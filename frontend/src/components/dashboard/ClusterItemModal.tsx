@@ -151,7 +151,7 @@ export function ClusterItemModal({ isOpen, onClose, clusterId, editingItem }: Cl
           {!isEdit && (
             <div>
               <label htmlFor={typeId} className="block text-sm font-medium mb-1">
-                아이템 종류 <span className="text-red-400">*</span>
+                아이템 종류 <span className="text-status-critical">*</span>
               </label>
               <select
                 id={typeId}
@@ -177,7 +177,7 @@ export function ClusterItemModal({ isOpen, onClose, clusterId, editingItem }: Cl
           <div className="grid grid-cols-[1fr_72px] gap-3">
             <div>
               <label htmlFor={titleId} className="block text-sm font-medium mb-1">
-                제목 <span className="text-red-400">*</span>
+                제목 <span className="text-status-critical">*</span>
               </label>
               <input
                 id={titleId}

@@ -28,8 +28,8 @@ const CHIPS: ChipConfig[] = [
   {
     key: 'failed',
     label: '⚠ 실패',
-    baseCls: 'bg-red-500/10 text-red-600 border-red-500/30 hover:bg-red-500/15',
-    activeCls: 'bg-red-500 text-white border-red-500',
+    baseCls: 'bg-status-critical/10 text-status-critical border-status-critical/30 hover:bg-status-critical/15',
+    activeCls: 'bg-status-critical text-white border-status-critical',
   },
   {
     key: 'running',
@@ -40,14 +40,14 @@ const CHIPS: ChipConfig[] = [
   {
     key: 'ok',
     label: '✓ 정상',
-    baseCls: 'bg-emerald-500/10 text-emerald-600 border-emerald-500/30 hover:bg-emerald-500/15',
-    activeCls: 'bg-emerald-500 text-white border-emerald-500',
+    baseCls: 'bg-status-healthy/10 text-status-healthy border-status-healthy/30 hover:bg-status-healthy/15',
+    activeCls: 'bg-status-healthy text-white border-status-healthy',
   },
   {
     key: 'missing_creds',
     label: '⚠ 자격증명 누락',
-    baseCls: 'bg-amber-500/10 text-amber-600 border-amber-500/30 hover:bg-amber-500/15',
-    activeCls: 'bg-amber-500 text-white border-amber-500',
+    baseCls: 'bg-status-warning/10 text-status-warning border-status-warning/30 hover:bg-status-warning/15',
+    activeCls: 'bg-status-warning text-white border-status-warning',
   },
 ];
 

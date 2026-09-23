@@ -22,13 +22,13 @@ import { Database, ShieldCheck } from 'lucide-react';
 
 const CATEGORY_META: Record<string, { label: string; icon: React.ComponentType<{ className?: string }>; cls: string }> = {
   control_plane: { label: 'Control Plane', icon: Server,     cls: 'bg-indigo-500/10 text-indigo-400 border-indigo-500/30' },
-  kubelet:       { label: 'Kubelet',        icon: Cpu,        cls: 'bg-sky-500/10 text-sky-400 border-sky-500/30' },
+  kubelet:       { label: 'Kubelet',        icon: Cpu,        cls: 'bg-status-info/10 text-status-info border-status-info/30' },
   cni:           { label: 'CNI / Cilium',   icon: Network,    cls: 'bg-purple-500/10 text-purple-400 border-purple-500/30' },
   // OS 레벨 — kernel sysctl · etcd systemd · etcdctl config 를 한 카테고리로.
-  os:            { label: 'OS',              icon: Cpu,        cls: 'bg-amber-500/10 text-amber-500 border-amber-500/30' },
+  os:            { label: 'OS',              icon: Cpu,        cls: 'bg-status-warning/10 text-status-warning border-status-warning/30' },
   // Storage — MinIO / AIStor / DirectPV 등 객체스토리지 레이어
-  storage:       { label: 'Storage (S3/MinIO)', icon: HardDrive, cls: 'bg-emerald-500/10 text-emerald-500 border-emerald-500/30' },
-  cluster:       { label: 'Cluster',        icon: Server,     cls: 'bg-slate-500/10 text-slate-400 border-slate-500/30' },
+  storage:       { label: 'Storage (S3/MinIO)', icon: HardDrive, cls: 'bg-status-healthy/10 text-status-healthy border-status-healthy/30' },
+  cluster:       { label: 'Cluster',        icon: Server,     cls: 'bg-status-unknown/10 text-status-unknown border-status-unknown/30' },
   other:         { label: 'Other',          icon: Settings2,  cls: 'bg-muted text-muted-foreground border-border' },
 };
 
@@ -223,7 +223,7 @@ function EtcdSystemdDetails({ data }: { data: Record<string, unknown> }) {
         )}
         {activeState && (
           <div><span className="text-xs text-muted-foreground">ActiveState<SourceBadge src={sources?.active_state} /></span>
-            <p className={`font-mono ${activeState === 'active' ? 'text-emerald-500' : 'text-amber-500'}`}>
+            <p className={`font-mono ${activeState === 'active' ? 'text-status-healthy' : 'text-status-warning'}`}>
               {activeState}{subState ? ` / ${subState}` : ''}
             </p></div>
         )}
@@ -543,17 +543,17 @@ function MinioTenantDetails({ data }: { data: Record<string, unknown> }) {
         </div>
       )}
       <div className="grid grid-cols-3 gap-1.5">
-        {stat('서버 수',   totalServers,  'text-sky-500')}
-        {stat('드라이브',  totalDrives,   'text-emerald-500')}
+        {stat('서버 수',   totalServers,  'text-status-info')}
+        {stat('드라이브',  totalDrives,   'text-status-healthy')}
         {stat('Erasure Set', drivesPerSet)}
       </div>
       <div className="grid grid-cols-3 gap-1.5">
-        {stat('Parity (EC)', ecParity != null ? `${ecParity}${ecExplicit ? ' (명시)' : ' (default)'}` : '-', 'text-amber-500')}
+        {stat('Parity (EC)', ecParity != null ? `${ecParity}${ecExplicit ? ' (명시)' : ' (default)'}` : '-', 'text-status-warning')}
         {stat('Data shards', ecDataShards)}
-        {stat('Auto TLS', requestAutoCert ? 'Yes' : 'No', requestAutoCert ? 'text-emerald-500' : 'text-muted-foreground')}
+        {stat('Auto TLS', requestAutoCert ? 'Yes' : 'No', requestAutoCert ? 'text-status-healthy' : 'text-muted-foreground')}
       </div>
       {ecRatio && (
-        <p className="text-xs font-mono text-emerald-500/80 bg-emerald-500/5 border border-emerald-500/20 rounded-md px-2 py-1">
+        <p className="text-xs font-mono text-status-healthy/80 bg-status-healthy/5 border border-status-healthy/20 rounded-md px-2 py-1">
           {ecRatio} — 손실 허용 디스크: {ecParity}개
         </p>
       )}
@@ -581,7 +581,7 @@ function MinioTenantDetails({ data }: { data: Record<string, unknown> }) {
                     <td className="px-2 py-1">{String(p.name ?? `pool-${i}`)}</td>
                     <td className="px-2 py-1">{String(p.servers ?? '-')}</td>
                     <td className="px-2 py-1">{String(p.volumesPerServer ?? '-')}</td>
-                    <td className="px-2 py-1 text-emerald-500">{String(p.drives ?? '-')}</td>
+                    <td className="px-2 py-1 text-status-healthy">{String(p.drives ?? '-')}</td>
                     <td className="px-2 py-1">{String(p.volumeSize ?? '-')}</td>
                     <td className="px-2 py-1 truncate max-w-[140px]" title={String(p.storageClass ?? '')}>{String(p.storageClass ?? '-')}</td>
                   </tr>
@@ -596,9 +596,9 @@ function MinioTenantDetails({ data }: { data: Record<string, unknown> }) {
       <div className="grid grid-cols-2 md:grid-cols-4 gap-1.5">
         {stat('currentState', str('currentState'))}
         {stat('health', str('healthStatus'))}
-        {stat('online', num('drivesOnline'), 'text-emerald-500')}
+        {stat('online', num('drivesOnline'), 'text-status-healthy')}
         {stat('offline', num('drivesOffline'),
-          (num('drivesOffline') ?? 0) > 0 ? 'text-red-500' : undefined)}
+          (num('drivesOffline') ?? 0) > 0 ? 'text-status-critical' : undefined)}
       </div>
     </div>
   );
@@ -629,14 +629,14 @@ function DirectPVDetails({ data }: { data: Record<string, unknown> }) {
   return (
     <div className="space-y-3 text-sm">
       <div className="grid grid-cols-3 gap-1.5">
-        {stat('총 드라이브', totalDrives, 'text-emerald-500')}
-        {stat('Ready', `${readyDrives} / ${totalDrives}`, readyDrives === totalDrives ? 'text-emerald-500' : 'text-amber-500')}
-        {stat('노드 수', nodeCount, 'text-sky-500')}
+        {stat('총 드라이브', totalDrives, 'text-status-healthy')}
+        {stat('Ready', `${readyDrives} / ${totalDrives}`, readyDrives === totalDrives ? 'text-status-healthy' : 'text-status-warning')}
+        {stat('노드 수', nodeCount, 'text-status-info')}
       </div>
       <div className="grid grid-cols-2 gap-1.5">
         {stat('총 용량', fmtBytes(totalCap))}
         {stat('할당된 용량', fmtBytes(allocCap),
-          (totalCap > 0 && allocCap / totalCap > 0.85) ? 'text-amber-500' : undefined)}
+          (totalCap > 0 && allocCap / totalCap > 0.85) ? 'text-status-warning' : undefined)}
       </div>
       {nodes.length > 0 && (
         <div>
@@ -807,8 +807,8 @@ function DiffPanel({
             <div key={i} className="text-sm font-mono px-2 py-1 rounded bg-muted/30 border border-border">
               <p className="text-primary mb-0.5">{c.key}</p>
               <div className="grid grid-cols-2 gap-2 text-xs">
-                <div className="text-red-400 break-all">- {String(c.from ?? '(없음)')}</div>
-                <div className="text-emerald-400 break-all">+ {String(c.to ?? '(없음)')}</div>
+                <div className="text-status-critical break-all">- {String(c.from ?? '(없음)')}</div>
+                <div className="text-status-healthy break-all">+ {String(c.to ?? '(없음)')}</div>
               </div>
             </div>
           ))}
@@ -978,7 +978,7 @@ export function VersionsPage() {
             {clusterId && current?.components && (
               <>
                 <span className="text-sm font-mono text-muted-foreground">· {clusters.find((c) => c.id === clusterId)?.name}</span>
-                <span className="text-sm px-2 py-0.5 rounded-full bg-slate-500/15 text-slate-400 border border-slate-500/30">
+                <span className="text-sm px-2 py-0.5 rounded-full bg-status-unknown/15 text-status-unknown border border-status-unknown/30">
                   {current.components.length}개 컴포넌트
                 </span>
               </>
@@ -1057,7 +1057,7 @@ export function VersionsPage() {
               {collectMinio.isPending ? (
                 <button
                   onClick={collectMinio.abort}
-                  className="flex items-center gap-1.5 px-3 py-2 text-sm font-medium bg-red-500 hover:bg-red-600 text-primary-foreground rounded-lg transition-colors"
+                  className="flex items-center gap-1.5 px-3 py-2 text-sm font-medium bg-status-critical hover:bg-status-critical text-primary-foreground rounded-lg transition-colors"
                   title="MinIO 수집 중지"
                 >
                   <Square className="w-4 h-4 fill-current" />
@@ -1076,7 +1076,7 @@ export function VersionsPage() {
               {collect.isPending ? (
                 <button
                   onClick={collect.abort}
-                  className="flex items-center gap-1.5 px-4 py-2 text-sm font-medium bg-red-500 hover:bg-red-600 text-primary-foreground rounded-lg transition-colors"
+                  className="flex items-center gap-1.5 px-4 py-2 text-sm font-medium bg-status-critical hover:bg-status-critical text-primary-foreground rounded-lg transition-colors"
                 >
                   <Square className="w-4 h-4 fill-current" />
                   중지

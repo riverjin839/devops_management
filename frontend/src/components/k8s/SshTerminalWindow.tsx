@@ -50,7 +50,7 @@ const DEFAULT_CLOSE_NOTES: Record<number, string> = {
  * 프레임으로 보낸다. 색·글꼴은 Settings → 터미널 Appearance 의 활성 프로파일을 따른다.
  */
 export function SshTerminalWindow({
-  label, labelClassName = 'text-green-400', subtitle, url, init,
+  label, labelClassName = 'text-status-healthy', subtitle, url, init,
   onClose, onPopOut, fill, closeNotes,
 }: SshTerminalWindowProps) {
   const [status, setStatus] = useState<SshTerminalStatus>('connecting');
@@ -181,7 +181,7 @@ export function SshTerminalWindow({
   }, [fullscreen, sendResize]);
 
   const statusColor =
-    status === 'open' ? 'text-green-500' : status === 'error' ? 'text-red-500' : 'text-muted-foreground';
+    status === 'open' ? 'text-status-healthy' : status === 'error' ? 'text-status-critical' : 'text-muted-foreground';
   const clipboardHint = clipboardHintText();
 
   // 기본(인라인) 모드는 드래그로 이동 가능한 플로팅 창 — 헤더가 드래그 핸들이다.

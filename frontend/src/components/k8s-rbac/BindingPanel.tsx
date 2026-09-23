@@ -305,7 +305,7 @@ export function BindingPanel({
           </div>
 
           {kind === 'ClusterRoleBinding' && (
-            <p className="text-[11.5px] leading-relaxed rounded-md border border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-400 px-3 py-2">
+            <p className="text-[11.5px] leading-relaxed rounded-md border border-status-warning/30 bg-status-warning/10 text-status-warning px-3 py-2">
               nodes·namespaces·persistentvolumes 처럼 네임스페이스가 없는(클러스터 스코프) 리소스는
               RoleBinding 으로는 권한이 발동하지 않는다 — 이 조합(ClusterRoleBinding)이 필요한 이유다.
               선택한 롤에 해당 규칙이 이미 있는지 Role/ClusterRole 탭에서 먼저 확인한다.

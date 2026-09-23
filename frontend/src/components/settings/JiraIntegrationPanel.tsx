@@ -297,7 +297,7 @@ export function JiraIntegrationPanel() {
         <div className="flex items-center gap-2 mb-4 flex-wrap">
           <span className={`inline-flex items-center gap-1 text-sm px-2 py-0.5 rounded-full border ${
             cred?.configured
-              ? 'bg-emerald-500/10 text-emerald-500 border-emerald-500/30'
+              ? 'bg-status-healthy/10 text-status-healthy border-status-healthy/30'
               : 'bg-secondary text-muted-foreground border-border'
           }`}>
             {cred?.configured
@@ -305,7 +305,7 @@ export function JiraIntegrationPanel() {
               : '미등록'}
           </span>
           {cred?.hasConfluence && (
-            <span className="inline-flex items-center gap-1 text-sm px-2 py-0.5 rounded-full border bg-emerald-500/10 text-emerald-500 border-emerald-500/30">
+            <span className="inline-flex items-center gap-1 text-sm px-2 py-0.5 rounded-full border bg-status-healthy/10 text-status-healthy border-status-healthy/30">
               Confluence 세션
             </span>
           )}
@@ -370,7 +370,7 @@ export function JiraIntegrationPanel() {
             </div>
             {diagResult && (
               <div className="mt-2 space-y-2">
-                <p className={`text-xs leading-relaxed ${diagResult.ok ? 'text-emerald-500' : 'text-amber-500'}`}>
+                <p className={`text-xs leading-relaxed ${diagResult.ok ? 'text-status-healthy' : 'text-status-warning'}`}>
                   {diagResult.detail}
                 </p>
                 <div className="overflow-x-auto">
@@ -392,7 +392,7 @@ export function JiraIntegrationPanel() {
                           <td className="px-2 py-1 align-top break-all">{e.product} {e.url}</td>
                           <td className="px-2 py-1 align-top break-all">{e.finalUrl || '-'}</td>
                           <td className="px-2 py-1 align-top">{e.httpStatus ?? '-'}</td>
-                          <td className={`px-2 py-1 align-top ${e.passwordInputs > 0 ? 'text-emerald-500' : ''}`}>
+                          <td className={`px-2 py-1 align-top ${e.passwordInputs > 0 ? 'text-status-healthy' : ''}`}>
                             {e.forms}/{e.passwordInputs}
                           </td>
                           <td className="px-2 py-1 align-top break-all">
@@ -418,7 +418,7 @@ export function JiraIntegrationPanel() {
                       <p className="font-mono break-all">스크립트: {(e.scripts ?? []).join(' · ')}</p>
                     )}
                     {(e.cryptoHints?.length ?? 0) > 0 && (
-                      <p className="text-amber-500 leading-relaxed">
+                      <p className="text-status-warning leading-relaxed">
                         ⚠ 클라이언트 암호화/보안모듈 흔적: {(e.cryptoHints ?? []).join(', ')} —
                         이런 페이지는 서버측 폼 로그인이 원리상 불가하므로 "내 PC 도우미" 또는 PAT/세션 쿠키를 사용하세요.
                       </p>
@@ -494,7 +494,7 @@ export function JiraIntegrationPanel() {
           )}
           {cred?.configured && (
             <button onClick={handleDeleteToken} disabled={deleteCred.isPending}
-              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg border border-border text-sm text-red-500 hover:bg-red-500/10 disabled:opacity-50">
+              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg border border-border text-sm text-status-critical hover:bg-status-critical/10 disabled:opacity-50">
               <Trash2 className="w-4 h-4" /> 인증 삭제
             </button>
           )}
@@ -502,7 +502,7 @@ export function JiraIntegrationPanel() {
 
         {testResult && (
           <div className={`text-sm mt-3 px-3 py-2 rounded-lg inline-flex items-center gap-1.5 ${
-            testResult.ok ? 'bg-emerald-500/10 text-emerald-500' : 'bg-red-500/10 text-red-500'
+            testResult.ok ? 'bg-status-healthy/10 text-status-healthy' : 'bg-status-critical/10 text-status-critical'
           }`}>
             {testResult.ok ? <Wifi className="w-3.5 h-3.5" /> : <WifiOff className="w-3.5 h-3.5" />}
             {testResult.detail}
@@ -510,7 +510,7 @@ export function JiraIntegrationPanel() {
         )}
         {confTestResult && (
           <div className={`text-sm mt-3 ml-2 px-3 py-2 rounded-lg inline-flex items-center gap-1.5 ${
-            confTestResult.ok ? 'bg-emerald-500/10 text-emerald-500' : 'bg-red-500/10 text-red-500'
+            confTestResult.ok ? 'bg-status-healthy/10 text-status-healthy' : 'bg-status-critical/10 text-status-critical'
           }`}>
             {confTestResult.ok ? <Wifi className="w-3.5 h-3.5" /> : <WifiOff className="w-3.5 h-3.5" />}
             {confTestResult.detail}

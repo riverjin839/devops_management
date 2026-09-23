@@ -25,21 +25,21 @@ type ServiceMeta = {
 };
 
 const SERVICES: ServiceMeta[] = [
-  { value: 'k8s',      label: 'Kubernetes', Icon: Ship,      accent: 'bg-sky-500',     ring: 'ring-sky-500/30',     soft: 'bg-sky-500/10 text-sky-600 dark:text-sky-300' },
+  { value: 'k8s',      label: 'Kubernetes', Icon: Ship,      accent: 'bg-status-info',     ring: 'ring-status-info/30',     soft: 'bg-status-info/10 text-status-info' },
   { value: 'keycloak', label: 'Keycloak',   Icon: KeyRound,  accent: 'bg-orange-500',  ring: 'ring-orange-500/30',  soft: 'bg-orange-500/10 text-orange-600 dark:text-orange-300' },
-  { value: 'cilium',   label: 'Cilium',     Icon: Bug,       accent: 'bg-yellow-500',  ring: 'ring-yellow-500/30',  soft: 'bg-yellow-500/10 text-yellow-700 dark:text-yellow-300' },
+  { value: 'cilium',   label: 'Cilium',     Icon: Bug,       accent: 'bg-status-warning',  ring: 'ring-status-warning/30',  soft: 'bg-status-warning/10 text-status-warning' },
   { value: 'jenkins',  label: 'Jenkins',    Icon: Hammer,    accent: 'bg-blue-500',    ring: 'ring-blue-500/30',    soft: 'bg-blue-500/10 text-blue-600 dark:text-blue-300' },
   { value: 'argocd',   label: 'ArgoCD',     Icon: RefreshCw, accent: 'bg-violet-500',  ring: 'ring-violet-500/30',  soft: 'bg-violet-500/10 text-violet-600 dark:text-violet-300' },
-  { value: 'nexus',    label: 'Nexus',      Icon: Package,   accent: 'bg-emerald-500', ring: 'ring-emerald-500/30', soft: 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-300' },
-  { value: 'etc',      label: '기타',        Icon: Layers,    accent: 'bg-slate-500',   ring: 'ring-slate-500/30',   soft: 'bg-slate-500/10 text-slate-600 dark:text-slate-300' },
+  { value: 'nexus',    label: 'Nexus',      Icon: Package,   accent: 'bg-status-healthy', ring: 'ring-status-healthy/30', soft: 'bg-status-healthy/10 text-status-healthy' },
+  { value: 'etc',      label: '기타',        Icon: Layers,    accent: 'bg-slate-500',   ring: 'ring-slate-500/30',   soft: 'bg-status-unknown/10 text-status-unknown dark:text-slate-300' },
 ];
 const SERVICE_MAP = Object.fromEntries(SERVICES.map((s) => [s.value, s]));
 
 // ── 카드 색상 (앞면 살짝 은은한 tint) ──────────────────────────────────────────
 const CARD_TINT: Record<OpsNoteColor, { stripe: string; tint: string; chip: string }> = {
-  yellow: { stripe: 'bg-amber-400',  tint: 'bg-amber-50/60 dark:bg-amber-500/[0.06]',  chip: 'bg-amber-500/15  text-amber-700  dark:text-amber-300' },
-  green:  { stripe: 'bg-emerald-400', tint: 'bg-emerald-50/60 dark:bg-emerald-500/[0.06]', chip: 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300' },
-  blue:   { stripe: 'bg-sky-400',    tint: 'bg-sky-50/60 dark:bg-sky-500/[0.06]',     chip: 'bg-sky-500/15    text-sky-700    dark:text-sky-300' },
+  yellow: { stripe: 'bg-status-warning',  tint: 'bg-status-warning/5',  chip: 'bg-status-warning/15 text-status-warning' },
+  green:  { stripe: 'bg-status-healthy', tint: 'bg-status-healthy/5', chip: 'bg-status-healthy/15 text-status-healthy' },
+  blue:   { stripe: 'bg-status-info',    tint: 'bg-status-info/5',      chip: 'bg-status-info/15 text-status-info' },
   pink:   { stripe: 'bg-pink-400',   tint: 'bg-pink-50/60 dark:bg-pink-500/[0.06]',    chip: 'bg-pink-500/15   text-pink-700   dark:text-pink-300' },
   purple: { stripe: 'bg-purple-400', tint: 'bg-purple-50/60 dark:bg-purple-500/[0.06]', chip: 'bg-purple-500/15 text-purple-700 dark:text-purple-300' },
 };
@@ -110,7 +110,7 @@ function QnaCard({ note, onOpen, onEdit, onDelete, onTogglePin }: QnaCardProps) 
           </button>
           <button
             onClick={(e) => { stop(e); onDelete(); }}
-            className="p-1 rounded-md hover:bg-secondary text-muted-foreground hover:text-red-500 transition-colors"
+            className="p-1 rounded-md hover:bg-secondary text-muted-foreground hover:text-status-critical transition-colors"
             title="삭제"
             aria-label="삭제"
           >
@@ -156,8 +156,8 @@ function QnaCard({ note, onOpen, onEdit, onDelete, onTogglePin }: QnaCardProps) 
           <span
             className={`inline-flex items-center justify-center w-5 h-5 rounded-md text-xs font-bold flex-shrink-0 mt-0.5 ${
               activeTab === 'answer'
-                ? 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400'
-                : 'bg-slate-500/15 text-slate-500 dark:text-slate-300'
+                ? 'bg-status-healthy/15 text-status-healthy'
+                : 'bg-status-unknown/15 text-status-unknown dark:text-slate-300'
             }`}
           >
             {activeTab === 'answer' ? 'A' : 'H'}
@@ -379,9 +379,9 @@ export function OpsNotesPage() {
         {/* ── Stat strip ──────────────────────────────────────────────── */}
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
           <StatCell label="전체 Q&A"   value={allNotes.length} icon={<MessageSquare className="w-4 h-4" />} accent="text-primary" />
-          <StatCell label="고정"       value={pinnedNotes.length} icon={<Pin className="w-4 h-4" />} accent="text-amber-500" />
-          <StatCell label="답변 보유율" value={`${meta.answerRate}%`} hint={`${meta.answered}/${allNotes.length}`} icon={<Sparkles className="w-4 h-4" />} accent="text-emerald-500" />
-          <StatCell label="작성자"     value={meta.authorCount} hint="명" icon={<HelpCircle className="w-4 h-4" />} accent="text-sky-500" />
+          <StatCell label="고정"       value={pinnedNotes.length} icon={<Pin className="w-4 h-4" />} accent="text-status-warning" />
+          <StatCell label="답변 보유율" value={`${meta.answerRate}%`} hint={`${meta.answered}/${allNotes.length}`} icon={<Sparkles className="w-4 h-4" />} accent="text-status-healthy" />
+          <StatCell label="작성자"     value={meta.authorCount} hint="명" icon={<HelpCircle className="w-4 h-4" />} accent="text-status-info" />
         </div>
 
         {/* ── Filter + search ─────────────────────────────────────────── */}

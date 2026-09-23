@@ -117,7 +117,7 @@ export function KubeconfigEditModal({
         ) : isError ? (
           /* No kubeconfig yet — start in edit mode to create one */
           <div className="space-y-3">
-            <div className="flex items-start gap-2 px-3 py-2.5 bg-yellow-500/10 border border-yellow-500/20 rounded-lg text-sm text-yellow-400">
+            <div className="flex items-start gap-2 px-3 py-2.5 bg-status-warning/10 border border-status-warning/20 rounded-lg text-sm text-status-warning">
               <AlertTriangle className="w-4 h-4 flex-shrink-0 mt-0.5" />
               <span>
                 {extractApiError(error)}
@@ -246,7 +246,7 @@ export function KubeconfigEditModal({
               {kubeconfig?.content}
             </pre>
             {saveSuccess && (
-              <div className="px-3 py-2.5 bg-green-500/10 border border-green-500/20 rounded-lg text-sm text-green-400">
+              <div className="px-3 py-2.5 bg-status-healthy/10 border border-status-healthy/20 rounded-lg text-sm text-status-healthy">
                 kubeconfig가 저장되었습니다.
               </div>
             )}

@@ -15,14 +15,14 @@ import { cronHealth, type CronHealth } from './filters';
 // cron 상태 → 행 좌측 보더/hover 배경 색 — 표에서 스크롤만 해도 정상(초록)/
 // 비정상(레드)/중지(회색)/실행 중(블루)이 판독되게 한다. 선택 시엔 primary 유지.
 const ROW_BORDER: Record<CronHealth, string> = {
-  ok: 'border-l-emerald-500/60',
-  failed: 'border-l-red-500/70',
+  ok: 'border-l-status-healthy/60',
+  failed: 'border-l-status-critical/70',
   running: 'border-l-blue-500/70',
   stopped: 'border-l-slate-400/50',
 };
 const ROW_HOVER: Record<CronHealth, string> = {
-  ok: 'hover:bg-emerald-500/5',
-  failed: 'hover:bg-red-500/5',
+  ok: 'hover:bg-status-healthy/5',
+  failed: 'hover:bg-status-critical/5',
   running: 'hover:bg-blue-500/5',
   stopped: 'hover:bg-secondary/50',
 };
@@ -126,7 +126,7 @@ export function BatchJobRow({ job, cluster, selected, onClick, checkbox, checked
         )}
         {hasMissingCreds && (
           <div className="mt-0.5">
-            <span className="text-xs text-amber-600 bg-amber-500/10 px-1.5 py-0.5 rounded">
+            <span className="text-xs text-status-warning bg-status-warning/10 px-1.5 py-0.5 rounded">
               ⚠ 자격증명 없음
             </span>
           </div>
@@ -159,7 +159,7 @@ export function BatchJobRow({ job, cluster, selected, onClick, checkbox, checked
                 onClick={() => setConfirmStop(true)}
                 disabled={stopMut.isPending}
                 aria-label={`${job.name} 중지`}
-                className="inline-flex items-center justify-center w-6 h-6 rounded-md border border-red-500/30 bg-red-500/10 text-red-600 hover:bg-red-500/20 disabled:opacity-50"
+                className="inline-flex items-center justify-center w-6 h-6 rounded-md border border-status-critical/30 bg-status-critical/10 text-status-critical hover:bg-status-critical/20 disabled:opacity-50"
               >
                 <Square className="w-3 h-3" fill="currentColor" />
               </TooltipTrigger>
@@ -191,7 +191,7 @@ export function BatchJobRow({ job, cluster, selected, onClick, checkbox, checked
                       비활성화된 잡입니다 — 행을 열어 "활성화"를 켜야 실행할 수 있습니다.
                     </p>
                   ) : !hasCreds && (
-                    <p className="text-amber-500">
+                    <p className="text-status-warning">
                       저장된 자격증명이 없어 즉시 실행할 수 없습니다 — 행을 열어 자격증명을 등록하세요.
                     </p>
                   )}

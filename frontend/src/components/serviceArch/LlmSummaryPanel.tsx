@@ -33,7 +33,7 @@ export function LlmSummaryPanel({
             <span className="ml-2 font-normal normal-case">({doc.llmContent.model})</span>
           )}
           {doc.summaryOverride != null && (
-            <span className="ml-2 font-normal normal-case text-amber-500">· 사용자 수정본</span>
+            <span className="ml-2 font-normal normal-case text-status-warning">· 사용자 수정본</span>
           )}
         </span>
         <button
@@ -55,7 +55,7 @@ export function LlmSummaryPanel({
       </div>
 
       {offline && (
-        <div className="flex items-center gap-2 text-xs text-amber-500 bg-secondary/40 border border-border rounded-xl px-3 py-2">
+        <div className="flex items-center gap-2 text-xs text-status-warning bg-secondary/40 border border-border rounded-xl px-3 py-2">
           <WifiOff className="w-3.5 h-3.5 shrink-0" />
           LLM(Ollama) 미연결 — 자동 요약 없이도 다이어그램/수동 편집은 정상 동작합니다.
         </div>

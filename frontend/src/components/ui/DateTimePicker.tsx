@@ -317,7 +317,7 @@ export function DateTimePicker({
                 <div
                   key={d}
                   className={`text-center text-xs font-medium ${
-                    i === 0 ? 'text-red-400' : i === 6 ? 'text-blue-400' : 'text-muted-foreground'
+                    i === 0 ? 'text-status-critical' : i === 6 ? 'text-blue-400' : 'text-muted-foreground'
                   }`}
                 >
                   {d}
@@ -343,7 +343,7 @@ export function DateTimePicker({
                         : isToday
                           ? 'bg-secondary text-foreground font-semibold ring-1 ring-primary/40'
                           : isCurMonth
-                            ? `hover:bg-secondary ${dow === 0 ? 'text-red-400' : dow === 6 ? 'text-blue-400' : 'text-foreground'}`
+                            ? `hover:bg-secondary ${dow === 0 ? 'text-status-critical' : dow === 6 ? 'text-blue-400' : 'text-foreground'}`
                             : 'text-muted-foreground/40 hover:bg-secondary/40'
                     }`}
                   >

@@ -80,7 +80,7 @@ export function LakeServiceTypeManager({ domain }: { domain: ServiceDomain }) {
 
       {/* Error/loading/empty */}
       {error && (
-        <div className="rounded-md border border-red-500/40 bg-red-500/5 p-3 flex items-start gap-2 text-sm text-red-500">
+        <div className="rounded-md border border-status-critical/40 bg-status-critical/5 p-3 flex items-start gap-2 text-sm text-status-critical">
           <AlertCircle className="w-4 h-4 mt-0.5 flex-shrink-0" />
           <div>
             <div className="font-medium">서비스 타입 조회 실패</div>
@@ -91,7 +91,7 @@ export function LakeServiceTypeManager({ domain }: { domain: ServiceDomain }) {
         </div>
       )}
       {errorMsg && (
-        <div className="rounded-md border border-amber-500/40 bg-amber-500/5 p-3 flex items-start gap-2 text-sm text-amber-600 dark:text-amber-400">
+        <div className="rounded-md border border-status-warning/40 bg-status-warning/5 p-3 flex items-start gap-2 text-sm text-status-warning">
           <AlertCircle className="w-3.5 h-3.5 mt-0.5 flex-shrink-0" />
           <div className="flex-1">{errorMsg}</div>
           <button type="button" onClick={() => setErrorMsg(null)} aria-label="알림 닫기">
@@ -177,7 +177,7 @@ export function LakeServiceTypeManager({ domain }: { domain: ServiceDomain }) {
                         disabled={r.isBuiltin}
                         aria-label={`${r.serviceType} 삭제`}
                         title={r.isBuiltin ? 'builtin 은 영구 삭제 불가 — 비활성화만 가능' : '삭제'}
-                        className="p-1 rounded text-red-500 hover:bg-red-500/10 disabled:opacity-30 disabled:cursor-not-allowed"
+                        className="p-1 rounded text-status-critical hover:bg-status-critical/10 disabled:opacity-30 disabled:cursor-not-allowed"
                       >
                         <Trash2 className="w-3.5 h-3.5" />
                       </button>
@@ -445,7 +445,7 @@ function TypeFormModal({ mode, domain, row, onClose, onError }: TypeFormModalPro
           </label>
 
           {localError && (
-            <div className="text-sm text-red-500 bg-red-500/10 border border-red-500/30 rounded p-2">
+            <div className="text-sm text-status-critical bg-status-critical/10 border border-status-critical/30 rounded p-2">
               {localError}
             </div>
           )}

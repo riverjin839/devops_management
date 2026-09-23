@@ -161,7 +161,7 @@ export function CreateBatchJobWizard({
                   <div
                     className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-semibold ${
                       active ? 'bg-primary text-primary-foreground' :
-                      done ? 'bg-emerald-500 text-white' :
+                      done ? 'bg-status-healthy text-white' :
                       'bg-secondary text-muted-foreground'
                     }`}
                     aria-label={done ? `${label} — 완료` : label}
@@ -191,7 +191,7 @@ export function CreateBatchJobWizard({
           {step === 1 && <StepHost types={types} state={state} onChange={update} requiresSsh={isSshType} />}
           {step === 2 && <StepSchedule state={state} onChange={update} requiresSsh={isSshType} />}
 
-          {error && <div role="alert" className="mt-3 text-sm text-red-500">{error}</div>}
+          {error && <div role="alert" className="mt-3 text-sm text-status-critical">{error}</div>}
         </div>
 
         <footer className="px-5 py-3 border-t border-border flex items-center justify-between gap-2">

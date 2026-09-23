@@ -811,7 +811,7 @@ export function NodeSpecPage() {
                             <Pencil className="w-3.5 h-3.5" />
                           </button>
                           <button onClick={() => setConfirmDelete(r)} title="삭제" aria-label="삭제"
-                            className="p-1 rounded hover:bg-red-500/10 text-muted-foreground hover:text-red-400">
+                            className="p-1 rounded hover:bg-status-critical/10 text-muted-foreground hover:text-status-critical">
                             <Trash2 className="w-3.5 h-3.5" />
                           </button>
                         </div>

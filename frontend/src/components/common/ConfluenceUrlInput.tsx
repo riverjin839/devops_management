@@ -62,7 +62,7 @@ export function ConfluenceUrlInput({
             placeholder={placeholder}
             inputMode="url"
             className={`w-full pl-3 pr-9 py-1.5 bg-background border ${
-              isValid ? 'border-border' : 'border-red-500/60'
+              isValid ? 'border-border' : 'border-status-critical/60'
             } rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/40 disabled:opacity-60 ${className}`}
           />
           {showOpen && (
@@ -97,7 +97,7 @@ export function ConfluenceUrlInput({
           placeholder={placeholder}
           inputMode="url"
           className={`w-full pl-3 pr-9 py-2 bg-background border ${
-            isValid ? 'border-border' : 'border-red-500/60'
+            isValid ? 'border-border' : 'border-status-critical/60'
           } rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/40 disabled:opacity-60 ${className}`}
         />
         {showOpen && (
@@ -113,7 +113,7 @@ export function ConfluenceUrlInput({
         )}
       </div>
       {showHint && (
-        <p className={`text-xs ${isValid ? 'text-muted-foreground' : 'text-red-500'}`}>
+        <p className={`text-xs ${isValid ? 'text-muted-foreground' : 'text-status-critical'}`}>
           {isValid
             ? (hint ?? '관련 Confluence 문서가 있다면 URL 을 붙여넣으세요. (선택)')
             : 'http:// 또는 https:// 로 시작해야 합니다.'}

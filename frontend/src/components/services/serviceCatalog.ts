@@ -93,17 +93,17 @@ export const KIND_BY_KEY: Record<string, KindDef> = Object.fromEntries(
 
 // 컬러 → tailwind 클래스 (StatusBadge 와 같은 매핑이지만 가벼운 버전)
 const COLOR_BG: Record<string, string> = {
-  sky:     'bg-sky-500/10     text-sky-500     border-sky-500/30',
-  amber:   'bg-amber-500/10   text-amber-500   border-amber-500/30',
+  sky:     'bg-status-info/10     text-status-info     border-status-info/30',
+  amber:   'bg-status-warning/10   text-status-warning   border-status-warning/30',
   blue:    'bg-blue-500/10    text-blue-500    border-blue-500/30',
   orange:  'bg-orange-500/10  text-orange-500  border-orange-500/30',
   purple:  'bg-purple-500/10  text-purple-500  border-purple-500/30',
-  red:     'bg-red-500/10     text-red-500     border-red-500/30',
+  red:     'bg-status-critical/10     text-status-critical     border-status-critical/30',
   cyan:    'bg-cyan-500/10    text-cyan-500    border-cyan-500/30',
-  emerald: 'bg-emerald-500/10 text-emerald-500 border-emerald-500/30',
+  emerald: 'bg-status-healthy/10 text-status-healthy border-status-healthy/30',
   pink:    'bg-pink-500/10    text-pink-500    border-pink-500/30',
   violet:  'bg-violet-500/10  text-violet-500  border-violet-500/30',
-  slate:   'bg-slate-500/10   text-slate-500   border-slate-500/30',
+  slate:   'bg-status-unknown/10   text-status-unknown   border-status-unknown/30',
 };
 
 export function colorBadgeClass(color: string): string {

@@ -1,3 +1,10 @@
+/* 상태 의미 고정 팔레트 금지 (P1) — 정상/경고/장애/정보 색은 테마를 따라가는 status 토큰만 쓴다
+   (text-status-healthy · bg-status-critical/10 · border-status-warning/30 …). emerald/red/amber 같은
+   고정 팔레트는 테마마다 대비가 깨진다(예: text-emerald-400 은 라이트 테마에서 1.9:1).
+   장식용 계열(blue·violet·purple·orange·cyan 등)과 slate 콘솔 배경은 대상이 아니다. */
+const STATUS_PALETTE_RE = String.raw`/(^|[^\w-])(text|bg|border|ring|fill|stroke|from|to|via|divide|outline|decoration|placeholder|accent|caret|shadow)(-[a-z]+)?-(emerald|green|red|rose|amber|yellow|sky)-\d{2,3}/`;
+const STATUS_PALETTE_MSG = '상태색은 status 토큰을 쓴다 — text-status-healthy|warning|critical|info, bg-status-*/10, border-status-*/30 (DESIGN_SYSTEM §2.4)';
+
 module.exports = {
   root: true,
   env: { browser: true, es2020: true },
@@ -38,5 +45,9 @@ module.exports = {
        프리셋엔 없지만 W4 접근성 패스에서 전수 검사 후 위반 54건을 모두 고쳤다(2026-07).
        회귀 방지를 위해 명시적으로 켜둔다. */
     'jsx-a11y/control-has-associated-label': 'warn',
+    'no-restricted-syntax': ['error',
+      { selector: `Literal[value=${STATUS_PALETTE_RE}]`, message: STATUS_PALETTE_MSG },
+      { selector: `TemplateElement[value.raw=${STATUS_PALETTE_RE}]`, message: STATUS_PALETTE_MSG },
+    ],
   },
 };

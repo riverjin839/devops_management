@@ -1,4 +1,4 @@
-import { Check, Plus, LayoutGrid } from 'lucide-react';
+import { Check, Plus, LayoutGrid, AlertTriangle } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import type { InstallableAppSection } from './installableApps';
 
@@ -35,10 +35,19 @@ export function AddAppDialog({ open, onClose, title, description, sections, inst
 
         <div className="px-5 pb-5 space-y-4">
           {sections.map((section) => (
-            <div key={section.label}>
-              <p className="px-0.5 pb-1.5 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+            <div
+              key={section.label}
+              className={section.tone === 'danger' ? 'rounded-xl border border-status-warning/40 bg-status-warning/5 p-2.5' : undefined}
+            >
+              <p className={`flex items-center gap-1.5 px-0.5 text-[11px] font-semibold uppercase tracking-wider ${
+                section.tone === 'danger' ? 'text-status-warning' : 'text-muted-foreground'
+              } ${section.description ? 'pb-0.5' : 'pb-1.5'}`}>
+                {section.tone === 'danger' && <AlertTriangle className="w-3.5 h-3.5" aria-hidden />}
                 {section.label}
               </p>
+              {section.description && (
+                <p className="px-0.5 pb-1.5 text-[11px] text-muted-foreground">{section.description}</p>
+              )}
               <div className="grid grid-cols-2 gap-2">
                 {section.apps.map((app) => {
                   const installed = installedApps.includes(app.id);

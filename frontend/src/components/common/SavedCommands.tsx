@@ -139,7 +139,7 @@ export function SavedCommands({
                 }}
                 title="삭제"
                 aria-label="삭제"
-                className="px-1.5 py-1 text-muted-foreground hover:text-red-400 hover:bg-red-500/10"
+                className="px-1.5 py-1 text-muted-foreground hover:text-status-critical hover:bg-status-critical/10"
               >
                 <Trash2 className="w-3 h-3" />
               </button>

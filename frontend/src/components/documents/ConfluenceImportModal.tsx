@@ -14,10 +14,10 @@ const inputCls =
   'focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary disabled:opacity-50';
 
 const ACTION_META: Record<string, { label: string; cls: string }> = {
-  create: { label: 'create', cls: 'bg-emerald-500/10 text-emerald-500' },
+  create: { label: 'create', cls: 'bg-status-healthy/10 text-status-healthy' },
   update: { label: 'update', cls: 'bg-blue-500/10 text-blue-500' },
   unchanged: { label: 'unchanged', cls: 'bg-secondary text-muted-foreground' },
-  error: { label: 'error', cls: 'bg-red-500/10 text-red-500' },
+  error: { label: 'error', cls: 'bg-status-critical/10 text-status-critical' },
 };
 
 type SearchMode = 'simple' | 'cql';
@@ -196,23 +196,23 @@ export function ConfluenceImportModal({ open, onClose }: Props) {
           {done ? (
             /* ── 3단계: 결과 ─────────────────────────────────────────── */
             <>
-              <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/5 p-4">
-                <div className="flex items-center gap-2 font-medium text-emerald-500">
+              <div className="rounded-xl border border-status-healthy/30 bg-status-healthy/5 p-4">
+                <div className="flex items-center gap-2 font-medium text-status-healthy">
                   <CheckCircle2 className="w-4 h-4" /> 가져오기 완료
                 </div>
                 <div className="mt-2 grid grid-cols-3 gap-2 text-sm">
-                  <div><span className="text-muted-foreground">신규</span> <b className="text-emerald-500">{done.imported}</b></div>
+                  <div><span className="text-muted-foreground">신규</span> <b className="text-status-healthy">{done.imported}</b></div>
                   <div><span className="text-muted-foreground">갱신</span> <b className="text-blue-500">{done.updated}</b></div>
                   <div><span className="text-muted-foreground">건너뜀</span> <b>{done.skipped}</b></div>
                 </div>
                 {done.errors.length > 0 && (
-                  <div className="mt-2 text-xs text-red-500">
+                  <div className="mt-2 text-xs text-status-critical">
                     {done.errors.slice(0, 5).map((e, i) => <div key={i}>⚠ {e}</div>)}
                   </div>
                 )}
               </div>
               {done.warnings.length > 0 && (
-                <div className="rounded-xl border border-amber-500/30 bg-amber-500/5 p-3 text-xs text-amber-500 space-y-0.5">
+                <div className="rounded-xl border border-status-warning/30 bg-status-warning/5 p-3 text-xs text-status-warning space-y-0.5">
                   <div className="flex items-center gap-1.5 font-medium"><AlertTriangle className="w-3.5 h-3.5" /> 변환 경고 {done.warnings.length}건</div>
                   {done.warnings.slice(0, 6).map((w, i) => <div key={i}>· {w}</div>)}
                   {done.warnings.length > 6 && <div>… 외 {done.warnings.length - 6}건</div>}
@@ -281,8 +281,8 @@ export function ConfluenceImportModal({ open, onClose }: Props) {
                               {c.new != null && <> → <span className="text-foreground">{c.new}</span></>}
                             </div>
                           ))}
-                          {item.warnings.map((w, i) => <div key={`w${i}`} className="text-amber-500">⚠ {w}</div>)}
-                          {item.detail && <div className="text-red-500">{item.detail}</div>}
+                          {item.warnings.map((w, i) => <div key={`w${i}`} className="text-status-warning">⚠ {w}</div>)}
+                          {item.detail && <div className="text-status-critical">{item.detail}</div>}
                         </div>
                       )}
                     </div>

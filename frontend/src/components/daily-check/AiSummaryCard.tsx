@@ -67,8 +67,8 @@ export function AiSummaryCard({ review }: Props) {
               <span
                 className={`inline-flex items-center gap-1 ${
                   statusBadge.tone === 'red'
-                    ? 'text-red-600 dark:text-red-400'
-                    : 'text-amber-600 dark:text-amber-400'
+                    ? 'text-status-critical'
+                    : 'text-status-warning'
                 }`}
               >
                 <AlertCircle className="w-3.5 h-3.5" />

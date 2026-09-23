@@ -96,7 +96,7 @@ export function MasterHostPicker({
         </label>
         {mastersQ.isLoading && <Loader2 className="w-3 h-3 animate-spin text-muted-foreground" />}
         {mastersQ.isError && (
-          <span className="text-xs text-amber-500" title={(mastersQ.error as Error).message}>
+          <span className="text-xs text-status-warning" title={(mastersQ.error as Error).message}>
             후보 조회 실패 — 직접 입력
           </span>
         )}

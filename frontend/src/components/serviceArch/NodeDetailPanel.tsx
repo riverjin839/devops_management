@@ -36,7 +36,7 @@ export function NodeDetailPanel({
           <div className="text-[11px] font-bold uppercase text-muted-foreground">{node.kind}</div>
           <div className="text-sm font-semibold break-all">{node.name}</div>
           {node.stale && (
-            <div className="mt-1 text-[11px] text-amber-500">
+            <div className="mt-1 text-[11px] text-status-warning">
               최근 현행화 시점에 클러스터에 존재하지 않음 (stale)
             </div>
           )}
@@ -75,7 +75,7 @@ export function NodeDetailPanel({
             <button
               onClick={() => onSaveAnnotation(node.id, null)}
               disabled={savingAnnotation}
-              className="px-2.5 py-1 text-xs font-medium text-red-500 hover:bg-secondary rounded-lg disabled:opacity-50">
+              className="px-2.5 py-1 text-xs font-medium text-status-critical hover:bg-secondary rounded-lg disabled:opacity-50">
               주석 삭제
             </button>
           )}
@@ -99,7 +99,7 @@ export function NodeDetailPanel({
                   {e.sourceId === node.id ? '→' : '←'} {e.label || e.edgeType}
                 </span>
                 <button onClick={() => onDeleteManualEdge(e.id)} aria-label="수동 연결 삭제" title="수동 연결 삭제"
-                  className="p-0.5 rounded text-muted-foreground hover:text-red-500">
+                  className="p-0.5 rounded text-muted-foreground hover:text-status-critical">
                   <Trash2 className="w-3.5 h-3.5" />
                 </button>
               </li>
@@ -115,7 +115,7 @@ export function NodeDetailPanel({
             <Pencil className="w-3.5 h-3.5" /> 수정
           </button>
           <button onClick={() => onDeleteManualNode(node.manualPk!)}
-            className="flex-1 inline-flex items-center justify-center gap-1.5 px-2.5 py-1.5 text-xs font-medium text-red-500 hover:bg-secondary border border-border rounded-xl">
+            className="flex-1 inline-flex items-center justify-center gap-1.5 px-2.5 py-1.5 text-xs font-medium text-status-critical hover:bg-secondary border border-border rounded-xl">
             <Trash2 className="w-3.5 h-3.5" /> 삭제
           </button>
         </div>

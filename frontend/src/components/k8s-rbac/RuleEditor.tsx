@@ -164,12 +164,12 @@ export function RuleEditor({ rules, onChange, disabled, disabledHint }: RuleEdit
                             title={disabled ? disabledHint : `${verb} ${on ? '해제' : '추가'}`}
                             aria-pressed={on}
                             className={`font-mono text-[11px] px-1.5 py-0.5 rounded border disabled:opacity-60 ${
-                              on
-                                ? write
-                                  ? 'bg-amber-500/15 border-amber-500/40 text-amber-700 dark:text-amber-400 font-semibold'
-                                  : 'bg-primary/15 border-primary/40 text-primary font-semibold'
-                                : 'bg-secondary border-border text-muted-foreground hover:border-primary/40'
-                            }`}
+ on
+ ? write
+ ? 'bg-status-warning/15 border-status-warning/40 text-status-warning font-semibold'
+ : 'bg-primary/15 border-primary/40 text-primary font-semibold'
+ : 'bg-secondary border-border text-muted-foreground hover:border-primary/40'
+ }`}
                           >
                             {verb}
                           </button>

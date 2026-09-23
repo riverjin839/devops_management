@@ -33,9 +33,9 @@ function fmtDate(s: string): string {
 }
 
 const STATUS_META: Record<SprintStatus, { label: string; cls: string }> = {
-  planning:  { label: '계획',   cls: 'bg-slate-500/10 text-slate-400 border-slate-500/30' },
+  planning:  { label: '계획',   cls: 'bg-status-unknown/10 text-status-unknown border-status-unknown/30' },
   active:    { label: '진행중', cls: 'bg-blue-500/10 text-blue-500 border-blue-500/30' },
-  completed: { label: '완료',   cls: 'bg-emerald-500/10 text-emerald-600 border-emerald-500/30' },
+  completed: { label: '완료',   cls: 'bg-status-healthy/10 text-status-healthy border-status-healthy/30' },
 };
 
 // ── create / edit modal ────────────────────────────────────────────────────
@@ -156,11 +156,11 @@ function SprintModal({
                 type="date"
                 value={form.endDate}
                 onChange={(e) => setForm((f) => ({ ...f, endDate: e.target.value }))}
-                className={`w-full px-3 py-2 text-sm bg-secondary border rounded-lg focus:outline-none font-mono ${invalidRange ? 'border-red-500/60' : 'border-border focus:border-primary/50'}`}
+                className={`w-full px-3 py-2 text-sm bg-secondary border rounded-lg focus:outline-none font-mono ${invalidRange ? 'border-status-critical/60' : 'border-border focus:border-primary/50'}`}
               />
             </div>
           </div>
-          {invalidRange && <p className="text-sm text-red-500">종료일은 시작일 이후여야 합니다.</p>}
+          {invalidRange && <p className="text-sm text-status-critical">종료일은 시작일 이후여야 합니다.</p>}
           <div className="flex items-center gap-2">
             {(['planning', 'active', 'completed'] as SprintStatus[]).map((s) => (
               <button
@@ -214,11 +214,11 @@ function CarryOverModal({
         <div className="p-5 space-y-3">
           <p className="text-sm text-muted-foreground">
             <span className="font-medium text-foreground">{source.name}</span> 의 미완료 항목
-            <span className="mx-1 px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-600 text-sm font-semibold">{remaining}건</span>
+            <span className="mx-1 px-1.5 py-0.5 rounded bg-status-warning/10 text-status-warning text-sm font-semibold">{remaining}건</span>
             을 다른 스프린트로 옮깁니다.
           </p>
           {targets.length === 0 ? (
-            <p className="text-sm text-red-500">이월할 대상 스프린트가 없습니다. 먼저 새 스프린트를 만들어 주세요.</p>
+            <p className="text-sm text-status-critical">이월할 대상 스프린트가 없습니다. 먼저 새 스프린트를 만들어 주세요.</p>
           ) : (
             <div>
               <label htmlFor="carryover-target" className="block text-sm font-medium text-muted-foreground mb-1">이월 대상</label>
@@ -276,15 +276,15 @@ function SprintCard({
           <p className="text-sm text-muted-foreground inline-flex items-center gap-1">
             <CalendarDays className="w-3 h-3" />{fmtDate(sprint.startDate)} ~ {fmtDate(sprint.endDate)}
             {sprint.status !== 'completed' && (
-              left < 0 ? <span className="ml-1 text-red-500 font-medium">종료일 경과</span>
-              : left === 0 ? <span className="ml-1 text-amber-500 font-medium">오늘 마감</span>
+              left < 0 ? <span className="ml-1 text-status-critical font-medium">종료일 경과</span>
+              : left === 0 ? <span className="ml-1 text-status-warning font-medium">오늘 마감</span>
               : <span className="ml-1 text-primary font-medium">D-{left}</span>
             )}
           </p>
         </div>
         <div className="flex items-center gap-1 flex-shrink-0">
           <button onClick={() => onEdit(sprint)} title="수정" aria-label="수정" className="p-1.5 rounded-lg hover:bg-secondary text-muted-foreground hover:text-foreground"><Pencil className="w-3.5 h-3.5" /></button>
-          <button onClick={() => onDelete(sprint)} title="삭제" aria-label="삭제" className="p-1.5 rounded-lg hover:bg-red-500/10 text-muted-foreground hover:text-red-500"><Trash2 className="w-3.5 h-3.5" /></button>
+          <button onClick={() => onDelete(sprint)} title="삭제" aria-label="삭제" className="p-1.5 rounded-lg hover:bg-status-critical/10 text-muted-foreground hover:text-status-critical"><Trash2 className="w-3.5 h-3.5" /></button>
         </div>
       </div>
 
@@ -305,9 +305,9 @@ function SprintCard({
       </div>
 
       <div className="flex items-center gap-3 text-sm text-muted-foreground flex-wrap">
-        <span className="text-emerald-600">완료 {sprint.doneItems}</span>
+        <span className="text-status-healthy">완료 {sprint.doneItems}</span>
         <span>전체 {sprint.totalItems}</span>
-        {remaining > 0 && <span className="text-amber-600">미완료 {remaining}</span>}
+        {remaining > 0 && <span className="text-status-warning">미완료 {remaining}</span>}
         {sprint.totalEffortHours > 0 && <span className="inline-flex items-center gap-0.5"><Clock className="w-3 h-3" />{sprint.totalEffortHours}h</span>}
         {sprint.assignees.length > 0 && <span className="inline-flex items-center gap-0.5"><Users className="w-3 h-3" />{sprint.assignees.length}명</span>}
       </div>
@@ -323,7 +323,7 @@ function SprintCard({
                 <ArrowRightLeft className="w-3 h-3" />이월
               </button>
             )}
-            <button onClick={() => onComplete(sprint)} className="ml-auto text-sm px-2.5 py-1.5 rounded-lg bg-emerald-500/10 text-emerald-600 hover:bg-emerald-500/20 transition-colors inline-flex items-center gap-1">
+            <button onClick={() => onComplete(sprint)} className="ml-auto text-sm px-2.5 py-1.5 rounded-lg bg-status-healthy/10 text-status-healthy hover:bg-status-healthy/20 transition-colors inline-flex items-center gap-1">
               <CheckCircle2 className="w-3 h-3" />종료
             </button>
           </>

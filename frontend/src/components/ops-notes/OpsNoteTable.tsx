@@ -154,7 +154,7 @@ function OpsNoteRow({
             : <span className="italic opacity-60">답변 없음</span>}
         </p>
         {hasBack && (
-          <span className="inline-block mt-0.5 text-xs px-1.5 py-0 rounded bg-slate-500/10 text-slate-500">
+          <span className="inline-block mt-0.5 text-xs px-1.5 py-0 rounded bg-status-unknown/10 text-status-unknown">
             히스토리 있음
           </span>
         )}
@@ -224,7 +224,7 @@ function OpsNoteRow({
           </button>
           <button
             onClick={() => onDelete(note)}
-            className="p-1.5 hover:bg-red-500/10 rounded-md text-muted-foreground hover:text-red-400 transition-colors"
+            className="p-1.5 hover:bg-status-critical/10 rounded-md text-muted-foreground hover:text-status-critical transition-colors"
             title="삭제"
           >
             <Trash2 className="w-3.5 h-3.5" />

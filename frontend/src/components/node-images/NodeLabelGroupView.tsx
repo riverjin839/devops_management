@@ -161,8 +161,8 @@ export function NodeLabelGroupView({ nodes, searchQuery }: Props) {
                         n.role === 'control-plane' ? 'bg-primary/10 text-primary' : 'bg-secondary text-muted-foreground'
                       }`}>{n.role}</span>
                       <span className={`text-[9.5px] px-1.5 py-0.5 rounded ${
-                        n.status === 'ready' ? 'bg-green-500/15 text-green-600 dark:text-green-400' :
-                        n.status === 'not-ready' ? 'bg-red-500/15 text-red-600 dark:text-red-400' :
+                        n.status === 'ready' ? 'bg-status-healthy/15 text-status-healthy' :
+                        n.status === 'not-ready' ? 'bg-status-critical/15 text-status-critical' :
                         'bg-muted text-muted-foreground'
                       }`}>{n.status}</span>
                     </div>

@@ -74,6 +74,10 @@ export function installableAppById(id: string): InstallableApp | undefined {
 export interface InstallableAppSection {
   label: string;
   apps: InstallableApp[];
+  /** GROUPS.description — 섹션 제목 아래 한 줄 설명. */
+  description?: string;
+  /** GROUPS.tone — `danger` 는 명령을 보내는 화면 묶음(경고 톤으로 구분). */
+  tone?: 'danger';
 }
 
 function sectionsForDomain(domain: 'platform' | 'system' | 'work', personal: InstallableApp[], isAdmin: boolean): InstallableAppSection[] {
@@ -81,6 +85,8 @@ function sectionsForDomain(domain: 'platform' | 'system' | 'work', personal: Ins
     .filter((g) => g.domain === domain || (domain === 'platform' && g.domain === 'system'))
     .map((g) => ({
       label: g.label,
+      description: g.description,
+      tone: g.tone,
       apps: LEAF_APPS.filter((a) => a.groupId === g.id && (!a.adminOnly || isAdmin)),
     }))
     .filter((s) => s.apps.length > 0);

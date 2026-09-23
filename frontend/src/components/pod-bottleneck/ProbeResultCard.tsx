@@ -5,9 +5,9 @@ import { ProbeAxisBadge } from './ProbeAxisBadge';
 import type { BottleneckStatus, ProbeResultOut } from '@/types';
 
 const STATUS_META: Record<BottleneckStatus, { label: string; cls: string; icon: typeof CheckCircle }> = {
-  healthy:  { label: '정상',  cls: 'text-emerald-500', icon: CheckCircle },
-  warning:  { label: '경고',  cls: 'text-amber-500',   icon: AlertTriangle },
-  critical: { label: '위험',  cls: 'text-red-500',     icon: XCircle },
+  healthy:  { label: '정상',  cls: 'text-status-healthy', icon: CheckCircle },
+  warning:  { label: '경고',  cls: 'text-status-warning',   icon: AlertTriangle },
+  critical: { label: '위험',  cls: 'text-status-critical',     icon: XCircle },
   pending:  { label: '미연결', cls: 'text-slate-400',   icon: WifiOff },
 };
 
@@ -45,9 +45,9 @@ export function ProbeResultCard({ probeKey, label, axis, result }: ProbeResultCa
         )}
 
         {result.manualFallback && (
-          <div className="text-sm rounded-md border border-amber-500/40 bg-amber-500/5 p-3 space-y-2">
+          <div className="text-sm rounded-md border border-status-warning/40 bg-status-warning/5 p-3 space-y-2">
             <div className="flex items-center justify-between">
-              <span className="text-xs font-semibold uppercase tracking-wider text-amber-600 dark:text-amber-400">
+              <span className="text-xs font-semibold uppercase tracking-wider text-status-warning">
                 Manual command 안내
               </span>
               <button

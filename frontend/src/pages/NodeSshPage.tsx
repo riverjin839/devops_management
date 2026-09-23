@@ -18,11 +18,11 @@ const TEST_STATUS_META: Record<
   NodeSshTestResult['status'],
   { label: string; cls: string; icon: React.ComponentType<{ className?: string }> }
 > = {
-  ok:            { label: '연결 성공', cls: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30', icon: CheckCircle },
-  error:         { label: '에러',      cls: 'bg-red-500/10 text-red-400 border-red-500/30',             icon: XCircle },
-  timeout:       { label: '타임아웃',  cls: 'bg-amber-500/10 text-amber-400 border-amber-500/30',       icon: Clock },
+  ok:            { label: '연결 성공', cls: 'bg-status-healthy/10 text-status-healthy border-status-healthy/30', icon: CheckCircle },
+  error:         { label: '에러',      cls: 'bg-status-critical/10 text-status-critical border-status-critical/30',             icon: XCircle },
+  timeout:       { label: '타임아웃',  cls: 'bg-status-warning/10 text-status-warning border-status-warning/30',       icon: Clock },
   auth_error:    { label: '인증 실패', cls: 'bg-orange-500/10 text-orange-400 border-orange-500/30',    icon: ShieldAlert },
-  connect_error: { label: '연결 실패', cls: 'bg-slate-500/10 text-slate-400 border-slate-500/30',       icon: Wifi },
+  connect_error: { label: '연결 실패', cls: 'bg-status-unknown/10 text-status-unknown border-status-unknown/30',       icon: Wifi },
 };
 
 /**
@@ -170,7 +170,7 @@ export function NodeSshPage() {
               개별 노드에 SSH 로그인 셸을 열어 웹 터미널로 사용
             </span>
             {effectiveHost && (
-              <span className="ml-auto text-sm px-2 py-0.5 rounded-full bg-slate-500/15 text-slate-400 border border-slate-500/30 font-mono">
+              <span className="ml-auto text-sm px-2 py-0.5 rounded-full bg-status-unknown/15 text-status-unknown border border-status-unknown/30 font-mono">
                 → {username}@{effectiveHost}:{port}
               </span>
             )}
@@ -250,7 +250,7 @@ export function NodeSshPage() {
                           }`}
                         >
                           <span
-                            className={`w-1.5 h-1.5 rounded-full shrink-0 ${n.ready ? 'bg-emerald-500' : 'bg-red-500'}`}
+                            className={`w-1.5 h-1.5 rounded-full shrink-0 ${n.ready ? 'bg-status-healthy' : 'bg-status-critical'}`}
                             title={n.ready ? 'Ready' : 'NotReady'}
                           />
                           <span className={`text-sm truncate ${active ? 'text-foreground font-medium' : 'text-foreground/80'}`}>

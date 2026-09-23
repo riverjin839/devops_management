@@ -13,11 +13,11 @@ import { useTerminalEnvSync } from '@/hooks/useTerminalEnvSync';
 import { formatApiError } from '@/lib/utils';
 
 const STATUS_META: Record<EtcdCtlRunResponse['status'], { label: string; cls: string; icon: React.ComponentType<{ className?: string }> }> = {
-  ok:            { label: '정상',     cls: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30',  icon: CheckCircle },
-  error:         { label: '에러',     cls: 'bg-red-500/10 text-red-400 border-red-500/30',              icon: XCircle },
-  timeout:       { label: '타임아웃', cls: 'bg-amber-500/10 text-amber-400 border-amber-500/30',        icon: Clock },
+  ok:            { label: '정상',     cls: 'bg-status-healthy/10 text-status-healthy border-status-healthy/30',  icon: CheckCircle },
+  error:         { label: '에러',     cls: 'bg-status-critical/10 text-status-critical border-status-critical/30',              icon: XCircle },
+  timeout:       { label: '타임아웃', cls: 'bg-status-warning/10 text-status-warning border-status-warning/30',        icon: Clock },
   auth_error:    { label: '인증 실패', cls: 'bg-orange-500/10 text-orange-400 border-orange-500/30',    icon: ShieldAlert },
-  connect_error: { label: '연결 실패', cls: 'bg-slate-500/10 text-slate-400 border-slate-500/30',       icon: Wifi },
+  connect_error: { label: '연결 실패', cls: 'bg-status-unknown/10 text-status-unknown border-status-unknown/30',       icon: Wifi },
 };
 
 // 타겟/프리셋 옆(우측)에 고정 위치로 배치 — 실행 전에도 같은 자리에 플레이스홀더를 보여줘
@@ -50,7 +50,7 @@ function ResultPanel({ result }: { result: EtcdCtlRunResponse | null }) {
           )}
           <span className="text-sm font-mono text-muted-foreground">{result.durationMs}ms</span>
         </div>
-        {result.error && <span className="text-sm text-red-400">⚠ {result.error}</span>}
+        {result.error && <span className="text-sm text-status-critical">⚠ {result.error}</span>}
       </header>
       <div className="px-5 py-3 space-y-3">
         <div>
@@ -148,7 +148,7 @@ export function McClientPage() {
             <HardDrive className="w-6 h-6 text-primary" />
             <h1 className="text-xl font-bold">mc 클라이언트 콘솔</h1>
             {effectiveHost && (
-              <span className="text-sm px-2 py-0.5 rounded-full bg-slate-500/15 text-slate-400 border border-slate-500/30 font-mono">
+              <span className="text-sm px-2 py-0.5 rounded-full bg-status-unknown/15 text-status-unknown border border-status-unknown/30 font-mono">
                 → {effectiveHost}
               </span>
             )}
@@ -324,7 +324,7 @@ export function McClientPage() {
             </pre>
           </div>
           {isDanger && (
-            <div className="text-sm text-red-400 border border-red-500/30 bg-red-500/5 rounded p-2">
+            <div className="text-sm text-status-critical border border-status-critical/30 bg-status-critical/5 rounded p-2">
               ⚠ 쓰기 성격 명령(rm/mirror/admin service restart/policy set 등)이 감지되었습니다. 정말 진행하시겠습니까?
             </div>
           )}

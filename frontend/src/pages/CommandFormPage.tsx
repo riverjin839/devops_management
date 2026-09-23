@@ -228,7 +228,7 @@ function CommandForm({ initial, onCancel, onSaved }: CommandFormProps) {
         onChange={setConfluenceUrl}
       />
 
-      {error && <div className="text-sm text-red-500">{error}</div>}
+      {error && <div className="text-sm text-status-critical">{error}</div>}
 
       <div className="flex justify-end gap-2 pt-2 border-t border-border">
         <button

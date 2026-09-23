@@ -87,12 +87,12 @@ export function JiraConnectCard({ compact = false }: { compact?: boolean }) {
   const open = editing || !connected;
 
   return (
-    <div className={`rounded-xl border ${connected ? 'border-border bg-secondary/30' : 'border-amber-500/40 bg-amber-500/5'} p-3 space-y-2`}>
+    <div className={`rounded-xl border ${connected ? 'border-border bg-secondary/30' : 'border-status-warning/40 bg-status-warning/5'} p-3 space-y-2`}>
       <div className="flex items-center gap-2 flex-wrap">
         <span className="text-sm font-semibold">내 Jira 연결</span>
         <span className={`inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full border ${
-          connected ? 'bg-emerald-500/10 text-emerald-500 border-emerald-500/30'
-            : 'bg-amber-500/10 text-amber-500 border-amber-500/30'
+          connected ? 'bg-status-healthy/10 text-status-healthy border-status-healthy/30'
+            : 'bg-status-warning/10 text-status-warning border-status-warning/30'
         }`}>
           {connected
             ? `등록됨 · ${cred?.authType === 'sso' ? 'SSO' : cred?.authType === 'cookie' ? '세션 쿠키' : 'PAT'}`
@@ -123,7 +123,7 @@ export function JiraConnectCard({ compact = false }: { compact?: boolean }) {
 
       {result && (
         <div className={`text-xs px-2 py-1.5 rounded-lg inline-flex items-center gap-1.5 ${
-          result.ok ? 'bg-emerald-500/10 text-emerald-500' : 'bg-red-500/10 text-red-500'
+          result.ok ? 'bg-status-healthy/10 text-status-healthy' : 'bg-status-critical/10 text-status-critical'
         }`}>
           {result.ok ? <CheckCircle2 className="w-3.5 h-3.5" /> : <WifiOff className="w-3.5 h-3.5" />}
           {result.detail}
@@ -174,7 +174,7 @@ export function JiraConnectCard({ compact = false }: { compact?: boolean }) {
             </button>
             {connected && (
               <button type="button" onClick={() => void handleDelete()} disabled={busy}
-                className="ml-auto inline-flex items-center gap-1 px-2 py-1 rounded-lg text-xs text-red-500 hover:bg-red-500/10 disabled:opacity-50">
+                className="ml-auto inline-flex items-center gap-1 px-2 py-1 rounded-lg text-xs text-status-critical hover:bg-status-critical/10 disabled:opacity-50">
                 <Trash2 className="w-3.5 h-3.5" /> 인증 삭제
               </button>
             )}
@@ -192,7 +192,7 @@ export function JiraConnectCard({ compact = false }: { compact?: boolean }) {
                       <b> 통째로</b> 복사해 위에 붙여넣습니다.</li>
                     <li>저장하면 자동으로 연결 테스트까지 수행합니다.</li>
                   </ol>
-                  <p className="text-amber-500">
+                  <p className="text-status-warning">
                     ⚠ <b>값만 넣으면 안 됩니다</b> — <code className="px-1 rounded bg-secondary">이름=값</code> 형식이어야 하고,
                     여러 개면 <code className="px-1 rounded bg-secondary">;</code> 로 연결합니다. SSO 환경은 JSESSIONID
                     하나로 부족한 경우가 많아 <b>Cookie 헤더 전체</b>가 확실합니다.

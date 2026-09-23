@@ -76,14 +76,14 @@ export function StepSchedule({ state, onChange, requiresSsh = true }: StepSchedu
         </div>
 
         {credsMissing && (
-          <div className="mt-2 text-xs text-amber-600 bg-amber-500/10 border border-amber-500/30 rounded-lg p-2">
+          <div className="mt-2 text-xs text-status-warning bg-status-warning/10 border border-status-warning/30 rounded-lg p-2">
             ⚠ cron 을 사용하려면 비밀번호 또는 개인키 중 하나를 지금 입력해야
             등록할 수 있습니다. 자격증명 없이 등록하려면 cron 을 비워 수동 실행
             전용으로 만드세요.
           </div>
         )}
         {hostMissing && (
-          <div className="mt-2 text-xs text-amber-600 bg-amber-500/10 border border-amber-500/30 rounded-lg p-2">
+          <div className="mt-2 text-xs text-status-warning bg-status-warning/10 border border-status-warning/30 rounded-lg p-2">
             ⚠ cron 을 사용하려면 기본 호스트도 필요합니다 — 이전 단계에서
             호스트를 지정하세요.
           </div>

@@ -62,7 +62,7 @@ function renderHighlighted(body: string, re: RegExp): React.ReactNode[] {
   while ((m = re.exec(body)) !== null) {
     if (m.index > last) out.push(body.slice(last, m.index));
     out.push(
-      <mark key={m.index} className="bg-amber-400/50 text-inherit rounded-[2px] px-px">
+      <mark key={m.index} className="bg-status-warning/50 text-inherit rounded-[2px] px-px">
         {m[0]}
       </mark>,
     );
@@ -320,7 +320,7 @@ export function PodLogStream({
           <History className="w-3.5 h-3.5" /> previous
         </label>
         {streaming ? (
-          <button onClick={stop} className="inline-flex items-center gap-1.5 rounded-xl bg-red-500/90 text-white px-3 py-1.5 text-sm font-medium hover:bg-red-500">
+          <button onClick={stop} className="inline-flex items-center gap-1.5 rounded-xl bg-status-critical/90 text-white px-3 py-1.5 text-sm font-medium hover:bg-status-critical">
             <Square className="w-3.5 h-3.5" /> 중지
           </button>
         ) : (
@@ -423,7 +423,7 @@ export function PodLogStream({
       </div>
 
       {err && (
-        <div className="mb-2 text-sm text-red-500 flex items-center gap-1.5">
+        <div className="mb-2 text-sm text-status-critical flex items-center gap-1.5">
           <RefreshCw className="w-3 h-3" /> {err}
         </div>
       )}

@@ -7,10 +7,10 @@ import { formatApiError } from '@/lib/utils';
 
 const COLOR_OPTIONS = [
   { value: 'blue',   label: '파랑',  cls: 'bg-blue-500' },
-  { value: 'emerald', label: '초록', cls: 'bg-emerald-500' },
+  { value: 'emerald', label: '초록', cls: 'bg-status-healthy' },
   { value: 'violet', label: '보라',  cls: 'bg-violet-500' },
-  { value: 'amber',  label: '노랑',  cls: 'bg-amber-500' },
-  { value: 'rose',   label: '빨강',  cls: 'bg-rose-500' },
+  { value: 'amber',  label: '노랑',  cls: 'bg-status-warning' },
+  { value: 'rose',   label: '빨강',  cls: 'bg-status-critical' },
   { value: 'slate',  label: '회색',  cls: 'bg-slate-500' },
 ];
 

@@ -113,7 +113,7 @@ export function SavedCreds({ job }: SavedCredsProps) {
       </div>
 
       {cronRequiresCreds && (
-        <div className="flex items-start gap-1.5 text-xs text-amber-600 bg-amber-500/10 border border-amber-500/30 rounded-xl px-2.5 py-2">
+        <div className="flex items-start gap-1.5 text-xs text-status-warning bg-status-warning/10 border border-status-warning/30 rounded-xl px-2.5 py-2">
           <ShieldAlert className="w-3.5 h-3.5 mt-0.5 flex-shrink-0" />
           <span>
             cron <span className="font-mono">{job.cron}</span> 가 설정됐지만 저장된 자격증명이
@@ -133,7 +133,7 @@ export function SavedCreds({ job }: SavedCredsProps) {
               type="button"
               onClick={() => clear('password')}
               disabled={update.isPending}
-              className="inline-flex items-center gap-1 text-xs text-red-500 hover:underline disabled:opacity-60"
+              className="inline-flex items-center gap-1 text-xs text-status-critical hover:underline disabled:opacity-60"
             >
               <Trash2 className="w-3 h-3" />
               저장된 비밀번호 삭제
@@ -161,7 +161,7 @@ export function SavedCreds({ job }: SavedCredsProps) {
               type="button"
               onClick={() => clear('privateKey')}
               disabled={update.isPending}
-              className="inline-flex items-center gap-1 text-xs text-red-500 hover:underline disabled:opacity-60"
+              className="inline-flex items-center gap-1 text-xs text-status-critical hover:underline disabled:opacity-60"
             >
               <Trash2 className="w-3 h-3" />
               저장된 개인키 삭제
@@ -182,8 +182,8 @@ export function SavedCreds({ job }: SavedCredsProps) {
         />
       </div>
 
-      {error && <div className="text-xs text-red-500">{error}</div>}
-      {okMsg && <div className="text-xs text-emerald-600">{okMsg}</div>}
+      {error && <div className="text-xs text-status-critical">{error}</div>}
+      {okMsg && <div className="text-xs text-status-healthy">{okMsg}</div>}
 
       <TestConnectionResult result={testResult} />
 
@@ -221,7 +221,7 @@ export function SavedCreds({ job }: SavedCredsProps) {
 function CredBadge({ label, present }: { label: string; present: boolean }) {
   if (present) {
     return (
-      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-600 border border-emerald-500/30">
+      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-status-healthy/10 text-status-healthy border border-status-healthy/30">
         <ShieldCheck className="w-3 h-3" />
         {label} 저장됨
       </span>

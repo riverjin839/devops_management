@@ -261,7 +261,7 @@ export function LogViewer({
             aria-label="복사"
             className="p-1 rounded hover:bg-secondary text-muted-foreground"
           >
-            {copied ? <Check className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3" />}
+            {copied ? <Check className="w-3 h-3 text-status-healthy" /> : <Copy className="w-3 h-3" />}
           </button>
           <LogThemeButton />
           {collapsible && (

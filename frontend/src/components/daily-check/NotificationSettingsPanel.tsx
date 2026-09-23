@@ -108,7 +108,7 @@ function ChannelRow({
         title={channel.enabled ? '비활성화' : '활성화'}
         className={`rounded-lg p-1.5 ${
           channel.enabled
-            ? 'text-emerald-600 hover:bg-emerald-500/10'
+            ? 'text-status-healthy hover:bg-status-healthy/10'
             : 'text-muted-foreground hover:bg-muted'
         }`}
       >
@@ -138,7 +138,7 @@ function ChannelRow({
       <button
         type="button"
         onClick={onDelete}
-        className="rounded-lg p-1.5 text-red-500 hover:bg-red-500/10"
+        className="rounded-lg p-1.5 text-status-critical hover:bg-status-critical/10"
         title="삭제"
       >
         <Trash2 className="w-4 h-4" />
@@ -202,7 +202,7 @@ function ChannelForm({
         rows={4}
         className="w-full rounded-xl border border-border bg-card px-3 py-2 text-sm font-mono resize-y"
       />
-      {error && <div className="text-sm text-red-500">{error}</div>}
+      {error && <div className="text-sm text-status-critical">{error}</div>}
       <div className="flex justify-end">
         <button
           type="button"

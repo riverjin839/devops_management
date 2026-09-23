@@ -101,7 +101,7 @@ export function ServiceNowRegisterDialog({ open, onClose, item }: ServiceNowRegi
           </p>
 
           {result?.authIssue && (
-            <div className="rounded-xl bg-amber-500/10 text-amber-600 dark:text-amber-400 px-3 py-2 text-sm flex items-start gap-1.5">
+            <div className="rounded-xl bg-status-warning/10 text-status-warning px-3 py-2 text-sm flex items-start gap-1.5">
               <AlertTriangle className="w-3.5 h-3.5 mt-0.5 flex-shrink-0" />
               <span>Settings → 연동(Jira)에서 &apos;SSO 자동 로그인&apos; 후 다시 시도하세요.</span>
             </div>

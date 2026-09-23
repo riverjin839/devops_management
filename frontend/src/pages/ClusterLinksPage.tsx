@@ -119,7 +119,7 @@ function LinkCard({ link, onEdit, onDelete }: { link: ClusterLink; onEdit: () =>
       </div>
       <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0">
         <button onClick={onEdit}   className="p-1.5 hover:bg-secondary rounded-md text-muted-foreground hover:text-foreground" title="편집" aria-label="편집"><Pencil className="w-3.5 h-3.5" /></button>
-        <button onClick={onDelete} className="p-1.5 hover:bg-red-500/10 rounded-md text-muted-foreground hover:text-red-500" title="삭제" aria-label="삭제"><Trash2 className="w-3.5 h-3.5" /></button>
+        <button onClick={onDelete} className="p-1.5 hover:bg-status-critical/10 rounded-md text-muted-foreground hover:text-status-critical" title="삭제" aria-label="삭제"><Trash2 className="w-3.5 h-3.5" /></button>
       </div>
     </div>
   );
@@ -141,7 +141,7 @@ function CompactLinkCell({ link, onEdit, onDelete, fontClass, fsClass }: {
       </div>
       <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0">
         <button onClick={onEdit}   className="p-1 hover:bg-secondary rounded text-muted-foreground hover:text-foreground" aria-label="편집"><Pencil className="w-2.5 h-2.5" /></button>
-        <button onClick={onDelete} className="p-1 hover:bg-red-500/10 rounded text-muted-foreground hover:text-red-400" aria-label="삭제"><Trash2 className="w-2.5 h-2.5" /></button>
+        <button onClick={onDelete} className="p-1 hover:bg-status-critical/10 rounded text-muted-foreground hover:text-status-critical" aria-label="삭제"><Trash2 className="w-2.5 h-2.5" /></button>
       </div>
     </div>
   );
@@ -327,12 +327,12 @@ export function ClusterLinksPage() {
     // ── Header row ──
     // Common header
     cells.push(
-      <div key="h-common" className={`relative flex items-center gap-1.5 border-b border-r ${borderCls} px-3 py-2 bg-emerald-500/10 sticky top-0 z-10`}>
-        <Globe className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400 flex-shrink-0" />
-        <span className="font-semibold text-xs uppercase tracking-wider text-emerald-700 dark:text-emerald-300 truncate">공통 링크</span>
+      <div key="h-common" className={`relative flex items-center gap-1.5 border-b border-r ${borderCls} px-3 py-2 bg-status-healthy/10 sticky top-0 z-10`}>
+        <Globe className="w-3.5 h-3.5 text-status-healthy flex-shrink-0" />
+        <span className="font-semibold text-xs uppercase tracking-wider text-status-healthy truncate">공통 링크</span>
         <span className="ml-auto text-xs text-muted-foreground tabular-nums flex-shrink-0">({filteredCommonLinks.length})</span>
         <button onClick={() => { setTableFormTarget('common'); setEditingCommon(null); setEditingLink(null); }}
-          className="ml-1 p-0.5 rounded text-emerald-600/60 dark:text-emerald-400/60 hover:text-emerald-700 dark:hover:text-emerald-300 hover:bg-emerald-500/15 transition-colors flex-shrink-0" title="공통 링크 추가" aria-label="공통 링크 추가">
+          className="ml-1 p-0.5 rounded text-status-healthy/60 hover:text-status-healthy dark:hover:text-status-healthy hover:bg-status-healthy/15 transition-colors flex-shrink-0" title="공통 링크 추가" aria-label="공통 링크 추가">
           <Plus className="w-3 h-3" />
         </button>
         <ColResizeHandle colId="common" currentWidth={colW('common')} onResize={handleColResize} onResizeDone={handleColResizeDone} />
@@ -597,13 +597,13 @@ export function ClusterLinksPage() {
             {/* Common links section */}
             <MacCard bodyPadding="p-0">
               <div className="flex items-center px-4 py-2.5 border-b border-border bg-muted/40 gap-2">
-                <Globe aria-hidden="true" className="w-3.5 h-3.5 text-emerald-500" />
+                <Globe aria-hidden="true" className="w-3.5 h-3.5 text-status-healthy" />
                 <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground select-none">
                   공통 서비스 링크
                 </span>
                 <span className="text-xs text-muted-foreground/70 tabular-nums">({filteredCommonLinks.length})</span>
                 <button onClick={() => { setAddingCommon(true); setEditingCommon(null); }}
-                  className="ml-auto px-2 py-1 text-xs font-medium bg-emerald-500/10 hover:bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/25 rounded-md transition-colors flex items-center gap-1">
+                  className="ml-auto px-2 py-1 text-xs font-medium bg-status-healthy/10 hover:bg-status-healthy/15 text-status-healthy border border-status-healthy/25 rounded-md transition-colors flex items-center gap-1">
                   <Plus className="w-3 h-3" /> 추가
                 </button>
               </div>
@@ -667,7 +667,7 @@ function StatTile({ label, value, accent }: { label: string; value: number; acce
   return (
     <div className="rounded-lg border border-border bg-muted/30 px-3 py-2">
       <p className="text-xs uppercase tracking-wider text-muted-foreground">{label}</p>
-      <p className={`text-lg font-semibold tabular-nums leading-tight ${accent ? 'text-emerald-600 dark:text-emerald-400' : 'text-foreground'}`}>
+      <p className={`text-lg font-semibold tabular-nums leading-tight ${accent ? 'text-status-healthy' : 'text-foreground'}`}>
         {value}
       </p>
     </div>

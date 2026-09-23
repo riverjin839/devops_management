@@ -45,21 +45,21 @@ const KANBAN_LABEL: Record<string, string> = {
   review_test: '검토', done: '완료',
 };
 const PRIORITY_COLOR: Record<string, string> = {
-  high:   'bg-red-500/15 text-red-600 dark:text-red-300 border-red-500/25',
-  medium: 'bg-amber-500/15 text-amber-600 dark:text-amber-300 border-amber-500/25',
-  low:    'bg-emerald-500/15 text-emerald-600 dark:text-emerald-300 border-emerald-500/25',
+  high:   'bg-status-critical/15 text-status-critical border-status-critical/25',
+  medium: 'bg-status-warning/15 text-status-warning border-status-warning/25',
+  low:    'bg-status-healthy/15 text-status-healthy border-status-healthy/25',
 };
 const MODULE_COLOR: Record<string, string> = {
-  k8s:        'bg-sky-500/15 text-sky-600 dark:text-sky-300',
+  k8s:        'bg-status-info/15 text-status-info',
   keycloak:   'bg-purple-500/15 text-purple-600 dark:text-purple-300',
   nexus:      'bg-orange-500/15 text-orange-600 dark:text-orange-300',
   cilium:     'bg-cyan-500/15 text-cyan-600 dark:text-cyan-300',
-  argocd:     'bg-emerald-500/15 text-emerald-600 dark:text-emerald-300',
-  jenkins:    'bg-red-500/15 text-red-600 dark:text-red-300',
+  argocd:     'bg-status-healthy/15 text-status-healthy',
+  jenkins:    'bg-status-critical/15 text-status-critical',
   backend:    'bg-indigo-500/15 text-indigo-600 dark:text-indigo-300',
   frontend:   'bg-pink-500/15 text-pink-600 dark:text-pink-300',
   monitoring: 'bg-teal-500/15 text-teal-600 dark:text-teal-300',
-  infra:      'bg-slate-500/15 text-slate-600 dark:text-slate-300',
+  infra:      'bg-status-unknown/15 text-status-unknown dark:text-slate-300',
 };
 
 // ── types ─────────────────────────────────────────────────────────────────────
@@ -92,13 +92,13 @@ interface AssigneeRow {
 function StatusIcon({ status, type }: { status: string; type: 'task' | 'issue' }) {
   if (type === 'issue') {
     return status === 'resolved'
-      ? <CheckCircle2 className="w-3 h-3 text-emerald-500 flex-shrink-0" />
-      : <AlertCircle className="w-3 h-3 text-red-500 flex-shrink-0" />;
+      ? <CheckCircle2 className="w-3 h-3 text-status-healthy flex-shrink-0" />
+      : <AlertCircle className="w-3 h-3 text-status-critical flex-shrink-0" />;
   }
   const icons: Record<string, JSX.Element> = {
-    done:        <CheckCircle2 className="w-3 h-3 text-emerald-500 flex-shrink-0" />,
-    in_progress: <Clock className="w-3 h-3 text-sky-500 flex-shrink-0" />,
-    review_test: <Clock className="w-3 h-3 text-amber-500 flex-shrink-0" />,
+    done:        <CheckCircle2 className="w-3 h-3 text-status-healthy flex-shrink-0" />,
+    in_progress: <Clock className="w-3 h-3 text-status-info flex-shrink-0" />,
+    review_test: <Clock className="w-3 h-3 text-status-warning flex-shrink-0" />,
     todo:        <Circle className="w-3 h-3 text-muted-foreground flex-shrink-0" />,
     backlog:     <Circle className="w-3 h-3 text-muted-foreground/60 flex-shrink-0" />,
   };
@@ -109,11 +109,11 @@ function ItemCard({ item, onClick }: { item: DayItem; onClick: () => void }) {
   const isIssue = item.type === 'issue';
   const base = isIssue
     ? (item.resolved
-        ? 'border-l-emerald-500 bg-emerald-500/5'
+        ? 'border-l-status-healthy bg-status-healthy/5'
         : 'border-l-orange-500 bg-orange-500/5')
     : item.isSubTask
       ? 'border-l-indigo-400 bg-indigo-500/5 opacity-90'
-      : 'border-l-sky-500 bg-sky-500/5';
+      : 'border-l-status-info bg-status-info/5';
 
   return (
     <button
@@ -139,7 +139,7 @@ function ItemCard({ item, onClick }: { item: DayItem; onClick: () => void }) {
           </span>
         )}
         {isIssue && (
-          <span className={`text-[10px] px-1 rounded-md ${item.resolved ? 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-300' : 'bg-orange-500/15 text-orange-600 dark:text-orange-300'}`}>
+          <span className={`text-[10px] px-1 rounded-md ${item.resolved ? 'bg-status-healthy/15 text-status-healthy' : 'bg-orange-500/15 text-orange-600 dark:text-orange-300'}`}>
             {item.resolved ? '해결' : '미해결'}
           </span>
         )}
@@ -154,7 +154,7 @@ function DetailModal({ item, onClose }: { item: DayItem; onClose: () => void }) 
   const isIssue = item.type === 'issue';
   const title = (
     <div className="flex items-center gap-2 flex-wrap min-w-0">
-      <span className={`text-xs px-2 py-0.5 rounded-full font-semibold flex-shrink-0 ${isIssue ? 'bg-orange-500/15 text-orange-600 dark:text-orange-300' : 'bg-sky-500/15 text-sky-600 dark:text-sky-300'}`}>
+      <span className={`text-xs px-2 py-0.5 rounded-full font-semibold flex-shrink-0 ${isIssue ? 'bg-orange-500/15 text-orange-600 dark:text-orange-300' : 'bg-status-info/15 text-status-info'}`}>
         {isIssue ? '이슈' : '작업'}
       </span>
       {item.module && (
@@ -253,7 +253,7 @@ function SummaryBar({ tasks, issues }: { tasks: WorkItem[]; issues: WorkItem[] }
         icon={<CheckCircle2 className="w-4 h-4" />}
         label="이슈 해결률"
         value={`${issueCounts.total > 0 ? Math.round((issueCounts.resolved / issueCounts.total) * 100) : 0}%`}
-        accent="text-emerald-500"
+        accent="text-status-healthy"
         progress={issueCounts.total > 0 ? Math.round((issueCounts.resolved / issueCounts.total) * 100) : 0}
       />
     </div>
@@ -292,10 +292,10 @@ function SummaryStat({ icon, label, value, accent = 'text-foreground', breakdown
 }
 
 const CHIP_COLOR: Record<string, string> = {
-  emerald: 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-300',
-  sky:     'bg-sky-500/15 text-sky-600 dark:text-sky-300',
-  slate:   'bg-slate-500/15 text-slate-600 dark:text-slate-300',
-  red:     'bg-red-500/15 text-red-600 dark:text-red-300',
+  emerald: 'bg-status-healthy/15 text-status-healthy',
+  sky:     'bg-status-info/15 text-status-info',
+  slate:   'bg-status-unknown/15 text-status-unknown dark:text-slate-300',
+  red:     'bg-status-critical/15 text-status-critical',
 };
 
 function Chip({ color, children }: { color: keyof typeof CHIP_COLOR | string; children: React.ReactNode }) {
@@ -308,9 +308,9 @@ function Chip({ color, children }: { color: keyof typeof CHIP_COLOR | string; ch
 
 // ── 개인별 Gantt 보기 ──────────────────────────────────────────────────────────
 const STATUS_CELL: Record<string, string> = {
-  done:        'bg-emerald-500/30 border-emerald-500/50',
-  in_progress: 'bg-sky-500/40 border-sky-500/55',
-  review_test: 'bg-amber-500/30 border-amber-500/50',
+  done:        'bg-status-healthy/30 border-status-healthy/50',
+  in_progress: 'bg-status-info/40 border-status-info/55',
+  review_test: 'bg-status-warning/30 border-status-warning/50',
   todo:        'bg-primary/20 border-primary/30',
   backlog:     'bg-secondary border-border',
 };
@@ -462,7 +462,7 @@ function PersonalGanttView({
                         style={{ minWidth: COL_W, width: COL_W, height: 34 }}>
                         {on && (
                           <div className={`mx-0.5 rounded border h-[22px] ${cellColor} flex items-center justify-center gap-0.5`}>
-                            {t.kanbanStatus === 'done' && <CheckCircle2 className="w-2.5 h-2.5 text-green-500" />}
+                            {t.kanbanStatus === 'done' && <CheckCircle2 className="w-2.5 h-2.5 text-status-healthy" />}
                             {t.kanbanStatus === 'in_progress' && <Clock className="w-2.5 h-2.5 text-blue-400" />}
                           </div>
                         )}
@@ -484,7 +484,7 @@ function PersonalGanttView({
                   <td className="sticky left-0 z-10 border-b border-r border-border px-3 py-1.5 align-middle"
                     style={{ backgroundColor: bgBase }}>
                     <div className="flex items-center gap-1.5">
-                      <AlertCircle className={`w-3 h-3 flex-shrink-0 ${iss.closedAt ? 'text-green-400' : 'text-red-400'}`} />
+                      <AlertCircle className={`w-3 h-3 flex-shrink-0 ${iss.closedAt ? 'text-status-healthy' : 'text-status-critical'}`} />
                       <span className="truncate max-w-[180px] font-medium leading-tight">{stripHtml(iss.content)}</span>
                     </div>
                     <div className="text-xs text-muted-foreground mt-0.5 ml-4">{iss.category}</div>
@@ -499,8 +499,8 @@ function PersonalGanttView({
                         className={`border-b border-r border-border align-middle ${isTd ? 'bg-primary/5' : isWeekend(d) ? 'bg-secondary/20' : ''} ${on ? 'cursor-pointer' : ''}`}
                         style={{ minWidth: COL_W, width: COL_W, height: 34 }}>
                         {on && (
-                          <div className={`mx-0.5 rounded border h-[22px] ${iss.closedAt ? 'bg-green-500/30 border-green-500/50' : 'bg-orange-500/30 border-orange-500/50'} flex items-center justify-center`}>
-                            <AlertCircle className={`w-2.5 h-2.5 ${iss.closedAt ? 'text-green-400' : 'text-orange-400'}`} />
+                          <div className={`mx-0.5 rounded border h-[22px] ${iss.closedAt ? 'bg-status-healthy/30 border-status-healthy/50' : 'bg-orange-500/30 border-orange-500/50'} flex items-center justify-center`}>
+                            <AlertCircle className={`w-2.5 h-2.5 ${iss.closedAt ? 'text-status-healthy' : 'text-orange-400'}`} />
                           </div>
                         )}
                       </td>
@@ -1028,11 +1028,11 @@ export function WbsFlowPage() {
         {/* ── Legend ──────────────────────────────────────────────────── */}
         <div className="flex items-center gap-3 text-sm text-muted-foreground flex-wrap px-1">
           <span className="font-medium">범례:</span>
-          <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-sm bg-sky-500/30 inline-block" /> 작업</span>
+          <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-sm bg-status-info/30 inline-block" /> 작업</span>
           <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-sm bg-orange-500/30 inline-block" /> 이슈</span>
-          <span className="flex items-center gap-1"><CheckCircle2 className="w-3 h-3 text-emerald-500" /> 완료/해결</span>
-          <span className="flex items-center gap-1"><Clock className="w-3 h-3 text-sky-500" /> 진행중</span>
-          <span className="flex items-center gap-1"><AlertCircle className="w-3 h-3 text-red-500" /> 미해결</span>
+          <span className="flex items-center gap-1"><CheckCircle2 className="w-3 h-3 text-status-healthy" /> 완료/해결</span>
+          <span className="flex items-center gap-1"><Clock className="w-3 h-3 text-status-info" /> 진행중</span>
+          <span className="flex items-center gap-1"><AlertCircle className="w-3 h-3 text-status-critical" /> 미해결</span>
           <span className="ml-auto text-xs">클릭 시 상세 정보</span>
         </div>
       </main>

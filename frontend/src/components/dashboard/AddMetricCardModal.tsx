@@ -408,7 +408,7 @@ export function AddMetricCardModal({ isOpen, onClose, editingCard }: AddMetricCa
           <div className="grid grid-cols-[1fr_80px] gap-3">
             <div>
               <label htmlFor={titleId} className="block text-sm font-medium mb-1">
-                Title <span className="text-red-400">*</span>
+                Title <span className="text-status-critical">*</span>
               </label>
               <input
                 id={titleId}
@@ -445,7 +445,7 @@ export function AddMetricCardModal({ isOpen, onClose, editingCard }: AddMetricCa
 
           <div>
             <label htmlFor={promqlId} className="block text-sm font-medium mb-1">
-              PromQL Query <span className="text-red-400">*</span>
+              PromQL Query <span className="text-status-critical">*</span>
             </label>
             <textarea
               id={promqlId}
@@ -465,12 +465,12 @@ export function AddMetricCardModal({ isOpen, onClose, editingCard }: AddMetricCa
                 {testStatus === 'loading' ? 'Testing...' : 'Test Query'}
               </button>
               {testStatus === 'ok' && (
-                <span className="text-sm text-green-400 flex items-center gap-1">
+                <span className="text-sm text-status-healthy flex items-center gap-1">
                   <CheckCircle2 className="w-3 h-3" /> {testResult}
                 </span>
               )}
               {testStatus === 'error' && (
-                <span className="text-sm text-red-400 flex items-center gap-1">
+                <span className="text-sm text-status-critical flex items-center gap-1">
                   <AlertTriangle className="w-3 h-3" /> {testResult}
                 </span>
               )}

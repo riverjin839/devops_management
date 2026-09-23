@@ -495,7 +495,7 @@ export function AssigneeManager() {
                         )}
                         <button onClick={() => setDeleteTarget(a)} disabled={isSelf || !a.id}
                           title={isSelf ? '자기 자신은 삭제할 수 없습니다' : '삭제'}
-                          className="p-1.5 rounded hover:bg-red-500/10 text-muted-foreground hover:text-red-400 transition-colors disabled:opacity-40 disabled:cursor-not-allowed">
+                          className="p-1.5 rounded hover:bg-status-critical/10 text-muted-foreground hover:text-status-critical transition-colors disabled:opacity-40 disabled:cursor-not-allowed">
                           <Trash2 className="w-3.5 h-3.5" />
                         </button>
                       </div>
@@ -507,7 +507,7 @@ export function AssigneeManager() {
 
             {/* Add new row */}
             {showAddRow && (
-              <tr className="bg-emerald-500/5 border-t-2 border-emerald-500/30">
+              <tr className="bg-status-healthy/5 border-t-2 border-status-healthy/30">
                 {(['employeeId', 'name', 'email', 'ip', 'seatLocation', 'primaryRole', 'secondaryRole'] as (keyof Assignee)[]).map((field) => (
                   <td key={field} className="px-4 py-2.5">
                     <input
@@ -534,7 +534,7 @@ export function AssigneeManager() {
                         : '부담당 역할 입력'
                       }
                       autoFocus={field === 'name'}
-                      className="w-full px-2 py-1 bg-background border border-emerald-500/40 rounded text-sm focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                      className="w-full px-2 py-1 bg-background border border-status-healthy/40 rounded text-sm focus:outline-none focus:ring-1 focus:ring-status-healthy"
                     />
                   </td>
                 ))}
@@ -542,7 +542,7 @@ export function AssigneeManager() {
                 <td className="px-3 py-2.5">
                   <div className="flex items-center gap-1">
                     <button onClick={handleAddAssignee} disabled={!addForm.name.trim()} title="추가" aria-label="추가"
-                      className="p-1.5 rounded bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 transition-colors disabled:opacity-40">
+                      className="p-1.5 rounded bg-status-healthy/10 hover:bg-status-healthy/20 text-status-healthy transition-colors disabled:opacity-40">
                       <Check className="w-3.5 h-3.5" />
                     </button>
                     <button onClick={() => setShowAddRow(false)} title="취소" aria-label="취소"

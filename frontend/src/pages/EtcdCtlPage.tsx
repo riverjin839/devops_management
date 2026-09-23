@@ -15,11 +15,11 @@ import {
 import { formatApiError } from '@/lib/utils';
 
 const STATUS_META: Record<EtcdCtlRunResponse['status'], { label: string; cls: string; icon: React.ComponentType<{ className?: string }> }> = {
-  ok:            { label: '정상',     cls: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30',  icon: CheckCircle },
-  error:         { label: '에러',     cls: 'bg-red-500/10 text-red-400 border-red-500/30',              icon: XCircle },
-  timeout:       { label: '타임아웃', cls: 'bg-amber-500/10 text-amber-400 border-amber-500/30',        icon: Clock },
+  ok:            { label: '정상',     cls: 'bg-status-healthy/10 text-status-healthy border-status-healthy/30',  icon: CheckCircle },
+  error:         { label: '에러',     cls: 'bg-status-critical/10 text-status-critical border-status-critical/30',              icon: XCircle },
+  timeout:       { label: '타임아웃', cls: 'bg-status-warning/10 text-status-warning border-status-warning/30',        icon: Clock },
   auth_error:    { label: '인증 실패', cls: 'bg-orange-500/10 text-orange-400 border-orange-500/30',    icon: ShieldAlert },
-  connect_error: { label: '연결 실패', cls: 'bg-slate-500/10 text-slate-400 border-slate-500/30',       icon: Wifi },
+  connect_error: { label: '연결 실패', cls: 'bg-status-unknown/10 text-status-unknown border-status-unknown/30',       icon: Wifi },
 };
 
 // 타겟/실행 구성 옆(우측)에 고정 위치로 배치 — mc 클라이언트 콘솔과 동일한 패턴이다.
@@ -53,7 +53,7 @@ function ResultPanel({ result, tab }: { result: EtcdCtlRunResponse | null; tab: 
           <span className="text-sm font-mono text-muted-foreground">{result.durationMs}ms</span>
         </div>
         {result.error && (
-          <span className="text-sm text-red-400">⚠ {result.error}</span>
+          <span className="text-sm text-status-critical">⚠ {result.error}</span>
         )}
       </header>
       <div className="px-5 py-3 space-y-3">
@@ -196,7 +196,7 @@ export function EtcdCtlPage() {
             <Database className="w-6 h-6 text-primary" />
             <h1 className="text-xl font-bold">etcdctl 콘솔</h1>
             {effectiveHost && (
-              <span className="text-sm px-2 py-0.5 rounded-full bg-slate-500/15 text-slate-400 border border-slate-500/30 font-mono">
+              <span className="text-sm px-2 py-0.5 rounded-full bg-status-unknown/15 text-status-unknown border border-status-unknown/30 font-mono">
                 → {effectiveHost}
               </span>
             )}
@@ -425,7 +425,7 @@ export function EtcdCtlPage() {
                   {runMut.isPending ? (
                     <button
                       onClick={runMut.abort}
-                      className="flex items-center gap-2 px-5 py-2.5 text-sm font-semibold bg-red-500 hover:bg-red-600 text-primary-foreground rounded-lg transition-colors"
+                      className="flex items-center gap-2 px-5 py-2.5 text-sm font-semibold bg-status-critical hover:bg-status-critical text-primary-foreground rounded-lg transition-colors"
                     >
                       <Square className="w-4 h-4 fill-current" />
                       중지
@@ -494,7 +494,7 @@ export function EtcdCtlPage() {
                   {logsMut.isPending ? (
                     <button
                       onClick={logsMut.abort}
-                      className="flex items-center gap-2 px-5 py-2.5 text-sm font-semibold bg-red-500 hover:bg-red-600 text-primary-foreground rounded-lg transition-colors"
+                      className="flex items-center gap-2 px-5 py-2.5 text-sm font-semibold bg-status-critical hover:bg-status-critical text-primary-foreground rounded-lg transition-colors"
                     >
                       <Square className="w-4 h-4 fill-current" />
                       중지

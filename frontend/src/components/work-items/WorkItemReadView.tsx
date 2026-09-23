@@ -16,7 +16,7 @@ interface WorkItemReadViewProps {
 }
 
 const PRIORITY_STYLES: Record<string, { dot: string; label: string; text: string }> = {
-  high: { dot: 'bg-red-500', label: '높음', text: 'text-red-400' },
+  high: { dot: 'bg-status-critical', label: '높음', text: 'text-status-critical' },
   medium: { dot: 'bg-blue-500', label: '보통', text: 'text-blue-400' },
   low: { dot: 'bg-slate-400', label: '낮음', text: 'text-slate-400' },
 };
@@ -66,10 +66,10 @@ export function WorkItemReadView({ item, onEdit }: WorkItemReadViewProps) {
       <div className="flex items-center gap-x-2 gap-y-1 flex-wrap text-xs">
         <span className={`flex items-center gap-1 font-medium px-2 py-0.5 rounded-full border ${
           isCompleted
-            ? 'bg-emerald-500/10 text-emerald-500 border-emerald-500/30'
-            : 'bg-amber-500/10 text-amber-500 border-amber-500/30'
+            ? 'bg-status-healthy/10 text-status-healthy border-status-healthy/30'
+            : 'bg-status-warning/10 text-status-warning border-status-warning/30'
         }`}>
-          <span className={`w-1.5 h-1.5 rounded-full ${isCompleted ? 'bg-emerald-500' : 'bg-amber-500'}`} />
+          <span className={`w-1.5 h-1.5 rounded-full ${isCompleted ? 'bg-status-healthy' : 'bg-status-warning'}`} />
           {kanbanLabel}
         </span>
         <span className={`flex items-center gap-1 font-medium ${pStyle.text}`}>
@@ -146,7 +146,7 @@ export function WorkItemReadView({ item, onEdit }: WorkItemReadViewProps) {
       {item.doneCondition && (
         <div>
           <p className="text-sm font-medium text-muted-foreground mb-1">완료 조건</p>
-          <p className="text-sm text-foreground/80 bg-emerald-500/5 border border-emerald-500/20 rounded-lg px-3 py-2">
+          <p className="text-sm text-foreground/80 bg-status-healthy/5 border border-status-healthy/20 rounded-lg px-3 py-2">
             ✓ {item.doneCondition}
           </p>
         </div>

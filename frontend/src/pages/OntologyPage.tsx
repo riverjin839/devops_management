@@ -118,7 +118,7 @@ function NodeDetailPanel({ node, onClose, onAnalyzeImpact }: {
         <div className="px-4 py-3 border-t border-border">
           <button
             onClick={() => onAnalyzeImpact(node.id)}
-            className="w-full flex items-center justify-center gap-2 px-3 py-2 bg-amber-500/15 hover:bg-amber-500/25 text-amber-400 border border-amber-500/30 rounded-lg text-sm font-semibold transition-colors"
+            className="w-full flex items-center justify-center gap-2 px-3 py-2 bg-status-warning/15 hover:bg-status-warning/25 text-status-warning border border-status-warning/30 rounded-lg text-sm font-semibold transition-colors"
           >
             <Zap className="w-3.5 h-3.5" />
             변경 영향 분석
@@ -134,14 +134,14 @@ function ImpactPanel({ result, onClose }: {
   result: { blastRadiusScore: number; impactedEntities: { id: string; name: string; entityType: OntologyEntityType }[]; impactPaths: { pathNames: string[]; pathRelations: string[]; score: number }[] };
   onClose: () => void;
 }) {
-  const scoreColor = result.blastRadiusScore >= 0.7 ? 'text-red-400' : result.blastRadiusScore >= 0.4 ? 'text-amber-400' : 'text-emerald-400';
+  const scoreColor = result.blastRadiusScore >= 0.7 ? 'text-status-critical' : result.blastRadiusScore >= 0.4 ? 'text-status-warning' : 'text-status-healthy';
 
   return (
-    <div className="absolute bottom-4 left-4 w-80 bg-card border border-amber-500/40 rounded-xl shadow-2xl overflow-hidden z-10">
-      <div className="flex items-center justify-between px-4 py-3 border-b border-border bg-amber-500/10">
+    <div className="absolute bottom-4 left-4 w-80 bg-card border border-status-warning/40 rounded-xl shadow-2xl overflow-hidden z-10">
+      <div className="flex items-center justify-between px-4 py-3 border-b border-border bg-status-warning/10">
         <div className="flex items-center gap-2">
-          <AlertTriangle className="w-4 h-4 text-amber-400" />
-          <p className="text-sm font-bold text-amber-400">변경 영향 분석</p>
+          <AlertTriangle className="w-4 h-4 text-status-warning" />
+          <p className="text-sm font-bold text-status-warning">변경 영향 분석</p>
         </div>
         <button onClick={onClose} aria-label="닫기" className="p-1 hover:bg-secondary rounded text-muted-foreground">
           <X className="w-4 h-4" />
@@ -174,7 +174,7 @@ function ImpactPanel({ result, onClose }: {
           <div key={i} className="rounded-lg bg-secondary/40 px-3 py-2">
             <div className="flex items-center justify-between mb-1">
               <p className="text-xs text-muted-foreground">경로 {i + 1}</p>
-              <p className="text-xs font-semibold text-amber-400">{(path.score * 100).toFixed(0)}%</p>
+              <p className="text-xs font-semibold text-status-warning">{(path.score * 100).toFixed(0)}%</p>
             </div>
             <p className="text-xs text-foreground font-mono">
               {path.pathNames.join(' → ')}
@@ -425,7 +425,7 @@ export function OntologyPage() {
         )}
 
         {analyzing && (
-          <div className="absolute top-4 left-1/2 -translate-x-1/2 flex items-center gap-2 bg-amber-500/20 border border-amber-500/40 rounded-full px-4 py-2 text-sm text-amber-400 z-20">
+          <div className="absolute top-4 left-1/2 -translate-x-1/2 flex items-center gap-2 bg-status-warning/20 border border-status-warning/40 rounded-full px-4 py-2 text-sm text-status-warning z-20">
             <Loader2 className="w-4 h-4 animate-spin" />영향 분석 중...
           </div>
         )}

@@ -23,7 +23,7 @@ function StepChips({ steps, running }: { steps: ProvisionStream['steps']; runnin
         const status = steps[key] ?? 'pending';
         const cls =
           status === 'done'
-            ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-700 dark:text-emerald-400 font-medium'
+            ? 'bg-status-healthy/10 border-status-healthy/30 text-status-healthy font-medium'
             : status === 'running'
               ? 'bg-primary/10 border-primary text-primary font-semibold'
               : 'bg-secondary border-border text-muted-foreground';
@@ -109,7 +109,7 @@ export function ProvisionConsole({ stream, showLogs }: ProvisionConsoleProps) {
             <div className="flex-1" />
             {running && (
               <>
-                <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-emerald-600 dark:text-emerald-400">
+                <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-status-healthy">
                   <Loader2 className="w-3.5 h-3.5 animate-spin" /> 실행 중
                 </span>
                 <button
@@ -189,9 +189,9 @@ export function ProvisionConsole({ stream, showLogs }: ProvisionConsoleProps) {
               <div className="text-xs">
                 <div className="flex items-center gap-2 mb-1">
                   {denied.length === 0 ? (
-                    <ShieldCheck className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
+                    <ShieldCheck className="w-4 h-4 text-status-healthy" />
                   ) : (
-                    <ShieldX className="w-4 h-4 text-amber-600 dark:text-amber-400" />
+                    <ShieldX className="w-4 h-4 text-status-warning" />
                   )}
                   <span className="text-muted-foreground">
                     권한 점검 {allowedCount}/{result.accessReview.length} 통과
@@ -200,7 +200,7 @@ export function ProvisionConsole({ stream, showLogs }: ProvisionConsoleProps) {
                 {denied.length > 0 && (
                   <ul className="space-y-0.5">
                     {denied.map((d, i) => (
-                      <li key={i} className="text-amber-700 dark:text-amber-400">
+                      <li key={i} className="text-status-warning">
                         ✘ [{d.namespace}] {d.label}
                         {d.reason ? ` — ${d.reason}` : ''}
                       </li>
@@ -236,7 +236,7 @@ export function ProvisionConsole({ stream, showLogs }: ProvisionConsoleProps) {
                     <Download className="w-3.5 h-3.5" /> .yaml 저장
                   </button>
                 </div>
-                <div className="text-[11.5px] rounded-md border border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-400 px-3 py-2">
+                <div className="text-[11.5px] rounded-md border border-status-warning/30 bg-status-warning/10 text-status-warning px-3 py-2">
                   토큰은 이 화면에서만 볼 수 있다. 창을 닫으면 다시 발급해야 한다 — 감사 로그에는 발급
                   사실만 남고 토큰 값은 남지 않는다.
                 </div>

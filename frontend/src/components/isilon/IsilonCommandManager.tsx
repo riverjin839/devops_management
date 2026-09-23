@@ -150,7 +150,7 @@ export function IsilonCommandManager({ serverId, onClose }: Props) {
           {/* 편집 폼 */}
           <div className="space-y-3">
             <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-              <ShieldCheck className="w-3.5 h-3.5 text-emerald-500" />
+              <ShieldCheck className="w-3.5 h-3.5 text-status-healthy" />
               변경·위험 동사, 셸 메타문자(;|`), --repeat 등은 저장이 거부됩니다.
             </div>
             <Field label="key (식별자) *">
@@ -197,7 +197,7 @@ export function IsilonCommandManager({ serverId, onClose }: Props) {
             </div>
             <div className="flex items-center justify-between pt-1">
               {editing && !editing.isBuiltin ? (
-                <button onClick={() => setConfirmId(editing.id)} className="inline-flex items-center gap-1 text-sm text-red-500 hover:text-red-600">
+                <button onClick={() => setConfirmId(editing.id)} className="inline-flex items-center gap-1 text-sm text-status-critical hover:text-status-critical">
                   <Trash2 className="w-4 h-4" /> 삭제
                 </button>
               ) : <span className="text-xs text-muted-foreground">{editing?.isBuiltin ? '기본 명령은 삭제 불가(비활성만)' : ''}</span>}

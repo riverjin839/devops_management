@@ -57,7 +57,7 @@ export function NodeSshTerminal({ params, onClose, onPopOut, fill }: NodeSshTerm
   return (
     <SshTerminalWindow
       label="ssh"
-      labelClassName="text-sky-400"
+      labelClassName="text-status-info"
       subtitle={subtitle}
       url={url}
       init={init}

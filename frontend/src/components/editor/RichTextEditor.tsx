@@ -330,7 +330,7 @@ function Toolbar({ editor, surfaceBg, bgColor, onPickBg, extraTemplates }: {
                     key={label}
                     type="button"
                     onMouseDown={(e) => { e.preventDefault(); fn(); setTblOpen(false); }}
-                    className={`w-full text-left px-3 py-1.5 hover:bg-secondary transition-colors ${label === '표 삭제' ? 'text-red-500' : ''}`}
+                    className={`w-full text-left px-3 py-1.5 hover:bg-secondary transition-colors ${label === '표 삭제' ? 'text-status-critical' : ''}`}
                   >
                     {label}
                   </button>

@@ -121,7 +121,7 @@ export function K9sPage() {
               control-plane 서버에 내장된 k9s 를 SSH 로 실행해 스트리밍
             </span>
             {effectiveHost && (
-              <span className="ml-auto text-sm px-2 py-0.5 rounded-full bg-slate-500/15 text-slate-400 border border-slate-500/30 font-mono">
+              <span className="ml-auto text-sm px-2 py-0.5 rounded-full bg-status-unknown/15 text-status-unknown border border-status-unknown/30 font-mono">
                 → {username}@{effectiveHost}
               </span>
             )}

@@ -117,13 +117,13 @@ export function ConfluenceLinkModal({ open, onClose }: ConfluenceLinkModalProps)
         <div className="px-5 pb-5 space-y-3.5">
           {done ? (
             <>
-              <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/5 p-4">
-                <div className="flex items-center gap-2 font-medium text-emerald-500">
+              <div className="rounded-xl border border-status-healthy/30 bg-status-healthy/5 p-4">
+                <div className="flex items-center gap-2 font-medium text-status-healthy">
                   <CheckCircle2 className="w-4 h-4" /> 가져오기 완료
                 </div>
-                <p className="mt-2 text-sm"><span className="text-muted-foreground">신규</span> <b className="text-emerald-500">{done.imported}</b>건</p>
+                <p className="mt-2 text-sm"><span className="text-muted-foreground">신규</span> <b className="text-status-healthy">{done.imported}</b>건</p>
                 {done.failed.length > 0 && (
-                  <div className="mt-2 text-xs text-red-500">
+                  <div className="mt-2 text-xs text-status-critical">
                     {done.failed.slice(0, 5).map((e, i) => <div key={i}>⚠ {e}</div>)}
                   </div>
                 )}
@@ -158,7 +158,7 @@ export function ConfluenceLinkModal({ open, onClose }: ConfluenceLinkModalProps)
               </div>
 
               {searchError && (
-                <div className="rounded-xl bg-red-500/10 text-red-500 px-3 py-2 text-sm flex items-center gap-1.5">
+                <div className="rounded-xl bg-status-critical/10 text-status-critical px-3 py-2 text-sm flex items-center gap-1.5">
                   <AlertTriangle className="w-3.5 h-3.5" /> {searchError}
                 </div>
               )}

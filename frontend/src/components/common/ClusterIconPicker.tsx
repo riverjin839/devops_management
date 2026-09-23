@@ -378,7 +378,7 @@ export function ClusterIconPicker({
               />
 
               {uploadError && (
-                <p className="text-xs text-red-500">{uploadError}</p>
+                <p className="text-xs text-status-critical">{uploadError}</p>
               )}
 
               <p className="text-xs text-muted-foreground/70 leading-relaxed">

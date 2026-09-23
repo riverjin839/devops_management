@@ -6,25 +6,25 @@ import { ProjectFormModal } from './ProjectFormModal';
 
 const COLOR_MAP: Record<string, string> = {
   blue:    'from-blue-500/20 to-blue-500/5 border-blue-500/30',
-  emerald: 'from-emerald-500/20 to-emerald-500/5 border-emerald-500/30',
+  emerald: 'from-status-healthy/20 to-status-healthy/5 border-status-healthy/30',
   violet:  'from-violet-500/20 to-violet-500/5 border-violet-500/30',
-  amber:   'from-amber-500/20 to-amber-500/5 border-amber-500/30',
-  rose:    'from-rose-500/20 to-rose-500/5 border-rose-500/30',
+  amber:   'from-status-warning/20 to-status-warning/5 border-status-warning/30',
+  rose:    'from-status-critical/20 to-status-critical/5 border-status-critical/30',
   slate:   'from-slate-500/20 to-slate-500/5 border-slate-500/30',
 };
 
 const BADGE_MAP: Record<string, string> = {
   blue:    'bg-blue-500/15 text-blue-600 dark:text-blue-300',
-  emerald: 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-300',
+  emerald: 'bg-status-healthy/15 text-status-healthy',
   violet:  'bg-violet-500/15 text-violet-600 dark:text-violet-300',
-  amber:   'bg-amber-500/15 text-amber-600 dark:text-amber-300',
-  rose:    'bg-rose-500/15 text-rose-600 dark:text-rose-300',
-  slate:   'bg-slate-500/15 text-slate-600 dark:text-slate-300',
+  amber:   'bg-status-warning/15 text-status-warning',
+  rose:    'bg-status-critical/15 text-status-critical',
+  slate:   'bg-status-unknown/15 text-status-unknown dark:text-slate-300',
 };
 
 const DOT_MAP: Record<string, string> = {
-  blue: 'bg-blue-500', emerald: 'bg-emerald-500', violet: 'bg-violet-500',
-  amber: 'bg-amber-500', rose: 'bg-rose-500', slate: 'bg-slate-500',
+  blue: 'bg-blue-500', emerald: 'bg-status-healthy', violet: 'bg-violet-500',
+  amber: 'bg-status-warning', rose: 'bg-status-critical', slate: 'bg-slate-500',
 };
 
 interface Props {

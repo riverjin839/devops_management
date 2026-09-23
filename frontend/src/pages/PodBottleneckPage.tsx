@@ -12,16 +12,16 @@ import type { BottleneckRun, BottleneckStatus } from '@/types';
 import { parseUTC } from '@/lib/utils';
 
 const STATUS_COLOR: Record<BottleneckStatus, string> = {
-  healthy:  'border-emerald-500/40 bg-emerald-500/5',
-  warning:  'border-amber-500/40 bg-amber-500/5',
-  critical: 'border-red-500/40 bg-red-500/5',
-  pending:  'border-slate-500/40 bg-slate-500/5',
+  healthy:  'border-status-healthy/40 bg-status-healthy/5',
+  warning:  'border-status-warning/40 bg-status-warning/5',
+  critical: 'border-status-critical/40 bg-status-critical/5',
+  pending:  'border-status-unknown/40 bg-status-unknown/5',
 };
 
 const STATUS_TEXT: Record<BottleneckStatus, string> = {
-  healthy: 'text-emerald-500',
-  warning: 'text-amber-500',
-  critical: 'text-red-500',
+  healthy: 'text-status-healthy',
+  warning: 'text-status-warning',
+  critical: 'text-status-critical',
   pending: 'text-slate-400',
 };
 
@@ -147,7 +147,7 @@ export function PodBottleneckPage() {
               </div>
             </div>
             {submitError && (
-              <div className="mt-3 text-sm text-red-500 bg-red-500/10 border border-red-500/30 rounded p-2">
+              <div className="mt-3 text-sm text-status-critical bg-status-critical/10 border border-status-critical/30 rounded p-2">
                 {submitError}
               </div>
             )}
@@ -159,7 +159,7 @@ export function PodBottleneckPage() {
           {/* 최근 진단 결과 */}
           <MacCard title="최근 진단 결과">
             {runsError ? (
-              <div className="flex items-start gap-2 text-sm text-red-500">
+              <div className="flex items-start gap-2 text-sm text-status-critical">
                 <AlertCircle className="w-4 h-4 mt-0.5 flex-shrink-0" />
                 <div>
                   <div className="font-medium">진단 history 조회 실패</div>

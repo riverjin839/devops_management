@@ -34,8 +34,8 @@ const TABS: { id: TabId; label: string }[] = [
 const STATUSES = ['진행', '완료', '지연'] as const;
 
 function statusClass(status: string) {
-  if (status === '완료') return 'text-emerald-500';
-  if (status === '지연') return 'text-red-500';
+  if (status === '완료') return 'text-status-healthy';
+  if (status === '지연') return 'text-status-critical';
   return 'text-blue-500';
 }
 
@@ -308,8 +308,8 @@ export function WeeklyReportPage() {
                 <tr>
                   <td className={td}>{summary.total}</td>
                   <td className={`${td} text-blue-500`}>{summary.inProgress}</td>
-                  <td className={`${td} text-emerald-500`}>{summary.done}</td>
-                  <td className={`${td} text-red-500`}>{summary.delayed}</td>
+                  <td className={`${td} text-status-healthy`}>{summary.done}</td>
+                  <td className={`${td} text-status-critical`}>{summary.delayed}</td>
                   <td className={td}>{filterActive ? '필터 적용된 집계' : (report?.summary.note ?? '')}</td>
                 </tr>
               </tbody>
@@ -359,10 +359,10 @@ export function WeeklyReportPage() {
                     </td>
                     <td className={td}>{r.plannedRate}</td>
                     <td className={td}>{r.actualRate}</td>
-                    <td className={`${td} ${r.achievementRate >= 100 ? 'text-emerald-500' : r.achievementRate < 80 ? 'text-red-500' : 'text-blue-500'}`}>
+                    <td className={`${td} ${r.achievementRate >= 100 ? 'text-status-healthy' : r.achievementRate < 80 ? 'text-status-critical' : 'text-blue-500'}`}>
                       {r.achievementRate}
                     </td>
-                    <td className={`${td} text-emerald-500`}>{r.doneCount}</td>
+                    <td className={`${td} text-status-healthy`}>{r.doneCount}</td>
                     <td className={`${td} text-blue-500`}>{r.inProgressCount}</td>
                     <td className={td}>{r.totalCount}</td>
                   </tr>

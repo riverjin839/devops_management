@@ -17,7 +17,7 @@ interface SavedScriptPanelProps {
 }
 
 const LANGUAGE_BADGE: Record<ScriptLanguage, string> = {
-  bash: 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30',
+  bash: 'bg-status-healthy/15 text-status-healthy border-status-healthy/30',
   python: 'bg-blue-500/15 text-blue-400 border-blue-500/30',
 };
 
@@ -103,7 +103,7 @@ export function SavedScriptPanel({
                 onClick={() => handleDelete(s)}
                 title="삭제"
                 aria-label={`${s.name} 삭제`}
-                className="px-1.5 py-1 text-muted-foreground hover:text-red-400 hover:bg-red-500/10"
+                className="px-1.5 py-1 text-muted-foreground hover:text-status-critical hover:bg-status-critical/10"
               >
                 <Trash2 className="w-3 h-3" />
               </button>

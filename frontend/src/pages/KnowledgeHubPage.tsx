@@ -49,29 +49,29 @@ const KIND_META: Record<HubKind, {
   chip: string;
 }> = {
   task:     { label: '업무',       Icon: ListTodo,      accent: 'text-indigo-500',  chip: 'bg-indigo-500/10 text-indigo-700 dark:text-indigo-300 border-indigo-500/30' },
-  note:     { label: '노트',       Icon: StickyNote,    accent: 'text-amber-500',   chip: 'bg-amber-500/10 text-amber-700 dark:text-amber-300 border-amber-500/30' },
-  command:  { label: '명령어',     Icon: Terminal,      accent: 'text-sky-500',     chip: 'bg-sky-500/10 text-sky-700 dark:text-sky-300 border-sky-500/30' },
-  guide:    { label: '가이드',     Icon: BookMarked,    accent: 'text-emerald-500', chip: 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border-emerald-500/30' },
-  item:     { label: '이슈',       Icon: AlertCircle,   accent: 'text-red-500',     chip: 'bg-red-500/10 text-red-700 dark:text-red-300 border-red-500/30' },
+  note:     { label: '노트',       Icon: StickyNote,    accent: 'text-status-warning',   chip: 'bg-status-warning/10 text-status-warning border-status-warning/30' },
+  command:  { label: '명령어',     Icon: Terminal,      accent: 'text-status-info',     chip: 'bg-status-info/10 text-status-info border-status-info/30' },
+  guide:    { label: '가이드',     Icon: BookMarked,    accent: 'text-status-healthy', chip: 'bg-status-healthy/10 text-status-healthy border-status-healthy/30' },
+  item:     { label: '이슈',       Icon: AlertCircle,   accent: 'text-status-critical',     chip: 'bg-status-critical/10 text-status-critical border-status-critical/30' },
   workflow: { label: '워크플로우', Icon: GitFork,       accent: 'text-violet-500',  chip: 'bg-violet-500/10 text-violet-700 dark:text-violet-300 border-violet-500/30' },
 };
 
 const STATUS_DOT_TONE: Record<NonNullable<HubItem['statusTone']>, string> = {
-  amber:   'bg-amber-500',
-  emerald: 'bg-emerald-500',
-  red:     'bg-red-500',
+  amber:   'bg-status-warning',
+  emerald: 'bg-status-healthy',
+  red:     'bg-status-critical',
   slate:   'bg-slate-400',
   primary: 'bg-primary',
-  sky:     'bg-sky-500',
+  sky:     'bg-status-info',
 };
 
 const STATUS_TEXT_TONE: Record<NonNullable<HubItem['statusTone']>, string> = {
-  amber:   'text-amber-600 dark:text-amber-400',
-  emerald: 'text-emerald-600 dark:text-emerald-400',
-  red:     'text-red-600 dark:text-red-400',
+  amber:   'text-status-warning',
+  emerald: 'text-status-healthy',
+  red:     'text-status-critical',
   slate:   'text-slate-600 dark:text-slate-400',
   primary: 'text-primary',
-  sky:     'text-sky-600 dark:text-sky-400',
+  sky:     'text-status-info',
 };
 
 // 허브 상단 탭 — 지식 목록(집계 표) + 임베드 도구(Q&A·마인드맵·온톨로지·기술동향).
@@ -427,12 +427,12 @@ export function KnowledgeHubPage() {
                 onClick={() => setOpenOnly((v) => !v)}
                 title="미조치 상태인 이슈만 보기"
                 className={`flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-full border transition-colors ${
-                  openOnly
-                    ? 'bg-red-500/10 text-red-700 dark:text-red-300 border-red-500/40 ring-1 ring-red-500/30'
-                    : 'bg-background border-border text-muted-foreground hover:border-red-500/50'
-                }`}
+ openOnly
+ ? 'bg-status-critical/10 text-status-critical border-status-critical/40 ring-1 ring-status-critical/30'
+ : 'bg-background border-border text-muted-foreground hover:border-status-critical/50'
+ }`}
               >
-                <AlertCircle className={`w-3.5 h-3.5 ${openOnly ? 'text-red-500' : 'text-red-500/70'}`} />
+                <AlertCircle className={`w-3.5 h-3.5 ${openOnly ? 'text-status-critical' : 'text-status-critical/70'}`} />
                 미해결 이슈
                 <span className="opacity-70">({openIssueCount})</span>
               </button>
@@ -557,10 +557,10 @@ export function KnowledgeHubPage() {
                         </td>
                         <td className="px-4 py-3 min-w-0">
                           <div className="flex items-center gap-1.5">
-                            {it.pinned && <Pin className="w-3 h-3 text-amber-500 flex-shrink-0" />}
+                            {it.pinned && <Pin className="w-3 h-3 text-status-warning flex-shrink-0" />}
                             <span className="line-clamp-1 font-medium text-foreground">{it.title}</span>
                             {it.kind === 'command' && it.statusTone === 'red' && (
-                              <AlertTriangle className="w-3.5 h-3.5 text-red-500 flex-shrink-0" />
+                              <AlertTriangle className="w-3.5 h-3.5 text-status-critical flex-shrink-0" />
                             )}
                           </div>
                         </td>

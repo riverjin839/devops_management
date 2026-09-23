@@ -159,7 +159,7 @@ export function RunForm({ job }: RunFormProps) {
           </div>
 
           {hasSavedCreds && !credsProvided && (
-            <div className="inline-flex items-center gap-1.5 text-xs text-emerald-700 bg-emerald-500/10 border border-emerald-500/30 rounded-lg px-2 py-1">
+            <div className="inline-flex items-center gap-1.5 text-xs text-status-healthy bg-status-healthy/10 border border-status-healthy/30 rounded-lg px-2 py-1">
               <ShieldCheck className="w-3 h-3" />
               저장된 자격증명을 사용합니다 ({[job.hasSavedPassword && '비밀번호', job.hasSavedPrivateKey && '개인키'].filter(Boolean).join(' / ')})
             </div>
@@ -223,7 +223,7 @@ export function RunForm({ job }: RunFormProps) {
         </div>
       </details>
 
-      {error && <div className="text-xs text-red-500">{error}</div>}
+      {error && <div className="text-xs text-status-critical">{error}</div>}
 
       <TestConnectionResult result={testResult} />
 
@@ -272,8 +272,8 @@ export function TestConnectionResult({ result }: { result: BatchJobTestConnectio
   if (!result) return null;
   const isOk = result.status === 'ok';
   const tone = isOk
-    ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-700'
-    : 'bg-red-500/10 border-red-500/30 text-red-600';
+    ? 'bg-status-healthy/10 border-status-healthy/30 text-status-healthy'
+    : 'bg-status-critical/10 border-status-critical/30 text-status-critical';
   const label = (
     {
       ok: '연결 성공',

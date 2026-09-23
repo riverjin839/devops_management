@@ -61,7 +61,7 @@ export function NodeDetailPanel({ node, edges, nodeName, onClose, onDeleteLink, 
         {/* external 삭제 */}
         {node.kind === 'External' && onDeleteExternal && (
           <button onClick={() => onDeleteExternal(node)}
-            className="w-full inline-flex items-center justify-center gap-1.5 px-2 py-1.5 text-xs rounded-lg border border-red-500/30 text-red-500 hover:bg-red-500/10">
+            className="w-full inline-flex items-center justify-center gap-1.5 px-2 py-1.5 text-xs rounded-lg border border-status-critical/30 text-status-critical hover:bg-status-critical/10">
             <Trash2 className="w-3 h-3" /> 외부 노드 삭제
           </button>
         )}
@@ -83,7 +83,7 @@ export function NodeDetailPanel({ node, edges, nodeName, onClose, onDeleteLink, 
                     {EDGE_TYPE_LABEL[e.type] ?? e.type}
                   </span>
                   {e.type === 'manual' && e.manualId && onDeleteLink && (
-                    <button onClick={() => onDeleteLink(e.manualId!)} className="text-red-500 hover:text-red-600 flex-shrink-0" aria-label="링크 삭제">
+                    <button onClick={() => onDeleteLink(e.manualId!)} className="text-status-critical hover:text-status-critical flex-shrink-0" aria-label="링크 삭제">
                       <Trash2 className="w-3 h-3" />
                     </button>
                   )}

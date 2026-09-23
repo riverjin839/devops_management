@@ -73,7 +73,7 @@ export function NodeMultiSelect({ clusterId, selected, onChange, max }: Props) {
               </div>
             </div>
             {atCap && (
-              <div className="px-3 py-1 text-xs text-amber-600">
+              <div className="px-3 py-1 text-xs text-status-warning">
                 최대 {max}개까지 선택 가능 (과수집 방지)
               </div>
             )}

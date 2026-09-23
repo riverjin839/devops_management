@@ -287,8 +287,8 @@ function StatusStrip({ status, loading, agentCount }: StatusStripProps) {
   }
   if (status.error) {
     return (
-      <div className="rounded-2xl border border-amber-500/40 bg-amber-500/10 px-4 py-3 flex items-start gap-2">
-        <AlertTriangle className="w-4 h-4 text-amber-500 flex-shrink-0 mt-0.5" />
+      <div className="rounded-2xl border border-status-warning/40 bg-status-warning/10 px-4 py-3 flex items-start gap-2">
+        <AlertTriangle className="w-4 h-4 text-status-warning flex-shrink-0 mt-0.5" />
         <div>
           <p className="text-sm font-semibold">상태 점검 중 문제가 발생했습니다.</p>
           <p className="text-sm text-muted-foreground">{status.error}</p>
@@ -302,7 +302,7 @@ function StatusStrip({ status, loading, agentCount }: StatusStripProps) {
         icon={<Boxes className="w-4 h-4" />}
         label="Cilium"
         value={status.ciliumInstalled ? '설치됨' : '미설치'}
-        accent={status.ciliumInstalled ? 'text-emerald-500' : 'text-muted-foreground'}
+        accent={status.ciliumInstalled ? 'text-status-healthy' : 'text-muted-foreground'}
         hint={status.ciliumVersion ?? undefined}
       />
       <StatusCell
@@ -316,7 +316,7 @@ function StatusStrip({ status, loading, agentCount }: StatusStripProps) {
         icon={<Waves className="w-4 h-4" />}
         label="Hubble Relay"
         value={status.hubbleRelayInstalled ? '활성' : '없음'}
-        accent={status.hubbleRelayInstalled ? 'text-emerald-500' : 'text-muted-foreground'}
+        accent={status.hubbleRelayInstalled ? 'text-status-healthy' : 'text-muted-foreground'}
         hint={status.hubbleRelayInstalled ? 'svc/hubble-relay' : 'install required'}
       />
       <StatusCell
@@ -545,7 +545,7 @@ function BpfInspectorTab({ clusterId, agents }: { clusterId: string; agents: Cil
               선택한 agent pod 에서 <code>cilium-dbg &lt;입력&gt;</code> 실행(operator). 임의 바이너리 불가, 실행은 감사 로그에 기록됩니다.
             </p>
             {adhocErr && (
-              <div className="px-3 py-2 rounded-lg bg-amber-500/10 text-sm text-amber-700 dark:text-amber-300 break-all">{adhocErr}</div>
+              <div className="px-3 py-2 rounded-lg bg-status-warning/10 text-sm text-status-warning break-all">{adhocErr}</div>
             )}
             {adhocOut != null && (
               <LogViewer text={adhocOut} maxHeight="max-h-[40vh]" />
@@ -563,7 +563,7 @@ function BpfInspectorTab({ clusterId, agents }: { clusterId: string; agents: Cil
         className="overflow-hidden"
       >
         {error && (
-          <div className="px-4 py-3 border-b border-border bg-amber-500/10 text-sm text-amber-700 dark:text-amber-300 flex items-center gap-2">
+          <div className="px-4 py-3 border-b border-border bg-status-warning/10 text-sm text-status-warning flex items-center gap-2">
             <AlertTriangle className="w-3.5 h-3.5 flex-shrink-0" />
             <span className="break-all">{error}</span>
           </div>
@@ -770,7 +770,7 @@ function MonitorTab({ clusterId, agents }: { clusterId: string; agents: CiliumAg
           ) : (
             <button
               onClick={stop}
-              className="px-3.5 py-1.5 text-sm font-semibold bg-red-500 hover:bg-red-600 text-white rounded-xl transition-colors flex items-center gap-1.5"
+              className="px-3.5 py-1.5 text-sm font-semibold bg-status-critical hover:bg-status-critical text-white rounded-xl transition-colors flex items-center gap-1.5"
             >
               <X className="w-3.5 h-3.5" /> 중단
             </button>
@@ -791,13 +791,13 @@ function MonitorTab({ clusterId, agents }: { clusterId: string; agents: CiliumAg
             <Trash2 className="w-3.5 h-3.5" /> 비우기
           </button>
           <span className="ml-auto text-xs text-muted-foreground tabular-nums">
-            <span className={running ? 'text-emerald-500' : ''}>●</span> {events.length}건
+            <span className={running ? 'text-status-healthy' : ''}>●</span> {events.length}건
           </span>
         </div>
       </MacCard>
 
       {err && (
-        <div className="rounded-xl border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm text-amber-700 dark:text-amber-300 flex items-center gap-2">
+        <div className="rounded-xl border border-status-warning/40 bg-status-warning/10 px-3 py-2 text-sm text-status-warning flex items-center gap-2">
           <AlertTriangle className="w-3.5 h-3.5" /> {err}
         </div>
       )}
@@ -923,7 +923,7 @@ function EventList({ events }: { events: MonitorEvent[] }) {
         <div
           key={i}
           className={`px-3 py-1.5 border-b border-border/30 hover:bg-secondary/30 ${
-            e.kind === 'error' ? 'text-red-500' : e.kind === 'meta' ? 'text-muted-foreground' : ''
+            e.kind === 'error' ? 'text-status-critical' : e.kind === 'meta' ? 'text-muted-foreground' : ''
           }`}
         >
           <span className="text-muted-foreground/70 mr-2">{new Date(e.ts).toLocaleTimeString()}</span>
@@ -1120,7 +1120,7 @@ function HubbleTab({ clusterId, hubbleInstalled }: { clusterId: string; hubbleIn
     return (
       <MacCard bodyPadding="p-8">
         <div className="text-center space-y-2">
-          <AlertTriangle className="w-10 h-10 mx-auto text-amber-500" />
+          <AlertTriangle className="w-10 h-10 mx-auto text-status-warning" />
           <p className="text-sm font-semibold">Hubble Relay 가 설치되어 있지 않습니다.</p>
           <p className="text-sm text-muted-foreground">
             <code className="px-1 py-0.5 rounded bg-secondary">cilium hubble enable --ui</code> 또는 helm 으로 hubble-relay 를 배포해 주세요.
@@ -1213,7 +1213,7 @@ function HubbleTab({ clusterId, hubbleInstalled }: { clusterId: string; hubbleIn
           ) : (
             <button
               onClick={stop}
-              className="px-3.5 py-1.5 text-sm font-semibold bg-red-500 hover:bg-red-600 text-white rounded-xl transition-colors flex items-center gap-1.5"
+              className="px-3.5 py-1.5 text-sm font-semibold bg-status-critical hover:bg-status-critical text-white rounded-xl transition-colors flex items-center gap-1.5"
             >
               <X className="w-3.5 h-3.5" /> 중단
             </button>
@@ -1234,10 +1234,10 @@ function HubbleTab({ clusterId, hubbleInstalled }: { clusterId: string; hubbleIn
             <Trash2 className="w-3.5 h-3.5" /> 비우기
           </button>
           <div className="ml-auto flex items-center gap-3 text-xs text-muted-foreground">
-            <span className="inline-flex items-center gap-1 text-emerald-500">
+            <span className="inline-flex items-center gap-1 text-status-healthy">
               <CheckCircle2 className="w-3 h-3" /> {verdictCounts.FORWARDED}
             </span>
-            <span className="inline-flex items-center gap-1 text-red-500">
+            <span className="inline-flex items-center gap-1 text-status-critical">
               <X className="w-3 h-3" /> {verdictCounts.DROPPED}
             </span>
             <span>전체 {events.length}</span>
@@ -1246,7 +1246,7 @@ function HubbleTab({ clusterId, hubbleInstalled }: { clusterId: string; hubbleIn
       </MacCard>
 
       {err && (
-        <div className="rounded-xl border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm text-amber-700 dark:text-amber-300 flex items-center gap-2">
+        <div className="rounded-xl border border-status-warning/40 bg-status-warning/10 px-3 py-2 text-sm text-status-warning flex items-center gap-2">
           <AlertTriangle className="w-3.5 h-3.5" /> {err}
         </div>
       )}
@@ -1277,9 +1277,9 @@ function FlowList({ events }: { events: HubbleFlowEvent[] }) {
         const flow = ((e.parsed?.flow as Record<string, unknown>) ?? e.parsed ?? {}) as Record<string, unknown>;
         const verdict = String(flow.verdict ?? '');
         const verdictClr =
-          verdict === 'FORWARDED' ? 'text-emerald-500'
-          : verdict === 'DROPPED' ? 'text-red-500'
-          : verdict === 'AUDIT' ? 'text-amber-500' : 'text-muted-foreground';
+          verdict === 'FORWARDED' ? 'text-status-healthy'
+          : verdict === 'DROPPED' ? 'text-status-critical'
+          : verdict === 'AUDIT' ? 'text-status-warning' : 'text-muted-foreground';
         const summary = String(flow.Summary ?? flow.summary ?? '');
         const src = flow.source as Record<string, unknown> | undefined;
         const dst = flow.destination as Record<string, unknown> | undefined;
@@ -1292,7 +1292,7 @@ function FlowList({ events }: { events: HubbleFlowEvent[] }) {
               <span className="text-muted-foreground/70 tabular-nums">{new Date(e.ts).toLocaleTimeString()}</span>
               <span className={`font-bold ${verdictClr}`}>{verdict || '?'}</span>
               {dropReason ? (
-                <span className="text-red-500">[{String(dropReason)}]</span>
+                <span className="text-status-critical">[{String(dropReason)}]</span>
               ) : null}
               <span className="text-foreground">{srcLabel}</span>
               <span className="text-muted-foreground">→</span>

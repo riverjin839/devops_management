@@ -95,7 +95,7 @@ export function IsilonNfsPage() {
         {/* 본문 */}
         <div className="flex-1 min-w-0 space-y-4">
           <div className="flex items-center gap-2">
-            <HardDrive className="w-5 h-5 text-sky-500" />
+            <HardDrive className="w-5 h-5 text-status-info" />
             <h1 className="text-lg font-semibold">NFS 모니터링 (Isilon)</h1>
             <span className="text-xs text-muted-foreground">K8s 가 쓰는 NFS 를 NAS 서버 쪽에서 점검 · 읽기전용/무부하 · 선택한 명령만 실행</span>
           </div>
@@ -134,10 +134,10 @@ export function IsilonNfsPage() {
                   </div>
                 </div>
                 {runResult?.connectionError && (
-                  <div className="mt-3 text-sm text-red-500">⚠ {runResult.connectionError}</div>
+                  <div className="mt-3 text-sm text-status-critical">⚠ {runResult.connectionError}</div>
                 )}
                 {runResult?.skippedKeys && runResult.skippedKeys.length > 0 && (
-                  <p className="mt-2 text-xs text-amber-600">등록/활성화되지 않아 건너뜀: {runResult.skippedKeys.join(', ')}</p>
+                  <p className="mt-2 text-xs text-status-warning">등록/활성화되지 않아 건너뜀: {runResult.skippedKeys.join(', ')}</p>
                 )}
               </MacCard>
 

@@ -43,13 +43,13 @@ export const TS = {
     default: 'bg-white/[0.06]',
     blue:    'bg-blue-500/[0.12]',
     indigo:  'bg-indigo-500/[0.12]',
-    emerald: 'bg-emerald-500/[0.12]',
+    emerald: 'bg-status-healthy/[0.12]',
   },
   headerText: {
     default: 'text-foreground',
     blue:    'text-blue-300',
     indigo:  'text-indigo-300',
-    emerald: 'text-emerald-300',
+    emerald: 'text-status-healthy',
   },
 } as const;
 

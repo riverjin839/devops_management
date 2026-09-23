@@ -63,14 +63,14 @@ function displayTitle(t: WorkItem): string {
 }
 
 const PRIORITY_DOT: Record<string, string> = {
-  high: 'bg-red-500', medium: 'bg-blue-500', low: 'bg-slate-400',
+  high: 'bg-status-critical', medium: 'bg-blue-500', low: 'bg-slate-400',
 };
 const STATUS_META: Record<KanbanStatus, { label: string; cls: string }> = {
-  backlog:     { label: '백로그',     cls: 'bg-slate-500/10 text-slate-400 border-slate-500/30' },
+  backlog:     { label: '백로그',     cls: 'bg-status-unknown/10 text-status-unknown border-status-unknown/30' },
   todo:        { label: '할일',       cls: 'bg-blue-500/10 text-blue-400 border-blue-500/30' },
-  in_progress: { label: '진행중',     cls: 'bg-amber-500/10 text-amber-500 border-amber-500/30' },
+  in_progress: { label: '진행중',     cls: 'bg-status-warning/10 text-status-warning border-status-warning/30' },
   review_test: { label: '검토/테스트', cls: 'bg-purple-500/10 text-purple-400 border-purple-500/30' },
-  done:        { label: '완료',       cls: 'bg-emerald-500/10 text-emerald-500 border-emerald-500/30' },
+  done:        { label: '완료',       cls: 'bg-status-healthy/10 text-status-healthy border-status-healthy/30' },
 };
 
 type ViewMode = 'sprint' | 'schedule' | 'card' | 'list';
@@ -89,10 +89,10 @@ function fmtRange(start: string, end: string): string {
 }
 type BucketTone = 'overdue' | 'today' | 'upcoming' | 'done';
 const TONE: Record<BucketTone, { ring: string; text: string; dot: string }> = {
-  overdue:  { ring: 'border-red-500/30',    text: 'text-red-500',     dot: 'bg-red-500' },
+  overdue:  { ring: 'border-status-critical/30',    text: 'text-status-critical',     dot: 'bg-status-critical' },
   today:    { ring: 'border-blue-500/30',   text: 'text-blue-500',    dot: 'bg-blue-500' },
   upcoming: { ring: 'border-border',        text: 'text-muted-foreground', dot: 'bg-muted-foreground/50' },
-  done:     { ring: 'border-emerald-500/30', text: 'text-emerald-600', dot: 'bg-emerald-500' },
+  done:     { ring: 'border-status-healthy/30', text: 'text-status-healthy', dot: 'bg-status-healthy' },
 };
 
 // ── item renderers ────────────────────────────────────────────────────────────
@@ -112,7 +112,7 @@ function CompleteBtn({ item, busy, onToggleDone }: Omit<ItemProps, 'onOpen'>) {
       onClick={(e) => { e.stopPropagation(); onToggleDone(item); }}
       title={done ? '완료 취소' : '완료 처리'}
       aria-label={done ? '완료 취소' : '완료 처리'}
-      className={`flex-shrink-0 rounded-full transition-colors disabled:opacity-50 ${done ? 'text-emerald-500' : 'text-muted-foreground/40 hover:text-emerald-500'}`}
+      className={`flex-shrink-0 rounded-full transition-colors disabled:opacity-50 ${done ? 'text-status-healthy' : 'text-muted-foreground/40 hover:text-status-healthy'}`}
     >
       {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : done ? <CheckCircle2 className="w-4 h-4" /> : <Circle className="w-4 h-4" />}
     </button>
@@ -317,9 +317,9 @@ export function TodoTodayPage() {
   const onOpen = (t: WorkItem) => navigate(`/tasks-mgmt/${t.id}`);
 
   const stats = [
-    { label: '지연', value: buckets.overdue.length, cls: 'text-red-500' },
+    { label: '지연', value: buckets.overdue.length, cls: 'text-status-critical' },
     { label: '오늘', value: buckets.todayList.length, cls: 'text-blue-500' },
-    { label: '진행중', value: buckets.inProgress, cls: 'text-amber-500' },
+    { label: '진행중', value: buckets.inProgress, cls: 'text-status-warning' },
     { label: '예정', value: buckets.upcoming.length, cls: 'text-foreground' },
   ];
   const totalOpen = buckets.overdue.length + buckets.todayList.length + buckets.upcoming.length;
@@ -433,15 +433,15 @@ export function TodoTodayPage() {
                       {fmtRange(currentSprint.startDate, currentSprint.endDate)}
                       {(() => {
                         const left = daysBetween(today, currentSprint.endDate);
-                        if (left < 0) return <span className="ml-1.5 text-red-500 font-medium">종료됨</span>;
-                        if (left === 0) return <span className="ml-1.5 text-amber-500 font-medium">오늘 마감</span>;
+                        if (left < 0) return <span className="ml-1.5 text-status-critical font-medium">종료됨</span>;
+                        if (left === 0) return <span className="ml-1.5 text-status-warning font-medium">오늘 마감</span>;
                         return <span className="ml-1.5 text-primary font-medium">D-{left}</span>;
                       })()}
                     </p>
                   </div>
                 </div>
                 <div className="flex items-center gap-3 text-sm">
-                  <span className="text-emerald-600">완료 {sprint.doneCount}</span>
+                  <span className="text-status-healthy">완료 {sprint.doneCount}</span>
                   <span className="text-muted-foreground">전체 {sprint.total}</span>
                   {sprint.effort > 0 && <span className="text-muted-foreground">{sprint.effort}h</span>}
                   <span className="text-primary font-semibold">{sprint.pct}%</span>
@@ -459,7 +459,7 @@ export function TodoTodayPage() {
 
             {sprint.total === 0 && sprint.candidates.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-14 gap-2 text-muted-foreground">
-                <CheckCircle2 className="w-10 h-10 opacity-30 text-emerald-500" />
+                <CheckCircle2 className="w-10 h-10 opacity-30 text-status-healthy" />
                 <p className="text-sm">이번 스프린트에 담긴 내 할일이 없습니다.</p>
               </div>
             ) : (
@@ -561,7 +561,7 @@ export function TodoTodayPage() {
         </MacCard>
       ) : totalOpen === 0 && buckets.doneRecent.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-20 gap-3 text-muted-foreground">
-          <CheckCircle2 className="w-12 h-12 opacity-30 text-emerald-500" />
+          <CheckCircle2 className="w-12 h-12 opacity-30 text-status-healthy" />
           <div className="text-center">
             <p className="text-base font-medium">처리할 할일이 없습니다 🎉</p>
             <p className="text-sm mt-1 opacity-70">담당으로 지정된 미완료 업무가 없습니다.</p>

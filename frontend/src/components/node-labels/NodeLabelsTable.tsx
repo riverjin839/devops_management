@@ -72,8 +72,8 @@ function NodeView({
                 <td className="px-4 py-3">
                   <span className={`px-2 py-0.5 text-sm rounded-full font-medium ${
                     node.status === 'ready'
-                      ? 'bg-green-500/10 text-green-400 border border-green-500/20'
-                      : 'bg-red-500/10 text-red-400 border border-red-500/20'
+                      ? 'bg-status-healthy/10 text-status-healthy border border-status-healthy/20'
+                      : 'bg-status-critical/10 text-status-critical border border-status-critical/20'
                   }`}>
                     {node.status}
                   </span>
@@ -94,7 +94,7 @@ function NodeView({
                           key={k}
                           className={`px-2 py-0.5 text-sm rounded border font-mono ${
                             isHighlighted
-                              ? 'bg-yellow-500/15 border-yellow-500/40 text-yellow-300'
+                              ? 'bg-status-warning/15 border-status-warning/40 text-status-warning'
                               : 'bg-secondary border-border text-muted-foreground'
                           }`}
                         >
@@ -166,7 +166,7 @@ function LabelView({
                   <span
                     className={`px-2 py-0.5 text-sm rounded border font-mono ${
                       isHighlighted
-                        ? 'bg-yellow-500/15 border-yellow-500/40 text-yellow-300'
+                        ? 'bg-status-warning/15 border-status-warning/40 text-status-warning'
                         : isSystem
                         ? 'bg-secondary border-border text-muted-foreground'
                         : 'bg-primary/10 border-primary/20 text-primary'
@@ -192,7 +192,7 @@ function LabelView({
                           key={`${ref.clusterId}/${ref.name}`}
                           className={`px-2 py-0.5 text-sm rounded border font-mono ${
                             hit
-                              ? 'bg-yellow-500/15 border-yellow-500/40 text-yellow-300'
+                              ? 'bg-status-warning/15 border-status-warning/40 text-status-warning'
                               : 'bg-secondary border-border text-foreground'
                           }`}
                         >

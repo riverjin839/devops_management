@@ -105,7 +105,7 @@ export function FeatureAccessManager() {
             return (
               <span className="flex items-center gap-2 flex-shrink-0">
                 {roleRestricted && (
-                  <span className="px-1.5 py-0.5 text-[11px] rounded-full border bg-amber-500/10 text-amber-600 border-amber-500/30 whitespace-nowrap">
+                  <span className="px-1.5 py-0.5 text-[11px] rounded-full border bg-status-warning/10 text-status-warning border-status-warning/30 whitespace-nowrap">
                     역할 제한
                   </span>
                 )}
@@ -149,7 +149,7 @@ export function FeatureAccessManager() {
                 <span className="text-sm font-semibold">{f.label}</span>
                 <span className="text-xs text-muted-foreground font-mono">{f.path}</span>
                 <span className={`ml-auto inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full border ${
-                  restricted ? 'bg-amber-500/10 text-amber-600 border-amber-500/30' : 'bg-emerald-500/10 text-emerald-600 border-emerald-500/30'
+                  restricted ? 'bg-status-warning/10 text-status-warning border-status-warning/30' : 'bg-status-healthy/10 text-status-healthy border-status-healthy/30'
                 }`}>
                   <Lock className="w-3 h-3" />{restricted ? '제한됨' : '전체 공개'}
                 </span>

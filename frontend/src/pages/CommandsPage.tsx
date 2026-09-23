@@ -63,7 +63,7 @@ export function CommandsPage() {
           </h1>
           <p className="text-sm text-muted-foreground mt-1">
             자주 쓰는 CLI 한 줄을 의미·주의사항·중요도와 함께 기록. 파괴적 명령은
-            <span className="ml-1 inline-flex items-center gap-1 text-xs px-1.5 py-0.5 rounded-full border bg-red-500/15 text-red-600 border-red-500/30">
+            <span className="ml-1 inline-flex items-center gap-1 text-xs px-1.5 py-0.5 rounded-full border bg-status-critical/15 text-status-critical border-status-critical/30">
               <AlertTriangle className="w-3 h-3" /> 치명
             </span>
             으로 분류해 시각적으로 구분합니다.

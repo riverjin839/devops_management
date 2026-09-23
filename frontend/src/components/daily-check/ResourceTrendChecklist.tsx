@@ -19,7 +19,7 @@ const num = (v: number | null) => (v == null ? '-' : String(v));
 function TrendCell({ row }: { row: MetricTrendRow }) {
   if (row.delta == null) return <span className="text-muted-foreground">-</span>;
   const Icon = row.trend === 'up' ? ArrowUp : row.trend === 'down' ? ArrowDown : Minus;
-  const cls = row.trend === 'up' ? 'text-amber-600' : row.trend === 'down' ? 'text-sky-600' : 'text-muted-foreground';
+  const cls = row.trend === 'up' ? 'text-status-warning' : row.trend === 'down' ? 'text-status-info' : 'text-muted-foreground';
   const sign = row.delta > 0 ? `+${row.delta}` : String(row.delta);
   return (
     <span className={`inline-flex items-center gap-0.5 ${cls}`}>
@@ -208,8 +208,8 @@ function ScheduleModal({ onClose }: { onClose: () => void }) {
             <label className="block">cron <input value={cron} onChange={(e) => setCron(e.target.value)} placeholder="0 8 * * *" className="ml-2 w-48 rounded-lg border border-border bg-background px-2 py-1 font-mono" /></label>
           )}
           <div className="text-xs text-muted-foreground">생성 cron: <span className="font-mono">{buildCron()}</span>{nextRun && <> · 다음 실행: {parseUTC(nextRun).toLocaleString()}</>}</div>
-          {err && <div className="text-sm text-red-500">{err}</div>}
-          {saved && <div className="text-sm text-green-600">저장됨</div>}
+          {err && <div className="text-sm text-status-critical">{err}</div>}
+          {saved && <div className="text-sm text-status-healthy">저장됨</div>}
         </div>
         <div className="px-5 py-3 border-t border-border flex justify-end gap-2">
           <button onClick={onClose} className="rounded-xl border border-border px-3 py-1.5 text-sm hover:bg-secondary">닫기</button>

@@ -167,7 +167,7 @@ export function CsvExportModal({ open, clusterId, clusterName, components, onClo
           </button>
           {exportMut.isPending ? (
             <button onClick={exportMut.abort}
-              className="flex items-center gap-1.5 px-4 py-1.5 text-sm font-semibold bg-red-500 text-primary-foreground rounded-lg">
+              className="flex items-center gap-1.5 px-4 py-1.5 text-sm font-semibold bg-status-critical text-primary-foreground rounded-lg">
               <Loader2 className="w-3 h-3 animate-spin" /> 중지
             </button>
           ) : (

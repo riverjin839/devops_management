@@ -69,7 +69,7 @@ export function LakeServiceDetailPage() {
     return (
       <div className="app-min-h-screen bg-background p-6">
         <div className="max-w-[800px] mx-auto">
-          <div className="rounded-md border border-red-500/40 bg-red-500/5 p-4 flex items-start gap-2 text-sm text-red-600 dark:text-red-400">
+          <div className="rounded-md border border-status-critical/40 bg-status-critical/5 p-4 flex items-start gap-2 text-sm text-status-critical">
             <AlertCircle className="w-4 h-4 flex-shrink-0 mt-0.5" />
             <div>
               <div className="font-medium">LAKE 서비스 조회 실패</div>
@@ -123,7 +123,7 @@ export function LakeServiceDetailPage() {
             type="button"
             onClick={() => setConfirmDelete(true)}
             aria-label="서비스 삭제"
-            className="inline-flex items-center gap-1.5 rounded-xl border border-border bg-card px-3 py-1.5 text-sm text-red-500 hover:bg-red-500/10"
+            className="inline-flex items-center gap-1.5 rounded-xl border border-border bg-card px-3 py-1.5 text-sm text-status-critical hover:bg-status-critical/10"
           >
             <Trash2 className="w-3.5 h-3.5" />
             삭제

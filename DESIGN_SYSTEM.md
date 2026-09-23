@@ -36,6 +36,16 @@ ui-ux-pro-max 검색에서 운영 도구에 매칭된 상위 3개 (출처: `styl
 - **본문(메트릭/플레이북/히스토리)** → B (Data-Dense Dashboard, 12-col grid)
 - **근거**: 운영 모니터링은 "상단 hero에서 즉시 인지 → 하단에서 상세 분석" 2단 흐름이고, 단일 스타일로는 두 요구를 동시에 만족할 수 없음. 스킬 데이터의 #1·#5·#6 결과가 같은 결론을 가리킴.
 
+**면(fill) / 글자(text) 분리와 사용 규칙** (P0·P1, 2026-09):
+
+- `bg-status-*` · `border-status-*` · `fill-status-*` 는 위 면 토큰(`--status-*`)을, `text-status-*` 는
+  테마별로 4.5:1 을 보장하는 글자 토큰(`--status-*-text`)을 탄다 (`tailwind.config.js` `extend.textColor`).
+- 배지 표준 조합: `bg-status-X/10 text-status-X border-status-X/30` (X = healthy·warning·critical·info·unknown).
+  옅은 카드 tint 는 `bg-status-X/5`. `dark:` 변형을 따로 달지 않는다 — 토큰이 테마를 따라간다.
+- **상태 의미의 고정 팔레트(`emerald`·`green`·`red`·`rose`·`amber`·`yellow`·`sky`)는 ESLint
+  `no-restricted-syntax` 가 error 로 막는다** (`frontend/.eslintrc.cjs` `STATUS_PALETTE_RE`).
+  장식용 계열(`blue`·`violet`·`purple`·`orange`·`cyan` 등)은 대상이 아니다.
+
 > **이전 제안과의 델타**: "Linear-inspired Dense Pro"는 검증 데이터엔 직접 매칭 없음 → **Real-Time Monitoring + Data-Dense Dashboard** 공식 패턴으로 교체. 시각 인상은 비슷하지만 출처가 명확해짐.
 
 ---
@@ -680,7 +690,10 @@ PEP 는 운영자용 내부 콘솔이라 모바일 전용 레이아웃을 만들
   카탈로그 다이얼로그의 섹션 헤더로만 쓰인다), `back`/`favorites`/`island` 세 개는 leaf 페이지가
   아닌 "개인" 섹션 특수 항목으로 하드코딩돼 있다. `sidebarAppSections(isAdmin)` 은
   `platform`/`system` 도메인 + `back` 을, `topbarAppSections()` 는 `work` 도메인 + `favorites`/
-  `island` 를 그룹별 섹션으로 묶어 반환한다. 새 그룹/leaf 를 추가하면 `GROUPS`/`NAV_MAP` 에만
+  `island` 를 그룹별 섹션으로 묶어 반환한다. 그룹의 `description` 은 섹션 설명으로, `tone: 'danger'`
+  (현재 '클러스터 · 운영 조작' — 명령을 보내는 화면)는 경고 톤 테두리로 `AddAppDialog` 에 표시된다.
+  2026-09 P1 재편으로 옛 '클러스터'(23개)는 관측(`observe`)/점검(`inspect`)/운영 조작(`operate`)/
+  구성(`configure`) 4그룹, 서버/인프라·스토리지·서비스/앱은 `infra` 하나로 바뀌었다. 새 그룹/leaf 를 추가하면 `GROUPS`/`NAV_MAP` 에만
   등록하면 자동으로 카탈로그에 반영된다(그룹 단위이던 예전과 달리 카탈로그 쪽에 별도 목록을
   중복 유지하지 않는다).
 - **저장**: `HomePrefs.installed_apps`(`backend/app/schemas/home_prefs.py`, 기존

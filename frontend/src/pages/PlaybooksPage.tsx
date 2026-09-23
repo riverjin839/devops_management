@@ -245,16 +245,16 @@ export function PlaybooksPage() {
               <h1 className="text-xl font-bold">Ansible 플레이북</h1>
               {statusCounts.total > 0 && (
                 <div className="flex items-center gap-2 ml-2">
-                  <span className="text-sm px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
+                  <span className="text-sm px-2 py-0.5 rounded-full bg-status-healthy/15 text-status-healthy border border-status-healthy/30">
                     {statusCounts.healthy} OK
                   </span>
                   {statusCounts.warning > 0 && (
-                    <span className="text-sm px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-400 border border-amber-500/30">
+                    <span className="text-sm px-2 py-0.5 rounded-full bg-status-warning/15 text-status-warning border border-status-warning/30">
                       {statusCounts.warning} Changed
                     </span>
                   )}
                   {statusCounts.critical > 0 && (
-                    <span className="text-sm px-2 py-0.5 rounded-full bg-red-500/15 text-red-400 border border-red-500/30">
+                    <span className="text-sm px-2 py-0.5 rounded-full bg-status-critical/15 text-status-critical border border-status-critical/30">
                       {statusCounts.critical} Failed
                     </span>
                   )}
@@ -330,7 +330,7 @@ export function PlaybooksPage() {
                   <RoleGate allow={['admin', 'operator']}>
                     <button
                       onClick={handleRunAll}
-                      className="px-4 py-2 text-sm font-medium bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg transition-colors flex items-center gap-2"
+                      className="px-4 py-2 text-sm font-medium bg-status-healthy hover:bg-status-healthy text-white rounded-lg transition-colors flex items-center gap-2"
                     >
                       <Play className="w-4 h-4" />
                       Run All

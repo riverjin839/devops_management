@@ -8,9 +8,9 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 type Tone = 'ok' | 'waiting' | 'error' | 'off';
 
 const TONE_META: Record<Tone, { cls: string; Icon: typeof Clock }> = {
-  ok: { cls: 'bg-emerald-500/10 text-emerald-600 border-emerald-500/30', Icon: CheckCircle2 },
-  waiting: { cls: 'bg-sky-500/10 text-sky-600 border-sky-500/30', Icon: Clock },
-  error: { cls: 'bg-red-500/10 text-red-600 border-red-500/30', Icon: AlertTriangle },
+  ok: { cls: 'bg-status-healthy/10 text-status-healthy border-status-healthy/30', Icon: CheckCircle2 },
+  waiting: { cls: 'bg-status-info/10 text-status-info border-status-info/30', Icon: Clock },
+  error: { cls: 'bg-status-critical/10 text-status-critical border-status-critical/30', Icon: AlertTriangle },
   off: { cls: 'bg-muted text-muted-foreground border-border', Icon: PowerOff },
 };
 
