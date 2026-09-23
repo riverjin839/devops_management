@@ -10,6 +10,16 @@
 
 1.36.0 이후 main 에 병합된 변경 (다음 릴리스 후보).
 
+### Fixed
+- **K8S 자원 관리 — 노드 상세에서 NS 가 많은 운영 노드의 사용량이 비던 문제**: 노드에 걸린
+  네임스페이스가 12개를 넘으면 cluster-wide metrics 1회로 떨어졌는데, 운영 워커는 DaemonSet 만으로도
+  NS 가 10개를 쉽게 넘고 대형 클러스터에서 cluster-wide metrics 는 타임아웃으로 빈 결과가 되기 쉬워
+  노드 상세의 사용량 열이 통째로 비고 Deployment 귀속도 이름 추정으로 떨어졌다. NS 별 metrics·
+  ReplicaSet 조회를 순차 → 병렬(8 workers)로 바꾸고 상한을 64 로 올렸으며, 상한을 넘는 노드는
+  화면에 추정 결과임을 표시한다. Backend: `k8s_allocation.py` `allocation_node_pods`
+  (`owner_approx` 응답 필드, `K8S_ALLOC_NODE_DRILL_NS_MAX` 기본 12→64). Tests:
+  `tests/test_allocation_node_pods.py`(신규).
+
 ## [1.36.0] - 2026-09-23
 
 ### Added
@@ -22,16 +32,6 @@
   로 반복 재선택/토스트가 나지 않도록 token 단위로 1회만 처리) · `K8sRbacPage.tsx`
   (`handleSelectRole` — Role 스코프면 네임스페이스를 null 로, ClusterRole 이면 바인딩
   네임스페이스로 맞춰 찾는다).
-
-### Fixed
-- **K8S 자원 관리 — 노드 상세에서 NS 가 많은 운영 노드의 사용량이 비던 문제**: 노드에 걸린
-  네임스페이스가 12개를 넘으면 cluster-wide metrics 1회로 떨어졌는데, 운영 워커는 DaemonSet 만으로도
-  NS 가 10개를 쉽게 넘고 대형 클러스터에서 cluster-wide metrics 는 타임아웃으로 빈 결과가 되기 쉬워
-  노드 상세의 사용량 열이 통째로 비고 Deployment 귀속도 이름 추정으로 떨어졌다. NS 별 metrics·
-  ReplicaSet 조회를 순차 → 병렬(8 workers)로 바꾸고 상한을 64 로 올렸으며, 상한을 넘는 노드는
-  화면에 추정 결과임을 표시한다. Backend: `k8s_allocation.py` `allocation_node_pods`
-  (`owner_approx` 응답 필드, `K8S_ALLOC_NODE_DRILL_NS_MAX` 기본 12→64). Tests:
-  `tests/test_allocation_node_pods.py`(신규).
 
 ## [1.35.2] - 2026-09-23
 
