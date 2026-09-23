@@ -259,7 +259,7 @@ offline/error dict 를 반환**하고 HTTP 500 을 올리지 않는다 (`agent_s
 
 ## UI Design System
 
-테마 10종(`default` 기본 / `comfort` 크림+딥그린 / `burnt-sienna` 테라코타+시에나 /
+테마 10종(`light` 슬레이트 **기본** / `default` 코랄 / `comfort` 화이트+딥그린 / `burnt-sienna` 테라코타+시에나 /
 `tuscan-sunset` 테라코타+피치+모브 / `electropop` 네온 다크 / `summer-breeze` 옐로우+코랄+스카이블루 /
 `wildflower-meadow` 데이지+앰버+그라스그린 / `tropical-punch` 망고+파파야핑크+틸 /
 `light` / `dark` + `system`) + 토큰 기반 시스템이다.

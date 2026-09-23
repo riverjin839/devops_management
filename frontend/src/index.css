@@ -314,9 +314,11 @@
      큰 radius(16px) 로 부드럽고 편안한 대시보드 톤. 사이드바는 본문과 같은 라이트
      크림, 활성 항목만 딥그린 필(pill) + 흰 텍스트. */
   html.comfort {
-    --background: 60 20% 96%;          /* #F6F6F0 — warm cream */
+    /* 배경·면은 라이트 테마와 같은 명도 구조(배경 98% · 카드 ~100% · 보조면 94~96% · 경계 89~90%)를 따르고
+       hue 만 테마 고유값을 남긴다 — 웜톤이 넓은 면을 덮지 않게 (2026-09 화이트 계열 보정). */
+    --background: 60 15% 98%;
     --foreground: 160 20% 12%;         /* #182520 — green-tinted near-black */
-    --card: 0 0% 100%;                 /* pure white card */
+    --card: 0 0% 100%;
     --card-foreground: 160 20% 12%;
     --popover: 0 0% 100%;
     --popover-foreground: 160 20% 12%;
@@ -329,16 +331,16 @@
     --status-critical-text: 0 70% 45%;
     --status-info-text: 199 75% 34%;
     --status-unknown-text: 150 6% 39%;
-    --secondary: 140 25% 93%;          /* #E9F2EC — mint cream surface */
+    --secondary: 140 22% 95%;
     --secondary-foreground: 160 20% 12%;
-    --muted: 70 15% 95%;
+    --muted: 70 12% 96%;
     --muted-foreground: 150 8% 40%;    /* #5E6E66 — muted green-gray */
     --accent: 145 40% 90%;             /* light mint hover */
     --accent-foreground: 150 45% 20%;
     --destructive: 0 70% 48%;
     --destructive-foreground: 0 0% 100%;
-    --border: 70 12% 87%;              /* #E0E1D8 — soft cream border */
-    --input: 70 12% 87%;
+    --border: 70 10% 90%;
+    --input: 70 10% 90%;
     --ring: 150 45% 30%;
     --radius: 1rem;                    /* 16px — 부드러운 라운딩 */
     --mac-red:    #FF5F57;
@@ -347,12 +349,12 @@
     --card-shadow: 0 1px 3px rgba(24, 37, 32, 0.04), 0 6px 20px -8px rgba(24, 37, 32, 0.08);
 
     /* Sidebar — 본문과 같은 라이트 크림, 활성 항목만 딥그린 필 */
-    --sidebar:                  60 22% 97%;     /* #F8F8F3 */
+    --sidebar:                  60 15% 99%;
     --sidebar-foreground:       160 20% 14%;
     --sidebar-muted-foreground: 150 8% 42%;
     --sidebar-accent:           150 45% 24%;    /* deep green active pill */
     --sidebar-accent-foreground: 0 0% 100%;
-    --sidebar-border:           70 12% 88%;
+    --sidebar-border:           70 10% 91%;
     --sidebar-primary:          150 45% 30%;
 
     /* Status — semantic 유지, healthy 는 테마 그린과 정렬 */
@@ -385,10 +387,10 @@
 
     /* Surface Container — 크림 스케일 (lowest=white → highest=deep cream) */
     --surface-container-lowest:  0 0% 100%;
-    --surface-container-low:     75 20% 98%;
-    --surface-container:         70 18% 96%;
-    --surface-container-high:    72 16% 94%;
-    --surface-container-highest: 70 14% 92%;
+    --surface-container-low:     60 15% 98%;
+    --surface-container:         70 12% 96.5%;
+    --surface-container-high:    70 12% 95%;
+    --surface-container-highest: 70 10% 93%;
 
     --motion-fast: 150ms;
     --motion-base: 200ms;
@@ -401,11 +403,13 @@
      시드 4색: #E35336(terracotta) #F5F5DC(beige) #F4A460(sandy brown) #A0522D(sienna).
      따뜻한 대지색 팔레트 — 크림 배경 + 번트오렌지 primary + 진한 시에나 사이드바. */
   html.burnt-sienna {
-    --background: 42 35% 95%;
+    /* 배경·면은 라이트 테마와 같은 명도 구조(배경 98% · 카드 ~100% · 보조면 94~96% · 경계 89~90%)를 따르고
+       hue 만 테마 고유값을 남긴다 — 웜톤이 넓은 면을 덮지 않게 (2026-09 화이트 계열 보정). */
+    --background: 40 30% 98%;
     --foreground: 19 35% 18%;
-    --card: 42 45% 98%;
+    --card: 40 40% 99.7%;
     --card-foreground: 19 35% 18%;
-    --popover: 42 45% 98%;
+    --popover: 40 40% 99.7%;
     --popover-foreground: 19 35% 18%;
     --primary: 10 70% 47%;             /* P0: 흰 글자 4.5:1 확보 위해 명도 하향 */
     --primary-foreground: 42 45% 98%;
@@ -416,16 +420,16 @@
     --status-critical-text: 6 70% 43%;
     --status-info-text: 199 60% 35%;
     --status-unknown-text: 20 10% 39%;
-    --secondary: 32 45% 90%;           /* sandy tint */
+    --secondary: 32 40% 94%;
     --secondary-foreground: 19 35% 18%;
-    --muted: 40 30% 92%;
+    --muted: 40 25% 96%;
     --muted-foreground: 20 15% 40%;
     --accent: 28 75% 90%;              /* peach hover */
     --accent-foreground: 19 35% 18%;
     --destructive: 0 65% 48%;
     --destructive-foreground: 42 45% 98%;
-    --border: 34 25% 84%;
-    --input: 34 25% 84%;
+    --border: 34 20% 89%;
+    --input: 34 20% 89%;
     --ring: 10 70% 47%;
     --radius: 0.875rem;
     --mac-red:    #FF5F57;
@@ -467,11 +471,11 @@
     --chart-7: 262 55% 55%;   /* violet */
     --chart-8: 20 12% 48%;    /* warm slate */
 
-    --surface-container-lowest:  42 45% 98%;
-    --surface-container-low:     42 40% 96%;
-    --surface-container:         42 35% 95%;
-    --surface-container-high:    40 30% 93%;
-    --surface-container-highest: 38 28% 91%;
+    --surface-container-lowest:  40 40% 99.7%;
+    --surface-container-low:     40 30% 98%;
+    --surface-container:         38 25% 96.5%;
+    --surface-container-high:    36 25% 95%;
+    --surface-container-highest: 34 22% 93%;
 
     --motion-fast: 150ms;
     --motion-base: 200ms;
@@ -484,11 +488,13 @@
      Burnt Sienna 와 같은 terracotta 를 공유하되, 모브톤 뉴트럴과 피치 서페이스로
      노을(sunset) 느낌을 낸다. */
   html.tuscan-sunset {
-    --background: 28 45% 95%;
+    /* 배경·면은 라이트 테마와 같은 명도 구조(배경 98% · 카드 ~100% · 보조면 94~96% · 경계 89~90%)를 따르고
+       hue 만 테마 고유값을 남긴다 — 웜톤이 넓은 면을 덮지 않게 (2026-09 화이트 계열 보정). */
+    --background: 28 40% 98%;
     --foreground: 14 40% 16%;
-    --card: 28 55% 98%;
+    --card: 28 45% 99.7%;
     --card-foreground: 14 40% 16%;
-    --popover: 28 55% 98%;
+    --popover: 28 45% 99.7%;
     --popover-foreground: 14 40% 16%;
     --primary: 10 70% 47%;             /* P0: 흰 글자 4.5:1 확보 위해 명도 하향 */
     --primary-foreground: 28 55% 98%;
@@ -499,16 +505,16 @@
     --status-critical-text: 8 65% 43%;
     --status-info-text: 199 60% 35%;
     --status-unknown-text: 281 8% 40%;
-    --secondary: 28 60% 90%;           /* #FFD3AC peach surface */
+    --secondary: 28 55% 94%;
     --secondary-foreground: 14 40% 16%;
-    --muted: 28 30% 93%;
+    --muted: 28 25% 96%;
     --muted-foreground: 281 10% 40%;   /* #9988A1 mauve-gray */
     --accent: 28 80% 88%;              /* peach hover */
     --accent-foreground: 14 40% 16%;
     --destructive: 0 65% 48%;
     --destructive-foreground: 28 55% 98%;
-    --border: 28 25% 85%;
-    --input: 28 25% 85%;
+    --border: 28 20% 89%;
+    --input: 28 20% 89%;
     --ring: 10 70% 47%;
     --radius: 0.875rem;
     --mac-red:    #FF5F57;
@@ -550,11 +556,11 @@
     --chart-7: 38 85% 50%;    /* amber */
     --chart-8: 281 8% 48%;    /* mauve-gray slate */
 
-    --surface-container-lowest:  28 55% 98%;
-    --surface-container-low:     28 45% 96%;
-    --surface-container:         28 40% 95%;
-    --surface-container-high:    28 35% 93%;
-    --surface-container-highest: 28 30% 91%;
+    --surface-container-lowest:  28 45% 99.7%;
+    --surface-container-low:     28 40% 98%;
+    --surface-container:         28 30% 96.5%;
+    --surface-container-high:    28 30% 95%;
+    --surface-container-highest: 28 25% 93%;
 
     --motion-fast: 150ms;
     --motion-base: 200ms;

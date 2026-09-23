@@ -2,10 +2,12 @@ import { create } from 'zustand';
 
 /**
  * 테마 모드.
- * - `default`        : 기본 테마 — Anthropic Claude 브랜드 톤 (따뜻한 페이퍼 배경 +
- *                      큰 radius + 은은한 그림자 + 코랄 #B8552E accent). 신규 사용자
- *                      첫 진입 시 보이는 화면.
- * - `comfort`        : 크림 배경 + 딥그린 액센트 + 화이트 카드 + 큰 radius(16px) —
+ * - `light`          : **기본 테마** — 슬레이트 + 블루 단일 강조 (Databricks-leaning).
+ *                      신규 사용자 첫 진입 화면. (2026-09 부터 기본값 — 이전엔 `default`.)
+ * - `default`        : "코랄" 테마 — 따뜻한 페이퍼 배경 + 큰 radius + 은은한 그림자 +
+ *                      코랄 #B8552E accent. ID 는 호환성 때문에 `default` 를 유지하지만
+ *                      더 이상 기본값이 아니다.
+ * - `comfort`        : 화이트 계열 배경 + 딥그린 액센트 + 화이트 카드 + 큰 radius(16px) —
  *                      부드럽고 편안한 대시보드 톤 (Donezo-inspired).
  * - `burnt-sienna`   : 테라코타/베이지/샌드/시에나 — 따뜻한 대지색 팔레트 (Figma
  *                      색상 조합 라이브러리 "Burnt Sienna" 참고).
@@ -17,7 +19,7 @@ import { create } from 'zustand';
  *                      ("Wildflower Meadow" 참고).
  * - `tropical-punch`  : 망고오렌지/파파야핑크/파인애플옐로우/딥틸 — 트로피컬 톤
  *                      ("Tropical Punch" 참고).
- * - `light` / `dark` : Databricks-leaning 라이트 / 다크 (대안).
+ * - `dark`           : Databricks-leaning 다크.
  * - `system`         : OS 환경설정 따라가는 라이트/다크.
  */
 export type Theme =
@@ -59,23 +61,38 @@ function applyTheme(theme: Theme) {
 
 const VALID_THEMES: readonly Theme[] = [...STANDALONE_THEMES, 'dark', 'light', 'system'];
 
+/** 신규 사용자 기본 테마. */
+const DEFAULT_THEME: Theme = 'light';
+/** 기본 테마 교체(default→light) 1회 마이그레이션 완료 표식. */
+const LIGHT_DEFAULT_MIGRATION_KEY = 'k8s:theme-migrated-light-default';
+
 // Apply theme immediately on module load (before React renders)
-// 레거시 'claude' 값은 'default' 로 자동 마이그레이션 (호환성).
+// - 레거시 'claude' 값 → 기본 테마.
+// - 기본 테마가 코랄(default) → 슬레이트(light) 로 바뀌면서, 이전에는 첫 로드 때 'default' 가
+//   자동 저장됐으므로 "직접 고른 코랄"과 "그냥 기본값"을 구분할 수 없다 → 저장값 'default' 를
+//   1회만 light 로 옮기고 표식을 남긴다. 이후 사용자가 코랄을 다시 고르면 그대로 유지된다.
 let _stored = localStorage.getItem('k8s:theme');
 if (_stored === 'claude') {
-  _stored = 'default';
-  localStorage.setItem('k8s:theme', 'default');
+  _stored = DEFAULT_THEME;
+  localStorage.setItem('k8s:theme', DEFAULT_THEME);
+}
+if (localStorage.getItem(LIGHT_DEFAULT_MIGRATION_KEY) !== '1') {
+  if (_stored === 'default') {
+    _stored = DEFAULT_THEME;
+    localStorage.setItem('k8s:theme', DEFAULT_THEME);
+  }
+  localStorage.setItem(LIGHT_DEFAULT_MIGRATION_KEY, '1');
 }
 const _initial: Theme = (
   _stored && (VALID_THEMES as readonly string[]).includes(_stored)
     ? (_stored as Theme)
-    : 'default'
+    : DEFAULT_THEME
 );
 applyTheme(_initial);
 
 // Listen for system preference changes when theme is 'system'
 window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => {
-  const current = (localStorage.getItem('k8s:theme') as Theme | null) ?? 'default';
+  const current = (localStorage.getItem('k8s:theme') as Theme | null) ?? DEFAULT_THEME;
   if (current === 'system') applyTheme('system');
 });
 

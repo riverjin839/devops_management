@@ -20,6 +20,16 @@
   default·burnt-sienna·tuscan-sunset 은 primary 명도 하향, dark·electropop·summer-breeze·
   tropical-punch 는 `--primary-foreground` 를 어두운 글자로 교체.
 
+### Changed
+- **기본 테마를 라이트(슬레이트)로 교체**: 첫 화면이 코랄 페이퍼 톤에서 슬레이트 + 블루 단일 강조로
+  바뀐다. 기존 사용자도 저장값 `default` 를 1회 자동으로 `light` 로 옮기고, 코랄은 테마 목록에
+  "코랄" 이름으로 남아 다시 고를 수 있다. Frontend: `themeStore.ts`(`DEFAULT_THEME`, 1회 마이그레이션
+  표식 `k8s:theme-migrated-light-default`), 사이드바·테마 갤러리 라벨/순서, `themeSwatches.ts`.
+- **컴포트·번트 시에나·토스카나 선셋 배경을 화이트 계열로**: 배경 98% · 카드 ~100% · 보조면 94~96% ·
+  경계 89~90% 로 라이트 테마와 같은 명도 구조를 따르고 hue 만 테마 고유값을 남긴다. 버튼·링크·
+  사이드바 색은 그대로. Frontend: `index.css` 각 테마 블록의 background/card/secondary/muted/border/
+  surface-container 토큰.
+
 ## [1.36.1] - 2026-09-23
 
 ### Fixed
