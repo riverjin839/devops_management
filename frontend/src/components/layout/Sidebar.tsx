@@ -50,9 +50,9 @@ const THEME_LABEL: Record<Theme, string> = {
   umber: '움버',
   'umber-light': '움버 라이트',
   plaster: '플래스터',
-  journal: '저널',
+  journal: '아침 식사',
   relief: '릴리프',
-  harlequin: '할리퀸',
+  harlequin: '할리퀸과 목걸이를 한 여인',
   system: '시스템',
 };
 // 강조색 스와치 아이콘 — 팩토리로 한 번만 만들어 매 렌더마다 컴포넌트 정체성이 바뀌지 않게 한다.
@@ -518,7 +518,7 @@ export function Sidebar() {
                   Icon={ACCENT_SWATCH_ICON[a]}
                   checked={accent === a}
                   disabled={!accentApplies(theme)}
-                  title={accentApplies(theme) ? undefined : '그림 테마(움버·플래스터·저널·릴리프·할리퀸)와 컴포트·고대비 바탕은 자체 색을 써서 강조색을 바꿀 수 없다'}
+                  title={accentApplies(theme) ? undefined : '그림 테마(움버·플래스터·아침 식사·릴리프·할리퀸과 목걸이를 한 여인)와 컴포트·고대비 바탕은 자체 색을 써서 강조색을 바꿀 수 없다'}
                   onSelect={() => setAccent(a)}
                 />
               ))}

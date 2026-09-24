@@ -6,7 +6,7 @@ import { THEME_SWATCH, ACCENT_SWATCH, ACCENT_LABEL } from '@/lib/themeSwatches';
 const THEME_LABEL: Record<Theme, string> = {
   light: '라이트 (기본)', dark: '다크', comfort: '컴포트', 'high-contrast': '고대비',
   umber: '움버', 'umber-light': '움버 라이트', plaster: '플래스터',
-  journal: '저널', relief: '릴리프', harlequin: '할리퀸', system: '시스템',
+  journal: '아침 식사', relief: '릴리프', harlequin: '할리퀸과 목걸이를 한 여인', system: '시스템',
 };
 
 /** 테마 하나의 미리보기 카드 — 실제 전환 없이 배경/카드/버튼 색을 그대로 보여준다. */
@@ -71,7 +71,7 @@ export function ThemeGallery() {
 
       <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground mt-4 mb-1.5">강조색</p>
       <p className="text-xs text-muted-foreground mb-2">
-        버튼·링크·선택 탭·활성 메뉴에만 쓰인다. 라이트·다크(시스템 포함) 바탕에 적용되고, 컴포트·고대비와 그림 테마(움버·플래스터·저널·릴리프·할리퀸)는 자체 색을 쓴다.
+        버튼·링크·선택 탭·활성 메뉴에만 쓰인다. 라이트·다크(시스템 포함) 바탕에 적용되고, 컴포트·고대비와 그림 테마(움버·플래스터·아침 식사·릴리프·할리퀸과 목걸이를 한 여인)는 자체 색을 쓴다.
       </p>
       <div className="flex flex-wrap gap-3" role="radiogroup" aria-label="강조색">
         {ACCENTS.map((a) => {
@@ -84,7 +84,7 @@ export function ThemeGallery() {
               aria-checked={active}
               disabled={!accentOn}
               onClick={() => setAccent(a)}
-              title={accentOn ? `강조색 ${ACCENT_LABEL[a]}` : '그림 테마(움버·플래스터·저널·릴리프·할리퀸)와 컴포트·고대비 바탕은 자체 색을 써서 강조색을 바꿀 수 없다'}
+              title={accentOn ? `강조색 ${ACCENT_LABEL[a]}` : '그림 테마(움버·플래스터·아침 식사·릴리프·할리퀸과 목걸이를 한 여인)와 컴포트·고대비 바탕은 자체 색을 써서 강조색을 바꿀 수 없다'}
               className="flex flex-col items-center gap-1 rounded-xl p-1 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <span
