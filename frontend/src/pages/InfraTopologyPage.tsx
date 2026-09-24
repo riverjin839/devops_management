@@ -28,8 +28,8 @@ import type {
 // ── Role 메타 ────────────────────────────────────────────────────────────────
 const ROLE_META: Record<InfraNodeRole, { label: string; color: string; bg: string; dot: string }> = {
   master:  { label: 'Master',  color: 'text-blue-400',   bg: 'bg-blue-500/10 border-blue-500/30',   dot: 'bg-blue-400'   },
-  worker:  { label: 'Worker',  color: 'text-emerald-400', bg: 'bg-emerald-500/10 border-emerald-500/30', dot: 'bg-emerald-400' },
-  storage: { label: 'Storage', color: 'text-amber-400',  bg: 'bg-amber-500/10 border-amber-500/30',  dot: 'bg-amber-400'  },
+  worker:  { label: 'Worker',  color: 'text-status-healthy', bg: 'bg-status-healthy/10 border-status-healthy/30', dot: 'bg-status-healthy' },
+  storage: { label: 'Storage', color: 'text-status-warning',  bg: 'bg-status-warning/10 border-status-warning/30',  dot: 'bg-status-warning'  },
   infra:   { label: 'Infra',   color: 'text-purple-400', bg: 'bg-purple-500/10 border-purple-500/30', dot: 'bg-purple-400' },
 };
 
@@ -66,7 +66,7 @@ function NodeCard({ node, onEdit, onDelete, onVerify }: NodeCardProps) {
             onClick={() => onVerify(node)}
             title="노드 추가 검증"
             aria-label="노드 추가 검증"
-            className="p-1 rounded hover:bg-emerald-500/10 text-muted-foreground hover:text-emerald-500 transition-colors"
+            className="p-1 rounded hover:bg-status-healthy/10 text-muted-foreground hover:text-status-healthy transition-colors"
           >
             <ShieldCheck className="w-3 h-3" />
           </button>
@@ -79,7 +79,7 @@ function NodeCard({ node, onEdit, onDelete, onVerify }: NodeCardProps) {
           </button>
           <button
             onClick={() => onDelete(node)}
-            className="p-1 rounded hover:bg-red-500/10 text-muted-foreground hover:text-red-400 transition-colors"
+            className="p-1 rounded hover:bg-status-critical/10 text-muted-foreground hover:text-status-critical transition-colors"
             aria-label="노드 삭제"
           >
             <Trash2 className="w-3 h-3" />
@@ -134,7 +134,7 @@ function NodeCard({ node, onEdit, onDelete, onVerify }: NodeCardProps) {
 
       {/* Auto-synced 배지 */}
       {node.autoSynced && (
-        <span className="inline-flex items-center gap-1 self-start px-1.5 py-0.5 rounded text-sm bg-sky-500/10 border border-sky-500/20 text-sky-400">
+        <span className="inline-flex items-center gap-1 self-start px-1.5 py-0.5 rounded text-sm bg-status-info/10 border border-status-info/20 text-status-info">
           <RefreshCw className="w-2.5 h-2.5" />K8s 동기화
         </span>
       )}
@@ -371,7 +371,7 @@ function NodeModal({ clusterId, clusterMeta, initial, onClose }: NodeModalProps)
           </div>
 
           {error && (
-            <div className="flex items-center gap-2 text-red-400 text-sm bg-red-500/10 border border-red-500/20 rounded-lg px-3 py-2">
+            <div className="flex items-center gap-2 text-status-critical text-sm bg-status-critical/10 border border-status-critical/20 rounded-lg px-3 py-2">
               <AlertTriangle className="w-3.5 h-3.5 flex-shrink-0" />{error}
             </div>
           )}
@@ -430,7 +430,7 @@ function DeleteConfirm({ node, onConfirm, onCancel, isPending }: DeleteConfirmPr
           </button>
           <button
             onClick={onConfirm} disabled={isPending}
-            className="px-4 py-2 text-sm rounded-lg bg-red-500 hover:bg-red-600 text-white disabled:opacity-50 flex items-center gap-2"
+            className="px-4 py-2 text-sm rounded-lg bg-status-critical hover:bg-status-critical text-white disabled:opacity-50 flex items-center gap-2"
           >
             {isPending && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
             삭제
@@ -638,7 +638,7 @@ export function InfraTopologyPage() {
 
             {/* 동기화 오류 */}
             {syncError && (
-              <div className="flex items-center gap-2 text-red-400 text-sm bg-red-500/10 border border-red-500/20 rounded-lg px-3 py-2 mb-4">
+              <div className="flex items-center gap-2 text-status-critical text-sm bg-status-critical/10 border border-status-critical/20 rounded-lg px-3 py-2 mb-4">
                 <AlertTriangle className="w-3.5 h-3.5 flex-shrink-0" />{syncError}
                 <button onClick={() => setSyncError('')} className="ml-auto" aria-label="오류 메시지 닫기"><X className="w-3 h-3" /></button>
               </div>
@@ -647,7 +647,7 @@ export function InfraTopologyPage() {
             {/* sync 직후 신규 노드 검증 요약 */}
             {syncSummary && (
               <div className="flex items-center gap-2 text-sm bg-card border border-border rounded-lg px-3 py-2 mb-4">
-                <ShieldCheck className="w-3.5 h-3.5 flex-shrink-0 text-emerald-500" />
+                <ShieldCheck className="w-3.5 h-3.5 flex-shrink-0 text-status-healthy" />
                 <span>
                   신규 노드 {syncSummary.length}개 검증 — 정상 {syncSummary.filter(v => v.ok).length},{' '}
                   이상 {syncSummary.filter(v => !v.ok).length}
@@ -656,7 +656,7 @@ export function InfraTopologyPage() {
                   <button
                     key={v.hostname}
                     onClick={() => { setVerifyResult(v); setVerifyOpen(true); }}
-                    className="px-1.5 py-0.5 rounded text-xs bg-red-500/10 border border-red-500/20 text-red-500 hover:bg-red-500/20"
+                    className="px-1.5 py-0.5 rounded text-xs bg-status-critical/10 border border-status-critical/20 text-status-critical hover:bg-status-critical/20"
                   >
                     {v.hostname}
                   </button>
@@ -724,7 +724,7 @@ export function InfraTopologyPage() {
                 </div>
 
                 {traceError && (
-                  <div className="flex items-center gap-2 text-red-400 text-sm bg-red-500/10 border border-red-500/20 rounded-lg px-3 py-2 mb-3">
+                  <div className="flex items-center gap-2 text-status-critical text-sm bg-status-critical/10 border border-status-critical/20 rounded-lg px-3 py-2 mb-3">
                     <AlertTriangle className="w-3.5 h-3.5 flex-shrink-0" />{traceError}
                   </div>
                 )}
@@ -732,7 +732,7 @@ export function InfraTopologyPage() {
                 {traceResult && (
                   <div className="flex flex-col gap-2">
                     {traceBottleneck && (
-                      <div className="flex items-center gap-2 text-amber-300 text-sm bg-amber-500/10 border border-amber-500/30 rounded-lg px-3 py-2">
+                      <div className="flex items-center gap-2 text-status-warning text-sm bg-status-warning/10 border border-status-warning/30 rounded-lg px-3 py-2">
                         <Activity className="w-3.5 h-3.5" />
                         병목 의심 홉: <span className="font-semibold">{traceBottleneck.hop.name}</span>
                         <span className="opacity-80">
@@ -785,13 +785,13 @@ export function InfraTopologyPage() {
                 {switches.map(({ switchName, nodeCount, racks: swRacks }) => (
                   <section
                     key={switchName}
-                    className="rounded-xl border border-sky-500/30 bg-sky-500/[0.03] overflow-hidden"
+                    className="rounded-xl border border-status-info/30 bg-status-info/[0.03] overflow-hidden"
                   >
                     {/* 스위치 헤더 (L2/L3) */}
-                    <header className="flex items-center gap-2 px-4 py-2.5 bg-sky-500/10 border-b border-sky-500/20">
-                      <Network className="w-4 h-4 text-sky-400 flex-shrink-0" />
-                      <span className="text-sm font-semibold text-sky-300">{switchName}</span>
-                      <span className="text-xs font-mono text-sky-400/70">ToR / Leaf</span>
+                    <header className="flex items-center gap-2 px-4 py-2.5 bg-status-info/10 border-b border-status-info/20">
+                      <Network className="w-4 h-4 text-status-info flex-shrink-0" />
+                      <span className="text-sm font-semibold text-status-info">{switchName}</span>
+                      <span className="text-xs font-mono text-status-info/70">ToR / Leaf</span>
                       <span className="ml-auto text-sm text-muted-foreground">
                         {swRacks.length}개 랙 · {nodeCount}개 노드
                       </span>

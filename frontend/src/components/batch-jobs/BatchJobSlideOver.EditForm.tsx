@@ -283,15 +283,15 @@ export function EditForm({ job, onSaved }: EditFormProps) {
           job.hasSavedPrivateKey ? 'present' : '',
         );
         return credsBlocking ? (
-          <div className="text-xs text-amber-600">
+          <div className="text-xs text-status-warning">
             cron 을 사용하려면 자격증명이 필요합니다. SavedCreds 패널에서 비밀번호 또는
             개인키를 먼저 등록하거나, cron 을 비워 수동 실행 전용으로 두세요.
           </div>
         ) : null;
       })()}
 
-      {error && <div className="text-xs text-red-500">{error}</div>}
-      {okMsg && <div className="text-xs text-emerald-600">{okMsg}</div>}
+      {error && <div className="text-xs text-status-critical">{error}</div>}
+      {okMsg && <div className="text-xs text-status-healthy">{okMsg}</div>}
 
       <div className="flex items-center gap-1.5">
         <button

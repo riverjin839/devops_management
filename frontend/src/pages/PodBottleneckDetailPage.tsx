@@ -13,10 +13,10 @@ import type { BottleneckStatus } from '@/types';
 import { parseUTC } from '@/lib/utils';
 
 const STATUS_BADGE: Record<BottleneckStatus, { label: string; cls: string }> = {
-  healthy:  { label: '정상',  cls: 'bg-emerald-500/10 text-emerald-500 border-emerald-500/30' },
-  warning:  { label: '경고',  cls: 'bg-amber-500/10 text-amber-500 border-amber-500/30' },
-  critical: { label: '위험',  cls: 'bg-red-500/10 text-red-500 border-red-500/30' },
-  pending:  { label: '미연결', cls: 'bg-slate-500/10 text-slate-400 border-slate-500/30' },
+  healthy:  { label: '정상',  cls: 'bg-status-healthy/10 text-status-healthy border-status-healthy/30' },
+  warning:  { label: '경고',  cls: 'bg-status-warning/10 text-status-warning border-status-warning/30' },
+  critical: { label: '위험',  cls: 'bg-status-critical/10 text-status-critical border-status-critical/30' },
+  pending:  { label: '미연결', cls: 'bg-status-unknown/10 text-status-unknown border-status-unknown/30' },
 };
 
 export function PodBottleneckDetailPage() {
@@ -52,7 +52,7 @@ export function PodBottleneckDetailPage() {
   if (error || !run) {
     return (
       <div className="app-min-h-screen bg-background p-6">
-        <div className="max-w-[800px] mx-auto rounded-md border border-red-500/40 bg-red-500/5 p-4 text-sm text-red-500 flex items-start gap-2">
+        <div className="max-w-[800px] mx-auto rounded-md border border-status-critical/40 bg-status-critical/5 p-4 text-sm text-status-critical flex items-start gap-2">
           <AlertCircle className="w-4 h-4 mt-0.5 flex-shrink-0" />
           <div>
             <div className="font-medium">진단 결과 조회 실패</div>
@@ -110,7 +110,7 @@ export function PodBottleneckDetailPage() {
             type="button"
             onClick={() => setConfirmDelete(true)}
             aria-label="진단 결과 삭제"
-            className="inline-flex items-center gap-1.5 rounded-xl border border-border bg-card px-3 py-1.5 text-sm text-red-500 hover:bg-red-500/10"
+            className="inline-flex items-center gap-1.5 rounded-xl border border-border bg-card px-3 py-1.5 text-sm text-status-critical hover:bg-status-critical/10"
           >
             <Trash2 className="w-3.5 h-3.5" />
             삭제

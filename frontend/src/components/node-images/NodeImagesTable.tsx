@@ -215,9 +215,9 @@ function RoleBadge({ role }: { role: string }) {
 function StatusBadge({ status }: { status: string }) {
   const cls =
     status === 'ready'
-      ? 'bg-green-500/15 text-green-600 dark:text-green-400'
+      ? 'bg-status-healthy/15 text-status-healthy'
       : status === 'not-ready'
-      ? 'bg-red-500/15 text-red-600 dark:text-red-400'
+      ? 'bg-status-critical/15 text-status-critical'
       : 'bg-muted text-muted-foreground';
   return (
     <span className={`inline-block px-2 py-0.5 rounded-md text-xs font-medium ${cls}`}>

@@ -134,9 +134,9 @@ export function PlaybookLogDialog({ playbook, onClose }: PlaybookLogDialogProps)
                   <thead className="bg-secondary/50">
                     <tr>
                       <th className="px-3 py-1.5 text-left font-medium">Host</th>
-                      <th className="px-3 py-1.5 text-right font-medium text-emerald-500">OK</th>
-                      <th className="px-3 py-1.5 text-right font-medium text-amber-500">Changed</th>
-                      <th className="px-3 py-1.5 text-right font-medium text-red-500">Failures</th>
+                      <th className="px-3 py-1.5 text-right font-medium text-status-healthy">OK</th>
+                      <th className="px-3 py-1.5 text-right font-medium text-status-warning">Changed</th>
+                      <th className="px-3 py-1.5 text-right font-medium text-status-critical">Failures</th>
                       <th className="px-3 py-1.5 text-right font-medium text-orange-500">Unreachable</th>
                       <th className="px-3 py-1.5 text-right font-medium text-slate-400">Skipped</th>
                     </tr>
@@ -233,7 +233,7 @@ export function PlaybookLogDialog({ playbook, onClose }: PlaybookLogDialogProps)
                 disabled={!rawOutput}
                 className="inline-flex items-center gap-1 px-2 py-1 text-xs rounded border border-border hover:bg-secondary disabled:opacity-40"
               >
-                {copied ? <Check className="w-3 h-3 text-emerald-500" /> : <Copy className="w-3 h-3" />}
+                {copied ? <Check className="w-3 h-3 text-status-healthy" /> : <Copy className="w-3 h-3" />}
                 {copied ? '복사됨' : '복사'}
               </button>
             </div>
@@ -260,9 +260,9 @@ function SectionTitle({
   inline?: boolean;
 }) {
   const toneClass =
-    tone === 'success' ? 'text-emerald-500'
-    : tone === 'warning' ? 'text-amber-500'
-    : tone === 'error' ? 'text-red-500'
+    tone === 'success' ? 'text-status-healthy'
+    : tone === 'warning' ? 'text-status-warning'
+    : tone === 'error' ? 'text-status-critical'
     : 'text-foreground';
   return (
     <div className={`flex items-center gap-1.5 ${inline ? '' : 'mb-2'}`}>
@@ -280,9 +280,9 @@ function SummaryCell({
   accent: 'success' | 'warning' | 'error' | 'neutral';
 }) {
   const cls =
-    accent === 'success' ? 'text-emerald-600 dark:text-emerald-400'
-    : accent === 'warning' ? 'text-amber-600 dark:text-amber-400'
-    : accent === 'error' ? 'text-red-600 dark:text-red-400'
+    accent === 'success' ? 'text-status-healthy'
+    : accent === 'warning' ? 'text-status-warning'
+    : accent === 'error' ? 'text-status-critical'
     : 'text-foreground';
   return (
     <div className="bg-secondary/50 border border-border rounded-lg px-3 py-2">
@@ -293,7 +293,7 @@ function SummaryCell({
 }
 
 function FailedTaskCard({ task, variant }: { task: FailedTask; variant: 'failed' | 'unreachable' }) {
-  const borderClass = variant === 'failed' ? 'border-red-500/30 bg-red-500/5' : 'border-orange-500/30 bg-orange-500/5';
+  const borderClass = variant === 'failed' ? 'border-status-critical/30 bg-status-critical/5' : 'border-orange-500/30 bg-orange-500/5';
   return (
     <div className={`border rounded-lg p-3 ${borderClass}`}>
       <div className="flex items-baseline gap-2 mb-1">

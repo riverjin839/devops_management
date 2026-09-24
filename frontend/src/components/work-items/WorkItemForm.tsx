@@ -393,7 +393,7 @@ export function WorkItemForm({ initial, parentItem, defaultStartedAt, onCancel, 
                 return (
                   <span key={id} className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-primary/10 text-primary text-xs border border-primary/20">
                     {c?.name ?? id}
-                    <button type="button" onClick={() => removeCluster(id)} className="hover:text-rose-500 leading-none" aria-label={`${c?.name ?? id} 제거`}>×</button>
+                    <button type="button" onClick={() => removeCluster(id)} className="hover:text-status-critical leading-none" aria-label={`${c?.name ?? id} 제거`}>×</button>
                   </span>
                 );
               })}
@@ -518,7 +518,7 @@ export function WorkItemForm({ initial, parentItem, defaultStartedAt, onCancel, 
                   <button
                     type="button"
                     onClick={() => deleteCustomCategory(cat)}
-                    className="text-muted-foreground hover:text-red-400 transition-colors"
+                    className="text-muted-foreground hover:text-status-critical transition-colors"
                     title="삭제"
                   >
                     ×

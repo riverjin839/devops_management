@@ -9,16 +9,16 @@ interface Props {
 }
 
 const VERDICT_META: Record<HopVerdict, { icon: typeof CheckCircle2; cls: string; label: string }> = {
-  allow: { icon: CheckCircle2, cls: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30', label: 'allow' },
-  deny:  { icon: XCircle,      cls: 'bg-red-500/10 text-red-400 border-red-500/30',             label: 'deny'  },
-  warn:  { icon: AlertTriangle,cls: 'bg-amber-500/10 text-amber-400 border-amber-500/30',       label: 'warn'  },
-  info:  { icon: Info,         cls: 'bg-slate-500/10 text-slate-400 border-slate-500/30',       label: 'info'  },
+  allow: { icon: CheckCircle2, cls: 'bg-status-healthy/10 text-status-healthy border-status-healthy/30', label: 'allow' },
+  deny:  { icon: XCircle,      cls: 'bg-status-critical/10 text-status-critical border-status-critical/30',             label: 'deny'  },
+  warn:  { icon: AlertTriangle,cls: 'bg-status-warning/10 text-status-warning border-status-warning/30',       label: 'warn'  },
+  info:  { icon: Info,         cls: 'bg-status-unknown/10 text-status-unknown border-status-unknown/30',       label: 'info'  },
 };
 
 function PolicyItem({ p }: { p: HopPolicy }) {
   const kindColor = p.kind.startsWith('Cilium')
     ? 'bg-purple-500/10 text-purple-400 border-purple-500/30'
-    : 'bg-sky-500/10 text-sky-400 border-sky-500/30';
+    : 'bg-status-info/10 text-status-info border-status-info/30';
   return (
     <div className="border border-border rounded p-2 bg-muted/20">
       <div className="flex items-center gap-1.5 mb-1 flex-wrap">
@@ -63,7 +63,7 @@ export function HopDetailPanel({ hop, index, totalHops, onClose }: Props) {
         {(hop.latencyMs != null || hop.errorCount != null) && (
           <div className="flex gap-3 text-xs text-muted-foreground">
             {hop.latencyMs != null && <span>⏱ {hop.latencyMs}ms</span>}
-            {hop.errorCount != null && <span className={hop.errorCount > 0 ? 'text-amber-400' : ''}>
+            {hop.errorCount != null && <span className={hop.errorCount > 0 ? 'text-status-warning' : ''}>
               ⚠ errors: {hop.errorCount}
             </span>}
           </div>

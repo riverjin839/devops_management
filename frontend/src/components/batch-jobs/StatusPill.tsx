@@ -7,11 +7,11 @@ interface StatusMeta {
 }
 
 const STATUS_META: Record<string, StatusMeta> = {
-  ok:            { label: '정상',      cls: 'bg-emerald-500/10 text-emerald-600 border-emerald-500/30', Icon: CheckCircle },
-  error:         { label: '에러',      cls: 'bg-red-500/10 text-red-600 border-red-500/30',             Icon: XCircle },
-  timeout:       { label: '타임아웃',  cls: 'bg-amber-500/10 text-amber-600 border-amber-500/30',       Icon: Clock },
+  ok:            { label: '정상',      cls: 'bg-status-healthy/10 text-status-healthy border-status-healthy/30', Icon: CheckCircle },
+  error:         { label: '에러',      cls: 'bg-status-critical/10 text-status-critical border-status-critical/30',             Icon: XCircle },
+  timeout:       { label: '타임아웃',  cls: 'bg-status-warning/10 text-status-warning border-status-warning/30',       Icon: Clock },
   auth_error:    { label: '인증 실패', cls: 'bg-orange-500/10 text-orange-600 border-orange-500/30',    Icon: ShieldAlert },
-  connect_error: { label: '연결 실패', cls: 'bg-slate-500/10 text-slate-600 border-slate-500/30',       Icon: Wifi },
+  connect_error: { label: '연결 실패', cls: 'bg-status-unknown/10 text-status-unknown border-status-unknown/30',       Icon: Wifi },
   running:       { label: '실행 중',   cls: 'bg-blue-500/10 text-blue-600 border-blue-500/30',          Icon: Play },
   unknown:       { label: '미실행',    cls: 'bg-muted text-muted-foreground border-border',             Icon: Clock },
 };

@@ -33,9 +33,9 @@ type StepTypeCfg = { label: string; border: string; header: string; dot: string;
 const STEP_TYPE: Record<WorkflowStepType, StepTypeCfg> = {
   trigger:      { label: 'Trigger',      border: 'border-violet-500/60', header: 'bg-violet-500/10',  dot: 'bg-violet-400',  icon: <Zap       className="w-3.5 h-3.5" /> },
   action:       { label: 'Action',       border: 'border-blue-500/60',   header: 'bg-blue-500/10',    dot: 'bg-blue-400',    icon: <Play      className="w-3.5 h-3.5" /> },
-  condition:    { label: 'Condition',    border: 'border-amber-500/60',  header: 'bg-amber-500/10',   dot: 'bg-amber-400',   icon: <GitBranch className="w-3.5 h-3.5" /> },
+  condition:    { label: 'Condition',    border: 'border-status-warning/60',  header: 'bg-status-warning/10',   dot: 'bg-status-warning',   icon: <GitBranch className="w-3.5 h-3.5" /> },
   wait:         { label: 'Wait',         border: 'border-cyan-500/60',   header: 'bg-cyan-500/10',    dot: 'bg-cyan-400',    icon: <Clock     className="w-3.5 h-3.5" /> },
-  notification: { label: 'Notification', border: 'border-emerald-500/60',header: 'bg-emerald-500/10', dot: 'bg-emerald-400', icon: <Bell      className="w-3.5 h-3.5" /> },
+  notification: { label: 'Notification', border: 'border-status-healthy/60',header: 'bg-status-healthy/10', dot: 'bg-status-healthy', icon: <Bell      className="w-3.5 h-3.5" /> },
 };
 const STEP_TYPE_KEYS = Object.keys(STEP_TYPE) as WorkflowStepType[];
 
@@ -43,11 +43,11 @@ const STEP_TYPE_KEYS = Object.keys(STEP_TYPE) as WorkflowStepType[];
 // 기획 게시판용 상태. 실행 색채 제거: pulse 애니메이션 없음, "실패" 빨간색 → "막힘" amber.
 type StepStatusCfg = { label: string; cls: string; barCls: string };
 const STEP_STATUS: Record<WorkflowStepStatus, StepStatusCfg> = {
-  'todo':        { label: '할 일',    cls: 'bg-zinc-500/15 text-zinc-500',     barCls: 'bg-zinc-400/60' },
+  'todo':        { label: '할 일',    cls: 'bg-status-unknown/15 text-status-unknown',     barCls: 'bg-zinc-400/60' },
   'in-progress': { label: '진행 중',  cls: 'bg-blue-500/15 text-blue-600',     barCls: 'bg-blue-500' },
-  'blocked':     { label: '막힘',     cls: 'bg-amber-500/15 text-amber-600',   barCls: 'bg-amber-500' },
-  'done':        { label: '완료',     cls: 'bg-emerald-500/15 text-emerald-600',barCls: 'bg-emerald-500' },
-  'skipped':     { label: '제외',     cls: 'bg-zinc-500/10 text-zinc-400 opacity-60', barCls: 'bg-zinc-300' },
+  'blocked':     { label: '막힘',     cls: 'bg-status-warning/15 text-status-warning',   barCls: 'bg-status-warning' },
+  'done':        { label: '완료',     cls: 'bg-status-healthy/15 text-status-healthy',barCls: 'bg-status-healthy' },
+  'skipped':     { label: '제외',     cls: 'bg-status-unknown/10 text-status-unknown opacity-60', barCls: 'bg-zinc-300' },
 };
 const STEP_STATUS_KEYS = Object.keys(STEP_STATUS) as WorkflowStepStatus[];
 
@@ -521,7 +521,7 @@ export function WorkflowBoardPage() {
                       <button
                         onClick={() => wfEditTitle.trim() && updateWorkflow.mutate({ id: wf.id, d: { title: wfEditTitle.trim() } })}
                         aria-label="제목 저장"
-                        className="p-1 rounded text-emerald-400 hover:bg-emerald-500/10"
+                        className="p-1 rounded text-status-healthy hover:bg-status-healthy/10"
                       >
                         <Check className="w-3.5 h-3.5" />
                       </button>
@@ -542,7 +542,7 @@ export function WorkflowBoardPage() {
                         <p className="text-sm text-muted-foreground">{total}단계 · {doneCount}/{total} 완료</p>
                         {total > 0 && (
                           <div className="mt-1 h-1 bg-secondary rounded-full overflow-hidden">
-                            <div className="h-full bg-emerald-500 rounded-full transition-all" style={{ width: `${(doneCount / total) * 100}%` }} />
+                            <div className="h-full bg-status-healthy rounded-full transition-all" style={{ width: `${(doneCount / total) * 100}%` }} />
                           </div>
                         )}
                       </div>
@@ -560,7 +560,7 @@ export function WorkflowBoardPage() {
                             if (confirm(`"${wf.title}" 워크플로우를 삭제할까요?`)) deleteWorkflow.mutate(wf.id);
                           }}
                           aria-label="워크플로우 삭제"
-                          className="p-1 rounded hover:bg-red-500/20 hover:text-red-400 text-muted-foreground"
+                          className="p-1 rounded hover:bg-status-critical/20 hover:text-status-critical text-muted-foreground"
                         >
                           <Trash2 className="w-3 h-3" />
                         </button>
@@ -607,7 +607,7 @@ export function WorkflowBoardPage() {
                     <button
                       onClick={() => headerTitleDraft.trim() && updateWorkflow.mutate({ id: selectedWf.id, d: { title: headerTitleDraft.trim() } })}
                       aria-label="제목 저장"
-                      className="p-1 rounded text-emerald-400 hover:bg-emerald-500/10"
+                      className="p-1 rounded text-status-healthy hover:bg-status-healthy/10"
                     >
                       <Check className="w-3.5 h-3.5" />
                     </button>
@@ -657,7 +657,7 @@ export function WorkflowBoardPage() {
                         setEditingHeaderConfluence(false);
                       }}
                       aria-label="Confluence 링크 저장"
-                      className="p-1 rounded text-emerald-400 hover:bg-emerald-500/10"
+                      className="p-1 rounded text-status-healthy hover:bg-status-healthy/10"
                     >
                       <Check className="w-3 h-3" />
                     </button>
@@ -857,7 +857,7 @@ export function WorkflowBoardPage() {
                             strokeWidth={1.8}
                             fill="none"
                             markerEnd="url(#wf-arrow)"
-                            className="group-hover/edge:stroke-rose-400 group-hover/edge:stroke-[2.4px] transition-colors"
+                            className="group-hover/edge:stroke-status-critical group-hover/edge:stroke-[2.4px] transition-colors"
                             style={{ pointerEvents: 'none' }}
                           />
                           {/* hover 시에만 보이는 중간 X 버튼 — 클릭 한 번 더 필요해 실수 방지 */}
@@ -869,9 +869,9 @@ export function WorkflowBoardPage() {
                               deleteEdge.mutate({ wfId: selectedWf.id, edgeId: edge.id });
                             }}
                           >
-                            <circle cx={mx} cy={my} r={9} fill="hsl(var(--card))" stroke="hsl(var(--rose-400, 251 113 133))" strokeWidth={1.6} className="stroke-rose-400" />
-                            <line x1={mx - 3.5} y1={my - 3.5} x2={mx + 3.5} y2={my + 3.5} stroke="currentColor" className="text-rose-500" strokeWidth={1.8} strokeLinecap="round" />
-                            <line x1={mx + 3.5} y1={my - 3.5} x2={mx - 3.5} y2={my + 3.5} stroke="currentColor" className="text-rose-500" strokeWidth={1.8} strokeLinecap="round" />
+                            <circle cx={mx} cy={my} r={9} fill="hsl(var(--card))" stroke="hsl(var(--rose-400, 251 113 133))" strokeWidth={1.6} className="stroke-status-critical" />
+                            <line x1={mx - 3.5} y1={my - 3.5} x2={mx + 3.5} y2={my + 3.5} stroke="currentColor" className="text-status-critical" strokeWidth={1.8} strokeLinecap="round" />
+                            <line x1={mx + 3.5} y1={my - 3.5} x2={mx - 3.5} y2={my + 3.5} stroke="currentColor" className="text-status-critical" strokeWidth={1.8} strokeLinecap="round" />
                           </g>
                         </g>
                       );
@@ -975,7 +975,7 @@ export function WorkflowBoardPage() {
                             <button
                               onClick={(e) => { e.stopPropagation(); if (confirm('이 단계를 삭제할까요?')) deleteStep.mutate({ wfId: selectedWf.id, stepId: step.id }); }}
                               aria-label="단계 삭제"
-                              className="p-0.5 rounded text-muted-foreground/30 hover:text-red-400 hover:bg-red-500/10 transition-colors"
+                              className="p-0.5 rounded text-muted-foreground/30 hover:text-status-critical hover:bg-status-critical/10 transition-colors"
                             >
                               <Trash2 className="w-3 h-3" />
                             </button>
@@ -988,7 +988,7 @@ export function WorkflowBoardPage() {
                             <button
                               onClick={(e) => { e.stopPropagation(); if (selectedWf) updateStep.mutate({ wfId: selectedWf.id, stepId: step.id, stepData: { completed: !step.completed } }); }}
                               aria-label={step.completed ? '완료 해제' : '완료로 표시'}
-                              className={`flex-shrink-0 w-[18px] h-[18px] rounded border-2 flex items-center justify-center transition-colors mt-0.5 ${step.completed ? 'bg-emerald-500 border-emerald-500 text-white' : 'border-border hover:border-emerald-400'}`}
+                              className={`flex-shrink-0 w-[18px] h-[18px] rounded border-2 flex items-center justify-center transition-colors mt-0.5 ${step.completed ? 'bg-status-healthy border-status-healthy text-white' : 'border-border hover:border-status-healthy'}`}
                             >
                               {step.completed && <Check className="w-2.5 h-2.5" />}
                             </button>

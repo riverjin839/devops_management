@@ -141,14 +141,14 @@ export function JiraExcelImportPage() {
 
         {/* 저장 결과 배너 */}
         {saveResult && (
-          <div className="mb-4 px-4 py-3 rounded-xl border border-emerald-500/30 bg-emerald-500/10 text-sm text-emerald-700 dark:text-emerald-400 flex items-center gap-3 flex-wrap">
+          <div className="mb-4 px-4 py-3 rounded-xl border border-status-healthy/30 bg-status-healthy/10 text-sm text-status-healthy flex items-center gap-3 flex-wrap">
             <CheckCircle2 className="w-4 h-4 flex-shrink-0" />
             <span>
               업무 관리 게시판에 저장했습니다 — 생성 {saveResult.imported}건 · 갱신 {saveResult.updated}건
               {saveResult.skipped > 0 && ` · 스킵 ${saveResult.skipped}건`}
             </span>
             {saveResult.errors.length > 0 && (
-              <span className="text-amber-600 dark:text-amber-400">
+              <span className="text-status-warning">
                 (오류 {saveResult.errors.length}건: {saveResult.errors.slice(0, 3).join(', ')}{saveResult.errors.length > 3 ? ' …' : ''})
               </span>
             )}
@@ -326,11 +326,11 @@ function ImportSummaryBadges({ result }: { result: JiraExcelImportResult | null 
       <span className="px-2 py-0.5 rounded-full bg-primary/10 text-primary border border-primary/20 text-sm">
         총 {result.total}건
       </span>
-      <span className="px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-500 border border-emerald-500/30 text-sm">
+      <span className="px-2 py-0.5 rounded-full bg-status-healthy/10 text-status-healthy border border-status-healthy/30 text-sm">
         담당자 매칭 {result.matched}건
       </span>
       {result.total - result.matched > 0 && (
-        <span className="px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-500 border border-amber-500/30 text-sm">
+        <span className="px-2 py-0.5 rounded-full bg-status-warning/10 text-status-warning border border-status-warning/30 text-sm">
           미매칭 {result.total - result.matched}건
         </span>
       )}
@@ -362,11 +362,11 @@ function JiraExcelTableRow({ row }: { row: JiraExcelRow }) {
       <td className="px-3 py-2.5">
         {row.assigneeMatched ? (
           <span className="inline-flex items-center gap-1 text-foreground">
-            <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500 flex-shrink-0" />
+            <CheckCircle2 className="w-3.5 h-3.5 text-status-healthy flex-shrink-0" />
             {row.assigneeName}
           </span>
         ) : (
-          <span className="inline-flex items-center gap-1 text-amber-500" title={`원본: ${row.assigneeRaw}`}>
+          <span className="inline-flex items-center gap-1 text-status-warning" title={`원본: ${row.assigneeRaw}`}>
             <AlertTriangle className="w-3.5 h-3.5 flex-shrink-0" />
             {row.assigneeName || row.assigneeRaw || '—'}
           </span>

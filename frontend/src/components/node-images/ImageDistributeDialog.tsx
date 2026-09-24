@@ -33,11 +33,11 @@ interface Props {
 }
 
 const STATUS_META: Record<BulkExecResultItem['status'], { label: string; cls: string; icon: React.ComponentType<{ className?: string }> }> = {
-  ok:            { label: '완료',     cls: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30', icon: CheckCircle },
-  error:         { label: '실패',     cls: 'bg-red-500/10 text-red-400 border-red-500/30',             icon: XCircle },
-  timeout:       { label: '타임아웃', cls: 'bg-amber-500/10 text-amber-400 border-amber-500/30',       icon: Clock },
+  ok:            { label: '완료',     cls: 'bg-status-healthy/10 text-status-healthy border-status-healthy/30', icon: CheckCircle },
+  error:         { label: '실패',     cls: 'bg-status-critical/10 text-status-critical border-status-critical/30',             icon: XCircle },
+  timeout:       { label: '타임아웃', cls: 'bg-status-warning/10 text-status-warning border-status-warning/30',       icon: Clock },
   auth_error:    { label: '인증 실패', cls: 'bg-orange-500/10 text-orange-400 border-orange-500/30',   icon: ShieldAlert },
-  connect_error: { label: '연결 실패', cls: 'bg-slate-500/10 text-slate-400 border-slate-500/30',      icon: Wifi },
+  connect_error: { label: '연결 실패', cls: 'bg-status-unknown/10 text-status-unknown border-status-unknown/30',      icon: Wifi },
 };
 
 /** 대상 클러스터의 node-images 스냅샷에서 "이 이미지를 이미 보유한 노드" 집합을 계산. */
@@ -254,7 +254,7 @@ export function ImageDistributeDialog({
                 />
               )}
               {runtime === 'ctr' && (
-                <p className="mt-1 text-xs text-amber-500">
+                <p className="mt-1 text-xs text-status-warning">
                   ⚠ ctr 는 namespace 가 <span className="font-mono">k8s.io</span> 가 아니면 kubelet/K8s 에 이미지가 안 보일 수 있습니다. K8s 노드는 crictl 권장.
                 </p>
               )}
@@ -336,7 +336,7 @@ export function ImageDistributeDialog({
               </div>
             </div>
             {coverageComputing && (
-              <p className="text-xs text-amber-500 mb-1 flex items-center gap-1">
+              <p className="text-xs text-status-warning mb-1 flex items-center gap-1">
                 <Loader2 className="w-3 h-3 animate-spin" /> 대상 클러스터 이미지 수집 중 — 보유 여부는 잠시 후 반영됩니다.
               </p>
             )}
@@ -360,11 +360,11 @@ export function ImageDistributeDialog({
                       })} />
                     <span className="font-mono text-foreground truncate">{n.name}</span>
                     <span className="text-xs text-muted-foreground">{n.internalIp ?? ''}</span>
-                    {!n.ready && <span className="text-xs px-1 rounded bg-red-500/10 text-red-400">NotReady</span>}
+                    {!n.ready && <span className="text-xs px-1 rounded bg-status-critical/10 text-status-critical">NotReady</span>}
                     {isMaster && <span className="text-xs px-1.5 py-0.5 rounded-full bg-primary/10 text-primary">master</span>}
                     <span className="ml-auto">
                       {coverageComputing ? null : has ? (
-                        <span className="text-xs px-1.5 py-0.5 rounded-full bg-emerald-500/10 text-emerald-500">보유</span>
+                        <span className="text-xs px-1.5 py-0.5 rounded-full bg-status-healthy/10 text-status-healthy">보유</span>
                       ) : (
                         <span className="text-xs px-1.5 py-0.5 rounded-full bg-secondary text-muted-foreground">미보유</span>
                       )}
@@ -386,8 +386,8 @@ export function ImageDistributeDialog({
             <div className="border border-border rounded-xl overflow-hidden">
               <div className="flex items-center gap-2 px-3 py-2 bg-muted/30 border-b border-border flex-wrap">
                 <span className="text-sm font-semibold">배포 결과</span>
-                <span className="text-xs px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/30">성공 {result.okCount}</span>
-                <span className="text-xs px-2 py-0.5 rounded-full bg-red-500/10 text-red-400 border border-red-500/30">실패 {result.errorCount}</span>
+                <span className="text-xs px-2 py-0.5 rounded-full bg-status-healthy/10 text-status-healthy border border-status-healthy/30">성공 {result.okCount}</span>
+                <span className="text-xs px-2 py-0.5 rounded-full bg-status-critical/10 text-status-critical border border-status-critical/30">실패 {result.errorCount}</span>
                 <span className="text-xs text-muted-foreground">총 {result.totalDurationMs}ms</span>
               </div>
               <p className="px-3 py-1.5 text-xs text-muted-foreground bg-muted/10 border-b border-border">
@@ -427,7 +427,7 @@ export function ImageDistributeDialog({
             </button>
             {runMut.isPending ? (
               <button onClick={runMut.abort}
-                className="flex items-center gap-1.5 px-4 py-1.5 text-sm font-semibold bg-red-500 text-primary-foreground rounded-lg hover:bg-red-600">
+                className="flex items-center gap-1.5 px-4 py-1.5 text-sm font-semibold bg-status-critical text-primary-foreground rounded-lg hover:bg-status-critical">
                 <Loader2 className="w-3 h-3 animate-spin" /> 중지
               </button>
             ) : (
@@ -473,12 +473,12 @@ function ResultRow({ r }: { r: BulkExecResultItem }) {
       {open && (
         <tr className="bg-muted/5">
           <td colSpan={4} className="px-4 py-2">
-            {r.error && <p className="text-xs text-red-400 mb-1">⚠ {r.error}</p>}
+            {r.error && <p className="text-xs text-status-critical mb-1">⚠ {r.error}</p>}
             {r.stdout && (
               <pre className="font-mono text-xs bg-background border border-border rounded p-1.5 max-h-40 overflow-auto whitespace-pre-wrap break-all">{r.stdout}</pre>
             )}
             {r.stderr && (
-              <pre className="font-mono text-xs bg-red-500/5 border border-red-500/20 text-red-400 rounded p-1.5 mt-1 max-h-40 overflow-auto whitespace-pre-wrap break-all">{r.stderr}</pre>
+              <pre className="font-mono text-xs bg-status-critical/5 border border-status-critical/20 text-status-critical rounded p-1.5 mt-1 max-h-40 overflow-auto whitespace-pre-wrap break-all">{r.stderr}</pre>
             )}
             {!r.stdout && !r.stderr && !r.error && (
               <p className="text-xs text-muted-foreground/70">(출력 없음)</p>

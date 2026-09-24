@@ -95,8 +95,8 @@ export function ConfluenceExportDialog({ open, onClose, guide }: Props) {
         <div className="px-5 pb-5 space-y-3.5">
           {result ? (
             <>
-              <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/5 p-4">
-                <div className="flex items-center gap-2 font-medium text-emerald-500">
+              <div className="rounded-xl border border-status-healthy/30 bg-status-healthy/5 p-4">
+                <div className="flex items-center gap-2 font-medium text-status-healthy">
                   <CheckCircle2 className="w-4 h-4" />
                   {result.action === 'created' ? '페이지 생성 완료' : `새 버전 게시 완료 (v${result.version ?? '?'})`}
                 </div>
@@ -109,7 +109,7 @@ export function ConfluenceExportDialog({ open, onClose, guide }: Props) {
                   </a>
                 )}
                 {result.warnings.length > 0 && (
-                  <div className="mt-2 space-y-0.5 text-xs text-amber-500">
+                  <div className="mt-2 space-y-0.5 text-xs text-status-warning">
                     {result.warnings.map((w, i) => <div key={i}>⚠ {w}</div>)}
                   </div>
                 )}

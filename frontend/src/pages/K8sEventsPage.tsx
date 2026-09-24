@@ -18,14 +18,14 @@ const SEVERITY_TABS: Array<{ value: string; label: string }> = [
 function SeverityBadge({ severity }: { severity: K8sEventSeverity }) {
   if (severity === 'critical') {
     return (
-      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold bg-red-100 text-red-700">
+      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold bg-status-critical/10 text-status-critical">
         <AlertCircle className="w-3 h-3" /> Critical
       </span>
     );
   }
   if (severity === 'warning') {
     return (
-      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold bg-yellow-100 text-yellow-700">
+      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold bg-status-warning/10 text-status-warning">
         <AlertTriangle className="w-3 h-3" /> Warning
       </span>
     );
@@ -111,8 +111,8 @@ export function K8sEventsPage() {
                 {(['critical', 'warning', 'info'] as K8sEventSeverity[]).map((sev) => {
                   const count = events.filter((e) => e.severity === sev).length;
                   const colors = {
-                    critical: 'bg-red-50 border-red-200 text-red-700',
-                    warning: 'bg-yellow-50 border-yellow-200 text-yellow-700',
+                    critical: 'bg-status-critical/10 border-status-critical/30 text-status-critical',
+                    warning: 'bg-status-warning/10 border-status-warning/30 text-status-warning',
                     info: 'bg-blue-50 border-blue-200 text-blue-600',
                   };
                   return (
@@ -183,7 +183,7 @@ export function K8sEventsPage() {
                                 deleteEvent.mutate(ev.id);
                               }}
                               aria-label="이벤트 삭제"
-                              className="p-1 rounded hover:bg-red-100 hover:text-red-600 text-muted-foreground transition-colors"
+                              className="p-1 rounded hover:bg-status-critical/10 hover:text-status-critical text-muted-foreground transition-colors"
                             >
                               <Trash2 className="w-3.5 h-3.5" />
                             </button>

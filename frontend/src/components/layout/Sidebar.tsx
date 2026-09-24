@@ -352,7 +352,7 @@ export function Sidebar() {
             onClick={handleHomeClick}
             title="홈으로"
             aria-label="홈으로"
-            className={`w-9 h-9 bg-gradient-to-br from-primary to-sky-700 rounded-md flex items-center justify-center text-white shadow-sm transition-transform hover:scale-105 active:scale-95 ${
+            className={`w-9 h-9 bg-gradient-to-br from-primary to-status-info rounded-md flex items-center justify-center text-white shadow-sm transition-transform hover:scale-105 active:scale-95 ${
               location.pathname === '/' ? 'ring-2 ring-primary/50' : ''
             }`}
           >

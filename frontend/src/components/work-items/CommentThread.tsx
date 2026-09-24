@@ -61,7 +61,7 @@ export function CommentThread({ workItemId }: { workItemId: string }) {
                     type="button"
                     onClick={() => remove(c.id)}
                     title="댓글 삭제"
-                    className="ml-auto opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground hover:text-rose-500"
+                    className="ml-auto opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground hover:text-status-critical"
                   >
                     <Trash2 className="w-3 h-3" />
                   </button>

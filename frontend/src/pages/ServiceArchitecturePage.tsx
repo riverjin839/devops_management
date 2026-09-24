@@ -24,9 +24,9 @@ const FLOW_HIDDEN_KINDS = new Set(['PVC']);
 
 function syncStatusMeta(status: string): { color: string; label: string } {
   switch (status) {
-    case 'ok': return { color: 'bg-emerald-500', label: '최신' };
-    case 'partial': return { color: 'bg-amber-500', label: '부분 성공' };
-    case 'failed': return { color: 'bg-red-500', label: '실패' };
+    case 'ok': return { color: 'bg-status-healthy', label: '최신' };
+    case 'partial': return { color: 'bg-status-warning', label: '부분 성공' };
+    case 'failed': return { color: 'bg-status-critical', label: '실패' };
     default: return { color: 'bg-slate-400', label: '미생성' };
   }
 }
@@ -253,7 +253,7 @@ export function ServiceArchitecturePage() {
                           <span className={`w-2 h-2 rounded-full shrink-0 ${meta.color}`} title={meta.label} />
                           <span className="text-sm font-medium truncate flex-1">{m.serviceName}</span>
                           {mDrift > 0 && (
-                            <span className="text-[10px] font-bold text-amber-500" title="드리프트 감지">
+                            <span className="text-[10px] font-bold text-status-warning" title="드리프트 감지">
                               Δ{mDrift}
                             </span>
                           )}
@@ -295,13 +295,13 @@ export function ServiceArchitecturePage() {
                   <span>현행화: {new Date(doc.lastSyncedAt).toLocaleString('ko-KR')}</span>
                 )}
                 {driftTotal > 0 && (
-                  <span className="inline-flex items-center gap-1 text-amber-500 font-semibold"
+                  <span className="inline-flex items-center gap-1 text-status-warning font-semibold"
                     title={`추가 ${drift?.added?.length ?? 0} · 제거 ${drift?.removed?.length ?? 0} · 변경 ${drift?.changed?.length ?? 0}`}>
                     <AlertTriangle className="w-3.5 h-3.5" /> 변경 {driftTotal}건
                   </span>
                 )}
                 {doc?.lastSyncStatus === 'failed' && (
-                  <span className="text-red-500 truncate" title={doc.syncError ?? ''}>
+                  <span className="text-status-critical truncate" title={doc.syncError ?? ''}>
                     동기화 실패: {doc.syncError}
                   </span>
                 )}
@@ -399,7 +399,7 @@ export function ServiceArchitecturePage() {
                   />
                 )}
                 {warnings.length > 0 && (
-                  <div className="absolute bottom-2 left-2 right-2 text-[10px] text-amber-500 bg-card/80 border border-border rounded-lg px-2 py-1 truncate"
+                  <div className="absolute bottom-2 left-2 right-2 text-[10px] text-status-warning bg-card/80 border border-border rounded-lg px-2 py-1 truncate"
                     title={warnings.join('\n')}>
                     ⚠ {warnings[0]}{warnings.length > 1 ? ` 외 ${warnings.length - 1}건` : ''}
                   </div>

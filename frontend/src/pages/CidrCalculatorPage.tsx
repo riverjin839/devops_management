@@ -185,7 +185,7 @@ function CopyButton({ value, className = '' }: { value: string; className?: stri
       title="복사"
       aria-label={`Copy ${value}`}
     >
-      {copied ? <Check className="w-3 h-3 text-emerald-500" /> : <Copy className="w-3 h-3" />}
+      {copied ? <Check className="w-3 h-3 text-status-healthy" /> : <Copy className="w-3 h-3" />}
     </button>
   );
 }
@@ -199,7 +199,7 @@ interface StatTileProps {
 function StatTile({ label, value, accent = 'default' }: StatTileProps) {
   const accentCls =
     accent === 'primary' ? 'text-primary' :
-    accent === 'success' ? 'text-emerald-600' : 'text-foreground';
+    accent === 'success' ? 'text-status-healthy' : 'text-foreground';
   return (
     <div className="group relative bg-secondary/40 hover:bg-secondary/70 border border-border rounded-lg px-3 py-2.5 transition-colors">
       <div className="flex items-center justify-between mb-1">
@@ -232,8 +232,8 @@ interface OverlapPairProps {
 }
 
 const HUE_TOKENS = {
-  amber:   { bg: 'bg-amber-500/10',   border: 'border-amber-500/30',   dot: 'bg-amber-500',   text: 'text-amber-600' },
-  rose:    { bg: 'bg-rose-500/10',    border: 'border-rose-500/30',    dot: 'bg-rose-500',    text: 'text-rose-600' },
+  amber:   { bg: 'bg-status-warning/10',   border: 'border-status-warning/30',   dot: 'bg-status-warning',   text: 'text-status-warning' },
+  rose:    { bg: 'bg-status-critical/10',    border: 'border-status-critical/30',    dot: 'bg-status-critical',    text: 'text-status-critical' },
   fuchsia: { bg: 'bg-fuchsia-500/10', border: 'border-fuchsia-500/30', dot: 'bg-fuchsia-500', text: 'text-fuchsia-600' },
   orange:  { bg: 'bg-orange-500/10',  border: 'border-orange-500/30',  dot: 'bg-orange-500',  text: 'text-orange-600' },
   cyan:    { bg: 'bg-cyan-500/10',    border: 'border-cyan-500/30',    dot: 'bg-cyan-500',    text: 'text-cyan-600' },
@@ -455,10 +455,10 @@ export function CidrCalculatorPage() {
           </div>
           <div className="flex items-center gap-3 text-xs text-muted-foreground">
             <span className="inline-flex items-center gap-1.5">
-              <span className="w-1.5 h-1.5 rounded-full bg-sky-500" /> Private (RFC1918)
+              <span className="w-1.5 h-1.5 rounded-full bg-status-info" /> Private (RFC1918)
             </span>
             <span className="inline-flex items-center gap-1.5">
-              <span className="w-1.5 h-1.5 rounded-full bg-amber-500" /> Public
+              <span className="w-1.5 h-1.5 rounded-full bg-status-warning" /> Public
             </span>
           </div>
         </header>
@@ -486,7 +486,7 @@ export function CidrCalculatorPage() {
                     'w-full px-4 py-3 pr-36 bg-secondary/60 border border-border rounded-xl',
                     'text-lg font-mono tabular-nums tracking-tight',
                     'focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary transition-all',
-                    inputError ? 'border-rose-500/60 focus:ring-rose-500/30' : '',
+                    inputError ? 'border-status-critical/60 focus:ring-status-critical/30' : '',
                   ].join(' ')}
                 />
                 {info && !inputError && (
@@ -498,8 +498,8 @@ export function CidrCalculatorPage() {
                       className={[
                         'px-2 py-0.5 text-xs font-semibold rounded-md border inline-flex items-center gap-1',
                         isPrivate
-                          ? 'bg-sky-500/10 text-sky-600 border-sky-500/30'
-                          : 'bg-amber-500/10 text-amber-600 border-amber-500/30',
+                          ? 'bg-status-info/10 text-status-info border-status-info/30'
+                          : 'bg-status-warning/10 text-status-warning border-status-warning/30',
                       ].join(' ')}
                     >
                       {isPrivate ? <Lock className="w-2.5 h-2.5" /> : <Globe className="w-2.5 h-2.5" />}
@@ -510,7 +510,7 @@ export function CidrCalculatorPage() {
               </div>
 
               {inputError && (
-                <p className="mt-2 text-sm text-rose-500 inline-flex items-center gap-1.5">
+                <p className="mt-2 text-sm text-status-critical inline-flex items-center gap-1.5">
                   <AlertTriangle className="w-3 h-3" />
                   {inputError}
                 </p>
@@ -578,9 +578,9 @@ export function CidrCalculatorPage() {
                     Host Range
                   </div>
                   <div className="flex items-center gap-2 font-mono tabular-nums text-sm">
-                    <span className="text-emerald-600 font-medium">{info.firstHost}</span>
+                    <span className="text-status-healthy font-medium">{info.firstHost}</span>
                     <ArrowRight className="w-3.5 h-3.5 text-muted-foreground/60 flex-shrink-0" />
-                    <span className="text-emerald-600 font-medium">{info.lastHost}</span>
+                    <span className="text-status-healthy font-medium">{info.lastHost}</span>
                     <CopyButton value={`${info.firstHost} - ${info.lastHost}`} className="ml-auto" />
                   </div>
                 </div>
@@ -652,7 +652,7 @@ export function CidrCalculatorPage() {
               const cur = `${info.network}/${info.prefix}`;
               return (
                 <div className="mt-3">
-                  <p className="text-sm font-semibold text-amber-600 inline-flex items-center gap-1.5 mb-2">
+                  <p className="text-sm font-semibold text-status-warning inline-flex items-center gap-1.5 mb-2">
                     <AlertTriangle className="w-3.5 h-3.5" />
                     등록 클러스터와 CIDR 겹침 — {overlappingClusters.length}개 충돌
                   </p>
@@ -712,14 +712,14 @@ export function CidrCalculatorPage() {
                     {(() => {
                       const bits = Math.ceil(Math.log2(Math.max(divideCount, 2)));
                       const newPrefix = info.prefix + bits;
-                      if (newPrefix > 32) return <> · <span className="text-rose-500">/32 초과</span></>;
+                      if (newPrefix > 32) return <> · <span className="text-status-critical">/32 초과</span></>;
                       return <> · 결과 prefix /{newPrefix} · 각 {formatHosts(Math.pow(2, 32 - newPrefix))} addresses</>;
                     })()}
                   </div>
                 </div>
 
                 {divideError && (
-                  <p className="mt-3 text-sm text-rose-500 inline-flex items-center gap-1.5">
+                  <p className="mt-3 text-sm text-status-critical inline-flex items-center gap-1.5">
                     <AlertTriangle className="w-3 h-3" />
                     {divideError}
                   </p>
@@ -799,7 +799,7 @@ export function CidrCalculatorPage() {
                       <button
                         type="button"
                         onClick={() => removeEntry(entry.id)}
-                        className="p-1.5 hover:bg-rose-500/10 rounded-md text-muted-foreground hover:text-rose-500 flex-shrink-0 transition-colors"
+                        className="p-1.5 hover:bg-status-critical/10 rounded-md text-muted-foreground hover:text-status-critical flex-shrink-0 transition-colors"
                         aria-label="Remove entry"
                       >
                         <Trash2 className="w-3.5 h-3.5" />
@@ -871,7 +871,7 @@ export function CidrCalculatorPage() {
                             </span>
                           </td>
                           <td className="py-2 px-3 font-mono tabular-nums text-muted-foreground truncate">
-                            {ei ? `${ei.network}/${ei.prefix}` : <span className="text-rose-500">invalid</span>}
+                            {ei ? `${ei.network}/${ei.prefix}` : <span className="text-status-critical">invalid</span>}
                           </td>
                           <td className="py-2 px-3 font-mono tabular-nums text-muted-foreground truncate">
                             {ei ? ei.mask : '—'}
@@ -903,7 +903,7 @@ export function CidrCalculatorPage() {
                                 })}
                               </div>
                             ) : ei ? (
-                              <span className="inline-flex items-center gap-1 text-xs px-1.5 py-0.5 rounded-md bg-emerald-500/10 text-emerald-600 border border-emerald-500/30">
+                              <span className="inline-flex items-center gap-1 text-xs px-1.5 py-0.5 rounded-md bg-status-healthy/10 text-status-healthy border border-status-healthy/30">
                                 <Check className="w-2.5 h-2.5" />
                                 clean
                               </span>
@@ -931,7 +931,7 @@ export function CidrCalculatorPage() {
                 if (conflicts.length === 0) return null;
                 return (
                   <div className="mt-3">
-                    <p className="text-sm font-semibold text-amber-600 inline-flex items-center gap-1.5 mb-2">
+                    <p className="text-sm font-semibold text-status-warning inline-flex items-center gap-1.5 mb-2">
                       <AlertTriangle className="w-3.5 h-3.5" />
                       등록 클러스터 CIDR 겹침 — {conflicts.length}건
                     </p>
@@ -998,11 +998,11 @@ export function CidrCalculatorPage() {
                       </div>
                       <div className="flex justify-between gap-2">
                         <dt className="text-muted-foreground">first_host</dt>
-                        <dd className="text-emerald-600 truncate">{info.firstHost}</dd>
+                        <dd className="text-status-healthy truncate">{info.firstHost}</dd>
                       </div>
                       <div className="flex justify-between gap-2">
                         <dt className="text-muted-foreground">last_host</dt>
-                        <dd className="text-emerald-600 truncate">{info.lastHost}</dd>
+                        <dd className="text-status-healthy truncate">{info.lastHost}</dd>
                       </div>
                     </dl>
                   </div>
@@ -1018,12 +1018,12 @@ export function CidrCalculatorPage() {
                 </button>
 
                 {applyStatus === 'success' && (
-                  <p className="mt-2 text-sm text-emerald-600 inline-flex items-center gap-1">
+                  <p className="mt-2 text-sm text-status-healthy inline-flex items-center gap-1">
                     <Check className="w-3 h-3" /> 클러스터 CIDR 이 저장되었습니다
                   </p>
                 )}
                 {applyStatus === 'error' && (
-                  <p className="mt-2 text-sm text-rose-500 inline-flex items-center gap-1">
+                  <p className="mt-2 text-sm text-status-critical inline-flex items-center gap-1">
                     <AlertTriangle className="w-3 h-3" /> 저장 실패 — 다시 시도해주세요
                   </p>
                 )}
@@ -1036,7 +1036,7 @@ export function CidrCalculatorPage() {
                   if (conflicting.length === 0) return null;
                   return (
                     <div className="mt-3">
-                      <p className="text-xs font-semibold text-amber-600 inline-flex items-center gap-1.5 mb-1.5">
+                      <p className="text-xs font-semibold text-status-warning inline-flex items-center gap-1.5 mb-1.5">
                         <AlertTriangle className="w-3 h-3" />
                         다른 클러스터와 CIDR 겹침
                       </p>

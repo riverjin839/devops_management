@@ -14,10 +14,10 @@ interface Props {
 }
 
 const VERDICT_CLS: Record<string, string> = {
-  FORWARDED: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30',
-  DROPPED:   'bg-red-500/10 text-red-400 border-red-500/30',
-  AUDIT:     'bg-amber-500/10 text-amber-400 border-amber-500/30',
-  TRACED:    'bg-sky-500/10 text-sky-400 border-sky-500/30',
+  FORWARDED: 'bg-status-healthy/10 text-status-healthy border-status-healthy/30',
+  DROPPED:   'bg-status-critical/10 text-status-critical border-status-critical/30',
+  AUDIT:     'bg-status-warning/10 text-status-warning border-status-warning/30',
+  TRACED:    'bg-status-info/10 text-status-info border-status-info/30',
 };
 
 function formatTime(iso?: string | null): string {
@@ -36,7 +36,7 @@ function formatEndpoint(ep: HubbleFlow['source']): string {
 }
 
 function FlowRow({ f }: { f: HubbleFlow }) {
-  const cls = VERDICT_CLS[f.verdict ?? ''] ?? 'bg-slate-500/10 text-slate-400 border-slate-500/30';
+  const cls = VERDICT_CLS[f.verdict ?? ''] ?? 'bg-status-unknown/10 text-status-unknown border-status-unknown/30';
   const port = f.l4?.destinationPort ? `:${f.l4.destinationPort}` : '';
   const proto = f.l4?.protocol ?? '';
   return (
@@ -59,7 +59,7 @@ function FlowRow({ f }: { f: HubbleFlow }) {
       <td className="px-2 py-1.5 text-xs text-muted-foreground">{f.trafficDirection}</td>
       <td className="px-2 py-1.5 text-xs text-foreground/80 max-w-[480px]">
         <div className="truncate" title={f.summary || f.dropReason || ''}>
-          {f.dropReason ? <span className="text-red-400">{f.dropReason}</span> : f.summary || '-'}
+          {f.dropReason ? <span className="text-status-critical">{f.dropReason}</span> : f.summary || '-'}
         </div>
       </td>
     </tr>
@@ -143,7 +143,7 @@ export function HubbleTimeline({ clusterId, initialFromPod, initialToPod, initia
         {runMut.isPending ? (
           <button
             onClick={runMut.abort}
-            className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-semibold bg-red-500 text-primary-foreground rounded-lg hover:bg-red-600"
+            className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-semibold bg-status-critical text-primary-foreground rounded-lg hover:bg-status-critical"
           >
             <Square className="w-4 h-4 fill-current" />
             중지
@@ -161,7 +161,7 @@ export function HubbleTimeline({ clusterId, initialFromPod, initialToPod, initia
       </div>
 
       {resp?.error && (
-        <div className="px-3 py-2 rounded-lg bg-amber-500/10 border border-amber-500/30 text-amber-400 text-sm flex items-start gap-2">
+        <div className="px-3 py-2 rounded-lg bg-status-warning/10 border border-status-warning/30 text-status-warning text-sm flex items-start gap-2">
           <AlertTriangle className="w-4 h-4 flex-shrink-0 mt-0.5" />
           <div className="flex-1">
             <p className="font-medium">Hubble Relay 조회 실패</p>

@@ -45,7 +45,7 @@ export function LoginPage() {
     <div className="min-h-screen flex items-center justify-center bg-background px-4">
       <div className="w-full max-w-sm bg-card border border-border rounded-md p-6 mac-shadow">
         <div className="flex items-center gap-2 mb-6">
-          <div className="w-9 h-9 bg-gradient-to-br from-primary to-sky-700 rounded-md flex items-center justify-center text-white text-base shadow-sm">
+          <div className="w-9 h-9 bg-gradient-to-br from-primary to-status-info rounded-md flex items-center justify-center text-white text-base shadow-sm">
             ☸
           </div>
           <div>

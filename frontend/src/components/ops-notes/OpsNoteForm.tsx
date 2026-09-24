@@ -17,9 +17,9 @@ const SERVICES = [
 ];
 
 const COLOR_OPTIONS: { value: OpsNoteColor; label: string; swatch: string }[] = [
-  { value: 'yellow', label: '노랑', swatch: 'bg-amber-300' },
-  { value: 'green',  label: '초록', swatch: 'bg-emerald-300' },
-  { value: 'blue',   label: '파랑', swatch: 'bg-sky-300' },
+  { value: 'yellow', label: '노랑', swatch: 'bg-status-warning' },
+  { value: 'green',  label: '초록', swatch: 'bg-status-healthy' },
+  { value: 'blue',   label: '파랑', swatch: 'bg-status-info' },
   { value: 'pink',   label: '분홍', swatch: 'bg-pink-300' },
   { value: 'purple', label: '보라', swatch: 'bg-purple-300' },
 ];
@@ -164,7 +164,7 @@ export function OpsNoteForm({ initial, defaultService, onCancel, onSaved }: OpsN
         {/* 답변 */}
         <div>
           <label htmlFor={f('front')} className={labelCls}>
-            <span className="text-emerald-500 font-bold mr-1">A.</span>답변 / 핵심 요약
+            <span className="text-status-healthy font-bold mr-1">A.</span>답변 / 핵심 요약
           </label>
           <div id={f('front')}>
             <RichTextEditor

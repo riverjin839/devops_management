@@ -3,9 +3,9 @@ import { isWriteVerb } from './rbacShared';
 
 const RISK_LABEL: Record<string, string> = { low: '낮음', medium: '보통', high: '높음' };
 const RISK_CLASS: Record<string, string> = {
-  low: 'text-emerald-700 dark:text-emerald-400 bg-emerald-500/10 border-emerald-500/30',
-  medium: 'text-amber-700 dark:text-amber-400 bg-amber-500/10 border-amber-500/30',
-  high: 'text-rose-700 dark:text-rose-400 bg-rose-500/10 border-rose-500/30',
+  low: 'text-status-healthy bg-status-healthy/10 border-status-healthy/30',
+  medium: 'text-status-warning bg-status-warning/10 border-status-warning/30',
+  high: 'text-status-critical bg-status-critical/10 border-status-critical/30',
 };
 
 export function RiskBadge({ risk }: { risk: 'low' | 'medium' | 'high' }) {
@@ -36,7 +36,7 @@ export function Tag({
 }) {
   const cls =
     tone === 'write'
-      ? 'bg-amber-500/10 border-amber-500/30 text-amber-700 dark:text-amber-400'
+      ? 'bg-status-warning/10 border-status-warning/30 text-status-warning'
       : tone === 'read'
         ? 'bg-primary/10 border-primary/30 text-primary'
         : tone === 'muted'

@@ -33,7 +33,7 @@ export function CommandTraceList({ commands }: { commands: BatchJobCommandTrace[
                 <code className="flex-1 min-w-0 text-xs font-mono truncate" title={c.command}>
                   {c.command}
                 </code>
-                <span className={`text-[10px] font-mono flex-shrink-0 ${failed ? 'text-red-500 font-semibold' : 'text-muted-foreground'}`}>
+                <span className={`text-[10px] font-mono flex-shrink-0 ${failed ? 'text-status-critical font-semibold' : 'text-muted-foreground'}`}>
                   {c.exitCode === null || c.exitCode === undefined ? 'exit —' : `exit ${c.exitCode}`}
                 </span>
                 <span className="text-[10px] font-mono text-muted-foreground tabular-nums flex-shrink-0">

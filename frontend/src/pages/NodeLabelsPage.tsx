@@ -188,7 +188,7 @@ export function NodeLabelsPage() {
 
         {/* 일부 클러스터 조회 실패 시 — 나머지는 그대로 표시하되 경고 노출 */}
         {errors.length > 0 && nodes.length > 0 && (
-          <div className="mb-3 flex items-start gap-2 rounded-lg border border-amber-500/30 bg-amber-500/5 px-3 py-2 text-sm text-amber-500">
+          <div className="mb-3 flex items-start gap-2 rounded-lg border border-status-warning/30 bg-status-warning/5 px-3 py-2 text-sm text-status-warning">
             <AlertTriangle className="w-4 h-4 mt-0.5 flex-shrink-0" />
             <span>
               {errors.length}개 클러스터 노드 조회 실패 (kubeconfig/엔드포인트 확인):{' '}
@@ -207,11 +207,11 @@ export function NodeLabelsPage() {
             등록된 클러스터가 없습니다.
           </MacCard>
         ) : isError ? (
-          <MacCard rootClassName="border-red-500/30" bodyPadding="p-8">
+          <MacCard rootClassName="border-status-critical/30" bodyPadding="p-8">
             <div className="flex flex-col items-center gap-3 text-center">
-              <AlertTriangle className="w-8 h-8 text-red-400" />
+              <AlertTriangle className="w-8 h-8 text-status-critical" />
               <div>
-                <p className="font-medium text-red-400 mb-1">노드 정보를 불러올 수 없습니다</p>
+                <p className="font-medium text-status-critical mb-1">노드 정보를 불러올 수 없습니다</p>
                 <p className="text-sm text-muted-foreground max-w-lg">
                   {extractErrorMessage(errors[0]?.error)}
                 </p>

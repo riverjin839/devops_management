@@ -10,15 +10,15 @@ import type { WorkItem, Assignee } from '@/types';
 // ── 상태 스타일 ──────────────────────────────────────────────────────────────
 
 const KANBAN_STYLE: Record<string, { label: string; cls: string }> = {
-  backlog:     { label: 'Backlog',  cls: 'bg-slate-500/10 text-slate-400 border-slate-500/30' },
+  backlog:     { label: 'Backlog',  cls: 'bg-status-unknown/10 text-status-unknown border-status-unknown/30' },
   todo:        { label: 'To Do',    cls: 'bg-blue-500/10 text-blue-400 border-blue-500/30' },
-  in_progress: { label: 'WIP',      cls: 'bg-amber-500/10 text-amber-400 border-amber-500/30' },
+  in_progress: { label: 'WIP',      cls: 'bg-status-warning/10 text-status-warning border-status-warning/30' },
   review_test: { label: 'Review',   cls: 'bg-purple-500/10 text-purple-400 border-purple-500/30' },
-  done:        { label: 'Done',     cls: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30' },
+  done:        { label: 'Done',     cls: 'bg-status-healthy/10 text-status-healthy border-status-healthy/30' },
 };
 
 const PRIORITY_DOT: Record<string, string> = {
-  high:   'bg-red-500',
+  high:   'bg-status-critical',
   medium: 'bg-blue-500',
   low:    'bg-slate-400',
 };
@@ -140,7 +140,7 @@ function MemberSection({ bucket, onTaskClick, onIssueClick }: {
           <span className="text-sm px-2 py-0.5 rounded-full bg-blue-500/10 text-blue-400 border border-blue-500/30">
             작업 {bucket.tasks.length} (진행 {bucket.openTasks} / 완료 {bucket.doneTasks})
           </span>
-          <span className="text-sm px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-400 border border-amber-500/30">
+          <span className="text-sm px-2 py-0.5 rounded-full bg-status-warning/10 text-status-warning border border-status-warning/30">
             이슈 {bucket.issues.length} (미조치 {bucket.unresolvedIssues} / 완료 {bucket.resolvedIssues})
           </span>
           <button
@@ -197,7 +197,7 @@ function MemberSection({ bucket, onTaskClick, onIssueClick }: {
           {/* 이슈 */}
           <div className="p-4">
             <div className="flex items-center gap-2 mb-3">
-              <ClipboardList className="w-4 h-4 text-amber-400" />
+              <ClipboardList className="w-4 h-4 text-status-warning" />
               <span className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">이슈</span>
             </div>
             {bucket.issues.length === 0 ? (
@@ -210,11 +210,11 @@ function MemberSection({ bucket, onTaskClick, onIssueClick }: {
                     onClick={() => onIssueClick(i)}
                     className="flex items-center gap-2 px-2 py-1.5 rounded hover:bg-muted/40 cursor-pointer"
                   >
-                    <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${i.closedAt ? 'bg-emerald-500' : 'bg-amber-500'}`} />
+                    <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${i.closedAt ? 'bg-status-healthy' : 'bg-status-warning'}`} />
                     <span className={`text-xs px-1.5 py-0.5 rounded-full border flex-shrink-0 ${
                       i.closedAt
-                        ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30'
-                        : 'bg-amber-500/10 text-amber-400 border-amber-500/30'
+                        ? 'bg-status-healthy/10 text-status-healthy border-status-healthy/30'
+                        : 'bg-status-warning/10 text-status-warning border-status-warning/30'
                     }`}>
                       {i.closedAt ? '완료' : '미조치'}
                     </span>
@@ -408,11 +408,11 @@ export function MemberBoardPage() {
           <div className="flex items-center gap-3">
             <Users className="w-6 h-6 text-primary" />
             <h1 className="text-xl font-bold">멤버별 업무</h1>
-            <span className="text-sm px-2 py-0.5 rounded-full bg-slate-500/15 text-slate-400 border border-slate-500/30">
+            <span className="text-sm px-2 py-0.5 rounded-full bg-status-unknown/15 text-status-unknown border border-status-unknown/30">
               멤버 {filtered.length} / 전체 {buckets.length}
             </span>
             {totalOpen > 0 && (
-              <span className="text-sm px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-400 border border-amber-500/30">
+              <span className="text-sm px-2 py-0.5 rounded-full bg-status-warning/10 text-status-warning border border-status-warning/30">
                 진행중 합계 {totalOpen}
               </span>
             )}

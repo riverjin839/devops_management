@@ -11,20 +11,20 @@ interface NodeVerifyModalProps {
 }
 
 const STATUS_STYLE: Record<string, { bg: string; text: string; label: string }> = {
-  healthy: { bg: 'bg-emerald-500/10 border-emerald-500/30', text: 'text-emerald-600', label: '정상' },
-  warning: { bg: 'bg-amber-500/10 border-amber-500/30', text: 'text-amber-600', label: '경고' },
-  critical: { bg: 'bg-red-500/10 border-red-500/30', text: 'text-red-600', label: '심각' },
-  pending: { bg: 'bg-zinc-500/10 border-zinc-500/30', text: 'text-zinc-500', label: '대기' },
-  error: { bg: 'bg-red-500/10 border-red-500/30', text: 'text-red-600', label: '오류' },
+  healthy: { bg: 'bg-status-healthy/10 border-status-healthy/30', text: 'text-status-healthy', label: '정상' },
+  warning: { bg: 'bg-status-warning/10 border-status-warning/30', text: 'text-status-warning', label: '경고' },
+  critical: { bg: 'bg-status-critical/10 border-status-critical/30', text: 'text-status-critical', label: '심각' },
+  pending: { bg: 'bg-status-unknown/10 border-status-unknown/30', text: 'text-zinc-500', label: '대기' },
+  error: { bg: 'bg-status-critical/10 border-status-critical/30', text: 'text-status-critical', label: '오류' },
 };
 
 function CheckRow({ label, ok, detail }: { label: string; ok: boolean; detail?: string }) {
   return (
     <div className="flex items-start gap-2 py-1.5">
       {ok ? (
-        <Check className="w-4 h-4 text-emerald-500 mt-0.5 shrink-0" />
+        <Check className="w-4 h-4 text-status-healthy mt-0.5 shrink-0" />
       ) : (
-        <X className="w-4 h-4 text-red-500 mt-0.5 shrink-0" />
+        <X className="w-4 h-4 text-status-critical mt-0.5 shrink-0" />
       )}
       <div className="min-w-0">
         <span className="text-sm text-foreground">{label}</span>
@@ -61,7 +61,7 @@ function NodeChecklist({ entry }: { entry: NodeHealthEntry }) {
       />
       <CheckRow label="kube-proxy" ok={net.kubeProxy} />
       {net.missing.length > 0 && (
-        <div className="py-1.5 text-xs text-red-500">누락: {net.missing.join(', ')}</div>
+        <div className="py-1.5 text-xs text-status-critical">누락: {net.missing.join(', ')}</div>
       )}
     </div>
   );

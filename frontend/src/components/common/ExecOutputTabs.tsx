@@ -60,8 +60,8 @@ export function ExecOutputTabs({
   return (
     <div className={className}>
       <div className="flex items-center gap-1 mb-1.5">
-        <TabButton id="stdout" label={stdoutLabel} lines={outLines} dotCls="bg-emerald-500" />
-        <TabButton id="stderr" label={stderrLabel} lines={errLines} dotCls="bg-red-500" />
+        <TabButton id="stdout" label={stdoutLabel} lines={outLines} dotCls="bg-status-healthy" />
+        <TabButton id="stderr" label={stderrLabel} lines={errLines} dotCls="bg-status-critical" />
       </div>
       {tab === 'stdout' ? (
         <LogViewer text={stdout} maxHeight={maxHeight} filterOverride={filterOverride} hideToolbar={hideToolbar} />

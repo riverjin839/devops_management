@@ -263,7 +263,7 @@ export function KernelParamsCollectModal({ open, clusterId, onClose }: Props) {
             <div className="border border-border rounded-xl overflow-hidden">
               <div className="flex items-center gap-2 px-3 py-2 bg-muted/30 border-b border-border">
                 {result.changed > 0
-                  ? <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" />
+                  ? <CheckCircle2 className="w-3.5 h-3.5 text-status-healthy" />
                   : <AlertTriangle className="w-3.5 h-3.5 text-muted-foreground" />}
                 <span className="text-sm font-semibold">
                   {result.changed > 0
@@ -286,16 +286,16 @@ export function KernelParamsCollectModal({ open, clusterId, onClose }: Props) {
                     {result.hosts.map((h) => (
                       <tr key={h.host} className="border-t border-border">
                         <td className="px-2 py-1 font-mono">{h.host}</td>
-                        <td className={`px-2 py-1 ${h.status === 'ok' ? 'text-emerald-500' : 'text-red-500'}`}>
+                        <td className={`px-2 py-1 ${h.status === 'ok' ? 'text-status-healthy' : 'text-status-critical'}`}>
                           {h.status}
                         </td>
                         <td className="px-2 py-1 font-mono">{h.paramCount ?? '-'}</td>
                         <td className="px-2 py-1">
                           {h.stored === true
-                            ? <span className="text-xs text-emerald-500">신규 저장</span>
+                            ? <span className="text-xs text-status-healthy">신규 저장</span>
                             : h.stored === false
                               ? <span className="text-xs text-muted-foreground">동일 (skip)</span>
-                              : <span className="text-xs text-red-400">{h.error ?? '실패'}</span>}
+                              : <span className="text-xs text-status-critical">{h.error ?? '실패'}</span>}
                         </td>
                         <td className="px-2 py-1 align-top">
                           <RawOutputDetails stdout={h.rawStdout} stderr={h.rawStderr} exitCode={h.exitCode} />
@@ -317,7 +317,7 @@ export function KernelParamsCollectModal({ open, clusterId, onClose }: Props) {
           </button>
           {collectMut.isPending ? (
             <button onClick={collectMut.abort}
-              className="flex items-center gap-1.5 px-4 py-1.5 text-sm font-semibold bg-red-500 text-primary-foreground rounded-lg hover:bg-red-600">
+              className="flex items-center gap-1.5 px-4 py-1.5 text-sm font-semibold bg-status-critical text-primary-foreground rounded-lg hover:bg-status-critical">
               <Loader2 className="w-3 h-3 animate-spin" /> 중지
             </button>
           ) : (

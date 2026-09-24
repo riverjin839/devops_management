@@ -19,6 +19,12 @@
   `text-primary`/`text-status-*` 만 새 토큰에 매핑(`bg-*`/`border-*`/`fill-*` 는 기존 면색 유지).
   default·burnt-sienna·tuscan-sunset 은 primary 명도 하향, dark·electropop·summer-breeze·
   tropical-punch 는 `--primary-foreground` 를 어두운 글자로 교체.
+- **상태 배지·글자가 라이트 테마에서 안 보이던 문제 (고정 팔레트 일괄 정리)**: 가장 많이 쓰인 배지
+  `bg-emerald-500/10 text-emerald-400` 처럼 다크 배경 기준으로 고른 고정 팔레트가 기본(라이트) 테마에서
+  1.9~2.9:1 로 읽히지 않았다. 상태 의미의 `emerald/green/red/rose/amber/yellow/sky` 약 1,630건(153개 파일)을
+  `text-status-*`·`bg-status-*/NN`·`border-status-*/NN` 토큰으로 치환해 모든 테마에서 4.5:1 이상이 되게 했고,
+  같은 뜻의 `dark:` 중복 90건을 걷어냈다. slate/gray 대기 배지 세트는 `status-unknown` 으로. ESLint
+  `no-restricted-syntax` 로 재유입을 error 처리한다. Frontend: 전 화면 className, `.eslintrc.cjs`.
 
 ### Changed
 - **기본 테마를 라이트(슬레이트)로 교체**: 첫 화면이 코랄 페이퍼 톤에서 슬레이트 + 블루 단일 강조로
@@ -29,6 +35,11 @@
   경계 89~90% 로 라이트 테마와 같은 명도 구조를 따르고 hue 만 테마 고유값을 남긴다. 버튼·링크·
   사이드바 색은 그대로. Frontend: `index.css` 각 테마 블록의 background/card/secondary/muted/border/
   surface-container 토큰.
+- **'클러스터' 메뉴 23개를 하는 일 기준 4묶음으로 재편**: 앱 추가 카탈로그·명령 팔레트·메뉴 설정에서
+  클러스터 · 관측(7) / 점검(5) / 운영 조작(5) / 구성(6)으로 나뉜다. 명령을 보내는 '운영 조작' 묶음은
+  경고 톤으로 구분한다. 서버/인프라·스토리지·서비스/앱은 '인프라' 하나로 합쳤다. 설치 단위가 화면
+  경로라 이미 설치한 레일 아이콘은 그대로다. Frontend: `navConfig.ts` `GROUPS`(`description`/`tone`),
+  `installableApps.ts`, `AddAppDialog.tsx`.
 
 ## [1.36.1] - 2026-09-23
 

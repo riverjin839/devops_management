@@ -111,7 +111,7 @@ export function AccessReviewPanel({ clusterId, serviceAccounts, showLogs }: Prop
         <div className="flex-1" />
         {entries && (
           <span className="text-xs text-muted-foreground">
-            <b className={denied.length === 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-foreground'}>
+            <b className={denied.length === 0 ? 'text-status-healthy' : 'text-foreground'}>
               {entries.length - denied.length}
             </b>
             /{entries.length} 통과
@@ -162,8 +162,8 @@ export function AccessReviewPanel({ clusterId, serviceAccounts, showLogs }: Prop
                           <span
                             className={`inline-flex items-center gap-1 text-xs font-semibold ${
                               e.allowed
-                                ? 'text-emerald-600 dark:text-emerald-400'
-                                : 'text-rose-600 dark:text-rose-400'
+                                ? 'text-status-healthy'
+                                : 'text-status-critical'
                             }`}
                           >
                             {e.allowed ? '✔ 허용' : '✘ 거부'}
@@ -181,7 +181,7 @@ export function AccessReviewPanel({ clusterId, serviceAccounts, showLogs }: Prop
           </div>
 
           {denied.length > 0 && (
-            <p className="text-[11.5px] leading-relaxed rounded-md border border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-400 px-3 py-2">
+            <p className="text-[11.5px] leading-relaxed rounded-md border border-status-warning/30 bg-status-warning/10 text-status-warning px-3 py-2">
               {denied.length}건이 거부됐다. 의도한 것이 아니라면 Binding 탭에서 그 네임스페이스에 다른
               바인딩이 걸려 있지 않은지 확인한다.
             </p>

@@ -64,7 +64,7 @@ function ProfileEditor({
   return (
     <div className="rounded-lg border border-border bg-card overflow-hidden">
       <div className="px-3 py-2 border-b border-border bg-muted/40 flex items-center gap-2">
-        <span className={`w-2 h-2 rounded-full ${env === 'ops' ? 'bg-red-500' : 'bg-blue-500'}`} />
+        <span className={`w-2 h-2 rounded-full ${env === 'ops' ? 'bg-status-critical' : 'bg-blue-500'}`} />
         <h4 className="text-sm font-semibold">{env === 'ops' ? '운영 (Production)' : '개발 (Dev)'} 프로파일</h4>
       </div>
       <div className="p-3 space-y-3">
@@ -222,7 +222,7 @@ export function TerminalAppearanceSettings() {
                   <button
                     onClick={() => sharedMut.mutate([...shared.filter((s) => s.id !== t.id), { ...t, group: '공용' }])}
                     title="공용으로 배포"
-                    className="p-0.5 rounded hover:bg-background text-sky-500"
+                    className="p-0.5 rounded hover:bg-background text-status-info"
                   >
                     <Megaphone className="w-3 h-3" />
                   </button>
@@ -251,7 +251,7 @@ export function TerminalAppearanceSettings() {
               <p className="text-[11px] text-muted-foreground mb-1">공용 배포된 템플릿 (admin)</p>
               <div className="flex flex-wrap gap-1.5">
                 {shared.map((t) => (
-                  <span key={t.id} className="inline-flex items-center gap-1 px-2 py-1 text-xs rounded border border-sky-500/30 bg-sky-500/5">
+                  <span key={t.id} className="inline-flex items-center gap-1 px-2 py-1 text-xs rounded border border-status-info/30 bg-status-info/5">
                     <span className="w-3 h-3 rounded-sm border border-border" style={{ backgroundColor: t.palette.bg || '#888' }} />
                     {t.name}
                     <button onClick={() => sharedMut.mutate(shared.filter((s) => s.id !== t.id))} className="p-0.5 rounded hover:bg-background text-muted-foreground"><Trash2 className="w-3 h-3" /></button>

@@ -23,14 +23,14 @@ const LEVEL_LABEL: Record<string, string> = {
 // cron 상태 → 섹션 테두리/상태 dot 색. 접힌 상태에서도 "펼치지 않고 판독"이 목표 —
 // 정상 실행 중이면 초록, 비정상(에러 등)이면 레드, 중지/미설정이면 회색톤.
 const GROUP_BORDER: Record<CronHealth, string> = {
-  ok: 'border-emerald-500/40 hover:border-emerald-500/70',
-  failed: 'border-red-500/50 hover:border-red-500/80',
+  ok: 'border-status-healthy/40 hover:border-status-healthy/70',
+  failed: 'border-status-critical/50 hover:border-status-critical/80',
   running: 'border-blue-500/40 hover:border-blue-500/70',
   stopped: 'border-border hover:border-muted-foreground/40',
 };
 const GROUP_DOT: Record<CronHealth, string> = {
-  ok: 'bg-emerald-500',
-  failed: 'bg-red-500',
+  ok: 'bg-status-healthy',
+  failed: 'bg-status-critical',
   running: 'bg-blue-500 animate-pulse',
   stopped: 'bg-slate-400',
 };
@@ -100,7 +100,7 @@ export function BatchJobClusterGroup({
         )}
         <span className="ml-auto flex items-center gap-2 text-xs text-muted-foreground flex-shrink-0">
           <span>잡 {allClusterJobs.length}{filtered ? ` (${jobs.length}건 표시)` : ''}</span>
-          {failed > 0 && <span className="text-red-500 font-medium">실패 {failed}</span>}
+          {failed > 0 && <span className="text-status-critical font-medium">실패 {failed}</span>}
           {running > 0 && <span className="text-blue-500 font-medium">실행 중 {running}</span>}
         </span>
       </button>

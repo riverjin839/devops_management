@@ -153,11 +153,11 @@ export function NodeImagesPage() {
               클러스터를 선택하세요.
             </MacCard>
           ) : nodesError ? (
-            <MacCard rootClassName="border-red-500/30" bodyPadding="p-8">
+            <MacCard rootClassName="border-status-critical/30" bodyPadding="p-8">
               <div className="flex flex-col items-center gap-3 text-center">
-                <AlertTriangle className="w-8 h-8 text-red-400" />
+                <AlertTriangle className="w-8 h-8 text-status-critical" />
                 <div>
-                  <p className="font-medium text-red-400 mb-1">노드 이미지 정보를 불러올 수 없습니다</p>
+                  <p className="font-medium text-status-critical mb-1">노드 이미지 정보를 불러올 수 없습니다</p>
                   <p className="text-sm text-muted-foreground max-w-lg">
                     {extractErrorMessage(nodesErrorDetail)}
                   </p>

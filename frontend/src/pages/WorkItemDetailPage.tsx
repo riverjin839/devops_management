@@ -112,7 +112,7 @@ export function WorkItemDetailPage() {
                 </button>
                 <button
                   onClick={handleDelete}
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-red-500 hover:bg-red-500/10 border border-border rounded-lg transition-colors"
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-status-critical hover:bg-status-critical/10 border border-border rounded-lg transition-colors"
                 >
                   <Trash2 className="w-3.5 h-3.5" /> 삭제
                 </button>

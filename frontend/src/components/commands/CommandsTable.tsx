@@ -38,7 +38,7 @@ function CopyButton({ value }: { value: string }) {
       className="inline-flex items-center gap-1 px-1.5 py-0.5 text-xs rounded-md bg-secondary text-muted-foreground hover:text-foreground flex-shrink-0 self-start"
       title="복사"
     >
-      {copied ? <Check className="w-3 h-3 text-emerald-500" /> : <Copy className="w-3 h-3" />}
+      {copied ? <Check className="w-3 h-3 text-status-healthy" /> : <Copy className="w-3 h-3" />}
       {copied ? '복사됨' : '복사'}
     </button>
   );
@@ -377,7 +377,7 @@ function CommandRow({ entry: e, onUpdate, onDelete, onTogglePin, onOpenForm }: C
           </button>
           <button
             onClick={onDelete}
-            className="inline-flex items-center justify-center px-1.5 py-1 text-xs rounded-md text-muted-foreground hover:bg-red-500/10 hover:text-red-500"
+            className="inline-flex items-center justify-center px-1.5 py-1 text-xs rounded-md text-muted-foreground hover:bg-status-critical/10 hover:text-status-critical"
             title="삭제"
             aria-label="삭제"
           >

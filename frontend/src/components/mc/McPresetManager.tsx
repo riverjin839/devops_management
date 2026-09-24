@@ -5,9 +5,9 @@ import { mcApi, type McPreset } from '@/services/api';
 import type { McEffectivePreset, McPresetSource } from '@/types';
 
 const SOURCE_BADGE: Record<McPresetSource, { label: string; cls: string }> = {
-  builtin:  { label: '기본',  cls: 'bg-slate-500/10 text-slate-400 border-slate-500/30' },
-  shared:   { label: '공용',  cls: 'bg-sky-500/10 text-sky-400 border-sky-500/30' },
-  personal: { label: '개인',  cls: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30' },
+  builtin:  { label: '기본',  cls: 'bg-status-unknown/10 text-status-unknown border-status-unknown/30' },
+  shared:   { label: '공용',  cls: 'bg-status-info/10 text-status-info border-status-info/30' },
+  personal: { label: '개인',  cls: 'bg-status-healthy/10 text-status-healthy border-status-healthy/30' },
 };
 
 interface EditRow {
@@ -80,7 +80,7 @@ export function McPresetManager({
             title={p.args}
           >
             <span className={`w-1.5 h-1.5 rounded-full ${
-              p.source === 'personal' ? 'bg-emerald-400' : p.source === 'shared' ? 'bg-sky-400' : 'bg-slate-400'
+              p.source === 'personal' ? 'bg-status-healthy' : p.source === 'shared' ? 'bg-status-info' : 'bg-slate-400'
             }`} />
             {p.label}
           </button>
@@ -254,9 +254,9 @@ function SharedEditor({ onClose, qcInvalidate }: { onClose: () => void; qcInvali
     setRows((prev) => prev.map((r, idx) => (idx === i ? { ...r, ...changes } : r)));
 
   return (
-    <div className="rounded-lg border border-sky-500/30 bg-sky-500/5 p-3 space-y-3">
+    <div className="rounded-lg border border-status-info/30 bg-status-info/5 p-3 space-y-3">
       <div className="flex items-center justify-between">
-        <p className="text-xs font-semibold text-sky-500 flex items-center gap-1"><Megaphone className="w-3.5 h-3.5" /> 공용 프리셋 배포 (모든 사용자에게 '공용'으로 표시)</p>
+        <p className="text-xs font-semibold text-status-info flex items-center gap-1"><Megaphone className="w-3.5 h-3.5" /> 공용 프리셋 배포 (모든 사용자에게 '공용'으로 표시)</p>
         <button onClick={onClose} className="p-0.5 rounded hover:bg-secondary text-muted-foreground"><X className="w-3.5 h-3.5" /></button>
       </div>
       <div className="space-y-1.5 max-h-72 overflow-auto">
@@ -271,13 +271,13 @@ function SharedEditor({ onClose, qcInvalidate }: { onClose: () => void; qcInvali
           </div>
         ))}
       </div>
-      <div className="flex items-center justify-between pt-1 border-t border-sky-500/20">
+      <div className="flex items-center justify-between pt-1 border-t border-status-info/20">
         <button onClick={() => setRows((prev) => [...prev, { key: '', label: '', args: '' }])}
           className="flex items-center gap-1 px-2 py-1 text-xs rounded border border-border bg-secondary hover:bg-secondary/80">
           <Plus className="w-3 h-3" /> 항목 추가
         </button>
         <button onClick={() => saveMut.mutate()} disabled={saveMut.isPending}
-          className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold bg-sky-600 hover:bg-sky-600/90 text-white rounded disabled:opacity-50">
+          className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold bg-status-info hover:bg-status-info/90 text-white rounded disabled:opacity-50">
           {saveMut.isPending ? <Loader2 className="w-3 h-3 animate-spin" /> : <Save className="w-3 h-3" />} 배포
         </button>
       </div>

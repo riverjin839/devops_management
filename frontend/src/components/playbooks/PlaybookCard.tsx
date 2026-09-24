@@ -11,9 +11,9 @@ interface PlaybookCardProps {
 }
 
 const statusConfig: Record<string, { color: string; bg: string; label: string }> = {
-  healthy: { color: 'text-emerald-400', bg: 'bg-emerald-500/15 border-emerald-500/30', label: 'OK' },
-  warning: { color: 'text-amber-400', bg: 'bg-amber-500/15 border-amber-500/30', label: 'Changed' },
-  critical: { color: 'text-red-400', bg: 'bg-red-500/15 border-red-500/30', label: 'Failed' },
+  healthy: { color: 'text-status-healthy', bg: 'bg-status-healthy/15 border-status-healthy/30', label: 'OK' },
+  warning: { color: 'text-status-warning', bg: 'bg-status-warning/15 border-status-warning/30', label: 'Changed' },
+  critical: { color: 'text-status-critical', bg: 'bg-status-critical/15 border-status-critical/30', label: 'Failed' },
   running: { color: 'text-blue-400', bg: 'bg-blue-500/15 border-blue-500/30', label: 'Running' },
   unknown: { color: 'text-status-unknown', bg: 'bg-status-unknown/15 border-status-unknown/30', label: 'Not Run' },
 };
@@ -74,9 +74,9 @@ export function PlaybookCard({ playbook, isRunning, onRun, onDelete, onEdit, onT
       {/* Stats (if available) */}
       {totals && (
         <div className="grid grid-cols-5 gap-1 mb-3">
-          <StatBadge label="OK" value={totals.ok} color="text-emerald-400" />
-          <StatBadge label="Chg" value={totals.changed} color="text-amber-400" />
-          <StatBadge label="Fail" value={totals.failures} color="text-red-400" />
+          <StatBadge label="OK" value={totals.ok} color="text-status-healthy" />
+          <StatBadge label="Chg" value={totals.changed} color="text-status-warning" />
+          <StatBadge label="Fail" value={totals.failures} color="text-status-critical" />
           <StatBadge label="Unr" value={totals.unreachable} color="text-orange-400" />
           <StatBadge label="Skip" value={totals.skipped} color="text-status-unknown" />
         </div>
@@ -133,7 +133,7 @@ export function PlaybookCard({ playbook, isRunning, onRun, onDelete, onEdit, onT
           <button
             onClick={onDelete}
             disabled={isRunning}
-            className="p-1.5 rounded-md hover:bg-red-500/10 text-red-400 transition-colors disabled:opacity-50"
+            className="p-1.5 rounded-md hover:bg-status-critical/10 text-status-critical transition-colors disabled:opacity-50"
             title="Delete playbook"
           >
             <Trash2 className="w-4 h-4" />

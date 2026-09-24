@@ -116,7 +116,7 @@ export function JiraPushDialog({ open, onClose, item }: JiraPushDialogProps) {
 
           {/* 충돌 경고 */}
           {conflict && (
-            <div className="rounded-xl bg-amber-500/10 text-amber-600 dark:text-amber-400 px-3 py-2 text-sm flex items-start gap-1.5">
+            <div className="rounded-xl bg-status-warning/10 text-status-warning px-3 py-2 text-sm flex items-start gap-1.5">
               <AlertTriangle className="w-3.5 h-3.5 mt-0.5 flex-shrink-0" />
               <span>{conflict}</span>
             </div>

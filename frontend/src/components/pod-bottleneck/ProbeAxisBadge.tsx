@@ -5,8 +5,8 @@ import type { ComponentType } from 'react';
 const AXIS_MAP: Record<string, { cls: string; icon: ComponentType<{ className?: string }>; label: string }> = {
   'L4 state':    { cls: 'bg-blue-500/10 text-blue-500 border-blue-500/30',     icon: Activity, label: 'L4 state' },
   'L4 counters': { cls: 'bg-violet-500/10 text-violet-500 border-violet-500/30', icon: Gauge,   label: 'L4 counters' },
-  'L7 DNS':      { cls: 'bg-emerald-500/10 text-emerald-500 border-emerald-500/30', icon: Globe, label: 'L7 DNS' },
-  'K8s control': { cls: 'bg-amber-500/10 text-amber-500 border-amber-500/30',   icon: Network, label: 'K8s control' },
+  'L7 DNS':      { cls: 'bg-status-healthy/10 text-status-healthy border-status-healthy/30', icon: Globe, label: 'L7 DNS' },
+  'K8s control': { cls: 'bg-status-warning/10 text-status-warning border-status-warning/30',   icon: Network, label: 'K8s control' },
 };
 
 interface ProbeAxisBadgeProps {
@@ -14,7 +14,7 @@ interface ProbeAxisBadgeProps {
 }
 
 export function ProbeAxisBadge({ axis }: ProbeAxisBadgeProps) {
-  const meta = AXIS_MAP[axis] ?? { cls: 'bg-slate-500/10 text-slate-400 border-slate-500/30', icon: Activity, label: axis };
+  const meta = AXIS_MAP[axis] ?? { cls: 'bg-status-unknown/10 text-status-unknown border-status-unknown/30', icon: Activity, label: axis };
   const Icon = meta.icon;
   return (
     <span

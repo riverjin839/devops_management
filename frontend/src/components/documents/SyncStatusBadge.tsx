@@ -13,7 +13,7 @@ export function SyncStatusBadge({ guide, showVersion = false }: { guide: WorkGui
   if (status === 'modified') {
     return (
       <span
-        className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium bg-amber-500/10 text-amber-500"
+        className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium bg-status-warning/10 text-status-warning"
         title="PEP 에서 수정된 뒤 아직 Confluence 에 게시되지 않았습니다"
       >
         <RefreshCw className="w-3 h-3" /> 재게시 필요{version}
@@ -23,7 +23,7 @@ export function SyncStatusBadge({ guide, showVersion = false }: { guide: WorkGui
   if (status === 'error') {
     return (
       <span
-        className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium bg-red-500/10 text-red-500"
+        className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium bg-status-critical/10 text-status-critical"
         title={guide.confluenceSyncError || '마지막 동기화가 실패했습니다'}
       >
         <AlertTriangle className="w-3 h-3" /> 동기화 오류{version}
@@ -32,7 +32,7 @@ export function SyncStatusBadge({ guide, showVersion = false }: { guide: WorkGui
   }
   return (
     <span
-      className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium bg-emerald-500/10 text-emerald-500"
+      className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium bg-status-healthy/10 text-status-healthy"
       title={guide.confluenceSyncedAt ? `마지막 동기화 ${guide.confluenceSyncedAt.slice(0, 10)}` : undefined}
     >
       <CheckCircle2 className="w-3 h-3" /> 동기화됨{version}

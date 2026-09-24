@@ -121,7 +121,7 @@ export function StepType({ clusters, types, fixedClusterId, state, onChange }: S
             <p className="mt-1 text-xs text-muted-foreground">{selectedType.description}</p>
           )}
           {selectedType && selectedType.requiresSsh === false && (
-            <p className="mt-1 inline-block text-xs px-1.5 py-0.5 rounded bg-sky-500/10 text-sky-600 border border-sky-500/30">
+            <p className="mt-1 inline-block text-xs px-1.5 py-0.5 rounded bg-status-info/10 text-status-info border border-status-info/30">
               SSH 불필요 — 클러스터 kubeconfig 로 실행
             </p>
           )}

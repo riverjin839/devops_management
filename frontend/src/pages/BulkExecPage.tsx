@@ -18,11 +18,11 @@ import type { ScriptLanguage } from '@/types';
 // ── 상태 색상 ───────────────────────────────────────────────────────────────
 
 const STATUS_META: Record<BulkExecResultItem['status'], { label: string; cls: string; icon: React.ComponentType<{ className?: string }> }> = {
-  ok:            { label: '정상',     cls: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30',  icon: CheckCircle },
-  error:         { label: '에러',     cls: 'bg-red-500/10 text-red-400 border-red-500/30',              icon: XCircle },
-  timeout:       { label: '타임아웃', cls: 'bg-amber-500/10 text-amber-400 border-amber-500/30',        icon: Clock },
+  ok:            { label: '정상',     cls: 'bg-status-healthy/10 text-status-healthy border-status-healthy/30',  icon: CheckCircle },
+  error:         { label: '에러',     cls: 'bg-status-critical/10 text-status-critical border-status-critical/30',              icon: XCircle },
+  timeout:       { label: '타임아웃', cls: 'bg-status-warning/10 text-status-warning border-status-warning/30',        icon: Clock },
   auth_error:    { label: '인증 실패', cls: 'bg-orange-500/10 text-orange-400 border-orange-500/30',    icon: ShieldAlert },
-  connect_error: { label: '연결 실패', cls: 'bg-slate-500/10 text-slate-400 border-slate-500/30',       icon: Wifi },
+  connect_error: { label: '연결 실패', cls: 'bg-status-unknown/10 text-status-unknown border-status-unknown/30',       icon: Wifi },
 };
 
 // ── Node row ────────────────────────────────────────────────────────────────
@@ -194,7 +194,7 @@ function ClusterNodeGroup({
             </div>
           ) : isError ? (
             <div className="px-3 py-2">
-              <p className="text-xs text-red-400 mb-1">노드 조회 실패: {errorMsg ?? '연결 오류'}</p>
+              <p className="text-xs text-status-critical mb-1">노드 조회 실패: {errorMsg ?? '연결 오류'}</p>
               <button
                 onClick={onRefetch}
                 className="text-xs text-primary hover:text-primary/80 underline"
@@ -231,7 +231,7 @@ function NodeRow({ node, checked, onToggle }: { node: NodeSummary; checked: bool
         className="w-4 h-4 accent-primary flex-shrink-0"
       />
       <div className="flex items-center gap-2 flex-1 min-w-0">
-        <span className={`w-2 h-2 rounded-full flex-shrink-0 ${node.ready ? 'bg-emerald-500' : 'bg-red-500'}`} />
+        <span className={`w-2 h-2 rounded-full flex-shrink-0 ${node.ready ? 'bg-status-healthy' : 'bg-status-critical'}`} />
         <span className="font-mono text-sm text-foreground truncate">{node.name}</span>
         <span className="text-sm font-mono text-muted-foreground">{host}</span>
         {node.roles.map((r) => (
@@ -302,7 +302,7 @@ function ResultRow({ result, globalFilter }: { result: BulkExecResultItem; globa
               hideToolbar={!!globalFilter.trim()}
             />
             {result.error && (
-              <p className="text-sm text-red-400 mt-2">⚠ {result.error}</p>
+              <p className="text-sm text-status-critical mt-2">⚠ {result.error}</p>
             )}
           </td>
         </tr>
@@ -370,7 +370,7 @@ function SummaryResultsTable({
             return (
               <tr key={rowKey}
                 className={`border-b border-border hover:bg-muted/20 align-top ${
-                  r.status !== 'ok' ? 'bg-red-500/[0.02]' : ''
+                  r.status !== 'ok' ? 'bg-status-critical/[0.02]' : ''
                 }`}>
                 <td className="px-3 py-2 align-top whitespace-nowrap">
                   <p className="font-mono text-sm font-medium">{primary}</p>
@@ -387,8 +387,8 @@ function SummaryResultsTable({
                   {matchBadge !== null && (
                     <span className={`ml-1 text-xs px-1.5 py-0.5 rounded-full border ${
                       matchBadge > 0
-                        ? 'bg-sky-500/10 text-sky-500 border-sky-500/30'
-                        : 'bg-slate-500/10 text-slate-400 border-slate-500/30'
+                        ? 'bg-status-info/10 text-status-info border-status-info/30'
+                        : 'bg-status-unknown/10 text-status-unknown border-status-unknown/30'
                     }`}>
                       매칭 {matchBadge}
                     </span>
@@ -399,12 +399,12 @@ function SummaryResultsTable({
                 </td>
                 <td className="px-3 py-2 align-top">
                   {r.error && (
-                    <p className="text-xs text-red-400 font-medium mb-0.5">⚠ {r.error}</p>
+                    <p className="text-xs text-status-critical font-medium mb-0.5">⚠ {r.error}</p>
                   )}
                   {preview.length > 0 ? (
                     <div className="font-mono text-xs space-y-0.5">
                       {preview.map((line, i) => (
-                        <p key={i} className={errLines.includes(line) ? 'text-red-400/90' : 'text-foreground/90'}
+                        <p key={i} className={errLines.includes(line) ? 'text-status-critical/90' : 'text-foreground/90'}
                           title={line}>
                           {line.length > 160 ? line.slice(0, 160) + '…' : line}
                         </p>
@@ -700,7 +700,7 @@ export function BulkExecPage() {
             <Terminal className="w-6 h-6 text-primary" />
             <h1 className="text-xl font-bold">노드 일괄 실행 (SSH / SCP)</h1>
             {clusterIds.length > 0 && (
-              <span className="text-sm px-2 py-0.5 rounded-full bg-slate-500/15 text-slate-400 border border-slate-500/30">
+              <span className="text-sm px-2 py-0.5 rounded-full bg-status-unknown/15 text-status-unknown border border-status-unknown/30">
                 클러스터 {clusterIds.length} · 노드 {selected.size} / {totalNodesShown}
               </span>
             )}
@@ -1091,7 +1091,7 @@ export function BulkExecPage() {
 
             {/* 대규모 실행 예상 시간 힌트 */}
             {selected.size >= 50 && (
-              <div className="px-3 py-2 text-xs rounded-lg bg-amber-500/10 border border-amber-500/30 text-amber-600 flex items-start gap-2">
+              <div className="px-3 py-2 text-xs rounded-lg bg-status-warning/10 border border-status-warning/30 text-status-warning flex items-start gap-2">
                 <Clock className="w-3 h-3 mt-0.5 flex-shrink-0" />
                 <div>
                   선택 {selected.size}개 호스트 · parallelism {parallelism} / chunk {chunkSize}개 ·
@@ -1115,7 +1115,7 @@ export function BulkExecPage() {
               {runMutation.isPending ? (
                 <button
                   onClick={runMutation.abort}
-                  className="flex items-center gap-2 px-5 py-2.5 text-sm font-semibold bg-red-500 hover:bg-red-600 text-primary-foreground rounded-lg transition-colors"
+                  className="flex items-center gap-2 px-5 py-2.5 text-sm font-semibold bg-status-critical hover:bg-status-critical text-primary-foreground rounded-lg transition-colors"
                 >
                   <Square className="w-4 h-4 fill-current" />
                   중지
@@ -1147,10 +1147,10 @@ export function BulkExecPage() {
               <>
                 <header className="px-3 py-2 border-b border-border bg-muted/20 flex flex-wrap items-center gap-2">
                   <h2 className="text-sm font-semibold">실행 결과</h2>
-                  <span className="text-xs px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/30">
+                  <span className="text-xs px-2 py-0.5 rounded-full bg-status-healthy/10 text-status-healthy border border-status-healthy/30">
                     성공 {runResponse.okCount}
                   </span>
-                  <span className="text-xs px-2 py-0.5 rounded-full bg-red-500/10 text-red-400 border border-red-500/30">
+                  <span className="text-xs px-2 py-0.5 rounded-full bg-status-critical/10 text-status-critical border border-status-critical/30">
                     실패 {runResponse.errorCount}
                   </span>
                   <span className="text-xs text-muted-foreground whitespace-nowrap">

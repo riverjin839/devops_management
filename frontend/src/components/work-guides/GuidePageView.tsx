@@ -11,13 +11,13 @@ import { formatApiError } from '@/lib/utils';
 import type { WorkGuide } from '@/types';
 
 const STATUS_CFG: Record<string, { label: string; icon: React.ReactNode; cls: string }> = {
-  draft:    { label: '초안', icon: <FileTextIcon className="w-3 h-3" />, cls: 'bg-slate-500/10 text-slate-400 border-slate-500/30' },
-  active:   { label: '활성', icon: <CheckCircle className="w-3 h-3" />,  cls: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30' },
-  archived: { label: '보관', icon: <Archive className="w-3 h-3" />,      cls: 'bg-zinc-500/10 text-zinc-400 border-zinc-500/30' },
+  draft:    { label: '초안', icon: <FileTextIcon className="w-3 h-3" />, cls: 'bg-status-unknown/10 text-status-unknown border-status-unknown/30' },
+  active:   { label: '활성', icon: <CheckCircle className="w-3 h-3" />,  cls: 'bg-status-healthy/10 text-status-healthy border-status-healthy/30' },
+  archived: { label: '보관', icon: <Archive className="w-3 h-3" />,      cls: 'bg-status-unknown/10 text-status-unknown border-status-unknown/30' },
 };
 
 const PRIORITY_DOT: Record<string, { dot: string; cls: string; label: string }> = {
-  high:   { dot: 'bg-red-400',   cls: 'text-red-400',   label: '높음' },
+  high:   { dot: 'bg-status-critical',   cls: 'text-status-critical',   label: '높음' },
   medium: { dot: 'bg-blue-400',  cls: 'text-blue-400',  label: '보통' },
   low:    { dot: 'bg-slate-400', cls: 'text-slate-400', label: '낮음' },
 };
@@ -144,7 +144,7 @@ export function GuidePageView({ guide, allGuides, onSelect, onEdit, onAddChild, 
               <Pencil className="w-3.5 h-3.5" /> 수정
             </button>
             <button onClick={onDelete}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-red-500 hover:bg-red-500/10 border border-border rounded-lg transition-colors"
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-status-critical hover:bg-status-critical/10 border border-border rounded-lg transition-colors"
               title="삭제">
               <Trash2 className="w-3.5 h-3.5" /> 삭제
             </button>

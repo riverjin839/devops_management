@@ -116,11 +116,11 @@ const PRESETS: Preset[] = [
 // ── 상태 색상 ──────────────────────────────────────────────────────────────
 
 const STATUS_META: Record<BulkExecResultItem['status'], { label: string; cls: string; icon: React.ComponentType<{ className?: string }> }> = {
-  ok:            { label: '정상',     cls: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30',  icon: CheckCircle },
-  error:         { label: '에러',     cls: 'bg-red-500/10 text-red-400 border-red-500/30',              icon: XCircle },
-  timeout:       { label: '타임아웃', cls: 'bg-amber-500/10 text-amber-400 border-amber-500/30',        icon: Clock },
+  ok:            { label: '정상',     cls: 'bg-status-healthy/10 text-status-healthy border-status-healthy/30',  icon: CheckCircle },
+  error:         { label: '에러',     cls: 'bg-status-critical/10 text-status-critical border-status-critical/30',              icon: XCircle },
+  timeout:       { label: '타임아웃', cls: 'bg-status-warning/10 text-status-warning border-status-warning/30',        icon: Clock },
   auth_error:    { label: '인증 실패', cls: 'bg-orange-500/10 text-orange-400 border-orange-500/30',    icon: ShieldAlert },
-  connect_error: { label: '연결 실패', cls: 'bg-slate-500/10 text-slate-400 border-slate-500/30',       icon: Wifi },
+  connect_error: { label: '연결 실패', cls: 'bg-status-unknown/10 text-status-unknown border-status-unknown/30',       icon: Wifi },
 };
 
 // ── 노드 선택 리스트 row ────────────────────────────────────────────────────
@@ -132,7 +132,7 @@ function NodeRow({ node, checked, onToggle }: { node: NodeSummary; checked: bool
       checked ? 'bg-primary/5' : ''
     }`}>
       <input type="checkbox" checked={checked} onChange={onToggle} className="w-4 h-4 accent-primary" />
-      <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${node.ready ? 'bg-emerald-500' : 'bg-red-500'}`} />
+      <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${node.ready ? 'bg-status-healthy' : 'bg-status-critical'}`} />
       <span className="flex-1 min-w-0">
         <span className="block text-sm font-mono text-foreground truncate">{node.name}</span>
         <span className="block text-sm font-mono text-muted-foreground">{host}</span>
@@ -174,7 +174,7 @@ function ResultCard({
           {meta.label}
         </span>
         {inlinePreview && !open && (
-          <span className="text-xs text-red-400/90 font-mono truncate min-w-0">
+          <span className="text-xs text-status-critical/90 font-mono truncate min-w-0">
             {inlinePreview}
           </span>
         )}
@@ -190,7 +190,7 @@ function ResultCard({
             {command}
           </pre>
           {result.error && (
-            <p className="text-sm text-red-400 font-mono break-all">⚠ {result.error}</p>
+            <p className="text-sm text-status-critical font-mono break-all">⚠ {result.error}</p>
           )}
           <p className="text-xs uppercase tracking-wider text-muted-foreground">stdout</p>
           {result.stdout.trim() ? (
@@ -315,7 +315,7 @@ export function KernelParamsPage() {
             <Cpu className="w-6 h-6 text-primary" />
             <h1 className="text-xl font-bold">OS / 커널 파라미터 조회</h1>
             {nodesQ.data?.nodes && (
-              <span className="text-sm px-2 py-0.5 rounded-full bg-slate-500/15 text-slate-400 border border-slate-500/30">
+              <span className="text-sm px-2 py-0.5 rounded-full bg-status-unknown/15 text-status-unknown border border-status-unknown/30">
                 선택 {selected.size} / {nodesQ.data.nodes.length}
               </span>
             )}
@@ -479,7 +479,7 @@ export function KernelParamsPage() {
                 {runMut.isPending ? (
                   <button
                     onClick={runMut.abort}
-                    className="flex items-center gap-2 px-5 py-2.5 text-sm font-semibold bg-red-500 hover:bg-red-600 text-primary-foreground rounded-lg transition-colors"
+                    className="flex items-center gap-2 px-5 py-2.5 text-sm font-semibold bg-status-critical hover:bg-status-critical text-primary-foreground rounded-lg transition-colors"
                   >
                     <Square className="w-4 h-4 fill-current" />
                     중지
@@ -503,11 +503,11 @@ export function KernelParamsPage() {
             <section ref={resultsRef} className="mt-6 space-y-3 scroll-mt-6">
               <div className="flex items-center gap-2 flex-wrap">
                 <h2 className="text-sm font-semibold">결과 — {runResponse.total}개 노드</h2>
-                <span className="text-xs px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/30">
+                <span className="text-xs px-2 py-0.5 rounded-full bg-status-healthy/10 text-status-healthy border border-status-healthy/30">
                   정상 {runResponse.okCount}
                 </span>
                 {runResponse.errorCount > 0 && (
-                  <span className="text-xs px-2 py-0.5 rounded-full bg-red-500/10 text-red-400 border border-red-500/30">
+                  <span className="text-xs px-2 py-0.5 rounded-full bg-status-critical/10 text-status-critical border border-status-critical/30">
                     실패 {runResponse.errorCount}
                   </span>
                 )}

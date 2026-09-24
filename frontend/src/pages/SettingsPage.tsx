@@ -336,12 +336,12 @@ function ManagementServerModal({
 
 function ServerStatusBadge({ status }: { status: string }) {
   if (status === 'online') return (
-    <span className="inline-flex items-center gap-1 text-sm px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/30">
+    <span className="inline-flex items-center gap-1 text-sm px-2 py-0.5 rounded-full bg-status-healthy/10 text-status-healthy border border-status-healthy/30">
       <Wifi className="w-3 h-3" /> online
     </span>
   );
   if (status === 'offline') return (
-    <span className="inline-flex items-center gap-1 text-sm px-2 py-0.5 rounded-full bg-red-500/10 text-red-400 border border-red-500/30">
+    <span className="inline-flex items-center gap-1 text-sm px-2 py-0.5 rounded-full bg-status-critical/10 text-status-critical border border-status-critical/30">
       <WifiOff className="w-3 h-3" /> offline
     </span>
   );
@@ -705,7 +705,7 @@ export function SettingsPage() {
               className="flex items-center gap-2 pl-1.5 pr-3 py-1.5 rounded-lg border border-border bg-secondary hover:bg-secondary/70 transition-colors"
               title="클릭하여 아이콘 변경"
             >
-              <span className="w-7 h-7 rounded-md bg-gradient-to-br from-primary to-sky-700 text-white flex items-center justify-center flex-shrink-0">
+              <span className="w-7 h-7 rounded-md bg-gradient-to-br from-primary to-status-info text-white flex items-center justify-center flex-shrink-0">
                 {renderHomeIconPreview(uiSettings?.homeIcons?.work)}
               </span>
               <span className="text-sm text-muted-foreground">변경</span>
@@ -853,25 +853,25 @@ export function SettingsPage() {
             <p className="text-2xl font-bold">{clusters.length}</p>
           </div>
           <div className="bg-card border border-border rounded-xl p-4">
-            <div className="flex items-center gap-2 text-emerald-400 text-sm mb-1">
+            <div className="flex items-center gap-2 text-status-healthy text-sm mb-1">
               <ShieldCheck className="w-4 h-4" />
               Healthy
             </div>
-            <p className="text-2xl font-bold text-emerald-400">{statusCounts.healthy}</p>
+            <p className="text-2xl font-bold text-status-healthy">{statusCounts.healthy}</p>
           </div>
           <div className="bg-card border border-border rounded-xl p-4">
-            <div className="flex items-center gap-2 text-amber-400 text-sm mb-1">
+            <div className="flex items-center gap-2 text-status-warning text-sm mb-1">
               <Clock className="w-4 h-4" />
               Warning
             </div>
-            <p className="text-2xl font-bold text-amber-400">{statusCounts.warning}</p>
+            <p className="text-2xl font-bold text-status-warning">{statusCounts.warning}</p>
           </div>
           <div className="bg-card border border-border rounded-xl p-4">
-            <div className="flex items-center gap-2 text-red-400 text-sm mb-1">
+            <div className="flex items-center gap-2 text-status-critical text-sm mb-1">
               <Globe className="w-4 h-4" />
               Critical
             </div>
-            <p className="text-2xl font-bold text-red-400">{statusCounts.critical}</p>
+            <p className="text-2xl font-bold text-status-critical">{statusCounts.critical}</p>
           </div>
         </div>}
 
@@ -969,12 +969,12 @@ export function SettingsPage() {
                       <span
                         className={`text-sm px-2 py-0.5 rounded-full border ${
                           cluster.status === 'healthy'
-                            ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30'
+                            ? 'bg-status-healthy/10 text-status-healthy border-status-healthy/30'
                             : cluster.status === 'warning'
-                            ? 'bg-amber-500/10 text-amber-400 border-amber-500/30'
+                            ? 'bg-status-warning/10 text-status-warning border-status-warning/30'
                             : cluster.status === 'critical'
-                            ? 'bg-red-500/10 text-red-400 border-red-500/30'
-                            : 'bg-slate-500/10 text-slate-400 border-slate-500/30'
+                            ? 'bg-status-critical/10 text-status-critical border-status-critical/30'
+                            : 'bg-status-unknown/10 text-status-unknown border-status-unknown/30'
                         }`}
                       >
                         {cluster.status === 'healthy'
@@ -1001,10 +1001,10 @@ export function SettingsPage() {
                     {verifyResults[cluster.id] && (() => {
                       const vr = verifyResults[cluster.id];
                       const tone = vr.ok
-                        ? 'bg-emerald-500/10 text-emerald-400'
+                        ? 'bg-status-healthy/10 text-status-healthy'
                         : vr.status === 'warning'
-                          ? 'bg-amber-500/10 text-amber-500'
-                          : 'bg-red-500/10 text-red-400';
+                          ? 'bg-status-warning/10 text-status-warning'
+                          : 'bg-status-critical/10 text-status-critical';
                       const headline = vr.ok
                         ? '✓ 연결 정상'
                         : vr.status === 'warning'
@@ -1067,7 +1067,7 @@ export function SettingsPage() {
                     <button
                       onClick={() => handleDelete(cluster)}
                       disabled={deletingId === cluster.id}
-                      className="p-2 hover:bg-red-500/10 rounded-md transition-colors text-muted-foreground hover:text-red-400 disabled:opacity-40"
+                      className="p-2 hover:bg-status-critical/10 rounded-md transition-colors text-muted-foreground hover:text-status-critical disabled:opacity-40"
                       title="삭제"
                       aria-label="삭제"
                     >
@@ -1174,7 +1174,7 @@ export function SettingsPage() {
                     </div>
                     {pingResults[server.id] && (
                       <div className={`text-sm mt-1 px-2 py-1 rounded ${
-                        pingResults[server.id].ok ? 'bg-emerald-500/10 text-emerald-400' : 'bg-red-500/10 text-red-400'
+                        pingResults[server.id].ok ? 'bg-status-healthy/10 text-status-healthy' : 'bg-status-critical/10 text-status-critical'
                       }`}>
                         {pingResults[server.id].ok ? '✓ 연결 확인됨' : '✗ 연결 실패'} — {pingResults[server.id].detail}
                       </div>
@@ -1201,7 +1201,7 @@ export function SettingsPage() {
                     <button
                       onClick={() => handleDeleteServer(server)}
                       disabled={deleteServerMutation.isPending}
-                      className="p-2 hover:bg-red-500/10 rounded-md transition-colors text-muted-foreground hover:text-red-400 disabled:opacity-40"
+                      className="p-2 hover:bg-status-critical/10 rounded-md transition-colors text-muted-foreground hover:text-status-critical disabled:opacity-40"
                       title="삭제"
                       aria-label="삭제"
                     >
@@ -1223,8 +1223,8 @@ export function SettingsPage() {
         {activeTab === 'debug' && (
           <MacCard title="Debug 모드" bodyPadding="p-6" className="space-y-5">
             <div className="flex items-start gap-3">
-              <div className="w-10 h-10 rounded-lg bg-amber-500/10 flex items-center justify-center flex-shrink-0">
-                <Bug className="w-5 h-5 text-amber-400" />
+              <div className="w-10 h-10 rounded-lg bg-status-warning/10 flex items-center justify-center flex-shrink-0">
+                <Bug className="w-5 h-5 text-status-warning" />
               </div>
               <div className="flex-1 min-w-0">
                 <p className="text-sm text-muted-foreground leading-relaxed">
@@ -1243,7 +1243,7 @@ export function SettingsPage() {
                   return (
                     <label key={p.key}
                       className={`flex items-center justify-between gap-3 px-3 py-2 rounded-lg border cursor-pointer transition-colors ${
-                        on ? 'border-amber-500/40 bg-amber-500/5' : 'border-border hover:bg-muted/30'
+                        on ? 'border-status-warning/40 bg-status-warning/5' : 'border-border hover:bg-muted/30'
                       }`}>
                       <div className="flex-1 min-w-0">
                         <p className="text-sm font-medium truncate">
@@ -1261,7 +1261,7 @@ export function SettingsPage() {
                         checked={on}
                         onChange={() => debugToggle(p.key)}
                         aria-label={p.label}
-                        className="w-4 h-4 accent-amber-500"
+                        className="w-4 h-4 accent-status-warning"
                       />
                     </label>
                   );

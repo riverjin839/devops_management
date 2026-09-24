@@ -20,15 +20,15 @@ import { TcpdumpPanel } from '@/components/packet-flow/TcpdumpPanel';
 type Tab = 'graph' | 'hubble' | 'tcpdump';
 
 const ENTITY_LABEL: Record<string, { icon: typeof Globe; label: string; color: string }> = {
-  external:           { icon: Globe,   label: 'External',  color: 'text-sky-400' },
+  external:           { icon: Globe,   label: 'External',  color: 'text-status-info' },
   dns:                { icon: Globe,   label: 'DNS',       color: 'text-indigo-400' },
   ingress_controller: { icon: Share2,  label: 'Ingress Pod', color: 'text-violet-400' },
   ingress:            { icon: Route,   label: 'Ingress',   color: 'text-purple-400' },
-  service:            { icon: Share2,  label: 'Service',   color: 'text-emerald-400' },
-  pod:                { icon: Box,     label: 'Pod',       color: 'text-amber-400' },
+  service:            { icon: Share2,  label: 'Service',   color: 'text-status-healthy' },
+  pod:                { icon: Box,     label: 'Pod',       color: 'text-status-warning' },
   node:               { icon: Server,  label: 'Node',      color: 'text-orange-400' },
-  switch:             { icon: Network, label: 'Switch',    color: 'text-rose-400' },
-  error:              { icon: AlertTriangle, label: 'Error', color: 'text-red-400' },
+  switch:             { icon: Network, label: 'Switch',    color: 'text-status-critical' },
+  error:              { icon: AlertTriangle, label: 'Error', color: 'text-status-critical' },
 };
 
 function HopBreadcrumb({
@@ -40,9 +40,9 @@ function HopBreadcrumb({
         const meta = ENTITY_LABEL[h.entityType] ?? ENTITY_LABEL.external;
         const Icon = meta.icon;
         const verdictCls =
-          h.verdict === 'allow' ? 'border-emerald-500/40'
-          : h.verdict === 'deny' ? 'border-red-500/50'
-          : h.verdict === 'warn' ? 'border-amber-500/50'
+          h.verdict === 'allow' ? 'border-status-healthy/40'
+          : h.verdict === 'deny' ? 'border-status-critical/50'
+          : h.verdict === 'warn' ? 'border-status-warning/50'
           : 'border-border';
         const active = selectedIndex === i;
         return (
@@ -247,7 +247,7 @@ export function PacketFlowPage() {
                 {runMut.isPending ? (
                   <button
                     onClick={runMut.abort}
-                    className="flex items-center gap-1.5 px-4 py-1.5 text-sm font-semibold bg-red-500 text-primary-foreground rounded-lg hover:bg-red-600"
+                    className="flex items-center gap-1.5 px-4 py-1.5 text-sm font-semibold bg-status-critical text-primary-foreground rounded-lg hover:bg-status-critical"
                   >
                     <Square className="w-4 h-4 fill-current" />
                     중지

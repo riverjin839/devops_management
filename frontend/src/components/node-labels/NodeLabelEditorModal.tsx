@@ -80,8 +80,8 @@ export function NodeLabelEditorModal({ node, isOpen, onClose, onApply }: Props) 
 
         <div className="mb-4 text-sm">
           <p className="font-medium mb-1">Preview</p>
-          {Object.entries(pendingAdd).map(([k, v]) => <div key={k} className="text-green-400 font-mono">+ {k}={v}</div>)}
-          {Object.keys(removeSet).filter((k)=>removeSet[k]).map((k) => <div key={k} className="text-red-400 font-mono">- {k}</div>)}
+          {Object.entries(pendingAdd).map(([k, v]) => <div key={k} className="text-status-healthy font-mono">+ {k}={v}</div>)}
+          {Object.keys(removeSet).filter((k)=>removeSet[k]).map((k) => <div key={k} className="text-status-critical font-mono">- {k}</div>)}
         </div>
 
         <div className="flex justify-end gap-2">

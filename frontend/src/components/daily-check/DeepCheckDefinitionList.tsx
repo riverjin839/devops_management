@@ -21,9 +21,9 @@ import type { DeepCheckDefinition } from '@/types';
 import { parseUTC } from '@/lib/utils';
 
 const STATUS_DOT: Record<string, string> = {
-  healthy: 'bg-emerald-500',
-  warning: 'bg-amber-500',
-  critical: 'bg-red-500',
+  healthy: 'bg-status-healthy',
+  warning: 'bg-status-warning',
+  critical: 'bg-status-critical',
   pending: 'bg-zinc-400',
 };
 
@@ -122,7 +122,7 @@ export function DeepCheckDefinitionList({
               aria-label={d.enabled ? `${d.name} 비활성화` : `${d.name} 활성화`}
               className={`flex-shrink-0 rounded-lg p-1.5 ${
                 d.enabled
-                  ? 'text-emerald-600 hover:bg-emerald-500/10'
+                  ? 'text-status-healthy hover:bg-status-healthy/10'
                   : 'text-muted-foreground hover:bg-muted'
               }`}
             >
@@ -233,7 +233,7 @@ export function DeepCheckDefinitionList({
               type="button"
               onClick={() => del(d.id)}
               disabled={deletingId === d.id}
-              className="flex-shrink-0 rounded-lg p-1.5 text-red-500 hover:bg-red-500/10 disabled:opacity-50"
+              className="flex-shrink-0 rounded-lg p-1.5 text-status-critical hover:bg-status-critical/10 disabled:opacity-50"
               title="삭제"
               aria-label={`${d.name} 삭제`}
             >

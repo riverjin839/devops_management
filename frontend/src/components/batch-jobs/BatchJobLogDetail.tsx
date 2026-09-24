@@ -79,7 +79,7 @@ export function BatchJobLogDetail({ run, stepPlan, maxHeight = 'max-h-[320px]', 
         {run.error && (
           <div>
             <p className="text-xs uppercase tracking-wider text-muted-foreground mb-1">error</p>
-            <pre className="text-xs font-mono bg-red-500/10 border border-red-500/30 text-red-700 dark:text-red-400 rounded p-2 overflow-auto whitespace-pre-wrap">
+            <pre className="text-xs font-mono bg-status-critical/10 border border-status-critical/30 text-status-critical rounded p-2 overflow-auto whitespace-pre-wrap">
               {run.error}
             </pre>
           </div>

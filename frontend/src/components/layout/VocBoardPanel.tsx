@@ -22,10 +22,10 @@ const STATUS_VARIANT: Record<VocStatus, StatusVariant> = {
   '완료': 'healthy',
 };
 const CATEGORY_CLS: Record<VocCategory, string> = {
-  '문의': 'bg-sky-500/10 text-sky-600',
+  '문의': 'bg-status-info/10 text-status-info',
   '개선': 'bg-violet-500/10 text-violet-600',
-  '불만': 'bg-red-500/10 text-red-600',
-  '제안': 'bg-emerald-500/10 text-emerald-600',
+  '불만': 'bg-status-critical/10 text-status-critical',
+  '제안': 'bg-status-healthy/10 text-status-healthy',
 };
 
 function errMessage(e: unknown, fallback: string): string {
@@ -187,7 +187,7 @@ function VocDetail({
           {(isOwner || isStaff) && (
             <>
               <button onClick={() => onEdit(post)} className="text-muted-foreground hover:text-foreground" aria-label="수정"><Pencil className="w-4 h-4" /></button>
-              <button onClick={() => setConfirmDel(true)} className="text-red-500 hover:text-red-600" aria-label="삭제"><Trash2 className="w-4 h-4" /></button>
+              <button onClick={() => setConfirmDel(true)} className="text-status-critical hover:text-status-critical" aria-label="삭제"><Trash2 className="w-4 h-4" /></button>
             </>
           )}
         </div>

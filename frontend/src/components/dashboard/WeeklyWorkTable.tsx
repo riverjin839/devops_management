@@ -11,9 +11,9 @@ const WEEKDAY_SHORT = ['일', '월', '화', '수', '목', '금', '토'];
 const STATUS_DOT: Record<KanbanStatus, string> = {
   backlog: 'bg-slate-400',
   todo: 'bg-blue-400',
-  in_progress: 'bg-amber-400',
+  in_progress: 'bg-status-warning',
   review_test: 'bg-purple-400',
-  done: 'bg-green-400',
+  done: 'bg-status-healthy',
 };
 
 interface WeekDay {

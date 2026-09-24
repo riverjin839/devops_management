@@ -5,12 +5,12 @@ import type { OpsNote } from '@/types';
 import { formatRelativeTime } from '@/lib/utils';
 
 const SERVICES = [
-  { value: 'k8s',       label: 'Kubernetes', icon: '☸', accent: 'bg-sky-500' },
+  { value: 'k8s',       label: 'Kubernetes', icon: '☸', accent: 'bg-status-info' },
   { value: 'keycloak',  label: 'Keycloak',   icon: '🔑', accent: 'bg-orange-500' },
-  { value: 'cilium',    label: 'Cilium',     icon: '🐝', accent: 'bg-yellow-500' },
+  { value: 'cilium',    label: 'Cilium',     icon: '🐝', accent: 'bg-status-warning' },
   { value: 'jenkins',   label: 'Jenkins',    icon: '🏗', accent: 'bg-blue-500' },
   { value: 'argocd',    label: 'ArgoCD',     icon: '🔄', accent: 'bg-violet-500' },
-  { value: 'nexus',     label: 'Nexus',      icon: '📦', accent: 'bg-emerald-500' },
+  { value: 'nexus',     label: 'Nexus',      icon: '📦', accent: 'bg-status-healthy' },
   { value: 'etc',       label: '기타',        icon: '📋', accent: 'bg-slate-500' },
 ];
 const SERVICE_MAP = Object.fromEntries(SERVICES.map((s) => [s.value, s]));
@@ -77,7 +77,7 @@ export function OpsNoteReadView({ note }: OpsNoteReadViewProps) {
       {/* 답변 */}
       <div>
         <div className="flex items-center gap-2 mb-2">
-          <span className="inline-flex items-center justify-center w-6 h-6 rounded-md bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 text-sm font-bold flex-shrink-0">
+          <span className="inline-flex items-center justify-center w-6 h-6 rounded-md bg-status-healthy/15 text-status-healthy text-sm font-bold flex-shrink-0">
             A
           </span>
           <span className="text-sm font-semibold text-foreground">답변 / 핵심 요약</span>

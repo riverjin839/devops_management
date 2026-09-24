@@ -56,8 +56,8 @@ const ACTIONS: string[] = [
 function StatusBadge({ status }: { status: string }) {
   const cls =
     status === 'success'
-      ? 'bg-emerald-500/15 text-emerald-700 border-emerald-500/30'
-      : 'bg-rose-500/15 text-rose-700 border-rose-500/30';
+      ? 'bg-status-healthy/15 text-status-healthy border-status-healthy/30'
+      : 'bg-status-critical/15 text-status-critical border-status-critical/30';
   return (
     <span className={`inline-flex items-center px-2 py-0.5 text-sm font-medium border rounded-md ${cls}`}>
       {status}

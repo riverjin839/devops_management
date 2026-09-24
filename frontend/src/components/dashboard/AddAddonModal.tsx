@@ -224,7 +224,7 @@ export function AddAddonModal({ isOpen, onClose, clusterId, editingAddon }: AddA
                   <div key={field.key}>
                     <label className="block text-sm font-medium mb-1">
                       {field.label}
-                      {field.required && <span className="text-red-400 ml-1">*</span>}
+                      {field.required && <span className="text-status-critical ml-1">*</span>}
                     </label>
                     <input
                       type={field.key.includes('token') || field.key.includes('password') ? 'password' : 'text'}

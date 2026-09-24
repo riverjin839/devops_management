@@ -2016,8 +2016,9 @@ def _migrate_installed_apps_to_leaf_paths():
 
     SENTINEL_KEY = "installed_apps_leaf_migration_v2"
 
-    # frontend navConfig.ts 의 GROUPS.paths 와 반드시 일치해야 한다 — 그룹이 추가/변경되면
-    # 여기도 같이 갱신할 것. collab/documents 는 그룹 id 로 설치된 적이 없어(상단바는 예전에
+    # 이 마이그레이션 시점(v2)의 frontend GROUPS id → leaf 스냅샷이다. 옛 그룹 id 로 저장된 값을
+    # 치환하는 용도라 이후 GROUPS 재편(2026-09 P1: cluster→observe/inspect/operate/configure,
+    # server·storage·services→infra)을 따라 바꾸지 않는다 — 키는 옛 id 그대로가 맞다. collab/documents 는 그룹 id 로 설치된 적이 없어(상단바는 예전에
     # 상시노출) 치환 대상이 아니라 아래 WORK_DOMAIN_GRANDFATHER 로 별도 취급한다.
     LEGACY_GROUP_LEAF_PATHS = {
         "cluster": ["/cluster-overview", "/k8s-manage", "/k8s-allocation", "/k9s", "/cluster-trends",

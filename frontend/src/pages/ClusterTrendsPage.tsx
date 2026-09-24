@@ -224,7 +224,7 @@ export function ClusterTrendsPage() {
 
                 {/* 상태/경고 라인 */}
                 {resp?.status === 'offline' && (
-                  <div className="mt-2 flex items-center gap-1.5 text-sm text-amber-600">
+                  <div className="mt-2 flex items-center gap-1.5 text-sm text-status-warning">
                     <AlertTriangle className="w-4 h-4" /> Prometheus offline — {resp.error || '클러스터 관리에서 Prometheus URL 을 설정/활성화하세요.'}
                   </div>
                 )}
@@ -234,7 +234,7 @@ export function ClusterTrendsPage() {
                   </div>
                 )}
                 {resp?.dropped && resp.dropped.length > 0 && (
-                  <div className="mt-2 flex items-center gap-1.5 text-sm text-amber-600">
+                  <div className="mt-2 flex items-center gap-1.5 text-sm text-status-warning">
                     <AlertTriangle className="w-4 h-4" /> 상한({MAX_NODES}) 초과로 {resp.dropped.length}개 노드 제외: {resp.dropped.join(', ')}
                   </div>
                 )}

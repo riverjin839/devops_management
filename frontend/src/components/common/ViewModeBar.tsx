@@ -91,7 +91,7 @@ const HEADER_SWATCHES = [
   { value: 'default', color: 'bg-slate-400',   title: '기본' },
   { value: 'blue',    color: 'bg-blue-400',    title: '파랑' },
   { value: 'indigo',  color: 'bg-indigo-400',  title: '인디고' },
-  { value: 'emerald', color: 'bg-emerald-400', title: '초록' },
+  { value: 'emerald', color: 'bg-status-healthy', title: '초록' },
 ] as const;
 
 // ── Style panel (popover) ──────────────────────────────────────────────────────
@@ -245,7 +245,7 @@ export function ViewModeBar({
                         : style.headerTheme === 'indigo'
                         ? 'bg-indigo-400'
                         : style.headerTheme === 'emerald'
-                        ? 'bg-emerald-400'
+                        ? 'bg-status-healthy'
                         : 'bg-slate-400'
                     }`}
                   />

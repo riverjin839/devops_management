@@ -12,9 +12,9 @@ import { parseUTC } from '@/lib/utils';
 const PAGE_SIZE = 20;
 
 const STATUS_DOT: Record<string, string> = {
-  healthy: 'bg-emerald-500',
-  warning: 'bg-amber-500',
-  critical: 'bg-red-500',
+  healthy: 'bg-status-healthy',
+  warning: 'bg-status-warning',
+  critical: 'bg-status-critical',
   pending: 'bg-zinc-400',
 };
 

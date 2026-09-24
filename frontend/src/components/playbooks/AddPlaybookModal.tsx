@@ -72,7 +72,7 @@ function NewPlaybookFileForm({ onCreated, onCancel }: { onCreated: (id: string) 
         spellCheck={false}
         className={`${inputCls} font-mono text-sm resize-y`}
       />
-      {error && <p className="text-sm text-red-500">{error}</p>}
+      {error && <p className="text-sm text-status-critical">{error}</p>}
       <div className="flex justify-end gap-2">
         <button onClick={onCancel} className="px-3 py-1 text-sm bg-secondary border border-border rounded">취소</button>
         <button
@@ -132,7 +132,7 @@ function NewInventoryForm({
         <input type="checkbox" checked={isDefault} onChange={(e) => setIsDefault(e.target.checked)} />
         이 클러스터의 기본 inventory 로 설정 (기존 default 는 해제됨)
       </label>
-      {error && <p className="text-sm text-red-500">{error}</p>}
+      {error && <p className="text-sm text-status-critical">{error}</p>}
       <div className="flex justify-end gap-2">
         <button onClick={onCancel} className="px-3 py-1 text-sm bg-secondary border border-border rounded">취소</button>
         <button
@@ -185,19 +185,19 @@ function EditPlaybookFileForm({
   };
 
   return (
-    <div className="border border-amber-500/40 rounded-lg p-3 space-y-2 bg-amber-500/5">
+    <div className="border border-status-warning/40 rounded-lg p-3 space-y-2 bg-status-warning/5">
       <div className="flex items-center justify-between">
-        <p className="text-sm font-semibold text-amber-500">Playbook 파일 편집</p>
+        <p className="text-sm font-semibold text-status-warning">Playbook 파일 편집</p>
         <button onClick={onClose} className="p-1 text-muted-foreground hover:text-foreground"><X className="w-3.5 h-3.5" /></button>
       </div>
       <input value={name} onChange={(e) => setName(e.target.value)} className={inputCls} />
       <input value={description} onChange={(e) => setDescription(e.target.value)} placeholder="설명" className={inputCls} />
       <textarea value={content} onChange={(e) => setContent(e.target.value)} rows={10}
         spellCheck={false} className={`${inputCls} font-mono text-sm resize-y`} />
-      {error && <p className="text-sm text-red-500">{error}</p>}
+      {error && <p className="text-sm text-status-critical">{error}</p>}
       <div className="flex justify-between gap-2">
         <button onClick={handleDelete}
-          className="flex items-center gap-1 px-3 py-1 text-sm bg-red-500/10 text-red-500 border border-red-500/30 rounded">
+          className="flex items-center gap-1 px-3 py-1 text-sm bg-status-critical/10 text-status-critical border border-status-critical/30 rounded">
           <Trash2 className="w-3 h-3" /> 삭제
         </button>
         <div className="flex gap-2">
@@ -249,9 +249,9 @@ function EditInventoryForm({
   };
 
   return (
-    <div className="border border-amber-500/40 rounded-lg p-3 space-y-2 bg-amber-500/5">
+    <div className="border border-status-warning/40 rounded-lg p-3 space-y-2 bg-status-warning/5">
       <div className="flex items-center justify-between">
-        <p className="text-sm font-semibold text-amber-500">Inventory 편집</p>
+        <p className="text-sm font-semibold text-status-warning">Inventory 편집</p>
         <button onClick={onClose} className="p-1 text-muted-foreground hover:text-foreground"><X className="w-3.5 h-3.5" /></button>
       </div>
       <input value={name} onChange={(e) => setName(e.target.value)} className={inputCls} />
@@ -262,10 +262,10 @@ function EditInventoryForm({
         <input type="checkbox" checked={isDefault} onChange={(e) => setIsDefault(e.target.checked)} />
         기본 inventory
       </label>
-      {error && <p className="text-sm text-red-500">{error}</p>}
+      {error && <p className="text-sm text-status-critical">{error}</p>}
       <div className="flex justify-between gap-2">
         <button onClick={handleDelete}
-          className="flex items-center gap-1 px-3 py-1 text-sm bg-red-500/10 text-red-500 border border-red-500/30 rounded">
+          className="flex items-center gap-1 px-3 py-1 text-sm bg-status-critical/10 text-status-critical border border-status-critical/30 rounded">
           <Trash2 className="w-3 h-3" /> 삭제
         </button>
         <div className="flex gap-2">

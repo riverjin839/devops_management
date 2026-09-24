@@ -26,15 +26,15 @@ const BPF_PRESETS: { id: string; label: string; value: string }[] = [
 ];
 
 const STATUS_CLS: Record<string, string> = {
-  ok:            'bg-emerald-500/10 text-emerald-400 border-emerald-500/30',
-  error:         'bg-red-500/10 text-red-400 border-red-500/30',
-  timeout:       'bg-amber-500/10 text-amber-400 border-amber-500/30',
-  auth_error:    'bg-red-500/10 text-red-400 border-red-500/30',
-  connect_error: 'bg-red-500/10 text-red-400 border-red-500/30',
+  ok:            'bg-status-healthy/10 text-status-healthy border-status-healthy/30',
+  error:         'bg-status-critical/10 text-status-critical border-status-critical/30',
+  timeout:       'bg-status-warning/10 text-status-warning border-status-warning/30',
+  auth_error:    'bg-status-critical/10 text-status-critical border-status-critical/30',
+  connect_error: 'bg-status-critical/10 text-status-critical border-status-critical/30',
 };
 
 function StatusBadge({ status }: { status: string }) {
-  const cls = STATUS_CLS[status] ?? 'bg-slate-500/10 text-slate-400 border-slate-500/30';
+  const cls = STATUS_CLS[status] ?? 'bg-status-unknown/10 text-status-unknown border-status-unknown/30';
   const Icon = status === 'ok' ? CheckCircle2 : XCircle;
   return (
     <span className={`inline-flex items-center gap-1 text-xs px-1.5 py-0.5 rounded-full border ${cls}`}>
@@ -329,7 +329,7 @@ export function TcpdumpPanel({ clusterId }: Props) {
           {runMut.isPending ? (
             <button
               onClick={runMut.abort}
-              className="flex items-center gap-1.5 px-4 py-1.5 text-sm font-semibold bg-red-500 text-primary-foreground rounded-lg hover:bg-red-600"
+              className="flex items-center gap-1.5 px-4 py-1.5 text-sm font-semibold bg-status-critical text-primary-foreground rounded-lg hover:bg-status-critical"
             >
               <Square className="w-4 h-4 fill-current" />
               중지
@@ -366,9 +366,9 @@ export function TcpdumpPanel({ clusterId }: Props) {
           </div>
 
           {result.error && (
-            <div className="px-3 py-2 flex items-start gap-2 bg-red-500/5 border-b border-border">
-              <AlertTriangle className="w-4 h-4 text-red-400 flex-shrink-0 mt-0.5" />
-              <p className="text-sm text-red-400">{result.error}</p>
+            <div className="px-3 py-2 flex items-start gap-2 bg-status-critical/5 border-b border-border">
+              <AlertTriangle className="w-4 h-4 text-status-critical flex-shrink-0 mt-0.5" />
+              <p className="text-sm text-status-critical">{result.error}</p>
             </div>
           )}
 

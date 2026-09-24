@@ -9,8 +9,8 @@ import { parseUTC } from '@/lib/utils';
 const CATEGORY_COLORS: Record<string, string> = {
   k8s:    'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300',
   cilium: 'bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-300',
-  linux:  'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300',
-  cncf:   'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300',
+  linux:  'bg-status-warning/10 text-status-warning',
+  cncf:   'bg-status-healthy/10 text-status-healthy',
 };
 
 const CATEGORY_LABEL: Record<string, string> = {
@@ -25,8 +25,8 @@ const STATUS_INFO: Record<string, { icon: import('react').ReactNode; label: stri
   pending:     { icon: <Clock className="w-3.5 h-3.5" />, label: '대기',   cls: 'text-muted-foreground' },
   collecting:  { icon: <Loader2 className="w-3.5 h-3.5 animate-spin" />, label: '수집 중', cls: 'text-blue-500' },
   summarizing: { icon: <Loader2 className="w-3.5 h-3.5 animate-spin" />, label: '요약 중', cls: 'text-purple-500' },
-  done:        { icon: <CheckCircle2 className="w-3.5 h-3.5" />, label: '완료',   cls: 'text-green-500' },
-  failed:      { icon: <AlertCircle className="w-3.5 h-3.5" />, label: '실패',   cls: 'text-red-500' },
+  done:        { icon: <CheckCircle2 className="w-3.5 h-3.5" />, label: '완료',   cls: 'text-status-healthy' },
+  failed:      { icon: <AlertCircle className="w-3.5 h-3.5" />, label: '실패',   cls: 'text-status-critical' },
 };
 
 // ── 개별 아이템 카드 ─────────────────────────────────────────────
@@ -114,7 +114,7 @@ function DigestPanel({ digest }: { digest: TrendDigest }) {
           </span>
           <span className="text-sm text-muted-foreground">· {digest.itemCount}건 수집</span>
           {digest.errorMessage && (
-            <span className="text-sm text-red-500 truncate ml-1">{digest.errorMessage}</span>
+            <span className="text-sm text-status-critical truncate ml-1">{digest.errorMessage}</span>
           )}
         </div>
 
@@ -187,9 +187,9 @@ function DigestPanel({ digest }: { digest: TrendDigest }) {
 // ── 소스 관리 패널 ───────────────────────────────────────────────
 
 const SOURCE_STATUS_CLS: Record<string, string> = {
-  ok:    'bg-emerald-500/10 text-emerald-400 border-emerald-500/30',
-  empty: 'bg-slate-500/10 text-slate-400 border-slate-500/30',
-  error: 'bg-red-500/10 text-red-400 border-red-500/30',
+  ok:    'bg-status-healthy/10 text-status-healthy border-status-healthy/30',
+  empty: 'bg-status-unknown/10 text-status-unknown border-status-unknown/30',
+  error: 'bg-status-critical/10 text-status-critical border-status-critical/30',
 };
 
 function formatDateTimeShort(iso?: string | null): string {
@@ -265,7 +265,7 @@ function SourceRow({ s }: { s: TrendSource }) {
           </div>
           <p className="text-sm text-muted-foreground font-mono truncate mt-0.5">{s.url}</p>
           {s.lastMessage && (
-            <p className={`text-xs mt-1 break-all ${s.lastStatus === 'error' ? 'text-red-400' : 'text-muted-foreground'}`}
+            <p className={`text-xs mt-1 break-all ${s.lastStatus === 'error' ? 'text-status-critical' : 'text-muted-foreground'}`}
                title={s.lastMessage}>
               {s.lastMessage}
             </p>
@@ -300,7 +300,7 @@ function SourceRow({ s }: { s: TrendSource }) {
               remove.mutate(s.id);
             }}
             aria-label="소스 삭제"
-            className="p-1.5 hover:bg-red-500/10 rounded-md text-muted-foreground hover:text-red-400">
+            className="p-1.5 hover:bg-status-critical/10 rounded-md text-muted-foreground hover:text-status-critical">
             <Trash2 className="w-3.5 h-3.5" />
           </button>
         </div>
@@ -340,7 +340,7 @@ function AddSourceForm({ onClose }: { onClose: () => void }) {
           className="px-2 py-1.5 text-sm font-mono bg-background border border-border rounded md:col-span-2" />
       </div>
       {create.isError && (
-        <p className="text-sm text-red-400">등록 실패: {(create.error as { response?: { data?: { detail?: string } } })?.response?.data?.detail ?? (create.error as Error).message}</p>
+        <p className="text-sm text-status-critical">등록 실패: {(create.error as { response?: { data?: { detail?: string } } })?.response?.data?.detail ?? (create.error as Error).message}</p>
       )}
       <div className="flex justify-end gap-2">
         <button onClick={onClose}
@@ -376,7 +376,7 @@ function SourcesPanel() {
       <div className="flex items-center justify-between">
         <div className="text-sm text-muted-foreground">
           총 {sources.length}개 · 활성 {sources.filter((s) => s.enabled).length}개
-          {totalErrors > 0 && <span className="ml-2 text-red-400">⚠ 수집 실패 {totalErrors}개</span>}
+          {totalErrors > 0 && <span className="ml-2 text-status-critical">⚠ 수집 실패 {totalErrors}개</span>}
         </div>
         {!adding && (
           <button

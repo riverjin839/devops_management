@@ -303,7 +303,7 @@ export function RolePanel({
             )}
 
             {needsClusterRoleBinding && (
-              <p className="text-[11.5px] leading-relaxed rounded-md border border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-400 px-3 py-2">
+              <p className="text-[11.5px] leading-relaxed rounded-md border border-status-warning/30 bg-status-warning/10 text-status-warning px-3 py-2">
                 nodes 같은 클러스터 스코프(네임스페이스 없는) 리소스가 규칙에 있다. 이 롤은{' '}
                 {referencingBindings.length === 0 ? '아직 어떤 바인딩에도 연결돼 있지 않다' : 'RoleBinding 으로만 연결돼 있다'}
                 — RoleBinding 으로는 이런 리소스에 권한이 발동하지 않는다. 저장 후 <b>Binding 탭</b>에서

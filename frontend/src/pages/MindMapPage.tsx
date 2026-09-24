@@ -1254,7 +1254,7 @@ export function MindMapPage() {
                     </button>
                     <button
                       onClick={(e) => { e.stopPropagation(); handleDeleteMap(m.id); }}
-                      className="p-1 hover:bg-red-500/10 rounded-md text-muted-foreground hover:text-red-500"
+                      className="p-1 hover:bg-status-critical/10 rounded-md text-muted-foreground hover:text-status-critical"
                       title="삭제"
                       aria-label="삭제"
                     >

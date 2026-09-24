@@ -15,8 +15,8 @@ import type {
 import { formatApiError, parseUTC } from '@/lib/utils';
 
 const SEVERITY_STYLE: Record<string, { icon: typeof AlertTriangle; bg: string; border: string; text: string; badge: string }> = {
-  critical: { icon: AlertTriangle, bg: 'bg-red-500/10',    border: 'border-red-500/40',    text: 'text-red-400',    badge: 'bg-red-500/15 text-red-400 border-red-500/30' },
-  warning:  { icon: AlertTriangle, bg: 'bg-amber-500/10',  border: 'border-amber-500/40',  text: 'text-amber-400',  badge: 'bg-amber-500/15 text-amber-400 border-amber-500/30' },
+  critical: { icon: AlertTriangle, bg: 'bg-status-critical/10',    border: 'border-status-critical/40',    text: 'text-status-critical',    badge: 'bg-status-critical/15 text-status-critical border-status-critical/30' },
+  warning:  { icon: AlertTriangle, bg: 'bg-status-warning/10',  border: 'border-status-warning/40',  text: 'text-status-warning',  badge: 'bg-status-warning/15 text-status-warning border-status-warning/30' },
   info:     { icon: Info,          bg: 'bg-blue-500/10',   border: 'border-blue-500/40',   text: 'text-blue-400',   badge: 'bg-blue-500/15 text-blue-400 border-blue-500/30' },
 };
 
@@ -28,7 +28,7 @@ const BACKEND_LABEL: Record<string, string> = {
 
 function ConfidenceBar({ value }: { value: number }) {
   const pct = Math.round(value * 100);
-  const color = pct >= 80 ? 'bg-emerald-500' : pct >= 50 ? 'bg-amber-500' : 'bg-red-500';
+  const color = pct >= 80 ? 'bg-status-healthy' : pct >= 50 ? 'bg-status-warning' : 'bg-status-critical';
   return (
     <div className="flex items-center gap-2">
       <div className="flex-1 bg-secondary rounded-full h-1.5">
@@ -105,7 +105,7 @@ function ResultPanel({ result }: { result: IncidentAnalysisResult }) {
 function EventRow({ event, index }: { event: KubeEvent; index: number }) {
   return (
     <div className={`grid grid-cols-[80px_70px_60px_1fr] gap-2 py-1.5 px-3 text-sm ${index % 2 === 0 ? 'bg-secondary/20' : ''}`}>
-      <span className={`font-medium truncate ${event.type === 'Warning' ? 'text-amber-400' : 'text-muted-foreground'}`}>{event.type ?? 'Normal'}</span>
+      <span className={`font-medium truncate ${event.type === 'Warning' ? 'text-status-warning' : 'text-muted-foreground'}`}>{event.type ?? 'Normal'}</span>
       <span className="font-mono text-muted-foreground truncate">{event.reason}</span>
       <span className="text-muted-foreground text-center">x{event.count}</span>
       <span className="text-foreground truncate">{event.message}</span>
@@ -317,8 +317,8 @@ export function IncidentAnalysisPage() {
           {health && (
             <div className="flex items-center gap-2 text-sm">
               {health.available
-                ? <CheckCircle className="w-4 h-4 text-emerald-400" />
-                : <AlertTriangle className="w-4 h-4 text-amber-400" />}
+                ? <CheckCircle className="w-4 h-4 text-status-healthy" />
+                : <AlertTriangle className="w-4 h-4 text-status-warning" />}
               <span className="text-muted-foreground">
                 {BACKEND_LABEL[health.backend] ?? health.backend}
                 {health.available ? ' 연결됨' : ' 오프라인'}
@@ -347,7 +347,7 @@ export function IncidentAnalysisPage() {
 
           {/* 이슈만 + ns 미선택일 때 — glob 패턴으로 스캔 범위 좁히기 */}
           {onlyIssues && !namespace && (
-            <div className="rounded-lg border border-amber-500/30 bg-amber-500/5 p-3 space-y-2">
+            <div className="rounded-lg border border-status-warning/30 bg-status-warning/5 p-3 space-y-2">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
                 <div>
                   <label htmlFor={f('nsPattern')} className={lc}>
@@ -428,7 +428,7 @@ export function IncidentAnalysisPage() {
                 emptyText="namespace 없음"
               />
               {nsQ.isError && (
-                <p className="text-xs text-red-400 mt-1">
+                <p className="text-xs text-status-critical mt-1">
                   {formatApiError(nsQ.error)}
                 </p>
               )}
@@ -459,7 +459,7 @@ export function IncidentAnalysisPage() {
                 className="font-mono text-sm"
               />
               {podsQ.isError && (
-                <p className="text-xs text-red-400 mt-1">
+                <p className="text-xs text-status-critical mt-1">
                   {formatApiError(podsQ.error)}
                 </p>
               )}
@@ -477,7 +477,7 @@ export function IncidentAnalysisPage() {
                   {selectedPod.phase} · ready {selectedPod.ready} · restart {selectedPod.restartCount}
                   {selectedPod.node && ` · node ${selectedPod.node}`}
                   {selectedPod.issueReason && (
-                    <span className="text-amber-500 ml-1">· {selectedPod.issueReason}</span>
+                    <span className="text-status-warning ml-1">· {selectedPod.issueReason}</span>
                   )}
                 </p>
               </div>
@@ -495,18 +495,18 @@ export function IncidentAnalysisPage() {
           )}
 
           {fetchCtx.isError && (
-            <p className="text-xs text-red-400">
+            <p className="text-xs text-status-critical">
               자동 수집 실패: {formatApiError(fetchCtx.error)}
             </p>
           )}
           {autofilledFor && !autofillStale && fetchCtx.isSuccess && (
-            <p className="text-xs text-emerald-500 flex items-center gap-1">
+            <p className="text-xs text-status-healthy flex items-center gap-1">
               <CheckCircle className="w-3 h-3" />
               자동 수집 완료 — events {events.length}건, logs {currentLogs.length} 자.
             </p>
           )}
           {autofillStale && (
-            <p className="text-xs text-amber-500 flex items-center gap-1">
+            <p className="text-xs text-status-warning flex items-center gap-1">
               <RefreshCw className="w-3 h-3" />
               선택이 변경되었습니다. 다시 자동 채우기를 누르세요.
             </p>
@@ -589,7 +589,7 @@ export function IncidentAnalysisPage() {
                 {streaming ? (
                   <button
                     onClick={() => setStreaming(false)}
-                    className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-semibold bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/30 rounded-md"
+                    className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-semibold bg-status-critical/10 hover:bg-status-critical/20 text-status-critical border border-status-critical/30 rounded-md"
                     title="실시간 갱신 중지"
                   >
                     <Square className="w-3 h-3 fill-current" />
@@ -612,8 +612,8 @@ export function IncidentAnalysisPage() {
             {streaming && (
               <div className="flex items-center gap-2 text-xs text-muted-foreground">
                 <span className="relative flex w-2 h-2">
-                  <span className="absolute inline-flex w-full h-full rounded-full bg-emerald-500 opacity-60 animate-ping" />
-                  <span className="relative inline-flex w-2 h-2 rounded-full bg-emerald-500" />
+                  <span className="absolute inline-flex w-full h-full rounded-full bg-status-healthy opacity-60 animate-ping" />
+                  <span className="relative inline-flex w-2 h-2 rounded-full bg-status-healthy" />
                 </span>
                 <span>LIVE · 매 {streamIntervalSec}초 갱신</span>
                 {lastStreamAt && (
@@ -690,7 +690,7 @@ export function IncidentAnalysisPage() {
             {response?.result ? (
               <ResultPanel result={response.result} />
             ) : response?.error ? (
-              <div className="rounded-xl border border-red-500/40 bg-red-500/10 p-5 text-sm text-red-400">
+              <div className="rounded-xl border border-status-critical/40 bg-status-critical/10 p-5 text-sm text-status-critical">
                 분석 실패: {response.error}
               </div>
             ) : (

@@ -16,9 +16,9 @@ interface PlaybookListRowProps {
 }
 
 const STATUS_CONFIG: Record<string, { dot: string; label: string; text: string }> = {
-  healthy: { dot: 'bg-emerald-500', label: 'OK', text: 'text-emerald-600 dark:text-emerald-400' },
-  warning: { dot: 'bg-amber-500', label: 'Changed', text: 'text-amber-600 dark:text-amber-400' },
-  critical: { dot: 'bg-red-500', label: 'Failed', text: 'text-red-600 dark:text-red-400' },
+  healthy: { dot: 'bg-status-healthy', label: 'OK', text: 'text-status-healthy' },
+  warning: { dot: 'bg-status-warning', label: 'Changed', text: 'text-status-warning' },
+  critical: { dot: 'bg-status-critical', label: 'Failed', text: 'text-status-critical' },
   running: { dot: 'bg-blue-500', label: 'Running', text: 'text-blue-600 dark:text-blue-400' },
   unknown: { dot: 'bg-slate-400', label: 'Not Run', text: 'text-muted-foreground' },
 };
@@ -97,9 +97,9 @@ export function PlaybookListRow({
       {/* Stats (compact) */}
       {totals ? (
         <div className="hidden md:flex items-center gap-2 text-xs flex-shrink-0 tabular-nums">
-          <Stat label="OK"   value={totals.ok}          color="text-emerald-500" />
-          <Stat label="Chg"  value={totals.changed}     color="text-amber-500" />
-          <Stat label="Fail" value={totals.failures}    color="text-red-500" />
+          <Stat label="OK"   value={totals.ok}          color="text-status-healthy" />
+          <Stat label="Chg"  value={totals.changed}     color="text-status-warning" />
+          <Stat label="Fail" value={totals.failures}    color="text-status-critical" />
           <Stat label="Unr"  value={totals.unreachable} color="text-orange-500" />
           <Stat label="Skip" value={totals.skipped}     color="text-slate-400" />
         </div>
@@ -159,7 +159,7 @@ export function PlaybookListRow({
         <button
           onClick={onDelete}
           disabled={isRunning}
-          className="p-1.5 rounded-md hover:bg-red-500/10 text-red-500 transition-colors disabled:opacity-50"
+          className="p-1.5 rounded-md hover:bg-status-critical/10 text-status-critical transition-colors disabled:opacity-50"
           title="Delete playbook"
           aria-label="삭제"
         >

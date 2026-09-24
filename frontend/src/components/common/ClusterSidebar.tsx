@@ -66,9 +66,9 @@ const STATUS_ICON: Record<Status, React.ComponentType<{ className?: string }>> =
 };
 
 const STATUS_DOT: Record<Status, string> = {
-  healthy:  'bg-emerald-500',
-  warning:  'bg-amber-500',
-  critical: 'bg-red-500',
+  healthy:  'bg-status-healthy',
+  warning:  'bg-status-warning',
+  critical: 'bg-status-critical',
   pending:  'bg-slate-400',
 };
 

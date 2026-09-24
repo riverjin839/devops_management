@@ -150,7 +150,7 @@ export function EventsStream({ clusterId, selectedNs, onSelectedNsChange }: Prop
     <div className="space-y-3">
       <div className="flex items-center gap-2 flex-wrap">
         {streaming ? (
-          <button onClick={stop} className="inline-flex items-center gap-1.5 rounded-xl bg-red-500/10 text-red-600 border border-red-500/30 px-3 py-1.5 text-sm font-medium">
+          <button onClick={stop} className="inline-flex items-center gap-1.5 rounded-xl bg-status-critical/10 text-status-critical border border-status-critical/30 px-3 py-1.5 text-sm font-medium">
             <Square className="w-3.5 h-3.5" /> 중지
           </button>
         ) : (
@@ -164,7 +164,7 @@ export function EventsStream({ clusterId, selectedNs, onSelectedNsChange }: Prop
         <div className="inline-flex rounded-xl border border-border overflow-hidden">
           {(['all', 'Normal', 'Warning'] as const).map((t) => (
             <button key={t} onClick={() => setTypeFilter(t)}
-              className={`px-2.5 py-1.5 text-sm font-medium ${typeFilter === t ? (t === 'Warning' ? 'bg-amber-500/15 text-amber-600' : 'bg-primary text-primary-foreground') : 'bg-card text-muted-foreground hover:bg-secondary/60'}`}>
+              className={`px-2.5 py-1.5 text-sm font-medium ${typeFilter === t ? (t === 'Warning' ? 'bg-status-warning/15 text-status-warning' : 'bg-primary text-primary-foreground') : 'bg-card text-muted-foreground hover:bg-secondary/60'}`}>
               {t === 'all' ? '전체' : t}
             </button>
           ))}
@@ -177,7 +177,7 @@ export function EventsStream({ clusterId, selectedNs, onSelectedNsChange }: Prop
         </div>
 
         <span className="text-sm text-muted-foreground ml-auto">{filtered.length} / {events.length}건</span>
-        {err && <span className="text-sm text-red-500">· {err}</span>}
+        {err && <span className="text-sm text-status-critical">· {err}</span>}
       </div>
 
       <div className="rounded-xl border border-border overflow-hidden">
@@ -194,7 +194,7 @@ export function EventsStream({ clusterId, selectedNs, onSelectedNsChange }: Prop
             data={filtered}
             itemContent={(_i, e) => (
               <div className={`grid ${COLS} gap-2 px-3 py-1.5 text-sm border-b border-border/40 items-center`}>
-                <span className={e.type === 'Warning' ? 'text-amber-600 font-medium' : 'text-muted-foreground'}>{e.type ?? '-'}</span>
+                <span className={e.type === 'Warning' ? 'text-status-warning font-medium' : 'text-muted-foreground'}>{e.type ?? '-'}</span>
                 <span className="truncate text-muted-foreground">{e.namespace ?? '-'}</span>
                 <span className="truncate font-medium" title={e.reason ?? ''}>{e.reason ?? '-'}</span>
                 <span className="truncate" title={e.message ?? ''}>{e.message}</span>

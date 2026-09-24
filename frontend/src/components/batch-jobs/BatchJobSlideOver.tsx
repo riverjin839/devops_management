@@ -106,14 +106,14 @@ export function BatchJobSlideOver({ job, onClose, onDelete, overlayMode = false 
             <KeyRound className="w-3.5 h-3.5" />
             자격증명
             {Boolean(job.cron) && !job.hasSavedPassword && !job.hasSavedPrivateKey && (
-              <span className="ml-0.5 inline-block w-1.5 h-1.5 rounded-full bg-amber-500" aria-label="자격증명 필요" />
+              <span className="ml-0.5 inline-block w-1.5 h-1.5 rounded-full bg-status-warning" aria-label="자격증명 필요" />
             )}
           </button>
         )}
         <button
           type="button"
           onClick={() => onDelete(job)}
-          className="inline-flex items-center gap-1.5 px-2.5 py-1.5 text-sm bg-secondary hover:bg-red-500/10 hover:text-red-500 border border-border rounded-xl"
+          className="inline-flex items-center gap-1.5 px-2.5 py-1.5 text-sm bg-secondary hover:bg-status-critical/10 hover:text-status-critical border border-border rounded-xl"
         >
           <Trash2 className="w-3.5 h-3.5" />
           삭제

@@ -14,9 +14,9 @@ import { GuideForm, GuidePageView } from '@/components/work-guides';
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 const STATUS_CFG: Record<string, { label: string; icon: React.ReactNode; cls: string }> = {
-  draft:    { label: '초안', icon: <FileText className="w-3 h-3" />,    cls: 'bg-slate-500/10 text-slate-400 border-slate-500/30' },
-  active:   { label: '활성', icon: <CheckCircle className="w-3 h-3" />, cls: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30' },
-  archived: { label: '보관', icon: <Archive className="w-3 h-3" />,     cls: 'bg-zinc-500/10 text-zinc-400 border-zinc-500/30' },
+  draft:    { label: '초안', icon: <FileText className="w-3 h-3" />,    cls: 'bg-status-unknown/10 text-status-unknown border-status-unknown/30' },
+  active:   { label: '활성', icon: <CheckCircle className="w-3 h-3" />, cls: 'bg-status-healthy/10 text-status-healthy border-status-healthy/30' },
+  archived: { label: '보관', icon: <Archive className="w-3 h-3" />,     cls: 'bg-status-unknown/10 text-status-unknown border-status-unknown/30' },
 };
 
 const REF_TYPE = 'work_guide';
@@ -258,7 +258,7 @@ function AddToWorkflowModal({ guide, onClose }: AddToWorkflowModalProps) {
         <span className="font-medium text-foreground">{guide.title}</span>{' '}가이드를 워크플로 노드로 연결합니다.
       </p>
       {done ? (
-        <div className="flex items-center gap-2 text-sm text-emerald-500 py-2">
+        <div className="flex items-center gap-2 text-sm text-status-healthy py-2">
           <CheckCircle className="w-4 h-4" /> 워크플로에 추가되었습니다!
         </div>
       ) : (

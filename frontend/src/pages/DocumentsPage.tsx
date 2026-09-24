@@ -18,7 +18,7 @@ import type { GuideSearchItem, WorkGuide } from '@/types';
 const CATEGORIES = ['배포', '트러블슈팅', '모니터링', '보안', '기타'];
 const STATUS_CFG: Record<string, { label: string; cls: string }> = {
   draft: { label: 'draft', cls: 'bg-secondary text-muted-foreground' },
-  active: { label: 'active', cls: 'bg-emerald-500/10 text-emerald-500' },
+  active: { label: 'active', cls: 'bg-status-healthy/10 text-status-healthy' },
   archived: { label: 'archived', cls: 'bg-secondary text-muted-foreground line-through' },
 };
 
@@ -148,11 +148,11 @@ export function DocumentsPage() {
           <button
             key={t.label} type="button" onClick={t.onClick}
             className={`text-left rounded-md border bg-card px-4 py-3 hover:bg-secondary/50 transition-colors ${
-              'attention' in t && t.attention ? 'border-amber-500/60' : 'border-border'
+              'attention' in t && t.attention ? 'border-status-warning/60' : 'border-border'
             }`}
           >
             <div className="text-[11px] font-semibold tracking-wide text-muted-foreground">{t.label}</div>
-            <div className={`text-xl font-bold tabular-nums ${'attention' in t && t.attention ? 'text-amber-500' : ''}`}>{t.value}</div>
+            <div className={`text-xl font-bold tabular-nums ${'attention' in t && t.attention ? 'text-status-warning' : ''}`}>{t.value}</div>
           </button>
         ))}
       </div>

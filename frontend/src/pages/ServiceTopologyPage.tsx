@@ -247,18 +247,18 @@ export function ServiceTopologyPage() {
             {/* 상태/경고 라인 */}
             <div className="flex flex-wrap items-center gap-2 mt-2 text-xs">
               {graph?.metricsStatus === 'offline' && (
-                <span className="inline-flex items-center gap-1 text-amber-600 dark:text-amber-400">
+                <span className="inline-flex items-center gap-1 text-status-warning">
                   <Info className="w-3 h-3" /> Prometheus 오프라인 — usage 미표시(requests/limits 만)
                 </span>
               )}
               {graph?.truncated && (
-                <span className="inline-flex items-center gap-1 text-amber-600 dark:text-amber-400">
+                <span className="inline-flex items-center gap-1 text-status-warning">
                   <AlertTriangle className="w-3 h-3" /> 노드 수 상한 초과(truncated)
                 </span>
               )}
               {isCluster && clusterData?.summaryRecommended && clusterMode === 'detail' && (
                 <button onClick={() => { setClusterMode('summary'); setSelectedId(null); }}
-                  className="inline-flex items-center gap-1 text-amber-600 dark:text-amber-400 underline">
+                  className="inline-flex items-center gap-1 text-status-warning underline">
                   <AlertTriangle className="w-3 h-3" /> 노드가 많아 요약 보기 권장 — 전환
                 </button>
               )}
@@ -312,7 +312,7 @@ export function ServiceTopologyPage() {
               ) : activeQuery.isError ? (
                 <div className="absolute inset-0 flex items-center justify-center text-center px-6">
                   <div>
-                    <AlertTriangle className="w-7 h-7 text-amber-500 mx-auto mb-2" />
+                    <AlertTriangle className="w-7 h-7 text-status-warning mx-auto mb-2" />
                     <p className="text-sm text-muted-foreground">{formatApiError(activeQuery.error)}</p>
                   </div>
                 </div>

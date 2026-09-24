@@ -4,7 +4,7 @@ import {
   CalendarCheck2, Link2, Tags, Calculator, GitFork, BookMarked, Layers, Boxes,
   Map, BarChart3, Network, Zap, Route, Share2, Rss, Users, GitCommit, Terminal, Database, Cpu, HardDrive,
   ClipboardCheck, ListTree, Waves, TerminalSquare, Library, Home, Workflow,
-  ShieldCheck, Activity, Package, GitBranch, ScrollText, Rocket, ShipWheel, Gauge, Bell, BellRing, Dog,
+  ShieldCheck, Activity, GitBranch, ScrollText, Rocket, ShipWheel, Gauge, Bell, BellRing, Dog,
   TrendingUp, FileSpreadsheet, Palmtree, FileText, FileCode2, LayoutGrid, KeyRound,
 } from 'lucide-react';
 
@@ -37,11 +37,11 @@ export const NAV_MAP: Record<string, { defaultLabel: string; icon: ComponentType
   '/cluster-manage':     { defaultLabel: '클러스터 관리',  icon: Server },
   '/versions':           { defaultLabel: '버전 / 설정',     icon: GitCommit },
   '/bulk-exec':          { defaultLabel: '노드 일괄 실행', icon: Terminal },
-  '/node-ssh':           { defaultLabel: '노드 SSH 터미널', icon: TerminalSquare, iconColor: 'text-sky-500' },
+  '/node-ssh':           { defaultLabel: '노드 SSH 터미널', icon: TerminalSquare, iconColor: 'text-status-info' },
   '/etcdctl':            { defaultLabel: 'etcdctl 콘솔',   icon: Database },
   '/batch-jobs':         { defaultLabel: '배치잡',          icon: ListTree },
   '/mc':                 { defaultLabel: 'mc 클라이언트',  icon: HardDrive },
-  '/isilon-nfs':         { defaultLabel: 'NFS 모니터링',   icon: HardDrive, iconColor: 'text-sky-500' },
+  '/isilon-nfs':         { defaultLabel: 'NFS 모니터링',   icon: HardDrive, iconColor: 'text-status-info' },
   '/kernel-params':      { defaultLabel: '커널 파라미터',  icon: Cpu },
   '/infra-topology':     { defaultLabel: '인프라 토폴로지', icon: Network },
   '/node-specs':         { defaultLabel: '노드 서버스펙',  icon: ClipboardCheck },
@@ -51,8 +51,8 @@ export const NAV_MAP: Record<string, { defaultLabel: string; icon: ComponentType
   '/node-images':        { defaultLabel: 'K8s 노드 이미지', icon: Boxes },
   '/cidr':               { defaultLabel: 'CIDR 계산기',    icon: Calculator },
   '/k8s-events':         { defaultLabel: 'K8s 실시간 이벤트', icon: Bell, iconColor: 'text-orange-500' },
-  '/observability':      { defaultLabel: '관측 지표',       icon: Activity, iconColor: 'text-emerald-500' },
-  '/alerts':             { defaultLabel: '알람 인박스',      icon: BellRing, iconColor: 'text-red-500' },
+  '/observability':      { defaultLabel: '관측 지표',       icon: Activity, iconColor: 'text-status-healthy' },
+  '/alerts':             { defaultLabel: '알람 인박스',      icon: BellRing, iconColor: 'text-status-critical' },
   '/incident-analysis':  { defaultLabel: 'K8s 로그 (분석·실시간)', icon: Zap },
   '/packet-flow':        { defaultLabel: '패킷 흐름 분석', icon: Route },
   '/cilium-trace':       { defaultLabel: 'Cilium BPF 추적', icon: Waves },
@@ -75,20 +75,46 @@ export const NAV_MAP: Record<string, { defaultLabel: string; icon: ComponentType
 };
 
 // 사이드바 레일에 표시되는 그룹들
-export type GroupId = 'cluster' | 'server' | 'network' | 'storage' | 'services' | 'devops' | 'collab' | 'documents' | 'system';
+export type GroupId =
+  | 'observe' | 'inspect' | 'operate' | 'configure'
+  | 'infra' | 'network' | 'devops' | 'collab' | 'documents' | 'system';
 /**
  * `domain` — 예전엔 홈 모드(work/platform)가 이 값으로 사이드바 그룹 자체를 게이팅했다
  * (D-054). 지금은 게이팅에 쓰지 않고 **배치 위치 결정**에만 쓴다: `platform` → 좌측
  * 사이드바 레일, `work` → 전역 상단바(AppTopBar), `system` → 레일 하단 개인 존(admin 전용).
  * 모든 그룹이 항상 어딘가에 보이므로 반대 도메인 화면이 "사라지는" 일이 없다.
  */
-export const GROUPS: Array<{ id: GroupId; label: string; icon: ComponentType<{ className?: string }>; paths: string[]; domain: 'work' | 'platform' | 'system' }> = [
-  { id: 'cluster',   label: '클러스터',   icon: Layers,    paths: ['/cluster-overview', '/k8s-manage', '/k8s-allocation', '/k9s', '/cluster-trends', '/node-labels', '/node-images', '/k8s-rbac', '/clusters', '/ops-checks', '/observability', '/alerts', '/k8s-events', '/incident-analysis', '/daily-check/review', '/daily-check/settings', '/pod-bottleneck', '/versions', '/bulk-exec', '/node-ssh', '/etcdctl', '/cluster-manage', '/k8s-logs'], domain: 'platform' },
-  { id: 'server',    label: '서버/인프라', icon: Server,    paths: ['/node-specs', '/kernel-params', '/infra-topology'], domain: 'platform' },
+export interface NavGroup {
+  id: GroupId;
+  label: string;
+  icon: ComponentType<{ className?: string }>;
+  paths: string[];
+  domain: 'work' | 'platform' | 'system';
+  /** 카탈로그(앱 추가)·설정 화면에 섹션 설명으로 보이는 한 줄. */
+  description?: string;
+  /** `danger` — 클러스터/노드에 명령을 보내는 화면 묶음. 카탈로그에서 경고 톤으로 구분한다. */
+  tone?: 'danger';
+}
+
+/**
+ * P1 메뉴 재편(2026-09) — 23개가 몰려 있던 '클러스터' 그룹을 하는 일 기준으로 나눴다.
+ * 관측(읽기) / 점검(확인·기록) / 운영 조작(명령 전송, danger) / 구성(등록·자원·권한).
+ * 서버/인프라·스토리지·서비스/앱(1~3개짜리)은 '인프라' 하나로 합쳤다.
+ * 설치 단위는 leaf path 라 그룹 id 를 바꿔도 사용자가 설치해 둔 레일 아이콘은 그대로다.
+ */
+export const GROUPS: NavGroup[] = [
+  { id: 'observe',   label: '클러스터 · 관측',     icon: Activity,    description: '상태를 본다 — 읽기 전용', domain: 'platform',
+    paths: ['/cluster-overview', '/cluster-trends', '/observability', '/alerts', '/k8s-events', '/k8s-logs', '/incident-analysis'] },
+  { id: 'inspect',   label: '클러스터 · 점검',     icon: ShieldCheck, description: '상태를 확인하고 기록한다', domain: 'platform',
+    paths: ['/ops-checks', '/daily-check/review', '/daily-check/settings', '/pod-bottleneck', '/versions'] },
+  { id: 'operate',   label: '클러스터 · 운영 조작', icon: Terminal,    description: '클러스터·노드에 명령을 보낸다 — 실행 전 대상을 확인할 것', domain: 'platform', tone: 'danger',
+    paths: ['/k8s-manage', '/k9s', '/bulk-exec', '/node-ssh', '/etcdctl'] },
+  { id: 'configure', label: '클러스터 · 구성',     icon: Layers,      description: '클러스터 등록·자원·권한을 관리한다', domain: 'platform',
+    paths: ['/clusters', '/cluster-manage', '/k8s-allocation', '/k8s-rbac', '/node-labels', '/node-images'] },
+  // 서버/인프라(3) + 스토리지(2) + 서비스/앱(1) 통합. /coroot 는 COROOT APM 통합 제거로 없는 라우트 — 재추가하지 않음.
+  { id: 'infra',     label: '인프라',     icon: Server,    domain: 'platform',
+    paths: ['/node-specs', '/kernel-params', '/infra-topology', '/mc', '/isilon-nfs', '/lake-services'] },
   { id: 'network',   label: '네트워크',   icon: Network,   paths: ['/cilium-trace', '/service-topology', '/service-architecture', '/architecture', '/packet-flow', '/cidr', '/links'], domain: 'platform' },
-  { id: 'storage',   label: '스토리지',   icon: Database,  paths: ['/mc', '/isilon-nfs'], domain: 'platform' },
-  // /coroot 는 COROOT APM 통합 전체 제거로 더 이상 존재하지 않는 라우트 — 재추가하지 않음.
-  { id: 'services',  label: '서비스/앱',  icon: Package,   paths: ['/lake-services'], domain: 'platform' },
   // '/batch-jobs' 는 사이드바 진입점에서 뺐다 — 홈 화면 "플랫폼 현황" 탭의 서브탭으로
   // 병합됐다(NAV_MAP 항목은 접근 제어/라벨 커스터마이징/Island 패널을 위해 유지).
   { id: 'devops',    label: 'DevOps',     icon: GitBranch, paths: ['/playbooks', '/commands', '/scripts'], domain: 'platform' },
