@@ -859,6 +859,80 @@
     --surface-container-highest: 210 12% 88%;
   }
 
+  /* ── Whanki 창 — 김환기의 추상화 〈창〉(서명 "whanki")에서 추출한 팔레트: 청자빛 회녹색 바탕 · 프러시안 블루 ·
+     진홍 · 황토 노랑 · 올리브 · 먹빛 녹흑. 그림의 원색 셋을 의미색에 그대로 대응시켰다.
+     - 프러시안 블루 = primary(버튼 글자 흰색 5.9:1), 링크·선택 글자는 한 단계 짙게(5.5:1).
+     - 진홍 = critical/destructive, 황토 = warning, 올리브 = healthy — 블루는 primary·info 에만 쓴다.
+     - 사이드바 = 그림 속 먹빛 녹흑, 활성 표시는 밝은 블루.
+     - 자체 색 고정 바탕(standalone) — 강조색(data-accent) 은 적용되지 않는다. */
+  html.whanki {
+    --background: 170 10% 90%;
+    --foreground: 168 25% 10%;
+    --card: 165 14% 97%;
+    --card-foreground: 168 25% 10%;
+    --popover: 165 14% 97%;
+    --popover-foreground: 168 25% 10%;
+    --primary: 203 55% 36%;
+    --primary-foreground: 165 20% 98%;
+    --primary-text: 203 60% 31%;
+    --secondary: 170 10% 86%;
+    --secondary-foreground: 168 25% 10%;
+    --muted: 170 10% 88%;
+    --muted-foreground: 175 8% 33%;
+    --accent: 203 40% 89%;
+    --accent-foreground: 168 25% 10%;
+    --destructive: 348 62% 42%;
+    --destructive-foreground: 165 20% 98%;
+    --border: 170 8% 78%;
+    --input: 170 8% 47%;
+    --ring: 203 55% 36%;
+    --radius: 0.5rem;
+    --card-shadow: 0 0 #0000;
+
+    --sidebar: 165 22% 12%;
+    --sidebar-foreground: 165 12% 92%;
+    --sidebar-muted-foreground: 165 8% 70%;
+    --sidebar-accent: 165 18% 21%;
+    --sidebar-accent-foreground: 0 0% 100%;
+    --sidebar-border: 165 22% 9%;
+    --sidebar-primary: 203 55% 68%;
+
+    --status-healthy: 85 30% 40%;
+    --status-healthy-bg: 85 25% 88%;
+    --status-warning: 44 70% 50%;
+    --status-warning-bg: 44 60% 87%;
+    --status-critical: 348 60% 48%;
+    --status-critical-bg: 348 50% 92%;
+    --status-unknown: 170 5% 52%;
+    --status-unknown-bg: 170 6% 87%;
+    --status-pending: 170 5% 52%;
+    --status-pending-bg: 170 6% 87%;
+    --status-info: 203 45% 52%;
+    --status-info-bg: 203 40% 90%;
+    --status-neutral: 170 5% 52%;
+    --status-neutral-bg: 170 6% 87%;
+    --status-healthy-text: 85 40% 24%;
+    --status-warning-text: 38 75% 26%;
+    --status-critical-text: 348 62% 37%;
+    --status-info-text: 203 55% 29%;
+    --status-unknown-text: 170 8% 31%;
+
+    --chart-1: 203 55% 40%;
+    --chart-2: 44 70% 52%;
+    --chart-3: 348 58% 48%;
+    --chart-4: 35 22% 58%;
+    --chart-5: 85 28% 42%;
+    --chart-6: 210 50% 60%;
+    --chart-7: 165 20% 22%;
+    --chart-8: 170 5% 58%;
+
+    --surface-container-lowest: 165 14% 97%;
+    --surface-container-low: 168 12% 94%;
+    --surface-container: 170 10% 90%;
+    --surface-container-high: 170 10% 88%;
+    --surface-container-highest: 170 10% 86%;
+  }
+
   /* ── 강조색(accent) — 라이트·다크 바탕 위에 <html data-accent="…"> 로 얹는다 (P2) ──
      버튼·링크·선택 탭·활성 메뉴·포커스 링만 바뀌고, 배경·상태색은 바탕 테마가 정한다.
      blue 는 기본값이라 블록이 없다. 값은 버튼 글자·링크 모두 4.5:1 이상으로 계산했다.

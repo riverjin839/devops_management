@@ -18,6 +18,7 @@ export const THEME_SWATCH: Partial<Record<Theme, { bg: string; primary: string; 
   relief:          { bg: '36 16% 91%',  primary: '228 16% 40%',  secondary: '34 14% 87%' },
   harlequin:       { bg: '30 2% 88%',   primary: '211 45% 62%',  secondary: '30 2% 82%' },
   ozenfant:        { bg: '210 12% 92%', primary: '210 38% 42%',  secondary: '210 12% 88%' },
+  whanki:          { bg: '170 10% 90%', primary: '203 55% 36%',  secondary: '170 10% 86%' },
 };
 
 /** 강조색 대표 색(라이트 바탕 기준 primary) — index.css 의 `html.light[data-accent]` 블록과 같은 값. */
