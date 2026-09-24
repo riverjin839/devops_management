@@ -351,6 +351,588 @@
     --surface-container-highest: 0 0% 91%;
   }
 
+  /* ── Umber — 입체미래주의풍 유화에서 추출한 팔레트 (움버 바탕 · 오커 강조 · 더스티 핑크 차트) ──
+     그림 속 면적 비율을 UI 역할 비율로 옮겼다: 넓은 움버·토프 = 바탕·면, 좁은 오커·핑크 = 강조.
+     - 오커 = primary. 기존 앰버 경고와 겹치므로 경고는 주황(hue 22~24)으로 옮기고 배지 형태로만 쓴다.
+     - 핑크는 차트·장식 전용(장애 빨강과 혼동 방지) — 버튼·배지에 쓰지 않는다.
+     - 자체 색 고정 바탕(컴포트·고대비와 같은 standalone) — 강조색(data-accent) 은 적용되지 않는다.
+     버튼·링크·상태 글자·보조 글자 모두 4.5:1 이상으로 계산했다. */
+  html.umber {
+    --background: 8 14% 11%;
+    --foreground: 40 28% 90%;
+    --card: 12 15% 15%;
+    --card-foreground: 40 28% 90%;
+    --popover: 12 15% 17%;
+    --popover-foreground: 40 28% 90%;
+    --primary: 45 96% 52%;
+    --primary-foreground: 8 14% 11%;
+    --primary-text: 45 96% 58%;
+    --secondary: 16 14% 21%;
+    --secondary-foreground: 40 28% 90%;
+    --muted: 16 12% 19%;
+    --muted-foreground: 28 16% 66%;
+    --accent: 14 32% 24%;
+    --accent-foreground: 40 28% 90%;
+    --destructive: 0 75% 62%;
+    --destructive-foreground: 8 14% 11%;
+    --border: 20 12% 27%;
+    --input: 24 12% 46%;
+    --ring: 45 96% 52%;
+    --radius: 0.5rem;
+    --card-shadow: 0 0 #0000;
+
+    --sidebar:                  8 16% 8%;
+    --sidebar-foreground:       40 28% 90%;
+    --sidebar-muted-foreground: 28 16% 64%;
+    --sidebar-accent:           14 35% 22%;
+    --sidebar-accent-foreground: 40 30% 94%;
+    --sidebar-border:           12 14% 16%;
+    --sidebar-primary:          45 96% 52%;
+
+    --status-healthy:     145 45% 58%;
+    --status-healthy-bg:  145 30% 16%;
+    --status-warning:     24 88% 62%;
+    --status-warning-bg:  24 50% 17%;
+    --status-critical:    0 75% 71%;
+    --status-critical-bg: 0 45% 18%;
+    --status-unknown:     28 10% 62%;
+    --status-unknown-bg:  20 10% 18%;
+    --status-pending:     28 10% 62%;
+    --status-pending-bg:  20 10% 18%;
+    --status-info:        200 55% 68%;
+    --status-info-bg:     200 35% 17%;
+    --status-neutral:     28 10% 62%;
+    --status-neutral-bg:  20 10% 18%;
+    --status-healthy-text:  145 45% 58%;
+    --status-warning-text:  24 88% 62%;
+    --status-critical-text: 0 75% 71%;
+    --status-info-text:     200 55% 68%;
+    --status-unknown-text:  28 10% 62%;
+
+    --chart-1: 45 96% 52%;    /* 오커 */
+    --chart-2: 1 63% 75%;     /* 더스티 핑크 */
+    --chart-3: 28 20% 62%;    /* 토프 */
+    --chart-4: 40 40% 80%;    /* 크림 */
+    --chart-5: 12 45% 52%;    /* 적갈 */
+    --chart-6: 175 30% 55%;   /* 탁한 틸 */
+    --chart-7: 24 80% 60%;    /* 주황 */
+    --chart-8: 20 8% 50%;     /* 회갈 */
+
+    --surface-container-lowest:  8 14% 11%;
+    --surface-container-low:     10 14% 13%;
+    --surface-container:         12 15% 15%;
+    --surface-container-high:    14 14% 18%;
+    --surface-container-highest: 16 14% 21%;
+  }
+
+  /* ── Umber light — 같은 그림 팔레트의 라이트 변형: 크림 바탕 + 움버 사이드바 + 오커 강조. */
+  html.umber-light {
+    --background: 40 28% 95%;
+    --foreground: 10 22% 13%;
+    --card: 40 33% 99%;
+    --card-foreground: 10 22% 13%;
+    --popover: 40 33% 99%;
+    --popover-foreground: 10 22% 13%;
+    --primary: 45 96% 52%;
+    --primary-foreground: 10 22% 13%;
+    --primary-text: 36 90% 28%;
+    --secondary: 35 24% 90%;
+    --secondary-foreground: 10 22% 13%;
+    --muted: 35 20% 92%;
+    --muted-foreground: 22 14% 38%;
+    --accent: 45 90% 90%;
+    --accent-foreground: 10 22% 13%;
+    --destructive: 0 70% 42%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 28 16% 82%;
+    --input: 26 14% 52%;
+    --ring: 36 90% 35%;
+    --radius: 0.5rem;
+    --card-shadow: 0 0 #0000;
+
+    --sidebar:                  8 16% 12%;
+    --sidebar-foreground:       40 28% 90%;
+    --sidebar-muted-foreground: 28 16% 64%;
+    --sidebar-accent:           14 35% 22%;
+    --sidebar-accent-foreground: 40 30% 94%;
+    --sidebar-border:           12 14% 18%;
+    --sidebar-primary:          45 96% 52%;
+
+    --status-healthy:     145 50% 40%;
+    --status-healthy-bg:  145 45% 91%;
+    --status-warning:     24 88% 50%;
+    --status-warning-bg:  24 85% 92%;
+    --status-critical:    0 72% 50%;
+    --status-critical-bg: 0 70% 94%;
+    --status-unknown:     25 10% 50%;
+    --status-unknown-bg:  30 15% 91%;
+    --status-pending:     25 10% 50%;
+    --status-pending-bg:  30 15% 91%;
+    --status-info:        200 70% 45%;
+    --status-info-bg:     200 60% 92%;
+    --status-neutral:     25 10% 50%;
+    --status-neutral-bg:  30 15% 91%;
+    --status-healthy-text:  145 55% 27%;
+    --status-warning-text:  22 85% 34%;
+    --status-critical-text: 0 70% 42%;
+    --status-info-text:     200 70% 30%;
+    --status-unknown-text:  22 12% 36%;
+
+    --chart-1: 40 90% 45%;    /* 오커(짙게) */
+    --chart-2: 1 55% 60%;     /* 더스티 핑크 */
+    --chart-3: 12 45% 35%;    /* 적갈 */
+    --chart-4: 26 15% 50%;    /* 토프 */
+    --chart-5: 175 40% 35%;   /* 탁한 틸 */
+    --chart-6: 24 80% 50%;    /* 주황 */
+    --chart-7: 10 25% 25%;    /* 움버 */
+    --chart-8: 20 8% 55%;     /* 회갈 */
+
+    --surface-container-lowest:  40 33% 99%;
+    --surface-container-low:     40 28% 97%;
+    --surface-container:         38 25% 95.5%;
+    --surface-container-high:    36 24% 94%;
+    --surface-container-highest: 35 22% 92%;
+  }
+
+  /* ── Plaster — 흰 벽 입체주의 풍경화에서 추출한 팔레트 (크림 석고 바탕 · 슬레이트 블루 강조 · 파스텔 차트) ──
+     사진이 조명 탓에 회색빛이라 hue 는 추출값, 채도는 그림에 맞춰 보정했다.
+     - 슬레이트 블루 = primary(흰 글자 6.2:1). 파스텔(핑크·라일락·밀짚 노랑)은 명도가 높아 차트·옅은 배경 전용.
+     - 상태색도 그림에서: 정상 세이지 · 경고 밀짚→황토 · 장애 크림슨 · 정보 파우더 블루.
+     - 입력 테두리 = 그림 속 시에나 윤곽선(3.1:1). 사이드바 = 나무 액자 브라운(A안).
+     - 자체 색 고정 바탕(standalone) — 강조색(data-accent) 은 적용되지 않는다. */
+  html.plaster {
+    --background: 42 32% 94%;
+    --foreground: 20 15% 15%;
+    --card: 40 40% 98%;
+    --card-foreground: 20 15% 15%;
+    --popover: 40 40% 98%;
+    --popover-foreground: 20 15% 15%;
+    --primary: 216 32% 40%;
+    --primary-foreground: 40 40% 98%;
+    --primary-text: 216 34% 36%;
+    --secondary: 36 24% 90%;
+    --secondary-foreground: 20 15% 15%;
+    --muted: 36 20% 92%;
+    --muted-foreground: 24 12% 38%;
+    --accent: 205 35% 91%;
+    --accent-foreground: 20 15% 15%;
+    --destructive: 350 58% 38%;
+    --destructive-foreground: 40 40% 98%;
+    --border: 30 20% 82%;
+    --input: 28 16% 55%;
+    --ring: 216 32% 40%;
+    --radius: 0.5rem;
+    --card-shadow: 0 0 #0000;
+
+    --sidebar:                  24 32% 22%;
+    --sidebar-foreground:       40 40% 94%;
+    --sidebar-muted-foreground: 34 20% 72%;
+    --sidebar-accent:           24 26% 31%;
+    --sidebar-accent-foreground: 40 40% 96%;
+    --sidebar-border:           24 28% 18%;
+    --sidebar-primary:          205 40% 76%;
+
+    --status-healthy:     140 30% 45%;
+    --status-healthy-bg:  120 25% 90%;
+    --status-warning:     42 75% 55%;
+    --status-warning-bg:  44 70% 88%;
+    --status-critical:    350 55% 48%;
+    --status-critical-bg: 350 50% 93%;
+    --status-unknown:     25 8% 55%;
+    --status-unknown-bg:  30 12% 90%;
+    --status-pending:     25 8% 55%;
+    --status-pending-bg:  30 12% 90%;
+    --status-info:        205 40% 55%;
+    --status-info-bg:     205 40% 91%;
+    --status-neutral:     25 8% 55%;
+    --status-neutral-bg:  30 12% 90%;
+    --status-healthy-text:  140 35% 28%;
+    --status-warning-text:  34 75% 30%;
+    --status-critical-text: 350 58% 38%;
+    --status-info-text:     210 45% 34%;
+    --status-unknown-text:  24 10% 38%;
+
+    --chart-1: 216 32% 40%;   /* 슬레이트 블루 */
+    --chart-2: 352 50% 72%;   /* 파스텔 핑크 */
+    --chart-3: 110 22% 50%;   /* 세이지 */
+    --chart-4: 46 70% 62%;    /* 밀짚 노랑 */
+    --chart-5: 275 22% 68%;   /* 라일락 */
+    --chart-6: 350 55% 42%;   /* 크림슨 */
+    --chart-7: 26 42% 42%;    /* 시에나 */
+    --chart-8: 205 40% 65%;   /* 파우더 블루 */
+
+    --surface-container-lowest:  40 40% 98%;
+    --surface-container-low:     42 34% 96%;
+    --surface-container:         40 28% 94%;
+    --surface-container-high:    38 25% 92%;
+    --surface-container-highest: 36 24% 90%;
+  }
+
+  /* ── Journal — 입체주의 정물화(〈아침 식사〉)에서 추출한 팔레트: 검정 바탕 · 코발트 블루 강조 ·
+     비취 초록 · 오커 목재 · 크림슨 커튼(사이드바) · 라일락.
+     - 코발트 = primary(움버 글자, 5.8:1). 비취 초록은 정상 상태·차트로 — primary 와 상태색이 섞이지 않게.
+     - 정보 상태는 코발트와 겹치지 않도록 라일락, 경고는 오커.
+     - 자체 색 고정 바탕(standalone) — 강조색(data-accent) 은 적용되지 않는다. */
+  html.journal {
+    --background: 230 14% 8%;
+    --foreground: 38 22% 88%;
+    --card: 210 10% 12%;
+    --card-foreground: 38 22% 88%;
+    --popover: 210 10% 14%;
+    --popover-foreground: 38 22% 88%;
+    --primary: 219 77% 64%;
+    --primary-foreground: 230 14% 8%;
+    --primary-text: 219 80% 72%;
+    --secondary: 210 9% 17%;
+    --secondary-foreground: 38 22% 88%;
+    --muted: 210 8% 15%;
+    --muted-foreground: 36 10% 66%;
+    --accent: 219 35% 20%;
+    --accent-foreground: 38 22% 88%;
+    --destructive: 350 65% 64%;
+    --destructive-foreground: 230 14% 8%;
+    --border: 210 8% 24%;
+    --input: 210 8% 44%;
+    --ring: 219 77% 64%;
+    --radius: 0.5rem;
+    --card-shadow: 0 0 #0000;
+
+    --sidebar: 351 45% 15%;
+    --sidebar-foreground: 38 25% 90%;
+    --sidebar-muted-foreground: 350 12% 70%;
+    --sidebar-accent: 351 40% 24%;
+    --sidebar-accent-foreground: 38 30% 94%;
+    --sidebar-border: 351 40% 11%;
+    --sidebar-primary: 219 80% 72%;
+
+    --status-healthy: 151 40% 56%;
+    --status-healthy-bg: 151 30% 15%;
+    --status-warning: 31 72% 62%;
+    --status-warning-bg: 31 45% 16%;
+    --status-critical: 350 65% 68%;
+    --status-critical-bg: 350 40% 17%;
+    --status-unknown: 36 8% 62%;
+    --status-unknown-bg: 210 8% 18%;
+    --status-pending: 36 8% 62%;
+    --status-pending-bg: 210 8% 18%;
+    --status-info: 280 30% 74%;
+    --status-info-bg: 280 20% 18%;
+    --status-neutral: 36 8% 62%;
+    --status-neutral-bg: 210 8% 18%;
+    --status-healthy-text: 151 40% 56%;
+    --status-warning-text: 31 72% 62%;
+    --status-critical-text: 350 65% 68%;
+    --status-info-text: 280 30% 74%;
+    --status-unknown-text: 36 8% 62%;
+
+    --chart-1: 219 77% 64%;
+    --chart-2: 151 40% 52%;
+    --chart-3: 31 70% 60%;
+    --chart-4: 350 55% 58%;
+    --chart-5: 300 20% 68%;
+    --chart-6: 33 22% 66%;
+    --chart-7: 190 40% 55%;
+    --chart-8: 36 8% 55%;
+
+    --surface-container-lowest: 230 14% 8%;
+    --surface-container-low: 220 12% 10%;
+    --surface-container: 210 10% 12%;
+    --surface-container-high: 210 9% 15%;
+    --surface-container-highest: 210 9% 17%;
+  }
+
+  /* ── Relief — 석재 부조 정물에서 추출한 팔레트: 스톤 베이지 바탕 · 라벤더 그레이 슬레이트 강조 ·
+     녹청(verdigris) 초록 · 목재 브라운. 사진 조명 탓에 채도가 낮게 잡혀 hue 는 추출값, 채도는 보정.
+     - 슬레이트 = primary(흰 글자 6.2:1) · 사이드바. 녹청은 정상 상태·차트·사이드바 활성 표시.
+     - 자체 색 고정 바탕(standalone) — 강조색(data-accent) 은 적용되지 않는다. */
+  html.relief {
+    --background: 36 16% 91%;
+    --foreground: 30 18% 15%;
+    --card: 38 22% 96%;
+    --card-foreground: 30 18% 15%;
+    --popover: 38 22% 96%;
+    --popover-foreground: 30 18% 15%;
+    --primary: 228 16% 40%;
+    --primary-foreground: 38 22% 97%;
+    --primary-text: 228 18% 36%;
+    --secondary: 34 14% 87%;
+    --secondary-foreground: 30 18% 15%;
+    --muted: 34 12% 89%;
+    --muted-foreground: 30 10% 36%;
+    --accent: 228 14% 88%;
+    --accent-foreground: 30 18% 15%;
+    --destructive: 8 55% 42%;
+    --destructive-foreground: 38 22% 97%;
+    --border: 32 12% 78%;
+    --input: 30 12% 52%;
+    --ring: 228 16% 40%;
+    --radius: 0.5rem;
+    --card-shadow: 0 0 #0000;
+
+    --sidebar: 228 10% 30%;
+    --sidebar-foreground: 38 20% 94%;
+    --sidebar-muted-foreground: 228 10% 78%;
+    --sidebar-accent: 228 12% 40%;
+    --sidebar-accent-foreground: 38 22% 97%;
+    --sidebar-border: 228 10% 25%;
+    --sidebar-primary: 160 32% 70%;
+
+    --status-healthy: 160 30% 42%;
+    --status-healthy-bg: 160 22% 88%;
+    --status-warning: 36 55% 52%;
+    --status-warning-bg: 38 45% 86%;
+    --status-critical: 8 55% 50%;
+    --status-critical-bg: 8 45% 90%;
+    --status-unknown: 30 8% 52%;
+    --status-unknown-bg: 30 10% 87%;
+    --status-pending: 30 8% 52%;
+    --status-pending-bg: 30 10% 87%;
+    --status-info: 205 30% 52%;
+    --status-info-bg: 205 25% 89%;
+    --status-neutral: 30 8% 52%;
+    --status-neutral-bg: 30 10% 87%;
+    --status-healthy-text: 160 38% 26%;
+    --status-warning-text: 32 60% 28%;
+    --status-critical-text: 8 58% 38%;
+    --status-info-text: 205 40% 32%;
+    --status-unknown-text: 30 10% 34%;
+
+    --chart-1: 228 16% 45%;
+    --chart-2: 160 30% 45%;
+    --chart-3: 31 35% 55%;
+    --chart-4: 25 38% 37%;
+    --chart-5: 205 30% 55%;
+    --chart-6: 8 45% 50%;
+    --chart-7: 160 20% 65%;
+    --chart-8: 30 8% 55%;
+
+    --surface-container-lowest: 38 22% 96%;
+    --surface-container-low: 37 18% 93.5%;
+    --surface-container: 36 16% 91%;
+    --surface-container-high: 35 14% 89%;
+    --surface-container-highest: 34 14% 87%;
+  }
+
+  /* ── Harlequin — 입체주의 인물화 〈할리퀸과 목걸이를 한 여인〉(서명 "Picasso, Rome 1917")에서 추출한 팔레트: 은회색 바탕 · 콘플라워 블루 ·
+     검정 · 흰색 · 크림 점무늬. 무채색 위 블루 하나만 색이라 운영 화면의 "단일 강조" 원칙과 그대로 맞는다.
+     - 콘플라워 = primary(밝아서 버튼 글자는 검정, 6.6:1). 링크·선택 글자는 짙은 블루(5.5:1).
+     - 사이드바 = 그림 속 검정, 활성 표시는 밝은 블루.
+     - 자체 색 고정 바탕(standalone) — 강조색(data-accent) 은 적용되지 않는다. */
+  html.harlequin {
+    --background: 30 2% 88%;
+    --foreground: 220 16% 7%;
+    --card: 0 0% 98%;
+    --card-foreground: 220 16% 7%;
+    --popover: 0 0% 98%;
+    --popover-foreground: 220 16% 7%;
+    --primary: 211 45% 62%;
+    --primary-foreground: 220 16% 7%;
+    --primary-text: 212 50% 32%;
+    --secondary: 30 2% 82%;
+    --secondary-foreground: 220 16% 7%;
+    --muted: 30 2% 85%;
+    --muted-foreground: 220 5% 30%;
+    --accent: 211 45% 90%;
+    --accent-foreground: 220 16% 7%;
+    --destructive: 0 65% 42%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 30 2% 74%;
+    --input: 30 2% 44%;
+    --ring: 212 50% 32%;
+    --radius: 0.5rem;
+    --card-shadow: 0 0 #0000;
+
+    --sidebar: 220 16% 6%;
+    --sidebar-foreground: 0 0% 96%;
+    --sidebar-muted-foreground: 30 3% 70%;
+    --sidebar-accent: 220 10% 16%;
+    --sidebar-accent-foreground: 0 0% 100%;
+    --sidebar-border: 220 14% 12%;
+    --sidebar-primary: 211 55% 72%;
+
+    --status-healthy: 150 40% 40%;
+    --status-healthy-bg: 150 25% 90%;
+    --status-warning: 36 75% 50%;
+    --status-warning-bg: 40 60% 88%;
+    --status-critical: 0 62% 50%;
+    --status-critical-bg: 0 55% 93%;
+    --status-unknown: 30 3% 52%;
+    --status-unknown-bg: 30 3% 88%;
+    --status-pending: 30 3% 52%;
+    --status-pending-bg: 30 3% 88%;
+    --status-info: 211 45% 55%;
+    --status-info-bg: 211 45% 91%;
+    --status-neutral: 30 3% 52%;
+    --status-neutral-bg: 30 3% 88%;
+    --status-healthy-text: 150 45% 25%;
+    --status-warning-text: 32 75% 27%;
+    --status-critical-text: 0 65% 38%;
+    --status-info-text: 212 50% 30%;
+    --status-unknown-text: 220 5% 30%;
+
+    --chart-1: 211 45% 60%;
+    --chart-2: 220 16% 14%;
+    --chart-3: 36 26% 70%;
+    --chart-4: 30 2% 55%;
+    --chart-5: 211 50% 38%;
+    --chart-6: 150 30% 45%;
+    --chart-7: 0 50% 55%;
+    --chart-8: 30 3% 75%;
+
+    --surface-container-lowest: 0 0% 98%;
+    --surface-container-low: 30 2% 95%;
+    --surface-container: 30 2% 92%;
+    --surface-container-high: 30 2% 88%;
+    --surface-container-highest: 30 2% 84%;
+  }
+
+  /* ── Ozenfant 자개 — 퓨리즘 정물화(서명 "ozenfant")에서 추출한 팔레트: 자개빛 펄 그레이 바탕 · 스틸 블루 ·
+     진주 블루 · 산화철 레드 · 세이지. 차분한 무채색 펄 위에 블루 한 줄기만 도드라지는 라이트 테마.
+     - 스틸 블루 = primary(버튼 글자 흰색 5.3:1), 링크·선택 글자는 한 단계 짙게(5.3:1).
+     - 사이드바 = 진주 블루 그레이, 활성 표시는 짙은 스틸 블루. 위험(critical)은 그림 속 산화철 레드.
+     - 자체 색 고정 바탕(standalone) — 강조색(data-accent) 은 적용되지 않는다. */
+  html.ozenfant {
+    --background: 210 12% 92%;
+    --foreground: 215 22% 15%;
+    --card: 200 20% 97%;
+    --card-foreground: 215 22% 15%;
+    --popover: 200 20% 97%;
+    --popover-foreground: 215 22% 15%;
+    --primary: 210 38% 42%;
+    --primary-foreground: 200 25% 98%;
+    --primary-text: 210 42% 36%;
+    --secondary: 210 12% 88%;
+    --secondary-foreground: 215 22% 15%;
+    --muted: 210 12% 90%;
+    --muted-foreground: 212 10% 36%;
+    --accent: 205 45% 90%;
+    --accent-foreground: 215 22% 15%;
+    --destructive: 8 52% 40%;
+    --destructive-foreground: 200 25% 98%;
+    --border: 210 10% 80%;
+    --input: 210 10% 50%;
+    --ring: 210 38% 42%;
+    --radius: 0.5rem;
+    --card-shadow: 0 0 #0000;
+
+    --sidebar: 205 18% 86%;
+    --sidebar-foreground: 215 22% 15%;
+    --sidebar-muted-foreground: 212 12% 34%;
+    --sidebar-accent: 205 35% 77%;
+    --sidebar-accent-foreground: 215 25% 12%;
+    --sidebar-border: 210 12% 78%;
+    --sidebar-primary: 210 45% 36%;
+
+    --status-healthy: 110 18% 50%;
+    --status-healthy-bg: 110 18% 89%;
+    --status-warning: 32 45% 55%;
+    --status-warning-bg: 32 45% 89%;
+    --status-critical: 8 52% 45%;
+    --status-critical-bg: 8 45% 91%;
+    --status-unknown: 212 8% 55%;
+    --status-unknown-bg: 210 10% 88%;
+    --status-pending: 212 8% 55%;
+    --status-pending-bg: 210 10% 88%;
+    --status-info: 205 45% 60%;
+    --status-info-bg: 205 50% 91%;
+    --status-neutral: 212 8% 55%;
+    --status-neutral-bg: 210 10% 88%;
+    --status-healthy-text: 110 25% 28%;
+    --status-warning-text: 30 55% 30%;
+    --status-critical-text: 8 55% 36%;
+    --status-info-text: 208 45% 32%;
+    --status-unknown-text: 212 10% 34%;
+
+    --chart-1: 210 38% 50%;
+    --chart-2: 8 45% 75%;
+    --chart-3: 110 18% 50%;
+    --chart-4: 30 25% 70%;
+    --chart-5: 205 45% 72%;
+    --chart-6: 8 52% 42%;
+    --chart-7: 100 28% 40%;
+    --chart-8: 212 8% 60%;
+
+    --surface-container-lowest: 200 20% 97%;
+    --surface-container-low: 205 16% 95%;
+    --surface-container: 210 12% 92%;
+    --surface-container-high: 210 12% 90%;
+    --surface-container-highest: 210 12% 88%;
+  }
+
+  /* ── Whanki 창 — 김환기의 추상화 〈창〉(서명 "whanki")에서 추출한 팔레트: 청자빛 회녹색 바탕 · 프러시안 블루 ·
+     진홍 · 황토 노랑 · 올리브 · 먹빛 녹흑. 그림의 원색 셋을 의미색에 그대로 대응시켰다.
+     - 프러시안 블루 = primary(버튼 글자 흰색 5.9:1), 링크·선택 글자는 한 단계 짙게(5.5:1).
+     - 진홍 = critical/destructive, 황토 = warning, 올리브 = healthy — 블루는 primary·info 에만 쓴다.
+     - 사이드바 = 그림 속 먹빛 녹흑, 활성 표시는 밝은 블루.
+     - 자체 색 고정 바탕(standalone) — 강조색(data-accent) 은 적용되지 않는다. */
+  html.whanki {
+    --background: 170 10% 90%;
+    --foreground: 168 25% 10%;
+    --card: 165 14% 97%;
+    --card-foreground: 168 25% 10%;
+    --popover: 165 14% 97%;
+    --popover-foreground: 168 25% 10%;
+    --primary: 203 55% 36%;
+    --primary-foreground: 165 20% 98%;
+    --primary-text: 203 60% 31%;
+    --secondary: 170 10% 86%;
+    --secondary-foreground: 168 25% 10%;
+    --muted: 170 10% 88%;
+    --muted-foreground: 175 8% 33%;
+    --accent: 203 40% 89%;
+    --accent-foreground: 168 25% 10%;
+    --destructive: 348 62% 42%;
+    --destructive-foreground: 165 20% 98%;
+    --border: 170 8% 78%;
+    --input: 170 8% 47%;
+    --ring: 203 55% 36%;
+    --radius: 0.5rem;
+    --card-shadow: 0 0 #0000;
+
+    --sidebar: 165 22% 12%;
+    --sidebar-foreground: 165 12% 92%;
+    --sidebar-muted-foreground: 165 8% 70%;
+    --sidebar-accent: 165 18% 21%;
+    --sidebar-accent-foreground: 0 0% 100%;
+    --sidebar-border: 165 22% 9%;
+    --sidebar-primary: 203 55% 68%;
+
+    --status-healthy: 85 30% 40%;
+    --status-healthy-bg: 85 25% 88%;
+    --status-warning: 44 70% 50%;
+    --status-warning-bg: 44 60% 87%;
+    --status-critical: 348 60% 48%;
+    --status-critical-bg: 348 50% 92%;
+    --status-unknown: 170 5% 52%;
+    --status-unknown-bg: 170 6% 87%;
+    --status-pending: 170 5% 52%;
+    --status-pending-bg: 170 6% 87%;
+    --status-info: 203 45% 52%;
+    --status-info-bg: 203 40% 90%;
+    --status-neutral: 170 5% 52%;
+    --status-neutral-bg: 170 6% 87%;
+    --status-healthy-text: 85 40% 24%;
+    --status-warning-text: 38 75% 26%;
+    --status-critical-text: 348 62% 37%;
+    --status-info-text: 203 55% 29%;
+    --status-unknown-text: 170 8% 31%;
+
+    --chart-1: 203 55% 40%;
+    --chart-2: 44 70% 52%;
+    --chart-3: 348 58% 48%;
+    --chart-4: 35 22% 58%;
+    --chart-5: 85 28% 42%;
+    --chart-6: 210 50% 60%;
+    --chart-7: 165 20% 22%;
+    --chart-8: 170 5% 58%;
+
+    --surface-container-lowest: 165 14% 97%;
+    --surface-container-low: 168 12% 94%;
+    --surface-container: 170 10% 90%;
+    --surface-container-high: 170 10% 88%;
+    --surface-container-highest: 170 10% 86%;
+  }
+
   /* ── 강조색(accent) — 라이트·다크 바탕 위에 <html data-accent="…"> 로 얹는다 (P2) ──
      버튼·링크·선택 탭·활성 메뉴·포커스 링만 바뀌고, 배경·상태색은 바탕 테마가 정한다.
      blue 는 기본값이라 블록이 없다. 값은 버튼 글자·링크 모두 4.5:1 이상으로 계산했다.
@@ -633,13 +1215,17 @@ button[aria-disabled="true"] {
 }
 
 /* ── Date input calendar icon (다크 바탕에서만 반전 — 예전 :not(.light) 는 컴포트 등 라이트 계열까지 뒤집었다) ─────────────────────────────── */
-html.dark input[type="date"]::-webkit-calendar-picker-indicator {
+html.dark input[type="date"]::-webkit-calendar-picker-indicator,
+html.umber input[type="date"]::-webkit-calendar-picker-indicator,
+html.journal input[type="date"]::-webkit-calendar-picker-indicator {
   filter: invert(0.8);
   opacity: 0.7;
   cursor: pointer;
 }
 
-html.dark input[type="date"]::-webkit-calendar-picker-indicator:hover {
+html.dark input[type="date"]::-webkit-calendar-picker-indicator:hover,
+html.umber input[type="date"]::-webkit-calendar-picker-indicator:hover,
+html.journal input[type="date"]::-webkit-calendar-picker-indicator:hover {
   opacity: 1;
 }
 
