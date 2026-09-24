@@ -494,6 +494,80 @@
     --surface-container-highest: 35 22% 92%;
   }
 
+  /* ── Plaster — 흰 벽 입체주의 풍경화에서 추출한 팔레트 (크림 석고 바탕 · 슬레이트 블루 강조 · 파스텔 차트) ──
+     사진이 조명 탓에 회색빛이라 hue 는 추출값, 채도는 그림에 맞춰 보정했다.
+     - 슬레이트 블루 = primary(흰 글자 6.2:1). 파스텔(핑크·라일락·밀짚 노랑)은 명도가 높아 차트·옅은 배경 전용.
+     - 상태색도 그림에서: 정상 세이지 · 경고 밀짚→황토 · 장애 크림슨 · 정보 파우더 블루.
+     - 입력 테두리 = 그림 속 시에나 윤곽선(3.1:1). 사이드바 = 나무 액자 브라운(A안).
+     - 자체 색 고정 바탕(standalone) — 강조색(data-accent) 은 적용되지 않는다. */
+  html.plaster {
+    --background: 42 32% 94%;
+    --foreground: 20 15% 15%;
+    --card: 40 40% 98%;
+    --card-foreground: 20 15% 15%;
+    --popover: 40 40% 98%;
+    --popover-foreground: 20 15% 15%;
+    --primary: 216 32% 40%;
+    --primary-foreground: 40 40% 98%;
+    --primary-text: 216 34% 36%;
+    --secondary: 36 24% 90%;
+    --secondary-foreground: 20 15% 15%;
+    --muted: 36 20% 92%;
+    --muted-foreground: 24 12% 38%;
+    --accent: 205 35% 91%;
+    --accent-foreground: 20 15% 15%;
+    --destructive: 350 58% 38%;
+    --destructive-foreground: 40 40% 98%;
+    --border: 30 20% 82%;
+    --input: 28 16% 55%;
+    --ring: 216 32% 40%;
+    --radius: 0.5rem;
+    --card-shadow: 0 0 #0000;
+
+    --sidebar:                  24 32% 22%;
+    --sidebar-foreground:       40 40% 94%;
+    --sidebar-muted-foreground: 34 20% 72%;
+    --sidebar-accent:           24 26% 31%;
+    --sidebar-accent-foreground: 40 40% 96%;
+    --sidebar-border:           24 28% 18%;
+    --sidebar-primary:          205 40% 76%;
+
+    --status-healthy:     140 30% 45%;
+    --status-healthy-bg:  120 25% 90%;
+    --status-warning:     42 75% 55%;
+    --status-warning-bg:  44 70% 88%;
+    --status-critical:    350 55% 48%;
+    --status-critical-bg: 350 50% 93%;
+    --status-unknown:     25 8% 55%;
+    --status-unknown-bg:  30 12% 90%;
+    --status-pending:     25 8% 55%;
+    --status-pending-bg:  30 12% 90%;
+    --status-info:        205 40% 55%;
+    --status-info-bg:     205 40% 91%;
+    --status-neutral:     25 8% 55%;
+    --status-neutral-bg:  30 12% 90%;
+    --status-healthy-text:  140 35% 28%;
+    --status-warning-text:  34 75% 30%;
+    --status-critical-text: 350 58% 38%;
+    --status-info-text:     210 45% 34%;
+    --status-unknown-text:  24 10% 38%;
+
+    --chart-1: 216 32% 40%;   /* 슬레이트 블루 */
+    --chart-2: 352 50% 72%;   /* 파스텔 핑크 */
+    --chart-3: 110 22% 50%;   /* 세이지 */
+    --chart-4: 46 70% 62%;    /* 밀짚 노랑 */
+    --chart-5: 275 22% 68%;   /* 라일락 */
+    --chart-6: 350 55% 42%;   /* 크림슨 */
+    --chart-7: 26 42% 42%;    /* 시에나 */
+    --chart-8: 205 40% 65%;   /* 파우더 블루 */
+
+    --surface-container-lowest:  40 40% 98%;
+    --surface-container-low:     42 34% 96%;
+    --surface-container:         40 28% 94%;
+    --surface-container-high:    38 25% 92%;
+    --surface-container-highest: 36 24% 90%;
+  }
+
   /* ── 강조색(accent) — 라이트·다크 바탕 위에 <html data-accent="…"> 로 얹는다 (P2) ──
      버튼·링크·선택 탭·활성 메뉴·포커스 링만 바뀌고, 배경·상태색은 바탕 테마가 정한다.
      blue 는 기본값이라 블록이 없다. 값은 버튼 글자·링크 모두 4.5:1 이상으로 계산했다.
