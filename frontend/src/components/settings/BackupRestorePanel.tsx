@@ -254,7 +254,7 @@ export function BackupRestorePanel() {
               {(['merge', 'replace'] as Mode[]).map((m) => (
                 <button key={m} onClick={() => { setMode(m); setPreview(null); }}
                   className={`px-3 py-1 text-sm font-medium rounded-md ${
-                    mode === m ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground/80 hover:text-foreground'
+                    mode === m ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
                   }`}>
                   {m === 'merge' ? '병합 (merge)' : '덮어쓰기 (replace)'}
                 </button>

@@ -428,7 +428,7 @@ export function KernelParamsPage() {
                     {(['password', 'key'] as const).map((m) => (
                       <button key={m} onClick={() => setAuthMode(m)}
                         className={`flex-1 px-2 py-1.5 text-sm font-medium rounded-md transition-all ${
-                          authMode === m ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground/70 hover:text-foreground'
+                          authMode === m ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
                         }`}>
                         {m === 'password' ? '비밀번호' : 'Private Key'}
                       </button>
@@ -453,7 +453,7 @@ export function KernelParamsPage() {
                   {(['parallel', 'sequential'] as const).map((m) => (
                     <button key={m} onClick={() => setMode(m)}
                       className={`px-3 py-1.5 text-sm font-medium rounded-md transition-all ${
-                        mode === m ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground/70 hover:text-foreground'
+                        mode === m ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
                       }`}>
                       {m === 'parallel' ? '병렬' : '순차'}
                     </button>

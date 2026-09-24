@@ -356,7 +356,7 @@ function EditItemForm({ isOpen, onClose, editingItem }: { isOpen: boolean; onClo
               onClick={() => setColor('')}
               title="무색"
               aria-label="행 배경 색 없음"
-              className={`w-6 h-6 rounded-full border text-[10px] text-muted-foreground flex items-center justify-center ${
+              className={`w-6 h-6 rounded-full border text-[11px] text-muted-foreground flex items-center justify-center ${
                 color === '' ? 'border-primary ring-2 ring-primary/40' : 'border-border'
               }`}
             >
@@ -451,7 +451,7 @@ function EditItemForm({ isOpen, onClose, editingItem }: { isOpen: boolean; onClo
           <div className="flex items-center justify-between gap-2">
             <span className="text-xs font-semibold">실행 설정 (임계값 · 파라미터)</span>
             {sourceConfig.dedicated && (
-              <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-primary/10 text-primary">
+              <span className="text-[11px] px-1.5 py-0.5 rounded-full bg-primary/10 text-primary">
                 이 항목 전용
               </span>
             )}
@@ -1136,7 +1136,7 @@ function RegisterItemWizard({ isOpen, onClose }: { isOpen: boolean; onClose: () 
                   onClick={() => setColor('')}
                   title="무색"
                   aria-label="행 배경 색 없음"
-                  className={`w-6 h-6 rounded-full border text-[10px] text-muted-foreground flex items-center justify-center ${
+                  className={`w-6 h-6 rounded-full border text-[11px] text-muted-foreground flex items-center justify-center ${
                     color === '' ? 'border-primary ring-2 ring-primary/40' : 'border-border'
                   }`}
                 >

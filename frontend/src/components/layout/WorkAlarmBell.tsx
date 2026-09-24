@@ -246,7 +246,7 @@ export function WorkAlarmBell() {
                           onClick={(e) => dismissNotif(e, n.id)}
                           title="지우기"
                           aria-label="알림 지우기"
-                          className="absolute top-1.5 right-1.5 p-0.5 rounded text-muted-foreground/60 hover:text-foreground hover:bg-secondary opacity-0 group-hover:opacity-100 transition-opacity"
+                          className="absolute top-1.5 right-1.5 p-0.5 rounded text-muted-foreground hover:text-foreground hover:bg-secondary opacity-0 group-hover:opacity-100 transition-opacity"
                         >
                           <X className="w-3 h-3" />
                         </button>

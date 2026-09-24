@@ -240,7 +240,7 @@ export function WorkItemCalendar({ items, onItemClick }: WorkItemCalendarProps) 
                       return (
                         <button
                           key={item.id}
-                          className={`w-full h-[18px] flex items-center gap-1 px-1.5 text-[10px] text-primary-foreground truncate cursor-pointer
+                          className={`w-full h-[18px] flex items-center gap-1 px-1.5 text-[11px] text-primary-foreground truncate cursor-pointer
                             focus:outline-none transition-opacity hover:brightness-110
                             ${color} ${barClass} ${isDone ? 'opacity-50' : ''}`}
                           onClick={(e) => { e.stopPropagation(); onItemClick(item); }}
@@ -258,7 +258,7 @@ export function WorkItemCalendar({ items, onItemClick }: WorkItemCalendarProps) 
                       );
                     })}
                     {dayBars.length > MAX_BARS && (
-                      <p className="text-[10px] text-muted-foreground pl-2">
+                      <p className="text-[11px] text-muted-foreground pl-2">
                         +{dayBars.length - MAX_BARS}개
                       </p>
                     )}
@@ -342,7 +342,7 @@ export function WorkItemCalendar({ items, onItemClick }: WorkItemCalendarProps) 
               )}
             </div>
 
-            <p className="text-xs text-muted-foreground/50 mt-2 pt-1.5 border-t border-border/40">
+            <p className="text-xs text-muted-foreground mt-2 pt-1.5 border-t border-border/40">
               클릭하여 상세보기
             </p>
           </div>

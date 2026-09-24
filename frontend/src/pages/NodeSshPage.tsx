@@ -260,7 +260,7 @@ export function NodeSshPage() {
                             {n.internalIp ?? '—'}
                           </span>
                           {n.roles.includes('control-plane') && (
-                            <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-orange-500/15 text-orange-400 border border-orange-500/30 shrink-0">
+                            <span className="text-[11px] px-1.5 py-0.5 rounded-full bg-orange-500/15 text-orange-400 border border-orange-500/30 shrink-0">
                               master
                             </span>
                           )}
@@ -313,7 +313,7 @@ export function NodeSshPage() {
                           key={m}
                           onClick={() => setAuthMode(m)}
                           className={`flex-1 px-2 py-1.5 text-sm font-medium rounded-md transition-all ${
-                            authMode === m ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground/70 hover:text-foreground'
+                            authMode === m ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
                           }`}
                         >
                           {m === 'password' ? '비밀번호' : 'Private Key'}

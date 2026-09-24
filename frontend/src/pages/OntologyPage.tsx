@@ -431,7 +431,7 @@ export function OntologyPage() {
         )}
 
         {isEmpty ? (
-          <div className="flex flex-col items-center justify-center h-full text-muted-foreground/50">
+          <div className="flex flex-col items-center justify-center h-full text-muted-foreground">
             <Share2 className="w-16 h-16 mb-4" />
             <p className="text-base">이 클러스터에 온톨로지 데이터가 없습니다</p>
             <p className="text-sm mt-1">API로 엔티티와 관계를 먼저 등록하세요</p>

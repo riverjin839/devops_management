@@ -120,7 +120,7 @@ export function UtilPct({ usage, req, lim, className = '' }: {
       title="R = 사용/요청(req 대비 사용률) · L = 사용/제한(limit 기준 사용율)">
       <span className="text-muted-foreground">사용률</span>
       <span>R <b className={rCls}>{rRatio == null ? '—' : `${Math.round(rRatio * 100)}%`}</b></span>
-      <span className="text-muted-foreground/50">·</span>
+      <span className="text-muted-foreground">·</span>
       <span>L <b className={lCls}>{lRatio == null ? '—' : `${Math.round(lRatio * 100)}%`}</b></span>
     </div>
   );
@@ -186,7 +186,7 @@ export function StatTooltip({ children }: { children: ReactNode }) {
         type="button"
         title="설명 보기"
         aria-label="설명 보기"
-        className="inline-flex items-center ml-0.5 text-muted-foreground/60 hover:text-muted-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded"
+        className="inline-flex items-center ml-0.5 text-muted-foreground hover:text-muted-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded"
       >
         <HelpCircle className="w-3 h-3" />
       </TooltipTrigger>

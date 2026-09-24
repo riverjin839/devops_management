@@ -80,13 +80,13 @@ export function PlaybookListRow({
         <div className="flex items-baseline gap-2">
           <span className="text-sm font-semibold truncate">{playbook.name}</span>
           {clusterName && (
-            <span className="text-xs text-muted-foreground/70 px-1.5 py-0.5 rounded bg-secondary/50 truncate">
+            <span className="text-xs text-muted-foreground px-1.5 py-0.5 rounded bg-secondary/50 truncate">
               {clusterName}
             </span>
           )}
         </div>
         {(playbook.description || fileLabel) && (
-          <div className="flex items-center gap-2 text-xs text-muted-foreground/80 truncate">
+          <div className="flex items-center gap-2 text-xs text-muted-foreground truncate">
             {playbook.description && <span className="truncate">{playbook.description}</span>}
             {playbook.description && <span aria-hidden>·</span>}
             <span className="font-mono truncate" title={fileLabel}>📄 {fileLabel}</span>
@@ -104,7 +104,7 @@ export function PlaybookListRow({
           <Stat label="Skip" value={totals.skipped}     color="text-slate-400" />
         </div>
       ) : (
-        <div className="hidden md:block text-xs text-muted-foreground/50 italic flex-shrink-0">no stats</div>
+        <div className="hidden md:block text-xs text-muted-foreground italic flex-shrink-0">no stats</div>
       )}
 
       {/* Last run */}
@@ -175,7 +175,7 @@ function Stat({ label, value, color }: { label: string; value: number; color: st
   return (
     <span className={`inline-flex items-baseline gap-0.5 ${v > 0 ? color : 'text-muted-foreground/40'}`}>
       <span className="font-bold">{v}</span>
-      <span className="text-xs text-muted-foreground/70">{label}</span>
+      <span className="text-xs text-muted-foreground">{label}</span>
     </span>
   );
 }

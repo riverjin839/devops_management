@@ -163,7 +163,7 @@ function MemberSection({ bucket, onTaskClick, onIssueClick }: {
               <span className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">작업</span>
             </div>
             {bucket.tasks.length === 0 ? (
-              <p className="text-sm text-muted-foreground/50 text-center py-6">할당된 작업 없음</p>
+              <p className="text-sm text-muted-foreground text-center py-6">할당된 작업 없음</p>
             ) : (
               <ul className="space-y-1">
                 {bucket.tasks.slice(0, 10).map((t) => {
@@ -186,7 +186,7 @@ function MemberSection({ bucket, onTaskClick, onIssueClick }: {
                   );
                 })}
                 {bucket.tasks.length > 10 && (
-                  <li className="text-xs text-muted-foreground/70 text-center pt-1">
+                  <li className="text-xs text-muted-foreground text-center pt-1">
                     + {bucket.tasks.length - 10}개 더...
                   </li>
                 )}
@@ -201,7 +201,7 @@ function MemberSection({ bucket, onTaskClick, onIssueClick }: {
               <span className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">이슈</span>
             </div>
             {bucket.issues.length === 0 ? (
-              <p className="text-sm text-muted-foreground/50 text-center py-6">할당된 이슈 없음</p>
+              <p className="text-sm text-muted-foreground text-center py-6">할당된 이슈 없음</p>
             ) : (
               <ul className="space-y-1">
                 {bucket.issues.slice(0, 10).map((i) => (
@@ -227,7 +227,7 @@ function MemberSection({ bucket, onTaskClick, onIssueClick }: {
                   </li>
                 ))}
                 {bucket.issues.length > 10 && (
-                  <li className="text-xs text-muted-foreground/70 text-center pt-1">
+                  <li className="text-xs text-muted-foreground text-center pt-1">
                     + {bucket.issues.length - 10}개 더...
                   </li>
                 )}
@@ -461,7 +461,7 @@ export function MemberBoardPage() {
                   className={`px-3 py-1.5 text-sm font-medium rounded-md transition-all ${
                     filter === f
                       ? 'bg-background text-foreground shadow-sm'
-                      : 'text-muted-foreground/70 hover:text-foreground'
+                      : 'text-muted-foreground hover:text-foreground'
                   }`}
                 >
                   {f === 'all' ? '전체 멤버' : f === 'active' ? '업무 있음' : '미완료 있음'}
@@ -477,7 +477,7 @@ export function MemberBoardPage() {
                   className={`px-3 py-1.5 text-sm font-medium rounded-md transition-all ${
                     period === p
                       ? 'bg-background text-foreground shadow-sm'
-                      : 'text-muted-foreground/70 hover:text-foreground'
+                      : 'text-muted-foreground hover:text-foreground'
                   }`}
                 >
                   {PERIOD_LABEL[p]}

@@ -172,7 +172,7 @@ export function SchemaHealthPanel() {
                       return (
                         <tr key={`${i.table}.${i.column}.${idx}`} className="border-b border-border/60">
                           <td className="py-1.5 pr-3 align-top">
-                            <span className={`inline-block px-1.5 py-0.5 rounded border text-[10px] font-medium whitespace-nowrap ${meta.cls}`}>
+                            <span className={`inline-block px-1.5 py-0.5 rounded border text-[11px] font-medium whitespace-nowrap ${meta.cls}`}>
                               {meta.label}
                             </span>
                           </td>

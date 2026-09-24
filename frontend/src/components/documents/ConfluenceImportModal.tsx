@@ -443,7 +443,7 @@ export function ConfluenceImportModal({ open, onClose }: Props) {
                     className="accent-[hsl(var(--primary))]" disabled={busy}
                   />
                   첨부 이미지를 본문에 저장
-                  <span className="text-[10px]">(기본: 원본 링크)</span>
+                  <span className="text-[11px]">(기본: 원본 링크)</span>
                 </label>
               </div>
 

@@ -15,8 +15,10 @@ export interface ResolvedIconSeed {
   customHex?: string | null;
 }
 
-/** 활성 테마 이름 → 매칭되는 배색 패턴의 대표(시드) 색상. 매칭 없으면 undefined
- *  (default/comfort/light/dark/system 처럼 큐레이션 패턴이 없는 테마). */
+/** 활성 테마 이름 → 매칭되는 배색 패턴의 대표(시드) 색상. 매칭 없으면 undefined.
+ *  P2(2026-09) 에서 배색 패턴 이름과 같던 컬러 테마(burnt-sienna 등)를 없애 현재 바탕 테마
+ *  (light/dark/comfort/high-contrast/system)는 모두 매칭이 없다 → 운영타입 색상으로 폴백한다.
+ *  배색 패턴을 직접 고른 아이콘(colorMode: 'custom')은 영향이 없다. */
 export function themePatternSeedHex(theme: Theme): string | undefined {
   return COLOR_PATTERNS.find((p) => p.key === theme)?.colors[0];
 }

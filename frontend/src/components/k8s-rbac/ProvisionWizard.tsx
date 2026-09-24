@@ -252,7 +252,7 @@ export function ProvisionWizard({ catalog, namespaces, running, onRun }: Provisi
             {primaryNs && (
               <span className="inline-flex items-center gap-1.5 font-mono text-xs px-2.5 py-1 rounded-full bg-primary/10 border border-primary/30 text-primary font-semibold">
                 {primaryNs}
-                <span className="text-[10px] font-normal opacity-70">주</span>
+                <span className="text-[11px] font-normal opacity-70">주</span>
               </span>
             )}
             {extraNs

@@ -1,12 +1,10 @@
 # PEP (Platform Engineering Portal) — Design System
 
 > **Stack**: React 18 + TypeScript + Tailwind CSS + Recharts + shadcn/ui (Radix)
-> **Mode**: 테마 10종 — 기본값은 `default`(Anthropic Claude 브랜드 톤, radius 14px), 대안으로
-> `comfort`(크림+딥그린, radius 16px), `burnt-sienna`/`tuscan-sunset`/`summer-breeze`/
-> `wildflower-meadow`/`tropical-punch`(Figma 색상 조합 라이브러리 참고, radius 14~16px),
-> `electropop`(네온 액센트 비비드 다크, radius 12px), `light`/`dark`(Databricks-leaning flat,
-> radius 8px) + `system`. 이 문서의 "Ops Slate" 다크
-> 규격은 `html.dark` 테마에 해당한다. (테마 전환: `stores/themeStore.ts`, fallback `'default'`)
+> **Mode**: 바탕 테마 4종 + `system` — 기본값은 `light`(Databricks-leaning flat, radius 8px), 대안으로
+> `dark`, `comfort`(화이트+딥그린, radius 16px), `high-contrast`(관제실용 고대비). 색 취향은 **강조색**
+> 6종(blue·teal·green·amber·coral·violet, `<html data-accent>`)으로 고르며 라이트·다크에만 적용된다.
+> 이 문서의 "Ops Slate" 다크 규격은 `html.dark` 테마에 해당한다. (테마 전환: `stores/themeStore.ts`, fallback `'light'`)
 > **Source of truth**: 규격 근거는 이 문서, 토큰 **실측값**은 `frontend/src/index.css` (테마별 상이).
 > 컴포넌트는 토큰만 참조해야 함. 운영(감사·백로그)은 `DESIGN.md`.
 > **검증**: ui-ux-pro-max v2.5.0 (50+ 스타일 / 161 팔레트 / 57 페어링 / 25 차트) 데이터와 대조 확정.
@@ -425,21 +423,27 @@ ui-ux-pro-max Pre-Delivery Checklist에서 추출.
 > 이 장이 **컴포넌트/레이아웃 구현 규칙의 원천**이다. `CLAUDE.md` 에는 위반 시 리뷰 반려되는
 > 불변 규칙만 요약돼 있고, props·예시 코드·레이아웃 세부는 여기를 본다.
 
-### 12.1 테마 시스템 (`stores/themeStore.ts` — `k8s:theme`, fallback `'light'`)
+### 12.1 테마 시스템 (`stores/themeStore.ts` — `k8s:theme` + `k8s:accent`, fallback `'light'` + `'blue'`)
+
+P2(2026-09)에서 테마 11종을 **바탕 4종 + 시스템**과 **강조색 6종**으로 줄였다. 테마마다 토큰 40여 개를
+다시 정의하던 구조라 대비 검증이 끝나지 않은 조합이 계속 생겼기 때문이다.
 
 | `<html>` 클래스 | 성격 | 비고 |
 |---|---|---|
-| `html.default` | **코랄** — 따뜻한 페이퍼 배경, `--radius` 14px, 은은한 그림자, 코랄(#B8552E) accent | 2026-09 까지의 기본값. ID 는 호환 유지, UI 라벨은 "코랄". 저장값 `'default'` 는 1회 `light` 로 마이그레이션(`k8s:theme-migrated-light-default`) |
-| `html.comfort` | Comfort — 화이트 계열 배경(`60 15% 98%`) + 딥그린(#22593D) primary + 화이트 카드 + 민트 서페이스, `--radius` 16px, 소프트 카드 섀도(hover lift) | Donezo-inspired. 사이드바는 라이트 크림 + 활성 항목 딥그린 필 |
-| `html.burnt-sienna` | Burnt Sienna — 테라코타(#E35336)+베이지+샌드+시에나, `--radius` 14px | Figma 색상 조합 라이브러리 참고. 사이드바는 진한 시에나 브라운 |
-| `html.tuscan-sunset` | Tuscan Sunset — 테라코타(#E35336)+피치+모브+러스트, `--radius` 14px | Figma 색상 조합 라이브러리 참고. 사이드바는 진한 러스트 + 모브 액센트 필 |
-| `html.electropop` | Electropop — 인디고/라임/오렌지/마젠타 네온 액센트, 다크 베이스, `--radius` 12px | Figma 색상 조합 라이브러리 참고. 이 앱에서 유일한 비비드 다크 테마 |
-| `html.summer-breeze` | Summer Breeze — 옐로우(#FFEB3B)+코랄(#F88379)+스카이블루+샌드, `--radius` 16px | Figma 색상 조합 라이브러리 참고. 사이드바는 진한 스카이블루-틸 |
-| `html.wildflower-meadow` | Wildflower Meadow — 데이지화이트+버터컵앰버(#FDB813)+스카이블루+그라스그린, `--radius` 16px | Figma 색상 조합 라이브러리 참고. 사이드바는 진한 그라스그린 |
-| `html.tropical-punch` | Tropical Punch — 망고오렌지(#FF8243)+파파야핑크+파인애플옐로우+딥틸(#069494), `--radius` 16px | Figma 색상 조합 라이브러리 참고. 사이드바는 진한 딥틸 |
-| `:root` / `html.light` | **기본값** — Databricks-leaning 라이트 — flat 표면, slate 팔레트, sky accent, **다크 네이비 사이드바**, `--radius` 8px, `--card-shadow: none` | Phase A redesign. 신규 사용자 첫 진입 화면, 레거시 `'claude'` 도 여기로 |
-| `html.dark` | Databricks-leaning 다크 | 위 §2 "Ops Slate" 계열 |
-| (`system`) | OS 설정 따라 light/dark 자동 | 클래스는 light/dark 중 하나로 해석됨 |
+| `:root` / `html.light` | **기본값** — flat 표면, slate 팔레트, **다크 네이비 사이드바**, `--radius` 8px, `--card-shadow: none` | 강조색 적용 대상 |
+| `html.dark` | Databricks-leaning 다크 | 위 §2 "Ops Slate" 계열. 강조색 적용 대상 |
+| `html.comfort` | 화이트 계열 배경(`60 15% 98%`) + 딥그린(#22593D) primary + 민트 서페이스, `--radius` 16px, 소프트 카드 섀도(hover lift) | 자체 색 고정(강조색 무시) |
+| `html.high-contrast` | 흰 바탕·검정 글자·회색 45% 경계, 본문 21:1 · 보조 10.4:1 · 경계 4.8:1, 포커스 링 3px, `text-primary` 앵커 밑줄 | 관제실 대형 화면·빔프로젝터용. 자체 색 고정 |
+| (`system`) | OS 설정 따라 light/dark 자동 | 클래스는 light/dark 중 하나로 해석됨 → 강조색 적용 |
+
+**강조색** — `html.light[data-accent="…"]` / `html.dark[data-accent="…"]` 블록이 `--primary`,
+`--primary-foreground`, `--primary-text`, `--accent`, `--sidebar-primary`(+다크는 `--ring`)만 덮는다.
+`blue` 는 기본값이라 블록이 없다. 6종 모두 버튼 글자·링크가 라이트·다크에서 4.5:1 이상이다.
+미리보기 색은 `lib/themeSwatches.ts` 의 `ACCENT_SWATCH` 가 같은 값을 들고 있다.
+
+**이전 테마 마이그레이션**(첫 로드 1회, `LEGACY_THEME_MAP`): `default`(코랄)·`burnt-sienna`·`tuscan-sunset`·
+`summer-breeze` → light+coral, `wildflower-meadow` → light+amber, `tropical-punch` → light+teal,
+`electropop` → dark+violet, 레거시 `claude` → light.
 
 핵심 원칙: **모든 색·라운딩은 테마별로 값이 달라지므로 고정값 대신 토큰을 쓴다.**
 Semantic status(`--status-healthy/warning/critical/...`), Surface Container 5단계
@@ -475,11 +479,14 @@ Props: `title?`, `variant?`('flat'|'mac', 기본 'flat'), `children`, `className
 ### 12.4 컴포넌트 컨벤션
 
 - **카드**: `MacCard` 사용, 직접 `bg-card border` div 조합 금지 (DESIGN.md D-004).
-- **Shadows**: light/dark/burnt-sienna/tuscan-sunset/electropop/summer-breeze/wildflower-meadow/
-  tropical-punch 는 `--card-shadow: none`(보더가 그림자 대체), default/comfort 만 은은한
+- **Shadows**: light/dark/high-contrast 는 `--card-shadow: none`(보더가 그림자 대체), comfort 만 은은한
   depth(멀티레이어 섀도+hover lift) —
   `.mac-shadow` 유틸이 토큰을 따라가므로 개별 shadow 클래스를 만들지 않는다.
 - **Section titles inside MacCard**: 카드 제목을 본문 `<h2>` 로 중복하지 않는다.
+- **타이포 (P2)**: 본문 기본 굵기 400(`body`), 라벨 500, 제목 600. 최소 글자 `text-[11px]` — 8~10px 금지.
+  보조 글자는 `text-muted-foreground` 를 투명도 없이 쓴다(`/50~90` 은 라이트에서 2~3:1). 장식용
+  아이콘·구분선만 `/20~40` 허용, 입력 안내는 `placeholder:` 변형. 둘 다 ESLint(`TYPO_RE`)가 error 로 막는다.
+  비활성 표현(`disabled:opacity-50`)은 예외 — 비활성은 흐린 게 맞다.
 - **Colors**: JSX 내 raw hex 금지 — Tailwind 토큰(`text-primary` 등) 또는 `hsl(var(--*))`.
   고정 팔레트(`text-white`, `bg-gray-*` 등)도 금지 — 테마 토큰(`text-foreground`,
   `text-muted-foreground`, `bg-card`, `bg-secondary`)을 쓴다. 차트/캔버스는 `--chart-*` 토큰 우선.

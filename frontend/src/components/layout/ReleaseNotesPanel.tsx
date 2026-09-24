@@ -93,7 +93,7 @@ export function ReleaseNotesPanel({ open }: Props) {
                         </li>
                       ))}
                       {hiddenCount > 0 && (
-                        <li className="flex gap-1.5 text-xs text-muted-foreground/70">
+                        <li className="flex gap-1.5 text-xs text-muted-foreground">
                           <span className="flex-shrink-0 invisible">·</span>
                           <span>+{hiddenCount}개 더 (클릭해서 전체 보기)</span>
                         </li>

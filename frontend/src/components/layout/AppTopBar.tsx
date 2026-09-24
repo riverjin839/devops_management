@@ -308,7 +308,7 @@ export function AppTopBar() {
         >
           <Search className="w-4 h-4 flex-shrink-0" />
           <span className="hidden md:inline text-xs flex-1 text-left">화면 검색</span>
-          <kbd className="hidden md:inline text-[10px] font-mono border border-border rounded px-1">⌘K</kbd>
+          <kbd className="hidden md:inline text-[11px] font-mono border border-border rounded px-1">⌘K</kbd>
         </button>
         <div className="flex items-center rounded-lg border border-border bg-card overflow-hidden">
           <WorkAlarmBell />

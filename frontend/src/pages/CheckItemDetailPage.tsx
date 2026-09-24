@@ -71,7 +71,7 @@ export function CheckItemDetailPage() {
               <h1 className="text-lg font-semibold truncate">{item.name}</h1>
               <ExecTechBadge execTech={item.execTech} />
               {categoryLabel && (
-                <span className="flex-shrink-0 px-1.5 py-0.5 rounded border border-border text-[10px] font-medium text-muted-foreground">
+                <span className="flex-shrink-0 px-1.5 py-0.5 rounded border border-border text-[11px] font-medium text-muted-foreground">
                   {categoryLabel}
                 </span>
               )}
@@ -237,7 +237,7 @@ function DefinitionTab({
                   <div className="flex items-center gap-2 min-w-0">
                     <span className="text-sm font-medium truncate">{c.name}</span>
                     {override ? (
-                      <span className="flex-shrink-0 px-1.5 py-0.5 rounded border border-primary/40 bg-primary/10 text-primary text-[10px] font-medium">전용</span>
+                      <span className="flex-shrink-0 px-1.5 py-0.5 rounded border border-primary/40 bg-primary/10 text-primary text-[11px] font-medium">전용</span>
                     ) : (
                       <span className="flex-shrink-0 text-[11px] text-muted-foreground">글로벌 상속</span>
                     )}

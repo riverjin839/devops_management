@@ -253,7 +253,7 @@ export function ServiceArchitecturePage() {
                           <span className={`w-2 h-2 rounded-full shrink-0 ${meta.color}`} title={meta.label} />
                           <span className="text-sm font-medium truncate flex-1">{m.serviceName}</span>
                           {mDrift > 0 && (
-                            <span className="text-[10px] font-bold text-status-warning" title="드리프트 감지">
+                            <span className="text-[11px] font-bold text-status-warning" title="드리프트 감지">
                               Δ{mDrift}
                             </span>
                           )}
@@ -399,7 +399,7 @@ export function ServiceArchitecturePage() {
                   />
                 )}
                 {warnings.length > 0 && (
-                  <div className="absolute bottom-2 left-2 right-2 text-[10px] text-status-warning bg-card/80 border border-border rounded-lg px-2 py-1 truncate"
+                  <div className="absolute bottom-2 left-2 right-2 text-[11px] text-status-warning bg-card/80 border border-border rounded-lg px-2 py-1 truncate"
                     title={warnings.join('\n')}>
                     ⚠ {warnings[0]}{warnings.length > 1 ? ` 외 ${warnings.length - 1}건` : ''}
                   </div>

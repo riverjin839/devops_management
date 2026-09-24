@@ -2,16 +2,15 @@ import { useEffect, useMemo, useRef, useState, type ComponentType } from 'react'
 import { createPortal } from 'react-dom';
 import { useLocation, useNavigate } from 'react-router-dom';
 import {
-  Sparkles, Plus, Leaf,
+  Plus, Leaf, Contrast,
   Moon, Sun, Monitor, LogOut, User,
   KeyRound, Home, MessageSquare, Bot, HelpCircle, Search, ScrollText, Bug, UserCog, Palette,
-  Flame, Sunset, Zap, Waves, Flower2, Citrus,
 } from 'lucide-react';
 import { useUiSettings } from '@/hooks/useUiSettings';
 import { useNavCatalog } from '@/hooks/useNavCatalog';
 import { useHomePrefs, useUpdateHomePrefs } from '@/hooks/useHomePrefs';
-import { useThemeStore, type Theme } from '@/stores/themeStore';
-import { THEME_SWATCH } from '@/lib/themeSwatches';
+import { useThemeStore, accentApplies, ACCENTS, THEMES, type Accent, type Theme } from '@/stores/themeStore';
+import { ACCENT_SWATCH, ACCENT_LABEL } from '@/lib/themeSwatches';
 import { NAV_WIDTH } from '@/stores/sidebarStore';
 import { useAuthStore } from '@/stores/authStore';
 import { useAgentChatStore } from '@/stores/agentChatStore';
@@ -27,59 +26,39 @@ import { installableAppById, sidebarAppSections } from './installableApps';
 
 // 정적 네비게이션 정의(NAV_MAP / GROUPS / GroupId / DEFAULT_TITLE)는 navConfig 로 분리 —
 // Settings 의 "화면 UI 설정" 탭(NavMenuManager / PageStyleManager)과 공유한다.
-// D-077 — 테마는 레일 버튼 순환 클릭(최대 10클릭)이 아니라 사용자 메뉴 안의 목록에서 1클릭으로
-// 고른다. 기본 3종(light/dark/system)을 먼저, 컬러 테마 8종(코랄=default 포함)은 그 아래 구분해서 둔다.
-// D-072 — 컬러 테마 7종은 아이콘 대신 대표 색 스와치로 미리보기(아래 THEME_SWATCH_ICON).
-// 전체 10종을 카드로 비교하는 "테마 갤러리"는 Settings ▸ 화면 UI 설정 탭에 별도로 있다.
-const THEME_BASIC: Theme[] = ['light', 'dark', 'system'];
-const THEME_EXTRA: Theme[] = [
-  'default', 'comfort', 'burnt-sienna', 'tuscan-sunset', 'electropop',
-  'summer-breeze', 'wildflower-meadow', 'tropical-punch',
-];
+// D-077 — 테마는 레일 버튼 순환 클릭이 아니라 사용자 메뉴 안의 목록에서 1클릭으로 고른다.
+// P2 — 바탕 테마 4종 + 시스템, 그 아래 강조색 6종(대표 색 스와치). 전체를 카드로 비교하는
+// "테마 갤러리"는 Settings ▸ 화면 UI 설정 탭에 별도로 있다.
 const THEME_ICON: Record<Theme, ComponentType<{ className?: string }>> = {
-  default: Sparkles,
-  comfort: Leaf,
-  'burnt-sienna': Flame,
-  'tuscan-sunset': Sunset,
-  electropop: Zap,
-  'summer-breeze': Waves,
-  'wildflower-meadow': Flower2,
-  'tropical-punch': Citrus,
   light: Sun,
   dark: Moon,
+  comfort: Leaf,
+  'high-contrast': Contrast,
   system: Monitor,
 };
-// D-072 — 컬러 테마 7종은 아이콘 대신 실제 대표 색 스와치로 미리보기(index.css 토큰 스냅샷,
-// lib/themeSwatches.ts). 팩토리로 한 번만 만들어 매 렌더마다 컴포넌트 정체성이 바뀌지 않게 한다.
-function makeThemeSwatchIcon(theme: Theme): ComponentType<{ className?: string }> {
-  const hsl = THEME_SWATCH[theme]?.primary;
-  return function ThemeSwatchIcon({ className }: { className?: string }) {
+const THEME_LABEL: Record<Theme, string> = {
+  light: '라이트 (기본)',
+  dark: '다크',
+  comfort: '컴포트',
+  'high-contrast': '고대비',
+  system: '시스템',
+};
+// 강조색 스와치 아이콘 — 팩토리로 한 번만 만들어 매 렌더마다 컴포넌트 정체성이 바뀌지 않게 한다.
+function makeAccentSwatchIcon(accent: Accent): ComponentType<{ className?: string }> {
+  const hsl = ACCENT_SWATCH[accent];
+  return function AccentSwatchIcon({ className }: { className?: string }) {
     return (
       <span
         className={`${className ?? ''} inline-block rounded-full ring-1 ring-inset ring-border/60`}
-        style={hsl ? { backgroundColor: `hsl(${hsl})` } : undefined}
+        style={{ backgroundColor: `hsl(${hsl})` }}
         aria-hidden="true"
       />
     );
   };
 }
-const THEME_SWATCH_ICON: Partial<Record<Theme, ComponentType<{ className?: string }>>> = Object.fromEntries(
-  THEME_EXTRA.map((t) => [t, makeThemeSwatchIcon(t)]),
-);
-
-const THEME_LABEL: Record<Theme, string> = {
-  default: '코랄',
-  comfort: '컴포트',
-  'burnt-sienna': '번트 시에나',
-  'tuscan-sunset': '토스카나 선셋',
-  electropop: '일렉트로팝',
-  'summer-breeze': '서머 브리즈',
-  'wildflower-meadow': '와일드플라워 메도우',
-  'tropical-punch': '트로피컬 펀치',
-  light: '라이트 (기본)',
-  dark: '다크',
-  system: '시스템',
-};
+const ACCENT_SWATCH_ICON = Object.fromEntries(
+  ACCENTS.map((a) => [a, makeAccentSwatchIcon(a)]),
+) as Record<Accent, ComponentType<{ className?: string }>>;
 
 // flyout 을 여는 아이콘에 마우스를 올렸을 때 클릭 없이 바로 열리게 하는 hover-intent 지연.
 // OPEN 은 레일을 스쳐 지나가는 마우스에 flyout 이 깜빡이지 않도록, CLOSE 는 아이콘→flyout
@@ -185,7 +164,7 @@ function RailIconButton({ label, Icon, active, highlighted, onClick, suppressToo
 // ── Main ────────────────────────────────────────────────────────────────────
 
 export function Sidebar() {
-  const { theme, setTheme } = useThemeStore();
+  const { theme, setTheme, accent, setAccent } = useThemeStore();
   const location = useLocation();
   const navigate = useNavigate();
   const { data: settings } = useUiSettings();
@@ -460,7 +439,7 @@ export function Sidebar() {
               <FlyoutAction
                 label="화면 검색"
                 Icon={Search}
-                trailing={<kbd className="text-[10px] font-mono text-muted-foreground border border-border rounded px-1">⌘K</kbd>}
+                trailing={<kbd className="text-[11px] font-mono text-muted-foreground border border-border rounded px-1">⌘K</kbd>}
                 onSelect={() => { setHelpFlyoutAnchor(null); openPalette(true); }}
               />
               <div className="mx-2 my-1 border-t border-border" />
@@ -516,12 +495,20 @@ export function Sidebar() {
               <p className="px-2.5 pt-1.5 pb-0.5 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-1">
                 <Palette className="w-3 h-3" aria-hidden="true" /> 테마
               </p>
-              {THEME_BASIC.map((t) => (
+              {THEMES.map((t) => (
                 <FlyoutAction key={t} label={THEME_LABEL[t]} Icon={THEME_ICON[t]} checked={theme === t} onSelect={() => setTheme(t)} />
               ))}
-              <p className="px-2.5 pt-1.5 pb-0.5 text-[10px] text-muted-foreground">컬러 테마</p>
-              {THEME_EXTRA.map((t) => (
-                <FlyoutAction key={t} label={THEME_LABEL[t]} Icon={THEME_SWATCH_ICON[t] ?? THEME_ICON[t]} checked={theme === t} onSelect={() => setTheme(t)} />
+              <p className="px-2.5 pt-1.5 pb-0.5 text-[11px] text-muted-foreground">강조색</p>
+              {ACCENTS.map((a) => (
+                <FlyoutAction
+                  key={a}
+                  label={ACCENT_LABEL[a]}
+                  Icon={ACCENT_SWATCH_ICON[a]}
+                  checked={accent === a}
+                  disabled={!accentApplies(theme)}
+                  title={accentApplies(theme) ? undefined : '컴포트·고대비 바탕에서는 강조색을 바꿀 수 없다'}
+                  onSelect={() => setAccent(a)}
+                />
               ))}
               <div className="mx-2 my-1 border-t border-border" />
               <FlyoutAction

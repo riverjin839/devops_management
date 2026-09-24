@@ -198,7 +198,7 @@ function StatusOverlay({
           <p className="font-medium break-words">{result.error || 'Query error'}</p>
           {hint && <p className="text-xs text-status-critical/80">{hint}</p>}
           {promql && (
-            <code className="block text-xs font-mono text-muted-foreground/80 break-all max-h-12 overflow-hidden">
+            <code className="block text-xs font-mono text-muted-foreground break-all max-h-12 overflow-hidden">
               {promql}
             </code>
           )}
@@ -317,7 +317,7 @@ export function MetricCard({ card, result, onDelete, onEdit }: MetricCardProps) 
       </div>
 
       {/* PromQL hint */}
-      <div className="mt-3 text-xs text-muted-foreground/50 font-mono truncate" title={card.promql}>
+      <div className="mt-3 text-xs text-muted-foreground font-mono truncate" title={card.promql}>
         {card.promql}
       </div>
     </div>

@@ -106,7 +106,7 @@ export function LlmSummaryPanel({
           <ol className="space-y-1">
             {flowSteps.map((s) => (
               <li key={`${s.order}-${s.source}-${s.target}`} className="flex items-start gap-2 text-xs">
-                <span className="shrink-0 w-4.5 h-4.5 min-w-[18px] inline-flex items-center justify-center rounded-full bg-secondary border border-border font-bold text-[10px]">
+                <span className="shrink-0 w-4.5 h-4.5 min-w-[18px] inline-flex items-center justify-center rounded-full bg-secondary border border-border font-bold text-[11px]">
                   {s.order}
                 </span>
                 <span className="text-muted-foreground">

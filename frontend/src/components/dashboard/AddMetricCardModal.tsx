@@ -379,7 +379,7 @@ export function AddMetricCardModal({ isOpen, onClose, editingCard }: AddMetricCa
             <div className="space-y-3">
               {groupedTemplates.map(({ group, items }) => (
                 <div key={group}>
-                  <p className="text-xs font-mono uppercase text-muted-foreground/70 mb-1">
+                  <p className="text-xs font-mono uppercase text-muted-foreground mb-1">
                     {group === 'k8s' ? 'Kubernetes / API server' : group === 'etcd' ? 'etcd' : 'General'}
                   </p>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
@@ -393,7 +393,7 @@ export function AddMetricCardModal({ isOpen, onClose, editingCard }: AddMetricCa
                         <div className="text-sm font-medium">{tpl.label}</div>
                         <div className="text-xs text-muted-foreground font-mono truncate mt-0.5">{tpl.promql}</div>
                         {tpl.source && (
-                          <div className="text-xs text-muted-foreground/70 mt-0.5">
+                          <div className="text-xs text-muted-foreground mt-0.5">
                             <span className="opacity-70">출처:</span> {tpl.source}
                           </div>
                         )}

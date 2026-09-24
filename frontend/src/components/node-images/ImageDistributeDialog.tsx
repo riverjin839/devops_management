@@ -219,7 +219,7 @@ export function ImageDistributeDialog({
                   </option>
                 ))}
               </select>
-              <p className="text-xs text-muted-foreground/70 mt-1">
+              <p className="text-xs text-muted-foreground mt-1">
                 {targetClusterId === sourceClusterId
                   ? '출처와 동일한 클러스터의 다른 노드로 배포'
                   : `다른 클러스터(${targetClusterName})의 노드로 배포`}
@@ -294,7 +294,7 @@ export function ImageDistributeDialog({
                 {(['password', 'key'] as const).map((m) => (
                   <button key={m} type="button" onClick={() => setAuthMode(m)}
                     className={`px-2 py-0.5 text-xs font-medium rounded-md ${
-                      authMode === m ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground/80 hover:text-foreground'
+                      authMode === m ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
                     }`}>
                     {m === 'password' ? '비밀번호' : '개인키'}
                   </button>
@@ -323,7 +323,7 @@ export function ImageDistributeDialog({
               <label className="text-xs text-muted-foreground">
                 대상 노드 ({selected.size} / {nodes.length} 선택)
                 {!coverageComputing && (
-                  <span className="ml-1 text-muted-foreground/70">· 보유 {havingNodes.size} · 미보유 {Math.max(0, nodes.length - havingNodes.size)}</span>
+                  <span className="ml-1 text-muted-foreground">· 보유 {havingNodes.size} · 미보유 {Math.max(0, nodes.length - havingNodes.size)}</span>
                 )}
               </label>
               <div className="flex gap-2">
@@ -481,7 +481,7 @@ function ResultRow({ r }: { r: BulkExecResultItem }) {
               <pre className="font-mono text-xs bg-status-critical/5 border border-status-critical/20 text-status-critical rounded p-1.5 mt-1 max-h-40 overflow-auto whitespace-pre-wrap break-all">{r.stderr}</pre>
             )}
             {!r.stdout && !r.stderr && !r.error && (
-              <p className="text-xs text-muted-foreground/70">(출력 없음)</p>
+              <p className="text-xs text-muted-foreground">(출력 없음)</p>
             )}
           </td>
         </tr>

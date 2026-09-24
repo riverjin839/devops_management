@@ -24,7 +24,7 @@ function TypeIcon({ icon, className = 'w-4 h-4' }: { icon?: string | null; class
   const resolved = resolveClusterIcon(icon);
   if (resolved?.kind === 'lucide') { const Icon = resolved.Component; return <Icon className={className} />; }
   if (resolved?.kind === 'text') return <span aria-hidden>{resolved.value}</span>;
-  return <span className="text-muted-foreground/50">—</span>;
+  return <span className="text-muted-foreground">—</span>;
 }
 
 /** 서비스 타입 카탈로그 관리 — Settings → "관리 서비스" 탭의 PEP/APP 서비스 서브탭 본문 하단
@@ -133,7 +133,7 @@ export function LakeServiceTypeManager({ domain }: { domain: ServiceDomain }) {
                   <td className="px-3 py-2 font-mono">{r.serviceType}</td>
                   <td className="px-3 py-2 font-medium">{r.label}</td>
                   <td className="px-3 py-2 text-muted-foreground">
-                    {r.categoryId ? (categoryLabelMap[r.categoryId] ?? '—') : <span className="text-muted-foreground/50">미분류</span>}
+                    {r.categoryId ? (categoryLabelMap[r.categoryId] ?? '—') : <span className="text-muted-foreground">미분류</span>}
                   </td>
                   <td className="px-3 py-2 font-mono text-xs text-muted-foreground">{r.defaultPath}</td>
                   <td className="px-3 py-2 text-center">

@@ -196,7 +196,7 @@ function SummaryTile({ label, value, unit, tip }: { label: string; value: string
       className="bg-card border border-border rounded-lg px-3 py-2.5"
       title={tip}
     >
-      <p className="text-xs uppercase tracking-wider text-muted-foreground/80">{label}</p>
+      <p className="text-xs uppercase tracking-wider text-muted-foreground">{label}</p>
       <p className="mt-0.5 flex items-baseline gap-1">
         <span className="text-lg font-bold tabular-nums text-foreground">{value}</span>
         {unit && <span className="text-xs text-muted-foreground">{unit}</span>}

@@ -275,7 +275,7 @@ export function ClusterItemModal({ isOpen, onClose, clusterId, editingItem }: Cl
                 </select>
                 <span className="text-muted-foreground">분 (KST)</span>
               </div>
-              <p className="text-xs text-muted-foreground/70">분 단위는 표시용이며 실제 자동 수집은 매시 정각에 시 기준으로 실행됩니다.</p>
+              <p className="text-xs text-muted-foreground">분 단위는 표시용이며 실제 자동 수집은 매시 정각에 시 기준으로 실행됩니다.</p>
             </div>
           )}
 

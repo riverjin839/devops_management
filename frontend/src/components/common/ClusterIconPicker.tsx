@@ -262,7 +262,7 @@ export function ClusterIconPicker({
                     {group.label}
                   </h3>
                   {group.hint && (
-                    <p className="text-xs text-muted-foreground/70 truncate">{group.hint}</p>
+                    <p className="text-xs text-muted-foreground truncate">{group.hint}</p>
                   )}
                 </header>
                 <div className="grid grid-cols-7 gap-1">
@@ -315,7 +315,7 @@ export function ClusterIconPicker({
                       {group.label}
                     </h3>
                     {group.hint && (
-                      <p className="text-xs text-muted-foreground/70 truncate">{group.hint}</p>
+                      <p className="text-xs text-muted-foreground truncate">{group.hint}</p>
                     )}
                   </header>
                   <div className="grid grid-cols-10 gap-1">
@@ -381,7 +381,7 @@ export function ClusterIconPicker({
                 <p className="text-xs text-status-critical">{uploadError}</p>
               )}
 
-              <p className="text-xs text-muted-foreground/70 leading-relaxed">
+              <p className="text-xs text-muted-foreground leading-relaxed">
                 • 권장 사이즈: 정사각형 (예: 256×256)<br />
                 • 최대 5MB · 자동 64×64 축소<br />
                 • 저장 후 사이드바/카드/카탈로그 어디든 표시됩니다
@@ -391,7 +391,7 @@ export function ClusterIconPicker({
         </div>
 
         {/* Footer hint */}
-        <div className="px-3 py-1.5 border-t border-border text-xs text-muted-foreground/70">
+        <div className="px-3 py-1.5 border-t border-border text-xs text-muted-foreground">
           ESC · 외부 클릭으로 닫기
         </div>
       </div>
@@ -451,11 +451,11 @@ function BuilderTab({ context, onApply }: { context: IconBuilderContext; onApply
       <div className="rounded-lg border border-border bg-muted/20 p-3 flex items-center justify-center gap-6">
         <div className="flex flex-col items-center gap-1">
           <img src={previewUrl} alt="미리보기 64px" className="w-16 h-16" />
-          <span className="text-[10px] text-muted-foreground">64px</span>
+          <span className="text-[11px] text-muted-foreground">64px</span>
         </div>
         <div className="flex flex-col items-center gap-1">
           <img src={previewUrl} alt="미리보기 40px (사이드바)" className="w-10 h-10" />
-          <span className="text-[10px] text-muted-foreground">사이드바</span>
+          <span className="text-[11px] text-muted-foreground">사이드바</span>
         </div>
       </div>
 
@@ -529,7 +529,7 @@ function BuilderTab({ context, onApply }: { context: IconBuilderContext; onApply
         <div className="space-y-1.5">
           {COLOR_PATTERNS.map((pattern) => (
             <div key={pattern.key} className="flex items-center gap-1.5">
-              <span className="w-24 shrink-0 truncate text-muted-foreground/80">{pattern.label}</span>
+              <span className="w-24 shrink-0 truncate text-muted-foreground">{pattern.label}</span>
               <div className="flex items-center gap-1">
                 {pattern.colors.map((hex) => (
                   <button
@@ -583,7 +583,7 @@ function BuilderTab({ context, onApply }: { context: IconBuilderContext; onApply
         이 아이콘 적용
       </button>
 
-      <p className="text-xs text-muted-foreground/70 leading-relaxed">
+      <p className="text-xs text-muted-foreground leading-relaxed">
         • SVG 로 저장되어 어느 크기에서도 선명합니다<br />
         • 우상단은 상태 표시(dot) 자리라 비워둡니다<br />
         • 운영타입별 기본 색은 Settings ▸ 운영등급에서 바꿀 수 있습니다<br />

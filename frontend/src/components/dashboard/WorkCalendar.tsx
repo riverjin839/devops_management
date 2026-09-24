@@ -299,7 +299,7 @@ export function WorkCalendar({ selectedClusterId }: WorkCalendarProps) {
                     <span className={`text-[12px] font-semibold tabular-nums leading-none ${dayNumberClr}`}>
                       {d.getDate()}
                       {isToday && (
-                        <span className="ml-1 align-super text-[8px] font-bold uppercase tracking-wider text-primary">today</span>
+                        <span className="ml-1 align-super text-[11px] font-bold uppercase tracking-wider text-primary">today</span>
                       )}
                     </span>
                     <button

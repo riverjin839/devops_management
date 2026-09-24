@@ -37,7 +37,7 @@ export function InternalIpRow({ cluster, overlapColor }: InternalIpRowProps) {
 
   const fallback = cluster.cidr ? (
     <p className="text-sm font-mono text-muted-foreground" title="nodeIps / internalIps 미입력 — fallback CIDR">
-      <span className="text-muted-foreground/70 text-xs mr-1">fallback CIDR</span>
+      <span className="text-muted-foreground text-xs mr-1">fallback CIDR</span>
       <span className="text-foreground">{cluster.cidr}</span>
     </p>
   ) : null;

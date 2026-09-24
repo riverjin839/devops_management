@@ -207,7 +207,7 @@ export function ClusterCustomFieldsManager({ open, onClose }: Props) {
                 )}
                 {fields.map((f, idx) => (
                   <tr key={f.id} className="border-t border-border">
-                    <td className="px-1 py-1 text-muted-foreground/60">
+                    <td className="px-1 py-1 text-muted-foreground">
                       <div className="flex flex-col">
                         <button onClick={() => shift(f, -1)} disabled={idx === 0 || updateMut.isPending}
                           title="위로 이동" aria-label="위로 이동"
@@ -253,7 +253,7 @@ export function ClusterCustomFieldsManager({ open, onClose }: Props) {
                           placeholder="A, B, C"
                           className="w-full bg-transparent border border-transparent hover:border-border focus:border-primary rounded px-1 py-0.5 font-mono text-xs"
                         />
-                      ) : <span className="text-muted-foreground/60">-</span>}
+                      ) : <span className="text-muted-foreground">-</span>}
                     </td>
                     <td className="px-2 py-1.5 text-right">
                       <button onClick={() => setDeleteTarget(f)}
@@ -307,7 +307,7 @@ export function ClusterCustomFieldsManager({ open, onClose }: Props) {
                           className="w-full px-1 py-0.5 text-xs font-mono bg-background border border-border rounded focus:outline-none focus:ring-1 focus:ring-primary"
                         />
                       ) : (
-                        <span className="text-xs text-muted-foreground/60">-</span>
+                        <span className="text-xs text-muted-foreground">-</span>
                       )}
                     </td>
                     <td className="px-2 py-1 text-right">

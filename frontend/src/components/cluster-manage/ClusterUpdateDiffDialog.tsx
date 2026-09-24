@@ -132,7 +132,7 @@ export function ClusterUpdateDiffDialog({
                         title={renderValue(d.current, d.field)}>
                         {renderValue(d.current, d.field)}
                       </td>
-                      <td className="py-1.5"><ArrowRight className="w-3 h-3 text-muted-foreground/50" /></td>
+                      <td className="py-1.5"><ArrowRight className="w-3 h-3 text-muted-foreground" /></td>
                       <td className="py-1.5 font-mono text-xs text-primary max-w-[260px] truncate"
                         title={renderValue(d.proposed, d.field)}>
                         {renderValue(d.proposed, d.field)}
@@ -149,7 +149,7 @@ export function ClusterUpdateDiffDialog({
               <summary className="text-xs text-muted-foreground cursor-pointer">
                 변경 없음 {unchanged.length}건 보기
               </summary>
-              <ul className="mt-2 text-xs text-muted-foreground/80 space-y-0.5 font-mono">
+              <ul className="mt-2 text-xs text-muted-foreground space-y-0.5 font-mono">
                 {unchanged.map((d) => (
                   <li key={d.field}>
                     {FIELD_LABELS[d.field] ?? d.field}: {renderValue(d.current, d.field)}

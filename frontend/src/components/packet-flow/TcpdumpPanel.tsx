@@ -239,7 +239,7 @@ export function TcpdumpPanel({ clusterId }: Props) {
               {(['password', 'key'] as const).map((m) => (
                 <button key={m} onClick={() => setAuthMode(m)}
                   className={`px-2 py-0.5 text-xs font-medium rounded-md ${
-                    authMode === m ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground/80 hover:text-foreground'
+                    authMode === m ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
                   }`}>
                   {m === 'password' ? '비밀번호' : '개인키'}
                 </button>
@@ -392,7 +392,7 @@ export function TcpdumpPanel({ clusterId }: Props) {
 
       {!result && (
         <div className="bg-card border border-border rounded-xl p-10 text-center text-sm text-muted-foreground">
-          <Info className="w-8 h-8 mx-auto mb-2 text-muted-foreground/50" />
+          <Info className="w-8 h-8 mx-auto mb-2 text-muted-foreground" />
           대상 노드/자격증명을 입력하고 "캡처 실행"을 눌러 원격에서 tcpdump 를 수행하세요.
           <br />
           <span className="text-xs">실행 전 확인 모달이 표시됩니다.</span>

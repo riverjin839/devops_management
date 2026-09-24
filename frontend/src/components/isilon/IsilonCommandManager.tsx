@@ -135,8 +135,8 @@ export function IsilonCommandManager({ serverId, onClose }: Props) {
                       <div className="flex items-center gap-2">
                         <span className="text-sm font-medium truncate">{c.label}</span>
                         {c.isBuiltin && <Lock className="w-3 h-3 text-muted-foreground" aria-label="builtin" />}
-                        {!c.enabled && <span className="text-[10px] px-1 rounded bg-muted text-muted-foreground">off</span>}
-                        <span className="ml-auto text-[10px] px-1.5 rounded bg-muted text-muted-foreground">{c.section}</span>
+                        {!c.enabled && <span className="text-[11px] px-1 rounded bg-muted text-muted-foreground">off</span>}
+                        <span className="ml-auto text-[11px] px-1.5 rounded bg-muted text-muted-foreground">{c.section}</span>
                       </div>
                       <code className="block text-[11px] text-muted-foreground truncate mt-0.5">{c.command}</code>
                     </button>

@@ -225,7 +225,7 @@ export function ClusterOpsCheckPanel({ clusterId, clusterName }: Props) {
                       <div className="flex items-center gap-1.5">
                         <span className="font-medium truncate max-w-[260px]">{c.name || c.checkType}</span>
                         {c.enabled === false && (
-                          <span className="text-[10px] rounded px-1 py-0.5 bg-muted text-muted-foreground border border-border" title="비활성 — cron 미실행, 수동 실행만">비활성</span>
+                          <span className="text-[11px] rounded px-1 py-0.5 bg-muted text-muted-foreground border border-border" title="비활성 — cron 미실행, 수동 실행만">비활성</span>
                         )}
                       </div>
                       {c.checkType && c.name && (
@@ -262,7 +262,7 @@ export function ClusterOpsCheckPanel({ clusterId, clusterName }: Props) {
                           )}
                         </span>
                       ) : (
-                        <span className="inline-flex items-center gap-1 text-xs text-muted-foreground/60">
+                        <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
                           <Circle className="w-3 h-3" /> 미실행
                         </span>
                       )}
@@ -321,7 +321,7 @@ export function ClusterOpsCheckPanel({ clusterId, clusterName }: Props) {
                   </span>
                 )}
                 <span className="flex-1 text-sm text-muted-foreground truncate">{it.message}</span>
-                {it.durationMs > 0 && <span className="text-xs text-muted-foreground/70 font-mono">{it.durationMs}ms</span>}
+                {it.durationMs > 0 && <span className="text-xs text-muted-foreground font-mono">{it.durationMs}ms</span>}
               </button>
             ))}
           </div>

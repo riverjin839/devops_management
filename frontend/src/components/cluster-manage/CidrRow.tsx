@@ -15,7 +15,7 @@ export function CidrRow({ label, cidr, first, last, color, overlapColor }: CidrR
     return (
       <div className="rounded-lg border border-dashed border-border/40 px-3 py-2.5">
         <p className={`text-xs font-semibold uppercase tracking-wider mb-0.5 ${color.label}`}>{label}</p>
-        <p className="text-sm text-muted-foreground/50">미입력</p>
+        <p className="text-sm text-muted-foreground">미입력</p>
       </div>
     );
   }

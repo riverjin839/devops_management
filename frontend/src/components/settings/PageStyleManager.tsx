@@ -97,7 +97,7 @@ export function PageStyleManager() {
       <div className="px-4 py-3 space-y-4">
         {/* 대상 페이지 선택 */}
         <div>
-          <span className="block text-xs text-muted-foreground/70 mb-1 uppercase tracking-wider">대상 페이지</span>
+          <span className="block text-xs text-muted-foreground mb-1 uppercase tracking-wider">대상 페이지</span>
           <select
             value={target}
             onChange={(e) => setTarget(e.target.value)}
@@ -118,7 +118,7 @@ export function PageStyleManager() {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-4">
           {/* 폰트 */}
           <div>
-            <span className="block text-xs text-muted-foreground/70 mb-1 uppercase tracking-wider">폰트</span>
+            <span className="block text-xs text-muted-foreground mb-1 uppercase tracking-wider">폰트</span>
             <select
               value={draft.fontFamily ?? ''}
               onChange={(e) => set('fontFamily', e.target.value || undefined)}
@@ -132,7 +132,7 @@ export function PageStyleManager() {
 
           {/* 글자 크기 */}
           <div>
-            <span className="block text-xs text-muted-foreground/70 mb-1 uppercase tracking-wider">글자 크기</span>
+            <span className="block text-xs text-muted-foreground mb-1 uppercase tracking-wider">글자 크기</span>
             <select
               value={draft.fontScale != null ? String(draft.fontScale) : ''}
               onChange={(e) => set('fontScale', e.target.value ? Number(e.target.value) : undefined)}
@@ -147,7 +147,7 @@ export function PageStyleManager() {
 
           {/* 글자색 */}
           <div>
-            <span className="block text-xs text-muted-foreground/70 mb-1 uppercase tracking-wider">글자색</span>
+            <span className="block text-xs text-muted-foreground mb-1 uppercase tracking-wider">글자색</span>
             <ColorField
               value={draft.textColor}
               fallback="#1e293b"
@@ -157,7 +157,7 @@ export function PageStyleManager() {
 
           {/* 배경색 */}
           <div>
-            <span className="block text-xs text-muted-foreground/70 mb-1 uppercase tracking-wider">배경색</span>
+            <span className="block text-xs text-muted-foreground mb-1 uppercase tracking-wider">배경색</span>
             <ColorField
               value={draft.bgColor}
               fallback="#ffffff"
@@ -168,7 +168,7 @@ export function PageStyleManager() {
 
         {/* 미리보기 */}
         <div>
-          <p className="text-xs text-muted-foreground/70 mb-1 uppercase tracking-wider">미리보기 — {targetLabel}</p>
+          <p className="text-xs text-muted-foreground mb-1 uppercase tracking-wider">미리보기 — {targetLabel}</p>
           <div className="rounded-lg border border-border p-4" style={pageStyleToCss(cleanStyle(draft))}>
             <p className="text-base font-semibold">가나다라 ABCDdefg 0123 — 제목 텍스트</p>
             <p className="text-sm opacity-80 mt-1">이 페이지의 본문은 이렇게 표시됩니다. 폰트 · 크기 · 글자색 · 배경색이 적용됩니다.</p>

@@ -269,7 +269,7 @@ export function MemberTodayTodos({ selectedClusterId }: MemberTodayTodosProps) {
               >
                 {/* 헤더 1줄 압축 — 이름은 작게, 카드 높이를 줄여 더 많은 담당자가 보이게 */}
                 <div className="flex items-center gap-1.5 mb-1.5">
-                  <div className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold flex-shrink-0 ${
+                  <div className={`w-5 h-5 rounded-full flex items-center justify-center text-[11px] font-bold flex-shrink-0 ${
                     isTeam ? 'bg-primary/25 text-primary' : 'bg-primary/15 text-primary'
                   }`}>
                     {isTeam ? <Users className="w-3 h-3" /> : g.assignee.slice(0, 2).toUpperCase()}
@@ -328,7 +328,7 @@ export function MemberTodayTodos({ selectedClusterId }: MemberTodayTodosProps) {
                             {t.title?.trim() || stripHtml(t.content) || t.category}
                           </span>
                           {t.clusterName && (
-                            <span className="text-xs text-muted-foreground/80 flex-shrink-0 hidden md:inline">
+                            <span className="text-xs text-muted-foreground flex-shrink-0 hidden md:inline">
                               {t.clusterName}
                             </span>
                           )}

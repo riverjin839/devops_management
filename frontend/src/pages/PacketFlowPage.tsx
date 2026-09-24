@@ -59,7 +59,7 @@ function HopBreadcrumb({
               <span className="text-muted-foreground">·</span>
               <span className="font-mono max-w-[120px] truncate">{h.name.split('/').pop()}</span>
             </button>
-            {i < hops.length - 1 && <ArrowRight className="w-3 h-3 text-muted-foreground/50" />}
+            {i < hops.length - 1 && <ArrowRight className="w-3 h-3 text-muted-foreground" />}
           </div>
         );
       })}
@@ -224,7 +224,7 @@ export function PacketFlowPage() {
                 {(['north-south', 'east-west'] as PacketDirection[]).map((d) => (
                   <button key={d} onClick={() => setDirection(d)}
                     className={`px-3 py-1.5 text-sm font-medium rounded-md transition-all ${
-                      direction === d ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground/80 hover:text-foreground'
+                      direction === d ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
                     }`}>
                     {d === 'north-south' ? '외부 → Pod (N-S)' : 'Pod ↔ Pod (E-W)'}
                   </button>
@@ -351,7 +351,7 @@ export function PacketFlowPage() {
             <>
               {!response ? (
                 <div className="bg-card border border-border rounded-xl p-10 text-center text-sm text-muted-foreground">
-                  <Info className="w-8 h-8 mx-auto mb-2 text-muted-foreground/50" />
+                  <Info className="w-8 h-8 mx-auto mb-2 text-muted-foreground" />
                   source/destination 를 입력하고 "추적" 을 눌러 경로를 그래프로 확인하세요.
                 </div>
               ) : (
@@ -396,7 +396,7 @@ export function PacketFlowPage() {
               />
             ) : (
               <div className="bg-card border border-border rounded-xl p-10 text-center text-sm text-muted-foreground">
-                <Info className="w-8 h-8 mx-auto mb-2 text-muted-foreground/50" />
+                <Info className="w-8 h-8 mx-auto mb-2 text-muted-foreground" />
                 왼쪽에서 클러스터를 선택하세요.
               </div>
             )
@@ -407,7 +407,7 @@ export function PacketFlowPage() {
               <TcpdumpPanel clusterId={clusterId} />
             ) : (
               <div className="bg-card border border-border rounded-xl p-10 text-center text-sm text-muted-foreground">
-                <Info className="w-8 h-8 mx-auto mb-2 text-muted-foreground/50" />
+                <Info className="w-8 h-8 mx-auto mb-2 text-muted-foreground" />
                 왼쪽에서 클러스터를 선택하세요.
               </div>
             )

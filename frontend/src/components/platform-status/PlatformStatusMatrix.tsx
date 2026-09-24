@@ -66,7 +66,7 @@ function CellButton({
         title={empty ? emptyCellHint(item, cell) : (cell?.message || undefined)}
       >
         {empty ? (
-          <span className="text-muted-foreground/50 text-xs">—</span>
+          <span className="text-muted-foreground text-xs">—</span>
         ) : (
           <>
             <StatusDot variant={cell.status!} />
@@ -88,7 +88,7 @@ function CellButton({
           {running ? (
             <Loader2 className="w-3 h-3 text-muted-foreground animate-spin" aria-hidden="true" />
           ) : (
-            <Play className={`w-3 h-3 ${runDisabledHint ? 'text-muted-foreground/60' : 'text-primary'}`} aria-hidden="true" />
+            <Play className={`w-3 h-3 ${runDisabledHint ? 'text-muted-foreground' : 'text-primary'}`} aria-hidden="true" />
           )}
         </button>
       )}
@@ -306,7 +306,7 @@ function ClusterCronBadge({
         title={`${cluster.checkCronExpr || '미설정'} — ${editDisabledHint ?? CRON_TONE_HINT[tone]}`}
         aria-haspopup="dialog"
         aria-expanded={open}
-        className={`inline-flex items-center gap-1 text-[10px] font-mono transition-colors px-1.5 py-0.5 rounded border hover:brightness-95 disabled:cursor-not-allowed max-w-[140px] ${CRON_TONE_CLS[tone]}`}
+        className={`inline-flex items-center gap-1 text-[11px] font-mono transition-colors px-1.5 py-0.5 rounded border hover:brightness-95 disabled:cursor-not-allowed max-w-[140px] ${CRON_TONE_CLS[tone]}`}
       >
         <ToneIcon className={`w-2.5 h-2.5 flex-shrink-0 ${tone === 'running' ? 'animate-spin' : ''}`} aria-hidden="true" />
         <span className="truncate">{cluster.checkCronExpr || '미설정'}</span>
@@ -763,17 +763,17 @@ export function PlatformStatusMatrix({ toolbarSlot }: PlatformStatusMatrixProps 
                           <span className="text-[11px] text-muted-foreground">{g.entries.length}개 항목</span>
                           <div className="ml-auto flex items-center gap-1.5 flex-shrink-0">
                             {g.counts.critical > 0 && (
-                              <span className={`inline-flex items-center gap-1 px-1.5 py-px rounded border text-[10px] font-semibold tabular-nums ${GROUP_BADGE_CLS.critical}`}>
+                              <span className={`inline-flex items-center gap-1 px-1.5 py-px rounded border text-[11px] font-semibold tabular-nums ${GROUP_BADGE_CLS.critical}`}>
                                 <XCircle className="w-2.5 h-2.5" aria-hidden="true" /> {g.counts.critical}
                               </span>
                             )}
                             {g.counts.warning > 0 && (
-                              <span className={`inline-flex items-center gap-1 px-1.5 py-px rounded border text-[10px] font-semibold tabular-nums ${GROUP_BADGE_CLS.warning}`}>
+                              <span className={`inline-flex items-center gap-1 px-1.5 py-px rounded border text-[11px] font-semibold tabular-nums ${GROUP_BADGE_CLS.warning}`}>
                                 <AlertTriangle className="w-2.5 h-2.5" aria-hidden="true" /> {g.counts.warning}
                               </span>
                             )}
                             {g.counts.healthy > 0 && (
-                              <span className={`inline-flex items-center gap-1 px-1.5 py-px rounded border text-[10px] font-semibold tabular-nums ${GROUP_BADGE_CLS.healthy}`}>
+                              <span className={`inline-flex items-center gap-1 px-1.5 py-px rounded border text-[11px] font-semibold tabular-nums ${GROUP_BADGE_CLS.healthy}`}>
                                 <CheckCircle2 className="w-2.5 h-2.5" aria-hidden="true" /> {g.counts.healthy}
                               </span>
                             )}
@@ -804,7 +804,7 @@ export function PlatformStatusMatrix({ toolbarSlot }: PlatformStatusMatrixProps 
                               else if (e.key === 'ArrowDown') { e.preventDefault(); moveItem(idx, 1); }
                             }}
                             disabled={!canOperate || reorderMut.isPending}
-                            className="flex-shrink-0 cursor-grab active:cursor-grabbing text-muted-foreground/60 hover:text-foreground focus-visible:text-foreground disabled:opacity-30 disabled:cursor-not-allowed"
+                            className="flex-shrink-0 cursor-grab active:cursor-grabbing text-muted-foreground hover:text-foreground focus-visible:text-foreground disabled:opacity-30 disabled:cursor-not-allowed"
                             title={withHint('드래그하거나 화살표 위/아래로 순서 변경')}
                             aria-label={operateHint ? `${item.name} 순서 변경 — ${operateHint}` : `${item.name} 순서 변경 — 드래그하거나 화살표 위/아래 키`}
                           >
@@ -814,7 +814,7 @@ export function PlatformStatusMatrix({ toolbarSlot }: PlatformStatusMatrixProps 
                         const categoryChip = item.category && (
                           <span
                             title={`영역: ${item.category}`}
-                            className={`flex-shrink-0 px-1.5 py-px rounded border text-[9px] font-medium select-none ${
+                            className={`flex-shrink-0 px-1.5 py-px rounded border text-[11px] font-medium select-none ${
                               color ? color.chip : 'border-border text-muted-foreground'
                             }`}
                           >

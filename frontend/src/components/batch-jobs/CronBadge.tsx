@@ -34,7 +34,7 @@ function formatDateTime(iso: string | null | undefined): string {
 }
 
 export function CronBadge({ job }: { job: BatchJob }) {
-  if (!job.cron) return <span className="text-xs text-muted-foreground/60">—</span>;
+  if (!job.cron) return <span className="text-xs text-muted-foreground">—</span>;
 
   const { tone, label } = classify(job);
   const { cls, Icon } = TONE_META[tone];

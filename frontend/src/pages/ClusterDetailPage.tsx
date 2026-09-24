@@ -23,7 +23,7 @@ function ContributorRow({ c }: { c: ClusterStatusContributor }) {
       <span className="font-medium truncate max-w-[220px]">{c.name}</span>
       {c.message && <span className="text-muted-foreground truncate flex-1 min-w-0">{c.message}</span>}
       {c.checkedAt && (
-        <span className="text-xs text-muted-foreground/70 font-mono ml-auto shrink-0">
+        <span className="text-xs text-muted-foreground font-mono ml-auto shrink-0">
           {parseUTC(c.checkedAt).toLocaleString()}
         </span>
       )}

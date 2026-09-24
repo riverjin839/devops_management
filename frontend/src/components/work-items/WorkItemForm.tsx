@@ -573,7 +573,7 @@ export function WorkItemForm({ initial, parentItem, defaultStartedAt, onCancel, 
         <summary className="flex items-center gap-2 px-3 py-2 cursor-pointer text-sm font-medium select-none">
           <ChevronDown className="w-4 h-4 text-muted-foreground transition-transform group-open:rotate-180" />
           <span>{type === 'issue' ? '이슈 내용' : '업무 내용'}</span>
-          <span className="text-xs text-muted-foreground/70">(클릭해서 펼치기)</span>
+          <span className="text-xs text-muted-foreground">(클릭해서 펼치기)</span>
         </summary>
         <div className="px-3 pb-3" id={f('content')}>
           <RichTextEditor
@@ -595,7 +595,7 @@ export function WorkItemForm({ initial, parentItem, defaultStartedAt, onCancel, 
           <summary className="flex items-center gap-2 px-3 py-2 cursor-pointer text-sm font-medium select-none">
             <ChevronDown className="w-4 h-4 text-muted-foreground transition-transform group-open:rotate-180" />
             <span>이슈 상세</span>
-            <span className="text-xs text-muted-foreground/70">(추가 배경 · 재현 절차 등 — 선택 입력)</span>
+            <span className="text-xs text-muted-foreground">(추가 배경 · 재현 절차 등 — 선택 입력)</span>
           </summary>
           <div className="px-3 pb-3">
             <RichTextEditor

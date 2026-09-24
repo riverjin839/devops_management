@@ -1,38 +1,24 @@
 import { create } from 'zustand';
 
 /**
- * 테마 모드.
- * - `light`          : **기본 테마** — 슬레이트 + 블루 단일 강조 (Databricks-leaning).
- *                      신규 사용자 첫 진입 화면. (2026-09 부터 기본값 — 이전엔 `default`.)
- * - `default`        : "코랄" 테마 — 따뜻한 페이퍼 배경 + 큰 radius + 은은한 그림자 +
- *                      코랄 #B8552E accent. ID 는 호환성 때문에 `default` 를 유지하지만
- *                      더 이상 기본값이 아니다.
- * - `comfort`        : 화이트 계열 배경 + 딥그린 액센트 + 화이트 카드 + 큰 radius(16px) —
- *                      부드럽고 편안한 대시보드 톤 (Donezo-inspired).
- * - `burnt-sienna`   : 테라코타/베이지/샌드/시에나 — 따뜻한 대지색 팔레트 (Figma
- *                      색상 조합 라이브러리 "Burnt Sienna" 참고).
- * - `tuscan-sunset`  : 테라코타/피치/모브/러스트 — 노을톤 팔레트 ("Tuscan Sunset" 참고).
- * - `electropop`     : 인디고/라임/오렌지/마젠타 네온 액센트의 비비드 다크 테마
- *                      ("Electropop" 참고) — 이 앱에서 유일한 비비드 다크 테마.
- * - `summer-breeze`   : 옐로우/코랄/스카이블루/샌드 — 여름 해변 톤 ("Summer Breeze" 참고).
- * - `wildflower-meadow`: 데이지화이트/버터컵앰버/스카이블루/그라스그린 — 봄 들판 톤
- *                      ("Wildflower Meadow" 참고).
- * - `tropical-punch`  : 망고오렌지/파파야핑크/파인애플옐로우/딥틸 — 트로피컬 톤
- *                      ("Tropical Punch" 참고).
- * - `dark`           : Databricks-leaning 다크.
- * - `system`         : OS 환경설정 따라가는 라이트/다크.
+ * 바탕 테마 (P2, 2026-09 — 11종 → 4종 + 시스템).
+ * - `light`         : **기본 테마** — 슬레이트 + 강조색(기본 블루) (Databricks-leaning).
+ * - `dark`          : Databricks-leaning 다크. 강조색 적용 대상.
+ * - `comfort`       : 화이트 계열 배경 + 딥그린 + 큰 radius(16px) + 소프트 카드 섀도. 자체 색 고정.
+ * - `high-contrast` : 관제실 대형 화면·빔프로젝터용 고대비. 자체 색 고정.
+ * - `system`        : OS 환경설정 따라가는 라이트/다크.
+ *
+ * 색 취향은 테마가 아니라 **강조색(Accent)** 으로 고른다 — 버튼·링크·선택 탭·활성 메뉴·포커스 링만
+ * 바뀌고 배경·상태색은 바탕 테마가 정한다. 라이트/다크(시스템 포함)에만 적용된다.
  */
-export type Theme =
-  | 'default' | 'comfort' | 'burnt-sienna' | 'tuscan-sunset' | 'electropop'
-  | 'summer-breeze' | 'wildflower-meadow' | 'tropical-punch'
-  | 'dark' | 'light' | 'system';
+export type Theme = 'light' | 'dark' | 'comfort' | 'high-contrast' | 'system';
+export type Accent = 'blue' | 'teal' | 'green' | 'amber' | 'coral' | 'violet';
 
-/** `system` 을 제외하고, 자체 완결된 토큰 세트를 가진 테마 — light/dark 로 해석하지 않고
- *  그대로 `<html>` 클래스로 적용한다. */
-const STANDALONE_THEMES = [
-  'default', 'comfort', 'burnt-sienna', 'tuscan-sunset', 'electropop',
-  'summer-breeze', 'wildflower-meadow', 'tropical-punch',
-] as const;
+export const THEMES: readonly Theme[] = ['light', 'dark', 'comfort', 'high-contrast', 'system'];
+export const ACCENTS: readonly Accent[] = ['blue', 'teal', 'green', 'amber', 'coral', 'violet'];
+
+/** 자체 완결 토큰 세트를 가진 바탕 — light/dark 로 해석하지 않고 그대로 `<html>` 클래스로 적용. */
+const STANDALONE_THEMES = ['comfort', 'high-contrast'] as const;
 type StandaloneTheme = (typeof STANDALONE_THEMES)[number];
 
 function isStandaloneTheme(theme: Theme): theme is StandaloneTheme {
@@ -45,9 +31,18 @@ function getSystemPreference(): 'dark' | 'light' {
 
 const ALL_CLASSES = ['light', 'dark', ...STANDALONE_THEMES] as const;
 
-function applyTheme(theme: Theme) {
+const THEME_KEY = 'k8s:theme';
+const ACCENT_KEY = 'k8s:accent';
+
+function safeGet(key: string): string | null {
+  try { return localStorage.getItem(key); } catch { return null; }
+}
+function safeSet(key: string, value: string) {
+  try { localStorage.setItem(key, value); } catch { /* ignore */ }
+}
+
+function applyTheme(theme: Theme, accent: Accent) {
   const root = document.documentElement;
-  // 기존 모드 클래스 제거
   for (const c of ALL_CLASSES) root.classList.remove(c);
 
   if (isStandaloneTheme(theme)) {
@@ -56,55 +51,84 @@ function applyTheme(theme: Theme) {
     const resolved = theme === 'system' ? getSystemPreference() : theme;
     root.classList.add(resolved);
   }
-  localStorage.setItem('k8s:theme', theme);
+  // 강조색 — blue 는 기본값이라 속성을 두지 않는다(index.css 에 blue 블록 없음).
+  if (accent === 'blue') root.removeAttribute('data-accent');
+  else root.setAttribute('data-accent', accent);
+
+  safeSet(THEME_KEY, theme);
+  safeSet(ACCENT_KEY, accent);
 }
 
-const VALID_THEMES: readonly Theme[] = [...STANDALONE_THEMES, 'dark', 'light', 'system'];
-
-/** 신규 사용자 기본 테마. */
+/** 신규 사용자 기본값. */
 const DEFAULT_THEME: Theme = 'light';
-/** 기본 테마 교체(default→light) 1회 마이그레이션 완료 표식. */
+const DEFAULT_ACCENT: Accent = 'blue';
+
+/**
+ * P2 에서 없앤 테마 → (바탕, 강조색). 저장값이 옛 테마면 로드 때 이 표대로 옮긴다.
+ * `default`(코랄)는 P0 의 1회 이전(default→light) 뒤에 사용자가 다시 고른 경우라 코랄로 보존한다.
+ */
+const LEGACY_THEME_MAP: Record<string, { theme: Theme; accent: Accent }> = {
+  claude:              { theme: 'light', accent: 'blue' },
+  default:             { theme: 'light', accent: 'coral' },
+  'burnt-sienna':      { theme: 'light', accent: 'coral' },
+  'tuscan-sunset':     { theme: 'light', accent: 'coral' },
+  'summer-breeze':     { theme: 'light', accent: 'coral' },
+  'wildflower-meadow': { theme: 'light', accent: 'amber' },
+  'tropical-punch':    { theme: 'light', accent: 'teal' },
+  electropop:          { theme: 'dark',  accent: 'violet' },
+};
+
+// P0 — 기본 테마가 코랄(default) → 슬레이트(light) 로 바뀌면서 저장값 'default' 를 1회만 light 로
+// 옮겼다(첫 로드 때 자동 저장된 'default' 와 직접 고른 코랄을 구분할 수 없어서). 그 이전을 아직
+// 거치지 않은 브라우저는 여기서도 먼저 같은 규칙을 적용한다.
 const LIGHT_DEFAULT_MIGRATION_KEY = 'k8s:theme-migrated-light-default';
 
-// Apply theme immediately on module load (before React renders)
-// - 레거시 'claude' 값 → 기본 테마.
-// - 기본 테마가 코랄(default) → 슬레이트(light) 로 바뀌면서, 이전에는 첫 로드 때 'default' 가
-//   자동 저장됐으므로 "직접 고른 코랄"과 "그냥 기본값"을 구분할 수 없다 → 저장값 'default' 를
-//   1회만 light 로 옮기고 표식을 남긴다. 이후 사용자가 코랄을 다시 고르면 그대로 유지된다.
-let _stored = localStorage.getItem('k8s:theme');
-if (_stored === 'claude') {
-  _stored = DEFAULT_THEME;
-  localStorage.setItem('k8s:theme', DEFAULT_THEME);
-}
-if (localStorage.getItem(LIGHT_DEFAULT_MIGRATION_KEY) !== '1') {
-  if (_stored === 'default') {
-    _stored = DEFAULT_THEME;
-    localStorage.setItem('k8s:theme', DEFAULT_THEME);
+function resolveInitial(): { theme: Theme; accent: Accent } {
+  let stored = safeGet(THEME_KEY);
+  if (safeGet(LIGHT_DEFAULT_MIGRATION_KEY) !== '1') {
+    if (stored === 'default') stored = DEFAULT_THEME;
+    safeSet(LIGHT_DEFAULT_MIGRATION_KEY, '1');
   }
-  localStorage.setItem(LIGHT_DEFAULT_MIGRATION_KEY, '1');
+  const storedAccent = safeGet(ACCENT_KEY);
+  const accent: Accent = storedAccent && (ACCENTS as readonly string[]).includes(storedAccent)
+    ? (storedAccent as Accent)
+    : DEFAULT_ACCENT;
+  if (stored && LEGACY_THEME_MAP[stored]) return LEGACY_THEME_MAP[stored];
+  const theme: Theme = stored && (THEMES as readonly string[]).includes(stored) ? (stored as Theme) : DEFAULT_THEME;
+  return { theme, accent };
 }
-const _initial: Theme = (
-  _stored && (VALID_THEMES as readonly string[]).includes(_stored)
-    ? (_stored as Theme)
-    : DEFAULT_THEME
-);
-applyTheme(_initial);
+
+// Apply theme immediately on module load (before React renders)
+const _initial = resolveInitial();
+applyTheme(_initial.theme, _initial.accent);
 
 // Listen for system preference changes when theme is 'system'
 window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => {
-  const current = (localStorage.getItem('k8s:theme') as Theme | null) ?? DEFAULT_THEME;
-  if (current === 'system') applyTheme('system');
+  const { theme, accent } = useThemeStore.getState();
+  if (theme === 'system') applyTheme('system', accent);
 });
 
 interface ThemeState {
   theme: Theme;
+  accent: Accent;
   setTheme: (theme: Theme) => void;
+  setAccent: (accent: Accent) => void;
 }
 
-export const useThemeStore = create<ThemeState>((set) => ({
-  theme: _initial,
+export const useThemeStore = create<ThemeState>((set, get) => ({
+  theme: _initial.theme,
+  accent: _initial.accent,
   setTheme: (theme) => {
-    applyTheme(theme);
+    applyTheme(theme, get().accent);
     set({ theme });
   },
+  setAccent: (accent) => {
+    applyTheme(get().theme, accent);
+    set({ accent });
+  },
 }));
+
+/** 강조색이 적용되는 바탕인지 — comfort/high-contrast 는 자체 색 고정이라 강조색을 무시한다. */
+export function accentApplies(theme: Theme): boolean {
+  return !isStandaloneTheme(theme);
+}

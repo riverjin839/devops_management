@@ -40,7 +40,7 @@ export function JiraIssueChip({ issueKey, title, status, url, className = '' }: 
       )}
       {title && <span className="truncate">{title}</span>}
       {status && (
-        <span className={`flex-shrink-0 text-[10px] font-medium px-1 rounded border ${statusClass(status)}`}>
+        <span className={`flex-shrink-0 text-[11px] font-medium px-1 rounded border ${statusClass(status)}`}>
           {status}
         </span>
       )}

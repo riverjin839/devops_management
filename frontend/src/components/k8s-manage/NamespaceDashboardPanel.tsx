@@ -95,7 +95,7 @@ function healthFromPods(rows: K8sPodRichRow[]): Health {
 }
 
 const HealthCell = ({ n, tone }: { n: number; tone: 'ok' | 'warn' | 'crit' }) => (
-  <span className={`tabular-nums ${n === 0 ? 'text-muted-foreground/50' : tone === 'ok' ? 'text-status-healthy font-medium' : tone === 'warn' ? 'text-status-warning font-semibold' : 'text-status-critical font-semibold'}`}>
+  <span className={`tabular-nums ${n === 0 ? 'text-muted-foreground' : tone === 'ok' ? 'text-status-healthy font-medium' : tone === 'warn' ? 'text-status-warning font-semibold' : 'text-status-critical font-semibold'}`}>
     {n}
   </span>
 );
@@ -216,7 +216,7 @@ export function NamespaceDashboardPanel(p: NamespaceDashboardPanelProps) {
                         <span className="text-right"><HealthCell n={health.crit} tone="crit" /></span>
                       </>
                     ) : (
-                      <span className="col-span-3 text-right text-muted-foreground/50">—</span>
+                      <span className="col-span-3 text-right text-muted-foreground">—</span>
                     )}
                     <span className="text-xs text-muted-foreground truncate">
                       {health ? (health.crit > 0 ? `위험 ${health.crit}건 확인 필요` : health.warn > 0 ? `경고 ${health.warn}건` : '정상') : ''}

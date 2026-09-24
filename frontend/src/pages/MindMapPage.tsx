@@ -1189,7 +1189,7 @@ export function MindMapPage() {
           ) : maps.length === 0 ? (
             <div className="text-center py-10 px-4">
               <div className="w-12 h-12 mx-auto mb-3 rounded-2xl bg-secondary flex items-center justify-center">
-                <MapIcon className="w-6 h-6 text-muted-foreground/50" />
+                <MapIcon className="w-6 h-6 text-muted-foreground" />
               </div>
               <p className="text-sm text-muted-foreground mb-3">마인드맵이 없습니다.</p>
               <button
@@ -1331,7 +1331,7 @@ export function MindMapPage() {
             <div className="absolute inset-0 flex items-center justify-center">
               <div className="text-center">
                 <div className="w-14 h-14 mx-auto mb-3 rounded-2xl bg-secondary flex items-center justify-center">
-                  <MapIcon className="w-7 h-7 text-muted-foreground/50" />
+                  <MapIcon className="w-7 h-7 text-muted-foreground" />
                 </div>
                 <p className="text-sm text-muted-foreground">좌측에서 마인드맵을 선택하세요</p>
               </div>

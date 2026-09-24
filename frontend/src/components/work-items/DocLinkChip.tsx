@@ -63,7 +63,7 @@ export function DocLinkChip({ url, onSave, label = '문서', className = '' }: D
         onClick={(e) => { e.stopPropagation(); open(); }}
         title="Confluence 문서 링크 추가"
         aria-label="Confluence 문서 링크 추가"
-        className={`flex-shrink-0 inline-flex items-center gap-0.5 px-1 py-0.5 rounded border border-dashed border-border text-[10px] text-muted-foreground/60 hover:text-foreground hover:border-primary/40 transition-colors ${className}`}
+        className={`flex-shrink-0 inline-flex items-center gap-0.5 px-1 py-0.5 rounded border border-dashed border-border text-[11px] text-muted-foreground hover:text-foreground hover:border-primary/40 transition-colors ${className}`}
       >
         <Plus className="w-2.5 h-2.5" />{label}
       </button>
@@ -80,7 +80,7 @@ export function DocLinkChip({ url, onSave, label = '문서', className = '' }: D
         rel="noopener noreferrer"
         onClick={(e) => e.stopPropagation()}
         title={url}
-        className="inline-flex items-center gap-0.5 text-[10px] font-semibold text-primary hover:underline"
+        className="inline-flex items-center gap-0.5 text-[11px] font-semibold text-primary hover:underline"
       >
         <FileText className="w-2.5 h-2.5" />{label}
       </a>

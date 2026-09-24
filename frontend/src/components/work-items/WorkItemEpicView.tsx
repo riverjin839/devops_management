@@ -190,7 +190,7 @@ function TreeRow({ node, depth, collapsedIds, onToggle, onItemClick, jiraBusyId,
               <span className="w-4 flex-shrink-0" />
             )}
             {item.jiraIssueType && (
-              <span className={`flex-shrink-0 inline-flex items-center px-1.5 py-0.5 text-[10px] font-medium rounded border ${jiraTypeClass(item.jiraIssueType)}`}>
+              <span className={`flex-shrink-0 inline-flex items-center px-1.5 py-0.5 text-[11px] font-medium rounded border ${jiraTypeClass(item.jiraIssueType)}`}>
                 {item.jiraIssueType}
               </span>
             )}
@@ -203,7 +203,7 @@ function TreeRow({ node, depth, collapsedIds, onToggle, onItemClick, jiraBusyId,
               {item.title?.trim() || stripHtml(item.content) || '-'}
             </button>
             {hasChildren && (
-              <span className="flex-shrink-0 text-[11px] text-muted-foreground/60">({countDescendants(node)})</span>
+              <span className="flex-shrink-0 text-[11px] text-muted-foreground">({countDescendants(node)})</span>
             )}
           </div>
         </td>
@@ -215,12 +215,12 @@ function TreeRow({ node, depth, collapsedIds, onToggle, onItemClick, jiraBusyId,
               rel="noopener noreferrer"
               onClick={(e) => e.stopPropagation()}
               title={`Jira ${item.jiraIssueKey}${item.jiraStatus ? ` · ${item.jiraStatus}` : ''} (새 창)`}
-              className="inline-flex items-center font-mono text-[10px] font-semibold px-1 py-0.5 rounded bg-brand-jira/10 text-brand-jira dark:text-blue-300 border border-brand-jira/20 hover:bg-brand-jira/20"
+              className="inline-flex items-center font-mono text-[11px] font-semibold px-1 py-0.5 rounded bg-brand-jira/10 text-brand-jira dark:text-blue-300 border border-brand-jira/20 hover:bg-brand-jira/20"
             >
               {item.jiraIssueKey}
             </a>
           ) : (
-            <span className="text-muted-foreground/50 text-sm">-</span>
+            <span className="text-muted-foreground text-sm">-</span>
           )}
         </td>
         <td className="px-4 py-1.5 whitespace-nowrap relative">
@@ -244,7 +244,7 @@ function TreeRow({ node, depth, collapsedIds, onToggle, onItemClick, jiraBusyId,
           )}
         </td>
         <td className="px-4 py-1.5 whitespace-nowrap text-sm">
-          {item.primaryAssignee || item.assignee || <span className="text-muted-foreground/50">-</span>}
+          {item.primaryAssignee || item.assignee || <span className="text-muted-foreground">-</span>}
           {item.secondaryAssignee && <span className="text-muted-foreground"> · {item.secondaryAssignee}</span>}
         </td>
         <td className="px-4 py-1.5 whitespace-nowrap">

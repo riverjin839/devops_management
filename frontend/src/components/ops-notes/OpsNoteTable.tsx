@@ -175,7 +175,7 @@ function OpsNoteRow({
         ) : note.author ? (
           <span className="cursor-pointer hover:text-foreground transition-colors">{note.author}</span>
         ) : (
-          <span className="text-muted-foreground/50 italic cursor-pointer hover:text-primary transition-colors">+ 작성자</span>
+          <span className="text-muted-foreground italic cursor-pointer hover:text-primary transition-colors">+ 작성자</span>
         )}
       </td>
       <td

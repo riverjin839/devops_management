@@ -246,7 +246,7 @@ export function DateTimePicker({
         } focus:outline-none focus:ring-1 focus:ring-primary disabled:opacity-50 disabled:cursor-not-allowed`}
       >
         <Calendar className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
-        <span className={`flex-1 truncate ${display ? '' : 'text-muted-foreground/60'}`}>
+        <span className={`flex-1 truncate ${display ? '' : 'text-muted-foreground'}`}>
           {display || placeholder}
         </span>
         {/* 지우기 자리는 값이 없어도 유지한다 — 값이 생길 때마다 폭이 밀려
@@ -405,7 +405,7 @@ export function DateTimePicker({
                 </div>
               </div>
             ) : (
-              <p className="text-xs text-muted-foreground/70 leading-relaxed">날짜만 저장됩니다. 시간이 필요하면 위 체크박스를 켜세요.</p>
+              <p className="text-xs text-muted-foreground leading-relaxed">날짜만 저장됩니다. 시간이 필요하면 위 체크박스를 켜세요.</p>
             )}
 
             <div className="mt-auto pt-2 border-t border-border space-y-1">

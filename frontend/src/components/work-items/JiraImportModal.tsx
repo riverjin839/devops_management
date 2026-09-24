@@ -412,7 +412,7 @@ export function JiraImportModal({ open, onClose, defaultProjectKey }: JiraImport
                                     })}
                                     aria-label={`${it.jiraKey} 적용 여부`} />
                                 )}
-                                <span className={`text-[10px] font-semibold px-1 rounded ${
+                                <span className={`text-[11px] font-semibold px-1 rounded ${
                                   it.action === 'create' ? 'bg-status-healthy/15 text-status-healthy'
                                     : it.action === 'update' ? 'bg-status-info/15 text-status-info'
                                     : 'bg-secondary text-muted-foreground'

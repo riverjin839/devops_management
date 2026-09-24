@@ -146,7 +146,7 @@ export function FlowDiagram({ nodes, edges, width, height, onNodeClick }: FlowDi
                   {n.emoji && <span className="text-base flex-shrink-0">{n.emoji}</span>}
                   <div className="min-w-0">
                     <div className="text-xs font-semibold truncate">{n.label}</div>
-                    {n.sublabel && <div className="text-[10px] text-muted-foreground truncate">{n.sublabel}</div>}
+                    {n.sublabel && <div className="text-[11px] text-muted-foreground truncate">{n.sublabel}</div>}
                   </div>
                 </div>
               </foreignObject>

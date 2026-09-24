@@ -102,7 +102,7 @@ export function SavedScriptEditorModal({
                     className={`flex-1 px-2 py-1.5 text-sm font-medium rounded-md transition-all ${
                       language === l
                         ? 'bg-background text-foreground shadow-sm'
-                        : 'text-muted-foreground/70 hover:text-foreground'
+                        : 'text-muted-foreground hover:text-foreground'
                     }`}
                   >
                     {l === 'bash' ? 'bash' : 'python'}

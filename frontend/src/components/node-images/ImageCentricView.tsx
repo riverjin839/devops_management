@@ -149,7 +149,7 @@ export function ImageCentricView({ nodes, searchQuery, onDistribute }: Props) {
                         )}
                         {r.nodes.length > 0 && (
                           <details className="mt-1">
-                            <summary className="text-xs text-muted-foreground/80 cursor-pointer hover:text-foreground inline-flex items-center gap-1">
+                            <summary className="text-xs text-muted-foreground cursor-pointer hover:text-foreground inline-flex items-center gap-1">
                               <Server className="w-2.5 h-2.5" />
                               {r.nodes.length}개 노드
                             </summary>

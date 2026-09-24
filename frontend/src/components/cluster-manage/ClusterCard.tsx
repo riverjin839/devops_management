@@ -145,7 +145,7 @@ export function ClusterCard({ cluster, onEdit, onDelete, deletingId, overlapGrou
             </div>
           )}
         </div>
-        <p className="text-xs font-mono text-muted-foreground/60 mt-1.5 truncate" title={cluster.apiEndpoint}>
+        <p className="text-xs font-mono text-muted-foreground mt-1.5 truncate" title={cluster.apiEndpoint}>
           {cluster.apiEndpoint}
         </p>
       </div>
@@ -213,7 +213,7 @@ export function ClusterCard({ cluster, onEdit, onDelete, deletingId, overlapGrou
               </div>
             ) : (
               !cluster.nodeCount && !cluster.maxPod && !cluster.hostname && (
-                <p className="text-sm text-muted-foreground/50 text-center py-2">노드 스펙 정보 없음 — 수정 버튼으로 입력하세요</p>
+                <p className="text-sm text-muted-foreground text-center py-2">노드 스펙 정보 없음 — 수정 버튼으로 입력하세요</p>
               )
             )}
           </div>
@@ -247,7 +247,7 @@ export function ClusterCard({ cluster, onEdit, onDelete, deletingId, overlapGrou
 
       {cluster.description && (
         <div className="px-4 pb-3 pt-1 border-t border-border/30 mt-auto">
-          <p className="text-xs text-muted-foreground/70 line-clamp-2">{cluster.description}</p>
+          <p className="text-xs text-muted-foreground line-clamp-2">{cluster.description}</p>
         </div>
       )}
     </MacCard>
@@ -278,13 +278,13 @@ function NicCompact({
       <div className="flex items-center justify-between mb-1.5">
         <p className="text-xs font-bold text-primary">{label}</p>
         {ipCount > 0 && (
-          <span className="text-[10px] font-mono text-muted-foreground tabular-nums">{ipCount}개</span>
+          <span className="text-[11px] font-mono text-muted-foreground tabular-nums">{ipCount}개</span>
         )}
       </div>
       {/* IP — 그룹 표기 우선, 없으면 master 단일 값 fallback */}
       {hasGroups ? (
         <div className="mb-1">
-          <p className="text-[10px] text-muted-foreground uppercase">IP</p>
+          <p className="text-[11px] text-muted-foreground uppercase">IP</p>
           <div className="space-y-0.5">
             {groups.map((g, i) => (
               <p key={i} className="text-xs font-mono text-foreground tabular-nums"
@@ -296,14 +296,14 @@ function NicCompact({
         </div>
       ) : fallbackIp ? (
         <div className="mb-1">
-          <p className="text-[10px] text-muted-foreground uppercase">IP (master)</p>
+          <p className="text-[11px] text-muted-foreground uppercase">IP (master)</p>
           <p className="text-xs font-mono text-foreground">{fallbackIp}</p>
         </div>
       ) : null}
       {/* MAC — 모든 노드 MAC 나열 (보통 5개 이하). fallback 은 master 단일 */}
       {hasMacs ? (
         <div>
-          <p className="text-[10px] text-muted-foreground uppercase">MAC ({macs.length})</p>
+          <p className="text-[11px] text-muted-foreground uppercase">MAC ({macs.length})</p>
           <div className="space-y-0.5">
             {macs.map((m) => (
               <p key={m} className="text-xs font-mono text-foreground/90">{m}</p>
@@ -312,7 +312,7 @@ function NicCompact({
         </div>
       ) : fallbackMac ? (
         <div>
-          <p className="text-[10px] text-muted-foreground uppercase">MAC (master)</p>
+          <p className="text-[11px] text-muted-foreground uppercase">MAC (master)</p>
           <p className="text-xs font-mono text-foreground">{fallbackMac}</p>
         </div>
       ) : null}

@@ -96,13 +96,13 @@ export function ExecutionStepsTimeline({ stepPlan, steps }: Props) {
                 </button>
                 <span className={`mt-1.5 text-[11px] text-center leading-tight ${st === 'failed' ? 'text-status-critical font-medium' : 'text-muted-foreground'}`}>{n.label}</span>
                 {shown && n.detail && (
-                  <span className="mt-0.5 text-[10px] text-center text-muted-foreground/80 line-clamp-2" title={n.detail}>{n.detail}</span>
+                  <span className="mt-0.5 text-[11px] text-center text-muted-foreground line-clamp-2" title={n.detail}>{n.detail}</span>
                 )}
                 {shown && n.durationMs != null && (
-                  <span className="text-[10px] text-muted-foreground/60 tabular-nums">{n.durationMs}ms</span>
+                  <span className="text-[11px] text-muted-foreground tabular-nums">{n.durationMs}ms</span>
                 )}
                 {shown && hasLog && (
-                  <ChevronDown className={`w-3 h-3 mt-0.5 text-muted-foreground/50 transition-transform ${expandedId === n.id ? 'rotate-180' : ''}`} />
+                  <ChevronDown className={`w-3 h-3 mt-0.5 text-muted-foreground transition-transform ${expandedId === n.id ? 'rotate-180' : ''}`} />
                 )}
               </div>
               {i < nodes.length - 1 && (
@@ -118,7 +118,7 @@ export function ExecutionStepsTimeline({ stepPlan, steps }: Props) {
       {expanded && (
         <div className="mt-2 rounded-lg border border-border bg-secondary/30 p-3 space-y-1.5">
           <div className="flex items-center gap-2">
-            <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded border text-[10px] font-medium ${RING[expanded.status]}`}>
+            <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded border text-[11px] font-medium ${RING[expanded.status]}`}>
               <StatusIcon s={expanded.status} /> {STATUS_LABEL[expanded.status]}
             </span>
             <span className="text-xs font-semibold">{expanded.label}</span>
@@ -146,7 +146,7 @@ export function ExecutionStepsTimeline({ stepPlan, steps }: Props) {
         </div>
       )}
 
-      <div className="mt-2 text-[10px] text-muted-foreground">
+      <div className="mt-2 text-[11px] text-muted-foreground">
         ● 초록=성공 · 빨강=실패 · 노랑=진행 · 회색=대기 — 계측되지 않은 항목은 단계 흐름(설계)만 표시됩니다.
         아이콘을 클릭하면 그 단계의 상세 로그를 볼 수 있습니다.
       </div>

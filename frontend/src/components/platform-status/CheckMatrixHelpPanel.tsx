@@ -71,7 +71,7 @@ export function CheckMatrixHelpPanel({ open, onClose }: Props) {
                 <li className="flex items-center gap-2"><StatusDot variant="critical" /> 위험</li>
                 <li className="flex items-center gap-2"><StatusDot variant="pending" /> 대기(연결 안 됨 등)</li>
                 <li className="flex items-center gap-2">
-                  <span className="text-muted-foreground/50 text-xs w-2 text-center">—</span>
+                  <span className="text-muted-foreground text-xs w-2 text-center">—</span>
                   아직 한 번도 실행되지 않은 셀
                 </li>
               </ul>

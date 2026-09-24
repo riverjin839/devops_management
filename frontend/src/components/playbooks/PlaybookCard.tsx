@@ -67,7 +67,7 @@ export function PlaybookCard({ playbook, isRunning, onRun, onDelete, onEdit, onT
         ) : playbook.playbookPath ? (
           <div className="truncate">{playbook.playbookPath}</div>
         ) : (
-          <div className="italic text-muted-foreground/70">(no playbook source)</div>
+          <div className="italic text-muted-foreground">(no playbook source)</div>
         )}
       </div>
 
@@ -147,7 +147,7 @@ export function PlaybookCard({ playbook, isRunning, onRun, onDelete, onEdit, onT
 function StatBadge({ label, value, color }: { label: string; value: number; color: string }) {
   return (
     <div className="text-center">
-      <div className={`text-sm font-bold ${value > 0 ? color : 'text-muted-foreground/50'}`}>
+      <div className={`text-sm font-bold ${value > 0 ? color : 'text-muted-foreground'}`}>
         {value}
       </div>
       <div className="text-xs text-muted-foreground">{label}</div>
