@@ -27,7 +27,7 @@ export function WorkItemFormModal({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
       <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={onClose} />
-      <div ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby="work-item-form-modal-title" className="relative bg-card border border-border rounded-2xl mac-shadow w-full max-w-6xl mx-4 max-h-[92vh] overflow-y-auto">
+      <div ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby="work-item-form-modal-title" className="relative bg-card border border-border rounded-2xl shadow-card w-full max-w-6xl mx-4 max-h-[92vh] overflow-y-auto">
         <div className="sticky top-0 z-10 flex items-center gap-2 px-5 py-3 bg-card/95 backdrop-blur-md border-b border-border">
           <ListTodo className="w-4 h-4 text-muted-foreground" />
           <span id="work-item-form-modal-title" className="text-sm font-semibold flex-1">{parentItem ? '하위 업무 등록' : '업무 등록'}</span>

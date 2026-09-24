@@ -479,7 +479,7 @@ function BpfInspectorTab({ clusterId, agents }: { clusterId: string; agents: Cil
           <button
             onClick={run}
             disabled={loading || (kind === 'policy' && !endpointId)}
-            className="px-3.5 py-1.5 text-sm font-semibold bg-primary hover:bg-primary/90 text-primary-foreground rounded-xl transition-colors flex items-center gap-1.5 disabled:opacity-50 mac-shadow"
+            className="px-3.5 py-1.5 text-sm font-semibold bg-primary hover:bg-primary/90 text-primary-foreground rounded-xl transition-colors flex items-center gap-1.5 disabled:opacity-50 shadow-card"
           >
             <Play className="w-3.5 h-3.5" />
             {loading ? '조회 중…' : '조회'}
@@ -528,7 +528,7 @@ function BpfInspectorTab({ clusterId, agents }: { clusterId: string; agents: Cil
               <button
                 onClick={runAdhoc}
                 disabled={adhocBusy || !adhoc.trim()}
-                className="px-3.5 py-1.5 text-sm font-semibold bg-primary hover:bg-primary/90 text-primary-foreground rounded-xl flex items-center gap-1.5 disabled:opacity-50 mac-shadow"
+                className="px-3.5 py-1.5 text-sm font-semibold bg-primary hover:bg-primary/90 text-primary-foreground rounded-xl flex items-center gap-1.5 disabled:opacity-50 shadow-card"
               >
                 <Play className="w-3.5 h-3.5" />{adhocBusy ? '실행 중…' : '실행'}
               </button>
@@ -763,7 +763,7 @@ function MonitorTab({ clusterId, agents }: { clusterId: string; agents: CiliumAg
           {!running ? (
             <button
               onClick={start}
-              className="px-3.5 py-1.5 text-sm font-semibold bg-primary hover:bg-primary/90 text-primary-foreground rounded-xl transition-colors flex items-center gap-1.5 mac-shadow"
+              className="px-3.5 py-1.5 text-sm font-semibold bg-primary hover:bg-primary/90 text-primary-foreground rounded-xl transition-colors flex items-center gap-1.5 shadow-card"
             >
               <Play className="w-3.5 h-3.5" /> 시작
             </button>
@@ -879,7 +879,7 @@ function TypeFilter({ types, setTypes, disabled }: { types: Set<MonitorType>; se
         <div
           ref={popRef}
           style={{ top: pos.top, left: pos.left }}
-          className="fixed z-50 w-56 bg-card border border-border rounded-xl mac-shadow p-2 space-y-1"
+          className="fixed z-50 w-56 bg-card border border-border rounded-xl shadow-card p-2 space-y-1"
         >
           {MONITOR_TYPES.map((t) => (
             <label key={t} className="flex items-center gap-2 text-sm px-2 py-1 rounded hover:bg-secondary cursor-pointer">
@@ -1206,7 +1206,7 @@ function HubbleTab({ clusterId, hubbleInstalled }: { clusterId: string; hubbleIn
           {!running ? (
             <button
               onClick={start}
-              className="px-3.5 py-1.5 text-sm font-semibold bg-primary hover:bg-primary/90 text-primary-foreground rounded-xl transition-colors flex items-center gap-1.5 mac-shadow"
+              className="px-3.5 py-1.5 text-sm font-semibold bg-primary hover:bg-primary/90 text-primary-foreground rounded-xl transition-colors flex items-center gap-1.5 shadow-card"
             >
               <Play className="w-3.5 h-3.5" /> 스트림 시작
             </button>

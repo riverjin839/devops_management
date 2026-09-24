@@ -56,7 +56,7 @@ export function ConfluenceDocsSettingsDialog({ open, onClose }: { open: boolean;
       <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={() => !busy && onClose()} />
       <div
         ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby="confluence-docs-settings-title"
-        className="relative bg-card border border-border rounded-2xl mac-shadow w-full max-w-md mx-4"
+        className="relative bg-card border border-border rounded-2xl shadow-card w-full max-w-md mx-4"
       >
         <div className="flex items-center gap-3 px-5 pt-5 pb-3">
           <div className="w-10 h-10 rounded-2xl bg-primary/10 flex items-center justify-center flex-shrink-0">

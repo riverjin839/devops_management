@@ -100,7 +100,7 @@ function TypeFilterDropdown({
       {open && (
         <>
           <div className="fixed inset-0 z-30" onClick={() => setOpen(false)} />
-          <div className="absolute left-0 top-full mt-1 z-40 bg-card border border-border rounded-lg mac-shadow p-1 min-w-[140px]" role="listbox">
+          <div className="absolute left-0 top-full mt-1 z-40 bg-card border border-border rounded-lg shadow-card p-1 min-w-[140px]" role="listbox">
             <button
               type="button"
               onClick={() => { onChange('all'); setOpen(false); }}
@@ -160,7 +160,7 @@ function StatusFilterDropdown({
       {open && (
         <>
           <div className="fixed inset-0 z-30" onClick={() => setOpen(false)} />
-          <div className="absolute left-0 top-full mt-1 z-40 bg-card border border-border rounded-lg mac-shadow p-1 min-w-[140px]" role="listbox">
+          <div className="absolute left-0 top-full mt-1 z-40 bg-card border border-border rounded-lg shadow-card p-1 min-w-[140px]" role="listbox">
             <button
               type="button"
               onClick={() => { onChange('all'); setOpen(false); }}

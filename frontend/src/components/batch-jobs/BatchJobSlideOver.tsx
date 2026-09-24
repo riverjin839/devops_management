@@ -71,7 +71,7 @@ export function BatchJobSlideOver({ job, onClose, onDelete, overlayMode = false 
             type="button"
             onClick={() => setConfirmStop(true)}
             disabled={stopMut.isPending}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-semibold bg-status-critical hover:bg-status-critical/90 text-primary-foreground rounded-xl mac-shadow disabled:opacity-60"
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-semibold bg-status-critical hover:bg-status-critical/90 text-primary-foreground rounded-xl shadow-card disabled:opacity-60"
           >
             <Square className="w-3.5 h-3.5" fill="currentColor" />
             지금 중지
@@ -80,7 +80,7 @@ export function BatchJobSlideOver({ job, onClose, onDelete, overlayMode = false 
           <button
             type="button"
             onClick={() => setRunFormOpen((v) => !v)}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-semibold bg-primary hover:bg-primary/90 text-primary-foreground rounded-xl mac-shadow"
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-semibold bg-primary hover:bg-primary/90 text-primary-foreground rounded-xl shadow-card"
             aria-expanded={runFormOpen}
           >
             <Play className="w-3.5 h-3.5" />

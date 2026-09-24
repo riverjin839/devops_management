@@ -325,7 +325,7 @@ ui-ux-pro-max `landing.csv` 검색 결과:
 
 | 용도 | shadcn/ui 컴포넌트 | 우리 적용 |
 |---|---|---|
-| 카드 컨테이너 | `Card` | 기존 `MacCard` → `Card` 어댑터로 통합. traffic-light 점은 옵션 prop |
+| 카드 컨테이너 | `Card` | 기존 `MacCard` → `Card` 어댑터로 통합. traffic-light 점 장식은 P3 에서 삭제 |
 | 버튼 | `Button` | variants: `default` / `secondary` / `ghost` / `destructive` × `sm` / `default` / `lg` |
 | 상태 라벨 | `Badge` | 색 dot + 텍스트 동시 표기 (a11y: 색만으로 의미 전달 금지) |
 | 모달 | `Dialog`, `Sheet` (모바일 사이드바) | 현재 자체 모달 교체 |
@@ -452,19 +452,29 @@ Semantic status(`--status-healthy/warning/critical/...`), Surface Container 5단
 
 ### 12.2 라운딩 (radius 토큰)
 
-`tailwind.config.js` 매핑: `rounded-lg` = `var(--radius)` / `rounded-md` = radius−2px /
-`rounded-sm` = radius−4px — **테마 인지(theme-aware)**. `rounded-xl`/`rounded-2xl` 은 고정값.
+`tailwind.config.js` 매핑 — **전 단계 테마 인지(theme-aware)** (P3, 2026-09):
+
+| 클래스 | 값 | `--radius` 8px(라이트·다크·고대비) | 12px(컴포트) |
+|---|---|---|---|
+| `rounded` / `rounded-sm` | radius−4px | 4 | 8 |
+| `rounded-md` | radius−2px | 6 | 10 |
+| `rounded-lg` | radius | 8 | 12 |
+| `rounded-xl` | radius+4px | 12 | 16 |
+| `rounded-2xl` | radius+8px | 16 | 20 |
+
+예전엔 `rounded`·`rounded-xl`·`rounded-2xl` 이 4/12/16px 고정이라 `--radius` 가 큰 테마에서 타일이 버튼보다
+둥글어지는 등 관계가 뒤집혔다. 8px 테마에서는 예전 고정값과 같아 화면 변화가 없다.
 
 - **카드**: `MacCard`(flat 기본, `rounded-md` 토큰) 사용 — 페이지에서 카드 div 를 직접 만들지 않는다.
 - **버튼/입력**: `rounded-xl` (`ui/button.tsx` 기준). sharp corner 금지.
-- 직접 `rounded-2xl` 카드는 레거시(mac variant·다이얼로그) — 신규 코드에서 사용하지 않는다.
+- 직접 `rounded-2xl` 카드는 레거시(다이얼로그 제외) — 신규 코드에서 사용하지 않는다.
 
 ### 12.3 MacCard (`frontend/src/components/ui/MacCard.tsx`)
 
-모든 주요 섹션은 `MacCard` 로 감싼다. shadcn `Card` 프리미티브의 어댑터이며 variant 2종:
-
-- **`flat` (기본)**: 평평한 표면 + 1px 보더, 좌측 정렬 소형 대문자 라벨 헤더 (`bg-surface-container-high`), 라운딩 `rounded-md` 토큰. 신규 코드는 전부 이것.
-- **`mac` (레거시 opt-in)**: 신호등 3점 + 중앙 타이틀의 구 macOS 창 스타일. 신규 사용 금지.
+모든 주요 섹션은 `MacCard` 로 감싼다. shadcn `Card` 프리미티브의 어댑터로, 평평한 표면 + 1px 보더,
+좌측 정렬 소형 대문자 라벨 헤더(`bg-surface-container-high`), 라운딩 `rounded-md` 토큰이다.
+(P3 에서 신호등 3점 장식의 `variant="mac"` 과 `--mac-red/yellow/green` 토큰을 삭제했다 — 사용처 0건,
+누를 수 없는 장식이 상태색과 같은 hue 라 "장애"로 읽혔다.)
 
 ```tsx
 import { MacCard } from '@/components/ui/MacCard';
@@ -472,16 +482,15 @@ import { MacCard } from '@/components/ui/MacCard';
 <MacCard title="Cluster Status">{/* content */}</MacCard>
 ```
 
-Props: `title?`, `variant?`('flat'|'mac', 기본 'flat'), `children`, `className?`(body),
-`rootClassName?`, `bodyPadding?`(기본 flat `p-4` / mac `p-5`).
-신호등 CSS 변수(`--mac-red/yellow/green`)는 mac variant 전용으로만 유지된다.
+Props: `title?`, `children`, `className?`(body), `rootClassName?`, `bodyPadding?`(기본 `p-4`).
 
 ### 12.4 컴포넌트 컨벤션
 
 - **카드**: `MacCard` 사용, 직접 `bg-card border` div 조합 금지 (DESIGN.md D-004).
 - **Shadows**: light/dark/high-contrast 는 `--card-shadow: none`(보더가 그림자 대체), comfort 만 은은한
-  depth(멀티레이어 섀도+hover lift) —
-  `.mac-shadow` 유틸이 토큰을 따라가므로 개별 shadow 클래스를 만들지 않는다.
+  depth(멀티레이어 섀도+hover lift) — Tailwind `shadow-card` / `hover:shadow-card-hover`(토큰
+  `--card-shadow(-hover)`)만 쓴다. `Card` 기본 컴포넌트가 이미 달고 있으니 개별 shadow 클래스를 만들지 않는다.
+  CSS 에서 `[class*="…"]` 처럼 클래스 이름 부분 문자열로 요소를 고르는 선택자는 쓰지 않는다(P3 에서 제거).
 - **Section titles inside MacCard**: 카드 제목을 본문 `<h2>` 로 중복하지 않는다.
 - **타이포 (P2)**: 본문 기본 굵기 400(`body`), 라벨 500, 제목 600. 최소 글자 `text-[11px]` — 8~10px 금지.
   보조 글자는 `text-muted-foreground` 를 투명도 없이 쓴다(`/50~90` 은 라이트에서 2~3:1). 장식용

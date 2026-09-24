@@ -65,7 +65,7 @@ export function ClusterCard({ cluster, onEdit, onDelete, deletingId, overlapGrou
   const hasNetworkData = !!(cluster.cidr || cluster.podCidr || cluster.svcCidr || cluster.nodeIps);
 
   return (
-    <MacCard rootClassName={`border-l-4 ${st.border} mac-shadow`} bodyPadding="p-0" className="flex flex-col h-full">
+    <MacCard rootClassName={`border-l-4 ${st.border} shadow-card`} bodyPadding="p-0" className="flex flex-col h-full">
       {/* 카드 헤더 */}
       <div className="px-4 pt-4 pb-3 border-b border-border/50">
         <div className="flex items-start justify-between gap-2">

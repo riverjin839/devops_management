@@ -752,7 +752,7 @@ function AddBlockMenu({
   return (
     <>
       <div className="fixed inset-0 z-30" onClick={onClose} />
-      <div className="absolute left-2 right-2 z-40 bg-card border border-border rounded-xl mac-shadow p-1.5"
+      <div className="absolute left-2 right-2 z-40 bg-card border border-border rounded-xl shadow-card p-1.5"
         style={{ top: Math.max(0, y) }}>
         <div className="flex items-center justify-between px-1.5 py-1">
           <span className="text-xs font-semibold tabular-nums">{fmtMin(minute)} 에 추가</span>

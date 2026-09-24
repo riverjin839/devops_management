@@ -53,7 +53,7 @@ export function CommandFormPage() {
           </p>
         </div>
 
-        <div className="bg-card border border-border rounded-2xl p-8 mac-shadow">
+        <div className="bg-card border border-border rounded-2xl p-8 shadow-card">
           {editMode && listLoading ? (
             <p className="text-sm text-muted-foreground">불러오는 중…</p>
           ) : editMode && !initial ? (

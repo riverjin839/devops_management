@@ -34,10 +34,8 @@
     --input: 214 32% 91%;
     --ring: 222 47% 11%;              /* slate-900 focus ring */
     --radius: 0.5rem;                 /* 8px — flatter than macOS 14px */
-    --mac-red:    #FF5F57;
-    --mac-yellow: #FEBC2E;
-    --mac-green:  #28C840;
-    --card-shadow: none;              /* flat — border replaces shadow */
+    --card-shadow: 0 0 #0000;               /* flat — border replaces shadow. none 이 아닌 투명 그림자: Tailwind shadow 목록 안에 none 이 들어가면 box-shadow 전체(ring 포함)가 무효가 된다 */
+    --card-shadow-hover: 0 0 #0000;
     /* 전역 상단바(AppTopBar) 높이 — 테마 무관 레이아웃 상수라 :root 에서 1회만 정의하고
        테마 블록에서 재정의하지 않는다. 소비는 아래 .app-min-h-screen/.app-h-screen
        유틸리티를 통한다. */
@@ -130,10 +128,7 @@
     --input: 220 14% 20%;
     --ring: 212 100% 63%;
     --radius: 0.5rem;
-    --mac-red:    #FF5F57;
-    --mac-yellow: #FEBC2E;
-    --mac-green:  #28C840;
-    --card-shadow: none;
+    --card-shadow: 0 0 #0000;
 
     /* Dark theme: sidebar matches body so the dark navy doesn't double-up */
     --sidebar:                  220 18% 5%;
@@ -212,10 +207,7 @@
     --input: 214 32% 91%;
     --ring: 222 47% 11%;
     --radius: 0.5rem;
-    --mac-red:    #FF5F57;
-    --mac-yellow: #FEBC2E;
-    --mac-green:  #28C840;
-    --card-shadow: none;
+    --card-shadow: 0 0 #0000;
 
     --sidebar:                  214 30% 14%;
     --sidebar-foreground:       210 40% 96%;
@@ -259,10 +251,7 @@
     --border: 70 10% 90%;
     --input: 70 10% 90%;
     --ring: 150 45% 30%;
-    --radius: 1rem;                    /* 16px — 부드러운 라운딩 */
-    --mac-red:    #FF5F57;
-    --mac-yellow: #FEBC2E;
-    --mac-green:  #28C840;
+    --radius: 0.75rem;                 /* 12px — P3: 카드 20 · 버튼/입력 16 · 타일 12 (xl/2xl 이 --radius 기준이 되며 16→12) */
     --card-shadow: 0 1px 3px rgba(24, 37, 32, 0.04), 0 6px 20px -8px rgba(24, 37, 32, 0.08);
 
     /* Sidebar — 본문과 같은 라이트 크림, 활성 항목만 딥그린 필 */
@@ -345,7 +334,7 @@
     --input: 0 0% 35%;
     --ring: 220 100% 30%;
     --radius: 0.5rem;
-    --card-shadow: none;
+    --card-shadow: 0 0 #0000;
 
     --sidebar:                  0 0% 100%;
     --sidebar-foreground:       0 0% 0%;
@@ -454,21 +443,12 @@ html.comfort {
     0 14px 32px -12px rgba(24, 37, 32, 0.14);
 }
 
-html.comfort .mac-shadow,
-html.comfort [class*="rounded-2xl"][class*="bg-card"],
-html.comfort [class*="rounded-xl"][class*="bg-card"] {
-  box-shadow: var(--card-shadow);
-  transition: box-shadow var(--motion-base) var(--motion-ease);
-}
-html.comfort .mac-shadow:hover,
-html.comfort [class*="rounded-2xl"][class*="bg-card"]:hover,
-html.comfort [class*="rounded-xl"][class*="bg-card"]:hover {
-  box-shadow: var(--card-shadow-hover);
-}
+/* P3 — 예전엔 [class*="rounded-xl"][class*="bg-card"] 부분 문자열로 카드를 찾아 그림자를 붙였다.
+   이제 Card 기본 컴포넌트·다이얼로그가 shadow-card / hover:shadow-card-hover 를 명시한다. */
 
-/* 고대비 — 포커스 링을 3px 로 키우고, 본문 링크(text-primary 앵커)는 항상 밑줄. */
+/* 고대비 — 포커스 링을 3px 로 키우고, 본문(문단·목록·표) 안 링크는 항상 밑줄. 메뉴·버튼형 링크는 제외. */
 html.high-contrast *:focus-visible { outline-width: 3px; }
-html.high-contrast a[class*="text-primary"] { text-decoration: underline; text-underline-offset: 2px; }
+html.high-contrast :where(p, li, td, dd) a { text-decoration: underline; text-underline-offset: 2px; }
 
 @layer base {
   * {
@@ -506,11 +486,6 @@ html.high-contrast a[class*="text-primary"] { text-decoration: underline; text-u
 /* font-weight: also restored — let Tailwind's font-medium=500,
    font-semibold=600, font-bold=700 do their job. Headings carry weight via
    the @layer base h1/h2/h3 rules above. */
-
-/* ── macOS-style Card shadow utility ──────────────────────────────────────── */
-.mac-shadow {
-  box-shadow: var(--card-shadow);
-}
 
 /* ── Status utilities (DESIGN_SYSTEM §2.4) ──────────────────────────────────
    컴포넌트에서 raw `text-green-400` `text-red-500` 등 사용 금지.

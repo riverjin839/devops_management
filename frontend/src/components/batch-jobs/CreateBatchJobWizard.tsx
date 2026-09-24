@@ -208,7 +208,7 @@ export function CreateBatchJobWizard({
           {step < 2 ? (
             <button
               onClick={goNext}
-              className="px-3 py-1.5 text-sm rounded-xl bg-primary text-primary-foreground hover:bg-primary/90 mac-shadow"
+              className="px-3 py-1.5 text-sm rounded-xl bg-primary text-primary-foreground hover:bg-primary/90 shadow-card"
             >
               다음
             </button>
@@ -232,7 +232,7 @@ export function CreateBatchJobWizard({
                       ? 'cron 을 사용하려면 2단계에서 기본 호스트를 지정하세요'
                       : undefined
                 }
-                className="px-3 py-1.5 text-sm rounded-xl bg-primary text-primary-foreground hover:bg-primary/90 mac-shadow disabled:opacity-60"
+                className="px-3 py-1.5 text-sm rounded-xl bg-primary text-primary-foreground hover:bg-primary/90 shadow-card disabled:opacity-60"
               >
                 {create.isPending ? '등록 중…' : '등록'}
               </button>

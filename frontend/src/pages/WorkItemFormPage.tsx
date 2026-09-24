@@ -49,7 +49,7 @@ export function WorkItemFormPage() {
       </div>
 
       <main className="max-w-[1400px] mx-auto px-6 pt-4 pb-6">
-        <div className="border border-border rounded-2xl p-5 mac-shadow bg-card">
+        <div className="border border-border rounded-2xl p-5 shadow-card bg-card">
           <WorkItemForm
             defaultType={defaultType}
             parentItem={parentItem}

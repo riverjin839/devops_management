@@ -91,7 +91,7 @@ export function IsilonServerModal({ server, onClose }: Props) {
         role="dialog"
         aria-modal="true"
         aria-labelledby={titleId}
-        className="bg-card rounded-2xl border border-border mac-shadow w-full max-w-lg max-h-[90vh] overflow-y-auto"
+        className="bg-card rounded-2xl border border-border shadow-card w-full max-w-lg max-h-[90vh] overflow-y-auto"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between px-5 py-3 border-b border-border">

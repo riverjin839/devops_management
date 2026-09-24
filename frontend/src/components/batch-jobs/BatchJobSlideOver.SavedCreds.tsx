@@ -208,7 +208,7 @@ export function SavedCreds({ job }: SavedCredsProps) {
           type="button"
           onClick={save}
           disabled={update.isPending || testConn.isPending || (!password && !privateKey)}
-          className="flex-1 inline-flex items-center justify-center gap-1.5 px-3 py-2 text-sm font-semibold bg-primary hover:bg-primary/90 text-primary-foreground rounded-xl mac-shadow disabled:opacity-60"
+          className="flex-1 inline-flex items-center justify-center gap-1.5 px-3 py-2 text-sm font-semibold bg-primary hover:bg-primary/90 text-primary-foreground rounded-xl shadow-card disabled:opacity-60"
         >
           <Save className="w-3.5 h-3.5" />
           {update.isPending ? '저장 중…' : '자격증명 저장'}

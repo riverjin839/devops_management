@@ -34,7 +34,7 @@ export function OpsNoteFormPage() {
           </p>
         </div>
 
-        <div className={cn('border border-border rounded-2xl p-8 mac-shadow', 'bg-card')}>
+        <div className={cn('border border-border rounded-2xl p-8 shadow-card', 'bg-card')}>
           <OpsNoteForm
             defaultService={defaultService}
             onCancel={() => navigate('/ops-notes')}

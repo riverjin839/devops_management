@@ -286,7 +286,7 @@ export function DateTimePicker({
         <div
           role="dialog"
           aria-label="날짜 선택"
-          className="absolute z-50 mt-1.5 bg-card border border-border rounded-xl mac-shadow p-3 w-[340px] flex gap-3"
+          className="absolute z-50 mt-1.5 bg-card border border-border rounded-xl shadow-card p-3 w-[340px] flex gap-3"
           style={{ left: 0 }}
         >
           {/* Calendar */}

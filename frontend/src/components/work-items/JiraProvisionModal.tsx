@@ -39,7 +39,7 @@ function IssueLookupPicker({
 
   if (!open) return null;
   return (
-    <div className="mt-1 border border-border rounded-lg bg-card max-h-48 overflow-y-auto mac-shadow">
+    <div className="mt-1 border border-border rounded-lg bg-card max-h-48 overflow-y-auto shadow-card">
       {!loading && (status === undefined || status === 'ok') && items.length > 0 && (
         <div className="sticky top-0 bg-card border-b border-border p-1.5">
           <div className="relative">
@@ -96,7 +96,7 @@ function ChildPagePicker({
 }) {
   if (!open) return null;
   return (
-    <div className="mt-1 border border-border rounded-lg bg-card max-h-36 overflow-y-auto mac-shadow">
+    <div className="mt-1 border border-border rounded-lg bg-card max-h-36 overflow-y-auto shadow-card">
       {loading && (
         <div className="p-2 text-xs text-muted-foreground flex items-center gap-1.5">
           <Loader2 className="w-3 h-3 animate-spin" /> 불러오는 중…
@@ -306,7 +306,7 @@ export function JiraProvisionModal({ open, onClose, item }: JiraProvisionModalPr
     <div className="fixed inset-0 z-50 flex items-center justify-center">
       <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={() => !busy && onClose()} />
       <div ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby="jira-provision-title"
-        className="relative bg-card border border-border rounded-2xl mac-shadow w-full max-w-2xl mx-4 max-h-[92vh] overflow-y-auto">
+        className="relative bg-card border border-border rounded-2xl shadow-card w-full max-w-2xl mx-4 max-h-[92vh] overflow-y-auto">
         <div className="flex items-center gap-3 px-5 pt-5 pb-3">
           <div className="w-10 h-10 rounded-2xl bg-primary/10 flex items-center justify-center flex-shrink-0">
             <Rocket className="w-5 h-5 text-primary" />

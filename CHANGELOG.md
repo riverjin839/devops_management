@@ -52,6 +52,12 @@
 - **본문 굵기·최소 글자·흐린 보조 글자 정리**: 본문 기본 굵기 500→400(라벨 600→500), 8~10px 글자 114건을
   `text-[11px]` 로 명시하고 CSS `!important` 보정 규칙 삭제, 라이트에서 2~3:1 로 흐리던
   `text-muted-foreground/50~90` 247건을 투명도 없이(4.72:1) 되돌렸다. 둘 다 ESLint 로 재유입을 막는다.
+- **라운딩 전 단계를 테마 토큰으로 (P3)**: `rounded`·`rounded-xl`·`rounded-2xl` 이 4/12/16px 고정이라 컴포트처럼
+  모서리가 큰 테마에서 타일이 버튼보다 둥글어지는 등 관계가 뒤집혔다. 전 단계를 `--radius` 기준으로 바꿨다
+  (라이트·다크·고대비는 화면 변화 없음). 컴포트는 `--radius` 16→12px 로 카드 20 · 버튼 16 · 타일 12px.
+  카드 그림자는 클래스 이름 부분 문자열 선택자 대신 `shadow-card` 토큰 유틸로, 고대비 링크 밑줄은 본문 링크로
+  한정했다. MacCard 의 신호등 점 장식(`variant="mac"`, 사용처 0건)과 `--mac-*` 토큰을 삭제했다.
+  Frontend: `tailwind.config.js`(`borderRadius`·`boxShadow`), `index.css`, `ui/card.tsx`, `ui/MacCard.tsx`.
 
 ## [1.36.1] - 2026-09-23
 

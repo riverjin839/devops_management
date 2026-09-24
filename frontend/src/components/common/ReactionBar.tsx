@@ -69,7 +69,7 @@ export function ReactionBar({ targetType, targetId, className }: ReactionBarProp
               className="fixed inset-0 z-[40] cursor-default"
               onClick={() => setOpen(false)}
             />
-            <div className="absolute left-0 z-[41] mt-1 flex items-center gap-0.5 rounded-xl border border-border bg-card p-1 mac-shadow">
+            <div className="absolute left-0 z-[41] mt-1 flex items-center gap-0.5 rounded-xl border border-border bg-card p-1 shadow-card">
               {REACTION_EMOJIS.map((e) => {
                 const mine = groups.find((g) => g.emoji === e)?.reacted;
                 return (

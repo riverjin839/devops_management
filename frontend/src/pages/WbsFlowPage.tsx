@@ -714,7 +714,7 @@ export function WbsFlowPage() {
             </div>
             <button
               onClick={() => setShowNewProjectModal(true)}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-semibold bg-primary hover:bg-primary/90 text-primary-foreground rounded-xl transition-colors mac-shadow"
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-semibold bg-primary hover:bg-primary/90 text-primary-foreground rounded-xl transition-colors shadow-card"
             >
               <Plus className="w-3.5 h-3.5" /> 프로젝트
             </button>
@@ -833,7 +833,7 @@ export function WbsFlowPage() {
                 <p className="text-sm mb-3">아직 프로젝트가 없습니다.</p>
                 <button
                   onClick={() => setShowNewProjectModal(true)}
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-semibold bg-primary hover:bg-primary/90 text-primary-foreground rounded-xl mac-shadow"
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-semibold bg-primary hover:bg-primary/90 text-primary-foreground rounded-xl shadow-card"
                 >
                   <Plus className="w-3.5 h-3.5" /> 첫 프로젝트 만들기
                 </button>
