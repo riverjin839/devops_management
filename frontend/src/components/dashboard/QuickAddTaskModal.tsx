@@ -257,7 +257,7 @@ export function QuickAddTaskModal({
         aria-modal="true"
         aria-labelledby={f('heading')}
         onSubmit={handleSubmit}
-        className="relative bg-card border border-border rounded-2xl mac-shadow w-full max-w-md mx-4 max-h-[92vh] overflow-y-auto"
+        className="relative bg-card border border-border rounded-2xl shadow-card w-full max-w-md mx-4 max-h-[92vh] overflow-y-auto"
       >
         {/* Header */}
         <div className="flex items-center gap-3 px-5 pt-5 pb-3">
@@ -456,7 +456,7 @@ export function QuickAddTaskModal({
             <button
               type="submit"
               disabled={!canSubmit}
-              className="px-3.5 py-1.5 text-sm font-semibold bg-primary hover:bg-primary/90 text-primary-foreground rounded-xl transition-colors disabled:opacity-50 inline-flex items-center gap-1.5 mac-shadow"
+              className="px-3.5 py-1.5 text-sm font-semibold bg-primary hover:bg-primary/90 text-primary-foreground rounded-xl transition-colors disabled:opacity-50 inline-flex items-center gap-1.5 shadow-card"
             >
               {busy ? (
                 <Loader2 className="w-3.5 h-3.5 animate-spin" />

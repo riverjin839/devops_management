@@ -72,7 +72,7 @@ export function ProjectFormModal({ initial, onClose }: Props) {
       <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={() => !isPending && onClose()} />
       <form
         onSubmit={handleSubmit}
-        className="relative bg-card border border-border rounded-2xl mac-shadow w-full max-w-md mx-4 max-h-[90vh] overflow-y-auto"
+        className="relative bg-card border border-border rounded-2xl shadow-card w-full max-w-md mx-4 max-h-[90vh] overflow-y-auto"
       >
         <div className="flex items-center gap-3 px-5 pt-5 pb-3">
           <div className="w-10 h-10 rounded-2xl bg-primary/10 flex items-center justify-center flex-shrink-0">
@@ -148,7 +148,7 @@ export function ProjectFormModal({ initial, onClose }: Props) {
             취소
           </button>
           <button type="submit" disabled={!name.trim() || isPending}
-            className="px-3.5 py-1.5 text-sm font-semibold bg-primary hover:bg-primary/90 text-primary-foreground rounded-xl disabled:opacity-50 inline-flex items-center gap-1.5 mac-shadow">
+            className="px-3.5 py-1.5 text-sm font-semibold bg-primary hover:bg-primary/90 text-primary-foreground rounded-xl disabled:opacity-50 inline-flex items-center gap-1.5 shadow-card">
             {isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : null}
             {isEdit ? '저장' : '만들기'}
           </button>

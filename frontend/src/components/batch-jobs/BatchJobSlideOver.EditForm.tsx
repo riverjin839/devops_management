@@ -320,7 +320,7 @@ export function EditForm({ job, onSaved }: EditFormProps) {
                   ? 'cron 을 사용하려면 자격증명이 필요합니다'
                   : undefined
               }
-              className="flex-1 inline-flex items-center justify-center gap-1.5 px-3 py-2 text-sm font-semibold bg-primary hover:bg-primary/90 text-primary-foreground rounded-xl mac-shadow disabled:opacity-60"
+              className="flex-1 inline-flex items-center justify-center gap-1.5 px-3 py-2 text-sm font-semibold bg-primary hover:bg-primary/90 text-primary-foreground rounded-xl shadow-card disabled:opacity-60"
             >
               <Save className="w-3.5 h-3.5" />
               {update.isPending ? '저장 중…' : '저장'}

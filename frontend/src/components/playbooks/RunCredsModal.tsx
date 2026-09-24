@@ -77,7 +77,7 @@ export function RunCredsModal({ open, playbookName, onClose, onRun }: RunCredsMo
         role="dialog"
         aria-modal="true"
         aria-labelledby={titleId}
-        className="bg-card border border-border rounded-2xl w-full max-w-md mac-shadow"
+        className="bg-card border border-border rounded-2xl w-full max-w-md shadow-card"
       >
         <div className="flex items-center justify-between px-5 py-3 border-b border-border">
           <div className="flex items-center gap-2">

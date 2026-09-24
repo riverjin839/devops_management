@@ -675,7 +675,7 @@ export function WorkItemForm({ initial, parentItem, defaultStartedAt, onCancel, 
 
   if (embedded) return formInner;
   return (
-    <div className="bg-card border border-border rounded-2xl p-5 mac-shadow">
+    <div className="bg-card border border-border rounded-2xl p-5 shadow-card">
       {formInner}
     </div>
   );

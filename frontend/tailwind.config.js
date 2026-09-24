@@ -113,10 +113,21 @@ export default {
           info:     "hsl(var(--status-info-text)     / <alpha-value>)",
         },
       },
+      // P3 — 라운딩 전 단계를 --radius 기준으로. 예전엔 lg/md/sm 만 테마를 따르고
+      // DEFAULT(4)·xl(12)·2xl(16) 은 고정이라 --radius 가 큰 테마(컴포트)에서 타일이 버튼보다
+      // 둥글어지는 등 관계가 뒤집혔다. --radius 8px(라이트·다크·고대비)에서는 기존 값과 같다.
       borderRadius: {
-        lg: "var(--radius)",
-        md: "calc(var(--radius) - 2px)",
+        DEFAULT: "calc(var(--radius) - 4px)",
         sm: "calc(var(--radius) - 4px)",
+        md: "calc(var(--radius) - 2px)",
+        lg: "var(--radius)",
+        xl: "calc(var(--radius) + 4px)",
+        "2xl": "calc(var(--radius) + 8px)",
+      },
+      // 카드 깊이 — 테마 토큰(--card-shadow). 라이트·다크·고대비는 none, 컴포트만 소프트 섀도.
+      boxShadow: {
+        card: "var(--card-shadow)",
+        "card-hover": "var(--card-shadow-hover)",
       },
       fontFamily: {
         sans: ["Inter", "system-ui", "sans-serif"],

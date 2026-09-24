@@ -124,7 +124,7 @@ export function WorkItemDetailPage() {
 
       <main className="max-w-[1400px] mx-auto px-8 pt-4 pb-16">
         {isEditing ? (
-          <div className={cn('border border-border rounded-2xl p-5 mac-shadow', 'bg-card')}>
+          <div className={cn('border border-border rounded-2xl p-5 shadow-card', 'bg-card')}>
             <WorkItemForm
               initial={item}
               onCancel={() => setIsEditing(false)}
@@ -133,7 +133,7 @@ export function WorkItemDetailPage() {
             />
           </div>
         ) : (
-          <div className={cn('border border-border rounded-2xl p-8 mac-shadow', 'bg-card')}>
+          <div className={cn('border border-border rounded-2xl p-8 shadow-card', 'bg-card')}>
             <WorkItemReadView item={item} onEdit={() => setIsEditing(true)} />
           </div>
         )}

@@ -163,7 +163,7 @@ export function CommandPalette() {
         aria-modal="true"
         aria-label="화면 검색"
         onKeyDown={onKeyDown}
-        className="relative w-full max-w-xl bg-card text-card-foreground border border-border rounded-2xl mac-shadow overflow-hidden flex flex-col max-h-[70vh]"
+        className="relative w-full max-w-xl bg-card text-card-foreground border border-border rounded-2xl shadow-card overflow-hidden flex flex-col max-h-[70vh]"
       >
         <div className="flex items-center gap-2 px-4 border-b border-border">
           <Search className="w-4 h-4 text-muted-foreground flex-shrink-0" aria-hidden="true" />

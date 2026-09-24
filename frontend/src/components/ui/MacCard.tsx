@@ -1,26 +1,17 @@
 /**
- * Section card. Two visual variants:
- *  - 'flat' (default, Databricks-leaning): flat surface, 1px border, no shadow,
- *    small uppercase label in a compact left-aligned header.
- *  - 'mac':   legacy macOS window with traffic-light dots and centred title.
- *    Kept for opt-in nostalgia or specific marketing surfaces.
+ * Section card — flat surface, 1px border, small uppercase label in a compact left-aligned header.
+ * Internally a thin adapter over the shadcn `Card` primitive (see `ui/card.tsx`).
  *
- * Call-site compatible — existing <MacCard title="..."> calls automatically
- * render in the new 'flat' variant.
- *
- * Internally a thin adapter over the shadcn `Card` primitive (see `ui/card.tsx`)
- * so both share one base implementation — the macOS traffic-light dots stay an
- * opt-in visual (`variant="mac"`), not a rewrite of every call site.
+ * P3(2026-09): macOS 신호등 점(빨강·노랑·초록) 장식을 쓰던 `variant="mac"` 을 없앴다 — 누를 수
+ * 없는 장식이 상태색과 같은 hue 라 운영 화면에서 "장애"로 읽혔고, 사용처도 0건이었다.
  */
 import type { ReactNode } from 'react';
 import { Card } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
 
 interface MacCardProps {
-  /** Section title — uppercase label in flat variant, centred in mac variant */
+  /** Section title — uppercase label in the card header */
   title?: string;
-  /** Visual style. Default 'flat' (Phase A redesign). 'mac' keeps legacy look. */
-  variant?: 'flat' | 'mac';
   children: ReactNode;
   /** Extra Tailwind classes applied to the body wrapper */
   className?: string;
@@ -32,36 +23,13 @@ interface MacCardProps {
 
 export function MacCard({
   title,
-  variant = 'flat',
   children,
   className = '',
   rootClassName = '',
   bodyPadding,
 }: MacCardProps) {
-  const padding = bodyPadding ?? (variant === 'mac' ? 'p-5' : 'p-4');
+  const padding = bodyPadding ?? 'p-4';
 
-  if (variant === 'mac') {
-    return (
-      <Card className={cn('mac-shadow', rootClassName)}>
-        <div className="flex items-center px-4 py-3 gap-2">
-          <div className="flex items-center gap-[6px] flex-shrink-0">
-            <span className="w-[13px] h-[13px] rounded-full bg-[var(--mac-red)]" />
-            <span className="w-[13px] h-[13px] rounded-full bg-[var(--mac-yellow)]" />
-            <span className="w-[13px] h-[13px] rounded-full bg-[var(--mac-green)]" />
-          </div>
-          {title && (
-            <span className="flex-1 text-center text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground select-none pr-8">
-              {title}
-            </span>
-          )}
-        </div>
-        <div className="h-px bg-border/60" />
-        <div className={cn(padding, className)}>{children}</div>
-      </Card>
-    );
-  }
-
-  // 'flat' (default)
   return (
     <Card className={cn('rounded-md', rootClassName)}>
       {title && (

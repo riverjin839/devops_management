@@ -92,7 +92,7 @@ function CreateAccountModal({ open, onClose }: { open: boolean; onClose: () => v
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-      <div ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby={f('title')} className="w-full max-w-md bg-card border border-border rounded-2xl p-5 mac-shadow">
+      <div ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby={f('title')} className="w-full max-w-md bg-card border border-border rounded-2xl p-5 shadow-card">
         <h3 id={f('title')} className="text-base font-bold mb-1">관리자 / 서비스 계정 추가</h3>
         <p className="text-sm text-muted-foreground mb-4">담당자 명부에 없는(사번 없는) 로그인 전용 계정을 만듭니다.</p>
         <div className="space-y-3">
@@ -164,7 +164,7 @@ function ResetPasswordModal({ target, onClose }: { target: Assignee | null; onCl
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-      <div ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby={titleId} className="w-full max-w-sm bg-card border border-border rounded-2xl p-5 mac-shadow">
+      <div ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby={titleId} className="w-full max-w-sm bg-card border border-border rounded-2xl p-5 shadow-card">
         <h3 id={titleId} className="text-base font-bold mb-2">{target.username} 비밀번호 재설정</h3>
         <p className="text-sm text-muted-foreground mb-3">새 비밀번호를 입력하세요. 변경 즉시 적용됩니다.</p>
         <input type="password" autoComplete="new-password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)}

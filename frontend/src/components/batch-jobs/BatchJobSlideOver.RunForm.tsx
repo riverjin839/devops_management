@@ -244,7 +244,7 @@ export function RunForm({ job }: RunFormProps) {
           onClick={submit}
           disabled={run.isPending || testConn.isPending || !job.enabled}
           title={!job.enabled ? '비활성화된 잡입니다 — "편집" 버튼에서 먼저 활성화하세요.' : undefined}
-          className="flex-1 inline-flex items-center justify-center gap-1.5 px-3 py-2 text-sm font-semibold bg-primary hover:bg-primary/90 text-primary-foreground rounded-xl mac-shadow disabled:opacity-60"
+          className="flex-1 inline-flex items-center justify-center gap-1.5 px-3 py-2 text-sm font-semibold bg-primary hover:bg-primary/90 text-primary-foreground rounded-xl shadow-card disabled:opacity-60"
         >
           <Play className="w-3.5 h-3.5" />
           {run.isPending ? '실행 중…' : '실행'}

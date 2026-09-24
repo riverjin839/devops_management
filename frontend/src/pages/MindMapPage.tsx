@@ -371,7 +371,7 @@ function NodeEditor({ initial, onSave, onClose, title }: NodeEditorProps) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
       <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={onClose} />
-      <div ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby={f('title')} className="relative bg-card border border-border rounded-2xl p-5 w-full max-w-lg mac-shadow max-h-[88vh] overflow-y-auto">
+      <div ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby={f('title')} className="relative bg-card border border-border rounded-2xl p-5 w-full max-w-lg shadow-card max-h-[88vh] overflow-y-auto">
         <div className="flex items-center justify-between mb-4">
           <h3 id={f('title')} className="text-sm font-semibold flex items-center gap-1.5">
             <MapIcon className="w-4 h-4 text-primary" />
@@ -783,7 +783,7 @@ function MindMapCanvas({
 
   return (
     <div className="relative w-full h-full">
-      <div className="absolute top-3 right-3 z-10 flex items-center gap-0.5 bg-card/90 backdrop-blur-md border border-border rounded-2xl p-1 mac-shadow">
+      <div className="absolute top-3 right-3 z-10 flex items-center gap-0.5 bg-card/90 backdrop-blur-md border border-border rounded-2xl p-1 shadow-card">
         <ToolGroup>
           <ToolBtn onClick={() => setZoom((z) => Math.min(3, z + 0.1))} title="확대 (+)"><ZoomIn className="w-4 h-4" /></ToolBtn>
           <ToolBtn onClick={() => setZoom((z) => Math.max(0.2, z - 0.1))} title="축소 (-)"><ZoomOut className="w-4 h-4" /></ToolBtn>
@@ -952,7 +952,7 @@ function MindMapCanvas({
           onClick={() => setShowShortcuts((s) => !s)}
           onMouseEnter={() => setHoverShortcut(true)}
           onMouseLeave={() => setHoverShortcut(false)}
-          className="p-2 rounded-full border border-border bg-card/90 backdrop-blur-md mac-shadow hover:bg-secondary text-muted-foreground hover:text-foreground transition-colors"
+          className="p-2 rounded-full border border-border bg-card/90 backdrop-blur-md shadow-card hover:bg-secondary text-muted-foreground hover:text-foreground transition-colors"
           title="단축키 도움말 (?)"
           aria-label="단축키 도움말"
         >
@@ -961,7 +961,7 @@ function MindMapCanvas({
       </div>
 
       {(showShortcuts || hoverShortcut) && (
-        <div className="absolute bottom-14 right-4 bg-card/95 backdrop-blur-md border border-border rounded-2xl p-4 text-sm mac-shadow w-72 z-20">
+        <div className="absolute bottom-14 right-4 bg-card/95 backdrop-blur-md border border-border rounded-2xl p-4 text-sm shadow-card w-72 z-20">
           <div className="flex items-center justify-between mb-3">
             <p className="font-semibold flex items-center gap-1.5">
               <HelpCircle className="w-3.5 h-3.5 text-primary" />
@@ -996,7 +996,7 @@ function MindMapCanvas({
         const node = nodes.find((n) => n.id === selectedNodeId);
         if (!node?.note) return null;
         return (
-          <div className="absolute bottom-4 left-4 bg-card/95 backdrop-blur-md border border-border rounded-2xl px-4 py-3 max-w-sm mac-shadow">
+          <div className="absolute bottom-4 left-4 bg-card/95 backdrop-blur-md border border-border rounded-2xl px-4 py-3 max-w-sm shadow-card">
             <div className="flex items-center gap-1.5 mb-1">
               <span className="w-1.5 h-1.5 rounded-full bg-primary" />
               <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{node.label}</p>
@@ -1281,7 +1281,7 @@ export function MindMapPage() {
               <div className="flex-1" />
               <button
                 onClick={handleAddRootNode}
-                className="px-3 py-1.5 text-sm font-semibold bg-primary hover:bg-primary/90 text-primary-foreground rounded-xl transition-colors flex items-center gap-1.5 mac-shadow"
+                className="px-3 py-1.5 text-sm font-semibold bg-primary hover:bg-primary/90 text-primary-foreground rounded-xl transition-colors flex items-center gap-1.5 shadow-card"
               >
                 <Plus className="w-3.5 h-3.5" /> 루트 노드
               </button>
@@ -1302,7 +1302,7 @@ export function MindMapPage() {
           {currentMap ? (
             currentMap.nodes.length === 0 ? (
               <div className="absolute inset-0 flex items-center justify-center">
-                <div className="text-center px-6 py-8 rounded-2xl bg-card/80 backdrop-blur-md border border-border mac-shadow max-w-sm">
+                <div className="text-center px-6 py-8 rounded-2xl bg-card/80 backdrop-blur-md border border-border shadow-card max-w-sm">
                   <div className="w-14 h-14 mx-auto mb-3 rounded-2xl bg-primary/10 flex items-center justify-center">
                     <MapIcon className="w-7 h-7 text-primary" />
                   </div>

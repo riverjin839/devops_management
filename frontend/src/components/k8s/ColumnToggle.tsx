@@ -29,7 +29,7 @@ export function ColumnToggle({ columns, hidden, onToggle }: ColumnToggleProps) {
         <DropdownMenu.Content
           align="end"
           sideOffset={4}
-          className="z-[60] min-w-[180px] rounded-xl border border-border bg-card p-1 shadow-lg mac-shadow"
+          className="z-[60] min-w-[180px] rounded-xl border border-border bg-card p-1 shadow-lg shadow-card"
         >
           <div className="px-2 py-1 text-xs font-semibold text-muted-foreground">컬럼</div>
           {columns.map((c) => (

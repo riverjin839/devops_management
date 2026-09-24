@@ -36,7 +36,7 @@ export function ConfluenceLinkCell({ item, onSave }: ConfluenceLinkCellProps) {
         {linksOpen && (
           <>
             <div className="fixed inset-0 z-30" onClick={(e) => { e.stopPropagation(); setLinksOpen(false); }} />
-            <div className="absolute left-0 top-full mt-1 z-40 bg-card border border-border rounded-lg mac-shadow p-1 min-w-[220px] max-w-xs">
+            <div className="absolute left-0 top-full mt-1 z-40 bg-card border border-border rounded-lg shadow-card p-1 min-w-[220px] max-w-xs">
               {links.map((link, i) => (
                 <a
                   key={link.url + i}

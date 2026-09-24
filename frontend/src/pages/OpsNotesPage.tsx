@@ -369,7 +369,7 @@ export function OpsNotesPage() {
             />
             <button
               onClick={() => navigate(newNoteHref)}
-              className="flex items-center gap-1.5 px-3.5 py-2 text-sm font-semibold bg-primary hover:bg-primary/90 text-primary-foreground rounded-xl transition-colors mac-shadow"
+              className="flex items-center gap-1.5 px-3.5 py-2 text-sm font-semibold bg-primary hover:bg-primary/90 text-primary-foreground rounded-xl transition-colors shadow-card"
             >
               <Plus className="w-4 h-4" /> 새 Q&amp;A
             </button>

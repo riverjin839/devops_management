@@ -198,7 +198,7 @@ export function BatchJobsPage() {
             type="button"
             onClick={openCreateFromHeader}
             disabled={!canCreate}
-            className="px-3.5 py-1.5 text-sm font-semibold bg-primary hover:bg-primary/90 text-primary-foreground rounded-xl mac-shadow flex items-center gap-1.5 disabled:opacity-50"
+            className="px-3.5 py-1.5 text-sm font-semibold bg-primary hover:bg-primary/90 text-primary-foreground rounded-xl shadow-card flex items-center gap-1.5 disabled:opacity-50"
             title={
               clusters.length === 0
                 ? '먼저 클러스터를 등록하세요'

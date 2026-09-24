@@ -49,7 +49,7 @@ export function ConfirmDialog({
         aria-modal="true"
         aria-labelledby={titleId}
         aria-describedby={description ? descId : undefined}
-        className="relative bg-card border border-border rounded-2xl mac-shadow w-full max-w-lg mx-4 overflow-hidden"
+        className="relative bg-card border border-border rounded-2xl shadow-card w-full max-w-lg mx-4 overflow-hidden"
       >
         <div className={`flex items-start gap-3 px-5 py-4 border-b border-border ${
           danger ? 'bg-status-critical/5' : 'bg-muted/30'

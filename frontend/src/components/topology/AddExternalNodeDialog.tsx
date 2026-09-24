@@ -30,7 +30,7 @@ export function AddExternalNodeDialog({ pending, onSubmit, onClose }: Props) {
         role="dialog"
         aria-modal="true"
         aria-labelledby={titleId}
-        className="relative bg-card border border-border rounded-2xl mac-shadow w-full max-w-sm mx-4"
+        className="relative bg-card border border-border rounded-2xl shadow-card w-full max-w-sm mx-4"
       >
         <div className="flex items-center gap-2 px-5 pt-4 pb-3 border-b border-border">
           <Server className="w-4 h-4 text-slate-500" />

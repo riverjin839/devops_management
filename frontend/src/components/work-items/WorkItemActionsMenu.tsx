@@ -118,7 +118,7 @@ export function WorkItemActionsMenu({
             onMouseEnter={openMenu}
             onMouseLeave={scheduleClose}
             style={{ position: 'fixed', top: menuPos.top, right: menuPos.right }}
-            className="z-40 w-60 bg-card border border-border rounded-lg mac-shadow p-1"
+            className="z-40 w-60 bg-card border border-border rounded-lg shadow-card p-1"
           >
             <button
               onClick={(e) => { e.stopPropagation(); setOpen(false); onEdit(item); }}

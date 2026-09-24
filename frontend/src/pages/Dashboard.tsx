@@ -387,7 +387,7 @@ export function Dashboard() {
           <button
             onClick={handleRunCheck}
             disabled={isChecking}
-            className="px-3 py-1 text-sm font-semibold bg-primary hover:bg-primary/90 text-primary-foreground rounded-xl transition-colors flex items-center gap-1.5 disabled:opacity-50 mac-shadow"
+            className="px-3 py-1 text-sm font-semibold bg-primary hover:bg-primary/90 text-primary-foreground rounded-xl transition-colors flex items-center gap-1.5 disabled:opacity-50 shadow-card"
           >
             <RefreshCw className={`w-3.5 h-3.5 ${isChecking ? 'animate-spin' : ''}`} />
             {isChecking ? '점검 중...' : '점검 실행'}

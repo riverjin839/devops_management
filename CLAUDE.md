@@ -275,7 +275,7 @@ offline/error dict 를 반환**하고 HTTP 500 을 올리지 않는다 (`agent_s
 - **카드는 `MacCard`(flat).** 페이지에서 `bg-card border` div 를 직접 조합하지 않는다
   (DESIGN.md D-004). 카드 제목을 본문 `<h2>` 로 중복하지 않는다.
 - **라운딩**: 카드 `rounded-md`(토큰) · 버튼/입력 `rounded-xl`. sharp corner 금지.
-  `rounded-lg|md|sm` 은 theme-aware, `rounded-xl|2xl` 은 고정값.
+  전 단계(`rounded`·`sm`·`md`·`lg`·`xl`·`2xl`)가 `--radius` 기준 theme-aware 다(P3).
 - **per-cluster 페이지는 `ClusterSidebar` `iconOnly` 필수.** 페이지 내 `<select>` 클러스터
   선택기 금지, `seq` 노출 금지, `onReorder` 금지. 보조 사이드바는 메인 사이드바에 flush
   (좌측 공백 0) — 행 전체에 좌측 패딩이나 `mx-auto` 를 주지 않는다.
