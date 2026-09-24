@@ -23,11 +23,14 @@ PEP 는 **v1.0.0 정식 오픈** 이후 **trunk 기반 + SemVer 태그**로 운�
 → MINOR/PATCH 판단과 CHANGELOG 작성의 근거가 된다.
 
 ## 릴리스 절차 — 완전 자동 (기본)
-`feat:`/`fix:`/`docs:`/`chore:`/`refactor:` prefix PR 이 `main` 에 머지되면
+`feat:`/`fix:`/`docs:`/`chore:`/`refactor:` prefix PR 이 `main` 에 머지되면 — scope 가 붙은
+`feat(ui):` · `fix(k8s-allocation):` 형태와 breaking 표시 `!` 도 같은 type 으로 인식한다 —
 `.github/workflows/auto-release.yml` 이 **사람 개입 없이** 전체 절차를 수행한다:
 
-1. 머지된 PR 제목에서 bump 종류 판단(`feat:` → MINOR, 그 외 → PATCH). 인식 불가/`chore(release):`
-   자신의 머지는 스킵.
+1. 머지된 PR 제목에서 bump 종류 판단(`feat` → MINOR, `fix`/`docs`/`chore`/`refactor` → PATCH,
+   그 외 type·형식 불일치·`chore(release):` 자신의 머지는 스킵). 판정은
+   `scripts/release/decide_bump.py`(테스트 `test_decide_bump.py`, CI `docs-sync` job 에서 실행).
+   `!`(breaking)는 type 기준으로 판정한다 — MAJOR 는 수동 릴리스 대상.
 2. `scripts/release/bump_version.py` 로 버전 3곳(`frontend/package.json`,
    `backend/app/main.py` ×2) + `CHANGELOG.md` `[Unreleased]` → `## [X.Y.Z] - <date>` 확정
    (Unreleased 에 실제 항목이 없으면 전체를 스킵).

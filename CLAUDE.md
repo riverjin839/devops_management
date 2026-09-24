@@ -98,7 +98,7 @@ devops_management/
 ├── k8s/                 # Kustomize base + overlays(dev/prod/kind/airgap) + superpod/(CronJob)
 ├── helm/k8s-daily-monitor/   # values / -dev / -prod / -airgap
 ├── scripts/             # kind-setup.sh, deploy-airgap.sh, init-cluster.sh,
-│                        #   release/bump_version.py, docs/check_docs_sync.py
+│                        #   release/{bump_version,decide_bump}.py, docs/check_docs_sync.py
 ├── ansible/playbooks/  argocd/  docker/ vagrant/ windows-docker/
 ├── docs/                # 인덱스는 docs/README.md (01-plan/ 02-design/ 03-analysis/
 │                        #   archive/ superpowers/ 하위 폴더 포함)
@@ -419,9 +419,10 @@ Makefile 타깃(`make k8s-dev`, `make docker-rebuild` 등)은 `make help` 로 �
   이어서 사용자 관점 요약, 필요 시 `Backend:`/`Frontend:` 로 구현 포인트 짧게).
 - 버전/브랜치/태그 전체 전략은 `docs/branch-tag-strategy.md` 참고. SemVer(`vMAJOR.MINOR.PATCH`),
   버전 소스는 `frontend/package.json` `version` + `backend/app/main.py` FastAPI `version`.
-- **릴리스 자동화**: `feat:`/`fix:` 등 conventional commit prefix PR 이 `main` 에 머지되면
-  `.github/workflows/auto-release.yml` 이 SemVer 버전을 자동으로 올리고(`feat:`→MINOR, 그
-  외→PATCH) `CHANGELOG.md` 의 `[Unreleased]` 를 새 버전 섹션으로 확정한 뒤 `vX.Y.Z` 태그를
+- **릴리스 자동화**: `feat:`/`fix:` 등 conventional commit prefix PR(scope 포함 `feat(ui):` 도
+  인식 — 판정은 `scripts/release/decide_bump.py`)이 `main` 에 머지되면
+  `.github/workflows/auto-release.yml` 이 SemVer 버전을 자동으로 올리고(`feat`→MINOR,
+  `fix`/`docs`/`chore`/`refactor`→PATCH) `CHANGELOG.md` 의 `[Unreleased]` 를 새 버전 섹션으로 확정한 뒤 `vX.Y.Z` 태그를
   push 한다(→ `release.yml` 이 GHCR 이미지 태깅 + GitHub Release 생성). 버전 3곳 수정과
   CHANGELOG 섹션 확정은 `scripts/release/bump_version.py` 로 자동화돼 있다. 수동 `/release`
   스킬은 hotfix 나 자동화 실패 시의 fallback 이다 — 평소엔 실행할 필요 없음.
