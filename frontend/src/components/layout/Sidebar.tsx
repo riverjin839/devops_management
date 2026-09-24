@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState, type ComponentType } from 'react'
 import { createPortal } from 'react-dom';
 import { useLocation, useNavigate } from 'react-router-dom';
 import {
-  Plus, Leaf, Contrast, Brush, Paintbrush, Frame, Newspaper, Shapes, Diamond,
+  Plus, Leaf, Contrast, Brush, Paintbrush, Frame, Newspaper, Shapes, Diamond, Shell,
   Moon, Sun, Monitor, LogOut, User,
   KeyRound, Home, MessageSquare, Bot, HelpCircle, Search, ScrollText, Bug, UserCog, Palette,
 } from 'lucide-react';
@@ -40,6 +40,7 @@ const THEME_ICON: Record<Theme, ComponentType<{ className?: string }>> = {
   journal: Newspaper,
   relief: Shapes,
   harlequin: Diamond,
+  ozenfant: Shell,
   system: Monitor,
 };
 const THEME_LABEL: Record<Theme, string> = {
@@ -53,6 +54,7 @@ const THEME_LABEL: Record<Theme, string> = {
   journal: '아침 식사',
   relief: '릴리프',
   harlequin: '할리퀸과 목걸이를 한 여인',
+  ozenfant: '오장팡 자개',
   system: '시스템',
 };
 // 강조색 스와치 아이콘 — 팩토리로 한 번만 만들어 매 렌더마다 컴포넌트 정체성이 바뀌지 않게 한다.
@@ -518,7 +520,7 @@ export function Sidebar() {
                   Icon={ACCENT_SWATCH_ICON[a]}
                   checked={accent === a}
                   disabled={!accentApplies(theme)}
-                  title={accentApplies(theme) ? undefined : '그림 테마(움버·플래스터·아침 식사·릴리프·할리퀸과 목걸이를 한 여인)와 컴포트·고대비 바탕은 자체 색을 써서 강조색을 바꿀 수 없다'}
+                  title={accentApplies(theme) ? undefined : '그림 테마(움버·플래스터·아침 식사·릴리프·할리퀸과 목걸이를 한 여인·오장팡 자개)와 컴포트·고대비 바탕은 자체 색을 써서 강조색을 바꿀 수 없다'}
                   onSelect={() => setAccent(a)}
                 />
               ))}

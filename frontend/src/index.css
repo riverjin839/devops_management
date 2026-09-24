@@ -786,6 +786,79 @@
     --surface-container-highest: 30 2% 84%;
   }
 
+  /* ── Ozenfant 자개 — 퓨리즘 정물화(서명 "ozenfant")에서 추출한 팔레트: 자개빛 펄 그레이 바탕 · 스틸 블루 ·
+     진주 블루 · 산화철 레드 · 세이지. 차분한 무채색 펄 위에 블루 한 줄기만 도드라지는 라이트 테마.
+     - 스틸 블루 = primary(버튼 글자 흰색 5.3:1), 링크·선택 글자는 한 단계 짙게(5.3:1).
+     - 사이드바 = 진주 블루 그레이, 활성 표시는 짙은 스틸 블루. 위험(critical)은 그림 속 산화철 레드.
+     - 자체 색 고정 바탕(standalone) — 강조색(data-accent) 은 적용되지 않는다. */
+  html.ozenfant {
+    --background: 210 12% 92%;
+    --foreground: 215 22% 15%;
+    --card: 200 20% 97%;
+    --card-foreground: 215 22% 15%;
+    --popover: 200 20% 97%;
+    --popover-foreground: 215 22% 15%;
+    --primary: 210 38% 42%;
+    --primary-foreground: 200 25% 98%;
+    --primary-text: 210 42% 36%;
+    --secondary: 210 12% 88%;
+    --secondary-foreground: 215 22% 15%;
+    --muted: 210 12% 90%;
+    --muted-foreground: 212 10% 36%;
+    --accent: 205 45% 90%;
+    --accent-foreground: 215 22% 15%;
+    --destructive: 8 52% 40%;
+    --destructive-foreground: 200 25% 98%;
+    --border: 210 10% 80%;
+    --input: 210 10% 50%;
+    --ring: 210 38% 42%;
+    --radius: 0.5rem;
+    --card-shadow: 0 0 #0000;
+
+    --sidebar: 205 18% 86%;
+    --sidebar-foreground: 215 22% 15%;
+    --sidebar-muted-foreground: 212 12% 34%;
+    --sidebar-accent: 205 35% 77%;
+    --sidebar-accent-foreground: 215 25% 12%;
+    --sidebar-border: 210 12% 78%;
+    --sidebar-primary: 210 45% 36%;
+
+    --status-healthy: 110 18% 50%;
+    --status-healthy-bg: 110 18% 89%;
+    --status-warning: 32 45% 55%;
+    --status-warning-bg: 32 45% 89%;
+    --status-critical: 8 52% 45%;
+    --status-critical-bg: 8 45% 91%;
+    --status-unknown: 212 8% 55%;
+    --status-unknown-bg: 210 10% 88%;
+    --status-pending: 212 8% 55%;
+    --status-pending-bg: 210 10% 88%;
+    --status-info: 205 45% 60%;
+    --status-info-bg: 205 50% 91%;
+    --status-neutral: 212 8% 55%;
+    --status-neutral-bg: 210 10% 88%;
+    --status-healthy-text: 110 25% 28%;
+    --status-warning-text: 30 55% 30%;
+    --status-critical-text: 8 55% 36%;
+    --status-info-text: 208 45% 32%;
+    --status-unknown-text: 212 10% 34%;
+
+    --chart-1: 210 38% 50%;
+    --chart-2: 8 45% 75%;
+    --chart-3: 110 18% 50%;
+    --chart-4: 30 25% 70%;
+    --chart-5: 205 45% 72%;
+    --chart-6: 8 52% 42%;
+    --chart-7: 100 28% 40%;
+    --chart-8: 212 8% 60%;
+
+    --surface-container-lowest: 200 20% 97%;
+    --surface-container-low: 205 16% 95%;
+    --surface-container: 210 12% 92%;
+    --surface-container-high: 210 12% 90%;
+    --surface-container-highest: 210 12% 88%;
+  }
+
   /* ── 강조색(accent) — 라이트·다크 바탕 위에 <html data-accent="…"> 로 얹는다 (P2) ──
      버튼·링크·선택 탭·활성 메뉴·포커스 링만 바뀌고, 배경·상태색은 바탕 테마가 정한다.
      blue 는 기본값이라 블록이 없다. 값은 버튼 글자·링크 모두 4.5:1 이상으로 계산했다.
