@@ -475,7 +475,7 @@ export function TodoTodayPage() {
                       <Plus className="w-4 h-4 text-muted-foreground" />
                       <span className="text-sm font-semibold text-muted-foreground">스프린트에 추가</span>
                       <span className="text-sm text-muted-foreground">{sprint.candidates.length}</span>
-                      <span className="ml-auto text-xs text-muted-foreground/70">미배정 · 미완료 내 할일</span>
+                      <span className="ml-auto text-xs text-muted-foreground">미배정 · 미완료 내 할일</span>
                     </div>
                     <div className="px-2 py-1 divide-y divide-border/40">
                       {sprint.candidates.map((t) => {

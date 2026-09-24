@@ -606,7 +606,7 @@ export function NodeSpecPage() {
                         className={`relative px-2 py-2 text-xs font-semibold text-muted-foreground ${k === 'ssd' || k === 'vm' ? 'text-center' : ''}`}>
                         <span className="truncate inline-flex items-center gap-1 max-w-full align-middle cursor-help">
                           {COL_LABELS[k]}
-                          <span className="text-[10px] text-muted-foreground/50">ⓘ</span>
+                          <span className="text-[11px] text-muted-foreground">ⓘ</span>
                         </span>
                         <ResizeGrip onMouseDown={(e) => colW.beginResize(k, e)} onDoubleClick={() => colW.autoFit(k)} />
                       </th>
@@ -656,7 +656,7 @@ export function NodeSpecPage() {
                       </GridCell>
                       <GridCell row={r.id} col="cluster" selection={selection}
                         className="px-2 py-2 align-top">
-                        <p className="text-sm">{r.clusterName ?? <span className="text-muted-foreground/60">미배정</span>}</p>
+                        <p className="text-sm">{r.clusterName ?? <span className="text-muted-foreground">미배정</span>}</p>
                         <p className="text-xs text-muted-foreground">{r.role ?? '-'}</p>
                       </GridCell>
                       <GridCell row={r.id} col="publicIp" selection={selection}
@@ -667,7 +667,7 @@ export function NodeSpecPage() {
                               onSave={(v) => saveField(r.id, { bond0Ip: v })} />
                           </p>
                         ) : (
-                          <span className="text-muted-foreground/50 italic" title="NIC 수집(SSH) 후 자동 채워지거나 수기 입력">
+                          <span className="text-muted-foreground italic" title="NIC 수집(SSH) 후 자동 채워지거나 수기 입력">
                             미수집
                           </span>
                         )}
@@ -681,7 +681,7 @@ export function NodeSpecPage() {
                               onSave={(v) => saveField(r.id, { bond1Ip: v })} />
                           </p>
                         ) : (
-                          <span className="text-muted-foreground/50 italic" title="NIC 수집(SSH) 후 자동 채워지거나 수기 입력">
+                          <span className="text-muted-foreground italic" title="NIC 수집(SSH) 후 자동 채워지거나 수기 입력">
                             미수집
                           </span>
                         )}
@@ -754,7 +754,7 @@ export function NodeSpecPage() {
                             }}
                             className={`px-1 rounded hover:bg-primary/10 disabled:opacity-40 ${
                               r.isSsd === true ? 'text-status-healthy font-bold'
-                              : r.isSsd === false ? 'text-muted-foreground/50'
+                              : r.isSsd === false ? 'text-muted-foreground'
                               : 'text-muted-foreground/30'
                             }`}
                           >
@@ -781,7 +781,7 @@ export function NodeSpecPage() {
                           }}
                           className={`px-1 rounded text-sm font-mono hover:bg-primary/10 disabled:opacity-40 ${
                             r.isVm === true ? 'text-status-info font-bold'
-                            : r.isVm === false ? 'text-muted-foreground/50'
+                            : r.isVm === false ? 'text-muted-foreground'
                             : 'text-muted-foreground/30'
                           }`}
                         >
@@ -802,7 +802,7 @@ export function NodeSpecPage() {
                             <MapPin className="w-3 h-3 inline mr-0.5 text-muted-foreground" />
                             {[r.datacenter, r.room, r.rack, r.rackUnit].filter(Boolean).join('/')}
                           </p>
-                        ) : <span className="text-muted-foreground/60">-</span>}
+                        ) : <span className="text-muted-foreground">-</span>}
                       </GridCell>
                       <td className="px-2 py-2 align-top">
                         <div className="flex items-center gap-1">

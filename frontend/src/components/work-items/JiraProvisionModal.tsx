@@ -111,7 +111,7 @@ function ChildPagePicker({
       {!loading && items.map((p) => (
         <button key={p.id} type="button" onClick={() => onPick(p)}
           className="w-full text-left px-2 py-1.5 text-xs hover:bg-secondary flex items-center gap-1.5">
-          <span className="font-mono text-muted-foreground/70 flex-shrink-0">{p.id}</span>
+          <span className="font-mono text-muted-foreground flex-shrink-0">{p.id}</span>
           <span className="text-foreground truncate">{p.title || '(제목 없음)'}</span>
         </button>
       ))}

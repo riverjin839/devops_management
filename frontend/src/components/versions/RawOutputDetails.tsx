@@ -28,13 +28,13 @@ export function RawOutputDetails({
       <div className="mt-1 space-y-1">
         {hasStdout && (
           <div>
-            <div className="text-[10px] uppercase tracking-wider text-muted-foreground">stdout</div>
+            <div className="text-[11px] uppercase tracking-wider text-muted-foreground">stdout</div>
             <LogViewer text={stdout!} maxHeight="max-h-40" hideToolbar />
           </div>
         )}
         {hasStderr && (
           <div>
-            <div className="text-[10px] uppercase tracking-wider text-muted-foreground">stderr</div>
+            <div className="text-[11px] uppercase tracking-wider text-muted-foreground">stderr</div>
             <LogViewer text={stderr!} maxHeight="max-h-40" asError hideToolbar />
           </div>
         )}

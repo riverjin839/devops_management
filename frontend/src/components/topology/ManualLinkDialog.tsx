@@ -95,7 +95,7 @@ export function ManualLinkDialog({ source, target, pending, onSubmit, onClose }:
 function NodeChip({ node }: { node: TopoNode }) {
   return (
     <span className="inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-secondary/60 min-w-0 max-w-[45%]">
-      <span className="text-[10px] font-bold text-muted-foreground flex-shrink-0">{KIND_ABBR[node.kind] ?? node.kind}</span>
+      <span className="text-[11px] font-bold text-muted-foreground flex-shrink-0">{KIND_ABBR[node.kind] ?? node.kind}</span>
       <span className="truncate font-medium" title={node.name}>{node.name}</span>
     </span>
   );

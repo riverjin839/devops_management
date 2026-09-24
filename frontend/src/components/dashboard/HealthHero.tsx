@@ -95,7 +95,7 @@ export function HealthHero({ stats, isLoading, lastCheckTime }: HealthHeroProps)
             ]}
             ariaLabel={`전체 헬스 ${healthyPct}% (${overallLabel}), 목표 100% 정상`}
           />
-          <div className="flex justify-between text-[10px] text-muted-foreground mt-1">
+          <div className="flex justify-between text-[11px] text-muted-foreground mt-1">
             <span>0%</span>
             <span>목표 100% 정상</span>
           </div>

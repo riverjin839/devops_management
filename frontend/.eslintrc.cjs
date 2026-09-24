@@ -3,6 +3,10 @@
    고정 팔레트는 테마마다 대비가 깨진다(예: text-emerald-400 은 라이트 테마에서 1.9:1).
    장식용 계열(blue·violet·purple·orange·cyan 등)과 slate 콘솔 배경은 대상이 아니다. */
 const STATUS_PALETTE_RE = String.raw`/(^|[^\w-])(text|bg|border|ring|fill|stroke|from|to|via|divide|outline|decoration|placeholder|accent|caret|shadow)(-[a-z]+)?-(emerald|green|red|rose|amber|yellow|sky)-\d{2,3}/`;
+/* P2 타이포 — 흐린 보조 글자(text-muted-foreground/50~90 → 라이트에서 1.96~3.23:1)와 11px 미만 글자 금지.
+   placeholder: 변형은 입력 안내 글자라 예외. esquery 정규식은 '/' 를 못 쓰므로 슬래시 자리는 '.' 로 매칭. */
+const TYPO_RE = String.raw`/((?<!placeholder:)(?<![\w-])text-muted-foreground.[5-9]\d(?!\d))|text-\[(8|9|10)px\]/`;
+const TYPO_MSG = '보조 글자는 text-muted-foreground(투명도 없이), 최소 글자는 text-[11px] — 흐리게 하거나 더 작게 하지 않는다 (DESIGN_SYSTEM §12 타이포)';
 const STATUS_PALETTE_MSG = '상태색은 status 토큰을 쓴다 — text-status-healthy|warning|critical|info, bg-status-*/10, border-status-*/30 (DESIGN_SYSTEM §2.4)';
 
 module.exports = {
@@ -48,6 +52,8 @@ module.exports = {
     'no-restricted-syntax': ['error',
       { selector: `Literal[value=${STATUS_PALETTE_RE}]`, message: STATUS_PALETTE_MSG },
       { selector: `TemplateElement[value.raw=${STATUS_PALETTE_RE}]`, message: STATUS_PALETTE_MSG },
+      { selector: `Literal[value=${TYPO_RE}]`, message: TYPO_MSG },
+      { selector: `TemplateElement[value.raw=${TYPO_RE}]`, message: TYPO_MSG },
     ],
   },
 };

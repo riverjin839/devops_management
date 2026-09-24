@@ -579,7 +579,7 @@ export function CidrCalculatorPage() {
                   </div>
                   <div className="flex items-center gap-2 font-mono tabular-nums text-sm">
                     <span className="text-status-healthy font-medium">{info.firstHost}</span>
-                    <ArrowRight className="w-3.5 h-3.5 text-muted-foreground/60 flex-shrink-0" />
+                    <ArrowRight className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
                     <span className="text-status-healthy font-medium">{info.lastHost}</span>
                     <CopyButton value={`${info.firstHost} - ${info.lastHost}`} className="ml-auto" />
                   </div>
@@ -633,7 +633,7 @@ export function CidrCalculatorPage() {
                             className={
                               isNetwork
                                 ? 'text-primary font-semibold'
-                                : 'text-muted-foreground/50'
+                                : 'text-muted-foreground'
                             }
                           >
                             {bit}

@@ -168,7 +168,7 @@ function PersonalEditor({
           const isReset = resetKeys.includes(r.key);
           return (
             <div key={r.key} className="flex items-start gap-1.5">
-              <span className={`mt-1.5 shrink-0 inline-flex px-1.5 py-0.5 text-[10px] rounded border ${SOURCE_BADGE[r.source].cls}`}>
+              <span className={`mt-1.5 shrink-0 inline-flex px-1.5 py-0.5 text-[11px] rounded border ${SOURCE_BADGE[r.source].cls}`}>
                 {SOURCE_BADGE[r.source].label}
               </span>
               <input

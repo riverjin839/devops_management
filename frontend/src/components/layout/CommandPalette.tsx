@@ -180,7 +180,7 @@ export function CommandPalette() {
             spellCheck={false}
             className="flex-1 min-w-0 bg-transparent py-3 text-sm focus:outline-none placeholder:text-muted-foreground"
           />
-          <kbd className="hidden sm:inline text-[10px] font-mono text-muted-foreground border border-border rounded px-1.5 py-0.5">Esc</kbd>
+          <kbd className="hidden sm:inline text-[11px] font-mono text-muted-foreground border border-border rounded px-1.5 py-0.5">Esc</kbd>
         </div>
 
         <div ref={listRef} id="command-palette-results" role="listbox" aria-label="검색 결과" className="flex-1 min-h-0 overflow-y-auto py-1">

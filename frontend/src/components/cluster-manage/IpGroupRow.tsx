@@ -48,7 +48,7 @@ export function IpGroupRow({
         <p className={`text-xs font-semibold uppercase tracking-wider mb-0.5 ${ACCENT[accent].label}`}>
           {label}
         </p>
-        <p className="text-sm text-muted-foreground/60">{emptyMessage}</p>
+        <p className="text-sm text-muted-foreground">{emptyMessage}</p>
       </div>
     );
   }

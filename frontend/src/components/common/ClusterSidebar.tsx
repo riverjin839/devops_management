@@ -132,7 +132,7 @@ function ClusterRow({ cluster, active, sortMode, onSelect, multiSelect, checked 
           )}
         </span>
         {!sortMode && (
-          <Icon className={`w-3 h-3 flex-shrink-0 ${active ? 'text-primary' : 'text-muted-foreground/70'}`} />
+          <Icon className={`w-3 h-3 flex-shrink-0 ${active ? 'text-primary' : 'text-muted-foreground'}`} />
         )}
       </button>
     </div>
@@ -312,7 +312,7 @@ function ClusterSidebarIconRail({
           />
         )}
         {clusters.length === 0 ? (
-          <p className="px-1 py-3 text-xs text-muted-foreground/70 text-center">없음</p>
+          <p className="px-1 py-3 text-xs text-muted-foreground text-center">없음</p>
         ) : (
           clusters.map((c) => {
             const subtitle = [c.region, c.operationLevel].filter(Boolean).join(' · ');
@@ -411,7 +411,7 @@ export function ClusterSidebar({
       <div className="flex items-center justify-between px-2 py-1.5">
         <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
           {title}
-          <span className="ml-1 text-muted-foreground/70">
+          <span className="ml-1 text-muted-foreground">
             {multiSelect ? `(${selectedSet?.size ?? 0}/${totalN})` : `(${totalN})`}
           </span>
         </p>
@@ -447,17 +447,17 @@ export function ClusterSidebar({
               : 'hover:bg-secondary text-foreground border border-transparent'
           }`}
         >
-          <LayoutGrid className={`w-3.5 h-3.5 flex-shrink-0 ${selectedId === null ? 'text-primary' : 'text-muted-foreground/70'}`} />
+          <LayoutGrid className={`w-3.5 h-3.5 flex-shrink-0 ${selectedId === null ? 'text-primary' : 'text-muted-foreground'}`} />
           <span className="flex-1 min-w-0 text-sm font-medium truncate">{allLabel}</span>
           {totalN > 0 && (
-            <span className="text-xs text-muted-foreground/70 flex-shrink-0">{totalN}</span>
+            <span className="text-xs text-muted-foreground flex-shrink-0">{totalN}</span>
           )}
         </button>
       )}
 
       <div className="space-y-0.5">
         {clusters.length === 0 ? (
-          <p className="px-2 py-3 text-sm text-muted-foreground/70">등록된 클러스터 없음</p>
+          <p className="px-2 py-3 text-sm text-muted-foreground">등록된 클러스터 없음</p>
         ) : (
           <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
             <SortableContext items={clusters.map((c) => c.id)} strategy={verticalListSortingStrategy}>

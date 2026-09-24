@@ -249,7 +249,7 @@ export function ClusterTrendsPage() {
                     <div key={`${cell.node}__${cell.metric}`} className="rounded-xl border border-border bg-card p-2.5">
                       <div className="flex items-center justify-between gap-1 mb-1 min-w-0">
                         <span className="text-xs font-medium truncate" title={cell.node}>{cell.node}</span>
-                        <span className="text-[10px] text-muted-foreground whitespace-nowrap">{METRIC_LABEL[cell.metric]}</span>
+                        <span className="text-[11px] text-muted-foreground whitespace-nowrap">{METRIC_LABEL[cell.metric]}</span>
                       </div>
                       <div className="text-sm font-semibold mb-1" style={{ color: METRIC_COLOR[cell.metric] }}>
                         {fmtVal(cell.latest, cell.unit)}

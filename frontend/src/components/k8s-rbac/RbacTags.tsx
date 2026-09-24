@@ -11,7 +11,7 @@ const RISK_CLASS: Record<string, string> = {
 export function RiskBadge({ risk }: { risk: 'low' | 'medium' | 'high' }) {
   return (
     <span
-      className={`inline-block text-[10px] font-semibold px-1.5 py-0.5 rounded border ${RISK_CLASS[risk]}`}
+      className={`inline-block text-[11px] font-semibold px-1.5 py-0.5 rounded border ${RISK_CLASS[risk]}`}
     >
       위험도 {RISK_LABEL[risk]}
     </span>

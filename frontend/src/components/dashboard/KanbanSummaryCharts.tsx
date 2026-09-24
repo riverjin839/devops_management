@@ -108,7 +108,7 @@ export function KanbanSummaryCharts({ items, isLoading, selectedClusterId }: Kan
         {isLoading ? (
           <ChartSkeleton />
         ) : totalTasks === 0 ? (
-          <div className="h-32 flex items-center justify-center text-sm text-muted-foreground/50">
+          <div className="h-32 flex items-center justify-center text-sm text-muted-foreground">
             데이터 없음
           </div>
         ) : (
@@ -151,7 +151,7 @@ export function KanbanSummaryCharts({ items, isLoading, selectedClusterId }: Kan
         {isLoading ? (
           <ChartSkeleton />
         ) : totalIssues === 0 ? (
-          <div className="h-32 flex items-center justify-center text-sm text-muted-foreground/50">
+          <div className="h-32 flex items-center justify-center text-sm text-muted-foreground">
             데이터 없음
           </div>
         ) : (

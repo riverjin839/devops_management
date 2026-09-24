@@ -119,7 +119,7 @@ export function SavedCommands({
       )}
 
       {items.length === 0 ? (
-        <p className="text-xs text-muted-foreground/70 italic py-1">
+        <p className="text-xs text-muted-foreground italic py-1">
           저장된 명령이 없습니다. 자주 쓰는 명령을 저장하면 다음에 클릭 한 번으로 불러올 수 있어요.
         </p>
       ) : (

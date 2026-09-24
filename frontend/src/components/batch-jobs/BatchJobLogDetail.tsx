@@ -57,7 +57,7 @@ export function BatchJobLogDetail({ run, stepPlan, maxHeight = 'max-h-[320px]', 
           <span className="text-xs font-mono text-muted-foreground">exit {run.exitCode}</span>
         )}
         <span className="text-xs font-mono text-muted-foreground">{run.durationMs}ms</span>
-        <span className="text-xs font-mono text-muted-foreground/70 ml-auto">{formatDateTime(run.startedAt)}</span>
+        <span className="text-xs font-mono text-muted-foreground ml-auto">{formatDateTime(run.startedAt)}</span>
       </header>
       <div className="p-2.5 space-y-2.5">
         {/* 단계별 진행 상태 — 어느 단계에서 무엇을 하다 실패했는지 한눈에 */}

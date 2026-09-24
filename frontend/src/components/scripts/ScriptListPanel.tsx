@@ -19,7 +19,7 @@ export function ScriptKindBadge({ kind }: { kind: ScriptKind }) {
   const meta = KIND_META[kind];
   const Icon = meta.icon;
   return (
-    <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded border text-[10px] font-medium ${meta.cls}`}>
+    <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded border text-[11px] font-medium ${meta.cls}`}>
       <Icon className="w-3 h-3" /> {meta.label}
     </span>
   );
@@ -99,13 +99,13 @@ export function ScriptListPanel({
                   <div className="flex items-center gap-1.5 min-w-0">
                     <span className="text-xs font-medium truncate">{s.name}</span>
                     {s.isSystem && (
-                      <span className="flex-shrink-0 text-[9px] px-1 py-px rounded border border-border text-muted-foreground">시스템</span>
+                      <span className="flex-shrink-0 text-[11px] px-1 py-px rounded border border-border text-muted-foreground">시스템</span>
                     )}
                   </div>
                   <div className="flex items-center gap-1 mt-1 flex-wrap">
                     <ScriptKindBadge kind={s.kind} />
                     {(s.tags ?? []).slice(0, 3).map((t) => (
-                      <span key={t} className="text-[10px] px-1 py-px rounded bg-secondary text-muted-foreground">{t}</span>
+                      <span key={t} className="text-[11px] px-1 py-px rounded bg-secondary text-muted-foreground">{t}</span>
                     ))}
                   </div>
                 </button>

@@ -271,7 +271,7 @@ function SourceRow({ s }: { s: TrendSource }) {
             </p>
           )}
           {s.lastCollectedAt && (
-            <p className="text-xs text-muted-foreground/70 mt-0.5">
+            <p className="text-xs text-muted-foreground mt-0.5">
               마지막: {formatDateTimeShort(s.lastCollectedAt)}
             </p>
           )}

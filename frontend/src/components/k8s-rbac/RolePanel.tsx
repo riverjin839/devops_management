@@ -233,7 +233,7 @@ export function RolePanel({
                     <td className="px-3 py-2 font-mono text-xs">
                       {r.name}
                       {r.labels['app.kubernetes.io/managed-by'] === 'pep' && (
-                        <span className="ml-1.5 text-[10px] px-1.5 py-px rounded-full border border-primary/30 bg-primary/10 text-primary font-medium">
+                        <span className="ml-1.5 text-[11px] px-1.5 py-px rounded-full border border-primary/30 bg-primary/10 text-primary font-medium">
                           PEP
                         </span>
                       )}

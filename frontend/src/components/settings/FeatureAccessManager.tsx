@@ -180,7 +180,7 @@ export function FeatureAccessManager() {
                   <UsersIcon className="w-3 h-3" /> 허용 사용자
                 </p>
                 {nonAdmin.length === 0 ? (
-                  <p className="text-xs text-muted-foreground/70">등록된 (admin 외) 사용자가 없습니다.</p>
+                  <p className="text-xs text-muted-foreground">등록된 (admin 외) 사용자가 없습니다.</p>
                 ) : (
                   <div className="flex flex-wrap gap-1.5">
                     {nonAdmin.map((u) => {

@@ -59,7 +59,7 @@ export function ActiveAlertsTable({ rows, isLoading, emptyMessage }: {
                   </td>
                   <td className={`${TD} font-medium truncate max-w-[16rem]`}>
                     {alert.alertname}
-                    <span className="ml-2 text-[10px] text-muted-foreground uppercase">{alert.origin}</span>
+                    <span className="ml-2 text-[11px] text-muted-foreground uppercase">{alert.origin}</span>
                   </td>
                   <td className={`${TD} text-xs text-muted-foreground truncate`}>{alert.namespace ?? '-'}</td>
                   <td className={`${TD} font-mono text-xs truncate max-w-[12rem]`}>{alert.resource ?? '-'}</td>

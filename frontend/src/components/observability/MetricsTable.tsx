@@ -71,7 +71,7 @@ export function MetricsTable({ rows, isLoading, emptyMessage, onEdit }: MetricsT
                   <td className={`${TD} text-xs text-muted-foreground truncate max-w-[14rem]`}>
                     {labelsSummary(row.labels, ['__name__']) || '-'}
                     {row.seriesCount > 1 ? (
-                      <span className="ml-1 text-[10px] text-muted-foreground">
+                      <span className="ml-1 text-[11px] text-muted-foreground">
                         (+{row.seriesCount - 1})
                       </span>
                     ) : null}

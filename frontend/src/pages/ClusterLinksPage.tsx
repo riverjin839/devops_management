@@ -115,7 +115,7 @@ function LinkCard({ link, onEdit, onDelete }: { link: ClusterLink; onEdit: () =>
           <ExternalLink className="w-3 h-3 flex-shrink-0 opacity-60" />
         </a>
         {link.description && <p className="text-sm text-muted-foreground mt-0.5 truncate">{link.description}</p>}
-        <p className="text-xs text-muted-foreground/60 font-mono truncate mt-1">{link.url}</p>
+        <p className="text-xs text-muted-foreground font-mono truncate mt-1">{link.url}</p>
       </div>
       <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0">
         <button onClick={onEdit}   className="p-1.5 hover:bg-secondary rounded-md text-muted-foreground hover:text-foreground" title="편집" aria-label="편집"><Pencil className="w-3.5 h-3.5" /></button>
@@ -452,7 +452,7 @@ export function ClusterLinksPage() {
             <div className="space-y-1.5">
               {orphanGroups.map(g => (
                 <div key={g.clusterId} className="flex items-center gap-3">
-                  <span className="text-sm text-muted-foreground/70 w-28 truncate">{g.clusterName}</span>
+                  <span className="text-sm text-muted-foreground w-28 truncate">{g.clusterName}</span>
                   <div className="flex flex-wrap gap-2">
                     {g.links.map(l => (
                       <a key={l.id} href={l.url} target="_blank" rel="noopener noreferrer"
@@ -475,7 +475,7 @@ export function ClusterLinksPage() {
     <div className="bg-card rounded-md border border-border overflow-hidden h-full flex flex-col">
       <div className="flex items-center px-4 py-2.5 border-b border-border bg-muted/40 gap-2">
         {!isOrphan && (
-          <span {...dragHandle} className="cursor-grab active:cursor-grabbing p-0.5 rounded text-muted-foreground/50 hover:text-foreground hover:bg-secondary transition-colors" title="드래그하여 순서 변경">
+          <span {...dragHandle} className="cursor-grab active:cursor-grabbing p-0.5 rounded text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors" title="드래그하여 순서 변경">
             <GripVertical className="w-3.5 h-3.5" />
           </span>
         )}
@@ -484,9 +484,9 @@ export function ClusterLinksPage() {
           {g.clusterName}
         </span>
         {isOrphan && (
-          <span className="text-xs text-muted-foreground/70 px-1.5 py-0.5 rounded bg-muted">삭제됨</span>
+          <span className="text-xs text-muted-foreground px-1.5 py-0.5 rounded bg-muted">삭제됨</span>
         )}
-        <span className="ml-auto text-xs text-muted-foreground/70 tabular-nums">{g.links.length}</span>
+        <span className="ml-auto text-xs text-muted-foreground tabular-nums">{g.links.length}</span>
         {!isOrphan && (
           <button onClick={() => { setAddingTo(g.clusterId); setEditingLink(null); }}
             className="ml-2 px-2 py-1 text-xs font-medium bg-primary/10 hover:bg-primary/15 text-primary border border-primary/20 rounded-md transition-colors flex items-center gap-1"
@@ -601,7 +601,7 @@ export function ClusterLinksPage() {
                 <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground select-none">
                   공통 서비스 링크
                 </span>
-                <span className="text-xs text-muted-foreground/70 tabular-nums">({filteredCommonLinks.length})</span>
+                <span className="text-xs text-muted-foreground tabular-nums">({filteredCommonLinks.length})</span>
                 <button onClick={() => { setAddingCommon(true); setEditingCommon(null); }}
                   className="ml-auto px-2 py-1 text-xs font-medium bg-status-healthy/10 hover:bg-status-healthy/15 text-status-healthy border border-status-healthy/25 rounded-md transition-colors flex items-center gap-1">
                   <Plus className="w-3 h-3" /> 추가

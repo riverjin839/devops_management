@@ -68,17 +68,17 @@ function CommandRow({ cmd, index }: { cmd: CheckMatrixRunbookCommand; index: num
   return (
     <li className="rounded-md border border-border bg-secondary/30 p-2.5">
       <div className="flex items-center gap-2 mb-1.5">
-        <span className="text-[10px] tabular-nums text-muted-foreground w-4 text-right">{index + 1}</span>
+        <span className="text-[11px] tabular-nums text-muted-foreground w-4 text-right">{index + 1}</span>
         <span
           title={meta.hint}
-          className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded border border-border text-[10px] font-medium text-muted-foreground"
+          className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded border border-border text-[11px] font-medium text-muted-foreground"
         >
           <Icon className="w-3 h-3" /> {meta.label}
         </span>
         {!cmd.readonly && (
           <span
             title="대상에 변경을 일으킬 수 있는 명령입니다."
-            className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded border border-status-warning/50 text-[10px] font-medium text-status-warning"
+            className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded border border-status-warning/50 text-[11px] font-medium text-status-warning"
           >
             <AlertTriangle className="w-3 h-3" /> 변경
           </span>
@@ -126,7 +126,7 @@ function InputsBlock({ inputs, action }: { inputs: CheckMatrixRunbookInput[]; ac
                 <div key={`${group}.${r.name}`} className="flex gap-2 min-w-0">
                   <dt className="font-mono text-muted-foreground flex-shrink-0">{r.name}</dt>
                   <dd className="font-mono truncate text-foreground/90" title={r.value}>
-                    {r.value || <span className="text-muted-foreground/60">(비어 있음)</span>}
+                    {r.value || <span className="text-muted-foreground">(비어 있음)</span>}
                   </dd>
                 </div>
               ))}
@@ -248,7 +248,7 @@ function SourceConfigEditor({
                 />
               )}
               {spec && (
-                <span className="text-[10px] text-muted-foreground w-24 truncate flex-shrink-0" title={spec.label}>
+                <span className="text-[11px] text-muted-foreground w-24 truncate flex-shrink-0" title={spec.label}>
                   {spec.label}
                 </span>
               )}

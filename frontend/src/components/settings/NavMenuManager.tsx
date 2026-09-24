@@ -40,7 +40,7 @@ export function NavMenuManager() {
 
       {/* 앱 타이틀 */}
       <div className="px-4 py-3 border-b border-border">
-        <p className="text-xs text-muted-foreground/70 mb-1 uppercase tracking-wider">앱 타이틀</p>
+        <p className="text-xs text-muted-foreground mb-1 uppercase tracking-wider">앱 타이틀</p>
         {isEditingTitle ? (
           <InlineEdit value={title} onSave={handleTitleSave} onCancel={() => setIsEditingTitle(false)}
             inputClassName="text-sm font-semibold w-full max-w-xs px-1.5 py-0.5 bg-secondary border border-primary rounded" />
@@ -60,7 +60,7 @@ export function NavMenuManager() {
           if (paths.length === 0) return null;
           return (
             <div key={g.id}>
-              <p className="px-1 py-1 text-xs font-semibold uppercase tracking-wider text-muted-foreground/70">{g.label}</p>
+              <p className="px-1 py-1 text-xs font-semibold uppercase tracking-wider text-muted-foreground">{g.label}</p>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-1">
                 {paths.map((path) => {
                   const navItem = NAV_MAP[path];

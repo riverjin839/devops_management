@@ -194,7 +194,7 @@ export function TerminalAppearanceSettings() {
                 key={m}
                 onClick={() => setDraft((d) => ({ ...d, mode: m }))}
                 className={`px-3 py-1 rounded font-medium transition-colors ${
-                  draft.mode === m ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground/70 hover:text-foreground'
+                  draft.mode === m ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
                 }`}
               >
                 {m === 'auto' ? '자동 (클러스터 운영등급)' : m === 'dev' ? '항상 개발' : '항상 운영'}

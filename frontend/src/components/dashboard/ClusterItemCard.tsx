@@ -169,7 +169,7 @@ export function ClusterItemCard({ item, isRunning, onRun, onEdit, onDelete, onRe
             <span className="break-words">{item.lastError || '수집 실패'}</span>
           </div>
         ) : valueText == null ? (
-          <span className="text-sm text-muted-foreground/60">미수집 — 실행해 주세요</span>
+          <span className="text-sm text-muted-foreground">미수집 — 실행해 주세요</span>
         ) : isAi ? (
           // AI 요약 — 여러 줄 텍스트
           <p className="text-sm leading-relaxed text-foreground/90 whitespace-pre-wrap line-clamp-5">
@@ -197,16 +197,16 @@ export function ClusterItemCard({ item, isRunning, onRun, onEdit, onDelete, onRe
             {!isAi && (
               <>
                 {' · '}
-                {prevText != null && <span className="text-muted-foreground/70">{prevText} → </span>}
+                {prevText != null && <span className="text-muted-foreground">{prevText} → </span>}
                 <span className="font-medium text-foreground/80">{valueText}</span>
               </>
             )}
           </p>
         ) : (
-          <p className="text-xs text-muted-foreground/60">변경 이력 없음</p>
+          <p className="text-xs text-muted-foreground">변경 이력 없음</p>
         )}
         {item.lastCheckedAt && (
-          <p className="text-xs text-muted-foreground/50">
+          <p className="text-xs text-muted-foreground">
             점검 {formatDateTime(item.lastCheckedAt)}
             {item.lastSource && ` · ${item.lastSource === 'manual' ? '수동' : item.lastSource === 'auto' ? '자동' : 'AI'}`}
           </p>

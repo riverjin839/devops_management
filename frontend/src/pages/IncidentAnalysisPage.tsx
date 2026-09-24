@@ -617,7 +617,7 @@ export function IncidentAnalysisPage() {
                 </span>
                 <span>LIVE · 매 {streamIntervalSec}초 갱신</span>
                 {lastStreamAt && (
-                  <span className="text-muted-foreground/70">
+                  <span className="text-muted-foreground">
                     마지막 {Math.max(0, Math.round((Date.now() - lastStreamAt) / 1000))}초 전
                   </span>
                 )}
@@ -694,7 +694,7 @@ export function IncidentAnalysisPage() {
                 분석 실패: {response.error}
               </div>
             ) : (
-              <div className="flex flex-col items-center justify-center min-h-[160px] text-muted-foreground/50 rounded-xl border border-dashed border-border">
+              <div className="flex flex-col items-center justify-center min-h-[160px] text-muted-foreground rounded-xl border border-dashed border-border">
                 <Zap className="w-10 h-10 mb-2" />
                 <p className="text-sm">로그 / 이벤트 / describe 입력 후 분석을 시작하세요</p>
               </div>

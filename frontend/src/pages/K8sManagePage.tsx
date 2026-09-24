@@ -334,7 +334,7 @@ export function K8sManagePage() {
                       type="button"
                       onClick={() => toggleCatCollapse(cat.id)}
                       aria-expanded={!isCollapsed}
-                      className="w-full flex items-center gap-1.5 px-2 py-0.5 rounded text-xs font-semibold uppercase tracking-wider text-muted-foreground/70 hover:text-foreground hover:bg-secondary/40"
+                      className="w-full flex items-center gap-1.5 px-2 py-0.5 rounded text-xs font-semibold uppercase tracking-wider text-muted-foreground hover:text-foreground hover:bg-secondary/40"
                     >
                       <Icon className="w-3 h-3 flex-shrink-0" />
                       <span className="flex-1 text-left truncate">{cat.label}</span>
@@ -354,7 +354,7 @@ export function K8sManagePage() {
                             >
                               <span className="flex-1 text-left truncate">{lf.label}</span>
                               {cnt != null && (
-                                <span className="text-[10px] tabular-nums rounded-full bg-secondary px-1.5 py-0.5 text-muted-foreground">{cnt}{more ? '+' : ''}</span>
+                                <span className="text-[11px] tabular-nums rounded-full bg-secondary px-1.5 py-0.5 text-muted-foreground">{cnt}{more ? '+' : ''}</span>
                               )}
                             </button>
                           );
@@ -1040,7 +1040,7 @@ function RelatedEventsView({ loading, error, items }: { loading: boolean; error:
             </span>
           </div>
           <p className="text-muted-foreground break-all whitespace-pre-wrap m-0">{ev.message ?? ''}</p>
-          {ev.source && <p className="mt-1 text-xs text-muted-foreground/70 m-0">source: {ev.source}</p>}
+          {ev.source && <p className="mt-1 text-xs text-muted-foreground m-0">source: {ev.source}</p>}
         </div>
       ))}
     </div>
@@ -1146,7 +1146,7 @@ function NodesPanel({ clusterId, onOpenDetail, onCordon, onDrain }: NodesPanelPr
                   ? <CheckCircle2 className="w-3.5 h-3.5 text-status-healthy flex-shrink-0" aria-label="Ready" />
                   : <AlertTriangle className="w-3.5 h-3.5 text-status-critical flex-shrink-0" aria-label="NotReady" />}
                 <span className="truncate">{n.name}</span>
-                {n.unschedulable && <span className="text-[10px] rounded px-1 bg-status-warning/15 text-status-warning">cordoned</span>}
+                {n.unschedulable && <span className="text-[11px] rounded px-1 bg-status-warning/15 text-status-warning">cordoned</span>}
               </button>
               {!isHidden('roles') && <span className="truncate text-muted-foreground">{n.roles.join(', ')}</span>}
               {!isHidden('version') && <span className="truncate text-muted-foreground">{n.version ?? '-'}</span>}
@@ -1155,7 +1155,7 @@ function NodesPanel({ clusterId, onOpenDetail, onCordon, onDrain }: NodesPanelPr
               {!isHidden('memory') && <span className="truncate text-muted-foreground">{n.memUsage ? `${n.memUsage} / ` : ''}{n.memCapacity ?? '-'}</span>}
               {!isHidden('age') && <span className="text-right text-muted-foreground tabular-nums">{age(n.ageSeconds)}</span>}
               <div className="flex items-center justify-end gap-1">
-                {warn.length > 0 && <span className="text-[10px] text-status-warning mr-1" title={warn.join(',')}>{warn.length}⚠</span>}
+                {warn.length > 0 && <span className="text-[11px] text-status-warning mr-1" title={warn.join(',')}>{warn.length}⚠</span>}
                 <RoleGate allow={['admin', 'operator']}>
                   <IconBtn title={n.unschedulable ? 'uncordon' : 'cordon'} onClick={() => onCordon(n.name, !n.unschedulable)}>
                     {n.unschedulable ? <CheckCircle2 className="w-3.5 h-3.5" /> : <Ban className="w-3.5 h-3.5" />}

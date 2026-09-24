@@ -226,89 +226,6 @@
     --sidebar-primary:          200 98% 60%;
   }
 
-  /* ── default theme — Anthropic Claude 브랜드 톤 (기본값) ────────────────
-     신규 사용자가 처음 보는 테마. 따뜻한 paper 배경 + 큰 radius + soft shadow +
-     코랄(#B8552E, P0 대비 보정 전 #D97757) 액센트로 노트/문서 느낌. 대안으로 light / dark / system 제공. */
-  html.default {
-    --background: 36 38% 96%;          /* #F7F2EA — warm paper */
-    --foreground: 28 18% 16%;          /* #2E2620 — deep cocoa */
-    --card: 38 50% 99%;                /* near-white with warm tint */
-    --card-foreground: 28 18% 16%;
-    --popover: 38 50% 99%;
-    --popover-foreground: 28 18% 16%;
-    --primary: 17 60% 45%;             /* P0: 흰 글자 4.5:1 확보 위해 명도 하향 */
-    --primary-foreground: 38 50% 99%;
-    /* P0 대비: 글자 전용 파생 토큰 — text-primary / text-status-* 가 참조(면색과 분리, 4.5:1 이상) */
-    --primary-text: 17 60% 40%;
-    --status-healthy-text: 142 55% 30%;
-    --status-warning-text: 30 85% 34%;
-    --status-critical-text: 0 65% 45%;
-    --status-info-text: 199 65% 35%;
-    --status-unknown-text: 28 10% 38%;
-    --secondary: 35 30% 92%;           /* #EFE7DA — cream */
-    --secondary-foreground: 28 18% 16%;
-    --muted: 35 30% 94%;
-    --muted-foreground: 28 12% 38%;    /* #645847 */
-    --accent: 17 70% 92%;              /* peach hover */
-    --accent-foreground: 28 18% 16%;
-    --destructive: 0 70% 50%;
-    --destructive-foreground: 38 50% 99%;
-    --border: 32 22% 86%;              /* #DCD2C2 — softer than slate */
-    --input: 32 22% 86%;
-    --ring: 17 60% 45%;
-    --radius: 0.875rem;                /* 14px — Claude scale */
-    --mac-red:    #FF5F57;
-    --mac-yellow: #FEBC2E;
-    --mac-green:  #28C840;
-    --card-shadow: 0 1px 3px rgba(46, 38, 32, 0.04), 0 6px 20px -8px rgba(46, 38, 32, 0.08);
-
-    /* Sidebar — same warm paper, not a dark navy slab */
-    --sidebar:                  35 28% 90%;     /* #E8DECF */
-    --sidebar-foreground:       28 18% 16%;
-    --sidebar-muted-foreground: 28 12% 38%;
-    --sidebar-accent:           17 60% 88%;     /* warm peach for active */
-    --sidebar-accent-foreground: 17 60% 30%;
-    --sidebar-border:           32 22% 80%;
-    --sidebar-primary:          17 60% 50%;
-
-    /* Status — keep semantic, slightly muted to match warm palette */
-    --status-healthy:     142 55% 40%;
-    --status-healthy-bg:  142 40% 90%;
-    --status-warning:     30 85% 50%;
-    --status-warning-bg:  30 70% 92%;
-    --status-critical:    0 65% 50%;
-    --status-critical-bg: 0 60% 92%;
-    --status-unknown:     28 10% 45%;
-    --status-unknown-bg:  35 15% 88%;
-    --status-pending:     28 10% 45%;
-    --status-pending-bg:  35 15% 88%;
-    --status-info:        199 65% 42%;
-    --status-info-bg:     199 50% 92%;
-    --status-neutral:     28 10% 50%;
-    --status-neutral-bg:  35 15% 90%;
-
-    /* Categorical chart tokens (D-005) — warm palette 에 맞춰 채도 약간 낮춤 */
-    --chart-1: 217 60% 48%;   /* blue */
-    --chart-2: 168 50% 45%;   /* teal/green */
-    --chart-3: 35 80% 50%;    /* amber */
-    --chart-4: 262 55% 55%;   /* violet */
-    --chart-5: 340 55% 50%;   /* rose */
-    --chart-6: 192 60% 45%;   /* cyan */
-    --chart-7: 24 70% 50%;    /* orange */
-    --chart-8: 28 12% 48%;    /* warm slate */
-
-    --surface-container-lowest:  38 50% 99%;
-    --surface-container-low:     37 42% 98%;
-    --surface-container:         36 38% 96%;
-    --surface-container-high:    35 32% 94%;
-    --surface-container-highest: 35 30% 92%;
-
-    --motion-fast: 150ms;
-    --motion-base: 200ms;
-    --motion-slow: 300ms;
-    --motion-ease: cubic-bezier(0.2, 0.8, 0.2, 1);
-  }
-
   /* ── Comfort theme — 크림 배경 + 딥그린 액센트 (Donezo-inspired) ─────────
      따뜻한 크림/오프화이트 바탕 + 딥그린(#1D5E3F 계열) primary + 민트 서페이스 +
      큰 radius(16px) 로 부드럽고 편안한 대시보드 톤. 사이드바는 본문과 같은 라이트
@@ -398,536 +315,136 @@
     --motion-ease: cubic-bezier(0.2, 0.8, 0.2, 1);
   }
 
-  /* ── Burnt Sienna — Figma 색상 조합 라이브러리 참고 (테라코타/베이지/샌드/시에나) ──
-     https://www.figma.com/ko-kr/resource-library/color-combinations/
-     시드 4색: #E35336(terracotta) #F5F5DC(beige) #F4A460(sandy brown) #A0522D(sienna).
-     따뜻한 대지색 팔레트 — 크림 배경 + 번트오렌지 primary + 진한 시에나 사이드바. */
-  html.burnt-sienna {
-    /* 배경·면은 라이트 테마와 같은 명도 구조(배경 98% · 카드 ~100% · 보조면 94~96% · 경계 89~90%)를 따르고
-       hue 만 테마 고유값을 남긴다 — 웜톤이 넓은 면을 덮지 않게 (2026-09 화이트 계열 보정). */
-    --background: 40 30% 98%;
-    --foreground: 19 35% 18%;
-    --card: 40 40% 99.7%;
-    --card-foreground: 19 35% 18%;
-    --popover: 40 40% 99.7%;
-    --popover-foreground: 19 35% 18%;
-    --primary: 10 70% 47%;             /* P0: 흰 글자 4.5:1 확보 위해 명도 하향 */
-    --primary-foreground: 42 45% 98%;
-    /* P0 대비: 글자 전용 파생 토큰 — text-primary / text-status-* 가 참조(면색과 분리, 4.5:1 이상) */
-    --primary-text: 10 70% 42%;
-    --status-healthy-text: 142 50% 30%;
-    --status-warning-text: 32 85% 32%;
-    --status-critical-text: 6 70% 43%;
-    --status-info-text: 199 60% 35%;
-    --status-unknown-text: 20 10% 39%;
-    --secondary: 32 40% 94%;
-    --secondary-foreground: 19 35% 18%;
-    --muted: 40 25% 96%;
-    --muted-foreground: 20 15% 40%;
-    --accent: 28 75% 90%;              /* peach hover */
-    --accent-foreground: 19 35% 18%;
-    --destructive: 0 65% 48%;
-    --destructive-foreground: 42 45% 98%;
-    --border: 34 20% 89%;
-    --input: 34 20% 89%;
-    --ring: 10 70% 47%;
-    --radius: 0.875rem;
-    --mac-red:    #FF5F57;
-    --mac-yellow: #FEBC2E;
-    --mac-green:  #28C840;
-    --card-shadow: none;
 
-    /* Sidebar — 진한 시에나 브라운 (#A0522D 계열) */
-    --sidebar:                  19 30% 16%;
-    --sidebar-foreground:       42 40% 94%;
-    --sidebar-muted-foreground: 34 15% 65%;
-    --sidebar-accent:           10 55% 30%;
-    --sidebar-accent-foreground: 0 0% 100%;
-    --sidebar-border:           19 25% 24%;
-    --sidebar-primary:          10 70% 60%;
-
-    --status-healthy:     142 50% 38%;
-    --status-healthy-bg:  90 35% 90%;
-    --status-warning:     32 85% 50%;
-    --status-warning-bg:  34 70% 90%;
-    --status-critical:    6 70% 48%;
-    --status-critical-bg: 6 55% 92%;
-    --status-unknown:     20 10% 45%;
-    --status-unknown-bg:  34 15% 88%;
-    --status-pending:     20 10% 45%;
-    --status-pending-bg:  34 15% 88%;
-    --status-info:        199 60% 42%;
-    --status-info-bg:     199 45% 91%;
-    --status-neutral:     20 10% 50%;
-    --status-neutral-bg:  34 15% 90%;
-
-    /* Categorical chart tokens — 팔레트 3색(terracotta/sandy/sienna) + 구분용 보조색 */
-    --chart-1: 10 70% 55%;    /* terracotta */
-    --chart-2: 28 80% 60%;    /* sandy orange */
-    --chart-3: 19 55% 40%;    /* sienna */
-    --chart-4: 217 60% 50%;   /* blue */
-    --chart-5: 168 50% 42%;   /* teal */
-    --chart-6: 340 55% 50%;   /* rose */
-    --chart-7: 262 55% 55%;   /* violet */
-    --chart-8: 20 12% 48%;    /* warm slate */
-
-    --surface-container-lowest:  40 40% 99.7%;
-    --surface-container-low:     40 30% 98%;
-    --surface-container:         38 25% 96.5%;
-    --surface-container-high:    36 25% 95%;
-    --surface-container-highest: 34 22% 93%;
-
-    --motion-fast: 150ms;
-    --motion-base: 200ms;
-    --motion-slow: 300ms;
-    --motion-ease: cubic-bezier(0.2, 0.8, 0.2, 1);
-  }
-
-  /* ── Tuscan Sunset — Figma 색상 조합 라이브러리 참고 (테라코타/피치/모브/러스트) ──
-     시드 4색: #E35336(terracotta) #FFD3AC(peach) #9988A1(mauve) #8A2B0E(rust).
-     Burnt Sienna 와 같은 terracotta 를 공유하되, 모브톤 뉴트럴과 피치 서페이스로
-     노을(sunset) 느낌을 낸다. */
-  html.tuscan-sunset {
-    /* 배경·면은 라이트 테마와 같은 명도 구조(배경 98% · 카드 ~100% · 보조면 94~96% · 경계 89~90%)를 따르고
-       hue 만 테마 고유값을 남긴다 — 웜톤이 넓은 면을 덮지 않게 (2026-09 화이트 계열 보정). */
-    --background: 28 40% 98%;
-    --foreground: 14 40% 16%;
-    --card: 28 45% 99.7%;
-    --card-foreground: 14 40% 16%;
-    --popover: 28 45% 99.7%;
-    --popover-foreground: 14 40% 16%;
-    --primary: 10 70% 47%;             /* P0: 흰 글자 4.5:1 확보 위해 명도 하향 */
-    --primary-foreground: 28 55% 98%;
-    /* P0 대비: 글자 전용 파생 토큰 — text-primary / text-status-* 가 참조(면색과 분리, 4.5:1 이상) */
-    --primary-text: 10 70% 41%;
-    --status-healthy-text: 142 45% 31%;
-    --status-warning-text: 34 85% 31%;
-    --status-critical-text: 8 65% 43%;
-    --status-info-text: 199 60% 35%;
-    --status-unknown-text: 281 8% 40%;
-    --secondary: 28 55% 94%;
-    --secondary-foreground: 14 40% 16%;
-    --muted: 28 25% 96%;
-    --muted-foreground: 281 10% 40%;   /* #9988A1 mauve-gray */
-    --accent: 28 80% 88%;              /* peach hover */
-    --accent-foreground: 14 40% 16%;
-    --destructive: 0 65% 48%;
-    --destructive-foreground: 28 55% 98%;
-    --border: 28 20% 89%;
-    --input: 28 20% 89%;
-    --ring: 10 70% 47%;
-    --radius: 0.875rem;
-    --mac-red:    #FF5F57;
-    --mac-yellow: #FEBC2E;
-    --mac-green:  #28C840;
-    --card-shadow: none;
-
-    /* Sidebar — 진한 러스트(#8A2B0E) 배경 + 모브 액센트 필 */
-    --sidebar:                  14 35% 15%;
-    --sidebar-foreground:       28 40% 94%;
-    --sidebar-muted-foreground: 281 8% 65%;
-    --sidebar-accent:           281 20% 28%;
-    --sidebar-accent-foreground: 0 0% 100%;
-    --sidebar-border:           14 25% 22%;
-    --sidebar-primary:          10 70% 58%;
-
-    --status-healthy:     142 45% 38%;
-    --status-healthy-bg:  100 30% 90%;
-    --status-warning:     34 85% 50%;
-    --status-warning-bg:  34 65% 90%;
-    --status-critical:    8 65% 46%;
-    --status-critical-bg: 8 55% 92%;
-    --status-unknown:     281 8% 45%;
-    --status-unknown-bg:  28 15% 88%;
-    --status-pending:     281 8% 45%;
-    --status-pending-bg:  28 15% 88%;
-    --status-info:        199 60% 42%;
-    --status-info-bg:     199 45% 91%;
-    --status-neutral:     281 8% 50%;
-    --status-neutral-bg:  28 15% 90%;
-
-    /* Categorical chart tokens — 팔레트 4색(terracotta/peach/mauve/rust) + 보조색 */
-    --chart-1: 10 70% 52%;    /* terracotta */
-    --chart-2: 28 90% 70%;    /* peach */
-    --chart-3: 281 20% 55%;   /* mauve */
-    --chart-4: 14 70% 32%;    /* deep rust */
-    --chart-5: 217 60% 50%;   /* blue */
-    --chart-6: 168 50% 42%;   /* teal */
-    --chart-7: 38 85% 50%;    /* amber */
-    --chart-8: 281 8% 48%;    /* mauve-gray slate */
-
-    --surface-container-lowest:  28 45% 99.7%;
-    --surface-container-low:     28 40% 98%;
-    --surface-container:         28 30% 96.5%;
-    --surface-container-high:    28 30% 95%;
-    --surface-container-highest: 28 25% 93%;
-
-    --motion-fast: 150ms;
-    --motion-base: 200ms;
-    --motion-slow: 300ms;
-    --motion-ease: cubic-bezier(0.2, 0.8, 0.2, 1);
-  }
-
-  /* ── Electropop — Figma 색상 조합 라이브러리 참고 (샤르트뢰즈/오렌지/마젠타/인디고) ──
-     시드 4색: #CCFF00(chartreuse) #FF6B00(orange) #F900FF(magenta) #5200FF(indigo).
-     원색 그대로는 전체 배경에 쓰기엔 채도가 너무 높아 다크 베이스 위에 네온 액센트로
-     "팝"하게 얹는 구성 — 이 앱에서 유일한 비비드 다크 테마. */
-  html.electropop {
-    --background: 260 25% 8%;
-    --foreground: 70 10% 94%;
-    --card: 260 20% 11%;
-    --card-foreground: 70 10% 94%;
-    --popover: 260 20% 11%;
-    --popover-foreground: 70 10% 94%;
-    --primary: 299 100% 60%;           /* #F900FF magenta */
-    --primary-foreground: 260 25% 8%;  /* P0: 밝은 primary 면 → 어두운 글자 */
-    /* P0 대비: 글자 전용 파생 토큰 — text-primary / text-status-* 가 참조(면색과 분리, 4.5:1 이상) */
-    --primary-text: 299 100% 60%;
-    --status-healthy-text: 142 71% 50%;
-    --status-warning-text: 38 92% 55%;
-    --status-critical-text: 0 84% 65%;
-    --status-info-text: 199 89% 58%;
-    --status-unknown-text: 260 9% 62%;
-    --secondary: 260 18% 16%;
-    --secondary-foreground: 70 10% 94%;
-    --muted: 260 15% 16%;
-    --muted-foreground: 260 8% 65%;
-    --accent: 259 60% 22%;             /* deep indigo hover */
-    --accent-foreground: 70 10% 94%;
-    --destructive: 0 84% 60%;
+  /* ── High-contrast — 관제실 대형 화면·빔프로젝터용 (P2) ──────────────────
+     본문 21:1 · 보조 글자 10.4:1 · 경계선 4.8:1(UI 경계 3:1 초과) · 버튼 10.9:1. */
+  html.high-contrast {
+    --background: 0 0% 100%;
+    --foreground: 0 0% 0%;
+    --card: 0 0% 100%;
+    --card-foreground: 0 0% 0%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 0 0% 0%;
+    --primary: 220 100% 30%;
+    --primary-foreground: 0 0% 100%;
+    --primary-text: 220 100% 30%;
+    --status-healthy-text: 142 72% 24%;
+    --status-warning-text: 32 95% 26%;
+    --status-critical-text: 0 84% 38%;
+    --status-info-text: 199 89% 28%;
+    --status-unknown-text: 0 0% 30%;
+    --secondary: 0 0% 94%;
+    --secondary-foreground: 0 0% 0%;
+    --muted: 0 0% 95%;
+    --muted-foreground: 0 0% 25%;
+    --accent: 220 100% 94%;
+    --accent-foreground: 0 0% 0%;
+    --destructive: 0 84% 38%;
     --destructive-foreground: 0 0% 100%;
-    --border: 260 15% 22%;
-    --input: 260 15% 22%;
-    --ring: 299 100% 60%;
-    --radius: 0.75rem;
-    --mac-red:    #FF5F57;
-    --mac-yellow: #FEBC2E;
-    --mac-green:  #28C840;
+    --border: 0 0% 45%;
+    --input: 0 0% 35%;
+    --ring: 220 100% 30%;
+    --radius: 0.5rem;
     --card-shadow: none;
 
-    /* Sidebar — body 와 같은 다크 인디고, 마젠타 액센트 필 */
-    --sidebar:                  260 22% 6%;
-    --sidebar-foreground:       70 10% 94%;
-    --sidebar-muted-foreground: 260 8% 65%;
-    --sidebar-accent:           299 70% 30%;
-    --sidebar-accent-foreground: 0 0% 100%;
-    --sidebar-border:           260 15% 18%;
-    --sidebar-primary:          299 100% 65%;
+    --sidebar:                  0 0% 100%;
+    --sidebar-foreground:       0 0% 0%;
+    --sidebar-muted-foreground: 0 0% 25%;
+    --sidebar-accent:           220 100% 94%;
+    --sidebar-accent-foreground: 0 0% 0%;
+    --sidebar-border:           0 0% 45%;
+    --sidebar-primary:          220 100% 30%;
 
-    /* Dark 계열 status — 전경 채도 유지, 배경만 어둡게 (html.dark 패턴과 동일) */
-    --status-healthy:     142 71% 50%;
-    --status-healthy-bg:  142 50% 16%;
-    --status-warning:     38 92% 55%;
-    --status-warning-bg:  38 60% 16%;
-    --status-critical:    0 84% 62%;
-    --status-critical-bg: 0 60% 18%;
-    --status-unknown:     260 9% 60%;
-    --status-unknown-bg:  260 12% 20%;
-    --status-pending:     260 9% 60%;
-    --status-pending-bg:  260 12% 20%;
-    --status-info:        199 89% 58%;
-    --status-info-bg:     199 50% 18%;
-    --status-neutral:     260 8% 62%;
-    --status-neutral-bg:  260 8% 20%;
-
-    /* Categorical chart tokens — 팔레트 4색(indigo/lime/orange/magenta) 그대로 + 보조색 */
-    --chart-1: 259 100% 65%;  /* #5200FF indigo */
-    --chart-2: 72 90% 55%;    /* #CCFF00 lime */
-    --chart-3: 25 95% 58%;    /* #FF6B00 orange */
-    --chart-4: 330 85% 62%;   /* hot pink — magenta(primary) 와 구분되게 살짝 이동 */
-    --chart-5: 190 75% 55%;   /* cyan */
-    --chart-6: 45 90% 55%;    /* gold */
-    --chart-7: 210 80% 60%;   /* blue */
-    --chart-8: 260 10% 60%;   /* neutral slate */
-
-    /* Dark: 밝을수록 더 떠 있는(elevated) 톤 — lowest 는 background 와 동일 */
-    --surface-container-lowest:  260 25% 8%;
-    --surface-container-low:     260 22% 10%;
-    --surface-container:         260 20% 12%;
-    --surface-container-high:    260 18% 15%;
-    --surface-container-highest: 260 16% 18%;
-
-    --motion-fast: 150ms;
-    --motion-base: 200ms;
-    --motion-slow: 300ms;
-    --motion-ease: cubic-bezier(0.2, 0.8, 0.2, 1);
+    --surface-container-lowest:  0 0% 100%;
+    --surface-container-low:     0 0% 98%;
+    --surface-container:         0 0% 96%;
+    --surface-container-high:    0 0% 94%;
+    --surface-container-highest: 0 0% 91%;
   }
 
-  /* ── Summer Breeze — Figma 색상 조합 라이브러리 참고 (옐로우/코랄/스카이블루/샌드) ──
-     조합 100: 여름 산들바람. 시드 4색: #FFEB3B(yellow) #F88379(coral) #82C8E5(sky blue)
-     #E6D8C4(sand beige). 밝고 명랑한 여름 해변 톤 — 산뜻한 코랄 primary + 스카이블루
-     사이드바. */
-  html.summer-breeze {
-    --background: 35 45% 96%;
-    --foreground: 205 25% 16%;
-    --card: 35 55% 99%;
-    --card-foreground: 205 25% 16%;
-    --popover: 35 55% 99%;
-    --popover-foreground: 205 25% 16%;
-    --primary: 5 85% 68%;              /* #F88379 coral */
-    --primary-foreground: 205 25% 16%;  /* P0: 밝은 primary 면 → 어두운 글자 */
-    /* P0 대비: 글자 전용 파생 토큰 — text-primary / text-status-* 가 참조(면색과 분리, 4.5:1 이상) */
-    --primary-text: 5 85% 42%;
-    --status-healthy-text: 142 55% 29%;
-    --status-warning-text: 45 90% 26%;
-    --status-critical-text: 5 70% 43%;
-    --status-info-text: 198 65% 34%;
-    --status-unknown-text: 205 10% 38%;
-    --secondary: 198 55% 90%;          /* #82C8E5 sky blue tint */
-    --secondary-foreground: 205 25% 16%;
-    --muted: 35 30% 93%;
-    --muted-foreground: 205 12% 40%;
-    --accent: 54 90% 88%;              /* #FFEB3B soft yellow hover */
-    --accent-foreground: 205 25% 16%;
-    --destructive: 0 65% 50%;
-    --destructive-foreground: 0 0% 100%;
-    --border: 35 25% 86%;
-    --input: 35 25% 86%;
-    --ring: 5 85% 65%;
-    --radius: 1rem;
-    --mac-red:    #FF5F57;
-    --mac-yellow: #FEBC2E;
-    --mac-green:  #28C840;
-    --card-shadow: none;
-
-    /* Sidebar — 진한 스카이블루-틸 다크, 코랄 액센트 필 */
-    --sidebar:                  198 45% 18%;
-    --sidebar-foreground:       35 40% 95%;
-    --sidebar-muted-foreground: 198 15% 65%;
-    --sidebar-accent:           5 75% 45%;
-    --sidebar-accent-foreground: 0 0% 100%;
-    --sidebar-border:           198 30% 26%;
-    --sidebar-primary:          5 85% 65%;
-
-    --status-healthy:     142 55% 40%;
-    --status-healthy-bg:  90 45% 90%;
-    --status-warning:     45 90% 50%;
-    --status-warning-bg:  45 75% 90%;
-    --status-critical:    5 70% 50%;
-    --status-critical-bg: 5 60% 92%;
-    --status-unknown:     205 10% 45%;
-    --status-unknown-bg:  35 15% 88%;
-    --status-pending:     205 10% 45%;
-    --status-pending-bg:  35 15% 88%;
-    --status-info:        198 65% 45%;
-    --status-info-bg:     198 50% 91%;
-    --status-neutral:     205 10% 50%;
-    --status-neutral-bg:  35 15% 90%;
-
-    /* Categorical chart tokens — 팔레트 4색(coral/yellow/sky/sand) + 보조색 */
-    --chart-1: 5 85% 68%;     /* coral */
-    --chart-2: 54 100% 62%;   /* yellow */
-    --chart-3: 198 66% 65%;   /* sky blue */
-    --chart-4: 35 40% 70%;    /* sand */
-    --chart-5: 262 55% 55%;   /* violet */
-    --chart-6: 168 50% 42%;   /* teal */
-    --chart-7: 340 55% 52%;   /* rose */
-    --chart-8: 205 10% 48%;   /* blue-gray slate */
-
-    --surface-container-lowest:  35 55% 99%;
-    --surface-container-low:     35 45% 97%;
-    --surface-container:         35 40% 96%;
-    --surface-container-high:    35 32% 94%;
-    --surface-container-highest: 35 28% 92%;
-
-    --motion-fast: 150ms;
-    --motion-base: 200ms;
-    --motion-slow: 300ms;
-    --motion-ease: cubic-bezier(0.2, 0.8, 0.2, 1);
+  /* ── 강조색(accent) — 라이트·다크 바탕 위에 <html data-accent="…"> 로 얹는다 (P2) ──
+     버튼·링크·선택 탭·활성 메뉴·포커스 링만 바뀌고, 배경·상태색은 바탕 테마가 정한다.
+     blue 는 기본값이라 블록이 없다. 값은 버튼 글자·링크 모두 4.5:1 이상으로 계산했다.
+     --sidebar-primary 는 라이트 테마의 다크 네이비 사이드바 위에서 쓰이므로 다크용 밝은 값을 쓴다. */
+  html.light[data-accent="teal"] {  /* 틸 */
+    --primary: 182 75% 27%;
+    --primary-foreground: 0 0% 100%;
+    --primary-text: 182 75% 27%;
+    --accent: 182 75% 95%;
+    --sidebar-primary: 182 75% 50%;
   }
-
-  /* ── Wildflower Meadow — Figma 색상 조합 라이브러리 참고 (데이지화이트/버터컵/스카이/그라스) ──
-     조합 97: 들꽃 초원. 시드 4색: #FBF9E7(daisy white) #FDB813(buttercup amber)
-     #82C8E5(sky blue) #7CFC00(lawn green). 봄 들판 톤 — 앰버 primary + 그린 액센트,
-     라임그린 원색은 채도가 높아 hover/차트에만 절제해서 쓴다. */
-  html.wildflower-meadow {
-    --background: 54 60% 97%;
-    --foreground: 100 20% 14%;
-    --card: 54 65% 99%;
-    --card-foreground: 100 20% 14%;
-    --popover: 54 65% 99%;
-    --popover-foreground: 100 20% 14%;
-    --primary: 42 95% 48%;             /* #FDB813 buttercup amber */
-    --primary-foreground: 42 30% 12%;
-    /* P0 대비: 글자 전용 파생 토큰 — text-primary / text-status-* 가 참조(면색과 분리, 4.5:1 이상) */
-    --primary-text: 42 95% 27%;
-    --status-healthy-text: 100 55% 29%;
-    --status-warning-text: 42 90% 27%;
-    --status-critical-text: 0 65% 45%;
-    --status-info-text: 198 65% 34%;
-    --status-unknown-text: 100 8% 37%;
-    --secondary: 198 55% 90%;          /* #82C8E5 sky blue tint */
-    --secondary-foreground: 100 20% 14%;
-    --muted: 54 35% 94%;
-    --muted-foreground: 100 10% 38%;
-    --accent: 90 70% 90%;              /* soft lawn-green hover */
-    --accent-foreground: 100 20% 14%;
-    --destructive: 0 65% 48%;
-    --destructive-foreground: 0 0% 100%;
-    --border: 54 25% 86%;
-    --input: 54 25% 86%;
-    --ring: 42 90% 45%;
-    --radius: 1rem;
-    --mac-red:    #FF5F57;
-    --mac-yellow: #FEBC2E;
-    --mac-green:  #28C840;
-    --card-shadow: none;
-
-    /* Sidebar — 진한 그라스그린 다크, 앰버 액센트 필 */
-    --sidebar:                  100 35% 14%;
-    --sidebar-foreground:       54 40% 95%;
-    --sidebar-muted-foreground: 100 12% 65%;
-    --sidebar-accent:           42 80% 40%;
-    --sidebar-accent-foreground: 0 0% 100%;
-    --sidebar-border:           100 25% 22%;
-    --sidebar-primary:          90 70% 45%;
-
-    --status-healthy:     100 55% 35%;
-    --status-healthy-bg:  90 45% 90%;
-    --status-warning:     42 90% 48%;
-    --status-warning-bg:  42 75% 90%;
-    --status-critical:    0 65% 48%;
-    --status-critical-bg: 0 60% 92%;
-    --status-unknown:     100 8% 45%;
-    --status-unknown-bg:  54 15% 88%;
-    --status-pending:     100 8% 45%;
-    --status-pending-bg:  54 15% 88%;
-    --status-info:        198 65% 42%;
-    --status-info-bg:     198 50% 91%;
-    --status-neutral:     100 8% 50%;
-    --status-neutral-bg:  54 15% 90%;
-
-    /* Categorical chart tokens — 팔레트 4색(amber/grass/sky/daisy) + 보조색 */
-    --chart-1: 42 95% 48%;    /* amber */
-    --chart-2: 90 90% 42%;    /* grass green (원색 7CFC00 보다 톤다운) */
-    --chart-3: 198 66% 60%;   /* sky blue */
-    --chart-4: 54 85% 55%;    /* daisy yellow-gold */
-    --chart-5: 262 55% 55%;   /* violet */
-    --chart-6: 340 55% 52%;   /* rose */
-    --chart-7: 217 60% 50%;   /* blue */
-    --chart-8: 100 8% 48%;    /* green-gray slate */
-
-    --surface-container-lowest:  54 65% 99%;
-    --surface-container-low:     54 55% 97%;
-    --surface-container:         54 45% 96%;
-    --surface-container-high:    54 35% 94%;
-    --surface-container-highest: 54 30% 92%;
-
-    --motion-fast: 150ms;
-    --motion-base: 200ms;
-    --motion-slow: 300ms;
-    --motion-ease: cubic-bezier(0.2, 0.8, 0.2, 1);
+  html.dark[data-accent="teal"] {
+    --primary: 182 75% 50%;
+    --primary-foreground: 220 18% 7%;
+    --primary-text: 182 75% 50%;
+    --ring: 182 75% 50%;
+    --accent: 182 60% 18%;
+    --sidebar-primary: 182 75% 50%;
   }
-
-  /* ── Tropical Punch — Figma 색상 조합 라이브러리 참고 (망고/파파야핑크/파인애플/틸) ──
-     조합 52: 트로피컬 펀치. 시드 4색: #FF8243(mango) #FFC0CB(papaya pink) #FCE883(pineapple)
-     #069494(teal). 망고 오렌지 primary + 딥틸 사이드바로 트로피컬 리조트 톤. */
-  html.tropical-punch {
-    --background: 50 60% 97%;
-    --foreground: 180 30% 14%;
-    --card: 50 65% 99%;
-    --card-foreground: 180 30% 14%;
-    --popover: 50 65% 99%;
-    --popover-foreground: 180 30% 14%;
-    --primary: 20 90% 60%;             /* #FF8243 mango orange */
-    --primary-foreground: 180 30% 14%;  /* P0: 밝은 primary 면 → 어두운 글자 */
-    /* P0 대비: 글자 전용 파생 토큰 — text-primary / text-status-* 가 참조(면색과 분리, 4.5:1 이상) */
-    --primary-text: 20 90% 36%;
-    --status-healthy-text: 160 55% 29%;
-    --status-warning-text: 42 90% 27%;
-    --status-critical-text: 5 70% 43%;
-    --status-info-text: 198 65% 34%;
-    --status-unknown-text: 180 8% 37%;
-    --secondary: 350 70% 93%;          /* #FFC0CB papaya pink tint */
-    --secondary-foreground: 180 30% 14%;
-    --muted: 50 35% 94%;
-    --muted-foreground: 180 12% 38%;
-    --accent: 50 85% 88%;              /* #FCE883 pineapple hover */
-    --accent-foreground: 180 30% 14%;
-    --destructive: 0 65% 48%;
-    --destructive-foreground: 0 0% 100%;
-    --border: 50 25% 86%;
-    --input: 50 25% 86%;
-    --ring: 20 85% 55%;
-    --radius: 1rem;
-    --mac-red:    #FF5F57;
-    --mac-yellow: #FEBC2E;
-    --mac-green:  #28C840;
-    --card-shadow: none;
-
-    /* Sidebar — 진한 딥틸(#069494 계열), 망고 액센트 필 */
-    --sidebar:                  180 45% 14%;
-    --sidebar-foreground:       50 40% 95%;
-    --sidebar-muted-foreground: 180 15% 65%;
-    --sidebar-accent:           20 75% 45%;
-    --sidebar-accent-foreground: 0 0% 100%;
-    --sidebar-border:           180 30% 22%;
-    --sidebar-primary:          20 85% 60%;
-
-    --status-healthy:     160 55% 35%;
-    --status-healthy-bg:  150 40% 90%;
-    --status-warning:     42 90% 50%;
-    --status-warning-bg:  42 75% 90%;
-    --status-critical:    5 70% 50%;
-    --status-critical-bg: 5 60% 92%;
-    --status-unknown:     180 8% 45%;
-    --status-unknown-bg:  50 15% 88%;
-    --status-pending:     180 8% 45%;
-    --status-pending-bg:  50 15% 88%;
-    --status-info:        198 65% 42%;
-    --status-info-bg:     198 50% 91%;
-    --status-neutral:     180 8% 50%;
-    --status-neutral-bg:  50 15% 90%;
-
-    /* Categorical chart tokens — 팔레트 4색(mango/papaya/pineapple/teal) + 보조색 */
-    --chart-1: 20 90% 60%;    /* mango */
-    --chart-2: 350 85% 82%;   /* papaya pink */
-    --chart-3: 50 90% 65%;    /* pineapple yellow */
-    --chart-4: 180 92% 30%;   /* deep teal */
-    --chart-5: 262 55% 55%;   /* violet */
-    --chart-6: 217 60% 50%;   /* blue */
-    --chart-7: 100 55% 40%;   /* green */
-    --chart-8: 180 8% 48%;    /* teal-gray slate */
-
-    --surface-container-lowest:  50 65% 99%;
-    --surface-container-low:     50 55% 97%;
-    --surface-container:         50 45% 96%;
-    --surface-container-high:    50 35% 94%;
-    --surface-container-highest: 50 30% 92%;
-
-    --motion-fast: 150ms;
-    --motion-base: 200ms;
-    --motion-slow: 300ms;
-    --motion-ease: cubic-bezier(0.2, 0.8, 0.2, 1);
+  html.light[data-accent="green"] {  /* 그린 */
+    --primary: 150 50% 32%;
+    --primary-foreground: 0 0% 100%;
+    --primary-text: 150 50% 31%;
+    --accent: 150 50% 95%;
+    --sidebar-primary: 150 50% 50%;
+  }
+  html.dark[data-accent="green"] {
+    --primary: 150 50% 50%;
+    --primary-foreground: 220 18% 7%;
+    --primary-text: 150 50% 50%;
+    --ring: 150 50% 50%;
+    --accent: 150 50% 18%;
+    --sidebar-primary: 150 50% 50%;
+  }
+  html.light[data-accent="amber"] {  /* 앰버 */
+    --primary: 32 92% 33%;
+    --primary-foreground: 0 0% 100%;
+    --primary-text: 32 92% 33%;
+    --accent: 32 80% 95%;
+    --sidebar-primary: 32 92% 50%;
+  }
+  html.dark[data-accent="amber"] {
+    --primary: 32 92% 50%;
+    --primary-foreground: 220 18% 7%;
+    --primary-text: 32 92% 50%;
+    --ring: 32 92% 50%;
+    --accent: 32 60% 18%;
+    --sidebar-primary: 32 92% 50%;
+  }
+  html.light[data-accent="coral"] {  /* 코랄 */
+    --primary: 12 70% 44%;
+    --primary-foreground: 0 0% 100%;
+    --primary-text: 12 70% 43%;
+    --accent: 12 70% 95%;
+    --sidebar-primary: 12 70% 60%;
+  }
+  html.dark[data-accent="coral"] {
+    --primary: 12 70% 60%;
+    --primary-foreground: 220 18% 7%;
+    --primary-text: 12 70% 62%;
+    --ring: 12 70% 60%;
+    --accent: 12 60% 18%;
+    --sidebar-primary: 12 70% 60%;
+  }
+  html.light[data-accent="violet"] {  /* 바이올렛 */
+    --primary: 265 60% 56%;
+    --primary-foreground: 0 0% 100%;
+    --primary-text: 265 60% 55%;
+    --accent: 265 60% 95%;
+    --sidebar-primary: 265 60% 68%;
+  }
+  html.dark[data-accent="violet"] {
+    --primary: 265 60% 68%;
+    --primary-foreground: 220 18% 7%;
+    --primary-text: 265 60% 68%;
+    --ring: 265 60% 68%;
+    --accent: 265 60% 18%;
+    --sidebar-primary: 265 60% 68%;
   }
 }
 
-/* default 모드 한정 — 약한 입체감
-   - 카드: drop shadow + 상단 1px 하이라이트 라인(inset) 으로 "살짝 떠있는" 느낌
-   - hover 시 그림자 강도만 약간 키워 lift 표현 (transform 은 안 씀 — 텍스트 흔들림 방지)
-   - 버튼(primary): 코랄 위에 미묘한 inset highlight 로 클릭 가능한 솟아오름 표현
-   - light/dark 의 flat 톤은 건드리지 않음. */
-html.default {
-  /* depth tokens — default 모드 안에서만 의미 있음 */
-  --card-shadow:
-    0 1px 2px rgba(46, 38, 32, 0.05),
-    0 8px 24px -10px rgba(46, 38, 32, 0.10),
-    inset 0 1px 0 rgba(255, 255, 255, 0.7);
-  --card-shadow-hover:
-    0 2px 4px rgba(46, 38, 32, 0.06),
-    0 14px 32px -12px rgba(46, 38, 32, 0.16),
-    inset 0 1px 0 rgba(255, 255, 255, 0.85);
-  --button-shadow:
-    0 1px 2px rgba(46, 38, 32, 0.10),
-    0 4px 10px -3px rgba(184, 85, 46, 0.30),
-    inset 0 1px 0 rgba(255, 255, 255, 0.30);
-  --button-shadow-active:
-    0 1px 1px rgba(46, 38, 32, 0.10),
-    inset 0 2px 4px rgba(46, 38, 32, 0.10);
-}
-
-/* comfort 모드 — Donezo 풍 "살짝 떠 있는" 화이트 카드. default 와 같은 적용 규칙을
-   공유하되 그림자 틴트만 그린-그레이. 버튼 글로우·grain 은 default 전용으로 둔다. */
+/* comfort 모드 — Donezo 풍 "살짝 떠 있는" 화이트 카드. 그림자 틴트는 그린-그레이.
+   (P2 에서 코랄(default) 테마를 없애며 그 테마 전용 버튼 글로우·grain 규칙도 함께 삭제.) */
 html.comfort {
   --card-shadow:
     0 1px 2px rgba(24, 37, 32, 0.04),
@@ -937,51 +454,21 @@ html.comfort {
     0 14px 32px -12px rgba(24, 37, 32, 0.14);
 }
 
-html.default .mac-shadow,
-html.default [class*="rounded-2xl"][class*="bg-card"],
-html.default [class*="rounded-xl"][class*="bg-card"],
 html.comfort .mac-shadow,
 html.comfort [class*="rounded-2xl"][class*="bg-card"],
 html.comfort [class*="rounded-xl"][class*="bg-card"] {
   box-shadow: var(--card-shadow);
   transition: box-shadow var(--motion-base) var(--motion-ease);
 }
-html.default .mac-shadow:hover,
-html.default [class*="rounded-2xl"][class*="bg-card"]:hover,
-html.default [class*="rounded-xl"][class*="bg-card"]:hover,
 html.comfort .mac-shadow:hover,
 html.comfort [class*="rounded-2xl"][class*="bg-card"]:hover,
 html.comfort [class*="rounded-xl"][class*="bg-card"]:hover {
   box-shadow: var(--card-shadow-hover);
 }
 
-/* primary 버튼만 살짝 솟아오른 느낌 — 부드러운 코랄 글로우 + 상단 하이라이트.
-   다른 secondary/ghost 버튼은 건드리지 않아 시각 노이즈 최소화. */
-html.default button[class*="bg-primary"]:not(:disabled),
-html.default a[class*="bg-primary"] {
-  box-shadow: var(--button-shadow);
-  transition: box-shadow var(--motion-fast) var(--motion-ease),
-              transform var(--motion-fast) var(--motion-ease);
-}
-html.default button[class*="bg-primary"]:not(:disabled):active,
-html.default a[class*="bg-primary"]:active {
-  box-shadow: var(--button-shadow-active);
-  transform: translateY(0.5px);
-}
-
-/* 입력창은 살짝 들어간 느낌 — 카드 위에 얹은 듯 보이지 않도록 inset 라인.
-   focus 시 코랄 ring 은 그대로(접근성). */
-html.default input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]),
-html.default textarea,
-html.default select {
-  box-shadow: inset 0 1px 2px rgba(46, 38, 32, 0.05);
-}
-
-/* paper 느낌을 살리기 위해 미세한 grain 효과 (1px noise) */
-html.default body {
-  background-image: radial-gradient(circle at 1px 1px, rgba(46, 38, 32, 0.025) 1px, transparent 0);
-  background-size: 24px 24px;
-}
+/* 고대비 — 포커스 링을 3px 로 키우고, 본문 링크(text-primary 앵커)는 항상 밑줄. */
+html.high-contrast *:focus-visible { outline-width: 3px; }
+html.high-contrast a[class*="text-primary"] { text-decoration: underline; text-underline-offset: 2px; }
 
 @layer base {
   * {
@@ -994,7 +481,7 @@ html.default body {
     font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
     font-size: 16px;
     line-height: 1.55;
-    font-weight: 500;
+    font-weight: 400;  /* P2: 500→400 — 한글 획 뭉침 방지, medium/semibold 와의 위계 회복 */
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
     letter-spacing: -0.003em;
@@ -1006,20 +493,13 @@ html.default body {
   h3 { font-weight: 600; }
   h4, h5, h6 { font-weight: 600; }
 
-  label { font-weight: 600; }
+  label { font-weight: 500; }
   strong, b { font-weight: 700; }
 }
 
-/* ── Phase B density pass ──────────────────────────────────────────────────
-   Restore Tailwind type scale so dense layouts (tables, cards, sidebar)
-   actually read as Databricks-tight. Only floor the smallest arbitrary
-   sizes (9–10px) up to 11px for legibility — 11px stays as-is. */
-.text-\[9px\]  { font-size: 11px !important; line-height: 1.4; }
-.text-\[10px\] { font-size: 11px !important; line-height: 1.4; }
-
-pre .text-\[9px\], pre .text-\[10px\], code .text-\[9px\], code .text-\[10px\] {
-  font-size: inherit !important;
-}
+/* ── 최소 글자 크기 (P2) ──────────────────────────────────────────────────
+   예전엔 text-[9px]/text-[10px] 를 여기서 !important 로 11px 로 끌어올렸다. P2 에서 소스의
+   8~10px 를 전부 text-[11px] 로 명시해 보정 규칙을 없앴다 — 11px 미만은 쓰지 않는다. */
 
 /* Tailwind defaults restored (no overrides) — relying on tailwind.css's
    built-in text-xs (12px) / text-sm (14px) / text-base (16px) etc. */
@@ -1177,14 +657,14 @@ button[aria-disabled="true"] {
   }
 }
 
-/* ── Date input calendar icon (dark mode only) ─────────────────────────────── */
-html:not(.light) input[type="date"]::-webkit-calendar-picker-indicator {
+/* ── Date input calendar icon (다크 바탕에서만 반전 — 예전 :not(.light) 는 컴포트 등 라이트 계열까지 뒤집었다) ─────────────────────────────── */
+html.dark input[type="date"]::-webkit-calendar-picker-indicator {
   filter: invert(0.8);
   opacity: 0.7;
   cursor: pointer;
 }
 
-html:not(.light) input[type="date"]::-webkit-calendar-picker-indicator:hover {
+html.dark input[type="date"]::-webkit-calendar-picker-indicator:hover {
   opacity: 1;
 }
 

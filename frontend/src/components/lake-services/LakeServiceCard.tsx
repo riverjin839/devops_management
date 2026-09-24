@@ -52,7 +52,7 @@ export function LakeServiceCard({
         {service.endpointUrl}
       </p>
       {service.namespace && (
-        <p className="text-xs text-muted-foreground/80 mb-2">
+        <p className="text-xs text-muted-foreground mb-2">
           namespace: <span className="font-mono">{service.namespace}</span>
         </p>
       )}
@@ -89,7 +89,7 @@ export function LakeServiceCard({
       </div>
 
       {service.lastMessage && (
-        <p className="mt-2 text-xs text-muted-foreground/70 italic truncate">
+        <p className="mt-2 text-xs text-muted-foreground italic truncate">
           {service.lastMessage}
         </p>
       )}

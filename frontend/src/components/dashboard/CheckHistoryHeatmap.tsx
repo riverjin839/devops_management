@@ -97,7 +97,7 @@ export function CheckHistoryHeatmap({ logs, isLoading, days = 14 }: CheckHistory
                 <span className="sr-only">클러스터</span>
               </th>
               {dayCols.map((d) => (
-                <th key={d} className="text-[10px] font-normal text-muted-foreground w-5" title={d}>
+                <th key={d} className="text-[11px] font-normal text-muted-foreground w-5" title={d}>
                   {d.slice(5).replace('-', '/')}
                 </th>
               ))}

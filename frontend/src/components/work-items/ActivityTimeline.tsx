@@ -63,7 +63,7 @@ export function ActivityTimeline({ workItemId }: { workItemId: string }) {
                 <div className="min-w-0">
                   <span className="text-foreground">{text}</span>
                   <span className="text-muted-foreground"> · {a.actor}</span>
-                  <span className="text-muted-foreground/70 font-mono ml-1">{fmt(a.createdAt)}</span>
+                  <span className="text-muted-foreground font-mono ml-1">{fmt(a.createdAt)}</span>
                 </div>
               </li>
             );

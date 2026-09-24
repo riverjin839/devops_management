@@ -27,16 +27,16 @@ export function CommandTraceList({ commands }: { commands: BatchJobCommandTrace[
                 onClick={() => hasOutput && setOpenIdx(open ? null : i)}
                 className={`w-full px-2 py-1.5 flex items-center gap-2 text-left ${hasOutput ? 'hover:bg-secondary/50 cursor-pointer' : 'cursor-default'}`}
               >
-                <span className="text-[10px] px-1.5 py-0.5 rounded bg-secondary text-muted-foreground uppercase flex-shrink-0">
+                <span className="text-[11px] px-1.5 py-0.5 rounded bg-secondary text-muted-foreground uppercase flex-shrink-0">
                   {c.kind}
                 </span>
                 <code className="flex-1 min-w-0 text-xs font-mono truncate" title={c.command}>
                   {c.command}
                 </code>
-                <span className={`text-[10px] font-mono flex-shrink-0 ${failed ? 'text-status-critical font-semibold' : 'text-muted-foreground'}`}>
+                <span className={`text-[11px] font-mono flex-shrink-0 ${failed ? 'text-status-critical font-semibold' : 'text-muted-foreground'}`}>
                   {c.exitCode === null || c.exitCode === undefined ? 'exit —' : `exit ${c.exitCode}`}
                 </span>
-                <span className="text-[10px] font-mono text-muted-foreground tabular-nums flex-shrink-0">
+                <span className="text-[11px] font-mono text-muted-foreground tabular-nums flex-shrink-0">
                   {c.durationMs}ms
                 </span>
                 {hasOutput && (open
@@ -47,7 +47,7 @@ export function CommandTraceList({ commands }: { commands: BatchJobCommandTrace[
                 <div className="px-2 pb-2 border-t border-border pt-2">
                   <ExecOutputTabs stdout={c.stdout || ''} stderr={c.stderr} maxHeight="max-h-[160px]" />
                   {c.truncated && (
-                    <p className="mt-1 text-[10px] text-muted-foreground">… 출력이 길어 발췌만 저장됨</p>
+                    <p className="mt-1 text-[11px] text-muted-foreground">… 출력이 길어 발췌만 저장됨</p>
                   )}
                 </div>
               )}

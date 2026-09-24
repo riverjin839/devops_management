@@ -103,7 +103,7 @@ export function ClusterCustomCell({ cluster, field, canEdit = true }: Props) {
         <span
           className={`font-mono text-sm px-1 ${
             current === true ? 'text-status-healthy font-bold'
-            : current === false ? 'text-muted-foreground/60'
+            : current === false ? 'text-muted-foreground'
             : 'text-muted-foreground/30'
           }`}
           title={field.label}
@@ -125,7 +125,7 @@ export function ClusterCustomCell({ cluster, field, canEdit = true }: Props) {
         }}
         className={`font-mono text-sm px-1 rounded hover:bg-primary/10 disabled:opacity-40 ${
           current === true ? 'text-status-healthy font-bold'
-          : current === false ? 'text-muted-foreground/60'
+          : current === false ? 'text-muted-foreground'
           : 'text-muted-foreground/30'
         }`}
         title={`${field.label} (클릭 순환: 미설정 → O → X → 미설정)`}

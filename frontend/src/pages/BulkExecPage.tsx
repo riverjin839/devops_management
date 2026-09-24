@@ -167,7 +167,7 @@ function ClusterNodeGroup({
         >
           {open ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
         </button>
-        <Server className="w-3.5 h-3.5 text-muted-foreground/80 flex-shrink-0" />
+        <Server className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
         <span className="text-sm font-semibold truncate flex-1">{clusterName}</span>
         <span className="text-xs font-mono text-muted-foreground whitespace-nowrap">
           {selectedCount}/{total}
@@ -201,7 +201,7 @@ function ClusterNodeGroup({
               >다시 시도</button>
             </div>
           ) : total === 0 ? (
-            <p className="px-3 py-3 text-xs text-muted-foreground/70">노드 없음</p>
+            <p className="px-3 py-3 text-xs text-muted-foreground">노드 없음</p>
           ) : (
             nodes.map((n) => (
               <NodeRow
@@ -273,7 +273,7 @@ function ResultRow({ result, globalFilter }: { result: BulkExecResultItem; globa
             <span>{primary}</span>
             {subHost && <span className="text-xs text-muted-foreground">{subHost}</span>}
             {result.clusterName && (
-              <span className="text-xs text-muted-foreground/80">{result.clusterName}</span>
+              <span className="text-xs text-muted-foreground">{result.clusterName}</span>
             )}
           </div>
         </td>
@@ -376,7 +376,7 @@ function SummaryResultsTable({
                   <p className="font-mono text-sm font-medium">{primary}</p>
                   {subHost && <p className="font-mono text-xs text-muted-foreground">{subHost}</p>}
                   {r.clusterName && (
-                    <p className="text-xs text-muted-foreground/80">{r.clusterName}</p>
+                    <p className="text-xs text-muted-foreground">{r.clusterName}</p>
                   )}
                 </td>
                 <td className="px-3 py-2 align-top whitespace-nowrap">
@@ -410,11 +410,11 @@ function SummaryResultsTable({
                         </p>
                       ))}
                       {moreCount > 0 && (
-                        <p className="text-xs text-muted-foreground/70">+{moreCount} 라인 더</p>
+                        <p className="text-xs text-muted-foreground">+{moreCount} 라인 더</p>
                       )}
                     </div>
                   ) : (
-                    <p className="text-xs text-muted-foreground/60">
+                    <p className="text-xs text-muted-foreground">
                       {globalFilter.trim() ? '(필터 매칭 없음)' : '(출력 없음)'}
                     </p>
                   )}
@@ -771,7 +771,7 @@ export function BulkExecPage() {
                     className={`px-3 py-1.5 text-sm font-medium rounded-md transition-all ${
                       action === a
                         ? 'bg-background text-foreground shadow-sm'
-                        : 'text-muted-foreground/70 hover:text-foreground'
+                        : 'text-muted-foreground hover:text-foreground'
                     }`}
                   >
                     {a === 'ssh' ? '명령 실행 (ssh)' : '파일 업로드 (scp)'}
@@ -786,7 +786,7 @@ export function BulkExecPage() {
                     className={`px-3 py-1.5 text-sm font-medium rounded-md transition-all ${
                       mode === m
                         ? 'bg-background text-foreground shadow-sm'
-                        : 'text-muted-foreground/70 hover:text-foreground'
+                        : 'text-muted-foreground hover:text-foreground'
                     }`}
                   >
                     {m === 'parallel' ? <><Zap className="w-3 h-3 inline mr-1" />병렬</> : '순차'}
@@ -840,7 +840,7 @@ export function BulkExecPage() {
                       className={`flex-1 px-2 py-1.5 text-sm font-medium rounded-md transition-all ${
                         authMode === m
                           ? 'bg-background text-foreground shadow-sm'
-                          : 'text-muted-foreground/70 hover:text-foreground'
+                          : 'text-muted-foreground hover:text-foreground'
                       }`}
                     >
                       {m === 'password' ? '비밀번호' : 'Private Key'}
@@ -875,7 +875,7 @@ export function BulkExecPage() {
                   rows={4}
                   className="w-full px-3 py-2 bg-background border border-border rounded-lg text-xs font-mono focus:outline-none focus:ring-1 focus:ring-primary resize-none"
                 />
-                <p className="text-xs text-muted-foreground/70 mt-1">RSA / Ed25519 / ECDSA / DSS 지원. 비밀번호 보호된 키는 지원 안 함.</p>
+                <p className="text-xs text-muted-foreground mt-1">RSA / Ed25519 / ECDSA / DSS 지원. 비밀번호 보호된 키는 지원 안 함.</p>
               </div>
             )}
 
@@ -895,7 +895,7 @@ export function BulkExecPage() {
                         className={`px-2 py-1 text-xs font-medium rounded-md transition-all ${
                           language === l
                             ? 'bg-background text-foreground shadow-sm'
-                            : 'text-muted-foreground/70 hover:text-foreground'
+                            : 'text-muted-foreground hover:text-foreground'
                         }`}
                         title={l === 'python' ? '원격 python3 인터프리터로 실행됩니다' : '원격 기본 셸로 그대로 실행됩니다'}
                       >
@@ -1000,7 +1000,7 @@ export function BulkExecPage() {
                         </div>
                       </div>
                       <div className="flex items-center justify-between">
-                        <p className="text-[11px] text-muted-foreground/70">
+                        <p className="text-[11px] text-muted-foreground">
                           위 인증 정보(사용자/포트/비밀번호|키)를 그대로 사용해 텍스트 파일을 읽어옵니다.
                         </p>
                         <button
@@ -1316,7 +1316,7 @@ export function BulkExecPage() {
             <div>
               <p className="text-xs uppercase tracking-wider text-muted-foreground mb-1 flex items-center gap-1.5">
                 실행할 명령
-                <span className="normal-case text-[10px] px-1.5 py-0.5 rounded border border-border bg-secondary">{language}</span>
+                <span className="normal-case text-[11px] px-1.5 py-0.5 rounded border border-border bg-secondary">{language}</span>
               </p>
               <pre className="text-xs font-mono bg-background border border-border rounded p-2 max-h-28 overflow-auto whitespace-pre-wrap break-all">
                 {command}
@@ -1342,8 +1342,8 @@ export function BulkExecPage() {
                 }, {})
               ).map(([cname, items]) => (
                 <div key={cname}>
-                  <p className="text-xs uppercase tracking-wider text-muted-foreground/80">
-                    {cname} <span className="text-muted-foreground/60">({items.length})</span>
+                  <p className="text-xs uppercase tracking-wider text-muted-foreground">
+                    {cname} <span className="text-muted-foreground">({items.length})</span>
                   </p>
                   {items.slice(0, 8).map((t) => (
                     <div key={`${t.clusterId}::${t.name}`} className="pl-2">

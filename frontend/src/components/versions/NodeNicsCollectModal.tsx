@@ -183,7 +183,7 @@ export function NodeNicsCollectModal({ open, clusterId, onClose }: Props) {
                 {(['password', 'key'] as const).map((m) => (
                   <button key={m} onClick={() => setAuthMode(m)}
                     className={`px-2 py-0.5 text-xs font-medium rounded-md ${
-                      authMode === m ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground/80 hover:text-foreground'
+                      authMode === m ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
                     }`}>
                     {m === 'password' ? '비밀번호' : '개인키'}
                   </button>
@@ -333,7 +333,7 @@ export function NodeNicsCollectModal({ open, clusterId, onClose }: Props) {
                               {(h.interfaces ?? []).map((ifc) => (
                                 <div key={ifc.name} className="flex items-start gap-1.5 flex-wrap">
                                   <span className="font-mono text-foreground">{ifc.name}</span>
-                                  <span className={`text-[10px] px-1 rounded ${
+                                  <span className={`text-[11px] px-1 rounded ${
                                     ifc.operstate === 'UP' ? 'bg-status-healthy/15 text-status-healthy' : 'bg-muted text-muted-foreground'
                                   }`}>{ifc.operstate ?? '?'}</span>
                                   {ifc.addrs.map((a) => {

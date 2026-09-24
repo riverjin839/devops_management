@@ -74,14 +74,14 @@ export function SavedScriptPanel({
       </div>
 
       {scripts.length === 0 && !isLoading ? (
-        <p className="text-xs text-muted-foreground/70 italic py-1">
+        <p className="text-xs text-muted-foreground italic py-1">
           저장된 스크립트가 없습니다. 자주 쓰는 bash/python 스크립트를 저장하면 다음에 클릭 한 번으로 불러올 수 있어요.
         </p>
       ) : (
         <div className="flex flex-wrap gap-1.5">
           {scripts.map((s) => (
             <div key={s.id} className="flex items-center gap-0.5 bg-secondary/50 border border-border rounded-md overflow-hidden">
-              <span className={`px-1.5 py-1 text-[10px] font-semibold border-r ${LANGUAGE_BADGE[s.language]}`}>
+              <span className={`px-1.5 py-1 text-[11px] font-semibold border-r ${LANGUAGE_BADGE[s.language]}`}>
                 {s.language}
               </span>
               <button

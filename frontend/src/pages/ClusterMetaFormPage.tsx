@@ -619,7 +619,7 @@ export function ClusterMetaFormPage() {
                   <div>
                     <label htmlFor={f('internalIps')} className={lc}>
                       IP 리스트 (정규식)
-                      <span className="ml-1.5 text-xs text-muted-foreground/70 font-normal normal-case">
+                      <span className="ml-1.5 text-xs text-muted-foreground font-normal normal-case">
                         한 줄에 한 그룹, 마지막 옥텟은 <code className="font-mono">[5-7,10]</code> 형태로 압축
                       </span>
                     </label>
@@ -637,7 +637,7 @@ export function ClusterMetaFormPage() {
                   <div>
                     <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">
                       Fallback CIDR
-                      <span className="ml-1.5 text-xs text-muted-foreground/70 font-normal normal-case">
+                      <span className="ml-1.5 text-xs text-muted-foreground font-normal normal-case">
                         — IP 리스트가 비었을 때 표시 + CIDR Calculator 의 겹침 검사에 사용
                       </span>
                     </p>

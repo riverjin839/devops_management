@@ -585,7 +585,7 @@ export function KnowledgeHubPage() {
                           {formatRelativeTime(it.updatedAt)}
                         </td>
                         <td className="px-4 py-3 text-center">
-                          <ChevronRight className="w-4 h-4 text-muted-foreground/60 inline-block" />
+                          <ChevronRight className="w-4 h-4 text-muted-foreground inline-block" />
                         </td>
                       </tr>
                     );

@@ -7,7 +7,7 @@ export function ExecTechBadge({ execTech }: { execTech?: string | null }) {
   return (
     <span
       title={meta?.hint ?? execTech}
-      className="flex-shrink-0 inline-flex items-center gap-0.5 px-1 py-px rounded border border-border text-[9px] font-medium text-muted-foreground select-none"
+      className="flex-shrink-0 inline-flex items-center gap-0.5 px-1 py-px rounded border border-border text-[11px] font-medium text-muted-foreground select-none"
     >
       {Icon && <Icon className="w-2.5 h-2.5" />}
       {meta?.label ?? execTech}

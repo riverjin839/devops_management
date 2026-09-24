@@ -122,7 +122,7 @@ export function HomePage() {
               {!!t.badge && (
                 <span
                   className={cn(
-                    'inline-flex items-center justify-center min-w-[1.1rem] h-[1.1rem] px-1 rounded-full text-[10px] font-bold tabular-nums',
+                    'inline-flex items-center justify-center min-w-[1.1rem] h-[1.1rem] px-1 rounded-full text-[11px] font-bold tabular-nums',
                     homeTab === t.key
                       ? 'bg-primary-foreground/20 text-primary-foreground'
                       : 'bg-status-critical/15 text-status-critical',

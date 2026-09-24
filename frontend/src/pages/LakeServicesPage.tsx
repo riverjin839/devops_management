@@ -145,7 +145,7 @@ export function LakeServicesPage() {
             <div className="text-center py-16 text-muted-foreground text-sm">
               <Database className="w-10 h-10 mx-auto mb-3 text-muted-foreground/30" />
               <p className="mb-2">등록된 LAKE 서비스가 없습니다.</p>
-              <p className="text-sm text-muted-foreground/70">
+              <p className="text-sm text-muted-foreground">
                 상단의 <strong>"서비스 등록"</strong> 버튼으로 인스턴스를 추가하세요.
               </p>
             </div>

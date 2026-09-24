@@ -172,7 +172,7 @@ function CommandRow({ entry: e, onUpdate, onDelete, onTogglePin, onOpenForm }: C
           )}
           <button
             onClick={onTogglePin}
-            className={`inline-flex items-center gap-1 text-xs ${e.pinned ? 'text-primary' : 'text-muted-foreground/50 hover:text-primary'}`}
+            className={`inline-flex items-center gap-1 text-xs ${e.pinned ? 'text-primary' : 'text-muted-foreground hover:text-primary'}`}
             title={e.pinned ? '고정 해제' : '상단 고정'}
           >
             {e.pinned ? <Pin className="w-3 h-3" /> : <PinOff className="w-3 h-3" />}
@@ -245,7 +245,7 @@ function CommandRow({ entry: e, onUpdate, onDelete, onTogglePin, onOpenForm }: C
                 {e.description}
               </p>
             ) : (
-              <p className="text-xs text-muted-foreground/50 italic">+ 의미 추가</p>
+              <p className="text-xs text-muted-foreground italic">+ 의미 추가</p>
             )
           )}
 
@@ -267,7 +267,7 @@ function CommandRow({ entry: e, onUpdate, onDelete, onTogglePin, onOpenForm }: C
                 {e.caution}
               </div>
             ) : (
-              <p className="text-xs text-muted-foreground/50 italic">+ 주의사항 추가</p>
+              <p className="text-xs text-muted-foreground italic">+ 주의사항 추가</p>
             )
           )}
 
@@ -296,7 +296,7 @@ function CommandRow({ entry: e, onUpdate, onDelete, onTogglePin, onOpenForm }: C
             </details>
           ) : (
             <p
-              className="text-xs text-muted-foreground/50 italic cursor-pointer hover:text-primary transition-colors"
+              className="text-xs text-muted-foreground italic cursor-pointer hover:text-primary transition-colors"
               onClick={() => setEditing('examples')}
             >
               + 예시 추가
@@ -322,7 +322,7 @@ function CommandRow({ entry: e, onUpdate, onDelete, onTogglePin, onOpenForm }: C
                 ))}
               </div>
             ) : (
-              <p className="text-xs text-muted-foreground/50 italic">+ 태그 추가</p>
+              <p className="text-xs text-muted-foreground italic">+ 태그 추가</p>
             )
           )}
 
@@ -356,7 +356,7 @@ function CommandRow({ entry: e, onUpdate, onDelete, onTogglePin, onOpenForm }: C
             </div>
           ) : (
             <p
-              className="text-xs text-muted-foreground/50 italic cursor-pointer hover:text-primary transition-colors"
+              className="text-xs text-muted-foreground italic cursor-pointer hover:text-primary transition-colors"
               onClick={() => setEditing('confluence')}
             >
               + Confluence 링크 추가

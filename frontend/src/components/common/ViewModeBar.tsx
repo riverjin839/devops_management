@@ -21,7 +21,7 @@ interface ViewModeBarProps {
 function StyleRow({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div className="flex items-center justify-between gap-2">
-      <span className="text-xs text-muted-foreground/70 w-9 flex-shrink-0 leading-none">{label}</span>
+      <span className="text-xs text-muted-foreground w-9 flex-shrink-0 leading-none">{label}</span>
       {children}
     </div>
   );
@@ -45,7 +45,7 @@ function PillGroup({
           className={`px-2 py-[3px] text-xs font-medium rounded transition-all duration-100 leading-none ${
             value === o.value
               ? 'bg-background text-foreground shadow-sm'
-              : 'text-muted-foreground/60 hover:text-muted-foreground'
+              : 'text-muted-foreground hover:text-muted-foreground'
           }`}
         >
           {o.label}
@@ -80,7 +80,7 @@ function MiniToggle({
           }`}
         />
       </div>
-      <span className="text-xs text-muted-foreground/70 group-hover:text-muted-foreground transition-colors leading-none">
+      <span className="text-xs text-muted-foreground group-hover:text-muted-foreground transition-colors leading-none">
         {label}
       </span>
     </button>
@@ -198,7 +198,7 @@ export function ViewModeBar({
             className={`flex items-center gap-1.5 px-2.5 py-[5px] text-sm font-medium rounded-md transition-all duration-150 whitespace-nowrap ${
               active === mode.id
                 ? 'bg-background text-foreground shadow-sm'
-                : 'text-muted-foreground/70 hover:text-foreground'
+                : 'text-muted-foreground hover:text-foreground'
             }`}
           >
             {mode.icon}
@@ -218,7 +218,7 @@ export function ViewModeBar({
             className={`p-[6px] rounded-lg border transition-all duration-150 ${
               open
                 ? 'border-primary/40 bg-primary/10 text-primary'
-                : 'border-transparent text-muted-foreground/60 hover:text-foreground hover:border-border/60 hover:bg-secondary/70'
+                : 'border-transparent text-muted-foreground hover:text-foreground hover:border-border/60 hover:bg-secondary/70'
             }`}
           >
             <SlidersHorizontal className="w-3.5 h-3.5" />
@@ -233,7 +233,7 @@ export function ViewModeBar({
             >
               {/* header */}
               <div className="px-3 py-2 border-b border-border/25 flex items-center justify-between">
-                <span className="text-xs font-semibold tracking-widest uppercase text-muted-foreground/60">
+                <span className="text-xs font-semibold tracking-widest uppercase text-muted-foreground">
                   표 스타일
                 </span>
                 <div className="flex items-center gap-1 text-muted-foreground">
@@ -270,7 +270,7 @@ export function ViewModeBar({
                       monoFont: false,
                     });
                   }}
-                  className="w-full text-xs text-muted-foreground/50 hover:text-muted-foreground transition-colors text-center py-1"
+                  className="w-full text-xs text-muted-foreground hover:text-muted-foreground transition-colors text-center py-1"
                 >
                   기본값으로 재설정
                 </button>

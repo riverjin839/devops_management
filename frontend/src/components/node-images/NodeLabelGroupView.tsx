@@ -114,7 +114,7 @@ export function NodeLabelGroupView({ nodes, searchQuery }: Props) {
           </button>
         ))}
         {candidateKeys.length === 0 && (
-          <span className="text-xs text-muted-foreground/60">
+          <span className="text-xs text-muted-foreground">
             노드 라벨이 모두 같거나 노드별로 모두 달라 그룹화 가능한 라벨이 없습니다.
           </span>
         )}
@@ -128,7 +128,7 @@ export function NodeLabelGroupView({ nodes, searchQuery }: Props) {
             <div className="px-4 py-3 bg-muted/20 border-b border-border">
               <div className="flex items-baseline justify-between gap-2 flex-wrap">
                 <div className="flex items-center gap-1.5 min-w-0">
-                  <span className="text-xs font-mono text-muted-foreground/70 uppercase tracking-wider truncate">
+                  <span className="text-xs font-mono text-muted-foreground uppercase tracking-wider truncate">
                     {groupKey}
                   </span>
                   <span className="text-sm font-semibold text-foreground font-mono truncate" title={g.value}>

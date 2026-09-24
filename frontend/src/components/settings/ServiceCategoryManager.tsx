@@ -14,7 +14,7 @@ function CategoryIcon({ icon, className = 'w-4 h-4' }: { icon?: string | null; c
   const resolved = resolveClusterIcon(icon);
   if (resolved?.kind === 'lucide') { const Icon = resolved.Component; return <Icon className={className} />; }
   if (resolved?.kind === 'text') return <span aria-hidden>{resolved.value}</span>;
-  return <span className="text-muted-foreground/50">—</span>;
+  return <span className="text-muted-foreground">—</span>;
 }
 
 /** PEP/APP 서비스 상위 카테고리(Runtime/Catalog/Workflow/JupyterLab 등) 관리 — Settings →
@@ -85,7 +85,7 @@ export function ServiceCategoryManager({ domain }: { domain: ServiceDomain }) {
       )}
 
       {!isLoading && rows.length === 0 && !error && (
-        <p className="text-sm text-muted-foreground/70 py-6 text-center">
+        <p className="text-sm text-muted-foreground py-6 text-center">
           {domain === 'app' ? 'APP 서비스는 기본 카테고리가 없습니다 — "카테고리 추가"로 직접 등록하세요.' : '등록된 카테고리가 없습니다.'}
         </p>
       )}

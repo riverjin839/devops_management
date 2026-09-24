@@ -873,7 +873,7 @@ export function ClusterManagePage() {
                             <TooltipTrigger
                               type="button"
                               aria-label={`${c.label} 설명`}
-                              className="inline-flex items-center text-muted-foreground/50 hover:text-muted-foreground focus:outline-none focus-visible:ring-1 focus-visible:ring-primary rounded"
+                              className="inline-flex items-center text-muted-foreground hover:text-muted-foreground focus:outline-none focus-visible:ring-1 focus-visible:ring-primary rounded"
                             >
                               <HelpCircle className="w-3 h-3" />
                             </TooltipTrigger>
@@ -901,7 +901,7 @@ export function ClusterManagePage() {
                           <TooltipTrigger
                             type="button"
                             aria-label="편집 컬럼 설명"
-                            className="inline-flex items-center text-muted-foreground/50 hover:text-muted-foreground focus:outline-none focus-visible:ring-1 focus-visible:ring-primary rounded"
+                            className="inline-flex items-center text-muted-foreground hover:text-muted-foreground focus:outline-none focus-visible:ring-1 focus-visible:ring-primary rounded"
                           >
                             <HelpCircle className="w-3 h-3" />
                           </TooltipTrigger>

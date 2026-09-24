@@ -100,7 +100,7 @@ function StatusIcon({ status, type }: { status: string; type: 'task' | 'issue' }
     in_progress: <Clock className="w-3 h-3 text-status-info flex-shrink-0" />,
     review_test: <Clock className="w-3 h-3 text-status-warning flex-shrink-0" />,
     todo:        <Circle className="w-3 h-3 text-muted-foreground flex-shrink-0" />,
-    backlog:     <Circle className="w-3 h-3 text-muted-foreground/60 flex-shrink-0" />,
+    backlog:     <Circle className="w-3 h-3 text-muted-foreground flex-shrink-0" />,
   };
   return icons[status] ?? <Circle className="w-3 h-3 text-muted-foreground flex-shrink-0" />;
 }
@@ -129,17 +129,17 @@ function ItemCard({ item, onClick }: { item: DayItem; onClick: () => void }) {
       )}
       <div className="flex items-center gap-1 mt-0.5 pl-4 flex-wrap">
         {item.module && (
-          <span className={`text-[10px] px-1 rounded-md ${MODULE_COLOR[item.module] ?? 'bg-secondary text-muted-foreground'}`}>
+          <span className={`text-[11px] px-1 rounded-md ${MODULE_COLOR[item.module] ?? 'bg-secondary text-muted-foreground'}`}>
             {item.module}
           </span>
         )}
         {item.priority && (
-          <span className={`text-[10px] px-1 rounded-md border ${PRIORITY_COLOR[item.priority] ?? ''}`}>
+          <span className={`text-[11px] px-1 rounded-md border ${PRIORITY_COLOR[item.priority] ?? ''}`}>
             {item.priority}
           </span>
         )}
         {isIssue && (
-          <span className={`text-[10px] px-1 rounded-md ${item.resolved ? 'bg-status-healthy/15 text-status-healthy' : 'bg-orange-500/15 text-orange-600 dark:text-orange-300'}`}>
+          <span className={`text-[11px] px-1 rounded-md ${item.resolved ? 'bg-status-healthy/15 text-status-healthy' : 'bg-orange-500/15 text-orange-600 dark:text-orange-300'}`}>
             {item.resolved ? '해결' : '미해결'}
           </span>
         )}
@@ -413,10 +413,10 @@ function PersonalGanttView({
               const isTd = ds === todayStr;
               const isWE = isWeekend(d);
               return (
-                <th key={ds} className={`border-b border-r border-border px-1 py-2 text-center font-medium ${isTd ? 'bg-primary/10 text-primary' : isWE ? 'text-muted-foreground/50 bg-secondary/30' : 'text-muted-foreground'}`}
+                <th key={ds} className={`border-b border-r border-border px-1 py-2 text-center font-medium ${isTd ? 'bg-primary/10 text-primary' : isWE ? 'text-muted-foreground bg-secondary/30' : 'text-muted-foreground'}`}
                   style={{ minWidth: COL_W, width: COL_W }}>
                   <div className="text-xs font-semibold">{dayLabel(d)}</div>
-                  {isTd && <div className="text-[10px] text-primary font-bold">TODAY</div>}
+                  {isTd && <div className="text-[11px] text-primary font-bold">TODAY</div>}
                 </th>
               );
             })}
@@ -881,7 +881,7 @@ export function WbsFlowPage() {
                 <div className="space-y-2">
                   <div className="rounded-2xl border border-dashed border-border/60 bg-secondary/10 p-4">
                     <p className="text-sm font-semibold text-muted-foreground">미분류 ({unclassified.length}건)</p>
-                    <p className="text-sm text-muted-foreground/70 mt-0.5">프로젝트에 소속되지 않은 업무</p>
+                    <p className="text-sm text-muted-foreground mt-0.5">프로젝트에 소속되지 않은 업무</p>
                   </div>
                   <MacCard bodyPadding="p-0" className="overflow-hidden">
                     <PersonalGanttView
@@ -951,14 +951,14 @@ export function WbsFlowPage() {
                   return (
                     <th key={ds}
                       className={`border-b border-r border-border px-1 py-2 text-center font-medium transition-colors
-                        ${isTodayCol ? 'bg-primary/10 text-primary' : isWE ? 'text-muted-foreground/50 bg-secondary/30' : 'text-muted-foreground'}`}
+                        ${isTodayCol ? 'bg-primary/10 text-primary' : isWE ? 'text-muted-foreground bg-secondary/30' : 'text-muted-foreground'}`}
                       style={{ minWidth: COL_W, width: COL_W }}>
                       <div className="leading-tight">
                         <div className={`text-xs font-semibold ${isTodayCol ? 'text-primary' : ''}`}>
                           {dayLabel(d)}
                         </div>
                         {isTodayCol && (
-                          <div className="text-[10px] text-primary font-bold">TODAY</div>
+                          <div className="text-[11px] text-primary font-bold">TODAY</div>
                         )}
                       </div>
                     </th>
@@ -979,15 +979,15 @@ export function WbsFlowPage() {
                       <div className="flex flex-wrap gap-1">
                         {row.roles.slice(0, 4).map(role => (
                           <span key={role}
-                            className={`text-[10px] px-1.5 py-0.5 rounded-full ${MODULE_COLOR[role] ?? 'bg-secondary text-muted-foreground'}`}>
+                            className={`text-[11px] px-1.5 py-0.5 rounded-full ${MODULE_COLOR[role] ?? 'bg-secondary text-muted-foreground'}`}>
                             {role}
                           </span>
                         ))}
                         {row.roles.length > 4 && (
-                          <span className="text-[10px] text-muted-foreground">+{row.roles.length - 4}</span>
+                          <span className="text-[11px] text-muted-foreground">+{row.roles.length - 4}</span>
                         )}
                       </div>
-                      <div className="mt-1 text-[10px] text-muted-foreground/60">{totalItemsInRow}건</div>
+                      <div className="mt-1 text-[11px] text-muted-foreground">{totalItemsInRow}건</div>
                     </td>
                     {dates.map(d => {
                       const ds = fmtDate(d);

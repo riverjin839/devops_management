@@ -21,7 +21,7 @@ function Field({ label, help, children }: { label: string; help?: string; childr
     <label className="block text-xs">
       <span className="text-muted-foreground">{label}</span>
       <div className="mt-0.5">{children}</div>
-      {help && <span className="block text-[11px] text-muted-foreground/80 mt-0.5 leading-snug">{help}</span>}
+      {help && <span className="block text-[11px] text-muted-foreground mt-0.5 leading-snug">{help}</span>}
     </label>
   );
 }
@@ -42,7 +42,7 @@ function Toggle({ checked, onChange, label, help }: { checked: boolean; onChange
       <input type="checkbox" checked={checked} onChange={(e) => onChange(e.target.checked)} className="accent-primary mt-0.5" />
       <span>
         {label}
-        {help && <span className="block text-[11px] text-muted-foreground/80 leading-snug">{help}</span>}
+        {help && <span className="block text-[11px] text-muted-foreground leading-snug">{help}</span>}
       </span>
     </label>
   );
@@ -228,7 +228,7 @@ function NamespaceTab({ clusterId, initialNamespace }: { clusterId: string; init
               <button type="button" onClick={() => setNs(p.namespace)}
                 className={`w-full text-left px-2 py-1 hover:bg-muted/10 ${p.namespace === ns ? 'bg-primary/5' : ''}`}>
                 <span className="truncate block">{p.namespace}</span>
-                <span className="text-[10px] text-muted-foreground">
+                <span className="text-[11px] text-muted-foreground">
                   {p.autoRightsize ? 'auto-rightsize ' : ''}{p.quotaElastic ? 'quota ' : ''}{p.customTargets.length ? `CR×${p.customTargets.length}` : ''}
                 </span>
               </button>

@@ -43,7 +43,7 @@ function PatternColorPicker({ onPick }: { onPick: (hex: string) => void }) {
         <div className="absolute z-20 mt-1 left-0 w-64 p-2 bg-card border border-border rounded-lg shadow-lg space-y-2">
           {COLOR_PATTERNS.map((pattern) => (
             <div key={pattern.key}>
-              <p className="text-[10px] text-muted-foreground mb-1">{pattern.label}</p>
+              <p className="text-[11px] text-muted-foreground mb-1">{pattern.label}</p>
               <div className="flex items-center gap-1">
                 {pattern.colors.map((hex) => (
                   <button
@@ -98,7 +98,7 @@ function EmojiPicker({
         title={isAuto ? `자동(${fallback}) — 클릭하여 변경` : `${shown} — 클릭하여 변경`}
       >
         <span className="text-base leading-none">{shown}</span>
-        {isAuto && <span className="text-[10px] text-muted-foreground/70">auto</span>}
+        {isAuto && <span className="text-[11px] text-muted-foreground">auto</span>}
         <ChevronDown className="w-3 h-3 text-muted-foreground" />
       </button>
       {open && (
@@ -251,7 +251,7 @@ export function OperationLevelsManager() {
             )}
             {!isLoading && draft.map((l, idx) => (
               <tr key={idx} className="border-t border-border align-top">
-                <td className="px-1 py-1 text-muted-foreground/60 text-center">
+                <td className="px-1 py-1 text-muted-foreground text-center">
                   <div className="flex flex-col">
                     <button onClick={() => move(idx, -1)} disabled={idx === 0}
                       aria-label="위로 이동"
@@ -304,7 +304,7 @@ export function OperationLevelsManager() {
                     <PatternColorPicker onPick={(hex) => update(idx, { customHex: hex })} />
                     {isValidHex(l.customHex) && (
                       <>
-                        <span className="text-[10px] font-mono text-muted-foreground">{l.customHex}</span>
+                        <span className="text-[11px] font-mono text-muted-foreground">{l.customHex}</span>
                         <button type="button" onClick={() => update(idx, { customHex: undefined })}
                           title="커스텀 색상 해제 → 프리셋 사용"
                           className="p-0.5 rounded hover:bg-secondary text-muted-foreground hover:text-foreground">

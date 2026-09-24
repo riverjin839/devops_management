@@ -142,13 +142,13 @@ function CommandTrace({
               <div className="p-2 space-y-2 border-t border-border">
                 {c.stdout ? (
                   <div>
-                    <p className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1">stdout</p>
+                    <p className="text-[11px] uppercase tracking-wider text-muted-foreground mb-1">stdout</p>
                     <LogViewer text={c.stdout} maxHeight="max-h-56" collapsible />
                   </div>
                 ) : null}
                 {c.stderr ? (
                   <div>
-                    <p className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1">stderr</p>
+                    <p className="text-[11px] uppercase tracking-wider text-muted-foreground mb-1">stderr</p>
                     <LogViewer text={c.stderr} maxHeight="max-h-40" asError collapsible />
                   </div>
                 ) : null}
@@ -156,7 +156,7 @@ function CommandTrace({
                   <p className="text-xs text-muted-foreground italic">출력이 없습니다.</p>
                 )}
                 {c.truncated && (
-                  <p className="text-[10px] text-muted-foreground">
+                  <p className="text-[11px] text-muted-foreground">
                     출력이 길어 앞부분만 보관합니다.
                   </p>
                 )}

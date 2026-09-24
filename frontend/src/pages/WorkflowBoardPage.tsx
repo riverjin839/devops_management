@@ -678,7 +678,7 @@ export function WorkflowBoardPage() {
                     </a>
                     <button
                       onClick={() => { setHeaderConfluenceDraft(selectedWf.confluenceUrl ?? ''); setEditingHeaderConfluence(true); }}
-                      className="p-0.5 rounded text-muted-foreground/50 hover:text-primary hover:bg-secondary"
+                      className="p-0.5 rounded text-muted-foreground hover:text-primary hover:bg-secondary"
                       title="Confluence 링크 수정"
                       aria-label="Confluence 링크 수정"
                     >
@@ -688,7 +688,7 @@ export function WorkflowBoardPage() {
                 ) : (
                   <button
                     onClick={() => { setHeaderConfluenceDraft(''); setEditingHeaderConfluence(true); }}
-                    className="text-xs px-1.5 py-0.5 rounded-full border border-dashed border-border text-muted-foreground/70 hover:text-primary hover:border-primary/40 transition-colors inline-flex items-center gap-1"
+                    className="text-xs px-1.5 py-0.5 rounded-full border border-dashed border-border text-muted-foreground hover:text-primary hover:border-primary/40 transition-colors inline-flex items-center gap-1"
                   >
                     <Link2 className="w-3 h-3" /> Confluence
                   </button>
@@ -717,7 +717,7 @@ export function WorkflowBoardPage() {
                         {STEP_STATUS[st].label} {statusCounts[st]}
                       </span>
                     ))}
-                    <span className="text-muted-foreground/60">· 연결 {selectedWf.edges.length}</span>
+                    <span className="text-muted-foreground">· 연결 {selectedWf.edges.length}</span>
                   </div>
                 </div>
                 {pendingEdge && (
@@ -971,7 +971,7 @@ export function WorkflowBoardPage() {
                             </div>
                           </div>
                           <div className="flex items-center gap-1" data-no-drag>
-                            <span className="text-sm text-muted-foreground/60 font-mono">#{selectedWf.steps.indexOf(step) + 1}</span>
+                            <span className="text-sm text-muted-foreground font-mono">#{selectedWf.steps.indexOf(step) + 1}</span>
                             <button
                               onClick={(e) => { e.stopPropagation(); if (confirm('이 단계를 삭제할까요?')) deleteStep.mutate({ wfId: selectedWf.id, stepId: step.id }); }}
                               aria-label="단계 삭제"

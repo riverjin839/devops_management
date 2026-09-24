@@ -297,7 +297,7 @@ export function EtcdCtlPage() {
                     key={m}
                     onClick={() => setAuthMode(m)}
                     className={`flex-1 px-2 py-1.5 text-sm font-medium rounded-md transition-all ${
-                      authMode === m ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground/70 hover:text-foreground'
+                      authMode === m ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
                     }`}
                   >
                     {m === 'password' ? '비밀번호' : 'Private Key'}

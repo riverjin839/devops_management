@@ -55,7 +55,7 @@ function jiraTypeClass(type: string): string {
 
 /** 컴포넌트/라벨 같은 문자열 목록을 작은 칩으로. 비면 '-'. */
 function ChipList({ values, className = '' }: { values?: string[] | null; className?: string }) {
-  if (!values || values.length === 0) return <span className="text-muted-foreground/50">-</span>;
+  if (!values || values.length === 0) return <span className="text-muted-foreground">-</span>;
   return (
     <div className="flex items-center gap-1 flex-wrap">
       {values.map((v) => (
@@ -289,7 +289,7 @@ export function WorkItemTableRow({
           <td key="project" data-col="project" className="px-4 py-1.5 text-muted-foreground whitespace-nowrap">
             {item.projectId
               ? (projectNameById.get(item.projectId) ?? '-')
-              : <span className="text-muted-foreground/50">-</span>}
+              : <span className="text-muted-foreground">-</span>}
           </td>
         );
 
@@ -298,7 +298,7 @@ export function WorkItemTableRow({
           <td key="sprint" data-col="sprint" className="px-4 py-1.5 text-muted-foreground whitespace-nowrap">
             {item.sprintId
               ? (sprintNameById?.get(item.sprintId) ?? '-')
-              : <span className="text-muted-foreground/50">-</span>}
+              : <span className="text-muted-foreground">-</span>}
           </td>
         );
 
@@ -579,12 +579,12 @@ export function WorkItemTableRow({
                 rel="noopener noreferrer"
                 onClick={(e) => e.stopPropagation()}
                 title={`Jira ${item.jiraIssueKey}${item.jiraStatus ? ` · ${item.jiraStatus}` : ''} (새 창)`}
-                className="inline-flex items-center font-mono text-[10px] font-semibold px-1 py-0.5 rounded bg-brand-jira/10 text-brand-jira dark:text-blue-300 border border-brand-jira/20 hover:bg-brand-jira/20"
+                className="inline-flex items-center font-mono text-[11px] font-semibold px-1 py-0.5 rounded bg-brand-jira/10 text-brand-jira dark:text-blue-300 border border-brand-jira/20 hover:bg-brand-jira/20"
               >
                 {item.jiraIssueKey}
               </a>
             ) : (
-              <span className="text-muted-foreground/50 text-sm">-</span>
+              <span className="text-muted-foreground text-sm">-</span>
             )}
           </td>
         );
@@ -606,7 +606,7 @@ export function WorkItemTableRow({
             {(() => {
               const hasEpic = !!(item.jiraEpicKey || item.jiraEpic);
               const hasParent = !!item.jiraParentKey && item.jiraParentKey !== item.jiraEpicKey;
-              if (!hasEpic && !hasParent) return <span className="text-muted-foreground/50">-</span>;
+              if (!hasEpic && !hasParent) return <span className="text-muted-foreground">-</span>;
               const jiraKeyUrl = (key: string) =>
                 item.jiraUrl ? item.jiraUrl.replace(/\/browse\/.*$/, `/browse/${key}`) : undefined;
               return (
@@ -619,7 +619,7 @@ export function WorkItemTableRow({
                     />
                   )}
                   {hasEpic && hasParent && (
-                    <ChevronRight className="w-3 h-3 flex-shrink-0 text-muted-foreground/50" />
+                    <ChevronRight className="w-3 h-3 flex-shrink-0 text-muted-foreground" />
                   )}
                   {hasParent && (
                     <JiraIssueChip
@@ -643,7 +643,7 @@ export function WorkItemTableRow({
                 {item.jiraIssueType}
               </span>
             ) : (
-              <span className="text-muted-foreground/50">-</span>
+              <span className="text-muted-foreground">-</span>
             )}
           </td>
         );

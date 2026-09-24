@@ -26,7 +26,7 @@ export function RunStateBadge({ state }: { state: CheckMatrixRunState }) {
   const Icon = meta.icon;
   return (
     <span
-      className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded border text-[10px] font-medium ${meta.cls}`}
+      className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded border text-[11px] font-medium ${meta.cls}`}
     >
       <Icon className={`w-3 h-3 ${state === 'running' ? 'animate-spin' : ''}`} />
       {meta.label}

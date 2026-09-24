@@ -144,7 +144,7 @@ function TreeNode({ guide, childGuides, allGuides, depth, selectedId, onSelect, 
               <button
                 type="button"
                 onClick={(e) => { e.stopPropagation(); setRenaming(true); }}
-                className="p-0.5 rounded text-muted-foreground/70 hover:text-primary hover:bg-secondary/80"
+                className="p-0.5 rounded text-muted-foreground hover:text-primary hover:bg-secondary/80"
                 title="이름 변경"
                 aria-label="이름 변경"
               >
@@ -153,7 +153,7 @@ function TreeNode({ guide, childGuides, allGuides, depth, selectedId, onSelect, 
               <button
                 type="button"
                 onClick={(e) => { e.stopPropagation(); setAddingChild(true); setExpanded(true); }}
-                className="p-0.5 rounded text-muted-foreground/70 hover:text-primary hover:bg-secondary/80"
+                className="p-0.5 rounded text-muted-foreground hover:text-primary hover:bg-secondary/80"
                 title="하위 페이지 추가"
                 aria-label="하위 페이지 추가"
               >
@@ -188,7 +188,7 @@ function TreeNode({ guide, childGuides, allGuides, depth, selectedId, onSelect, 
               style={{ paddingLeft: `${8 + (depth + 1) * 16}px` }}
             >
               <span className="w-5 flex-shrink-0" />
-              <FileText className="w-3.5 h-3.5 flex-shrink-0 text-muted-foreground/50" />
+              <FileText className="w-3.5 h-3.5 flex-shrink-0 text-muted-foreground" />
               <InlineTitleInput
                 initial=""
                 onSave={(v) => { onCreateChild(guide.id, v); setAddingChild(false); }}

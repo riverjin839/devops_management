@@ -760,7 +760,7 @@ function AddBlockMenu({
         </div>
         {candidates.length > 0 && (
           <>
-            <div className="px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-muted-foreground">기존 업무에 시간 추가</div>
+            <div className="px-1.5 py-0.5 text-[11px] uppercase tracking-wide text-muted-foreground">기존 업무에 시간 추가</div>
             <div className="max-h-40 overflow-y-auto">
               {candidates.map((it) => (
                 <button key={it.id} onClick={() => onPickItem(it)}

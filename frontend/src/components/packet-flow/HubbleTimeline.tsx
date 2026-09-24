@@ -166,7 +166,7 @@ export function HubbleTimeline({ clusterId, initialFromPod, initialToPod, initia
           <div className="flex-1">
             <p className="font-medium">Hubble Relay 조회 실패</p>
             <p className="text-sm text-muted-foreground mt-0.5">{resp.error}</p>
-            <p className="text-xs text-muted-foreground/70 mt-1">
+            <p className="text-xs text-muted-foreground mt-1">
               • 클러스터에 <code className="font-mono">hubble-relay</code> 가 배포돼 있어야 합니다.
               <br />
               • 백엔드 컨테이너에 kubectl + hubble CLI 가 설치돼 있어야 합니다.
@@ -215,7 +215,7 @@ export function HubbleTimeline({ clusterId, initialFromPod, initialToPod, initia
 
       {!resp && (
         <div className="bg-card border border-border rounded-xl p-10 text-center text-sm text-muted-foreground">
-          <Info className="w-8 h-8 mx-auto mb-2 text-muted-foreground/50" />
+          <Info className="w-8 h-8 mx-auto mb-2 text-muted-foreground" />
           필터를 입력하고 "플로우 조회" 를 눌러 Hubble Relay 에서 최근 패킷 플로우를 가져오세요.
         </div>
       )}

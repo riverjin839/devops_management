@@ -67,7 +67,7 @@ export function DiffRow({ d }: { d: NodeSpecCsvDiff }) {
               <tbody>
                 {changeKeys.map((k) => (
                   <tr key={k} className="border-t border-border/40">
-                    <td className="pr-2 text-muted-foreground/80">{k}</td>
+                    <td className="pr-2 text-muted-foreground">{k}</td>
                     <td className="pr-2 text-status-critical/80 line-through max-w-[180px] truncate">
                       {String(d.changes[k].old ?? '—')}
                     </td>

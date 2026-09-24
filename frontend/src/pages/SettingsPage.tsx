@@ -131,7 +131,7 @@ function EditClusterModal({
           <div>
             <label htmlFor={f('kubeconfig')} className="block text-sm font-medium text-muted-foreground mb-1.5">
               Kubeconfig 파일 경로
-              <span className="ml-1 text-sm text-muted-foreground/60">(내용 변경은 Kubeconfig 버튼 이용)</span>
+              <span className="ml-1 text-sm text-muted-foreground">(내용 변경은 Kubeconfig 버튼 이용)</span>
             </label>
             <input
               id={f('kubeconfig')}

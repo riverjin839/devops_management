@@ -140,7 +140,7 @@ function SourceBadge({ src }: { src?: string | null }) {
   return (
     <span
       title={`출처: ${src}`}
-      className="ml-1.5 text-[10px] font-mono px-1.5 py-0.5 rounded bg-muted text-muted-foreground border border-border"
+      className="ml-1.5 text-[11px] font-mono px-1.5 py-0.5 rounded bg-muted text-muted-foreground border border-border"
     >
       {src}
     </span>
@@ -241,7 +241,7 @@ function EtcdSystemdDetails({ data }: { data: Record<string, unknown> }) {
               <span className="text-primary">{r.label}:</span>
               {r.value
                 ? <span className="text-foreground/90">{r.value}</span>
-                : <span className="text-muted-foreground/60">(없음)</span>}
+                : <span className="text-muted-foreground">(없음)</span>}
               <SourceBadge src={r.src} />
             </div>
           ))}
@@ -463,7 +463,7 @@ function GenericComponentDetails({
           </p>
           <div className="max-h-60 overflow-y-auto space-y-0.5 rounded-md bg-muted/30 p-2">
             {flagsEntries.length === 0 ? (
-              <p className="text-xs text-muted-foreground/70">(필터 매칭 없음)</p>
+              <p className="text-xs text-muted-foreground">(필터 매칭 없음)</p>
             ) : flagsEntries.map(([k, v]) => (
               <div key={k} className="font-mono text-xs break-all">
                 <span className="text-primary">--{k}</span>
@@ -481,7 +481,7 @@ function GenericComponentDetails({
           </p>
           <div className="max-h-60 overflow-y-auto space-y-0.5 rounded-md bg-muted/30 p-2">
             {cmEntries.length === 0 ? (
-              <p className="text-xs text-muted-foreground/70">(필터 매칭 없음)</p>
+              <p className="text-xs text-muted-foreground">(필터 매칭 없음)</p>
             ) : cmEntries.map(([k, v]) => (
               <div key={k} className="font-mono text-xs break-all">
                 <span className="text-primary">{k}</span>:{' '}
@@ -494,7 +494,7 @@ function GenericComponentDetails({
       {rawData && (
         <div className="space-y-0.5 rounded-md bg-muted/30 p-2">
           {rawEntries.length === 0 ? (
-            <p className="text-xs text-muted-foreground/70">(필터 매칭 없음)</p>
+            <p className="text-xs text-muted-foreground">(필터 매칭 없음)</p>
           ) : rawEntries.map(([k, v]) => (
             <div key={k} className="font-mono text-xs break-all">
               <span className="text-primary">{k}</span>
@@ -529,7 +529,7 @@ function MinioTenantDetails({ data }: { data: Record<string, unknown> }) {
 
   const stat = (label: string, value: React.ReactNode, color?: string) => (
     <div className="bg-muted/40 rounded-md px-2 py-1.5">
-      <p className="text-[10px] uppercase text-muted-foreground tracking-wider">{label}</p>
+      <p className="text-[11px] uppercase text-muted-foreground tracking-wider">{label}</p>
       <p className={`text-sm font-semibold font-mono ${color ?? 'text-foreground'}`}>{value ?? '-'}</p>
     </div>
   );
@@ -622,7 +622,7 @@ function DirectPVDetails({ data }: { data: Record<string, unknown> }) {
 
   const stat = (label: string, value: React.ReactNode, color?: string) => (
     <div className="bg-muted/40 rounded-md px-2 py-1.5">
-      <p className="text-[10px] uppercase text-muted-foreground tracking-wider">{label}</p>
+      <p className="text-[11px] uppercase text-muted-foreground tracking-wider">{label}</p>
       <p className={`text-sm font-semibold font-mono ${color ?? 'text-foreground'}`}>{value ?? '-'}</p>
     </div>
   );

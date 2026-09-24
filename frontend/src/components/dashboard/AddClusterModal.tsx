@@ -349,7 +349,7 @@ export function AddClusterModal({ isOpen, onClose }: AddClusterModalProps) {
                       <p className="mt-1.5 text-xs text-muted-foreground">
                         클러스터명:{' '}
                         <span className="font-mono text-foreground">{composedName || '업무명-운영타입-속성'}</span>
-                        <span className="ml-2 text-muted-foreground/60">· 지역은 아래에 별도로 입력</span>
+                        <span className="ml-2 text-muted-foreground">· 지역은 아래에 별도로 입력</span>
                       </p>
                     </>
                   )}

@@ -142,7 +142,7 @@ function TaskCard({ item, onClick, onEdit, onDelete, onMove }: TaskCardProps) {
 
       {/* 완료 조건 (in_progress / review_test 에서만 표시) */}
       {item.doneCondition && (item.kanbanStatus === 'in_progress' || item.kanbanStatus === 'review_test') && (
-        <p className="text-xs text-muted-foreground/70 line-clamp-1 mb-1.5 italic">
+        <p className="text-xs text-muted-foreground line-clamp-1 mb-1.5 italic">
           ✓ {item.doneCondition}
         </p>
       )}
@@ -306,7 +306,7 @@ export function WorkItemKanban({ items, onItemClick, onEdit, onDelete }: WorkIte
               <div className="flex-1 bg-muted/10 border border-t-0 border-border rounded-b-lg p-2 flex flex-col gap-2 min-h-[200px]">
                 {colTasks.length === 0 ? (
                   <div className="flex-1 flex items-center justify-center">
-                    <p className="text-sm text-muted-foreground/50 text-center py-4">{col.emptyText}</p>
+                    <p className="text-sm text-muted-foreground text-center py-4">{col.emptyText}</p>
                   </div>
                 ) : (
                   colTasks.map((item) => (

@@ -926,7 +926,7 @@ function EventList({ events }: { events: MonitorEvent[] }) {
             e.kind === 'error' ? 'text-status-critical' : e.kind === 'meta' ? 'text-muted-foreground' : ''
           }`}
         >
-          <span className="text-muted-foreground/70 mr-2">{new Date(e.ts).toLocaleTimeString()}</span>
+          <span className="text-muted-foreground mr-2">{new Date(e.ts).toLocaleTimeString()}</span>
           <span className="break-all">{prettyEvent(e)}</span>
         </div>
       ))}
@@ -1289,7 +1289,7 @@ function FlowList({ events }: { events: HubbleFlowEvent[] }) {
         return (
           <div key={i} className="px-3 py-1.5 hover:bg-secondary/30 text-xs font-mono">
             <div className="flex items-center gap-2 flex-wrap">
-              <span className="text-muted-foreground/70 tabular-nums">{new Date(e.ts).toLocaleTimeString()}</span>
+              <span className="text-muted-foreground tabular-nums">{new Date(e.ts).toLocaleTimeString()}</span>
               <span className={`font-bold ${verdictClr}`}>{verdict || '?'}</span>
               {dropReason ? (
                 <span className="text-status-critical">[{String(dropReason)}]</span>

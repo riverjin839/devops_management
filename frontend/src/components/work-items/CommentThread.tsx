@@ -48,7 +48,7 @@ export function CommentThread({ workItemId }: { workItemId: string }) {
           <Loader2 className="w-3.5 h-3.5 animate-spin" /> 불러오는 중…
         </div>
       ) : comments.length === 0 ? (
-        <p className="text-sm text-muted-foreground/70 py-1">아직 댓글이 없습니다.</p>
+        <p className="text-sm text-muted-foreground py-1">아직 댓글이 없습니다.</p>
       ) : (
         <ul className="space-y-2 mb-3">
           {comments.map((c) => (
