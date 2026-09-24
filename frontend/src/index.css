@@ -351,6 +351,149 @@
     --surface-container-highest: 0 0% 91%;
   }
 
+  /* ── Umber — 입체미래주의풍 유화에서 추출한 팔레트 (움버 바탕 · 오커 강조 · 더스티 핑크 차트) ──
+     그림 속 면적 비율을 UI 역할 비율로 옮겼다: 넓은 움버·토프 = 바탕·면, 좁은 오커·핑크 = 강조.
+     - 오커 = primary. 기존 앰버 경고와 겹치므로 경고는 주황(hue 22~24)으로 옮기고 배지 형태로만 쓴다.
+     - 핑크는 차트·장식 전용(장애 빨강과 혼동 방지) — 버튼·배지에 쓰지 않는다.
+     - 자체 색 고정 바탕(컴포트·고대비와 같은 standalone) — 강조색(data-accent) 은 적용되지 않는다.
+     버튼·링크·상태 글자·보조 글자 모두 4.5:1 이상으로 계산했다. */
+  html.umber {
+    --background: 8 14% 11%;
+    --foreground: 40 28% 90%;
+    --card: 12 15% 15%;
+    --card-foreground: 40 28% 90%;
+    --popover: 12 15% 17%;
+    --popover-foreground: 40 28% 90%;
+    --primary: 45 96% 52%;
+    --primary-foreground: 8 14% 11%;
+    --primary-text: 45 96% 58%;
+    --secondary: 16 14% 21%;
+    --secondary-foreground: 40 28% 90%;
+    --muted: 16 12% 19%;
+    --muted-foreground: 28 16% 66%;
+    --accent: 14 32% 24%;
+    --accent-foreground: 40 28% 90%;
+    --destructive: 0 75% 62%;
+    --destructive-foreground: 8 14% 11%;
+    --border: 20 12% 27%;
+    --input: 24 12% 46%;
+    --ring: 45 96% 52%;
+    --radius: 0.5rem;
+    --card-shadow: 0 0 #0000;
+
+    --sidebar:                  8 16% 8%;
+    --sidebar-foreground:       40 28% 90%;
+    --sidebar-muted-foreground: 28 16% 64%;
+    --sidebar-accent:           14 35% 22%;
+    --sidebar-accent-foreground: 40 30% 94%;
+    --sidebar-border:           12 14% 16%;
+    --sidebar-primary:          45 96% 52%;
+
+    --status-healthy:     145 45% 58%;
+    --status-healthy-bg:  145 30% 16%;
+    --status-warning:     24 88% 62%;
+    --status-warning-bg:  24 50% 17%;
+    --status-critical:    0 75% 71%;
+    --status-critical-bg: 0 45% 18%;
+    --status-unknown:     28 10% 62%;
+    --status-unknown-bg:  20 10% 18%;
+    --status-pending:     28 10% 62%;
+    --status-pending-bg:  20 10% 18%;
+    --status-info:        200 55% 68%;
+    --status-info-bg:     200 35% 17%;
+    --status-neutral:     28 10% 62%;
+    --status-neutral-bg:  20 10% 18%;
+    --status-healthy-text:  145 45% 58%;
+    --status-warning-text:  24 88% 62%;
+    --status-critical-text: 0 75% 71%;
+    --status-info-text:     200 55% 68%;
+    --status-unknown-text:  28 10% 62%;
+
+    --chart-1: 45 96% 52%;    /* 오커 */
+    --chart-2: 1 63% 75%;     /* 더스티 핑크 */
+    --chart-3: 28 20% 62%;    /* 토프 */
+    --chart-4: 40 40% 80%;    /* 크림 */
+    --chart-5: 12 45% 52%;    /* 적갈 */
+    --chart-6: 175 30% 55%;   /* 탁한 틸 */
+    --chart-7: 24 80% 60%;    /* 주황 */
+    --chart-8: 20 8% 50%;     /* 회갈 */
+
+    --surface-container-lowest:  8 14% 11%;
+    --surface-container-low:     10 14% 13%;
+    --surface-container:         12 15% 15%;
+    --surface-container-high:    14 14% 18%;
+    --surface-container-highest: 16 14% 21%;
+  }
+
+  /* ── Umber light — 같은 그림 팔레트의 라이트 변형: 크림 바탕 + 움버 사이드바 + 오커 강조. */
+  html.umber-light {
+    --background: 40 28% 95%;
+    --foreground: 10 22% 13%;
+    --card: 40 33% 99%;
+    --card-foreground: 10 22% 13%;
+    --popover: 40 33% 99%;
+    --popover-foreground: 10 22% 13%;
+    --primary: 45 96% 52%;
+    --primary-foreground: 10 22% 13%;
+    --primary-text: 36 90% 28%;
+    --secondary: 35 24% 90%;
+    --secondary-foreground: 10 22% 13%;
+    --muted: 35 20% 92%;
+    --muted-foreground: 22 14% 38%;
+    --accent: 45 90% 90%;
+    --accent-foreground: 10 22% 13%;
+    --destructive: 0 70% 42%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 28 16% 82%;
+    --input: 26 14% 52%;
+    --ring: 36 90% 35%;
+    --radius: 0.5rem;
+    --card-shadow: 0 0 #0000;
+
+    --sidebar:                  8 16% 12%;
+    --sidebar-foreground:       40 28% 90%;
+    --sidebar-muted-foreground: 28 16% 64%;
+    --sidebar-accent:           14 35% 22%;
+    --sidebar-accent-foreground: 40 30% 94%;
+    --sidebar-border:           12 14% 18%;
+    --sidebar-primary:          45 96% 52%;
+
+    --status-healthy:     145 50% 40%;
+    --status-healthy-bg:  145 45% 91%;
+    --status-warning:     24 88% 50%;
+    --status-warning-bg:  24 85% 92%;
+    --status-critical:    0 72% 50%;
+    --status-critical-bg: 0 70% 94%;
+    --status-unknown:     25 10% 50%;
+    --status-unknown-bg:  30 15% 91%;
+    --status-pending:     25 10% 50%;
+    --status-pending-bg:  30 15% 91%;
+    --status-info:        200 70% 45%;
+    --status-info-bg:     200 60% 92%;
+    --status-neutral:     25 10% 50%;
+    --status-neutral-bg:  30 15% 91%;
+    --status-healthy-text:  145 55% 27%;
+    --status-warning-text:  22 85% 34%;
+    --status-critical-text: 0 70% 42%;
+    --status-info-text:     200 70% 30%;
+    --status-unknown-text:  22 12% 36%;
+
+    --chart-1: 40 90% 45%;    /* 오커(짙게) */
+    --chart-2: 1 55% 60%;     /* 더스티 핑크 */
+    --chart-3: 12 45% 35%;    /* 적갈 */
+    --chart-4: 26 15% 50%;    /* 토프 */
+    --chart-5: 175 40% 35%;   /* 탁한 틸 */
+    --chart-6: 24 80% 50%;    /* 주황 */
+    --chart-7: 10 25% 25%;    /* 움버 */
+    --chart-8: 20 8% 55%;     /* 회갈 */
+
+    --surface-container-lowest:  40 33% 99%;
+    --surface-container-low:     40 28% 97%;
+    --surface-container:         38 25% 95.5%;
+    --surface-container-high:    36 24% 94%;
+    --surface-container-highest: 35 22% 92%;
+  }
+
   /* ── 강조색(accent) — 라이트·다크 바탕 위에 <html data-accent="…"> 로 얹는다 (P2) ──
      버튼·링크·선택 탭·활성 메뉴·포커스 링만 바뀌고, 배경·상태색은 바탕 테마가 정한다.
      blue 는 기본값이라 블록이 없다. 값은 버튼 글자·링크 모두 4.5:1 이상으로 계산했다.
@@ -633,13 +776,15 @@ button[aria-disabled="true"] {
 }
 
 /* ── Date input calendar icon (다크 바탕에서만 반전 — 예전 :not(.light) 는 컴포트 등 라이트 계열까지 뒤집었다) ─────────────────────────────── */
-html.dark input[type="date"]::-webkit-calendar-picker-indicator {
+html.dark input[type="date"]::-webkit-calendar-picker-indicator,
+html.umber input[type="date"]::-webkit-calendar-picker-indicator {
   filter: invert(0.8);
   opacity: 0.7;
   cursor: pointer;
 }
 
-html.dark input[type="date"]::-webkit-calendar-picker-indicator:hover {
+html.dark input[type="date"]::-webkit-calendar-picker-indicator:hover,
+html.umber input[type="date"]::-webkit-calendar-picker-indicator:hover {
   opacity: 1;
 }
 

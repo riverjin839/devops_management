@@ -259,8 +259,8 @@ offline/error dict 를 반환**하고 HTTP 500 을 올리지 않는다 (`agent_s
 
 ## UI Design System
 
-바탕 테마 4종(`light` 슬레이트 **기본** / `dark` / `comfort` 화이트+딥그린 / `high-contrast` 고대비
-+ `system`)과 강조색 6종(`blue`·`teal`·`green`·`amber`·`coral`·`violet`, `<html data-accent>` — 라이트·다크에만 적용) + 토큰 기반 시스템이다.
+바탕 테마 6종(`light` 슬레이트 **기본** / `dark` / `comfort` 화이트+딥그린 / `high-contrast` 고대비 /
+`umber`·`umber-light` 유화 팔레트(움버+오커) + `system`)과 강조색 6종(`blue`·`teal`·`green`·`amber`·`coral`·`violet`, `<html data-accent>` — 라이트·다크에만 적용) + 토큰 기반 시스템이다.
 
 - **규격·구현 표준의 원천 = `DESIGN_SYSTEM.md` §12 구현 표준** — 테마 매트릭스, radius 토큰,
   MacCard props, ClusterSidebar 사용 패턴 3종 + 레이아웃 규칙, 콘솔 패턴 5개 항목이 전부 거기 있다.

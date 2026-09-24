@@ -11,6 +11,8 @@ export const THEME_SWATCH: Partial<Record<Theme, { bg: string; primary: string; 
   dark:            { bg: '220 18% 7%',  primary: '212 100% 63%', secondary: '220 14% 16%' },
   comfort:         { bg: '60 15% 98%',  primary: '150 45% 24%',  secondary: '140 22% 95%' },
   'high-contrast': { bg: '0 0% 100%',   primary: '220 100% 30%', secondary: '0 0% 94%' },
+  umber:           { bg: '8 14% 11%',   primary: '45 96% 52%',   secondary: '16 14% 21%' },
+  'umber-light':   { bg: '40 28% 95%',  primary: '45 96% 52%',   secondary: '35 24% 90%' },
 };
 
 /** 강조색 대표 색(라이트 바탕 기준 primary) — index.css 의 `html.light[data-accent]` 블록과 같은 값. */

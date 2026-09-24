@@ -434,6 +434,8 @@ P2(2026-09)에서 테마 11종을 **바탕 4종 + 시스템**과 **강조색 6�
 | `html.dark` | Databricks-leaning 다크 | 위 §2 "Ops Slate" 계열. 강조색 적용 대상 |
 | `html.comfort` | 화이트 계열 배경(`60 15% 98%`) + 딥그린(#22593D) primary + 민트 서페이스, `--radius` 16px, 소프트 카드 섀도(hover lift) | 자체 색 고정(강조색 무시) |
 | `html.high-contrast` | 흰 바탕·검정 글자·회색 45% 경계, 본문 21:1 · 보조 10.4:1 · 경계 4.8:1, 포커스 링 3px, `text-primary` 앵커 밑줄 | 관제실 대형 화면·빔프로젝터용. 자체 색 고정 |
+| `html.umber` | 입체미래주의풍 유화에서 추출 — 움버 바탕(`8 14% 11%`) · 오커 primary(`45 96% 52%`, 움버 글자) · 더스티 핑크 차트. 경고는 오커와 겹치지 않게 주황(hue 24) | 자체 색 고정. 핑크는 차트·장식 전용 |
+| `html.umber-light` | 같은 팔레트의 라이트 — 크림 바탕 · 움버 사이드바 · 오커 primary(글자는 짙은 오커 `36 90% 28%`) | 자체 색 고정 |
 | (`system`) | OS 설정 따라 light/dark 자동 | 클래스는 light/dark 중 하나로 해석됨 → 강조색 적용 |
 
 **강조색** — `html.light[data-accent="…"]` / `html.dark[data-accent="…"]` 블록이 `--primary`,

@@ -6,19 +6,21 @@ import { create } from 'zustand';
  * - `dark`          : Databricks-leaning 다크. 강조색 적용 대상.
  * - `comfort`       : 화이트 계열 배경 + 딥그린 + 큰 radius(16px) + 소프트 카드 섀도. 자체 색 고정.
  * - `high-contrast` : 관제실 대형 화면·빔프로젝터용 고대비. 자체 색 고정.
+ * - `umber`         : 입체미래주의풍 유화에서 추출한 팔레트 — 움버 바탕 + 오커 강조 + 핑크 차트(다크). 자체 색 고정.
+ * - `umber-light`   : 같은 팔레트의 라이트 변형 — 크림 바탕 + 움버 사이드바. 자체 색 고정.
  * - `system`        : OS 환경설정 따라가는 라이트/다크.
  *
  * 색 취향은 테마가 아니라 **강조색(Accent)** 으로 고른다 — 버튼·링크·선택 탭·활성 메뉴·포커스 링만
  * 바뀌고 배경·상태색은 바탕 테마가 정한다. 라이트/다크(시스템 포함)에만 적용된다.
  */
-export type Theme = 'light' | 'dark' | 'comfort' | 'high-contrast' | 'system';
+export type Theme = 'light' | 'dark' | 'comfort' | 'high-contrast' | 'umber' | 'umber-light' | 'system';
 export type Accent = 'blue' | 'teal' | 'green' | 'amber' | 'coral' | 'violet';
 
-export const THEMES: readonly Theme[] = ['light', 'dark', 'comfort', 'high-contrast', 'system'];
+export const THEMES: readonly Theme[] = ['light', 'dark', 'comfort', 'high-contrast', 'umber', 'umber-light', 'system'];
 export const ACCENTS: readonly Accent[] = ['blue', 'teal', 'green', 'amber', 'coral', 'violet'];
 
 /** 자체 완결 토큰 세트를 가진 바탕 — light/dark 로 해석하지 않고 그대로 `<html>` 클래스로 적용. */
-const STANDALONE_THEMES = ['comfort', 'high-contrast'] as const;
+const STANDALONE_THEMES = ['comfort', 'high-contrast', 'umber', 'umber-light'] as const;
 type StandaloneTheme = (typeof STANDALONE_THEMES)[number];
 
 function isStandaloneTheme(theme: Theme): theme is StandaloneTheme {
@@ -128,7 +130,7 @@ export const useThemeStore = create<ThemeState>((set, get) => ({
   },
 }));
 
-/** 강조색이 적용되는 바탕인지 — comfort/high-contrast 는 자체 색 고정이라 강조색을 무시한다. */
+/** 강조색이 적용되는 바탕인지 — comfort/high-contrast/umber(-light) 는 자체 색 고정이라 강조색을 무시한다. */
 export function accentApplies(theme: Theme): boolean {
   return !isStandaloneTheme(theme);
 }
