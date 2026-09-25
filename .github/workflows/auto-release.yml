@@ -33,8 +33,16 @@ jobs:
     outputs:
       bump: ${{ steps.decide.outputs.bump }}
     permissions:
+      contents: read        # 판정 스크립트 checkout (job 에 permissions 를 명시하면 나머지는 none)
       pull-requests: read
     steps:
+      # 판정 로직은 scripts/release/decide_bump.py 에 있다(단위 테스트: test_decide_bump.py,
+      # CI docs-sync job 에서 실행). 여기서는 그 스크립트만 꺼내 쓴다.
+      - name: Checkout release scripts
+        uses: actions/checkout@v4
+        with:
+          sparse-checkout: scripts/release
+
       - name: Decide bump type from the merged PR title
         id: decide
         env:
@@ -57,16 +65,10 @@ jobs:
           if [[ -z "${TITLE}" ]]; then
             echo "PR 제목을 가져오지 못함 — 스킵"
             echo "bump=none" >> "$GITHUB_OUTPUT"
-          elif [[ "${TITLE}" == chore\(release\):* ]]; then
-            echo "release 자동 PR 자신의 머지 — 무한루프 방지, 스킵"
-            echo "bump=none" >> "$GITHUB_OUTPUT"
-          elif [[ "${TITLE}" == feat:* ]]; then
-            echo "bump=minor" >> "$GITHUB_OUTPUT"
-          elif [[ "${TITLE}" == fix:* || "${TITLE}" == docs:* || "${TITLE}" == chore:* || "${TITLE}" == refactor:* ]]; then
-            echo "bump=patch" >> "$GITHUB_OUTPUT"
           else
-            echo "인식할 수 없는 conventional commit prefix — 스킵 (${TITLE})"
-            echo "bump=none" >> "$GITHUB_OUTPUT"
+            # `type(scope)!: …` 형식 인식 — 예전 bash 패턴은 scope 가 붙은 `feat(ui): …` 를
+            # 인식하지 못해 릴리스를 조용히 건너뛰었다. 사유는 stderr, 결과 한 줄은 stdout.
+            python3 scripts/release/decide_bump.py "${TITLE}" | tee -a "$GITHUB_OUTPUT"
           fi
 
   release:
