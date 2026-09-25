@@ -8,7 +8,7 @@ description: 새 버전을 릴리스할 때(마이너 기능 추가/패치) 사�
 전략 상세: `docs/branch-tag-strategy.md`. `main` 단일 트렁크 + `vX.Y.Z` 태그.
 
 > **기본적으로는 이 스킬을 수동 실행할 필요가 없다.** `feat:`/`fix:` 등 conventional commit
-> prefix 를 가진 PR 이 `main` 에 머지되면 `.github/workflows/auto-release.yml` 이 버전업 →
+> prefix(scope 포함 `feat(ui):` 도 인식 — `scripts/release/decide_bump.py`)를 가진 PR 이 `main` 에 머지되면 `.github/workflows/auto-release.yml` 이 버전업 →
 > CHANGELOG 확정 → 태그 push 까지 자동으로 수행한다. 이 스킬은 hotfix 나 자동화가 실패했을
 > 때(예: `RELEASE_PAT` 미설정으로 태그 push 가 `release.yml` 을 못 띄운 경우)의 수동 fallback
 > 절차다.

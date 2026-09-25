@@ -20,6 +20,9 @@ docker-compose up -d
 
 ## 커밋 컨벤션 (Conventional Commits)
 `feat:` `fix:` `docs:` `refactor:` `chore:` — SemVer/CHANGELOG 의 근거가 된다.
+scope 를 붙여도 된다(`feat(ui):`, `fix(k8s-allocation):`) — 자동 릴리스는 type 으로 판정한다
+(`feat` → MINOR, 나머지 넷 → PATCH, 그 외 type 은 릴리스 안 함). 판정 규칙:
+[`scripts/release/decide_bump.py`](scripts/release/decide_bump.py).
 
 ## 코드 규칙 (요약)
 - **Frontend**: TypeScript strict, ESLint **max-warnings 0**, Tailwind only(인라인 스타일 금지),

@@ -18,6 +18,10 @@ jobs:
       - name: Docs sync check
         run: python3 scripts/docs/check_docs_sync.py
 
+      # auto-release 의 bump 판정(scope 붙은 제목 포함) — 의존성 없는 unittest.
+      - name: Release script tests
+        run: python3 -m unittest discover -s scripts/release -p 'test_*.py' -v
+
       # feat/fix 성격의 코드 변경 PR 인데 CHANGELOG/문서를 하나도 안 건드리면 실패.
       # 의도된 예외는 PR 제목에 [skip-docs] 를 붙인다 (예: 리팩토링-only, 실험 브랜치).
       - name: Changelog / docs updated check (PR only)

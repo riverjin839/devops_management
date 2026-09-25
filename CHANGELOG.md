@@ -33,6 +33,14 @@
   입력 테두리 3.9:1. Frontend: `index.css`(`html.whanki`), `themeStore.ts`, 사용자 메뉴·테마 갤러리.
 
 ### Fixed
+- **자동 릴리스 — scope 가 붙은 PR 제목(`feat(ui):` 등)이 릴리스를 조용히 건너뛰던 문제**:
+  `auto-release.yml` 이 PR 제목을 `feat:*`/`fix:*` 문자 그대로 비교해 `feat(ui): …`,
+  `fix(k8s-allocation): …` 같은 제목은 "인식할 수 없는 prefix"로 스킵했다. 그 PR 의 CHANGELOG
+  항목은 다음에 우연히 머지된 scope 없는 PR 의 릴리스에 섞여 엉뚱한 버전에 기록되거나 미릴리스로
+  남았다(main 에 머지된 PR 163건 중 36건이 해당 — 이 섹션의 테마 항목들도 그래서 쌓여 있었다).
+  판정을 `scripts/release/decide_bump.py` 로 옮겨 `type(scope)!:` 형식을 인식하게 했고, 기존에
+  릴리스되던 제목의 판정은 그대로다. 단위 테스트 `scripts/release/test_decide_bump.py` 를 CI
+  `docs-sync` job 에서 실행한다.
 - **테마 대비(접근성) P0 — 상태 글자·primary 버튼/링크가 흐리게 보이던 문제**: 라이트 계열 테마에서
   `정상`/`경고` 상태 글자가 카드 위 2.1~2.3:1, 기본 테마(코랄) primary 버튼 글자가 3.3:1 로 WCAG AA
   (4.5:1) 에 못 미쳤다. 상태색을 면(fill)과 글자(text)로 분리하고 테마 10종 전부에서 버튼·링크·상태
