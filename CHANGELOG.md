@@ -10,6 +10,12 @@
 
 1.37.2 이후 main 에 병합된 변경 (다음 릴리스 후보).
 
+### Fixed
+- **클러스터 자동 업데이트가 hostname·maxPod 를 건너뛰던 버그**: 노드 IP 가 /16 보다 넓게 흩어져 있거나
+  IPv4 InternalIP 가 없어 Node CIDR 추정에 실패하면, 정의되지 않은 변수(`node_ips_only`) 참조로 NameError 가 나
+  "nodes 조회 실패" 라는 엉뚱한 경고와 함께 뒤이은 hostname·maxPod 갱신이 조용히 빠졌다. 이제 CIDR 추정 실패만
+  경고하고 나머지 필드는 정상 반영한다. Backend: `routers/clusters.py` `auto_update_cluster`.
+
 ## [1.37.2] - 2026-09-26
 
 ### Fixed
