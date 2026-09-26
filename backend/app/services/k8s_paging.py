@@ -44,6 +44,12 @@ def is_timeout_error(e: Exception) -> bool:
             return True
     except Exception:  # noqa: BLE001
         pass
+    try:
+        from app.services.k8s_concurrency import K8sConcurrencyLimited
+        if isinstance(e, K8sConcurrencyLimited):   # PEP 쪽 동시 호출 상한 대기 초과도 일시적
+            return True
+    except Exception:  # noqa: BLE001
+        pass
     status = getattr(e, "status", None)
     if status in (408, 429, 500, 502, 503, 504):
         return True

@@ -105,6 +105,9 @@
 | `K8S_CLIENT_CACHE_TTL` | `300` (5m) | 동일 — 클러스터별 공유 `ApiClient` 캐시 수명(초). exec/OIDC 토큰 만료보다 짧게 둔다. kubeconfig 내용이 바뀌면 TTL 과 무관하게 즉시 재생성 |
 | `K8S_CLIENT_CACHE_MAX` | `64` | 동일 — 캐시할 클러스터(kubeconfig) 수 상한. 초과 시 가장 오래 안 쓴 항목 퇴출 |
 | `K8S_CLIENT_POOL_MAXSIZE` | `8` | 동일 — 클러스터 1개당 동시 keep-alive 연결 상한(urllib3 풀 크기) |
+| `K8S_CLUSTER_MAX_INFLIGHT` | `8` | `services/k8s_concurrency.py` — 대상 apiserver(host) 1개로 PEP 전체(API replica + Celery 워커)가 동시에 보내는 요청 수 상한(Redis 세마포어, Redis 없으면 프로세스 단위). `0` 이면 비활성. 가이드: `docs/K8S_APISERVER_PROTECTION.md` |
+| `K8S_CLUSTER_SLOT_WAIT` | `20` | 동일 — 슬롯 대기 최대 시간(초). 넘으면 요청 포기(목록 API 는 503 + 사유) |
+| `K8S_DISPATCH_JITTER_SECONDS` | `20` | `celery_app.py` — 점검 매트릭스·K8S 효율화 수집 디스패처가 같은 분에 due 한 작업을 0~N초 랜덤 지연해 같은 클러스터로 동시에 몰리지 않게 함. `0` 이면 즉시 |
 | `K8S_LIST_CACHE_FRESH` | `5` | `routers/k8s_resources.py` — `/k8s-manage` 목록(`resources/{kind}`·`nodes`·`pods`) 서버 캐시를 그대로 응답하는 시간(초) |
 | `K8S_LIST_CACHE_STALE` | `30` | 동일 — 이 시간(초)까지는 캐시를 즉시 응답하고 백그라운드에서 1회 갱신(SWR). 넘으면 동기 조회. 쓰기 액션 시 클러스터 단위로 즉시 무효화(Redis 세대 값 — replica 공유) |
 | `K8S_LIST_CACHE_MAX` | `256` | 동일 — 프로세스당 캐시 항목 수 상한(클러스터 × 종류 × 네임스페이스) |

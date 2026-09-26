@@ -10,6 +10,16 @@
 
 1.37.1 이후 main 에 병합된 변경 (다음 릴리스 후보).
 
+### Fixed
+- **대상 apiserver 보호 (동시 호출 상한 · watch cache · 파드 페이지 조회 · APF 가이드)**: PEP 전체(API replica +
+  Celery 워커)가 한 클러스터로 동시에 보내는 요청 수를 Redis 세마포어로 제한한다(`K8S_CLUSTER_MAX_INFLIGHT`, 기본 8 —
+  초과분은 PEP 가 기다리고 대기 초과는 503 + 사유). 노드·네임스페이스 등 작은 cluster-scoped 목록은 `resource_version=0`
+  으로 apiserver watch cache 에서 읽어 etcd quorum read 를 없앴다. `/k8s-manage` 파드 목록은 200건 페이지 + 무한 스크롤로
+  첫 화면이 빨라졌고, 기존 1000개 상한에 잘리던 파드도 끝까지 볼 수 있다. K8S 효율화 수집 디스패처에도 점검 매트릭스와
+  같은 랜덤 지터(`K8S_DISPATCH_JITTER_SECONDS`)를 적용했다. 대상 클러스터에 적용할 PEP 전용 APF FlowSchema/PriorityLevel
+  매니페스트(`k8s/target-cluster/pep-apf.yaml`)와 가이드(`docs/K8S_APISERVER_PROTECTION.md`)를 추가.
+  Backend: `services/k8s_concurrency.py`(신규), `k8s_client_pool`·`k8s_resources`·`celery_app`. Frontend: `PodsPanel` 무한 스크롤.
+
 ## [1.37.1] - 2026-09-26
 
 ### Fixed

@@ -35,6 +35,7 @@ from typing import Any, Optional
 import urllib3
 from kubernetes import client as k8s_client, config as k8s_config
 
+from app.services.k8s_concurrency import cluster_slots
 from app.services.kubeconfig import resolve_kubeconfig
 
 logger = logging.getLogger(__name__)
@@ -78,6 +79,18 @@ def harden_configuration(cfg: k8s_client.Configuration) -> k8s_client.Configurat
     return cfg
 
 
+def _slot_hold(timeout: Any) -> float:
+    """슬롯 만료(초) — 요청 최대 소요(connect+read)보다 약간 길게. 반납 못 한 슬롯의 자동 회수 시각."""
+    try:
+        if isinstance(timeout, (tuple, list)):
+            return float(sum(t for t in timeout if t)) + 15.0
+        if timeout:
+            return float(timeout) + 15.0
+    except (TypeError, ValueError):
+        pass
+    return DEFAULT_CONNECT_TIMEOUT + DEFAULT_READ_TIMEOUT + 15.0
+
+
 class HardenedApiClient(k8s_client.ApiClient):
     """`_request_timeout` 기본값 주입 + 스트림(exec) 안전성을 갖춘 ApiClient.
 
@@ -100,11 +113,14 @@ class HardenedApiClient(k8s_client.ApiClient):
         # 정상이므로 기본 read timeout 을 주입하지 않는다(명시값은 그대로 존중).
         if _request_timeout is None and _preload_content:
             _request_timeout = DEFAULT_TIMEOUT
-        return k8s_client.ApiClient.request(
-            self, method, url, query_params=query_params, headers=headers,
-            post_params=post_params, body=body, _preload_content=_preload_content,
-            _request_timeout=_request_timeout,
-        )
+        # 대상 apiserver 별 동시 호출 상한(PEP 전체 합산, Redis). 스트리밍은 응답 헤더를 받는
+        # 순간까지만 슬롯을 잡는다 — watch/follow 가 슬롯을 오래 점유하지 않게.
+        with cluster_slots.slot(self.configuration.host or "", hold=_slot_hold(_request_timeout)):
+            return k8s_client.ApiClient.request(
+                self, method, url, query_params=query_params, headers=headers,
+                post_params=post_params, body=body, _preload_content=_preload_content,
+                _request_timeout=_request_timeout,
+            )
 
     @property
     def request(self):  # type: ignore[override]
