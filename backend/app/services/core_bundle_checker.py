@@ -16,13 +16,14 @@ from datetime import datetime
 from typing import Optional
 
 import httpx
-from kubernetes import client, config
+from kubernetes import client
 from sqlalchemy.orm import Session
 
 from app.models import Cluster, DailyCheckLog, CheckScheduleType, StatusEnum
 from app.config import settings
 from app.services.k8s_diagnose import diagnose_connect_error
 from app.services.kubeconfig import ensure_kubeconfig_file
+from app.services.k8s_client_pool import get_api_client_for_path, get_incluster_api_client
 
 
 class DailyChecker:
@@ -47,13 +48,9 @@ class DailyChecker:
         kc_path = ensure_kubeconfig_file(cluster)
         api_client: client.ApiClient
         if kc_path and os.path.exists(kc_path):
-            api_client = config.new_client_from_config(config_file=kc_path)
+            api_client = get_api_client_for_path(kc_path)
         else:
-            try:
-                config.load_incluster_config()
-                api_client = client.ApiClient()
-            except config.ConfigException:
-                api_client = config.new_client_from_config()
+            api_client = get_incluster_api_client()
 
         self._v1 = client.CoreV1Api(api_client)
         self._v1_cluster_id = cluster.id

@@ -18,6 +18,8 @@ AI 어시스턴트 + 사람 개발자용 — 기능 → 파일 경로와 자주 
 | CRUD + 연결검증 + kubeconfig | `backend/app/routers/clusters.py` | `frontend/src/pages/ClusterManagePage.tsx` · `frontend/src/components/cluster-manage/` |
 | 수정 페이지 (탭: 노드/CIDR/기타) | — | `frontend/src/pages/ClusterMetaFormPage.tsx` |
 | kubeconfig 뷰/편집 모달 | `GET/PUT /clusters/{id}/kubeconfig` | `frontend/src/components/dashboard/KubeconfigEditModal.tsx` |
+| **대상 K8s ApiClient (공용 풀)** | `backend/app/services/k8s_client_pool.py` — `get_api_client(cluster)`/`get_api_client_for_path(path)`(클러스터별 캐시·기본 타임아웃·read 재시도 0·exec stream 스레드 격리), `get_incluster_api_client()`(관리 클러스터), `new_api_client(path)`(1회성). kubeconfig 해석은 `services/kubeconfig.py` | — |
+| **K8s 목록 성능 헬퍼** | `backend/app/services/k8s_raw.py`(`raw_call` — `_preload_content=False` 로 받아 `K8sObj` 로 typed 모델처럼 읽기, 역직렬화 생략) · `services/swr_cache.py`(`SWRCache` — fresh/stale SWR + single-flight + Redis 세대 무효화 `bump(group)`) | — |
 | 자동 업데이트 (k8s API) | `POST /clusters/{id}/auto-update` (clusters.py) | `clustersApi.autoUpdate` in `api.ts` |
 | 버전/설정 스냅샷 수집 + 히스토리 | `backend/app/routers/versions.py` · model: `backend/app/models/config_snapshot.py` | `frontend/src/pages/VersionsPage.tsx` |
 | 컴포넌트 관계 3D 그래프 | `GET /clusters/{id}/versions/graph` | `frontend/src/pages/VersionGraphPage.tsx` |
@@ -225,6 +227,13 @@ AI 어시스턴트 + 사람 개발자용 — 기능 → 파일 경로와 자주 
 3. `backend/app/schemas/cluster.py` `ClusterBase` / `ClusterManageUpdate`에 필드 추가
 4. 프론트 `frontend/src/types/index.ts` `Cluster`/`ClusterManageUpdate`에 필드 추가
 5. 수정 폼 `frontend/src/pages/ClusterMetaFormPage.tsx`에 입력 필드 추가
+
+### 대상 K8s 에 API 호출 추가
+1. 클라이언트는 **항상** `services/k8s_client_pool.py` 의 `get_api_client(cluster)`(또는 경로가 있으면 `get_api_client_for_path`)로 얻는다. `config.new_client_from_config()`·전역 `config.load_kube_config()`/`load_incluster_config()` 를 새로 쓰지 않는다(요청마다 TLS 핸드셰이크 / 다른 클러스터로 새는 race).
+2. 풀 클라이언트는 공유되므로 `close()` 는 no-op 이다 — 설정(`configuration`/헤더)을 바꾸지 않는다.
+3. 대량 LIST 는 `services/k8s_paging.py` `iter_all` 로 페이지 스트리밍하고, 존재 여부만 필요하면 `limit=1`.
+   화면 목록처럼 몇 필드만 읽는다면 `services/k8s_raw.py` `raw_call` 로 모델 역직렬화를 생략하고, 반복 조회되는 목록은 `SWRCache` 로 감싼다(쓰기 경로에서 `bump(cluster_id)` 필수).
+4. `_request_timeout` 을 빼먹어도 기본값(`K8S_API_TIMEOUT`)이 주입되지만, 화면 응답 경로는 더 짧게 명시한다.
 
 ### 새 Health Checker 추가
 1. `backend/app/services/checkers/my_checker.py` — `BaseChecker` 상속, `check()` 구현

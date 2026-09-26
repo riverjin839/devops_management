@@ -12,10 +12,11 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass, field, asdict
 from typing import Any, Optional, TYPE_CHECKING
 
-from kubernetes import client, config
+from kubernetes import client
 
 from app.models import StatusEnum
 from app.services.kubeconfig import ensure_kubeconfig_file
+from app.services.k8s_client_pool import get_api_client_for_path, get_incluster_api_client
 
 if TYPE_CHECKING:
     from app.models import Cluster
@@ -59,13 +60,9 @@ class ProbeContext:
         if self._api_client_cache is not None:
             return self._api_client_cache
         if self.kubeconfig_path and os.path.exists(self.kubeconfig_path):
-            self._api_client_cache = config.new_client_from_config(config_file=self.kubeconfig_path)
+            self._api_client_cache = get_api_client_for_path(self.kubeconfig_path)
         else:
-            try:
-                config.load_incluster_config()
-                self._api_client_cache = client.ApiClient()
-            except config.ConfigException:
-                self._api_client_cache = config.new_client_from_config()
+            self._api_client_cache = get_incluster_api_client()
         return self._api_client_cache
 
 

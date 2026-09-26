@@ -371,13 +371,11 @@ def run_commands(
 def _list_k8s_nfs_pvs(server: IsilonServer) -> list[dict[str, Any]]:
     """관리 클러스터 K8s 에서 NFS 백엔드 PV 목록(무해, 실패 시 빈 목록)."""
     try:
-        from kubernetes import client, config
+        from kubernetes import client
 
-        try:
-            config.load_incluster_config()
-        except Exception:
-            config.load_kube_config()
-        v1 = client.CoreV1Api()
+        from app.services.k8s_client_pool import get_incluster_api_client
+
+        v1 = client.CoreV1Api(get_incluster_api_client())
         pvs = v1.list_persistent_volume(timeout_seconds=15)
         out: list[dict[str, Any]] = []
         for pv in pvs.items:

@@ -124,12 +124,10 @@ class K8sEventChannel(_BaseChannel):
         try:
             from datetime import datetime as _dt
 
-            from kubernetes import client, config as _kconfig
-            try:
-                _kconfig.load_incluster_config()
-            except _kconfig.ConfigException:
-                _kconfig.load_kube_config()
-            v1 = client.CoreV1Api()
+            from kubernetes import client
+
+            from app.services.k8s_client_pool import get_incluster_api_client
+            v1 = client.CoreV1Api(get_incluster_api_client())
             ns = self.config.get("namespace") or settings.mgmt_namespace
             now = _dt.utcnow()
             ev = client.V1Event(

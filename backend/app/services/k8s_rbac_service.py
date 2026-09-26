@@ -28,6 +28,7 @@ from kubernetes.client.rest import ApiException
 
 from app.models.cluster import Cluster
 from app.services.kubeconfig import resolve_kubeconfig
+from app.services.k8s_client_pool import HardenedApiClient, harden_configuration
 
 # ── 가드레일 ────────────────────────────────────────────────────────────────
 # 빌트인 오브젝트를 이 화면에서 지우면 클러스터가 통째로 망가진다. 조회는 허용하되
@@ -166,7 +167,8 @@ class RbacService:
 
     def _client(self) -> client.ApiClient:
         if self._api_client is None:
-            self._api_client = client.ApiClient(configuration=self._configuration())
+            # 기본 타임아웃 주입 + read 재시도 0 (apiserver 부하 증폭 방지).
+            self._api_client = HardenedApiClient(configuration=harden_configuration(self._configuration()))
         return self._api_client
 
     @property

@@ -15,10 +15,11 @@ from contextlib import contextmanager
 from dataclasses import asdict, dataclass, field
 from typing import Any, Iterator, Optional
 
-from kubernetes import client, config
+from kubernetes import client
 
 from app.models import Cluster, StatusEnum
 from app.services.kubeconfig import ensure_kubeconfig_file
+from app.services.k8s_client_pool import get_api_client_for_path, get_incluster_api_client
 
 logger = logging.getLogger(__name__)
 
@@ -154,21 +155,13 @@ class DeepCheckerBase(ABC):
         신경 쓸 필요 없이 그냥 ``CoreV1Api`` 처럼 쓰면 된다(모든 메서드가 그대로 위임됨).
         """
         if ctx.in_cluster:
-            try:
-                config.load_incluster_config()
-                api_client = client.ApiClient()
-            except config.ConfigException:
-                api_client = config.new_client_from_config()
+            api_client = get_incluster_api_client()
         else:
             kc = ensure_kubeconfig_file(ctx.cluster) if ctx.cluster else None
             if kc and os.path.exists(kc):
-                api_client = config.new_client_from_config(config_file=kc)
+                api_client = get_api_client_for_path(kc)
             else:
-                try:
-                    config.load_incluster_config()
-                    api_client = client.ApiClient()
-                except config.ConfigException:
-                    api_client = config.new_client_from_config()
+                api_client = get_incluster_api_client()
         return self._wrap_api(client.CoreV1Api(api_client))
 
     @staticmethod

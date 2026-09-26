@@ -2,13 +2,15 @@ import os
 from dataclasses import dataclass, field
 from typing import Optional
 
-from kubernetes import client, config
+from kubernetes import client
 from kubernetes.client.rest import ApiException
 from sqlalchemy.orm import Session
 
 from app.models.cluster import Cluster
 from app.models.infra_node import InfraNode
 from app.services.cilium_policy_analyzer import CiliumPolicyAnalyzer
+from app.services.k8s_client_pool import K8sClientError, get_api_client_for_path, get_incluster_api_client
+from app.services.kubeconfig import ensure_kubeconfig_file
 
 
 @dataclass
@@ -47,34 +49,43 @@ class TopologyTraceService:
         self.cluster = cluster
         self._core_v1: client.CoreV1Api | None = None
         self._discovery_v1: client.DiscoveryV1Api | None = None
+        self._api: client.ApiClient | None = None
 
-    def _load_config(self) -> None:
-        kubeconfig = self.cluster.kubeconfig_path
+    def _api_client(self) -> client.ApiClient:
+        """클러스터별 격리 풀 클라이언트.
+
+        예전엔 전역 `config.load_kube_config()` 로 로드해 동시 요청이 다른 클러스터로 새는 race 가
+        있었고, `kubeconfig_path` 만 봐서 컨테이너 재시작으로 파일이 사라지면 in-cluster(= PEP 자신의
+        클러스터)로 조용히 폴백하는 오답이 있었다. DB content 로 파일을 재생성하고(ensure), 등록된
+        kubeconfig 가 아예 없을 때만 in-cluster 를 쓴다(로컬 기본 kubeconfig 폴백 없음).
+        """
+        if self._api is not None:
+            return self._api
+        kubeconfig = ensure_kubeconfig_file(self.cluster)
         if kubeconfig and os.path.exists(kubeconfig):
-            config.load_kube_config(config_file=kubeconfig)
-            return
-
+            self._api = get_api_client_for_path(kubeconfig)
+            return self._api
         try:
-            config.load_incluster_config()
-        except config.ConfigException as e:
-            if kubeconfig:
-                raise ValueError(f"kubeconfig 파일을 찾을 수 없습니다: '{kubeconfig}'") from e
+            self._api = get_incluster_api_client(allow_local_fallback=False)
+        except K8sClientError as e:
+            if self.cluster.kubeconfig_path or getattr(self.cluster, "kubeconfig_content", None):
+                raise ValueError(f"kubeconfig 파일을 찾을 수 없습니다: '{self.cluster.kubeconfig_path}'") from e
             raise ValueError(
                 f"클러스터 '{self.cluster.name}'에 kubeconfig_path가 설정되지 않았고 in-cluster 환경도 아닙니다"
             ) from e
+        return self._api
 
     def _get_clients(self) -> tuple[client.CoreV1Api, client.DiscoveryV1Api]:
         if self._core_v1 and self._discovery_v1:
             return self._core_v1, self._discovery_v1
 
-        self._load_config()
-        self._core_v1 = client.CoreV1Api()
-        self._discovery_v1 = client.DiscoveryV1Api()
+        api = self._api_client()
+        self._core_v1 = client.CoreV1Api(api)
+        self._discovery_v1 = client.DiscoveryV1Api(api)
         return self._core_v1, self._discovery_v1
 
     def _get_networking_client(self) -> client.NetworkingV1Api:
-        self._load_config()
-        return client.NetworkingV1Api()
+        return client.NetworkingV1Api(self._api_client())
 
     @staticmethod
     def _safe_error_count(pod: client.V1Pod | None, node: client.V1Node | None) -> int | None:
@@ -524,7 +535,7 @@ class TopologyTraceService:
         """
         core_v1, _ = self._get_clients()
         net_v1 = self._get_networking_client()
-        custom_api = client.CustomObjectsApi()
+        custom_api = client.CustomObjectsApi(self._api_client())
         analyzer = CiliumPolicyAnalyzer(core=core_v1, net=net_v1, custom=custom_api)
         cilium_cfg = analyzer.get_cilium_config()
 

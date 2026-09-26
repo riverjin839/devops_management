@@ -1,10 +1,11 @@
 import os
 
-from kubernetes import client, config
+from kubernetes import client
 from kubernetes.client.rest import ApiException
 
 from app.models.cluster import Cluster
 from app.services.kubeconfig import ensure_kubeconfig_file
+from app.services.k8s_client_pool import K8sClientError, get_api_client_for_path, get_incluster_api_client
 
 # 노드 list 페이지 크기 — 거대 노드(364대 × 수백 이미지) 응답을 페이지 단위로 끊어
 # 한 페이지의 read 가 ingress 타임아웃을 넘지 않게 하고 메모리 피크를 낮춘다.
@@ -35,12 +36,12 @@ class NodeImageService:
         kubeconfig = ensure_kubeconfig_file(self.cluster)
         if kubeconfig and os.path.exists(kubeconfig):
             # 전역 config 를 오염시키지 않는 격리된 ApiClient 사용(백그라운드 스레드 안전).
-            api_client = config.new_client_from_config(config_file=kubeconfig)
+            api_client = get_api_client_for_path(kubeconfig)
             self._v1 = client.CoreV1Api(api_client)
         else:
             try:
-                config.load_incluster_config()
-            except config.ConfigException:
+                api_client = get_incluster_api_client(allow_local_fallback=False)
+            except K8sClientError:
                 if kubeconfig:
                     detail = f"kubeconfig 파일을 찾을 수 없습니다: '{kubeconfig}'"
                 else:
@@ -49,7 +50,7 @@ class NodeImageService:
                     f"{detail}. in-cluster 환경도 아닙니다. "
                     "클러스터 설정에서 kubeconfig를 등록하세요."
                 )
-            self._v1 = client.CoreV1Api()
+            self._v1 = client.CoreV1Api(api_client)
         return self._v1
 
     @staticmethod

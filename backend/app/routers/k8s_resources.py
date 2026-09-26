@@ -10,13 +10,16 @@ from __future__ import annotations
 
 import logging
 import os
+import threading
+import time
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 from typing import Any, Callable, Optional
 from uuid import UUID
 
 import yaml
 from fastapi import APIRouter, Depends, HTTPException, Request
-from kubernetes import client as k8s_client, config as k8s_config
+from kubernetes import client as k8s_client
 from kubernetes.client.rest import ApiException
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
@@ -26,24 +29,43 @@ from app.database import get_db
 from app.models import Cluster
 from app.models.user import User
 from app.services import audit_logger
+from app.services.k8s_client_pool import K8sClientError, get_api_client_for_path
 from app.services.kubeconfig import ensure_kubeconfig_file
+from app.services.k8s_raw import raw_call
+from app.services.snapshot_jobs import _RedisStore
+from app.services.swr_cache import SWRCache
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/k8s", tags=["k8s-resources"])
 
 _LIST_LIMIT = 1000  # 대형 클러스터 보호 — 한 종류당 상한(초과 시 truncated 표시)
+_LIST_TIMEOUT = (3.05, float(os.getenv("K8S_LIST_READ_TIMEOUT", "20")))  # 목록 LIST (connect, read)
+
+# 탐색기 목록 캐시 — fresh 이내는 즉시, stale 이내는 즉시 응답 + 백그라운드 갱신(SWR),
+# 같은 키 동시 요청은 1건으로 합친다. 쓰기 엔드포인트는 bump(cluster_id)로 모든 replica 무효화.
+_list_cache = SWRCache(
+    fresh=float(os.getenv("K8S_LIST_CACHE_FRESH", "5")),
+    stale=float(os.getenv("K8S_LIST_CACHE_STALE", "30")),
+    max_entries=int(os.getenv("K8S_LIST_CACHE_MAX", "256")),
+    store=_RedisStore(prefix="k8slist"),
+    name="k8s-list",
+)
 
 
 # ── 클라이언트 ────────────────────────────────────────────────────────────────
 def _api_client(cluster: Cluster) -> k8s_client.ApiClient:
+    """클러스터별 풀 클라이언트(keep-alive 재사용 · 기본 타임아웃 · read 재시도 0).
+
+    `k8s_client_pool` 이 `_request_timeout` 미지정 호출에 기본 타임아웃을 주입하므로 아래
+    KIND_MAP 람다들이 apiserver 앞에서 무한 대기하지 않는다."""
     kc_path = ensure_kubeconfig_file(cluster)
     if not kc_path or not os.path.exists(kc_path):
         raise HTTPException(status_code=422, detail="kubeconfig 가 등록되지 않은 클러스터입니다.")
     try:
-        return k8s_config.new_client_from_config(config_file=kc_path)
-    except Exception as e:  # noqa: BLE001
-        raise HTTPException(status_code=502, detail=f"kubeconfig 로드 실패: {str(e)[:200]}") from e
+        return get_api_client_for_path(kc_path)
+    except K8sClientError as e:
+        raise HTTPException(status_code=502, detail=str(e)[:300]) from e
 
 
 def _require_cluster(cluster_id: UUID, db: Session) -> Cluster:
@@ -106,8 +128,8 @@ KIND_MAP: dict[str, dict[str, Any]] = {
     "deployments": {
         "namespaced": True,
         "api": lambda c: k8s_client.AppsV1Api(c),
-        "list_all": lambda a: a.list_deployment_for_all_namespaces(limit=_LIST_LIMIT),
-        "list_ns": lambda a, ns: a.list_namespaced_deployment(ns, limit=_LIST_LIMIT),
+        "list_all": lambda a, **kw: a.list_deployment_for_all_namespaces(**{"limit": _LIST_LIMIT, **kw}),
+        "list_ns": lambda a, ns, **kw: a.list_namespaced_deployment(ns, **{"limit": _LIST_LIMIT, **kw}),
         "read": lambda a, ns, n: a.read_namespaced_deployment(n, ns),
         "delete": lambda a, ns, n: a.delete_namespaced_deployment(n, ns),
         "patch": lambda a, ns, n, body: a.patch_namespaced_deployment(n, ns, body),
@@ -117,8 +139,8 @@ KIND_MAP: dict[str, dict[str, Any]] = {
     "statefulsets": {
         "namespaced": True,
         "api": lambda c: k8s_client.AppsV1Api(c),
-        "list_all": lambda a: a.list_stateful_set_for_all_namespaces(limit=_LIST_LIMIT),
-        "list_ns": lambda a, ns: a.list_namespaced_stateful_set(ns, limit=_LIST_LIMIT),
+        "list_all": lambda a, **kw: a.list_stateful_set_for_all_namespaces(**{"limit": _LIST_LIMIT, **kw}),
+        "list_ns": lambda a, ns, **kw: a.list_namespaced_stateful_set(ns, **{"limit": _LIST_LIMIT, **kw}),
         "read": lambda a, ns, n: a.read_namespaced_stateful_set(n, ns),
         "delete": lambda a, ns, n: a.delete_namespaced_stateful_set(n, ns),
         "patch": lambda a, ns, n, body: a.patch_namespaced_stateful_set(n, ns, body),
@@ -128,8 +150,8 @@ KIND_MAP: dict[str, dict[str, Any]] = {
     "daemonsets": {
         "namespaced": True,
         "api": lambda c: k8s_client.AppsV1Api(c),
-        "list_all": lambda a: a.list_daemon_set_for_all_namespaces(limit=_LIST_LIMIT),
-        "list_ns": lambda a, ns: a.list_namespaced_daemon_set(ns, limit=_LIST_LIMIT),
+        "list_all": lambda a, **kw: a.list_daemon_set_for_all_namespaces(**{"limit": _LIST_LIMIT, **kw}),
+        "list_ns": lambda a, ns, **kw: a.list_namespaced_daemon_set(ns, **{"limit": _LIST_LIMIT, **kw}),
         "read": lambda a, ns, n: a.read_namespaced_daemon_set(n, ns),
         "delete": lambda a, ns, n: a.delete_namespaced_daemon_set(n, ns),
         "patch": lambda a, ns, n, body: a.patch_namespaced_daemon_set(n, ns, body),
@@ -138,8 +160,8 @@ KIND_MAP: dict[str, dict[str, Any]] = {
     "services": {
         "namespaced": True,
         "api": lambda c: k8s_client.CoreV1Api(c),
-        "list_all": lambda a: a.list_service_for_all_namespaces(limit=_LIST_LIMIT),
-        "list_ns": lambda a, ns: a.list_namespaced_service(ns, limit=_LIST_LIMIT),
+        "list_all": lambda a, **kw: a.list_service_for_all_namespaces(**{"limit": _LIST_LIMIT, **kw}),
+        "list_ns": lambda a, ns, **kw: a.list_namespaced_service(ns, **{"limit": _LIST_LIMIT, **kw}),
         "read": lambda a, ns, n: a.read_namespaced_service(n, ns),
         "delete": lambda a, ns, n: a.delete_namespaced_service(n, ns),
         "summary": _svc_summary,
@@ -147,8 +169,8 @@ KIND_MAP: dict[str, dict[str, Any]] = {
     "ingresses": {
         "namespaced": True,
         "api": lambda c: k8s_client.NetworkingV1Api(c),
-        "list_all": lambda a: a.list_ingress_for_all_namespaces(limit=_LIST_LIMIT),
-        "list_ns": lambda a, ns: a.list_namespaced_ingress(ns, limit=_LIST_LIMIT),
+        "list_all": lambda a, **kw: a.list_ingress_for_all_namespaces(**{"limit": _LIST_LIMIT, **kw}),
+        "list_ns": lambda a, ns, **kw: a.list_namespaced_ingress(ns, **{"limit": _LIST_LIMIT, **kw}),
         "read": lambda a, ns, n: a.read_namespaced_ingress(n, ns),
         "delete": lambda a, ns, n: a.delete_namespaced_ingress(n, ns),
         "summary": _ing_summary,
@@ -156,8 +178,8 @@ KIND_MAP: dict[str, dict[str, Any]] = {
     "configmaps": {
         "namespaced": True,
         "api": lambda c: k8s_client.CoreV1Api(c),
-        "list_all": lambda a: a.list_config_map_for_all_namespaces(limit=_LIST_LIMIT),
-        "list_ns": lambda a, ns: a.list_namespaced_config_map(ns, limit=_LIST_LIMIT),
+        "list_all": lambda a, **kw: a.list_config_map_for_all_namespaces(**{"limit": _LIST_LIMIT, **kw}),
+        "list_ns": lambda a, ns, **kw: a.list_namespaced_config_map(ns, **{"limit": _LIST_LIMIT, **kw}),
         "read": lambda a, ns, n: a.read_namespaced_config_map(n, ns),
         "delete": lambda a, ns, n: a.delete_namespaced_config_map(n, ns),
         "summary": lambda o: f"{len(o.data or {})} keys",
@@ -165,8 +187,8 @@ KIND_MAP: dict[str, dict[str, Any]] = {
     "secrets": {
         "namespaced": True,
         "api": lambda c: k8s_client.CoreV1Api(c),
-        "list_all": lambda a: a.list_secret_for_all_namespaces(limit=_LIST_LIMIT),
-        "list_ns": lambda a, ns: a.list_namespaced_secret(ns, limit=_LIST_LIMIT),
+        "list_all": lambda a, **kw: a.list_secret_for_all_namespaces(**{"limit": _LIST_LIMIT, **kw}),
+        "list_ns": lambda a, ns, **kw: a.list_namespaced_secret(ns, **{"limit": _LIST_LIMIT, **kw}),
         "read": lambda a, ns, n: a.read_namespaced_secret(n, ns),
         "delete": lambda a, ns, n: a.delete_namespaced_secret(n, ns),
         "summary": lambda o: f"{o.type} · {len(o.data or {})} keys",
@@ -174,8 +196,8 @@ KIND_MAP: dict[str, dict[str, Any]] = {
     "persistentvolumeclaims": {
         "namespaced": True,
         "api": lambda c: k8s_client.CoreV1Api(c),
-        "list_all": lambda a: a.list_persistent_volume_claim_for_all_namespaces(limit=_LIST_LIMIT),
-        "list_ns": lambda a, ns: a.list_namespaced_persistent_volume_claim(ns, limit=_LIST_LIMIT),
+        "list_all": lambda a, **kw: a.list_persistent_volume_claim_for_all_namespaces(**{"limit": _LIST_LIMIT, **kw}),
+        "list_ns": lambda a, ns, **kw: a.list_namespaced_persistent_volume_claim(ns, **{"limit": _LIST_LIMIT, **kw}),
         "read": lambda a, ns, n: a.read_namespaced_persistent_volume_claim(n, ns),
         "delete": lambda a, ns, n: a.delete_namespaced_persistent_volume_claim(n, ns),
         "summary": _pvc_summary,
@@ -183,8 +205,8 @@ KIND_MAP: dict[str, dict[str, Any]] = {
     "jobs": {
         "namespaced": True,
         "api": lambda c: k8s_client.BatchV1Api(c),
-        "list_all": lambda a: a.list_job_for_all_namespaces(limit=_LIST_LIMIT),
-        "list_ns": lambda a, ns: a.list_namespaced_job(ns, limit=_LIST_LIMIT),
+        "list_all": lambda a, **kw: a.list_job_for_all_namespaces(**{"limit": _LIST_LIMIT, **kw}),
+        "list_ns": lambda a, ns, **kw: a.list_namespaced_job(ns, **{"limit": _LIST_LIMIT, **kw}),
         "read": lambda a, ns, n: a.read_namespaced_job(n, ns),
         "delete": lambda a, ns, n: a.delete_namespaced_job(n, ns, propagation_policy="Background"),
         "summary": lambda o: f"succeeded {(o.status.succeeded or 0)} / failed {(o.status.failed or 0)}",
@@ -192,8 +214,8 @@ KIND_MAP: dict[str, dict[str, Any]] = {
     "cronjobs": {
         "namespaced": True,
         "api": lambda c: k8s_client.BatchV1Api(c),
-        "list_all": lambda a: a.list_cron_job_for_all_namespaces(limit=_LIST_LIMIT),
-        "list_ns": lambda a, ns: a.list_namespaced_cron_job(ns, limit=_LIST_LIMIT),
+        "list_all": lambda a, **kw: a.list_cron_job_for_all_namespaces(**{"limit": _LIST_LIMIT, **kw}),
+        "list_ns": lambda a, ns, **kw: a.list_namespaced_cron_job(ns, **{"limit": _LIST_LIMIT, **kw}),
         "read": lambda a, ns, n: a.read_namespaced_cron_job(n, ns),
         "delete": lambda a, ns, n: a.delete_namespaced_cron_job(n, ns),
         "summary": lambda o: f"schedule {o.spec.schedule}",
@@ -201,8 +223,8 @@ KIND_MAP: dict[str, dict[str, Any]] = {
     "pods": {
         "namespaced": True,
         "api": lambda c: k8s_client.CoreV1Api(c),
-        "list_all": lambda a: a.list_pod_for_all_namespaces(limit=_LIST_LIMIT),
-        "list_ns": lambda a, ns: a.list_namespaced_pod(ns, limit=_LIST_LIMIT),
+        "list_all": lambda a, **kw: a.list_pod_for_all_namespaces(**{"limit": _LIST_LIMIT, **kw}),
+        "list_ns": lambda a, ns, **kw: a.list_namespaced_pod(ns, **{"limit": _LIST_LIMIT, **kw}),
         "read": lambda a, ns, n: a.read_namespaced_pod(n, ns),
         "delete": lambda a, ns, n: a.delete_namespaced_pod(n, ns),
         "summary": _pod_summary,
@@ -211,14 +233,14 @@ KIND_MAP: dict[str, dict[str, Any]] = {
     "nodes": {
         "namespaced": False,
         "api": lambda c: k8s_client.CoreV1Api(c),
-        "list_all": lambda a: a.list_node(limit=_LIST_LIMIT),
+        "list_all": lambda a, **kw: a.list_node(**{"limit": _LIST_LIMIT, **kw}),
         "read": lambda a, ns, n: a.read_node(n),
         "summary": _node_summary,
     },
     "namespaces": {
         "namespaced": False,
         "api": lambda c: k8s_client.CoreV1Api(c),
-        "list_all": lambda a: a.list_namespace(limit=_LIST_LIMIT),
+        "list_all": lambda a, **kw: a.list_namespace(**{"limit": _LIST_LIMIT, **kw}),
         "read": lambda a, ns, n: a.read_namespace(n),
         "summary": lambda o: (o.status.phase if o.status else "-") or "-",
     },
@@ -226,38 +248,38 @@ KIND_MAP: dict[str, dict[str, Any]] = {
     "serviceaccounts": {
         "namespaced": True,
         "api": lambda c: k8s_client.CoreV1Api(c),
-        "list_all": lambda a: a.list_service_account_for_all_namespaces(limit=_LIST_LIMIT),
-        "list_ns": lambda a, ns: a.list_namespaced_service_account(ns, limit=_LIST_LIMIT),
+        "list_all": lambda a, **kw: a.list_service_account_for_all_namespaces(**{"limit": _LIST_LIMIT, **kw}),
+        "list_ns": lambda a, ns, **kw: a.list_namespaced_service_account(ns, **{"limit": _LIST_LIMIT, **kw}),
         "read": lambda a, ns, n: a.read_namespaced_service_account(n, ns),
         "summary": lambda o: f"{len(o.secrets or [])} secrets",
     },
     "roles": {
         "namespaced": True,
         "api": lambda c: k8s_client.RbacAuthorizationV1Api(c),
-        "list_all": lambda a: a.list_role_for_all_namespaces(limit=_LIST_LIMIT),
-        "list_ns": lambda a, ns: a.list_namespaced_role(ns, limit=_LIST_LIMIT),
+        "list_all": lambda a, **kw: a.list_role_for_all_namespaces(**{"limit": _LIST_LIMIT, **kw}),
+        "list_ns": lambda a, ns, **kw: a.list_namespaced_role(ns, **{"limit": _LIST_LIMIT, **kw}),
         "read": lambda a, ns, n: a.read_namespaced_role(n, ns),
         "summary": lambda o: f"{len(o.rules or [])} rules",
     },
     "rolebindings": {
         "namespaced": True,
         "api": lambda c: k8s_client.RbacAuthorizationV1Api(c),
-        "list_all": lambda a: a.list_role_binding_for_all_namespaces(limit=_LIST_LIMIT),
-        "list_ns": lambda a, ns: a.list_namespaced_role_binding(ns, limit=_LIST_LIMIT),
+        "list_all": lambda a, **kw: a.list_role_binding_for_all_namespaces(**{"limit": _LIST_LIMIT, **kw}),
+        "list_ns": lambda a, ns, **kw: a.list_namespaced_role_binding(ns, **{"limit": _LIST_LIMIT, **kw}),
         "read": lambda a, ns, n: a.read_namespaced_role_binding(n, ns),
         "summary": lambda o: f"→ {o.role_ref.kind}/{o.role_ref.name} · {len(o.subjects or [])} subj",
     },
     "clusterroles": {
         "namespaced": False,
         "api": lambda c: k8s_client.RbacAuthorizationV1Api(c),
-        "list_all": lambda a: a.list_cluster_role(limit=_LIST_LIMIT),
+        "list_all": lambda a, **kw: a.list_cluster_role(**{"limit": _LIST_LIMIT, **kw}),
         "read": lambda a, ns, n: a.read_cluster_role(n),
         "summary": lambda o: f"{len(o.rules or [])} rules",
     },
     "clusterrolebindings": {
         "namespaced": False,
         "api": lambda c: k8s_client.RbacAuthorizationV1Api(c),
-        "list_all": lambda a: a.list_cluster_role_binding(limit=_LIST_LIMIT),
+        "list_all": lambda a, **kw: a.list_cluster_role_binding(**{"limit": _LIST_LIMIT, **kw}),
         "read": lambda a, ns, n: a.read_cluster_role_binding(n),
         "summary": lambda o: f"→ {o.role_ref.kind}/{o.role_ref.name} · {len(o.subjects or [])} subj",
     },
@@ -266,8 +288,8 @@ KIND_MAP: dict[str, dict[str, Any]] = {
     "replicasets": {
         "namespaced": True,
         "api": lambda c: k8s_client.AppsV1Api(c),
-        "list_all": lambda a: a.list_replica_set_for_all_namespaces(limit=_LIST_LIMIT),
-        "list_ns": lambda a, ns: a.list_namespaced_replica_set(ns, limit=_LIST_LIMIT),
+        "list_all": lambda a, **kw: a.list_replica_set_for_all_namespaces(**{"limit": _LIST_LIMIT, **kw}),
+        "list_ns": lambda a, ns, **kw: a.list_namespaced_replica_set(ns, **{"limit": _LIST_LIMIT, **kw}),
         "read": lambda a, ns, n: a.read_namespaced_replica_set(n, ns),
         "delete": lambda a, ns, n: a.delete_namespaced_replica_set(n, ns),
         "scale": lambda a, ns, n, body: a.patch_namespaced_replica_set_scale(n, ns, body),
@@ -276,8 +298,8 @@ KIND_MAP: dict[str, dict[str, Any]] = {
     "replicationcontrollers": {
         "namespaced": True,
         "api": lambda c: k8s_client.CoreV1Api(c),
-        "list_all": lambda a: a.list_replication_controller_for_all_namespaces(limit=_LIST_LIMIT),
-        "list_ns": lambda a, ns: a.list_namespaced_replication_controller(ns, limit=_LIST_LIMIT),
+        "list_all": lambda a, **kw: a.list_replication_controller_for_all_namespaces(**{"limit": _LIST_LIMIT, **kw}),
+        "list_ns": lambda a, ns, **kw: a.list_namespaced_replication_controller(ns, **{"limit": _LIST_LIMIT, **kw}),
         "read": lambda a, ns, n: a.read_namespaced_replication_controller(n, ns),
         "delete": lambda a, ns, n: a.delete_namespaced_replication_controller(n, ns),
         "scale": lambda a, ns, n, body: a.patch_namespaced_replication_controller_scale(n, ns, body),
@@ -287,8 +309,8 @@ KIND_MAP: dict[str, dict[str, Any]] = {
     "resourcequotas": {
         "namespaced": True,
         "api": lambda c: k8s_client.CoreV1Api(c),
-        "list_all": lambda a: a.list_resource_quota_for_all_namespaces(limit=_LIST_LIMIT),
-        "list_ns": lambda a, ns: a.list_namespaced_resource_quota(ns, limit=_LIST_LIMIT),
+        "list_all": lambda a, **kw: a.list_resource_quota_for_all_namespaces(**{"limit": _LIST_LIMIT, **kw}),
+        "list_ns": lambda a, ns, **kw: a.list_namespaced_resource_quota(ns, **{"limit": _LIST_LIMIT, **kw}),
         "read": lambda a, ns, n: a.read_namespaced_resource_quota(n, ns),
         "delete": lambda a, ns, n: a.delete_namespaced_resource_quota(n, ns),
         "summary": lambda o: f"{len((o.spec.hard or {})) if o.spec else 0} hard limits",
@@ -296,8 +318,8 @@ KIND_MAP: dict[str, dict[str, Any]] = {
     "limitranges": {
         "namespaced": True,
         "api": lambda c: k8s_client.CoreV1Api(c),
-        "list_all": lambda a: a.list_limit_range_for_all_namespaces(limit=_LIST_LIMIT),
-        "list_ns": lambda a, ns: a.list_namespaced_limit_range(ns, limit=_LIST_LIMIT),
+        "list_all": lambda a, **kw: a.list_limit_range_for_all_namespaces(**{"limit": _LIST_LIMIT, **kw}),
+        "list_ns": lambda a, ns, **kw: a.list_namespaced_limit_range(ns, **{"limit": _LIST_LIMIT, **kw}),
         "read": lambda a, ns, n: a.read_namespaced_limit_range(n, ns),
         "delete": lambda a, ns, n: a.delete_namespaced_limit_range(n, ns),
         "summary": lambda o: f"{len((o.spec.limits or [])) if o.spec else 0} limits",
@@ -305,8 +327,8 @@ KIND_MAP: dict[str, dict[str, Any]] = {
     "horizontalpodautoscalers": {
         "namespaced": True,
         "api": lambda c: k8s_client.AutoscalingV1Api(c),
-        "list_all": lambda a: a.list_horizontal_pod_autoscaler_for_all_namespaces(limit=_LIST_LIMIT),
-        "list_ns": lambda a, ns: a.list_namespaced_horizontal_pod_autoscaler(ns, limit=_LIST_LIMIT),
+        "list_all": lambda a, **kw: a.list_horizontal_pod_autoscaler_for_all_namespaces(**{"limit": _LIST_LIMIT, **kw}),
+        "list_ns": lambda a, ns, **kw: a.list_namespaced_horizontal_pod_autoscaler(ns, **{"limit": _LIST_LIMIT, **kw}),
         "read": lambda a, ns, n: a.read_namespaced_horizontal_pod_autoscaler(n, ns),
         "delete": lambda a, ns, n: a.delete_namespaced_horizontal_pod_autoscaler(n, ns),
         "summary": lambda o: f"{(o.status.current_replicas if o.status else 0)} → min {o.spec.min_replicas}/max {o.spec.max_replicas}",
@@ -314,8 +336,8 @@ KIND_MAP: dict[str, dict[str, Any]] = {
     "poddisruptionbudgets": {
         "namespaced": True,
         "api": lambda c: k8s_client.PolicyV1Api(c),
-        "list_all": lambda a: a.list_pod_disruption_budget_for_all_namespaces(limit=_LIST_LIMIT),
-        "list_ns": lambda a, ns: a.list_namespaced_pod_disruption_budget(ns, limit=_LIST_LIMIT),
+        "list_all": lambda a, **kw: a.list_pod_disruption_budget_for_all_namespaces(**{"limit": _LIST_LIMIT, **kw}),
+        "list_ns": lambda a, ns, **kw: a.list_namespaced_pod_disruption_budget(ns, **{"limit": _LIST_LIMIT, **kw}),
         "read": lambda a, ns, n: a.read_namespaced_pod_disruption_budget(n, ns),
         "delete": lambda a, ns, n: a.delete_namespaced_pod_disruption_budget(n, ns),
         "summary": lambda o: f"min {getattr(o.spec, 'min_available', None)} / maxUnavail {getattr(o.spec, 'max_unavailable', None)}",
@@ -323,7 +345,7 @@ KIND_MAP: dict[str, dict[str, Any]] = {
     "priorityclasses": {
         "namespaced": False,
         "api": lambda c: k8s_client.SchedulingV1Api(c),
-        "list_all": lambda a: a.list_priority_class(limit=_LIST_LIMIT),
+        "list_all": lambda a, **kw: a.list_priority_class(**{"limit": _LIST_LIMIT, **kw}),
         "read": lambda a, ns, n: a.read_priority_class(n),
         "delete": lambda a, ns, n: a.delete_priority_class(n),
         "summary": lambda o: f"value {o.value}{' · global-default' if o.global_default else ''}",
@@ -332,8 +354,8 @@ KIND_MAP: dict[str, dict[str, Any]] = {
     "endpoints": {
         "namespaced": True,
         "api": lambda c: k8s_client.CoreV1Api(c),
-        "list_all": lambda a: a.list_endpoints_for_all_namespaces(limit=_LIST_LIMIT),
-        "list_ns": lambda a, ns: a.list_namespaced_endpoints(ns, limit=_LIST_LIMIT),
+        "list_all": lambda a, **kw: a.list_endpoints_for_all_namespaces(**{"limit": _LIST_LIMIT, **kw}),
+        "list_ns": lambda a, ns, **kw: a.list_namespaced_endpoints(ns, **{"limit": _LIST_LIMIT, **kw}),
         "read": lambda a, ns, n: a.read_namespaced_endpoints(n, ns),
         "delete": lambda a, ns, n: a.delete_namespaced_endpoints(n, ns),
         "summary": lambda o: f"{sum(len(s.addresses or []) for s in (o.subsets or []))} addresses",
@@ -341,8 +363,8 @@ KIND_MAP: dict[str, dict[str, Any]] = {
     "networkpolicies": {
         "namespaced": True,
         "api": lambda c: k8s_client.NetworkingV1Api(c),
-        "list_all": lambda a: a.list_network_policy_for_all_namespaces(limit=_LIST_LIMIT),
-        "list_ns": lambda a, ns: a.list_namespaced_network_policy(ns, limit=_LIST_LIMIT),
+        "list_all": lambda a, **kw: a.list_network_policy_for_all_namespaces(**{"limit": _LIST_LIMIT, **kw}),
+        "list_ns": lambda a, ns, **kw: a.list_namespaced_network_policy(ns, **{"limit": _LIST_LIMIT, **kw}),
         "read": lambda a, ns, n: a.read_namespaced_network_policy(n, ns),
         "delete": lambda a, ns, n: a.delete_namespaced_network_policy(n, ns),
         "summary": lambda o: f"types {', '.join(o.spec.policy_types or []) if o.spec else '-'}",
@@ -350,7 +372,7 @@ KIND_MAP: dict[str, dict[str, Any]] = {
     "ingressclasses": {
         "namespaced": False,
         "api": lambda c: k8s_client.NetworkingV1Api(c),
-        "list_all": lambda a: a.list_ingress_class(limit=_LIST_LIMIT),
+        "list_all": lambda a, **kw: a.list_ingress_class(**{"limit": _LIST_LIMIT, **kw}),
         "read": lambda a, ns, n: a.read_ingress_class(n),
         "delete": lambda a, ns, n: a.delete_ingress_class(n),
         "summary": lambda o: f"controller {o.spec.controller if o.spec else '-'}",
@@ -359,7 +381,7 @@ KIND_MAP: dict[str, dict[str, Any]] = {
     "persistentvolumes": {
         "namespaced": False,
         "api": lambda c: k8s_client.CoreV1Api(c),
-        "list_all": lambda a: a.list_persistent_volume(limit=_LIST_LIMIT),
+        "list_all": lambda a, **kw: a.list_persistent_volume(**{"limit": _LIST_LIMIT, **kw}),
         "read": lambda a, ns, n: a.read_persistent_volume(n),
         "delete": lambda a, ns, n: a.delete_persistent_volume(n),
         "summary": lambda o: f"{(o.status.phase if o.status else '-')} · {(o.spec.capacity or {}).get('storage','') if o.spec else ''} · {o.spec.storage_class_name if o.spec else ''}".strip(),
@@ -367,7 +389,7 @@ KIND_MAP: dict[str, dict[str, Any]] = {
     "storageclasses": {
         "namespaced": False,
         "api": lambda c: k8s_client.StorageV1Api(c),
-        "list_all": lambda a: a.list_storage_class(limit=_LIST_LIMIT),
+        "list_all": lambda a, **kw: a.list_storage_class(**{"limit": _LIST_LIMIT, **kw}),
         "read": lambda a, ns, n: a.read_storage_class(n),
         "delete": lambda a, ns, n: a.delete_storage_class(n),
         "summary": lambda o: f"{o.provisioner}{' · default' if (o.metadata.annotations or {}).get('storageclass.kubernetes.io/is-default-class') == 'true' else ''}",
@@ -376,37 +398,37 @@ KIND_MAP: dict[str, dict[str, Any]] = {
     "leases": {
         "namespaced": True,
         "api": lambda c: k8s_client.CoordinationV1Api(c),
-        "list_all": lambda a: a.list_lease_for_all_namespaces(limit=_LIST_LIMIT),
-        "list_ns": lambda a, ns: a.list_namespaced_lease(ns, limit=_LIST_LIMIT),
+        "list_all": lambda a, **kw: a.list_lease_for_all_namespaces(**{"limit": _LIST_LIMIT, **kw}),
+        "list_ns": lambda a, ns, **kw: a.list_namespaced_lease(ns, **{"limit": _LIST_LIMIT, **kw}),
         "read": lambda a, ns, n: a.read_namespaced_lease(n, ns),
         "summary": lambda o: f"holder {(o.spec.holder_identity or '-') if o.spec else '-'}",
     },
     "endpointslices": {
         "namespaced": True,
         "api": lambda c: k8s_client.DiscoveryV1Api(c),
-        "list_all": lambda a: a.list_endpoint_slice_for_all_namespaces(limit=_LIST_LIMIT),
-        "list_ns": lambda a, ns: a.list_namespaced_endpoint_slice(ns, limit=_LIST_LIMIT),
+        "list_all": lambda a, **kw: a.list_endpoint_slice_for_all_namespaces(**{"limit": _LIST_LIMIT, **kw}),
+        "list_ns": lambda a, ns, **kw: a.list_namespaced_endpoint_slice(ns, **{"limit": _LIST_LIMIT, **kw}),
         "read": lambda a, ns, n: a.read_namespaced_endpoint_slice(n, ns),
         "summary": lambda o: f"{o.address_type} · {len(o.endpoints or [])} endpoints",
     },
     "runtimeclasses": {
         "namespaced": False,
         "api": lambda c: k8s_client.NodeV1Api(c),
-        "list_all": lambda a: a.list_runtime_class(limit=_LIST_LIMIT),
+        "list_all": lambda a, **kw: a.list_runtime_class(**{"limit": _LIST_LIMIT, **kw}),
         "read": lambda a, ns, n: a.read_runtime_class(n),
         "summary": lambda o: f"handler {o.handler}",
     },
     "mutatingwebhookconfigurations": {
         "namespaced": False,
         "api": lambda c: k8s_client.AdmissionregistrationV1Api(c),
-        "list_all": lambda a: a.list_mutating_webhook_configuration(limit=_LIST_LIMIT),
+        "list_all": lambda a, **kw: a.list_mutating_webhook_configuration(**{"limit": _LIST_LIMIT, **kw}),
         "read": lambda a, ns, n: a.read_mutating_webhook_configuration(n),
         "summary": lambda o: f"{len(o.webhooks or [])} webhooks",
     },
     "validatingwebhookconfigurations": {
         "namespaced": False,
         "api": lambda c: k8s_client.AdmissionregistrationV1Api(c),
-        "list_all": lambda a: a.list_validating_webhook_configuration(limit=_LIST_LIMIT),
+        "list_all": lambda a, **kw: a.list_validating_webhook_configuration(**{"limit": _LIST_LIMIT, **kw}),
         "read": lambda a, ns, n: a.read_validating_webhook_configuration(n),
         "summary": lambda o: f"{len(o.webhooks or [])} webhooks",
     },
@@ -418,14 +440,14 @@ if hasattr(k8s_client, "AdmissionregistrationV1beta1Api"):
     KIND_MAP["validatingadmissionpolicies"] = {
         "namespaced": False,
         "api": lambda c: k8s_client.AdmissionregistrationV1beta1Api(c),
-        "list_all": lambda a: a.list_validating_admission_policy(limit=_LIST_LIMIT),
+        "list_all": lambda a, **kw: a.list_validating_admission_policy(**{"limit": _LIST_LIMIT, **kw}),
         "read": lambda a, ns, n: a.read_validating_admission_policy(n),
         "summary": lambda o: f"{len((o.spec.validations or []) if o.spec else [])} validations",
     }
     KIND_MAP["validatingadmissionpolicybindings"] = {
         "namespaced": False,
         "api": lambda c: k8s_client.AdmissionregistrationV1beta1Api(c),
-        "list_all": lambda a: a.list_validating_admission_policy_binding(limit=_LIST_LIMIT),
+        "list_all": lambda a, **kw: a.list_validating_admission_policy_binding(**{"limit": _LIST_LIMIT, **kw}),
         "read": lambda a, ns, n: a.read_validating_admission_policy_binding(n),
         "summary": lambda o: f"→ {(o.spec.policy_name or '-') if o.spec else '-'}",
     }
@@ -549,6 +571,8 @@ class ResourceListResponse(BaseModel):
     columns: list[ColumnDef] = []
     count: int
     truncated: bool
+    cache: Optional[str] = None               # hit | stale | miss (목록 캐시 상태)
+    cache_age_seconds: Optional[float] = None
     items: list[ResourceRow]
 
 
@@ -558,33 +582,14 @@ def list_kinds():
     return {"kinds": sorted(KIND_MAP.keys())}
 
 
-@router.get("/{cluster_id}/resources/{kind}", response_model=ResourceListResponse)
-def list_resources(
-    cluster_id: UUID,
-    kind: str,
-    namespace: Optional[str] = None,
-    db: Session = Depends(get_db),
-):
-    spec = KIND_MAP.get(kind)
-    if spec is None:
-        raise HTTPException(status_code=404, detail=f"지원하지 않는 종류: {kind}")
-    cluster = _require_cluster(cluster_id, db)
-    api = spec["api"](_api_client(cluster))
-    try:
-        if namespace and "list_ns" in spec:
-            result = spec["list_ns"](api, namespace)
-        else:
-            result = spec["list_all"](api)
-    except Exception as e:  # noqa: BLE001
-        msg = str(e)
-        code = 504 if "timeout" in msg.lower() else 502
-        raise HTTPException(status_code=code, detail=f"{kind} 조회 실패: {msg[:200]}")
-
+def _build_rows(kind: str, items) -> list[ResourceRow]:
+    """LIST 항목 → 공통 행. typed 모델과 `K8sObj`(원본 JSON 래퍼) 모두 받는다."""
+    spec = KIND_MAP[kind]
     rows: list[ResourceRow] = []
     summary_fn: Callable[[Any], str] = spec["summary"]
     col_spec = RESOURCE_COLUMNS.get(kind)
     col_fn = col_spec["fn"] if col_spec else None
-    for o in (result.items or []):
+    for o in (items or []):
         try:
             summ = summary_fn(o)
         except Exception:  # noqa: BLE001
@@ -602,10 +607,51 @@ def list_resources(
             cols=cols,
             age_seconds=_age_seconds(o.metadata),
         ))
-    truncated = (result.metadata._continue is not None) if result.metadata else False
     rows.sort(key=lambda r: (r.namespace or "", r.name))
+    return rows
+
+
+@router.get("/{cluster_id}/resources/{kind}", response_model=ResourceListResponse)
+def list_resources(
+    cluster_id: UUID,
+    kind: str,
+    namespace: Optional[str] = None,
+    refresh: bool = False,
+    db: Session = Depends(get_db),
+):
+    """kind 목록. 짧은 캐시(SWR) + single-flight — 같은 목록을 여러 사용자/탭이 열어도 LIST 1회.
+
+    응답은 원본 JSON 으로 받아(`k8s_raw`) 모델 역직렬화 비용 없이 행을 만든다.
+    `refresh=true` 는 캐시를 건너뛰고 새로 조회한다(동시 요청은 여전히 1건으로 합쳐짐).
+    """
+    spec = KIND_MAP.get(kind)
+    if spec is None:
+        raise HTTPException(status_code=404, detail=f"지원하지 않는 종류: {kind}")
+    cluster = _require_cluster(cluster_id, db)
+    api = spec["api"](_api_client(cluster))
+    ns = namespace if (namespace and "list_ns" in spec) else None
+
+    def _load() -> dict:
+        if ns:
+            result = raw_call(spec["list_ns"], api, ns, timeout=_LIST_TIMEOUT)
+        else:
+            result = raw_call(spec["list_all"], api, timeout=_LIST_TIMEOUT)
+        truncated = bool(result.metadata._continue) if result.metadata else False
+        rows = _build_rows(kind, result.items)
+        return {"rows": rows, "truncated": truncated}
+
+    try:
+        data, meta = _list_cache.get((cluster_id, "list", kind, ns or ""), _load, refresh=refresh)
+    except Exception as e:  # noqa: BLE001
+        msg = str(e)
+        code = 504 if "timeout" in msg.lower() or "timed out" in msg.lower() else 502
+        raise HTTPException(status_code=code, detail=f"{kind} 조회 실패: {msg[:200]}")
+
+    col_spec = RESOURCE_COLUMNS.get(kind)
     columns = [ColumnDef(key=k, label=lbl) for k, lbl in (col_spec["defs"] if col_spec else [])]
-    return ResourceListResponse(kind=kind, columns=columns, count=len(rows), truncated=truncated, items=rows)
+    rows = data["rows"]
+    return ResourceListResponse(kind=kind, columns=columns, count=len(rows), truncated=data["truncated"],
+                                items=rows, cache=meta["cache"], cache_age_seconds=meta["age"])
 
 
 @router.get("/{cluster_id}/resources/{kind}/{namespace}/{name}/yaml")
@@ -912,6 +958,7 @@ def scale_resource(
                             details={"cluster_id": str(cluster_id), "replicas": payload.replicas, "error": str(e)[:200]},
                             request=request)
         _raise_k8s_write(e, "scale")
+    _list_cache.bump(cluster_id)  # 탐색기 목록 캐시 무효화(모든 replica)
     audit_logger.record(db, action="k8s.scale", actor=actor, status="success",
                         target_type="k8s", target_id=f"{kind}/{namespace}/{name}",
                         details={"cluster_id": str(cluster_id), "cluster": cluster.name, "replicas": payload.replicas},
@@ -944,6 +991,7 @@ def restart_resource(
                             target_type="k8s", target_id=f"{kind}/{namespace}/{name}",
                             details={"cluster_id": str(cluster_id), "error": str(e)[:200]}, request=request)
         _raise_k8s_write(e, "restart")
+    _list_cache.bump(cluster_id)  # 탐색기 목록 캐시 무효화(모든 replica)
     audit_logger.record(db, action="k8s.restart", actor=actor, status="success",
                         target_type="k8s", target_id=f"{kind}/{namespace}/{name}",
                         details={"cluster_id": str(cluster_id), "cluster": cluster.name}, request=request)
@@ -974,6 +1022,7 @@ def delete_resource(
                             target_type="k8s", target_id=f"{kind}/{namespace}/{name}",
                             details={"cluster_id": str(cluster_id), "error": str(e)[:200]}, request=request)
         _raise_k8s_write(e, "delete")
+    _list_cache.bump(cluster_id)  # 탐색기 목록 캐시 무효화(모든 replica)
     audit_logger.record(db, action="k8s.delete", actor=actor, status="success",
                         target_type="k8s", target_id=f"{kind}/{namespace}/{name}",
                         details={"cluster_id": str(cluster_id), "cluster": cluster.name}, request=request)
@@ -1041,6 +1090,7 @@ def apply_resource_yaml(
                             target_type="k8s", target_id=f"{kind}/{namespace}/{name}",
                             details={"cluster_id": str(cluster_id), "error": str(e)[:200]}, request=request)
         _raise_k8s_write(e, "apply")
+    _list_cache.bump(cluster_id)  # 탐색기 목록 캐시 무효화(모든 replica)
     audit_logger.record(db, action="k8s.apply", actor=actor, status="success",
                         target_type="k8s", target_id=f"{kind}/{namespace}/{name}",
                         details={"cluster_id": str(cluster_id), "cluster": cluster.name}, request=request)
@@ -1101,6 +1151,7 @@ def cordon_node(
                             details={"cluster_id": str(cluster_id), "unschedulable": payload.unschedulable, "error": str(e)[:200]},
                             request=request)
         _raise_k8s_write(e, "cordon")
+    _list_cache.bump(cluster_id)  # 탐색기 목록 캐시 무효화(모든 replica)
     audit_logger.record(db, action="k8s.cordon", actor=actor, status="success",
                         target_type="k8s.node", target_id=name,
                         details={"cluster_id": str(cluster_id), "cluster": cluster.name, "unschedulable": payload.unschedulable},
@@ -1158,6 +1209,7 @@ def drain_node(
             errors.append({"pod": f"{ns}/{pod_name}", "error": msg[:160]})
 
     status_val = "success" if not errors else "partial"
+    _list_cache.bump(cluster_id)  # 탐색기 목록 캐시 무효화(모든 replica)
     audit_logger.record(db, action="k8s.drain", actor=actor, status=status_val,
                         target_type="k8s.node", target_id=name,
                         details={"cluster_id": str(cluster_id), "cluster": cluster.name,
@@ -1422,21 +1474,29 @@ class NodeRichRow(BaseModel):
 
 
 @router.get("/{cluster_id}/nodes")
-def list_nodes_rich(cluster_id: UUID, db: Session = Depends(get_db)):
-    """노드 목록 — Lens 대등 컬럼. usage 는 metrics-server 가용 시 best-effort."""
+def list_nodes_rich(cluster_id: UUID, refresh: bool = False, db: Session = Depends(get_db)):
+    """노드 목록 — Lens 대등 컬럼. usage 는 metrics-server 가용 시 best-effort.
+
+    목록 캐시(SWR·single-flight)와 원본 JSON 파싱(`k8s_raw`)은 `list_resources` 와 동일."""
     cluster = _require_cluster(cluster_id, db)
     client = _api_client(cluster)
-    v1 = k8s_client.CoreV1Api(client)
     try:
-        nodes = v1.list_node(limit=_LIST_LIMIT)
+        body, meta = _list_cache.get((cluster_id, "nodes-rich"), lambda: _load_nodes_rich(client),
+                                     refresh=refresh)
     except Exception as e:  # noqa: BLE001
         raise HTTPException(status_code=502, detail=f"노드 조회 실패: {str(e)[:200]}")
+    return {**body, "cache": meta["cache"], "cache_age_seconds": meta["age"]}
+
+
+def _load_nodes_rich(client) -> dict:
+    v1 = k8s_client.CoreV1Api(client)
+    nodes = raw_call(v1.list_node, limit=_LIST_LIMIT, timeout=_LIST_TIMEOUT)
 
     # usage (metrics-server) — 없으면 생략
     usage: dict[str, dict] = {}
     try:
         co = k8s_client.CustomObjectsApi(client)
-        m = co.list_cluster_custom_object("metrics.k8s.io", "v1beta1", "nodes")
+        m = co.list_cluster_custom_object("metrics.k8s.io", "v1beta1", "nodes", _request_timeout=10)
         for it in (m.get("items") or []):
             usage[it.get("metadata", {}).get("name", "")] = it.get("usage", {}) or {}
     except Exception:  # noqa: BLE001
@@ -1586,20 +1646,32 @@ def _pod_status_color(phase: str, cells: list[PodContainerCell]) -> str:
 
 
 @router.get("/{cluster_id}/pods")
-def list_pods_rich(cluster_id: UUID, namespace: Optional[str] = None, db: Session = Depends(get_db)):
+def list_pods_rich(cluster_id: UUID, namespace: Optional[str] = None, refresh: bool = False,
+                   db: Session = Depends(get_db)):
     """파드 목록 — Lens 대등 컬럼 (컨테이너 색칸/재시작/소유자/노드/QoS/상태).
 
     CPU/Mem 사용량(metrics-server)과 Warning 이벤트는 best-effort 병렬 조회 —
     없거나 실패해도 목록은 정상 반환(freelens 의 즉시값 컬럼 파리티).
+    목록 캐시(SWR·single-flight)와 원본 JSON 파싱(`k8s_raw`)은 `list_resources` 와 동일.
     """
-    from concurrent.futures import ThreadPoolExecutor
-
     cluster = _require_cluster(cluster_id, db)
     client = _api_client(cluster)
+    try:
+        body, meta = _list_cache.get((cluster_id, "pods-rich", namespace or ""),
+                                     lambda: _load_pods_rich(client, namespace), refresh=refresh)
+    except Exception as e:  # noqa: BLE001
+        code = 504 if ("timeout" in str(e).lower() or "timed out" in str(e).lower()) else 502
+        raise HTTPException(status_code=code, detail=f"파드 조회 실패: {str(e)[:200]}")
+    return {**body, "cache": meta["cache"], "cache_age_seconds": meta["age"]}
+
+
+def _load_pods_rich(client, namespace: Optional[str]) -> dict:
     v1 = k8s_client.CoreV1Api(client)
 
     def _fetch_pods():
-        return v1.list_namespaced_pod(namespace, limit=_LIST_LIMIT) if namespace else v1.list_pod_for_all_namespaces(limit=_LIST_LIMIT)
+        if namespace:
+            return raw_call(v1.list_namespaced_pod, namespace, limit=_LIST_LIMIT, timeout=_LIST_TIMEOUT)
+        return raw_call(v1.list_pod_for_all_namespaces, limit=_LIST_LIMIT, timeout=_LIST_TIMEOUT)
 
     def _fetch_usage() -> dict[tuple[str, str], tuple[str, str]]:
         """(ns, pod) → (cpu 표시, mem 표시). metrics-server 없으면 예외 → {}."""
@@ -1626,11 +1698,11 @@ def list_pods_rich(cluster_id: UUID, namespace: Optional[str] = None, db: Sessio
         """(ns, pod) → (warning 수, 최신 reason). 실패 시 예외 → {}."""
         fs = "type=Warning,involvedObject.kind=Pod"
         if namespace:
-            evs = v1.list_namespaced_event(
-                namespace, field_selector=fs, limit=_LIST_LIMIT, _request_timeout=10)
+            evs = raw_call(v1.list_namespaced_event, namespace,
+                           field_selector=fs, limit=_LIST_LIMIT, timeout=10)
         else:
-            evs = v1.list_event_for_all_namespaces(
-                field_selector=fs, limit=_LIST_LIMIT, _request_timeout=10)
+            evs = raw_call(v1.list_event_for_all_namespaces,
+                           field_selector=fs, limit=_LIST_LIMIT, timeout=10)
         out: dict[tuple[str, str], tuple[int, str]] = {}
         latest: dict[tuple[str, str], object] = {}
         for ev in (evs.items or []):
@@ -1654,11 +1726,7 @@ def list_pods_rich(cluster_id: UUID, namespace: Optional[str] = None, db: Sessio
         f_pods = ex.submit(_fetch_pods)
         f_usage = ex.submit(_fetch_usage)
         f_warn = ex.submit(_fetch_warnings)
-        try:
-            res = f_pods.result()
-        except Exception as e:  # noqa: BLE001
-            code = 504 if "timeout" in str(e).lower() else 502
-            raise HTTPException(status_code=code, detail=f"파드 조회 실패: {str(e)[:200]}")
+        res = f_pods.result()   # 실패는 호출부(list_pods_rich)가 502/504 로 변환
         try:
             usage = f_usage.result()
         except Exception:  # noqa: BLE001
@@ -1705,7 +1773,7 @@ def list_pods_rich(cluster_id: UUID, namespace: Optional[str] = None, db: Sessio
             warning_reason=w[1] if w else None,
         ))
     rows.sort(key=lambda r: (r.namespace or "", r.name))
-    truncated = (res.metadata._continue is not None) if res.metadata else False
+    truncated = bool(res.metadata._continue) if res.metadata else False
     return {"count": len(rows), "truncated": truncated, "items": rows, "metrics_available": bool(usage)}
 
 
@@ -1805,52 +1873,103 @@ def pods_summary(cluster_id: UUID, db: Session = Depends(get_db)):
 
 
 # ── 종류 가용성 — 클러스터에 실제 존재(≥1)/지원하는 종류만 UI 노출용 ───────────
+# 종류 가용성 결과 캐시 — 화면 진입마다 ~40종 LIST 를 다시 치지 않도록 replica 간 공유(Redis,
+# 없으면 프로세스 메모리). nav 노출 여부·개수 배지 용도라 수 분 지연은 무해하다.
+_AVAIL_TTL = 300          # 전부 성공한 결과
+_AVAIL_PARTIAL_TTL = 60   # 일부 프로브가 타임아웃/오류(count=None)인 결과 — 빨리 재시도
+_AVAIL_PROBE_TIMEOUT = 8.0  # 프로브 1건 read timeout(초) — limit=1 이라 정상이면 수십 ms
+_AVAIL_BUDGET = 15.0        # 전체 응답 예산(초) — 게이트웨이 타임아웃 전에 부분 결과라도 반환
+_AVAIL_WORKERS = 6
+_avail_store = _RedisStore(prefix="kindavail")
+_avail_mem: dict[str, tuple[float, dict]] = {}
+_avail_mem_lock = threading.Lock()
+
+
+def _avail_cache_get(key: str) -> Optional[dict]:
+    hit = _avail_store.get_json(key, "result")
+    if isinstance(hit, dict):
+        return hit
+    with _avail_mem_lock:
+        ent = _avail_mem.get(key)
+        if ent and ent[0] > time.time():
+            return ent[1]
+    return None
+
+
+def _avail_cache_put(key: str, value: dict, ttl: int) -> None:
+    if _avail_store.set_json(key, "result", value, ex=ttl):
+        return
+    with _avail_mem_lock:
+        _avail_mem[key] = (time.time() + ttl, value)
+
+
+def _probe_kind(client, kind: str, timeout: float) -> dict:
+    """kind 1종의 available/present/count 를 **limit=1** LIST 로 확인한다.
+
+    존재 여부는 첫 항목 1개면 충분하고, 개수는 apiserver 의 `remainingItemCount` 로 정확히 얻는다
+    (limit=1000 으로 secrets/configmaps 본문까지 전부 받아오던 비용 제거). selector 가 없어
+    remainingItemCount 가 오지만, 구버전/일부 리소스에서 안 오면 개수는 알 수 없음(None)으로 둔다.
+    """
+    spec = KIND_MAP[kind]
+    try:
+        res = spec["list_all"](spec["api"](client), limit=1, _request_timeout=(3.05, timeout))
+        items = res.items or []
+        meta = getattr(res, "metadata", None)
+        more = bool(getattr(meta, "_continue", None)) if meta else False
+        remaining = getattr(meta, "remaining_item_count", None) if meta else None
+        if not more:
+            count: Optional[int] = len(items)
+        elif remaining is not None:
+            count = len(items) + int(remaining)
+        else:
+            count = None
+        return {"available": True, "present": bool(items) or more, "count": count, "truncated": False}
+    except ApiException as e:
+        return {"available": e.status not in (404,), "present": False, "count": 0, "truncated": False}
+    except Exception:  # noqa: BLE001
+        # 타임아웃/일시오류 → 알 수 없음: nav 엔 표시(present=True)하되 배지 숨김(count=None)
+        return {"available": True, "present": True, "count": None, "truncated": False}
+
+
 @router.get("/{cluster_id}/kind-availability")
-def kind_availability(cluster_id: UUID, db: Session = Depends(get_db)):
-    """각 KIND 별 available(API 지원) / present(≥1개 존재) 를 병렬 프로브.
+def kind_availability(cluster_id: UUID, refresh: bool = False, db: Session = Depends(get_db)):
+    """각 KIND 별 available(API 지원) / present(≥1개 존재) / count 를 병렬 프로브.
 
     프론트는 present=False(또는 available=False) 종류를 nav 에서 숨겨 클러스터에
     실제 있는 것만 보여준다. 프로브 실패 시(전체 에러) 프론트는 전체 노출로 폴백.
-    """
-    import time as _t
-    from concurrent.futures import ThreadPoolExecutor
-    from app.services.resource_count_service import COUNT_METHODS
 
-    _PROBE_LIMIT = 1000
-    _PROBE_TIMEOUT = 15   # 페이지당 apiserver 타임아웃(초)
-    _BUDGET = 25          # 전체 응답 예산(초) — 게이트웨이 타임아웃 전에 부분 결과라도 반환
+    대상 apiserver 보호:
+      - 종류당 `limit=1` LIST 1회(본문 대량 전송 없음), read timeout 짧게.
+      - 결과는 클러스터 단위로 캐시(_AVAIL_TTL) — `refresh=true` 로만 강제 재조회.
+      - 전체 응답 예산(_AVAIL_BUDGET)을 넘긴 프로브는 기다리지 않고 "알 수 없음"으로 응답한다.
+        (예전엔 `with ThreadPoolExecutor` 의 종료가 남은 프로브를 전부 기다려 예산이 무의미했다.)
+    """
+    cache_key = str(cluster_id)
+    if not refresh:
+        hit = _avail_cache_get(cache_key)
+        if hit is not None:
+            return hit
 
     cluster = _require_cluster(cluster_id, db)
     client = _api_client(cluster)
 
-    def _probe(kind: str) -> tuple[str, dict]:
-        spec = KIND_MAP[kind]
-        try:
-            cm = COUNT_METHODS.get(kind)
-            if cm:  # 타임아웃 지정 가능 경로(무거운 kind 대부분 포함)
-                api_attr, method_name = cm
-                res = getattr(getattr(k8s_client, api_attr)(client), method_name)(
-                    limit=_PROBE_LIMIT, _request_timeout=_PROBE_TIMEOUT)
-            else:   # 그 외(RBAC 등 가벼움) — 기존 경로
-                res = spec["list_all"](spec["api"](client))
-            items = res.items or []
-            more = bool(res.metadata._continue) if getattr(res, "metadata", None) else False
-            return kind, {"available": True, "present": (len(items) > 0) or more, "count": len(items), "truncated": more}
-        except ApiException as e:
-            avail = e.status not in (404,)
-            return kind, {"available": avail, "present": False, "count": 0, "truncated": False}
-        except Exception:  # noqa: BLE001
-            # 타임아웃/일시오류 → 알 수 없음: nav 엔 표시(present=True)하되 배지 숨김(count=None)
-            return kind, {"available": True, "present": True, "count": None, "truncated": False}
-
+    unknown = {"available": True, "present": True, "count": None, "truncated": False}
     out: dict[str, dict] = {}
-    deadline = _t.time() + _BUDGET
-    with ThreadPoolExecutor(max_workers=4) as ex:
-        futs = {ex.submit(_probe, k): k for k in KIND_MAP}
-        for fut, k in futs.items():
+    deadline = time.monotonic() + _AVAIL_BUDGET
+    ex = ThreadPoolExecutor(max_workers=_AVAIL_WORKERS, thread_name_prefix="kind-avail")
+    try:
+        futs = {k: ex.submit(_probe_kind, client, k, _AVAIL_PROBE_TIMEOUT) for k in KIND_MAP}
+        for k, fut in futs.items():
             try:
-                kind, info = fut.result(timeout=max(0.1, deadline - _t.time()))
-                out[kind] = info
-            except Exception:  # noqa: BLE001
-                out[k] = {"available": True, "present": True, "count": None, "truncated": False}
-    return {"kinds": out}
+                out[k] = fut.result(timeout=max(0.05, deadline - time.monotonic()))
+            except Exception:  # noqa: BLE001 — 예산 초과 포함
+                out[k] = dict(unknown)
+    finally:
+        # 남은 프로브는 취소(미시작분)하고 기다리지 않는다 — 진행 중인 것은 자체 timeout 으로 끝난다.
+        ex.shutdown(wait=False, cancel_futures=True)
+
+    body = {"kinds": out}
+    if any(v.get("count") is not None or not v.get("present") for v in out.values()):
+        partial = any(v.get("count") is None and v.get("present") for v in out.values())
+        _avail_cache_put(cache_key, body, _AVAIL_PARTIAL_TTL if partial else _AVAIL_TTL)
+    return body

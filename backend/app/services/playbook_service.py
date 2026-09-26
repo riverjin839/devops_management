@@ -12,12 +12,13 @@ import logging
 from datetime import datetime
 from typing import Any, Optional
 
-from kubernetes import client as k8s_client, config as k8s_config
+from kubernetes import client as k8s_client
 from sqlalchemy.orm import Session
 
 from app.models import Cluster, Playbook, PlaybookRun
 from app.services.kubeconfig import ensure_kubeconfig_file
 from app.services.playbook_executor import PlaybookResult, run_playbook
+from app.services.k8s_client_pool import get_api_client_for_path
 
 logger = logging.getLogger(__name__)
 
@@ -34,7 +35,7 @@ def cluster_node_hosts(cluster: Optional[Cluster]) -> list[str]:
     if not kc:
         return []
     try:
-        api_client = k8s_config.new_client_from_config(config_file=kc)
+        api_client = get_api_client_for_path(kc)
         v1 = k8s_client.CoreV1Api(api_client)
         nodes = v1.list_node(_request_timeout=10)
     except Exception as e:  # noqa: BLE001

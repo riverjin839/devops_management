@@ -13,7 +13,7 @@ from datetime import date, datetime, timedelta
 from typing import Any, Optional
 from uuid import UUID
 
-from kubernetes import client as k8s_client, config as k8s_config
+from kubernetes import client as k8s_client
 from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
@@ -22,6 +22,7 @@ from app.models.resource_count import (
     MetricCheckState, MetricChecklistItem, ResourceCountSnapshot, SnapshotSource,
 )
 from app.services.kubeconfig import ensure_kubeconfig_file
+from app.services.k8s_client_pool import get_api_client_for_path
 
 logger = logging.getLogger(__name__)
 
@@ -112,7 +113,7 @@ def _client(cluster: Cluster):
     kc = ensure_kubeconfig_file(cluster)
     if not kc or not os.path.exists(kc):
         raise RuntimeError("kubeconfig 가 등록되지 않은 클러스터입니다.")
-    return k8s_config.new_client_from_config(config_file=kc)
+    return get_api_client_for_path(kc)
 
 
 def _count_kind(api_client, kind: str) -> tuple[int, bool]:

@@ -1,10 +1,12 @@
 import os
 import re
 
-from kubernetes import client, config
+from kubernetes import client
 from kubernetes.client.rest import ApiException
 
 from app.models.cluster import Cluster
+from app.services.k8s_client_pool import K8sClientError, get_api_client_for_path, get_incluster_api_client
+from app.services.kubeconfig import ensure_kubeconfig_file
 
 PROTECTED_PREFIXES = ("kubernetes.io/", "k8s.io/")
 IMMUTABLE_KEYS = {"kubernetes.io/hostname"}
@@ -26,17 +28,18 @@ class NodeLabelService:
         # 전역(default) Configuration 을 덮어쓰는데, 여러 클러스터 요청이 동시에 들어오면
         # 서로의 전역 설정을 클로버링해서 "A 클러스터를 조회했는데 B 클러스터 노드가 돌아오는"
         # 현상(노드 수가 11↔364 로 튐)이 발생한다. client_configuration 로 격리해 이를 막는다.
-        cfg = client.Configuration()
-        kubeconfig = self.cluster.kubeconfig_path
+        # 풀 클라이언트는 kubeconfig 내용별로 격리돼 있고(기본 타임아웃·read 재시도 0), 경로가
+        # 사라졌으면 DB content 로 재생성(ensure)한다.
+        kubeconfig = ensure_kubeconfig_file(self.cluster)
         if kubeconfig and os.path.exists(kubeconfig):
-            config.load_kube_config(config_file=kubeconfig, client_configuration=cfg)
+            api_client = get_api_client_for_path(kubeconfig)
         else:
             # kubeconfig 없거나 파일 미존재 → in-cluster 서비스 어카운트 시도
             try:
-                config.load_incluster_config(client_configuration=cfg)
-            except config.ConfigException:
-                if kubeconfig:
-                    detail = f"kubeconfig 파일을 찾을 수 없습니다: '{kubeconfig}'"
+                api_client = get_incluster_api_client(allow_local_fallback=False)
+            except K8sClientError:
+                if self.cluster.kubeconfig_path:
+                    detail = f"kubeconfig 파일을 찾을 수 없습니다: '{self.cluster.kubeconfig_path}'"
                 else:
                     detail = f"클러스터 '{self.cluster.name}'에 kubeconfig_path가 설정되지 않았습니다"
                 raise ValueError(
@@ -44,7 +47,7 @@ class NodeLabelService:
                     "클러스터 설정에서 kubeconfig를 등록하세요."
                 )
 
-        self._v1 = client.CoreV1Api(api_client=client.ApiClient(configuration=cfg))
+        self._v1 = client.CoreV1Api(api_client=api_client)
         return self._v1
 
     @staticmethod

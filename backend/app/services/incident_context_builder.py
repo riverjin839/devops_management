@@ -53,7 +53,7 @@ def _fetch_pod_logs(db: Session, cluster_id: Optional[UUID], namespace: Optional
     if not (namespace and resource):
         return None
     try:
-        from kubernetes import client as k8s_client, config as k8s_config
+        from kubernetes import client as k8s_client
 
         from app.models import Cluster
         from app.services.kubeconfig import ensure_kubeconfig_file
@@ -64,8 +64,8 @@ def _fetch_pod_logs(db: Session, cluster_id: Optional[UUID], namespace: Optional
         kc_path = ensure_kubeconfig_file(cluster)
         if not kc_path:
             return None
-        k8s_config.load_kube_config(config_file=kc_path)
-        core = k8s_client.CoreV1Api()
+        from app.services.k8s_client_pool import get_api_client_for_path
+        core = k8s_client.CoreV1Api(get_api_client_for_path(kc_path))
         logs = core.read_namespaced_pod_log(
             name=resource, namespace=namespace,
             tail_lines=200, _request_timeout=15,
