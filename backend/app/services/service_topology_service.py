@@ -22,11 +22,12 @@ from datetime import datetime, timezone
 from typing import Any, Optional
 
 from fastapi import HTTPException
-from kubernetes import client as k8s_client, config as k8s_config
+from kubernetes import client as k8s_client
 
 from app.models import Cluster
 from app.services.kubeconfig import ensure_kubeconfig_file
 from app.services.k8s_paging import iter_all, list_all
+from app.services.k8s_client_pool import get_api_client_for_path
 
 logger = logging.getLogger(__name__)
 
@@ -43,7 +44,7 @@ def api_client(cluster: Cluster) -> k8s_client.ApiClient:
     if not kc_path or not os.path.exists(kc_path):
         raise HTTPException(status_code=422, detail="kubeconfig 가 등록되지 않은 클러스터입니다.")
     try:
-        return k8s_config.new_client_from_config(config_file=kc_path)
+        return get_api_client_for_path(kc_path)
     except Exception as e:  # noqa: BLE001
         raise HTTPException(status_code=502, detail=f"kubeconfig 로드 실패: {str(e)[:200]}") from e
 

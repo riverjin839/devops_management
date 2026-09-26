@@ -5,7 +5,7 @@ import time
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
-from kubernetes import client as k8s_client, config as k8s_config
+from kubernetes import client as k8s_client
 from sqlalchemy.orm import Session
 
 from app.database import get_db
@@ -21,6 +21,7 @@ from app.services.kubeconfig import ensure_kubeconfig_file
 from app.services.script_wrap import wrap_script_for_language
 from app.services.ssh_runner import SSHTarget, fetch_remote_file, run_bulk
 from app.services import audit_logger
+from app.services.k8s_client_pool import get_api_client_for_path
 
 router = APIRouter(tags=["bulk-exec"])
 
@@ -46,7 +47,7 @@ def list_cluster_nodes(cluster_id: UUID, db: Session = Depends(get_db)):
         )
 
     try:
-        api_client = k8s_config.new_client_from_config(config_file=kc_path)
+        api_client = get_api_client_for_path(kc_path)
         v1 = k8s_client.CoreV1Api(api_client)
         nodes = v1.list_node(_request_timeout=10)
     except Exception as e:

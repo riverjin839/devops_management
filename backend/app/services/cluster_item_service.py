@@ -23,7 +23,7 @@ from datetime import datetime, timezone
 from typing import Callable, Optional
 from urllib.parse import urlparse
 
-from kubernetes import client, config
+from kubernetes import client
 from sqlalchemy.orm import Session
 
 from app.config import settings
@@ -31,6 +31,7 @@ from app.models import Cluster
 from app.models.cluster_item import ClusterItem
 from app.services.checkers.node_checker import NodeChecker
 from app.services.kubeconfig import ensure_kubeconfig_file
+from app.services.k8s_client_pool import get_api_client_for_path, get_incluster_api_client
 
 logger = logging.getLogger(__name__)
 
@@ -52,13 +53,10 @@ def _k8s(cluster: Cluster) -> tuple[client.CoreV1Api, client.VersionApi]:
     """클러스터별 K8s 클라이언트. BaseChecker._get_k8s_client 와 동일 로직."""
     kc_path = ensure_kubeconfig_file(cluster)
     if kc_path and os.path.exists(kc_path):
-        config.load_kube_config(config_file=kc_path)
+        api_client = get_api_client_for_path(kc_path)
     else:
-        try:
-            config.load_incluster_config()
-        except config.ConfigException:
-            config.load_kube_config()
-    return client.CoreV1Api(), client.VersionApi()
+        api_client = get_incluster_api_client()
+    return client.CoreV1Api(api_client), client.VersionApi(api_client)
 
 
 # ── Collectors ─────────────────────────────────────────────

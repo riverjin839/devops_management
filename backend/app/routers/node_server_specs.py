@@ -8,7 +8,7 @@ from uuid import UUID
 import json
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from kubernetes import client as k8s_client, config as k8s_config
+from kubernetes import client as k8s_client
 from sqlalchemy.orm import Session
 
 from app.auth.deps import require_operator
@@ -31,6 +31,7 @@ from app.schemas.node_server_spec import (
 )
 from app.services.kubeconfig import ensure_kubeconfig_file
 from app.services.ssh_runner import SSHTarget, run_bulk
+from app.services.k8s_client_pool import get_api_client_for_path
 
 router = APIRouter(prefix="/node-specs", tags=["node-specs"])
 
@@ -452,7 +453,7 @@ def import_from_cluster(
         raise HTTPException(status_code=422, detail="kubeconfig 가 등록돼 있지 않습니다.")
 
     try:
-        api_client = k8s_config.new_client_from_config(config_file=kc_path)
+        api_client = get_api_client_for_path(kc_path)
         v1 = k8s_client.CoreV1Api(api_client)
         nodes = v1.list_node(_request_timeout=_K8S_TIMEOUT)
     except Exception as e:

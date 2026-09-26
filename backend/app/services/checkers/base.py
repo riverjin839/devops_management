@@ -5,11 +5,12 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any, Optional
 
-from kubernetes import client, config
+from kubernetes import client
 from sqlalchemy.orm import Session
 
 from app.models import Cluster, Addon, StatusEnum
 from app.services.kubeconfig import ensure_kubeconfig_file
+from app.services.k8s_client_pool import get_api_client_for_path, get_incluster_api_client
 
 
 # exception message 에 들어있으면 "연결 문제"로 분류해 pending 처리
@@ -52,16 +53,15 @@ class BaseChecker(ABC):
             return self._v1
 
         # kubeconfig 파일이 없으면 DB content 로 재생성 시도
+        # 전역 config.load_kube_config() 는 동시 점검 시 다른 클러스터로 요청이 새는 race 를
+        # 만든다 — 격리된 풀 클라이언트(기본 타임아웃·read 재시도 0)를 쓴다.
         kc_path = ensure_kubeconfig_file(self.cluster)
         if kc_path and os.path.exists(kc_path):
-            config.load_kube_config(config_file=kc_path)
+            api_client = get_api_client_for_path(kc_path)
         else:
-            try:
-                config.load_incluster_config()
-            except config.ConfigException:
-                config.load_kube_config()
+            api_client = get_incluster_api_client()
 
-        self._v1 = client.CoreV1Api()
+        self._v1 = client.CoreV1Api(api_client)
         return self._v1
 
     # ── 시간 측정 헬퍼 ──────────────────────────────────────

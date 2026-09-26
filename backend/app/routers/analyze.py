@@ -18,7 +18,7 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import PlainTextResponse, StreamingResponse
-from kubernetes import client as k8s_client, config as k8s_config, watch as k8s_watch
+from kubernetes import client as k8s_client, watch as k8s_watch
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
@@ -33,6 +33,7 @@ from app.services.analyzers import (
     get_analyzer,
 )
 from app.services.kubeconfig import ensure_kubeconfig_file
+from app.services.k8s_client_pool import get_api_client_for_path
 
 logger = logging.getLogger(__name__)
 
@@ -56,7 +57,7 @@ def _get_core_v1(cluster: Cluster) -> k8s_client.CoreV1Api:
             detail="kubeconfig 가 등록되지 않은 클러스터입니다. 먼저 kubeconfig 를 등록하세요.",
         )
     try:
-        api_client = k8s_config.new_client_from_config(config_file=kc_path)
+        api_client = get_api_client_for_path(kc_path)
         return k8s_client.CoreV1Api(api_client)
     except Exception as e:
         raise HTTPException(status_code=502, detail=f"kubeconfig 로드 실패: {str(e)[:200]}") from e

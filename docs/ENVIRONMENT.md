@@ -100,6 +100,11 @@
 | `ALLOWED_ORIGINS` | *(empty)* | `main.py` — 추가 CORS origin (콤마 구분) |
 | `PEP_K9S_SSH_ENABLED` | `true` | `routers/k9s_ssh.py` — k9s 콘솔(SSH 웹 터미널) on/off. `false`\|`0`\|`no` 면 WS 를 4403 으로 거부 |
 | `PEP_NODE_SSH_ENABLED` | `true` | `routers/node_ssh.py` — 노드 SSH 터미널 on/off (위와 동일 규칙) |
+| `K8S_API_TIMEOUT` | `30.0` | `services/k8s_client_pool.py` — 대상 K8s 호출에서 `_request_timeout` 을 지정하지 않은 요청에 주입하는 기본 read timeout(초). watch·로그 follow(`_preload_content=False`)에는 주입하지 않음 |
+| `K8S_API_CONNECT_TIMEOUT` | `5.0` | 동일 — 기본 connect timeout(초) |
+| `K8S_CLIENT_CACHE_TTL` | `300` (5m) | 동일 — 클러스터별 공유 `ApiClient` 캐시 수명(초). exec/OIDC 토큰 만료보다 짧게 둔다. kubeconfig 내용이 바뀌면 TTL 과 무관하게 즉시 재생성 |
+| `K8S_CLIENT_CACHE_MAX` | `64` | 동일 — 캐시할 클러스터(kubeconfig) 수 상한. 초과 시 가장 오래 안 쓴 항목 퇴출 |
+| `K8S_CLIENT_POOL_MAXSIZE` | `8` | 동일 — 클러스터 1개당 동시 keep-alive 연결 상한(urllib3 풀 크기) |
 | `K8S_ALLOC_OVERVIEW_TTL` | `86400` (24h) | `routers/k8s_allocation.py` — `/k8s-allocation` 전체 스냅샷(노드+네임스페이스) 캐시 수명(초). 완전한 결과에만 적용 — 절단(partial) 결과는 `K8S_ALLOC_PARTIAL_TTL` 이 우선 |
 | `K8S_ALLOC_PARTIAL_TTL` | `300` (5m) | 동일 — 부분(절단) 스냅샷의 짧은 캐시 수명(초). apiserver 5xx/`_continue` 토큰 만료로 전량 순회가 끊긴 결과가 24h 짜리 확정 데이터처럼 서빙되지 않도록 자동 재집계를 유도 |
 | `K8S_ALLOC_STUCK_TIMEOUT` | `1800` (30m) | 동일 — 백그라운드 집계가 이 시간을 넘겨도 안 끝나면(행업) `refresh` 요청 시 새 계산으로 교체 |

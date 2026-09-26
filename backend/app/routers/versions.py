@@ -20,7 +20,7 @@ from typing import Any, Callable
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from kubernetes import client as k8s_client, config as k8s_config
+from kubernetes import client as k8s_client
 from kubernetes.client import ApiException
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
@@ -35,6 +35,7 @@ from app.services.config_snapshot import (
     store_if_changed as _store_if_changed,
     record_cluster_meta_snapshots,
 )
+from app.services.k8s_client_pool import get_api_client_for_path
 
 router = APIRouter(prefix="/clusters", tags=["versions"])
 
@@ -83,7 +84,7 @@ def _image_tag(image: str) -> str:
 
 def _collect_all(cluster: Cluster, kc_path: str, db: Session) -> dict:
     """실제 수집 수행. 반환은 요약(각 카테고리별 변경 개수)."""
-    api_client = k8s_config.new_client_from_config(config_file=kc_path)
+    api_client = get_api_client_for_path(kc_path)
     v1 = k8s_client.CoreV1Api(api_client)
     version_api = k8s_client.VersionApi(api_client)
 
@@ -1613,7 +1614,7 @@ async def collect_node_nics(
         try:
             kc_path = _ensure_kubeconfig_file_for(cluster)
             if kc_path:
-                api_client = k8s_config.new_client_from_config(config_file=kc_path)
+                api_client = get_api_client_for_path(kc_path)
                 v1 = k8s_client.CoreV1Api(api_client)
                 k8s_nodes = v1.list_node(_request_timeout=10)
                 for kn in k8s_nodes.items:
@@ -2106,7 +2107,7 @@ def collect_minio(
         )
 
     try:
-        api_client = k8s_config.new_client_from_config(config_file=kc_path)
+        api_client = get_api_client_for_path(kc_path)
         now = datetime.utcnow()
         result = _collect_minio_one(api_client, db, cluster, now)
         db.commit()

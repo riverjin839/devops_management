@@ -10,6 +10,20 @@
 
 1.37.0 이후 main 에 병합된 변경 (다음 릴리스 후보).
 
+### Fixed
+- **대상 K8s 호출 안정성·성능 개선 (공용 클라이언트 풀)**: 느려진 apiserver 앞에서 백엔드가 멈추거나
+  부하를 키우던 문제를 막는다. 모든 K8s 조회가 클러스터별 공유 `ApiClient` 를 재사용해 매 요청 TLS
+  핸드셰이크·kubeconfig 파싱·exec 인증 플러그인 실행이 사라지고, `_request_timeout` 을 빠뜨린 호출
+  (리소스 탐색기 목록/YAML·노드·CRD 등)에도 기본 타임아웃(connect 5s / read 30s)이 걸린다. urllib3 기본
+  `Retry(3)` 이 read timeout 난 LIST 를 3번 더 보내던 증폭도 read 재시도 0 으로 막았다.
+  전역 `config.load_kube_config()` 로 동시 요청이 **다른 클러스터로 새던 race** 와, 토폴로지 추적이
+  kubeconfig 파일이 사라지면 조용히 PEP 자신의 클러스터를 조회하던 오답도 함께 제거.
+  Backend: `services/k8s_client_pool.py`(신규), 라우터·체커·서비스의 클라이언트 생성부 일원화.
+- **K8S 관리 화면 진입 부하 감소 (`kind-availability`)**: 종류 가용성 프로브가 약 40종을 `limit=1000`
+  으로 전부(Secret·ConfigMap 본문 포함) 받아오던 것을 `limit=1` + `remainingItemCount` 로 바꿔 개수는
+  오히려 정확해졌다. 결과는 클러스터 단위로 5분 캐시(replica 간 Redis 공유, 부분 결과는 1분)하고,
+  25초 예산이 `ThreadPoolExecutor` 종료 대기 때문에 무시돼 60초 타임아웃이 나던 버그도 수정(예산 15초).
+
 ## [1.37.0] - 2026-09-25
 
 ### Changed

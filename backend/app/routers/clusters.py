@@ -51,6 +51,7 @@ from app.services.kubeconfig import (
     ensure_kubeconfig_file as _ensure_kubeconfig_file,    # noqa: F401  (호환)
     resolve_kubeconfig as _resolve_kubeconfig,
 )
+from app.services.k8s_client_pool import get_api_client_for_path
 
 
 def _verify_cluster_connectivity(api_endpoint: str, kubeconfig_path: str | None) -> None:
@@ -626,7 +627,7 @@ def verify_cluster(
     kc_path, kc_reason = _resolve_kubeconfig(cluster)
     if kc_path and os.path.exists(kc_path):
         try:
-            api_client = k8s_config.new_client_from_config(config_file=kc_path)
+            api_client = get_api_client_for_path(kc_path)
             v1 = k8s_client.CoreV1Api(api_client)
             v1.list_namespace(limit=1, _request_timeout=_K8S_AUTH_TIMEOUT)
             results.append({"check": "kubeconfig_auth", "ok": True, "detail": "인증 성공"})
@@ -786,7 +787,7 @@ def _collect_node_basics(cluster: Cluster, db: Session) -> bool:
     if not kc_path or not os.path.exists(kc_path):
         return False
     try:
-        api_client = k8s_config.new_client_from_config(config_file=kc_path)
+        api_client = get_api_client_for_path(kc_path)
         v1 = k8s_client.CoreV1Api(api_client)
         nodes = v1.list_node(_request_timeout=_K8S_AUTH_TIMEOUT * 4)
     except Exception:
@@ -889,7 +890,7 @@ def auto_update_cluster(
     warnings: list[str] = []
 
     try:
-        api_client = k8s_config.new_client_from_config(config_file=kc_path)
+        api_client = get_api_client_for_path(kc_path)
     except Exception as e:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=f"kubeconfig 로드 실패: {str(e)[:120]}")
 
