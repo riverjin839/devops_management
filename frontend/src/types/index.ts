@@ -3935,6 +3935,10 @@ export interface K8sPodsResponse {
   metricsAvailable?: boolean;
   cache?: K8sListCacheState | null;
   cacheAgeSeconds?: number | null;
+  /** 페이지 조회 시 다음 페이지 토큰(없으면 마지막 페이지) */
+  continueToken?: string | null;
+  /** apiserver 가 알려준 남은 파드 수(추정치, 없을 수 있음) */
+  remainingCount?: number | null;
 }
 
 // Pods 요약 (K8s 상세 관리 개요 카드 — 용량/상태별 카운트)

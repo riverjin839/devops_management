@@ -104,6 +104,17 @@ celery_app.conf.beat_schedule = {
 }
 
 
+def _dispatch_jitter() -> float:
+    """디스패처 팬아웃 지연(초) — `K8S_DISPATCH_JITTER_SECONDS`(기본 20, 0 이면 즉시)."""
+    import os
+    import random
+    try:
+        j = float(os.getenv("K8S_DISPATCH_JITTER_SECONDS", "20"))
+    except ValueError:
+        j = 20.0
+    return random.uniform(0, j) if j > 0 else 0.0
+
+
 @celery_app.task(bind=True, name="app.celery_app.run_check_matrix_dispatch", ignore_result=True)
 def run_check_matrix_dispatch(self):
     """점검 매트릭스 디스패처 — 매분 실행, due 한 core_bundle(Cluster.check_cron_expr) +
@@ -119,7 +130,12 @@ def run_check_matrix_dispatch(self):
 
     db = SessionLocal()
     try:
-        return cms.dispatch_due(db)
+        import os
+        try:
+            jitter = float(os.getenv("K8S_DISPATCH_JITTER_SECONDS", "20"))
+        except ValueError:
+            jitter = 20.0
+        return cms.dispatch_due(db, jitter_seconds=jitter)
     except Exception as e:  # noqa: BLE001
         logging.getLogger(__name__).exception("run_check_matrix_dispatch failed: %s", e)
         return {"error": str(e)[:200]}
@@ -1529,7 +1545,9 @@ def dispatch_k8s_efficiency_collect(self):
                 continue
             if next_fire > now_naive:
                 continue
-            collect_k8s_efficiency_one.delay(str(cluster.id))
+            # 같은 분에 due 한 다른 작업(점검 매트릭스·리소스 카운트 등)과 같은 클러스터를 정확히
+            # 같은 순간에 두드리지 않도록 0~jitter 초 랜덤 지연(점검 매트릭스 dispatch_due 와 동일 정책).
+            collect_k8s_efficiency_one.apply_async(args=[str(cluster.id)], countdown=_dispatch_jitter())
             effcfg.mark_cluster_run(db, str(cluster.id), datetime.now(_tz.utc).isoformat())
             fired.append(cluster.name)
         if fired:

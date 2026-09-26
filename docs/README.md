@@ -17,6 +17,7 @@ PEP 문서 모음. 루트의 [README](../README.md) · [CHANGELOG](../CHANGELOG.
 - [K8S_ALLOCATION_GUIDE.md](K8S_ALLOCATION_GUIDE.md) — **K8S 자원 관리 운영 매뉴얼**(`/k8s-allocation`): 노드/NS 용량 계획 화면 + 효율화 탭 사용법(추천 적용/롤백, NS 정책 opt-in, ResourceQuota 탄력, 오퍼레이터 CR 어댑터), 트러블슈팅
 - [OBSERVABILITY_GUIDE.md](OBSERVABILITY_GUIDE.md) — **관측 스택 대시보드 · 인시던트 알람 수신**(Alertmanager receiver 설정, pull/push 수집 모드, 알림 라우팅·중복 억제, 모듈 확장법)
 - [K8S_OPS_CHECKLIST.md](K8S_OPS_CHECKLIST.md) — K8s 운영 점검 체크리스트
+- [K8S_APISERVER_PROTECTION.md](K8S_APISERVER_PROTECTION.md) — **대상 K8s apiserver 보호**(PEP 쪽 클라이언트 풀·동시 호출 상한·목록 캐시·RV=0·페이지 조회·지터 + 대상 클러스터 APF FlowSchema 적용법)
 - [PROJECT_FLOW_GUIDE.md](PROJECT_FLOW_GUIDE.md) — 요청/작업 흐름
 - [SERVICE_TOPOLOGY_GUIDE.md](SERVICE_TOPOLOGY_GUIDE.md) — 서비스 토폴로지(서비스 디스커버리) 사용 가이드
 - [JIRA_기능정리.md](JIRA_기능정리.md) — Jira 연동 기능 정리(Excel 가져오기, 양방향 반영)

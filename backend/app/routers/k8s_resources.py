@@ -18,7 +18,7 @@ from typing import Any, Callable, Optional
 from uuid import UUID
 
 import yaml
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from kubernetes import client as k8s_client
 from kubernetes.client.rest import ApiException
 from pydantic import BaseModel
@@ -30,6 +30,7 @@ from app.models import Cluster
 from app.models.user import User
 from app.services import audit_logger
 from app.services.k8s_client_pool import K8sClientError, get_api_client_for_path
+from app.services.k8s_concurrency import K8sConcurrencyLimited
 from app.services.kubeconfig import ensure_kubeconfig_file
 from app.services.k8s_raw import raw_call
 from app.services.snapshot_jobs import _RedisStore
@@ -41,6 +42,26 @@ router = APIRouter(prefix="/k8s", tags=["k8s-resources"])
 
 _LIST_LIMIT = 1000  # 대형 클러스터 보호 — 한 종류당 상한(초과 시 truncated 표시)
 _LIST_TIMEOUT = (3.05, float(os.getenv("K8S_LIST_READ_TIMEOUT", "20")))  # 목록 LIST (connect, read)
+
+# 파드 페이지 크기 하한(너무 잘게 쪼개 요청 수가 폭증하는 것 방지). 상한은 _LIST_LIMIT.
+_POD_PAGE_MIN = 50
+
+# 작은 cluster-scoped 목록 — resource_version="0" 으로 apiserver watch cache 에서 읽는다(etcd
+# quorum read 생략). RV=0 에서는 limit 이 무시되고 전량이 오므로 항목 수가 작은 종류만 넣는다.
+_WATCH_CACHE_KINDS = frozenset({
+    "nodes", "namespaces", "storageclasses", "priorityclasses", "ingressclasses", "runtimeclasses",
+    "mutatingwebhookconfigurations", "validatingwebhookconfigurations",
+})
+
+
+def _list_http_error(what: str, e: Exception) -> HTTPException:
+    """목록 조회 실패 → HTTP 오류. PEP 쪽 동시 호출 상한 대기 초과는 503, 타임아웃은 504."""
+    if isinstance(e, K8sConcurrencyLimited):
+        return HTTPException(status_code=503, detail=f"{what} 조회 보류: {str(e)[:300]}")
+    msg = str(e)
+    code = 504 if ("timeout" in msg.lower() or "timed out" in msg.lower()) else 502
+    return HTTPException(status_code=code, detail=f"{what} 조회 실패: {msg[:200]}")
+
 
 # 탐색기 목록 캐시 — fresh 이내는 즉시, stale 이내는 즉시 응답 + 백그라운드 갱신(SWR),
 # 같은 키 동시 요청은 1건으로 합친다. 쓰기 엔드포인트는 bump(cluster_id)로 모든 replica 무효화.
@@ -634,6 +655,8 @@ def list_resources(
     def _load() -> dict:
         if ns:
             result = raw_call(spec["list_ns"], api, ns, timeout=_LIST_TIMEOUT)
+        elif kind in _WATCH_CACHE_KINDS:
+            result = raw_call(spec["list_all"], api, timeout=_LIST_TIMEOUT, resource_version="0")
         else:
             result = raw_call(spec["list_all"], api, timeout=_LIST_TIMEOUT)
         truncated = bool(result.metadata._continue) if result.metadata else False
@@ -643,9 +666,7 @@ def list_resources(
     try:
         data, meta = _list_cache.get((cluster_id, "list", kind, ns or ""), _load, refresh=refresh)
     except Exception as e:  # noqa: BLE001
-        msg = str(e)
-        code = 504 if "timeout" in msg.lower() or "timed out" in msg.lower() else 502
-        raise HTTPException(status_code=code, detail=f"{kind} 조회 실패: {msg[:200]}")
+        raise _list_http_error(kind, e)
 
     col_spec = RESOURCE_COLUMNS.get(kind)
     columns = [ColumnDef(key=k, label=lbl) for k, lbl in (col_spec["defs"] if col_spec else [])]
@@ -1484,13 +1505,14 @@ def list_nodes_rich(cluster_id: UUID, refresh: bool = False, db: Session = Depen
         body, meta = _list_cache.get((cluster_id, "nodes-rich"), lambda: _load_nodes_rich(client),
                                      refresh=refresh)
     except Exception as e:  # noqa: BLE001
-        raise HTTPException(status_code=502, detail=f"노드 조회 실패: {str(e)[:200]}")
+        raise _list_http_error("노드", e)
     return {**body, "cache": meta["cache"], "cache_age_seconds": meta["age"]}
 
 
 def _load_nodes_rich(client) -> dict:
     v1 = k8s_client.CoreV1Api(client)
-    nodes = raw_call(v1.list_node, limit=_LIST_LIMIT, timeout=_LIST_TIMEOUT)
+    # 노드 목록은 작다 → watch cache(RV=0)에서 읽어 etcd quorum read 생략(RV=0 은 limit 무시·전량).
+    nodes = raw_call(v1.list_node, limit=_LIST_LIMIT, timeout=_LIST_TIMEOUT, resource_version="0")
 
     # usage (metrics-server) — 없으면 생략
     usage: dict[str, dict] = {}
@@ -1646,32 +1668,52 @@ def _pod_status_color(phase: str, cells: list[PodContainerCell]) -> str:
 
 
 @router.get("/{cluster_id}/pods")
-def list_pods_rich(cluster_id: UUID, namespace: Optional[str] = None, refresh: bool = False,
-                   db: Session = Depends(get_db)):
+def list_pods_rich(
+    cluster_id: UUID,
+    namespace: Optional[str] = None,
+    refresh: bool = False,
+    limit: Optional[int] = None,
+    cont: Optional[str] = Query(None, alias="continue"),
+    db: Session = Depends(get_db),
+):
     """파드 목록 — Lens 대등 컬럼 (컨테이너 색칸/재시작/소유자/노드/QoS/상태).
 
     CPU/Mem 사용량(metrics-server)과 Warning 이벤트는 best-effort 병렬 조회 —
     없거나 실패해도 목록은 정상 반환(freelens 의 즉시값 컬럼 파리티).
     목록 캐시(SWR·single-flight)와 원본 JSON 파싱(`k8s_raw`)은 `list_resources` 와 동일.
+
+    페이지 조회: `limit`(50~1000)을 주면 그만큼만 받고 응답의 `continue_token` 으로 다음 페이지를
+    `continue=` 로 이어 받는다(첫 화면이 빨리 뜨고 1000개 초과 파드도 끝까지 볼 수 있음).
+    limit 미지정은 기존과 같이 최대 1000개 한 번에. usage/Warning 맵은 페이지마다 다시 받지 않고
+    (클러스터, 네임스페이스) 단위로 캐시해 공유한다.
     """
+    page = _LIST_LIMIT if limit is None else max(_POD_PAGE_MIN, min(int(limit), _LIST_LIMIT))
     cluster = _require_cluster(cluster_id, db)
     client = _api_client(cluster)
+    ns = namespace or ""
+
+    def _aux() -> dict:
+        return _list_cache.get((cluster_id, "pods-aux", ns), lambda: _fetch_pods_aux(client, namespace),
+                               refresh=refresh)[0]
+
     try:
-        body, meta = _list_cache.get((cluster_id, "pods-rich", namespace or ""),
-                                     lambda: _load_pods_rich(client, namespace), refresh=refresh)
+        body, meta = _list_cache.get(
+            (cluster_id, "pods-rich", ns, page, cont or ""),
+            lambda: _load_pods_rich(client, namespace, limit=page, cont=cont, aux=_aux),
+            refresh=refresh,
+        )
+    except ApiException as e:
+        if e.status == 410:
+            raise HTTPException(status_code=410, detail="continue 토큰이 만료됐습니다(etcd compaction) — 처음부터 다시 조회하세요.")
+        raise HTTPException(status_code=502, detail=f"파드 조회 실패: {str(e)[:200]}")
     except Exception as e:  # noqa: BLE001
-        code = 504 if ("timeout" in str(e).lower() or "timed out" in str(e).lower()) else 502
-        raise HTTPException(status_code=code, detail=f"파드 조회 실패: {str(e)[:200]}")
+        raise _list_http_error("파드", e)
     return {**body, "cache": meta["cache"], "cache_age_seconds": meta["age"]}
 
 
-def _load_pods_rich(client, namespace: Optional[str]) -> dict:
+def _fetch_pods_aux(client, namespace: Optional[str]) -> dict:
+    """(네임스페이스|클러스터) 단위 usage·Warning 맵 — 각각 best-effort(실패 시 빈 맵)."""
     v1 = k8s_client.CoreV1Api(client)
-
-    def _fetch_pods():
-        if namespace:
-            return raw_call(v1.list_namespaced_pod, namespace, limit=_LIST_LIMIT, timeout=_LIST_TIMEOUT)
-        return raw_call(v1.list_pod_for_all_namespaces, limit=_LIST_LIMIT, timeout=_LIST_TIMEOUT)
 
     def _fetch_usage() -> dict[tuple[str, str], tuple[str, str]]:
         """(ns, pod) → (cpu 표시, mem 표시). metrics-server 없으면 예외 → {}."""
@@ -1720,13 +1762,9 @@ def _load_pods_rich(client, namespace: Optional[str]) -> dict:
                 out[key] = (cnt + 1, _reason)
         return out
 
-    usage: dict[tuple[str, str], tuple[str, str]] = {}
-    warnings: dict[tuple[str, str], tuple[int, str]] = {}
-    with ThreadPoolExecutor(max_workers=3) as ex:
-        f_pods = ex.submit(_fetch_pods)
+    with ThreadPoolExecutor(max_workers=2) as ex:
         f_usage = ex.submit(_fetch_usage)
         f_warn = ex.submit(_fetch_warnings)
-        res = f_pods.result()   # 실패는 호출부(list_pods_rich)가 502/504 로 변환
         try:
             usage = f_usage.result()
         except Exception:  # noqa: BLE001
@@ -1735,6 +1773,32 @@ def _load_pods_rich(client, namespace: Optional[str]) -> dict:
             warnings = f_warn.result()
         except Exception:  # noqa: BLE001
             warnings = {}
+    return {"usage": usage, "warnings": warnings}
+
+
+def _load_pods_rich(client, namespace: Optional[str], *, limit: int = _LIST_LIMIT,
+                    cont: Optional[str] = None, aux: Optional[Callable[[], dict]] = None) -> dict:
+    v1 = k8s_client.CoreV1Api(client)
+    page_kw: dict[str, Any] = {"limit": limit}
+    if cont:
+        page_kw["_continue"] = cont
+
+    def _fetch_pods():
+        if namespace:
+            return raw_call(v1.list_namespaced_pod, namespace, timeout=_LIST_TIMEOUT, **page_kw)
+        return raw_call(v1.list_pod_for_all_namespaces, timeout=_LIST_TIMEOUT, **page_kw)
+
+    # 파드 페이지와 usage/Warning 맵을 병렬로(맵은 캐시 적중 시 즉시).
+    with ThreadPoolExecutor(max_workers=2) as ex:
+        f_pods = ex.submit(_fetch_pods)
+        f_aux = ex.submit(aux or (lambda: _fetch_pods_aux(client, namespace)))
+        res = f_pods.result()   # 실패는 호출부(list_pods_rich)가 HTTP 오류로 변환
+        try:
+            aux_maps = f_aux.result()
+        except Exception:  # noqa: BLE001
+            aux_maps = {"usage": {}, "warnings": {}}
+    usage: dict[tuple[str, str], tuple[str, str]] = aux_maps.get("usage") or {}
+    warnings: dict[tuple[str, str], tuple[int, str]] = aux_maps.get("warnings") or {}
 
     rows: list[PodRichRow] = []
     for p in (res.items or []):
@@ -1773,8 +1837,10 @@ def _load_pods_rich(client, namespace: Optional[str]) -> dict:
             warning_reason=w[1] if w else None,
         ))
     rows.sort(key=lambda r: (r.namespace or "", r.name))
-    truncated = bool(res.metadata._continue) if res.metadata else False
-    return {"count": len(rows), "truncated": truncated, "items": rows, "metrics_available": bool(usage)}
+    token = (res.metadata._continue or None) if res.metadata else None
+    remaining = res.metadata.remaining_item_count if res.metadata else None
+    return {"count": len(rows), "truncated": bool(token), "items": rows, "metrics_available": bool(usage),
+            "continue_token": token, "remaining_count": remaining}
 
 
 # ── Pods 요약 — 개요 패널 카드용 (용량/상태별 카운트) ─────────────────────────

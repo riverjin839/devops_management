@@ -8,6 +8,8 @@ PEP (Platform Engineering Portal) — 구 K8s Daily Monitor — 를 Kubernetes �
 
 ```
 k8s/
+├── target-cluster/                    # PEP 가 **조회하는 대상 클러스터**에 적용(PEP 배포 overlay 아님)
+│   └── pep-apf.yaml                   # PEP 전용 APF FlowSchema/PriorityLevel — docs/K8S_APISERVER_PROTECTION.md
 ├── base/                              # 환경 공통 기본 매니페스트
 │   ├── kustomization.yaml             # Kustomize 루트 설정
 │   ├── namespace.yaml                 # 네임스페이스 정의

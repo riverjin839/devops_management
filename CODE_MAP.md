@@ -19,6 +19,7 @@ AI 어시스턴트 + 사람 개발자용 — 기능 → 파일 경로와 자주 
 | 수정 페이지 (탭: 노드/CIDR/기타) | — | `frontend/src/pages/ClusterMetaFormPage.tsx` |
 | kubeconfig 뷰/편집 모달 | `GET/PUT /clusters/{id}/kubeconfig` | `frontend/src/components/dashboard/KubeconfigEditModal.tsx` |
 | **대상 K8s ApiClient (공용 풀)** | `backend/app/services/k8s_client_pool.py` — `get_api_client(cluster)`/`get_api_client_for_path(path)`(클러스터별 캐시·기본 타임아웃·read 재시도 0·exec stream 스레드 격리), `get_incluster_api_client()`(관리 클러스터), `new_api_client(path)`(1회성). kubeconfig 해석은 `services/kubeconfig.py` | — |
+| **대상 apiserver 동시 호출 상한** | `backend/app/services/k8s_concurrency.py`(`cluster_slots` — apiserver host 별 Redis ZSET 세마포어, `HardenedApiClient` 의 모든 요청이 자동 경유) · 대상 클러스터 APF 매니페스트 `k8s/target-cluster/pep-apf.yaml` · 가이드 `docs/K8S_APISERVER_PROTECTION.md` | — |
 | **K8s 목록 성능 헬퍼** | `backend/app/services/k8s_raw.py`(`raw_call` — `_preload_content=False` 로 받아 `K8sObj` 로 typed 모델처럼 읽기, 역직렬화 생략) · `services/swr_cache.py`(`SWRCache` — fresh/stale SWR + single-flight + Redis 세대 무효화 `bump(group)`) | — |
 | 자동 업데이트 (k8s API) | `POST /clusters/{id}/auto-update` (clusters.py) | `clustersApi.autoUpdate` in `api.ts` |
 | 버전/설정 스냅샷 수집 + 히스토리 | `backend/app/routers/versions.py` · model: `backend/app/models/config_snapshot.py` | `frontend/src/pages/VersionsPage.tsx` |

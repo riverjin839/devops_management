@@ -9,7 +9,7 @@ import {
 } from 'lucide-react';
 import { Virtuoso } from 'react-virtuoso';
 import * as Tabs from '@radix-ui/react-tabs';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useInfiniteQuery, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { AxiosError } from 'axios';
 import { MacCard } from '@/components/ui/MacCard';
 import { ClusterSidebar } from '@/components/common/ClusterSidebar';
@@ -1205,32 +1205,56 @@ export interface PodsPanelProps {
   onTerminal: (ns: string, name: string) => void;
   hideNsSelector?: boolean;
 }
+/** 파드 목록 페이지 크기 — 첫 화면을 빨리 띄우고 나머지는 스크롤 시 continue 토큰으로 이어 받는다. */
+const POD_PAGE_SIZE = 200;
+
 export function PodsPanel(p: PodsPanelProps) {
   const { clusterId, selectedNs, setSelectedNs, search, setSearch } = p;
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const nsArr = useMemo(() => [...selectedNs], [selectedNs]);
   const serverNs = nsArr.length === 1 ? nsArr[0] : undefined;
+  // 'paged' 구분자: 무한 스크롤 캐시(pages 배열)는 NamespaceDashboardPanel 의 일반 목록 캐시와
+  // 모양이 달라 같은 키를 쓰면 안 된다. 'k8s-mng-list' 접두사는 유지해 쓰기 후 무효화(reloadList)는 그대로.
+  const podsKey = useMemo(
+    () => ['k8s-mng-list', clusterId, 'pods', 'paged', serverNs ?? (nsArr.length > 1 ? 'multi' : 'all')],
+    [clusterId, serverNs, nsArr.length],
+  );
   const forceRef = useRef(false);
-  const { data, isLoading, isError, error, refetch, isFetching } = useQuery({
-    queryKey: ['k8s-mng-list', clusterId, 'pods', serverNs ?? (nsArr.length > 1 ? 'multi' : 'all')],
-    queryFn: async () => {
-      const refresh = forceRef.current;
-      forceRef.current = false;
-      return (await k8sResourcesApi.richPods(clusterId, serverNs, refresh)).data;
+  const {
+    data, isLoading, isError, error, isFetching, fetchNextPage, hasNextPage, isFetchingNextPage,
+  } = useInfiniteQuery({
+    queryKey: podsKey,
+    initialPageParam: undefined as string | undefined,
+    queryFn: async ({ pageParam }) => {
+      // 수동 새로고침은 첫 페이지만 서버 캐시를 건너뛴다(이어지는 페이지는 새 토큰으로 조회).
+      const refresh = !pageParam && forceRef.current;
+      if (!pageParam) forceRef.current = false;
+      return (await k8sResourcesApi.richPods(clusterId, serverNs, { refresh, limit: POD_PAGE_SIZE, cont: pageParam })).data;
     },
+    getNextPageParam: (last) => last.continueToken ?? undefined,
     enabled: !!clusterId,
   });
+  // 새로고침: 쌓인 페이지를 버리고 첫 페이지부터(옛 continue 토큰 재사용 방지 — 410 만료 복구도 이 경로)
   const forceRefetch = () => {
     forceRef.current = true;
-    void refetch();
+    void queryClient.resetQueries({ queryKey: podsKey, exact: true });
   };
+  const loadMore = () => {
+    if (hasNextPage && !isFetchingNextPage) void fetchNextPage();
+  };
+  const pages = data?.pages;
+  const allItems = useMemo(() => (pages ?? []).flatMap((pg) => pg.items), [pages]);
+  const lastPage = pages?.[pages.length - 1];
+  const metricsAvailable = pages?.[0]?.metricsAvailable;
+  const estimatedTotal = lastPage?.remainingCount != null ? allItems.length + lastPage.remainingCount : null;
   const filtered = useMemo(() => {
-    let list = data?.items ?? [];
+    let list = allItems;
     if (selectedNs.size > 1) list = list.filter((r) => r.namespace && selectedNs.has(r.namespace));
     const q = search.trim().toLowerCase();
     if (!q) return list;
     return list.filter((r) => `${r.name} ${r.namespace ?? ''} ${r.phase} ${r.node ?? ''} ${r.controlledBy ?? ''}`.toLowerCase().includes(q));
-  }, [data, search, selectedNs]);
+  }, [allItems, search, selectedNs]);
 
   // 토글 가능 컬럼 (이름/상태/동작은 항상 표시)
   const PODS_TOGGLE_COLS: { key: string; label: string; width: string }[] = [
@@ -1285,6 +1309,7 @@ export function PodsPanel(p: PodsPanelProps) {
         <Virtuoso
           style={{ height: '64vh' }}
           data={filtered}
+          endReached={loadMore}
           itemContent={(_i, r) => {
             const ns = r.namespace || '-';
             return (
@@ -1341,8 +1366,21 @@ export function PodsPanel(p: PodsPanelProps) {
       </div>
       </div>
       <div className="px-4 py-1.5 text-xs text-muted-foreground border-t border-border">
-        {filtered.length}개 표시{data?.truncated ? ' · 1000개 초과(잘림) — 네임스페이스 필터 권장' : ''}
-        {data && data.metricsAvailable === false ? ' · metrics-server 없음(CPU/MEM 생략)' : ''} · 컨테이너 색칸: 초록=실행/정상, 노랑=대기/준비안됨, 빨강=오류, 회색=종료/대기
+        {filtered.length}개 표시 · 불러온 파드 {allItems.length}개{estimatedTotal != null ? ` / 전체 약 ${estimatedTotal}개` : ''}
+        {hasNextPage && (
+          <>
+            {' · '}
+            <button
+              onClick={loadMore}
+              disabled={isFetchingNextPage}
+              className="text-primary hover:underline disabled:opacity-60 disabled:no-underline"
+            >
+              {isFetchingNextPage ? '불러오는 중…' : `다음 ${POD_PAGE_SIZE}개 불러오기`}
+            </button>
+            {' (스크롤 끝에서 자동으로 이어짐 · 검색은 불러온 파드 기준)'}
+          </>
+        )}
+        {metricsAvailable === false ? ' · metrics-server 없음(CPU/MEM 생략)' : ''} · 컨테이너 색칸: 초록=실행/정상, 노랑=대기/준비안됨, 빨강=오류, 회색=종료/대기
       </div>
     </MacCard>
   );

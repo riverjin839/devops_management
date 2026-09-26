@@ -2478,9 +2478,15 @@ export const k8sResourcesApi = {
     api.get<import('@/types').KindAvailabilityResponse>(`/k8s/${clusterId}/kind-availability`, { timeout: 60_000 }),
   richNodes: (clusterId: string, refresh?: boolean) =>
     api.get<import('@/types').K8sNodesResponse>(`/k8s/${clusterId}/nodes`, { params: refresh ? { refresh: true } : undefined, timeout: 60_000 }),
-  richPods: (clusterId: string, namespace?: string, refresh?: boolean) =>
+  /** opts.limit 을 주면 페이지 조회 — 응답 continueToken 을 다음 호출의 opts.cont 로 넘긴다. */
+  richPods: (clusterId: string, namespace?: string, opts?: { refresh?: boolean; limit?: number; cont?: string }) =>
     api.get<import('@/types').K8sPodsResponse>(`/k8s/${clusterId}/pods`, {
-      params: { ...(namespace ? { namespace } : {}), ...(refresh ? { refresh: true } : {}) },
+      params: {
+        ...(namespace ? { namespace } : {}),
+        ...(opts?.refresh ? { refresh: true } : {}),
+        ...(opts?.limit ? { limit: opts.limit } : {}),
+        ...(opts?.cont ? { continue: opts.cont } : {}),
+      },
       timeout: 120_000,
     }),
   podsSummary: (clusterId: string) =>
