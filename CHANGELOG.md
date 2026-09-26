@@ -8,7 +8,9 @@
 
 ## [Unreleased]
 
-1.37.1 이후 main 에 병합된 변경 (다음 릴리스 후보).
+1.37.2 이후 main 에 병합된 변경 (다음 릴리스 후보).
+
+## [1.37.2] - 2026-09-26
 
 ### Fixed
 - **대상 apiserver 보호 (동시 호출 상한 · watch cache · 파드 페이지 조회 · APF 가이드)**: PEP 전체(API replica +
