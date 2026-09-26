@@ -108,9 +108,9 @@
 | `K8S_CLUSTER_MAX_INFLIGHT` | `8` | `services/k8s_concurrency.py` — 대상 apiserver(host) 1개로 PEP 전체(API replica + Celery 워커)가 동시에 보내는 요청 수 상한(Redis 세마포어, Redis 없으면 프로세스 단위). `0` 이면 비활성. 가이드: `docs/K8S_APISERVER_PROTECTION.md` |
 | `K8S_CLUSTER_SLOT_WAIT` | `20` | 동일 — 슬롯 대기 최대 시간(초). 넘으면 요청 포기(목록 API 는 503 + 사유) |
 | `K8S_DISPATCH_JITTER_SECONDS` | `20` | `celery_app.py` — 점검 매트릭스·K8S 효율화 수집 디스패처가 같은 분에 due 한 작업을 0~N초 랜덤 지연해 같은 클러스터로 동시에 몰리지 않게 함. `0` 이면 즉시 |
-| `K8S_LIST_CACHE_FRESH` | `5` | `routers/k8s_resources.py` — `/k8s-manage` 목록(`resources/{kind}`·`nodes`·`pods`) 서버 캐시를 그대로 응답하는 시간(초) |
-| `K8S_LIST_CACHE_STALE` | `30` | 동일 — 이 시간(초)까지는 캐시를 즉시 응답하고 백그라운드에서 1회 갱신(SWR). 넘으면 동기 조회. 쓰기 액션 시 클러스터 단위로 즉시 무효화(Redis 세대 값 — replica 공유) |
-| `K8S_LIST_CACHE_MAX` | `256` | 동일 — 프로세스당 캐시 항목 수 상한(클러스터 × 종류 × 네임스페이스) |
+| `K8S_LIST_CACHE_FRESH` | `5` | `services/k8s_list_cache.py` — `/k8s-manage` 목록(`resources/{kind}`·`nodes`·`pods`·객체 이벤트) 서버 캐시를 그대로 응답하는 시간(초) |
+| `K8S_LIST_CACHE_STALE` | `30` | 동일 — 이 시간(초)까지는 캐시를 즉시 응답하고 백그라운드에서 1회 갱신(SWR). 넘으면 동기 조회. 풀 클라이언트를 거치는 모든 쓰기(POST/PUT/PATCH/DELETE — 탐색기·효율화 적용·노드 라벨·RBAC 등)와 배치잡의 kubectl 삭제가 해당 apiserver 캐시를 즉시 무효화(Redis 세대 값 — replica·워커 공유) |
+| `K8S_LIST_CACHE_MAX` | `256` | 동일 — 프로세스당 캐시 항목 수 상한(apiserver × 종류 × 네임스페이스) |
 | `K8S_LIST_READ_TIMEOUT` | `20` | 동일 — 목록 LIST 1회의 read timeout(초) |
 | `K8S_ALLOC_OVERVIEW_TTL` | `86400` (24h) | `routers/k8s_allocation.py` — `/k8s-allocation` 전체 스냅샷(노드+네임스페이스) 캐시 수명(초). 완전한 결과에만 적용 — 절단(partial) 결과는 `K8S_ALLOC_PARTIAL_TTL` 이 우선 |
 | `K8S_ALLOC_PARTIAL_TTL` | `300` (5m) | 동일 — 부분(절단) 스냅샷의 짧은 캐시 수명(초). apiserver 5xx/`_continue` 토큰 만료로 전량 순회가 끊긴 결과가 24h 짜리 확정 데이터처럼 서빙되지 않도록 자동 재집계를 유도 |
