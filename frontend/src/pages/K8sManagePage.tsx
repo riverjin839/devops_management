@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useClusterRouteParam } from '@/hooks/useClusterRouteParam';
 import {
@@ -575,11 +575,21 @@ export function ResourceTablePanel(p: ResourceTablePanelProps) {
   const nsArr = useMemo(() => [...selectedNs], [selectedNs]);
   const serverNs = isNamespaced && nsArr.length === 1 ? nsArr[0] : undefined;
 
+  // 수동 새로고침만 서버 목록 캐시를 건너뛴다(자동 재조회·탭 전환은 캐시 사용).
+  const forceRef = useRef(false);
   const { data, isLoading, isError, error, refetch, isFetching } = useQuery({
     queryKey: ['k8s-mng-list', clusterId, kind, serverNs ?? (nsArr.length > 1 ? 'multi' : 'all')],
-    queryFn: async () => (await k8sResourcesApi.list(clusterId, kind, serverNs)).data,
+    queryFn: async () => {
+      const refresh = forceRef.current;
+      forceRef.current = false;
+      return (await k8sResourcesApi.list(clusterId, kind, serverNs, refresh)).data;
+    },
     enabled: !!clusterId,
   });
+  const forceRefetch = () => {
+    forceRef.current = true;
+    void refetch();
+  };
 
   const filtered = useMemo(() => {
     let list = data?.items ?? [];
@@ -618,7 +628,7 @@ export function ResourceTablePanel(p: ResourceTablePanelProps) {
         </div>
         <div className="ml-auto flex items-center gap-1">
           <ColumnToggle columns={allColumns} hidden={hidden} onToggle={toggle} />
-          <button onClick={() => refetch()} title="새로고침" aria-label="새로고침" className="p-1.5 rounded-lg hover:bg-secondary text-muted-foreground">
+          <button onClick={forceRefetch} title="새로고침" aria-label="새로고침" className="p-1.5 rounded-lg hover:bg-secondary text-muted-foreground">
             <RefreshCw className={`w-3.5 h-3.5 ${isFetching ? 'animate-spin' : ''}`} />
           </button>
         </div>
@@ -1090,11 +1100,20 @@ interface NodesPanelProps {
   onDrain: (name: string) => void;
 }
 function NodesPanel({ clusterId, onOpenDetail, onCordon, onDrain }: NodesPanelProps) {
+  const forceRef = useRef(false);
   const { data, isLoading, isError, error, refetch, isFetching } = useQuery({
     queryKey: ['k8s-mng-nodes', clusterId],
-    queryFn: async () => (await k8sResourcesApi.richNodes(clusterId)).data,
+    queryFn: async () => {
+      const refresh = forceRef.current;
+      forceRef.current = false;
+      return (await k8sResourcesApi.richNodes(clusterId, refresh)).data;
+    },
     enabled: !!clusterId,
   });
+  const forceRefetch = () => {
+    forceRef.current = true;
+    void refetch();
+  };
   const rows: K8sNodeRichRow[] = data?.items ?? [];
 
   const NODES_TOGGLE_COLS: { key: string; label: string; width: string }[] = [
@@ -1117,7 +1136,7 @@ function NodesPanel({ clusterId, onOpenDetail, onCordon, onDrain }: NodesPanelPr
         <span className="text-sm text-muted-foreground">{rows.length} nodes{data && !data.metricsAvailable ? ' · metrics-server 없음(usage 생략)' : ''}</span>
         <div className="ml-auto flex items-center gap-1">
           <ColumnToggle columns={NODES_TOGGLE_COLS} hidden={hidden} onToggle={toggle} />
-          <button onClick={() => refetch()} title="새로고침" aria-label="새로고침" className="p-1.5 rounded-lg hover:bg-secondary text-muted-foreground">
+          <button onClick={forceRefetch} title="새로고침" aria-label="새로고침" className="p-1.5 rounded-lg hover:bg-secondary text-muted-foreground">
             <RefreshCw className={`w-3.5 h-3.5 ${isFetching ? 'animate-spin' : ''}`} />
           </button>
         </div>
@@ -1191,11 +1210,20 @@ export function PodsPanel(p: PodsPanelProps) {
   const navigate = useNavigate();
   const nsArr = useMemo(() => [...selectedNs], [selectedNs]);
   const serverNs = nsArr.length === 1 ? nsArr[0] : undefined;
+  const forceRef = useRef(false);
   const { data, isLoading, isError, error, refetch, isFetching } = useQuery({
     queryKey: ['k8s-mng-list', clusterId, 'pods', serverNs ?? (nsArr.length > 1 ? 'multi' : 'all')],
-    queryFn: async () => (await k8sResourcesApi.richPods(clusterId, serverNs)).data,
+    queryFn: async () => {
+      const refresh = forceRef.current;
+      forceRef.current = false;
+      return (await k8sResourcesApi.richPods(clusterId, serverNs, refresh)).data;
+    },
     enabled: !!clusterId,
   });
+  const forceRefetch = () => {
+    forceRef.current = true;
+    void refetch();
+  };
   const filtered = useMemo(() => {
     let list = data?.items ?? [];
     if (selectedNs.size > 1) list = list.filter((r) => r.namespace && selectedNs.has(r.namespace));
@@ -1235,7 +1263,7 @@ export function PodsPanel(p: PodsPanelProps) {
         </div>
         <div className="ml-auto flex items-center gap-1">
           <ColumnToggle columns={PODS_TOGGLE_COLS} hidden={hidden} onToggle={toggle} />
-          <button onClick={() => refetch()} title="새로고침" aria-label="새로고침" className="p-1.5 rounded-lg hover:bg-secondary text-muted-foreground">
+          <button onClick={forceRefetch} title="새로고침" aria-label="새로고침" className="p-1.5 rounded-lg hover:bg-secondary text-muted-foreground">
             <RefreshCw className={`w-3.5 h-3.5 ${isFetching ? 'animate-spin' : ''}`} />
           </button>
         </div>

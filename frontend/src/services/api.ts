@@ -2457,10 +2457,11 @@ export const opsCheckApi = {
 export const k8sResourcesApi = {
   kinds: (clusterId: string) =>
     api.get<{ kinds: string[] }>(`/k8s/${clusterId}/resources/kinds`),
-  list: (clusterId: string, kind: string, namespace?: string) =>
+  // refresh=true: 서버 목록 캐시(SWR)를 건너뛰고 새로 조회 — 수동 "새로고침" 버튼 전용
+  list: (clusterId: string, kind: string, namespace?: string, refresh?: boolean) =>
     api.get<import('@/types').K8sResourceListResponse>(
       `/k8s/${clusterId}/resources/${kind}`,
-      { params: namespace ? { namespace } : undefined, timeout: 120_000 },
+      { params: { ...(namespace ? { namespace } : {}), ...(refresh ? { refresh: true } : {}) }, timeout: 120_000 },
     ),
   yaml: (clusterId: string, kind: string, namespace: string, name: string) =>
     api.get<import('@/types').K8sResourceDetail>(
@@ -2475,10 +2476,13 @@ export const k8sResourcesApi = {
     api.get<import('@/types').K8sCapabilitiesResponse>(`/k8s/${clusterId}/resources-capabilities`),
   kindAvailability: (clusterId: string) =>
     api.get<import('@/types').KindAvailabilityResponse>(`/k8s/${clusterId}/kind-availability`, { timeout: 60_000 }),
-  richNodes: (clusterId: string) =>
-    api.get<import('@/types').K8sNodesResponse>(`/k8s/${clusterId}/nodes`, { timeout: 60_000 }),
-  richPods: (clusterId: string, namespace?: string) =>
-    api.get<import('@/types').K8sPodsResponse>(`/k8s/${clusterId}/pods`, { params: namespace ? { namespace } : undefined, timeout: 120_000 }),
+  richNodes: (clusterId: string, refresh?: boolean) =>
+    api.get<import('@/types').K8sNodesResponse>(`/k8s/${clusterId}/nodes`, { params: refresh ? { refresh: true } : undefined, timeout: 60_000 }),
+  richPods: (clusterId: string, namespace?: string, refresh?: boolean) =>
+    api.get<import('@/types').K8sPodsResponse>(`/k8s/${clusterId}/pods`, {
+      params: { ...(namespace ? { namespace } : {}), ...(refresh ? { refresh: true } : {}) },
+      timeout: 120_000,
+    }),
   podsSummary: (clusterId: string) =>
     api.get<import('@/types').K8sPodsSummaryResponse>(`/k8s/${clusterId}/pods-summary`, { timeout: 120_000 }),
   scale: (clusterId: string, kind: string, namespace: string, name: string, replicas: number) =>

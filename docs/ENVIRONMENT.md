@@ -105,6 +105,10 @@
 | `K8S_CLIENT_CACHE_TTL` | `300` (5m) | 동일 — 클러스터별 공유 `ApiClient` 캐시 수명(초). exec/OIDC 토큰 만료보다 짧게 둔다. kubeconfig 내용이 바뀌면 TTL 과 무관하게 즉시 재생성 |
 | `K8S_CLIENT_CACHE_MAX` | `64` | 동일 — 캐시할 클러스터(kubeconfig) 수 상한. 초과 시 가장 오래 안 쓴 항목 퇴출 |
 | `K8S_CLIENT_POOL_MAXSIZE` | `8` | 동일 — 클러스터 1개당 동시 keep-alive 연결 상한(urllib3 풀 크기) |
+| `K8S_LIST_CACHE_FRESH` | `5` | `routers/k8s_resources.py` — `/k8s-manage` 목록(`resources/{kind}`·`nodes`·`pods`) 서버 캐시를 그대로 응답하는 시간(초) |
+| `K8S_LIST_CACHE_STALE` | `30` | 동일 — 이 시간(초)까지는 캐시를 즉시 응답하고 백그라운드에서 1회 갱신(SWR). 넘으면 동기 조회. 쓰기 액션 시 클러스터 단위로 즉시 무효화(Redis 세대 값 — replica 공유) |
+| `K8S_LIST_CACHE_MAX` | `256` | 동일 — 프로세스당 캐시 항목 수 상한(클러스터 × 종류 × 네임스페이스) |
+| `K8S_LIST_READ_TIMEOUT` | `20` | 동일 — 목록 LIST 1회의 read timeout(초) |
 | `K8S_ALLOC_OVERVIEW_TTL` | `86400` (24h) | `routers/k8s_allocation.py` — `/k8s-allocation` 전체 스냅샷(노드+네임스페이스) 캐시 수명(초). 완전한 결과에만 적용 — 절단(partial) 결과는 `K8S_ALLOC_PARTIAL_TTL` 이 우선 |
 | `K8S_ALLOC_PARTIAL_TTL` | `300` (5m) | 동일 — 부분(절단) 스냅샷의 짧은 캐시 수명(초). apiserver 5xx/`_continue` 토큰 만료로 전량 순회가 끊긴 결과가 24h 짜리 확정 데이터처럼 서빙되지 않도록 자동 재집계를 유도 |
 | `K8S_ALLOC_STUCK_TIMEOUT` | `1800` (30m) | 동일 — 백그라운드 집계가 이 시간을 넘겨도 안 끝나면(행업) `refresh` 요청 시 새 계산으로 교체 |

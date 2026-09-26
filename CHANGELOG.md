@@ -23,6 +23,14 @@
   으로 전부(Secret·ConfigMap 본문 포함) 받아오던 것을 `limit=1` + `remainingItemCount` 로 바꿔 개수는
   오히려 정확해졌다. 결과는 클러스터 단위로 5분 캐시(replica 간 Redis 공유, 부분 결과는 1분)하고,
   25초 예산이 `ThreadPoolExecutor` 종료 대기 때문에 무시돼 60초 타임아웃이 나던 버그도 수정(예산 15초).
+- **K8s 상세 관리 목록 체감 속도 개선 (서버 캐시 + 역직렬화 생략)**: 리소스 목록·노드·파드 목록이 짧은
+  서버 캐시(fresh 5초 / stale 30초, stale-while-revalidate)를 거쳐 재진입·탭 전환이 즉시 뜨고, 같은 목록을
+  여러 사용자·탭이 동시에 열어도 apiserver LIST 는 1회로 합쳐진다(single-flight). scale/restart/delete/
+  YAML 적용/cordon/drain 직후에는 해당 클러스터 캐시가 Redis 세대 값으로 **모든 replica 에서** 무효화되고,
+  패널의 새로고침 버튼은 캐시를 건너뛴다. 응답은 원본 JSON 을 그대로 읽어(모델 역직렬화 생략) 파드 1000개
+  기준 파싱+행 생성이 약 3.3초 → 0.1초로 줄었다.
+  Backend: `services/swr_cache.py`·`services/k8s_raw.py`(신규), `routers/k8s_resources.py`.
+  Frontend: `K8sManagePage` 새로고침 버튼 → `refresh=true`.
 
 ## [1.37.0] - 2026-09-25
 

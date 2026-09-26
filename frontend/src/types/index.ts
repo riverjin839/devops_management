@@ -3783,7 +3783,12 @@ export interface K8sResourceListResponse {
   count: number;
   truncated: boolean;
   items: K8sResourceRow[];
+  /** 서버 목록 캐시 상태 — hit(신선) | stale(즉시 응답 후 백그라운드 갱신) | miss(방금 조회) */
+  cache?: K8sListCacheState | null;
+  cacheAgeSeconds?: number | null;
 }
+
+export type K8sListCacheState = 'hit' | 'stale' | 'miss';
 export interface K8sResourceYaml {
   kind: string;
   namespace: string;
@@ -3895,6 +3900,8 @@ export interface K8sNodesResponse {
   count: number;
   items: K8sNodeRichRow[];
   metricsAvailable: boolean;
+  cache?: K8sListCacheState | null;
+  cacheAgeSeconds?: number | null;
 }
 
 // 종류 가용성 (nav 동적 숨김)
@@ -3926,6 +3933,8 @@ export interface K8sPodsResponse {
   truncated: boolean;
   items: K8sPodRichRow[];
   metricsAvailable?: boolean;
+  cache?: K8sListCacheState | null;
+  cacheAgeSeconds?: number | null;
 }
 
 // Pods 요약 (K8s 상세 관리 개요 카드 — 용량/상태별 카운트)
