@@ -13,20 +13,24 @@ import { create } from 'zustand';
  * - `harlequin`     : 〈할리퀸과 목걸이를 한 여인〉 팔레트 — 은회색 바탕 + 콘플라워 블루 강조 + 검정 사이드바(라이트). 자체 색 고정.
  * - `ozenfant`      : 오장팡 퓨리즘 정물화(〈자개〉) 팔레트 — 펄 그레이 바탕 + 스틸 블루 강조 + 진주 블루 사이드바(라이트). 자체 색 고정.
  * - `whanki`        : 김환기 〈창〉 팔레트 — 청자빛 회녹색 바탕 + 프러시안 블루 강조 + 먹빛 녹흑 사이드바(라이트). 자체 색 고정.
+ * - `picasso-girl`  : 피카소 〈소녀의 머리〉 팔레트 — 석고 회백 바탕 + 움버 강조 + 먹 검정 사이드바(라이트). 자체 색 고정.
+ * - `picasso-portrait`: 피카소 〈소녀의 초상〉 팔레트 — 에메랄드 바탕 + 페리윙클 강조 + 마룬 사이드바(다크). 자체 색 고정.
+ * - `picasso-violin`: 피카소 〈바이올린〉 팔레트 — 분필 흰 바탕 + 바이올렛 강조 + 초콜릿 사이드바(라이트). 자체 색 고정.
+ * - `gris-guitar`   : 후안 그리스 〈기타〉 팔레트 — 민트 바탕 + 데님 블루 강조 + 네이비 사이드바(라이트). 자체 색 고정.
  * - `plaster`       : 흰 벽 입체주의 풍경화 팔레트 — 크림 석고 바탕 + 슬레이트 블루 강조 + 액자 브라운 사이드바. 자체 색 고정.
  * - `system`        : OS 환경설정 따라가는 라이트/다크.
  *
  * 색 취향은 테마가 아니라 **강조색(Accent)** 으로 고른다 — 버튼·링크·선택 탭·활성 메뉴·포커스 링만
  * 바뀌고 배경·상태색은 바탕 테마가 정한다. 라이트/다크(시스템 포함)에만 적용된다.
  */
-export type Theme = 'light' | 'dark' | 'comfort' | 'high-contrast' | 'umber' | 'umber-light' | 'plaster' | 'journal' | 'relief' | 'harlequin' | 'ozenfant' | 'whanki' | 'system';
+export type Theme = 'light' | 'dark' | 'comfort' | 'high-contrast' | 'umber' | 'umber-light' | 'plaster' | 'journal' | 'relief' | 'harlequin' | 'ozenfant' | 'whanki' | 'picasso-girl' | 'picasso-portrait' | 'picasso-violin' | 'gris-guitar' | 'system';
 export type Accent = 'blue' | 'teal' | 'green' | 'amber' | 'coral' | 'violet';
 
-export const THEMES: readonly Theme[] = ['light', 'dark', 'comfort', 'high-contrast', 'umber', 'umber-light', 'plaster', 'journal', 'relief', 'harlequin', 'ozenfant', 'whanki', 'system'];
+export const THEMES: readonly Theme[] = ['light', 'dark', 'comfort', 'high-contrast', 'umber', 'umber-light', 'plaster', 'journal', 'relief', 'harlequin', 'ozenfant', 'whanki', 'picasso-girl', 'picasso-portrait', 'picasso-violin', 'gris-guitar', 'system'];
 export const ACCENTS: readonly Accent[] = ['blue', 'teal', 'green', 'amber', 'coral', 'violet'];
 
 /** 자체 완결 토큰 세트를 가진 바탕 — light/dark 로 해석하지 않고 그대로 `<html>` 클래스로 적용. */
-const STANDALONE_THEMES = ['comfort', 'high-contrast', 'umber', 'umber-light', 'plaster', 'journal', 'relief', 'harlequin', 'ozenfant', 'whanki'] as const;
+const STANDALONE_THEMES = ['comfort', 'high-contrast', 'umber', 'umber-light', 'plaster', 'journal', 'relief', 'harlequin', 'ozenfant', 'whanki', 'picasso-girl', 'picasso-portrait', 'picasso-violin', 'gris-guitar'] as const;
 type StandaloneTheme = (typeof STANDALONE_THEMES)[number];
 
 function isStandaloneTheme(theme: Theme): theme is StandaloneTheme {
@@ -136,7 +140,7 @@ export const useThemeStore = create<ThemeState>((set, get) => ({
   },
 }));
 
-/** 강조색이 적용되는 바탕인지 — comfort/high-contrast/umber(-light)/plaster/journal/relief/harlequin/ozenfant/whanki 는 자체 색 고정이라 강조색을 무시한다. */
+/** 강조색이 적용되는 바탕인지 — comfort/high-contrast/umber(-light)/plaster/journal/relief/harlequin/ozenfant/whanki/picasso-girl·portrait·violin/gris-guitar 는 자체 색 고정이라 강조색을 무시한다. */
 export function accentApplies(theme: Theme): boolean {
   return !isStandaloneTheme(theme);
 }

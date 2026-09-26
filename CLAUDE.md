@@ -259,10 +259,12 @@ offline/error dict 를 반환**하고 HTTP 500 을 올리지 않는다 (`agent_s
 
 ## UI Design System
 
-바탕 테마 12종(`light` 슬레이트 **기본** / `dark` / `comfort` 화이트+딥그린 / `high-contrast` 고대비 /
+바탕 테마 16종(`light` 슬레이트 **기본** / `dark` / `comfort` 화이트+딥그린 / `high-contrast` 고대비 /
 `umber`·`umber-light` 유화 팔레트(움버+오커) / `plaster` 크림+슬레이트 블루 /
 `journal` 〈아침 식사〉 검정+코발트 / `relief` 스톤+슬레이트 / `harlequin` 〈할리퀸과 목걸이를 한 여인〉 은회색+콘플라워 /
-`ozenfant` 〈오장팡 자개〉 펄 그레이+스틸 블루 / `whanki` 김환기 〈창〉 회녹색+프러시안 블루 + `system`)과 강조색 6종(`blue`·`teal`·`green`·`amber`·`coral`·`violet`, `<html data-accent>` — 라이트·다크에만 적용) + 토큰 기반 시스템이다.
+`ozenfant` 〈오장팡 자개〉 펄 그레이+스틸 블루 / `whanki` 김환기 〈창〉 회녹색+프러시안 블루 /
+`picasso-girl` 〈소녀의 머리〉 회백+움버 / `picasso-portrait` 〈소녀의 초상〉 에메랄드+페리윙클(다크) /
+`picasso-violin` 〈바이올린〉 분필 흰색+바이올렛 / `gris-guitar` 후안 그리스 〈기타〉 민트+데님 블루 + `system`)과 강조색 6종(`blue`·`teal`·`green`·`amber`·`coral`·`violet`, `<html data-accent>` — 라이트·다크에만 적용) + 토큰 기반 시스템이다.
 
 - **규격·구현 표준의 원천 = `DESIGN_SYSTEM.md` §12 구현 표준** — 테마 매트릭스, radius 토큰,
   MacCard props, ClusterSidebar 사용 패턴 3종 + 레이아웃 규칙, 콘솔 패턴 5개 항목이 전부 거기 있다.

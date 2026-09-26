@@ -933,6 +933,302 @@
     --surface-container-highest: 170 10% 86%;
   }
 
+  /* ── Picasso 소녀의 머리 — 피카소의 종합적 입체주의 〈소녀의 머리〉에서 추출한 팔레트: 석고빛 회백 바탕 · 움버 브라운 ·
+     흑연 회색 · 먹 검정 · 흰 종이. 무채색 위 움버 하나만 색이라 단일 강조 원칙과 맞는다.
+     - 움버 = primary(버튼 글자 흰색 6.9:1), 링크·선택 글자는 한 단계 짙게(5.8:1).
+     - 경고는 움버와 구분되게 머스터드(hue 45), 정보는 흑연 블루 그레이.
+     - 사이드바 = 그림 속 먹 검정, 활성 표시는 밝은 탄.
+     - 자체 색 고정 바탕(standalone) — 강조색(data-accent) 은 적용되지 않는다. */
+  html.picasso-girl {
+    --background: 38 8% 89%;
+    --foreground: 30 10% 10%;
+    --card: 40 12% 97%;
+    --card-foreground: 30 10% 10%;
+    --popover: 40 12% 97%;
+    --popover-foreground: 30 10% 10%;
+    --primary: 30 38% 32%;
+    --primary-foreground: 40 20% 98%;
+    --primary-text: 30 42% 28%;
+    --secondary: 36 7% 84%;
+    --secondary-foreground: 30 10% 10%;
+    --muted: 36 7% 86%;
+    --muted-foreground: 30 6% 33%;
+    --accent: 33 30% 88%;
+    --accent-foreground: 30 10% 10%;
+    --destructive: 5 60% 40%;
+    --destructive-foreground: 40 20% 98%;
+    --border: 36 6% 76%;
+    --input: 30 5% 46%;
+    --ring: 30 38% 32%;
+    --radius: 0.5rem;
+    --card-shadow: 0 0 #0000;
+
+    --sidebar: 30 5% 10%;
+    --sidebar-foreground: 40 12% 92%;
+    --sidebar-muted-foreground: 36 6% 68%;
+    --sidebar-accent: 30 5% 19%;
+    --sidebar-accent-foreground: 0 0% 100%;
+    --sidebar-border: 30 5% 7%;
+    --sidebar-primary: 33 45% 66%;
+
+    --status-healthy: 140 22% 40%;
+    --status-healthy-bg: 140 18% 88%;
+    --status-warning: 45 70% 46%;
+    --status-warning-bg: 45 55% 87%;
+    --status-critical: 5 58% 46%;
+    --status-critical-bg: 5 45% 91%;
+    --status-unknown: 30 4% 52%;
+    --status-unknown-bg: 36 6% 86%;
+    --status-pending: 30 4% 52%;
+    --status-pending-bg: 36 6% 86%;
+    --status-info: 210 18% 46%;
+    --status-info-bg: 210 18% 89%;
+    --status-neutral: 30 4% 52%;
+    --status-neutral-bg: 36 6% 86%;
+    --status-healthy-text: 140 30% 24%;
+    --status-warning-text: 40 75% 25%;
+    --status-critical-text: 5 62% 36%;
+    --status-info-text: 210 25% 30%;
+    --status-unknown-text: 30 6% 31%;
+
+    --chart-1: 30 38% 38%;
+    --chart-2: 30 5% 15%;
+    --chart-3: 33 30% 62%;
+    --chart-4: 210 8% 55%;
+    --chart-5: 36 6% 72%;
+    --chart-6: 140 22% 42%;
+    --chart-7: 210 18% 46%;
+    --chart-8: 5 45% 50%;
+
+    --surface-container-lowest: 40 12% 97%;
+    --surface-container-low: 39 10% 94%;
+    --surface-container: 38 8% 91%;
+    --surface-container-high: 37 7% 88%;
+    --surface-container-highest: 36 7% 84%;
+  }
+
+  /* ── Gris 기타 — 후안 그리스의 입체주의 정물화 〈기타〉에서 추출한 팔레트: 민트 바탕 · 데님 블루 · 네이비 ·
+     살몬(기타 몸통) · 마룬(탁자). 블루가 화면을 지배하는 그림이라 primary 를 블루에 두었다.
+     - 데님 블루 = primary(버튼 글자 흰색 6.0:1), 링크·선택 글자는 한 단계 짙게(5.9:1).
+     - 마룬 = critical/destructive, 살몬 = warning, 민트 계열 짙은 초록 = healthy.
+     - 사이드바 = 그림 속 네이비, 활성 표시는 민트.
+     - 자체 색 고정 바탕(standalone) — 강조색(data-accent) 은 적용되지 않는다. */
+  html.gris-guitar {
+    --background: 150 16% 91%;
+    --foreground: 214 30% 12%;
+    --card: 150 20% 97%;
+    --card-foreground: 214 30% 12%;
+    --popover: 150 20% 97%;
+    --popover-foreground: 214 30% 12%;
+    --primary: 208 42% 38%;
+    --primary-foreground: 150 20% 98%;
+    --primary-text: 208 48% 32%;
+    --secondary: 150 12% 86%;
+    --secondary-foreground: 214 30% 12%;
+    --muted: 150 12% 88%;
+    --muted-foreground: 210 12% 33%;
+    --accent: 208 40% 89%;
+    --accent-foreground: 214 30% 12%;
+    --destructive: 5 55% 38%;
+    --destructive-foreground: 150 20% 98%;
+    --border: 150 10% 77%;
+    --input: 210 10% 47%;
+    --ring: 208 42% 38%;
+    --radius: 0.5rem;
+    --card-shadow: 0 0 #0000;
+
+    --sidebar: 214 30% 14%;
+    --sidebar-foreground: 150 20% 92%;
+    --sidebar-muted-foreground: 208 14% 70%;
+    --sidebar-accent: 212 26% 23%;
+    --sidebar-accent-foreground: 0 0% 100%;
+    --sidebar-border: 214 30% 10%;
+    --sidebar-primary: 150 40% 76%;
+
+    --status-healthy: 150 38% 36%;
+    --status-healthy-bg: 150 30% 86%;
+    --status-warning: 22 65% 55%;
+    --status-warning-bg: 22 60% 89%;
+    --status-critical: 5 52% 40%;
+    --status-critical-bg: 5 40% 90%;
+    --status-unknown: 210 6% 52%;
+    --status-unknown-bg: 210 8% 87%;
+    --status-pending: 210 6% 52%;
+    --status-pending-bg: 210 8% 87%;
+    --status-info: 208 38% 52%;
+    --status-info-bg: 208 38% 90%;
+    --status-neutral: 210 6% 52%;
+    --status-neutral-bg: 210 8% 87%;
+    --status-healthy-text: 150 45% 22%;
+    --status-warning-text: 20 65% 30%;
+    --status-critical-text: 5 58% 33%;
+    --status-info-text: 208 48% 30%;
+    --status-unknown-text: 210 8% 31%;
+
+    --chart-1: 208 42% 44%;
+    --chart-2: 18 55% 68%;
+    --chart-3: 5 45% 34%;
+    --chart-4: 150 25% 62%;
+    --chart-5: 210 6% 55%;
+    --chart-6: 214 30% 20%;
+    --chart-7: 208 40% 66%;
+    --chart-8: 15 30% 48%;
+
+    --surface-container-lowest: 150 20% 97%;
+    --surface-container-low: 150 18% 94%;
+    --surface-container: 150 16% 91%;
+    --surface-container-high: 150 14% 88.5%;
+    --surface-container-highest: 150 12% 86%;
+  }
+
+  /* ── Picasso 소녀의 초상 — 피카소의 종합적 입체주의 〈소녀의 초상〉(1914)에서 추출한 팔레트: 에메랄드 초록 바탕 ·
+     페리윙클 블루(드레스) · 마룬 꽃무늬 벽지 · 점묘 레드 · 먹 검정 · 흰 대리석. 초록이 화면 전체라 다크 바탕으로 깔았다.
+     - 페리윙클 = primary(밝아서 버튼 글자는 짙은 초록, 7.2:1). 링크·선택 글자는 더 밝게(6.0:1).
+     - 점묘 레드 = critical/destructive, 황토 = warning, 밝은 민트 = healthy(바탕 초록보다 한참 밝게).
+     - 사이드바 = 그림 오른쪽의 마룬 꽃무늬 벽지, 활성 표시는 페리윙클.
+     - 자체 색 고정 바탕(standalone) — 강조색(data-accent) 은 적용되지 않는다. */
+  html.picasso-portrait {
+    --background: 155 26% 11%;
+    --foreground: 40 20% 91%;
+    --card: 155 22% 15%;
+    --card-foreground: 40 20% 91%;
+    --popover: 155 22% 17%;
+    --popover-foreground: 40 20% 91%;
+    --primary: 228 50% 72%;
+    --primary-foreground: 155 30% 8%;
+    --primary-text: 228 60% 80%;
+    --secondary: 155 18% 20%;
+    --secondary-foreground: 40 20% 91%;
+    --muted: 155 18% 18%;
+    --muted-foreground: 150 10% 70%;
+    --accent: 228 25% 26%;
+    --accent-foreground: 40 20% 91%;
+    --destructive: 5 72% 66%;
+    --destructive-foreground: 155 30% 8%;
+    --border: 155 16% 25%;
+    --input: 155 10% 45%;
+    --ring: 228 50% 72%;
+    --radius: 0.5rem;
+    --card-shadow: 0 0 #0000;
+
+    --sidebar: 350 35% 14%;
+    --sidebar-foreground: 35 30% 90%;
+    --sidebar-muted-foreground: 350 12% 72%;
+    --sidebar-accent: 350 30% 23%;
+    --sidebar-accent-foreground: 35 35% 95%;
+    --sidebar-border: 350 35% 10%;
+    --sidebar-primary: 228 60% 80%;
+
+    --status-healthy: 150 45% 58%;
+    --status-healthy-bg: 150 30% 20%;
+    --status-warning: 38 70% 60%;
+    --status-warning-bg: 38 40% 18%;
+    --status-critical: 5 72% 64%;
+    --status-critical-bg: 5 40% 20%;
+    --status-unknown: 150 6% 60%;
+    --status-unknown-bg: 155 12% 20%;
+    --status-pending: 150 6% 60%;
+    --status-pending-bg: 155 12% 20%;
+    --status-info: 228 50% 70%;
+    --status-info-bg: 228 25% 22%;
+    --status-neutral: 150 6% 60%;
+    --status-neutral-bg: 155 12% 20%;
+    --status-healthy-text: 150 50% 68%;
+    --status-warning-text: 38 75% 68%;
+    --status-critical-text: 5 80% 74%;
+    --status-info-text: 228 60% 80%;
+    --status-unknown-text: 150 8% 72%;
+
+    --chart-1: 228 50% 70%;
+    --chart-2: 5 72% 64%;
+    --chart-3: 150 40% 55%;
+    --chart-4: 35 45% 62%;
+    --chart-5: 350 35% 45%;
+    --chart-6: 40 20% 88%;
+    --chart-7: 160 30% 38%;
+    --chart-8: 150 6% 58%;
+
+    --surface-container-lowest: 155 26% 11%;
+    --surface-container-low: 155 24% 13%;
+    --surface-container: 155 22% 15%;
+    --surface-container-high: 155 20% 18%;
+    --surface-container-highest: 155 18% 20%;
+  }
+
+  /* ── Picasso 바이올린 — 피카소의 종합적 입체주의 〈바이올린〉(BASS 병 라벨)에서 추출한 팔레트: 분필빛 흰 바탕 ·
+     바이올렛(BASS 글자·점묘) · 연노랑 벽지 · 초콜릿 브라운 · 주홍 · 청회색 · 먹 검정.
+     - 바이올렛 = primary(버튼 글자 흰색 6.3:1), 링크·선택 글자는 한 단계 짙게(5.6:1).
+     - 주홍 = critical/destructive, 노랑 = warning, 점묘 청록 = healthy, 청회색 = info.
+     - 사이드바 = 초콜릿 브라운, 활성 표시는 연노랑.
+     - 자체 색 고정 바탕(standalone) — 강조색(data-accent) 은 적용되지 않는다. */
+  html.picasso-violin {
+    --background: 40 10% 91%;
+    --foreground: 20 15% 10%;
+    --card: 40 15% 97%;
+    --card-foreground: 20 15% 10%;
+    --popover: 40 15% 97%;
+    --popover-foreground: 20 15% 10%;
+    --primary: 272 32% 44%;
+    --primary-foreground: 40 20% 98%;
+    --primary-text: 272 36% 40%;
+    --secondary: 40 8% 86%;
+    --secondary-foreground: 20 15% 10%;
+    --muted: 40 8% 88%;
+    --muted-foreground: 25 6% 33%;
+    --accent: 272 30% 91%;
+    --accent-foreground: 20 15% 10%;
+    --destructive: 10 68% 42%;
+    --destructive-foreground: 40 20% 98%;
+    --border: 40 6% 77%;
+    --input: 215 8% 47%;
+    --ring: 272 32% 44%;
+    --radius: 0.5rem;
+    --card-shadow: 0 0 #0000;
+
+    --sidebar: 18 28% 14%;
+    --sidebar-foreground: 40 20% 92%;
+    --sidebar-muted-foreground: 25 10% 70%;
+    --sidebar-accent: 18 22% 23%;
+    --sidebar-accent-foreground: 0 0% 100%;
+    --sidebar-border: 18 28% 10%;
+    --sidebar-primary: 45 80% 74%;
+
+    --status-healthy: 172 35% 36%;
+    --status-healthy-bg: 172 28% 88%;
+    --status-warning: 42 75% 50%;
+    --status-warning-bg: 45 70% 87%;
+    --status-critical: 10 68% 50%;
+    --status-critical-bg: 10 60% 92%;
+    --status-unknown: 215 5% 52%;
+    --status-unknown-bg: 40 6% 86%;
+    --status-pending: 215 5% 52%;
+    --status-pending-bg: 40 6% 86%;
+    --status-info: 215 20% 50%;
+    --status-info-bg: 215 20% 89%;
+    --status-neutral: 215 5% 52%;
+    --status-neutral-bg: 40 6% 86%;
+    --status-healthy-text: 172 45% 22%;
+    --status-warning-text: 38 75% 26%;
+    --status-critical-text: 10 70% 36%;
+    --status-info-text: 215 28% 31%;
+    --status-unknown-text: 215 6% 31%;
+
+    --chart-1: 272 32% 50%;
+    --chart-2: 45 75% 62%;
+    --chart-3: 15 35% 30%;
+    --chart-4: 10 68% 55%;
+    --chart-5: 215 15% 58%;
+    --chart-6: 172 35% 38%;
+    --chart-7: 20 15% 12%;
+    --chart-8: 40 8% 70%;
+
+    --surface-container-lowest: 40 15% 97%;
+    --surface-container-low: 40 12% 94%;
+    --surface-container: 40 10% 91%;
+    --surface-container-high: 40 9% 88.5%;
+    --surface-container-highest: 40 8% 86%;
+  }
+
   /* ── 강조색(accent) — 라이트·다크 바탕 위에 <html data-accent="…"> 로 얹는다 (P2) ──
      버튼·링크·선택 탭·활성 메뉴·포커스 링만 바뀌고, 배경·상태색은 바탕 테마가 정한다.
      blue 는 기본값이라 블록이 없다. 값은 버튼 글자·링크 모두 4.5:1 이상으로 계산했다.
@@ -1217,7 +1513,8 @@ button[aria-disabled="true"] {
 /* ── Date input calendar icon (다크 바탕에서만 반전 — 예전 :not(.light) 는 컴포트 등 라이트 계열까지 뒤집었다) ─────────────────────────────── */
 html.dark input[type="date"]::-webkit-calendar-picker-indicator,
 html.umber input[type="date"]::-webkit-calendar-picker-indicator,
-html.journal input[type="date"]::-webkit-calendar-picker-indicator {
+html.journal input[type="date"]::-webkit-calendar-picker-indicator,
+html.picasso-portrait input[type="date"]::-webkit-calendar-picker-indicator {
   filter: invert(0.8);
   opacity: 0.7;
   cursor: pointer;
@@ -1225,7 +1522,8 @@ html.journal input[type="date"]::-webkit-calendar-picker-indicator {
 
 html.dark input[type="date"]::-webkit-calendar-picker-indicator:hover,
 html.umber input[type="date"]::-webkit-calendar-picker-indicator:hover,
-html.journal input[type="date"]::-webkit-calendar-picker-indicator:hover {
+html.journal input[type="date"]::-webkit-calendar-picker-indicator:hover,
+html.picasso-portrait input[type="date"]::-webkit-calendar-picker-indicator:hover {
   opacity: 1;
 }
 
