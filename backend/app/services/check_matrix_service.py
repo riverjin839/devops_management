@@ -127,8 +127,20 @@ def set_settings(db: Session, retention_days: int) -> dict[str, Any]:
     return val
 
 
+# validate_cron_min_interval 이 최소 간격 판정을 위해 뽑는 연속 실행 시각 표본 수 — 필드 안에
+# 값이 여러 개 섞인 cron(예: "0,4 * * * *")의 촘촘한 구간이 표본에 반드시 걸리도록 충분히 크게.
+_CRON_INTERVAL_SAMPLE_COUNT = 30
+
+
 def validate_cron_min_interval(cron_expr: Optional[str]) -> None:
-    """평균 실행 간격이 MIN_CRON_INTERVAL_MINUTES 미만이면 거부."""
+    """연속 실행 시각 여러 개를 표본으로 뽑아 그중 최소 간격이 MIN_CRON_INTERVAL_MINUTES
+    미만이면 거부한다.
+
+    처음엔 base 이후 첫 두 실행 시각의 간격만 봤는데, "0,4 * * * *" 처럼 한 필드 안에
+    값이 여러 개 섞인 cron 은 그 중 하나의 구간(예: 매시 04분→다음 시 정각, 56분)만
+    우연히 표본에 걸리면 실제로는 4분 간격(정각→04분)으로 도는데도 통과해버렸다 —
+    연속 표본을 여러 개 뽑아 그 안의 최솟값으로 판정해야 이런 패턴을 놓치지 않는다.
+    """
     if not cron_expr:
         return
     try:
@@ -139,9 +151,9 @@ def validate_cron_min_interval(cron_expr: Optional[str]) -> None:
         raise ValueError("올바르지 않은 cron 표현식입니다.")
     base = datetime(2024, 1, 1, 0, 0, 0)
     itr = croniter(cron_expr, base)
-    first = itr.get_next(datetime)
-    second = itr.get_next(datetime)
-    if (second - first).total_seconds() < MIN_CRON_INTERVAL_MINUTES * 60:
+    times = [itr.get_next(datetime) for _ in range(_CRON_INTERVAL_SAMPLE_COUNT)]
+    min_gap = min((b - a).total_seconds() for a, b in zip(times, times[1:]))
+    if min_gap < MIN_CRON_INTERVAL_MINUTES * 60:
         raise ValueError(f"cron 최소 간격은 {MIN_CRON_INTERVAL_MINUTES}분입니다.")
 
 
