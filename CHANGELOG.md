@@ -10,6 +10,18 @@
 
 1.37.2 이후 main 에 병합된 변경 (다음 릴리스 후보).
 
+### Fixed
+- **K8s 상세 관리 목록이 다른 화면에서 바꾼 내용을 늦게 보여주던 문제 · 이벤트 폴링 완화**: 목록 캐시 무효화가
+  탐색기의 scale/restart/delete 에만 걸려 있어, K8S 효율화 적용·노드 라벨 편집·RBAC 발급·배치잡 Job 정리처럼 다른 곳에서
+  바꾼 내용은 최대 30초 늦게 보였다. 이제 PEP 가 대상 클러스터에 보내는 모든 쓰기(POST/PUT/PATCH/DELETE)가 그 apiserver 의
+  목록 캐시를 자동으로 무효화하고(모든 replica·워커 공유), kubectl 로 지우는 배치잡도 명시적으로 무효화한다. 리소스 상세의
+  이벤트 탭은 15초 → 30초 갱신(탭이 숨겨지면 중지)으로 줄이고 서버 캐시로 같은 오브젝트를 보는 사용자들의 조회를 1회로 합쳤다.
+  Backend: `services/k8s_list_cache.py`(신규), `k8s_client_pool`·`k8s_resources`·`batch_jobs/k8s_job_cleanup`. Frontend: `DetailDrawer`.
+- **클러스터 자동 업데이트가 hostname·maxPod 를 건너뛰던 버그**: 노드 IP 가 /16 보다 넓게 흩어져 있거나
+  IPv4 InternalIP 가 없어 Node CIDR 추정에 실패하면, 정의되지 않은 변수(`node_ips_only`) 참조로 NameError 가 나
+  "nodes 조회 실패" 라는 엉뚱한 경고와 함께 뒤이은 hostname·maxPod 갱신이 조용히 빠졌다. 이제 CIDR 추정 실패만
+  경고하고 나머지 필드는 정상 반영한다. Backend: `routers/clusters.py` `auto_update_cluster`.
+
 ## [1.37.2] - 2026-09-26
 
 ### Fixed

@@ -115,12 +115,18 @@ class HardenedApiClient(k8s_client.ApiClient):
             _request_timeout = DEFAULT_TIMEOUT
         # 대상 apiserver 별 동시 호출 상한(PEP 전체 합산, Redis). 스트리밍은 응답 헤더를 받는
         # 순간까지만 슬롯을 잡는다 — watch/follow 가 슬롯을 오래 점유하지 않게.
-        with cluster_slots.slot(self.configuration.host or "", hold=_slot_hold(_request_timeout)):
-            return k8s_client.ApiClient.request(
-                self, method, url, query_params=query_params, headers=headers,
-                post_params=post_params, body=body, _preload_content=_preload_content,
-                _request_timeout=_request_timeout,
-            )
+        try:
+            with cluster_slots.slot(self.configuration.host or "", hold=_slot_hold(_request_timeout)):
+                return k8s_client.ApiClient.request(
+                    self, method, url, query_params=query_params, headers=headers,
+                    post_params=post_params, body=body, _preload_content=_preload_content,
+                    _request_timeout=_request_timeout,
+                )
+        finally:
+            # 쓰기(POST/PUT/PATCH/DELETE)면 이 apiserver 의 화면 목록 캐시를 무효화(모든 replica).
+            # 실패·타임아웃이어도 서버에 반영됐을 수 있으므로 finally 에서 처리한다.
+            from app.services.k8s_list_cache import note_write
+            note_write(self.configuration.host, method, url)
 
     @property
     def request(self):  # type: ignore[override]

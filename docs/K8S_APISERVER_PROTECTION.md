@@ -15,7 +15,8 @@ PEP 는 등록된 여러 클러스터의 apiserver 를 조회한다. 화면 조�
 | 기본 타임아웃 | 동일 | `_request_timeout` 을 빠뜨린 호출도 무한 대기하지 않는다 | `K8S_API_TIMEOUT` · `K8S_API_CONNECT_TIMEOUT` |
 | read 재시도 0 | 동일 | 느린 apiserver 에 같은 LIST 를 다시 보내지 않는다. urllib3 기본값은 최대 4회 | — |
 | **클러스터당 동시 호출 상한** | `services/k8s_concurrency.py` | PEP 전체(API replica + Celery 워커)가 한 apiserver 로 동시에 보내는 요청 수를 Redis 세마포어로 제한한다. 초과분은 PEP 가 기다린다 | `K8S_CLUSTER_MAX_INFLIGHT` · `K8S_CLUSTER_SLOT_WAIT` |
-| 목록 캐시 (SWR) | `services/swr_cache.py` | 같은 목록을 여러 사용자가 열어도 LIST 는 1회로 합쳐진다 | `K8S_LIST_CACHE_FRESH` · `K8S_LIST_CACHE_STALE` |
+| 목록 캐시 (SWR) | `services/swr_cache.py` · `services/k8s_list_cache.py` | 같은 목록·객체 이벤트를 여러 사용자가 열어도 LIST 는 1회로 합쳐진다. PEP 어디서든 일어난 쓰기(풀 클라이언트 POST/PUT/PATCH/DELETE, 배치잡 kubectl 삭제)가 그 apiserver 캐시를 자동 무효화한다 | `K8S_LIST_CACHE_FRESH` · `K8S_LIST_CACHE_STALE` |
+| 상세 이벤트 폴링 완화 | `K8sManagePage` `DetailDrawer` | 이벤트 탭 갱신 15초 → 30초, 브라우저 탭이 숨겨지면 중지. events field selector(인덱스 없음) 조회 빈도를 절반 이하로 | — |
 | watch cache 읽기 (RV=0) | `routers/k8s_resources.py` | 노드·네임스페이스 등 작은 cluster-scoped 목록을 etcd quorum read 없이 apiserver 메모리에서 읽는다 | — (종류 목록은 `_WATCH_CACHE_KINDS`) |
 | 페이지 조회 | 동일 (`/k8s/{id}/pods?limit=&continue=`) | 파드 목록을 200건씩 받는다. 첫 화면이 빨라지고 한 번에 받는 응답 크기가 줄어든다 | — |
 | 디스패처 지터 | `celery_app.py` | 같은 분에 due 인 점검·수집을 0~N초 흩어 보낸다 | `K8S_DISPATCH_JITTER_SECONDS` |

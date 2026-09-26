@@ -927,13 +927,16 @@ function DetailDrawer({ clusterId, detail, editing, draft, setDraft, onStartEdit
   // Escape 닫기·포커스 트랩·초점 복원 (D-023)
   const drawerRef = useModalA11y(true, onClose);
 
-  // 관련 이벤트 (k8s 리소스만) — 탭 활성 시 15s 라이브 갱신 (Lens 파리티)
+  // 관련 이벤트 (k8s 리소스만) — 이벤트 탭이 열려 있고 브라우저 탭이 보일 때만 30s 갱신.
+  // (events field selector 는 apiserver 가 인덱스 없이 걸러내는 조회라, 15s 폴링을 30s 로 완화하고
+  //  서버 목록 캐시로 같은 오브젝트를 보는 사용자들의 조회를 1회로 합친다. 쓰기 직후엔 캐시가 무효화된다.)
   const hasEvents = detail.kind === 'k8s';
   const eventsQuery = useQuery({
     queryKey: ['k8s-mng-obj-events', clusterId, detail.resourceKind, detail.namespace, detail.name],
     queryFn: async () => (await k8sResourcesApi.resourceEvents(clusterId, detail.resourceKind!, detail.namespace, detail.name)).data,
     enabled: hasEvents && tab === 'events',
-    refetchInterval: 15_000,
+    refetchInterval: 30_000,
+    refetchIntervalInBackground: false,
   });
 
   return (
