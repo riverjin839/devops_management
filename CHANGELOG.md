@@ -10,6 +10,17 @@
 
 1.37.2 이후 main 에 병합된 변경 (다음 릴리스 후보).
 
+### Fixed
+- **릴리즈 자동화 — 태그 push 가 `release.yml`(GHCR 이미지 + GitHub Release)을 트리거하지 못하던 문제**:
+  `auto-release.yml` 이 `vX.Y.Z` 태그를 기본 `GITHUB_TOKEN` 으로 push 하는데, GitHub 가 `GITHUB_TOKEN`
+  으로 발생한 push 이벤트는 다른 워크플로우를 재귀적으로 트리거하지 않도록 막고 있어(안내된
+  `RELEASE_PAT` 시크릿도 미등록) 15개+ 태그가 push 됐음에도 `release.yml` 실행 이력이 0건이었다
+  (GHCR 이미지 미태깅, GitHub Release 0개). 태그 push 직후 `gh workflow run release.yml -f
+  tag=vX.Y.Z` 로 `workflow_dispatch` 를 직접 호출하도록 바꿔 우회했다(명시적 API 호출은 재귀
+  제한 대상이 아니라 `RELEASE_PAT` 없이도 동작). `release.yml` 자체도 `workflow_dispatch`(수동
+  백필용 `tag` 입력)를 받도록 확장하고, 버전 태그 계산을 `github.ref_name` 대신 명시적으로 뽑아
+  두 트리거 경로 모두에서 동일하게 동작하게 했다.
+
 ## [1.37.2] - 2026-09-26
 
 ### Fixed
