@@ -283,3 +283,119 @@ def test_memory_backend_ignores_store():
     assert mgr.is_shared is False
     v = mgr.get("k", _instant_builder({"partial": False, "v": 1}), initial_wait=1.0)
     assert v["status"] == "ready"
+
+
+# ── heartbeat: 주인 없는 계산 인계 / 인계당한 계산의 쓰기 차단 ─────────────────────────
+import json as _json  # noqa: E402
+
+
+def _seed_orphan(fake: FakeRedis, key: str, *, beat_age: float, owner: str = "dead-pod:1:abcd",
+                 processed: int = 0) -> None:
+    """롤링 배포·OOM 으로 죽은 replica 가 남긴 computing meta + 긴 TTL 락을 흉내."""
+    now = time.time()
+    meta = {"status": "computing", "started_at": now - beat_age, "finished_at": None,
+            "heartbeat_at": now - beat_age, "processed": processed, "total": None, "phase": "nodes",
+            "error": None, "last_total": None, "owner": owner}
+    fake.set(f"snap:{key}:meta", _json.dumps(meta))
+    fake.set(f"snap:{key}:lock", owner, ex=1800)
+
+
+def test_dead_owner_is_taken_over_after_heartbeat_timeout():
+    """죽은 replica 의 computing 은 stuck_timeout(30분)을 기다리지 않고 heartbeat_timeout 뒤 인계 —
+    대형 클러스터에서 '0 Pod 처리됨'에 멈춰 보이던 원인."""
+    fake = FakeRedis()
+    _seed_orphan(fake, "k", beat_age=5.0)
+    mgr = SnapshotManager(ttl=60.0, store=_RedisStore(client=fake), stuck_timeout=1800.0,
+                          heartbeat_timeout=1.0)
+    v = mgr.get("k", _instant_builder({"partial": False, "v": "fresh"}), initial_wait=1.0)
+    assert v["status"] == "ready" and v["data"]["v"] == "fresh"
+    assert fake.get("snap:k:lock") is None
+
+
+def test_legacy_meta_without_heartbeat_uses_started_at():
+    """heartbeat_at 이 없는 구버전 meta(배포 전 파드가 남김)도 started_at 기준으로 인계된다."""
+    fake = FakeRedis()
+    _seed_orphan(fake, "k", beat_age=5.0)
+    meta = _json.loads(fake.get("snap:k:meta"))
+    meta.pop("heartbeat_at")
+    fake.set("snap:k:meta", _json.dumps(meta))
+    mgr = SnapshotManager(ttl=60.0, store=_RedisStore(client=fake), heartbeat_timeout=1.0)
+    v = mgr.get("k", _instant_builder({"partial": False, "v": "fresh"}), initial_wait=1.0)
+    assert v["status"] == "ready" and v["data"]["v"] == "fresh"
+
+
+def test_live_owner_with_fresh_heartbeat_is_not_taken_over():
+    fake = FakeRedis()
+    _seed_orphan(fake, "k", beat_age=0.0, owner="alive-pod:1:abcd", processed=1500)
+    mgr = SnapshotManager(ttl=60.0, store=_RedisStore(client=fake), heartbeat_timeout=30.0)
+    calls = {"n": 0}
+
+    def builder(progress):
+        calls["n"] += 1
+        return {"partial": False}
+
+    v = mgr.get("k", builder, initial_wait=0.2, force=True)
+    assert v["status"] == "computing" and v["processed"] == 1500
+    assert calls["n"] == 0, "heartbeat 가 살아 있는 계산은 force 로도 중복 기동하지 않는다"
+
+
+def test_heartbeat_keeps_long_build_alive_across_replicas():
+    """progress 갱신이 없는 긴 대기(첫 페이지 응답 대기 등)에도 heartbeat 스레드가 meta 를 갱신해
+    다른 replica 가 살아 있는 계산을 죽은 것으로 오판해 인계하지 않는다."""
+    fake = FakeRedis()
+    a, b = _shared_pair(fake, heartbeat_timeout=0.2)
+    calls = {"n": 0}
+    release = threading.Event()
+
+    def slow(progress):
+        calls["n"] += 1
+        release.wait(timeout=5)       # progress 갱신 없이 오래 대기
+        return {"partial": False, "v": "done"}
+
+    a.get("k", slow, initial_wait=0.01)
+    time.sleep(0.6)                   # heartbeat_timeout(0.2s)의 3배 경과
+    v = b.get("k", slow, initial_wait=0.01)
+    assert v["status"] == "computing" and calls["n"] == 1
+    release.set()
+    time.sleep(0.3)
+    v = b.get("k", slow, initial_wait=0.01)
+    assert v["status"] == "ready" and v["data"]["v"] == "done"
+    assert fake.get("snap:k:lock") is None, "완료 후 heartbeat 가 락을 되살리면 안 된다"
+    time.sleep(0.3)
+    assert _json.loads(fake.get("snap:k:meta"))["status"] == "ready", "늦은 heartbeat 가 meta 를 되돌리면 안 된다"
+
+
+def test_superseded_build_stops_and_does_not_overwrite_new_owner():
+    """인계당한(느렸을 뿐 살아 있던) 계산은 락을 잃은 걸 알아채고 순회를 끊으며, 새 주인의
+    meta/결과를 덮어쓰지 않는다."""
+    fake = FakeRedis()
+    mgr = SnapshotManager(ttl=60.0, store=_RedisStore(client=fake), heartbeat_timeout=0.2,
+                          publish_interval=0.0)
+    looped = threading.Event()
+    stopped = {"exc": None}
+
+    def looping(progress):
+        try:
+            for i in range(10_000):
+                progress.processed = i
+                looped.set()
+                time.sleep(0.01)
+        except Exception as e:  # noqa: BLE001
+            stopped["exc"] = type(e).__name__
+            raise
+        return {"partial": False, "v": "zombie"}
+
+    mgr.get("k", looping, initial_wait=0.01)
+    looped.wait(timeout=2)
+    # 다른 replica 가 인계했다고 가정: 락과 meta 를 새 주인으로 교체
+    fake.set("snap:k:lock", "new-owner", ex=60)
+    new_meta = {"status": "computing", "started_at": time.time(), "heartbeat_at": time.time(),
+                "processed": 7, "total": None, "phase": "pods:1", "error": None,
+                "last_total": None, "owner": "new-owner"}
+    fake.set("snap:k:meta", _json.dumps(new_meta))
+    time.sleep(0.5)
+    assert stopped["exc"] == "SnapshotSuperseded"
+    meta = _json.loads(fake.get("snap:k:meta"))
+    assert meta["owner"] == "new-owner" and meta["processed"] == 7
+    assert fake.get("snap:k:result") is None
+    assert fake.get("snap:k:lock") == b"new-owner", "새 주인의 락을 지우면 안 된다"

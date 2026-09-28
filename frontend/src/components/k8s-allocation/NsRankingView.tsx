@@ -10,6 +10,7 @@ import { fmtN } from './format';
 import { PageSizeSelect, Pager, SearchInput } from './primitives';
 import { paginate } from './tableSort';
 import type { AllocDetailTarget } from './AllocDetailDialog';
+import { allocPhaseText } from './effUtils';
 
 type ChartMetric = 'cpu' | 'mem';
 
@@ -82,7 +83,8 @@ export function NsRankingView({ clusterId, onOpenDetail }: {
   } else if (computing && !(nsQ.data?.items?.length)) {
     body = (
       <SnapshotProgressCard processed={nsQ.data?.processed ?? 0} total={nsQ.data?.total ?? null}
-        progress={nsQ.data?.progress ?? null} label="자원 집계 중" unit="Pod" />
+        progress={nsQ.data?.progress ?? null} label="자원 집계 중" unit="Pod"
+          detail={allocPhaseText(nsQ.data?.phase, nsQ.data?.processed)} />
     );
   } else if (nsQ.isLoading && !nsQ.data) {
     body = <Skeleton className="h-64 w-full" />;

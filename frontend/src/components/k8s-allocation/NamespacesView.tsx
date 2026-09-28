@@ -14,6 +14,7 @@ import { nextSort, paginate, useTableSort } from './tableSort';
 import type { SortState } from './tableSort';
 import { WorkloadsDrill } from './drilldown';
 import type { AllocDetailTarget } from './AllocDetailDialog';
+import { allocPhaseText } from './effUtils';
 
 const NS_ACCESSORS: Record<string, (r: AllocNamespaceRow) => number | string | null> = {
   namespace: (r) => r.namespace,
@@ -86,7 +87,8 @@ export function NamespacesView({ clusterId, clusterName, onOpenDetail }: {
     body = (
       <div className="p-3">
         <SnapshotProgressCard processed={data?.processed ?? 0} total={data?.total ?? null}
-          progress={data?.progress ?? null} label="자원 집계 중" unit="Pod" />
+          progress={data?.progress ?? null} label="자원 집계 중" unit="Pod"
+          detail={allocPhaseText(data?.phase, data?.processed)} />
       </div>
     );
   } else if (!allItems.length) {

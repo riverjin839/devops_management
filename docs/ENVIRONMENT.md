@@ -115,11 +115,13 @@
 | `K8S_ALLOC_OVERVIEW_TTL` | `86400` (24h) | `routers/k8s_allocation.py` — `/k8s-allocation` 전체 스냅샷(노드+네임스페이스) 캐시 수명(초). 완전한 결과에만 적용 — 절단(partial) 결과는 `K8S_ALLOC_PARTIAL_TTL` 이 우선 |
 | `K8S_ALLOC_PARTIAL_TTL` | `300` (5m) | 동일 — 부분(절단) 스냅샷의 짧은 캐시 수명(초). apiserver 5xx/`_continue` 토큰 만료로 전량 순회가 끊긴 결과가 24h 짜리 확정 데이터처럼 서빙되지 않도록 자동 재집계를 유도 |
 | `K8S_ALLOC_STUCK_TIMEOUT` | `1800` (30m) | 동일 — 백그라운드 집계가 이 시간을 넘겨도 안 끝나면(행업) `refresh` 요청 시 새 계산으로 교체 |
+| `K8S_ALLOC_HEARTBEAT_TIMEOUT` | `90` | 동일 — Redis 공유 모드에서 집계 중인 replica 는 heartbeat(meta `heartbeat_at` + 락 TTL 연장)를 뛴다. 이 시간(초) 동안 끊기면(롤링 배포·OOM·liveness 재시작으로 계산 파드가 죽음) 다음 요청이 계산을 인계한다 — 없으면 죽은 계산이 `K8S_ALLOC_STUCK_TIMEOUT` 동안 "집계 중 · 0 Pod 처리됨"으로 멈춰 보인다. 인계당한(느렸을 뿐 살아 있던) 계산은 락을 잃은 걸 알아채고 기록·결과 쓰기를 멈춘다 |
 | `K8S_ALLOC_METRICS_TIMEOUT` | `8.0` | 동일 — metrics-server(`metrics.k8s.io`) 조회 read timeout(초). 느리면 usage 생략(best-effort) |
 | `K8S_ALLOC_POD_USAGE_MAX` | `6000` | 동일 — cluster-wide Pod usage 조회는 활성 Pod 수가 이 값 이하일 때만 시도(초과 시 생략 — 대형 클러스터에서 metrics 응답이 타임아웃만 반복하는 것을 방지, 드릴다운은 네임스페이스 단위로 계속 확인 가능) |
 | `K8S_ALLOC_API_READ_TIMEOUT` | `12.0` | `services/k8s_paging.py` — LIST 페이지 1개당 read timeout(초). 게이트웨이 타임아웃보다 충분히 짧게 |
 | `K8S_ALLOC_PAGE_LIMIT` | `500` | 동일 — LIST `_continue` 페이지네이션 페이지 크기 |
 | `K8S_ALLOC_SNAPSHOT_BACKEND` | `auto` | `routers/k8s_allocation.py` / `services/snapshot_jobs.py` — 개요 스냅샷 저장소. `auto`(Redis 연결되면 replica 간 공유, 아니면 프로세스 메모리로 폴백) · `redis` · `memory`. 멀티 replica(HPA) 에서 `memory` 면 1.5초 폴링이 파드마다 다른 진행률/결과를 보고 파드마다 전수 스캔이 중복된다 |
+| `K8S_ALLOC_RAW_LIST` | `1` | 동일 — 노드/NS/Pod 전수 순회를 kubernetes 모델 역직렬화 없이 원본 JSON 으로 읽는다(`services/k8s_raw.py`). 모델 변환은 Pod 500개 페이지당 초 단위 CPU 라 3만 Pod 클러스터에서 집계 1회가 수 분 걸리고 웹 파드를 불안정하게 만들었다(원본 JSON 은 약 70배 빠름). `0` 이면 구 동작(롤백용) |
 | `K8S_ALLOC_COUNT_TERMINAL_PODS` | `1` | 동일 — Pod 전수 순회에 종료(Succeeded/Failed) 파드까지 포함해 POD 상태 카운트(`/allocation/pods-summary`)를 같은 스냅샷에서 계산. 완료 Job 파드가 수만 개 쌓인 클러스터에서 순회가 너무 길면 `0`(활성 파드만 서버측 필터, succeeded/failed 는 0 표시) |
 | `K8S_ALLOC_DRILL_CACHE_MAX` | `256` | 동일 — 네임스페이스 드릴다운(워크로드/파드) 20초 캐시의 항목 상한. 초과 시 만료 항목 정리 후 가장 오래된 항목부터 퇴출 |
 | `K8S_ALLOC_NODE_DRILL_NS_MAX` | `64` | 동일 — 노드 상세(`GET .../allocation/nodes/{node}/pods`)는 노드에 걸린 NS 마다 metrics·ReplicaSet 을 NS 단위로 병렬 조회한다(정확 + NS 드릴다운과 캐시 공유). NS 가 이 수를 넘는 노드만 cluster-wide metrics 1회 + 이름 기반 워크로드 근사로 떨어지고 응답 `owner_approx=true` 로 화면에 안내된다. cluster-wide metrics 는 대형 클러스터에서 타임아웃으로 빈 결과가 되기 쉬우므로 낮추지 않는 것을 권장 |

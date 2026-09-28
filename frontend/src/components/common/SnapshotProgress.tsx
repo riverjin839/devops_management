@@ -42,6 +42,8 @@ interface SnapshotProgressCardProps {
   label: string;
   /** 처리 단위 (예: "노드", "Pod") */
   unit?: string;
+  /** 현재 단계 설명(예: "Pod 목록 3번째 페이지 처리 중") — 무엇을 기다리는지 표시 */
+  detail?: string;
 }
 
 /**
@@ -54,6 +56,7 @@ export function SnapshotProgressCard({
   progress,
   label,
   unit = '',
+  detail,
 }: SnapshotProgressCardProps) {
   const pct = progress != null ? Math.min(100, Math.round(progress * 100)) : null;
   return (
@@ -69,6 +72,7 @@ export function SnapshotProgressCard({
             {processed.toLocaleString()}
             {total != null ? ` / ${total.toLocaleString()}` : ''} {unit} 처리됨
           </p>
+          {detail && <p className="text-xs text-muted-foreground mt-1">{detail}</p>}
         </div>
         <div className="w-full max-w-md h-2 rounded-full bg-muted overflow-hidden">
           {pct != null ? (

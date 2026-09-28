@@ -10,6 +10,12 @@
   "N% 집계중" 을 표시.
 - 계산이 끝나면 **전체(무결) 결과**를 반환 → 데이터 무결성 보장.
 
+주인 없는 계산 감지(heartbeat): 공유 모드에서 계산하는 replica 는 `heartbeat_interval` 마다
+meta.heartbeat_at 을 갱신하고 락 TTL 을 연장한다. 그 replica 가 롤링 배포·OOM·liveness 로 죽으면
+heartbeat 가 끊기고, `heartbeat_timeout` 이 지나면 다음 요청이 계산을 인계한다 — 종전에는 락 TTL
+(= stuck_timeout, 기본 30분) 동안 "집계 중"이 마지막 processed 값에 멈춰 있었다. 인계당한(느렸을 뿐
+살아 있던) 계산은 락을 잃은 것을 알아채고 진행 기록·결과 쓰기를 멈춘다(`SnapshotSuperseded`).
+
 멀티 replica(HPA 2~10) 대응: 스냅샷/진행률/락을 **Redis 에 공유**한다(`_RedisStore`). 프론트의
 1.5초 폴링이 매번 다른 파드에 맞아도 같은 진행률·같은 결과를 보고, 전수 스캔은 클러스터당
 1개(락 소유 replica)만 돈다. Redis 가 없거나 죽으면 종전처럼 프로세스 메모리(`_MemoryStore`)로
@@ -201,6 +207,36 @@ class _RedisStore:
         except Exception:  # noqa: BLE001
             pass
 
+    def lock_owner(self, key: str) -> Optional[str]:
+        """현재 락 토큰(없으면 None). Redis 오류도 None — 호출측은 '판단 보류'로 다룬다."""
+        c = self._c()
+        if c is None:
+            return None
+        try:
+            raw = c.get(self._k(key, "lock"))
+            return raw.decode() if isinstance(raw, (bytes, bytearray)) else raw
+        except Exception:  # noqa: BLE001
+            return None
+
+    def renew_lock(self, key: str, token: str, ttl: float) -> Optional[bool]:
+        """내 락이면 TTL 연장 → True. 다른 토큰이 잡고 있으면 False(인계당함).
+        락이 사라졌으면(만료) 다시 잡아 본다(NX) — 못 잡으면 False. Redis 오류는 None(판단 보류)."""
+        c = self._c()
+        if c is None:
+            return None
+        try:
+            k = self._k(key, "lock")
+            raw = c.get(k)
+            cur = raw.decode() if isinstance(raw, (bytes, bytearray)) else raw
+            if cur == token:
+                c.set(k, token, ex=max(1, int(ttl)))
+                return True
+            if cur is None:
+                return bool(c.set(k, token, nx=True, ex=max(1, int(ttl))))
+            return False
+        except Exception:  # noqa: BLE001
+            return None
+
     def force_lock(self, key: str, token: str, ttl: float) -> bool:
         """stuck 교체용 — 기존 락을 덮어쓴다."""
         c = self._c()
@@ -221,6 +257,10 @@ def _json_default(o):
     raise TypeError(f"not JSON serializable: {type(o).__name__}")
 
 
+class SnapshotSuperseded(Exception):
+    """다른 replica 가 계산을 인계했다 — 이 계산의 진행/결과는 버린다(빌더 순회를 끊기 위해 raise)."""
+
+
 class _PublishingProgress(Progress):
     """진행률/부분결과를 Redis 에 주기적으로 밀어 넣는 Progress.
 
@@ -228,14 +268,19 @@ class _PublishingProgress(Progress):
     `publish_interval` 초 간격으로만 meta 를 갱신하고, `partial` 대입은 즉시 저장한다.
     """
 
-    def __init__(self, store: _RedisStore, key: str, meta: dict, publish_interval: float = 1.0):
+    def __init__(self, store: _RedisStore, key: str, meta: dict, publish_interval: float = 1.0,
+                 token: Optional[str] = None):
         # dataclass __init__ 이 필드 대입으로 __setattr__ 를 타므로 스토어 참조를 먼저 심는다.
         object.__setattr__(self, "_store", store)
         object.__setattr__(self, "_key", key)
         object.__setattr__(self, "_meta", meta)
         object.__setattr__(self, "_interval", publish_interval)
+        object.__setattr__(self, "_token", token)
         object.__setattr__(self, "_last_pub", 0.0)
         object.__setattr__(self, "_armed", False)
+        object.__setattr__(self, "_lock", threading.Lock())   # heartbeat 스레드와 meta 쓰기 직렬화
+        object.__setattr__(self, "superseded", False)
+        object.__setattr__(self, "_closed", False)            # 최종 기록 이후 heartbeat 쓰기 차단
         super().__init__()
         object.__setattr__(self, "_armed", True)
 
@@ -243,9 +288,12 @@ class _PublishingProgress(Progress):
         object.__setattr__(self, name, value)
         if not self.__dict__.get("_armed"):
             return
+        if self.__dict__.get("superseded"):
+            # 인계당한 계산 — 새 주인의 meta/partial 을 덮어쓰지 않도록 즉시 순회를 끊는다.
+            raise SnapshotSuperseded(self._key)
         if name == "partial":
             self._flush(force=True)
-            if value is not None:
+            if value is not None and self._still_owner():
                 self._store.set_json(self._key, "partial", value, ex=120)
         elif name in ("processed", "total", "phase"):
             self._flush(force=(name == "phase"))
@@ -255,26 +303,57 @@ class _PublishingProgress(Progress):
         if not force and (now - self._last_pub) < self._interval:
             return
         object.__setattr__(self, "_last_pub", now)
-        meta = self._meta
-        meta["processed"] = self.processed
-        meta["total"] = self.total
-        meta["phase"] = self.phase
-        self._store.set_json(self._key, "meta", meta)
+        self.write_meta(heartbeat=True)
+
+    def _still_owner(self) -> bool:
+        """락이 아직 내 것인지 — 다른 토큰이면 인계당한 것으로 표시하고 False. 락이 없으면(만료,
+        heartbeat 가 곧 다시 잡음)·Redis 오류면 True(판단 보류). 쓰기마다 GET 1회(수 초 간격)."""
+        token = self._token
+        if not token:
+            return True
+        cur = self._store.lock_owner(self._key)
+        if cur is None or cur == token:
+            return True
+        object.__setattr__(self, "superseded", True)
+        return False
+
+    def write_meta(self, heartbeat: bool = False) -> None:
+        """현재 진행 상태를 meta 에 기록(heartbeat 면 heartbeat_at 도 갱신). 인계당했으면 쓰지 않는다
+        — 새 주인이 막 쓴 meta 를 옛 주인의 늦은 flush 가 덮어쓰는 틈을 막는다."""
+        with self._lock:
+            if self.__dict__.get("superseded") or self.__dict__.get("_closed"):
+                return
+            if not self._still_owner():
+                return
+            meta = self._meta
+            meta["processed"] = self.processed
+            meta["total"] = self.total
+            meta["phase"] = self.phase
+            if heartbeat:
+                meta["heartbeat_at"] = time.time()
+            self._store.set_json(self._key, "meta", meta)
 
 
 class SnapshotManager:
     def __init__(self, ttl: float = 30.0, partial_ttl: Optional[float] = None,
                  stuck_timeout: float = 1800.0, backend: str = "auto",
                  store: Optional[_RedisStore] = None,
-                 publish_interval: float = 1.0) -> None:
+                 publish_interval: float = 1.0,
+                 heartbeat_timeout: float = 90.0) -> None:
         """ttl: 완전한 결과의 캐시 수명. partial_ttl: 결과가 부분(절단) 집계일 때 적용할
         더 짧은 수명(None 이면 ttl 과 동일) — 절단된 스냅샷이 ttl 내내 확정 데이터처럼
         서빙되는 것을 막고 자동 재집계되게 한다. stuck_timeout: computing 이 이 시간(초)을
         넘기면 행업으로 간주하고 새 계산으로 교체(영구 wedge 방지).
 
         backend: "auto"(Redis 가능하면 공유, 아니면 memory) | "redis" | "memory".
-        store: 테스트 주입용 `_RedisStore`(fake 클라이언트 포함)."""
+        store: 테스트 주입용 `_RedisStore`(fake 클라이언트 포함).
+        heartbeat_timeout: 공유 모드에서 계산 중 replica 의 heartbeat 가 이 시간(초) 끊기면 죽은
+        것으로 보고 인계한다(락 TTL 도 이 값 — heartbeat 마다 연장). stuck_timeout 은 살아 있어도
+        넘기면 교체하는 절대 상한으로 남는다."""
         self._ttl = ttl
+        self._heartbeat_timeout = max(0.05, min(heartbeat_timeout, stuck_timeout))
+        # heartbeat 주기 — 타임아웃 안에 여러 번 뛰도록(네트워크 지연·GC 여유). 최대 15초.
+        self._heartbeat_interval = max(0.01, min(15.0, self._heartbeat_timeout / 4.0))
         self._partial_ttl = partial_ttl
         self._stuck_timeout = stuck_timeout
         self._publish_interval = publish_interval
@@ -292,6 +371,12 @@ class SnapshotManager:
     def is_shared(self) -> bool:
         """Redis 공유 스토어가 실제로 동작 중인지(빌더가 publish 주기를 늘리는 데 참고)."""
         return self._backend != "memory" and self._store is not None and self._store.available()
+
+    def _meta_alive(self, meta: dict, now: float) -> bool:
+        """공유 meta 가 살아 있는 계산인지 — heartbeat 가 끊기지 않았고 stuck_timeout 이내."""
+        started = float(meta.get("started_at") or 0)
+        beat = float(meta.get("heartbeat_at") or started)
+        return (now - beat) < self._heartbeat_timeout and (now - started) < self._stuck_timeout
 
     def _effective_ttl_for(self, result: Any) -> float:
         """부분(절단) 결과면 partial_ttl 로 단축된 TTL 반환(duck-check: dict 의 partial 키)."""
@@ -320,7 +405,7 @@ class SnapshotManager:
         now = time.time()
         if self.is_shared:
             meta = self._store.get_json(key, "meta") or {}
-            if meta.get("status") == "computing" and (now - float(meta.get("started_at") or 0)) < self._stuck_timeout:
+            if meta.get("status") == "computing" and self._meta_alive(meta, now):
                 return
             self._store.set_json(key, "result", result, ex=int(self._effective_ttl_for(result)) + 60)
             self._store.set_json(key, "last", result)
@@ -447,24 +532,33 @@ class SnapshotManager:
             started = float(meta.get("started_at") or 0)
             finished = meta.get("finished_at")
             if st == "computing":
-                if (now - started) < self._stuck_timeout:
+                # heartbeat 가 없던 구버전 meta 는 started_at 을 마지막 신호로 본다(배포 직후 고아 정리).
+                beat = float(meta.get("heartbeat_at") or started)
+                alive = (now - beat) < self._heartbeat_timeout
+                if self._meta_alive(meta, now):
                     return self._shared_view(key, meta)
-                logger.warning("snapshot job stuck > %.0fs — replacing (key=%s, owner=%s)",
-                               self._stuck_timeout, key, meta.get("owner"))
-                store.delete(key, "lock")
+                if alive:
+                    logger.warning("snapshot job stuck > %.0fs — replacing (key=%s, owner=%s)",
+                                   self._stuck_timeout, key, meta.get("owner"))
+                else:
+                    logger.warning("snapshot job heartbeat lost %.0fs (owner 종료 추정) — taking over "
+                                   "(key=%s, owner=%s, processed=%s)", now - beat, key,
+                                   meta.get("owner"), meta.get("processed"))
+                # 그 주인의 락만 지운다 — 동시에 인계를 시도한 다른 replica 가 막 잡은 새 락은 보존.
+                store.release_lock(key, str(meta.get("owner") or ""))
             elif st == "ready" and not force and finished is not None:
                 result = store.get_json(key, "result")
                 if result is not None and (now - float(finished)) < self._effective_ttl_for(result):
                     return self._shared_view(key, meta)
         # 새 계산 — 리더 선출(락). 실패하면 다른 replica 가 이미 돌리는 중.
         token = f"{_OWNER}:{uuid.uuid4().hex[:8]}"
-        if not store.acquire_lock(key, token, self._stuck_timeout):
+        if not store.acquire_lock(key, token, self._heartbeat_timeout):
             m2 = store.get_json(key, "meta") or meta
             return self._shared_view(key, m2)
         had_prev = (store.get_json(key, "last") is not None)
         last_total = (meta or {}).get("last_total")
         new_meta = {
-            "status": "computing", "started_at": now, "finished_at": None,
+            "status": "computing", "started_at": now, "finished_at": None, "heartbeat_at": now,
             "processed": 0, "total": last_total, "phase": "", "error": None,
             "last_total": last_total, "owner": token,
         }
@@ -479,13 +573,49 @@ class SnapshotManager:
             thread.join(timeout=initial_wait)
         return self._shared_view(key, store.get_json(key, "meta") or new_meta)
 
+    def _heartbeat_loop(self, key: str, token: str, prog: _PublishingProgress,
+                        stop: threading.Event) -> None:
+        """계산이 끝날 때까지 락 TTL 연장 + meta.heartbeat_at 갱신. 락을 다른 토큰이 잡았으면
+        (인계당함) 진행 기록을 멈추게 표시한다 — 빌더는 다음 progress 갱신에서 끊긴다."""
+        store = self._store
+        while not stop.wait(self._heartbeat_interval):
+            ok = store.renew_lock(key, token, self._heartbeat_timeout)
+            if ok is False:
+                logger.warning("snapshot job superseded — lock taken over (key=%s, token=%s)", key, token)
+                object.__setattr__(prog, "superseded", True)
+                return
+            prog.write_meta(heartbeat=True)
+
+    @staticmethod
+    def _stop_heartbeat(prog: _PublishingProgress, stop: threading.Event,
+                        beat: threading.Thread) -> None:
+        """heartbeat 스레드를 완전히 멈춘 뒤 진행 기록을 닫는다 — 이후의 최종 meta 기록·락 해제를
+        heartbeat 의 늦은 쓰기(computing 으로 되돌리기, 해제한 락 재연장)가 덮지 못하게."""
+        stop.set()
+        beat.join(timeout=5.0)
+        with prog._lock:
+            object.__setattr__(prog, "_closed", True)
+
     def _run_shared(self, key: str, builder, meta: dict, token: str) -> None:
         store = self._store
-        prog = _PublishingProgress(store, key, meta, publish_interval=self._publish_interval)
+        prog = _PublishingProgress(store, key, meta, publish_interval=self._publish_interval,
+                                   token=token)
         if meta.get("last_total"):
             prog.total = meta["last_total"]
+        stop = threading.Event()
+        beat = threading.Thread(target=self._heartbeat_loop, args=(key, token, prog, stop),
+                                name=f"snap-hb-{key[:20]}", daemon=True)
+        beat.start()
         try:
-            result = builder(prog)
+            try:
+                result = builder(prog)
+            finally:
+                self._stop_heartbeat(prog, stop, beat)
+            owner_now = store.lock_owner(key)
+            if prog.superseded or (owner_now is not None and owner_now != token):
+                # heartbeat 를 멈춘 직후 인계됐을 수도 있다 — 최종 결과 쓰기 직전에 한 번 더 확인.
+                object.__setattr__(prog, "superseded", True)
+                raise SnapshotSuperseded(key)
             processed = prog.processed
             ttl = int(self._effective_ttl_for(result))
             store.set_json(key, "result", result, ex=ttl + 60)
@@ -497,7 +627,13 @@ class SnapshotManager:
             })
             store.set_json(key, "meta", meta)
             store.delete(key, "partial")
+        except SnapshotSuperseded:
+            # 새 주인이 meta/partial 을 쓰고 있다 — 아무것도 덮어쓰지 않고 조용히 빠진다.
+            logger.info("snapshot build abandoned — superseded by another owner (key=%s)", key)
         except Exception as e:  # noqa: BLE001
+            if prog.superseded:   # 인계 후 늦게 난 오류 — 새 주인의 상태를 error 로 덮지 않는다
+                logger.info("snapshot build failed after takeover — ignored (key=%s): %s", key, str(e)[:120])
+                return
             logger.exception("snapshot build failed (key=%s)", key)
             meta.update({"status": "error", "finished_at": time.time(), "error": str(e)[:300]})
             store.set_json(key, "meta", meta)

@@ -80,6 +80,9 @@ _POD_USAGE_MAX = int(_envf("K8S_ALLOC_POD_USAGE_MAX", 6000))
 _PARTIAL_TTL = _envf("K8S_ALLOC_PARTIAL_TTL", 300.0)
 # computing 이 이 시간(초)을 넘기면 행업으로 간주하고 refresh 시 새 계산으로 교체.
 _STUCK_TIMEOUT = _envf("K8S_ALLOC_STUCK_TIMEOUT", 1800.0)
+# 집계 중인 replica 의 heartbeat 가 이 시간(초) 끊기면(롤링 배포·OOM·liveness 재시작) 다음 요청이
+# 계산을 인계한다 — 없으면 죽은 계산이 _STUCK_TIMEOUT 동안 "집계 중"으로 멈춰 보인다.
+_HEARTBEAT_TIMEOUT = _envf("K8S_ALLOC_HEARTBEAT_TIMEOUT", 90.0)
 
 # 비싼 집계 스냅샷에 대한 짧은 TTL 캐시(클러스터/네임스페이스 키별 격리).
 # 크기 상한을 둔다 — 드릴다운을 많이 펼치는 대형 클러스터에서 무제한 성장·클러스터 삭제 후
@@ -499,6 +502,10 @@ _PARTIAL_PUBLISH_INTERVAL_SHARED = 2.0
 # 종료(Succeeded/Failed) 파드까지 순회해 POD 상태 카운트를 같은 스냅샷에서 계산할지.
 # 0 이면 구 동작(활성 파드만 서버측 필터) — 완료 Job 파드가 수만 개 쌓인 클러스터용 탈출구.
 _COUNT_TERMINAL_PODS = os.getenv("K8S_ALLOC_COUNT_TERMINAL_PODS", "1") not in ("0", "false", "no")
+# 노드/NS/Pod 전수 순회를 kubernetes 모델 역직렬화 없이(원본 JSON) 읽을지. 모델 변환은 Pod 500개
+# 페이지당 초 단위 CPU 라 3만 Pod 클러스터에서 집계 1회가 수 분(1코어 제한 파드에서는 더)으로
+# 늘어나고, 그동안 웹 파드가 liveness/OOM 으로 죽어 스냅샷이 멈춰 보였다. 0 이면 구 동작(롤백용).
+_RAW_LIST = os.getenv("K8S_ALLOC_RAW_LIST", "1") not in ("0", "false", "no")
 
 _POD_STATUS_KEYS = ("running", "pending", "error", "succeeded", "failed", "unknown")
 
@@ -578,14 +585,15 @@ def _build_overview(cluster, progress: Optional[Progress] = None, *,
 
         # 노드/NS 목록은 작으므로 watch cache(resource_version="0")에서 싸게 읽는다.
         # (Pod 순회에는 절대 쓰지 않는다 — RV=0 은 limit 을 무시해 전량 단일 응답 → OOM.)
-        nodes = _list_all(lambda **kw: core.list_node(**kw), report=partial_flag,
-                          resource_version="0")
+        # phase 는 각 단계를 **시작하기 전에** 기록한다 — 느린 단계에서 화면이 "0 처리됨"만 보이지
+        # 않고 무엇을 기다리는지(노드 목록/Pod n번째 페이지/실사용량) 보이게.
         if progress is not None:
             progress.phase = "nodes"
+        nodes = _list_all(lambda **kw: core.list_node(**kw), report=partial_flag,
+                          resource_version="0", raw=_RAW_LIST)
         node_usage = _node_usage(client)
-        ns_total = len(_list_all(lambda **kw: core.list_namespace(**kw), resource_version="0"))
-        if progress is not None:
-            progress.phase = "pods"
+        ns_total = len(_list_all(lambda **kw: core.list_namespace(**kw), resource_version="0",
+                                 raw=_RAW_LIST))
 
         # 노드 base (allocatable/capacity/roles) — raw 객체는 보관 안 함.
         node_base: dict[str, dict] = {}
@@ -617,8 +625,13 @@ def _build_overview(cluster, progress: Optional[Progress] = None, *,
         # 약 1초마다 부분 결과를 progress.partial 로 publish → 프론트가 누적 표시.
         last_pub = time.monotonic()
         pod_selector = None if _COUNT_TERMINAL_PODS else _ACTIVE_FIELD_SELECTOR
+        def _on_page(n: int) -> None:
+            if progress is not None:
+                progress.phase = f"pods:{n}"
+
         for p in _iter_all(lambda **kw: core.list_pod_for_all_namespaces(**kw),
-                           field_selector=pod_selector, report=partial_flag):
+                           field_selector=pod_selector, report=partial_flag,
+                           raw=_RAW_LIST, on_page=_on_page):
             if progress is not None:
                 progress.processed += 1
             # POD 상태 카운트 — 종료 파드 포함(구 pods-summary 와 동일 버킷).
@@ -679,6 +692,8 @@ def _build_overview(cluster, progress: Optional[Progress] = None, *,
         # 활성 Pod 가 _POD_USAGE_MAX 를 넘으면 생략 — metrics 단일 응답이 타임아웃만 반복하는
         # 초대형 클러스터 보호(드릴다운에서 NS 단위로 정확히 확인 가능).
         usage_skipped = summary["pods"] > _POD_USAGE_MAX
+        if progress is not None:
+            progress.phase = "pod_metrics"
         if usage_skipped:
             logger.info("cluster-wide pod usage 생략: 활성 Pod %d > %d",
                         summary["pods"], _POD_USAGE_MAX)
@@ -709,7 +724,8 @@ _OVERVIEW_TTL = _envf("K8S_ALLOC_OVERVIEW_TTL", 86400.0)
 _SNAPSHOT_BACKEND = (os.getenv("K8S_ALLOC_SNAPSHOT_BACKEND") or "auto").strip().lower()
 _overview_mgr = SnapshotManager(ttl=_OVERVIEW_TTL, partial_ttl=_PARTIAL_TTL,
                                 stuck_timeout=_STUCK_TIMEOUT, backend=_SNAPSHOT_BACKEND,
-                                publish_interval=_PARTIAL_PUBLISH_INTERVAL)
+                                publish_interval=_PARTIAL_PUBLISH_INTERVAL,
+                                heartbeat_timeout=_HEARTBEAT_TIMEOUT)
 
 
 def _overview_view(cluster_id: UUID, db: Session, force: bool = False) -> dict:
@@ -749,6 +765,8 @@ def _alloc_meta(view: dict) -> dict:
         "total": view["total"],
         "stale": view["stale"],
         "partial": view.get("partial", False),  # 부분(누적) 결과 여부
+        # 현재 단계: nodes | pods:<n>(n번째 Pod 페이지 요청·처리 중) | pod_metrics | ""
+        "phase": view.get("phase") or "",
     }
 
 

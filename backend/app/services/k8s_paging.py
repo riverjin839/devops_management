@@ -6,10 +6,13 @@ etcd compaction)를 graceful 하게 partial 처리한다.
 """
 from __future__ import annotations
 
+import json
 import logging
 import os
 import time
 from typing import Any, Callable, Optional
+
+from app.services.k8s_raw import K8sObj
 
 logger = logging.getLogger(__name__)
 
@@ -57,9 +60,32 @@ def is_timeout_error(e: Exception) -> bool:
     return "timed out" in msg or "timeout" in msg or "max retries" in msg
 
 
+def _fetch_page(list_fn: Callable[..., Any], kw: dict, raw: bool) -> Any:
+    """LIST 한 페이지. raw=True 면 `_preload_content=False` 로 원본 바이트를 받아 `json.loads` 후
+    K8sObj(typed 모델과 같은 속성 이름으로 읽히는 래퍼)로 돌려준다 — kubernetes 모델 역직렬화를
+    건너뛰어 수만 Pod 순회의 CPU·메모리를 수십 배 줄인다(`services/k8s_raw.py`).
+
+    응답에 원본 바이트(`.data`)가 없으면(이미 모델 객체 — 테스트 대역 등) 그대로 쓴다."""
+    if not raw:
+        return list_fn(**kw)
+    resp = list_fn(_preload_content=False, **kw)
+    data = getattr(resp, "data", None)
+    if not isinstance(data, (bytes, bytearray, str)):
+        return resp
+    try:
+        parsed = json.loads(data)
+    finally:
+        try:
+            resp.release_conn()
+        except Exception:  # noqa: BLE001
+            pass
+    return K8sObj(parsed if isinstance(parsed, dict) else {"items": parsed})
+
+
 def iter_all(list_fn: Callable[..., Any], *, field_selector: Optional[str] = None,
              hard_cap: int = 200_000, deadline: Optional[float] = None,
-             report: Optional[list] = None, resource_version: Optional[str] = None):
+             report: Optional[list] = None, resource_version: Optional[str] = None,
+             raw: bool = False, on_page: Optional[Callable[[int], None]] = None):
     """`_continue` 페이지네이션을 **페이지 단위로 스트리밍**(yield)한다.
 
     전량을 메모리에 모으지 않으므로(한 번에 한 페이지만 유지) 수만 Pod 클러스터에서도
@@ -70,8 +96,14 @@ def iter_all(list_fn: Callable[..., Any], *, field_selector: Optional[str] = Non
     응답한다(저렴). **단, RV=0 에서는 apiserver 가 `limit` 을 무시하고 전량을 한 응답으로
     돌려주므로(페이지네이션 비지원) 노드/네임스페이스처럼 작은 목록에만 쓴다** — Pod 전수
     순회에 쓰면 전량 메모리 적재로 OOM(→502)이 재현된다. 기본값 None(사용 안 함).
+
+    raw: True 면 페이지를 모델 역직렬화 없이 읽는다(`_fetch_page`). 항목은 K8sObj 라 typed 모델과
+    같은 속성으로 읽히지만 `to_dict()`/모델 메서드는 다르므로, 필드 읽기만 하는 집계 경로에서 쓴다.
+    on_page(n): 페이지를 **요청하기 직전**에 1부터 번호를 넘겨 호출 — 첫 페이지가 오래 걸려도
+    "몇 번째 페이지를 기다리는 중"인지 진행 표시에 쓸 수 있다.
     """
     seen = 0
+    pages = 0
     cont: Optional[str] = None
     while True:
         kw: dict[str, Any] = {"limit": PAGE_LIMIT, "_request_timeout": API_TIMEOUT}
@@ -81,8 +113,11 @@ def iter_all(list_fn: Callable[..., Any], *, field_selector: Optional[str] = Non
             kw["resource_version"] = resource_version
         if cont:
             kw["_continue"] = cont
+        pages += 1
+        if on_page is not None:
+            on_page(pages)
         try:
-            resp = list_fn(**kw)
+            resp = _fetch_page(list_fn, kw, raw)
         except Exception as e:  # noqa: BLE001
             # 첫 페이지 실패 처리:
             #  - 타임아웃/일시적 서버오류성: partial(빈) 결과로 graceful 처리(502 전파 시
@@ -111,7 +146,9 @@ def iter_all(list_fn: Callable[..., Any], *, field_selector: Optional[str] = Non
 
 def list_all(list_fn: Callable[..., Any], *, field_selector: Optional[str] = None,
              hard_cap: int = 200_000, deadline: Optional[float] = None,
-             report: Optional[list] = None, resource_version: Optional[str] = None) -> list:
+             report: Optional[list] = None, resource_version: Optional[str] = None,
+             raw: bool = False) -> list:
     """`iter_all` 을 전량 리스트로 수집(소형 컬렉션용 — 여기서만 resource_version="0" 허용)."""
     return list(iter_all(list_fn, field_selector=field_selector, hard_cap=hard_cap,
-                         deadline=deadline, report=report, resource_version=resource_version))
+                         deadline=deadline, report=report, resource_version=resource_version,
+                         raw=raw))

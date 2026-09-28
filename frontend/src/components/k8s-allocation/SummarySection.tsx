@@ -8,6 +8,7 @@ import { useAllocNamespaces, usePodsSummary } from '@/hooks/useK8sAllocation';
 import { fmtCores, fmtGi, fmtN, pctText, ratio } from './format';
 import { Stat } from './primitives';
 import { PodScheduleCalc } from './PodScheduleCalc';
+import { allocPhaseText } from './effUtils';
 
 export function SummarySection({ clusterId }: { clusterId: string }) {
   const { data, isLoading, isError, error } = useAllocNamespaces(clusterId);
@@ -22,7 +23,8 @@ export function SummarySection({ clusterId }: { clusterId: string }) {
   } else if (data?.status === 'computing' && !data.items?.length) {
     body = (
       <SnapshotProgressCard processed={data.processed ?? 0} total={data.total ?? null}
-        progress={data.progress ?? null} label="자원 집계 중" unit="Pod" />
+        progress={data.progress ?? null} label="자원 집계 중" unit="Pod"
+          detail={allocPhaseText(data?.phase, data?.processed)} />
     );
   } else if (!data) {
     body = <EmptyState title="데이터 없음" description="클러스터 요약을 표시할 수 없습니다." />;
