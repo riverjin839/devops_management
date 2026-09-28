@@ -4,11 +4,22 @@ name: Release
 #   1) GHCR 이미지 빌드 + 버전 태깅(:X.Y.Z, :X.Y, :latest)
 #   2) CHANGELOG 해당 섹션을 본문으로 GitHub Release 생성
 # 수동 릴리스 단계(이미지 태깅/Release 작성)를 없애기 위한 자동화. 태그만 올리면 끝.
-
+#
+# auto-release.yml 이 태그를 push 한 직후 `gh workflow run release.yml -f tag=vX.Y.Z` 로
+# 이 워크플로우를 직접 체이닝한다(기본 GITHUB_TOKEN 으로도 가능 — recursive-trigger 제한은
+# push/PR 같은 "이벤트" 재발생에만 적용되고 workflow_dispatch API 명시 호출은 막지 않는다).
+# `workflow_dispatch` 입력은 그 체이닝 경로 + "태그는 있는데 릴리즈가 안 만들어졌을 때"의
+# 수동 백필 용도 둘 다를 겸한다.
 on:
   push:
     tags:
       - 'v*'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: '릴리즈할 기존 태그 (예: v1.37.2) — 자동 트리거를 놓친 태그의 수동 백필용'
+        required: true
+        type: string
 
 env:
   REGISTRY: ghcr.io
@@ -21,10 +32,27 @@ jobs:
     permissions:
       contents: read
       packages: write
+    outputs:
+      tag: ${{ steps.reltag.outputs.tag }}
 
     steps:
+      # workflow_dispatch 로 실행되면 github.ref_name 이 태그가 아니라 dispatch 시 선택한
+      # 브랜치(main)라 docker/metadata-action 의 type=semver 가 버전을 못 뽑는다 — 두 트리거
+      # 모두에서 동일하게 동작하도록 태그 문자열을 직접 계산해 raw 값으로 넘긴다.
+      - name: Resolve release tag
+        id: reltag
+        run: |
+          set -euo pipefail
+          TAG="${{ inputs.tag || github.ref_name }}"
+          VERSION="${TAG#v}"
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "major_minor=$(echo "$VERSION" | cut -d. -f1,2)" >> "$GITHUB_OUTPUT"
+
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          ref: ${{ steps.reltag.outputs.tag }}
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -42,9 +70,9 @@ jobs:
         with:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME_BACKEND }}
           tags: |
-            type=semver,pattern={{version}}
-            type=semver,pattern={{major}}.{{minor}}
-            type=raw,value=latest,enable=${{ !contains(github.ref_name, '-') }}
+            type=raw,value=${{ steps.reltag.outputs.version }}
+            type=raw,value=${{ steps.reltag.outputs.major_minor }}
+            type=raw,value=latest,enable=${{ !contains(steps.reltag.outputs.tag, '-') }}
 
       - name: Extract metadata for Frontend
         id: meta-frontend
@@ -52,9 +80,9 @@ jobs:
         with:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME_FRONTEND }}
           tags: |
-            type=semver,pattern={{version}}
-            type=semver,pattern={{major}}.{{minor}}
-            type=raw,value=latest,enable=${{ !contains(github.ref_name, '-') }}
+            type=raw,value=${{ steps.reltag.outputs.version }}
+            type=raw,value=${{ steps.reltag.outputs.major_minor }}
+            type=raw,value=latest,enable=${{ !contains(steps.reltag.outputs.tag, '-') }}
 
       - name: Copy CHANGELOG for backend image
         # backend/app/routers/release_notes.py 가 이미지 안에서 CHANGELOG.md 를 읽어
@@ -82,6 +110,7 @@ jobs:
           cache-to: type=gha,mode=max
 
   github-release:
+    needs: build-and-push
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -89,11 +118,15 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.build-and-push.outputs.tag }}
 
       - name: Extract CHANGELOG section for this tag
         id: notes
+        env:
+          REF_TAG: ${{ needs.build-and-push.outputs.tag }}
         run: |
-          VERSION="${GITHUB_REF_NAME#v}"
+          VERSION="${REF_TAG#v}"
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
           # CHANGELOG.md 에서 "## [VERSION]" 섹션만 추출 → RELEASE_NOTES.md
           awk -v ver="$VERSION" '
@@ -111,19 +144,20 @@ jobs:
       - name: Create GitHub Release
         env:
           GH_TOKEN: ${{ github.token }}
+          REF_TAG: ${{ needs.build-and-push.outputs.tag }}
         run: |
           EXTRA=""
           if [ "${{ steps.notes.outputs.auto_notes }}" = "true" ]; then
             EXTRA="--generate-notes"
           fi
-          if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
-            echo "Release $GITHUB_REF_NAME 이미 존재 — 노트만 갱신"
-            gh release edit "$GITHUB_REF_NAME" \
-              --title "$GITHUB_REF_NAME" \
+          if gh release view "$REF_TAG" >/dev/null 2>&1; then
+            echo "Release $REF_TAG 이미 존재 — 노트만 갱신"
+            gh release edit "$REF_TAG" \
+              --title "$REF_TAG" \
               --notes-file RELEASE_NOTES.md
           else
-            gh release create "$GITHUB_REF_NAME" \
-              --title "$GITHUB_REF_NAME" \
+            gh release create "$REF_TAG" \
+              --title "$REF_TAG" \
               --notes-file RELEASE_NOTES.md \
               --verify-tag \
               $EXTRA
