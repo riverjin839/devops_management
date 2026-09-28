@@ -1023,9 +1023,9 @@ def auto_update_cluster(
             if last_h:
                 cluster.last_host = last_h
                 updated["lastHost"] = last_h
-        elif node_ips_only:
+        elif all_ips:
             warnings.append(
-                f"Node CIDR 추정 실패 — 노드 IP {len(node_ips_only)}개가 너무 분산되어 있거나 "
+                f"Node CIDR 추정 실패 — 노드 IP {len(all_ips)}개가 너무 분산되어 있거나 "
                 "IPv4 가 아닙니다 (최소 공통 subnet 이 /16 보다 넓음)."
             )
 

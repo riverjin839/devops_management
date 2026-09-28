@@ -25,6 +25,7 @@ import time
 from datetime import datetime, timedelta, timezone
 from typing import Any, Optional
 
+from app.services.k8s_list_cache import invalidate_kubeconfig
 from app.services.batch_jobs.base import (
     BatchJobExecutor,
     ExecutionContext,
@@ -399,6 +400,9 @@ class K8sJobCleanupExecutor(BatchJobExecutor):
                 if proc.returncode == 0:
                     deleted += len(names)
                     lines.append(proc.stdout.strip())
+                    # kubectl 서브프로세스 쓰기는 풀 클라이언트의 자동 무효화를 거치지 않는다 —
+                    # /k8s-manage Jobs 목록이 삭제 전 캐시를 보여주지 않게 명시적으로 무효화.
+                    invalidate_kubeconfig(ctx.kubeconfig_path)
                 else:
                     first = (proc.stderr or "").strip().splitlines()
                     errors.append(f"{ns}: {(first[0] if first else '')[:300]}")
