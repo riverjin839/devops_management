@@ -8,6 +8,10 @@
 
 ## [Unreleased]
 
+1.37.4 이후 main 에 병합된 변경 (다음 릴리스 후보).
+
+## [1.37.4] - 2026-09-28
+
 ### Fixed
 - **릴리즈 자동화 — 태그 push 가 `release.yml`(GHCR 이미지 + GitHub Release)을 트리거하지 못하던 문제**:
   `auto-release.yml` 이 `vX.Y.Z` 태그를 기본 `GITHUB_TOKEN` 으로 push 하는데, GitHub 가 `GITHUB_TOKEN`
