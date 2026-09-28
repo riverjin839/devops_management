@@ -10,6 +10,16 @@
 
 1.37.4 이후 main 에 병합된 변경 (다음 릴리스 후보).
 
+### Fixed
+- **대형 클러스터 자원 집계가 "집계 중 · 0 Pod 처리됨"에서 멈추던 문제 (`/k8s-allocation`)**: 376노드·3만 Pod
+  클러스터에서 노드/네임스페이스/비효율 랭킹 탭이 끝나지 않았다. 원인은 둘이다. ① Pod 전수 순회가 kubernetes 모델
+  역직렬화(500개 페이지당 약 2.5초 CPU)를 거쳐 집계 1회가 수 분 걸리며 웹 파드를 불안정하게 만들었다 — 이제 노드/NS/Pod 을
+  원본 JSON 으로 읽는다(파싱 CPU 약 70배 감소 — 376노드·3만 Pod 개요 집계 1회 약 195초 → 약 11초, 결과는 동일). ② 집계하던 파드가 롤링 배포·OOM·liveness 로
+  죽으면 "집계 중"이 최대 30분 멈춰 있었고 새로고침도 먹지 않았다 — 이제 집계 파드가 heartbeat 를 뛰고, 90초 끊기면 다른 파드가
+  이어받는다(인계당한 계산은 기록을 멈춤). 진행 카드에는 현재 단계(노드 목록 / Pod n번째 페이지 / 실사용량)도 표시한다.
+  Backend: `services/k8s_paging.py`(`raw`·`on_page`), `routers/k8s_allocation.py`(`K8S_ALLOC_RAW_LIST`·`K8S_ALLOC_HEARTBEAT_TIMEOUT`·
+  응답 `phase`), `services/snapshot_jobs.py`(heartbeat·인계·`SnapshotSuperseded`). Frontend: `SnapshotProgressCard` `detail`.
+
 ## [1.37.4] - 2026-09-28
 
 ### Fixed

@@ -34,3 +34,14 @@ export function readSummaryDetailPref(): boolean {
 export function writeSummaryDetailPref(v: boolean) {
   try { localStorage.setItem(SUMMARY_DETAIL_KEY, v ? '1' : '0'); } catch { /* ignore */ }
 }
+
+/** 자원 집계 스냅샷의 현재 단계(`phase`)를 사람이 읽는 문장으로. 대형 클러스터에서 첫 Pod 페이지를
+ *  기다리는 동안 "0 처리됨"만 보이면 멈춘 건지 진행 중인지 구분이 안 되기 때문. 모르면 undefined. */
+export function allocPhaseText(phase: string | undefined, processed: number | undefined): string | undefined {
+  if (!phase) return undefined;
+  if (phase === 'nodes') return '노드·네임스페이스 목록 조회 중';
+  if (phase === 'pod_metrics') return '실사용량(metrics) 조회 중';
+  const m = /^pods:(\d+)$/.exec(phase);
+  if (m) return `Pod 목록 ${m[1]}번째 페이지 ${processed ? '처리 중' : '응답 대기 중'}`;
+  return undefined;
+}

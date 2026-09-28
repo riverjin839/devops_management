@@ -16,6 +16,7 @@ import { CsvButton, EffBadge, MeterBar, SearchInput, SortableTh, StatTooltip, Ut
 import { nextSort, useTableSort } from './tableSort';
 import type { SortState } from './tableSort';
 import type { AllocDetailTarget } from './AllocDetailDialog';
+import { allocPhaseText } from './effUtils';
 
 // 이 수를 넘으면 가상 스크롤(고정 높이 뷰포트)로 전환한다. 작은 클러스터는 종전처럼 전량 렌더.
 const VIRTUALIZE_AT = 48;
@@ -250,7 +251,8 @@ export function NodesView({ clusterId, clusterName, onOpenDetail }: {
     body = (
       <div className="p-3">
         <SnapshotProgressCard processed={data?.processed ?? 0} total={data?.total ?? null}
-          progress={data?.progress ?? null} label="자원 집계 중" unit="Pod" />
+          progress={data?.progress ?? null} label="자원 집계 중" unit="Pod"
+          detail={allocPhaseText(data?.phase, data?.processed)} />
       </div>
     );
   } else if (!allItems.length) {

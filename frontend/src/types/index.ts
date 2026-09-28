@@ -4023,6 +4023,8 @@ export interface AllocSnapshotMeta {
   total?: number | null;
   stale?: boolean;
   partial?: boolean;          // 부분(누적) 결과 여부
+  /** 현재 단계 — nodes | pods:<n>(n번째 Pod 페이지) | pod_metrics | ''(대기·완료) */
+  phase?: string;
 }
 export interface AllocNodesResponse extends AllocSnapshotMeta { count: number; items: AllocNodeRow[]; metricsAvailable: boolean; partial?: boolean }
 /** 단일 노드 즉시 재계산(개별 REFRESH) 응답. */
