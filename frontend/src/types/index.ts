@@ -3979,7 +3979,12 @@ export interface K8sRelatedEvent {
   firstTimestamp?: string | null;
   lastTimestamp?: string | null;
 }
-export interface K8sRelatedEventsResponse { count: number; items: K8sRelatedEvent[] }
+export interface K8sRelatedEventsResponse {
+  count: number;
+  items: K8sRelatedEvent[];
+  cache?: K8sListCacheState | null;
+  cacheAgeSeconds?: number | null;
+}
 
 // ── K8s 자원 관리 (allocation: request vs 사용량 slack) ───────────────────────
 // CPU 는 millicores(int), MEM 은 bytes(int). *Display 는 사람이 읽는 문자열.

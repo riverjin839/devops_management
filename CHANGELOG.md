@@ -8,8 +8,6 @@
 
 ## [Unreleased]
 
-1.37.2 이후 main 에 병합된 변경 (다음 릴리스 후보).
-
 ### Fixed
 - **릴리즈 자동화 — 태그 push 가 `release.yml`(GHCR 이미지 + GitHub Release)을 트리거하지 못하던 문제**:
   `auto-release.yml` 이 `vX.Y.Z` 태그를 기본 `GITHUB_TOKEN` 으로 push 하는데, GitHub 가 `GITHUB_TOKEN`
@@ -20,6 +18,20 @@
   제한 대상이 아니라 `RELEASE_PAT` 없이도 동작). `release.yml` 자체도 `workflow_dispatch`(수동
   백필용 `tag` 입력)를 받도록 확장하고, 버전 태그 계산을 `github.ref_name` 대신 명시적으로 뽑아
   두 트리거 경로 모두에서 동일하게 동작하게 했다.
+
+## [1.37.3] - 2026-09-28
+
+### Fixed
+- **K8s 상세 관리 목록이 다른 화면에서 바꾼 내용을 늦게 보여주던 문제 · 이벤트 폴링 완화**: 목록 캐시 무효화가
+  탐색기의 scale/restart/delete 에만 걸려 있어, K8S 효율화 적용·노드 라벨 편집·RBAC 발급·배치잡 Job 정리처럼 다른 곳에서
+  바꾼 내용은 최대 30초 늦게 보였다. 이제 PEP 가 대상 클러스터에 보내는 모든 쓰기(POST/PUT/PATCH/DELETE)가 그 apiserver 의
+  목록 캐시를 자동으로 무효화하고(모든 replica·워커 공유), kubectl 로 지우는 배치잡도 명시적으로 무효화한다. 리소스 상세의
+  이벤트 탭은 15초 → 30초 갱신(탭이 숨겨지면 중지)으로 줄이고 서버 캐시로 같은 오브젝트를 보는 사용자들의 조회를 1회로 합쳤다.
+  Backend: `services/k8s_list_cache.py`(신규), `k8s_client_pool`·`k8s_resources`·`batch_jobs/k8s_job_cleanup`. Frontend: `DetailDrawer`.
+- **클러스터 자동 업데이트가 hostname·maxPod 를 건너뛰던 버그**: 노드 IP 가 /16 보다 넓게 흩어져 있거나
+  IPv4 InternalIP 가 없어 Node CIDR 추정에 실패하면, 정의되지 않은 변수(`node_ips_only`) 참조로 NameError 가 나
+  "nodes 조회 실패" 라는 엉뚱한 경고와 함께 뒤이은 hostname·maxPod 갱신이 조용히 빠졌다. 이제 CIDR 추정 실패만
+  경고하고 나머지 필드는 정상 반영한다. Backend: `routers/clusters.py` `auto_update_cluster`.
 
 ## [1.37.2] - 2026-09-26
 
@@ -34,6 +46,13 @@
   Backend: `services/k8s_concurrency.py`(신규), `k8s_client_pool`·`k8s_resources`·`celery_app`. Frontend: `PodsPanel` 무한 스크롤.
 
 ## [1.37.1] - 2026-09-26
+
+### Added
+- **피카소·후안 그리스 테마 (바탕 4종)**: 그림 팔레트로 만든 자체 색 고정 바탕 4종을 추가했다 —
+  〈소녀의 머리〉 `picasso-girl`(석고 회백 + 움버, 라이트), 〈소녀의 초상〉 `picasso-portrait`(에메랄드 + 페리윙클 +
+  마룬 사이드바, 다크), 〈바이올린〉 `picasso-violin`(분필 흰색 + 바이올렛 + 초콜릿 사이드바, 라이트), 후안 그리스
+  〈기타〉 `gris-guitar`(민트 + 데님 블루 + 네이비 사이드바, 라이트). 글자 대비 5.0:1 이상, 입력 테두리 3.2:1 이상.
+  Frontend: `index.css`, `themeStore.ts`, 사용자 메뉴·테마 갤러리.
 
 ### Fixed
 - **대상 K8s 호출 안정성·성능 개선 (공용 클라이언트 풀)**: 느려진 apiserver 앞에서 백엔드가 멈추거나
@@ -56,6 +75,12 @@
   기준 파싱+행 생성이 약 3.3초 → 0.1초로 줄었다.
   Backend: `services/swr_cache.py`·`services/k8s_raw.py`(신규), `routers/k8s_resources.py`.
   Frontend: `K8sManagePage` 새로고침 버튼 → `refresh=true`.
+- **점검 매트릭스 cron 최소 간격 검증 우회 버그**: 클러스터 열/셀/점검 정의 cron 저장 시
+  "최소 5분 간격" 을 검사하던 `validate_cron_min_interval()` 이 base 시각 이후 **첫 두 실행
+  시각의 간격만** 봐서, 한 필드 안에 값이 여러 개 섞인 cron(예: `0,4 * * * *` — 매시 정각과
+  04분에 실행, 04분→다음 시 정각 구간은 56분이지만 정각→04분 구간은 4분)을 저장하면 실제로는
+  4분 간격으로 도는데도 검증을 통과해버렸다. 연속 실행 시각 30개를 뽑아 그중 최솟값으로
+  판정하도록 고쳐 이런 패턴도 정확히 거부한다. Backend: `services/check_matrix_service.py`.
 
 ## [1.37.0] - 2026-09-25
 
@@ -64,20 +89,7 @@
   버그 때문에 미릴리스로 쌓여 있던 신규 테마(`### Added`)가 PATCH 로 함께 실렸다. SemVer 상 MINOR 가 맞는
   묶음이라 같은 코드로 1.37.0 을 다시 낸다 — 1.36.2 대비 코드 변경은 없고, 변경 상세는 `[1.36.2]` 섹션 참고.
 
-### Added
-- **피카소·후안 그리스 테마 (바탕 4종)**: 그림 팔레트로 만든 자체 색 고정 바탕 4종을 추가했다 —
-  〈소녀의 머리〉 `picasso-girl`(석고 회백 + 움버, 라이트), 〈소녀의 초상〉 `picasso-portrait`(에메랄드 + 페리윙클 +
-  마룬 사이드바, 다크), 〈바이올린〉 `picasso-violin`(분필 흰색 + 바이올렛 + 초콜릿 사이드바, 라이트), 후안 그리스
-  〈기타〉 `gris-guitar`(민트 + 데님 블루 + 네이비 사이드바, 라이트). 글자 대비 5.0:1 이상, 입력 테두리 3.2:1 이상.
-  Frontend: `index.css`, `themeStore.ts`, 사용자 메뉴·테마 갤러리.
-
-### Fixed
-- **점검 매트릭스 cron 최소 간격 검증 우회 버그**: 클러스터 열/셀/점검 정의 cron 저장 시
-  "최소 5분 간격" 을 검사하던 `validate_cron_min_interval()` 이 base 시각 이후 **첫 두 실행
-  시각의 간격만** 봐서, 한 필드 안에 값이 여러 개 섞인 cron(예: `0,4 * * * *` — 매시 정각과
-  04분에 실행, 04분→다음 시 정각 구간은 56분이지만 정각→04분 구간은 4분)을 저장하면 실제로는
-  4분 간격으로 도는데도 검증을 통과해버렸다. 연속 실행 시각 30개를 뽑아 그중 최솟값으로
-  판정하도록 고쳐 이런 패턴도 정확히 거부한다. Backend: `services/check_matrix_service.py`.
+## [1.36.2] - 2026-09-25
 
 ### Added
 - **움버 테마 (바탕 2종)**: 입체미래주의풍 유화에서 추출한 팔레트로 만든 `umber`(움버 바탕 + 오커 강조 + 더스티

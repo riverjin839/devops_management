@@ -34,7 +34,7 @@ from app.services.k8s_concurrency import K8sConcurrencyLimited
 from app.services.kubeconfig import ensure_kubeconfig_file
 from app.services.k8s_raw import raw_call
 from app.services.snapshot_jobs import _RedisStore
-from app.services.swr_cache import SWRCache
+from app.services.k8s_list_cache import cache_group, invalidate_host, list_cache
 
 logger = logging.getLogger(__name__)
 
@@ -63,15 +63,18 @@ def _list_http_error(what: str, e: Exception) -> HTTPException:
     return HTTPException(status_code=code, detail=f"{what} 조회 실패: {msg[:200]}")
 
 
-# 탐색기 목록 캐시 — fresh 이내는 즉시, stale 이내는 즉시 응답 + 백그라운드 갱신(SWR),
-# 같은 키 동시 요청은 1건으로 합친다. 쓰기 엔드포인트는 bump(cluster_id)로 모든 replica 무효화.
-_list_cache = SWRCache(
-    fresh=float(os.getenv("K8S_LIST_CACHE_FRESH", "5")),
-    stale=float(os.getenv("K8S_LIST_CACHE_STALE", "30")),
-    max_entries=int(os.getenv("K8S_LIST_CACHE_MAX", "256")),
-    store=_RedisStore(prefix="k8slist"),
-    name="k8s-list",
-)
+# 탐색기 목록 캐시(SWR · single-flight) — 모듈은 `services/k8s_list_cache.py`. 그룹 키는 apiserver host 이고,
+# 풀 클라이언트를 거치는 모든 쓰기(여기의 scale/delete 뿐 아니라 효율화 적용·노드 라벨·RBAC 등)가 자동 무효화한다.
+_list_cache = list_cache
+
+
+def _invalidate_lists(cluster) -> None:
+    """이 클러스터(apiserver)의 목록 캐시 무효화. 풀 클라이언트 쓰기는 이미 자동 무효화되지만,
+    쓰기 직후 프런트가 곧바로 다시 읽으므로 핸들러에서도 확실히 한 번 더 부른다(멱등)."""
+    try:
+        invalidate_host(cache_group(_api_client(cluster), getattr(cluster, "id", None)))
+    except Exception:  # noqa: BLE001 — 캐시는 TTL 로도 회복된다
+        pass
 
 
 # ── 클라이언트 ────────────────────────────────────────────────────────────────
@@ -649,7 +652,9 @@ def list_resources(
     if spec is None:
         raise HTTPException(status_code=404, detail=f"지원하지 않는 종류: {kind}")
     cluster = _require_cluster(cluster_id, db)
-    api = spec["api"](_api_client(cluster))
+    client = _api_client(cluster)
+    api = spec["api"](client)
+    group = cache_group(client, cluster_id)
     ns = namespace if (namespace and "list_ns" in spec) else None
 
     def _load() -> dict:
@@ -664,7 +669,7 @@ def list_resources(
         return {"rows": rows, "truncated": truncated}
 
     try:
-        data, meta = _list_cache.get((cluster_id, "list", kind, ns or ""), _load, refresh=refresh)
+        data, meta = _list_cache.get((group, "list", kind, ns or ""), _load, refresh=refresh)
     except Exception as e:  # noqa: BLE001
         raise _list_http_error(kind, e)
 
@@ -740,26 +745,45 @@ def get_resource_events(
     kind: str,
     namespace: str,
     name: str,
+    refresh: bool = False,
     db: Session = Depends(get_db),
 ):
-    """오브젝트 관련 이벤트 (involvedObject field selector, 읽기전용)."""
+    """오브젝트 관련 이벤트 (involvedObject field selector, 읽기전용).
+
+    상세 drawer 의 이벤트 탭이 주기적으로 부르는 경로다. events 의 field selector 는 인덱스가 없어
+    apiserver 가 걸러내야 하므로, 같은 오브젝트를 여러 사용자·탭이 보고 있어도 LIST 가 1회로 합쳐지도록
+    목록 캐시(SWR · single-flight)를 거친다. 쓰기(재시작·삭제 등)는 캐시를 무효화해 새 이벤트가 바로 보인다.
+    """
     spec = KIND_MAP.get(kind)
     if spec is None:
         raise HTTPException(status_code=404, detail=f"지원하지 않는 종류: {kind}")
     cluster = _require_cluster(cluster_id, db)
-    v1 = k8s_client.CoreV1Api(_api_client(cluster))
+    client = _api_client(cluster)
     kind_name = KIND_NAME.get(kind)
     fs = f"involvedObject.name={name}"
     if kind_name:
         fs += f",involvedObject.kind={kind_name}"
     ns = None if namespace in ("-", "_cluster") else namespace
+    scoped_ns = ns if (spec.get("namespaced") and ns) else None
+
+    def _load() -> dict:
+        return _load_object_events(client, scoped_ns, fs)
+
     try:
-        if spec.get("namespaced") and ns:
-            evs = v1.list_namespaced_event(ns, field_selector=fs, limit=200, _request_timeout=15)
-        else:
-            evs = v1.list_event_for_all_namespaces(field_selector=fs, limit=200, _request_timeout=15)
+        body, meta = _list_cache.get(
+            (cache_group(client, cluster_id), "obj-events", kind, scoped_ns or "", name), _load, refresh=refresh,
+        )
     except Exception as e:  # noqa: BLE001
-        raise HTTPException(status_code=502, detail=f"이벤트 조회 실패: {str(e)[:200]}")
+        raise _list_http_error("이벤트", e)
+    return {**body, "cache": meta["cache"], "cache_age_seconds": meta["age"]}
+
+
+def _load_object_events(client, namespace: Optional[str], field_selector: str) -> dict:
+    v1 = k8s_client.CoreV1Api(client)
+    if namespace:
+        evs = raw_call(v1.list_namespaced_event, namespace, field_selector=field_selector, limit=200, timeout=15)
+    else:
+        evs = raw_call(v1.list_event_for_all_namespaces, field_selector=field_selector, limit=200, timeout=15)
 
     items = []
     for ev in (evs.items or []):
@@ -979,7 +1003,7 @@ def scale_resource(
                             details={"cluster_id": str(cluster_id), "replicas": payload.replicas, "error": str(e)[:200]},
                             request=request)
         _raise_k8s_write(e, "scale")
-    _list_cache.bump(cluster_id)  # 탐색기 목록 캐시 무효화(모든 replica)
+    _invalidate_lists(cluster)  # 탐색기 목록 캐시 무효화(모든 replica) — 풀 자동 무효화의 보강
     audit_logger.record(db, action="k8s.scale", actor=actor, status="success",
                         target_type="k8s", target_id=f"{kind}/{namespace}/{name}",
                         details={"cluster_id": str(cluster_id), "cluster": cluster.name, "replicas": payload.replicas},
@@ -1012,7 +1036,7 @@ def restart_resource(
                             target_type="k8s", target_id=f"{kind}/{namespace}/{name}",
                             details={"cluster_id": str(cluster_id), "error": str(e)[:200]}, request=request)
         _raise_k8s_write(e, "restart")
-    _list_cache.bump(cluster_id)  # 탐색기 목록 캐시 무효화(모든 replica)
+    _invalidate_lists(cluster)  # 탐색기 목록 캐시 무효화(모든 replica) — 풀 자동 무효화의 보강
     audit_logger.record(db, action="k8s.restart", actor=actor, status="success",
                         target_type="k8s", target_id=f"{kind}/{namespace}/{name}",
                         details={"cluster_id": str(cluster_id), "cluster": cluster.name}, request=request)
@@ -1043,7 +1067,7 @@ def delete_resource(
                             target_type="k8s", target_id=f"{kind}/{namespace}/{name}",
                             details={"cluster_id": str(cluster_id), "error": str(e)[:200]}, request=request)
         _raise_k8s_write(e, "delete")
-    _list_cache.bump(cluster_id)  # 탐색기 목록 캐시 무효화(모든 replica)
+    _invalidate_lists(cluster)  # 탐색기 목록 캐시 무효화(모든 replica) — 풀 자동 무효화의 보강
     audit_logger.record(db, action="k8s.delete", actor=actor, status="success",
                         target_type="k8s", target_id=f"{kind}/{namespace}/{name}",
                         details={"cluster_id": str(cluster_id), "cluster": cluster.name}, request=request)
@@ -1111,7 +1135,7 @@ def apply_resource_yaml(
                             target_type="k8s", target_id=f"{kind}/{namespace}/{name}",
                             details={"cluster_id": str(cluster_id), "error": str(e)[:200]}, request=request)
         _raise_k8s_write(e, "apply")
-    _list_cache.bump(cluster_id)  # 탐색기 목록 캐시 무효화(모든 replica)
+    _invalidate_lists(cluster)  # 탐색기 목록 캐시 무효화(모든 replica) — 풀 자동 무효화의 보강
     audit_logger.record(db, action="k8s.apply", actor=actor, status="success",
                         target_type="k8s", target_id=f"{kind}/{namespace}/{name}",
                         details={"cluster_id": str(cluster_id), "cluster": cluster.name}, request=request)
@@ -1172,7 +1196,7 @@ def cordon_node(
                             details={"cluster_id": str(cluster_id), "unschedulable": payload.unschedulable, "error": str(e)[:200]},
                             request=request)
         _raise_k8s_write(e, "cordon")
-    _list_cache.bump(cluster_id)  # 탐색기 목록 캐시 무효화(모든 replica)
+    _invalidate_lists(cluster)  # 탐색기 목록 캐시 무효화(모든 replica) — 풀 자동 무효화의 보강
     audit_logger.record(db, action="k8s.cordon", actor=actor, status="success",
                         target_type="k8s.node", target_id=name,
                         details={"cluster_id": str(cluster_id), "cluster": cluster.name, "unschedulable": payload.unschedulable},
@@ -1230,7 +1254,7 @@ def drain_node(
             errors.append({"pod": f"{ns}/{pod_name}", "error": msg[:160]})
 
     status_val = "success" if not errors else "partial"
-    _list_cache.bump(cluster_id)  # 탐색기 목록 캐시 무효화(모든 replica)
+    _invalidate_lists(cluster)  # 탐색기 목록 캐시 무효화(모든 replica) — 풀 자동 무효화의 보강
     audit_logger.record(db, action="k8s.drain", actor=actor, status=status_val,
                         target_type="k8s.node", target_id=name,
                         details={"cluster_id": str(cluster_id), "cluster": cluster.name,
@@ -1502,7 +1526,7 @@ def list_nodes_rich(cluster_id: UUID, refresh: bool = False, db: Session = Depen
     cluster = _require_cluster(cluster_id, db)
     client = _api_client(cluster)
     try:
-        body, meta = _list_cache.get((cluster_id, "nodes-rich"), lambda: _load_nodes_rich(client),
+        body, meta = _list_cache.get((cache_group(client, cluster_id), "nodes-rich"), lambda: _load_nodes_rich(client),
                                      refresh=refresh)
     except Exception as e:  # noqa: BLE001
         raise _list_http_error("노드", e)
@@ -1693,12 +1717,12 @@ def list_pods_rich(
     ns = namespace or ""
 
     def _aux() -> dict:
-        return _list_cache.get((cluster_id, "pods-aux", ns), lambda: _fetch_pods_aux(client, namespace),
+        return _list_cache.get((cache_group(client, cluster_id), "pods-aux", ns), lambda: _fetch_pods_aux(client, namespace),
                                refresh=refresh)[0]
 
     try:
         body, meta = _list_cache.get(
-            (cluster_id, "pods-rich", ns, page, cont or ""),
+            (cache_group(client, cluster_id), "pods-rich", ns, page, cont or ""),
             lambda: _load_pods_rich(client, namespace, limit=page, cont=cont, aux=_aux),
             refresh=refresh,
         )
