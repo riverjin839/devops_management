@@ -79,6 +79,7 @@ from app.routers.check_matrix import router as check_matrix_router
 from app.routers.island import router as island_router
 from app.routers.llm_settings import router as llm_settings_router
 from app.routers.home_prefs import router as home_prefs_router
+from app.routers.tenants import router as tenants_router
 
 __all__ = [
     "check_matrix_router",
@@ -157,4 +158,5 @@ __all__ = [
     "island_router",
     "llm_settings_router",
     "home_prefs_router",
+    "tenants_router",
 ]

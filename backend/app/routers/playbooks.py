@@ -21,6 +21,7 @@ from app.schemas.playbook import (
 )
 from app.services.playbook_service import execute_playbook_run
 from app.services import audit_logger
+from app.services.cluster_access import require_cluster_access
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/playbooks", tags=["playbooks"])
@@ -293,6 +294,7 @@ def run_playbook_endpoint(
     playbook = db.query(Playbook).filter(Playbook.id == playbook_id).first()
     if not playbook:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Playbook not found")
+    require_cluster_access(db, actor, playbook.cluster_id)
     audit_logger.record(
         db,
         action="playbook.run",

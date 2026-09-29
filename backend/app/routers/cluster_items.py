@@ -16,10 +16,13 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
+from app.auth.deps import get_current_user
 from app.database import get_db
 from app.models import Cluster
 from app.models.cluster_item import ClusterItem
+from app.models.user import User
 from app.services import cluster_item_service as cis
+from app.services.cluster_access import require_cluster_access
 
 router = APIRouter(tags=["cluster-items"])
 
@@ -151,8 +154,9 @@ def create_cluster_item(cluster_id: UUID, body: ClusterItemCreate, db: Session =
 
 
 @router.put("/cluster-items/{item_id}", response_model=ClusterItemResponse)
-def update_cluster_item(item_id: UUID, body: ClusterItemUpdate, db: Session = Depends(get_db)):
+def update_cluster_item(item_id: UUID, body: ClusterItemUpdate, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
     item = _get_item_or_404(db, item_id)
+    require_cluster_access(db, user, item.cluster_id)
     for key, value in body.model_dump(exclude_unset=True).items():
         setattr(item, key, value)
     db.commit()
@@ -161,8 +165,9 @@ def update_cluster_item(item_id: UUID, body: ClusterItemUpdate, db: Session = De
 
 
 @router.delete("/cluster-items/{item_id}")
-def delete_cluster_item(item_id: UUID, db: Session = Depends(get_db)):
+def delete_cluster_item(item_id: UUID, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
     item = _get_item_or_404(db, item_id)
+    require_cluster_access(db, user, item.cluster_id)
     if item.is_builtin:
         raise HTTPException(status_code=400, detail="기본 아이템은 삭제할 수 없습니다 (편집만 가능)")
     db.delete(item)
@@ -171,9 +176,10 @@ def delete_cluster_item(item_id: UUID, db: Session = Depends(get_db)):
 
 
 @router.post("/cluster-items/{item_id}/run", response_model=ClusterItemResponse)
-def run_cluster_item(item_id: UUID, db: Session = Depends(get_db)):
+def run_cluster_item(item_id: UUID, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
     """수동(수작업) 즉시 수집."""
     item = _get_item_or_404(db, item_id)
+    require_cluster_access(db, user, item.cluster_id)
     try:
         item = cis.run_item(db, item, source="manual")
     except Exception as e:  # noqa: BLE001

@@ -28,7 +28,9 @@ from app.database import SessionLocal
 from app.models import Cluster
 from app.models.user import User
 from app.services import audit_logger
+from app.services.cluster_access import has_cluster_access
 from app.services.ssh_pty import (
+    CLOSE_CLUSTER_FORBIDDEN,
     CLOSE_DISABLED,
     CLOSE_NOT_FOUND,
     CLOSE_UNAUTHORIZED,
@@ -106,6 +108,9 @@ async def k9s_terminal(websocket: WebSocket, cluster_id: UUID, token: str | None
         cluster = db.query(Cluster).filter(Cluster.id == cluster_id).first()
         if cluster is None:
             await websocket.close(code=CLOSE_NOT_FOUND)
+            return
+        if not has_cluster_access(db, user, cluster_id, "operate"):
+            await websocket.close(code=CLOSE_CLUSTER_FORBIDDEN)
             return
 
         await websocket.accept()

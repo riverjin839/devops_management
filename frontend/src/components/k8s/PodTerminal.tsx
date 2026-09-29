@@ -73,6 +73,7 @@ export function PodTerminal({ clusterId, namespace, pod, container: initialConta
         ev.code === 4401 ? '[인증 실패 — operator 권한이 필요합니다]'
         : ev.code === 4403 ? '[exec 기능이 비활성화되어 있습니다]'
         : ev.code === 4404 ? '[클러스터를 찾을 수 없습니다]'
+        : ev.code === 4413 ? '[이 클러스터에 exec 권한이 없습니다 — 테넌트 바인딩 확인]'
         : ev.code === 4422 ? '[kubeconfig 미등록]'
         : '[연결 종료]';
       term.write(`\r\n\x1b[33m${note}\x1b[0m\r\n`);

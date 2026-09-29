@@ -47,6 +47,8 @@ MAX_SESSION_SECONDS = 60 * 60  # 1시간 상한 — 좀비 세션 방지
 CLOSE_UNAUTHORIZED = 4401
 CLOSE_DISABLED = 4403
 CLOSE_NOT_FOUND = 4404
+# 테넌트 바인딩상 이 클러스터에 실행 권한이 없음 (services/cluster_access.py).
+CLOSE_CLUSTER_FORBIDDEN = 4413
 CLOSE_BAD_INIT = 1008
 CLOSE_SSH_FAILED = 1011
 
