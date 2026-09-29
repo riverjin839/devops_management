@@ -8,7 +8,7 @@
 
 ## [Unreleased]
 
-1.37.5 이후 main 에 병합된 변경 (다음 릴리스 후보).
+1.37.6 이후 main 에 병합된 변경 (다음 릴리스 후보).
 
 ### Added
 - **테넌트 기반 클러스터 실행 권한 (Settings ▸ 테넌트, 멀티테넌시 1단계)**: 테넌트(팀)에 사용자를 넣고 클러스터를
@@ -17,6 +17,8 @@
   바인딩이 없는 클러스터는 지금처럼 열려 있고(기존 설치 영향 없음), admin 은 항상 허용, 멤버십은 권한을 좁힐 뿐 넓히지 않는다.
   Backend: `models/tenant.py`(`tenants`/`tenant_members`/`cluster_bindings`), `services/cluster_access.py`, `routers/tenants.py`,
   `main.py` `_cluster_scoped` 의존성. Frontend: `TenantManager`, 터미널 close code `4413` 안내.
+
+## [1.37.6] - 2026-09-29
 
 ### Fixed
 - **백업 export 가 viewer 에게도 열려 있던 권한 구멍 (Settings ▸ 백업 / 복구)**: `GET /backup/export`·`/backup/meta` 가
