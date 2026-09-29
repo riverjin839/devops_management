@@ -8,6 +8,7 @@ import { backupApi } from '@/services/api';
 import type { BackupImportResponse } from '@/services/api';
 import { ConfirmDialog, useToast } from '@/components/common';
 import { formatApiError, parseUTC } from '@/lib/utils';
+import { useAuthStore, hasRole } from '@/stores/authStore';
 
 type Mode = 'merge' | 'replace';
 
@@ -17,7 +18,30 @@ function formatBytes(n: number): string {
   return `${(n / 1024 / 1024).toFixed(2)} MB`;
 }
 
+/**
+ * 백업은 kubeconfig·자격증명을 포함한 전체 DB 반출이라 서버가 meta/export/import 모두 admin 만
+ * 허용한다. admin 이 아니면 403 을 연달아 맞는 대신 탭 안에서 사유를 먼저 보여준다.
+ */
 export function BackupRestorePanel() {
+  const user = useAuthStore((s) => s.user);
+  if (!hasRole(user, 'admin')) {
+    return (
+      <section className="bg-card border border-border rounded-xl p-5 flex items-start gap-3">
+        <Info className="w-5 h-5 text-muted-foreground shrink-0 mt-0.5" />
+        <div>
+          <h2 className="font-semibold">관리자 전용</h2>
+          <p className="text-sm text-muted-foreground mt-1">
+            백업 / 복구는 kubeconfig·자격증명 등 전체 데이터를 다루므로 admin 권한이 필요합니다
+            (현재: {user?.role ?? '미로그인'}).
+          </p>
+        </div>
+      </section>
+    );
+  }
+  return <BackupRestorePanelBody />;
+}
+
+function BackupRestorePanelBody() {
   // 현재 DB 메타
   const toast = useToast();
   const metaQ = useQuery({
