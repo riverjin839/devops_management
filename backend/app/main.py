@@ -1111,6 +1111,9 @@ def _run_migrations():
             label="check_matrix_items.definition_id FK",
         )
         _safe_create_index("ix_check_matrix_items_definition", "check_matrix_items", "(definition_id)")
+        # target_key — 실제 점검 대상(예: "etcd") 식별자, D-062 "대상 중복 표시". category 와
+        # 같은 자유 문자열 철학(운영자가 화면에서 편집). backfill 은 backfill_item_metadata 담당.
+        _safe_add_column("check_matrix_items", "target_key", "VARCHAR(80)")
 
     # check_matrix_runs: 점검 매트릭스 수행 로그 — 테이블은 create_all 이 생성하고,
     # 셀별 최근 로그 조회 / 배치 진행률 폴링 / 리텐션 퍼지 스캔용 인덱스만 보강한다.

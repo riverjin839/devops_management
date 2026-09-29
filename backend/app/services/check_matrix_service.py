@@ -73,6 +73,22 @@ _ADDON_CATEGORIES: dict[str, str] = {
     "keycloak": "app",
 }
 
+# check_type/addon type → 실제 점검 대상(target_key) 시드 힌트 — D-062 "대상 중복 표시".
+# 여러 실행기술이 같은 실물을 검사하는 것이 확인된 조합만 넣는다(추측성 매칭은 잘못된
+# "중복" 경고를 만들어 신뢰를 깎으므로 보수적으로 유지). 시드/backfill 의 기본값일 뿐이며
+# 운영자가 화면에서 자유롭게 덮어쓸 수 있다(category 와 동일한 UI-First 철학).
+_DEEP_CHECK_TARGET_HINTS: dict[str, str] = {
+    "etcd_defrag": "etcd",
+    "node_pressure": "node",
+    "node_health": "node",
+    "coredns_health": "coredns",
+    "cert_expiry": "certificate",
+}
+_ADDON_TARGET_HINTS: dict[str, str] = {
+    "etcd-leader": "etcd",
+    "node-check": "node",
+}
+
 _ADDON_LABELS: dict[str, str] = {
     "etcd-leader": "ETCD Leader",
     "node-check": "노드 상태",
@@ -207,7 +223,42 @@ def _batch_job_exec_tech(db: Session, name: str) -> str:
     return "ssh_bash"
 
 
-def _item_to_dict(db: Session, item: CheckMatrixItem) -> dict[str, Any]:
+def _target_duplicate_map(db: Session, items: Iterable[CheckMatrixItem]) -> dict[str, dict[str, Any]]:
+    """``target_key`` 가 있는 활성 행을 묶어, 같은 대상을 2종 이상의 실행기술이 점검 중인
+    그룹만 골라낸다(D-062). 같은 target_key 라도 exec_tech 가 전부 같으면(예: 수동 입력
+    행 2개) "여러 기술이 중복 점검"이 아니므로 대상에서 제외한다.
+
+    반환: item_id(str) → {"target_key", "duplicate_count"(자기 자신 제외 동료 수), "peers"}.
+    """
+    groups: dict[str, list[tuple[CheckMatrixItem, Optional[str]]]] = {}
+    for it in items:
+        if not it.enabled or not it.target_key:
+            continue
+        groups.setdefault(it.target_key, []).append((it, _resolve_exec_tech(db, it)))
+
+    out: dict[str, dict[str, Any]] = {}
+    for target_key, entries in groups.items():
+        distinct_techs = {tech for _, tech in entries if tech}
+        if len(distinct_techs) < 2:
+            continue
+        for it, tech in entries:
+            peers = [
+                {"item_id": str(peer.id), "name": peer.name, "exec_tech": peer_tech}
+                for peer, peer_tech in entries
+                if peer.id != it.id
+            ]
+            out[str(it.id)] = {
+                "target_key": target_key,
+                "duplicate_count": len(peers),
+                "peers": peers,
+            }
+    return out
+
+
+def _item_to_dict(
+    db: Session, item: CheckMatrixItem, dup_map: Optional[dict[str, dict[str, Any]]] = None,
+) -> dict[str, Any]:
+    dup = (dup_map or {}).get(str(item.id))
     return {
         "id": str(item.id),
         "name": item.name,
@@ -223,6 +274,10 @@ def _item_to_dict(db: Session, item: CheckMatrixItem) -> dict[str, Any]:
         "is_system": item.is_system,
         "enabled": item.enabled,
         "sort_order": item.sort_order,
+        "target_key": item.target_key,
+        # dup 이 없으면 "같은 대상을 다른 기술로도 점검 중"인 경우가 아니라는 뜻 — 0/빈 목록.
+        "target_duplicate_count": dup["duplicate_count"] if dup else 0,
+        "target_peers": dup["peers"] if dup else [],
     }
 
 
@@ -271,8 +326,9 @@ def build_grid(db: Session, hidden_cluster_ids: Optional[Iterable[Any]] = None) 
             }
         cells[str(item.id)] = row
 
+    dup_map = _target_duplicate_map(db, items)
     return {
-        "items": [_item_to_dict(db, i) for i in items],
+        "items": [_item_to_dict(db, i, dup_map) for i in items],
         "clusters": [
             {
                 "id": str(c.id), "name": c.name, "check_cron_expr": c.check_cron_expr,
@@ -294,6 +350,17 @@ def item_detail(db: Session, item_id) -> Optional[dict[str, Any]]:
     item = db.query(CheckMatrixItem).filter(CheckMatrixItem.id == item_id).first()
     if item is None:
         return None
+
+    # 이 항목의 target_key 를 공유하는 행들만 좁혀서 중복 판정 — build_grid() 처럼 전체를
+    # 다시 훑을 필요 없다(item_detail 은 항목 하나짜리 lean 조회).
+    dup_map: dict[str, dict[str, Any]] = {}
+    if item.target_key:
+        peers_qs = (
+            db.query(CheckMatrixItem)
+            .filter(CheckMatrixItem.target_key == item.target_key)
+            .all()
+        )
+        dup_map = _target_duplicate_map(db, peers_qs)
 
     clusters = db.query(Cluster).order_by(Cluster.seq.asc(), Cluster.name.asc()).all()
     result_by_cluster = {
@@ -326,7 +393,7 @@ def item_detail(db: Session, item_id) -> Optional[dict[str, Any]]:
             "schedule_enabled": schedule_enabled,
         })
 
-    return {"item": _item_to_dict(db, item), "cells": cells}
+    return {"item": _item_to_dict(db, item, dup_map), "cells": cells}
 
 
 def get_cell_history(db: Session, item_id, cluster_id, days: int = 30) -> dict[str, Any]:
@@ -2194,6 +2261,7 @@ def seed_default_items(db: Session) -> int:
             source_ref=check_type,
             category=spec.category,
             color=CATEGORY_DEFAULT_COLORS.get(spec.category),
+            target_key=_DEEP_CHECK_TARGET_HINTS.get(check_type),
             is_system=False,
             sort_order=sort_order,
         ))
@@ -2209,6 +2277,7 @@ def seed_default_items(db: Session) -> int:
             source_ref=addon_type,
             category=category,
             color=CATEGORY_DEFAULT_COLORS.get(category or ""),
+            target_key=_ADDON_TARGET_HINTS.get(addon_type),
             is_system=False,
             sort_order=sort_order,
         ))
@@ -2232,6 +2301,10 @@ def backfill_item_metadata(db: Session) -> int:
     updated = 0
     for row in db.query(CheckMatrixItem).all():
         touched = False
+        # 색 기본값 부여는 "category 를 방금 이 루프에서 얻었을 때"만이어야 한다 —
+        # unit/target_key 만 바뀐 경우까지 touched 로 묶으면 운영자가 지운 색을 도로
+        # 칠하게 된다(D-062 target_key 백필 도입 때 실제로 이 버그가 났다).
+        category_touched = False
         if row.source_type == CheckMatrixSourceType.deep_check:
             entry = CELL_VALUE_SPECS.get(row.source_ref or "")
             if not row.unit and entry and entry[0]:
@@ -2242,16 +2315,30 @@ def backfill_item_metadata(db: Session) -> int:
                 if reg:
                     row.category = reg[1].category
                     touched = True
+                    category_touched = True
+            if not row.target_key:
+                hint = _DEEP_CHECK_TARGET_HINTS.get(row.source_ref or "")
+                if hint:
+                    row.target_key = hint
+                    touched = True
         elif row.source_type == CheckMatrixSourceType.core_bundle and not row.category:
             row.category = "k8s"
             touched = True
-        elif row.source_type == CheckMatrixSourceType.addon and not row.category:
-            cat = _ADDON_CATEGORIES.get(row.source_ref or "")
-            if cat:
-                row.category = cat
-                touched = True
+            category_touched = True
+        elif row.source_type == CheckMatrixSourceType.addon:
+            if not row.category:
+                cat = _ADDON_CATEGORIES.get(row.source_ref or "")
+                if cat:
+                    row.category = cat
+                    touched = True
+                    category_touched = True
+            if not row.target_key:
+                hint = _ADDON_TARGET_HINTS.get(row.source_ref or "")
+                if hint:
+                    row.target_key = hint
+                    touched = True
         # 색은 category 를 방금 얻었고 색이 비어 있을 때만 기본값 부여.
-        if touched and row.category and not row.color:
+        if category_touched and row.category and not row.color:
             row.color = CATEGORY_DEFAULT_COLORS.get(row.category)
         if touched:
             updated += 1
