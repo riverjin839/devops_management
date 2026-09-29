@@ -92,6 +92,7 @@ from app.routers import (
     home_prefs_router,
 )
 from app.auth.deps import get_current_user
+from app.auth.feature_access import enforce_feature_access
 from app.auth.security import hash_password
 from app.models.user import User
 
@@ -2338,7 +2339,9 @@ app.include_router(health_router, prefix="/api/v1")
 app.include_router(check_ingest_router, prefix="/api/v1")
 
 # Protected routers — every endpoint below requires a valid JWT.
-_auth = [Depends(get_current_user)]
+# enforce_feature_access: Settings "접근 제어" 규칙을 화면 전용 API 에도 서버 측에서 강제한다
+# (UI 숨김만으로는 API 직접 호출을 막지 못한다 — app/auth/feature_access.py).
+_auth = [Depends(get_current_user), Depends(enforce_feature_access)]
 app.include_router(clusters_router, prefix="/api/v1", dependencies=_auth)
 app.include_router(history_router, prefix="/api/v1", dependencies=_auth)
 app.include_router(core_bundle_router, prefix="/api/v1", dependencies=_auth)

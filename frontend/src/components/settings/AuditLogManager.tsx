@@ -28,6 +28,7 @@ const ACTIONS: string[] = [
   'bulk_exec.run',
   'etcdctl.run',
   'backup.import',
+  'backup.export',
   'batch_job.*',
   'batch_job.create',
   'batch_job.update',
