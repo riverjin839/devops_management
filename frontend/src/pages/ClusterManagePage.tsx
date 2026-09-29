@@ -117,6 +117,7 @@ export function ClusterManagePage() {
   const autoUpdateAbortsRef = useRef<Map<string, AbortController>>(new Map());
   const [applyingId, setApplyingId]       = useState<string | null>(null);
   const [collectingNodeIpsId, setCollectingNodeIpsId] = useState<string | null>(null);
+  const [verifyingIds, setVerifyingIds] = useState<Set<string>>(new Set());
   const [bulkCollecting, setBulkCollecting] = useState(false);
   const [bulkConfirmOpen, setBulkConfirmOpen] = useState(false);
   const [bulkProgress, setBulkProgress]   = useState<{ done: number; total: number } | null>(null);
@@ -461,6 +462,40 @@ export function ClusterManagePage() {
     }
   };
 
+  // 연결 검증 — POST /clusters/{id}/verify 의 단계별 결과(api_server / kubeconfig_auth /
+  // kubectl_nodes)를 실행 로그에 한 줄씩 남긴다. 서버가 cluster.status 를 갱신하므로 목록을 다시 읽는다.
+  // 로그 패널은 자동으로 열지 않고 "로그 보기" 토글에 맡긴다(CLAUDE.md — 사용자가 결정).
+  const CHECK_LABEL: Record<string, string> = {
+    api_server: 'API server',
+    kubeconfig_auth: 'kubeconfig 인증',
+    kubectl_nodes: 'kubectl get nodes',
+  };
+  const handleVerify = async (cluster: Cluster) => {
+    if (verifyingIds.has(cluster.id)) return;
+    setVerifyingIds((prev) => new Set(prev).add(cluster.id));
+    appendLog(`[검증] start ${cluster.name} — API server → kubeconfig 인증 → kubectl 순서로 점검`);
+    try {
+      const { data } = await clustersApi.verify(cluster.id);
+      for (const r of data.results ?? []) {
+        const mark = r.ok === true ? 'ok' : r.ok === false ? 'FAIL' : 'SKIP';
+        appendLog(`[검증]   ${mark} ${CHECK_LABEL[r.check] ?? r.check} — ${r.detail}`);
+      }
+      appendLog(`[검증] ${data.ok ? 'ok' : 'FAIL'} ${cluster.name} — 상태 ${data.status ?? '-'}${data.statusReason ? ` (${data.statusReason})` : ''}`);
+      await queryClient.refetchQueries({ queryKey: ['clusters'] });
+      if (data.ok) toast.success('연결 검증 통과', cluster.name);
+      else toast.warning('연결 검증 실패 항목 있음', `${cluster.name} — 자세한 내용은 "로그 보기"`);
+    } catch (e: unknown) {
+      appendLog(`[검증] FAIL ${cluster.name} — ${formatApiError(e)}`);
+      toast.error('연결 검증 실패', `${cluster.name}: ${formatApiError(e)}`);
+    } finally {
+      setVerifyingIds((prev) => {
+        const next = new Set(prev);
+        next.delete(cluster.id);
+        return next;
+      });
+    }
+  };
+
   // 노드 IP 만 즉시 수집 — diff 다이얼로그 없이 auto-update 결과를 바로 반영.
   // 백엔드 auto-update 가 nodeIps + nodeCount + hostname + cidr 등을 같이 갱신하므로
   // 추가 엔드포인트 없이 dryRun=false 호출 한 번이면 충분.
@@ -646,7 +681,7 @@ export function ClusterManagePage() {
               className={`flex items-center gap-1.5 px-3 py-1.5 text-sm border border-border rounded-lg transition-colors ${
                 collectLogOpen ? 'bg-secondary text-foreground' : 'bg-secondary/60 hover:bg-secondary text-muted-foreground hover:text-foreground'
               }`}
-              title="수집 실행 로그 — 재수집/IP 수집/일괄 수집의 대상별 성공·실패 기록"
+              title="실행 로그 — 연결 검증/재수집/IP 수집/일괄 수집의 대상별 성공·실패 기록"
             >
               <ScrollText className="w-3.5 h-3.5" />
               로그 보기{collectLog.length > 0 && ` (${collectLog.length})`}
@@ -740,7 +775,7 @@ export function ClusterManagePage() {
           <MacCard rootClassName="mb-5" bodyPadding="p-0">
             <div className="flex items-center gap-2 px-4 py-2 border-b border-border bg-surface-container-high">
               <ScrollText className="w-3.5 h-3.5 text-muted-foreground" aria-hidden />
-              <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground select-none">수집 로그</span>
+              <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground select-none">실행 로그</span>
               <div className="ml-auto flex items-center gap-1.5">
                 {lastBulkFailedIds.length > 0 && !bulkCollecting && canEdit && (
                   <button
@@ -761,7 +796,7 @@ export function ClusterManagePage() {
               </div>
             </div>
             <LogViewer
-              text={collectLog.length > 0 ? collectLog.join('\n') : '아직 수집 실행 기록이 없습니다 — 재수집 / IP 수집 / 일괄 수집 결과가 여기에 대상별로 쌓입니다.'}
+              text={collectLog.length > 0 ? collectLog.join('\n') : '아직 실행 기록이 없습니다 — 연결 검증 / 재수집 / IP 수집 / 일괄 수집 결과가 여기에 대상별로 쌓입니다.'}
               maxHeight="max-h-48"
             />
           </MacCard>
@@ -943,6 +978,8 @@ export function ClusterManagePage() {
                             overlapPeers={overlapPeerNames.get(cluster.id)}
                             onCilium={c => setCiliumCluster(c)}
                             onAutoUpdate={handleAutoUpdate}
+                            onVerify={handleVerify}
+                            verifying={verifyingIds.has(cluster.id)}
                             autoUpdating={autoUpdatingIds.has(cluster.id)}
                             customFields={customFields}
                             onCollectNodeIps={(c) => setCollectConfirm(c)}
@@ -990,6 +1027,8 @@ export function ClusterManagePage() {
                           overlapGroupIdx={cidrOverlapGroups.get(cluster.id)}
                           overlapPeers={overlapPeerNames.get(cluster.id)}
                           onAutoUpdate={handleAutoUpdate}
+                          onVerify={handleVerify}
+                          verifying={verifyingIds.has(cluster.id)}
                           autoUpdating={autoUpdatingIds.has(cluster.id)}
                           onCollectNics={(c) => setNicsClusterId(c.id)}
                           sortEnabled={sortEnabled}

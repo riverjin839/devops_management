@@ -1,6 +1,6 @@
 import { useRef, useState, useMemo } from 'react';
 import { Link } from 'react-router-dom';
-import { Pencil, Trash2, AlertTriangle, RefreshCw, Loader2, ArrowUpRight, Cable, Server, GripVertical, Globe, Lock } from 'lucide-react';
+import { Pencil, Trash2, AlertTriangle, RefreshCw, Loader2, ArrowUpRight, Cable, Server, GripVertical, Globe, Lock, ShieldCheck } from 'lucide-react';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import type { Cluster, ClusterCustomField, ClusterManageUpdate } from '@/types';
@@ -23,6 +23,9 @@ interface ClusterTableRowProps {
   overlapPeers?: string[];
   onCilium: (c: Cluster) => void;
   onAutoUpdate: (c: Cluster) => void;
+  /** 연결 검증(API server · kubeconfig 인증 · kubectl) 실행 — 단계별 결과는 페이지 실행 로그에 쌓인다 */
+  onVerify?: (c: Cluster) => void;
+  verifying?: boolean;
   /** 이 클러스터의 auto-update 진행 여부 — per-cluster 동시 진행 지원 (D-047) */
   autoUpdating: boolean;
   customFields?: ClusterCustomField[];
@@ -84,7 +87,7 @@ function EditableCell({
   );
 }
 
-export function ClusterTableRow({ cluster, onEdit, onDelete, deletingId, overlapGroupIdx, overlapPeers, onCilium, onAutoUpdate, autoUpdating, customFields = [], onCollectNodeIps, collectingNodeIpsId, onCollectNics, sortable = false, canEdit = true, hiddenCols }: ClusterTableRowProps) {
+export function ClusterTableRow({ cluster, onEdit, onDelete, deletingId, overlapGroupIdx, overlapPeers, onCilium, onAutoUpdate, onVerify, verifying = false, autoUpdating, customFields = [], onCollectNodeIps, collectingNodeIpsId, onCollectNics, sortable = false, canEdit = true, hiddenCols }: ClusterTableRowProps) {
   const colVisible = (key: string) => key === 'name' || !hiddenCols?.has(key);
   const updateCluster = useUpdateCluster();
   // 테이블 뷰 행 드래그 — 페이지의 DndContext/SortableContext 안에서만 렌더된다.
@@ -566,6 +569,16 @@ export function ClusterTableRow({ cluster, onEdit, onDelete, deletingId, overlap
       <td className="px-3 py-2.5 overflow-hidden">
         {canEdit ? (
           <div className="flex items-center gap-1">
+            {onVerify && (
+              <button onClick={() => onVerify(cluster)} disabled={verifying}
+                className="p-1.5 hover:bg-primary/10 rounded text-muted-foreground hover:text-primary disabled:opacity-60 transition-colors"
+                title="연결 검증 — API server / kubeconfig 인증 / kubectl 을 단계별로 점검하고 결과를 실행 로그에 남깁니다 (상태 갱신됨)"
+                aria-label={`${cluster.name} 연결 검증`}>
+                {verifying
+                  ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  : <ShieldCheck className="w-3.5 h-3.5" />}
+              </button>
+            )}
             <button onClick={() => onAutoUpdate(cluster)}
               className={`p-1.5 rounded transition-colors ${
                 autoUpdating
