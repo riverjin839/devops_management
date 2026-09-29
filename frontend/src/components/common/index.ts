@@ -35,3 +35,4 @@ export { ReactionBar } from './ReactionBar';
 export { SnapshotProgressCard, SnapshotProgressBar } from './SnapshotProgress';
 export { ExportMenu } from './ExportMenu';
 export { ScreenCatalogList } from './ScreenCatalogList';
+export { TenantScopeSelect } from './TenantScopeSelect';

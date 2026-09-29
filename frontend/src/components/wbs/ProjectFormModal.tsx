@@ -1,6 +1,6 @@
 import { useId, useState } from 'react';
 import { X, Loader2, FolderOpen } from 'lucide-react';
-import { useModalA11y } from '@/components/common';
+import { TenantScopeSelect, useModalA11y } from '@/components/common';
 import type { Project, ProjectCreate } from '@/types';
 import { useCreateProject, useUpdateProject } from '@/hooks/useProjects';
 import { formatApiError } from '@/lib/utils';
@@ -33,6 +33,7 @@ export function ProjectFormModal({ initial, onClose }: Props) {
   const [color, setColor] = useState(initial?.color ?? 'blue');
   const [startDate, setStartDate] = useState(initial?.startDate ?? '');
   const [endDate, setEndDate] = useState(initial?.endDate ?? '');
+  const [tenantId, setTenantId] = useState<string | null>(initial?.tenantId ?? null);
   const [error, setError] = useState<string | null>(null);
 
   // ESC 닫기 · 포커스 트랩 · 초점 복원 (공용 훅) — 이 모달은 마운트=열림
@@ -51,6 +52,7 @@ export function ProjectFormModal({ initial, onClose }: Props) {
       color,
       startDate: startDate || undefined,
       endDate: endDate || undefined,
+      tenantId,
     };
     try {
       if (isEdit && initial) {
@@ -118,6 +120,9 @@ export function ProjectFormModal({ initial, onClose }: Props) {
               <input id={f('end')} type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} className={inputCls} />
             </div>
           </div>
+
+          {/* 공유 범위 — 비공개 프로젝트의 업무 항목은 프로젝트 테넌트 멤버에게만 보인다 */}
+          <TenantScopeSelect value={tenantId} onChange={setTenantId} labelClassName={labelCls} selectClassName={inputCls} />
 
           <div>
             <p className={labelCls}>색상</p>

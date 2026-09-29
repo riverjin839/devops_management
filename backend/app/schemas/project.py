@@ -8,6 +8,8 @@ ProjectStatus = str  # active / completed / paused
 
 
 class ProjectBase(BaseModel):
+    # 멀티테넌시 3단계 — None = 전체 공유, 값이 있으면 그 테넌트 멤버·admin 만 본다.
+    tenant_id: Optional[UUID] = None
     name: str = Field(..., min_length=1, max_length=200)
     description: Optional[str] = None
     goal: Optional[str] = None
@@ -22,6 +24,8 @@ class ProjectCreate(ProjectBase):
 
 
 class ProjectUpdate(BaseModel):
+    # 멀티테넌시 3단계 — None = 전체 공유, 값이 있으면 그 테넌트 멤버·admin 만 본다.
+    tenant_id: Optional[UUID] = None
     name: Optional[str] = Field(None, min_length=1, max_length=200)
     description: Optional[str] = None
     goal: Optional[str] = None

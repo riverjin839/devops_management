@@ -249,6 +249,15 @@ def _safe_add_constraint(
 def _run_migrations():
     """기존 테이블에 누락된 컬럼 추가 (경량 마이그레이션)"""
     inspector = inspect(engine)
+    # 멀티테넌시 3단계 — 업무·지식 데이터 tenant_id (NULL = 전체 공유). tenants 테이블은 create_all 이
+    # 먼저 만든다. ON DELETE RESTRICT: 데이터가 남은 테넌트를 지우면 그 데이터가 전체 공개로
+    # 바뀌므로 막는다(routers/tenants.py 가 409 로 사유를 먼저 알려준다).
+    from app.services.tenant_scope import TENANT_SCOPED_TABLES
+    _existing_tables = set(inspector.get_table_names())
+    for _t in TENANT_SCOPED_TABLES:
+        if _t in _existing_tables:
+            _safe_add_column(_t, "tenant_id", "UUID REFERENCES tenants(id) ON DELETE RESTRICT")
+            _safe_create_index(f"ix_{_t}_tenant_id", _t, "(tenant_id)")
     if "addons" in inspector.get_table_names():
         _safe_add_column("addons", "details", "JSONB")
         _safe_add_column("addons", "config", "JSONB")

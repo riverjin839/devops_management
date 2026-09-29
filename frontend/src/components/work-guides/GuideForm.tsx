@@ -3,7 +3,7 @@ import { AlertCircle } from 'lucide-react';
 import { useQueryClient } from '@tanstack/react-query';
 import { workGuidesApi } from '@/services/api';
 import type { WorkGuide, WorkGuideCreate, WorkGuideUpdate } from '@/types';
-import { ConfluenceUrlInput } from '@/components/common';
+import { ConfluenceUrlInput, TenantScopeSelect } from '@/components/common';
 import { RichTextEditor } from '@/components/editor';
 
 const CATEGORIES = ['배포', '트러블슈팅', '모니터링', '보안', '기타'];
@@ -28,6 +28,7 @@ export function GuideForm({ initial, allGuides, defaultParentId, onCancel, onSav
   const [status, setStatus]     = useState(initial?.status ?? 'draft');
   const [author, setAuthor]     = useState(initial?.author ?? '');
   const [confluenceUrl, setConfluenceUrl] = useState(initial?.confluenceUrl ?? '');
+  const [tenantId, setTenantId] = useState<string | null>(initial?.tenantId ?? null);
   const [parentId, setParentId] = useState<string>(
     initial?.parentId ?? defaultParentId ?? '',
   );
@@ -59,6 +60,7 @@ export function GuideForm({ initial, allGuides, defaultParentId, onCancel, onSav
         author: author.trim() || undefined,
         parentId: parentId || null,
         confluenceUrl: confluenceUrl.trim() || undefined,
+        tenantId,
       };
       if (isEdit && initial) {
         await workGuidesApi.update(initial.id, payload as WorkGuideUpdate);
@@ -151,6 +153,8 @@ export function GuideForm({ initial, allGuides, defaultParentId, onCancel, onSav
               placeholder="예: k8s, nginx, 긴급" className={inputCls} />
           </div>
         </div>
+
+        <TenantScopeSelect value={tenantId} onChange={setTenantId} labelClassName={labelCls} selectClassName={inputCls} />
 
         <ConfluenceUrlInput
           id={f('confluence')}

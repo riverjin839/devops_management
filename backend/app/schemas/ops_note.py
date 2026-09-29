@@ -1,9 +1,12 @@
 from datetime import datetime
 from typing import Optional
+from uuid import UUID
 from pydantic import BaseModel, Field
 
 
 class OpsNoteCreate(BaseModel):
+    # 멀티테넌시 3단계 — None = 전체 공유, 값이 있으면 그 테넌트 멤버·admin 만 본다.
+    tenant_id: Optional[UUID] = None
     service: str = Field(..., min_length=1, max_length=50)
     title: str = Field(..., min_length=1, max_length=200)
     content: Optional[str] = None
@@ -16,6 +19,8 @@ class OpsNoteCreate(BaseModel):
 
 
 class OpsNoteUpdate(BaseModel):
+    # 멀티테넌시 3단계 — None = 전체 공유, 값이 있으면 그 테넌트 멤버·admin 만 본다.
+    tenant_id: Optional[UUID] = None
     service: Optional[str] = Field(None, min_length=1, max_length=50)
     title: Optional[str] = Field(None, min_length=1, max_length=200)
     content: Optional[str] = None
@@ -28,6 +33,8 @@ class OpsNoteUpdate(BaseModel):
 
 
 class OpsNoteResponse(BaseModel):
+    # 멀티테넌시 3단계 — None = 전체 공유, 값이 있으면 그 테넌트 멤버·admin 만 본다.
+    tenant_id: Optional[UUID] = None
     id: str
     service: str
     title: str

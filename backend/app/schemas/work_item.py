@@ -49,6 +49,8 @@ class ConfluenceLinkItem(BaseModel):
 
 
 class WorkItemBase(BaseModel):
+    # 멀티테넌시 3단계 — None = 전체 공유, 값이 있으면 그 테넌트 멤버·admin 만 본다.
+    tenant_id: Optional[UUID] = None
     type: WorkItemType
 
     # 담당자
@@ -110,6 +112,8 @@ class WorkItemCreate(WorkItemBase):
 
 
 class WorkItemUpdate(BaseModel):
+    # 멀티테넌시 3단계 — None = 전체 공유, 값이 있으면 그 테넌트 멤버·admin 만 본다.
+    tenant_id: Optional[UUID] = None
     # type 은 생성 시 정하고 변경 불가 (별도 엔드포인트로만 변환 허용하는 정책)
     assignee: Optional[str] = Field(None, min_length=1, max_length=100)
     primary_assignee: Optional[str] = Field(None, min_length=1, max_length=100)

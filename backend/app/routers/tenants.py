@@ -77,6 +77,11 @@ class TenantBindingsPut(BaseModel):
     bindings: list[ClusterBindingIn] = []
 
 
+class TenantBrief(BaseModel):
+    id: UUID
+    name: str
+
+
 class MyClusterAccessOut(BaseModel):
     # 바인딩이 있는(=제한된) 클러스터만 담는다. 값이 None 이면 접근 불가.
     # 여기 없는 클러스터는 제한 없음(전역 role 만 적용).
@@ -124,6 +129,19 @@ def _tenant_out(db: Session, t: Tenant) -> TenantOut:
     )
 
 
+def _tenant_data_counts(db: Session, tenant_id: UUID) -> dict[str, int]:
+    from sqlalchemy import text
+
+    from app.services.tenant_scope import TENANT_SCOPED_TABLES
+
+    out: dict[str, int] = {}
+    for table in TENANT_SCOPED_TABLES:
+        n = db.execute(text(f"SELECT COUNT(*) FROM {table} WHERE tenant_id = :tid"), {"tid": tenant_id}).scalar()
+        if n:
+            out[table] = int(n)
+    return out
+
+
 def _ensure_unique_name(db: Session, name: str, exclude_id: UUID | None = None) -> None:
     q = db.query(Tenant).filter(Tenant.name == name)
     if exclude_id is not None:
@@ -141,6 +159,15 @@ def my_cluster_access(db: Session = Depends(get_db), user: User = Depends(get_cu
     return MyClusterAccessOut(
         clusters={str(cid): cluster_access_level(db, user, cid) for cid in restricted},
     )
+
+
+@router.get("/mine", response_model=list[TenantBrief])
+def my_tenants(db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    """업무·지식 데이터 작성 폼의 "공유 범위" 선택지 — admin 은 전체, 그 외는 내가 속한 테넌트."""
+    q = db.query(Tenant)
+    if user.role != "admin":
+        q = q.join(TenantMember, TenantMember.tenant_id == Tenant.id).filter(TenantMember.user_id == user.id)
+    return [TenantBrief(id=t.id, name=t.name) for t in q.order_by(Tenant.name).all()]
 
 
 @router.get("", response_model=list[TenantOut])
@@ -186,6 +213,16 @@ def delete_tenant(tenant_id: UUID, request: Request, db: Session = Depends(get_d
                   actor: User = Depends(require_admin)):
     t = _get_tenant_or_404(db, tenant_id)
     name = t.name
+    # 이 테넌트로 제한된 업무·지식 데이터가 남아 있으면 막는다 — 지우면 그 데이터의 범위가 사라져
+    # (FK RESTRICT) 삭제가 실패하거나, 풀어 버리면 전체 공개로 바뀌기 때문이다. 먼저 옮기게 한다.
+    in_use = _tenant_data_counts(db, t.id)
+    if in_use:
+        summary = ", ".join(f"{k} {v}건" for k, v in in_use.items())
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"이 테넌트로 제한된 데이터가 남아 있어 삭제할 수 없습니다 ({summary}). "
+                   "공유 범위를 다른 테넌트나 '전체 공유'로 바꾼 뒤 삭제하세요.",
+        )
     # FK 는 ondelete=CASCADE 지만 ORM 세션 일관성을 위해 자식 행을 명시적으로 지운다.
     db.query(TenantMember).filter(TenantMember.tenant_id == t.id).delete(synchronize_session=False)
     db.query(ClusterBinding).filter(ClusterBinding.tenant_id == t.id).delete(synchronize_session=False)

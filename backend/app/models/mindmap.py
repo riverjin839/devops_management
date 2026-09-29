@@ -10,6 +10,8 @@ class MindMap(Base):
     __tablename__ = "mindmaps"
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    # 멀티테넌시 3단계 — NULL = 전체 공유, 값이 있으면 그 테넌트 멤버·admin 만 본다 (services/tenant_scope.py).
+    tenant_id = Column(UUID(as_uuid=True), ForeignKey("tenants.id", ondelete="RESTRICT"), nullable=True, index=True)
     title = Column(String(200), nullable=False)
     description = Column(Text, nullable=True)
     # Confluence 문서 링크 (선택)

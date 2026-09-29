@@ -3,7 +3,7 @@ import { History, Pin } from 'lucide-react';
 import { useQueryClient } from '@tanstack/react-query';
 import { opsNotesApi } from '@/services/api';
 import type { OpsNote, OpsNoteCreate, OpsNoteColor, OpsNoteUpdate } from '@/types';
-import { ConfluenceUrlInput } from '@/components/common';
+import { ConfluenceUrlInput, TenantScopeSelect } from '@/components/common';
 import { RichTextEditor } from '@/components/editor';
 
 const SERVICES = [
@@ -44,6 +44,7 @@ export function OpsNoteForm({ initial, defaultService, onCancel, onSaved }: OpsN
   const [pinned, setPinned]           = useState(initial?.pinned ?? false);
   const [confluenceUrl, setConfluenceUrl] = useState(initial?.confluenceUrl ?? '');
   const [dlUrl, setDlUrl]             = useState(initial?.dlUrl ?? '');
+  const [tenantId, setTenantId]       = useState<string | null>(initial?.tenantId ?? null);
   const [saving, setSaving]           = useState(false);
   const [error, setError]             = useState('');
 
@@ -65,6 +66,7 @@ export function OpsNoteForm({ initial, defaultService, onCancel, onSaved }: OpsN
         pinned,
         confluenceUrl: confluenceUrl.trim() || undefined,
         dlUrl: dlUrl.trim() || undefined,
+        tenantId,
       };
       let savedId: string | undefined;
       if (isEdit && initial) {
@@ -204,6 +206,9 @@ export function OpsNoteForm({ initial, defaultService, onCancel, onSaved }: OpsN
             className={inputCls}
           />
         </div>
+
+        {/* 공유 범위 (멀티테넌시) */}
+        <TenantScopeSelect value={tenantId} onChange={setTenantId} labelClassName={labelCls} selectClassName={inputCls} />
 
         {/* Confluence 링크 */}
         <ConfluenceUrlInput

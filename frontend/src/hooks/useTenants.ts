@@ -13,6 +13,15 @@ export function useTenants(enabled = true) {
   });
 }
 
+/** 작성 폼의 "공유 범위" 선택지 — 내가 속한 테넌트(admin 은 전체). */
+export function useMyTenants() {
+  return useQuery({
+    queryKey: ['tenants', 'mine'],
+    queryFn: () => tenantsApi.mine().then((r) => r.data),
+    staleTime: 60_000,
+  });
+}
+
 export function useTenantMutations() {
   const qc = useQueryClient();
   const invalidate = () => {

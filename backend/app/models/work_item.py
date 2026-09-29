@@ -25,6 +25,8 @@ class WorkItem(Base):
     __tablename__ = "work_items"
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    # 멀티테넌시 3단계 — NULL = 전체 공유, 값이 있으면 그 테넌트 멤버·admin 만 본다 (services/tenant_scope.py).
+    tenant_id = Column(UUID(as_uuid=True), ForeignKey("tenants.id", ondelete="RESTRICT"), nullable=True, index=True)
     # 디스크리미네이터 — 'task' | 'issue' | 'meeting' | 'training' | 'etc' | 'build_response'(구축 대응)
     type = Column(String(20), nullable=False, default="task", index=True)
 

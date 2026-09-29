@@ -22,6 +22,10 @@ from app.models.work_guide import WorkGuide  # noqa: E402
 import app.celery_app as celery_app_module  # noqa: E402
 import app.routers.work_items as work_items_router  # noqa: E402
 from app.main import _ensure_pgvector_extension, _run_migrations  # noqa: E402
+from app.services.tenant_scope import TenantScope  # noqa: E402
+
+# 라우터 함수를 직접 부르므로 Depends 대신 가시 범위를 명시한다(admin = 제한 없음).
+ADMIN_SCOPE = TenantScope(is_admin=True, tenant_ids=frozenset())
 
 
 @pytest.fixture(scope="module", autouse=True)
@@ -185,7 +189,7 @@ def test_create_work_item_queues_embedding_without_blocking(db, monkeypatch):
         started_at=datetime.utcnow(),
     )
 
-    item = work_items_router.create_work_item(payload, db=db, actor=actor, request=request)
+    item = work_items_router.create_work_item(payload, db=db, actor=actor, request=request, scope=ADMIN_SCOPE)
 
     fake_delay.assert_called_once_with(str(item.id))
     # 동기 경로에서 embedding 이 채워지지 않아야 한다 (Celery 가 비동기로 채움).
@@ -202,7 +206,7 @@ def test_similar_work_items_orders_by_cosine_distance(db):
     fake_user = MagicMock()
 
     result = work_items_router.get_similar_work_items(
-        item_id=target.id, limit=5, db=db, _=fake_user,
+        item_id=target.id, limit=5, db=db, _=fake_user, scope=ADMIN_SCOPE,
     )
 
     assert result.embedding_available is True
@@ -216,7 +220,7 @@ def test_similar_work_items_reports_unavailable_when_no_embedding(db):
     fake_user = MagicMock()
 
     result = work_items_router.get_similar_work_items(
-        item_id=item.id, limit=5, db=db, _=fake_user,
+        item_id=item.id, limit=5, db=db, _=fake_user, scope=ADMIN_SCOPE,
     )
 
     assert result.embedding_available is False

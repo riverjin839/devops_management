@@ -28,7 +28,7 @@ import {
   useCreateNode, useUpdateNode, useDeleteNode, useBulkUpdatePositions,
 } from '@/hooks/useMindMap';
 import type { MindMap, MindMapNode } from '@/types';
-import { useModalA11y } from '@/components/common';
+import { TenantScopeSelect, useModalA11y } from '@/components/common';
 
 // ── Constants ───────────────────────────────────────────────────────────────
 const NODE_COLORS = [
@@ -1054,6 +1054,7 @@ export function MindMapPage() {
   const [showCreateMap, setShowCreateMap] = useState(false);
   const [editingMapTitle, setEditingMapTitle] = useState('');
   const [editingMapConfluence, setEditingMapConfluence] = useState('');
+  const [editingMapTenant, setEditingMapTenant] = useState<string | null>(null);
   const [nodeEditorState, setNodeEditorState] = useState<{
     mode: 'create' | 'edit';
     parentId?: string;
@@ -1070,11 +1071,13 @@ export function MindMapPage() {
     const m = await createMap.mutateAsync({
       title: editingMapTitle.trim(),
       confluenceUrl: editingMapConfluence.trim() || undefined,
+      tenantId: editingMapTenant,
     });
     setSelectedMapId(m.id);
     setShowCreateMap(false);
     setEditingMapTitle('');
     setEditingMapConfluence('');
+    setEditingMapTenant(null);
   };
 
   const handleDeleteMap = (mapId: string) => {
@@ -1171,6 +1174,12 @@ export function MindMapPage() {
               onChange={(e) => setEditingMapConfluence(e.target.value)}
               placeholder="Confluence URL (선택)"
               className="w-full px-2.5 py-1.5 text-sm bg-background border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/40"
+            />
+            <TenantScopeSelect
+              value={editingMapTenant}
+              onChange={setEditingMapTenant}
+              labelClassName="block text-xs font-medium text-muted-foreground mb-1"
+              selectClassName="w-full px-2.5 py-1.5 text-sm bg-background border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/40"
             />
             <div className="flex gap-1.5">
               <button type="submit" className="flex-1 py-1.5 text-sm font-medium bg-primary hover:bg-primary/90 text-primary-foreground rounded-lg transition-colors">생성</button>

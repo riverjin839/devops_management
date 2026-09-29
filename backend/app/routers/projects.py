@@ -7,7 +7,8 @@ from sqlalchemy.orm import Session
 from app.database import get_db
 from app.models.project import Project
 from app.models.work_item import WorkItem
-from app.auth.deps import get_current_user
+from app.auth.deps import get_current_user, get_tenant_scope
+from app.services.tenant_scope import TenantScope
 from app.models.user import User
 from app.schemas.project import (
     ProjectCreate,
@@ -46,8 +47,9 @@ def list_projects(
     status_filter: Optional[str] = Query(None, alias="status"),
     db: Session = Depends(get_db),
     _: User = Depends(get_current_user),
+    scope: TenantScope = Depends(get_tenant_scope),
 ):
-    q = db.query(Project)
+    q = scope.apply(db.query(Project), Project.tenant_id)
     if status_filter:
         q = q.filter(Project.status == status_filter)
     projects = q.order_by(Project.created_at.desc()).all()
@@ -62,7 +64,9 @@ def create_project(
     payload: ProjectCreate,
     db: Session = Depends(get_db),
     _: User = Depends(get_current_user),
+    scope: TenantScope = Depends(get_tenant_scope),
 ):
+    scope.ensure_assignable(payload.tenant_id)
     project = Project(**payload.model_dump())
     db.add(project)
     db.commit()
@@ -75,9 +79,10 @@ def get_project(
     project_id: UUID,
     db: Session = Depends(get_db),
     _: User = Depends(get_current_user),
+    scope: TenantScope = Depends(get_tenant_scope),
 ):
     project = db.query(Project).filter(Project.id == project_id).first()
-    if not project:
+    if not project or not scope.visible(project.tenant_id):
         raise _not_found(project_id)
     return _build_response(project, db)
 
@@ -88,10 +93,13 @@ def update_project(
     payload: ProjectUpdate,
     db: Session = Depends(get_db),
     _: User = Depends(get_current_user),
+    scope: TenantScope = Depends(get_tenant_scope),
 ):
     project = db.query(Project).filter(Project.id == project_id).first()
-    if not project:
+    if not project or not scope.visible(project.tenant_id):
         raise _not_found(project_id)
+    if "tenant_id" in payload.model_fields_set:
+        scope.ensure_assignable(payload.tenant_id)
     for field, value in payload.model_dump(exclude_unset=True).items():
         setattr(project, field, value)
     db.commit()
@@ -104,10 +112,17 @@ def delete_project(
     project_id: UUID,
     db: Session = Depends(get_db),
     _: User = Depends(get_current_user),
+    scope: TenantScope = Depends(get_tenant_scope),
 ):
     project = db.query(Project).filter(Project.id == project_id).first()
-    if not project:
+    if not project or not scope.visible(project.tenant_id):
         raise _not_found(project_id)
+    # 비공개 프로젝트였다면 연결 해제 전에 공유 상태인 소속 항목에 프로젝트의 테넌트를 넘겨준다 —
+    # 프로젝트 덕분에 가려져 있던 항목이 삭제와 함께 전체 공개로 바뀌지 않도록.
+    if project.tenant_id is not None:
+        db.query(WorkItem).filter(
+            WorkItem.project_id == project_id, WorkItem.tenant_id.is_(None),
+        ).update({"tenant_id": project.tenant_id}, synchronize_session=False)
     # project_id=null 로 업무 연결 해제
     db.query(WorkItem).filter(WorkItem.project_id == project_id).update({"project_id": None})
     db.delete(project)

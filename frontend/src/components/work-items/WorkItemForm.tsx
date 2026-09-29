@@ -5,7 +5,7 @@ import { loadWorkItemImages, saveWorkItemImages } from '@/lib/workItemImages';
 import { RichTextEditor, assigneeWorkTableTemplate } from '@/components/editor';
 import { DateTimePicker } from '@/components/ui/DateTimePicker';
 import { useAssignees } from '@/hooks/useAssignees';
-import { ConfluenceUrlInput, useToast } from '@/components/common';
+import { ConfluenceUrlInput, TenantScopeSelect, useToast } from '@/components/common';
 import { formatApiError } from '@/lib/utils';
 import { useClusters } from '@/hooks/useCluster';
 import { useClusterStore } from '@/stores/clusterStore';
@@ -128,6 +128,7 @@ export function WorkItemForm({ initial, parentItem, defaultStartedAt, onCancel, 
   // 프로젝트/스프린트 배정은 등록 폼에서 뺐다(효율화) — 기존 값은 수정 시 유지되도록
   // state 는 남겨두되 선택 UI 는 제공하지 않는다.
   const [projectId, setProjectId] = useState(initial?.projectId ?? '');
+  const [tenantId, setTenantId] = useState<string | null>(initial?.tenantId ?? null);
   const [sprintId, setSprintId] = useState(initial?.sprintId ?? '');
   const [title, setTitle] = useState(initial?.title ?? '');
   const [primaryList, setPrimaryList] = useState<string[]>(
@@ -194,6 +195,7 @@ export function WorkItemForm({ initial, parentItem, defaultStartedAt, onCancel, 
     const allKnownCategories = [...TASK_CATEGORIES, ...loadCustomCategories()];
     if (isEdit && initial) {
       setProjectId(initial.projectId ?? '');
+      setTenantId(initial.tenantId ?? null);
       setSprintId(initial.sprintId ?? '');
       setTitle(initial.title ?? '');
       setType(initial.type);
@@ -278,6 +280,7 @@ export function WorkItemForm({ initial, parentItem, defaultStartedAt, onCancel, 
       clusterName: primaryCluster?.name,
       clusterIds: clusterIds.length ? clusterIds : undefined,
       projectId: projectId || undefined,
+      tenantId,
       sprintId: sprintId || null,
       title: title.trim() || undefined,
       category: resolvedCategory,
@@ -466,6 +469,10 @@ export function WorkItemForm({ initial, parentItem, defaultStartedAt, onCancel, 
             />
             <span className="font-medium whitespace-nowrap">👥 공통업무</span>
           </label>
+        </div>
+        {/* 공유 범위 (멀티테넌시) — 테넌트가 없으면 렌더하지 않는다 */}
+        <div className="md:col-span-2">
+          <TenantScopeSelect value={tenantId} onChange={setTenantId} labelClassName={labelClass} selectClassName={inputClass} />
         </div>
         {/* Confluence 링크 — 옵션 */}
         <div className="md:col-span-2">

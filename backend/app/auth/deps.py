@@ -84,3 +84,13 @@ def get_cluster_scope(
     from app.services.cluster_access import ClusterScope, hidden_cluster_ids
 
     return ClusterScope(hidden_cluster_ids(db, user))
+
+
+def get_tenant_scope(
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """업무·지식 데이터용 — 사용자별 테넌트 가시 범위(``services.tenant_scope.TenantScope``)."""
+    from app.services.tenant_scope import TenantScope, user_tenant_ids
+
+    return TenantScope(is_admin=user.role == "admin", tenant_ids=user_tenant_ids(db, user))
