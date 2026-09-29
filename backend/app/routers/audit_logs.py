@@ -27,6 +27,9 @@ def list_audit_logs(
     target_type: str | None = Query(None),
     actor_username: str | None = Query(None),
     status: str | None = Query(None),
+    tenant_id: str | None = Query(
+        None, description="귀속 테넌트 필터 — 테넌트 id, 또는 'none' 이면 귀속 테넌트가 없는 행"
+    ),
     date_from: datetime | None = Query(None),
     date_to: datetime | None = Query(None),
 ):
@@ -43,6 +46,10 @@ def list_audit_logs(
         q = q.filter(AuditLog.actor_username == actor_username)
     if status:
         q = q.filter(AuditLog.status == status)
+    if tenant_id == "none":
+        q = q.filter(AuditLog.tenant_id.is_(None))
+    elif tenant_id:
+        q = q.filter(AuditLog.tenant_id == tenant_id)
     if date_from:
         q = q.filter(AuditLog.created_at >= date_from)
     if date_to:

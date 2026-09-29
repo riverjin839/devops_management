@@ -26,8 +26,13 @@ class AuditLog(Base):
     ip = Column(String(64), nullable=True)
     user_agent = Column(String(255), nullable=True)
     details = Column(JSONB, nullable=True)
+    # 멀티테넌시 5단계 — 이 행위가 귀속되는 테넌트 (services/audit_logger._resolve_tenant).
+    # FK 를 걸지 않는다: 테넌트가 삭제돼도 감사 기록은 그대로 남아야 한다. 이름은 스냅샷.
+    tenant_id = Column(String(36), nullable=True)
+    tenant_name = Column(String(100), nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False, index=True)
 
     __table_args__ = (
         Index("ix_audit_logs_action_created_at", "action", "created_at"),
+        Index("ix_audit_logs_tenant_created", "tenant_id", "created_at"),
     )

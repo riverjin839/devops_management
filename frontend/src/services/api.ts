@@ -191,6 +191,8 @@ export interface AuditLogQuery {
   targetType?: string;
   actorUsername?: string;
   status?: string;
+  /** 귀속 테넌트 id, 또는 'none'(귀속 없음) */
+  tenantId?: string;
   dateFrom?: string;
   dateTo?: string;
 }
@@ -206,6 +208,7 @@ export const auditLogsApi = {
     if (params.targetType) q.target_type = params.targetType;
     if (params.actorUsername) q.actor_username = params.actorUsername;
     if (params.status) q.status = params.status;
+    if (params.tenantId) q.tenant_id = params.tenantId;
     if (params.dateFrom) q.date_from = params.dateFrom;
     if (params.dateTo) q.date_to = params.dateTo;
     return api.get<import('@/types').AuditLogListResponse>('/audit-logs', { params: q });
@@ -1123,7 +1126,7 @@ export const tenantsApi = {
   // 업무·지식 데이터 "공유 범위" 선택지 — admin 은 전체, 그 외는 내가 속한 테넌트
   mine: () => api.get<TenantBrief[]>('/tenants/mine'),
   create: (data: { name: string; description?: string | null }) => api.post<Tenant>('/tenants', data),
-  update: (id: string, data: { name?: string; description?: string | null }) =>
+  update: (id: string, data: { name?: string; description?: string | null; maxConcurrentRuns?: number | null }) =>
     api.put<Tenant>(`/tenants/${id}`, data),
   remove: (id: string) => api.delete(`/tenants/${id}`),
   putMembers: (id: string, userIds: string[]) => api.put<Tenant>(`/tenants/${id}/members`, { userIds }),
@@ -1134,6 +1137,8 @@ export const tenantsApi = {
   putLlmRouting: (id: string, routing: import('@/types').TenantLlmRouting) =>
     api.put<Tenant>(`/tenants/${id}/llm-routing`, { routing }),
   llmUsage: () => api.get<import('@/types').TenantLlmUsage[]>('/tenants/llm-usage'),
+  // 멀티테넌시 5단계 — 상한을 지정한 테넌트별 실행 중·대기 중 백그라운드 실행 (admin)
+  runSlots: () => api.get<import('@/types').TenantRunSlots[]>('/tenants/run-slots'),
   myClusterAccess: () =>
     api.get<{ clusters: Record<string, ClusterAccessLevel | null> }>('/tenants/my-cluster-access'),
 };

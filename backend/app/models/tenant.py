@@ -14,7 +14,7 @@ exec/etcdctl/리소스 변경을 할 수 있었다. 이 모델은 "누가 어느
 import uuid
 from datetime import datetime
 
-from sqlalchemy import Column, DateTime, ForeignKey, String, Text, UniqueConstraint
+from sqlalchemy import Column, DateTime, ForeignKey, Integer, String, Text, UniqueConstraint
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 
 from app.database import Base
@@ -32,6 +32,10 @@ class Tenant(Base):
     # {purpose: {"primary": <profile>, "fallback": <profile|None>}} — 지정한 purpose 만 전역
     # llm_settings.routing 을 덮는다. 판정은 services/llm/service.py (llm_tenant_context).
     llm_routing = Column(JSONB, nullable=True)
+    # 멀티테넌시 5단계 — 이 테넌트 클러스터에 대해 동시에 도는 백그라운드 실행(배치잡·운영 점검·
+    # 점검 매트릭스 일괄 수행·심층 점검·효율화 적용) 상한. NULL/0 = 제한 없음.
+    # 판정은 services/tenant_concurrency.py.
+    max_concurrent_runs = Column(Integer, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 

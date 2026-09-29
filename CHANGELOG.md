@@ -10,6 +10,17 @@
 
 1.40.0 이후 main 에 병합된 변경 (다음 릴리스 후보).
 
+### Added
+- **테넌트별 백그라운드 실행 상한 · 감사 로그 테넌트 귀속 (멀티테넌시 5단계)**: Settings ▸ 테넌트 정보에 **동시 실행 상한**을
+  지정하면, 그 테넌트가 소유한 클러스터(operate 바인딩 우선)에 대한 배치잡·운영 점검·점검 매트릭스 일괄 수행·심층 점검·효율화
+  적용이 그 수만큼만 동시에 돈다. 넘치는 실행은 워커를 붙잡지 않고 15초마다 재시도하며 기다리고(최대 약 1시간, 점검 매트릭스는 stale 마감 전인 20분), 대기 사유는
+  각 실행 로그(효율화 run 로그·매트릭스 수행 메시지·운영 점검 항목 메시지)와 새 **실행 슬롯** 카드(실행 중/대기, 5초 갱신)에
+  보인다. 대기 초과 시 실행 이력에 실패로 남는다. 주기 모니터링·수집은 제한하지 않고, 상한이 없거나 Redis 가 없으면 제한 없음.
+  감사 로그 각 행에는 **귀속 테넌트**가 기록되고(대상 테넌트 → 클러스터 바인딩 → 행위자 단일 소속 순으로 추정, 이름 스냅샷),
+  Settings ▸ 감사 로그에 테넌트 열·필터가 생겼다. Backend: `services/tenant_concurrency.py`(`acquire_run_slot`, Redis ZSET
+  슬롯), `tenants.max_concurrent_runs`, `audit_logs.tenant_id`/`tenant_name`(`_safe_add_column`), `GET /tenants/run-slots`,
+  `GET /audit-logs?tenant_id=`. Frontend: `TenantManager` `TenantRunSlotsCard`, `AuditLogManager`.
+
 ## [1.40.0] - 2026-09-29
 
 ### Added

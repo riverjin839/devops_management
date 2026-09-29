@@ -15,6 +15,8 @@ class AuditLogOut(BaseModel):
     ip: str | None = None
     user_agent: str | None = None
     details: dict[str, Any] | None = None
+    tenant_id: str | None = None
+    tenant_name: str | None = None
     created_at: datetime
 
     class Config:
