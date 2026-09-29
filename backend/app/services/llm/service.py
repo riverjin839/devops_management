@@ -16,6 +16,8 @@ from __future__ import annotations
 import asyncio
 import logging
 import time
+from contextlib import contextmanager
+from contextvars import ContextVar
 from datetime import datetime
 from typing import Any, AsyncIterator, Optional
 
@@ -39,6 +41,57 @@ PURPOSES: tuple[str, ...] = (
 )
 
 _SETTINGS_CACHE_TTL_SECONDS = 60
+
+# ── 멀티테넌시 4단계: 요청 단위 테넌트 컨텍스트 ─────────────────────────────
+# 사용자 요청(예: Agent 채팅)이 LLM 을 부를 때 그 사용자의 테넌트를 담는다. 게이트웨이는
+# 이 값이 있으면 (1) 테넌트의 llm_routing 으로 purpose 라우팅을 덮고 (2) 사용량을 테넌트별로도
+# 집계한다. 호출 경로(agent_service/analyzers/…)마다 인자를 뚫지 않으려고 ContextVar 로 둔다.
+# Celery·배치 등 사용자 없는 호출은 None → 전역 라우팅·전역 집계만.
+# {"id": "<tenant uuid>", "name": str, "routing": {purpose: {primary, fallback}}}
+_llm_tenant: ContextVar[Optional[dict]] = ContextVar("llm_tenant", default=None)
+
+# 테넌트 오버라이드를 허용하지 않는 purpose — 임베딩 모델이 바뀌면 pgvector 에 저장된
+# 기존 벡터와 비교가 깨진다(차원·공간 불일치).
+TENANT_ROUTING_EXCLUDED: frozenset[str] = frozenset({"embedding"})
+
+
+@contextmanager
+def llm_tenant_context(tenant: Optional[dict]):
+    """``with llm_tenant_context(t): await llm_service.chat_for_purpose(...)`` — t 가 None 이면 no-op."""
+    token = _llm_tenant.set(tenant)
+    try:
+        yield
+    finally:
+        try:
+            _llm_tenant.reset(token)
+        except ValueError:
+            # 스트리밍 제너레이터가 클라이언트 끊김으로 다른 컨텍스트에서 닫힐 때 — 그 경우
+            # 토큰 복원 대신 비워 둔다(요청 태스크 단위라 다른 요청으로 새지 않는다).
+            _llm_tenant.set(None)
+
+
+def current_llm_tenant() -> Optional[dict]:
+    return _llm_tenant.get()
+
+
+def effective_route(cfg: dict, purpose: str) -> dict:
+    """전역 라우팅 위에 현재 테넌트의 오버라이드를 얹은 purpose 라우팅.
+
+    오버라이드가 존재하지 않는 프로필을 가리키면(프로필 삭제 등) 무시하고 전역값을 쓴다.
+    """
+    route = cfg["routing"].get(purpose) or cfg["routing"]["chat"]
+    tenant = _llm_tenant.get()
+    if not tenant or purpose in TENANT_ROUTING_EXCLUDED:
+        return route
+    ov = (tenant.get("routing") or {}).get(purpose)
+    if not isinstance(ov, dict):
+        return route
+    names = {p["name"] for p in cfg["profiles"]}
+    primary = ov.get("primary")
+    if primary not in names:
+        return route
+    fallback = ov.get("fallback")
+    return {"primary": primary, "fallback": fallback if (fallback in names and fallback != primary) else None}
 
 _redis_client = None
 
@@ -283,7 +336,7 @@ class LLMService:
         # 시크릿 마스킹 — 게이트웨이 진입점에서 일괄 적용 (호출부 누락 방지).
         from app.services.llm.masking import mask_secrets
         prompt = mask_secrets(prompt)
-        route = cfg["routing"].get(purpose) or cfg["routing"]["chat"]
+        route = effective_route(cfg, purpose)
         candidates = [route.get("primary"), route.get("fallback")]
         last: Optional[LLMResult] = None
         for name in candidates:
@@ -328,7 +381,7 @@ class LLMService:
             system = get_system_prompt(purpose, cfg.get("language", "ko"))
         from app.services.llm.masking import mask_secrets
         prompt = mask_secrets(prompt)
-        route = cfg["routing"].get(purpose) or cfg["routing"]["chat"]
+        route = effective_route(cfg, purpose)
         candidates = [route.get("primary"), route.get("fallback")]
 
         last_error: Optional[LLMStreamChunk] = None
@@ -481,6 +534,18 @@ class LLMService:
             if result.completion_tokens:
                 pipe.hincrby(key, "completion_tokens", int(result.completion_tokens))
             pipe.expire(key, 25 * 3600)
+            tenant = _llm_tenant.get()
+            if tenant and tenant.get("id"):
+                # 테넌트별 사용량(멀티테넌시 4단계) — 비용 귀속용. 프로필·purpose 는 합산한다.
+                tkey = f"llm:tstats:{tenant['id']}:{bucket}"
+                pipe.hincrby(tkey, "count", 1)
+                if result.status != "ok":
+                    pipe.hincrby(tkey, "errors", 1)
+                if result.prompt_tokens:
+                    pipe.hincrby(tkey, "prompt_tokens", int(result.prompt_tokens))
+                if result.completion_tokens:
+                    pipe.hincrby(tkey, "completion_tokens", int(result.completion_tokens))
+                pipe.expire(tkey, 25 * 3600)
             pipe.execute()
         except Exception:  # noqa: BLE001
             pass
@@ -519,6 +584,31 @@ class LLMService:
         except Exception:  # noqa: BLE001
             return out
         out.sort(key=lambda x: (x["bucket"], x["profile"], x["purpose"]), reverse=True)
+        return out
+
+
+    @staticmethod
+    def tenant_usage_stats() -> dict[str, dict]:
+        """최근 24h 테넌트별 합계 — ``GET /tenants/llm-usage`` 응답 데이터 (fail-open)."""
+        client = _get_redis()
+        if not client:
+            return {}
+        out: dict[str, dict] = {}
+        try:
+            for raw_key in client.scan_iter(match="llm:tstats:*", count=500):
+                key = raw_key.decode() if isinstance(raw_key, bytes) else str(raw_key)
+                parts = key.split(":")
+                if len(parts) != 4:
+                    continue
+                tenant_id = parts[2]
+                h = client.hgetall(key)
+                agg = out.setdefault(tenant_id, {"count": 0, "errors": 0, "prompt_tokens": 0, "completion_tokens": 0})
+                for k, v in h.items():
+                    name = k.decode() if isinstance(k, bytes) else k
+                    if name in agg:
+                        agg[name] += int(v.decode() if isinstance(v, bytes) else v)
+        except Exception:  # noqa: BLE001
+            return out
         return out
 
 

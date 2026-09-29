@@ -254,6 +254,9 @@ def _run_migrations():
     # 바뀌므로 막는다(routers/tenants.py 가 409 로 사유를 먼저 알려준다).
     from app.services.tenant_scope import TENANT_SCOPED_TABLES
     _existing_tables = set(inspector.get_table_names())
+    if "tenants" in _existing_tables:
+        # 멀티테넌시 4단계 — 테넌트별 LLM 라우팅 오버라이드
+        _safe_add_column("tenants", "llm_routing", "JSONB")
     for _t in TENANT_SCOPED_TABLES:
         if _t in _existing_tables:
             _safe_add_column(_t, "tenant_id", "UUID REFERENCES tenants(id) ON DELETE RESTRICT")

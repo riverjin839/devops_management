@@ -21,7 +21,7 @@ from app.models.tenant import TenantMember
 from app.models.user import User
 
 # tenant_id 컬럼을 가진 테이블 — main.py 마이그레이션·테넌트 삭제 가드가 같은 목록을 쓴다.
-TENANT_SCOPED_TABLES = ("projects", "work_items", "work_guides", "ops_notes", "mindmaps")
+TENANT_SCOPED_TABLES = ("projects", "work_items", "work_guides", "ops_notes", "mindmaps", "metric_cards")
 
 
 def user_tenant_ids(db: Session, user: User) -> frozenset[UUID]:
@@ -87,3 +87,24 @@ def work_item_visible(scope: TenantScope, db: Session, item) -> bool:
 
     proj = db.query(Project.tenant_id).filter(Project.id == item.project_id).first()
     return proj is None or scope.visible(proj.tenant_id)
+
+
+def resolve_llm_tenant(db: Session, user: User) -> Optional[dict]:
+    """사용자 요청의 LLM 테넌트 컨텍스트(멀티테넌시 4단계) — ``llm_tenant_context`` 에 넘긴다.
+
+    사용자가 여러 테넌트에 속하면 **LLM 라우팅을 지정한 테넌트 중 이름순 첫 번째**를, 지정한
+    테넌트가 없으면 이름순 첫 테넌트를 쓴다(사용량 귀속만, 라우팅은 전역). 소속이 없으면 None.
+    """
+    from app.models.tenant import Tenant
+
+    rows = (
+        db.query(Tenant)
+        .join(TenantMember, TenantMember.tenant_id == Tenant.id)
+        .filter(TenantMember.user_id == user.id)
+        .order_by(Tenant.name)
+        .all()
+    )
+    if not rows:
+        return None
+    chosen = next((t for t in rows if t.llm_routing), rows[0])
+    return {"id": str(chosen.id), "name": chosen.name, "routing": chosen.llm_routing or {}}

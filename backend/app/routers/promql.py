@@ -14,7 +14,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import Response
 from sqlalchemy.orm import Session
 
-from app.auth.deps import require_operator
+from app.auth.deps import get_tenant_scope, require_operator
 from app.database import get_db
 from app.models.metric_card import MetricCard
 from app.models.user import User
@@ -29,8 +29,17 @@ from app.schemas.metric_card import (
 )
 from app.services.prometheus_service import prometheus_service
 from app.services.grafana_service import grafana_service
+from app.services.tenant_scope import TenantScope
 
 router = APIRouter(prefix="/promql", tags=["promql"])
+
+
+def _card_or_404(db: Session, card_id: UUID, scope: TenantScope) -> MetricCard:
+    """카드 단건 조회 + 테넌트 가시 범위(멀티테넌시 4단계). 안 보이면 존재를 숨기도록 404."""
+    card = db.query(MetricCard).filter(MetricCard.id == card_id).first()
+    if not card or not scope.visible(card.tenant_id):
+        raise HTTPException(status_code=404, detail="Metric card not found")
+    return card
 
 # ── /query/all 캐시 ──────────────────────────────────────────────────
 # 대시보드 탭이 여러 개 열려 있으면 각자 30초 폴링 → 카드 수 × 탭 수만큼 실
@@ -54,9 +63,10 @@ def list_cards(
     category: Optional[str] = None,
     enabled_only: bool = True,
     db: Session = Depends(get_db),
+    scope: TenantScope = Depends(get_tenant_scope),
 ):
-    """List all metric cards, optionally filtered by category."""
-    q = db.query(MetricCard)
+    """List all metric cards, optionally filtered by category. 볼 수 없는 테넌트 카드는 제외."""
+    q = scope.apply(db.query(MetricCard), MetricCard.tenant_id)
     if enabled_only:
         q = q.filter(MetricCard.enabled == True)  # noqa: E712
     if category:
@@ -66,11 +76,9 @@ def list_cards(
 
 
 @router.get("/cards/{card_id}", response_model=MetricCardResponse)
-def get_card(card_id: UUID, db: Session = Depends(get_db)):
-    card = db.query(MetricCard).filter(MetricCard.id == card_id).first()
-    if not card:
-        raise HTTPException(status_code=404, detail="Metric card not found")
-    return card
+def get_card(card_id: UUID, db: Session = Depends(get_db),
+             scope: TenantScope = Depends(get_tenant_scope)):
+    return _card_or_404(db, card_id, scope)
 
 
 @router.post("/cards", response_model=MetricCardResponse)
@@ -78,7 +86,9 @@ def create_card(
     body: MetricCardCreate,
     db: Session = Depends(get_db),
     _: User = Depends(require_operator),
+    scope: TenantScope = Depends(get_tenant_scope),
 ):
+    scope.ensure_assignable(body.tenant_id)
     card = MetricCard(**body.model_dump())
     db.add(card)
     db.commit()
@@ -93,10 +103,11 @@ def update_card(
     body: MetricCardUpdate,
     db: Session = Depends(get_db),
     _: User = Depends(require_operator),
+    scope: TenantScope = Depends(get_tenant_scope),
 ):
-    card = db.query(MetricCard).filter(MetricCard.id == card_id).first()
-    if not card:
-        raise HTTPException(status_code=404, detail="Metric card not found")
+    card = _card_or_404(db, card_id, scope)
+    if "tenant_id" in body.model_fields_set:
+        scope.ensure_assignable(body.tenant_id)
     for key, value in body.model_dump(exclude_unset=True).items():
         setattr(card, key, value)
     db.commit()
@@ -110,10 +121,9 @@ def delete_card(
     card_id: UUID,
     db: Session = Depends(get_db),
     _: User = Depends(require_operator),
+    scope: TenantScope = Depends(get_tenant_scope),
 ):
-    card = db.query(MetricCard).filter(MetricCard.id == card_id).first()
-    if not card:
-        raise HTTPException(status_code=404, detail="Metric card not found")
+    card = _card_or_404(db, card_id, scope)
     db.delete(card)
     db.commit()
     _invalidate_query_all_cache()
@@ -128,16 +138,18 @@ def delete_card(
 # Prometheus Insights 섹션이 항상 "Loading..." 에 멈춰있던 버그였다.
 
 @router.get("/query/all", response_model=list[MetricQueryResult])
-async def query_all_cards(db: Session = Depends(get_db)):
+async def query_all_cards(db: Session = Depends(get_db),
+                          scope: TenantScope = Depends(get_tenant_scope)):
     """Execute all enabled metric cards and return results.
 
     카드를 병렬로 조회(과거엔 직렬 await 라 카드 하나가 느리면 응답 전체가 그만큼
-    늦어졌다) + 짧은 TTL 캐시(동시 폴링 흡수).
+    늦어졌다) + 짧은 TTL 캐시(동시 폴링 흡수). 캐시는 전체 카드 결과를 담고, 응답
+    직전에 사용자 테넌트 범위로 거른다 — 캐시를 사용자별로 쪼개지 않기 위함.
     """
     now = time.monotonic()
     cached = _query_all_cache["data"]
     if cached is not None and now - _query_all_cache["ts"] < _QUERY_ALL_CACHE_TTL:
-        return cached
+        return _visible_results(db, cached, scope)
 
     cards = (
         db.query(MetricCard)
@@ -152,28 +164,33 @@ async def query_all_cards(db: Session = Depends(get_db)):
     ]
     _query_all_cache["ts"] = now
     _query_all_cache["data"] = results
-    return results
+    return _visible_results(db, results, scope)
+
+
+def _visible_results(db: Session, results: list, scope: TenantScope) -> list:
+    if scope.is_admin:
+        return results
+    visible = {cid for (cid,) in scope.apply(db.query(MetricCard.id), MetricCard.tenant_id).all()}
+    return [r for r in results if r.card_id in visible]
 
 
 @router.get("/query/{card_id}", response_model=MetricQueryResult)
-async def query_card(card_id: UUID, db: Session = Depends(get_db)):
+async def query_card(card_id: UUID, db: Session = Depends(get_db),
+                     scope: TenantScope = Depends(get_tenant_scope)):
     """Execute the PromQL query for a specific card and return the result."""
-    card = db.query(MetricCard).filter(MetricCard.id == card_id).first()
-    if not card:
-        raise HTTPException(status_code=404, detail="Metric card not found")
+    card = _card_or_404(db, card_id, scope)
 
     result = await prometheus_service.query(card.promql)
     return MetricQueryResult(card_id=card.id, **result)
 
 
 @router.get("/query/{card_id}/sparkline", response_model=MetricSparklineResult)
-async def query_card_sparkline(card_id: UUID, db: Session = Depends(get_db)):
+async def query_card_sparkline(card_id: UUID, db: Session = Depends(get_db),
+                               scope: TenantScope = Depends(get_tenant_scope)):
     """카드의 PromQL 을 최근 1시간 range query 로 실행 — KPI 카드 하단 Sparkline 용
     (DESIGN_SYSTEM §5②). Prometheus 미연결/쿼리 실패는 fail-safe 로 offline/error 반환,
     500 을 내지 않는다(PrometheusService 규약)."""
-    card = db.query(MetricCard).filter(MetricCard.id == card_id).first()
-    if not card:
-        raise HTTPException(status_code=404, detail="Metric card not found")
+    card = _card_or_404(db, card_id, scope)
 
     now = time.time()
     result = await prometheus_service.query_range(card.promql, now - 3600, now, "5m")
@@ -214,15 +231,14 @@ async def prometheus_health():
 
 
 @router.get("/cards/{card_id}/snapshot", response_class=Response)
-async def snapshot_card(card_id: UUID, db: Session = Depends(get_db)):
+async def snapshot_card(card_id: UUID, db: Session = Depends(get_db),
+                        scope: TenantScope = Depends(get_tenant_scope)):
     """Grafana Image Renderer 를 통해 패널 PNG 스냅샷 반환.
 
     MetricCard.grafana_panel_url 이 설정돼 있어야 한다 (예: /d-solo/abc/dash?panelId=2).
     renderer 오프라인 또는 URL 미설정 시 503 반환.
     """
-    card = db.query(MetricCard).filter(MetricCard.id == card_id).first()
-    if not card:
-        raise HTTPException(status_code=404, detail="Metric card not found")
+    card = _card_or_404(db, card_id, scope)
     if not card.grafana_panel_url:
         raise HTTPException(status_code=400, detail="grafana_panel_url not configured for this card")
     png = await grafana_service.render_panel(card.grafana_panel_url)

@@ -15,7 +15,7 @@ import uuid
 from datetime import datetime
 
 from sqlalchemy import Column, DateTime, ForeignKey, String, Text, UniqueConstraint
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.dialects.postgresql import JSONB, UUID
 
 from app.database import Base
 
@@ -28,6 +28,10 @@ class Tenant(Base):
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     name = Column(String(100), nullable=False, unique=True)
     description = Column(Text, nullable=True)
+    # 멀티테넌시 4단계 — 이 테넌트 멤버가 쓰는 LLM 라우팅 오버라이드.
+    # {purpose: {"primary": <profile>, "fallback": <profile|None>}} — 지정한 purpose 만 전역
+    # llm_settings.routing 을 덮는다. 판정은 services/llm/service.py (llm_tenant_context).
+    llm_routing = Column(JSONB, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 

@@ -1130,6 +1130,10 @@ export const tenantsApi = {
   putBindings: (id: string, bindings: { clusterId: string; access: ClusterAccessLevel }[]) =>
     api.put<Tenant>(`/tenants/${id}/bindings`, { bindings }),
   // 로그인 사용자 기준 — 키: 제한된 클러스터 id, 값: 'read' | 'operate' | null(접근 불가)
+  // 멀티테넌시 4단계 — 테넌트 LLM 라우팅 오버라이드 / 테넌트별 24h 사용량 (admin)
+  putLlmRouting: (id: string, routing: import('@/types').TenantLlmRouting) =>
+    api.put<Tenant>(`/tenants/${id}/llm-routing`, { routing }),
+  llmUsage: () => api.get<import('@/types').TenantLlmUsage[]>('/tenants/llm-usage'),
   myClusterAccess: () =>
     api.get<{ clusters: Record<string, ClusterAccessLevel | null> }>('/tenants/my-cluster-access'),
 };

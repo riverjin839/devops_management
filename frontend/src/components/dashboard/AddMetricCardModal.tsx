@@ -2,7 +2,7 @@ import { useEffect, useId, useMemo, useState } from 'react';
 import { X, FlaskConical, CheckCircle2, AlertTriangle, BookOpen, ChevronDown, ChevronUp } from 'lucide-react';
 import { useCreateMetricCard, useTestPromql, useUpdateMetricCard } from '@/hooks/useMetricCards';
 import { MetricCard } from '@/types';
-import { useToast } from '@/components/common';
+import { TenantScopeSelect, useToast } from '@/components/common';
 import { useModalA11y } from '@/components/common/useModalA11y';
 import { formatApiError } from '@/lib/utils';
 
@@ -154,6 +154,7 @@ export function AddMetricCardModal({ isOpen, onClose, editingCard }: AddMetricCa
   const [category, setCategory] = useState('general');
   const [thresholds, setThresholds] = useState('');
   const [grafanaPanelUrl, setGrafanaPanelUrl] = useState('');
+  const [tenantId, setTenantId] = useState<string | null>(null);
 
   const titleId = useId();
   const iconId = useId();
@@ -206,6 +207,7 @@ export function AddMetricCardModal({ isOpen, onClose, editingCard }: AddMetricCa
       setCategory(editingCard.category);
       setThresholds(editingCard.thresholds || '');
       setGrafanaPanelUrl(editingCard.grafanaPanelUrl || '');
+      setTenantId(editingCard.tenantId ?? null);
       setTestStatus('idle');
       setTestResult('');
       return;
@@ -251,6 +253,7 @@ export function AddMetricCardModal({ isOpen, onClose, editingCard }: AddMetricCa
       grafanaPanelUrl: grafanaPanelUrl.trim() || undefined,
       sortOrder: editingCard?.sortOrder ?? 99,
       enabled: editingCard?.enabled ?? true,
+      tenantId,
     };
 
     setSaving(true);
@@ -286,6 +289,7 @@ export function AddMetricCardModal({ isOpen, onClose, editingCard }: AddMetricCa
 
 
   const resetForm = () => {
+    setTenantId(null);
     setTitle('');
     setDescription('');
     setIcon('📊');
@@ -551,6 +555,14 @@ export function AddMetricCardModal({ isOpen, onClose, editingCard }: AddMetricCa
               className="w-full px-3 py-2 bg-secondary border border-border rounded-lg text-sm font-mono focus:outline-none focus:ring-2 focus:ring-primary/50"
             />
           </div>
+
+          {/* 공유 범위 (멀티테넌시) — 테넌트가 없으면 렌더하지 않는다 */}
+          <TenantScopeSelect
+            value={tenantId}
+            onChange={setTenantId}
+            labelClassName="block text-sm font-medium mb-1"
+            selectClassName="w-full px-3 py-2 bg-secondary border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
+          />
 
           <div className="flex gap-3 pt-2">
             <button

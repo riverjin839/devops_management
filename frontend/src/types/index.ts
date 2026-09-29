@@ -428,6 +428,8 @@ export interface MetricCard {
   grafanaPanelUrl?: string;
   sortOrder: number;
   enabled: boolean;
+  /** 멀티테넌시 4단계 — null/미지정 = 전체 공유, 값이 있으면 그 테넌트 멤버·admin 대시보드에만 보인다. */
+  tenantId?: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -5508,12 +5510,25 @@ export interface TenantBrief {
   name: string;
 }
 
+/** 테넌트 LLM 라우팅 오버라이드 — purpose(camelCase) → 프로필 이름 (멀티테넌시 4단계). */
+export type TenantLlmRouting = Record<string, { primary?: string | null; fallback?: string | null }>;
+
+export interface TenantLlmUsage {
+  tenantId: string;
+  tenantName?: string | null;
+  count: number;
+  errors: number;
+  promptTokens: number;
+  completionTokens: number;
+}
+
 export interface Tenant {
   id: string;
   name: string;
   description?: string | null;
   members: TenantMember[];
   bindings: TenantClusterBinding[];
+  llmRouting?: TenantLlmRouting;
   createdAt?: string | null;
   updatedAt?: string | null;
 }

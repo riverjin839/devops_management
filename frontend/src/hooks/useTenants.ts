@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { tenantsApi } from '@/services/api';
-import type { ClusterAccessLevel } from '@/types';
+import type { ClusterAccessLevel, TenantLlmRouting } from '@/types';
 
 const KEY = ['tenants'] as const;
 
@@ -51,5 +51,19 @@ export function useTenantMutations() {
         tenantsApi.putBindings(id, bindings),
       onSuccess: invalidate,
     }),
+    putLlmRouting: useMutation({
+      mutationFn: ({ id, routing }: { id: string; routing: TenantLlmRouting }) =>
+        tenantsApi.putLlmRouting(id, routing),
+      onSuccess: invalidate,
+    }),
   };
+}
+
+/** 테넌트별 최근 24h LLM 사용량 (admin) — Redis 미가용이면 빈 목록. */
+export function useTenantLlmUsage() {
+  return useQuery({
+    queryKey: ['tenants', 'llm-usage'],
+    queryFn: () => tenantsApi.llmUsage().then((r) => r.data),
+    refetchInterval: 60_000,
+  });
 }
