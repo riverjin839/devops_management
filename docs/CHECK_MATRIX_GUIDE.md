@@ -55,6 +55,16 @@ unit 도 여기서 채워진다(구버전 DB 는 부팅 시 자동 보강).
 차트 토큰 프리셋(`chart-1`..`chart-8`)으로 저장된다 — 다크/라이트 테마를 자동으로 따라간다.
 **행 순서는 이름 왼쪽 그립(⋮⋮)을 드래그**해서 바꾼다.
 
+**대상 중복 표시(`target_key`, D-062)** — `source_type`/`source_ref` 가 달라도 실제로는 같은
+컴포넌트를 가리키는 행이 있다(예: `etcd_defrag`(deep_check, kubectl/스냅샷)와 `etcd-leader`
+애드온(k8s_api) 이 둘 다 etcd 를 점검). `category` 와 같은 철학의 자유 문자열
+(`target_key`, 항목 수정에서 편집)을 같은 값으로 맞추면, 두 행 이상이 **서로 다른 실행기술**로
+같은 대상을 점검할 때만 매트릭스/항목 상세에 "N개 실행기술 중복" 배지가 뜬다(같은 대상이라도
+실행기술이 전부 같으면 — 예: 수동 입력 행 2개 — 중복 경고를 띄우지 않는다, 판정은
+`check_matrix_service._target_duplicate_map()`). 값이 없으면 판정 대상에서 빠질 뿐 다른 동작에
+영향 없음 — 시드는 실제로 겹치는 것이 확인된 조합(`etcd`/`node`/`coredns`/`certificate`)만
+기본값으로 채우고, 나머지는 운영자가 화면에서 직접 채운다(추측 강요 금지).
+
 | 소스 | 실행 주체 | cron 위치 | 대상 해석 |
 |---|---|---|---|
 | `core_bundle` | `DailyChecker.run_daily_check()` | 클러스터 열 (`Cluster.check_cron_expr`) | 클러스터 자체 |
@@ -422,7 +432,7 @@ erDiagram
 
 | 테이블 | 역할 | 핵심 컬럼 | 인덱스/제약 |
 |---|---|---|---|
-| `check_matrix_items` | 행 카탈로그 | `source_type`(enum: core_bundle/deep_check/addon/batch_job/playbook/manual) · `source_ref`(논리 키) · `definition_id`(행 전용 deep_check 정의, NULL=공유) · `unit`(셀 값 단위) · `is_system` · `enabled` · `sort_order` | `definition_id` 인덱스 + FK `ON DELETE SET NULL` |
+| `check_matrix_items` | 행 카탈로그 | `source_type`(enum: core_bundle/deep_check/addon/batch_job/playbook/manual) · `source_ref`(논리 키) · `definition_id`(행 전용 deep_check 정의, NULL=공유) · `target_key`(실제 점검 대상 자유 문자열, D-062 대상 중복 표시) · `unit`(셀 값 단위) · `is_system` · `enabled` · `sort_order` | `definition_id` 인덱스 + FK `ON DELETE SET NULL` |
 | `check_matrix_schedules` | 셀 cron | `cron_expr`(NULL=미스케줄) · `enabled` · `last_run_at`(디스패처 anchor) | `uq(item_id, cluster_id)` |
 | `check_matrix_results` | 셀 최신 스냅샷 | `status` · `value` · `message` · `details`(JSONB) · `checked_at` — **upsert**(`ON CONFLICT`) | `uq(item_id, cluster_id)` |
 | `check_matrix_result_logs` | 값 이력 (append-only) | Result 와 동일 컬럼 — 추이 차트/변경 이력의 원천 | `(item_id, cluster_id, checked_at)` + `checked_at` 단독(퍼지 스캔용) |

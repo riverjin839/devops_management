@@ -100,7 +100,7 @@ AI 어시스턴트 + 사람 개발자용 — 기능 → 파일 경로와 자주 
 ### 모니터링 / 점검
 | 기능 | 위치 |
 |---|---|
-| 홈(플랫폼 현황) + check-matrix | `backend/app/routers/check_matrix.py` + `services/check_matrix_service.py`(그리드/항목상세/실행/수행로그, source_type: core_bundle/deep_check/addon/**batch_job/playbook**(D-066)/manual) · `services/check_matrix_runbook.py`(셀별 실행 계획 — 실제 나가는 명령) + `models/check_matrix.py`(`CheckMatrixRun` 수행 로그 포함) → `frontend/src/pages/HomePage.tsx` + `components/platform-status/` (매뉴얼: `docs/CHECK_MATRIX_GUIDE.md`) |
+| 홈(플랫폼 현황) + check-matrix | `backend/app/routers/check_matrix.py` + `services/check_matrix_service.py`(그리드/항목상세/실행/수행로그, source_type: core_bundle/deep_check/addon/**batch_job/playbook**(D-066)/manual, `target_key` 대상 중복 판정 D-062) · `services/check_matrix_runbook.py`(셀별 실행 계획 — 실제 나가는 명령) + `models/check_matrix.py`(`CheckMatrixRun` 수행 로그 포함) → `frontend/src/pages/HomePage.tsx` + `components/platform-status/`(`ExecTechBadge`/`TargetDuplicateBadge`) (매뉴얼: `docs/CHECK_MATRIX_GUIDE.md`) |
 | 커스텀 점검 카드 (마법사에서 직접 만들기) | `check_matrix.py`(`POST /items` 의 `new_playbook`·`dedicated_definition`, `GET\|PUT /items/{id}/source-config`, `POST /items/preview` 의 플레이북 본문 + `check_mode`) + `check_matrix_service.py`(`create_playbook_card_targets` → `AnsiblePlaybookFile`+클러스터별 `Playbook`, `create_dedicated_definition`/`resolve_definition_for_item` → 행 전용 `DeepCheckDefinition`) + `services/playbook_executor.py`(`check_mode` = `ansible --check`) → `components/platform-status/CheckMatrixItemFormModal.tsx` |
 | 클러스터 대시보드 | `backend/app/routers/core_bundle_router.py` · `history.py` → `frontend/src/pages/Dashboard.tsx` (`/cluster-overview`) |
 | 일일 점검 리뷰 | `core_bundle_router.py` → `frontend/src/pages/DailyCheckReview.tsx` |

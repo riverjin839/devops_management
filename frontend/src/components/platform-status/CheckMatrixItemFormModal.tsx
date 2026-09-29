@@ -13,7 +13,7 @@ import type {
 } from '@/types';
 import { formatApiError } from '@/lib/utils';
 import { useModalA11y } from '@/components/common/useModalA11y';
-import { ROW_COLOR_PRESETS, CATEGORY_SUGGESTIONS } from './rowColors';
+import { ROW_COLOR_PRESETS, CATEGORY_SUGGESTIONS, TARGET_SUGGESTIONS } from './rowColors';
 import { EXEC_TECH_META } from './execTechMeta';
 
 interface Props {
@@ -185,6 +185,8 @@ function EditItemForm({ isOpen, onClose, editingItem }: { isOpen: boolean; onClo
   const unitId = useId();
   const categoryId = useId();
   const categoryListId = useId();
+  const targetKeyId = useId();
+  const targetKeyListId = useId();
   const checkTypeId = useId();
   const addonTypeId = useId();
   const titleId = useId();
@@ -196,6 +198,7 @@ function EditItemForm({ isOpen, onClose, editingItem }: { isOpen: boolean; onClo
   const [sourceType, setSourceType] = useState<CheckMatrixSourceType>('manual');
   const [sourceRef, setSourceRef] = useState('');
   const [category, setCategory] = useState('');
+  const [targetKey, setTargetKey] = useState('');
   const [color, setColor] = useState('');
   const [enabled, setEnabled] = useState(true);
   // 실행 설정(임계값/파라미터) — 기본 등록 카드도 여기서 확인·수정할 수 있어야 한다는 요건.
@@ -214,6 +217,7 @@ function EditItemForm({ isOpen, onClose, editingItem }: { isOpen: boolean; onClo
     setSourceType(editingItem.sourceType ?? 'manual');
     setSourceRef(editingItem.sourceRef ?? '');
     setCategory(editingItem.category ?? '');
+    setTargetKey(editingItem.targetKey ?? '');
     setColor(editingItem.color ?? '');
     setEnabled(editingItem.enabled ?? true);
   }, [isOpen, editingItem]);
@@ -252,6 +256,7 @@ function EditItemForm({ isOpen, onClose, editingItem }: { isOpen: boolean; onClo
       sourceType,
       sourceRef: sourceType === 'manual' ? null : sourceRef,
       category: category.trim() || null,
+      targetKey: targetKey.trim() || null,
       color: color || null,
       enabled,
     };
@@ -376,6 +381,28 @@ function EditItemForm({ isOpen, onClose, editingItem }: { isOpen: boolean; onClo
             ))}
           </div>
         </div>
+      </div>
+
+      <div>
+        <label htmlFor={targetKeyId} className="text-xs font-medium text-muted-foreground mb-1 block">
+          점검 대상 (선택 — 대상 중복 표시용)
+        </label>
+        <input
+          id={targetKeyId}
+          type="text"
+          list={targetKeyListId}
+          value={targetKey}
+          onChange={(e) => setTargetKey(e.target.value)}
+          placeholder="예: etcd, node, api-server"
+          className="w-full text-sm border border-border rounded-xl px-3 py-2 bg-background"
+        />
+        <datalist id={targetKeyListId}>
+          {TARGET_SUGGESTIONS.map((t) => <option key={t} value={t}>{t}</option>)}
+        </datalist>
+        <p className="text-[11px] text-muted-foreground mt-1">
+          같은 값을 가진 다른 실행 방식 행이 있으면 매트릭스에 "중복 점검" 배지가 뜹니다(같은
+          실행 방식끼리는 표시하지 않음).
+        </p>
       </div>
 
       {isSystem ? (
@@ -531,6 +558,8 @@ function RegisterItemWizard({ isOpen, onClose }: { isOpen: boolean; onClose: () 
   const unitId = useId();
   const categoryId = useId();
   const categoryListId = useId();
+  const targetKeyId = useId();
+  const targetKeyListId = useId();
   const clusterFieldId = useId();
   const titleId = useId();
   const dialogRef = useModalA11y(isOpen, onClose);
@@ -559,6 +588,7 @@ function RegisterItemWizard({ isOpen, onClose }: { isOpen: boolean; onClose: () 
   const [description, setDescription] = useState('');
   const [unit, setUnit] = useState('');
   const [category, setCategory] = useState('');
+  const [targetKey, setTargetKey] = useState('');
   const [color, setColor] = useState('');
   const [enabled, setEnabled] = useState(true);
   const [thresholdDraft, setThresholdDraft] = useState<Record<string, string>>({});
@@ -573,7 +603,7 @@ function RegisterItemWizard({ isOpen, onClose }: { isOpen: boolean; onClose: () 
     setStepIdx(0);
     setExecTech(null);
     setCatalogItem(null);
-    setName(''); setDescription(''); setUnit(''); setCategory(''); setColor(''); setEnabled(true);
+    setName(''); setDescription(''); setUnit(''); setCategory(''); setTargetKey(''); setColor(''); setEnabled(true);
     setThresholdDraft({}); setParamDraft({});
     setAddonConfigRows([{ key: '', value: '' }]);
     setTestClusterId(''); setTestResult(null); setTestAttempted(false);
@@ -763,6 +793,7 @@ function RegisterItemWizard({ isOpen, onClose }: { isOpen: boolean; onClose: () 
           ? pbName.trim()
           : (catalogItem?.sourceType === 'manual' || !catalogItem ? null : catalogItem.sourceRef),
         category: category.trim() || null,
+        targetKey: targetKey.trim() || null,
         color: color || null,
         enabled,
         thresholds: Object.keys(thresholds).length ? thresholds : undefined,
@@ -1129,32 +1160,49 @@ function RegisterItemWizard({ isOpen, onClose }: { isOpen: boolean; onClose: () 
               </datalist>
             </div>
             <div>
-              <span className="text-xs font-medium text-muted-foreground mb-1 block">행 배경 색 (선택)</span>
-              <div className="flex flex-wrap items-center gap-1.5 pt-1">
+              <label htmlFor={targetKeyId} className="text-xs font-medium text-muted-foreground mb-1 block">
+                점검 대상 (선택 — 대상 중복 표시용)
+              </label>
+              <input
+                id={targetKeyId}
+                type="text"
+                list={targetKeyListId}
+                value={targetKey}
+                onChange={(e) => setTargetKey(e.target.value)}
+                placeholder="예: etcd, node, api-server"
+                className="w-full text-sm border border-border rounded-xl px-3 py-2 bg-background"
+              />
+              <datalist id={targetKeyListId}>
+                {TARGET_SUGGESTIONS.map((t) => <option key={t} value={t}>{t}</option>)}
+              </datalist>
+            </div>
+          </div>
+          <div>
+            <span className="text-xs font-medium text-muted-foreground mb-1 block">행 배경 색 (선택)</span>
+            <div className="flex flex-wrap items-center gap-1.5 pt-1">
+              <button
+                type="button"
+                onClick={() => setColor('')}
+                title="무색"
+                aria-label="행 배경 색 없음"
+                className={`w-6 h-6 rounded-full border text-[11px] text-muted-foreground flex items-center justify-center ${
+                  color === '' ? 'border-primary ring-2 ring-primary/40' : 'border-border'
+                }`}
+              >
+                ×
+              </button>
+              {ROW_COLOR_PRESETS.map((p) => (
                 <button
+                  key={p.key}
                   type="button"
-                  onClick={() => setColor('')}
-                  title="무색"
-                  aria-label="행 배경 색 없음"
-                  className={`w-6 h-6 rounded-full border text-[11px] text-muted-foreground flex items-center justify-center ${
-                    color === '' ? 'border-primary ring-2 ring-primary/40' : 'border-border'
+                  onClick={() => setColor(p.key)}
+                  title={p.label}
+                  aria-label={`행 배경 색 ${p.label}`}
+                  className={`w-6 h-6 rounded-full ${p.swatch} ${
+                    color === p.key ? 'ring-2 ring-primary ring-offset-2 ring-offset-card' : ''
                   }`}
-                >
-                  ×
-                </button>
-                {ROW_COLOR_PRESETS.map((p) => (
-                  <button
-                    key={p.key}
-                    type="button"
-                    onClick={() => setColor(p.key)}
-                    title={p.label}
-                    aria-label={`행 배경 색 ${p.label}`}
-                    className={`w-6 h-6 rounded-full ${p.swatch} ${
-                      color === p.key ? 'ring-2 ring-primary ring-offset-2 ring-offset-card' : ''
-                    }`}
-                  />
-                ))}
-              </div>
+                />
+              ))}
             </div>
           </div>
         </div>
@@ -1345,6 +1393,7 @@ function RegisterItemWizard({ isOpen, onClose }: { isOpen: boolean; onClose: () 
               </div>
             )}
             {category && <div><span className="text-muted-foreground">영역</span> · {category}</div>}
+            {targetKey && <div><span className="text-muted-foreground">점검 대상</span> · {targetKey}</div>}
           </div>
           <label className="flex items-center gap-2 text-sm">
             <input type="checkbox" checked={enabled} onChange={(e) => setEnabled(e.target.checked)} />

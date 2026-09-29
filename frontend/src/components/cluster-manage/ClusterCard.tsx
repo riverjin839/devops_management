@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { Pencil, Trash2, Cpu, Network, AlertTriangle, RefreshCw, Loader2, Cable } from 'lucide-react';
+import { Pencil, Trash2, Cpu, Network, AlertTriangle, RefreshCw, Loader2, Cable, ShieldCheck } from 'lucide-react';
 import { MacCard } from '@/components/ui/MacCard';
 import type { Cluster } from '@/types';
 import { STATUS_STYLE, OVERLAP_COLORS } from './constants';
@@ -22,6 +22,9 @@ interface ClusterCardProps {
   /** 실제로 직접 겹치는 상대 클러스터명 — 그룹 배경색(hue)만으로는 "누구와" 겹치는지 알 수 없다 */
   overlapPeers?: string[];
   onAutoUpdate: (c: Cluster) => void;
+  /** 연결 검증 실행 — 단계별 결과는 페이지 실행 로그에 쌓인다 */
+  onVerify?: (c: Cluster) => void;
+  verifying?: boolean;
   /** 이 클러스터의 auto-update 진행 여부 — per-cluster 동시 진행 지원 (D-047) */
   autoUpdating: boolean;
   /** SSH 기반 NIC 수집(bond0/bond1 채움) 모달 열기 */
@@ -30,7 +33,7 @@ interface ClusterCardProps {
   canEdit?: boolean;
 }
 
-export function ClusterCard({ cluster, onEdit, onDelete, deletingId, overlapGroupIdx, overlapPeers, onAutoUpdate, autoUpdating, onCollectNics, canEdit = true }: ClusterCardProps) {
+export function ClusterCard({ cluster, onEdit, onDelete, deletingId, overlapGroupIdx, overlapPeers, onAutoUpdate, onVerify, verifying = false, autoUpdating, onCollectNics, canEdit = true }: ClusterCardProps) {
   const [tab, setTab] = useState<CardTab>('node');
   const st = STATUS_STYLE[cluster.status] ?? STATUS_STYLE.pending;
   const { data: opsLevels } = useOperationLevels();
@@ -112,6 +115,16 @@ export function ClusterCard({ cluster, onEdit, onDelete, deletingId, overlapGrou
           </div>
           {canEdit && (
             <div className="flex items-center gap-1 flex-shrink-0">
+              {onVerify && (
+                <button onClick={() => onVerify(cluster)} disabled={verifying}
+                  className="p-1.5 hover:bg-primary/10 rounded-md transition-colors text-muted-foreground hover:text-primary disabled:opacity-60"
+                  title="연결 검증 — API server / kubeconfig 인증 / kubectl 단계별 점검 (실행 로그에 기록)"
+                  aria-label={`${cluster.name} 연결 검증`}>
+                  {verifying
+                    ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    : <ShieldCheck className="w-3.5 h-3.5" />}
+                </button>
+              )}
               <button onClick={() => onAutoUpdate(cluster)}
                 className={`p-1.5 rounded-md transition-colors ${
                   autoUpdating
