@@ -95,6 +95,30 @@ class TestTargetDuplicateMap:
             db.commit()
 
 
+class TestBackfillTargetKeyDoesNotRepaintClearedColor:
+    def test_target_key_backfill_alone_does_not_set_color(self, db):
+        """target_key 만 새로 채워지는 행(category 는 이미 있고 color 는 운영자가 지운 상태)은
+        색을 다시 칠하면 안 된다 — category_touched 와 touched 를 분리하지 않으면 재발하는
+        회귀(2026-09-29 CI 에서 실제로 걸림: cert_expiry 행이 target_key 백필만으로 색까지
+        다시 칠해짐)."""
+        row = _mk(
+            db, name="already-categorized", source_type=CheckMatrixSourceType.deep_check,
+            target_key=None,
+        )
+        row.source_ref = "cert_expiry"
+        row.category = "k8s"
+        row.color = None
+        db.commit()
+        try:
+            svc.backfill_item_metadata(db)
+            db.refresh(row)
+            assert row.target_key == "certificate"
+            assert row.color is None
+        finally:
+            db.query(CheckMatrixItem).filter(CheckMatrixItem.id == row.id).delete(synchronize_session=False)
+            db.commit()
+
+
 class TestGridAndDetailExposeTarget:
     def test_build_grid_includes_target_fields(self, db, cluster):
         a = _mk(db, name="a", source_type=CheckMatrixSourceType.core_bundle, target_key="etcd", is_system=True)

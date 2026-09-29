@@ -2301,6 +2301,10 @@ def backfill_item_metadata(db: Session) -> int:
     updated = 0
     for row in db.query(CheckMatrixItem).all():
         touched = False
+        # 색 기본값 부여는 "category 를 방금 이 루프에서 얻었을 때"만이어야 한다 —
+        # unit/target_key 만 바뀐 경우까지 touched 로 묶으면 운영자가 지운 색을 도로
+        # 칠하게 된다(D-062 target_key 백필 도입 때 실제로 이 버그가 났다).
+        category_touched = False
         if row.source_type == CheckMatrixSourceType.deep_check:
             entry = CELL_VALUE_SPECS.get(row.source_ref or "")
             if not row.unit and entry and entry[0]:
@@ -2311,6 +2315,7 @@ def backfill_item_metadata(db: Session) -> int:
                 if reg:
                     row.category = reg[1].category
                     touched = True
+                    category_touched = True
             if not row.target_key:
                 hint = _DEEP_CHECK_TARGET_HINTS.get(row.source_ref or "")
                 if hint:
@@ -2319,19 +2324,21 @@ def backfill_item_metadata(db: Session) -> int:
         elif row.source_type == CheckMatrixSourceType.core_bundle and not row.category:
             row.category = "k8s"
             touched = True
+            category_touched = True
         elif row.source_type == CheckMatrixSourceType.addon:
             if not row.category:
                 cat = _ADDON_CATEGORIES.get(row.source_ref or "")
                 if cat:
                     row.category = cat
                     touched = True
+                    category_touched = True
             if not row.target_key:
                 hint = _ADDON_TARGET_HINTS.get(row.source_ref or "")
                 if hint:
                     row.target_key = hint
                     touched = True
         # 색은 category 를 방금 얻었고 색이 비어 있을 때만 기본값 부여.
-        if touched and row.category and not row.color:
+        if category_touched and row.category and not row.color:
             row.color = CATEGORY_DEFAULT_COLORS.get(row.category)
         if touched:
             updated += 1
