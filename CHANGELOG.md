@@ -36,6 +36,16 @@
   Backend: `models/tenant.py`(`tenants`/`tenant_members`/`cluster_bindings`), `services/cluster_access.py`, `routers/tenants.py`,
   `main.py` `_cluster_scoped` 의존성. Frontend: `TenantManager`, 터미널 close code `4413` 안내.
 
+### Added
+
+- **클러스터 관리 연결 검증 버튼** — 행/카드의 방패 버튼으로 API server → kubeconfig 인증 → kubectl 을 점검하고 단계별 성공/실패/건너뜀을 "로그 보기" 실행 로그에 남긴다(재수집·IP 수집 로그와 같은 패널). 검증 결과로 클러스터 상태가 갱신된다.
+  Frontend: `ClusterManagePage`, `ClusterTableRow`, `ClusterCard`.
+
+### Fixed
+
+- **클러스터 관리 보안·감사 보강** — kubeconfig 저장 전에 YAML 구조와 서버 주소(API Endpoint 일치)를 검증하고, 수정 API 로 `status` 를 임의 지정하거나 kubeconfig 가 아닌 파일을 `kubeconfig_path` 로 지정하지 못하게 막았다. 클러스터 수정·kubeconfig 조회/교체가 감사 로그(`cluster.update`, `cluster.kubeconfig.read`, `cluster.kubeconfig.update`)에 남는다.
+  Backend: `routers/clusters.py`, `schemas/cluster.py` (`ClusterUpdate.status` 제거).
+
 ## [1.37.6] - 2026-09-29
 
 ### Fixed

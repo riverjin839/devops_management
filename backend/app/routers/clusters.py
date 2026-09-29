@@ -4,6 +4,7 @@ import tempfile
 from datetime import datetime
 
 import httpx
+import yaml
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from kubernetes import client as k8s_client, config as k8s_config
 from kubernetes.client import ApiException
@@ -162,6 +163,74 @@ def _verify_kubeconfig_auth(api_endpoint: str, kubeconfig_path: str) -> None:
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail=f"kubeconfig 검증 실패: {str(exc)[:200]}",
         )
+
+
+def _parse_kubeconfig_text(text: str) -> dict:
+    """kubeconfig YAML 파싱 + 최소 구조 검증. 실패 시 422 (자격증명 원문은 사유에 싣지 않는다)."""
+    try:
+        doc = yaml.safe_load(text)
+    except yaml.YAMLError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=f"kubeconfig YAML 파싱에 실패했습니다: {type(exc).__name__}",
+        )
+    if not isinstance(doc, dict) or not isinstance(doc.get("clusters"), list) or not doc["clusters"]:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="kubeconfig 형식이 올바르지 않습니다 — 'clusters' 항목이 있는 kubeconfig 여야 합니다.",
+        )
+    return doc
+
+
+def _kubeconfig_server(doc: dict) -> str:
+    """current-context 가 가리키는 cluster 의 server (없으면 첫 cluster)."""
+    clusters = [c for c in doc.get("clusters", []) if isinstance(c, dict)]
+    by_name = {c.get("name"): c.get("cluster") or {} for c in clusters}
+    ctx_name = doc.get("current-context")
+    cluster_name = None
+    for ctx in doc.get("contexts") or []:
+        if isinstance(ctx, dict) and ctx.get("name") == ctx_name:
+            cluster_name = (ctx.get("context") or {}).get("cluster")
+            break
+    entry = by_name.get(cluster_name) if cluster_name in by_name else (clusters[0].get("cluster") if clusters else {})
+    return str((entry or {}).get("server") or "").rstrip("/")
+
+
+def _validate_kubeconfig_for_cluster(text: str, api_endpoint: str | None) -> str:
+    """저장 전 kubeconfig 검증: YAML 구조 + server 주소가 클러스터 API Endpoint 와 일치. server 반환."""
+    server = _kubeconfig_server(_parse_kubeconfig_text(text))
+    ep = (api_endpoint or "").rstrip("/")
+    if server and ep and server != ep:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=(
+                "kubeconfig 서버 주소와 API Endpoint가 일치하지 않습니다. "
+                f"kubeconfig: '{server}', API Endpoint: '{ep}'"
+            ),
+        )
+    return server
+
+
+def _validate_kubeconfig_path(path: str) -> None:
+    """kubeconfig_path 로 지정된 파일이 실제 kubeconfig 인지 확인 — 임의 파일 경로 지정 방지.
+
+    GET /kubeconfig 는 경로의 파일 내용을 그대로 돌려주므로 (구 레코드 호환),
+    kubeconfig 가 아닌 파일(/etc/passwd 등)을 가리키게 둘 수 없다.
+    """
+    if not os.path.isfile(path):
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=f"kubeconfig 파일을 찾을 수 없습니다: '{path}'. 경로를 확인하세요.",
+        )
+    try:
+        with open(path, encoding="utf-8") as f:
+            text = f.read(1024 * 1024)
+    except (OSError, UnicodeDecodeError):
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=f"kubeconfig 파일을 읽을 수 없습니다: '{path}'.",
+        )
+    _parse_kubeconfig_text(text)
 
 
 # ── 클러스터 생성 시 자동 등록할 기본 애드온 ─────────────────────────────────
@@ -398,8 +467,9 @@ def create_cluster(
 def update_cluster(
     cluster_id: UUID,
     cluster_data: ClusterUpdate,
+    request: Request,
     db: Session = Depends(get_db),
-    _: User = Depends(require_operator),
+    actor: User = Depends(require_operator),
 ):
     """클러스터 수정"""
     cluster = db.query(Cluster).filter(Cluster.id == cluster_id).first()
@@ -424,11 +494,29 @@ def update_cluster(
                 detail="이미 존재하는 클러스터 이름입니다.",
             )
 
+    new_path = update_data.get("kubeconfig_path")
+    if new_path and new_path != cluster.kubeconfig_path:
+        _validate_kubeconfig_path(new_path)
+
     for key, value in update_data.items():
         setattr(cluster, key, value)
 
     db.commit()
     db.refresh(cluster)
+
+    details: dict[str, object] = {"name": cluster.name, "fields": sorted(update_data.keys())}
+    if renaming:
+        details["renamed_from"] = old_name
+    audit_logger.record(
+        db,
+        action="cluster.update",
+        actor=actor,
+        status="success",
+        target_type="cluster",
+        target_id=cluster_id,
+        details=details,
+        request=request,
+    )
 
     if renaming:
         try:
@@ -542,8 +630,9 @@ def delete_cluster(
 @router.get("/{cluster_id}/kubeconfig", response_model=KubeconfigResponse)
 def get_kubeconfig(
     cluster_id: UUID,
+    request: Request,
     db: Session = Depends(get_db),
-    _: User = Depends(require_operator),
+    actor: User = Depends(require_operator),
 ):
     """클러스터 kubeconfig 내용 조회 — DB 우선, 파일은 폴백.
 
@@ -552,6 +641,18 @@ def get_kubeconfig(
     cluster = db.query(Cluster).filter(Cluster.id == cluster_id).first()
     if not cluster:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Cluster not found")
+
+    # 자격증명 원문 열람 — 성공/실패와 무관하게 열람 시도를 남긴다 (내용은 기록하지 않음).
+    audit_logger.record(
+        db,
+        action="cluster.kubeconfig.read",
+        actor=actor,
+        status="success",
+        target_type="cluster",
+        target_id=cluster_id,
+        details={"name": cluster.name},
+        request=request,
+    )
 
     # 1) DB 에 kubeconfig_content 가 있으면 그것이 진실 (컨테이너 재시작 대비)
     if cluster.kubeconfig_content:
@@ -582,8 +683,9 @@ def get_kubeconfig(
 def update_kubeconfig(
     cluster_id: UUID,
     body: KubeconfigUpdateRequest,
+    request: Request,
     db: Session = Depends(get_db),
-    _: User = Depends(require_operator),
+    actor: User = Depends(require_operator),
 ):
     """클러스터 kubeconfig 내용 저장/수정"""
     cluster = db.query(Cluster).filter(Cluster.id == cluster_id).first()
@@ -597,10 +699,22 @@ def update_kubeconfig(
         )
 
     cleaned = body.content.strip()
+    # 저장 전 검증 — 잘못된 kubeconfig 가 들어가면 이후 모든 점검·배치잡이 실패한다.
+    server = _validate_kubeconfig_for_cluster(cleaned, cluster.api_endpoint)
     saved_path = _save_kubeconfig_content(cluster_id, cleaned)
     cluster.kubeconfig_path = saved_path
     cluster.kubeconfig_content = cleaned
     db.commit()
+    audit_logger.record(
+        db,
+        action="cluster.kubeconfig.update",
+        actor=actor,
+        status="success",
+        target_type="cluster",
+        target_id=cluster_id,
+        details={"name": cluster.name, "server": server},
+        request=request,
+    )
     return KubeconfigResponse(content=cleaned, path=saved_path)
 
 
