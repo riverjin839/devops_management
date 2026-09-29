@@ -10,6 +10,16 @@
 
 1.37.6 이후 main 에 병합된 변경 (다음 릴리스 후보).
 
+### Added
+- **대형 클러스터 NS 단위 자원 수집 (`/k8s-allocation`)**: 노드 50개 이상 클러스터는 개요를 네임스페이스 단위로
+  병렬 수집한다(NS 마다 Pod 목록 + NS 단위 Pod metrics). ① 활성 Pod 6000개를 넘으면 비어 있던 **실사용량(usage)이 대형
+  클러스터에서도 표시**된다 ② 한 NS 의 조회 실패·절단은 그 NS 만 빠지고 페이지 상단에 "네임스페이스 n개 수집 실패" 로
+  안내된다 ③ 완료한 NS 는 Redis 에 남아, 집계하던 파드가 죽어 다른 파드가 인계하면 **처음부터가 아니라 이어서** 모은다
+  ④ 진행은 "네임스페이스 12 / 340 수집 완료" 로 보인다. 작은 클러스터는 기존 방식 그대로(요청 수 최소).
+  Backend: `routers/k8s_allocation.py`(`_collect_by_namespace`, 공용 누적기 `_add_pod`/`_merge_acc`, 응답
+  `collect_mode`·`failed_namespaces`, `K8S_ALLOC_COLLECT_MODE`·`NS_MODE_MIN_NODES`·`NS_WORKERS`·`NS_RESUME_TTL`),
+  `services/snapshot_jobs.py`(인계 시 `Progress.resume_since`). Frontend: 페이지 상단 실패 NS 안내·진행 단계 문구.
+
 ## [1.37.6] - 2026-09-29
 
 ### Fixed
@@ -21,16 +31,6 @@
   (UI 숨김일 뿐 격리가 아니었다). 이제 인증 라우터 공통 의존성이 화면 전용 API(`/mindmaps`, `/ontology`,
   `/clusters/{id}/rbac`, `/clusters/{id}/etcdctl/run` 등 14개 화면)를 같은 규칙으로 403 차단한다. 여러 화면이 공유하는
   API 는 대상에서 뺐다. Backend: `app/auth/feature_access.py`(`FEATURE_API_PATTERNS`·`enforce_feature_access`), `main.py` `_auth`.
-
-### Added
-- **대형 클러스터 NS 단위 자원 수집 (`/k8s-allocation`)**: 노드 50개 이상 클러스터는 개요를 네임스페이스 단위로
-  병렬 수집한다(NS 마다 Pod 목록 + NS 단위 Pod metrics). ① 활성 Pod 6000개를 넘으면 비어 있던 **실사용량(usage)이 대형
-  클러스터에서도 표시**된다 ② 한 NS 의 조회 실패·절단은 그 NS 만 빠지고 페이지 상단에 "네임스페이스 n개 수집 실패" 로
-  안내된다 ③ 완료한 NS 는 Redis 에 남아, 집계하던 파드가 죽어 다른 파드가 인계하면 **처음부터가 아니라 이어서** 모은다
-  ④ 진행은 "네임스페이스 12 / 340 수집 완료" 로 보인다. 작은 클러스터는 기존 방식 그대로(요청 수 최소).
-  Backend: `routers/k8s_allocation.py`(`_collect_by_namespace`, 공용 누적기 `_add_pod`/`_merge_acc`, 응답
-  `collect_mode`·`failed_namespaces`, `K8S_ALLOC_COLLECT_MODE`·`NS_MODE_MIN_NODES`·`NS_WORKERS`·`NS_RESUME_TTL`),
-  `services/snapshot_jobs.py`(인계 시 `Progress.resume_since`). Frontend: 페이지 상단 실패 NS 안내·진행 단계 문구.
 
 ## [1.37.5] - 2026-09-28
 
