@@ -4,6 +4,7 @@ Celery 앱 설정 및 스케줄 태스크
   (구 아침/점심/저녁 하드코딩 스케줄 완전 대체)
 """
 from celery import Celery
+from celery.exceptions import Retry
 from celery.schedules import crontab
 from datetime import datetime
 import asyncio
@@ -267,11 +268,35 @@ def run_check_matrix_run_one(self, run_id: str):
     """
     import logging
     from app.database import SessionLocal
+    from app.models.check_matrix import CheckMatrixRun, CheckMatrixRunState
     from app.services import check_matrix_service as cms
+    from app.services.tenant_concurrency import WAIT_INTERVAL, TenantRunLimitTimeout, acquire_run_slot
 
     db = SessionLocal()
     try:
-        return cms.execute_run(db, run_id)
+        run = db.query(CheckMatrixRun).filter(CheckMatrixRun.id == run_id).first()
+        if run is None or run.run_state != CheckMatrixRunState.queued:
+            return {"run_id": run_id, "skipped": True}
+
+        def _note(msg: str) -> None:
+            run.message = msg  # 수행 로그의 대기 중 행에 사유 표시
+            db.commit()
+
+        try:
+            # 매트릭스는 queued 30분 초과 run 을 stale 로 마감하므로(_sweep_stale_runs) 대기는 20분까지.
+            slot = acquire_run_slot(self, db, cluster_id=run.cluster_id, kind="check_matrix_run",
+                                    ref=run_id, label="점검 매트릭스 셀", on_wait=_note,
+                                    max_wait_retries=20 * 60 // WAIT_INTERVAL)
+        except TenantRunLimitTimeout as e:
+            cms._finish_run(run, CheckMatrixRunState.failed, error=str(e))
+            db.commit()
+            return {"run_id": run_id, "error": "tenant_limit_timeout"}
+        try:
+            return cms.execute_run(db, run_id)
+        finally:
+            slot.release()
+    except Retry:
+        raise  # 테넌트 슬롯 대기 — 재시도 예외는 삼키지 않는다
     except Exception as e:  # noqa: BLE001
         db.rollback()
         logging.getLogger(__name__).exception("check-matrix run task failed run_id=%s: %s", run_id, e)
@@ -588,7 +613,7 @@ def run_batch_job(
     """
     from uuid import UUID
     from app.database import SessionLocal
-    from app.services.batch_job_service import execute_job, get_job_or_404
+    from app.services.batch_job_service import get_job_or_404
 
     db = SessionLocal()
     try:
@@ -596,44 +621,84 @@ def run_batch_job(
         if not job.enabled:
             return {"job_id": job_id, "skipped": True, "reason": "disabled"}
 
-        # "중지" 요청이 이 실행을 revoke(terminate=True) 로 찾아 죽일 수 있도록
-        # 자기 자신의 celery task id 를 잡에 기록해둔다. execute_job 이 끝나면
-        # (성공/실패 불문) 항상 다시 None 으로 지운다.
-        job.active_task_id = self.request.id
-        db.commit()
-
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
+        # 멀티테넌시 5단계 — 클러스터 소유 테넌트의 동시 실행 상한. 차 있으면 재시도로 돌려보낸다.
+        from app.services.tenant_concurrency import TenantRunLimitTimeout, acquire_run_slot
         try:
-            try:
-                run, result = loop.run_until_complete(
-                    execute_job(
-                        db,
-                        job,
-                        password=password,
-                        private_key=private_key,
-                        trigger=trigger,
-                        triggered_by_user_id=triggered_by_user_id,
-                        triggered_by_username=triggered_by_username,
-                    )
-                )
-            finally:
-                # execute_job 이 정상 경로(_run_and_record)를 못 타고 일찍 raise 하는
-                # 예외적인 경우(예: UnknownJobType)에도 active_task_id 는 항상 정리한다.
-                if job.active_task_id == self.request.id:
-                    job.active_task_id = None
-                    db.commit()
-        finally:
-            loop.close()
+            slot = acquire_run_slot(self, db, cluster_id=job.cluster_id, kind="batch_job",
+                                    ref=job_id, label=job.name)
+        except TenantRunLimitTimeout as e:
+            _record_batch_job_wait_timeout(db, job, str(e), trigger=trigger,
+                                           user_id=triggered_by_user_id, username=triggered_by_username)
+            return {"job_id": job_id, "skipped": True, "reason": "tenant_limit_timeout"}
 
-        return {
-            "job_id": job_id,
-            "run_id": str(run.id),
-            "status": result.status,
-            "duration_ms": result.duration_ms,
-        }
+        try:
+            return _run_batch_job_body(self, db, job, job_id, password=password, private_key=private_key,
+                                       trigger=trigger, triggered_by_user_id=triggered_by_user_id,
+                                       triggered_by_username=triggered_by_username)
+        finally:
+            slot.release()
     finally:
         db.close()
+
+
+def _record_batch_job_wait_timeout(db, job, message: str, *, trigger: str,
+                                   user_id: str | None, username: str | None) -> None:
+    """테넌트 슬롯 대기 초과 — 실행 이력에 실패 행을 남겨 "로그 보기"에서 사유가 보이게 한다."""
+    from app.models.batch_job import BatchJobRun
+
+    now = datetime.utcnow()
+    try:
+        db.add(BatchJobRun(
+            job_id=job.id, status="error", trigger=trigger, triggered_by_user_id=user_id,
+            triggered_by_username=username, error=message[:1000], stderr=message,
+            steps=[{"id": "tenant_slot", "label": "테넌트 실행 슬롯", "status": "failed", "detail": message}],
+            duration_ms=0, started_at=now, finished_at=now,
+        ))
+        db.commit()
+    except Exception:  # noqa: BLE001
+        db.rollback()
+
+
+def _run_batch_job_body(self, db, job, job_id: str, *, password, private_key, trigger,
+                        triggered_by_user_id, triggered_by_username):
+    from app.services.batch_job_service import execute_job
+
+    # "중지" 요청이 이 실행을 revoke(terminate=True) 로 찾아 죽일 수 있도록
+    # 자기 자신의 celery task id 를 잡에 기록해둔다. execute_job 이 끝나면
+    # (성공/실패 불문) 항상 다시 None 으로 지운다.
+    job.active_task_id = self.request.id
+    db.commit()
+
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+    try:
+        try:
+            run, result = loop.run_until_complete(
+                execute_job(
+                    db,
+                    job,
+                    password=password,
+                    private_key=private_key,
+                    trigger=trigger,
+                    triggered_by_user_id=triggered_by_user_id,
+                    triggered_by_username=triggered_by_username,
+                )
+            )
+        finally:
+            # execute_job 이 정상 경로(_run_and_record)를 못 타고 일찍 raise 하는
+            # 예외적인 경우(예: UnknownJobType)에도 active_task_id 는 항상 정리한다.
+            if job.active_task_id == self.request.id:
+                job.active_task_id = None
+                db.commit()
+    finally:
+        loop.close()
+
+    return {
+        "job_id": job_id,
+        "run_id": str(run.id),
+        "status": result.status,
+        "duration_ms": result.duration_ms,
+    }
 
 
 @celery_app.task(bind=True, name="app.celery_app.run_batch_job_dispatcher", ignore_result=True)
@@ -867,12 +932,43 @@ def run_ops_check_batch(self, run_id: str):
     항목마다 진행 상태/결과를 즉시 커밋하므로 콘솔이 폴링으로 진행률을 본다.
     """
     from app.database import SessionLocal
+    from app.models.ops_check import OpsCheckRun, OpsCheckRunItem
     from app.services.ops_check_service import OpsCheckService
+    from app.services.tenant_concurrency import TenantRunLimitTimeout, acquire_run_slot
 
     db = SessionLocal()
     try:
-        OpsCheckService(db).execute_run(run_id)
+        run = db.query(OpsCheckRun).filter(OpsCheckRun.id == run_id).first()
+        if run is None or run.status not in ("pending",):
+            return {"run_id": run_id, "skipped": True}
+
+        def _note(msg: str, *, fail: bool = False) -> None:
+            # 대기 사유를 아직 안 돈 항목의 메시지로 보여준다(콘솔이 항목 메시지를 폴링).
+            for it in db.query(OpsCheckRunItem).filter(OpsCheckRunItem.run_id == run.id,
+                                                       OpsCheckRunItem.status == "queued").all():
+                it.message = msg
+                if fail:
+                    it.status = "error"
+                    it.finished_at = datetime.utcnow()
+            if fail:
+                run.status = "done"
+                run.error_count = run.total or 0
+                run.finished_at = datetime.utcnow()
+            db.commit()
+
+        try:
+            slot = acquire_run_slot(self, db, cluster_id=run.cluster_id, kind="ops_check",
+                                    ref=run_id, label=f"운영 점검 {run.total or 0}건", on_wait=_note)
+        except TenantRunLimitTimeout as e:
+            _note(str(e), fail=True)
+            return {"run_id": run_id, "error": "tenant_limit_timeout"}
+        try:
+            OpsCheckService(db).execute_run(run_id)
+        finally:
+            slot.release()
         return {"run_id": run_id, "status": "done"}
+    except Retry:
+        raise  # 테넌트 슬롯 대기 — 재시도 예외는 삼키지 않는다
     except Exception as e:  # noqa: BLE001
         import logging
         logging.getLogger(__name__).exception("run_ops_check_batch failed (%s): %s", run_id, e)
@@ -890,8 +986,20 @@ def run_deep_check_for_cluster(self, cluster_id: str, daily_check_log_id: str | 
     """
     from app.database import SessionLocal
     from app.services.check_definition_runner import DeepCheckService
+    from app.services.tenant_concurrency import TenantRunLimitTimeout, acquire_run_slot
 
     db = SessionLocal()
+    try:
+        slot = acquire_run_slot(self, db, cluster_id=cluster_id, kind="deep_check", ref=cluster_id,
+                                label="클러스터 심층 점검")
+    except TenantRunLimitTimeout as e:
+        import logging
+        logging.getLogger(__name__).warning("run_deep_check_for_cluster(%s): %s", cluster_id, e)
+        db.close()
+        return {"cluster_id": cluster_id, "error": str(e)[:200]}
+    except BaseException:
+        db.close()
+        raise
     try:
         svc = DeepCheckService(db)
         loop = asyncio.new_event_loop()
@@ -924,6 +1032,7 @@ def run_deep_check_for_cluster(self, cluster_id: str, daily_check_log_id: str | 
         )
         return {"cluster_id": cluster_id, "error": str(e)[:200]}
     finally:
+        slot.release()
         db.close()
 
 
@@ -1691,10 +1800,7 @@ def run_k8s_efficiency_run(self, run_id: str):
     """적용/롤백/쿼터 조정/CR 스케일 run 실행 — apply.execute_run + 감사 기록."""
     import logging
     from app.database import SessionLocal
-    from app.models import Cluster
-    from app.models.k8s_efficiency import K8sEfficiencyRun, K8sNamespacePolicy
-    from app.services import audit_logger
-    from app.services.k8s_efficiency.apply import execute_run
+    from app.models.k8s_efficiency import K8sEfficiencyRun
 
     log = logging.getLogger(__name__)
     db = SessionLocal()
@@ -1704,36 +1810,63 @@ def run_k8s_efficiency_run(self, run_id: str):
             return {"error": "run not found"}
         if run.run_state not in ("queued",):
             return {"error": f"run already {run.run_state}"}
-        cluster = db.query(Cluster).filter(Cluster.id == run.cluster_id).first()
-        run.celery_task_id = getattr(self.request, "id", None)
-        db.commit()
+        # 멀티테넌시 5단계 — 테넌트 동시 실행 상한. 대기 사유는 실행 로그에 남는다.
+        from app.services.k8s_efficiency.runs import RunLogger
+        from app.services.tenant_concurrency import TenantRunLimitTimeout, acquire_run_slot
         try:
-            execute_run(db, run, cluster)
-        except Exception as e:  # noqa: BLE001
-            db.rollback()
-            log.exception("efficiency run failed run=%s", run_id)
+            slot = acquire_run_slot(self, db, cluster_id=run.cluster_id, kind="k8s_efficiency_run",
+                                    ref=run_id, label=f"효율화 {run.run_type}",
+                                    on_wait=RunLogger(db, run).log)
+        except TenantRunLimitTimeout as e:
+            RunLogger(db, run).log(str(e))
             run.run_state = "failed"
             run.error = str(e)[:1000]
+            run.finished_at = datetime.utcnow()
             db.commit()
-        # CR 어댑터 적용 성공 시 정책의 current 값을 갱신(다음 자동화 판단 기준).
-        if run.run_state in ("succeeded", "partial") and not run.dry_run:
-            for i, t in enumerate(run.targets or []):
-                if t.get("type") == "custom_resource" and str(i) in (run.after or {}):
-                    idx = t.get("policy_target_index")
-                    pol = (db.query(K8sNamespacePolicy)
-                           .filter(K8sNamespacePolicy.cluster_id == run.cluster_id,
-                                   K8sNamespacePolicy.namespace == t.get("namespace")).first())
-                    if pol is not None and idx is not None and idx < len(pol.custom_targets or []):
-                        ct = list(pol.custom_targets)
-                        ct[idx] = {**ct[idx], "current": t.get("value")}
-                        pol.custom_targets = ct
-                        db.commit()
-        audit_logger.record(db, action=f"k8s.efficiency.{run.run_type}.run",
-                            actor_username=run.triggered_by or "automation",
-                            status="success" if run.run_state == "succeeded" else "failure",
-                            target_type="cluster", target_id=str(run.cluster_id),
-                            details={"run_id": str(run.id), "trigger": run.trigger, "dry_run": run.dry_run,
-                                     "summary": run.summary, "error": run.error})
-        return {"run_id": str(run.id), "state": run.run_state, "summary": run.summary}
+            return {"run_id": run_id, "error": "tenant_limit_timeout"}
+        try:
+            return _run_k8s_efficiency_body(self, db, run, log)
+        finally:
+            slot.release()
     finally:
         db.close()
+
+
+def _run_k8s_efficiency_body(self, db, run, log):
+    from app.models import Cluster
+    from app.models.k8s_efficiency import K8sNamespacePolicy
+    from app.services import audit_logger
+    from app.services.k8s_efficiency.apply import execute_run
+
+    run_id = str(run.id)
+    cluster = db.query(Cluster).filter(Cluster.id == run.cluster_id).first()
+    run.celery_task_id = getattr(self.request, "id", None)
+    db.commit()
+    try:
+        execute_run(db, run, cluster)
+    except Exception as e:  # noqa: BLE001
+        db.rollback()
+        log.exception("efficiency run failed run=%s", run_id)
+        run.run_state = "failed"
+        run.error = str(e)[:1000]
+        db.commit()
+    # CR 어댑터 적용 성공 시 정책의 current 값을 갱신(다음 자동화 판단 기준).
+    if run.run_state in ("succeeded", "partial") and not run.dry_run:
+        for i, t in enumerate(run.targets or []):
+            if t.get("type") == "custom_resource" and str(i) in (run.after or {}):
+                idx = t.get("policy_target_index")
+                pol = (db.query(K8sNamespacePolicy)
+                       .filter(K8sNamespacePolicy.cluster_id == run.cluster_id,
+                               K8sNamespacePolicy.namespace == t.get("namespace")).first())
+                if pol is not None and idx is not None and idx < len(pol.custom_targets or []):
+                    ct = list(pol.custom_targets)
+                    ct[idx] = {**ct[idx], "current": t.get("value")}
+                    pol.custom_targets = ct
+                    db.commit()
+    audit_logger.record(db, action=f"k8s.efficiency.{run.run_type}.run",
+                        actor_username=run.triggered_by or "automation",
+                        status="success" if run.run_state == "succeeded" else "failure",
+                        target_type="cluster", target_id=str(run.cluster_id),
+                        details={"run_id": str(run.id), "trigger": run.trigger, "dry_run": run.dry_run,
+                                 "summary": run.summary, "error": run.error})
+    return {"run_id": str(run.id), "state": run.run_state, "summary": run.summary}

@@ -34,7 +34,7 @@ export function useTenantMutations() {
       onSuccess: invalidate,
     }),
     update: useMutation({
-      mutationFn: ({ id, ...d }: { id: string; name?: string; description?: string | null }) =>
+      mutationFn: ({ id, ...d }: { id: string; name?: string; description?: string | null; maxConcurrentRuns?: number | null }) =>
         tenantsApi.update(id, d),
       onSuccess: invalidate,
     }),
@@ -65,5 +65,15 @@ export function useTenantLlmUsage() {
     queryKey: ['tenants', 'llm-usage'],
     queryFn: () => tenantsApi.llmUsage().then((r) => r.data),
     refetchInterval: 60_000,
+  });
+}
+
+/** 테넌트별 백그라운드 실행 슬롯(실행 중·대기) — admin. 대기 상황을 보는 용도라 짧게 폴링한다. */
+export function useTenantRunSlots(enabled = true) {
+  return useQuery({
+    queryKey: ['tenants', 'run-slots'],
+    queryFn: () => tenantsApi.runSlots().then((r) => r.data),
+    refetchInterval: 5_000,
+    enabled,
   });
 }

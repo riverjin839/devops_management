@@ -257,6 +257,8 @@ def _run_migrations():
     if "tenants" in _existing_tables:
         # 멀티테넌시 4단계 — 테넌트별 LLM 라우팅 오버라이드
         _safe_add_column("tenants", "llm_routing", "JSONB")
+        # 멀티테넌시 5단계 — 테넌트별 백그라운드 실행 동시성 상한 (NULL = 제한 없음)
+        _safe_add_column("tenants", "max_concurrent_runs", "INTEGER")
     for _t in TENANT_SCOPED_TABLES:
         if _t in _existing_tables:
             _safe_add_column(_t, "tenant_id", "UUID REFERENCES tenants(id) ON DELETE RESTRICT")
@@ -1100,6 +1102,10 @@ def _run_migrations():
     # audit_logs: create_all 이 테이블 자체는 만들지만 보조 인덱스만 명시.
     if "audit_logs" in inspector.get_table_names():
         _safe_create_index("ix_audit_logs_created_at_desc", "audit_logs", "(created_at DESC)")
+        # 멀티테넌시 5단계 — 감사 로그 테넌트 귀속 (FK 없음: 테넌트가 지워져도 기록은 남는다)
+        _safe_add_column("audit_logs", "tenant_id", "VARCHAR(36)")
+        _safe_add_column("audit_logs", "tenant_name", "VARCHAR(100)")
+        _safe_create_index("ix_audit_logs_tenant_created", "audit_logs", "(tenant_id, created_at DESC)")
 
     # ops_check_*: 운영 점검 콘솔 — 테이블은 create_all 이 생성, 폴링/조회용 인덱스만 보강.
     if "ops_check_runs" in inspector.get_table_names():

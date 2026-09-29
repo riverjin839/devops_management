@@ -7,6 +7,7 @@
 - PUT    /tenants/{tenant_id}/members     → 멤버 집합 교체 — admin
 - PUT    /tenants/{tenant_id}/bindings    → 클러스터 바인딩 집합 교체 — admin
 - GET    /tenants/my-cluster-access       → 로그인 사용자의 클러스터별 access (바인딩 있는 클러스터만)
+- GET    /tenants/run-slots               → 테넌트별 백그라운드 실행 슬롯(실행 중·대기) — admin (5단계)
 
 판정 규칙은 ``models/tenant.py`` / ``services/cluster_access.py`` 참고.
 """
@@ -57,6 +58,8 @@ class TenantOut(BaseModel):
     bindings: list[ClusterBindingOut] = []
     # 멀티테넌시 4단계 — {purpose: {primary, fallback}}
     llm_routing: dict = {}
+    # 멀티테넌시 5단계 — 백그라운드 실행 동시성 상한 (None = 제한 없음)
+    max_concurrent_runs: Optional[int] = None
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
 
@@ -64,11 +67,33 @@ class TenantOut(BaseModel):
 class TenantCreate(BaseModel):
     name: str = Field(..., min_length=1, max_length=100)
     description: Optional[str] = None
+    max_concurrent_runs: Optional[int] = Field(default=None, ge=0, le=1000)
 
 
 class TenantUpdate(BaseModel):
     name: Optional[str] = Field(default=None, min_length=1, max_length=100)
     description: Optional[str] = None
+    # 0 또는 null = 제한 없음
+    max_concurrent_runs: Optional[int] = Field(default=None, ge=0, le=1000)
+
+
+class RunSlotEntry(BaseModel):
+    kind: Optional[str] = None
+    ref: Optional[str] = None
+    label: Optional[str] = None
+    cluster_id: Optional[str] = None
+    cluster_name: Optional[str] = None
+    since: Optional[datetime] = None
+
+
+class TenantRunSlots(BaseModel):
+    tenant_id: UUID
+    tenant_name: str
+    limit: Optional[int] = None
+    # Redis 사용 불가면 False — 이때는 상한이 적용되지 않는다(fail-open)
+    available: bool = True
+    running: list[RunSlotEntry] = []
+    waiting: list[RunSlotEntry] = []
 
 
 class TenantMembersPut(BaseModel):
@@ -146,6 +171,7 @@ def _tenant_out(db: Session, t: Tenant) -> TenantOut:
             for b, name in bindings
         ],
         llm_routing=t.llm_routing or {},
+        max_concurrent_runs=t.max_concurrent_runs,
         created_at=t.created_at,
         updated_at=t.updated_at,
     )
@@ -205,6 +231,39 @@ def tenant_llm_usage(db: Session = Depends(get_db), _: User = Depends(require_ad
     ]
 
 
+@router.get("/run-slots", response_model=list[TenantRunSlots])
+def tenant_run_slots(db: Session = Depends(get_db), _: User = Depends(require_admin)):
+    """상한을 지정한 테넌트별 백그라운드 실행 슬롯 — 실행 중·대기 중 목록 (멀티테넌시 5단계)."""
+    from datetime import timezone
+
+    from app.services.tenant_concurrency import tenant_run_slots as slots
+
+    names = {str(cid): n for cid, n in db.query(Cluster.id, Cluster.name).all()}
+
+    def _entries(rows: list[dict]) -> list[RunSlotEntry]:
+        out = []
+        for m in rows:
+            since = m.get("since")
+            out.append(RunSlotEntry(
+                kind=m.get("kind"), ref=m.get("ref"), label=m.get("label"),
+                cluster_id=m.get("cluster_id"), cluster_name=names.get(str(m.get("cluster_id"))),
+                since=datetime.fromtimestamp(float(since), tz=timezone.utc) if since else None,
+            ))
+        return out
+
+    result = []
+    tenants = (db.query(Tenant).filter(Tenant.max_concurrent_runs.isnot(None), Tenant.max_concurrent_runs > 0)
+               .order_by(Tenant.name).all())
+    for t in tenants:
+        snap = slots.snapshot(t.id)
+        result.append(TenantRunSlots(
+            tenant_id=t.id, tenant_name=t.name, limit=t.max_concurrent_runs, available=snap is not None,
+            running=_entries((snap or {}).get("running", [])),
+            waiting=_entries((snap or {}).get("waiting", [])),
+        ))
+    return result
+
+
 @router.get("", response_model=list[TenantOut])
 def list_tenants(db: Session = Depends(get_db), _: User = Depends(require_admin)):
     return [_tenant_out(db, t) for t in db.query(Tenant).order_by(Tenant.name).all()]
@@ -215,7 +274,7 @@ def create_tenant(body: TenantCreate, request: Request, db: Session = Depends(ge
                   actor: User = Depends(require_admin)):
     name = body.name.strip()
     _ensure_unique_name(db, name)
-    t = Tenant(name=name, description=body.description)
+    t = Tenant(name=name, description=body.description, max_concurrent_runs=body.max_concurrent_runs or None)
     db.add(t)
     db.commit()
     db.refresh(t)
@@ -228,17 +287,20 @@ def create_tenant(body: TenantCreate, request: Request, db: Session = Depends(ge
 def update_tenant(tenant_id: UUID, body: TenantUpdate, request: Request, db: Session = Depends(get_db),
                   actor: User = Depends(require_admin)):
     t = _get_tenant_or_404(db, tenant_id)
-    before = {"name": t.name, "description": t.description}
+    before = {"name": t.name, "description": t.description, "max_concurrent_runs": t.max_concurrent_runs}
     if body.name is not None:
         name = body.name.strip()
         _ensure_unique_name(db, name, exclude_id=t.id)
         t.name = name
     if "description" in body.model_fields_set:
         t.description = body.description
+    if "max_concurrent_runs" in body.model_fields_set:
+        t.max_concurrent_runs = body.max_concurrent_runs or None
     db.commit()
     db.refresh(t)
     audit_logger.record(db, action="tenant.update", actor=actor, target_type="tenant", target_id=t.id,
-                        details={"before": before, "after": {"name": t.name, "description": t.description}},
+                        details={"before": before, "after": {"name": t.name, "description": t.description,
+                                                             "max_concurrent_runs": t.max_concurrent_runs}},
                         request=request)
     return _tenant_out(db, t)
 
@@ -264,7 +326,7 @@ def delete_tenant(tenant_id: UUID, request: Request, db: Session = Depends(get_d
     db.delete(t)
     db.commit()
     audit_logger.record(db, action="tenant.delete", actor=actor, target_type="tenant", target_id=tenant_id,
-                        details={"name": name}, request=request)
+                        details={"name": name}, request=request, tenant_name=name)
 
 
 @router.put("/{tenant_id}/members", response_model=TenantOut)

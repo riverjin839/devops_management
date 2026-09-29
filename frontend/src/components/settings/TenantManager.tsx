@@ -1,13 +1,13 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Building2, Plus, Save, Trash2, Users as UsersIcon, Server, Bot } from 'lucide-react';
+import { Building2, Plus, Save, Trash2, Users as UsersIcon, Server, Bot, Gauge } from 'lucide-react';
 import { authApi, llmApi } from '@/services/api';
 import { useClusters } from '@/hooks/useCluster';
-import { useTenantLlmUsage, useTenantMutations, useTenants } from '@/hooks/useTenants';
+import { useTenantLlmUsage, useTenantMutations, useTenantRunSlots, useTenants } from '@/hooks/useTenants';
 import { ConfirmDialog, useToast } from '@/components/common';
 import { MacCard } from '@/components/ui/MacCard';
-import { formatApiError } from '@/lib/utils';
-import type { ClusterAccessLevel, Tenant, TenantLlmRouting } from '@/types';
+import { formatApiError, formatRelativeTime } from '@/lib/utils';
+import type { ClusterAccessLevel, Tenant, TenantLlmRouting, TenantRunSlotEntry, TenantRunSlots } from '@/types';
 
 type BindingChoice = 'none' | ClusterAccessLevel;
 
@@ -33,6 +33,8 @@ export function TenantManager() {
   const m = useTenantMutations();
   const { data: llmUsage = [] } = useTenantLlmUsage();
   const usageBy = useMemo(() => new Map(llmUsage.map((u) => [u.tenantId, u])), [llmUsage]);
+  const { data: runSlots = [] } = useTenantRunSlots();
+  const slotsBy = useMemo(() => new Map(runSlots.map((s) => [s.tenantId, s])), [runSlots]);
 
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [newName, setNewName] = useState('');
@@ -114,6 +116,10 @@ export function TenantManager() {
                   <span className="block text-xs text-muted-foreground mt-0.5 pl-6">
                     멤버 {t.members.length} · 클러스터 {t.bindings.length}
                     {usageBy.get(t.id) ? ` · LLM 24h ${usageBy.get(t.id)?.count}회` : ''}
+                    {t.maxConcurrentRuns
+                      ? ` · 실행 ${slotsBy.get(t.id)?.running.length ?? 0}/${t.maxConcurrentRuns}`
+                        + (slotsBy.get(t.id)?.waiting.length ? ` (대기 ${slotsBy.get(t.id)?.waiting.length})` : '')
+                      : ''}
                   </span>
                 </button>
               </li>
@@ -122,7 +128,13 @@ export function TenantManager() {
         </MacCard>
 
         {selected ? (
-          <TenantDetail key={selected.id} tenant={selected} users={users} clusters={clusters} />
+          <TenantDetail
+            key={selected.id}
+            tenant={selected}
+            users={users}
+            clusters={clusters}
+            runSlots={slotsBy.get(selected.id)}
+          />
         ) : (
           <MacCard>
             <p className="text-sm text-muted-foreground">왼쪽에서 테넌트를 추가하거나 선택하세요.</p>
@@ -137,13 +149,15 @@ interface DetailProps {
   tenant: Tenant;
   users: { id: string; username: string; displayName?: string | null; role: string }[];
   clusters: { id: string; name: string }[];
+  runSlots?: TenantRunSlots;
 }
 
-function TenantDetail({ tenant, users, clusters }: DetailProps) {
+function TenantDetail({ tenant, users, clusters, runSlots }: DetailProps) {
   const toast = useToast();
   const m = useTenantMutations();
   const [name, setName] = useState(tenant.name);
   const [description, setDescription] = useState(tenant.description ?? '');
+  const [maxRuns, setMaxRuns] = useState(tenant.maxConcurrentRuns ? String(tenant.maxConcurrentRuns) : '');
   const [memberIds, setMemberIds] = useState<Set<string>>(new Set());
   const [bindings, setBindings] = useState<Record<string, BindingChoice>>({});
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -151,6 +165,7 @@ function TenantDetail({ tenant, users, clusters }: DetailProps) {
   useEffect(() => {
     setName(tenant.name);
     setDescription(tenant.description ?? '');
+    setMaxRuns(tenant.maxConcurrentRuns ? String(tenant.maxConcurrentRuns) : '');
     setMemberIds(new Set(tenant.members.map((x) => x.userId)));
     setBindings(Object.fromEntries(tenant.bindings.map((b) => [b.clusterId, b.access])));
   }, [tenant]);
@@ -165,8 +180,14 @@ function TenantDetail({ tenant, users, clusters }: DetailProps) {
       return next;
     });
 
+  const maxRunsNum = maxRuns.trim() === '' ? null : Number(maxRuns);
+  const maxRunsInvalid = maxRunsNum !== null && (!Number.isInteger(maxRunsNum) || maxRunsNum < 0 || maxRunsNum > 1000);
+
   const saveInfo = () =>
-    m.update.mutate({ id: tenant.id, name: name.trim(), description: description || null }, {
+    m.update.mutate({
+      id: tenant.id, name: name.trim(), description: description || null,
+      maxConcurrentRuns: maxRunsNum || null,
+    }, {
       onSuccess: () => toast.success('테넌트 정보 저장됨'),
       onError: (e) => toast.error('저장 실패', formatApiError(e)),
     });
@@ -196,7 +217,7 @@ function TenantDetail({ tenant, users, clusters }: DetailProps) {
   return (
     <div className="space-y-4">
       <MacCard title="정보">
-        <div className="grid grid-cols-1 md:grid-cols-[1fr_2fr_auto] gap-2 items-end">
+        <div className="grid grid-cols-1 md:grid-cols-[1fr_2fr_140px_auto] gap-2 items-end">
           <label className="text-xs text-muted-foreground">
             이름
             <input className={`${INPUT} mt-1`} value={name} onChange={(e) => setName(e.target.value)} />
@@ -205,12 +226,27 @@ function TenantDetail({ tenant, users, clusters }: DetailProps) {
             설명
             <input className={`${INPUT} mt-1`} value={description} onChange={(e) => setDescription(e.target.value)} />
           </label>
+          <label
+            className="text-xs text-muted-foreground"
+            title="이 테넌트 클러스터에 대해 동시에 도는 백그라운드 실행(배치잡·운영 점검·점검 매트릭스 일괄 수행·심층 점검·효율화 적용) 수. 비우거나 0 이면 제한 없음"
+          >
+            동시 실행 상한
+            <input
+              className={`${INPUT} mt-1 ${maxRunsInvalid ? 'border-status-critical' : ''}`}
+              type="number"
+              min={0}
+              max={1000}
+              placeholder="제한 없음"
+              value={maxRuns}
+              onChange={(e) => setMaxRuns(e.target.value)}
+            />
+          </label>
           <div className="flex gap-2">
             <button
               type="button"
               className={`${BTN} bg-primary text-primary-foreground`}
               onClick={saveInfo}
-              disabled={!name.trim() || m.update.isPending}
+              disabled={!name.trim() || maxRunsInvalid || m.update.isPending}
             >
               <Save className="w-4 h-4" /> 저장
             </button>
@@ -296,8 +332,81 @@ function TenantDetail({ tenant, users, clusters }: DetailProps) {
         onCancel={() => setConfirmDelete(false)}
       />
 
+      <TenantRunSlotsCard tenant={tenant} slots={runSlots} />
+
       <TenantLlmRoutingCard tenant={tenant} />
     </div>
+  );
+}
+
+const RUN_KIND_LABELS: Record<string, string> = {
+  batch_job: '배치잡',
+  ops_check: '운영 점검',
+  check_matrix_run: '점검 매트릭스 수행',
+  deep_check: '심층 점검',
+  k8s_efficiency_run: '효율화 적용',
+};
+
+function SlotRow({ e }: { e: TenantRunSlotEntry }) {
+  return (
+    <li className="flex items-center justify-between gap-3 rounded-xl border border-border px-3 py-2 text-sm">
+      <span className="min-w-0">
+        <span className="font-medium text-foreground">{RUN_KIND_LABELS[e.kind ?? ''] ?? e.kind ?? '-'}</span>
+        <span className="text-muted-foreground"> · {e.label || e.ref || '-'}</span>
+        {e.clusterName && <span className="text-muted-foreground"> · {e.clusterName}</span>}
+      </span>
+      <span className="shrink-0 text-xs text-muted-foreground">{e.since ? formatRelativeTime(e.since) : ''}</span>
+    </li>
+  );
+}
+
+/**
+ * 멀티테넌시 5단계 — 이 테넌트 클러스터에 대해 도는 백그라운드 실행 슬롯. 상한을 넘은 실행은
+ * 워커를 붙잡지 않고 15초마다 재시도하며 기다린다(최대 약 1시간). 5초마다 갱신한다.
+ */
+function TenantRunSlotsCard({ tenant, slots }: { tenant: Tenant; slots?: TenantRunSlots }) {
+  const limit = tenant.maxConcurrentRuns;
+  return (
+    <MacCard title="실행 슬롯 (동시 실행 상한)">
+      {!limit ? (
+        <p className="text-sm text-muted-foreground">
+          상한이 없습니다. 위 <b>정보</b>에서 동시 실행 상한을 지정하면, 이 테넌트가 소유한 클러스터(operate 바인딩)에
+          대한 배치잡·운영 점검·점검 매트릭스 일괄 수행·심층 점검·효율화 적용이 그 수만큼만 동시에 돌고 나머지는
+          대기합니다. 주기 모니터링과 수집은 제한하지 않습니다.
+        </p>
+      ) : (
+        <div className="space-y-3">
+          <p className="text-sm text-muted-foreground flex items-center gap-2">
+            <Gauge className="w-4 h-4" />
+            실행 중 <b className="text-foreground">{slots?.running.length ?? 0}</b> / {limit}
+            {' · '}대기 <b className="text-foreground">{slots?.waiting.length ?? 0}</b>
+          </p>
+          {slots && !slots.available && (
+            <p className="text-sm text-status-warning">
+              Redis 에 연결할 수 없어 상한이 적용되지 않는 상태입니다(실행은 제한 없이 진행).
+            </p>
+          )}
+          <div className="grid grid-cols-1 xl:grid-cols-2 gap-3">
+            <div>
+              <p className="text-xs text-muted-foreground mb-1">실행 중</p>
+              {slots?.running.length ? (
+                <ul className="space-y-1">{slots.running.map((e, i) => <SlotRow key={`r${i}`} e={e} />)}</ul>
+              ) : (
+                <p className="text-sm text-muted-foreground">없음</p>
+              )}
+            </div>
+            <div>
+              <p className="text-xs text-muted-foreground mb-1">대기 중 (15초마다 재시도 · 최대 약 1시간, 매트릭스 20분)</p>
+              {slots?.waiting.length ? (
+                <ul className="space-y-1">{slots.waiting.map((e, i) => <SlotRow key={`w${i}`} e={e} />)}</ul>
+              ) : (
+                <p className="text-sm text-muted-foreground">없음</p>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+    </MacCard>
   );
 }
 

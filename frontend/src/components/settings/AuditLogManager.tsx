@@ -2,6 +2,7 @@
  * 감사 로그 조회 — Settings ▸ 감사 로그 탭 (admin 전용, SettingsPage 라우트 자체가 RequireAdmin).
  *
  * 로그인 성공/실패, 사용자 CRUD, 역할 변경, 클러스터/플레이북 등 위험 작업 기록 표시.
+ * 멀티테넌시 5단계 — 각 행의 귀속 테넌트를 보여주고 테넌트로 거를 수 있다(테넌트가 있을 때만).
  */
 import { useId, useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
@@ -9,6 +10,7 @@ import { RefreshCw, Search } from 'lucide-react';
 
 import { MacCard } from '@/components/ui/MacCard';
 import { auditLogsApi } from '@/services/api';
+import { useTenants } from '@/hooks/useTenants';
 import type { AuditLog } from '@/types';
 import { formatApiError, parseUTC } from '@/lib/utils';
 
@@ -147,11 +149,13 @@ export function AuditLogManager() {
   const [action, setAction] = useState('');
   const [actorUsername, setActorUsername] = useState('');
   const [status, setStatus] = useState('');
+  const [tenantId, setTenantId] = useState('');
+  const { data: tenants = [] } = useTenants();
 
   // 'batch_job.*' 류 패밀리 선택은 prefix 필터로 변환해 하위 액션 전부를 조회.
   const isPrefix = action.endsWith('.*');
   const { data, isFetching, refetch, error } = useQuery({
-    queryKey: ['audit-logs', page, pageSize, action, actorUsername, status],
+    queryKey: ['audit-logs', page, pageSize, action, actorUsername, status, tenantId],
     queryFn: async () =>
       (await auditLogsApi.list({
         page,
@@ -160,6 +164,7 @@ export function AuditLogManager() {
         actionPrefix: isPrefix ? action.slice(0, -1) : undefined,
         actorUsername: actorUsername || undefined,
         status: status || undefined,
+        tenantId: tenantId || undefined,
       })).data,
   });
 
@@ -209,6 +214,23 @@ export function AuditLogManager() {
             <option value="failure">failure</option>
           </select>
         </div>
+        {tenants.length > 0 && (
+          <div className="flex flex-col">
+            <label htmlFor={f('tenant')} className="text-sm text-muted-foreground mb-1">테넌트</label>
+            <select
+              id={f('tenant')}
+              value={tenantId}
+              onChange={(e) => { setTenantId(e.target.value); setPage(1); }}
+              className="px-2 py-1.5 bg-background border border-border rounded-xl text-sm min-w-[140px]"
+            >
+              <option value="">전체</option>
+              <option value="none">귀속 없음</option>
+              {tenants.map((t) => (
+                <option key={t.id} value={t.id}>{t.name}</option>
+              ))}
+            </select>
+          </div>
+        )}
         <button
           type="button"
           onClick={() => { setPage(1); refetch(); }}
@@ -244,6 +266,7 @@ export function AuditLogManager() {
               <th className="py-2 pr-3 font-medium">사용자</th>
               <th className="py-2 pr-3 font-medium">액션</th>
               <th className="py-2 pr-3 font-medium">대상</th>
+              <th className="py-2 pr-3 font-medium">테넌트</th>
               <th className="py-2 pr-3 font-medium">상태</th>
               <th className="py-2 pr-3 font-medium">IP</th>
               <th className="py-2 pr-3 font-medium">상세</th>
@@ -261,6 +284,7 @@ export function AuditLogManager() {
                   {row.targetType ? `${row.targetType}` : '-'}
                   {row.targetId ? <span className="block text-xs opacity-70 break-all">{row.targetId}</span> : null}
                 </td>
+                <td className="py-2 pr-3 text-sm text-muted-foreground whitespace-nowrap">{row.tenantName || '-'}</td>
                 <td className="py-2 pr-3"><StatusBadge status={row.status} /></td>
                 <td className="py-2 pr-3 text-sm text-muted-foreground font-mono">{row.ip || '-'}</td>
                 <td className="py-2 pr-3 max-w-[420px]"><DetailsCell row={row} /></td>
@@ -268,7 +292,7 @@ export function AuditLogManager() {
             ))}
             {!isFetching && (!data || data.items.length === 0) && (
               <tr>
-                <td colSpan={7} className="py-10 text-center text-sm text-muted-foreground">
+                <td colSpan={8} className="py-10 text-center text-sm text-muted-foreground">
                   표시할 감사 로그가 없습니다.
                 </td>
               </tr>

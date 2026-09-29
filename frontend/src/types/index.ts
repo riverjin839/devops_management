@@ -3462,6 +3462,9 @@ export interface AuditLog {
   userAgent?: string | null;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   details?: Record<string, any> | null;
+  // 멀티테넌시 5단계 — 귀속 테넌트 (이름은 기록 시점 스냅샷)
+  tenantId?: string | null;
+  tenantName?: string | null;
   createdAt: string;
 }
 
@@ -5529,6 +5532,28 @@ export interface Tenant {
   members: TenantMember[];
   bindings: TenantClusterBinding[];
   llmRouting?: TenantLlmRouting;
+  /** 멀티테넌시 5단계 — 백그라운드 실행 동시성 상한 (null = 제한 없음) */
+  maxConcurrentRuns?: number | null;
   createdAt?: string | null;
   updatedAt?: string | null;
+}
+
+/** 테넌트 실행 슬롯 한 칸 — 실행 중 또는 대기 중인 백그라운드 실행 */
+export interface TenantRunSlotEntry {
+  kind?: string | null;
+  ref?: string | null;
+  label?: string | null;
+  clusterId?: string | null;
+  clusterName?: string | null;
+  since?: string | null;
+}
+
+export interface TenantRunSlots {
+  tenantId: string;
+  tenantName: string;
+  limit?: number | null;
+  /** false 면 Redis 미가용 — 상한이 적용되지 않는 상태 */
+  available: boolean;
+  running: TenantRunSlotEntry[];
+  waiting: TenantRunSlotEntry[];
 }
