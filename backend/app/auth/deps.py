@@ -65,11 +65,22 @@ def enforce_cluster_access(
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> None:
-    """실행 계열 라우터 공통 의존성 — 경로의 ``cluster_id`` 에 대한 테넌트 바인딩 강제.
+    """클러스터 범위 라우터 공통 의존성 — 경로의 ``cluster_id`` 에 대한 테넌트 바인딩 강제.
 
-    변경 메서드(POST/PUT/PATCH/DELETE)만 검사한다. 판정은 ``services/cluster_access.py``.
+    조회(GET 등)는 read, 변경(POST/PUT/PATCH/DELETE)은 operate 를 요구한다.
+    판정은 ``services/cluster_access.py``.
     """
     # 지연 import — services 가 models 전체를 끌어오므로 auth 모듈 로드 순서를 가볍게 유지.
     from app.services.cluster_access import enforce_path_cluster_access
 
     enforce_path_cluster_access(request, db, user)
+
+
+def get_cluster_scope(
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """목록형 조회용 — 사용자별 클러스터 가시 범위(``services.cluster_access.ClusterScope``)."""
+    from app.services.cluster_access import ClusterScope, hidden_cluster_ids
+
+    return ClusterScope(hidden_cluster_ids(db, user))

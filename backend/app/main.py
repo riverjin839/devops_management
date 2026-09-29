@@ -2343,14 +2343,14 @@ app.include_router(check_ingest_router, prefix="/api/v1")
 # enforce_feature_access: Settings "접근 제어" 규칙을 화면 전용 API 에도 서버 측에서 강제한다
 # (UI 숨김만으로는 API 직접 호출을 막지 못한다 — app/auth/feature_access.py).
 _auth = [Depends(get_current_user), Depends(enforce_feature_access)]
-# 실행·변경 계열 라우터 — 경로 cluster_id 에 테넌트 바인딩이 있으면 operate 권한을 요구한다
-# (services/cluster_access.py). 바인딩 없는 클러스터는 기존처럼 열려 있다.
+# 경로에 cluster_id 가 있는 라우터 — 테넌트 바인딩이 있으면 조회(GET)는 read, 변경은 operate 를
+# 요구한다 (services/cluster_access.py). 바인딩 없는 클러스터는 기존처럼 열려 있다.
 _cluster_scoped = _auth + [Depends(enforce_cluster_access)]
 app.include_router(clusters_router, prefix="/api/v1", dependencies=_cluster_scoped)
-app.include_router(history_router, prefix="/api/v1", dependencies=_auth)
-app.include_router(core_bundle_router, prefix="/api/v1", dependencies=_auth)
-app.include_router(check_matrix_router, prefix="/api/v1", dependencies=_auth)
-app.include_router(playbooks_router, prefix="/api/v1", dependencies=_auth)
+app.include_router(history_router, prefix="/api/v1", dependencies=_cluster_scoped)
+app.include_router(core_bundle_router, prefix="/api/v1", dependencies=_cluster_scoped)
+app.include_router(check_matrix_router, prefix="/api/v1", dependencies=_cluster_scoped)
+app.include_router(playbooks_router, prefix="/api/v1", dependencies=_cluster_scoped)
 app.include_router(agent_router, prefix="/api/v1", dependencies=_auth)
 app.include_router(llm_settings_router, prefix="/api/v1", dependencies=_auth)
 app.include_router(promql_router, prefix="/api/v1", dependencies=_auth)
@@ -2372,20 +2372,20 @@ app.include_router(reactions_router, prefix="/api/v1", dependencies=_auth)
 app.include_router(mindmap_router, prefix="/api/v1", dependencies=_auth)
 app.include_router(management_server_router, prefix="/api/v1", dependencies=_auth)
 app.include_router(isilon_nfs_router, prefix="/api/v1", dependencies=_auth)
-app.include_router(infra_nodes_router, prefix="/api/v1", dependencies=_auth)
+app.include_router(infra_nodes_router, prefix="/api/v1", dependencies=_cluster_scoped)
 app.include_router(topology_trace_router, prefix="/api/v1", dependencies=_auth)
-app.include_router(ontology_router, prefix="/api/v1", dependencies=_auth)
-app.include_router(analyze_router, prefix="/api/v1", dependencies=_auth)
+app.include_router(ontology_router, prefix="/api/v1", dependencies=_cluster_scoped)
+app.include_router(analyze_router, prefix="/api/v1", dependencies=_cluster_scoped)
 app.include_router(trends_router, prefix="/api/v1", dependencies=_auth)
 app.include_router(versions_router, prefix="/api/v1", dependencies=_cluster_scoped)
 app.include_router(bulk_exec_router, prefix="/api/v1", dependencies=_cluster_scoped)
 app.include_router(saved_scripts_router, prefix="/api/v1", dependencies=_auth)
 app.include_router(scripts_router, prefix="/api/v1", dependencies=_auth)
 app.include_router(etcdctl_router, prefix="/api/v1", dependencies=_cluster_scoped)
-app.include_router(cilium_trace_router, prefix="/api/v1", dependencies=_auth)
+app.include_router(cilium_trace_router, prefix="/api/v1", dependencies=_cluster_scoped)
 app.include_router(mc_client_router, prefix="/api/v1", dependencies=_cluster_scoped)
-app.include_router(node_server_specs_router, prefix="/api/v1", dependencies=_auth)
-app.include_router(cluster_custom_fields_router, prefix="/api/v1", dependencies=_auth)
+app.include_router(node_server_specs_router, prefix="/api/v1", dependencies=_cluster_scoped)
+app.include_router(cluster_custom_fields_router, prefix="/api/v1", dependencies=_cluster_scoped)
 app.include_router(work_item_custom_fields_router, prefix="/api/v1", dependencies=_auth)
 app.include_router(backup_router, prefix="/api/v1", dependencies=_auth)
 app.include_router(schema_health_router, prefix="/api/v1", dependencies=_auth)
@@ -2394,7 +2394,7 @@ app.include_router(commands_router, prefix="/api/v1", dependencies=_auth)
 app.include_router(ansible_files_router, prefix="/api/v1", dependencies=_auth)
 app.include_router(ansible_inventories_router, prefix="/api/v1", dependencies=_auth)
 # Deep check 결과 조회/관리/이력 — JWT 보호.
-app.include_router(check_results_router, prefix="/api/v1", dependencies=_auth)
+app.include_router(check_results_router, prefix="/api/v1", dependencies=_cluster_scoped)
 app.include_router(check_definitions_router, prefix="/api/v1", dependencies=_auth)
 app.include_router(notifications_router, prefix="/api/v1", dependencies=_auth)
 app.include_router(audit_logs_router, prefix="/api/v1", dependencies=_auth)
@@ -2407,16 +2407,16 @@ app.include_router(lake_service_types_router, prefix="/api/v1", dependencies=_au
 # PEP/APP 서비스 상위 카테고리 카탈로그 (Runtime/Catalog/Workflow/JupyterLab 등, Settings 관리).
 app.include_router(service_categories_router, prefix="/api/v1", dependencies=_auth)
 # ops-checks (운영 점검 통합 콘솔) — 여러 점검 소스를 골라 일괄/개별 실행.
-app.include_router(ops_check_router, prefix="/api/v1", dependencies=_auth)
+app.include_router(ops_check_router, prefix="/api/v1", dependencies=_cluster_scoped)
 # k8s-resources (Lens 식 상세 관리) — 리소스 탐색 + 쓰기 액션(require_operator) + RBAC/CRD.
 app.include_router(k8s_resources_router, prefix="/api/v1", dependencies=_cluster_scoped)
 # k8s-allocation (자원 관리) — 노드/NS/워크로드/파드 단위 request vs 사용량(slack) 가시화(읽기 전용).
-app.include_router(k8s_allocation_router, prefix="/api/v1", dependencies=_auth)
+app.include_router(k8s_allocation_router, prefix="/api/v1", dependencies=_cluster_scoped)
 app.include_router(k8s_efficiency_router, prefix="/api/v1", dependencies=_cluster_scoped)
 # cluster-trends — per-node 메트릭 추이(Prometheus range query, 노드 명시선택+상한).
-app.include_router(cluster_trends_router, prefix="/api/v1", dependencies=_auth)
+app.include_router(cluster_trends_router, prefix="/api/v1", dependencies=_cluster_scoped)
 # helm 릴리스 뷰어(읽기 전용).
-app.include_router(k8s_helm_router, prefix="/api/v1", dependencies=_auth)
+app.include_router(k8s_helm_router, prefix="/api/v1", dependencies=_cluster_scoped)
 # pod exec 터미널(WebSocket) — 전역 _auth 미적용, 핸들러 내부에서 토큰 직접 검증.
 app.include_router(k8s_exec_router, prefix="/api/v1")
 # k9s TUI SSH 터미널(WebSocket) — 전역 _auth 미적용, 핸들러 내부에서 토큰 직접 검증.
@@ -2425,9 +2425,9 @@ app.include_router(k9s_ssh_router, prefix="/api/v1")
 # require_operator 를 직접 건다.
 app.include_router(node_ssh_router, prefix="/api/v1")
 # metric-trend — 일일점검 리뷰: 리소스 수 추세 체크리스트(자동/수동 스냅샷 + 체크 + 항목 CRUD).
-app.include_router(metric_trend_router, prefix="/api/v1", dependencies=_auth)
+app.include_router(metric_trend_router, prefix="/api/v1", dependencies=_cluster_scoped)
 # service-topology — 서비스 동작 플로우 가시화(자동 그래프 + 수동 연계 + 실트래픽).
-app.include_router(service_topology_router, prefix="/api/v1", dependencies=_auth)
+app.include_router(service_topology_router, prefix="/api/v1", dependencies=_cluster_scoped)
 app.include_router(architecture_docs_router, prefix="/api/v1", dependencies=_auth)
 app.include_router(cluster_items_router, prefix="/api/v1", dependencies=_cluster_scoped)
 # terminal-appearance — 모든 로그 화면(LogViewer) 공유 글꼴/색상 테마(개인화 + admin 공용 배포).

@@ -1127,6 +1127,9 @@ export const tenantsApi = {
   putMembers: (id: string, userIds: string[]) => api.put<Tenant>(`/tenants/${id}/members`, { userIds }),
   putBindings: (id: string, bindings: { clusterId: string; access: ClusterAccessLevel }[]) =>
     api.put<Tenant>(`/tenants/${id}/bindings`, { bindings }),
+  // 로그인 사용자 기준 — 키: 제한된 클러스터 id, 값: 'read' | 'operate' | null(접근 불가)
+  myClusterAccess: () =>
+    api.get<{ clusters: Record<string, ClusterAccessLevel | null> }>('/tenants/my-cluster-access'),
 };
 
 export const uiSettingsApi = {

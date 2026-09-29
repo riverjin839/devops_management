@@ -13,7 +13,8 @@ from pydantic import BaseModel
 from sqlalchemy import desc
 from sqlalchemy.orm import Session
 
-from app.auth.deps import require_operator
+from app.auth.deps import get_cluster_scope, require_operator
+from app.services.cluster_access import ClusterScope
 from app.config import settings
 from app.database import get_db
 from app.models.k8s_event import K8sEvent
@@ -157,8 +158,9 @@ def list_k8s_events(
     limit: int = Query(default=100, le=500),
     offset: int = 0,
     db: Session = Depends(get_db),
+    scope: ClusterScope = Depends(get_cluster_scope),
 ) -> K8sEventListResponse:
-    q = db.query(K8sEvent).order_by(desc(K8sEvent.received_at))
+    q = scope.apply(db.query(K8sEvent), K8sEvent.cluster_id, nullable=True).order_by(desc(K8sEvent.received_at))
     if cluster_id:
         q = q.filter(K8sEvent.cluster_id == cluster_id)
     if severity:
@@ -171,9 +173,10 @@ def list_k8s_events(
 
 
 @router.get("/{event_id}", response_model=K8sEventOut)
-def get_k8s_event(event_id: UUID, db: Session = Depends(get_db)) -> K8sEventOut:
+def get_k8s_event(event_id: UUID, db: Session = Depends(get_db),
+                  scope: ClusterScope = Depends(get_cluster_scope)) -> K8sEventOut:
     event = db.query(K8sEvent).filter(K8sEvent.id == event_id).first()
-    if not event:
+    if not event or not scope.visible(event.cluster_id):
         raise HTTPException(status_code=404, detail="Event not found")
     return event
 

@@ -23,11 +23,13 @@ from app.main import _ensure_pgvector_extension
 from app.models.audit_log import AuditLog
 from app.models.cluster import Cluster
 from app.models.tenant import ClusterBinding, Tenant, TenantMember
+from app.models.alert_event import AlertEvent
 from app.models.user import User
 from app.services.cluster_access import (
     cluster_access_level,
     cluster_ids_for_host,
     has_cluster_access,
+    hidden_cluster_ids,
 )
 
 
@@ -155,9 +157,16 @@ def test_path_dependency_allows_member_and_unbound(client_as, world):
     assert client_as(world["op_outsider"]).post(_dismiss_url(world["open"].id)).status_code == 404
 
 
-def test_get_is_not_blocked_in_stage1(client_as, world):
-    r = client_as(world["op_outsider"]).get(f"/api/v1/k8s/{world['bound'].id}/efficiency/policies")
-    assert r.status_code != 403
+def test_get_requires_read_binding(client_as, world, db):
+    # 2단계: 조회(GET)도 바인딩 범위로 격리 — 비멤버는 403, read 멤버는 통과.
+    url = f"/api/v1/k8s/{world['bound'].id}/efficiency/policies"
+    assert client_as(world["op_outsider"]).get(url).status_code == 403
+    assert client_as(world["op_member"]).get(url).status_code != 403
+    b = db.query(ClusterBinding).filter(ClusterBinding.cluster_id == world["bound"].id).one()
+    b.access = "read"
+    db.commit()
+    assert client_as(world["op_member"]).get(url).status_code != 403
+    assert client_as(world["op_member"]).post(_dismiss_url(world["bound"].id)).status_code == 403
 
 
 def test_bulk_exec_checks_target_clusters(client_as, world):
@@ -222,3 +231,70 @@ def test_my_cluster_access(client_as, world):
     clusters = r.json()["clusters"]
     assert clusters[str(world["bound"].id)] is None
     assert str(world["open"].id) not in clusters
+
+
+# ── 2단계: 조회 격리 ─────────────────────────────────────────────────────────
+
+def test_hidden_cluster_ids(db, world):
+    assert world["bound"].id in hidden_cluster_ids(db, world["op_outsider"])
+    assert world["open"].id not in hidden_cluster_ids(db, world["op_outsider"])
+    assert hidden_cluster_ids(db, world["op_member"]) == frozenset()
+    assert hidden_cluster_ids(db, world["admin"]) == frozenset()
+
+
+def test_cluster_list_is_filtered(client_as, world):
+    def ids(user):
+        r = client_as(user).get("/api/v1/clusters")
+        assert r.status_code == 200
+        return {c["id"] for c in r.json()["data"]}
+
+    outsider = ids(world["op_outsider"])
+    assert str(world["bound"].id) not in outsider
+    assert str(world["open"].id) in outsider
+    assert str(world["bound"].id) in ids(world["op_member"])
+    assert str(world["bound"].id) in ids(world["admin"])
+
+
+def test_cluster_detail_is_blocked(client_as, world):
+    assert client_as(world["op_outsider"]).get(f"/api/v1/clusters/{world['bound'].id}").status_code == 403
+    assert client_as(world["op_member"]).get(f"/api/v1/clusters/{world['bound'].id}").status_code == 200
+
+
+def test_check_matrix_grid_hides_columns(client_as, world):
+    r = client_as(world["op_outsider"]).get("/api/v1/check-matrix/grid")
+    assert r.status_code == 200
+    cols = {c["id"] for c in r.json()["clusters"]}
+    assert str(world["bound"].id) not in cols
+    assert str(world["open"].id) in cols
+    for row in r.json()["cells"].values():
+        assert str(world["bound"].id) not in row
+
+
+def test_dashboard_summary_is_filtered(client_as, world):
+    r = client_as(world["op_outsider"]).get("/api/v1/daily-check/summary")
+    assert r.status_code == 200
+    assert str(world["bound"].id) not in {s["cluster_id"] for s in r.json()}
+
+
+def test_alerts_are_filtered(client_as, world, db):
+    tag = world["tenant"].name
+    rows = [
+        AlertEvent(fingerprint=f"fp-bound-{tag}", alertname=f"A-{tag}", status="firing", severity="critical",
+                   cluster_id=world["bound"].id),
+        AlertEvent(fingerprint=f"fp-none-{tag}", alertname=f"A-{tag}", status="firing", severity="warning",
+                   cluster_id=None),
+    ]
+    db.add_all(rows)
+    db.commit()
+    try:
+        r = client_as(world["op_outsider"]).get("/api/v1/observability/alerts", params={"alertname": f"A-{tag}"})
+        assert r.status_code == 200
+        got = {a["fingerprint"] for a in r.json()["data"]}
+        assert got == {f"fp-none-{tag}"}  # 클러스터 무관 알람은 남고, 가려진 클러스터 알람은 빠진다
+        assert client_as(world["op_outsider"]).get(
+            f"/api/v1/observability/alerts/{rows[0].id}").status_code == 404
+        assert client_as(world["op_member"]).get(
+            f"/api/v1/observability/alerts/{rows[0].id}").status_code == 200
+    finally:
+        db.query(AlertEvent).filter(AlertEvent.id.in_([r.id for r in rows])).delete(synchronize_session=False)
+        db.commit()
