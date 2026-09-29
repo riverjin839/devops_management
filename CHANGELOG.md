@@ -8,7 +8,7 @@
 
 ## [Unreleased]
 
-1.37.6 이후 main 에 병합된 변경 (다음 릴리스 후보).
+1.38.0 이후 main 에 병합된 변경 (다음 릴리스 후보).
 
 ### Added
 - **업무·지식 데이터 테넌트 공유 범위 (멀티테넌시 3단계)**: 업무 항목·프로젝트·업무 가이드·운영 노트·마인드맵 작성/수정 폼에
@@ -29,6 +29,18 @@
   바인딩이 없는 클러스터는 지금처럼 열려 있고(기존 설치 영향 없음), admin 은 항상 허용, 멤버십은 권한을 좁힐 뿐 넓히지 않는다.
   Backend: `models/tenant.py`(`tenants`/`tenant_members`/`cluster_bindings`), `services/cluster_access.py`, `routers/tenants.py`,
   `main.py` `_cluster_scoped` 의존성. Frontend: `TenantManager`, 터미널 close code `4413` 안내.
+
+## [1.38.0] - 2026-09-29
+
+### Added
+- **대형 클러스터 NS 단위 자원 수집 (`/k8s-allocation`)**: 노드 50개 이상 클러스터는 개요를 네임스페이스 단위로
+  병렬 수집한다(NS 마다 Pod 목록 + NS 단위 Pod metrics). ① 활성 Pod 6000개를 넘으면 비어 있던 **실사용량(usage)이 대형
+  클러스터에서도 표시**된다 ② 한 NS 의 조회 실패·절단은 그 NS 만 빠지고 페이지 상단에 "네임스페이스 n개 수집 실패" 로
+  안내된다 ③ 완료한 NS 는 Redis 에 남아, 집계하던 파드가 죽어 다른 파드가 인계하면 **처음부터가 아니라 이어서** 모은다
+  ④ 진행은 "네임스페이스 12 / 340 수집 완료" 로 보인다. 작은 클러스터는 기존 방식 그대로(요청 수 최소).
+  Backend: `routers/k8s_allocation.py`(`_collect_by_namespace`, 공용 누적기 `_add_pod`/`_merge_acc`, 응답
+  `collect_mode`·`failed_namespaces`, `K8S_ALLOC_COLLECT_MODE`·`NS_MODE_MIN_NODES`·`NS_WORKERS`·`NS_RESUME_TTL`),
+  `services/snapshot_jobs.py`(인계 시 `Progress.resume_since`). Frontend: 페이지 상단 실패 NS 안내·진행 단계 문구.
 
 ## [1.37.6] - 2026-09-29
 

@@ -41,6 +41,8 @@ export function allocPhaseText(phase: string | undefined, processed: number | un
   if (!phase) return undefined;
   if (phase === 'nodes') return '노드·네임스페이스 목록 조회 중';
   if (phase === 'pod_metrics') return '실사용량(metrics) 조회 중';
+  const ns = /^ns:(\d+)\/(\d+)$/.exec(phase);
+  if (ns) return `네임스페이스 ${ns[1]} / ${ns[2]} 수집 완료 (NS 단위 수집)`;
   const m = /^pods:(\d+)$/.exec(phase);
   if (m) return `Pod 목록 ${m[1]}번째 페이지 ${processed ? '처리 중' : '응답 대기 중'}`;
   return undefined;
