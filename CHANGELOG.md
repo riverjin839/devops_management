@@ -8,7 +8,9 @@
 
 ## [Unreleased]
 
-1.37.5 이후 main 에 병합된 변경 (다음 릴리스 후보).
+1.37.6 이후 main 에 병합된 변경 (다음 릴리스 후보).
+
+## [1.37.6] - 2026-09-29
 
 ### Fixed
 - **백업 export 가 viewer 에게도 열려 있던 권한 구멍 (Settings ▸ 백업 / 복구)**: `GET /backup/export`·`/backup/meta` 가
