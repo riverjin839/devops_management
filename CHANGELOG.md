@@ -11,6 +11,14 @@
 1.38.0 이후 main 에 병합된 변경 (다음 릴리스 후보).
 
 ### Added
+- **메트릭 카드 공유 범위 · 테넌트별 LLM 라우팅/사용량 (멀티테넌시 4단계)**: PromQL 메트릭 카드 추가/수정 모달에 "공유 범위"가
+  생겨, 테넌트 전용 카드는 그 멤버·admin 대시보드에만 보인다(목록·단건·쿼리·스파크라인·`/query/all` 캐시 응답까지).
+  Settings ▸ 테넌트에 **LLM 라우팅** 카드가 생겨 용도별(챗봇·장애 분석·리뷰·아키텍처 문서·트렌드) 프로필을 테넌트마다 따로
+  지정할 수 있고, 멤버가 Agent 채팅을 쓰면 전역 라우팅 대신 그 프로필을 쓴다(테넌트 전용 키 프로필로 비용 분리). 임베딩은
+  pgvector 호환 때문에 제외. 테넌트 목록에 최근 24h LLM 호출 수가 보인다. 지정하지 않으면 동작 변화 없음.
+  Backend: `metric_cards.tenant_id`, `tenants.llm_routing`(`_safe_add_column`), `services/llm/service.py`(`llm_tenant_context`·
+  `effective_route`·테넌트 사용량 `llm:tstats`), `tenant_scope.resolve_llm_tenant`, `PUT /tenants/{id}/llm-routing`·
+  `GET /tenants/llm-usage`. Frontend: `AddMetricCardModal`, `TenantManager` `TenantLlmRoutingCard`.
 - **업무·지식 데이터 테넌트 공유 범위 (멀티테넌시 3단계)**: 업무 항목·프로젝트·업무 가이드·운영 노트·마인드맵 작성/수정 폼에
   "공유 범위"가 생겼다. `전체 공유`(기본, 기존 데이터 전부)가 아니라 테넌트를 고르면 그 테넌트 멤버와 admin 만 목록·상세·검색에서
   보고 수정할 수 있다(그 외에는 404). 비공개 프로젝트 안의 업무 항목은 프로젝트 멤버에게만 보이고, 비공개 프로젝트를 지우면 소속

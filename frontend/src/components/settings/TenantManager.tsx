@@ -1,13 +1,13 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Building2, Plus, Save, Trash2, Users as UsersIcon, Server } from 'lucide-react';
-import { authApi } from '@/services/api';
+import { Building2, Plus, Save, Trash2, Users as UsersIcon, Server, Bot } from 'lucide-react';
+import { authApi, llmApi } from '@/services/api';
 import { useClusters } from '@/hooks/useCluster';
-import { useTenantMutations, useTenants } from '@/hooks/useTenants';
+import { useTenantLlmUsage, useTenantMutations, useTenants } from '@/hooks/useTenants';
 import { ConfirmDialog, useToast } from '@/components/common';
 import { MacCard } from '@/components/ui/MacCard';
 import { formatApiError } from '@/lib/utils';
-import type { ClusterAccessLevel, Tenant } from '@/types';
+import type { ClusterAccessLevel, Tenant, TenantLlmRouting } from '@/types';
 
 type BindingChoice = 'none' | ClusterAccessLevel;
 
@@ -31,6 +31,8 @@ export function TenantManager() {
     queryFn: () => authApi.listUsers().then((r) => r.data),
   });
   const m = useTenantMutations();
+  const { data: llmUsage = [] } = useTenantLlmUsage();
+  const usageBy = useMemo(() => new Map(llmUsage.map((u) => [u.tenantId, u])), [llmUsage]);
 
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [newName, setNewName] = useState('');
@@ -111,6 +113,7 @@ export function TenantManager() {
                   </span>
                   <span className="block text-xs text-muted-foreground mt-0.5 pl-6">
                     멤버 {t.members.length} · 클러스터 {t.bindings.length}
+                    {usageBy.get(t.id) ? ` · LLM 24h ${usageBy.get(t.id)?.count}회` : ''}
                   </span>
                 </button>
               </li>
@@ -292,6 +295,93 @@ function TenantDetail({ tenant, users, clusters }: DetailProps) {
         onConfirm={remove}
         onCancel={() => setConfirmDelete(false)}
       />
+
+      <TenantLlmRoutingCard tenant={tenant} />
     </div>
+  );
+}
+
+// 테넌트별로 바꿀 수 있는 LLM 용도 — 임베딩은 제외(pgvector 에 저장된 벡터와 호환이 깨진다).
+// axios 인터셉터가 키를 camelCase 로 바꾸므로 purpose 키도 camelCase 로 다룬다.
+const TENANT_LLM_PURPOSES: { key: string; label: string }[] = [
+  { key: 'chat', label: 'AI 챗봇' },
+  { key: 'incidentAnalysis', label: '장애 분석' },
+  { key: 'reviewSummary', label: '점검 리뷰/요약' },
+  { key: 'archDoc', label: '아키텍처 문서' },
+  { key: 'trends', label: '기술 트렌드 요약' },
+];
+
+/**
+ * 멀티테넌시 4단계 — 이 테넌트 멤버가 사용자 요청(현재 Agent 채팅)으로 LLM 을 부를 때 쓰는
+ * 용도별 프로필. 비우면 전역 라우팅(Settings ▸ AI / LLM)을 따른다. 테넌트 전용 키
+ * (`credential:<name>`)를 쓰는 프로필로 보내면 비용이 분리된다.
+ */
+function TenantLlmRoutingCard({ tenant }: { tenant: Tenant }) {
+  const toast = useToast();
+  const m = useTenantMutations();
+  const { data: llm } = useQuery({
+    queryKey: ['tenant-manager', 'llm-profiles'],
+    queryFn: () => llmApi.getSettings().then((r) => r.data.data),
+  });
+  const profiles = (llm?.profiles ?? []).map((p) => p.name);
+  const [routing, setRouting] = useState<TenantLlmRouting>({});
+  useEffect(() => { setRouting(tenant.llmRouting ?? {}); }, [tenant]);
+
+  const setRoute = (purpose: string, field: 'primary' | 'fallback', value: string) =>
+    setRouting((cur) => ({ ...cur, [purpose]: { ...cur[purpose], [field]: value || null } }));
+
+  const save = () =>
+    m.putLlmRouting.mutate({ id: tenant.id, routing }, {
+      onSuccess: () => toast.success('LLM 라우팅 저장됨'),
+      onError: (e) => toast.error('저장 실패', formatApiError(e)),
+    });
+
+  const selectCls = 'rounded-xl border border-border bg-background px-2 py-1 text-sm';
+  return (
+    <MacCard title="LLM 라우팅 (테넌트 전용)">
+      <p className="text-xs text-muted-foreground mb-3">
+        이 테넌트 멤버가 Agent 채팅을 쓸 때 용도별로 보낼 LLM 프로필입니다. 비워 두면 전역 라우팅을 따릅니다.
+        여러 테넌트에 속한 사용자는 라우팅을 지정한 테넌트 중 이름순 첫 테넌트를 따릅니다.
+      </p>
+      <div className="space-y-1.5">
+        {TENANT_LLM_PURPOSES.map(({ key, label }) => (
+          <div key={key} className="grid grid-cols-[140px_1fr_1fr] gap-2 items-center text-sm">
+            <span className="flex items-center gap-1.5 font-medium">
+              <Bot className="w-4 h-4 text-muted-foreground" />
+              {label}
+            </span>
+            <select
+              className={selectCls}
+              value={routing[key]?.primary ?? ''}
+              onChange={(e) => setRoute(key, 'primary', e.target.value)}
+              aria-label={`${label} primary 프로필`}
+            >
+              <option value="">전역 라우팅 따름</option>
+              {profiles.map((p) => <option key={p} value={p}>{p}</option>)}
+            </select>
+            <select
+              className={selectCls}
+              value={routing[key]?.fallback ?? ''}
+              onChange={(e) => setRoute(key, 'fallback', e.target.value)}
+              disabled={!routing[key]?.primary}
+              aria-label={`${label} fallback 프로필`}
+            >
+              <option value="">fallback 없음</option>
+              {profiles.filter((p) => p !== routing[key]?.primary).map((p) => <option key={p} value={p}>{p}</option>)}
+            </select>
+          </div>
+        ))}
+      </div>
+      <div className="flex justify-end mt-3">
+        <button
+          type="button"
+          className="inline-flex items-center gap-1.5 rounded-xl px-3 py-2 text-sm font-medium bg-primary text-primary-foreground disabled:opacity-50"
+          onClick={save}
+          disabled={m.putLlmRouting.isPending}
+        >
+          <Save className="w-4 h-4" /> 라우팅 저장
+        </button>
+      </div>
+    </MacCard>
   );
 }

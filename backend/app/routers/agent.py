@@ -22,6 +22,8 @@ from app.models.agent_conversation import AgentConversation, AgentMessage
 from app.models.user import User
 from app.services.agent_service import agent_service
 from app.services.llm import llm_service
+from app.services.llm.service import llm_tenant_context
+from app.services.tenant_scope import resolve_llm_tenant
 from app.services.llm.response_parser import extract_info_requests
 
 logger = logging.getLogger(__name__)
@@ -217,7 +219,9 @@ async def agent_chat(
     conv = _resolve_conversation(db, body.conversation_id, body.query, user)
     prompt, citations = await _build_chat_prompt(db, conv, body.query, body.context)
 
-    result = await agent_service._call_llm(prompt, purpose="chat")
+    # 멀티테넌시 4단계 — 사용자 테넌트의 LLM 라우팅 오버라이드 + 테넌트별 사용량 집계
+    with llm_tenant_context(resolve_llm_tenant(db, user)):
+        result = await agent_service._call_llm(prompt, purpose="chat")
     answer, requests = extract_info_requests(result.get("answer", ""))
     if not answer:
         answer = result.get("answer", "")
@@ -250,6 +254,7 @@ async def agent_chat_stream(
     conv = _resolve_conversation(db, body.conversation_id, body.query, user)
     prompt, citations = await _build_chat_prompt(db, conv, body.query, body.context)
     conversation_id = str(conv.id) if conv is not None else None
+    llm_tenant = resolve_llm_tenant(db, user)  # 스트림 시작 전에 확정 (4단계)
 
     async def _gen():
         collected: list[str] = []
@@ -257,15 +262,16 @@ async def agent_chat_stream(
         final_model = ""
         final_error: Optional[str] = None
         try:
-            async for chunk in llm_service.chat_stream_for_purpose("chat", prompt):
-                if not chunk.done:
-                    if chunk.delta:
-                        collected.append(chunk.delta)
-                        yield f"data: {json.dumps({'delta': chunk.delta}, ensure_ascii=False)}\n\n"
-                    continue
-                final_status = chunk.status
-                final_model = chunk.model
-                final_error = chunk.error
+            with llm_tenant_context(llm_tenant):
+                async for chunk in llm_service.chat_stream_for_purpose("chat", prompt):
+                    if not chunk.done:
+                        if chunk.delta:
+                            collected.append(chunk.delta)
+                            yield f"data: {json.dumps({'delta': chunk.delta}, ensure_ascii=False)}\n\n"
+                        continue
+                    final_status = chunk.status
+                    final_model = chunk.model
+                    final_error = chunk.error
         except Exception as exc:  # noqa: BLE001  (게이트웨이는 원래 raise 안 하지만 방어적으로)
             logger.exception("chat stream 예외: %s", exc)
             final_status = "error"

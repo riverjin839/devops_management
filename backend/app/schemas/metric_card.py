@@ -5,6 +5,8 @@ from pydantic import BaseModel, Field
 
 
 class MetricCardBase(BaseModel):
+    # 멀티테넌시 4단계 — None = 전체 공유
+    tenant_id: Optional[UUID] = None
     title: str = Field(..., min_length=1, max_length=100)
     description: Optional[str] = None
     icon: str = "📊"
@@ -23,6 +25,8 @@ class MetricCardCreate(MetricCardBase):
 
 
 class MetricCardUpdate(BaseModel):
+    # 멀티테넌시 4단계 — None = 전체 공유
+    tenant_id: Optional[UUID] = None
     title: Optional[str] = None
     description: Optional[str] = None
     icon: Optional[str] = None

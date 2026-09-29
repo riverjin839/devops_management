@@ -55,6 +55,8 @@ class TenantOut(BaseModel):
     description: Optional[str] = None
     members: list[TenantMemberOut] = []
     bindings: list[ClusterBindingOut] = []
+    # 멀티테넌시 4단계 — {purpose: {primary, fallback}}
+    llm_routing: dict = {}
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
 
@@ -75,6 +77,25 @@ class TenantMembersPut(BaseModel):
 
 class TenantBindingsPut(BaseModel):
     bindings: list[ClusterBindingIn] = []
+
+
+class LlmRouteIn(BaseModel):
+    primary: Optional[str] = None
+    fallback: Optional[str] = None
+
+
+class TenantLlmRoutingPut(BaseModel):
+    # purpose → 라우팅. primary 가 비면 그 purpose 는 전역 라우팅을 따른다(오버라이드 제거).
+    routing: dict[str, LlmRouteIn] = {}
+
+
+class TenantLlmUsage(BaseModel):
+    tenant_id: str
+    tenant_name: Optional[str] = None
+    count: int = 0
+    errors: int = 0
+    prompt_tokens: int = 0
+    completion_tokens: int = 0
 
 
 class TenantBrief(BaseModel):
@@ -124,6 +145,7 @@ def _tenant_out(db: Session, t: Tenant) -> TenantOut:
             ClusterBindingOut(cluster_id=b.cluster_id, access=b.access, cluster_name=name)
             for b, name in bindings
         ],
+        llm_routing=t.llm_routing or {},
         created_at=t.created_at,
         updated_at=t.updated_at,
     )
@@ -168,6 +190,19 @@ def my_tenants(db: Session = Depends(get_db), user: User = Depends(get_current_u
     if user.role != "admin":
         q = q.join(TenantMember, TenantMember.tenant_id == Tenant.id).filter(TenantMember.user_id == user.id)
     return [TenantBrief(id=t.id, name=t.name) for t in q.order_by(Tenant.name).all()]
+
+
+@router.get("/llm-usage", response_model=list[TenantLlmUsage])
+def tenant_llm_usage(db: Session = Depends(get_db), _: User = Depends(require_admin)):
+    """테넌트별 최근 24h LLM 사용량(호출·오류·토큰) — 비용 귀속용. Redis 미가용이면 빈 목록."""
+    from app.services.llm import llm_service
+
+    stats = llm_service.tenant_usage_stats()
+    names = {str(t.id): t.name for t in db.query(Tenant).all()}
+    return [
+        TenantLlmUsage(tenant_id=tid, tenant_name=names.get(tid), **agg)
+        for tid, agg in sorted(stats.items(), key=lambda kv: -kv[1].get("count", 0))
+    ]
 
 
 @router.get("", response_model=list[TenantOut])
@@ -287,4 +322,40 @@ def put_bindings(tenant_id: UUID, body: TenantBindingsPut, request: Request, db:
     db.commit()
     audit_logger.record(db, action="tenant.bindings.update", actor=actor, target_type="tenant", target_id=t.id,
                         details={"name": t.name, "changes": changes}, request=request)
+    return _tenant_out(db, t)
+
+
+@router.put("/{tenant_id}/llm-routing", response_model=TenantOut)
+def put_llm_routing(tenant_id: UUID, body: TenantLlmRoutingPut, request: Request,
+                    db: Session = Depends(get_db), actor: User = Depends(require_admin)):
+    """테넌트 LLM 라우팅 오버라이드 저장 — 지정한 purpose 만 전역 llm_settings.routing 을 덮는다.
+
+    이 테넌트 멤버가 Agent 채팅 등 사용자 요청으로 LLM 을 부를 때 적용된다(services/llm/service.py
+    ``effective_route``). 테넌트 전용 키(``credential:<name>``)를 쓰는 프로필로 보내면 비용이 분리된다.
+    """
+    from app.services.llm import llm_service
+    from app.services.llm.service import PURPOSES, TENANT_ROUTING_EXCLUDED
+
+    t = _get_tenant_or_404(db, tenant_id)
+    profiles = {p["name"] for p in llm_service.resolve_settings(db)["profiles"]}
+    cleaned: dict[str, dict] = {}
+    for purpose, route in body.routing.items():
+        if not route.primary:
+            continue  # 비우면 전역 라우팅
+        if purpose not in PURPOSES or purpose in TENANT_ROUTING_EXCLUDED:
+            raise HTTPException(status_code=422, detail=f"테넌트별로 바꿀 수 없는 용도입니다: {purpose}")
+        for name in (route.primary, route.fallback):
+            if name and name not in profiles:
+                raise HTTPException(status_code=422, detail=f"존재하지 않는 LLM 프로필: {name}")
+        cleaned[purpose] = {
+            "primary": route.primary,
+            "fallback": route.fallback if route.fallback and route.fallback != route.primary else None,
+        }
+    before = t.llm_routing or {}
+    t.llm_routing = cleaned or None
+    db.commit()
+    db.refresh(t)
+    audit_logger.record(db, action="tenant.llm_routing.update", actor=actor, target_type="tenant",
+                        target_id=t.id, details={"name": t.name, "before": before, "after": cleaned},
+                        request=request)
     return _tenant_out(db, t)
