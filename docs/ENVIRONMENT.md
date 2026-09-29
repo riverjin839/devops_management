@@ -38,6 +38,9 @@
 |---|---|---|
 | `CHECK_INTERVAL_MINUTES` | `5` | Health check interval |
 | `CHECK_TIMEOUT_SECONDS` | `30` | kubectl/HTTP timeout |
+| `LOG_STREAM_MAX_CONCURRENT` | `20` | Pod 로그/클러스터 이벤트 SSE(`analyze.py`) 프로세스당 동시 스트림 상한. kubernetes SDK 가 blocking 이라 스트림 하나가 anyio 스레드풀 슬롯을 스트림 수명 내내 점유한다 — 초과 요청은 429 |
+| `LOG_STREAM_MAX_DURATION_SECONDS` | `1800` | `follow=True` pod 로그 스트림 최대 수명(초). 초과 시 정상 종료 메시지를 보내고 끊는다(프론트가 재연결) |
+| `SYNC_THREADPOOL_SIZE` | `100` | sync 라우트(전체의 대다수)가 공유하는 anyio 스레드풀 총량. 기본값(40)은 kubectl subprocess·SSH·로그 스트림처럼 오래 걸리는 sync 요청 비중이 높은 이 앱에는 작아서 부팅 시 lifespan 에서 이 값으로 올린다 |
 | `KUBECONFIG_STORE_DIR` | `/tmp/k8s-monitor/kubeconfigs` | content 방식 kubeconfig 저장 위치 |
 | `KUBEWATCH_TOKEN` | *(empty)* | kubewatch 웹훅 Bearer 토큰. **fail-closed** — 미설정 시 웹훅 수신 자체를 503 으로 거부(deep_check ingest 의 `SUPERPOD_INGEST_TOKEN` 과 동일 정책) |
 | `ALERT_INGEST_TOKEN` | *(empty)* | 인시던트 알람 수신(Alertmanager webhook · 사내 alert-forwarder) Bearer 토큰. **fail-closed** — 미설정 시 `POST /observability/alerts/ingest` 및 `/observability/snapshot/ingest` 를 503 으로 거부 |

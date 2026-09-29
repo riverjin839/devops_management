@@ -69,4 +69,9 @@ COPY . .
 EXPOSE 8000
 
 # 실행
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+# --workers 2: 단일 프로세스는 sync 라우트(전체의 89%)가 전부 같은 anyio 스레드풀을
+# 나눠 쓰므로, 로그 스트림 등 오래 걸리는 요청 하나가 한 프로세스의 슬롯을 다 먹으면
+# 그 프로세스가 받는 나머지 요청 전체가 멈춘다. 워커 2개(=replicas 2 와 동일 배수)로
+# 그 장애가 최소 절반의 용량에만 미치게 한다. celery worker/beat 는 별도 컨테이너/
+# 커맨드로 이 이미지를 쓰므로 영향 없음.
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "2"]

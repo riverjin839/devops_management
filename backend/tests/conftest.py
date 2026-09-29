@@ -25,18 +25,11 @@ def _stub_if_missing(name: str) -> types.ModuleType | None:
 
 
 # ── Optional deps that only some tests need ─────────────────────────────
-# `feedparser` is used by trends/rss_collector; `jose` by app.auth.security.
-# Real packages exist in CI/full-dev requirements.txt and will be left alone.
+# `feedparser` is used by trends/rss_collector. Real package exists in
+# CI/full-dev requirements.txt and will be left alone.
+# (app.auth.security 는 PyJWT/bcrypt 를 쓴다 — 둘 다 필수 의존이라 스텁이 필요 없다.)
 
 _stub_if_missing("feedparser")
-
-if _stub_if_missing("jose") is not None:
-    # Real jose absent — also stub the symbols app code imports.
-    jose = sys.modules["jose"]
-    if not hasattr(jose, "jwt"):
-        jose.jwt = _stub_if_missing("jose.jwt") or types.ModuleType("jose.jwt")
-    if not hasattr(jose, "JWTError"):
-        jose.JWTError = Exception  # type: ignore[attr-defined]
 
 
 # ── Standard env-vars required by app.config / SQLAlchemy engine init ──────

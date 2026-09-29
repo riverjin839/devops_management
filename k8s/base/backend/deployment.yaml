@@ -90,6 +90,14 @@ spec:
                 secretKeyRef:
                   name: k8s-monitor-secret
                   key: SECRET_KEY
+            # uvicorn --workers 2(Dockerfile) 라 pod 당 SQLAlchemy 엔진이 2개 뜬다.
+            # 기본 풀(10+20=30)을 그대로 두면 pod 당 예산이 60 으로 배가되어 celery
+            # worker/beat 오버라이드(config.py 주석의 예산 계산)를 깨뜨린다 — 워커 수만큼
+            # 나눠서 이전과 같은 pod 당 총 예산(30)을 유지.
+            - name: DB_POOL_SIZE
+              value: "5"
+            - name: DB_MAX_OVERFLOW
+              value: "10"
             - name: PROMETHEUS_URL
               valueFrom:
                 configMapKeyRef:
