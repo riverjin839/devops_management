@@ -44,6 +44,9 @@ class Progress:
     phase: str = ""
     # 빌더가 주기적으로 publish 하는 중간(부분) 결과 — 누적 표시용. ready 전에도 노출된다.
     partial: Any = None
+    # 죽은(또는 행업) 계산을 인계해 시작한 경우 그 계산의 시작 시각 — 빌더가 그 이후에 저장된
+    # 중간 결과(예: NS 단위 수집의 완료 NS)를 재사용해 처음부터 다시 하지 않게 한다. 새 계산이면 None.
+    resume_since: Optional[float] = None
 
     @property
     def ratio(self) -> Optional[float]:
@@ -550,6 +553,11 @@ class SnapshotManager:
                 result = store.get_json(key, "result")
                 if result is not None and (now - float(finished)) < self._effective_ttl_for(result):
                     return self._shared_view(key, meta)
+        # 인계라면 이어하기 기준 시각 — 인계당한 계산이 이미 이어하기였으면 그 기준을 물려받는다
+        # (A 가 죽고 B 가 이어받다 또 죽으면, C 는 A 가 모은 결과까지 재사용할 수 있어야 한다).
+        resume_since: Optional[float] = None
+        if meta and meta.get("status") == "computing":
+            resume_since = meta.get("resume_since") or meta.get("started_at")
         # 새 계산 — 리더 선출(락). 실패하면 다른 replica 가 이미 돌리는 중.
         token = f"{_OWNER}:{uuid.uuid4().hex[:8]}"
         if not store.acquire_lock(key, token, self._heartbeat_timeout):
@@ -560,7 +568,7 @@ class SnapshotManager:
         new_meta = {
             "status": "computing", "started_at": now, "finished_at": None, "heartbeat_at": now,
             "processed": 0, "total": last_total, "phase": "", "error": None,
-            "last_total": last_total, "owner": token,
+            "last_total": last_total, "owner": token, "resume_since": resume_since,
         }
         store.set_json(key, "meta", new_meta)
         store.delete(key, "partial")
@@ -602,6 +610,8 @@ class SnapshotManager:
                                    token=token)
         if meta.get("last_total"):
             prog.total = meta["last_total"]
+        if meta.get("resume_since"):
+            object.__setattr__(prog, "resume_since", float(meta["resume_since"]))
         stop = threading.Event()
         beat = threading.Thread(target=self._heartbeat_loop, args=(key, token, prog, stop),
                                 name=f"snap-hb-{key[:20]}", daemon=True)

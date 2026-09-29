@@ -13,6 +13,7 @@ import { useAllocProgress, useForceAllocRefresh } from '@/hooks/useK8sAllocation
 import {
   SummarySection, SummaryStrip, PodCapacityStatusCards, NodesView, NamespacesView, NsRankingView,
   EfficiencyTab, AllocDetailDialog, csvCluster, readSummaryDetailPref, writeSummaryDetailPref,
+  allocPhaseText,
 } from '@/components/k8s-allocation';
 import type { AllocDetailTarget } from '@/components/k8s-allocation';
 
@@ -46,6 +47,8 @@ export function K8sAllocationPage() {
   const prog = progQ.data;
   const { refresh: forceRefresh, isPending: refreshPending, isError: refreshFailed } = useForceAllocRefresh(clusterId);
   const computing = prog?.status === 'computing';
+  const phaseText = allocPhaseText(prog?.phase, prog?.processed);
+  const failedNs = prog?.failedNamespaces ?? [];
   const isFetching = progQ.isFetching || refreshPending;
   const clusterName = clusters.find((c) => c.id === clusterId)?.name;
   const contentRef = useRef<HTMLDivElement>(null);
@@ -120,14 +123,16 @@ export function K8sAllocationPage() {
                   processed={prog?.processed ?? 0}
                   total={prog?.total ?? null}
                   progress={prog?.progress ?? null}
-                  label="자원 누적 집계 중"
+                  label={phaseText ? `자원 누적 집계 중 · ${phaseText}` : '자원 누적 집계 중'}
                 />
               ) : (prog?.partial || prog?.stale) ? (
                 <div className="flex items-center gap-1.5 text-xs text-status-warning py-1">
-                  <AlertTriangle className="w-3.5 h-3.5" />
-                  {prog?.partial
-                    ? '일부만 집계된 잠정 결과입니다 — API 응답 지연/절단으로 재집계가 자동으로 재시도됩니다.'
-                    : '재집계 중이라 직전 스냅샷을 표시하고 있습니다.'}
+                  <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
+                  {failedNs.length
+                    ? `네임스페이스 ${failedNs.length}개의 수집이 실패·절단되어 그 값이 빠진 잠정 결과입니다 — ${failedNs.slice(0, 5).join(', ')}${failedNs.length > 5 ? ` 외 ${failedNs.length - 5}개` : ''}. 새로고침으로 다시 집계할 수 있습니다.`
+                    : prog?.partial
+                      ? '일부만 집계된 잠정 결과입니다 — API 응답 지연/절단으로 재집계가 자동으로 재시도됩니다.'
+                      : '재집계 중이라 직전 스냅샷을 표시하고 있습니다.'}
                 </div>
               ) : null}
             </div>

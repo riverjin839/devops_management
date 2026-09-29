@@ -44,9 +44,11 @@ export function useAllocNamespaces(clusterId: string) {
   });
 }
 
-export type AllocProgress = Pick<AllocSnapshotMeta, 'status' | 'progress' | 'processed' | 'total' | 'partial' | 'stale'>;
+export type AllocProgress = Pick<AllocSnapshotMeta, 'status' | 'progress' | 'processed' | 'total' | 'partial' | 'stale' | 'phase'>
+  & Pick<AllocNamespacesResponse, 'failedNamespaces'>;
 const selectProgress = (d: AllocNamespacesResponse): AllocProgress => ({
   status: d.status, progress: d.progress, processed: d.processed, total: d.total, partial: d.partial, stale: d.stale,
+  phase: d.phase, failedNamespaces: d.failedNamespaces,
 });
 
 /** 페이지 루트용 경량 구독 — 같은 캐시(['alloc-namespaces'])에서 진행 메타만 select 해
