@@ -5,6 +5,8 @@ from typing import Optional, List
 
 
 class WorkGuideCreate(BaseModel):
+    # 멀티테넌시 3단계 — None = 전체 공유, 값이 있으면 그 테넌트 멤버·admin 만 본다.
+    tenant_id: Optional[UUID] = None
     title: str = Field(..., min_length=1, max_length=200)
     content: Optional[str] = None
     category: Optional[str] = None
@@ -18,6 +20,8 @@ class WorkGuideCreate(BaseModel):
 
 
 class WorkGuideUpdate(BaseModel):
+    # 멀티테넌시 3단계 — None = 전체 공유, 값이 있으면 그 테넌트 멤버·admin 만 본다.
+    tenant_id: Optional[UUID] = None
     title: Optional[str] = Field(None, min_length=1, max_length=200)
     content: Optional[str] = None
     category: Optional[str] = None
@@ -31,6 +35,8 @@ class WorkGuideUpdate(BaseModel):
 
 
 class WorkGuideResponse(BaseModel):
+    # 멀티테넌시 3단계 — None = 전체 공유, 값이 있으면 그 테넌트 멤버·admin 만 본다.
+    tenant_id: Optional[UUID] = None
     id: UUID
     parent_id: Optional[UUID] = None
     title: str

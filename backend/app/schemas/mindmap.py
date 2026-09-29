@@ -44,6 +44,8 @@ class MindMapNodeResponse(MindMapNodeBase):
 
 
 class MindMapBase(BaseModel):
+    # 멀티테넌시 3단계 — None = 전체 공유, 값이 있으면 그 테넌트 멤버·admin 만 본다.
+    tenant_id: Optional[UUID] = None
     title: str
     description: Optional[str] = None
     confluence_url: Optional[str] = Field(default=None, max_length=2048)
@@ -54,6 +56,8 @@ class MindMapCreate(MindMapBase):
 
 
 class MindMapUpdate(BaseModel):
+    # 멀티테넌시 3단계 — None = 전체 공유, 값이 있으면 그 테넌트 멤버·admin 만 본다.
+    tenant_id: Optional[UUID] = None
     title: Optional[str] = None
     description: Optional[str] = None
     confluence_url: Optional[str] = Field(default=None, max_length=2048)

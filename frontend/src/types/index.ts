@@ -436,6 +436,8 @@ export interface MetricCard {
 export type ProjectStatus = 'active' | 'completed' | 'paused';
 
 export interface Project {
+  /** 멀티테넌시 3단계 — null/미지정 = 전체 공유, 값이 있으면 그 테넌트 멤버·admin 만 본다. */
+  tenantId?: string | null;
   id: string;
   name: string;
   description?: string;
@@ -453,6 +455,8 @@ export interface Project {
 }
 
 export interface ProjectCreate {
+  /** 멀티테넌시 3단계 — null/미지정 = 전체 공유, 값이 있으면 그 테넌트 멤버·admin 만 본다. */
+  tenantId?: string | null;
   name: string;
   description?: string;
   goal?: string;
@@ -516,6 +520,8 @@ export type WorkItemModule = 'k8s' | 'keycloak' | 'nexus' | 'cilium' | 'argocd' 
 export type WorkItemTypeLabel = 'feature' | 'bug' | 'chore' | 'docs' | 'security';
 
 export interface WorkItem {
+  /** 멀티테넌시 3단계 — null/미지정 = 전체 공유, 값이 있으면 그 테넌트 멤버·admin 만 본다. */
+  tenantId?: string | null;
   id: string;
   /** 업무 유형 디스크리미네이터 (task/issue/meeting/training/etc). 생성 시 결정, 변경 불가. */
   type: WorkItemType;
@@ -1071,6 +1077,8 @@ export interface WorkItemStatusResponse {
 }
 
 export interface WorkItemCreate {
+  /** 멀티테넌시 3단계 — null/미지정 = 전체 공유, 값이 있으면 그 테넌트 멤버·admin 만 본다. */
+  tenantId?: string | null;
   type: WorkItemType;
   assignee: string;
   primaryAssignee: string;
@@ -1326,6 +1334,8 @@ export interface WorkflowEdgeCreate {
 
 // Work Guide Board (Confluence-style)
 export interface WorkGuide {
+  /** 멀티테넌시 3단계 — null/미지정 = 전체 공유, 값이 있으면 그 테넌트 멤버·admin 만 본다. */
+  tenantId?: string | null;
   id: string;
   parentId?: string | null;
   title: string;
@@ -1354,6 +1364,8 @@ export interface WorkGuide {
 }
 
 export interface WorkGuideCreate {
+  /** 멀티테넌시 3단계 — null/미지정 = 전체 공유, 값이 있으면 그 테넌트 멤버·admin 만 본다. */
+  tenantId?: string | null;
   title: string;
   content?: string;
   category?: string;
@@ -1519,6 +1531,8 @@ export interface ClusterLinksPayload {
 export type OpsNoteColor = 'yellow' | 'green' | 'blue' | 'pink' | 'purple';
 
 export interface OpsNote {
+  /** 멀티테넌시 3단계 — null/미지정 = 전체 공유, 값이 있으면 그 테넌트 멤버·admin 만 본다. */
+  tenantId?: string | null;
   id: string;
   service: string;
   title: string;
@@ -1536,6 +1550,8 @@ export interface OpsNote {
 }
 
 export interface OpsNoteCreate {
+  /** 멀티테넌시 3단계 — null/미지정 = 전체 공유, 값이 있으면 그 테넌트 멤버·admin 만 본다. */
+  tenantId?: string | null;
   service: string;
   title: string;
   content?: string;
@@ -1614,6 +1630,8 @@ export interface MindMapNode {
 }
 
 export interface MindMap {
+  /** 멀티테넌시 3단계 — null/미지정 = 전체 공유, 값이 있으면 그 테넌트 멤버·admin 만 본다. */
+  tenantId?: string | null;
   id: string;
   title: string;
   description?: string;
@@ -1625,6 +1643,8 @@ export interface MindMap {
 }
 
 export interface MindMapListItem {
+  /** 멀티테넌시 3단계 — null/미지정 = 전체 공유, 값이 있으면 그 테넌트 멤버·admin 만 본다. */
+  tenantId?: string | null;
   id: string;
   title: string;
   description?: string;
@@ -1635,12 +1655,16 @@ export interface MindMapListItem {
 }
 
 export interface MindMapCreate {
+  /** 멀티테넌시 3단계 — null/미지정 = 전체 공유, 값이 있으면 그 테넌트 멤버·admin 만 본다. */
+  tenantId?: string | null;
   title: string;
   description?: string;
   confluenceUrl?: string;
 }
 
 export interface MindMapUpdate {
+  /** 멀티테넌시 3단계 — null/미지정 = 전체 공유, 값이 있으면 그 테넌트 멤버·admin 만 본다. */
+  tenantId?: string | null;
   title?: string;
   description?: string;
   confluenceUrl?: string;
@@ -5477,6 +5501,11 @@ export interface TenantClusterBinding {
   clusterId: string;
   access: ClusterAccessLevel;
   clusterName?: string | null;
+}
+
+export interface TenantBrief {
+  id: string;
+  name: string;
 }
 
 export interface Tenant {

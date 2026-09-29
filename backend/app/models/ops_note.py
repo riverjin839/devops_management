@@ -1,6 +1,7 @@
 import uuid
 from datetime import datetime
-from sqlalchemy import Column, String, Text, DateTime, Boolean
+from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy import Column, String, Text, DateTime, Boolean, ForeignKey
 from sqlalchemy.orm import deferred
 from pgvector.sqlalchemy import Vector
 
@@ -13,6 +14,8 @@ class OpsNote(Base):
     __tablename__ = "ops_notes"
 
     id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    # 멀티테넌시 3단계 — NULL = 전체 공유, 값이 있으면 그 테넌트 멤버·admin 만 본다 (services/tenant_scope.py).
+    tenant_id = Column(UUID(as_uuid=True), ForeignKey("tenants.id", ondelete="RESTRICT"), nullable=True, index=True)
     service = Column(String(50), nullable=False)       # keycloak / k8s / cilium / jenkins / argocd / nexus / etc
     title = Column(String(200), nullable=False)
     content = Column(Text, nullable=True)              # 앞면 내용 (포스트잇 앞)

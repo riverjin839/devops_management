@@ -21,6 +21,10 @@ from app.models.user import User  # noqa: E402
 from app.models.work_item import WorkItem  # noqa: E402
 from app.routers.work_items import patch_status  # noqa: E402
 from app.schemas.work_item import WorkItemStatusPatch  # noqa: E402
+from app.services.tenant_scope import TenantScope  # noqa: E402
+
+# 라우터 함수를 직접 부르므로 Depends 대신 가시 범위를 명시한다(admin = 제한 없음).
+ADMIN_SCOPE = TenantScope(is_admin=True, tenant_ids=frozenset())
 
 
 @pytest.fixture
@@ -69,7 +73,7 @@ def test_done_transition_sets_closed_at(db, actor):
     item = _make_item(db)
     assert item.closed_at is None
 
-    patch_status(item_id=item.id, payload=WorkItemStatusPatch(kanban_status="done"), db=db, actor=actor)
+    patch_status(item_id=item.id, payload=WorkItemStatusPatch(kanban_status="done"), db=db, actor=actor, scope=ADMIN_SCOPE)
 
     db.refresh(item)
     assert item.closed_at is not None
@@ -79,11 +83,11 @@ def test_reopen_after_done_clears_auto_set_closed_at(db, actor):
     """done → 다른 상태로 되돌리면(재오픈), 자동으로 채워졌던 완료일도 함께 지워져야 한다
     (PUT /{item_id} 의 기존 동작과 일치)."""
     item = _make_item(db)
-    patch_status(item_id=item.id, payload=WorkItemStatusPatch(kanban_status="done"), db=db, actor=actor)
+    patch_status(item_id=item.id, payload=WorkItemStatusPatch(kanban_status="done"), db=db, actor=actor, scope=ADMIN_SCOPE)
     db.refresh(item)
     assert item.closed_at is not None
 
-    patch_status(item_id=item.id, payload=WorkItemStatusPatch(kanban_status="in_progress"), db=db, actor=actor)
+    patch_status(item_id=item.id, payload=WorkItemStatusPatch(kanban_status="in_progress"), db=db, actor=actor, scope=ADMIN_SCOPE)
 
     db.refresh(item)
     assert item.closed_at is None
@@ -93,7 +97,7 @@ def test_non_done_to_non_done_transition_does_not_touch_closed_at(db, actor):
     """done 이 아니었던 상태끼리의 이동은 closed_at 에 손대지 않는다."""
     item = _make_item(db, kanban_status="backlog")
 
-    patch_status(item_id=item.id, payload=WorkItemStatusPatch(kanban_status="todo"), db=db, actor=actor)
+    patch_status(item_id=item.id, payload=WorkItemStatusPatch(kanban_status="todo"), db=db, actor=actor, scope=ADMIN_SCOPE)
 
     db.refresh(item)
     assert item.closed_at is None

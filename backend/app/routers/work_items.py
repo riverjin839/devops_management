@@ -16,7 +16,9 @@ from app.models.work_item import WorkItem
 from app.models.work_item_comment import WorkItemComment
 from app.models.audit_log import AuditLog
 from app.models.user import User
-from app.auth.deps import require_operator, get_current_user
+from app.auth.deps import require_operator, get_current_user, get_tenant_scope
+from app.models.project import Project
+from app.services.tenant_scope import TenantScope, work_item_visibility, work_item_visible
 from app.config import settings
 from app.services import audit_logger
 from app.models.work_item_time_block import WorkItemTimeBlock
@@ -147,6 +149,23 @@ def _not_found(item_id: UUID) -> HTTPException:
     )
 
 
+def _visible_item_or_404(db: Session, item_id: UUID, scope: TenantScope) -> WorkItem:
+    """업무 항목 단건 조회 + 테넌트 가시 범위(항목·소속 프로젝트) 확인. 안 보이면 존재를 숨기도록 404."""
+    item = db.query(WorkItem).filter(WorkItem.id == item_id).first()
+    if not item or not work_item_visible(scope, db, item):
+        raise _not_found(item_id)
+    return item
+
+
+def _ensure_project_visible(db: Session, project_id: Optional[UUID], scope: TenantScope) -> None:
+    """볼 수 없는(비공개) 프로젝트에 업무를 연결하지 못하게 한다."""
+    if project_id is None:
+        return
+    proj = db.query(Project).filter(Project.id == project_id).first()
+    if proj is None or not scope.visible(proj.tenant_id):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="프로젝트를 찾을 수 없습니다.")
+
+
 def _resolve_clusters(db: Session, cluster_ids, cluster_id, cluster_name):
     """다중 대상 클러스터를 정규화한다.
 
@@ -254,6 +273,7 @@ def list_work_items(
     offset: int = Query(default=0, ge=0, description="페이지네이션 offset (0 부터)"),
     limit: int = Query(default=100, ge=1, le=500, description="페이지네이션 limit (1~500, 기본 100)"),
     db: Session = Depends(get_db),
+    scope: TenantScope = Depends(get_tenant_scope),
     # G-C1: GET 도 인증 필수 — viewer 까지 허용. operator/admin 이 아닌 익명 접근 차단.
     _: User = Depends(get_current_user),
 ):
@@ -262,7 +282,7 @@ def list_work_items(
     parent_id 가 있는 sub-task 는 결과에서 제외하지 않는다 (한 리스트에서 보고 싶을 수 있어
     그대로 노출). 응답 `total` 은 필터 적용 후 전체 카운트, `data` 는 offset~limit 범위만.
     """
-    query = db.query(WorkItem)
+    query = work_item_visibility(scope, db.query(WorkItem), db)
     query = _apply_filters(
         query, type_=type, cluster_id=cluster_id, assignee=assignee, category=category,
         priority=priority, kanban_status=kanban_status, module=module,
@@ -300,6 +320,7 @@ def export_csv(
     # G-C3: 무인증 bulk export 차단 — operator 만 가능. limit 으로 메모리 cap.
     limit: int = Query(default=5000, ge=1, le=10000, description="최대 export 행 수 (메모리 보호용)"),
     db: Session = Depends(get_db),
+    scope: TenantScope = Depends(get_tenant_scope),
     actor: User = Depends(require_operator),
     request: Request = None,  # noqa: B008 — fastapi DI
 ):
@@ -308,7 +329,7 @@ def export_csv(
     G-C3: 이전엔 무인증 + 무제한 bulk export 가 가능했음. 이제 operator role 필수 +
     행 수 cap. 5천행 초과 시 클라이언트는 명시적으로 limit 늘려야 함 (감사 추적).
     """
-    query = db.query(WorkItem)
+    query = work_item_visibility(scope, db.query(WorkItem), db)
     query = _apply_filters(
         query, type_=type, cluster_id=cluster_id, assignee=assignee, category=category,
         jira_issue_type=jira_issue_type,
@@ -403,6 +424,7 @@ def export_csv(
 def get_today_summary(
     date: Optional[str] = Query(default=None, description="YYYY-MM-DD; 미지정 시 오늘(UTC)"),
     db: Session = Depends(get_db),
+    scope: TenantScope = Depends(get_tenant_scope),
     _: User = Depends(get_current_user),  # G-C1
 ):
     """오늘의 작업/이슈 요약 — task + issue 모두 대상.
@@ -424,7 +446,7 @@ def get_today_summary(
     )
 
     today_items = (
-        db.query(WorkItem)
+        work_item_visibility(scope, db.query(WorkItem), db)
         .filter(
             WorkItem.started_at >= today_start,
             WorkItem.started_at < today_end,
@@ -434,7 +456,7 @@ def get_today_summary(
     )
 
     in_progress_items = (
-        db.query(WorkItem)
+        work_item_visibility(scope, db.query(WorkItem), db)
         .filter(
             WorkItem.kanban_status == "in_progress",
             ~((WorkItem.started_at >= today_start) & (WorkItem.started_at < today_end)),
@@ -447,7 +469,7 @@ def get_today_summary(
     # backlog('언젠가 할 일')는 아직 착수 약정이 아니므로 시작일이 지나도 지연으로 세지 않는다
     # (지연 뱃지 인플레이션 방지).
     overdue_items = (
-        db.query(WorkItem)
+        work_item_visibility(scope, db.query(WorkItem), db)
         .filter(
             WorkItem.started_at < today_start,
             WorkItem.kanban_status.notin_(["done", "in_progress", "backlog"]),
@@ -541,11 +563,10 @@ def get_today_summary(
 def get_work_item(
     item_id: UUID,
     db: Session = Depends(get_db),
+    scope: TenantScope = Depends(get_tenant_scope),
     _: User = Depends(get_current_user),  # G-C1
 ):
-    item = db.query(WorkItem).filter(WorkItem.id == item_id).first()
-    if not item:
-        raise _not_found(item_id)
+    item = _visible_item_or_404(db, item_id, scope)
     return item
 
 
@@ -554,6 +575,7 @@ def get_similar_work_items(
     item_id: UUID,
     limit: int = Query(default=5, ge=1, le=20),
     db: Session = Depends(get_db),
+    scope: TenantScope = Depends(get_tenant_scope),
     _: User = Depends(get_current_user),
 ):
     """pgvector 코사인 거리 기반 유사 WorkItem 검색 (제목+본문 임베딩).
@@ -561,9 +583,7 @@ def get_similar_work_items(
     대상 WorkItem 또는 후보 쪽 임베딩이 아직 계산되지 않았으면(Celery 대기 중)
     ``embedding_available=False`` 와 함께 빈 목록을 반환한다 — 실패가 아니라 "아직 준비 안 됨".
     """
-    item = db.query(WorkItem).filter(WorkItem.id == item_id).first()
-    if not item:
-        raise _not_found(item_id)
+    item = _visible_item_or_404(db, item_id, scope)
 
     try:
         # item.embedding 은 deferred 컬럼 — 여기서 처음 접근할 때 DB 에서 로드된다.
@@ -574,7 +594,7 @@ def get_similar_work_items(
 
         distance = WorkItem.embedding.cosine_distance(item.embedding).label("distance")
         rows = (
-            db.query(WorkItem, distance)
+            work_item_visibility(scope, db.query(WorkItem, distance), db)
             .filter(WorkItem.id != item.id)
             .filter(WorkItem.embedding.isnot(None))
             .order_by(distance.asc())
@@ -606,9 +626,12 @@ def get_similar_work_items(
 def create_work_item(
     payload: WorkItemCreate,
     db: Session = Depends(get_db),
+    scope: TenantScope = Depends(get_tenant_scope),
     actor: User = Depends(require_operator),
     request: Request = None,  # noqa: B008
 ):
+    scope.ensure_assignable(payload.tenant_id)
+    _ensure_project_visible(db, payload.project_id, scope)
     # 다중 대상 클러스터 정규화 (cluster_id/cluster_name 은 대표값 유지).
     cluster_ids_norm, cluster_names_norm, primary_cluster_id, primary_cluster_name = _resolve_clusters(
         db, payload.cluster_ids, payload.cluster_id, payload.cluster_name,
@@ -650,12 +673,15 @@ def update_work_item(
     item_id: UUID,
     payload: WorkItemUpdate,
     db: Session = Depends(get_db),
+    scope: TenantScope = Depends(get_tenant_scope),
     actor: User = Depends(require_operator),
     request: Request = None,  # noqa: B008
 ):
-    item = db.query(WorkItem).filter(WorkItem.id == item_id).first()
-    if not item:
-        raise _not_found(item_id)
+    item = _visible_item_or_404(db, item_id, scope)
+    if "tenant_id" in payload.model_fields_set:
+        scope.ensure_assignable(payload.tenant_id)
+    if "project_id" in payload.model_fields_set:
+        _ensure_project_visible(db, payload.project_id, scope)
 
     _assert_ownership(item, actor, op="수정", db=db)  # G-C4
 
@@ -712,13 +738,12 @@ def patch_status(
     item_id: UUID,
     payload: WorkItemStatusPatch,
     db: Session = Depends(get_db),
+    scope: TenantScope = Depends(get_tenant_scope),
     actor: User = Depends(require_operator),
     request: Request = None,  # noqa: B008
 ):
     """칸반 상태 이동 — type 무관 in_progress 총합으로 WIP 체크. done 이동 시 closed_at 자동 set."""
-    item = db.query(WorkItem).filter(WorkItem.id == item_id).first()
-    if not item:
-        raise _not_found(item_id)
+    item = _visible_item_or_404(db, item_id, scope)
 
     _assert_ownership(item, actor, op="상태 변경", db=db)  # G-C4
 
@@ -758,12 +783,11 @@ def patch_status(
 def delete_work_item(
     item_id: UUID,
     db: Session = Depends(get_db),
+    scope: TenantScope = Depends(get_tenant_scope),
     actor: User = Depends(require_operator),
     request: Request = None,  # noqa: B008
 ):
-    item = db.query(WorkItem).filter(WorkItem.id == item_id).first()
-    if not item:
-        raise _not_found(item_id)
+    item = _visible_item_or_404(db, item_id, scope)
 
     _assert_ownership(item, actor, op="삭제", db=db)  # G-C4
 
@@ -792,8 +816,10 @@ def delete_work_item(
 def list_comments(
     item_id: UUID,
     db: Session = Depends(get_db),
+    scope: TenantScope = Depends(get_tenant_scope),
     _: User = Depends(get_current_user),
 ):
+    _visible_item_or_404(db, item_id, scope)
     return (
         db.query(WorkItemComment)
         .filter(WorkItemComment.work_item_id == item_id)
@@ -808,11 +834,10 @@ def add_comment(
     item_id: UUID,
     payload: WorkItemCommentCreate,
     db: Session = Depends(get_db),
+    scope: TenantScope = Depends(get_tenant_scope),
     actor: User = Depends(require_operator),
 ):
-    item = db.query(WorkItem).filter(WorkItem.id == item_id).first()
-    if not item:
-        raise _not_found(item_id)
+    item = _visible_item_or_404(db, item_id, scope)
     comment = WorkItemComment(
         work_item_id=item_id,
         author=actor.username,
@@ -836,6 +861,7 @@ def add_comment(
 def delete_comment(
     comment_id: UUID,
     db: Session = Depends(get_db),
+    scope: TenantScope = Depends(get_tenant_scope),
     actor: User = Depends(require_operator),
 ):
     comment = db.query(WorkItemComment).filter(WorkItemComment.id == comment_id).first()
@@ -844,6 +870,7 @@ def delete_comment(
             status_code=status.HTTP_404_NOT_FOUND,
             detail={"error": "COMMENT_NOT_FOUND", "message": "Comment not found", "id": str(comment_id)},
         )
+    _visible_item_or_404(db, comment.work_item_id, scope)
     # 작성자 본인 또는 admin 만 삭제.
     if actor.role != "admin" and comment.author and comment.author != actor.username:
         raise HTTPException(
@@ -860,9 +887,11 @@ def delete_comment(
 def list_activities(
     item_id: UUID,
     db: Session = Depends(get_db),
+    scope: TenantScope = Depends(get_tenant_scope),
     _: User = Depends(get_current_user),
 ):
     """이 업무의 생성/수정/상태변경 이력(audit_logs)을 시간순으로 반환."""
+    _visible_item_or_404(db, item_id, scope)
     rows = (
         db.query(AuditLog)
         .filter(AuditLog.target_type == "work_item", AuditLog.target_id == str(item_id))
@@ -890,6 +919,7 @@ def list_time_blocks_range(
     start: date = Query(..., description="조회 시작일 (YYYY-MM-DD)"),
     end: date = Query(..., description="조회 종료일 (YYYY-MM-DD, 포함)"),
     db: Session = Depends(get_db),
+    scope: TenantScope = Depends(get_tenant_scope),
     _: User = Depends(get_current_user),
 ):
     """기간 내 모든 업무의 시간 블록 — 당일 스케줄 보드용. 프런트가 work item 과 join."""
@@ -898,6 +928,9 @@ def list_time_blocks_range(
     return (
         db.query(WorkItemTimeBlock)
         .filter(WorkItemTimeBlock.block_date >= start, WorkItemTimeBlock.block_date <= end)
+        # 볼 수 없는 테넌트 업무의 블록은 제외
+        .filter(WorkItemTimeBlock.work_item_id.in_(
+            work_item_visibility(scope, db.query(WorkItem.id), db).subquery().select()))
         .order_by(WorkItemTimeBlock.block_date.asc(), WorkItemTimeBlock.start_minute.asc())
         .all()
     )
@@ -907,10 +940,10 @@ def list_time_blocks_range(
 def list_item_time_blocks(
     item_id: UUID,
     db: Session = Depends(get_db),
+    scope: TenantScope = Depends(get_tenant_scope),
     _: User = Depends(get_current_user),
 ):
-    if not db.query(WorkItem).filter(WorkItem.id == item_id).first():
-        raise HTTPException(status_code=404, detail="Work item not found")
+    _visible_item_or_404(db, item_id, scope)
     return (
         db.query(WorkItemTimeBlock)
         .filter(WorkItemTimeBlock.work_item_id == item_id)
@@ -924,10 +957,10 @@ def create_time_block(
     item_id: UUID,
     payload: TimeBlockCreate,
     db: Session = Depends(get_db),
+    scope: TenantScope = Depends(get_tenant_scope),
     _: User = Depends(get_current_user),
 ):
-    if not db.query(WorkItem).filter(WorkItem.id == item_id).first():
-        raise HTTPException(status_code=404, detail="Work item not found")
+    _visible_item_or_404(db, item_id, scope)
     block = WorkItemTimeBlock(
         work_item_id=item_id,
         block_date=payload.block_date,
@@ -949,11 +982,13 @@ def update_time_block(
     block_id: UUID,
     payload: TimeBlockUpdate,
     db: Session = Depends(get_db),
+    scope: TenantScope = Depends(get_tenant_scope),
     _: User = Depends(get_current_user),
 ):
     block = db.query(WorkItemTimeBlock).filter(WorkItemTimeBlock.id == block_id).first()
     if not block:
         raise HTTPException(status_code=404, detail="Time block not found")
+    _visible_item_or_404(db, block.work_item_id, scope)
     data = payload.model_dump(exclude_unset=True)
     for field, val in data.items():
         setattr(block, field, val)
@@ -972,11 +1007,13 @@ def update_time_block(
 def delete_time_block(
     block_id: UUID,
     db: Session = Depends(get_db),
+    scope: TenantScope = Depends(get_tenant_scope),
     _: User = Depends(get_current_user),
 ):
     block = db.query(WorkItemTimeBlock).filter(WorkItemTimeBlock.id == block_id).first()
     if not block:
         raise HTTPException(status_code=404, detail="Time block not found")
+    _visible_item_or_404(db, block.work_item_id, scope)
     db.delete(block)
     db.commit()
     return None

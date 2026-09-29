@@ -10,6 +10,14 @@
 
 1.39.0 이후 main 에 병합된 변경 (다음 릴리스 후보).
 
+### Added
+- **업무·지식 데이터 테넌트 공유 범위 (멀티테넌시 3단계)**: 업무 항목·프로젝트·업무 가이드·운영 노트·마인드맵 작성/수정 폼에
+  "공유 범위"가 생겼다. `전체 공유`(기본, 기존 데이터 전부)가 아니라 테넌트를 고르면 그 테넌트 멤버와 admin 만 목록·상세·검색에서
+  보고 수정할 수 있다(그 외에는 404). 비공개 프로젝트 안의 업무 항목은 프로젝트 멤버에게만 보이고, 비공개 프로젝트를 지우면 소속
+  항목이 테넌트를 물려받아 공개로 풀리지 않는다. 데이터가 남은 테넌트는 삭제가 409 로 막힌다. 테넌트를 쓰지 않으면 폼·동작 변화 없음.
+  Backend: `services/tenant_scope.py`(`TenantScope`·`work_item_visibility`), 5개 테이블 `tenant_id`(`_safe_add_column`, FK RESTRICT),
+  `auth/deps.get_tenant_scope`, `GET /tenants/mine`. Frontend: `components/common/TenantScopeSelect.tsx`.
+
 ## [1.39.0] - 2026-09-29
 
 ### Added

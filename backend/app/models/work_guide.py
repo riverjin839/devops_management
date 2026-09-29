@@ -1,6 +1,6 @@
 import uuid
 from datetime import datetime
-from sqlalchemy import Column, String, Text, DateTime, Integer
+from sqlalchemy import Column, String, Text, DateTime, Integer, ForeignKey
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import deferred
 from pgvector.sqlalchemy import Vector
@@ -12,6 +12,8 @@ class WorkGuide(Base):
     __tablename__ = "work_guides"
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    # 멀티테넌시 3단계 — NULL = 전체 공유, 값이 있으면 그 테넌트 멤버·admin 만 본다 (services/tenant_scope.py).
+    tenant_id = Column(UUID(as_uuid=True), ForeignKey("tenants.id", ondelete="RESTRICT"), nullable=True, index=True)
     parent_id = Column(UUID(as_uuid=True), nullable=True)  # 상위 페이지 (계층 구조)
     title = Column(String(200), nullable=False)
     content = Column(Text, nullable=True)
