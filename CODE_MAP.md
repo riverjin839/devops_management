@@ -174,7 +174,8 @@ AI 어시스턴트 + 사람 개발자용 — 기능 → 파일 경로와 자주 
 | 담당자 명부 (겸 로그인 계정) / 내 담당자 정보 | `backend/app/routers/ui_settings.py`(`/assignees` = admin 전용 전체 목록 upsert, `/assignees/me` = 로그인 사용자 본인 행만 부분 수정) — `users` 테이블을 직접 다룬다(더 이상 별도 JSON 저장소 없음). 사번(employeeId) 입력 시 로그인 계정 자동 발급/해제. 역할 변경·비밀번호 재설정·삭제는 `auth.py` 의 `/auth/users/*`(admin 전용) 재사용. `services/assignee_accounts.py` 는 구버전 JSON 명부를 흡수하는 1회성 마이그레이션만 담당 → `components/settings/AssigneeManager.tsx`(Settings ▸ 시스템 담당자 탭, 서브탭 없이 명부+계정 한 표) · `components/layout/SelfAssigneePanel.tsx`(사용자 메뉴 SidePane) · `hooks/useAssignees.ts` |
 | 감사 로그 | `backend/app/routers/audit_logs.py` + `services/audit_logger.py` (Settings 탭) |
 | 인앱 알림 | `backend/app/routers/notifications.py` + `services/user_notify.py` |
-| JSON 백업/복원 | `backend/app/routers/backup.py` + `services/backup_service.py` (Settings 탭) |
+| JSON 백업/복원 | `backend/app/routers/backup.py` + `services/backup_service.py` (Settings 탭, meta/export/import 전부 admin 전용) |
+| 화면별 접근 제어 서버 강제 | `backend/app/auth/feature_access.py`(`FEATURE_API_PATTERNS` = 화면 → 전용 API 정규식, `enforce_feature_access` 는 `main.py` `_auth` 에 포함) — 판정은 프론트 `hooks/useFeatureAccess.ts` `canAccessFeature` 와 동일해야 한다 |
 | 스키마 점검/복구 (모델↔DB 드리프트) | `backend/app/routers/schema_health.py` + `services/schema_health.py` → `frontend/src/components/settings/SchemaHealthPanel.tsx` (Settings ▸ 스키마 점검 탭). 부팅 안전망은 `main.py` 의 `_sync_missing_model_columns`(누락 컬럼) + `_relax_not_null_drift`(레거시 NOT NULL) |
 | Your Island (사용자 커스텀 화면) | `backend/app/routers/island.py` + `models/island.py` → `frontend/src/pages/IslandPage.tsx` · `components/island/` (`panelRegistry.ts` = 임베드 가능 화면 등록부) · `hooks/useIslands.ts` · `hooks/useNavCatalog.ts` · `hooks/useClusterRouteParam.ts` + `lib/islandEmbed.ts` (임베드 시 URL 이동 억제) |
 

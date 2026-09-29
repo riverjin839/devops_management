@@ -8,6 +8,7 @@ from app.database import get_db
 from app.models.app_setting import AppSetting
 from app.models.user import User
 from app.auth.deps import get_current_user, require_admin
+from app.auth.feature_access import FEATURE_ACCESS_KEY, normalize_feature_access
 from app.auth.security import hash_password
 from app.services.assignee_accounts import ASSIGNEE_ACCOUNT_ROLE
 from app.schemas.ui_settings import (
@@ -25,7 +26,6 @@ router = APIRouter(prefix="/ui-settings", tags=["ui-settings"])
 
 UI_SETTINGS_KEY = "ui_settings"
 CLUSTER_LINKS_KEY = "cluster_links"
-FEATURE_ACCESS_KEY = "feature_access"
 DEFAULT_FEATURE_ACCESS: dict = {}
 OPERATION_LEVELS_KEY = "operation_levels"
 WORK_ITEM_BOARD_SETTINGS_KEY = "work_item_board_settings"
@@ -384,32 +384,9 @@ def update_my_assignee(
 #   - 그 외 해당 feature 설정이 없거나 roles/users 가 모두 비면 전체 허용(기본 open).
 #   - 설정이 있으면 role ∈ roles 또는 본인 ∈ users 일 때만 허용(세부 제한, WBS 등 고급 용도).
 
-def _normalize_feature_access(raw) -> dict:
-    if not isinstance(raw, dict):
-        return {}
-    out: dict = {}
-    for feature, rule in raw.items():
-        if not isinstance(rule, dict):
-            continue
-        roles = rule.get("roles")
-        users = rule.get("users")
-        entry = {
-            "roles": [str(r) for r in roles] if isinstance(roles, list) else [],
-            "users": [str(u) for u in users] if isinstance(users, list) else [],
-        }
-        # enabled 는 명시적으로 false 일 때만 저장 — 기본값(true/미설정)은 저장하지 않아
-        # payload 를 최소화하고, "미설정 = 열림" 의미를 필드 부재로 표현한다.
-        if rule.get("enabled") is False:
-            entry["enabled"] = False
-        out[str(feature)] = entry
-    # 레거시 마이그레이션: Your Island 이전엔 WBS 만 지원했고 키가 'wbs' 였다.
-    # 화면별 접근 제어가 라우트 경로를 키로 쓰는 규칙으로 통일되면서 '/wbs' 로 승격한다.
-    # '/wbs' 가 이미 있으면(신규 설정 우선) 구 키는 버리고, 없으면 그 값을 승격한다 —
-    # 어느 쪽이든 'wbs' 라는 레거시 키 자체는 결과에 남기지 않는다.
-    if "wbs" in out:
-        legacy = out.pop("wbs")
-        out.setdefault("/wbs", legacy)
-    return out
+# 정규화·판정 로직은 서버 측 강제(`app.auth.feature_access`)와 공유한다 — 저장과 강제가
+# 같은 규칙을 쓰도록 한 곳에 둔다.
+_normalize_feature_access = normalize_feature_access
 
 
 @router.get("/feature-access")

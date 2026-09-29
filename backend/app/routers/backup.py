@@ -35,8 +35,11 @@ _log = logging.getLogger("k8s_monitor.backup")
 router = APIRouter(prefix="/backup", tags=["backup"])
 
 
+# 백업은 kubeconfig·자격증명·전 사용자 데이터를 통째로 담으므로 meta/export 도 import 와 같이
+# admin 전용이다. (이전엔 export 가 인증만 요구해 viewer 가 include_sensitive=true 로
+# 복호화된 민감정보를 받아갈 수 있었다.)
 @router.get("/meta", response_model=BackupMetaResponse)
-def get_meta(db: Session = Depends(get_db)):
+def get_meta(db: Session = Depends(get_db), _: User = Depends(require_admin)):
     try:
         return BackupMetaResponse.model_validate(current_meta(db))
     except Exception as e:  # noqa: BLE001
@@ -49,9 +52,11 @@ def get_meta(db: Session = Depends(get_db)):
 
 @router.get("/export")
 def export_backup(
+    request: Request,
     include_logs: bool = Query(default=False, description="로그성 테이블 포함 여부"),
     include_sensitive: bool = Query(default=False, description="kubeconfig 등 민감 필드 포함 여부"),
     db: Session = Depends(get_db),
+    actor: User = Depends(require_admin),
 ):
     try:
         raw, filename = export_to_bytes(
@@ -63,10 +68,29 @@ def export_backup(
         # backup_service 가 per-table 격리를 하지만 예상치 못한 envelope/JSON 단계 실패도
         # 여기서 잡아 사용자에게 명시적 메시지를 돌려준다 (500 빈 응답 방지).
         _log.exception("backup/export failed")
+        audit_logger.record(
+            db,
+            action="backup.export",
+            actor=actor,
+            status="failure",
+            details={"include_logs": include_logs, "include_sensitive": include_sensitive,
+                     "error": str(e)[:200]},
+            request=request,
+        )
         raise HTTPException(
             status_code=500,
             detail=f"백업 export 실패 ({type(e).__name__}): {str(e)[:200]}",
         ) from e
+    # 민감정보 포함 여부와 무관하게 전체 데이터 반출이므로 항상 감사 로그에 남긴다.
+    audit_logger.record(
+        db,
+        action="backup.export",
+        actor=actor,
+        status="success",
+        details={"include_logs": include_logs, "include_sensitive": include_sensitive,
+                 "bytes": len(raw)},
+        request=request,
+    )
     return Response(
         content=raw,
         media_type="application/json",

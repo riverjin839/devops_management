@@ -8,7 +8,19 @@
 
 ## [Unreleased]
 
-1.37.5 이후 main 에 병합된 변경 (다음 릴리스 후보).
+1.37.6 이후 main 에 병합된 변경 (다음 릴리스 후보).
+
+## [1.37.6] - 2026-09-29
+
+### Fixed
+- **백업 export 가 viewer 에게도 열려 있던 권한 구멍 (Settings ▸ 백업 / 복구)**: `GET /backup/export`·`/backup/meta` 가
+  인증만 요구해, viewer 도 `include_sensitive=true` 로 복호화된 kubeconfig·자격증명이 담긴 전체 백업을 받아갈 수 있었다.
+  이제 import 와 같이 admin 전용이고, export 는 성공·실패 모두 감사 로그(`backup.export`)에 남는다. admin 이 아니면 탭에
+  "관리자 전용" 안내가 나온다. Backend: `routers/backup.py`. Frontend: `BackupRestorePanel`, 감사 로그 필터.
+- **Settings "접근 제어"가 API 에는 적용되지 않던 문제**: 화면을 막아도 같은 데이터를 주는 API 는 인증만 통과하면 응답했다
+  (UI 숨김일 뿐 격리가 아니었다). 이제 인증 라우터 공통 의존성이 화면 전용 API(`/mindmaps`, `/ontology`,
+  `/clusters/{id}/rbac`, `/clusters/{id}/etcdctl/run` 등 14개 화면)를 같은 규칙으로 403 차단한다. 여러 화면이 공유하는
+  API 는 대상에서 뺐다. Backend: `app/auth/feature_access.py`(`FEATURE_API_PATTERNS`·`enforce_feature_access`), `main.py` `_auth`.
 
 ### Added
 - **대형 클러스터 NS 단위 자원 수집 (`/k8s-allocation`)**: 노드 50개 이상 클러스터는 개요를 네임스페이스 단위로
