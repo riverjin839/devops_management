@@ -210,3 +210,110 @@ def test_create_cluster_rejects_duplicate_name():
 
     assert exc_info.value.status_code == 400
     assert "already exists" in exc_info.value.detail
+
+
+# ── kubeconfig 저장 검증 / 수정 API 보호 / 감사 로그 ─────────────────────────
+
+_VALID_KUBECONFIG = """
+apiVersion: v1
+kind: Config
+current-context: c1
+clusters:
+- name: k1
+  cluster: {server: "https://10.0.0.1:6443/"}
+contexts:
+- name: c1
+  context: {cluster: k1, user: u1}
+users:
+- name: u1
+  user: {token: t}
+"""
+
+
+def test_validate_kubeconfig_accepts_matching_server():
+    server = clusters_router._validate_kubeconfig_for_cluster(
+        _VALID_KUBECONFIG, "https://10.0.0.1:6443"
+    )
+    assert server == "https://10.0.0.1:6443"
+
+
+@pytest.mark.parametrize("text", ["", "::: not yaml [", "just a string", "a: 1", "clusters: []"])
+def test_validate_kubeconfig_rejects_malformed(text):
+    with pytest.raises(HTTPException) as exc_info:
+        clusters_router._validate_kubeconfig_for_cluster(text, "https://10.0.0.1:6443")
+    assert exc_info.value.status_code == 422
+
+
+def test_validate_kubeconfig_rejects_server_mismatch():
+    with pytest.raises(HTTPException) as exc_info:
+        clusters_router._validate_kubeconfig_for_cluster(_VALID_KUBECONFIG, "https://other:6443")
+    assert exc_info.value.status_code == 422
+    assert "일치하지 않습니다" in exc_info.value.detail
+
+
+def test_validate_kubeconfig_path_rejects_non_kubeconfig(tmp_path):
+    bad = tmp_path / "passwd"
+    bad.write_text("root:x:0:0:root:/root:/bin/bash\n")
+    with pytest.raises(HTTPException) as exc_info:
+        clusters_router._validate_kubeconfig_path(str(bad))
+    assert exc_info.value.status_code == 422
+
+    good = tmp_path / "kc.yaml"
+    good.write_text(_VALID_KUBECONFIG)
+    clusters_router._validate_kubeconfig_path(str(good))  # 예외 없음
+
+    with pytest.raises(HTTPException):
+        clusters_router._validate_kubeconfig_path(str(tmp_path / "missing"))
+
+
+def test_cluster_update_schema_ignores_status():
+    from app.schemas import ClusterUpdate
+
+    data = ClusterUpdate(status="healthy", region="kr").model_dump(exclude_unset=True)
+    assert "status" not in data
+    assert data == {"region": "kr"}
+
+
+def _fake_db_with_cluster(cluster):
+    db = MagicMock()
+    db.query.return_value.filter.return_value.first.return_value = cluster
+    return db
+
+
+def test_update_kubeconfig_audits_and_rejects_invalid(monkeypatch, tmp_path):
+    cluster = Cluster(id=uuid.uuid4(), name="c", api_endpoint="https://10.0.0.1:6443")
+    db = _fake_db_with_cluster(cluster)
+    records = []
+    monkeypatch.setattr(clusters_router.audit_logger, "record", lambda *a, **k: records.append(k))
+    monkeypatch.setattr(clusters_router.settings, "kubeconfig_store_dir", str(tmp_path))
+
+    with pytest.raises(HTTPException) as exc_info:
+        clusters_router.update_kubeconfig(
+            cluster.id, clusters_router.KubeconfigUpdateRequest(content="garbage"),
+            _fake_request(), db, _fake_actor(),
+        )
+    assert exc_info.value.status_code == 422
+    assert records == []  # 검증 실패 시 저장·감사 없음
+
+    clusters_router.update_kubeconfig(
+        cluster.id, clusters_router.KubeconfigUpdateRequest(content=_VALID_KUBECONFIG),
+        _fake_request(), db, _fake_actor(),
+    )
+    assert [r["action"] for r in records] == ["cluster.kubeconfig.update"]
+    assert cluster.kubeconfig_content.startswith("apiVersion")
+    assert "apiVersion" not in str(records[0]["details"])  # 원문은 감사 로그에 남기지 않는다
+
+
+def test_update_cluster_audits_changed_fields(monkeypatch):
+    from app.schemas import ClusterUpdate
+
+    cluster = Cluster(id=uuid.uuid4(), name="c", api_endpoint="https://x")
+    db = _fake_db_with_cluster(cluster)
+    records = []
+    monkeypatch.setattr(clusters_router.audit_logger, "record", lambda *a, **k: records.append(k))
+
+    clusters_router.update_cluster(
+        cluster.id, ClusterUpdate(region="kr"), _fake_request(), db, _fake_actor()
+    )
+    assert records[0]["action"] == "cluster.update"
+    assert records[0]["details"]["fields"] == ["region"]
