@@ -46,7 +46,7 @@ export function BindingPanel({
   onIncludeSystemChange,
   isLoading,
 }: Props) {
-  const { canOperate, withHint } = useCanOperate();
+  const { canOperate, withHint } = useCanOperate(clusterId);
   const toast = useToastSafe();
   const [query, setQuery] = useState('');
   const [pendingDelete, setPendingDelete] = useState<RbacBinding | null>(null);

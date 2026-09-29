@@ -106,7 +106,7 @@ export function CheckMatrixCellDetailModal({ item, cluster, cronExpr, scheduleEn
 
   const runnable = item.sourceType !== 'manual';
   // D-082 — viewer 는 실행/저장 버튼을 보되 누르지 못하고 사유를 본다.
-  const { canOperate, withHint } = useCanOperate();
+  const { canOperate, withHint } = useCanOperate(cluster.id);
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={onClose}>

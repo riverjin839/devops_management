@@ -46,7 +46,7 @@ export function RolePanel({
   isLoading,
   focusRequest,
 }: Props) {
-  const { canOperate, hint, withHint } = useCanOperate();
+  const { canOperate, hint, withHint } = useCanOperate(clusterId);
   const toast = useToastSafe();
   const [query, setQuery] = useState('');
   const [selectedKey, setSelectedKey] = useState<string | null>(null);

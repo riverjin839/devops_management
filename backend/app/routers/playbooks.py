@@ -9,7 +9,8 @@ from sqlalchemy.orm import Session
 from app.database import get_db
 from app.models import AnsibleInventory, AnsiblePlaybookFile, Cluster, Playbook, PlaybookRun
 from app.models.user import User
-from app.auth.deps import require_operator
+from app.auth.deps import get_cluster_scope, require_operator
+from app.services.cluster_access import ClusterScope
 from app.schemas.playbook import (
     PlaybookCreate,
     PlaybookUpdate,
@@ -63,9 +64,10 @@ STATUS_LABEL = {
 def list_playbooks(
     cluster_id: UUID | None = Query(default=None),
     db: Session = Depends(get_db),
+    scope: ClusterScope = Depends(get_cluster_scope),
 ):
-    """클러스터별 또는 전체 Playbook 목록 조회"""
-    query = db.query(Playbook)
+    """클러스터별 또는 전체 Playbook 목록 조회 — 테넌트 바인딩으로 가려진 클러스터는 제외."""
+    query = scope.apply(db.query(Playbook), Playbook.cluster_id)
     if cluster_id:
         query = query.filter(Playbook.cluster_id == cluster_id)
     playbooks = query.order_by(Playbook.created_at.desc()).all()

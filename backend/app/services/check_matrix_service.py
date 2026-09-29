@@ -20,7 +20,7 @@ import logging
 import random
 import uuid
 from datetime import datetime, timedelta
-from typing import Any, Optional
+from typing import Any, Iterable, Optional
 
 from sqlalchemy import asc, select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
@@ -226,13 +226,17 @@ def _item_to_dict(db: Session, item: CheckMatrixItem) -> dict[str, Any]:
     }
 
 
-def build_grid(db: Session) -> dict[str, Any]:
+def build_grid(db: Session, hidden_cluster_ids: Optional[Iterable[Any]] = None) -> dict[str, Any]:
+    """``hidden_cluster_ids``: 테넌트 바인딩으로 이 사용자에게 가려진 클러스터(열·셀 모두 제외)."""
     items = (
         db.query(CheckMatrixItem)
         .order_by(CheckMatrixItem.sort_order.asc(), CheckMatrixItem.created_at.asc())
         .all()
     )
     clusters = db.query(Cluster).order_by(Cluster.seq.asc(), Cluster.name.asc()).all()
+    if hidden_cluster_ids:
+        hidden = {str(c) for c in hidden_cluster_ids}
+        clusters = [c for c in clusters if str(c.id) not in hidden]
 
     result_by_cell: dict[tuple[str, str], CheckMatrixResult] = {
         (str(r.item_id), str(r.cluster_id)): r for r in db.query(CheckMatrixResult).all()

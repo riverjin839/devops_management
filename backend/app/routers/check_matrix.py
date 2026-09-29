@@ -10,7 +10,8 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
-from app.auth.deps import require_operator
+from app.auth.deps import get_cluster_scope, require_operator
+from app.services.cluster_access import ClusterScope
 from app.database import get_db
 from app.models import (
     CheckMatrixItem,
@@ -408,8 +409,8 @@ def get_catalog(db: Session = Depends(get_db)):
 
 # ── Grid / history / manual entry ────────────────────────────────────────────
 @router.get("/grid")
-def get_grid(db: Session = Depends(get_db)):
-    return svc.build_grid(db)
+def get_grid(db: Session = Depends(get_db), scope: ClusterScope = Depends(get_cluster_scope)):
+    return svc.build_grid(db, hidden_cluster_ids=scope.hidden)
 
 
 @router.get("/cell/{item_id}/{cluster_id}/history")

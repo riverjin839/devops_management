@@ -11,6 +11,12 @@
 1.37.6 이후 main 에 병합된 변경 (다음 릴리스 후보).
 
 ### Added
+- **테넌트 기반 클러스터 조회 격리 (멀티테넌시 2단계)**: 테넌트에 바인딩된 클러스터는 이제 바인딩 멤버(read/operate)에게만
+  **보인다**. 클러스터 목록·사이드바·대시보드 요약·점검 매트릭스 그리드·점검 이력·K8s 이벤트·알람·플레이북 목록에서
+  빠지고, 경로에 클러스터가 들어간 조회 API 는 read 권한이 없으면 403 이다. 실행 버튼은 `useCanOperate(clusterId)` 로
+  권한이 없으면 미리 비활성화되고 사유가 표시된다(RBAC 패널·점검 셀 상세). 바인딩이 없으면 동작 변화 없음.
+  Backend: `services/cluster_access.py`(`hidden_cluster_ids`·`ClusterScope`, 경로 GET=read), `auth/deps.get_cluster_scope`,
+  `main.py` `_cluster_scoped` 대상 17개 라우터 추가. Frontend: `hooks/useCanOperate.ts`(`useMyClusterAccess`).
 - **테넌트 기반 클러스터 실행 권한 (Settings ▸ 테넌트, 멀티테넌시 1단계)**: 테넌트(팀)에 사용자를 넣고 클러스터를
   `operate`(실행·변경) / `read`(조회) 로 바인딩하면, 그 클러스터의 Pod exec·k9s·노드 SSH·etcdctl·mc·일괄 실행·리소스
   변경·노드 라벨·RBAC 발급·효율화 적용/롤백·배치잡/플레이북/클러스터 아이템 실행은 바인딩된 테넌트 멤버만 할 수 있다.

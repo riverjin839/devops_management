@@ -15,7 +15,10 @@ export function useTenants(enabled = true) {
 
 export function useTenantMutations() {
   const qc = useQueryClient();
-  const invalidate = () => qc.invalidateQueries({ queryKey: KEY });
+  const invalidate = () => {
+    qc.invalidateQueries({ queryKey: KEY });
+    qc.invalidateQueries({ queryKey: ['my-cluster-access'] });
+  };
   return {
     create: useMutation({
       mutationFn: (d: { name: string; description?: string | null }) => tenantsApi.create(d),

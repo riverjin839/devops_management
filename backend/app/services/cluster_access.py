@@ -110,14 +110,62 @@ def cluster_ids_for_host(db: Session, host: str) -> set[UUID]:
     return cluster_ids_for_hosts(db, [host])
 
 
-def enforce_path_cluster_access(request: Request, db: Session, user: User) -> None:
-    """경로 파라미터 ``cluster_id`` 기준 강제 — 실행 계열 라우터 공통 의존성에서 호출.
+def hidden_cluster_ids(db: Session, user: User) -> frozenset[UUID]:
+    """이 사용자에게 **보이지 않아야** 하는 클러스터 — 바인딩이 있는데 사용자가 어느 바인딩 테넌트의
+    멤버도 아닌 클러스터. read/operate 어느 쪽이든 바인딩 멤버면 보인다(2단계 조회 격리).
 
-    조회 메서드(GET 등)는 통과시킨다: 1단계 범위는 실행·변경 차단이고, 조회 범위 격리는
-    2단계(클러스터 목록·대시보드 필터링)에서 함께 다룬다.
+    admin 이거나 바인딩이 하나도 없으면 빈 집합 — 목록 필터가 no-op 이 된다.
     """
-    if request.method in _READ_METHODS:
-        return
+    if _is_admin(user):
+        return frozenset()
+    rows = db.query(ClusterBinding.cluster_id, ClusterBinding.tenant_id).all()
+    if not rows:
+        return frozenset()
+    mine = {
+        tid for (tid,) in db.query(TenantMember.tenant_id).filter(TenantMember.user_id == user.id).all()
+    }
+    restricted = {cid for cid, _ in rows}
+    allowed = {cid for cid, tid in rows if tid in mine}
+    return frozenset(restricted - allowed)
+
+
+class ClusterScope:
+    """목록형 조회에 쓰는 사용자별 클러스터 가시 범위. ``auth.deps.get_cluster_scope`` 로 주입한다."""
+
+    def __init__(self, hidden: frozenset[UUID]):
+        self.hidden = hidden
+
+    @property
+    def unrestricted(self) -> bool:
+        return not self.hidden
+
+    def visible(self, cluster_id: UUID | str | None) -> bool:
+        """cluster_id 가 없는 행(클러스터 무관 알람 등)은 보인다."""
+        if cluster_id is None or not self.hidden:
+            return True
+        try:
+            cid = cluster_id if isinstance(cluster_id, UUID) else UUID(str(cluster_id))
+        except ValueError:
+            return True
+        return cid not in self.hidden
+
+    def apply(self, query, column, *, nullable: bool = False):
+        """SQLAlchemy 쿼리에 가시 범위 필터를 건다. ``nullable`` 이면 cluster_id NULL 행은 남긴다."""
+        if not self.hidden:
+            return query
+        cond = column.notin_(list(self.hidden))
+        if nullable:
+            cond = column.is_(None) | cond
+        return query.filter(cond)
+
+
+def enforce_path_cluster_access(request: Request, db: Session, user: User) -> None:
+    """경로 파라미터 ``cluster_id`` 기준 강제 — 클러스터 범위 라우터 공통 의존성에서 호출.
+
+    조회 메서드(GET 등)는 ``read``, 나머지(POST/PUT/PATCH/DELETE)는 ``operate`` 를 요구한다.
+    (1단계는 변경만 막았고, 2단계에서 조회도 바인딩 범위로 격리했다.)
+    """
+    level = "read" if request.method in _READ_METHODS else "operate"
     raw = request.path_params.get("cluster_id")
     if raw is None:
         return
@@ -125,4 +173,4 @@ def enforce_path_cluster_access(request: Request, db: Session, user: User) -> No
         cid = raw if isinstance(raw, UUID) else UUID(str(raw))
     except ValueError:
         return  # 형식 오류는 라우트 검증(422)에 맡긴다
-    require_cluster_access(db, user, cid, "operate")
+    require_cluster_access(db, user, cid, level)

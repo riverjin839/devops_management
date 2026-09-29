@@ -7,6 +7,8 @@ import csv
 import io
 
 from app.database import get_db
+from app.auth.deps import get_cluster_scope
+from app.services.cluster_access import ClusterScope
 from app.models import CheckLog
 from app.schemas import CheckLogListResponse, CheckLogResponse
 
@@ -18,9 +20,10 @@ def get_check_logs(
     cluster_id: Optional[UUID] = None,
     page: int = Query(default=1, ge=1),
     page_size: int = Query(default=20, ge=1, le=100),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    scope: ClusterScope = Depends(get_cluster_scope),
 ):
-    """점검 히스토리 조회"""
+    """점검 히스토리 조회 — 테넌트 바인딩으로 가려진 클러스터의 로그는 제외."""
     # joinedload 로 cluster/addon 을 한 쿼리에서 LEFT JOIN 으로 함께 가져온다.
     # 예전엔 join(Cluster) 만 걸고 아래에서 log.cluster.name/log.addon_id 조회를
     # 각 행마다 별도 쿼리로 실행해(N+1) 페이지 20행에 최대 41쿼리가 나갔다.
@@ -30,6 +33,7 @@ def get_check_logs(
 
     if cluster_id:
         query = query.filter(CheckLog.cluster_id == cluster_id)
+    query = scope.apply(query, CheckLog.cluster_id)
 
     # 총 개수
     total = query.count()

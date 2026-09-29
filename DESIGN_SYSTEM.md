@@ -685,6 +685,10 @@ const { canOperate, withHint } = useCanOperate();
 - 예외: 빈 상태(EmptyState)의 주 액션처럼 "비활성 버튼 하나만 덩그러니" 남는 자리는 viewer 에게
   액션을 생략해도 된다. 기존 `hasRole(user,'admin','operator')` 로 버튼을 **숨기던** 화면
   (`ClusterManagePage` 등)은 그대로 두되, 신규 화면은 이 패턴을 따른다.
+- **클러스터 범위 실행(멀티테넌시)**: 특정 클러스터에 대한 실행 버튼이면 `useCanOperate(clusterId)` 로
+  클러스터를 넘긴다. 테넌트 바인딩상 그 클러스터에 `operate` 권한이 없으면(`GET /tenants/my-cluster-access`)
+  `canOperate=false` + "이 클러스터에 실행 권한이 없습니다 (테넌트 바인딩)" 사유가 붙는다. 바인딩 없는
+  클러스터·응답 로딩 중에는 막지 않는다(서버가 최종 판정). 인자 없이 부르면 기존처럼 역할만 본다.
 
 ### 12.10 지원 뷰포트 (D-076)
 

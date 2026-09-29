@@ -30,7 +30,8 @@ from fastapi import APIRouter, Body, Depends, Header, HTTPException, Query
 from sqlalchemy import desc, or_
 from sqlalchemy.orm import Session
 
-from app.auth.deps import get_current_user, require_operator
+from app.auth.deps import get_cluster_scope, get_current_user, require_operator
+from app.services.cluster_access import ClusterScope
 from app.config import settings
 from app.database import get_db
 from app.models.alert_event import SEVERITY_ORDER, AlertEvent
@@ -712,8 +713,9 @@ def list_alerts(
     limit: int = Query(default=100, le=500),
     offset: int = Query(default=0, ge=0),
     db: Session = Depends(get_db),
+    scope: ClusterScope = Depends(get_cluster_scope),
 ) -> AlertEventListResponse:
-    query = db.query(AlertEvent)
+    query = scope.apply(db.query(AlertEvent), AlertEvent.cluster_id, nullable=True)
     if cluster_id:
         query = query.filter(AlertEvent.cluster_id == cluster_id)
     if severity and severity != "all":
@@ -748,9 +750,11 @@ def alert_stats(
     cluster_id: Optional[UUID] = Query(default=None),
     hours: int = Query(default=24, ge=1, le=720),
     db: Session = Depends(get_db),
+    scope: ClusterScope = Depends(get_cluster_scope),
 ) -> AlertStatsResponse:
     since = datetime.utcnow() - timedelta(hours=hours)
-    query = db.query(AlertEvent).filter(AlertEvent.received_at >= since)
+    query = scope.apply(db.query(AlertEvent), AlertEvent.cluster_id, nullable=True).filter(
+        AlertEvent.received_at >= since)
     if cluster_id:
         query = query.filter(AlertEvent.cluster_id == cluster_id)
     rows = query.all()
@@ -766,9 +770,10 @@ def alert_stats(
 
 
 @router.get("/alerts/{alert_id}", response_model=AlertEventOut)
-def get_alert(alert_id: UUID, db: Session = Depends(get_db)) -> AlertEventOut:
+def get_alert(alert_id: UUID, db: Session = Depends(get_db),
+              scope: ClusterScope = Depends(get_cluster_scope)) -> AlertEventOut:
     event = db.query(AlertEvent).filter(AlertEvent.id == alert_id).first()
-    if not event:
+    if not event or not scope.visible(event.cluster_id):
         raise HTTPException(status_code=404, detail="알람을 찾을 수 없습니다.")
     return _alert_out(event, _cluster_names(db))
 

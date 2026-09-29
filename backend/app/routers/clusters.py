@@ -21,7 +21,8 @@ from app.models import (
 from app.models.cluster import StatusEnum
 from app.models.work_item import WorkItem
 from app.models.user import User
-from app.auth.deps import require_operator
+from app.auth.deps import get_cluster_scope, require_operator
+from app.services.cluster_access import ClusterScope
 from app.services.health_checker import HealthChecker
 from app.services.k8s_diagnose import diagnose_connect_error
 from app.services.cluster_purge import purge_cluster_references
@@ -187,9 +188,17 @@ class KubeconfigResponse(BaseModel):
 # ── routes ────────────────────────────────────────────────────────────────────
 
 @router.get("", response_model=ClusterListResponse)
-def get_clusters(db: Session = Depends(get_db)):
-    """전체 클러스터 목록 조회 — 사용자 지정 seq 오름차순, 동률은 이름 순."""
-    clusters = db.query(Cluster).order_by(Cluster.seq.asc(), Cluster.name.asc()).all()
+def get_clusters(db: Session = Depends(get_db), scope: ClusterScope = Depends(get_cluster_scope)):
+    """전체 클러스터 목록 조회 — 사용자 지정 seq 오름차순, 동률은 이름 순.
+
+    테넌트 바인딩으로 가려진 클러스터는 빠진다(멀티테넌시 2단계) — ClusterSidebar 등 모든
+    클러스터 선택 UI 가 이 목록을 쓰므로 여기서 거르면 화면 전체가 같이 좁혀진다.
+    """
+    clusters = (
+        scope.apply(db.query(Cluster), Cluster.id)
+        .order_by(Cluster.seq.asc(), Cluster.name.asc())
+        .all()
+    )
     return ClusterListResponse(data=clusters)
 
 

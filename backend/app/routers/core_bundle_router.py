@@ -14,6 +14,8 @@ from sqlalchemy.orm import Session
 from sqlalchemy import desc
 
 from app.database import get_db
+from app.auth.deps import get_cluster_scope
+from app.services.cluster_access import ClusterScope
 from app.models import Cluster, DailyCheckLog, CheckScheduleType, StatusEnum
 from app.services.core_bundle_checker import DailyChecker
 
@@ -123,9 +125,11 @@ async def get_latest_check_result(
 
 
 @router.get("/summary", response_model=List[ClusterSummary])
-async def get_all_clusters_summary(db: Session = Depends(get_db)):
-    """전체 클러스터 요약 (대시보드용)"""
-    clusters = db.query(Cluster).all()
+async def get_all_clusters_summary(
+    db: Session = Depends(get_db), scope: ClusterScope = Depends(get_cluster_scope),
+):
+    """전체 클러스터 요약 (대시보드용) — 테넌트 바인딩으로 가려진 클러스터는 제외."""
+    clusters = scope.apply(db.query(Cluster), Cluster.id).all()
     summaries = []
 
     today_start = datetime.combine(date.today(), time.min)
