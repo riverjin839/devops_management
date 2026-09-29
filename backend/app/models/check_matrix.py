@@ -77,6 +77,12 @@ class CheckMatrixItem(Base):
     # 영역 구분 — 행이 어느 도메인 점검인지 (k8s | network | storage | os | app | 자유 문자열).
     # deep check 는 spec.category 에서 시드/보강되고, 사용자가 화면에서 바꿀 수 있다.
     category = Column(String(50), nullable=True)
+    # 실제 점검 대상(예: "etcd"/"node"/"api-server") — source_type/source_ref 가 달라도
+    # 같은 실물을 가리키면 같은 값을 준다(D-062, "대상 중복 표시"). category 와 동일한
+    # 철학의 자유 문자열(운영자가 화면에서 편집, 하드코딩 enum 아님) — UI-First. NULL 이면
+    # 중복 판정에서 제외(추측 강요하지 않음). 실제 그룹핑은 check_matrix_service 가 이 값으로
+    # enabled 행을 묶어 exec_tech 가 2종 이상 섞이는지로 판정한다.
+    target_key = Column(String(80), nullable=True)
     # 행 배경 커스텀 색 — 테마 대응을 위해 hex 가 아니라 차트 토큰 프리셋 키('chart-1'..'chart-8')를
     # 저장한다. NULL = 무색. 실측값은 frontend index.css 의 --chart-* 가 원천.
     color = Column(String(20), nullable=True)

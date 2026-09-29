@@ -73,7 +73,7 @@ class ClusterUpdate(BaseModel):
     seq: Optional[int] = Field(None, ge=0, le=999999)
     api_endpoint: Optional[str] = Field(None, min_length=1, max_length=255)
     kubeconfig_path: Optional[str] = None
-    status: Optional[StatusEnum] = None
+    # status 는 점검/verify 결과로만 갱신 — 수정 API 로 임의 지정 불가 (미지정 필드는 무시됨).
     region: Optional[str] = None
     operation_level: Optional[str] = None
     max_pod: Optional[int] = None

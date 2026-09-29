@@ -77,6 +77,9 @@ class ItemIn(BaseModel):
     source_type: CheckMatrixSourceType
     source_ref: Optional[str] = None
     category: Optional[str] = None
+    # 실제 점검 대상 식별자(예: "etcd") — D-062 "대상 중복 표시". category 와 동일한 자유
+    # 문자열, 운영자가 화면에서 직접 입력/수정(하드코딩 enum 아님).
+    target_key: Optional[str] = None
     color: Optional[str] = None
     enabled: bool = True
     # 등록 마법사 전용 — deep_check 항목의 임계값/파라미터 초기값.
@@ -99,6 +102,7 @@ class ItemOut(BaseModel):
     source_type: CheckMatrixSourceType
     source_ref: Optional[str] = None
     category: Optional[str] = None
+    target_key: Optional[str] = None
     color: Optional[str] = None
     # 이 행 전용 deep_check 정의 — 값이 있으면 같은 종류의 다른 행과 설정을 공유하지 않는다.
     definition_id: Optional[UUID] = None
@@ -263,6 +267,7 @@ def update_item(item_id: UUID, body: ItemIn, db: Session = Depends(get_db), _: U
         row.description = body.description
         row.unit = body.unit
         row.category = body.category
+        row.target_key = body.target_key
         row.color = body.color
         row.enabled = body.enabled
         db.commit()
