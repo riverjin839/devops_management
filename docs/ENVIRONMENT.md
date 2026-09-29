@@ -117,7 +117,11 @@
 | `K8S_ALLOC_STUCK_TIMEOUT` | `1800` (30m) | 동일 — 백그라운드 집계가 이 시간을 넘겨도 안 끝나면(행업) `refresh` 요청 시 새 계산으로 교체 |
 | `K8S_ALLOC_HEARTBEAT_TIMEOUT` | `90` | 동일 — Redis 공유 모드에서 집계 중인 replica 는 heartbeat(meta `heartbeat_at` + 락 TTL 연장)를 뛴다. 이 시간(초) 동안 끊기면(롤링 배포·OOM·liveness 재시작으로 계산 파드가 죽음) 다음 요청이 계산을 인계한다 — 없으면 죽은 계산이 `K8S_ALLOC_STUCK_TIMEOUT` 동안 "집계 중 · 0 Pod 처리됨"으로 멈춰 보인다. 인계당한(느렸을 뿐 살아 있던) 계산은 락을 잃은 걸 알아채고 기록·결과 쓰기를 멈춘다 |
 | `K8S_ALLOC_METRICS_TIMEOUT` | `8.0` | 동일 — metrics-server(`metrics.k8s.io`) 조회 read timeout(초). 느리면 usage 생략(best-effort) |
-| `K8S_ALLOC_POD_USAGE_MAX` | `6000` | 동일 — cluster-wide Pod usage 조회는 활성 Pod 수가 이 값 이하일 때만 시도(초과 시 생략 — 대형 클러스터에서 metrics 응답이 타임아웃만 반복하는 것을 방지, 드릴다운은 네임스페이스 단위로 계속 확인 가능) |
+| `K8S_ALLOC_POD_USAGE_MAX` | `6000` | 동일 — **cluster 수집 모드에서만**: cluster-wide Pod usage 조회는 활성 Pod 수가 이 값 이하일 때만 시도(초과 시 생략 — 대형 클러스터에서 metrics 응답이 타임아웃만 반복하는 것을 방지). namespace 모드는 NS 단위 metrics 를 쓰므로 이 상한과 무관하게 실사용량이 나온다 |
+| `K8S_ALLOC_COLLECT_MODE` | `auto` | 동일 — 개요 수집 방식. `auto`(노드 수 ≥ `K8S_ALLOC_NS_MODE_MIN_NODES` 면 namespace, 아니면 cluster) · `cluster`(`list_pod_for_all_namespaces` 스트리밍 1회 — 요청 수 최소) · `namespace`(NS 마다 Pod 목록 + NS 단위 Pod metrics 를 병렬 수집 — 대형 클러스터 실사용량 표시, NS 실패 격리(`failed_namespaces`), 집계 파드 인계 시 완료 NS 이어하기) |
+| `K8S_ALLOC_NS_MODE_MIN_NODES` | `50` | 동일 — `auto` 일 때 namespace 모드로 전환하는 노드 수 기준 |
+| `K8S_ALLOC_NS_WORKERS` | `4` | 동일 — namespace 모드 병렬 워커 수. 워커마다 Pod 목록·metrics 를 호출하므로 `K8S_CLUSTER_MAX_INFLIGHT`(기본 8) 이하로 둔다 |
+| `K8S_ALLOC_NS_RESUME_TTL` | `1800` | 동일 — namespace 모드에서 완료한 NS 누적기를 Redis(`allocns:{cluster}:{ns}:acc`)에 보관하는 시간(초). 집계 파드가 죽어 다른 파드가 인계하면 그 계산이 시작된 뒤 저장된 NS 는 다시 조회하지 않는다(일반 새로고침은 항상 전부 새로 조회) |
 | `K8S_ALLOC_API_READ_TIMEOUT` | `12.0` | `services/k8s_paging.py` — LIST 페이지 1개당 read timeout(초). 게이트웨이 타임아웃보다 충분히 짧게 |
 | `K8S_ALLOC_PAGE_LIMIT` | `500` | 동일 — LIST `_continue` 페이지네이션 페이지 크기 |
 | `K8S_ALLOC_SNAPSHOT_BACKEND` | `auto` | `routers/k8s_allocation.py` / `services/snapshot_jobs.py` — 개요 스냅샷 저장소. `auto`(Redis 연결되면 replica 간 공유, 아니면 프로세스 메모리로 폴백) · `redis` · `memory`. 멀티 replica(HPA) 에서 `memory` 면 1.5초 폴링이 파드마다 다른 진행률/결과를 보고 파드마다 전수 스캔이 중복된다 |

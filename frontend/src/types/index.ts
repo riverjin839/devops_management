@@ -4070,6 +4070,10 @@ export interface AllocNamespacesResponse extends AllocSnapshotMeta {
   metricsAvailable: boolean;
   podUsageSkipped: boolean;
   partial?: boolean;
+  /** 수집 방식 — namespace 면 NS 단위 수집(대형 클러스터: NS 단위 실사용량·실패 격리·이어하기) */
+  collectMode?: 'cluster' | 'namespace';
+  /** namespace 모드에서 목록/metrics 가 실패·절단된 NS — 그 NS 의 값은 빠져 있다 */
+  failedNamespaces?: string[];
 }
 
 // ── K8S 자원 효율화 (/k8s-allocation 효율화 탭) ───────────────────────────────

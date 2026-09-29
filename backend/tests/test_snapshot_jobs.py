@@ -8,6 +8,8 @@
 - 정상 케이스(짧은 시간 내 완료, force 없는 재사용)는 기존 동작을 유지한다.
 """
 import threading
+
+import pytest
 import time
 
 from app.services.snapshot_jobs import Progress, SnapshotManager
@@ -399,3 +401,42 @@ def test_superseded_build_stops_and_does_not_overwrite_new_owner():
     assert meta["owner"] == "new-owner" and meta["processed"] == 7
     assert fake.get("snap:k:result") is None
     assert fake.get("snap:k:lock") == b"new-owner", "새 주인의 락을 지우면 안 된다"
+
+
+def test_takeover_passes_resume_since_to_builder():
+    """죽은 계산을 인계하면 빌더가 그 계산의 시작 시각(resume_since)을 받아, 그 뒤에 저장된 중간
+    결과(NS 단위 수집의 완료 NS)를 재사용할 수 있다. 새 계산(인계 아님)이면 None."""
+    fake = FakeRedis()
+    _seed_orphan(fake, "k", beat_age=5.0)
+    dead_started = _json.loads(fake.get("snap:k:meta"))["started_at"]
+    mgr = SnapshotManager(ttl=60.0, store=_RedisStore(client=fake), heartbeat_timeout=1.0)
+    seen = {}
+    ran = threading.Event()
+
+    def builder(progress):
+        seen["since"] = progress.resume_since
+        ran.set()
+        return {"partial": False}
+
+    mgr.get("k", builder, initial_wait=1.0)
+    assert ran.wait(2) and seen["since"] == pytest.approx(dead_started)
+
+    seen.clear()
+    ran.clear()
+    # 정상 재집계 — 인계 아님. 직전 결과가 있으면 get 은 기다리지 않고 돌아오므로 빌더 완료를 기다린다.
+    mgr.get("k", builder, initial_wait=1.0, force=True)
+    assert ran.wait(2) and seen["since"] is None
+
+
+def test_chained_takeover_keeps_original_resume_point():
+    """A 가 죽고 B 가 이어받다 또 죽으면, C 는 A 의 시작 시각부터 재사용해야 한다(A 가 모은 것 포함)."""
+    fake = FakeRedis()
+    _seed_orphan(fake, "k", beat_age=5.0)
+    meta = _json.loads(fake.get("snap:k:meta"))
+    meta["resume_since"] = meta["started_at"] - 100.0      # B 는 A(100초 전 시작)를 이어받던 중이었다
+    fake.set("snap:k:meta", _json.dumps(meta))
+    mgr = SnapshotManager(ttl=60.0, store=_RedisStore(client=fake), heartbeat_timeout=1.0)
+    seen = {}
+    mgr.get("k", lambda p: seen.setdefault("since", p.resume_since) and {"partial": False},
+            initial_wait=1.0)
+    assert seen["since"] == pytest.approx(meta["resume_since"])

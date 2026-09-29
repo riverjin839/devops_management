@@ -42,7 +42,7 @@ from app.routers.k8s_resources import (
     _api_client, _require_cluster, _classify_pod_status, _TERMINAL_PHASES,
 )
 from app.services.kubeconfig import ensure_kubeconfig_file
-from app.services.snapshot_jobs import Progress, SnapshotManager
+from app.services.snapshot_jobs import Progress, SnapshotManager, _RedisStore
 from pydantic import BaseModel
 
 logger = logging.getLogger(__name__)
@@ -506,6 +506,15 @@ _COUNT_TERMINAL_PODS = os.getenv("K8S_ALLOC_COUNT_TERMINAL_PODS", "1") not in ("
 # 페이지당 초 단위 CPU 라 3만 Pod 클러스터에서 집계 1회가 수 분(1코어 제한 파드에서는 더)으로
 # 늘어나고, 그동안 웹 파드가 liveness/OOM 으로 죽어 스냅샷이 멈춰 보였다. 0 이면 구 동작(롤백용).
 _RAW_LIST = os.getenv("K8S_ALLOC_RAW_LIST", "1") not in ("0", "false", "no")
+# 수집 방식: auto(노드 수 ≥ K8S_ALLOC_NS_MODE_MIN_NODES 면 namespace, 아니면 cluster) | cluster | namespace.
+# namespace 모드는 NS 마다 Pod 목록 + NS 단위 Pod metrics 를 병렬 수집 — 대형 클러스터에서도 실사용량이
+# 나오고(cluster 모드는 K8S_ALLOC_POD_USAGE_MAX 초과 시 metrics 생략), NS 실패 격리·이어하기가 된다.
+_COLLECT_MODE = (os.getenv("K8S_ALLOC_COLLECT_MODE") or "auto").strip().lower()
+_NS_MODE_MIN_NODES = int(_envf("K8S_ALLOC_NS_MODE_MIN_NODES", 50))
+# NS 병렬 수집 워커 수 — 각 워커가 Pod 목록·metrics 를 부르므로 K8S_CLUSTER_MAX_INFLIGHT(기본 8) 이하로.
+_NS_WORKERS = max(1, int(_envf("K8S_ALLOC_NS_WORKERS", 4)))
+# 완료한 NS 누적기의 Redis 보존(초) — 집계 파드가 죽어 인계될 때 이어하기에 쓴다.
+_NS_RESUME_TTL = _envf("K8S_ALLOC_NS_RESUME_TTL", 1800.0)
 
 _POD_STATUS_KEYS = ("running", "pending", "error", "succeeded", "failed", "unknown")
 
@@ -562,17 +571,177 @@ def _node_ready(n) -> bool:
                for c in conds)
 
 
+# ── 집계 누적기 — 클러스터 전수 순회 · NS 단위 수집이 같은 규칙을 쓰게 한 곳에 둔다 ──────────
+def _new_acc() -> dict:
+    """파드 집계 누적기. owners 는 set 이라 JSON 저장 시 `_acc_to_json` 으로 변환한다."""
+    return {
+        "per_node": {}, "per_ns": {},
+        "summary": {"rc": 0, "rm": 0, "lc": 0, "lm": 0, "uc": 0, "um": 0, "pods": 0, "norq": 0},
+        "pod_summary": _empty_pod_summary(),
+        "processed": 0,
+    }
+
+
+def _add_pod(acc: dict, p, node_base: dict, schedulable_nodes: set, on_pod=None) -> None:
+    """파드 1개를 누적기에 반영(종료 파드는 상태 카운트만). on_pod 는 활성 파드마다 호출."""
+    acc["processed"] += 1
+    ps = acc["pod_summary"]
+    # POD 상태 카운트 — 종료 파드 포함(구 pods-summary 와 동일 버킷).
+    ps["total_pods"] += 1
+    ps["status_counts"][_classify_pod_status(p)] += 1
+    phase = p.status.phase if p.status else None
+    node = p.spec.node_name if p.spec else None
+    if phase not in _TERMINAL_PHASES and node in schedulable_nodes:
+        ps["occupied_on_schedulable"] += 1
+    if phase not in _ACTIVE_PHASES:
+        return
+    ns = p.metadata.namespace
+    rc, rm, lc, lm = _pod_effective_resources(p.spec)
+    no_req = (rc == 0 and rm == 0)
+    owner = _top_owner(p, {})  # 대규모 보호: RS 전량 미조회(해시 strip 근사)
+    if on_pod is not None:
+        try:
+            on_pod(p, (rc, rm, lc, lm), owner)
+        except Exception:  # noqa: BLE001
+            logger.exception("on_pod 콜백 실패(무시): %s/%s", ns, p.metadata.name)
+
+    s = acc["per_ns"].setdefault(ns, {
+        "rc": 0, "rm": 0, "lc": 0, "lm": 0, "uc": 0, "um": 0,
+        "pods": 0, "norq": 0, "owners": set(), "has_usage": False,
+    })
+    s["rc"] += rc; s["rm"] += rm; s["lc"] += lc; s["lm"] += lm
+    s["pods"] += 1
+    s["owners"].add(owner)
+    if no_req:
+        s["norq"] += 1
+
+    # per-node (request/limit 합산. usage 는 노드 metrics(node_usage) 사용)
+    if node and node in node_base:
+        ag = acc["per_node"].setdefault(node, {"rc": 0, "rm": 0, "lc": 0, "lm": 0, "pods": 0})
+        ag["rc"] += rc; ag["rm"] += rm; ag["lc"] += lc; ag["lm"] += lm
+        ag["pods"] += 1
+
+    sm = acc["summary"]
+    sm["rc"] += rc; sm["rm"] += rm; sm["lc"] += lc; sm["lm"] += lm
+    sm["pods"] += 1
+    if no_req:
+        sm["norq"] += 1
+
+
+def _add_usage(acc: dict, pu: dict) -> None:
+    """파드 usage 맵({(ns,pod): {cpu,mem}})을 NS·전체 합계에 반영(활성 파드가 없는 NS 는 전체에만)."""
+    per_ns, sm = acc["per_ns"], acc["summary"]
+    for (ns, _pod), u in pu.items():
+        cpu, mem = u["cpu"], u["mem"]
+        if ns in per_ns:
+            per_ns[ns]["uc"] += cpu; per_ns[ns]["um"] += mem; per_ns[ns]["has_usage"] = True
+        sm["uc"] += cpu; sm["um"] += mem
+
+
+def _merge_acc(dst: dict, src: dict) -> None:
+    """NS 단위로 모은 누적기(src)를 전체(dst)에 더한다."""
+    for node, ag in src["per_node"].items():
+        d = dst["per_node"].setdefault(node, {"rc": 0, "rm": 0, "lc": 0, "lm": 0, "pods": 0})
+        for k, v in ag.items():
+            d[k] += v
+    for ns, s in src["per_ns"].items():
+        d = dst["per_ns"].get(ns)
+        if d is None:
+            dst["per_ns"][ns] = {**s, "owners": set(s["owners"])}
+            continue
+        for k in ("rc", "rm", "lc", "lm", "uc", "um", "pods", "norq"):
+            d[k] += s[k]
+        d["owners"] |= s["owners"]
+        d["has_usage"] = d["has_usage"] or s["has_usage"]
+    for k, v in src["summary"].items():
+        dst["summary"][k] += v
+    dps, sps = dst["pod_summary"], src["pod_summary"]
+    dps["total_pods"] += sps["total_pods"]
+    dps["occupied_on_schedulable"] += sps["occupied_on_schedulable"]
+    for k, v in sps["status_counts"].items():
+        dps["status_counts"][k] = dps["status_counts"].get(k, 0) + v
+    dst["processed"] += src["processed"]
+
+
+def _acc_to_json(acc: dict) -> dict:
+    """Redis 저장용 — owners set(tuple) → 정렬된 [[kind,name]…]."""
+    out = dict(acc)
+    out["per_ns"] = {ns: {**s, "owners": sorted([list(o) for o in s["owners"]])}
+                     for ns, s in acc["per_ns"].items()}
+    return out
+
+
+def _acc_from_json(d: dict) -> dict:
+    acc = dict(d)
+    acc["per_ns"] = {ns: {**s, "owners": {tuple(o) for o in s["owners"]}}
+                     for ns, s in (d.get("per_ns") or {}).items()}
+    return acc
+
+
+def _node_base_of(nodes) -> tuple[dict[str, dict], set[str]]:
+    """노드 목록 → (node_base, 스케줄 가능 노드 집합). raw 객체는 보관하지 않는다."""
+    node_base: dict[str, dict] = {}
+    schedulable_nodes: set[str] = set()
+    for n in nodes:
+        labels = n.metadata.labels or {}
+        alloc = (n.status.allocatable or {}) if n.status else {}
+        cap = (n.status.capacity or {}) if n.status else {}
+        unsched = bool(n.spec.unschedulable) if n.spec else False
+        ready = _node_ready(n)
+        node_base[n.metadata.name] = {
+            "roles": _node_roles(labels),
+            "unschedulable": unsched,
+            "ready": ready,
+            "cpu_alloc": _cpu_m(alloc.get("cpu")), "mem_alloc": _mem_b(alloc.get("memory")),
+            "cpu_cap": _cpu_m(cap.get("cpu")), "mem_cap": _mem_b(cap.get("memory")),
+            "pods_alloc": _pods_n(alloc.get("pods")),
+        }
+        if ready and not unsched:
+            schedulable_nodes.add(n.metadata.name)
+    return node_base, schedulable_nodes
+
+
+def _use_namespace_mode(mode: Optional[str], node_count: int) -> bool:
+    m = (mode or _COLLECT_MODE or "auto").lower()
+    if m == "namespace":
+        return True
+    if m == "cluster":
+        return False
+    return node_count >= _NS_MODE_MIN_NODES
+
+
+def _ns_cache_get(cid: Optional[str], ns: str) -> Optional[dict]:
+    if not cid or _ns_cache is None:
+        return None
+    return _ns_cache.get_json(f"{cid}:{ns}", "acc")
+
+
+def _ns_cache_put(cid: Optional[str], ns: str, acc: dict, has_metrics: bool) -> None:
+    if not cid or _ns_cache is None:
+        return
+    _ns_cache.set_json(f"{cid}:{ns}", "acc",
+                       {"collected_at": time.time(), "has_metrics": has_metrics, "acc": _acc_to_json(acc)},
+                       ex=int(_NS_RESUME_TTL))
+
+
 def _build_overview(cluster, progress: Optional[Progress] = None, *,
                     on_pod: Optional[Callable[[Any, tuple[int, int, int, int], tuple[str, str]], None]] = None,
-                    publish_interval: Optional[float] = None) -> dict:
-    """단일 Pod 순회로 노드/네임스페이스 집계를 모두 계산. 결과는 작은 숫자 dict 만 캐시.
+                    publish_interval: Optional[float] = None, mode: Optional[str] = None) -> dict:
+    """노드/네임스페이스 집계를 한 번에 계산. 결과는 작은 숫자 dict 만 캐시.
 
-    반환: {node_base, per_node, node_usage, per_ns, summary, ns_total,
-           metrics_available, pod_usage_skipped, pods_summary}
+    반환: {node_base, per_node, node_usage, per_ns, summary, metrics_available, pod_usage_skipped,
+           partial, pods_summary, collect_mode, failed_namespaces, resumed_namespaces}
+
+    수집 방식(`mode` 또는 K8S_ALLOC_COLLECT_MODE — auto 는 노드 수로 결정):
+      - cluster: `list_pod_for_all_namespaces` 페이지 스트리밍 1회 + cluster-wide Pod metrics
+        (활성 Pod 가 K8S_ALLOC_POD_USAGE_MAX 초과면 metrics 생략). 요청 수가 가장 적다 — 소·중형.
+      - namespace: NS 마다 Pod 목록 + **NS 단위 Pod metrics** 를 병렬 수집해 누적. 대형 클러스터에서도
+        실사용량이 나오고, 한 NS 실패는 그 NS 만 표시(failed_namespaces), 완료한 NS 는 Redis 에 남겨
+        집계 파드가 죽어 인계될 때 이어서 한다(Progress.resume_since).
 
     백그라운드 스냅샷 매니저에서 호출되므로 게이트웨이 타임아웃과 무관 — **전수 집계를
     끝까지 수행**해 무결성을 보장한다(시간 예산으로 자르지 않고, 폭주 방지용 hard_cap 만
-    유지). progress 가 주어지면 Pod 처리량을 보고한다.
+    유지). progress 가 주어지면 Pod 처리량과 단계(phase)를 보고한다.
 
     on_pod(pod, (rc,rm,lc,lm), (owner_kind, owner_name)) 콜백을 주면 활성 파드마다 호출된다 —
     수집 워커(k8s_efficiency)가 워크로드 단위 집계를 **같은 순회**에서 얻기 위한 훅.
@@ -592,39 +761,25 @@ def _build_overview(cluster, progress: Optional[Progress] = None, *,
         nodes = _list_all(lambda **kw: core.list_node(**kw), report=partial_flag,
                           resource_version="0", raw=_RAW_LIST)
         node_usage = _node_usage(client)
-        ns_total = len(_list_all(lambda **kw: core.list_namespace(**kw), resource_version="0",
-                                 raw=_RAW_LIST))
+        namespaces = [n.metadata.name for n in _list_all(
+            lambda **kw: core.list_namespace(**kw), resource_version="0", raw=_RAW_LIST)]
+        ns_total = len(namespaces)
+        node_base, schedulable_nodes = _node_base_of(nodes)
+        pod_selector = None if _COUNT_TERMINAL_PODS else _ACTIVE_FIELD_SELECTOR
 
-        # 노드 base (allocatable/capacity/roles) — raw 객체는 보관 안 함.
-        node_base: dict[str, dict] = {}
-        schedulable_nodes: set[str] = set()
-        for n in nodes:
-            labels = n.metadata.labels or {}
-            alloc = (n.status.allocatable or {}) if n.status else {}
-            cap = (n.status.capacity or {}) if n.status else {}
-            unsched = bool(n.spec.unschedulable) if n.spec else False
-            ready = _node_ready(n)
-            node_base[n.metadata.name] = {
-                "roles": _node_roles(labels),
-                "unschedulable": unsched,
-                "ready": ready,
-                "cpu_alloc": _cpu_m(alloc.get("cpu")), "mem_alloc": _mem_b(alloc.get("memory")),
-                "cpu_cap": _cpu_m(cap.get("cpu")), "mem_cap": _mem_b(cap.get("memory")),
-                "pods_alloc": _pods_n(alloc.get("pods")),
-            }
-            if ready and not unsched:
-                schedulable_nodes.add(n.metadata.name)
+        if _use_namespace_mode(mode, len(node_base)):
+            return _collect_by_namespace(
+                client, core, progress, cluster_id=getattr(cluster, "id", None),
+                namespaces=namespaces, node_base=node_base, schedulable_nodes=schedulable_nodes,
+                node_usage=node_usage, on_pod=on_pod, pub_every=pub_every,
+                pod_selector=pod_selector, partial_flag=partial_flag,
+            )
 
-        per_node: dict[str, dict] = {}
-        per_ns: dict[str, dict] = {}
-        summary = {"rc": 0, "rm": 0, "lc": 0, "lm": 0, "uc": 0, "um": 0, "pods": 0, "norq": 0}
-        pod_summary = _empty_pod_summary()
-        status_counts = pod_summary["status_counts"]
-
+        acc = _new_acc()
         # Pod 를 **페이지 단위로 스트리밍**하며 즉시 집계(전량 메모리 적재 금지 → OOM/502 방지).
         # 약 1초마다 부분 결과를 progress.partial 로 publish → 프론트가 누적 표시.
         last_pub = time.monotonic()
-        pod_selector = None if _COUNT_TERMINAL_PODS else _ACTIVE_FIELD_SELECTOR
+
         def _on_page(n: int) -> None:
             if progress is not None:
                 progress.phase = f"pods:{n}"
@@ -632,87 +787,150 @@ def _build_overview(cluster, progress: Optional[Progress] = None, *,
         for p in _iter_all(lambda **kw: core.list_pod_for_all_namespaces(**kw),
                            field_selector=pod_selector, report=partial_flag,
                            raw=_RAW_LIST, on_page=_on_page):
+            _add_pod(acc, p, node_base, schedulable_nodes, on_pod)
             if progress is not None:
                 progress.processed += 1
-            # POD 상태 카운트 — 종료 파드 포함(구 pods-summary 와 동일 버킷).
-            pod_summary["total_pods"] += 1
-            status_counts[_classify_pod_status(p)] += 1
-            phase = p.status.phase if p.status else None
-            node = p.spec.node_name if p.spec else None
-            if phase not in _TERMINAL_PHASES and node in schedulable_nodes:
-                pod_summary["occupied_on_schedulable"] += 1
-            if phase not in _ACTIVE_PHASES:
-                continue
-            ns = p.metadata.namespace
-            rc, rm, lc, lm = _pod_effective_resources(p.spec)
-            no_req = (rc == 0 and rm == 0)
-            owner = _top_owner(p, {})  # 대규모 보호: RS 전량 미조회(해시 strip 근사)
-            if on_pod is not None:
-                try:
-                    on_pod(p, (rc, rm, lc, lm), owner)
-                except Exception:  # noqa: BLE001
-                    logger.exception("on_pod 콜백 실패(무시): %s/%s", ns, p.metadata.name)
-
-            # per-namespace
-            s = per_ns.setdefault(ns, {
-                "rc": 0, "rm": 0, "lc": 0, "lm": 0, "uc": 0, "um": 0,
-                "pods": 0, "norq": 0, "owners": set(), "has_usage": False,
-            })
-            s["rc"] += rc; s["rm"] += rm; s["lc"] += lc; s["lm"] += lm
-            s["pods"] += 1
-            s["owners"].add(owner)
-            if no_req:
-                s["norq"] += 1
-
-            # per-node (request/limit 합산. usage 는 노드 metrics(node_usage) 사용)
-            if node and node in node_base:
-                ag = per_node.setdefault(node, {"rc": 0, "rm": 0, "lc": 0, "lm": 0, "pods": 0})
-                ag["rc"] += rc; ag["rm"] += rm; ag["lc"] += lc; ag["lm"] += lm
-                ag["pods"] += 1
-
-            # summary
-            summary["rc"] += rc; summary["rm"] += rm; summary["lc"] += lc; summary["lm"] += lm
-            summary["pods"] += 1
-            if no_req:
-                summary["norq"] += 1
-
-            # 부분 결과 publish(usage 미반영=pending). accumulator 비파괴 복사로 안전.
-            if progress is not None:
+                # 부분 결과 publish(usage 미반영=pending). accumulator 비파괴 복사로 안전.
                 now = time.monotonic()
                 if now - last_pub >= pub_every:
                     progress.partial = _assemble_overview(
-                        node_base, per_node, per_ns, node_usage, summary, ns_total,
+                        node_base, acc["per_node"], acc["per_ns"], node_usage, acc["summary"], ns_total,
                         metrics_available=False, pod_usage_skipped=True, partial=bool(partial_flag),
-                        pod_summary=pod_summary,
+                        pod_summary=acc["pod_summary"],
                     )
                     last_pub = now
 
         partial = bool(partial_flag)
         # cluster-wide pod usage — namespace 단위로 합산(NS 랭킹 실사용 표시). best-effort.
         # 활성 Pod 가 _POD_USAGE_MAX 를 넘으면 생략 — metrics 단일 응답이 타임아웃만 반복하는
-        # 초대형 클러스터 보호(드릴다운에서 NS 단위로 정확히 확인 가능).
-        usage_skipped = summary["pods"] > _POD_USAGE_MAX
+        # 초대형 클러스터 보호(대형은 namespace 모드가 NS 단위 metrics 로 대신 채운다).
+        usage_skipped = acc["summary"]["pods"] > _POD_USAGE_MAX
         if progress is not None:
             progress.phase = "pod_metrics"
         if usage_skipped:
             logger.info("cluster-wide pod usage 생략: 활성 Pod %d > %d",
-                        summary["pods"], _POD_USAGE_MAX)
+                        acc["summary"]["pods"], _POD_USAGE_MAX)
             pu = {}
         else:
             pu = _pod_usage(client)
         metrics_available = bool(pu)
-        for (ns, _pod), u in pu.items():
-            cpu, mem = u["cpu"], u["mem"]
-            if ns in per_ns:
-                per_ns[ns]["uc"] += cpu; per_ns[ns]["um"] += mem; per_ns[ns]["has_usage"] = True
-            summary["uc"] += cpu; summary["um"] += mem
+        _add_usage(acc, pu)
 
-        return _assemble_overview(
-            node_base, per_node, per_ns, node_usage, summary, ns_total,
+        out = _assemble_overview(
+            node_base, acc["per_node"], acc["per_ns"], node_usage, acc["summary"], ns_total,
             metrics_available=metrics_available,
             pod_usage_skipped=(usage_skipped or not metrics_available), partial=partial,
-            pod_summary=pod_summary,
+            pod_summary=acc["pod_summary"],
         )
+        out.update(collect_mode="cluster", failed_namespaces=[], resumed_namespaces=0)
+        return out
+
+
+def _collect_by_namespace(client, core, progress: Optional[Progress], *, cluster_id,
+                          namespaces: list[str], node_base: dict, schedulable_nodes: set,
+                          node_usage: dict, on_pod, pub_every: float, pod_selector,
+                          partial_flag: list) -> dict:
+    """NS 단위 수집 — NS 마다 Pod 목록(페이지네이션) + NS Pod metrics 를 병렬로 받아 누적한다.
+
+    - 진행: phase = "ns:<완료>/<전체>", processed = 지금까지 누적한 Pod 수. 완료한 NS 가 쌓일
+      때마다 부분 결과를 publish(실사용량 포함) — 규모와 무관하게 화면이 계속 채워진다.
+    - 실패 격리: 한 NS 의 목록/metrics 실패·절단은 그 NS 만 failed_namespaces 로 표시하고 계속.
+      모든 NS 가 예외로 실패하면(RBAC 등 설정 오류) 첫 예외를 올려 error 로 드러낸다.
+    - 이어하기: 완료한 NS 누적기는 Redis(`allocns:{cid}:{ns}:acc`)에 남긴다. 스냅샷 매니저가
+      죽은 계산을 인계하면서 `progress.resume_since`(그 계산의 시작 시각)를 넘기면, 그 이후에
+      수집된 NS 는 다시 조회하지 않고 재사용한다. on_pod(수집기)가 있으면 모든 파드를 봐야
+      하므로 캐시를 읽지도 쓰지도 않는다.
+    """
+    from concurrent.futures import as_completed
+
+    cid = str(cluster_id) if cluster_id else None
+    use_cache = cid is not None and on_pod is None
+    resume_since = getattr(progress, "resume_since", None) if progress is not None else None
+    ns_total = len(namespaces)
+    acc = _new_acc()
+    failed: list[str] = []
+    errors: list[Exception] = []
+    any_metrics = False
+    resumed = 0
+
+    todo: list[str] = []
+    for ns in namespaces:
+        cached = _ns_cache_get(cid, ns) if (use_cache and resume_since) else None
+        if cached and float(cached.get("collected_at") or 0) >= float(resume_since):
+            _merge_acc(acc, _acc_from_json(cached["acc"]))
+            any_metrics = any_metrics or bool(cached.get("has_metrics"))
+            resumed += 1
+        else:
+            todo.append(ns)
+    if resumed:
+        logger.info("자원 집계 이어하기: NS %d/%d 재사용 (cluster=%s)", resumed, ns_total, cid)
+    done = resumed
+    if progress is not None:
+        progress.processed = acc["processed"]
+        progress.phase = f"ns:{done}/{ns_total}"
+
+    def _work(ns: str):
+        local = _new_acc()
+        hook: Optional[list] = [] if on_pod is not None else None
+        rep: list = []
+        cb = (lambda p, res, owner: hook.append((p, res, owner))) if hook is not None else None
+        for p in _iter_all(lambda **kw: core.list_namespaced_pod(ns, **kw),
+                           field_selector=pod_selector, report=rep, raw=_RAW_LIST):
+            _add_pod(local, p, node_base, schedulable_nodes, cb)
+        pu = _pod_usage(client, ns)
+        _add_usage(local, pu)
+        return local, hook, bool(rep), bool(pu)
+
+    last_pub = time.monotonic()
+    ex = ThreadPoolExecutor(max_workers=max(1, min(_NS_WORKERS, len(todo) or 1)),
+                            thread_name_prefix="alloc-ns")
+    try:
+        futs = {ex.submit(_work, ns): ns for ns in todo}
+        for f in as_completed(futs):
+            ns = futs[f]
+            try:
+                local, hook, cut, has_metrics = f.result()
+            except Exception as e:  # noqa: BLE001
+                logger.warning("자원 집계: NS %s 수집 실패 — 건너뜀: %s", ns, str(e)[:200])
+                failed.append(ns)
+                errors.append(e)
+            else:
+                if cut:  # 첫 페이지 타임아웃·continue 만료 등 — 이 NS 는 불완전
+                    failed.append(ns)
+                for p, res, owner in (hook or []):
+                    try:
+                        on_pod(p, res, owner)
+                    except Exception:  # noqa: BLE001
+                        logger.exception("on_pod 콜백 실패(무시): %s/%s", ns, p.metadata.name)
+                _merge_acc(acc, local)
+                any_metrics = any_metrics or has_metrics
+                if use_cache and not cut:
+                    _ns_cache_put(cid, ns, local, has_metrics)
+            done += 1
+            if progress is not None:
+                progress.processed = acc["processed"]
+                progress.phase = f"ns:{done}/{ns_total}"
+                now = time.monotonic()
+                if now - last_pub >= pub_every:
+                    progress.partial = _assemble_overview(
+                        node_base, acc["per_node"], acc["per_ns"], node_usage, acc["summary"], ns_total,
+                        metrics_available=any_metrics, pod_usage_skipped=not any_metrics,
+                        partial=True, pod_summary=acc["pod_summary"],
+                    )
+                    last_pub = now
+    finally:
+        ex.shutdown(wait=False, cancel_futures=True)
+
+    if errors and len(errors) == len(todo) and not resumed:
+        raise errors[0]   # 전부 실패 — 부분 결과가 아니라 설정·권한 오류로 드러낸다
+    out = _assemble_overview(
+        node_base, acc["per_node"], acc["per_ns"], node_usage, acc["summary"], ns_total,
+        metrics_available=any_metrics, pod_usage_skipped=not any_metrics,
+        partial=bool(partial_flag) or bool(failed), pod_summary=acc["pod_summary"],
+    )
+    out.update(collect_mode="namespace", failed_namespaces=sorted(failed)[:200],
+               resumed_namespaces=resumed)
+    return out
 
 
 # 비싼 overview 집계는 백그라운드 스냅샷 매니저로 수행(요청 스레드 비블로킹 → 502 방지).
@@ -722,6 +940,8 @@ _OVERVIEW_TTL = _envf("K8S_ALLOC_OVERVIEW_TTL", 86400.0)
 # 스냅샷 저장소: auto(Redis 가능하면 replica 간 공유, 아니면 프로세스 메모리) | redis | memory.
 # 멀티 replica(HPA) 환경에서 memory 면 폴링이 파드마다 다른 진행률/결과를 보게 된다(BE-15).
 _SNAPSHOT_BACKEND = (os.getenv("K8S_ALLOC_SNAPSHOT_BACKEND") or "auto").strip().lower()
+# NS 단위 수집의 이어하기 저장소(Redis). memory 백엔드면 쓰지 않는다(replica 인계가 없으므로).
+_ns_cache: Optional[_RedisStore] = None if _SNAPSHOT_BACKEND == "memory" else _RedisStore(prefix="allocns")
 _overview_mgr = SnapshotManager(ttl=_OVERVIEW_TTL, partial_ttl=_PARTIAL_TTL,
                                 stuck_timeout=_STUCK_TIMEOUT, backend=_SNAPSHOT_BACKEND,
                                 publish_interval=_PARTIAL_PUBLISH_INTERVAL,
@@ -934,6 +1154,9 @@ def allocation_namespaces(cluster_id: UUID, refresh: bool = False, db: Session =
         "metrics_available": ov["metrics_available"],
         "pod_usage_skipped": ov["pod_usage_skipped"],
         "partial": ov.get("partial", False),
+        # namespace 모드 수집 결과 — 실패(절단)한 NS 는 화면에 안내(값이 빠져 있음)
+        "collect_mode": ov.get("collect_mode", "cluster"),
+        "failed_namespaces": ov.get("failed_namespaces", []),
         **_alloc_meta(view),
     }
 
