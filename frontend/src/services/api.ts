@@ -1,5 +1,5 @@
 import axios, { type InternalAxiosRequestConfig } from 'axios';
-import { Cluster, Addon, CheckLog, SummaryStats, ApiResponse, PaginatedResponse, Playbook, PlaybookRunResult, PlaybookSshCreds, AgentChatRequest, AgentChatResponse, AgentHealthResponse, MetricCard, MetricQueryResult, MetricSparklineResult, ClusterItem, WorkItem, WorkItemType, WorkItemListResponse, WorkItemCreate, WorkItemUpdate, WorkItemStatusResponse, KanbanStatus, UiSettings, ClusterLinksPayload, WorkGuide, WorkGuideCreate, WorkGuideUpdate, WorkGuideListResponse, OpsNote, OpsNoteCreate, OpsNoteUpdate, OpsNoteListResponse, MindMap, MindMapListItem, MindMapCreate, MindMapUpdate, MindMapNode, MindMapNodeCreate, MindMapNodeUpdate, ManagementServer, ManagementServerCreate, ManagementServerUpdate, ManagementServerListResponse, TopologyTraceRequest, TopologyTraceResponse, TrendDigest, TrendItem, TrendSource, ClusterTrendsResponse, ReleaseNotesResponse, CheckMatrixItem, CheckMatrixItemInput, CheckMatrixGrid, CheckMatrixHistory, CheckMatrixSettings, CheckMatrixRunbook, CheckMatrixRun, CheckMatrixRunDetail, CheckMatrixRunList, CheckMatrixBatchResult, CheckMatrixSourceConfigEntry, CheckMatrixCatalog, CheckMatrixItemPreviewInput, CheckMatrixItemPreviewResult, CheckMatrixItemSourceConfig, CheckMatrixItemDetail, ClusterStatusBreakdown, SchemaHealthReport, SchemaRepairResult, LlmSettings, LlmHealthEntry, LlmTestResult, LlmCredentialSummary, LlmUsageBucket } from '@/types';
+import { Cluster, Addon, CheckLog, SummaryStats, ApiResponse, PaginatedResponse, Playbook, PlaybookRunResult, PlaybookSshCreds, AgentChatRequest, AgentChatResponse, AgentHealthResponse, MetricCard, MetricQueryResult, MetricSparklineResult, ClusterItem, WorkItem, WorkItemType, WorkItemListResponse, WorkItemCreate, WorkItemUpdate, WorkItemStatusResponse, KanbanStatus, UiSettings, ClusterLinksPayload, WorkGuide, WorkGuideCreate, WorkGuideUpdate, WorkGuideListResponse, OpsNote, OpsNoteCreate, OpsNoteUpdate, OpsNoteListResponse, MindMap, MindMapListItem, MindMapCreate, MindMapUpdate, MindMapNode, MindMapNodeCreate, MindMapNodeUpdate, ManagementServer, ManagementServerCreate, ManagementServerUpdate, ManagementServerListResponse, TopologyTraceRequest, TopologyTraceResponse, TrendDigest, TrendItem, TrendSource, ClusterTrendsResponse, ReleaseNotesResponse, CheckMatrixItem, CheckMatrixItemInput, CheckMatrixGrid, CheckMatrixHistory, CheckMatrixSettings, CheckMatrixRunbook, CheckMatrixRun, CheckMatrixRunDetail, CheckMatrixRunList, CheckMatrixBatchResult, CheckMatrixSourceConfigEntry, CheckMatrixCatalog, CheckMatrixItemPreviewInput, CheckMatrixItemPreviewResult, CheckMatrixItemSourceConfig, CheckMatrixItemDetail, ClusterStatusBreakdown, SchemaHealthReport, SchemaRepairResult, LlmSettings, LlmHealthEntry, LlmTestResult, LlmCredentialSummary, LlmUsageBucket, Tenant, ClusterAccessLevel } from '@/types';
 import { isDebugEnabled, useDebugStore } from '@/stores/debugStore';
 import { getAuthToken, expireAuthSession, type AuthUser } from '@/stores/authStore';
 
@@ -1115,6 +1115,18 @@ export interface TodayTasksSummary {
 export const todayWorkItemsApi = {
   getSummary: (date?: string) =>
     api.get<TodayTasksSummary>('/work-items/today/summary', { params: date ? { date } : {} }),
+};
+
+// 멀티테넌시 1단계 — 테넌트/멤버/클러스터 바인딩 (admin 전용, routers/tenants.py)
+export const tenantsApi = {
+  list: () => api.get<Tenant[]>('/tenants'),
+  create: (data: { name: string; description?: string | null }) => api.post<Tenant>('/tenants', data),
+  update: (id: string, data: { name?: string; description?: string | null }) =>
+    api.put<Tenant>(`/tenants/${id}`, data),
+  remove: (id: string) => api.delete(`/tenants/${id}`),
+  putMembers: (id: string, userIds: string[]) => api.put<Tenant>(`/tenants/${id}/members`, { userIds }),
+  putBindings: (id: string, bindings: { clusterId: string; access: ClusterAccessLevel }[]) =>
+    api.put<Tenant>(`/tenants/${id}/bindings`, { bindings }),
 };
 
 export const uiSettingsApi = {

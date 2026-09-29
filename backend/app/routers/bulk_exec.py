@@ -21,6 +21,7 @@ from app.services.kubeconfig import ensure_kubeconfig_file
 from app.services.script_wrap import wrap_script_for_language
 from app.services.ssh_runner import SSHTarget, fetch_remote_file, run_bulk
 from app.services import audit_logger
+from app.services.cluster_access import cluster_ids_for_hosts, require_clusters_access
 from app.services.k8s_client_pool import get_api_client_for_path
 
 router = APIRouter(tags=["bulk-exec"])
@@ -115,6 +116,14 @@ async def bulk_exec_run(
 
     인증 정보는 요청에만 존재하고 저장되지 않는다.
     """
+    # 타겟이 속한 클러스터에 테넌트 바인딩이 있으면 operate 권한 필요 (멀티테넌시 1단계).
+    # cluster_id 를 빼고 host 만 넘겨 우회하지 못하도록 host 가 실제로 속한 클러스터도 본다.
+    targets = payload.targets or []
+    require_clusters_access(db, actor, [
+        payload.cluster_id,
+        *(t.cluster_id for t in targets),
+        *cluster_ids_for_hosts(db, (t.host for t in targets)),
+    ])
     audit_logger.record(
         db,
         action="bulk_exec.run",
@@ -205,6 +214,7 @@ async def bulk_exec_fetch_file(
     뒤 (필요하면 다시) 여러 노드에 업로드하는 용도. 인증 정보는 요청에만 존재하고
     저장되지 않는다(bulk_exec_run 과 동일 원칙).
     """
+    require_clusters_access(db, actor, cluster_ids_for_hosts(db, [payload.host]))
     audit_logger.record(
         db,
         action="bulk_exec.fetch_file",

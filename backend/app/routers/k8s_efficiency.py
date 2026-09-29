@@ -26,6 +26,7 @@ from app.schemas.k8s_efficiency import (
     ApplyBody, CustomScaleBody, NamespacePolicyBody, PolicyDefaultsBody, QuotaAdjustBody, ScheduleBody,
 )
 from app.services import audit_logger
+from app.services.cluster_access import require_cluster_access
 from app.services.k8s_efficiency import history as _hist
 from app.services.k8s_efficiency import settings as _cfg
 from app.services.k8s_efficiency.apply import rollback_targets, targets_from_recommendations
@@ -180,6 +181,7 @@ def rollback_run(run_id: UUID, request: Request, db: Session = Depends(get_db),
     r = db.query(K8sEfficiencyRun).filter(K8sEfficiencyRun.id == run_id).first()
     if r is None:
         raise HTTPException(status_code=404, detail="run not found")
+    require_cluster_access(db, actor, r.cluster_id)
     if r.dry_run:
         raise HTTPException(status_code=422, detail="dry-run 실행은 롤백 대상이 아닙니다.")
     if r.run_state not in ("succeeded", "partial"):

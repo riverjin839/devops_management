@@ -75,6 +75,7 @@ from app.models.resource_count import (
     MetricCheckState,
     SnapshotSource,
 )
+from app.models.tenant import Tenant, TenantMember, ClusterBinding, CLUSTER_ACCESS_LEVELS
 from app.models.check_matrix import (
     CheckMatrixItem,
     CheckMatrixSchedule,
@@ -181,4 +182,8 @@ __all__ = [
     "K8sRightsizeRecommendation",
     "K8sNamespacePolicy",
     "K8sEfficiencyRun",
+    "Tenant",
+    "TenantMember",
+    "ClusterBinding",
+    "CLUSTER_ACCESS_LEVELS",
 ]

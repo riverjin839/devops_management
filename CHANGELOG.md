@@ -10,6 +10,14 @@
 
 1.37.5 이후 main 에 병합된 변경 (다음 릴리스 후보).
 
+### Added
+- **테넌트 기반 클러스터 실행 권한 (Settings ▸ 테넌트, 멀티테넌시 1단계)**: 테넌트(팀)에 사용자를 넣고 클러스터를
+  `operate`(실행·변경) / `read`(조회) 로 바인딩하면, 그 클러스터의 Pod exec·k9s·노드 SSH·etcdctl·mc·일괄 실행·리소스
+  변경·노드 라벨·RBAC 발급·효율화 적용/롤백·배치잡/플레이북/클러스터 아이템 실행은 바인딩된 테넌트 멤버만 할 수 있다.
+  바인딩이 없는 클러스터는 지금처럼 열려 있고(기존 설치 영향 없음), admin 은 항상 허용, 멤버십은 권한을 좁힐 뿐 넓히지 않는다.
+  Backend: `models/tenant.py`(`tenants`/`tenant_members`/`cluster_bindings`), `services/cluster_access.py`, `routers/tenants.py`,
+  `main.py` `_cluster_scoped` 의존성. Frontend: `TenantManager`, 터미널 close code `4413` 안내.
+
 ### Fixed
 - **백업 export 가 viewer 에게도 열려 있던 권한 구멍 (Settings ▸ 백업 / 복구)**: `GET /backup/export`·`/backup/meta` 가
   인증만 요구해, viewer 도 `include_sensitive=true` 로 복호화된 kubeconfig·자격증명이 담긴 전체 백업을 받아갈 수 있었다.

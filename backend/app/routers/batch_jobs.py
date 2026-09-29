@@ -18,6 +18,7 @@ from app.auth.deps import require_operator
 from app.database import get_db
 from app.models import BatchJob, BatchJobRun, Cluster, User
 from app.services import active_runs, audit_logger
+from app.services.cluster_access import has_cluster_access, require_cluster_access
 from app.schemas.batch_job import (
     BatchJobBulkRunItem,
     BatchJobBulkRunRequest,
@@ -201,6 +202,7 @@ def create_job(
 ):
     if not db.query(Cluster).filter(Cluster.id == payload.cluster_id).first():
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Cluster not found")
+    require_cluster_access(db, actor, payload.cluster_id)
 
     effective_job_type = payload.job_type
     if payload.execution_mode == "script":
@@ -272,6 +274,9 @@ def bulk_run_jobs(
         if not job.enabled:
             results.append(BatchJobBulkRunItem(job_id=jid, queued=False, reason="비활성 잡"))
             continue
+        if not has_cluster_access(db, actor, job.cluster_id, "operate"):
+            results.append(BatchJobBulkRunItem(job_id=jid, queued=False, reason="클러스터 실행 권한 없음(테넌트 바인딩)"))
+            continue
         if _requires_ssh(job.job_type) and not (job.encrypted_password or job.encrypted_private_key):
             results.append(BatchJobBulkRunItem(job_id=jid, queued=False, reason="저장된 자격증명 없음"))
             continue
@@ -313,6 +318,7 @@ def update_job(
         job = get_job_or_404(db, job_id)
     except BatchJobNotFound:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="BatchJob not found")
+    require_cluster_access(db, actor, job.cluster_id)
 
     update = payload.model_dump(exclude_unset=True)
     saved_password = update.pop("saved_password", None)
@@ -379,6 +385,7 @@ def delete_job(
         job = get_job_or_404(db, job_id)
     except BatchJobNotFound:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="BatchJob not found")
+    require_cluster_access(db, actor, job.cluster_id)
     job_name, job_type, cluster_id = job.name, job.job_type, job.cluster_id
     # Cascade deletes BatchJobRun rows via the relationship's
     # `cascade="all, delete-orphan"`.
@@ -407,6 +414,7 @@ async def run_job(
         job = get_job_or_404(db, job_id)
     except BatchJobNotFound:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="BatchJob not found")
+    require_cluster_access(db, actor, job.cluster_id)
 
     # 비활성 잡은 즉시 실행도 막는다 — 예전엔 스케줄(디스패처)/일괄 실행만 enabled 를
     # 지켰고 단일 잡 "즉시 실행" 버튼은 이 검사가 없어, 꺼둔 잡을 클릭 한 번으로 실행할
@@ -478,6 +486,7 @@ def stop_job(
         job = get_job_or_404(db, job_id)
     except BatchJobNotFound:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="BatchJob not found")
+    require_cluster_access(db, actor, job.cluster_id)
 
     run = (
         db.query(BatchJobRun)

@@ -30,6 +30,7 @@ from app.database import SessionLocal
 from app.models import Cluster
 from app.models.user import User
 from app.services import audit_logger
+from app.services.cluster_access import has_cluster_access
 from app.services.kubeconfig import ensure_kubeconfig_file
 
 logger = logging.getLogger(__name__)
@@ -85,6 +86,9 @@ async def pod_exec(
         cluster = db.query(Cluster).filter(Cluster.id == cluster_id).first()
         if cluster is None:
             await websocket.close(code=4404)
+            return
+        if not has_cluster_access(db, user, cluster_id, "operate"):
+            await websocket.close(code=4413)  # 테넌트 바인딩상 실행 권한 없음
             return
         kc = ensure_kubeconfig_file(cluster)
         if not kc or not os.path.exists(kc):

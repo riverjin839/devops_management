@@ -32,7 +32,9 @@ from app.database import SessionLocal, get_db
 from app.models import Cluster
 from app.models.user import User
 from app.services import audit_logger
+from app.services.cluster_access import cluster_ids_for_host, has_cluster_access
 from app.services.ssh_pty import (
+    CLOSE_CLUSTER_FORBIDDEN,
     CLOSE_DISABLED,
     CLOSE_UNAUTHORIZED,
     PtyInitError,
@@ -148,6 +150,16 @@ async def node_ssh_terminal(
             init = await receive_init(websocket)
         except PtyInitError as e:
             await reject_init(websocket, str(e))
+            return
+
+        # 테넌트 바인딩 — 화면이 넘긴 cluster_id 뿐 아니라 host 가 실제로 속한 클러스터까지 본다
+        # (cluster_id 를 빼고 접속해 우회하는 것을 막는다).
+        scoped = cluster_ids_for_host(db, init.host)
+        if cluster_uuid is not None:
+            scoped.add(cluster_uuid)
+        if any(not has_cluster_access(db, user, cid, "operate") for cid in scoped):
+            await reject_init(websocket, "이 노드가 속한 클러스터에 대한 실행 권한이 없습니다 (테넌트 바인딩)",
+                              code=CLOSE_CLUSTER_FORBIDDEN)
             return
 
         label = init.label

@@ -5452,3 +5452,29 @@ export interface RbacKubeconfigResult {
   namespace: string;
   serviceAccount: string;
 }
+
+// ── 멀티테넌시 1단계: 테넌트 · 멤버 · 클러스터 바인딩 (Settings ▸ 테넌트) ──────────
+export type ClusterAccessLevel = 'read' | 'operate';
+
+export interface TenantMember {
+  userId: string;
+  username?: string | null;
+  displayName?: string | null;
+  role?: string | null;
+}
+
+export interface TenantClusterBinding {
+  clusterId: string;
+  access: ClusterAccessLevel;
+  clusterName?: string | null;
+}
+
+export interface Tenant {
+  id: string;
+  name: string;
+  description?: string | null;
+  members: TenantMember[];
+  bindings: TenantClusterBinding[];
+  createdAt?: string | null;
+  updatedAt?: string | null;
+}
