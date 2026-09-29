@@ -8,7 +8,14 @@
 
 ## [Unreleased]
 
-1.38.0 이후 main 에 병합된 변경 (다음 릴리스 후보).
+### Added
+- **점검 매트릭스 대상 중복 표시**: 실행 방식(K8s API/kubectl/HTTP/Ansible 등)이 달라도 실제로는 같은
+  컴포넌트(예: etcd)를 여러 곳에서 중복 점검하고 있다는 것을 알 수 없던 문제를 해소했다. 항목 수정에서
+  "점검 대상"(자유 입력, 예: etcd/node/api-server)을 지정하면, 같은 대상을 **서로 다른 실행 방식**으로
+  점검하는 다른 항목이 있을 때만 매트릭스·항목 상세에 "중복 N" 배지가 뜬다(같은 실행 방식끼리는 표시하지
+  않아 오탐을 피한다). etcd/node/CoreDNS/인증서처럼 실제로 겹치는 것이 확인된 항목은 기본값이 자동으로
+  채워진다. Backend: `check_matrix_items.target_key`, `check_matrix_service._target_duplicate_map()`.
+  Frontend: `CheckMatrixItemFormModal`, 신규 `TargetDuplicateBadge`.
 
 ## [1.38.0] - 2026-09-29
 

@@ -18,6 +18,7 @@ import {
 } from '@/hooks/useDeepCheckDefinitions';
 import { DeepCheckDefinitionForm } from '@/components/daily-check';
 import { ExecTechBadge } from '@/components/platform-status/ExecTechBadge';
+import { TargetDuplicateBadge } from '@/components/platform-status/TargetDuplicateBadge';
 import { CheckMatrixRunbookPanel } from '@/components/platform-status/CheckMatrixRunbookPanel';
 import { CheckMatrixRunList, CheckMatrixRunDetailView } from '@/components/platform-status/CheckMatrixRunLog';
 import { CheckMatrixHistoryPanel } from '@/components/platform-status/CheckMatrixHistoryPanel';
@@ -70,6 +71,7 @@ export function CheckItemDetailPage() {
             <div className="flex items-center gap-2 flex-wrap">
               <h1 className="text-lg font-semibold truncate">{item.name}</h1>
               <ExecTechBadge execTech={item.execTech} />
+              <TargetDuplicateBadge item={item} />
               {categoryLabel && (
                 <span className="flex-shrink-0 px-1.5 py-0.5 rounded border border-border text-[11px] font-medium text-muted-foreground">
                   {categoryLabel}
@@ -80,7 +82,14 @@ export function CheckItemDetailPage() {
             <p className="text-[11px] text-muted-foreground mt-0.5">
               소스: <span className="font-mono">{item.sourceType}</span>
               {item.sourceRef && <span className="font-mono"> · {item.sourceRef}</span>}
+              {item.targetKey && <span className="font-mono"> · 대상: {item.targetKey}</span>}
             </p>
+            {!!item.targetDuplicateCount && (
+              <p className="text-[11px] text-status-warning mt-0.5">
+                이 대상을 {item.targetDuplicateCount}개 다른 실행기술도 점검 중:{' '}
+                {(item.targetPeers ?? []).map((p) => p.name).join(', ')}
+              </p>
+            )}
           </div>
         </div>
 

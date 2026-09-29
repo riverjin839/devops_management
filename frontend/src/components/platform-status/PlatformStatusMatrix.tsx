@@ -23,6 +23,7 @@ import { CheckMatrixSettingsModal } from './CheckMatrixSettingsModal';
 import { CheckMatrixHelpPanel } from './CheckMatrixHelpPanel';
 import { CheckMatrixRunLogPanel } from './CheckMatrixRunLogPanel';
 import { ExecTechBadge } from './ExecTechBadge';
+import { TargetDuplicateBadge } from './TargetDuplicateBadge';
 import { rowColor } from './rowColors';
 
 const STATUS_LABEL: Record<Status, string> = {
@@ -824,6 +825,7 @@ export function PlatformStatusMatrix({ toolbarSlot }: PlatformStatusMatrixProps 
                         const sourceMeta = (
                           <>
                             <ExecTechBadge execTech={item.execTech} />
+                            <TargetDuplicateBadge item={item} />
                             {item.isSystem && (
                               <span title="시스템 항목" className="flex-shrink-0">
                                 <Lock className="w-3 h-3 text-muted-foreground" />

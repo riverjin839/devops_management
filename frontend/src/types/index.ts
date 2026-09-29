@@ -4359,6 +4359,12 @@ export interface CheckMatrixItem {
   category?: string | null;
   /** 실행 기술 (k8s_api | kubectl | http | promql | snapshot | ssh_bash | manual | 자유 문자열) */
   execTech?: string | null;
+  /** 실제 점검 대상 식별자(예: "etcd") — D-062 "대상 중복 표시". category 와 같은 자유 문자열. */
+  targetKey?: string | null;
+  /** targetKey 를 공유하면서 exec_tech 가 서로 다른 동료 행 수(자기 자신 제외). 0 = 중복 아님. */
+  targetDuplicateCount?: number;
+  /** 그 동료 행 목록(툴팁용) — targetDuplicateCount 가 0 이면 항상 빈 배열. */
+  targetPeers?: { itemId: string; name: string; execTech?: string | null }[];
   /** 행 배경 색 — 차트 토큰 프리셋 키('chart-1'..'chart-8'), null = 무색 */
   color?: string | null;
   /** 이 행 전용 deep_check 정의 id — 값이 있으면 같은 점검 종류의 다른 행과 설정을 공유하지 않는다(커스텀 카드). */

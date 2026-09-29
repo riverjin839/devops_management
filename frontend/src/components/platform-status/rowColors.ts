@@ -86,3 +86,7 @@ export function rowColor(key?: string | null): RowColorPreset | null {
 
 /** 영역 자유 입력 시 추천 목록 — 백엔드 시드 카테고리와 일치. */
 export const CATEGORY_SUGGESTIONS = ['k8s', 'network', 'storage', 'os', 'app'];
+
+/** 대상(target_key) 자유 입력 시 추천 목록 — D-062 "대상 중복 표시". 백엔드 시드 힌트
+ *  (`_DEEP_CHECK_TARGET_HINTS`/`_ADDON_TARGET_HINTS`)와 실제로 겹치는 것이 확인된 값만 담는다. */
+export const TARGET_SUGGESTIONS = ['etcd', 'node', 'coredns', 'certificate', 'api-server', 'control-plane'];
