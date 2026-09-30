@@ -378,3 +378,65 @@ def test_verify_cluster_missing_cluster_is_not_audited(monkeypatch):
         clusters_router.verify_cluster(uuid.uuid4(), _fake_request(), db, _fake_actor())
     assert exc_info.value.status_code == 404
     assert records == []
+
+
+# ── 생성 시 kubeconfig_path 검증 ─────────────────────────────────────────────
+
+@pytest.mark.parametrize("skip", [False, True])
+def test_create_cluster_rejects_non_kubeconfig_path(tmp_path, skip):
+    """경로로만 지정한 kubeconfig 가 kubeconfig 가 아니면 (연결 검증 생략 여부와 무관하게) 422."""
+    bad = tmp_path / "passwd"
+    bad.write_text("root:x:0:0:root:/root:/bin/bash\n")
+    db = MagicMock()
+    db.query.return_value.filter.return_value.first.return_value = None
+
+    payload = ClusterCreate(
+        name="c",
+        api_endpoint="https://cluster.local",
+        kubeconfig_path=str(bad),
+        skip_connectivity_check=skip,
+    )
+    with pytest.raises(HTTPException) as exc_info:
+        clusters_router.create_cluster(payload, request=_fake_request(), db=db, actor=_fake_actor())
+
+    assert exc_info.value.status_code == 422
+    assert not db.add.called  # 검증 실패 시 아무것도 저장하지 않는다
+
+
+def test_create_cluster_rejects_missing_kubeconfig_path_even_when_skipping_check(tmp_path):
+    db = MagicMock()
+    db.query.return_value.filter.return_value.first.return_value = None
+
+    payload = ClusterCreate(
+        name="c",
+        api_endpoint="https://cluster.local",
+        kubeconfig_path=str(tmp_path / "missing.yaml"),
+        skip_connectivity_check=True,
+    )
+    with pytest.raises(HTTPException) as exc_info:
+        clusters_router.create_cluster(payload, request=_fake_request(), db=db, actor=_fake_actor())
+
+    assert exc_info.value.status_code == 422
+    assert "찾을 수 없습니다" in exc_info.value.detail
+
+
+def test_create_cluster_accepts_valid_kubeconfig_path(monkeypatch, tmp_path):
+    good = tmp_path / "kc.yaml"
+    good.write_text(_VALID_KUBECONFIG)
+    monkeypatch.setattr(clusters_router, "_verify_cluster_connectivity", lambda *_a, **_k: None)
+    monkeypatch.setattr(clusters_router, "_collect_node_basics", lambda *_a, **_k: None)
+    monkeypatch.setattr(clusters_router.audit_logger, "record", lambda *_a, **_k: None)
+    hc = MagicMock()
+    monkeypatch.setattr(clusters_router, "HealthChecker", lambda _db: hc)
+    db = MagicMock()
+    db.query.return_value.filter.return_value.first.return_value = None
+    db.flush.side_effect = lambda: [
+        setattr(c.args[0], "id", uuid.uuid4())
+        for c in db.add.call_args_list
+        if isinstance(c.args[0], Cluster) and c.args[0].id is None
+    ]
+
+    payload = ClusterCreate(name="c", api_endpoint="https://10.0.0.1:6443", kubeconfig_path=str(good))
+    cluster = clusters_router.create_cluster(payload, request=_fake_request(), db=db, actor=_fake_actor())
+
+    assert cluster.kubeconfig_path == str(good)

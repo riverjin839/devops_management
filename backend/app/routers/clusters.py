@@ -348,6 +348,12 @@ def create_cluster(
     connectivity_failed = False
     connectivity_error: str | None = None
 
+    # kubeconfig 를 경로로만 지정한 경우 — 연결 검증 생략(skip) 여부와 무관하게 실제 kubeconfig 인지
+    # 확인한다. GET /kubeconfig 가 경로의 파일 내용을 그대로 돌려주므로(구 레코드 호환) 임의 파일
+    # 경로(/etc/passwd 등)를 등록해 읽어내는 우회로를 막는다. (content 가 있으면 저장 경로로 대체됨)
+    if effective_path and not (content and content.strip()):
+        _validate_kubeconfig_path(effective_path)
+
     temp_kubeconfig_path = None
     if content and content.strip():
         with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False, encoding="utf-8") as temp_file:
