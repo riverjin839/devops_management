@@ -7,10 +7,12 @@ from fastapi import APIRouter, Depends, HTTPException, status, Header
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
+from app.auth.deps import require_operator
 from app.database import get_db
 from app.models.cluster import Cluster
 from app.models.infra_node import InfraNode
 from app.models.topology_audit_log import TopologyAuditLog
+from app.models.user import User
 from app.schemas.infra_node import (
     InfraNodeCreate,
     InfraNodeUpdate,
@@ -20,6 +22,7 @@ from app.schemas.infra_node import (
     SyncResult,
 )
 from app.services.check_definition_runner import DeepCheckService
+from app.services.cluster_access import require_cluster_access
 
 router = APIRouter(prefix="/infra-nodes", tags=["infra-nodes"])
 
@@ -121,10 +124,17 @@ def get_infra_node(node_id: UUID, _=Depends(_require_scope(SCOPE_READ)), db: Ses
 
 
 @router.post("", response_model=InfraNodeResponse, status_code=status.HTTP_201_CREATED)
-def create_infra_node(payload: InfraNodeCreate, _=Depends(_require_scope(SCOPE_EDIT)), db: Session = Depends(get_db)):
+def create_infra_node(
+    payload: InfraNodeCreate,
+    _=Depends(_require_scope(SCOPE_EDIT)),
+    user: User = Depends(require_operator),
+    db: Session = Depends(get_db),
+):
     cluster = db.query(Cluster).filter(Cluster.id == payload.cluster_id).first()
     if not cluster:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Cluster not found")
+    # 본문 cluster_id 는 경로 의존성(enforce_cluster_access)이 못 보므로 여기서 테넌트 바인딩을 직접 판정.
+    require_cluster_access(db, user, cluster.id, "operate")
     payload_data = payload.model_dump()
     if not payload_data.get("hostname") and cluster.hostname:
         payload_data["hostname"] = cluster.hostname
@@ -157,10 +167,17 @@ def create_infra_node(payload: InfraNodeCreate, _=Depends(_require_scope(SCOPE_E
 
 
 @router.put("/{node_id}", response_model=InfraNodeResponse)
-def update_infra_node(node_id: UUID, payload: InfraNodeUpdate, _=Depends(_require_scope(SCOPE_EDIT)), db: Session = Depends(get_db)):
+def update_infra_node(
+    node_id: UUID,
+    payload: InfraNodeUpdate,
+    _=Depends(_require_scope(SCOPE_EDIT)),
+    user: User = Depends(require_operator),
+    db: Session = Depends(get_db),
+):
     node = db.query(InfraNode).filter(InfraNode.id == node_id).first()
     if not node:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="InfraNode not found")
+    require_cluster_access(db, user, node.cluster_id, "operate")
     if node.version != payload.version:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
@@ -192,10 +209,16 @@ def update_infra_node(node_id: UUID, payload: InfraNodeUpdate, _=Depends(_requir
 
 
 @router.delete("/{node_id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_infra_node(node_id: UUID, _=Depends(_require_scope(SCOPE_FORCE_FIX)), db: Session = Depends(get_db)):
+def delete_infra_node(
+    node_id: UUID,
+    _=Depends(_require_scope(SCOPE_FORCE_FIX)),
+    user: User = Depends(require_operator),
+    db: Session = Depends(get_db),
+):
     node = db.query(InfraNode).filter(InfraNode.id == node_id).first()
     if not node:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="InfraNode not found")
+    require_cluster_access(db, user, node.cluster_id, "operate")
     before_data = _serialize_node(node)
     _audit(
         db,
@@ -242,11 +265,17 @@ def _verify_node_health(
 
 
 @router.post("/{node_id}/verify", response_model=NodeVerifyResult)
-def verify_infra_node(node_id: UUID, _=Depends(_require_scope(SCOPE_SYNC)), db: Session = Depends(get_db)):
+def verify_infra_node(
+    node_id: UUID,
+    _=Depends(_require_scope(SCOPE_SYNC)),
+    user: User = Depends(require_operator),
+    db: Session = Depends(get_db),
+):
     """노드 추가 검증 — 해당 노드의 Ready/Pressure/Taint/Allocatable/CNI·kube-proxy 를 점검."""
     node = db.query(InfraNode).filter(InfraNode.id == node_id).first()
     if not node:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="InfraNode not found")
+    require_cluster_access(db, user, node.cluster_id, "operate")
     cluster = db.query(Cluster).filter(Cluster.id == node.cluster_id).first()
     if not cluster:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Cluster not found")
@@ -267,7 +296,12 @@ def verify_infra_node(node_id: UUID, _=Depends(_require_scope(SCOPE_SYNC)), db: 
 
 
 @router.post("/sync/{cluster_id}", response_model=SyncResult)
-def sync_infra_nodes_from_k8s(cluster_id: UUID, _=Depends(_require_scope(SCOPE_SYNC)), db: Session = Depends(get_db)):
+def sync_infra_nodes_from_k8s(
+    cluster_id: UUID,
+    _=Depends(_require_scope(SCOPE_SYNC)),
+    _operator: User = Depends(require_operator),
+    db: Session = Depends(get_db),
+):
     """kubectl get nodes 를 통해 클러스터 노드 정보를 자동 수집하고 upsert"""
     cluster = db.query(Cluster).filter(Cluster.id == cluster_id).first()
     if not cluster:

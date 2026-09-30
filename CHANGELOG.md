@@ -8,7 +8,14 @@
 
 ## [Unreleased]
 
-1.41.0 이후 main 에 병합된 변경 (다음 릴리스 후보).
+### Fixed
+- **인프라·서비스 토폴로지 변경 동작에 역할·테넌트 게이팅 추가 (보안)**: 인프라 노드 API 는 클라이언트가 보내는
+  `X-API-Scopes` 헤더 문자열만 검사했고, 서비스 토폴로지 링크·외부 노드 API 는 아무 검사도 없어 viewer 나 다른
+  테넌트 사용자도 노드·링크·외부 노드를 만들고 지울 수 있었다(특히 `link_id`/`node_id` 경로는 클러스터 판정이 빠져
+  있었다). 이제 변경(생성·수정·삭제·검증·동기화)은 operator 이상만 가능하고, 소유 클러스터의 테넌트 바인딩까지
+  서버가 판정한다. 화면에서도 viewer 는 관련 버튼이 비활성으로 보이고 사유가 툴팁으로 나온다.
+  Backend: `routers/infra_nodes.py`·`routers/service_topology.py`(`require_operator` + `require_cluster_access`).
+  Frontend: `InfraTopologyPage`·`ServiceTopologyPage`·`NodeDetailPanel`(`useCanOperate`).
 
 ## [1.41.0] - 2026-09-29
 
