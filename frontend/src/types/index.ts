@@ -4103,6 +4103,10 @@ export interface AllocNamespacesResponse extends AllocSnapshotMeta {
   collectMode?: 'cluster' | 'namespace';
   /** namespace 모드에서 목록/metrics 가 실패·절단된 NS — 그 NS 의 값은 빠져 있다 */
   failedNamespaces?: string[];
+  /** NS 롤링 갱신 중(Celery 가 오래된 NS 부터 다시 모아 스냅샷 게시) — 화면은 주기적으로 읽기만 한다 */
+  rolling?: boolean;
+  /** 결과에 포함된 NS 중 가장 오래된 수집 시각(epoch 초) — NS 마다 수집 시점이 다르다 */
+  nsOldestAt?: number | null;
 }
 
 // ── K8S 자원 효율화 (/k8s-allocation 효율화 탭) ───────────────────────────────

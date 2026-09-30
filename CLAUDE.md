@@ -218,6 +218,7 @@ All routers are imported from `app/routers/__init__.py` and mounted under `/api/
 | `arch-doc-sync-dispatcher` | 매분 | 서비스 아키텍처 문서 현행화 (AppSetting cron 평가 → `sync_all_architecture_docs`) |
 | `weekly-report-dispatcher` | 매분 | 주간보고 자동 생성·Confluence 게시 (AppSetting cron 평가, 기본 금 17:00) |
 | `k8s-efficiency-dispatcher` | 매분 | K8S 자원 효율화 — 클러스터별 cron(AppSetting `k8s_efficiency.schedule`, 기본 10분) 평가 → NS/워크로드 request·usage·quota 샘플 수집 + 추천 생성 + opt-in NS 자동화 팬아웃 |
+| `k8s-alloc-rolling-dispatcher` | 매분 | K8S 자원 관리 NS 롤링 갱신 — `K8S_ALLOC_ROLLING`(viewed 기본: 최근 화면을 연 클러스터) 대상 팬아웃 → 대형(namespace 모드) 클러스터의 NS 누적기를 오래된 순으로 시간 예산만큼 다시 수집, 전 NS 가 모이면 개요 스냅샷 게시(`refresh_k8s_alloc_rolling_one`, 클러스터당 Redis 락) |
 
 태스크 성격별로 디스패처류(`run_check_matrix_dispatch`, `run_batch_job_dispatcher`,
 `dispatch_resource_count_snapshot`, `run_cluster_item_dispatcher`,

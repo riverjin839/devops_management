@@ -102,6 +102,12 @@ celery_app.conf.beat_schedule = {
         "task": "app.celery_app.dispatch_k8s_efficiency_collect",
         "schedule": crontab(minute="*"),
     },
+    # K8S 자원 관리 NS 롤링 갱신 — 대형(namespace 모드) 클러스터의 NS 누적기를 오래된 순으로 다시 모으고
+    # 전 NS 가 모이면 개요 스냅샷 게시(웹은 읽기만). K8S_ALLOC_ROLLING=off|viewed(기본)|always.
+    "k8s-alloc-rolling-dispatcher": {
+        "task": "app.celery_app.dispatch_k8s_alloc_rolling",
+        "schedule": crontab(minute="*"),
+    },
 }
 
 
@@ -1870,3 +1876,67 @@ def _run_k8s_efficiency_body(self, db, run, log):
                         details={"run_id": str(run.id), "trigger": run.trigger, "dry_run": run.dry_run,
                                  "summary": run.summary, "error": run.error})
     return {"run_id": str(run.id), "state": run.run_state, "summary": run.summary}
+
+
+# ── K8S 자원 관리 NS 롤링 갱신 ───────────────────────────────────────────────────
+@celery_app.task(bind=True, name="app.celery_app.dispatch_k8s_alloc_rolling", ignore_result=True)
+def dispatch_k8s_alloc_rolling(self):
+    """매분 — 롤링 대상 클러스터(viewed: 최근 화면을 연 클러스터 / always: 전부)를
+    `refresh_k8s_alloc_rolling_one` 으로 팬아웃. 소형(cluster 모드) 판정은 태스크가 노드 수로 한다."""
+    from app.database import SessionLocal
+    from app.models import Cluster
+    from app.routers import k8s_allocation as ka
+
+    if not ka._rolling_enabled():
+        return {"dispatched": [], "reason": "disabled"}
+    db = SessionLocal()
+    fired: list[str] = []
+    try:
+        for cluster in db.query(Cluster).all():
+            cid = str(cluster.id)
+            if ka._ROLLING_MODE == "viewed" and not ka.recently_viewed(cid):
+                continue
+            # 같은 분의 다른 디스패처와 겹치지 않게 짧게 분산(예산이 1분을 넘지 않도록 최대 5초).
+            refresh_k8s_alloc_rolling_one.apply_async(args=[cid], countdown=min(_dispatch_jitter(), 5.0))
+            fired.append(cluster.name)
+        return {"dispatched": fired}
+    finally:
+        db.close()
+
+
+_ALLOC_ROLLING_TIME_LIMIT = 300
+
+
+@celery_app.task(bind=True, name="app.celery_app.refresh_k8s_alloc_rolling_one",
+                 time_limit=_ALLOC_ROLLING_TIME_LIMIT, soft_time_limit=270, ignore_result=True)
+def refresh_k8s_alloc_rolling_one(self, cluster_id: str):
+    """클러스터 1개 NS 롤링 갱신 1회. 클러스터당 Redis 락으로 직전 틱이 아직 돌면 건너뛴다(겹침 방지)."""
+    import logging
+    import uuid
+
+    from app.database import SessionLocal
+    from app.models import Cluster
+    from app.routers import k8s_allocation as ka
+    from app.services.k8s_alloc_rolling import refresh_cluster
+    from app.services.kubeconfig import ensure_kubeconfig_file
+
+    log = logging.getLogger(__name__)
+    store = ka._ns_cache
+    if store is None:
+        return {"skipped": "no_shared_store"}
+    token = uuid.uuid4().hex
+    if not store.acquire_lock(f"{cluster_id}:rolling", token, _ALLOC_ROLLING_TIME_LIMIT + 30):
+        return {"skipped": "overlap", "cluster_id": cluster_id}
+    db = SessionLocal()
+    try:
+        cluster = db.query(Cluster).filter(Cluster.id == cluster_id).first()
+        if cluster is None:
+            return {"error": "cluster not found", "cluster_id": cluster_id}
+        ensure_kubeconfig_file(cluster)
+        return refresh_cluster(cluster)
+    except Exception as e:  # noqa: BLE001
+        log.warning("k8s alloc rolling failed cluster=%s: %s", cluster_id, str(e)[:300])
+        return {"error": str(e)[:200], "cluster_id": cluster_id}
+    finally:
+        db.close()
+        store.release_lock(f"{cluster_id}:rolling", token)
