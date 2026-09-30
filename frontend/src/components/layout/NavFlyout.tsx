@@ -1,4 +1,4 @@
-import { useEffect, useRef, type ComponentType } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState, type ComponentType } from 'react';
 import { createPortal } from 'react-dom';
 import { Link } from 'react-router-dom';
 import { Check, ChevronRight, Star, X } from 'lucide-react';
@@ -94,6 +94,15 @@ export function FlyoutShell({
     }
   };
 
+  // right 배치: 패널의 실제 높이를 측정해, 하단 아이콘(도움말·사용자)처럼 anchor 가 화면
+  // 바닥 근처여도 잘리지 않게 위로 끌어올린다. 측정 전(첫 렌더)에는 anchor top 을 쓴다.
+  const [measuredTop, setMeasuredTop] = useState<number | null>(null);
+  useLayoutEffect(() => {
+    if (placement !== 'right') return;
+    const h = ref.current?.offsetHeight ?? 0;
+    setMeasuredTop(Math.max(8, Math.min(anchorRect.top, window.innerHeight - h - 8)));
+  }, [placement, anchorRect, children]);
+
   const style = placement === 'bottom'
     ? {
         top: anchorRect.bottom + 6,
@@ -101,10 +110,9 @@ export function FlyoutShell({
         maxHeight: window.innerHeight - (anchorRect.bottom + 6) - 8,
       }
     : {
-        // popover top 은 아이콘의 top 에 맞추되, 화면 아래로 넘치면 위로 끌어올림.
-        top: Math.min(anchorRect.top, window.innerHeight - 100),
+        top: measuredTop ?? anchorRect.top,
         left: NAV_WIDTH,
-        maxHeight: window.innerHeight - Math.min(anchorRect.top, window.innerHeight - 100) - 8,
+        maxHeight: window.innerHeight - 16,
       };
 
   return createPortal(
