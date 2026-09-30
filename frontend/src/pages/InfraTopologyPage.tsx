@@ -5,6 +5,7 @@ import {
 } from 'lucide-react';
 import { useClusters } from '@/hooks/useCluster';
 import { useCanOperate } from '@/hooks/useCanOperate';
+import { formatApiError } from '@/lib/utils';
 import {
   useInfraNodes,
   useCreateInfraNode,
@@ -21,6 +22,7 @@ import type {
   InfraNode,
   InfraNodeCreate,
   InfraNodeRole,
+  InfraSyncResult,
   NodeVerifyResult,
   TopologyTargetType,
   TopologyTraceResponse,
@@ -38,8 +40,14 @@ const ROLES: InfraNodeRole[] = ['master', 'worker', 'storage', 'infra'];
 
 // ── 유틸 ────────────────────────────────────────────────────────────────────
 function extractError(e: unknown): string {
-  const err = e as { response?: { data?: { detail?: string } }; message?: string };
-  return err?.response?.data?.detail ?? err?.message ?? '알 수 없는 오류';
+  // 낙관적 락 충돌(409)은 detail 이 문자열이 아니라 {message, expected_version, …} 객체다 — 그대로 렌더하면
+  // React 가 "Objects are not valid as a React child" 로 화면 전체를 죽인다(D-086). 영어 원문 대신 안내 문구로.
+  const err = e as { response?: { status?: number; data?: { detail?: unknown } } };
+  const detail = err?.response?.data?.detail;
+  if (err?.response?.status === 409 && detail && typeof detail === 'object' && 'expected_version' in detail) {
+    return '다른 사용자가 먼저 이 노드를 수정했습니다 — 화면을 새로고침한 뒤 다시 시도하세요.';
+  }
+  return formatApiError(e, '알 수 없는 오류');
 }
 
 // ── 노드 카드 ────────────────────────────────────────────────────────────────
@@ -412,9 +420,10 @@ interface DeleteConfirmProps {
   onConfirm: () => void;
   onCancel: () => void;
   isPending: boolean;
+  error?: string;
 }
 
-function DeleteConfirm({ node, onConfirm, onCancel, isPending }: DeleteConfirmProps) {
+function DeleteConfirm({ node, onConfirm, onCancel, isPending, error }: DeleteConfirmProps) {
   const dialogRef = useModalA11y(true, onCancel);
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60">
@@ -430,6 +439,11 @@ function DeleteConfirm({ node, onConfirm, onCancel, isPending }: DeleteConfirmPr
             </p>
           </div>
         </div>
+        {error && (
+          <div role="alert" className="flex items-start gap-2 text-sm text-status-critical bg-status-critical/10 border border-status-critical/20 rounded-md px-3 py-2">
+            <AlertTriangle className="w-3.5 h-3.5 mt-0.5 flex-shrink-0" />{error}
+          </div>
+        )}
         <div className="flex justify-end gap-2">
           <button
             onClick={onCancel}
@@ -458,6 +472,8 @@ export function InfraTopologyPage() {
   const [editTarget, setEditTarget] = useState<InfraNode | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<InfraNode | null>(null);
   const [syncError, setSyncError] = useState('');
+  const [syncResult, setSyncResult] = useState<InfraSyncResult | null>(null);
+  const [deleteError, setDeleteError] = useState('');
   const [verifyOpen, setVerifyOpen] = useState(false);
   const [verifyResult, setVerifyResult] = useState<NodeVerifyResult | null>(null);
   const [syncSummary, setSyncSummary] = useState<NodeVerifyResult[] | null>(null);
@@ -472,7 +488,7 @@ export function InfraTopologyPage() {
   const activeCluster = clusters.find(c => c.id === activeClusterId);
   const { canOperate, withHint } = useCanOperate(activeClusterId);
 
-  const { data: nodesResp, isLoading: nodesLoading } = useInfraNodes(
+  const { data: nodesResp, isLoading: nodesLoading, isError: nodesError, error: nodesErr, refetch: refetchNodes } = useInfraNodes(
     activeClusterId ? { clusterId: activeClusterId } : undefined,
   );
   const nodes = useMemo<InfraNode[]>(() => nodesResp?.data ?? [], [nodesResp]);
@@ -551,8 +567,11 @@ export function InfraTopologyPage() {
     if (!activeClusterId) return;
     setSyncError('');
     setSyncSummary(null);
+    setSyncResult(null);
     try {
       const res = await syncNodes.mutateAsync(activeClusterId);
+      // 생성/갱신/실패 요약 — 신규 노드가 0개여도 "동기화가 됐다"는 피드백을 남긴다(D-088)
+      setSyncResult(res);
       // 신규 노드 자동 검증 결과(있으면) 요약 배너로 노출
       setSyncSummary(res.verifications && res.verifications.length ? res.verifications : null);
     } catch (e) {
@@ -562,11 +581,13 @@ export function InfraTopologyPage() {
 
   async function handleDeleteConfirm() {
     if (!deleteTarget) return;
+    setDeleteError('');
     try {
       await deleteNode.mutateAsync(deleteTarget.id);
       setDeleteTarget(null);
-    } catch {
-      setDeleteTarget(null);
+    } catch (e) {
+      // 실패해도 모달을 닫지 않고 사유를 보여준다 — 예전엔 조용히 닫혀 삭제가 성공한 것처럼 보였다(D-088)
+      setDeleteError(extractError(e));
     }
   }
 
@@ -653,6 +674,37 @@ export function InfraTopologyPage() {
               <div className="flex items-center gap-2 text-status-critical text-sm bg-status-critical/10 border border-status-critical/20 rounded-lg px-3 py-2 mb-4">
                 <AlertTriangle className="w-3.5 h-3.5 flex-shrink-0" />{syncError}
                 <button onClick={() => setSyncError('')} className="ml-auto" aria-label="오류 메시지 닫기"><X className="w-3 h-3" /></button>
+              </div>
+            )}
+
+            {/* 동기화 결과 요약 (생성/갱신/실패 + 오류 목록) */}
+            {syncResult && (
+              <div
+                role="status"
+                className={`text-sm bg-card border rounded-md px-3 py-2 mb-4 ${
+                  syncResult.failed > 0 || syncResult.partialFailure ? 'border-status-warning/40' : 'border-border'
+                }`}
+              >
+                <div className="flex items-center gap-2">
+                  {syncResult.failed > 0 || syncResult.partialFailure
+                    ? <AlertTriangle className="w-3.5 h-3.5 flex-shrink-0 text-status-warning" />
+                    : <ShieldCheck className="w-3.5 h-3.5 flex-shrink-0 text-status-healthy" />}
+                  <span>
+                    동기화 {syncResult.failed > 0 || syncResult.partialFailure ? '부분 완료' : '완료'} —
+                    생성 {syncResult.created} · 갱신 {syncResult.updated} · 실패 {syncResult.failed} (총 {syncResult.total})
+                    {syncResult.retryCount > 0 && ` · 재시도 ${syncResult.retryCount}회`}
+                  </span>
+                  <button onClick={() => setSyncResult(null)} className="ml-auto text-muted-foreground" aria-label="동기화 결과 닫기" title="동기화 결과 닫기"><X className="w-3 h-3" /></button>
+                </div>
+                {syncResult.errors.length > 0 && (
+                  <ul className="mt-1.5 ml-5 list-disc text-xs text-status-warning space-y-0.5">
+                    {syncResult.errors.slice(0, 5).map((m, i) => <li key={i}>{m}</li>)}
+                    {syncResult.errors.length > 5 && <li>… 외 {syncResult.errors.length - 5}건</li>}
+                  </ul>
+                )}
+                {syncResult.verifiedTruncated && (
+                  <p className="mt-1 ml-5 text-xs text-muted-foreground">신규 노드가 많아 자동 검증은 일부만 수행했습니다.</p>
+                )}
               </div>
             )}
 
@@ -781,6 +833,17 @@ export function InfraTopologyPage() {
               <div className="flex items-center justify-center py-20 text-muted-foreground">
                 <Loader2 className="w-6 h-6 animate-spin" />
               </div>
+            ) : nodesError && !nodesResp ? (
+              <div role="alert" className="flex flex-col items-center justify-center py-16 gap-3 border border-status-critical/30 bg-status-critical/5 rounded-md text-status-critical">
+                <AlertTriangle className="w-8 h-8" />
+                <p className="text-sm">노드 목록을 불러오지 못했습니다 — {extractError(nodesErr)}</p>
+                <button
+                  onClick={() => refetchNodes()}
+                  className="px-3 py-1.5 text-sm rounded-xl border border-border bg-card text-foreground hover:bg-muted"
+                >
+                  다시 시도
+                </button>
+              </div>
             ) : nodes.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-20 gap-3 text-muted-foreground border border-dashed border-border rounded-xl">
                 <Server className="w-10 h-10 opacity-30" />
@@ -830,7 +893,7 @@ export function InfraTopologyPage() {
                                 key={node.id}
                                 node={node}
                                 onEdit={n => { setEditTarget(n); setModalOpen(true); }}
-                                onDelete={n => setDeleteTarget(n)}
+                                onDelete={n => { setDeleteError(''); setDeleteTarget(n); }}
                                 onVerify={handleVerify}
                                 canOperate={canOperate}
                                 withHint={withHint}
@@ -864,8 +927,9 @@ export function InfraTopologyPage() {
         <DeleteConfirm
           node={deleteTarget}
           onConfirm={handleDeleteConfirm}
-          onCancel={() => setDeleteTarget(null)}
+          onCancel={() => { setDeleteTarget(null); setDeleteError(''); }}
           isPending={deleteNode.isPending}
+          error={deleteError}
         />
       )}
 

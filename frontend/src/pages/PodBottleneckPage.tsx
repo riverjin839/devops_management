@@ -4,12 +4,13 @@ import { Activity, Play, AlertCircle, ListTree } from 'lucide-react';
 import { ClusterSidebar, NamespaceSingleSelect, PodSingleSelect } from '@/components/common';
 import { MacCard } from '@/components/ui/MacCard';
 import { useClusters } from '@/hooks/useCluster';
+import { useCanOperate } from '@/hooks/useCanOperate';
 import {
   useBottleneckRuns,
   useRunBottleneckAnalysis,
 } from '@/hooks/usePodBottleneck';
 import type { BottleneckRun, BottleneckStatus } from '@/types';
-import { parseUTC } from '@/lib/utils';
+import { formatApiError, parseUTC } from '@/lib/utils';
 
 const STATUS_COLOR: Record<BottleneckStatus, string> = {
   healthy:  'border-status-healthy/40 bg-status-healthy/5',
@@ -56,6 +57,7 @@ export function PodBottleneckPage() {
   }, [prefillCluster, selectedClusterId]);
 
   const runMutation = useRunBottleneckAnalysis();
+  const { canOperate, withHint } = useCanOperate(selectedClusterId);
 
   const { data: runsData, isLoading: runsLoading, error: runsError } = useBottleneckRuns({
     clusterId: selectedClusterId ?? undefined,
@@ -79,8 +81,8 @@ export function PodBottleneckPage() {
       });
       navigate(`/pod-bottleneck/${data.id}`);
     } catch (e) {
-      const msg = e instanceof Error ? e.message : '진단 실패';
-      setSubmitError(msg);
+      // axios 기본 메시지("Request failed with status code 403")가 아니라 서버 detail 을 보여준다(D-093)
+      setSubmitError(formatApiError(e, '진단 실패'));
     }
   };
 
@@ -137,8 +139,9 @@ export function PodBottleneckPage() {
                 <button
                   type="button"
                   onClick={handleRun}
-                  disabled={!selectedClusterId || runMutation.isPending}
-                  aria-label="병목 진단 실행"
+                  disabled={!selectedClusterId || runMutation.isPending || !canOperate}
+                  title={withHint('병목 진단 실행')}
+                  aria-label={withHint('병목 진단 실행')}
                   className="w-full inline-flex items-center justify-center gap-1.5 rounded-xl bg-primary text-primary-foreground px-3 py-2 text-sm font-semibold hover:opacity-90 disabled:opacity-50"
                 >
                   <Play className="w-4 h-4" />
