@@ -721,8 +721,9 @@ def update_kubeconfig(
 @router.post("/{cluster_id}/verify")
 def verify_cluster(
     cluster_id: UUID,
+    request: Request,
     db: Session = Depends(get_db),
-    _: User = Depends(require_operator),
+    actor: User = Depends(require_operator),
 ):
     """클러스터 연결 상태 상세 검증"""
     cluster = db.query(Cluster).filter(Cluster.id == cluster_id).first()
@@ -798,9 +799,31 @@ def verify_cluster(
         new_status = StatusEnum.warning
         failing = [r for r in results if r["ok"] is not True]
         status_reason = " / ".join(f"{r['check']}: {r['detail']}" for r in failing)[:300]
+    prev_status = cluster.status
     cluster.status = new_status
     cluster.updated_at = datetime.utcnow()
     db.commit()
+
+    # verify 는 cluster.status 를 바꾸는 실행 동작이라 결과와 상태 전이를 남긴다.
+    # 단계별 상세 문구(서버 주소·에러 원문)는 싣지 않고 check → 결과 코드만 기록한다.
+    def _code(ok: bool | None) -> str:
+        return "ok" if ok is True else "fail" if ok is False else "skip"
+
+    audit_logger.record(
+        db,
+        action="cluster.verify",
+        actor=actor,
+        status="success" if overall_ok else "failure",
+        target_type="cluster",
+        target_id=cluster_id,
+        details={
+            "name": cluster.name,
+            "checks": {r["check"]: _code(r["ok"]) for r in results},
+            "status_from": getattr(prev_status, "value", prev_status),
+            "status_to": new_status.value,
+        },
+        request=request,
+    )
 
     return {
         "cluster_id": str(cluster_id),

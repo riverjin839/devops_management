@@ -317,3 +317,64 @@ def test_update_cluster_audits_changed_fields(monkeypatch):
     )
     assert records[0]["action"] == "cluster.update"
     assert records[0]["details"]["fields"] == ["region"]
+
+
+# ── verify 감사 로그 ─────────────────────────────────────────────────────────
+
+class _FakeHttpxClient:
+    """verify 의 API server 단계를 성공시키는 httpx.Client 대역."""
+
+    def __init__(self, *a, **k):
+        pass
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *a):
+        return False
+
+    def get(self, _url):
+        resp = MagicMock()
+        resp.status_code = 200
+        resp.text = "ok"
+        return resp
+
+
+def _run_verify(monkeypatch, cluster):
+    db = _fake_db_with_cluster(cluster)
+    records = []
+    monkeypatch.setattr(clusters_router.audit_logger, "record", lambda *a, **k: records.append(k))
+    monkeypatch.setattr(clusters_router.httpx, "Client", _FakeHttpxClient)
+    monkeypatch.setattr(clusters_router, "_resolve_kubeconfig", lambda _c: (None, "kubeconfig 미등록"))
+    result = clusters_router.verify_cluster(cluster.id, _fake_request(), db, _fake_actor())
+    return result, records
+
+
+def test_verify_cluster_audits_partial_failure(monkeypatch):
+    from app.models.cluster import StatusEnum
+
+    cluster = Cluster(id=uuid.uuid4(), name="c", api_endpoint="https://x", status=StatusEnum.healthy)
+    result, records = _run_verify(monkeypatch, cluster)
+
+    assert result["ok"] is False
+    assert len(records) == 1
+    rec = records[0]
+    assert rec["action"] == "cluster.verify"
+    assert rec["status"] == "failure"
+    assert rec["details"]["checks"] == {
+        "api_server": "ok", "kubeconfig_auth": "skip", "kubectl_nodes": "skip",
+    }
+    assert rec["details"]["status_from"] == "healthy"
+    assert rec["details"]["status_to"] == "warning"
+    # 단계별 상세 문구(에러 원문 등)는 감사 로그에 남기지 않는다
+    assert "kubeconfig 미등록" not in str(rec["details"])
+
+
+def test_verify_cluster_missing_cluster_is_not_audited(monkeypatch):
+    db = _fake_db_with_cluster(None)
+    records = []
+    monkeypatch.setattr(clusters_router.audit_logger, "record", lambda *a, **k: records.append(k))
+    with pytest.raises(HTTPException) as exc_info:
+        clusters_router.verify_cluster(uuid.uuid4(), _fake_request(), db, _fake_actor())
+    assert exc_info.value.status_code == 404
+    assert records == []

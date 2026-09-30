@@ -10,6 +10,11 @@
 
 1.41.0 이후 main 에 병합된 변경 (다음 릴리스 후보).
 
+### Fixed
+
+- **클러스터 연결 검증 감사 로그** — `POST /clusters/{id}/verify` 실행이 `cluster.verify` 로 감사 로그에 남는다(단계별 ok/fail/skip 결과와 클러스터 상태 전이 기록, 에러 원문은 제외). 검증은 `cluster.status` 를 갱신하는 동작이라 누가 언제 돌렸는지 추적할 수 없던 공백을 메웠다.
+  Backend: `routers/clusters.py`.
+
 ## [1.41.0] - 2026-09-29
 
 ### Added
