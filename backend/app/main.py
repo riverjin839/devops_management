@@ -772,7 +772,7 @@ def _run_migrations():
                     entity_type VARCHAR(20) NOT NULL,
                     entity_id VARCHAR(100),
                     action VARCHAR(30) NOT NULL,
-                    scope VARCHAR(20) NOT NULL,
+                    scope VARCHAR(40) NOT NULL,
                     status VARCHAR(20) NOT NULL DEFAULT 'success',
                     reason TEXT,
                     before_data JSONB,
@@ -780,6 +780,13 @@ def _run_migrations():
                     created_at TIMESTAMP DEFAULT NOW()
                 )
             '''))
+    else:
+        # 구버전 DB — scope 가 VARCHAR(20) 이면 "infra_topology.force_fix"(24자) 감사 INSERT 가 실패해
+        # 노드 삭제가 500 이었다. varchar 확장은 재기록 없이 끝나고 이미 40 이어도 무해(멱등).
+        _safe_exec(
+            "ALTER TABLE topology_audit_logs ALTER COLUMN scope TYPE VARCHAR(40)",
+            label="topology_audit_logs.scope widen to VARCHAR(40)",
+        )
 
     # work_guides: 계층 구조 + 정렬 컬럼 추가
     if "work_guides" in inspector.get_table_names():

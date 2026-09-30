@@ -4,6 +4,7 @@ import {
   Trash2, Pencil, X, ChevronDown, AlertTriangle, Loader2, Tag, Activity, ShieldCheck,
 } from 'lucide-react';
 import { useClusters } from '@/hooks/useCluster';
+import { useCanOperate } from '@/hooks/useCanOperate';
 import {
   useInfraNodes,
   useCreateInfraNode,
@@ -47,9 +48,12 @@ interface NodeCardProps {
   onEdit: (n: InfraNode) => void;
   onDelete: (n: InfraNode) => void;
   onVerify: (n: InfraNode) => void;
+  /** D-087 — 서버가 operator 이상을 요구하는 동작(검증·편집·삭제)의 활성 조건과 비활성 사유. */
+  canOperate: boolean;
+  withHint: (title: string) => string;
 }
 
-function NodeCard({ node, onEdit, onDelete, onVerify }: NodeCardProps) {
+function NodeCard({ node, onEdit, onDelete, onVerify, canOperate, withHint }: NodeCardProps) {
   const meta = ROLE_META[node.role];
   return (
     <div className="bg-card border border-border rounded-lg p-3 flex flex-col gap-2 hover:border-primary/40 transition-colors group">
@@ -64,23 +68,28 @@ function NodeCard({ node, onEdit, onDelete, onVerify }: NodeCardProps) {
         <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0">
           <button
             onClick={() => onVerify(node)}
-            title="노드 추가 검증"
-            aria-label="노드 추가 검증"
-            className="p-1 rounded hover:bg-status-healthy/10 text-muted-foreground hover:text-status-healthy transition-colors"
+            disabled={!canOperate}
+            title={withHint('노드 추가 검증')}
+            aria-label={withHint('노드 추가 검증')}
+            className="p-1 rounded hover:bg-status-healthy/10 text-muted-foreground hover:text-status-healthy transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
           >
             <ShieldCheck className="w-3 h-3" />
           </button>
           <button
             onClick={() => onEdit(node)}
-            className="p-1 rounded hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
-            aria-label="노드 편집"
+            disabled={!canOperate}
+            title={withHint('노드 편집')}
+            className="p-1 rounded hover:bg-muted text-muted-foreground hover:text-foreground transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+            aria-label={withHint('노드 편집')}
           >
             <Pencil className="w-3 h-3" />
           </button>
           <button
             onClick={() => onDelete(node)}
-            className="p-1 rounded hover:bg-status-critical/10 text-muted-foreground hover:text-status-critical transition-colors"
-            aria-label="노드 삭제"
+            disabled={!canOperate}
+            title={withHint('노드 삭제')}
+            className="p-1 rounded hover:bg-status-critical/10 text-muted-foreground hover:text-status-critical transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+            aria-label={withHint('노드 삭제')}
           >
             <Trash2 className="w-3 h-3" />
           </button>
@@ -461,6 +470,7 @@ export function InfraTopologyPage() {
 
   const activeClusterId = selectedClusterId || clusters[0]?.id || '';
   const activeCluster = clusters.find(c => c.id === activeClusterId);
+  const { canOperate, withHint } = useCanOperate(activeClusterId);
 
   const { data: nodesResp, isLoading: nodesLoading } = useInfraNodes(
     activeClusterId ? { clusterId: activeClusterId } : undefined,
@@ -607,7 +617,8 @@ export function InfraTopologyPage() {
           <div className="flex items-center gap-2">
             <button
               onClick={handleSync}
-              disabled={!activeClusterId || syncNodes.isPending}
+              disabled={!activeClusterId || syncNodes.isPending || !canOperate}
+              title={withHint('K8s 노드 정보를 동기화')}
               className="flex items-center gap-2 px-3 py-1.5 text-sm rounded-lg border border-border hover:bg-muted text-muted-foreground disabled:opacity-50 transition-colors"
             >
               <RefreshCw className={`w-3.5 h-3.5 ${syncNodes.isPending ? 'animate-spin' : ''}`} />
@@ -615,7 +626,8 @@ export function InfraTopologyPage() {
             </button>
             <button
               onClick={() => { setEditTarget(null); setModalOpen(true); }}
-              disabled={!activeClusterId}
+              disabled={!activeClusterId || !canOperate}
+              title={withHint('노드 추가')}
               className="flex items-center gap-2 px-3 py-1.5 text-sm rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50 transition-colors"
             >
               <Plus className="w-3.5 h-3.5" />
@@ -775,7 +787,9 @@ export function InfraTopologyPage() {
                 <p className="text-sm">이 클러스터에 노드가 없습니다.</p>
                 <button
                   onClick={() => { setEditTarget(null); setModalOpen(true); }}
-                  className="flex items-center gap-2 px-3 py-1.5 text-sm rounded-lg bg-primary text-primary-foreground hover:bg-primary/90"
+                  disabled={!canOperate}
+                  title={withHint('첫 노드 추가')}
+                  className="flex items-center gap-2 px-3 py-1.5 text-sm rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   <Plus className="w-3.5 h-3.5" />첫 노드 추가
                 </button>
@@ -818,6 +832,8 @@ export function InfraTopologyPage() {
                                 onEdit={n => { setEditTarget(n); setModalOpen(true); }}
                                 onDelete={n => setDeleteTarget(n)}
                                 onVerify={handleVerify}
+                                canOperate={canOperate}
+                                withHint={withHint}
                               />
                             ))}
                           </div>

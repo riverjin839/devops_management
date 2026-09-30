@@ -11,9 +11,14 @@ interface Props {
   onClose: () => void;
   onDeleteLink?: (manualId: string) => void;
   onDeleteExternal?: (node: TopoNode) => void;
+  /** D-090 — 삭제는 서버가 operator 이상을 요구한다. 없으면(기본) 항상 활성. */
+  canOperate?: boolean;
+  withHint?: (title: string) => string;
 }
 
-export function NodeDetailPanel({ node, edges, nodeName, onClose, onDeleteLink, onDeleteExternal }: Props) {
+export function NodeDetailPanel({
+  node, edges, nodeName, onClose, onDeleteLink, onDeleteExternal, canOperate = true, withHint = (t) => t,
+}: Props) {
   const related = edges.filter((e) => e.source === node.id || e.target === node.id);
   const cpuR = usageRatio(node.metrics.cpu.usage, node.metrics.cpu.request, node.metrics.cpu.limit);
   const memR = usageRatio(node.metrics.mem.usage, node.metrics.mem.request, node.metrics.mem.limit);
@@ -61,7 +66,9 @@ export function NodeDetailPanel({ node, edges, nodeName, onClose, onDeleteLink, 
         {/* external 삭제 */}
         {node.kind === 'External' && onDeleteExternal && (
           <button onClick={() => onDeleteExternal(node)}
-            className="w-full inline-flex items-center justify-center gap-1.5 px-2 py-1.5 text-xs rounded-lg border border-status-critical/30 text-status-critical hover:bg-status-critical/10">
+            disabled={!canOperate}
+            title={withHint('외부 노드 삭제')}
+            className="w-full inline-flex items-center justify-center gap-1.5 px-2 py-1.5 text-xs rounded-lg border border-status-critical/30 text-status-critical hover:bg-status-critical/10 disabled:opacity-50 disabled:cursor-not-allowed">
             <Trash2 className="w-3 h-3" /> 외부 노드 삭제
           </button>
         )}
@@ -83,7 +90,8 @@ export function NodeDetailPanel({ node, edges, nodeName, onClose, onDeleteLink, 
                     {EDGE_TYPE_LABEL[e.type] ?? e.type}
                   </span>
                   {e.type === 'manual' && e.manualId && onDeleteLink && (
-                    <button onClick={() => onDeleteLink(e.manualId!)} className="text-status-critical hover:text-status-critical flex-shrink-0" aria-label="링크 삭제">
+                    <button onClick={() => onDeleteLink(e.manualId!)} disabled={!canOperate} title={withHint('링크 삭제')}
+                      className="text-status-critical hover:text-status-critical flex-shrink-0 disabled:opacity-40 disabled:cursor-not-allowed" aria-label={withHint('링크 삭제')}>
                       <Trash2 className="w-3 h-3" />
                     </button>
                   )}

@@ -15,7 +15,9 @@ class TopologyAuditLog(Base):
     entity_type = Column(String(20), nullable=False)  # node|port|link
     entity_id = Column(String(100), nullable=True)
     action = Column(String(30), nullable=False)  # create|update|delete|sync|force_fix
-    scope = Column(String(20), nullable=False)  # read|edit|sync|force_fix
+    # 전체 스코프 문자열("infra_topology.force_fix" = 24자)을 그대로 기록한다 — 예전 String(20) 은 노드 삭제
+    # 감사 로그 INSERT 가 항상 StringDataRightTruncation 으로 실패해 삭제가 500 이었다.
+    scope = Column(String(40), nullable=False)
     status = Column(String(20), nullable=False, default="success")  # success|partial|failed
     reason = Column(Text, nullable=True)
     before_data = Column(JSONB, nullable=True)
