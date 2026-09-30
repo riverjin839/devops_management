@@ -8,7 +8,38 @@
 
 ## [Unreleased]
 
-1.41.0 이후 main 에 병합된 변경 (다음 릴리스 후보).
+1.41.1 이후 main 에 병합된 변경 (다음 릴리스 후보).
+
+## [1.41.1] - 2026-09-30
+
+### Fixed
+- **인프라·서비스 토폴로지 변경 동작에 역할·테넌트 게이팅 추가 (보안)**: 인프라 노드 API 는 클라이언트가 보내는
+  `X-API-Scopes` 헤더 문자열만 검사했고, 서비스 토폴로지 링크·외부 노드 API 는 아무 검사도 없어 viewer 나 다른
+  테넌트 사용자도 노드·링크·외부 노드를 만들고 지울 수 있었다(특히 `link_id`/`node_id` 경로는 클러스터 판정이 빠져
+  있었다). 이제 변경(생성·수정·삭제·검증·동기화)은 operator 이상만 가능하고, 소유 클러스터의 테넌트 바인딩까지
+  서버가 판정한다. 화면에서도 viewer 는 관련 버튼이 비활성으로 보이고 사유가 툴팁으로 나온다.
+  Backend: `routers/infra_nodes.py`·`routers/service_topology.py`(`require_operator` + `require_cluster_access`).
+  Frontend: `InfraTopologyPage`·`ServiceTopologyPage`·`NodeDetailPanel`(`useCanOperate`).
+- **인프라 노드 삭제가 항상 500 으로 실패하던 버그**: 삭제 감사 로그(`topology_audit_logs.scope` `VARCHAR(20)`)에
+  24자짜리 `infra_topology.force_fix` 를 넣다가 `value too long` 으로 INSERT 가 실패해, 권한이 있어도 노드를 지울 수
+  없었다(화면은 오류를 삼켜 모달만 닫혔다). 컬럼을 `VARCHAR(40)` 으로 넓히고 구버전 DB 는 부팅 시 자동 확장한다.
+  Backend: `models/topology_audit_log.py`, `main.py` 마이그레이션.
+
+### Fixed
+
+- **클러스터 연결 검증 감사 로그** — `POST /clusters/{id}/verify` 실행이 `cluster.verify` 로 감사 로그에 남는다(단계별 ok/fail/skip 결과와 클러스터 상태 전이 기록, 에러 원문은 제외). 검증은 `cluster.status` 를 갱신하는 동작이라 누가 언제 돌렸는지 추적할 수 없던 공백을 메웠다.
+  Backend: `routers/clusters.py`.
+
+### Added
+- **대형 클러스터 자원 집계 준실시간 롤링 갱신 (`/k8s-allocation`)**: 화면을 연 대형(namespace 모드) 클러스터는
+  Celery 가 매분 **가장 오래된 네임스페이스부터** 시간 예산(기본 40초)만큼 다시 모아 NS 누적기를 신선하게 유지하고,
+  전 NS 가 모이면 개요 스냅샷을 게시한다. 화면은 재집계 없이 1분마다 저장된 결과를 읽어 규모와 무관하게 즉시
+  뜨고, 상단에 "NS 롤링 갱신 중 · 가장 오래된 NS 데이터 n분 전" 으로 데이터 나이를 보여준다. 새로고침도 최근
+  5분 내 모은 NS 는 재사용해 오래된 NS 만 다시 모은다. 실패한 NS 는 직전 값을 유지하고 다음 틱에 재시도한다.
+  Backend: `services/k8s_alloc_rolling.py`, Celery `k8s-alloc-rolling-dispatcher`(`dispatch_k8s_alloc_rolling` →
+  `refresh_k8s_alloc_rolling_one`, 클러스터당 Redis 락), `K8S_ALLOC_ROLLING`(viewed|always|off)·`ROLLING_BUDGET`·
+  `ROLLING_MIN_AGE`·`ROLLING_ACTIVE_TTL`·`NS_REUSE_MAX_AGE`, 응답 `rolling`·`ns_oldest_at`. 효율화 수집의 NS 단위
+  순회 결과도 롤링 캐시에 저장한다. Frontend: 롤링 안내·데이터 나이 표시, 롤링 중 비강제 주기 재조회.
 
 ## [1.41.0] - 2026-09-29
 

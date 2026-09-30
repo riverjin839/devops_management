@@ -23,10 +23,13 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
+from app.auth.deps import require_operator
 from app.database import get_db
 from app.models import Cluster, ServiceTopologyLink, ServiceTopologyExternalNode
+from app.models.user import User
 from app.services import service_topology_service as svc
 from app.services.cilium_trace_service import detect_status
+from app.services.cluster_access import require_cluster_access
 from app.services.kubeconfig import ensure_kubeconfig_file
 from app.services.prometheus_service import prometheus_service
 from app.services.snapshot_jobs import SnapshotManager
@@ -505,6 +508,7 @@ def list_links(
 def create_link(
     cluster_id: UUID,
     payload: LinkCreate,
+    _operator: User = Depends(require_operator),
     db: Session = Depends(get_db),
 ):
     _require_cluster(cluster_id, db)
@@ -527,11 +531,14 @@ def create_link(
 def update_link(
     link_id: UUID,
     payload: LinkUpdate,
+    user: User = Depends(require_operator),
     db: Session = Depends(get_db),
 ):
     link = db.query(ServiceTopologyLink).filter(ServiceTopologyLink.id == link_id).first()
     if not link:
         raise HTTPException(status_code=404, detail="Link not found")
+    # 경로에 cluster_id 가 없어 enforce_cluster_access 가 못 본다 — 링크의 소유 클러스터로 직접 판정.
+    require_cluster_access(db, user, link.cluster_id, "operate")
     for field, val in payload.model_dump(exclude_unset=True).items():
         setattr(link, field, val)
     try:
@@ -543,10 +550,15 @@ def update_link(
 
 
 @router.delete("/links/{link_id}", status_code=204)
-def delete_link(link_id: UUID, db: Session = Depends(get_db)):
+def delete_link(
+    link_id: UUID,
+    user: User = Depends(require_operator),
+    db: Session = Depends(get_db),
+):
     link = db.query(ServiceTopologyLink).filter(ServiceTopologyLink.id == link_id).first()
     if not link:
         raise HTTPException(status_code=404, detail="Link not found")
+    require_cluster_access(db, user, link.cluster_id, "operate")
     db.delete(link)
     db.commit()
     return None
@@ -557,6 +569,7 @@ def delete_link(link_id: UUID, db: Session = Depends(get_db)):
 def create_external_node(
     cluster_id: UUID,
     payload: ExternalNodeCreate,
+    _operator: User = Depends(require_operator),
     db: Session = Depends(get_db),
 ):
     _require_cluster(cluster_id, db)
@@ -574,10 +587,15 @@ def create_external_node(
 
 
 @router.delete("/external-nodes/{node_id}", status_code=204)
-def delete_external_node(node_id: UUID, db: Session = Depends(get_db)):
+def delete_external_node(
+    node_id: UUID,
+    user: User = Depends(require_operator),
+    db: Session = Depends(get_db),
+):
     en = db.query(ServiceTopologyExternalNode).filter(ServiceTopologyExternalNode.id == node_id).first()
     if not en:
         raise HTTPException(status_code=404, detail="External node not found")
+    require_cluster_access(db, user, en.cluster_id, "operate")
     db.delete(en)
     db.commit()
     return None

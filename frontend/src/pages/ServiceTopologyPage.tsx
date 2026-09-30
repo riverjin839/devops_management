@@ -5,6 +5,7 @@ import {
   Server, Info, AlertTriangle, Layers, Grid3x3, Globe,
 } from 'lucide-react';
 import { useClusters } from '@/hooks/useCluster';
+import { useCanOperate } from '@/hooks/useCanOperate';
 import { analyzeApi } from '@/services/api';
 import {
   ClusterSidebar, DebugLogPanel, NamespaceSingleSelect, SnapshotProgressCard, useToast,
@@ -99,6 +100,7 @@ export function ServiceTopologyPage() {
   };
 
   // mutations
+  const { canOperate, withHint } = useCanOperate(clusterId);
   const createLink = useCreateTopologyLink(clusterId);
   const deleteLink = useDeleteTopologyLink();
   const createExt = useCreateExternalNode(clusterId);
@@ -231,11 +233,15 @@ export function ServiceTopologyPage() {
               {!isCluster && (
                 <div className="ml-auto flex items-center gap-2">
                   <button onClick={() => setExtOpen(true)}
-                    className="px-2 py-1 text-sm bg-secondary hover:bg-secondary/80 border border-border rounded-lg inline-flex items-center gap-1">
+                    disabled={!canOperate}
+                    title={withHint('외부 노드 추가')}
+                    className="px-2 py-1 text-sm bg-secondary hover:bg-secondary/80 border border-border rounded-lg inline-flex items-center gap-1 disabled:opacity-50 disabled:cursor-not-allowed">
                     <Server className="w-3 h-3" /> 외부 노드
                   </button>
                   <button onClick={() => { setEditMode((v) => !v); setLinkSourceId(null); }}
-                    className={`px-2.5 py-1 text-sm rounded-lg inline-flex items-center gap-1 border ${
+                    disabled={!canOperate}
+                    title={withHint('링크 편집')}
+                    className={`px-2.5 py-1 text-sm rounded-lg inline-flex items-center gap-1 border disabled:opacity-50 disabled:cursor-not-allowed ${
                       editMode ? 'bg-orange-500/15 border-orange-500/40 text-orange-600 dark:text-orange-400' : 'bg-secondary border-border hover:bg-secondary/80'
                     }`}>
                     {editMode ? <Pencil className="w-3 h-3" /> : <Eye className="w-3 h-3" />} 링크 편집
@@ -353,6 +359,8 @@ export function ServiceTopologyPage() {
                   onClose={() => setSelectedId(null)}
                   onDeleteLink={handleDeleteLink}
                   onDeleteExternal={handleDeleteExternal}
+                  canOperate={canOperate}
+                  withHint={withHint}
                 />
               )}
             </div>
