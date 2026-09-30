@@ -51,20 +51,6 @@
   않아 오탐을 피한다). etcd/node/CoreDNS/인증서처럼 실제로 겹치는 것이 확인된 항목은 기본값이 자동으로
   채워진다. Backend: `check_matrix_items.target_key`, `check_matrix_service._target_duplicate_map()`.
   Frontend: `CheckMatrixItemFormModal`, 신규 `TargetDuplicateBadge`.
-
-## [1.38.0] - 2026-09-29
-
-### Added
-- **대형 클러스터 NS 단위 자원 수집 (`/k8s-allocation`)**: 노드 50개 이상 클러스터는 개요를 네임스페이스 단위로
-  병렬 수집한다(NS 마다 Pod 목록 + NS 단위 Pod metrics). ① 활성 Pod 6000개를 넘으면 비어 있던 **실사용량(usage)이 대형
-  클러스터에서도 표시**된다 ② 한 NS 의 조회 실패·절단은 그 NS 만 빠지고 페이지 상단에 "네임스페이스 n개 수집 실패" 로
-  안내된다 ③ 완료한 NS 는 Redis 에 남아, 집계하던 파드가 죽어 다른 파드가 인계하면 **처음부터가 아니라 이어서** 모은다
-  ④ 진행은 "네임스페이스 12 / 340 수집 완료" 로 보인다. 작은 클러스터는 기존 방식 그대로(요청 수 최소).
-  Backend: `routers/k8s_allocation.py`(`_collect_by_namespace`, 공용 누적기 `_add_pod`/`_merge_acc`, 응답
-  `collect_mode`·`failed_namespaces`, `K8S_ALLOC_COLLECT_MODE`·`NS_MODE_MIN_NODES`·`NS_WORKERS`·`NS_RESUME_TTL`),
-  `services/snapshot_jobs.py`(인계 시 `Progress.resume_since`). Frontend: 페이지 상단 실패 NS 안내·진행 단계 문구.
-
-### Added
 - **테넌트 기반 클러스터 조회 격리 (멀티테넌시 2단계)**: 테넌트에 바인딩된 클러스터는 이제 바인딩 멤버(read/operate)에게만
   **보인다**. 클러스터 목록·사이드바·대시보드 요약·점검 매트릭스 그리드·점검 이력·K8s 이벤트·알람·플레이북 목록에서
   빠지고, 경로에 클러스터가 들어간 조회 API 는 read 권한이 없으면 403 이다. 실행 버튼은 `useCanOperate(clusterId)` 로
@@ -77,16 +63,24 @@
   바인딩이 없는 클러스터는 지금처럼 열려 있고(기존 설치 영향 없음), admin 은 항상 허용, 멤버십은 권한을 좁힐 뿐 넓히지 않는다.
   Backend: `models/tenant.py`(`tenants`/`tenant_members`/`cluster_bindings`), `services/cluster_access.py`, `routers/tenants.py`,
   `main.py` `_cluster_scoped` 의존성. Frontend: `TenantManager`, 터미널 close code `4413` 안내.
-
-### Added
-
 - **클러스터 관리 연결 검증 버튼** — 행/카드의 방패 버튼으로 API server → kubeconfig 인증 → kubectl 을 점검하고 단계별 성공/실패/건너뜀을 "로그 보기" 실행 로그에 남긴다(재수집·IP 수집 로그와 같은 패널). 검증 결과로 클러스터 상태가 갱신된다.
   Frontend: `ClusterManagePage`, `ClusterTableRow`, `ClusterCard`.
 
 ### Fixed
-
 - **클러스터 관리 보안·감사 보강** — kubeconfig 저장 전에 YAML 구조와 서버 주소(API Endpoint 일치)를 검증하고, 수정 API 로 `status` 를 임의 지정하거나 kubeconfig 가 아닌 파일을 `kubeconfig_path` 로 지정하지 못하게 막았다. 클러스터 수정·kubeconfig 조회/교체가 감사 로그(`cluster.update`, `cluster.kubeconfig.read`, `cluster.kubeconfig.update`)에 남는다.
   Backend: `routers/clusters.py`, `schemas/cluster.py` (`ClusterUpdate.status` 제거).
+
+## [1.38.0] - 2026-09-29
+
+### Added
+- **대형 클러스터 NS 단위 자원 수집 (`/k8s-allocation`)**: 노드 50개 이상 클러스터는 개요를 네임스페이스 단위로
+  병렬 수집한다(NS 마다 Pod 목록 + NS 단위 Pod metrics). ① 활성 Pod 6000개를 넘으면 비어 있던 **실사용량(usage)이 대형
+  클러스터에서도 표시**된다 ② 한 NS 의 조회 실패·절단은 그 NS 만 빠지고 페이지 상단에 "네임스페이스 n개 수집 실패" 로
+  안내된다 ③ 완료한 NS 는 Redis 에 남아, 집계하던 파드가 죽어 다른 파드가 인계하면 **처음부터가 아니라 이어서** 모은다
+  ④ 진행은 "네임스페이스 12 / 340 수집 완료" 로 보인다. 작은 클러스터는 기존 방식 그대로(요청 수 최소).
+  Backend: `routers/k8s_allocation.py`(`_collect_by_namespace`, 공용 누적기 `_add_pod`/`_merge_acc`, 응답
+  `collect_mode`·`failed_namespaces`, `K8S_ALLOC_COLLECT_MODE`·`NS_MODE_MIN_NODES`·`NS_WORKERS`·`NS_RESUME_TTL`),
+  `services/snapshot_jobs.py`(인계 시 `Progress.resume_since`). Frontend: 페이지 상단 실패 NS 안내·진행 단계 문구.
 
 ## [1.37.6] - 2026-09-29
 
