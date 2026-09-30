@@ -45,10 +45,10 @@ export function useAllocNamespaces(clusterId: string) {
 }
 
 export type AllocProgress = Pick<AllocSnapshotMeta, 'status' | 'progress' | 'processed' | 'total' | 'partial' | 'stale' | 'phase'>
-  & Pick<AllocNamespacesResponse, 'failedNamespaces'>;
+  & Pick<AllocNamespacesResponse, 'failedNamespaces' | 'rolling' | 'nsOldestAt'>;
 const selectProgress = (d: AllocNamespacesResponse): AllocProgress => ({
   status: d.status, progress: d.progress, processed: d.processed, total: d.total, partial: d.partial, stale: d.stale,
-  phase: d.phase, failedNamespaces: d.failedNamespaces,
+  phase: d.phase, failedNamespaces: d.failedNamespaces, rolling: d.rolling, nsOldestAt: d.nsOldestAt,
 });
 
 /** 페이지 루트용 경량 구독 — 같은 캐시(['alloc-namespaces'])에서 진행 메타만 select 해
@@ -104,6 +104,18 @@ export function useForceAllocRefresh(clusterId: string) {
     } catch { /* isError/error 로 조회 가능 — 호출부에서 처리 */ }
   }, [clusterId, mutateAsync]);
   return { refresh, isPending, isError, error };
+}
+
+/** 비강제 재조회 — NS 롤링 갱신 중인 클러스터는 Celery 가 스냅샷을 계속 게시하므로 재집계(force)
+ * 없이 저장된 결과만 다시 읽는다(세 쿼리가 같은 스냅샷을 공유). 서버 부하는 GET 3회뿐이다. */
+export function useSoftAllocRefresh(clusterId: string) {
+  const qc = useQueryClient();
+  return useCallback(() => {
+    if (!clusterId) return;
+    for (const k of ['alloc-namespaces', 'alloc-nodes', 'alloc-pods-summary']) {
+      void qc.invalidateQueries({ queryKey: [k, clusterId] });
+    }
+  }, [clusterId, qc]);
 }
 
 /** 단일 노드 즉시 재계산(개별 REFRESH) → alloc-nodes 캐시의 해당 행만 patch. */

@@ -9,13 +9,16 @@ import { MacCard } from '@/components/ui/MacCard';
 import { ClusterSidebar } from '@/components/common/ClusterSidebar';
 import { EmptyState, SnapshotProgressBar, ExportMenu } from '@/components/common';
 import { useClusters } from '@/hooks/useCluster';
-import { useAllocProgress, useForceAllocRefresh } from '@/hooks/useK8sAllocation';
+import { useAllocProgress, useForceAllocRefresh, useSoftAllocRefresh } from '@/hooks/useK8sAllocation';
 import {
   SummarySection, SummaryStrip, PodCapacityStatusCards, NodesView, NamespacesView, NsRankingView,
   EfficiencyTab, AllocDetailDialog, csvCluster, readSummaryDetailPref, writeSummaryDetailPref,
-  allocPhaseText,
+  allocPhaseText, allocAgeText,
 } from '@/components/k8s-allocation';
 import type { AllocDetailTarget } from '@/components/k8s-allocation';
+
+// NS 롤링 갱신 중인 클러스터는 자동갱신이 꺼져 있어도 이 간격으로 저장된 스냅샷을 다시 읽는다(비강제).
+const ROLLING_READ_MS = 60_000;
 
 // 자동갱신 간격 옵션 (ms). false = 끔.
 const AUTO_OPTIONS: { label: string; ms: number | false }[] = [
@@ -49,20 +52,29 @@ export function K8sAllocationPage() {
   const computing = prog?.status === 'computing';
   const phaseText = allocPhaseText(prog?.phase, prog?.processed);
   const failedNs = prog?.failedNamespaces ?? [];
+  const rolling = !!prog?.rolling;
+  const softRefresh = useSoftAllocRefresh(clusterId);
   const isFetching = progQ.isFetching || refreshPending;
   const clusterName = clusters.find((c) => c.id === clusterId)?.name;
   const contentRef = useRef<HTMLDivElement>(null);
 
   // 자동 갱신: 켜져 있으면(autoMs) 주기마다 강제 재집계. OFF 면 완료 결과를 그대로 유지.
+  // NS 롤링 갱신 중이면 Celery 가 스냅샷을 계속 게시하므로 재집계 대신 저장된 결과만 다시 읽고,
+  // 자동갱신이 꺼져 있어도 ROLLING_READ_MS 주기로 읽어 준실시간을 유지한다.
   // in-flight 여부는 ref 로 읽어 effect 의존성에서 뺀다 — 의존성에 넣으면 폴링/뮤테이션
   // 상태가 바뀔 때마다 타이머가 재생성되어 주기가 밀리고 화면이 흔들린다.
   const pendingRef = useRef(false);
   pendingRef.current = refreshPending;
   useEffect(() => {
-    if (!autoMs || !clusterId) return;
-    const id = setInterval(() => { if (!pendingRef.current) void forceRefresh(); }, autoMs);
+    const ms = autoMs || (rolling ? ROLLING_READ_MS : false);
+    if (!ms || !clusterId) return;
+    const id = setInterval(() => {
+      if (pendingRef.current) return;
+      if (rolling) softRefresh();
+      else void forceRefresh();
+    }, ms);
     return () => clearInterval(id);
-  }, [autoMs, clusterId, forceRefresh]);
+  }, [autoMs, clusterId, forceRefresh, rolling, softRefresh]);
 
   return (
     <div className="app-min-h-screen bg-background py-2 pr-3">
@@ -133,6 +145,12 @@ export function K8sAllocationPage() {
                     : prog?.partial
                       ? '일부만 집계된 잠정 결과입니다 — API 응답 지연/절단으로 재집계가 자동으로 재시도됩니다.'
                       : '재집계 중이라 직전 스냅샷을 표시하고 있습니다.'}
+                </div>
+              ) : rolling ? (
+                <div className="flex items-center gap-1.5 text-xs text-muted-foreground py-1">
+                  <RefreshCw className="w-3.5 h-3.5 shrink-0" />
+                  {`NS 롤링 갱신 중 — 백그라운드가 오래된 네임스페이스부터 계속 다시 모으고 화면은 1분마다 읽습니다${
+                    allocAgeText(prog?.nsOldestAt) ? ` · 가장 오래된 NS 데이터 ${allocAgeText(prog?.nsOldestAt)}` : ''}.`}
                 </div>
               ) : null}
             </div>

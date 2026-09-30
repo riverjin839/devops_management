@@ -55,6 +55,9 @@ class _FakeCache:
         self.kv[f"{key}:{part}"] = json.dumps(value)
         return True
 
+    def available(self):
+        return True
+
 
 @pytest.fixture
 def env(monkeypatch):
@@ -69,6 +72,7 @@ def env(monkeypatch):
         k: v for k, v in USAGE.items() if namespace is None or k[0] == namespace})
     monkeypatch.setattr(ka, "_RAW_LIST", True)
     monkeypatch.setattr(ka, "_ns_cache", cache)
+    monkeypatch.setattr(ka, "_ROLLING_MODE", "off")   # 롤링 재사용 창은 전용 테스트에서만 켠다
     monkeypatch.setattr(k8s_paging, "PAGE_LIMIT", 2)   # NS 안에서도 페이지네이션
     return cache
 
@@ -82,7 +86,7 @@ def _norm(ov):
 
 def _strip_mode(ov):
     d = _norm(ov)
-    for k in ("collect_mode", "failed_namespaces", "resumed_namespaces"):
+    for k in ("collect_mode", "failed_namespaces", "resumed_namespaces", "rolling", "ns_oldest_at"):
         d.pop(k, None)
     return d
 
@@ -174,8 +178,9 @@ def test_no_resume_without_takeover(env):
 
 
 def test_collector_hook_sees_every_pod_and_skips_cache(env):
-    """효율화 수집기(on_pod)는 모든 활성 파드를 봐야 하므로 캐시를 읽지도 쓰지도 않고, 워크로드
-    누적이 cluster 모드와 같다(훅은 메인 스레드에서 호출 — 수집기 누적기는 스레드 안전하지 않다)."""
+    """효율화 수집기(on_pod)는 모든 활성 파드를 봐야 하므로 캐시를 읽지 않고(인계 시점이 있어도),
+    워크로드 누적이 cluster 모드와 같다(훅은 메인 스레드에서 호출 — 수집기 누적기는 스레드 안전하지
+    않다). 모은 NS 누적기는 저장해 롤링 캐시를 새로 채운다."""
     def run(mode):
         acc = col._WorkloadAcc()
         seen = []
@@ -191,7 +196,10 @@ def test_collector_hook_sees_every_pod_and_skips_cache(env):
     env.kv.clear()
     ns_seen, ns_wl = run("namespace")
     assert ns_seen == cl_seen and ns_wl == cl_wl
-    assert env.kv == {}
+    assert sorted(k.split(":")[1] for k in env.kv) == ["empty", "ns1", "ns2", "ns3"]
+    NS_CALLS.clear()
+    run("namespace")   # 캐시가 채워져 있어도 다시 전부 조회
+    assert sorted(set(NS_CALLS)) == ["empty", "ns1", "ns2", "ns3"]
 
 
 def test_auto_mode_uses_node_count(monkeypatch):

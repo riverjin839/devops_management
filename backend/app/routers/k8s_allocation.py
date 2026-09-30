@@ -515,6 +515,20 @@ _NS_MODE_MIN_NODES = int(_envf("K8S_ALLOC_NS_MODE_MIN_NODES", 50))
 _NS_WORKERS = max(1, int(_envf("K8S_ALLOC_NS_WORKERS", 4)))
 # 완료한 NS 누적기의 Redis 보존(초) — 집계 파드가 죽어 인계될 때 이어하기에 쓴다.
 _NS_RESUME_TTL = _envf("K8S_ALLOC_NS_RESUME_TTL", 1800.0)
+# NS 롤링 갱신(Celery): off | viewed(최근 화면을 연 클러스터만, 기본) | always.
+# 켜져 있으면 워커가 매분 **가장 오래된 NS 부터** 시간 예산만큼 다시 모아 Redis NS 누적기를 신선하게
+# 유지하고, 전 NS 가 모이면 개요 스냅샷을 조립·게시한다 — 웹은 저장된 결과를 읽기만 한다(규모 무관).
+_ROLLING_MODE = (os.getenv("K8S_ALLOC_ROLLING") or "viewed").strip().lower()
+_ROLLING_BUDGET = _envf("K8S_ALLOC_ROLLING_BUDGET", 40.0)          # 클러스터당 1회(매분) 수집 시간 예산(초)
+_ROLLING_MIN_AGE = _envf("K8S_ALLOC_ROLLING_MIN_AGE", 60.0)        # 이보다 최근에 모은 NS 는 건너뜀(초)
+_ROLLING_ACTIVE_TTL = _envf("K8S_ALLOC_ROLLING_ACTIVE_TTL", 900.0)  # viewed: 마지막 조회 후 유지 시간(초)
+# 롤링이 켜져 있을 때 웹 재집계(새로고침)가 다시 조회하지 않고 재사용할 NS 누적기의 최대 나이(초).
+_NS_REUSE_MAX_AGE = _envf("K8S_ALLOC_NS_REUSE_MAX_AGE", 300.0)
+
+
+def _rolling_enabled() -> bool:
+    """롤링 갱신 사용 여부 — NS 누적기를 공유할 Redis 저장소가 있어야 의미가 있다(memory 백엔드면 끔)."""
+    return _ROLLING_MODE in ("viewed", "always") and _ns_cache is not None
 
 _POD_STATUS_KEYS = ("running", "pending", "error", "succeeded", "failed", "unknown")
 
@@ -716,12 +730,67 @@ def _ns_cache_get(cid: Optional[str], ns: str) -> Optional[dict]:
     return _ns_cache.get_json(f"{cid}:{ns}", "acc")
 
 
-def _ns_cache_put(cid: Optional[str], ns: str, acc: dict, has_metrics: bool) -> None:
+def _ns_cache_put(cid: Optional[str], ns: str, acc: dict, has_metrics: bool) -> Optional[dict]:
+    """NS 누적기 저장. 반환: 저장한 엔트리(롤링 조립에서 그대로 재사용) — 저장소가 없으면 None."""
     if not cid or _ns_cache is None:
+        return None
+    # 롤링이 켜져 있으면 보존 기간을 재사용 창보다 넉넉히 — 롤링 한 바퀴가 끝나기 전에 사라지지 않게.
+    ttl = max(_NS_RESUME_TTL, _NS_REUSE_MAX_AGE * 2) if _rolling_enabled() else _NS_RESUME_TTL
+    entry = {"collected_at": time.time(), "has_metrics": has_metrics, "acc": _acc_to_json(acc)}
+    _ns_cache.set_json(f"{cid}:{ns}", "acc", entry, ex=int(ttl))
+    return entry
+
+
+def mark_viewed(cid) -> None:
+    """화면 조회 표시 — K8S_ALLOC_ROLLING=viewed 일 때 롤링 갱신 대상 판정에 쓴다."""
+    if _ns_cache is None or _ROLLING_MODE != "viewed" or not cid:
         return
-    _ns_cache.set_json(f"{cid}:{ns}", "acc",
-                       {"collected_at": time.time(), "has_metrics": has_metrics, "acc": _acc_to_json(acc)},
-                       ex=int(_NS_RESUME_TTL))
+    _ns_cache.set_json(str(cid), "viewed", time.time(), ex=int(_ROLLING_ACTIVE_TTL))
+
+
+def recently_viewed(cid) -> bool:
+    if _ns_cache is None or not cid:
+        return False
+    return _ns_cache.get_json(str(cid), "viewed") is not None
+
+
+def _collect_ns(client, core, ns: str, node_base: dict, schedulable_nodes: set, pod_selector,
+                on_pod=None) -> tuple[dict, bool, bool]:
+    """NS 1개 수집: Pod 목록(페이지네이션) + NS 단위 Pod metrics → (누적기, 절단 여부, metrics 유무)."""
+    local = _new_acc()
+    rep: list = []
+    for p in _iter_all(lambda **kw: core.list_namespaced_pod(ns, **kw),
+                       field_selector=pod_selector, report=rep, raw=_RAW_LIST):
+        _add_pod(local, p, node_base, schedulable_nodes, on_pod)
+    pu = _pod_usage(client, ns)
+    _add_usage(local, pu)
+    return local, bool(rep), bool(pu)
+
+
+def compose_overview_from_entries(namespaces: list[str], entries: dict[str, dict], node_base: dict,
+                                  node_usage: dict) -> tuple[dict, int]:
+    """NS 누적기 엔트리({collected_at, has_metrics, acc(json)})들로 개요를 조립(롤링 갱신 게시용).
+
+    NS 마다 수집 시점이 다르므로 `ns_oldest_at`(가장 오래된 NS 수집 시각)을 함께 싣는다. 노드
+    목록은 지금 것을 쓰고, 그 사이 빠진 노드의 per_node 집계는 버린다. 반환: (개요, 누적 Pod 수)."""
+    acc = _new_acc()
+    any_metrics = False
+    oldest: Optional[float] = None
+    for ns in namespaces:
+        e = entries[ns]
+        _merge_acc(acc, _acc_from_json(e["acc"]))
+        any_metrics = any_metrics or bool(e.get("has_metrics"))
+        at = float(e.get("collected_at") or 0)
+        oldest = at if oldest is None else min(oldest, at)
+    per_node = {k: v for k, v in acc["per_node"].items() if k in node_base}
+    out = _assemble_overview(
+        node_base, per_node, acc["per_ns"], node_usage, acc["summary"], len(namespaces),
+        metrics_available=any_metrics, pod_usage_skipped=not any_metrics, partial=False,
+        pod_summary=acc["pod_summary"],
+    )
+    out.update(collect_mode="namespace", failed_namespaces=[], resumed_namespaces=len(namespaces),
+               rolling=True, ns_oldest_at=oldest)
+    return out, acc["processed"]
 
 
 def _build_overview(cluster, progress: Optional[Progress] = None, *,
@@ -838,28 +907,41 @@ def _collect_by_namespace(client, core, progress: Optional[Progress], *, cluster
       모든 NS 가 예외로 실패하면(RBAC 등 설정 오류) 첫 예외를 올려 error 로 드러낸다.
     - 이어하기: 완료한 NS 누적기는 Redis(`allocns:{cid}:{ns}:acc`)에 남긴다. 스냅샷 매니저가
       죽은 계산을 인계하면서 `progress.resume_since`(그 계산의 시작 시각)를 넘기면, 그 이후에
-      수집된 NS 는 다시 조회하지 않고 재사용한다. on_pod(수집기)가 있으면 모든 파드를 봐야
-      하므로 캐시를 읽지도 쓰지도 않는다.
+      수집된 NS 는 다시 조회하지 않고 재사용한다.
+    - 롤링 재사용: K8S_ALLOC_ROLLING 이 켜져 있으면 K8S_ALLOC_NS_REUSE_MAX_AGE 이내에 모은 NS 도
+      재사용한다(Celery 롤링 갱신이 신선하게 유지 → 새로고침이 오래된 NS 만 다시 모은다).
+    - on_pod(수집기)가 있으면 모든 파드를 봐야 하므로 캐시를 **읽지 않고**, 모은 결과는 저장한다
+      (효율화 수집 1회가 롤링 캐시 전체를 새로 채우는 효과).
     """
     from concurrent.futures import as_completed
 
     cid = str(cluster_id) if cluster_id else None
-    use_cache = cid is not None and on_pod is None
+    read_cache = cid is not None and on_pod is None
+    write_cache = cid is not None
     resume_since = getattr(progress, "resume_since", None) if progress is not None else None
+    started_at = time.time()
+    # 재사용 기준 시각 — 인계 시작점과 롤링 재사용 창 중 더 넓은(이른) 쪽.
+    cutoffs = [float(resume_since)] if resume_since else []
+    if _rolling_enabled():
+        cutoffs.append(started_at - _NS_REUSE_MAX_AGE)
+    reuse_since = min(cutoffs) if cutoffs else None
     ns_total = len(namespaces)
     acc = _new_acc()
     failed: list[str] = []
     errors: list[Exception] = []
     any_metrics = False
     resumed = 0
+    oldest = started_at
 
     todo: list[str] = []
     for ns in namespaces:
-        cached = _ns_cache_get(cid, ns) if (use_cache and resume_since) else None
-        if cached and float(cached.get("collected_at") or 0) >= float(resume_since):
+        cached = _ns_cache_get(cid, ns) if (read_cache and reuse_since is not None) else None
+        at = float((cached or {}).get("collected_at") or 0)
+        if cached and at >= reuse_since:
             _merge_acc(acc, _acc_from_json(cached["acc"]))
             any_metrics = any_metrics or bool(cached.get("has_metrics"))
             resumed += 1
+            oldest = min(oldest, at)
         else:
             todo.append(ns)
     if resumed:
@@ -870,16 +952,11 @@ def _collect_by_namespace(client, core, progress: Optional[Progress], *, cluster
         progress.phase = f"ns:{done}/{ns_total}"
 
     def _work(ns: str):
-        local = _new_acc()
         hook: Optional[list] = [] if on_pod is not None else None
-        rep: list = []
         cb = (lambda p, res, owner: hook.append((p, res, owner))) if hook is not None else None
-        for p in _iter_all(lambda **kw: core.list_namespaced_pod(ns, **kw),
-                           field_selector=pod_selector, report=rep, raw=_RAW_LIST):
-            _add_pod(local, p, node_base, schedulable_nodes, cb)
-        pu = _pod_usage(client, ns)
-        _add_usage(local, pu)
-        return local, hook, bool(rep), bool(pu)
+        local, cut, has_metrics = _collect_ns(client, core, ns, node_base, schedulable_nodes,
+                                              pod_selector, cb)
+        return local, hook, cut, has_metrics
 
     last_pub = time.monotonic()
     ex = ThreadPoolExecutor(max_workers=max(1, min(_NS_WORKERS, len(todo) or 1)),
@@ -904,7 +981,7 @@ def _collect_by_namespace(client, core, progress: Optional[Progress], *, cluster
                         logger.exception("on_pod 콜백 실패(무시): %s/%s", ns, p.metadata.name)
                 _merge_acc(acc, local)
                 any_metrics = any_metrics or has_metrics
-                if use_cache and not cut:
+                if write_cache and not cut:
                     _ns_cache_put(cid, ns, local, has_metrics)
             done += 1
             if progress is not None:
@@ -929,7 +1006,7 @@ def _collect_by_namespace(client, core, progress: Optional[Progress], *, cluster
         partial=bool(partial_flag) or bool(failed), pod_summary=acc["pod_summary"],
     )
     out.update(collect_mode="namespace", failed_namespaces=sorted(failed)[:200],
-               resumed_namespaces=resumed)
+               resumed_namespaces=resumed, rolling=_rolling_enabled(), ns_oldest_at=oldest)
     return out
 
 
@@ -956,6 +1033,10 @@ def _overview_view(cluster_id: UUID, db: Session, force: bool = False) -> dict:
     # kubeconfig 파일을 요청 스레드에서 미리 구체화(백그라운드 스레드의 detached 인스턴스 접근 회피).
     try:
         ensure_kubeconfig_file(cluster)
+    except Exception:  # noqa: BLE001
+        pass
+    try:
+        mark_viewed(cid)   # 롤링 갱신(viewed) 대상 표시 — 실패해도 조회는 계속
     except Exception:  # noqa: BLE001
         pass
     pub = _PARTIAL_PUBLISH_INTERVAL_SHARED if _overview_mgr.is_shared else _PARTIAL_PUBLISH_INTERVAL
@@ -1157,6 +1238,9 @@ def allocation_namespaces(cluster_id: UUID, refresh: bool = False, db: Session =
         # namespace 모드 수집 결과 — 실패(절단)한 NS 는 화면에 안내(값이 빠져 있음)
         "collect_mode": ov.get("collect_mode", "cluster"),
         "failed_namespaces": ov.get("failed_namespaces", []),
+        # 롤링 갱신 — NS 마다 수집 시점이 달라 가장 오래된 NS 의 수집 시각(epoch 초)을 함께 노출
+        "rolling": bool(ov.get("rolling")) and ov.get("collect_mode") == "namespace",
+        "ns_oldest_at": ov.get("ns_oldest_at"),
         **_alloc_meta(view),
     }
 

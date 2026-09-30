@@ -124,7 +124,12 @@
 | `K8S_ALLOC_COLLECT_MODE` | `auto` | 동일 — 개요 수집 방식. `auto`(노드 수 ≥ `K8S_ALLOC_NS_MODE_MIN_NODES` 면 namespace, 아니면 cluster) · `cluster`(`list_pod_for_all_namespaces` 스트리밍 1회 — 요청 수 최소) · `namespace`(NS 마다 Pod 목록 + NS 단위 Pod metrics 를 병렬 수집 — 대형 클러스터 실사용량 표시, NS 실패 격리(`failed_namespaces`), 집계 파드 인계 시 완료 NS 이어하기) |
 | `K8S_ALLOC_NS_MODE_MIN_NODES` | `50` | 동일 — `auto` 일 때 namespace 모드로 전환하는 노드 수 기준 |
 | `K8S_ALLOC_NS_WORKERS` | `4` | 동일 — namespace 모드 병렬 워커 수. 워커마다 Pod 목록·metrics 를 호출하므로 `K8S_CLUSTER_MAX_INFLIGHT`(기본 8) 이하로 둔다 |
-| `K8S_ALLOC_NS_RESUME_TTL` | `1800` | 동일 — namespace 모드에서 완료한 NS 누적기를 Redis(`allocns:{cluster}:{ns}:acc`)에 보관하는 시간(초). 집계 파드가 죽어 다른 파드가 인계하면 그 계산이 시작된 뒤 저장된 NS 는 다시 조회하지 않는다(일반 새로고침은 항상 전부 새로 조회) |
+| `K8S_ALLOC_NS_RESUME_TTL` | `1800` | 동일 — namespace 모드에서 완료한 NS 누적기를 Redis(`allocns:{cluster}:{ns}:acc`)에 보관하는 시간(초). 집계 파드가 죽어 다른 파드가 인계하면 그 계산이 시작된 뒤 저장된 NS 는 다시 조회하지 않는다(롤링 갱신이 꺼져 있으면 일반 새로고침은 항상 전부 새로 조회). 롤링이 켜져 있으면 보존 기간은 `K8S_ALLOC_NS_REUSE_MAX_AGE`×2 이상으로 늘어난다 |
+| `K8S_ALLOC_ROLLING` | `viewed` | 동일 — **NS 롤링 갱신**(Celery `k8s-alloc-rolling-dispatcher`, 매분). `viewed`=최근 화면을 연 클러스터만(`K8S_ALLOC_ROLLING_ACTIVE_TTL` 동안), `always`=전 클러스터, `off`=끔. namespace 모드(대형) 클러스터만 대상 — 가장 오래된 NS 부터 다시 모아 Redis NS 누적기를 신선하게 유지하고, 전 NS 가 모이면 개요 스냅샷을 게시한다(웹은 읽기만, 화면은 1분마다 재조회). Redis 공유 스토어가 없으면 동작하지 않는다 |
+| `K8S_ALLOC_ROLLING_BUDGET` | `40` | 동일 — 롤링 갱신 1회(클러스터당 매분)의 수집 시간 예산(초). 예산이 끝나면 새 NS 를 시작하지 않는다. NS 수 / (예산 동안 처리 NS 수) 분이 한 바퀴 — 데이터 최대 나이다 |
+| `K8S_ALLOC_ROLLING_MIN_AGE` | `60` | 동일 — 이보다 최근에 모은 NS 는 롤링에서 건너뛴다(초). 작은 NS 를 매분 다시 부르는 낭비 방지 |
+| `K8S_ALLOC_ROLLING_ACTIVE_TTL` | `900` | 동일 — `viewed` 모드에서 마지막 화면 조회 후 롤링을 유지하는 시간(초). 아무도 보지 않는 클러스터는 API 서버에 부하를 주지 않는다 |
+| `K8S_ALLOC_NS_REUSE_MAX_AGE` | `300` | 동일 — 롤링이 켜져 있을 때 웹 새로고침(재집계)이 다시 조회하지 않고 재사용할 NS 누적기의 최대 나이(초). 이보다 오래된 NS 만 새로 모은다 |
 | `K8S_ALLOC_API_READ_TIMEOUT` | `12.0` | `services/k8s_paging.py` — LIST 페이지 1개당 read timeout(초). 게이트웨이 타임아웃보다 충분히 짧게 |
 | `K8S_ALLOC_PAGE_LIMIT` | `500` | 동일 — LIST `_continue` 페이지네이션 페이지 크기 |
 | `K8S_ALLOC_SNAPSHOT_BACKEND` | `auto` | `routers/k8s_allocation.py` / `services/snapshot_jobs.py` — 개요 스냅샷 저장소. `auto`(Redis 연결되면 replica 간 공유, 아니면 프로세스 메모리로 폴백) · `redis` · `memory`. 멀티 replica(HPA) 에서 `memory` 면 1.5초 폴링이 파드마다 다른 진행률/결과를 보고 파드마다 전수 스캔이 중복된다 |

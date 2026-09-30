@@ -35,6 +35,15 @@ export function writeSummaryDetailPref(v: boolean) {
   try { localStorage.setItem(SUMMARY_DETAIL_KEY, v ? '1' : '0'); } catch { /* ignore */ }
 }
 
+/** epoch 초 → "n초/분/시간 전"(NS 롤링 갱신 데이터 나이 표시용). 값이 없으면 undefined. */
+export function allocAgeText(epochSec: number | null | undefined): string | undefined {
+  if (!epochSec) return undefined;
+  const sec = Math.max(0, Math.floor(Date.now() / 1000 - epochSec));
+  if (sec < 60) return `${sec}초 전`;
+  if (sec < 3600) return `${Math.floor(sec / 60)}분 전`;
+  return `${Math.floor(sec / 3600)}시간 전`;
+}
+
 /** 자원 집계 스냅샷의 현재 단계(`phase`)를 사람이 읽는 문장으로. 대형 클러스터에서 첫 Pod 페이지를
  *  기다리는 동안 "0 처리됨"만 보이면 멈춘 건지 진행 중인지 구분이 안 되기 때문. 모르면 undefined. */
 export function allocPhaseText(phase: string | undefined, processed: number | undefined): string | undefined {
