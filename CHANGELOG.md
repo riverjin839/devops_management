@@ -23,6 +23,11 @@
   `ROLLING_MIN_AGE`·`ROLLING_ACTIVE_TTL`·`NS_REUSE_MAX_AGE`, 응답 `rolling`·`ns_oldest_at`. 효율화 수집의 NS 단위
   순회 결과도 롤링 캐시에 저장한다. Frontend: 롤링 안내·데이터 나이 표시, 롤링 중 비강제 주기 재조회.
 
+### Fixed
+
+- **클러스터 생성 시 kubeconfig 경로 검증** — 경로로만 지정한 kubeconfig 가 실제 kubeconfig(YAML, `clusters` 항목 포함)인지 등록 시점에 확인한다. 연결 검증 생략(`skip_connectivity_check`)으로 등록해도 동일하게 적용돼, kubeconfig 조회 API 를 통해 임의 파일이 노출되는 우회로를 막는다.
+  Backend: `routers/clusters.py` (`create_cluster`).
+
 ## [1.41.1] - 2026-09-30
 
 ### Fixed
