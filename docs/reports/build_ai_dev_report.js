@@ -51,7 +51,7 @@ const MONTHS = ["2월", "3월", "4월", "5월", "6월", "7월", "8월", "9월"];
     { text: "상용화까지 얼마나 왔고, 무엇이 남았나", options: { bullet: true } },
   ], { x: 0.7, y: 3.9, w: 7.6, h: 1.5, fontFace: KO, fontSize: 17, color: C.fg, paraSpaceAfter: 8, margin: 0, isTextBox: true });
   s.addText("기간 2026-02-05 ~ 2026-10-01 · 데이터 기준 riverjin839/devops_management main", { x: 0.7, y: 6.6, w: 7.8, h: 0.35, fontFace: KO, fontSize: 11, color: C.dim, margin: 0, isTextBox: true });
-  const st = [["1,988", "커밋"], ["845", "병합 PR"], ["82", "자동 릴리스"], ["86%", "AI 작성 커밋 비중"]];
+  const st = [["1,988", "커밋"], ["750", "병합 PR"], ["82", "자동 릴리스"], ["96%", "AI 작성 커밋 비중"]];
   st.forEach(([v, l], i) => {
     const y = 0.9 + i * 1.5;
     s.addText(v, { x: 9.2, y, w: 3.6, h: 0.8, fontFace: NUM, fontSize: 44, bold: true, color: i === 3 ? C.periT : C.fg, margin: 0, isTextBox: true });
@@ -67,8 +67,8 @@ const MONTHS = ["2월", "3월", "4월", "5월", "6월", "7월", "8월", "9월"];
   const k = [
     ["222K", "코드 라인", "Python 102K + TS 121K\n2월 대비 16배"],
     ["1,097", "백엔드 테스트", "5월 31개 → 9월 1,097개\n35배"],
-    ["6.1", "PR / 작업일", "845 PR ÷ 139 작업일\n하루 6건 병합"],
-    ["67%", "상용화 진척도", "9개 영역 자체 평가\n근거는 10장"],
+    ["5.4", "PR / 작업일", "750 PR ÷ 139 작업일\n하루 5건 병합"],
+    ["67%", "상용화 진척도", "9개 영역 자체 평가\n근거는 11장"],
   ];
   k.forEach(([v, l, d], i) => {
     const x = 0.6 + i * 3.08;
@@ -79,7 +79,7 @@ const MONTHS = ["2월", "3월", "4월", "5월", "6월", "7월", "8월", "9월"];
   });
   card(s, 0.6, 4.6, 12.1, 2.2);
   s.addText([
-    { text: "방식 변화  ", options: { bold: true, color: C.peri } }, { text: "커밋의 86%, PR 의 77% 를 AI 가 작성. 사람의 일은 코딩 → 요구사항·리뷰·규칙(하네스) 설계로 이동했다.", options: { breakLine: true } },
+    { text: "방식 변화  ", options: { bold: true, color: C.peri } }, { text: "커밋의 96%, PR 의 78% 를 AI 가 작성. 사람의 일은 코딩 → 요구사항·리뷰·규칙(하네스) 설계로 이동했다.", options: { breakLine: true } },
     { text: "발전 경로  ", options: { bold: true, color: C.peri } }, { text: "프롬프트 코딩 → 컨텍스트 문서화 → 스킬·자동 게이트 → 에이전트 운영의 4단계로 진화했다.", options: { breakLine: true } },
     { text: "상용화  ", options: { bold: true, color: C.peri } }, { text: "기능·배포·CI 는 상용 수준. SSO·프론트 테스트·관측성·i18n 이 남은 핵심 공백이다.", options: {} },
   ], { x: 0.9, y: 4.8, w: 11.5, h: 1.85, fontFace: KO, fontSize: 15, color: C.fg, paraSpaceAfter: 10, margin: 0, isTextBox: true, valign: "middle" });
@@ -140,7 +140,7 @@ const MONTHS = ["2월", "3월", "4월", "5월", "6월", "7월", "8월", "9월"];
   card(s, 0.6, 5.45, 12.1, 1.3, C.periBg);
   s.addText([
     { text: "핵심 관찰  ", options: { bold: true, color: C.periT } },
-    { text: "모델이 아니라 '저장소에 남긴 규칙'이 생산성을 바꿨다. CLAUDE.md 이후 같은 지시를 반복할 필요가 사라졌고, 스킬·게이트 도입(6~7월)과 함께 월 PR 이 110 → 220 건으로 2배가 됐다.", options: {} },
+    { text: "모델이 아니라 '저장소에 남긴 규칙'이 생산성을 바꿨다. CLAUDE.md 이후 같은 지시를 반복할 필요가 사라졌고, 스킬·게이트 도입(6~7월)과 함께 월 PR 이 99 → 183 건으로 1.8배가 됐다.", options: {} },
   ], { x: 0.9, y: 5.55, w: 11.5, h: 1.1, fontFace: KO, fontSize: 15, color: C.fg, valign: "middle", margin: 0, isTextBox: true });
   foot(s, 4, "출처: 각 파일의 최초 추가 커밋 일자 (git log --diff-filter=A)");
 }
@@ -148,9 +148,9 @@ const MONTHS = ["2월", "3월", "4월", "5월", "6월", "7월", "8월", "9월"];
 // ── 5. AI 기여도 ────────────────────────────────────────
 {
   const s = pres.addSlide(); base(s);
-  title(s, "AI SHARE", "작성 주체 — 커밋의 86% 를 AI 가 작성");
-  const ai = [67, 50, 79, 74, 211, 249, 85, 91];
-  const hu = [6, 5, 18, 114, 3, 2, 1, 1];
+  title(s, "AI SHARE", "작성 주체 — 커밋의 96% 를 AI 가 작성");
+  const ai = [67, 49, 80, 173, 216, 250, 85, 92];
+  const hu = [6, 4, 19, 11, 2, 1, 1, 0];
   card(s, 0.6, 1.7, 8.3, 5.1);
   s.addChart(pres.charts.BAR, [
     { name: "AI (Claude)", labels: MONTHS, values: ai },
@@ -158,22 +158,22 @@ const MONTHS = ["2월", "3월", "4월", "5월", "6월", "7월", "8월", "9월"];
   ], { x: 0.8, y: 1.85, w: 7.9, h: 4.85, barDir: "col", barGrouping: "stacked", chartColors: [C.peri, C.dim],
     showTitle: true, title: "월별 커밋 수 (병합·봇 커밋 제외)", showLegend: true, legendPos: "t",
     showValue: false, barGapWidthPct: 45, ...axis() });
-  const side = [["906 / 1,056", "AI 작성 커밋 (86%)"], ["653 / 845", "AI 브랜치 PR (77%)"], ["5월", "유일하게 사람 커밋 114건 —\n구조 개편을 직접 수행"]];
+  const side = [["1,012 / 1,056", "AI 작성 커밋 (96%)"], ["586 / 750", "AI 브랜치 PR (78%)"], ["5월", "로컬 Claude Code CLI 전환\n개인 계정 커밋도 91% AI 작성"]];
   side.forEach(([v, l], i) => {
     const y = 1.7 + i * 1.75;
     card(s, 9.2, y, 3.5, 1.55, i === 0 ? C.periBg : C.card);
     s.addText(v, { x: 9.45, y: y + 0.15, w: 3.1, h: 0.6, fontFace: NUM, fontSize: 26, bold: true, color: i === 0 ? C.periT : C.fg, margin: 0, isTextBox: true });
     s.addText(l, { x: 9.45, y: y + 0.75, w: 3.1, h: 0.7, fontFace: KO, fontSize: 13, color: C.muted, margin: 0, isTextBox: true });
   });
-  foot(s, 5, "출처: git log --no-merges 작성자 기준 (github-actions 봇 171건 제외)");
+  foot(s, 5, "AI = 작성자 Claude 또는 Co-Authored-By: Claude 트레일러 · github-actions 봇 171건 제외");
 }
 
 // ── 6. 처리량 ──────────────────────────────────────────
 {
   const s = pres.addSlide(); base(s);
-  title(s, "THROUGHPUT", "처리량 — 7월 정점 220 PR, 이후 안정화 구간");
-  const prs = [56, 54, 74, 110, 129, 220, 97, 105];
-  const days = [13, 13, 14, 20, 22, 24, 13, 22];
+  title(s, "THROUGHPUT", "처리량 — 7월 정점 183 PR, 이후 안정화 구간");
+  const prs = [53, 54, 68, 99, 116, 183, 87, 90];
+  const days = [13, 13, 13, 20, 21, 24, 13, 22];
   card(s, 0.6, 1.7, 7.6, 5.1);
   s.addChart(pres.charts.BAR, [{ name: "병합 PR", labels: MONTHS, values: prs }], {
     x: 0.8, y: 1.85, w: 7.2, h: 4.85, barDir: "col", chartColors: [C.dim, C.dim, C.dim, C.dim, C.dim, C.peri, C.dim, C.dim],
@@ -184,10 +184,10 @@ const MONTHS = ["2월", "3월", "4월", "5월", "6월", "7월", "8월", "9월"];
     x: 8.65, y: 1.85, w: 3.9, h: 3.2, chartColors: [C.peri], lineSize: 3, lineDataSymbol: "circle", lineDataSymbolSize: 7,
     showTitle: true, title: "작업일당 PR", showLegend: false, showValue: true, dataLabelPosition: "t", dataLabelFormatCode: "0.0", ...axis(), catAxisLabelFontSize: 10 });
   s.addText([
-    { text: "4.3 → 9.2", options: { bold: true, color: C.periT, fontSize: 22, breakLine: true } },
-    { text: "2월 대비 7월 작업일당 PR 2.1배. 8월은 신규 기능 대신 버그·품질 정비에 집중한 구간이다.", options: { fontSize: 13, color: C.muted } },
+    { text: "4.1 → 7.6", options: { bold: true, color: C.periT, fontSize: 22, breakLine: true } },
+    { text: "2월 대비 7월 작업일당 PR 1.9배. 8월은 신규 기능 대신 버그·품질 정비에 집중한 구간이다.", options: { fontSize: 13, color: C.muted } },
   ], { x: 8.8, y: 5.1, w: 3.7, h: 1.6, fontFace: KO, margin: 0, isTextBox: true, valign: "top" });
-  foot(s, 6, "출처: git log --merges (월별), 작업일 = 커밋이 1건 이상인 날");
+  foot(s, 6, "출처: 'Merge pull request' 병합만 집계(브랜치 동기화 병합 95건 제외), 작업일 = 커밋 1건 이상인 날");
 }
 
 // ── 7. 코드베이스 성장 ──────────────────────────────────
@@ -215,7 +215,38 @@ const MONTHS = ["2월", "3월", "4월", "5월", "6월", "7월", "8월", "9월"];
   foot(s, 7, "출처: 월말 커밋 스냅샷 기준 파일·라인 집계 (git ls-tree / cat-file)");
 }
 
-// ── 8. 품질 체계 ───────────────────────────────────────
+// ── 8. 모델 세대별 기능 구현 성장 ──────────────────────
+{
+  const s = pres.addSlide(); base(s);
+  title(s, "MODEL EVOLUTION", "모델 세대가 바뀔 때마다 기능 구현 규모가 커졌다");
+  // 세대 구분 = 병합 PR 안 커밋의 Co-Authored-By 모델 다수결. 2~4월은 모델 표기 없음(초기).
+  const gens = ["초기 (2~4월)", "4.x (5~6월)", "5 (7~8월)", "5.x (9월)"];
+  card(s, 0.6, 1.7, 7.6, 5.1);
+  s.addChart(pres.charts.BAR, [
+    { name: "월 기능 PR", labels: gens, values: [100, 204, 150, 93] },
+    { name: "월 코드 증가량", labels: gens, values: [100, 148, 176, 148] },
+    { name: "PR당 변경 파일", labels: gens, values: [100, 140, 140, 200] },
+  ], { x: 0.8, y: 1.85, w: 7.2, h: 4.85, barDir: "col", barGrouping: "clustered", chartColors: [C.dim, C.muted, C.peri],
+    showTitle: true, title: "세대별 성장 지수 (초기 = 100)", showLegend: true, legendPos: "t",
+    showValue: true, dataLabelPosition: "outEnd", dataLabelFontSize: 10, barGapWidthPct: 35, valAxisMinVal: 0, valAxisMaxVal: 250, ...axis() });
+  const rows = [
+    ["4.x", "Opus 4.7 (1M) · Opus 4.8", "월 기능 PR 35 → 72건 (2.0배)"],
+    ["5", "Sonnet 5 · Opus 5 · Fable 5", "월 코드 +20K → +36K줄 (1.8배)"],
+    ["5.x", "Opus 5.5 · Fable 5.1 · Sonnet 5.5", "PR당 변경 파일 5 → 10개 (2.0배)"],
+  ];
+  card(s, 8.5, 1.7, 4.2, 5.1);
+  s.addText("세대별 주력 모델과 대표 성장", { x: 8.75, y: 1.85, w: 3.8, h: 0.4, fontFace: KO, fontSize: 15, bold: true, color: C.fg, margin: 0, isTextBox: true });
+  rows.forEach(([g, m, v], i) => {
+    const y = 2.4 + i * 1.12;
+    s.addText(g, { x: 8.75, y, w: 0.75, h: 0.4, fontFace: NUM, fontSize: 18, bold: true, color: C.periT, margin: 0, isTextBox: true });
+    s.addText(m, { x: 9.5, y: y + 0.03, w: 3.1, h: 0.4, fontFace: NUM, fontSize: 11.5, color: C.muted, margin: 0, isTextBox: true });
+    s.addText(v, { x: 8.75, y: y + 0.45, w: 3.85, h: 0.45, fontFace: KO, fontSize: 14, bold: true, color: C.fg, margin: 0, isTextBox: true });
+  });
+  s.addText("8~9월 기능 PR 감소는 성능 저하가 아니라 안정화 집중(테스트 540 → 1,097)의 결과다.", { x: 8.75, y: 5.75, w: 3.85, h: 0.9, fontFace: KO, fontSize: 12, color: C.muted, margin: 0, isTextBox: true, valign: "top" });
+  foot(s, 8, "기준: main 병합 PR 745건 중 모델 표기(Co-Authored-By) PR 295건 + 초기 173건 · 세대 구간은 일부 겹침 · 파일 = 중앙값");
+}
+
+// ── 9. 품질 체계 ───────────────────────────────────────
 {
   const s = pres.addSlide(); base(s);
   title(s, "QUALITY", "품질 — 7월 버그 급증을 테스트·게이트로 되잡았다");
@@ -235,17 +266,17 @@ const MONTHS = ["2월", "3월", "4월", "5월", "6월", "7월", "8월", "9월"];
     { text: "7월 fix 비율 50%", options: { bold: true, color: C.periT, breakLine: true } },
     { text: "→ 테스트 10배·docs-sync CI·자동 릴리스 도입 → 9월 40% 로 회복, 릴리스 82회 중 revert·hotfix 4건", options: { color: C.muted, fontSize: 13 } },
   ], { x: 7.2, y: 5.4, w: 5.3, h: 1.3, fontFace: KO, fontSize: 16, margin: 0, isTextBox: true, valign: "top" });
-  foot(s, 8, "출처: backend/tests 의 def test_ 집계, Conventional Commits prefix 집계");
+  foot(s, 9, "출처: backend/tests 의 def test_ 집계, Conventional Commits prefix 집계");
 }
 
-// ── 9. 성숙도 4단계 ────────────────────────────────────
+// ── 10. 성숙도 4단계 ────────────────────────────────────
 {
   const s = pres.addSlide(); base(s);
   title(s, "MATURITY", "AI 활용 성숙도 — 4단계로 진화");
   const st = [
-    ["1", "프롬프트 코딩", "2~3월", "대화로 기능 단위 구현\nCLAUDE.md 첫 도입", "PR 55건/월"],
-    ["2", "컨텍스트 문서화", "4~5월", "CODE_MAP·디자인 시스템\n문서로 저장소 지도 제공", "PR 92건/월"],
-    ["3", "스킬·자동 게이트", "6~7월", "스킬 8종, docs-sync CI,\n자동 릴리스·CHANGELOG", "PR 175건/월"],
+    ["1", "프롬프트 코딩", "2~3월", "대화로 기능 단위 구현\nCLAUDE.md 첫 도입", "PR 54건/월"],
+    ["2", "컨텍스트 문서화", "4~5월", "CODE_MAP·디자인 시스템\n문서로 저장소 지도 제공", "PR 84건/월"],
+    ["3", "스킬·자동 게이트", "6~7월", "스킬 8종, docs-sync CI,\n자동 릴리스·CHANGELOG", "PR 150건/월"],
     ["4", "에이전트 운영", "8~9월", "UX 감사 에이전트, 테스트\n1,097개, 안정화 우선", "테스트 2배"],
   ];
   st.forEach(([n, t, p, d, m], i) => {
@@ -259,10 +290,10 @@ const MONTHS = ["2월", "3월", "4월", "5월", "6월", "7월", "8월", "9월"];
     s.addText(m, { x: x + 0.3, y: 5.25, w: 2.35, h: 0.6, fontFace: KO, fontSize: 17, bold: true, color: cur ? C.periT : C.fg, margin: 0, isTextBox: true });
     if (i < 3) s.addShape(pres.shapes.RIGHT_ARROW, { x: x + 2.83, y: 4.05, w: 0.24, h: 0.3, fill: { color: C.peri }, line: { color: C.peri } });
   });
-  foot(s, 9, "PR/월 = 해당 구간 월평균 병합 PR · 현재 위치 = 4단계");
+  foot(s, 10, "PR/월 = 해당 구간 월평균 병합 PR · 현재 위치 = 4단계");
 }
 
-// ── 10. 상용화 진척도 ──────────────────────────────────
+// ── 11. 상용화 진척도 ──────────────────────────────────
 {
   const s = pres.addSlide(); base(s);
   title(s, "READINESS", "상용화까지 얼마나 왔나 — 종합 67%");
@@ -288,10 +319,10 @@ const MONTHS = ["2월", "3월", "4월", "5월", "6월", "7월", "8월", "9월"];
     { text: h, options: { bold: true, color: C.periT, breakLine: true } },
     { text: d, options: { color: C.muted, breakLine: i < ev.length - 1 } },
   ]), { x: 7.85, y: 2.3, w: 4.65, h: 4.35, fontFace: KO, fontSize: 12.5, paraSpaceAfter: 5, margin: 0, isTextBox: true, valign: "top" });
-  foot(s, 10, "자체 평가: 9개 영역 동일 가중 평균 · 70% 이상 = 상용 기준 충족(강조색)");
+  foot(s, 11, "자체 평가: 9개 영역 동일 가중 평균 · 70% 이상 = 상용 기준 충족(강조색)");
 }
 
-// ── 11. 남은 과제 ──────────────────────────────────────
+// ── 12. 남은 과제 ──────────────────────────────────────
 {
   const s = pres.addSlide(); base(s);
   title(s, "NEXT", "남은 과제 — 상용 전환을 막는 5가지");
@@ -314,10 +345,10 @@ const MONTHS = ["2월", "3월", "4월", "5월", "6월", "7월", "8월", "9월"];
     s.addText(c, { x: 10.4, y, w: 2.2, h: 0.7, fontFace: KO, fontSize: 15, bold: true, color: top ? C.periT : C.fg, valign: "middle", margin: 0, isTextBox: true });
   });
   s.addText("목표 지표를 모두 달성하면 종합 진척도 67% → 약 80% (상용 베타 수준)", { x: 0.6, y: 6.45, w: 12.1, h: 0.35, fontFace: KO, fontSize: 13, color: C.periT, margin: 0, isTextBox: true });
-  foot(s, 11, "출처: DESIGN.md 로드맵 R-6·R-7, 백로그 D-069~D-085, 저장소 grep 결과");
+  foot(s, 12, "출처: DESIGN.md 로드맵 R-6·R-7, 백로그 D-069~D-085, 저장소 grep 결과");
 }
 
-// ── 12. 교훈 / 마무리 ──────────────────────────────────
+// ── 13. 교훈 / 마무리 ──────────────────────────────────
 {
   const s = pres.addSlide(); base(s);
   s.addShape(pres.shapes.RECTANGLE, { x: 0, y: 0, w: 4.6, h: 7.5, fill: { color: C.maroon }, line: { color: C.maroon } });
@@ -325,7 +356,7 @@ const MONTHS = ["2월", "3월", "4월", "5월", "6월", "7월", "8월", "9월"];
   s.addText("8개월에서\n얻은 3가지", { x: 0.6, y: 1.4, w: 3.7, h: 1.6, fontFace: KO, fontSize: 32, bold: true, color: C.fg, margin: 0, isTextBox: true });
   s.addText("AI 는 속도를 주고,\n하네스는 방향을 준다.", { x: 0.6, y: 5.4, w: 3.7, h: 1.0, fontFace: KO, fontSize: 16, italic: true, color: C.muted, margin: 0, isTextBox: true });
   const L = [
-    ["컨텍스트가 곧 생산성", "CLAUDE.md·CODE_MAP·스킬로 규칙을 저장소에 남기자 같은 설명의 반복이 사라졌다. 월 PR 2배의 실제 원인이다."],
+    ["컨텍스트가 곧 생산성", "CLAUDE.md·CODE_MAP·스킬로 규칙을 저장소에 남기자 같은 설명의 반복이 사라졌다. 월 PR 1.8배의 실제 원인이다."],
     ["속도는 게이트와 함께 키운다", "7월 fix 비율 50% 는 게이트 없이 속도만 낸 대가였다. 테스트·docs-sync·자동 릴리스가 이를 40% 로 되돌렸다."],
     ["사람의 역할은 '판단'으로 이동", "무엇을 만들지, 무엇이 충분히 좋은지, 어디서 멈출지. 남은 과제(SSO·테스트·관측)도 같은 판단의 문제다."],
   ];
