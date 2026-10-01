@@ -5,11 +5,12 @@ const pres = new pptxgen();
 pres.layout = "LAYOUT_WIDE"; // 13.33 x 7.5
 pres.title = "AI 페어 개발 리포트 — PEP";
 
-// Picasso 〈소녀의 초상〉 (picasso-portrait) 테마 토큰 → hex
+// Umber light (umber-light) 테마 토큰 → hex — 크림 바탕 + 움버 패널 + 오커 단일 강조
 const C = {
-  bg: "15231D", card: "1E2F28", sec: "2A3C35", border: "364A41",
-  fg: "EDEAE3", muted: "ABBAB2", dim: "6E7F77",
-  peri: "94A2DB", periT: "ADBAEB", periBg: "323853", maroon: "30171B",
+  bg: "F6F3EF", card: "FDFDFC", sec: "ECE7DF", border: "D8D1CA",
+  fg: "281C1A", muted: "6E5D53", dim: "A49284",
+  peri: "DA950B", periT: "885407", periBg: "FCF1CF", maroon: "231B1A",
+  onDark: "EDE8DE", onDarkMuted: "B7ADA4", onDarkAcc: "FABF0F",
 };
 const KO = "Malgun Gothic";
 const NUM = "Arial";
@@ -17,7 +18,7 @@ const W = 13.333;
 
 function base(s) { s.background = { color: C.bg }; }
 function title(s, kicker, text) {
-  s.addText(kicker, { x: 0.6, y: 0.35, w: 9, h: 0.35, fontFace: KO, fontSize: 13, color: C.peri, bold: true, margin: 0, isTextBox: true });
+  s.addText(kicker, { x: 0.6, y: 0.35, w: 9, h: 0.35, fontFace: KO, fontSize: 13, color: C.periT, bold: true, margin: 0, isTextBox: true });
   s.addText(text, { x: 0.6, y: 0.7, w: 12.1, h: 0.75, fontFace: KO, fontSize: 30, color: C.fg, bold: true, margin: 0, isTextBox: true });
 }
 function card(s, x, y, w, h, fill) {
@@ -42,7 +43,7 @@ const MONTHS = ["2월", "3월", "4월", "5월", "6월", "7월", "8월", "9월"];
 {
   const s = pres.addSlide(); base(s);
   s.addShape(pres.shapes.RECTANGLE, { x: 8.6, y: 0, w: W - 8.6, h: 7.5, fill: { color: C.maroon }, line: { color: C.maroon } });
-  s.addText("팀 보고 · 2026-10", { x: 0.7, y: 0.8, w: 7, h: 0.4, fontFace: KO, fontSize: 14, color: C.peri, bold: true, margin: 0, isTextBox: true });
+  s.addText("팀 보고 · 2026-10", { x: 0.7, y: 0.8, w: 7, h: 0.4, fontFace: KO, fontSize: 14, color: C.periT, bold: true, margin: 0, isTextBox: true });
   s.addText("AI 와 함께 만든 8개월", { x: 0.7, y: 1.9, w: 7.8, h: 0.9, fontFace: KO, fontSize: 40, bold: true, color: C.fg, margin: 0, isTextBox: true });
   s.addText("PEP(Platform Engineering Portal) 개발 과정·결과 리포트", { x: 0.7, y: 2.85, w: 7.8, h: 0.6, fontFace: KO, fontSize: 20, color: C.muted, margin: 0, isTextBox: true });
   s.addText([
@@ -54,8 +55,8 @@ const MONTHS = ["2월", "3월", "4월", "5월", "6월", "7월", "8월", "9월"];
   const st = [["1,988", "커밋"], ["750", "병합 PR"], ["82", "자동 릴리스"], ["96%", "AI 작성 커밋 비중"]];
   st.forEach(([v, l], i) => {
     const y = 0.9 + i * 1.5;
-    s.addText(v, { x: 9.2, y, w: 3.6, h: 0.8, fontFace: NUM, fontSize: 44, bold: true, color: i === 3 ? C.periT : C.fg, margin: 0, isTextBox: true });
-    s.addText(l, { x: 9.2, y: y + 0.8, w: 3.6, h: 0.4, fontFace: KO, fontSize: 14, color: C.muted, margin: 0, isTextBox: true });
+    s.addText(v, { x: 9.2, y, w: 3.6, h: 0.8, fontFace: NUM, fontSize: 44, bold: true, color: i === 3 ? C.onDarkAcc : C.onDark, margin: 0, isTextBox: true });
+    s.addText(l, { x: 9.2, y: y + 0.8, w: 3.6, h: 0.4, fontFace: KO, fontSize: 14, color: C.onDarkMuted, margin: 0, isTextBox: true });
   });
   s.addNotes("표지. 8개월간 1인 + AI(Claude Code) 페어로 PEP 를 개발한 과정과 결과를 수치로 정리했다.");
 }
@@ -79,9 +80,9 @@ const MONTHS = ["2월", "3월", "4월", "5월", "6월", "7월", "8월", "9월"];
   });
   card(s, 0.6, 4.6, 12.1, 2.2);
   s.addText([
-    { text: "방식 변화  ", options: { bold: true, color: C.peri } }, { text: "커밋의 96%, PR 의 78% 를 AI 가 작성. 사람의 일은 코딩 → 요구사항·리뷰·규칙(하네스) 설계로 이동했다.", options: { breakLine: true } },
-    { text: "발전 경로  ", options: { bold: true, color: C.peri } }, { text: "프롬프트 코딩 → 컨텍스트 문서화 → 스킬·자동 게이트 → 에이전트 운영의 4단계로 진화했다.", options: { breakLine: true } },
-    { text: "상용화  ", options: { bold: true, color: C.peri } }, { text: "기능·배포·CI 는 상용 수준. SSO·프론트 테스트·관측성·i18n 이 남은 핵심 공백이다.", options: {} },
+    { text: "방식 변화  ", options: { bold: true, color: C.periT } }, { text: "커밋의 96%, PR 의 78% 를 AI 가 작성. 사람의 일은 코딩 → 요구사항·리뷰·규칙(하네스) 설계로 이동했다.", options: { breakLine: true } },
+    { text: "발전 경로  ", options: { bold: true, color: C.periT } }, { text: "프롬프트 코딩 → 컨텍스트 문서화 → 스킬·자동 게이트 → 에이전트 운영의 4단계로 진화했다.", options: { breakLine: true } },
+    { text: "상용화  ", options: { bold: true, color: C.periT } }, { text: "기능·배포·CI 는 상용 수준. SSO·프론트 테스트·관측성·i18n 이 남은 핵심 공백이다.", options: {} },
   ], { x: 0.9, y: 4.8, w: 11.5, h: 1.85, fontFace: KO, fontSize: 15, color: C.fg, paraSpaceAfter: 10, margin: 0, isTextBox: true, valign: "middle" });
   foot(s, 2);
 }
@@ -101,7 +102,7 @@ const MONTHS = ["2월", "3월", "4월", "5월", "6월", "7월", "8월", "9월"];
   const hy = 1.75;
   s.addText("영역", { x: 0.6, y: hy, w: 2.4, h: 0.45, fontFace: KO, fontSize: 14, bold: true, color: C.muted, margin: 0, isTextBox: true });
   s.addText("BEFORE", { x: 3.1, y: hy, w: 3.9, h: 0.45, fontFace: NUM, fontSize: 14, bold: true, color: C.muted, margin: 0, isTextBox: true });
-  s.addText("AFTER (AI 페어)", { x: 7.5, y: hy, w: 5.2, h: 0.45, fontFace: KO, fontSize: 14, bold: true, color: C.peri, margin: 0, isTextBox: true });
+  s.addText("AFTER (AI 페어)", { x: 7.5, y: hy, w: 5.2, h: 0.45, fontFace: KO, fontSize: 14, bold: true, color: C.periT, margin: 0, isTextBox: true });
   rows.forEach(([a, b, c], i) => {
     const y = 2.3 + i * 0.75;
     card(s, 0.6, y, 12.1, 0.62);
@@ -283,7 +284,7 @@ const MONTHS = ["2월", "3월", "4월", "5월", "6월", "7월", "8월", "9월"];
     const x = 0.6 + i * 3.1, cur = i === 3;
     card(s, x, 1.8, 2.8, 4.3, cur ? C.periBg : C.card);
     s.addShape(pres.shapes.OVAL, { x: x + 0.3, y: 2.05, w: 0.7, h: 0.7, fill: { color: cur ? C.peri : C.sec }, line: { color: cur ? C.peri : C.border } });
-    s.addText(n, { x: x + 0.3, y: 2.05, w: 0.7, h: 0.7, fontFace: NUM, fontSize: 22, bold: true, color: cur ? C.bg : C.fg, align: "center", valign: "middle", margin: 0, isTextBox: true });
+    s.addText(n, { x: x + 0.3, y: 2.05, w: 0.7, h: 0.7, fontFace: NUM, fontSize: 22, bold: true, color: C.fg, align: "center", valign: "middle", margin: 0, isTextBox: true });
     s.addText(t, { x: x + 0.3, y: 3.0, w: 2.35, h: 0.5, fontFace: KO, fontSize: 18, bold: true, color: C.fg, margin: 0, isTextBox: true });
     s.addText(p, { x: x + 0.3, y: 3.5, w: 2.35, h: 0.35, fontFace: KO, fontSize: 13, color: cur ? C.periT : C.muted, margin: 0, isTextBox: true });
     s.addText(d, { x: x + 0.3, y: 4.0, w: 2.4, h: 1.2, fontFace: KO, fontSize: 13, color: C.muted, margin: 0, isTextBox: true, valign: "top" });
@@ -348,13 +349,70 @@ const MONTHS = ["2월", "3월", "4월", "5월", "6월", "7월", "8월", "9월"];
   foot(s, 12, "출처: DESIGN.md 로드맵 R-6·R-7, 백로그 D-069~D-085, 저장소 grep 결과");
 }
 
-// ── 13. 교훈 / 마무리 ──────────────────────────────────
+// ── 13. 복기 — 실제 vs 다시 한다면 ───────────────────────
+{
+  const s = pres.addSlide(); base(s);
+  title(s, "RETROSPECTIVE", "과거로 돌아간다면 — 무엇을 다르게 했어야 했나");
+  const rows = [
+    ["하네스", "CLAUDE.md 19일 차, CODE_MAP 75일 차, 스킬 118일 차에 도입", "스킬 전 4개월은 같은 설명을 반복", "1주 차에 하네스 골격(CLAUDE.md·스킬)"],
+    ["테스트", "5월 말 코드 9만 줄에 테스트 31개", "7월 fix 104건, fix 비율 50%", "PR 마다 테스트 동반을 CI 게이트로 강제"],
+    ["디자인 시스템", "화면 34개를 만든 뒤 5월에 도입", "UX 백로그 101건, raw hex 104건 잔존", "화면 5개 시점에 토큰·카드 규격 확정"],
+    ["비기능 요건", "SSO·i18n·관측·프론트 테스트를 후순위로", "상용화 67%, 남은 공백이 전부 비기능", "1개월 차에 인증·관측·i18n 뼈대 선행"],
+    ["측정 규칙", "모델 표기 PR 40%, 동기화 병합 95건", "모델·하네스 효과를 정밀 비교 불가", "커밋 트레일러·세션 링크·병합 규칙 첫날 고정"],
+  ];
+  const hy = 1.7;
+  [["영역", 0.6, 1.9], ["실제로 한 것", 2.55, 3.6], ["치른 대가 (지표)", 6.25, 3.0], ["다시 한다면", 9.35, 3.3]].forEach(([h, x, w], i) =>
+    s.addText(h, { x: x + 0.2, y: hy, w, h: 0.4, fontFace: KO, fontSize: 13, bold: true, color: i === 3 ? C.periT : C.muted, margin: 0, isTextBox: true }));
+  rows.forEach(([a, b, c, d], i) => {
+    const y = 2.15 + i * 0.92;
+    card(s, 0.6, y, 12.1, 0.8);
+    s.addShape(pres.shapes.ROUNDED_RECTANGLE, { x: 9.45, y: y + 0.08, w: 3.15, h: 0.64, rectRadius: 0.06, fill: { color: C.periBg }, line: { color: C.periBg } });
+    s.addText(a, { x: 0.8, y, w: 1.75, h: 0.8, fontFace: KO, fontSize: 15, bold: true, color: C.fg, valign: "middle", margin: 0, isTextBox: true });
+    s.addText(b, { x: 2.75, y, w: 3.45, h: 0.8, fontFace: KO, fontSize: 12.5, color: C.muted, valign: "middle", margin: 0, isTextBox: true });
+    s.addText(c, { x: 6.45, y, w: 2.85, h: 0.8, fontFace: KO, fontSize: 12.5, bold: true, color: C.fg, valign: "middle", margin: 0, isTextBox: true });
+    s.addText(d, { x: 9.6, y, w: 2.95, h: 0.8, fontFace: KO, fontSize: 12.5, bold: true, color: C.periT, valign: "middle", margin: 0, isTextBox: true });
+  });
+  foot(s, 13, "일차 = 첫 커밋(2026-02-05) 기준 · 지표 출처는 각 장(5·6·8·9·11장)과 동일");
+}
+
+// ── 14. 복기 — 다시 짠다면의 순서 ───────────────────────
+{
+  const s = pres.addSlide(); base(s);
+  title(s, "IF WE STARTED OVER", "다시 짠다면 — 기능보다 '틀'을 먼저 깐다");
+  const ph = [
+    ["1주 차", "하네스", "CLAUDE.md · CODE_MAP\n스킬 템플릿\n커밋·병합 규칙"],
+    ["1개월", "품질 게이트", "PR 테스트 동반 강제\ndocs-sync · 자동 릴리스\n디자인 토큰 확정"],
+    ["2~3개월", "상용 뼈대", "SSO·세션 · i18n 키\n/metrics · E2E 스모크\n권한 UX 규칙"],
+    ["4개월~", "기능 확장", "도메인 기능 병렬 개발\nUX·보안 감사 에이전트\n모델별 작업 라우팅"],
+  ];
+  ph.forEach(([w, t, d], i) => {
+    const x = 0.6 + i * 3.1, last = i === 3;
+    card(s, x, 1.75, 2.8, 3.0, i === 0 ? C.periBg : C.card);
+    s.addText(w, { x: x + 0.3, y: 1.95, w: 2.3, h: 0.4, fontFace: KO, fontSize: 14, bold: true, color: C.periT, margin: 0, isTextBox: true });
+    s.addText(t, { x: x + 0.3, y: 2.4, w: 2.3, h: 0.5, fontFace: KO, fontSize: 20, bold: true, color: C.fg, margin: 0, isTextBox: true });
+    s.addText(d, { x: x + 0.3, y: 3.05, w: 2.4, h: 1.5, fontFace: KO, fontSize: 13, color: C.muted, margin: 0, isTextBox: true, valign: "top", paraSpaceAfter: 4 });
+    if (!last) s.addShape(pres.shapes.RIGHT_ARROW, { x: x + 2.83, y: 3.07, w: 0.24, h: 0.3, fill: { color: C.peri }, line: { color: C.peri } });
+  });
+  card(s, 0.6, 5.0, 5.95, 1.75);
+  s.addText([
+    { text: "실제 순서", options: { bold: true, color: C.muted, breakLine: true } },
+    { text: "기능 → 컨텍스트 → 게이트 → 안정화 → 비기능(미완)", options: { color: C.fg, fontSize: 15 } },
+  ], { x: 0.85, y: 5.15, w: 5.5, h: 1.45, fontFace: KO, fontSize: 13, margin: 0, isTextBox: true, valign: "middle", paraSpaceAfter: 6 });
+  card(s, 6.75, 5.0, 5.95, 1.75, C.periBg);
+  s.addText([
+    { text: "기대 효과 (추정)", options: { bold: true, color: C.periT, breakLine: true } },
+    { text: "남은 과제 5개 중 4개(SSO·프론트 테스트·관측·i18n)를 깔고 기능을 얹었을 것. 7월 fix 급증과 UX 재작업이 가장 크게 줄었을 구간이다.", options: { color: C.fg, fontSize: 13.5 } },
+  ], { x: 7.0, y: 5.15, w: 5.5, h: 1.45, fontFace: KO, fontSize: 13, margin: 0, isTextBox: true, valign: "middle", paraSpaceAfter: 6 });
+  foot(s, 14, "추정은 실제 수치(9·11·12장)에 근거한 해석이며 검증된 결과가 아니다");
+}
+
+// ── 15. 교훈 / 마무리 ──────────────────────────────────
 {
   const s = pres.addSlide(); base(s);
   s.addShape(pres.shapes.RECTANGLE, { x: 0, y: 0, w: 4.6, h: 7.5, fill: { color: C.maroon }, line: { color: C.maroon } });
-  s.addText("LESSONS", { x: 0.6, y: 0.8, w: 3.6, h: 0.4, fontFace: NUM, fontSize: 14, bold: true, color: C.peri, margin: 0, isTextBox: true });
-  s.addText("8개월에서\n얻은 3가지", { x: 0.6, y: 1.4, w: 3.7, h: 1.6, fontFace: KO, fontSize: 32, bold: true, color: C.fg, margin: 0, isTextBox: true });
-  s.addText("AI 는 속도를 주고,\n하네스는 방향을 준다.", { x: 0.6, y: 5.4, w: 3.7, h: 1.0, fontFace: KO, fontSize: 16, italic: true, color: C.muted, margin: 0, isTextBox: true });
+  s.addText("LESSONS", { x: 0.6, y: 0.8, w: 3.6, h: 0.4, fontFace: NUM, fontSize: 14, bold: true, color: C.onDarkAcc, margin: 0, isTextBox: true });
+  s.addText("8개월에서\n얻은 3가지", { x: 0.6, y: 1.4, w: 3.7, h: 1.6, fontFace: KO, fontSize: 32, bold: true, color: C.onDark, margin: 0, isTextBox: true });
+  s.addText("AI 는 속도를 주고,\n하네스는 방향을 준다.", { x: 0.6, y: 5.4, w: 3.7, h: 1.0, fontFace: KO, fontSize: 16, italic: true, color: C.onDarkMuted, margin: 0, isTextBox: true });
   const L = [
     ["컨텍스트가 곧 생산성", "CLAUDE.md·CODE_MAP·스킬로 규칙을 저장소에 남기자 같은 설명의 반복이 사라졌다. 월 PR 1.8배의 실제 원인이다."],
     ["속도는 게이트와 함께 키운다", "7월 fix 비율 50% 는 게이트 없이 속도만 낸 대가였다. 테스트·docs-sync·자동 릴리스가 이를 40% 로 되돌렸다."],
@@ -363,7 +421,7 @@ const MONTHS = ["2월", "3월", "4월", "5월", "6월", "7월", "8월", "9월"];
   L.forEach(([h, d], i) => {
     const y = 0.9 + i * 2.1;
     s.addShape(pres.shapes.OVAL, { x: 5.2, y: y + 0.05, w: 0.6, h: 0.6, fill: { color: C.peri }, line: { color: C.peri } });
-    s.addText(String(i + 1), { x: 5.2, y: y + 0.05, w: 0.6, h: 0.6, fontFace: NUM, fontSize: 18, bold: true, color: C.bg, align: "center", valign: "middle", margin: 0, isTextBox: true });
+    s.addText(String(i + 1), { x: 5.2, y: y + 0.05, w: 0.6, h: 0.6, fontFace: NUM, fontSize: 18, bold: true, color: C.fg, align: "center", valign: "middle", margin: 0, isTextBox: true });
     s.addText(h, { x: 6.1, y, w: 6.6, h: 0.55, fontFace: KO, fontSize: 21, bold: true, color: C.fg, margin: 0, isTextBox: true });
     s.addText(d, { x: 6.1, y: y + 0.6, w: 6.6, h: 1.1, fontFace: KO, fontSize: 14, color: C.muted, margin: 0, isTextBox: true, valign: "top" });
   });
