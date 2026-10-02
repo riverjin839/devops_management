@@ -24,7 +24,7 @@ export function NodeDetailPanel({
   const memR = usageRatio(node.metrics.mem.usage, node.metrics.mem.request, node.metrics.mem.limit);
 
   return (
-    <div className="absolute top-3 right-3 w-72 max-h-[calc(100%-1.5rem)] overflow-y-auto bg-card/95 backdrop-blur border border-border rounded-2xl shadow-card z-20">
+    <div role="region" aria-label={`${node.name} 상세`} className="absolute top-3 right-3 w-72 max-h-[calc(100%-1.5rem)] overflow-y-auto bg-card/95 backdrop-blur border border-border rounded-2xl shadow-card z-20">
       <div className="flex items-start gap-2 px-4 pt-3.5 pb-2 border-b border-border">
         <span className="text-[11px] font-bold px-1.5 py-0.5 rounded mt-0.5" style={{ background: `${kindAccent(node.kind)}22`, color: kindAccent(node.kind) }}>
           {KIND_ABBR[node.kind] ?? node.kind}

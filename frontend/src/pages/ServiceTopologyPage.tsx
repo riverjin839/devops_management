@@ -8,7 +8,7 @@ import { useClusters } from '@/hooks/useCluster';
 import { useCanOperate } from '@/hooks/useCanOperate';
 import { analyzeApi } from '@/services/api';
 import {
-  ClusterSidebar, DebugLogPanel, NamespaceSingleSelect, SnapshotProgressCard, useToast,
+  ClusterSidebar, ConfirmDialog, DebugLogPanel, NamespaceSingleSelect, SnapshotProgressCard, useToast,
 } from '@/components/common';
 import { MacCard } from '@/components/ui/MacCard';
 import {
@@ -46,6 +46,10 @@ export function ServiceTopologyPage() {
   const [linkSourceId, setLinkSourceId] = useState<string | null>(null);
   const [linkTargetId, setLinkTargetId] = useState<string | null>(null);
   const [extOpen, setExtOpen] = useState(false);
+  // D-091 — 삭제는 복구가 안 되므로 바로 mutate 하지 않고 확인을 받는다.
+  const [pendingDelete, setPendingDelete] = useState<
+    { kind: 'link'; manualId: string; label: string } | { kind: 'external'; node: TopoNode } | null
+  >(null);
 
   const canvasRef = useRef<HTMLDivElement>(null);
   const [dim, setDim] = useState({ w: 800, h: 600 });
@@ -133,19 +137,32 @@ export function ServiceTopologyPage() {
     );
   };
 
-  const handleDeleteLink = (manualId: string) => {
-    deleteLink.mutate(manualId, {
-      onSuccess: () => toast.success('연계 삭제됨'),
-      onError: (e) => toast.error('삭제 실패', formatApiError(e)),
-    });
+  const requestDeleteLink = (manualId: string) => {
+    const edge = graph?.edges.find((e) => e.manualId === manualId);
+    const label = edge ? `${nodeName(edge.source)} → ${nodeName(edge.target)}` : '이 수동 연계';
+    setPendingDelete({ kind: 'link', manualId, label });
   };
 
-  const handleDeleteExternal = (node: TopoNode) => {
+  const requestDeleteExternal = (node: TopoNode) => {
     if (!node.externalId) return;
-    deleteExt.mutate(node.externalId, {
-      onSuccess: () => { toast.success('외부 노드 삭제됨'); setSelectedId(null); },
-      onError: (e) => toast.error('삭제 실패', formatApiError(e)),
-    });
+    setPendingDelete({ kind: 'external', node });
+  };
+
+  const confirmDelete = () => {
+    const target = pendingDelete;
+    if (!target) return;
+    setPendingDelete(null);
+    if (target.kind === 'link') {
+      deleteLink.mutate(target.manualId, {
+        onSuccess: () => toast.success('연계 삭제됨'),
+        onError: (e) => toast.error('삭제 실패', formatApiError(e)),
+      });
+    } else if (target.node.externalId) {
+      deleteExt.mutate(target.node.externalId, {
+        onSuccess: () => { toast.success('외부 노드 삭제됨'); setSelectedId(null); },
+        onError: (e) => toast.error('삭제 실패', formatApiError(e)),
+      });
+    }
   };
 
   const submitExternal = (data: { name: string; nodeType: string; note?: string }) => {
@@ -284,7 +301,7 @@ export function ServiceTopologyPage() {
                 </span>
               )}
               {editMode && (
-                <span className="inline-flex items-center gap-1 text-orange-600 dark:text-orange-400">
+                <span role="status" className="inline-flex items-center gap-1 text-orange-600 dark:text-orange-400">
                   <Pencil className="w-3 h-3" /> {linkSourceId ? `시작 노드: ${nodeName(linkSourceId)} → 대상 노드를 클릭` : '연결할 시작 노드를 클릭'}
                 </span>
               )}
@@ -357,8 +374,8 @@ export function ServiceTopologyPage() {
                   edges={graph?.edges ?? []}
                   nodeName={nodeName}
                   onClose={() => setSelectedId(null)}
-                  onDeleteLink={handleDeleteLink}
-                  onDeleteExternal={handleDeleteExternal}
+                  onDeleteLink={requestDeleteLink}
+                  onDeleteExternal={requestDeleteExternal}
                   canOperate={canOperate}
                   withHint={withHint}
                 />
@@ -378,6 +395,17 @@ export function ServiceTopologyPage() {
           onClose={() => setLinkTargetId(null)}
         />
       )}
+      <ConfirmDialog
+        open={pendingDelete !== null}
+        danger
+        title={pendingDelete?.kind === 'external' ? '외부 노드 삭제' : '수동 연계 삭제'}
+        description={pendingDelete?.kind === 'external'
+          ? `외부 노드 "${pendingDelete.node.name}" 를 삭제한다. 되돌릴 수 없다.`
+          : `수동 연계 "${pendingDelete?.label ?? ''}" 를 삭제한다. 되돌릴 수 없다.`}
+        confirmLabel="삭제"
+        onConfirm={confirmDelete}
+        onCancel={() => setPendingDelete(null)}
+      />
       {extOpen && (
         <AddExternalNodeDialog pending={createExt.isPending} onSubmit={submitExternal} onClose={() => setExtOpen(false)} />
       )}

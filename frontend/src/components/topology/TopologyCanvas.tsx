@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Maximize2, ZoomIn, ZoomOut } from 'lucide-react';
 import type { TopoNode, TopoEdge, TopologyTrafficEdge } from '@/types';
 import {
   computeLayout, edgeStyle, kindAccent, statusColor, usageRatio,
@@ -21,6 +22,9 @@ interface Props {
 
 interface ViewState { x: number; y: number; k: number; }
 
+/** 이 거리(px)를 넘기 전의 이동은 클릭의 손떨림으로 보고 드래그/팬으로 취급하지 않는다. */
+const DRAG_THRESHOLD = 5;
+
 export function TopologyCanvas({
   graph, trafficEdges = [], showTraffic, selectedId, onSelectNode, editMode, linkSourceId,
 }: Props) {
@@ -29,6 +33,9 @@ export function TopologyCanvas({
   const [drag, setDrag] = useState<{ id: string | null; startX: number; startY: number; origX: number; origY: number } | null>(null);
   const [override, setOverride] = useState<Record<string, LayoutPos>>({});
   const panning = useRef<{ x: number; y: number; vx: number; vy: number } | null>(null);
+  // 마우스를 누른 뒤 임계값 넘게 움직였는지 — 드래그 직후 발화하는 click 을 무시하는 데 쓴다(D-091).
+  const moved = useRef(false);
+  const [focusId, setFocusId] = useState<string | null>(null);
 
   const baseLayout = useMemo(() => computeLayout(graph.nodes, graph.edges), [graph]);
   const layout = useMemo(() => ({ ...baseLayout.pos, ...override }), [baseLayout, override]);
@@ -51,31 +58,59 @@ export function TopologyCanvas({
 
   const onBgDown = (e: React.MouseEvent) => {
     if (e.button !== 0) return;
+    moved.current = false;
     panning.current = { x: e.clientX, y: e.clientY, vx: view.x, vy: view.y };
   };
   const onMove = (e: React.MouseEvent) => {
     if (drag) {
-      const dx = (e.clientX - drag.startX) / view.k;
-      const dy = (e.clientY - drag.startY) / view.k;
-      if (drag.id) setOverride((o) => ({ ...o, [drag.id!]: { x: drag.origX + dx, y: drag.origY + dy } }));
+      const rawDx = e.clientX - drag.startX;
+      const rawDy = e.clientY - drag.startY;
+      if (!moved.current && Math.hypot(rawDx, rawDy) <= DRAG_THRESHOLD) return;
+      moved.current = true;
+      if (drag.id) setOverride((o) => ({ ...o, [drag.id!]: { x: drag.origX + rawDx / view.k, y: drag.origY + rawDy / view.k } }));
       return;
     }
     if (panning.current) {
-      setView((v) => ({ ...v, x: panning.current!.vx + (e.clientX - panning.current!.x), y: panning.current!.vy + (e.clientY - panning.current!.y) }));
+      const p = panning.current;
+      if (!moved.current && Math.hypot(e.clientX - p.x, e.clientY - p.y) <= DRAG_THRESHOLD) return;
+      moved.current = true;
+      setView((v) => ({ ...v, x: p.vx + (e.clientX - p.x), y: p.vy + (e.clientY - p.y) }));
     }
   };
   const onUp = () => { panning.current = null; setDrag(null); };
 
   const onNodeDown = (e: React.MouseEvent, id: string) => {
     e.stopPropagation();
+    if (e.button !== 0) return;
     const p = layout[id];
     if (!p) return;
+    moved.current = false;
     setDrag({ id, startX: e.clientX, startY: e.clientY, origX: p.x, origY: p.y });
   };
   const onNodeClick = (e: React.MouseEvent, id: string) => {
     e.stopPropagation();
+    // 노드를 끌어 옮긴 뒤 손을 떼면 click 이 따라 발화한다 — 링크 편집 모드에서 시작 노드로 잘못 잡히던 버그.
+    if (moved.current) { moved.current = false; return; }
     onSelectNode(id);
   };
+  const onBgClick = () => {
+    // 배경을 끌어 팬한 뒤 손을 뗀 click 은 선택 해제로 보지 않는다.
+    if (moved.current) { moved.current = false; return; }
+    if (!editMode) onSelectNode(null);
+  };
+  const onNodeKeyDown = (e: React.KeyboardEvent, id: string) => {
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      e.stopPropagation();
+      onSelectNode(id);
+    }
+  };
+  const onSvgKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Escape' && !editMode) onSelectNode(null);
+  };
+
+  const zoomBy = (factor: number) =>
+    setView((v) => ({ ...v, k: Math.max(0.2, Math.min(2.5, v.k * factor)) }));
 
   const bezier = (a: LayoutPos, b: LayoutPos): string => {
     const mx = (a.x + b.x) / 2;
@@ -88,8 +123,11 @@ export function TopologyCanvas({
   );
 
   return (
+    <div className="relative w-full h-full">
     <svg
       ref={svgRef}
+      role="group"
+      aria-label={`서비스 토폴로지 그래프 — 노드 ${graph.nodes.length}개, 연결 ${graph.edges.length}개. Tab 으로 노드를 이동하고 Enter 로 선택한다.`}
       className="w-full h-full select-none touch-none"
       style={{ cursor: panning.current ? 'grabbing' : 'default', background: 'transparent' }}
       onWheel={onWheel}
@@ -97,7 +135,8 @@ export function TopologyCanvas({
       onMouseMove={onMove}
       onMouseUp={onUp}
       onMouseLeave={onUp}
-      onClick={() => !editMode && onSelectNode(null)}
+      onClick={onBgClick}
+      onKeyDown={onSvgKeyDown}
     >
       <defs>
         <marker id="topo-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
@@ -172,8 +211,19 @@ export function TopologyCanvas({
               transform={`translate(${p.x},${p.y})`}
               onMouseDown={(e) => onNodeDown(e, n.id)}
               onClick={(e) => onNodeClick(e, n.id)}
-              style={{ cursor: 'pointer' }}
+              onKeyDown={(e) => onNodeKeyDown(e, n.id)}
+              onFocus={() => setFocusId(n.id)}
+              onBlur={() => setFocusId((cur) => (cur === n.id ? null : cur))}
+              role="button"
+              tabIndex={0}
+              aria-pressed={isSel || isLinkSrc}
+              aria-label={nodeAriaLabel(n, isLinkSrc, editMode)}
+              style={{ cursor: 'pointer', outline: 'none' }}
             >
+              {focusId === n.id && (
+                <rect x={-3} y={-3} width={NODE_W + 6} height={NODE_H + 6} rx={12}
+                  fill="none" stroke="hsl(var(--ring))" strokeWidth={2} />
+              )}
               <rect
                 width={NODE_W} height={NODE_H} rx={10}
                 fill="hsl(var(--card))"
@@ -227,21 +277,39 @@ export function TopologyCanvas({
         })}
       </g>
 
-      {/* zoom 컨트롤 */}
-      <g transform="translate(12,12)" className="pointer-events-auto">
-        <ZoomBtn y={0} label="+" onClick={() => setView((v) => ({ ...v, k: Math.min(2.5, v.k * 1.2) }))} />
-        <ZoomBtn y={28} label="−" onClick={() => setView((v) => ({ ...v, k: Math.max(0.2, v.k / 1.2) }))} />
-        <ZoomBtn y={56} label="⟲" onClick={() => setView({ x: 60, y: 40, k: 1 })} />
-      </g>
     </svg>
+
+      {/* zoom 컨트롤 — SVG <g onClick> 은 키보드·스크린리더로 못 쓰므로 실제 button 으로 둔다(D-092) */}
+      <div className="absolute top-3 left-3 flex flex-col gap-1.5">
+        <ZoomBtn label="확대" onClick={() => zoomBy(1.2)}><ZoomIn className="w-4 h-4" /></ZoomBtn>
+        <ZoomBtn label="축소" onClick={() => zoomBy(1 / 1.2)}><ZoomOut className="w-4 h-4" /></ZoomBtn>
+        <ZoomBtn label="보기 초기화" onClick={() => setView({ x: 60, y: 40, k: 1 })}><Maximize2 className="w-4 h-4" /></ZoomBtn>
+      </div>
+    </div>
   );
 }
 
-function ZoomBtn({ y, label, onClick }: { y: number; label: string; onClick: () => void }) {
+
+function ZoomBtn({ label, onClick, children }: { label: string; onClick: () => void; children: React.ReactNode }) {
   return (
-    <g transform={`translate(0,${y})`} onClick={(e) => { e.stopPropagation(); onClick(); }} style={{ cursor: 'pointer' }}>
-      <rect width={24} height={24} rx={6} fill="hsl(var(--card))" stroke="hsl(var(--border))" />
-      <text x={12} y={16} fontSize={14} textAnchor="middle" fill="hsl(var(--foreground))">{label}</text>
-    </g>
+    <button
+      type="button"
+      onClick={onClick}
+      title={label}
+      aria-label={label}
+      className="w-8 h-8 inline-flex items-center justify-center rounded-xl border border-border bg-card text-foreground hover:bg-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+    >
+      {children}
+    </button>
   );
+}
+
+/** 스크린리더용 노드 설명 — kind·이름·네임스페이스·상태. */
+function nodeAriaLabel(n: TopoNode, isLinkSrc: boolean, editMode: boolean): string {
+  const parts = [`${n.kind} ${n.name}`, n.namespace ? `네임스페이스 ${n.namespace}` : '', `상태 ${n.status}`];
+  if (n.podCount > 0) parts.push(`Pod ${n.readyCount}/${n.podCount}`);
+  if (n.ghost) parts.push('존재하지 않는 참조');
+  if (isLinkSrc) parts.push('링크 시작 노드');
+  else if (editMode) parts.push('Enter 로 링크 양끝으로 선택');
+  return parts.filter(Boolean).join(', ');
 }
