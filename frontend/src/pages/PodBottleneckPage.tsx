@@ -1,14 +1,16 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { Activity, Play, AlertCircle, ListTree, Loader2 } from 'lucide-react';
-import { ClusterSidebar, NamespaceSingleSelect, PodSingleSelect } from '@/components/common';
+import { Activity, Play, AlertCircle, ListTree, Loader2, ExternalLink } from 'lucide-react';
+import { ClusterSidebar, NamespaceSingleSelect, PodSingleSelect, RunLogPanel } from '@/components/common';
 import { MacCard } from '@/components/ui/MacCard';
 import { useClusters } from '@/hooks/useCluster';
 import { useCanOperate } from '@/hooks/useCanOperate';
-import {
-  useBottleneckRunsPaged,
-  useRunBottleneckAnalysis,
-} from '@/hooks/usePodBottleneck';
+import { useBottleneckRunsPaged } from '@/hooks/usePodBottleneck';
+import { useRunLog, toRunLogLevel } from '@/hooks/useRunLog';
+import { useLogPref } from '@/hooks/useLogPref';
+import { postSse } from '@/lib/sse';
+import { podBottleneckStreamUrl } from '@/services/api';
 import type { BottleneckRun, BottleneckStatus } from '@/types';
 import { formatApiError, parseUTC } from '@/lib/utils';
 
@@ -60,7 +62,14 @@ export function PodBottleneckPage() {
     setSubmitError(null);
   };
 
-  const runMutation = useRunBottleneckAnalysis();
+  const qc = useQueryClient();
+  // D-089 — "지금 진단" 은 SSE 로 probe 가 끝나는 순서대로 단계·로그를 받는다.
+  const runLog = useRunLog();
+  const [showLog, setShowLog] = useLogPref('pod-bottleneck');
+  const [lastRunId, setLastRunId] = useState<string | null>(null);
+  const abortRef = useRef<AbortController | null>(null);
+  // 화면을 떠나면 진행 중 스트림을 끊는다(연결이 끊기면 서버도 그 진단을 중단해 저장하지 않는다).
+  useEffect(() => () => abortRef.current?.abort(), []);
   const { canOperate, withHint } = useCanOperate(selectedClusterId);
 
   const {
@@ -80,20 +89,54 @@ export function PodBottleneckPage() {
     if (!namespace.trim()) { setSubmitError('namespace 를 입력하세요.'); return; }
     if (!sourcePod.trim()) { setSubmitError('source pod 를 입력하세요.'); return; }
     if (!destPod.trim()) { setSubmitError('dest pod 를 입력하세요.'); return; }
+    abortRef.current?.abort();
+    const ac = new AbortController();
+    abortRef.current = ac;
+    setLastRunId(null);
+    runLog.begin('병목 진단', '진단 요청 전송');
+    // 콜백 안에서 채우므로 객체로 둔다(let 은 TS 가 null 로 좁혀 버린다).
+    const out: { runId: string | null; error: string | null } = { runId: null, error: null };
     try {
-      const { data } = await runMutation.mutateAsync({
-        clusterId: selectedClusterId,
-        namespace: namespace.trim(),
-        sourcePod: sourcePod.trim(),
-        destPod: destPod.trim(),
-        destService: destService.trim() || null,
-      });
-      navigate(`/pod-bottleneck/${data.id}`);
+      await postSse(
+        podBottleneckStreamUrl,
+        {
+          cluster_id: selectedClusterId,
+          namespace: namespace.trim(),
+          source_pod: sourcePod.trim(),
+          dest_pod: destPod.trim(),
+          dest_service: destService.trim() || null,
+        },
+        (evt) => {
+          if (evt.type === 'log') runLog.log(toRunLogLevel(evt.level), String(evt.message ?? ''));
+          else if (evt.type === 'step') {
+            const st = evt.status === 'failed' ? 'failed' : evt.status === 'done' ? 'done' : 'running';
+            runLog.setStep(String(evt.name ?? ''), String(evt.label ?? evt.name ?? ''), st);
+          } else if (evt.type === 'result') out.runId = String(evt.run_id ?? '') || null;
+          else if (evt.type === 'error') out.error = String(evt.message ?? '진단 실패');
+        },
+        ac.signal,
+      );
     } catch (e) {
-      // axios 기본 메시지("Request failed with status code 403")가 아니라 서버 detail 을 보여준다(D-093)
-      setSubmitError(formatApiError(e, '진단 실패'));
+      if (!ac.signal.aborted) out.error = e instanceof Error ? e.message : String(e);
+    } finally {
+      runLog.end();
+      abortRef.current = null;
+    }
+    if (out.error) {
+      runLog.log('error', out.error);
+      setSubmitError(out.error);
+      return;
+    }
+    void qc.invalidateQueries({ queryKey: ['bottleneckRuns'] });
+    const runId = out.runId;
+    if (runId) {
+      setLastRunId(runId);
+      // 로그를 접어 둔 사용자는 예전처럼 곧바로 결과 상세로 간다. 펼쳐 둔 사용자는 로그를 보고 직접 이동.
+      if (!showLog) navigate(`/pod-bottleneck/${runId}`);
     }
   };
+
+  const running = runLog.running;
 
   return (
     <div className="app-min-h-screen bg-background">
@@ -148,13 +191,13 @@ export function PodBottleneckPage() {
                 <button
                   type="button"
                   onClick={handleRun}
-                  disabled={!selectedClusterId || runMutation.isPending || !canOperate}
+                  disabled={!selectedClusterId || running || !canOperate}
                   title={withHint('병목 진단 실행')}
                   aria-label={withHint('병목 진단 실행')}
                   className="w-full inline-flex items-center justify-center gap-1.5 rounded-xl bg-primary text-primary-foreground px-3 py-2 text-sm font-semibold hover:opacity-90 disabled:opacity-50"
                 >
                   <Play className="w-4 h-4" />
-                  {runMutation.isPending ? '진단 중…' : '지금 진단'}
+                  {running ? '진단 중…' : '지금 진단'}
                 </button>
               </div>
             </div>
@@ -166,6 +209,22 @@ export function PodBottleneckPage() {
             {!selectedClusterId && (
               <p className="mt-3 text-sm text-muted-foreground">좌측 사이드바에서 클러스터를 먼저 선택하세요.</p>
             )}
+            <div className="mt-3">
+              <RunLogPanel
+                run={runLog}
+                show={showLog}
+                onShowChange={setShowLog}
+                actions={lastRunId && !running ? (
+                  <button
+                    type="button"
+                    onClick={() => navigate(`/pod-bottleneck/${lastRunId}`)}
+                    className="text-xs inline-flex items-center gap-1 px-2 py-1 rounded-xl border border-border bg-background hover:bg-secondary"
+                  >
+                    <ExternalLink className="w-3.5 h-3.5" /> 결과 상세 보기
+                  </button>
+                ) : null}
+              />
+            </div>
           </MacCard>
 
           {/* 최근 진단 결과 */}

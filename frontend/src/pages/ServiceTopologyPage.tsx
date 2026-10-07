@@ -8,7 +8,7 @@ import { useClusters } from '@/hooks/useCluster';
 import { useCanOperate } from '@/hooks/useCanOperate';
 import { analyzeApi } from '@/services/api';
 import {
-  ClusterSidebar, ConfirmDialog, DebugLogPanel, NamespaceSingleSelect, SnapshotProgressCard, useToast,
+  ClusterSidebar, ConfirmDialog, DebugLogPanel, NamespaceSingleSelect, RunLogPanel, SnapshotProgressCard, useToast,
 } from '@/components/common';
 import { MacCard } from '@/components/ui/MacCard';
 import {
@@ -21,6 +21,8 @@ import {
 } from '@/hooks/useServiceTopology';
 import type { TopoNode } from '@/types';
 import { formatApiError, parseUTC } from '@/lib/utils';
+import { useRunLog } from '@/hooks/useRunLog';
+import { useLogPref } from '@/hooks/useLogPref';
 
 type ViewMode = '2d' | '3d';
 type Scope = 'namespace' | 'cluster';
@@ -89,6 +91,44 @@ export function ServiceTopologyPage() {
   );
   const trafficQuery = useServiceTopologyTraffic(clusterId || null, namespace, showTraffic && !isCluster);
 
+  // D-089 — 실트래픽 수집(켜기·새로고침)마다 요청·결과·엣지 상위 목록을 로그로 남긴다. 펼침은 "로그 보기".
+  const trafficLog = useRunLog();
+  const { begin: tBegin, log: tLog, end: tEnd } = trafficLog;
+  const [showTrafficLog, setShowTrafficLog] = useLogPref('service-topology');
+  const trafficFetching = showTraffic && !isCluster && trafficQuery.isFetching;
+  const prevTrafficFetching = useRef(false);
+  const trafficT0 = useRef(0);
+  useEffect(() => {
+    const was = prevTrafficFetching.current;
+    prevTrafficFetching.current = trafficFetching;
+    if (trafficFetching && !was) {
+      trafficT0.current = performance.now();
+      tBegin('실트래픽 수집', `${namespace} 네임스페이스 flow 수집 요청 (Hubble → conntrack 폴백)`);
+      return;
+    }
+    if (!trafficFetching && was) {
+      const ms = Math.round(performance.now() - trafficT0.current);
+      if (trafficQuery.isError) {
+        tLog('error', `수집 실패 · ${ms}ms — ${formatApiError(trafficQuery.error)}`);
+      } else if (trafficQuery.data) {
+        const d = trafficQuery.data;
+        if (d.status === 'ok') {
+          const dropped = d.edges.filter((e) => e.droppedCount > 0).length;
+          tLog(dropped ? 'warn' : 'info',
+            `수집 완료 · ${ms}ms — 소스 ${d.source ?? '-'} · 엣지 ${d.edges.length}개${dropped ? ` · drop 발생 ${dropped}개` : ''}`);
+          [...d.edges].sort((a, b) => b.flowCount - a.flowCount).slice(0, 10).forEach((e) => {
+            tLog(e.droppedCount > 0 ? 'warn' : 'info',
+              `  ${e.source} → ${e.target}: flow ${e.flowCount}${e.droppedCount > 0 ? ` · drop ${e.droppedCount}` : ''}`);
+          });
+          if (d.edges.length > 10) tLog('info', `  … 외 ${d.edges.length - 10}개`);
+        } else {
+          tLog(d.status === 'error' ? 'error' : 'warn', `수집 ${d.status} · ${ms}ms — ${d.reason ?? '사유 없음'}`);
+        }
+      }
+      tEnd();
+    }
+  }, [trafficFetching, trafficQuery.isError, trafficQuery.error, trafficQuery.data, namespace, tBegin, tLog, tEnd]);
+
   const activeQuery = isCluster ? clusterQuery : graphQuery;
   const clusterData = clusterQuery.data;
   const computing = isCluster && clusterData?.status === 'computing';
@@ -120,6 +160,7 @@ export function ServiceTopologyPage() {
     setLinkTargetId(null);
     setEditMode(false);
     setPendingDelete(null);
+    trafficLog.clear();
   };
 
   const refreshAll = () => {
@@ -334,6 +375,11 @@ export function ServiceTopologyPage() {
                 </span>
               )}
             </div>
+            {showTraffic && !isCluster && (
+              <div className="mt-2">
+                <RunLogPanel run={trafficLog} show={showTrafficLog} onShowChange={setShowTrafficLog} maxHeight="max-h-48" />
+              </div>
+            )}
           </MacCard>
 
           {/* 캔버스 */}

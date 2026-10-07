@@ -15,7 +15,9 @@ import {
   useVerifyInfraNode,
 } from '@/hooks/useInfraNodes';
 import { NodeVerifyModal } from '@/components/infra/NodeVerifyModal';
-import { ClusterSidebar, useModalA11y } from '@/components/common';
+import { ClusterSidebar, RunLogPanel, useModalA11y } from '@/components/common';
+import { useRunLog, type RunLogLevel } from '@/hooks/useRunLog';
+import { useLogPref } from '@/hooks/useLogPref';
 import { MacCard } from '@/components/ui/MacCard';
 import { topologyTraceApi } from '@/services/api';
 import type {
@@ -479,6 +481,13 @@ function DeleteConfirm({ node, onConfirm, onCancel, isPending, error }: DeleteCo
   );
 }
 
+// 검증 결과 상태 → 로그 레벨
+function verifyLevel(status: NodeVerifyResult['status']): RunLogLevel {
+  return status === 'critical' || status === 'error' ? 'error' : status === 'healthy' ? 'info' : 'warn';
+}
+
+const elapsed = (t0: number) => `${Math.round(performance.now() - t0)}ms`;
+
 // ── 메인 페이지 ──────────────────────────────────────────────────────────────
 export function InfraTopologyPage() {
   const { data: clusters = [], isLoading: clustersLoading } = useClusters();
@@ -514,18 +523,38 @@ export function InfraTopologyPage() {
   const deleteNode = useDeleteInfraNode();
   const syncNodes = useSyncInfraNodes();
   const verifyNode = useVerifyInfraNode();
+  // D-089 — 실행 버튼(K8s 동기화·노드 검증·Trace)마다 단계·결과를 시각과 함께 남기고, 펼쳐 볼지는 "로그 보기" 로 정한다.
+  const runLog = useRunLog();
+  const [showLog, setShowLog] = useLogPref('infra-topology');
+
+  function logVerify(r: NodeVerifyResult, prefix = '') {
+    runLog.log(verifyLevel(r.status), `${prefix}${r.hostname}: ${r.status} — ${r.message}`);
+    for (const st of r.steps ?? []) {
+      const lvl: RunLogLevel = st.status === 'failed' ? 'error' : st.status === 'skipped' ? 'warn' : 'info';
+      const dur = st.durationMs != null ? ` · ${st.durationMs}ms` : '';
+      runLog.log(lvl, `${prefix}  - ${st.label}: ${st.status}${dur}${st.detail ? ` — ${st.detail}` : ''}`);
+    }
+  }
 
   async function handleVerify(n: InfraNode) {
     setVerifyResult(null);
     setVerifyOpen(true);
+    const t0 = performance.now();
+    runLog.begin('노드 검증', `${n.hostname} 검증 요청 (SSH/API 점검)`);
     try {
       const res = await verifyNode.mutateAsync(n.id);
       setVerifyResult(res);
+      logVerify(res);
+      runLog.log(res.ok ? 'info' : 'warn', `검증 ${res.ok ? '통과' : '미통과'} · ${elapsed(t0)}`);
     } catch (e) {
+      const msg = extractError(e);
       setVerifyResult({
         hostname: n.hostname, status: 'error', ok: false,
-        message: extractError(e), details: {},
+        message: msg, details: {},
       });
+      runLog.log('error', `검증 실패 · ${elapsed(t0)} — ${msg}`);
+    } finally {
+      runLog.end();
     }
   }
 
@@ -592,6 +621,7 @@ export function InfraTopologyPage() {
     setTraceError('');
     setTraceNamespace('default');
     setTraceTargetName('');
+    runLog.clear();
   }
 
   async function handleSync() {
@@ -600,6 +630,8 @@ export function InfraTopologyPage() {
     setSyncError('');
     setSyncSummary(null);
     setSyncResult(null);
+    const t0 = performance.now();
+    runLog.begin('K8s 동기화', `${activeCluster?.name ?? requestedFor} — kubectl get nodes 로 노드 정보 수집 요청`);
     try {
       const res = await syncNodes.mutateAsync(activeClusterId);
       if (activeClusterRef.current !== requestedFor) return;
@@ -607,9 +639,19 @@ export function InfraTopologyPage() {
       setSyncResult(res);
       // 신규 노드 자동 검증 결과(있으면) 요약 배너로 노출
       setSyncSummary(res.verifications && res.verifications.length ? res.verifications : null);
+      runLog.log(res.failed > 0 ? 'warn' : 'info',
+        `수집 완료 · ${elapsed(t0)} — 총 ${res.total} · 생성 ${res.created} · 갱신 ${res.updated} · 실패 ${res.failed}`
+        + (res.retryCount ? ` · kubectl 재시도 ${res.retryCount}회` : ''));
+      for (const err of res.errors ?? []) runLog.log('error', `오류: ${err}`);
+      for (const v of res.verifications ?? []) logVerify(v, '[신규 노드 검증] ');
+      if (res.verifiedTruncated) runLog.log('warn', '신규 노드가 많아 일부만 자동 검증했다 — 나머지는 노드 카드의 검증 버튼으로 실행');
     } catch (e) {
       if (activeClusterRef.current !== requestedFor) return;
-      setSyncError(extractError(e));
+      const msg = extractError(e);
+      setSyncError(msg);
+      runLog.log('error', `동기화 실패 · ${elapsed(t0)} — ${msg}`);
+    } finally {
+      runLog.end();
     }
   }
 
@@ -630,6 +672,8 @@ export function InfraTopologyPage() {
     const requestedFor = activeClusterId;
     setTraceError('');
     setTraceLoading(true);
+    const t0 = performance.now();
+    runLog.begin('Trace', `${traceNamespace.trim()}/${traceTargetType} ${traceTargetName.trim()} → 스위치 경로 추적 요청`);
     try {
       const res = await topologyTraceApi.trace({
         clusterId: activeClusterId,
@@ -639,12 +683,25 @@ export function InfraTopologyPage() {
       });
       if (activeClusterRef.current !== requestedFor) return;
       setTraceResult(res.data);
+      const hops = res.data.hops ?? [];
+      runLog.log(hops.length ? 'info' : 'warn', `추적 완료 · ${elapsed(t0)} — hop ${hops.length}개`);
+      hops.forEach((h, i) => {
+        const extra = [
+          h.interface ? `if ${h.interface}` : '',
+          h.latencyMs != null ? `${h.latencyMs}ms` : '',
+          h.errorCount ? `errors ${h.errorCount}` : '',
+        ].filter(Boolean).join(' · ');
+        runLog.log(h.errorCount ? 'warn' : 'info', `  #${i + 1} ${h.entityType} ${h.name}${extra ? ` (${extra})` : ''}`);
+      });
     } catch (e) {
       if (activeClusterRef.current !== requestedFor) return;
+      const msg = extractError(e);
       setTraceResult(null);
-      setTraceError(extractError(e));
+      setTraceError(msg);
+      runLog.log('error', `추적 실패 · ${elapsed(t0)} — ${msg}`);
     } finally {
       setTraceLoading(false);
+      runLog.end();
     }
   }
 
@@ -692,6 +749,10 @@ export function InfraTopologyPage() {
               노드 추가
             </button>
           </div>
+        </div>
+
+        <div className="mb-4 empty:mb-0">
+          <RunLogPanel run={runLog} show={showLog} onShowChange={setShowLog} />
         </div>
 
         {clustersLoading ? (

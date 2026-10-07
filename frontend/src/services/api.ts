@@ -1969,6 +1969,9 @@ import type {
   BottleneckProbeCatalogEntry as _BottleneckProbeCatalogEntry,
 } from '@/types';
 
+/** 병목 진단 실행(SSE) — fetch+reader 로 소비(`lib/sse.ts` postSse). 본문은 snake_case. */
+export const podBottleneckStreamUrl = '/api/v1/pod-bottleneck/run/stream';
+
 export const podBottleneckApi = {
   listProbes: () => api.get<_BottleneckProbeCatalogEntry[]>('/pod-bottleneck/probes'),
   listRuns: (params?: {

@@ -6,6 +6,7 @@ export { CitationList } from './CitationList';
 export { IncidentAnalysisPanel } from './IncidentAnalysisPanel';
 export { useModalA11y } from './useModalA11y';
 export { LogViewer } from './LogViewer';
+export { RunLogPanel } from './RunLogPanel';
 export { ExecOutputTabs } from './ExecOutputTabs';
 export { CommandTraceList } from './CommandTraceList';
 export { ClusterSidebar } from './ClusterSidebar';

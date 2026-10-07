@@ -690,6 +690,28 @@ const { canOperate, withHint } = useCanOperate();
   `canOperate=false` + "이 클러스터에 실행 권한이 없습니다 (테넌트 바인딩)" 사유가 붙는다. 바인딩 없는
   클러스터·응답 로딩 중에는 막지 않는다(서버가 최종 판정). 인자 없이 부르면 기존처럼 역할만 본다.
 
+### 12.9.1 실행 버튼의 실시간 로그 — `RunLogPanel` + `useRunLog` + `useLogPref` (D-089)
+
+CLAUDE.md 사용자 규칙("모든 실행 버튼에는 상세·실시간 로그 + 사용자가 '로그 보기' 를 정할 수 있어야")을 신규
+화면에서 같은 부품으로 지키기 위한 표준이다. 도메인 전용 패널(`EfficiencyRunLog`, `ProvisionConsole`)이 이미 있는
+화면은 그대로 두고, 새로 붙이는 실행 버튼은 이걸 쓴다.
+
+```tsx
+const runLog = useRunLog();                        // 로그는 항상 수집
+const [showLog, setShowLog] = useLogPref('page-key'); // 펼침 여부는 화면별 localStorage
+// 단건 요청형: 요청 시작·응답 요약·오류를 직접 남긴다
+runLog.begin('K8s 동기화', '요청 전송'); … runLog.log('info', '생성 3 · 갱신 2'); … runLog.end();
+// 서버 스트리밍형: postSse(url, snakeBody, onEvent) 로 log/step/result/error 이벤트를 그대로 쌓는다
+<RunLogPanel run={runLog} show={showLog} onShowChange={setShowLog} actions={…} />
+```
+
+- 수 초 이상 걸리고 서버 안에서 단계가 나뉘는 실행은 **SSE 엔드포인트**(`…/stream`, `text/event-stream`,
+  snake_case 원문 JSON, 이벤트 `log{level,ts,message}`·`step{name,label,status}`·`result`·`error`)를 만들고
+  `lib/sse.ts` `postSse` 로 소비한다. 검증 실패(403/404/422)는 스트림 시작 전에 일반 HTTP 오류로 응답한다.
+  FastAPI 0.106+ 는 yield 의존성(`get_db`)을 스트리밍 전에 정리하므로 스트림 안에서는 `SessionLocal()` 을 따로 연다.
+- 패널은 실행 전에는 렌더되지 않고(null), 로그를 접어 두면 마지막 한 줄만 보인다. 레퍼런스:
+  `/pod-bottleneck`(SSE), `/infra-topology`(동기화·검증·Trace), `/service-topology`(실트래픽).
+
 ### 12.10 지원 뷰포트 (D-076)
 
 PEP 는 운영자용 내부 콘솔이라 모바일 전용 레이아웃을 만들지 않는다 — 대신 창 폭 기준으로
