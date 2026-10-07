@@ -1,15 +1,10 @@
 import { useState } from 'react';
-import { CheckCircle, AlertTriangle, XCircle, WifiOff, ChevronRight, Copy } from 'lucide-react';
+import { ChevronRight } from 'lucide-react';
 import { MacCard } from '@/components/ui/MacCard';
+import { LogViewer } from '@/components/common';
 import { ProbeAxisBadge } from './ProbeAxisBadge';
-import type { BottleneckStatus, ProbeResultOut } from '@/types';
-
-const STATUS_META: Record<BottleneckStatus, { label: string; cls: string; icon: typeof CheckCircle }> = {
-  healthy:  { label: '정상',  cls: 'text-status-healthy', icon: CheckCircle },
-  warning:  { label: '경고',  cls: 'text-status-warning',   icon: AlertTriangle },
-  critical: { label: '위험',  cls: 'text-status-critical',     icon: XCircle },
-  pending:  { label: '미연결', cls: 'text-slate-400',   icon: WifiOff },
-};
+import { BOTTLENECK_STATUS_META as STATUS_META } from './statusMeta';
+import type { ProbeResultOut } from '@/types';
 
 interface ProbeResultCardProps {
   probeKey: string;
@@ -46,23 +41,11 @@ export function ProbeResultCard({ probeKey, label, axis, result }: ProbeResultCa
 
         {result.manualFallback && (
           <div className="text-sm rounded-md border border-status-warning/40 bg-status-warning/5 p-3 space-y-2">
-            <div className="flex items-center justify-between">
-              <span className="text-xs font-semibold uppercase tracking-wider text-status-warning">
-                Manual command 안내
-              </span>
-              <button
-                type="button"
-                onClick={() => navigator.clipboard?.writeText(result.manualFallback!.command)}
-                aria-label="명령 복사"
-                className="inline-flex items-center gap-1 text-xs hover:text-foreground text-muted-foreground"
-              >
-                <Copy className="w-3 h-3" />
-                복사
-              </button>
-            </div>
-            <pre className="font-mono text-xs bg-card border border-border rounded p-2 overflow-x-auto whitespace-pre-wrap break-all">
-              {result.manualFallback.command}
-            </pre>
+            <span className="text-xs font-semibold uppercase tracking-wider text-status-warning">
+              Manual command 안내
+            </span>
+            {/* LogViewer 툴바의 복사 버튼이 "복사됨" 피드백을 준다(D-098) */}
+            <LogViewer text={result.manualFallback.command} maxHeight="max-h-40" />
             <p className="text-xs text-muted-foreground italic">이유: {result.manualFallback.reason}</p>
           </div>
         )}
@@ -79,9 +62,7 @@ export function ProbeResultCard({ probeKey, label, axis, result }: ProbeResultCa
           </button>
         )}
         {expanded && (
-          <pre className="text-xs font-mono bg-muted rounded p-2 overflow-x-auto max-h-64">
-            {JSON.stringify(result.details, null, 2)}
-          </pre>
+          <LogViewer text={JSON.stringify(result.details, null, 2)} maxHeight="max-h-64" />
         )}
       </div>
     </MacCard>

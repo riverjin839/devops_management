@@ -2,9 +2,10 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Maximize2, ZoomIn, ZoomOut } from 'lucide-react';
 import type { TopoNode, TopoEdge, TopologyTrafficEdge } from '@/types';
 import {
-  computeLayout, edgeStyle, kindAccent, statusColor, usageRatio,
+  computeLayout, edgeStyleToken, kindAccent, statusColor, statusGlyph, usageRatio,
   KIND_ABBR, NODE_W, NODE_H, type LayoutPos,
 } from './topologyShared';
+import { usePrefersReducedMotion } from '@/hooks/usePrefersReducedMotion';
 
 /** namespace 단위 그래프와 cluster 전체 그래프 모두 받도록 구조적 타입. */
 type TopoGraphLike = { nodes: TopoNode[]; edges: TopoEdge[]; generatedAt: string };
@@ -36,6 +37,9 @@ export function TopologyCanvas({
   // 마우스를 누른 뒤 임계값 넘게 움직였는지 — 드래그 직후 발화하는 click 을 무시하는 데 쓴다(D-091).
   const moved = useRef(false);
   const [focusId, setFocusId] = useState<string | null>(null);
+  // ref 만으로는 재렌더가 없어 grabbing 커서가 바뀌지 않았다(D-097) — 커서용 상태를 따로 둔다.
+  const [isPanning, setIsPanning] = useState(false);
+  const reducedMotion = usePrefersReducedMotion();
 
   const baseLayout = useMemo(() => computeLayout(graph.nodes, graph.edges), [graph]);
   const layout = useMemo(() => ({ ...baseLayout.pos, ...override }), [baseLayout, override]);
@@ -67,6 +71,7 @@ export function TopologyCanvas({
     if (e.button !== 0) return;
     moved.current = false;
     panning.current = { x: e.clientX, y: e.clientY, vx: view.x, vy: view.y };
+    setIsPanning(true);
   };
   const onMove = (e: React.MouseEvent) => {
     if (drag) {
@@ -84,7 +89,7 @@ export function TopologyCanvas({
       setView((v) => ({ ...v, x: p.vx + (e.clientX - p.x), y: p.vy + (e.clientY - p.y) }));
     }
   };
-  const onUp = () => { panning.current = null; setDrag(null); };
+  const onUp = () => { panning.current = null; setDrag(null); setIsPanning(false); };
 
   const onNodeDown = (e: React.MouseEvent, id: string) => {
     e.stopPropagation();
@@ -135,8 +140,7 @@ export function TopologyCanvas({
       ref={svgRef}
       role="group"
       aria-label={`서비스 토폴로지 그래프 — 노드 ${graph.nodes.length}개, 연결 ${graph.edges.length}개. Tab 으로 노드를 이동하고 Enter 로 선택한다.`}
-      className="w-full h-full select-none touch-none"
-      style={{ cursor: panning.current ? 'grabbing' : 'default', background: 'transparent' }}
+      className={`w-full h-full select-none touch-none bg-transparent ${isPanning ? 'cursor-grabbing' : 'cursor-default'}`}
       onWheel={onWheel}
       onMouseDown={onBgDown}
       onMouseMove={onMove}
@@ -147,7 +151,7 @@ export function TopologyCanvas({
     >
       <defs>
         <marker id="topo-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
-          <path d="M 0 0 L 10 5 L 0 10 z" fill="#94a3b8" />
+          <path d="M 0 0 L 10 5 L 0 10 z" fill="hsl(var(--muted-foreground))" />
         </marker>
       </defs>
       <g transform={`translate(${view.x},${view.y}) scale(${view.k})`}>
@@ -167,7 +171,7 @@ export function TopologyCanvas({
         {graph.edges.map((e) => {
           const a = center(e.source); const b = center(e.target);
           if (!a || !b) return null;
-          const st = edgeStyle(e.type);
+          const st = edgeStyleToken(e.type);
           const active = selectedId && (e.source === selectedId || e.target === selectedId);
           return (
             <path
@@ -187,13 +191,16 @@ export function TopologyCanvas({
         {showTraffic && trafficEdges.map((t, i) => {
           const a = center(t.source); const b = center(t.target);
           if (!a || !b) return null;
-          const st = edgeStyle('traffic', t.droppedCount > 0);
+          const st = edgeStyleToken('traffic', t.droppedCount > 0);
           const w = 1.5 + (t.flowCount / maxFlow) * 4;
           return (
             <g key={`tr-${i}`}>
               <path d={bezier(a, b)} fill="none" stroke={st.stroke} strokeWidth={w}
                 strokeDasharray={st.dash} strokeOpacity={0.85} markerEnd="url(#topo-arrow)">
-                <animate attributeName="stroke-dashoffset" from="20" to="0" dur="0.6s" repeatCount="indefinite" />
+                {/* OS "동작 줄이기" 설정이면 흐름 애니메이션을 끈다(D-096) */}
+                {!reducedMotion && (
+                  <animate attributeName="stroke-dashoffset" from="20" to="0" dur="0.6s" repeatCount="indefinite" />
+                )}
               </path>
               <text x={(a.x + b.x) / 2} y={(a.y + b.y) / 2 - 4} fontSize={9}
                 fill={st.stroke} textAnchor="middle" className="pointer-events-none">
@@ -225,8 +232,9 @@ export function TopologyCanvas({
               tabIndex={0}
               aria-pressed={isSel || isLinkSrc}
               aria-label={nodeAriaLabel(n, isLinkSrc, editMode)}
-              style={{ cursor: 'pointer', outline: 'none' }}
+              className="cursor-pointer outline-none"
             >
+              <title>{n.name}</title>
               {focusId === n.id && (
                 <rect x={-3} y={-3} width={NODE_W + 6} height={NODE_H + 6} rx={12}
                   fill="none" stroke="hsl(var(--ring))" strokeWidth={2} />
@@ -234,7 +242,7 @@ export function TopologyCanvas({
               <rect
                 width={NODE_W} height={NODE_H} rx={10}
                 fill="hsl(var(--card))"
-                stroke={isLinkSrc ? '#f97316' : isSel ? 'hsl(var(--primary))' : accent}
+                stroke={isLinkSrc ? 'hsl(var(--chart-7))' : isSel ? 'hsl(var(--primary))' : accent}
                 strokeWidth={isSel || isLinkSrc ? 2.5 : 1.2}
                 strokeDasharray={n.ghost ? '4 3' : undefined}
                 opacity={n.ghost ? 0.6 : 1}
@@ -243,7 +251,14 @@ export function TopologyCanvas({
               {/* kind 배지 */}
               <text x={12} y={16} fontSize={8} fontWeight={700} fill={accent}>{KIND_ABBR[n.kind] ?? n.kind}</text>
               {/* status dot */}
-              <circle cx={NODE_W - 10} cy={12} r={4} fill={statusColor(n.status)} />
+              {/* 상태는 색 + 글자(!/?/·)로 함께 전달한다(D-096) */}
+              <circle cx={NODE_W - 10} cy={12} r={5} fill={statusColor(n.status)} />
+              {statusGlyph(n.status) && (
+                <text x={NODE_W - 10} y={15} fontSize={8} fontWeight={700} textAnchor="middle"
+                  fill="hsl(var(--background))" className="pointer-events-none">
+                  {statusGlyph(n.status)}
+                </text>
+              )}
               {/* 이름 */}
               <text x={12} y={31} fontSize={11} fontWeight={600} fill="hsl(var(--foreground))">
                 {n.name.length > 18 ? n.name.slice(0, 17) + '…' : n.name}
@@ -267,14 +282,14 @@ export function TopologyCanvas({
                     <>
                       <rect x={NODE_W - 50} y={38} width={38} height={4} rx={2} fill="hsl(var(--secondary))" />
                       <rect x={NODE_W - 50} y={38} width={38 * cpuR} height={4} rx={2}
-                        fill={cpuR > 0.9 ? '#ef4444' : cpuR > 0.7 ? '#f59e0b' : '#10b981'} />
+                        fill={cpuR > 0.9 ? 'hsl(var(--status-critical))' : cpuR > 0.7 ? 'hsl(var(--status-warning))' : 'hsl(var(--status-healthy))'} />
                     </>
                   )}
                   {memR != null && (
                     <>
                       <rect x={NODE_W - 50} y={44} width={38} height={4} rx={2} fill="hsl(var(--secondary))" />
                       <rect x={NODE_W - 50} y={44} width={38 * memR} height={4} rx={2}
-                        fill={memR > 0.9 ? '#ef4444' : memR > 0.7 ? '#f59e0b' : '#06b6d4'} />
+                        fill={memR > 0.9 ? 'hsl(var(--status-critical))' : memR > 0.7 ? 'hsl(var(--status-warning))' : 'hsl(var(--chart-6))'} />
                     </>
                   )}
                 </>

@@ -3,8 +3,8 @@ import type { ComponentType } from 'react';
 
 // axis 별 색상 + 아이콘 매핑 — Design §5.3 PROBE_CATALOG 의 axis 와 일치
 const AXIS_MAP: Record<string, { cls: string; icon: ComponentType<{ className?: string }>; label: string }> = {
-  'L4 state':    { cls: 'bg-blue-500/10 text-blue-500 border-blue-500/30',     icon: Activity, label: 'L4 state' },
-  'L4 counters': { cls: 'bg-violet-500/10 text-violet-500 border-violet-500/30', icon: Gauge,   label: 'L4 counters' },
+  'L4 state':    { cls: 'bg-chart-1/10 text-chart-1 border-chart-1/30', icon: Activity, label: 'L4 state' },
+  'L4 counters': { cls: 'bg-chart-4/10 text-chart-4 border-chart-4/30', icon: Gauge,   label: 'L4 counters' },
   'L7 DNS':      { cls: 'bg-status-healthy/10 text-status-healthy border-status-healthy/30', icon: Globe, label: 'L7 DNS' },
   'K8s control': { cls: 'bg-status-warning/10 text-status-warning border-status-warning/30',   icon: Network, label: 'K8s control' },
 };

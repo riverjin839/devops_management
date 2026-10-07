@@ -32,10 +32,10 @@ import type {
 
 // ── Role 메타 ────────────────────────────────────────────────────────────────
 const ROLE_META: Record<InfraNodeRole, { label: string; color: string; bg: string; dot: string }> = {
-  master:  { label: 'Master',  color: 'text-blue-400',   bg: 'bg-blue-500/10 border-blue-500/30',   dot: 'bg-blue-400'   },
+  master:  { label: 'Master',  color: 'text-chart-1',    bg: 'bg-chart-1/10 border-chart-1/30',     dot: 'bg-chart-1'    },
   worker:  { label: 'Worker',  color: 'text-status-healthy', bg: 'bg-status-healthy/10 border-status-healthy/30', dot: 'bg-status-healthy' },
   storage: { label: 'Storage', color: 'text-status-warning',  bg: 'bg-status-warning/10 border-status-warning/30',  dot: 'bg-status-warning'  },
-  infra:   { label: 'Infra',   color: 'text-purple-400', bg: 'bg-purple-500/10 border-purple-500/30', dot: 'bg-purple-400' },
+  infra:   { label: 'Infra',   color: 'text-chart-4',    bg: 'bg-chart-4/10 border-chart-4/30',     dot: 'bg-chart-4'    },
 };
 
 const ROLES: InfraNodeRole[] = ['master', 'worker', 'storage', 'infra'];
@@ -66,7 +66,7 @@ interface NodeCardProps {
 function NodeCard({ node, onEdit, onDelete, onVerify, canOperate, withHint }: NodeCardProps) {
   const meta = ROLE_META[node.role];
   return (
-    <div className="bg-card border border-border rounded-lg p-3 flex flex-col gap-2 hover:border-primary/40 transition-colors group">
+    <div className="bg-card border border-border rounded-md p-3 flex flex-col gap-2 hover:border-primary/40 transition-colors group">
       {/* 헤더 */}
       <div className="flex items-start justify-between gap-2">
         <div className="flex items-center gap-2 min-w-0">
@@ -81,7 +81,7 @@ function NodeCard({ node, onEdit, onDelete, onVerify, canOperate, withHint }: No
             disabled={!canOperate}
             title={withHint('노드 추가 검증')}
             aria-label={withHint('노드 추가 검증')}
-            className="p-1 rounded hover:bg-status-healthy/10 text-muted-foreground hover:text-status-healthy transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+            className="p-1 rounded-xl hover:bg-status-healthy/10 text-muted-foreground hover:text-status-healthy transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
           >
             <ShieldCheck className="w-3 h-3" />
           </button>
@@ -89,7 +89,7 @@ function NodeCard({ node, onEdit, onDelete, onVerify, canOperate, withHint }: No
             onClick={() => onEdit(node)}
             disabled={!canOperate}
             title={withHint('노드 편집')}
-            className="p-1 rounded hover:bg-muted text-muted-foreground hover:text-foreground transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+            className="p-1 rounded-xl hover:bg-muted text-muted-foreground hover:text-foreground transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
             aria-label={withHint('노드 편집')}
           >
             <Pencil className="w-3 h-3" />
@@ -98,7 +98,7 @@ function NodeCard({ node, onEdit, onDelete, onVerify, canOperate, withHint }: No
             onClick={() => onDelete(node)}
             disabled={!canOperate}
             title={withHint('노드 삭제')}
-            className="p-1 rounded hover:bg-status-critical/10 text-muted-foreground hover:text-status-critical transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+            className="p-1 rounded-xl hover:bg-status-critical/10 text-muted-foreground hover:text-status-critical transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
             aria-label={withHint('노드 삭제')}
           >
             <Trash2 className="w-3 h-3" />
@@ -107,7 +107,7 @@ function NodeCard({ node, onEdit, onDelete, onVerify, canOperate, withHint }: No
       </div>
 
       {/* Role 배지 */}
-      <span className={`inline-flex items-center self-start px-2 py-0.5 rounded text-sm font-medium border ${meta.bg} ${meta.color}`}>
+      <span className={`inline-flex items-center self-start px-2 py-0.5 rounded-md text-sm font-medium border ${meta.bg} ${meta.color}`}>
         {meta.label}
       </span>
 
@@ -153,7 +153,7 @@ function NodeCard({ node, onEdit, onDelete, onVerify, canOperate, withHint }: No
 
       {/* Auto-synced 배지 */}
       {node.autoSynced && (
-        <span className="inline-flex items-center gap-1 self-start px-1.5 py-0.5 rounded text-sm bg-status-info/10 border border-status-info/20 text-status-info">
+        <span className="inline-flex items-center gap-1 self-start px-1.5 py-0.5 rounded-md text-sm bg-status-info/10 border border-status-info/20 text-status-info">
           <RefreshCw className="w-2.5 h-2.5" />K8s 동기화
         </span>
       )}
@@ -260,19 +260,19 @@ function NodeModal({ clusterId, clusterMeta, initial, onClose }: NodeModalProps)
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60">
-      <div ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby={f('title')} className="bg-card border border-border rounded-xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
+      <div ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby={f('title')} className="bg-card border border-border rounded-xl shadow-card w-full max-w-lg max-h-[90vh] overflow-y-auto">
         <div className="flex items-center justify-between p-5 border-b border-border">
           <h2 id={f('title')} className="text-base font-semibold text-foreground">
             {isEdit ? '노드 수정' : '노드 추가'}
           </h2>
-          <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-muted text-muted-foreground" aria-label="닫기">
+          <button type="button" onClick={onClose} className="p-1.5 rounded-xl hover:bg-muted text-muted-foreground" title="닫기" aria-label="닫기">
             <X className="w-4 h-4" />
           </button>
         </div>
 
         <form onSubmit={handleSubmit} className="p-5 flex flex-col gap-4">
           {!isEdit && clusterMeta && (
-            <div className="text-xs text-muted-foreground bg-muted/40 border border-border rounded-lg px-3 py-2">
+            <div className="text-xs text-muted-foreground bg-muted/40 border border-border rounded-md px-3 py-2">
               클러스터 관리정보 기반 자동입력: hostname / first_host / description
             </div>
           )}
@@ -284,7 +284,7 @@ function NodeModal({ clusterId, clusterMeta, initial, onClose }: NodeModalProps)
               value={form.hostname}
               onChange={e => set('hostname', e.target.value)}
               placeholder="node-01"
-              className="w-full bg-background border border-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40"
+              className="w-full bg-background border border-border rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40"
             />
           </div>
 
@@ -296,7 +296,7 @@ function NodeModal({ clusterId, clusterMeta, initial, onClose }: NodeModalProps)
                 id={f('role')}
                 value={form.role}
                 onChange={e => set('role', e.target.value as InfraNodeRole)}
-                className="w-full appearance-none bg-background border border-border rounded-lg px-3 py-2 text-sm pr-8 focus:outline-none focus:ring-2 focus:ring-primary/40"
+                className="w-full appearance-none bg-background border border-border rounded-xl px-3 py-2 text-sm pr-8 focus:outline-none focus:ring-2 focus:ring-primary/40"
               >
                 {ROLES.map(r => (
                   <option key={r} value={r}>{ROLE_META[r].label}</option>
@@ -315,7 +315,7 @@ function NodeModal({ clusterId, clusterMeta, initial, onClose }: NodeModalProps)
                 value={form.rackName ?? ''}
                 onChange={e => set('rackName', e.target.value)}
                 placeholder="Rack-A1"
-                className="w-full bg-background border border-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40"
+                className="w-full bg-background border border-border rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40"
               />
             </div>
             <div>
@@ -325,7 +325,7 @@ function NodeModal({ clusterId, clusterMeta, initial, onClose }: NodeModalProps)
                 value={form.ipAddress ?? ''}
                 onChange={e => set('ipAddress', e.target.value)}
                 placeholder="192.168.1.10"
-                className="w-full bg-background border border-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40"
+                className="w-full bg-background border border-border rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40"
               />
             </div>
           </div>
@@ -340,7 +340,7 @@ function NodeModal({ clusterId, clusterMeta, initial, onClose }: NodeModalProps)
                 value={form.cpuCores ?? ''}
                 onChange={e => set('cpuCores', e.target.value ? Number(e.target.value) : null)}
                 placeholder="32"
-                className="w-full bg-background border border-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40"
+                className="w-full bg-background border border-border rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40"
               />
             </div>
             <div>
@@ -351,7 +351,7 @@ function NodeModal({ clusterId, clusterMeta, initial, onClose }: NodeModalProps)
                 value={form.ramGb ?? ''}
                 onChange={e => set('ramGb', e.target.value ? Number(e.target.value) : null)}
                 placeholder="128"
-                className="w-full bg-background border border-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40"
+                className="w-full bg-background border border-border rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40"
               />
             </div>
             <div>
@@ -362,7 +362,7 @@ function NodeModal({ clusterId, clusterMeta, initial, onClose }: NodeModalProps)
                 value={form.diskGb ?? ''}
                 onChange={e => set('diskGb', e.target.value ? Number(e.target.value) : null)}
                 placeholder="960"
-                className="w-full bg-background border border-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40"
+                className="w-full bg-background border border-border rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40"
               />
             </div>
           </div>
@@ -376,7 +376,7 @@ function NodeModal({ clusterId, clusterMeta, initial, onClose }: NodeModalProps)
                 value={form.switchName ?? ''}
                 onChange={e => set('switchName', e.target.value)}
                 placeholder="SW-Core-01"
-                className="w-full bg-background border border-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40"
+                className="w-full bg-background border border-border rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40"
               />
             </div>
             <div>
@@ -386,7 +386,7 @@ function NodeModal({ clusterId, clusterMeta, initial, onClose }: NodeModalProps)
                 value={form.osInfo ?? ''}
                 onChange={e => set('osInfo', e.target.value)}
                 placeholder="Ubuntu 22.04"
-                className="w-full bg-background border border-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40"
+                className="w-full bg-background border border-border rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40"
               />
             </div>
           </div>
@@ -400,12 +400,12 @@ function NodeModal({ clusterId, clusterMeta, initial, onClose }: NodeModalProps)
               onChange={e => set('notes', e.target.value)}
               rows={2}
               placeholder="참고 사항..."
-              className="w-full bg-background border border-border rounded-lg px-3 py-2 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-primary/40"
+              className="w-full bg-background border border-border rounded-xl px-3 py-2 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-primary/40"
             />
           </div>
 
           {error && (
-            <div className="flex items-center gap-2 text-status-critical text-sm bg-status-critical/10 border border-status-critical/20 rounded-lg px-3 py-2">
+            <div className="flex items-center gap-2 text-status-critical text-sm bg-status-critical/10 border border-status-critical/20 rounded-md px-3 py-2">
               <AlertTriangle className="w-3.5 h-3.5 flex-shrink-0" />{error}
             </div>
           )}
@@ -413,13 +413,13 @@ function NodeModal({ clusterId, clusterMeta, initial, onClose }: NodeModalProps)
           <div className="flex justify-end gap-2 pt-1">
             <button
               type="button" onClick={onClose}
-              className="px-4 py-2 text-sm rounded-lg border border-border hover:bg-muted text-muted-foreground transition-colors"
+              className="px-4 py-2 text-sm rounded-xl border border-border hover:bg-muted text-muted-foreground transition-colors"
             >
               취소
             </button>
             <button
               type="submit" disabled={isPending}
-              className="px-4 py-2 text-sm rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50 transition-colors flex items-center gap-2"
+              className="px-4 py-2 text-sm rounded-xl bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50 transition-colors flex items-center gap-2"
             >
               {isPending && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
               {isEdit ? '저장' : '추가'}
@@ -444,7 +444,7 @@ function DeleteConfirm({ node, onConfirm, onCancel, isPending, error }: DeleteCo
   const dialogRef = useModalA11y(true, onCancel);
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60">
-      <div ref={dialogRef} role="dialog" aria-modal="true" aria-label="노드 삭제 확인" className="bg-card border border-border rounded-xl shadow-2xl w-full max-w-sm p-6 flex flex-col gap-4">
+      <div ref={dialogRef} role="dialog" aria-modal="true" aria-label="노드 삭제 확인" className="bg-card border border-border rounded-xl shadow-card w-full max-w-sm p-6 flex flex-col gap-4">
         <div className="flex items-center gap-3">
           <div className="p-2 rounded-full bg-status-critical/10">
             <AlertTriangle className="w-5 h-5 text-status-critical" />
@@ -464,13 +464,13 @@ function DeleteConfirm({ node, onConfirm, onCancel, isPending, error }: DeleteCo
         <div className="flex justify-end gap-2">
           <button
             onClick={onCancel}
-            className="px-4 py-2 text-sm rounded-lg border border-border hover:bg-muted text-muted-foreground"
+            className="px-4 py-2 text-sm rounded-xl border border-border hover:bg-muted text-muted-foreground"
           >
             취소
           </button>
           <button
             onClick={onConfirm} disabled={isPending}
-            className="px-4 py-2 text-sm rounded-lg bg-status-critical hover:bg-status-critical text-white disabled:opacity-50 flex items-center gap-2"
+            className="px-4 py-2 text-sm rounded-xl bg-status-critical hover:bg-status-critical/90 text-white disabled:opacity-50 flex items-center gap-2"
           >
             {isPending && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
             삭제
@@ -720,7 +720,7 @@ export function InfraTopologyPage() {
         {/* 헤더 */}
         <div className="flex items-center justify-between gap-4 mb-6">
           <div className="flex items-center gap-3">
-            <div className="p-2 rounded-lg bg-primary/10">
+            <div className="p-2 rounded-md bg-primary/10">
               <Network className="w-5 h-5 text-primary" />
             </div>
             <div>
@@ -734,7 +734,7 @@ export function InfraTopologyPage() {
               onClick={handleSync}
               disabled={!activeClusterId || syncNodes.isPending || !canOperate}
               title={withHint('K8s 노드 정보를 동기화')}
-              className="flex items-center gap-2 px-3 py-1.5 text-sm rounded-lg border border-border hover:bg-muted text-muted-foreground disabled:opacity-50 transition-colors"
+              className="flex items-center gap-2 px-3 py-1.5 text-sm rounded-xl border border-border hover:bg-muted text-muted-foreground disabled:opacity-50 transition-colors"
             >
               <RefreshCw className={`w-3.5 h-3.5 ${syncNodes.isPending ? 'animate-spin' : ''}`} />
               K8s 동기화
@@ -743,7 +743,7 @@ export function InfraTopologyPage() {
               onClick={() => { setEditTarget(null); setModalOpen(true); }}
               disabled={!activeClusterId || !canOperate}
               title={withHint('노드 추가')}
-              className="flex items-center gap-2 px-3 py-1.5 text-sm rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50 transition-colors"
+              className="flex items-center gap-2 px-3 py-1.5 text-sm rounded-xl bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50 transition-colors"
             >
               <Plus className="w-3.5 h-3.5" />
               노드 추가
@@ -769,9 +769,9 @@ export function InfraTopologyPage() {
 
             {/* 동기화 오류 */}
             {syncError && (
-              <div className="flex items-center gap-2 text-status-critical text-sm bg-status-critical/10 border border-status-critical/20 rounded-lg px-3 py-2 mb-4">
+              <div className="flex items-center gap-2 text-status-critical text-sm bg-status-critical/10 border border-status-critical/20 rounded-md px-3 py-2 mb-4">
                 <AlertTriangle className="w-3.5 h-3.5 flex-shrink-0" />{syncError}
-                <button onClick={() => setSyncError('')} className="ml-auto" aria-label="오류 메시지 닫기"><X className="w-3 h-3" /></button>
+                <button type="button" onClick={() => setSyncError('')} className="ml-auto" title="오류 메시지 닫기" aria-label="오류 메시지 닫기"><X className="w-3 h-3" /></button>
               </div>
             )}
 
@@ -808,7 +808,7 @@ export function InfraTopologyPage() {
 
             {/* sync 직후 신규 노드 검증 요약 */}
             {syncSummary && (
-              <div className="flex items-center gap-2 text-sm bg-card border border-border rounded-lg px-3 py-2 mb-4">
+              <div className="flex items-center gap-2 text-sm bg-card border border-border rounded-md px-3 py-2 mb-4">
                 <ShieldCheck className="w-3.5 h-3.5 flex-shrink-0 text-status-healthy" />
                 <span>
                   신규 노드 {syncSummary.length}개 검증 — 정상 {syncSummary.filter(v => v.ok).length},{' '}
@@ -818,7 +818,7 @@ export function InfraTopologyPage() {
                   <button
                     key={v.hostname}
                     onClick={() => { setVerifyResult(v); setVerifyOpen(true); }}
-                    className="px-1.5 py-0.5 rounded text-xs bg-status-critical/10 border border-status-critical/20 text-status-critical hover:bg-status-critical/20"
+                    className="px-1.5 py-0.5 rounded-xl text-xs bg-status-critical/10 border border-status-critical/20 text-status-critical hover:bg-status-critical/20"
                   >
                     {v.hostname}
                   </button>
@@ -830,7 +830,7 @@ export function InfraTopologyPage() {
             {/* 요약 통계 */}
             {activeCluster && (
               <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-5 gap-3 mb-6">
-                <div className="col-span-2 sm:col-span-4 lg:col-span-1 bg-card border border-border rounded-lg p-4 flex flex-col gap-1">
+                <div className="col-span-2 sm:col-span-4 lg:col-span-1 bg-card border border-border rounded-md p-4 flex flex-col gap-1">
                   <p className="text-sm text-muted-foreground">전체 노드</p>
                   <p className="text-2xl font-bold text-foreground">{nodes.length}</p>
                   <p className="text-sm text-muted-foreground">{activeCluster.name}</p>
@@ -838,7 +838,7 @@ export function InfraTopologyPage() {
                 {ROLES.map(role => {
                   const meta = ROLE_META[role];
                   return (
-                    <div key={role} className="bg-card border border-border rounded-lg p-4 flex flex-col gap-1">
+                    <div key={role} className="bg-card border border-border rounded-md p-4 flex flex-col gap-1">
                       <p className="text-sm text-muted-foreground">{meta.label}</p>
                       <p className={`text-2xl font-bold ${meta.color}`}>{stats[role]}</p>
                       <div className="flex items-center gap-1">
@@ -854,39 +854,52 @@ export function InfraTopologyPage() {
             {/* Trace 패널 */}
             {activeCluster && (
               <MacCard title="Pod/Service → Switch Trace" rootClassName="mb-6">
-                <div className="grid grid-cols-1 md:grid-cols-4 gap-2 mb-3">
-                  <input
-                    value={traceNamespace}
-                    onChange={e => setTraceNamespace(e.target.value)}
-                    placeholder="namespace"
-                    className="bg-background border border-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40"
-                  />
-                  <select
-                    value={traceTargetType}
-                    onChange={e => setTraceTargetType(e.target.value as TopologyTargetType)}
-                    className="bg-background border border-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40"
-                  >
-                    <option value="service">service</option>
-                    <option value="pod">pod</option>
-                  </select>
-                  <input
-                    value={traceTargetName}
-                    onChange={e => setTraceTargetName(e.target.value)}
-                    placeholder={traceTargetType === 'service' ? 'service-name' : 'pod-name'}
-                    className="bg-background border border-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40"
-                  />
+                {/* <form> 이라 Enter 로 실행되고, 각 입력에 라벨이 붙는다(D-095) */}
+                <form
+                  onSubmit={(e) => { e.preventDefault(); void handleTrace(); }}
+                  className="grid grid-cols-1 md:grid-cols-4 gap-2 mb-3 items-end"
+                >
+                  <label className="flex flex-col gap-1 text-xs text-muted-foreground">
+                    Namespace
+                    <input
+                      value={traceNamespace}
+                      onChange={e => setTraceNamespace(e.target.value)}
+                      placeholder="namespace"
+                      className="bg-background border border-border rounded-xl px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/40"
+                    />
+                  </label>
+                  <label className="flex flex-col gap-1 text-xs text-muted-foreground">
+                    대상 종류
+                    <select
+                      value={traceTargetType}
+                      onChange={e => setTraceTargetType(e.target.value as TopologyTargetType)}
+                      className="bg-background border border-border rounded-xl px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/40"
+                    >
+                      <option value="service">service</option>
+                      <option value="pod">pod</option>
+                    </select>
+                  </label>
+                  <label className="flex flex-col gap-1 text-xs text-muted-foreground">
+                    대상 이름
+                    <input
+                      value={traceTargetName}
+                      onChange={e => setTraceTargetName(e.target.value)}
+                      placeholder={traceTargetType === 'service' ? 'service-name' : 'pod-name'}
+                      className="bg-background border border-border rounded-xl px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/40"
+                    />
+                  </label>
                   <button
-                    onClick={handleTrace}
+                    type="submit"
                     disabled={traceLoading || !traceTargetName.trim() || !traceNamespace.trim()}
-                    className="px-3 py-2 text-sm rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50 transition-colors flex items-center justify-center gap-2"
+                    className="px-3 py-2 text-sm rounded-xl bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50 transition-colors flex items-center justify-center gap-2"
                   >
-                    {traceLoading && <Loader2 className="w-3 h-3 animate-spin" />}
-                    Trace 실행
+                    {traceLoading && <Loader2 className="w-3 h-3 animate-spin" aria-hidden />}
+                    {traceLoading ? <span role="status">추적 중…</span> : 'Trace 실행'}
                   </button>
-                </div>
+                </form>
 
                 {traceError && (
-                  <div className="flex items-center gap-2 text-status-critical text-sm bg-status-critical/10 border border-status-critical/20 rounded-lg px-3 py-2 mb-3">
+                  <div className="flex items-center gap-2 text-status-critical text-sm bg-status-critical/10 border border-status-critical/20 rounded-md px-3 py-2 mb-3">
                     <AlertTriangle className="w-3.5 h-3.5 flex-shrink-0" />{traceError}
                   </div>
                 )}
@@ -894,7 +907,7 @@ export function InfraTopologyPage() {
                 {traceResult && (
                   <div className="flex flex-col gap-2">
                     {traceBottleneck && (
-                      <div className="flex items-center gap-2 text-status-warning text-sm bg-status-warning/10 border border-status-warning/30 rounded-lg px-3 py-2">
+                      <div className="flex items-center gap-2 text-status-warning text-sm bg-status-warning/10 border border-status-warning/30 rounded-md px-3 py-2">
                         <Activity className="w-3.5 h-3.5" />
                         병목 의심 홉: <span className="font-semibold">{traceBottleneck.hop.name}</span>
                         <span className="opacity-80">
@@ -905,7 +918,7 @@ export function InfraTopologyPage() {
                     <div className="flex flex-wrap items-center gap-2">
                       {traceResult.hops.map((hop, idx) => (
                         <div key={`${hop.entityId}-${idx}`} className="inline-flex items-center gap-2">
-                          <div className="px-2.5 py-1.5 rounded-lg border border-border bg-background text-sm">
+                          <div className="px-2.5 py-1.5 rounded-md border border-border bg-background text-sm">
                             <span className="text-muted-foreground">{hop.entityType}</span>
                             <span className="mx-1">·</span>
                             <span className="font-medium text-foreground">{hop.name}</span>
@@ -950,7 +963,7 @@ export function InfraTopologyPage() {
                   onClick={() => { setEditTarget(null); setModalOpen(true); }}
                   disabled={!canOperate}
                   title={withHint('첫 노드 추가')}
-                  className="flex items-center gap-2 px-3 py-1.5 text-sm rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="flex items-center gap-2 px-3 py-1.5 text-sm rounded-xl bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   <Plus className="w-3.5 h-3.5" />첫 노드 추가
                 </button>
@@ -977,7 +990,7 @@ export function InfraTopologyPage() {
                       {swRacks.map(({ rack, nodes: rackNodes }) => (
                         <div key={`${switchName}::${rack}`} className="flex-shrink-0 w-56 flex flex-col gap-2">
                           {/* 랙 헤더 */}
-                          <div className="flex items-center gap-2 px-2 py-1.5 bg-muted/50 rounded-lg border border-border">
+                          <div className="flex items-center gap-2 px-2 py-1.5 bg-muted/50 rounded-md border border-border">
                             <Tag className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
                             <span className="text-sm font-semibold text-foreground truncate">{rack}</span>
                             <span className="ml-auto text-sm text-muted-foreground flex-shrink-0">

@@ -2,6 +2,7 @@ import { useMemo, useRef } from 'react';
 import ForceGraph3D, { type ForceGraph3DInstance, type NodeObject, type LinkObject } from 'react-force-graph-3d';
 import type { TopoNode, TopoEdge, TopologyTrafficEdge } from '@/types';
 import { kindAccent, edgeStyle, KIND_ABBR } from './topologyShared';
+import { usePrefersReducedMotion } from '@/hooks/usePrefersReducedMotion';
 
 interface Props {
   graph: { nodes: TopoNode[]; edges: TopoEdge[] };
@@ -51,6 +52,8 @@ export function Topology3D({ graph, trafficEdges = [], showTraffic, width, heigh
     return { nodes, links };
   }, [graph, trafficEdges, showTraffic]);
 
+  // OS "동작 줄이기" 설정이면 트래픽 파티클(무한 애니메이션)을 끈다(D-096).
+  const reducedMotion = usePrefersReducedMotion();
   const linkColor = (l: LinkObject) => edgeStyle((l as G3Link).type, (l as G3Link).dropped).stroke;
 
   return (
@@ -72,7 +75,7 @@ export function Topology3D({ graph, trafficEdges = [], showTraffic, width, heigh
       linkDirectionalArrowLength={5}
       linkDirectionalArrowRelPos={1}
       linkDirectionalArrowColor={linkColor}
-      linkDirectionalParticles={(l: LinkObject) => ((l as G3Link).type === 'traffic' ? 4 : 0)}
+      linkDirectionalParticles={(l: LinkObject) => (!reducedMotion && (l as G3Link).type === 'traffic' ? 4 : 0)}
       linkDirectionalParticleSpeed={0.01}
       linkDirectionalParticleColor={linkColor}
       onNodeClick={(n: NodeObject) => onSelectNode((n as G3Node).id)}

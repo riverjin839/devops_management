@@ -13,7 +13,7 @@ import {
 import { MacCard } from '@/components/ui/MacCard';
 import {
   TopologyCanvas, Topology3D, NodeDetailPanel, ManualLinkDialog, AddExternalNodeDialog,
-  EDGE_TYPE_LABEL,
+  EDGE_TYPE_LABEL, edgeStyleToken,
 } from '@/components/topology';
 import {
   useServiceTopologyGraph, useServiceTopologyTraffic, useClusterTopologyGraph,
@@ -261,7 +261,7 @@ export function ServiceTopologyPage() {
           <MacCard title="컨트롤" className="mb-3" bodyPadding="p-3">
             <div className="flex flex-wrap items-center gap-2">
               {/* scope: 네임스페이스 / 전체 클러스터 */}
-              <div className="flex items-center rounded-lg border border-border overflow-hidden text-sm">
+              <div role="group" aria-label="범위" className="flex items-center rounded-xl border border-border overflow-hidden text-sm">
                 <ToggleSeg active={!isCluster} onClick={() => { setScope('namespace'); setSelectedId(null); setEditMode(false); }} icon={<Layers className="w-3 h-3" />} label="네임스페이스" />
                 <ToggleSeg active={isCluster} onClick={() => { setScope('cluster'); setSelectedId(null); setEditMode(false); }} icon={<Globe className="w-3 h-3" />} label="전체 클러스터" border />
               </div>
@@ -280,19 +280,19 @@ export function ServiceTopologyPage() {
                   </div>
                 </div>
               ) : (
-                <div className="flex items-center rounded-lg border border-border overflow-hidden text-sm">
+                <div role="group" aria-label="클러스터 보기" className="flex items-center rounded-xl border border-border overflow-hidden text-sm">
                   <ToggleSeg active={clusterMode === 'summary'} onClick={() => { setClusterMode('summary'); setSelectedId(null); }} icon={<Boxes className="w-3 h-3" />} label="네임스페이스 요약" />
                   <ToggleSeg active={clusterMode === 'detail'} onClick={() => { setClusterMode('detail'); setSelectedId(null); }} icon={<Grid3x3 className="w-3 h-3" />} label="전체 상세" border />
                 </div>
               )}
 
               <button onClick={refreshAll}
-                className="px-2 py-1 text-sm bg-secondary hover:bg-secondary/80 border border-border rounded-lg inline-flex items-center gap-1">
+                className="px-2 py-1 text-sm bg-secondary hover:bg-secondary/80 border border-border rounded-xl inline-flex items-center gap-1">
                 <RefreshCw className={`w-3 h-3 ${activeQuery.isFetching || (showTraffic && trafficQuery.isFetching) ? 'animate-spin' : ''}`} /> 새로고침
               </button>
 
               {/* 2D / 3D */}
-              <div className="flex items-center rounded-lg border border-border overflow-hidden text-sm">
+              <div role="group" aria-label="보기 방식" className="flex items-center rounded-xl border border-border overflow-hidden text-sm">
                 <ToggleSeg active={view === '2d'} onClick={() => setView('2d')} icon={<Grid3x3 className="w-3 h-3" />} label="2D" />
                 <ToggleSeg active={view === '3d'} onClick={() => setView('3d')} icon={<Boxes className="w-3 h-3" />} label="3D" border />
               </div>
@@ -311,14 +311,15 @@ export function ServiceTopologyPage() {
                   <button onClick={() => setExtOpen(true)}
                     disabled={!canOperate}
                     title={withHint('외부 노드 추가')}
-                    className="px-2 py-1 text-sm bg-secondary hover:bg-secondary/80 border border-border rounded-lg inline-flex items-center gap-1 disabled:opacity-50 disabled:cursor-not-allowed">
+                    className="px-2 py-1 text-sm bg-secondary hover:bg-secondary/80 border border-border rounded-xl inline-flex items-center gap-1 disabled:opacity-50 disabled:cursor-not-allowed">
                     <Server className="w-3 h-3" /> 외부 노드
                   </button>
                   <button onClick={() => { setEditMode((v) => !v); setLinkSourceId(null); }}
                     disabled={!canOperate}
                     title={withHint('링크 편집')}
-                    className={`px-2.5 py-1 text-sm rounded-lg inline-flex items-center gap-1 border disabled:opacity-50 disabled:cursor-not-allowed ${
-                      editMode ? 'bg-orange-500/15 border-orange-500/40 text-orange-600 dark:text-orange-400' : 'bg-secondary border-border hover:bg-secondary/80'
+                    aria-pressed={editMode}
+                    className={`px-2.5 py-1 text-sm rounded-xl inline-flex items-center gap-1 border disabled:opacity-50 disabled:cursor-not-allowed ${
+                      editMode ? 'bg-primary/15 border-primary/40 text-primary' : 'bg-secondary border-border hover:bg-secondary/80'
                     }`}>
                     {editMode ? <Pencil className="w-3 h-3" /> : <Eye className="w-3 h-3" />} 링크 편집
                   </button>
@@ -365,7 +366,7 @@ export function ServiceTopologyPage() {
                 </span>
               )}
               {editMode && (
-                <span role="status" className="inline-flex items-center gap-1 text-orange-600 dark:text-orange-400">
+                <span role="status" className="inline-flex items-center gap-1 text-primary">
                   <Pencil className="w-3 h-3" /> {linkSourceId ? `시작 노드: ${nodeName(linkSourceId)} → 대상 노드를 클릭` : '연결할 시작 노드를 클릭'}
                 </span>
               )}
@@ -384,7 +385,7 @@ export function ServiceTopologyPage() {
 
           {/* 캔버스 */}
           <MacCard title={`그래프 · ${graph?.nodes.length ?? 0} 노드 / ${graph?.edges.length ?? 0} 엣지`} bodyPadding="p-0">
-            <div ref={canvasRef} className="relative w-full h-[calc(100vh-260px)] min-h-[420px] overflow-hidden rounded-b-2xl">
+            <div ref={canvasRef} className="relative w-full h-[calc(100vh-260px)] min-h-[420px] overflow-hidden rounded-b-md">
               {computing ? (
                 <div className="absolute inset-0 flex items-center justify-center p-6">
                   <div className="w-full max-w-md">
@@ -486,7 +487,7 @@ function ToggleSeg({ active, onClick, icon, label, border }: {
   active: boolean; onClick: () => void; icon: React.ReactNode; label: string; border?: boolean;
 }) {
   return (
-    <button onClick={onClick}
+    <button type="button" onClick={onClick} aria-pressed={active}
       className={`flex items-center gap-1 px-2 py-1 transition-colors ${border ? 'border-l border-border' : ''} ${
         active ? 'bg-primary text-primary-foreground' : 'hover:bg-secondary text-muted-foreground'
       }`}>
@@ -499,8 +500,8 @@ function PillToggle({ on, onClick, icon, label, loading }: {
   on: boolean; onClick: () => void; icon: React.ReactNode; label: string; loading?: boolean;
 }) {
   return (
-    <button onClick={onClick}
-      className={`px-2.5 py-1 text-sm rounded-lg inline-flex items-center gap-1 border transition-colors ${
+    <button type="button" onClick={onClick} aria-pressed={on}
+      className={`px-2.5 py-1 text-sm rounded-xl inline-flex items-center gap-1 border transition-colors ${
         on ? 'bg-primary/10 border-primary/40 text-primary' : 'bg-secondary border-border text-muted-foreground hover:bg-secondary/80'
       }`}>
       {loading ? <Loader2 className="w-3 h-3 animate-spin" /> : icon} {label}
@@ -509,28 +510,26 @@ function PillToggle({ on, onClick, icon, label, loading }: {
 }
 
 function Legend() {
-  const items: { type: string }[] = [
-    { type: 'routes' }, { type: 'exposes' }, { type: 'uses_config' },
-    { type: 'uses_secret' }, { type: 'mounts_pvc' }, { type: 'manual' }, { type: 'traffic' },
-  ];
+  // 색만으로 구분하지 않도록 실제 선 패턴(dash)까지 그린다 — 캔버스와 같은 edgeStyleToken(D-096/D-097)
+  const items = ['routes', 'exposes', 'owns', 'uses_config', 'uses_secret', 'mounts_pvc', 'manual', 'traffic'];
   return (
-    <div className="absolute bottom-3 left-3 bg-card/90 backdrop-blur border border-border rounded-xl px-3 py-2 z-10 max-w-[60%]">
-      <div className="flex flex-wrap gap-x-3 gap-y-1">
-        {items.map((it) => (
-          <span key={it.type} className="inline-flex items-center gap-1 text-xs text-muted-foreground">
-            <EdgeSwatch type={it.type} /> {EDGE_TYPE_LABEL[it.type]}
-          </span>
+    <div className="absolute bottom-3 left-3 bg-card/90 backdrop-blur border border-border rounded-md px-3 py-2 z-10 max-w-[60%]">
+      <ul className="flex flex-wrap gap-x-3 gap-y-1" aria-label="엣지 범례">
+        {items.map((type) => (
+          <li key={type} className="inline-flex items-center gap-1 text-xs text-muted-foreground">
+            <EdgeSwatch type={type} /> {EDGE_TYPE_LABEL[type]}
+          </li>
         ))}
-      </div>
+      </ul>
     </div>
   );
 }
 
 function EdgeSwatch({ type }: { type: string }) {
-  // topologyShared.edgeStyle 와 일관된 색
-  const color: Record<string, string> = {
-    routes: '#0ea5e9', exposes: '#8b5cf6', uses_config: '#6366f1',
-    uses_secret: '#ec4899', mounts_pvc: '#06b6d4', manual: '#f97316', traffic: '#f59e0b',
-  };
-  return <span className="inline-block w-3 h-0.5 rounded-full" style={{ background: color[type] ?? '#94a3b8' }} />;
+  const st = edgeStyleToken(type);
+  return (
+    <svg width={18} height={6} aria-hidden className="flex-shrink-0">
+      <line x1={0} y1={3} x2={18} y2={3} stroke={st.stroke} strokeWidth={Math.max(1.5, st.width)} strokeDasharray={st.dash} />
+    </svg>
+  );
 }

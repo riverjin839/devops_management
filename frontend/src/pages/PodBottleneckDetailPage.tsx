@@ -3,7 +3,7 @@ import { Link, useNavigate, useParams } from 'react-router-dom';
 import { ArrowLeft, Trash2, AlertCircle } from 'lucide-react';
 import { MacCard } from '@/components/ui/MacCard';
 import { ConfirmDialog } from '@/components/common';
-import { ProbeResultCard } from '@/components/pod-bottleneck';
+import { ProbeResultCard, BOTTLENECK_STATUS_META } from '@/components/pod-bottleneck';
 import {
   useBottleneckRun,
   useBottleneckProbes,
@@ -45,7 +45,7 @@ export function PodBottleneckDetailPage() {
     return (
       <div className="app-min-h-screen bg-background p-6">
         <div className="max-w-[1400px] mx-auto space-y-3">
-          <div className="h-8 w-64 bg-muted/30 animate-pulse rounded" />
+          <div className="h-8 w-64 bg-muted/30 animate-pulse rounded-md" />
           <div className="h-32 bg-muted/30 animate-pulse rounded-md" />
         </div>
       </div>
@@ -72,6 +72,7 @@ export function PodBottleneckDetailPage() {
   }
 
   const status = STATUS_BADGE[run.overallStatus] ?? STATUS_BADGE.pending;
+  const StatusIcon = (BOTTLENECK_STATUS_META[run.overallStatus] ?? BOTTLENECK_STATUS_META.pending).icon;
   // 4 axis 고정 표시 순서
   const orderedKeys: Array<keyof typeof run.probes> = ['tcp_state', 'tcp_perf', 'dns_latency', 'endpoints'];
 
@@ -104,9 +105,10 @@ export function PodBottleneckDetailPage() {
             </p>
           </div>
           <span
-            className={`inline-flex items-center rounded-full border px-3 py-1 text-sm font-semibold ${status.cls}`}
+            className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-sm font-semibold ${status.cls}`}
             aria-label={`전체 상태: ${status.label}`}
           >
+            <StatusIcon className="w-4 h-4" aria-hidden />
             {status.label}
           </span>
           <button

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Activity, Play, AlertCircle, ListTree, Loader2, ExternalLink } from 'lucide-react';
@@ -7,6 +7,7 @@ import { MacCard } from '@/components/ui/MacCard';
 import { useClusters } from '@/hooks/useCluster';
 import { useCanOperate } from '@/hooks/useCanOperate';
 import { useBottleneckRunsPaged } from '@/hooks/usePodBottleneck';
+import { BOTTLENECK_STATUS_META } from '@/components/pod-bottleneck';
 import { useRunLog, toRunLogLevel } from '@/hooks/useRunLog';
 import { useLogPref } from '@/hooks/useLogPref';
 import { postSse } from '@/lib/sse';
@@ -25,7 +26,7 @@ const STATUS_TEXT: Record<BottleneckStatus, string> = {
   healthy: 'text-status-healthy',
   warning: 'text-status-warning',
   critical: 'text-status-critical',
-  pending: 'text-slate-400',
+  pending: 'text-status-unknown',
 };
 
 const STATUS_KR: Record<BottleneckStatus, string> = {
@@ -63,6 +64,7 @@ export function PodBottleneckPage() {
   };
 
   const qc = useQueryClient();
+  const fid = useId();
   // D-089 — "지금 진단" 은 SSE 로 probe 가 끝나는 순서대로 단계·로그를 받는다.
   const runLog = useRunLog();
   const [showLog, setShowLog] = useLogPref('pod-bottleneck');
@@ -167,30 +169,34 @@ export function PodBottleneckPage() {
 
           {/* 진단 폼 */}
           <MacCard title="진단 폼">
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+            {/* <form> 이라 Enter 로도 실행되고, 각 입력에 <label htmlFor> 가 연결된다(D-095) */}
+            <form
+              onSubmit={(e) => { e.preventDefault(); if (!running && canOperate) void handleRun(); }}
+              className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3"
+            >
               <div className="flex flex-col gap-1 text-sm">
-                <span className="text-muted-foreground">Namespace *</span>
+                <label htmlFor={`${fid}-ns`} className="text-muted-foreground">Namespace *</label>
                 <NamespaceSingleSelect
+                  id={`${fid}-ns`}
                   clusterId={selectedClusterId ?? ''}
                   value={namespace}
                   onChange={(ns) => { setNamespace(ns); setSourcePod(''); setDestPod(''); }}
                 />
               </div>
               <div className="flex flex-col gap-1 text-sm">
-                <span className="text-muted-foreground">Source Pod *</span>
-                <PodSingleSelect clusterId={selectedClusterId ?? ''} namespace={namespace} value={sourcePod} onChange={setSourcePod} />
+                <label htmlFor={`${fid}-src`} className="text-muted-foreground">Source Pod *</label>
+                <PodSingleSelect id={`${fid}-src`} clusterId={selectedClusterId ?? ''} namespace={namespace} value={sourcePod} onChange={setSourcePod} />
               </div>
               <div className="flex flex-col gap-1 text-sm">
-                <span className="text-muted-foreground">Dest Pod *</span>
-                <PodSingleSelect clusterId={selectedClusterId ?? ''} namespace={namespace} value={destPod} onChange={setDestPod} />
+                <label htmlFor={`${fid}-dst`} className="text-muted-foreground">Dest Pod *</label>
+                <PodSingleSelect id={`${fid}-dst`} clusterId={selectedClusterId ?? ''} namespace={namespace} value={destPod} onChange={setDestPod} />
               </div>
               <FormField label="Dest Service (옵션 — endpoints probe)" value={destService}
                          onChange={setDestService} placeholder="backend"
-                         aria-label="dest service" mono className="md:col-span-2" />
+                         mono className="md:col-span-2" />
               <div className="flex items-end">
                 <button
-                  type="button"
-                  onClick={handleRun}
+                  type="submit"
                   disabled={!selectedClusterId || running || !canOperate}
                   title={withHint('병목 진단 실행')}
                   aria-label={withHint('병목 진단 실행')}
@@ -200,9 +206,9 @@ export function PodBottleneckPage() {
                   {running ? '진단 중…' : '지금 진단'}
                 </button>
               </div>
-            </div>
+            </form>
             {submitError && (
-              <div className="mt-3 text-sm text-status-critical bg-status-critical/10 border border-status-critical/30 rounded p-2">
+              <div className="mt-3 text-sm text-status-critical bg-status-critical/10 border border-status-critical/30 rounded-md p-2">
                 {submitError}
               </div>
             )}
@@ -288,7 +294,6 @@ export function PodBottleneckPage() {
 
 function FormField({
   label, value, onChange, placeholder, mono, className,
-  'aria-label': ariaLabel,
 }: {
   label: string;
   value: string;
@@ -296,8 +301,8 @@ function FormField({
   placeholder?: string;
   mono?: boolean;
   className?: string;
-  'aria-label'?: string;
 }) {
+  // 접근성 이름은 감싸는 <label> 의 보이는 텍스트를 그대로 쓴다(별도 aria-label 로 덮어쓰지 않는다, D-095)
   return (
     <label className={`block ${className ?? ''}`}>
       <span className="text-sm font-semibold text-muted-foreground">{label}</span>
@@ -306,7 +311,6 @@ function FormField({
         value={value}
         onChange={(e) => onChange(e.target.value)}
         placeholder={placeholder}
-        aria-label={ariaLabel}
         className={`mt-1 w-full rounded-xl border border-border bg-background px-3 py-2 text-sm ${mono ? 'font-mono' : ''}`}
       />
     </label>
@@ -314,6 +318,7 @@ function FormField({
 }
 
 function RunRow({ run, clusterLabel, onClick }: { run: BottleneckRun; clusterLabel: string | null; onClick: () => void }) {
+  const StatusIcon = (BOTTLENECK_STATUS_META[run.overallStatus] ?? BOTTLENECK_STATUS_META.pending).icon;
   return (
     <li>
       <button
@@ -322,7 +327,8 @@ function RunRow({ run, clusterLabel, onClick }: { run: BottleneckRun; clusterLab
         aria-label={`${run.sourcePod}→${run.destPod} 진단 결과 상세`}
         className={`w-full flex items-center gap-3 px-3 py-2.5 text-left hover:bg-secondary/40 border-l-2 ${STATUS_COLOR[run.overallStatus]}`}
       >
-        <span className={`text-sm font-semibold ${STATUS_TEXT[run.overallStatus]} w-12`}>
+        <span className={`text-sm font-semibold ${STATUS_TEXT[run.overallStatus]} w-20 flex-shrink-0 inline-flex items-center gap-1`}>
+          <StatusIcon className="w-3.5 h-3.5" aria-hidden />
           {STATUS_KR[run.overallStatus]}
         </span>
         {clusterLabel && (
@@ -340,7 +346,7 @@ function RunRow({ run, clusterLabel, onClick }: { run: BottleneckRun; clusterLab
           {parseUTC(run.createdAt).toLocaleString('ko-KR')}
         </span>
         <span className="text-xs font-mono text-muted-foreground">
-          {run.durationMs}ms
+          {run.durationMs != null ? `${run.durationMs}ms` : '—'}
         </span>
       </button>
     </li>

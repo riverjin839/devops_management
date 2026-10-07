@@ -38,12 +38,23 @@ export function kindAccent(kind: string): string {
 }
 
 // ── status → 색 ──────────────────────────────────────────────────────────────
+// SVG/DOM 용 — 테마 토큰을 따른다(D-097). three.js(3D)는 CSS 변수를 못 읽으므로 이 함수를 쓰지 않는다.
 export function statusColor(status: string): string {
   switch (status) {
-    case 'critical': return '#ef4444';
-    case 'warning': return '#f59e0b';
-    case 'healthy': return '#10b981';
-    default: return '#94a3b8';
+    case 'critical': return 'hsl(var(--status-critical))';
+    case 'warning': return 'hsl(var(--status-warning))';
+    case 'healthy': return 'hsl(var(--status-healthy))';
+    default: return 'hsl(var(--status-pending))';
+  }
+}
+
+/** 상태를 색만으로 전달하지 않도록 함께 쓰는 글자(D-096). */
+export function statusGlyph(status: string): string {
+  switch (status) {
+    case 'critical': return '!';
+    case 'warning': return '?';
+    case 'healthy': return '';
+    default: return '·';
   }
 }
 
@@ -61,6 +72,23 @@ export function edgeStyle(type: string, dropped = false): EdgeStyle {
     case 'traffic':     return { stroke: dropped ? '#ef4444' : '#f59e0b', width: 2, dash: '6 4', animated: true };
     default:            return { stroke: '#94a3b8', width: 1.2 };
   }
+}
+
+/** SVG/DOM 용 엣지 스타일 — 선 패턴(dash)은 edgeStyle 과 같고 색만 테마 토큰(D-097).
+ *  edgeStyle(hex)은 three.js(Topology3D)·아키텍처 문서 캔버스가 계속 쓴다(캔버스 hex 허용 예외). */
+export function edgeStyleToken(type: string, dropped = false): EdgeStyle {
+  const base = edgeStyle(type, dropped);
+  const token: Record<string, string> = {
+    routes: 'hsl(var(--chart-1))',
+    exposes: 'hsl(var(--chart-4))',
+    owns: 'hsl(var(--muted-foreground))',
+    uses_config: 'hsl(var(--chart-8))',
+    uses_secret: 'hsl(var(--chart-5))',
+    mounts_pvc: 'hsl(var(--chart-6))',
+    manual: 'hsl(var(--chart-7))',
+    traffic: dropped ? 'hsl(var(--status-critical))' : 'hsl(var(--status-warning))',
+  };
+  return { ...base, stroke: token[type] ?? 'hsl(var(--muted-foreground))' };
 }
 
 export const EDGE_TYPE_LABEL: Record<string, string> = {

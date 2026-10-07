@@ -14,7 +14,7 @@ const STATUS_STYLE: Record<string, { bg: string; text: string; label: string }> 
   healthy: { bg: 'bg-status-healthy/10 border-status-healthy/30', text: 'text-status-healthy', label: '정상' },
   warning: { bg: 'bg-status-warning/10 border-status-warning/30', text: 'text-status-warning', label: '경고' },
   critical: { bg: 'bg-status-critical/10 border-status-critical/30', text: 'text-status-critical', label: '심각' },
-  pending: { bg: 'bg-status-unknown/10 border-status-unknown/30', text: 'text-zinc-500', label: '대기' },
+  pending: { bg: 'bg-status-unknown/10 border-status-unknown/30', text: 'text-status-unknown', label: '대기' },
   error: { bg: 'bg-status-critical/10 border-status-critical/30', text: 'text-status-critical', label: '오류' },
 };
 
@@ -89,7 +89,7 @@ export function NodeVerifyModal({ result, loading, onClose }: NodeVerifyModalPro
             <h3 id={titleId} className="font-semibold text-foreground">노드 추가 검증</h3>
             {result && <span className="text-sm text-muted-foreground">— {result.hostname}</span>}
           </div>
-          <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-muted text-muted-foreground">
+          <button type="button" onClick={onClose} title="닫기" aria-label="닫기" className="p-1.5 rounded-xl hover:bg-muted text-muted-foreground">
             <X className="w-4 h-4" />
           </button>
         </div>
@@ -102,7 +102,7 @@ export function NodeVerifyModal({ result, loading, onClose }: NodeVerifyModalPro
             </div>
           ) : (
             <>
-              <div className={`flex items-center gap-2 rounded-lg border px-3 py-2 ${style.bg}`}>
+              <div className={`flex items-center gap-2 rounded-md border px-3 py-2 ${style.bg}`}>
                 {result.ok ? (
                   <Check className={`w-5 h-5 ${style.text}`} />
                 ) : (

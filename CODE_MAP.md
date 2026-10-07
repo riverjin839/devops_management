@@ -35,6 +35,7 @@ AI 어시스턴트 + 사람 개발자용 — 기능 → 파일 경로와 자주 
 | 공용 UI: 실행 확인 모달 | — | `frontend/src/components/common/ConfirmDialog.tsx` |
 | 공용 UI: 로그 뷰어 (JSON/journal/table 자동감지) | — | `frontend/src/components/common/LogViewer.tsx` |
 | 공용 UI: 실행 로그 패널 (실행 버튼 실시간 로그 + "로그 보기", D-089) | — | `frontend/src/components/common/RunLogPanel.tsx` · `hooks/useRunLog.ts` · `hooks/useLogPref.ts` · `lib/sse.ts`(POST SSE 소비 `postSse`) |
+| 공용 훅: OS "동작 줄이기" 감지 (무한 애니메이션 끄기, D-096) | — | `frontend/src/hooks/usePrefersReducedMotion.ts` |
 | 연결 검증 + status 반영 | `POST /clusters/{id}/verify` (clusters.py) | `clustersApi.verify` |
 | Cilium 설정 조회 | `GET /clusters/{id}/cilium-config` | `CiliumConfigModal.tsx` |
 | 클러스터 등록 위저드 (3-step) | — | `frontend/src/components/dashboard/AddClusterModal.tsx` |

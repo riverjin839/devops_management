@@ -9,11 +9,13 @@ interface Props {
   placeholder?: string;
   className?: string;
   clearable?: boolean;
+  /** 바깥 <label htmlFor> 와 연결할 입력 id. */
+  id?: string;
 }
 
 /** 파드 단일 선택 — 텍스트 검색 + 리스트(콤보박스). 선택된 namespace 의 pod 목록 fetch.
  *  namespace 가 비면 비활성. SearchableSelect 재사용. */
-export function PodSingleSelect({ clusterId, namespace, value, onChange, placeholder = 'pod 검색…', className, clearable }: Props) {
+export function PodSingleSelect({ clusterId, namespace, value, onChange, placeholder = 'pod 검색…', className, clearable, id }: Props) {
   const podsQ = useAnalyzePods(clusterId, namespace);
   return (
     <SearchableSelect
@@ -28,6 +30,7 @@ export function PodSingleSelect({ clusterId, namespace, value, onChange, placeho
       emptyText="pod 없음"
       clearable={clearable}
       className={className ?? 'font-mono text-sm'}
+      id={id}
     />
   );
 }
