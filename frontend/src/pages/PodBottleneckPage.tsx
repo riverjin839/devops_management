@@ -1,12 +1,12 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { Activity, Play, AlertCircle, ListTree } from 'lucide-react';
+import { Activity, Play, AlertCircle, ListTree, Loader2 } from 'lucide-react';
 import { ClusterSidebar, NamespaceSingleSelect, PodSingleSelect } from '@/components/common';
 import { MacCard } from '@/components/ui/MacCard';
 import { useClusters } from '@/hooks/useCluster';
 import { useCanOperate } from '@/hooks/useCanOperate';
 import {
-  useBottleneckRuns,
+  useBottleneckRunsPaged,
   useRunBottleneckAnalysis,
 } from '@/hooks/usePodBottleneck';
 import type { BottleneckRun, BottleneckStatus } from '@/types';
@@ -49,21 +49,30 @@ export function PodBottleneckPage() {
   const [destService, setDestService] = useState(prefillSvc);
   const [submitError, setSubmitError] = useState<string | null>(null);
 
-  // URL prefill 이 도착 후 cluster 가 바뀌면 sync
-  useEffect(() => {
-    if (prefillCluster && !selectedClusterId) {
-      setSelectedClusterId(prefillCluster);
-    }
-  }, [prefillCluster, selectedClusterId]);
+  // D-094 — prefill 은 초기 state 로만 쓴다. 예전 effect 는 "전체 클러스터"(null)를 고르면 prefill 클러스터로
+  // 되돌려 그 선택지를 죽였다. 클러스터를 바꾸면 그 클러스터에 속한 namespace·pod 선택을 비운다.
+  const selectCluster = (id: string | null) => {
+    if (id === selectedClusterId) return;
+    setSelectedClusterId(id);
+    setNamespace('');
+    setSourcePod('');
+    setDestPod('');
+    setSubmitError(null);
+  };
 
   const runMutation = useRunBottleneckAnalysis();
   const { canOperate, withHint } = useCanOperate(selectedClusterId);
 
-  const { data: runsData, isLoading: runsLoading, error: runsError } = useBottleneckRuns({
-    clusterId: selectedClusterId ?? undefined,
-    limit: 50,
-  });
-  const runs = useMemo(() => runsData?.data ?? [], [runsData?.data]);
+  const {
+    data: runsData, isLoading: runsLoading, error: runsError,
+    fetchNextPage, hasNextPage, isFetchingNextPage,
+  } = useBottleneckRunsPaged({ clusterId: selectedClusterId ?? undefined });
+  const runs = useMemo(() => runsData?.pages.flatMap((p) => p.data) ?? [], [runsData]);
+  const runsTotal = runsData?.pages[0]?.total ?? 0;
+  const clusterName = useMemo(() => {
+    const m = new Map(clusters.map((c) => [c.id, c.name]));
+    return (id: string) => m.get(id) ?? id.slice(0, 8);
+  }, [clusters]);
 
   const handleRun = async () => {
     setSubmitError(null);
@@ -93,7 +102,7 @@ export function PodBottleneckPage() {
           <ClusterSidebar
             clusters={clusters}
             selectedId={selectedClusterId}
-            onSelect={setSelectedClusterId}
+            onSelect={selectCluster}
             allowAll
             allLabel="전체 클러스터"
             iconOnly
@@ -167,7 +176,7 @@ export function PodBottleneckPage() {
                 <div>
                   <div className="font-medium">진단 history 조회 실패</div>
                   <div className="text-sm text-muted-foreground">
-                    {runsError instanceof Error ? runsError.message : 'API 오류'}
+                    {formatApiError(runsError, 'API 오류')}
                   </div>
                 </div>
               </div>
@@ -183,11 +192,33 @@ export function PodBottleneckPage() {
                 <p>진단 결과가 없습니다. 위 폼에서 첫 진단을 실행하세요.</p>
               </div>
             ) : (
-              <ul className="divide-y divide-border">
-                {runs.map((r) => (
-                  <RunRow key={r.id} run={r} onClick={() => navigate(`/pod-bottleneck/${r.id}`)} />
-                ))}
-              </ul>
+              <>
+                <ul className="divide-y divide-border">
+                  {runs.map((r) => (
+                    <RunRow
+                      key={r.id}
+                      run={r}
+                      // 전체 클러스터 보기에서는 어느 클러스터의 진단인지 행마다 보여준다.
+                      clusterLabel={selectedClusterId ? null : clusterName(r.clusterId)}
+                      onClick={() => navigate(`/pod-bottleneck/${r.id}`)}
+                    />
+                  ))}
+                </ul>
+                <div className="flex items-center justify-between gap-2 pt-3 text-xs text-muted-foreground">
+                  <span>{runs.length} / {runsTotal}건</span>
+                  {hasNextPage && (
+                    <button
+                      type="button"
+                      onClick={() => fetchNextPage()}
+                      disabled={isFetchingNextPage}
+                      className="inline-flex items-center gap-1.5 rounded-xl border border-border bg-secondary px-3 py-1.5 text-sm text-foreground hover:bg-secondary/80 disabled:opacity-50"
+                    >
+                      {isFetchingNextPage && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+                      더 보기
+                    </button>
+                  )}
+                </div>
+              </>
             )}
           </MacCard>
         </div>
@@ -223,7 +254,7 @@ function FormField({
   );
 }
 
-function RunRow({ run, onClick }: { run: BottleneckRun; onClick: () => void }) {
+function RunRow({ run, clusterLabel, onClick }: { run: BottleneckRun; clusterLabel: string | null; onClick: () => void }) {
   return (
     <li>
       <button
@@ -235,6 +266,11 @@ function RunRow({ run, onClick }: { run: BottleneckRun; onClick: () => void }) {
         <span className={`text-sm font-semibold ${STATUS_TEXT[run.overallStatus]} w-12`}>
           {STATUS_KR[run.overallStatus]}
         </span>
+        {clusterLabel && (
+          <span className="text-xs px-1.5 py-0.5 rounded-md bg-secondary text-muted-foreground flex-shrink-0 max-w-[10rem] truncate" title={clusterLabel}>
+            {clusterLabel}
+          </span>
+        )}
         <span className="font-mono text-sm flex-1 truncate">
           <span className="text-muted-foreground">{run.namespace}/</span>
           {run.sourcePod}

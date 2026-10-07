@@ -1,4 +1,4 @@
-import { useId, useMemo, useState } from 'react';
+import { useId, useMemo, useRef, useState } from 'react';
 import {
   Network, Plus, RefreshCw, Server, Cpu, Database, HardDrive,
   Trash2, Pencil, X, ChevronDown, AlertTriangle, Loader2, Tag, Activity, ShieldCheck,
@@ -173,9 +173,9 @@ const EMPTY_FORM: InfraNodeCreate = {
   rackName: '',
   ipAddress: '',
   role: 'worker',
-  cpuCores: undefined,
-  ramGb: undefined,
-  diskGb: undefined,
+  cpuCores: null,
+  ramGb: null,
+  diskGb: null,
   osInfo: '',
   switchName: '',
   notes: '',
@@ -198,9 +198,9 @@ function NodeModal({ clusterId, clusterMeta, initial, onClose }: NodeModalProps)
         rackName: initial.rackName ?? '',
         ipAddress: initial.ipAddress ?? '',
         role: initial.role,
-        cpuCores: initial.cpuCores ?? undefined,
-        ramGb: initial.ramGb ?? undefined,
-        diskGb: initial.diskGb ?? undefined,
+        cpuCores: initial.cpuCores ?? null,
+        ramGb: initial.ramGb ?? null,
+        diskGb: initial.diskGb ?? null,
         osInfo: initial.osInfo ?? '',
         switchName: initial.switchName ?? '',
         notes: initial.notes ?? '',
@@ -225,13 +225,28 @@ function NodeModal({ clusterId, clusterMeta, initial, onClose }: NodeModalProps)
     e.preventDefault();
     setError('');
     if (!form.hostname.trim()) { setError('호스트명은 필수입니다.'); return; }
+    // D-100 — 비운 값은 "삭제"로 보낸다. 숫자를 undefined 로 두면 JSON 에서 빠져 서버 부분 수정이
+    // 기존 값을 유지했고, 빈 문자열은 그대로 저장돼 이름 없는 랙/스위치 그룹을 만들었다.
+    const blank = (v?: string | null) => (v && v.trim() ? v.trim() : null);
+    const payload: InfraNodeCreate = {
+      ...form,
+      hostname: form.hostname.trim(),
+      rackName: blank(form.rackName),
+      ipAddress: blank(form.ipAddress),
+      osInfo: blank(form.osInfo),
+      switchName: blank(form.switchName),
+      notes: blank(form.notes),
+      cpuCores: form.cpuCores ?? null,
+      ramGb: form.ramGb ?? null,
+      diskGb: form.diskGb ?? null,
+    };
     try {
       if (isEdit && initial) {
         // eslint-disable-next-line @typescript-eslint/no-unused-vars
-        const { clusterId, ...updateData } = form;
+        const { clusterId, ...updateData } = payload;
         await updateNode.mutateAsync({ id: initial.id, data: { ...updateData, version: initial.version } });
       } else {
-        await createNode.mutateAsync(form);
+        await createNode.mutateAsync(payload);
       }
       onClose();
     } catch (e) {
@@ -321,7 +336,7 @@ function NodeModal({ clusterId, clusterMeta, initial, onClose }: NodeModalProps)
                 id={f('cpu')}
                 type="number" min={1}
                 value={form.cpuCores ?? ''}
-                onChange={e => set('cpuCores', e.target.value ? Number(e.target.value) : undefined)}
+                onChange={e => set('cpuCores', e.target.value ? Number(e.target.value) : null)}
                 placeholder="32"
                 className="w-full bg-background border border-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40"
               />
@@ -332,7 +347,7 @@ function NodeModal({ clusterId, clusterMeta, initial, onClose }: NodeModalProps)
                 id={f('ram')}
                 type="number" min={1}
                 value={form.ramGb ?? ''}
-                onChange={e => set('ramGb', e.target.value ? Number(e.target.value) : undefined)}
+                onChange={e => set('ramGb', e.target.value ? Number(e.target.value) : null)}
                 placeholder="128"
                 className="w-full bg-background border border-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40"
               />
@@ -343,7 +358,7 @@ function NodeModal({ clusterId, clusterMeta, initial, onClose }: NodeModalProps)
                 id={f('disk')}
                 type="number" min={1}
                 value={form.diskGb ?? ''}
-                onChange={e => set('diskGb', e.target.value ? Number(e.target.value) : undefined)}
+                onChange={e => set('diskGb', e.target.value ? Number(e.target.value) : null)}
                 placeholder="960"
                 className="w-full bg-background border border-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40"
               />
@@ -485,6 +500,9 @@ export function InfraTopologyPage() {
   const [traceLoading, setTraceLoading] = useState(false);
 
   const activeClusterId = selectedClusterId || clusters[0]?.id || '';
+  // 응답이 늦게 와도 그사이 클러스터를 바꿨다면 버린다 — 다른 클러스터 결과를 현재 것으로 오독(D-094).
+  const activeClusterRef = useRef(activeClusterId);
+  activeClusterRef.current = activeClusterId;
   const activeCluster = clusters.find(c => c.id === activeClusterId);
   const { canOperate, withHint } = useCanOperate(activeClusterId);
 
@@ -517,7 +535,7 @@ export function InfraTopologyPage() {
     // 1차: switch 별
     const swMap = new Map<string, InfraNode[]>();
     for (const n of nodes) {
-      const sw = n.switchName ?? '(스위치 미지정)';
+      const sw = n.switchName || '(스위치 미지정)';
       if (!swMap.has(sw)) swMap.set(sw, []);
       swMap.get(sw)!.push(n);
     }
@@ -527,7 +545,7 @@ export function InfraTopologyPage() {
         // 2차: rack 별
         const rackMap = new Map<string, InfraNode[]>();
         for (const n of swNodes) {
-          const rack = n.rackName ?? '(랙 미지정)';
+          const rack = n.rackName || '(랙 미지정)';
           if (!rackMap.has(rack)) rackMap.set(rack, []);
           rackMap.get(rack)!.push(n);
         }
@@ -563,18 +581,34 @@ export function InfraTopologyPage() {
     }, null as { hop: TopologyTraceResponse['hops'][number]; score: number } | null);
   }, [traceResult]);
 
+  // D-094 — 클러스터를 바꾸면 이전 클러스터의 동기화·Trace 결과를 지운다.
+  function selectCluster(id: string) {
+    if (id === activeClusterId) return;
+    setSelectedClusterId(id);
+    setSyncError('');
+    setSyncResult(null);
+    setSyncSummary(null);
+    setTraceResult(null);
+    setTraceError('');
+    setTraceNamespace('default');
+    setTraceTargetName('');
+  }
+
   async function handleSync() {
     if (!activeClusterId) return;
+    const requestedFor = activeClusterId;
     setSyncError('');
     setSyncSummary(null);
     setSyncResult(null);
     try {
       const res = await syncNodes.mutateAsync(activeClusterId);
+      if (activeClusterRef.current !== requestedFor) return;
       // 생성/갱신/실패 요약 — 신규 노드가 0개여도 "동기화가 됐다"는 피드백을 남긴다(D-088)
       setSyncResult(res);
       // 신규 노드 자동 검증 결과(있으면) 요약 배너로 노출
       setSyncSummary(res.verifications && res.verifications.length ? res.verifications : null);
     } catch (e) {
+      if (activeClusterRef.current !== requestedFor) return;
       setSyncError(extractError(e));
     }
   }
@@ -593,6 +627,7 @@ export function InfraTopologyPage() {
 
   async function handleTrace() {
     if (!activeClusterId || !traceTargetName.trim() || !traceNamespace.trim()) return;
+    const requestedFor = activeClusterId;
     setTraceError('');
     setTraceLoading(true);
     try {
@@ -602,8 +637,10 @@ export function InfraTopologyPage() {
         targetType: traceTargetType,
         targetName: traceTargetName.trim(),
       });
+      if (activeClusterRef.current !== requestedFor) return;
       setTraceResult(res.data);
     } catch (e) {
+      if (activeClusterRef.current !== requestedFor) return;
       setTraceResult(null);
       setTraceError(extractError(e));
     } finally {
@@ -617,7 +654,7 @@ export function InfraTopologyPage() {
         <ClusterSidebar
           clusters={clusters}
           selectedId={activeClusterId || null}
-          onSelect={(id) => setSelectedClusterId(id ?? '')}
+          onSelect={(id) => selectCluster(id ?? '')}
           iconOnly
         />
 
@@ -916,7 +953,8 @@ export function InfraTopologyPage() {
       {modalOpen && activeClusterId && (
         <NodeModal
           clusterId={activeClusterId}
-          clusterMeta={activeCluster}
+          // D-100 — 클러스터 정보 자동입력은 첫 노드에만. 매번 채우면 두 번째 노드부터 hostname 중복(409)·메모 복제.
+          clusterMeta={nodes.length === 0 ? activeCluster : null}
           initial={editTarget}
           onClose={() => { setModalOpen(false); setEditTarget(null); }}
         />

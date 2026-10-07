@@ -1918,15 +1918,16 @@ export interface InfraNode {
 export interface InfraNodeCreate {
   clusterId: string;
   hostname: string;
-  rackName?: string;
-  ipAddress?: string;
+  // null = 값 없음(수정 시 기존 값 지우기). undefined 는 JSON 에서 빠져 서버가 기존 값을 유지한다.
+  rackName?: string | null;
+  ipAddress?: string | null;
   role?: InfraNodeRole;
-  cpuCores?: number;
-  ramGb?: number;
-  diskGb?: number;
-  osInfo?: string;
-  switchName?: string;
-  notes?: string;
+  cpuCores?: number | null;
+  ramGb?: number | null;
+  diskGb?: number | null;
+  osInfo?: string | null;
+  switchName?: string | null;
+  notes?: string | null;
 }
 
 export interface InfraNodeUpdate extends Partial<Omit<InfraNodeCreate, 'clusterId'>> {

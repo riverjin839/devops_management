@@ -1,7 +1,21 @@
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 from datetime import datetime
 from uuid import UUID
 from typing import Any, Optional
+
+
+_NULLABLE_TEXT = ("rack_name", "ip_address", "os_info", "switch_name", "notes")
+
+
+def _blank_to_none(v: Any) -> Any:
+    """D-100 — 공백뿐인 문자열은 "값 없음"(NULL)으로 저장한다.
+
+    빈 문자열이 그대로 저장되면 랙/스위치 그룹핑에서 "(미지정)" 이 아니라 이름 없는 그룹이 생긴다.
+    """
+    if isinstance(v, str):
+        v = v.strip()
+        return v or None
+    return v
 
 
 class InfraNodeBase(BaseModel):
@@ -15,6 +29,13 @@ class InfraNodeBase(BaseModel):
     os_info: Optional[str] = Field(None, max_length=200)
     switch_name: Optional[str] = Field(None, max_length=100)
     notes: Optional[str] = None
+
+    _normalize_text = field_validator(*_NULLABLE_TEXT, mode="before")(_blank_to_none)
+
+    @field_validator("hostname", mode="before")
+    @classmethod
+    def _strip_hostname(cls, v: Any) -> Any:
+        return v.strip() if isinstance(v, str) else v
 
 
 class InfraNodeCreate(InfraNodeBase):
@@ -33,6 +54,13 @@ class InfraNodeUpdate(BaseModel):
     switch_name: Optional[str] = Field(None, max_length=100)
     notes: Optional[str] = None
     version: int = Field(..., ge=1)
+
+    _normalize_text = field_validator(*_NULLABLE_TEXT, mode="before")(_blank_to_none)
+
+    @field_validator("hostname", mode="before")
+    @classmethod
+    def _strip_hostname(cls, v: Any) -> Any:
+        return v.strip() if isinstance(v, str) else v
 
 
 class InfraNodeResponse(InfraNodeBase):

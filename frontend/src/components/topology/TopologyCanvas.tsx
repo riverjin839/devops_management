@@ -40,8 +40,15 @@ export function TopologyCanvas({
   const baseLayout = useMemo(() => computeLayout(graph.nodes, graph.edges), [graph]);
   const layout = useMemo(() => ({ ...baseLayout.pos, ...override }), [baseLayout, override]);
   const groups = baseLayout.groups;
-  // 새 그래프 로드 시 수동 이동 초기화
-  useEffect(() => { setOverride({}); }, [graph.generatedAt]);
+  // 그래프가 다시 오면(재조회·링크 추가 후 invalidate) 사용자가 옮긴 배치는 노드 id 기준으로 유지하고,
+  // 새 그래프에 없는 노드의 위치만 버린다. 예전엔 generatedAt 이 바뀔 때마다 배치가 전부 초기화됐다(D-094).
+  useEffect(() => {
+    const ids = new Set(graph.nodes.map((n) => n.id));
+    setOverride((o) => {
+      const kept = Object.entries(o).filter(([id]) => ids.has(id));
+      return kept.length === Object.keys(o).length ? o : Object.fromEntries(kept);
+    });
+  }, [graph]);
 
   const center = (id: string): LayoutPos | null => {
     const p = layout[id];

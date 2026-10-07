@@ -136,12 +136,14 @@ def create_infra_node(
     # 본문 cluster_id 는 경로 의존성(enforce_cluster_access)이 못 보므로 여기서 테넌트 바인딩을 직접 판정.
     require_cluster_access(db, user, cluster.id, "operate")
     payload_data = payload.model_dump()
-    if not payload_data.get("hostname") and cluster.hostname:
-        payload_data["hostname"] = cluster.hostname
-    if not payload_data.get("ip_address") and cluster.first_host:
-        payload_data["ip_address"] = cluster.first_host
-    if not payload_data.get("notes") and cluster.description:
-        payload_data["notes"] = f"[cluster:{cluster.name}] {cluster.description}"
+    # 클러스터 관리정보(first_host·description) 자동입력은 첫 노드에만 적용한다(D-100). 매번 채우면
+    # 모든 노드가 같은 IP·메모를 갖게 되고, 운영자가 일부러 비운 값도 다시 채워진다.
+    is_first_node = not db.query(InfraNode.id).filter(InfraNode.cluster_id == cluster.id).first()
+    if is_first_node:
+        if not payload_data.get("ip_address") and cluster.first_host:
+            payload_data["ip_address"] = cluster.first_host
+        if not payload_data.get("notes") and cluster.description:
+            payload_data["notes"] = f"[cluster:{cluster.name}] {cluster.description}"
     node = InfraNode(**payload_data)
     db.add(node)
     _audit(
@@ -160,7 +162,7 @@ def create_infra_node(
         db.rollback()
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail="hostname already exists in this cluster",
+            detail=f"이 클러스터에 이미 hostname '{payload.hostname}' 노드가 있습니다.",
         )
     db.refresh(node)
     return node
@@ -189,6 +191,10 @@ def update_infra_node(
         )
     before_data = _serialize_node(node)
     patch_data = payload.model_dump(exclude_unset=True, exclude={"version"})
+    # NOT NULL 컬럼에 null 이 오면 무시한다(그 외 필드의 null 은 "값 지우기" — D-100).
+    for required in ("hostname", "role"):
+        if patch_data.get(required, "") is None:
+            patch_data.pop(required)
     for k, v in patch_data.items():
         setattr(node, k, v)
     node.version += 1

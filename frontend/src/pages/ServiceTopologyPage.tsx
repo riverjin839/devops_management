@@ -20,7 +20,7 @@ import {
   useCreateTopologyLink, useDeleteTopologyLink, useCreateExternalNode, useDeleteExternalNode,
 } from '@/hooks/useServiceTopology';
 import type { TopoNode } from '@/types';
-import { formatApiError } from '@/lib/utils';
+import { formatApiError, parseUTC } from '@/lib/utils';
 
 type ViewMode = '2d' | '3d';
 type Scope = 'namespace' | 'cluster';
@@ -110,6 +110,24 @@ export function ServiceTopologyPage() {
   const createExt = useCreateExternalNode(clusterId);
   const deleteExt = useDeleteExternalNode();
 
+  // D-094 — 클러스터를 바꾸면 이전 클러스터의 선택·링크 편집 상태를 버린다(이전 id 가 안내에 남고 이전 NS 로 조회되던 문제).
+  const selectCluster = (id: string) => {
+    if (id === clusterId) return;
+    setClusterId(id);
+    setNamespace('default');
+    setSelectedId(null);
+    setLinkSourceId(null);
+    setLinkTargetId(null);
+    setEditMode(false);
+    setPendingDelete(null);
+  };
+
+  const refreshAll = () => {
+    void activeQuery.refetch();
+    // 실트래픽을 켜 둔 상태면 함께 다시 모은다 — 예전엔 그래프만 새로 받아 트래픽이 stale 로 남았다(D-094).
+    if (showTraffic && !isCluster) void trafficQuery.refetch();
+  };
+
   const handleSelect = (id: string | null) => {
     if (!editMode) { setSelectedId(id); return; }
     if (id == null) return;
@@ -184,7 +202,7 @@ export function ServiceTopologyPage() {
         <ClusterSidebar
           clusters={clusters}
           selectedId={clusterId || null}
-          onSelect={(id) => setClusterId(id ?? '')}
+          onSelect={(id) => selectCluster(id ?? '')}
           iconOnly
         />
 
@@ -227,9 +245,9 @@ export function ServiceTopologyPage() {
                 </div>
               )}
 
-              <button onClick={() => activeQuery.refetch()}
+              <button onClick={refreshAll}
                 className="px-2 py-1 text-sm bg-secondary hover:bg-secondary/80 border border-border rounded-lg inline-flex items-center gap-1">
-                <RefreshCw className={`w-3 h-3 ${activeQuery.isFetching ? 'animate-spin' : ''}`} /> 새로고침
+                <RefreshCw className={`w-3 h-3 ${activeQuery.isFetching || (showTraffic && trafficQuery.isFetching) ? 'animate-spin' : ''}`} /> 새로고침
               </button>
 
               {/* 2D / 3D */}
@@ -269,6 +287,11 @@ export function ServiceTopologyPage() {
 
             {/* 상태/경고 라인 */}
             <div className="flex flex-wrap items-center gap-2 mt-2 text-xs">
+              {graph?.generatedAt && (
+                <span className="text-muted-foreground tabular-nums" title={graph.generatedAt}>
+                  조회 {parseUTC(graph.generatedAt).toLocaleTimeString('ko-KR')}
+                </span>
+              )}
               {graph?.metricsStatus === 'offline' && (
                 <span className="inline-flex items-center gap-1 text-status-warning">
                   <Info className="w-3 h-3" /> Prometheus 오프라인 — usage 미표시(requests/limits 만)
