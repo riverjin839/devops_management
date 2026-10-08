@@ -16,7 +16,7 @@ import {
 } from '@/hooks/useInfraNodes';
 import { NodeVerifyModal } from '@/components/infra/NodeVerifyModal';
 import { ClusterSidebar, RunLogPanel, useModalA11y } from '@/components/common';
-import { useRunLog, type RunLogLevel } from '@/hooks/useRunLog';
+import { useRunLog, applyRunEvent } from '@/hooks/useRunLog';
 import { useLogPref } from '@/hooks/useLogPref';
 import { MacCard } from '@/components/ui/MacCard';
 import { topologyTraceApi } from '@/services/api';
@@ -481,11 +481,6 @@ function DeleteConfirm({ node, onConfirm, onCancel, isPending, error }: DeleteCo
   );
 }
 
-// 검증 결과 상태 → 로그 레벨
-function verifyLevel(status: NodeVerifyResult['status']): RunLogLevel {
-  return status === 'critical' || status === 'error' ? 'error' : status === 'healthy' ? 'info' : 'warn';
-}
-
 const elapsed = (t0: number) => `${Math.round(performance.now() - t0)}ms`;
 
 // ── 메인 페이지 ──────────────────────────────────────────────────────────────
@@ -500,6 +495,8 @@ export function InfraTopologyPage() {
   const [deleteError, setDeleteError] = useState('');
   const [verifyOpen, setVerifyOpen] = useState(false);
   const [verifyResult, setVerifyResult] = useState<NodeVerifyResult | null>(null);
+  // 노드 카드에서 방금 실행한 검증이면 모달 안에 실시간 로그를 띄운다(동기화 요약에서 연 과거 결과는 제외).
+  const [verifyLive, setVerifyLive] = useState(false);
   const [syncSummary, setSyncSummary] = useState<NodeVerifyResult[] | null>(null);
   const [traceNamespace, setTraceNamespace] = useState('default');
   const [traceTargetType, setTraceTargetType] = useState<TopologyTargetType>('service');
@@ -529,24 +526,16 @@ export function InfraTopologyPage() {
   const runLog = useRunLog();
   const [showLog, setShowLog] = useLogPref('infra-topology');
 
-  function logVerify(r: NodeVerifyResult, prefix = '') {
-    runLog.log(verifyLevel(r.status), `${prefix}${r.hostname}: ${r.status} — ${r.message}`);
-    for (const st of r.steps ?? []) {
-      const lvl: RunLogLevel = st.status === 'failed' ? 'error' : st.status === 'skipped' ? 'warn' : 'info';
-      const dur = st.durationMs != null ? ` · ${st.durationMs}ms` : '';
-      runLog.log(lvl, `${prefix}  - ${st.label}: ${st.status}${dur}${st.detail ? ` — ${st.detail}` : ''}`);
-    }
-  }
-
   async function handleVerify(n: InfraNode) {
     setVerifyResult(null);
+    setVerifyLive(true);
     setVerifyOpen(true);
     const t0 = performance.now();
     runLog.begin('노드 검증', `${n.hostname} 검증 요청 (SSH/API 점검)`);
     try {
-      const res = await verifyNode.mutateAsync(n.id);
+      // 체커 단계(Ready·Pressure·CNI…)가 진행되는 대로 서버가 step/log 를 흘린다(D-089).
+      const res = await verifyNode.mutateAsync({ id: n.id, onEvent: (evt) => applyRunEvent(runLog, evt) });
       setVerifyResult(res);
-      logVerify(res);
       runLog.log(res.ok ? 'info' : 'warn', `검증 ${res.ok ? '통과' : '미통과'} · ${elapsed(t0)}`);
     } catch (e) {
       const msg = extractError(e);
@@ -637,17 +626,18 @@ export function InfraTopologyPage() {
     const t0 = performance.now();
     runLog.begin('K8s 동기화', `${activeCluster?.name ?? requestedFor} — kubectl get nodes 로 노드 정보 수집 요청`);
     try {
-      const res = await syncNodes.mutateAsync(activeClusterId);
+      // kubeconfig 확인 → kubectl(재시도) → 노드별 반영 → 신규 노드 검증을 서버가 실시간으로 흘린다(D-089).
+      // 그사이 클러스터를 바꿨다면 다른 클러스터 로그를 섞지 않는다(D-094).
+      const res = await syncNodes.mutateAsync({
+        clusterId: requestedFor,
+        onEvent: (evt) => { if (activeClusterRef.current === requestedFor) applyRunEvent(runLog, evt); },
+      });
       if (activeClusterRef.current !== requestedFor) return;
       // 생성/갱신/실패 요약 — 신규 노드가 0개여도 "동기화가 됐다"는 피드백을 남긴다(D-088)
       setSyncResult(res);
       // 신규 노드 자동 검증 결과(있으면) 요약 배너로 노출
       setSyncSummary(res.verifications && res.verifications.length ? res.verifications : null);
-      runLog.log(res.failed > 0 ? 'warn' : 'info',
-        `수집 완료 · ${elapsed(t0)} — 총 ${res.total} · 생성 ${res.created} · 갱신 ${res.updated} · 실패 ${res.failed}`
-        + (res.retryCount ? ` · kubectl 재시도 ${res.retryCount}회` : ''));
-      for (const err of res.errors ?? []) runLog.log('error', `오류: ${err}`);
-      for (const v of res.verifications ?? []) logVerify(v, '[신규 노드 검증] ');
+      runLog.log('info', `총 소요 ${elapsed(t0)}`);
       if (res.verifiedTruncated) runLog.log('warn', '신규 노드가 많아 일부만 자동 검증했다 — 나머지는 노드 카드의 검증 버튼으로 실행');
     } catch (e) {
       if (activeClusterRef.current !== requestedFor) return;
@@ -821,7 +811,7 @@ export function InfraTopologyPage() {
                 {syncSummary.filter(v => !v.ok).map(v => (
                   <button
                     key={v.hostname}
-                    onClick={() => { setVerifyResult(v); setVerifyOpen(true); }}
+                    onClick={() => { setVerifyResult(v); setVerifyLive(false); setVerifyOpen(true); }}
                     className="px-1.5 py-0.5 rounded-xl text-xs bg-status-critical/10 border border-status-critical/20 text-status-critical hover:bg-status-critical/20"
                   >
                     {v.hostname}
@@ -1083,6 +1073,9 @@ export function InfraTopologyPage() {
           result={verifyResult}
           loading={verifyNode.isPending && !verifyResult}
           onClose={() => { setVerifyOpen(false); setVerifyResult(null); }}
+          run={verifyLive ? runLog : undefined}
+          showLog={showLog}
+          onShowLogChange={setShowLog}
         />
       )}
     </div>

@@ -10,6 +10,14 @@
 
 1.43.0 이후 main 에 병합된 변경 (다음 릴리스 후보).
 
+### Added
+- **인프라 토폴로지 K8s 동기화·노드 검증 실시간 로그**: "K8s 동기화"가 끝날 때까지 기다리지 않고 kubeconfig 확인 →
+  kubectl get nodes(시도별 결과·재시도) → 노드별 신규/갱신 반영 → 신규 노드 자동 검증(체커 단계까지)을 진행되는 대로
+  보여준다. 노드 "검증"도 Ready·Pressure·CNI 등 점검 단계가 실시간으로 쌓이고, 검증 모달 안에서 로그를 볼 수 있다.
+  DB 에만 저장된 kubeconfig 로도 동기화되며, 등록된 kubeconfig 를 해석할 수 없으면 다른 클러스터를 읽지 않도록 중단한다.
+  Backend: SSE `POST /infra-nodes/sync/{cluster_id}/stream` · `POST /infra-nodes/{id}/verify/stream`, 딥체커 `on_step`
+  단계 훅. Frontend: `useSyncInfraNodes`/`useVerifyInfraNode` 가 스트림 소비, 공용 `applyRunEvent`·`camelizeKeys`.
+
 ## [1.43.0] - 2026-10-08
 
 ### Added

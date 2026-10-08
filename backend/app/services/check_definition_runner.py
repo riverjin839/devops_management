@@ -8,7 +8,7 @@ from __future__ import annotations
 import asyncio
 import logging
 from datetime import datetime, timedelta
-from typing import Any, Optional
+from typing import Any, Callable, Optional
 from uuid import UUID
 
 from sqlalchemy import desc
@@ -221,12 +221,14 @@ class DeepCheckService:
         thresholds: dict[str, Any] | None = None,
         in_cluster: bool = False,
         persist: bool = False,
+        on_step: Callable[[dict[str, Any]], None] | None = None,
     ) -> dict[str, Any]:
         """저장된 정의 없이 check_type 을 ad-hoc 으로 1회 실행 (런타임 params 주입 가능).
 
         ``run_definition_once`` 는 저장된 정의의 params 만 쓰므로 per-node(node_name) 같은
         런타임 인자를 넘길 수 없다. 이 메서드는 registry 의 default_thresholds/default_params 위에
         호출자 인자를 덮어써 실행한다. (예: 노드별 '검증' 버튼 / sync 직후 자동검증)
+        ``on_step`` 을 주면 체커의 단계 진입·종료(ExecutionStep dict)를 실행 중에 받는다(SSE 로그용).
         """
         from app.models import StatusEnum
         from app.services.registered_checks.registry import REGISTRY, get_step_plan
@@ -253,7 +255,9 @@ class DeepCheckService:
             params=eff_params,
             in_cluster=in_cluster,
         )
-        outcome = cls().safe_run(ctx)
+        checker = cls()
+        checker._on_step = on_step
+        outcome = checker.safe_run(ctx)
         steps = getattr(outcome, "steps", []) or []
         commands = getattr(outcome, "commands", []) or []
         details = dict(outcome.details or {})
@@ -295,6 +299,7 @@ class DeepCheckService:
         node_name: str,
         in_cluster: bool = False,
         persist: bool = False,
+        on_step: Callable[[dict[str, Any]], None] | None = None,
     ) -> dict[str, Any]:
         """단일 노드 health 검증 (노드별 '검증' 버튼 / sync 직후 자동검증)."""
         return self.run_check_type_once(
@@ -303,6 +308,7 @@ class DeepCheckService:
             params={"node_name": node_name},
             in_cluster=in_cluster,
             persist=persist,
+            on_step=on_step,
         )
 
     # ──────────────────────────────────────────────────────────────

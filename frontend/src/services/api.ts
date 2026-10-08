@@ -31,6 +31,11 @@ function convertKeys(obj: unknown): unknown {
   return obj;
 }
 
+/** axios 를 거치지 않는 응답(SSE 이벤트 본문 등)을 화면 타입(camelCase)으로 바꾼다. */
+export function camelizeKeys<T>(obj: unknown): T {
+  return convertKeys(obj) as T;
+}
+
 function convertKeysToSnake(obj: unknown): unknown {
   if (Array.isArray(obj)) return obj.map(convertKeysToSnake);
   if (obj !== null && typeof obj === 'object') {
@@ -1971,6 +1976,13 @@ import type {
 
 /** 병목 진단 실행(SSE) — fetch+reader 로 소비(`lib/sse.ts` postSse). 본문은 snake_case. */
 export const podBottleneckStreamUrl = '/api/v1/pod-bottleneck/run/stream';
+
+/** 인프라 K8s 동기화·노드 검증(SSE, D-089) — fetch+reader 로 소비. result 이벤트의 `result` 는 snake_case. */
+export const infraNodeStream = {
+  syncUrl: (clusterId: string) => `/api/v1/infra-nodes/sync/${clusterId}/stream`,
+  verifyUrl: (nodeId: string) => `/api/v1/infra-nodes/${nodeId}/verify/stream`,
+  headers: { 'X-API-Scopes': 'infra_topology.sync' } as Record<string, string>,
+};
 
 export const podBottleneckApi = {
   listProbes: () => api.get<_BottleneckProbeCatalogEntry[]>('/pod-bottleneck/probes'),
