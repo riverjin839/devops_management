@@ -19,6 +19,8 @@ interface Props {
   /** 링크 편집 모드 — 노드 클릭이 링크 양끝 선택으로 동작. */
   editMode: boolean;
   linkSourceId: string | null;
+  /** 노드 검색 결과 — 있으면 일치하지 않는 노드를 흐리게 그린다(D-099). */
+  highlightIds?: Set<string> | null;
 }
 
 interface ViewState { x: number; y: number; k: number; }
@@ -27,7 +29,7 @@ interface ViewState { x: number; y: number; k: number; }
 const DRAG_THRESHOLD = 5;
 
 export function TopologyCanvas({
-  graph, trafficEdges = [], showTraffic, selectedId, onSelectNode, editMode, linkSourceId,
+  graph, trafficEdges = [], showTraffic, selectedId, onSelectNode, editMode, linkSourceId, highlightIds = null,
 }: Props) {
   const svgRef = useRef<SVGSVGElement>(null);
   const [view, setView] = useState<ViewState>({ x: 60, y: 40, k: 1 });
@@ -233,6 +235,7 @@ export function TopologyCanvas({
               aria-pressed={isSel || isLinkSrc}
               aria-label={nodeAriaLabel(n, isLinkSrc, editMode)}
               className="cursor-pointer outline-none"
+              opacity={highlightIds && !highlightIds.has(n.id) ? 0.25 : 1}
             >
               <title>{n.name}</title>
               {focusId === n.id && (

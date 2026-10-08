@@ -507,6 +507,8 @@ export function InfraTopologyPage() {
   const [traceResult, setTraceResult] = useState<TopologyTraceResponse | null>(null);
   const [traceError, setTraceError] = useState('');
   const [traceLoading, setTraceLoading] = useState(false);
+  // Trace 패널은 기본 접힘 — 늘 통계·토폴로지 위를 차지하던 것을 필요할 때만 펼친다(D-099).
+  const [traceOpen, setTraceOpen] = useState(false);
 
   const activeClusterId = selectedClusterId || clusters[0]?.id || '';
   // 응답이 늦게 와도 그사이 클러스터를 바꿨다면 버린다 — 다른 클러스터 결과를 현재 것으로 오독(D-094).
@@ -599,7 +601,7 @@ export function InfraTopologyPage() {
 
   const traceBottleneck = useMemo(() => {
     if (!traceResult?.hops?.length) return null;
-    return traceResult.hops.reduce((acc, hop) => {
+    const best = traceResult.hops.reduce((acc, hop) => {
       const latency = hop.latencyMs ?? 0;
       const errors = hop.errorCount ?? 0;
       const score = latency + (errors * 10);
@@ -608,6 +610,8 @@ export function InfraTopologyPage() {
       }
       return acc;
     }, null as { hop: TopologyTraceResponse['hops'][number]; score: number } | null);
+    // latency/errors 가 모두 없으면(score 0) 근거 없는 "병목 의심" 을 띄우지 않는다(D-099).
+    return best && best.score > 0 ? best : null;
   }, [traceResult]);
 
   // D-094 — 클러스터를 바꾸면 이전 클러스터의 동기화·Trace 결과를 지운다.
@@ -854,6 +858,26 @@ export function InfraTopologyPage() {
             {/* Trace 패널 */}
             {activeCluster && (
               <MacCard title="Pod/Service → Switch Trace" rootClassName="mb-6">
+                <div className="flex items-center gap-2 mb-2">
+                  <p className="text-sm text-muted-foreground flex-1">
+                    Pod/Service 가 거치는 노드·스위치 경로와 지연·오류가 큰 홉을 찾는다.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const open = traceOpen || !!traceResult || !!traceError;
+                      if (open) { setTraceResult(null); setTraceError(''); }
+                      setTraceOpen(!open);
+                    }}
+                    aria-expanded={traceOpen || !!traceResult || !!traceError}
+                    aria-controls="infra-trace-body"
+                    className="text-xs inline-flex items-center gap-1 px-2 py-1 rounded-xl border border-border bg-background hover:bg-secondary"
+                  >
+                    {traceOpen || traceResult || traceError ? '접기' : '펼치기'}
+                  </button>
+                </div>
+                {(traceOpen || traceResult || traceError) && (
+                <div id="infra-trace-body">
                 {/* <form> 이라 Enter 로 실행되고, 각 입력에 라벨이 붙는다(D-095) */}
                 <form
                   onSubmit={(e) => { e.preventDefault(); void handleTrace(); }}
@@ -904,7 +928,12 @@ export function InfraTopologyPage() {
                   </div>
                 )}
 
-                {traceResult && (
+                {traceResult && traceResult.hops.length === 0 && (
+                  <p role="status" className="text-sm text-muted-foreground bg-muted/30 border border-border rounded-md px-3 py-2">
+                    경로를 찾지 못했다 — 대상 이름·네임스페이스를 확인하거나, 노드에 스위치/랙 정보가 등록돼 있는지 확인한다.
+                  </p>
+                )}
+                {traceResult && traceResult.hops.length > 0 && (
                   <div className="flex flex-col gap-2">
                     {traceBottleneck && (
                       <div className="flex items-center gap-2 text-status-warning text-sm bg-status-warning/10 border border-status-warning/30 rounded-md px-3 py-2">
@@ -935,6 +964,8 @@ export function InfraTopologyPage() {
                       ))}
                     </div>
                   </div>
+                )}
+                </div>
                 )}
               </MacCard>
             )}
@@ -973,7 +1004,7 @@ export function InfraTopologyPage() {
                 {switches.map(({ switchName, nodeCount, racks: swRacks }) => (
                   <section
                     key={switchName}
-                    className="rounded-xl border border-status-info/30 bg-status-info/[0.03] overflow-hidden"
+                    className="rounded-md border border-status-info/30 bg-status-info/[0.03] overflow-hidden"
                   >
                     {/* 스위치 헤더 (L2/L3) */}
                     <header className="flex items-center gap-2 px-4 py-2.5 bg-status-info/10 border-b border-status-info/20">
@@ -986,9 +1017,10 @@ export function InfraTopologyPage() {
                     </header>
 
                     {/* 아래: 해당 스위치에 물린 랙 + 노드 */}
-                    <div className="flex gap-4 overflow-x-auto p-4">
+                    {/* 랙이 많아도 가로 스크롤에 숨지 않도록 줄바꿈 그리드(D-099) */}
+                    <div className="grid gap-4 p-4 grid-cols-[repeat(auto-fill,minmax(14rem,1fr))]">
                       {swRacks.map(({ rack, nodes: rackNodes }) => (
-                        <div key={`${switchName}::${rack}`} className="flex-shrink-0 w-56 flex flex-col gap-2">
+                        <div key={`${switchName}::${rack}`} className="min-w-0 flex flex-col gap-2">
                           {/* 랙 헤더 */}
                           <div className="flex items-center gap-2 px-2 py-1.5 bg-muted/50 rounded-md border border-border">
                             <Tag className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />

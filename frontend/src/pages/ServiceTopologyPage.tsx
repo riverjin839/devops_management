@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import {
   Workflow, RefreshCw, Box, Boxes, Activity, Pencil, Eye, Loader2,
-  Server, Info, AlertTriangle, Layers, Grid3x3, Globe,
+  Server, Info, AlertTriangle, Layers, Grid3x3, Globe, Search,
 } from 'lucide-react';
 import { useClusters } from '@/hooks/useCluster';
 import { useCanOperate } from '@/hooks/useCanOperate';
@@ -42,6 +42,9 @@ export function ServiceTopologyPage() {
   const [includeOrphans, setIncludeOrphans] = useState(false);
   const [showTraffic, setShowTraffic] = useState(false);
   const [editMode, setEditMode] = useState(false);
+  // D-099 — 큰 그래프에서 노드를 찾는 검색어, 경고 목록 펼침
+  const [nodeQuery, setNodeQuery] = useState('');
+  const [warningsOpen, setWarningsOpen] = useState(false);
 
   // selection / edit state
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -138,6 +141,12 @@ export function ServiceTopologyPage() {
     for (const n of graph?.nodes ?? []) m.set(n.id, n);
     return m;
   }, [graph]);
+  const nodeMatches = useMemo(() => {
+    const q = nodeQuery.trim().toLowerCase();
+    if (!q) return null;
+    return (graph?.nodes ?? []).filter((n) => n.name.toLowerCase().includes(q) || n.kind.toLowerCase() === q);
+  }, [graph, nodeQuery]);
+  const highlightIds = useMemo(() => (nodeMatches ? new Set(nodeMatches.map((n) => n.id)) : null), [nodeMatches]);
   const nodeName = (id: string) => {
     const n = nodeById.get(id);
     return n ? n.name : id;
@@ -160,6 +169,8 @@ export function ServiceTopologyPage() {
     setLinkTargetId(null);
     setEditMode(false);
     setPendingDelete(null);
+    setNodeQuery('');
+    setWarningsOpen(false);
     trafficLog.clear();
   };
 
@@ -294,7 +305,8 @@ export function ServiceTopologyPage() {
               {/* 2D / 3D */}
               <div role="group" aria-label="보기 방식" className="flex items-center rounded-xl border border-border overflow-hidden text-sm">
                 <ToggleSeg active={view === '2d'} onClick={() => setView('2d')} icon={<Grid3x3 className="w-3 h-3" />} label="2D" />
-                <ToggleSeg active={view === '3d'} onClick={() => setView('3d')} icon={<Boxes className="w-3 h-3" />} label="3D" border />
+                <ToggleSeg active={view === '3d'} onClick={() => setView('3d')} icon={<Boxes className="w-3 h-3" />} label="3D" border
+                  disabled={editMode} title={editMode ? '링크 편집은 2D 에서만 할 수 있다' : undefined} />
               </div>
 
               <PillToggle on={includePods} onClick={() => setIncludePods((v) => !v)} icon={<Box className="w-3 h-3" />} label="Pod 표시" />
@@ -306,6 +318,25 @@ export function ServiceTopologyPage() {
                 </>
               )}
 
+              <label className="relative inline-flex items-center">
+                <span className="sr-only">노드 검색</span>
+                <Search className="w-3.5 h-3.5 absolute left-2 text-muted-foreground pointer-events-none" aria-hidden />
+                <input
+                  type="search"
+                  value={nodeQuery}
+                  onChange={(e) => setNodeQuery(e.target.value)}
+                  onKeyDown={(e) => {
+                    // Enter 로 첫 번째 일치 노드를 선택(상세 패널 열림)
+                    if (e.key === 'Enter' && nodeMatches && nodeMatches.length > 0 && !editMode) setSelectedId(nodeMatches[0].id);
+                  }}
+                  placeholder="노드 검색"
+                  className="w-40 pl-7 pr-2 py-1 text-sm rounded-xl border border-border bg-background focus:outline-none focus:ring-2 focus:ring-primary/40"
+                />
+                {nodeMatches && (
+                  <span role="status" className="ml-1.5 text-xs text-muted-foreground tabular-nums">{nodeMatches.length}개</span>
+                )}
+              </label>
+
               {!isCluster && (
                 <div className="ml-auto flex items-center gap-2">
                   <button onClick={() => setExtOpen(true)}
@@ -314,7 +345,11 @@ export function ServiceTopologyPage() {
                     className="px-2 py-1 text-sm bg-secondary hover:bg-secondary/80 border border-border rounded-xl inline-flex items-center gap-1 disabled:opacity-50 disabled:cursor-not-allowed">
                     <Server className="w-3 h-3" /> 외부 노드
                   </button>
-                  <button onClick={() => { setEditMode((v) => !v); setLinkSourceId(null); }}
+                  <button onClick={() => {
+                      // 3D 는 링크 시작 노드를 표시하지 못하므로 편집 모드는 2D 로 전환한다(D-099)
+                      if (!editMode) setView('2d');
+                      setEditMode((v) => !v); setLinkSourceId(null);
+                    }}
                     disabled={!canOperate}
                     title={withHint('링크 편집')}
                     aria-pressed={editMode}
@@ -341,7 +376,7 @@ export function ServiceTopologyPage() {
               )}
               {graph?.truncated && (
                 <span className="inline-flex items-center gap-1 text-status-warning">
-                  <AlertTriangle className="w-3 h-3" /> 노드 수 상한 초과(truncated)
+                  <AlertTriangle className="w-3 h-3" /> 노드 수 상한을 넘어 일부만 표시 중 — Pod 표시를 끄거나 범위를 좁혀라
                 </span>
               )}
               {isCluster && clusterData?.summaryRecommended && clusterMode === 'detail' && (
@@ -371,11 +406,23 @@ export function ServiceTopologyPage() {
                 </span>
               )}
               {(graph?.warnings.length ?? 0) > 0 && (
-                <span className="inline-flex items-center gap-1 text-muted-foreground" title={graph!.warnings.join('\n')}>
-                  <AlertTriangle className="w-3 h-3" /> 경고 {graph!.warnings.length}건
-                </span>
+                <button
+                  type="button"
+                  onClick={() => setWarningsOpen((v) => !v)}
+                  aria-expanded={warningsOpen}
+                  aria-controls="topology-warnings"
+                  className="inline-flex items-center gap-1 text-status-warning underline-offset-2 hover:underline"
+                >
+                  <AlertTriangle className="w-3 h-3" /> 경고 {graph!.warnings.length}건 {warningsOpen ? '접기' : '보기'}
+                </button>
               )}
             </div>
+            {/* 경고는 툴팁이 아니라 펼치는 목록으로 — 키보드·터치에서도 읽을 수 있다(D-099) */}
+            {warningsOpen && (graph?.warnings.length ?? 0) > 0 && (
+              <ul id="topology-warnings" className="mt-2 space-y-1 rounded-md border border-status-warning/30 bg-status-warning/5 px-3 py-2 text-xs text-foreground">
+                {graph!.warnings.map((w, i) => <li key={i} className="break-all">{w}</li>)}
+              </ul>
+            )}
             {showTraffic && !isCluster && (
               <div className="mt-2">
                 <RunLogPanel run={trafficLog} show={showTrafficLog} onShowChange={setShowTrafficLog} maxHeight="max-h-48" />
@@ -407,6 +454,10 @@ export function ServiceTopologyPage() {
                   <div>
                     <AlertTriangle className="w-7 h-7 text-status-warning mx-auto mb-2" />
                     <p className="text-sm text-muted-foreground">{formatApiError(activeQuery.error)}</p>
+                    <button type="button" onClick={() => void activeQuery.refetch()}
+                      className="mt-3 inline-flex items-center gap-1 px-3 py-1.5 text-sm rounded-xl border border-border bg-background hover:bg-secondary">
+                      <RefreshCw className="w-3.5 h-3.5" /> 다시 시도
+                    </button>
                   </div>
                 </div>
               ) : !graph || graph.nodes.length === 0 ? (
@@ -422,6 +473,7 @@ export function ServiceTopologyPage() {
                   onSelectNode={handleSelect}
                   editMode={editMode}
                   linkSourceId={linkSourceId}
+                  highlightIds={highlightIds}
                 />
               ) : (
                 <Topology3D
@@ -483,12 +535,13 @@ export function ServiceTopologyPage() {
   );
 }
 
-function ToggleSeg({ active, onClick, icon, label, border }: {
+function ToggleSeg({ active, onClick, icon, label, border, disabled, title }: {
   active: boolean; onClick: () => void; icon: React.ReactNode; label: string; border?: boolean;
+  disabled?: boolean; title?: string;
 }) {
   return (
-    <button type="button" onClick={onClick} aria-pressed={active}
-      className={`flex items-center gap-1 px-2 py-1 transition-colors ${border ? 'border-l border-border' : ''} ${
+    <button type="button" onClick={onClick} aria-pressed={active} disabled={disabled} title={title}
+      className={`flex items-center gap-1 px-2 py-1 transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${border ? 'border-l border-border' : ''} ${
         active ? 'bg-primary text-primary-foreground' : 'hover:bg-secondary text-muted-foreground'
       }`}>
       {icon} {label}

@@ -131,8 +131,36 @@ export function PodBottleneckDetailPage() {
           </div>
         )}
 
-        {/* 4 Probe 결과 — grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        {/* 원인 후보 요약 — 4개 카드를 다 읽지 않아도 어느 probe 가 문제인지 바로 보이게(D-099) */}
+        {(() => {
+          const rank: Record<string, number> = { critical: 3, pending: 2, warning: 1, healthy: 0 };
+          const bad = orderedKeys
+            .map((k) => ({ k, r: run.probes[k] }))
+            .filter((x) => x.r && x.r.status !== 'healthy')
+            .sort((a, b) => (rank[b.r!.status] ?? 0) - (rank[a.r!.status] ?? 0));
+          return (
+            <div role="status" className="flex flex-wrap items-center gap-2 text-sm">
+              <span className="text-muted-foreground">원인 후보</span>
+              {bad.length === 0 ? (
+                <span className="inline-flex items-center gap-1 rounded-full border border-status-healthy/30 bg-status-healthy/10 px-2.5 py-0.5 text-status-healthy">
+                  이상 없음
+                </span>
+              ) : bad.map(({ k, r }) => {
+                const sm = BOTTLENECK_STATUS_META[r!.status] ?? BOTTLENECK_STATUS_META.pending;
+                const Icon = sm.icon;
+                return (
+                  <span key={String(k)} className={`inline-flex items-center gap-1 rounded-full border border-border bg-card px-2.5 py-0.5 ${sm.cls}`}>
+                    <Icon className="w-3.5 h-3.5" aria-hidden />
+                    {probeMetaMap[k]?.label ?? String(k)} · {sm.label}
+                  </span>
+                );
+              })}
+            </div>
+          );
+        })()}
+
+        {/* 4 Probe 결과 — grid (카드 높이를 행 단위로 맞춘다) */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-stretch">
           {orderedKeys.map((k) => {
             const result = run.probes[k];
             const meta = probeMetaMap[k];
