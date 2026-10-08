@@ -267,7 +267,7 @@ export const clustersApi = {
       signal: opts?.signal,
     }),
   getCiliumConfig: (id: string) =>
-    api.get<{ live: string | null; stored: string | null; source: string; error: string | null }>(`/clusters/${id}/cilium-config`),
+    api.get<{ live: string | null; stored: string | null; /** live | stored | none | masked(viewer 숨김 정책) */ source: string; error: string | null }>(`/clusters/${id}/cilium-config`),
   updateCustomValues: (id: string, values: Record<string, unknown>) =>
     api.put<{ clusterId: string; customValues: Record<string, unknown> }>(
       `/clusters/${id}/custom-values`, { values },
@@ -1165,6 +1165,10 @@ export const uiSettingsApi = {
     api.get<{ data: import('@/types').WorkItemBoardSettings }>('/ui-settings/work-item-board'),
   updateWorkItemBoardSettings: (data: import('@/types').WorkItemBoardSettings) =>
     api.put<{ data: import('@/types').WorkItemBoardSettings }>('/ui-settings/work-item-board', { data }),
+  getClusterViewerMask: () =>
+    api.get<{ data: import('@/types').ClusterViewerMaskSetting }>('/ui-settings/cluster-viewer-mask'),
+  updateClusterViewerMask: (data: import('@/types').ClusterViewerMaskSetting) =>
+    api.put<{ data: import('@/types').ClusterViewerMaskSetting }>('/ui-settings/cluster-viewer-mask', { data }),
 };
 
 export const nodeLabelsApi = {

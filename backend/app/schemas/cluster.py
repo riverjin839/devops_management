@@ -119,6 +119,9 @@ class ClusterResponse(ClusterBase):
     # 추출 표시. 응답에서 빠져 있으면 cluster.nodeIps == undefined 가 되어
     # bond0/bond1 컬럼이 영구적으로 비어있게 보인다.
     node_ips: Optional[str] = None
+    # viewer 네트워크 정보 숨김 정책(services/cluster_network_mask.py)으로 IP·CIDR 등이
+    # 비워진 응답이면 True — 화면은 빈 값 대신 "숨김" 을 표시한다.
+    network_masked: bool = False
 
     class Config:
         from_attributes = True

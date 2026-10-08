@@ -29,7 +29,7 @@ import { useOperationLevels, levelLabel } from '@/hooks/useOperationLevels';
 import { useColumnWidths } from '@/hooks/useColumnWidths';
 import { ResizeGrip } from '@/components/common';
 import { useClusterCustomFields, sortedFields } from '@/hooks/useClusterCustomFields';
-import { Settings2, Wand2 } from 'lucide-react';
+import { EyeOff, Settings2, Wand2 } from 'lucide-react';
 import { StandardizeClusterNamesModal } from '@/components/cluster-manage/StandardizeClusterNamesModal';
 import { DndContext, closestCenter, PointerSensor, KeyboardSensor, useSensor, useSensors, type DragEndEvent } from '@dnd-kit/core';
 import { SortableContext, rectSortingStrategy, verticalListSortingStrategy, sortableKeyboardCoordinates, useSortable, arrayMove } from '@dnd-kit/sortable';
@@ -905,6 +905,16 @@ export function ClusterManagePage() {
                 초기화
               </button>
             )}
+          </MacCard>
+        )}
+
+        {/* viewer 네트워크 정보 숨김 정책 — 빈 IP·CIDR 칸이 "미수집" 으로 오해되지 않게 안내 */}
+        {clusters.some((c) => c.networkMasked) && (
+          <MacCard rootClassName="mb-5">
+            <p className="text-sm text-muted-foreground flex items-center gap-2">
+              <EyeOff className="w-4 h-4 text-primary flex-shrink-0" aria-hidden />
+              관리자 정책으로 IP·CIDR·MAC·호스트명·API 엔드포인트가 숨김 처리되어 빈 칸으로 보입니다 (viewer 권한).
+            </p>
           </MacCard>
         )}
 

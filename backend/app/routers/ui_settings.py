@@ -1,7 +1,7 @@
 import re
 from collections import Counter
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy.orm import Session
 
 from app.database import get_db
@@ -10,7 +10,13 @@ from app.models.user import User
 from app.auth.deps import get_current_user, require_admin
 from app.auth.feature_access import FEATURE_ACCESS_KEY, normalize_feature_access
 from app.auth.security import hash_password
+from app.services import audit_logger
 from app.services.assignee_accounts import ASSIGNEE_ACCOUNT_ROLE
+from app.services.cluster_network_mask import (
+    CLUSTER_VIEWER_MASK_KEY,
+    DEFAULT_CLUSTER_VIEWER_MASK,
+    normalize_mask_setting,
+)
 from app.schemas.ui_settings import (
     UiSettingsResponse,
     UiSettingsUpdate,
@@ -405,6 +411,45 @@ def update_feature_access(payload: dict, db: Session = Depends(get_db),
     db.commit()
     db.refresh(setting)
     return {"data": access}
+
+
+# ── viewer 클러스터 네트워크 정보 숨김 (Settings → 접근 제어) ─────────────────────
+# 켜면 viewer 의 /clusters 응답에서 내부 IP·CIDR·MAC·호스트명·API 엔드포인트를 비운다.
+# 조회는 화면이 "숨김" 안내를 그리도록 인증만, 변경은 admin + 감사 로그.
+@router.get("/cluster-viewer-mask")
+def get_cluster_viewer_mask(
+    db: Session = Depends(get_db),
+    _: User = Depends(get_current_user),
+):
+    setting = _get_or_create(db, CLUSTER_VIEWER_MASK_KEY, DEFAULT_CLUSTER_VIEWER_MASK)
+    return {"data": normalize_mask_setting(setting.value)}
+
+
+@router.put("/cluster-viewer-mask")
+def update_cluster_viewer_mask(
+    payload: dict,
+    request: Request,
+    db: Session = Depends(get_db),
+    actor: User = Depends(require_admin),
+):
+    """viewer 네트워크 정보 숨김 정책 저장 — admin 전용, 변경 시 감사 기록."""
+    value = normalize_mask_setting(payload.get("data", payload))
+    setting = _get_or_create(db, CLUSTER_VIEWER_MASK_KEY, DEFAULT_CLUSTER_VIEWER_MASK)
+    before = normalize_mask_setting(setting.value)
+    setting.value = value
+    db.commit()
+    db.refresh(setting)
+    if before != value:
+        audit_logger.record(
+            db,
+            action="settings.cluster_viewer_mask.update",
+            actor=actor,
+            target_type="app_setting",
+            target_id=CLUSTER_VIEWER_MASK_KEY,
+            details={"enabled_from": before["enabled"], "enabled_to": value["enabled"]},
+            request=request,
+        )
+    return {"data": value}
 
 
 # ── 업무 관리 게시판 공통 설정 (Settings) ─────────────────────────────────────────

@@ -6,6 +6,7 @@ import { BackupRestorePanel } from '@/components/settings/BackupRestorePanel';
 import { TenantManager } from '@/components/settings/TenantManager';
 import { SchemaHealthPanel } from '@/components/settings/SchemaHealthPanel';
 import { FeatureAccessManager } from '@/components/settings/FeatureAccessManager';
+import { ClusterViewerMaskSetting } from '@/components/settings/ClusterViewerMaskSetting';
 import { JiraIntegrationPanel } from '@/components/settings/JiraIntegrationPanel';
 import { ServiceNowIntegrationPanel } from '@/components/settings/ServiceNowIntegrationPanel';
 import { OperationLevelsManager } from '@/components/settings/OperationLevelsManager';
@@ -1283,7 +1284,12 @@ export function SettingsPage() {
         )}
 
         {/* Backup / Restore 탭 */}
-        {activeTab === 'access' && <FeatureAccessManager />}
+        {activeTab === 'access' && (
+          <div className="space-y-4">
+            <FeatureAccessManager />
+            <ClusterViewerMaskSetting />
+          </div>
+        )}
         {activeTab === 'tenant' && <TenantManager />}
 
         {activeTab === 'backup' && <BackupRestorePanel />}

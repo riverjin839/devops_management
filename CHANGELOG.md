@@ -10,6 +10,13 @@
 
 1.45.0 이후 main 에 병합된 변경 (다음 릴리스 후보).
 
+### Added
+- **viewer 클러스터 네트워크 정보 숨김 정책**: Settings → 접근 제어에서 켜면 viewer 는 클러스터 관리·사이드바 등에서
+  내부 IP·CIDR·bond IP/MAC·호스트명·AS 번호·API 엔드포인트·Prometheus/Alertmanager 주소를 볼 수 없고 Cilium 설정 보기도
+  막힌다(이름·지역·운영레벨·상태·노드 수는 유지). admin·operator 는 그대로이고 기본값은 꺼짐이라 기존 화면은 바뀌지 않는다.
+  설정 변경은 감사 로그에 남는다. Backend: `services/cluster_network_mask.py`, `GET/PUT /ui-settings/cluster-viewer-mask`,
+  `ClusterResponse.network_masked`. Frontend: `ClusterViewerMaskSetting`, 클러스터 관리 화면 숨김 안내.
+
 ## [1.45.0] - 2026-10-08
 
 ### Added

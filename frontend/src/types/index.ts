@@ -61,6 +61,8 @@ export interface Cluster {
   k8sVersion?: string;
   ciliumVersion?: string;
   nodeIps?: string;   // JSON 문자열: [{name, ip, master}]
+  /** viewer 네트워크 정보 숨김 정책으로 IP·CIDR·MAC·호스트명·API 엔드포인트가 비워진 응답이면 true. */
+  networkMasked?: boolean;
   // 사용자 정의 컬럼 값 (ClusterCustomField.key → value)
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   customValues?: Record<string, any> | null;
@@ -5561,4 +5563,9 @@ export interface TenantRunSlots {
   available: boolean;
   running: TenantRunSlotEntry[];
   waiting: TenantRunSlotEntry[];
+}
+
+/** Settings → 접근 제어 — viewer 의 /clusters 응답에서 망 구성 정보를 숨길지 (admin 전용 편집). */
+export interface ClusterViewerMaskSetting {
+  enabled: boolean;
 }
