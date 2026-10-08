@@ -8,7 +8,7 @@ import { useClusters } from '@/hooks/useCluster';
 import { useCanOperate } from '@/hooks/useCanOperate';
 import { useBottleneckRunsPaged } from '@/hooks/usePodBottleneck';
 import { BOTTLENECK_STATUS_META } from '@/components/pod-bottleneck';
-import { useRunLog, toRunLogLevel } from '@/hooks/useRunLog';
+import { useRunLog, applyRunEvent } from '@/hooks/useRunLog';
 import { useLogPref } from '@/hooks/useLogPref';
 import { postSse } from '@/lib/sse';
 import { podBottleneckStreamUrl } from '@/services/api';
@@ -109,12 +109,9 @@ export function PodBottleneckPage() {
           dest_service: destService.trim() || null,
         },
         (evt) => {
-          if (evt.type === 'log') runLog.log(toRunLogLevel(evt.level), String(evt.message ?? ''));
-          else if (evt.type === 'step') {
-            const st = evt.status === 'failed' ? 'failed' : evt.status === 'done' ? 'done' : 'running';
-            runLog.setStep(String(evt.name ?? ''), String(evt.label ?? evt.name ?? ''), st);
-          } else if (evt.type === 'result') out.runId = String(evt.run_id ?? '') || null;
+          if (evt.type === 'result') out.runId = String(evt.run_id ?? '') || null;
           else if (evt.type === 'error') out.error = String(evt.message ?? '진단 실패');
+          else applyRunEvent(runLog, evt);
         },
         ac.signal,
       );

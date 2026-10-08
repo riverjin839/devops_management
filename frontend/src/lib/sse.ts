@@ -7,12 +7,14 @@ import { getAuthToken } from '@/stores/authStore';
 export type SseEvent = Record<string, unknown> & { type?: string };
 
 /** 스트림을 끝까지 읽으며 이벤트마다 onEvent 를 호출한다.
- *  스트림 시작 전 거절(403/404/422 등)은 서버 detail 을 담아 Error 로 던진다. */
+ *  스트림 시작 전 거절(403/404/422 등)은 서버 detail 을 담아 Error 로 던진다.
+ *  `headers` 는 axios 쪽에서 붙이던 화면별 헤더(예: `X-API-Scopes`)를 그대로 넘길 때 쓴다. */
 export async function postSse(
   url: string,
   body: unknown,
   onEvent: (evt: SseEvent) => void,
   signal?: AbortSignal,
+  headers?: Record<string, string>,
 ): Promise<void> {
   const token = getAuthToken();
   const resp = await fetch(url, {
@@ -21,6 +23,7 @@ export async function postSse(
     headers: {
       'Content-Type': 'application/json',
       Accept: 'text/event-stream',
+      ...(headers ?? {}),
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
     },
     body: JSON.stringify(body),

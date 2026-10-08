@@ -3,11 +3,17 @@ import { Check, X, Loader2, ShieldCheck, AlertTriangle } from 'lucide-react';
 import type { NodeVerifyResult, NodeHealthEntry } from '@/types';
 import { ExecutionStepsTimeline } from '@/components/daily-check';
 import { useModalA11y } from '@/components/common/useModalA11y';
+import { RunLogPanel } from '@/components/common/RunLogPanel';
+import type { RunLog } from '@/hooks/useRunLog';
 
 interface NodeVerifyModalProps {
   result: NodeVerifyResult | null;
   loading: boolean;
   onClose: () => void;
+  /** 이 모달에서 막 실행한 검증의 실시간 로그 — 모달이 화면의 실행 로그 패널을 가리므로 안에서 보여준다(D-089). */
+  run?: RunLog;
+  showLog?: boolean;
+  onShowLogChange?: (v: boolean) => void;
 }
 
 const STATUS_STYLE: Record<string, { bg: string; text: string; label: string }> = {
@@ -67,7 +73,7 @@ function NodeChecklist({ entry }: { entry: NodeHealthEntry }) {
   );
 }
 
-export function NodeVerifyModal({ result, loading, onClose }: NodeVerifyModalProps) {
+export function NodeVerifyModal({ result, loading, onClose, run, showLog = true, onShowLogChange }: NodeVerifyModalProps) {
   const dialogRef = useModalA11y(true, onClose);
   const titleId = useId();
   const style = result ? (STATUS_STYLE[result.status] ?? STATUS_STYLE.pending) : STATUS_STYLE.pending;
@@ -128,6 +134,9 @@ export function NodeVerifyModal({ result, loading, onClose }: NodeVerifyModalPro
                 </div>
               ) : null}
             </>
+          )}
+          {run && onShowLogChange && (
+            <RunLogPanel run={run} show={showLog} onShowChange={onShowLogChange} maxHeight="max-h-56" />
           )}
         </div>
       </div>

@@ -246,6 +246,7 @@ class DeepCheckerBase(ABC):
         rec = ExecutionStep(id=step_id, label=label, status="running",
                             started_ms=int((time.time() - self._run_start) * 1000))
         self._steps.append(rec)
+        self._emit_step(rec)
         t0 = time.time()
         try:
             yield rec
@@ -258,6 +259,7 @@ class DeepCheckerBase(ABC):
             raise
         finally:
             rec.duration_ms = int((time.time() - t0) * 1000)
+            self._emit_step(rec)
             # 체커가 예외를 던지지 않고 st.status="failed" 만 세팅한 뒤 그대로
             # DeepCheckOutcome 을 반환하는 경우(흔한 "정상적인 실패" 경로 — 권한 부족,
             # 바이너리 없음, 스냅샷 없음 등) 는 safe_run() 의 일반 예외 로깅을 타지 않아
@@ -270,6 +272,20 @@ class DeepCheckerBase(ABC):
                     self.check_type, getattr(self, "_log_cluster_label", "?"),
                     step_id, label, (rec.detail or "")[:300],
                 )
+
+    def _emit_step(self, rec: "ExecutionStep") -> None:
+        """단계 진입·종료를 실시간 구독자(``on_step``)에게 알린다 — SSE 실행 로그용(D-089).
+
+        구독자는 ``run_check_type_once(on_step=...)`` 가 꽂는다. 구독자 오류가 점검 자체를
+        깨뜨리면 안 되므로 예외는 삼킨다.
+        """
+        cb = getattr(self, "_on_step", None)
+        if cb is None:
+            return
+        try:
+            cb(asdict(rec))
+        except Exception:  # noqa: BLE001
+            logger.debug("deep check %s on_step callback failed", self.check_type, exc_info=True)
 
     def _collected_steps(self) -> list[dict[str, Any]]:
         return [asdict(s) for s in getattr(self, "_steps", [])]
