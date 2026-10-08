@@ -22,6 +22,9 @@ class HomePrefs(BaseModel):
     # 전 기존 계정은 `_backfill_installed_sidebar_apps()`(1단계, 그룹 단위) →
     # `_migrate_installed_apps_to_leaf_paths()`(2단계, leaf 치환) →
     # `_prune_topbar_apps_to_default()`(3단계, 상단바를 `/tasks-mgmt` 하나로 정리)를 거친다.
+    # ⚠ 메뉴 표시 개인화일 뿐 접근 제어가 아니다 — 설치 안 한 화면도 URL 로 열리고, 서버·프론트
+    # 어느 권한 판정도 이 값을 보지 않는다. 화면 차단은 feature_access(Settings → 접근 제어)·역할·
+    # 테넌트 바인딩으로 한다(DESIGN_SYSTEM.md "접근 제어가 아니다").
     installed_apps: list[str] = Field(default_factory=lambda: ["/tasks-mgmt"])
 
 

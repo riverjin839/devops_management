@@ -103,3 +103,17 @@ export function sidebarAppSections(isAdmin: boolean): InstallableAppSection[] {
 export function topbarAppSections(): InstallableAppSection[] {
   return sectionsForDomain('work', [SPECIAL_APPS.favorites, SPECIAL_APPS.island], false);
 }
+
+/**
+ * 카탈로그에서 접근 제어(Settings → 접근 제어)로 막힌 화면을 뺀다. 설치(installedApps)는 메뉴 표시
+ * 개인화일 뿐 권한이 아니라서, 막힌 화면을 설치해도 레일·상단바에는 어차피 그려지지 않는다
+ * (`featureAllowed` 렌더 필터) — 카탈로그에 남겨 두면 "설치됨"인데 안 보이는 상태가 된다.
+ */
+export function filterSectionsByAccess(
+  sections: InstallableAppSection[],
+  allowed: (id: string) => boolean,
+): InstallableAppSection[] {
+  return sections
+    .map((s) => ({ ...s, apps: s.apps.filter((a) => allowed(a.id)) }))
+    .filter((s) => s.apps.length > 0);
+}

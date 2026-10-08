@@ -93,6 +93,8 @@ export function FeatureAccessManager() {
           admin 은 항상 모든 화면에 접근할 수 있습니다. <b>비활성화</b>로 체크한 화면은
           일반 사용자(operator·viewer)의 사이드바 메뉴·Your Island 화면 추가 목록에서 사라지고,
           주소를 직접 입력해도 홈으로 돌아갑니다. 기본값은 <b>열림</b>입니다.
+          사용자가 사이드바·상단바 "+" 로 설치한 앱 목록은 메뉴 표시용일 뿐 권한이 아니므로, 화면을 막으려면
+          반드시 여기서 비활성화하세요(설치 여부와 무관하게 적용됩니다).
         </p>
         <ScreenCatalogList
           filter={(path) => !SCREEN_ACCESS_EXCLUDED.has(path)}
