@@ -15,7 +15,7 @@ import { FlyoutShell, FlyoutLink, FlyoutAction } from './NavFlyout';
 import { FavoritesFlyoutBody } from './FavoritesFlyoutBody';
 import { WorkAlarmBell } from './WorkAlarmBell';
 import { AddAppDialog } from './AddAppDialog';
-import { installableAppById, topbarAppSections } from './installableApps';
+import { filterSectionsByAccess, installableAppById, topbarAppSections } from './installableApps';
 
 // Sidebar.tsx 의 flyout hover-intent 와 동일한 지연값 — 두 진입점의 체감 반응 속도를 맞춘다.
 const HOVER_OPEN_DELAY = 150;
@@ -57,7 +57,10 @@ export function AppTopBar() {
     const next = installedApps.includes(id) ? installedApps.filter((x) => x !== id) : [...installedApps, id];
     updateHomePrefs.mutate({ installedApps: next });
   };
-  const catalogSections = useMemo(() => topbarAppSections(), []);
+  const catalogSections = useMemo(
+    () => filterSectionsByAccess(topbarAppSections(), featureAllowed),
+    [featureAllowed],
+  );
 
   const [favoritesOpen, setFavoritesOpen] = useState(false);
   const [favoritesAnchor, setFavoritesAnchor] = useState<DOMRect | null>(null);

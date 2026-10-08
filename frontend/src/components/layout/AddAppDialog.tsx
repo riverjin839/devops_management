@@ -81,6 +81,11 @@ export function AddAppDialog({ open, onClose, title, description, sections, inst
               </div>
             </div>
           ))}
+          {/* installed_apps 는 메뉴 표시 개인화일 뿐 접근 제어가 아니다 — 권한 오해 방지 안내 */}
+          <p className="px-0.5 text-[11px] text-muted-foreground">
+            설치는 내 메뉴에 보일지만 정합니다. 화면을 열 수 있는 권한은 관리자가 Settings → 접근 제어에서
+            정하며, 막힌 화면은 이 목록에 나오지 않습니다.
+          </p>
         </div>
       </DialogContent>
     </Dialog>

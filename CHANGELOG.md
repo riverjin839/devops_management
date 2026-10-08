@@ -10,6 +10,12 @@
 
 1.46.0 이후 main 에 병합된 변경 (다음 릴리스 후보).
 
+### Fixed
+- **"앱 추가" 카탈로그에서 접근 제어로 막힌 화면 제외**: Settings → 접근 제어에서 비활성화된 화면이 사이드바·상단바
+  "+" 카탈로그에 그대로 나와, 설치해도 "설치됨"으로만 표시되고 레일에는 나타나지 않던 문제를 고쳤다. 카탈로그 하단과
+  접근 제어 탭에 "설치는 메뉴 표시일 뿐 권한이 아니다"라는 안내를 추가했고, `installed_apps` 가 접근 제어가 아님을
+  `DESIGN_SYSTEM.md`·`docs/SCREENS.md` 에 명시했다. Frontend: `installableApps.ts` `filterSectionsByAccess`.
+
 ## [1.46.0] - 2026-10-08
 
 ### Added
