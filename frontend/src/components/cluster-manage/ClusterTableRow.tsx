@@ -570,10 +570,16 @@ export function ClusterTableRow({ cluster, onEdit, onDelete, deletingId, overlap
         {canEdit ? (
           <div className="flex items-center gap-1">
             {onVerify && (
-              <button onClick={() => onVerify(cluster)} disabled={verifying}
-                className="p-1.5 hover:bg-primary/10 rounded text-muted-foreground hover:text-primary disabled:opacity-60 transition-colors"
-                title="연결 검증 — API server / kubeconfig 인증 / kubectl 을 단계별로 점검하고 결과를 실행 로그에 남깁니다 (상태 갱신됨)"
-                aria-label={`${cluster.name} 연결 검증`}>
+              <button onClick={() => onVerify(cluster)}
+                className={`p-1.5 rounded transition-colors ${
+                  verifying
+                    ? 'bg-status-critical/10 text-status-critical hover:bg-status-critical/20'
+                    : 'text-muted-foreground hover:bg-primary/10 hover:text-primary'
+                }`}
+                title={verifying
+                  ? '검증 중지 — 남은 단계는 실행하지 않고 상태도 바꾸지 않습니다'
+                  : '연결 검증 — API server / kubeconfig 인증 / kubectl 을 단계별로 점검하고 진행 상황을 실행 로그에 실시간으로 남깁니다 (상태 갱신됨)'}
+                aria-label={verifying ? `${cluster.name} 검증 중지` : `${cluster.name} 연결 검증`}>
                 {verifying
                   ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
                   : <ShieldCheck className="w-3.5 h-3.5" />}

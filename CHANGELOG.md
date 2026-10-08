@@ -13,6 +13,11 @@
 ## [1.44.0] - 2026-10-08
 
 ### Added
+- **클러스터 연결 검증 실시간 스트리밍**: `/cluster-manage` 의 연결 검증이 API server → kubeconfig 인증 → kubectl
+  단계를 시작·끝날 때마다 실행 로그에 바로 남긴다(예전엔 최대 수십 초 동안 아무 표시 없이 기다린 뒤 한꺼번에 출력).
+  진행 중 버튼을 다시 누르면 검증이 중지되고, 남은 단계는 실행하지 않으며 클러스터 상태도 바꾸지 않는다(감사 로그
+  `cluster.verify` status `aborted`). Backend: `POST /clusters/{id}/verify/stream`(SSE — 동기 `/verify` 와 단계·판정
+  로직 공유). Frontend: `ClusterManagePage` 가 fetch 스트림으로 소비, 검증 버튼은 진행 중 "검증 중지" 토글.
 - **인프라 토폴로지 K8s 동기화·노드 검증 실시간 로그**: "K8s 동기화"가 끝날 때까지 기다리지 않고 kubeconfig 확인 →
   kubectl get nodes(시도별 결과·재시도) → 노드별 신규/갱신 반영 → 신규 노드 자동 검증(체커 단계까지)을 진행되는 대로
   보여준다. 노드 "검증"도 Ready·Pressure·CNI 등 점검 단계가 실시간으로 쌓이고, 검증 모달 안에서 로그를 볼 수 있다.
