@@ -28,6 +28,7 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       bump: ${{ steps.decide.outputs.bump }}
+      rescue: ${{ steps.decide.outputs.rescue }}
     permissions:
       contents: read        # 판정 스크립트 checkout (job 에 permissions 를 명시하면 나머지는 none)
       pull-requests: read
@@ -67,6 +68,13 @@ jobs:
             python3 scripts/release/decide_bump.py "${TITLE}" | tee -a "$GITHUB_OUTPUT"
           fi
 
+          # [changelog-fix] PR 은 릴리스 섹션을 일부러 고친 것 — bump 전 구제(rescue)를 끈다.
+          if [[ "${TITLE}" == *"[changelog-fix]"* ]]; then
+            echo "rescue=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "rescue=true" >> "$GITHUB_OUTPUT"
+          fi
+
   release:
     needs: determine-bump
     if: needs.determine-bump.outputs.bump != 'none'
@@ -92,7 +100,13 @@ jobs:
         run: |
           set -euo pipefail
           set +e
-          OUTPUT="$(python3 scripts/release/bump_version.py ${{ needs.determine-bump.outputs.bump }})"
+          # 브랜치 생성 후 릴리스가 끼어들어 이번 머지의 [Unreleased] 항목이 이미 릴리스된 섹션에
+          # 들어갔으면, 직전 main(HEAD^1) 대비 끼어든 줄을 [Unreleased] 로 되돌린 뒤 bump 한다.
+          RESCUE_ARGS=()
+          if [[ "${{ needs.determine-bump.outputs.rescue }}" != "false" ]]; then
+            RESCUE_ARGS=(--rescue-from HEAD^1)
+          fi
+          OUTPUT="$(python3 scripts/release/bump_version.py ${{ needs.determine-bump.outputs.bump }} "${RESCUE_ARGS[@]}")"
           CODE=$?
           set -e
           echo "$OUTPUT"

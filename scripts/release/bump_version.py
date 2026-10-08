@@ -6,7 +6,7 @@ docs/branch-tag-strategy.md / .claude/skills/release/SKILL.md 의 수동 절차�
 만들어낸다 — "버전 3곳"(frontend/package.json, backend/app/main.py 2곳) + CHANGELOG.md 섹션 확정.
 
 사용법:
-    python3 scripts/release/bump_version.py <minor|patch> [--dry-run]
+    python3 scripts/release/bump_version.py <minor|patch> [--dry-run] [--rescue-from <git-ref>]
 
 동작:
     - Unreleased 섹션에 실제 변경 항목("- " 로 시작하는 불릿)이 하나도 없으면 아무것도 바꾸지
@@ -14,6 +14,10 @@ docs/branch-tag-strategy.md / .claude/skills/release/SKILL.md 의 수동 절차�
     - 버전 문자열을 못 찾거나 예상 개수(1/2)와 다르게 매칭되면 예외로 즉시 실패한다
       (조용히 일부만 바뀌는 상황을 막기 위해).
     - 표준출력에 `new_version=X.Y.Z` 한 줄을 출력해 호출자가 파싱할 수 있게 한다.
+    - `--rescue-from <ref>`: bump 전에 <ref>(직전 main) 대비 **이미 릴리스된 섹션에 새로 끼어든 줄**을
+      [Unreleased] 의 같은 `### 소제목` 아래로 옮긴다. 브랜치 생성 후 릴리스가 끼어들어 PR 항목이
+      git 머지로 엉뚱한 버전 섹션에 들어간 경우를 구제한다(changelog_sections.py 참고).
+      옮긴 내역은 표준에러에 `rescued:` 로 남는다.
 """
 from __future__ import annotations
 
@@ -21,8 +25,13 @@ import argparse
 import datetime
 import json
 import re
+import subprocess
 import sys
 from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+
+from changelog_sections import rescue  # noqa: E402
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 PACKAGE_JSON = REPO_ROOT / "frontend" / "package.json"
@@ -131,11 +140,33 @@ def update_changelog(new_version: str, dry_run: bool) -> bool:
     return True
 
 
+def rescue_intrusions(ref: str, dry_run: bool) -> int:
+    """<ref> 대비 릴리스 섹션에 끼어든 항목을 [Unreleased] 로 옮긴다. 옮긴 묶음 수를 돌려준다."""
+    r = subprocess.run(
+        ["git", "show", f"{ref}:CHANGELOG.md"], cwd=REPO_ROOT, capture_output=True, text=True,
+    )
+    if r.returncode != 0:
+        print(f"rescue: {ref} 의 CHANGELOG.md 를 읽지 못함 — 구제 생략", file=sys.stderr)
+        return 0
+    new_text, moved = rescue(r.stdout, CHANGELOG.read_text(encoding="utf-8"))
+    for it in moved:
+        first = it.lines[0][:80]
+        print(f"rescued: [{it.version}] ### {it.subsection or '-'} → [Unreleased] :: {first}", file=sys.stderr)
+    if moved and not dry_run:
+        CHANGELOG.write_text(new_text, encoding="utf-8")
+    return len(moved)
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("bump_kind", choices=["minor", "patch"])
     parser.add_argument("--dry-run", action="store_true")
+    parser.add_argument("--rescue-from", metavar="REF",
+                        help="이 ref 대비 릴리스 섹션에 끼어든 항목을 bump 전에 [Unreleased] 로 옮긴다")
     args = parser.parse_args()
+
+    if args.rescue_from:
+        rescue_intrusions(args.rescue_from, args.dry_run)
 
     old_version = read_current_version()
     new_version = bump(old_version, args.bump_kind)

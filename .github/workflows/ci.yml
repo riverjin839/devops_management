@@ -22,6 +22,16 @@ jobs:
       - name: Release script tests
         run: python3 -m unittest discover -s scripts/release -p 'test_*.py' -v
 
+      # 이미 릴리스된 CHANGELOG 섹션 보호 — 브랜치 생성 후 auto-release 가 끼어들면 [Unreleased]
+      # 에 넣은 항목이 git 머지로 새 버전 섹션 안에 들어간다(checkout 은 PR→base 머지 결과).
+      # 의도적 위치 정리는 PR 제목에 [changelog-fix]. 로직: scripts/release/changelog_sections.py
+      - name: Released CHANGELOG sections unchanged (PR only)
+        if: github.event_name == 'pull_request'
+        env:
+          PR_TITLE: ${{ github.event.pull_request.title }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: python3 scripts/release/check_changelog_sections.py "$BASE_SHA" --title "$PR_TITLE"
+
       # feat/fix 성격의 코드 변경 PR 인데 CHANGELOG/문서를 하나도 안 건드리면 실패.
       # 의도된 예외는 PR 제목에 [skip-docs] 를 붙인다 (예: 리팩토링-only, 실험 브랜치).
       - name: Changelog / docs updated check (PR only)

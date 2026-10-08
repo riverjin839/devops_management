@@ -98,7 +98,8 @@ devops_management/
 ├── k8s/                 # Kustomize base + overlays(dev/prod/kind/airgap) + superpod/(CronJob)
 ├── helm/k8s-daily-monitor/   # values / -dev / -prod / -airgap
 ├── scripts/             # kind-setup.sh, deploy-airgap.sh, init-cluster.sh,
-│                        #   release/{bump_version,decide_bump}.py, docs/check_docs_sync.py
+│                        #   release/{bump_version,decide_bump,changelog_sections,check_changelog_sections}.py,
+│                        #   docs/check_docs_sync.py
 ├── ansible/playbooks/  argocd/  docker/ vagrant/ windows-docker/
 ├── docs/                # 인덱스는 docs/README.md (01-plan/ 02-design/ 03-analysis/
 │                        #   archive/ superpowers/ 하위 폴더 포함)
@@ -429,6 +430,10 @@ Makefile 타깃(`make k8s-dev`, `make docker-rebuild` 등)은 `make help` 로 �
   push 한다(→ `release.yml` 이 GHCR 이미지 태깅 + GitHub Release 생성). 버전 3곳 수정과
   CHANGELOG 섹션 확정은 `scripts/release/bump_version.py` 로 자동화돼 있다. 수동 `/release`
   스킬은 hotfix 나 자동화 실패 시의 fallback 이다 — 평소엔 실행할 필요 없음.
+- **이미 릴리스된 섹션은 고치지 않는다.** PR CI 가 base 에 있던 `## [X.Y.Z]` 섹션 변경을 막고
+  (`scripts/release/check_changelog_sections.py`), CI 이후 릴리스가 끼어든 경우는 auto-release 가
+  끼어든 항목을 `[Unreleased]` 로 되돌린다. 의도적 위치 정리 PR 만 제목에 `[changelog-fix]`.
+  상세는 `docs/branch-tag-strategy.md` "이미 릴리스된 섹션 보호".
 
 ### 사이드바 "릴리즈 노트" 패널
 
