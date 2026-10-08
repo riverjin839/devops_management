@@ -1,4 +1,5 @@
-import { useMemo, useRef } from 'react';
+import { useId, useMemo, useRef } from 'react';
+import { Maximize2, Table2 } from 'lucide-react';
 import ForceGraph3D, { type ForceGraph3DInstance, type NodeObject, type LinkObject } from 'react-force-graph-3d';
 import type { TopoNode, TopoEdge, TopologyTrafficEdge } from '@/types';
 import { kindAccent, edgeStyle, KIND_ABBR } from './topologyShared';
@@ -11,6 +12,8 @@ interface Props {
   width: number;
   height: number;
   onSelectNode: (id: string | null) => void;
+  /** 3D(WebGL)는 키보드·스크린리더로 조작할 수 없다 — 같은 데이터를 표로 보는 대체 뷰로 전환(D-092). */
+  onShowTable?: () => void;
 }
 
 interface G3Node extends NodeObject {
@@ -25,8 +28,9 @@ interface G3Link extends LinkObject {
   dropped?: boolean;
 }
 
-export function Topology3D({ graph, trafficEdges = [], showTraffic, width, height, onSelectNode }: Props) {
+export function Topology3D({ graph, trafficEdges = [], showTraffic, width, height, onSelectNode, onShowTable }: Props) {
   const ref = useRef<ForceGraph3DInstance>();
+  const hintId = useId();
 
   const data = useMemo(() => {
     const degree: Record<string, number> = {};
@@ -56,7 +60,31 @@ export function Topology3D({ graph, trafficEdges = [], showTraffic, width, heigh
   const reducedMotion = usePrefersReducedMotion();
   const linkColor = (l: LinkObject) => edgeStyle((l as G3Link).type, (l as G3Link).dropped).stroke;
 
+  // WebGL 캔버스는 보조기기에 내용이 없다 — 요약·조작법을 그룹 라벨로 주고, 같은 정보를 담은 표 보기로 가는
+  // 버튼과 "화면 맞춤"을 실제 <button> 으로 둔다(D-092 잔여).
   return (
+    <div role="group" className="relative w-full h-full"
+      aria-label={`서비스 토폴로지 3D 그래프 — 노드 ${graph.nodes.length}개, 연결 ${graph.edges.length}개`}
+      aria-describedby={hintId}>
+      <p id={hintId} className="sr-only">
+        3D 보기는 마우스로만 조작할 수 있다(드래그 회전, 휠 확대, 노드 클릭 선택). 키보드나 스크린리더로는 표 보기를 쓴다.
+      </p>
+      <div className="absolute top-3 left-3 z-10 flex items-center gap-1.5">
+        {onShowTable && (
+          <button type="button" onClick={onShowTable}
+            className="inline-flex items-center gap-1 px-2 py-1 text-xs rounded-xl border border-border bg-card/90 text-foreground hover:bg-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+            <Table2 className="w-3.5 h-3.5" aria-hidden /> 표로 보기
+          </button>
+        )}
+        <button type="button" onClick={() => ref.current?.zoomToFit(400)}
+          title="화면 맞춤" aria-label="화면 맞춤"
+          className="inline-flex items-center gap-1 px-2 py-1 text-xs rounded-xl border border-border bg-card/90 text-foreground hover:bg-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+          <Maximize2 className="w-3.5 h-3.5" aria-hidden />
+        </button>
+        <span aria-hidden className="hidden sm:inline text-[11px] text-muted-foreground bg-card/80 rounded-xl px-2 py-0.5">
+          드래그 회전 · 휠 확대 · 클릭 선택
+        </span>
+      </div>
     <ForceGraph3D
       ref={ref as React.MutableRefObject<ForceGraph3DInstance>}
       graphData={data}
@@ -86,5 +114,6 @@ export function Topology3D({ graph, trafficEdges = [], showTraffic, width, heigh
       cooldownTicks={150}
       nodeOpacity={0.95}
     />
+    </div>
   );
 }

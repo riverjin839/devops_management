@@ -701,7 +701,8 @@ const runLog = useRunLog();                        // 로그는 항상 수집
 const [showLog, setShowLog] = useLogPref('page-key'); // 펼침 여부는 화면별 localStorage
 // 단건 요청형: 요청 시작·응답 요약·오류를 직접 남긴다
 runLog.begin('K8s 동기화', '요청 전송'); … runLog.log('info', '생성 3 · 갱신 2'); … runLog.end();
-// 서버 스트리밍형: postSse(url, snakeBody, onEvent) 로 log/step/result/error 이벤트를 그대로 쌓는다
+// 서버 스트리밍형: postSse(url, snakeBody, onEvent, signal?, headers?) — log/step 은 applyRunEvent(runLog, evt) 로 쌓고
+//   result(snake_case → camelizeKeys)·error 만 직접 처리한다
 <RunLogPanel run={runLog} show={showLog} onShowChange={setShowLog} actions={…} />
 ```
 
@@ -709,8 +710,12 @@ runLog.begin('K8s 동기화', '요청 전송'); … runLog.log('info', '생성 3
   snake_case 원문 JSON, 이벤트 `log{level,ts,message}`·`step{name,label,status}`·`result`·`error`)를 만들고
   `lib/sse.ts` `postSse` 로 소비한다. 검증 실패(403/404/422)는 스트림 시작 전에 일반 HTTP 오류로 응답한다.
   FastAPI 0.106+ 는 yield 의존성(`get_db`)을 스트리밍 전에 정리하므로 스트림 안에서는 `SessionLocal()` 을 따로 연다.
+  동기(blocking) 작업은 실행 함수를 `emit` 콜백형으로 짜서 동기 엔드포인트와 SSE 엔드포인트가 같은 코드를 쓰게 하고,
+  SSE 쪽은 작업 스레드 + 큐로 흘린다(`infra_nodes.py` `_stream_job` — 15초 무이벤트 시 `: ping` 주석). 딥체커 단계를
+  실시간으로 받으려면 `run_check_type_once(..., on_step=cb)` 를 쓴다(체커 `_step` 진입·종료마다 호출).
+- 모달이 페이지의 실행 로그 패널을 가리는 실행(예: 노드 검증)은 모달 안에도 같은 `RunLogPanel` 을 렌더한다.
 - 패널은 실행 전에는 렌더되지 않고(null), 로그를 접어 두면 마지막 한 줄만 보인다. 레퍼런스:
-  `/pod-bottleneck`(SSE), `/infra-topology`(동기화·검증·Trace), `/service-topology`(실트래픽).
+  `/pod-bottleneck`(SSE), `/infra-topology`(동기화·검증 SSE, Trace 응답 단위), `/service-topology`(실트래픽).
 
 ### 12.10 지원 뷰포트 (D-076)
 

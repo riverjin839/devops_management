@@ -139,7 +139,7 @@ AI 어시스턴트 + 사람 개발자용 — 기능 → 파일 경로와 자주 
 | 서비스 토폴로지 | `backend/app/routers/service_topology.py` → `frontend/src/pages/ServiceTopologyPage.tsx` |
 | 서비스 아키텍처 문서 (자동생성·현행화) | `backend/app/routers/architecture_docs.py` + `services/architecture_doc_service.py` + `models/service_arch_doc.py` → `frontend/src/pages/ServiceArchitecturePage.tsx` + `components/serviceArch/` + `hooks/useArchDoc.ts` |
 | 서비스 모듈 관계도 | — → `frontend/src/pages/ArchitecturePage.tsx` |
-| 인프라 물리 토폴로지 | `backend/app/routers/infra_nodes.py` → `frontend/src/pages/InfraTopologyPage.tsx` |
+| 인프라 물리 토폴로지 | `backend/app/routers/infra_nodes.py`(동기화·검증 SSE `…/stream` — `_run_sync`·`_run_verify`·`_stream_job`) → `frontend/src/pages/InfraTopologyPage.tsx` |
 | 노드 서버스펙 자산 대장 | `backend/app/routers/node_server_specs.py` → `frontend/src/pages/NodeSpecPage.tsx` |
 | 관리 서버 대장 | `backend/app/routers/management_servers.py` |
 | Isilon NFS 모니터링 | `backend/app/routers/isilon_nfs.py` + `services/isilon_service.py` → `frontend/src/pages/IsilonNfsPage.tsx` |

@@ -2,6 +2,7 @@
 // 서버가 SSE 로 단계를 흘려주는 실행은 그 이벤트를 그대로 쌓고(appendServer), 단건 요청형 실행은
 // 화면이 요청 시작·응답 요약·오류를 직접 기록한다(log). 보여줄지는 RunLogPanel 의 "로그 보기" 가 정한다.
 import { useCallback, useState } from 'react';
+import type { SseEvent } from '@/lib/sse';
 
 export type RunLogLevel = 'info' | 'warn' | 'error';
 export interface RunLogLine { ts: string; level: RunLogLevel; message: string }
@@ -74,4 +75,14 @@ export function formatRunLog(lines: RunLogLine[]): string {
       return `${hhmmss} ${l.level.toUpperCase().padEnd(5)} ${l.message}`;
     })
     .join('\n');
+}
+
+/** 서버 SSE 의 `log`·`step` 이벤트를 실행 로그에 그대로 반영한다(`result`·`error` 는 호출자가 처리).
+ *  이벤트 규약: log{level,ts,message} · step{name,label,status: running|done|failed}. */
+export function applyRunEvent(run: Pick<RunLog, 'log' | 'setStep'>, evt: SseEvent): void {
+  if (evt.type === 'log') run.log(toRunLogLevel(evt.level), String(evt.message ?? ''));
+  else if (evt.type === 'step') {
+    const st: RunStepStatus = evt.status === 'failed' ? 'failed' : evt.status === 'done' ? 'done' : 'running';
+    run.setStep(String(evt.name ?? ''), String(evt.label ?? evt.name ?? ''), st);
+  }
 }

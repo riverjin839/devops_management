@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import {
   Workflow, RefreshCw, Box, Boxes, Activity, Pencil, Eye, Loader2,
-  Server, Info, AlertTriangle, Layers, Grid3x3, Globe, Search,
+  Server, Info, AlertTriangle, Layers, Grid3x3, Globe, Search, Table2,
 } from 'lucide-react';
 import { useClusters } from '@/hooks/useCluster';
 import { useCanOperate } from '@/hooks/useCanOperate';
@@ -12,7 +12,7 @@ import {
 } from '@/components/common';
 import { MacCard } from '@/components/ui/MacCard';
 import {
-  TopologyCanvas, Topology3D, NodeDetailPanel, ManualLinkDialog, AddExternalNodeDialog,
+  TopologyCanvas, Topology3D, TopologyTable, NodeDetailPanel, ManualLinkDialog, AddExternalNodeDialog,
   EDGE_TYPE_LABEL, edgeStyleToken,
 } from '@/components/topology';
 import {
@@ -24,7 +24,8 @@ import { formatApiError, parseUTC } from '@/lib/utils';
 import { useRunLog } from '@/hooks/useRunLog';
 import { useLogPref } from '@/hooks/useLogPref';
 
-type ViewMode = '2d' | '3d';
+// 'table' 은 그래프의 대체 뷰 — 키보드·스크린리더로 노드·연결을 읽고 선택한다(D-092).
+type ViewMode = '2d' | '3d' | 'table';
 type Scope = 'namespace' | 'cluster';
 type ClusterMode = 'summary' | 'detail';
 
@@ -306,7 +307,9 @@ export function ServiceTopologyPage() {
               <div role="group" aria-label="보기 방식" className="flex items-center rounded-xl border border-border overflow-hidden text-sm">
                 <ToggleSeg active={view === '2d'} onClick={() => setView('2d')} icon={<Grid3x3 className="w-3 h-3" />} label="2D" />
                 <ToggleSeg active={view === '3d'} onClick={() => setView('3d')} icon={<Boxes className="w-3 h-3" />} label="3D" border
-                  disabled={editMode} title={editMode ? '링크 편집은 2D 에서만 할 수 있다' : undefined} />
+                  disabled={editMode} title={editMode ? '링크 편집은 2D·표에서만 할 수 있다' : undefined} />
+                <ToggleSeg active={view === 'table'} onClick={() => setView('table')} icon={<Table2 className="w-3 h-3" />} label="표" border
+                  title="노드·연결을 표로 보기 — 키보드·스크린리더용 대체 보기" />
               </div>
 
               <PillToggle on={includePods} onClick={() => setIncludePods((v) => !v)} icon={<Box className="w-3 h-3" />} label="Pod 표시" />
@@ -346,8 +349,8 @@ export function ServiceTopologyPage() {
                     <Server className="w-3 h-3" /> 외부 노드
                   </button>
                   <button onClick={() => {
-                      // 3D 는 링크 시작 노드를 표시하지 못하므로 편집 모드는 2D 로 전환한다(D-099)
-                      if (!editMode) setView('2d');
+                      // 3D 는 링크 시작 노드를 표시하지 못하므로 편집 모드는 2D 로 전환한다(D-099). 표 보기는 그대로 둔다.
+                      if (!editMode && view === '3d') setView('2d');
                       setEditMode((v) => !v); setLinkSourceId(null);
                     }}
                     disabled={!canOperate}
@@ -475,6 +478,19 @@ export function ServiceTopologyPage() {
                   linkSourceId={linkSourceId}
                   highlightIds={highlightIds}
                 />
+              ) : view === 'table' ? (
+                <TopologyTable
+                  graph={graph}
+                  trafficEdges={trafficEdges}
+                  showTraffic={showTraffic}
+                  selectedId={selectedId}
+                  onSelectNode={handleSelect}
+                  editMode={editMode}
+                  linkSourceId={linkSourceId}
+                  highlightIds={highlightIds}
+                  nodeName={nodeName}
+                  panelOpen={!!selectedNode && !editMode}
+                />
               ) : (
                 <Topology3D
                   graph={graph}
@@ -483,6 +499,7 @@ export function ServiceTopologyPage() {
                   width={dim.w}
                   height={dim.h}
                   onSelectNode={handleSelect}
+                  onShowTable={() => setView('table')}
                 />
               )}
 
