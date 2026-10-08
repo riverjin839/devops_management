@@ -8,6 +8,9 @@ data:
     handler:
       webhook:
         enabled: true
+        # 이 kubewatch 가 감시하는 클러스터를 `?cluster=<PEP 에 등록된 클러스터 이름 또는 id>` 로 붙인다.
+        # 없으면 이벤트가 "클러스터 미지정"으로 저장돼 /k8s-events 의 클러스터 필터·테넌트 격리에 걸리지 않는다.
+        # 예: url: "http://backend/api/v1/events/kubewatch?cluster=prod-a"
         url: "http://backend/api/v1/events/kubewatch"
     resource:
       pod: true

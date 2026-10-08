@@ -14,9 +14,10 @@ from sqlalchemy import desc
 from sqlalchemy.orm import Session
 
 from app.auth.deps import get_cluster_scope, require_operator
-from app.services.cluster_access import ClusterScope
+from app.services.cluster_access import ClusterScope, require_cluster_access
 from app.config import settings
 from app.database import get_db
+from app.models.cluster import Cluster
 from app.models.k8s_event import K8sEvent
 from app.models.user import User
 from app.services.k8s_event_classifier import parse_kubewatch_payload
@@ -84,21 +85,44 @@ def _verify_kubewatch_token(authorization: str = Header(default="")) -> None:
         raise HTTPException(status_code=401, detail="Invalid kubewatch token")
 
 
+def _resolve_cluster_ref(db: Session, ref: Optional[str]) -> tuple[Optional[UUID], Optional[str]]:
+    """웹훅 URL 의 `?cluster=` 값(클러스터 id 또는 이름) → cluster_id. 못 찾으면 (None, 사유)."""
+    ref = (ref or "").strip()
+    if not ref:
+        return None, None
+    try:
+        cluster = db.query(Cluster).filter(Cluster.id == UUID(ref)).first()
+    except ValueError:
+        cluster = db.query(Cluster).filter(Cluster.name == ref).first()
+    if cluster is None:
+        return None, f"알 수 없는 클러스터 '{ref}' — 클러스터 미지정으로 저장했습니다."
+    return cluster.id, None
+
+
 @ingest_router.post("/kubewatch", status_code=201)
 def receive_kubewatch_event(
     payload: dict[str, Any],
+    cluster: Optional[str] = Query(
+        default=None,
+        description="이 kubewatch 가 감시하는 클러스터(id 또는 이름). 웹훅 URL 에 `?cluster=<이름>` 으로 붙인다.",
+    ),
     db: Session = Depends(get_db),
     _: None = Depends(_verify_kubewatch_token),
 ) -> dict:
     """kubewatch 웹훅 수신 엔드포인트.
 
-    payload 는 kubewatch 가 전송하는 raw JSON 그대로 받는다.
-    파싱·severity 분류 후 DB 저장, critical 이면 알림 생성.
+    payload 는 kubewatch 가 전송하는 raw JSON 그대로 받는다(클러스터 정보가 없다).
+    그래서 클러스터는 웹훅 URL 의 `?cluster=` 로 받는다 — 없으면 클러스터 미지정(전체 공개)으로
+    저장된다(D-101: 예전엔 항상 미지정이라 클러스터 필터가 늘 빈 목록이고 테넌트 격리가 무력했다).
+    파싱·severity 분류 후 DB 저장, critical 이면 그 클러스터를 볼 수 있는 사용자에게 알림.
     """
     try:
+        cluster_id, cluster_warning = _resolve_cluster_ref(db, cluster)
+        if cluster_warning:
+            logger.warning("kubewatch ingest: %s", cluster_warning)
         fields = parse_kubewatch_payload(payload)
         event = K8sEvent(
-            cluster_id=None,  # kubewatch config 에 cluster_id env 가 있으면 활용 가능
+            cluster_id=cluster_id,
             raw=payload,
             **fields,
         )
@@ -119,11 +143,16 @@ def receive_kubewatch_event(
         except Exception as exc:  # noqa: BLE001
             logger.warning("k8s_event 자동 분석 훅 실패 — 무시 (%s)", exc)
 
-        return {"id": str(event.id), "severity": event.severity}
+        out = {"id": str(event.id), "severity": event.severity,
+               "cluster_id": str(cluster_id) if cluster_id else None}
+        if cluster_warning:
+            out["warning"] = cluster_warning
+        return out
     except Exception as exc:  # noqa: BLE001
-        logger.error("kubewatch ingest error: %s", exc)
+        # 내부 예외 문구는 로그에만 — 웹훅 호출자에게 스택/SQL 을 흘리지 않는다.
+        logger.exception("kubewatch ingest error: %s", exc)
         db.rollback()
-        raise HTTPException(status_code=500, detail=str(exc)) from exc
+        raise HTTPException(status_code=500, detail="이벤트 저장에 실패했습니다 — 서버 로그를 확인하세요.") from exc
 
 
 def _create_notification(db: Session, event: K8sEvent) -> None:
@@ -141,6 +170,7 @@ def _create_notification(db: Session, event: K8sEvent) -> None:
             title=f"[CRITICAL] {event.resource_kind}/{event.resource_name}",
             body=event.reason or event.message or "",
             link="/k8s-events",
+            cluster_id=event.cluster_id,  # 바인딩된 클러스터면 볼 수 있는 사용자에게만(D-101)
         )
         db.commit()
     except Exception as exc:  # noqa: BLE001
@@ -181,21 +211,39 @@ def get_k8s_event(event_id: UUID, db: Session = Depends(get_db),
     return event
 
 
-@router.delete("/{event_id}", status_code=204)
-def delete_k8s_event(event_id: UUID, db: Session = Depends(get_db)):
+def _load_visible_event(db: Session, event_id: UUID, scope: ClusterScope) -> K8sEvent:
+    """보이지 않는(다른 테넌트 클러스터) 이벤트는 존재 자체를 숨긴다 — 404."""
     event = db.query(K8sEvent).filter(K8sEvent.id == event_id).first()
-    if not event:
+    if not event or not scope.visible(event.cluster_id):
         raise HTTPException(status_code=404, detail="Event not found")
+    return event
+
+
+@router.delete("/{event_id}", status_code=204)
+def delete_k8s_event(
+    event_id: UUID,
+    db: Session = Depends(get_db),
+    user: User = Depends(require_operator),
+    scope: ClusterScope = Depends(get_cluster_scope),
+):
+    """이벤트 삭제 — operator 이상 + 이벤트 클러스터 operate 권한(D-102)."""
+    event = _load_visible_event(db, event_id, scope)
+    require_cluster_access(db, user, event.cluster_id, "operate")
     db.delete(event)
     db.commit()
 
 
 @router.get("/{event_id}/analysis")
-def get_k8s_event_analysis(event_id: UUID, db: Session = Depends(get_db)):
+def get_k8s_event_analysis(
+    event_id: UUID,
+    db: Session = Depends(get_db),
+    scope: ClusterScope = Depends(get_cluster_scope),
+):
     """이벤트에 연결된 AI 분석 결과 조회 (최신 1건)."""
     from app.models.incident_analysis import IncidentAnalysis
     from app.schemas.observability import IncidentAnalysisOut
 
+    _load_visible_event(db, event_id, scope)
     row = (
         db.query(IncidentAnalysis)
         .filter(IncidentAnalysis.k8s_event_id == event_id)
@@ -232,12 +280,12 @@ def get_k8s_event_analysis(event_id: UUID, db: Session = Depends(get_db)):
 def trigger_k8s_event_analysis(
     event_id: UUID,
     db: Session = Depends(get_db),
-    _: User = Depends(require_operator),
+    user: User = Depends(require_operator),
+    scope: ClusterScope = Depends(get_cluster_scope),
 ):
-    """수동 AI 분석 실행 — scope 규칙과 무관하게 즉시 llm 큐로 보낸다 (operator+)."""
-    event = db.query(K8sEvent).filter(K8sEvent.id == event_id).first()
-    if not event:
-        raise HTTPException(status_code=404, detail="Event not found")
+    """수동 AI 분석 실행 — scope 규칙과 무관하게 즉시 llm 큐로 보낸다 (operator+, 클러스터 operate)."""
+    event = _load_visible_event(db, event_id, scope)
+    require_cluster_access(db, user, event.cluster_id, "operate")
     if event.analysis_status in ("queued", "running"):
         return {"ok": True, "status": event.analysis_status, "detail": "이미 분석이 진행 중입니다."}
     try:
