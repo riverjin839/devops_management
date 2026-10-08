@@ -43,7 +43,7 @@ export function CiliumConfigModal({ cluster, onClose }: CiliumConfigModalProps) 
                 <span className="inline-flex items-center gap-1">
                   소스:
                   <StatusDot variant={data.source === 'live' ? 'healthy' : data.source === 'stored' ? 'warning' : 'neutral'} />
-                  {data.source === 'live' ? 'kubectl 실시간' : data.source === 'stored' ? '저장된 설정' : '없음'}
+                  {data.source === 'live' ? 'kubectl 실시간' : data.source === 'stored' ? '저장된 설정' : data.source === 'masked' ? '숨김(viewer 정책)' : '없음'}
                 </span>
                 {data.error && (
                   <span className="text-status-warning inline-flex items-center gap-1">

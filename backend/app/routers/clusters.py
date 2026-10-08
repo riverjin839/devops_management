@@ -24,8 +24,9 @@ from app.models import (
 from app.models.cluster import StatusEnum
 from app.models.work_item import WorkItem
 from app.models.user import User
-from app.auth.deps import get_cluster_scope, require_operator
+from app.auth.deps import get_cluster_scope, get_current_user, require_operator
 from app.services.cluster_access import ClusterScope
+from app.services.cluster_network_mask import mask_cluster, should_mask
 from app.services.health_checker import HealthChecker
 from app.services.k8s_diagnose import diagnose_connect_error
 from app.services.cluster_purge import purge_cluster_references
@@ -266,17 +267,24 @@ class KubeconfigResponse(BaseModel):
 # ── routes ────────────────────────────────────────────────────────────────────
 
 @router.get("", response_model=ClusterListResponse)
-def get_clusters(db: Session = Depends(get_db), scope: ClusterScope = Depends(get_cluster_scope)):
+def get_clusters(
+    db: Session = Depends(get_db),
+    scope: ClusterScope = Depends(get_cluster_scope),
+    user: User = Depends(get_current_user),
+):
     """전체 클러스터 목록 조회 — 사용자 지정 seq 오름차순, 동률은 이름 순.
 
     테넌트 바인딩으로 가려진 클러스터는 빠진다(멀티테넌시 2단계) — ClusterSidebar 등 모든
     클러스터 선택 UI 가 이 목록을 쓰므로 여기서 거르면 화면 전체가 같이 좁혀진다.
+    viewer 네트워크 정보 숨김 정책이 켜져 있으면 viewer 응답에서 IP·CIDR 등을 비운다.
     """
     clusters = (
         scope.apply(db.query(Cluster), Cluster.id)
         .order_by(Cluster.seq.asc(), Cluster.name.asc())
         .all()
     )
+    if should_mask(db, user):
+        return ClusterListResponse(data=[mask_cluster(c) for c in clusters])
     return ClusterListResponse(data=clusters)
 
 
@@ -312,11 +320,13 @@ def reorder_clusters(
 
 
 @router.get("/{cluster_id}", response_model=ClusterResponse)
-def get_cluster(cluster_id: UUID, db: Session = Depends(get_db)):
-    """클러스터 상세 조회"""
+def get_cluster(cluster_id: UUID, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    """클러스터 상세 조회 — 목록과 같은 viewer 네트워크 정보 숨김 정책을 따른다."""
     cluster = db.query(Cluster).filter(Cluster.id == cluster_id).first()
     if not cluster:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Cluster not found")
+    if should_mask(db, user):
+        return mask_cluster(cluster)
     return cluster
 
 
@@ -1507,11 +1517,22 @@ def auto_update_cluster(
 
 
 @router.get("/{cluster_id}/cilium-config")
-def get_cluster_cilium_config(cluster_id: UUID, db: Session = Depends(get_db)):
-    """Cilium ConfigMap 조회 (kubectl 또는 저장된 설정)"""
+def get_cluster_cilium_config(cluster_id: UUID, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    """Cilium ConfigMap 조회 (kubectl 또는 저장된 설정)
+
+    viewer 네트워크 정보 숨김 정책이 켜져 있으면 viewer 에게는 CIDR·라우팅 설정이 담긴
+    ConfigMap 을 내주지 않는다(kubectl 호출도 하지 않음) — ``source: "masked"``.
+    """
     cluster = db.query(Cluster).filter(Cluster.id == cluster_id).first()
     if not cluster:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Cluster not found")
+    if should_mask(db, user):
+        return {
+            "live": None,
+            "stored": None,
+            "source": "masked",
+            "error": "viewer 네트워크 정보 숨김 정책으로 Cilium 설정을 표시하지 않습니다 (Settings → 접근 제어).",
+        }
 
     live_config = None
     error_msg = None
