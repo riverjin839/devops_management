@@ -3,14 +3,15 @@ import { Link, useNavigate, useParams } from 'react-router-dom';
 import { ArrowLeft, Trash2, AlertCircle } from 'lucide-react';
 import { MacCard } from '@/components/ui/MacCard';
 import { ConfirmDialog } from '@/components/common';
-import { ProbeResultCard } from '@/components/pod-bottleneck';
+import { ProbeResultCard, BOTTLENECK_STATUS_META } from '@/components/pod-bottleneck';
 import {
   useBottleneckRun,
   useBottleneckProbes,
   useDeleteBottleneckRun,
 } from '@/hooks/usePodBottleneck';
+import { useCanOperate } from '@/hooks/useCanOperate';
 import type { BottleneckStatus } from '@/types';
-import { parseUTC } from '@/lib/utils';
+import { formatApiError, parseUTC } from '@/lib/utils';
 
 const STATUS_BADGE: Record<BottleneckStatus, { label: string; cls: string }> = {
   healthy:  { label: '정상',  cls: 'bg-status-healthy/10 text-status-healthy border-status-healthy/30' },
@@ -27,6 +28,8 @@ export function PodBottleneckDetailPage() {
   const { data: run, isLoading, error } = useBottleneckRun(id || undefined);
   const { data: probes = [] } = useBottleneckProbes();
   const del = useDeleteBottleneckRun();
+  // 훅은 조기 return 앞에서 호출해야 한다 — run 이 아직 없으면 clusterId 는 undefined(클러스터 제한 판정 없음).
+  const { canOperate, withHint } = useCanOperate(run?.clusterId);
 
   const probeMetaMap = useMemo(
     () => Object.fromEntries(probes.map((p) => [p.probeKey, p])),
@@ -42,7 +45,7 @@ export function PodBottleneckDetailPage() {
     return (
       <div className="app-min-h-screen bg-background p-6">
         <div className="max-w-[1400px] mx-auto space-y-3">
-          <div className="h-8 w-64 bg-muted/30 animate-pulse rounded" />
+          <div className="h-8 w-64 bg-muted/30 animate-pulse rounded-md" />
           <div className="h-32 bg-muted/30 animate-pulse rounded-md" />
         </div>
       </div>
@@ -69,6 +72,7 @@ export function PodBottleneckDetailPage() {
   }
 
   const status = STATUS_BADGE[run.overallStatus] ?? STATUS_BADGE.pending;
+  const StatusIcon = (BOTTLENECK_STATUS_META[run.overallStatus] ?? BOTTLENECK_STATUS_META.pending).icon;
   // 4 axis 고정 표시 순서
   const orderedKeys: Array<keyof typeof run.probes> = ['tcp_state', 'tcp_perf', 'dns_latency', 'endpoints'];
 
@@ -101,21 +105,31 @@ export function PodBottleneckDetailPage() {
             </p>
           </div>
           <span
-            className={`inline-flex items-center rounded-full border px-3 py-1 text-sm font-semibold ${status.cls}`}
+            className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-sm font-semibold ${status.cls}`}
             aria-label={`전체 상태: ${status.label}`}
           >
+            <StatusIcon className="w-4 h-4" aria-hidden />
             {status.label}
           </span>
           <button
             type="button"
             onClick={() => setConfirmDelete(true)}
-            aria-label="진단 결과 삭제"
-            className="inline-flex items-center gap-1.5 rounded-xl border border-border bg-card px-3 py-1.5 text-sm text-status-critical hover:bg-status-critical/10"
+            disabled={del.isPending || !canOperate}
+            title={withHint('진단 결과 삭제')}
+            aria-label={withHint('진단 결과 삭제')}
+            className="inline-flex items-center gap-1.5 rounded-xl border border-border bg-card px-3 py-1.5 text-sm text-status-critical hover:bg-status-critical/10 disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <Trash2 className="w-3.5 h-3.5" />
             삭제
           </button>
         </div>
+
+        {del.isError && (
+          <div role="alert" className="flex items-start gap-2 rounded-md border border-status-critical/40 bg-status-critical/5 p-3 text-sm text-status-critical">
+            <AlertCircle className="w-4 h-4 mt-0.5 flex-shrink-0" />
+            <span>삭제하지 못했습니다 — {formatApiError(del.error, '알 수 없는 오류')}</span>
+          </div>
+        )}
 
         {/* 4 Probe 결과 — grid */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

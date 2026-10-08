@@ -8,19 +8,21 @@ import { useClusters } from '@/hooks/useCluster';
 import { useCanOperate } from '@/hooks/useCanOperate';
 import { analyzeApi } from '@/services/api';
 import {
-  ClusterSidebar, DebugLogPanel, NamespaceSingleSelect, SnapshotProgressCard, useToast,
+  ClusterSidebar, ConfirmDialog, DebugLogPanel, NamespaceSingleSelect, RunLogPanel, SnapshotProgressCard, useToast,
 } from '@/components/common';
 import { MacCard } from '@/components/ui/MacCard';
 import {
   TopologyCanvas, Topology3D, NodeDetailPanel, ManualLinkDialog, AddExternalNodeDialog,
-  EDGE_TYPE_LABEL,
+  EDGE_TYPE_LABEL, edgeStyleToken,
 } from '@/components/topology';
 import {
   useServiceTopologyGraph, useServiceTopologyTraffic, useClusterTopologyGraph,
   useCreateTopologyLink, useDeleteTopologyLink, useCreateExternalNode, useDeleteExternalNode,
 } from '@/hooks/useServiceTopology';
 import type { TopoNode } from '@/types';
-import { formatApiError } from '@/lib/utils';
+import { formatApiError, parseUTC } from '@/lib/utils';
+import { useRunLog } from '@/hooks/useRunLog';
+import { useLogPref } from '@/hooks/useLogPref';
 
 type ViewMode = '2d' | '3d';
 type Scope = 'namespace' | 'cluster';
@@ -46,6 +48,10 @@ export function ServiceTopologyPage() {
   const [linkSourceId, setLinkSourceId] = useState<string | null>(null);
   const [linkTargetId, setLinkTargetId] = useState<string | null>(null);
   const [extOpen, setExtOpen] = useState(false);
+  // D-091 — 삭제는 복구가 안 되므로 바로 mutate 하지 않고 확인을 받는다.
+  const [pendingDelete, setPendingDelete] = useState<
+    { kind: 'link'; manualId: string; label: string } | { kind: 'external'; node: TopoNode } | null
+  >(null);
 
   const canvasRef = useRef<HTMLDivElement>(null);
   const [dim, setDim] = useState({ w: 800, h: 600 });
@@ -85,6 +91,44 @@ export function ServiceTopologyPage() {
   );
   const trafficQuery = useServiceTopologyTraffic(clusterId || null, namespace, showTraffic && !isCluster);
 
+  // D-089 — 실트래픽 수집(켜기·새로고침)마다 요청·결과·엣지 상위 목록을 로그로 남긴다. 펼침은 "로그 보기".
+  const trafficLog = useRunLog();
+  const { begin: tBegin, log: tLog, end: tEnd } = trafficLog;
+  const [showTrafficLog, setShowTrafficLog] = useLogPref('service-topology');
+  const trafficFetching = showTraffic && !isCluster && trafficQuery.isFetching;
+  const prevTrafficFetching = useRef(false);
+  const trafficT0 = useRef(0);
+  useEffect(() => {
+    const was = prevTrafficFetching.current;
+    prevTrafficFetching.current = trafficFetching;
+    if (trafficFetching && !was) {
+      trafficT0.current = performance.now();
+      tBegin('실트래픽 수집', `${namespace} 네임스페이스 flow 수집 요청 (Hubble → conntrack 폴백)`);
+      return;
+    }
+    if (!trafficFetching && was) {
+      const ms = Math.round(performance.now() - trafficT0.current);
+      if (trafficQuery.isError) {
+        tLog('error', `수집 실패 · ${ms}ms — ${formatApiError(trafficQuery.error)}`);
+      } else if (trafficQuery.data) {
+        const d = trafficQuery.data;
+        if (d.status === 'ok') {
+          const dropped = d.edges.filter((e) => e.droppedCount > 0).length;
+          tLog(dropped ? 'warn' : 'info',
+            `수집 완료 · ${ms}ms — 소스 ${d.source ?? '-'} · 엣지 ${d.edges.length}개${dropped ? ` · drop 발생 ${dropped}개` : ''}`);
+          [...d.edges].sort((a, b) => b.flowCount - a.flowCount).slice(0, 10).forEach((e) => {
+            tLog(e.droppedCount > 0 ? 'warn' : 'info',
+              `  ${e.source} → ${e.target}: flow ${e.flowCount}${e.droppedCount > 0 ? ` · drop ${e.droppedCount}` : ''}`);
+          });
+          if (d.edges.length > 10) tLog('info', `  … 외 ${d.edges.length - 10}개`);
+        } else {
+          tLog(d.status === 'error' ? 'error' : 'warn', `수집 ${d.status} · ${ms}ms — ${d.reason ?? '사유 없음'}`);
+        }
+      }
+      tEnd();
+    }
+  }, [trafficFetching, trafficQuery.isError, trafficQuery.error, trafficQuery.data, namespace, tBegin, tLog, tEnd]);
+
   const activeQuery = isCluster ? clusterQuery : graphQuery;
   const clusterData = clusterQuery.data;
   const computing = isCluster && clusterData?.status === 'computing';
@@ -105,6 +149,25 @@ export function ServiceTopologyPage() {
   const deleteLink = useDeleteTopologyLink();
   const createExt = useCreateExternalNode(clusterId);
   const deleteExt = useDeleteExternalNode();
+
+  // D-094 — 클러스터를 바꾸면 이전 클러스터의 선택·링크 편집 상태를 버린다(이전 id 가 안내에 남고 이전 NS 로 조회되던 문제).
+  const selectCluster = (id: string) => {
+    if (id === clusterId) return;
+    setClusterId(id);
+    setNamespace('default');
+    setSelectedId(null);
+    setLinkSourceId(null);
+    setLinkTargetId(null);
+    setEditMode(false);
+    setPendingDelete(null);
+    trafficLog.clear();
+  };
+
+  const refreshAll = () => {
+    void activeQuery.refetch();
+    // 실트래픽을 켜 둔 상태면 함께 다시 모은다 — 예전엔 그래프만 새로 받아 트래픽이 stale 로 남았다(D-094).
+    if (showTraffic && !isCluster) void trafficQuery.refetch();
+  };
 
   const handleSelect = (id: string | null) => {
     if (!editMode) { setSelectedId(id); return; }
@@ -133,19 +196,32 @@ export function ServiceTopologyPage() {
     );
   };
 
-  const handleDeleteLink = (manualId: string) => {
-    deleteLink.mutate(manualId, {
-      onSuccess: () => toast.success('연계 삭제됨'),
-      onError: (e) => toast.error('삭제 실패', formatApiError(e)),
-    });
+  const requestDeleteLink = (manualId: string) => {
+    const edge = graph?.edges.find((e) => e.manualId === manualId);
+    const label = edge ? `${nodeName(edge.source)} → ${nodeName(edge.target)}` : '이 수동 연계';
+    setPendingDelete({ kind: 'link', manualId, label });
   };
 
-  const handleDeleteExternal = (node: TopoNode) => {
+  const requestDeleteExternal = (node: TopoNode) => {
     if (!node.externalId) return;
-    deleteExt.mutate(node.externalId, {
-      onSuccess: () => { toast.success('외부 노드 삭제됨'); setSelectedId(null); },
-      onError: (e) => toast.error('삭제 실패', formatApiError(e)),
-    });
+    setPendingDelete({ kind: 'external', node });
+  };
+
+  const confirmDelete = () => {
+    const target = pendingDelete;
+    if (!target) return;
+    setPendingDelete(null);
+    if (target.kind === 'link') {
+      deleteLink.mutate(target.manualId, {
+        onSuccess: () => toast.success('연계 삭제됨'),
+        onError: (e) => toast.error('삭제 실패', formatApiError(e)),
+      });
+    } else if (target.node.externalId) {
+      deleteExt.mutate(target.node.externalId, {
+        onSuccess: () => { toast.success('외부 노드 삭제됨'); setSelectedId(null); },
+        onError: (e) => toast.error('삭제 실패', formatApiError(e)),
+      });
+    }
   };
 
   const submitExternal = (data: { name: string; nodeType: string; note?: string }) => {
@@ -167,7 +243,7 @@ export function ServiceTopologyPage() {
         <ClusterSidebar
           clusters={clusters}
           selectedId={clusterId || null}
-          onSelect={(id) => setClusterId(id ?? '')}
+          onSelect={(id) => selectCluster(id ?? '')}
           iconOnly
         />
 
@@ -185,7 +261,7 @@ export function ServiceTopologyPage() {
           <MacCard title="컨트롤" className="mb-3" bodyPadding="p-3">
             <div className="flex flex-wrap items-center gap-2">
               {/* scope: 네임스페이스 / 전체 클러스터 */}
-              <div className="flex items-center rounded-lg border border-border overflow-hidden text-sm">
+              <div role="group" aria-label="범위" className="flex items-center rounded-xl border border-border overflow-hidden text-sm">
                 <ToggleSeg active={!isCluster} onClick={() => { setScope('namespace'); setSelectedId(null); setEditMode(false); }} icon={<Layers className="w-3 h-3" />} label="네임스페이스" />
                 <ToggleSeg active={isCluster} onClick={() => { setScope('cluster'); setSelectedId(null); setEditMode(false); }} icon={<Globe className="w-3 h-3" />} label="전체 클러스터" border />
               </div>
@@ -204,19 +280,19 @@ export function ServiceTopologyPage() {
                   </div>
                 </div>
               ) : (
-                <div className="flex items-center rounded-lg border border-border overflow-hidden text-sm">
+                <div role="group" aria-label="클러스터 보기" className="flex items-center rounded-xl border border-border overflow-hidden text-sm">
                   <ToggleSeg active={clusterMode === 'summary'} onClick={() => { setClusterMode('summary'); setSelectedId(null); }} icon={<Boxes className="w-3 h-3" />} label="네임스페이스 요약" />
                   <ToggleSeg active={clusterMode === 'detail'} onClick={() => { setClusterMode('detail'); setSelectedId(null); }} icon={<Grid3x3 className="w-3 h-3" />} label="전체 상세" border />
                 </div>
               )}
 
-              <button onClick={() => activeQuery.refetch()}
-                className="px-2 py-1 text-sm bg-secondary hover:bg-secondary/80 border border-border rounded-lg inline-flex items-center gap-1">
-                <RefreshCw className={`w-3 h-3 ${activeQuery.isFetching ? 'animate-spin' : ''}`} /> 새로고침
+              <button onClick={refreshAll}
+                className="px-2 py-1 text-sm bg-secondary hover:bg-secondary/80 border border-border rounded-xl inline-flex items-center gap-1">
+                <RefreshCw className={`w-3 h-3 ${activeQuery.isFetching || (showTraffic && trafficQuery.isFetching) ? 'animate-spin' : ''}`} /> 새로고침
               </button>
 
               {/* 2D / 3D */}
-              <div className="flex items-center rounded-lg border border-border overflow-hidden text-sm">
+              <div role="group" aria-label="보기 방식" className="flex items-center rounded-xl border border-border overflow-hidden text-sm">
                 <ToggleSeg active={view === '2d'} onClick={() => setView('2d')} icon={<Grid3x3 className="w-3 h-3" />} label="2D" />
                 <ToggleSeg active={view === '3d'} onClick={() => setView('3d')} icon={<Boxes className="w-3 h-3" />} label="3D" border />
               </div>
@@ -235,14 +311,15 @@ export function ServiceTopologyPage() {
                   <button onClick={() => setExtOpen(true)}
                     disabled={!canOperate}
                     title={withHint('외부 노드 추가')}
-                    className="px-2 py-1 text-sm bg-secondary hover:bg-secondary/80 border border-border rounded-lg inline-flex items-center gap-1 disabled:opacity-50 disabled:cursor-not-allowed">
+                    className="px-2 py-1 text-sm bg-secondary hover:bg-secondary/80 border border-border rounded-xl inline-flex items-center gap-1 disabled:opacity-50 disabled:cursor-not-allowed">
                     <Server className="w-3 h-3" /> 외부 노드
                   </button>
                   <button onClick={() => { setEditMode((v) => !v); setLinkSourceId(null); }}
                     disabled={!canOperate}
                     title={withHint('링크 편집')}
-                    className={`px-2.5 py-1 text-sm rounded-lg inline-flex items-center gap-1 border disabled:opacity-50 disabled:cursor-not-allowed ${
-                      editMode ? 'bg-orange-500/15 border-orange-500/40 text-orange-600 dark:text-orange-400' : 'bg-secondary border-border hover:bg-secondary/80'
+                    aria-pressed={editMode}
+                    className={`px-2.5 py-1 text-sm rounded-xl inline-flex items-center gap-1 border disabled:opacity-50 disabled:cursor-not-allowed ${
+                      editMode ? 'bg-primary/15 border-primary/40 text-primary' : 'bg-secondary border-border hover:bg-secondary/80'
                     }`}>
                     {editMode ? <Pencil className="w-3 h-3" /> : <Eye className="w-3 h-3" />} 링크 편집
                   </button>
@@ -252,6 +329,11 @@ export function ServiceTopologyPage() {
 
             {/* 상태/경고 라인 */}
             <div className="flex flex-wrap items-center gap-2 mt-2 text-xs">
+              {graph?.generatedAt && (
+                <span className="text-muted-foreground tabular-nums" title={graph.generatedAt}>
+                  조회 {parseUTC(graph.generatedAt).toLocaleTimeString('ko-KR')}
+                </span>
+              )}
               {graph?.metricsStatus === 'offline' && (
                 <span className="inline-flex items-center gap-1 text-status-warning">
                   <Info className="w-3 h-3" /> Prometheus 오프라인 — usage 미표시(requests/limits 만)
@@ -284,7 +366,7 @@ export function ServiceTopologyPage() {
                 </span>
               )}
               {editMode && (
-                <span className="inline-flex items-center gap-1 text-orange-600 dark:text-orange-400">
+                <span role="status" className="inline-flex items-center gap-1 text-primary">
                   <Pencil className="w-3 h-3" /> {linkSourceId ? `시작 노드: ${nodeName(linkSourceId)} → 대상 노드를 클릭` : '연결할 시작 노드를 클릭'}
                 </span>
               )}
@@ -294,11 +376,16 @@ export function ServiceTopologyPage() {
                 </span>
               )}
             </div>
+            {showTraffic && !isCluster && (
+              <div className="mt-2">
+                <RunLogPanel run={trafficLog} show={showTrafficLog} onShowChange={setShowTrafficLog} maxHeight="max-h-48" />
+              </div>
+            )}
           </MacCard>
 
           {/* 캔버스 */}
           <MacCard title={`그래프 · ${graph?.nodes.length ?? 0} 노드 / ${graph?.edges.length ?? 0} 엣지`} bodyPadding="p-0">
-            <div ref={canvasRef} className="relative w-full h-[calc(100vh-260px)] min-h-[420px] overflow-hidden rounded-b-2xl">
+            <div ref={canvasRef} className="relative w-full h-[calc(100vh-260px)] min-h-[420px] overflow-hidden rounded-b-md">
               {computing ? (
                 <div className="absolute inset-0 flex items-center justify-center p-6">
                   <div className="w-full max-w-md">
@@ -357,8 +444,8 @@ export function ServiceTopologyPage() {
                   edges={graph?.edges ?? []}
                   nodeName={nodeName}
                   onClose={() => setSelectedId(null)}
-                  onDeleteLink={handleDeleteLink}
-                  onDeleteExternal={handleDeleteExternal}
+                  onDeleteLink={requestDeleteLink}
+                  onDeleteExternal={requestDeleteExternal}
                   canOperate={canOperate}
                   withHint={withHint}
                 />
@@ -378,6 +465,17 @@ export function ServiceTopologyPage() {
           onClose={() => setLinkTargetId(null)}
         />
       )}
+      <ConfirmDialog
+        open={pendingDelete !== null}
+        danger
+        title={pendingDelete?.kind === 'external' ? '외부 노드 삭제' : '수동 연계 삭제'}
+        description={pendingDelete?.kind === 'external'
+          ? `외부 노드 "${pendingDelete.node.name}" 를 삭제한다. 되돌릴 수 없다.`
+          : `수동 연계 "${pendingDelete?.label ?? ''}" 를 삭제한다. 되돌릴 수 없다.`}
+        confirmLabel="삭제"
+        onConfirm={confirmDelete}
+        onCancel={() => setPendingDelete(null)}
+      />
       {extOpen && (
         <AddExternalNodeDialog pending={createExt.isPending} onSubmit={submitExternal} onClose={() => setExtOpen(false)} />
       )}
@@ -389,7 +487,7 @@ function ToggleSeg({ active, onClick, icon, label, border }: {
   active: boolean; onClick: () => void; icon: React.ReactNode; label: string; border?: boolean;
 }) {
   return (
-    <button onClick={onClick}
+    <button type="button" onClick={onClick} aria-pressed={active}
       className={`flex items-center gap-1 px-2 py-1 transition-colors ${border ? 'border-l border-border' : ''} ${
         active ? 'bg-primary text-primary-foreground' : 'hover:bg-secondary text-muted-foreground'
       }`}>
@@ -402,8 +500,8 @@ function PillToggle({ on, onClick, icon, label, loading }: {
   on: boolean; onClick: () => void; icon: React.ReactNode; label: string; loading?: boolean;
 }) {
   return (
-    <button onClick={onClick}
-      className={`px-2.5 py-1 text-sm rounded-lg inline-flex items-center gap-1 border transition-colors ${
+    <button type="button" onClick={onClick} aria-pressed={on}
+      className={`px-2.5 py-1 text-sm rounded-xl inline-flex items-center gap-1 border transition-colors ${
         on ? 'bg-primary/10 border-primary/40 text-primary' : 'bg-secondary border-border text-muted-foreground hover:bg-secondary/80'
       }`}>
       {loading ? <Loader2 className="w-3 h-3 animate-spin" /> : icon} {label}
@@ -412,28 +510,26 @@ function PillToggle({ on, onClick, icon, label, loading }: {
 }
 
 function Legend() {
-  const items: { type: string }[] = [
-    { type: 'routes' }, { type: 'exposes' }, { type: 'uses_config' },
-    { type: 'uses_secret' }, { type: 'mounts_pvc' }, { type: 'manual' }, { type: 'traffic' },
-  ];
+  // 색만으로 구분하지 않도록 실제 선 패턴(dash)까지 그린다 — 캔버스와 같은 edgeStyleToken(D-096/D-097)
+  const items = ['routes', 'exposes', 'owns', 'uses_config', 'uses_secret', 'mounts_pvc', 'manual', 'traffic'];
   return (
-    <div className="absolute bottom-3 left-3 bg-card/90 backdrop-blur border border-border rounded-xl px-3 py-2 z-10 max-w-[60%]">
-      <div className="flex flex-wrap gap-x-3 gap-y-1">
-        {items.map((it) => (
-          <span key={it.type} className="inline-flex items-center gap-1 text-xs text-muted-foreground">
-            <EdgeSwatch type={it.type} /> {EDGE_TYPE_LABEL[it.type]}
-          </span>
+    <div className="absolute bottom-3 left-3 bg-card/90 backdrop-blur border border-border rounded-md px-3 py-2 z-10 max-w-[60%]">
+      <ul className="flex flex-wrap gap-x-3 gap-y-1" aria-label="엣지 범례">
+        {items.map((type) => (
+          <li key={type} className="inline-flex items-center gap-1 text-xs text-muted-foreground">
+            <EdgeSwatch type={type} /> {EDGE_TYPE_LABEL[type]}
+          </li>
         ))}
-      </div>
+      </ul>
     </div>
   );
 }
 
 function EdgeSwatch({ type }: { type: string }) {
-  // topologyShared.edgeStyle 와 일관된 색
-  const color: Record<string, string> = {
-    routes: '#0ea5e9', exposes: '#8b5cf6', uses_config: '#6366f1',
-    uses_secret: '#ec4899', mounts_pvc: '#06b6d4', manual: '#f97316', traffic: '#f59e0b',
-  };
-  return <span className="inline-block w-3 h-0.5 rounded-full" style={{ background: color[type] ?? '#94a3b8' }} />;
+  const st = edgeStyleToken(type);
+  return (
+    <svg width={18} height={6} aria-hidden className="flex-shrink-0">
+      <line x1={0} y1={3} x2={18} y2={3} stroke={st.stroke} strokeWidth={Math.max(1.5, st.width)} strokeDasharray={st.dash} />
+    </svg>
+  );
 }

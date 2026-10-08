@@ -750,6 +750,12 @@ def _run_migrations():
             label="unique index infra_nodes(cluster_id, hostname)",
         )
         _safe_create_index("ix_infra_nodes_cluster_hostname", "infra_nodes", "(cluster_id, hostname)")
+        # D-100 — 예전 화면이 빈 값을 '' 로 저장했다. 그룹핑이 "(미지정)" 으로 묶이도록 NULL 로 정규화(멱등).
+        for _col in ("rack_name", "ip_address", "os_info", "switch_name", "notes"):
+            _safe_exec(
+                f"UPDATE infra_nodes SET {_col} = NULL WHERE {_col} IS NOT NULL AND btrim({_col}) = ''",
+                label=f"infra_nodes.{_col} blank -> NULL",
+            )
 
     # isilon_servers / isilon_commands: Isilon NFS 모니터링 (테이블은 create_all 로 생성,
     # 구버전 DB 호환용으로 신규 컬럼 보강). 향후 컬럼 추가 시 여기에 _safe_add_column 추가.

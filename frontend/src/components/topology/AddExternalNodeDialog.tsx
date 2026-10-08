@@ -33,9 +33,9 @@ export function AddExternalNodeDialog({ pending, onSubmit, onClose }: Props) {
         className="relative bg-card border border-border rounded-2xl shadow-card w-full max-w-sm mx-4"
       >
         <div className="flex items-center gap-2 px-5 pt-4 pb-3 border-b border-border">
-          <Server className="w-4 h-4 text-slate-500" />
+          <Server className="w-4 h-4 text-muted-foreground" />
           <h2 id={titleId} className="text-sm font-semibold flex-1">외부 노드 추가</h2>
-          <button onClick={onClose} disabled={pending} className="p-1 rounded-lg text-muted-foreground hover:bg-secondary disabled:opacity-50">
+          <button type="button" onClick={onClose} disabled={pending} title="닫기" aria-label="닫기" className="p-1 rounded-xl text-muted-foreground hover:bg-secondary disabled:opacity-50">
             <X className="w-4 h-4" />
           </button>
         </div>

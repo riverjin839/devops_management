@@ -621,11 +621,12 @@ hover 시 flyout 자체가 라벨을 보여주므로 이름만 뜨는 중복 툴
   - `ClusterSidebar` — `iconOnly` + `allowAll`(`allLabel="전체 클러스터"`) + 단일 선택.
   - MacCard "진단 폼" — Namespace/Source Pod/Dest Pod (`NamespaceSingleSelect`/`PodSingleSelect`) + Dest Service(옵션, endpoints probe용) + "지금 진단" 버튼.
   - MacCard "최근 진단 결과" — `overallStatus` 별 좌측 색상 바 + namespace/src→dst pod + 시각 + 소요시간(ms) 리스트, 행 클릭 시 상세 페이지 이동.
-- **Frontend**: `useClusters`, `useBottleneckRuns({clusterId, limit: 50})`, `useRunBottleneckAnalysis()`(mutation, 성공 시 `['bottleneckRuns']` 무효화). 로컬 state: `selectedClusterId`/`namespace`/`sourcePod`/`destPod`/`destService`/`submitError`(+URL prefill sync). api.ts: `podBottleneckApi.listRuns`, `podBottleneckApi.runAnalysis`.
+- **Frontend**: `useClusters`, `useBottleneckRunsPaged({clusterId})`(offset 페이지 무한 조회 — "더 보기"), `useRunBottleneckAnalysis()`(mutation, 성공 시 `['bottleneckRuns']` 무효화). 로컬 state: `selectedClusterId`/`namespace`/`sourcePod`/`destPod`/`destService`/`submitError`(URL prefill 은 초기 state 로만 — 클러스터 변경 시 namespace·pod 선택 초기화). api.ts: `podBottleneckApi.listRuns`, `podBottleneckApi.runAnalysis`.
 - **Backend**: `GET /api/v1/pod-bottleneck/runs`, `POST /api/v1/pod-bottleneck/run` — `backend/app/routers/bottleneck.py`. `POST /run` 은 `require_operator` 권한 필요, `app/services/bottleneck_probes.py`(`BOTTLENECK_PROBE_REGISTRY`)의 4개 probe 를 `asyncio.gather` 로 병렬 실행 후 `worst_status()` 로 종합 상태 산출, `audit_logger.record` 로 감사 로그 기록. 모델: `BottleneckRun`(`backend/app/models/bottleneck_run.py`, `probes` JSONB 1컬럼에 4 probe 결과 통합 저장).
 - **핵심 기능**:
-  - 진단 실행 성공 시 즉시 `/pod-bottleneck/:id` 상세 페이지로 이동.
-  - namespace 변경 시 source/dest pod 선택 초기화(선택 일관성 보장).
+  - "지금 진단"은 SSE(`POST /pod-bottleneck/run/stream`)로 probe 가 끝나는 순서대로 단계 칩·상세 로그를 `RunLogPanel` 에 실시간 표시한다(D-089). "로그 보기"(화면별 기억)를 켜 두면 완료 후 "결과 상세 보기" 버튼으로 이동하고, 꺼 두면 예전처럼 완료 즉시 `/pod-bottleneck/:id` 로 이동한다.
+  - namespace 변경 시 source/dest pod 선택 초기화(선택 일관성 보장). 클러스터를 바꾸면 namespace·pod 까지 초기화(D-094).
+  - 진단 이력은 50건씩 "더 보기"로 이어 받고(`n / 총건` 표시), "전체 클러스터" 보기에서는 행마다 클러스터명 배지를 붙인다(D-094).
   - 다른 화면(PacketFlowPage)에서 cross-link 로 폼 prefill.
   - `overallStatus`(healthy/warning/critical/pending) 별 시각 구분(border+text 색상 맵).
   - 진단 이력은 `cluster_id`(선택 시) 필터, `namespace`+`source_pod`+`dest_pod` 페어 단위 인덱스로 조회 가능(백엔드).
@@ -946,8 +947,12 @@ hover 시 flyout 자체가 라벨을 보여주므로 이름만 뜨는 중복 툴
 - **Frontend**: `useClusters`; `useInfraNodes/useCreateInfraNode/useUpdateInfraNode/useDeleteInfraNode/useSyncInfraNodes/useVerifyInfraNode`(`frontend/src/hooks/useInfraNodes.ts`, 내부적으로 `infraNodesApi` 호출); Trace는 `topologyTraceApi.trace`를 페이지에서 직접 호출(전용 훅 없음).
 - **Backend**: `GET/POST /api/v1/infra-nodes`, `GET/PUT/DELETE /api/v1/infra-nodes/{id}`, `POST /api/v1/infra-nodes/{id}/verify`, `POST /api/v1/infra-nodes/sync/{cluster_id}` — 라우터 `backend/app/routers/infra_nodes.py`, 모델 `backend/app/models/infra_node.py`(`InfraNode`). Trace는 `POST /api/v1/topology-trace` — 라우터 `backend/app/routers/topology_trace.py`. **권한(D-087)**: 변경(`POST`/`PUT`/`DELETE`/`verify`/`sync`)은 `require_operator` + 레거시 `X-API-Scopes` 헤더 스코프(클라이언트 자기 신고라 보조 수단일 뿐) 를 함께 요구하고, `node_id` 경로(`PUT`/`DELETE`/`verify`)와 본문 `cluster_id`(`POST`)는 핸들러가 `require_cluster_access(…, "operate")` 로 테넌트 바인딩을 직접 판정한다. 프론트는 `useCanOperate(activeClusterId)` 로 동기화·노드 추가·검증·편집·삭제 버튼을 viewer 에게 `disabled`+사유로 보인다.
 - **핵심 기능**:
+  - 실행 로그(D-089): K8s 동기화·노드 검증·Trace 실행마다 요청·결과 요약(생성/갱신/실패, 오류, 신규 노드 검증 단계, hop 목록)·소요 시간을 헤더 아래 `RunLogPanel` 에 남긴다. "로그 보기" 로 펼침 여부를 정한다(서버 단계 스트리밍은 미구현 — 응답 단위 기록).
+  - 노드 값 지우기(D-100): 편집에서 CPU/RAM/Disk·랙·스위치 등을 비우면 `null` 로 보내 실제로 지워진다. 서버 스키마도 공백 문자열을 `NULL` 로 정규화하고(부팅 마이그레이션이 기존 `''` 값도 정리), `hostname`/`role` 에 온 `null` 은 무시한다. 클러스터 관리정보(first_host·description) 자동입력은 **첫 노드에만** 적용한다(두 번째 노드부터 hostname 중복 409·메모 복제 방지). hostname 중복 409 는 한국어 사유로 응답.
+  - 클러스터를 바꾸면 이전 클러스터의 동기화·Trace 결과를 지우고, 바꾸기 전에 보낸 요청의 늦은 응답은 버린다(D-094).
   - 스위치/랙 기반 계층형 물리 토폴로지 시각화(role 우선순위 정렬).
   - K8s 동기화 시 신규 노드 자동 검증 결과를 배너로 요약 노출.
+  - 실패는 삼키지 않는다(D-086/D-088): 동기화 결과(생성·갱신·실패·오류 목록·재시도·검증 절단)를 요약 배너로, 삭제 실패는 확인 모달 안에 사유와 함께 유지, 노드 목록 조회 실패는 빈 상태가 아니라 오류 상태+"다시 시도", 낙관적 락 충돌(409)은 안내 문구("다른 사용자가 먼저 수정했습니다")로 표시.
   - 노드별 수동 "추가 검증"(SSH/API) 및 실패 시 사유 표시.
   - namespace + service/pod 기준 스위치까지의 hop 추적, latency/error 기반 병목 홉 강조.
 - **요청사항 (수정 요청)**:
@@ -982,7 +987,7 @@ hover 시 flyout 자체가 라벨을 보여주므로 이름만 뜨는 중복 툴
   - 캔버스: `TopologyCanvas`(2D) / `Topology3D`(3D), 클러스터 전체 집계 중이면 `SnapshotProgressCard`(polling), 선택 노드 `NodeDetailPanel`, 범례.
   - 편집 모드에서 노드 2개 클릭 → `ManualLinkDialog`로 수동 링크 추가/삭제, `AddExternalNodeDialog`로 외부 노드 등록.
 - **Frontend**: `useClusters`; `useServiceTopologyGraph`(namespace 그래프)/`useClusterTopologyGraph`(computing 시 1.5s 폴링)/`useServiceTopologyTraffic`(수동 트리거)/`useCreateTopologyLink`/`useDeleteTopologyLink`/`useCreateExternalNode`/`useDeleteExternalNode`(`frontend/src/hooks/useServiceTopology.ts`, `serviceTopologyApi` 래핑); `analyzeApi.listNamespaces`.
-- **Backend**: `GET /api/v1/service-topology/{cluster_id}/graph`, `GET .../cluster-graph`, `GET .../traffic`, `GET/POST .../links`, `PATCH/DELETE /api/v1/service-topology/links/{id}`, `POST /api/v1/service-topology/{cluster_id}/external-nodes`, `DELETE /api/v1/service-topology/external-nodes/{id}` — 라우터 `backend/app/routers/service_topology.py`, 모델 `backend/app/models/service_topology.py`(`ServiceTopologyLink`, `ServiceTopologyExternalNode`). **권한(D-090)**: 링크·외부 노드 생성/수정/삭제 5개 엔드포인트는 `require_operator`, `link_id`/`node_id` 경로(`PATCH`/`DELETE`)는 소유 클러스터를 조회해 `require_cluster_access(…, "operate")` 로 테넌트 바인딩을 판정한다(경로에 `cluster_id` 가 없어 `enforce_cluster_access` 가 못 보던 구멍). 프론트는 `useCanOperate(clusterId)` 로 외부 노드·링크 편집·삭제 버튼을 `disabled`+사유 처리.
+- **Backend**: `GET /api/v1/service-topology/{cluster_id}/graph`, `GET .../cluster-graph`, `GET .../traffic`, `GET/POST .../links`, `PATCH/DELETE /api/v1/service-topology/links/{id}`, `POST /api/v1/service-topology/{cluster_id}/external-nodes`, `DELETE /api/v1/service-topology/external-nodes/{id}` — 라우터 `backend/app/routers/service_topology.py`, 모델 `backend/app/models/service_topology.py`(`ServiceTopologyLink`, `ServiceTopologyExternalNode`). **권한(D-090)**: 링크·외부 노드 생성/수정/삭제 5개 엔드포인트는 `require_operator`, `link_id`/`node_id` 경로(`PATCH`/`DELETE`)는 소유 클러스터를 조회해 `require_cluster_access(…, "operate")` 로 테넌트 바인딩을 판정한다(경로에 `cluster_id` 가 없어 `enforce_cluster_access` 가 못 보던 구멍). 프론트는 `useCanOperate(clusterId)` 로 외부 노드·링크 편집·삭제 버튼을 `disabled`+사유 처리. **삭제·조작 UX(D-091/D-092)**: 링크·외부 노드 삭제는 `ConfirmDialog` 확인 후에만 실행, 2D 캔버스는 5px 미만 이동을 클릭으로 취급(드래그 직후 click 무시), 노드는 `role=button`+Tab/Enter/Space·Esc, 줌은 HTML `<button aria-label>`. 노드·연결 표 대체 뷰와 3D 뷰 접근성은 미구현. **상태 정합(D-094)**: 클러스터를 바꾸면 선택·링크 편집·namespace 를 초기화하고, 그래프를 다시 받아도 사용자가 옮긴 노드 배치는 노드 id 기준으로 유지(사라진 노드만 버림). 새로고침은 실트래픽도 함께 refetch 하며 상태 줄에 그래프 조회 시각을 표시. **실행 로그(D-089)**: "실트래픽"을 켜거나 새로고침할 때마다 수집 요청·결과(소스·엣지 수·drop)·flow 상위 10개 엣지를 컨트롤 카드 안 `RunLogPanel` 에 남긴다. **접근성·테마(D-095~D-098)**: 상태 점에 글자 병행, 범례는 실제 선 패턴(`edgeStyleToken`, 3D 는 hex `edgeStyle` 유지), "동작 줄이기" 시 트래픽 애니메이션·3D 파티클 정지(`usePrefersReducedMotion`), 토글 `aria-pressed`.
 - **핵심 기능**:
   - 자동 탐지 그래프(routes/exposes/uses_config/uses_secret/mounts_pvc) + 수동 링크/외부노드 병합.
   - 클러스터 전체 스캔은 백그라운드 집계(`status==='computing'`) 진행률 폴링.

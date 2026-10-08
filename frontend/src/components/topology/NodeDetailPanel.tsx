@@ -1,8 +1,16 @@
 import { X, Trash2, Cpu, MemoryStick, RotateCcw, Box } from 'lucide-react';
 import type { TopoNode, TopoEdge } from '@/types';
 import {
-  fmtCpu, fmtMem, usageRatio, statusColor, kindAccent, KIND_ABBR, EDGE_TYPE_LABEL,
+  fmtCpu, fmtMem, usageRatio, KIND_ABBR, EDGE_TYPE_LABEL,
 } from './topologyShared';
+
+// 상태 점 — 색 토큰 + 상태 글자를 함께 쓴다(D-096/D-097)
+const STATUS_DOT: Record<string, string> = {
+  critical: 'bg-status-critical', warning: 'bg-status-warning', healthy: 'bg-status-healthy',
+};
+const STATUS_LABEL: Record<string, string> = {
+  critical: '위험', warning: '경고', healthy: '정상',
+};
 
 interface Props {
   node: TopoNode;
@@ -24,16 +32,16 @@ export function NodeDetailPanel({
   const memR = usageRatio(node.metrics.mem.usage, node.metrics.mem.request, node.metrics.mem.limit);
 
   return (
-    <div className="absolute top-3 right-3 w-72 max-h-[calc(100%-1.5rem)] overflow-y-auto bg-card/95 backdrop-blur border border-border rounded-2xl shadow-card z-20">
+    <div role="region" aria-label={`${node.name} 상세`} className="absolute top-3 right-3 w-72 max-h-[calc(100%-1.5rem)] overflow-y-auto bg-card/95 backdrop-blur border border-border rounded-md shadow-card z-20">
       <div className="flex items-start gap-2 px-4 pt-3.5 pb-2 border-b border-border">
-        <span className="text-[11px] font-bold px-1.5 py-0.5 rounded mt-0.5" style={{ background: `${kindAccent(node.kind)}22`, color: kindAccent(node.kind) }}>
+        <span className="text-[11px] font-bold px-1.5 py-0.5 rounded-md mt-0.5 bg-secondary text-foreground border border-border">
           {KIND_ABBR[node.kind] ?? node.kind}
         </span>
         <div className="min-w-0 flex-1">
           <p className="text-sm font-semibold leading-tight break-all">{node.name}</p>
           <p className="text-xs text-muted-foreground">{node.namespace}{node.ghost ? ' · (없음)' : ''}</p>
         </div>
-        <button onClick={onClose} className="p-1 rounded-lg text-muted-foreground hover:bg-secondary" aria-label="닫기">
+        <button onClick={onClose} className="p-1 rounded-xl text-muted-foreground hover:bg-secondary" title="닫기" aria-label="닫기">
           <X className="w-4 h-4" />
         </button>
       </div>
@@ -41,8 +49,9 @@ export function NodeDetailPanel({
       <div className="px-4 py-3 space-y-3">
         {/* 상태 */}
         <div className="flex items-center gap-2 text-sm">
-          <span className="w-2 h-2 rounded-full" style={{ background: statusColor(node.status) }} />
-          <span className="font-medium capitalize">{node.status}</span>
+          <span className={`w-2 h-2 rounded-full ${STATUS_DOT[node.status] ?? 'bg-status-unknown'}`} aria-hidden />
+          <span className="font-medium">{STATUS_LABEL[node.status] ?? node.status}</span>
+          <span className="text-xs text-muted-foreground">({node.status})</span>
           {node.podCount > 0 && (
             <span className="text-muted-foreground flex items-center gap-1 ml-auto">
               <Box className="w-3 h-3" /> {node.readyCount}/{node.podCount}
@@ -68,7 +77,7 @@ export function NodeDetailPanel({
           <button onClick={() => onDeleteExternal(node)}
             disabled={!canOperate}
             title={withHint('외부 노드 삭제')}
-            className="w-full inline-flex items-center justify-center gap-1.5 px-2 py-1.5 text-xs rounded-lg border border-status-critical/30 text-status-critical hover:bg-status-critical/10 disabled:opacity-50 disabled:cursor-not-allowed">
+            className="w-full inline-flex items-center justify-center gap-1.5 px-2 py-1.5 text-xs rounded-xl border border-status-critical/30 text-status-critical hover:bg-status-critical/10 disabled:opacity-50 disabled:cursor-not-allowed">
             <Trash2 className="w-3 h-3" /> 외부 노드 삭제
           </button>
         )}
@@ -83,10 +92,10 @@ export function NodeDetailPanel({
               const out = e.source === node.id;
               const other = out ? e.target : e.source;
               return (
-                <div key={e.id} className="flex items-center gap-1.5 text-xs rounded-lg bg-secondary/40 px-2 py-1">
+                <div key={e.id} className="flex items-center gap-1.5 text-xs rounded-md bg-secondary/40 px-2 py-1">
                   <span className="text-muted-foreground">{out ? '→' : '←'}</span>
                   <span className="flex-1 min-w-0 truncate" title={nodeName(other)}>{nodeName(other)}</span>
-                  <span className="text-[11px] px-1 py-0.5 rounded bg-card text-muted-foreground flex-shrink-0">
+                  <span className="text-[11px] px-1 py-0.5 rounded-md bg-card text-muted-foreground flex-shrink-0">
                     {EDGE_TYPE_LABEL[e.type] ?? e.type}
                   </span>
                   {e.type === 'manual' && e.manualId && onDeleteLink && (
@@ -110,11 +119,11 @@ function MetricBar({ icon, label, ratio, usage, req, lim }: {
   icon: React.ReactNode; label: string; ratio: number | null; usage: string; req: string; lim: string;
 }) {
   const pct = ratio == null ? 0 : ratio * 100;
-  const color = ratio == null
-    ? 'hsl(var(--status-unknown))'
-    : ratio > 0.9 ? 'hsl(var(--status-critical))'
-    : ratio > 0.7 ? 'hsl(var(--status-warning))'
-    : 'hsl(var(--status-healthy))';
+  const barCls = ratio == null
+    ? 'bg-status-unknown'
+    : ratio > 0.9 ? 'bg-status-critical'
+    : ratio > 0.7 ? 'bg-status-warning'
+    : 'bg-status-healthy';
   return (
     <div>
       <div className="flex items-center gap-1.5 text-xs mb-0.5">
@@ -125,7 +134,8 @@ function MetricBar({ icon, label, ratio, usage, req, lim }: {
         </span>
       </div>
       <div className="h-1.5 rounded-full bg-secondary overflow-hidden">
-        <div className="h-full rounded-full transition-all" style={{ width: `${pct}%`, background: color }} />
+        {/* 폭은 값에 따라 달라지는 유일한 인라인 스타일 */}
+        <div className={`h-full rounded-full transition-all ${barCls}`} style={{ width: `${pct}%` }} />
       </div>
     </div>
   );

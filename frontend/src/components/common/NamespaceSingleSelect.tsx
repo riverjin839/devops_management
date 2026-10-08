@@ -8,11 +8,13 @@ interface Props {
   placeholder?: string;
   className?: string;
   clearable?: boolean;
+  /** 바깥 <label htmlFor> 와 연결할 입력 id. */
+  id?: string;
 }
 
 /** 네임스페이스 단일 선택 — 텍스트 검색 + 리스트(콤보박스). analyzeApi 로 NS 목록 fetch.
  *  SearchableSelect 재사용. 여러 페이지에서 NS 선택 UI 통일용. */
-export function NamespaceSingleSelect({ clusterId, value, onChange, placeholder = 'namespace 검색…', className, clearable }: Props) {
+export function NamespaceSingleSelect({ clusterId, value, onChange, placeholder = 'namespace 검색…', className, clearable, id }: Props) {
   const nsQ = useAnalyzeNamespaces(clusterId);
   return (
     <SearchableSelect
@@ -27,6 +29,7 @@ export function NamespaceSingleSelect({ clusterId, value, onChange, placeholder 
       emptyText="namespace 없음"
       clearable={clearable}
       className={className}
+      id={id}
     />
   );
 }

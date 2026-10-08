@@ -1,4 +1,4 @@
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useInfiniteQuery, useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { podBottleneckApi } from '@/services/api';
 import type { BottleneckRunInput } from '@/types';
 
@@ -16,17 +16,16 @@ export function useBottleneckProbes() {
   });
 }
 
-export function useBottleneckRuns(params?: {
-  clusterId?: string;
-  namespace?: string;
-  sourcePod?: string;
-  destPod?: string;
-  offset?: number;
-  limit?: number;
-}) {
-  return useQuery({
-    queryKey: bottleneckKeys.runs(params),
-    queryFn: async () => (await podBottleneckApi.listRuns(params)).data,
+/** 이력 목록 — "더 보기"로 offset 페이지를 이어 붙인다(D-094: 예전엔 50건 고정이라 그 뒤는 열람 불가).
+ *  키는 'bottleneckRuns' 접두사를 유지해 실행·삭제 후 무효화가 그대로 걸린다. */
+export function useBottleneckRunsPaged(params: { clusterId?: string; pageSize?: number }) {
+  const pageSize = params.pageSize ?? 50;
+  return useInfiniteQuery({
+    queryKey: ['bottleneckRuns', 'paged', params.clusterId ?? null, pageSize] as const,
+    initialPageParam: 0,
+    queryFn: async ({ pageParam }) =>
+      (await podBottleneckApi.listRuns({ clusterId: params.clusterId, offset: pageParam, limit: pageSize })).data,
+    getNextPageParam: (last) => (last.hasMore ? last.offset + last.data.length : undefined),
   });
 }
 
