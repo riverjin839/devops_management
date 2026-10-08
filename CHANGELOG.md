@@ -8,7 +8,16 @@
 
 ## [Unreleased]
 
-1.44.0 이후 main 에 병합된 변경 (다음 릴리스 후보).
+1.45.0 이후 main 에 병합된 변경 (다음 릴리스 후보).
+
+## [1.45.0] - 2026-10-08
+
+### Added
+- **클러스터 연결 검증 실시간 스트리밍**: `/cluster-manage` 의 연결 검증이 API server → kubeconfig 인증 → kubectl
+  단계를 시작·끝날 때마다 실행 로그에 바로 남긴다(예전엔 최대 수십 초 동안 아무 표시 없이 기다린 뒤 한꺼번에 출력).
+  진행 중 버튼을 다시 누르면 검증이 중지되고, 남은 단계는 실행하지 않으며 클러스터 상태도 바꾸지 않는다(감사 로그
+  `cluster.verify` status `aborted`). Backend: `POST /clusters/{id}/verify/stream`(SSE — 동기 `/verify` 와 단계·판정
+  로직 공유). Frontend: `ClusterManagePage` 가 fetch 스트림으로 소비, 검증 버튼은 진행 중 "검증 중지" 토글.
 
 ### Fixed
 - **K8s 이벤트 클러스터 필터·테넌트 격리**: kubewatch 이벤트가 항상 "클러스터 미지정"으로 저장돼 클러스터를 고르면

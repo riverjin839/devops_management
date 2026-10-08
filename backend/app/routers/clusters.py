@@ -1,3 +1,4 @@
+import json
 import os
 import subprocess
 import tempfile
@@ -6,6 +7,7 @@ from datetime import datetime
 import httpx
 import yaml
 from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi.responses import StreamingResponse
 from kubernetes import client as k8s_client, config as k8s_config
 from kubernetes.client import ApiException
 from pydantic import BaseModel, Field
@@ -37,6 +39,13 @@ from app.schemas import (
 )
 
 _CONNECT_TIMEOUT = 5  # seconds
+# SSE 응답 공통 헤더 — analyze 로그 스트림과 같은 이유(nginx 버퍼링·gzip 이 실시간성을 깸).
+_SSE_HEADERS = {
+    "Cache-Control": "no-cache",
+    "X-Accel-Buffering": "no",
+    "Connection": "keep-alive",
+    "Content-Encoding": "identity",
+}
 _K8S_AUTH_TIMEOUT = 15  # seconds — 300노드 규모 API server 부하 고려. heavy call 은 *4 배수.
 
 
@@ -724,77 +733,87 @@ def update_kubeconfig(
     return KubeconfigResponse(content=cleaned, path=saved_path)
 
 
-@router.post("/{cluster_id}/verify")
-def verify_cluster(
-    cluster_id: UUID,
-    request: Request,
-    db: Session = Depends(get_db),
-    actor: User = Depends(require_operator),
-):
-    """클러스터 연결 상태 상세 검증"""
-    cluster = db.query(Cluster).filter(Cluster.id == cluster_id).first()
-    if not cluster:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Cluster not found")
+# ── 연결 검증 (verify) ─────────────────────────────────────────────────────────
+# 동기 엔드포인트(POST /verify)와 SSE 스트림(POST /verify/stream)이 같은 단계 함수와
+# 마무리 로직을 공유한다 — 두 경로의 판정·상태 전이·감사 기록이 어긋나지 않게 하기 위함.
 
-    results = []
+VERIFY_STEPS: list[tuple[str, str]] = [
+    ("api_server", "API server"),
+    ("kubeconfig_auth", "kubeconfig 인증"),
+    ("kubectl_nodes", "kubectl get nodes"),
+]
 
-    # 1. API Server 연결
+
+def _verify_step_api_server(cluster) -> dict:
     try:
         healthz_url = (cluster.api_endpoint or "").rstrip("/") + "/healthz"
         with httpx.Client(verify=False, timeout=_CONNECT_TIMEOUT) as client:
             resp = client.get(healthz_url)
         ok = resp.status_code < 500
-        results.append({"check": "api_server", "ok": ok, "detail": f"HTTP {resp.status_code} — {resp.text[:80].strip()}"})
+        return {"check": "api_server", "ok": ok, "detail": f"HTTP {resp.status_code} — {resp.text[:80].strip()}"}
     except httpx.ConnectError as e:
-        results.append({"check": "api_server", "ok": False, "detail": f"연결 실패: {str(e)[:80]}"})
+        return {"check": "api_server", "ok": False, "detail": f"연결 실패: {str(e)[:80]}"}
     except httpx.TimeoutException:
-        results.append({"check": "api_server", "ok": False, "detail": f"타임아웃 ({_CONNECT_TIMEOUT}s)"})
-    except Exception as e:
-        results.append({"check": "api_server", "ok": False, "detail": str(e)[:80]})
+        return {"check": "api_server", "ok": False, "detail": f"타임아웃 ({_CONNECT_TIMEOUT}s)"}
+    except Exception as e:  # noqa: BLE001
+        return {"check": "api_server", "ok": False, "detail": str(e)[:80]}
 
-    # 2. kubeconfig 인증 — 파일이 없으면 DB content 로 재생성 시도.
-    # 실패 사유(미등록 / 경로만 등록·워커 미공유 / 재생성 실패)를 그대로 노출한다.
+
+def _verify_step_kubeconfig_auth(kc_path: str | None, kc_reason: str) -> dict:
+    # kubeconfig 파일이 없으면 실패 사유(미등록 / 경로만 등록·워커 미공유 / 재생성 실패)를 그대로 노출한다.
+    if not (kc_path and os.path.exists(kc_path)):
+        return {"check": "kubeconfig_auth", "ok": None, "detail": kc_reason or "kubeconfig 파일 없음"}
+    try:
+        api_client = get_api_client_for_path(kc_path)
+        v1 = k8s_client.CoreV1Api(api_client)
+        v1.list_namespace(limit=1, _request_timeout=_K8S_AUTH_TIMEOUT)
+        return {"check": "kubeconfig_auth", "ok": True, "detail": "인증 성공"}
+    except ApiException as e:
+        return {"check": "kubeconfig_auth", "ok": False, "detail": f"HTTP {e.status}: {e.reason}"}
+    except Exception as e:  # noqa: BLE001
+        return {"check": "kubeconfig_auth", "ok": False, "detail": str(e)[:80]}
+
+
+def _verify_step_kubectl_nodes(cluster, kc_path: str | None, kc_reason: str) -> dict:
+    if not (kc_path and os.path.exists(kc_path)):
+        return {"check": "kubectl_nodes", "ok": None, "detail": kc_reason or "kubeconfig 파일 없음"}
+    try:
+        cmd = ["kubectl", "--kubeconfig", kc_path]
+        if cluster.api_endpoint:
+            cmd += ["--server", cluster.api_endpoint]
+        cmd += ["get", "nodes", "--no-headers"]
+        res = subprocess.run(cmd, capture_output=True, text=True, timeout=15)
+        if res.returncode == 0:
+            node_lines = [l for l in res.stdout.strip().split("\n") if l]
+            return {"check": "kubectl_nodes", "ok": True, "detail": f"{len(node_lines)}개 노드 조회 성공"}
+        return {"check": "kubectl_nodes", "ok": False, "detail": res.stderr.strip()[:100]}
+    except Exception as e:  # noqa: BLE001
+        return {"check": "kubectl_nodes", "ok": False, "detail": str(e)[:80]}
+
+
+def _iter_verify_steps(cluster):
+    """검증 단계를 하나씩 실행하며 결과 dict 를 yield 한다 (동기·스트림 공용)."""
+    yield _verify_step_api_server(cluster)
     kc_path, kc_reason = _resolve_kubeconfig(cluster)
-    if kc_path and os.path.exists(kc_path):
-        try:
-            api_client = get_api_client_for_path(kc_path)
-            v1 = k8s_client.CoreV1Api(api_client)
-            v1.list_namespace(limit=1, _request_timeout=_K8S_AUTH_TIMEOUT)
-            results.append({"check": "kubeconfig_auth", "ok": True, "detail": "인증 성공"})
-        except ApiException as e:
-            results.append({"check": "kubeconfig_auth", "ok": False, "detail": f"HTTP {e.status}: {e.reason}"})
-        except Exception as e:
-            results.append({"check": "kubeconfig_auth", "ok": False, "detail": str(e)[:80]})
-    else:
-        results.append({"check": "kubeconfig_auth", "ok": None, "detail": kc_reason or "kubeconfig 파일 없음"})
+    yield _verify_step_kubeconfig_auth(kc_path, kc_reason)
+    yield _verify_step_kubectl_nodes(cluster, kc_path, kc_reason)
 
-    # 3. kubectl get nodes
-    if kc_path and os.path.exists(kc_path):
-        try:
-            cmd = ["kubectl", "--kubeconfig", kc_path]
-            if cluster.api_endpoint:
-                cmd += ["--server", cluster.api_endpoint]
-            cmd += ["get", "nodes", "--no-headers"]
-            res = subprocess.run(cmd, capture_output=True, text=True, timeout=15)
-            if res.returncode == 0:
-                node_lines = [l for l in res.stdout.strip().split("\n") if l]
-                results.append({"check": "kubectl_nodes", "ok": True, "detail": f"{len(node_lines)}개 노드 조회 성공"})
-            else:
-                results.append({"check": "kubectl_nodes", "ok": False, "detail": res.stderr.strip()[:100]})
-        except Exception as e:
-            results.append({"check": "kubectl_nodes", "ok": False, "detail": str(e)[:80]})
-    else:
-        results.append({"check": "kubectl_nodes", "ok": None, "detail": kc_reason or "kubeconfig 파일 없음"})
 
+def _verify_result_code(ok: bool | None) -> str:
+    return "ok" if ok is True else "fail" if ok is False else "skip"
+
+
+def _finalize_verify(db: Session, cluster, results: list[dict], actor: User, request: Request) -> dict:
+    """전 단계 결과로 cluster.status 를 판정·반영하고 감사 로그를 남긴 뒤 응답 dict 를 만든다.
+
+    - 전부 OK           → healthy
+    - API 도달 불가      → pending (연결 불가. critical 은 "연결은 되는데 addon critical" 전용)
+    - API 는 되는데 kubeconfig 부재/인증불가 → warning — 예전엔 healthy 로 마킹해
+      "클러스터는 연결됨인데 배치잡·점검은 kubeconfig 미등록 에러" 모순이 생겼다.
+      kubectl/SDK 를 쓰는 모든 기능이 실패할 상태이므로 미리 warning 으로 드러낸다.
+    """
     api_ok = next((r["ok"] for r in results if r["check"] == "api_server"), False)
     overall_ok = all(r["ok"] is True for r in results)
-
-    # 연결 확인 결과를 cluster.status 에 반영.
-    # - 전부 OK           → healthy
-    # - API 도달 불가      → pending (연결 불가. critical 은 "연결은 되는데 addon critical" 전용)
-    # - API 는 되는데 kubeconfig 부재/인증불가 → warning — 예전엔 healthy 로 마킹해
-    #   "클러스터는 연결됨인데 배치잡·점검은 kubeconfig 미등록 에러" 모순이 생겼다.
-    #   kubectl/SDK 를 쓰는 모든 기능이 실패할 상태이므로 미리 warning 으로 드러낸다.
     if overall_ok:
         new_status = StatusEnum.healthy
         status_reason = None
@@ -812,19 +831,16 @@ def verify_cluster(
 
     # verify 는 cluster.status 를 바꾸는 실행 동작이라 결과와 상태 전이를 남긴다.
     # 단계별 상세 문구(서버 주소·에러 원문)는 싣지 않고 check → 결과 코드만 기록한다.
-    def _code(ok: bool | None) -> str:
-        return "ok" if ok is True else "fail" if ok is False else "skip"
-
     audit_logger.record(
         db,
         action="cluster.verify",
         actor=actor,
         status="success" if overall_ok else "failure",
         target_type="cluster",
-        target_id=cluster_id,
+        target_id=cluster.id,
         details={
             "name": cluster.name,
-            "checks": {r["check"]: _code(r["ok"]) for r in results},
+            "checks": {r["check"]: _verify_result_code(r["ok"]) for r in results},
             "status_from": getattr(prev_status, "value", prev_status),
             "status_to": new_status.value,
         },
@@ -832,13 +848,111 @@ def verify_cluster(
     )
 
     return {
-        "cluster_id": str(cluster_id),
+        "cluster_id": str(cluster.id),
         "cluster_name": cluster.name,
         "ok": overall_ok,
-        "status": new_status.value if hasattr(new_status, "value") else str(new_status),
+        "status": new_status.value,
         "status_reason": status_reason,
         "results": results,
     }
+
+
+def _get_cluster_or_404(db: Session, cluster_id: UUID):
+    cluster = db.query(Cluster).filter(Cluster.id == cluster_id).first()
+    if not cluster:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Cluster not found")
+    return cluster
+
+
+@router.post("/{cluster_id}/verify")
+def verify_cluster(
+    cluster_id: UUID,
+    request: Request,
+    db: Session = Depends(get_db),
+    actor: User = Depends(require_operator),
+):
+    """클러스터 연결 상태 상세 검증 (전 단계 완료 후 한 번에 응답)."""
+    cluster = _get_cluster_or_404(db, cluster_id)
+    results = list(_iter_verify_steps(cluster))
+    return _finalize_verify(db, cluster, results, actor, request)
+
+
+def _sse(event: dict) -> str:
+    return f"data: {json.dumps(event, ensure_ascii=False)}\n\n"
+
+
+def verify_event_stream(db: Session, cluster, actor: User, request: Request):
+    """연결 검증 SSE 이벤트 스트림.
+
+    이벤트 (snake_case JSON, ``data:`` 한 줄):
+      - ``{"type":"step","check":..,"label":..,"status":"running"}`` — 단계 시작
+      - ``{"type":"step","check":..,"label":..,"status":"ok|fail|skip","detail":..}`` — 단계 완료
+      - ``{"type":"done", ...동기 /verify 와 같은 응답 dict}`` — 상태 반영·감사 기록 후
+      - ``{"type":"error","message":..}`` — 마무리 중 예외
+
+    클라이언트가 중간에 끊으면(중지 버튼) 남은 단계는 실행하지 않고 cluster.status 도
+    바꾸지 않는다 — 부분 결과로 상태를 판정하면 거짓 상태가 남는다. 대신 감사 로그에
+    ``aborted`` 와 그때까지의 단계 결과를 남겨 누가 언제 돌리다 멈췄는지는 추적된다.
+    """
+    labels = dict(VERIFY_STEPS)
+    results: list[dict] = []
+    steps = _iter_verify_steps(cluster)
+    try:
+        for check, label in VERIFY_STEPS:
+            yield _sse({"type": "step", "check": check, "label": label, "status": "running"})
+            r = next(steps)
+            results.append(r)
+            yield _sse({
+                "type": "step",
+                "check": r["check"],
+                "label": labels.get(r["check"], r["check"]),
+                "status": _verify_result_code(r["ok"]),
+                "detail": r["detail"],
+            })
+    except GeneratorExit:
+        try:
+            audit_logger.record(
+                db,
+                action="cluster.verify",
+                actor=actor,
+                status="aborted",
+                target_type="cluster",
+                target_id=cluster.id,
+                details={
+                    "name": cluster.name,
+                    "checks": {r["check"]: _verify_result_code(r["ok"]) for r in results},
+                },
+                request=request,
+            )
+        except Exception:  # noqa: BLE001 — 감사 로그 실패가 정리를 깨지 않게
+            pass
+        raise
+
+    try:
+        payload = _finalize_verify(db, cluster, results, actor, request)
+        yield _sse({"type": "done", **payload})
+    except Exception as e:  # noqa: BLE001 — SSE 로는 에러도 이벤트로 보낸다
+        yield _sse({"type": "error", "message": str(e)[:200] or "검증 결과 반영에 실패했습니다."})
+
+
+@router.post("/{cluster_id}/verify/stream")
+def verify_cluster_stream(
+    cluster_id: UUID,
+    request: Request,
+    db: Session = Depends(get_db),
+    actor: User = Depends(require_operator),
+):
+    """클러스터 연결 검증 — 단계별 결과를 SSE 로 실시간 중계한다.
+
+    화면의 "연결 검증" 버튼이 이 엔드포인트를 쓴다(fetch + reader 로 소비, snake_case 원문 JSON).
+    판정·상태 반영·감사 기록은 동기 ``POST /verify`` 와 같은 함수를 쓴다.
+    """
+    cluster = _get_cluster_or_404(db, cluster_id)
+    return StreamingResponse(
+        verify_event_stream(db, cluster, actor, request),
+        media_type="text/event-stream",
+        headers=_SSE_HEADERS,
+    )
 
 
 # ── 자동 업데이트 (kubeconfig 기반) ───────────────────────────────────────────
