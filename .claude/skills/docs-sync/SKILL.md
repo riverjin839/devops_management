@@ -48,6 +48,9 @@ python3 scripts/docs/check_docs_sync.py
   - **전수 나열**(라우터·모델·페이지 개별 파일명) — 도메인 그룹 요약만 유지한다.
 - **CHANGELOG.md**: `[Unreleased]` 아래 `### Added`/`### Fixed`/`### Changed` 에 굵은
   기능명 + 사용자 관점 요약 1~2줄 (+ `Backend:`/`Frontend:` 구현 포인트).
+  이미 릴리스된 `## [X.Y.Z]` 섹션은 건드리지 않는다 — CI `check_changelog_sections.py` 가 막는다.
+  main 을 머지한 뒤 내 항목이 버전 섹션 안에 들어가 있으면 `[Unreleased]` 로 옮긴다.
+  의도적 위치 정리만 PR 제목에 `[changelog-fix]`.
 - **의도된 예외**: 문서화가 불필요한 라우트/파일이면
   `scripts/docs/check_docs_sync.py` 의 `EXEMPT_*` 목록에 **사유 주석과 함께** 추가한다.
   예외 남발 금지 — 리다이렉트 alias, 내부 전용 유틸 정도만.

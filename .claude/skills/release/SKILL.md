@@ -44,3 +44,6 @@ description: 새 버전을 릴리스할 때(마이너 기능 추가/패치) 사�
 - 태그는 **main 커밋에만**(작업 브랜치 금지). 접두사 `v`. pre-release `vX.Y.Z-rc.N`.
 - 커밋은 Conventional Commits 유지(`feat`/`fix`/`docs`/`refactor`/`chore`).
 - 핫픽스: `hotfix/<설명>` → PR → main → PATCH 태그.
+- 이미 릴리스된 CHANGELOG 섹션을 고치는 정리 PR 은 제목에 `[changelog-fix]` 를 붙인다(CI 가드·
+  auto-release 구제 우회). 수동 bump 에서 끼어든 항목을 되돌리려면
+  `bump_version.py <kind> --rescue-from <직전 main ref>` (`docs/branch-tag-strategy.md` 참고).

@@ -33,9 +33,26 @@ PEP 는 **v1.0.0 정식 오픈** 이후 **trunk 기반 + SemVer 태그**로 운�
    `!`(breaking)는 type 기준으로 판정한다 — MAJOR 는 수동 릴리스 대상.
 2. `scripts/release/bump_version.py` 로 버전 3곳(`frontend/package.json`,
    `backend/app/main.py` ×2) + `CHANGELOG.md` `[Unreleased]` → `## [X.Y.Z] - <date>` 확정
-   (Unreleased 에 실제 항목이 없으면 전체를 스킵).
+   (Unreleased 에 실제 항목이 없으면 전체를 스킵). 이때 `--rescue-from HEAD^1` 로 **릴리스 섹션
+   구제**를 먼저 한다 — 아래 "이미 릴리스된 섹션 보호" 참고.
 3. `chore(release): vX.Y.Z` PR 을 열고 즉시 병합.
 4. 병합 커밋에 annotated 태그 `vX.Y.Z` 를 push → 아래 `release.yml` 자동 트리거.
+
+#### 이미 릴리스된 섹션 보호
+
+PR 이 `[Unreleased]` 끝에 항목을 넣은 뒤, 그 PR 이 머지되기 전에 auto-release 가 `[Unreleased]`
+를 `## [X.Y.Z]` 로 확정하면 git 3-way 머지가 그 항목을 **충돌 없이 새 버전 섹션 안에** 넣는다.
+`[Unreleased]` 는 비어 다음 릴리스가 스킵되고, 변경은 이미 나간 버전에 거짓으로 기록된다
+(1.38.0 · 1.41.1 · 1.41.2 사례). 두 겹으로 막는다 — 로직은 `scripts/release/changelog_sections.py`,
+테스트는 `test_changelog_sections.py`(실제 git 머지 재현 포함).
+
+| 단계 | 동작 |
+|---|---|
+| PR CI (`docs-sync` job) | `check_changelog_sections.py <base-sha>` — PR→base 머지 결과에서 base 에 있던 버전 섹션의 헤더·본문이 바뀌면 실패. 해결: main 을 머지하고 항목을 `[Unreleased]` 로 옮긴다 |
+| auto-release | CI 이후에 릴리스가 끼어든 경우(CI 가 오래된 base 로 통과) `bump_version.py --rescue-from HEAD^1` 이 직전 main 대비 릴리스 섹션에 **순수 추가된 줄**을 `[Unreleased]` 의 같은 `### 소제목` 아래로 되돌린 뒤 bump 한다. 기존 줄 수정·삭제는 건드리지 않는다 |
+
+릴리스 섹션을 **의도적으로** 고치는 PR(위치 정리 등)은 제목에 `[changelog-fix]` 를 붙인다 —
+CI 가드와 구제 둘 다 건너뛴다. `chore(release): …` 도 CI 가드 예외다.
 
 > ⚠️ **설정 필요**: 태그 push 가 `release.yml` 을 실제로 트리거하려면 repo+workflow 스코프
 > PAT 를 `RELEASE_PAT` 시크릿으로 등록해야 한다(Settings ▸ Secrets and variables ▸ Actions).
