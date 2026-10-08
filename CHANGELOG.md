@@ -17,6 +17,10 @@
   DB 에만 저장된 kubeconfig 로도 동기화되며, 등록된 kubeconfig 를 해석할 수 없으면 다른 클러스터를 읽지 않도록 중단한다.
   Backend: SSE `POST /infra-nodes/sync/{cluster_id}/stream` · `POST /infra-nodes/{id}/verify/stream`, 딥체커 `on_step`
   단계 훅. Frontend: `useSyncInfraNodes`/`useVerifyInfraNode` 가 스트림 소비, 공용 `applyRunEvent`·`camelizeKeys`.
+- **서비스 토폴로지 "표" 보기·3D 접근성**: 2D/3D 옆에 "표" 보기가 생겨 노드(종류·상태·Pod·재시작·연결 수)·연결·
+  실트래픽을 표로 읽고, 노드 이름을 눌러 상세를 열거나 링크 편집의 출발·도착을 고를 수 있다(키보드·스크린리더 대체 뷰).
+  검색어가 있으면 일치 노드와 그 연결만 남긴다. 3D 보기에는 "표로 보기"·"화면 맞춤" 버튼과 조작 안내가 붙었다.
+  Frontend: `components/topology/TopologyTable.tsx`, `Topology3D`, `ServiceTopologyPage`.
 
 ## [1.43.0] - 2026-10-08
 
