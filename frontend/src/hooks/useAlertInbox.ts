@@ -52,8 +52,8 @@ export function useAckAllAlerts() {
   const qc = useQueryClient();
   return useMutation({
     // 처리 건수를 토스트에 쓰므로 공용 헬퍼(unknown 반환) 대신 반환 타입을 유지한다.
-    mutationFn: ({ clusterId, severity }: { clusterId?: string | null; severity?: string }) =>
-      observabilityApi.ackAllAlerts(clusterId, severity).then((res) => res.data),
+    mutationFn: (filter: { clusterId?: string | null; severity?: string; status?: string; q?: string }) =>
+      observabilityApi.ackAllAlerts(filter).then((res) => res.data),
     onSuccess: () => qc.invalidateQueries({ queryKey: alertInboxKeys.all }),
   });
 }

@@ -6,8 +6,29 @@ username/display_name 집합과 매칭한다(work item 담당자 식별자 불�
 from app.models.user_notification import UserNotification
 
 
+def restrict_to_cluster_viewers(db, query, cluster_id):
+    """User 쿼리를 이 클러스터를 **볼 수 있는** 사용자로 좁힌다(테넌트 격리 — D-101/D-103).
+
+    바인딩이 없는 클러스터(또는 cluster_id 없음)는 그대로 둔다. 바인딩이 있으면 admin 과
+    바인딩된 테넌트의 멤버만 남긴다 — `cluster_access.hidden_cluster_ids` 와 같은 판정.
+    """
+    if cluster_id is None:
+        return query
+    from sqlalchemy import or_, select
+
+    from app.models.tenant import ClusterBinding, TenantMember
+    from app.models.user import User
+
+    bound = [tid for (tid,) in db.query(ClusterBinding.tenant_id)
+             .filter(ClusterBinding.cluster_id == cluster_id).all()]
+    if not bound:
+        return query
+    members = select(TenantMember.user_id).where(TenantMember.tenant_id.in_(bound))
+    return query.filter(or_(User.role == "admin", User.id.in_(members)))
+
+
 def notify_broadcast(db, *, type: str, title: str, body: str = "", link: str | None = None,
-                     roles: tuple[str, ...] | None = None) -> list[UserNotification]:
+                     roles: tuple[str, ...] | None = None, cluster_id=None) -> list[UserNotification]:
     """전체(또는 특정 role) 사용자에게 개인 알림을 **사용자별 행으로 팬아웃**한다.
 
     과거에는 `recipient="all"` 공유 행 하나를 넣었는데, 조회 쪽(`_me_ids`)이 그 센티널을
@@ -15,12 +36,14 @@ def notify_broadcast(db, *, type: str, title: str, body: str = "", link: str | N
     안 되므로(한 명이 읽으면 전원 읽음) 생성 시점에 나누는 쪽이 맞다.
 
     `roles` 를 주면 해당 role 사용자에게만 보낸다 (예: ("admin", "operator")).
+    `cluster_id` 를 주면 그 클러스터를 볼 수 있는 사용자에게만 보낸다(테넌트 바인딩).
     """
     from app.models.user import User
 
     query = db.query(User).filter(User.is_active.is_(True))
     if roles:
         query = query.filter(User.role.in_(roles))
+    query = restrict_to_cluster_viewers(db, query, cluster_id)
 
     created: list[UserNotification] = []
     for user in query.all():

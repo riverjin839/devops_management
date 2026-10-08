@@ -3,7 +3,7 @@ import { BellOff, Check, ExternalLink, RefreshCw, Search, Trash2 } from 'lucide-
 import { MacCard } from '@/components/ui/MacCard';
 import { ClusterSidebar } from '@/components/common/ClusterSidebar';
 import { AlertAnalysisPanel } from '@/components/observability/AlertAnalysisPanel';
-import { useToast } from '@/components/common';
+import { ConfirmDialog, useToast } from '@/components/common';
 import { useClusters } from '@/hooks/useCluster';
 import {
   useAckAlert,
@@ -94,6 +94,7 @@ export function AlertInboxPage() {
   const [status, setStatus] = useState('firing');
   const [query, setQuery] = useState('');
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [ackAllOpen, setAckAllOpen] = useState(false);
 
   const { data, isLoading, isFetching, refetch } = useAlerts({
     clusterId, severity, status, q: query.trim() || undefined, limit: 200,
@@ -114,9 +115,18 @@ export function AlertInboxPage() {
     }
   };
 
+  // 일괄 확인 대상 = 지금 목록에 걸린 조건 그대로(클러스터·심각도·상태·검색어) — D-103
+  const ackAllScope = [
+    clusterId ? (clusters.find((c) => c.id === clusterId)?.name ?? '선택 클러스터') : '볼 수 있는 전체 클러스터',
+    severity === 'all' ? '모든 심각도' : severity,
+    status === 'all' ? '발생중·해소 전체' : status === 'firing' ? '발생중' : '해소',
+    query.trim() ? `검색 "${query.trim()}"` : null,
+  ].filter(Boolean).join(' · ');
+
   const handleAckAll = async () => {
+    setAckAllOpen(false);
     try {
-      const res = await ackAll.mutateAsync({ clusterId, severity });
+      const res = await ackAll.mutateAsync({ clusterId, severity, status, q: query.trim() || undefined });
       toast.success(`${res.acked}건을 확인 처리했습니다.`);
     } catch (err) {
       toast.error(formatApiError(err, '일괄 확인 실패'));
@@ -190,8 +200,9 @@ export function AlertInboxPage() {
                   </div>
                   <button
                     type="button"
-                    onClick={handleAckAll}
+                    onClick={() => setAckAllOpen(true)}
                     disabled={ackAll.isPending}
+                    title="지금 보이는 조건의 미확인 알람을 모두 확인 처리"
                     className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-sm bg-secondary text-muted-foreground hover:bg-secondary/80 transition-colors disabled:opacity-50"
                   >
                     <Check className="w-3.5 h-3.5" aria-hidden /> 일괄 확인
@@ -389,6 +400,14 @@ export function AlertInboxPage() {
           )}
         </div>
       </div>
+      <ConfirmDialog
+        open={ackAllOpen}
+        title="미확인 알람 일괄 확인"
+        description={`다음 조건에 맞는 미확인 알람을 모두 확인 처리한다 — ${ackAllScope}.`}
+        confirmLabel="일괄 확인"
+        onConfirm={() => void handleAckAll()}
+        onCancel={() => setAckAllOpen(false)}
+      />
     </div>
   );
 }

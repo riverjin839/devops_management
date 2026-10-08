@@ -2456,11 +2456,14 @@ export const observabilityApi = {
     }),
   ackAlert: (id: string, acked = true) =>
     api.post<import('@/types').AlertEvent>(`/observability/alerts/${id}/ack`, { acked }),
-  ackAllAlerts: (clusterId?: string | null, severity?: string) =>
+  // 목록과 같은 조건(클러스터·심각도·상태·검색어)으로만 확인 처리한다(D-103).
+  ackAllAlerts: (filter: { clusterId?: string | null; severity?: string; status?: string; q?: string }) =>
     api.post<{ acked: number }>('/observability/alerts/ack-all', undefined, {
       params: {
-        ...(clusterId ? { cluster_id: clusterId } : {}),
-        ...(severity && severity !== 'all' ? { severity } : {}),
+        ...(filter.clusterId ? { cluster_id: filter.clusterId } : {}),
+        ...(filter.severity && filter.severity !== 'all' ? { severity: filter.severity } : {}),
+        ...(filter.status && filter.status !== 'all' ? { status: filter.status } : {}),
+        ...(filter.q ? { q: filter.q } : {}),
       },
     }),
   deleteAlert: (id: string) => api.delete(`/observability/alerts/${id}`),
