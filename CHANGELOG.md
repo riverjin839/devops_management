@@ -51,28 +51,11 @@
   "노드가 없습니다"로 오인되던 것을 오류 상태와 "다시 시도"로 바꿨다. ③ Pod 병목 진단은 실행·삭제 버튼에 권한 표시
   (viewer 비활성+사유)를 넣고, 삭제 실패를 배너로 알리며 삭제 중 중복 클릭을 막고, 실행 실패는 서버 사유를 보여준다.
   Frontend: `InfraTopologyPage`·`PodBottleneckPage`·`PodBottleneckDetailPage`.
-
-## [1.41.2] - 2026-09-30
-
-### Added
-- **대형 클러스터 자원 집계 준실시간 롤링 갱신 (`/k8s-allocation`)**: 화면을 연 대형(namespace 모드) 클러스터는
-  Celery 가 매분 **가장 오래된 네임스페이스부터** 시간 예산(기본 40초)만큼 다시 모아 NS 누적기를 신선하게 유지하고,
-  전 NS 가 모이면 개요 스냅샷을 게시한다. 화면은 재집계 없이 1분마다 저장된 결과를 읽어 규모와 무관하게 즉시
-  뜨고, 상단에 "NS 롤링 갱신 중 · 가장 오래된 NS 데이터 n분 전" 으로 데이터 나이를 보여준다. 새로고침도 최근
-  5분 내 모은 NS 는 재사용해 오래된 NS 만 다시 모은다. 실패한 NS 는 직전 값을 유지하고 다음 틱에 재시도한다.
-  Backend: `services/k8s_alloc_rolling.py`, Celery `k8s-alloc-rolling-dispatcher`(`dispatch_k8s_alloc_rolling` →
-  `refresh_k8s_alloc_rolling_one`, 클러스터당 Redis 락), `K8S_ALLOC_ROLLING`(viewed|always|off)·`ROLLING_BUDGET`·
-  `ROLLING_MIN_AGE`·`ROLLING_ACTIVE_TTL`·`NS_REUSE_MAX_AGE`, 응답 `rolling`·`ns_oldest_at`. 효율화 수집의 NS 단위
-  순회 결과도 롤링 캐시에 저장한다. Frontend: 롤링 안내·데이터 나이 표시, 롤링 중 비강제 주기 재조회.
-
-### Fixed
-
 - **클러스터 생성 시 kubeconfig 경로 검증** — 경로로만 지정한 kubeconfig 가 실제 kubeconfig(YAML, `clusters` 항목 포함)인지 등록 시점에 확인한다. 연결 검증 생략(`skip_connectivity_check`)으로 등록해도 동일하게 적용돼, kubeconfig 조회 API 를 통해 임의 파일이 노출되는 우회로를 막는다.
   Backend: `routers/clusters.py` (`create_cluster`).
-
-### Fixed
-
 - **사이드바 하단 flyout 잘림** — 좌측 하단 도움말·사용자 아이콘 hover 시 뜨는 패널이 약 92px 로 잘려 보이던 문제. Frontend: `FlyoutShell` 이 실제 높이를 측정해 화면 안으로 끌어올린다.
+
+## [1.41.2] - 2026-09-30
 
 ### Added
 - **대형 클러스터 자원 집계 준실시간 롤링 갱신 (`/k8s-allocation`)**: 화면을 연 대형(namespace 모드) 클러스터는
