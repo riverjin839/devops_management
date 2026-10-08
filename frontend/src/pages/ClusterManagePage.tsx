@@ -13,8 +13,8 @@ import {
 import type { Cluster } from '@/types';
 import { useClusters } from '@/hooks/useCluster';
 import { useClusterStore } from '@/stores/clusterStore';
-import { useAuthStore, hasRole } from '@/stores/authStore';
-import { clustersApi } from '@/services/api';
+import { useAuthStore, hasRole, getAuthToken } from '@/stores/authStore';
+import { clustersApi, clustersVerifyStreamUrl } from '@/services/api';
 import { useQueryClient } from '@tanstack/react-query';
 import {
   CiliumConfigModal,
@@ -462,37 +462,104 @@ export function ClusterManagePage() {
     }
   };
 
-  // 연결 검증 — POST /clusters/{id}/verify 의 단계별 결과(api_server / kubeconfig_auth /
-  // kubectl_nodes)를 실행 로그에 한 줄씩 남긴다. 서버가 cluster.status 를 갱신하므로 목록을 다시 읽는다.
+  // 연결 검증 — POST /clusters/{id}/verify/stream(SSE) 를 fetch 로 소비해 단계(api_server /
+  // kubeconfig_auth / kubectl_nodes)가 시작·끝날 때마다 실행 로그에 바로 한 줄씩 남긴다.
+  // 진행 중 버튼을 다시 누르면 abort — 서버는 남은 단계를 실행하지 않고 상태도 바꾸지 않는다(감사: aborted).
   // 로그 패널은 자동으로 열지 않고 "로그 보기" 토글에 맡긴다(CLAUDE.md — 사용자가 결정).
   const CHECK_LABEL: Record<string, string> = {
     api_server: 'API server',
     kubeconfig_auth: 'kubeconfig 인증',
     kubectl_nodes: 'kubectl get nodes',
   };
+  const STEP_MARK: Record<string, string> = { ok: 'ok', fail: 'FAIL', skip: 'SKIP' };
+  const verifyAbortRef = useRef<Map<string, AbortController>>(new Map());
   const handleVerify = async (cluster: Cluster) => {
-    if (verifyingIds.has(cluster.id)) return;
+    const running = verifyAbortRef.current.get(cluster.id);
+    if (running) {
+      running.abort();
+      return;
+    }
+    const ac = new AbortController();
+    verifyAbortRef.current.set(cluster.id, ac);
     setVerifyingIds((prev) => new Set(prev).add(cluster.id));
     appendLog(`[검증] start ${cluster.name} — API server → kubeconfig 인증 → kubectl 순서로 점검`);
-    try {
-      const { data } = await clustersApi.verify(cluster.id);
-      for (const r of data.results ?? []) {
-        const mark = r.ok === true ? 'ok' : r.ok === false ? 'FAIL' : 'SKIP';
-        appendLog(`[검증]   ${mark} ${CHECK_LABEL[r.check] ?? r.check} — ${r.detail}`);
+    let finished = false;
+    const handle = (evt: Record<string, unknown>) => {
+      const type = String(evt.type ?? '');
+      if (type === 'step') {
+        const label = CHECK_LABEL[String(evt.check)] ?? String(evt.check ?? '');
+        if (evt.status === 'running') appendLog(`[검증]   … ${label} 진행 중`);
+        else appendLog(`[검증]   ${STEP_MARK[String(evt.status)] ?? String(evt.status)} ${label} — ${String(evt.detail ?? '')}`);
+      } else if (type === 'done') {
+        finished = true;
+        appendLog(`[검증] ${evt.ok ? 'ok' : 'FAIL'} ${cluster.name} — 상태 ${String(evt.status ?? '-')}${evt.status_reason ? ` (${String(evt.status_reason)})` : ''}`);
+        if (evt.ok) toast.success('연결 검증 통과', cluster.name);
+        else toast.warning('연결 검증 실패 항목 있음', `${cluster.name} — 자세한 내용은 "로그 보기"`);
+      } else if (type === 'error') {
+        finished = true;
+        const msg = String(evt.message ?? '검증 처리 중 오류');
+        appendLog(`[검증] FAIL ${cluster.name} — ${msg}`);
+        toast.error('연결 검증 실패', `${cluster.name}: ${msg}`);
       }
-      appendLog(`[검증] ${data.ok ? 'ok' : 'FAIL'} ${cluster.name} — 상태 ${data.status ?? '-'}${data.statusReason ? ` (${data.statusReason})` : ''}`);
-      await queryClient.refetchQueries({ queryKey: ['clusters'] });
-      if (data.ok) toast.success('연결 검증 통과', cluster.name);
-      else toast.warning('연결 검증 실패 항목 있음', `${cluster.name} — 자세한 내용은 "로그 보기"`);
+    };
+    try {
+      const token = getAuthToken();
+      const resp = await fetch(clustersVerifyStreamUrl(cluster.id), {
+        method: 'POST',
+        signal: ac.signal,
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
+      if (!resp.ok || !resp.body) {
+        // 스트림 시작 전 거절(403/404 등)은 본문이 JSON 에러다.
+        let detail = `서버 오류 ${resp.status}`;
+        try {
+          const body = await resp.json();
+          if (body?.detail) detail = String(body.detail);
+        } catch {
+          /* 본문이 JSON 이 아니면 상태코드만 */
+        }
+        throw new Error(detail);
+      }
+      const reader = resp.body.getReader();
+      const decoder = new TextDecoder('utf-8');
+      let buf = '';
+      for (;;) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buf += decoder.decode(value, { stream: true });
+        let idx;
+        while ((idx = buf.indexOf('\n\n')) >= 0) {
+          const block = buf.slice(0, idx);
+          buf = buf.slice(idx + 2);
+          for (const ln of block.split('\n')) {
+            if (!ln.startsWith('data:')) continue;
+            try {
+              handle(JSON.parse(ln.slice(5).replace(/^ /, '')));
+            } catch {
+              /* 깨진 줄은 건너뛴다 — 스트림 전체를 죽이지 않는다 */
+            }
+          }
+        }
+      }
+      if (!finished) appendLog(`[검증] FAIL ${cluster.name} — 결과 없이 스트림이 끊겼습니다`);
     } catch (e: unknown) {
-      appendLog(`[검증] FAIL ${cluster.name} — ${formatApiError(e)}`);
-      toast.error('연결 검증 실패', `${cluster.name}: ${formatApiError(e)}`);
+      if (ac.signal.aborted) {
+        appendLog(`[검증] 중지 ${cluster.name} — 남은 단계는 실행하지 않았고 상태는 그대로입니다`);
+        toast.info('연결 검증 중지', cluster.name);
+      } else {
+        const msg = e instanceof Error ? e.message : formatApiError(e);
+        appendLog(`[검증] FAIL ${cluster.name} — ${msg}`);
+        toast.error('연결 검증 실패', `${cluster.name}: ${msg}`);
+      }
     } finally {
+      verifyAbortRef.current.delete(cluster.id);
       setVerifyingIds((prev) => {
         const next = new Set(prev);
         next.delete(cluster.id);
         return next;
       });
+      // 서버가 cluster.status 를 갱신했을 수 있으니 목록을 다시 읽는다.
+      await queryClient.refetchQueries({ queryKey: ['clusters'] });
     }
   };
 

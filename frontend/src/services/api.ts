@@ -1268,6 +1268,10 @@ export const k8sRbacApi = {
     api.post<import('@/types').RbacKubeconfigResult>(`/clusters/${clusterId}/rbac/kubeconfig`, payload),
 };
 
+/** 클러스터 연결 검증 SSE — 단계별 step(running→ok|fail|skip) 이벤트 후 done/error 로 끝난다. */
+export const clustersVerifyStreamUrl = (clusterId: string) =>
+  `/api/v1/clusters/${clusterId}/verify/stream`;
+
 /** 액세스 발급 SSE — Authorization 헤더가 필요해 EventSource 대신 fetch 로 소비한다. */
 export const k8sRbacStreamUrl = (clusterId: string) =>
   `/api/v1/clusters/${clusterId}/rbac/provision/stream`;

@@ -116,10 +116,14 @@ export function ClusterCard({ cluster, onEdit, onDelete, deletingId, overlapGrou
           {canEdit && (
             <div className="flex items-center gap-1 flex-shrink-0">
               {onVerify && (
-                <button onClick={() => onVerify(cluster)} disabled={verifying}
-                  className="p-1.5 hover:bg-primary/10 rounded-md transition-colors text-muted-foreground hover:text-primary disabled:opacity-60"
-                  title="연결 검증 — API server / kubeconfig 인증 / kubectl 단계별 점검 (실행 로그에 기록)"
-                  aria-label={`${cluster.name} 연결 검증`}>
+                <button onClick={() => onVerify(cluster)}
+                  className={`p-1.5 rounded-md transition-colors ${
+                    verifying
+                      ? 'bg-status-critical/10 text-status-critical hover:bg-status-critical/20'
+                      : 'text-muted-foreground hover:bg-primary/10 hover:text-primary'
+                  }`}
+                  title={verifying ? '검증 중지' : '연결 검증 — API server / kubeconfig 인증 / kubectl 단계별 점검 (실행 로그에 실시간 기록)'}
+                  aria-label={verifying ? `${cluster.name} 검증 중지` : `${cluster.name} 연결 검증`}>
                   {verifying
                     ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
                     : <ShieldCheck className="w-3.5 h-3.5" />}

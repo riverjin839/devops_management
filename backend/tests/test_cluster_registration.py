@@ -440,3 +440,100 @@ def test_create_cluster_accepts_valid_kubeconfig_path(monkeypatch, tmp_path):
     cluster = clusters_router.create_cluster(payload, request=_fake_request(), db=db, actor=_fake_actor())
 
     assert cluster.kubeconfig_path == str(good)
+
+
+# ── verify SSE 스트림 ────────────────────────────────────────────────────────
+
+def _parse_sse(chunks):
+    import json as _json
+
+    return [_json.loads(c[len("data: "):].strip()) for c in chunks]
+
+
+def _stream_setup(monkeypatch, cluster):
+    db = _fake_db_with_cluster(cluster)
+    records = []
+    monkeypatch.setattr(clusters_router.audit_logger, "record", lambda *a, **k: records.append(k))
+    monkeypatch.setattr(clusters_router.httpx, "Client", _FakeHttpxClient)
+    monkeypatch.setattr(clusters_router, "_resolve_kubeconfig", lambda _c: (None, "kubeconfig 미등록"))
+    return db, records
+
+
+def test_verify_stream_emits_steps_in_order_then_done(monkeypatch):
+    from app.models.cluster import StatusEnum
+
+    cluster = Cluster(id=uuid.uuid4(), name="c", api_endpoint="https://x", status=StatusEnum.healthy)
+    db, records = _stream_setup(monkeypatch, cluster)
+
+    events = _parse_sse(list(clusters_router.verify_event_stream(db, cluster, _fake_actor(), _fake_request())))
+
+    # 단계마다 running → 결과 순서로 나오고, 마지막은 done
+    assert [(e["type"], e.get("check"), e.get("status")) for e in events] == [
+        ("step", "api_server", "running"),
+        ("step", "api_server", "ok"),
+        ("step", "kubeconfig_auth", "running"),
+        ("step", "kubeconfig_auth", "skip"),
+        ("step", "kubectl_nodes", "running"),
+        ("step", "kubectl_nodes", "skip"),
+        ("done", None, "warning"),
+    ]
+    done = events[-1]
+    assert done["ok"] is False
+    assert [r["check"] for r in done["results"]] == ["api_server", "kubeconfig_auth", "kubectl_nodes"]
+    # 동기 /verify 와 같은 마무리 — 상태 반영 + 감사 1건
+    assert cluster.status == StatusEnum.warning
+    assert [r["action"] for r in records] == ["cluster.verify"]
+    assert records[0]["status"] == "failure"
+
+
+def test_verify_stream_matches_sync_verify(monkeypatch):
+    from app.models.cluster import StatusEnum
+
+    c1 = Cluster(id=uuid.uuid4(), name="c", api_endpoint="https://x", status=StatusEnum.healthy)
+    db1, _ = _stream_setup(monkeypatch, c1)
+    sync = clusters_router.verify_cluster(c1.id, _fake_request(), db1, _fake_actor())
+
+    c2 = Cluster(id=c1.id, name="c", api_endpoint="https://x", status=StatusEnum.healthy)
+    db2, _ = _stream_setup(monkeypatch, c2)
+    done = _parse_sse(list(clusters_router.verify_event_stream(db2, c2, _fake_actor(), _fake_request())))[-1]
+
+    assert {k: v for k, v in done.items() if k != "type"} == sync
+
+
+def test_verify_stream_abort_keeps_status_and_audits_aborted(monkeypatch):
+    from app.models.cluster import StatusEnum
+
+    cluster = Cluster(id=uuid.uuid4(), name="c", api_endpoint="https://x", status=StatusEnum.healthy)
+    db, records = _stream_setup(monkeypatch, cluster)
+    called = []
+    monkeypatch.setattr(
+        clusters_router, "_verify_step_kubectl_nodes", lambda *a, **k: called.append(1) or {}
+    )
+
+    gen = clusters_router.verify_event_stream(db, cluster, _fake_actor(), _fake_request())
+    next(gen)  # api_server running
+    next(gen)  # api_server ok
+    gen.close()  # 클라이언트가 끊음(중지 버튼)
+
+    assert called == []  # 남은 단계는 실행하지 않는다
+    assert cluster.status == StatusEnum.healthy  # 부분 결과로 상태를 바꾸지 않는다
+    assert not db.commit.called
+    assert len(records) == 1
+    assert records[0]["action"] == "cluster.verify"
+    assert records[0]["status"] == "aborted"
+    assert records[0]["details"]["checks"] == {"api_server": "ok"}
+
+
+def test_verify_stream_endpoint_returns_sse(monkeypatch):
+    from app.models.cluster import StatusEnum
+
+    cluster = Cluster(id=uuid.uuid4(), name="c", api_endpoint="https://x", status=StatusEnum.healthy)
+    db, _ = _stream_setup(monkeypatch, cluster)
+    resp = clusters_router.verify_cluster_stream(cluster.id, _fake_request(), db, _fake_actor())
+    assert resp.media_type == "text/event-stream"
+    assert resp.headers["x-accel-buffering"] == "no"
+
+    missing = _fake_db_with_cluster(None)
+    with pytest.raises(HTTPException) as exc_info:
+        clusters_router.verify_cluster_stream(uuid.uuid4(), _fake_request(), missing, _fake_actor())
+    assert exc_info.value.status_code == 404
