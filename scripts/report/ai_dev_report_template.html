@@ -142,6 +142,16 @@
   .rm .it b { display: block; margin-bottom: 2px; }
   .rm .it p { margin: 0 0 6px; font-size: 13px; color: hsl(var(--muted-foreground)); }
   .rm .lane-ai .it { background: hsl(var(--accent)); border-color: transparent; }
+  .feat ul { margin: 6px 0 10px; padding-left: 18px; font-size: 14px; } .feat li { margin: 2px 0; }
+  .feat .top, .case .top { display: flex; justify-content: space-between; gap: 8px; align-items: baseline; } .feat .name { font-weight: 800; font-size: 16px; }
+  .cases { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(320px, 100%), 1fr)); gap: 14px; }
+  .case .top .chip { white-space: nowrap; flex-shrink: 0; } .case b { font-size: 16px; } .case p { margin: 8px 0 0; font-size: 14px; } .case .pr { color: hsl(var(--muted-foreground)); }
+  .case .tag { display: inline-block; font-size: 11px; font-weight: 800; margin-right: 6px; padding: 0 6px; border-radius: 6px; background: hsl(var(--secondary)); color: hsl(var(--foreground)); }
+  .case .tag.acc { background: hsl(var(--primary)); color: hsl(var(--primary-foreground)); }
+  .calc { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 8px 12px; }
+  .calc label { display: flex; flex-direction: column; gap: 3px; font-size: 12px; color: hsl(var(--muted-foreground)); }
+  .calc input { font: inherit; font-size: 14px; color: hsl(var(--foreground)); background: hsl(var(--background)); border: 1px solid hsl(var(--border)); border-radius: 8px; padding: 5px 8px; min-width: 0; }
+  .csrc { padding: 8px 0; border-top: 1px solid hsl(var(--border)); font-size: 13px; } .csrc:first-of-type { border-top: 0; }
   .ev { display: inline-block; font-size: 12px; font-weight: 700; border-radius: 6px; padding: 2px 8px; background: hsl(var(--secondary)); color: hsl(var(--foreground)); }
   .pb { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
   .pb ul { list-style: none; margin: 0; padding: 0; }
@@ -355,6 +365,22 @@ function lines(c, { labels, series, h = 260, dec = 0, unit = "" }) {
   c.host.appendChild(svg);
 }
 
+/* 가로 막대 (값 차이가 큰 비교용 — 로그 스케일 선택) */
+function hbars(c, { rows, log = true }) {
+  const W = Math.max(280, c.host.clientWidth), rh = 46, P = { l: Math.min(150, W * 0.34), r: 120, t: 6 }, H = P.t + rows.length * rh;
+  const svg = el("svg", { viewBox: `0 0 ${W} ${H}`, height: H, role: "img" });
+  const f = v => log ? Math.log10(1 + v) : v, max = Math.max(...rows.map(r => f(r.value)), 1e-9), iw = W - P.l - P.r;
+  rows.forEach((r, i) => {
+    const y = P.t + i * rh, w = Math.max(2, f(r.value) / max * iw);
+    el("text", { x: P.l - 10, y: y + rh / 2 + 5, "text-anchor": "end", class: r.hl ? "lbl" : "" }, svg).textContent = r.label;
+    const b = el("rect", { class: "bar", x: P.l, y: y + 8, width: w, height: rh - 16, rx: 4, fill: col(r.hl ? C.acc : C.mute, r.hl ? 1 : .45) }, svg);
+    b.addEventListener("mousemove", e => showTip(e, `<b>${r.label}</b><br><span class="num">${r.text}</span>`)); b.addEventListener("mouseleave", hideTip);
+    el("text", { x: P.l + w + 8, y: y + rh / 2 + 5, class: "lbl" }, svg).textContent = r.text;
+  });
+  c.host.appendChild(svg);
+  if (log) { const n = document.createElement("p"); n.className = "hint"; n.textContent = "막대 길이는 로그 스케일 (값 차이가 커서) — 정확한 값은 라벨"; c.host.appendChild(n); }
+}
+
 /* ── 섹션 렌더링 ── */
 const sections = [];
 function sec(id, kicker, title, body) { sections.push({ id, kicker, title, body }); }
@@ -449,6 +475,22 @@ function build() {
   const firstTouch = k => { const c = D.commits.find(x => hasMod(x, k)); return c ? c[0] : null; };
   const heat = MODS.map(m => M.map(mm => A.cm[mm].filter(c => hasMod(c, m.key)).length));
   const hmax = Math.max(1, ...heat.flat());
+  /* 7-0. 무엇을 만들었나 — 기능 지도 */
+  const INV = D.inventory || {}, stripPage = n => n.replace(/Page$/, "");
+  add("features", "WHAT WE BUILT", `무엇을 만들었나 — 화면 ${last ? last.pages : 0} · API 라우터 ${last ? last.routers : 0} · 모듈 ${MODS.length}`, h(`
+    <div class="mods">${MODS.map(m => {
+      const inv = INV[m.key] || { pages: [], routers: [] }, pg = inv.pages.map(stripPage);
+      return `<div class="card feat"><div class="top"><span class="name">${m.label}</span><span class="hint num">화면 ${inv.pages.length} · API ${inv.routers.length}</span></div>
+        <ul>${(m.features || []).map(f => `<li>${f}</li>`).join("")}</ul>
+        <div class="chips">${pg.slice(0, 6).map(n => `<span class="chip">${n}</span>`).join("")}${pg.length > 6 ? `<span class="hint">외 ${pg.length - 6}</span>` : ""}</div></div>`; }).join("")}</div>
+    <p class="note">화면 = frontend/src/pages/*.tsx, API = backend/app/routers/*.py (현재 ${D.meta.head} 기준, 모듈 경로 규칙으로 분류). 기능 문구는 narrative.json 의 modules[].features.</p>`));
+
+  /* 7-0b. 실무 요청 사례 */
+  add("cases", "FROM THE FIELD", "기존 도구에 없던 기능 — 실무에서 직접 요청해 만든 사례", h(`
+    <div class="cases">${(N.cases || []).map((c, i) => `<div class="card case ${i === 0 ? "hl" : ""}"><div class="top"><b>${c.title}</b><span class="chip acc num">v${c.ver}</span></div>
+      <p class="pr"><span class="tag">문제</span>${c.problem}</p><p class="bt"><span class="tag acc">만든 것</span>${c.built}</p></div>`).join("")}</div>
+    <p class="note">${N.cases_note || ""}</p>`));
+
   const s71 = add("modules", "MODULES", "모듈별로 무엇이 바뀌었나", h(`
     <div class="card"><h3>모듈 × 월 커밋 히트맵 <span class="hint">(칸을 누르면 그 달·그 모듈의 PR 목록)</span></h3>
       <div class="tablewrap"><table class="heat"><thead><tr><th></th>${L.map(l => `<th class="num">${l}</th>`).join("")}<th>합계</th></tr></thead><tbody>
@@ -517,6 +559,39 @@ function build() {
   chart($("#c-eramix", s8), c => bars(c, { labels: L, stacked: true, onClick: (i, si) => openDrawer(M[i], gens[si]),
     series: gens.map(k => ({ name: k, color: k === gens[gens.length - 2] ? C.acc : C.mute, alpha: k === gens[gens.length - 2] ? 1 : alphaFor(k), values: M.map(m => A.pm[m].filter(p => genOf(p) === k).length) })) }));
 
+  /* 12-1. 근거 수치 (data.json 에서 계산 — 매월 자동 갱신) */
+  const fullMonths = D.months.filter(m => m <= lastFull);
+  const prBy = m => D.prs.filter(p => p.d.startsWith(m)).length;
+  const avgOf = arr => arr.length ? arr.reduce((a, b) => a + b, 0) / arr.length : 0;
+  const skillsDate = (D.harness.find(x => x.label.includes("스킬")) || {}).d || "";
+  const claudeDate = (D.harness.find(x => x.label.includes("CLAUDE")) || {}).d || "";
+  const dayN = d => d ? Math.round((new Date(d) - new Date(D.meta.first)) / 864e5) : 0;
+  const beforeM = fullMonths.filter(m => m < skillsDate.slice(0, 7)), afterM = fullMonths.filter(m => m >= skillsDate.slice(0, 7));
+  const fixRatio = m => { const cs = D.commits.filter(c => c[0].startsWith(m)); const f = cs.filter(c => c[2] === "fix").length, t = f + cs.filter(c => c[2] === "feat").length; return t ? Math.round(f / t * 100) : 0; };
+  const fr = fullMonths.map(fixRatio), frMax = fr.indexOf(Math.max(...fr));
+  const tagged = D.prs.filter(p => p.model).length;
+  const mcount = {}; D.prs.forEach(p => { if (p.model) mcount[p.model] = (mcount[p.model] || 0) + 1; });
+  const topModels = Object.entries(mcount).sort((a, b) => b[1] - a[1]).slice(0, 3);
+  const EV = {
+    filesPerPR: `PR당 변경 파일 ${eraStats[0].med} → ${eraStats[eraStats.length - 1].med}개 (${eraStats[0].e.key} → ${eraStats[eraStats.length - 1].e.key})`,
+    prUplift: `스킬·게이트 도입(${skillsDate}) 전후 월평균 PR ${Math.round(avgOf(beforeM.map(prBy)))} → ${Math.round(avgOf(afterM.map(prBy)))}`,
+    fixPeak: `fix 비율 최고 ${mLabel(fullMonths[frMax])} ${fr[frMax]}% → ${mLabel(fullMonths[fullMonths.length - 1])} ${fr[fr.length - 1]}%`,
+    tagShare: `모델 표기 PR ${fmt(tagged)} / ${fmt(D.prs.length)} (${Math.round(tagged / D.prs.length * 100)}%)`,
+    modelMix: `PR 다수 모델: ${topModels.map(([m, n]) => `${m} ${n}`).join(" · ")}`,
+    autoReport: `리포트 자동 생성 ${D.meta.generated} (${D.meta.head})`,
+    qaFixes: "재집계·렌더 QA 로 잡은 수치 오류 4건 — PR 845→750, AI 86→96%, 진척도 67→66, 날짜 시간대",
+    harnessLag: `CLAUDE.md ${dayN(claudeDate)}일 차 · 스킬 ${dayN(skillsDate)}일 차에 도입`,
+    throughput: `${M.length}개월 · PR ${fmt(A.prs.length)}건 · 작업일당 ${perDay.toFixed(1)}건`,
+    breadth: `모듈 ${MODS.length} · 화면 ${last ? last.pages : 0} · API 라우터 ${last ? last.routers : 0}`,
+    gates: `CI 게이트 5종(lint 0경고·tsc·build·pytest·docs-sync) · 스킬 ${last ? last.skills : 0}개`,
+    docs: `문서 ${fmt(last ? last.md : 0)}건 · 자동 릴리스 ${fmt(A.releases)}회`,
+    fixShare: (() => { const f = A.commits.filter(c => c[2] === "fix").length, t = f + A.commits.filter(c => c[2] === "feat").length; return `fix ${fmt(f)} / (feat+fix) ${fmt(t)} = ${t ? Math.round(f / t * 100) : 0}%`; })(),
+    gaps: `70점 미만 ${N.readiness.filter((r, i) => S.scores[i] < 70).map(r => r.area).join(" · ") || "없음"}`,
+    loc: `코드 ${Math.round(loc(last) / 1000)}K 줄 (Python ${Math.round((last ? last.py : 0) / 1000)}K + TS ${Math.round((last ? last.ts : 0) / 1000)}K)`,
+    reviewLoad: `작업일당 PR ${perDay.toFixed(1)}건을 1명이 리뷰·병합`,
+  };
+  const ev = k => k && EV[k] ? `<span class="ev num" title="data.json 에서 계산">${EV[k]}</span>` : "";
+
   /* 9. 품질 */
   const s9 = add("quality", "QUALITY", "품질 — 버그 급증을 테스트·게이트로 되잡았다", h(`
     <div class="grid g2e"><div class="card"><h3>백엔드 테스트 함수 (월말)</h3><div class="chart" id="c-test"></div></div>
@@ -526,6 +601,44 @@ function build() {
   chart($("#c-ff", s9), c => bars(c, { labels: L, valueLabels: false, series: [{ name: "feat", color: C.acc, values: feat }, { name: "fix", color: C.mute, alpha: .5, values: fix }] }));
   const ratio = M.map((_, i) => feat[i] + fix[i] ? Math.round(fix[i] / (feat[i] + fix[i]) * 100) : 0), rMax = ratio.indexOf(Math.max(...ratio));
   $("#ff-note", s9).textContent = `fix 비율 최고: ${L[rMax]} ${ratio[rMax]}% · 마지막 달 ${L[L.length - 1]} ${ratio[ratio.length - 1]}%`;
+
+  /* 9-1. 일반 개발 대비 장단점 */
+  const CMP = N.compare || { pros: [], cons: [] };
+  const cmpLi = ([t, d, k]) => `<li><b>${t}</b><span class="d">${d}</span><div style="margin-top:4px">${k ? ev(k) : '<span class="ev muted">정성 평가</span>'}</div></li>`;
+  add("vs-dev", "AI vs 일반 개발", "일반 개발자 개발과 비교하면 — 장점과 단점", h(`<div class="pb">
+    <div class="card hl"><h3 class="acc">장점</h3><ul>${CMP.pros.map(cmpLi).join("")}</ul></div>
+    <div class="card"><h3>단점</h3><ul>${CMP.cons.map(cmpLi).join("")}</ul></div></div>
+    <p class="note">근거 칩은 data.json 에서 계산한 이 저장소 실측치, '정성 평가'는 개발자 본인의 판단이다. 같은 기능을 일반 개발팀이 만든 대조군은 없으므로 비교는 경험·업계 통념 기준이다.</p>`));
+
+  /* 9-2. 비용 비교 (입력 조정 가능) */
+  const CO = { ...(N.cost || {}), ...S.cost };
+  const costMonths = M.length, ksloc = loc(last) / 1000;
+  const s92 = add("cost", "COST", "비용 비교 — AI 와 1인 개발 vs 일반 개발 추정", h(`
+    <div class="card noprint"><div class="calc">${[["dayRate", "일평균임금(원)"], ["workDays", "월 근무일"], ["humanFte", "투입 인원(FTE)"], ["aiMonthlyUsd", "AI 구독(USD/월)"], ["fx", "환율(원/USD)"], ["locPerDay", "LoC/인일"], ["daysPerPage", "화면당 인일"], ["daysPerRouter", "라우터당 인일"], ["daysInfra", "배포·CI 인일"]]
+      .map(([k, l]) => `<label>${l}<input type="number" min="0" step="any" data-k="${k}" value="${CO[k]}"></label>`).join("")}</div>
+      <p class="hint" style="margin:8px 0 0">값을 바꾸면 아래 막대·배수가 즉시 다시 계산된다.</p></div>
+    <div class="grid g2" style="margin-top:16px"><div class="card"><h3>총비용 (억 원) <span class="hint">· 기간 ${costMonths}개월 · 코드 ${Math.round(ksloc)}K 줄</span></h3><div class="chart" id="c-cost"></div><p class="hint" id="cost-x"></p></div>
+    <div class="card" id="cost-src"></div></div>
+    <p class="note">주의 — LoC 기반(LoC/일·COCOMO)은 AI 코드가 사람보다 길어 과대 추정된다. 가장 보수적인 비교치는 '기능 기반'이다. 남은 상용화 공백(SSO·프론트 테스트·관측성)은 양쪽 모두 미포함, 실제 비용의 FTE 는 가정치다.</p>`));
+  const costCalc = () => {
+    const c = CO, real = costMonths * c.workDays * c.humanFte * c.dayRate + costMonths * c.aiMonthlyUsd * c.fx;
+    const featDays = (last ? last.pages : 0) * c.daysPerPage + (last ? last.routers : 0) * c.daysPerRouter + +c.daysInfra;
+    const pm = 2.94 * Math.pow(ksloc, 1.0997);
+    return [
+      { k: "실제 (AI + 1인)", v: real, f: `${costMonths}개월 × ${c.workDays}일 × ${c.humanFte}명 × ${fmt(c.dayRate)}원 + AI 구독 $${c.aiMonthlyUsd} × ${costMonths}개월 × ${fmt(c.fx)}원`, src: [c.dayRateSrc, c.workDaysSrc, c.aiMonthlySrc, c.humanFteSrc] },
+      { k: "기능 기반 추정", v: featDays * c.dayRate, f: `화면 ${last ? last.pages : 0}×${c.daysPerPage} + 라우터 ${last ? last.routers : 0}×${c.daysPerRouter} + ${c.daysInfra} = ${fmt(featDays)}인일 × 일단가`, src: [c.featureSrc] },
+      { k: "LoC 생산성 기준", v: ksloc * 1000 / c.locPerDay * c.dayRate, f: `${fmt(Math.round(ksloc * 1000))}줄 ÷ ${c.locPerDay}줄/일 = ${fmt(Math.round(ksloc * 1000 / c.locPerDay))}인일 × 일단가`, src: [c.locPerDaySrc] },
+      { k: "COCOMO II", v: pm * 19 * c.dayRate, f: `2.94 × ${ksloc.toFixed(0)}^1.0997 = ${fmt(Math.round(pm))}PM × 19일(152h) × 일단가`, src: [c.cocomoSrc] },
+    ];
+  };
+  const eok = v => (v / 1e8).toFixed(v < 1e9 ? 2 : 1);
+  const costChart = chart($("#c-cost", s92), c => {
+    const rows = costCalc(), base = rows[0].v;
+    hbars(c, { rows: rows.map((r, i) => ({ label: r.k, value: r.v / 1e8, text: `${eok(r.v)}억${i ? ` · ×${(r.v / base).toFixed(1)}` : ""}`, hl: i === 0 })) });
+    $("#cost-x", s92).textContent = `실제 대비 — 기능 기반 ${(rows[1].v / base).toFixed(1)}배 · LoC ${(rows[2].v / base).toFixed(1)}배 · COCOMO ${(rows[3].v / base).toFixed(1)}배`;
+    $("#cost-src", s92).innerHTML = `<h3>산식과 근거</h3>${rows.map(r => `<div class="csrc"><b>${r.k} <span class="num acc">${eok(r.v)}억</span></b><div class="num">${r.f}</div>${r.src.filter(Boolean).map(x => `<div class="hint">· ${x}</div>`).join("")}</div>`).join("")}`;
+  });
+  s92.querySelectorAll(".calc input").forEach(inp => inp.oninput = () => { const v = parseFloat(inp.value); if (!isNaN(v) && v >= 0) { S.cost = { ...(S.cost || {}), [inp.dataset.k]: v }; CO[inp.dataset.k] = v; renderChart(costChart); } });
 
   /* 10. 성숙도 */
   add("maturity", "MATURITY", "AI 활용 성숙도 — 4단계로 진화", h(`<div class="steps">${N.maturity.map((st, i) => {
@@ -555,31 +668,6 @@ function build() {
   add("next", "NEXT", "남은 과제 — 상용 전환을 막는 5가지", h(`<div class="tablewrap"><table><thead><tr><th>우선</th><th>과제</th><th>내용</th><th>목표 지표</th></tr></thead><tbody>
     ${N.tasks.map(t => { const r = N.readiness.find(x => x.area === t.area); return `<tr><td><span class="chip ${t.p === "P0" ? "acc" : ""}">${t.p}</span></td><td><b>${t.title}</b></td><td class="muted">${t.desc}</td><td class="num">${t.area} ${r.score} → <b class="acc">${r.target}</b></td></tr>`; }).join("")}
     </tbody></table></div><p class="note">목표를 모두 달성하면 종합 ${overall}% → ${Math.round(N.readiness.reduce((a, r) => a + r.target, 0) / N.readiness.length)}% (진척도 섹션의 '목표 달성 시 보기'와 같다)</p>`));
-
-  /* 12-1. 근거 수치 (data.json 에서 계산 — 매월 자동 갱신) */
-  const fullMonths = D.months.filter(m => m <= lastFull);
-  const prBy = m => D.prs.filter(p => p.d.startsWith(m)).length;
-  const avgOf = arr => arr.length ? arr.reduce((a, b) => a + b, 0) / arr.length : 0;
-  const skillsDate = (D.harness.find(x => x.label.includes("스킬")) || {}).d || "";
-  const claudeDate = (D.harness.find(x => x.label.includes("CLAUDE")) || {}).d || "";
-  const dayN = d => d ? Math.round((new Date(d) - new Date(D.meta.first)) / 864e5) : 0;
-  const beforeM = fullMonths.filter(m => m < skillsDate.slice(0, 7)), afterM = fullMonths.filter(m => m >= skillsDate.slice(0, 7));
-  const fixRatio = m => { const cs = D.commits.filter(c => c[0].startsWith(m)); const f = cs.filter(c => c[2] === "fix").length, t = f + cs.filter(c => c[2] === "feat").length; return t ? Math.round(f / t * 100) : 0; };
-  const fr = fullMonths.map(fixRatio), frMax = fr.indexOf(Math.max(...fr));
-  const tagged = D.prs.filter(p => p.model).length;
-  const mcount = {}; D.prs.forEach(p => { if (p.model) mcount[p.model] = (mcount[p.model] || 0) + 1; });
-  const topModels = Object.entries(mcount).sort((a, b) => b[1] - a[1]).slice(0, 3);
-  const EV = {
-    filesPerPR: `PR당 변경 파일 ${eraStats[0].med} → ${eraStats[eraStats.length - 1].med}개 (${eraStats[0].e.key} → ${eraStats[eraStats.length - 1].e.key})`,
-    prUplift: `스킬·게이트 도입(${skillsDate}) 전후 월평균 PR ${Math.round(avgOf(beforeM.map(prBy)))} → ${Math.round(avgOf(afterM.map(prBy)))}`,
-    fixPeak: `fix 비율 최고 ${mLabel(fullMonths[frMax])} ${fr[frMax]}% → ${mLabel(fullMonths[fullMonths.length - 1])} ${fr[fr.length - 1]}%`,
-    tagShare: `모델 표기 PR ${fmt(tagged)} / ${fmt(D.prs.length)} (${Math.round(tagged / D.prs.length * 100)}%)`,
-    modelMix: `PR 다수 모델: ${topModels.map(([m, n]) => `${m} ${n}`).join(" · ")}`,
-    autoReport: `리포트 자동 생성 ${D.meta.generated} (${D.meta.head})`,
-    qaFixes: "재집계·렌더 QA 로 잡은 수치 오류 4건 — PR 845→750, AI 86→96%, 진척도 67→66, 날짜 시간대",
-    harnessLag: `CLAUDE.md ${dayN(claudeDate)}일 차 · 스킬 ${dayN(skillsDate)}일 차에 도입`,
-  };
-  const ev = k => k && EV[k] ? `<span class="ev num" title="data.json 에서 계산">${EV[k]}</span>` : "";
 
   /* 12-2. 향후 로드맵 */
   const RM = N.roadmap_next || { quarters: [], lanes: [] };

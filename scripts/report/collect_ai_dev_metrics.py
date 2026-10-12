@@ -158,6 +158,14 @@ for ln in git("grep", "-c", "", REV, "--", ".").splitlines():
         module_size[k]["files"] += 1
         module_size[k]["loc"] += int(n)
 
+# ── 모듈별 기능 목록 (REV 기준 화면·API 라우터) ──────────────
+inventory = {k: {"pages": [], "routers": []} for k, _ in MODULES}
+for path in git("ls-tree", "-r", "--name-only", REV).splitlines():
+    m = re.match(r"^frontend/src/pages/(\w+)\.tsx$", path) or re.match(r"^backend/app/routers/([a-z]\w*)\.py$", path)
+    k = module_of(path)
+    if m and k and m.group(1) != "__init__":
+        inventory[k]["pages" if path.startswith("frontend") else "routers"].append(m.group(1))
+
 # ── 의존성 도입 이력 (requirements.txt · package.json) ────────
 DEP_FILES = {"py": "backend/requirements.txt", "npm": "frontend/package.json"}
 PY_DEP = re.compile(r"^([+-])\s*([A-Za-z0-9_.-]+)(\[[^\]]*\])?\s*(==|>=|<=|~=|>|<)")
@@ -215,6 +223,7 @@ data = {
     "release_months": dict(collections.Counter(tags)),
     "harness": harness,
     "module_size": module_size,
+    "inventory": inventory,
     "deps": dep_list,
     "path_added": path_added,
 }
