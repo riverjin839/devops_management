@@ -14,20 +14,25 @@ export function CheckMatrixSettingsModal({ isOpen, onClose }: Props) {
   const toast = useToast();
   const { data: settings } = useCheckMatrixSettings();
   const updateMut = useUpdateCheckMatrixSettings();
-  const [retentionDays, setRetentionDays] = useState(90);
+  // 입력 중 빈 값/범위 밖 값을 그대로 숫자로 바꾸면 0·99999 가 저장됐다 — 문자열로 들고 검증한다.
+  const [retentionDays, setRetentionDays] = useState('90');
   const retentionId = useId();
   const titleId = useId();
   const dialogRef = useModalA11y(isOpen, onClose);
 
   useEffect(() => {
-    if (isOpen && settings) setRetentionDays(settings.retentionDays);
+    if (isOpen && settings) setRetentionDays(String(settings.retentionDays));
   }, [isOpen, settings]);
 
   if (!isOpen) return null;
 
+  const days = Number(retentionDays);
+  const valid = retentionDays.trim() !== '' && Number.isInteger(days) && days >= 1 && days <= 3650;
+
   const handleSave = async () => {
+    if (!valid) return;
     try {
-      await updateMut.mutateAsync(retentionDays);
+      await updateMut.mutateAsync(days);
       toast.success('보관 주기를 저장했습니다.');
       onClose();
     } catch (e) {
@@ -51,7 +56,7 @@ export function CheckMatrixSettingsModal({ isOpen, onClose }: Props) {
             onClick={onClose}
             title="닫기"
             aria-label="닫기"
-            className="p-1 hover:bg-secondary rounded-lg transition-colors"
+            className="p-1 hover:bg-secondary rounded-xl transition-colors"
           >
             <X className="w-5 h-5" />
           </button>
@@ -65,24 +70,27 @@ export function CheckMatrixSettingsModal({ isOpen, onClose }: Props) {
             min={1}
             max={3650}
             value={retentionDays}
-            onChange={(e) => setRetentionDays(Number(e.target.value))}
-            className="w-full text-sm border border-border rounded-lg px-3 py-2 bg-background"
+            onChange={(e) => setRetentionDays(e.target.value)}
+            aria-invalid={!valid || undefined}
+            className={`w-full text-sm border rounded-xl px-3 py-2 bg-background ${valid ? 'border-border' : 'border-status-critical'}`}
           />
+          {!valid && <p className="text-xs text-status-critical">1~3650 사이의 정수(일)를 입력하세요.</p>}
           <p className="text-xs text-muted-foreground">
-            보관 주기를 초과한 셀 이력(추이/변경 이력)은 매일 자동으로 정리됩니다. DB 용량을 고려해 설정하세요.
+            보관 기간을 넘긴 셀 값 이력(추이·변경 이력)과 실행 기록은 매일 03:00 에 자동으로 정리됩니다.
+            DB 용량을 고려해 설정하세요(기본 90일).
           </p>
         </div>
 
         <div className="flex justify-end gap-2 px-6 py-4 border-t border-border">
-          <button onClick={onClose} className="px-4 py-1.5 text-sm font-medium bg-secondary hover:bg-secondary/80 border border-border rounded-lg">
+          <button onClick={onClose} className="px-4 py-1.5 text-sm font-medium bg-secondary hover:bg-secondary/80 border border-border rounded-xl">
             취소
           </button>
           <button
             onClick={handleSave}
-            disabled={updateMut.isPending}
-            className="px-4 py-1.5 text-sm font-semibold bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 disabled:opacity-50"
+            disabled={updateMut.isPending || !valid}
+            className="px-4 py-1.5 text-sm font-semibold bg-primary text-primary-foreground rounded-xl hover:bg-primary/90 disabled:opacity-50"
           >
-            저장
+            {updateMut.isPending ? '저장 중…' : '저장'}
           </button>
         </div>
       </div>

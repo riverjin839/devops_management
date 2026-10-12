@@ -41,6 +41,7 @@ def _serialize(pb: Playbook) -> dict:
         "inventory_path": pb.inventory_path,
         "extra_vars": pb.extra_vars,
         "tags": pb.tags,
+        "timeout_seconds": pb.timeout_seconds,
         "status": pb.status,
         "show_on_dashboard": pb.show_on_dashboard,
         "last_run_at": pb.last_run_at,

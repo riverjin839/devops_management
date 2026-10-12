@@ -75,6 +75,8 @@ export function useCreateDefinition() {
       deepCheckDefinitionsApi.create(body),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['deepCheckDefinitions'] });
+      // 점검 매트릭스(항목 상세·설정 폼·런북)도 같은 정의를 보여 준다.
+      qc.invalidateQueries({ predicate: (q) => String(q.queryKey[0]).startsWith('checkMatrix') });
     },
   });
 }
@@ -86,6 +88,8 @@ export function useUpdateDefinition() {
       deepCheckDefinitionsApi.update(id, body),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['deepCheckDefinitions'] });
+      // 점검 매트릭스(항목 상세·설정 폼·런북)도 같은 정의를 보여 준다.
+      qc.invalidateQueries({ predicate: (q) => String(q.queryKey[0]).startsWith('checkMatrix') });
     },
   });
 }
@@ -96,6 +100,8 @@ export function useDeleteDefinition() {
     mutationFn: (id: string) => deepCheckDefinitionsApi.remove(id),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['deepCheckDefinitions'] });
+      // 점검 매트릭스(항목 상세·설정 폼·런북)도 같은 정의를 보여 준다.
+      qc.invalidateQueries({ predicate: (q) => String(q.queryKey[0]).startsWith('checkMatrix') });
       qc.invalidateQueries({ queryKey: ['deepCheckDefinitionResults'] });
     },
   });
@@ -107,6 +113,8 @@ export function useDuplicateDefinition() {
     mutationFn: (id: string) => deepCheckDefinitionsApi.duplicate(id),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['deepCheckDefinitions'] });
+      // 점검 매트릭스(항목 상세·설정 폼·런북)도 같은 정의를 보여 준다.
+      qc.invalidateQueries({ predicate: (q) => String(q.queryKey[0]).startsWith('checkMatrix') });
     },
   });
 }
@@ -126,6 +134,8 @@ export function useRunDefinition() {
       deepCheckDefinitionsApi.run(id, clusterId),
     onSuccess: (_data, vars) => {
       qc.invalidateQueries({ queryKey: ['deepCheckDefinitions'] });
+      // 점검 매트릭스(항목 상세·설정 폼·런북)도 같은 정의를 보여 준다.
+      qc.invalidateQueries({ predicate: (q) => String(q.queryKey[0]).startsWith('checkMatrix') });
       qc.invalidateQueries({ queryKey: deepCheckDefinitionKeys.results(vars.id) });
     },
   });

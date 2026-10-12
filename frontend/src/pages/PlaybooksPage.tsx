@@ -139,6 +139,7 @@ export function PlaybooksPage() {
       playbookPath: data.playbookPath,
       inventoryPath: data.inventoryPath,
       tags: data.tags || undefined,
+      timeoutSeconds: data.timeoutSeconds,
       clusterId: data.clusterId,
     });
   };
@@ -156,6 +157,7 @@ export function PlaybooksPage() {
         playbookPath: data.playbookPath ?? null,
         inventoryPath: data.inventoryPath ?? null,
         tags: data.tags || undefined,
+        timeoutSeconds: data.timeoutSeconds,
         clusterId: data.clusterId,
       },
     });

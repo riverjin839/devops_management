@@ -101,7 +101,10 @@ class CheckMatrixItem(Base):
     # core_bundle 행은 삭제 불가(Cluster.status 계산에 필요한 DailyChecker 실행은 행 존재와
     # 무관하게 계속 돌아야 함) — 라우터에서 이 플래그로 삭제를 막고 "그리드에서 숨기기"만 허용.
     is_system = Column(Boolean, nullable=False, default=False)
-    enabled = Column(Boolean, nullable=False, default=True)  # false = 그리드에서 숨김
+    enabled = Column(Boolean, nullable=False, default=True)  # false = 그리드에서 숨김 + 자동·일괄 실행 제외
+    # 클러스터 종합 상태(Cluster.status)에 이 행 결과를 반영할지 — 배치잡·플레이북·수동 입력 행 전용
+    # opt-in(기본 False). deep_check 는 정의의 affects_cluster_status, addon 은 항상 반영이라 쓰지 않는다.
+    affects_cluster_status = Column(Boolean, nullable=False, default=False)
 
     sort_order = Column(Integer, nullable=False, default=0)
 

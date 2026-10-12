@@ -464,6 +464,13 @@ def create_cluster(
     except Exception:
         db.rollback()
 
+    # 점검 매트릭스 기본 주기 — 새 클러스터도 다음 재시작을 기다리지 않고 기본 점검이 돈다.
+    try:
+        from app.services import check_matrix_service as cms
+        cms.seed_default_schedules(db, cluster_ids=[cluster.id])
+    except Exception:
+        db.rollback()
+
     # pending 상태가 아닌 경우에만 초기 점검 + 노드 IP 자동 수집 수행
     if not connectivity_failed:
         HealthChecker(db).run_check(cluster.id)

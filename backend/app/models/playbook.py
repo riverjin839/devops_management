@@ -25,6 +25,9 @@ class Playbook(Base):
     inventory_path = Column(String(500), nullable=True)  # optional inventory override
     extra_vars = Column(JSONB, nullable=True)            # --extra-vars JSON
     tags = Column(String(255), nullable=True)            # --tags filter
+    # ansible-playbook 실행 제한 시간(초). NULL = 전역 기본(CHECK_TIMEOUT_SECONDS, 30초).
+    # 예전엔 항상 30초 고정이라 실제 운영 플레이북 대부분이 "timed out" 으로 실패했다 — 화면에서 정한다(UI-First).
+    timeout_seconds = Column(Integer, nullable=True)
     status = Column(String(20), default="unknown")       # healthy/warning/critical/unknown/running
     show_on_dashboard = Column(Boolean, default=False)   # Dashboard 카드 표시 여부
     last_run_at = Column(DateTime, nullable=True)
