@@ -8,16 +8,9 @@
 
 ## [Unreleased]
 
-1.46.0 이후 main 에 병합된 변경 (다음 릴리스 후보).
+1.46.1 이후 main 에 병합된 변경 (다음 릴리스 후보).
 
-## [1.46.0] - 2026-10-08
-
-### Added
-- **viewer 클러스터 네트워크 정보 숨김 정책**: Settings → 접근 제어에서 켜면 viewer 는 클러스터 관리·사이드바 등에서
-  내부 IP·CIDR·bond IP/MAC·호스트명·AS 번호·API 엔드포인트·Prometheus/Alertmanager 주소를 볼 수 없고 Cilium 설정 보기도
-  막힌다(이름·지역·운영레벨·상태·노드 수는 유지). admin·operator 는 그대로이고 기본값은 꺼짐이라 기존 화면은 바뀌지 않는다.
-  설정 변경은 감사 로그에 남는다. Backend: `services/cluster_network_mask.py`, `GET/PUT /ui-settings/cluster-viewer-mask`,
-  `ClusterResponse.network_masked`. Frontend: `ClusterViewerMaskSetting`, 클러스터 관리 화면 숨김 안내.
+## [1.46.1] - 2026-10-12
 
 ### Fixed
 - **K8s 이벤트 클러스터 필터·테넌트 격리**: kubewatch 이벤트가 항상 "클러스터 미지정"으로 저장돼 클러스터를 고르면
@@ -30,6 +23,15 @@
   미확인 알람만 처리하고, 실행 전에 대상 조건을 보여주는 확인 창을 띄운다. 알람 알림(`all` 모드)도 그 클러스터를
   볼 수 있는 사용자에게만 간다. Backend: `routers/k8s_events.py`·`routers/observability.py`,
   `user_notify.restrict_to_cluster_viewers`.
+
+## [1.46.0] - 2026-10-08
+
+### Added
+- **viewer 클러스터 네트워크 정보 숨김 정책**: Settings → 접근 제어에서 켜면 viewer 는 클러스터 관리·사이드바 등에서
+  내부 IP·CIDR·bond IP/MAC·호스트명·AS 번호·API 엔드포인트·Prometheus/Alertmanager 주소를 볼 수 없고 Cilium 설정 보기도
+  막힌다(이름·지역·운영레벨·상태·노드 수는 유지). admin·operator 는 그대로이고 기본값은 꺼짐이라 기존 화면은 바뀌지 않는다.
+  설정 변경은 감사 로그에 남는다. Backend: `services/cluster_network_mask.py`, `GET/PUT /ui-settings/cluster-viewer-mask`,
+  `ClusterResponse.network_masked`. Frontend: `ClusterViewerMaskSetting`, 클러스터 관리 화면 숨김 안내.
 
 ## [1.45.0] - 2026-10-08
 
