@@ -1,12 +1,14 @@
-import { useState } from 'react';
-import { AlertCircle, AlertTriangle, Info, RefreshCw, Trash2 } from 'lucide-react';
+import { Fragment, useState } from 'react';
+import { AlertCircle, AlertTriangle, Info, Loader2, RefreshCw, Trash2 } from 'lucide-react';
 import { MacCard } from '@/components/ui/MacCard';
 import { ClusterSidebar } from '@/components/common/ClusterSidebar';
+import { ConfirmDialog, useToast } from '@/components/common';
 import { useClusters } from '@/hooks/useCluster';
+import { useCanOperate } from '@/hooks/useCanOperate';
 import { useK8sEvents, useDeleteK8sEvent } from '@/hooks/useK8sEvents';
 import { K8sEventAnalysisPanel } from '@/components/k8s/K8sEventAnalysisPanel';
 import type { K8sEvent, K8sEventSeverity } from '@/types';
-import { parseUTC } from '@/lib/utils';
+import { formatApiError, parseUTC } from '@/lib/utils';
 
 const SEVERITY_TABS: Array<{ value: string; label: string }> = [
   { value: 'all', label: '전체' },
@@ -60,9 +62,26 @@ export function K8sEventsPage() {
     limit: 200,
   });
 
+  const toast = useToast();
   const deleteEvent = useDeleteK8sEvent();
+  // D-102 — 삭제는 서버가 operator + 클러스터 operate 를 요구한다. viewer 에겐 숨기지 않고 사유와 함께 막는다.
+  const { canOperate, withHint } = useCanOperate(selectedClusterId);
+  const [pendingDelete, setPendingDelete] = useState<K8sEvent | null>(null);
+
+  const confirmDelete = async () => {
+    const ev = pendingDelete;
+    setPendingDelete(null);
+    if (!ev) return;
+    try {
+      await deleteEvent.mutateAsync(ev.id);
+      toast.success('이벤트를 삭제했습니다.');
+    } catch (err) {
+      toast.error(formatApiError(err, '이벤트 삭제 실패'));
+    }
+  };
 
   const events: K8sEvent[] = data?.data ?? [];
+  const selectedClusterName = clusters.find((c) => c.id === selectedClusterId)?.name;
 
   return (
     <div className="app-min-h-screen bg-background py-3 pr-3">
@@ -131,7 +150,17 @@ export function K8sEventsPage() {
             {isLoading ? (
               <div className="text-center py-12 text-muted-foreground text-sm">로딩 중…</div>
             ) : events.length === 0 ? (
-              <div className="text-center py-12 text-muted-foreground text-sm">이벤트 없음</div>
+              <div className="text-center py-12 text-muted-foreground text-sm space-y-1">
+                <p>이벤트 없음</p>
+                {selectedClusterId && (
+                  // D-101 — kubewatch 페이로드에는 클러스터 정보가 없다. 웹훅 URL 에 클러스터를 붙여야 이 필터에 모인다.
+                  <p className="text-xs">
+                    클러스터별로 모으려면 이 클러스터의 kubewatch 웹훅 URL 끝에{' '}
+                    <code className="font-mono text-foreground">?cluster={selectedClusterName ?? '<클러스터 이름>'}</code>
+                    {' '}를 붙인다. 붙이지 않은 이벤트는 "전체 클러스터"에만 보인다.
+                  </p>
+                )}
+              </div>
             ) : (
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
@@ -144,14 +173,13 @@ export function K8sEventsPage() {
                       <th className="text-left py-2 pr-3 font-medium w-32">네임스페이스</th>
                       <th className="text-left py-2 pr-3 font-medium w-36">Reason</th>
                       <th className="text-left py-2 font-medium">메시지</th>
-                      <th className="w-8"><span className="sr-only">펼치기</span></th>
+                      <th className="w-8"><span className="sr-only">작업</span></th>
                     </tr>
                   </thead>
                   <tbody>
                     {events.map((ev) => (
-                      <>
+                      <Fragment key={ev.id}>
                         <tr
-                          key={ev.id}
                           onClick={() => setExpandedId(expandedId === ev.id ? null : ev.id)}
                           className="border-b border-border/50 hover:bg-muted/30 cursor-pointer transition-colors"
                         >
@@ -178,19 +206,24 @@ export function K8sEventsPage() {
                           </td>
                           <td className="py-2 pl-2">
                             <button
+                              type="button"
                               onClick={(e) => {
                                 e.stopPropagation();
-                                deleteEvent.mutate(ev.id);
+                                setPendingDelete(ev);
                               }}
-                              aria-label="이벤트 삭제"
-                              className="p-1 rounded hover:bg-status-critical/10 hover:text-status-critical text-muted-foreground transition-colors"
+                              disabled={!canOperate || (deleteEvent.isPending && deleteEvent.variables === ev.id)}
+                              title={withHint('이벤트 삭제')}
+                              aria-label={withHint('이벤트 삭제')}
+                              className="p-1 rounded-xl hover:bg-status-critical/10 hover:text-status-critical text-muted-foreground transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
                             >
-                              <Trash2 className="w-3.5 h-3.5" />
+                              {deleteEvent.isPending && deleteEvent.variables === ev.id
+                                ? <Loader2 className="w-3.5 h-3.5 animate-spin" aria-hidden />
+                                : <Trash2 className="w-3.5 h-3.5" aria-hidden />}
                             </button>
                           </td>
                         </tr>
                         {expandedId === ev.id && (
-                          <tr key={`${ev.id}-detail`} className="bg-muted/20">
+                          <tr className="bg-muted/20">
                             <td colSpan={8} className="px-4 py-3 space-y-3">
                               <K8sEventAnalysisPanel event={ev} />
                               <pre className="text-xs font-mono text-muted-foreground whitespace-pre-wrap break-all">
@@ -199,7 +232,7 @@ export function K8sEventsPage() {
                             </td>
                           </tr>
                         )}
-                      </>
+                      </Fragment>
                     ))}
                   </tbody>
                 </table>
@@ -208,6 +241,17 @@ export function K8sEventsPage() {
           </MacCard>
         </div>
       </div>
+      <ConfirmDialog
+        open={pendingDelete !== null}
+        danger
+        title="이벤트 삭제"
+        description={pendingDelete
+          ? `${pendingDelete.resourceKind}/${pendingDelete.resourceName} 이벤트(${pendingDelete.reason ?? pendingDelete.eventType})를 삭제한다. 되돌릴 수 없다.`
+          : ''}
+        confirmLabel="삭제"
+        onConfirm={() => void confirmDelete()}
+        onCancel={() => setPendingDelete(null)}
+      />
     </div>
   );
 }

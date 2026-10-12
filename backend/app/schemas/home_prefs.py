@@ -26,6 +26,9 @@ class HomePrefs(BaseModel):
     # 사용자가 한 번이라도 앱을 추가/제거하면 그때의 목록으로 고정되고, "기본값으로 초기화" 로
     # 다시 None 이 된다. 옛 레이아웃으로 저장된 행은 부팅 시 `_migrate_home_prefs_layout()` 가
     # 행 단위로 한 번만 변환한다.
+    # ⚠ 메뉴 표시 개인화일 뿐 접근 제어가 아니다 — 설치 안 한 화면도 URL 로 열리고, 서버·프론트
+    # 어느 권한 판정도 이 값을 보지 않는다. 화면 차단은 feature_access(Settings → 접근 제어)·역할·
+    # 테넌트 바인딩으로 한다(DESIGN_SYSTEM.md "접근 제어가 아니다").
     installed_apps: Optional[list[str]] = Field(None, max_length=MAX_INSTALLED_APPS)
     # 서버 관리 필드 — 클라이언트가 바꿀 수 없다(HomePrefsUpdate 에 없음). 새로 저장되는 행에는
     # 최신 버전이 찍혀 이후 부팅 이관 대상에서 영구히 빠진다.

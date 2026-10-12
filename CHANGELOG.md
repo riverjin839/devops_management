@@ -8,7 +8,7 @@
 
 ## [Unreleased]
 
-1.46.0 이후 main 에 병합된 변경 (다음 릴리스 후보).
+1.46.1 이후 main 에 병합된 변경 (다음 릴리스 후보).
 
 ### Added
 - **사이드바·상단바 조직 기본 앱 구성 + 개인 초기화**: admin 이 Settings → 화면 UI 설정 → "기본 앱 구성"에서
@@ -31,6 +31,14 @@
   부팅 이관이 개인 설치 목록을 바꾸면 감사 로그(`home_prefs.layout_migrate`)에 추가/제거 항목을 남긴다.
   Jenkins 백엔드 테스트는 `TEST_DATABASE_URL`(테스트 전용 DB)이 있어야만 돌고 실패하면 파이프라인을 멈춘다.
 
+## [1.46.1] - 2026-10-12
+
+### Fixed
+- **"앱 추가" 카탈로그에서 접근 제어로 막힌 화면 제외**: Settings → 접근 제어에서 비활성화된 화면이 사이드바·상단바
+  "+" 카탈로그에 그대로 나와, 설치해도 "설치됨"으로만 표시되고 레일에는 나타나지 않던 문제를 고쳤다. 카탈로그 하단과
+  접근 제어 탭에 "설치는 메뉴 표시일 뿐 권한이 아니다"라는 안내를 추가했고, `installed_apps` 가 접근 제어가 아님을
+  `DESIGN_SYSTEM.md`·`docs/SCREENS.md` 에 명시했다. Frontend: `installableApps.ts` `filterSectionsByAccess`.
+
 ## [1.46.0] - 2026-10-08
 
 ### Added
@@ -39,6 +47,18 @@
   막힌다(이름·지역·운영레벨·상태·노드 수는 유지). admin·operator 는 그대로이고 기본값은 꺼짐이라 기존 화면은 바뀌지 않는다.
   설정 변경은 감사 로그에 남는다. Backend: `services/cluster_network_mask.py`, `GET/PUT /ui-settings/cluster-viewer-mask`,
   `ClusterResponse.network_masked`. Frontend: `ClusterViewerMaskSetting`, 클러스터 관리 화면 숨김 안내.
+
+### Fixed
+- **K8s 이벤트 클러스터 필터·테넌트 격리**: kubewatch 이벤트가 항상 "클러스터 미지정"으로 저장돼 클러스터를 고르면
+  늘 빈 목록이 나오고, 테넌트에 바인딩된 클러스터의 이벤트가 모두에게 보이던 문제를 고쳤다. 웹훅 URL 에
+  `?cluster=<클러스터 이름 또는 id>` 를 붙이면 그 클러스터로 귀속되고, critical 알림은 그 클러스터를 볼 수 있는
+  사용자에게만 간다(빈 목록일 때 설정 방법을 화면에 안내). 이벤트 삭제는 operator 이상 + 클러스터 실행 권한이
+  필요하고, 확인 창·권한 사유·실패 토스트가 붙었다.
+- **알람 확인·삭제·AI 분석의 테넌트 범위**: 다른 테넌트 클러스터의 알람을 확인·삭제·분석 요청하거나 분석 결과를
+  읽을 수 있던 문제를 막았다(보이지 않는 알람은 404). "일괄 확인"은 화면 조건(클러스터·심각도·상태·검색어)과 같은
+  미확인 알람만 처리하고, 실행 전에 대상 조건을 보여주는 확인 창을 띄운다. 알람 알림(`all` 모드)도 그 클러스터를
+  볼 수 있는 사용자에게만 간다. Backend: `routers/k8s_events.py`·`routers/observability.py`,
+  `user_notify.restrict_to_cluster_viewers`.
 
 ## [1.45.0] - 2026-10-08
 

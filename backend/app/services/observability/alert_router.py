@@ -288,21 +288,24 @@ def _notification_body(event: AlertEvent, repeat: int, window_sec: int) -> str:
     return text
 
 
-def _resolve_recipients(db: Session, policy: dict[str, Any]) -> list[str]:
+def _resolve_recipients(db: Session, policy: dict[str, Any], cluster_id=None) -> list[str]:
     """알림을 받을 recipient 목록. `all` 은 활성 사용자 전체로 **팬아웃**한다.
 
     공유 `recipient="all"` 행을 쓰지 않는 이유는 `services/user_notify.notify_broadcast`
     docstring 참고 — 조회에서 매칭되지 않았고 읽음 처리가 개인별로 안 됐다.
+    `all` 은 알람 클러스터를 볼 수 있는 사용자로 좁힌다(테넌트 바인딩 — D-103).
     """
     mode = policy.get("notify_mode")
     if mode == "none":
         return []
     if mode == "all":
         from app.models.user import User
+        from app.services.user_notify import restrict_to_cluster_viewers
 
+        query = restrict_to_cluster_viewers(db, db.query(User).filter(User.is_active.is_(True)), cluster_id)
         return [
             (u.username or u.display_name or "").strip()
-            for u in db.query(User).filter(User.is_active.is_(True)).all()
+            for u in query.all()
             if (u.username or u.display_name or "").strip()
         ]
     return [str(r).strip() for r in (policy.get("recipients") or []) if str(r).strip()]
@@ -320,7 +323,7 @@ def apply_notification(db: Session, event: AlertEvent, policy: dict[str, Any]) -
     if SEVERITY_ORDER.get(event.severity, 0) < min_sev:
         return "skipped_severity"
 
-    recipients = _resolve_recipients(db, policy)
+    recipients = _resolve_recipients(db, policy, getattr(event, "cluster_id", None))
     if not recipients:
         return "skipped_mode"
 
