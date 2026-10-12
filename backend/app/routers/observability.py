@@ -31,7 +31,7 @@ from sqlalchemy import desc, or_
 from sqlalchemy.orm import Session
 
 from app.auth.deps import get_cluster_scope, get_current_user, require_operator
-from app.services.cluster_access import ClusterScope
+from app.services.cluster_access import ClusterScope, require_cluster_access
 from app.config import settings
 from app.database import get_db
 from app.models.alert_event import SEVERITY_ORDER, AlertEvent
@@ -700,6 +700,33 @@ def _cluster_names(db: Session) -> dict[UUID, str]:
     return {c.id: c.name for c in db.query(Cluster.id, Cluster.name).all()}
 
 
+def _filter_alerts(query, *, cluster_id=None, severity=None, status=None, q=None):
+    """목록·일괄 확인이 **같은 조건**으로 알람을 고르게 하는 공용 필터(D-103)."""
+    if cluster_id:
+        query = query.filter(AlertEvent.cluster_id == cluster_id)
+    if severity and severity != "all":
+        query = query.filter(AlertEvent.severity == severity)
+    if status and status != "all":
+        query = query.filter(AlertEvent.status == status)
+    if q:
+        pattern = f"%{q}%"
+        query = query.filter(or_(
+            AlertEvent.alertname.ilike(pattern),
+            AlertEvent.summary.ilike(pattern),
+            AlertEvent.resource.ilike(pattern),
+            AlertEvent.namespace.ilike(pattern),
+        ))
+    return query
+
+
+def _load_visible_alert(db: Session, alert_id: UUID, scope: ClusterScope) -> AlertEvent:
+    """보이지 않는(다른 테넌트 클러스터) 알람은 존재 자체를 숨긴다 — 404(D-103)."""
+    event = db.query(AlertEvent).filter(AlertEvent.id == alert_id).first()
+    if not event or not scope.visible(event.cluster_id):
+        raise HTTPException(status_code=404, detail="알람을 찾을 수 없습니다.")
+    return event
+
+
 @router.get("/alerts", response_model=AlertEventListResponse)
 def list_alerts(
     cluster_id: Optional[UUID] = Query(default=None),
@@ -715,13 +742,10 @@ def list_alerts(
     db: Session = Depends(get_db),
     scope: ClusterScope = Depends(get_cluster_scope),
 ) -> AlertEventListResponse:
-    query = scope.apply(db.query(AlertEvent), AlertEvent.cluster_id, nullable=True)
-    if cluster_id:
-        query = query.filter(AlertEvent.cluster_id == cluster_id)
-    if severity and severity != "all":
-        query = query.filter(AlertEvent.severity == severity)
-    if status and status != "all":
-        query = query.filter(AlertEvent.status == status)
+    query = _filter_alerts(
+        scope.apply(db.query(AlertEvent), AlertEvent.cluster_id, nullable=True),
+        cluster_id=cluster_id, severity=severity, status=status, q=q,
+    )
     if alertname:
         query = query.filter(AlertEvent.alertname == alertname)
     if acked is not None:
@@ -730,14 +754,6 @@ def list_alerts(
         query = query.filter(AlertEvent.received_at >= from_)
     if to:
         query = query.filter(AlertEvent.received_at <= to)
-    if q:
-        pattern = f"%{q}%"
-        query = query.filter(or_(
-            AlertEvent.alertname.ilike(pattern),
-            AlertEvent.summary.ilike(pattern),
-            AlertEvent.resource.ilike(pattern),
-            AlertEvent.namespace.ilike(pattern),
-        ))
 
     total = query.count()
     rows = query.order_by(desc(AlertEvent.received_at)).offset(offset).limit(limit).all()
@@ -772,10 +788,7 @@ def alert_stats(
 @router.get("/alerts/{alert_id}", response_model=AlertEventOut)
 def get_alert(alert_id: UUID, db: Session = Depends(get_db),
               scope: ClusterScope = Depends(get_cluster_scope)) -> AlertEventOut:
-    event = db.query(AlertEvent).filter(AlertEvent.id == alert_id).first()
-    if not event or not scope.visible(event.cluster_id):
-        raise HTTPException(status_code=404, detail="알람을 찾을 수 없습니다.")
-    return _alert_out(event, _cluster_names(db))
+    return _alert_out(_load_visible_alert(db, alert_id, scope), _cluster_names(db))
 
 
 @router.post("/alerts/{alert_id}/ack", response_model=AlertEventOut)
@@ -784,10 +797,10 @@ def ack_alert(
     body: AlertAckInput = Body(default=AlertAckInput()),
     db: Session = Depends(get_db),
     actor: User = Depends(get_current_user),
+    scope: ClusterScope = Depends(get_cluster_scope),
 ) -> AlertEventOut:
-    event = db.query(AlertEvent).filter(AlertEvent.id == alert_id).first()
-    if not event:
-        raise HTTPException(status_code=404, detail="알람을 찾을 수 없습니다.")
+    # 확인(ack)은 역할 제한 없이 알람을 볼 수 있는 사용자면 된다 — 다만 다른 테넌트 알람은 못 본다(D-103).
+    event = _load_visible_alert(db, alert_id, scope)
     event.acked = bool(body.acked)
     event.ack_by = (actor.display_name or actor.username) if body.acked else None
     event.ack_at = datetime.utcnow() if body.acked else None
@@ -800,14 +813,21 @@ def ack_alert(
 def ack_all_alerts(
     cluster_id: Optional[UUID] = Query(default=None),
     severity: Optional[str] = Query(default=None),
+    status: Optional[str] = Query(default=None, description="firing | resolved — 목록 필터와 동일"),
+    q: Optional[str] = Query(default=None, description="목록 검색어와 동일"),
     db: Session = Depends(get_db),
     actor: User = Depends(get_current_user),
+    scope: ClusterScope = Depends(get_cluster_scope),
 ) -> dict[str, int]:
-    query = db.query(AlertEvent).filter(AlertEvent.acked.is_(False))
-    if cluster_id:
-        query = query.filter(AlertEvent.cluster_id == cluster_id)
-    if severity and severity != "all":
-        query = query.filter(AlertEvent.severity == severity)
+    """화면에 보이는 조건(클러스터·심각도·상태·검색어)과 **같은** 미확인 알람만 확인 처리한다.
+
+    D-103: 예전엔 테넌트 범위 없이 전체를 훑고 상태·검색 필터를 무시해, "전체 클러스터"에서 누르면
+    보이지 않는 다른 테넌트 알람까지 확인 처리됐다.
+    """
+    query = _filter_alerts(
+        scope.apply(db.query(AlertEvent), AlertEvent.cluster_id, nullable=True),
+        cluster_id=cluster_id, severity=severity, status=status, q=q,
+    ).filter(AlertEvent.acked.is_(False))
     who = actor.display_name or actor.username
     now = datetime.utcnow()
     count = 0
@@ -821,10 +841,13 @@ def ack_all_alerts(
 
 
 @router.get("/alerts/{alert_id}/analysis")
-def get_alert_analysis(alert_id: UUID, db: Session = Depends(get_db)):
+def get_alert_analysis(alert_id: UUID, db: Session = Depends(get_db),
+                       scope: ClusterScope = Depends(get_cluster_scope)):
     """알람에 연결된 AI 분석 결과 조회 (최신 1건)."""
     from app.models.incident_analysis import IncidentAnalysis
     from app.schemas.observability import IncidentAnalysisOut
+
+    _load_visible_alert(db, alert_id, scope)
 
     row = (
         db.query(IncidentAnalysis)
@@ -861,12 +884,12 @@ def get_alert_analysis(alert_id: UUID, db: Session = Depends(get_db)):
 def trigger_alert_analysis(
     alert_id: UUID,
     db: Session = Depends(get_db),
-    _: User = Depends(require_operator),
+    user: User = Depends(require_operator),
+    scope: ClusterScope = Depends(get_cluster_scope),
 ):
-    """수동 AI 분석 실행 — scope 규칙과 무관하게 즉시 llm 큐로 보낸다 (operator+)."""
-    event = db.query(AlertEvent).filter(AlertEvent.id == alert_id).first()
-    if not event:
-        raise HTTPException(status_code=404, detail="알람을 찾을 수 없습니다.")
+    """수동 AI 분석 실행 — scope 규칙과 무관하게 즉시 llm 큐로 보낸다 (operator+, 클러스터 operate)."""
+    event = _load_visible_alert(db, alert_id, scope)
+    require_cluster_access(db, user, event.cluster_id, "operate")
     if event.analysis_status in ("queued", "running"):
         return {"ok": True, "status": event.analysis_status, "detail": "이미 분석이 진행 중입니다."}
     try:
@@ -883,11 +906,12 @@ def trigger_alert_analysis(
 def delete_alert(
     alert_id: UUID,
     db: Session = Depends(get_db),
-    _: User = Depends(require_operator),
+    user: User = Depends(require_operator),
+    scope: ClusterScope = Depends(get_cluster_scope),
 ):
-    event = db.query(AlertEvent).filter(AlertEvent.id == alert_id).first()
-    if not event:
-        raise HTTPException(status_code=404, detail="알람을 찾을 수 없습니다.")
+    """알람 삭제 — operator 이상 + 알람 클러스터 operate 권한(D-103)."""
+    event = _load_visible_alert(db, alert_id, scope)
+    require_cluster_access(db, user, event.cluster_id, "operate")
     db.delete(event)
     db.commit()
 

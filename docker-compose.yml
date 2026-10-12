@@ -137,6 +137,7 @@ services:
         handler:
           webhook:
             enabled: true
+            # 클러스터별로 모으려면 ?cluster=<PEP 클러스터 이름> 을 붙인다 (예: ...kubewatch?cluster=local)
             url: "http://backend:8000/api/v1/events/kubewatch"
         resource:
           pod: true
