@@ -105,6 +105,34 @@
   .chip { display: inline-block; font-size: 11px; font-weight: 700; border-radius: 6px; padding: 1px 6px; background: hsl(var(--secondary)); color: hsl(var(--foreground)); }
   .chip.acc { background: hsl(var(--accent)); color: hsl(var(--primary-text, var(--primary))); }
 
+  /* ── 모듈 히트맵·기술 타임라인 ── */
+  .heat { width: 100%; border-collapse: separate; border-spacing: 3px; font-size: 13px; }
+  .heat th { padding: 2px 4px; font-size: 12px; text-align: center; }
+  .heat th.rowh { text-align: left; white-space: nowrap; font-size: 13px; color: hsl(var(--foreground)); }
+  .heat td { border: 0 !important; border-radius: 6px !important; padding: 0; height: 30px; min-width: 34px; text-align: center; cursor: pointer;
+    background: hsl(var(--primary) / var(--a, 0)); color: hsl(var(--foreground)); font-weight: 600; font-variant-numeric: tabular-nums; }
+  .heat td.zero { background: hsl(var(--secondary)); color: transparent; cursor: default; }
+  .heat td:hover:not(.zero) { outline: 2px solid hsl(var(--primary)); }
+  .mods { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 14px; }
+  .mod { cursor: pointer; transition: border-color .15s; }
+  .mod:hover, .mod:focus-visible { border-color: hsl(var(--primary)); }
+  .mod .top { display: flex; justify-content: space-between; gap: 8px; align-items: baseline; }
+  .mod .name { font-weight: 800; font-size: 16px; }
+  .mod .stats { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 13px; color: hsl(var(--muted-foreground)); margin: 6px 0 8px; }
+  .mod .stats b { color: hsl(var(--foreground)); }
+  .mod .desc { font-size: 14px; margin: 0 0 10px; }
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; }
+  .filters { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 14px; }
+  .filters button { font-size: 12px; min-height: 28px; padding: 3px 10px; }
+  .tmonth { display: grid; grid-template-columns: 70px 1fr; gap: 12px; padding: 12px 0; border-top: 1px solid hsl(var(--border)); }
+  .tmonth:first-child { border-top: 0; }
+  .tmonth .mm { font-weight: 800; color: hsl(var(--primary-text, var(--primary))); }
+  .titem { display: grid; grid-template-columns: minmax(150px, 220px) 1fr; gap: 4px 12px; padding: 4px 0; font-size: 14px; }
+  .titem .src { font-size: 12px; color: hsl(var(--muted-foreground)); }
+  details.deps summary { cursor: pointer; font-weight: 700; font-size: 14px; }
+  details.deps ul { columns: 3 220px; font-size: 13px; padding-left: 18px; }
+  @media (max-width: 600px) { .titem { grid-template-columns: 1fr; } .tmonth { grid-template-columns: 1fr; } }
+
   /* ── 드릴다운 패널 ── */
   .drawer {
     position: fixed; top: 0; right: 0; bottom: 0; width: min(520px, 100vw); z-index: 40; transform: translateX(100%); transition: transform .25s;
@@ -120,11 +148,30 @@
   .era-edit span { display: flex; gap: 4px; align-items: center; }
 
   /* ── 발표 모드 ── */
-  body.present main { max-width: none; padding: 0 5vw; }
-  body.present section { min-height: calc(100vh - 56px); display: flex; flex-direction: column; justify-content: center; padding: 24px 0; }
+  /* 한 화면 = 한 섹션. 넘치는 섹션은 .fit 을 축소해 화면에 맞춘다 (세로 스크롤 없음) */
+  body.present { overflow: hidden; height: 100vh; }
+  body.present main { max-width: none; padding: 0; }
+  body.present main > section { display: none; height: calc(100vh - var(--barh, 56px)); padding: 3vh 5vw 7vh; overflow: hidden; touch-action: pan-y; }
+  body.present main > section.active { display: block; }
+  body.present .fit { transform-origin: top left; }
+  body.present main > section.scrolly { overflow-y: auto; }
+  body.present #tl-list { columns: 2 420px; column-gap: 28px; }
+  body.present .tmonth { break-inside: avoid; }
   body.present .bar .doc-only { display: none; }
-  .pager { position: fixed; right: 18px; bottom: 16px; z-index: 30; font-size: 12px; color: hsl(var(--muted-foreground)); display: none; }
-  body.present .pager { display: block; }
+  .pager, .navbtn { display: none; }
+  body.present .pager { display: flex; gap: 10px; align-items: center; position: fixed; left: 50%; transform: translateX(-50%); bottom: 14px; z-index: 30;
+    font-size: 12px; color: hsl(var(--muted-foreground)); background: hsl(var(--card) / .9); border: 1px solid hsl(var(--border)); border-radius: 999px; padding: 6px 14px; }
+  .pager .prog { width: 120px; height: 4px; border-radius: 2px; background: hsl(var(--secondary)); overflow: hidden; }
+  .pager .prog > i { display: block; height: 100%; background: hsl(var(--primary)); transition: width .2s; }
+  body.present .navbtn { display: grid; place-items: center; position: fixed; top: 50%; z-index: 30; width: 44px; height: 44px; border-radius: 50%;
+    font-size: 20px; padding: 0; background: hsl(var(--card) / .9); }
+  .navbtn.prev { left: 10px; } .navbtn.next { right: 10px; }
+  body.present .pager { white-space: nowrap; }
+  @media (max-width: 700px) { body.present .navbtn { display: none; } .pager .hint-keys { display: none; } }  /* 폰은 스와이프로 넘긴다 */
+  .navbtn:disabled { opacity: .3; cursor: default; }
+  @keyframes slidein { from { opacity: 0; transform: translateX(var(--dx, 24px)); } to { opacity: 1; transform: none; } }
+  body.present main > section.active { animation: slidein .22s ease-out; }
+  @media (prefers-reduced-motion: reduce) { body.present main > section.active { animation: none; } }
 
   /* ── 반응형 ── */
   @media (max-width: 860px) {
@@ -137,7 +184,10 @@
   /* ── 인쇄 (A4 가로, 섹션당 1페이지) ── */
   @page { size: A4 landscape; margin: 12mm; }
   @media print {
-    .bar, .drawer, .tooltip, .pager, .noprint, .hint { display: none !important; }
+    .bar, .drawer, .tooltip, .pager, .navbtn, .noprint, .hint { display: none !important; }
+    body.present { overflow: visible; height: auto; }
+    body.present main > section { display: block !important; height: auto; padding: 0; animation: none; }
+    .fit { transform: none !important; width: auto !important; }
     body { font-size: 13px; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
     main { max-width: none; padding: 0; }
     section { break-after: page; padding: 0; min-height: 0; }
@@ -166,7 +216,9 @@
   <ul id="dr-list"></ul>
 </aside>
 <div class="tooltip" id="tip" role="status"></div>
-<div class="pager" id="pager"></div>
+<button type="button" class="navbtn prev" id="nav-prev" aria-label="이전 슬라이드" title="이전 (←)">‹</button>
+<button type="button" class="navbtn next" id="nav-next" aria-label="다음 슬라이드" title="다음 (→)">›</button>
+<div class="pager" id="pager" role="status" aria-live="polite"><span id="pg-n" class="num"></span><span class="prog"><i id="pg-bar"></i></span><span class="hint-keys">←/→ · 스와이프 · Esc</span></div>
 
 <script id="data" type="application/json">/*__DATA__*/</script>
 <script id="narrative" type="application/json">/*__NARRATIVE__*/</script>
@@ -303,12 +355,14 @@ function build() {
 
   const add = (id, kicker, title, node) => {
     const s = document.createElement("section"); s.id = id; s.setAttribute("aria-labelledby", id + "-h");
-    s.appendChild(h(`<p class="kicker">${kicker}</p><h2 id="${id}-h">${title}</h2>`)); s.appendChild(node); main.appendChild(s); return s;
+    const fit = document.createElement("div"); fit.className = "fit";
+    fit.appendChild(h(`<p class="kicker">${kicker}</p><h2 id="${id}-h">${title}</h2>`)); fit.appendChild(node); s.appendChild(fit); main.appendChild(s); return s;
   };
 
   /* 1. 표지 */
   const cover = document.createElement("section"); cover.id = "cover";
-  cover.appendChild(h(`
+  const coverFit = document.createElement("div"); coverFit.className = "fit"; cover.appendChild(coverFit);
+  coverFit.appendChild(h(`
     <p class="kicker">팀 보고 · 데이터 ${D.meta.head} 기준</p>
     <h1>${N.title}</h1><p class="sub">${N.subtitle}</p>
     <p class="note">기간 ${range} · 원천 ${D.meta.repo} (${D.meta.rev}) · 생성 ${D.meta.generated}</p>
@@ -365,6 +419,53 @@ function build() {
     </div></div>`));
   chart($("#c-loc", s7), c => lines(c, { labels: A.snaps.map(s => mLabel(s.m)), dec: 1, unit: "K",
     series: [{ name: "Frontend TS/TSX", color: C.acc, values: A.snaps.map(s => s.ts / 1000) }, { name: "Backend Python", color: C.mute, alpha: .6, values: A.snaps.map(s => s.py / 1000) }] }));
+
+  /* 7-1. 모듈별 변화 */
+  const MODS = N.modules || [], modLabel = k => (MODS.find(m => m.key === k) || {}).label || k;
+  const hasMod = (c, k) => c[4] && c[4].split(",").includes(k);
+  const techDate = t => {
+    const ds = [...(t.deps || []).map(n => (D.deps.find(x => x.n === n) || {}).added), ...(t.paths || []).map(p => D.path_added[p])].filter(Boolean).sort();
+    return ds[0] || null;
+  };
+  const TECH = (N.tech || []).map(t => ({ ...t, date: techDate(t) })).filter(t => t.date);
+  const firstTouch = k => { const c = D.commits.find(x => hasMod(x, k)); return c ? c[0] : null; };
+  const heat = MODS.map(m => M.map(mm => A.cm[mm].filter(c => hasMod(c, m.key)).length));
+  const hmax = Math.max(1, ...heat.flat());
+  const s71 = add("modules", "MODULES", "모듈별로 무엇이 바뀌었나", h(`
+    <div class="card"><h3>모듈 × 월 커밋 히트맵 <span class="hint">(칸을 누르면 그 달·그 모듈의 PR 목록)</span></h3>
+      <div class="tablewrap"><table class="heat"><thead><tr><th></th>${L.map(l => `<th class="num">${l}</th>`).join("")}<th>합계</th></tr></thead><tbody>
+      ${MODS.map((m, r) => `<tr><th class="rowh">${m.label}</th>${heat[r].map((v, i) => `<td class="${v ? "" : "zero"}" style="--a:${v ? (0.12 + 0.88 * v / hmax).toFixed(2) : 0}" data-m="${M[i]}" data-k="${m.key}" title="${m.label} · ${L[i]} · ${v}커밋">${v || ""}</td>`).join("")}<th class="num">${heat[r].reduce((a, b) => a + b, 0)}</th></tr>`).join("")}
+      </tbody></table></div>
+      <p class="note">모듈 = 경로 규칙(scripts/report/ai_dev_report_narrative.json 의 modules). 거의 모든 기능이 함께 고치는 공용 허브 파일(api.ts·types·App.tsx·main.py 등)은 세지 않는다. 커밋 하나가 여러 모듈에 걸치면 각 모듈에 1씩 센다.</p></div>`));
+  const s71b = add("modules-detail", "MODULES", "모듈별 변화 내용과 도입 기술 <span class=\"hint\">(카드를 누르면 PR 목록)</span>", h(`
+    <div class="mods">${MODS.map(m => {
+      const cs = A.commits.filter(c => hasMod(c, m.key)).length, ps = A.prs.filter(p => p.mods.includes(m.key)).length, sz = D.module_size[m.key] || { files: 0, loc: 0 };
+      const techs = TECH.filter(t => t.module === m.key && t.date.slice(0, 7) <= S.to);
+      const ft = firstTouch(m.key);
+      return `<div class="card mod" tabindex="0" role="button" data-k="${m.key}" aria-label="${m.label} PR 목록 열기">
+        <div class="top"><span class="name">${m.label}</span><span class="hint num">${ft ? "시작 " + ft : ""}</span></div>
+        <div class="stats"><span>커밋 <b class="num">${fmt(cs)}</b></span><span>PR <b class="num">${fmt(ps)}</b></span><span>현재 <b class="num">${fmt(sz.files)}</b>파일 · <b class="num">${fmt(Math.round(sz.loc / 100) / 10)}K</b>줄</span></div>
+        <p class="desc">${m.desc}</p>
+        <div class="chips">${techs.map(t => `<span class="chip acc" title="${t.desc} (${t.date})">${t.label}</span>`).join("") || '<span class="hint">별도 도입 기술 없음</span>'}</div></div>`; }).join("")}</div>`));
+  s71.querySelectorAll(".heat td[data-m]").forEach(td => { if (!td.classList.contains("zero")) td.onclick = () => openDrawer(td.dataset.m, null, td.dataset.k); });
+  s71b.querySelectorAll(".mod").forEach(c => { const go = () => openDrawer(null, null, c.dataset.k); c.onclick = go; c.onkeydown = e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); go(); } }; });
+
+  /* 7-2. 도입 기술 타임라인 */
+  const techIn = TECH.filter(t => t.date.slice(0, 7) >= S.from && t.date.slice(0, 7) <= S.to).sort((a, b) => a.date.localeCompare(b.date));
+  const depsIn = D.deps.filter(x => x.added.slice(0, 7) >= S.from && x.added.slice(0, 7) <= S.to);
+  const s72 = add("tech", "TECH STACK", `어떤 기술이 언제 들어왔나 — 주요 기술 ${techIn.length}종`, h(`
+    <div class="card"><div class="filters noprint" role="group" aria-label="모듈 필터"><button type="button" class="on" data-f="">전체</button>${MODS.filter(m => techIn.some(t => t.module === m.key)).map(m => `<button type="button" data-f="${m.key}">${m.label}</button>`).join("")}</div>
+      <div id="tl-list"></div>
+      <details class="deps" style="margin-top:14px"><summary>기간 내 추가된 의존성 전체 ${depsIn.length}개 (현재 사용 ${depsIn.filter(x => x.present).length}개, 이후 제거 ${depsIn.filter(x => !x.present).length}개)</summary>
+        <ul>${depsIn.map(x => `<li><span class="num">${x.added}</span> <b>${x.n}</b> <span class="hint">${x.eco === "py" ? "Python" : "npm"}${x.present ? "" : " · 제거됨"}</span></li>`).join("")}</ul></details>
+      <p class="note">의존성 도입일 = backend/requirements.txt · frontend/package.json 에 처음 추가된 커밋 날짜. 인프라·구조 기술은 해당 경로가 처음 생긴 날짜. 2026-02-05 는 초기 골격(첫 커밋)에 포함된 기술이다.</p></div>`));
+  const drawTl = f => {
+    const list = techIn.filter(t => !f || t.module === f), byM = {};
+    list.forEach(t => (byM[t.date.slice(0, 7)] ||= []).push(t));
+    $("#tl-list", s72).innerHTML = Object.keys(byM).sort().map(mm => `<div class="tmonth"><div class="mm">${mLabel(mm)}</div><div>${byM[mm].map(t => `<div class="titem"><div><b>${t.label}</b><div class="src num">${t.date}</div></div><div>${t.desc} <span class="chip">${modLabel(t.module)}</span><div class="src">${(t.deps || t.paths || []).join(" · ")}</div></div></div>`).join("")}</div></div>`).join("") || '<p class="muted">기간 안에 들어온 주요 기술이 없다.</p>';
+  };
+  s72.querySelectorAll(".filters button").forEach(b => b.onclick = () => { s72.querySelectorAll(".filters button").forEach(x => x.classList.toggle("on", x === b)); drawTl(b.dataset.f); });
+  drawTl("");
 
   /* 8. 모델 세대 */
   const eraStats = S.eras.map(e => {
@@ -450,28 +551,30 @@ function build() {
   add("lessons", "LESSONS", "얻은 3가지 — AI 는 속도를 주고, 하네스는 방향을 준다", h(`<div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(240px,1fr))">${N.lessons.map(([t, d], i) => `<div class="card"><div class="step"><div class="n num" style="background:hsl(var(--primary));color:hsl(var(--primary-foreground))">${i + 1}</div></div><div style="font-size:18px;font-weight:800">${t}</div><p class="muted">${d}</p></div>`).join("")}</div>`));
 
   charts.forEach(renderChart);
-  updatePager();
+  if (document.body.classList.contains("present")) show(cur, 0);
 }
 function updateOverall() { const o = Math.round(S.scores.reduce((a, b) => a + b, 0) / S.scores.length); document.querySelectorAll("[data-overall]").forEach(n => n.textContent = o + "%"); }
 function rebuildKeep() { const y = scrollY; build(); scrollTo(0, y); }
 
 /* ── 드릴다운 ── */
-let drawerMonth = null, drawerGen = null;
-function openDrawer(m, gen) {
-  drawerMonth = m; drawerGen = gen || null;
-  $("#dr-title").textContent = `${m} PR${gen ? " · " + gen : ""}`;
+let drawerMonth = null, drawerGen = null, drawerMod = null;
+const drawerLabel = () => [drawerMonth || `${S.from} ~ ${S.to}`, drawerGen, drawerMod && ((N.modules || []).find(m => m.key === drawerMod) || {}).label].filter(Boolean).join(" · ");
+function openDrawer(m, gen, mod) {
+  drawerMonth = m || null; drawerGen = gen || null; drawerMod = mod || null;
+  $("#dr-title").textContent = drawerLabel();
   const d = $("#drawer"); d.classList.add("open"); d.setAttribute("aria-hidden", "false"); renderDrawer(); $("#dr-q").focus();
 }
 function renderDrawer() {
   const q = $("#dr-q").value.trim().toLowerCase(), kind = $("#dr-kind").value;
   const genOf = p => (modelEra(p.model) || {}).key || "미표기";
-  const list = D.prs.filter(p => p.d.startsWith(drawerMonth)).filter(p => !drawerGen || genOf(p) === drawerGen)
+  const inRange = p => drawerMonth ? p.d.startsWith(drawerMonth) : (p.d.slice(0, 7) >= S.from && p.d.slice(0, 7) <= S.to);
+  const list = D.prs.filter(inRange).filter(p => !drawerGen || genOf(p) === drawerGen).filter(p => !drawerMod || p.mods.includes(drawerMod))
     .filter(p => !q || (p.t + " " + p.b).toLowerCase().includes(q))
     .filter(p => kind === "feat" ? p.feat : kind === "fix" ? p.fixonly : kind === "ai" ? p.ai : true);
   $("#dr-list").innerHTML = list.length ? list.map(p => `<li><a href="https://github.com/${D.meta.repo}/pull/${p.n}" target="_blank" rel="noopener">#${p.n}</a> ${p.t.replace(/</g, "&lt;")}
-    <div class="meta">${p.d} · ${p.feat ? '<span class="chip acc">feat</span> ' : ""}${p.fixonly ? '<span class="chip">fix</span> ' : ""}${p.model || "모델 미표기"} · 파일 ${p.files} · +${fmt(p.adds)}줄</div></li>`).join("")
+    <div class="meta">${p.d} · ${p.feat ? '<span class="chip acc">feat</span> ' : ""}${p.fixonly ? '<span class="chip">fix</span> ' : ""}${p.model || "모델 미표기"} · 파일 ${p.files} · +${fmt(p.adds)}줄${p.mods.length ? " · " + p.mods.map(k => ((N.modules || []).find(m => m.key === k) || {}).label || k).join(", ") : ""}</div></li>`).join("")
     : `<li class="muted">조건에 맞는 PR 이 없다.</li>`;
-  $("#dr-title").textContent = `${drawerMonth} PR${drawerGen ? " · " + drawerGen : ""} (${list.length}건)`;
+  $("#dr-title").textContent = `${drawerLabel()} PR (${list.length}건)`;
 }
 function closeDrawer() { const d = $("#drawer"); d.classList.remove("open"); d.setAttribute("aria-hidden", "true"); }
 $("#dr-q").oninput = renderDrawer; $("#dr-kind").onchange = renderDrawer; $("#dr-close").onclick = closeDrawer;
@@ -489,21 +592,68 @@ fromSel.onchange = () => { S.from = fromSel.value; if (S.to < S.from) { S.to = S
 toSel.onchange = () => { S.to = toSel.value; if (S.from > S.to) { S.from = S.to; fromSel.value = S.from; } rebuildKeep(); };
 $("#print").onclick = () => print();
 
-/* ── 발표 모드 ── */
+/* ── 발표 모드: 페이징 (한 화면 = 한 섹션) ── */
 const modeBtn = $("#mode");
+let cur = 0;
+const isPresent = () => document.body.classList.contains("present");
 function secs() { return [...document.querySelectorAll("main > section")]; }
-function curIndex() { const s = secs(); let best = 0; s.forEach((x, i) => { if (x.getBoundingClientRect().top < innerHeight * 0.4) best = i; }); return best; }
-function go(d) { const s = secs(); const i = Math.max(0, Math.min(s.length - 1, curIndex() + d)); s[i].scrollIntoView({ behavior: "smooth" }); }
-function updatePager() { $("#pager").textContent = `${curIndex() + 1} / ${secs().length} · ←/→ 이동 · Esc 종료`; }
-function setMode(p) { document.body.classList.toggle("present", p); modeBtn.classList.toggle("on", p); modeBtn.setAttribute("aria-pressed", String(p)); modeBtn.textContent = p ? "문서 모드" : "발표 모드"; charts.forEach(renderChart); updatePager(); }
-modeBtn.onclick = () => setMode(!document.body.classList.contains("present"));
-addEventListener("scroll", updatePager, { passive: true });
+function fitSlide(sec) {
+  const fit = sec.querySelector(".fit"); if (!fit) return;
+  const own = charts.filter(c => sec.contains(c.host));
+  const cs = getComputedStyle(sec), availH = sec.clientHeight - parseFloat(cs.paddingTop) - parseFloat(cs.paddingBottom);
+  const apply = k => {  // k<1: 폭을 1/k 로 넓혀 다시 배치한 뒤 k 배 축소 — 가로 공간을 버리지 않는다
+    fit.style.width = k < 1 ? (100 / k) + "%" : ""; fit.style.transform = k < 1 ? `scale(${k})` : ""; own.forEach(renderChart);
+  };
+  // 읽을 수 있는 최소 배율 아래로는 줄이지 않는다 — 그때만 그 슬라이드 안에서 세로 스크롤을 허용
+  const MIN = innerWidth < 700 ? 0.85 : 0.5;
+  sec.classList.remove("scrolly");
+  const fits = k => { apply(k); return fit.scrollHeight * k <= availH + 1; };
+  if (fits(1)) return;
+  if (!fits(MIN)) { sec.classList.add("scrolly"); return; }
+  let lo = MIN, hi = 1;  // 화면에 들어가는 가장 큰 배율을 이분 탐색
+  for (let i = 0; i < 7; i++) { const mid = (lo + hi) / 2; if (fits(mid)) lo = mid; else hi = mid; }
+  apply(lo);
+}
+function show(i, dir = 1) {
+  const s = secs(); cur = Math.max(0, Math.min(s.length - 1, i));
+  s.forEach((x, k) => x.classList.toggle("active", k === cur));
+  s[cur].style.setProperty("--dx", dir >= 0 ? "24px" : "-24px");
+  fitSlide(s[cur]); updatePager();
+  try { history.replaceState(null, "", "#" + s[cur].id); } catch {}
+}
+function go(d) { if (isPresent()) show(cur + d, d); }
+function updatePager() {
+  const n = secs().length;
+  $("#pg-n").textContent = `${cur + 1} / ${n}`; $("#pg-bar").style.width = ((cur + 1) / n * 100) + "%";
+  $("#nav-prev").disabled = cur === 0; $("#nav-next").disabled = cur === n - 1;
+}
+function setMode(p) {
+  if (p) { const s = secs(); cur = Math.max(0, s.findIndex(x => x.getBoundingClientRect().bottom > 80)); }
+  document.body.classList.toggle("present", p); modeBtn.classList.toggle("on", p); modeBtn.setAttribute("aria-pressed", String(p));
+  modeBtn.textContent = p ? "문서 모드" : "발표 모드";
+  document.documentElement.style.setProperty("--barh", $(".bar").offsetHeight + "px");
+  if (p) show(cur, 0);
+  else { secs().forEach(x => { x.classList.remove("active"); const f = x.querySelector(".fit"); if (f) { f.style.transform = ""; f.style.width = ""; } }); charts.forEach(renderChart); secs()[cur].scrollIntoView(); }
+}
+modeBtn.onclick = () => setMode(!isPresent());
+$("#nav-prev").onclick = () => go(-1); $("#nav-next").onclick = () => go(1);
+addEventListener("resize", () => { if (isPresent()) { document.documentElement.style.setProperty("--barh", $(".bar").offsetHeight + "px"); fitSlide(secs()[cur]); } });
+/* 스와이프: 가로 이동이 세로보다 크고 50px 이상이면 넘긴다 */
+let sx = null, sy = null;
+$("#main").addEventListener("pointerdown", e => { if (isPresent() && e.pointerType !== "mouse") { sx = e.clientX; sy = e.clientY; } });
+$("#main").addEventListener("pointerup", e => {
+  if (sx === null) return; const dx = e.clientX - sx, dy = e.clientY - sy; sx = sy = null;
+  if (Math.abs(dx) > 50 && Math.abs(dx) > Math.abs(dy) * 1.3) go(dx < 0 ? 1 : -1);
+});
+$("#main").addEventListener("pointercancel", () => { sx = sy = null; });
 addEventListener("keydown", e => {
-  if (e.key === "Escape") { if ($("#drawer").classList.contains("open")) closeDrawer(); else if (document.body.classList.contains("present")) setMode(false); return; }
+  if (e.key === "Escape") { if ($("#drawer").classList.contains("open")) closeDrawer(); else if (isPresent()) setMode(false); return; }
   if (e.target.matches("input, select, textarea")) return;
-  if (!document.body.classList.contains("present")) return;
-  if (["ArrowRight", "PageDown", " "].includes(e.key)) { e.preventDefault(); go(1); }
-  if (["ArrowLeft", "PageUp"].includes(e.key)) { e.preventDefault(); go(-1); }
+  if (!isPresent() || $("#drawer").classList.contains("open")) return;
+  if (["ArrowRight", "ArrowDown", "PageDown", " "].includes(e.key)) { e.preventDefault(); go(1); }
+  if (["ArrowLeft", "ArrowUp", "PageUp"].includes(e.key)) { e.preventDefault(); go(-1); }
+  if (e.key === "Home") { e.preventDefault(); show(0, -1); }
+  if (e.key === "End") { e.preventDefault(); show(secs().length - 1, 1); }
 });
 addEventListener("beforeprint", () => charts.forEach(renderChart));
 

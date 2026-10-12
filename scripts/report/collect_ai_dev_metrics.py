@@ -10,12 +10,17 @@
 import collections
 import datetime as dt
 import json
+import pathlib
 import re
 import subprocess
 import sys
 
 REPO, OUT = sys.argv[1], sys.argv[2]
 REV = sys.argv[3] if len(sys.argv) > 3 else "origin/main"
+HERE = pathlib.Path(__file__).resolve().parent
+NARR = json.loads((HERE / "ai_dev_report_narrative.json").read_text(encoding="utf-8"))
+MODULES = [(m["key"], re.compile(m["pattern"])) for m in NARR.get("modules", [])]
+HUB_FILES = re.compile(r"(frontend/src/(services/api\.ts|types/index\.ts|App\.tsx|components/layout/navConfig\.ts)|backend/app/(main\.py|routers/__init__\.py|models/__init__\.py|schemas/__init__\.py))$")
 SKIP_FILE = re.compile(r"(lock|\.pptx|\.svg|\.drawio|\.png|\.jpg|CHANGELOG)")
 TRAILER = re.compile(r"Co-Authored-By: Claude ([A-Za-z]+ [0-9.]+)")
 HARNESS = [
@@ -34,6 +39,22 @@ def git(*args):
     return subprocess.run(["git", "-C", REPO, *args], capture_output=True, text=True, check=True).stdout
 
 
+def module_of(path):
+    """파일 경로 → 모듈 키 (ai_dev_report_narrative.json 의 modules 순서대로 첫 매치). 문서·잡파일은 None."""
+    if path.startswith("docs/") or path.endswith((".md", ".pptx", ".drawio", ".png", ".svg", ".lock")) or "package-lock" in path:
+        return None
+    if HUB_FILES.search(path):  # 거의 모든 기능이 함께 고치는 공용 허브 — 특정 모듈로 세지 않는다
+        return None
+    for key, pat in MODULES:
+        if pat.search(path):
+            return key
+    return None
+
+
+def mods_of(paths):
+    return sorted({k for k in (module_of(p) for p in paths) if k})
+
+
 def ctype(subject):
     m = re.match(r"^([a-z]+)(\([^)]*\))?!?:", subject)
     return m.group(1) if m else "other"
@@ -41,15 +62,17 @@ def ctype(subject):
 
 # ── 커밋 (병합 제외) ─────────────────────────────────────────
 commits = []
-raw = git("log", REV, "--no-merges", "--format=@@@%an|%cd|%s%n%b", "--date=short")
+raw = git("log", REV, "--no-merges", "--name-only", "--format=@@@%an|%cd|%s%n%b%n@@FILES", "--date=short")
 for blk in raw.split("@@@")[1:]:
-    first, _, body = blk.partition("\n")
+    head, _, files = blk.partition("@@FILES")
+    first, _, body = head.partition("\n")
     author, date, subject = first.split("|", 2)
     if "github-actions" in author:
         continue
     models = TRAILER.findall(body)
     ai = author == "Claude" or bool(models)
-    commits.append([date, int(ai), ctype(subject), models[-1] if models else ""])
+    commits.append([date, int(ai), ctype(subject), models[-1] if models else "",
+                    ",".join(mods_of([f for f in files.split("\n") if f.strip()]))])
 commits.sort()
 
 # ── PR (Merge pull request 만) ───────────────────────────────
@@ -65,8 +88,11 @@ for line in git("log", REV, "--merges", "--format=%H|%cd|%s", "--date=short").sp
     subs = [b.strip().split("\n")[0] for b in inner.split("@@END") if b.strip()]
     models = TRAILER.findall(inner)
     adds = files = 0
+    touched = []
     for ln in git("diff", "--numstat", f"{sha}^1", sha).splitlines():
         p = ln.split("\t")
+        if len(p) == 3:
+            touched.append(p[2])
         if len(p) == 3 and p[0].isdigit() and not SKIP_FILE.search(p[2]):
             adds += int(p[0])
             files += 1
@@ -75,7 +101,7 @@ for line in git("log", REV, "--merges", "--format=%H|%cd|%s", "--date=short").sp
         "ai": int(branch.startswith("claude/") or bool(models)),
         "feat": int(any(s.startswith("feat") for s in subs)),
         "fixonly": int(bool(subs) and all(s.startswith("fix") for s in subs)),
-        "files": files, "adds": adds,
+        "files": files, "adds": adds, "mods": mods_of(touched),
         "model": collections.Counter(models).most_common(1)[0][0] if models else "",
     })
 prs.sort(key=lambda p: (p["d"], p["n"]))
@@ -123,6 +149,48 @@ for m in months:
         "tests": tests,
     })
 
+# ── 모듈 현재 규모 (REV 기준 파일·라인) ───────────────────────
+module_size = {k: {"files": 0, "loc": 0} for k, _ in MODULES}
+for ln in git("grep", "-c", "", REV, "--", ".").splitlines():
+    path, _, n = ln[len(REV) + 1:].rpartition(":")
+    k = module_of(path)
+    if k:
+        module_size[k]["files"] += 1
+        module_size[k]["loc"] += int(n)
+
+# ── 의존성 도입 이력 (requirements.txt · package.json) ────────
+DEP_FILES = {"py": "backend/requirements.txt", "npm": "frontend/package.json"}
+PY_DEP = re.compile(r"^([+-])\s*([A-Za-z0-9_.-]+)(\[[^\]]*\])?\s*(==|>=|<=|~=|>|<)")
+NPM_DEP = re.compile(r'^([+-])\s*"(@?[A-Za-z0-9_./-]+)":\s*"[\^~>=<]*\d')
+NPM_SKIP = {"version", "node", "npm"}
+deps = {}
+for eco, path in DEP_FILES.items():
+    log = git("log", REV, "--reverse", "--format=@@@%cd", "--date=short", "-p", "--", path)
+    for blk in log.split("@@@")[1:]:
+        date = blk.split("\n", 1)[0].strip()
+        for line in blk.splitlines():
+            if line.startswith(("+++", "---")):
+                continue
+            m = (PY_DEP if eco == "py" else NPM_DEP).match(line)
+            if not m or (eco == "npm" and m.group(2) in NPM_SKIP):
+                continue
+            name = m.group(2).lower() if eco == "py" else m.group(2)
+            if m.group(1) == "+" and (eco, name) not in deps:
+                deps[(eco, name)] = date
+head_py = {m.group(2).lower() for m in (PY_DEP.match("+" + l) for l in git("show", f"{REV}:backend/requirements.txt").splitlines()) if m}
+pkg = json.loads(git("show", f"{REV}:frontend/package.json"))
+head_npm = set(pkg.get("dependencies", {})) | set(pkg.get("devDependencies", {}))
+dep_list = [{"n": n, "eco": e, "added": d, "present": int(n in (head_py if e == "py" else head_npm))}
+            for (e, n), d in sorted(deps.items(), key=lambda x: x[1])]
+
+# ── 경로 기반 기술 도입일 (카탈로그의 paths) ──────────────────
+path_added = {}
+for t in NARR.get("tech", []):
+    for pth in t.get("paths", []):
+        d = git("log", REV, "--diff-filter=A", "--format=%cd", "--date=short", "--", pth).split()
+        if d:
+            path_added[pth] = d[-1]
+
 # ── 릴리스 태그 · 하네스 타임라인 ────────────────────────────
 tags = [l.split()[0][:7] for l in git("for-each-ref", "--format=%(creatordate:short) %(refname:short)", "refs/tags/v*").splitlines() if l]
 harness = []
@@ -141,11 +209,14 @@ data = {
         "repo": "riverjin839/devops_management",
     },
     "months": months,
-    "commits": commits,       # [date, ai, type, model]
+    "commits": commits,       # [date, ai, type, model, "모듈키,..."]
     "prs": prs,
     "snapshots": snapshots,
     "release_months": dict(collections.Counter(tags)),
     "harness": harness,
+    "module_size": module_size,
+    "deps": dep_list,
+    "path_added": path_added,
 }
 with open(OUT, "w", encoding="utf-8") as f:
     json.dump(data, f, ensure_ascii=False, separators=(",", ":"))

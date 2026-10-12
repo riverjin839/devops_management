@@ -2,64 +2,646 @@
   "title": "AI 와 함께 만든 PEP",
   "subtitle": "PEP(Platform Engineering Portal) 개발 과정·결과 리포트",
   "eras": [
-    {"key": "초기", "label": "초기 (모델 미표기)", "from": "2026-02", "to": "2026-04", "models": []},
-    {"key": "4.x", "label": "4.x 세대", "from": "2026-05", "to": "2026-06", "models": ["Opus 4.7", "Sonnet 4.6", "Opus 4.8"]},
-    {"key": "5", "label": "5 세대", "from": "2026-07", "to": "2026-08", "models": ["Sonnet 5", "Fable 5", "Opus 5"]},
-    {"key": "5.x", "label": "5.x 세대", "from": "2026-09", "to": "2026-09", "models": ["Opus 5.5", "Fable 5.1", "Sonnet 5.5"]}
+    {
+      "key": "초기",
+      "label": "초기 (모델 미표기)",
+      "from": "2026-02",
+      "to": "2026-04",
+      "models": []
+    },
+    {
+      "key": "4.x",
+      "label": "4.x 세대",
+      "from": "2026-05",
+      "to": "2026-06",
+      "models": [
+        "Opus 4.7",
+        "Sonnet 4.6",
+        "Opus 4.8"
+      ]
+    },
+    {
+      "key": "5",
+      "label": "5 세대",
+      "from": "2026-07",
+      "to": "2026-08",
+      "models": [
+        "Sonnet 5",
+        "Fable 5",
+        "Opus 5"
+      ]
+    },
+    {
+      "key": "5.x",
+      "label": "5.x 세대",
+      "from": "2026-09",
+      "to": "2026-09",
+      "models": [
+        "Opus 5.5",
+        "Fable 5.1",
+        "Sonnet 5.5"
+      ]
+    }
   ],
   "summary": [
-    ["방식 변화", "커밋의 대부분을 AI 가 작성한다. 사람의 일은 코딩에서 요구사항·리뷰·규칙(하네스) 설계로 이동했다."],
-    ["발전 경로", "프롬프트 코딩 → 컨텍스트 문서화 → 스킬·자동 게이트 → 에이전트 운영의 4단계로 진화했다."],
-    ["상용화", "기능·배포·CI 는 상용 수준. SSO·프론트 테스트·관측성·i18n 이 남은 핵심 공백이다."]
+    [
+      "방식 변화",
+      "커밋의 대부분을 AI 가 작성한다. 사람의 일은 코딩에서 요구사항·리뷰·규칙(하네스) 설계로 이동했다."
+    ],
+    [
+      "발전 경로",
+      "프롬프트 코딩 → 컨텍스트 문서화 → 스킬·자동 게이트 → 에이전트 운영의 4단계로 진화했다."
+    ],
+    [
+      "상용화",
+      "기능·배포·CI 는 상용 수준. SSO·프론트 테스트·관측성·i18n 이 남은 핵심 공백이다."
+    ]
   ],
   "beforeAfter": [
-    ["코드 작성", "사람이 직접 타이핑", "AI 가 구현, 사람은 의도·수용 기준 제시"],
-    ["컨텍스트 전달", "매번 설명 (휘발)", "CLAUDE.md·CODE_MAP·SCREENS 로 저장소에 고정"],
-    ["반복 작업", "사람의 기억·체크리스트", "스킬 8종 (페이지·체커·릴리스·문서 동기화)"],
-    ["품질 확인", "수동 확인", "lint 0경고·tsc·build·pytest·docs-sync 게이트"],
-    ["릴리스", "수동 버전·태그", "PR 병합 → SemVer·CHANGELOG·태그 자동"],
-    ["디자인 검토", "화면 보며 감(感)", "UX 에이전트 감사 → DESIGN.md 백로그"]
+    [
+      "코드 작성",
+      "사람이 직접 타이핑",
+      "AI 가 구현, 사람은 의도·수용 기준 제시"
+    ],
+    [
+      "컨텍스트 전달",
+      "매번 설명 (휘발)",
+      "CLAUDE.md·CODE_MAP·SCREENS 로 저장소에 고정"
+    ],
+    [
+      "반복 작업",
+      "사람의 기억·체크리스트",
+      "스킬 8종 (페이지·체커·릴리스·문서 동기화)"
+    ],
+    [
+      "품질 확인",
+      "수동 확인",
+      "lint 0경고·tsc·build·pytest·docs-sync 게이트"
+    ],
+    [
+      "릴리스",
+      "수동 버전·태그",
+      "PR 병합 → SemVer·CHANGELOG·태그 자동"
+    ],
+    [
+      "디자인 검토",
+      "화면 보며 감(感)",
+      "UX 에이전트 감사 → DESIGN.md 백로그"
+    ]
   ],
   "maturity": [
-    {"n": 1, "title": "프롬프트 코딩", "from": "2026-02", "to": "2026-03", "desc": "대화로 기능 단위 구현, CLAUDE.md 첫 도입"},
-    {"n": 2, "title": "컨텍스트 문서화", "from": "2026-04", "to": "2026-05", "desc": "CODE_MAP·디자인 시스템 문서로 저장소 지도 제공"},
-    {"n": 3, "title": "스킬·자동 게이트", "from": "2026-06", "to": "2026-07", "desc": "스킬 8종, docs-sync CI, 자동 릴리스·CHANGELOG"},
-    {"n": 4, "title": "에이전트 운영", "from": "2026-08", "to": "2026-09", "desc": "UX 감사 에이전트, 테스트 확대, 안정화 우선"}
+    {
+      "n": 1,
+      "title": "프롬프트 코딩",
+      "from": "2026-02",
+      "to": "2026-03",
+      "desc": "대화로 기능 단위 구현, CLAUDE.md 첫 도입"
+    },
+    {
+      "n": 2,
+      "title": "컨텍스트 문서화",
+      "from": "2026-04",
+      "to": "2026-05",
+      "desc": "CODE_MAP·디자인 시스템 문서로 저장소 지도 제공"
+    },
+    {
+      "n": 3,
+      "title": "스킬·자동 게이트",
+      "from": "2026-06",
+      "to": "2026-07",
+      "desc": "스킬 8종, docs-sync CI, 자동 릴리스·CHANGELOG"
+    },
+    {
+      "n": 4,
+      "title": "에이전트 운영",
+      "from": "2026-08",
+      "to": "2026-09",
+      "desc": "UX 감사 에이전트, 테스트 확대, 안정화 우선"
+    }
   ],
   "readiness": [
-    {"area": "기능 커버리지", "score": 90, "target": 90, "evidence": "라우터 76 · 화면 72 · 모델 60"},
-    {"area": "CI/CD·릴리스", "score": 90, "target": 90, "evidence": "CI 게이트 3종, 자동 릴리스·태그"},
-    {"area": "배포 형태", "score": 85, "target": 85, "evidence": "Compose·kind·Helm·Kustomize 4 overlay·폐쇄망"},
-    {"area": "운영 문서", "score": 85, "target": 85, "evidence": "docs 79건, 관리자 매뉴얼·배포 가이드"},
-    {"area": "백엔드 테스트", "score": 70, "target": 70, "evidence": "테스트 함수 1,000개+ (커버리지 미측정)"},
-    {"area": "UX 완성도", "score": 70, "target": 85, "evidence": "UX 백로그 101건 중 83건 완료 / i18n·반응형 미대응"},
-    {"area": "보안·인증", "score": 55, "target": 80, "evidence": "JWT·3단 권한·테넌트·감사 로그 / SSO·refresh 토큰 없음"},
-    {"area": "관측·성능", "score": 30, "target": 70, "evidence": "앱 메트릭 exporter 0, 부하 테스트 0"},
-    {"area": "프론트 테스트", "score": 20, "target": 60, "evidence": "단위·E2E 테스트 0건 (lint·tsc·build 만)"}
+    {
+      "area": "기능 커버리지",
+      "score": 90,
+      "target": 90,
+      "evidence": "라우터 76 · 화면 72 · 모델 60"
+    },
+    {
+      "area": "CI/CD·릴리스",
+      "score": 90,
+      "target": 90,
+      "evidence": "CI 게이트 3종, 자동 릴리스·태그"
+    },
+    {
+      "area": "배포 형태",
+      "score": 85,
+      "target": 85,
+      "evidence": "Compose·kind·Helm·Kustomize 4 overlay·폐쇄망"
+    },
+    {
+      "area": "운영 문서",
+      "score": 85,
+      "target": 85,
+      "evidence": "docs 79건, 관리자 매뉴얼·배포 가이드"
+    },
+    {
+      "area": "백엔드 테스트",
+      "score": 70,
+      "target": 70,
+      "evidence": "테스트 함수 1,000개+ (커버리지 미측정)"
+    },
+    {
+      "area": "UX 완성도",
+      "score": 70,
+      "target": 85,
+      "evidence": "UX 백로그 101건 중 83건 완료 / i18n·반응형 미대응"
+    },
+    {
+      "area": "보안·인증",
+      "score": 55,
+      "target": 80,
+      "evidence": "JWT·3단 권한·테넌트·감사 로그 / SSO·refresh 토큰 없음"
+    },
+    {
+      "area": "관측·성능",
+      "score": 30,
+      "target": 70,
+      "evidence": "앱 메트릭 exporter 0, 부하 테스트 0"
+    },
+    {
+      "area": "프론트 테스트",
+      "score": 20,
+      "target": 60,
+      "evidence": "단위·E2E 테스트 0건 (lint·tsc·build 만)"
+    }
   ],
   "tasks": [
-    {"p": "P0", "title": "SSO·세션", "desc": "OIDC/LDAP 로그인, refresh 토큰, 만료 안내·returnTo", "area": "보안·인증"},
-    {"p": "P0", "title": "프론트 테스트", "desc": "Vitest 핵심 훅·컴포넌트 + Playwright 주요 동선 E2E", "area": "프론트 테스트"},
-    {"p": "P1", "title": "관측·성능", "desc": "/metrics exporter, SLO 정의, 대형 클러스터 부하 테스트", "area": "관측·성능"},
-    {"p": "P1", "title": "국제화·반응형", "desc": "react-i18next ko/en, 태블릿 최소 폭 대응", "area": "UX 완성도"},
-    {"p": "P2", "title": "UX 백로그", "desc": "미처리 13건 + 부분완료 3건 소진, 토큰 정합", "area": "UX 완성도"}
+    {
+      "p": "P0",
+      "title": "SSO·세션",
+      "desc": "OIDC/LDAP 로그인, refresh 토큰, 만료 안내·returnTo",
+      "area": "보안·인증"
+    },
+    {
+      "p": "P0",
+      "title": "프론트 테스트",
+      "desc": "Vitest 핵심 훅·컴포넌트 + Playwright 주요 동선 E2E",
+      "area": "프론트 테스트"
+    },
+    {
+      "p": "P1",
+      "title": "관측·성능",
+      "desc": "/metrics exporter, SLO 정의, 대형 클러스터 부하 테스트",
+      "area": "관측·성능"
+    },
+    {
+      "p": "P1",
+      "title": "국제화·반응형",
+      "desc": "react-i18next ko/en, 태블릿 최소 폭 대응",
+      "area": "UX 완성도"
+    },
+    {
+      "p": "P2",
+      "title": "UX 백로그",
+      "desc": "미처리 13건 + 부분완료 3건 소진, 토큰 정합",
+      "area": "UX 완성도"
+    }
   ],
   "retro": [
-    ["하네스", "CLAUDE.md 19일 차, CODE_MAP 75일 차, 스킬 118일 차에 도입", "스킬 전 4개월은 같은 설명을 반복", "1주 차에 하네스 골격(CLAUDE.md·스킬)"],
-    ["테스트", "5월 말 코드 9만 줄에 테스트 31개", "7월 fix 비율 50%", "PR 마다 테스트 동반을 CI 게이트로 강제"],
-    ["디자인 시스템", "화면 34개를 만든 뒤 5월에 도입", "UX 백로그 101건, raw hex 잔존", "화면 5개 시점에 토큰·카드 규격 확정"],
-    ["비기능 요건", "SSO·i18n·관측·프론트 테스트를 후순위로", "남은 공백이 전부 비기능", "1개월 차에 인증·관측·i18n 뼈대 선행"],
-    ["측정 규칙", "모델 표기 PR 일부, 동기화 병합 다수", "모델·하네스 효과를 정밀 비교 불가", "커밋 트레일러·세션 링크·병합 규칙 첫날 고정"]
+    [
+      "하네스",
+      "CLAUDE.md 19일 차, CODE_MAP 75일 차, 스킬 118일 차에 도입",
+      "스킬 전 4개월은 같은 설명을 반복",
+      "1주 차에 하네스 골격(CLAUDE.md·스킬)"
+    ],
+    [
+      "테스트",
+      "5월 말 코드 9만 줄에 테스트 31개",
+      "7월 fix 비율 50%",
+      "PR 마다 테스트 동반을 CI 게이트로 강제"
+    ],
+    [
+      "디자인 시스템",
+      "화면 34개를 만든 뒤 5월에 도입",
+      "UX 백로그 101건, raw hex 잔존",
+      "화면 5개 시점에 토큰·카드 규격 확정"
+    ],
+    [
+      "비기능 요건",
+      "SSO·i18n·관측·프론트 테스트를 후순위로",
+      "남은 공백이 전부 비기능",
+      "1개월 차에 인증·관측·i18n 뼈대 선행"
+    ],
+    [
+      "측정 규칙",
+      "모델 표기 PR 일부, 동기화 병합 다수",
+      "모델·하네스 효과를 정밀 비교 불가",
+      "커밋 트레일러·세션 링크·병합 규칙 첫날 고정"
+    ]
   ],
   "roadmap": [
-    ["1주 차", "하네스", "CLAUDE.md · CODE_MAP · 스킬 템플릿 · 커밋·병합 규칙"],
-    ["1개월", "품질 게이트", "PR 테스트 동반 강제 · docs-sync · 자동 릴리스 · 디자인 토큰 확정"],
-    ["2~3개월", "상용 뼈대", "SSO·세션 · i18n 키 · /metrics · E2E 스모크 · 권한 UX 규칙"],
-    ["4개월~", "기능 확장", "도메인 기능 병렬 개발 · UX·보안 감사 에이전트 · 모델별 작업 라우팅"]
+    [
+      "1주 차",
+      "하네스",
+      "CLAUDE.md · CODE_MAP · 스킬 템플릿 · 커밋·병합 규칙"
+    ],
+    [
+      "1개월",
+      "품질 게이트",
+      "PR 테스트 동반 강제 · docs-sync · 자동 릴리스 · 디자인 토큰 확정"
+    ],
+    [
+      "2~3개월",
+      "상용 뼈대",
+      "SSO·세션 · i18n 키 · /metrics · E2E 스모크 · 권한 UX 규칙"
+    ],
+    [
+      "4개월~",
+      "기능 확장",
+      "도메인 기능 병렬 개발 · UX·보안 감사 에이전트 · 모델별 작업 라우팅"
+    ]
   ],
   "lessons": [
-    ["컨텍스트가 곧 생산성", "CLAUDE.md·CODE_MAP·스킬로 규칙을 저장소에 남기자 같은 설명의 반복이 사라졌다."],
-    ["속도는 게이트와 함께 키운다", "7월 fix 비율 급증은 게이트 없이 속도만 낸 대가였다. 테스트·docs-sync·자동 릴리스가 이를 되돌렸다."],
-    ["사람의 역할은 '판단'으로 이동", "무엇을 만들지, 무엇이 충분히 좋은지, 어디서 멈출지. 남은 과제도 같은 판단의 문제다."]
+    [
+      "컨텍스트가 곧 생산성",
+      "CLAUDE.md·CODE_MAP·스킬로 규칙을 저장소에 남기자 같은 설명의 반복이 사라졌다."
+    ],
+    [
+      "속도는 게이트와 함께 키운다",
+      "7월 fix 비율 급증은 게이트 없이 속도만 낸 대가였다. 테스트·docs-sync·자동 릴리스가 이를 되돌렸다."
+    ],
+    [
+      "사람의 역할은 '판단'으로 이동",
+      "무엇을 만들지, 무엇이 충분히 좋은지, 어디서 멈출지. 남은 과제도 같은 판단의 문제다."
+    ]
+  ],
+  "modules": [
+    {
+      "key": "infra-ci",
+      "label": "배포·CI/CD",
+      "pattern": "^(k8s/|helm/|docker/|argocd/|ansible/|vagrant/|windows-docker/|\\.github/workflows/|scripts/|Jenkinsfile|Makefile|skaffold\\.yaml|docker-compose|backend/Dockerfile|frontend/Dockerfile|frontend/nginx)",
+      "desc": "Compose 단일 구성에서 kind·Kustomize overlay 4종·Helm·폐쇄망 배포로 확장. CI 게이트·SHA 고정 CD·자동 릴리스·문서 동기화 검사를 붙였다."
+    },
+    {
+      "key": "monitor",
+      "label": "점검·모니터링",
+      "pattern": "(check_|checks?/|checkers|core_bundle|daily|DailyCheck|daily-check|ops_check|ops-check|OpsCheck|DeepCheck|deep_check|health|history|metric_trend|cluster_trends|ClusterTrends|registered_checks|lake_checkers|Dashboard|dashboard/|platform-status|promql|metric_card|CheckItem|cluster_item)",
+      "desc": "아침·점심·저녁 고정 점검에서 cron 기반 점검 매트릭스로 재편. 심층 점검(deep check)·런북 가시화·실행 로그 스트리밍이 들어갔다."
+    },
+    {
+      "key": "observe",
+      "label": "관측·알람",
+      "pattern": "(observability|alert|Alert|prometheus|grafana|k8s_event|K8sEvents|k8s-events|notifier|kubewatch|event_classifier)",
+      "desc": "PromQL 카드에서 Observability 대시보드·Alertmanager 수신·알림 라우팅·K8s 이벤트 수집으로 확장."
+    },
+    {
+      "key": "k8s-ops",
+      "label": "K8s 운영 콘솔",
+      "pattern": "(k8s_(resources|exec|helm|rbac|raw|client|list|paging|diagnose|concurrency)|k8s/|k8s-manage|K8sManage|k8s-rbac|K8sRbac|K8sLogs|k9s|K9s|bulk_exec|bulk-exec|BulkExec|etcdctl|EtcdCtl|mc_client|McClient|components/mc/|node_ssh|NodeSsh|ssh_|kubectl|kubeconfig|commands|Command|saved_script|KernelParams|node_label|NodeLabel|node-labels|node_image|NodeImage|node-images|tcpdump|terminal)",
+      "desc": "kubectl 래핑에서 리소스 탐색·k9s 웹 콘솔·SSH/Pod 터미널·일괄 실행·etcdctl·RBAC·kubeconfig 발급까지 갖춘 운영 콘솔로 성장."
+    },
+    {
+      "key": "capacity",
+      "label": "자원 관리·효율화",
+      "pattern": "(k8s_alloc|k8s-allocation|K8sAllocation|k8s_efficiency|efficiency|bottleneck|Bottleneck|pod-bottleneck|resource_count)",
+      "desc": "NS·노드 자원 할당 현황에서 request·usage 시계열 수집, 축소 추천, NS opt-in 자동 적용·롤백까지 확장."
+    },
+    {
+      "key": "network",
+      "label": "네트워크·토폴로지",
+      "pattern": "(cilium|Cilium|topology|Topology|packet-flow|PacketFlow|hubble|architecture|Architecture|serviceArch|Cidr|InfraTopology)",
+      "desc": "Cilium 트레이스·Hubble 플로우·패킷 경로 3D 시각화·서비스 토폴로지·아키텍처 문서 자동 현행화가 추가됐다."
+    },
+    {
+      "key": "assets",
+      "label": "클러스터·인프라 자산",
+      "pattern": "(clusters|cluster_|Cluster(Manage|Detail|Links|MetaForm)|cluster-manage|infra_node|infra/|management_server|isilon|Isilon|node_server_spec|NodeSpec|node-specs|lake_|Lake|lake-services|versions|Version|service_categor|services/ServiceCategory)",
+      "desc": "클러스터 등록에서 노드 스펙·관리 서버·Isilon NFS·LAKE 서비스·버전 그래프까지 인프라 자산 대장으로 확장."
+    },
+    {
+      "key": "work",
+      "label": "업무 관리",
+      "pattern": "(work_item|work-items|WorkItem|sprint|Sprint|project|Project|workflow|Workflow|jira|Jira|servicenow|wbs|Wbs|TodoToday|MemberBoard|weekly_report|WeeklyReport|assignee)",
+      "desc": "작업 항목 보드에서 스프린트·WBS·워크플로·Jira/ServiceNow 연동·주간보고 자동 게시로 확장."
+    },
+    {
+      "key": "knowledge",
+      "label": "지식·AI",
+      "pattern": "(work_guide|work-guides|WorkGuide|ops_note|OpsNote|ops-notes|mindmap|MindMap|ontology|Ontology|knowledge|Knowledge|confluence|documents|Documents|editor|agent|analyze|analyzers|llm|rag_|embedding|IncidentAnalysis|trends|TrendDigest|voc|reactions|review_service)",
+      "desc": "Ollama 채팅에서 장애 분석기(Claude·로컬 LLM·규칙)·RAG 지식 검색·리치텍스트 문서·온톨로지·마인드맵으로 확장."
+    },
+    {
+      "key": "automation",
+      "label": "자동화 (배치·플레이북·스크립트)",
+      "pattern": "(batch_job|batch-jobs|BatchJob|playbook|Playbook|ansible_asset|scripts\\.py|ScriptsPage|components/scripts|script_|executable_script|snapshot_jobs)",
+      "desc": "Ansible 플레이북 실행에서 cron 배치잡·버전 관리되는 스크립트 자산·실행 이력 로그로 확장."
+    },
+    {
+      "key": "platform",
+      "label": "플랫폼 셸·사용자·보안",
+      "pattern": "(auth|Login|ChangePassword|user|tenant|audit|notification|ui_settings|home_prefs|island|Island|HomePage|settings|Settings|layout/|backup|schema_health|release_notes|terminal_appearance|secret_box|login_rate|cluster_access|tenant_scope|cluster_network_mask|components/(common|ui)/|index\\.css|App\\.tsx|main\\.py|config\\.py|database\\.py|celery_app|services/api\\.ts|types/index\\.ts|lib/)",
+      "desc": "단일 대시보드에서 앱 셸·테마 16종·권한(viewer/operator/admin)·테넌트 격리·감사 로그·백업/복구를 갖춘 포털로 재정의."
+    }
+  ],
+  "tech": [
+    {
+      "label": "Celery + Redis",
+      "module": "monitor",
+      "deps": [
+        "celery",
+        "redis"
+      ],
+      "desc": "비동기 작업·Beat 스케줄 (점검·수집·배치 디스패처)"
+    },
+    {
+      "label": "croniter",
+      "module": "automation",
+      "deps": [
+        "croniter"
+      ],
+      "desc": "cron 표현식 기반 점검·배치 디스패처"
+    },
+    {
+      "label": "Ansible Runner",
+      "module": "automation",
+      "deps": [
+        "ansible-core",
+        "ansible-runner"
+      ],
+      "desc": "플레이북 실행·이력"
+    },
+    {
+      "label": "Kubernetes Python SDK",
+      "module": "k8s-ops",
+      "deps": [
+        "kubernetes"
+      ],
+      "desc": "kubectl subprocess 와 병행하는 API 접근"
+    },
+    {
+      "label": "Paramiko (SSH)",
+      "module": "k8s-ops",
+      "deps": [
+        "paramiko"
+      ],
+      "desc": "노드 SSH·원격 실행·웹 터미널 백엔드"
+    },
+    {
+      "label": "xterm.js",
+      "module": "k8s-ops",
+      "deps": [
+        "@xterm/xterm"
+      ],
+      "desc": "브라우저 터미널 (k9s·SSH·Pod exec)"
+    },
+    {
+      "label": "react-virtuoso",
+      "module": "k8s-ops",
+      "deps": [
+        "react-virtuoso"
+      ],
+      "desc": "대용량 로그·이벤트·노드 목록 가상 스크롤"
+    },
+    {
+      "label": "pgvector",
+      "module": "knowledge",
+      "deps": [
+        "pgvector"
+      ],
+      "desc": "작업 항목·가이드·운영 노트 임베딩 검색 (RAG)"
+    },
+    {
+      "label": "Anthropic SDK",
+      "module": "knowledge",
+      "deps": [
+        "anthropic"
+      ],
+      "desc": "Claude 기반 장애 분석기"
+    },
+    {
+      "label": "TipTap 에디터",
+      "module": "knowledge",
+      "deps": [
+        "@tiptap/react"
+      ],
+      "desc": "리치텍스트 문서·템플릿"
+    },
+    {
+      "label": "Markdown·안전 렌더",
+      "module": "knowledge",
+      "deps": [
+        "marked",
+        "react-markdown",
+        "dompurify"
+      ],
+      "desc": "마크다운 변환·XSS 방지 HTML 렌더"
+    },
+    {
+      "label": "feedparser",
+      "module": "knowledge",
+      "deps": [
+        "feedparser"
+      ],
+      "desc": "기술 트렌드 RSS 수집"
+    },
+    {
+      "label": "3D 그래프 (three.js)",
+      "module": "network",
+      "deps": [
+        "react-force-graph-3d",
+        "three"
+      ],
+      "desc": "패킷 경로·토폴로지·온톨로지 3D 시각화"
+    },
+    {
+      "label": "openpyxl · xlrd",
+      "module": "work",
+      "deps": [
+        "openpyxl",
+        "xlrd"
+      ],
+      "desc": "Jira 엑셀 가져오기"
+    },
+    {
+      "label": "TanStack Query + Zustand",
+      "module": "platform",
+      "deps": [
+        "@tanstack/react-query",
+        "zustand"
+      ],
+      "desc": "서버 상태 / 클라이언트 상태 분리"
+    },
+    {
+      "label": "shadcn/ui (Base UI·Radix)",
+      "module": "platform",
+      "deps": [
+        "@base-ui/react",
+        "@radix-ui/react-dialog"
+      ],
+      "desc": "다이얼로그·탭·토스트 등 UI 프리미티브"
+    },
+    {
+      "label": "dnd-kit",
+      "module": "platform",
+      "deps": [
+        "@dnd-kit/core"
+      ],
+      "desc": "사이드바·아일랜드 드래그 재배치"
+    },
+    {
+      "label": "화면 내보내기",
+      "module": "platform",
+      "deps": [
+        "html-to-image",
+        "jspdf",
+        "pptxgenjs"
+      ],
+      "desc": "화면을 PNG·PDF·PPT 로 내보내기"
+    },
+    {
+      "label": "JWT + bcrypt",
+      "module": "platform",
+      "deps": [
+        "PyJWT",
+        "bcrypt"
+      ],
+      "desc": "로그인 토큰·비밀번호 해시"
+    },
+    {
+      "label": "orjson",
+      "module": "platform",
+      "deps": [
+        "orjson"
+      ],
+      "desc": "고속 JSON 직렬화 (대용량 응답)"
+    },
+    {
+      "label": "Recharts",
+      "module": "monitor",
+      "deps": [
+        "recharts"
+      ],
+      "desc": "대시보드·추이 차트"
+    },
+    {
+      "label": "접근성 린트",
+      "module": "platform",
+      "deps": [
+        "eslint-plugin-jsx-a11y"
+      ],
+      "desc": "jsx-a11y 규칙 상시화"
+    },
+    {
+      "label": "Docker Compose",
+      "module": "infra-ci",
+      "paths": [
+        "docker-compose.yml"
+      ],
+      "desc": "로컬 전체 스택"
+    },
+    {
+      "label": "Kustomize overlays",
+      "module": "infra-ci",
+      "paths": [
+        "k8s/overlays"
+      ],
+      "desc": "dev·prod·kind·airgap 환경 분리"
+    },
+    {
+      "label": "Helm 차트",
+      "module": "infra-ci",
+      "paths": [
+        "helm"
+      ],
+      "desc": "프로덕션 배포 패키징"
+    },
+    {
+      "label": "Skaffold",
+      "module": "infra-ci",
+      "paths": [
+        "skaffold.yaml"
+      ],
+      "desc": "K8s 핫리로드 개발"
+    },
+    {
+      "label": "ArgoCD",
+      "module": "infra-ci",
+      "paths": [
+        "argocd"
+      ],
+      "desc": "GitOps 배포"
+    },
+    {
+      "label": "Jenkins",
+      "module": "infra-ci",
+      "paths": [
+        "Jenkinsfile"
+      ],
+      "desc": "사내 파이프라인 (phase 3)"
+    },
+    {
+      "label": "GitHub Actions CD",
+      "module": "infra-ci",
+      "paths": [
+        ".github/workflows/cd.yml"
+      ],
+      "desc": "GHCR 빌드·SHA 고정 배포"
+    },
+    {
+      "label": "폐쇄망 배포",
+      "module": "infra-ci",
+      "paths": [
+        "scripts/deploy-airgap.sh"
+      ],
+      "desc": "레지스트리·CLI·인증정보 대화형 설치"
+    },
+    {
+      "label": "폐쇄망 LLM 이미지",
+      "module": "knowledge",
+      "paths": [
+        ".github/workflows/ollama-qwen2.5-coder.yml"
+      ],
+      "desc": "Ollama qwen2.5-coder 반입 이미지"
+    },
+    {
+      "label": "LLM 라우팅 레이어",
+      "module": "knowledge",
+      "paths": [
+        "backend/app/services/llm"
+      ],
+      "desc": "테넌트별 LLM 라우팅"
+    },
+    {
+      "label": "장애 분석기 스택",
+      "module": "knowledge",
+      "paths": [
+        "backend/app/services/analyzers"
+      ],
+      "desc": "claude · local_llm · rule_based 선택"
+    },
+    {
+      "label": "Hubble 클라이언트",
+      "module": "network",
+      "paths": [
+        "backend/app/services/hubble_client.py"
+      ],
+      "desc": "Cilium Hubble 플로우 조회"
+    },
+    {
+      "label": "SuperPod 심층 점검",
+      "module": "monitor",
+      "paths": [
+        "k8s/superpod"
+      ],
+      "desc": "클러스터 내 CronJob 심층 점검"
+    },
+    {
+      "label": "shadcn MCP",
+      "module": "platform",
+      "paths": [
+        "frontend/.mcp.json"
+      ],
+      "desc": "AI 가 실제 레지스트리를 읽고 컴포넌트 추가"
+    }
   ]
 }
