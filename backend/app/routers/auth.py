@@ -4,6 +4,7 @@ from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.models.user import User
+from app.models.user_setting import UserSetting
 from app.auth.security import hash_password, verify_password, create_access_token
 from app.auth.deps import get_current_user, require_admin
 from app.schemas.auth import (
@@ -198,6 +199,11 @@ def delete_user(
     if not user:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="사용자를 찾을 수 없습니다.")
     snapshot = {"username": user.username, "role": user.role}
+    # user_settings 는 users 에 FK 가 없다(값이 JSON 이라 사용자별 키만 갖는 경량 저장소) — 계정과
+    # 함께 지우지 않으면 고아 행이 쌓이고, 같은 id 가 재사용되면 남의 개인 설정을 물려받는다.
+    snapshot["settings_deleted"] = (
+        db.query(UserSetting).filter(UserSetting.user_id == user_id).delete(synchronize_session=False)
+    )
     db.delete(user)
     db.commit()
     audit_logger.record(

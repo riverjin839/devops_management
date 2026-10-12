@@ -10,6 +10,27 @@
 
 1.48.0 이후 main 에 병합된 변경 (다음 릴리스 후보).
 
+### Added
+- **사이드바·상단바 조직 기본 앱 구성 + 개인 초기화**: admin 이 Settings → 화면 UI 설정 → "기본 앱 구성"에서
+  앱을 직접 고른 적 없는 사용자의 사이드바·상단바 구성을 정한다(이미 고른 사용자는 그대로, 변경은 감사 로그).
+  사용자는 "앱 추가" 창의 "기본값으로 초기화"로 언제든 조직 기본 구성으로 돌아간다. Backend:
+  `GET/PUT /ui-settings/home-prefs-defaults`, `home_prefs.installed_apps` = `null`(기본값 따름)/리스트(사용자 지정),
+  응답 `installed_apps_customized`. Frontend: `DefaultAppsManager`, `AddAppDialog` 초기화 버튼.
+
+### Fixed
+- **배포 후 사이드바·상단바 개인 설정이 초기화되던 버그**: 사이드바 설치 목록 이관이 `app_settings` 의 전역
+  "1회 실행" 표식에 의존해, 표식이 지워지면(운영 DB 를 가리킨 채 돈 pytest, 구 백업 복원 등) 다음 배포에서
+  다시 돌아 개인화 안 한 계정엔 앱 42개가 전부 설치되고 직접 고른 상단바 항목은 지워졌다. 이제 버전 표식이
+  계정별 설정 행에 붙어 몇 번을 다시 배포해도 사용자가 고른 목록은 바뀌지 않는다. Backend:
+  `_migrate_home_prefs_layout()`(행 단위 `layout_version`, 기존 3단계 이관 대체), 테스트는 DB 이름에 `test` 가
+  없으면 실행을 거부(`PEP_TESTS_ALLOW_NON_TEST_DB=1` 로 우회). Frontend: 설정을 아직 못 받은 상태에서 앱 추가/제거를
+  눌러 서버 목록 전체를 덮어쓰던 경로 차단.
+- **두 기기·탭에서 앱을 동시에 추가/제거하면 한쪽 변경이 사라지던 문제**: 설치 목록을 통째로 저장하던 방식을
+  원자적 추가/제거 연산(`installed_apps_add`/`installed_apps_remove`, 서버 행 잠금)으로 바꿨다.
+- **사용자 삭제 후 개인 설정이 남던 문제**: 계정 삭제 시 `user_settings` 행도 함께 지운다(같은 id 재사용 시 설정 상속 방지).
+  부팅 이관이 개인 설치 목록을 바꾸면 감사 로그(`home_prefs.layout_migrate`)에 추가/제거 항목을 남긴다.
+  Jenkins 백엔드 테스트는 `TEST_DATABASE_URL`(테스트 전용 DB)이 있어야만 돌고 실패하면 파이프라인을 멈춘다.
+
 ## [1.48.0] - 2026-10-12
 
 ### Fixed

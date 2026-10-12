@@ -36,6 +36,7 @@ PEP 문서 모음. 루트의 [README](../README.md) · [CHANGELOG](../CHANGELOG.
 - [collab-tooling-borrow-report.md](collab-tooling-borrow-report.md) — AFFiNE/AppFlowy 차용 분석
 - [03-analysis/check-matrix-commercial-review.md](03-analysis/check-matrix-commercial-review.md) — **점검 매트릭스 상용화 전면 재검토(2026-10)**: 상용화 불가 판정 원인(테넌트 격리·값 유실·실행 피드백·스케줄러·직관성) 감사와 조치, 잔여 백로그, 재검증 체크리스트
 - [03-analysis/backend-language-migration-review.md](03-analysis/backend-language-migration-review.md) — **백엔드 언어 변경(Python→TypeScript) 검토**: 무응답 원인(스레드풀 고갈)·타입 게이트 부재 실측, 권고 = 변경하지 않음
+- [03-analysis/personalization-review.md](03-analysis/personalization-review.md) — **개인화 설정 상용화 검토**: 배포 후 사이드바 설치 목록 초기화 버그 원인(전역 sentinel + 운영 DB pytest)·수정, 남은 P1/P2 과제
 - [architecture.drawio](architecture.drawio) — 아키텍처 다이어그램 소스
 - [observability-agentic-architecture.drawio](observability-agentic-architecture.drawio) — 관측/에이전틱 아키텍처 다이어그램 소스
 

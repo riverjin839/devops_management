@@ -8,6 +8,8 @@
 //   - 'registry-credentials' : Private Registry 로그인 (Username/Password)
 //   - 'git-credentials'      : Git 접근용 (폐쇄망 Git)
 //   - 'argocd-auth-token'    : ArgoCD API 토큰 (Secret text)
+// 선택 환경변수:
+//   - TEST_DATABASE_URL      : 백엔드 테스트 전용 PostgreSQL(DB 이름에 test 포함). 미설정이면 테스트 단계 SKIP
 
 pipeline {
     agent any
@@ -54,11 +56,20 @@ pipeline {
         stage('Backend Test') {
             steps {
                 dir('backend') {
+                    // 테스트는 DB 에 계정·설정 행을 만들고 지운다 — 운영 DB 를 가리키면 개인 설정이
+                    // 망가진다(배포 후 사이드바 설치 목록이 초기화되던 버그). 그래서 테스트 전용 DB 를
+                    // TEST_DATABASE_URL 로 명시해야만 돌고(DB 이름에 test 필수 — tests/conftest.py 가드),
+                    // 실패하면 이후 단계(이미지 빌드·배포)를 멈춘다. 미설정이면 명시적으로 건너뛴다.
                     sh '''
-                        python3 -m venv venv || true
+                        if [ -z "${TEST_DATABASE_URL:-}" ]; then
+                            echo "SKIP: TEST_DATABASE_URL 미설정 — 백엔드 테스트를 건너뛴다(GitHub Actions CI 가 머지 전 게이트)."
+                            exit 0
+                        fi
+                        python3 -m venv venv
                         . venv/bin/activate
                         pip install -r requirements.txt --quiet
-                        pytest -v --tb=short || echo "WARNING: Tests failed"
+                        pip install pytest pytest-asyncio httpx --quiet
+                        DATABASE_URL="$TEST_DATABASE_URL" pytest -v --tb=short
                     '''
                 }
             }

@@ -1994,74 +1994,30 @@ def _migrate_assignee_roster_to_users():
         db.close()
 
 
-def _backfill_installed_sidebar_apps():
-    """사이드바 "SaaS 앱" 개편(opt-in 설치형) — 기존 사용자는 이전과 동일하게 전체가 설치된
-    것으로 1회 이관, 이 마이그레이션 이후 생성되는 신규 계정은 `HomePrefs` 기본값(빈 리스트)이
-    자연히 적용돼 빈 사이드바 + "+" 버튼으로 시작한다.
+def _migrate_home_prefs_layout():
+    """사이드바/상단바 설치 목록(`home_prefs.installed_apps`)의 **행 단위 버전** 이관.
 
-    설치 가능한 앱 id 는 프론트 `navConfig.ts` 의 `GroupId`(플랫폼 도메인 그룹) + `"back"`
-    (뒤로가기 버튼) 과 반드시 일치해야 한다 — 프론트에서 그룹을 추가/삭제하면 이 기본 목록도
-    같이 갱신할 것. `app_settings` 의 sentinel 키로 1회만 실행되게 막는다(재부팅마다 반복 방지).
+    예전엔 1단계(그룹 단위 백필) → 2단계(leaf 치환 + 업무 도메인 grandfather) → 3단계(상단바
+    `/tasks-mgmt` 하나로 정리) 세 함수가 `app_settings` 의 전역 sentinel 로 "1회만" 실행됐다.
+    sentinel 이 데이터(`user_settings`)와 떨어져 있어, sentinel 만 사라지면(운영 DB 를 가리킨
+    채 돈 pytest 의 cleanup, 구 백업 replace 복원, app_settings 수동 정리 등) 다음 배포 부팅에서
+    세 단계가 처음부터 다시 돌아 ① 개인화한 적 없는 계정엔 앱 42개가 전부 설치되고 ② 개인화한
+    계정은 직접 고른 상단바 항목이 지워졌다("배포하면 사이드바 셋업이 다 추가되는" 버그).
+
+    지금은 상태 없는(stateless) 행 단위 이관이다 — 몇 번을 다시 돌아도 결과가 같다:
+    - 버전 표식(`layout_version`)이 **행 자체**에 있어 데이터와 함께 백업·복원된다.
+    - `layout_version` 이 이미 최신인 행은 건드리지 않는다.
+    - 버전이 없는 행은 **모양으로만** 판정한다. legacy 모양(`installed_apps` 키 없음 = 1단계
+      이전, 옛 그룹 id 포함 = 2단계 이전)일 때만 변환하고, 이미 leaf 모양이면 목록은 그대로 두고
+      버전만 찍는다 — 사용자가 고른 항목을 빼는(3단계식 뺄셈) 일은 절대 없다.
+    - home_prefs 행이 없는 계정은 만들지 않는다 — API 기본값(`/tasks-mgmt` 하나)을 그대로 쓴다.
+      그래서 부트스트랩 admin 과의 실행 순서 제약도 없다.
     """
-    from app.models.app_setting import AppSetting
-    from app.models.user import User
     from app.models.user_setting import UserSetting
+    from app.schemas.home_prefs import HOME_PREFS_LAYOUT_VERSION
 
-    SENTINEL_KEY = "installed_sidebar_apps_backfilled_v1"
-    DEFAULT_INSTALLED_APPS = [
-        "cluster", "server", "network", "storage", "services", "devops", "system", "back",
-    ]
-
-    db = SessionLocal()
-    try:
-        if db.query(AppSetting).filter(AppSetting.key == SENTINEL_KEY).first() is not None:
-            return
-        touched = 0
-        for user in db.query(User).all():
-            row = (
-                db.query(UserSetting)
-                .filter(UserSetting.user_id == user.id, UserSetting.key == "home_prefs")
-                .first()
-            )
-            if row is None:
-                db.add(UserSetting(user_id=user.id, key="home_prefs", value={"installed_apps": DEFAULT_INSTALLED_APPS}))
-                touched += 1
-            elif isinstance(row.value, dict) and "installed_apps" not in row.value:
-                row.value = {**row.value, "installed_apps": DEFAULT_INSTALLED_APPS}
-                touched += 1
-        db.add(AppSetting(key=SENTINEL_KEY, value={"done": True}))
-        db.commit()
-        _log.info("backfilled installed_apps default for %d existing user(s)", touched)
-    finally:
-        db.close()
-
-
-def _migrate_installed_apps_to_leaf_paths():
-    """사이드바/상단바 "leaf 단위 설치" 개편(2단계) — 두 가지를 한 번에 처리한다.
-
-    1. `_backfill_installed_sidebar_apps`(1단계)가 넣어준 그룹 단위 id(cluster/server/.../
-       system)가 남아있는 계정은 그 그룹의 leaf 페이지 목록으로 치환한다 — 그룹 id 는 더 이상
-       `installableApps.ts` 의 `INSTALLABLE_APPS` 에 존재하지 않아(설치 단위가 leaf 로 바뀜)
-       방치하면 해당 항목이 조용히 사라진다.
-    2. 상단바(업무 관리/문서 관리 그룹 + 즐겨찾기 + Your Island)는 예전엔 로그인만 하면 항상
-       보였다 — 이 마이그레이션 시점에 존재하던 계정은 동일하게 보이도록 그 leaf 목록 +
-       "favorites"/"island" 를 이관해 준다. 이 마이그레이션 이후 생성되는 계정은 `HomePrefs`
-       기본값(빈 리스트) 그대로 완전히 빈 상단바로 시작한다.
-
-    `app_settings` sentinel 로 1회만 실행되며, `_backfill_installed_sidebar_apps` 와 같은 이유로
-    `_seed_initial_admin` 보다 먼저 실행돼야 한다 — 안 그러면 이번 부팅에 막 생긴 부트스트랩
-    admin 이 "기존 사용자"로 오인돼 이관 대상이 된다.
-    """
-    from app.models.app_setting import AppSetting
-    from app.models.user import User
-    from app.models.user_setting import UserSetting
-
-    SENTINEL_KEY = "installed_apps_leaf_migration_v2"
-
-    # 이 마이그레이션 시점(v2)의 frontend GROUPS id → leaf 스냅샷이다. 옛 그룹 id 로 저장된 값을
-    # 치환하는 용도라 이후 GROUPS 재편(2026-09 P1: cluster→observe/inspect/operate/configure,
-    # server·storage·services→infra)을 따라 바꾸지 않는다 — 키는 옛 id 그대로가 맞다. collab/documents 는 그룹 id 로 설치된 적이 없어(상단바는 예전에
-    # 상시노출) 치환 대상이 아니라 아래 WORK_DOMAIN_GRANDFATHER 로 별도 취급한다.
+    # 1단계 이전(사이드바가 전부 보이던 시절) 계정의 옛 그룹 id → leaf 스냅샷. 옛 id 로 저장된
+    # 값을 치환하는 용도라 이후 GROUPS 재편을 따라 바꾸지 않는다 — 키는 옛 id 그대로가 맞다.
     LEGACY_GROUP_LEAF_PATHS = {
         "cluster": ["/cluster-overview", "/k8s-manage", "/k8s-allocation", "/k9s", "/cluster-trends",
                     "/node-labels", "/node-images", "/k8s-rbac", "/clusters", "/ops-checks",
@@ -2076,104 +2032,64 @@ def _migrate_installed_apps_to_leaf_paths():
         "devops": ["/playbooks", "/commands", "/scripts"],
         "system": ["/settings"],
     }
-    WORK_DOMAIN_GRANDFATHER = [
-        "/tasks-mgmt", "/todo-today", "/sprints", "/members", "/workflow", "/wbs",
-        "/weekly-report", "/jira-import",  # 업무 관리(구 협업)
-        "/documents", "/work-guides", "/docs", "/ops-notes", "/mindmap", "/ontology", "/trends",  # 문서 관리
-        "favorites", "island",
-    ]
+    # 1단계가 installed_apps 키가 없던 계정에 주던 기본 목록(당시 사이드바 전체 = 이전과 동일).
+    LEGACY_FULL_SIDEBAR = ["cluster", "server", "network", "storage", "services", "devops", "system", "back"]
+    TOPBAR_DEFAULT = "/tasks-mgmt"
 
     db = SessionLocal()
     try:
-        if db.query(AppSetting).filter(AppSetting.key == SENTINEL_KEY).first() is not None:
-            return
-        touched = 0
-        for user in db.query(User).all():
-            row = (
-                db.query(UserSetting)
-                .filter(UserSetting.user_id == user.id, UserSetting.key == "home_prefs")
-                .first()
-            )
-            current = list(row.value.get("installed_apps", [])) if row and isinstance(row.value, dict) else []
-
-            expanded: list[str] = []
-            for app_id in current:
-                for leaf in LEGACY_GROUP_LEAF_PATHS.get(app_id, [app_id]):
-                    if leaf not in expanded:
-                        expanded.append(leaf)
-            for leaf in WORK_DOMAIN_GRANDFATHER:
-                if leaf not in expanded:
-                    expanded.append(leaf)
-
-            if row is None:
-                db.add(UserSetting(user_id=user.id, key="home_prefs", value={"installed_apps": expanded}))
-            elif isinstance(row.value, dict):
-                row.value = {**row.value, "installed_apps": expanded}
-            else:
-                row.value = {"installed_apps": expanded}
-            touched += 1
-        db.add(AppSetting(key=SENTINEL_KEY, value={"done": True}))
-        db.commit()
-        _log.info("migrated installed_apps to leaf paths for %d existing user(s)", touched)
-    finally:
-        db.close()
-
-
-def _prune_topbar_apps_to_default():
-    """상단바(이름 옆) "leaf 단위 설치" 개편(3단계) — 사용자 요청("업무 관리만 기본으로
-    나오게 하고 나머지는 개인별 add-on 방식으로")에 따라 기본 노출을 `/tasks-mgmt`
-    ("업무 관리") 하나로 줄인다.
-
-    1/2단계(`_backfill_installed_sidebar_apps`/`_migrate_installed_apps_to_leaf_paths`)가
-    이관해 준 나머지 업무 관리 leaf(오늘 할 일/스프린트/멤버별 업무/워크플로우/WBS/주간보고/
-    Jira Excel 가져오기)·문서 관리 leaf 7종·즐겨찾기·Your Island 를 이 마이그레이션 시점
-    존재하던 계정에서 제거한다 — 사이드바(platform/system 도메인) 설치 항목은 건드리지
-    않는다. v1/v2 와 달리 **뺄셈** 마이그레이션이다(추가로 사라지는 화면이 없게 하던 이전
-    두 단계와 반대 방향) — 사용자가 그 뒤 직접 다시 설치한 항목까지는 구분할 수 없어 함께
-    제거되지만, `+` 버튼으로 언제든 다시 켤 수 있다.
-
-    `app_settings` sentinel 로 1회만 실행되며, 다른 두 이관과 같은 이유로 `_seed_initial_admin`
-    보다 먼저 실행돼야 한다 — 안 그러면 이번 부팅에 막 생긴 부트스트랩 admin 이 "기존
-    사용자"로 오인돼 방금 시딩된 기본값(`/tasks-mgmt` 하나)에서 불필요하게 다시 걸러진다.
-    """
-    from app.models.app_setting import AppSetting
-    from app.models.user import User
-    from app.models.user_setting import UserSetting
-
-    SENTINEL_KEY = "installed_apps_topbar_default_v3"
-
-    # frontend navConfig.ts 의 GROUPS.paths(collab/documents) 와 반드시 일치해야 한다 —
-    # `/tasks-mgmt`("업무 관리")만 남기고 나머지 업무 도메인 leaf + 특수 항목을 제거한다.
-    TOPBAR_ITEMS_TO_PRUNE = {
-        "/todo-today", "/sprints", "/members", "/workflow", "/wbs", "/weekly-report", "/jira-import",
-        "/documents", "/work-guides", "/docs", "/ops-notes", "/mindmap", "/ontology", "/trends",
-        "favorites", "island",
-    }
-
-    db = SessionLocal()
-    try:
-        if db.query(AppSetting).filter(AppSetting.key == SENTINEL_KEY).first() is not None:
-            return
-        touched = 0
-        for user in db.query(User).all():
-            row = (
-                db.query(UserSetting)
-                .filter(UserSetting.user_id == user.id, UserSetting.key == "home_prefs")
-                .first()
-            )
-            if row is None or not isinstance(row.value, dict):
+        upgraded = stamped = 0
+        changes: list[tuple[str, list, list]] = []  # (user_id, before, after) — 감사 기록용
+        for row in db.query(UserSetting).filter(UserSetting.key == "home_prefs").all():
+            value = row.value if isinstance(row.value, dict) else {}
+            version = value.get("layout_version")
+            if isinstance(version, int) and version >= HOME_PREFS_LAYOUT_VERSION:
                 continue
-            current = row.value.get("installed_apps", [])
+
+            current = value.get("installed_apps")
             if not isinstance(current, list):
-                continue
-            pruned = [a for a in current if a not in TOPBAR_ITEMS_TO_PRUNE]
-            if pruned == current:
-                continue
-            row.value = {**row.value, "installed_apps": pruned}
-            touched += 1
-        db.add(AppSetting(key=SENTINEL_KEY, value={"done": True}))
+                current = list(LEGACY_FULL_SIDEBAR)
+            current = [a for a in current if isinstance(a, str)]
+
+            if any(a in LEGACY_GROUP_LEAF_PATHS for a in current):
+                expanded: list[str] = []
+                for app_id in current:
+                    for leaf in LEGACY_GROUP_LEAF_PATHS.get(app_id, [app_id]):
+                        if leaf not in expanded:
+                            expanded.append(leaf)
+                # 2단계(업무 도메인 grandfather) + 3단계(상단바는 /tasks-mgmt 만)의 순효과.
+                if TOPBAR_DEFAULT not in expanded:
+                    expanded.append(TOPBAR_DEFAULT)
+                row.value = {**value, "installed_apps": expanded, "layout_version": HOME_PREFS_LAYOUT_VERSION}
+                changes.append((row.user_id, list(value.get("installed_apps") or []), expanded))
+                upgraded += 1
+            else:
+                row.value = {**value, "installed_apps": current, "layout_version": HOME_PREFS_LAYOUT_VERSION}
+                stamped += 1
         db.commit()
-        _log.info("pruned topbar installed_apps to default for %d existing user(s)", touched)
+        if upgraded or stamped:
+            _log.info(
+                "home_prefs layout v%d: upgraded %d legacy row(s), stamped %d current row(s) unchanged",
+                HOME_PREFS_LAYOUT_VERSION, upgraded, stamped,
+            )
+        # 목록을 실제로 바꾼 행만 감사 로그에 남긴다 — "왜 내 메뉴가 바뀌었나" 문의의 근거.
+        # 버전만 찍은 행은 사용자에게 보이는 변화가 없어 기록하지 않는다.
+        from app.services import audit_logger
+
+        for user_id, before, after in changes:
+            audit_logger.record(
+                db,
+                action="home_prefs.layout_migrate",
+                actor_username="system",
+                target_type="user",
+                target_id=user_id,
+                details={
+                    "layout_version": HOME_PREFS_LAYOUT_VERSION,
+                    "before": before,
+                    "added": [a for a in after if a not in before],
+                    "removed": [a for a in before if a not in after],
+                },
+            )
     finally:
         db.close()
 
@@ -2320,14 +2236,9 @@ async def lifespan(app: FastAPI):
             ("seed_service_categories", _seed_default_service_categories),
             ("merge_service_catalog_into_pep_types", _merge_service_catalog_into_pep_types),
             ("seed_observability_catalog", _seed_observability_catalog),
-            # backfill_installed_sidebar_apps 는 seed_initial_admin 보다 먼저 실행돼야 한다 —
-            # 안 그러면 첫 부팅에서 방금 만든 부트스트랩 admin 이 "기존 사용자"로 오인돼 빈
-            # 사이드바로 시작해야 할 신규 계정인데도 전체 설치 상태를 받는다(리뷰 지적).
-            ("backfill_installed_sidebar_apps", _backfill_installed_sidebar_apps),
-            # migrate_installed_apps_to_leaf_paths / prune_topbar_apps_to_default 도 같은 이유로
-            # seed_initial_admin 보다 먼저.
-            ("migrate_installed_apps_to_leaf_paths", _migrate_installed_apps_to_leaf_paths),
-            ("prune_topbar_apps_to_default", _prune_topbar_apps_to_default),
+            # 행 단위 버전 이관 — 전역 sentinel 이 없어 몇 번을 다시 돌아도 개인 설정을
+            # 덮지 않는다(home_prefs 행이 없는 계정은 만들지 않으므로 실행 순서 제약도 없다).
+            ("migrate_home_prefs_layout", _migrate_home_prefs_layout),
             ("seed_initial_admin", _seed_initial_admin),
             ("migrate_assignee_roster_to_users", _migrate_assignee_roster_to_users),
         ]:
