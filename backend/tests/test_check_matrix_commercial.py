@@ -420,3 +420,18 @@ def test_run_detail_has_progress_log_lines(db, world):
     assert any("실행 시작" in line for line in done["log_lines"])
     assert len(done["log_lines"]) >= 3
     assert "_log" not in done["details"]
+
+
+def test_masked_secret_roundtrip_keeps_original(db, world):
+    from app.services.check_matrix_runbook import MASKED_VALUE
+
+    addon = Addon(cluster_id=world["open"].id, name="jenkins", type="jenkins",
+                  config={"url": "http://a", "api_token": "keep-me"})
+    db.add(addon)
+    db.commit()
+    svc.update_source_config(db, world["addon"], world["open"], [
+        {"group": "config", "name": "api_token", "value": MASKED_VALUE},
+        {"group": "config", "name": "url", "value": "http://b"},
+    ])
+    db.refresh(addon)
+    assert addon.config["api_token"] == "keep-me" and addon.config["url"] == "http://b"

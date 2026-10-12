@@ -2147,11 +2147,17 @@ def update_source_config(
             raise ValueError(
                 f"이 클러스터에 `{item.source_ref}` 애드온이 등록돼 있지 않습니다."
             )
+        from app.services.check_matrix_runbook import MASKED_VALUE, is_secret_key
+
         config = dict(addon.config or {})
         for e in entries:
             if e["group"] != "config":
                 raise ValueError(f"애드온은 config 그룹만 수정할 수 있습니다: {e['group']}")
             name, raw = e["name"], (e.get("value") or "").strip()
+            # 런북은 비밀값을 ******** 로 가려 보낸다 — 그대로 돌아오면 "바꾸지 않음" 이다
+            # (가린 문자열로 실제 토큰을 덮어쓰면 안 된다).
+            if raw == MASKED_VALUE and is_secret_key(name) and name in config:
+                continue
             if raw == "":
                 config.pop(name, None)
                 continue

@@ -220,38 +220,35 @@ function SourceConfigEditor({
         {rows.map((r, i) => {
           const spec = specByKey.get(`${r.group}.${r.name}`);
           return (
-            <div key={`${r.group}.${r.name}`} className="flex items-center gap-2 min-w-0">
-              <span
-                className="text-xs font-mono text-muted-foreground w-44 flex-shrink-0 truncate"
-                title={spec ? `${spec.label}${spec.help ? ` — ${spec.help}` : ''} (${spec.type})` : r.name}
-              >
-                {r.name}
-              </span>
+            // 라벨·도움말은 툴팁이 아니라 화면에 그대로 보인다(UI-First — 무슨 값인지 운영자가 읽고 고쳐야 한다).
+            <div key={`${r.group}.${r.name}`} className="space-y-1 min-w-0">
+              <div className="flex items-baseline gap-2 min-w-0">
+                <span className="text-xs font-medium text-foreground truncate">{spec?.label ?? r.name}</span>
+                <code className="text-[11px] font-mono text-muted-foreground truncate">{r.name}</code>
+                {spec && <span className="text-[11px] text-muted-foreground flex-shrink-0">{spec.type}</span>}
+              </div>
               {spec?.type === 'boolean' ? (
                 <select
-                  value={r.value.toLowerCase() === 'true' ? 'true' : 'false'}
+                  value={r.value === '' ? '' : r.value.toLowerCase() === 'true' ? 'true' : 'false'}
                   onChange={(e) => setValue(i, e.target.value)}
-                  aria-label={r.name}
-                  className="text-xs border border-border rounded-lg px-2 py-1 bg-background"
+                  aria-label={spec?.label ?? r.name}
+                  className="text-xs border border-border rounded-xl px-2 py-1 bg-background"
                 >
-                  <option value="true">true</option>
-                  <option value="false">false</option>
+                  <option value="">(기본값)</option>
+                  <option value="true">켜기 (true)</option>
+                  <option value="false">끄기 (false)</option>
                 </select>
               ) : (
                 <input
                   type="text"
                   value={r.value}
                   onChange={(e) => setValue(i, e.target.value)}
-                  placeholder={spec ? `${spec.label} (비우면 기본값)` : '비우면 키 제거'}
-                  aria-label={r.name}
-                  className="flex-1 min-w-0 text-xs font-mono border border-border rounded-lg px-2 py-1 bg-background"
+                  placeholder={spec ? '비우면 기본값' : '비우면 키 제거'}
+                  aria-label={spec?.label ?? r.name}
+                  className="w-full min-w-0 text-xs font-mono border border-border rounded-xl px-2 py-1 bg-background"
                 />
               )}
-              {spec && (
-                <span className="text-[11px] text-muted-foreground w-24 truncate flex-shrink-0" title={spec.label}>
-                  {spec.label}
-                </span>
-              )}
+              {spec?.help && <p className="text-[11px] text-muted-foreground">{spec.help}</p>}
             </div>
           );
         })}
@@ -266,7 +263,8 @@ function SourceConfigEditor({
             value={newKey}
             onChange={(e) => setNewKey(e.target.value)}
             placeholder="새 config 키 (예: url)"
-            className="text-xs font-mono border border-border rounded-lg px-2 py-1 bg-background w-44"
+            aria-label="새 config 키 이름"
+            className="text-xs font-mono border border-border rounded-xl px-2 py-1 bg-background w-44"
           />
           <button
             onClick={() => {
@@ -275,7 +273,7 @@ function SourceConfigEditor({
               setRows((cur) => [...cur, { group: 'config', name: k, value: '' }]);
               setNewKey('');
             }}
-            className="inline-flex items-center gap-1 px-2 py-1 text-xs rounded-lg border border-border hover:bg-secondary"
+            className="inline-flex items-center gap-1 px-2 py-1 text-xs rounded-xl border border-border hover:bg-secondary"
           >
             <Plus className="w-3 h-3" /> 키 추가
           </button>
@@ -284,14 +282,14 @@ function SourceConfigEditor({
       <div className="flex justify-end gap-1.5">
         <button
           onClick={onDone}
-          className="inline-flex items-center gap-1 px-2.5 py-1 text-xs rounded-lg border border-border hover:bg-secondary"
+          className="inline-flex items-center gap-1 px-2.5 py-1 text-xs rounded-xl border border-border hover:bg-secondary"
         >
           <X className="w-3 h-3" /> 취소
         </button>
         <button
           onClick={handleSave}
           disabled={saveMut.isPending}
-          className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 disabled:opacity-50"
+          className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold bg-primary text-primary-foreground rounded-xl hover:bg-primary/90 disabled:opacity-50"
         >
           <Save className="w-3 h-3" /> 저장
         </button>
@@ -310,7 +308,8 @@ export function CheckMatrixRunbookPanel({ runbook, isLoading, editTarget, latest
   const [editing, setEditing] = useState(false);
   const [showSshCollect, setShowSshCollect] = useState(false);
   // D-082 — 설정 편집은 operator 이상만. viewer 에겐 비활성 + 사유. (early return 위에서 호출)
-  const { canOperate, withHint } = useCanOperate();
+  // 테넌트 바인딩까지 본다 — 읽기 전용 바인딩 클러스터에서 편집 버튼이 눌린 뒤 403 이 나지 않게.
+  const { canOperate, withHint } = useCanOperate(runbook?.clusterId);
   if (isLoading) {
     return <div className="py-8 text-center text-sm text-muted-foreground">실행 계획 불러오는 중…</div>;
   }
@@ -356,7 +355,7 @@ export function CheckMatrixRunbookPanel({ runbook, isLoading, editTarget, latest
               {latestRun.status && <StatusBadge variant={latestRun.status} size="sm" />}
             </div>
             {running && (
-              <p className="text-[11px] text-status-warning">
+              <p className="text-[11px] text-status-info">
                 진행 중입니다 — 아래 실행 단계가 진행 상황에 따라 실시간으로 색칠됩니다.
               </p>
             )}
@@ -368,7 +367,7 @@ export function CheckMatrixRunbookPanel({ runbook, isLoading, editTarget, latest
           </section>
         ) : (
           <section className="rounded-md border border-dashed border-border p-3 flex items-center">
-            <p className="text-xs text-muted-foreground italic">아직 수행 기록이 없습니다 — 위 "지금 실행"으로 돌려보세요.</p>
+            <p className="text-xs text-muted-foreground italic">아직 실행 기록이 없습니다 — 위 "지금 실행"으로 돌려보세요.</p>
           </section>
         )}
       </div>
@@ -384,7 +383,9 @@ export function CheckMatrixRunbookPanel({ runbook, isLoading, editTarget, latest
             </span>
             <button
               onClick={() => setShowSshCollect(true)}
-              className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium rounded-lg border border-status-warning/50 bg-card hover:bg-secondary flex-shrink-0"
+              disabled={!canOperate}
+              title={withHint(SSH_COLLECT_ACTIONS[runbook.sourceRef].label)}
+              className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium rounded-xl border border-status-warning/50 bg-card hover:bg-secondary flex-shrink-0 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <ShieldCheck className="w-3.5 h-3.5" /> {SSH_COLLECT_ACTIONS[runbook.sourceRef].label}
             </button>
@@ -433,7 +434,7 @@ export function CheckMatrixRunbookPanel({ runbook, isLoading, editTarget, latest
                 <button
                   onClick={() => setEditing(true)}
                   disabled={!canOperate}
-                  className="inline-flex items-center gap-1 px-2 py-1 text-xs rounded-lg border border-border hover:bg-secondary text-muted-foreground disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="inline-flex items-center gap-1 px-2 py-1 text-xs rounded-xl border border-border hover:bg-secondary text-muted-foreground disabled:opacity-50 disabled:cursor-not-allowed"
                   title={withHint('이 점검의 임계값/파라미터를 여기서 바로 수정')}
                   aria-label={withHint('소스 설정 편집')}
                 >

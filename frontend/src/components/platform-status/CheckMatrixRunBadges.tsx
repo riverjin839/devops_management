@@ -7,7 +7,7 @@ import type { CheckMatrixRunState, CheckMatrixTrigger } from '@/types';
 
 export const STATE_META: Record<CheckMatrixRunState, { label: string; cls: string; icon: typeof Check }> = {
   queued: { label: '대기열', cls: 'text-muted-foreground border-border', icon: Clock },
-  running: { label: '실행 중', cls: 'text-status-warning border-status-warning/50', icon: Loader2 },
+  running: { label: '실행 중', cls: 'text-status-info border-status-info/50', icon: Loader2 },
   success: { label: '완료', cls: 'text-status-healthy border-status-healthy/50', icon: Check },
   failed: { label: '실패', cls: 'text-status-critical border-status-critical/50', icon: X },
   skipped: { label: '건너뜀', cls: 'text-muted-foreground border-border', icon: SkipForward },

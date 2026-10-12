@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import {
-  ChevronRight, Terminal, User, CalendarClock, AlertTriangle,
+  ChevronRight, Terminal, User, CalendarClock, AlertTriangle, Loader2,
 } from 'lucide-react';
 import { LogViewer, StatusBadge, Skeleton } from '@/components/common';
 import { ExecutionStepsTimeline } from '@/components/daily-check/ExecutionStepsTimeline';
@@ -66,7 +66,7 @@ export function CheckMatrixRunList({
   filter, live, showCell = false, selectedId, onSelect, emptyText = '수행 기록이 없습니다.',
 }: {
   filter: CheckMatrixRunFilter;
-  live?: boolean;
+  live?: boolean | number;
   showCell?: boolean;
   selectedId?: string | null;
   onSelect: (runId: string) => void;
@@ -190,6 +190,8 @@ export function CheckMatrixRunDetailView({ runId }: { runId: string }) {
 
   const rawKeys = Object.keys(run.details ?? {});
   const needsExplanation = run.status === 'warning' || run.status === 'critical' || run.runState === 'failed';
+  const live = run.runState === 'queued' || run.runState === 'running';
+  const logText = (run.logLines ?? []).join('\n');
 
   return (
     <div className="space-y-4">
@@ -235,6 +237,25 @@ export function CheckMatrixRunDetailView({ runId }: { runId: string }) {
             {run.message && <p className="text-sm">{run.message}</p>}
             {run.error && <p className="text-sm text-status-critical break-all">{run.error}</p>}
           </>
+        )}
+      </section>
+
+      <section aria-live="polite">
+        <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2 inline-flex items-center gap-1.5">
+          실행 로그
+          {live && (
+            <span className="inline-flex items-center gap-1 normal-case tracking-normal font-normal text-status-info">
+              <Loader2 className="w-3 h-3 animate-spin" aria-hidden="true" />
+              {run.runState === 'queued' ? '대기 중 — 워커가 집으면 바로 시작합니다' : '실행 중 — 2초마다 갱신'}
+            </span>
+          )}
+        </h3>
+        {logText ? (
+          <LogViewer text={logText} maxHeight="max-h-72" />
+        ) : (
+          <p className="text-xs text-muted-foreground italic">
+            이 수행에는 진행 로그가 없습니다(이전 버전에서 실행된 기록) — 아래 단계·명령 기록을 확인하세요.
+          </p>
         )}
       </section>
 

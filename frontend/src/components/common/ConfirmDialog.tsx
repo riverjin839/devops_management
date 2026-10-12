@@ -1,4 +1,4 @@
-import { useEffect, useId } from 'react';
+import { useCallback, useEffect, useId, useRef } from 'react';
 import { AlertTriangle, X } from 'lucide-react';
 import { useModalA11y } from './useModalA11y';
 
@@ -12,6 +12,8 @@ interface ConfirmDialogProps {
   onConfirm: () => void;
   onCancel: () => void;
   children?: React.ReactNode;  // 추가 상세 (실행 대상 요약 등)
+  /** true = 확인 처리 중 — 버튼을 잠가 연타·Enter 로 같은 작업이 두 번 나가지 않게 한다. */
+  busy?: boolean;
 }
 
 /** 중요 액션(ssh/etcdctl 실행 등) 실행 전에 확인을 받는 모달.
@@ -19,21 +21,38 @@ interface ConfirmDialogProps {
  */
 export function ConfirmDialog({
   open, title, description, confirmLabel = '실행', cancelLabel = '취소',
-  danger = false, onConfirm, onCancel, children,
+  danger = false, onConfirm, onCancel, children, busy = false,
 }: ConfirmDialogProps) {
   const dialogRef = useModalA11y(open, onCancel);
   const titleId = useId();
   const descId = useId();
 
+  // 확인은 짧은 시간 안에 한 번만 — 예전엔 확인 버튼에 autoFocus 가 있는 상태에서 Enter 를 누르면
+  // 창 전체 keydown 핸들러와 버튼의 기본 click 이 함께 발화해 onConfirm 이 두 번 불렸다
+  // (운영 클러스터에 일괄 실행이 두 번 나감). 버튼 위 Enter 는 브라우저 click 에 맡기고,
+  // 그래도 겹치는 호출은 시간 창으로 한 번 더 걸러낸다.
+  const lastFiredAt = useRef(0);
+  const fire = useCallback(() => {
+    if (busy) return;
+    const now = Date.now();
+    if (now - lastFiredAt.current < 800) return;
+    lastFiredAt.current = now;
+    onConfirm();
+  }, [busy, onConfirm]);
+
   // Enter = 확인 (Escape/포커스 트랩은 useModalA11y)
   useEffect(() => {
     if (!open) return;
     const handler = (e: KeyboardEvent) => {
-      if (e.key === 'Enter') onConfirm();
+      if (e.key !== 'Enter' || e.isComposing) return;
+      const t = e.target as HTMLElement | null;
+      if (t && (t.tagName === 'BUTTON' || t.tagName === 'TEXTAREA' || t.tagName === 'A')) return;
+      e.preventDefault();
+      fire();
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
-  }, [open, onConfirm]);
+  }, [open, fire]);
 
   if (!open) return null;
 
@@ -80,15 +99,17 @@ export function ConfirmDialog({
             {cancelLabel}
           </button>
           <button
-            onClick={onConfirm}
+            onClick={fire}
             autoFocus
-            className={`px-4 py-1.5 text-sm font-semibold rounded-xl text-primary-foreground ${
+            disabled={busy}
+            aria-busy={busy || undefined}
+            className={`px-4 py-1.5 text-sm font-semibold rounded-xl text-primary-foreground disabled:opacity-60 disabled:cursor-wait ${
               danger
                 ? 'bg-status-critical hover:bg-status-critical/90'
                 : 'bg-primary hover:bg-primary/90'
             }`}
           >
-            {confirmLabel}
+            {busy ? '처리 중…' : confirmLabel}
           </button>
         </div>
       </div>
