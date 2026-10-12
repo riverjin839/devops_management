@@ -5325,11 +5325,13 @@ export interface HomePrefs {
   pinnedPaths: string[];
   /** R-6 i18n 2단계 — 표시 언어(서버 저장, 기기/브라우저를 넘어 따라온다). */
   locale?: 'ko' | 'en' | null;
-  /** 사이드바 "SaaS 앱" 개편 — 사용자가 설치(opt-in)한 플랫폼 그룹 id(GroupId) + "back". */
+  /** 사이드바/상단바 "SaaS 앱" — 사용자가 설치(opt-in)한 leaf 경로 + "back"/"favorites"/"island". */
   installedApps: string[];
+  /** 서버 관리 레이아웃 버전(읽기 전용) — 부팅 이관 대상 판정용. 0 = 이관 전 행. */
+  readonly layoutVersion?: number;
 }
 
-export type HomePrefsUpdate = Partial<HomePrefs>;
+export type HomePrefsUpdate = Partial<Omit<HomePrefs, 'layoutVersion'>>;
 
 // ── K8S 접근 권한 (RBAC) — /k8s-rbac ────────────────────────────────────────
 // 개발자가 자기 LOCAL kubectl 로 클러스터에 붙어 배포·로그 조회를 하려면

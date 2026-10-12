@@ -18,10 +18,20 @@ router = APIRouter(prefix="/me", tags=["home-prefs"])
 PREFS_KEY = "home_prefs"
 
 
+def _load_prefs(raw) -> HomePrefs:
+    if not isinstance(raw, dict):
+        return HomePrefs()
+    prefs = HomePrefs.model_validate(raw)
+    # 버전 표식 없는 기존 행은 아직 부팅 이관(`_migrate_home_prefs_layout`) 전일 수 있다 — 여기서
+    # 최신 버전을 찍어 저장하면 옛 그룹 id 가 변환 없이 "최신"으로 굳으므로 0 으로 유지한다.
+    if "layout_version" not in raw:
+        prefs.layout_version = 0
+    return prefs
+
+
 @router.get("/home-prefs", response_model=HomePrefs)
 def get_home_prefs(db: Session = Depends(get_db), user: User = Depends(get_current_user)):
-    raw = get_user_setting(db, user.id, PREFS_KEY, None)
-    return HomePrefs.model_validate(raw) if isinstance(raw, dict) else HomePrefs()
+    return _load_prefs(get_user_setting(db, user.id, PREFS_KEY, None))
 
 
 @router.put("/home-prefs", response_model=HomePrefs)
@@ -30,8 +40,7 @@ def update_home_prefs(
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
-    raw = get_user_setting(db, user.id, PREFS_KEY, None)
-    current = HomePrefs.model_validate(raw) if isinstance(raw, dict) else HomePrefs()
+    current = _load_prefs(get_user_setting(db, user.id, PREFS_KEY, None))
     updated = current.model_copy(update=payload.model_dump(exclude_unset=True))
     set_user_setting(db, user.id, PREFS_KEY, updated.model_dump())
     return updated

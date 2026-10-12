@@ -776,29 +776,24 @@ PEP 는 운영자용 내부 콘솔이라 모바일 전용 레이아웃을 만들
   항목이 됐다 — 설치해야만 보인다. 둘 다 leaf 페이지가 아니라 자체 flyout(즐겨찾기 목록 / 내
   아일랜드 선택)을 열므로, `Sidebar.tsx`/`AppTopBar.tsx` 렌더 쪽에서 `appId === 'favorites' |
   'island'` 특수 분기로 처리한다(직행 링크가 아님).
-- **기존 계정 이관 — 3단계**: 이 기능이 생기기 전부터 있던 계정이 갑자기 빈 화면을 보면 안
-  되므로, `backend/app/main.py` 에 순서가 고정된 세 마이그레이션이 있다(`_seed_initial_admin`
-  보다 반드시 먼저 실행 — 안 그러면 막 생긴 부트스트랩 admin 이 "기존 사용자"로 오인된다).
-  1. `_backfill_installed_sidebar_apps()`(1단계, sentinel `installed_sidebar_apps_backfilled_v1`)
-     — 그룹 단위 개편 당시 전체 그룹 id(`cluster`/`server`/.../`system`/`back`)로 이관.
-  2. `_migrate_installed_apps_to_leaf_paths()`(2단계, sentinel `installed_apps_leaf_migration_v2`)
-     — 1단계가 넣어준 그룹 id(더 이상 `INSTALLABLE_APPS` 에 없어 방치하면 조용히 사라짐)를 그
-     그룹의 leaf 목록으로 치환하고, 상단바 업무 도메인(업무 관리·문서 관리 leaf + 즐겨찾기 +
-     Your Island, 전부 예전엔 상시노출)을 이 마이그레이션 시점 존재하던 모든 계정에
-     grandfather 로 추가한다.
-  3. `_prune_topbar_apps_to_default()`(3단계, sentinel `installed_apps_topbar_default_v3`) —
-     사용자 요청("업무 관리만 기본으로 나오게, 나머지는 개인별 add-on")에 따라 2단계가 채운
-     상단바 grandfather 결과에서 `/tasks-mgmt`("업무 관리") 하나만 남기고 나머지(업무 관리
-     그룹의 다른 leaf·문서 관리 그룹 전체·즐겨찾기·Your Island)를 다시 제거한다. 사이드바
-     설치 항목은 건드리지 않는다. v1/v2 와 달리 **뺄셈** 마이그레이션이라, 이 마이그레이션이
-     실행되는 시점에 사용자가 이미 직접 추가해 둔 항목까지 구분 없이 함께 제거된다(1회성
-     트레이드오프로 감수 — `+` 로 언제든 재설치 가능).
+- **기존 계정 이관 — 행 단위 버전(`layout_version`)**: 이 기능이 생기기 전부터 있던 계정이 갑자기
+  빈 화면을 보면 안 되므로 `backend/app/main.py::_migrate_home_prefs_layout()` 가 부팅마다 돈다.
+  예전엔 1단계(그룹 단위 백필)·2단계(leaf 치환 + 업무 도메인 grandfather)·3단계(상단바를
+  `/tasks-mgmt` 하나로 정리)가 `app_settings` 전역 sentinel 로 1회 실행을 보장했지만, sentinel 만
+  사라지면(운영 DB 를 가리킨 pytest cleanup, 구 백업 복원 등) 배포 때마다 다시 돌아 개인화 안 한
+  계정엔 앱 42개가 전부 설치되고 개인화한 계정은 고른 상단바 항목이 지워졌다. 그래서 계약을 바꿨다:
+  1. 버전 표식은 **행 자체**(`home_prefs.layout_version`, `schemas/home_prefs.py::HOME_PREFS_LAYOUT_VERSION`)에
+     둔다 — 데이터와 함께 백업·복원되고, 최신 버전 행은 다시 건드리지 않는다.
+  2. 버전 없는 행은 **모양으로만** 판정한다 — `installed_apps` 키 없음(1단계 이전) → 당시 사이드바 전체,
+     옛 그룹 id 포함(2단계 이전) → leaf 로 펼치고 `/tasks-mgmt` 보장. 이미 leaf 모양이면 목록은 그대로,
+     버전만 찍는다. **사용자가 고른 항목을 빼는 이관은 금지**다.
+  3. home_prefs 행이 없는 계정은 만들지 않는다(API 기본값 `["/tasks-mgmt"]`) — 부트스트랩 admin 과의
+     실행 순서 제약도 없다.
+  4. PUT 은 버전 없는 기존 행에 최신 버전을 몰래 찍지 않는다(라우터 `_load_prefs` — 0 유지).
 
-  세 마이그레이션이 전부 실행된 뒤 새로 생성되는 계정만 `HomePrefs` 기본값(`["/tasks-mgmt"]`)이
-  적용돼 사이드바는 빈 레일, 상단바는 "업무 관리" 하나로 시작한다. 그룹/leaf 매핑표는 프론트
-  `navConfig.ts` 의 `GROUPS.paths` 와 반드시 일치해야 한다(`_migrate_installed_apps_to_leaf_paths()`
-  의 `LEGACY_GROUP_LEAF_PATHS`, `_prune_topbar_apps_to_default()` 의 `TOPBAR_ITEMS_TO_PRUNE`
-  주석 참고) — 그룹이 바뀌면 백엔드 상수도 같이 갱신할 것.
+  레이아웃을 다시 바꿔야 하면 `HOME_PREFS_LAYOUT_VERSION` 을 올리고 `_migrate_home_prefs_layout()` 에
+  "이전 버전 행 → 새 모양" 변환을 **추가 전용**으로 넣는다. 옛 그룹 → leaf 매핑표(`LEGACY_GROUP_LEAF_PATHS`)는
+  옛 저장값 치환용 스냅샷이라 이후 `navConfig.ts` GROUPS 재편을 따라 바꾸지 않는다.
 - **재사용 시 주의**: 카탈로그 항목 순서 재배열(드래그 앤 드롭)은 아직 지원하지 않는다 — 순서는
   설치한 순서 그대로다. 재정렬이 필요해지면 `pinnedPaths`(즐겨찾기)가 이미 쓰는 순서 보존 배열
   패턴을 참고할 것.

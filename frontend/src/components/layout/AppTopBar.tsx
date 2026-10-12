@@ -33,8 +33,8 @@ function islandFlyoutIcon(icon?: string | null) {
  *
  * 예전엔 "협업"/"문서 관리" 그룹 전체와 즐겨찾기가 항상 떠 있었다. 사용자 요청("업무 관리로
  * 개명 + 문서관리·즐겨찾기·아일랜드도 개인이 추가하는 방식으로")에 따라 사이드바와 같은
- * opt-in leaf 카탈로그로 바꿨다 — 기본은 빈 목록 + "+" 버튼뿐이고, 기존 계정은 1회 이관으로
- * 이전과 동일한 항목이 채워진다(main.py::_backfill_installed_sidebar_apps).
+ * opt-in leaf 카탈로그로 바꿨다 — 기본은 `/tasks-mgmt` + "+" 버튼이고, 옛 레이아웃 계정은
+ * 행 단위 버전 이관으로 변환된다(main.py::_migrate_home_prefs_layout).
  */
 export function AppTopBar() {
   const location = useLocation();
@@ -54,6 +54,9 @@ export function AppTopBar() {
   );
   const [catalogOpen, setCatalogOpen] = useState(false);
   const toggleInstalledApp = (id: string) => {
+    // 설정을 아직 못 받았거나(로딩·오류) 빈 [] 폴백 상태에서 토글하면 [id] 하나로 서버 목록
+    // 전체를 덮어쓴다 — 로드된 원본이 있을 때만 저장한다.
+    if (!homePrefs) return;
     const next = installedApps.includes(id) ? installedApps.filter((x) => x !== id) : [...installedApps, id];
     updateHomePrefs.mutate({ installedApps: next });
   };

@@ -3,6 +3,9 @@ from typing import Literal, Optional
 from pydantic import BaseModel, Field
 
 MAX_PINNED_PATHS = 30
+# installed_apps 레이아웃 스키마 버전 — `main.py::_migrate_home_prefs_layout()` 가 이 값보다 낮은
+# (또는 표식이 없는) 행만 이관한다. 표식이 행 자체에 있어 백업·복원과 함께 움직인다.
+HOME_PREFS_LAYOUT_VERSION = 3
 
 
 class HomePrefs(BaseModel):
@@ -18,11 +21,12 @@ class HomePrefs(BaseModel):
     # 완전히 빈 리스트가 기본값이라 신규 계정은 빈 레일로 시작한다. 상단바(work 도메인)만
     # 예외로 `/tasks-mgmt`("업무 관리") 하나를 기본 설치 상태로 시작한다 — 사용자 요청
     # ("업무 관리만 기본으로 나오게, 나머지는 개인별 add-on") — 나머지 업무 관리 leaf·문서
-    # 관리 leaf·즐겨찾기·Your Island 는 전부 `+` 로 개인이 추가해야 보인다. 이 필드가 생기기
-    # 전 기존 계정은 `_backfill_installed_sidebar_apps()`(1단계, 그룹 단위) →
-    # `_migrate_installed_apps_to_leaf_paths()`(2단계, leaf 치환) →
-    # `_prune_topbar_apps_to_default()`(3단계, 상단바를 `/tasks-mgmt` 하나로 정리)를 거친다.
+    # 관리 leaf·즐겨찾기·Your Island 는 전부 `+` 로 개인이 추가해야 보인다. 옛 레이아웃으로
+    # 저장된 행은 부팅 시 `_migrate_home_prefs_layout()` 가 행 단위로 한 번만 변환한다.
     installed_apps: list[str] = Field(default_factory=lambda: ["/tasks-mgmt"])
+    # 서버 관리 필드 — 클라이언트가 바꿀 수 없다(HomePrefsUpdate 에 없음). PUT 으로 저장되는
+    # 순간 최신 버전이 찍혀 이후 부팅 이관 대상에서 영구히 빠진다.
+    layout_version: int = HOME_PREFS_LAYOUT_VERSION
 
 
 class HomePrefsUpdate(BaseModel):

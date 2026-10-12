@@ -215,6 +215,9 @@ export function Sidebar() {
   );
   const [catalogOpen, setCatalogOpen] = useState(false);
   const toggleInstalledApp = (id: string) => {
+    // 설정을 아직 못 받았거나(로딩·오류) 빈 [] 폴백 상태에서 토글하면 [id] 하나로 서버 목록
+    // 전체를 덮어쓴다 — 로드된 원본이 있을 때만 저장한다.
+    if (!homePrefs) return;
     const next = installedApps.includes(id) ? installedApps.filter((x) => x !== id) : [...installedApps, id];
     updateHomePrefs.mutate({ installedApps: next });
   };
