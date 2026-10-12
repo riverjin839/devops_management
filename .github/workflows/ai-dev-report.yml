@@ -1,0 +1,81 @@
+name: AI Dev Report (monthly refresh)
+
+# AI 개발 리포트(docs/reports/ai-dev-report.html)를 매월 git 이력으로 다시 집계해 갱신 PR 을 연다.
+#   collect_ai_dev_metrics.py  → git 이력만 읽어 data.json 생성 (커밋·PR·월말 스냅샷·태그·하네스)
+#   build_ai_dev_report_html.py → data.json + ai_dev_report_narrative.json + PEP 테마 토큰 → 단일 HTML
+# 문구·상용화 진척도·모델 세대 구간 같은 "판단 값"은 scripts/report/ai_dev_report_narrative.json 을
+# 사람이 고친다 — 이 워크플로는 숫자만 갱신한다.
+#
+# PR 제목은 chore(report) — decide_bump.py 가 릴리스 대상에서 제외한다(매월 PATCH 버전업 방지).
+#
+# ⚠️ auto-release.yml 과 같은 제약: 기본 GITHUB_TOKEN 으로 PR 을 만들려면 repo Settings ▸ Actions ▸
+# General ▸ "Allow GitHub Actions to create and approve pull requests" 가 켜져 있어야 한다.
+# 또 GITHUB_TOKEN 이 만든 PR 에는 CI 가 자동으로 돌지 않는다 — RELEASE_PAT 가 있으면 그것을 써서
+# 두 제약을 모두 피한다.
+
+on:
+  schedule:
+    - cron: '7 0 1 * *'   # 매월 1일 00:07 UTC (09:07 KST)
+  workflow_dispatch:
+
+concurrency:
+  group: ai-dev-report
+  cancel-in-progress: false
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - name: Checkout (full history + tags)
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.RELEASE_PAT || github.token }}
+
+      - name: Fetch tags
+        run: git fetch --tags --force origin
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Collect metrics and build HTML
+        run: |
+          set -euo pipefail
+          python3 -I scripts/report/collect_ai_dev_metrics.py "$GITHUB_WORKSPACE" "$RUNNER_TEMP/ai-dev-data.json" HEAD
+          python3 -I scripts/report/build_ai_dev_report_html.py "$GITHUB_WORKSPACE" "$RUNNER_TEMP/ai-dev-data.json" docs/reports/ai-dev-report.html
+
+      - name: Open refresh PR
+        env:
+          GH_TOKEN: ${{ secrets.RELEASE_PAT || github.token }}
+        run: |
+          set -euo pipefail
+          if git diff --quiet -- docs/reports/ai-dev-report.html; then
+            echo "리포트 변경 없음 — PR 생략"
+            exit 0
+          fi
+          MONTH="$(date -u +%Y-%m)"
+          BRANCH="chore/ai-dev-report-${MONTH}"
+          TITLE="chore(report): AI 개발 리포트 월간 갱신 (${MONTH})"
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git push origin --delete "${BRANCH}" 2>/dev/null || true
+          git checkout -b "${BRANCH}"
+          git add docs/reports/ai-dev-report.html
+          git commit -m "${TITLE}"
+          git push -u origin "${BRANCH}"
+          gh pr create --base main --head "${BRANCH}" --title "${TITLE}" --body "$(cat <<BODY
+          ## Summary
+          - \`ai-dev-report.yml\` 월간 실행으로 AI 개발 리포트 수치를 ${MONTH} 기준으로 다시 집계했다.
+
+          ## Changes
+          - docs: \`docs/reports/ai-dev-report.html\` 재생성 (git 이력 집계값만 변경, 문구·판단 값은 그대로)
+
+          ## Test plan
+          - [ ] 브라우저로 열어 기간 필터·드릴다운이 동작하는지 확인
+          - [ ] 판단 값(상용화 진척도·세대 구간)을 갱신해야 하면 \`scripts/report/ai_dev_report_narrative.json\` 을 이 PR 에 추가 커밋
+          BODY
+          )"

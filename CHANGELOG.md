@@ -18,6 +18,14 @@
   접근 제어 탭에 "설치는 메뉴 표시일 뿐 권한이 아니다"라는 안내를 추가했고, `installed_apps` 가 접근 제어가 아님을
   `DESIGN_SYSTEM.md`·`docs/SCREENS.md` 에 명시했다. Frontend: `installableApps.ts` `filterSectionsByAccess`.
 
+### Added
+- **AI 개발 리포트 (HTML) 월간 자동 갱신**: AI 와 함께 개발한 과정·결과 리포트를 HTML 로 제공한다. 기간 필터,
+  월 막대 클릭 시 PR 목록 드릴다운, 모델 세대 구간 조정, 상용화 진척도 가정 조정, PEP 테마 16종 전환, 발표 모드,
+  A4 인쇄를 지원한다. 매월 1일 GitHub Actions 가 git 이력으로 수치를 다시 집계해 갱신 PR 을 연다(`chore(report)`
+  — 릴리스 대상 제외). 산출물: `docs/reports/ai-dev-report.html`. 스크립트: `scripts/report/`
+  (`collect_ai_dev_metrics.py` → `build_ai_dev_report_html.py`, 판단 값은 `ai_dev_report_narrative.json`).
+  워크플로: `.github/workflows/ai-dev-report.yml`.
+
 ## [1.46.0] - 2026-10-08
 
 ### Added
