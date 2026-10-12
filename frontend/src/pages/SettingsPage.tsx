@@ -13,6 +13,7 @@ import { OperationLevelsManager } from '@/components/settings/OperationLevelsMan
 import { LakeServiceTypeManager } from '@/components/settings/LakeServiceTypeManager';
 import { ServiceCategoryManager } from '@/components/settings/ServiceCategoryManager';
 import { NavMenuManager } from '@/components/settings/NavMenuManager';
+import { DefaultAppsManager } from '@/components/settings/DefaultAppsManager';
 import { PageStyleManager } from '@/components/settings/PageStyleManager';
 import { ThemeGallery } from '@/components/settings/ThemeGallery';
 import { TerminalAppearanceSettings } from '@/components/settings/TerminalAppearanceSettings';
@@ -823,6 +824,9 @@ export function SettingsPage() {
 
           {/* 메뉴 이름 편집 (사이드바에서 이동) */}
           <NavMenuManager />
+
+          {/* 사이드바·상단바 조직 기본 앱 구성 — 개인화 안 한 계정에 적용 */}
+          <DefaultAppsManager />
 
           {/* 페이지별 화면 스타일 — 폰트/크기/글자색/배경색 */}
           <PageStyleManager />

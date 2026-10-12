@@ -2036,6 +2036,7 @@ def _migrate_home_prefs_layout():
     db = SessionLocal()
     try:
         upgraded = stamped = 0
+        changes: list[tuple[str, list, list]] = []  # (user_id, before, after) — 감사 기록용
         for row in db.query(UserSetting).filter(UserSetting.key == "home_prefs").all():
             value = row.value if isinstance(row.value, dict) else {}
             version = value.get("layout_version")
@@ -2057,6 +2058,7 @@ def _migrate_home_prefs_layout():
                 if TOPBAR_DEFAULT not in expanded:
                     expanded.append(TOPBAR_DEFAULT)
                 row.value = {**value, "installed_apps": expanded, "layout_version": HOME_PREFS_LAYOUT_VERSION}
+                changes.append((row.user_id, list(value.get("installed_apps") or []), expanded))
                 upgraded += 1
             else:
                 row.value = {**value, "installed_apps": current, "layout_version": HOME_PREFS_LAYOUT_VERSION}
@@ -2066,6 +2068,24 @@ def _migrate_home_prefs_layout():
             _log.info(
                 "home_prefs layout v%d: upgraded %d legacy row(s), stamped %d current row(s) unchanged",
                 HOME_PREFS_LAYOUT_VERSION, upgraded, stamped,
+            )
+        # 목록을 실제로 바꾼 행만 감사 로그에 남긴다 — "왜 내 메뉴가 바뀌었나" 문의의 근거.
+        # 버전만 찍은 행은 사용자에게 보이는 변화가 없어 기록하지 않는다.
+        from app.services import audit_logger
+
+        for user_id, before, after in changes:
+            audit_logger.record(
+                db,
+                action="home_prefs.layout_migrate",
+                actor_username="system",
+                target_type="user",
+                target_id=user_id,
+                details={
+                    "layout_version": HOME_PREFS_LAYOUT_VERSION,
+                    "before": before,
+                    "added": [a for a in after if a not in before],
+                    "removed": [a for a in before if a not in after],
+                },
             )
     finally:
         db.close()

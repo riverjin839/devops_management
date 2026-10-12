@@ -107,6 +107,18 @@ def test_legacy_group_ids_expand_to_leaves(db, cleanup):
     assert value["installed_apps"] == ["/mc", "/isilon-nfs", "back", "/tasks-mgmt"]
     assert value["layout_version"] == HOME_PREFS_LAYOUT_VERSION
 
+    # 목록을 바꾼 이관은 감사 로그에 남는다(버전만 찍은 행은 남기지 않는다).
+    from app.models.audit_log import AuditLog
+
+    log = (
+        db.query(AuditLog)
+        .filter(AuditLog.action == "home_prefs.layout_migrate", AuditLog.target_id == u.id)
+        .first()
+    )
+    assert log is not None and log.actor_username == "system"
+    assert log.details["added"] == ["/mc", "/isilon-nfs", "/tasks-mgmt"]
+    assert log.details["removed"] == ["storage"]
+
 
 def test_pre_v1_row_without_key_gets_legacy_full_sidebar(db, cleanup):
     from app.services.user_settings import set_user_setting

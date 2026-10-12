@@ -794,6 +794,12 @@ PEP 는 운영자용 내부 콘솔이라 모바일 전용 레이아웃을 만들
   레이아웃을 다시 바꿔야 하면 `HOME_PREFS_LAYOUT_VERSION` 을 올리고 `_migrate_home_prefs_layout()` 에
   "이전 버전 행 → 새 모양" 변환을 **추가 전용**으로 넣는다. 옛 그룹 → leaf 매핑표(`LEGACY_GROUP_LEAF_PATHS`)는
   옛 저장값 치환용 스냅샷이라 이후 `navConfig.ts` GROUPS 재편을 따라 바꾸지 않는다.
+- **조직 기본값 / 사용자 지정 / 초기화**: `home_prefs.installed_apps` 가 `null` 이면 조직 기본값
+  (`app_settings.home_prefs_defaults`, Settings → 화면 UI 설정 → `DefaultAppsManager`)을 따르고, 응답의
+  `installedAppsCustomized` 가 false 다. 앱을 하나라도 추가·제거하는 순간 그때의 실효 목록으로 고정되고,
+  `AddAppDialog` 하단 "기본값으로 초기화"(두 번 눌러 확인)로 다시 기본값을 따른다. 화면은 설치 목록을
+  **통째로 보내지 않고** 델타(`installedAppsAdd`/`installedAppsRemove`)만 보낸다 — 서버가 행 잠금 아래에서
+  합쳐 다른 기기·탭의 변경을 덮지 않는다. 설정을 아직 못 받은 상태(`homePrefs` undefined)에서는 토글을 막는다.
 - **재사용 시 주의**: 카탈로그 항목 순서 재배열(드래그 앤 드롭)은 아직 지원하지 않는다 — 순서는
   설치한 순서 그대로다. 재정렬이 필요해지면 `pinnedPaths`(즐겨찾기)가 이미 쓰는 순서 보존 배열
   패턴을 참고할 것.

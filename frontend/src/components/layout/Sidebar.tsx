@@ -218,8 +218,12 @@ export function Sidebar() {
     // 설정을 아직 못 받았거나(로딩·오류) 빈 [] 폴백 상태에서 토글하면 [id] 하나로 서버 목록
     // 전체를 덮어쓴다 — 로드된 원본이 있을 때만 저장한다.
     if (!homePrefs) return;
-    const next = installedApps.includes(id) ? installedApps.filter((x) => x !== id) : [...installedApps, id];
-    updateHomePrefs.mutate({ installedApps: next });
+    // 델타 연산 — 서버가 행 잠금 아래에서 합쳐 다른 기기·탭의 변경을 덮지 않는다.
+    updateHomePrefs.mutate(installedApps.includes(id) ? { installedAppsRemove: [id] } : { installedAppsAdd: [id] });
+  };
+  const resetInstalledApps = () => {
+    if (!homePrefs) return;
+    updateHomePrefs.mutate({ installedAppsReset: true });
   };
 
   const { open: agentChatOpen, toggle: toggleAgentChat } = useAgentChatStore();
@@ -569,6 +573,8 @@ export function Sidebar() {
         sections={catalogSections}
         installedApps={installedApps}
         onToggle={toggleInstalledApp}
+        customized={homePrefs?.installedAppsCustomized ?? false}
+        onReset={resetInstalledApps}
       />
 
       {/* 내 정보·담당 설정 — 우측 슬라이드 SidePane. 다른 상세 편집 패널(WbsFlowPage 등)과 동일한 패턴. */}

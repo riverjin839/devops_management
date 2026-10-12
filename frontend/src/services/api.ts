@@ -2812,6 +2812,9 @@ export const homePrefsApi = {
   get: () => api.get<import('@/types').HomePrefs>('/me/home-prefs'),
   update: (data: import('@/types').HomePrefsUpdate) =>
     api.put<import('@/types').HomePrefs>('/me/home-prefs', data),
+  getDefaults: () => api.get<import('@/types').HomePrefsDefaults>('/ui-settings/home-prefs-defaults'),
+  updateDefaults: (data: import('@/types').HomePrefsDefaults) =>
+    api.put<import('@/types').HomePrefsDefaults>('/ui-settings/home-prefs-defaults', data),
 };
 
 export default api;

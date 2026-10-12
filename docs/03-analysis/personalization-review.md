@@ -24,7 +24,7 @@
 
 | 경로 | 설명 |
 |---|---|
-| **운영 DB 를 가리킨 pytest** | `tests/conftest.py` 가 `DATABASE_URL` 을 `setdefault` 로만 넣어, 이미 설정된 환경(backend 파드 `kubectl exec`, 운영 접속 정보가 env 로 있는 Jenkins 에이전트)에서는 그 DB 를 그대로 쓴다. 이관 테스트 3종의 cleanup 이 sentinel 을 **삭제**한다. `Jenkinsfile` 의 Backend Test 단계는 배포 파이프라인 안에서 돌고 실패해도 `|| echo WARNING` 으로 통과한다 — "배포할 때마다" 와 정확히 맞물린다. |
+| **운영 DB 를 가리킨 pytest** | `tests/conftest.py` 가 `DATABASE_URL` 을 `setdefault` 로만 넣어, 이미 설정된 환경(운영 DB 접속 정보가 셸 env 에 있는 개발 PC, backend 파드 `kubectl exec`)에서는 그 DB 를 그대로 쓴다. 이관 테스트 3종의 cleanup 이 sentinel 을 **삭제**한다. `Jenkinsfile` 의 Backend Test 단계도 의심했지만, `requirements.txt` 에 pytest 가 없어 그 venv 에서는 테스트가 실제로 돌지 못했을 가능성이 높다 — 실제 경로는 운영 환경 로그로 확인해야 한다. |
 | 구 백업 replace 복원 | sentinel 이 생기기 전 백업을 replace 로 복원하면 app_settings 가 통째로 교체된다. |
 | app_settings 수동 정리 | 운영자가 "쓸모없어 보이는" 키를 지우는 경우. |
 
@@ -52,29 +52,22 @@ SELECT key, created_at FROM app_settings WHERE key LIKE 'installed_%';
 | 테스트 DB 가드 | DB 이름에 `test` 가 없으면 pytest 가 수집 전에 중단한다(`PEP_TESTS_ALLOW_NON_TEST_DB=1` 로 명시적 우회). |
 | 프론트 덮어쓰기 차단 | 설정 로딩 전·오류 시 `[]` 폴백 상태에서 앱 토글하면 `[id]` 하나로 서버 목록 전체를 덮어쓰던 경로를 막았다. |
 
-## 3. 상용화 관점 남은 과제
+## 3. P1 — 후속 PR 에서 처리한 것
 
-### P1 — 데이터 무결성
+| # | 과제 | 처리 |
+|---|---|---|
+| 1 | 전체 목록 PUT → 원자적 연산 | `installed_apps_add` / `installed_apps_remove` 델타 연산 + 라우터가 `SELECT … FOR UPDATE` 행 잠금 아래에서 읽기-수정-쓰기. 첫 INSERT 경합은 유니크 위반 시 1회 재시도. 화면(사이드바·상단바)은 델타만 보낸다. |
+| 2 | Jenkins Backend Test | `TEST_DATABASE_URL` 이 있을 때만 그 DB 로 돌고(conftest 가드로 이름에 `test` 필수), 실패하면 파이프라인을 멈춘다. 미설정이면 명시적으로 SKIP. pytest 를 명시 설치한다. |
+| 3 | 사용자 삭제 시 설정 정리 | `DELETE /auth/users/{id}` 가 `user_settings` 행도 지우고 지운 개수를 감사 로그 details 에 남긴다. |
+| 4 | 이관 감사 | `_migrate_home_prefs_layout()` 가 목록을 바꾼 행마다 `home_prefs.layout_migrate`(actor `system`, before/added/removed)를 남긴다. 버전만 찍은 행은 기록하지 않는다. |
+| 5 | 기본값 따름 vs 사용자 지정 | `installed_apps: null` = 조직 기본값 따름, 리스트 = 사용자 지정. 조직 기본값은 `app_settings.home_prefs_defaults`(admin, Settings → 화면 UI 설정 → "기본 앱 구성", 변경 감사). 응답에 `installed_apps_customized` 를 실어 화면이 구분한다. |
+| 6 | 기본값으로 초기화 | "앱 추가" 창 하단 버튼(두 번 눌러 확인) → `installed_apps_reset`. |
 
-1. **전체 목록 PUT → 원자적 add/remove 연산.** 지금은 클라이언트가 계산한 배열 전체를 PUT 한다.
-   두 기기·두 탭에서 동시에 바꾸면 나중 요청이 앞 요청을 덮는다(lost update). 서버에
-   `installed_apps_add` / `installed_apps_remove` 델타 연산을 두거나, 응답에 `revision` 을 실어
-   `If-Match` 로 낙관적 잠금을 건다.
-2. **Jenkins Backend Test 단계 정리.** 실패해도 통과(`|| echo WARNING`)하고, 테스트 DB 를 명시하지 않는다.
-   `DATABASE_URL=...k8s_monitor_test` 를 명시하고 실패 시 파이프라인을 멈춘다. (이번 conftest 가드로
-   최소 방어는 됐다.)
-3. **사용자 삭제 시 user_settings 정리.** `DELETE /auth/users/{id}` 가 `user_settings` 를 지우지 않는다
-   (FK 없음 → 고아 행 누적, 같은 id 재사용 시 남의 설정 상속 가능성). 삭제 시 함께 지우거나 FK `ON DELETE CASCADE`.
-4. **이관 이력 감사.** 부팅 이관이 개인 설정을 바꾸면 `audit_logs` 에 행 수·키를 남겨, "왜 내 메뉴가
-   바뀌었나" 문의에 근거를 댈 수 있게 한다.
+기존 계정은 전부 "사용자 지정"으로 남는다 — 지금 목록이 내장 기본값과 같아도 일부러 고른 것인지
+구분할 수 없어서, 이관으로 "기본값 따름"으로 바꾸지 않았다(사용자 선택을 바꾸지 않는 원칙). 조직
+기본값을 따르게 하려면 각자 초기화하면 된다.
 
-### P1 — 기본값 정책
-
-5. **"사용자 지정" vs "기본값 따름" 구분.** 지금 기본값은 코드 상수(`["/tasks-mgmt"]`)다. 관리자가 조직
-   기본 레이아웃을 바꾸려면 배포가 필요하고, 바꿔도 이미 행이 있는 계정엔 적용되지 않는다. 상용 제품은
-   보통 `installed_apps: null` = 조직 기본값 따름, 배열 = 사용자 지정으로 구분하고, 조직 기본값은
-   `app_settings`(admin UI 편집)에서 읽는다 — UI-First 원칙과도 맞는다.
-6. **"기본값으로 초기화" 버튼.** 사용자가 스스로 레이아웃을 리셋할 수단이 없다.
+## 4. 남은 과제
 
 ### P2 — 저장 위치 일관성
 
@@ -86,8 +79,8 @@ SELECT key, created_at FROM app_settings WHERE key LIKE 'installed_%';
    현재는 전체 DB 백업뿐이다.
 9. **순서 변경(드래그 앤 드롭).** 설치 순서가 곧 표시 순서다. 재정렬 수요가 생기면 배열 순서 보존 방식을 그대로 쓴다.
 
-## 4. 앞으로 레이아웃을 바꿀 때의 규칙
+## 5. 앞으로 레이아웃을 바꿀 때의 규칙
 
 - `HOME_PREFS_LAYOUT_VERSION` 을 올리고 `_migrate_home_prefs_layout()` 에 "이전 버전 → 새 모양" 변환을 **추가 전용**으로 넣는다.
-- 사용자가 고른 항목을 빼는 이관은 쓰지 않는다. 노출을 줄여야 하면 기본값(신규·미지정 계정)만 바꾼다.
+- 사용자가 고른 항목을 빼는 이관은 쓰지 않는다. 노출을 줄여야 하면 조직 기본값(Settings → 기본 앱 구성)만 바꾼다 — 기본값을 따르는 계정에만 반영된다.
 - 개인 데이터 이관의 "실행 여부" 표식을 전역 테이블에 두지 않는다 — 표식은 그 데이터 행에 둔다.

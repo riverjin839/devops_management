@@ -1,4 +1,5 @@
-import { Check, Plus, LayoutGrid, AlertTriangle } from 'lucide-react';
+import { useState } from 'react';
+import { Check, Plus, LayoutGrid, AlertTriangle, RotateCcw } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import type { InstallableAppSection } from './installableApps';
 
@@ -10,6 +11,10 @@ interface AddAppDialogProps {
   sections: InstallableAppSection[];
   installedApps: string[];
   onToggle: (id: string) => void;
+  /** true = 사용자가 직접 고른 목록(초기화 가능), false = 조직 기본값을 따르는 중. */
+  customized?: boolean;
+  /** 사용자 지정 목록을 버리고 조직 기본값으로 돌아간다(사이드바·상단바 공용 목록 전체). */
+  onReset?: () => void;
 }
 
 /**
@@ -19,9 +24,14 @@ interface AddAppDialogProps {
  * 설치 단위는 그룹이 아니라 leaf 페이지 하나하나라, 그룹 헤더로 섹션을 나눠 스캔하기 쉽게 한다.
  * 순서는 설치한 순서 그대로 레일/상단바에 반영된다(재정렬은 아직 지원하지 않음 — 후속 과제).
  */
-export function AddAppDialog({ open, onClose, title, description, sections, installedApps, onToggle }: AddAppDialogProps) {
+export function AddAppDialog({
+  open, onClose, title, description, sections, installedApps, onToggle, customized = false, onReset,
+}: AddAppDialogProps) {
+  // 초기화는 사이드바·상단바의 개인 목록을 한 번에 버리므로 두 번 눌러 확인한다.
+  const [confirmReset, setConfirmReset] = useState(false);
+  const close = () => { setConfirmReset(false); onClose(); };
   return (
-    <Dialog open={open} onOpenChange={(next) => { if (!next) onClose(); }}>
+    <Dialog open={open} onOpenChange={(next) => { if (!next) close(); }}>
       <DialogContent className="max-w-lg">
         <DialogHeader className="flex-row items-center gap-3">
           <div className="w-10 h-10 rounded-2xl bg-primary/10 flex items-center justify-center flex-shrink-0">
@@ -82,6 +92,34 @@ export function AddAppDialog({ open, onClose, title, description, sections, inst
             </div>
           ))}
         </div>
+
+        {onReset && (
+          <div className="px-5 pb-4 -mt-1 flex items-center justify-between gap-3 border-t border-border pt-3">
+            <p className="text-[11px] text-muted-foreground">
+              {customized
+                ? '직접 고른 구성이다. 초기화하면 사이드바·상단바 모두 조직 기본 구성으로 돌아간다.'
+                : '조직 기본 구성을 따르는 중이다. 앱을 추가·제거하면 내 구성으로 고정된다.'}
+            </p>
+            {customized && (
+              <button
+                type="button"
+                onClick={() => {
+                  if (!confirmReset) { setConfirmReset(true); return; }
+                  setConfirmReset(false);
+                  onReset();
+                }}
+                className={`flex-shrink-0 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-xs transition-colors ${
+                  confirmReset
+                    ? 'border-status-warning/50 bg-status-warning/10 text-status-warning'
+                    : 'border-border text-muted-foreground hover:bg-secondary'
+                }`}
+              >
+                <RotateCcw className="w-3.5 h-3.5" aria-hidden />
+                {confirmReset ? '한 번 더 눌러 초기화' : '기본값으로 초기화'}
+              </button>
+            )}
+          </div>
+        )}
       </DialogContent>
     </Dialog>
   );
