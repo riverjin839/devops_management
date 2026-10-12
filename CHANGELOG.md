@@ -10,6 +10,14 @@
 
 1.46.0 이후 main 에 병합된 변경 (다음 릴리스 후보).
 
+### Added
+- **AI 개발 리포트 (HTML) 월간 자동 갱신**: AI 와 함께 개발한 과정·결과 리포트를 HTML 로 제공한다. 기간 필터,
+  월 막대 클릭 시 PR 목록 드릴다운, 모델 세대 구간 조정, 상용화 진척도 가정 조정, PEP 테마 16종 전환, 발표 모드,
+  A4 인쇄를 지원한다. 매월 1일 GitHub Actions 가 git 이력으로 수치를 다시 집계해 갱신 PR 을 연다(`chore(report)`
+  — 릴리스 대상 제외). 산출물: `docs/reports/ai-dev-report.html`. 스크립트: `scripts/report/`
+  (`collect_ai_dev_metrics.py` → `build_ai_dev_report_html.py`, 판단 값은 `ai_dev_report_narrative.json`).
+  워크플로: `.github/workflows/ai-dev-report.yml`.
+
 ## [1.46.0] - 2026-10-08
 
 ### Added
