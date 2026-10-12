@@ -768,6 +768,16 @@ PEP 는 운영자용 내부 콘솔이라 모바일 전용 레이아웃을 만들
   `system` 도메인 leaf(`/settings`)는 admin 에게만 보인다 — 렌더링 쪽(`Sidebar.tsx`)도
   `installableAppById(id).adminOnly` 가 참인데 `!isAdmin` 이면 건너뛰는 방어 체크를 이중으로
   둔다(역할 강등 등 엣지케이스 대비).
+- **접근 제어가 아니다 (오해 주의)**: `installed_apps` 는 "내 레일·상단바에 무엇을 보일지"만 정하는
+  **개인화** 값이다. 라이선스·노출 제어·권한이 아니며, 설치하지 않은 화면도 주소를 직접 입력하면
+  열린다. 화면 접근은 ① Settings → 접근 제어 `feature_access`(프론트 `RouteAccessGate`·
+  `featureAllowed` + 서버 `enforce_feature_access` 의 `FEATURE_API_PATTERNS`), ② 역할 게이트
+  (`RequireAdmin`·`require_operator`·`useCanOperate`), ③ 클러스터 테넌트 바인딩(`cluster_access.py`)이
+  담당한다. 방향은 한쪽뿐이다 — 접근 제어로 막힌 화면은 설치돼 있어도 레일·상단바에 그려지지 않고
+  (`featureAllowed` 렌더 필터), "+" 카탈로그에서도 빠진다(`filterSectionsByAccess`). 반대로 설치
+  여부는 권한 판정에 쓰이지 않는다. 새 기능의 노출을 막아야 하면 `installed_apps` 기본값이나
+  카탈로그에서 빼는 것으로 대신하지 말고 접근 제어/역할로 막는다. 사용자에게도 같은 안내가
+  `AddAppDialog` 하단 문구와 접근 제어 탭 설명으로 노출된다.
 - **예외 — 홈은 opt-in 대상이 아니다**: 로고(홈 버튼)는 사용자가 레일을 전부 비워도 `/` 로 돌아올
   방법이 하나는 있어야 하므로 항상 클릭 가능하다. "뒤로가기"는 반대로 카탈로그 항목이라 기본
   미설치이고, 홈(`/`)에서는 설치돼 있어도 숨는다(의미 없는 버튼이므로).

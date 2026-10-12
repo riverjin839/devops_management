@@ -61,6 +61,10 @@ Jira Excel 가져오기)·문서 관리 그룹 전체·즐겨찾기·Your Island
 보인다. 설치 목록은 `HomePrefs.installedApps`(서버 저장, `GET/PUT /api/v1/me/home-prefs`,
 `hooks/useHomePrefs.ts` — 기기·브라우저를 넘어 따라온다, 기본값 `["/tasks-mgmt"]`) 하나를
 사이드바/상단바가 함께 쓰고, 각자 `installableAppById(id).domain` 으로 자기 몫만 걸러 그린다.
+**설치는 접근 제어가 아니다** — 설치하지 않은 화면도 URL 로 직접 열리고, 권한은 Settings
+"접근 제어"(`feature_access`)·역할·테넌트 바인딩이 정한다. 접근 제어로 막힌 화면은 카탈로그
+(`filterSectionsByAccess`)와 레일·상단바(`featureAllowed`)에서 모두 빠지며, `AddAppDialog` 하단에
+이 안내 문구가 있다(상세 `DESIGN_SYSTEM.md` "접근 제어가 아니다").
 로고(홈 버튼)는 유일한 예외로 opt-in 대상이 아니다 — 사용자가 전부 제거해도 "/" 로 돌아올
 방법이 하나는 남아 있어야 하므로 항상 클릭 가능하다. 이 기능이 생기기 전부터 있던 계정은
 `backend/app/main.py` 의 세 마이그레이션(전부 `app_settings` sentinel 로 멱등,
