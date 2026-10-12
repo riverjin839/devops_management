@@ -133,6 +133,24 @@
   details.deps ul { columns: 3 220px; font-size: 13px; padding-left: 18px; }
   @media (max-width: 600px) { .titem { grid-template-columns: 1fr; } .tmonth { grid-template-columns: 1fr; } }
 
+  /* ── 로드맵·플레이북 ── */
+  .rm { display: grid; grid-template-columns: 130px repeat(3, minmax(0, 1fr)); gap: 10px; align-items: start; }
+  .rm .qh { font-weight: 800; color: hsl(var(--primary-text, var(--primary))); padding: 0 4px; }
+  .rm .lh { font-weight: 800; padding-top: 10px; }
+  .rm .cell { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+  .rm .it { background: hsl(var(--card)); border: 1px solid hsl(var(--border)); border-radius: var(--radius-card); padding: 10px 12px; }
+  .rm .it b { display: block; margin-bottom: 2px; }
+  .rm .it p { margin: 0 0 6px; font-size: 13px; color: hsl(var(--muted-foreground)); }
+  .rm .lane-ai .it { background: hsl(var(--accent)); border-color: transparent; }
+  .ev { display: inline-block; font-size: 12px; font-weight: 700; border-radius: 6px; padding: 2px 8px; background: hsl(var(--secondary)); color: hsl(var(--foreground)); }
+  .pb { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  .pb ul { list-style: none; margin: 0; padding: 0; }
+  .pb li { padding: 10px 0; border-top: 1px solid hsl(var(--border)); }
+  .pb li:first-child { border-top: 0; }
+  .pb li b { display: block; }
+  .pb li span.d { font-size: 13px; color: hsl(var(--muted-foreground)); }
+  @media (max-width: 860px) { .rm { grid-template-columns: 1fr; } .rm .qh.blank { display: none; } .pb { grid-template-columns: 1fr; } }
+
   /* ── 드릴다운 패널 ── */
   .drawer {
     position: fixed; top: 0; right: 0; bottom: 0; width: min(520px, 100vw); z-index: 40; transform: translateX(100%); transition: transform .25s;
@@ -537,6 +555,54 @@ function build() {
   add("next", "NEXT", "남은 과제 — 상용 전환을 막는 5가지", h(`<div class="tablewrap"><table><thead><tr><th>우선</th><th>과제</th><th>내용</th><th>목표 지표</th></tr></thead><tbody>
     ${N.tasks.map(t => { const r = N.readiness.find(x => x.area === t.area); return `<tr><td><span class="chip ${t.p === "P0" ? "acc" : ""}">${t.p}</span></td><td><b>${t.title}</b></td><td class="muted">${t.desc}</td><td class="num">${t.area} ${r.score} → <b class="acc">${r.target}</b></td></tr>`; }).join("")}
     </tbody></table></div><p class="note">목표를 모두 달성하면 종합 ${overall}% → ${Math.round(N.readiness.reduce((a, r) => a + r.target, 0) / N.readiness.length)}% (진척도 섹션의 '목표 달성 시 보기'와 같다)</p>`));
+
+  /* 12-1. 근거 수치 (data.json 에서 계산 — 매월 자동 갱신) */
+  const fullMonths = D.months.filter(m => m <= lastFull);
+  const prBy = m => D.prs.filter(p => p.d.startsWith(m)).length;
+  const avgOf = arr => arr.length ? arr.reduce((a, b) => a + b, 0) / arr.length : 0;
+  const skillsDate = (D.harness.find(x => x.label.includes("스킬")) || {}).d || "";
+  const claudeDate = (D.harness.find(x => x.label.includes("CLAUDE")) || {}).d || "";
+  const dayN = d => d ? Math.round((new Date(d) - new Date(D.meta.first)) / 864e5) : 0;
+  const beforeM = fullMonths.filter(m => m < skillsDate.slice(0, 7)), afterM = fullMonths.filter(m => m >= skillsDate.slice(0, 7));
+  const fixRatio = m => { const cs = D.commits.filter(c => c[0].startsWith(m)); const f = cs.filter(c => c[2] === "fix").length, t = f + cs.filter(c => c[2] === "feat").length; return t ? Math.round(f / t * 100) : 0; };
+  const fr = fullMonths.map(fixRatio), frMax = fr.indexOf(Math.max(...fr));
+  const tagged = D.prs.filter(p => p.model).length;
+  const mcount = {}; D.prs.forEach(p => { if (p.model) mcount[p.model] = (mcount[p.model] || 0) + 1; });
+  const topModels = Object.entries(mcount).sort((a, b) => b[1] - a[1]).slice(0, 3);
+  const EV = {
+    filesPerPR: `PR당 변경 파일 ${eraStats[0].med} → ${eraStats[eraStats.length - 1].med}개 (${eraStats[0].e.key} → ${eraStats[eraStats.length - 1].e.key})`,
+    prUplift: `스킬·게이트 도입(${skillsDate}) 전후 월평균 PR ${Math.round(avgOf(beforeM.map(prBy)))} → ${Math.round(avgOf(afterM.map(prBy)))}`,
+    fixPeak: `fix 비율 최고 ${mLabel(fullMonths[frMax])} ${fr[frMax]}% → ${mLabel(fullMonths[fullMonths.length - 1])} ${fr[fr.length - 1]}%`,
+    tagShare: `모델 표기 PR ${fmt(tagged)} / ${fmt(D.prs.length)} (${Math.round(tagged / D.prs.length * 100)}%)`,
+    modelMix: `PR 다수 모델: ${topModels.map(([m, n]) => `${m} ${n}`).join(" · ")}`,
+    autoReport: `리포트 자동 생성 ${D.meta.generated} (${D.meta.head})`,
+    qaFixes: "재집계·렌더 QA 로 잡은 수치 오류 4건 — PR 845→750, AI 86→96%, 진척도 67→66, 날짜 시간대",
+    harnessLag: `CLAUDE.md ${dayN(claudeDate)}일 차 · 스킬 ${dayN(skillsDate)}일 차에 도입`,
+  };
+  const ev = k => k && EV[k] ? `<span class="ev num" title="data.json 에서 계산">${EV[k]}</span>` : "";
+
+  /* 12-2. 향후 로드맵 */
+  const RM = N.roadmap_next || { quarters: [], lanes: [] };
+  const rdBy = a => N.readiness.find(r => r.area === a);
+  const target = Math.round(N.readiness.reduce((a, r) => a + r.target, 0) / N.readiness.length);
+  add("roadmap-next", "ROADMAP", `향후 남은 과제 — 제품 상용화와 AI 개발 방식, 두 갈래로`, h(`
+    <div class="rm"><div></div>${RM.quarters.map(q => `<div class="qh num">${q}</div>`).join("")}
+    ${RM.lanes.map(l => `<div class="lh">${l.label}</div>${RM.quarters.map(q => `<div class="cell lane-${l.key}">${l.items.filter(it => it.q === q).map(it => {
+      const r = it.area ? rdBy(it.area) : null;
+      return `<div class="it"><b>${it.title}</b><p>${it.desc}</p>${r ? `<span class="chip acc num">${r.area} ${r.score} → ${r.target}</span>` : ev(it.evidence)}</div>`; }).join("")}</div>`).join("")}`).join("")}</div>
+    <div class="card hl" style="margin-top:16px"><b class="acc">완료 시</b> 상용화 종합 진척도 <b class="num">${overall}% → ${target}%</b> (상용 베타 수준). AI 개발 방식 레인은 이 숫자를 지키는 장치다 — 측정·게이트·라우팅이 없으면 속도가 품질로 되돌아온다.</div>`));
+
+  /* 12-3. 모델 발전 방향과 활용법 */
+  add("ai-trends", "AI CODING · 1", "모델은 어디로 가고, 우리는 어떻게 써야 하나", h(`<div class="tablewrap"><table><thead><tr><th>모델 발전 방향</th><th class="acc">그래서 이렇게 쓴다</th><th>이 저장소 근거</th></tr></thead><tbody>
+    ${(N.ai_trends || []).map(t => `<tr><td>${t.trend}<div class="hint" style="font-weight:400">${t.detail}</div></td><td>${t.practice}</td><td class="acc-cell" style="font-weight:600">${EV[t.evidence] || ""}</td></tr>`).join("")}
+    </tbody></table></div><p class="note">발전 방향은 일반적인 추세 수준으로만 적었다 — 특정 미래 모델의 성능·출시를 가정하지 않는다. 근거 칸은 data.json 에서 계산해 매월 갱신된다.</p>`));
+
+  /* 12-4. AI 코딩 운영 원칙 */
+  const PB = N.playbook || { do: [], dont: [] };
+  add("ai-playbook", "AI CODING · 2", "AI 코딩을 가장 잘 쓰는 법 — 이번 8개월이 남긴 원칙", h(`<div class="pb">
+    <div class="card hl"><h3 class="acc">DO</h3><ul>${PB.do.map(([t, d, k]) => `<li><b>${t}</b><span class="d">${d}</span>${k ? `<div style="margin-top:4px">${ev(k)}</div>` : ""}</li>`).join("")}</ul></div>
+    <div class="card"><h3>DON'T</h3><ul>${PB.dont.map(([t, d, k]) => `<li><b>${t}</b><span class="d">${d}</span>${k ? `<div style="margin-top:4px">${ev(k)}</div>` : ""}</li>`).join("")}</ul></div>
+  </div>`));
 
   /* 13. 복기 */
   add("retro", "RETROSPECTIVE", "과거로 돌아간다면 — 무엇을 다르게 했어야 했나", h(`<div class="tablewrap"><table><thead><tr><th>영역</th><th>실제로 한 것</th><th>치른 대가</th><th class="acc">다시 한다면</th></tr></thead><tbody>
