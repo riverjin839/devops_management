@@ -19,6 +19,8 @@ export interface PlaybookFormSubmit {
   inventoryPath?: string;
   tags: string;
   clusterId: string;
+  /** 실행 제한 시간(초) — null = 전역 기본(30초). */
+  timeoutSeconds: number | null;
 }
 
 interface AddPlaybookModalProps {
@@ -293,6 +295,7 @@ export function AddPlaybookModal({
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const [tags, setTags] = useState('');
+  const [timeoutText, setTimeoutText] = useState('');
   const [clusterId, setClusterId] = useState('');
 
   // 신: DB 관리 모드 (기본). advanced 토글 시 path 기반 fallback.
@@ -317,6 +320,7 @@ export function AddPlaybookModal({
   const playbookPathId = useId();
   const inventoryPathId = useId();
   const tagsId = useId();
+  const timeoutId = useId();
 
   const filesQ = usePlaybookFiles();
   const invQ = useInventories(clusterId || undefined);
@@ -328,6 +332,7 @@ export function AddPlaybookModal({
     setName(initialData?.name ?? '');
     setDescription(initialData?.description ?? '');
     setTags(initialData?.tags ?? '');
+    setTimeoutText(initialData?.timeoutSeconds ? String(initialData.timeoutSeconds) : '');
     setClusterId(initialData?.clusterId ?? defaultClusterId ?? clusters[0]?.id ?? '');
     setPlaybookFileId(initialData?.playbookFileId ?? '');
     setInventoryId(initialData?.inventoryId ?? '');
@@ -343,20 +348,23 @@ export function AddPlaybookModal({
 
   if (!isOpen) return null;
 
+  const timeoutNum = timeoutText.trim() === '' ? null : Number(timeoutText);
+  const timeoutInvalid = timeoutNum !== null && (!Number.isInteger(timeoutNum) || timeoutNum < 10 || timeoutNum > 1800);
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!name.trim() || !clusterId) return;
+    if (!name.trim() || !clusterId || timeoutInvalid) return;
     if (advanced) {
       if (!playbookPath.trim()) return;
       onSubmit({
-        name, description, tags, clusterId,
+        name, description, tags, clusterId, timeoutSeconds: timeoutNum,
         playbookPath: playbookPath.trim(),
         inventoryPath: inventoryPath.trim() || undefined,
       });
     } else {
       if (!playbookFileId) return;
       onSubmit({
-        name, description, tags, clusterId,
+        name, description, tags, clusterId, timeoutSeconds: timeoutNum,
         playbookFileId,
         inventoryId: inventoryId || undefined,
       });
@@ -593,6 +601,28 @@ export function AddPlaybookModal({
               placeholder="e.g. check,validate"
               className={inputCls}
             />
+          </div>
+
+          {/* 실행 제한 시간 — 예전엔 30초 고정이라 실제 운영 플레이북 대부분이 timed out 으로 실패했다. */}
+          <div>
+            <label htmlFor={timeoutId} className="block text-sm font-medium mb-1">실행 제한 시간 (초, optional)</label>
+            <input
+              id={timeoutId}
+              type="number"
+              min={10}
+              max={1800}
+              value={timeoutText}
+              onChange={(e) => setTimeoutText(e.target.value)}
+              placeholder="비우면 기본 30초"
+              aria-invalid={timeoutInvalid || undefined}
+              aria-describedby={`${timeoutId}-help`}
+              className={`${inputCls} ${timeoutInvalid ? 'border-status-critical' : ''}`}
+            />
+            <p id={`${timeoutId}-help`} className={`text-xs mt-1 ${timeoutInvalid ? 'text-status-critical' : 'text-muted-foreground'}`}>
+              {timeoutInvalid
+                ? '10~1800 사이의 정수(초)를 입력하세요.'
+                : '이 시간을 넘기면 ansible-playbook 을 중단하고 실패로 기록합니다. 점검 매트릭스·스케줄 실행에 그대로 적용됩니다 — 화면에서 바로 실행할 때는 프록시 응답 제한(60초)에 먼저 걸릴 수 있습니다.'}
+            </p>
           </div>
 
           <div className="flex justify-end gap-3 pt-2">

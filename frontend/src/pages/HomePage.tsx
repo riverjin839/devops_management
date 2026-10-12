@@ -72,7 +72,7 @@ export function HomePage() {
   // 밀도로 보이므로 기본 탭으로 되돌린다.
   const [weeklyTab, setWeeklyTab] = useState<'week' | 'month' | 'member'>('week');
 
-  // 플랫폼 탭 배지 — 위험 클러스터 + 점검 실패 합계. 0이면 배지를 숨겨 평상시엔 조용하다.
+  // 플랫폼 탭 배지 — 위험 클러스터 + 위험(critical) 셀 합계. 0이면 배지를 숨겨 평상시엔 조용하다.
   const platformSignalCount = criticalClusters + (checkFailureCount ?? 0);
   const TABS: Array<{ key: HomeTab; label: string; Icon: typeof ListTodo; badge?: number }> = [
     { key: 'work', label: '업무 현황', Icon: ListTodo },
@@ -127,7 +127,7 @@ export function HomePage() {
                       ? 'bg-primary-foreground/20 text-primary-foreground'
                       : 'bg-status-critical/15 text-status-critical',
                   )}
-                  title={`위험 클러스터·점검 실패 합계 ${t.badge}건`}
+                  title={`위험 클러스터 ${criticalClusters}곳 · 위험 셀 ${checkFailureCount ?? 0}개`}
                 >
                   {t.badge}
                 </span>

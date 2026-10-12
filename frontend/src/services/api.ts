@@ -2357,7 +2357,8 @@ export const checkMatrixApi = {
   // 동기 실행 — 느린 점검(pod_to_pod 프로브, core_bundle 등)이 기본 30s 를 넘길 수 있어
   // 백엔드 셀 태스크 한도(280s)에 맞춰 여유를 준다.
   runCell: (itemId: string, clusterId: string) =>
-    api.post<CheckMatrixRun>(`/check-matrix/cell/${itemId}/${clusterId}/run`, undefined, { timeout: 300000 }),
+    // 큐잉 후 즉시 queued 수행을 돌려준다 — 진행은 getRun(id) 폴링으로 본다.
+    api.post<CheckMatrixRun>(`/check-matrix/cell/${itemId}/${clusterId}/run`),
   runCluster: (clusterId: string) =>
     api.post<CheckMatrixBatchResult>(`/check-matrix/clusters/${clusterId}/run`),
   runItem: (itemId: string) =>

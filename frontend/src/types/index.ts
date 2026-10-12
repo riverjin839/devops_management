@@ -296,6 +296,8 @@ export interface Playbook {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   extraVars?: Record<string, any>;
   tags?: string;
+  /** ansible-playbook 실행 제한 시간(초, 10~1800). 비우면 전역 기본(30초). */
+  timeoutSeconds?: number | null;
   status: string;  // healthy | warning | critical | unknown | running
   showOnDashboard: boolean;
   lastRunAt?: string;
@@ -4407,11 +4409,20 @@ export interface CheckMatrixItem {
   definitionId?: string | null;
   /** true = 시스템 항목(core_bundle) — 삭제 불가, Cluster.status 산정에 사용 */
   isSystem: boolean;
-  /** false = 그리드에서 숨김(자동 실행은 계속됨) */
+  /** false = 그리드에서 숨김 + 자동(cron)·일괄 실행에서도 제외 */
   enabled: boolean;
+  /** 배치잡·플레이북·수동 입력 행 — 결과를 클러스터 종합 상태에 반영(opt-in, 기본 false). */
+  affectsClusterStatus?: boolean;
   sortOrder: number;
   createdAt: string;
   updatedAt: string;
+}
+
+/** 필드명을 값 자리에 둔 설정값 1건 — 응답 키 camelCase 변환에 이름이 깨지지 않게(서버 `named_values`). */
+export interface CheckMatrixNamedValue {
+  name: string;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  value: any;
 }
 
 /** 등록 마법사에서 그 자리에 만들어 등록하는 Ansible 플레이북 (커스텀 카드). */
@@ -4429,6 +4440,8 @@ export interface CheckMatrixNewPlaybookInput {
   inventories?: { clusterId: string; inventoryId: string }[] | null;
   /** 라이브러리에 이미 있는 플레이북 파일을 그대로 쓸 때(본문 재작성 없음). */
   playbookFileId?: string | null;
+  /** 같은 이름의 라이브러리 파일이 있을 때 덮어쓰기(기본 false = 409). */
+  overwrite?: boolean;
 }
 
 export type CheckMatrixItemInput = Omit<
@@ -4460,10 +4473,11 @@ export interface CheckMatrixItemSourceConfig {
   definitionName?: string | null;
   thresholdFields: DeepCheckFieldSpec[];
   paramFields: DeepCheckFieldSpec[];
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  thresholds: Record<string, any>;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  params: Record<string, any>;
+  /** 필드명은 응답 변환에서 camelCase 로 바뀌므로 화면은 아래 `*Values` 리스트를 읽는다. */
+  thresholdValues: CheckMatrixNamedValue[];
+  paramValues: CheckMatrixNamedValue[];
+  /** true = 같은 점검 종류의 다른 항목·전 클러스터와 공유하는 정의(수정 시 전파, admin 만 직접 수정). */
+  shared?: boolean;
   note?: string | null;
 }
 
@@ -4477,10 +4491,8 @@ export interface CheckMatrixCatalogItem {
   execTech?: string | null;
   thresholdFields: DeepCheckFieldSpec[];
   paramFields: DeepCheckFieldSpec[];
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  defaultThresholds: Record<string, any>;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  defaultParams: Record<string, any>;
+  defaultThresholdValues?: CheckMatrixNamedValue[];
+  defaultParamValues?: CheckMatrixNamedValue[];
   seedDefault: boolean;
   /** true = 행 전용 정의를 붙일 수 있는 종류(deep_check) — 같은 종류로 카드 여러 장 가능. */
   supportsDedicated?: boolean;
@@ -4522,8 +4534,10 @@ export interface CheckMatrixItemPreviewInput {
   /** 키 변환 회피 — 이름을 값 자리에 둔다(CheckMatrixNewPlaybookInput.extraVars 와 동일). */
   extraVars?: { name: string; value: string }[] | null;
   tags?: string | null;
-  /** 기본 true = ansible --check(dry-run). false 면 실제로 변경이 나간다. */
+  /** 기본 true = ansible --check(dry-run). false 면 실제로 변경이 나간다(admin 만). */
   checkMode?: boolean;
+  /** 저장된 항목을 "지금 설정으로" 시험할 때 — 그 행의 실효 정의 값이 기본으로 깔린다. */
+  itemId?: string | null;
 }
 
 /** 미리 실행 결과 — deep_check 는 DeepCheckResult 형태, addon 은 CheckResult 형태라 필드가
@@ -4536,9 +4550,19 @@ export interface CheckMatrixItemPreviewResult {
   durationMs?: number | null;
   /** 실행 상세 로그(단계/명령 출력) — 화면의 "로그 보기"가 펼쳐 보여준다. */
   log?: string | null;
+  /** true = 안전상 실제로 실행하지 않았다(기존 배치잡/플레이북) — status 는 pending. */
+  skipped?: boolean;
 }
 
-export interface CheckMatrixCell {
+/** 셀의 가장 최근 수행 — 결과 값과 별개로 "최근 실행이 실패/건너뜀" 을 보이게 한다. */
+export interface CheckMatrixLastRun {
+  lastRunState?: CheckMatrixRunState | null;
+  lastRunAt?: string | null;
+  lastRunMessage?: string | null;
+  lastRunId?: string | null;
+}
+
+export interface CheckMatrixCell extends CheckMatrixLastRun {
   status: Status | null;
   value: number | null;
   message?: string | null;
@@ -4560,7 +4584,7 @@ export interface CheckMatrixGridCluster {
 }
 
 /** 항목 상세(`/checks/:itemId`) 의 클러스터별 한 행 — `GET /check-matrix/items/{itemId}/detail`. */
-export interface CheckMatrixItemDetailCell {
+export interface CheckMatrixItemDetailCell extends CheckMatrixLastRun {
   clusterId: string;
   clusterName: string;
   status: Status | null;
@@ -4579,7 +4603,8 @@ export interface CheckMatrixItemDetail {
 
 /** 클러스터 종합 상태 원인 1건 — `cluster_status_service.recompute()` 의 contributor. */
 export interface ClusterStatusContributor {
-  sourceType: 'core_bundle' | 'addon' | 'deep_check';
+  /** check_matrix = 클러스터 상태 반영을 켠 배치잡·플레이북·수동 입력 행(editId = 항목 id) */
+  sourceType: 'core_bundle' | 'addon' | 'deep_check' | 'check_matrix';
   sourceRef?: string | null;
   name: string;
   status: Status;
@@ -4601,6 +4626,8 @@ export interface CheckMatrixGrid {
   clusters: CheckMatrixGridCluster[];
   /** cells[itemId][clusterId] */
   cells: Record<string, Record<string, CheckMatrixCell>>;
+  /** cron 을 해석하는 기준 시간대(디스패처와 동일, 예: Asia/Seoul) */
+  timezone?: string;
 }
 
 export interface CheckMatrixHistoryPoint {
@@ -4729,6 +4756,8 @@ export interface CheckMatrixRun {
   queuedAt: string;
   startedAt?: string | null;
   finishedAt?: string | null;
+  /** 셀 실행 응답 전용 — true 면 이미 대기/실행 중이던 수행을 돌려받은 것(새로 만들지 않음). */
+  deduplicated?: boolean;
 }
 
 export interface CheckMatrixRunDetail extends CheckMatrixRun {
@@ -4736,6 +4765,8 @@ export interface CheckMatrixRunDetail extends CheckMatrixRun {
   stepPlan: DeepCheckStepPlanItem[];
   commands: CheckMatrixExecutedCommand[];
   runbook?: CheckMatrixRunbook | null;
+  /** 실행 진행 로그 — 대기열 등록·실행 시작·대상 해석·단계·마감이 시각과 함께 실시간으로 쌓인다. */
+  logLines?: string[];
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   details: Record<string, any>;
 }
@@ -4752,8 +4783,13 @@ export interface CheckMatrixBatchResult {
   batchId: string;
   total: number;
   queued: number;
+  /** 이미 대기/실행 중이라 새로 큐잉하지 않은 셀 수 */
+  skipped?: number;
   errors: string[];
   runIds: string[];
+  activeRunIds?: string[];
+  /** 항목(행) 실행 — 실행 권한이 있어 대상이 된 클러스터 수 */
+  clusterCount?: number;
 }
 
 // ── 스키마 점검 (모델 vs 실제 DB 드리프트) ──────────────────────────────────

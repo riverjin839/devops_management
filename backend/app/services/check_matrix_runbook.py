@@ -42,6 +42,30 @@ def _cmd(kind: str, command: str, description: str, *, readonly: bool = True) ->
     return {"kind": kind, "command": command, "description": description, "readonly": readonly}
 
 
+# 런북·실행 로그에 그대로 노출되면 안 되는 설정 키 패턴 — 애드온 config 에는 Jenkins
+# api_token, Keycloak admin password 같은 자격증명이 들어 있을 수 있다. 런북은 read 권한만 있으면
+# 누구나 GET 할 수 있고 실행 로그 details 로 복사돼 백업에도 남으므로 값을 가린다.
+_SECRET_KEY_HINTS = ("token", "password", "passwd", "secret", "apikey", "api_key", "private_key", "credential")
+MASKED_VALUE = "********"
+
+
+def is_secret_key(name: Any) -> bool:
+    low = str(name or "").lower().replace("-", "_")
+    return any(h in low for h in _SECRET_KEY_HINTS)
+
+
+def mask_secrets(obj: Any) -> Any:
+    """dict/list 를 재귀로 훑어 비밀값 키의 값을 ``********`` 로 바꾼 사본을 돌려준다."""
+    if isinstance(obj, dict):
+        return {
+            k: (MASKED_VALUE if is_secret_key(k) and v not in (None, "") else mask_secrets(v))
+            for k, v in obj.items()
+        }
+    if isinstance(obj, list):
+        return [mask_secrets(v) for v in obj]
+    return obj
+
+
 def _inputs(groups: dict[str, dict[str, Any]]) -> list[dict[str, str]]:
     """설정값을 **키가 아닌 값**으로 담은 리스트로 평탄화한다.
 
@@ -101,8 +125,9 @@ _CORE_BUNDLE_NOTES = [
     "/healthz 응답시간만 셀 값으로 투영한다. 네 개의 하위 점검을 따로 돌릴 수 없는 이유가 이것이다.",
     "`Cluster.status`(사이드바 클러스터 색)를 갱신하는 유일한 경로 — 그래서 항목별 cron 이 아니라 "
     "클러스터 열 헤더의 cron(`Cluster.check_cron_expr`)으로 스케줄한다.",
-    "/healthz 가 200 이고 응답시간 3000ms 미만이면 정상, 200 이지만 3000ms 이상이면 경고, "
-    "그 외(비200·연결 실패)는 위험.",
+    "판정: /healthz 200(또는 익명 차단 401/403 — 서버까지는 도달) 이고 3000ms 미만이면 정상, "
+    "3000ms 이상이면 경고, 그 밖의 4xx 는 경고, 5xx·연결 실패는 위험이다. 익명 프로브가 실패하면 "
+    "kubeconfig 인증으로 /healthz 를 한 번 더 시도한 결과를 쓴다.",
 ]
 
 
@@ -421,20 +446,46 @@ _ADDON_NOTES = [
 # ──────────────────────────────────────────────────────────────
 # batch_job — 등록된 BatchJob(SSH bash/python) 실행 — D-066
 # ──────────────────────────────────────────────────────────────
-def _batch_job_commands(job: Optional[BatchJob]) -> list[dict[str, Any]]:
+def _batch_job_commands(job: Optional[BatchJob], db: Optional[Session] = None) -> list[dict[str, Any]]:
+    """배치잡이 실제로 나가는 경로를 실행기·스크립트 종류에 맞춰 적는다.
+
+    예전엔 무조건 ``ssh user@host -- …`` 로 적어, SSH 를 쓰지 않는 실행기(K8s API 로 도는 job_type)나
+    Ansible 플레이북 스크립트도 SSH 로 보였다 — 런북이 실제와 다르면 존재 이유(사실성)가 깨진다.
+    """
     if job is None:
         return []
+    who = f"{job.default_username or 'root'}@{job.default_host or '<default_host 미설정>'}"
     if job.execution_mode == "script":
-        target = f"등록 스크립트(script_id={job.script_id})" if job.script_id else "(스크립트 미지정)"
-        return [
-            _cmd(KIND_SSH, f"ssh {job.default_username or 'root'}@{job.default_host or '<default_host 미설정>'} -- {target}",
-                 f"`/scripts` 화면에서 관리되는 {target} 를 대상 호스트에서 실행한다. "
-                 "전체 내용은 해당 스크립트 상세에서 버전별로 확인할 수 있다.",
-                 readonly=False),
-        ]
+        script = None
+        if db is not None and job.script_id:
+            from app.models.executable_script import ExecutableScript
+            script = db.query(ExecutableScript).filter(ExecutableScript.id == job.script_id).first()
+        if script is None:
+            target = f"등록 스크립트(script_id={job.script_id})" if job.script_id else "(스크립트 미지정)"
+            return [_cmd(KIND_SSH, f"ssh {who} -- {target}",
+                         f"`/scripts` 화면에서 관리되는 {target} 를 대상 호스트에서 실행한다.", readonly=False)]
+        label = f"스크립트 «{script.name}» ({script.kind})"
+        if script.kind == "ansible_playbook":
+            return [_cmd(KIND_ANSIBLE, f"ansible-playbook <{script.name}> -i {job.default_host or '<default_host 미설정>'},",
+                         f"`/scripts` 의 {label} 현재 버전을 ansible-playbook 으로 대상 호스트에 실행한다.",
+                         readonly=False)]
+        runner = "python3 -" if script.kind == "python" else "bash -s"
+        return [_cmd(KIND_SSH, f"ssh {who} -- {runner} < <{script.name}>",
+                     f"`/scripts` 의 {label} 현재 버전을 SSH 로 대상 호스트에 넘겨 실행한다.", readonly=False)]
+    requires_ssh = True
+    try:
+        from app.services.batch_jobs import get_executor
+        executor = get_executor(job.job_type)
+        if executor is not None and not executor.requires_ssh:
+            requires_ssh = False
+    except Exception:  # noqa: BLE001 — 실행기 조회 실패는 기본(SSH) 표기
+        pass
+    if not requires_ssh:
+        return [_cmd(KIND_K8S_API, f"<{job.job_type} 실행기> — K8s API 호출",
+                     f"job_type=`{job.job_type}` 실행기(코드에 내장)는 SSH 없이 클러스터 K8s API 로 동작한다.",
+                     readonly=False)]
     return [
-        _cmd(KIND_SSH, f"ssh {job.default_username or 'root'}@{job.default_host or '<default_host 미설정>'} "
-             f"-- <{job.job_type} 실행기(system) 명령>",
+        _cmd(KIND_SSH, f"ssh {who} -- <{job.job_type} 실행기(system) 명령>",
              f"등록된 job_type=`{job.job_type}` 실행기(코드에 내장)를 대상 호스트에서 실행한다.",
              readonly=False),
     ]
@@ -472,7 +523,8 @@ def _playbook_commands(playbook: Optional[Playbook]) -> list[dict[str, Any]]:
     return [
         _cmd(KIND_ANSIBLE, f"ansible-playbook {pb_name} -i {inv_name}{tags}",
              "등록된 플레이북을 인벤토리 대상 호스트 전체에서 실행하고 JSON callback 출력으로 "
-             "호스트별 ok/changed/failures/unreachable 을 집계한다.",
+             "호스트별 ok/changed/failures/unreachable 을 집계한다. 제한 시간 "
+             f"{playbook.timeout_seconds or '기본(30)'}초 — `/playbooks` 화면에서 바꾼다.",
              readonly=False),
     ]
 
@@ -627,7 +679,7 @@ def build_runbook(db: Session, item: CheckMatrixItem, cluster: Cluster) -> dict[
             out["runnable"] = True
             out["addon_id"] = str(addon.id)
             out["config_editable"] = True
-            out["inputs"] = _inputs({"config": addon.config or {}})
+            out["inputs"] = _inputs({"config": mask_secrets(addon.config or {})})
         return out
 
     if item.source_type == CheckMatrixSourceType.batch_job:
@@ -637,7 +689,7 @@ def build_runbook(db: Session, item: CheckMatrixItem, cluster: Cluster) -> dict[
             .first()
         )
         out["steps"] = _BATCH_JOB_STEPS
-        out["commands"] = _batch_job_commands(job)
+        out["commands"] = _batch_job_commands(job, db)
         out["notes"] = list(_BATCH_JOB_NOTES)
         # config_editable=False — job.params/자격증명 편집은 /batch-jobs 화면 전용(중복 UI 방지).
         if job is None:

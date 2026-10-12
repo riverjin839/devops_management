@@ -10,6 +10,7 @@ unscoped PR 의 릴리스에 섞여 나가거나(엉뚱한 버전에 기록), �
 
 규칙 (`type(scope)!: 설명` — scope 와 `!` 는 선택):
   - chore(release)        → none  (release 자동 PR 자신의 머지 — 무한루프 방지)
+  - chore(report)         → none  (ai-dev-report.yml 월간 리포트 갱신 PR)
   - feat                  → minor
   - fix / docs / chore / refactor → patch
   - 그 외(perf, test, ci, 형식 불일치, 대문자 type 등) → none
@@ -44,6 +45,8 @@ def decide_bump(title: str) -> tuple[str, str]:
     ctype, scope = m.group("type"), m.group("scope")
     if ctype == "chore" and scope == "release":
         return "none", "release 자동 PR 자신의 머지 — 무한루프 방지, 스킵"
+    if ctype == "chore" and scope == "report":
+        return "none", "AI 개발 리포트 월간 자동 갱신 PR — 릴리스 대상 아님, 스킵"
     label = f"{ctype}({scope})" if scope is not None else ctype
     if ctype in _MINOR_TYPES:
         return "minor", f"{label} → minor"

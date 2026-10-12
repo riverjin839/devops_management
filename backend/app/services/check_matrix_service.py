@@ -176,7 +176,18 @@ def validate_cron_min_interval(cron_expr: Optional[str]) -> None:
 # ──────────────────────────────────────────────────────────────
 # 그리드 / 이력
 # ──────────────────────────────────────────────────────────────
-def _resolve_exec_tech(db: Session, item: CheckMatrixItem) -> Optional[str]:
+def _resolve_exec_tech(
+    db: Session, item: CheckMatrixItem, memo: Optional[dict[str, Optional[str]]] = None,
+) -> Optional[str]:
+    if memo is not None:
+        key = str(item.id)
+        if key not in memo:
+            memo[key] = _resolve_exec_tech_raw(db, item)
+        return memo[key]
+    return _resolve_exec_tech_raw(db, item)
+
+
+def _resolve_exec_tech_raw(db: Session, item: CheckMatrixItem) -> Optional[str]:
     """행이 실제로 어떤 기술로 실행되는지 — UI 배지(ExecTechBadge)용.
 
     "Deep Check/Addon" 같은 내부 소스 구현 용어 대신 사용자가 알아보는 실행 기술
@@ -223,7 +234,9 @@ def _batch_job_exec_tech(db: Session, name: str) -> str:
     return "ssh_bash"
 
 
-def _target_duplicate_map(db: Session, items: Iterable[CheckMatrixItem]) -> dict[str, dict[str, Any]]:
+def _target_duplicate_map(
+    db: Session, items: Iterable[CheckMatrixItem], *, tech_memo: Optional[dict[str, Optional[str]]] = None,
+) -> dict[str, dict[str, Any]]:
     """``target_key`` 가 있는 활성 행을 묶어, 같은 대상을 2종 이상의 실행기술이 점검 중인
     그룹만 골라낸다(D-062). 같은 target_key 라도 exec_tech 가 전부 같으면(예: 수동 입력
     행 2개) "여러 기술이 중복 점검"이 아니므로 대상에서 제외한다.
@@ -234,7 +247,7 @@ def _target_duplicate_map(db: Session, items: Iterable[CheckMatrixItem]) -> dict
     for it in items:
         if not it.enabled or not it.target_key:
             continue
-        groups.setdefault(it.target_key, []).append((it, _resolve_exec_tech(db, it)))
+        groups.setdefault(it.target_key, []).append((it, _resolve_exec_tech(db, it, tech_memo)))
 
     out: dict[str, dict[str, Any]] = {}
     for target_key, entries in groups.items():
@@ -257,6 +270,7 @@ def _target_duplicate_map(db: Session, items: Iterable[CheckMatrixItem]) -> dict
 
 def _item_to_dict(
     db: Session, item: CheckMatrixItem, dup_map: Optional[dict[str, dict[str, Any]]] = None,
+    *, tech_memo: Optional[dict[str, Optional[str]]] = None,
 ) -> dict[str, Any]:
     dup = (dup_map or {}).get(str(item.id))
     return {
@@ -267,7 +281,7 @@ def _item_to_dict(
         "source_type": item.source_type.value,
         "source_ref": item.source_ref,
         "category": item.category,
-        "exec_tech": _resolve_exec_tech(db, item),
+        "exec_tech": _resolve_exec_tech(db, item, tech_memo),
         # 값이 있으면 이 행 전용 설정(커스텀 카드) — 같은 종류의 다른 행과 공유하지 않는다.
         "definition_id": str(item.definition_id) if item.definition_id else None,
         "color": item.color,
@@ -275,9 +289,47 @@ def _item_to_dict(
         "enabled": item.enabled,
         "sort_order": item.sort_order,
         "target_key": item.target_key,
+        "affects_cluster_status": bool(getattr(item, "affects_cluster_status", False)),
         # dup 이 없으면 "같은 대상을 다른 기술로도 점검 중"인 경우가 아니라는 뜻 — 0/빈 목록.
         "target_duplicate_count": dup["duplicate_count"] if dup else 0,
         "target_peers": dup["peers"] if dup else [],
+    }
+
+
+def _latest_runs_by_cell(
+    db: Session, *, item_id=None,
+) -> dict[tuple[str, str], CheckMatrixRun]:
+    """(item, cluster) 셀마다 가장 최근 수행 1건 — ``DISTINCT ON`` 한 번으로 모은다.
+
+    결과 테이블(CheckMatrixResult)은 "판정이 나온 실행"만 갱신되므로, 실패·건너뜀이 이어지면
+    그리드가 마지막 성공 값을 계속 보여 준다(어제 green 이 오늘도 green). 셀에 최근 수행 상태를
+    같이 내려 "값은 오래됐고 최근 실행은 실패했다"를 화면이 구분하게 한다.
+    """
+    q = (
+        db.query(CheckMatrixRun)
+        .filter(CheckMatrixRun.trigger != CheckMatrixTrigger.manual_entry)
+    )
+    if item_id is not None:
+        q = q.filter(CheckMatrixRun.item_id == item_id)
+    rows = (
+        q.distinct(CheckMatrixRun.item_id, CheckMatrixRun.cluster_id)
+        .order_by(
+            CheckMatrixRun.item_id, CheckMatrixRun.cluster_id, CheckMatrixRun.queued_at.desc(),
+        )
+        .all()
+    )
+    return {(str(r.item_id), str(r.cluster_id)): r for r in rows}
+
+
+def _cell_run_fields(run: Optional[CheckMatrixRun]) -> dict[str, Any]:
+    if run is None:
+        return {"last_run_state": None, "last_run_at": None, "last_run_message": None, "last_run_id": None}
+    at = run.finished_at or run.started_at or run.queued_at
+    return {
+        "last_run_state": run.run_state.value if run.run_state else None,
+        "last_run_at": at.isoformat() if at else None,
+        "last_run_message": (run.error or run.message or None),
+        "last_run_id": str(run.id),
     }
 
 
@@ -293,12 +345,18 @@ def build_grid(db: Session, hidden_cluster_ids: Optional[Iterable[Any]] = None) 
         hidden = {str(c) for c in hidden_cluster_ids}
         clusters = [c for c in clusters if str(c.id) not in hidden]
 
-    result_by_cell: dict[tuple[str, str], CheckMatrixResult] = {
-        (str(r.item_id), str(r.cluster_id)): r for r in db.query(CheckMatrixResult).all()
+    # 60초 폴링 화면 — details(JSONB, 단계/명령 출력 발췌가 들어 있을 수 있음)는 읽지 않는다.
+    result_by_cell: dict[tuple[str, str], Any] = {
+        (str(r.item_id), str(r.cluster_id)): r
+        for r in db.query(
+            CheckMatrixResult.item_id, CheckMatrixResult.cluster_id, CheckMatrixResult.status,
+            CheckMatrixResult.value, CheckMatrixResult.message, CheckMatrixResult.checked_at,
+        ).all()
     }
     schedule_by_cell: dict[tuple[str, str], CheckMatrixSchedule] = {
         (str(s.item_id), str(s.cluster_id)): s for s in db.query(CheckMatrixSchedule).all()
     }
+    run_by_cell = _latest_runs_by_cell(db)
 
     cells: dict[str, dict[str, dict[str, Any]]] = {}
     for item in items:
@@ -323,12 +381,14 @@ def build_grid(db: Session, hidden_cluster_ids: Optional[Iterable[Any]] = None) 
                 "cron_expr": cron_expr,
                 "schedule_enabled": schedule_enabled,
                 "has_result": r is not None,
+                **_cell_run_fields(run_by_cell.get(key)),
             }
         cells[str(item.id)] = row
 
-    dup_map = _target_duplicate_map(db, items)
+    tech_memo: dict[str, Optional[str]] = {}
+    dup_map = _target_duplicate_map(db, items, tech_memo=tech_memo)
     return {
-        "items": [_item_to_dict(db, i, dup_map) for i in items],
+        "items": [_item_to_dict(db, i, dup_map, tech_memo=tech_memo) for i in items],
         "clusters": [
             {
                 "id": str(c.id), "name": c.name, "check_cron_expr": c.check_cron_expr,
@@ -341,10 +401,14 @@ def build_grid(db: Session, hidden_cluster_ids: Optional[Iterable[Any]] = None) 
             for c in clusters
         ],
         "cells": cells,
+        # 화면이 cron 을 사람 말로 풀고 "다음 실행" 을 계산할 때 쓰는 기준 시간대(디스패처와 동일).
+        "timezone": getattr(_resolve_tz(), "key", "Asia/Seoul"),
     }
 
 
-def item_detail(db: Session, item_id) -> Optional[dict[str, Any]]:
+def item_detail(
+    db: Session, item_id, hidden_cluster_ids: Optional[Iterable[Any]] = None,
+) -> Optional[dict[str, Any]]:
     """항목 상세(``/checks/:itemId``, R-4 6차 라운드 4단계) — 이 항목 하나의 클러스터별 cron/최근
     결과를 모은다. ``build_grid()`` 와 같은 셀 계산 규칙을 항목 하나로 좁힌 lean 버전."""
     item = db.query(CheckMatrixItem).filter(CheckMatrixItem.id == item_id).first()
@@ -363,6 +427,12 @@ def item_detail(db: Session, item_id) -> Optional[dict[str, Any]]:
         dup_map = _target_duplicate_map(db, peers_qs)
 
     clusters = db.query(Cluster).order_by(Cluster.seq.asc(), Cluster.name.asc()).all()
+    if hidden_cluster_ids:
+        hidden = {str(c) for c in hidden_cluster_ids}
+        clusters = [c for c in clusters if str(c.id) not in hidden]
+    run_by_cluster = {
+        cid: r for (_iid, cid), r in _latest_runs_by_cell(db, item_id=item_id).items()
+    }
     result_by_cluster = {
         str(r.cluster_id): r
         for r in db.query(CheckMatrixResult).filter(CheckMatrixResult.item_id == item_id).all()
@@ -391,6 +461,7 @@ def item_detail(db: Session, item_id) -> Optional[dict[str, Any]]:
             "checked_at": r.checked_at.isoformat() if r and r.checked_at else None,
             "cron_expr": cron_expr,
             "schedule_enabled": schedule_enabled,
+            **_cell_run_fields(run_by_cluster.get(str(cluster.id))),
         })
 
     return {"item": _item_to_dict(db, item, dup_map), "cells": cells}
@@ -428,6 +499,9 @@ def get_cell_history(db: Session, item_id, cluster_id, days: int = 30) -> dict[s
 # ──────────────────────────────────────────────────────────────
 # 결과 upsert(레이스 방지: ON CONFLICT DO UPDATE) + 이력 append
 # ──────────────────────────────────────────────────────────────
+_RUN_ONLY_DETAIL_KEYS = frozenset({"_steps", "_commands", "_runbook", "_step_plan", "_log", "_definition_id"})
+
+
 def _upsert_result(
     db: Session,
     item_id,
@@ -439,6 +513,10 @@ def _upsert_result(
     checked_at: Optional[datetime] = None,
 ) -> None:
     checked_at = checked_at or datetime.utcnow()
+    # 단계/명령 출력·런북 스냅샷은 수행 로그(CheckMatrixRun.details)에만 둔다 — 결과 테이블과
+    # append-only 이력에 매번 복제하면 셀 1개당 수십 KB 씩 쌓인다.
+    if isinstance(details, dict):
+        details = {k: v for k, v in details.items() if k not in _RUN_ONLY_DETAIL_KEYS}
     stmt = pg_insert(CheckMatrixResult).values(
         id=uuid.uuid4(),
         item_id=item_id,
@@ -491,6 +569,20 @@ def record_manual_entry(
         finished_at=now,
     ))
     db.commit()
+    _maybe_recompute_cluster(db, item_id, cluster_id)
+
+
+def _maybe_recompute_cluster(db: Session, item_id, cluster_id) -> None:
+    """클러스터 상태 반영(opt-in)을 켠 행이면 결과가 바뀐 직후 종합 상태를 다시 계산한다."""
+    try:
+        item = db.query(CheckMatrixItem).filter(CheckMatrixItem.id == item_id).first()
+        if item is None or not item.affects_cluster_status:
+            return
+        from app.services import cluster_status_service
+        cluster_status_service.recompute(db, cluster_id)
+    except Exception:  # noqa: BLE001 — 상태 재계산 실패가 결과 기록을 되돌리면 안 된다
+        db.rollback()
+        logger.exception("check-matrix: cluster status recompute failed item=%s cluster=%s", item_id, cluster_id)
 
 
 def project_core_bundle_result(db: Session, cluster: Cluster, log: Any) -> None:
@@ -538,10 +630,13 @@ def _resolve_deep_check_definition(db: Session, check_type: str, cluster_id) -> 
         DeepCheckDefinition.parent_id.is_(None),
         DeepCheckDefinition.id.notin_(dedicated),
     )
-    d = base.filter(DeepCheckDefinition.cluster_id == cluster_id).first()
+    # 같은 범위에 정의가 여럿이면(운영 점검 화면의 "복제" 등) 가장 먼저 만든 것을 일관되게 고른다
+    # — 정렬 없는 .first() 는 쿼리마다 다른 행을 집을 수 있다.
+    order = (DeepCheckDefinition.created_at.asc(), DeepCheckDefinition.id.asc())
+    d = base.filter(DeepCheckDefinition.cluster_id == cluster_id).order_by(*order).first()
     if d is not None:
         return d
-    return base.filter(DeepCheckDefinition.cluster_id.is_(None)).first()
+    return base.filter(DeepCheckDefinition.cluster_id.is_(None)).order_by(*order).first()
 
 
 def resolve_definition_for_item(
@@ -603,6 +698,16 @@ def _resolve_playbook(db: Session, name: str, cluster_id) -> Optional[Playbook]:
 # ──────────────────────────────────────────────────────────────
 # 등록 마법사 — 실행 기술별 카탈로그 / 저장 전 테스트 / 신규 deep_check 정의 자동 생성
 # ──────────────────────────────────────────────────────────────
+def named_values(values: Optional[dict[str, Any]]) -> list[dict[str, Any]]:
+    """``{name: value}`` → ``[{"name", "value"}]`` — 응답 키 camelCase 변환 면역.
+
+    프론트 axios 인터셉터가 응답 JSON 의 **키** 를 camelCase 로 바꾸므로, 필드명을 dict 키로
+    내려보내면 ``label_selector`` 가 ``labelSelector`` 가 되어 폼이 값을 못 찾고 기본값으로
+    채운 뒤 저장 시 운영 값을 덮어썼다. 이름을 값 자리에 둔다(런북 inputs 와 같은 패턴).
+    """
+    return [{"name": str(k), "value": v} for k, v in (values or {}).items()]
+
+
 def list_catalog(db: Session) -> dict[str, Any]:
     """등록 마법사용 카탈로그 — "실행 기술 선택 → 그 기술의 점검 종류 목록"을 API 하나로.
 
@@ -626,6 +731,8 @@ def list_catalog(db: Session) -> dict[str, Any]:
             "param_fields": ct["param_fields"],
             "default_thresholds": ct["default_thresholds"],
             "default_params": ct["default_params"],
+            "default_threshold_values": named_values(ct["default_thresholds"]),
+            "default_param_values": named_values(ct["default_params"]),
             "seed_default": ct["seed_default"],
             # deep_check 는 행 전용 정의(CheckMatrixItem.definition_id)를 붙일 수 있어
             # 같은 종류로 설정이 다른 카드를 여러 장 만들 수 있다.
@@ -784,11 +891,22 @@ def preview_item(
     extra_vars: Optional[dict[str, Any]] = None,
     tags: Optional[str] = None,
     check_mode: bool = True,
+    item: Optional[CheckMatrixItem] = None,
 ) -> dict[str, Any]:
-    """저장 전 1회 실행 — 등록 마법사의 "테스트" 단계. 아무것도 영속화하지 않는다."""
+    """저장 전 1회 실행 — 등록 마법사의 "테스트" 단계. 아무것도 영속화하지 않는다.
+
+    ``item`` 을 주면(항목 상세의 "미리 실행") 그 행이 이 클러스터에서 실제로 쓸 정의의
+    임계값/파라미터를 기본으로 깐다 — 화면이 "지금 설정으로 1회 실행" 이라고 말하는데
+    점검 종류의 기본값으로 돌면 결과가 거짓이 된다. 호출부가 넘긴 값은 그 위에 덮는다.
+    """
     cluster = db.query(Cluster).filter(Cluster.id == cluster_id).first()
     if cluster is None:
         raise ValueError("클러스터를 찾을 수 없습니다.")
+    if item is not None and source_type == CheckMatrixSourceType.deep_check:
+        effective = resolve_definition_for_item(db, item, cluster.id)
+        if effective is not None:
+            thresholds = {**(effective.thresholds or {}), **(thresholds or {})}
+            params = {**(effective.params or {}), **(params or {})}
 
     if source_type == CheckMatrixSourceType.deep_check:
         from app.services.registered_checks.registry import REGISTRY
@@ -837,8 +955,10 @@ def preview_item(
             f"{label}은 안전을 위해 등록 전 미리보기에서 실행하지 않습니다 — "
             "이미 존재하는 항목을 매트릭스에 연결할 뿐이니 '적용' 후 셀에서 실행해 확인하세요."
         )
+        # 실행하지 않았으므로 "정상" 이라고 말하면 안 된다 — pending + skipped 로 구분한다.
         return {
-            "status": "healthy",
+            "status": "pending",
+            "skipped": True,
             "message": message,
             "details": None,
             "duration_ms": 0,
@@ -947,6 +1067,7 @@ def ensure_deep_check_definition(
             DeepCheckDefinition.parent_id.is_(None),
             DeepCheckDefinition.id.notin_(_dedicated_definition_ids(db)),
         )
+        .order_by(DeepCheckDefinition.created_at.asc(), DeepCheckDefinition.id.asc())
         .first()
     )
     if existing is not None:
@@ -1025,6 +1146,9 @@ def item_source_config(db: Session, item: CheckMatrixItem) -> dict[str, Any]:
         "param_fields": [],
         "thresholds": {},
         "params": {},
+        "threshold_values": [],
+        "param_values": [],
+        "shared": False,
         "note": None,
     }
     if item.source_type != CheckMatrixSourceType.deep_check:
@@ -1057,8 +1181,16 @@ def item_source_config(db: Session, item: CheckMatrixItem) -> dict[str, Any]:
     out["editable"] = True
     out["threshold_fields"] = ct.get("threshold_fields", [])
     out["param_fields"] = ct.get("param_fields", [])
-    out["thresholds"] = {**spec.default_thresholds, **((definition.thresholds if definition else None) or {})}
-    out["params"] = {**spec.default_params, **((definition.params if definition else None) or {})}
+    thresholds = {**spec.default_thresholds, **((definition.thresholds if definition else None) or {})}
+    params = {**spec.default_params, **((definition.params if definition else None) or {})}
+    out["thresholds"] = thresholds
+    out["params"] = params
+    # 화면은 이쪽을 읽는다 — dict 키는 응답 변환에서 camelCase 로 바뀌기 때문(named_values 참고).
+    out["threshold_values"] = named_values(thresholds)
+    out["param_values"] = named_values(params)
+    # 공유 정의를 고치면 같은 점검 종류의 다른 행 전체(= 전 클러스터)에 퍼진다 — 화면이 이를
+    # 경고하고, 권한이 없으면 "이 항목 전용으로 분리" 만 허용하도록 알려준다.
+    out["shared"] = definition is not None and not item.definition_id
     out["definition_id"] = str(definition.id) if definition else None
     out["definition_name"] = definition.name if definition else None
     if definition is None:
@@ -1068,6 +1200,34 @@ def item_source_config(db: Session, item: CheckMatrixItem) -> dict[str, Any]:
             f"이 설정은 `{item.source_ref}` 를 쓰는 다른 항목과 공유됩니다 — "
             "이 항목만 다르게 쓰려면 '이 항목 전용 설정으로 분리'를 켜고 저장하세요."
         )
+    return out
+
+
+def coerce_spec_values(
+    fields, values: Optional[dict[str, Any]], *, group: str, ref: Optional[str],
+) -> dict[str, Any]:
+    """폼 값(문자열이든 이미 타입이 맞든)을 spec 필드 타입으로 강제하고 모르는 키는 거부한다.
+
+    예전엔 키 이름만 확인해서 int 필드에 "abc" 가 그대로 저장됐다가 실행 시점에야 실패했다.
+    빈 값/None 은 "기본값으로" — 결과 dict 에서 뺀다.
+    """
+    types = {f.name: f.type for f in fields}
+    out: dict[str, Any] = {}
+    for k, v in (values or {}).items():
+        if k not in types:
+            raise ValueError(f"`{ref}` 에 없는 {group} 필드: {k}")
+        if v is None:
+            continue
+        if isinstance(v, str):
+            coerced = _coerce_field_value(v, types[k])
+        elif types[k] == "int" and isinstance(v, (int, float)) and not isinstance(v, bool):
+            coerced = int(v)
+        elif types[k] == "float" and isinstance(v, (int, float)) and not isinstance(v, bool):
+            coerced = float(v)
+        else:
+            coerced = v
+        if coerced is not None:
+            out[k] = coerced
     return out
 
 
@@ -1092,14 +1252,8 @@ def update_item_source_config(
     if entry is None:
         raise ValueError(f"알 수 없는 check_type: {item.source_ref}")
     spec = entry[1]
-    known_thresholds = {f.name for f in spec.threshold_fields}
-    known_params = {f.name for f in spec.param_fields}
-    for k in (thresholds or {}):
-        if k not in known_thresholds:
-            raise ValueError(f"`{item.source_ref}` 에 없는 thresholds 필드: {k}")
-    for k in (params or {}):
-        if k not in known_params:
-            raise ValueError(f"`{item.source_ref}` 에 없는 params 필드: {k}")
+    thresholds = coerce_spec_values(spec.threshold_fields, thresholds, group="thresholds", ref=item.source_ref)
+    params = coerce_spec_values(spec.param_fields, params, group="params", ref=item.source_ref)
 
     definition = None
     if item.definition_id:
@@ -1271,7 +1425,7 @@ def execute_item_for_cluster(db: Session, item: CheckMatrixItem, cluster: Cluste
     return outcome["run_state"] == CheckMatrixRunState.success.value
 
 
-def run_core_bundle(db: Session, cluster: Cluster) -> None:
+def run_core_bundle(db: Session, cluster: Cluster) -> None:  # cron 경로
     """core_bundle(DailyChecker 원자 실행) — 실행 로그와 함께."""
     item = (
         db.query(CheckMatrixItem)
@@ -1285,12 +1439,24 @@ def run_core_bundle(db: Session, cluster: Cluster) -> None:
     execute_run(db, run.id)
 
 
-def _run_core_bundle_raw(db: Session, cluster: Cluster):
+def _schedule_type_for_now():
+    """cron 실행을 DailyCheckLog 이력에 수동(manual)으로 찍지 않도록 시간대로 라벨링한다."""
+    from app.models import CheckScheduleType
+    hour = datetime.now(_resolve_tz()).hour
+    if hour < 12:
+        return CheckScheduleType.morning
+    if hour < 17:
+        return CheckScheduleType.noon
+    return CheckScheduleType.evening
+
+
+def _run_core_bundle_raw(db: Session, cluster: Cluster, *, scheduled: bool = False):
     import asyncio
     from app.models import CheckScheduleType
     from app.services.core_bundle_checker import DailyChecker
 
-    log = asyncio.run(DailyChecker(db).run_daily_check(str(cluster.id), CheckScheduleType.manual))
+    schedule_type = _schedule_type_for_now() if scheduled else CheckScheduleType.manual
+    log = asyncio.run(DailyChecker(db).run_daily_check(str(cluster.id), schedule_type))
     project_core_bundle_result(db, cluster, log)
     return log
 
@@ -1324,12 +1490,43 @@ def create_run(
         triggered_by=triggered_by,
         run_state=CheckMatrixRunState.queued,
         queued_at=datetime.utcnow(),
-        details={"_definition_id": forced_definition_id} if forced_definition_id else None,
+        details={
+            **({"_definition_id": forced_definition_id} if forced_definition_id else {}),
+            "_log": [_log_line(
+                f"대기열 등록 — «{item.name}» × «{cluster.name}»"
+                + (f" · 요청자 {triggered_by}" if triggered_by else "")
+                + f" · 트리거 {trigger.value}"
+            )],
+        },
     )
     db.add(run)
     db.commit()
     db.refresh(run)
     return run
+
+
+_LOG_MAX_LINES = 300
+
+
+def _log_line(text: str) -> str:
+    return f"[{datetime.now(_resolve_tz()).strftime('%H:%M:%S')}] {text}"
+
+
+def _progress(db: Session, run: CheckMatrixRun, text: str) -> None:
+    """실행 중인 수행에 진행 로그 한 줄을 붙이고 즉시 커밋한다 — 화면이 2초 폴링으로 실시간 표시.
+
+    "모든 실행에는 상세·실시간 로그" 원칙: 결과가 나오기 전에도 지금 무엇을 하는지(대상 해석,
+    체커 실행, 판정)를 볼 수 있어야 한다. 로그 기록 실패가 실행을 막지는 않는다.
+    """
+    try:
+        details = dict(run.details or {})
+        lines = list(details.get("_log") or [])
+        lines.append(_log_line(text))
+        details["_log"] = lines[-_LOG_MAX_LINES:]
+        run.details = details
+        db.commit()
+    except Exception:  # noqa: BLE001
+        db.rollback()
 
 
 def _finish_run(
@@ -1342,11 +1539,27 @@ def _finish_run(
     details: Optional[dict] = None,
     error: Optional[str] = None,
 ) -> None:
+    # 실행 중에 쌓은 진행 로그(_log)는 결과 details 로 덮어써도 보존하고, 마감 줄을 붙인다.
+    prev_log = list(((run.details or {}) if isinstance(run.details, dict) else {}).get("_log") or [])
+    outcome = {
+        CheckMatrixRunState.success: "완료",
+        CheckMatrixRunState.failed: "실패",
+        CheckMatrixRunState.skipped: "건너뜀",
+    }.get(state, state.value if hasattr(state, "value") else str(state))
+    tail = f"{outcome}"
+    if status is not None:
+        tail += f" · 판정 {status.value if hasattr(status, 'value') else status}"
+    if value is not None:
+        tail += f" · 값 {value}"
+    if error or message:
+        tail += f" — {error or message}"
+    merged = dict(details or {})
+    merged["_log"] = (prev_log + [_log_line(tail)])[-_LOG_MAX_LINES:]
     run.run_state = state
     run.status = status
     run.value = value
     run.message = message
-    run.details = details
+    run.details = merged
     run.error = error
     run.finished_at = datetime.utcnow()
     if run.started_at:
@@ -1368,6 +1581,7 @@ def execute_run(db: Session, run_id) -> dict[str, Any]:
     run.run_state = CheckMatrixRunState.running
     run.started_at = datetime.utcnow()
     db.commit()
+    _progress(db, run, "실행 시작 — 워커가 수행을 집었습니다.")
 
     if item is None or cluster is None:
         _finish_run(run, CheckMatrixRunState.failed, error="항목 또는 클러스터가 삭제되었습니다.")
@@ -1381,7 +1595,10 @@ def execute_run(db: Session, run_id) -> dict[str, Any]:
         # rollback 이 run 을 만료시키므로 다시 읽어 실패로 마감한다.
         run = db.query(CheckMatrixRun).filter(CheckMatrixRun.id == run_id).first()
         if run is not None:
-            _finish_run(run, CheckMatrixRunState.failed, error=str(e)[:1000])
+            _finish_run(
+                run, CheckMatrixRunState.failed, error=f"{type(e).__name__}: {str(e)[:1000]}",
+                details={k: v for k, v in (run.details or {}).items() if k != "_log"} or None,
+            )
             db.commit()
         logger.exception("check-matrix run failed run_id=%s", run_id)
     return _run_to_dict(run) if run is not None else {"error": "run lost", "run_id": str(run_id)}
@@ -1395,6 +1612,14 @@ def _execute_into_run(
     runbook = build_runbook(db, item, cluster)
     base_details: dict[str, Any] = {"_runbook": runbook}
     forced_definition_id = (run.details or {}).get("_definition_id")
+    _progress(
+        db, run,
+        f"실행 계획 — 방식 {item.source_type.value}"
+        + (f" · 대상 {runbook.get('target')}" if runbook.get("target") else "")
+        + (f" · 명령 {len(runbook.get('commands') or [])}개" if runbook.get("commands") else ""),
+    )
+    if runbook.get("blocked_reason"):
+        _progress(db, run, f"주의: {runbook['blocked_reason']}")
 
     if item.source_type == CheckMatrixSourceType.manual:
         _finish_run(
@@ -1406,7 +1631,8 @@ def _execute_into_run(
         return
 
     if item.source_type == CheckMatrixSourceType.core_bundle:
-        log = _run_core_bundle_raw(db, cluster)
+        _progress(db, run, "핵심 점검(DailyChecker) 실행 중 — API 서버·컴포넌트·노드·시스템 파드")
+        log = _run_core_bundle_raw(db, cluster, scheduled=run.trigger == CheckMatrixTrigger.cron)
         value = (
             float(log.api_server_response_time_ms)
             if log.api_server_response_time_ms is not None else None
@@ -1452,7 +1678,11 @@ def _execute_into_run(
         from app.services.check_definition_runner import DeepCheckService
         from app.services.registered_checks.registry import extract_cell_value
 
+        _progress(db, run, f"점검 정의 «{definition.name}» 실행 중 (check_type={definition.check_type})")
         res = DeepCheckService(db).run_definition_once(definition.id, cluster=cluster, persist=True)
+        for st in (res.get("details") or {}).get("_steps") or res.get("steps") or []:
+            if isinstance(st, dict):
+                _progress(db, run, f"단계 {st.get('label') or st.get('id')}: {st.get('status', '')} {st.get('detail') or st.get('message') or ''}".rstrip())
         try:
             status = StatusEnum(res.get("status", "pending"))
         except ValueError:
@@ -1479,6 +1709,7 @@ def _execute_into_run(
             db.commit()
             return
         from app.services.health_checker import HealthChecker
+        _progress(db, run, f"애드온 «{addon.name}» 헬스 체크 실행 중")
         result = HealthChecker(db).run_single_addon_check(cluster.id, addon.id)
         if result is None:
             _finish_run(
@@ -1526,6 +1757,7 @@ def _execute_into_run(
         # host/password/private_key 를 넘기지 않으면 execute_job() 이 job 에 저장된
         # 스케줄용 자격증명으로 자동 폴백한다(없으면 그 사유가 실행 결과에 그대로 남는다).
         bj_trigger = "schedule" if run.trigger == CheckMatrixTrigger.cron else "manual"
+        _progress(db, run, f"배치잡 «{job.name}» 실행 중 (job_type={job.job_type})")
         try:
             _job_run, exec_result = asyncio.run(batch_job_service.execute_job(
                 db, job, trigger=bj_trigger, triggered_by_username=run.triggered_by,
@@ -1551,6 +1783,7 @@ def _execute_into_run(
         _upsert_result(db, item.id, cluster.id, status, None, message, details)
         _finish_run(run, CheckMatrixRunState.success, status=status, value=None, message=message, details=details)
         db.commit()
+        _maybe_recompute_cluster(db, item.id, cluster.id)
         return
 
     if item.source_type == CheckMatrixSourceType.playbook:
@@ -1566,6 +1799,7 @@ def _execute_into_run(
         from app.services import playbook_service
 
         pb_trigger = "schedule" if run.trigger == CheckMatrixTrigger.cron else "check_matrix"
+        _progress(db, run, f"플레이북 «{playbook.name}» 실행 중 (ansible-playbook)")
         try:
             _pb_run, pb_result = playbook_service.execute_playbook_run(
                 db, playbook, trigger=pb_trigger, triggered_by_username=run.triggered_by,
@@ -1585,6 +1819,7 @@ def _execute_into_run(
             status=status, value=None, message=pb_result.message or "", details=details,
         )
         db.commit()
+        _maybe_recompute_cluster(db, item.id, cluster.id)
         return
 
     _finish_run(
@@ -1648,6 +1883,16 @@ def execute_definition_for_cluster(db: Session, definition_id, cluster: Cluster)
         DeepCheckService(db).run_definition_once(definition.id, cluster=cluster, persist=True)
         return {"definition_id": str(definition.id), "cluster_id": str(cluster.id), "logged": False}
 
+    # 글로벌 정의의 cron 이 전 클러스터로 퍼질 때, 이 클러스터에 오버라이드(클러스터 전용
+    # 사본)가 있으면 그 셀의 실효 정의는 사본이다 — 글로벌 값으로 덮어 돌리면 셀이 오버라이드
+    # 결과와 글로벌 결과를 번갈아 보여 준다. 실효 정의가 이것이 아니면 이번 발화는 건너뛴다
+    # (오버라이드 셀은 자기 셀 cron 으로 돈다).
+    effective = resolve_definition_for_item(db, item, cluster.id)
+    if effective is not None and effective.id != definition.id:
+        return {
+            "definition_id": str(definition.id), "cluster_id": str(cluster.id),
+            "logged": False, "skipped": "cluster_override",
+        }
     run = create_run(
         db, item, cluster,
         trigger=CheckMatrixTrigger.cron, forced_definition_id=str(definition.id),
@@ -1659,12 +1904,54 @@ def execute_definition_for_cluster(db: Session, definition_id, cluster: Cluster)
 def run_cell_now(
     db: Session, item: CheckMatrixItem, cluster: Cluster, *, triggered_by: Optional[str] = None,
 ) -> dict[str, Any]:
-    """셀 1건 동기 실행 — 즉시 결과를 돌려준다(요청 스레드에서 실행)."""
+    """셀 1건 동기 실행 — 요청 스레드에서 끝까지 실행한다(테스트·내부 호출용).
+
+    화면의 "지금 실행" 은 ``queue_cell_now`` 를 쓴다 — 동기 HTTP 는 프록시 타임아웃(60s)에
+    잘리고 실행 중 로그를 볼 수 없다.
+    """
     run = create_run(
         db, item, cluster,
         trigger=CheckMatrixTrigger.manual_cell, triggered_by=triggered_by, batch_id=uuid.uuid4(),
     )
     return execute_run(db, run.id)
+
+
+_DEFAULT_TASK_TIME_LIMIT = 280
+
+
+def _task_time_limit(db: Session, item: CheckMatrixItem) -> Optional[int]:
+    """플레이북 행은 Playbook.timeout_seconds(최대 1800초)가 기본 셀 태스크 한도(280초)를 넘을 수 있다 —
+    태스크를 그보다 넉넉히(+60초) 잡지 않으면 ansible 이 끝나기 전에 워커가 강제 종료한다."""
+    if item.source_type != CheckMatrixSourceType.playbook or not item.source_ref:
+        return None
+    longest = (
+        db.query(Playbook.timeout_seconds)
+        .filter(Playbook.name == item.source_ref, Playbook.timeout_seconds.isnot(None))
+        .order_by(Playbook.timeout_seconds.desc())
+        .limit(1)
+        .scalar()
+    )
+    if not longest or longest + 60 <= _DEFAULT_TASK_TIME_LIMIT:
+        return None
+    return int(longest) + 60
+
+
+def _active_pairs(db: Session, pairs: list[tuple[CheckMatrixItem, Cluster]]) -> dict[tuple[str, str], CheckMatrixRun]:
+    """이미 queued/running 인 (item, cluster) 수행 — 같은 셀을 두 번 큐잉하지 않기 위해."""
+    if not pairs:
+        return {}
+    item_ids = {i.id for i, _ in pairs}
+    cluster_ids = {c.id for _, c in pairs}
+    rows = (
+        db.query(CheckMatrixRun)
+        .filter(
+            CheckMatrixRun.run_state.in_([CheckMatrixRunState.queued, CheckMatrixRunState.running]),
+            CheckMatrixRun.item_id.in_(item_ids),
+            CheckMatrixRun.cluster_id.in_(cluster_ids),
+        )
+        .all()
+    )
+    return {(str(r.item_id), str(r.cluster_id)): r for r in rows}
 
 
 def start_batch(
@@ -1679,18 +1966,26 @@ def start_batch(
     큐잉만 하고 즉시 반환하므로 요청이 오래 물리지 않는다. 호출자는 batch_id 로
     진행 상황(queued → running → success/failed)을 폴링한다. Celery 가 없거나
     큐잉이 실패하면 해당 run 은 failed 로 마감돼 UI 에서 원인을 볼 수 있다.
+
+    이미 실행 중/대기 중인 셀은 다시 큐잉하지 않는다(더블 클릭·연타·cron 과 수동 실행의
+    겹침 방지) — 응답의 ``skipped`` / ``active_run_ids`` 로 알려준다.
     """
     batch_id = uuid.uuid4()
+    active = _active_pairs(db, pairs)
+    fresh = [(i, c) for i, c in pairs if (str(i.id), str(c.id)) not in active]
     runs = [
         create_run(db, item, cluster, trigger=trigger, triggered_by=triggered_by, batch_id=batch_id)
-        for item, cluster in pairs
+        for item, cluster in fresh
     ]
     queued = 0
     errors: list[str] = []
+    limits = {str(i.id): _task_time_limit(db, i) for i, _ in fresh}
     for run in runs:
         try:
             from app.celery_app import run_check_matrix_run_one
-            run_check_matrix_run_one.apply_async(args=[str(run.id)])
+            limit = limits.get(str(run.item_id))
+            opts = {"time_limit": limit, "soft_time_limit": limit - 30} if limit else {}
+            run_check_matrix_run_one.apply_async(args=[str(run.id)], **opts)
             queued += 1
         except Exception as e:  # noqa: BLE001
             logger.exception("check-matrix batch queue failed run_id=%s", run.id)
@@ -1704,9 +1999,34 @@ def start_batch(
         "batch_id": str(batch_id),
         "total": len(runs),
         "queued": queued,
+        "skipped": len(pairs) - len(fresh),
         "errors": errors,
         "run_ids": [str(r.id) for r in runs],
+        "active_run_ids": [str(r.id) for r in active.values()],
     }
+
+
+def queue_cell_now(
+    db: Session, item: CheckMatrixItem, cluster: Cluster, *, triggered_by: Optional[str] = None,
+) -> dict[str, Any]:
+    """셀 1건 비동기 실행 — queued 수행 레코드를 즉시 돌려준다.
+
+    화면은 받은 ``id`` 로 ``GET /runs/{id}`` 를 폴링해 단계·명령 출력을 실시간으로 보여 준다.
+    같은 셀이 이미 실행 중이면 새로 만들지 않고 그 수행을 ``deduplicated=True`` 로 돌려준다.
+    """
+    out = start_batch(
+        db, [(item, cluster)],
+        trigger=CheckMatrixTrigger.manual_cell, triggered_by=triggered_by,
+    )
+    run_id = (out["run_ids"] or out["active_run_ids"] or [None])[0]
+    run = db.query(CheckMatrixRun).filter(CheckMatrixRun.id == run_id).first() if run_id else None
+    if run is None:
+        raise RuntimeError("수행 레코드를 만들지 못했습니다.")
+    d = _run_to_dict(run)
+    d["deduplicated"] = not out["run_ids"]
+    d["item_name"] = item.name
+    d["cluster_name"] = cluster.name
+    return d
 
 
 def run_cluster_now(
@@ -1722,13 +2042,23 @@ def run_cluster_now(
 
 def run_item_now(
     db: Session, item: CheckMatrixItem, *, triggered_by: Optional[str] = None,
+    allowed_cluster_ids: Optional[Iterable[Any]] = None,
 ) -> dict[str, Any]:
-    """공통 점검 항목(행) 단위 — 등록된 모든 클러스터에 같은 점검을 일괄 수행."""
+    """공통 점검 항목(행) 단위 — 이 사용자가 실행할 수 있는 클러스터에 같은 점검을 일괄 수행.
+
+    ``allowed_cluster_ids`` 가 주어지면 그 안의 클러스터만 대상이다 — 라우터가 테넌트
+    바인딩(operate)을 통과한 클러스터만 넘긴다. 다른 테넌트 클러스터로 새면 안 된다.
+    """
     clusters = db.query(Cluster).order_by(Cluster.seq.asc(), Cluster.name.asc()).all()
-    return start_batch(
+    if allowed_cluster_ids is not None:
+        allowed = {str(c) for c in allowed_cluster_ids}
+        clusters = [c for c in clusters if str(c.id) in allowed]
+    out = start_batch(
         db, [(item, c) for c in clusters],
         trigger=CheckMatrixTrigger.manual_item, triggered_by=triggered_by,
     )
+    out["cluster_count"] = len(clusters)
+    return out
 
 
 # ──────────────────────────────────────────────────────────────
@@ -1857,11 +2187,17 @@ def update_source_config(
             raise ValueError(
                 f"이 클러스터에 `{item.source_ref}` 애드온이 등록돼 있지 않습니다."
             )
+        from app.services.check_matrix_runbook import MASKED_VALUE, is_secret_key
+
         config = dict(addon.config or {})
         for e in entries:
             if e["group"] != "config":
                 raise ValueError(f"애드온은 config 그룹만 수정할 수 있습니다: {e['group']}")
             name, raw = e["name"], (e.get("value") or "").strip()
+            # 런북은 비밀값을 ******** 로 가려 보낸다 — 그대로 돌아오면 "바꾸지 않음" 이다
+            # (가린 문자열로 실제 토큰을 덮어쓰면 안 된다).
+            if raw == MASKED_VALUE and is_secret_key(name) and name in config:
+                continue
             if raw == "":
                 config.pop(name, None)
                 continue
@@ -1906,6 +2242,8 @@ def _run_to_dict(run: CheckMatrixRun, *, include_details: bool = False) -> dict[
         out["step_plan"] = details.pop("_step_plan", []) or []
         out["commands"] = details.pop("_commands", []) or []
         out["runbook"] = details.pop("_runbook", None)
+        out["log_lines"] = details.pop("_log", []) or []
+        details.pop("_definition_id", None)
         out["details"] = details
     return out
 
@@ -1920,8 +2258,11 @@ def list_runs(
     run_state: Optional[str] = None,
     limit: int = 50,
     offset: int = 0,
+    hidden_cluster_ids: Optional[Iterable[Any]] = None,
 ) -> dict[str, Any]:
     q = db.query(CheckMatrixRun)
+    if hidden_cluster_ids:
+        q = q.filter(CheckMatrixRun.cluster_id.notin_(list(hidden_cluster_ids)))
     if item_id:
         q = q.filter(CheckMatrixRun.item_id == item_id)
     if cluster_id:
@@ -1929,7 +2270,10 @@ def list_runs(
     if batch_id:
         q = q.filter(CheckMatrixRun.batch_id == batch_id)
     if trigger:
-        q = q.filter(CheckMatrixRun.trigger == trigger)
+        try:
+            q = q.filter(CheckMatrixRun.trigger == CheckMatrixTrigger(trigger))
+        except ValueError:
+            raise ValueError(f"알 수 없는 trigger: {trigger}")
     if run_state:
         states = []
         for token in run_state.split(","):
@@ -1941,15 +2285,25 @@ def list_runs(
         if states:
             q = q.filter(CheckMatrixRun.run_state.in_(states))
     total = q.count()
+    limit = max(1, min(limit, 200))
+    offset = max(0, offset)
     rows = (
         q.order_by(CheckMatrixRun.queued_at.desc())
-        .offset(max(0, offset))
-        .limit(max(1, min(limit, 200)))
+        .offset(offset)
+        .limit(limit)
         .all()
     )
-    # 이름 조인은 N+1 을 피하려 한 번에 맵으로 만든다.
-    item_names = {str(i.id): i.name for i in db.query(CheckMatrixItem).all()}
-    cluster_names = {str(c.id): c.name for c in db.query(Cluster).all()}
+    # 이름 조인은 N+1 을 피하려 이번 페이지에 나온 id 만 한 번에 맵으로 만든다.
+    page_items = {r.item_id for r in rows}
+    page_clusters = {r.cluster_id for r in rows}
+    item_names = {
+        str(i.id): i.name
+        for i in db.query(CheckMatrixItem.id, CheckMatrixItem.name).filter(CheckMatrixItem.id.in_(page_items))
+    } if page_items else {}
+    cluster_names = {
+        str(c.id): c.name
+        for c in db.query(Cluster.id, Cluster.name).filter(Cluster.id.in_(page_clusters))
+    } if page_clusters else {}
     runs = []
     for r in rows:
         d = _run_to_dict(r)
@@ -1984,10 +2338,31 @@ def _resolve_tz():
 
 def _anchor_naive(last_run_at: Optional[datetime], now_utc: datetime, tz) -> datetime:
     from datetime import timezone as _tz
-    raw = last_run_at or (now_utc - timedelta(days=1))
+    # last_run_at 이 비어 있으면 "방금 막 등록됨" 으로 본다 — 예전엔 하루 전을 기준점으로 잡아
+    # 새 스케줄(예: 0 3 * * *)이 등록 1분 안에 엉뚱한 시각에 발화했다. 이번 분에 걸리는 cron 만
+    # 발화하도록 1분 전을 기준점으로 쓴다.
+    raw = last_run_at or (now_utc - timedelta(seconds=61))
     if raw.tzinfo is None:
         raw = raw.replace(tzinfo=_tz.utc)
     return raw.astimezone(tz).replace(tzinfo=None)
+
+
+def _claim(db: Session, column, row_id_col, row_id, old_value, new_value) -> bool:
+    """``last_run_at`` 조건부 갱신 — 동시에 돈 디스패처 둘 중 하나만 이 발화를 가져간다.
+
+    읽은 값(old_value)이 그대로일 때만 갱신하고 rowcount 로 승패를 가린다. 디스패처가 워커 슬롯
+    대기로 밀려 같은 분에 두 개가 겹쳐 실행돼도 셀이 두 번 큐잉되지 않는다.
+    """
+    from sqlalchemy import update as _update
+
+    table = row_id_col.class_
+    cond = column.is_(None) if old_value is None else column == old_value
+    res = db.execute(
+        _update(table).where(row_id_col == row_id, cond).values({column.key: new_value})
+        .execution_options(synchronize_session=False)
+    )
+    db.commit()
+    return (res.rowcount or 0) == 1
 
 
 def dispatch_due(db: Session, *, jitter_seconds: float = 20.0) -> dict[str, Any]:
@@ -2047,8 +2422,8 @@ def dispatch_due(db: Session, *, jitter_seconds: float = 20.0) -> dict[str, Any]
             continue
         if next_fire > now_naive:
             continue
-        cluster.check_last_run_at = check_at
-        db.commit()
+        if not _claim(db, Cluster.check_last_run_at, Cluster.id, cluster.id, cluster.check_last_run_at, check_at):
+            continue
         try:
             run_check_matrix_core_bundle_one.apply_async(
                 args=[str(cluster.id)], countdown=_countdown(),
@@ -2079,9 +2454,16 @@ def dispatch_due(db: Session, *, jitter_seconds: float = 20.0) -> dict[str, Any]
 
         item = db.query(CheckMatrixItem).filter(CheckMatrixItem.id == sch.item_id).first()
         cluster = db.query(Cluster).filter(Cluster.id == sch.cluster_id).first()
-        sch.last_run_at = check_at
-        db.commit()
-        if item is None or cluster is None:
+        # 비활성 항목·수동 입력 항목은 cron 대상이 아니다 — 예전엔 비활성 항목도 계속 돌았고,
+        # 수동 항목은 매 주기 "건너뜀" 로그를 쌓았다.
+        if (
+            item is None or cluster is None or not item.enabled
+            or item.source_type in (CheckMatrixSourceType.manual, CheckMatrixSourceType.core_bundle)
+        ):
+            continue
+        if not _claim(
+            db, CheckMatrixSchedule.last_run_at, CheckMatrixSchedule.id, sch.id, sch.last_run_at, check_at,
+        ):
             continue
         try:
             run_check_matrix_cell_one.apply_async(
@@ -2114,8 +2496,10 @@ def dispatch_due(db: Session, *, jitter_seconds: float = 20.0) -> dict[str, Any]
             continue
         if next_fire > now_naive:
             continue
-        d.last_run_at = check_at
-        db.commit()
+        if not _claim(
+            db, DeepCheckDefinition.last_run_at, DeepCheckDefinition.id, d.id, d.last_run_at, check_at,
+        ):
+            continue
 
         if d.cluster_id is not None:
             targets = db.query(Cluster).filter(Cluster.id == d.cluster_id).all()
@@ -2149,29 +2533,51 @@ def dispatch_due(db: Session, *, jitter_seconds: float = 20.0) -> dict[str, Any]
     }
 
 
-_STALE_RUN_MINUTES = 30  # 개별 태스크 time_limit(280s) 대비 충분한 여유
+_STALE_RUN_MINUTES = 30  # running: 개별 태스크 time_limit(280s) 대비 충분한 여유
+# queued: 테넌트 동시 실행 슬롯 대기(최대 20분)와 2-slot 워커 큐 적체를 감안해 넉넉히 —
+# 예전엔 queued 도 30분이라, 많은 클러스터를 한 번에 돌리면 아직 차례를 기다리던 수행이
+# "워커 재시작" 으로 오인 마감되고 run_one 이 이를 건너뛰어 영영 실행되지 않았다.
+_STALE_QUEUED_MINUTES = 90
 
 
 def _sweep_stale_runs(db: Session) -> int:
-    """queued/running 인 채 30분을 넘긴 수행을 실패로 마감한다 (워커 사망 등)."""
-    cutoff = datetime.utcnow() - timedelta(minutes=_STALE_RUN_MINUTES)
+    """오래 끝나지 않은 수행을 실패로 마감한다 (워커 사망 등).
+
+    running 은 시작 시각(started_at) 기준 30분, queued 는 큐잉 시각 기준 90분.
+    """
+    from sqlalchemy import and_, or_
+
+    now = datetime.utcnow()
+    running_cutoff = now - timedelta(minutes=_STALE_RUN_MINUTES)
+    queued_cutoff = now - timedelta(minutes=_STALE_QUEUED_MINUTES)
     try:
         swept = (
             db.query(CheckMatrixRun)
-            .filter(
-                CheckMatrixRun.run_state.in_(
-                    [CheckMatrixRunState.queued, CheckMatrixRunState.running],
+            .filter(or_(
+                and_(
+                    CheckMatrixRun.run_state == CheckMatrixRunState.running,
+                    CheckMatrixRun.started_at.isnot(None),
+                    CheckMatrixRun.started_at < running_cutoff,
                 ),
-                CheckMatrixRun.queued_at < cutoff,
-            )
+                and_(
+                    CheckMatrixRun.run_state == CheckMatrixRunState.running,
+                    CheckMatrixRun.started_at.is_(None),
+                    CheckMatrixRun.queued_at < running_cutoff,
+                ),
+                and_(
+                    CheckMatrixRun.run_state == CheckMatrixRunState.queued,
+                    CheckMatrixRun.queued_at < queued_cutoff,
+                ),
+            ))
             .update(
                 {
                     CheckMatrixRun.run_state: CheckMatrixRunState.failed,
                     CheckMatrixRun.error: (
-                        f"{_STALE_RUN_MINUTES}분 넘게 완료되지 않아 실패로 마감했습니다 — "
-                        "Celery 워커가 재시작됐거나 태스크가 유실됐을 수 있습니다."
+                        "제한 시간 안에 완료되지 않아 실패로 마감했습니다 — "
+                        "Celery 워커가 재시작됐거나 태스크가 유실됐을 수 있습니다 "
+                        f"(실행 중 {_STALE_RUN_MINUTES}분 / 대기 {_STALE_QUEUED_MINUTES}분 초과)."
                     ),
-                    CheckMatrixRun.finished_at: datetime.utcnow(),
+                    CheckMatrixRun.finished_at: now,
                 },
                 synchronize_session=False,
             )
@@ -2189,14 +2595,28 @@ def _sweep_stale_runs(db: Session) -> int:
 # ──────────────────────────────────────────────────────────────
 # 리텐션 정리 (일 1회 Celery Beat)
 # ──────────────────────────────────────────────────────────────
-def purge_expired_logs(db: Session, *, max_batches: int = 50, batch_size: int = 5000) -> dict[str, Any]:
-    """task_time_limit(5분) 보호 — 청크 단위 삭제 + 배치 상한."""
+def purge_expired_logs(
+    db: Session, *, batch_size: int = 5000, time_budget_seconds: float = 240.0,
+) -> dict[str, Any]:
+    """보관 기간이 지난 값 이력·수행 로그를 청크 단위로 지운다.
+
+    예전엔 테이블당 하루 50×5000=250k 행 상한이 있어, 하루에 그보다 많이 쌓이는 설치본은 영원히
+    따라잡지 못했다. 이제는 행 수가 아니라 **시간 예산**(태스크 한도 300초 안쪽의 240초)으로 끊는다 —
+    예산 안에서는 다 지울 때까지 돌고, 남으면 ``remaining=True`` 로 알려 다음 날 이어서 지운다.
+    """
+    import time as _time
+
     retention_days = get_settings(db)["retention_days"]
     cutoff = datetime.utcnow() - timedelta(days=retention_days)
+    deadline = _time.monotonic() + time_budget_seconds
+    state = {"remaining": False}
 
     def _purge(model, ts_col) -> int:
         deleted = 0
-        for _ in range(max_batches):
+        while True:
+            if _time.monotonic() >= deadline:
+                state["remaining"] = True
+                break
             ids = [
                 row[0]
                 for row in db.query(model.id).filter(ts_col < cutoff).limit(batch_size).all()
@@ -2213,18 +2633,32 @@ def purge_expired_logs(db: Session, *, max_batches: int = 50, batch_size: int = 
     # 실행 로그(runs)는 details 에 명령 출력 발췌를 담아 행이 크므로 값 이력과 함께 정리한다.
     total_deleted = _purge(CheckMatrixResultLog, CheckMatrixResultLog.checked_at)
     runs_deleted = _purge(CheckMatrixRun, CheckMatrixRun.queued_at)
+    if state["remaining"]:
+        logger.warning("check-matrix purge: 시간 예산(%ss) 소진 — 남은 행은 다음 정리 때 이어서 지운다", time_budget_seconds)
     return {
         "retention_days": retention_days,
         "deleted": total_deleted,
         "runs_deleted": runs_deleted,
+        "remaining": state["remaining"],
     }
 
 
 # ──────────────────────────────────────────────────────────────
 # 기본 항목 시드 (main.py lifespan, 테이블 비어있을 때만)
 # ──────────────────────────────────────────────────────────────
+_SEED_LOCK_KEY = 0x434D5345  # "CMSE" — 백엔드 레플리카 여러 개가 동시에 부팅할 때의 시드 경합 가드
+
+
 def seed_default_items(db: Session) -> int:
+    # 트랜잭션 범위 advisory lock — 레플리카 둘이 동시에 "비어 있음" 을 보고 핵심 항목(core_bundle)을
+    # 두 번 만드는 경합을 막는다. 뒤에 온 쪽은 앞쪽 커밋을 기다렸다가 count>0 을 보고 빠진다.
+    from sqlalchemy import text as _text
+    try:
+        db.execute(_text("SELECT pg_advisory_xact_lock(:k)"), {"k": _SEED_LOCK_KEY})
+    except Exception:  # noqa: BLE001 — PostgreSQL 이 아니면 잠금 없이 진행(테스트 환경 등)
+        db.rollback()
     if db.query(CheckMatrixItem).count() > 0:
+        db.commit()  # 잠금 해제
         return 0
 
     added = 0
@@ -2268,6 +2702,11 @@ def seed_default_items(db: Session) -> int:
         sort_order += 10
         added += 1
 
+    db.flush()
+    seeded_deep_ids = [
+        r[0] for r in db.query(CheckMatrixItem.id)
+        .filter(CheckMatrixItem.source_type == CheckMatrixSourceType.deep_check)
+    ]
     addon_types = sorted({row[0] for row in db.query(Addon.type).distinct().all() if row[0]})
     for addon_type in addon_types:
         category = _ADDON_CATEGORIES.get(addon_type)
@@ -2285,6 +2724,7 @@ def seed_default_items(db: Session) -> int:
         added += 1
 
     db.commit()
+    record_seeded_items(db, seeded_deep_ids)
     return added
 
 
@@ -2351,42 +2791,151 @@ def backfill_item_metadata(db: Session) -> int:
 backfill_item_units = backfill_item_metadata
 
 
-def seed_default_schedules(db: Session) -> int:
-    """시드 직후 1회 — deep_check 행 중 REGISTRY.default_enabled=True 인 항목만
-    기존 +15분 오프셋 cron 으로 클러스터마다 활성화(기존 자동 실행 동작 보존).
-    addon 행은 기존에도 자동 cron 이 없었으므로 스케줄을 만들지 않는다(수동 트리거만).
+SCHEDULE_SEED_STATE_KEY = "check_matrix.schedule_seed_state"
+DEFAULT_SEED_CRON = "15 9,13,18 * * *"
+
+
+def _schedule_seed_state(db: Session):
+    from app.models.app_setting import AppSetting
+    row = db.query(AppSetting).filter(AppSetting.key == SCHEDULE_SEED_STATE_KEY).first()
+    val = row.value if row and isinstance(row.value, dict) else None
+    return row, val
+
+
+def seed_default_schedules(db: Session, *, cluster_ids: Optional[Iterable[Any]] = None) -> int:
+    """기본 등록(seed) deep_check 행에 클러스터별 기본 cron(``15 9,13,18 * * *``)을 1회만 부여한다.
+
+    예전엔 매 부팅마다 "스케줄 행이 없는 모든 deep_check 항목 × 클러스터" 에 cron 을 다시 넣었다 —
+    운영자가 일부러 주기를 비워 둔 사용자 생성 항목까지 재스케줄되고, 새 클러스터는 다음
+    재시작 전까지 자동 점검이 없었다. 이제는 AppSetting 에 "시드한 항목/클러스터" 를 기록해,
+
+    - 처음 한 번: 시드 출처 항목(``seed_item_ids``)에만 부여.
+    - 그 뒤: 아직 시드하지 않은 **클러스터**(새로 추가된 클러스터)에만 부여 — 클러스터 생성
+      API 가 ``cluster_ids`` 로 즉시 호출하고, 부팅 시에도 누락분을 메운다.
+    - 구버전 설치본(기록 없음): 현재 상태를 기록만 하고 아무것도 추가하지 않는다(보존).
+
+    시드된 행은 ``last_run_at = now`` 로 만들어 등록 직후 즉시 발화하지 않는다.
     """
+    from app.models.app_setting import AppSetting
     from app.services.registered_checks import REGISTRY
 
-    items = (
+    row, state = _schedule_seed_state(db)
+    all_clusters = db.query(Cluster).all()
+    deep_items = (
         db.query(CheckMatrixItem)
         .filter(CheckMatrixItem.source_type == CheckMatrixSourceType.deep_check)
         .all()
     )
-    if not items:
+    if state is None:
+        # 구버전 설치본: 지금 있는 deep_check 항목을 "시드 출처" 로, 지금 있는 클러스터를 "처리됨"
+        # 으로 기록만 한다(이미 운영 중인 스케줄 구성을 바꾸지 않는다).
+        state = {
+            "seed_item_ids": [str(i.id) for i in deep_items if i.definition_id is None],
+            "seeded_cluster_ids": [str(c.id) for c in all_clusters],
+        }
+        if row is None:
+            db.add(AppSetting(key=SCHEDULE_SEED_STATE_KEY, value=state))
+        else:
+            row.value = state
+        db.commit()
         return 0
-    clusters = db.query(Cluster).all()
-    if not clusters:
+
+    seed_item_ids = set(state.get("seed_item_ids") or [])
+    seeded_clusters = set(state.get("seeded_cluster_ids") or [])
+    wanted = {str(c) for c in cluster_ids} if cluster_ids is not None else None
+    targets = [
+        c for c in all_clusters
+        if str(c.id) not in seeded_clusters and (wanted is None or str(c.id) in wanted)
+    ]
+    if not targets:
         return 0
 
     existing = {(str(s.item_id), str(s.cluster_id)) for s in db.query(CheckMatrixSchedule).all()}
+    now = datetime.utcnow()
     added = 0
-    for item in items:
-        entry = REGISTRY.get(item.source_ref)
-        default_enabled = bool(entry[1].default_enabled) if entry else True
-        if not default_enabled:
+    for item in deep_items:
+        if str(item.id) not in seed_item_ids:
             continue
-        for cluster in clusters:
-            key = (str(item.id), str(cluster.id))
-            if key in existing:
+        entry = REGISTRY.get(item.source_ref)
+        if not (bool(entry[1].default_enabled) if entry else True):
+            continue
+        for cluster in targets:
+            if (str(item.id), str(cluster.id)) in existing:
                 continue
             db.add(CheckMatrixSchedule(
-                item_id=item.id,
-                cluster_id=cluster.id,
-                cron_expr="15 9,13,18 * * *",
-                enabled=True,
+                item_id=item.id, cluster_id=cluster.id,
+                cron_expr=DEFAULT_SEED_CRON, enabled=True, last_run_at=now,
             ))
             added += 1
-    if added:
-        db.commit()
+    state = {
+        "seed_item_ids": sorted(seed_item_ids),
+        "seeded_cluster_ids": sorted(seeded_clusters | {str(c.id) for c in targets}),
+    }
+    row, _ = _schedule_seed_state(db)
+    if row is None:
+        db.add(AppSetting(key=SCHEDULE_SEED_STATE_KEY, value=state))
+    else:
+        row.value = state
+    db.commit()
     return added
+
+
+def record_seeded_items(db: Session, item_ids: Iterable[Any]) -> None:
+    """``seed_default_items`` 가 방금 만든 deep_check 행을 "시드 출처" 로 기록한다(신규 설치)."""
+    from app.models.app_setting import AppSetting
+
+    row, state = _schedule_seed_state(db)
+    state = dict(state or {"seed_item_ids": [], "seeded_cluster_ids": []})
+    state["seed_item_ids"] = sorted(set(state.get("seed_item_ids") or []) | {str(i) for i in item_ids})
+    if row is None:
+        db.add(AppSetting(key=SCHEDULE_SEED_STATE_KEY, value=state))
+    else:
+        row.value = state
+    db.commit()
+
+
+# ──────────────────────────────────────────────────────────────
+# 항목 삭제 / 실행 소스 변경 시 정리
+# ──────────────────────────────────────────────────────────────
+def delete_dedicated_definition(db: Session, definition_id, *, keep_item_id=None) -> bool:
+    """행 전용 정의와 그 클러스터 오버라이드(parent_id)를 지운다 — 다른 행이 물고 있으면 보존.
+
+    그대로 남겨 두면, 더 이상 아무 행도 물지 않는 순간 check_type 공유 해석이 그 정의를
+    "공유 글로벌 정의" 로 오인해 같은 종류의 다른 행이 삭제된 카드의 URL/임계값으로 돌았다.
+    이력(DeepCheckResult)은 남기되 정의 참조만 끊는다(운영 점검 화면의 삭제와 같은 방식).
+    """
+    from app.models import DeepCheckResult
+
+    if not definition_id:
+        return False
+    other = (
+        db.query(CheckMatrixItem.id)
+        .filter(CheckMatrixItem.definition_id == definition_id)
+    )
+    if keep_item_id is not None:
+        other = other.filter(CheckMatrixItem.id != keep_item_id)
+    if other.first() is not None:
+        return False
+    ids = [definition_id] + [
+        r[0] for r in db.query(DeepCheckDefinition.id).filter(DeepCheckDefinition.parent_id == definition_id)
+    ]
+    db.query(DeepCheckResult).filter(DeepCheckResult.definition_id.in_(ids)).update(
+        {DeepCheckResult.definition_id: None}, synchronize_session=False,
+    )
+    db.query(CheckMatrixItem).filter(CheckMatrixItem.definition_id.in_(ids)).update(
+        {CheckMatrixItem.definition_id: None}, synchronize_session=False,
+    )
+    db.query(DeepCheckDefinition).filter(DeepCheckDefinition.id.in_(ids)).delete(synchronize_session=False)
+    return True
+
+
+def reset_item_cells(db: Session, item: CheckMatrixItem) -> None:
+    """실행 소스가 바뀐 행의 셀 값/이력을 비운다 — 다른 점검의 값·단위가 섞여 보이지 않게.
+
+    수행 로그(CheckMatrixRun)는 감사 목적으로 남긴다. 새 소스가 수동 입력이면 cron 이 의미가
+    없으므로 셀 스케줄도 지운다.
+    """
+    db.query(CheckMatrixResult).filter(CheckMatrixResult.item_id == item.id).delete(synchronize_session=False)
+    db.query(CheckMatrixResultLog).filter(CheckMatrixResultLog.item_id == item.id).delete(synchronize_session=False)
+    if item.source_type == CheckMatrixSourceType.manual:
+        db.query(CheckMatrixSchedule).filter(CheckMatrixSchedule.item_id == item.id).delete(synchronize_session=False)

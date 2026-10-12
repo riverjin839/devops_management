@@ -10,7 +10,7 @@ import { parseUTC } from '@/lib/utils';
 import type { ClusterStatusContributor } from '@/types';
 
 const SOURCE_LABEL: Record<ClusterStatusContributor['sourceType'], string> = {
-  core_bundle: '핵심 점검 번들', addon: '애드온', deep_check: '심층 점검',
+  core_bundle: '핵심 점검 번들', addon: '애드온', deep_check: '심층 점검', check_matrix: '매트릭스 항목',
 };
 
 function ContributorRow({ c }: { c: ClusterStatusContributor }) {

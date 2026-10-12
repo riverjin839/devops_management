@@ -46,6 +46,9 @@ celery_app.conf.beat_schedule = {
     "check-matrix-dispatch": {
         "task": "app.celery_app.run_check_matrix_dispatch",
         "schedule": crontab(minute="*"),
+        # 워커 슬롯이 밀려 늦게 집힌 디스패치는 버린다 — 다음 분 디스패치와 겹쳐 같은 셀을
+        # 두 번 큐잉하지 않게(셀 단위 조건부 claim 과 이중 방어).
+        "options": {"expires": 55},
     },
     # 점검 매트릭스 이력 리텐션 정리 (매일 03:00 KST)
     "check-matrix-log-purge": {
@@ -210,6 +213,15 @@ def run_check_matrix_cell_one(self, item_id: str, cluster_id: str):
                 "item_id": item_id,
                 "cluster_id": cluster_id,
             }
+        # 큐잉(지터 최대 20초) 사이에 항목이 꺼졌거나 셀 스케줄이 꺼졌으면 실행하지 않는다.
+        from app.models import CheckMatrixSchedule
+        sch = (
+            db.query(CheckMatrixSchedule)
+            .filter(CheckMatrixSchedule.item_id == item.id, CheckMatrixSchedule.cluster_id == cluster.id)
+            .first()
+        )
+        if not item.enabled or sch is None or not sch.enabled or not sch.cron_expr:
+            return {"item_id": item_id, "cluster_id": cluster_id, "executed": False, "skipped": "disabled"}
         executed = cms.execute_item_for_cluster(db, item, cluster)
         return {"item_id": item_id, "cluster_id": cluster_id, "executed": executed}
     except Exception as e:  # noqa: BLE001
@@ -287,6 +299,7 @@ def run_check_matrix_run_one(self, run_id: str):
         def _note(msg: str) -> None:
             run.message = msg  # 수행 로그의 대기 중 행에 사유 표시
             db.commit()
+            cms._progress(db, run, f"대기 — {msg}")
 
         try:
             # 매트릭스는 queued 30분 초과 run 을 stale 로 마감하므로(_sweep_stale_runs) 대기는 20분까지.

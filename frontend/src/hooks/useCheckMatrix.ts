@@ -1,6 +1,8 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { checkMatrixApi } from '@/services/api';
-import type { CheckMatrixItemInput, CheckMatrixItemPreviewInput, CheckMatrixSourceConfigEntry } from '@/types';
+import type {
+  CheckMatrixGrid, CheckMatrixItemInput, CheckMatrixItemPreviewInput, CheckMatrixSourceConfigEntry,
+} from '@/types';
 
 export const checkMatrixKeys = {
   items: ['checkMatrixItems'] as const,
@@ -15,7 +17,23 @@ export const checkMatrixKeys = {
   itemSourceConfig: (itemId: string) => ['checkMatrixItemSourceConfig', itemId] as const,
   runs: (filter: CheckMatrixRunFilter) => ['checkMatrixRuns', filter] as const,
   run: (runId: string) => ['checkMatrixRun', runId] as const,
+  activeRuns: ['checkMatrixActiveRuns'] as const,
 };
+
+/** 점검 매트릭스 관련 캐시 전부(그리드·항목·항목 상세·설정 폼·런북·이력·수행 로그) — 항목/정의/설정을
+ *  바꾸면 어느 화면이 그 값을 들고 있는지 일일이 맞추지 않고 접두사로 한 번에 무효화한다.
+ *  (예전엔 items/grid 만 갱신해 /checks/:id 상세·편집 폼·런북이 이전 값을 보여 줬다.) */
+function invalidateAllCheckMatrix(qc: ReturnType<typeof useQueryClient>) {
+  return qc.invalidateQueries({
+    predicate: (q) => typeof q.queryKey[0] === 'string' && (q.queryKey[0] as string).startsWith('checkMatrix'),
+  });
+}
+
+/** 실행을 큐잉한 직후 — 실행 중 표시(activeRuns)와 수행 로그를 바로 당겨 온다. */
+function invalidateRunState(qc: ReturnType<typeof useQueryClient>) {
+  qc.invalidateQueries({ queryKey: checkMatrixKeys.activeRuns });
+  qc.invalidateQueries({ queryKey: ['checkMatrixRuns'] });
+}
 
 export interface CheckMatrixRunFilter {
   itemId?: string;
@@ -78,11 +96,7 @@ export function useUpdateCheckMatrixItemSourceConfig() {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       body: { thresholds?: Record<string, any>; params?: Record<string, any>; dedicated?: boolean };
     }) => checkMatrixApi.putItemSourceConfig(itemId, body).then((r) => r.data),
-    onSuccess: (_d, vars) => {
-      qc.invalidateQueries({ queryKey: checkMatrixKeys.itemSourceConfig(vars.itemId) });
-      qc.invalidateQueries({ queryKey: checkMatrixKeys.items });
-      qc.invalidateQueries({ queryKey: checkMatrixKeys.grid });
-    },
+    onSuccess: () => invalidateAllCheckMatrix(qc),
   });
 }
 
@@ -149,8 +163,7 @@ export function useCheckMatrixCellHistory(itemId: string | undefined, clusterId:
 }
 
 function invalidateGridAndItems(qc: ReturnType<typeof useQueryClient>) {
-  qc.invalidateQueries({ queryKey: checkMatrixKeys.items });
-  qc.invalidateQueries({ queryKey: checkMatrixKeys.grid });
+  return invalidateAllCheckMatrix(qc);
 }
 
 export function useCreateCheckMatrixItem() {
@@ -178,11 +191,30 @@ export function useDeleteCheckMatrixItem() {
   });
 }
 
+/**
+ * 행 순서 변경 — 낙관적 갱신. 예전엔 서버 응답 전까지 행이 제자리로 튀었고, 성공 콜백이 재조회를
+ * 기다리지 않아 연속으로 ↑↓ 를 누르면 이전 순서 기준으로 계산돼 첫 이동이 되돌려졌다.
+ */
 export function useReorderCheckMatrixItems() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (itemIds: string[]) => checkMatrixApi.reorderItems(itemIds),
-    onSuccess: () => invalidateGridAndItems(qc),
+    onMutate: async (itemIds) => {
+      await qc.cancelQueries({ queryKey: checkMatrixKeys.grid });
+      const prev = qc.getQueryData<CheckMatrixGrid>(checkMatrixKeys.grid);
+      if (prev) {
+        const byId = new Map(prev.items.map((i) => [i.id, i]));
+        const head = itemIds.map((id) => byId.get(id)).filter((i): i is NonNullable<typeof i> => !!i);
+        const rest = prev.items.filter((i) => !itemIds.includes(i.id));
+        const items = [...head, ...rest].map((i, idx) => ({ ...i, sortOrder: (idx + 1) * 10 }));
+        qc.setQueryData<CheckMatrixGrid>(checkMatrixKeys.grid, { ...prev, items });
+      }
+      return { prev };
+    },
+    onError: (_e, _v, ctx) => {
+      if (ctx?.prev) qc.setQueryData(checkMatrixKeys.grid, ctx.prev);
+    },
+    onSettled: () => invalidateGridAndItems(qc),
   });
 }
 
@@ -196,6 +228,8 @@ export function usePostManualEntry() {
     onSuccess: (_, { itemId, clusterId }) => {
       qc.invalidateQueries({ queryKey: checkMatrixKeys.grid });
       qc.invalidateQueries({ queryKey: ['checkMatrixHistory', itemId, clusterId] });
+      qc.invalidateQueries({ queryKey: checkMatrixKeys.itemDetail(itemId) });
+      qc.invalidateQueries({ queryKey: ['checkMatrixRuns'] });
     },
   });
 }
@@ -272,26 +306,20 @@ export function useUpdateSourceConfig() {
     mutationFn: ({ itemId, clusterId, entries }: {
       itemId: string; clusterId: string; entries: CheckMatrixSourceConfigEntry[];
     }) => checkMatrixApi.putSourceConfig(itemId, clusterId, entries).then((r) => r.data),
-    onSuccess: (_, { itemId, clusterId }) => {
-      qc.invalidateQueries({ queryKey: checkMatrixKeys.runbook(itemId, clusterId) });
-      // 글로벌 정의 수정은 다른 클러스터 셀의 런북에도 영향을 준다.
-      qc.invalidateQueries({ queryKey: ['checkMatrixRunbook'] });
-      qc.invalidateQueries({ queryKey: checkMatrixKeys.grid });
-    },
+    onSuccess: () => invalidateAllCheckMatrix(qc),
   });
 }
 
 // ── 수동 실행 ──────────────────────────────────────────────────────────────
-/** 셀 1건 동기 실행 — 응답에 결과가 담겨 오므로 성공 즉시 그리드를 무효화한다. */
+/** 셀 1건 실행 — 큐잉 후 즉시 queued 수행이 돌아온다. 진행은 `useCheckMatrixRun(id)` 가 2초 폴링하고,
+ *  끝나면 activeRuns 감시(PlatformStatusMatrix)가 그리드를 갱신한다. */
 export function useRunCheckMatrixCell() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: ({ itemId, clusterId }: { itemId: string; clusterId: string }) =>
       checkMatrixApi.runCell(itemId, clusterId).then((r) => r.data),
-    onSuccess: (_, { itemId, clusterId }) => {
-      qc.invalidateQueries({ queryKey: checkMatrixKeys.grid });
-      qc.invalidateQueries({ queryKey: ['checkMatrixHistory', itemId, clusterId] });
-      qc.invalidateQueries({ queryKey: ['checkMatrixRuns'] });
+    onSuccess: (_, { itemId }) => {
+      invalidateRunState(qc);
       qc.invalidateQueries({ queryKey: checkMatrixKeys.itemDetail(itemId) });
     },
   });
@@ -302,17 +330,17 @@ export function useRunCheckMatrixCluster() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (clusterId: string) => checkMatrixApi.runCluster(clusterId).then((r) => r.data),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['checkMatrixRuns'] }),
+    onSuccess: () => invalidateRunState(qc),
   });
 }
 
-/** 공통 점검 항목(행) 일괄 실행 — 등록된 모든 클러스터 대상. */
+/** 공통 점검 항목(행) 일괄 실행 — 실행 권한(operate)이 있는 클러스터 대상. */
 export function useRunCheckMatrixItem() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (itemId: string) => checkMatrixApi.runItem(itemId).then((r) => r.data),
     onSuccess: (_, itemId) => {
-      qc.invalidateQueries({ queryKey: ['checkMatrixRuns'] });
+      invalidateRunState(qc);
       qc.invalidateQueries({ queryKey: checkMatrixKeys.itemDetail(itemId) });
     },
   });
@@ -320,7 +348,8 @@ export function useRunCheckMatrixItem() {
 
 // ── 실행 로그 ──────────────────────────────────────────────────────────────
 /** 수행 로그 목록. `live` 면 실행 중인 배치를 따라가도록 짧은 주기로 폴링한다. */
-export function useCheckMatrixRuns(filter: CheckMatrixRunFilter, enabled = true, live = false) {
+/** `live`: true = 3초 폴링, 숫자 = 그 주기(ms) 폴링, false = 폴링 없음. */
+export function useCheckMatrixRuns(filter: CheckMatrixRunFilter, enabled = true, live: boolean | number = false) {
   return useQuery({
     queryKey: checkMatrixKeys.runs(filter),
     queryFn: async () => {
@@ -328,7 +357,7 @@ export function useCheckMatrixRuns(filter: CheckMatrixRunFilter, enabled = true,
       return data;
     },
     enabled,
-    refetchInterval: live ? 3000 : false,
+    refetchInterval: live === true ? 3000 : typeof live === 'number' ? live : false,
   });
 }
 
@@ -352,12 +381,17 @@ export function useCheckMatrixRun(runId: string | undefined) {
  *  `limit=1` 조회로 그리드/셀마다 별도 쿼리를 두지 않고 한 번의 가벼운 폴링으로 공유한다. */
 export function useCheckMatrixActiveRuns(enabled = true) {
   return useQuery({
-    queryKey: ['checkMatrixActiveRuns'],
+    queryKey: checkMatrixKeys.activeRuns,
     queryFn: async () => {
-      const { data } = await checkMatrixApi.listRuns({ runState: 'queued,running', limit: 100 });
+      const { data } = await checkMatrixApi.listRuns({ runState: 'queued,running', limit: 200 });
       return data;
     },
     enabled,
-    refetchInterval: enabled ? 4000 : false,
+    // 실행 중인 것이 있으면 3초, 없으면 20초 — 아무것도 안 돌 때 4초마다 두드리지 않는다.
+    // 실행을 트리거한 쪽은 invalidateRunState 로 즉시 당겨 오므로 시작 표시가 늦지 않는다.
+    refetchInterval: (query) => {
+      if (!enabled) return false;
+      return (query.state.data?.total ?? 0) > 0 ? 3000 : 20000;
+    },
   });
 }

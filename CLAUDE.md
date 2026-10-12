@@ -99,7 +99,7 @@ devops_management/
 ├── helm/k8s-daily-monitor/   # values / -dev / -prod / -airgap
 ├── scripts/             # kind-setup.sh, deploy-airgap.sh, init-cluster.sh,
 │                        #   release/{bump_version,decide_bump,changelog_sections,check_changelog_sections}.py,
-│                        #   docs/check_docs_sync.py
+│                        #   docs/check_docs_sync.py, report/(AI 개발 리포트 집계·HTML 빌드)
 ├── ansible/playbooks/  argocd/  docker/ vagrant/ windows-docker/
 ├── docs/                # 인덱스는 docs/README.md (01-plan/ 02-design/ 03-analysis/
 │                        #   archive/ superpowers/ 하위 폴더 포함)
@@ -408,6 +408,9 @@ Makefile 타깃(`make k8s-dev`, `make docker-rebuild` 등)은 `make help` 로 �
   머지 전 로컬 게이트는 §Development & Tests 와 동일하다 — **CI 에서 처음 확인하지 말 것.**
 - **CD (`cd.yml`, push → `main`)**: GHCR 이미지 빌드 → `kustomize edit set image` 로 SHA 핀 →
   apply → rollout status. 배포는 **SHA 태그로만** 고정한다(`latest` 금지).
+- **AI 개발 리포트 (`ai-dev-report.yml`, 매월 1일 + 수동 실행)**: `scripts/report/` 로 git 이력을 다시 집계해
+  `docs/reports/ai-dev-report.html` 갱신 PR 을 연다. PR 제목 `chore(report)` 는 `decide_bump.py` 가 릴리스에서
+  제외한다. 문구·진척도·세대 구간 같은 판단 값은 `scripts/report/ai_dev_report_narrative.json` 을 직접 고친다.
 - 필요한 GitHub secrets: `KUBECONFIG_DEV`, `KUBECONFIG_PROD`.
 
 ---

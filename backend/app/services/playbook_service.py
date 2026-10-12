@@ -110,6 +110,7 @@ def execute_playbook_run(
         tags=playbook.tags,
         inventory_hosts=inventory_hosts,
         ssh_private_key=ssh_private_key,
+        timeout=playbook.timeout_seconds or None,
     )
     finished_at = datetime.utcnow()
 

@@ -271,6 +271,7 @@ def _run_migrations():
         _safe_add_column("addons", "config", "JSONB")
     if "playbooks" in inspector.get_table_names():
         _safe_add_column("playbooks", "show_on_dashboard", "BOOLEAN DEFAULT FALSE")
+        _safe_add_column("playbooks", "timeout_seconds", "INTEGER")
         # 신규 FK 컬럼 — 컬럼만 먼저, REFERENCES 는 별도 ADD CONSTRAINT 로 분리 (대상 테이블 부재 위험 격리).
         _safe_add_column("playbooks", "playbook_file_id", "UUID")
         _safe_add_column("playbooks", "inventory_id", "UUID")
@@ -1148,6 +1149,8 @@ def _run_migrations():
         # target_key — 실제 점검 대상(예: "etcd") 식별자, D-062 "대상 중복 표시". category 와
         # 같은 자유 문자열 철학(운영자가 화면에서 편집). backfill 은 backfill_item_metadata 담당.
         _safe_add_column("check_matrix_items", "target_key", "VARCHAR(80)")
+        # 배치잡·플레이북·수동 입력 행의 클러스터 종합 상태 반영 opt-in (2026-10 상용화 P2).
+        _safe_add_column("check_matrix_items", "affects_cluster_status", "BOOLEAN NOT NULL DEFAULT FALSE")
 
     # check_matrix_runs: 점검 매트릭스 수행 로그 — 테이블은 create_all 이 생성하고,
     # 셀별 최근 로그 조회 / 배치 진행률 폴링 / 리텐션 퍼지 스캔용 인덱스만 보강한다.
@@ -2261,7 +2264,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title=settings.app_name,
     description="DevOps K8s Daily Monitoring Dashboard API",
-    version="1.46.1",
+    version="1.48.0",
     docs_url="/docs",
     redoc_url="/redoc",
     lifespan=lifespan,
@@ -2412,7 +2415,7 @@ app.include_router(tenants_router, prefix="/api/v1", dependencies=_auth)
 def root():
     return {
         "name": settings.app_name,
-        "version": "1.46.1",
+        "version": "1.48.0",
         "version": "1.8.2",
         "status": "running"
     }
