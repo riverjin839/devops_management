@@ -42,6 +42,30 @@ def _cmd(kind: str, command: str, description: str, *, readonly: bool = True) ->
     return {"kind": kind, "command": command, "description": description, "readonly": readonly}
 
 
+# 런북·실행 로그에 그대로 노출되면 안 되는 설정 키 패턴 — 애드온 config 에는 Jenkins
+# api_token, Keycloak admin password 같은 자격증명이 들어 있을 수 있다. 런북은 read 권한만 있으면
+# 누구나 GET 할 수 있고 실행 로그 details 로 복사돼 백업에도 남으므로 값을 가린다.
+_SECRET_KEY_HINTS = ("token", "password", "passwd", "secret", "apikey", "api_key", "private_key", "credential")
+MASKED_VALUE = "********"
+
+
+def is_secret_key(name: Any) -> bool:
+    low = str(name or "").lower().replace("-", "_")
+    return any(h in low for h in _SECRET_KEY_HINTS)
+
+
+def mask_secrets(obj: Any) -> Any:
+    """dict/list 를 재귀로 훑어 비밀값 키의 값을 ``********`` 로 바꾼 사본을 돌려준다."""
+    if isinstance(obj, dict):
+        return {
+            k: (MASKED_VALUE if is_secret_key(k) and v not in (None, "") else mask_secrets(v))
+            for k, v in obj.items()
+        }
+    if isinstance(obj, list):
+        return [mask_secrets(v) for v in obj]
+    return obj
+
+
 def _inputs(groups: dict[str, dict[str, Any]]) -> list[dict[str, str]]:
     """설정값을 **키가 아닌 값**으로 담은 리스트로 평탄화한다.
 
@@ -101,8 +125,9 @@ _CORE_BUNDLE_NOTES = [
     "/healthz 응답시간만 셀 값으로 투영한다. 네 개의 하위 점검을 따로 돌릴 수 없는 이유가 이것이다.",
     "`Cluster.status`(사이드바 클러스터 색)를 갱신하는 유일한 경로 — 그래서 항목별 cron 이 아니라 "
     "클러스터 열 헤더의 cron(`Cluster.check_cron_expr`)으로 스케줄한다.",
-    "/healthz 가 200 이고 응답시간 3000ms 미만이면 정상, 200 이지만 3000ms 이상이면 경고, "
-    "그 외(비200·연결 실패)는 위험.",
+    "판정: /healthz 200(또는 익명 차단 401/403 — 서버까지는 도달) 이고 3000ms 미만이면 정상, "
+    "3000ms 이상이면 경고, 그 밖의 4xx 는 경고, 5xx·연결 실패는 위험이다. 익명 프로브가 실패하면 "
+    "kubeconfig 인증으로 /healthz 를 한 번 더 시도한 결과를 쓴다.",
 ]
 
 
@@ -627,7 +652,7 @@ def build_runbook(db: Session, item: CheckMatrixItem, cluster: Cluster) -> dict[
             out["runnable"] = True
             out["addon_id"] = str(addon.id)
             out["config_editable"] = True
-            out["inputs"] = _inputs({"config": addon.config or {}})
+            out["inputs"] = _inputs({"config": mask_secrets(addon.config or {})})
         return out
 
     if item.source_type == CheckMatrixSourceType.batch_job:
