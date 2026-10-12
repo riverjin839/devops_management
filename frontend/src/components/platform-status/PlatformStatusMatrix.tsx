@@ -463,6 +463,110 @@ function MatrixDisplaySettings(p: DisplaySettingsProps) {
   );
 }
 
+// ── 목록 보기(표 대체) ───────────────────────────────────────────────────────
+// 표는 "항목 × 클러스터" 를 한눈에 보기 좋지만, 좁은 화면·스크린리더에서는 가로 스크롤과 2차원
+// 탐색이 부담이다. 같은 데이터를 영역 → 항목 → 클러스터별 칩의 1차원 목록으로 보여 준다
+// (1024px 미만에서는 기본값, 넓은 화면에서도 툴바에서 고를 수 있다).
+type MatrixView = 'table' | 'list';
+
+interface ListGroup {
+  key: string; label: string;
+  entries: { item: CheckMatrixItem; idx: number }[];
+  counts: { healthy: number; warning: number; critical: number };
+}
+
+function MatrixListView({
+  groups, clusters, cells, timezone, activeByCell, isExpanded, toggleGroup, onOpenCell, onOpenItem,
+}: {
+  groups: ListGroup[];
+  clusters: CheckMatrixGridCluster[];
+  cells: Record<string, Record<string, CheckMatrixCell>> | undefined;
+  timezone: string;
+  activeByCell: Map<string, CheckMatrixRunState>;
+  isExpanded: (g: ListGroup) => boolean;
+  toggleGroup: (g: ListGroup) => void;
+  onOpenCell: (item: CheckMatrixItem, cluster: CheckMatrixGridCluster) => void;
+  onOpenItem: (item: CheckMatrixItem) => void;
+}) {
+  return (
+    <div className="flex-1 min-h-0 overflow-auto p-2 space-y-2" role="list" aria-label="점검 항목 목록">
+      {groups.map((g) => {
+        const expanded = isExpanded(g);
+        return (
+          <section key={g.key} role="listitem" aria-label={`${g.label} 영역`} className="rounded-md border border-border">
+            <button
+              onClick={() => toggleGroup(g)}
+              aria-expanded={expanded}
+              className="w-full flex items-center gap-1.5 px-3 py-2 bg-surface-container-high rounded-t-md text-left"
+            >
+              <ChevronRight className={`w-3.5 h-3.5 text-muted-foreground transition-transform ${expanded ? 'rotate-90' : ''}`} aria-hidden="true" />
+              <span className="text-xs font-semibold">{g.label}</span>
+              <span className="text-[11px] text-muted-foreground">{g.entries.length}개</span>
+              <span className="ml-auto flex items-center gap-1">
+                {g.counts.critical > 0 && <span className={`px-1 rounded border text-[11px] font-semibold ${GROUP_BADGE_CLS.critical}`}>위험 {g.counts.critical}</span>}
+                {g.counts.warning > 0 && <span className={`px-1 rounded border text-[11px] font-semibold ${GROUP_BADGE_CLS.warning}`}>경고 {g.counts.warning}</span>}
+              </span>
+            </button>
+            {expanded && (
+              <ul className="divide-y divide-border">
+                {g.entries.map(({ item }) => (
+                  <li key={item.id} className={`px-3 py-2 space-y-1.5 ${item.enabled ? '' : 'opacity-60'}`}>
+                    <div className="flex items-center gap-1.5 min-w-0">
+                      <button
+                        onClick={() => onOpenItem(item)}
+                        className="text-sm font-medium truncate text-left hover:text-primary hover:underline underline-offset-2"
+                        title="항목 상세로 이동"
+                      >
+                        {item.name}
+                      </button>
+                      <ExecTechBadge execTech={item.execTech} />
+                      {item.isSystem && <Lock className="w-3 h-3 text-muted-foreground" aria-label="핵심 항목" />}
+                      {!item.enabled && <span className="px-1 rounded border border-border text-[11px] text-muted-foreground">꺼짐</span>}
+                    </div>
+                    <div className="flex flex-wrap gap-1.5">
+                      {clusters.map((cluster) => {
+                        const cell = cells?.[item.id]?.[cluster.id];
+                        const view = cellView(cell, timezone);
+                        const active = activeByCell.get(`${item.id}:${cluster.id}`);
+                        const label = active
+                          ? (active === 'queued' ? '대기' : '실행 중')
+                          : view.empty
+                            ? (view.lastRunProblem === 'skipped' ? '건너뜀' : '결과 없음')
+                            : cell!.value != null ? `${cell!.value}${item.unit ?? ''}` : STATUS_LABEL[cell!.status!];
+                        return (
+                          <button
+                            key={cluster.id}
+                            onClick={() => onOpenCell(item, cluster)}
+                            title={cellTitle(item, cell, view, active)}
+                            className={`inline-flex items-center gap-1 px-2 py-1 rounded-xl border text-xs transition-colors hover:bg-muted ${
+                              view.stale ? 'opacity-50' : ''
+                            } ${view.lastRunProblem === 'failed' ? 'border-status-critical/50' : 'border-border'}`}
+                          >
+                            {active
+                              ? <Loader2 className="w-3 h-3 animate-spin text-status-info" aria-hidden="true" />
+                              : !view.empty && <StatusDot variant={cell!.status!} />}
+                            <span className="text-muted-foreground">{cluster.name}</span>
+                            <span className="font-medium tabular-nums">{label}</span>
+                            {view.lastRunProblem === 'failed' && !active && (
+                              <XCircle className="w-3 h-3 text-status-critical" aria-label="최근 실행 실패" />
+                            )}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </section>
+        );
+      })}
+    </div>
+  );
+}
+
+const PROBLEM_STATUSES = new Set<Status>(['warning', 'critical']);
+
 interface PlatformStatusMatrixProps {
   /** 지정하면 카드 안쪽 헤더 줄 대신 이 DOM 노드로 툴바를 portal — 상위(HomePage)가
    * 세그먼트 탭 줄과 한 줄로 합칠 때 쓴다. `null` 은 "슬롯이 곧 생긴다" 는 뜻이라 툴바를 아직
@@ -526,7 +630,35 @@ export function PlatformStatusMatrix({ toolbarSlot }: PlatformStatusMatrixProps 
   const [showDisabled, setShowDisabled] = useState(() => loadPref('pep:checkMatrixShowDisabled', ['1', '0'] as const, '0') === '1');
   useEffect(() => { savePref('pep:checkMatrixShowDisabled', showDisabled ? '1' : '0'); }, [showDisabled]);
   const disabledCount = allItems.filter((i) => !i.enabled).length;
-  const items = useMemo(() => (showDisabled ? allItems : allItems.filter((i) => i.enabled)), [allItems, showDisabled]);
+  // "문제만 보기" — 경고·위험 셀이 있거나 최근 실행이 실패한 항목만. 항목이 수십 개가 되면 정상 행이
+  // 화면 대부분을 차지해 정작 볼 행을 찾기 어렵다.
+  const [problemsOnly, setProblemsOnly] = useState(() => loadPref('pep:checkMatrixProblemsOnly', ['1', '0'] as const, '0') === '1');
+  useEffect(() => { savePref('pep:checkMatrixProblemsOnly', problemsOnly ? '1' : '0'); }, [problemsOnly]);
+  const items = useMemo(() => {
+    let out = showDisabled ? allItems : allItems.filter((i) => i.enabled);
+    if (problemsOnly) {
+      out = out.filter((i) => Object.values(grid?.cells[i.id] ?? {}).some(
+        (c) => (c.status && PROBLEM_STATUSES.has(c.status)) || c.lastRunState === 'failed',
+      ));
+    }
+    return out;
+  }, [allItems, showDisabled, problemsOnly, grid?.cells]);
+
+  // 표/목록 — 사용자가 고른 값이 있으면 그것, 없으면 1024px 미만에서 목록.
+  const narrowQuery = '(max-width: 1023px)';
+  const [narrow, setNarrow] = useState(() => {
+    try { return window.matchMedia(narrowQuery).matches; } catch { return false; }
+  });
+  useEffect(() => {
+    let mq: MediaQueryList;
+    try { mq = window.matchMedia(narrowQuery); } catch { return undefined; }
+    const onChange = () => setNarrow(mq.matches);
+    mq.addEventListener('change', onChange);
+    return () => mq.removeEventListener('change', onChange);
+  }, []);
+  const [viewPref, setViewPref] = useState<MatrixView | 'auto'>(() => loadPref('pep:checkMatrixView', ['table', 'list', 'auto'] as const, 'auto'));
+  useEffect(() => { savePref('pep:checkMatrixView', viewPref); }, [viewPref]);
+  const view: MatrixView = viewPref === 'auto' ? (narrow ? 'list' : 'table') : viewPref;
 
   // 지금 대기/실행 중인 셀 — 셀 스피너, 클러스터 배지, 중복 실행 방지가 모두 이 한 쿼리를 본다.
   const { data: activeRuns } = useCheckMatrixActiveRuns(clusters.length > 0);
@@ -734,6 +866,29 @@ export function PlatformStatusMatrix({ toolbarSlot }: PlatformStatusMatrixProps 
       )}
       <div className="ml-auto flex items-center gap-1.5 border-l border-border pl-2.5 flex-shrink-0">
         <button
+          onClick={() => setProblemsOnly((v) => !v)}
+          aria-pressed={problemsOnly}
+          title={problemsOnly ? '모든 항목 보기' : '경고·위험이거나 최근 실행이 실패한 항목만 보기'}
+          className={`inline-flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-xl border transition-colors ${
+            problemsOnly ? 'border-status-warning/60 bg-status-warning-soft text-status-warning' : 'border-transparent hover:bg-secondary text-muted-foreground'
+          }`}
+        >
+          <AlertTriangle className="w-3.5 h-3.5" aria-hidden="true" /> 문제만
+        </button>
+        <div className="inline-flex items-center rounded-xl border border-border overflow-hidden" role="group" aria-label="보기 방식">
+          {(['table', 'list'] as const).map((v) => (
+            <button
+              key={v}
+              onClick={() => setViewPref(v)}
+              aria-pressed={view === v}
+              title={v === 'table' ? '표 보기 — 항목 × 클러스터' : '목록 보기 — 좁은 화면·스크린리더에 맞춘 1열 목록'}
+              className={`px-2 py-1 text-xs transition-colors ${view === v ? 'bg-secondary text-foreground font-medium' : 'text-muted-foreground hover:bg-secondary/60'}`}
+            >
+              {v === 'table' ? '표' : '목록'}
+            </button>
+          ))}
+        </div>
+        <button
           onClick={() => refetch()}
           disabled={isFetching}
           className="p-1.5 rounded-xl hover:bg-secondary text-muted-foreground disabled:opacity-50"
@@ -853,6 +1008,14 @@ export function PlatformStatusMatrix({ toolbarSlot }: PlatformStatusMatrixProps 
                 action={canOperate ? { label: '클러스터 관리로 이동', onClick: () => navigate('/cluster-manage') } : undefined}
               />
             ) : (
+              problemsOnly ? (
+                <EmptyState
+                  icon={CheckCircle2}
+                  title="문제 있는 항목이 없습니다"
+                  description="경고·위험 셀이나 최근 실행 실패가 없습니다. 모든 항목을 보려면 툴바의 「문제만」 을 끄세요."
+                  action={{ label: '모든 항목 보기', onClick: () => setProblemsOnly(false) }}
+                />
+              ) : (
               <EmptyState
                 icon={Plus}
                 title={disabledCount > 0 && !showDisabled ? '활성화된 점검 항목이 없습니다' : '점검 항목이 없습니다'}
@@ -861,11 +1024,25 @@ export function PlatformStatusMatrix({ toolbarSlot }: PlatformStatusMatrixProps 
                   : '행(점검 항목)을 추가하면 등록된 클러스터마다 열이 자동으로 채워집니다.'}
                 action={canOperate ? { label: '항목 추가', onClick: () => setFormItem('new') } : undefined}
               />
+              )
             )}
           </div>
         ) : (
           <div className="flex-1 min-h-0 flex flex-col">
           {showLegend && <MatrixLegend onHide={() => setShowLegend(false)} />}
+          {view === 'list' ? (
+            <MatrixListView
+              groups={groups}
+              clusters={clusters}
+              cells={grid?.cells}
+              timezone={timezone}
+              activeByCell={activeByCell}
+              isExpanded={isExpanded}
+              toggleGroup={toggleGroup}
+              onOpenCell={(item, cluster) => setCellTarget({ item, cluster })}
+              onOpenItem={(item) => navigate(`/checks/${item.id}`)}
+            />
+          ) : (
           <div className="flex-1 min-h-0 overflow-auto">
             <table className="border-collapse text-sm" style={{ tableLayout: 'fixed', width: 'max-content', minWidth: '100%' }}>
               <colgroup>
@@ -1147,6 +1324,7 @@ export function PlatformStatusMatrix({ toolbarSlot }: PlatformStatusMatrixProps 
               </tbody>
             </table>
           </div>
+          )}
           </div>
         )}
       </MacCard>

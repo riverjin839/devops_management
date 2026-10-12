@@ -304,6 +304,25 @@ function RowColorPicker({ color, onChange }: { color: string; onChange: (v: stri
   );
 }
 
+/** 클러스터 종합 상태 반영(opt-in) 을 쓸 수 있는 실행 소스 — 등록된 점검은 정의의 같은 스위치,
+ *  애드온은 항상 반영이라 여기서 다루지 않는다(서버도 같은 규칙으로 400). */
+const STATUS_OPT_IN_SOURCES: CheckMatrixSourceType[] = ['batch_job', 'playbook', 'manual'];
+
+function ClusterStatusOptIn({ checked, onChange }: { checked: boolean; onChange: (v: boolean) => void }) {
+  return (
+    <label className="flex items-start gap-2 rounded-xl border border-border px-3 py-2 text-sm cursor-pointer select-none">
+      <input type="checkbox" className="mt-0.5" checked={checked} onChange={(e) => onChange(e.target.checked)} />
+      <span>
+        클러스터 상태에 반영
+        <span className="block text-[11px] text-muted-foreground">
+          켜면 이 항목이 경고·위험일 때 클러스터 종합 상태(사이드바 색·열 머리글 점)도 경고·위험이 됩니다.
+          클러스터 상세의 「종합 상태」 원인 목록에도 나옵니다. 기본은 꺼짐.
+        </span>
+      </span>
+    </label>
+  );
+}
+
 /** 영역 / 같은 대상 묶기 / 행 색 — 대부분의 사용자는 건드리지 않으므로 접어 둔다. */
 function AdvancedSection({
   category, onCategory, targetKey, onTargetKey, color, onColor, defaultOpen,
@@ -493,6 +512,7 @@ function EditItemForm({ onClose, editingItem }: { onClose: () => void; editingIt
   const [sourceRef, setSourceRef] = useState(editingItem.sourceRef ?? '');
   const [category, setCategory] = useState(editingItem.category ?? '');
   const [targetKey, setTargetKey] = useState(editingItem.targetKey ?? '');
+  const [affectsStatus, setAffectsStatus] = useState(!!editingItem.affectsClusterStatus);
   const [color, setColor] = useState(editingItem.color ?? '');
   const [enabled, setEnabled] = useState(editingItem.enabled ?? true);
   // 저장된 값 위에 사용자가 고친 것만 얹는다 — 저장 후 재조회가 와도 편집 중인 값이 날아가지 않는다.
@@ -568,6 +588,7 @@ function EditItemForm({ onClose, editingItem }: { onClose: () => void; editingIt
       targetKey: targetKey.trim() || null,
       color: color || null,
       enabled,
+      affectsClusterStatus: STATUS_OPT_IN_SOURCES.includes(sourceType as CheckMatrixSourceType) ? affectsStatus : false,
     };
     try {
       await updateMut.mutateAsync({ id: editingItem.id, body });
@@ -758,6 +779,10 @@ function EditItemForm({ onClose, editingItem }: { onClose: () => void; editingIt
             </label>
           )}
         </div>
+      )}
+
+      {STATUS_OPT_IN_SOURCES.includes(sourceType as CheckMatrixSourceType) && (
+        <ClusterStatusOptIn checked={affectsStatus} onChange={setAffectsStatus} />
       )}
 
       <AdvancedSection
@@ -1060,6 +1085,7 @@ function RegisterItemWizard({ onClose }: { onClose: () => void }) {
   const [unit, setUnit] = useState('');
   const [category, setCategory] = useState('');
   const [targetKey, setTargetKey] = useState('');
+  const [affectsStatus, setAffectsStatus] = useState(false);
   const [color, setColor] = useState('');
   const [enabled, setEnabled] = useState(true);
   const [thresholdDraft, setThresholdDraft] = useState<Record<string, string>>({});
@@ -1267,6 +1293,7 @@ function RegisterItemWizard({ onClose }: { onClose: () => void }) {
         targetKey: targetKey.trim() || null,
         color: color || null,
         enabled,
+        affectsClusterStatus: STATUS_OPT_IN_SOURCES.includes((sourceType ?? 'manual') as CheckMatrixSourceType) ? affectsStatus : false,
         thresholds: Object.keys(thresholds).length ? thresholds : undefined,
         params: Object.keys(params).length ? params : undefined,
         dedicatedDefinition: isDeepCheck ? dedicated : undefined,
@@ -1604,6 +1631,10 @@ function RegisterItemWizard({ onClose }: { onClose: () => void }) {
               clusters={clusters}
               playbookFiles={playbookFiles}
             />
+          )}
+
+          {STATUS_OPT_IN_SOURCES.includes((sourceType ?? 'manual') as CheckMatrixSourceType) && (
+            <ClusterStatusOptIn checked={affectsStatus} onChange={setAffectsStatus} />
           )}
 
           <AdvancedSection

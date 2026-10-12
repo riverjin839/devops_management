@@ -15,6 +15,8 @@ class PlaybookBase(BaseModel):
     inventory_path: Optional[str] = None
     extra_vars: Optional[dict[str, Any]] = None
     tags: Optional[str] = None
+    # 실행 제한 시간(초) — 비우면 전역 기본(30초).
+    timeout_seconds: Optional[int] = Field(default=None, ge=10, le=1800)
 
 
 class PlaybookCreate(PlaybookBase):
@@ -37,6 +39,7 @@ class PlaybookUpdate(BaseModel):
     extra_vars: Optional[dict[str, Any]] = None
     tags: Optional[str] = None
     show_on_dashboard: Optional[bool] = None
+    timeout_seconds: Optional[int] = Field(default=None, ge=10, le=1800)
 
 
 class PlaybookResponse(PlaybookBase):

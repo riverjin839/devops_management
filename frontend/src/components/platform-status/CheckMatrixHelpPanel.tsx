@@ -135,6 +135,11 @@ export function CheckMatrixHelpPanel({ open, onClose }: Props) {
                 <span>툴바의 조절 아이콘 — 행 높이, 범례 표시, <b>실행 시 로그 자동 열기</b>, 비활성 항목 표시, 영역 모두 펼치기/접기, 열 너비 초기화.
                   열 너비는 머리글 오른쪽 끝을 드래그(더블클릭 = 자동 맞춤).</span>
               </p>
+              <p className="flex items-start gap-2">
+                <AlertTriangle className="w-4 h-4 mt-0.5 flex-shrink-0 text-muted-foreground" />
+                <span>툴바 <b>「문제만」</b> — 경고·위험 셀이 있거나 최근 실행이 실패한 항목만 남깁니다.
+                  <b> 「표 / 목록」</b> — 목록은 영역 → 항목 → 클러스터별 칩의 1열 보기로, 좁은 화면(1024px 미만)에서는 처음부터 목록으로 열립니다.</span>
+              </p>
             </Section>
           </div>
         )}
@@ -230,7 +235,8 @@ export function CheckMatrixHelpPanel({ open, onClose }: Props) {
             <Section title="배치잡(SSH) · 플레이북(Ansible)">
               <p>/batch-jobs · /playbooks 에 등록한 잡을 <b>이름</b>으로 연결합니다 — 여러 클러스터에 같은 이름으로 등록해 두면 한 행이 열마다 실행됩니다.
                 운영 스크립트라 등록 마법사의 테스트에서는 실행하지 않습니다(새로 작성한 플레이북은 dry-run 으로 테스트 가능).
-                자동 실행은 잡에 저장된 스케줄용 자격증명을 씁니다.</p>
+                자동 실행은 잡에 저장된 스케줄용 자격증명을 씁니다. 플레이북의 <b>실행 제한 시간</b>(기본 30초, 최대 1800초)은 /playbooks 화면에서 정합니다.</p>
+              <p>이 행들과 수동 입력 행은 항목 설정의 <b>「클러스터 상태에 반영」</b> 을 켜면 결과가 클러스터 종합 상태(사이드바 색)에도 들어갑니다 — 기본은 꺼짐입니다.</p>
             </Section>
             <Section title="수동 입력">
               <p>NAS 콘솔·네트워크 스위치·외주 점검처럼 PEP 가 직접 확인할 수 없는 대상입니다. 셀을 누르면 첫 탭이 <b>값 입력</b>이고,

@@ -104,6 +104,8 @@ class ItemIn(BaseModel):
     target_key: Optional[Ref80] = None
     color: Optional[Short20] = None
     enabled: bool = True
+    # 배치잡·플레이북·수동 입력 행의 결과를 클러스터 종합 상태에 반영(opt-in).
+    affects_cluster_status: bool = False
     # 등록 마법사 전용 — deep_check 항목의 임계값/파라미터 초기값.
     # dedicated_definition=False 면 예전과 같이 "글로벌 정의가 없을 때만" 이 값으로 정의를
     # 만들고, 이미 있으면 조용히 무시한다(= 같은 종류의 다른 행과 설정 공유).
@@ -130,6 +132,7 @@ class ItemOut(BaseModel):
     definition_id: Optional[UUID] = None
     is_system: bool
     enabled: bool
+    affects_cluster_status: bool = False
     sort_order: int
     created_at: datetime
     updated_at: datetime
@@ -185,6 +188,14 @@ def _validate_item_body(body: ItemIn, db: Session) -> None:
         )
     if body.source_type == CheckMatrixSourceType.core_bundle:
         raise HTTPException(status_code=400, detail="core_bundle 항목은 시스템에서만 생성/관리됩니다.")
+    if body.affects_cluster_status and body.source_type not in (
+        CheckMatrixSourceType.batch_job, CheckMatrixSourceType.playbook, CheckMatrixSourceType.manual,
+    ):
+        raise HTTPException(
+            status_code=400,
+            detail=("'클러스터 상태에 반영' 은 배치잡·플레이북·수동 입력 항목에서만 켭니다 — 등록된 점검은 "
+                    "운영 점검 정의의 '클러스터 상태에 반영', 애드온은 항상 반영됩니다."),
+        )
     if body.source_type == CheckMatrixSourceType.deep_check:
         from app.services.registered_checks import REGISTRY
         if not body.source_ref or body.source_ref not in REGISTRY:
@@ -367,6 +378,7 @@ def update_item(
         or (body.source_ref or None) != (row.source_ref or None)
     )
     old_definition_id = row.definition_id
+    old_affects = bool(row.affects_cluster_status)
     for k, v in body.model_dump(
         exclude={"thresholds", "params", "dedicated_definition", "new_playbook"},
     ).items():
@@ -384,6 +396,14 @@ def update_item(
             svc.ensure_deep_check_definition(db, row.source_ref)
     db.commit()
     db.refresh(row)
+    if old_affects != bool(row.affects_cluster_status) or (old_affects and (source_changed or not row.enabled)):
+        # 반영 여부가 바뀌면 이 행이 걸린 모든 클러스터의 종합 상태를 다시 계산한다.
+        from app.services import cluster_status_service
+        for (cid,) in db.query(Cluster.id).all():
+            try:
+                cluster_status_service.recompute(db, cid)
+            except Exception:  # noqa: BLE001
+                db.rollback()
     _audit(db, user, "item.update", target_id=row.id, request=request, details={
         "name": row.name, "source_changed": source_changed,
         "source_type": row.source_type.value, "source_ref": row.source_ref,

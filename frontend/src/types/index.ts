@@ -296,6 +296,8 @@ export interface Playbook {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   extraVars?: Record<string, any>;
   tags?: string;
+  /** ansible-playbook 실행 제한 시간(초, 10~1800). 비우면 전역 기본(30초). */
+  timeoutSeconds?: number | null;
   status: string;  // healthy | warning | critical | unknown | running
   showOnDashboard: boolean;
   lastRunAt?: string;
@@ -4409,6 +4411,8 @@ export interface CheckMatrixItem {
   isSystem: boolean;
   /** false = 그리드에서 숨김 + 자동(cron)·일괄 실행에서도 제외 */
   enabled: boolean;
+  /** 배치잡·플레이북·수동 입력 행 — 결과를 클러스터 종합 상태에 반영(opt-in, 기본 false). */
+  affectsClusterStatus?: boolean;
   sortOrder: number;
   createdAt: string;
   updatedAt: string;
@@ -4599,7 +4603,8 @@ export interface CheckMatrixItemDetail {
 
 /** 클러스터 종합 상태 원인 1건 — `cluster_status_service.recompute()` 의 contributor. */
 export interface ClusterStatusContributor {
-  sourceType: 'core_bundle' | 'addon' | 'deep_check';
+  /** check_matrix = 클러스터 상태 반영을 켠 배치잡·플레이북·수동 입력 행(editId = 항목 id) */
+  sourceType: 'core_bundle' | 'addon' | 'deep_check' | 'check_matrix';
   sourceRef?: string | null;
   name: string;
   status: Status;

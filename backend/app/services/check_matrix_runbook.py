@@ -446,20 +446,46 @@ _ADDON_NOTES = [
 # ──────────────────────────────────────────────────────────────
 # batch_job — 등록된 BatchJob(SSH bash/python) 실행 — D-066
 # ──────────────────────────────────────────────────────────────
-def _batch_job_commands(job: Optional[BatchJob]) -> list[dict[str, Any]]:
+def _batch_job_commands(job: Optional[BatchJob], db: Optional[Session] = None) -> list[dict[str, Any]]:
+    """배치잡이 실제로 나가는 경로를 실행기·스크립트 종류에 맞춰 적는다.
+
+    예전엔 무조건 ``ssh user@host -- …`` 로 적어, SSH 를 쓰지 않는 실행기(K8s API 로 도는 job_type)나
+    Ansible 플레이북 스크립트도 SSH 로 보였다 — 런북이 실제와 다르면 존재 이유(사실성)가 깨진다.
+    """
     if job is None:
         return []
+    who = f"{job.default_username or 'root'}@{job.default_host or '<default_host 미설정>'}"
     if job.execution_mode == "script":
-        target = f"등록 스크립트(script_id={job.script_id})" if job.script_id else "(스크립트 미지정)"
-        return [
-            _cmd(KIND_SSH, f"ssh {job.default_username or 'root'}@{job.default_host or '<default_host 미설정>'} -- {target}",
-                 f"`/scripts` 화면에서 관리되는 {target} 를 대상 호스트에서 실행한다. "
-                 "전체 내용은 해당 스크립트 상세에서 버전별로 확인할 수 있다.",
-                 readonly=False),
-        ]
+        script = None
+        if db is not None and job.script_id:
+            from app.models.executable_script import ExecutableScript
+            script = db.query(ExecutableScript).filter(ExecutableScript.id == job.script_id).first()
+        if script is None:
+            target = f"등록 스크립트(script_id={job.script_id})" if job.script_id else "(스크립트 미지정)"
+            return [_cmd(KIND_SSH, f"ssh {who} -- {target}",
+                         f"`/scripts` 화면에서 관리되는 {target} 를 대상 호스트에서 실행한다.", readonly=False)]
+        label = f"스크립트 «{script.name}» ({script.kind})"
+        if script.kind == "ansible_playbook":
+            return [_cmd(KIND_ANSIBLE, f"ansible-playbook <{script.name}> -i {job.default_host or '<default_host 미설정>'},",
+                         f"`/scripts` 의 {label} 현재 버전을 ansible-playbook 으로 대상 호스트에 실행한다.",
+                         readonly=False)]
+        runner = "python3 -" if script.kind == "python" else "bash -s"
+        return [_cmd(KIND_SSH, f"ssh {who} -- {runner} < <{script.name}>",
+                     f"`/scripts` 의 {label} 현재 버전을 SSH 로 대상 호스트에 넘겨 실행한다.", readonly=False)]
+    requires_ssh = True
+    try:
+        from app.services.batch_jobs import get_executor
+        executor = get_executor(job.job_type)
+        if executor is not None and not executor.requires_ssh:
+            requires_ssh = False
+    except Exception:  # noqa: BLE001 — 실행기 조회 실패는 기본(SSH) 표기
+        pass
+    if not requires_ssh:
+        return [_cmd(KIND_K8S_API, f"<{job.job_type} 실행기> — K8s API 호출",
+                     f"job_type=`{job.job_type}` 실행기(코드에 내장)는 SSH 없이 클러스터 K8s API 로 동작한다.",
+                     readonly=False)]
     return [
-        _cmd(KIND_SSH, f"ssh {job.default_username or 'root'}@{job.default_host or '<default_host 미설정>'} "
-             f"-- <{job.job_type} 실행기(system) 명령>",
+        _cmd(KIND_SSH, f"ssh {who} -- <{job.job_type} 실행기(system) 명령>",
              f"등록된 job_type=`{job.job_type}` 실행기(코드에 내장)를 대상 호스트에서 실행한다.",
              readonly=False),
     ]
@@ -497,7 +523,8 @@ def _playbook_commands(playbook: Optional[Playbook]) -> list[dict[str, Any]]:
     return [
         _cmd(KIND_ANSIBLE, f"ansible-playbook {pb_name} -i {inv_name}{tags}",
              "등록된 플레이북을 인벤토리 대상 호스트 전체에서 실행하고 JSON callback 출력으로 "
-             "호스트별 ok/changed/failures/unreachable 을 집계한다.",
+             "호스트별 ok/changed/failures/unreachable 을 집계한다. 제한 시간 "
+             f"{playbook.timeout_seconds or '기본(30)'}초 — `/playbooks` 화면에서 바꾼다.",
              readonly=False),
     ]
 
@@ -662,7 +689,7 @@ def build_runbook(db: Session, item: CheckMatrixItem, cluster: Cluster) -> dict[
             .first()
         )
         out["steps"] = _BATCH_JOB_STEPS
-        out["commands"] = _batch_job_commands(job)
+        out["commands"] = _batch_job_commands(job, db)
         out["notes"] = list(_BATCH_JOB_NOTES)
         # config_editable=False — job.params/자격증명 편집은 /batch-jobs 화면 전용(중복 UI 방지).
         if job is None:

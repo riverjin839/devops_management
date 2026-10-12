@@ -639,6 +639,7 @@ export function Dashboard() {
               playbookPath: data.playbookPath,
               inventoryPath: data.inventoryPath || undefined,
               tags: data.tags || undefined,
+              timeoutSeconds: data.timeoutSeconds,
               clusterId: data.clusterId,
             },
           });

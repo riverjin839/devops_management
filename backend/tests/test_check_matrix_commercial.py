@@ -435,3 +435,87 @@ def test_masked_secret_roundtrip_keeps_original(db, world):
     ])
     db.refresh(addon)
     assert addon.config["api_token"] == "keep-me" and addon.config["url"] == "http://b"
+
+
+# ── P2 후속 ───────────────────────────────────────────────────────────────────
+
+def test_manual_item_opt_in_affects_cluster_status(db, world):
+    from app.models import StatusEnum
+    from app.services import cluster_status_service
+
+    world["manual"].affects_cluster_status = True
+    db.commit()
+    svc.record_manual_entry(db, world["manual"].id, world["open"].id, StatusEnum.critical, None, "NAS full")
+    out = cluster_status_service.recompute(db, world["open"].id)
+    assert out["status"] == "critical"
+    assert any(c["source_type"] == "check_matrix" and c["edit_id"] == str(world["manual"].id) for c in out["contributors"])
+    # 끄면 반영되지 않는다
+    world["manual"].affects_cluster_status = False
+    db.commit()
+    out = cluster_status_service.recompute(db, world["open"].id)
+    assert not any(c["source_type"] == "check_matrix" for c in out["contributors"])
+
+
+def test_opt_in_rejected_for_deep_check(client_as, world):
+    r = client_as(world["admin"]).put(f"/api/v1/check-matrix/items/{world['deep'].id}", json={
+        "name": world["deep"].name, "source_type": "deep_check", "source_ref": "pvc_health",
+        "affects_cluster_status": True,
+    })
+    assert r.status_code == 400
+
+
+def test_deep_check_status_uses_each_lineage(db, world):
+    """같은 종류 커스텀 카드 둘 — A 위험·B 정상이어도 클러스터는 위험(예전엔 최신 1건만 봤다)."""
+    from app.models import DeepCheckResult, StatusEnum
+    from app.services import cluster_status_service
+
+    a = svc.create_dedicated_definition(db, "pvc_health", name="cr-a")
+    b = svc.create_dedicated_definition(db, "pvc_health", name="cr-b")
+    a.affects_cluster_status = b.affects_cluster_status = True
+    world["deep"].definition_id = a.id
+    other = CheckMatrixItem(name="cr-deep-b", source_type=CheckMatrixSourceType.deep_check,
+                            source_ref="pvc_health", definition_id=b.id, sort_order=9030)
+    db.add(other)
+    db.commit()
+    now = datetime.utcnow()
+    db.add_all([
+        DeepCheckResult(cluster_id=world["open"].id, definition_id=a.id, check_type="pvc_health",
+                        status=StatusEnum.critical, checked_at=now - timedelta(minutes=1)),
+        DeepCheckResult(cluster_id=world["open"].id, definition_id=b.id, check_type="pvc_health",
+                        status=StatusEnum.healthy, checked_at=now),
+    ])
+    db.commit()
+    try:
+        out = cluster_status_service.recompute(db, world["open"].id)
+        assert out["status"] == "critical"
+    finally:
+        db.query(DeepCheckResult).filter(DeepCheckResult.definition_id.in_([a.id, b.id])).delete(synchronize_session=False)
+        db.delete(other)
+        world["deep"].definition_id = None
+        db.commit()
+        db.query(DeepCheckDefinition).filter(DeepCheckDefinition.id.in_([a.id, b.id])).delete(synchronize_session=False)
+        db.commit()
+
+
+def test_purge_reports_remaining_when_budget_exhausted(db):
+    out = svc.purge_expired_logs(db, time_budget_seconds=0)
+    assert out["remaining"] is True
+
+
+def test_playbook_timeout_extends_task_limit(db, world):
+    from app.models import Playbook
+
+    pb = Playbook(cluster_id=world["open"].id, name=f"cr-pb-{uuid.uuid4().hex[:6]}",
+                  playbook_path="/tmp/x.yml", timeout_seconds=900)
+    db.add(pb)
+    item = CheckMatrixItem(name="cr-pb-item", source_type=CheckMatrixSourceType.playbook,
+                           source_ref=pb.name, sort_order=9040)
+    db.add(item)
+    db.commit()
+    try:
+        assert svc._task_time_limit(db, item) == 960
+        assert svc._task_time_limit(db, world["deep"]) is None
+    finally:
+        db.delete(item)
+        db.delete(pb)
+        db.commit()

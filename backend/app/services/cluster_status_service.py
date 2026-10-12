@@ -13,8 +13,9 @@
 를 대입하지 않는다.
 
 opt-in 정책: 심층 점검은 `DeepCheckDefinition.affects_cluster_status=True` 인 정의만 집계
-대상이다(기본 False — 운영자가 명시적으로 "클러스터 상태에 반영"을 켠 점검만). 애드온은
-기존과 동일하게 항상 반영된다(클러스터별 인스턴스라 opt-in 개념이 없음).
+대상이다(기본 False — 운영자가 명시적으로 "클러스터 상태에 반영"을 켠 점검만). 점검 매트릭스의
+배치잡·플레이북·수동 입력 행은 `CheckMatrixItem.affects_cluster_status=True` 인 행만 반영한다.
+애드온은 기존과 동일하게 항상 반영된다(클러스터별 인스턴스라 opt-in 개념이 없음).
 """
 from __future__ import annotations
 
@@ -36,8 +37,19 @@ def _core_bundle_message(log: DailyCheckLog) -> str:
     return "정상입니다."
 
 
-def _latest_definitions_by_check_type(db: Session, cluster_id) -> dict[str, DeepCheckDefinition]:
-    """`affects_cluster_status=True` 인 정의만, check_type 별로 클러스터 전용 우선."""
+def _status_definition_groups(db: Session, cluster_id) -> list[dict[str, Any]]:
+    """`affects_cluster_status=True` 인 정의를 "계보" 단위로 묶는다 — 클러스터 전용이 글로벌보다 우선.
+
+    예전엔 check_type 하나당 정의 하나로 접어, 같은 종류의 커스텀 카드 둘(A·B)이 있으면 하나만 남았고
+    결과도 check_type 의 최신 1건을 읽었다 — 10:00 A 위험, 10:01 B 정상이면 클러스터가 정상으로 보였다.
+
+    - 매트릭스 행이 전용으로 문 정의(``CheckMatrixItem.definition_id``)와 그 오버라이드(parent_id)는
+      그 정의의 계보 하나로 묶는다.
+    - 그 밖의 공유 정의는 예전처럼 check_type 단위(클러스터 전용 사본 우선) — 셀 편집이 만드는 공유
+      정의의 클러스터 사본은 parent_id 가 없으므로 check_type 으로 묶어야 같은 계보가 된다.
+    """
+    from app.models import CheckMatrixItem
+
     defs = (
         db.query(DeepCheckDefinition)
         .filter(
@@ -47,14 +59,38 @@ def _latest_definitions_by_check_type(db: Session, cluster_id) -> dict[str, Deep
                 DeepCheckDefinition.cluster_id.is_(None),
             ),
         )
+        .order_by(DeepCheckDefinition.created_at.asc())
         .all()
     )
-    by_check_type: dict[str, DeepCheckDefinition] = {}
+    dedicated_roots = {
+        r[0] for r in db.query(CheckMatrixItem.definition_id).filter(CheckMatrixItem.definition_id.isnot(None))
+    }
+    groups: dict[Any, dict[str, Any]] = {}
     for d in defs:
-        # 클러스터 전용 정의가 있으면 글로벌보다 우선(먼저 온 글로벌을 나중에 덮어씀).
-        if d.check_type not in by_check_type or d.cluster_id is not None:
-            by_check_type[d.check_type] = d
-    return by_check_type
+        root = d.parent_id or d.id
+        key = ("lineage", root) if root in dedicated_roots else ("type", d.check_type)
+        g = groups.setdefault(key, {"key": key, "check_type": d.check_type, "ids": set(), "primary": None})
+        g["ids"].add(d.id)
+        # 클러스터 전용 정의가 있으면 그것을 대표로(이름·편집 대상).
+        if g["primary"] is None or (d.cluster_id is not None and g["primary"].cluster_id is None):
+            g["primary"] = d
+    return list(groups.values())
+
+
+def _latest_group_result(db: Session, cluster_id, group: dict[str, Any]) -> Optional[DeepCheckResult]:
+    q = db.query(DeepCheckResult).filter(DeepCheckResult.cluster_id == cluster_id)
+    if group["key"][0] == "lineage":
+        q = q.filter(DeepCheckResult.definition_id.in_(list(group["ids"])))
+    else:
+        # 공유 계보: 이 정의들의 결과 + 정의 참조가 끊긴(삭제·레거시) 같은 종류 결과.
+        q = q.filter(
+            DeepCheckResult.check_type == group["check_type"],
+            or_(
+                DeepCheckResult.definition_id.in_(list(group["ids"])),
+                DeepCheckResult.definition_id.is_(None),
+            ),
+        )
+    return q.order_by(DeepCheckResult.checked_at.desc()).first()
 
 
 def recompute(db: Session, cluster_id) -> dict[str, Any]:
@@ -130,17 +166,13 @@ def recompute(db: Session, cluster_id) -> dict[str, Any]:
         # ③ 심층 점검(opt-in) — pending(미판정)은 "아직 판정 없음"이라 집계에서 제외한다
         # (애드온과 달리 warning 으로 승격하지 않음 — opt-in 이라 안 켠 점검이 대다수라
         # 노이즈가 커지는 걸 막는다).
-        for check_type, d in _latest_definitions_by_check_type(db, cluster_id).items():
-            latest_result = (
-                db.query(DeepCheckResult)
-                .filter(DeepCheckResult.cluster_id == cluster_id, DeepCheckResult.check_type == check_type)
-                .order_by(DeepCheckResult.checked_at.desc())
-                .first()
-            )
+        for group in _status_definition_groups(db, cluster_id):
+            d = group["primary"]
+            latest_result = _latest_group_result(db, cluster_id, group)
             if latest_result is None or latest_result.status == StatusEnum.pending:
                 continue
             contributors.append({
-                "source_type": "deep_check", "source_ref": check_type,
+                "source_type": "deep_check", "source_ref": group["check_type"],
                 "name": d.name, "status": latest_result.status.value,
                 "message": latest_result.message,
                 "checked_at": latest_result.checked_at.isoformat() if latest_result.checked_at else None,
@@ -149,6 +181,40 @@ def recompute(db: Session, cluster_id) -> dict[str, Any]:
             if latest_result.status == StatusEnum.critical:
                 final_status = StatusEnum.critical
             elif latest_result.status == StatusEnum.warning and final_status != StatusEnum.critical:
+                final_status = StatusEnum.warning
+
+        # ④ 점검 매트릭스 행(opt-in) — 배치잡·플레이북·수동 입력 결과. 이 소스들은 점검 정의가 없어
+        # 위 ③으로 잡히지 않는다. 운영자가 항목에서 "클러스터 상태에 반영" 을 켠 활성 행만 본다.
+        # pending(판정 보류)은 ③과 같이 제외한다.
+        from app.models import CheckMatrixItem, CheckMatrixResult, CheckMatrixSourceType
+
+        rows = (
+            db.query(CheckMatrixItem, CheckMatrixResult)
+            .join(CheckMatrixResult, CheckMatrixResult.item_id == CheckMatrixItem.id)
+            .filter(
+                CheckMatrixResult.cluster_id == cluster_id,
+                CheckMatrixItem.affects_cluster_status.is_(True),
+                CheckMatrixItem.enabled.is_(True),
+                CheckMatrixItem.source_type.in_([
+                    CheckMatrixSourceType.batch_job, CheckMatrixSourceType.playbook,
+                    CheckMatrixSourceType.manual,
+                ]),
+            )
+            .all()
+        )
+        for item, res in rows:
+            if res.status is None or res.status == StatusEnum.pending:
+                continue
+            contributors.append({
+                "source_type": "check_matrix", "source_ref": item.source_type.value,
+                "name": item.name, "status": res.status.value,
+                "message": res.message,
+                "checked_at": res.checked_at.isoformat() if res.checked_at else None,
+                "edit_id": str(item.id),
+            })
+            if res.status == StatusEnum.critical:
+                final_status = StatusEnum.critical
+            elif res.status == StatusEnum.warning and final_status != StatusEnum.critical:
                 final_status = StatusEnum.warning
 
     # row-level lock 으로 동시 갱신(Beat cron + 사용자 수동 트리거 등) race 차단 — 예전

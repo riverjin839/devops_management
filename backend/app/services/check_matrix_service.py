@@ -289,6 +289,7 @@ def _item_to_dict(
         "enabled": item.enabled,
         "sort_order": item.sort_order,
         "target_key": item.target_key,
+        "affects_cluster_status": bool(getattr(item, "affects_cluster_status", False)),
         # dup 이 없으면 "같은 대상을 다른 기술로도 점검 중"인 경우가 아니라는 뜻 — 0/빈 목록.
         "target_duplicate_count": dup["duplicate_count"] if dup else 0,
         "target_peers": dup["peers"] if dup else [],
@@ -568,6 +569,20 @@ def record_manual_entry(
         finished_at=now,
     ))
     db.commit()
+    _maybe_recompute_cluster(db, item_id, cluster_id)
+
+
+def _maybe_recompute_cluster(db: Session, item_id, cluster_id) -> None:
+    """클러스터 상태 반영(opt-in)을 켠 행이면 결과가 바뀐 직후 종합 상태를 다시 계산한다."""
+    try:
+        item = db.query(CheckMatrixItem).filter(CheckMatrixItem.id == item_id).first()
+        if item is None or not item.affects_cluster_status:
+            return
+        from app.services import cluster_status_service
+        cluster_status_service.recompute(db, cluster_id)
+    except Exception:  # noqa: BLE001 — 상태 재계산 실패가 결과 기록을 되돌리면 안 된다
+        db.rollback()
+        logger.exception("check-matrix: cluster status recompute failed item=%s cluster=%s", item_id, cluster_id)
 
 
 def project_core_bundle_result(db: Session, cluster: Cluster, log: Any) -> None:
@@ -1768,6 +1783,7 @@ def _execute_into_run(
         _upsert_result(db, item.id, cluster.id, status, None, message, details)
         _finish_run(run, CheckMatrixRunState.success, status=status, value=None, message=message, details=details)
         db.commit()
+        _maybe_recompute_cluster(db, item.id, cluster.id)
         return
 
     if item.source_type == CheckMatrixSourceType.playbook:
@@ -1803,6 +1819,7 @@ def _execute_into_run(
             status=status, value=None, message=pb_result.message or "", details=details,
         )
         db.commit()
+        _maybe_recompute_cluster(db, item.id, cluster.id)
         return
 
     _finish_run(
@@ -1899,6 +1916,26 @@ def run_cell_now(
     return execute_run(db, run.id)
 
 
+_DEFAULT_TASK_TIME_LIMIT = 280
+
+
+def _task_time_limit(db: Session, item: CheckMatrixItem) -> Optional[int]:
+    """플레이북 행은 Playbook.timeout_seconds(최대 1800초)가 기본 셀 태스크 한도(280초)를 넘을 수 있다 —
+    태스크를 그보다 넉넉히(+60초) 잡지 않으면 ansible 이 끝나기 전에 워커가 강제 종료한다."""
+    if item.source_type != CheckMatrixSourceType.playbook or not item.source_ref:
+        return None
+    longest = (
+        db.query(Playbook.timeout_seconds)
+        .filter(Playbook.name == item.source_ref, Playbook.timeout_seconds.isnot(None))
+        .order_by(Playbook.timeout_seconds.desc())
+        .limit(1)
+        .scalar()
+    )
+    if not longest or longest + 60 <= _DEFAULT_TASK_TIME_LIMIT:
+        return None
+    return int(longest) + 60
+
+
 def _active_pairs(db: Session, pairs: list[tuple[CheckMatrixItem, Cluster]]) -> dict[tuple[str, str], CheckMatrixRun]:
     """이미 queued/running 인 (item, cluster) 수행 — 같은 셀을 두 번 큐잉하지 않기 위해."""
     if not pairs:
@@ -1942,10 +1979,13 @@ def start_batch(
     ]
     queued = 0
     errors: list[str] = []
+    limits = {str(i.id): _task_time_limit(db, i) for i, _ in fresh}
     for run in runs:
         try:
             from app.celery_app import run_check_matrix_run_one
-            run_check_matrix_run_one.apply_async(args=[str(run.id)])
+            limit = limits.get(str(run.item_id))
+            opts = {"time_limit": limit, "soft_time_limit": limit - 30} if limit else {}
+            run_check_matrix_run_one.apply_async(args=[str(run.id)], **opts)
             queued += 1
         except Exception as e:  # noqa: BLE001
             logger.exception("check-matrix batch queue failed run_id=%s", run.id)
@@ -2555,14 +2595,28 @@ def _sweep_stale_runs(db: Session) -> int:
 # ──────────────────────────────────────────────────────────────
 # 리텐션 정리 (일 1회 Celery Beat)
 # ──────────────────────────────────────────────────────────────
-def purge_expired_logs(db: Session, *, max_batches: int = 50, batch_size: int = 5000) -> dict[str, Any]:
-    """task_time_limit(5분) 보호 — 청크 단위 삭제 + 배치 상한."""
+def purge_expired_logs(
+    db: Session, *, batch_size: int = 5000, time_budget_seconds: float = 240.0,
+) -> dict[str, Any]:
+    """보관 기간이 지난 값 이력·수행 로그를 청크 단위로 지운다.
+
+    예전엔 테이블당 하루 50×5000=250k 행 상한이 있어, 하루에 그보다 많이 쌓이는 설치본은 영원히
+    따라잡지 못했다. 이제는 행 수가 아니라 **시간 예산**(태스크 한도 300초 안쪽의 240초)으로 끊는다 —
+    예산 안에서는 다 지울 때까지 돌고, 남으면 ``remaining=True`` 로 알려 다음 날 이어서 지운다.
+    """
+    import time as _time
+
     retention_days = get_settings(db)["retention_days"]
     cutoff = datetime.utcnow() - timedelta(days=retention_days)
+    deadline = _time.monotonic() + time_budget_seconds
+    state = {"remaining": False}
 
     def _purge(model, ts_col) -> int:
         deleted = 0
-        for _ in range(max_batches):
+        while True:
+            if _time.monotonic() >= deadline:
+                state["remaining"] = True
+                break
             ids = [
                 row[0]
                 for row in db.query(model.id).filter(ts_col < cutoff).limit(batch_size).all()
@@ -2579,18 +2633,32 @@ def purge_expired_logs(db: Session, *, max_batches: int = 50, batch_size: int = 
     # 실행 로그(runs)는 details 에 명령 출력 발췌를 담아 행이 크므로 값 이력과 함께 정리한다.
     total_deleted = _purge(CheckMatrixResultLog, CheckMatrixResultLog.checked_at)
     runs_deleted = _purge(CheckMatrixRun, CheckMatrixRun.queued_at)
+    if state["remaining"]:
+        logger.warning("check-matrix purge: 시간 예산(%ss) 소진 — 남은 행은 다음 정리 때 이어서 지운다", time_budget_seconds)
     return {
         "retention_days": retention_days,
         "deleted": total_deleted,
         "runs_deleted": runs_deleted,
+        "remaining": state["remaining"],
     }
 
 
 # ──────────────────────────────────────────────────────────────
 # 기본 항목 시드 (main.py lifespan, 테이블 비어있을 때만)
 # ──────────────────────────────────────────────────────────────
+_SEED_LOCK_KEY = 0x434D5345  # "CMSE" — 백엔드 레플리카 여러 개가 동시에 부팅할 때의 시드 경합 가드
+
+
 def seed_default_items(db: Session) -> int:
+    # 트랜잭션 범위 advisory lock — 레플리카 둘이 동시에 "비어 있음" 을 보고 핵심 항목(core_bundle)을
+    # 두 번 만드는 경합을 막는다. 뒤에 온 쪽은 앞쪽 커밋을 기다렸다가 count>0 을 보고 빠진다.
+    from sqlalchemy import text as _text
+    try:
+        db.execute(_text("SELECT pg_advisory_xact_lock(:k)"), {"k": _SEED_LOCK_KEY})
+    except Exception:  # noqa: BLE001 — PostgreSQL 이 아니면 잠금 없이 진행(테스트 환경 등)
+        db.rollback()
     if db.query(CheckMatrixItem).count() > 0:
+        db.commit()  # 잠금 해제
         return 0
 
     added = 0

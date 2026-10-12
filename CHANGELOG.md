@@ -18,9 +18,22 @@
   주기를 새로 넣거나 바꾸면 1분 안에 엉뚱한 시각에 실행되던 문제, 디스패처 중복 발화, 비활성 항목의 자동 실행,
   재시작마다 기본 주기가 다시 붙던 문제, 대기 중이던 일괄 실행이 "워커 재시작" 으로 오인 마감되던 문제를 고쳤다.
   확인창에서 Enter 를 누르면 실행이 두 번 나가던 문제, 셀 실행이 실패해도 "실행했습니다" 가 뜨던 문제도 고쳤다.
+  클러스터 상태 계산이 같은 종류의 심층 점검 카드 여러 장을 하나로 접어 최신 1건만 보던 문제(A 위험·B 정상 → 정상),
+  여러 백엔드가 동시에 처음 부팅할 때 기본 항목이 두 번 만들어지던 경합, 이력 정리가 하루 25만 행에서 멈춰 대규모 설치본이
+  따라잡지 못하던 문제, 배치잡 실행 계획이 K8s API·Ansible 실행기도 SSH 로 적던 문제를 고쳤다.
   Backend: `routers/check_matrix.py`(본문/아이템 경유 operate 검사·`get_cluster_scope`·감사 로그 `check_matrix.*`·입력 길이/NaN 검증),
   `check_matrix_service`(`queue_cell_now`·`start_batch` 중복 방지·`_claim` 조건부 발화·`seed_default_schedules` 1회 시드·
   `delete_dedicated_definition`), `check_matrix_runbook.mask_secrets`. Frontend: `ConfirmDialog` `busy`·Enter 이중 발화 제거.
+
+### Added
+- **점검 매트릭스 항목의 클러스터 상태 반영(opt-in)**: 배치잡·플레이북·수동 입력 항목에 「클러스터 상태에 반영」 스위치가
+  생겨, 켜면 그 항목의 경고·위험이 클러스터 종합 상태(사이드바 색·열 머리글 점)와 클러스터 상세 원인 목록에 들어간다(기본 꺼짐).
+  Backend: `check_matrix_items.affects_cluster_status`, `cluster_status_service.recompute` ④ 단계.
+- **플레이북 실행 제한 시간**: `/playbooks` 등록·수정에서 실행 제한 시간(10~1800초)을 정한다 — 예전엔 30초 고정이라
+  실제 운영 플레이북이 대부분 timed out 으로 실패했다. 점검 매트릭스 셀 태스크도 그만큼 한도를 늘린다.
+  Backend: `playbooks.timeout_seconds`.
+- **점검 매트릭스 목록 보기·문제만 보기**: 툴바 「표 / 목록」 으로 영역 → 항목 → 클러스터별 칩의 1열 목록을 고를 수 있다
+  (1024px 미만에서는 기본 목록). 「문제만」 은 경고·위험이거나 최근 실행이 실패한 항목만 남긴다.
 
 ### Changed
 - **점검 매트릭스 실행은 언제나 실시간 로그로**: 셀 "지금 실행" 이 요청 안에서 끝까지 기다리던 동기 방식(오래 걸리면 504)에서
