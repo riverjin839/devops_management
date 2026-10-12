@@ -8,7 +8,7 @@
 
 ## [Unreleased]
 
-1.46.0 이후 main 에 병합된 변경 (다음 릴리스 후보).
+1.47.0 이후 main 에 병합된 변경 (다음 릴리스 후보).
 
 ### Fixed
 - **점검 매트릭스 상용화 재검토 — 권한·데이터·스케줄러 결함 일괄 수정**: 행 "전 클러스터 실행" 이 다른 테넌트에 묶인
@@ -48,6 +48,25 @@
   값 입력(수동 항목 첫 탭)·추이 · 이력·실행 주기·실행 계획·실행 기록으로 정리했고, 등록 마법사는 점검 선택 → 설정 →
   테스트·저장 3단계로 줄였다. 비활성 항목은 기본 숨김, 행 순서 변경은 같은 영역 안에서만, 드래그는 Firefox 에서도 동작한다.
 
+
+## [1.47.0] - 2026-10-12
+
+### Added
+- **AI 개발 리포트 (HTML) 월간 자동 갱신**: AI 와 함께 개발한 과정·결과 리포트를 HTML 로 제공한다. 기간 필터,
+  월 막대 클릭 시 PR 목록 드릴다운, 모델 세대 구간 조정, 상용화 진척도 가정 조정, PEP 테마 16종 전환, 발표 모드,
+  A4 인쇄를 지원한다. 매월 1일 GitHub Actions 가 git 이력으로 수치를 다시 집계해 갱신 PR 을 연다(`chore(report)`
+  — 릴리스 대상 제외). 산출물: `docs/reports/ai-dev-report.html`. 스크립트: `scripts/report/`
+  (`collect_ai_dev_metrics.py` → `build_ai_dev_report_html.py`, 판단 값은 `ai_dev_report_narrative.json`).
+  워크플로: `.github/workflows/ai-dev-report.yml`.
+
+## [1.46.1] - 2026-10-12
+
+### Fixed
+- **"앱 추가" 카탈로그에서 접근 제어로 막힌 화면 제외**: Settings → 접근 제어에서 비활성화된 화면이 사이드바·상단바
+  "+" 카탈로그에 그대로 나와, 설치해도 "설치됨"으로만 표시되고 레일에는 나타나지 않던 문제를 고쳤다. 카탈로그 하단과
+  접근 제어 탭에 "설치는 메뉴 표시일 뿐 권한이 아니다"라는 안내를 추가했고, `installed_apps` 가 접근 제어가 아님을
+  `DESIGN_SYSTEM.md`·`docs/SCREENS.md` 에 명시했다. Frontend: `installableApps.ts` `filterSectionsByAccess`.
+
 ## [1.46.0] - 2026-10-08
 
 ### Added
@@ -56,6 +75,18 @@
   막힌다(이름·지역·운영레벨·상태·노드 수는 유지). admin·operator 는 그대로이고 기본값은 꺼짐이라 기존 화면은 바뀌지 않는다.
   설정 변경은 감사 로그에 남는다. Backend: `services/cluster_network_mask.py`, `GET/PUT /ui-settings/cluster-viewer-mask`,
   `ClusterResponse.network_masked`. Frontend: `ClusterViewerMaskSetting`, 클러스터 관리 화면 숨김 안내.
+
+### Fixed
+- **K8s 이벤트 클러스터 필터·테넌트 격리**: kubewatch 이벤트가 항상 "클러스터 미지정"으로 저장돼 클러스터를 고르면
+  늘 빈 목록이 나오고, 테넌트에 바인딩된 클러스터의 이벤트가 모두에게 보이던 문제를 고쳤다. 웹훅 URL 에
+  `?cluster=<클러스터 이름 또는 id>` 를 붙이면 그 클러스터로 귀속되고, critical 알림은 그 클러스터를 볼 수 있는
+  사용자에게만 간다(빈 목록일 때 설정 방법을 화면에 안내). 이벤트 삭제는 operator 이상 + 클러스터 실행 권한이
+  필요하고, 확인 창·권한 사유·실패 토스트가 붙었다.
+- **알람 확인·삭제·AI 분석의 테넌트 범위**: 다른 테넌트 클러스터의 알람을 확인·삭제·분석 요청하거나 분석 결과를
+  읽을 수 있던 문제를 막았다(보이지 않는 알람은 404). "일괄 확인"은 화면 조건(클러스터·심각도·상태·검색어)과 같은
+  미확인 알람만 처리하고, 실행 전에 대상 조건을 보여주는 확인 창을 띄운다. 알람 알림(`all` 모드)도 그 클러스터를
+  볼 수 있는 사용자에게만 간다. Backend: `routers/k8s_events.py`·`routers/observability.py`,
+  `user_notify.restrict_to_cluster_viewers`.
 
 ## [1.45.0] - 2026-10-08
 

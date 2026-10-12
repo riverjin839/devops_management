@@ -27,6 +27,9 @@ class DecideBumpTest(unittest.TestCase):
     def test_release_pr_is_skipped(self):
         self.assertBump("chore(release): v1.36.1", "none")
 
+    def test_monthly_report_pr_is_skipped(self):
+        self.assertBump("chore(report): AI 개발 리포트 월간 갱신 (2026-11)", "none")
+
     # ── 이번 수정의 핵심: scope 가 붙은 제목 ─────────────────────────────────
     def test_scoped_titles_seen_in_this_repo(self):
         # 실제로 스킵됐던 제목들 (#709, #715, feat(ui) 테마 시리즈)

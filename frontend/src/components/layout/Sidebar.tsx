@@ -22,7 +22,7 @@ import { SelfAssigneePanel } from './SelfAssigneePanel';
 import { UserFeedbackPanel, USER_FEEDBACK_TAB_TITLE, type UserFeedbackTab } from './UserFeedbackPanel';
 import { FlyoutShell, FlyoutLink, FlyoutAction } from './NavFlyout';
 import { AddAppDialog } from './AddAppDialog';
-import { installableAppById, sidebarAppSections } from './installableApps';
+import { filterSectionsByAccess, installableAppById, sidebarAppSections } from './installableApps';
 
 // 정적 네비게이션 정의(NAV_MAP / GROUPS / GroupId / DEFAULT_TITLE)는 navConfig 로 분리 —
 // Settings 의 "화면 UI 설정" 탭(NavMenuManager / PageStyleManager)과 공유한다.
@@ -329,7 +329,10 @@ export function Sidebar() {
   /** flyout 이 닫힐 때(라우팅/액션) 호출 — 포커스 복귀는 FlyoutShell 이 트리거로 알아서 한다. */
   const focusProps = { autoFocus: flyoutFocus.autoFocus, returnFocusTo: flyoutFocus.trigger };
 
-  const catalogSections = useMemo(() => sidebarAppSections(isAdmin), [isAdmin]);
+  const catalogSections = useMemo(
+    () => filterSectionsByAccess(sidebarAppSections(isAdmin), featureAllowed),
+    [isAdmin, featureAllowed],
+  );
 
   return (
     <>
