@@ -74,6 +74,12 @@ Jira Excel 가져오기)·문서 관리 그룹 전체·즐겨찾기·Your Island
 `_migrate_home_prefs_layout()` 가 행 단위 `layout_version` 으로 한 번만 변환한다(전역 sentinel
 없음 — 재실행돼도 사용자 목록을 바꾸지 않는다).
 
+**사용자 메뉴 — 개인 설정 내보내기/가져오기**: 사용자 flyout 의 "개인 설정 내보내기"는 서버 개인 설정
+(`GET /me/settings-export`, 허용 키만 — 비밀 제외)과 브라우저 개인 키(`lib/personalStorage.ts` `snapshotPersonal`)를
+한 JSON 파일로 내려받고, "개인 설정 가져오기"는 확인 창 뒤 `POST /me/settings-import` + 로컬 키 교체 후 새로 고친다
+(`components/layout/usePersonalSettingsTransfer.tsx`). "앱 추가" 창 상단 "표시 순서"에서 설치 앱을 끌어 순서를
+바꾼다(`InstalledAppOrder`, `installedAppsMove` 델타).
+
 **flyout — 호버로 열림 + 클러스터 그룹 섹션 구분**: 좌측 사이드바에서 설치된 leaf 는 개별
 직행 링크라 flyout 이 없고(설치 단위 자체가 이미 최하위 메뉴), 상단바에 설치된 `favorites`/
 `island` 특수 항목만 여전히 flyout(즐겨찾기 목록 / 내 아일랜드가 여러 개일 때의 선택지)을
@@ -189,6 +195,7 @@ hover 시 flyout 자체가 라벨을 보여주므로 이름만 뜨는 중복 툴
 - **Backend**: `POST /api/v1/auth/login` (`backend/app/routers/auth.py`) — `User` 모델(`backend/app/models/user.py`) 조회 후 `verify_password` 검증, 성공 시 `create_access_token`으로 JWT 발급 + `audit_logger.record(action="login.success"/"login.failure")` 감사 로그 기록. 실패 시 401 + 한글 상세 메시지.
 - **핵심 기능**:
   - 사용자명/비밀번호 로그인, JWT + `AuthUser` 세션을 `localStorage`(`k8s:auth:token`, `k8s:auth:user`)에 저장.
+  - **계정별 로컬 설정 분리**: 로그인 시 `lib/personalStorage.ts` `activateProfile` 이 브라우저에 깔린 개인 설정(테마·접힘·보기 모드 등)의 주인(`pep:profile-owner`)을 확인해, 다른 계정 것이면 `pep:profile:{id}` 로 보관하고 이 계정 것으로 바꿔 끼운 뒤 `/` 로 새로 고친다(공용 PC). 창·패널 폭 등 기기 설정과 로그인 토큰은 대상이 아니다. 로그아웃·세션 만료 시 탭에 기억된 플레이북 SSH 자격증명(sessionStorage)을 지운다.
   - **세션 만료 흐름(D-079)**: axios 401 → `expireAuthSession()`(보던 `pathname+search` 를 `returnTo` 로 기록 + 사유 `'expired'`) / `hooks/useSessionExpiryWatch`(AppShell 에서 JWT `exp` 를 읽어 만료 5분 전 경고 토스트, 만료 시각 지나면 401 을 기다리지 않고 같은 처리). 재로그인 성공 시 `consumeReturnTo()` 로 복귀 경로를 소비해 현재 URL 과 다르면 `navigate(returnTo)`.
   - 로그인 성공 시 홈 탭을 강제로 되돌리지 않는다 — 마지막으로 보던 탭(또는 Settings 에서 지정한 기본 홈 탭)이 로그인 후에도 유지된다.
   - 로그인 성공/실패 모두 감사 로그(`audit_logs`)에 기록.

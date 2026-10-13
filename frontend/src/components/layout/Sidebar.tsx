@@ -4,7 +4,7 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import {
   Plus, Leaf, Contrast, Brush, Paintbrush, Frame, Newspaper, Shapes, Diamond, Shell, AppWindow, CircleUserRound, Drama, Music, Guitar,
   Moon, Sun, Monitor, LogOut, User,
-  KeyRound, Home, MessageSquare, Bot, HelpCircle, Search, ScrollText, Bug, UserCog, Palette,
+  KeyRound, Home, MessageSquare, Bot, HelpCircle, Search, ScrollText, Bug, UserCog, Palette, Download, Upload,
 } from 'lucide-react';
 import { useUiSettings } from '@/hooks/useUiSettings';
 import { useNavCatalog } from '@/hooks/useNavCatalog';
@@ -22,6 +22,7 @@ import { SelfAssigneePanel } from './SelfAssigneePanel';
 import { UserFeedbackPanel, USER_FEEDBACK_TAB_TITLE, type UserFeedbackTab } from './UserFeedbackPanel';
 import { FlyoutShell, FlyoutLink, FlyoutAction } from './NavFlyout';
 import { AddAppDialog } from './AddAppDialog';
+import { usePersonalSettingsTransfer } from './usePersonalSettingsTransfer';
 import { filterSectionsByAccess, installableAppById, sidebarAppSections } from './installableApps';
 
 // 정적 네비게이션 정의(NAV_MAP / GROUPS / GroupId / DEFAULT_TITLE)는 navConfig 로 분리 —
@@ -221,6 +222,10 @@ export function Sidebar() {
     // 델타 연산 — 서버가 행 잠금 아래에서 합쳐 다른 기기·탭의 변경을 덮지 않는다.
     updateHomePrefs.mutate(installedApps.includes(id) ? { installedAppsRemove: [id] } : { installedAppsAdd: [id] });
   };
+  const moveInstalledApp = (id: string, before: string | null) => {
+    if (!homePrefs) return;
+    updateHomePrefs.mutate({ installedAppsMove: { id, before } });
+  };
   const resetInstalledApps = () => {
     if (!homePrefs) return;
     updateHomePrefs.mutate({ installedAppsReset: true });
@@ -264,6 +269,7 @@ export function Sidebar() {
   const [userFlyoutAnchor, setUserFlyoutAnchor] = useState<DOMRect | null>(null);
   const [selfPaneOpen, setSelfPaneOpen] = useState(false);
   const [logoutConfirmOpen, setLogoutConfirmOpen] = useState(false);
+  const settingsTransfer = usePersonalSettingsTransfer();
   // "도움말·지원" flyout — 화면 검색(⌘K) / VOC / 릴리즈 노트 / 버그 픽스 로그(admin).
   // 개발팀 내부 산출물(버그 픽스 로그)이 제품 셸에 상시 노출되던 것을 admin 전용으로 격리.
   const [helpFlyoutAnchor, setHelpFlyoutAnchor] = useState<DOMRect | null>(null);
@@ -525,6 +531,18 @@ export function Sidebar() {
                 active={location.pathname === '/me/change-password'}
                 onSelect={() => setUserFlyoutAnchor(null)}
               />
+              <FlyoutAction
+                label="개인 설정 내보내기"
+                Icon={Download}
+                title="홈·사이드바·즐겨찾기·터미널 색상·테마 등 내 설정을 파일로 받는다(비밀번호 제외)"
+                onSelect={() => { setUserFlyoutAnchor(null); settingsTransfer.startExport(); }}
+              />
+              <FlyoutAction
+                label="개인 설정 가져오기"
+                Icon={Upload}
+                title="내보낸 파일로 내 설정을 바꾼다 — 새 환경·새 PC 로 옮길 때"
+                onSelect={() => { setUserFlyoutAnchor(null); settingsTransfer.startImport(); }}
+              />
               <div className="mx-2 my-1 border-t border-border" />
               <p className="px-2.5 pt-1.5 pb-0.5 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-1">
                 <Palette className="w-3 h-3" aria-hidden="true" /> 테마
@@ -556,6 +574,9 @@ export function Sidebar() {
         </>
       )}
 
+      {/* 개인 설정 가져오기 — 파일 선택 input + 확인 창(메뉴 밖에 있어야 메뉴가 닫혀도 유지된다). */}
+      {settingsTransfer.element}
+
       {/* 로그아웃 확인 — 1클릭 즉시 로그아웃이던 것을 확인 다이얼로그로(작성 중인 폼 보호). */}
       <ConfirmDialog
         open={logoutConfirmOpen}
@@ -578,6 +599,7 @@ export function Sidebar() {
         onToggle={toggleInstalledApp}
         customized={homePrefs?.installedAppsCustomized ?? false}
         onReset={resetInstalledApps}
+        onMove={moveInstalledApp}
       />
 
       {/* 내 정보·담당 설정 — 우측 슬라이드 SidePane. 다른 상세 편집 패널(WbsFlowPage 등)과 동일한 패턴. */}

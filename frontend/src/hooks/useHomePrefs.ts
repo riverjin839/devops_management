@@ -23,15 +23,20 @@ export function useHomePrefs() {
 }
 
 /** 서버 규칙(services/home_prefs.py apply_update)과 같은 순서로 캐시에 미리 반영한다:
- *  reset → 전체 교체 → remove → add. reset 은 조직 기본값을 모르므로 응답을 기다린다. */
+ *  reset → 전체 교체 → remove → add → move. reset 은 조직 기본값을 모르므로 응답을 기다린다. */
 function applyOptimistic(prev: HomePrefs, payload: HomePrefsUpdate): HomePrefs {
-  const { installedAppsAdd, installedAppsRemove, installedAppsReset, ...simple } = payload;
+  const { installedAppsAdd, installedAppsRemove, installedAppsReset, installedAppsMove, ...simple } = payload;
   const next: HomePrefs = { ...prev, ...simple };
   if (installedAppsReset) return next;
-  if (installedAppsAdd || installedAppsRemove) {
+  if (installedAppsAdd || installedAppsRemove || installedAppsMove) {
     const remove = new Set(installedAppsRemove ?? []);
-    const apps = next.installedApps.filter((a) => !remove.has(a));
+    let apps = next.installedApps.filter((a) => !remove.has(a));
     for (const a of installedAppsAdd ?? []) if (!apps.includes(a)) apps.push(a);
+    if (installedAppsMove && apps.includes(installedAppsMove.id)) {
+      apps = apps.filter((a) => a !== installedAppsMove.id);
+      const idx = installedAppsMove.before ? apps.indexOf(installedAppsMove.before) : -1;
+      apps.splice(idx >= 0 ? idx : apps.length, 0, installedAppsMove.id);
+    }
     return { ...next, installedApps: apps, installedAppsCustomized: true };
   }
   if (simple.installedApps) return { ...next, installedAppsCustomized: true };
