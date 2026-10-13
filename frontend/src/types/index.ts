@@ -5361,6 +5361,9 @@ export interface HomePrefs {
   pinnedPaths: string[];
   /** R-6 i18n 2단계 — 표시 언어(서버 저장, 기기/브라우저를 넘어 따라온다). */
   locale?: 'ko' | 'en' | null;
+  /** 바탕 테마·강조색 — 서버 원천(기기를 넘어 따라옴). null = 아직 저장 안 됨. hooks/useThemeSync 가 맞춘다. */
+  theme?: string | null;
+  accent?: 'blue' | 'teal' | 'green' | 'amber' | 'coral' | 'violet' | null;
   /** 사이드바/상단바 "SaaS 앱" 실효 목록 — leaf 경로 + "back"/"favorites"/"island", 설치 순서 = 표시 순서.
    *  installedAppsCustomized 가 false 면 조직 기본값(Settings 에서 admin 편집)을 그대로 보여준 것이다. */
   installedApps: string[];

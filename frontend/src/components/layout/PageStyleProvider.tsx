@@ -5,6 +5,7 @@ import { useUiSettings } from '@/hooks/useUiSettings';
 import { resolvePageStyle, pageStyleToCss } from '@/lib/pageStyles';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { useSessionExpiryWatch } from '@/hooks/useSessionExpiryWatch';
+import { useThemeSync } from '@/hooks/useThemeSync';
 import { AppTopBar } from './AppTopBar';
 import { ViewportSupportBanner } from './ViewportSupportBanner';
 import { CommandPalette } from './CommandPalette';
@@ -22,6 +23,7 @@ export function PageStyleProvider({ children }: { children: ReactNode }) {
   const { data: settings } = useUiSettings();
   usePageTitle(); // D-075 — 라우트별 document.title ("화면명 · 앱 제목")
   useSessionExpiryWatch(); // D-079 — 만료 5분 전 경고 + 만료 시 선제 로그아웃(사유·복귀 경로 기록)
+  useThemeSync(); // 테마·강조색 서버 저장 — 다른 PC·브라우저에서도 같은 테마
   const eff = resolvePageStyle(settings?.pageStyles, location.pathname);
 
   // D-073 — Ctrl/⌘+K 로 어디서든 화면 검색. 입력창 안에서도 연다(브라우저 기본 ⌘K 는 막는다).
