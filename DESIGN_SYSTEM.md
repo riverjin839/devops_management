@@ -675,13 +675,16 @@ Cilium BPF Trace `/cilium-trace` · 커널 파라미터 `/kernel-params` · NFS 
 실행·추가·수정·삭제·저장·설정처럼 서버가 operator 이상을 요구하는 버튼은:
 
 ```tsx
-const { canOperate, withHint } = useCanOperate();
-<button disabled={!canOperate || pending} title={withHint('지금 실행')} aria-label={withHint('지금 실행')}
+const { canOperate, withHint, ariaWithHint } = useCanOperate();
+<button disabled={!canOperate || pending} title={withHint('지금 실행')} aria-label={ariaWithHint('지금 실행')}
         className="… disabled:opacity-50 disabled:cursor-not-allowed">
 ```
 
 - `withHint(title)` 은 권한이 있으면 원래 title, 없으면 "operator 이상 권한이 필요합니다 (현재:
   viewer)" 를 돌려준다. 숨기지 않는 이유는 기능이 있다는 것을 알아야 권한을 요청할 수 있어서다.
+- **`aria-label` 에는 `withHint` 를 쓰지 않는다** — 사유가 액션 이름을 통째로 덮어 스크린리더가
+  모든 버튼을 같은 이름("operator 이상 권한이 필요합니다")으로 읽는다. `ariaWithHint(label)` 은
+  이름을 남기고 사유를 덧붙인다(`"지금 실행 — operator 이상 …"`).
 - 예외: 빈 상태(EmptyState)의 주 액션처럼 "비활성 버튼 하나만 덩그러니" 남는 자리는 viewer 에게
   액션을 생략해도 된다. 기존 `hasRole(user,'admin','operator')` 로 버튼을 **숨기던** 화면
   (`ClusterManagePage` 등)은 그대로 두되, 신규 화면은 이 패턴을 따른다.

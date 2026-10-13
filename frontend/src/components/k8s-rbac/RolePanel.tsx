@@ -46,7 +46,7 @@ export function RolePanel({
   isLoading,
   focusRequest,
 }: Props) {
-  const { canOperate, hint, withHint } = useCanOperate(clusterId);
+  const { canOperate, hint, withHint, ariaWithHint } = useCanOperate(clusterId);
   const toast = useToastSafe();
   const [query, setQuery] = useState('');
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
@@ -251,7 +251,7 @@ export function RolePanel({
                           }}
                           disabled={!canOperate}
                           title={withHint('롤 삭제')}
-                          aria-label={withHint(`${r.name} 삭제`)}
+                          aria-label={ariaWithHint(`${r.name} 삭제`)}
                           className="p-1.5 rounded-lg text-muted-foreground hover:text-destructive hover:bg-destructive/10 disabled:opacity-50"
                         >
                           <Trash2 className="w-4 h-4" />
@@ -327,7 +327,7 @@ export function RolePanel({
                 onClick={() => setDraft([...draft, emptyRule()])}
                 disabled={!canOperate || selected.builtin}
                 title={withHint('규칙 추가')}
-                aria-label={withHint('규칙 추가')}
+                aria-label={ariaWithHint('규칙 추가')}
                 className="px-3 py-1.5 rounded-xl border border-border text-xs hover:border-primary disabled:opacity-50"
               >
                 규칙 추가
@@ -344,7 +344,7 @@ export function RolePanel({
                       ? '변경 사항이 없다'
                       : withHint('저장')
                 }
-                aria-label={withHint('규칙 저장')}
+                aria-label={ariaWithHint('규칙 저장')}
                 className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-primary text-primary-foreground text-xs font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 <Save className="w-3.5 h-3.5" /> {upsert.isPending ? '저장 중…' : '저장'}

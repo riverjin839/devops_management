@@ -65,7 +65,7 @@ export function K8sEventsPage() {
   const toast = useToast();
   const deleteEvent = useDeleteK8sEvent();
   // D-102 — 삭제는 서버가 operator + 클러스터 operate 를 요구한다. viewer 에겐 숨기지 않고 사유와 함께 막는다.
-  const { canOperate, withHint } = useCanOperate(selectedClusterId);
+  const { canOperate, withHint, ariaWithHint } = useCanOperate(selectedClusterId);
   const [pendingDelete, setPendingDelete] = useState<K8sEvent | null>(null);
 
   const confirmDelete = async () => {
@@ -213,7 +213,7 @@ export function K8sEventsPage() {
                               }}
                               disabled={!canOperate || (deleteEvent.isPending && deleteEvent.variables === ev.id)}
                               title={withHint('이벤트 삭제')}
-                              aria-label={withHint('이벤트 삭제')}
+                              aria-label={ariaWithHint('이벤트 삭제')}
                               className="p-1 rounded-xl hover:bg-status-critical/10 hover:text-status-critical text-muted-foreground transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
                             >
                               {deleteEvent.isPending && deleteEvent.variables === ev.id

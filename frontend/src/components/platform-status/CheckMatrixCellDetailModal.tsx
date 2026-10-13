@@ -141,7 +141,7 @@ export function CheckMatrixCellDetailModal({ item, cluster, cell, timezone = DEF
   };
 
   // D-082 — viewer·실행 권한 없는 테넌트 사용자는 버튼을 보되 누르지 못하고 사유를 본다.
-  const { canOperate, withHint } = useCanOperate(cluster.id);
+  const { canOperate, withHint, ariaWithHint } = useCanOperate(cluster.id);
 
   const lastRunProblem = cell?.lastRunState === 'failed' || cell?.lastRunState === 'skipped'
     ? (!cell.checkedAt || (cell.lastRunAt && parseUTC(cell.lastRunAt) > parseUTC(cell.checkedAt)))
@@ -171,7 +171,7 @@ export function CheckMatrixCellDetailModal({ item, cluster, cell, timezone = DEF
                   onClick={handleRunCell}
                   disabled={!canOperate || runCell.isPending || !!activeRun}
                   title={activeRun ? '이미 실행 중입니다 — 실행 기록 탭에서 진행을 확인하세요.' : withHint('이 셀만 지금 실행 (실행 로그가 바로 열립니다)')}
-                  aria-label={withHint('이 셀만 지금 실행')}
+                  aria-label={ariaWithHint('이 셀만 지금 실행')}
                   className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium bg-primary text-primary-foreground rounded-xl hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {runCell.isPending || activeRun

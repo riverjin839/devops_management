@@ -61,9 +61,10 @@ interface NodeCardProps {
   /** D-087 — 서버가 operator 이상을 요구하는 동작(검증·편집·삭제)의 활성 조건과 비활성 사유. */
   canOperate: boolean;
   withHint: (title: string) => string;
+  ariaWithHint: (label: string) => string;
 }
 
-function NodeCard({ node, onEdit, onDelete, onVerify, canOperate, withHint }: NodeCardProps) {
+function NodeCard({ node, onEdit, onDelete, onVerify, canOperate, withHint, ariaWithHint }: NodeCardProps) {
   const meta = ROLE_META[node.role];
   return (
     <div className="bg-card border border-border rounded-md p-3 flex flex-col gap-2 hover:border-primary/40 transition-colors group">
@@ -80,7 +81,7 @@ function NodeCard({ node, onEdit, onDelete, onVerify, canOperate, withHint }: No
             onClick={() => onVerify(node)}
             disabled={!canOperate}
             title={withHint('노드 추가 검증')}
-            aria-label={withHint('노드 추가 검증')}
+            aria-label={ariaWithHint('노드 추가 검증')}
             className="p-1 rounded-xl hover:bg-status-healthy/10 text-muted-foreground hover:text-status-healthy transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
           >
             <ShieldCheck className="w-3 h-3" />
@@ -90,7 +91,7 @@ function NodeCard({ node, onEdit, onDelete, onVerify, canOperate, withHint }: No
             disabled={!canOperate}
             title={withHint('노드 편집')}
             className="p-1 rounded-xl hover:bg-muted text-muted-foreground hover:text-foreground transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-            aria-label={withHint('노드 편집')}
+            aria-label={ariaWithHint('노드 편집')}
           >
             <Pencil className="w-3 h-3" />
           </button>
@@ -99,7 +100,7 @@ function NodeCard({ node, onEdit, onDelete, onVerify, canOperate, withHint }: No
             disabled={!canOperate}
             title={withHint('노드 삭제')}
             className="p-1 rounded-xl hover:bg-status-critical/10 text-muted-foreground hover:text-status-critical transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-            aria-label={withHint('노드 삭제')}
+            aria-label={ariaWithHint('노드 삭제')}
           >
             <Trash2 className="w-3 h-3" />
           </button>
@@ -512,7 +513,7 @@ export function InfraTopologyPage() {
   const activeClusterRef = useRef(activeClusterId);
   activeClusterRef.current = activeClusterId;
   const activeCluster = clusters.find(c => c.id === activeClusterId);
-  const { canOperate, withHint } = useCanOperate(activeClusterId);
+  const { canOperate, withHint, ariaWithHint } = useCanOperate(activeClusterId);
 
   const { data: nodesResp, isLoading: nodesLoading, isError: nodesError, error: nodesErr, refetch: refetchNodes } = useInfraNodes(
     activeClusterId ? { clusterId: activeClusterId } : undefined,
@@ -1030,6 +1031,7 @@ export function InfraTopologyPage() {
                                 onVerify={handleVerify}
                                 canOperate={canOperate}
                                 withHint={withHint}
+                                ariaWithHint={ariaWithHint}
                               />
                             ))}
                           </div>
