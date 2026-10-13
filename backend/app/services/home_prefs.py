@@ -74,7 +74,7 @@ def to_out(prefs: HomePrefs, defaults: list[str]) -> HomePrefsOut:
 
 
 def apply_update(current: HomePrefs, payload: HomePrefsUpdate, defaults: list[str]) -> HomePrefs:
-    """부분 업데이트 + installed_apps 연산 적용. 적용 순서: reset → 전체 교체 → remove → add."""
+    """부분 업데이트 + installed_apps 연산 적용. 적용 순서: reset → 전체 교체 → remove → add → move."""
     fields = payload.model_dump(exclude_unset=True)
     simple = {k: fields[k] for k in ("default_home_tab", "pinned_paths", "locale") if k in fields}
     updated = current.model_copy(update=simple)
@@ -97,6 +97,15 @@ def apply_update(current: HomePrefs, payload: HomePrefsUpdate, defaults: list[st
                 base.append(a)
         apps = base
         touched = True
+    move = payload.installed_apps_move
+    if move is not None:
+        base = apps if apps is not None else list(defaults)
+        if move.id in base:
+            base = [a for a in base if a != move.id]
+            idx = base.index(move.before) if move.before in base else len(base)
+            base.insert(idx, move.id)
+            apps = base
+            touched = True
     if touched or fields.get("installed_apps_reset"):
         updated = updated.model_copy(update={"installed_apps": apps})
     return updated

@@ -253,3 +253,92 @@ def test_deleting_user_removes_their_settings(db, cleanup):
     auth.delete_user(user_id=victim.id, request=None, db=db, actor=admin)
 
     assert get_user_setting(db, victim.id, "home_prefs", None) is None
+
+
+# ── 순서 변경(move) ───────────────────────────────────────────────────────────
+
+def test_move_reorders_one_item(db, me, cleanup, org_defaults):
+    from app.schemas.home_prefs import InstalledAppMove
+
+    cleanup.append(me.id)
+    home_prefs_router.update_home_prefs(payload=HomePrefsUpdate(installed_apps=["/a", "/b", "/c"]), db=db, user=me)
+    moved = home_prefs_router.update_home_prefs(
+        payload=HomePrefsUpdate(installed_apps_move=InstalledAppMove(id="/c", before="/a")), db=db, user=me,
+    )
+    assert moved.installed_apps == ["/c", "/a", "/b"]
+    to_end = home_prefs_router.update_home_prefs(
+        payload=HomePrefsUpdate(installed_apps_move=InstalledAppMove(id="/c")), db=db, user=me,
+    )
+    assert to_end.installed_apps == ["/a", "/b", "/c"]
+    # 없는 항목 이동은 무시(다른 기기에서 막 제거된 경우).
+    same = home_prefs_router.update_home_prefs(
+        payload=HomePrefsUpdate(installed_apps_move=InstalledAppMove(id="/zzz", before="/a")), db=db, user=me,
+    )
+    assert same.installed_apps == ["/a", "/b", "/c"]
+
+
+# ── 개인 설정 내보내기 / 가져오기 ──────────────────────────────────────────────
+
+def _user_row(db, cleanup, prefix: str):
+    from app.models.user import User
+
+    u = User(id=f"u-{prefix}-{uuid.uuid4().hex[:8]}", username=f"{prefix}-{uuid.uuid4().hex[:8]}", role="operator")
+    cleanup.append(u.id)
+    db.add(u)
+    db.commit()
+    return u
+
+
+def test_export_then_import_moves_settings_to_another_account(db, cleanup):
+    import json
+
+    from app.services.user_settings import get_user_setting, set_user_setting
+
+    src = _user_row(db, cleanup, "exp-src")
+    dst = _user_row(db, cleanup, "exp-dst")
+    set_user_setting(db, src.id, "home_prefs", {"installed_apps": ["/k9s"], "pinned_paths": ["/wbs"], "layout_version": 3})
+    set_user_setting(db, src.id, "mc_presets", {"presets": [{"alias": "x", "password": "secret"}]})
+
+    doc = home_prefs_router.export_personal_settings(db=db, user=src)["document"]
+    parsed = json.loads(doc)
+    assert parsed["format"] == "pep-personal-settings"
+    assert "mc_presets" not in parsed["server"]  # 비밀이 섞인 키는 내보내지 않는다
+    assert "secret" not in doc
+
+    result = home_prefs_router.import_personal_settings(
+        payload=home_prefs_router.SettingsImportRequest(document=doc), request=None, db=db, user=dst,
+    )
+    assert "home_prefs" in result["applied"]
+    value = get_user_setting(db, dst.id, "home_prefs", None)
+    assert value["installed_apps"] == ["/k9s"] and value["pinned_paths"] == ["/wbs"]
+
+
+def test_import_ignores_unknown_keys_and_rejects_foreign_format(db, cleanup):
+    import json
+
+    from fastapi import HTTPException
+
+    from app.services.user_settings import get_user_setting
+
+    u = _user_row(db, cleanup, "imp")
+    doc = json.dumps({"format": "pep-personal-settings", "version": 1, "server": {
+        "mc_presets": {"presets": []}, "home_prefs": {"pinned_paths": ["/k9s"]},
+    }})
+    result = home_prefs_router.import_personal_settings(
+        payload=home_prefs_router.SettingsImportRequest(document=doc), request=None, db=db, user=u,
+    )
+    assert result["applied"] == ["home_prefs"] and result["skipped"] == ["mc_presets"]
+    assert get_user_setting(db, u.id, "mc_presets", None) is None
+    # 버전 표식 없는 파일은 0 으로 저장돼 다음 부팅 이관 대상이 된다.
+    assert get_user_setting(db, u.id, "home_prefs", None)["layout_version"] == 0
+
+    with pytest.raises(HTTPException) as exc:
+        home_prefs_router.import_personal_settings(
+            payload=home_prefs_router.SettingsImportRequest(document=json.dumps({"format": "other"})),
+            request=None, db=db, user=u,
+        )
+    assert exc.value.status_code == 400
+    with pytest.raises(HTTPException):
+        home_prefs_router.import_personal_settings(
+            payload=home_prefs_router.SettingsImportRequest(document="not json"), request=None, db=db, user=u,
+        )
