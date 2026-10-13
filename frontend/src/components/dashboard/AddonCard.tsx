@@ -1,7 +1,30 @@
 import { Addon } from '@/types';
-import { Pencil, Play, Trash2, Crown, ClipboardList, Clock, AlertTriangle } from 'lucide-react';
+import {
+  Pencil, Play, Trash2, Crown, ClipboardList, Clock, AlertTriangle,
+  Database, Server, SlidersHorizontal, Globe, Package, Wrench, RefreshCw, ShieldCheck,
+  type LucideIcon,
+} from 'lucide-react';
 import { StatusBadge, statusToVariant } from '@/components/common/StatusBadge';
 import { formatRelativeTime } from '@/lib/utils';
+
+// 기본 애드온 타입은 lucide 아이콘으로 그린다 — DB 의 icon 필드(템플릿 기본값이 이모지)는 사용자가
+// 직접 고른 커스텀 아이콘일 때만 쓴다 (DESIGN_SYSTEM §12.12-9, D-126).
+const ADDON_TYPE_ICON: Record<string, LucideIcon> = {
+  'etcd-leader': Database,
+  'node-check': Server,
+  'control-plane': SlidersHorizontal,
+  'system-pod': Globe,
+  nexus: Package,
+  jenkins: Wrench,
+  argocd: RefreshCw,
+  keycloak: ShieldCheck,
+};
+
+function AddonIcon({ addon }: { addon: Addon }) {
+  const Icon = ADDON_TYPE_ICON[addon.type];
+  if (Icon) return <Icon className="w-5 h-5 text-muted-foreground" aria-hidden="true" />;
+  return <span aria-hidden="true">{addon.icon}</span>;
+}
 
 interface AddonCardProps {
   addon: Addon;
@@ -402,7 +425,7 @@ export function AddonCard({ addon, onClick, onEdit, onDelete, onRun }: AddonCard
     >
       <div className="flex items-start justify-between mb-4 gap-2">
         <div className="w-11 h-11 rounded-lg bg-secondary flex items-center justify-center text-xl shrink-0">
-          {addon.icon}
+          <AddonIcon addon={addon} />
         </div>
         <div className="flex items-center gap-2 shrink-0">
           <StatusBadge variant={statusToVariant(addon.status)} />

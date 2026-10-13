@@ -126,19 +126,6 @@ export function getStatusBgColor(status: Status): string {
   }
 }
 
-export function getStatusIcon(status: Status): string {
-  switch (status) {
-    case 'healthy':
-      return '🟢';
-    case 'warning':
-      return '🟠';
-    case 'critical':
-      return '🔴';
-    default:
-      return '⚪';
-  }
-}
-
 // Backend는 datetime.utcnow() (UTC)로 저장하지만 timezone suffix 없이 반환
 // JavaScript new Date()는 suffix 없으면 로컬 시간으로 해석 → UTC 'Z' 붙여서 보정
 export function parseUTC(dateString: string): Date {

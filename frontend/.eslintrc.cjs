@@ -9,27 +9,27 @@ const STATUS_PALETTE_RE = String.raw`/(^|[^\w-])(text|bg|border|ring|fill|stroke
    (래칫 — 파일을 지울 수만 있고 추가하지 않는다)에서 이 검사만 면제된다. 새 파일·새 코드는 바로 걸린다. */
 const DECO_PALETTE_RE = String.raw`/(^|[^\w-])(text|bg|border|ring|fill|stroke|from|to|via|divide|outline|decoration|placeholder|accent|caret|shadow)(-[a-z]+)?-(blue|orange|purple|violet|indigo|cyan|pink|fuchsia|teal|lime)-\d{2,3}/`;
 const DECO_PALETTE_MSG = '장식·카테고리 색도 고정 팔레트를 쓰지 않는다 — 종류 구분은 --chart-1..8 토큰, 상태는 status 토큰 (DESIGN_SYSTEM §12.12-7, D-120). 기존 파일은 .eslintrc.cjs DECO_PALETTE_ALLOWLIST(줄이기만 한다)';
+/* 장식 효과·대비 우회 금지 (Phase 2, D-119·D-121·D-125·D-132, DESIGN_SYSTEM §12.12-4·8) — 전량 0 으로 만든 뒤 회귀 방지로 켠다.
+   hover-lift(hover:-translate-y·hover:scale·active:scale), 그라데이션, transition-all, 장식 ping/bounce,
+   상태 글자색 arbitrary 값(text-[hsl(var(--status-*))] — 4.5:1 대비 토큰 text-status-* 를 우회한다). */
+const FX_RE = String.raw`/(^|[^\w-])(hover:-translate-y-|hover:scale-|active:scale-|bg-gradient-to-|transition-all(?![\w-])|animate-ping|animate-bounce)|text-\[hsl\(var\(--status/`;
+const FX_MSG = '장식 효과 금지 — hover-lift·그라데이션·transition-all(→ transition-colors)·장식 ping/bounce·text-[hsl(var(--status-*))](→ text-status-*) (DESIGN_SYSTEM §12.12-4, D-121·D-132)';
+/* 대문자 아이브로우 금지 (D-125, §12.12-8) — MacCard·Card 헤더(components/ui)에 내장된 한 곳만 허용. */
+const EYEBROW_RE = String.raw`/(^|\s)uppercase(\s.*)?\stracking-(wide|wider|widest)|(^|\s)tracking-(wide|wider|widest)(\s.*)?\suppercase(\s|$)/`;
+const EYEBROW_MSG = '대문자 아이브로우(uppercase + tracking-wide*) 금지 — 라벨은 text-xs font-medium text-muted-foreground (DESIGN_SYSTEM §12.12-8, D-125)';
 const DECO_PALETTE_ALLOWLIST = [
-  'src/components/batch-jobs/BatchJobClusterGroup.tsx',
-  'src/components/batch-jobs/BatchJobRow.tsx',
-  'src/components/bulk-exec/SavedScriptPanel.tsx',
   'src/components/commands/constants.ts',
   'src/components/common/ViewModeBar.tsx',
   'src/components/dashboard/AddClusterModal.tsx',
   'src/components/dashboard/AddMetricCardModal.tsx',
   'src/components/dashboard/WeeklyWorkTable.tsx',
   'src/components/documents/ConfluenceImportModal.tsx',
-  'src/components/layout/VocBoardPanel.tsx',
-  'src/components/layout/navConfig.ts',
   'src/components/node-labels/NodeLabelsTable.tsx',
-  'src/components/ops-notes/OpsNoteReadView.tsx',
   'src/components/packet-flow/HopDetailPanel.tsx',
-  'src/components/playbooks/PlaybookCard.tsx',
   'src/components/playbooks/PlaybookLogDialog.tsx',
   'src/components/settings/AssigneeManager.tsx',
   'src/components/settings/TerminalAppearanceSettings.tsx',
   'src/components/ui/DateTimePicker.tsx',
-  'src/components/wbs/ProjectFormModal.tsx',
   'src/components/work-guides/GuidePageView.tsx',
   'src/components/work-items/JiraImportModal.tsx',
   'src/components/work-items/JiraIssueChip.tsx',
@@ -53,6 +53,12 @@ const BASE_RESTRICTED = [
   { selector: `TemplateElement[value.raw=${STATUS_PALETTE_RE}]`, message: STATUS_PALETTE_MSG },
   { selector: `Literal[value=${TYPO_RE}]`, message: TYPO_MSG },
   { selector: `TemplateElement[value.raw=${TYPO_RE}]`, message: TYPO_MSG },
+];
+const FX_RESTRICTED = [
+  { selector: `Literal[value=${FX_RE}]`, message: FX_MSG },
+  { selector: `TemplateElement[value.raw=${FX_RE}]`, message: FX_MSG },
+  { selector: `Literal[value=${EYEBROW_RE}]`, message: EYEBROW_MSG },
+  { selector: `TemplateElement[value.raw=${EYEBROW_RE}]`, message: EYEBROW_MSG },
 ];
 const DECO_RESTRICTED = [
   { selector: `Literal[value=${DECO_PALETTE_RE}]`, message: DECO_PALETTE_MSG },
@@ -99,10 +105,12 @@ module.exports = {
        프리셋엔 없지만 W4 접근성 패스에서 전수 검사 후 위반 54건을 모두 고쳤다(2026-07).
        회귀 방지를 위해 명시적으로 켜둔다. */
     'jsx-a11y/control-has-associated-label': 'warn',
-    'no-restricted-syntax': ['error', ...BASE_RESTRICTED, ...DECO_RESTRICTED],
+    'no-restricted-syntax': ['error', ...BASE_RESTRICTED, ...DECO_RESTRICTED, ...FX_RESTRICTED],
   },
   overrides: [
     /* D-120 래칫 — 장식 팔레트 검사만 면제. 파일을 토큰으로 이관하면 목록에서 지운다. */
-    { files: DECO_PALETTE_ALLOWLIST, rules: { 'no-restricted-syntax': ['error', ...BASE_RESTRICTED] } },
+    { files: DECO_PALETTE_ALLOWLIST, rules: { 'no-restricted-syntax': ['error', ...BASE_RESTRICTED, ...FX_RESTRICTED] } },
+    /* MacCard·Card 헤더 아이브로우는 디자인 시스템이 정한 유일한 허용처. */
+    { files: ['src/components/ui/MacCard.tsx', 'src/components/ui/card.tsx'], rules: { 'no-restricted-syntax': ['error', ...BASE_RESTRICTED, ...DECO_RESTRICTED] } },
   ],
 };

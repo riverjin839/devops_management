@@ -29,7 +29,8 @@ import { clustersApi, managementServersApi } from '@/services/api';
 import { useClusterStore } from '@/stores/clusterStore';
 import { AddClusterModal, KubeconfigEditModal } from '@/components/dashboard';
 import { Cluster, ManagementServer, ManagementServerCreate, ServiceDomain } from '@/types';
-import { getStatusIcon, formatDateTime, formatApiError, cn } from '@/lib/utils';
+import { formatDateTime, formatApiError, cn } from '@/lib/utils';
+import { StatusDot, statusToVariant } from '@/components/common/StatusBadge';
 import { useHomeStore } from '@/stores/homeStore';
 import { useHomePrefs, useUpdateHomePrefs } from '@/hooks/useHomePrefs';
 import { useToast, ClusterIconPicker, useModalA11y, EmptyState, PageHeader } from '@/components/common';
@@ -375,9 +376,7 @@ function ClusterIconButton({ cluster, onClick }: { cluster: Cluster; onClick: (e
       ) : resolved?.kind === 'text' ? (
         <span className="text-xl leading-none">{resolved.value}</span>
       ) : (
-        <span className="text-xl leading-none" aria-hidden>
-          {getStatusIcon(cluster.status)}
-        </span>
+        <StatusDot variant={statusToVariant(cluster.status)} className="w-2.5 h-2.5" />
       )}
     </button>
   );
