@@ -104,6 +104,7 @@ export function HomePage() {
 
   return (
     <div className="app-h-screen overflow-hidden bg-background flex flex-col">
+      <h1 className="sr-only">홈</h1>
 
       {/* ── 세그먼트 탭 — 홈 본문에서 뭘 볼지 고르는 로컬 선택. 예전엔 사이드바 전체를
           게이팅하는 "모드"였지만(D-054), 지금은 이 홈 화면 안에서만 의미가 있다.

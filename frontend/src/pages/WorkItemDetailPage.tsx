@@ -1,8 +1,8 @@
 import { useState } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
-import { ArrowLeft, ListTodo, Plus, Trash2, UploadCloud, Ticket } from 'lucide-react';
+import { ListTodo, Plus, Trash2, UploadCloud, Ticket } from 'lucide-react';
 import { WorkItemForm, WorkItemReadView, JiraPushDialog, ServiceNowRegisterDialog } from '@/components/work-items';
-import { ConfirmDialog, useToast, EmptyState } from '@/components/common';
+import { ConfirmDialog, useToast, EmptyState, PageHeader } from '@/components/common';
 import { useWorkItem, useDeleteWorkItem } from '@/hooks/useWorkItems';
 import { cn, formatApiError } from '@/lib/utils';
 
@@ -63,18 +63,12 @@ export function WorkItemDetailPage() {
   return (
     <div className="app-min-h-screen bg-background">
       <div className="sticky top-0 z-10 bg-background/85 backdrop-blur-md border-b border-border">
-        <div className="max-w-[1400px] mx-auto px-8 py-2.5 flex items-center gap-2">
-          <button
-            onClick={() => navigate('/tasks-mgmt')}
-            className="p-1.5 hover:bg-secondary rounded-lg transition-colors text-muted-foreground hover:text-foreground"
-            title="목록으로"
-            aria-label="목록으로"
-          >
-            <ArrowLeft className="w-4 h-4" />
-          </button>
-          <ListTodo className="w-4 h-4 text-muted-foreground" />
-          <span className="text-sm text-muted-foreground">{pageTitle}</span>
-          <div className="ml-auto flex items-center gap-2">
+        <PageHeader
+          className="max-w-[1400px] mx-auto px-8 py-2.5 items-center"
+          back={{ to: '/tasks-mgmt', label: '업무 목록' }}
+          icon={ListTodo}
+          title={pageTitle}
+          actions={<>
             {!isEditing && item.jiraIssueKey && (
               <button
                 onClick={() => setPushOpen(true)}
@@ -114,8 +108,8 @@ export function WorkItemDetailPage() {
                 </button>
               </>
             )}
-          </div>
-        </div>
+          </>}
+        />
       </div>
 
       <main className="max-w-[1400px] mx-auto px-8 pt-4 pb-16">

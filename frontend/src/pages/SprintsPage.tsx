@@ -4,7 +4,7 @@ import {
   Rocket, Plus, Target, Pencil, Trash2, X, Loader2, CheckCircle2,
   ArrowRightLeft, CalendarDays, Users, Clock,
 } from 'lucide-react';
-import { ConfirmDialog, useToast, useModalA11y } from '@/components/common';
+import { ConfirmDialog, useToast, useModalA11y, PageHeader, EmptyState, LoadingState } from '@/components/common';
 import { formatApiError } from '@/lib/utils';
 import {
   useSprints, useCreateSprint, useUpdateSprint, useDeleteSprint, useCarryOverSprint,
@@ -34,7 +34,7 @@ function fmtDate(s: string): string {
 
 const STATUS_META: Record<SprintStatus, { label: string; cls: string }> = {
   planning:  { label: '계획',   cls: 'bg-status-unknown/10 text-status-unknown border-status-unknown/30' },
-  active:    { label: '진행중', cls: 'bg-blue-500/10 text-blue-500 border-blue-500/30' },
+  active:    { label: '진행중', cls: 'bg-status-info/10 text-status-info border-status-info/30' },
   completed: { label: '완료',   cls: 'bg-status-healthy/10 text-status-healthy border-status-healthy/30' },
 };
 
@@ -416,38 +416,29 @@ export function SprintsPage() {
   return (
     <div className="app-min-h-screen bg-background">
       <main className="max-w-[1400px] mx-auto px-4 lg:px-6 py-5 space-y-5">
-        <div className="flex items-center justify-between gap-3 flex-wrap">
-          <div className="flex items-center gap-2">
-            <Rocket className="w-5 h-5 text-primary" />
-            <div>
-              <h1 className="text-xl font-bold">스프린트</h1>
-              <p className="text-sm text-muted-foreground">반복(iteration) 단위로 업무를 계획·추적합니다.</p>
-            </div>
-          </div>
-          <button
-            onClick={() => setModal({ mode: 'create' })}
-            className="px-4 py-2 text-sm font-medium bg-primary hover:bg-primary/90 text-primary-foreground rounded-lg transition-colors inline-flex items-center gap-1.5"
-          >
-            <Plus className="w-4 h-4" />새 스프린트
-          </button>
-        </div>
-
-        {isLoading ? (
-          <div className="flex items-center justify-center py-20"><Loader2 className="w-8 h-8 animate-spin text-primary" /></div>
-        ) : sprints.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-20 gap-4 text-muted-foreground">
-            <Rocket className="w-12 h-12 opacity-30 text-primary" />
-            <div className="text-center">
-              <p className="text-base font-medium text-foreground">아직 스프린트가 없습니다</p>
-              <p className="text-sm mt-1 opacity-70">1~4주 등 원하는 기간의 반복으로 팀의 업무를 묶어 추적해보세요.</p>
-            </div>
+        <PageHeader
+          icon={Rocket}
+          title="스프린트"
+          description="반복(iteration) 단위로 업무를 계획·추적합니다."
+          actions={
             <button
               onClick={() => setModal({ mode: 'create' })}
-              className="px-4 py-2 text-sm bg-primary hover:bg-primary/90 text-primary-foreground rounded-lg inline-flex items-center gap-1.5"
+              className="px-4 py-2 text-sm font-medium bg-primary hover:bg-primary/90 text-primary-foreground rounded-lg transition-colors inline-flex items-center gap-1.5"
             >
-              <Plus className="w-4 h-4" />첫 스프린트 만들기
+              <Plus className="w-4 h-4" />새 스프린트
             </button>
-          </div>
+          }
+        />
+
+        {isLoading ? (
+          <LoadingState label="스프린트를 불러오는 중…" />
+        ) : sprints.length === 0 ? (
+          <EmptyState
+            icon={Rocket}
+            title="아직 스프린트가 없습니다."
+            description="1~4주 등 원하는 기간의 반복으로 팀의 업무를 묶어 추적해 보세요."
+            action={{ label: '첫 스프린트 만들기', onClick: () => setModal({ mode: 'create' }) }}
+          />
         ) : (
           <div className="space-y-6">
             {renderGroup('진행중', active)}

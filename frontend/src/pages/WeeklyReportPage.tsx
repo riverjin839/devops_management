@@ -4,7 +4,7 @@ import {
 } from 'lucide-react';
 import { MacCard } from '@/components/ui/MacCard';
 import { JiraIssueChip } from '@/components/work-items';
-import { useToast } from '@/components/common';
+import { useToast, PageHeader, EmptyState } from '@/components/common';
 import { formatApiError } from '@/lib/utils';
 import { useAuthStore } from '@/stores/authStore';
 import {
@@ -36,7 +36,7 @@ const STATUSES = ['진행', '완료', '지연'] as const;
 function statusClass(status: string) {
   if (status === '완료') return 'text-status-healthy';
   if (status === '지연') return 'text-status-critical';
-  return 'text-blue-500';
+  return 'text-status-info';
 }
 
 /** 컬럼 헤더 클릭 정렬 — 같은 키 재클릭 시 asc ↔ desc 토글. */
@@ -221,13 +221,13 @@ export function WeeklyReportPage() {
 
   return (
     <div className="p-6 space-y-4">
-      <div className="flex items-center gap-2 flex-wrap">
-        <FileText className="w-5 h-5 text-primary" />
-        <h1 className="text-lg font-semibold">주간보고</h1>
-        {report && (
+      <PageHeader
+        icon={FileText}
+        title="주간보고"
+        titleExtra={report && (
           <span className="text-sm text-muted-foreground">{report.periodStart} ~ {report.periodEnd}</span>
         )}
-        <div className="ml-auto flex items-center gap-2">
+        actions={<>
           <input type="date" className={`${inputCls} w-auto`} value={weekOf}
             onChange={(e) => setWeekOf(e.target.value)} title="해당 주(월~금) 선택" />
           <button onClick={() => void loadPreview()} disabled={busy}
@@ -235,8 +235,8 @@ export function WeeklyReportPage() {
             {previewMut.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
             다시 생성
           </button>
-        </div>
-      </div>
+        </>}
+      />
 
       {/* 필터바 — 날짜 외 다양한 조건 */}
       <MacCard title="보고서 필터">
@@ -307,7 +307,7 @@ export function WeeklyReportPage() {
               <tbody>
                 <tr>
                   <td className={td}>{summary.total}</td>
-                  <td className={`${td} text-blue-500`}>{summary.inProgress}</td>
+                  <td className={`${td} text-status-info`}>{summary.inProgress}</td>
                   <td className={`${td} text-status-healthy`}>{summary.done}</td>
                   <td className={`${td} text-status-critical`}>{summary.delayed}</td>
                   <td className={td}>{filterActive ? '필터 적용된 집계' : (report?.summary.note ?? '')}</td>
@@ -359,16 +359,16 @@ export function WeeklyReportPage() {
                     </td>
                     <td className={td}>{r.plannedRate}</td>
                     <td className={td}>{r.actualRate}</td>
-                    <td className={`${td} ${r.achievementRate >= 100 ? 'text-status-healthy' : r.achievementRate < 80 ? 'text-status-critical' : 'text-blue-500'}`}>
+                    <td className={`${td} ${r.achievementRate >= 100 ? 'text-status-healthy' : r.achievementRate < 80 ? 'text-status-critical' : 'text-status-info'}`}>
                       {r.achievementRate}
                     </td>
                     <td className={`${td} text-status-healthy`}>{r.doneCount}</td>
-                    <td className={`${td} text-blue-500`}>{r.inProgressCount}</td>
+                    <td className={`${td} text-status-info`}>{r.inProgressCount}</td>
                     <td className={td}>{r.totalCount}</td>
                   </tr>
                 ))}
                 {progressSort.sorted.length === 0 && (
-                  <tr><td className={`${td} text-muted-foreground`} colSpan={8}>표시할 진척 데이터가 없습니다.</td></tr>
+                  <tr><td colSpan={8}><EmptyState compact title="표시할 진척 데이터가 없습니다." description={filterActive ? '필터 조건을 바꾸거나 초기화해 보세요.' : '선택한 주에 집계된 진척 데이터가 없습니다.'} /></td></tr>
                 )}
               </tbody>
             </table>
@@ -413,7 +413,7 @@ export function WeeklyReportPage() {
                   </tr>
                 ))}
                 {detailSort.sorted.length === 0 && (
-                  <tr><td className={`${td} text-muted-foreground`} colSpan={9}>표시할 업무가 없습니다.</td></tr>
+                  <tr><td colSpan={9}><EmptyState compact title="표시할 업무가 없습니다." description={filterActive ? '필터 조건을 바꾸거나 초기화해 보세요.' : '선택한 주에 집계된 업무가 없습니다.'} /></td></tr>
                 )}
               </tbody>
             </table>
@@ -443,7 +443,7 @@ export function WeeklyReportPage() {
                   </tr>
                 ))}
                 {ownerSort.sorted.length === 0 && (
-                  <tr><td className={`${td} text-muted-foreground`} colSpan={4}>표시할 업무가 없습니다.</td></tr>
+                  <tr><td colSpan={4}><EmptyState compact title="표시할 업무가 없습니다." description={filterActive ? '필터 조건을 바꾸거나 초기화해 보세요.' : '선택한 주에 집계된 업무가 없습니다.'} /></td></tr>
                 )}
               </tbody>
             </table>

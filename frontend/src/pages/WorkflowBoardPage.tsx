@@ -6,7 +6,7 @@ import {
   ZoomIn, ZoomOut, Maximize2, LayoutGrid, Link2, ExternalLink,
 } from 'lucide-react';
 import { workflowsApi } from '@/services/api';
-import { useToast } from '@/components/common';
+import { useToast, PageHeader, EmptyState, LoadingState } from '@/components/common';
 import { useClusters } from '@/hooks/useCluster';
 import { useWorkItems } from '@/hooks/useWorkItems';
 import { usePlaybooks } from '@/hooks/usePlaybook';
@@ -31,11 +31,11 @@ const PORT_HIT = PORT_R + 8; // drop target detection radius
 // ─── step type config ─────────────────────────────────────────────────────────
 type StepTypeCfg = { label: string; border: string; header: string; dot: string; icon: React.ReactNode };
 const STEP_TYPE: Record<WorkflowStepType, StepTypeCfg> = {
-  trigger:      { label: 'Trigger',      border: 'border-violet-500/60', header: 'bg-violet-500/10',  dot: 'bg-violet-400',  icon: <Zap       className="w-3.5 h-3.5" /> },
-  action:       { label: 'Action',       border: 'border-blue-500/60',   header: 'bg-blue-500/10',    dot: 'bg-blue-400',    icon: <Play      className="w-3.5 h-3.5" /> },
-  condition:    { label: 'Condition',    border: 'border-status-warning/60',  header: 'bg-status-warning/10',   dot: 'bg-status-warning',   icon: <GitBranch className="w-3.5 h-3.5" /> },
-  wait:         { label: 'Wait',         border: 'border-cyan-500/60',   header: 'bg-cyan-500/10',    dot: 'bg-cyan-400',    icon: <Clock     className="w-3.5 h-3.5" /> },
-  notification: { label: 'Notification', border: 'border-status-healthy/60',header: 'bg-status-healthy/10', dot: 'bg-status-healthy', icon: <Bell      className="w-3.5 h-3.5" /> },
+  trigger:      { label: 'Trigger',      border: 'border-chart-4/60',    header: 'bg-chart-4/10',     dot: 'bg-chart-4',     icon: <Zap       className="w-3.5 h-3.5" /> },
+  action:       { label: 'Action',       border: 'border-chart-1/60',    header: 'bg-chart-1/10',     dot: 'bg-chart-1',     icon: <Play      className="w-3.5 h-3.5" /> },
+  condition:    { label: 'Condition',    border: 'border-chart-3/60',    header: 'bg-chart-3/10',     dot: 'bg-chart-3',     icon: <GitBranch className="w-3.5 h-3.5" /> },
+  wait:         { label: 'Wait',         border: 'border-chart-6/60',    header: 'bg-chart-6/10',     dot: 'bg-chart-6',     icon: <Clock     className="w-3.5 h-3.5" /> },
+  notification: { label: 'Notification', border: 'border-chart-2/60',    header: 'bg-chart-2/10',     dot: 'bg-chart-2',     icon: <Bell      className="w-3.5 h-3.5" /> },
 };
 const STEP_TYPE_KEYS = Object.keys(STEP_TYPE) as WorkflowStepType[];
 
@@ -43,11 +43,11 @@ const STEP_TYPE_KEYS = Object.keys(STEP_TYPE) as WorkflowStepType[];
 // 기획 게시판용 상태. 실행 색채 제거: pulse 애니메이션 없음, "실패" 빨간색 → "막힘" amber.
 type StepStatusCfg = { label: string; cls: string; barCls: string };
 const STEP_STATUS: Record<WorkflowStepStatus, StepStatusCfg> = {
-  'todo':        { label: '할일',     cls: 'bg-status-unknown/15 text-status-unknown',     barCls: 'bg-zinc-400/60' },
-  'in-progress': { label: '진행 중',  cls: 'bg-blue-500/15 text-blue-600',     barCls: 'bg-blue-500' },
+  'todo':        { label: '할일',     cls: 'bg-status-unknown/15 text-status-unknown',     barCls: 'bg-muted-foreground/40' },
+  'in-progress': { label: '진행 중',  cls: 'bg-status-info/15 text-status-info', barCls: 'bg-status-info' },
   'blocked':     { label: '막힘',     cls: 'bg-status-warning/15 text-status-warning',   barCls: 'bg-status-warning' },
   'done':        { label: '완료',     cls: 'bg-status-healthy/15 text-status-healthy',barCls: 'bg-status-healthy' },
-  'skipped':     { label: '제외',     cls: 'bg-status-unknown/10 text-status-unknown opacity-60', barCls: 'bg-zinc-300' },
+  'skipped':     { label: '제외',     cls: 'bg-status-unknown/10 text-status-unknown opacity-60', barCls: 'bg-muted-foreground/20' },
 };
 const STEP_STATUS_KEYS = Object.keys(STEP_STATUS) as WorkflowStepStatus[];
 
@@ -69,11 +69,11 @@ function normalizeStatus(raw: string | null | undefined): WorkflowStepStatus {
 
 // ─── port SVG colors ──────────────────────────────────────────────────────────
 const TYPE_SVG_COLOR: Record<string, { fill: string; stroke: string }> = {
-  trigger:      { fill: '#a78bfa', stroke: '#7c3aed' },
-  action:       { fill: '#60a5fa', stroke: '#2563eb' },
-  condition:    { fill: '#fbbf24', stroke: '#d97706' },
-  wait:         { fill: '#22d3ee', stroke: '#0891b2' },
-  notification: { fill: '#34d399', stroke: '#059669' },
+  trigger:      { fill: 'hsl(var(--chart-4) / 0.6)', stroke: 'hsl(var(--chart-4))' },
+  action:       { fill: 'hsl(var(--chart-1) / 0.6)', stroke: 'hsl(var(--chart-1))' },
+  condition:    { fill: 'hsl(var(--chart-3) / 0.6)', stroke: 'hsl(var(--chart-3))' },
+  wait:         { fill: 'hsl(var(--chart-6) / 0.6)', stroke: 'hsl(var(--chart-6))' },
+  notification: { fill: 'hsl(var(--chart-2) / 0.6)', stroke: 'hsl(var(--chart-2))' },
 };
 
 // ─── reference type labels ────────────────────────────────────────────────────
@@ -183,7 +183,7 @@ export function WorkflowBoardPage() {
   // ── data ─────────────────────────────────────────────────────────────────────
   const queryClient = useQueryClient();
   const toast = useToast();
-  const { data } = useQuery({
+  const { data, isLoading } = useQuery({
     queryKey: ['workflows'],
     queryFn: () => workflowsApi.getAll().then((r) => r.data),
     staleTime: 1000 * 10,
@@ -422,22 +422,24 @@ export function WorkflowBoardPage() {
 
   // ── render ────────────────────────────────────────────────────────────────────
   return (
-    <div className="app-h-screen flex overflow-hidden bg-background">
-      {/* ── Left sidebar ── */}
-      <aside className="w-64 flex-shrink-0 border-r border-border flex flex-col bg-card">
-        <div className="flex items-center justify-between px-4 py-4 border-b border-border">
-          <div className="flex items-center gap-2">
-            <GitFork className="w-4 h-4 text-primary" />
-            <span className="font-semibold text-sm">워크플로우</span>
-          </div>
+    <div className="app-h-screen flex flex-col overflow-hidden bg-background">
+      <PageHeader
+        className="px-5 py-3 border-b border-border flex-shrink-0"
+        icon={GitFork}
+        title="워크플로우"
+        description="업무 흐름을 단계와 연결로 기획하고 진행 상태를 추적합니다."
+        actions={
           <button
             onClick={() => setShowCreateWf(true)}
-            aria-label="새 워크플로우 만들기"
-            className="p-1.5 rounded-md hover:bg-secondary text-muted-foreground hover:text-foreground transition-colors"
+            className="px-3 py-1.5 text-sm font-medium bg-primary hover:bg-primary/90 text-primary-foreground rounded-lg transition-colors inline-flex items-center gap-1.5"
           >
-            <Plus className="w-4 h-4" />
+            <Plus className="w-4 h-4" /> 새 워크플로우
           </button>
-        </div>
+        }
+      />
+      <div className="flex flex-1 min-h-0 overflow-hidden">
+      {/* ── Left sidebar ── */}
+      <aside className="w-64 flex-shrink-0 border-r border-border flex flex-col bg-card">
 
         {showCreateWf && (
           <div className="px-3 py-3 border-b border-border bg-secondary/30 space-y-2">
@@ -487,14 +489,16 @@ export function WorkflowBoardPage() {
         )}
 
         <div className="flex-1 overflow-y-auto py-2">
-          {workflows.length === 0 ? (
-            <p className="text-sm text-muted-foreground text-center mt-10 px-4 leading-relaxed">
-              워크플로우가 없습니다.
-              <br />
-              <button onClick={() => setShowCreateWf(true)} className="mt-2 text-primary hover:underline">
-                + 새로 만들기
-              </button>
-            </p>
+          {isLoading ? (
+            <LoadingState compact label="워크플로우를 불러오는 중…" />
+          ) : workflows.length === 0 ? (
+            <EmptyState
+              compact
+              icon={GitFork}
+              title="워크플로우가 없습니다."
+              description="첫 워크플로우를 만들어 단계를 구성해 보세요."
+              action={{ label: '새로 만들기', onClick: () => setShowCreateWf(true) }}
+            />
           ) : (
             workflows.map((wf) => {
               const doneCount = wf.steps.filter((s) => s.completed).length;
@@ -550,7 +554,7 @@ export function WorkflowBoardPage() {
                         <button
                           onClick={(e) => { e.stopPropagation(); setEditingWfId(wf.id); setWfEditTitle(wf.title); }}
                           aria-label="이름 변경"
-                          className="p-1 rounded hover:bg-blue-500/20 hover:text-blue-400 text-muted-foreground"
+                          className="p-1 rounded hover:bg-secondary hover:text-foreground text-muted-foreground"
                         >
                           <Pencil className="w-3 h-3" />
                         </button>
@@ -578,13 +582,12 @@ export function WorkflowBoardPage() {
       <main className="flex-1 min-w-0 flex flex-col overflow-hidden">
         {!selectedWf ? (
           <div className="flex-1 flex items-center justify-center">
-            <div className="text-center">
-              <GitFork className="w-16 h-16 mx-auto mb-4 text-muted-foreground/20" />
-              <p className="text-muted-foreground mb-2">왼쪽에서 워크플로우를 선택하거나 새로 만드세요</p>
-              <button onClick={() => setShowCreateWf(true)} className="text-sm text-primary hover:underline">
-                + 새 워크플로우 만들기
-              </button>
-            </div>
+            <EmptyState
+              icon={GitFork}
+              title="선택된 워크플로우가 없습니다."
+              description="왼쪽 목록에서 워크플로우를 고르거나 새로 만들어 보세요."
+              action={{ label: '새 워크플로우 만들기', onClick: () => setShowCreateWf(true) }}
+            />
           </div>
         ) : (
           <>
@@ -1111,6 +1114,7 @@ export function WorkflowBoardPage() {
           </>
         )}
       </main>
+      </div>
     </div>
   );
 }

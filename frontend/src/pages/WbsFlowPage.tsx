@@ -9,7 +9,7 @@ import {
   CheckCircle2, Clock, AlertCircle, Circle, BarChart3,
   ListChecks, Activity, Plus, FolderOpen,
 } from 'lucide-react';
-import { ViewModeBar, SidePane } from '@/components/common';
+import { ViewModeBar, SidePane, EmptyState } from '@/components/common';
 import { MacCard } from '@/components/ui/MacCard';
 import { stripHtml } from '@/lib/utils';
 import { useProjects } from '@/hooks/useProjects';
@@ -52,16 +52,16 @@ const PRIORITY_COLOR: Record<string, string> = {
   low:    'bg-status-healthy/15 text-status-healthy border-status-healthy/25',
 };
 const MODULE_COLOR: Record<string, string> = {
-  k8s:        'bg-status-info/15 text-status-info',
-  keycloak:   'bg-purple-500/15 text-purple-600 dark:text-purple-300',
-  nexus:      'bg-orange-500/15 text-orange-600 dark:text-orange-300',
-  cilium:     'bg-cyan-500/15 text-cyan-600 dark:text-cyan-300',
-  argocd:     'bg-status-healthy/15 text-status-healthy',
-  jenkins:    'bg-status-critical/15 text-status-critical',
-  backend:    'bg-indigo-500/15 text-indigo-600 dark:text-indigo-300',
-  frontend:   'bg-pink-500/15 text-pink-600 dark:text-pink-300',
-  monitoring: 'bg-teal-500/15 text-teal-600 dark:text-teal-300',
-  infra:      'bg-status-unknown/15 text-status-unknown dark:text-slate-300',
+  k8s:        'bg-chart-1/15 text-chart-1',
+  keycloak:   'bg-chart-4/15 text-chart-4',
+  nexus:      'bg-chart-7/15 text-chart-7',
+  cilium:     'bg-chart-6/15 text-chart-6',
+  argocd:     'bg-chart-2/15 text-chart-2',
+  jenkins:    'bg-chart-5/15 text-chart-5',
+  backend:    'bg-chart-3/15 text-chart-3',
+  frontend:   'bg-chart-5/15 text-chart-5',
+  monitoring: 'bg-chart-2/15 text-chart-2',
+  infra:      'bg-chart-8/15 text-chart-8',
 };
 
 // ── types ─────────────────────────────────────────────────────────────────────
@@ -112,9 +112,9 @@ function ItemCard({ item, onClick }: { item: DayItem; onClick: () => void }) {
   const base = isIssue
     ? (item.resolved
         ? 'border-l-status-healthy bg-status-healthy/5'
-        : 'border-l-orange-500 bg-orange-500/5')
+        : 'border-l-chart-7 bg-chart-7/5')
     : item.isSubTask
-      ? 'border-l-indigo-400 bg-indigo-500/5 opacity-90'
+      ? 'border-l-chart-4 bg-chart-4/5 opacity-90'
       : 'border-l-status-info bg-status-info/5';
 
   return (
@@ -141,7 +141,7 @@ function ItemCard({ item, onClick }: { item: DayItem; onClick: () => void }) {
           </span>
         )}
         {isIssue && (
-          <span className={`text-[11px] px-1 rounded-md ${item.resolved ? 'bg-status-healthy/15 text-status-healthy' : 'bg-orange-500/15 text-orange-600 dark:text-orange-300'}`}>
+          <span className={`text-[11px] px-1 rounded-md ${item.resolved ? 'bg-status-healthy/15 text-status-healthy' : 'bg-status-warning/15 text-status-warning'}`}>
             {item.resolved ? '해결' : '미해결'}
           </span>
         )}
@@ -156,7 +156,7 @@ function DetailModal({ item, onClose }: { item: DayItem; onClose: () => void }) 
   const isIssue = item.type === 'issue';
   const title = (
     <div className="flex items-center gap-2 flex-wrap min-w-0">
-      <span className={`text-xs px-2 py-0.5 rounded-full font-semibold flex-shrink-0 ${isIssue ? 'bg-orange-500/15 text-orange-600 dark:text-orange-300' : 'bg-status-info/15 text-status-info'}`}>
+      <span className={`text-xs px-2 py-0.5 rounded-full font-semibold flex-shrink-0 ${isIssue ? 'bg-chart-7/15 text-chart-7' : 'bg-status-info/15 text-status-info'}`}>
         {isIssue ? '이슈' : '작업'}
       </span>
       {item.module && (
@@ -256,7 +256,7 @@ function ProgressBar({ value }: { value: number }) {
 const CHIP_COLOR: Record<string, string> = {
   emerald: 'bg-status-healthy/15 text-status-healthy',
   sky:     'bg-status-info/15 text-status-info',
-  slate:   'bg-status-unknown/15 text-status-unknown dark:text-slate-300',
+  slate:   'bg-status-unknown/15 text-status-unknown',
   red:     'bg-status-critical/15 text-status-critical',
 };
 
@@ -353,10 +353,11 @@ function PersonalGanttView({
 
   if (rows.length === 0) {
     return (
-      <div className="flex flex-col items-center justify-center py-24 text-muted-foreground">
-        <Users className="w-12 h-12 mb-3 opacity-30" />
-        <p className="text-sm">"{assignee}"의 작업/이슈가 없습니다.</p>
-      </div>
+      <EmptyState
+        icon={Users}
+        title={`"${assignee}"의 작업·이슈가 없습니다.`}
+        description="이 기간에 담당한 작업이나 이슈가 없습니다. 기간을 바꿔 보세요."
+      />
     );
   }
 
@@ -425,7 +426,7 @@ function PersonalGanttView({
                         {on && (
                           <div className={`mx-0.5 rounded border h-[22px] ${cellColor} flex items-center justify-center gap-0.5`}>
                             {t.kanbanStatus === 'done' && <CheckCircle2 className="w-2.5 h-2.5 text-status-healthy" />}
-                            {t.kanbanStatus === 'in_progress' && <Clock className="w-2.5 h-2.5 text-blue-400" />}
+                            {t.kanbanStatus === 'in_progress' && <Clock className="w-2.5 h-2.5 text-status-info" />}
                           </div>
                         )}
                       </td>
@@ -461,8 +462,8 @@ function PersonalGanttView({
                         className={`border-b border-r border-border align-middle ${isTd ? 'bg-primary/5' : isWeekend(d) ? 'bg-secondary/20' : ''} ${on ? 'cursor-pointer' : ''}`}
                         style={{ minWidth: COL_W, width: COL_W, height: 34 }}>
                         {on && (
-                          <div className={`mx-0.5 rounded border h-[22px] ${iss.closedAt ? 'bg-status-healthy/30 border-status-healthy/50' : 'bg-orange-500/30 border-orange-500/50'} flex items-center justify-center`}>
-                            <AlertCircle className={`w-2.5 h-2.5 ${iss.closedAt ? 'text-status-healthy' : 'text-orange-400'}`} />
+                          <div className={`mx-0.5 rounded border h-[22px] ${iss.closedAt ? 'bg-status-healthy/30 border-status-healthy/50' : 'bg-chart-7/30 border-chart-7/50'} flex items-center justify-center`}>
+                            <AlertCircle className={`w-2.5 h-2.5 ${iss.closedAt ? 'text-status-healthy' : 'text-chart-7'}`} />
                           </div>
                         )}
                       </td>
@@ -780,18 +781,12 @@ export function WbsFlowPage() {
         {pageView === 'project' && (
           <div className="space-y-4">
             {projects.length === 0 ? (
-              <div className="flex flex-col items-center justify-center py-20 text-muted-foreground">
-                <div className="w-14 h-14 rounded-2xl bg-secondary flex items-center justify-center mb-3">
-                  <FolderOpen className="w-7 h-7 opacity-50" />
-                </div>
-                <p className="text-sm mb-3">아직 프로젝트가 없습니다.</p>
-                <button
-                  onClick={() => setShowNewProjectModal(true)}
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-semibold bg-primary hover:bg-primary/90 text-primary-foreground rounded-xl shadow-card"
-                >
-                  <Plus className="w-3.5 h-3.5" /> 첫 프로젝트 만들기
-                </button>
-              </div>
+              <EmptyState
+                icon={FolderOpen}
+                title="아직 프로젝트가 없습니다."
+                description="프로젝트를 만들면 소속 업무를 묶어 흐름을 볼 수 있습니다."
+                action={{ label: '첫 프로젝트 만들기', onClick: () => setShowNewProjectModal(true) }}
+              />
             ) : (
               (selectedProjectId ? projects.filter(p => p.id === selectedProjectId) : projects).map((project) => {
                 const pTasks = allItems.filter(w => w.projectId === project.id && w.type === 'task');
@@ -819,7 +814,7 @@ export function WbsFlowPage() {
                         />
                       </MacCard>
                     ) : (
-                      <p className="text-sm text-muted-foreground px-1 py-2">소속 업무가 없습니다.</p>
+                      <EmptyState compact title="소속 업무가 없습니다." description="업무를 이 프로젝트에 연결하면 여기에 나타납니다." />
                     )}
                   </div>
                 );
@@ -874,22 +869,20 @@ export function WbsFlowPage() {
               onItemClick={setSelectedItem}
             />
           ) : (
-            <div className="flex flex-col items-center justify-center py-20 text-muted-foreground">
-              <div className="w-14 h-14 rounded-2xl bg-secondary flex items-center justify-center mb-3">
-                <Users className="w-7 h-7 opacity-50" />
-              </div>
-              <p className="text-sm">상단에서 담당자를 선택하세요.</p>
-            </div>
+            <EmptyState
+              icon={Users}
+              title="선택된 담당자가 없습니다."
+              description="상단에서 담당자를 선택하면 작업 흐름이 나타납니다."
+            />
           )
         ) : (
           <div className="overflow-auto">
             {filteredRows.length === 0 ? (
-              <div className="flex flex-col items-center justify-center py-20 text-muted-foreground">
-                <div className="w-14 h-14 rounded-2xl bg-secondary flex items-center justify-center mb-3">
-                  <Users className="w-7 h-7 opacity-50" />
-                </div>
-                <p className="text-sm">이 기간에 해당하는 작업/이슈가 없습니다.</p>
-              </div>
+              <EmptyState
+                icon={Users}
+                title="이 기간에 해당하는 작업·이슈가 없습니다."
+                description="기간을 넓히거나 다른 담당자를 선택해 보세요."
+              />
             ) : (
               <table className="border-collapse min-w-full text-sm">
             <thead className="sticky top-0 z-20 bg-card">
@@ -983,7 +976,7 @@ export function WbsFlowPage() {
         <div className="flex items-center gap-3 text-sm text-muted-foreground flex-wrap px-1">
           <span className="font-medium">범례:</span>
           <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-sm bg-status-info/30 inline-block" /> 작업</span>
-          <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-sm bg-orange-500/30 inline-block" /> 이슈</span>
+          <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-sm bg-chart-7/30 inline-block" /> 이슈</span>
           <span className="flex items-center gap-1"><CheckCircle2 className="w-3 h-3 text-status-healthy" /> 완료/해결</span>
           <span className="flex items-center gap-1"><Clock className="w-3 h-3 text-status-info" /> 진행중</span>
           <span className="flex items-center gap-1"><AlertCircle className="w-3 h-3 text-status-critical" /> 미해결</span>

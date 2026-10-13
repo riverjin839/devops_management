@@ -1,5 +1,6 @@
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { ArrowLeft, ListTodo } from 'lucide-react';
+import { ListTodo } from 'lucide-react';
+import { PageHeader } from '@/components/common';
 import { WorkItemForm } from '@/components/work-items';
 import { useWorkItems } from '@/hooks/useWorkItems';
 import type { WorkItemType } from '@/types';
@@ -25,27 +26,21 @@ export function WorkItemFormPage() {
   return (
     <div className="app-min-h-screen bg-background">
       <div className="sticky top-0 z-10 bg-background/85 backdrop-blur-md border-b border-border">
-        <div className="max-w-[1400px] mx-auto px-8 py-2.5 flex items-center gap-2">
-          <button
-            onClick={() => navigate('/tasks-mgmt')}
-            className="p-1.5 hover:bg-secondary rounded-lg transition-colors text-muted-foreground hover:text-foreground"
-            title="목록으로"
-            aria-label="목록으로"
-          >
-            <ArrowLeft className="w-4 h-4" />
-          </button>
-          <ListTodo className="w-4 h-4 text-muted-foreground" />
-          <span className="text-sm text-muted-foreground">{pageTitle}</span>
-          {parentItem && (
-            <span className="ml-2 text-sm text-muted-foreground truncate max-w-[400px]">
-              ↳ 상위:&nbsp;
+        <PageHeader
+          className="max-w-[1400px] mx-auto px-8 py-2.5 items-center"
+          back={{ to: '/tasks-mgmt', label: '업무 목록' }}
+          icon={ListTodo}
+          title={pageTitle}
+          titleExtra={parentItem && (
+            <span className="text-sm text-muted-foreground truncate max-w-[400px]">
+              상위:&nbsp;
               <span className="text-foreground/80">
                 {parentItem.content.replace(/<[^>]*>/g, '').slice(0, 60)}
                 {parentItem.content.replace(/<[^>]*>/g, '').length > 60 ? '…' : ''}
               </span>
             </span>
           )}
-        </div>
+        />
       </div>
 
       <main className="max-w-[1400px] mx-auto px-6 pt-4 pb-6">

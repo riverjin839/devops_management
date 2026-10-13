@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { Users, User, Search, X, ClipboardList, ListTodo, Mail, Hash, ChevronDown, ChevronUp, Copy } from 'lucide-react';
 import { useAssignees } from '@/hooks/useAssignees';
 import { useWorkItems } from '@/hooks/useWorkItems';
-import { useToast, EmptyState } from '@/components/common';
+import { useToast, EmptyState, PageHeader } from '@/components/common';
 import { useAuthStore } from '@/stores/authStore';
 import type { WorkItem, Assignee } from '@/types';
 
@@ -11,16 +11,16 @@ import type { WorkItem, Assignee } from '@/types';
 
 const KANBAN_STYLE: Record<string, { label: string; cls: string }> = {
   backlog:     { label: 'Backlog',  cls: 'bg-status-unknown/10 text-status-unknown border-status-unknown/30' },
-  todo:        { label: 'To Do',    cls: 'bg-blue-500/10 text-blue-400 border-blue-500/30' },
+  todo:        { label: 'To Do',    cls: 'bg-chart-1/10 text-chart-1 border-chart-1/30' },
   in_progress: { label: 'WIP',      cls: 'bg-status-warning/10 text-status-warning border-status-warning/30' },
-  review_test: { label: 'Review',   cls: 'bg-purple-500/10 text-purple-400 border-purple-500/30' },
+  review_test: { label: 'Review',   cls: 'bg-chart-4/10 text-chart-4 border-chart-4/30' },
   done:        { label: 'Done',     cls: 'bg-status-healthy/10 text-status-healthy border-status-healthy/30' },
 };
 
 const PRIORITY_DOT: Record<string, string> = {
   high:   'bg-status-critical',
-  medium: 'bg-blue-500',
-  low:    'bg-slate-400',
+  medium: 'bg-chart-1',
+  low:    'bg-chart-8',
 };
 
 // ── 유틸 ────────────────────────────────────────────────────────────────────
@@ -137,7 +137,7 @@ function MemberSection({ bucket, onTaskClick, onIssueClick }: {
           </div>
         </div>
         <div className="flex items-center gap-2">
-          <span className="text-sm px-2 py-0.5 rounded-full bg-blue-500/10 text-blue-400 border border-blue-500/30">
+          <span className="text-sm px-2 py-0.5 rounded-full bg-chart-1/10 text-chart-1 border border-chart-1/30">
             작업 {bucket.tasks.length} (진행 {bucket.openTasks} / 완료 {bucket.doneTasks})
           </span>
           <span className="text-sm px-2 py-0.5 rounded-full bg-status-warning/10 text-status-warning border border-status-warning/30">
@@ -163,7 +163,7 @@ function MemberSection({ bucket, onTaskClick, onIssueClick }: {
               <span className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">작업</span>
             </div>
             {bucket.tasks.length === 0 ? (
-              <p className="text-sm text-muted-foreground text-center py-6">할당된 작업 없음</p>
+              <EmptyState compact icon={ListTodo} title="할당된 작업이 없습니다." description="이 멤버를 담당자로 지정한 작업이 아직 없습니다." />
             ) : (
               <ul className="space-y-1">
                 {bucket.tasks.slice(0, 10).map((t) => {
@@ -174,7 +174,7 @@ function MemberSection({ bucket, onTaskClick, onIssueClick }: {
                       onClick={() => onTaskClick(t)}
                       className="flex items-center gap-2 px-2 py-1 rounded hover:bg-muted/40 cursor-pointer group"
                     >
-                      <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${PRIORITY_DOT[t.priority] ?? 'bg-slate-400'}`} />
+                      <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${PRIORITY_DOT[t.priority] ?? 'bg-chart-8'}`} />
                       <span className={`text-xs px-1.5 py-0.5 rounded-full border flex-shrink-0 ${ks.cls}`}>{ks.label}</span>
                       <span className="text-sm text-foreground truncate flex-1" title={stripHtml(t.content)}>
                         {stripHtml(t.content) || t.category}
@@ -201,7 +201,7 @@ function MemberSection({ bucket, onTaskClick, onIssueClick }: {
               <span className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">이슈</span>
             </div>
             {bucket.issues.length === 0 ? (
-              <p className="text-sm text-muted-foreground text-center py-6">할당된 이슈 없음</p>
+              <EmptyState compact icon={ClipboardList} title="할당된 이슈가 없습니다." description="이 멤버를 담당자로 지정한 이슈가 아직 없습니다." />
             ) : (
               <ul className="space-y-1">
                 {bucket.issues.slice(0, 10).map((i) => (
@@ -404,10 +404,11 @@ export function MemberBoardPage() {
     <div className="app-min-h-screen bg-background">
       <main className="mx-auto px-8 py-8">
         {/* 헤더 */}
-        <div className="flex items-center justify-between mb-6">
-          <div className="flex items-center gap-3">
-            <Users className="w-6 h-6 text-primary" />
-            <h1 className="text-xl font-bold">멤버별 업무</h1>
+        <PageHeader
+          className="mb-6"
+          icon={Users}
+          title="멤버별 업무"
+          titleExtra={<>
             <span className="text-sm px-2 py-0.5 rounded-full bg-status-unknown/15 text-status-unknown border border-status-unknown/30">
               멤버 {filtered.length} / 전체 {buckets.length}
             </span>
@@ -416,8 +417,8 @@ export function MemberBoardPage() {
                 진행중 합계 {totalOpen}
               </span>
             )}
-          </div>
-        </div>
+          </>}
+        />
 
         {/* 필터 */}
         <div className="bg-card border border-border rounded-xl p-4 mb-5">

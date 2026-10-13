@@ -32,7 +32,7 @@ import { Cluster, ManagementServer, ManagementServerCreate, ServiceDomain } from
 import { getStatusIcon, formatDateTime, formatApiError, cn } from '@/lib/utils';
 import { useHomeStore } from '@/stores/homeStore';
 import { useHomePrefs, useUpdateHomePrefs } from '@/hooks/useHomePrefs';
-import { useToast, ClusterIconPicker, useModalA11y, EmptyState } from '@/components/common';
+import { useToast, ClusterIconPicker, useModalA11y, EmptyState, PageHeader } from '@/components/common';
 import { resolveClusterIcon } from '@/lib/clusterIcons';
 import {
   buildClusterIconSvg, svgToDataUrl, suggestInitials, suggestRegionAbbr,
@@ -148,7 +148,7 @@ function EditClusterModal({
             />
           </div>
           {error && (
-            <div className="flex items-start gap-2 px-3 py-2.5 bg-destructive/10 border border-destructive/20 rounded-lg text-sm text-destructive">
+            <div className="flex items-start gap-2 px-3 py-2.5 bg-status-critical/10 border border-status-critical/20 rounded-lg text-sm text-status-critical">
               <AlertTriangle className="w-4 h-4 flex-shrink-0 mt-0.5" />
               <span>{error}</span>
             </div>
@@ -318,7 +318,7 @@ function ManagementServerModal({
           </div>
 
           {error && (
-            <div className="flex items-start gap-2 px-3 py-2.5 bg-destructive/10 border border-destructive/20 rounded-lg text-sm text-destructive">
+            <div className="flex items-start gap-2 px-3 py-2.5 bg-status-critical/10 border border-status-critical/20 rounded-lg text-sm text-status-critical">
               <AlertTriangle className="w-4 h-4 flex-shrink-0 mt-0.5" />
               <span>{error}</span>
             </div>
@@ -633,12 +633,7 @@ export function SettingsPage() {
     <div className="app-min-h-screen bg-background">
       <main className="max-w-[1700px] px-4 lg:px-6 py-5">
         {/* Page Header + Tabs */}
-        <div className="flex items-center justify-between mb-6">
-          <div className="flex items-center gap-3">
-            <SettingsIcon className="w-6 h-6 text-primary" />
-            <h1 className="text-xl font-bold">설정</h1>
-          </div>
-        </div>
+        <PageHeader className="mb-6" icon={SettingsIcon} title="설정" />
 
         {/* Tab Navigation */}
         <div className="flex gap-1 mb-6 bg-secondary/50 rounded-xl p-1 w-fit">
@@ -1091,16 +1086,12 @@ export function SettingsPage() {
           </div>
 
           {servers.length === 0 ? (
-            <div className="text-center py-12">
-              <MonitorDot className="w-10 h-10 mx-auto mb-3 text-muted-foreground/30" />
-              <p className="text-muted-foreground text-sm mb-4">등록된 관리서버가 없습니다.</p>
-              <button
-                onClick={() => { setEditServer(null); setShowServerModal(true); }}
-                className="px-4 py-2 text-sm font-medium bg-primary/10 hover:bg-primary/20 text-primary border border-primary/20 rounded-lg transition-colors"
-              >
-                + 첫 번째 관리서버 등록
-              </button>
-            </div>
+            <EmptyState
+              icon={MonitorDot}
+              title="등록된 관리서버가 없습니다."
+              description="관리서버를 등록하면 연결 상태를 확인하고 원격 작업에 사용할 수 있습니다."
+              action={{ label: '첫 번째 관리서버 등록', variant: 'secondary', onClick: () => { setEditServer(null); setShowServerModal(true); } }}
+            />
           ) : (
             <div className="divide-y divide-border">
               {servers.map((server) => (

@@ -11,7 +11,7 @@ import { useWorkItems, usePatchWorkItemStatus, useUpdateWorkItem } from '@/hooks
 import { useCurrentSprint, useCreateSprint } from '@/hooks/useSprints';
 import { useToday } from '@/hooks/useToday';
 import { useAuthStore } from '@/stores/authStore';
-import { ViewModeBar, useToast } from '@/components/common';
+import { ViewModeBar, useToast, PageHeader, EmptyState, LoadingState } from '@/components/common';
 import { MacCard } from '@/components/ui/MacCard';
 import { stripHtml, formatApiError } from '@/lib/utils';
 import { isAssignedTo, itemDateKey } from '@/lib/workItems';
@@ -64,13 +64,13 @@ function displayTitle(t: WorkItem): string {
 }
 
 const PRIORITY_DOT: Record<string, string> = {
-  high: 'bg-status-critical', medium: 'bg-blue-500', low: 'bg-slate-400',
+  high: 'bg-status-critical', medium: 'bg-chart-1', low: 'bg-chart-8',
 };
 const STATUS_META: Record<KanbanStatus, { label: string; cls: string }> = {
   backlog:     { label: '백로그',     cls: 'bg-status-unknown/10 text-status-unknown border-status-unknown/30' },
-  todo:        { label: '할일',       cls: 'bg-blue-500/10 text-blue-400 border-blue-500/30' },
+  todo:        { label: '할일',       cls: 'bg-chart-1/10 text-chart-1 border-chart-1/30' },
   in_progress: { label: '진행중',     cls: 'bg-status-warning/10 text-status-warning border-status-warning/30' },
-  review_test: { label: '검토/테스트', cls: 'bg-purple-500/10 text-purple-400 border-purple-500/30' },
+  review_test: { label: '검토/테스트', cls: 'bg-chart-4/10 text-chart-4 border-chart-4/30' },
   done:        { label: '완료',       cls: 'bg-status-healthy/10 text-status-healthy border-status-healthy/30' },
 };
 
@@ -91,7 +91,7 @@ function fmtRange(start: string, end: string): string {
 type BucketTone = 'overdue' | 'today' | 'upcoming' | 'done';
 const TONE: Record<BucketTone, { ring: string; text: string; dot: string }> = {
   overdue:  { ring: 'border-status-critical/30',    text: 'text-status-critical',     dot: 'bg-status-critical' },
-  today:    { ring: 'border-blue-500/30',   text: 'text-blue-500',    dot: 'bg-blue-500' },
+  today:    { ring: 'border-status-info/30', text: 'text-status-info', dot: 'bg-status-info' },
   upcoming: { ring: 'border-border',        text: 'text-muted-foreground', dot: 'bg-muted-foreground/50' },
   done:     { ring: 'border-status-healthy/30', text: 'text-status-healthy', dot: 'bg-status-healthy' },
 };
@@ -328,15 +328,11 @@ export function TodoTodayPage() {
   return (
     <div className="p-6 flex flex-col gap-5 app-min-h-screen max-w-[1200px] mx-auto">
       {/* 헤더 */}
-      <div className="flex items-start justify-between gap-4 flex-wrap">
-        <div>
-          <div className="flex items-center gap-2 mb-1">
-            <CalendarCheck2 className="w-5 h-5 text-primary" />
-            <h1 className="text-xl font-bold">{myName ? `${myName}님의 오늘 할일` : '오늘 할 일'}</h1>
-          </div>
-          <p className="text-sm text-muted-foreground">내 일정·할일만 모아 봅니다 (다른 사람 일정은 표시되지 않습니다).</p>
-        </div>
-        <div className="flex items-center gap-2 flex-shrink-0">
+      <PageHeader
+        icon={CalendarCheck2}
+        title={myName ? `${myName}님의 오늘 할일` : '오늘 할일'}
+        description="내 일정·할일만 모아 봅니다 (다른 사람 일정은 표시되지 않습니다)."
+        actions={<>
           <ViewModeBar
             modes={[
               { id: 'sprint', label: '스프린트', icon: <Rocket className="w-3.5 h-3.5" /> },
@@ -369,8 +365,8 @@ export function TodoTodayPage() {
           >
             <RefreshCw className={`w-4 h-4 ${isFetching ? 'animate-spin' : ''}`} />
           </button>
-        </div>
-      </div>
+        </>}
+      />
 
       {/* 요약 통계 */}
       <StatTileRow>
@@ -381,27 +377,27 @@ export function TodoTodayPage() {
 
       {/* 본문 */}
       {!myName ? (
-        <div className="flex flex-col items-center justify-center py-20 gap-2 text-muted-foreground">
-          <AlertTriangle className="w-8 h-8 opacity-40" />
-          <p className="text-sm">로그인 후 본인 담당 업무가 표시됩니다.</p>
-        </div>
+        <EmptyState
+          icon={AlertTriangle}
+          title="로그인 정보가 없습니다."
+          description="로그인하면 본인이 담당한 업무가 여기에 표시됩니다."
+        />
       ) : isLoading ? (
-        <div className="flex items-center justify-center py-20"><Loader2 className="w-8 h-8 animate-spin text-primary" /></div>
+        <LoadingState label="할일을 불러오는 중…" />
       ) : isError ? (
-        <div className="flex flex-col items-center justify-center py-20 gap-3 text-destructive">
+        <div className="flex flex-col items-center justify-center py-20 gap-3 text-status-critical">
           <AlertTriangle className="w-8 h-8" />
           <p className="text-sm">데이터를 불러오는 중 오류가 발생했습니다.</p>
-          <button onClick={() => refetch()} className="px-4 py-2 text-sm bg-secondary hover:bg-secondary/80 border border-border rounded-lg">다시 시도</button>
+          <button onClick={() => refetch()} className="px-4 py-2 text-sm text-foreground bg-secondary hover:bg-secondary/80 border border-border rounded-lg">다시 시도</button>
         </div>
       ) : view === 'sprint' ? (
         !currentSprint ? (
-          <div className="flex flex-col items-center justify-center py-20 gap-4 text-muted-foreground">
-            <Rocket className="w-12 h-12 opacity-30 text-primary" />
-            <div className="text-center">
-              <p className="text-base font-medium text-foreground">진행 중인 스프린트가 없습니다</p>
-              <p className="text-sm mt-1 opacity-70">이번 반복에 집중할 할일을 모아보세요. (기간은 스프린트 페이지에서 1~4주로 조절)</p>
-            </div>
-            <div className="flex items-center gap-2">
+          <EmptyState
+            icon={Rocket}
+            title="진행 중인 스프린트가 없습니다."
+            description="이번 반복에 집중할 할일을 모아 보세요. 기간은 스프린트 화면에서 1~4주로 조절합니다."
+          >
+            <div className="flex items-center gap-2 mt-4">
               <button
                 onClick={onStartSprint}
                 disabled={createSprint.isPending}
@@ -417,7 +413,7 @@ export function TodoTodayPage() {
                 기간 직접 설정
               </button>
             </div>
-          </div>
+          </EmptyState>
         ) : (
           <div className="flex flex-col gap-3">
             {/* 스프린트 헤더 */}
@@ -456,10 +452,11 @@ export function TodoTodayPage() {
             </MacCard>
 
             {sprint.total === 0 && sprint.candidates.length === 0 ? (
-              <div className="flex flex-col items-center justify-center py-14 gap-2 text-muted-foreground">
-                <CheckCircle2 className="w-10 h-10 opacity-30 text-status-healthy" />
-                <p className="text-sm">이번 스프린트에 담긴 내 할일이 없습니다.</p>
-              </div>
+              <EmptyState
+                icon={CheckCircle2}
+                title="이번 스프린트에 담긴 내 할일이 없습니다."
+                description="업무 게시판에서 업무를 이 스프린트에 배정하면 여기에 나타납니다."
+              />
             ) : (
               <>
                 <Section title="진행중" tone="today" items={sprint.inProgress} view="list" busyId={busyId} onToggleDone={onToggleDone} onOpen={onOpen} />
@@ -517,7 +514,7 @@ export function TodoTodayPage() {
             <span className="ml-auto text-sm text-muted-foreground">{daySchedule.length}건</span>
           </div>
           {daySchedule.length === 0 ? (
-            <div className="py-14 text-center text-sm text-muted-foreground">이 날짜에 예정된 일정이 없습니다.</div>
+            <EmptyState compact icon={CalendarDays} title="이 날짜에 예정된 일정이 없습니다." description="이전·다음 날로 이동하거나 업무에 일정을 지정해 보세요." />
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
@@ -558,16 +555,12 @@ export function TodoTodayPage() {
           )}
         </MacCard>
       ) : totalOpen === 0 && buckets.doneRecent.length === 0 ? (
-        <div className="flex flex-col items-center justify-center py-20 gap-3 text-muted-foreground">
-          <CheckCircle2 className="w-12 h-12 opacity-30 text-status-healthy" />
-          <div className="text-center">
-            <p className="text-base font-medium">처리할 할일이 없습니다.</p>
-            <p className="text-sm mt-1 opacity-70">담당으로 지정된 미완료 업무가 없습니다.</p>
-          </div>
-          <button onClick={() => navigate('/tasks-mgmt/new')} className="flex items-center gap-1.5 px-4 py-2 text-sm bg-primary/10 text-primary hover:bg-primary/20 rounded-lg transition-colors">
-            <Plus className="w-4 h-4" /> 업무 추가
-          </button>
-        </div>
+        <EmptyState
+          icon={CheckCircle2}
+          title="처리할 할일이 없습니다."
+          description="담당으로 지정된 미완료 업무가 없습니다. 새 업무를 추가해 보세요."
+          action={{ label: '업무 추가', onClick: () => navigate('/tasks-mgmt/new') }}
+        />
       ) : (
         <div className="flex flex-col gap-3">
           <Section title="지연" tone="overdue" items={buckets.overdue} view={view} busyId={busyId} onToggleDone={onToggleDone} onOpen={onOpen} />

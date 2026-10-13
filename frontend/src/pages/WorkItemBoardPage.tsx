@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type RefObject } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { ViewModeBar, DoubleScrollX, ConfirmDialog, useToast, EmptyState } from '@/components/common';
+import { ViewModeBar, DoubleScrollX, ConfirmDialog, useToast, EmptyState, PageHeader, Skeleton } from '@/components/common';
 import { MacCard } from '@/components/ui/MacCard';
 import { formatApiError } from '@/lib/utils';
 import { Plus, Download, ListTodo, X, CalendarDays, List, ChevronUp, ChevronDown, ArrowUpDown, Kanban, ListTree, AlertCircle, AlertTriangle, GripVertical, ListFilter, DownloadCloud, CalendarRange, UserRound, Search, Save, Settings } from 'lucide-react';
@@ -723,10 +723,11 @@ export function WorkItemBoardPage() {
       <main className="mx-auto px-4 lg:px-6 py-4">
         <div className="min-w-0">
         {/* Page Header */}
-        <div className="flex items-center justify-between mb-4">
-          <div className="flex items-center gap-3">
-            <ListTodo className="w-6 h-6 text-primary" />
-            <h1 className="text-xl font-bold">업무 관리 게시판</h1>
+        <PageHeader
+          className="mb-4"
+          icon={ListTodo}
+          title="업무 관리 게시판"
+          titleExtra={<>
             {isAdmin && (
               <button
                 type="button"
@@ -739,7 +740,7 @@ export function WorkItemBoardPage() {
               </button>
             )}
             {items.length > 0 && (
-              <div className="flex items-center gap-2 ml-4">
+              <div className="flex items-center gap-2 ml-2">
                 {boardSettings?.badgeVisibility.total && (
                   <span className="text-sm px-2 py-0.5 rounded-full bg-status-unknown/15 text-status-unknown border border-status-unknown/30">
                     전체 {items.length}
@@ -775,9 +776,8 @@ export function WorkItemBoardPage() {
                 )}
               </div>
             )}
-          </div>
-
-          <div className="flex items-center gap-3">
+          </>}
+          actions={<>
             {/* View mode toggle */}
             <ViewModeBar
               modes={[
@@ -828,8 +828,8 @@ export function WorkItemBoardPage() {
               <Plus className="w-4 h-4" />
               업무 등록
             </button>
-          </div>
-        </div>
+          </>}
+        />
 
         {/* 필터 바 — 모든 조건을 한 줄에 인라인으로 노출한다("필터 더보기" 팝오버로 묶지
             않음). 기본 필터링은 항상 비어 있고(EMPTY_FILTER_PREFS), "필터 저장" 을 눌러야
@@ -1005,7 +1005,7 @@ export function WorkItemBoardPage() {
                     <span className="text-sm font-semibold">{col.label}</span>
                   </div>
                   {[...Array(3)].map((_, i) => (
-                    <div key={i} className="h-24 rounded-md border border-border bg-muted/20 animate-pulse" />
+                    <Skeleton key={i} className="block h-24 w-full rounded-md" />
                   ))}
                 </div>
               ))}
@@ -1026,7 +1026,7 @@ export function WorkItemBoardPage() {
             {isLoading ? (
               <div className="grid grid-cols-7 gap-0">
                 {[...Array(35)].map((_, i) => (
-                  <div key={i} className="h-[88px] border border-border animate-pulse bg-muted/20" />
+                  <div key={i} className="h-[88px] border border-border p-1"><Skeleton className="block h-full w-full" /></div>
                 ))}
               </div>
             ) : (
@@ -1040,7 +1040,7 @@ export function WorkItemBoardPage() {
           isLoading ? (
             <MacCard bodyPadding="p-0" rootClassName="overflow-hidden">
               {[...Array(5)].map((_, i) => (
-                <div key={i} className="h-14 border-b border-border last:border-b-0 animate-pulse bg-muted/30" />
+                <div key={i} className="h-14 px-4 flex items-center border-b border-border last:border-b-0"><Skeleton className="h-4 w-full" /></div>
               ))}
             </MacCard>
           ) : items.length === 0 ? (
@@ -1080,7 +1080,7 @@ export function WorkItemBoardPage() {
           isLoading ? (
             <MacCard bodyPadding="p-0" rootClassName="overflow-hidden">
               {[...Array(5)].map((_, i) => (
-                <div key={i} className="h-14 border-b border-border last:border-b-0 animate-pulse bg-muted/30" />
+                <div key={i} className="h-14 px-4 flex items-center border-b border-border last:border-b-0"><Skeleton className="h-4 w-full" /></div>
               ))}
             </MacCard>
           ) : items.length === 0 ? (
