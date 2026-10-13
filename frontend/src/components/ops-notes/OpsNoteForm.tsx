@@ -92,7 +92,7 @@ export function OpsNoteForm({ initial, defaultService, onCancel, onSaved }: OpsN
   return (
     <>
       {error && (
-        <div className="mb-4 px-3 py-2 bg-destructive/10 border border-destructive/30 rounded-lg text-sm text-destructive">{error}</div>
+        <div className="mb-4 px-3 py-2 bg-status-critical/10 border border-status-critical/30 rounded-lg text-sm text-status-critical">{error}</div>
       )}
 
       <form onSubmit={handleSubmit} className="space-y-4">

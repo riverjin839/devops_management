@@ -3,7 +3,7 @@ import {
   Terminal, Globe, Server, Database, KeyRound, AlertTriangle, Info, Target, Pencil, Save, Plus, X,
   ShieldCheck, Workflow,
 } from 'lucide-react';
-import { StatusBadge, useToast } from '@/components/common';
+import { EmptyState, StatusBadge, useToast } from '@/components/common';
 import { ExecutionStepsTimeline } from '@/components/daily-check/ExecutionStepsTimeline';
 import { KubeadmCertsModal, EtcdSystemdModal } from '@/components/versions';
 import { useUpdateSourceConfig } from '@/hooks/useCheckMatrix';
@@ -115,7 +115,7 @@ function InputsBlock({ inputs, action }: { inputs: CheckMatrixRunbookInput[]; ac
         {action}
       </div>
       {groups.length === 0 && (
-        <p className="text-xs text-muted-foreground italic">저장된 설정값이 없습니다 — 기본값으로 동작합니다.</p>
+        <EmptyState compact title="저장된 설정값이 없습니다." description="기본값으로 동작합니다." />
       )}
       <div className="space-y-3 max-h-72 overflow-y-auto pr-1">
         {groups.map(({ group, rows }) => (
@@ -253,7 +253,7 @@ function SourceConfigEditor({
           );
         })}
         {rows.length === 0 && (
-          <p className="text-xs text-muted-foreground italic">편집할 설정이 없습니다{isAddon ? ' — 아래에서 키를 추가하세요.' : '.'}</p>
+          <EmptyState compact title="편집할 설정이 없습니다." description={isAddon ? '아래에서 키를 추가하세요.' : undefined} />
         )}
       </div>
       {isAddon && (
@@ -366,8 +366,8 @@ export function CheckMatrixRunbookPanel({ runbook, isLoading, editTarget, latest
             )}
           </section>
         ) : (
-          <section className="rounded-md border border-dashed border-border p-3 flex items-center">
-            <p className="text-xs text-muted-foreground italic">아직 실행 기록이 없습니다 — 위 "지금 실행"으로 돌려보세요.</p>
+          <section className="rounded-md border border-dashed border-border flex items-center justify-center">
+            <EmptyState compact title="아직 실행 기록이 없습니다." description="위의 '지금 실행'으로 돌려보세요." />
           </section>
         )}
       </div>
@@ -407,7 +407,7 @@ export function CheckMatrixRunbookPanel({ runbook, isLoading, editTarget, latest
             수행되는 명령
           </h3>
           {runbook.commands.length === 0 ? (
-            <p className="text-sm text-muted-foreground italic">등록된 명령 정보가 없습니다.</p>
+            <EmptyState compact icon={Terminal} title="등록된 명령 정보가 없습니다." description="이 점검 타입의 런북 명령 목록이 아직 정의되지 않았습니다." />
           ) : (
             // 명령이 많은 점검(복수 kubectl/ssh 단계)도 이 목록만 내부 스크롤하게 해
             // 팝업 전체가 늘어나지 않게 한다.

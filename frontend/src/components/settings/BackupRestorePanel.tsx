@@ -7,6 +7,7 @@ import {
 import { backupApi } from '@/services/api';
 import type { BackupImportResponse } from '@/services/api';
 import { ConfirmDialog, useToast } from '@/components/common';
+import { StatTile, StatTileRow } from '@/components/common/StatTile';
 import { formatApiError, parseUTC } from '@/lib/utils';
 import { useAuthStore, hasRole } from '@/stores/authStore';
 
@@ -151,24 +152,12 @@ function BackupRestorePanelBody() {
           {metaQ.isLoading && <Loader2 className="w-3 h-3 animate-spin text-muted-foreground ml-1" />}
         </header>
 
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
-          <div>
-            <p className="text-xs text-muted-foreground">전체 테이블</p>
-            <p className="text-xl font-bold">{metaQ.data?.tables.length ?? 0}</p>
-          </div>
-          <div>
-            <p className="text-xs text-muted-foreground">총 Row</p>
-            <p className="text-xl font-bold">{totalRows.toLocaleString()}</p>
-          </div>
-          <div>
-            <p className="text-xs text-muted-foreground">사용자 데이터 row</p>
-            <p className="text-xl font-bold text-status-healthy">{(totalRows - logTableRows).toLocaleString()}</p>
-          </div>
-          <div>
-            <p className="text-xs text-muted-foreground">로그성 row</p>
-            <p className="text-xl font-bold text-status-warning">{logTableRows.toLocaleString()}</p>
-          </div>
-        </div>
+        <StatTileRow className="mb-4">
+          <StatTile label="전체 테이블" value={metaQ.data?.tables.length ?? 0} />
+          <StatTile label="총 행" value={totalRows.toLocaleString()} />
+          <StatTile label="사용자 데이터 행" value={(totalRows - logTableRows).toLocaleString()} />
+          <StatTile label="로그성 행" value={logTableRows.toLocaleString()} />
+        </StatTileRow>
 
         <details className="text-sm">
           <summary className="cursor-pointer text-muted-foreground hover:text-foreground">
@@ -359,7 +348,7 @@ function BackupRestorePanelBody() {
             <div className={`px-3 py-2 rounded-lg text-sm border ${
               resultMsg.startsWith('✓')
                 ? 'bg-status-healthy/10 text-status-healthy border-status-healthy/30'
-                : 'bg-destructive/10 text-destructive border-destructive/30'
+                : 'bg-status-critical/10 text-status-critical border-status-critical/30'
             }`}>
               {resultMsg}
             </div>

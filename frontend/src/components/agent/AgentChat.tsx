@@ -10,6 +10,7 @@ import { useAgentChatStore } from '@/stores/agentChatStore';
 import { NAV_WIDTH } from '@/stores/sidebarStore';
 import { useFeatureAccess, canAccessFeature } from '@/hooks/useFeatureAccess';
 import { CitationList } from '@/components/common/CitationList';
+import { EmptyState } from '@/components/common/EmptyState';
 import { InfoRequestChips } from '@/components/agent/InfoRequestChips';
 import type { AgentInfoRequest, RagCitation } from '@/types';
 import { generateUUID } from '@/lib/utils';
@@ -365,7 +366,7 @@ export function AgentChat() {
           {drawerOpen && (
             <div className="border-b border-border max-h-48 overflow-y-auto bg-secondary/30">
               {conversations.length === 0 ? (
-                <p className="px-4 py-3 text-xs text-muted-foreground">저장된 대화가 없습니다.</p>
+                <EmptyState compact icon={History} title="저장된 대화가 없습니다." description="질문을 보내면 대화가 자동으로 저장됩니다." />
               ) : (
                 conversations.map((c) => (
                   <div key={c.id} className="px-3 py-1.5 flex items-center gap-2 hover:bg-secondary/60">

@@ -322,7 +322,7 @@ export function TcpdumpPanel({ clusterId }: Props) {
 
         <div className="flex items-center justify-end gap-2">
           {runError && (
-            <div className="flex-1 px-3 py-1.5 text-sm rounded-lg bg-destructive/10 text-destructive border border-destructive/30">
+            <div className="flex-1 px-3 py-1.5 text-sm rounded-lg bg-status-critical/10 text-status-critical border border-status-critical/30">
               {runError.response?.data?.detail ?? runError.message}
             </div>
           )}

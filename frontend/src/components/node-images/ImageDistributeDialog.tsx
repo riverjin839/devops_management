@@ -36,7 +36,7 @@ const STATUS_META: Record<BulkExecResultItem['status'], { label: string; cls: st
   ok:            { label: '완료',     cls: 'bg-status-healthy/10 text-status-healthy border-status-healthy/30', icon: CheckCircle },
   error:         { label: '실패',     cls: 'bg-status-critical/10 text-status-critical border-status-critical/30',             icon: XCircle },
   timeout:       { label: '타임아웃', cls: 'bg-status-warning/10 text-status-warning border-status-warning/30',       icon: Clock },
-  auth_error:    { label: '인증 실패', cls: 'bg-orange-500/10 text-orange-400 border-orange-500/30',   icon: ShieldAlert },
+  auth_error:    { label: '인증 실패', cls: 'bg-status-warning/10 text-status-warning border-status-warning/30', icon: ShieldAlert },
   connect_error: { label: '연결 실패', cls: 'bg-status-unknown/10 text-status-unknown border-status-unknown/30',      icon: Wifi },
 };
 
@@ -376,7 +376,7 @@ export function ImageDistributeDialog({
           </div>
 
           {runMut.isError && (
-            <div className="px-3 py-2 text-sm rounded-lg bg-destructive/10 text-destructive border border-destructive/30">
+            <div className="px-3 py-2 text-sm rounded-lg bg-status-critical/10 text-status-critical border border-status-critical/30">
               {formatApiError(runMut.error, '배포 중 오류')}
             </div>
           )}

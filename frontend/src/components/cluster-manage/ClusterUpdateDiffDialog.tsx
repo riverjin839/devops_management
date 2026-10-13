@@ -1,5 +1,5 @@
 import { X, ArrowRight, Loader2, AlertTriangle, CheckCircle2 } from 'lucide-react';
-import { useModalA11y } from '@/components/common';
+import { EmptyState, useModalA11y } from '@/components/common';
 
 export interface DiffRow {
   field: string;
@@ -160,9 +160,7 @@ export function ClusterUpdateDiffDialog({
           )}
 
           {diff.length === 0 && (
-            <div className="px-5 py-8 text-center text-sm text-muted-foreground">
-              수집된 정보가 없습니다. (kubeconfig 접근은 성공했으나 추출 가능한 필드가 없음)
-            </div>
+            <EmptyState compact title="수집된 정보가 없습니다." description="kubeconfig 접근은 성공했으나 추출 가능한 필드가 없습니다." />
           )}
         </div>
 

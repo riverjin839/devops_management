@@ -8,6 +8,7 @@ import {
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { MacCard } from '@/components/ui/MacCard';
+import { EmptyState } from '@/components/common/EmptyState';
 import { todayWorkItemsApi } from '@/services/api';
 import { useAssignees } from '@/hooks/useAssignees';
 import { useWorkItems } from '@/hooks/useWorkItems';
@@ -246,8 +247,10 @@ export function MemberTodayTodos({ selectedClusterId }: MemberTodayTodosProps) {
           </div>
         </div>
       ) : displayGroups.length === 0 ? (
-        <div className="rounded-xl border border-dashed border-border/60 py-10 text-center text-sm text-muted-foreground">
-          {isToday ? '오늘 예정된 업무가 없습니다.' : '해당 날짜에 예정된 업무가 없습니다.'}
+        <div className="rounded-md border border-dashed border-border/60">
+          <EmptyState compact icon={CalendarCheck2}
+            title={isToday ? '오늘 예정된 업무가 없습니다.' : '해당 날짜에 예정된 업무가 없습니다.'}
+            description="업무에 기한이나 시작일을 지정하면 해당 날짜에 표시됩니다." />
         </div>
       ) : (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-2 pr-1">

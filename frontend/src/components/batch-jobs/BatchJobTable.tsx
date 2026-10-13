@@ -3,6 +3,7 @@ import { ArrowDown, ArrowUp, ArrowUpDown } from 'lucide-react';
 import type { BatchJob } from '@/services/api';
 import type { Cluster } from '@/types';
 import { TooltipProvider } from '@/components/ui/tooltip';
+import { EmptyState } from '@/components/common/EmptyState';
 import { BatchJobRow } from './BatchJobRow';
 import { type SortKey, type SortState } from './types';
 
@@ -89,9 +90,8 @@ export function BatchJobTable({
 
   if (sorted.length === 0) {
     return (
-      <div className="text-center text-sm text-muted-foreground py-10">
-        {emptyMessage ?? '표시할 잡이 없습니다.'}
-      </div>
+      <EmptyState compact title={emptyMessage ?? '표시할 잡이 없습니다.'}
+        description={emptyMessage ? undefined : '상단의 잡 추가로 배치잡을 등록하면 여기에 표시됩니다.'} />
     );
   }
 

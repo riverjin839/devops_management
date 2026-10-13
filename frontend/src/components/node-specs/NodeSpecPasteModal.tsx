@@ -331,7 +331,7 @@ export function NodeSpecPasteModal({ open, onClose, onApplied, displayColumns, i
             <div className={`px-3 py-2 rounded-lg text-sm border ${
               msg.startsWith('✓')
                 ? 'bg-status-healthy/10 text-status-healthy border-status-healthy/30'
-                : 'bg-destructive/10 text-destructive border-destructive/30'
+                : 'bg-status-critical/10 text-status-critical border-status-critical/30'
             }`}>
               <p>{msg}</p>
               {applyErrors.length > 0 && (

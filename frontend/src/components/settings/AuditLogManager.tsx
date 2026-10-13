@@ -10,6 +10,7 @@ import { RefreshCw, Search } from 'lucide-react';
 
 import { MacCard } from '@/components/ui/MacCard';
 import { auditLogsApi } from '@/services/api';
+import { EmptyState } from '@/components/common/EmptyState';
 import { useTenants } from '@/hooks/useTenants';
 import type { AuditLog } from '@/types';
 import { formatApiError, parseUTC } from '@/lib/utils';
@@ -253,7 +254,7 @@ export function AuditLogManager() {
       </div>
 
       {error && (
-        <p role="alert" className="text-sm text-destructive mb-3">
+        <p role="alert" className="text-sm text-status-critical mb-3">
           감사 로그 조회 실패: {formatApiError(error)}
         </p>
       )}
@@ -292,8 +293,8 @@ export function AuditLogManager() {
             ))}
             {!isFetching && (!data || data.items.length === 0) && (
               <tr>
-                <td colSpan={8} className="py-10 text-center text-sm text-muted-foreground">
-                  표시할 감사 로그가 없습니다.
+                <td colSpan={8}>
+                  <EmptyState compact title="표시할 감사 로그가 없습니다." description="필터 조건을 바꾸거나 기간을 넓혀 보세요." />
                 </td>
               </tr>
             )}

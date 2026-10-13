@@ -5,7 +5,7 @@ import {
   sortedWorkItemFields,
 } from '@/hooks/useWorkItemCustomFields';
 import { useModalA11y } from '@/components/common/useModalA11y';
-import { ConfirmDialog, useToast } from '@/components/common';
+import { ConfirmDialog, EmptyState, useToast } from '@/components/common';
 import { formatApiError } from '@/lib/utils';
 import type { WorkItemCustomFieldType } from '@/types';
 
@@ -78,7 +78,7 @@ export function WorkItemCustomFieldsManager({ open, onClose }: { open: boolean; 
 
         <div className="flex-1 overflow-y-auto p-4 space-y-2">
           {fields.length === 0 ? (
-            <p className="text-center text-sm text-muted-foreground py-6">정의된 필드가 없습니다. 아래에서 추가하세요.</p>
+            <EmptyState compact title="정의된 필드가 없습니다." description="아래에서 필드를 추가하세요." />
           ) : (
             fields.map((f) => (
               <div key={f.id} className="flex items-center gap-2 rounded-lg border border-border px-3 py-2 text-sm">

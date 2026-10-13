@@ -80,7 +80,7 @@ export function CiliumConfigModal({ cluster, onClose }: CiliumConfigModalProps) 
             </div>
           ) : error ? (
             <div className="text-sm py-4 text-center space-y-1">
-              <p className="text-destructive">조회에 실패했습니다.</p>
+              <p className="text-status-critical">조회에 실패했습니다.</p>
               {/* 페이지 수준 에러(formatApiError + 사유)와 일관 — 사유 없는 실패 문구는 복구 단서를 주지 않는다 */}
               <p className="text-xs text-muted-foreground">{formatApiError(error)}</p>
             </div>

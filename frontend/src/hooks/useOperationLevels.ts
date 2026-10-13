@@ -64,18 +64,20 @@ export function useUpdateOperationLevels() {
 }
 
 // ── 색상 토큰 → 클래스 매핑 (Tailwind 동적 클래스 회피) ──────────────
+// 키(이름)는 DB 저장값 호환을 위해 유지하고, 장식 팔레트 키는 카테고리 토큰 chart-N 으로 그린다(D-120).
+// purple·violet 은 같은 chart-4 로 수렴한다.
 const COLOR_BADGE: Record<string, string> = {
   red:     'bg-status-critical/15     text-status-critical     border-status-critical/30',
   amber:   'bg-status-warning/15   text-status-warning   border-status-warning/30',
   emerald: 'bg-status-healthy/15 text-status-healthy border-status-healthy/30',
   sky:     'bg-status-info/15     text-status-info     border-status-info/30',
-  blue:    'bg-blue-500/15    text-blue-400    border-blue-500/30',
-  purple:  'bg-purple-500/15  text-purple-400  border-purple-500/30',
-  pink:    'bg-pink-500/15    text-pink-400    border-pink-500/30',
+  blue:    'bg-chart-1/15 text-chart-1 border-chart-1/30',
+  purple:  'bg-chart-4/15 text-chart-4 border-chart-4/30',
+  pink:    'bg-chart-5/15 text-chart-5 border-chart-5/30',
   yellow:  'bg-status-warning/15  text-status-warning  border-status-warning/30',
-  cyan:    'bg-cyan-500/15    text-cyan-400    border-cyan-500/30',
-  violet:  'bg-violet-500/15  text-violet-400  border-violet-500/30',
-  orange:  'bg-orange-500/15  text-orange-400  border-orange-500/30',
+  cyan:    'bg-chart-6/15 text-chart-6 border-chart-6/30',
+  violet:  'bg-chart-4/15 text-chart-4 border-chart-4/30',
+  orange:  'bg-chart-7/15 text-chart-7 border-chart-7/30',
   slate:   'bg-status-unknown/15   text-status-unknown   border-status-unknown/30',
   muted:   'bg-muted          text-muted-foreground border-border',
 };

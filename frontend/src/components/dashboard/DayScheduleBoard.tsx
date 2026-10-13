@@ -10,7 +10,7 @@ import {
 import { useAssignees } from '@/hooks/useAssignees';
 import { useToday } from '@/hooks/useToday';
 import { useAuthStore } from '@/stores/authStore';
-import { ConfirmDialog, useToast } from '@/components/common';
+import { ConfirmDialog, EmptyState, useToast } from '@/components/common';
 import { Button } from '@/components/ui/button';
 import { stripHtml, cn, assigneeNames } from '@/lib/utils';
 import { WORK_ITEM_TYPE_CONFIG } from '@/components/work-items/workItemKanbanUtils';
@@ -608,16 +608,18 @@ export function DayScheduleBoard({ selectedClusterId }: DayScheduleBoardProps) {
             )}
 
             {totalCount === 0 && (
-              <div className="rounded-xl border border-dashed border-border/60 py-10 mt-2 text-center text-sm text-muted-foreground">
-                {meOnly && !selectedName
-                  ? '로그인 후 나의 일정을 볼 수 있습니다. "전체" 로 모든 일정을 볼 수 있어요.'
-                  : `${isToday ? '오늘' : '해당 날짜'} ${meOnly ? `${selectedName === myName ? '나의' : `${selectedName}의`} ` : ''}일정이 없습니다.`}
-                <div>
-                  <button onClick={() => setQuickAdd({ time: '09:00', assignee: meOnly ? (selectedName || undefined) : undefined })}
-                    className="mt-2 inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs bg-primary/10 text-primary hover:bg-primary/20">
-                    <Plus className="w-3 h-3" /> 업무 등록
-                  </button>
-                </div>
+              <div className="rounded-md border border-dashed border-border/60 mt-2">
+                <EmptyState
+                  compact
+                  icon={CalendarClock}
+                  title={meOnly && !selectedName
+                    ? '로그인 후 나의 일정을 볼 수 있습니다.'
+                    : `${isToday ? '오늘' : '해당 날짜'} ${meOnly ? `${selectedName === myName ? '나의' : `${selectedName}의`} ` : ''}일정이 없습니다.`}
+                  description={meOnly && !selectedName
+                    ? '"전체" 로 모든 일정을 볼 수 있습니다.'
+                    : '업무를 등록하면 시간표에 표시됩니다.'}
+                  action={{ label: '업무 등록', onClick: () => setQuickAdd({ time: '09:00', assignee: meOnly ? (selectedName || undefined) : undefined }) }}
+                />
               </div>
             )}
           </>

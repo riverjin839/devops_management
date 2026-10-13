@@ -9,6 +9,7 @@ import { useHomeWorkItems } from '@/hooks/useWorkItems';
 import { useToday } from '@/hooks/useToday';
 import { stripHtml } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
+import { EmptyState } from '@/components/common/EmptyState';
 import { WorkItem, KanbanStatus } from '@/types';
 import { QuickAddTaskModal } from './QuickAddTaskModal';
 import { WORK_ITEM_TYPE_CONFIG } from '@/components/work-items/workItemKanbanUtils';
@@ -538,19 +539,9 @@ function DayDetailPopover({ anchorRect, label, bucket, onClose, onQuickAdd }: Da
             />
           )}
           {total === 0 && (
-            <div className="flex flex-col items-center justify-center text-center text-sm text-muted-foreground py-8 gap-2">
-              <div className="w-12 h-12 rounded-2xl bg-secondary flex items-center justify-center">
-                <CalendarPlus className="w-5 h-5 opacity-50" />
-              </div>
-              <p>해당 날짜에 등록된 업무가 없습니다.</p>
-              <button
-                type="button"
-                onClick={onQuickAdd}
-                className="mt-1 inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs bg-primary/10 text-primary hover:bg-primary/20 transition-colors"
-              >
-                <Plus className="w-3 h-3" /> 업무 등록
-              </button>
-            </div>
+            <EmptyState compact icon={CalendarPlus} title="해당 날짜에 등록된 업무가 없습니다."
+              description="이 날짜로 업무를 바로 등록할 수 있습니다."
+              action={{ label: '업무 등록', onClick: onQuickAdd }} />
           )}
         </div>
 

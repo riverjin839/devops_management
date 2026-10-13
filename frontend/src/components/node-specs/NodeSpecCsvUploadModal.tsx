@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import { X, Upload, Loader2, AlertTriangle, CheckCircle2, FileSpreadsheet, Info } from 'lucide-react';
 import { nodeSpecsApi } from '@/services/api';
 import { useModalA11y } from '@/components/common/useModalA11y';
+import { EmptyState } from '@/components/common/EmptyState';
 import type {
   NodeSpecCsvPreviewResponse, NodeSpecCsvRow,
 } from '@/types';
@@ -301,7 +302,7 @@ export function NodeSpecCsvUploadModal({ open, onClose, onApplied }: Props) {
                   <tbody>
                     {diffs.map((d) => <DiffRow key={d.rowIndex} d={d} />)}
                     {diffs.length === 0 && (
-                      <tr><td colSpan={4} className="text-center py-4 text-sm text-muted-foreground">표시할 행 없음</td></tr>
+                      <tr><td colSpan={4}><EmptyState compact title="표시할 행이 없습니다." description="CSV 에 데이터 행이 있는지, 선택한 필터에 해당하는 행이 있는지 확인하세요." /></td></tr>
                     )}
                   </tbody>
                 </table>
@@ -333,7 +334,7 @@ export function NodeSpecCsvUploadModal({ open, onClose, onApplied }: Props) {
             <div className={`px-3 py-2 rounded-lg text-sm border ${
               resultMsg.startsWith('✓')
                 ? 'bg-status-healthy/10 text-status-healthy border-status-healthy/30'
-                : 'bg-destructive/10 text-destructive border-destructive/30'
+                : 'bg-status-critical/10 text-status-critical border-status-critical/30'
             }`}>
               <p>{resultMsg}</p>
               {/* 적용 후 오류는 건수만으론 어느 행이 실패했는지 알 수 없다 — 미리보기 단계처럼 itemize. */}

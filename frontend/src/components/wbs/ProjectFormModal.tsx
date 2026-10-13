@@ -143,7 +143,7 @@ export function ProjectFormModal({ initial, onClose }: Props) {
           </div>
 
           {error && (
-            <p className="text-sm text-destructive bg-destructive/10 rounded-xl px-3 py-2">{error}</p>
+            <p className="text-sm text-status-critical bg-status-critical/10 rounded-xl px-3 py-2">{error}</p>
           )}
         </div>
 

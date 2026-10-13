@@ -205,7 +205,7 @@ export function NamespaceDashboardPanel(p: NamespaceDashboardPanelProps) {
                 {isLoading ? (
                   <span className="col-span-4"><Skeleton className="h-3 w-20" /></span>
                 ) : isError ? (
-                  <span className="col-span-4 text-xs text-destructive">조회 실패</span>
+                  <span className="col-span-4 text-xs text-status-critical">조회 실패</span>
                 ) : (
                   <>
                     <span className="text-right tabular-nums">{count}</span>

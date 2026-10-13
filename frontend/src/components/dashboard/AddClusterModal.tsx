@@ -500,7 +500,7 @@ export function AddClusterModal({ isOpen, onClose }: AddClusterModalProps) {
 
           {/* Error */}
           {error && (
-            <div className="flex items-start gap-2 px-3 py-2.5 bg-destructive/10 border border-destructive/20 rounded-lg text-sm text-destructive mt-4">
+            <div className="flex items-start gap-2 px-3 py-2.5 bg-status-critical/10 border border-status-critical/20 rounded-lg text-sm text-status-critical mt-4">
               <AlertTriangle className="w-4 h-4 flex-shrink-0 mt-0.5" />
               <span>{error}</span>
             </div>

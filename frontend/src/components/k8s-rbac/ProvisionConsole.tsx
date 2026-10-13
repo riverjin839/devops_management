@@ -7,7 +7,7 @@
  */
 import { useMemo, useState } from 'react';
 import { Check, Copy, Download, Loader2, ShieldCheck, ShieldX, Square } from 'lucide-react';
-import { LogViewer } from '@/components/common';
+import { EmptyState, LogViewer } from '@/components/common';
 import { MacCard } from '@/components/ui/MacCard';
 import { PROVISION_STEPS, type ProvisionStream } from '@/hooks/useK8sRbac';
 
@@ -90,12 +90,8 @@ export function ProvisionConsole({ stream, showLogs }: ProvisionConsoleProps) {
   if (!running && logs.length === 0 && !result && !error) {
     return (
       <MacCard title="실행 결과">
-        <div className="py-10 text-center text-sm text-muted-foreground">
-          왼쪽에서 대상과 권한을 정한 뒤 <span className="text-foreground font-medium">액세스 발급 실행</span>
-          을 누르면
-          <br />
-          단계별 로그와 발급된 kubeconfig 가 여기에 나온다.
-        </div>
+        <EmptyState icon={ShieldCheck} title="아직 발급을 실행하지 않았습니다."
+          description="왼쪽에서 대상과 권한을 정한 뒤 '액세스 발급 실행'을 누르면 단계별 로그와 발급된 kubeconfig 가 여기에 나옵니다." />
       </MacCard>
     );
   }
@@ -127,7 +123,7 @@ export function ProvisionConsole({ stream, showLogs }: ProvisionConsoleProps) {
           </div>
 
           {error && (
-            <div className="text-sm rounded-md border border-destructive/40 bg-destructive/10 text-destructive px-3 py-2">
+            <div className="text-sm rounded-md border border-status-critical/40 bg-status-critical/10 text-status-critical px-3 py-2">
               {error}
             </div>
           )}

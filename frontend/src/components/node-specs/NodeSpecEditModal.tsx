@@ -308,7 +308,7 @@ export function NodeSpecEditModal({ mode, spec, defaultClusterId, clusters, onCl
           </section>
 
           {error && (
-            <div className="px-3 py-2 text-sm rounded-lg bg-destructive/10 text-destructive border border-destructive/30">
+            <div className="px-3 py-2 text-sm rounded-lg bg-status-critical/10 text-status-critical border border-status-critical/30">
               {error}
             </div>
           )}

@@ -112,8 +112,8 @@ export function NamespacesView({ clusterId, clusterName, onOpenDetail }: {
             <tbody>
               {!rows.length && (
                 <tr className="border-t border-border">
-                  <td colSpan={7} className="px-3 py-6 text-center text-sm text-muted-foreground">
-                    '{q}' 와 일치하는 네임스페이스가 없습니다.
+                  <td colSpan={7}>
+                    <EmptyState compact title={`'${q}' 와 일치하는 네임스페이스가 없습니다.`} description="검색어를 줄이거나 지우면 전체 목록이 다시 보입니다." />
                   </td>
                 </tr>
               )}

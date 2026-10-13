@@ -34,8 +34,8 @@ const CHIPS: ChipConfig[] = [
   {
     key: 'running',
     label: '▶ 실행 중',
-    baseCls: 'bg-blue-500/10 text-blue-600 border-blue-500/30 hover:bg-blue-500/15',
-    activeCls: 'bg-blue-500 text-white border-blue-500',
+    baseCls: 'bg-status-info/10 text-status-info border-status-info/30 hover:bg-status-info/15',
+    activeCls: 'bg-status-info text-white border-status-info',
   },
   {
     key: 'ok',

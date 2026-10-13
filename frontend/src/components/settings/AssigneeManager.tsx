@@ -118,7 +118,7 @@ function CreateAccountModal({ open, onClose }: { open: boolean; onClose: () => v
               {ACCOUNT_ROLES.map((r) => <option key={r.value} value={r.value}>{r.label} — {r.desc}</option>)}
             </select>
           </div>
-          {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
+          {error && <p role="alert" className="text-sm text-status-critical">{error}</p>}
         </div>
         <div className="flex justify-end gap-2 mt-5">
           <button type="button" onClick={onClose} disabled={submitting}
@@ -169,7 +169,7 @@ function ResetPasswordModal({ target, onClose }: { target: Assignee | null; onCl
         <p className="text-sm text-muted-foreground mb-3">새 비밀번호를 입력하세요. 변경 즉시 적용됩니다.</p>
         <input type="password" autoComplete="new-password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)}
           minLength={4} className="w-full px-3 py-2 bg-background border border-border rounded-xl text-sm" />
-        {error && <p role="alert" className="text-sm text-destructive mt-2">{error}</p>}
+        {error && <p role="alert" className="text-sm text-status-critical mt-2">{error}</p>}
         <div className="flex justify-end gap-2 mt-4">
           <button type="button" onClick={onClose} disabled={submitting}
             className="px-3 py-1.5 text-sm bg-secondary border border-border rounded-xl hover:bg-muted">취소</button>

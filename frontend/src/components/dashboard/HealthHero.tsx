@@ -31,7 +31,7 @@ function KpiCell({ icon: Icon, label, value, colorClass: toneClass, bgClass: ton
     <MacCard rootClassName={className} bodyPadding="p-4">
       <div className="flex items-center justify-between h-full">
         <div className="min-w-0">
-          <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground mb-1.5 truncate">
+          <p className="text-xs text-muted-foreground mb-1.5 truncate">
             {label}
           </p>
           <p className={`font-bold font-mono leading-none ${colorClass} ${typeof value === 'number' ? 'text-3xl' : 'text-lg'}`}>

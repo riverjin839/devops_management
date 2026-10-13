@@ -6,6 +6,7 @@ import { useCommandPaletteStore } from '@/stores/commandPaletteStore';
 import { useRecentPathsStore } from '@/stores/recentPathsStore';
 import { useNavCatalog, groupLabelForPath } from '@/hooks/useNavCatalog';
 import { useModalA11y } from '@/components/common/useModalA11y';
+import { EmptyState } from '@/components/common/EmptyState';
 import { clustersApi } from '@/services/api';
 import { cn } from '@/lib/utils';
 import type { Cluster } from '@/types';
@@ -185,7 +186,7 @@ export function CommandPalette() {
 
         <div ref={listRef} id="command-palette-results" role="listbox" aria-label="검색 결과" className="flex-1 min-h-0 overflow-y-auto py-1">
           {results.length === 0 ? (
-            <p className="px-4 py-8 text-center text-sm text-muted-foreground">"{query}" 에 맞는 화면이나 클러스터가 없습니다.</p>
+            <EmptyState compact icon={Search} title={`"${query}" 에 맞는 화면이나 클러스터가 없습니다.`} description="화면 이름의 일부나 클러스터 이름으로 다시 검색해 보세요." />
           ) : results.map((it, idx) => {
             const header = it.section !== lastSection ? it.section : null;
             lastSection = it.section;

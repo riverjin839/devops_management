@@ -185,12 +185,12 @@ export function ClusterOpsCheckPanel({ clusterId, clusterName }: Props) {
         {isLoading ? (
           <div className="p-6 text-sm text-muted-foreground">불러오는 중…</div>
         ) : isError ? (
-          <div className="m-4 rounded-md border border-destructive/30 bg-destructive/10 p-4">
-            <div className="flex items-start gap-2 text-sm text-destructive">
+          <div className="m-4 rounded-md border border-status-critical/30 bg-status-critical/10 p-4">
+            <div className="flex items-start gap-2 text-sm text-status-critical">
               <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0" />
               <div>
                 <p className="font-medium">점검 항목을 불러오지 못했습니다.</p>
-                <p className="text-destructive/80 mt-0.5">네트워크 또는 서버 상태를 확인한 뒤 다시 시도해 주세요.</p>
+                <p className="text-status-critical/80 mt-0.5">네트워크 또는 서버 상태를 확인한 뒤 다시 시도해 주세요.</p>
               </div>
             </div>
             <Button variant="outline" size="sm" onClick={() => refetch()} className="mt-3">

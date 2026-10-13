@@ -19,8 +19,8 @@ const STATUS_CONFIG: Record<string, { dot: string; label: string; text: string }
   healthy: { dot: 'bg-status-healthy', label: 'OK', text: 'text-status-healthy' },
   warning: { dot: 'bg-status-warning', label: 'Changed', text: 'text-status-warning' },
   critical: { dot: 'bg-status-critical', label: 'Failed', text: 'text-status-critical' },
-  running: { dot: 'bg-blue-500', label: 'Running', text: 'text-blue-600 dark:text-blue-400' },
-  unknown: { dot: 'bg-slate-400', label: 'Not Run', text: 'text-muted-foreground' },
+  running: { dot: 'bg-status-info', label: 'Running', text: 'text-status-info' },
+  unknown: { dot: 'bg-status-unknown', label: 'Not Run', text: 'text-muted-foreground' },
 };
 
 function formatTimeAgo(dateStr?: string): string {
@@ -100,8 +100,8 @@ export function PlaybookListRow({
           <Stat label="OK"   value={totals.ok}          color="text-status-healthy" />
           <Stat label="Chg"  value={totals.changed}     color="text-status-warning" />
           <Stat label="Fail" value={totals.failures}    color="text-status-critical" />
-          <Stat label="Unr"  value={totals.unreachable} color="text-orange-500" />
-          <Stat label="Skip" value={totals.skipped}     color="text-slate-400" />
+          <Stat label="Unr"  value={totals.unreachable} color="text-status-warning" />
+          <Stat label="Skip" value={totals.skipped}     color="text-status-unknown" />
         </div>
       ) : (
         <div className="hidden md:block text-xs text-muted-foreground italic flex-shrink-0">no stats</div>

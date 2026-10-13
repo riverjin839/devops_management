@@ -33,7 +33,7 @@ export function ReleaseNotesPanel({ open }: Props) {
 
   if (error) {
     return (
-      <p className="text-sm text-destructive py-6 text-center">
+      <p className="text-sm text-status-critical py-6 text-center">
         릴리즈 노트를 불러오지 못했습니다.
       </p>
     );

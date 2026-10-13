@@ -331,7 +331,7 @@ export function ClusterCustomFieldsManager({ open, onClose }: Props) {
           </div>
 
           {err && (
-            <div className="px-3 py-2 rounded-lg bg-destructive/10 text-destructive border border-destructive/30 text-sm">
+            <div className="px-3 py-2 rounded-lg bg-status-critical/10 text-status-critical border border-status-critical/30 text-sm">
               {err}
             </div>
           )}

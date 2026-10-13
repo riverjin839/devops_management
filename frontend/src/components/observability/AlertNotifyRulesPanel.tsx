@@ -1,7 +1,7 @@
 import { useEffect, useId, useState } from 'react';
 import { Plus, Trash2 } from 'lucide-react';
 import { MacCard } from '@/components/ui/MacCard';
-import { useToast } from '@/components/common';
+import { EmptyState, LoadingState, useToast } from '@/components/common';
 import { useNotificationChannels } from '@/hooks/useNotifications';
 import {
   useAlertRules,
@@ -164,10 +164,10 @@ export function AlertNotifyRulesPanel({ clusters, canEdit }: {
             </thead>
             <tbody>
               {isLoading ? (
-                <tr><td colSpan={10} className="py-8 text-center text-sm text-muted-foreground">불러오는 중…</td></tr>
+                <tr><td colSpan={10}><LoadingState compact /></td></tr>
               ) : rules.length === 0 ? (
-                <tr><td colSpan={10} className="py-8 text-center text-sm text-muted-foreground">
-                  등록된 규칙이 없습니다 — 전역 기본값으로만 동작합니다.
+                <tr><td colSpan={10}>
+                  <EmptyState compact title="등록된 규칙이 없습니다." description="지금은 전역 기본값으로만 동작합니다. 위에서 규칙을 추가하면 라우팅·중복 억제가 적용됩니다." />
                 </td></tr>
               ) : (
                 rules.map((rule) => (
@@ -496,9 +496,7 @@ function RuleEditor({ draft, setDraft, clusters, channels, isEdit, busy, onCance
         <div className="sm:col-span-2 lg:col-span-3">
           <span className={labelCls}>재전파 채널 (선택)</span>
           {channels.length === 0 ? (
-            <p className="text-xs text-muted-foreground">
-              등록된 알림 채널이 없습니다 — 점검 항목 관리 → 알림 채널에서 먼저 등록하세요.
-            </p>
+            <EmptyState compact title="등록된 알림 채널이 없습니다." description="점검 항목 관리 → 알림 채널에서 먼저 등록하세요." />
           ) : (
             <div className="flex flex-wrap gap-x-4 gap-y-2">
               {channels.map((channel) => (

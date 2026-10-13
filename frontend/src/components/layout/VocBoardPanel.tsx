@@ -101,7 +101,7 @@ export function VocBoardPanel({ open }: Props) {
         {isLoading ? (
           <div className="flex items-center justify-center py-12 text-muted-foreground"><Loader2 className="w-5 h-5 animate-spin" /></div>
         ) : error ? (
-          <p className="text-sm text-destructive py-6 text-center">VOC 목록을 불러오지 못했습니다.</p>
+          <p className="text-sm text-status-critical py-6 text-center">VOC 목록을 불러오지 못했습니다.</p>
         ) : !posts || posts.length === 0 ? (
           <div className="flex flex-col items-center gap-2 py-12 text-muted-foreground">
             <MessageSquarePlus className="w-8 h-8 opacity-40" />
