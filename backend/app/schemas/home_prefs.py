@@ -4,6 +4,10 @@ from pydantic import BaseModel, Field
 
 MAX_PINNED_PATHS = 30
 MAX_INSTALLED_APPS = 200
+# 테마 id 는 프론트 `stores/themeStore.ts` 의 THEMES 가 원천이다 — 목록이 자주 늘어서 여기서는 모양만
+# 검사하고, 모르는 값은 화면이 무시하고 자기 값으로 덮어쓴다(서버가 테마 추가를 따라 배포될 필요 없음).
+THEME_PATTERN = r"^[a-z0-9-]{1,40}$"
+Accent = Literal["blue", "teal", "green", "amber", "coral", "violet"]
 # installed_apps 레이아웃 스키마 버전 — `main.py::_migrate_home_prefs_layout()` 가 이 값보다 낮은
 # (또는 표식이 없는) 행만 이관한다. 표식이 행 자체에 있어 백업·복원과 함께 움직인다.
 HOME_PREFS_LAYOUT_VERSION = 3
@@ -20,6 +24,10 @@ class HomePrefs(BaseModel):
     # R-6 i18n 2단계 — 표시 언어. 기기/브라우저를 넘어 따라오는 서버 저장 선호로 여기 얹는다
     # (localStorage 는 이 값을 즉시 적용용 캐시로만 사용, 원천은 서버).
     locale: Optional[Literal["ko", "en"]] = None
+    # 바탕 테마·강조색 — 기기·브라우저를 넘어 따라온다. localStorage(`k8s:theme`/`k8s:accent`)는 첫 화면을
+    # 깜빡임 없이 그리기 위한 캐시이고 원천은 여기다. None = 아직 서버에 저장한 적 없음(화면이 로컬 값을 올린다).
+    theme: Optional[str] = Field(None, pattern=THEME_PATTERN)
+    accent: Optional[Accent] = None
     # 사이드바/상단바 "SaaS 앱" — 사용자가 설치(opt-in)한 leaf 페이지 경로(navConfig.ts 의
     # GROUPS.paths) + "back"/"favorites"/"island", 설치 순서 = 표시 순서.
     # ``None`` = **조직 기본값을 따름**(admin 이 Settings 에서 바꾸면 즉시 반영), 리스트 = 사용자 지정.
@@ -46,6 +54,8 @@ class HomePrefsUpdate(BaseModel):
     default_home_tab: Optional[Literal["work", "platform"]] = None
     pinned_paths: Optional[list[str]] = Field(None, max_length=MAX_PINNED_PATHS)
     locale: Optional[Literal["ko", "en"]] = None
+    theme: Optional[str] = Field(None, pattern=THEME_PATTERN)
+    accent: Optional[Accent] = None
     # 전체 교체(하위 호환). 여러 기기·탭이 동시에 바꾸면 나중 요청이 앞 요청을 덮으므로
     # 화면은 아래 델타 연산을 쓴다.
     installed_apps: Optional[list[str]] = Field(None, max_length=MAX_INSTALLED_APPS)

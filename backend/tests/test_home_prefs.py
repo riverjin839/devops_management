@@ -342,3 +342,32 @@ def test_import_ignores_unknown_keys_and_rejects_foreign_format(db, cleanup):
         home_prefs_router.import_personal_settings(
             payload=home_prefs_router.SettingsImportRequest(document="not json"), request=None, db=db, user=u,
         )
+
+
+# ── 테마·강조색 ──────────────────────────────────────────────────────────────
+
+def test_theme_and_accent_roundtrip_and_partial(db, me, cleanup):
+    cleanup.append(me.id)
+    assert home_prefs_router.get_home_prefs(db=db, user=me).theme is None
+    home_prefs_router.update_home_prefs(payload=HomePrefsUpdate(theme="umber", accent="teal"), db=db, user=me)
+    home_prefs_router.update_home_prefs(payload=HomePrefsUpdate(locale="en"), db=db, user=me)
+    prefs = home_prefs_router.get_home_prefs(db=db, user=me)
+    assert (prefs.theme, prefs.accent, prefs.locale) == ("umber", "teal", "en")
+
+
+def test_invalid_theme_or_accent_rejected():
+    from pydantic import ValidationError
+
+    with pytest.raises(ValidationError):
+        HomePrefsUpdate(theme="<script>")
+    with pytest.raises(ValidationError):
+        HomePrefsUpdate(accent="pink")
+
+
+def test_corrupt_stored_theme_does_not_break_read(db, me, cleanup):
+    from app.services.user_settings import set_user_setting
+
+    cleanup.append(me.id)
+    set_user_setting(db, me.id, "home_prefs", {"theme": "BAD THEME!", "accent": "pink", "pinned_paths": ["/k9s"]})
+    prefs = home_prefs_router.get_home_prefs(db=db, user=me)
+    assert prefs.theme is None and prefs.accent is None and prefs.pinned_paths == ["/k9s"]

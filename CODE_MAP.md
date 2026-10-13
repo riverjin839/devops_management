@@ -200,7 +200,7 @@ AI 어시스턴트 + 사람 개발자용 — 기능 → 파일 경로와 자주 
 ### 공통 UI / 인프라
 | 기능 | 위치 |
 |---|---|
-| 테마 / CSS 변수 | `frontend/src/index.css` (`:root`, `html.light`, `html.dark`) — 대표 색 스냅샷은 `frontend/src/lib/themeSwatches.ts`(D-072, 사용자 메뉴 스와치·`components/settings/ThemeGallery.tsx` 가 공유) |
+| 테마 / CSS 변수 | `frontend/src/index.css` (`:root`, `html.light`, `html.dark`) — 대표 색 스냅샷은 `frontend/src/lib/themeSwatches.ts`(D-072, 사용자 메뉴 스와치·`components/settings/ThemeGallery.tsx` 가 공유). 선택값은 `stores/themeStore.ts`(localStorage 캐시) ↔ 서버 `home_prefs.theme`/`accent` 를 `hooks/useThemeSync.ts` 가 맞춘다 |
 | MacCard 공통 컴포넌트 | `frontend/src/components/ui/MacCard.tsx` |
 | Sidebar(플랫폼 도메인) + 네비 설정 | `frontend/src/components/layout/Sidebar.tsx` (`NAV_MAP`/`GROUPS` 는 `navConfig.ts` 로 분리, `GROUPS.domain` 이 배치 결정) |
 | leaf 단위 opt-in 앱 카탈로그(사이드바+상단바, Main UI 간소화 + 후속 개편) | `frontend/src/components/layout/installableApps.ts`(leaf 단위 설치 가능 카탈로그 + `sidebarAppSections()`/`topbarAppSections()`) + `AddAppDialog.tsx`(공용 카드형 추가 다이얼로그) → `HomePrefs.installedApps`(`backend/app/schemas/home_prefs.py` — `None` = 조직 기본값 따름, 리스트 = 사용자 지정; 공용 로직 `services/home_prefs.py`(`apply_update` 델타·초기화, `get/set_default_installed_apps`), `home_prefs.py` 라우터는 행 잠금 아래 갱신) · 조직 기본값 `GET/PUT /ui-settings/home-prefs-defaults` → `components/settings/DefaultAppsManager.tsx` · 순서 변경 `installed_apps_move` → `components/layout/InstalledAppOrder.tsx`(dnd-kit) — 옛 레이아웃 계정 이관은 `backend/app/main.py::_migrate_home_prefs_layout()`(행 단위 `layout_version` — 전역 sentinel 없음, 재실행 안전) |

@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from pydantic import ValidationError
 from sqlalchemy.orm import Session
 
 from app.models.app_setting import AppSetting
@@ -57,7 +58,11 @@ def set_default_installed_apps(db: Session, apps: list[str]) -> list[str]:
 def load_prefs(raw: Any) -> HomePrefs:
     if not isinstance(raw, dict):
         return HomePrefs()
-    prefs = HomePrefs.model_validate(raw)
+    try:
+        prefs = HomePrefs.model_validate(raw)
+    except ValidationError:
+        # 표시 선호(테마·강조색)가 깨져 있다고 설정 전체를 못 읽으면 안 된다 — 그 둘만 버리고 다시 읽는다.
+        prefs = HomePrefs.model_validate({k: v for k, v in raw.items() if k not in ("theme", "accent")})
     # 버전 표식 없는 기존 행은 아직 부팅 이관(`_migrate_home_prefs_layout`) 전일 수 있다 — 여기서
     # 최신 버전을 찍어 저장하면 옛 그룹 id 가 변환 없이 "최신"으로 굳으므로 0 으로 유지한다.
     if "layout_version" not in raw:
@@ -76,7 +81,7 @@ def to_out(prefs: HomePrefs, defaults: list[str]) -> HomePrefsOut:
 def apply_update(current: HomePrefs, payload: HomePrefsUpdate, defaults: list[str]) -> HomePrefs:
     """부분 업데이트 + installed_apps 연산 적용. 적용 순서: reset → 전체 교체 → remove → add → move."""
     fields = payload.model_dump(exclude_unset=True)
-    simple = {k: fields[k] for k in ("default_home_tab", "pinned_paths", "locale") if k in fields}
+    simple = {k: fields[k] for k in ("default_home_tab", "pinned_paths", "locale", "theme", "accent") if k in fields}
     updated = current.model_copy(update=simple)
 
     apps: list[str] | None = list(updated.installed_apps) if isinstance(updated.installed_apps, list) else None
