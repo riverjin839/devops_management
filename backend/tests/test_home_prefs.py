@@ -56,7 +56,10 @@ def cleanup(db):
     from app.models.user_setting import UserSetting
 
     if user_ids:
+        from app.models.user import User
+
         db.query(UserSetting).filter(UserSetting.user_id.in_(user_ids)).delete(synchronize_session=False)
+        db.query(User).filter(User.id.in_(user_ids)).delete(synchronize_session=False)
         db.commit()
 
 
@@ -129,6 +132,7 @@ def test_installed_apps_defaults_to_task_board_only(db, me, cleanup):
     cleanup.append(me.id)
     prefs = home_prefs_router.get_home_prefs(db=db, user=me)
     assert prefs.installed_apps == ["/tasks-mgmt"]
+    assert prefs.installed_apps_customized is False
 
 
 def test_prefs_are_isolated_per_user(db, me, other, cleanup):
@@ -141,3 +145,111 @@ def test_prefs_are_isolated_per_user(db, me, other, cleanup):
     other_prefs = home_prefs_router.get_home_prefs(db=db, user=other)
     assert other_prefs.default_home_tab is None
     assert other_prefs.pinned_paths == []
+
+
+# ── 설치 앱: 기본값 따름 / 사용자 지정 / 델타 연산 / 초기화 / 조직 기본값 ─────────────
+
+@pytest.fixture
+def org_defaults(db):
+    """조직 기본값 행을 테스트 동안만 둔다 — 공유 테스트 DB 의 다른 테스트에 새지 않게."""
+    from app.models.app_setting import AppSetting
+    from app.services.home_prefs import DEFAULTS_KEY
+
+    def _clear():
+        db.query(AppSetting).filter(AppSetting.key == DEFAULTS_KEY).delete(synchronize_session=False)
+        db.commit()
+
+    _clear()
+    yield
+    _clear()
+
+
+def test_new_account_follows_org_default_until_it_customizes(db, me, cleanup, org_defaults):
+    from app.services.home_prefs import set_default_installed_apps
+
+    cleanup.append(me.id)
+    home_prefs_router.update_home_prefs(payload=HomePrefsUpdate(locale="en"), db=db, user=me)
+    prefs = home_prefs_router.get_home_prefs(db=db, user=me)
+    assert prefs.installed_apps_customized is False
+    assert prefs.installed_apps == ["/tasks-mgmt"]
+
+    # admin 이 조직 기본값을 바꾸면 개인화 안 한 계정에 즉시 반영된다.
+    set_default_installed_apps(db, ["/tasks-mgmt", "/k9s"])
+    assert home_prefs_router.get_home_prefs(db=db, user=me).installed_apps == ["/tasks-mgmt", "/k9s"]
+
+
+def test_delta_ops_customize_from_effective_list(db, me, cleanup, org_defaults):
+    from app.services.home_prefs import set_default_installed_apps
+
+    cleanup.append(me.id)
+    set_default_installed_apps(db, ["/tasks-mgmt", "/k9s"])
+    updated = home_prefs_router.update_home_prefs(
+        payload=HomePrefsUpdate(installed_apps_add=["/wbs"], installed_apps_remove=["/k9s"]), db=db, user=me,
+    )
+    assert updated.installed_apps == ["/tasks-mgmt", "/wbs"]
+    assert updated.installed_apps_customized is True
+
+    # 이후 조직 기본값이 바뀌어도 사용자 지정 목록은 그대로다.
+    set_default_installed_apps(db, ["/settings"])
+    assert home_prefs_router.get_home_prefs(db=db, user=me).installed_apps == ["/tasks-mgmt", "/wbs"]
+
+
+def test_concurrent_style_deltas_do_not_overwrite_each_other(db, me, cleanup, org_defaults):
+    """두 기기가 같은 옛 목록을 보고 각자 하나씩 추가해도 둘 다 남는다(전체 교체였다면 하나 유실)."""
+    cleanup.append(me.id)
+    home_prefs_router.update_home_prefs(payload=HomePrefsUpdate(installed_apps_add=["/a"]), db=db, user=me)
+    home_prefs_router.update_home_prefs(payload=HomePrefsUpdate(installed_apps_add=["/b"]), db=db, user=me)
+    home_prefs_router.update_home_prefs(payload=HomePrefsUpdate(installed_apps_add=["/a"]), db=db, user=me)
+    assert home_prefs_router.get_home_prefs(db=db, user=me).installed_apps == ["/tasks-mgmt", "/a", "/b"]
+
+
+def test_reset_returns_to_org_default(db, me, cleanup, org_defaults):
+    cleanup.append(me.id)
+    home_prefs_router.update_home_prefs(payload=HomePrefsUpdate(installed_apps=["/k9s"], locale="en"), db=db, user=me)
+    updated = home_prefs_router.update_home_prefs(
+        payload=HomePrefsUpdate(installed_apps_reset=True), db=db, user=me,
+    )
+    assert updated.installed_apps_customized is False
+    assert updated.installed_apps == ["/tasks-mgmt"]
+    assert updated.locale == "en"
+
+
+def test_org_default_update_is_admin_audited(db, cleanup, org_defaults):
+    from app.models.audit_log import AuditLog
+    from app.models.user import User
+    from app.routers import ui_settings
+    from app.schemas.home_prefs import HomePrefsDefaults
+
+    admin = User(id=f"u-admin-{uuid.uuid4().hex[:8]}", username=f"admin-{uuid.uuid4().hex[:8]}", role="admin")
+    cleanup.append(admin.id)
+    res = ui_settings.update_home_prefs_defaults(
+        payload=HomePrefsDefaults(installed_apps=["/tasks-mgmt", "/k9s", "/k9s"]),
+        request=None, db=db, actor=admin,
+    )
+    assert res.installed_apps == ["/tasks-mgmt", "/k9s"]
+    assert ui_settings.get_home_prefs_defaults(db=db, _=admin).installed_apps == ["/tasks-mgmt", "/k9s"]
+    log = (
+        db.query(AuditLog)
+        .filter(AuditLog.action == "settings.home_prefs_defaults.update", AuditLog.actor_username == admin.username)
+        .first()
+    )
+    assert log is not None and log.details["added"] == ["/k9s"]
+    db.query(AuditLog).filter(AuditLog.actor_username == admin.username).delete(synchronize_session=False)
+    db.commit()
+
+
+def test_deleting_user_removes_their_settings(db, cleanup):
+    from app.models.user import User
+    from app.routers import auth
+    from app.services.user_settings import get_user_setting, set_user_setting
+
+    admin = User(id=f"u-adm-{uuid.uuid4().hex[:8]}", username=f"adm-{uuid.uuid4().hex[:8]}", role="admin")
+    victim = User(id=f"u-del-{uuid.uuid4().hex[:8]}", username=f"del-{uuid.uuid4().hex[:8]}", role="operator")
+    cleanup.extend([admin.id, victim.id])
+    db.add_all([admin, victim])
+    db.commit()
+    set_user_setting(db, victim.id, "home_prefs", {"installed_apps": ["/k9s"]})
+
+    auth.delete_user(user_id=victim.id, request=None, db=db, actor=admin)
+
+    assert get_user_setting(db, victim.id, "home_prefs", None) is None

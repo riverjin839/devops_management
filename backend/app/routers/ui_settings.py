@@ -17,6 +17,12 @@ from app.services.cluster_network_mask import (
     DEFAULT_CLUSTER_VIEWER_MASK,
     normalize_mask_setting,
 )
+from app.schemas.home_prefs import HomePrefsDefaults
+from app.services.home_prefs import (
+    DEFAULTS_KEY as HOME_PREFS_DEFAULTS_KEY,
+    get_default_installed_apps,
+    set_default_installed_apps,
+)
 from app.schemas.ui_settings import (
     UiSettingsResponse,
     UiSettingsUpdate,
@@ -450,6 +456,43 @@ def update_cluster_viewer_mask(
             request=request,
         )
     return {"data": value}
+
+
+# ── 사이드바/상단바 조직 기본 설치 목록 (Settings "화면 UI 설정") ─────────────────────
+# 개인화하지 않은(installed_apps_customized=False) 모든 계정의 실효 목록이다. 조회는 인증만,
+# 변경은 admin 전용 + 감사 기록. 이미 직접 고른 계정은 영향을 받지 않는다.
+
+@router.get("/home-prefs-defaults", response_model=HomePrefsDefaults)
+def get_home_prefs_defaults(
+    db: Session = Depends(get_db),
+    _: User = Depends(get_current_user),
+):
+    return HomePrefsDefaults(installed_apps=get_default_installed_apps(db))
+
+
+@router.put("/home-prefs-defaults", response_model=HomePrefsDefaults)
+def update_home_prefs_defaults(
+    payload: HomePrefsDefaults,
+    request: Request,
+    db: Session = Depends(get_db),
+    actor: User = Depends(require_admin),
+):
+    before = get_default_installed_apps(db)
+    after = set_default_installed_apps(db, payload.installed_apps)
+    if before != after:
+        audit_logger.record(
+            db,
+            action="settings.home_prefs_defaults.update",
+            actor=actor,
+            target_type="app_setting",
+            target_id=HOME_PREFS_DEFAULTS_KEY,
+            details={
+                "added": [a for a in after if a not in before],
+                "removed": [a for a in before if a not in after],
+            },
+            request=request,
+        )
+    return HomePrefsDefaults(installed_apps=after)
 
 
 # ── 업무 관리 게시판 공통 설정 (Settings) ─────────────────────────────────────────

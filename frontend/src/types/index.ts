@@ -5361,11 +5361,27 @@ export interface HomePrefs {
   pinnedPaths: string[];
   /** R-6 i18n 2단계 — 표시 언어(서버 저장, 기기/브라우저를 넘어 따라온다). */
   locale?: 'ko' | 'en' | null;
-  /** 사이드바 "SaaS 앱" 개편 — 사용자가 설치(opt-in)한 플랫폼 그룹 id(GroupId) + "back". */
+  /** 사이드바/상단바 "SaaS 앱" 실효 목록 — leaf 경로 + "back"/"favorites"/"island", 설치 순서 = 표시 순서.
+   *  installedAppsCustomized 가 false 면 조직 기본값(Settings 에서 admin 편집)을 그대로 보여준 것이다. */
   installedApps: string[];
+  /** true = 사용자가 직접 고른 목록, false = 조직 기본값을 따름. */
+  readonly installedAppsCustomized?: boolean;
+  /** 서버 관리 레이아웃 버전(읽기 전용) — 부팅 이관 대상 판정용. 0 = 이관 전 행. */
+  readonly layoutVersion?: number;
 }
 
-export type HomePrefsUpdate = Partial<HomePrefs>;
+export type HomePrefsUpdate = Partial<Omit<HomePrefs, 'layoutVersion' | 'installedAppsCustomized'>> & {
+  /** 원자적 델타 연산 — 서버가 행 잠금 아래에서 현재 목록에 적용한다(동시 편집에도 유실 없음). */
+  installedAppsAdd?: string[];
+  installedAppsRemove?: string[];
+  /** true = 사용자 지정 목록을 버리고 조직 기본값을 따름. */
+  installedAppsReset?: boolean;
+};
+
+/** 조직 기본 설치 목록 — 개인화하지 않은 계정의 사이드바/상단바. */
+export interface HomePrefsDefaults {
+  installedApps: string[];
+}
 
 // ── K8S 접근 권한 (RBAC) — /k8s-rbac ────────────────────────────────────────
 // 개발자가 자기 LOCAL kubectl 로 클러스터에 붙어 배포·로그 조회를 하려면
