@@ -43,7 +43,7 @@ ui-ux-pro-max 검색에서 운영 도구에 매칭된 상위 3개 (출처: `styl
 - 배지 표준 조합: `bg-status-X/10 text-status-X border-status-X/30` (X = healthy·warning·critical·info·unknown).
   옅은 카드 tint 는 `bg-status-X/5`. `dark:` 변형을 따로 달지 않는다 — 토큰이 테마를 따라간다.
 - **상태 의미의 고정 팔레트(`emerald`·`green`·`red`·`rose`·`amber`·`yellow`·`sky`)는 ESLint
-  `no-restricted-syntax` 가 error 로 막는다** (`frontend/.eslintrc.cjs` `STATUS_PALETTE_RE`).
+  `no-restricted-syntax` 가 error 로 막는다** (`frontend/.eslintrc.cjs` `STATUS_PALETTE_RE`; 장식 계열은 `DECO_PALETTE_RE` + 래칫 allowlist, §12.12-7).
   장식용 계열(`blue`·`violet`·`purple`·`orange`·`cyan` 등)은 대상이 아니다.
 
 > **이전 제안과의 델타**: "Linear-inspired Dense Pro"는 검증 데이터엔 직접 매칭 없음 → **Real-Time Monitoring + Data-Dense Dashboard** 공식 패턴으로 교체. 시각 인상은 비슷하지만 출처가 명확해짐.
@@ -845,7 +845,7 @@ D-117~D-134)에서 원자는 지켜지는데 화면이 "AI 가 만든 템플릿"
 | 4 | **카드는 섹션 1단, `rounded-md` 만** | 단일 요소(문단·EmptyState·탭 줄·헤더) 래핑, 카드 안 카드, `bg-card` + `rounded-xl/2xl/lg`, hover-lift(`hover:-translate-y`·`hover:scale`), `shadow-lg/xl/2xl`, 비모달 `backdrop-blur`, `bg-gradient-*`, `transition-all`, 비로딩 `animate-pulse/ping` | 구분선·여백·정렬로 먼저 해결. 카드가 필요하면 `MacCard`(헤더 액션은 D-122 슬롯). 그림자는 `shadow-card` 만. 로고는 단색 |
 | 5 | **페이지 루트는 밀도 클래스 3종 중 하나** | 그 외 `max-w-*`, 콘솔 페이지의 `mx-auto`, 루트 패딩 임의값 | **콘솔**(exec·표·매트릭스): `py-3 pr-3`, 폭 제한 없음, 표 `text-xs`, 빈 상태 `py-10` · **허브/목록**: `px-6 py-5`, `max-w-[1600px]` 좌정렬 · **문서**(상세·폼·가이드): `max-w-4xl mx-auto px-8 py-8`, 빈 상태 `py-16` |
 | 6 | **빈·로딩·에러 상태는 공용만** | 인라인 빈 상태 div/p, 로컬 `EmptyState` 재정의, 이모지·영어 문구, "~가 없습니다" 만 있는 문구, 로딩 문구 변형("로딩", "불러오는 중...") , 에러에 `text-destructive` | `common/EmptyState` 단일 — "클러스터를 선택하세요" 는 프리셋 `SelectClusterEmptyState`, 로딩은 `LoadingState`(둘 다 `components/common/EmptyState.tsx`). 권한 게이트 버튼은 `children` 으로. 문구 = 왜 비었나 + 다음 행동(`ClusterManagePage:866` 참고). 로딩 "불러오는 중…"(`…` 1글자) 또는 `Skeleton`. 에러 `text-status-critical`(`text-destructive` 는 파괴 액션 버튼 전용) |
-| 7 | **카테고리·종류 구분 색은 `--chart-1..8` 토큰만** | Tailwind 색상명(blue·orange·purple·violet·indigo·cyan·pink·fuchsia·teal) — 장식 용도 포함, hex 기본색, 유색 배경 위 `text-white` 칩 | `--chart-*` 토큰(`text-[hsl(var(--chart-3))]` 아닌 유틸 클래스). slate/zinc 는 콘솔(터미널) 배경에만. D-120 으로 `.eslintrc.cjs` `STATUS_PALETTE_RE` 에 장식 계열을 추가해 기계화 |
+| 7 | **카테고리·종류 구분 색은 `--chart-1..8` 토큰만** | Tailwind 색상명(blue·orange·purple·violet·indigo·cyan·pink·fuchsia·teal) — 장식 용도 포함, hex 기본색, 유색 배경 위 `text-white` 칩 | `--chart-*` 토큰(`text-[hsl(var(--chart-3))]` 아닌 유틸 클래스). slate/zinc 는 콘솔(터미널) 배경에만. `.eslintrc.cjs` 의 `DECO_PALETTE_RE` 가 기계로 막는다(D-120). 기존 위반 파일은 `DECO_PALETTE_ALLOWLIST` 래칫에 있고 **파일을 지울 수만 있다** — 토큰으로 이관한 파일은 목록에서 제거한다 |
 | 8 | **uppercase 아이브로우는 MacCard 헤더 내장만** | 페이지 본문·h1·버튼·탭·폼 라벨의 `uppercase tracking-wider`, 전부 대문자 제목("CIDR INPUT") | 라벨은 `text-xs text-muted-foreground`(대소문자 그대로). 상태 배지는 `common/StatusBadge` 한국어 1종 |
 | 9 | **아이콘은 lucide 만** | 이모지를 상태(🟢🟡🔴)·카테고리·아이콘·장식(🎉💡☸)으로, ⚠/✓/✗ 문자 접두, 모든 아이콘 `text-primary` 틴트 | lucide + 상태 토큰. `text-primary` 틴트는 클릭 가능한 액션에만. 사용자 데이터로 저장된 클러스터 아이콘(`clusterIcons`)의 예외 여부는 D-126 에서 판정 |
 | 10 | **타이포 위계 4단** | 페이지 내 `text-2xl` 이상(Health Hero 외), h1 크기 변형, 숫자 `font-mono`, `text-[11px]` 를 표 밖에 | h1 `text-xl font-semibold` · 카드 제목 MacCard 내장 · 본문 `text-sm` · 보조 `text-xs`. 숫자는 `tabular-nums`(`font-mono` 는 식별자·코드·로그만). `text-[11px]` 는 표 셀만 |
