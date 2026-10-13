@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
-import { Link, useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
 import {
-  ArrowLeft, TrendingUp, ArrowUp, ArrowDown, ChevronsUpDown, AlertTriangle, RefreshCw,
+  TrendingUp, ArrowUp, ArrowDown, ChevronsUpDown, AlertTriangle, RefreshCw,
 } from 'lucide-react';
 import {
   ResponsiveContainer, LineChart, Line, XAxis, YAxis, Tooltip, CartesianGrid,
@@ -9,6 +9,7 @@ import {
 import { MacCard } from '@/components/ui/MacCard';
 import { ClusterSidebar } from '@/components/common/ClusterSidebar';
 import { EmptyState, SelectClusterEmptyState } from '@/components/common';
+import { PageHeader } from '@/components/common/PageHeader';
 import { NodeMultiSelect } from '@/components/k8s/NodeMultiSelect';
 import { useClusters } from '@/hooks/useCluster';
 import { useClusterTrends } from '@/hooks/useClusterTrends';
@@ -151,16 +152,13 @@ export function ClusterTrendsPage() {
         </div>
 
         <div className="flex-1 min-w-0 space-y-2">
-          <div className="flex items-center gap-3 flex-wrap">
-            <Link to="/cluster-overview" className="text-sm text-muted-foreground hover:text-foreground flex items-center gap-1">
-              <ArrowLeft className="w-4 h-4" /> 클러스터 현황
-            </Link>
-            <h1 className="text-lg font-semibold flex items-center gap-2">
-              <TrendingUp className="w-5 h-5 text-cyan-500" /> 클러스터 추이
-            </h1>
-            <span className="text-sm text-muted-foreground">노드별 메트릭 시계열 (선택 노드 한정)</span>
-            {query.isFetching && <RefreshCw className="w-4 h-4 text-muted-foreground animate-spin" />}
-          </div>
+          <PageHeader
+            back={{ to: '/cluster-overview', label: '클러스터 현황' }}
+            icon={TrendingUp}
+            title="클러스터 추이"
+            description="노드별 메트릭 시계열 (선택 노드 한정)"
+            titleExtra={query.isFetching ? <RefreshCw className="w-4 h-4 text-muted-foreground animate-spin" aria-label="갱신 중" /> : undefined}
+          />
 
           {!clusterId ? (
             <SelectClusterEmptyState />
@@ -173,7 +171,7 @@ export function ClusterTrendsPage() {
                   <div className="inline-flex rounded-xl border border-border bg-card p-1">
                     {RANGES.map((r) => (
                       <button key={r} onClick={() => setRange(r)}
-                        className={`px-3 py-1.5 rounded-lg text-sm ${range === r ? 'bg-primary text-white' : 'text-muted-foreground hover:text-foreground'}`}>
+                        className={`px-3 py-1.5 rounded-lg text-sm ${range === r ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground'}`}>
                         {r}
                       </button>
                     ))}
@@ -214,7 +212,7 @@ export function ClusterTrendsPage() {
                     <div className="inline-flex rounded-xl border border-border bg-card p-1">
                       {COLS.map((c) => (
                         <button key={c} onClick={() => setCols(c)}
-                          className={`px-2.5 py-1 rounded-lg text-sm ${cols === c ? 'bg-primary text-white' : 'text-muted-foreground hover:text-foreground'}`}>
+                          className={`px-2.5 py-1 rounded-lg text-sm ${cols === c ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground'}`}>
                           {c}
                         </button>
                       ))}
@@ -229,7 +227,7 @@ export function ClusterTrendsPage() {
                   </div>
                 )}
                 {resp?.status === 'error' && (
-                  <div className="mt-2 flex items-center gap-1.5 text-sm text-destructive">
+                  <div className="mt-2 flex items-center gap-1.5 text-sm text-status-critical">
                     <AlertTriangle className="w-4 h-4" /> 조회 오류 — {resp.error}
                   </div>
                 )}

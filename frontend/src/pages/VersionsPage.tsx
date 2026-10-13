@@ -7,8 +7,9 @@ import {
   AlertTriangle, ScrollText,
 } from 'lucide-react';
 import { useClusters } from '@/hooks/useCluster';
-import { ClusterSidebar, DebugLogPanel, useToast, EmptyState, SkeletonCard, DoubleScrollX, LogViewer } from '@/components/common';
+import { ClusterSidebar, DebugLogPanel, useToast, EmptyState, LoadingState, SkeletonCard, DoubleScrollX, LogViewer } from '@/components/common';
 import { MacCard } from '@/components/ui/MacCard';
+import { PageHeader } from '@/components/common/PageHeader';
 import { formatApiError, parseUTC } from '@/lib/utils';
 import { versionsApi, type ComponentSnapshot } from '@/services/api';
 import { useAbortableMutation } from '@/hooks/useAbortableMutation';
@@ -21,9 +22,9 @@ import { Database, ShieldCheck } from 'lucide-react';
 // ── 유틸 ────────────────────────────────────────────────────────────────────
 
 const CATEGORY_META: Record<string, { label: string; icon: React.ComponentType<{ className?: string }>; cls: string }> = {
-  control_plane: { label: 'Control Plane', icon: Server,     cls: 'bg-indigo-500/10 text-indigo-400 border-indigo-500/30' },
+  control_plane: { label: 'Control Plane', icon: Server,     cls: 'bg-chart-4/15 text-chart-4 border-chart-4/30' },
   kubelet:       { label: 'Kubelet',        icon: Cpu,        cls: 'bg-status-info/10 text-status-info border-status-info/30' },
-  cni:           { label: 'CNI / Cilium',   icon: Network,    cls: 'bg-purple-500/10 text-purple-400 border-purple-500/30' },
+  cni:           { label: 'CNI / Cilium',   icon: Network,    cls: 'bg-chart-5/15 text-chart-5 border-chart-5/30' },
   // OS 레벨 — kernel sysctl · etcd systemd · etcdctl config 를 한 카테고리로.
   os:            { label: 'OS',              icon: Cpu,        cls: 'bg-status-warning/10 text-status-warning border-status-warning/30' },
   // Storage — MinIO / AIStor / DirectPV 등 객체스토리지 레이어
@@ -88,9 +89,11 @@ function KernelParamsDetails({ data }: { data: Record<string, unknown> }) {
 
   if (entries.length === 0) {
     return (
-      <p className="text-sm text-muted-foreground">
-        수집된 sysctl 값이 없습니다. (수집이 실패했거나 값이 없는 호스트)
-      </p>
+      <EmptyState
+        compact
+        title="수집된 sysctl 값이 없습니다."
+        description="수집이 실패했거나 값이 없는 호스트입니다. 커널 파라미터 수집을 다시 실행해 보세요."
+      />
     );
   }
 
@@ -708,7 +711,7 @@ function HistoryTimeline({
     }
   }, [pickedIds, snapshots, onPickDiff]);
 
-  if (isLoading) return <p className="text-sm text-muted-foreground px-4 py-3">불러오는 중…</p>;
+  if (isLoading) return <LoadingState compact />;
   if (isError) {
     return (
       <p className="text-sm px-4 py-3">
@@ -717,7 +720,9 @@ function HistoryTimeline({
       </p>
     );
   }
-  if (snapshots.length === 0) return <p className="text-sm text-muted-foreground px-4 py-3">히스토리 없음</p>;
+  if (snapshots.length === 0) {
+    return <EmptyState compact title="히스토리가 없습니다." description="수집을 실행할 때마다 스냅샷이 여기에 쌓입니다." />;
+  }
 
   return (
     <div className="space-y-1 px-4 py-3">
@@ -788,14 +793,14 @@ function DiffPanel({
         </button>
       </div>
       {isLoading ? (
-        <p className="text-sm text-muted-foreground">분석 중…</p>
+        <LoadingState compact />
       ) : isError ? (
         <p className="text-sm">
           <span className="text-status-critical">diff 를 불러오지 못했습니다.</span>{' '}
           <span className="text-xs text-muted-foreground">{formatApiError(error)}</span>
         </p>
       ) : data?.changes.length === 0 ? (
-        <p className="text-sm text-muted-foreground">변경 없음</p>
+        <EmptyState compact title="변경 사항이 없습니다." description="선택한 두 스냅샷의 값이 같습니다." />
       ) : (
         <div className="space-y-1.5 max-h-80 overflow-y-auto">
           {data?.versionChanged && (
@@ -971,21 +976,20 @@ export function VersionsPage() {
         <div className="flex-1 min-w-0">
         <DebugLogPanel pageKey="versions" extra={{ clusterId, components: current?.components?.length ?? 0, pending: collect.isPending }} />
         {/* 헤더 */}
-        <div className="flex items-center justify-between mb-6">
-          <div className="flex items-center gap-3">
-            <GitCommit className="w-6 h-6 text-primary" />
-            <h1 className="text-xl font-bold">버전 / 설정 관리</h1>
-            {clusterId && current?.components && (
-              <>
-                <span className="text-sm font-mono text-muted-foreground">· {clusters.find((c) => c.id === clusterId)?.name}</span>
-                <span className="text-sm px-2 py-0.5 rounded-full bg-status-unknown/15 text-status-unknown border border-status-unknown/30">
-                  {current.components.length}개 컴포넌트
-                </span>
-              </>
-            )}
-          </div>
-          {clusterId && (
-            <div className="flex items-center gap-2">
+        <PageHeader
+          className="mb-6"
+          icon={GitCommit}
+          title="버전 / 설정 관리"
+          titleExtra={clusterId && current?.components ? (
+            <>
+              <span className="text-sm font-mono text-muted-foreground">· {clusters.find((c) => c.id === clusterId)?.name}</span>
+              <span className="text-sm px-2 py-0.5 rounded-full bg-status-unknown/15 text-status-unknown border border-status-unknown/30">
+                {current.components.length}개 컴포넌트
+              </span>
+            </>
+          ) : undefined}
+          actions={clusterId ? (
+            <>
               <Link
                 to={`/versions/${clusterId}/graph`}
                 className="flex items-center gap-1.5 px-3 py-2 text-sm font-medium bg-secondary hover:bg-secondary/80 border border-border rounded-lg text-foreground transition-colors"
@@ -1090,9 +1094,9 @@ export function VersionsPage() {
                   지금 수집
                 </button>
               )}
-            </div>
-          )}
-        </div>
+            </>
+          ) : undefined}
+        />
 
         {!clusterId && clusters.length === 0 && (
           <EmptyState title="등록된 클러스터가 없습니다." description="클러스터 관리에서 등록하면 버전 수집 대상이 됩니다." />

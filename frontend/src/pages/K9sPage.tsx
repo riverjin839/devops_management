@@ -4,6 +4,7 @@ import { useQuery } from '@tanstack/react-query';
 import { ShipWheel, Key, Play, ShieldAlert, ExternalLink } from 'lucide-react';
 import { useClusters } from '@/hooks/useCluster';
 import { ClusterSidebar, SelectClusterEmptyState } from '@/components/common';
+import { PageHeader } from '@/components/common/PageHeader';
 import { MacCard } from '@/components/ui/MacCard';
 import { K9sTerminal, type K9sConnectParams } from '@/components/k8s';
 import { openK9sPopout } from '@/lib/k9sPopout';
@@ -113,19 +114,16 @@ export function K9sPage() {
         </div>
 
         <div className="flex-1 min-w-0 space-y-3">
-          <div className="flex items-center gap-3 flex-wrap">
-            <h1 className="text-lg font-semibold flex items-center gap-2">
-              <ShipWheel className="w-5 h-5 text-primary" /> k9s 콘솔
-            </h1>
-            <span className="text-sm text-muted-foreground">
-              control-plane 서버에 내장된 k9s 를 SSH 로 실행해 스트리밍
-            </span>
-            {effectiveHost && (
-              <span className="ml-auto text-sm px-2 py-0.5 rounded-full bg-status-unknown/15 text-status-unknown border border-status-unknown/30 font-mono">
+          <PageHeader
+            icon={ShipWheel}
+            title="k9s 콘솔"
+            description="control-plane 서버에 내장된 k9s 를 SSH 로 실행해 스트리밍"
+            actions={effectiveHost ? (
+              <span className="text-sm px-2 py-0.5 rounded-full bg-status-unknown/15 text-status-unknown border border-status-unknown/30 font-mono">
                 → {username}@{effectiveHost}
               </span>
-            )}
-          </div>
+            ) : undefined}
+          />
 
           {!clusterId ? (
             <SelectClusterEmptyState description="좌측에서 클러스터를 고르면 k9s 접속 정보를 입력할 수 있습니다." />

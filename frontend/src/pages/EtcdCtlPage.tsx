@@ -7,7 +7,8 @@ import {
 } from 'lucide-react';
 import { useClusters } from '@/hooks/useCluster';
 import { useTerminalEnvSync } from '@/hooks/useTerminalEnvSync';
-import { ConfirmDialog, ExecOutputTabs, ClusterSidebar, SavedCommands } from '@/components/common';
+import { ConfirmDialog, ExecOutputTabs, ClusterSidebar, SavedCommands, EmptyState } from '@/components/common';
+import { PageHeader } from '@/components/common/PageHeader';
 import { MacCard } from '@/components/ui/MacCard';
 import {
   etcdctlApi, type EtcdPreset, type EtcdMasterCandidate, type EtcdCtlRunResponse,
@@ -18,7 +19,7 @@ const STATUS_META: Record<EtcdCtlRunResponse['status'], { label: string; cls: st
   ok:            { label: '정상',     cls: 'bg-status-healthy/10 text-status-healthy border-status-healthy/30',  icon: CheckCircle },
   error:         { label: '에러',     cls: 'bg-status-critical/10 text-status-critical border-status-critical/30',              icon: XCircle },
   timeout:       { label: '타임아웃', cls: 'bg-status-warning/10 text-status-warning border-status-warning/30',        icon: Clock },
-  auth_error:    { label: '인증 실패', cls: 'bg-orange-500/10 text-orange-400 border-orange-500/30',    icon: ShieldAlert },
+  auth_error:    { label: '인증 실패', cls: 'bg-status-warning/10 text-status-warning border-status-warning/30',    icon: ShieldAlert },
   connect_error: { label: '연결 실패', cls: 'bg-status-unknown/10 text-status-unknown border-status-unknown/30',       icon: Wifi },
 };
 
@@ -30,9 +31,12 @@ function ResultPanel({ result, tab }: { result: EtcdCtlRunResponse | null; tab: 
   if (!result) {
     return (
       <MacCard rootClassName="lg:col-span-5 min-w-0" bodyPadding="p-5" className="flex items-center justify-center min-h-[200px] lg:h-[calc(100vh-260px)]">
-        <p className="text-sm text-muted-foreground text-center">
-          {tab === 'run' ? 'etcdctl 명령을 실행하면' : '로그를 가져오면'}<br />결과가 여기에 표시됩니다.
-        </p>
+        <EmptyState
+          compact
+          icon={tab === 'run' ? Terminal : ScrollText}
+          title="아직 실행 결과가 없습니다."
+          description={tab === 'run' ? 'etcdctl 명령을 실행하면 결과가 여기에 표시됩니다.' : '로그를 가져오면 결과가 여기에 표시됩니다.'}
+        />
       </MacCard>
     );
   }
@@ -191,17 +195,16 @@ export function EtcdCtlPage() {
         />
         <div className="flex-1 min-w-0">
         {/* 헤더 */}
-        <div className="flex items-center justify-between mb-6">
-          <div className="flex items-center gap-3">
-            <Database className="w-6 h-6 text-primary" />
-            <h1 className="text-xl font-bold">etcdctl 콘솔</h1>
-            {effectiveHost && (
-              <span className="text-sm px-2 py-0.5 rounded-full bg-status-unknown/15 text-status-unknown border border-status-unknown/30 font-mono">
-                → {effectiveHost}
-              </span>
-            )}
-          </div>
-        </div>
+        <PageHeader
+          className="mb-6"
+          icon={Database}
+          title="etcdctl 콘솔"
+          titleExtra={effectiveHost ? (
+            <span className="text-sm px-2 py-0.5 rounded-full bg-status-unknown/15 text-status-unknown border border-status-unknown/30 font-mono">
+              → {effectiveHost}
+            </span>
+          ) : undefined}
+        />
 
         {/* 안내 */}
         <MacCard rootClassName="mb-5" className="text-sm text-muted-foreground leading-relaxed">
@@ -416,7 +419,7 @@ export function EtcdCtlPage() {
                 </div>
 
                 {runError && (
-                  <div className="px-3 py-2 text-sm rounded-lg bg-destructive/10 text-destructive border border-destructive/30">
+                  <div className="px-3 py-2 text-sm rounded-lg bg-status-critical/10 text-status-critical border border-status-critical/30">
                     {formatApiError(runError)}
                   </div>
                 )}
@@ -485,7 +488,7 @@ export function EtcdCtlPage() {
                 </div>
 
                 {runError && (
-                  <div className="px-3 py-2 text-sm rounded-lg bg-destructive/10 text-destructive border border-destructive/30">
+                  <div className="px-3 py-2 text-sm rounded-lg bg-status-critical/10 text-status-critical border border-status-critical/30">
                     {formatApiError(runError)}
                   </div>
                 )}

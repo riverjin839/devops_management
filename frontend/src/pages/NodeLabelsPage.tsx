@@ -4,7 +4,8 @@ import { useClusters } from '@/hooks/useCluster';
 import { useClustersNodes, usePatchNodeLabels, NodeRow } from '@/hooks/useNodeLabels';
 import { NodeLabelEditorModal, NodeLabelsTable } from '@/components/node-labels';
 import { matchesSearch, buildLabelEntries, filterLabelEntries } from '@/components/node-labels/nodeLabelsShared';
-import { ClusterSidebar, ExportMenu } from '@/components/common';
+import { ClusterSidebar, ExportMenu, EmptyState, LoadingState } from '@/components/common';
+import { PageHeader } from '@/components/common/PageHeader';
 import { MacCard } from '@/components/ui/MacCard';
 import { buildCsv, downloadCsv } from '@/lib/csv';
 import { formatApiError } from '@/lib/utils';
@@ -91,15 +92,16 @@ export function NodeLabelsPage() {
         />
         <div ref={contentRef} className="flex-1 min-w-0">
         {/* Header */}
-        <div className="flex items-center justify-between mb-6">
-          <div className="flex items-center gap-2">
-            <Tags className="w-5 h-5 text-primary" />
-            <h1 className="text-xl font-semibold">K8s 노드 라벨</h1>
+        <PageHeader
+          className="mb-6"
+          icon={Tags}
+          title="K8s 노드 라벨"
+          titleExtra={
             <span className="text-sm text-muted-foreground">
               — <span className="font-medium text-foreground">{headerLabel}</span>
             </span>
-          </div>
-        </div>
+          }
+        />
 
         {/* Toolbar: search + view mode */}
         <div className="flex items-center gap-3 mb-4">
@@ -199,12 +201,12 @@ export function NodeLabelsPage() {
 
         {/* Table */}
         {isLoading ? (
-          <MacCard bodyPadding="p-8" className="text-center text-muted-foreground">
-            {clustersLoading ? 'Loading clusters...' : 'Loading nodes...'}
+          <MacCard bodyPadding="p-0">
+            <LoadingState />
           </MacCard>
         ) : clusters.length === 0 ? (
-          <MacCard bodyPadding="p-8" className="text-center text-muted-foreground">
-            등록된 클러스터가 없습니다.
+          <MacCard bodyPadding="p-0">
+            <EmptyState title="등록된 클러스터가 없습니다." description="클러스터 관리에서 클러스터를 등록하면 노드 라벨을 조회할 수 있습니다." />
           </MacCard>
         ) : isError ? (
           <MacCard rootClassName="border-status-critical/30" bodyPadding="p-8">

@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
 import { PageHeader } from '@/components/common/PageHeader';
+import { StatTile, StatTileRow } from '@/components/common/StatTile';
 import { useSearchParams } from 'react-router-dom';
 import {
   AlertTriangle,
@@ -191,33 +192,6 @@ function CopyButton({ value, className = '' }: { value: string; className?: stri
   );
 }
 
-interface StatTileProps {
-  label: string;
-  value: string;
-  accent?: 'default' | 'primary' | 'success';
-}
-
-function StatTile({ label, value, accent = 'default' }: StatTileProps) {
-  const accentCls =
-    accent === 'primary' ? 'text-primary' :
-    accent === 'success' ? 'text-status-healthy' : 'text-foreground';
-  return (
-    <div className="group relative bg-secondary/40 hover:bg-secondary/70 border border-border rounded-lg px-3 py-2.5 transition-colors">
-      <div className="flex items-center justify-between mb-1">
-        <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-          {label}
-        </span>
-        <span className="opacity-0 group-hover:opacity-100 transition-opacity">
-          <CopyButton value={value} />
-        </span>
-      </div>
-      <div className={`font-mono text-sm tabular-nums truncate ${accentCls}`} title={value}>
-        {value}
-      </div>
-    </div>
-  );
-}
-
 /**
  * 한 쌍의 겹침을 "A ↔ B + 겹치는 IP 구간" 형태로 보여준다.
  * 가독성 개선의 핵심: 좌/우 어느 쪽이 어느 CIDR 인지, 그리고 *어디까지* 겹치는지를
@@ -235,9 +209,9 @@ interface OverlapPairProps {
 const HUE_TOKENS = {
   amber:   { bg: 'bg-status-warning/10',   border: 'border-status-warning/30',   dot: 'bg-status-warning',   text: 'text-status-warning' },
   rose:    { bg: 'bg-status-critical/10',    border: 'border-status-critical/30',    dot: 'bg-status-critical',    text: 'text-status-critical' },
-  fuchsia: { bg: 'bg-fuchsia-500/10', border: 'border-fuchsia-500/30', dot: 'bg-fuchsia-500', text: 'text-fuchsia-600' },
-  orange:  { bg: 'bg-orange-500/10',  border: 'border-orange-500/30',  dot: 'bg-orange-500',  text: 'text-orange-600' },
-  cyan:    { bg: 'bg-cyan-500/10',    border: 'border-cyan-500/30',    dot: 'bg-cyan-500',    text: 'text-cyan-600' },
+  fuchsia: { bg: 'bg-chart-4/10', border: 'border-chart-4/30', dot: 'bg-chart-4', text: 'text-chart-4' },
+  orange:  { bg: 'bg-chart-7/10', border: 'border-chart-7/30', dot: 'bg-chart-7', text: 'text-chart-7' },
+  cyan:    { bg: 'bg-chart-6/10', border: 'border-chart-6/30', dot: 'bg-chart-6', text: 'text-chart-6' },
 } as const;
 
 function OverlapPair({ leftLabel, leftCidr, rightLabel, rightCidr, hue = 'amber' }: OverlapPairProps) {
@@ -589,12 +563,12 @@ export function CidrCalculatorPage() {
         {/* ── Network Details (tiles + binary mask) ──────────────────────── */}
         {info && (
           <MacCard title="Network Details">
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-2.5">
-              <StatTile label="Network" value={`${info.network}/${info.prefix}`} accent="primary" />
-              <StatTile label="Broadcast" value={info.broadcast} />
-              <StatTile label="Subnet Mask" value={info.mask} />
-              <StatTile label="Wildcard" value={info.wildcard} />
-            </div>
+            <StatTileRow>
+              <StatTile label="네트워크" value={`${info.network}/${info.prefix}`} hint={<CopyButton value={`${info.network}/${info.prefix}`} />} />
+              <StatTile label="브로드캐스트" value={info.broadcast} hint={<CopyButton value={info.broadcast} />} />
+              <StatTile label="서브넷 마스크" value={info.mask} hint={<CopyButton value={info.mask} />} />
+              <StatTile label="와일드카드" value={info.wildcard} hint={<CopyButton value={info.wildcard} />} />
+            </StatTileRow>
 
             {/* Binary mask visualization */}
             <div className="mt-4 p-3.5 bg-secondary/40 border border-border rounded-lg">

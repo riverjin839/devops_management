@@ -8,6 +8,7 @@ import {
 import { useClusters } from '@/hooks/useCluster';
 import { useTerminalEnvSync } from '@/hooks/useTerminalEnvSync';
 import { ConfirmDialog, LogViewer, ClusterSidebar, SavedCommands, SelectClusterEmptyState, LoadingState } from '@/components/common';
+import { PageHeader } from '@/components/common/PageHeader';
 import { MacCard } from '@/components/ui/MacCard';
 import {
   bulkExecApi, type NodeSummary, type BulkExecResultItem, type BulkExecResponse,
@@ -119,7 +120,7 @@ const STATUS_META: Record<BulkExecResultItem['status'], { label: string; cls: st
   ok:            { label: '정상',     cls: 'bg-status-healthy/10 text-status-healthy border-status-healthy/30',  icon: CheckCircle },
   error:         { label: '에러',     cls: 'bg-status-critical/10 text-status-critical border-status-critical/30',              icon: XCircle },
   timeout:       { label: '타임아웃', cls: 'bg-status-warning/10 text-status-warning border-status-warning/30',        icon: Clock },
-  auth_error:    { label: '인증 실패', cls: 'bg-orange-500/10 text-orange-400 border-orange-500/30',    icon: ShieldAlert },
+  auth_error:    { label: '인증 실패', cls: 'bg-status-warning/10 text-status-warning border-status-warning/30',    icon: ShieldAlert },
   connect_error: { label: '연결 실패', cls: 'bg-status-unknown/10 text-status-unknown border-status-unknown/30',       icon: Wifi },
 };
 
@@ -311,15 +312,16 @@ export function KernelParamsPage() {
         <ClusterSidebar clusters={clusters} selectedId={clusterId || null} onSelect={(id) => setClusterId(id ?? '')} iconOnly />
 
         <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-3 mb-6">
-            <Cpu className="w-6 h-6 text-primary" />
-            <h1 className="text-xl font-bold">OS / 커널 파라미터 조회</h1>
-            {nodesQ.data?.nodes && (
+          <PageHeader
+            className="mb-6"
+            icon={Cpu}
+            title="OS / 커널 파라미터 조회"
+            titleExtra={nodesQ.data?.nodes ? (
               <span className="text-sm px-2 py-0.5 rounded-full bg-status-unknown/15 text-status-unknown border border-status-unknown/30">
                 선택 {selected.size} / {nodesQ.data.nodes.length}
               </span>
-            )}
-          </div>
+            ) : undefined}
+          />
 
           <MacCard rootClassName="mb-5" className="text-sm text-muted-foreground leading-relaxed">
             노드에 SSH 로 접속해 sysctl / limits / 모듈 / 디스크 등의 상태를 조회합니다.
@@ -470,7 +472,7 @@ export function KernelParamsPage() {
               </div>
 
               {runError && (
-                <div className="px-3 py-2 text-sm rounded-lg bg-destructive/10 text-destructive border border-destructive/30">
+                <div className="px-3 py-2 text-sm rounded-lg bg-status-critical/10 text-status-critical border border-status-critical/30">
                   {formatApiError(runError)}
                 </div>
               )}

@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
-  HardDrive, Plus, Pencil, Loader2, ServerCog,
+  HardDrive, Plus, Pencil, ServerCog,
 } from 'lucide-react';
 import { MacCard } from '@/components/ui/MacCard';
-import { StatusBadge, StatusDot, statusToVariant, EmptyState, LogViewer } from '@/components/common';
+import { StatusBadge, StatusDot, statusToVariant, EmptyState, LoadingState, LogViewer } from '@/components/common';
+import { PageHeader } from '@/components/common/PageHeader';
 import { IsilonServerModal, IsilonCommandManager, IsilonCommandSelector, ISILON_SECTION_LABEL } from '@/components/isilon';
 import { useIsilonServers, useRunIsilonCommands } from '@/hooks/useIsilonNfs';
 import { useClusters } from '@/hooks/useCluster';
@@ -65,9 +66,9 @@ export function IsilonNfsPage() {
           <MacCard title="Isilon 서버" bodyPadding="p-2">
             <div className="space-y-1">
               {loadingServers ? (
-                <div className="text-xs text-muted-foreground p-2"><Loader2 className="w-3.5 h-3.5 animate-spin inline" /> 로딩…</div>
+                <LoadingState compact />
               ) : servers.length === 0 ? (
-                <p className="text-xs text-muted-foreground p-2">등록된 서버가 없습니다.</p>
+                <EmptyState compact icon={ServerCog} title="등록된 서버가 없습니다." description="아래 서버 추가로 등록하세요." />
               ) : servers.map((s) => (
                 <button
                   key={s.id}
@@ -94,11 +95,11 @@ export function IsilonNfsPage() {
 
         {/* 본문 */}
         <div className="flex-1 min-w-0 space-y-4">
-          <div className="flex items-center gap-2">
-            <HardDrive className="w-5 h-5 text-status-info" />
-            <h1 className="text-lg font-semibold">NFS 모니터링 (Isilon)</h1>
-            <span className="text-xs text-muted-foreground">K8s 가 쓰는 NFS 를 NAS 서버 쪽에서 점검 · 읽기전용/무부하 · 선택한 명령만 실행</span>
-          </div>
+          <PageHeader
+            icon={HardDrive}
+            title="NFS 모니터링 (Isilon)"
+            description="K8s 가 쓰는 NFS 를 NAS 서버 쪽에서 점검 · 읽기전용/무부하 · 선택한 명령만 실행"
+          />
 
           {!loadingServers && servers.length === 0 ? (
             <MacCard>
@@ -267,9 +268,11 @@ function RunResultPanel({ runResult, running }: { runResult: IsilonRunResponse |
   if (!runResult && !running) {
     return (
       <MacCard rootClassName="lg:col-span-6 min-w-0" bodyPadding="p-5" className="flex items-center justify-center min-h-[200px] lg:h-[calc(100vh-360px)]">
-        <p className="text-sm text-muted-foreground text-center">
-          왼쪽에서 isi 명령을 선택하고 실행하면<br />결과가 여기에 표시됩니다.
-        </p>
+        <EmptyState
+          compact
+          title="아직 실행 결과가 없습니다."
+          description="왼쪽에서 isi 명령을 선택하고 실행하면 결과가 여기에 표시됩니다."
+        />
       </MacCard>
     );
   }
@@ -277,9 +280,9 @@ function RunResultPanel({ runResult, running }: { runResult: IsilonRunResponse |
   return (
     <MacCard rootClassName="lg:col-span-6 min-w-0 overflow-y-auto overflow-x-hidden lg:h-[calc(100vh-360px)]" bodyPadding="p-0">
       {running && !runResult ? (
-        <div className="text-sm text-muted-foreground py-10 text-center"><Loader2 className="w-4 h-4 animate-spin inline" /> 실행 중…</div>
+        <LoadingState label="실행 중…" />
       ) : results.length === 0 ? (
-        <p className="text-sm text-muted-foreground py-10 text-center">실행된 명령 결과가 없습니다.</p>
+        <EmptyState compact title="실행된 명령 결과가 없습니다." description="선택한 명령이 결과를 반환하지 않았습니다. 명령 선택을 확인하고 다시 실행하세요." />
       ) : (
         <div className="divide-y divide-border">
           {results.map((r) => <ResultBlock key={r.key} result={r} />)}

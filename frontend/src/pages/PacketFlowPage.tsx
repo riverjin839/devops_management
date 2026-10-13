@@ -6,7 +6,9 @@ import {
 } from 'lucide-react';
 import { useAbortableMutation } from '@/hooks/useAbortableMutation';
 import { useClusters } from '@/hooks/useCluster';
-import { ClusterSidebar, DebugLogPanel, SelectClusterEmptyState } from '@/components/common';
+import { ClusterSidebar, DebugLogPanel, SelectClusterEmptyState, EmptyState } from '@/components/common';
+import { PageHeader } from '@/components/common/PageHeader';
+import { MacCard } from '@/components/ui/MacCard';
 import { topologyTraceApi } from '@/services/api';
 import { formatApiError } from '@/lib/utils';
 import type {
@@ -21,12 +23,12 @@ type Tab = 'graph' | 'hubble' | 'tcpdump';
 
 const ENTITY_LABEL: Record<string, { icon: typeof Globe; label: string; color: string }> = {
   external:           { icon: Globe,   label: 'External',  color: 'text-status-info' },
-  dns:                { icon: Globe,   label: 'DNS',       color: 'text-indigo-400' },
-  ingress_controller: { icon: Share2,  label: 'Ingress Pod', color: 'text-violet-400' },
-  ingress:            { icon: Route,   label: 'Ingress',   color: 'text-purple-400' },
+  dns:                { icon: Globe,   label: 'DNS',       color: 'text-chart-6' },
+  ingress_controller: { icon: Share2,  label: 'Ingress Pod', color: 'text-chart-4' },
+  ingress:            { icon: Route,   label: 'Ingress',   color: 'text-chart-5' },
   service:            { icon: Share2,  label: 'Service',   color: 'text-status-healthy' },
   pod:                { icon: Box,     label: 'Pod',       color: 'text-status-warning' },
-  node:               { icon: Server,  label: 'Node',      color: 'text-orange-400' },
+  node:               { icon: Server,  label: 'Node',      color: 'text-chart-7' },
   switch:             { icon: Network, label: 'Switch',    color: 'text-status-critical' },
   error:              { icon: AlertTriangle, label: 'Error', color: 'text-status-critical' },
 };
@@ -211,11 +213,12 @@ export function PacketFlowPage() {
 
         <div className="flex-1 min-w-0">
           <DebugLogPanel pageKey="packet-flow" extra={{ clusterId, direction, source, destination, tab, pending: runMut.isPending }} />
-          <div className="flex items-center gap-3 mb-5">
-            <Route className="w-6 h-6 text-primary" />
-            <h1 className="text-xl font-bold">패킷 흐름 분석</h1>
-            <p className="text-sm text-muted-foreground">외부 → Ingress → Service → Pod / Pod ↔ Pod</p>
-          </div>
+          <PageHeader
+            className="mb-5"
+            icon={Route}
+            title="패킷 흐름 분석"
+            description="외부 → Ingress → Service → Pod / Pod ↔ Pod"
+          />
 
           {/* Target 구성 바 */}
           <section className="bg-card border border-border rounded-xl p-4 mb-4 space-y-3">
@@ -321,7 +324,7 @@ export function PacketFlowPage() {
             </div>
 
             {runError && (
-              <div className="px-3 py-2 text-sm rounded-lg bg-destructive/10 text-destructive border border-destructive/30">
+              <div className="px-3 py-2 text-sm rounded-lg bg-status-critical/10 text-status-critical border border-status-critical/30">
                 {formatApiError(runError)}
               </div>
             )}
@@ -350,10 +353,13 @@ export function PacketFlowPage() {
           {tab === 'graph' && (
             <>
               {!response ? (
-                <div className="bg-card border border-border rounded-xl p-10 text-center text-sm text-muted-foreground">
-                  <Info className="w-8 h-8 mx-auto mb-2 text-muted-foreground" />
-                  source/destination 를 입력하고 "추적" 을 눌러 경로를 그래프로 확인하세요.
-                </div>
+                <MacCard bodyPadding="p-0">
+                  <EmptyState
+                    icon={Info}
+                    title="아직 추적한 경로가 없습니다."
+                    description={'source/destination 을 입력하고 "추적" 을 누르면 경로를 그래프로 확인할 수 있습니다.'}
+                  />
+                </MacCard>
               ) : (
                 <>
                   <HopBreadcrumb hops={response.hops} selectedIndex={selectedIdx} onSelect={setSelectedIdx} />

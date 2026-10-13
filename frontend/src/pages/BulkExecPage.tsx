@@ -7,7 +7,8 @@ import {
 } from 'lucide-react';
 import { useClusters } from '@/hooks/useCluster';
 import { useTerminalEnvSync } from '@/hooks/useTerminalEnvSync';
-import { ConfirmDialog, ExecOutputTabs, ClusterSidebar, CommandTraceList, DebugLogPanel, Skeleton, EmptyState, ResizeGrip, DoubleScrollX} from '@/components/common';
+import { ConfirmDialog, ExecOutputTabs, ClusterSidebar, CommandTraceList, DebugLogPanel, Skeleton, EmptyState, SelectClusterEmptyState, ResizeGrip, DoubleScrollX} from '@/components/common';
+import { PageHeader } from '@/components/common/PageHeader';
 import { ExecutionStepsTimeline } from '@/components/daily-check';
 import { SavedScriptPanel } from '@/components/bulk-exec';
 import { useColumnWidths } from '@/hooks/useColumnWidths';
@@ -21,7 +22,7 @@ const STATUS_META: Record<BulkExecResultItem['status'], { label: string; cls: st
   ok:            { label: '정상',     cls: 'bg-status-healthy/10 text-status-healthy border-status-healthy/30',  icon: CheckCircle },
   error:         { label: '에러',     cls: 'bg-status-critical/10 text-status-critical border-status-critical/30',              icon: XCircle },
   timeout:       { label: '타임아웃', cls: 'bg-status-warning/10 text-status-warning border-status-warning/30',        icon: Clock },
-  auth_error:    { label: '인증 실패', cls: 'bg-orange-500/10 text-orange-400 border-orange-500/30',    icon: ShieldAlert },
+  auth_error:    { label: '인증 실패', cls: 'bg-status-warning/10 text-status-warning border-status-warning/30',    icon: ShieldAlert },
   connect_error: { label: '연결 실패', cls: 'bg-status-unknown/10 text-status-unknown border-status-unknown/30',       icon: Wifi },
 };
 
@@ -201,7 +202,7 @@ function ClusterNodeGroup({
               >다시 시도</button>
             </div>
           ) : total === 0 ? (
-            <p className="px-3 py-3 text-xs text-muted-foreground">노드 없음</p>
+            <EmptyState compact title="노드가 없습니다." description="이 클러스터에서 조회된 노드가 없습니다. 새로고침해 보세요." />
           ) : (
             nodes.map((n) => (
               <NodeRow
@@ -695,26 +696,27 @@ export function BulkExecPage() {
         <div className="flex-1 min-w-0">
         <DebugLogPanel pageKey="bulk-exec" extra={{ clusters: clusterIds.length, selected: selected.size, action, mode, pending: runMutation.isPending }} />
         {/* 헤더 */}
-        <div className="flex items-center justify-between mb-3">
-          <div className="flex items-center gap-3">
-            <Terminal className="w-6 h-6 text-primary" />
-            <h1 className="text-xl font-bold">노드 일괄 실행 (SSH / SCP)</h1>
-            {clusterIds.length > 0 && (
-              <span className="text-sm px-2 py-0.5 rounded-full bg-status-unknown/15 text-status-unknown border border-status-unknown/30">
-                클러스터 {clusterIds.length} · 노드 {selected.size} / {totalNodesShown}
-              </span>
-            )}
-          </div>
-          <button
-            onClick={refetchAllNodes}
-            disabled={clusterIds.length === 0}
-            className="p-2 bg-secondary hover:bg-secondary/80 rounded-lg text-muted-foreground disabled:opacity-50"
-            title="노드 목록 새로고침"
-            aria-label="노드 목록 새로고침"
-          >
-            <RefreshCw className={`w-4 h-4 ${isAnyFetching ? 'animate-spin' : ''}`} />
-          </button>
-        </div>
+        <PageHeader
+          className="mb-3"
+          icon={Terminal}
+          title="노드 일괄 실행 (SSH / SCP)"
+          titleExtra={clusterIds.length > 0 ? (
+            <span className="text-sm px-2 py-0.5 rounded-full bg-status-unknown/15 text-status-unknown border border-status-unknown/30">
+              클러스터 {clusterIds.length} · 노드 {selected.size} / {totalNodesShown}
+            </span>
+          ) : undefined}
+          actions={
+            <button
+              onClick={refetchAllNodes}
+              disabled={clusterIds.length === 0}
+              className="p-2 bg-secondary hover:bg-secondary/80 rounded-lg text-muted-foreground disabled:opacity-50"
+              title="노드 목록 새로고침"
+              aria-label="노드 목록 새로고침"
+            >
+              <RefreshCw className={`w-4 h-4 ${isAnyFetching ? 'animate-spin' : ''}`} />
+            </button>
+          }
+        />
 
         {/* mc 콘솔처럼 한 로우에 [타겟 노드 | 명령 메뉴 | 실행 결과] 를 나란히 배치.
             12컬럼 그리드 3:4:5 — 결과는 항상 우측 같은 자리에 고정된다. */}
@@ -733,8 +735,7 @@ export function BulkExecPage() {
             </header>
             <div className="max-h-[calc(100vh-160px)] overflow-y-auto">
               {clusterIds.length === 0 ? (
-                <EmptyState compact title="클러스터를 선택하세요"
-                  description="왼쪽 사이드바에서 한 개 이상의 클러스터를 체크하세요." />
+                <SelectClusterEmptyState compact description="왼쪽 사이드바에서 한 개 이상의 클러스터를 체크하세요." />
               ) : (
                 clusterSections.map((sec) => {
                   const allHere = sec.nodes.map((n) => n.name);
@@ -1102,7 +1103,7 @@ export function BulkExecPage() {
             )}
 
             {runError && (
-              <div className="px-3 py-2 text-sm rounded-lg bg-destructive/10 text-destructive border border-destructive/30">
+              <div className="px-3 py-2 text-sm rounded-lg bg-status-critical/10 text-status-critical border border-status-critical/30">
                 {formatApiError(runError, '실행 중 오류')}
               </div>
             )}
@@ -1138,10 +1139,12 @@ export function BulkExecPage() {
           <section className="lg:col-span-5 min-w-0 bg-card border border-border rounded-xl overflow-hidden flex flex-col lg:h-[calc(100vh-160px)] min-h-[280px]">
             {!runResponse ? (
               <div className="flex-1 flex items-center justify-center p-6">
-                <div className="text-center text-sm text-muted-foreground">
-                  <Terminal className="w-8 h-8 mx-auto mb-2 opacity-40" />
-                  명령을 실행하면<br />결과가 여기에 표시됩니다.
-                </div>
+                <EmptyState
+                  compact
+                  icon={Terminal}
+                  title="아직 실행 결과가 없습니다."
+                  description="명령을 실행하면 결과가 여기에 표시됩니다."
+                />
               </div>
             ) : (
               <>
