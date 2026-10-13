@@ -15,7 +15,7 @@ import type {
   OpsNote, CommandEntry, WorkGuide, WorkItem, Workflow, CommandImportance,
 } from '@/types';
 import { formatRelativeTime, stripHtml, parseUTC } from '@/lib/utils';
-import { ServiceSidebar, EmptyState } from '@/components/common';
+import { ServiceSidebar, EmptyState, Skeleton } from '@/components/common';
 import { MacCard } from '@/components/ui/MacCard';
 import { useServiceCatalog } from '@/hooks/useServiceCatalog';
 import { useSprints } from '@/hooks/useSprints';
@@ -49,19 +49,19 @@ const KIND_META: Record<HubKind, {
   accent: string;
   chip: string;
 }> = {
-  task:     { label: '업무',       Icon: ListTodo,      accent: 'text-indigo-500',  chip: 'bg-indigo-500/10 text-indigo-700 dark:text-indigo-300 border-indigo-500/30' },
-  note:     { label: '노트',       Icon: StickyNote,    accent: 'text-status-warning',   chip: 'bg-status-warning/10 text-status-warning border-status-warning/30' },
-  command:  { label: '명령어',     Icon: Terminal,      accent: 'text-status-info',     chip: 'bg-status-info/10 text-status-info border-status-info/30' },
-  guide:    { label: '가이드',     Icon: BookMarked,    accent: 'text-status-healthy', chip: 'bg-status-healthy/10 text-status-healthy border-status-healthy/30' },
-  item:     { label: '이슈',       Icon: AlertCircle,   accent: 'text-status-critical',     chip: 'bg-status-critical/10 text-status-critical border-status-critical/30' },
-  workflow: { label: '워크플로우', Icon: GitFork,       accent: 'text-violet-500',  chip: 'bg-violet-500/10 text-violet-700 dark:text-violet-300 border-violet-500/30' },
+  task:     { label: '업무',       Icon: ListTodo,      accent: 'text-chart-1', chip: 'bg-chart-1/15 text-chart-1 border-chart-1/30' },
+  note:     { label: '노트',       Icon: StickyNote,    accent: 'text-chart-3', chip: 'bg-chart-3/15 text-chart-3 border-chart-3/30' },
+  command:  { label: '명령어',     Icon: Terminal,      accent: 'text-chart-6', chip: 'bg-chart-6/15 text-chart-6 border-chart-6/30' },
+  guide:    { label: '가이드',     Icon: BookMarked,    accent: 'text-chart-2', chip: 'bg-chart-2/15 text-chart-2 border-chart-2/30' },
+  item:     { label: '이슈',       Icon: AlertCircle,   accent: 'text-chart-5', chip: 'bg-chart-5/15 text-chart-5 border-chart-5/30' },
+  workflow: { label: '워크플로우', Icon: GitFork,       accent: 'text-chart-4', chip: 'bg-chart-4/15 text-chart-4 border-chart-4/30' },
 };
 
 const STATUS_DOT_TONE: Record<NonNullable<HubItem['statusTone']>, string> = {
   amber:   'bg-status-warning',
   emerald: 'bg-status-healthy',
   red:     'bg-status-critical',
-  slate:   'bg-slate-400',
+  slate:   'bg-status-unknown',
   primary: 'bg-primary',
   sky:     'bg-status-info',
 };
@@ -70,7 +70,7 @@ const STATUS_TEXT_TONE: Record<NonNullable<HubItem['statusTone']>, string> = {
   amber:   'text-status-warning',
   emerald: 'text-status-healthy',
   red:     'text-status-critical',
-  slate:   'text-slate-600 dark:text-slate-400',
+  slate:   'text-muted-foreground',
   primary: 'text-primary',
   sky:     'text-status-info',
 };
@@ -496,7 +496,9 @@ export function KnowledgeHubPage() {
         {isLoading ? (
           <MacCard bodyPadding="p-0">
             {[...Array(6)].map((_, i) => (
-              <div key={i} className="h-14 border-b border-border last:border-b-0 animate-pulse bg-muted/30" />
+              <div key={i} className="h-14 px-4 flex items-center border-b border-border last:border-b-0">
+                <Skeleton className="block w-full h-4 rounded" />
+              </div>
             ))}
           </MacCard>
         ) : sorted.length === 0 ? (

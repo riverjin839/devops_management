@@ -6,7 +6,8 @@ import {
   Sparkles, UploadCloud,
 } from 'lucide-react';
 import { MacCard } from '@/components/ui/MacCard';
-import { EmptyState, useToast } from '@/components/common';
+import { EmptyState, LoadingState, useToast } from '@/components/common';
+import { PageHeader } from '@/components/common/PageHeader';
 import {
   ConfluenceDocsSettingsDialog, ConfluenceExportDialog, ConfluenceImportModal, SyncStatusBadge,
 } from '@/components/documents';
@@ -106,14 +107,11 @@ export function DocumentsPage() {
   return (
     <div className="p-6 space-y-4">
       {/* 헤더 + 툴바 */}
-      <div className="flex items-center justify-between gap-3 flex-wrap">
-        <div>
-          <h1 className="text-lg font-semibold">문서 관리</h1>
-          <p className="text-xs text-muted-foreground">
-            파트 문서를 한곳에서 관리하고 Confluence 와 동기화합니다 — 가져온 문서는 AI 검색·LLM 학습 소스로 자동 편입됩니다.
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
+      <PageHeader
+        title="문서 관리"
+        description="파트 문서를 한곳에서 관리하고 Confluence 와 동기화합니다 — 가져온 문서는 AI 검색·LLM 학습 소스로 자동 편입됩니다."
+        actions={
+          <>
           <button
             type="button" onClick={() => navigate('/work-guides/new')}
             className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl border border-border bg-secondary text-sm font-medium hover:bg-secondary/80"
@@ -135,8 +133,9 @@ export function DocumentsPage() {
               <Settings2 className="w-4 h-4" />
             </button>
           )}
-        </div>
-      </div>
+          </>
+        }
+      />
 
       {/* 요약 타일 */}
       <StatTileRow>
@@ -236,7 +235,7 @@ export function DocumentsPage() {
                     <td className="px-3 py-2.5">
                       <span className={`px-2 py-0.5 rounded-full text-[11px] font-medium ${
                         guide.confluencePageId || guide.source === 'confluence'
-                          ? 'bg-blue-500/10 text-blue-500' : 'bg-secondary text-muted-foreground'
+                          ? 'bg-chart-1/15 text-chart-1' : 'bg-secondary text-muted-foreground'
                       }`}>
                         {guide.confluencePageId || guide.source === 'confluence' ? 'Confluence' : 'PEP'}
                       </span>
@@ -295,9 +294,7 @@ export function DocumentsPage() {
             </div>
           )}
           {isLoading && (
-            <div className="py-10 flex justify-center text-muted-foreground">
-              <Loader2 className="w-5 h-5 animate-spin" />
-            </div>
+            <LoadingState />
           )}
         </div>
       </MacCard>

@@ -5,7 +5,7 @@ import {
   Play, Trash2, AlertCircle, History,
 } from 'lucide-react';
 import { MacCard } from '@/components/ui/MacCard';
-import { ConfirmDialog } from '@/components/common';
+import { ConfirmDialog, EmptyState, Skeleton } from '@/components/common';
 import { HealthBadge, ServiceTypeIcon } from '@/components/lake-services';
 import {
   useLakeService,
@@ -59,8 +59,8 @@ export function LakeServiceDetailPage() {
     return (
       <div className="app-min-h-screen bg-background p-6">
         <div className="max-w-[1400px] mx-auto space-y-3">
-          <div className="h-8 w-48 bg-muted/30 animate-pulse rounded" />
-          <div className="h-48 bg-muted/30 animate-pulse rounded-md" />
+          <Skeleton className="block h-8 w-48 rounded" />
+          <Skeleton className="block h-48 w-full rounded-md" />
         </div>
       </div>
     );
@@ -151,10 +151,12 @@ export function LakeServiceDetailPage() {
         {/* 점검 이력 (LakeServiceCheck) */}
         <MacCard title="점검 이력">
           {timeline.length === 0 ? (
-            <div className="text-sm text-muted-foreground italic">
-              <History className="w-4 h-4 inline-block mr-1.5 -mt-0.5" />
-              아직 점검 기록이 없습니다. 상단 "지금 점검" 버튼으로 첫 회차를 생성하세요.
-            </div>
+            <EmptyState
+              compact
+              icon={History}
+              title="아직 점검 기록이 없습니다."
+              description="상단 '지금 점검' 버튼으로 첫 회차를 생성하세요."
+            />
           ) : (
             <ul className="space-y-1.5">
               {timeline.slice(0, 50).map((t) => (

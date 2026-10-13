@@ -3,7 +3,7 @@ import { PageHeader } from '@/components/common/PageHeader';
 import { useQueryClient } from '@tanstack/react-query';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Activity, Play, AlertCircle, ListTree, Loader2, ExternalLink } from 'lucide-react';
-import { ClusterSidebar, NamespaceSingleSelect, PodSingleSelect, RunLogPanel } from '@/components/common';
+import { ClusterSidebar, EmptyState, NamespaceSingleSelect, PodSingleSelect, RunLogPanel, SelectClusterEmptyState, Skeleton } from '@/components/common';
 import { MacCard } from '@/components/ui/MacCard';
 import { useClusters } from '@/hooks/useCluster';
 import { useCanOperate } from '@/hooks/useCanOperate';
@@ -208,7 +208,9 @@ export function PodBottleneckPage() {
               </div>
             )}
             {!selectedClusterId && (
-              <p className="mt-3 text-sm text-muted-foreground">좌측 사이드바에서 클러스터를 먼저 선택하세요.</p>
+              <div className="mt-3">
+                <SelectClusterEmptyState compact description="왼쪽 사이드바에서 클러스터를 고르면 진단을 실행할 수 있습니다." />
+              </div>
             )}
             <div className="mt-3">
               <RunLogPanel
@@ -243,14 +245,16 @@ export function PodBottleneckPage() {
             ) : runsLoading ? (
               <div className="space-y-2">
                 {Array.from({ length: 3 }).map((_, i) => (
-                  <div key={i} className="h-12 rounded-md bg-muted/30 animate-pulse" />
+                  <Skeleton key={i} className="block w-full h-12 rounded-md" />
                 ))}
               </div>
             ) : runs.length === 0 ? (
-              <div className="text-center py-10 text-sm text-muted-foreground">
-                <ListTree className="w-8 h-8 mx-auto mb-2 text-muted-foreground/30" />
-                <p>진단 결과가 없습니다. 위 폼에서 첫 진단을 실행하세요.</p>
-              </div>
+              <EmptyState
+                compact
+                icon={ListTree}
+                title="진단 결과가 없습니다."
+                description="위 폼에서 대상 Pod 를 골라 첫 진단을 실행하세요."
+              />
             ) : (
               <>
                 <ul className="divide-y divide-border">

@@ -3,7 +3,7 @@ import { PageHeader } from '@/components/common/PageHeader';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { Trash2, AlertCircle } from 'lucide-react';
 import { MacCard } from '@/components/ui/MacCard';
-import { ConfirmDialog } from '@/components/common';
+import { ConfirmDialog, Skeleton } from '@/components/common';
 import { ProbeResultCard, BOTTLENECK_STATUS_META } from '@/components/pod-bottleneck';
 import {
   useBottleneckRun,
@@ -46,8 +46,8 @@ export function PodBottleneckDetailPage() {
     return (
       <div className="app-min-h-screen bg-background p-6">
         <div className="max-w-[1400px] mx-auto space-y-3">
-          <div className="h-8 w-64 bg-muted/30 animate-pulse rounded-md" />
-          <div className="h-32 bg-muted/30 animate-pulse rounded-md" />
+          <Skeleton className="block h-8 w-64 rounded-md" />
+          <Skeleton className="block h-32 w-full rounded-md" />
         </div>
       </div>
     );

@@ -117,7 +117,7 @@ function OpsNoteRow({
           </select>
         ) : svc ? (
           <span
-            className={`inline-flex items-center gap-1 text-xs font-semibold px-2 py-0.5 rounded-md text-white cursor-pointer ${svc.accent}`}
+            className={`inline-flex items-center gap-1 text-xs font-semibold px-2 py-0.5 rounded-md cursor-pointer ${svc.soft}`}
             title="클릭하여 서비스 변경"
           >
             <svc.Icon className="w-3 h-3" />{svc.label}

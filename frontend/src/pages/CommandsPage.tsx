@@ -5,7 +5,8 @@ import {
 } from 'lucide-react';
 
 import { MacCard } from '@/components/ui/MacCard';
-import { ConfirmDialog } from '@/components/common';
+import { ConfirmDialog, LoadingState } from '@/components/common';
+import { PageHeader } from '@/components/common/PageHeader';
 import { CommandsTable } from '@/components/commands/CommandsTable';
 import {
   useCommands, useCreateCommand, useDeleteCommand, useUpdateCommand,
@@ -56,26 +57,27 @@ export function CommandsPage() {
 
   return (
     <main className="mx-auto p-5 space-y-4 max-w-[1400px]">
-      <div className="flex items-center justify-between flex-wrap gap-3">
-        <div>
-          <h1 className="text-xl font-semibold flex items-center gap-2">
-            <Terminal className="w-5 h-5" /> 주요 명령어 / 파라미터 모음
-          </h1>
-          <p className="text-sm text-muted-foreground mt-1">
-            자주 쓰는 CLI 한 줄을 의미·주의사항·중요도와 함께 기록. 파괴적 명령은
-            <span className="ml-1 inline-flex items-center gap-1 text-xs px-1.5 py-0.5 rounded-full border bg-status-critical/15 text-status-critical border-status-critical/30">
+      <PageHeader
+        icon={Terminal}
+        title="주요 명령어 / 파라미터 모음"
+        description={
+          <>
+            자주 쓰는 CLI 한 줄을 의미·주의사항·중요도와 함께 기록합니다. 파괴적 명령은
+            <span className="mx-1 inline-flex items-center gap-1 text-xs px-1.5 py-0.5 rounded-full border bg-status-critical/15 text-status-critical border-status-critical/30">
               <AlertTriangle className="w-3 h-3" /> 치명
             </span>
-            으로 분류해 시각적으로 구분합니다.
-          </p>
-        </div>
-        <button
-          onClick={() => navigate('/commands/new')}
-          className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-semibold bg-primary text-primary-foreground rounded-xl hover:bg-primary/90"
-        >
-          <Plus className="w-3.5 h-3.5" /> 새 명령어
-        </button>
-      </div>
+            으로 분류해 구분합니다.
+          </>
+        }
+        actions={
+          <button
+            onClick={() => navigate('/commands/new')}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-semibold bg-primary text-primary-foreground rounded-xl hover:bg-primary/90"
+          >
+            <Plus className="w-3.5 h-3.5" /> 새 명령어
+          </button>
+        }
+      />
 
       {/* 필터 / 검색 바 */}
       <MacCard bodyPadding="p-3">
@@ -116,7 +118,7 @@ export function CommandsPage() {
       {/* 리스트 */}
       <MacCard bodyPadding="p-0">
         {isLoading ? (
-          <p className="text-sm text-muted-foreground p-5">불러오는 중…</p>
+          <LoadingState compact />
         ) : (
           <CommandsTable
             entries={entries}

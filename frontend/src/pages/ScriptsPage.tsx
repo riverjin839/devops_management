@@ -1,6 +1,8 @@
 import { useMemo, useState } from 'react';
 import { FileCode2 } from 'lucide-react';
 import { MacCard } from '@/components/ui/MacCard';
+import { EmptyState } from '@/components/common';
+import { PageHeader } from '@/components/common/PageHeader';
 import { ScriptListPanel, ScriptCreateForm, ScriptDetailPanel } from '@/components/scripts';
 import { useScripts } from '@/hooks/useScripts';
 import type { ScriptKind } from '@/types';
@@ -21,15 +23,11 @@ export function ScriptsPage() {
 
   return (
     <main className="mx-auto p-5 space-y-4 max-w-[1400px]">
-      <div>
-        <h1 className="text-xl font-semibold flex items-center gap-2">
-          <FileCode2 className="w-5 h-5" /> 스크립트 라이브러리
-        </h1>
-        <p className="text-sm text-muted-foreground mt-1">
-          Python / Ansible Playbook / Shell 스크립트를 DB 에 저장·버전관리하고 UI 에서
-          바로 편집·테스트 실행합니다.
-        </p>
-      </div>
+      <PageHeader
+        icon={FileCode2}
+        title="스크립트 라이브러리"
+        description="Python / Ansible Playbook / Shell 스크립트를 DB 에 저장·버전관리하고 화면에서 바로 편집·테스트 실행합니다."
+      />
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
         <MacCard rootClassName="lg:col-span-3 min-w-0" bodyPadding="p-0" className="lg:h-[calc(100vh-220px)] overflow-hidden">
@@ -58,9 +56,11 @@ export function ScriptsPage() {
             <ScriptDetailPanel scriptId={selectedId} onDeleted={() => setSelectedId(null)} />
           ) : (
             <div className="h-full flex items-center justify-center">
-              <p className="text-sm text-muted-foreground text-center">
-                왼쪽에서 스크립트를 선택하거나<br />"새 스크립트"로 만들어보세요.
-              </p>
+              <EmptyState
+                icon={FileCode2}
+                title="선택된 스크립트가 없습니다."
+                description="왼쪽 목록에서 스크립트를 고르거나 '새 스크립트'로 만드세요."
+              />
             </div>
           )}
         </MacCard>

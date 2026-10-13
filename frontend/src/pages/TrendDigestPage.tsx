@@ -2,13 +2,15 @@ import { useState } from 'react';
 import { RefreshCw, ExternalLink, ChevronDown, ChevronRight, Settings2, AlertCircle, Loader2, CheckCircle2, Clock, Plus, Pencil, Trash2, X, Check } from 'lucide-react';
 import { useTrendDigests, useTrendItems, useTrendSources, useTriggerCollect, useToggleSource, useCreateSource, useUpdateSource, useDeleteSource } from '@/hooks/useTrends';
 import { MacCard } from '@/components/ui/MacCard';
+import { EmptyState, LoadingState } from '@/components/common';
+import { PageHeader } from '@/components/common/PageHeader';
 import type { TrendDigest, TrendItem, TrendSource } from '@/types';
 import { parseUTC } from '@/lib/utils';
 
 // ── 카테고리 색상 ────────────────────────────────────────────────
 const CATEGORY_COLORS: Record<string, string> = {
-  k8s:    'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300',
-  cilium: 'bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-300',
+  k8s:    'bg-chart-1/15 text-chart-1',
+  cilium: 'bg-chart-7/15 text-chart-7',
   linux:  'bg-status-warning/10 text-status-warning',
   cncf:   'bg-status-healthy/10 text-status-healthy',
 };
@@ -23,8 +25,8 @@ const ITEM_TYPE_LABEL: Record<string, string> = {
 
 const STATUS_INFO: Record<string, { icon: import('react').ReactNode; label: string; cls: string }> = {
   pending:     { icon: <Clock className="w-3.5 h-3.5" />, label: '대기',   cls: 'text-muted-foreground' },
-  collecting:  { icon: <Loader2 className="w-3.5 h-3.5 animate-spin" />, label: '수집 중', cls: 'text-blue-500' },
-  summarizing: { icon: <Loader2 className="w-3.5 h-3.5 animate-spin" />, label: '요약 중', cls: 'text-purple-500' },
+  collecting:  { icon: <Loader2 className="w-3.5 h-3.5 animate-spin" />, label: '수집 중', cls: 'text-status-info' },
+  summarizing: { icon: <Loader2 className="w-3.5 h-3.5 animate-spin" />, label: '요약 중', cls: 'text-status-info' },
   done:        { icon: <CheckCircle2 className="w-3.5 h-3.5" />, label: '완료',   cls: 'text-status-healthy' },
   failed:      { icon: <AlertCircle className="w-3.5 h-3.5" />, label: '실패',   cls: 'text-status-critical' },
 };
@@ -168,11 +170,9 @@ function DigestPanel({ digest }: { digest: TrendDigest }) {
 
       {/* 아이템 목록 */}
       {isLoading ? (
-        <div className="flex justify-center py-10">
-          <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
-        </div>
+        <LoadingState compact />
       ) : items.length === 0 ? (
-        <p className="text-sm text-muted-foreground text-center py-10">해당 조건의 항목이 없습니다</p>
+        <EmptyState compact title="해당 조건의 항목이 없습니다." description="카테고리·유형 필터를 바꾸거나 수집 기간을 늘려 다시 수집하세요." />
       ) : (
         <div className="space-y-2">
           {items.map((item) => (
@@ -376,7 +376,11 @@ function SourcesPanel() {
       <div className="flex items-center justify-between">
         <div className="text-sm text-muted-foreground">
           총 {sources.length}개 · 활성 {sources.filter((s) => s.enabled).length}개
-          {totalErrors > 0 && <span className="ml-2 text-status-critical">⚠ 수집 실패 {totalErrors}개</span>}
+          {totalErrors > 0 && (
+            <span className="ml-2 inline-flex items-center gap-1 text-status-critical">
+              <AlertCircle className="w-3.5 h-3.5" aria-hidden="true" /> 수집 실패 {totalErrors}개
+            </span>
+          )}
         </div>
         {!adding && (
           <button
@@ -464,13 +468,9 @@ export function TrendDigestPage() {
 
         <nav className="flex-1 overflow-y-auto py-2">
           {digestsLoading ? (
-            <div className="flex justify-center pt-4">
-              <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />
-            </div>
+            <LoadingState compact />
           ) : displayDigests.length === 0 ? (
-            <p className="text-sm text-muted-foreground text-center pt-6 px-3">
-              수집된 동향이 없습니다.<br />위 버튼을 눌러 시작하세요.
-            </p>
+            <EmptyState compact title="수집된 동향이 없습니다." description="위 '지금 수집' 버튼으로 시작하세요." />
           ) : (
             displayDigests.map((d) => {
               const si = STATUS_INFO[d.status] ?? STATUS_INFO.pending;
@@ -518,15 +518,15 @@ export function TrendDigestPage() {
         <div className="max-w-4xl mx-auto px-6 py-6">
           {activeTab === 'sources' ? (
             <>
-              <h1 className="text-lg font-bold mb-4">수집 소스 관리</h1>
+              <PageHeader title="수집 소스 관리" className="mb-4" />
               <SourcesPanel />
             </>
           ) : activeDigest ? (
             <>
-              <div className="flex items-center justify-between mb-4 gap-3 flex-wrap">
-                <h1 className="text-lg font-bold">
-                  {activeDigest.digestDate} 기술 동향
-                </h1>
+              <PageHeader
+                title={`${activeDigest.digestDate} 기술 동향`}
+                className="mb-4"
+                actions={
                 <button
                   onClick={handleCollect}
                   disabled={triggerCollect.isPending}
@@ -536,23 +536,28 @@ export function TrendDigestPage() {
                   <RefreshCw className={`w-3.5 h-3.5 ${triggerCollect.isPending ? 'animate-spin' : ''}`} />
                   {LOOKBACK_OPTIONS.find((o) => o.value === lookbackDays)?.label ?? '재수집'} 다시 수집
                 </button>
-              </div>
+                }
+              />
               <DigestPanel digest={activeDigest} />
             </>
           ) : (
-            <div className="flex flex-col items-center justify-center py-20 text-center">
-              <p className="text-muted-foreground text-sm mb-4">
-                아직 수집된 동향이 없습니다.
-              </p>
+            <>
+              <PageHeader title="기술 동향" description="K8s · Cilium · Linux · CNCF 릴리즈와 블로그를 모아 요약합니다." />
+              <EmptyState
+                icon={RefreshCw}
+                title="아직 수집된 동향이 없습니다."
+                description="수집 기간을 고른 뒤 지금 수집을 시작하세요."
+              >
               <button
                 onClick={handleCollect}
                 disabled={triggerCollect.isPending}
-                className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 text-sm"
+                className="mt-4 flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 text-sm"
               >
                 <RefreshCw className={`w-4 h-4 ${triggerCollect.isPending ? 'animate-spin' : ''}`} />
                 지금 수집 시작
               </button>
-            </div>
+              </EmptyState>
+            </>
           )}
         </div>
       </main>

@@ -28,7 +28,7 @@ import {
   useCreateNode, useUpdateNode, useDeleteNode, useBulkUpdatePositions,
 } from '@/hooks/useMindMap';
 import type { MindMap, MindMapNode } from '@/types';
-import { TenantScopeSelect, useModalA11y } from '@/components/common';
+import { EmptyState, Skeleton, TenantScopeSelect, useModalA11y } from '@/components/common';
 
 // ── Constants ───────────────────────────────────────────────────────────────
 const NODE_COLORS = [
@@ -924,20 +924,20 @@ function MindMapCanvas({
                 {isSelected && (
                   <g>
                     <g transform={`translate(${nodeW + 4}, ${nodeH / 2 - 20})`} onClick={(e) => { e.stopPropagation(); onAddChild(node.id); }} style={{ cursor: 'pointer' }}>
-                      <circle r="9" fill="#6366f1" fillOpacity={0.9} />
-                      <text x="0" y="0" textAnchor="middle" dominantBaseline="middle" fontSize="12" fill="white" style={{ pointerEvents: 'none' }}>+</text>
+                      <circle r="9" className="fill-primary" fillOpacity={0.9} />
+                      <text x="0" y="0" textAnchor="middle" dominantBaseline="middle" fontSize="12" className="fill-primary-foreground" style={{ pointerEvents: 'none' }}>+</text>
                     </g>
                     <g transform={`translate(${nodeW + 4}, ${nodeH / 2})`} onClick={(e) => { e.stopPropagation(); onAddSibling(node.id); }} style={{ cursor: 'pointer' }}>
-                      <circle r="9" fill="#2563eb" fillOpacity={0.9} />
-                      <text x="0" y="0" textAnchor="middle" dominantBaseline="middle" fontSize="11" fill="white" style={{ pointerEvents: 'none' }}>↔</text>
+                      <circle r="9" className="fill-primary" fillOpacity={0.9} />
+                      <text x="0" y="0" textAnchor="middle" dominantBaseline="middle" fontSize="11" className="fill-primary-foreground" style={{ pointerEvents: 'none' }}>↔</text>
                     </g>
                     <g transform={`translate(${nodeW + 4}, ${nodeH / 2 + 20})`} onClick={(e) => { e.stopPropagation(); onEditNode(node); }} style={{ cursor: 'pointer' }}>
-                      <circle r="9" fill="#374151" fillOpacity={0.9} />
-                      <text x="0" y="0" textAnchor="middle" dominantBaseline="middle" fontSize="10" fill="white" style={{ pointerEvents: 'none' }}>✎</text>
+                      <circle r="9" className="fill-muted-foreground" fillOpacity={0.9} />
+                      <text x="0" y="0" textAnchor="middle" dominantBaseline="middle" fontSize="10" className="fill-background" style={{ pointerEvents: 'none' }}>✎</text>
                     </g>
                     <g transform={`translate(${nodeW / 2}, ${nodeH + 12})`} onClick={(e) => { e.stopPropagation(); onDeleteNode(node.id); }} style={{ cursor: 'pointer' }}>
-                      <circle r="9" fill="#ef4444" fillOpacity={0.8} />
-                      <text x="0" y="0" textAnchor="middle" dominantBaseline="middle" fontSize="10" fill="white" style={{ pointerEvents: 'none' }}>✕</text>
+                      <circle r="9" className="fill-status-critical" fillOpacity={0.8} />
+                      <text x="0" y="0" textAnchor="middle" dominantBaseline="middle" fontSize="10" className="fill-background" style={{ pointerEvents: 'none' }}>✕</text>
                     </g>
                   </g>
                 )}
@@ -1137,6 +1137,7 @@ export function MindMapPage() {
 
   return (
     <div className="app-min-h-screen bg-background flex">
+      <h1 className="sr-only">마인드맵</h1>
       <aside className="w-64 flex-shrink-0 border-r border-border bg-card flex flex-col">
         <div className="px-4 py-3.5 border-b border-border flex items-center justify-between gap-2">
           <div className="flex items-center gap-2 min-w-0">
@@ -1192,22 +1193,17 @@ export function MindMapPage() {
           {mapsLoading ? (
             <div className="space-y-2 px-2">
               {[...Array(3)].map((_, i) => (
-                <div key={i} className="h-12 rounded-xl bg-secondary/40 animate-pulse" />
+                <Skeleton key={i} className="block w-full h-12 rounded-xl" />
               ))}
             </div>
           ) : maps.length === 0 ? (
-            <div className="text-center py-10 px-4">
-              <div className="w-12 h-12 mx-auto mb-3 rounded-2xl bg-secondary flex items-center justify-center">
-                <MapIcon className="w-6 h-6 text-muted-foreground" />
-              </div>
-              <p className="text-sm text-muted-foreground mb-3">마인드맵이 없습니다.</p>
-              <button
-                onClick={() => setShowCreateMap(true)}
-                className="inline-flex items-center gap-1 text-sm px-3 py-1.5 rounded-lg bg-primary/10 text-primary hover:bg-primary/20 transition-colors"
-              >
-                <Plus className="w-3.5 h-3.5" /> 새로 만들기
-              </button>
-            </div>
+            <EmptyState
+              compact
+              icon={MapIcon}
+              title="마인드맵이 없습니다."
+              description="새 마인드맵을 만들어 아이디어를 정리하세요."
+              action={{ label: '새로 만들기', onClick: () => setShowCreateMap(true), variant: 'secondary' }}
+            />
           ) : (
             maps.map((m) => {
               const isActive = selectedMapId === m.id;
@@ -1311,18 +1307,13 @@ export function MindMapPage() {
           {currentMap ? (
             currentMap.nodes.length === 0 ? (
               <div className="absolute inset-0 flex items-center justify-center">
-                <div className="text-center px-6 py-8 rounded-2xl bg-card/80 backdrop-blur-md border border-border shadow-card max-w-sm">
-                  <div className="w-14 h-14 mx-auto mb-3 rounded-2xl bg-primary/10 flex items-center justify-center">
-                    <MapIcon className="w-7 h-7 text-primary" />
-                  </div>
-                  <p className="text-sm font-semibold mb-1">노드가 없습니다</p>
-                  <p className="text-sm text-muted-foreground mb-4">루트 노드부터 시작해 자식 노드를 자유롭게 추가하세요.</p>
-                  <button
-                    onClick={handleAddRootNode}
-                    className="px-4 py-2 text-sm font-semibold bg-primary hover:bg-primary/90 text-primary-foreground rounded-xl transition-colors inline-flex items-center gap-1.5"
-                  >
-                    <Plus className="w-4 h-4" /> 첫 번째 노드 추가
-                  </button>
+                <div className="rounded-md bg-card border border-border max-w-sm">
+                  <EmptyState
+                    icon={MapIcon}
+                    title="노드가 없습니다."
+                    description="루트 노드부터 시작해 자식 노드를 자유롭게 추가하세요."
+                    action={{ label: '첫 번째 노드 추가', onClick: handleAddRootNode }}
+                  />
                 </div>
               </div>
             ) : (
@@ -1338,12 +1329,11 @@ export function MindMapPage() {
             )
           ) : (
             <div className="absolute inset-0 flex items-center justify-center">
-              <div className="text-center">
-                <div className="w-14 h-14 mx-auto mb-3 rounded-2xl bg-secondary flex items-center justify-center">
-                  <MapIcon className="w-7 h-7 text-muted-foreground" />
-                </div>
-                <p className="text-sm text-muted-foreground">좌측에서 마인드맵을 선택하세요</p>
-              </div>
+              <EmptyState
+                icon={MapIcon}
+                title="선택된 마인드맵이 없습니다."
+                description="왼쪽 목록에서 마인드맵을 고르거나 새로 만드세요."
+              />
             </div>
           )}
         </div>

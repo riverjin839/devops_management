@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react';
 import { PageHeader } from '@/components/common/PageHeader';
 import { useNavigate } from 'react-router-dom';
 import { Database, Plus, AlertCircle } from 'lucide-react';
-import { ClusterSidebar } from '@/components/common';
+import { ClusterSidebar, EmptyState, Skeleton } from '@/components/common';
 import { useClusters } from '@/hooks/useCluster';
 import {
   useLakeServices,
@@ -133,20 +133,19 @@ export function LakeServicesPage() {
           {isLoading && (
             <div className="grid gap-3 grid-cols-[repeat(auto-fill,minmax(280px,1fr))]">
               {Array.from({ length: 4 }).map((_, i) => (
-                <div key={i} className="h-32 rounded-md bg-muted/30 animate-pulse" />
+                <Skeleton key={i} className="block w-full h-32 rounded-md" />
               ))}
             </div>
           )}
 
           {/* Empty state */}
           {!isLoading && !error && services.length === 0 && (
-            <div className="text-center py-16 text-muted-foreground text-sm">
-              <Database className="w-10 h-10 mx-auto mb-3 text-muted-foreground/30" />
-              <p className="mb-2">등록된 LAKE 서비스가 없습니다.</p>
-              <p className="text-sm text-muted-foreground">
-                상단의 <strong>"서비스 등록"</strong> 버튼으로 인스턴스를 추가하세요.
-              </p>
-            </div>
+            <EmptyState
+              icon={Database}
+              title="등록된 LAKE 서비스가 없습니다."
+              description="'서비스 등록'으로 모니터링할 인스턴스를 추가하세요."
+              action={{ label: '서비스 등록', onClick: () => setAddOpen(true) }}
+            />
           )}
 
           {/* Cards grid */}

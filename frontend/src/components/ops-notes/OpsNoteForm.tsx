@@ -20,8 +20,8 @@ const COLOR_OPTIONS: { value: OpsNoteColor; label: string; swatch: string }[] = 
   { value: 'yellow', label: '노랑', swatch: 'bg-status-warning' },
   { value: 'green',  label: '초록', swatch: 'bg-status-healthy' },
   { value: 'blue',   label: '파랑', swatch: 'bg-status-info' },
-  { value: 'pink',   label: '분홍', swatch: 'bg-pink-300' },
-  { value: 'purple', label: '보라', swatch: 'bg-purple-300' },
+  { value: 'pink',   label: '분홍', swatch: 'bg-chart-5' },
+  { value: 'purple', label: '보라', swatch: 'bg-chart-4' },
 ];
 
 interface OpsNoteFormProps {

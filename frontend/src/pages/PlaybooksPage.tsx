@@ -6,7 +6,8 @@ import { CSS } from '@dnd-kit/utilities';
 import { PlaybookCard, PlaybookListRow, PlaybookLogDialog, AddPlaybookModal, RunCredsModal } from '@/components/playbooks';
 import type { PlaybookFormSubmit } from '@/components/playbooks/AddPlaybookModal';
 import type { PlaybookSshCreds } from '@/types';
-import { ClusterSidebar, EmptyState } from '@/components/common';
+import { ClusterSidebar, EmptyState, Skeleton } from '@/components/common';
+import { PageHeader } from '@/components/common/PageHeader';
 import { RoleGate } from '@/components/auth/RoleGate';
 import { usePlaybooks, useCreatePlaybook, useUpdatePlaybook, useDeletePlaybook, useRunPlaybook, useToggleDashboard } from '@/hooks/usePlaybook';
 import { playbooksApi } from '@/services/api';
@@ -241,10 +242,12 @@ export function PlaybooksPage() {
 
         <div className="flex-1 min-w-0">
           {/* Page Header */}
-          <div className="flex items-center justify-between mb-6 gap-3 flex-wrap">
-            <div className="flex items-center gap-3 min-w-0">
-              <BookOpen className="w-6 h-6 text-primary flex-shrink-0" />
-              <h1 className="text-xl font-bold">Ansible 플레이북</h1>
+          <PageHeader
+            icon={BookOpen}
+            title="Ansible 플레이북"
+            className="mb-6"
+            titleExtra={
+            <>
               {statusCounts.total > 0 && (
                 <div className="flex items-center gap-2 ml-2">
                   <span className="text-sm px-2 py-0.5 rounded-full bg-status-healthy/15 text-status-healthy border border-status-healthy/30">
@@ -267,8 +270,9 @@ export function PlaybooksPage() {
                   ? `· 전체 (${clusters.length}개 클러스터)`
                   : `· ${selectedClusterIds.length}개 클러스터 선택됨`}
               </span>
-            </div>
-
+            </>
+            }
+            actions={
             <div className="flex items-center gap-3 flex-wrap">
               {/* View Mode Toggle */}
               <div className="inline-flex items-center bg-background border border-border rounded-lg p-0.5">
@@ -351,20 +355,21 @@ export function PlaybooksPage() {
                 </button>
               </RoleGate>
             </div>
-          </div>
+            }
+          />
 
           {/* Content */}
           {isLoading ? (
             viewMode === 'list' ? (
               <div className="space-y-2">
                 {[...Array(5)].map((_, i) => (
-                  <div key={i} className="bg-card border border-border rounded-lg h-12 animate-pulse" />
+                  <Skeleton key={i} className="block w-full h-12 rounded-lg" />
                 ))}
               </div>
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
                 {[...Array(4)].map((_, i) => (
-                  <div key={i} className="bg-card border border-border rounded-xl p-5 h-48 animate-pulse" />
+                  <Skeleton key={i} className="block w-full h-48 rounded-md" />
                 ))}
               </div>
             )

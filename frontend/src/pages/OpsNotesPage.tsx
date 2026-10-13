@@ -4,14 +4,14 @@ import { PageHeader } from '@/components/common/PageHeader';
 import { useNavigate } from 'react-router-dom';
 import {
   HelpCircle, Plus, Pencil, Trash2, X, Pin, PinOff, Search, MessageSquare,
-  ChevronRight, FileQuestion, ExternalLink, List, LayoutGrid,
+  FileQuestion, ExternalLink, List, LayoutGrid,
   PenLine, Ship, KeyRound, Bug, Hammer, RefreshCw, Package, Layers,
 } from 'lucide-react';
 import { RichContent } from '@/components/editor';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { opsNotesApi } from '@/services/api';
 import type { OpsNote, OpsNoteColor } from '@/types';
-import { useToast, ViewModeBar } from '@/components/common';
+import { EmptyState, Skeleton, useToast, ViewModeBar } from '@/components/common';
 import { formatApiError, formatRelativeTime } from '@/lib/utils';
 import { MacCard } from '@/components/ui/MacCard';
 import { OpsNoteTable, type OpsNoteSortKey } from '@/components/ops-notes/OpsNoteTable';
@@ -27,13 +27,13 @@ type ServiceMeta = {
 };
 
 const SERVICES: ServiceMeta[] = [
-  { value: 'k8s',      label: 'Kubernetes', Icon: Ship,      accent: 'bg-status-info',     ring: 'ring-status-info/30',     soft: 'bg-status-info/10 text-status-info' },
-  { value: 'keycloak', label: 'Keycloak',   Icon: KeyRound,  accent: 'bg-orange-500',  ring: 'ring-orange-500/30',  soft: 'bg-orange-500/10 text-orange-600 dark:text-orange-300' },
-  { value: 'cilium',   label: 'Cilium',     Icon: Bug,       accent: 'bg-status-warning',  ring: 'ring-status-warning/30',  soft: 'bg-status-warning/10 text-status-warning' },
-  { value: 'jenkins',  label: 'Jenkins',    Icon: Hammer,    accent: 'bg-blue-500',    ring: 'ring-blue-500/30',    soft: 'bg-blue-500/10 text-blue-600 dark:text-blue-300' },
-  { value: 'argocd',   label: 'ArgoCD',     Icon: RefreshCw, accent: 'bg-violet-500',  ring: 'ring-violet-500/30',  soft: 'bg-violet-500/10 text-violet-600 dark:text-violet-300' },
-  { value: 'nexus',    label: 'Nexus',      Icon: Package,   accent: 'bg-status-healthy', ring: 'ring-status-healthy/30', soft: 'bg-status-healthy/10 text-status-healthy' },
-  { value: 'etc',      label: '기타',        Icon: Layers,    accent: 'bg-slate-500',   ring: 'ring-slate-500/30',   soft: 'bg-status-unknown/10 text-status-unknown dark:text-slate-300' },
+  { value: 'k8s',      label: 'Kubernetes', Icon: Ship,      accent: 'bg-chart-1', ring: 'ring-chart-1/30', soft: 'bg-chart-1/15 text-chart-1' },
+  { value: 'keycloak', label: 'Keycloak',   Icon: KeyRound,  accent: 'bg-chart-7', ring: 'ring-chart-7/30', soft: 'bg-chart-7/15 text-chart-7' },
+  { value: 'cilium',   label: 'Cilium',     Icon: Bug,       accent: 'bg-chart-3', ring: 'ring-chart-3/30', soft: 'bg-chart-3/15 text-chart-3' },
+  { value: 'jenkins',  label: 'Jenkins',    Icon: Hammer,    accent: 'bg-chart-6', ring: 'ring-chart-6/30', soft: 'bg-chart-6/15 text-chart-6' },
+  { value: 'argocd',   label: 'ArgoCD',     Icon: RefreshCw, accent: 'bg-chart-4', ring: 'ring-chart-4/30', soft: 'bg-chart-4/15 text-chart-4' },
+  { value: 'nexus',    label: 'Nexus',      Icon: Package,   accent: 'bg-chart-2', ring: 'ring-chart-2/30', soft: 'bg-chart-2/15 text-chart-2' },
+  { value: 'etc',      label: '기타',        Icon: Layers,    accent: 'bg-chart-8', ring: 'ring-chart-8/30', soft: 'bg-chart-8/15 text-chart-8' },
 ];
 const SERVICE_MAP = Object.fromEntries(SERVICES.map((s) => [s.value, s]));
 
@@ -42,9 +42,30 @@ const CARD_TINT: Record<OpsNoteColor, { stripe: string; tint: string; chip: stri
   yellow: { stripe: 'bg-status-warning',  tint: 'bg-status-warning/5',  chip: 'bg-status-warning/15 text-status-warning' },
   green:  { stripe: 'bg-status-healthy', tint: 'bg-status-healthy/5', chip: 'bg-status-healthy/15 text-status-healthy' },
   blue:   { stripe: 'bg-status-info',    tint: 'bg-status-info/5',      chip: 'bg-status-info/15 text-status-info' },
-  pink:   { stripe: 'bg-pink-400',   tint: 'bg-pink-50/60 dark:bg-pink-500/[0.06]',    chip: 'bg-pink-500/15   text-pink-700   dark:text-pink-300' },
-  purple: { stripe: 'bg-purple-400', tint: 'bg-purple-50/60 dark:bg-purple-500/[0.06]', chip: 'bg-purple-500/15 text-purple-700 dark:text-purple-300' },
+  pink:   { stripe: 'bg-chart-5',        tint: 'bg-chart-5/5',          chip: 'bg-chart-5/15 text-chart-5' },
+  purple: { stripe: 'bg-chart-4',        tint: 'bg-chart-4/5',          chip: 'bg-chart-4/15 text-chart-4' },
 };
+
+// ── 빈 상태 (리스트·카드 공용) ─────────────────────────────────────────────────
+function QnaEmptyState({ hasAny, search, onCreate }: { hasAny: boolean; search: string; onCreate: () => void }) {
+  if (!hasAny) {
+    return (
+      <EmptyState
+        icon={FileQuestion}
+        title="아직 등록된 Q&A 가 없습니다."
+        description="운영 중 만난 질문과 해결책을 첫 Q&A 로 남기세요."
+        action={{ label: '첫 Q&A 만들기', onClick: onCreate }}
+      />
+    );
+  }
+  return (
+    <EmptyState
+      icon={FileQuestion}
+      title={search.trim() ? `"${search}" 검색 결과가 없습니다.` : '해당 서비스의 Q&A 가 없습니다.'}
+      description={search.trim() ? '다른 검색어를 쓰거나 서비스 필터를 해제하세요.' : '다른 서비스를 고르거나 새 Q&A 를 등록하세요.'}
+    />
+  );
+}
 
 // ── Q&A 카드 ──────────────────────────────────────────────────────────────────
 interface QnaCardProps {
@@ -83,7 +104,7 @@ function QnaCard({ note, onOpen, onEdit, onDelete, onTogglePin }: QnaCardProps) 
       {/* 헤더 */}
       <header className="flex items-center justify-between gap-2 pl-4 pr-2 pt-3">
         <div className="flex items-center gap-1.5 min-w-0">
-          <span className={`inline-flex items-center gap-1 text-xs font-semibold px-1.5 py-0.5 rounded-md text-white ${svc?.accent ?? 'bg-slate-500'}`}>
+          <span className={`inline-flex items-center gap-1 text-xs font-semibold px-1.5 py-0.5 rounded-md ${svc?.soft ?? 'bg-secondary text-muted-foreground'}`}>
             {SvcIcon && <SvcIcon className="w-3 h-3" />}
             {svc?.label ?? note.service}
           </span>
@@ -159,7 +180,7 @@ function QnaCard({ note, onOpen, onEdit, onDelete, onTogglePin }: QnaCardProps) 
             className={`inline-flex items-center justify-center w-5 h-5 rounded-md text-xs font-bold flex-shrink-0 mt-0.5 ${
               activeTab === 'answer'
                 ? 'bg-status-healthy/15 text-status-healthy'
-                : 'bg-status-unknown/15 text-status-unknown dark:text-slate-300'
+                : 'bg-status-unknown/15 text-status-unknown'
             }`}
           >
             {activeTab === 'answer' ? 'A' : 'H'}
@@ -446,29 +467,15 @@ export function OpsNotesPage() {
             {isLoading ? (
               <div className="p-4 space-y-2">
                 {[...Array(6)].map((_, i) => (
-                  <div key={i} className="h-12 rounded bg-secondary/40 animate-pulse" />
+                  <Skeleton key={i} className="block w-full h-12 rounded" />
                 ))}
               </div>
             ) : tableNotes.length === 0 ? (
-              <div className="text-center py-16">
-                <FileQuestion className="w-12 h-12 mx-auto mb-4 text-muted-foreground/40" />
-                <p className="text-sm text-muted-foreground">
-                  {allNotes.length === 0
-                    ? '아직 등록된 Q&A 가 없습니다.'
-                    : search.trim()
-                      ? `"${search}" 검색 결과가 없습니다.`
-                      : '해당 서비스의 Q&A 가 없습니다.'}
-                </p>
-                {allNotes.length === 0 && (
-                  <button
-                    onClick={() => navigate('/ops-notes/new')}
-                    className="mt-4 inline-flex items-center gap-1.5 px-3.5 py-2 text-sm bg-primary/10 hover:bg-primary/20 text-primary rounded-xl transition-colors"
-                  >
-                    <Plus className="w-4 h-4" /> 첫 번째 Q&amp;A 만들기
-                    <ChevronRight className="w-3.5 h-3.5" />
-                  </button>
-                )}
-              </div>
+              <QnaEmptyState
+                hasAny={allNotes.length > 0}
+                search={search}
+                onCreate={() => navigate('/ops-notes/new')}
+              />
             ) : (
               <OpsNoteTable
                 notes={tableNotes}
@@ -519,29 +526,15 @@ export function OpsNotesPage() {
               {isLoading ? (
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
                   {[...Array(8)].map((_, i) => (
-                    <div key={i} className="h-56 rounded-2xl bg-secondary/40 animate-pulse" />
+                    <Skeleton key={i} className="block w-full h-56 rounded-md" />
                   ))}
                 </div>
               ) : regularNotes.length === 0 ? (
-                <div className="text-center py-16">
-                  <FileQuestion className="w-12 h-12 mx-auto mb-4 text-muted-foreground/40" />
-                  <p className="text-sm text-muted-foreground">
-                    {allNotes.length === 0
-                      ? '아직 등록된 Q&A 가 없습니다.'
-                      : search.trim()
-                        ? `"${search}" 검색 결과가 없습니다.`
-                        : '해당 서비스의 Q&A 가 없습니다.'}
-                  </p>
-                  {allNotes.length === 0 && (
-                    <button
-                      onClick={() => navigate('/ops-notes/new')}
-                      className="mt-4 inline-flex items-center gap-1.5 px-3.5 py-2 text-sm bg-primary/10 hover:bg-primary/20 text-primary rounded-xl transition-colors"
-                    >
-                      <Plus className="w-4 h-4" /> 첫 번째 Q&amp;A 만들기
-                      <ChevronRight className="w-3.5 h-3.5" />
-                    </button>
-                  )}
-                </div>
+                <QnaEmptyState
+                  hasAny={allNotes.length > 0}
+                  search={search}
+                  onCreate={() => navigate('/ops-notes/new')}
+                />
               ) : (
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
                   {regularNotes.map((note) => (

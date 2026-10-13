@@ -24,7 +24,7 @@ import { useQuery } from '@tanstack/react-query';
 import { useClusters } from '@/hooks/useCluster';
 import { useTerminalEnvSync } from '@/hooks/useTerminalEnvSync';
 import { useClusterStore } from '@/stores/clusterStore';
-import { ClusterSidebar, LogViewer, SearchableSelect, EmptyState, SelectClusterEmptyState } from '@/components/common';
+import { ClusterSidebar, LogViewer, SearchableSelect, EmptyState, SelectClusterEmptyState, LoadingState, Skeleton } from '@/components/common';
 import { MacCard } from '@/components/ui/MacCard';
 import { RoleGate } from '@/components/auth/RoleGate';
 import { getAuthToken } from '@/stores/authStore';
@@ -272,7 +272,7 @@ interface StatusStripProps { status?: CiliumStatus; loading: boolean; agentCount
 
 function StatusStrip({ status, loading, agentCount }: StatusStripProps) {
   if (loading) {
-    return <div className="h-20 rounded-2xl bg-secondary/40 animate-pulse" />;
+    return <Skeleton className="block w-full h-20 rounded-md" />;
   }
   if (!status) {
     return null;
@@ -541,14 +541,14 @@ function BpfInspectorTab({ clusterId, agents }: { clusterId: string; agents: Cil
           </div>
         )}
         {!data && !loading && (
-          <div className="text-center py-16 text-sm text-muted-foreground">
-            대상 BPF 맵을 선택하고 <kbd className="mx-1 px-1.5 py-0.5 rounded bg-secondary border border-border text-xs">조회</kbd> 를 누르세요.
-          </div>
+          <EmptyState
+            icon={Database}
+            title="조회한 BPF 맵이 없습니다."
+            description="대상 BPF 맵을 선택하고 '조회'를 누르면 cilium-dbg 결과가 여기에 표시됩니다."
+          />
         )}
         {loading && (
-          <div className="text-center py-16 text-sm text-muted-foreground flex items-center justify-center gap-2">
-            <RefreshCw className="w-4 h-4 animate-spin" /> cilium-dbg 실행 중…
-          </div>
+          <LoadingState label="cilium-dbg 실행 중…" />
         )}
         {data && data.isJson && Array.isArray(data.parsed) && (
           <BpfJsonTable rows={data.parsed} />
@@ -570,7 +570,7 @@ function BpfJsonTable({ rows }: { rows: Record<string, unknown>[] }) {
     return Array.from(set);
   }, [rows]);
   if (rows.length === 0) {
-    return <div className="text-center py-12 text-sm text-muted-foreground">결과가 비어있습니다.</div>;
+    return <EmptyState compact title="결과가 비어 있습니다." description="선택한 맵에 항목이 없습니다. 다른 맵이나 에이전트를 골라 다시 조회하세요." />;
   }
   return (
     <div className="overflow-auto max-h-[60vh] lg:max-h-[calc(100vh-300px)]">
@@ -1088,14 +1088,14 @@ function HubbleTab({ clusterId, hubbleInstalled }: { clusterId: string; hubbleIn
 
   if (!hubbleInstalled) {
     return (
-      <MacCard bodyPadding="p-8">
-        <div className="text-center space-y-2">
-          <AlertTriangle className="w-10 h-10 mx-auto text-status-warning" />
-          <p className="text-sm font-semibold">Hubble Relay 가 설치되어 있지 않습니다.</p>
-          <p className="text-sm text-muted-foreground">
-            <code className="px-1 py-0.5 rounded bg-secondary">cilium hubble enable --ui</code> 또는 helm 으로 hubble-relay 를 배포해 주세요.
-          </p>
-        </div>
+      <MacCard bodyPadding="p-0">
+        <EmptyState
+          icon={AlertTriangle}
+          title="Hubble Relay 가 설치되어 있지 않습니다."
+          description="아래 명령 또는 helm 으로 hubble-relay 를 배포하면 flow 를 볼 수 있습니다."
+        >
+          <code className="mt-3 px-1.5 py-0.5 rounded bg-secondary text-sm">cilium hubble enable --ui</code>
+        </EmptyState>
       </MacCard>
     );
   }
