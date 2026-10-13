@@ -105,6 +105,62 @@
   .chip { display: inline-block; font-size: 11px; font-weight: 700; border-radius: 6px; padding: 1px 6px; background: hsl(var(--secondary)); color: hsl(var(--foreground)); }
   .chip.acc { background: hsl(var(--accent)); color: hsl(var(--primary-text, var(--primary))); }
 
+  /* ── 모듈 히트맵·기술 타임라인 ── */
+  .heat { width: 100%; border-collapse: separate; border-spacing: 3px; font-size: 13px; }
+  .heat th { padding: 2px 4px; font-size: 12px; text-align: center; }
+  .heat th.rowh { text-align: left; white-space: nowrap; font-size: 13px; color: hsl(var(--foreground)); }
+  .heat td { border: 0 !important; border-radius: 6px !important; padding: 0; height: 30px; min-width: 34px; text-align: center; cursor: pointer;
+    background: hsl(var(--primary) / var(--a, 0)); color: hsl(var(--foreground)); font-weight: 600; font-variant-numeric: tabular-nums; }
+  .heat td.zero { background: hsl(var(--secondary)); color: transparent; cursor: default; }
+  .heat td:hover:not(.zero) { outline: 2px solid hsl(var(--primary)); }
+  .mods { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 14px; }
+  .mod { cursor: pointer; transition: border-color .15s; }
+  .mod:hover, .mod:focus-visible { border-color: hsl(var(--primary)); }
+  .mod .top { display: flex; justify-content: space-between; gap: 8px; align-items: baseline; }
+  .mod .name { font-weight: 800; font-size: 16px; }
+  .mod .stats { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 13px; color: hsl(var(--muted-foreground)); margin: 6px 0 8px; }
+  .mod .stats b { color: hsl(var(--foreground)); }
+  .mod .desc { font-size: 14px; margin: 0 0 10px; }
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; }
+  .filters { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 14px; }
+  .filters button { font-size: 12px; min-height: 28px; padding: 3px 10px; }
+  .tmonth { display: grid; grid-template-columns: 70px 1fr; gap: 12px; padding: 12px 0; border-top: 1px solid hsl(var(--border)); }
+  .tmonth:first-child { border-top: 0; }
+  .tmonth .mm { font-weight: 800; color: hsl(var(--primary-text, var(--primary))); }
+  .titem { display: grid; grid-template-columns: minmax(150px, 220px) 1fr; gap: 4px 12px; padding: 4px 0; font-size: 14px; }
+  .titem .src { font-size: 12px; color: hsl(var(--muted-foreground)); }
+  details.deps summary { cursor: pointer; font-weight: 700; font-size: 14px; }
+  details.deps ul { columns: 3 220px; font-size: 13px; padding-left: 18px; }
+  @media (max-width: 600px) { .titem { grid-template-columns: 1fr; } .tmonth { grid-template-columns: 1fr; } }
+
+  /* ── 로드맵·플레이북 ── */
+  .rm { display: grid; grid-template-columns: 130px repeat(3, minmax(0, 1fr)); gap: 10px; align-items: start; }
+  .rm .qh { font-weight: 800; color: hsl(var(--primary-text, var(--primary))); padding: 0 4px; }
+  .rm .lh { font-weight: 800; padding-top: 10px; }
+  .rm .cell { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+  .rm .it { background: hsl(var(--card)); border: 1px solid hsl(var(--border)); border-radius: var(--radius-card); padding: 10px 12px; }
+  .rm .it b { display: block; margin-bottom: 2px; }
+  .rm .it p { margin: 0 0 6px; font-size: 13px; color: hsl(var(--muted-foreground)); }
+  .rm .lane-ai .it { background: hsl(var(--accent)); border-color: transparent; }
+  .feat ul { margin: 6px 0 10px; padding-left: 18px; font-size: 14px; } .feat li { margin: 2px 0; }
+  .feat .top, .case .top { display: flex; justify-content: space-between; gap: 8px; align-items: baseline; } .feat .name { font-weight: 800; font-size: 16px; }
+  .cases { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(320px, 100%), 1fr)); gap: 14px; }
+  .case .top .chip { white-space: nowrap; flex-shrink: 0; } .case b { font-size: 16px; } .case p { margin: 8px 0 0; font-size: 14px; } .case .pr { color: hsl(var(--muted-foreground)); }
+  .case .tag { display: inline-block; font-size: 11px; font-weight: 800; margin-right: 6px; padding: 0 6px; border-radius: 6px; background: hsl(var(--secondary)); color: hsl(var(--foreground)); }
+  .case .tag.acc { background: hsl(var(--primary)); color: hsl(var(--primary-foreground)); }
+  .calc { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 8px 12px; }
+  .calc label { display: flex; flex-direction: column; gap: 3px; font-size: 12px; color: hsl(var(--muted-foreground)); }
+  .calc input { font: inherit; font-size: 14px; color: hsl(var(--foreground)); background: hsl(var(--background)); border: 1px solid hsl(var(--border)); border-radius: 8px; padding: 5px 8px; min-width: 0; }
+  .csrc { padding: 8px 0; border-top: 1px solid hsl(var(--border)); font-size: 13px; } .csrc:first-of-type { border-top: 0; }
+  .ev { display: inline-block; font-size: 12px; font-weight: 700; border-radius: 6px; padding: 2px 8px; background: hsl(var(--secondary)); color: hsl(var(--foreground)); }
+  .pb { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  .pb ul { list-style: none; margin: 0; padding: 0; }
+  .pb li { padding: 10px 0; border-top: 1px solid hsl(var(--border)); }
+  .pb li:first-child { border-top: 0; }
+  .pb li b { display: block; }
+  .pb li span.d { font-size: 13px; color: hsl(var(--muted-foreground)); }
+  @media (max-width: 860px) { .rm { grid-template-columns: 1fr; } .rm .qh.blank { display: none; } .pb { grid-template-columns: 1fr; } }
+
   /* ── 드릴다운 패널 ── */
   .drawer {
     position: fixed; top: 0; right: 0; bottom: 0; width: min(520px, 100vw); z-index: 40; transform: translateX(100%); transition: transform .25s;
@@ -120,11 +176,30 @@
   .era-edit span { display: flex; gap: 4px; align-items: center; }
 
   /* ── 발표 모드 ── */
-  body.present main { max-width: none; padding: 0 5vw; }
-  body.present section { min-height: calc(100vh - 56px); display: flex; flex-direction: column; justify-content: center; padding: 24px 0; }
+  /* 한 화면 = 한 섹션. 넘치는 섹션은 .fit 을 축소해 화면에 맞춘다 (세로 스크롤 없음) */
+  body.present { overflow: hidden; height: 100vh; }
+  body.present main { max-width: none; padding: 0; }
+  body.present main > section { display: none; height: calc(100vh - var(--barh, 56px)); padding: 3vh 5vw 7vh; overflow: hidden; touch-action: pan-y; }
+  body.present main > section.active { display: block; }
+  body.present .fit { transform-origin: top left; }
+  body.present main > section.scrolly { overflow-y: auto; }
+  body.present #tl-list { columns: 2 420px; column-gap: 28px; }
+  body.present .tmonth { break-inside: avoid; }
   body.present .bar .doc-only { display: none; }
-  .pager { position: fixed; right: 18px; bottom: 16px; z-index: 30; font-size: 12px; color: hsl(var(--muted-foreground)); display: none; }
-  body.present .pager { display: block; }
+  .pager, .navbtn { display: none; }
+  body.present .pager { display: flex; gap: 10px; align-items: center; position: fixed; left: 50%; transform: translateX(-50%); bottom: 14px; z-index: 30;
+    font-size: 12px; color: hsl(var(--muted-foreground)); background: hsl(var(--card) / .9); border: 1px solid hsl(var(--border)); border-radius: 999px; padding: 6px 14px; }
+  .pager .prog { width: 120px; height: 4px; border-radius: 2px; background: hsl(var(--secondary)); overflow: hidden; }
+  .pager .prog > i { display: block; height: 100%; background: hsl(var(--primary)); transition: width .2s; }
+  body.present .navbtn { display: grid; place-items: center; position: fixed; top: 50%; z-index: 30; width: 44px; height: 44px; border-radius: 50%;
+    font-size: 20px; padding: 0; background: hsl(var(--card) / .9); }
+  .navbtn.prev { left: 10px; } .navbtn.next { right: 10px; }
+  body.present .pager { white-space: nowrap; }
+  @media (max-width: 700px) { body.present .navbtn { display: none; } .pager .hint-keys { display: none; } }  /* 폰은 스와이프로 넘긴다 */
+  .navbtn:disabled { opacity: .3; cursor: default; }
+  @keyframes slidein { from { opacity: 0; transform: translateX(var(--dx, 24px)); } to { opacity: 1; transform: none; } }
+  body.present main > section.active { animation: slidein .22s ease-out; }
+  @media (prefers-reduced-motion: reduce) { body.present main > section.active { animation: none; } }
 
   /* ── 반응형 ── */
   @media (max-width: 860px) {
@@ -137,7 +212,10 @@
   /* ── 인쇄 (A4 가로, 섹션당 1페이지) ── */
   @page { size: A4 landscape; margin: 12mm; }
   @media print {
-    .bar, .drawer, .tooltip, .pager, .noprint, .hint { display: none !important; }
+    .bar, .drawer, .tooltip, .pager, .navbtn, .noprint, .hint { display: none !important; }
+    body.present { overflow: visible; height: auto; }
+    body.present main > section { display: block !important; height: auto; padding: 0; animation: none; }
+    .fit { transform: none !important; width: auto !important; }
     body { font-size: 13px; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
     main { max-width: none; padding: 0; }
     section { break-after: page; padding: 0; min-height: 0; }
@@ -166,7 +244,9 @@
   <ul id="dr-list"></ul>
 </aside>
 <div class="tooltip" id="tip" role="status"></div>
-<div class="pager" id="pager"></div>
+<button type="button" class="navbtn prev" id="nav-prev" aria-label="이전 슬라이드" title="이전 (←)">‹</button>
+<button type="button" class="navbtn next" id="nav-next" aria-label="다음 슬라이드" title="다음 (→)">›</button>
+<div class="pager" id="pager" role="status" aria-live="polite"><span id="pg-n" class="num"></span><span class="prog"><i id="pg-bar"></i></span><span class="hint-keys">←/→ · 스와이프 · Esc</span></div>
 
 <script id="data" type="application/json">/*__DATA__*/</script>
 <script id="narrative" type="application/json">/*__NARRATIVE__*/</script>
@@ -285,6 +365,22 @@ function lines(c, { labels, series, h = 260, dec = 0, unit = "" }) {
   c.host.appendChild(svg);
 }
 
+/* 가로 막대 (값 차이가 큰 비교용 — 로그 스케일 선택) */
+function hbars(c, { rows, log = true }) {
+  const W = Math.max(280, c.host.clientWidth), rh = 46, P = { l: Math.min(150, W * 0.34), r: 120, t: 6 }, H = P.t + rows.length * rh;
+  const svg = el("svg", { viewBox: `0 0 ${W} ${H}`, height: H, role: "img" });
+  const f = v => log ? Math.log10(1 + v) : v, max = Math.max(...rows.map(r => f(r.value)), 1e-9), iw = W - P.l - P.r;
+  rows.forEach((r, i) => {
+    const y = P.t + i * rh, w = Math.max(2, f(r.value) / max * iw);
+    el("text", { x: P.l - 10, y: y + rh / 2 + 5, "text-anchor": "end", class: r.hl ? "lbl" : "" }, svg).textContent = r.label;
+    const b = el("rect", { class: "bar", x: P.l, y: y + 8, width: w, height: rh - 16, rx: 4, fill: col(r.hl ? C.acc : C.mute, r.hl ? 1 : .45) }, svg);
+    b.addEventListener("mousemove", e => showTip(e, `<b>${r.label}</b><br><span class="num">${r.text}</span>`)); b.addEventListener("mouseleave", hideTip);
+    el("text", { x: P.l + w + 8, y: y + rh / 2 + 5, class: "lbl" }, svg).textContent = r.text;
+  });
+  c.host.appendChild(svg);
+  if (log) { const n = document.createElement("p"); n.className = "hint"; n.textContent = "막대 길이는 로그 스케일 (값 차이가 커서) — 정확한 값은 라벨"; c.host.appendChild(n); }
+}
+
 /* ── 섹션 렌더링 ── */
 const sections = [];
 function sec(id, kicker, title, body) { sections.push({ id, kicker, title, body }); }
@@ -303,12 +399,14 @@ function build() {
 
   const add = (id, kicker, title, node) => {
     const s = document.createElement("section"); s.id = id; s.setAttribute("aria-labelledby", id + "-h");
-    s.appendChild(h(`<p class="kicker">${kicker}</p><h2 id="${id}-h">${title}</h2>`)); s.appendChild(node); main.appendChild(s); return s;
+    const fit = document.createElement("div"); fit.className = "fit";
+    fit.appendChild(h(`<p class="kicker">${kicker}</p><h2 id="${id}-h">${title}</h2>`)); fit.appendChild(node); s.appendChild(fit); main.appendChild(s); return s;
   };
 
   /* 1. 표지 */
   const cover = document.createElement("section"); cover.id = "cover";
-  cover.appendChild(h(`
+  const coverFit = document.createElement("div"); coverFit.className = "fit"; cover.appendChild(coverFit);
+  coverFit.appendChild(h(`
     <p class="kicker">팀 보고 · 데이터 ${D.meta.head} 기준</p>
     <h1>${N.title}</h1><p class="sub">${N.subtitle}</p>
     <p class="note">기간 ${range} · 원천 ${D.meta.repo} (${D.meta.rev}) · 생성 ${D.meta.generated}</p>
@@ -319,7 +417,7 @@ function build() {
   main.appendChild(cover);
 
   /* 2. 요약 */
-  add("summary", "SUMMARY", "한 장 요약 — 구현은 AI, 사람은 의도·검증·하네스", h(`
+  add("summary", "SUMMARY", "한 장 요약 — AI 는 구현, 사람은 의도·검증·하네스 담당", h(`
     <div class="grid g4">
       <div class="card kpi"><div class="v num">${last ? Math.round(loc(last) / 1000) + "K" : "-"}</div><div class="l">코드 라인</div><div class="d">Python ${last ? Math.round(last.py / 1000) : 0}K + TS ${last ? Math.round(last.ts / 1000) : 0}K${first && loc(first) ? ` · 기간 시작 대비 ${(loc(last) / loc(first)).toFixed(1)}배` : ""}</div></div>
       <div class="card kpi"><div class="v num">${last ? fmt(last.tests) : "-"}</div><div class="l">백엔드 테스트</div><div class="d">월말 스냅샷의 def test_ 수</div></div>
@@ -329,17 +427,17 @@ function build() {
     <div class="card" style="margin-top:20px">${N.summary.map(([k, v]) => `<p style="margin:6px 0"><b class="acc">${k}</b> ${v}</p>`).join("")}</div>`));
 
   /* 3. Before / After */
-  add("how", "HOW WE WORK", "개발 방식은 어떻게 바뀌었나", h(`<div class="tablewrap"><table><thead><tr><th>영역</th><th>BEFORE</th><th class="acc">AFTER (AI 페어)</th></tr></thead><tbody>
+  add("how", "HOW WE WORK", "AI 도입 전후로 달라진 개발 방식", h(`<div class="tablewrap"><table><thead><tr><th>영역</th><th>BEFORE</th><th class="acc">AFTER (AI 페어)</th></tr></thead><tbody>
     ${N.beforeAfter.map(([a, b, c]) => `<tr><td>${a}</td><td class="muted">${b}</td><td>${c}</td></tr>`).join("")}</tbody></table></div>`));
 
   /* 4. 하네스 타임라인 */
   const keyLabels = new Set(["CLAUDE.md 도입", "스킬 + CHANGELOG", "자동 릴리스", "UX 에이전트·DESIGN.md"]);
-  add("timeline", "TIMELINE", "AI 를 잘 쓰기 위한 '하네스'가 쌓여 온 과정", h(`
+  add("timeline", "TIMELINE", "AI 활용도를 높인 '하네스' 구축 과정", h(`
     <div class="card"><div class="timeline">${D.harness.map(x => `<div class="tl ${keyLabels.has(x.label) ? "key" : ""}"><div class="d num">${x.d.slice(5)}</div><div class="dot"></div><div class="t">${x.label}</div></div>`).join("")}</div></div>
     <div class="card hl" style="margin-top:16px"><b class="acc">핵심 관찰</b> 모델이 아니라 '저장소에 남긴 규칙'이 생산성을 바꿨다. 아래 처리량 섹션에서 하네스 도입 전후 월 PR 을 직접 비교할 수 있다.</div>`));
 
   /* 5. AI 기여도 */
-  const s5 = add("share", "AI SHARE", `작성 주체 — 커밋의 ${share}% 를 AI 가 작성`, h(`
+  const s5 = add("share", "AI SHARE", `작성 주체 — AI 가 작성한 커밋 ${share}%`, h(`
     <div class="grid g2"><div class="card"><h3>월별 커밋 (병합·봇 제외)</h3><div class="chart" id="c-share"></div><p class="hint">범례를 누르면 계열을 숨긴다. 막대를 누르면 그 달 PR 목록이 열린다.</p></div>
     <div class="grid" style="align-content:start">
       <div class="card kpi hl"><div class="v num">${fmt(A.ai)} / ${fmt(A.commits.length)}</div><div class="d">AI 작성 커밋 (${share}%) — 작성자 Claude 또는 Co-Authored-By 트레일러</div></div>
@@ -350,7 +448,7 @@ function build() {
 
   /* 6. 처리량 */
   const prCounts = M.map(m => A.pm[m].length), peak = prCounts.indexOf(Math.max(...prCounts));
-  const s6 = add("throughput", "THROUGHPUT", `처리량 — ${L[peak] || ""} 정점 ${fmt(prCounts[peak] || 0)} PR`, h(`
+  const s6 = add("throughput", "THROUGHPUT", `처리량 — ${L[peak] || ""} ${fmt(prCounts[peak] || 0)} PR 정점 후 안정화 구간`, h(`
     <div class="grid g2"><div class="card"><h3>월별 병합 PR <span class="hint">(막대 클릭 → PR 목록)</span></h3><div class="chart" id="c-pr"></div></div>
     <div class="card"><h3>작업일당 PR</h3><div class="chart" id="c-ppd"></div></div></div>`));
   chart($("#c-pr", s6), c => bars(c, { labels: L, onClick: i => openDrawer(M[i]),
@@ -366,6 +464,69 @@ function build() {
   chart($("#c-loc", s7), c => lines(c, { labels: A.snaps.map(s => mLabel(s.m)), dec: 1, unit: "K",
     series: [{ name: "Frontend TS/TSX", color: C.acc, values: A.snaps.map(s => s.ts / 1000) }, { name: "Backend Python", color: C.mute, alpha: .6, values: A.snaps.map(s => s.py / 1000) }] }));
 
+  /* 7-1. 모듈별 변화 */
+  const MODS = N.modules || [], modLabel = k => (MODS.find(m => m.key === k) || {}).label || k;
+  const hasMod = (c, k) => c[4] && c[4].split(",").includes(k);
+  const techDate = t => {
+    const ds = [...(t.deps || []).map(n => (D.deps.find(x => x.n === n) || {}).added), ...(t.paths || []).map(p => D.path_added[p])].filter(Boolean).sort();
+    return ds[0] || null;
+  };
+  const TECH = (N.tech || []).map(t => ({ ...t, date: techDate(t) })).filter(t => t.date);
+  const firstTouch = k => { const c = D.commits.find(x => hasMod(x, k)); return c ? c[0] : null; };
+  const heat = MODS.map(m => M.map(mm => A.cm[mm].filter(c => hasMod(c, m.key)).length));
+  const hmax = Math.max(1, ...heat.flat());
+  /* 7-0. 구현 기능 지도 */
+  const INV = D.inventory || {}, stripPage = n => n.replace(/Page$/, "");
+  add("features", "WHAT WE BUILT", `구현 기능 지도 — 화면 ${last ? last.pages : 0} · API 라우터 ${last ? last.routers : 0} · 모듈 ${MODS.length}`, h(`
+    <div class="mods">${MODS.map(m => {
+      const inv = INV[m.key] || { pages: [], routers: [] }, pg = inv.pages.map(stripPage);
+      return `<div class="card feat"><div class="top"><span class="name">${m.label}</span><span class="hint num">화면 ${inv.pages.length} · API ${inv.routers.length}</span></div>
+        <ul>${(m.features || []).map(f => `<li>${f}</li>`).join("")}</ul>
+        <div class="chips">${pg.slice(0, 6).map(n => `<span class="chip">${n}</span>`).join("")}${pg.length > 6 ? `<span class="hint">외 ${pg.length - 6}</span>` : ""}</div></div>`; }).join("")}</div>
+    <p class="note">화면 = frontend/src/pages/*.tsx, API = backend/app/routers/*.py (현재 ${D.meta.head} 기준, 모듈 경로 규칙으로 분류). 기능 문구는 narrative.json 의 modules[].features.</p>`));
+
+  /* 7-0b. 실무 요청 사례 */
+  add("cases", "FROM THE FIELD", "실무 요청으로 만든, 기존 도구에 없던 기능 사례", h(`
+    <div class="cases">${(N.cases || []).map((c, i) => `<div class="card case ${i === 0 ? "hl" : ""}"><div class="top"><b>${c.title}</b><span class="chip acc num">v${c.ver}</span></div>
+      <p class="pr"><span class="tag">문제</span>${c.problem}</p><p class="bt"><span class="tag acc">만든 것</span>${c.built}</p></div>`).join("")}</div>
+    <p class="note">${N.cases_note || ""}</p>`));
+
+  const s71 = add("modules", "MODULES", "모듈별 월간 변화량", h(`
+    <div class="card"><h3>모듈 × 월 커밋 히트맵 <span class="hint">(칸을 누르면 그 달·그 모듈의 PR 목록)</span></h3>
+      <div class="tablewrap"><table class="heat"><thead><tr><th></th>${L.map(l => `<th class="num">${l}</th>`).join("")}<th>합계</th></tr></thead><tbody>
+      ${MODS.map((m, r) => `<tr><th class="rowh">${m.label}</th>${heat[r].map((v, i) => `<td class="${v ? "" : "zero"}" style="--a:${v ? (0.12 + 0.88 * v / hmax).toFixed(2) : 0}" data-m="${M[i]}" data-k="${m.key}" title="${m.label} · ${L[i]} · ${v}커밋">${v || ""}</td>`).join("")}<th class="num">${heat[r].reduce((a, b) => a + b, 0)}</th></tr>`).join("")}
+      </tbody></table></div>
+      <p class="note">모듈 = 경로 규칙(scripts/report/ai_dev_report_narrative.json 의 modules). 거의 모든 기능이 함께 고치는 공용 허브 파일(api.ts·types·App.tsx·main.py 등)은 세지 않는다. 커밋 하나가 여러 모듈에 걸치면 각 모듈에 1씩 센다.</p></div>`));
+  const s71b = add("modules-detail", "MODULES", "모듈별 변화 내용과 도입 기술 <span class=\"hint\">(카드를 누르면 PR 목록)</span>", h(`
+    <div class="mods">${MODS.map(m => {
+      const cs = A.commits.filter(c => hasMod(c, m.key)).length, ps = A.prs.filter(p => p.mods.includes(m.key)).length, sz = D.module_size[m.key] || { files: 0, loc: 0 };
+      const techs = TECH.filter(t => t.module === m.key && t.date.slice(0, 7) <= S.to);
+      const ft = firstTouch(m.key);
+      return `<div class="card mod" tabindex="0" role="button" data-k="${m.key}" aria-label="${m.label} PR 목록 열기">
+        <div class="top"><span class="name">${m.label}</span><span class="hint num">${ft ? "시작 " + ft : ""}</span></div>
+        <div class="stats"><span>커밋 <b class="num">${fmt(cs)}</b></span><span>PR <b class="num">${fmt(ps)}</b></span><span>현재 <b class="num">${fmt(sz.files)}</b>파일 · <b class="num">${fmt(Math.round(sz.loc / 100) / 10)}K</b>줄</span></div>
+        <p class="desc">${m.desc}</p>
+        <div class="chips">${techs.map(t => `<span class="chip acc" title="${t.desc} (${t.date})">${t.label}</span>`).join("") || '<span class="hint">별도 도입 기술 없음</span>'}</div></div>`; }).join("")}</div>`));
+  s71.querySelectorAll(".heat td[data-m]").forEach(td => { if (!td.classList.contains("zero")) td.onclick = () => openDrawer(td.dataset.m, null, td.dataset.k); });
+  s71b.querySelectorAll(".mod").forEach(c => { const go = () => openDrawer(null, null, c.dataset.k); c.onclick = go; c.onkeydown = e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); go(); } }; });
+
+  /* 7-2. 도입 기술 타임라인 */
+  const techIn = TECH.filter(t => t.date.slice(0, 7) >= S.from && t.date.slice(0, 7) <= S.to).sort((a, b) => a.date.localeCompare(b.date));
+  const depsIn = D.deps.filter(x => x.added.slice(0, 7) >= S.from && x.added.slice(0, 7) <= S.to);
+  const s72 = add("tech", "TECH STACK", `시기별 도입 기술 — 주요 기술 ${techIn.length}종`, h(`
+    <div class="card"><div class="filters noprint" role="group" aria-label="모듈 필터"><button type="button" class="on" data-f="">전체</button>${MODS.filter(m => techIn.some(t => t.module === m.key)).map(m => `<button type="button" data-f="${m.key}">${m.label}</button>`).join("")}</div>
+      <div id="tl-list"></div>
+      <details class="deps" style="margin-top:14px"><summary>기간 내 추가된 의존성 전체 ${depsIn.length}개 (현재 사용 ${depsIn.filter(x => x.present).length}개, 이후 제거 ${depsIn.filter(x => !x.present).length}개)</summary>
+        <ul>${depsIn.map(x => `<li><span class="num">${x.added}</span> <b>${x.n}</b> <span class="hint">${x.eco === "py" ? "Python" : "npm"}${x.present ? "" : " · 제거됨"}</span></li>`).join("")}</ul></details>
+      <p class="note">의존성 도입일 = backend/requirements.txt · frontend/package.json 에 처음 추가된 커밋 날짜. 인프라·구조 기술은 해당 경로가 처음 생긴 날짜. 2026-02-05 는 초기 골격(첫 커밋)에 포함된 기술이다.</p></div>`));
+  const drawTl = f => {
+    const list = techIn.filter(t => !f || t.module === f), byM = {};
+    list.forEach(t => (byM[t.date.slice(0, 7)] ||= []).push(t));
+    $("#tl-list", s72).innerHTML = Object.keys(byM).sort().map(mm => `<div class="tmonth"><div class="mm">${mLabel(mm)}</div><div>${byM[mm].map(t => `<div class="titem"><div><b>${t.label}</b><div class="src num">${t.date}</div></div><div>${t.desc} <span class="chip">${modLabel(t.module)}</span><div class="src">${(t.deps || t.paths || []).join(" · ")}</div></div></div>`).join("")}</div></div>`).join("") || '<p class="muted">기간 안에 들어온 주요 기술이 없다.</p>';
+  };
+  s72.querySelectorAll(".filters button").forEach(b => b.onclick = () => { s72.querySelectorAll(".filters button").forEach(x => x.classList.toggle("on", x === b)); drawTl(b.dataset.f); });
+  drawTl("");
+
   /* 8. 모델 세대 */
   const eraStats = S.eras.map(e => {
     const ms = D.months.filter(m => m >= e.from && m <= e.to);
@@ -378,7 +539,7 @@ function build() {
   });
   const b0 = eraStats[0], idx = (v, b) => b ? Math.round(v / b * 100) : 0;
   const monthOpts = sel => D.months.map(m => `<option ${m === sel ? "selected" : ""}>${m}</option>`).join("");
-  const s8 = add("models", "MODEL EVOLUTION", "모델 세대가 바뀔 때마다 기능 구현 규모가 커졌다", h(`
+  const s8 = add("models", "MODEL EVOLUTION", "모델 세대 변경시마다 커진 기능 구현 규모", h(`
     <div class="card noprint"><div class="era-edit">${S.eras.map((e, i) => `<span><b>${e.key}</b><select data-era="${i}" data-k="from" aria-label="${e.key} 시작">${monthOpts(e.from)}</select>~<select data-era="${i}" data-k="to" aria-label="${e.key} 끝">${monthOpts(e.to)}</select></span>`).join("")}</div>
       <p class="hint" style="margin:0">세대 구간을 바꾸면 지수가 즉시 다시 계산된다. 기본값은 PPT 리포트와 같은 구간이다.</p></div>
     <div class="grid g2" style="margin-top:16px"><div class="card"><h3>세대별 성장 지수 (첫 세대 = 100)</h3><div class="chart" id="c-era"></div></div>
@@ -398,8 +559,41 @@ function build() {
   chart($("#c-eramix", s8), c => bars(c, { labels: L, stacked: true, onClick: (i, si) => openDrawer(M[i], gens[si]),
     series: gens.map(k => ({ name: k, color: k === gens[gens.length - 2] ? C.acc : C.mute, alpha: k === gens[gens.length - 2] ? 1 : alphaFor(k), values: M.map(m => A.pm[m].filter(p => genOf(p) === k).length) })) }));
 
+  /* 12-1. 근거 수치 (data.json 에서 계산 — 매월 자동 갱신) */
+  const fullMonths = D.months.filter(m => m <= lastFull);
+  const prBy = m => D.prs.filter(p => p.d.startsWith(m)).length;
+  const avgOf = arr => arr.length ? arr.reduce((a, b) => a + b, 0) / arr.length : 0;
+  const skillsDate = (D.harness.find(x => x.label.includes("스킬")) || {}).d || "";
+  const claudeDate = (D.harness.find(x => x.label.includes("CLAUDE")) || {}).d || "";
+  const dayN = d => d ? Math.round((new Date(d) - new Date(D.meta.first)) / 864e5) : 0;
+  const beforeM = fullMonths.filter(m => m < skillsDate.slice(0, 7)), afterM = fullMonths.filter(m => m >= skillsDate.slice(0, 7));
+  const fixRatio = m => { const cs = D.commits.filter(c => c[0].startsWith(m)); const f = cs.filter(c => c[2] === "fix").length, t = f + cs.filter(c => c[2] === "feat").length; return t ? Math.round(f / t * 100) : 0; };
+  const fr = fullMonths.map(fixRatio), frMax = fr.indexOf(Math.max(...fr));
+  const tagged = D.prs.filter(p => p.model).length;
+  const mcount = {}; D.prs.forEach(p => { if (p.model) mcount[p.model] = (mcount[p.model] || 0) + 1; });
+  const topModels = Object.entries(mcount).sort((a, b) => b[1] - a[1]).slice(0, 3);
+  const EV = {
+    filesPerPR: `PR당 변경 파일 ${eraStats[0].med} → ${eraStats[eraStats.length - 1].med}개 (${eraStats[0].e.key} → ${eraStats[eraStats.length - 1].e.key})`,
+    prUplift: `스킬·게이트 도입(${skillsDate}) 전후 월평균 PR ${Math.round(avgOf(beforeM.map(prBy)))} → ${Math.round(avgOf(afterM.map(prBy)))}`,
+    fixPeak: `fix 비율 최고 ${mLabel(fullMonths[frMax])} ${fr[frMax]}% → ${mLabel(fullMonths[fullMonths.length - 1])} ${fr[fr.length - 1]}%`,
+    tagShare: `모델 표기 PR ${fmt(tagged)} / ${fmt(D.prs.length)} (${Math.round(tagged / D.prs.length * 100)}%)`,
+    modelMix: `PR 다수 모델: ${topModels.map(([m, n]) => `${m} ${n}`).join(" · ")}`,
+    autoReport: `리포트 자동 생성 ${D.meta.generated} (${D.meta.head})`,
+    qaFixes: "재집계·렌더 QA 로 잡은 수치 오류 4건 — PR 845→750, AI 86→96%, 진척도 67→66, 날짜 시간대",
+    harnessLag: `CLAUDE.md ${dayN(claudeDate)}일 차 · 스킬 ${dayN(skillsDate)}일 차에 도입`,
+    throughput: `${M.length}개월 · PR ${fmt(A.prs.length)}건 · 작업일당 ${perDay.toFixed(1)}건`,
+    breadth: `모듈 ${MODS.length} · 화면 ${last ? last.pages : 0} · API 라우터 ${last ? last.routers : 0}`,
+    gates: `CI 게이트 5종(lint 0경고·tsc·build·pytest·docs-sync) · 스킬 ${last ? last.skills : 0}개`,
+    docs: `문서 ${fmt(last ? last.md : 0)}건 · 자동 릴리스 ${fmt(A.releases)}회`,
+    fixShare: (() => { const f = A.commits.filter(c => c[2] === "fix").length, t = f + A.commits.filter(c => c[2] === "feat").length; return `fix ${fmt(f)} / (feat+fix) ${fmt(t)} = ${t ? Math.round(f / t * 100) : 0}%`; })(),
+    gaps: `70점 미만 ${N.readiness.filter((r, i) => S.scores[i] < 70).map(r => r.area).join(" · ") || "없음"}`,
+    loc: `코드 ${Math.round(loc(last) / 1000)}K 줄 (Python ${Math.round((last ? last.py : 0) / 1000)}K + TS ${Math.round((last ? last.ts : 0) / 1000)}K)`,
+    reviewLoad: `작업일당 PR ${perDay.toFixed(1)}건을 1명이 리뷰·병합`,
+  };
+  const ev = k => k && EV[k] ? `<span class="ev num" title="data.json 에서 계산">${EV[k]}</span>` : "";
+
   /* 9. 품질 */
-  const s9 = add("quality", "QUALITY", "품질 — 버그 급증을 테스트·게이트로 되잡았다", h(`
+  const s9 = add("quality", "QUALITY", "품질 — 테스트·게이트로 되잡은 버그 급증", h(`
     <div class="grid g2e"><div class="card"><h3>백엔드 테스트 함수 (월말)</h3><div class="chart" id="c-test"></div></div>
     <div class="card"><h3>월별 feat vs fix 커밋</h3><div class="chart" id="c-ff"></div><p class="hint" id="ff-note"></p></div></div>`));
   chart($("#c-test", s9), c => bars(c, { labels: A.snaps.map(s => mLabel(s.m)), series: [{ name: "테스트", color: C.acc, values: A.snaps.map(s => s.tests) }] }));
@@ -408,15 +602,91 @@ function build() {
   const ratio = M.map((_, i) => feat[i] + fix[i] ? Math.round(fix[i] / (feat[i] + fix[i]) * 100) : 0), rMax = ratio.indexOf(Math.max(...ratio));
   $("#ff-note", s9).textContent = `fix 비율 최고: ${L[rMax]} ${ratio[rMax]}% · 마지막 달 ${L[L.length - 1]} ${ratio[ratio.length - 1]}%`;
 
+  /* 9-1. 일반 개발 대비 장단점 */
+  const CMP = N.compare || { pros: [], cons: [] };
+  const cmpLi = ([t, d, k]) => `<li><b>${t}</b><span class="d">${d}</span><div style="margin-top:4px">${k ? ev(k) : '<span class="ev muted">정성 평가</span>'}</div></li>`;
+  add("vs-dev", "AI vs 일반 개발", "일반 개발 대비 AI 개발의 장점과 단점", h(`<div class="pb">
+    <div class="card hl"><h3 class="acc">장점</h3><ul>${CMP.pros.map(cmpLi).join("")}</ul></div>
+    <div class="card"><h3>단점</h3><ul>${CMP.cons.map(cmpLi).join("")}</ul></div></div>
+    <p class="note">근거 칩은 data.json 에서 계산한 이 저장소 실측치, '정성 평가'는 개발자 본인의 판단이다. 같은 기능을 일반 개발팀이 만든 대조군은 없으므로 비교는 경험·업계 통념 기준이다.</p>`));
+
+  /* 9-2. 비용 비교 (입력 조정 가능) */
+  const CO = { ...(N.cost || {}), ...S.cost };
+  const costMonths = M.length, ksloc = loc(last) / 1000;
+  const s92 = add("cost", "COST", "비용 비교 — AI + 1인 개발 vs 일반 개발 추정", h(`
+    <div class="card noprint"><div class="calc">${[["dayRate", "일평균임금(원)"], ["workDays", "월 근무일"], ["humanFte", "투입 인원(FTE)"], ["aiMonthlyUsd", "AI 구독(USD/월)"], ["fx", "환율(원/USD)"], ["locPerDay", "LoC/인일"], ["daysPerPage", "화면당 인일"], ["daysPerRouter", "라우터당 인일"], ["daysInfra", "배포·CI 인일"]]
+      .map(([k, l]) => `<label>${l}<input type="number" min="0" step="any" data-k="${k}" value="${CO[k]}"></label>`).join("")}</div>
+      <p class="hint" style="margin:8px 0 0">값을 바꾸면 아래 막대·배수가 즉시 다시 계산된다.</p></div>
+    <div class="grid g2" style="margin-top:16px"><div class="card"><h3>총비용 (억 원) <span class="hint">· 기간 ${costMonths}개월 · 코드 ${Math.round(ksloc)}K 줄</span></h3><div class="chart" id="c-cost"></div><p class="hint" id="cost-x"></p></div>
+    <div class="card" id="cost-src"></div></div>
+    <p class="note">주의 — LoC 기반(LoC/일·COCOMO)은 AI 코드가 사람보다 길어 과대 추정된다. 가장 보수적인 비교치는 '기능 기반'이다. 남은 상용화 공백(SSO·프론트 테스트·관측성)은 양쪽 모두 미포함, 실제 비용의 FTE 는 가정치다.</p>`));
+  const costCalc = () => {
+    const c = CO, real = costMonths * c.workDays * c.humanFte * c.dayRate + costMonths * c.aiMonthlyUsd * c.fx;
+    const featDays = (last ? last.pages : 0) * c.daysPerPage + (last ? last.routers : 0) * c.daysPerRouter + +c.daysInfra;
+    const pm = 2.94 * Math.pow(ksloc, 1.0997);
+    return [
+      { k: "실제 (AI + 1인)", v: real, f: `${costMonths}개월 × ${c.workDays}일 × ${c.humanFte}명 × ${fmt(c.dayRate)}원 + AI 구독 $${c.aiMonthlyUsd} × ${costMonths}개월 × ${fmt(c.fx)}원`, src: [c.dayRateSrc, c.workDaysSrc, c.aiMonthlySrc, c.humanFteSrc] },
+      { k: "기능 기반 추정", v: featDays * c.dayRate, f: `화면 ${last ? last.pages : 0}×${c.daysPerPage} + 라우터 ${last ? last.routers : 0}×${c.daysPerRouter} + ${c.daysInfra} = ${fmt(featDays)}인일 × 일단가`, src: [c.featureSrc] },
+      { k: "LoC 생산성 기준", v: ksloc * 1000 / c.locPerDay * c.dayRate, f: `${fmt(Math.round(ksloc * 1000))}줄 ÷ ${c.locPerDay}줄/일 = ${fmt(Math.round(ksloc * 1000 / c.locPerDay))}인일 × 일단가`, src: [c.locPerDaySrc] },
+      { k: "COCOMO II", v: pm * 19 * c.dayRate, f: `2.94 × ${ksloc.toFixed(0)}^1.0997 = ${fmt(Math.round(pm))}PM × 19일(152h) × 일단가`, src: [c.cocomoSrc] },
+    ];
+  };
+  const eok = v => (v / 1e8).toFixed(v < 1e9 ? 2 : 1);
+  const costChart = chart($("#c-cost", s92), c => {
+    const rows = costCalc(), base = rows[0].v;
+    hbars(c, { rows: rows.map((r, i) => ({ label: r.k, value: r.v / 1e8, text: `${eok(r.v)}억${i ? ` · ×${(r.v / base).toFixed(1)}` : ""}`, hl: i === 0 })) });
+    $("#cost-x", s92).textContent = `실제 대비 — 기능 기반 ${(rows[1].v / base).toFixed(1)}배 · LoC ${(rows[2].v / base).toFixed(1)}배 · COCOMO ${(rows[3].v / base).toFixed(1)}배`;
+    $("#cost-src", s92).innerHTML = `<h3>산식과 근거</h3>${rows.map(r => `<div class="csrc"><b>${r.k} <span class="num acc">${eok(r.v)}억</span></b><div class="num">${r.f}</div>${r.src.filter(Boolean).map(x => `<div class="hint">· ${x}</div>`).join("")}</div>`).join("")}`;
+  });
+
+  /* 9-3. 총 사용비용 vs 고급 인력 개발비 */
+  const won = v => v >= 1e8 ? `${eok(v)}억` : `${fmt(Math.round(v / 1e4))}만원`;
+  const seniorCalc = () => {
+    const c = CO, rows = costCalc(), featDays = rows[1].v / c.dayRate;
+    const ai = costMonths * c.aiMonthlyUsd * c.fx, senior = featDays * c.seniorRate;
+    return { ai, real: rows[0].v, avgDev: rows[1].v, senior, featDays, months: featDays / (c.seniorTeam * c.workDays) };
+  };
+  const s93 = add("cost-senior", "COST · 2", "총 사용비용 vs 같은 결과물의 고급 인력 개발비", h(`
+    <div class="card noprint"><div class="calc">${[["seniorRate", "고급 인력 일단가(원)"], ["seniorTeam", "고급 인력 팀 인원(명)"], ["aiMonthlyUsd", "AI 구독(USD/월)"]]
+      .map(([k, l]) => `<label>${l}<input type="number" min="0" step="any" data-k="${k}" value="${CO[k]}"></label>`).join("")}</div>
+      <p class="hint" style="margin:8px 0 0">일단가·인원·구독료를 바꾸면 즉시 다시 계산된다. 공수(인일)는 앞 장의 기능 기반 추정과 같다.</p></div>
+    <div class="grid g4" style="margin-top:16px" id="sr-kpi"></div>
+    <div class="grid g2" style="margin-top:16px"><div class="card"><h3>총비용 비교</h3><div class="chart" id="c-senior"></div></div>
+    <div class="card" id="sr-src"></div></div>
+    <p class="note">고급 인력 = KOSA 2025 직무별 일평균임금 중 IT아키텍트(492,609원). 등급별(초급~특급) 단가 대신 현재 공표되는 직무별 단가 중 상위 직무를 고급 인력으로 본다. 공수는 사람 기준 가정치이고, AI 사용비용은 구독료만 센다(전기·장비·개인 시간 제외).</p>`));
+  const seniorChart = chart($("#c-senior", s93), c => {
+    const r = seniorCalc(), C2 = CO;
+    hbars(c, { rows: [
+      { label: "AI 총 사용비용", value: r.ai / 1e8, text: won(r.ai), hl: true },
+      { label: "총 투입 (1인 + AI)", value: r.real / 1e8, text: won(r.real) },
+      { label: "SW기술자 평균 단가", value: r.avgDev / 1e8, text: `${won(r.avgDev)} · ×${(r.avgDev / r.real).toFixed(1)}` },
+      { label: "고급 인력 단가", value: r.senior / 1e8, text: `${won(r.senior)} · ×${(r.senior / r.real).toFixed(1)}` } ] });
+    $("#sr-kpi", s93).innerHTML = [
+      [won(r.ai), "AI 총 사용비용", `구독 $${C2.aiMonthlyUsd} × ${costMonths}개월 = $${fmt(C2.aiMonthlyUsd * costMonths)}`, true],
+      [won(r.senior), "고급 인력 기준 개발비", `${fmt(Math.round(r.featDays))}인일 × ${fmt(C2.seniorRate)}원`],
+      [`${(r.ai / r.senior * 100).toFixed(1)}%`, "AI 사용비용 비중", `고급 인력 개발비 대비 (1/${fmt(Math.round(r.senior / r.ai))})`],
+      [`${r.months.toFixed(1)}개월`, `고급 인력 ${C2.seniorTeam}명 소요 기간`, `실제 ${costMonths}개월 (1인 + AI)`]]
+      .map(([v, l, d, hl]) => `<div class="card kpi ${hl ? "hl" : ""}"><div class="v num">${v}</div><div class="l">${l}</div><div class="d">${d}</div></div>`).join("");
+    $("#sr-src", s93).innerHTML = `<h3>산식과 근거</h3>
+      <div class="csrc"><b>AI 총 사용비용 <span class="num acc">${won(r.ai)}</span></b><div class="num">$${C2.aiMonthlyUsd} × ${costMonths}개월 × ${fmt(C2.fx)}원</div><div class="hint">· ${C2.aiMonthlySrc}</div></div>
+      <div class="csrc"><b>총 투입비용 <span class="num acc">${won(r.real)}</span></b><div class="num">본인 인건비(평균 단가) + AI 구독</div><div class="hint">· 앞 장 '실제 (AI + 1인)' 와 같다</div></div>
+      <div class="csrc"><b>고급 인력 기준 <span class="num acc">${won(r.senior)}</span></b><div class="num">기능 기반 ${fmt(Math.round(r.featDays))}인일 × ${fmt(C2.seniorRate)}원</div><div class="hint">· ${C2.seniorRateSrc}</div></div>
+      <div class="csrc"><b>결론</b><div>총 투입 대비 <b class="acc num">${(r.senior / r.real).toFixed(1)}배</b>, AI 사용비용만 보면 <b class="acc num">${fmt(Math.round(r.senior / r.ai))}분의 1</b>. 기간은 고급 인력 ${C2.seniorTeam}명 기준 약 ${r.months.toFixed(0)}개월 vs 실제 ${costMonths}개월.</div></div>`;
+  });
+  [s92, s93].forEach(sec => sec.querySelectorAll(".calc input").forEach(inp => inp.oninput = () => { const v = parseFloat(inp.value); if (!isNaN(v) && v >= 0) {
+    S.cost = { ...(S.cost || {}), [inp.dataset.k]: v }; CO[inp.dataset.k] = v;
+    document.querySelectorAll(`.calc input[data-k="${inp.dataset.k}"]`).forEach(o => { if (o !== inp) o.value = v; });
+    renderChart(costChart); renderChart(seniorChart); } }));
+
   /* 10. 성숙도 */
-  add("maturity", "MATURITY", "AI 활용 성숙도 — 4단계로 진화", h(`<div class="steps">${N.maturity.map((st, i) => {
+  add("maturity", "MATURITY", "4단계로 진화한 AI 활용 성숙도", h(`<div class="steps">${N.maturity.map((st, i) => {
     const ms = D.months.filter(m => m >= st.from && m <= st.to), avg = Math.round(D.prs.filter(p => ms.includes(p.d.slice(0, 7))).length / (ms.length || 1));
     const cur = i === N.maturity.length - 1;
     return `<div class="card step ${cur ? "hl" : ""}"><div class="n num">${st.n}</div><div class="t">${st.title}</div><div class="p">${mLabel(st.from)}~${mLabel(st.to)}</div><div class="muted" style="font-size:14px">${st.desc}</div><div class="m ${cur ? "acc" : ""}">PR <span class="num">${avg}</span>건/월</div></div>`; }).join("")}</div>
     <p class="note">PR/월 = 해당 구간 월평균 병합 PR (기간 필터와 무관하게 단계 구간 기준)</p>`));
 
   /* 11. 상용화 진척도 (조정 가능) */
-  const s11 = add("readiness", "READINESS", `상용화까지 얼마나 왔나 — 종합 <span data-overall>${overall}%</span>`, h(`
+  const s11 = add("readiness", "READINESS", `상용화 진척도 — 종합 <span data-overall>${overall}%</span>`, h(`
     <div class="grid g2"><div class="card"><h3>영역별 진척도 <span class="hint">(슬라이더로 가정 조정 → 종합 즉시 재계산)</span></h3><div id="rd"></div>
       <div class="noprint" style="display:flex;gap:8px;margin-top:12px"><button type="button" id="rd-target">목표 달성 시 보기</button><button type="button" id="rd-reset">평가값으로 되돌리기</button></div></div>
     <div class="card"><h3>평가 근거</h3>${N.readiness.map(r => `<p style="margin:6px 0;font-size:14px"><b class="acc">${r.area}</b> <span class="muted">${r.evidence}</span></p>`).join("")}</div></div>
@@ -433,45 +703,70 @@ function build() {
   $("#rd-reset", s11).onclick = () => setScores(N.readiness.map(r => r.score));
 
   /* 12. 남은 과제 */
-  add("next", "NEXT", "남은 과제 — 상용 전환을 막는 5가지", h(`<div class="tablewrap"><table><thead><tr><th>우선</th><th>과제</th><th>내용</th><th>목표 지표</th></tr></thead><tbody>
+  add("next", "NEXT", "상용 전환을 막는 남은 과제 5가지", h(`<div class="tablewrap"><table><thead><tr><th>우선</th><th>과제</th><th>내용</th><th>목표 지표</th></tr></thead><tbody>
     ${N.tasks.map(t => { const r = N.readiness.find(x => x.area === t.area); return `<tr><td><span class="chip ${t.p === "P0" ? "acc" : ""}">${t.p}</span></td><td><b>${t.title}</b></td><td class="muted">${t.desc}</td><td class="num">${t.area} ${r.score} → <b class="acc">${r.target}</b></td></tr>`; }).join("")}
     </tbody></table></div><p class="note">목표를 모두 달성하면 종합 ${overall}% → ${Math.round(N.readiness.reduce((a, r) => a + r.target, 0) / N.readiness.length)}% (진척도 섹션의 '목표 달성 시 보기'와 같다)</p>`));
 
+  /* 12-2. 향후 로드맵 */
+  const RM = N.roadmap_next || { quarters: [], lanes: [] };
+  const rdBy = a => N.readiness.find(r => r.area === a);
+  const target = Math.round(N.readiness.reduce((a, r) => a + r.target, 0) / N.readiness.length);
+  add("roadmap-next", "ROADMAP", `향후 로드맵 — 제품 상용화와 AI 개발 방식의 두 갈래`, h(`
+    <div class="rm"><div></div>${RM.quarters.map(q => `<div class="qh num">${q}</div>`).join("")}
+    ${RM.lanes.map(l => `<div class="lh">${l.label}</div>${RM.quarters.map(q => `<div class="cell lane-${l.key}">${l.items.filter(it => it.q === q).map(it => {
+      const r = it.area ? rdBy(it.area) : null;
+      return `<div class="it"><b>${it.title}</b><p>${it.desc}</p>${r ? `<span class="chip acc num">${r.area} ${r.score} → ${r.target}</span>` : ev(it.evidence)}</div>`; }).join("")}</div>`).join("")}`).join("")}</div>
+    <div class="card hl" style="margin-top:16px"><b class="acc">완료 시</b> 상용화 종합 진척도 <b class="num">${overall}% → ${target}%</b> (상용 베타 수준). AI 개발 방식 레인은 이 숫자를 지키는 장치다 — 측정·게이트·라우팅이 없으면 속도가 품질로 되돌아온다.</div>`));
+
+  /* 12-3. 모델 발전 방향과 활용법 */
+  add("ai-trends", "AI CODING · 1", "모델 발전 방향에 맞춘 AI 활용법", h(`<div class="tablewrap"><table><thead><tr><th>모델 발전 방향</th><th class="acc">그래서 이렇게 쓴다</th><th>이 저장소 근거</th></tr></thead><tbody>
+    ${(N.ai_trends || []).map(t => `<tr><td>${t.trend}<div class="hint" style="font-weight:400">${t.detail}</div></td><td>${t.practice}</td><td class="acc-cell" style="font-weight:600">${EV[t.evidence] || ""}</td></tr>`).join("")}
+    </tbody></table></div><p class="note">발전 방향은 일반적인 추세 수준으로만 적었다 — 특정 미래 모델의 성능·출시를 가정하지 않는다. 근거 칸은 data.json 에서 계산해 매월 갱신된다.</p>`));
+
+  /* 12-4. AI 코딩 운영 원칙 */
+  const PB = N.playbook || { do: [], dont: [] };
+  add("ai-playbook", "AI CODING · 2", "8개월간 정립한 AI 코딩 운영 원칙", h(`<div class="pb">
+    <div class="card hl"><h3 class="acc">DO</h3><ul>${PB.do.map(([t, d, k]) => `<li><b>${t}</b><span class="d">${d}</span>${k ? `<div style="margin-top:4px">${ev(k)}</div>` : ""}</li>`).join("")}</ul></div>
+    <div class="card"><h3>DON'T</h3><ul>${PB.dont.map(([t, d, k]) => `<li><b>${t}</b><span class="d">${d}</span>${k ? `<div style="margin-top:4px">${ev(k)}</div>` : ""}</li>`).join("")}</ul></div>
+  </div>`));
+
   /* 13. 복기 */
-  add("retro", "RETROSPECTIVE", "과거로 돌아간다면 — 무엇을 다르게 했어야 했나", h(`<div class="tablewrap"><table><thead><tr><th>영역</th><th>실제로 한 것</th><th>치른 대가</th><th class="acc">다시 한다면</th></tr></thead><tbody>
+  add("retro", "RETROSPECTIVE", "과거로 돌아간다면 다르게 했을 선택", h(`<div class="tablewrap"><table><thead><tr><th>영역</th><th>실제로 한 것</th><th>치른 대가</th><th class="acc">다시 한다면</th></tr></thead><tbody>
     ${N.retro.map(([a, b, c, d]) => `<tr><td>${a}</td><td class="muted">${b}</td><td><b>${c}</b></td><td class="acc-cell">${d}</td></tr>`).join("")}</tbody></table></div>`));
 
   /* 14. 다시 짠다면 */
-  add("restart", "IF WE STARTED OVER", "다시 짠다면 — 기능보다 '틀'을 먼저 깐다", h(`<div class="steps">${N.roadmap.map(([w, t, d], i) => `<div class="card step ${i === 0 ? "hl" : ""}"><div class="p acc" style="font-weight:700">${w}</div><div class="t">${t}</div><div class="muted" style="font-size:14px;margin-top:8px">${d}</div></div>`).join("")}</div>
+  add("restart", "IF WE STARTED OVER", "다시 시작한다면 — 기능보다 '틀'이 먼저인 순서", h(`<div class="steps">${N.roadmap.map(([w, t, d], i) => `<div class="card step ${i === 0 ? "hl" : ""}"><div class="p acc" style="font-weight:700">${w}</div><div class="t">${t}</div><div class="muted" style="font-size:14px;margin-top:8px">${d}</div></div>`).join("")}</div>
     <div class="grid g2e" style="margin-top:16px"><div class="card"><b class="muted">실제 순서</b><p style="margin:6px 0 0">기능 → 컨텍스트 → 게이트 → 안정화 → 비기능(미완)</p></div>
     <div class="card hl"><b class="acc">기대 효과 (추정)</b><p style="margin:6px 0 0">남은 과제 5개 중 4개를 먼저 깔고 기능을 얹었을 것. fix 급증과 UX 재작업이 가장 크게 줄었을 구간이다.</p></div></div>`));
 
   /* 15. 교훈 */
-  add("lessons", "LESSONS", "얻은 3가지 — AI 는 속도를 주고, 하네스는 방향을 준다", h(`<div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(240px,1fr))">${N.lessons.map(([t, d], i) => `<div class="card"><div class="step"><div class="n num" style="background:hsl(var(--primary));color:hsl(var(--primary-foreground))">${i + 1}</div></div><div style="font-size:18px;font-weight:800">${t}</div><p class="muted">${d}</p></div>`).join("")}</div>`));
+  add("lessons", "LESSONS", "8개월간 얻은 교훈 3가지 — AI 는 속도, 하네스는 방향", h(`<div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(240px,1fr))">${N.lessons.map(([t, d], i) => `<div class="card"><div class="step"><div class="n num" style="background:hsl(var(--primary));color:hsl(var(--primary-foreground))">${i + 1}</div></div><div style="font-size:18px;font-weight:800">${t}</div><p class="muted">${d}</p></div>`).join("")}</div>`));
 
   charts.forEach(renderChart);
-  updatePager();
+  if (document.body.classList.contains("present")) show(cur, 0);
 }
 function updateOverall() { const o = Math.round(S.scores.reduce((a, b) => a + b, 0) / S.scores.length); document.querySelectorAll("[data-overall]").forEach(n => n.textContent = o + "%"); }
 function rebuildKeep() { const y = scrollY; build(); scrollTo(0, y); }
 
 /* ── 드릴다운 ── */
-let drawerMonth = null, drawerGen = null;
-function openDrawer(m, gen) {
-  drawerMonth = m; drawerGen = gen || null;
-  $("#dr-title").textContent = `${m} PR${gen ? " · " + gen : ""}`;
+let drawerMonth = null, drawerGen = null, drawerMod = null;
+const drawerLabel = () => [drawerMonth || `${S.from} ~ ${S.to}`, drawerGen, drawerMod && ((N.modules || []).find(m => m.key === drawerMod) || {}).label].filter(Boolean).join(" · ");
+function openDrawer(m, gen, mod) {
+  drawerMonth = m || null; drawerGen = gen || null; drawerMod = mod || null;
+  $("#dr-title").textContent = drawerLabel();
   const d = $("#drawer"); d.classList.add("open"); d.setAttribute("aria-hidden", "false"); renderDrawer(); $("#dr-q").focus();
 }
 function renderDrawer() {
   const q = $("#dr-q").value.trim().toLowerCase(), kind = $("#dr-kind").value;
   const genOf = p => (modelEra(p.model) || {}).key || "미표기";
-  const list = D.prs.filter(p => p.d.startsWith(drawerMonth)).filter(p => !drawerGen || genOf(p) === drawerGen)
+  const inRange = p => drawerMonth ? p.d.startsWith(drawerMonth) : (p.d.slice(0, 7) >= S.from && p.d.slice(0, 7) <= S.to);
+  const list = D.prs.filter(inRange).filter(p => !drawerGen || genOf(p) === drawerGen).filter(p => !drawerMod || p.mods.includes(drawerMod))
     .filter(p => !q || (p.t + " " + p.b).toLowerCase().includes(q))
     .filter(p => kind === "feat" ? p.feat : kind === "fix" ? p.fixonly : kind === "ai" ? p.ai : true);
   $("#dr-list").innerHTML = list.length ? list.map(p => `<li><a href="https://github.com/${D.meta.repo}/pull/${p.n}" target="_blank" rel="noopener">#${p.n}</a> ${p.t.replace(/</g, "&lt;")}
-    <div class="meta">${p.d} · ${p.feat ? '<span class="chip acc">feat</span> ' : ""}${p.fixonly ? '<span class="chip">fix</span> ' : ""}${p.model || "모델 미표기"} · 파일 ${p.files} · +${fmt(p.adds)}줄</div></li>`).join("")
+    <div class="meta">${p.d} · ${p.feat ? '<span class="chip acc">feat</span> ' : ""}${p.fixonly ? '<span class="chip">fix</span> ' : ""}${p.model || "모델 미표기"} · 파일 ${p.files} · +${fmt(p.adds)}줄${p.mods.length ? " · " + p.mods.map(k => ((N.modules || []).find(m => m.key === k) || {}).label || k).join(", ") : ""}</div></li>`).join("")
     : `<li class="muted">조건에 맞는 PR 이 없다.</li>`;
-  $("#dr-title").textContent = `${drawerMonth} PR${drawerGen ? " · " + drawerGen : ""} (${list.length}건)`;
+  $("#dr-title").textContent = `${drawerLabel()} PR (${list.length}건)`;
 }
 function closeDrawer() { const d = $("#drawer"); d.classList.remove("open"); d.setAttribute("aria-hidden", "true"); }
 $("#dr-q").oninput = renderDrawer; $("#dr-kind").onchange = renderDrawer; $("#dr-close").onclick = closeDrawer;
@@ -489,21 +784,68 @@ fromSel.onchange = () => { S.from = fromSel.value; if (S.to < S.from) { S.to = S
 toSel.onchange = () => { S.to = toSel.value; if (S.from > S.to) { S.from = S.to; fromSel.value = S.from; } rebuildKeep(); };
 $("#print").onclick = () => print();
 
-/* ── 발표 모드 ── */
+/* ── 발표 모드: 페이징 (한 화면 = 한 섹션) ── */
 const modeBtn = $("#mode");
+let cur = 0;
+const isPresent = () => document.body.classList.contains("present");
 function secs() { return [...document.querySelectorAll("main > section")]; }
-function curIndex() { const s = secs(); let best = 0; s.forEach((x, i) => { if (x.getBoundingClientRect().top < innerHeight * 0.4) best = i; }); return best; }
-function go(d) { const s = secs(); const i = Math.max(0, Math.min(s.length - 1, curIndex() + d)); s[i].scrollIntoView({ behavior: "smooth" }); }
-function updatePager() { $("#pager").textContent = `${curIndex() + 1} / ${secs().length} · ←/→ 이동 · Esc 종료`; }
-function setMode(p) { document.body.classList.toggle("present", p); modeBtn.classList.toggle("on", p); modeBtn.setAttribute("aria-pressed", String(p)); modeBtn.textContent = p ? "문서 모드" : "발표 모드"; charts.forEach(renderChart); updatePager(); }
-modeBtn.onclick = () => setMode(!document.body.classList.contains("present"));
-addEventListener("scroll", updatePager, { passive: true });
+function fitSlide(sec) {
+  const fit = sec.querySelector(".fit"); if (!fit) return;
+  const own = charts.filter(c => sec.contains(c.host));
+  const cs = getComputedStyle(sec), availH = sec.clientHeight - parseFloat(cs.paddingTop) - parseFloat(cs.paddingBottom);
+  const apply = k => {  // k<1: 폭을 1/k 로 넓혀 다시 배치한 뒤 k 배 축소 — 가로 공간을 버리지 않는다
+    fit.style.width = k < 1 ? (100 / k) + "%" : ""; fit.style.transform = k < 1 ? `scale(${k})` : ""; own.forEach(renderChart);
+  };
+  // 읽을 수 있는 최소 배율 아래로는 줄이지 않는다 — 그때만 그 슬라이드 안에서 세로 스크롤을 허용
+  const MIN = innerWidth < 700 ? 0.85 : 0.5;
+  sec.classList.remove("scrolly");
+  const fits = k => { apply(k); return fit.scrollHeight * k <= availH + 1; };
+  if (fits(1)) return;
+  if (!fits(MIN)) { sec.classList.add("scrolly"); return; }
+  let lo = MIN, hi = 1;  // 화면에 들어가는 가장 큰 배율을 이분 탐색
+  for (let i = 0; i < 7; i++) { const mid = (lo + hi) / 2; if (fits(mid)) lo = mid; else hi = mid; }
+  apply(lo);
+}
+function show(i, dir = 1) {
+  const s = secs(); cur = Math.max(0, Math.min(s.length - 1, i));
+  s.forEach((x, k) => x.classList.toggle("active", k === cur));
+  s[cur].style.setProperty("--dx", dir >= 0 ? "24px" : "-24px");
+  fitSlide(s[cur]); updatePager();
+  try { history.replaceState(null, "", "#" + s[cur].id); } catch {}
+}
+function go(d) { if (isPresent()) show(cur + d, d); }
+function updatePager() {
+  const n = secs().length;
+  $("#pg-n").textContent = `${cur + 1} / ${n}`; $("#pg-bar").style.width = ((cur + 1) / n * 100) + "%";
+  $("#nav-prev").disabled = cur === 0; $("#nav-next").disabled = cur === n - 1;
+}
+function setMode(p) {
+  if (p) { const s = secs(); cur = Math.max(0, s.findIndex(x => x.getBoundingClientRect().bottom > 80)); }
+  document.body.classList.toggle("present", p); modeBtn.classList.toggle("on", p); modeBtn.setAttribute("aria-pressed", String(p));
+  modeBtn.textContent = p ? "문서 모드" : "발표 모드";
+  document.documentElement.style.setProperty("--barh", $(".bar").offsetHeight + "px");
+  if (p) show(cur, 0);
+  else { secs().forEach(x => { x.classList.remove("active"); const f = x.querySelector(".fit"); if (f) { f.style.transform = ""; f.style.width = ""; } }); charts.forEach(renderChart); secs()[cur].scrollIntoView(); }
+}
+modeBtn.onclick = () => setMode(!isPresent());
+$("#nav-prev").onclick = () => go(-1); $("#nav-next").onclick = () => go(1);
+addEventListener("resize", () => { if (isPresent()) { document.documentElement.style.setProperty("--barh", $(".bar").offsetHeight + "px"); fitSlide(secs()[cur]); } });
+/* 스와이프: 가로 이동이 세로보다 크고 50px 이상이면 넘긴다 */
+let sx = null, sy = null;
+$("#main").addEventListener("pointerdown", e => { if (isPresent() && e.pointerType !== "mouse") { sx = e.clientX; sy = e.clientY; } });
+$("#main").addEventListener("pointerup", e => {
+  if (sx === null) return; const dx = e.clientX - sx, dy = e.clientY - sy; sx = sy = null;
+  if (Math.abs(dx) > 50 && Math.abs(dx) > Math.abs(dy) * 1.3) go(dx < 0 ? 1 : -1);
+});
+$("#main").addEventListener("pointercancel", () => { sx = sy = null; });
 addEventListener("keydown", e => {
-  if (e.key === "Escape") { if ($("#drawer").classList.contains("open")) closeDrawer(); else if (document.body.classList.contains("present")) setMode(false); return; }
+  if (e.key === "Escape") { if ($("#drawer").classList.contains("open")) closeDrawer(); else if (isPresent()) setMode(false); return; }
   if (e.target.matches("input, select, textarea")) return;
-  if (!document.body.classList.contains("present")) return;
-  if (["ArrowRight", "PageDown", " "].includes(e.key)) { e.preventDefault(); go(1); }
-  if (["ArrowLeft", "PageUp"].includes(e.key)) { e.preventDefault(); go(-1); }
+  if (!isPresent() || $("#drawer").classList.contains("open")) return;
+  if (["ArrowRight", "ArrowDown", "PageDown", " "].includes(e.key)) { e.preventDefault(); go(1); }
+  if (["ArrowLeft", "ArrowUp", "PageUp"].includes(e.key)) { e.preventDefault(); go(-1); }
+  if (e.key === "Home") { e.preventDefault(); show(0, -1); }
+  if (e.key === "End") { e.preventDefault(); show(secs().length - 1, 1); }
 });
 addEventListener("beforeprint", () => charts.forEach(renderChart));
 
