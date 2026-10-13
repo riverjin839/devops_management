@@ -5,9 +5,8 @@ import { useClusterRouteParam } from '@/hooks/useClusterRouteParam';
 import {
   Gauge, RefreshCw, AlertTriangle, Server, Layers, BarChart3, Sparkles,
 } from 'lucide-react';
-import { MacCard } from '@/components/ui/MacCard';
 import { ClusterSidebar } from '@/components/common/ClusterSidebar';
-import { EmptyState, SnapshotProgressBar, ExportMenu } from '@/components/common';
+import { SnapshotProgressBar, ExportMenu, SelectClusterEmptyState } from '@/components/common';
 import { useClusters } from '@/hooks/useCluster';
 import { useAllocProgress, useForceAllocRefresh, useSoftAllocRefresh } from '@/hooks/useK8sAllocation';
 import {
@@ -156,7 +155,7 @@ export function K8sAllocationPage() {
           )}
 
           {!clusterId ? (
-            <MacCard><EmptyState title="클러스터를 선택하세요" description="좌측에서 클러스터를 고르면 자원 현황이 표시됩니다." /></MacCard>
+            <SelectClusterEmptyState description="좌측에서 클러스터를 고르면 자원 현황이 표시됩니다." />
           ) : (
             <>
               <SummaryStrip clusterId={clusterId} expanded={summaryDetail} onToggle={toggleSummaryDetail} />

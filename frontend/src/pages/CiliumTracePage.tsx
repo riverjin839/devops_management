@@ -24,7 +24,7 @@ import { useQuery } from '@tanstack/react-query';
 import { useClusters } from '@/hooks/useCluster';
 import { useTerminalEnvSync } from '@/hooks/useTerminalEnvSync';
 import { useClusterStore } from '@/stores/clusterStore';
-import { ClusterSidebar, LogViewer, SearchableSelect } from '@/components/common';
+import { ClusterSidebar, LogViewer, SearchableSelect, EmptyState, SelectClusterEmptyState } from '@/components/common';
 import { MacCard } from '@/components/ui/MacCard';
 import { RoleGate } from '@/components/auth/RoleGate';
 import { getAuthToken } from '@/stores/authStore';
@@ -253,9 +253,7 @@ export function CiliumTracePage() {
 
         {/* Tab body */}
         {!cid ? (
-          <MacCard bodyPadding="p-10">
-            <div className="text-center text-sm text-muted-foreground">왼쪽에서 클러스터를 선택하세요.</div>
-          </MacCard>
+          <SelectClusterEmptyState />
         ) : tab === 'bpf' ? (
           <BpfInspectorTab clusterId={cid} agents={agents} />
         ) : tab === 'monitor' ? (
@@ -886,9 +884,7 @@ function EventList({ events }: { events: MonitorEvent[] }) {
 
   if (events.length === 0) {
     return (
-      <div className="py-16 text-center text-sm text-muted-foreground">
-        이벤트가 없습니다. 시작 버튼을 누르거나 잠시 기다려 주세요.
-      </div>
+      <EmptyState title="이벤트가 없습니다." description="시작 버튼을 누르거나 잠시 기다려 주세요." />
     );
   }
   return (
@@ -1240,9 +1236,7 @@ function FlowList({ events }: { events: HubbleFlowEvent[] }) {
   }, [events.length]);
   if (events.length === 0) {
     return (
-      <div className="py-16 text-center text-sm text-muted-foreground">
-        flow 가 아직 없습니다. 시작 버튼을 눌러 hubble observe --follow 를 시작하세요.
-      </div>
+      <EmptyState title="flow 가 아직 없습니다." description="시작 버튼을 눌러 hubble observe --follow 를 시작하세요." />
     );
   }
   return (

@@ -8,7 +8,7 @@ import {
 } from 'recharts';
 import { MacCard } from '@/components/ui/MacCard';
 import { ClusterSidebar } from '@/components/common/ClusterSidebar';
-import { EmptyState } from '@/components/common';
+import { EmptyState, SelectClusterEmptyState } from '@/components/common';
 import { NodeMultiSelect } from '@/components/k8s/NodeMultiSelect';
 import { useClusters } from '@/hooks/useCluster';
 import { useClusterTrends } from '@/hooks/useClusterTrends';
@@ -163,7 +163,7 @@ export function ClusterTrendsPage() {
           </div>
 
           {!clusterId ? (
-            <MacCard><EmptyState title="클러스터를 선택하세요" /></MacCard>
+            <SelectClusterEmptyState />
           ) : (
             <>
               {/* ── 컨트롤 바 ── */}
@@ -242,7 +242,7 @@ export function ClusterTrendsPage() {
 
               {/* ── 차트 그리드 ── */}
               {noSelection ? (
-                <MacCard><EmptyState title="노드와 지표를 선택하세요" description={`노드를 최대 ${MAX_NODES}개까지 선택할 수 있습니다.`} /></MacCard>
+                <EmptyState title="노드와 지표를 선택하세요" description={`노드를 최대 ${MAX_NODES}개까지 선택할 수 있습니다.`} />
               ) : (
                 <div className="grid gap-2" style={{ gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))` }}>
                   {cells.map((cell) => (

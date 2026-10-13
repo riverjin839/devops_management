@@ -2,11 +2,11 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import ForceGraph3D, { type ForceGraph3DInstance, type NodeObject, type LinkObject } from 'react-force-graph-3d';
 import * as THREE from 'three';
-import { ArrowLeft, Loader2, RefreshCw, Share2, X } from 'lucide-react';
+import { ArrowLeft, RefreshCw, Share2, X } from 'lucide-react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { versionsApi, type VersionGraphNode, type VersionGraphEdge } from '@/services/api';
 import { useClusters } from '@/hooks/useCluster';
-import { useToast } from '@/components/common';
+import { useToast, SelectClusterEmptyState, LoadingState } from '@/components/common';
 import { formatApiError } from '@/lib/utils';
 
 // ── 타입별 색상 (D-005: 차트 토큰 체계) ─────────────────────────────────────
@@ -236,12 +236,12 @@ export function VersionGraphPage() {
       {/* 그래프 */}
       <div ref={containerRef} className="flex-1 relative">
         {!selectedId ? (
-          <p className="absolute inset-0 flex items-center justify-center text-muted-foreground text-sm">
-            클러스터를 선택하세요.
-          </p>
+          <div className="absolute inset-0 flex items-center justify-center">
+            <SelectClusterEmptyState />
+          </div>
         ) : isLoading ? (
-          <div className="absolute inset-0 flex items-center justify-center text-muted-foreground">
-            <Loader2 className="w-5 h-5 animate-spin mr-2" /> 로딩 중…
+          <div className="absolute inset-0 flex items-center justify-center">
+            <LoadingState />
           </div>
         ) : graphData.nodes.length === 0 ? (
           <div className="absolute inset-0 flex flex-col items-center justify-center text-muted-foreground text-sm gap-2">

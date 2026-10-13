@@ -32,7 +32,7 @@ import { Cluster, ManagementServer, ManagementServerCreate, ServiceDomain } from
 import { getStatusIcon, formatDateTime, formatApiError, cn } from '@/lib/utils';
 import { useHomeStore } from '@/stores/homeStore';
 import { useHomePrefs, useUpdateHomePrefs } from '@/hooks/useHomePrefs';
-import { useToast, ClusterIconPicker, useModalA11y } from '@/components/common';
+import { useToast, ClusterIconPicker, useModalA11y, EmptyState } from '@/components/common';
 import { resolveClusterIcon } from '@/lib/clusterIcons';
 import {
   buildClusterIconSvg, svgToDataUrl, suggestInitials, suggestRegionAbbr,
@@ -905,16 +905,12 @@ export function SettingsPage() {
           </div>
 
           {clusters.length === 0 ? (
-            <div className="text-center py-16">
-              <Server className="w-12 h-12 mx-auto mb-4 text-muted-foreground/30" />
-              <p className="text-muted-foreground mb-4">등록된 클러스터가 없습니다.</p>
-              <button
-                onClick={() => setShowAddModal(true)}
-                className="px-4 py-2 text-sm font-medium bg-primary/10 hover:bg-primary/20 text-primary border border-primary/20 rounded-lg transition-colors"
-              >
-                + 첫 번째 클러스터 등록
-              </button>
-            </div>
+            <EmptyState
+              icon={Server}
+              title="등록된 클러스터가 없습니다."
+              description="클러스터를 등록하면 점검·운영 화면에서 바로 쓸 수 있습니다."
+              action={{ label: '첫 번째 클러스터 등록', onClick: () => setShowAddModal(true) }}
+            />
           ) : (
             <div className="divide-y divide-border">
               {clusters.map((cluster) => {

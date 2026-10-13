@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { ArrowLeft, ListTodo, Plus, Trash2, UploadCloud, Ticket } from 'lucide-react';
 import { WorkItemForm, WorkItemReadView, JiraPushDialog, ServiceNowRegisterDialog } from '@/components/work-items';
-import { ConfirmDialog, useToast } from '@/components/common';
+import { ConfirmDialog, useToast, EmptyState } from '@/components/common';
 import { useWorkItem, useDeleteWorkItem } from '@/hooks/useWorkItems';
 import { cn, formatApiError } from '@/lib/utils';
 
@@ -29,16 +29,12 @@ export function WorkItemDetailPage() {
     return (
       <div className="app-min-h-screen bg-background">
         <main className="max-w-[1200px] mx-auto px-8 py-8">
-          <div className="text-center py-20">
-            <ListTodo className="w-12 h-12 mx-auto mb-4 text-muted-foreground/30" />
-            <p className="text-muted-foreground mb-4">업무를 찾을 수 없습니다.</p>
-            <button
-              onClick={() => navigate('/tasks-mgmt')}
-              className="px-4 py-2 text-sm font-medium bg-primary hover:bg-primary/90 text-primary-foreground rounded-lg"
-            >
-              업무 목록으로
-            </button>
-          </div>
+          <EmptyState
+            icon={ListTodo}
+            title="업무를 찾을 수 없습니다."
+            description="삭제됐거나 주소가 잘못됐을 수 있습니다."
+            action={{ label: '업무 목록으로', onClick: () => navigate('/tasks-mgmt') }}
+          />
         </main>
       </div>
     );

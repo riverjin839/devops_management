@@ -210,7 +210,7 @@ export function BatchJobsPage() {
           <div className="flex-1 min-w-0 space-y-4">
             <MacCard title="배치 잡" bodyPadding="p-4">
               {allJobsQ.isLoading ? (
-                <p className="text-sm text-muted-foreground py-6 text-center">로딩 중…</p>
+                <p className="text-sm text-muted-foreground py-6 text-center">불러오는 중…</p>
               ) : clusters.length === 0 ? (
                 <p className="text-sm text-muted-foreground py-10 text-center">
                   등록된 클러스터가 없습니다. /cluster-manage 에서 추가하세요.

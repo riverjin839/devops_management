@@ -15,7 +15,7 @@ import type {
   OpsNote, CommandEntry, WorkGuide, WorkItem, Workflow, CommandImportance,
 } from '@/types';
 import { formatRelativeTime, stripHtml, parseUTC } from '@/lib/utils';
-import { ServiceSidebar } from '@/components/common';
+import { ServiceSidebar, EmptyState } from '@/components/common';
 import { MacCard } from '@/components/ui/MacCard';
 import { useServiceCatalog } from '@/hooks/useServiceCatalog';
 import { useSprints } from '@/hooks/useSprints';
@@ -500,20 +500,12 @@ export function KnowledgeHubPage() {
             ))}
           </MacCard>
         ) : sorted.length === 0 ? (
-          <MacCard className="text-center" bodyPadding="py-20">
-            <FileQuestion className="w-12 h-12 mx-auto mb-4 text-muted-foreground/30" />
-            <p className="text-muted-foreground mb-4">
-              {hasFilters ? '검색 조건에 해당하는 지식 항목이 없습니다.' : '아직 등록된 지식 항목이 없습니다.'}
-            </p>
-            {hasFilters && (
-              <button
-                onClick={clearFilters}
-                className="px-4 py-2 text-sm font-medium bg-primary/10 hover:bg-primary/20 text-primary border border-primary/20 rounded-lg transition-colors"
-              >
-                필터 초기화
-              </button>
-            )}
-          </MacCard>
+          <EmptyState
+            icon={FileQuestion}
+            title={hasFilters ? '검색 조건에 해당하는 지식 항목이 없습니다.' : '아직 등록된 지식 항목이 없습니다.'}
+            description={hasFilters ? '검색어나 필터를 바꿔 보세요.' : '업무·노트·명령어·가이드를 등록하면 여기에 모입니다.'}
+            action={hasFilters ? { label: '필터 초기화', onClick: clearFilters, variant: 'secondary' } : undefined}
+          />
         ) : (
           <MacCard bodyPadding="p-0">
             <div className="overflow-x-auto">

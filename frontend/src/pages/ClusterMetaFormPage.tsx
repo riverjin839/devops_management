@@ -10,7 +10,7 @@ import { useClusters } from '@/hooks/useCluster';
 import { useClusterStore } from '@/stores/clusterStore';
 import { useQueryClient } from '@tanstack/react-query';
 import { useOperationLevels } from '@/hooks/useOperationLevels';
-import { ConfirmDialog, Skeleton, useToast } from '@/components/common';
+import { ConfirmDialog, Skeleton, useToast, EmptyState } from '@/components/common';
 import { MacCard } from '@/components/ui/MacCard';
 import { Button } from '@/components/ui/button';
 import { formatApiError } from '@/lib/utils';
@@ -277,13 +277,12 @@ export function ClusterMetaFormPage() {
 
   if (!cluster) {
     return shell(
-      <div className="text-center py-20">
-        <Server className="w-12 h-12 mx-auto mb-4 text-muted-foreground/30" />
-        <p className="text-muted-foreground mb-4">클러스터를 찾을 수 없습니다.</p>
-        <Button type="button" onClick={() => navigate('/cluster-manage')}>
-          클러스터 목록으로
-        </Button>
-      </div>,
+      <EmptyState
+        icon={Server}
+        title="클러스터를 찾을 수 없습니다."
+        description="삭제됐거나 주소가 잘못됐을 수 있습니다."
+        action={{ label: '클러스터 목록으로', onClick: () => navigate('/cluster-manage') }}
+      />,
     );
   }
 

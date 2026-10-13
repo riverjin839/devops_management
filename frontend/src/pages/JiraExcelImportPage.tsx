@@ -7,7 +7,7 @@ import {
 import { jiraApi } from '@/services/api';
 import type { JiraExcelImportResult, JiraExcelRow, JiraImportResult } from '@/types';
 import { formatApiError } from '@/lib/utils';
-import { ViewModeBar } from '@/components/common';
+import { ViewModeBar, EmptyState } from '@/components/common';
 import { MacCard } from '@/components/ui/MacCard';
 
 type ImportMode = 'file' | 'paste';
@@ -298,9 +298,7 @@ export function JiraExcelImportPage() {
         )}
 
         {result && result.rows.length === 0 && (
-          <MacCard className="text-center text-muted-foreground text-sm" bodyPadding="py-16">
-            가져올 항목이 없습니다.
-          </MacCard>
+          <EmptyState compact title="가져올 항목이 없습니다." description="파일에 가져올 수 있는 행이 없습니다. 헤더와 필수 열을 확인하세요." />
         )}
 
         {!result && !error && !loading && (

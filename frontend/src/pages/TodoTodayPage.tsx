@@ -561,7 +561,7 @@ export function TodoTodayPage() {
         <div className="flex flex-col items-center justify-center py-20 gap-3 text-muted-foreground">
           <CheckCircle2 className="w-12 h-12 opacity-30 text-status-healthy" />
           <div className="text-center">
-            <p className="text-base font-medium">처리할 할일이 없습니다 🎉</p>
+            <p className="text-base font-medium">처리할 할일이 없습니다.</p>
             <p className="text-sm mt-1 opacity-70">담당으로 지정된 미완료 업무가 없습니다.</p>
           </div>
           <button onClick={() => navigate('/tasks-mgmt/new')} className="flex items-center gap-1.5 px-4 py-2 text-sm bg-primary/10 text-primary hover:bg-primary/20 rounded-lg transition-colors">

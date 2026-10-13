@@ -6,7 +6,7 @@ import { CSS } from '@dnd-kit/utilities';
 import { PlaybookCard, PlaybookListRow, PlaybookLogDialog, AddPlaybookModal, RunCredsModal } from '@/components/playbooks';
 import type { PlaybookFormSubmit } from '@/components/playbooks/AddPlaybookModal';
 import type { PlaybookSshCreds } from '@/types';
-import { ClusterSidebar } from '@/components/common';
+import { ClusterSidebar, EmptyState } from '@/components/common';
 import { RoleGate } from '@/components/auth/RoleGate';
 import { usePlaybooks, useCreatePlaybook, useUpdatePlaybook, useDeletePlaybook, useRunPlaybook, useToggleDashboard } from '@/hooks/usePlaybook';
 import { playbooksApi } from '@/services/api';
@@ -369,22 +369,21 @@ export function PlaybooksPage() {
               </div>
             )
           ) : filteredPlaybooks.length === 0 ? (
-            <div className="text-center py-16">
-              <BookOpen className="w-12 h-12 mx-auto mb-4 text-muted-foreground/30" />
-              <p className="text-muted-foreground mb-4">
-                {selectedClusterIds.length === 0
-                  ? 'No playbooks registered yet'
-                  : '선택한 클러스터에 등록된 playbook이 없습니다'}
-              </p>
+            <EmptyState
+              icon={BookOpen}
+              title={selectedClusterIds.length === 0 ? '등록된 플레이북이 없습니다.' : '선택한 클러스터에 등록된 플레이북이 없습니다.'}
+              description="Ansible 플레이북을 등록하면 클러스터별로 실행하고 결과를 남길 수 있습니다."
+            >
               <RoleGate allow={['admin', 'operator']}>
                 <button
+                  type="button"
                   onClick={() => { setEditPlaybook(null); setShowAdd(true); }}
-                  className="px-4 py-2 text-sm font-medium bg-primary/10 hover:bg-primary/20 text-primary border border-primary/20 rounded-lg transition-colors"
+                  className="mt-4 px-3.5 py-1.5 text-sm font-semibold rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 transition-colors"
                 >
-                  + Register your first playbook
+                  플레이북 등록
                 </button>
               </RoleGate>
-            </div>
+            </EmptyState>
           ) : viewMode === 'list' ? (
             <DndContext
               sensors={dndSensors}

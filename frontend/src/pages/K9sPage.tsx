@@ -3,7 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { ShipWheel, Key, Play, ShieldAlert, ExternalLink } from 'lucide-react';
 import { useClusters } from '@/hooks/useCluster';
-import { ClusterSidebar, EmptyState } from '@/components/common';
+import { ClusterSidebar, SelectClusterEmptyState } from '@/components/common';
 import { MacCard } from '@/components/ui/MacCard';
 import { K9sTerminal, type K9sConnectParams } from '@/components/k8s';
 import { openK9sPopout } from '@/lib/k9sPopout';
@@ -128,9 +128,7 @@ export function K9sPage() {
           </div>
 
           {!clusterId ? (
-            <MacCard>
-              <EmptyState title="클러스터를 선택하세요" description="좌측에서 클러스터를 고르면 k9s 접속 정보를 입력할 수 있습니다." />
-            </MacCard>
+            <SelectClusterEmptyState description="좌측에서 클러스터를 고르면 k9s 접속 정보를 입력할 수 있습니다." />
           ) : session ? (
             <>
               <MacCard className="text-sm text-muted-foreground leading-relaxed">

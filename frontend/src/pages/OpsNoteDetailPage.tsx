@@ -4,7 +4,7 @@ import { ArrowLeft, HelpCircle, Pencil, Trash2 } from 'lucide-react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { opsNotesApi } from '@/services/api';
 import { OpsNoteForm, OpsNoteReadView } from '@/components/ops-notes';
-import { useToast } from '@/components/common';
+import { useToast, EmptyState } from '@/components/common';
 import { formatApiError } from '@/lib/utils';
 import { useMemo } from 'react';
 import { cn } from '@/lib/utils';
@@ -33,16 +33,12 @@ export function OpsNoteDetailPage() {
     return (
       <div className="app-min-h-screen bg-background">
         <main className="max-w-[1200px] mx-auto px-8 py-8">
-          <div className="text-center py-20">
-            <HelpCircle className="w-12 h-12 mx-auto mb-4 text-muted-foreground/30" />
-            <p className="text-muted-foreground mb-4">Q&amp;A 를 찾을 수 없습니다.</p>
-            <button
-              onClick={() => navigate('/ops-notes')}
-              className="px-4 py-2 text-sm font-medium bg-primary hover:bg-primary/90 text-primary-foreground rounded-lg"
-            >
-              Q&amp;A 목록으로
-            </button>
-          </div>
+          <EmptyState
+            icon={HelpCircle}
+            title="Q&A 를 찾을 수 없습니다."
+            description="삭제됐거나 주소가 잘못됐을 수 있습니다."
+            action={{ label: 'Q&A 목록으로', onClick: () => navigate('/ops-notes') }}
+          />
         </main>
       </div>
     );

@@ -116,7 +116,7 @@ export function CommandsPage() {
       {/* 리스트 */}
       <MacCard bodyPadding="p-0">
         {isLoading ? (
-          <p className="text-sm text-muted-foreground p-5">로딩 중…</p>
+          <p className="text-sm text-muted-foreground p-5">불러오는 중…</p>
         ) : (
           <CommandsTable
             entries={entries}

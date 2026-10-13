@@ -1095,7 +1095,7 @@ export function VersionsPage() {
         </div>
 
         {!clusterId && clusters.length === 0 && (
-          <p className="text-center text-muted-foreground py-20">등록된 클러스터가 없습니다.</p>
+          <EmptyState title="등록된 클러스터가 없습니다." description="클러스터 관리에서 등록하면 버전 수집 대상이 됩니다." />
         )}
 
         {/* 선택된 클러스터 상세 */}

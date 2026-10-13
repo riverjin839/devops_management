@@ -744,7 +744,7 @@ export function InfraTopologyPage() {
 
         {clustersLoading ? (
           <div className="flex items-center gap-2 text-muted-foreground text-sm mb-6">
-            <Loader2 className="w-4 h-4 animate-spin" />로딩 중...
+            <Loader2 className="w-4 h-4 animate-spin" />불러오는 중…
           </div>
         ) : clusters.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-20 text-muted-foreground">

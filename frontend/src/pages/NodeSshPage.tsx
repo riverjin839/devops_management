@@ -6,7 +6,7 @@ import {
   CheckCircle, XCircle, Wifi, Clock, Plug,
 } from 'lucide-react';
 import { useClusters } from '@/hooks/useCluster';
-import { ClusterSidebar, EmptyState } from '@/components/common';
+import { ClusterSidebar, SelectClusterEmptyState } from '@/components/common';
 import { MacCard } from '@/components/ui/MacCard';
 import { NodeSshTerminal, type NodeSshConnectParams } from '@/components/k8s';
 import { openNodeSshPopout } from '@/lib/nodeSshPopout';
@@ -177,12 +177,7 @@ export function NodeSshPage() {
           </div>
 
           {!clusterId ? (
-            <MacCard>
-              <EmptyState
-                title="클러스터를 선택하세요"
-                description="좌측에서 클러스터를 고르면 노드 목록과 접속 정보를 입력할 수 있습니다."
-              />
-            </MacCard>
+            <SelectClusterEmptyState description="왼쪽에서 클러스터를 고르면 노드 목록과 접속 정보를 입력할 수 있습니다." />
           ) : session ? (
             <>
               <MacCard className="text-sm text-muted-foreground leading-relaxed">

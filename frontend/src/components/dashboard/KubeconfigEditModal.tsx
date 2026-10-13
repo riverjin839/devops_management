@@ -112,7 +112,7 @@ export function KubeconfigEditModal({
         {isLoading ? (
           <div className="flex items-center justify-center py-12 gap-2 text-muted-foreground">
             <Loader2 className="w-4 h-4 animate-spin" />
-            <span className="text-sm">불러오는 중...</span>
+            <span className="text-sm">불러오는 중…</span>
           </div>
         ) : isError ? (
           /* No kubeconfig yet — start in edit mode to create one */

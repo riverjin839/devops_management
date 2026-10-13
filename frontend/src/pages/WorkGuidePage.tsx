@@ -402,7 +402,7 @@ export function WorkGuidePage() {
 
         <div className="flex-1 overflow-y-auto py-2 px-2">
           {isLoading ? (
-            <div className="text-sm text-muted-foreground text-center py-6">불러오는 중...</div>
+            <div className="text-sm text-muted-foreground text-center py-6">불러오는 중…</div>
           ) : rootGuides.length === 0 ? (
             <div className="text-sm text-muted-foreground text-center py-6">
               페이지가 없습니다

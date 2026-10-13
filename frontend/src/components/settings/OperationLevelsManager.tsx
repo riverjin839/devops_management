@@ -246,7 +246,7 @@ export function OperationLevelsManager() {
           <tbody>
             {isLoading && (
               <tr><td colSpan={7} className="text-center py-6 text-sm text-muted-foreground">
-                <Loader2 className="w-3 h-3 inline animate-spin mr-1" /> 로딩...
+                <Loader2 className="w-3 h-3 inline animate-spin mr-1" /> 불러오는 중…
               </td></tr>
             )}
             {!isLoading && draft.map((l, idx) => (

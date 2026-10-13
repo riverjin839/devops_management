@@ -3,7 +3,7 @@ import { Boxes, Search, AlertTriangle, LayoutList, LayoutGrid, Layers } from 'lu
 import { useClusters } from '@/hooks/useCluster';
 import { useNodeImageList } from '@/hooks/useNodeImages';
 import { NodeImagesTable, NodeLabelGroupView, ImageCentricView, NodeImagesCsvExportMenu, ImageDistributeDialog } from '@/components/node-images';
-import { ClusterSidebar, SnapshotProgressCard, ExportMenu } from '@/components/common';
+import { ClusterSidebar, SnapshotProgressCard, ExportMenu, SelectClusterEmptyState } from '@/components/common';
 import { MacCard } from '@/components/ui/MacCard';
 import { formatApiError } from '@/lib/utils';
 
@@ -149,9 +149,7 @@ export function NodeImagesPage() {
               unit="노드"
             />
           ) : !activeClusterId ? (
-            <MacCard bodyPadding="p-8" className="text-center text-muted-foreground">
-              클러스터를 선택하세요.
-            </MacCard>
+            <SelectClusterEmptyState />
           ) : nodesError ? (
             <MacCard rootClassName="border-status-critical/30" bodyPadding="p-8">
               <div className="flex flex-col items-center gap-3 text-center">

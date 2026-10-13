@@ -186,7 +186,7 @@ export function ClusterCustomFieldsManager({ open, onClose }: Props) {
               <tbody>
                 {isLoading && (
                   <tr><td colSpan={6} className="text-center py-4 text-sm text-muted-foreground">
-                    <Loader2 className="w-3 h-3 inline animate-spin mr-1" /> 로딩...
+                    <Loader2 className="w-3 h-3 inline animate-spin mr-1" /> 불러오는 중…
                   </td></tr>
                 )}
                 {/* 조회 실패를 "컬럼 없음"과 똑같이 보여주면 정의가 지워졌다고 오해한다 — 구분 필수 */}

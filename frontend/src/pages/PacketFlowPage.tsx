@@ -6,7 +6,7 @@ import {
 } from 'lucide-react';
 import { useAbortableMutation } from '@/hooks/useAbortableMutation';
 import { useClusters } from '@/hooks/useCluster';
-import { ClusterSidebar, DebugLogPanel } from '@/components/common';
+import { ClusterSidebar, DebugLogPanel, SelectClusterEmptyState } from '@/components/common';
 import { topologyTraceApi } from '@/services/api';
 import { formatApiError } from '@/lib/utils';
 import type {
@@ -395,10 +395,7 @@ export function PacketFlowPage() {
                 initialToService={hubblePrefill.toService}
               />
             ) : (
-              <div className="bg-card border border-border rounded-xl p-10 text-center text-sm text-muted-foreground">
-                <Info className="w-8 h-8 mx-auto mb-2 text-muted-foreground" />
-                왼쪽에서 클러스터를 선택하세요.
-              </div>
+              <SelectClusterEmptyState />
             )
           )}
 
@@ -406,10 +403,7 @@ export function PacketFlowPage() {
             clusterId ? (
               <TcpdumpPanel clusterId={clusterId} />
             ) : (
-              <div className="bg-card border border-border rounded-xl p-10 text-center text-sm text-muted-foreground">
-                <Info className="w-8 h-8 mx-auto mb-2 text-muted-foreground" />
-                왼쪽에서 클러스터를 선택하세요.
-              </div>
+              <SelectClusterEmptyState />
             )
           )}
         </div>

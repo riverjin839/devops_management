@@ -8,7 +8,7 @@
  */
 import { useMemo, useState } from 'react';
 import { KeyRound, Link2, Shield, ShieldCheck, Wand2 } from 'lucide-react';
-import { ClusterSidebar } from '@/components/common';
+import { ClusterSidebar, SelectClusterEmptyState } from '@/components/common';
 import {
   AccessReviewPanel,
   BindingPanel,
@@ -147,9 +147,7 @@ export function K8sRbacPage() {
           </div>
 
           {!clusterId ? (
-            <div className="py-16 text-center text-sm text-muted-foreground">
-              왼쪽에서 클러스터를 고르세요.
-            </div>
+            <SelectClusterEmptyState />
           ) : tab === 'wizard' ? (
             <div className="grid grid-cols-1 xl:grid-cols-2 gap-3 items-start">
               <ProvisionWizard
