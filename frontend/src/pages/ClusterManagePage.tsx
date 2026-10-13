@@ -102,6 +102,8 @@ export function ClusterManagePage() {
   // "눌러보고서야 403 으로 안다"를 없앤다.
   const authUser = useAuthStore((s) => s.user);
   const canEdit = hasRole(authUser, 'admin', 'operator');
+  // /settings 는 RequireAdmin 라우트라 빈 상태의 등록 CTA 는 admin 에게만 보인다(D-129).
+  const isAdmin = hasRole(authUser, 'admin');
   // 로딩/조회실패를 "등록된 클러스터가 없습니다" 로 위장하지 않도록 쿼리 상태를 사용한다 (D-043).
   const { isLoading: clustersLoading, isError: clustersError, error: clustersLoadError, refetch: refetchClusters } = useClusters();
   const queryClient = useQueryClient();
@@ -945,8 +947,10 @@ export function ClusterManagePage() {
           <EmptyState
             icon={Server}
             title="등록된 클러스터가 없습니다."
-            description="클러스터 등록과 API/kubeconfig 설정은 Settings → 클러스터 탭에서 할 수 있습니다."
-            action={{ label: 'Settings 에서 클러스터 등록', onClick: () => navigate('/settings?tab=clusters') }}
+            description={isAdmin
+              ? '클러스터 등록과 API/kubeconfig 설정은 설정 → 클러스터 탭에서 할 수 있습니다.'
+              : '클러스터 등록은 관리자만 할 수 있습니다. 관리자에게 설정 → 클러스터 탭에서 등록을 요청하세요.'}
+            action={isAdmin ? { label: '설정에서 클러스터 등록', onClick: () => navigate('/settings?tab=cluster') } : undefined}
           />
         ) : filteredClusters.length === 0 ? (
           <EmptyState

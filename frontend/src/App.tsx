@@ -197,8 +197,9 @@ function AppShell() {
               <Route path="/versions/:clusterId/graph" element={<VersionGraphPage />} />
               <Route path="/bulk-exec" element={<BulkExecPage />} />
               <Route path="/etcdctl" element={<EtcdCtlPage />} />
-              {/* 홈 화면 "플랫폼 현황" 탭의 배치잡 서브탭으로 병합됨 — 기존 링크/북마크 호환용 리다이렉트 */}
-              <Route path="/batch-jobs" element={<Navigate to="/" replace />} />
+              {/* 홈 화면 "플랫폼 현황" 탭의 배치잡 서브탭으로 병합됨 — 기존 링크/북마크가 홈 첫 탭이 아니라
+                  배치잡 서브탭에 바로 떨어지도록 쿼리로 탭/서브뷰를 넘긴다(HomePage 가 읽고 지움, D-129). */}
+              <Route path="/batch-jobs" element={<Navigate to="/?tab=platform&view=batch" replace />} />
               <Route path="/kernel-params" element={<KernelParamsPage />} />
               <Route path="/mc" element={<McClientPage />} />
               <Route path="/isilon-nfs" element={<IsilonNfsPage />} />

@@ -137,10 +137,11 @@ export function DailyCheckReviewPage() {
           {clusterId && <ResourceTrendChecklist clusterId={clusterId} />}
 
           {!dailyCheckLogId && (
-            <MacCard title="안내">
-              <div className="text-sm text-muted-foreground italic">
-                해당 클러스터의 점검 기록이 없습니다. 상단의 <strong>"Daily Check 실행"</strong> 버튼을 눌러 새 회차를 생성하세요.
-                (Dashboard 의 "체크 실행" 은 별개 파이프라인이라 여기에 결과가 나타나지 않습니다.)
+            <MacCard title="점검 기록 없음">
+              <div className="text-sm text-muted-foreground">
+                해당 클러스터의 점검 기록이 없습니다. 상단의 <strong>「기본 점검 실행」</strong>으로 새 회차를 만들고,
+                <strong>「심층 점검 실행」</strong>으로 등록된 심층 점검 결과를 그 회차에 묶으세요.
+                (클러스터 현황의 「점검 실행」은 별개 파이프라인이라 여기에 결과가 나타나지 않습니다.)
               </div>
             </MacCard>
           )}

@@ -27,6 +27,13 @@
   rebinding) 없앴다 — 호스트명은 허용 대역에 그 호스트명(또는 `*.도메인`)을 직접 적어야 허용된다.
   Backend: `routers/clusters.py` `_ensure_kubeconfig_server_allowed`, `services/cluster_endpoint_policy.py`.
 
+### Fixed
+- **클러스터 관리 빈 상태의 등록 버튼이 빈 설정 화면으로 가던 문제**: `/settings?tab=clusters` 가 아니라 실제 탭 id
+  `cluster` 로 가고, 설정 화면은 관리자 전용이라 운영자·뷰어에게는 버튼 대신 "관리자에게 요청" 안내를 보인다.
+  일일 점검 리뷰의 "기록 없음" 안내가 없는 버튼("Daily Check 실행")을 가리키던 문구를 실제 버튼명으로 고쳤다.
+  레거시 운영 점검 콘솔(`/ops-checks`)을 사이드바에서 뺐고(라우트·북마크는 유지, 정본은 `/clusters/:id`),
+  `/batch-jobs` 링크·북마크는 홈 첫 탭이 아니라 플랫폼 현황 ▸ 배치잡 서브탭으로 바로 떨어진다. (DESIGN.md D-129)
+
 ## [1.52.0] - 2026-10-13
 
 ### Added
