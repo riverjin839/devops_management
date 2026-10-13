@@ -246,7 +246,7 @@ export function NodeSshPage() {
                           }`}
                         >
                           <span
-                            className={`w-1.5 h-1.5 rounded-full shrink-0 ${n.ready ? 'bg-status-healthy' : 'bg-status-critical'}`}
+                            className={`w-1.5 h-1.5 rounded-full shrink-0 ${n.ready ? 'bg-muted-foreground/40' : 'bg-status-critical'}`}
                             title={n.ready ? 'Ready' : 'NotReady'}
                           />
                           <span className={`text-sm truncate ${active ? 'text-foreground font-medium' : 'text-foreground/80'}`}>
@@ -308,7 +308,7 @@ export function NodeSshPage() {
                         <button
                           key={m}
                           onClick={() => setAuthMode(m)}
-                          className={`flex-1 px-2 py-1.5 text-sm font-medium rounded-md transition-all ${
+                          className={`flex-1 px-2 py-1.5 text-sm font-medium rounded-md transition-colors ${
                             authMode === m ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
                           }`}
                         >

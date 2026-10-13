@@ -119,7 +119,7 @@ export function K9sPage() {
             title="k9s 콘솔"
             description="control-plane 서버에 내장된 k9s 를 SSH 로 실행해 스트리밍"
             actions={effectiveHost ? (
-              <span className="text-sm px-2 py-0.5 rounded-full bg-status-unknown/15 text-status-unknown border border-status-unknown/30 font-mono">
+              <span className="text-sm px-2 py-0.5 rounded-full bg-secondary text-muted-foreground border border-border font-mono">
                 → {username}@{effectiveHost}
               </span>
             ) : undefined}
@@ -219,7 +219,7 @@ export function K9sPage() {
                         <button
                           key={m}
                           onClick={() => setAuthMode(m)}
-                          className={`flex-1 px-2 py-1.5 text-sm font-medium rounded-md transition-all ${
+                          className={`flex-1 px-2 py-1.5 text-sm font-medium rounded-md transition-colors ${
                             authMode === m ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
                           }`}
                         >

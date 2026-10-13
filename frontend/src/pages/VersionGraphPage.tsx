@@ -75,11 +75,11 @@ function makeNodeObject(node: NodeObject): THREE.Mesh {
 
 function NodeDetail({ node, onClose }: { node: GNode; onClose: () => void }) {
   return (
-    <div className="absolute top-4 right-4 w-80 bg-card border border-border rounded-xl shadow-2xl overflow-hidden z-10">
+    <div className="absolute top-4 right-4 w-80 bg-card border border-border rounded-md shadow-2xl overflow-hidden z-10">
       <div className="flex items-center justify-between px-4 py-3 border-b border-border"
         style={{ borderLeftColor: chartTokenColor(NODE_TOKEN[node.type]), borderLeftWidth: 4 }}>
         <div className="min-w-0">
-          <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+          <p className="text-xs font-medium text-muted-foreground">
             {node.type}
           </p>
           <p className="text-sm font-bold text-foreground truncate">{node.label}</p>
@@ -91,25 +91,25 @@ function NodeDetail({ node, onClose }: { node: GNode; onClose: () => void }) {
       <div className="px-4 py-3 space-y-3 max-h-[420px] overflow-y-auto text-sm">
         {node.version && (
           <div>
-            <p className="text-xs text-muted-foreground uppercase mb-0.5">Version</p>
+            <p className="text-xs font-medium text-muted-foreground mb-0.5">버전</p>
             <p className="font-mono text-foreground">{node.version}</p>
           </div>
         )}
         {node.value && (
           <div>
-            <p className="text-xs text-muted-foreground uppercase mb-0.5">Value</p>
+            <p className="text-xs font-medium text-muted-foreground mb-0.5">값</p>
             <p className="font-mono text-foreground break-all">{node.value}</p>
           </div>
         )}
         {node.category && (
           <div>
-            <p className="text-xs text-muted-foreground uppercase mb-0.5">Category</p>
+            <p className="text-xs font-medium text-muted-foreground mb-0.5">카테고리</p>
             <p className="font-mono text-foreground">{node.category}</p>
           </div>
         )}
         {node.collectedAt && (
           <div>
-            <p className="text-xs text-muted-foreground uppercase mb-0.5">Collected</p>
+            <p className="text-xs font-medium text-muted-foreground mb-0.5">수집 시각</p>
             <p className="font-mono text-foreground text-xs">{node.collectedAt}</p>
           </div>
         )}

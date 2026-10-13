@@ -2,7 +2,7 @@ import { useEffect, useId, useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useAbortableMutation } from '@/hooks/useAbortableMutation';
 import {
-  Database, Play, Square, CheckCircle, XCircle, Key, FileText, Terminal,
+  Database, Play, Square, CheckCircle, XCircle, AlertTriangle, Key, FileText, Terminal,
   ShieldAlert, Wifi, Clock, ScrollText,
 } from 'lucide-react';
 import { useClusters } from '@/hooks/useCluster';
@@ -44,7 +44,7 @@ function ResultPanel({ result, tab }: { result: EtcdCtlRunResponse | null; tab: 
   const Icon = meta.icon;
   return (
     <MacCard rootClassName="lg:col-span-5 min-w-0 overflow-y-auto overflow-x-hidden lg:h-[calc(100vh-260px)]" bodyPadding="p-0">
-      <header className="sticky top-0 z-10 px-5 py-3 border-b border-border flex items-center justify-between bg-muted/90 backdrop-blur-sm">
+      <header className="sticky top-0 z-10 px-5 py-3 border-b border-border flex items-center justify-between bg-muted">
         <div className="flex items-center gap-3 flex-wrap">
           <span className={`inline-flex items-center gap-1 text-sm px-2 py-0.5 rounded-full border font-medium ${meta.cls}`}>
             <Icon className="w-3 h-3" />
@@ -57,12 +57,12 @@ function ResultPanel({ result, tab }: { result: EtcdCtlRunResponse | null; tab: 
           <span className="text-sm font-mono text-muted-foreground">{result.durationMs}ms</span>
         </div>
         {result.error && (
-          <span className="text-sm text-status-critical">⚠ {result.error}</span>
+          <span className="text-sm text-status-critical inline-flex items-start gap-1"><AlertTriangle className="w-3.5 h-3.5 mt-0.5 shrink-0" aria-hidden="true" />{result.error}</span>
         )}
       </header>
       <div className="px-5 py-3 space-y-3">
         <div>
-          <p className="text-xs uppercase tracking-wider text-muted-foreground mb-1">executed</p>
+          <p className="text-xs font-medium text-muted-foreground mb-1">실행된 명령</p>
           <pre className="text-xs font-mono bg-background border border-border rounded p-2 overflow-auto whitespace-pre-wrap break-all text-foreground/80">
             {result.executedCommand || '(not provided)'}
           </pre>
@@ -299,7 +299,7 @@ export function EtcdCtlPage() {
                   <button
                     key={m}
                     onClick={() => setAuthMode(m)}
-                    className={`flex-1 px-2 py-1.5 text-sm font-medium rounded-md transition-all ${
+                    className={`flex-1 px-2 py-1.5 text-sm font-medium rounded-md transition-colors ${
                       authMode === m ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
                     }`}
                   >
@@ -542,7 +542,7 @@ export function EtcdCtlPage() {
       >
         <div className="space-y-3">
           <div>
-            <p className="text-xs uppercase tracking-wider text-muted-foreground mb-1">타겟</p>
+            <p className="text-xs font-medium text-muted-foreground mb-1">타겟</p>
             <p className="font-mono">
               <span className="text-primary">{username}</span>
               <span className="text-muted-foreground">@</span>
@@ -555,14 +555,14 @@ export function EtcdCtlPage() {
           </div>
           {confirmAction === 'run' ? (
             <div>
-              <p className="text-xs uppercase tracking-wider text-muted-foreground mb-1">실행</p>
+              <p className="text-xs font-medium text-muted-foreground mb-1">실행</p>
               <pre className="text-xs font-mono bg-background border border-border rounded p-2 max-h-32 overflow-auto whitespace-pre-wrap break-all">
                 {useEnv && envFile ? `source ${envFile} && ` : ''}{etcdctlPath} {args}
               </pre>
             </div>
           ) : (
             <div>
-              <p className="text-xs uppercase tracking-wider text-muted-foreground mb-1">journalctl</p>
+              <p className="text-xs font-medium text-muted-foreground mb-1">journalctl</p>
               <pre className="text-xs font-mono bg-background border border-border rounded p-2 overflow-auto whitespace-pre-wrap">
                 journalctl -u {unit} -n {tail}
                 {since && ` --since "${since}"`}

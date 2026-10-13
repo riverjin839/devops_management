@@ -2,7 +2,7 @@ import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useAbortableMutation } from '@/hooks/useAbortableMutation';
 import {
-  Cpu, Play, Square, CheckCircle, XCircle, Clock,
+  Cpu, Play, Square, CheckCircle2, XCircle, Clock, AlertTriangle,
   ShieldAlert, Wifi, Terminal, ChevronDown, ChevronRight,
 } from 'lucide-react';
 import { useClusters } from '@/hooks/useCluster';
@@ -117,7 +117,7 @@ const PRESETS: Preset[] = [
 // ── 상태 색상 ──────────────────────────────────────────────────────────────
 
 const STATUS_META: Record<BulkExecResultItem['status'], { label: string; cls: string; icon: React.ComponentType<{ className?: string }> }> = {
-  ok:            { label: '정상',     cls: 'bg-status-healthy/10 text-status-healthy border-status-healthy/30',  icon: CheckCircle },
+  ok:            { label: '정상',     cls: 'bg-secondary text-muted-foreground border-border',  icon: CheckCircle2 },
   error:         { label: '에러',     cls: 'bg-status-critical/10 text-status-critical border-status-critical/30',              icon: XCircle },
   timeout:       { label: '타임아웃', cls: 'bg-status-warning/10 text-status-warning border-status-warning/30',        icon: Clock },
   auth_error:    { label: '인증 실패', cls: 'bg-status-warning/10 text-status-warning border-status-warning/30',    icon: ShieldAlert },
@@ -133,7 +133,7 @@ function NodeRow({ node, checked, onToggle }: { node: NodeSummary; checked: bool
       checked ? 'bg-primary/5' : ''
     }`}>
       <input type="checkbox" checked={checked} onChange={onToggle} className="w-4 h-4 accent-primary" />
-      <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${node.ready ? 'bg-status-healthy' : 'bg-status-critical'}`} />
+      <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${node.ready ? 'bg-muted-foreground/40' : 'bg-status-critical'}`} />
       <span className="flex-1 min-w-0">
         <span className="block text-sm font-mono text-foreground truncate">{node.name}</span>
         <span className="block text-sm font-mono text-muted-foreground">{host}</span>
@@ -163,7 +163,7 @@ function ResultCard({
       : '';
 
   return (
-    <div className="bg-card border border-border rounded-xl overflow-hidden">
+    <div className="bg-card border border-border rounded-md overflow-hidden">
       <button
         onClick={() => setOpen((v) => !v)}
         className="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-muted/30 transition-colors text-left"
@@ -186,14 +186,14 @@ function ResultCard({
       </button>
       {open && (
         <div className="px-4 pb-4 space-y-2">
-          <p className="text-xs uppercase tracking-wider text-muted-foreground">command</p>
+          <p className="text-xs font-medium text-muted-foreground">명령</p>
           <pre className="text-xs font-mono bg-background border border-border rounded p-2 overflow-auto whitespace-pre-wrap break-all max-h-24">
             {command}
           </pre>
           {result.error && (
-            <p className="text-sm text-status-critical font-mono break-all">⚠ {result.error}</p>
+            <p className="text-sm text-status-critical font-mono break-all flex items-start gap-1"><AlertTriangle className="w-3.5 h-3.5 mt-0.5 shrink-0" aria-hidden="true" />{result.error}</p>
           )}
-          <p className="text-xs uppercase tracking-wider text-muted-foreground">stdout</p>
+          <p className="text-xs font-medium text-muted-foreground">stdout</p>
           {result.stdout.trim() ? (
             <LogViewer text={result.stdout} maxHeight="max-h-96" filterOverride={globalFilter || undefined} hideToolbar={!!globalFilter.trim()} />
           ) : (
@@ -203,7 +203,7 @@ function ResultCard({
           )}
           {result.stderr && (
             <>
-              <p className="text-xs uppercase tracking-wider text-muted-foreground">stderr</p>
+              <p className="text-xs font-medium text-muted-foreground">stderr</p>
               <LogViewer text={result.stderr} maxHeight="max-h-40" asError filterOverride={globalFilter || undefined} hideToolbar={!!globalFilter.trim()} />
             </>
           )}
@@ -429,7 +429,7 @@ export function KernelParamsPage() {
                   <div className="flex items-center bg-secondary/60 rounded-lg p-[3px] gap-px">
                     {(['password', 'key'] as const).map((m) => (
                       <button key={m} onClick={() => setAuthMode(m)}
-                        className={`flex-1 px-2 py-1.5 text-sm font-medium rounded-md transition-all ${
+                        className={`flex-1 px-2 py-1.5 text-sm font-medium rounded-md transition-colors ${
                           authMode === m ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
                         }`}>
                         {m === 'password' ? '비밀번호' : 'Private Key'}
@@ -454,7 +454,7 @@ export function KernelParamsPage() {
                 <div className="flex items-center bg-secondary/60 rounded-lg p-[3px] gap-px">
                   {(['parallel', 'sequential'] as const).map((m) => (
                     <button key={m} onClick={() => setMode(m)}
-                      className={`px-3 py-1.5 text-sm font-medium rounded-md transition-all ${
+                      className={`px-3 py-1.5 text-sm font-medium rounded-md transition-colors ${
                         mode === m ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
                       }`}>
                       {m === 'parallel' ? '병렬' : '순차'}
@@ -465,7 +465,7 @@ export function KernelParamsPage() {
 
               {/* 미리보기 */}
               <div>
-                <p className="text-xs uppercase tracking-wider text-muted-foreground mb-1">실행될 명령</p>
+                <p className="text-xs font-medium text-muted-foreground mb-1">실행될 명령</p>
                 <pre className="text-xs font-mono bg-background border border-border rounded p-2 overflow-auto whitespace-pre-wrap break-all max-h-24">
                   {commandToRun || '(선택된 프리셋 없음)'}
                 </pre>
@@ -545,7 +545,7 @@ export function KernelParamsPage() {
                 </div>
               </div>
               {runResponse.results.length === 0 ? (
-                <p className="text-sm text-muted-foreground italic px-3 py-2 bg-card border border-border rounded-lg">
+                <p className="text-sm text-muted-foreground italic px-3 py-2 bg-card border border-border rounded-md">
                   (노드 결과가 비어있음 — targets 가 비어있었는지 확인하세요.)
                 </p>
               ) : (
@@ -575,17 +575,17 @@ export function KernelParamsPage() {
       >
         <div className="space-y-2">
           <div>
-            <p className="text-xs uppercase tracking-wider text-muted-foreground mb-1">프리셋</p>
+            <p className="text-xs font-medium text-muted-foreground mb-1">프리셋</p>
             <p className="text-sm font-semibold">{preset?.label ?? '직접 입력'}</p>
           </div>
           <div>
-            <p className="text-xs uppercase tracking-wider text-muted-foreground mb-1">실행 명령</p>
+            <p className="text-xs font-medium text-muted-foreground mb-1">실행 명령</p>
             <pre className="text-xs font-mono bg-background border border-border rounded p-2 max-h-28 overflow-auto whitespace-pre-wrap break-all">
               {commandToRun}
             </pre>
           </div>
           <div>
-            <p className="text-xs uppercase tracking-wider text-muted-foreground mb-1">대상 ({selected.size})</p>
+            <p className="text-xs font-medium text-muted-foreground mb-1">대상 ({selected.size})</p>
             <div className="text-xs font-mono max-h-20 overflow-auto bg-background border border-border rounded p-2">
               {selectedHosts.slice(0, 8).map((t) => <div key={t.name}>{t.name}</div>)}
               {selectedHosts.length > 8 && <div className="text-muted-foreground">+ {selectedHosts.length - 8}개 더…</div>}

@@ -23,13 +23,13 @@ import { Database, ShieldCheck } from 'lucide-react';
 
 const CATEGORY_META: Record<string, { label: string; icon: React.ComponentType<{ className?: string }>; cls: string }> = {
   control_plane: { label: 'Control Plane', icon: Server,     cls: 'bg-chart-4/15 text-chart-4 border-chart-4/30' },
-  kubelet:       { label: 'Kubelet',        icon: Cpu,        cls: 'bg-status-info/10 text-status-info border-status-info/30' },
+  kubelet:       { label: 'Kubelet',        icon: Cpu,        cls: 'bg-chart-1/15 text-chart-1 border-chart-1/30' },
   cni:           { label: 'CNI / Cilium',   icon: Network,    cls: 'bg-chart-5/15 text-chart-5 border-chart-5/30' },
   // OS 레벨 — kernel sysctl · etcd systemd · etcdctl config 를 한 카테고리로.
-  os:            { label: 'OS',              icon: Cpu,        cls: 'bg-status-warning/10 text-status-warning border-status-warning/30' },
+  os:            { label: 'OS',              icon: Cpu,        cls: 'bg-chart-3/15 text-chart-3 border-chart-3/30' },
   // Storage — MinIO / AIStor / DirectPV 등 객체스토리지 레이어
-  storage:       { label: 'Storage (S3/MinIO)', icon: HardDrive, cls: 'bg-status-healthy/10 text-status-healthy border-status-healthy/30' },
-  cluster:       { label: 'Cluster',        icon: Server,     cls: 'bg-status-unknown/10 text-status-unknown border-status-unknown/30' },
+  storage:       { label: 'Storage (S3/MinIO)', icon: HardDrive, cls: 'bg-chart-6/15 text-chart-6 border-chart-6/30' },
+  cluster:       { label: 'Cluster',        icon: Server,     cls: 'bg-chart-8/15 text-chart-8 border-chart-8/30' },
   other:         { label: 'Other',          icon: Settings2,  cls: 'bg-muted text-muted-foreground border-border' },
 };
 
@@ -115,7 +115,7 @@ function KernelParamsDetails({ data }: { data: Record<string, unknown> }) {
       <div className="space-y-2">
         {orderedKeys.map((g) => (
           <details key={g} open className="rounded-md border border-border bg-muted/30">
-            <summary className="cursor-pointer px-3 py-1.5 text-xs uppercase tracking-wider text-muted-foreground select-none flex items-center justify-between">
+            <summary className="cursor-pointer px-3 py-1.5 text-xs font-medium text-muted-foreground select-none flex items-center justify-between">
               <span>{g}</span>
               <span className="font-mono text-foreground/60">{groups[g].length}</span>
             </summary>
@@ -160,7 +160,7 @@ function SourcesNote({ sources }: { sources?: Record<string, string> | null }) {
   }
   return (
     <div className="rounded-md border border-border bg-muted/20 p-2">
-      <p className="text-xs uppercase tracking-wider text-muted-foreground mb-1">데이터 출처</p>
+      <p className="text-xs font-medium text-muted-foreground mb-1">데이터 출처</p>
       <ul className="space-y-0.5">
         {Array.from(groups.entries()).map(([src, fields]) => (
           <li key={src} className="font-mono text-xs break-all">
@@ -226,7 +226,7 @@ function EtcdSystemdDetails({ data }: { data: Record<string, unknown> }) {
         )}
         {activeState && (
           <div><span className="text-xs text-muted-foreground">ActiveState<SourceBadge src={sources?.active_state} /></span>
-            <p className={`font-mono ${activeState === 'active' ? 'text-status-healthy' : 'text-status-warning'}`}>
+            <p className={`font-mono ${activeState === 'active' ? 'text-muted-foreground' : 'text-status-warning'}`}>
               {activeState}{subState ? ` / ${subState}` : ''}
             </p></div>
         )}
@@ -237,7 +237,7 @@ function EtcdSystemdDetails({ data }: { data: Record<string, unknown> }) {
       </div>
 
       <div>
-        <p className="text-xs text-muted-foreground uppercase mb-1">설정 파일 경로 (출처별)</p>
+        <p className="text-xs font-medium text-muted-foreground mb-1">설정 파일 경로 (출처별)</p>
         <div className="space-y-1 rounded-md bg-muted/30 p-2">
           {pathRows.map((r) => (
             <div key={r.label} className="font-mono text-xs break-all flex flex-wrap items-center gap-1">
@@ -253,7 +253,7 @@ function EtcdSystemdDetails({ data }: { data: Record<string, unknown> }) {
 
       {execStart && (
         <div>
-          <p className="text-xs text-muted-foreground uppercase mb-1">
+          <p className="text-xs font-medium text-muted-foreground mb-1">
             ExecStart<SourceBadge src={sources?.exec_start} />
           </p>
           <pre className="text-xs font-mono bg-muted/30 rounded-md p-2 break-all whitespace-pre-wrap max-h-32 overflow-auto">{execStart}</pre>
@@ -262,7 +262,7 @@ function EtcdSystemdDetails({ data }: { data: Record<string, unknown> }) {
 
       {psCmdline && (
         <div>
-          <p className="text-xs text-muted-foreground uppercase mb-1">
+          <p className="text-xs font-medium text-muted-foreground mb-1">
             ps -ef cmdline<SourceBadge src={sources?.ps_cmdline} />
           </p>
           <pre className="text-xs font-mono bg-muted/30 rounded-md p-2 break-all whitespace-pre-wrap max-h-24 overflow-auto">{psCmdline}</pre>
@@ -272,7 +272,7 @@ function EtcdSystemdDetails({ data }: { data: Record<string, unknown> }) {
       {envContent && (
         <div>
           <div className="flex items-center justify-between mb-1">
-            <p className="text-xs text-muted-foreground uppercase">
+            <p className="text-xs font-medium text-muted-foreground">
               env 파일 내용 ({envFile})<SourceBadge src={sources?.env_content} />
             </p>
           </div>
@@ -347,7 +347,7 @@ function KubeletConfigDetails({ data }: { data: Record<string, unknown> }) {
 
       {psCmdline && (
         <div>
-          <p className="text-xs text-muted-foreground uppercase mb-1">
+          <p className="text-xs font-medium text-muted-foreground mb-1">
             ps -ef cmdline<SourceBadge src={sources?.ps_cmdline} />
           </p>
           <pre className="text-xs font-mono bg-muted/30 rounded-md p-2 break-all whitespace-pre-wrap max-h-24 overflow-auto">{psCmdline}</pre>
@@ -356,7 +356,7 @@ function KubeletConfigDetails({ data }: { data: Record<string, unknown> }) {
 
       {configContent && (
         <div>
-          <p className="text-xs text-muted-foreground uppercase mb-1">
+          <p className="text-xs font-medium text-muted-foreground mb-1">
             config 파일 내용<SourceBadge src={sources?.config_content} />
           </p>
           <input
@@ -445,7 +445,7 @@ function GenericComponentDetails({
     <div className="space-y-3 text-sm">
       {image && (
         <div>
-          <p className="text-xs text-muted-foreground uppercase mb-0.5">Image</p>
+          <p className="text-xs font-medium text-muted-foreground mb-0.5">이미지</p>
           <p className="font-mono text-foreground break-all">{image}</p>
         </div>
       )}
@@ -461,7 +461,7 @@ function GenericComponentDetails({
 
       {flags && (
         <div>
-          <p className="text-xs text-muted-foreground uppercase mb-0.5">
+          <p className="text-xs font-medium text-muted-foreground mb-0.5">
             Flags ({flagsEntries.length}{filter ? ` / ${Object.keys(flags).length}` : ''})
           </p>
           <div className="max-h-60 overflow-y-auto space-y-0.5 rounded-md bg-muted/30 p-2">
@@ -479,7 +479,7 @@ function GenericComponentDetails({
       )}
       {cmData && (
         <div>
-          <p className="text-xs text-muted-foreground uppercase mb-0.5">
+          <p className="text-xs font-medium text-muted-foreground mb-0.5">
             ConfigMap data ({cmEntries.length}{filter ? ` / ${Object.keys(cmData).length}` : ''})
           </p>
           <div className="max-h-60 overflow-y-auto space-y-0.5 rounded-md bg-muted/30 p-2">
@@ -532,7 +532,7 @@ function MinioTenantDetails({ data }: { data: Record<string, unknown> }) {
 
   const stat = (label: string, value: React.ReactNode, color?: string) => (
     <div className="bg-muted/40 rounded-md px-2 py-1.5">
-      <p className="text-[11px] uppercase text-muted-foreground tracking-wider">{label}</p>
+      <p className="text-[11px] text-muted-foreground">{label}</p>
       <p className={`text-sm font-semibold font-mono ${color ?? 'text-foreground'}`}>{value ?? '—'}</p>
     </div>
   );
@@ -541,29 +541,29 @@ function MinioTenantDetails({ data }: { data: Record<string, unknown> }) {
     <div className="space-y-3 text-sm">
       {str('image') && (
         <div>
-          <p className="text-xs text-muted-foreground uppercase mb-0.5">Image</p>
+          <p className="text-xs font-medium text-muted-foreground mb-0.5">이미지</p>
           <p className="font-mono text-foreground break-all">{str('image')}</p>
         </div>
       )}
       <div className="grid grid-cols-3 gap-1.5">
-        {stat('서버 수',   totalServers,  'text-status-info')}
-        {stat('드라이브',  totalDrives,   'text-status-healthy')}
+        {stat('서버 수',   totalServers)}
+        {stat('드라이브',  totalDrives)}
         {stat('Erasure Set', drivesPerSet)}
       </div>
       <div className="grid grid-cols-3 gap-1.5">
-        {stat('Parity (EC)', ecParity != null ? `${ecParity}${ecExplicit ? ' (명시)' : ' (default)'}` : '-', 'text-status-warning')}
+        {stat('Parity (EC)', ecParity != null ? `${ecParity}${ecExplicit ? ' (명시)' : ' (default)'}` : '-')}
         {stat('Data shards', ecDataShards)}
-        {stat('Auto TLS', requestAutoCert ? 'Yes' : 'No', requestAutoCert ? 'text-status-healthy' : 'text-muted-foreground')}
+        {stat('Auto TLS', requestAutoCert ? 'Yes' : 'No', 'text-muted-foreground')}
       </div>
       {ecRatio && (
-        <p className="text-xs font-mono text-status-healthy/80 bg-status-healthy/5 border border-status-healthy/20 rounded-md px-2 py-1">
+        <p className="text-xs font-mono text-muted-foreground bg-muted/30 border border-border rounded-md px-2 py-1">
           {ecRatio} — 손실 허용 디스크: {ecParity}개
         </p>
       )}
 
       {pools.length > 0 && (
         <div>
-          <p className="text-xs text-muted-foreground uppercase mb-1 tracking-wider">
+          <p className="text-xs font-medium text-muted-foreground mb-1">
             Pools ({pools.length})
           </p>
           <DoubleScrollX className="rounded-md border border-border">
@@ -584,7 +584,7 @@ function MinioTenantDetails({ data }: { data: Record<string, unknown> }) {
                     <td className="px-2 py-1">{String(p.name ?? `pool-${i}`)}</td>
                     <td className="px-2 py-1">{String(p.servers ?? '—')}</td>
                     <td className="px-2 py-1">{String(p.volumesPerServer ?? '—')}</td>
-                    <td className="px-2 py-1 text-status-healthy">{String(p.drives ?? '—')}</td>
+                    <td className="px-2 py-1">{String(p.drives ?? '—')}</td>
                     <td className="px-2 py-1">{String(p.volumeSize ?? '—')}</td>
                     <td className="px-2 py-1 truncate max-w-[140px]" title={String(p.storageClass ?? '')}>{String(p.storageClass ?? '—')}</td>
                   </tr>
@@ -599,7 +599,7 @@ function MinioTenantDetails({ data }: { data: Record<string, unknown> }) {
       <div className="grid grid-cols-2 md:grid-cols-4 gap-1.5">
         {stat('currentState', str('currentState'))}
         {stat('health', str('healthStatus'))}
-        {stat('online', num('drivesOnline'), 'text-status-healthy')}
+        {stat('online', num('drivesOnline'))}
         {stat('offline', num('drivesOffline'),
           (num('drivesOffline') ?? 0) > 0 ? 'text-status-critical' : undefined)}
       </div>
@@ -625,16 +625,16 @@ function DirectPVDetails({ data }: { data: Record<string, unknown> }) {
 
   const stat = (label: string, value: React.ReactNode, color?: string) => (
     <div className="bg-muted/40 rounded-md px-2 py-1.5">
-      <p className="text-[11px] uppercase text-muted-foreground tracking-wider">{label}</p>
+      <p className="text-[11px] text-muted-foreground">{label}</p>
       <p className={`text-sm font-semibold font-mono ${color ?? 'text-foreground'}`}>{value ?? '—'}</p>
     </div>
   );
   return (
     <div className="space-y-3 text-sm">
       <div className="grid grid-cols-3 gap-1.5">
-        {stat('총 드라이브', totalDrives, 'text-status-healthy')}
-        {stat('Ready', `${readyDrives} / ${totalDrives}`, readyDrives === totalDrives ? 'text-status-healthy' : 'text-status-warning')}
-        {stat('노드 수', nodeCount, 'text-status-info')}
+        {stat('총 드라이브', totalDrives)}
+        {stat('Ready', `${readyDrives} / ${totalDrives}`, readyDrives === totalDrives ? undefined : 'text-status-warning')}
+        {stat('노드 수', nodeCount)}
       </div>
       <div className="grid grid-cols-2 gap-1.5">
         {stat('총 용량', fmtBytes(totalCap))}
@@ -643,8 +643,8 @@ function DirectPVDetails({ data }: { data: Record<string, unknown> }) {
       </div>
       {nodes.length > 0 && (
         <div>
-          <p className="text-xs text-muted-foreground uppercase mb-1 tracking-wider">
-            Per-node ({nodes.length})
+          <p className="text-xs font-medium text-muted-foreground mb-1">
+            노드별 ({nodes.length})
           </p>
           <div className="max-h-60 overflow-y-auto rounded-md border border-border">
             <table className="w-full text-xs">
@@ -983,7 +983,7 @@ export function VersionsPage() {
           titleExtra={clusterId && current?.components ? (
             <>
               <span className="text-sm font-mono text-muted-foreground">· {clusters.find((c) => c.id === clusterId)?.name}</span>
-              <span className="text-sm px-2 py-0.5 rounded-full bg-status-unknown/15 text-status-unknown border border-status-unknown/30">
+              <span className="text-sm px-2 py-0.5 rounded-full bg-secondary text-muted-foreground border border-border">
                 {current.components.length}개 컴포넌트
               </span>
             </>
@@ -1109,7 +1109,7 @@ export function VersionsPage() {
               <MacCard rootClassName="mb-4" bodyPadding="p-0">
                 <div className="flex items-center gap-2 px-4 py-2 border-b border-border bg-surface-container-high">
                   <ScrollText className="w-3.5 h-3.5 text-muted-foreground" aria-hidden />
-                  <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground select-none">수집 로그</span>
+                  <span className="text-xs font-medium text-muted-foreground select-none">수집 로그</span>
                   <button
                     onClick={() => setCollectLog([])}
                     disabled={collectLog.length === 0}
@@ -1124,7 +1124,7 @@ export function VersionsPage() {
                 />
               </MacCard>
             )}
-            <div className="bg-card border border-border rounded-xl p-4 mb-5 text-sm text-muted-foreground leading-relaxed">
+            <div className="bg-card border border-border rounded-md p-4 mb-5 text-sm text-muted-foreground leading-relaxed">
               kubeconfig 를 통해 K8s/Cilium 버전, core component image tag, command/args 플래그, cilium-config ConfigMap 을 수집합니다.
               동일 hash 가 감지되면 저장하지 않으므로 반복 실행해도 안전. 변경이 발생한 시점에만 히스토리에 새 레코드가 생깁니다.
             </div>
@@ -1132,7 +1132,7 @@ export function VersionsPage() {
             {/* 노드/컴포넌트 검색 — 노드가 많을 때 빠르게 찾기.
                 키워드는 component 이름 / version / data 의 host·config_path 에 매칭한다. */}
             {totalComponents > 0 && (
-              <div className="bg-card border border-border rounded-xl px-4 py-2.5 mb-4 flex items-center gap-3 focus-within:ring-1 focus-within:ring-primary">
+              <div className="bg-card border border-border rounded-md px-4 py-2.5 mb-4 flex items-center gap-3 focus-within:ring-1 focus-within:ring-primary">
                 <Search className="w-4 h-4 text-muted-foreground" />
                 <input
                   value={nodeSearch}
@@ -1264,11 +1264,11 @@ export function VersionsPage() {
                           {isOpen && (
                             <div className="grid grid-cols-1 lg:grid-cols-2 divide-y lg:divide-y-0 lg:divide-x divide-border border-t border-border bg-muted/10">
                               <div className="px-5 py-4">
-                                <p className="text-xs text-muted-foreground uppercase mb-2 tracking-wider">현재 값</p>
+                                <p className="text-xs font-medium text-muted-foreground mb-2">현재 값</p>
                                 <ComponentDetails snap={snap} />
                               </div>
                               <div>
-                                <p className="text-xs text-muted-foreground uppercase px-4 pt-4 tracking-wider">히스토리</p>
+                                <p className="text-xs font-medium text-muted-foreground px-4 pt-4">히스토리</p>
                                 <HistoryTimeline
                                   clusterId={clusterId}
                                   component={snap.component}

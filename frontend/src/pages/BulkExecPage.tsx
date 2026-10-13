@@ -2,7 +2,7 @@ import { useEffect, useId, useMemo, useState } from 'react';
 import { useQueries } from '@tanstack/react-query';
 import { useAbortableMutation } from '@/hooks/useAbortableMutation';
 import {
-  Terminal, RefreshCw, Play, Square, CheckCircle, XCircle, Key, Upload, ChevronDown, ChevronRight,
+  Terminal, RefreshCw, Play, Square, CheckCircle2, XCircle, AlertTriangle, Key, Upload, ChevronDown, ChevronRight,
   Wifi, FileText, ShieldAlert, Zap, Clock, Download, LayoutList, Rows, Server, FolderInput, Loader2,
 } from 'lucide-react';
 import { useClusters } from '@/hooks/useCluster';
@@ -19,7 +19,7 @@ import type { ScriptLanguage } from '@/types';
 // ── 상태 색상 ───────────────────────────────────────────────────────────────
 
 const STATUS_META: Record<BulkExecResultItem['status'], { label: string; cls: string; icon: React.ComponentType<{ className?: string }> }> = {
-  ok:            { label: '정상',     cls: 'bg-status-healthy/10 text-status-healthy border-status-healthy/30',  icon: CheckCircle },
+  ok:            { label: '정상',     cls: 'bg-secondary text-muted-foreground border-border',  icon: CheckCircle2 },
   error:         { label: '에러',     cls: 'bg-status-critical/10 text-status-critical border-status-critical/30',              icon: XCircle },
   timeout:       { label: '타임아웃', cls: 'bg-status-warning/10 text-status-warning border-status-warning/30',        icon: Clock },
   auth_error:    { label: '인증 실패', cls: 'bg-status-warning/10 text-status-warning border-status-warning/30',    icon: ShieldAlert },
@@ -232,7 +232,7 @@ function NodeRow({ node, checked, onToggle }: { node: NodeSummary; checked: bool
         className="w-4 h-4 accent-primary flex-shrink-0"
       />
       <div className="flex items-center gap-2 flex-1 min-w-0">
-        <span className={`w-2 h-2 rounded-full flex-shrink-0 ${node.ready ? 'bg-status-healthy' : 'bg-status-critical'}`} />
+        <span className={`w-2 h-2 rounded-full flex-shrink-0 ${node.ready ? 'bg-muted-foreground/40' : 'bg-status-critical'}`} />
         <span className="font-mono text-sm text-foreground truncate">{node.name}</span>
         <span className="text-sm font-mono text-muted-foreground">{host}</span>
         {node.roles.map((r) => (
@@ -303,7 +303,7 @@ function ResultRow({ result, globalFilter }: { result: BulkExecResultItem; globa
               hideToolbar={!!globalFilter.trim()}
             />
             {result.error && (
-              <p className="text-sm text-status-critical mt-2">⚠ {result.error}</p>
+              <p className="text-sm text-status-critical mt-2 flex items-start gap-1"><AlertTriangle className="w-3.5 h-3.5 mt-0.5 shrink-0" aria-hidden="true" />{result.error}</p>
             )}
           </td>
         </tr>
@@ -400,7 +400,7 @@ function SummaryResultsTable({
                 </td>
                 <td className="px-3 py-2 align-top">
                   {r.error && (
-                    <p className="text-xs text-status-critical font-medium mb-0.5">⚠ {r.error}</p>
+                    <p className="text-xs text-status-critical font-medium mb-0.5 flex items-start gap-1"><AlertTriangle className="w-3 h-3 mt-0.5 shrink-0" aria-hidden="true" />{r.error}</p>
                   )}
                   {preview.length > 0 ? (
                     <div className="font-mono text-xs space-y-0.5">
@@ -722,7 +722,7 @@ export function BulkExecPage() {
             12컬럼 그리드 3:4:5 — 결과는 항상 우측 같은 자리에 고정된다. */}
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-3 items-start">
           {/* 왼쪽: 노드 선택 — 클러스터별 그룹 */}
-          <section className="lg:col-span-3 min-w-0 bg-card border border-border rounded-xl overflow-hidden">
+          <section className="lg:col-span-3 min-w-0 bg-card border border-border rounded-md overflow-hidden">
             <header className="px-3 py-2 border-b border-border bg-muted/20 flex items-center justify-between">
               <h2 className="text-sm font-semibold">타겟 노드</h2>
               <button
@@ -761,7 +761,7 @@ export function BulkExecPage() {
           </section>
 
           {/* 가운데: 실행 구성 (명령 메뉴) */}
-          <section className="lg:col-span-4 min-w-0 bg-card border border-border rounded-xl p-4 space-y-3">
+          <section className="lg:col-span-4 min-w-0 bg-card border border-border rounded-md p-4 space-y-3">
             {/* Action 토글 */}
             <div className="flex items-center gap-2 flex-wrap">
               <div className="flex items-center bg-secondary/60 rounded-lg p-[3px] gap-px">
@@ -769,7 +769,7 @@ export function BulkExecPage() {
                   <button
                     key={a}
                     onClick={() => setAction(a)}
-                    className={`px-3 py-1.5 text-sm font-medium rounded-md transition-all ${
+                    className={`px-3 py-1.5 text-sm font-medium rounded-md transition-colors ${
                       action === a
                         ? 'bg-background text-foreground shadow-sm'
                         : 'text-muted-foreground hover:text-foreground'
@@ -784,7 +784,7 @@ export function BulkExecPage() {
                   <button
                     key={m}
                     onClick={() => setMode(m)}
-                    className={`px-3 py-1.5 text-sm font-medium rounded-md transition-all ${
+                    className={`px-3 py-1.5 text-sm font-medium rounded-md transition-colors ${
                       mode === m
                         ? 'bg-background text-foreground shadow-sm'
                         : 'text-muted-foreground hover:text-foreground'
@@ -838,7 +838,7 @@ export function BulkExecPage() {
                     <button
                       key={m}
                       onClick={() => setAuthMode(m)}
-                      className={`flex-1 px-2 py-1.5 text-sm font-medium rounded-md transition-all ${
+                      className={`flex-1 px-2 py-1.5 text-sm font-medium rounded-md transition-colors ${
                         authMode === m
                           ? 'bg-background text-foreground shadow-sm'
                           : 'text-muted-foreground hover:text-foreground'
@@ -893,7 +893,7 @@ export function BulkExecPage() {
                         key={l}
                         type="button"
                         onClick={() => setLanguage(l)}
-                        className={`px-2 py-1 text-xs font-medium rounded-md transition-all ${
+                        className={`px-2 py-1 text-xs font-medium rounded-md transition-colors ${
                           language === l
                             ? 'bg-background text-foreground shadow-sm'
                             : 'text-muted-foreground hover:text-foreground'
@@ -1136,7 +1136,7 @@ export function BulkExecPage() {
 
           {/* 우측: 실행 결과 — mc 콘솔처럼 항상 같은 자리에 고정, 실행 전엔 플레이스홀더.
               내부에서만 스크롤되어 세 컬럼이 한 화면 폭 안에 들어온다. */}
-          <section className="lg:col-span-5 min-w-0 bg-card border border-border rounded-xl overflow-hidden flex flex-col lg:h-[calc(100vh-160px)] min-h-[280px]">
+          <section className="lg:col-span-5 min-w-0 bg-card border border-border rounded-md overflow-hidden flex flex-col lg:h-[calc(100vh-160px)] min-h-[280px]">
             {!runResponse ? (
               <div className="flex-1 flex items-center justify-center p-6">
                 <EmptyState
@@ -1164,14 +1164,14 @@ export function BulkExecPage() {
                     {/* 뷰 모드 토글 */}
                     <div className="flex items-center bg-secondary/60 rounded-md p-[2px] gap-px">
                       <button onClick={() => setResultView('summary')}
-                        className={`flex items-center gap-1 px-2 py-1 text-xs font-medium rounded transition-all ${
+                        className={`flex items-center gap-1 px-2 py-1 text-xs font-medium rounded transition-colors ${
                           resultView === 'summary' ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
                         }`}
                         title="모든 노드 한 줄 요약">
                         <LayoutList className="w-3 h-3" /> 요약
                       </button>
                       <button onClick={() => setResultView('detail')}
-                        className={`flex items-center gap-1 px-2 py-1 text-xs font-medium rounded transition-all ${
+                        className={`flex items-center gap-1 px-2 py-1 text-xs font-medium rounded transition-colors ${
                           resultView === 'detail' ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
                         }`}
                         title="호스트별 stdout/stderr 전체">
@@ -1304,7 +1304,7 @@ export function BulkExecPage() {
       >
         <div className="space-y-3">
           <div>
-            <p className="text-xs uppercase tracking-wider text-muted-foreground mb-1">접속 정보</p>
+            <p className="text-xs font-medium text-muted-foreground mb-1">접속 정보</p>
             <p className="font-mono">
               <span className="text-primary">{username}</span>
               <span className="text-muted-foreground">@</span>
@@ -1317,9 +1317,9 @@ export function BulkExecPage() {
           </div>
           {action === 'ssh' ? (
             <div>
-              <p className="text-xs uppercase tracking-wider text-muted-foreground mb-1 flex items-center gap-1.5">
+              <p className="text-xs font-medium text-muted-foreground mb-1 flex items-center gap-1.5">
                 실행할 명령
-                <span className="normal-case text-[11px] px-1.5 py-0.5 rounded border border-border bg-secondary">{language}</span>
+                <span className="text-[11px] px-1.5 py-0.5 rounded border border-border bg-secondary">{language}</span>
               </p>
               <pre className="text-xs font-mono bg-background border border-border rounded p-2 max-h-28 overflow-auto whitespace-pre-wrap break-all">
                 {command}
@@ -1327,7 +1327,7 @@ export function BulkExecPage() {
             </div>
           ) : (
             <div>
-              <p className="text-xs uppercase tracking-wider text-muted-foreground mb-1">업로드 대상</p>
+              <p className="text-xs font-medium text-muted-foreground mb-1">업로드 대상</p>
               <p className="font-mono">{scpRemotePath}</p>
               <p className="text-xs text-muted-foreground mt-0.5">
                 크기: {new Blob([scpContent]).size} bytes
@@ -1335,7 +1335,7 @@ export function BulkExecPage() {
             </div>
           )}
           <div>
-            <p className="text-xs uppercase tracking-wider text-muted-foreground mb-1">대상 호스트 (클러스터별)</p>
+            <p className="text-xs font-medium text-muted-foreground mb-1">대상 호스트 (클러스터별)</p>
             <div className="text-xs font-mono max-h-40 overflow-auto bg-background border border-border rounded p-2 space-y-1.5">
               {Object.entries(
                 selectedHosts.reduce<Record<string, typeof selectedHosts>>((acc, t) => {
@@ -1345,7 +1345,7 @@ export function BulkExecPage() {
                 }, {})
               ).map(([cname, items]) => (
                 <div key={cname}>
-                  <p className="text-xs uppercase tracking-wider text-muted-foreground">
+                  <p className="text-xs font-medium text-muted-foreground">
                     {cname} <span className="text-muted-foreground">({items.length})</span>
                   </p>
                   {items.slice(0, 8).map((t) => (

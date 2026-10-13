@@ -31,12 +31,13 @@ import type {
   K8sPodRichRow, K8sCellColor, K8sRelatedEvent,
 } from '@/types';
 
-// 셀 색상 → Tailwind 클래스
+// 셀 색상 → Tailwind 클래스 (정상(green)은 무채색 — §12.12 #3, StatusDot 과 동일)
 const CELL_BG: Record<K8sCellColor, string> = {
-  green: 'bg-status-healthy', amber: 'bg-status-warning', red: 'bg-status-critical', gray: 'bg-status-unknown',
+  green: 'bg-muted-foreground/40', amber: 'bg-status-warning', red: 'bg-status-critical', gray: 'bg-status-unknown',
 };
+// 파드 phase 글자색 — 상태 신호는 앞의 점 하나로 충분하므로 글자는 무채색(정상은 보조색)
 const STATUS_TEXT: Record<K8sCellColor, string> = {
-  green: 'text-status-healthy', amber: 'text-status-warning', red: 'text-status-critical', gray: 'text-status-unknown',
+  green: 'text-muted-foreground', amber: 'text-foreground', red: 'text-foreground', gray: 'text-foreground',
 };
 // 컨테이너 색칸 접근성 라벨 (D-024)
 const CELL_LABEL: Record<K8sCellColor, string> = {
@@ -335,7 +336,7 @@ export function K8sManagePage() {
                       type="button"
                       onClick={() => toggleCatCollapse(cat.id)}
                       aria-expanded={!isCollapsed}
-                      className="w-full flex items-center gap-1.5 px-2 py-0.5 rounded text-xs font-semibold uppercase tracking-wider text-muted-foreground hover:text-foreground hover:bg-secondary/40"
+                      className="w-full flex items-center gap-1.5 px-2 py-0.5 rounded text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-secondary/40"
                     >
                       <Icon className="w-3 h-3 flex-shrink-0" />
                       <span className="flex-1 text-left truncate">{cat.label}</span>
@@ -1053,7 +1054,7 @@ function SectionsView({ sections }: { sections: ResourceDetailSection[] }) {
     <div className="space-y-4 max-h-[80vh] overflow-auto pr-1">
       {sections.map((s, i) => (
         <div key={i} className="rounded-xl border border-border overflow-hidden">
-          <div className="px-3 py-1.5 text-xs font-semibold uppercase tracking-wider text-muted-foreground bg-secondary/40 border-b border-border">
+          <div className="px-3 py-1.5 text-xs font-medium text-muted-foreground bg-secondary/40 border-b border-border">
             {s.title}
           </div>
           <div className="p-3 text-sm">
@@ -1152,7 +1153,7 @@ function NodesPanel({ clusterId, onOpenDetail, onCordon, onDrain }: NodesPanelPr
             <div key={n.name} className="grid gap-2 px-4 py-1.5 text-sm border-b border-border/40 hover:bg-secondary/30 items-center" style={gridStyle}>
               <button onClick={() => onOpenDetail(n.name)} className="truncate font-medium text-left hover:text-primary flex items-center gap-1.5">
                 {ready
-                  ? <CheckCircle2 className="w-3.5 h-3.5 text-status-healthy flex-shrink-0" aria-label="Ready" />
+                  ? <CheckCircle2 className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" aria-label="Ready" />
                   : <AlertTriangle className="w-3.5 h-3.5 text-status-critical flex-shrink-0" aria-label="NotReady" />}
                 <span className="truncate">{n.name}</span>
                 {n.unschedulable && <span className="text-[11px] rounded px-1 bg-status-warning/15 text-status-warning">cordoned</span>}
@@ -1164,7 +1165,7 @@ function NodesPanel({ clusterId, onOpenDetail, onCordon, onDrain }: NodesPanelPr
               {!isHidden('memory') && <span className="truncate text-muted-foreground">{n.memUsage ? `${n.memUsage} / ` : ''}{n.memCapacity ?? '—'}</span>}
               {!isHidden('age') && <span className="text-right text-muted-foreground tabular-nums">{age(n.ageSeconds)}</span>}
               <div className="flex items-center justify-end gap-1">
-                {warn.length > 0 && <span className="text-[11px] text-status-warning mr-1" title={warn.join(',')}>{warn.length}⚠</span>}
+                {warn.length > 0 && <span className="inline-flex items-center gap-0.5 text-[11px] text-status-warning mr-1" title={warn.join(',')}>{warn.length}<AlertTriangle className="w-3 h-3" aria-hidden="true" /></span>}
                 <RoleGate allow={['admin', 'operator']}>
                   <IconBtn title={n.unschedulable ? 'uncordon' : 'cordon'} onClick={() => onCordon(n.name, !n.unschedulable)}>
                     {n.unschedulable ? <CheckCircle2 className="w-3.5 h-3.5" /> : <Ban className="w-3.5 h-3.5" />}

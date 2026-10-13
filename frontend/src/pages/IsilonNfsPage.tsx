@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
-  HardDrive, Plus, Pencil, ServerCog,
+  HardDrive, Plus, Pencil, ServerCog, AlertTriangle,
 } from 'lucide-react';
 import { MacCard } from '@/components/ui/MacCard';
 import { StatusBadge, StatusDot, statusToVariant, EmptyState, LoadingState, LogViewer } from '@/components/common';
@@ -135,7 +135,7 @@ export function IsilonNfsPage() {
                   </div>
                 </div>
                 {runResult?.connectionError && (
-                  <div className="mt-3 text-sm text-status-critical">⚠ {runResult.connectionError}</div>
+                  <div className="mt-3 text-sm text-status-critical flex items-start gap-1"><AlertTriangle className="w-3.5 h-3.5 mt-0.5 shrink-0" aria-hidden="true" />{runResult.connectionError}</div>
                 )}
                 {runResult?.skippedKeys && runResult.skippedKeys.length > 0 && (
                   <p className="mt-2 text-xs text-status-warning">등록/활성화되지 않아 건너뜀: {runResult.skippedKeys.join(', ')}</p>

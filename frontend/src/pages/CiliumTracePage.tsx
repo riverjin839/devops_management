@@ -279,7 +279,7 @@ function StatusStrip({ status, loading, agentCount }: StatusStripProps) {
   }
   if (status.error) {
     return (
-      <div className="rounded-2xl border border-status-warning/40 bg-status-warning/10 px-4 py-3 flex items-start gap-2">
+      <div className="rounded-md border border-status-warning/40 bg-status-warning/10 px-4 py-3 flex items-start gap-2">
         <AlertTriangle className="w-4 h-4 text-status-warning flex-shrink-0 mt-0.5" />
         <div>
           <p className="text-sm font-semibold">상태 점검 중 문제가 발생했습니다.</p>
@@ -578,7 +578,7 @@ function BpfJsonTable({ rows }: { rows: Record<string, unknown>[] }) {
         <thead className="sticky top-0 bg-card">
           <tr>
             {cols.map((c) => (
-              <th key={c} className="text-left px-3 py-2 border-b border-border font-semibold uppercase tracking-wide text-xs text-muted-foreground whitespace-nowrap">
+              <th key={c} className="text-left px-3 py-2 border-b border-border font-medium text-xs text-muted-foreground whitespace-nowrap">
                 {c}
               </th>
             ))}
@@ -742,7 +742,7 @@ function MonitorTab({ clusterId, agents }: { clusterId: string; agents: CiliumAg
           ) : (
             <button
               onClick={stop}
-              className="px-3.5 py-1.5 text-sm font-semibold bg-status-critical hover:bg-status-critical text-white rounded-xl transition-colors flex items-center gap-1.5"
+              className="px-3.5 py-1.5 text-sm font-semibold bg-status-critical hover:bg-status-critical text-primary-foreground rounded-xl transition-colors flex items-center gap-1.5"
             >
               <X className="w-3.5 h-3.5" /> 중단
             </button>
@@ -769,7 +769,7 @@ function MonitorTab({ clusterId, agents }: { clusterId: string; agents: CiliumAg
       </MacCard>
 
       {err && (
-        <div className="rounded-xl border border-status-warning/40 bg-status-warning/10 px-3 py-2 text-sm text-status-warning flex items-center gap-2">
+        <div className="rounded-md border border-status-warning/40 bg-status-warning/10 px-3 py-2 text-sm text-status-warning flex items-center gap-2">
           <AlertTriangle className="w-3.5 h-3.5" /> {err}
         </div>
       )}
@@ -851,7 +851,7 @@ function TypeFilter({ types, setTypes, disabled }: { types: Set<MonitorType>; se
         <div
           ref={popRef}
           style={{ top: pos.top, left: pos.left }}
-          className="fixed z-50 w-56 bg-card border border-border rounded-xl shadow-card p-2 space-y-1"
+          className="fixed z-50 w-56 bg-card border border-border rounded-md shadow-card p-2 space-y-1"
         >
           {MONITOR_TYPES.map((t) => (
             <label key={t} className="flex items-center gap-2 text-sm px-2 py-1 rounded hover:bg-secondary cursor-pointer">
@@ -1183,7 +1183,7 @@ function HubbleTab({ clusterId, hubbleInstalled }: { clusterId: string; hubbleIn
           ) : (
             <button
               onClick={stop}
-              className="px-3.5 py-1.5 text-sm font-semibold bg-status-critical hover:bg-status-critical text-white rounded-xl transition-colors flex items-center gap-1.5"
+              className="px-3.5 py-1.5 text-sm font-semibold bg-status-critical hover:bg-status-critical text-primary-foreground rounded-xl transition-colors flex items-center gap-1.5"
             >
               <X className="w-3.5 h-3.5" /> 중단
             </button>
@@ -1204,10 +1204,10 @@ function HubbleTab({ clusterId, hubbleInstalled }: { clusterId: string; hubbleIn
             <Trash2 className="w-3.5 h-3.5" /> 비우기
           </button>
           <div className="ml-auto flex items-center gap-3 text-xs text-muted-foreground">
-            <span className="inline-flex items-center gap-1 text-status-healthy">
+            <span className="inline-flex items-center gap-1 text-muted-foreground" title="FORWARDED">
               <CheckCircle2 className="w-3 h-3" /> {verdictCounts.FORWARDED}
             </span>
-            <span className="inline-flex items-center gap-1 text-status-critical">
+            <span className={`inline-flex items-center gap-1 ${verdictCounts.DROPPED > 0 ? 'text-status-critical' : 'text-muted-foreground'}`} title="DROPPED">
               <X className="w-3 h-3" /> {verdictCounts.DROPPED}
             </span>
             <span>전체 {events.length}</span>
@@ -1216,7 +1216,7 @@ function HubbleTab({ clusterId, hubbleInstalled }: { clusterId: string; hubbleIn
       </MacCard>
 
       {err && (
-        <div className="rounded-xl border border-status-warning/40 bg-status-warning/10 px-3 py-2 text-sm text-status-warning flex items-center gap-2">
+        <div className="rounded-md border border-status-warning/40 bg-status-warning/10 px-3 py-2 text-sm text-status-warning flex items-center gap-2">
           <AlertTriangle className="w-3.5 h-3.5" /> {err}
         </div>
       )}
@@ -1245,8 +1245,7 @@ function FlowList({ events }: { events: HubbleFlowEvent[] }) {
         const flow = ((e.parsed?.flow as Record<string, unknown>) ?? e.parsed ?? {}) as Record<string, unknown>;
         const verdict = String(flow.verdict ?? '');
         const verdictClr =
-          verdict === 'FORWARDED' ? 'text-status-healthy'
-          : verdict === 'DROPPED' ? 'text-status-critical'
+          verdict === 'DROPPED' ? 'text-status-critical'
           : verdict === 'AUDIT' ? 'text-status-warning' : 'text-muted-foreground';
         const summary = String(flow.Summary ?? flow.summary ?? '');
         const src = flow.source as Record<string, unknown> | undefined;

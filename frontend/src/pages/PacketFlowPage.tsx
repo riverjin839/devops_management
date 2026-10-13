@@ -22,14 +22,14 @@ import { TcpdumpPanel } from '@/components/packet-flow/TcpdumpPanel';
 type Tab = 'graph' | 'hubble' | 'tcpdump';
 
 const ENTITY_LABEL: Record<string, { icon: typeof Globe; label: string; color: string }> = {
-  external:           { icon: Globe,   label: 'External',  color: 'text-status-info' },
+  external:           { icon: Globe,   label: 'External',  color: 'text-chart-1' },
   dns:                { icon: Globe,   label: 'DNS',       color: 'text-chart-6' },
   ingress_controller: { icon: Share2,  label: 'Ingress Pod', color: 'text-chart-4' },
   ingress:            { icon: Route,   label: 'Ingress',   color: 'text-chart-5' },
-  service:            { icon: Share2,  label: 'Service',   color: 'text-status-healthy' },
-  pod:                { icon: Box,     label: 'Pod',       color: 'text-status-warning' },
+  service:            { icon: Share2,  label: 'Service',   color: 'text-chart-2' },
+  pod:                { icon: Box,     label: 'Pod',       color: 'text-chart-3' },
   node:               { icon: Server,  label: 'Node',      color: 'text-chart-7' },
-  switch:             { icon: Network, label: 'Switch',    color: 'text-status-critical' },
+  switch:             { icon: Network, label: 'Switch',    color: 'text-chart-8' },
   error:              { icon: AlertTriangle, label: 'Error', color: 'text-status-critical' },
 };
 
@@ -41,9 +41,9 @@ function HopBreadcrumb({
       {hops.map((h, i) => {
         const meta = ENTITY_LABEL[h.entityType] ?? ENTITY_LABEL.external;
         const Icon = meta.icon;
+        // allow(정상)는 기본 보더 — 상태색은 비정상(deny/warn)에만 (§12.12 #3)
         const verdictCls =
-          h.verdict === 'allow' ? 'border-status-healthy/40'
-          : h.verdict === 'deny' ? 'border-status-critical/50'
+          h.verdict === 'deny' ? 'border-status-critical/50'
           : h.verdict === 'warn' ? 'border-status-warning/50'
           : 'border-border';
         const active = selectedIndex === i;
@@ -221,12 +221,12 @@ export function PacketFlowPage() {
           />
 
           {/* Target 구성 바 */}
-          <section className="bg-card border border-border rounded-xl p-4 mb-4 space-y-3">
+          <section className="bg-card border border-border rounded-md p-4 mb-4 space-y-3">
             <div className="flex items-center gap-2 flex-wrap">
               <div className="flex items-center bg-secondary/60 rounded-lg p-[3px] gap-px">
                 {(['north-south', 'east-west'] as PacketDirection[]).map((d) => (
                   <button key={d} onClick={() => setDirection(d)}
-                    className={`px-3 py-1.5 text-sm font-medium rounded-md transition-all ${
+                    className={`px-3 py-1.5 text-sm font-medium rounded-md transition-colors ${
                       direction === d ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
                     }`}>
                     {d === 'north-south' ? '외부 → Pod (N-S)' : 'Pod ↔ Pod (E-W)'}
@@ -365,7 +365,7 @@ export function PacketFlowPage() {
                   <HopBreadcrumb hops={response.hops} selectedIndex={selectedIdx} onSelect={setSelectedIdx} />
                   <div
                     ref={graphBoxRef}
-                    className="relative bg-card border border-border rounded-xl overflow-hidden"
+                    className="relative bg-card border border-border rounded-md overflow-hidden"
                     style={{ height: 560 }}
                   >
                     <FlowGraph3D
