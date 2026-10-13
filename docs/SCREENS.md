@@ -307,7 +307,7 @@ hover 시 flyout 자체가 라벨을 보여주므로 이름만 뜨는 중복 툴
 - **요청사항 (수정 요청)**:
   - _(여기에 개선/수정 요청을 직접 적어주세요)_
 
-### K8S 자원 관리 (`/k8s-allocation`, `/k8s-allocation/:clusterId`)
+### K8s 자원 관리 (`/k8s-allocation`, `/k8s-allocation/:clusterId`)
 
 - **파일**: `frontend/src/pages/K8sAllocationPage.tsx`(페이지 셸 — 요약 스트립/진행 슬롯/sticky 탭/자동갱신/상세 다이얼로그 상태) + `frontend/src/components/k8s-allocation/`(`SummaryStrip`(압축 요약), `SummarySection`, `PodScheduleCalc`, `PodCapacityStatusCards`, `NodesView`, `NamespacesView`, `NsRankingView`, **`AllocDetailDialog`**(노드/NS 상세), 공용 `drilldown.tsx`(`WorkloadTable`/`WorkloadsDrill`/`PodsDrill`/`PodAllocTable`/`NodeWorkloadsDrill`)·`podGroup.ts`·`format.ts`/`primitives.tsx`/`tableSort.ts`), + `components/common/{EmptyState,Skeleton,SnapshotProgressCard,SnapshotProgressBar,ExportMenu}`.
 - **목적 / UX**: 노드/네임스페이스/워크로드별 request 대비 실사용량(slack)을 진단해 과할당(낭비) · 과사용(위험) 파드를 찾는 용량 계획 화면. "얼마나 더 스케줄할 수 있는가", "어디서 자원이 낭비되고 있는가"를 시각화.
@@ -423,7 +423,8 @@ hover 시 flyout 자체가 라벨을 보여주므로 이름만 뜨는 중복 툴
 - **목적 / UX**: 클러스터에 깔린 관측 스택(`kube-prometheus-stack`, 이후 `alert-forwarder`/`opensearch-stack`/`fluent-operator`)의 **개별 지표를 dense 리스트 테이블**로 한 화면에서 훑는다. 카드형(`/cluster-overview` PromQL 카드)과 달리 수십 개 지표를 스캔하는 용도.
 - **UI 구성**:
   - `ClusterSidebar` — `iconOnly` 단일 선택(클러스터별 Prometheus 를 봐야 하므로 `allowAll` 없음).
-  - 모듈 탭(`MacCard`) — 지표가 1개 이상 등록된 모듈만 활성, 나머지는 "준비중"(disabled + 툴팁).
+  - 상단 `PageHeader` "관측 지표"(2026-10-14, D-117) — 예전 "Observability 모듈" 카드 제목을 페이지 제목으로 올렸다.
+  - 모듈 탭(카드 래퍼 없는 pill 줄) — 지표가 1개 이상 등록된 모듈만 활성, 나머지는 "준비중"(disabled + 툴팁).
   - 뷰 탭 — **지표 / 알람 규칙 / 스크레이프 타겟 / 발화중 알람** (kube-prometheus-stack 에서만 4종 전부).
   - 툴바 — `SourceBadge`(실시간 vs 스냅샷 n분 전), 지표 추가(operator 이상), 새로고침.
   - 지표 테이블 — 상태 dot · 지표 · 카테고리 · 현재값 · 임계 · 대상(라벨) · PromQL · 편집. 행 클릭 시 설명/전체 라벨/PromQL/참고문서 펼침. 상단에 정상·경고·심각·수집불가 요약 pill.
@@ -1089,6 +1090,7 @@ hover 시 flyout 자체가 라벨을 보여주므로 이름만 뜨는 중복 툴
 ### 클러스터 주요 링크 (`/links`)
 
 - **파일**: `frontend/src/pages/ClusterLinksPage.tsx`
+- **헤더(2026-10-14, D-117/D-118)**: 헤더를 감싸던 MacCard 와 아이콘 타일을 걷어내고 `PageHeader`(보기 전환은 `actions`) + 공용 `StatTileRow` 3칸으로 바꿨다.
 - **목적 / UX**: 클러스터별 대시보드/모니터링/관리 콘솔 URL과, 모든 클러스터에 공통되는 링크(예: Jira, Wiki)를 한곳에 모아 빠르게 접근할 수 있게 하는 즐겨찾기 허브.
 - **UI 구성**:
   - **`ClusterSidebar` 미사용** — 모든 클러스터의 링크를 동시에 비교/열람하는 것이 목적이라 사이드바 대신 표/카드 매트릭스 레이아웃 사용.
