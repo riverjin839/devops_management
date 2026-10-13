@@ -188,7 +188,7 @@ export function VersionGraphPage() {
     try {
       await versionsApi.collect(selectedId);
       queryClient.invalidateQueries({ queryKey: ['versions'] });
-      toast.success('수집 완료');
+      toast.success('수집됨');
     } catch (e) {
       toast.error('수집 실패', formatApiError(e));
     }

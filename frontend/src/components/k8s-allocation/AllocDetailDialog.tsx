@@ -89,7 +89,7 @@ function NodeDetail({ clusterId, node, clusterName }: {
         <Stat label="파드" value={fmtN(pods.length)} icon={<Layers className="w-3 h-3" />}
           sub={row ? `노드 집계 ${fmtN(row.podCount)}개` : undefined} />
         <Stat label="네임스페이스" value={fmtN(data?.namespaceCount ?? new Set(pods.map((p) => p.namespace)).size)} />
-        <Stat label="역할" value={row?.roles.join(', ') || '-'}
+        <Stat label="역할" value={row?.roles.join(', ') || '—'}
           sub={row?.unschedulable ? 'cordoned (스케줄 불가)' : undefined} warn={row?.unschedulable} />
       </div>
 

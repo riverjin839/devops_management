@@ -294,7 +294,7 @@ export function JiraProvisionModal({ open, onClose, item }: JiraProvisionModalPr
       // 필요한 것만 보여주는 편이 명확하다).
       if (data.jiraKey) setCreateJira(false);
       if (data.confluenceUrl) setCreateConfluence(false);
-      if (data.status === 'ok') toast.success('생성 완료', data.detail);
+      if (data.status === 'ok') toast.success('생성됨', data.detail);
       else if (data.status === 'partial') toast.error('일부만 생성됨', data.detail);
       else toast.error('생성 실패', data.detail);
     } catch (err) {

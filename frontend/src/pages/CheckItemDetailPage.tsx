@@ -224,7 +224,7 @@ function DefinitionTab({ item, clusters }: { item: CheckMatrixItem; clusters: Cl
   const submitDefinition = async (id: string, body: DeepCheckDefinitionInput) => {
     try {
       await update.mutateAsync({ id, body });
-      toast.success('저장했습니다.');
+      toast.success('저장됨');
       setEditingKey(null);
     } catch (e) {
       toast.error('저장 실패', formatApiError(e));
@@ -246,7 +246,7 @@ function DefinitionTab({ item, clusters }: { item: CheckMatrixItem; clusters: Cl
         params: globalDef.params ?? null,
         sortOrder: globalDef.sortOrder,
       });
-      toast.success('클러스터 전용 정의로 분리했습니다.', `${clusterName} — 값을 바꾸려면 "편집"을 누르세요.`);
+      toast.success('클러스터 전용 정의로 분리됨', `${clusterName} — 값을 바꾸려면 "편집"을 누르세요.`);
     } catch (e) {
       toast.error('분리 실패', formatApiError(e));
     }
@@ -256,7 +256,7 @@ function DefinitionTab({ item, clusters }: { item: CheckMatrixItem; clusters: Cl
     if (!revertTarget) return;
     try {
       await del.mutateAsync(revertTarget.def.id);
-      toast.success('글로벌 값으로 복귀했습니다.', revertTarget.clusterName);
+      toast.success('글로벌 값으로 복귀됨', revertTarget.clusterName);
       if (editingKey === revertTarget.def.clusterId) setEditingKey(null);
       setRevertTarget(null);
     } catch (e) {
@@ -594,7 +594,7 @@ function ApplyRow({ item, cell, timezone, runnable, isCoreBundle }: {
       }
       setCronEdit(null);
       setEnabledEdit(null);
-      toast.success('실행 주기를 저장했습니다.', cell.clusterName);
+      toast.success('실행 주기 저장됨', cell.clusterName);
     } catch (e) {
       toast.error('저장 실패', formatApiError(e));
     }

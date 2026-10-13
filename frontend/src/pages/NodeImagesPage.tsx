@@ -42,7 +42,7 @@ export function NodeImagesPage() {
   const computing = result?.status === 'computing' && nodes.length === 0;
 
   const activeClusterName = useMemo(
-    () => clusters.find((c) => c.id === activeClusterId)?.name || '-',
+    () => clusters.find((c) => c.id === activeClusterId)?.name || '—',
     [clusters, activeClusterId],
   );
 

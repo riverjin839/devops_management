@@ -45,7 +45,7 @@ export function ServiceNowRegisterDialog({ open, onClose, item }: ServiceNowRegi
       const { data } = await register.mutateAsync(item.id);
       setResult(data);
       if (data.status === 'ok') {
-        toast.success('ServiceNow 등록 완료', `${data.ticketNumber ?? ''} 생성됨`);
+        toast.success('ServiceNow 등록됨', `${data.ticketNumber ?? ''} 생성됨`);
       } else {
         toast.warning('ServiceNow 등록 실패', data.detail || '아래 로그를 확인하세요.');
         setLogOpen(true);
@@ -74,7 +74,7 @@ export function ServiceNowRegisterDialog({ open, onClose, item }: ServiceNowRegi
           <div className="rounded-xl border border-border bg-secondary/30 p-3 text-sm space-y-1.5">
             <div className="flex gap-2">
               <span className="text-muted-foreground w-20 flex-shrink-0">Jira 연동</span>
-              <span className="font-mono">{item.jiraIssueKey ?? '-'}</span>
+              <span className="font-mono">{item.jiraIssueKey ?? '—'}</span>
             </div>
             <div className="flex gap-2">
               <span className="text-muted-foreground w-20 flex-shrink-0">ServiceNow</span>

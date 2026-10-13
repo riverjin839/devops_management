@@ -199,7 +199,7 @@ export function IslandManagerPane({ open, onClose, currentId }: IslandManagerPan
       onSuccess: (res) => {
         setLastIslandId(res.data.id);
         navigate(`/island/${res.data.id}`);
-        toast.success('복제 완료', `"${res.data.name}" 이(가) 내 아일랜드에 추가되었습니다.`);
+        toast.success('복제됨', `"${res.data.name}" 이(가) 내 아일랜드에 추가되었습니다.`);
       },
       onError: () => toast.error('복제 실패'),
     });
@@ -215,7 +215,7 @@ export function IslandManagerPane({ open, onClose, currentId }: IslandManagerPan
           setLastIslandId(null);
           navigate('/island');
         }
-        toast.success('삭제 완료', `"${target.name}" 을(를) 삭제했습니다.`);
+        toast.success('삭제됨', `"${target.name}" 을(를) 삭제했습니다.`);
       },
       onError: () => toast.error('삭제 실패'),
     });

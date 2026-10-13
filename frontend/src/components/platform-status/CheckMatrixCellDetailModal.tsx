@@ -98,7 +98,7 @@ export function CheckMatrixCellDetailModal({ item, cluster, cell, timezone = DEF
         itemId: item.id, clusterId: cluster.id,
         cronExpr: cronDraft.trim() || null, enabled: cronOn,
       });
-      toast.success('실행 주기를 저장했습니다.', !cronDraft.trim()
+      toast.success('실행 주기 저장됨', !cronDraft.trim()
         ? '자동 실행하지 않습니다(수동 실행만).'
         : !cronOn ? '자동 실행이 꺼져 있어 주기만 저장됐습니다.'
           : cronCheck.next[0] ? `다음 실행: ${formatWallClock(cronCheck.next[0])}` : undefined);
@@ -117,7 +117,7 @@ export function CheckMatrixCellDetailModal({ item, cluster, cell, timezone = DEF
         value: manualValueNum,
         message: manualMessage.trim() || null,
       });
-      toast.success('값을 기록했습니다.', `${STATUS_OPTIONS.find((o) => o.value === manualStatus)?.label}${manualValueNum !== null ? ` · ${manualValueNum}${item.unit ?? ''}` : ''}`);
+      toast.success('값 기록됨', `${STATUS_OPTIONS.find((o) => o.value === manualStatus)?.label}${manualValueNum !== null ? ` · ${manualValueNum}${item.unit ?? ''}` : ''}`);
       setManualValue('');
       setManualMessage('');
     } catch (e) {

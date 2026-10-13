@@ -61,7 +61,7 @@ export function ConfluenceExportDialog({ open, onClose, guide }: Props) {
       }
       setResult(data);
       toast.success(
-        'Confluence 게시 완료',
+        'Confluence 게시됨',
         data.action === 'created' ? '새 페이지를 생성했습니다.' : `새 버전(v${data.version ?? '?'})으로 갱신했습니다.`,
       );
     } catch (err) {

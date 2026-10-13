@@ -58,7 +58,7 @@ function NodeChecklist({ entry }: { entry: NodeHealthEntry }) {
       <CheckRow
         label="Allocatable (CPU/MEM)"
         ok={entry.allocatableOk}
-        detail={`cpu ${entry.allocatable?.cpu ?? '-'} / mem ${entry.allocatable?.memory ?? '-'}`}
+        detail={`cpu ${entry.allocatable?.cpu ?? '—'} / mem ${entry.allocatable?.memory ?? '—'}`}
       />
       <CheckRow
         label="CNI 데몬셋"

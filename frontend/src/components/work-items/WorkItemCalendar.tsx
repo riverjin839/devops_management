@@ -215,7 +215,7 @@ export function WorkItemCalendar({ items, onItemClick }: WorkItemCalendarProps) 
                       type="button"
                       onClick={(e) => { e.stopPropagation(); setRegisterDate(toDateKey(day)); }}
                       className="w-4 h-4 rounded flex items-center justify-center text-muted-foreground hover:text-primary opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity"
-                      aria-label={`${toDateKey(day)} 업무 등록`}
+                      aria-label={`${toDateKey(day)} 업무 추가`}
                     >
                       <Plus className="w-3 h-3" />
                     </button>
@@ -318,7 +318,7 @@ export function WorkItemCalendar({ items, onItemClick }: WorkItemCalendarProps) 
               </div>
               <div className="flex items-center gap-2">
                 <span className="text-sm text-muted-foreground w-[68px] flex-shrink-0">대상 클러스터</span>
-                <span className="text-sm text-foreground truncate">{tooltip.item.clusterName || '-'}</span>
+                <span className="text-sm text-foreground truncate">{tooltip.item.clusterName || '—'}</span>
               </div>
               <div className="flex items-center gap-2">
                 <span className="text-sm text-muted-foreground w-[68px] flex-shrink-0">작업 분류</span>
@@ -399,12 +399,12 @@ function CalendarRegisterPanel({ date, onClose, onSaved }: CalendarRegisterPanel
       <div
         ref={panelRef}
         role="dialog"
-        aria-label={`${dateLabel} 업무 등록`}
+        aria-label={`${dateLabel} 업무 추가`}
         className="fixed right-0 top-0 bottom-0 z-50 w-full max-w-[520px] bg-card border-l border-border shadow-2xl flex flex-col overflow-hidden"
       >
         <div className="flex items-center justify-between gap-2 px-5 py-3 border-b border-border bg-muted/30 flex-shrink-0">
           <div>
-            <p className="text-sm font-semibold">업무 등록</p>
+            <p className="text-sm font-semibold">업무 추가</p>
             <p className="text-xs text-muted-foreground">{dateLabel}</p>
           </div>
           <button

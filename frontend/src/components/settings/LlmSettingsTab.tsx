@@ -121,7 +121,7 @@ export function LlmSettingsTab() {
       if (res.warnings?.length) {
         res.warnings.forEach((w) => toast.warning('저장됨 (주의)', w));
       } else {
-        toast.success('저장 완료', 'LLM 설정이 저장되었습니다. (반영까지 최대 1분)');
+        toast.success('저장됨', 'LLM 설정이 저장되었습니다. (반영까지 최대 1분)');
       }
     } catch (e) {
       toast.error('저장 실패', formatApiError(e));
@@ -187,7 +187,7 @@ export function LlmSettingsTab() {
       const res = await llmApi.testProfile(name);
       setTestResult({ profile: name, result: res.data });
       if (res.data.status === 'ok') {
-        toast.success('연결 확인 완료', `${name}: ${res.data.latencyMs}ms`);
+        toast.success('연결 확인됨', `${name}: ${res.data.latencyMs}ms`);
       } else {
         toast.error('연결 실패', `${name}: ${res.data.error ?? res.data.status}`);
       }
@@ -463,7 +463,7 @@ export function LlmSettingsTab() {
                   onClick={async () => {
                     try {
                       await deleteCredMut.mutateAsync(c.name);
-                      toast.success('삭제 완료', `자격증명 '${c.name}' 을 삭제했습니다.`);
+                      toast.success('삭제됨', `자격증명 '${c.name}' 을 삭제했습니다.`);
                     } catch (e) {
                       toast.error('삭제 실패', formatApiError(e));
                     }
@@ -572,7 +572,7 @@ export function LlmSettingsTab() {
                 onClick={async () => {
                   try {
                     await createCredMut.mutateAsync({ name: credName.trim(), apiKey: credKey.trim() });
-                    toast.success('등록 완료', `자격증명 '${credName.trim()}' 을 저장했습니다.`);
+                    toast.success('등록됨', `자격증명 '${credName.trim()}' 을 저장했습니다.`);
                     setCredModalOpen(false);
                   } catch (e) {
                     toast.error('등록 실패', formatApiError(e));
@@ -646,7 +646,7 @@ function AnalysisScopePanel() {
       if (res.warnings?.length) {
         res.warnings.forEach((w) => toast.warning('저장됨 (주의)', w));
       } else {
-        toast.success('저장 완료', '자동 분석 범위가 저장되었습니다. (반영까지 최대 1분)');
+        toast.success('저장됨', '자동 분석 범위가 저장되었습니다. (반영까지 최대 1분)');
       }
     } catch (e) {
       toast.error('저장 실패', formatApiError(e));

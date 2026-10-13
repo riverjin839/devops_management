@@ -44,7 +44,7 @@ export function ConfluenceDocsSettingsDialog({ open, onClose }: { open: boolean;
         defaultCategory,
         titlePrefix,
       });
-      toast.success('저장 완료', '문서 동기화 기본값을 갱신했습니다.');
+      toast.success('저장됨', '문서 동기화 기본값을 갱신했습니다.');
       onClose();
     } catch (err) {
       toast.error('저장 실패', formatApiError(err));

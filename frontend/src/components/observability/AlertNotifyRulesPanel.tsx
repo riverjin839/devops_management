@@ -118,7 +118,7 @@ export function AlertNotifyRulesPanel({ clusters, canEdit }: {
   const remove = async (rule: AlertNotifyRule) => {
     try {
       await deleteRule.mutateAsync(rule.id);
-      toast.success('규칙을 삭제했습니다.');
+      toast.success('규칙 삭제됨');
       if (editing?.id === rule.id) { setDraft(null); setEditing(null); }
     } catch (err) {
       toast.error(formatApiError(err, '규칙 삭제 실패'));
@@ -185,18 +185,18 @@ export function AlertNotifyRulesPanel({ clusters, canEdit }: {
                       {NOTIFY_MODES.find((m) => m.value === rule.notifyMode)?.label ?? rule.notifyMode}
                     </td>
                     <td className={`${TD} text-xs text-muted-foreground truncate max-w-[10rem]`}>
-                      {rule.recipients.length ? rule.recipients.join(', ') : '-'}
+                      {rule.recipients.length ? rule.recipients.join(', ') : '—'}
                     </td>
                     <td className={`${TD} text-xs text-muted-foreground`}>
                       {Math.round(rule.dedupWindowSec / 60)}분 ·{' '}
                       {DEDUP_MODES.find((d) => d.value === rule.dedupMode)?.label ?? rule.dedupMode}
                     </td>
                     <td className={`${TD} text-xs text-muted-foreground`}>
-                      {rule.severityMin ?? '-'}
+                      {rule.severityMin ?? '—'}
                       {rule.severityOverride ? ` → ${rule.severityOverride}` : ''}
                     </td>
                     <td className={`${TD} text-xs text-muted-foreground`}>
-                      {rule.channelIds.length ? `채널 ${rule.channelIds.length}` : '-'}
+                      {rule.channelIds.length ? `채널 ${rule.channelIds.length}` : '—'}
                     </td>
                     <td className={`${TD} text-xs`}>{rule.enabled ? '사용' : '중지'}</td>
                     <td className={TD}>
@@ -266,7 +266,7 @@ function GlobalSettingsCard({ settings, canEdit }: {
   const save = async () => {
     try {
       await updateSettings.mutateAsync(form);
-      toast.success('전역 기본값을 저장했습니다.');
+      toast.success('전역 기본값 저장됨');
     } catch (err) {
       toast.error(formatApiError(err, '설정 저장 실패'));
     }

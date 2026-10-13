@@ -444,7 +444,7 @@ export function ClusterManagePage() {
       const open = diffClusterRef.current;
       if (open && open.id !== cluster.id) {
         // 다른 클러스터의 diff 가 열려 있음 — 덮어쓰면 사용자가 엉뚱한 대상에 적용할 수 있다.
-        toast.info(`${cluster.name} 수집 완료`, `${open.name} 의 변경 미리보기가 열려 있어 표시하지 않았습니다. 닫은 뒤 다시 새로고침하세요.`);
+        toast.info(`${cluster.name} 수집됨`, `${open.name} 의 변경 미리보기가 열려 있어 표시하지 않았습니다. 닫은 뒤 다시 새로고침하세요.`);
       } else {
         openDiff(cluster, (data.diff ?? []) as DiffRow[], data.warnings ?? []);
       }
@@ -576,7 +576,7 @@ export function ClusterManagePage() {
       await clustersApi.autoUpdate(cluster.id);
       await queryClient.refetchQueries({ queryKey: ['clusters'] });
       appendLog(`[IP 수집] ok ${cluster.name} — 노드 IP / k8s 버전 등 갱신됨`);
-      toast.success('수집 완료', `${cluster.name} 의 노드 IP / k8s 버전 등이 갱신됐습니다.`);
+      toast.success('수집됨', `${cluster.name} 의 노드 IP / k8s 버전 등이 갱신됐습니다.`);
     } catch (e: unknown) {
       appendLog(`[IP 수집] FAIL ${cluster.name} — ${formatApiError(e)}`);
       toast.error('노드 IP 수집 실패', formatApiError(e));
@@ -645,7 +645,7 @@ export function ClusterManagePage() {
     if (fail > 0 && ok === 0) toast.error('일괄 수집 실패', `${summary} — 상세는 수집 로그 참조`);
     else if (fail > 0) toast.warning('일괄 수집 부분 실패', `${summary} — 상세는 수집 로그 참조`);
     else if (aborted) toast.info('일괄 수집 중단됨', summary);
-    else toast.success('일괄 수집 완료', summary);
+    else toast.success('일괄 수집됨', summary);
   };
 
   const handleApplyDiff = async () => {

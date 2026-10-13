@@ -658,12 +658,12 @@ export function ResourceTablePanel(p: ResourceTablePanelProps) {
             return (
               <div className="grid gap-2 px-4 py-1.5 text-sm border-b border-border/40 hover:bg-secondary/30 items-center" style={{ gridTemplateColumns: gridTemplate }}>
                 <button onClick={() => p.onOpenDetail(r, !!caps?.editable)} className="truncate font-medium text-left hover:text-primary">{r.name}</button>
-                {isNamespaced && <span className="truncate text-muted-foreground">{r.namespace ?? '-'}</span>}
+                {isNamespaced && <span className="truncate text-muted-foreground">{r.namespace ?? '—'}</span>}
                 {useSummary ? (
                   <span className="truncate text-muted-foreground">{r.summary}</span>
                 ) : (
                   columns.map((c) => (
-                    <span key={c.key} className="truncate text-muted-foreground" title={r.cols?.[c.key] ?? ''}>{r.cols?.[c.key] ?? '-'}</span>
+                    <span key={c.key} className="truncate text-muted-foreground" title={r.cols?.[c.key] ?? ''}>{r.cols?.[c.key] ?? '—'}</span>
                   ))
                 )}
                 <span className="text-right text-muted-foreground tabular-nums">{age(r.ageSeconds)}</span>
@@ -749,7 +749,7 @@ function OverviewPanel({ clusterId }: { clusterId: string }) {
   return (
     <StatTileRow>
       <StatTile label="노드" value={nodeItems.length} hint={`Ready ${readyNodes} / ${nodeItems.length}`} />
-      <StatTile label="네임스페이스" value={namespaces.data?.items.length ?? '-'} />
+      <StatTile label="네임스페이스" value={namespaces.data?.items.length ?? '—'} />
       <StatTile label="상태" value={healthy ? '정상' : '점검 필요'} tone={healthy ? undefined : 'warning'} />
     </StatTileRow>
   );
@@ -847,10 +847,10 @@ function CrdPanel({ clusterId, selectedCrd, setSelectedCrd, onOpenObject }: CrdP
             <button key={`${r.namespace}/${r.name}`} onClick={() => onOpenObject(selectedCrd, r)}
               className="w-full grid gap-2 px-4 py-1.5 text-sm text-left border-b border-border/40 hover:bg-secondary/30 items-center" style={grid}>
               <span className="truncate font-medium">{r.name}</span>
-              {namespaced && <span className="truncate text-muted-foreground">{r.namespace ?? '-'}</span>}
+              {namespaced && <span className="truncate text-muted-foreground">{r.namespace ?? '—'}</span>}
               {dynCols.length > 0
                 ? dynCols.map((c) => (
-                    <span key={c.key} className="truncate text-muted-foreground" title={r.cols?.[c.key] ?? ''}>{r.cols?.[c.key] ?? '-'}</span>
+                    <span key={c.key} className="truncate text-muted-foreground" title={r.cols?.[c.key] ?? ''}>{r.cols?.[c.key] ?? '—'}</span>
                   ))
                 : <span className="truncate text-muted-foreground">{r.summary}</span>}
               <span className="text-right text-muted-foreground tabular-nums">{age(r.ageSeconds)}</span>
@@ -1033,7 +1033,7 @@ function RelatedEventsView({ loading, error, items }: { loading: boolean; error:
             {ev.type === 'Warning'
               ? <AlertTriangle className="w-3.5 h-3.5 text-status-warning shrink-0" />
               : <CheckCircle2 className="w-3.5 h-3.5 text-muted-foreground shrink-0" />}
-            <span className="font-medium truncate">{ev.reason ?? '-'}</span>
+            <span className="font-medium truncate">{ev.reason ?? '—'}</span>
             {(ev.count ?? 0) > 1 && <span className="text-xs text-muted-foreground">×{ev.count}</span>}
             <span className="ml-auto text-xs text-muted-foreground tabular-nums shrink-0" title={ev.lastTimestamp ?? ''}>
               {rel(ev.lastTimestamp)}
@@ -1158,10 +1158,10 @@ function NodesPanel({ clusterId, onOpenDetail, onCordon, onDrain }: NodesPanelPr
                 {n.unschedulable && <span className="text-[11px] rounded px-1 bg-status-warning/15 text-status-warning">cordoned</span>}
               </button>
               {!isHidden('roles') && <span className="truncate text-muted-foreground">{n.roles.join(', ')}</span>}
-              {!isHidden('version') && <span className="truncate text-muted-foreground">{n.version ?? '-'}</span>}
+              {!isHidden('version') && <span className="truncate text-muted-foreground">{n.version ?? '—'}</span>}
               {!isHidden('taints') && <span className="text-muted-foreground tabular-nums">{n.taints}</span>}
-              {!isHidden('cpu') && <span className="truncate text-muted-foreground">{n.cpuUsage ? `${n.cpuUsage} / ` : ''}{n.cpuCapacity ?? '-'}</span>}
-              {!isHidden('memory') && <span className="truncate text-muted-foreground">{n.memUsage ? `${n.memUsage} / ` : ''}{n.memCapacity ?? '-'}</span>}
+              {!isHidden('cpu') && <span className="truncate text-muted-foreground">{n.cpuUsage ? `${n.cpuUsage} / ` : ''}{n.cpuCapacity ?? '—'}</span>}
+              {!isHidden('memory') && <span className="truncate text-muted-foreground">{n.memUsage ? `${n.memUsage} / ` : ''}{n.memCapacity ?? '—'}</span>}
               {!isHidden('age') && <span className="text-right text-muted-foreground tabular-nums">{age(n.ageSeconds)}</span>}
               <div className="flex items-center justify-end gap-1">
                 {warn.length > 0 && <span className="text-[11px] text-status-warning mr-1" title={warn.join(',')}>{warn.length}⚠</span>}
@@ -1305,7 +1305,7 @@ export function PodsPanel(p: PodsPanelProps) {
             return (
               <div className="grid gap-2 px-4 py-1.5 text-sm border-b border-border/40 hover:bg-secondary/30 items-center" style={gridStyle}>
                 <button onClick={() => p.onOpenDetail(r)} className="truncate font-medium text-left hover:text-primary">{r.name}</button>
-                {!isHidden('namespace') && <span className="truncate text-muted-foreground">{r.namespace ?? '-'}</span>}
+                {!isHidden('namespace') && <span className="truncate text-muted-foreground">{r.namespace ?? '—'}</span>}
                 {!isHidden('containers') && (
                   <span className="flex items-center gap-0.5" title={r.containers.map((c) => `${c.name}: ${c.state}${c.reason ? ` (${c.reason})` : ''}`).join('\n')}>
                     {r.containers.slice(0, 12).map((c, j) => (
@@ -1320,11 +1320,11 @@ export function PodsPanel(p: PodsPanelProps) {
                   </span>
                 )}
                 {!isHidden('restarts') && <span className={`tabular-nums ${r.restarts > 0 ? 'text-status-warning font-medium' : 'text-muted-foreground'}`}>{r.restarts}</span>}
-                {!isHidden('cpu') && <span className="truncate text-muted-foreground tabular-nums">{r.cpuUsage ?? '-'}</span>}
-                {!isHidden('mem') && <span className="truncate text-muted-foreground tabular-nums">{r.memUsage ?? '-'}</span>}
-                {!isHidden('controlledBy') && <span className="truncate text-muted-foreground" title={r.controlledBy ?? ''}>{r.controlledBy ?? '-'}</span>}
-                {!isHidden('node') && <span className="truncate text-muted-foreground" title={r.node ?? ''}>{r.node ?? '-'}</span>}
-                {!isHidden('qos') && <span className="truncate text-muted-foreground">{r.qos ?? '-'}</span>}
+                {!isHidden('cpu') && <span className="truncate text-muted-foreground tabular-nums">{r.cpuUsage ?? '—'}</span>}
+                {!isHidden('mem') && <span className="truncate text-muted-foreground tabular-nums">{r.memUsage ?? '—'}</span>}
+                {!isHidden('controlledBy') && <span className="truncate text-muted-foreground" title={r.controlledBy ?? ''}>{r.controlledBy ?? '—'}</span>}
+                {!isHidden('node') && <span className="truncate text-muted-foreground" title={r.node ?? ''}>{r.node ?? '—'}</span>}
+                {!isHidden('qos') && <span className="truncate text-muted-foreground">{r.qos ?? '—'}</span>}
                 {!isHidden('age') && <span className="text-right text-muted-foreground tabular-nums">{age(r.ageSeconds)}</span>}
                 <span className={`truncate font-medium ${STATUS_TEXT[r.statusColor]}`} title={r.phase}>
                   <span className={`inline-block w-1.5 h-1.5 rounded-full mr-1 ${CELL_BG[r.statusColor]}`} />{r.phase}

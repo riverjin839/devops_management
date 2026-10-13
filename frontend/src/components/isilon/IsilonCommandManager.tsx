@@ -71,7 +71,7 @@ export function IsilonCommandManager({ serverId, onClose }: Props) {
       } else {
         await createMut.mutateAsync({ ...form, serverId: serverId ?? null });
       }
-      toast.success('저장되었습니다.');
+      toast.success('저장됨');
       startNew();
     } catch (e) {
       // 422 = 부하/변경 명령 거부 등 — 서버 메시지 그대로 노출
@@ -82,7 +82,7 @@ export function IsilonCommandManager({ serverId, onClose }: Props) {
   const doDelete = async (id: string) => {
     try {
       await deleteMut.mutateAsync(id);
-      toast.success('삭제되었습니다.');
+      toast.success('삭제됨');
       if (editing?.id === id) startNew();
     } catch (e) {
       toast.error('삭제 실패', errMessage(e, '오류'));

@@ -375,7 +375,7 @@ export function SprintsPage() {
   const handleCarryOver = (toId: string) => {
     if (!carryOverFor) return;
     carryOver.mutate({ id: carryOverFor.id, to: toId }, {
-      onSuccess: () => { setCarryOverFor(null); toast.success('이월 완료', '미완료 항목을 옮겼습니다.'); },
+      onSuccess: () => { setCarryOverFor(null); toast.success('이월됨', '미완료 항목을 옮겼습니다.'); },
       onError: (err) => toast.error('이월 실패', formatApiError(err, '항목을 이월할 수 없습니다.')),
     });
   };

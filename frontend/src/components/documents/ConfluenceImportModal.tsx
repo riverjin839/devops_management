@@ -147,11 +147,11 @@ export function ConfluenceImportModal({ open, onClose }: Props) {
         setExcluded(new Set());
         const c = data.items.filter((i) => i.action === 'create').length;
         const u = data.items.filter((i) => i.action === 'update').length;
-        toast.info('미리보기 완료', `신규 ${c} · 갱신 ${u} · 변경없음 ${data.items.filter((i) => i.action === 'unchanged').length}`);
+        toast.info('미리보기 생성됨', `신규 ${c} · 갱신 ${u} · 변경없음 ${data.items.filter((i) => i.action === 'unchanged').length}`);
       } else {
         setDone(data);
         setPreview(null);
-        toast.success('Confluence 가져오기 완료', `신규 ${data.imported} · 갱신 ${data.updated}`);
+        toast.success('Confluence 가져옴', `신규 ${data.imported} · 갱신 ${data.updated}`);
       }
     } catch (err) {
       toast.error('요청 실패', formatApiError(err));

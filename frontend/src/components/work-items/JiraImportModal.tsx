@@ -100,7 +100,7 @@ export function JiraImportModal({ open, onClose, defaultProjectKey }: JiraImport
       setVerifyResult(data);
       // 찾지 못한 연결은 기본으로 전부 선택 — 대개 그대로 정리하려는 흐름이다.
       setPickedMissing(new Set(data.missing.map((m) => m.workItemId)));
-      toast.info('연결 점검 완료', data.detail);
+      toast.info('연결 점검됨', data.detail);
     } catch (err) {
       toast.error('연결 점검 실패', formatApiError(err));
     }
@@ -162,11 +162,11 @@ export function JiraImportModal({ open, onClose, defaultProjectKey }: JiraImport
       if (dryRun) {
         setPreview(data);
         setExcluded(new Set());
-        toast.info('미리보기 완료', `신규 ${data.imported} · 갱신 ${data.updated} · 변경없음 ${data.skipped}`);
+        toast.info('미리보기 생성됨', `신규 ${data.imported} · 갱신 ${data.updated} · 변경없음 ${data.skipped}`);
       } else {
         setDone(data);
         setPreview(null);
-        toast.success('Jira 가져오기 완료', `신규 ${data.imported} · 갱신 ${data.updated}`);
+        toast.success('Jira 가져옴', `신규 ${data.imported} · 갱신 ${data.updated}`);
       }
     } catch (err) {
       toast.error('요청 실패', formatApiError(err));
@@ -211,7 +211,7 @@ export function JiraImportModal({ open, onClose, defaultProjectKey }: JiraImport
       }
       setDone(data);
       setExcelRows(null);
-      toast.success('업무 관리에 저장 완료', `신규 ${data.imported} · 갱신 ${data.updated}`);
+      toast.success('업무 관리에 저장됨', `신규 ${data.imported} · 갱신 ${data.updated}`);
     } catch (err) {
       toast.error('저장 실패', formatApiError(err));
     } finally {

@@ -556,7 +556,7 @@ export function WorkItemBoardPage() {
         data.fieldsUpdated.length ? `필드 ${data.fieldsUpdated.join(', ')}` : '',
         data.transitioned ? '상태 전이' : '',
       ].filter(Boolean);
-      toast.success(`${item.jiraIssueKey} 반영 완료`, parts.join(' · ') || data.detail);
+      toast.success(`${item.jiraIssueKey} 반영됨`, parts.join(' · ') || data.detail);
     } catch (err) {
       toast.error('Jira 반영 실패', formatApiError(err));
     } finally {
@@ -572,7 +572,7 @@ export function WorkItemBoardPage() {
         toast.error('Confluence 반영 실패', data.detail);
         return;
       }
-      toast.success('Confluence 문서 반영 완료', data.detail);
+      toast.success('Confluence 문서 반영됨', data.detail);
     } catch (err) {
       toast.error('Confluence 반영 실패', formatApiError(err));
     } finally {
@@ -826,7 +826,7 @@ export function WorkItemBoardPage() {
               className="px-4 py-2 text-sm font-medium bg-primary hover:bg-primary/90 text-primary-foreground rounded-lg transition-colors flex items-center gap-2"
             >
               <Plus className="w-4 h-4" />
-              업무 등록
+              업무 추가
             </button>
           </>}
         />
@@ -1052,7 +1052,7 @@ export function WorkItemBoardPage() {
               description={onlyMine && myName && !hasFilters
                 ? '"내 업무" 를 끄면 전체 업무를 볼 수 있습니다.'
                 : isFilteredView ? '검색어나 필터를 바꿔 보세요.' : '첫 업무를 등록하면 보드와 표에 나타납니다.'}
-              action={!isFilteredView ? { label: '첫 번째 업무 등록', onClick: handleCreateNew } : undefined}
+              action={!isFilteredView ? { label: '첫 번째 업무 추가', onClick: handleCreateNew } : undefined}
             />
           ) : (
             <MacCard bodyPadding="p-0" rootClassName="overflow-hidden">
@@ -1092,7 +1092,7 @@ export function WorkItemBoardPage() {
               description={onlyMine && myName && !hasFilters
                 ? '"내 업무" 를 끄면 전체 업무를 볼 수 있습니다.'
                 : isFilteredView ? '검색어나 필터를 바꿔 보세요.' : '첫 업무를 등록하면 보드와 표에 나타납니다.'}
-              action={!isFilteredView ? { label: '첫 번째 업무 등록', onClick: handleCreateNew } : undefined}
+              action={!isFilteredView ? { label: '첫 번째 업무 추가', onClick: handleCreateNew } : undefined}
             />
           ) : (
             <MacCard bodyPadding="p-0" rootClassName="overflow-hidden">
@@ -1188,7 +1188,7 @@ export function WorkItemBoardPage() {
       />
 
       {/* 업무 등록/수정/하위 업무 등록 — 홈 "업무 현황"과 동일한 팝업. initial 지정 시 수정
-          모드, subItemParent 지정 시 하위 업무 등록 모드(상위 업무 읽기전용 표시 + Jira/
+          모드, subItemParent 지정 시 하위 업무 추가 모드(상위 업무 읽기전용 표시 + Jira/
           Confluence 자동 생성 체이닝은 모달 내부에서 자체 처리). */}
       <QuickAddTaskModal
         open={quickAddOpen || !!editingItem || !!subItemParent}

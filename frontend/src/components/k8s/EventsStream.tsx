@@ -194,13 +194,13 @@ export function EventsStream({ clusterId, selectedNs, onSelectedNsChange }: Prop
             data={filtered}
             itemContent={(_i, e) => (
               <div className={`grid ${COLS} gap-2 px-3 py-1.5 text-sm border-b border-border/40 items-center`}>
-                <span className={e.type === 'Warning' ? 'text-status-warning font-medium' : 'text-muted-foreground'}>{e.type ?? '-'}</span>
-                <span className="truncate text-muted-foreground">{e.namespace ?? '-'}</span>
-                <span className="truncate font-medium" title={e.reason ?? ''}>{e.reason ?? '-'}</span>
+                <span className={e.type === 'Warning' ? 'text-status-warning font-medium' : 'text-muted-foreground'}>{e.type ?? '—'}</span>
+                <span className="truncate text-muted-foreground">{e.namespace ?? '—'}</span>
+                <span className="truncate font-medium" title={e.reason ?? ''}>{e.reason ?? '—'}</span>
                 <span className="truncate" title={e.message ?? ''}>{e.message}</span>
                 <span className="truncate text-muted-foreground" title={`${e.involvedKind}/${e.involvedName}`}>{e.involvedKind}: {e.involvedName}</span>
-                <span className="truncate text-muted-foreground" title={e.source ?? ''}>{e.source ?? '-'}</span>
-                <span className="text-right text-muted-foreground tabular-nums">{e.count ?? '-'}</span>
+                <span className="truncate text-muted-foreground" title={e.source ?? ''}>{e.source ?? '—'}</span>
+                <span className="text-right text-muted-foreground tabular-nums">{e.count ?? '—'}</span>
                 <span className="text-right text-muted-foreground tabular-nums">{rel(e.lastTimestamp)}</span>
               </div>
             )}

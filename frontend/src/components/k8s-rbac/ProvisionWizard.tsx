@@ -360,7 +360,7 @@ export function ProvisionWizard({ catalog, namespaces, running, onRun }: Provisi
         <StepHeader
           n={4}
           title="실제로 적용될 규칙"
-          hint={rulesTouched ? '프리셋에서 수정됨' : `프리셋: ${preset?.name ?? '-'}`}
+          hint={rulesTouched ? '프리셋에서 수정됨' : `프리셋: ${preset?.name ?? '—'}`}
         />
         <RuleEditor
           rules={rules}

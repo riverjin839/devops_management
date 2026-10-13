@@ -105,7 +105,7 @@ export function NodeSpecEditModal({ mode, spec, defaultClusterId, clusters, onCl
       <div ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby="node-spec-edit-modal-title" className="relative bg-card border border-border rounded-2xl shadow-2xl w-full max-w-5xl mx-4 max-h-[90vh] overflow-hidden flex flex-col">
         <div className="flex items-center gap-3 px-5 py-3 border-b border-border bg-muted/30">
           <h2 id="node-spec-edit-modal-title" className="text-sm font-semibold">
-            {mode === 'create' ? '서버스펙 신규 등록' : `서버스펙 수정 — ${spec?.hostname}`}
+            {mode === 'create' ? '서버 스펙 추가' : `서버스펙 수정 — ${spec?.hostname}`}
           </h2>
           <button onClick={onClose} disabled={saving} title="닫기" aria-label="닫기"
             className="ml-auto p-1 rounded hover:bg-secondary text-muted-foreground disabled:opacity-40">

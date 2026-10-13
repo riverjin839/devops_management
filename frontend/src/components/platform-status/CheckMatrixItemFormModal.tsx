@@ -613,7 +613,7 @@ function EditItemForm({ onClose, editingItem }: { onClose: () => void; editingIt
         return;
       }
     }
-    toast.success('항목을 수정했습니다.');
+    toast.success('항목 수정됨');
     onClose();
   };
 
@@ -1311,7 +1311,7 @@ function RegisterItemWizard({ onClose }: { onClose: () => void }) {
           overwrite: pbOverwrite,
         } : undefined,
       });
-      toast.success('항목을 추가했습니다.', trimmedName);
+      toast.success('항목 추가됨', trimmedName);
       onClose();
     } catch (e) {
       const msg = formatApiError(e);

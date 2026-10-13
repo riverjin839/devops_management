@@ -24,7 +24,7 @@ const POD_PHASE_CLS: Record<string, string> = {
 };
 export function PodPhaseBadge({ phase }: { phase: string }) {
   const cls = POD_PHASE_CLS[phase] ?? 'bg-muted text-muted-foreground';
-  return <span className={`text-xs px-1.5 py-0.5 rounded ${cls}`}>{phase || '-'}</span>;
+  return <span className={`text-xs px-1.5 py-0.5 rounded ${cls}`}>{phase || '—'}</span>;
 }
 
 export function QosBadge({ qos }: { qos: string | null }) {
@@ -33,7 +33,7 @@ export function QosBadge({ qos }: { qos: string | null }) {
     : qos === 'BestEffort'
       ? 'bg-status-critical/10 text-status-critical'
       : 'bg-status-warning/10 text-status-warning';
-  return <span className={`text-xs px-1.5 py-0.5 rounded ${cls}`}>{qos ?? '-'}</span>;
+  return <span className={`text-xs px-1.5 py-0.5 rounded ${cls}`}>{qos ?? '—'}</span>;
 }
 
 // ── 파드 + 컨테이너 표 ─────────────────────────────────────────────────────────
@@ -70,7 +70,7 @@ export function PodAllocTable({ pods, showNamespace = false }: {
                 {showNamespace && <td className="px-2 py-1.5 text-xs text-muted-foreground">{p.namespace}</td>}
                 <td className="px-2 py-1.5"><PodPhaseBadge phase={p.phase} /></td>
                 <td className="px-2 py-1.5"><QosBadge qos={p.qos} /></td>
-                <td className="px-2 py-1.5 text-xs text-muted-foreground">{p.node ?? '-'}</td>
+                <td className="px-2 py-1.5 text-xs text-muted-foreground">{p.node ?? '—'}</td>
                 <td className="px-2 py-1.5 text-xs tabular-nums">
                   {fmtCores(p.cpuReqM)} / {fmtCores(p.cpuLimM)} / {p.cpuUsageM == null ? '—' : fmtCores(p.cpuUsageM)}
                   <UtilPct usage={p.cpuUsageM} req={p.cpuReqM} lim={p.cpuLimM} />

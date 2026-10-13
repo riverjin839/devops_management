@@ -37,7 +37,7 @@ function detailLine(item: ClusterItem): ReactNode {
   const d = item.resultDetail || {};
   switch (item.itemType) {
     case 'node_count':
-      return d.ready != null ? `Ready ${d.ready}/${d.total ?? '-'}` : null;
+      return d.ready != null ? `Ready ${d.ready}/${d.total ?? '—'}` : null;
     case 'workload_count':
       return d.namespaces != null
         ? `네임스페이스 ${d.namespaces}${d.pending ? ` · 대기 ${d.pending}` : ''}${d.failed ? ` · 실패 ${d.failed}` : ''}`

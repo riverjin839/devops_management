@@ -233,7 +233,7 @@ function ClusterCronBadge({
       await mutation.mutateAsync({
         clusterId: cluster.id, checkCronExpr: value.trim() || null, checkCronEnabled: enabled,
       });
-      toast.success(`${cluster.name} 핵심 점검 주기를 저장했습니다.`);
+      toast.success(`${cluster.name} 핵심 점검 주기 저장됨`);
       setOpen(false);
     } catch (e) {
       toast.error('저장 실패', formatApiError(e));
@@ -833,7 +833,7 @@ export function PlatformStatusMatrix({ toolbarSlot }: PlatformStatusMatrixProps 
     setDeleteTarget(null);
     try {
       await deleteMut.mutateAsync(target.id);
-      toast.success('항목을 삭제했습니다.', target.name);
+      toast.success('항목 삭제됨', target.name);
     } catch (e) {
       toast.error('삭제 실패', formatApiError(e));
     }

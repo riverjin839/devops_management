@@ -60,10 +60,10 @@ export function EfficiencyTab({ clusterId }: { clusterId: string; clusterName?: 
           <Sparkles className="w-4 h-4 text-primary" />
           <span className="text-sm font-medium">자원 효율화</span>
           <span className="text-xs text-muted-foreground">
-            수집 {scheduleQ.data?.enabled === false ? '중지' : (mine?.effectiveCron ?? scheduleQ.data?.defaultCron ?? '-')}
+            수집 {scheduleQ.data?.enabled === false ? '중지' : (mine?.effectiveCron ?? scheduleQ.data?.defaultCron ?? '—')}
             {mine?.lastRunAt ? ` · 마지막 ${fmtTs(mine.lastRunAt)}` : ''}
             {' · '}자동 적용 <b className={automationOn ? 'text-status-warning' : 'text-muted-foreground'}>{automationOn ? 'ON' : 'OFF'}</b>
-            {' · '}사용률 소스 {defaultsQ.data?.usageSource ?? '-'}
+            {' · '}사용률 소스 {defaultsQ.data?.usageSource ?? '—'}
           </span>
           {totals && (
             <span className="text-xs text-muted-foreground">

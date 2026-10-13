@@ -120,7 +120,7 @@ export function ServiceTopologyPage() {
         if (d.status === 'ok') {
           const dropped = d.edges.filter((e) => e.droppedCount > 0).length;
           tLog(dropped ? 'warn' : 'info',
-            `수집 완료 · ${ms}ms — 소스 ${d.source ?? '-'} · 엣지 ${d.edges.length}개${dropped ? ` · drop 발생 ${dropped}개` : ''}`);
+            `수집 완료 · ${ms}ms — 소스 ${d.source ?? '—'} · 엣지 ${d.edges.length}개${dropped ? ` · drop 발생 ${dropped}개` : ''}`);
           [...d.edges].sort((a, b) => b.flowCount - a.flowCount).slice(0, 10).forEach((e) => {
             tLog(e.droppedCount > 0 ? 'warn' : 'info',
               `  ${e.source} → ${e.target}: flow ${e.flowCount}${e.droppedCount > 0 ? ` · drop ${e.droppedCount}` : ''}`);
@@ -268,7 +268,7 @@ export function ServiceTopologyPage() {
             className="mb-2"
             icon={Workflow}
             title="서비스 토폴로지"
-            description="Pod 통신 · 자원 연계 · 사용량과 한계를 한 그래프로 보여 줍니다."
+            description="파드 통신 · 자원 연계 · 사용량과 한계를 한 그래프로 보여 줍니다."
           />
 
           {/* 툴바 */}
@@ -381,7 +381,7 @@ export function ServiceTopologyPage() {
               )}
               {graph?.truncated && (
                 <span className="inline-flex items-center gap-1 text-status-warning">
-                  <AlertTriangle className="w-3 h-3" /> 노드 수 상한을 넘어 일부만 표시 중 — Pod 표시를 끄거나 범위를 좁혀라
+                  <AlertTriangle className="w-3 h-3" /> 노드 수 상한을 넘어 일부만 표시 중 — 파드 표시를 끄거나 범위를 좁혀라
                 </span>
               )}
               {isCluster && clusterData?.summaryRecommended && clusterMode === 'detail' && (

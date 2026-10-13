@@ -270,7 +270,7 @@ export function NodeSpecPage() {
       case 'privateIp': return r.bond1Ip ?? '';
       case 'cpu': return `${r.cpuSockets ?? ''}s/${r.cpuCores ?? ''}c/${r.cpuThreads ?? ''}t ${r.cpuModel ?? ''}`.trim();
       case 'ram': return `${r.memoryGb ?? ''}GB ${r.memoryModules ?? ''}`.trim();
-      case 'disk': return `${r.diskTotalGb ?? ''}GB / non-OS ${r.nonOsDiskGb ?? '-'}GB ${r.diskType ?? ''}`.trim();
+      case 'disk': return `${r.diskTotalGb ?? ''}GB / non-OS ${r.nonOsDiskGb ?? '—'}GB ${r.diskType ?? ''}`.trim();
       case 'os': return r.osImage ?? '';
       case 'ssd': return r.diskType ?? (r.isSsd === true ? 'O' : r.isSsd === false ? 'X' : '-');
       case 'vm': return r.isVm === true ? 'O' : r.isVm === false ? 'X' : '-';
@@ -360,7 +360,7 @@ export function NodeSpecPage() {
     onSuccess: (data) => {
       qc.invalidateQueries({ queryKey: ['node-specs'] });
       toast.success(
-        '클러스터 임포트 완료',
+        '클러스터 임포트됨',
         `신규 ${data.inserted} · 업데이트 ${data.updated} · 변경없음 ${data.skipped}` +
         (data.errors.length ? ` · 오류 ${data.errors.length}건` : ''),
       );
@@ -411,7 +411,7 @@ export function NodeSpecPage() {
         upsert: true,
       });
       qc.invalidateQueries({ queryKey: ['node-specs'] });
-      toast.success('Host Facts 수집 완료', `신규 ${res.data.inserted} · 업데이트 ${res.data.updated} · 스킵 ${res.data.skipped}`);
+      toast.success('Host Facts 수집됨', `신규 ${res.data.inserted} · 업데이트 ${res.data.updated} · 스킵 ${res.data.skipped}`);
       if (res.data.errors.length > 0) toast.warning('일부 오류', `${res.data.errors.length}건 — 아래 상세 로그를 확인하세요.`);
       // 성공/실패와 무관하게 모달은 열어둔다 — 자동으로 닫히면 방금 뭐가 실패했는지 볼 기회가 없다.
       setHostFactsResult(res.data);
@@ -504,7 +504,7 @@ export function NodeSpecPage() {
               )}
               <button onClick={() => setCreating(true)}
                 className="px-3 py-1 text-sm font-semibold bg-primary hover:bg-primary/90 text-primary-foreground rounded-lg flex items-center gap-1.5">
-                <Plus className="w-3.5 h-3.5" /> 신규 등록
+                <Plus className="w-3.5 h-3.5" /> 노드 추가
               </button>
             </>}
           />
@@ -639,7 +639,7 @@ export function NodeSpecPage() {
                         icon={ClipboardCheck}
                         title="등록된 서버가 없습니다"
                         description="kubeconfig 가 등록된 클러스터라면 '클러스터 임포트' 로 자동 생성 가능합니다."
-                        action={{ label: '신규 등록', onClick: () => setCreating(true) }}
+                        action={{ label: '노드 추가', onClick: () => setCreating(true) }}
                         secondaryAction={clusterId ? { label: '클러스터 임포트', onClick: () => setConfirmImport(true) } : undefined}
                       />
                     </td></tr>
@@ -660,7 +660,7 @@ export function NodeSpecPage() {
                       <GridCell row={r.id} col="cluster" selection={selection}
                         className="px-2 py-2 align-top">
                         <p className="text-sm">{r.clusterName ?? <span className="text-muted-foreground">미배정</span>}</p>
-                        <p className="text-xs text-muted-foreground">{r.role ?? '-'}</p>
+                        <p className="text-xs text-muted-foreground">{r.role ?? '—'}</p>
                       </GridCell>
                       <GridCell row={r.id} col="publicIp" selection={selection}
                         className="px-2 py-2 align-top font-mono text-xs">
@@ -699,13 +699,13 @@ export function NodeSpecPage() {
                           {r.cpuThreads ? `/${r.cpuThreads}t` : ''}
                         </p>
                         <p className="text-muted-foreground text-xs truncate max-w-[180px]" title={r.cpuModel ?? ''}>
-                          {r.cpuModel ?? '-'}
+                          {r.cpuModel ?? '—'}
                         </p>
                       </GridCell>
                       <GridCell row={r.id} col="ram" selection={selection}
                         className="px-2 py-2 align-top text-sm">
                         <p className="font-mono">
-                          {r.memoryGb ? `${r.memoryGb}GB` : '-'}
+                          {r.memoryGb ? `${r.memoryGb}GB` : '—'}
                         </p>
                         {r.memoryModules && (
                           <p className="text-xs text-muted-foreground truncate max-w-[160px]" title={r.memoryModules}>
@@ -717,11 +717,11 @@ export function NodeSpecPage() {
                         className="px-2 py-2 align-top text-sm">
                         <p className="font-mono">
                           <HardDrive className="w-3 h-3 inline mr-0.5 text-muted-foreground" />
-                          {r.diskTotalGb ? `총 ${r.diskTotalGb}GB` : '-'}
+                          {r.diskTotalGb ? `총 ${r.diskTotalGb}GB` : '—'}
                           {r.diskCount ? ` ×${r.diskCount}` : ''}
                         </p>
                         <p className="text-xs text-muted-foreground" title="OS 디스크 제외한 사용 가능 디스크 합계 (lsblk 자동수집 또는 수기)">
-                          OS 제외 {r.nonOsDiskGb != null ? `${r.nonOsDiskGb}GB` : '-'}
+                          OS 제외 {r.nonOsDiskGb != null ? `${r.nonOsDiskGb}GB` : '—'}
                         </p>
                         {r.diskType && (
                           <p className="text-xs font-mono text-status-info/80 truncate max-w-[180px]" title={r.diskType}>

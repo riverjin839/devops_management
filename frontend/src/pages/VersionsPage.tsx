@@ -533,7 +533,7 @@ function MinioTenantDetails({ data }: { data: Record<string, unknown> }) {
   const stat = (label: string, value: React.ReactNode, color?: string) => (
     <div className="bg-muted/40 rounded-md px-2 py-1.5">
       <p className="text-[11px] uppercase text-muted-foreground tracking-wider">{label}</p>
-      <p className={`text-sm font-semibold font-mono ${color ?? 'text-foreground'}`}>{value ?? '-'}</p>
+      <p className={`text-sm font-semibold font-mono ${color ?? 'text-foreground'}`}>{value ?? '—'}</p>
     </div>
   );
 
@@ -582,11 +582,11 @@ function MinioTenantDetails({ data }: { data: Record<string, unknown> }) {
                 {pools.map((p, i) => (
                   <tr key={i} className="border-t border-border font-mono">
                     <td className="px-2 py-1">{String(p.name ?? `pool-${i}`)}</td>
-                    <td className="px-2 py-1">{String(p.servers ?? '-')}</td>
-                    <td className="px-2 py-1">{String(p.volumesPerServer ?? '-')}</td>
-                    <td className="px-2 py-1 text-status-healthy">{String(p.drives ?? '-')}</td>
-                    <td className="px-2 py-1">{String(p.volumeSize ?? '-')}</td>
-                    <td className="px-2 py-1 truncate max-w-[140px]" title={String(p.storageClass ?? '')}>{String(p.storageClass ?? '-')}</td>
+                    <td className="px-2 py-1">{String(p.servers ?? '—')}</td>
+                    <td className="px-2 py-1">{String(p.volumesPerServer ?? '—')}</td>
+                    <td className="px-2 py-1 text-status-healthy">{String(p.drives ?? '—')}</td>
+                    <td className="px-2 py-1">{String(p.volumeSize ?? '—')}</td>
+                    <td className="px-2 py-1 truncate max-w-[140px]" title={String(p.storageClass ?? '')}>{String(p.storageClass ?? '—')}</td>
                   </tr>
                 ))}
               </tbody>
@@ -626,7 +626,7 @@ function DirectPVDetails({ data }: { data: Record<string, unknown> }) {
   const stat = (label: string, value: React.ReactNode, color?: string) => (
     <div className="bg-muted/40 rounded-md px-2 py-1.5">
       <p className="text-[11px] uppercase text-muted-foreground tracking-wider">{label}</p>
-      <p className={`text-sm font-semibold font-mono ${color ?? 'text-foreground'}`}>{value ?? '-'}</p>
+      <p className={`text-sm font-semibold font-mono ${color ?? 'text-foreground'}`}>{value ?? '—'}</p>
     </div>
   );
   return (
@@ -660,11 +660,11 @@ function DirectPVDetails({ data }: { data: Record<string, unknown> }) {
               <tbody>
                 {nodes.map((n, i) => (
                   <tr key={i} className="border-t border-border font-mono">
-                    <td className="px-2 py-1 break-all">{String(n.node ?? '-')}</td>
-                    <td className="px-2 py-1">{String(n.drives ?? '-')}</td>
-                    <td className="px-2 py-1">{String(n.ready ?? '-')}</td>
+                    <td className="px-2 py-1 break-all">{String(n.node ?? '—')}</td>
+                    <td className="px-2 py-1">{String(n.drives ?? '—')}</td>
+                    <td className="px-2 py-1">{String(n.ready ?? '—')}</td>
                     <td className="px-2 py-1">{fmtBytes(Number(n.total ?? 0))}</td>
-                    <td className="px-2 py-1">{Array.isArray(n.fsTypes) ? (n.fsTypes as string[]).join(', ') : '-'}</td>
+                    <td className="px-2 py-1">{Array.isArray(n.fsTypes) ? (n.fsTypes as string[]).join(', ') : '—'}</td>
                   </tr>
                 ))}
               </tbody>

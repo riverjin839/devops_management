@@ -351,8 +351,8 @@ function SlotRow({ e }: { e: TenantRunSlotEntry }) {
   return (
     <li className="flex items-center justify-between gap-3 rounded-xl border border-border px-3 py-2 text-sm">
       <span className="min-w-0">
-        <span className="font-medium text-foreground">{RUN_KIND_LABELS[e.kind ?? ''] ?? e.kind ?? '-'}</span>
-        <span className="text-muted-foreground"> · {e.label || e.ref || '-'}</span>
+        <span className="font-medium text-foreground">{RUN_KIND_LABELS[e.kind ?? ''] ?? e.kind ?? '—'}</span>
+        <span className="text-muted-foreground"> · {e.label || e.ref || '—'}</span>
         {e.clusterName && <span className="text-muted-foreground"> · {e.clusterName}</span>}
       </span>
       <span className="shrink-0 text-xs text-muted-foreground">{e.since ? formatRelativeTime(e.since) : ''}</span>

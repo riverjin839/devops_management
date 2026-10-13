@@ -554,7 +554,7 @@ export function SettingsPage() {
       }
     }
     setBulkGenBusy(false);
-    if (fail === 0) toast.success('아이콘 일괄 생성 완료', `${ok}개 생성`);
+    if (fail === 0) toast.success('아이콘 일괄 생성됨', `${ok}개 생성`);
     else toast.warning('아이콘 일괄 생성 부분 완료', `${ok}개 성공 · ${fail}개 실패`);
   };
 

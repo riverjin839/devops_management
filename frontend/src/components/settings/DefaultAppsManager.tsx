@@ -38,7 +38,7 @@ export function DefaultAppsManager() {
 
   const save = () =>
     update.mutate({ installedApps: current }, {
-      onSuccess: () => { setDraft(null); toast.success('조직 기본 앱 구성을 저장했습니다.'); },
+      onSuccess: () => { setDraft(null); toast.success('조직 기본 앱 구성 저장됨'); },
       onError: (e) => toast.error('저장 실패', formatApiError(e)),
     });
 

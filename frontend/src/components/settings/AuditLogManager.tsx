@@ -249,7 +249,7 @@ export function AuditLogManager() {
           새로고침
         </button>
         <div className="ml-auto text-sm text-muted-foreground">
-          {data ? `총 ${data.total}건 · ${data.page}/${totalPages}` : '-'}
+          {data ? `총 ${data.total}건 · ${data.page}/${totalPages}` : '—'}
         </div>
       </div>
 
@@ -282,12 +282,12 @@ export function AuditLogManager() {
                 <td className="py-2 pr-3 font-medium">{row.actorUsername}</td>
                 <td className="py-2 pr-3"><code className="text-sm">{row.action}</code></td>
                 <td className="py-2 pr-3 text-sm text-muted-foreground">
-                  {row.targetType ? `${row.targetType}` : '-'}
+                  {row.targetType ? `${row.targetType}` : '—'}
                   {row.targetId ? <span className="block text-xs opacity-70 break-all">{row.targetId}</span> : null}
                 </td>
-                <td className="py-2 pr-3 text-sm text-muted-foreground whitespace-nowrap">{row.tenantName || '-'}</td>
+                <td className="py-2 pr-3 text-sm text-muted-foreground whitespace-nowrap">{row.tenantName || '—'}</td>
                 <td className="py-2 pr-3"><StatusBadge status={row.status} /></td>
-                <td className="py-2 pr-3 text-sm text-muted-foreground font-mono">{row.ip || '-'}</td>
+                <td className="py-2 pr-3 text-sm text-muted-foreground font-mono">{row.ip || '—'}</td>
                 <td className="py-2 pr-3 max-w-[420px]"><DetailsCell row={row} /></td>
               </tr>
             ))}

@@ -70,7 +70,7 @@ export function GuidePageView({ guide, allGuides, onSelect, onEdit, onAddChild, 
     try {
       const res = await pullMut.mutateAsync(guide.id);
       if (res.status !== 'ok') toast.error('다시 가져오기 실패', res.detail);
-      else toast.success('다시 가져오기 완료', `Confluence v${res.version ?? '?'} 내용으로 갱신했습니다.`);
+      else toast.success('다시 가져옴', `Confluence v${res.version ?? '?'} 내용으로 갱신했습니다.`);
     } catch (err) {
       toast.error('다시 가져오기 실패', formatApiError(err));
     }

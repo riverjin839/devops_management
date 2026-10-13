@@ -55,16 +55,16 @@ export function ActiveAlertsTable({ rows, isLoading, emptyMessage }: {
                     {alert.state}
                   </td>
                   <td className={`${TD} text-xs ${SEVERITY_CLS[alert.severity ?? ''] ?? 'text-muted-foreground'}`}>
-                    {alert.severity ?? '-'}
+                    {alert.severity ?? '—'}
                   </td>
                   <td className={`${TD} font-medium truncate max-w-[16rem]`}>
                     {alert.alertname}
                     <span className="ml-2 text-[11px] text-muted-foreground uppercase">{alert.origin}</span>
                   </td>
-                  <td className={`${TD} text-xs text-muted-foreground truncate`}>{alert.namespace ?? '-'}</td>
-                  <td className={`${TD} font-mono text-xs truncate max-w-[12rem]`}>{alert.resource ?? '-'}</td>
+                  <td className={`${TD} text-xs text-muted-foreground truncate`}>{alert.namespace ?? '—'}</td>
+                  <td className={`${TD} font-mono text-xs truncate max-w-[12rem]`}>{alert.resource ?? '—'}</td>
                   <td className={`${TD} text-xs text-muted-foreground truncate max-w-[20rem]`}>
-                    {alert.summary ?? '-'}
+                    {alert.summary ?? '—'}
                   </td>
                   <td className={`${TD} text-xs text-muted-foreground whitespace-nowrap`}>
                     {formatTime(alert.activeAt)}

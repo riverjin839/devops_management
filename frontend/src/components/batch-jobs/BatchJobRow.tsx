@@ -67,7 +67,7 @@ export function BatchJobRow({ job, cluster, selected, onClick, checkbox, checked
     try {
       const { data } = await runMut.mutateAsync({ id: job.id, payload: {} });
       if (data.status === 'ok') {
-        toast.success(`${job.name} 실행 완료`, `${data.durationMs}ms`);
+        toast.success(`${job.name} 실행됨`, `${data.durationMs}ms`);
       } else {
         toast.error(`${job.name} 실행 실패`, data.error ?? data.status);
       }

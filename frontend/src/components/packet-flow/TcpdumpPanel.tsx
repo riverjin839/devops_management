@@ -77,12 +77,12 @@ function PacketTable({ rows }: { rows: TcpdumpPacketRow[] }) {
                   <span className="inline-flex items-center px-1.5 py-0.5 rounded bg-secondary text-foreground/80 font-mono">
                     {r.proto}
                   </span>
-                ) : '-'}
+                ) : '—'}
               </td>
-              <td className="px-2 py-1 font-mono text-sm text-foreground">{r.src ?? '-'}</td>
-              <td className="px-2 py-1 font-mono text-sm text-foreground">{r.dst ?? '-'}</td>
-              <td className="px-2 py-1 font-mono text-xs text-muted-foreground">{r.flags ?? '-'}</td>
-              <td className="px-2 py-1 font-mono text-xs text-muted-foreground">{r.length ?? '-'}</td>
+              <td className="px-2 py-1 font-mono text-sm text-foreground">{r.src ?? '—'}</td>
+              <td className="px-2 py-1 font-mono text-sm text-foreground">{r.dst ?? '—'}</td>
+              <td className="px-2 py-1 font-mono text-xs text-muted-foreground">{r.flags ?? '—'}</td>
+              <td className="px-2 py-1 font-mono text-xs text-muted-foreground">{r.length ?? '—'}</td>
               <td className="px-2 py-1 text-xs text-foreground/80 max-w-[520px]">
                 <div className="truncate" title={r.summary}>{r.summary}</div>
               </td>

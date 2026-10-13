@@ -326,7 +326,7 @@ export function WorkflowBoardPage() {
         ),
       );
       invalidate();
-      toast.success('자동 배치 완료', `${targets.length}개 단계 위치 갱신`);
+      toast.success('자동 배치됨', `${targets.length}개 단계 위치 갱신`);
     } catch (e) {
       toast.error('자동 배치 실패', e instanceof Error ? e.message : String(e));
     }

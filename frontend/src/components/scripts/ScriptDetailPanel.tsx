@@ -67,7 +67,7 @@ export function ScriptDetailPanel({ scriptId, onDeleted }: Props) {
   const handleSaveVersion = async () => {
     try {
       await createVersion.mutateAsync({ content: draft, changelog: changelog.trim() || undefined });
-      toast.success('새 버전을 저장했습니다.');
+      toast.success('새 버전 저장됨');
     } catch (e) {
       toast.error('저장 실패', formatApiError(e));
     }
@@ -98,7 +98,7 @@ export function ScriptDetailPanel({ scriptId, onDeleted }: Props) {
         tags: tagsDraft.split(',').map((t) => t.trim()).filter(Boolean),
       });
       setEditingMeta(false);
-      toast.success('스크립트 정보를 수정했습니다.');
+      toast.success('스크립트 정보 수정됨');
     } catch (e) {
       toast.error('수정 실패', formatApiError(e));
     }
@@ -107,7 +107,7 @@ export function ScriptDetailPanel({ scriptId, onDeleted }: Props) {
   const handleDelete = async () => {
     try {
       await deleteScript.mutateAsync(script.id);
-      toast.success('스크립트를 삭제했습니다.');
+      toast.success('스크립트 삭제됨');
       setDeleteConfirm(false);
       onDeleted();
     } catch (e) {
@@ -270,7 +270,7 @@ export function ScriptDetailPanel({ scriptId, onDeleted }: Props) {
                 <span className="text-xs font-mono font-medium flex-shrink-0">v{v.version}</span>
                 <div className="min-w-0 flex-1">
                   <p className="text-xs truncate">{v.changelog || '(메모 없음)'}</p>
-                  <p className="text-[11px] text-muted-foreground">{v.createdBy ?? '-'} · {new Date(v.createdAt).toLocaleString('ko-KR')}</p>
+                  <p className="text-[11px] text-muted-foreground">{v.createdBy ?? '—'} · {new Date(v.createdAt).toLocaleString('ko-KR')}</p>
                 </div>
                 {v.id === script.currentVersionId ? (
                   <span className="text-[11px] px-1.5 py-0.5 rounded bg-primary/15 text-primary flex-shrink-0">현재</span>

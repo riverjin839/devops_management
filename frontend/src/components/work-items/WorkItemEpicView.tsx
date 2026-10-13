@@ -200,7 +200,7 @@ function TreeRow({ node, depth, collapsedIds, onToggle, onItemClick, jiraBusyId,
               className="text-left min-w-0 truncate text-foreground/90 hover:text-primary hover:underline transition-colors"
               title={item.title?.trim() || stripHtml(item.content) || '업무'}
             >
-              {item.title?.trim() || stripHtml(item.content) || '-'}
+              {item.title?.trim() || stripHtml(item.content) || '—'}
             </button>
             {hasChildren && (
               <span className="flex-shrink-0 text-[11px] text-muted-foreground">({countDescendants(node)})</span>

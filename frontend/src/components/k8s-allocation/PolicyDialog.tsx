@@ -347,10 +347,10 @@ function ScheduleTab({ clusterId }: { clusterId: string }) {
     <div className="space-y-3">
       <Toggle checked={enabled} onChange={setEnabled} label="주기 수집 사용(전체)" help="끄면 모든 클러스터의 자동 수집이 멈춥니다(수동 '지금 수집'은 가능)." />
       <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-        <Field label="기본 cron" help={`다음 실행: ${q.data.nextRun ?? '-'} (Celery beat 가 매분 평가)`}>
+        <Field label="기본 cron" help={`다음 실행: ${q.data.nextRun ?? '—'} (Celery beat 가 매분 평가)`}>
           <input className={INPUT} value={cron} onChange={(e) => setCron(e.target.value)} />
         </Field>
-        <Field label="이 클러스터 cron 오버라이드(비우면 기본)" help={`이 클러스터 다음 실행: ${mine?.nextRun ?? q.data.nextRun ?? '-'} · 마지막 수집: ${mine?.lastRunAt ?? '-'}`}>
+        <Field label="이 클러스터 cron 오버라이드(비우면 기본)" help={`이 클러스터 다음 실행: ${mine?.nextRun ?? q.data.nextRun ?? '—'} · 마지막 수집: ${mine?.lastRunAt ?? '—'}`}>
           <input className={INPUT} value={cCron} onChange={(e) => setCCron(e.target.value)} placeholder={cron} />
         </Field>
       </div>

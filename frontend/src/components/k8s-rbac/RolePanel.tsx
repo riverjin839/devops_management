@@ -33,7 +33,7 @@ interface Props {
 }
 
 function roleKey(r: RbacRole): string {
-  return `${r.scope}:${r.namespace ?? '-'}:${r.name}`;
+  return `${r.scope}:${r.namespace ?? '—'}:${r.name}`;
 }
 
 export function RolePanel({

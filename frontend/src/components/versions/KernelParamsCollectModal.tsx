@@ -92,11 +92,11 @@ export function KernelParamsCollectModal({ open, clusterId, onClose }: Props) {
       setResult(d);
       if (d.changed > 0) {
         toast.success(
-          '커널 파라미터 수집 완료',
+          '커널 파라미터 수집됨',
           `${d.changed}개 노드 변경 감지 · 히스토리에 누적`,
         );
       } else {
-        toast.info('커널 파라미터 수집 완료', '변경 없음 (히스토리 동일)');
+        toast.info('커널 파라미터 수집됨', '변경 없음 (히스토리 동일)');
       }
     },
     onError: (e: unknown) => {
@@ -289,7 +289,7 @@ export function KernelParamsCollectModal({ open, clusterId, onClose }: Props) {
                         <td className={`px-2 py-1 ${h.status === 'ok' ? 'text-status-healthy' : 'text-status-critical'}`}>
                           {h.status}
                         </td>
-                        <td className="px-2 py-1 font-mono">{h.paramCount ?? '-'}</td>
+                        <td className="px-2 py-1 font-mono">{h.paramCount ?? '—'}</td>
                         <td className="px-2 py-1">
                           {h.stored === true
                             ? <span className="text-xs text-status-healthy">신규 저장</span>

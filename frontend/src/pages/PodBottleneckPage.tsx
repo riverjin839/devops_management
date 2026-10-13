@@ -253,7 +253,7 @@ export function PodBottleneckPage() {
                 compact
                 icon={ListTree}
                 title="진단 결과가 없습니다."
-                description="위 폼에서 대상 Pod 를 골라 첫 진단을 실행하세요."
+                description="위 폼에서 대상 파드를 골라 첫 진단을 실행하세요."
               />
             ) : (
               <>

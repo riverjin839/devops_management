@@ -89,7 +89,7 @@ export function ConfluenceLinkModal({ open, onClose }: ConfluenceLinkModalProps)
       }
     }
     setDone({ imported, failed });
-    if (imported) toast.success('업무 등록 완료', `${imported}건을 업무 관리 게시판에 추가했습니다.`);
+    if (imported) toast.success('업무 추가됨', `${imported}건을 업무 관리 게시판에 추가했습니다.`);
     if (failed.length) toast.error('일부 실패', failed.slice(0, 3).join(' / '));
   };
 

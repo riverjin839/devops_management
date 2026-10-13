@@ -101,16 +101,16 @@ export function NodeNicsCollectModal({ open, clusterId, onClose }: Props) {
       ).length;
       if (d.changed > 0) {
         toast.success(
-          'NIC 수집 완료',
+          'NIC 수집됨',
           `${okCount}개 노드 수집 · ${d.changed}건 변경 감지 · 표 갱신 완료`,
         );
       } else if (noNicCount > 0) {
         toast.info(
-          'NIC 수집 완료',
+          'NIC 수집됨',
           `${okCount}개 노드 · ${noNicCount}개 노드는 NIC 미검출 (raw 출력 확인)`,
         );
       } else {
-        toast.info('NIC 수집 완료', `${okCount}개 노드 · 변경 없음`);
+        toast.info('NIC 수집됨', `${okCount}개 노드 · 변경 없음`);
       }
     },
     onError: (e: unknown) => {
@@ -308,7 +308,7 @@ export function NodeNicsCollectModal({ open, clusterId, onClose }: Props) {
                         <td className="px-2 py-1.5">
                           {h.status !== 'ok' ? (
                             <div className="space-y-1">
-                              <span className="text-xs text-status-critical">{h.error ?? '-'}</span>
+                              <span className="text-xs text-status-critical">{h.error ?? '—'}</span>
                               {(h.rawStdout || h.rawStderr) && (
                                 <RawOutputDetails
                                   stdout={h.rawStdout}

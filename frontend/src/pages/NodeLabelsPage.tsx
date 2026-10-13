@@ -48,7 +48,7 @@ export function NodeLabelsPage() {
   const showCluster = targetClusters.length > 1;
 
   const headerLabel = useMemo(() => {
-    if (effectiveSelection) return clusters.find((c) => c.id === effectiveSelection)?.name || '-';
+    if (effectiveSelection) return clusters.find((c) => c.id === effectiveSelection)?.name || '—';
     return `전체 클러스터 (${clusters.length})`;
   }, [clusters, effectiveSelection]);
 

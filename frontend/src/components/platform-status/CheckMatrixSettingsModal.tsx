@@ -33,7 +33,7 @@ export function CheckMatrixSettingsModal({ isOpen, onClose }: Props) {
     if (!valid) return;
     try {
       await updateMut.mutateAsync(days);
-      toast.success('보관 주기를 저장했습니다.');
+      toast.success('보관 주기 저장됨');
       onClose();
     } catch (e) {
       toast.error('저장 실패', formatApiError(e));

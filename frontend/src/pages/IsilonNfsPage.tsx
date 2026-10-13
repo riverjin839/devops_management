@@ -243,9 +243,9 @@ function K8sNfsTable({ runResult }: { runResult: IsilonRunResponse | null }) {
             return (
               <tr key={pv.pv} className="border-b border-border/50">
                 <td className="py-1.5 pr-3 font-mono text-xs truncate max-w-[200px]">{pv.pv}</td>
-                <td className="py-1.5 pr-3 text-xs">{pv.pvc ?? '-'}</td>
+                <td className="py-1.5 pr-3 text-xs">{pv.pvc ?? '—'}</td>
                 <td className="py-1.5 pr-3 font-mono text-xs">{pv.path}</td>
-                <td className="py-1.5 pr-3 text-xs">{pv.server ?? '-'}</td>
+                <td className="py-1.5 pr-3 text-xs">{pv.server ?? '—'}</td>
                 <td className="py-1.5 pr-3">
                   {served === null
                     ? <StatusBadge variant="neutral" label="exports 미실행" />
@@ -301,7 +301,7 @@ function ResultBlock({ result }: { result: IsilonCommandResult }) {
       <div className="flex items-center gap-2 flex-wrap text-xs">
         <StatusBadge
           variant={result.ok ? 'healthy' : 'critical'}
-          label={result.ok ? `exit ${result.exitCode ?? 0}` : (result.error ?? `exit ${result.exitCode ?? '-'}`)}
+          label={result.ok ? `exit ${result.exitCode ?? 0}` : (result.error ?? `exit ${result.exitCode ?? '—'}`)}
         />
         <span className="font-medium text-foreground">{ISILON_SECTION_LABEL[result.section] ?? result.section} · {result.label}</span>
         <code className="text-muted-foreground truncate">{result.command}</code>

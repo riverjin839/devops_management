@@ -127,7 +127,7 @@ export function AlertInboxPage() {
     setAckAllOpen(false);
     try {
       const res = await ackAll.mutateAsync({ clusterId, severity, status, q: query.trim() || undefined });
-      toast.success(`${res.acked}건을 확인 처리했습니다.`);
+      toast.success(`${res.acked}건 확인 처리됨`);
     } catch (err) {
       toast.error(formatApiError(err, '일괄 확인 실패'));
     }
@@ -300,7 +300,7 @@ export function AlertInboxPage() {
                             </td>
                             <td className={`${TD} text-xs ${sev.text}`}>{sev.label}</td>
                             <td className={`${TD} text-xs text-muted-foreground truncate`}>
-                              {alert.clusterName ?? '-'}
+                              {alert.clusterName ?? '—'}
                             </td>
                             <td className={`${TD} truncate max-w-[16rem] ${sev.text}`}>
                               {alert.alertname}
@@ -311,13 +311,13 @@ export function AlertInboxPage() {
                               ) : null}
                             </td>
                             <td className={`${TD} font-mono text-xs text-muted-foreground truncate max-w-[11rem]`}>
-                              {[alert.namespace, alert.resource].filter(Boolean).join(' / ') || '-'}
+                              {[alert.namespace, alert.resource].filter(Boolean).join(' / ') || '—'}
                             </td>
                             <td className={`${TD} text-xs text-muted-foreground truncate max-w-[20rem]`}>
-                              {alert.summary ?? alert.description ?? '-'}
+                              {alert.summary ?? alert.description ?? '—'}
                             </td>
                             <td className={`${TD} text-right text-xs font-mono`}>
-                              {alert.occurrences > 1 ? `×${alert.occurrences}` : '-'}
+                              {alert.occurrences > 1 ? `×${alert.occurrences}` : '—'}
                               {alert.suppressedCount > 0 ? (
                                 <span
                                   className="ml-1 text-[11px] text-muted-foreground"

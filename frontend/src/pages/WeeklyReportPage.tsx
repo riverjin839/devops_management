@@ -198,7 +198,7 @@ export function WeeklyReportPage() {
         parentPageId: parentPageId.trim() || undefined,
         title: title.trim() || undefined,
       });
-      if (data.status === 'ok') toast.success('Confluence 게시 완료', data.detail);
+      if (data.status === 'ok') toast.success('Confluence 게시됨', data.detail);
       else toast.error('게시 실패', data.detail);
     } catch (err) {
       toast.error('게시 실패', formatApiError(err));

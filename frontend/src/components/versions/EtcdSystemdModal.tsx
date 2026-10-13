@@ -281,11 +281,11 @@ export function EtcdSystemdModal({ open, clusterId, onClose }: Props) {
                             ? <CheckCircle2 className="w-3 h-3 text-status-healthy" />
                             : <XCircle className="w-3 h-3 text-status-critical" />}
                         </td>
-                        <td className="px-2 py-1 text-muted-foreground">{h.activeState ?? '-'}</td>
-                        <td className="px-2 py-1 font-mono text-muted-foreground">{h.mainPid ?? '-'}</td>
-                        <td className="px-2 py-1 font-mono">{h.version ?? '-'}</td>
+                        <td className="px-2 py-1 text-muted-foreground">{h.activeState ?? '—'}</td>
+                        <td className="px-2 py-1 font-mono text-muted-foreground">{h.mainPid ?? '—'}</td>
+                        <td className="px-2 py-1 font-mono">{h.version ?? '—'}</td>
                         <td className="px-2 py-1 text-muted-foreground truncate max-w-[200px]" title={h.fragmentPath ?? ''}>
-                          {h.fragmentPath ?? '-'}
+                          {h.fragmentPath ?? '—'}
                         </td>
                         <td className="px-2 py-1 align-top">
                           {h.error && <p className="text-xs text-status-critical mb-0.5">{h.error}</p>}

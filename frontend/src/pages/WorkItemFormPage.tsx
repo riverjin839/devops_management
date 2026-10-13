@@ -21,7 +21,7 @@ export function WorkItemFormPage() {
   const { data: listData } = useWorkItems();
   const parentItem = parentId ? listData?.data.find((x) => x.id === parentId) ?? null : null;
 
-  const pageTitle = parentItem ? '하위 업무 등록' : '업무 등록';
+  const pageTitle = parentItem ? '하위 업무 추가' : '업무 추가';
 
   return (
     <div className="app-min-h-screen bg-background">

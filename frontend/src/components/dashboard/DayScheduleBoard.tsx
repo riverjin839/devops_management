@@ -472,8 +472,8 @@ export function DayScheduleBoard({ selectedClusterId }: DayScheduleBoardProps) {
         <button
           onClick={() => setQuickAdd({ time: isToday ? `${String(Math.min(new Date().getHours(), 23)).padStart(2, '0')}:00` : '09:00', assignee: meOnly ? (selectedName || undefined) : undefined })}
           className="inline-flex items-center gap-1 px-2 py-1 rounded-lg border border-primary/30 bg-primary/10 text-primary text-xs font-semibold hover:bg-primary/20"
-          title="업무 등록">
-          <Plus className="w-3 h-3" /> 업무 등록
+          title="업무 추가">
+          <Plus className="w-3 h-3" /> 업무 추가
         </button>
       </div>
 
@@ -618,7 +618,7 @@ export function DayScheduleBoard({ selectedClusterId }: DayScheduleBoardProps) {
                   description={meOnly && !selectedName
                     ? '"전체" 로 모든 일정을 볼 수 있습니다.'
                     : '업무를 등록하면 시간표에 표시됩니다.'}
-                  action={{ label: '업무 등록', onClick: () => setQuickAdd({ time: '09:00', assignee: meOnly ? (selectedName || undefined) : undefined }) }}
+                  action={{ label: '업무 추가', onClick: () => setQuickAdd({ time: '09:00', assignee: meOnly ? (selectedName || undefined) : undefined }) }}
                 />
               </div>
             )}
@@ -776,7 +776,7 @@ function AddBlockMenu({
         )}
         <button onClick={onNewTask}
           className="w-full text-left px-1.5 py-1 rounded-lg hover:bg-secondary text-xs text-primary font-medium inline-flex items-center gap-1">
-          <Plus className="w-3 h-3" /> 새 업무 등록
+          <Plus className="w-3 h-3" /> 새 업무 추가
         </button>
       </div>
     </>

@@ -46,7 +46,7 @@ function Row({ r, selected, onToggle, onDismiss }: {
       </div>
       <div className="tabular-nums text-right font-medium">{r.savingsDisplay}<div className="text-[11px] text-muted-foreground font-normal">× {r.podCount} pod</div></div>
       <div className="text-[11px] text-muted-foreground truncate" title={JSON.stringify(r.reason)}>
-        headroom {r.reason?.headroomPct ?? '-'}% · 임계 ×{r.reason?.thresholdRatio ?? '-'} · {r.windowDays}일
+        headroom {r.reason?.headroomPct ?? '—'}% · 임계 ×{r.reason?.thresholdRatio ?? '—'} · {r.windowDays}일
       </div>
       <div className="flex justify-end">
         <RoleGate allow={['admin', 'operator']}>

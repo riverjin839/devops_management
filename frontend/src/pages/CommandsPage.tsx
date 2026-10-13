@@ -74,7 +74,7 @@ export function CommandsPage() {
             onClick={() => navigate('/commands/new')}
             className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-semibold bg-primary text-primary-foreground rounded-xl hover:bg-primary/90"
           >
-            <Plus className="w-3.5 h-3.5" /> 새 명령어
+            <Plus className="w-3.5 h-3.5" /> 명령어 추가
           </button>
         }
       />

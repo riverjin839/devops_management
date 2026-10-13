@@ -93,10 +93,10 @@ export function MetricEditModal({ isOpen, onClose, moduleKey, editing }: MetricE
     try {
       if (editing) {
         await updateMetric.mutateAsync({ id: editing.id, data: form });
-        toast.success('지표를 수정했습니다.');
+        toast.success('지표 수정됨');
       } else {
         await createMetric.mutateAsync(form);
-        toast.success('지표를 추가했습니다.');
+        toast.success('지표 추가됨');
       }
       onClose();
     } catch (err) {
@@ -108,7 +108,7 @@ export function MetricEditModal({ isOpen, onClose, moduleKey, editing }: MetricE
     if (!editing) return;
     try {
       await deleteMetric.mutateAsync(editing.id);
-      toast.success('지표를 삭제했습니다.');
+      toast.success('지표 삭제됨');
       onClose();
     } catch (err) {
       toast.error(formatApiError(err, '지표 삭제 실패'));

@@ -63,7 +63,7 @@ export function IsilonServerModal({ server, onClose }: Props) {
           ...(privateKey ? { savedPrivateKey: privateKey } : {}),
         });
       }
-      toast.success('저장되었습니다.');
+      toast.success('저장됨');
       onClose();
     } catch (e) {
       toast.error('저장 실패', errMessage(e, '알 수 없는 오류'));

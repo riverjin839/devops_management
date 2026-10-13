@@ -934,7 +934,7 @@ export function InfraTopologyPage() {
                         <Activity className="w-3.5 h-3.5" />
                         병목 의심 홉: <span className="font-semibold">{traceBottleneck.hop.name}</span>
                         <span className="opacity-80">
-                          (latency: {traceBottleneck.hop.latencyMs ?? '-'}ms, errors: {traceBottleneck.hop.errorCount ?? 0})
+                          (latency: {traceBottleneck.hop.latencyMs ?? '—'}ms, errors: {traceBottleneck.hop.errorCount ?? 0})
                         </span>
                       </div>
                     )}
@@ -947,7 +947,7 @@ export function InfraTopologyPage() {
                             <span className="font-medium text-foreground">{hop.name}</span>
                             {(hop.latencyMs !== undefined || hop.errorCount !== undefined) && (
                               <span className="ml-1 text-muted-foreground">
-                                ({hop.latencyMs ?? '-'}ms / err {hop.errorCount ?? 0})
+                                ({hop.latencyMs ?? '—'}ms / err {hop.errorCount ?? 0})
                               </span>
                             )}
                           </div>

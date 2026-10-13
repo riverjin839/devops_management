@@ -58,7 +58,7 @@ export function EfficiencyRunLog({ runId, onClose, onRollback, rollbackPending }
         <RunStatePill state={run.runState} />
         <span className="text-sm font-medium">{RUN_TYPE_LABEL[run.runType] ?? run.runType}</span>
         <span className="text-xs text-muted-foreground">
-          {TRIGGER_LABEL[run.trigger] ?? run.trigger} · {run.triggeredBy ?? '-'} · {fmtTs(run.queuedAt)}
+          {TRIGGER_LABEL[run.trigger] ?? run.trigger} · {run.triggeredBy ?? '—'} · {fmtTs(run.queuedAt)}
           {run.dryRun && <span className="ml-1 px-1.5 py-0.5 rounded bg-status-info/10 text-status-info">dry-run</span>}
           {run.rollbackOf && <span className="ml-1">· 롤백 of {run.rollbackOf.slice(0, 8)}</span>}
         </span>

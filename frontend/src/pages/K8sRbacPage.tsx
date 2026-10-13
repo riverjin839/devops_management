@@ -97,7 +97,7 @@ export function K8sRbacPage() {
             title="K8s 접근 권한"
             titleExtra={
               <span className="text-sm text-muted-foreground">
-                — <span className="font-medium text-foreground">{cluster?.name ?? '-'}</span>
+                — <span className="font-medium text-foreground">{cluster?.name ?? '—'}</span>
                 {namespaces.length > 0 && (
                   <span className="ml-2">네임스페이스 {namespaces.length}</span>
                 )}

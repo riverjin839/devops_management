@@ -89,11 +89,11 @@ export function KubeletConfigCollectModal({ open, clusterId, onClose }: Props) {
       const found = d.hosts.filter((h) => h.configFile).length;
       if (d.changed > 0) {
         toast.success(
-          'kubelet config 수집 완료',
+          'kubelet config 수집됨',
           `${d.changed}개 노드 변경 감지 · 경로 식별 ${found}/${d.hosts.length}`,
         );
       } else if (found > 0) {
-        toast.info('kubelet config 수집 완료', `변경 없음 · 경로 식별 ${found}/${d.hosts.length}`);
+        toast.info('kubelet config 수집됨', `변경 없음 · 경로 식별 ${found}/${d.hosts.length}`);
       } else {
         toast.warning('config 파일을 찾지 못함', 'ps/-eo args 에서 --config 가 없고 fallback 경로도 모두 실패');
       }

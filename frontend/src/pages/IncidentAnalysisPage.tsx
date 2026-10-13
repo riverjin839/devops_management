@@ -362,7 +362,7 @@ export function IncidentAnalysisPage() {
                 </div>
                 <div>
                   <label htmlFor={f('podPattern')} className={lc}>
-                    Pod 이름 패턴 (선택)
+                    파드 이름 패턴 (선택)
                   </label>
                   <input
                     id={f('podPattern')}

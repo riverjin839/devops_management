@@ -161,7 +161,7 @@ function VocDetail({
   const saveReply = async () => {
     try {
       await replyMut.mutateAsync({ id: post.id, data: { adminReply: replyText, status: statusVal } });
-      toast.success('답변이 저장되었습니다.');
+      toast.success('답변이 저장됨');
     } catch (e) {
       toast.error('답변 저장 실패', errMessage(e, '오류'));
     }
@@ -170,7 +170,7 @@ function VocDetail({
   const doDelete = async () => {
     try {
       await deleteMut.mutateAsync(post.id);
-      toast.success('삭제되었습니다.');
+      toast.success('삭제됨');
       onDeleted();
     } catch (e) {
       toast.error('삭제 실패', errMessage(e, '오류'));
@@ -264,7 +264,7 @@ function VocForm({ post, onDone, onBack }: { post?: VocPost; onDone: () => void;
     try {
       if (post) await updateMut.mutateAsync({ id: post.id, data: { title, content, category } });
       else await createMut.mutateAsync({ title, content, category });
-      toast.success('저장되었습니다.');
+      toast.success('저장됨');
       onDone();
     } catch (e) {
       toast.error('저장 실패', errMessage(e, '오류'));

@@ -74,7 +74,7 @@ export function K8sEventsPage() {
     if (!ev) return;
     try {
       await deleteEvent.mutateAsync(ev.id);
-      toast.success('이벤트를 삭제했습니다.');
+      toast.success('이벤트 삭제됨');
     } catch (err) {
       toast.error(formatApiError(err, '이벤트 삭제 실패'));
     }
@@ -204,13 +204,13 @@ export function K8sEventsPage() {
                             {ev.resourceName}
                           </td>
                           <td className="py-2 pr-3 text-muted-foreground text-xs truncate">
-                            {ev.namespace ?? '-'}
+                            {ev.namespace ?? '—'}
                           </td>
                           <td className="py-2 pr-3 text-xs text-muted-foreground">
-                            {ev.reason ?? '-'}
+                            {ev.reason ?? '—'}
                           </td>
                           <td className="py-2 text-xs text-muted-foreground truncate max-w-[200px]">
-                            {ev.message ?? '-'}
+                            {ev.message ?? '—'}
                           </td>
                           <td className="py-2 pl-2">
                             <button

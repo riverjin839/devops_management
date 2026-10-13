@@ -339,7 +339,7 @@ export function BindingPanel({
             <tbody>
               {rows.map((b) => (
                 <tr
-                  key={`${b.kind}:${b.namespace ?? '-'}:${b.name}`}
+                  key={`${b.kind}:${b.namespace ?? '—'}:${b.name}`}
                   className="border-t border-border hover:bg-secondary/60"
                 >
                   <td className="px-3 py-2">

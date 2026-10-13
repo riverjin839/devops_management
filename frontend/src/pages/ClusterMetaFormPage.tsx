@@ -413,7 +413,7 @@ export function ClusterMetaFormPage() {
       await clustersApi.update(cluster.id, payload as Record<string, unknown>);
       queryClient.invalidateQueries({ queryKey: ['clusters'] });
       // 저장 성공을 명시적으로 알린다 — 이전엔 목록으로 튕기기만 해 반영 여부가 불확실했다 (D-037)
-      toast.success('클러스터 정보를 저장했습니다.', cluster.name);
+      toast.success('클러스터 정보 저장됨', cluster.name);
       baselineRef.current = serialize(snapshot);   // 이탈 경고가 뜨지 않도록 기준 갱신
       navigate('/cluster-manage');
     } catch (err) {

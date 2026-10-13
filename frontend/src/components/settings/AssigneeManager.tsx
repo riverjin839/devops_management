@@ -79,7 +79,7 @@ function CreateAccountModal({ open, onClose }: { open: boolean; onClose: () => v
         role,
         displayName: displayName.trim() || undefined,
       });
-      toast.success(`계정 ${username} 이(가) 추가되었습니다.`);
+      toast.success(`계정 ${username} 추가됨`);
       qc.invalidateQueries({ queryKey: ['assignees'] });
       setUsername(''); setPassword(''); setDisplayName(''); setRole('viewer');
       onClose();
@@ -151,7 +151,7 @@ function ResetPasswordModal({ target, onClose }: { target: Assignee | null; onCl
     setSubmitting(true);
     try {
       await authApi.resetPassword(target.id, newPassword);
-      toast.success(`${target.username} 비밀번호가 재설정되었습니다.`);
+      toast.success(`${target.username} 비밀번호가 재설정됨`);
       qc.invalidateQueries({ queryKey: ['assignees'] });
       setNewPassword('');
       onClose();
@@ -262,7 +262,7 @@ export function AssigneeManager() {
     setRoleUpdatingId(a.id);
     try {
       await authApi.updateUserRole(a.id, role);
-      toast.success('역할이 변경되었습니다.');
+      toast.success('역할이 변경됨');
       qc.invalidateQueries({ queryKey: ['assignees'] });
     } catch (err) {
       toast.error('역할 변경 실패', formatApiError(err) ?? undefined);

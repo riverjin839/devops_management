@@ -431,7 +431,7 @@ export function ServiceArchitecturePage() {
                   }}
                   onDeleteManualNode={(pk) => {
                     deleteNode.mutate(pk, {
-                      onSuccess: () => { setSelectedId(null); toast.success('수동 노드를 삭제했습니다.'); },
+                      onSuccess: () => { setSelectedId(null); toast.success('수동 노드 삭제됨'); },
                       onError: (e) => toast.error(formatApiError(e)),
                     });
                   }}
@@ -453,7 +453,7 @@ export function ServiceArchitecturePage() {
                 onRegenerate={() => llmMut.mutate(undefined, {
                   onSuccess: (d) => {
                     if (d.llmStatus === 'offline') toast.error('LLM(Ollama) 이 오프라인입니다.');
-                    else toast.success('AI 분석을 갱신했습니다.');
+                    else toast.success('AI 분석 갱신됨');
                   },
                   onError: (e) => toast.error(formatApiError(e)),
                 })}
@@ -479,7 +479,7 @@ export function ServiceArchitecturePage() {
               onSuccess: () => {
                 setNodeDialogOpen(false);
                 setEditingManualNode(null);
-                toast.success('저장했습니다.');
+                toast.success('저장됨');
               },
               onError: (e: unknown) => toast.error(formatApiError(e)),
             };
@@ -501,7 +501,7 @@ export function ServiceArchitecturePage() {
                 onSuccess: () => {
                   setLinkSourceId(null);
                   setLinkTargetId(null);
-                  toast.success('연결을 추가했습니다.');
+                  toast.success('연결 추가됨');
                 },
                 onError: (e) => toast.error(formatApiError(e)),
               },

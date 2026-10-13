@@ -31,7 +31,7 @@ const VARIANT_META: Record<StatusVariant, { icon: ComponentType<{ className?: st
   critical: { icon: XCircle,       defaultLabel: '위험' },
   pending:  { icon: WifiOff,       defaultLabel: '미연결' },
   info:     { icon: Info,          defaultLabel: 'Info' },
-  neutral:  { icon: Circle,        defaultLabel: '-' },
+  neutral:  { icon: Circle,        defaultLabel: '—' },
   loading:  { icon: Loader2,       defaultLabel: '로딩' },
 };
 

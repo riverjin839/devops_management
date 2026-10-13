@@ -288,7 +288,7 @@ export function WorkItemTableRow({
         return (
           <td key="project" data-col="project" className="px-4 py-1.5 text-muted-foreground whitespace-nowrap">
             {item.projectId
-              ? (projectNameById.get(item.projectId) ?? '-')
+              ? (projectNameById.get(item.projectId) ?? '—')
               : <span className="text-muted-foreground">-</span>}
           </td>
         );
@@ -297,7 +297,7 @@ export function WorkItemTableRow({
         return (
           <td key="sprint" data-col="sprint" className="px-4 py-1.5 text-muted-foreground whitespace-nowrap">
             {item.sprintId
-              ? (sprintNameById?.get(item.sprintId) ?? '-')
+              ? (sprintNameById?.get(item.sprintId) ?? '—')
               : <span className="text-muted-foreground">-</span>}
           </td>
         );
@@ -386,7 +386,7 @@ export function WorkItemTableRow({
               />
             ) : (
               <span className="px-2 py-0.5 text-xs rounded-full bg-secondary text-secondary-foreground border border-border">
-                {item.primaryAssignee || item.assignee || '-'}
+                {item.primaryAssignee || item.assignee || '—'}
               </span>
             )}
           </EditableCell>
@@ -452,7 +452,7 @@ export function WorkItemTableRow({
               aria-label={`${item.title?.trim() || stripHtml(item.content) || '업무'} — 클릭하여 상세 보기`}
             >
               <span className="line-clamp-2 hover:underline">
-                {item.title?.trim() || stripHtml(item.content) || '-'}
+                {item.title?.trim() || stripHtml(item.content) || '—'}
               </span>
             </button>
           </td>
@@ -491,7 +491,7 @@ export function WorkItemTableRow({
               />
             ) : (
               <p className="line-clamp-2 text-muted-foreground">
-                {stripHtml(item.resolution) || '-'}
+                {stripHtml(item.resolution) || '—'}
               </p>
             )}
           </EditableCell>
@@ -675,7 +675,7 @@ export function WorkItemTableRow({
               />
             ) : (
               <p className="line-clamp-2 text-muted-foreground text-sm">
-                {item.remarks || '-'}
+                {item.remarks || '—'}
               </p>
             )}
           </EditableCell>

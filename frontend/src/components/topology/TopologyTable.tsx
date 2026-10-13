@@ -105,13 +105,13 @@ export function TopologyTable({
                       {n.ghost && <span className="ml-1 text-muted-foreground">(미참조)</span>}
                       {editMode && linkSourceId === n.id && <span className="ml-1 text-primary">· 링크 출발</span>}
                     </td>
-                    <td className={`${td} text-muted-foreground`}>{n.namespace || '-'}</td>
+                    <td className={`${td} text-muted-foreground`}>{n.namespace || '—'}</td>
                     <td className={`${td} whitespace-nowrap ${STATUS_TEXT[n.status] ?? 'text-muted-foreground'}`}>
                       {statusGlyph(n.status) && <span aria-hidden className="font-bold mr-1">{statusGlyph(n.status)}</span>}
                       {STATUS_LABEL[n.status] ?? n.status}
                     </td>
-                    <td className={`${td} text-right tabular-nums`}>{n.podCount ? `${n.readyCount}/${n.podCount}` : '-'}</td>
-                    <td className={`${td} text-right tabular-nums`}>{n.restartCount || '-'}</td>
+                    <td className={`${td} text-right tabular-nums`}>{n.podCount ? `${n.readyCount}/${n.podCount}` : '—'}</td>
+                    <td className={`${td} text-right tabular-nums`}>{n.restartCount || '—'}</td>
                     <td className={`${td} text-right tabular-nums`}>{d.in}/{d.out}</td>
                   </tr>
                 );
@@ -145,7 +145,7 @@ export function TopologyTable({
                       {EDGE_TYPE_LABEL[e.type] ?? e.type}
                       {e.manualId && <span className="ml-1 text-primary">(수동)</span>}
                     </td>
-                    <td className={`${td} text-muted-foreground break-all`}>{[e.label, e.detail].filter(Boolean).join(' · ') || '-'}</td>
+                    <td className={`${td} text-muted-foreground break-all`}>{[e.label, e.detail].filter(Boolean).join(' · ') || '—'}</td>
                   </tr>
                 ))}
               </tbody>
@@ -181,7 +181,7 @@ export function TopologyTable({
                         {t.droppedCount}
                       </td>
                       <td className={`${td} text-muted-foreground`}>
-                        {[t.protocols.join('/'), t.ports.join(', ')].filter(Boolean).join(' · ') || '-'}
+                        {[t.protocols.join('/'), t.ports.join(', ')].filter(Boolean).join(' · ') || '—'}
                       </td>
                     </tr>
                   ))}

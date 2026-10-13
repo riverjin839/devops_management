@@ -188,7 +188,7 @@ function SourceConfigEditor({
         itemId: editTarget.itemId, clusterId: editTarget.clusterId, entries: rows,
       });
       toast.success(
-        '소스 설정을 저장했습니다.',
+        '소스 설정 저장됨',
         res.copiedFromGlobal
           ? '글로벌 정의를 복제해 이 클러스터 전용 정의를 만들었습니다 — 다른 클러스터에는 영향 없습니다.'
           : undefined,

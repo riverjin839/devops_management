@@ -40,13 +40,13 @@ export function CommandFormPage() {
             <ArrowLeft className="w-4 h-4" />
           </button>
           <Terminal className="w-4 h-4 text-muted-foreground" />
-          <span className="text-sm text-muted-foreground">{editMode ? '명령어 수정' : '새 명령어'}</span>
+          <span className="text-sm text-muted-foreground">{editMode ? '명령어 수정' : '명령어 추가'}</span>
         </div>
       </div>
 
       <main className="max-w-[1400px] mx-auto px-8 pt-10 pb-16">
         <PageHeader
-          title={editMode ? '명령어 수정' : '새 명령어 등록'}
+          title={editMode ? '명령어 수정' : '명령어 추가'}
           description="자주 쓰는 CLI 한 줄을 의미·주의사항·중요도와 함께 기록합니다."
           className="mb-8"
         />
@@ -114,10 +114,10 @@ function CommandForm({ initial, onCancel, onSaved }: CommandFormProps) {
     try {
       if (initial) {
         await update.mutateAsync({ id: initial.id, data: payload });
-        toast.success('수정 완료', '명령어 정보가 업데이트되었습니다.');
+        toast.success('수정됨', '명령어 정보가 업데이트되었습니다.');
       } else {
         await create.mutateAsync(payload);
-        toast.success('등록 완료', '새 명령어가 추가되었습니다.');
+        toast.success('명령어 추가됨');
       }
       onSaved();
     } catch (e) {

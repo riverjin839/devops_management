@@ -136,12 +136,12 @@ export function DeepCheckRunHistory({ definition, clusters, runClusterId, onClos
                   title={r.status}
                 />
                 <span className="text-xs font-mono text-muted-foreground whitespace-nowrap">
-                  {r.checkedAt ? parseUTC(r.checkedAt).toLocaleString() : '-'}
+                  {r.checkedAt ? parseUTC(r.checkedAt).toLocaleString() : '—'}
                 </span>
                 <span className="text-xs text-muted-foreground bg-muted rounded px-1.5 py-0.5 whitespace-nowrap">
                   {clusterName(r.clusterId)}
                 </span>
-                <span className="min-w-0 flex-1 truncate text-sm">{r.message ?? '-'}</span>
+                <span className="min-w-0 flex-1 truncate text-sm">{r.message ?? '—'}</span>
                 <span className="text-xs text-muted-foreground tabular-nums whitespace-nowrap">
                   {r.durationMs}ms
                 </span>

@@ -42,7 +42,7 @@ export function PodScheduleCalc({ clusterId }: { clusterId: string }) {
   return (
     <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm border-t border-border pt-2">
       <span className="flex items-center gap-1.5 text-muted-foreground">
-        <Cpu className="w-4 h-4 text-status-info" /> Pod 스케줄 가능 수:
+        <Cpu className="w-4 h-4 text-status-info" /> 파드 스케줄 가능 수:
       </span>
       <label className="flex items-center gap-1 text-xs text-muted-foreground">
         CPU

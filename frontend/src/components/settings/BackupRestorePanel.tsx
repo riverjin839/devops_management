@@ -335,7 +335,7 @@ function BackupRestorePanelBody() {
                         <td className="px-2 py-1 text-right font-mono">{t.incoming}</td>
                         <td className="px-2 py-1 text-right font-mono text-status-healthy">{t.insertCount}</td>
                         <td className="px-2 py-1 text-right font-mono text-status-warning">{t.updateCount}</td>
-                        <td className="px-2 py-1 text-right font-mono text-status-critical">{mode === 'replace' ? t.deleteCandidates : '-'}</td>
+                        <td className="px-2 py-1 text-right font-mono text-status-critical">{mode === 'replace' ? t.deleteCandidates : '—'}</td>
                       </tr>
                     ))}
                   </tbody>

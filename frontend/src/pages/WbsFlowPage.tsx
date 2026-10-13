@@ -178,7 +178,7 @@ function DetailModal({ item, onClose }: { item: DayItem; onClose: () => void }) 
       <dl className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
         <div className="rounded-lg bg-secondary/40 px-3 py-2">
           <dt className="text-xs uppercase tracking-wide text-muted-foreground">시작일</dt>
-          <dd className="font-medium tabular-nums">{item.startDate || '-'}</dd>
+          <dd className="font-medium tabular-nums">{item.startDate || '—'}</dd>
         </div>
         {item.endDate && (
           <div className="rounded-lg bg-secondary/40 px-3 py-2">

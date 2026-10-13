@@ -48,7 +48,7 @@ export function AccessReviewPanel({ clusterId, serviceAccounts, showLogs }: Prop
       });
       setEntries(data);
       const denied = data.filter((d) => !d.allowed).length;
-      if (denied === 0) toast.success('권한 점검 완료', `${data.length}건 모두 허용`);
+      if (denied === 0) toast.success('권한 점검됨', `${data.length}건 모두 허용`);
       else toast.warning('권한 점검 완료', `${data.length}건 중 ${denied}건 거부`);
     } catch (e) {
       toast.error('점검 실패', formatApiError(e));
@@ -61,7 +61,7 @@ export function AccessReviewPanel({ clusterId, serviceAccounts, showLogs }: Prop
     const namespaces = Array.from(new Set(entries.map((e) => e.namespace ?? '-')));
     const labels = Array.from(new Set(entries.map((e) => e.label)));
     const cell = new Map<string, RbacAccessReviewEntry>();
-    entries.forEach((e) => cell.set(`${e.label}::${e.namespace ?? '-'}`, e));
+    entries.forEach((e) => cell.set(`${e.label}::${e.namespace ?? '—'}`, e));
     return { namespaces, labels, cell };
   }, [entries]);
 

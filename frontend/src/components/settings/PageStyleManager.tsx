@@ -69,7 +69,7 @@ export function PageStyleManager() {
     else delete next[target];
     updateSettings.mutate(
       { pageStyles: next },
-      { onSuccess: () => toast.success('화면 스타일이 저장되었습니다.'), onError: () => toast.error('저장에 실패했습니다.') },
+      { onSuccess: () => toast.success('화면 스타일이 저장됨'), onError: () => toast.error('저장에 실패했습니다.') },
     );
   };
 
@@ -79,7 +79,7 @@ export function PageStyleManager() {
     delete next[target];
     updateSettings.mutate(
       { pageStyles: next },
-      { onSuccess: () => toast.success('이 페이지 설정을 초기화했습니다.') },
+      { onSuccess: () => toast.success('이 페이지 설정 초기화됨') },
     );
   };
 

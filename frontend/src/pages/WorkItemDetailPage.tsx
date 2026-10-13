@@ -96,7 +96,7 @@ export function WorkItemDetailPage() {
                 <button
                   onClick={() => navigate(`/tasks-mgmt/new?parentId=${item.id}`)}
                   className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium bg-secondary hover:bg-secondary/80 border border-border rounded-lg transition-colors"
-                  title="하위 업무 등록"
+                  title="하위 업무 추가"
                 >
                   <Plus className="w-3.5 h-3.5" /> 하위
                 </button>

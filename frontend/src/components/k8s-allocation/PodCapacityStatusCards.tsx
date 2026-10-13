@@ -31,28 +31,28 @@ export function PodCapacityStatusCards({ clusterId }: { clusterId: string }) {
   return (
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
       <MacCard bodyPadding="p-3">
-        <CardHeader title="Pod 용량" onRefresh={onRefresh} refreshing={isFetching} />
+        <CardHeader title="파드 용량" onRefresh={onRefresh} refreshing={isFetching} />
         <div className="min-h-16">
           {loading ? <Skeleton className="h-16 w-full" />
             : failed ? <EmptyState title="조회 실패" description={(error as Error)?.message ?? '파드 용량/상태를 불러오지 못했습니다.'} />
             : computing || !cap ? <Skeleton className="h-16 w-full" />
             : (
               <div className="grid grid-cols-3 gap-2">
-                <StatTile label="스케줄 가능 Pod" value={fmtN(cap.schedulableFreeSlots)}
+                <StatTile label="스케줄 가능 파드" value={fmtN(cap.schedulableFreeSlots)}
                   hint={<StatTooltip><p>Ready·비cordon 노드({cap.nodesSchedulable}/{cap.nodesTotal})의 할당 가능 {fmtN(cap.schedulableAllocatablePods)}개 중 남은 슬롯(현재 파드 개수 기준, 크기 무관).</p></StatTooltip>} />
-                <StatTile label="전체 Pod" value={fmtN(data.totalPods)}
+                <StatTile label="전체 파드" value={fmtN(data.totalPods)}
                   hint={data.terminalCounted === false ? <StatTooltip><p>종료(Succeeded/Failed) 파드는 제외된 수입니다(K8S_ALLOC_COUNT_TERMINAL_PODS=0).</p></StatTooltip> : undefined} />
-                <StatTile label="전체 할당 가능 Pod" value={fmtN(cap.allocatablePods)}
+                <StatTile label="할당 가능 파드" value={fmtN(cap.allocatablePods)}
                   hint={<StatTooltip><p>전체 노드 <code>allocatable.pods</code>(max-pods) 합계.</p></StatTooltip>} />
               </div>
             )}
         </div>
       </MacCard>
       <MacCard bodyPadding="p-3">
-        <CardHeader title="Pod 상태" onRefresh={onRefresh} refreshing={isFetching} />
+        <CardHeader title="파드 상태" onRefresh={onRefresh} refreshing={isFetching} />
         <div className="min-h-16">
           {loading || computing || (!data && !failed) ? <Skeleton className="h-16 w-full" />
-            : failed ? <EmptyState title="조회 실패" description="Pod 상태를 불러오지 못했습니다." />
+            : failed ? <EmptyState title="조회 실패" description="파드 상태를 불러오지 못했습니다." />
             : (
               <div className="grid grid-cols-3 gap-2">
                 {POD_STATUS_META

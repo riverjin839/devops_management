@@ -70,7 +70,7 @@ export function WorkItemBoardSettingsModal({ open, onClose }: WorkItemBoardSetti
     if (!draft) return;
     try {
       await updateMut.mutateAsync(draft);
-      toast.success('설정 저장 완료', '업무 관리 게시판 공통 설정이 저장되었습니다.');
+      toast.success('설정 저장됨', '업무 관리 게시판 공통 설정이 저장되었습니다.');
       onClose();
     } catch (err) {
       toast.error('저장 실패', formatApiError(err));

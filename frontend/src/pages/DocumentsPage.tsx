@@ -96,7 +96,7 @@ export function DocumentsPage() {
     try {
       const res = await pullMut.mutateAsync(guide.id);
       if (res.status !== 'ok') toast.error('다시 가져오기 실패', res.detail);
-      else toast.success('다시 가져오기 완료', `「${guide.title}」 v${res.version ?? '?'} 로 갱신했습니다.`);
+      else toast.success('다시 가져옴', `「${guide.title}」 v${res.version ?? '?'} 로 갱신했습니다.`);
     } catch (err) {
       toast.error('다시 가져오기 실패', formatApiError(err));
     } finally {

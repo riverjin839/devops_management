@@ -467,7 +467,7 @@ function ResultRow({ r }: { r: BulkExecResultItem }) {
           </span>
         </td>
         <td className="px-2 py-1.5 font-mono text-xs text-muted-foreground">
-          {r.exitCode ?? '-'} · {r.durationMs}ms
+          {r.exitCode ?? '—'} · {r.durationMs}ms
         </td>
       </tr>
       {open && (

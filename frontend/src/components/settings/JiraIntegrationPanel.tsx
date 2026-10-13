@@ -69,7 +69,7 @@ export function JiraIntegrationPanel() {
       const { data } = await ssoLogin.mutateAsync(payload);
       if (data.ok) {
         setSsoPw('');
-        toast.success('SSO 로그인 완료', data.displayName ? `${data.displayName} 세션이 저장되었습니다.` : data.detail);
+        toast.success('SSO 로그인 성공', data.displayName ? `${data.displayName} 세션이 저장되었습니다.` : data.detail);
         // Confluence 동시 로그인이 시도됐고 실패한 경우만 별도 안내 (Jira 는 정상).
         if (data.confluenceOk === false) {
           toast.error('Confluence 로그인 실패', data.confluenceDetail || 'Jira 세션은 정상 저장되었습니다.');
@@ -241,7 +241,7 @@ export function JiraIntegrationPanel() {
               onChange={(e) => setEpicField(e.target.value)} disabled={!isAdmin} />
             <p className="text-xs text-muted-foreground mt-1">
               Jira Server/DC 는 이슈-Epic 연결이 <b>커스텀 필드</b>라 인스턴스마다 필드 ID 가
-              다릅니다. 비워두면 "업무 등록" 화면에서 Epic 을 선택해 Task 를 만들어도
+              다릅니다. 비워두면 "업무 추가" 화면에서 Epic 을 선택해 Task 를 만들어도
               <b> 실제 Jira 에는 Epic 연결이 반영되지 않습니다</b>(이슈 자체는 생성됨). 프로젝트
               화면(관리 &gt; 필드) 또는 이슈 편집 화면 URL 에서 Epic Link 필드의 customfield ID 를
               확인해 입력하세요.
@@ -390,19 +390,19 @@ export function JiraIntegrationPanel() {
                       {diagResult.entries.map((e, i) => (
                         <tr key={`${e.product}-${e.url}-${i}`} className="border-t border-border">
                           <td className="px-2 py-1 align-top break-all">{e.product} {e.url}</td>
-                          <td className="px-2 py-1 align-top break-all">{e.finalUrl || '-'}</td>
-                          <td className="px-2 py-1 align-top">{e.httpStatus ?? '-'}</td>
+                          <td className="px-2 py-1 align-top break-all">{e.finalUrl || '—'}</td>
+                          <td className="px-2 py-1 align-top">{e.httpStatus ?? '—'}</td>
                           <td className={`px-2 py-1 align-top ${e.passwordInputs > 0 ? 'text-status-healthy' : ''}`}>
                             {e.forms}/{e.passwordInputs}
                           </td>
                           <td className="px-2 py-1 align-top break-all">
-                            {e.usernameField || '-'}{e.wantsBase64 ? ' (base64)' : ''}
+                            {e.usernameField || '—'}{e.wantsBase64 ? ' (base64)' : ''}
                           </td>
                           <td className="px-2 py-1 align-top break-all max-w-[16rem]">
-                            {Object.entries(e.hiddenFields ?? {}).map(([k, v]) => `${k}=${v}`).join(' · ') || '-'}
+                            {Object.entries(e.hiddenFields ?? {}).map(([k, v]) => `${k}=${v}`).join(' · ') || '—'}
                           </td>
                           <td className="px-2 py-1 align-top break-all">
-                            {e.error || e.clientRedirect || e.wwwAuthenticate || e.title || '-'}
+                            {e.error || e.clientRedirect || e.wwwAuthenticate || e.title || '—'}
                           </td>
                         </tr>
                       ))}
@@ -427,7 +427,7 @@ export function JiraIntegrationPanel() {
                 ))}
                 {(diagResult.podSourceIp || diagResult.podHostname) && (
                   <p className="text-[11px] text-muted-foreground font-mono break-all">
-                    이 파드: {diagResult.podHostname || '-'} · 출발지 IP {diagResult.podSourceIp || '-'}
+                    이 파드: {diagResult.podHostname || '—'} · 출발지 IP {diagResult.podSourceIp || '—'}
                     <span className="font-sans"> — SSO 가 클라이언트 IP 를 검사하는 구성이면 이 IP(보통 노드/게이트웨이 IP 로 NAT 됨)를 허용해야 합니다.</span>
                   </p>
                 )}

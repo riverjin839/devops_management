@@ -32,7 +32,7 @@ function formatEndpoint(ep: HubbleFlow['source']): string {
   if (!ep) return '-';
   if (ep.podName) return `${ep.namespace ?? '?'}/${ep.podName}`;
   if (ep.ip) return ep.ip;
-  return `(${ep.identity ?? '-'})`;
+  return `(${ep.identity ?? '—'})`;
 }
 
 function FlowRow({ f }: { f: HubbleFlow }) {
@@ -50,7 +50,7 @@ function FlowRow({ f }: { f: HubbleFlow }) {
           {f.verdict === 'DROPPED' && <XCircle className="w-2.5 h-2.5" />}
           {f.verdict === 'AUDIT' && <AlertTriangle className="w-2.5 h-2.5" />}
           {f.verdict === 'TRACED' && <Info className="w-2.5 h-2.5" />}
-          {f.verdict ?? '-'}
+          {f.verdict ?? '—'}
         </span>
       </td>
       <td className="px-2 py-1.5 font-mono text-sm text-foreground">{formatEndpoint(f.source)}</td>
@@ -59,7 +59,7 @@ function FlowRow({ f }: { f: HubbleFlow }) {
       <td className="px-2 py-1.5 text-xs text-muted-foreground">{f.trafficDirection}</td>
       <td className="px-2 py-1.5 text-xs text-foreground/80 max-w-[480px]">
         <div className="truncate" title={f.summary || f.dropReason || ''}>
-          {f.dropReason ? <span className="text-status-critical">{f.dropReason}</span> : f.summary || '-'}
+          {f.dropReason ? <span className="text-status-critical">{f.dropReason}</span> : f.summary || '—'}
         </div>
       </td>
     </tr>

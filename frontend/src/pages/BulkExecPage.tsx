@@ -61,7 +61,7 @@ function resultsToCsv(
     'error', 'stdout_lines', 'stderr_lines', 'stdout', 'stderr',
   ];
   const lines: string[] = [];
-  lines.push(`# command: ${command || '-'}`);
+  lines.push(`# command: ${command || '—'}`);
   if (filter.trim()) lines.push(`# filter: ${filter}`);
   lines.push(`# exported_at: ${new Date().toISOString()}`);
   lines.push(cols.join(','));
@@ -92,14 +92,14 @@ function resultsToTxt(
   command: string,
 ): string {
   const lines: string[] = [];
-  lines.push(`# command : ${command || '-'}`);
+  lines.push(`# command : ${command || '—'}`);
   if (filter.trim()) lines.push(`# filter  : ${filter}`);
   lines.push(`# exported: ${new Date().toISOString()}`);
   lines.push(`# total   : ${results.length} (ok=${results.filter((r) => r.status === 'ok').length})`);
   lines.push('');
   for (const r of results) {
     const label = r.name ? `${r.name}${r.clusterName ? `@${r.clusterName}` : ''} (${r.host})` : r.host;
-    lines.push(`========== ${label}  [${r.status}]  exit=${r.exitCode ?? '-'}  ${r.durationMs}ms ==========`);
+    lines.push(`========== ${label}  [${r.status}]  exit=${r.exitCode ?? '—'}  ${r.durationMs}ms ==========`);
     if (r.error) lines.push(`!! error: ${r.error}`);
     const stdout = filteredText(r.stdout, filter);
     if (stdout.trim()) {
@@ -289,7 +289,7 @@ function ResultRow({ result, globalFilter }: { result: BulkExecResultItem; globa
         </td>
         <td className="px-3 py-2 text-sm font-mono text-muted-foreground">{result.durationMs}ms</td>
         <td className="px-3 py-2 text-sm text-muted-foreground max-w-[320px] truncate" title={result.error ?? ''}>
-          {result.error ?? (result.stdout.split('\n')[0].slice(0, 80) || '-')}
+          {result.error ?? (result.stdout.split('\n')[0].slice(0, 80) || '—')}
         </td>
       </tr>
       {expanded && (
@@ -396,7 +396,7 @@ function SummaryResultsTable({
                   )}
                 </td>
                 <td className="px-3 py-2 align-top whitespace-nowrap font-mono text-xs text-muted-foreground">
-                  {r.exitCode ?? '-'} · {r.durationMs}ms
+                  {r.exitCode ?? '—'} · {r.durationMs}ms
                 </td>
                 <td className="px-3 py-2 align-top">
                   {r.error && (
