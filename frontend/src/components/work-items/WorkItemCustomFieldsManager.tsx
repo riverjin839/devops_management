@@ -67,7 +67,7 @@ export function WorkItemCustomFieldsManager({ open, onClose }: { open: boolean; 
 
   return (
     <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/40 p-4" onClick={onClose}>
-      <div ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby="work-item-custom-fields-modal-title" className="w-full max-w-2xl max-h-[85vh] flex flex-col rounded-2xl border border-border bg-card shadow-xl" onClick={(e) => e.stopPropagation()}>
+      <div ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby="work-item-custom-fields-modal-title" className="w-full max-w-2xl max-h-[85vh] flex flex-col rounded-md border border-border bg-card shadow-xl" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center gap-2 px-5 py-3 border-b border-border">
           <Settings2 className="w-4 h-4 text-primary" />
           <h2 id="work-item-custom-fields-modal-title" className="text-sm font-semibold">업무 사용자 정의 필드</h2>

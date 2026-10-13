@@ -316,7 +316,7 @@ function TypeFormModal({ mode, domain, row, onClose, onError }: TypeFormModalPro
   return (
     <div ref={dialogRef} className="fixed inset-0 z-50 flex items-center justify-center" role="dialog" aria-modal="true" aria-label="서비스 타입 폼">
       <div className="absolute inset-0 bg-black/60" onClick={onClose} aria-hidden />
-      <div className="relative bg-card border border-border rounded-2xl shadow-2xl w-full max-w-xl mx-4 overflow-hidden">
+      <div className="relative bg-card border border-border rounded-md shadow-2xl w-full max-w-xl mx-4 overflow-hidden">
         <div className="flex items-center justify-between px-5 py-4 border-b border-border bg-muted/30">
           <h2 className="text-sm font-semibold">
             {mode === 'create'

@@ -40,7 +40,7 @@ function PatternColorPicker({ onPick }: { onPick: (hex: string) => void }) {
         <Sparkles className="w-3 h-3" />
       </button>
       {open && (
-        <div className="absolute z-20 mt-1 left-0 w-64 p-2 bg-card border border-border rounded-lg shadow-lg space-y-2">
+        <div className="absolute z-20 mt-1 left-0 w-64 p-2 bg-card border border-border rounded-md shadow-lg space-y-2">
           {COLOR_PATTERNS.map((pattern) => (
             <div key={pattern.key}>
               <p className="text-[11px] text-muted-foreground mb-1">{pattern.label}</p>
@@ -53,7 +53,7 @@ function PatternColorPicker({ onPick }: { onPick: (hex: string) => void }) {
                     title={hex}
                     aria-label={`${pattern.label} ${hex}`}
                     style={{ backgroundColor: hex }}
-                    className="w-5 h-5 rounded-full border border-border/60 hover:scale-110 transition-transform"
+                    className="w-5 h-5 rounded-full border border-border/60 hover:border-foreground transition-colors"
                   />
                 ))}
               </div>
@@ -102,7 +102,7 @@ function EmojiPicker({
         <ChevronDown className="w-3 h-3 text-muted-foreground" />
       </button>
       {open && (
-        <div className="absolute z-20 mt-1 left-0 w-56 p-2 bg-card border border-border rounded-lg shadow-lg">
+        <div className="absolute z-20 mt-1 left-0 w-56 p-2 bg-card border border-border rounded-md shadow-lg">
           <div className="grid grid-cols-5 gap-1">
             {EMOJI_OPTIONS.map((opt) => (
               <button
@@ -212,7 +212,7 @@ export function OperationLevelsManager() {
   };
 
   return (
-    <div className="bg-card border border-border rounded-xl p-5 space-y-4">
+    <div className="bg-card border border-border rounded-md p-5 space-y-4">
       <div className="flex items-start gap-3">
         <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center flex-shrink-0">
           <Layers className="w-5 h-5 text-primary" />
@@ -233,7 +233,7 @@ export function OperationLevelsManager() {
       <div className="border border-border rounded-xl overflow-hidden">
         <table className="w-full text-sm">
           <thead className="bg-muted/30 text-left">
-            <tr className="text-xs text-muted-foreground uppercase">
+            <tr className="text-xs font-medium text-muted-foreground">
               <th className="px-2 py-1.5 w-8"><span className="sr-only">순서</span></th>
               <th className="px-2 py-1.5">표시 라벨</th>
               <th className="px-2 py-1.5">value (식별자)</th>

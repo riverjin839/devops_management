@@ -69,7 +69,7 @@ export function RunLogPanel({ run, show, onShowChange, actions, maxHeight = 'max
                   ? 'border-primary/30 bg-primary/10 text-primary'
                   : s.status === 'failed'
                     ? 'border-status-critical/30 bg-status-critical/10 text-status-critical'
-                    : 'border-status-healthy/30 bg-status-healthy/10 text-status-healthy'
+                    : 'border-border bg-secondary text-muted-foreground'
               }`}
             >
               {s.status === 'running' && <Loader2 className="w-3 h-3 animate-spin" aria-hidden />}

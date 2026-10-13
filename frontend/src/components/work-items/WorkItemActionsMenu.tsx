@@ -118,7 +118,7 @@ export function WorkItemActionsMenu({
             onMouseEnter={openMenu}
             onMouseLeave={scheduleClose}
             style={{ position: 'fixed', top: menuPos.top, right: menuPos.right }}
-            className="z-40 w-60 bg-card border border-border rounded-lg shadow-card p-1"
+            className="z-40 w-60 bg-card border border-border rounded-md shadow-card p-1"
           >
             <button
               onClick={(e) => { e.stopPropagation(); setOpen(false); onEdit(item); }}
@@ -194,8 +194,8 @@ export function WorkItemActionsMenu({
                 title="수정한 내용을 연결된 Confluence 문서에 반영"
               >
                 {confluenceBusy
-                  ? <Loader2 className="w-3.5 h-3.5 animate-spin text-status-info flex-shrink-0" />
-                  : <Upload className="w-3.5 h-3.5 text-status-info flex-shrink-0" />}
+                  ? <Loader2 className="w-3.5 h-3.5 animate-spin text-muted-foreground flex-shrink-0" />
+                  : <Upload className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />}
                 Confluence 문서 동기화
               </button>
             )}

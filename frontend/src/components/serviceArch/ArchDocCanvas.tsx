@@ -1,4 +1,5 @@
 import { forwardRef, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { StickyNote } from 'lucide-react';
 import type { TopoNode, TopoEdge } from '@/types';
 import {
   computeLayout, edgeStyle, kindAccent, statusColor,
@@ -208,7 +209,7 @@ export const ArchDocCanvas = forwardRef<SVGSVGElement, Props>(function ArchDocCa
               {isTraffic && (
                 <text x={mid.x} y={mid.y - 4} fontSize={9} fill={st.stroke}
                   textAnchor="middle" className="pointer-events-none">
-                  {e.flowCount}{e.dropped ? ' ⚠' : ''}
+                  {e.flowCount}{e.dropped ? ' (드롭)' : ''}
                 </text>
               )}
               {/* 플로우 순번 뱃지 */}
@@ -266,7 +267,7 @@ export const ArchDocCanvas = forwardRef<SVGSVGElement, Props>(function ArchDocCa
                 </text>
               )}
               {n.annotated && (
-                <text x={NODE_W - 22} y={48} fontSize={9} className="pointer-events-none">📝</text>
+                <StickyNote x={NODE_W - 22} y={39} size={10} className="text-muted-foreground pointer-events-none" aria-label="주석 있음" />
               )}
             </g>
           );

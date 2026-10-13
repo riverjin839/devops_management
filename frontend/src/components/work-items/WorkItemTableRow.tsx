@@ -12,16 +12,14 @@ import { JiraIssueChip } from './JiraIssueChip';
 import { WorkItemActionsMenu } from './WorkItemActionsMenu';
 import type { WorkItemColumnKey } from './workItemColumns';
 
-// 상태색은 semantic status 토큰으로 (D-011). backlog=대기→unknown, todo=정보→info,
-// in_progress=진행중→warning, done=완료→healthy. review_test 는 status 토큰이 없는
-// 장식(purple)이므로 임의 status 대신 중립 토큰(muted)으로 둔다.
+// 업무 단계는 상태가 아니라 종류라 chart 토큰(lib/statusColors.ts 와 같은 매핑), 완료는 무채색(D-119).
 const KS_DOT: Record<string, string> = {
-  backlog: 'bg-status-unknown', todo: 'bg-status-info', in_progress: 'bg-status-warning',
-  review_test: 'bg-muted-foreground', done: 'bg-status-healthy',
+  backlog: 'bg-chart-8', todo: 'bg-chart-1', in_progress: 'bg-chart-3',
+  review_test: 'bg-chart-4', done: 'bg-muted-foreground/40',
 };
 const KS_TEXT: Record<string, string> = {
-  backlog: 'text-status-unknown', todo: 'text-status-info', in_progress: 'text-status-warning',
-  review_test: 'text-muted-foreground', done: 'text-status-healthy',
+  backlog: 'text-chart-8', todo: 'text-chart-1', in_progress: 'text-chart-3',
+  review_test: 'text-chart-4', done: 'text-muted-foreground',
 };
 const KS_LABEL: Record<string, string> = {
   backlog: 'Backlog', todo: 'To Do', in_progress: 'In Progress',
@@ -38,10 +36,10 @@ const PRI_OPTIONS: Array<'high' | 'medium' | 'low'> = ['high', 'medium', 'low'];
 
 /** Jira statusCategory.key → 점 색. 프로젝트마다 상태명이 달라도 색은 일관되게 간다. */
 const JIRA_CAT_DOT: Record<string, string> = {
-  new: 'bg-status-info', indeterminate: 'bg-status-warning', done: 'bg-status-healthy',
+  new: 'bg-chart-1', indeterminate: 'bg-chart-3', done: 'bg-muted-foreground/40',
 };
 const JIRA_CAT_TEXT: Record<string, string> = {
-  new: 'text-status-info', indeterminate: 'text-status-warning', done: 'text-status-healthy',
+  new: 'text-chart-1', indeterminate: 'text-chart-3', done: 'text-muted-foreground',
 };
 
 /** Jira 이슈 종류 배지 색 — Epic/Sub-task 를 눈으로 바로 구분할 수 있게. */
@@ -219,7 +217,7 @@ function TextareaInline({
         <button type="button" onClick={() => { committed.current = true; onCancel(); }} title="취소" aria-label="취소" className="p-0.5 hover:text-foreground">
           <X className="w-3.5 h-3.5" />
         </button>
-        <span className="ml-auto">Ctrl+Enter 저장 / Esc 취소 · 서식 보존은 ✏ 사용</span>
+        <span className="ml-auto">Ctrl+Enter 저장 / Esc 취소 · 서식 보존은 '전체 수정' 사용</span>
       </div>
     </div>
   );
@@ -460,7 +458,7 @@ export function WorkItemTableRow({
 
       case 'content':
         return (
-          <EditableCell key="content" dataCol="content" isEditing={editing === 'content'} onEnter={() => setEditing('content')} className="max-w-xs" title="클릭하여 수정 (서식 보존은 ✏ 사용)">
+          <EditableCell key="content" dataCol="content" isEditing={editing === 'content'} onEnter={() => setEditing('content')} className="max-w-xs" title="클릭하여 수정 (서식 보존은 '전체 수정' 사용)">
             {editing === 'content' ? (
               <TextareaInline
                 initial={stripHtml(item.content)}
@@ -481,7 +479,7 @@ export function WorkItemTableRow({
 
       case 'result':
         return (
-          <EditableCell key="result" dataCol="result" isEditing={editing === 'resolution'} onEnter={() => setEditing('resolution')} className="max-w-xs" title="클릭하여 수정 (서식 보존은 ✏ 사용)">
+          <EditableCell key="result" dataCol="result" isEditing={editing === 'resolution'} onEnter={() => setEditing('resolution')} className="max-w-xs" title="클릭하여 수정 (서식 보존은 '전체 수정' 사용)">
             {editing === 'resolution' ? (
               <TextareaInline
                 initial={stripHtml(item.resolution ?? '')}

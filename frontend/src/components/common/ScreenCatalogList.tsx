@@ -82,7 +82,7 @@ export function ScreenCatalogList({
         )}
         {grouped.map((group) => (
           <div key={group.label}>
-            <p className="mb-1.5 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+            <p className="mb-1.5 text-xs font-medium text-muted-foreground">
               {group.label}
             </p>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-1">

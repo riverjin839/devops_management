@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Loader2, Wifi, WifiOff, Trash2, Save, KeyRound, Globe, LogIn, ShieldCheck, Download, Copy, Stethoscope } from 'lucide-react';
+import { Loader2, Wifi, WifiOff, Trash2, Save, KeyRound, Globe, LogIn, ShieldCheck, Download, Copy, Stethoscope, AlertTriangle } from 'lucide-react';
 import {
   useJiraConfig, useUpdateJiraConfig, useJiraCredential,
   useDeleteJiraCredential, useJiraTest, useJiraSsoLogin,
@@ -191,7 +191,7 @@ export function JiraIntegrationPanel() {
   return (
     <div className="space-y-6">
       {/* 공통 설정 (관리자) */}
-      <div className="bg-card border border-border rounded-xl p-5">
+      <div className="bg-card border border-border rounded-md p-5">
         <div className="flex items-center gap-2 mb-1">
           <Globe className="w-4 h-4 text-primary" />
           <h3 className="font-semibold">Jira 공통 설정</h3>
@@ -282,7 +282,7 @@ export function JiraIntegrationPanel() {
       </div>
 
       {/* 내 인증 (전 사용자) — PAT 또는 세션 쿠키 */}
-      <div className="bg-card border border-border rounded-xl p-5">
+      <div className="bg-card border border-border rounded-md p-5">
         <div className="flex items-center gap-2 mb-1">
           <KeyRound className="w-4 h-4 text-primary" />
           <h3 className="font-semibold">내 Jira 인증</h3>
@@ -297,7 +297,7 @@ export function JiraIntegrationPanel() {
         <div className="flex items-center gap-2 mb-4 flex-wrap">
           <span className={`inline-flex items-center gap-1 text-sm px-2 py-0.5 rounded-full border ${
             cred?.configured
-              ? 'bg-status-healthy/10 text-status-healthy border-status-healthy/30'
+              ? 'bg-secondary text-foreground border-border'
               : 'bg-secondary text-muted-foreground border-border'
           }`}>
             {cred?.configured
@@ -305,7 +305,7 @@ export function JiraIntegrationPanel() {
               : '미등록'}
           </span>
           {cred?.hasConfluence && (
-            <span className="inline-flex items-center gap-1 text-sm px-2 py-0.5 rounded-full border bg-status-healthy/10 text-status-healthy border-status-healthy/30">
+            <span className="inline-flex items-center gap-1 text-sm px-2 py-0.5 rounded-full border bg-secondary text-muted-foreground border-border">
               Confluence 세션
             </span>
           )}
@@ -419,7 +419,7 @@ export function JiraIntegrationPanel() {
                     )}
                     {(e.cryptoHints?.length ?? 0) > 0 && (
                       <p className="text-status-warning leading-relaxed">
-                        ⚠ 클라이언트 암호화/보안모듈 흔적: {(e.cryptoHints ?? []).join(', ')} —
+                        <AlertTriangle className="inline w-3 h-3 mr-1 align-[-2px]" aria-hidden />클라이언트 암호화/보안모듈 흔적: {(e.cryptoHints ?? []).join(', ')} —
                         이런 페이지는 서버측 폼 로그인이 원리상 불가하므로 "내 PC 도우미" 또는 PAT/세션 쿠키를 사용하세요.
                       </p>
                     )}

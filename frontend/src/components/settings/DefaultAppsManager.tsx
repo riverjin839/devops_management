@@ -78,7 +78,7 @@ export function DefaultAppsManager() {
         ) : (
           sections.map((section) => (
             <div key={section.label}>
-              <p className="px-0.5 pb-1.5 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+              <p className="px-0.5 pb-1.5 text-xs font-medium text-muted-foreground">
                 {section.label}
               </p>
               <div className="flex flex-wrap gap-1.5">

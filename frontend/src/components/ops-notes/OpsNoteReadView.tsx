@@ -1,17 +1,19 @@
-import { Pin, History, ExternalLink } from 'lucide-react';
+import type { ComponentType } from 'react';
+import { Pin, History, ExternalLink, Ship, KeyRound, Bug, Hammer, RefreshCw, Package, Layers, PenLine } from 'lucide-react';
 import { RichContent } from '@/components/editor';
 import { ReactionBar } from '@/components/common';
 import type { OpsNote } from '@/types';
 import { formatRelativeTime } from '@/lib/utils';
 
-const SERVICES = [
-  { value: 'k8s',       label: 'Kubernetes', icon: '☸', accent: 'bg-status-info' },
-  { value: 'keycloak',  label: 'Keycloak',   icon: '🔑', accent: 'bg-orange-500' },
-  { value: 'cilium',    label: 'Cilium',     icon: '🐝', accent: 'bg-status-warning' },
-  { value: 'jenkins',   label: 'Jenkins',    icon: '🏗', accent: 'bg-blue-500' },
-  { value: 'argocd',    label: 'ArgoCD',     icon: '🔄', accent: 'bg-violet-500' },
-  { value: 'nexus',     label: 'Nexus',      icon: '📦', accent: 'bg-status-healthy' },
-  { value: 'etc',       label: '기타',        icon: '📋', accent: 'bg-slate-500' },
+// 서비스 배지 — OpsNotesPage 의 서비스 메타와 같은 lucide 아이콘·chart 토큰(D-126/§12.12-7).
+const SERVICES: { value: string; label: string; Icon: ComponentType<{ className?: string }>; soft: string }[] = [
+  { value: 'k8s',      label: 'Kubernetes', Icon: Ship,      soft: 'bg-chart-1/15 text-chart-1' },
+  { value: 'keycloak', label: 'Keycloak',   Icon: KeyRound,  soft: 'bg-chart-7/15 text-chart-7' },
+  { value: 'cilium',   label: 'Cilium',     Icon: Bug,       soft: 'bg-chart-3/15 text-chart-3' },
+  { value: 'jenkins',  label: 'Jenkins',    Icon: Hammer,    soft: 'bg-chart-6/15 text-chart-6' },
+  { value: 'argocd',   label: 'ArgoCD',     Icon: RefreshCw, soft: 'bg-chart-4/15 text-chart-4' },
+  { value: 'nexus',    label: 'Nexus',      Icon: Package,   soft: 'bg-chart-2/15 text-chart-2' },
+  { value: 'etc',      label: '기타',        Icon: Layers,    soft: 'bg-chart-8/15 text-chart-8' },
 ];
 const SERVICE_MAP = Object.fromEntries(SERVICES.map((s) => [s.value, s]));
 
@@ -28,15 +30,15 @@ export function OpsNoteReadView({ note }: OpsNoteReadViewProps) {
     <div className="space-y-5">
       {/* 메타 정보 */}
       <div className="flex items-center gap-2 flex-wrap text-sm">
-        <span className={`inline-flex items-center gap-1 text-xs font-semibold px-2 py-0.5 rounded-md text-white ${svc?.accent ?? 'bg-slate-500'}`}>
-          {svc?.icon} {svc?.label ?? note.service}
+        <span className={`inline-flex items-center gap-1 text-xs font-semibold px-2 py-0.5 rounded-md ${svc?.soft ?? 'bg-secondary text-muted-foreground'}`}>
+          {svc && <svc.Icon className="w-3 h-3" />} {svc?.label ?? note.service}
         </span>
         {note.pinned && (
           <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-primary/15 text-primary font-semibold">
             <Pin className="w-3 h-3" /> 고정
           </span>
         )}
-        {note.author && <span className="text-muted-foreground">✍ {note.author}</span>}
+        {note.author && <span className="inline-flex items-center gap-1 text-muted-foreground"><PenLine className="w-3 h-3" aria-hidden />{note.author}</span>}
         {note.confluenceUrl && (
           <a
             href={note.confluenceUrl}
@@ -77,7 +79,7 @@ export function OpsNoteReadView({ note }: OpsNoteReadViewProps) {
       {/* 답변 */}
       <div>
         <div className="flex items-center gap-2 mb-2">
-          <span className="inline-flex items-center justify-center w-6 h-6 rounded-md bg-status-healthy/15 text-status-healthy text-sm font-bold flex-shrink-0">
+          <span className="inline-flex items-center justify-center w-6 h-6 rounded-md bg-secondary text-foreground text-sm font-bold flex-shrink-0">
             A
           </span>
           <span className="text-sm font-semibold text-foreground">답변 / 핵심 요약</span>

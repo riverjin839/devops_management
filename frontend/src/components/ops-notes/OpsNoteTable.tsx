@@ -272,7 +272,7 @@ export function OpsNoteTable({
   const serviceMap = Object.fromEntries(services.map((s) => [s.value, s])) as Record<string, OpsNoteServiceMeta>;
 
   return (
-    <div className="bg-card border border-border rounded-xl overflow-hidden">
+    <div className="bg-card border border-border rounded-md overflow-hidden">
       <DoubleScrollX>
         <table className="w-full text-sm">
           <thead>

@@ -110,7 +110,7 @@ export function ReleaseNotesPanel({ open }: Props) {
                     <div className="space-y-3">
                       {entry.sections.map((section) => (
                         <div key={section.name}>
-                          <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-1">
+                          <div className="text-xs font-medium text-muted-foreground mb-1">
                             {section.name}
                           </div>
                           <table className="w-full text-xs border border-border/60 rounded-md overflow-hidden">

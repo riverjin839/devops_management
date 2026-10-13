@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { CheckCircle2, ExternalLink, Loader2, UploadCloud, X } from 'lucide-react';
+import { CheckCircle2, ExternalLink, Loader2, UploadCloud, X, AlertTriangle } from 'lucide-react';
 import { useModalA11y, useToast } from '@/components/common';
 import { useConfluenceDocExport, useConfluenceDocsSettings } from '@/hooks/useConfluenceDocs';
 import { formatApiError } from '@/lib/utils';
@@ -74,7 +74,7 @@ export function ConfluenceExportDialog({ open, onClose, guide }: Props) {
       <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={() => !busy && onClose()} />
       <div
         ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby="confluence-export-title"
-        className="relative bg-card border border-border rounded-2xl shadow-card w-full max-w-md mx-4 max-h-[92vh] overflow-y-auto"
+        className="relative bg-card border border-border rounded-md shadow-card w-full max-w-md mx-4 max-h-[92vh] overflow-y-auto"
       >
         <div className="flex items-center gap-3 px-5 pt-5 pb-3">
           <div className="w-10 h-10 rounded-2xl bg-primary/10 flex items-center justify-center flex-shrink-0">
@@ -110,7 +110,7 @@ export function ConfluenceExportDialog({ open, onClose, guide }: Props) {
                 )}
                 {result.warnings.length > 0 && (
                   <div className="mt-2 space-y-0.5 text-xs text-status-warning">
-                    {result.warnings.map((w, i) => <div key={i}>⚠ {w}</div>)}
+                    {result.warnings.map((w, i) => <div key={i}><AlertTriangle className="inline w-3 h-3 mr-1 align-[-2px]" aria-hidden />{w}</div>)}
                   </div>
                 )}
               </div>

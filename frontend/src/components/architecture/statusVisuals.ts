@@ -1,13 +1,17 @@
 import type { StatusVariant } from '@/components/common/StatusBadge';
 
-/** 상태별 라인/점/아이콘 색상 — CSS var 기반이라 라이트/다크에서 자동 대응 */
+/**
+ * 상태별 라인/점/아이콘 색상 — CSS var 기반이라 라이트/다크에서 자동 대응.
+ * SVG fill/stroke 속성값이라 Tailwind 클래스가 아닌 hsl() 문자열이다.
+ * D-119: 정상(healthy)·중립은 무채색, pending 은 status-unknown.
+ */
 export const STATUS_COLOR: Record<StatusVariant, string> = {
-  healthy: 'hsl(var(--status-healthy))',
+  healthy: 'hsl(var(--muted-foreground))',
   warning: 'hsl(var(--status-warning))',
   critical: 'hsl(var(--status-critical))',
-  pending: 'hsl(var(--status-pending))',
+  pending: 'hsl(var(--status-unknown))',
   info: 'hsl(var(--status-info))',
-  neutral: 'hsl(var(--status-neutral))',
+  neutral: 'hsl(var(--muted-foreground))',
   loading: 'hsl(var(--status-info))',
 };
 

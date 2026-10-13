@@ -318,7 +318,7 @@ export function AgentChat() {
       {isOpen && (
         <div
           style={{ left: NAV_WIDTH + 12 }}
-          className="fixed bottom-4 z-50 w-[420px] h-[560px] bg-card border border-border rounded-2xl shadow-2xl flex flex-col overflow-hidden"
+          className="fixed bottom-4 z-50 w-[420px] h-[560px] bg-card border border-border rounded-md shadow-2xl flex flex-col overflow-hidden"
         >
           {/* Header */}
           <div className="px-4 py-3 border-b border-border flex items-center justify-between bg-card">
@@ -326,7 +326,7 @@ export function AgentChat() {
               <Bot className="w-5 h-5 text-primary" />
               <span className="font-semibold text-sm">AI 어시스턴트</span>
               {isOnline === true && (
-                <span className="w-2 h-2 rounded-full bg-status-healthy" title="온라인" />
+                <span className="w-2 h-2 rounded-full bg-muted-foreground/40" title="온라인" />
               )}
               {isOnline === false && (
                 <span className="flex items-center gap-1 text-sm text-status-warning">

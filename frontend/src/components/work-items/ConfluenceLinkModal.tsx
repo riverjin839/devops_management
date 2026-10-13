@@ -97,7 +97,7 @@ export function ConfluenceLinkModal({ open, onClose }: ConfluenceLinkModalProps)
     <div className="fixed inset-0 z-50 flex items-center justify-center">
       <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={() => !busy && onClose()} />
       <div ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby="confluence-link-modal-title"
-        className="relative bg-card border border-border rounded-2xl shadow-card w-full max-w-lg mx-4 max-h-[92vh] overflow-y-auto">
+        className="relative bg-card border border-border rounded-md shadow-card w-full max-w-lg mx-4 max-h-[92vh] overflow-y-auto">
         <div className="flex items-center gap-3 px-5 pt-5 pb-3">
           <div className="w-10 h-10 rounded-2xl bg-primary/10 flex items-center justify-center flex-shrink-0">
             <DownloadCloud className="w-5 h-5 text-primary" />
@@ -124,7 +124,7 @@ export function ConfluenceLinkModal({ open, onClose }: ConfluenceLinkModalProps)
                 <p className="mt-2 text-sm"><span className="text-muted-foreground">신규</span> <b className="text-status-healthy">{done.imported}</b>건</p>
                 {done.failed.length > 0 && (
                   <div className="mt-2 text-xs text-status-critical">
-                    {done.failed.slice(0, 5).map((e, i) => <div key={i}>⚠ {e}</div>)}
+                    {done.failed.slice(0, 5).map((e, i) => <div key={i}><AlertTriangle className="inline w-3 h-3 mr-1 align-[-2px]" aria-hidden />{e}</div>)}
                   </div>
                 )}
               </div>

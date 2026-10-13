@@ -64,7 +64,7 @@ export function BugFixLogPanel({ open }: Props) {
 
       {versions.map((v) => (
         <section key={v.version} className="border-b border-border">
-          <header className="sticky top-0 z-[1] flex items-center gap-2 px-4 py-2 bg-muted/40 backdrop-blur-sm">
+          <header className="sticky top-0 z-[1] flex items-center gap-2 px-4 py-2 bg-muted">
             <span className="font-mono font-semibold text-sm">v{v.version}</span>
             <span className="text-xs text-muted-foreground">{v.date}</span>
             <span className="ml-auto text-xs px-1.5 py-0.5 rounded-full bg-primary/10 text-primary tabular-nums">

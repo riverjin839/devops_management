@@ -1,7 +1,6 @@
 import { useMemo, useState } from 'react';
 import {
-  AlertTriangle, CheckCircle2, ChevronDown, ChevronRight, DownloadCloud,
-  ExternalLink, Loader2, RotateCcw, Search, X,
+  AlertTriangle, CheckCircle2, ChevronDown, ChevronRight, DownloadCloud, ExternalLink, Loader2, RotateCcw, Search, X,
 } from 'lucide-react';
 import { useModalA11y, useToast } from '@/components/common';
 import { useConfluenceDocImport, useConfluenceDocSearch } from '@/hooks/useConfluenceDocs';
@@ -172,7 +171,7 @@ export function ConfluenceImportModal({ open, onClose }: Props) {
       <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={() => !busy && onClose()} />
       <div
         ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby="confluence-import-title"
-        className="relative bg-card border border-border rounded-2xl shadow-card w-full max-w-2xl mx-4 max-h-[92vh] overflow-y-auto"
+        className="relative bg-card border border-border rounded-md shadow-card w-full max-w-2xl mx-4 max-h-[92vh] overflow-y-auto"
       >
         <div className="flex items-center gap-3 px-5 pt-5 pb-3">
           <div className="w-10 h-10 rounded-2xl bg-primary/10 flex items-center justify-center flex-shrink-0">
@@ -207,7 +206,7 @@ export function ConfluenceImportModal({ open, onClose }: Props) {
                 </div>
                 {done.errors.length > 0 && (
                   <div className="mt-2 text-xs text-status-critical">
-                    {done.errors.slice(0, 5).map((e, i) => <div key={i}>⚠ {e}</div>)}
+                    {done.errors.slice(0, 5).map((e, i) => <div key={i}><AlertTriangle className="inline w-3 h-3 mr-1 align-[-2px]" aria-hidden />{e}</div>)}
                   </div>
                 )}
               </div>
@@ -258,7 +257,7 @@ export function ConfluenceImportModal({ open, onClose }: Props) {
                           <span className="font-medium truncate block">{item.title || item.pageId}</span>
                           <span className="text-[11px] text-muted-foreground">
                             {item.spaceKey}{item.version ? ` · v${item.version}` : ''}
-                            {item.warnings.length > 0 && ` · ⚠ ${item.warnings.length}`}
+                            {item.warnings.length > 0 && ` · 경고 ${item.warnings.length}`}
                           </span>
                         </button>
                         <span className={`px-2 py-0.5 rounded-md text-[11px] font-semibold ${meta.cls}`}>{meta.label}</span>
@@ -281,7 +280,7 @@ export function ConfluenceImportModal({ open, onClose }: Props) {
                               {c.new != null && <> → <span className="text-foreground">{c.new}</span></>}
                             </div>
                           ))}
-                          {item.warnings.map((w, i) => <div key={`w${i}`} className="text-status-warning">⚠ {w}</div>)}
+                          {item.warnings.map((w, i) => <div key={`w${i}`} className="text-status-warning"><AlertTriangle className="inline w-3 h-3 mr-1 align-[-2px]" aria-hidden />{w}</div>)}
                           {item.detail && <div className="text-status-critical">{item.detail}</div>}
                         </div>
                       )}
@@ -320,7 +319,7 @@ export function ConfluenceImportModal({ open, onClose }: Props) {
                     key={m.id} type="button" onClick={() => setMode(m.id)} aria-pressed={mode === m.id}
                     className={`flex-1 px-3 py-2 rounded-xl border text-sm font-medium transition-colors ${
                       mode === m.id
-                        ? 'bg-primary/10 text-primary border-primary/30 ring-2 ring-primary/20'
+                        ? 'bg-primary/10 text-primary border-primary/30'
                         : 'bg-secondary border-border text-muted-foreground hover:text-foreground'
                     }`}
                   >
@@ -340,7 +339,7 @@ export function ConfluenceImportModal({ open, onClose }: Props) {
                           aria-pressed={contributorMode === c.id}
                           className={`flex-1 px-2.5 py-1.5 rounded-lg border text-xs font-medium transition-colors ${
                             contributorMode === c.id
-                              ? 'bg-primary/10 text-primary border-primary/30 ring-2 ring-primary/20'
+                              ? 'bg-primary/10 text-primary border-primary/30'
                               : 'bg-secondary border-border text-muted-foreground hover:text-foreground'
                           }`}
                         >

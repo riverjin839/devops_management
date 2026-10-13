@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import {
   Database, Download, Upload, AlertTriangle, CheckCircle2, Loader2,
-  Info, HardDrive, RotateCcw, Trash2,
+  Info, HardDrive, RotateCcw, Trash2, XCircle,
 } from 'lucide-react';
 import { backupApi } from '@/services/api';
 import type { BackupImportResponse } from '@/services/api';
@@ -27,7 +27,7 @@ export function BackupRestorePanel() {
   const user = useAuthStore((s) => s.user);
   if (!hasRole(user, 'admin')) {
     return (
-      <section className="bg-card border border-border rounded-xl p-5 flex items-start gap-3">
+      <section className="bg-card border border-border rounded-md p-5 flex items-start gap-3">
         <Info className="w-5 h-5 text-muted-foreground shrink-0 mt-0.5" />
         <div>
           <h2 className="font-semibold">관리자 전용</h2>
@@ -64,7 +64,7 @@ function BackupRestorePanelBody() {
   const [previewing, setPreviewing] = useState(false);
   const [applying, setApplying] = useState(false);
   const [confirmReplace, setConfirmReplace] = useState(false);
-  const [resultMsg, setResultMsg] = useState<string | null>(null);
+  const [resultMsg, setResultMsg] = useState<{ ok: boolean; text: string } | null>(null);
 
   const totalRows = metaQ.data?.totalRows ?? 0;
   const logTableRows = useMemo(() => {
@@ -101,7 +101,7 @@ function BackupRestorePanelBody() {
       setPreview(r.data);
     } catch (e: unknown) {
       const err = e as { response?: { data?: { detail?: string } }; message?: string };
-      setResultMsg(`미리보기 실패: ${err.response?.data?.detail ?? err.message}`);
+      setResultMsg({ ok: false, text: `미리보기 실패: ${err.response?.data?.detail ?? err.message}` });
     } finally {
       setPreviewing(false);
     }
@@ -114,14 +114,15 @@ function BackupRestorePanelBody() {
     try {
       const r = await backupApi.importApply(file, mode, includeLogs, mode === 'replace');
       const d = r.data;
-      setResultMsg(
-        `✓ 복구 완료 — 신규 ${d.inserted} · 업데이트 ${d.updated} · 삭제 ${d.deleted}` +
-        (d.errors.length ? ` · 오류 ${d.errors.length}건` : ''),
-      );
+      setResultMsg({
+        ok: true,
+        text: `복구 완료 — 신규 ${d.inserted} · 업데이트 ${d.updated} · 삭제 ${d.deleted}` +
+          (d.errors.length ? ` · 오류 ${d.errors.length}건` : ''),
+      });
       metaQ.refetch();
     } catch (e: unknown) {
       const err = e as { response?: { data?: { detail?: string } }; message?: string };
-      setResultMsg(`복구 실패: ${err.response?.data?.detail ?? err.message}`);
+      setResultMsg({ ok: false, text: `복구 실패: ${err.response?.data?.detail ?? err.message}` });
     } finally {
       setApplying(false);
       setConfirmReplace(false);
@@ -145,7 +146,7 @@ function BackupRestorePanelBody() {
   return (
     <div className="space-y-5">
       {/* ── 현재 DB 요약 ─────────────────────────────────────────────────── */}
-      <section className="bg-card border border-border rounded-xl p-5">
+      <section className="bg-card border border-border rounded-md p-5">
         <header className="flex items-center gap-2 mb-3">
           <HardDrive className="w-5 h-5 text-primary" />
           <h2 className="font-semibold">현재 데이터</h2>
@@ -166,7 +167,7 @@ function BackupRestorePanelBody() {
           <div className="mt-2 max-h-60 overflow-y-auto border border-border rounded-lg">
             <table className="w-full text-sm">
               <thead className="bg-muted/30 sticky top-0">
-                <tr className="text-left text-xs text-muted-foreground uppercase">
+                <tr className="text-left text-xs font-medium text-muted-foreground">
                   <th className="px-2 py-1">테이블</th>
                   <th className="px-2 py-1 text-right">Rows</th>
                   <th className="px-2 py-1">유형</th>
@@ -193,9 +194,9 @@ function BackupRestorePanelBody() {
       </section>
 
       {/* ── 백업 (Export) ────────────────────────────────────────────────── */}
-      <section className="bg-card border border-border rounded-xl p-5">
+      <section className="bg-card border border-border rounded-md p-5">
         <header className="flex items-center gap-2 mb-3">
-          <Download className="w-5 h-5 text-status-healthy" />
+          <Download className="w-5 h-5 text-muted-foreground" />
           <h2 className="font-semibold">백업 (Export)</h2>
         </header>
         <p className="text-sm text-muted-foreground mb-3">
@@ -223,9 +224,9 @@ function BackupRestorePanelBody() {
       </section>
 
       {/* ── 복구 (Import) ────────────────────────────────────────────────── */}
-      <section className="bg-card border border-border rounded-xl p-5">
+      <section className="bg-card border border-border rounded-md p-5">
         <header className="flex items-center gap-2 mb-3">
-          <Upload className="w-5 h-5 text-status-info" />
+          <Upload className="w-5 h-5 text-muted-foreground" />
           <h2 className="font-semibold">복구 (Import)</h2>
         </header>
 
@@ -316,7 +317,7 @@ function BackupRestorePanelBody() {
               <div className="max-h-64 overflow-y-auto">
                 <table className="w-full text-sm">
                   <thead className="bg-muted/30 sticky top-0">
-                    <tr className="text-xs text-muted-foreground uppercase text-left">
+                    <tr className="text-xs font-medium text-muted-foreground text-left">
                       <th className="px-2 py-1">테이블</th>
                       <th className="px-2 py-1 text-right">현재</th>
                       <th className="px-2 py-1 text-right">백업</th>
@@ -346,11 +347,14 @@ function BackupRestorePanelBody() {
 
           {resultMsg && (
             <div className={`px-3 py-2 rounded-lg text-sm border ${
-              resultMsg.startsWith('✓')
+              resultMsg.ok
                 ? 'bg-status-healthy/10 text-status-healthy border-status-healthy/30'
                 : 'bg-status-critical/10 text-status-critical border-status-critical/30'
             }`}>
-              {resultMsg}
+              <span className="inline-flex items-center gap-1.5">
+                {resultMsg.ok ? <CheckCircle2 className="w-4 h-4 flex-shrink-0" aria-hidden /> : <XCircle className="w-4 h-4 flex-shrink-0" aria-hidden />}
+                {resultMsg.text}
+              </span>
             </div>
           )}
 
@@ -387,7 +391,7 @@ function BackupRestorePanelBody() {
       </ConfirmDialog>
 
       {/* ── 도움말 ──────────────────────────────────────────────────────── */}
-      <section className="bg-card border border-border rounded-xl p-5 text-sm text-muted-foreground space-y-1.5">
+      <section className="bg-card border border-border rounded-md p-5 text-sm text-muted-foreground space-y-1.5">
         <p className="flex items-center gap-2 text-foreground font-medium">
           <Database className="w-4 h-4" /> 사용 팁
         </p>

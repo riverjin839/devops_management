@@ -63,7 +63,7 @@ export function InstalledAppOrder({ apps, onMove }: InstalledAppOrderProps) {
   if (apps.length < 2) return null;
   return (
     <div>
-      <p className="px-0.5 pb-1.5 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+      <p className="px-0.5 pb-1.5 text-xs font-medium text-muted-foreground">
         표시 순서
       </p>
       <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>

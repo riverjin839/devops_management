@@ -86,7 +86,7 @@ export function SchemaHealthPanel() {
           <>
             <div className="flex flex-wrap items-center gap-3 mb-3">
               {data.healthy ? (
-                <span className="inline-flex items-center gap-1.5 text-sm text-status-healthy font-medium">
+                <span className="inline-flex items-center gap-1.5 text-sm text-muted-foreground font-medium">
                   <ShieldCheck className="w-4 h-4" /> 모델과 DB 가 일치합니다
                 </span>
               ) : (

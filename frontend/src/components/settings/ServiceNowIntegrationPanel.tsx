@@ -84,7 +84,7 @@ export function ServiceNowIntegrationPanel() {
 
   return (
     <div className="space-y-6">
-      <div className="bg-card border border-border rounded-xl p-5">
+      <div className="bg-card border border-border rounded-md p-5">
         <div className="flex items-center gap-2 mb-1">
           <Globe className="w-4 h-4 text-primary" />
           <h3 className="font-semibold">ServiceNow 공통 설정</h3>
@@ -143,7 +143,7 @@ export function ServiceNowIntegrationPanel() {
         )}
       </div>
 
-      <div className="bg-card border border-border rounded-xl p-5">
+      <div className="bg-card border border-border rounded-md p-5">
         <h3 className="font-semibold mb-3">연결 테스트</h3>
         <button onClick={() => void runTest()} disabled={testConn.isPending}
           className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg border border-border bg-secondary hover:bg-secondary/80 text-sm font-medium disabled:opacity-50">

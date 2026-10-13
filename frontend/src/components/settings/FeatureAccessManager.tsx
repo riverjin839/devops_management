@@ -79,7 +79,7 @@ export function FeatureAccessManager() {
   return (
     <div className="space-y-4">
       {/* ── 화면별 노출 — 단순 on/off ──────────────────────────────────────── */}
-      <div className="bg-card border border-border rounded-xl p-5 space-y-3">
+      <div className="bg-card border border-border rounded-md p-5 space-y-3">
         <div className="flex items-center gap-2">
           <EyeOff className="w-5 h-5 text-primary" />
           <h2 className="text-base font-semibold">화면별 노출</h2>
@@ -131,7 +131,7 @@ export function FeatureAccessManager() {
       </div>
 
       {/* ── 세부 역할/사용자 제한 (고급) ───────────────────────────────────── */}
-      <div className="bg-card border border-border rounded-xl p-5 space-y-4">
+      <div className="bg-card border border-border rounded-md p-5 space-y-4">
         <div className="flex items-center gap-2">
           <ShieldCheck className="w-5 h-5 text-primary" />
           <h2 className="text-base font-semibold">세부 역할 제한 (고급)</h2>
@@ -151,7 +151,7 @@ export function FeatureAccessManager() {
                 <span className="text-sm font-semibold">{f.label}</span>
                 <span className="text-xs text-muted-foreground font-mono">{f.path}</span>
                 <span className={`ml-auto inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full border ${
-                  restricted ? 'bg-status-warning/10 text-status-warning border-status-warning/30' : 'bg-status-healthy/10 text-status-healthy border-status-healthy/30'
+                  restricted ? 'bg-status-warning/10 text-status-warning border-status-warning/30' : 'bg-secondary text-muted-foreground border-border'
                 }`}>
                   <Lock className="w-3 h-3" />{restricted ? '제한됨' : '전체 공개'}
                 </span>

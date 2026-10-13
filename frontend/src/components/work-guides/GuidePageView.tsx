@@ -1,7 +1,6 @@
 import { useState } from 'react';
 import {
-  Plus, Pencil, Trash2, GitFork, Loader2, RefreshCw, UploadCloud,
-  ChevronRight, FileText, CheckCircle, Archive, FileText as FileTextIcon, ExternalLink,
+  Plus, Pencil, Trash2, GitFork, Loader2, RefreshCw, UploadCloud, ChevronRight, FileText, CheckCircle, Archive, FileText as FileTextIcon, ExternalLink, PenLine,
 } from 'lucide-react';
 import { RichContent } from '@/components/editor';
 import { ReactionBar, useToast } from '@/components/common';
@@ -12,7 +11,7 @@ import type { WorkGuide } from '@/types';
 
 const STATUS_CFG: Record<string, { label: string; icon: React.ReactNode; cls: string }> = {
   draft:    { label: '초안', icon: <FileTextIcon className="w-3 h-3" />, cls: 'bg-status-unknown/10 text-status-unknown border-status-unknown/30' },
-  active:   { label: '활성', icon: <CheckCircle className="w-3 h-3" />,  cls: 'bg-status-healthy/10 text-status-healthy border-status-healthy/30' },
+  active:   { label: '활성', icon: <CheckCircle className="w-3 h-3" />,  cls: 'bg-secondary text-muted-foreground border-border' },
   archived: { label: '보관', icon: <Archive className="w-3 h-3" />,      cls: 'bg-status-unknown/10 text-status-unknown border-status-unknown/30' },
 };
 
@@ -97,7 +96,7 @@ export function GuidePageView({ guide, allGuides, onSelect, onEdit, onAddChild, 
                 <span className={`inline-block w-1.5 h-1.5 rounded-full ${pc.dot} mr-1`} />
                 {pc.label}
               </span>
-              {guide.author && <span className="text-muted-foreground">✍ {guide.author}</span>}
+              {guide.author && <span className="inline-flex items-center gap-1 text-muted-foreground"><PenLine className="w-3 h-3" aria-hidden />{guide.author}</span>}
               {guide.confluenceUrl && (
                 <a
                   href={guide.confluenceUrl}

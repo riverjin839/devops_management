@@ -58,7 +58,7 @@ export function SavedScriptEditorModal({
         role="dialog"
         aria-modal="true"
         aria-labelledby={titleId}
-        className="relative bg-card border border-border rounded-2xl shadow-card w-full max-w-xl mx-4 overflow-hidden"
+        className="relative bg-card border border-border rounded-md shadow-card w-full max-w-xl mx-4 overflow-hidden"
       >
         <div className="flex items-start gap-3 px-5 py-4 border-b border-border bg-muted/30">
           <div className="flex-1 min-w-0">
@@ -99,7 +99,7 @@ export function SavedScriptEditorModal({
                     key={l}
                     type="button"
                     onClick={() => setLanguage(l)}
-                    className={`flex-1 px-2 py-1.5 text-sm font-medium rounded-md transition-all ${
+                    className={`flex-1 px-2 py-1.5 text-sm font-medium rounded-md transition-colors ${
                       language === l
                         ? 'bg-background text-foreground shadow-sm'
                         : 'text-muted-foreground hover:text-foreground'

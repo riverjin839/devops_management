@@ -335,7 +335,7 @@ export function WorkItemCalendar({ items, onItemClick }: WorkItemCalendarProps) 
               {tooltip.item.closedAt && (
                 <div className="flex items-center gap-2">
                   <span className="text-sm text-muted-foreground w-[68px] flex-shrink-0">완료일</span>
-                  <span className="text-sm text-status-healthy font-mono">
+                  <span className="text-sm text-foreground font-mono">
                     {tooltip.item.closedAt.slice(0, 10)}
                   </span>
                 </div>

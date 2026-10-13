@@ -217,7 +217,7 @@ export function LlmSettingsTab() {
       return <span className="px-2 py-0.5 text-xs rounded-full bg-status-warning/15 text-status-warning" title={h.detail}>모델 미준비</span>;
     }
     if (h.status === 'online') {
-      return <span className="px-2 py-0.5 text-xs rounded-full bg-status-healthy/15 text-status-healthy">온라인 · {h.latencyMs}ms</span>;
+      return <span className="px-2 py-0.5 text-xs rounded-full bg-secondary text-muted-foreground">온라인 · {h.latencyMs}ms</span>;
     }
     return <span className="px-2 py-0.5 text-xs rounded-full bg-status-critical/15 text-status-critical" title={h.detail}>오프라인</span>;
   };

@@ -12,21 +12,21 @@ import { WorkItemActionsMenu, type WorkItemActionsMenuProps } from './WorkItemAc
 // 색 토큰 — 목록 뷰와 에픽 뷰가 같은 상태/우선순위를 다른 색으로 보여주면 안 되므로 값을
 // 그대로 맞춘다(테이블 전용 인라인 편집 로직은 없어 컴포넌트 자체 공유는 하지 않음).
 const KS_DOT: Record<string, string> = {
-  backlog: 'bg-status-unknown', todo: 'bg-status-info', in_progress: 'bg-status-warning',
-  review_test: 'bg-muted-foreground', done: 'bg-status-healthy',
+  backlog: 'bg-chart-8', todo: 'bg-chart-1', in_progress: 'bg-chart-3',
+  review_test: 'bg-chart-4', done: 'bg-muted-foreground/40',
 };
 const KS_TEXT: Record<string, string> = {
-  backlog: 'text-status-unknown', todo: 'text-status-info', in_progress: 'text-status-warning',
-  review_test: 'text-muted-foreground', done: 'text-status-healthy',
+  backlog: 'text-chart-8', todo: 'text-chart-1', in_progress: 'text-chart-3',
+  review_test: 'text-chart-4', done: 'text-muted-foreground',
 };
 const KS_LABEL: Record<string, string> = {
   backlog: 'Backlog', todo: 'To Do', in_progress: 'In Progress', review_test: 'Review', done: 'Done',
 };
 const JIRA_CAT_DOT: Record<string, string> = {
-  new: 'bg-status-info', indeterminate: 'bg-status-warning', done: 'bg-status-healthy',
+  new: 'bg-chart-1', indeterminate: 'bg-chart-3', done: 'bg-muted-foreground/40',
 };
 const JIRA_CAT_TEXT: Record<string, string> = {
-  new: 'text-status-info', indeterminate: 'text-status-warning', done: 'text-status-healthy',
+  new: 'text-chart-1', indeterminate: 'text-chart-3', done: 'text-muted-foreground',
 };
 const PRI_STYLES: Record<string, { dot: string; text: string; label: string }> = {
   high:   { dot: 'bg-status-critical', text: 'text-status-critical', label: 'High' },

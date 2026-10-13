@@ -92,7 +92,7 @@ function CreateAccountModal({ open, onClose }: { open: boolean; onClose: () => v
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-      <div ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby={f('title')} className="w-full max-w-md bg-card border border-border rounded-2xl p-5 shadow-card">
+      <div ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby={f('title')} className="w-full max-w-md bg-card border border-border rounded-md p-5 shadow-card">
         <h3 id={f('title')} className="text-base font-bold mb-1">관리자 / 서비스 계정 추가</h3>
         <p className="text-sm text-muted-foreground mb-4">담당자 명부에 없는(사번 없는) 로그인 전용 계정을 만듭니다.</p>
         <div className="space-y-3">
@@ -164,7 +164,7 @@ function ResetPasswordModal({ target, onClose }: { target: Assignee | null; onCl
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-      <div ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby={titleId} className="w-full max-w-sm bg-card border border-border rounded-2xl p-5 shadow-card">
+      <div ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby={titleId} className="w-full max-w-sm bg-card border border-border rounded-md p-5 shadow-card">
         <h3 id={titleId} className="text-base font-bold mb-2">{target.username} 비밀번호 재설정</h3>
         <p className="text-sm text-muted-foreground mb-3">새 비밀번호를 입력하세요. 변경 즉시 적용됩니다.</p>
         <input type="password" autoComplete="new-password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)}
@@ -301,7 +301,7 @@ export function AssigneeManager() {
   const sortedAssignees = useMemo(() => assignees, [assignees]);
 
   return (
-    <div className="bg-card border border-border rounded-xl">
+    <div className="bg-card border border-border rounded-md">
       <div className="px-6 py-4 border-b border-border flex flex-wrap items-center justify-between gap-3">
         <div className="flex flex-wrap items-center gap-2 min-w-0">
           <UserCheck className="w-4 h-4 text-primary flex-shrink-0" />
@@ -507,7 +507,7 @@ export function AssigneeManager() {
 
             {/* Add new row */}
             {showAddRow && (
-              <tr className="bg-status-healthy/5 border-t-2 border-status-healthy/30">
+              <tr className="bg-primary/5 border-t-2 border-primary/30">
                 {(['employeeId', 'name', 'email', 'ip', 'seatLocation', 'primaryRole', 'secondaryRole'] as (keyof Assignee)[]).map((field) => (
                   <td key={field} className="px-4 py-2.5">
                     <input
@@ -534,7 +534,7 @@ export function AssigneeManager() {
                         : '부담당 역할 입력'
                       }
                       autoFocus={field === 'name'}
-                      className="w-full px-2 py-1 bg-background border border-status-healthy/40 rounded text-sm focus:outline-none focus:ring-1 focus:ring-status-healthy"
+                      className="w-full px-2 py-1 bg-background border border-border rounded text-sm focus:outline-none focus:ring-1 focus:ring-ring"
                     />
                   </td>
                 ))}
@@ -542,7 +542,7 @@ export function AssigneeManager() {
                 <td className="px-3 py-2.5">
                   <div className="flex items-center gap-1">
                     <button onClick={handleAddAssignee} disabled={!addForm.name.trim()} title="추가" aria-label="추가"
-                      className="p-1.5 rounded bg-status-healthy/10 hover:bg-status-healthy/20 text-status-healthy transition-colors disabled:opacity-40">
+                      className="p-1.5 rounded bg-primary/10 hover:bg-primary/20 text-primary transition-colors disabled:opacity-40">
                       <Check className="w-3.5 h-3.5" />
                     </button>
                     <button onClick={() => setShowAddRow(false)} title="취소" aria-label="취소"

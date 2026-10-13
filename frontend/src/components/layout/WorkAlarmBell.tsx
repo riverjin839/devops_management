@@ -196,7 +196,7 @@ export function WorkAlarmBell() {
             top: Math.max(8, Math.min(anchor.bottom + 8, window.innerHeight - 8 - 440)),
             right: Math.max(8, window.innerWidth - anchor.right),
           }}
-          className="fixed z-[60] w-80 max-h-[70vh] rounded-xl border border-border bg-card shadow-xl flex flex-col overflow-hidden"
+          className="fixed z-[60] w-80 max-h-[70vh] rounded-md border border-border bg-card shadow-xl flex flex-col overflow-hidden"
         >
           <div className="flex items-center justify-between px-3 py-2.5 border-b border-border flex-shrink-0">
             <div className="flex items-center gap-2">

@@ -9,7 +9,7 @@ import type { AlertIncidentAnalysis } from '@/types';
 const STATUS_META: Record<string, { label: string; cls: string }> = {
   queued: { label: '분석 대기', cls: 'bg-secondary text-muted-foreground' },
   running: { label: '분석 중', cls: 'bg-status-warning/15 text-status-warning' },
-  done: { label: '분석 완료', cls: 'bg-status-healthy/15 text-status-healthy' },
+  done: { label: '분석 완료', cls: 'bg-secondary text-muted-foreground' },
   failed: { label: '분석 실패', cls: 'bg-status-critical/15 text-status-critical' },
   skipped: { label: '건너뜀 (부하 제한)', cls: 'bg-muted text-muted-foreground' },
 };
@@ -62,7 +62,7 @@ export function IncidentAnalysisPanel({
   const isRuleBased = (analysis?.analyzedBy ?? '').startsWith('rule_based');
 
   return (
-    <div className="rounded-xl border border-border bg-card/50 p-3 space-y-2">
+    <div className="rounded-md border border-border bg-card p-3 space-y-2">
       <div className="flex items-center gap-2">
         <Sparkles className="w-4 h-4 text-primary" aria-hidden />
         <span className="text-xs font-medium">AI 분석</span>

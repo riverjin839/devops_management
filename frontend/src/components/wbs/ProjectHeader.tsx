@@ -117,7 +117,7 @@ export function ProjectHeader({ project, onDeleted }: Props) {
           </div>
           <div className="h-2 rounded-full bg-black/10 overflow-hidden">
             <div
-              className={`h-full rounded-full transition-all ${dot}`}
+              className={`h-full rounded-full transition-[width] ${dot}`}
               style={{ width: `${project.achievementRate}%` }}
             />
           </div>

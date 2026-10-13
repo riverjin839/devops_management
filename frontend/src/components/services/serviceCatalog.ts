@@ -94,17 +94,17 @@ export const KIND_BY_KEY: Record<string, KindDef> = Object.fromEntries(
 // 컬러 → tailwind 클래스 (StatusBadge 와 같은 매핑이지만 가벼운 버전)
 // 키(이름)는 저장값 호환을 위해 유지하고, 장식 팔레트 키는 chart-N 토큰으로 그린다(D-120). purple·violet 은 chart-4 로 수렴.
 const COLOR_BG: Record<string, string> = {
-  sky:     'bg-status-info/10     text-status-info     border-status-info/30',
-  amber:   'bg-status-warning/10   text-status-warning   border-status-warning/30',
+  sky:     'bg-chart-6/10 text-chart-6 border-chart-6/30',
+  amber:   'bg-chart-3/10 text-chart-3 border-chart-3/30',
   blue:    'bg-chart-1/10 text-chart-1 border-chart-1/30',
   orange:  'bg-chart-7/10 text-chart-7 border-chart-7/30',
   purple:  'bg-chart-4/10 text-chart-4 border-chart-4/30',
-  red:     'bg-status-critical/10     text-status-critical     border-status-critical/30',
+  red:     'bg-chart-5/10 text-chart-5 border-chart-5/30',
   cyan:    'bg-chart-6/10 text-chart-6 border-chart-6/30',
-  emerald: 'bg-status-healthy/10 text-status-healthy border-status-healthy/30',
+  emerald: 'bg-chart-2/10 text-chart-2 border-chart-2/30',
   pink:    'bg-chart-5/10 text-chart-5 border-chart-5/30',
   violet:  'bg-chart-4/10 text-chart-4 border-chart-4/30',
-  slate:   'bg-status-unknown/10   text-status-unknown   border-status-unknown/30',
+  slate:   'bg-chart-8/10 text-chart-8 border-chart-8/30',
 };
 
 export function colorBadgeClass(color: string): string {

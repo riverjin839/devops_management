@@ -6,12 +6,12 @@ import { useCreateProject, useUpdateProject } from '@/hooks/useProjects';
 import { formatApiError } from '@/lib/utils';
 
 const COLOR_OPTIONS = [
-  { value: 'blue',   label: '파랑',  cls: 'bg-blue-500' },
-  { value: 'emerald', label: '초록', cls: 'bg-status-healthy' },
-  { value: 'violet', label: '보라',  cls: 'bg-violet-500' },
-  { value: 'amber',  label: '노랑',  cls: 'bg-status-warning' },
-  { value: 'rose',   label: '빨강',  cls: 'bg-status-critical' },
-  { value: 'slate',  label: '회색',  cls: 'bg-slate-500' },
+  { value: 'blue',   label: '파랑',  cls: 'bg-chart-1' },
+  { value: 'emerald', label: '초록', cls: 'bg-chart-2' },
+  { value: 'violet', label: '보라',  cls: 'bg-chart-4' },
+  { value: 'amber',  label: '노랑',  cls: 'bg-chart-3' },
+  { value: 'rose',   label: '빨강',  cls: 'bg-chart-5' },
+  { value: 'slate',  label: '회색',  cls: 'bg-chart-8' },
 ];
 
 interface Props {
@@ -74,7 +74,7 @@ export function ProjectFormModal({ initial, onClose }: Props) {
       <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={() => !isPending && onClose()} />
       <form
         onSubmit={handleSubmit}
-        className="relative bg-card border border-border rounded-2xl shadow-card w-full max-w-md mx-4 max-h-[90vh] overflow-y-auto"
+        className="relative bg-card border border-border rounded-md shadow-card w-full max-w-md mx-4 max-h-[90vh] overflow-y-auto"
       >
         <div className="flex items-center gap-3 px-5 pt-5 pb-3">
           <div className="w-10 h-10 rounded-2xl bg-primary/10 flex items-center justify-center flex-shrink-0">
@@ -132,8 +132,8 @@ export function ProjectFormModal({ initial, onClose }: Props) {
                   key={c.value}
                   type="button"
                   onClick={() => setColor(c.value)}
-                  className={`w-7 h-7 rounded-full ${c.cls} transition-all ${
-                    color === c.value ? 'ring-2 ring-offset-2 ring-primary scale-110' : 'opacity-60 hover:opacity-100'
+                  className={`w-7 h-7 rounded-full ${c.cls} transition-opacity ${
+                    color === c.value ? 'ring-1 ring-offset-2 ring-primary' : 'opacity-60 hover:opacity-100'
                   }`}
                   title={c.label}
                   aria-label={c.label}

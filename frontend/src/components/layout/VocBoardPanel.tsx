@@ -22,10 +22,11 @@ const STATUS_VARIANT: Record<VocStatus, StatusVariant> = {
   '완료': 'healthy',
 };
 const CATEGORY_CLS: Record<VocCategory, string> = {
-  '문의': 'bg-status-info/10 text-status-info',
-  '개선': 'bg-violet-500/10 text-violet-600',
-  '불만': 'bg-status-critical/10 text-status-critical',
-  '제안': 'bg-status-healthy/10 text-status-healthy',
+  // 분류는 상태가 아니라 종류 — chart 토큰(D-119/§12.12-7).
+  '문의': 'bg-chart-1/10 text-chart-1',
+  '개선': 'bg-chart-4/10 text-chart-4',
+  '불만': 'bg-chart-5/10 text-chart-5',
+  '제안': 'bg-chart-2/10 text-chart-2',
 };
 
 function errMessage(e: unknown, fallback: string): string {
