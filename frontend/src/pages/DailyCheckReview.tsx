@@ -1,7 +1,8 @@
 import { useEffect } from 'react';
+import { PageHeader } from '@/components/common/PageHeader';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import type { AxiosError } from 'axios';
-import { ArrowLeft, Play, Settings, RefreshCw } from 'lucide-react';
+import { Play, Settings, RefreshCw } from 'lucide-react';
 import { MacCard } from '@/components/ui/MacCard';
 import { ClusterSidebar } from '@/components/common/ClusterSidebar';
 import { Skeleton } from '@/components/common';
@@ -83,16 +84,11 @@ export function DailyCheckReviewPage() {
         </div>
         <div className="flex-1 min-w-0 space-y-4">
           <div className="flex items-center gap-3 flex-wrap">
-            <Link
-              to="/"
-              className="inline-flex items-center gap-1.5 rounded-xl border border-border bg-card px-3 py-1.5 text-sm hover:bg-muted"
-            >
-              <ArrowLeft className="w-3.5 h-3.5" />
-              대시보드
-            </Link>
-            <h1 className="text-lg font-semibold flex-1 min-w-[200px]">
-              {cluster ? `${cluster.name} — 일일 점검 리뷰` : '일일 점검 리뷰'}
-            </h1>
+            <PageHeader
+              back={{ to: '/', label: '홈' }}
+              title={cluster ? `${cluster.name} — 일일 점검 리뷰` : '일일 점검 리뷰'}
+              className="flex-1 min-w-[200px]"
+            />
             <button
               type="button"
               onClick={() => {

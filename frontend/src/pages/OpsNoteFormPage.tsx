@@ -1,4 +1,5 @@
 import { useNavigate, useSearchParams } from 'react-router-dom';
+import { PageHeader } from '@/components/common/PageHeader';
 import { ArrowLeft, HelpCircle } from 'lucide-react';
 import { OpsNoteForm } from '@/components/ops-notes';
 import { cn } from '@/lib/utils';
@@ -27,12 +28,7 @@ export function OpsNoteFormPage() {
       </div>
 
       <main className="max-w-[1400px] mx-auto px-8 pt-10 pb-16">
-        <div className="mb-8">
-          <h1 className="text-3xl font-bold text-foreground tracking-tight">새 Q&amp;A</h1>
-          <p className="text-sm text-muted-foreground mt-1">
-            서비스, 질문, 답변, 히스토리를 입력하세요.
-          </p>
-        </div>
+        <PageHeader title="새 Q&A" description="서비스, 질문, 답변, 히스토리를 입력하세요." className="mb-8" />
 
         <div className={cn('border border-border rounded-2xl p-8 shadow-card', 'bg-card')}>
           <OpsNoteForm

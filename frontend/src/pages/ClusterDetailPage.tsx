@@ -1,5 +1,6 @@
 import { Link } from 'react-router-dom';
-import { ArrowLeft, ClipboardCheck, Settings, AlertTriangle, Loader2 } from 'lucide-react';
+import { PageHeader } from '@/components/common/PageHeader';
+import { ClipboardCheck, Settings, AlertTriangle, Loader2 } from 'lucide-react';
 import { ClusterSidebar } from '@/components/common/ClusterSidebar';
 import { MacCard } from '@/components/ui/MacCard';
 import { StatusBadge, statusToVariant } from '@/components/common/StatusBadge';
@@ -59,12 +60,11 @@ export function ClusterDetailPage() {
         <div className="flex-1 min-w-0 space-y-4">
           {/* header */}
           <div className="flex items-center gap-3 flex-wrap">
-            <Link to="/" className="inline-flex items-center gap-1.5 rounded-xl border border-border bg-card px-3 py-1.5 text-sm hover:bg-muted">
-              <ArrowLeft className="w-3.5 h-3.5" /> 대시보드
-            </Link>
-            <h1 className="text-lg font-semibold flex-1 min-w-[200px]">
-              {cluster ? `${cluster.name} — 클러스터 상세` : '클러스터 상세'}
-            </h1>
+            <PageHeader
+              back={{ to: '/', label: '홈' }}
+              title={cluster ? `${cluster.name} — 클러스터 상세` : '클러스터 상세'}
+              className="flex-1 min-w-[200px]"
+            />
             {clusterId && (
               <>
                 <Link to={`/daily-check/review/${clusterId}`} className="inline-flex items-center gap-1.5 rounded-xl border border-border bg-card px-3 py-1.5 text-sm hover:bg-muted">

@@ -1,4 +1,5 @@
 import { useMemo, useState, type ComponentType } from 'react';
+import { PageHeader } from '@/components/common/PageHeader';
 import { useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import {
@@ -335,17 +336,12 @@ export function KnowledgeHubPage() {
         {/* ── 헤더 + 탭 ─────────────────────────────────────────────── */}
         <div className="px-4 lg:px-6 pt-5 pb-2 border-b border-border">
           <div className="flex items-center justify-between gap-3 flex-wrap mb-3">
-            <div className="flex items-center gap-3 min-w-0">
-              <div className="w-10 h-10 rounded-2xl bg-primary/10 flex items-center justify-center flex-shrink-0">
-                <Library className="w-5 h-5 text-primary" />
-              </div>
-              <div className="min-w-0">
-                <h1 className="text-xl font-bold leading-tight">지식 허브</h1>
-                <p className="text-sm text-muted-foreground">
-                  업무 · 노트 · 명령어 · 가이드 · 이슈 · 워크플로우 + 분석 도구를 한 곳에서.
-                </p>
-              </div>
-            </div>
+            <PageHeader
+              icon={Library}
+              title="지식 허브"
+              description="업무 · 노트 · 명령어 · 가이드 · 이슈 · 워크플로우 + 분석 도구를 한 곳에서."
+              className="flex-1 min-w-0"
+            />
           </div>
           {/* 탭 바 */}
           <div className="flex items-center gap-1 flex-wrap">

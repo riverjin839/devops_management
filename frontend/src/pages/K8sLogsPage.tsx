@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react';
+import { PageHeader } from '@/components/common/PageHeader';
 import { useSearchParams } from 'react-router-dom';
 import { useClusterRouteParam } from '@/hooks/useClusterRouteParam';
-import { Link } from 'react-router-dom';
-import { ArrowLeft, ScrollText } from 'lucide-react';
+import { ScrollText } from 'lucide-react';
 import { MacCard } from '@/components/ui/MacCard';
 import { ClusterSidebar } from '@/components/common/ClusterSidebar';
 import { LogViewTabs, NamespaceSingleSelect, PodSingleSelect } from '@/components/common';
@@ -54,13 +54,12 @@ export function K8sLogsPage() {
 
         <div className="flex-1 min-w-0 space-y-4">
           <div className="flex items-center gap-3 flex-wrap">
-            <Link to="/" className="inline-flex items-center gap-1.5 rounded-xl border border-border bg-card px-3 py-1.5 text-sm hover:bg-muted">
-              <ArrowLeft className="w-3.5 h-3.5" /> 대시보드
-            </Link>
-            <h1 className="text-lg font-semibold min-w-[180px] flex items-center gap-2">
-              <ScrollText className="w-4 h-4 text-primary" />
-              {cluster ? `${cluster.name} — 실시간 로그` : '실시간 로그'}
-            </h1>
+            <PageHeader
+              back={{ to: '/', label: '홈' }}
+              icon={ScrollText}
+              title={cluster ? `${cluster.name} — 실시간 로그` : '실시간 로그'}
+              className="min-w-[180px]"
+            />
             <div className="flex-1" />
             <LogViewTabs current="stream" />
           </div>

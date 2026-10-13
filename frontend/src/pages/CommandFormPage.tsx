@@ -1,4 +1,5 @@
 import { useId, useMemo, useState } from 'react';
+import { PageHeader } from '@/components/common/PageHeader';
 import { useNavigate, useParams } from 'react-router-dom';
 import { ArrowLeft, Terminal } from 'lucide-react';
 
@@ -44,14 +45,11 @@ export function CommandFormPage() {
       </div>
 
       <main className="max-w-[1400px] mx-auto px-8 pt-10 pb-16">
-        <div className="mb-8">
-          <h1 className="text-3xl font-bold text-foreground tracking-tight">
-            {editMode ? '명령어 수정' : '새 명령어 등록'}
-          </h1>
-          <p className="text-sm text-muted-foreground mt-1">
-            자주 쓰는 CLI 한 줄을 의미·주의사항·중요도와 함께 기록합니다.
-          </p>
-        </div>
+        <PageHeader
+          title={editMode ? '명령어 수정' : '새 명령어 등록'}
+          description="자주 쓰는 CLI 한 줄을 의미·주의사항·중요도와 함께 기록합니다."
+          className="mb-8"
+        />
 
         <div className="bg-card border border-border rounded-2xl p-8 shadow-card">
           {editMode && listLoading ? (

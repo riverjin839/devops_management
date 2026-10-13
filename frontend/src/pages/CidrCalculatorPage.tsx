@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import { PageHeader } from '@/components/common/PageHeader';
 import { useSearchParams } from 'react-router-dom';
 import {
   AlertTriangle,
@@ -444,15 +445,7 @@ export function CidrCalculatorPage() {
       <main className="max-w-[1440px] mx-auto px-6 py-6 space-y-5">
         {/* ── Page Header ─────────────────────────────────────────────────── */}
         <header className="flex items-center justify-between gap-4 flex-wrap">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-primary/10 text-primary flex items-center justify-center border border-primary/20">
-              <Calculator className="w-5 h-5" />
-            </div>
-            <div>
-              <h1 className="text-lg font-bold tracking-tight">CIDR Calculator</h1>
-              <p className="text-sm text-muted-foreground">서브넷 계산 · 분할 · 충돌 검사</p>
-            </div>
-          </div>
+          <PageHeader icon={Calculator} title="CIDR 계산기" description="서브넷 계산 · 분할 · 충돌 검사" className="flex-1 min-w-0" />
           <div className="flex items-center gap-3 text-xs text-muted-foreground">
             <span className="inline-flex items-center gap-1.5">
               <span className="w-1.5 h-1.5 rounded-full bg-status-info" /> Private (RFC1918)

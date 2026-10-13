@@ -1,5 +1,6 @@
 import { useMemo, useRef, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { PageHeader } from '@/components/common/PageHeader';
+import { useNavigate } from 'react-router-dom';
 import { useClusterRouteParam } from '@/hooks/useClusterRouteParam';
 import {
   ArrowLeft, Boxes, Server, Settings as SettingsIcon, Network, Database, Layers,
@@ -371,13 +372,11 @@ export function K8sManagePage() {
         {/* 본문 */}
         <div className="flex-1 min-w-0 space-y-3">
           <div className="flex items-center gap-3 flex-wrap">
-            <Link to="/cluster-overview" className="inline-flex items-center gap-1.5 rounded-xl border border-border bg-card px-3 py-1.5 text-sm hover:bg-muted">
-              <ArrowLeft className="w-3.5 h-3.5" /> 클러스터 현황
-            </Link>
-            <h1 className="text-lg font-semibold flex items-center gap-2">
-              <Boxes className="w-4 h-4 text-primary" />
-              {cluster ? cluster.name : '클러스터'} — {leaf.label}
-            </h1>
+            <PageHeader
+              back={{ to: '/cluster-overview', label: '클러스터 현황' }}
+              icon={Boxes}
+              title={<>{cluster ? cluster.name : '클러스터'} — {leaf.label}</>}
+            />
             <RoleGate allow={['admin', 'operator']} fallback={
               <span className="text-xs rounded px-1.5 py-0.5 bg-muted text-muted-foreground">읽기 전용 (viewer)</span>
             }>

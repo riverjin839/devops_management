@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { PageHeader } from '@/components/common/PageHeader';
 import { createPortal } from 'react-dom';
 import {
   Activity,
@@ -215,15 +216,7 @@ export function CiliumTracePage() {
       <main className="flex-1 min-w-0 px-4 lg:px-6 py-5 space-y-4 max-w-[1700px]">
         {/* Header */}
         <div className="flex items-center justify-between gap-3 flex-wrap">
-          <div className="flex items-center gap-3 min-w-0">
-            <div className="w-10 h-10 rounded-2xl bg-primary/10 flex items-center justify-center flex-shrink-0">
-              <Waves className="w-5 h-5 text-primary" />
-            </div>
-            <div className="min-w-0">
-              <h1 className="text-xl font-bold leading-tight">Cilium BPF 추적</h1>
-              <p className="text-sm text-muted-foreground">BPF 맵 인스펙터 · cilium monitor · Hubble flow</p>
-            </div>
-          </div>
+          <PageHeader icon={Waves} title="Cilium BPF 추적" description="BPF 맵 인스펙터 · cilium monitor · Hubble flow" className="flex-1 min-w-0" />
           <button
             onClick={() => refetchStatus()}
             disabled={statusLoading || !cid}

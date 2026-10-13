@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import { PageHeader } from '@/components/common/PageHeader';
 import { useNavigate } from 'react-router-dom';
 import { Database, Plus, AlertCircle } from 'lucide-react';
 import { ClusterSidebar } from '@/components/common';
@@ -79,15 +80,12 @@ export function LakeServicesPage() {
         <div className="flex-1 min-w-0 space-y-4">
           {/* Header */}
           <div className="flex items-center gap-3 flex-wrap">
-            <div className="w-9 h-9 rounded-md bg-primary/10 text-primary flex items-center justify-center flex-shrink-0">
-              <Database className="w-4 h-4" />
-            </div>
-            <div className="flex-1 min-w-[180px]">
-              <h1 className="text-lg font-semibold">LAKE 서비스</h1>
-              <p className="text-sm text-muted-foreground">
-                K8s 위의 LAKE 도메인 OSS (airflow / spark / iceberg / trino / starrocks / jupyterlab / superset / polaris) monitoring
-              </p>
-            </div>
+            <PageHeader
+              icon={Database}
+              title="LAKE 서비스"
+              description="K8s 위의 LAKE 도메인 OSS (airflow / spark / iceberg / trino / starrocks / jupyterlab / superset / polaris) 모니터링"
+              className="flex-1 min-w-[180px]"
+            />
             <button
               type="button"
               onClick={() => setAddOpen(true)}

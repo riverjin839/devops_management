@@ -27,6 +27,13 @@
   rebinding) 없앴다 — 호스트명은 허용 대역에 그 호스트명(또는 `*.도메인`)을 직접 적어야 허용된다.
   Backend: `routers/clusters.py` `_ensure_kubeconfig_server_allowed`, `services/cluster_endpoint_policy.py`.
 
+### Changed
+- **페이지 헤더 표준화 1차**: 공용 `PageHeader`(제목 `text-xl font-semibold`, 아이콘은 회색, 뒤로가기는 텍스트 링크)를
+  신설하고 20개 화면을 이관했다 — 배치잡·Cilium 추적·지식 허브·Q&A·WBS·LAKE 서비스(목록/상세)·Pod 병목(목록/상세)·
+  CIDR 계산기·인프라 토폴로지·클러스터 상세·운영 점검·일일 점검 리뷰·점검 항목 관리·점검 항목 상세·실시간 로그·
+  K8s 자원 관리·K8s 상세 관리·명령어/Q&A 폼. 색 배경 아이콘 타일과 pill 모양 뒤로가기, 3xl 제목이 사라지고 모든
+  화면의 제목 줄이 같은 높이·굵기가 된다. (DESIGN.md D-117, DESIGN_SYSTEM §12.12-1)
+
 ### Fixed
 - **클러스터 관리 빈 상태의 등록 버튼이 빈 설정 화면으로 가던 문제**: `/settings?tab=clusters` 가 아니라 실제 탭 id
   `cluster` 로 가고, 설정 화면은 관리자 전용이라 운영자·뷰어에게는 버튼 대신 "관리자에게 요청" 안내를 보인다.

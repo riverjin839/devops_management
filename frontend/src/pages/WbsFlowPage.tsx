@@ -1,4 +1,5 @@
 import { useState, useMemo } from 'react';
+import { PageHeader } from '@/components/common/PageHeader';
 import { useQuery } from '@tanstack/react-query';
 import { workItemsApi } from '@/services/api';
 import type { WorkItem } from '@/types';
@@ -681,15 +682,7 @@ export function WbsFlowPage() {
       <main className="mx-auto px-4 lg:px-6 py-5 space-y-4 max-w-[1800px]">
         {/* ── Page header ─────────────────────────────────────────────── */}
         <div className="flex items-center justify-between gap-3 flex-wrap">
-          <div className="flex items-center gap-3 min-w-0">
-            <div className="w-10 h-10 rounded-2xl bg-primary/10 flex items-center justify-center flex-shrink-0">
-              <BarChart3 className="w-5 h-5 text-primary" />
-            </div>
-            <div className="min-w-0">
-              <h1 className="text-xl font-bold leading-tight">WBS 작업 흐름</h1>
-              <p className="text-sm text-muted-foreground">담당자별 역할 · 날짜별 업무 현황</p>
-            </div>
-          </div>
+          <PageHeader icon={BarChart3} title="WBS 작업 흐름" description="담당자별 역할 · 날짜별 업무 현황" className="flex-1 min-w-0" />
           <div className="flex items-center gap-2">
             {/* 보기 모드 토글 */}
             <div className="flex items-center gap-0.5 bg-secondary rounded-xl p-0.5 text-sm">

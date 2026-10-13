@@ -1,4 +1,5 @@
 import { useNavigate, useParams, useLocation } from 'react-router-dom';
+import { PageHeader } from '@/components/common/PageHeader';
 import { ArrowLeft, HelpCircle, Pencil, Trash2 } from 'lucide-react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { opsNotesApi } from '@/services/api';
@@ -103,10 +104,7 @@ export function OpsNoteDetailPage() {
       <main className="max-w-[1400px] mx-auto px-8 pt-8 pb-16">
         {editMode ? (
           <>
-            <div className="mb-8">
-              <h1 className="text-3xl font-bold text-foreground tracking-tight">Q&amp;A 수정</h1>
-              <p className="text-sm text-muted-foreground mt-1">필요한 항목을 수정한 뒤 폼 하단의 저장 버튼을 누르세요.</p>
-            </div>
+            <PageHeader title="Q&A 수정" description="필요한 항목을 수정한 뒤 폼 하단의 저장 버튼을 누르세요." className="mb-8" />
             <div className={cn('border border-border rounded-2xl p-8 shadow-card', 'bg-card')}>
               <OpsNoteForm
                 initial={note}

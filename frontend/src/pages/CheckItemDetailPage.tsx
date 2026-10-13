@@ -1,6 +1,7 @@
 import { useId, useState } from 'react';
+import { PageHeader } from '@/components/common/PageHeader';
 import { Link, useParams } from 'react-router-dom';
-import { AlertTriangle, ArrowLeft, Loader2, Play, Save } from 'lucide-react';
+import { AlertTriangle, Loader2, Play, Save } from 'lucide-react';
 import { MacCard } from '@/components/ui/MacCard';
 import { StatusBadge, useToast, DoubleScrollX, LogViewer, ConfirmDialog } from '@/components/common';
 import { useClusters } from '@/hooks/useCluster';
@@ -88,10 +89,7 @@ export function CheckItemDetailPage() {
   if (!detail) {
     return (
       <div className="app-min-h-screen bg-background py-3 pr-3 pl-3 space-y-3">
-        <Link to="/" className="inline-flex items-center gap-1.5 rounded-xl border border-border bg-card px-3 py-1.5 text-sm hover:bg-muted">
-          <ArrowLeft className="w-3.5 h-3.5" /> 대시보드
-        </Link>
-        <p className="text-sm text-muted-foreground">항목을 찾을 수 없습니다.</p>
+        <PageHeader back={{ to: '/', label: '홈' }} title="점검 항목" description="항목을 찾을 수 없습니다." />
       </div>
     );
   }
@@ -112,20 +110,22 @@ export function CheckItemDetailPage() {
     <div className="app-min-h-screen bg-background py-3 pr-3 pl-3">
       <div className="max-w-5xl mx-auto space-y-4">
         <div className="flex items-start gap-3">
-          <Link to="/" className="inline-flex items-center gap-1.5 rounded-xl border border-border bg-card px-3 py-1.5 text-sm hover:bg-muted flex-shrink-0">
-            <ArrowLeft className="w-3.5 h-3.5" /> 대시보드
-          </Link>
-          <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-2 flex-wrap">
-              <h1 className="text-lg font-semibold truncate">{item.name}</h1>
-              <ExecTechBadge execTech={item.execTech} />
-              <TargetDuplicateBadge item={item} />
-              {categoryLabel && (
-                <span className="flex-shrink-0 px-1.5 py-0.5 rounded border border-border text-[11px] font-medium text-muted-foreground">
-                  {categoryLabel}
-                </span>
-              )}
-            </div>
+          <PageHeader
+            back={{ to: '/', label: '홈' }}
+            title={item.name}
+            titleExtra={
+              <>
+                <ExecTechBadge execTech={item.execTech} />
+                <TargetDuplicateBadge item={item} />
+                {categoryLabel && (
+                  <span className="flex-shrink-0 px-1.5 py-0.5 rounded border border-border text-[11px] font-medium text-muted-foreground">
+                    {categoryLabel}
+                  </span>
+                )}
+              </>
+            }
+            className="flex-1 min-w-0"
+            description={<>
             {item.description && <p className="text-xs text-muted-foreground mt-0.5">{item.description}</p>}
             <p className="text-[11px] text-muted-foreground mt-0.5">
               소스: <span className="font-mono">{item.sourceType}</span>
@@ -138,7 +138,8 @@ export function CheckItemDetailPage() {
                 {(item.targetPeers ?? []).map((p) => p.name).join(', ')}
               </p>
             )}
-          </div>
+            </>}
+          />
         </div>
 
         <div

@@ -839,7 +839,7 @@ D-117~D-134)에서 원자는 지켜지는데 화면이 "AI 가 만든 템플릿"
 
 | # | 규칙 | 금지 | 대신 |
 |---|---|---|---|
-| 1 | **페이지 헤더는 공용 `PageHeader` 하나**(D-117 로 신설). 모든 페이지에 `<h1>` 정확히 1개, `text-xl font-semibold` | 아이콘 타일(`rounded-* bg-primary/10` 박스), `text-2xl` 이상 h1, uppercase h1, 페이지 헤더를 MacCard 로 감싸기, 첫 MacCard 제목으로 h1 대체 | h1 앞 아이콘은 선택이되 `w-5 h-5 text-muted-foreground`. 부제는 1줄 `text-sm text-muted-foreground` 선택. 뒤로가기는 텍스트 링크 1종 |
+| 1 | **페이지 헤더는 공용 `PageHeader` 하나**(`components/common/PageHeader.tsx`, D-117 — props `title`·`description`·`icon`·`back`·`titleExtra`·`actions`). 모든 페이지에 `<h1>` 정확히 1개, `text-xl font-semibold` | 아이콘 타일(`rounded-* bg-primary/10` 박스), `text-2xl` 이상 h1, uppercase h1, 페이지 헤더를 MacCard 로 감싸기, 첫 MacCard 제목으로 h1 대체 | h1 앞 아이콘은 선택이되 `w-5 h-5 text-muted-foreground`. 부제는 1줄 `text-sm text-muted-foreground` 선택. 뒤로가기는 텍스트 링크 1종 |
 | 2 | **요약 수치는 Health Hero(`/cluster-overview`) 외 KPI 타일 행 금지** | 페이지 상단 "큰 숫자 + 작은 라벨" 3~7개 행, 설정·목록·콘솔 화면의 KPI, 타일 로컬 구현 | 공용 `StatTile`(D-118, ≤4개, `tabular-nums`) 또는 한 줄 표(`WeeklyReportPage` 방식). 0 은 중립색, 아이콘은 의미와 일치 |
 | 3 | **상태색은 비정상에만** | 정상(healthy/done/synced/ok)에 `status-healthy` 보더·배경·점·pill, 한 상태에 시각 신호 2개 이상(보더+배경+점+pill), 상태 토큰을 카테고리·nav 아이콘·업무 진행 상태·버튼 톤에 전용, `brand-ai` 를 AI 배지 외에 사용 | 정상 = `text-muted-foreground` + 체크 아이콘, 색 없음. 상태당 신호 1개. 목록은 비정상 우선 정렬 |
 | 4 | **카드는 섹션 1단, `rounded-md` 만** | 단일 요소(문단·EmptyState·탭 줄·헤더) 래핑, 카드 안 카드, `bg-card` + `rounded-xl/2xl/lg`, hover-lift(`hover:-translate-y`·`hover:scale`), `shadow-lg/xl/2xl`, 비모달 `backdrop-blur`, `bg-gradient-*`, `transition-all`, 비로딩 `animate-pulse/ping` | 구분선·여백·정렬로 먼저 해결. 카드가 필요하면 `MacCard`(헤더 액션은 D-122 슬롯). 그림자는 `shadow-card` 만. 로고는 단색 |

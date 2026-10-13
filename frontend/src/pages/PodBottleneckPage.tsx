@@ -1,4 +1,5 @@
 import { useEffect, useId, useMemo, useRef, useState } from 'react';
+import { PageHeader } from '@/components/common/PageHeader';
 import { useQueryClient } from '@tanstack/react-query';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Activity, Play, AlertCircle, ListTree, Loader2, ExternalLink } from 'lucide-react';
@@ -153,15 +154,12 @@ export function PodBottleneckPage() {
 
         <div className="flex-1 min-w-0 space-y-4">
           <div className="flex items-center gap-3 flex-wrap">
-            <div className="w-9 h-9 rounded-md bg-primary/10 text-primary flex items-center justify-center">
-              <Activity className="w-4 h-4" />
-            </div>
-            <div className="flex-1 min-w-[180px]">
-              <h1 className="text-lg font-semibold">Pod 병목 진단</h1>
-              <p className="text-sm text-muted-foreground">
-                두 pod 사이 L4 TCP / L7 DNS / K8s endpoints 4축 통합 진단
-              </p>
-            </div>
+            <PageHeader
+              icon={Activity}
+              title="Pod 병목 진단"
+              description="두 pod 사이 L4 TCP / L7 DNS / K8s endpoints 4축 통합 진단"
+              className="flex-1 min-w-[180px]"
+            />
           </div>
 
           {/* 진단 폼 */}
