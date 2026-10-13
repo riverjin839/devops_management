@@ -154,7 +154,7 @@ export function CheckMatrixCellDetailModal({ item, cluster, cell, timezone = DEF
         role="dialog"
         aria-modal="true"
         aria-labelledby={titleId}
-        className={`bg-card border border-border rounded-2xl shadow-xl w-full mx-4 max-h-[88vh] overflow-y-auto transition-[max-width] ${
+        className={`bg-card border border-border rounded-md shadow-xl w-full mx-4 max-h-[88vh] overflow-y-auto transition-[max-width] ${
           tab === 'runbook' || tab === 'runs' ? 'max-w-4xl' : 'max-w-2xl'
         }`}
         onClick={(e) => e.stopPropagation()}

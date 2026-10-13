@@ -113,7 +113,7 @@ export function KubeletConfigCollectModal({ open, clusterId, onClose }: Props) {
     <div className="fixed inset-0 z-50 flex items-center justify-center">
       <div className="absolute inset-0 bg-black/60" onClick={() => !collectMut.isPending && onClose()} />
       <div ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby={titleId}
-        className="relative bg-card border border-border rounded-2xl shadow-2xl w-full max-w-3xl mx-4 max-h-[90vh] overflow-hidden flex flex-col">
+        className="relative bg-card border border-border rounded-md shadow-2xl w-full max-w-3xl mx-4 max-h-[90vh] overflow-hidden flex flex-col">
         <div className="flex items-center gap-3 px-5 py-4 border-b border-border bg-muted/30">
           <div className="w-9 h-9 rounded-lg flex items-center justify-center bg-primary/10 text-primary">
             <Cpu className="w-4 h-4" />

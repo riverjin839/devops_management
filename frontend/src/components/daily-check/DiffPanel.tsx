@@ -48,7 +48,7 @@ export function DiffPanel({ diff }: Props) {
         {sections.map((s) =>
           s.items && s.items.length > 0 ? (
             <div key={s.label}>
-              <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-1">
+              <div className="text-xs font-semibold text-muted-foreground mb-1">
                 {s.label}
               </div>
               <ul className="space-y-1">

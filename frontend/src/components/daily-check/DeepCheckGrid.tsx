@@ -9,7 +9,7 @@ interface Props {
 }
 
 const STATUS_ICON: Record<Status, { Icon: typeof CheckCircle2; color: string }> = {
-  healthy:  { Icon: CheckCircle2,  color: 'text-status-healthy'  },
+  healthy:  { Icon: CheckCircle2,  color: 'text-muted-foreground' },
   warning:  { Icon: AlertTriangle, color: 'text-status-warning'  },
   critical: { Icon: XCircle,       color: 'text-status-critical' },
   pending:  { Icon: Clock,         color: 'text-status-unknown'  },
@@ -36,7 +36,7 @@ export function DeepCheckGrid({ results }: Props) {
           return (
             <div
               key={r.id}
-              className="rounded-xl border border-border bg-card p-3.5 space-y-2"
+              className="rounded-md border border-border bg-card p-3.5 space-y-2"
             >
               <div className="flex items-start gap-2">
                 <Icon className={`w-4 h-4 mt-0.5 flex-shrink-0 ${meta.color}`} />

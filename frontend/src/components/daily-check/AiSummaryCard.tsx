@@ -101,7 +101,7 @@ export function AiSummaryCard({ review }: Props) {
 
         {review.aiRemediation && (
           <div className="rounded-xl bg-muted/50 p-3">
-            <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">
+            <div className="text-xs font-semibold text-muted-foreground mb-2">
               조치 권고
             </div>
             <div className="text-sm">

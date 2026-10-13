@@ -6,7 +6,7 @@
  * 실행이 끝난 뒤 펼쳐도 전체 로그가 그대로 있다.
  */
 import { useMemo, useState } from 'react';
-import { Check, Copy, Download, Loader2, ShieldCheck, ShieldX, Square } from 'lucide-react';
+import { Check, Copy, Download, Loader2, ShieldCheck, ShieldX, Square, X } from 'lucide-react';
 import { EmptyState, LogViewer } from '@/components/common';
 import { MacCard } from '@/components/ui/MacCard';
 import { PROVISION_STEPS, type ProvisionStream } from '@/hooks/useK8sRbac';
@@ -23,7 +23,7 @@ function StepChips({ steps, running }: { steps: ProvisionStream['steps']; runnin
         const status = steps[key] ?? 'pending';
         const cls =
           status === 'done'
-            ? 'bg-status-healthy/10 border-status-healthy/30 text-status-healthy font-medium'
+            ? 'bg-secondary border-border text-foreground font-medium'
             : status === 'running'
               ? 'bg-primary/10 border-primary text-primary font-semibold'
               : 'bg-secondary border-border text-muted-foreground';
@@ -105,7 +105,7 @@ export function ProvisionConsole({ stream, showLogs }: ProvisionConsoleProps) {
             <div className="flex-1" />
             {running && (
               <>
-                <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-status-healthy">
+                <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-muted-foreground">
                   <Loader2 className="w-3.5 h-3.5 animate-spin" /> 실행 중
                 </span>
                 <button
@@ -196,9 +196,10 @@ export function ProvisionConsole({ stream, showLogs }: ProvisionConsoleProps) {
                 {denied.length > 0 && (
                   <ul className="space-y-0.5">
                     {denied.map((d, i) => (
-                      <li key={i} className="text-status-warning">
-                        ✘ [{d.namespace}] {d.label}
-                        {d.reason ? ` — ${d.reason}` : ''}
+                      <li key={i} className="flex items-start gap-1 text-status-warning">
+                        <X className="w-3 h-3 mt-0.5 flex-shrink-0" aria-hidden />
+                        <span>[{d.namespace}] {d.label}
+                        {d.reason ? ` — ${d.reason}` : ''}</span>
                       </li>
                     ))}
                   </ul>

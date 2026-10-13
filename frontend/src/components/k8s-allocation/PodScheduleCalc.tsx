@@ -67,7 +67,7 @@ export function PodScheduleCalc({ clusterId }: { clusterId: string }) {
             {result.per.length > 0 && (
               <div data-export-ignore
                 className="hidden group-hover:block group-focus-within:block absolute left-0 top-full mt-1 z-50 w-72 max-h-72 overflow-auto
-                  rounded-lg border border-border bg-card shadow-lg p-2 text-xs">
+                  rounded-md border border-border bg-card shadow-lg p-2 text-xs">
                 <div className="text-muted-foreground mb-1">배치 가능 노드 (alloc−req · max-pods 기준)</div>
                 {result.per.slice(0, 30).map((p) => (
                   <div key={p.name} className="flex items-center justify-between gap-2 py-0.5">

@@ -21,7 +21,7 @@ function Row({ r, selected, onToggle, onDismiss }: {
         aria-label={`${r.namespace}/${r.name} ${r.container} ${r.resource} 선택`} className="accent-primary" />
       <div className="min-w-0">
         <div className="truncate text-xs text-muted-foreground">{r.namespace}</div>
-        <div className="truncate"><span className="text-xs uppercase text-muted-foreground mr-1">{r.kind}</span>{r.name}</div>
+        <div className="truncate"><span className="text-xs text-muted-foreground mr-1">{r.kind}</span>{r.name}</div>
       </div>
       <div className="min-w-0">
         <div className="truncate font-mono text-xs">{r.container}</div>
@@ -35,10 +35,10 @@ function Row({ r, selected, onToggle, onDismiss }: {
           {r.targetLim != null && <span className="text-[11px] text-muted-foreground">limit 동반</span>}
         </div>
       </div>
-      <div className="text-xs uppercase">{r.resource === 'cpu' ? 'CPU' : 'MEM'}</div>
+      <div className="text-xs">{r.resource === 'cpu' ? 'CPU' : 'MEM'}</div>
       <div className="tabular-nums text-right">
         <span className="text-muted-foreground line-through mr-1">{r.currentReqDisplay}</span>
-        <span className="font-medium text-status-healthy">{r.targetReqDisplay}</span>
+        <span className="font-medium text-foreground">{r.targetReqDisplay}</span>
       </div>
       <div className="tabular-nums text-right text-xs text-muted-foreground">
         p{r.reason?.percentile ?? 95} {r.p95Use == null ? '—' : r.resource === 'cpu' ? `${r.p95Use}m` : `${Math.round(r.p95Use / 1024 ** 2)}Mi`}

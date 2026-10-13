@@ -112,8 +112,8 @@ export function UtilPct({ usage, req, lim, className = '' }: {
   const rRatio = utilRatio(usage, req);
   const lRatio = utilRatio(usage, lim);
   if (rRatio == null && lRatio == null) return null;
-  // req 대비: 30% 미만 낭비(amber) · 105% 초과 request 초과(red) · 그 외 적정(green)
-  const rCls = rRatio == null ? 'text-muted-foreground' : rRatio > 1.05 ? 'text-status-critical' : rRatio < 0.3 ? 'text-status-warning' : 'text-status-healthy';
+  // req 대비: 30% 미만 낭비(amber) · 105% 초과 request 초과(red) · 그 외 적정(무채색)
+  const rCls = rRatio == null ? 'text-muted-foreground' : rRatio > 1.05 ? 'text-status-critical' : rRatio < 0.3 ? 'text-status-warning' : 'text-muted-foreground';
   // limit 대비: 90% 이상 스로틀/OOM 위험(red) · 그 외 muted
   const lCls = lRatio == null ? 'text-muted-foreground' : lRatio >= 0.9 ? 'text-status-critical' : 'text-muted-foreground';
   return (
@@ -225,7 +225,7 @@ export function Stat({ label, value, sub, warn, help, valueClassName }: {
 export function CardHeader({ title, onRefresh, refreshing }: { title: string; onRefresh: () => void; refreshing: boolean }) {
   return (
     <div className="flex items-center justify-between mb-2">
-      <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground select-none">{title}</span>
+      <span className="text-xs font-semibold text-muted-foreground select-none">{title}</span>
       <button type="button" onClick={onRefresh} title="새로고침" aria-label={`${title} 새로고침`}
         className="p-1 rounded-md text-muted-foreground hover:bg-secondary hover:text-foreground">
         <RefreshCw className={`w-3.5 h-3.5 ${refreshing ? 'animate-spin' : ''}`} />

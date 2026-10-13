@@ -7,7 +7,7 @@ interface StatusMeta {
 }
 
 const STATUS_META: Record<string, StatusMeta> = {
-  ok:            { label: '정상',      cls: 'bg-status-healthy/10 text-status-healthy border-status-healthy/30', Icon: CheckCircle },
+  ok:            { label: '정상',      cls: 'bg-secondary text-muted-foreground border-border', Icon: CheckCircle },
   error:         { label: '에러',      cls: 'bg-status-critical/10 text-status-critical border-status-critical/30',             Icon: XCircle },
   timeout:       { label: '타임아웃',  cls: 'bg-status-warning/10 text-status-warning border-status-warning/30',       Icon: Clock },
   auth_error:    { label: '인증 실패', cls: 'bg-status-warning/10 text-status-warning border-status-warning/30', Icon: ShieldAlert },

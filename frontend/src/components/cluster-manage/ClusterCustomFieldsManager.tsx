@@ -154,7 +154,7 @@ export function ClusterCustomFieldsManager({ open, onClose }: Props) {
     <div className="fixed inset-0 z-50 flex items-center justify-center">
       <div className="absolute inset-0 bg-black/60" onClick={onClose} />
       <div ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby={titleId}
-        className="relative bg-card border border-border rounded-2xl shadow-2xl w-full max-w-2xl mx-4 max-h-[90vh] overflow-hidden flex flex-col">
+        className="relative bg-card border border-border rounded-md shadow-2xl w-full max-w-2xl mx-4 max-h-[90vh] overflow-hidden flex flex-col">
         <div className="flex items-center gap-3 px-5 py-3 border-b border-border bg-muted/30">
           <Settings2 className="w-5 h-5 text-primary" />
           <h2 id={titleId} className="text-sm font-semibold">클러스터 커스텀 컬럼 관리</h2>
@@ -174,7 +174,7 @@ export function ClusterCustomFieldsManager({ open, onClose }: Props) {
           <div className="border border-border rounded-xl overflow-hidden">
             <table className="w-full text-sm">
               <thead className="bg-muted/30 text-left">
-                <tr className="text-xs text-muted-foreground uppercase">
+                <tr className="text-xs text-muted-foreground">
                   <th className="px-2 py-1.5 w-6"><span className="sr-only">순서</span></th>
                   <th className="px-2 py-1.5">라벨</th>
                   <th className="px-2 py-1.5">key</th>

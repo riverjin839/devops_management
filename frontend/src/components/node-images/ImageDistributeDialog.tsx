@@ -1,7 +1,7 @@
 import { useEffect, useId, useMemo, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
-  X, Send, Play, Loader2, Key, CheckCircle, XCircle, Clock, ShieldAlert, Wifi, ChevronDown, ChevronRight,
+  X, Send, Play, Loader2, Key, CheckCircle, XCircle, Clock, ShieldAlert, Wifi, ChevronDown, ChevronRight, AlertTriangle,
 } from 'lucide-react';
 import {
   bulkExecApi,
@@ -33,7 +33,7 @@ interface Props {
 }
 
 const STATUS_META: Record<BulkExecResultItem['status'], { label: string; cls: string; icon: React.ComponentType<{ className?: string }> }> = {
-  ok:            { label: '완료',     cls: 'bg-status-healthy/10 text-status-healthy border-status-healthy/30', icon: CheckCircle },
+  ok:            { label: '완료',     cls: 'bg-secondary text-muted-foreground border-border', icon: CheckCircle },
   error:         { label: '실패',     cls: 'bg-status-critical/10 text-status-critical border-status-critical/30',             icon: XCircle },
   timeout:       { label: '타임아웃', cls: 'bg-status-warning/10 text-status-warning border-status-warning/30',       icon: Clock },
   auth_error:    { label: '인증 실패', cls: 'bg-status-warning/10 text-status-warning border-status-warning/30', icon: ShieldAlert },
@@ -179,7 +179,7 @@ export function ImageDistributeDialog({
   return (
     <div ref={dialogRef} className="fixed inset-0 z-50 flex items-center justify-center" role="dialog" aria-modal="true" aria-labelledby={f('title')}>
       <div className="absolute inset-0 bg-black/60" onClick={() => !runMut.isPending && onClose()} />
-      <div className="relative bg-card border border-border rounded-2xl shadow-2xl w-full max-w-3xl mx-4 max-h-[92vh] overflow-hidden flex flex-col">
+      <div className="relative bg-card border border-border rounded-md shadow-2xl w-full max-w-3xl mx-4 max-h-[92vh] overflow-hidden flex flex-col">
         {/* 헤더 */}
         <div className="flex items-center gap-3 px-5 py-4 border-b border-border bg-muted/30">
           <div className="w-9 h-9 rounded-lg flex items-center justify-center bg-primary/10 text-primary">
@@ -254,8 +254,9 @@ export function ImageDistributeDialog({
                 />
               )}
               {runtime === 'ctr' && (
-                <p className="mt-1 text-xs text-status-warning">
-                  ⚠ ctr 는 namespace 가 <span className="font-mono">k8s.io</span> 가 아니면 kubelet/K8s 에 이미지가 안 보일 수 있습니다. K8s 노드는 crictl 권장.
+                <p className="mt-1 flex items-start gap-1 text-xs text-status-warning">
+                  <AlertTriangle className="w-3 h-3 mt-0.5 flex-shrink-0" aria-hidden />
+                  <span>ctr 는 namespace 가 <span className="font-mono">k8s.io</span> 가 아니면 kubelet/K8s 에 이미지가 안 보일 수 있습니다. K8s 노드는 crictl 권장.</span>
                 </p>
               )}
             </div>
@@ -364,7 +365,7 @@ export function ImageDistributeDialog({
                     {isMaster && <span className="text-xs px-1.5 py-0.5 rounded-full bg-primary/10 text-primary">master</span>}
                     <span className="ml-auto">
                       {coverageComputing ? null : has ? (
-                        <span className="text-xs px-1.5 py-0.5 rounded-full bg-status-healthy/10 text-status-healthy">보유</span>
+                        <span className="text-xs px-1.5 py-0.5 rounded-full bg-secondary text-foreground">보유</span>
                       ) : (
                         <span className="text-xs px-1.5 py-0.5 rounded-full bg-secondary text-muted-foreground">미보유</span>
                       )}
@@ -473,7 +474,7 @@ function ResultRow({ r }: { r: BulkExecResultItem }) {
       {open && (
         <tr className="bg-muted/5">
           <td colSpan={4} className="px-4 py-2">
-            {r.error && <p className="text-xs text-status-critical mb-1">⚠ {r.error}</p>}
+            {r.error && <p className="flex items-start gap-1 text-xs text-status-critical mb-1"><AlertTriangle className="w-3 h-3 mt-0.5 flex-shrink-0" aria-hidden /><span>{r.error}</span></p>}
             {r.stdout && (
               <pre className="font-mono text-xs bg-background border border-border rounded p-1.5 max-h-40 overflow-auto whitespace-pre-wrap break-all">{r.stdout}</pre>
             )}

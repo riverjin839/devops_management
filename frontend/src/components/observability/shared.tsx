@@ -3,21 +3,21 @@ import { AlertTriangle, CheckCircle2, HelpCircle, Database, Radio, XCircle } fro
 import type { DataSource, LabelPair, MetricState } from '@/types';
 import { parseUTC } from '@/lib/utils';
 
-/** 지표 상태 → 색/아이콘. 전부 테마 토큰(--status-*)이라 3개 테마에서 자동 동작한다. */
+/** 지표 상태 → 색/아이콘. 정상은 무채색, 경고·심각만 상태 토큰(DESIGN_SYSTEM §12.12-3). */
 const STATE_META: Record<MetricState, { cls: string; dot: string; label: string }> = {
   ok: {
-    cls: 'text-[hsl(var(--status-healthy))]',
-    dot: 'bg-[hsl(var(--status-healthy))]',
+    cls: 'text-muted-foreground',
+    dot: 'bg-muted-foreground/40',
     label: '정상',
   },
   warning: {
-    cls: 'text-[hsl(var(--status-warning))]',
-    dot: 'bg-[hsl(var(--status-warning))]',
+    cls: 'text-status-warning',
+    dot: 'bg-status-warning',
     label: '경고',
   },
   critical: {
-    cls: 'text-[hsl(var(--status-critical))]',
-    dot: 'bg-[hsl(var(--status-critical))]',
+    cls: 'text-status-critical',
+    dot: 'bg-status-critical',
     label: '심각',
   },
   unknown: {
@@ -44,15 +44,15 @@ export function stateTextClass(state: MetricState): string {
 /** up/down 같은 이진 상태를 아이콘으로. */
 export function HealthIcon({ healthy }: { healthy: boolean }) {
   return healthy
-    ? <CheckCircle2 className="w-3.5 h-3.5 text-[hsl(var(--status-healthy))]" aria-hidden />
-    : <XCircle className="w-3.5 h-3.5 text-[hsl(var(--status-critical))]" aria-hidden />;
+    ? <CheckCircle2 className="w-3.5 h-3.5 text-muted-foreground" aria-hidden />
+    : <XCircle className="w-3.5 h-3.5 text-status-critical" aria-hidden />;
 }
 
 /** live / snapshot / offline 신선도 배지. push 모드에서 "언제 걷힌 값인지"가 중요하다. */
 export function SourceBadge({ source, collectedAt }: { source: DataSource; collectedAt?: string | null }) {
   const meta = {
-    live: { Icon: Radio, label: '실시간', cls: 'text-[hsl(var(--status-healthy))]' },
-    snapshot: { Icon: Database, label: '스냅샷', cls: 'text-[hsl(var(--status-warning))]' },
+    live: { Icon: Radio, label: '실시간', cls: 'text-muted-foreground' },
+    snapshot: { Icon: Database, label: '스냅샷', cls: 'text-status-warning' },
     offline: { Icon: HelpCircle, label: '미연결', cls: 'text-muted-foreground' },
   }[source] ?? { Icon: HelpCircle, label: source, cls: 'text-muted-foreground' };
 
@@ -167,7 +167,7 @@ export function TableMessage({ colSpan, children, tone = 'muted' }: {
     <tr>
       <td colSpan={colSpan} className="py-12 text-center text-sm">
         <span className={tone === 'warning'
-          ? 'text-[hsl(var(--status-warning))] inline-flex items-center gap-2'
+          ? 'text-status-warning inline-flex items-center gap-2'
           : 'text-muted-foreground inline-flex items-center gap-2'}>
           {tone === 'warning' ? <AlertTriangle className="w-4 h-4" aria-hidden /> : null}
           {children}

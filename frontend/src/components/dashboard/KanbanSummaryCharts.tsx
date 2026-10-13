@@ -28,7 +28,7 @@ interface TooltipPayload {
 function CustomTooltip({ active, payload, label }: { active?: boolean; payload?: TooltipPayload[]; label?: string }) {
   if (!active || !payload?.length) return null;
   return (
-    <div className="bg-card border border-border rounded-lg px-3 py-2 text-sm shadow-lg">
+    <div className="bg-card border border-border rounded-md px-3 py-2 text-sm shadow-lg">
       <p className="font-semibold mb-1">{label}</p>
       {payload.map((p) => (
         <p key={p.name} style={{ color: p.fill }}>{p.name}: {p.value}건</p>
@@ -85,7 +85,7 @@ export function KanbanSummaryCharts({ items, isLoading, selectedClusterId }: Kan
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
       {/* WorkItem 상태 분포 */}
-      <div className="bg-card border border-border rounded-xl p-5">
+      <div className="bg-card border border-border rounded-md p-5">
         <div className="flex items-center justify-between mb-4">
           <div>
             <h3 className="text-sm font-semibold">작업 상태 분포</h3>
@@ -128,7 +128,7 @@ export function KanbanSummaryCharts({ items, isLoading, selectedClusterId }: Kan
       </div>
 
       {/* WorkItem 상태 분포 */}
-      <div className="bg-card border border-border rounded-xl p-5">
+      <div className="bg-card border border-border rounded-md p-5">
         <div className="flex items-center justify-between mb-4">
           <div>
             <h3 className="text-sm font-semibold">이슈 상태 분포</h3>

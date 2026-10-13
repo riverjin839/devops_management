@@ -53,7 +53,7 @@ export function NotificationSettingsPanel() {
             등록된 채널이 없습니다.
           </div>
         ) : (
-          <ul className="divide-y divide-border rounded-xl border border-border bg-card overflow-hidden">
+          <ul className="divide-y divide-border rounded-md border border-border bg-card overflow-hidden">
             {channels.map((c) => (
               <ChannelRow
                 key={c.id}
@@ -108,7 +108,7 @@ function ChannelRow({
         title={channel.enabled ? '비활성화' : '활성화'}
         className={`rounded-lg p-1.5 ${
           channel.enabled
-            ? 'text-status-healthy hover:bg-status-healthy/10'
+            ? 'text-primary hover:bg-primary/10'
             : 'text-muted-foreground hover:bg-muted'
         }`}
       >
@@ -166,7 +166,7 @@ function ChannelForm({
   };
 
   return (
-    <div className="rounded-xl border border-border bg-card/50 p-3 space-y-3">
+    <div className="rounded-md border border-border bg-card p-3 space-y-3">
       <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
         <input
           value={name}

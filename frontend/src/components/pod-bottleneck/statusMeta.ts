@@ -4,7 +4,7 @@ import { CheckCircle, AlertTriangle, XCircle, WifiOff } from 'lucide-react';
 import type { BottleneckStatus } from '@/types';
 
 export const BOTTLENECK_STATUS_META: Record<BottleneckStatus, { label: string; cls: string; icon: typeof CheckCircle }> = {
-  healthy:  { label: '정상',   cls: 'text-status-healthy',  icon: CheckCircle },
+  healthy:  { label: '정상',   cls: 'text-muted-foreground', icon: CheckCircle },
   warning:  { label: '경고',   cls: 'text-status-warning',  icon: AlertTriangle },
   critical: { label: '위험',   cls: 'text-status-critical', icon: XCircle },
   pending:  { label: '미연결', cls: 'text-status-unknown',  icon: WifiOff },

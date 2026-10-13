@@ -123,7 +123,7 @@ function NodeDetails({ details }: { details: Details }) {
   return (
     <div className="space-y-2">
       <div className="flex items-center gap-2">
-        <span className={`text-sm font-semibold font-mono ${ready < total ? 'text-status-warning' : 'text-status-healthy'}`}>
+        <span className={`text-sm font-semibold font-mono ${ready < total ? 'text-status-warning' : 'text-muted-foreground'}`}>
           {ready}/{total} Ready
         </span>
         {issues.length > 0 && (
@@ -134,7 +134,7 @@ function NodeDetails({ details }: { details: Details }) {
       </div>
       <div className="w-full bg-secondary rounded-full h-1.5">
         <div
-          className={`h-1.5 rounded-full transition-all ${pct === 100 ? 'bg-status-healthy' : pct > 80 ? 'bg-status-warning' : 'bg-status-critical'}`}
+          className={`h-1.5 rounded-full transition-[width] ${pct === 100 ? 'bg-muted-foreground/40' : pct > 80 ? 'bg-status-warning' : 'bg-status-critical'}`}
           style={{ width: `${pct}%` }}
         />
       </div>
@@ -165,7 +165,7 @@ function ControlPlaneDetails({ details }: { details: Details }) {
         <div key={comp.name} className="flex items-center justify-between text-sm font-mono">
           <span className="text-muted-foreground flex items-center gap-1.5">
             <span className={`inline-block w-2 h-2 rounded-full ${
-              comp.status === 'healthy' ? 'bg-status-healthy' : comp.status === 'warning' ? 'bg-status-warning' : 'bg-status-critical'
+              comp.status === 'healthy' ? 'bg-muted-foreground/40' : comp.status === 'warning' ? 'bg-status-warning' : 'bg-status-critical'
             }`} />
             {comp.name}
           </span>
@@ -206,7 +206,7 @@ function SystemPodDetails({ details }: { details: Details }) {
       </div>
       <div className="w-full bg-secondary rounded-full h-1.5">
         <div
-          className={`h-1.5 rounded-full transition-all ${displayPct >= 100 ? 'bg-status-healthy' : displayPct > 80 ? 'bg-status-warning' : 'bg-status-critical'}`}
+          className={`h-1.5 rounded-full transition-[width] ${displayPct >= 100 ? 'bg-muted-foreground/40' : displayPct > 80 ? 'bg-status-warning' : 'bg-status-critical'}`}
           style={{ width: `${Math.min(displayPct, 100)}%` }}
         />
       </div>
@@ -223,8 +223,8 @@ function NexusDetails({ details }: { details: Details }) {
   return (
     <div className="space-y-1.5">
       <div className="flex items-center gap-2">
-        <span className={`inline-block w-2 h-2 rounded-full ${writable ? 'bg-status-healthy' : 'bg-status-critical'}`} />
-        <span className={`text-sm font-semibold font-mono ${writable ? 'text-status-healthy' : 'text-status-critical'}`}>
+        <span className={`inline-block w-2 h-2 rounded-full ${writable ? 'bg-muted-foreground/40' : 'bg-status-critical'}`} />
+        <span className={`text-sm font-semibold font-mono ${writable ? 'text-muted-foreground' : 'text-status-critical'}`}>
           {writable ? 'Writable' : 'Read-Only'}
         </span>
       </div>
@@ -242,14 +242,14 @@ function JenkinsDetails({ details }: { details: Details }) {
   const queueItems = Number(details.queueItems ?? 0);
 
   const modeColor = mode === 'NORMAL' && !quietingDown
-    ? 'text-status-healthy' : quietingDown ? 'text-status-warning' : 'text-status-critical';
+    ? 'text-muted-foreground' : quietingDown ? 'text-status-warning' : 'text-status-critical';
 
   return (
     <div className="space-y-1.5">
       <div className="flex items-center justify-between text-sm font-mono">
         <span className="text-muted-foreground flex items-center gap-1.5">
           <span className={`inline-block w-2 h-2 rounded-full ${
-            mode === 'NORMAL' && !quietingDown ? 'bg-status-healthy' : quietingDown ? 'bg-status-warning' : 'bg-status-critical'
+            mode === 'NORMAL' && !quietingDown ? 'bg-muted-foreground/40' : quietingDown ? 'bg-status-warning' : 'bg-status-critical'
           }`} />
           Mode
         </span>
@@ -286,11 +286,11 @@ function ArgoCDDetails({ details }: { details: Details }) {
     <div className="space-y-1.5">
       <div className="flex items-center gap-3 text-sm font-mono">
         <span className="text-muted-foreground">Apps: <strong className="text-foreground">{totalApps}</strong></span>
-        <span className="text-status-healthy">Synced: {synced}</span>
+        <span className="text-muted-foreground">Synced: {synced}</span>
         {outOfSync > 0 && <span className="text-status-warning">OutOfSync: {outOfSync}</span>}
       </div>
       <div className="flex items-center gap-3 text-sm font-mono">
-        <span className="text-status-healthy">Healthy: {healthy}</span>
+        <span className="text-muted-foreground">Healthy: {healthy}</span>
         {degraded > 0 && <span className="text-status-critical">Degraded: {degraded}</span>}
         {progressing > 0 && <span className="text-status-info">Progressing: {progressing}</span>}
       </div>
@@ -324,8 +324,8 @@ function KeycloakDetails({ details }: { details: Details }) {
   return (
     <div className="space-y-1.5">
       <div className="flex items-center gap-2">
-        <span className={`inline-block w-2 h-2 rounded-full ${ready ? 'bg-status-healthy' : 'bg-status-critical'}`} />
-        <span className={`text-sm font-semibold font-mono ${ready ? 'text-status-healthy' : 'text-status-critical'}`}>
+        <span className={`inline-block w-2 h-2 rounded-full ${ready ? 'bg-muted-foreground/40' : 'bg-status-critical'}`} />
+        <span className={`text-sm font-semibold font-mono ${ready ? 'text-muted-foreground' : 'text-status-critical'}`}>
           {ready ? 'Auth Service Ready' : 'Not Ready'}
         </span>
       </div>
@@ -333,7 +333,7 @@ function KeycloakDetails({ details }: { details: Details }) {
         checks.map((chk) => (
           <div key={chk.name} className="flex items-center justify-between text-sm font-mono">
             <span className="text-muted-foreground">{chk.name}</span>
-            <span className={chk.status === 'UP' ? 'text-status-healthy' : 'text-status-critical'}>{chk.status}</span>
+            <span className={chk.status === 'UP' ? 'text-muted-foreground' : 'text-status-critical'}>{chk.status}</span>
           </div>
         ))
       ) : (
@@ -396,7 +396,7 @@ export function AddonCard({ addon, onClick, onEdit, onDelete, onRun }: AddonCard
 
   return (
     <div
-      className="bg-card border border-border rounded-xl p-5 hover:border-muted-foreground/30 transition-all cursor-pointer hover:-translate-y-0.5"
+      className="bg-card border border-border rounded-md p-5 hover:border-muted-foreground/30 transition-colors cursor-pointer"
       onClick={onClick}
       title={hoverDetail || undefined}
     >
@@ -412,7 +412,7 @@ export function AddonCard({ addon, onClick, onEdit, onDelete, onRun }: AddonCard
                 e.stopPropagation();
                 onRun(addon);
               }}
-              className="p-1.5 rounded-md hover:bg-status-healthy/10 text-status-healthy transition-colors"
+              className="p-1.5 rounded-md hover:bg-secondary text-muted-foreground hover:text-foreground transition-colors"
               title="Run this check"
               aria-label="Run this check"
             >
@@ -485,7 +485,7 @@ export function AddonGrid({ addons, isLoading, onAddonClick, onAddDefaultAddons,
     return (
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
         {[...Array(4)].map((_, i) => (
-          <div key={i} className="bg-card border border-border rounded-xl p-5 h-44 animate-pulse" />
+          <div key={i} className="bg-card border border-border rounded-md p-5 h-44 animate-pulse" />
         ))}
       </div>
     );

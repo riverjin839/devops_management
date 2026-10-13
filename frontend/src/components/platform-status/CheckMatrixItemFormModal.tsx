@@ -247,7 +247,7 @@ function ModalChrome({
         role="dialog"
         aria-modal="true"
         aria-labelledby={titleId}
-        className={`bg-card border border-border rounded-2xl shadow-xl w-full ${wide ? 'max-w-2xl' : 'max-w-lg'} mx-4 max-h-[88vh] flex flex-col`}
+        className={`bg-card border border-border rounded-md shadow-xl w-full ${wide ? 'max-w-2xl' : 'max-w-lg'} mx-4 max-h-[88vh] flex flex-col`}
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between px-6 py-4 border-b border-border">
@@ -281,7 +281,7 @@ function RowColorPicker({ color, onChange }: { color: string; onChange: (v: stri
           aria-label="행 배경 색 없음"
           aria-pressed={color === ''}
           className={`w-6 h-6 rounded-full border text-[11px] text-muted-foreground flex items-center justify-center ${
-            color === '' ? 'border-primary ring-2 ring-primary/40' : 'border-border'
+            color === '' ? 'border-primary ring-1 ring-primary/40' : 'border-border'
           }`}
         >
           ×
@@ -295,7 +295,7 @@ function RowColorPicker({ color, onChange }: { color: string; onChange: (v: stri
             aria-label={`행 배경 색 ${p.label}`}
             aria-pressed={color === p.key}
             className={`w-6 h-6 rounded-full ${p.swatch} ${
-              color === p.key ? 'ring-2 ring-primary ring-offset-2 ring-offset-card' : ''
+              color === p.key ? 'ring-1 ring-primary ring-offset-2 ring-offset-card' : ''
             }`}
           />
         ))}
@@ -1423,7 +1423,7 @@ function RegisterItemWizard({ onClose }: { onClose: () => void }) {
                 const Icon = meta?.icon;
                 return (
                   <section key={g.tech || 'none'} aria-label={execTechLabel(g.tech)} className="space-y-1">
-                    <h3 className="flex items-center gap-1.5 text-[11px] font-semibold text-muted-foreground uppercase tracking-wide">
+                    <h3 className="flex items-center gap-1.5 text-[11px] font-semibold text-muted-foreground">
                       {Icon && <Icon className="w-3.5 h-3.5" aria-hidden="true" />}
                       {execTechLabel(g.tech)}
                       {meta?.hint && <span className="font-normal normal-case tracking-normal">· {meta.hint}</span>}
@@ -1468,7 +1468,7 @@ function RegisterItemWizard({ onClose }: { onClose: () => void }) {
               {creatable.length > 0 && (
                 <section aria-label="직접 만들기" className="space-y-1">
                   <div className="flex items-center gap-2 pt-1">
-                    <h3 className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide">직접 만들기</h3>
+                    <h3 className="text-[11px] font-semibold text-muted-foreground">직접 만들기</h3>
                     <span className="flex-1 h-px bg-border" aria-hidden="true" />
                   </div>
                   {creatable.map((opt) => {
@@ -1732,7 +1732,7 @@ function RegisterItemWizard({ onClose }: { onClose: () => void }) {
           ) : (
             <p className="text-xs text-muted-foreground rounded-xl border border-border bg-secondary/40 px-3 py-2">
               {isExistingRunner
-                ? `이미 등록된 ${sourceType === 'batch_job' ? '배치잡' : '플레이북'}은 안전상 저장 전 테스트로 실행하지 않습니다 — 저장 후 매트릭스 셀이나 항목 상세의 ▶ 로 실행하면 실시간 로그로 결과를 볼 수 있습니다.`
+                ? `이미 등록된 ${sourceType === 'batch_job' ? '배치잡' : '플레이북'}은 안전상 저장 전 테스트로 실행하지 않습니다 — 저장 후 매트릭스 셀이나 항목 상세의 실행(재생 아이콘) 버튼으로 실행하면 실시간 로그로 결과를 볼 수 있습니다.`
                 : '수동 입력 항목은 자동 실행이 없어 테스트할 것이 없습니다 — 저장 후 매트릭스 셀에서 값을 직접 기록합니다.'}
             </p>
           )}

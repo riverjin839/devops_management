@@ -203,7 +203,7 @@ export function AddClusterModal({ isOpen, onClose }: AddClusterModalProps) {
       <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={handleClose} />
 
       <div ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby={titleId}
-           className="relative bg-[hsl(var(--card))] border border-border rounded-2xl shadow-2xl w-full max-w-3xl mx-4 overflow-hidden"
+           className="relative bg-card border border-border rounded-md shadow-2xl w-full max-w-3xl mx-4 overflow-hidden"
            style={{ maxHeight: '90vh' }}>
 
         {/* ── Top bar ── */}
@@ -261,9 +261,9 @@ export function AddClusterModal({ isOpen, onClose }: AddClusterModalProps) {
                   <button
                     key={p.id}
                     onClick={() => setProvider(p.id)}
-                    className={`relative flex flex-col items-center gap-2 p-4 rounded-xl border-2 transition-all text-center ${
+                    className={`relative flex flex-col items-center gap-2 p-4 rounded-xl border-2 transition-colors text-center ${
                       provider === p.id
-                        ? `${p.color} shadow-lg scale-[1.02]`
+                        ? p.color
                         : 'border-border bg-card hover:border-primary/30 hover:bg-secondary/50'
                     }`}
                   >
@@ -291,7 +291,7 @@ export function AddClusterModal({ isOpen, onClose }: AddClusterModalProps) {
               <div className="grid grid-cols-2 gap-4">
                 <div className="col-span-2">
                   <div className="flex items-center justify-between mb-1.5">
-                    <label htmlFor={nameId} className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">
+                    <label htmlFor={nameId} className="text-sm font-semibold text-muted-foreground">
                       Cluster Name *
                     </label>
                     <button
@@ -357,7 +357,7 @@ export function AddClusterModal({ isOpen, onClose }: AddClusterModalProps) {
 
                 <div className="col-span-2">
                   <div className="flex items-center justify-between mb-1.5">
-                    <label htmlFor={apiEndpointId} className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">
+                    <label htmlFor={apiEndpointId} className="text-sm font-semibold text-muted-foreground">
                       API Endpoint {skipConnectivity ? '' : '*'}
                     </label>
                     {skipConnectivity && (
@@ -382,7 +382,7 @@ export function AddClusterModal({ isOpen, onClose }: AddClusterModalProps) {
                 </div>
 
                 <div>
-                  <label htmlFor={regionId} className="block text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">
+                  <label htmlFor={regionId} className="block text-sm font-semibold text-muted-foreground mb-1.5">
                     Region
                   </label>
                   <input
@@ -399,7 +399,7 @@ export function AddClusterModal({ isOpen, onClose }: AddClusterModalProps) {
                   <button
                     type="button"
                     onClick={() => setSkipConnectivity(!skipConnectivity)}
-                    className={`w-full flex items-center gap-2 px-3 py-2.5 rounded-lg border-2 transition-all text-sm font-medium ${
+                    className={`w-full flex items-center gap-2 px-3 py-2.5 rounded-lg border-2 transition-colors text-sm font-medium ${
                       skipConnectivity
                         ? 'bg-status-warning/10 border-status-warning/40 text-status-warning'
                         : 'bg-secondary border-border text-muted-foreground hover:border-status-warning/30 hover:text-status-warning/80'
@@ -427,7 +427,7 @@ export function AddClusterModal({ isOpen, onClose }: AddClusterModalProps) {
                 onDrop={handleDrop}
                 onDragOver={(e) => e.preventDefault()}
                 onClick={() => !kubeconfigContent && fileInputRef.current?.click()}
-                className={`relative border-2 border-dashed rounded-xl transition-all cursor-pointer ${
+                className={`relative border-2 border-dashed rounded-xl transition-colors cursor-pointer ${
                   kubeconfigContent
                     ? 'border-primary/40 bg-primary/5'
                     : 'border-border hover:border-primary/40 hover:bg-primary/5'
@@ -466,7 +466,7 @@ export function AddClusterModal({ isOpen, onClose }: AddClusterModalProps) {
               {/* Manual paste */}
               <div>
                 <div className="flex items-center justify-between mb-1.5">
-                  <label htmlFor={kubeconfigId} className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">
+                  <label htmlFor={kubeconfigId} className="text-sm font-semibold text-muted-foreground">
                     또는 직접 붙여넣기
                   </label>
                   <button

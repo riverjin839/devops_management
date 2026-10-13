@@ -5,7 +5,7 @@
  * 겹치거나, 네임스페이스에 별도 정책이 걸려 있을 때). 그래서 SubjectAccessReview 를 쓴다.
  */
 import { useMemo, useState } from 'react';
-import { Play, ShieldCheck } from 'lucide-react';
+import { Check, Play, ShieldCheck, X } from 'lucide-react';
 import { EmptyState, LogViewer, useToastSafe } from '@/components/common';
 import { MacCard } from '@/components/ui/MacCard';
 import { useAccessReview } from '@/hooks/useK8sRbac';
@@ -70,7 +70,7 @@ export function AccessReviewPanel({ clusterId, serviceAccounts, showLogs }: Prop
     return entries
       .map(
         (e) =>
-          `${e.allowed ? '✔ 허용' : '✘ 거부'}  [${e.namespace}] ${e.label}  (${e.verb} ${e.resource}${
+          `${e.allowed ? '허용' : '거부'}  [${e.namespace}] ${e.label}  (${e.verb} ${e.resource}${
             e.subresource ? `/${e.subresource}` : ''
           })${e.reason ? ` — ${e.reason}` : ''}`,
       )
@@ -111,7 +111,7 @@ export function AccessReviewPanel({ clusterId, serviceAccounts, showLogs }: Prop
         <div className="flex-1" />
         {entries && (
           <span className="text-xs text-muted-foreground">
-            <b className={denied.length === 0 ? 'text-status-healthy' : 'text-foreground'}>
+            <b className="text-foreground">
               {entries.length - denied.length}
             </b>
             /{entries.length} 통과
@@ -132,13 +132,13 @@ export function AccessReviewPanel({ clusterId, serviceAccounts, showLogs }: Prop
             <table className="w-full min-w-[520px] text-sm">
               <thead>
                 <tr className="bg-secondary">
-                  <th className="text-left px-3 py-2 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                  <th className="text-left px-3 py-2 text-[11px] font-semibold text-muted-foreground">
                     확인 항목
                   </th>
                   {matrix.namespaces.map((ns) => (
                     <th
                       key={ns}
-                      className="text-left px-3 py-2 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground font-mono whitespace-nowrap"
+                      className="text-left px-3 py-2 text-[11px] font-semibold text-muted-foreground font-mono whitespace-nowrap"
                     >
                       {ns}
                     </th>
@@ -162,11 +162,13 @@ export function AccessReviewPanel({ clusterId, serviceAccounts, showLogs }: Prop
                           <span
                             className={`inline-flex items-center gap-1 text-xs font-semibold ${
                               e.allowed
-                                ? 'text-status-healthy'
+                                ? 'text-muted-foreground'
                                 : 'text-status-critical'
                             }`}
                           >
-                            {e.allowed ? '✔ 허용' : '✘ 거부'}
+                            {e.allowed
+                              ? <><Check className="w-3.5 h-3.5" aria-hidden /> 허용</>
+                              : <><X className="w-3.5 h-3.5" aria-hidden /> 거부</>}
                           </span>
                           {!e.allowed && e.reason && (
                             <div className="text-[11px] text-muted-foreground mt-0.5">{e.reason}</div>

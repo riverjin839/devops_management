@@ -109,7 +109,7 @@ function InputsBlock({ inputs, action }: { inputs: CheckMatrixRunbookInput[]; ac
   return (
     <section>
       <div className="flex items-center justify-between mb-2">
-        <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+        <h3 className="text-xs font-semibold text-muted-foreground">
           적용되는 설정값
         </h3>
         {action}
@@ -403,7 +403,7 @@ export function CheckMatrixRunbookPanel({ runbook, isLoading, editTarget, latest
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <section className="min-w-0">
-          <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">
+          <h3 className="text-xs font-semibold text-muted-foreground mb-2">
             수행되는 명령
           </h3>
           {runbook.commands.length === 0 ? (
@@ -422,7 +422,7 @@ export function CheckMatrixRunbookPanel({ runbook, isLoading, editTarget, latest
         <div className="min-w-0 space-y-3">
           {canEdit && editing && editTarget ? (
             <section>
-              <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">
+              <h3 className="text-xs font-semibold text-muted-foreground mb-2">
                 소스 설정 편집
               </h3>
               <SourceConfigEditor runbook={runbook} editTarget={editTarget} onDone={() => setEditing(false)} />
@@ -446,7 +446,7 @@ export function CheckMatrixRunbookPanel({ runbook, isLoading, editTarget, latest
 
           {runbook.notes.length > 0 && (
             <section>
-              <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">
+              <h3 className="text-xs font-semibold text-muted-foreground mb-2">
                 알아둘 점
               </h3>
               <ul className="space-y-1.5">

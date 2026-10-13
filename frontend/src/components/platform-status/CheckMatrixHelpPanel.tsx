@@ -22,7 +22,7 @@ const TABS: { value: Tab; label: string }[] = [
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <section className="space-y-2">
-      <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">{title}</h3>
+      <h3 className="text-xs font-semibold text-muted-foreground">{title}</h3>
       <div className="text-sm text-foreground/90 space-y-2">{children}</div>
     </section>
   );
@@ -118,7 +118,7 @@ export function CheckMatrixHelpPanel({ open, onClose }: Props) {
                 <Row icon={<StatusDot variant="healthy" />}>이름 옆 점 = 클러스터 종합 상태. 이름을 누르면 원인 목록이 있는 클러스터 상세로 갑니다.</Row>
                 <Row icon={<Clock className="w-3.5 h-3.5" />}>배지 = 핵심 점검 주기(예: 「매일 09:15, 13:15, 18:15」). 점선은 주기 없음,
                   <PauseCircle className="inline w-3 h-3 mx-0.5" />는 주기는 있지만 꺼짐입니다. 눌러서 바꿉니다.</Row>
-                <Row icon={<Play className="w-3.5 h-3.5" />}>「▶ 전체」 = 이 클러스터의 모든 자동 점검을 지금 실행.</Row>
+                <Row icon={<Play className="w-3.5 h-3.5" />}>「전체」(재생 아이콘) = 이 클러스터의 모든 자동 점검을 지금 실행.</Row>
               </ul>
             </Section>
             <Section title="행(항목) 표시">
@@ -149,9 +149,9 @@ export function CheckMatrixHelpPanel({ open, onClose }: Props) {
             <Section title="지금 실행하는 3가지 단위">
               <p>모두 확인창을 거치고, 이미 대기·실행 중인 셀은 다시 큐에 넣지 않습니다(연타·중복 방지).</p>
               <ul className="space-y-2.5">
-                <Row icon={<Play className="w-4 h-4" />}><b>셀 1개</b> — 셀에 마우스를 올리면 나오는 ▶, 또는 셀 상세 우측 상단 「지금 실행」.</Row>
-                <Row icon={<Play className="w-4 h-4" />}><b>클러스터 전체</b> — 열 머리글의 「▶ 전체」. 그 클러스터의 활성 자동 점검 항목 전부.</Row>
-                <Row icon={<Play className="w-4 h-4" />}><b>항목 전체</b> — 행의 「▶ 전 클러스터」. 실행 권한이 있는 클러스터 전부.</Row>
+                <Row icon={<Play className="w-4 h-4" />}><b>셀 1개</b> — 셀에 마우스를 올리면 나오는 재생 아이콘, 또는 셀 상세 우측 상단 「지금 실행」.</Row>
+                <Row icon={<Play className="w-4 h-4" />}><b>클러스터 전체</b> — 열 머리글의 「전체」(재생 아이콘). 그 클러스터의 활성 자동 점검 항목 전부.</Row>
+                <Row icon={<Play className="w-4 h-4" />}><b>항목 전체</b> — 행의 「전 클러스터」(재생 아이콘). 실행 권한이 있는 클러스터 전부.</Row>
               </ul>
             </Section>
             <Section title="실시간 실행 로그">

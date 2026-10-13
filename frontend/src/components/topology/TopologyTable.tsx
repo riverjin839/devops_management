@@ -6,7 +6,7 @@ import type { TopoNode, TopoEdge, TopologyTrafficEdge } from '@/types';
 import { KIND_ABBR, EDGE_TYPE_LABEL, kindRank, statusGlyph } from './topologyShared';
 
 const STATUS_TEXT: Record<string, string> = {
-  critical: 'text-status-critical', warning: 'text-status-warning', healthy: 'text-status-healthy',
+  critical: 'text-status-critical', warning: 'text-status-warning', healthy: 'text-muted-foreground',
 };
 const STATUS_LABEL: Record<string, string> = { critical: '위험', warning: '경고', healthy: '정상' };
 

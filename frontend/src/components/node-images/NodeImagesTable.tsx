@@ -34,14 +34,14 @@ export function NodeImagesTable({ nodes, searchQuery, onDistribute }: Props) {
 
   if (filtered.length === 0) {
     return (
-      <div className="bg-card border border-border rounded-xl p-8 text-center text-muted-foreground text-sm">
+      <div className="bg-card border border-border rounded-md p-8 text-center text-muted-foreground text-sm">
         {searchQuery ? `"${searchQuery}"에 해당하는 노드/이미지가 없습니다.` : '노드 이미지 정보가 없습니다.'}
       </div>
     );
   }
 
   return (
-    <div className="bg-card border border-border rounded-xl overflow-hidden">
+    <div className="bg-card border border-border rounded-md overflow-hidden">
       <table className="w-full text-sm">
         <thead className="bg-muted/20">
           <tr>
@@ -215,7 +215,7 @@ function RoleBadge({ role }: { role: string }) {
 function StatusBadge({ status }: { status: string }) {
   const cls =
     status === 'ready'
-      ? 'bg-status-healthy/15 text-status-healthy'
+      ? 'bg-secondary text-muted-foreground'
       : status === 'not-ready'
       ? 'bg-status-critical/15 text-status-critical'
       : 'bg-muted text-muted-foreground';

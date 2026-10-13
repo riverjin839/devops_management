@@ -26,7 +26,7 @@ export const fmtN = (n: number) => n.toLocaleString();
 // 과할당 노드는 slack(alloc-req) 이 음수가 될 수 있다 — 초록 "여유"로 표시하면 실제로는
 // 부족한 노드가 정상처럼 보인다. 부호에 따라 라벨/색을 함께 바꾼다.
 export const slackLabel = (m: number) => (m < 0 ? '부족' : '여유');
-export const slackCls = (m: number) => (m < 0 ? 'text-status-critical' : 'text-status-healthy');
+export const slackCls = (m: number) => (m < 0 ? 'text-status-critical' : 'text-foreground');
 
 /** 효율 판정: 사용량/request 비율 → 배지. usage 없으면 null.
  * 임계값(30%/105%)은 UtilPct 와 반드시 동일해야 한다 — 한쪽은 반올림 정수, 한쪽은 원시
@@ -42,7 +42,7 @@ export function efficiency(reqM: number, usageM: number | null): EffKind {
 }
 export const EFF_BADGE: Record<Exclude<EffKind, null>, { label: string; cls: string }> = {
   over: { label: 'request 과대', cls: 'bg-status-warning/10 text-status-warning border-status-warning/30' },
-  ok: { label: '적정', cls: 'bg-status-healthy/10 text-status-healthy border-status-healthy/30' },
+  ok: { label: '적정', cls: 'bg-secondary text-muted-foreground border-border' },
   under: { label: '사용 초과', cls: 'bg-status-critical/10 text-status-critical border-status-critical/30' },
 };
 

@@ -101,7 +101,7 @@ export function MetricsTable({ rows, isLoading, emptyMessage, onEdit }: MetricsT
                           <p className="text-xs text-muted-foreground">{row.help}</p>
                         ) : null}
                         {row.error ? (
-                          <p className="text-xs text-[hsl(var(--status-critical))]">{row.error}</p>
+                          <p className="text-xs text-status-critical">{row.error}</p>
                         ) : null}
                         <div>
                           <div className="text-xs font-semibold text-muted-foreground mb-1">PromQL</div>

@@ -14,7 +14,7 @@ interface Props {
 }
 
 const VERDICT_CLS: Record<string, string> = {
-  FORWARDED: 'bg-status-healthy/10 text-status-healthy border-status-healthy/30',
+  FORWARDED: 'bg-secondary text-muted-foreground border-border',
   DROPPED:   'bg-status-critical/10 text-status-critical border-status-critical/30',
   AUDIT:     'bg-status-warning/10 text-status-warning border-status-warning/30',
   TRACED:    'bg-status-info/10 text-status-info border-status-info/30',
@@ -99,7 +99,7 @@ export function HubbleTimeline({ clusterId, initialFromPod, initialToPod, initia
 
   return (
     <div className="space-y-3">
-      <div className="bg-card border border-border rounded-xl p-3 flex items-end gap-2 flex-wrap">
+      <div className="bg-card border border-border rounded-md p-3 flex items-end gap-2 flex-wrap">
         <div className="flex-1 min-w-[180px]">
           <label htmlFor={f('fromPod')} className="block text-xs text-muted-foreground mb-0.5">From Pod (ns/name)</label>
           <input id={f('fromPod')} value={fromPod} onChange={(e) => setFromPod(e.target.value)}
@@ -188,18 +188,18 @@ export function HubbleTimeline({ clusterId, initialFromPod, initialToPod, initia
               </span>
             )}
           </div>
-          <div className="bg-card border border-border rounded-xl overflow-hidden">
+          <div className="bg-card border border-border rounded-md overflow-hidden">
             <DoubleScrollX>
               <table className="w-full text-sm">
                 <thead className="bg-muted/30 text-left">
                   <tr>
-                    <th className="px-2 py-1.5 text-xs font-medium text-muted-foreground uppercase">Time</th>
-                    <th className="px-2 py-1.5 text-xs font-medium text-muted-foreground uppercase">Verdict</th>
-                    <th className="px-2 py-1.5 text-xs font-medium text-muted-foreground uppercase">Source</th>
-                    <th className="px-2 py-1.5 text-xs font-medium text-muted-foreground uppercase">Destination</th>
-                    <th className="px-2 py-1.5 text-xs font-medium text-muted-foreground uppercase">L4</th>
-                    <th className="px-2 py-1.5 text-xs font-medium text-muted-foreground uppercase">Dir</th>
-                    <th className="px-2 py-1.5 text-xs font-medium text-muted-foreground uppercase">Summary / Drop Reason</th>
+                    <th className="px-2 py-1.5 text-xs font-medium text-muted-foreground">Time</th>
+                    <th className="px-2 py-1.5 text-xs font-medium text-muted-foreground">Verdict</th>
+                    <th className="px-2 py-1.5 text-xs font-medium text-muted-foreground">Source</th>
+                    <th className="px-2 py-1.5 text-xs font-medium text-muted-foreground">Destination</th>
+                    <th className="px-2 py-1.5 text-xs font-medium text-muted-foreground">L4</th>
+                    <th className="px-2 py-1.5 text-xs font-medium text-muted-foreground">Dir</th>
+                    <th className="px-2 py-1.5 text-xs font-medium text-muted-foreground">Summary / Drop Reason</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -214,7 +214,7 @@ export function HubbleTimeline({ clusterId, initialFromPod, initialToPod, initia
       )}
 
       {!resp && (
-        <div className="bg-card border border-border rounded-xl p-10 text-center text-sm text-muted-foreground">
+        <div className="bg-card border border-border rounded-md p-10 text-center text-sm text-muted-foreground">
           <Info className="w-8 h-8 mx-auto mb-2 text-muted-foreground" />
           필터를 입력하고 "플로우 조회" 를 눌러 Hubble Relay 에서 최근 패킷 플로우를 가져오세요.
         </div>

@@ -41,7 +41,7 @@ export function CheckMatrixHistoryPanel({ itemId, clusterId, unit, seriesName }:
     <>
       <section>
         <div className="flex items-center justify-between mb-2">
-          <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">추이</h3>
+          <h3 className="text-xs font-semibold text-muted-foreground">추이</h3>
           <div className="flex items-center rounded-md border border-border overflow-hidden text-xs">
             {DAY_OPTIONS.map((d) => (
               <button
@@ -76,7 +76,7 @@ export function CheckMatrixHistoryPanel({ itemId, clusterId, unit, seriesName }:
       </section>
 
       <section>
-        <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">변경 이력</h3>
+        <h3 className="text-xs font-semibold text-muted-foreground mb-2">변경 이력</h3>
         {(history?.changes.length ?? 0) === 0 ? (
           <div className="text-sm text-muted-foreground italic">기록이 없습니다.</div>
         ) : (

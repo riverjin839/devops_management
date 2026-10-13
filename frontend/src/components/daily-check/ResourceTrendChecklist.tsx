@@ -127,7 +127,7 @@ export function ResourceTrendChecklist({ clusterId }: { clusterId: string }) {
             <span className="text-right tabular-nums text-muted-foreground">{num(r.d28)}</span>
             <span className="text-sm"><TrendCell row={r} /></span>
             <span className="flex justify-center">
-              <RoleGate allow={['admin', 'operator']} fallback={r.isChecked ? <Check className="w-4 h-4 text-status-healthy" /> : <span className="text-muted-foreground">-</span>}>
+              <RoleGate allow={['admin', 'operator']} fallback={r.isChecked ? <Check className="w-4 h-4 text-muted-foreground" /> : <span className="text-muted-foreground">-</span>}>
                 <input type="checkbox" checked={r.isChecked} onChange={() => toggleCheck(r)} title={r.checkedBy ? `${r.checkedBy} · ${r.checkedAt ? parseUTC(r.checkedAt).toLocaleString('ko-KR') : ''}` : ''}
                   className="w-4 h-4 accent-primary cursor-pointer" />
               </RoleGate>
@@ -183,7 +183,7 @@ function ScheduleModal({ onClose }: { onClose: () => void }) {
 
   return (
     <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4" onClick={onClose}>
-      <div ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby="trend-schedule-title" className="bg-card w-full max-w-md rounded-2xl border border-border overflow-hidden" onClick={(e) => e.stopPropagation()}>
+      <div ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby="trend-schedule-title" className="bg-card w-full max-w-md rounded-md border border-border overflow-hidden" onClick={(e) => e.stopPropagation()}>
         <div id="trend-schedule-title" className="px-5 py-3 border-b border-border font-semibold text-sm">자동 스냅샷 동작 주기</div>
         <div className="p-4 space-y-4 text-sm">
           <label className="flex items-center gap-2">
@@ -258,7 +258,7 @@ function ItemsModal({ clusterId, onClose }: { clusterId: string; onClose: () => 
 
   return (
     <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4" onClick={onClose}>
-      <div ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby="trend-items-title" className="bg-card w-full max-w-2xl max-h-[80vh] rounded-2xl border border-border flex flex-col overflow-hidden" onClick={(e) => e.stopPropagation()}>
+      <div ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby="trend-items-title" className="bg-card w-full max-w-2xl max-h-[80vh] rounded-md border border-border flex flex-col overflow-hidden" onClick={(e) => e.stopPropagation()}>
         <div id="trend-items-title" className="px-5 py-3 border-b border-border font-semibold text-sm">추적 항목 관리</div>
         <div className="p-4 space-y-3 overflow-auto">
           {err && <div className="text-sm text-status-critical">{err}</div>}

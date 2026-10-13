@@ -127,7 +127,7 @@ export function NodeNicsCollectModal({ open, clusterId, onClose }: Props) {
     <div className="fixed inset-0 z-50 flex items-center justify-center">
       <div className="absolute inset-0 bg-black/60" onClick={() => !collectMut.isPending && onClose()} />
       <div ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby={titleId}
-        className="relative bg-card border border-border rounded-2xl shadow-2xl w-full max-w-4xl mx-4 max-h-[90vh] overflow-hidden flex flex-col">
+        className="relative bg-card border border-border rounded-md shadow-2xl w-full max-w-4xl mx-4 max-h-[90vh] overflow-hidden flex flex-col">
         <div className="flex items-center gap-3 px-5 py-4 border-b border-border bg-muted/30">
           <div className="w-9 h-9 rounded-lg flex items-center justify-center bg-primary/10 text-primary">
             <Network className="w-4 h-4" />
@@ -302,7 +302,7 @@ export function NodeNicsCollectModal({ open, clusterId, onClose }: Props) {
                     {result.hosts.map((h) => (
                       <tr key={h.host} className="border-t border-border align-top">
                         <td className="px-2 py-1.5 font-mono">{h.host}</td>
-                        <td className={`px-2 py-1.5 ${h.status === 'ok' ? 'text-status-healthy' : 'text-status-critical'}`}>
+                        <td className={`px-2 py-1.5 ${h.status === 'ok' ? 'text-muted-foreground' : 'text-status-critical'}`}>
                           {h.status}
                         </td>
                         <td className="px-2 py-1.5">
@@ -334,7 +334,7 @@ export function NodeNicsCollectModal({ open, clusterId, onClose }: Props) {
                                 <div key={ifc.name} className="flex items-start gap-1.5 flex-wrap">
                                   <span className="font-mono text-foreground">{ifc.name}</span>
                                   <span className={`text-[11px] px-1 rounded ${
-                                    ifc.operstate === 'UP' ? 'bg-status-healthy/15 text-status-healthy' : 'bg-muted text-muted-foreground'
+                                    ifc.operstate === 'UP' ? 'bg-secondary text-foreground' : 'bg-muted text-muted-foreground'
                                   }`}>{ifc.operstate ?? '?'}</span>
                                   {ifc.addrs.map((a) => {
                                     const isPub = !isPrivateIp(a.ip);

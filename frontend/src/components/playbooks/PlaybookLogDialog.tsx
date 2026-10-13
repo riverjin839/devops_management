@@ -81,7 +81,7 @@ export function PlaybookLogDialog({ playbook, onClose }: PlaybookLogDialogProps)
         role="dialog"
         aria-modal="true"
         aria-label={`${playbook.name} 실행 로그`}
-        className="fixed inset-4 sm:inset-10 z-50 bg-card border border-border rounded-2xl shadow-2xl flex flex-col overflow-hidden"
+        className="fixed inset-4 sm:inset-10 z-50 bg-card border border-border rounded-md shadow-2xl flex flex-col overflow-hidden"
       >
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-3 border-b border-border flex-shrink-0">
@@ -111,8 +111,8 @@ export function PlaybookLogDialog({ playbook, onClose }: PlaybookLogDialogProps)
           <section>
             <SectionTitle icon={isSuccess ? CheckCircle : XCircle} title="실행 요약" tone={isSuccess ? 'success' : 'error'} />
             <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2">
-              <SummaryCell label="Return Code" value={returncode ?? '—'} accent={returncode === 0 ? 'success' : returncode == null ? 'neutral' : 'error'} />
-              <SummaryCell label="OK"          value={totals.ok ?? 0}          accent="success" />
+              <SummaryCell label="Return Code" value={returncode ?? '—'} accent={returncode === 0 || returncode == null ? 'neutral' : 'error'} />
+              <SummaryCell label="OK"          value={totals.ok ?? 0}          accent="neutral" />
               <SummaryCell label="Changed"     value={totals.changed ?? 0}     accent="warning" />
               <SummaryCell label="Failures"    value={totals.failures ?? 0}    accent={(totals.failures ?? 0) > 0 ? 'error' : 'neutral'} />
               <SummaryCell label="Unreachable" value={totals.unreachable ?? 0} accent={(totals.unreachable ?? 0) > 0 ? 'error' : 'neutral'} />
@@ -134,11 +134,11 @@ export function PlaybookLogDialog({ playbook, onClose }: PlaybookLogDialogProps)
                   <thead className="bg-secondary/50">
                     <tr>
                       <th className="px-3 py-1.5 text-left font-medium">Host</th>
-                      <th className="px-3 py-1.5 text-right font-medium text-status-healthy">OK</th>
-                      <th className="px-3 py-1.5 text-right font-medium text-status-warning">Changed</th>
-                      <th className="px-3 py-1.5 text-right font-medium text-status-critical">Failures</th>
-                      <th className="px-3 py-1.5 text-right font-medium text-orange-500">Unreachable</th>
-                      <th className="px-3 py-1.5 text-right font-medium text-slate-400">Skipped</th>
+                      <th className="px-3 py-1.5 text-right font-medium">OK</th>
+                      <th className="px-3 py-1.5 text-right font-medium">Changed</th>
+                      <th className="px-3 py-1.5 text-right font-medium">Failures</th>
+                      <th className="px-3 py-1.5 text-right font-medium">Unreachable</th>
+                      <th className="px-3 py-1.5 text-right font-medium">Skipped</th>
                     </tr>
                   </thead>
                   <tbody className="font-mono">
@@ -267,7 +267,7 @@ function SectionTitle({
   return (
     <div className={`flex items-center gap-1.5 ${inline ? '' : 'mb-2'}`}>
       {Icon && <Icon className={`w-4 h-4 ${toneClass}`} />}
-      <h3 className={`text-sm font-semibold uppercase tracking-wider ${toneClass}`}>{title}</h3>
+      <h3 className={`text-sm font-semibold ${toneClass}`}>{title}</h3>
     </div>
   );
 }
@@ -286,7 +286,7 @@ function SummaryCell({
     : 'text-foreground';
   return (
     <div className="bg-secondary/50 border border-border rounded-lg px-3 py-2">
-      <p className="text-xs text-muted-foreground uppercase tracking-wider">{label}</p>
+      <p className="text-xs text-muted-foreground">{label}</p>
       <p className={`text-lg font-bold tabular-nums ${cls}`}>{value}</p>
     </div>
   );

@@ -206,7 +206,7 @@ export function AlertNotifyRulesPanel({ clusters, canEdit }: {
                           onClick={(e) => { e.stopPropagation(); void remove(rule); }}
                           title="규칙 삭제"
                           aria-label={`${rule.name} 규칙 삭제`}
-                          className="p-1 rounded-xl text-muted-foreground hover:bg-secondary hover:text-[hsl(var(--status-critical))] transition-colors"
+                          className="p-1 rounded-xl text-muted-foreground hover:bg-secondary hover:text-status-critical transition-colors"
                         >
                           <Trash2 className="w-3.5 h-3.5" />
                         </button>

@@ -598,7 +598,7 @@ export function DayScheduleBoard({ selectedClusterId }: DayScheduleBoardProps) {
             {/* 시간 미지정 (하단) */}
             {allDay.length > 0 && (
               <div className="mt-2 rounded-xl border border-border/60 bg-secondary/20 p-2">
-                <div className="flex items-center gap-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-1.5">
+                <div className="flex items-center gap-1 text-xs font-semibold text-muted-foreground mb-1.5">
                   <Clock3 className="w-3 h-3" /> 시간 미지정 · {allDay.length}
                 </div>
                 <div className="space-y-1">
@@ -754,7 +754,7 @@ function AddBlockMenu({
   return (
     <>
       <div className="fixed inset-0 z-30" onClick={onClose} />
-      <div className="absolute left-2 right-2 z-40 bg-card border border-border rounded-xl shadow-card p-1.5"
+      <div className="absolute left-2 right-2 z-40 bg-card border border-border rounded-md shadow-card p-1.5"
         style={{ top: Math.max(0, y) }}>
         <div className="flex items-center justify-between px-1.5 py-1">
           <span className="text-xs font-semibold tabular-nums">{fmtMin(minute)} 에 추가</span>
@@ -762,7 +762,7 @@ function AddBlockMenu({
         </div>
         {candidates.length > 0 && (
           <>
-            <div className="px-1.5 py-0.5 text-[11px] uppercase tracking-wide text-muted-foreground">기존 업무에 시간 추가</div>
+            <div className="px-1.5 py-0.5 text-[11px] text-muted-foreground">기존 업무에 시간 추가</div>
             <div className="max-h-40 overflow-y-auto">
               {candidates.map((it) => (
                 <button key={it.id} onClick={() => onPickItem(it)}

@@ -108,7 +108,7 @@ function DefaultsTab() {
         <Toggle checked={form.keepGuaranteed} onChange={(v) => set('keepGuaranteed', v)} label="Guaranteed(req=lim) 유지 — limit 도 같이 내림" />
       </div>
       <div className="rounded-lg border border-border p-2">
-        <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-1.5">ResourceQuota 탄력 기본값</div>
+        <div className="text-xs font-semibold text-muted-foreground mb-1.5">ResourceQuota 탄력 기본값</div>
         <div className="grid grid-cols-2 md:grid-cols-6 gap-2">
           <Field label="확장 임계(used/hard)"><Num value={form.quota.upThreshold} step={0.05} min={0.1} onChange={(v) => setQ('upThreshold', v ?? 0.85)} /></Field>
           <Field label="회수 임계(used/hard)"><Num value={form.quota.lowThreshold} step={0.05} min={0} onChange={(v) => setQ('lowThreshold', v ?? 0.5)} /></Field>
@@ -248,7 +248,7 @@ function NamespaceTab({ clusterId, initialNamespace }: { clusterId: string; init
             </div>
             <div className="rounded-lg border border-border p-2 space-y-2">
               <div className="flex items-center gap-2">
-                <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">ResourceQuota</span>
+                <span className="text-xs font-semibold text-muted-foreground">ResourceQuota</span>
                 <button type="button" className={BTN} onClick={() => { setLoadQuotas(true); if (quotasQ.data) prefillQuota(); }}
                   disabled={quotasQ.isFetching} title="클러스터에서 현재 Quota 를 읽어 기본값 채우기">
                   <Download className="w-3.5 h-3.5" /> 라이브 Quota 불러오기
@@ -267,7 +267,7 @@ function NamespaceTab({ clusterId, initialNamespace }: { clusterId: string; init
               </div>
             </div>
             <div className="rounded-lg border border-border p-2">
-              <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-1.5">right-size 오버라이드(비우면 전역)</div>
+              <div className="text-xs font-semibold text-muted-foreground mb-1.5">right-size 오버라이드(비우면 전역)</div>
               <div className="grid grid-cols-3 gap-2">
                 <Field label="headroom(%)"><Num value={form.headroomPct} min={0} onChange={(v) => set('headroomPct', v)} placeholder="전역" /></Field>
                 <Field label="쿨다운(분)"><Num value={form.cooldownMinutes} min={0} onChange={(v) => set('cooldownMinutes', v)} placeholder="전역" /></Field>
@@ -276,7 +276,7 @@ function NamespaceTab({ clusterId, initialNamespace }: { clusterId: string; init
             </div>
             <div className="rounded-lg border border-border p-2 space-y-2">
               <div className="flex items-center gap-2">
-                <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">오퍼레이터 CR 어댑터</span>
+                <span className="text-xs font-semibold text-muted-foreground">오퍼레이터 CR 어댑터</span>
                 <span className="text-[11px] text-muted-foreground">예: StarRocks CN — starrocks.com / v1 / starrocksclusters / spec.starRocksCnSpec.replicas</span>
                 <button type="button" className={`${BTN} ml-auto`} onClick={() => set('targets', [...form.targets, { ...EMPTY_TARGET }])}>
                   <Plus className="w-3.5 h-3.5" /> 추가
@@ -374,7 +374,7 @@ export function PolicyDialog({ clusterId, open, onClose, initialTab = 'namespace
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 p-4" data-export-ignore>
       <div ref={ref} role="dialog" aria-modal="true" aria-label="자원 효율화 정책 설정"
-        className="w-full max-w-5xl max-h-[90vh] overflow-auto rounded-xl border border-border bg-card shadow-xl">
+        className="w-full max-w-5xl max-h-[90vh] overflow-auto rounded-md border border-border bg-card shadow-xl">
         <div className="flex items-center gap-2 px-4 py-2 border-b border-border sticky top-0 bg-card z-10">
           <span className="font-semibold">자원 효율화 정책</span>
           <div className="inline-flex rounded-xl border border-border bg-muted/20 p-0.5 ml-2">

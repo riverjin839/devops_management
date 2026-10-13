@@ -126,7 +126,7 @@ export function MetricEditModal({ isOpen, onClose, moduleKey, editing }: MetricE
         role="dialog"
         aria-modal="true"
         aria-labelledby={`${formId}-title`}
-        className="bg-card border border-border rounded-2xl shadow-xl w-full max-w-2xl mx-4 max-h-[90vh] overflow-y-auto"
+        className="bg-card border border-border rounded-md shadow-xl w-full max-w-2xl mx-4 max-h-[90vh] overflow-y-auto"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between px-6 py-4 border-b border-border sticky top-0 bg-card rounded-t-2xl z-10">
@@ -276,7 +276,7 @@ export function MetricEditModal({ isOpen, onClose, moduleKey, editing }: MetricE
             <button
               onClick={handleDelete}
               disabled={busy}
-              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-sm text-[hsl(var(--status-critical))] hover:bg-secondary transition-colors disabled:opacity-50"
+              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-sm text-status-critical hover:bg-secondary transition-colors disabled:opacity-50"
             >
               <Trash2 className="w-4 h-4" aria-hidden /> 삭제
             </button>

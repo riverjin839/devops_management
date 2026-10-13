@@ -75,7 +75,7 @@ const NodeCard = memo(function NodeCard({ n, onRefresh, refreshing, onOpenDetail
   onOpenDetail: (name: string) => void;
 }) {
   return (
-    <div className="rounded-lg border border-border bg-card/50 p-2.5 h-full">
+    <div className="rounded-md border border-border bg-card p-2.5 h-full">
       <div className="flex items-center justify-between mb-1">
         <button
           type="button"

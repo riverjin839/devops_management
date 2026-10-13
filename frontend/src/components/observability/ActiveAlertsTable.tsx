@@ -5,9 +5,9 @@ import { LabelTable, ROW, TD, TH, TableMessage, formatTime } from './shared';
 const COLS = 7;
 
 const SEVERITY_CLS: Record<string, string> = {
-  critical: 'text-[hsl(var(--status-critical))] font-semibold',
-  warning: 'text-[hsl(var(--status-warning))]',
-  info: 'text-[hsl(var(--status-info))]',
+  critical: 'text-status-critical font-semibold',
+  warning: 'text-status-warning',
+  info: 'text-status-info',
 };
 
 /** 지금 발화/대기 중인 알람 (Prometheus + Alertmanager 병합). */
@@ -49,8 +49,8 @@ export function ActiveAlertsTable({ rows, isLoading, emptyMessage }: {
                 >
                   <td className={`${TD} text-xs ${
                     alert.state === 'firing'
-                      ? 'text-[hsl(var(--status-critical))]'
-                      : 'text-[hsl(var(--status-warning))]'
+                      ? 'text-status-critical'
+                      : 'text-status-warning'
                   }`}>
                     {alert.state}
                   </td>
@@ -59,7 +59,7 @@ export function ActiveAlertsTable({ rows, isLoading, emptyMessage }: {
                   </td>
                   <td className={`${TD} font-medium truncate max-w-[16rem]`}>
                     {alert.alertname}
-                    <span className="ml-2 text-[11px] text-muted-foreground uppercase">{alert.origin}</span>
+                    <span className="ml-2 text-[11px] text-muted-foreground">{alert.origin}</span>
                   </td>
                   <td className={`${TD} text-xs text-muted-foreground truncate`}>{alert.namespace ?? '—'}</td>
                   <td className={`${TD} font-mono text-xs truncate max-w-[12rem]`}>{alert.resource ?? '—'}</td>

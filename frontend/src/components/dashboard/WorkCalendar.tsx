@@ -211,7 +211,7 @@ export function WorkCalendar({ selectedClusterId }: WorkCalendarProps) {
               <span className="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-status-info/10 text-status-info">
                 <Clock className="w-3 h-3" /> 예정 {monthTotals.scheduled}
               </span>
-              <span className="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-status-healthy/10 text-status-healthy">
+              <span className="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-secondary text-muted-foreground">
                 <CheckCircle2 className="w-3 h-3" /> 완료 {monthTotals.completed}
               </span>
               <span className="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-status-warning/10 text-status-warning">
@@ -280,9 +280,9 @@ export function WorkCalendar({ selectedClusterId }: WorkCalendarProps) {
                       handleDayClick(key, e as unknown as React.MouseEvent<HTMLDivElement>);
                     }
                   }}
-                  className={`group relative rounded-xl border bg-card text-left cursor-pointer transition-all flex flex-col p-2 min-h-[110px] ${
+                  className={`group relative rounded-md border bg-card text-left cursor-pointer transition-colors flex flex-col p-2 min-h-[110px] ${
                     isSelected
-                      ? 'border-primary ring-2 ring-primary/30 shadow-sm'
+                      ? 'border-primary ring-1 ring-primary/30'
                       : isToday
                       ? 'border-primary/45'
                       : 'border-border/60 hover:border-primary/40 hover:shadow-sm'
@@ -300,7 +300,7 @@ export function WorkCalendar({ selectedClusterId }: WorkCalendarProps) {
                     <span className={`text-[12px] font-semibold tabular-nums leading-none ${dayNumberClr}`}>
                       {d.getDate()}
                       {isToday && (
-                        <span className="ml-1 align-super text-[11px] font-bold uppercase tracking-wider text-primary">today</span>
+                        <span className="ml-1 align-super text-[11px] font-bold text-primary">today</span>
                       )}
                     </span>
                     <button
@@ -310,7 +310,7 @@ export function WorkCalendar({ selectedClusterId }: WorkCalendarProps) {
                         setSelected(key);
                         setQuickAddDate(key);
                       }}
-                      className={`w-5 h-5 rounded-md inline-flex items-center justify-center bg-card/80 backdrop-blur-sm shadow-sm border border-border text-muted-foreground hover:text-primary hover:border-primary/40 transition-all ${
+                      className={`w-5 h-5 rounded-md inline-flex items-center justify-center bg-card shadow-sm border border-border text-muted-foreground hover:text-primary hover:border-primary/40 transition-colors ${
                         isSelected ? 'opacity-100' : 'opacity-0 group-hover:opacity-100 focus:opacity-100'
                       }`}
                       title="이 날짜에 업무 추가"
@@ -366,7 +366,7 @@ export function WorkCalendar({ selectedClusterId }: WorkCalendarProps) {
             </div>
             <div className="flex items-center gap-3">
               <span className="inline-flex items-center gap-1">
-                <span className="w-2 h-2 rounded-full bg-status-healthy" /> 완료
+                <span className="w-2 h-2 rounded-full bg-muted-foreground/40" /> 완료
               </span>
               <span className="inline-flex items-center gap-1">
                 <span className="w-2 h-2 rounded-full bg-status-info" /> 예정
@@ -461,7 +461,7 @@ function DayDetailPopover({ anchorRect, label, bucket, onClose, onQuickAdd }: Da
         role="dialog"
         aria-label={`${label} 상세`}
         style={{ top: pos.top, left: pos.left, width: 320 }}
-        className="fixed z-50 bg-card border border-border rounded-xl shadow-2xl flex flex-col overflow-hidden"
+        className="fixed z-50 bg-card border border-border rounded-md shadow-2xl flex flex-col overflow-hidden"
       >
         <div className="flex items-center justify-between gap-2 px-3 py-2 border-b border-border bg-muted/30">
           <div className="min-w-0">
@@ -493,7 +493,7 @@ function DayDetailPopover({ anchorRect, label, bucket, onClose, onQuickAdd }: Da
         <div className="px-3 py-3 space-y-3 overflow-y-auto max-h-[360px]">
           {bucket.completed.length > 0 && (
             <DayList
-              icon={<CheckCircle2 className="w-3.5 h-3.5 text-status-healthy" />}
+              icon={<CheckCircle2 className="w-3.5 h-3.5 text-muted-foreground" />}
               title="완료"
               count={bucket.completed.length}
               onItemClick={onClose}
@@ -503,7 +503,7 @@ function DayDetailPopover({ anchorRect, label, bucket, onClose, onQuickAdd }: Da
                   id: t.id,
                   primary: itemLabel(t),
                   meta: `${WORK_ITEM_TYPE_CONFIG[t.type]?.label ?? t.type} · ${t.assignee || '미지정'} · ${STATUS_LABEL[t.kanbanStatus]}`,
-                  leadingIcon: TypeIcon ? <TypeIcon className="w-3.5 h-3.5 text-status-healthy" /> : null,
+                  leadingIcon: TypeIcon ? <TypeIcon className="w-3.5 h-3.5 text-muted-foreground" /> : null,
                 };
               })}
             />
@@ -571,7 +571,7 @@ interface DayChipProps {
 }
 
 const CHIP_COLOR: Record<DayChipProps['color'], string> = {
-  emerald: 'bg-status-healthy/15 text-status-healthy border-status-healthy/30',
+  emerald: 'bg-secondary text-muted-foreground border-border',
   blue:    'bg-status-info/15 text-status-info border-status-info/30',
   amber:   'bg-status-warning/15 text-status-warning border-status-warning/30',
 };
@@ -599,7 +599,7 @@ interface DayListProps {
 function DayList({ icon, title, count, items, onItemClick }: DayListProps) {
   return (
     <div>
-      <div className="flex items-center gap-1.5 mb-1.5 text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+      <div className="flex items-center gap-1.5 mb-1.5 text-xs font-semibold text-muted-foreground">
         {icon}
         <span>{title}</span>
         <span className="text-foreground tabular-nums">{count}</span>

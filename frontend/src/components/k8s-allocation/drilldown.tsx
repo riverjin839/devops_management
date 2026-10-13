@@ -16,7 +16,7 @@ import { groupPodsByWorkload } from './podGroup';
 // ── 배지 ──────────────────────────────────────────────────────────────────────
 // Pod phase(Running/Pending/Succeeded/Failed/Unknown) 배지.
 const POD_PHASE_CLS: Record<string, string> = {
-  Running: 'bg-status-healthy/10 text-status-healthy',
+  Running: 'bg-secondary text-muted-foreground',
   Pending: 'bg-status-warning/10 text-status-warning',
   Failed: 'bg-status-critical/10 text-status-critical',
   Succeeded: 'bg-muted text-muted-foreground',
@@ -29,7 +29,7 @@ export function PodPhaseBadge({ phase }: { phase: string }) {
 
 export function QosBadge({ qos }: { qos: string | null }) {
   const cls = qos === 'Guaranteed'
-    ? 'bg-status-healthy/10 text-status-healthy'
+    ? 'bg-secondary text-muted-foreground'
     : qos === 'BestEffort'
       ? 'bg-status-critical/10 text-status-critical'
       : 'bg-status-warning/10 text-status-warning';
@@ -44,7 +44,7 @@ export function PodAllocTable({ pods, showNamespace = false }: {
 }) {
   const span = showNamespace ? 7 : 6;
   return (
-    <div className="rounded-lg border border-border bg-card overflow-x-auto">
+    <div className="rounded-md border border-border bg-card overflow-x-auto">
       <table className="w-full text-sm">
         <thead className="bg-muted/20 text-left text-xs text-muted-foreground">
           <tr>
@@ -131,7 +131,7 @@ export function WorkloadTable({ rows, renderDetail, showNamespace = false }: {
   });
 
   return (
-    <div className="rounded-lg border border-border bg-card overflow-x-auto">
+    <div className="rounded-md border border-border bg-card overflow-x-auto">
       <table className="w-full text-sm">
         <thead className="bg-muted/20 text-left text-xs text-muted-foreground">
           <tr>
@@ -161,7 +161,7 @@ export function WorkloadTable({ rows, renderDetail, showNamespace = false }: {
                 >
                   <td className="px-2 py-1.5 text-muted-foreground">{open ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}</td>
                   <td className="px-2 py-1.5">
-                    <span className="text-xs uppercase text-muted-foreground mr-1.5">{w.kind}</span>
+                    <span className="text-xs text-muted-foreground mr-1.5">{w.kind}</span>
                     {showNamespace && <span className="text-xs text-muted-foreground">{w.namespace}/</span>}
                     <span className="font-medium">{w.name}</span>
                     {w.noRequestPods > 0 && <span className="ml-2 text-xs text-status-warning">· req미설정 {w.noRequestPods}</span>}

@@ -3,7 +3,7 @@ import { isWriteVerb } from './rbacShared';
 
 const RISK_LABEL: Record<string, string> = { low: '낮음', medium: '보통', high: '높음' };
 const RISK_CLASS: Record<string, string> = {
-  low: 'text-status-healthy bg-status-healthy/10 border-status-healthy/30',
+  low: 'text-muted-foreground bg-secondary border-border',
   medium: 'text-status-warning bg-status-warning/10 border-status-warning/30',
   high: 'text-status-critical bg-status-critical/10 border-status-critical/30',
 };

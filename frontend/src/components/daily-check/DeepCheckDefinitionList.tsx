@@ -21,7 +21,7 @@ import type { DeepCheckDefinition } from '@/types';
 import { parseUTC } from '@/lib/utils';
 
 const STATUS_DOT: Record<string, string> = {
-  healthy: 'bg-status-healthy',
+  healthy: 'bg-muted-foreground/40',
   warning: 'bg-status-warning',
   critical: 'bg-status-critical',
   pending: 'bg-zinc-400',
@@ -122,7 +122,7 @@ export function DeepCheckDefinitionList({
               aria-label={d.enabled ? `${d.name} 비활성화` : `${d.name} 활성화`}
               className={`flex-shrink-0 rounded-lg p-1.5 ${
                 d.enabled
-                  ? 'text-status-healthy hover:bg-status-healthy/10'
+                  ? 'text-primary hover:bg-primary/10'
                   : 'text-muted-foreground hover:bg-muted'
               }`}
             >
@@ -148,7 +148,7 @@ export function DeepCheckDefinitionList({
                 {!d.clusterId && (
                   <span
                     title="글로벌 (모든 클러스터)"
-                    className="inline-flex items-center gap-1 text-xs uppercase tracking-wider text-muted-foreground bg-muted rounded px-1.5 py-0.5"
+                    className="inline-flex items-center gap-1 text-xs text-muted-foreground bg-muted rounded px-1.5 py-0.5"
                   >
                     <Globe2 className="w-3 h-3" />
                     글로벌

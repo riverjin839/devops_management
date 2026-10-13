@@ -92,7 +92,7 @@ export function KubeconfigEditModal({
       <div className="absolute inset-0 bg-black/60" onClick={onClose} />
 
       {/* Modal */}
-      <div ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby={headingId} className="relative bg-card border border-border rounded-2xl shadow-2xl w-full max-w-3xl mx-4 p-6">
+      <div ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby={headingId} className="relative bg-card border border-border rounded-md shadow-2xl w-full max-w-3xl mx-4 p-6">
         {/* Header */}
         <div className="flex items-center justify-between mb-5">
           <div>

@@ -33,7 +33,7 @@ export function CiliumConfigModal({ cluster, onClose }: CiliumConfigModalProps) 
     <div className="fixed inset-0 z-50 flex items-center justify-center">
       <div className="absolute inset-0 bg-black/60" onClick={onClose} />
       <div ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby={titleId}
-        className="relative bg-card border border-border rounded-xl w-full max-w-4xl mx-4 shadow-2xl flex flex-col max-h-[80vh]">
+        className="relative bg-card border border-border rounded-md w-full max-w-4xl mx-4 shadow-2xl flex flex-col max-h-[80vh]">
         <div className="flex items-center justify-between px-5 py-4 border-b border-border flex-shrink-0">
           <div>
             <h3 id={titleId} className="text-base font-semibold">Cilium 설정 — {cluster.name}</h3>

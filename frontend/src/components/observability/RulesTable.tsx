@@ -7,15 +7,15 @@ import {
 const COLS = 8;
 
 const STATE_CLS: Record<string, string> = {
-  firing: 'text-[hsl(var(--status-critical))]',
-  pending: 'text-[hsl(var(--status-warning))]',
+  firing: 'text-status-critical',
+  pending: 'text-status-warning',
   inactive: 'text-muted-foreground',
 };
 
 const SEVERITY_CLS: Record<string, string> = {
-  critical: 'text-[hsl(var(--status-critical))]',
-  warning: 'text-[hsl(var(--status-warning))]',
-  info: 'text-[hsl(var(--status-info))]',
+  critical: 'text-status-critical',
+  warning: 'text-status-warning',
+  info: 'text-status-info',
 };
 
 /** Prometheus 알람/기록 규칙 dense 테이블. */
@@ -71,12 +71,12 @@ export function RulesTable({ rows, isLoading, emptyMessage }: {
                     {rule.duration ? formatDuration(rule.duration) : '—'}
                   </td>
                   <td className={`${TD} text-right text-xs font-mono ${
-                    rule.activeAlerts > 0 ? 'text-[hsl(var(--status-critical))]' : 'text-muted-foreground'
+                    rule.activeAlerts > 0 ? 'text-status-critical' : 'text-muted-foreground'
                   }`}>
                     {rule.activeAlerts || '—'}
                   </td>
                   <td className={`${TD} text-xs ${
-                    unhealthy ? 'text-[hsl(var(--status-critical))]' : 'text-muted-foreground'
+                    unhealthy ? 'text-status-critical' : 'text-muted-foreground'
                   }`}>
                     {rule.health ?? '—'}
                   </td>
@@ -94,7 +94,7 @@ export function RulesTable({ rows, isLoading, emptyMessage }: {
                         </pre>
                       </div>
                       {rule.lastError ? (
-                        <p className="text-xs text-[hsl(var(--status-critical))]">
+                        <p className="text-xs text-status-critical">
                           마지막 평가 오류: {rule.lastError}
                         </p>
                       ) : null}

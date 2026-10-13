@@ -217,7 +217,7 @@ export function NodeSpecPasteModal({ open, onClose, onApplied, displayColumns, i
         ignoreEmptyOnUpdate: true,
       });
       const d = r.data;
-      setMsg(`✓ 신규 ${d.inserted} / 업데이트 ${d.updated} / 건너뜀 ${d.skipped}` +
+      setMsg(`적용됨 — 신규 ${d.inserted} / 업데이트 ${d.updated} / 건너뜀 ${d.skipped}` +
         (d.errors.length ? ` · 오류 ${d.errors.length}건` : ''));
       setApplyErrors(d.errors);
       onApplied();
@@ -236,7 +236,7 @@ export function NodeSpecPasteModal({ open, onClose, onApplied, displayColumns, i
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
       <div className="absolute inset-0 bg-black/60" onClick={() => !applying && onClose()} />
-      <div ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby="node-spec-paste-modal-title" className="relative bg-card border border-border rounded-2xl shadow-2xl w-full max-w-5xl mx-4 max-h-[90vh] overflow-hidden flex flex-col">
+      <div ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby="node-spec-paste-modal-title" className="relative bg-card border border-border rounded-md shadow-2xl w-full max-w-5xl mx-4 max-h-[90vh] overflow-hidden flex flex-col">
         <div className="flex items-center gap-3 px-5 py-3 border-b border-border bg-muted/30">
           <ClipboardPaste className="w-5 h-5 text-primary" />
           <h2 id="node-spec-paste-modal-title" className="text-sm font-semibold">엑셀 블록 붙여넣기 — 노드 서버스펙</h2>
@@ -312,7 +312,7 @@ export function NodeSpecPasteModal({ open, onClose, onApplied, displayColumns, i
               <div className="border border-border rounded-xl overflow-hidden max-h-[320px] overflow-y-auto">
                 <table className="w-full text-sm">
                   <thead className="bg-muted/30 sticky top-0">
-                    <tr className="text-left text-xs text-muted-foreground uppercase">
+                    <tr className="text-left text-xs text-muted-foreground">
                       <th className="px-2 py-1.5">#</th>
                       <th className="px-2 py-1.5">동작</th>
                       <th className="px-2 py-1.5">hostname</th>
@@ -329,7 +329,7 @@ export function NodeSpecPasteModal({ open, onClose, onApplied, displayColumns, i
 
           {msg && (
             <div className={`px-3 py-2 rounded-lg text-sm border ${
-              msg.startsWith('✓')
+              msg.startsWith('적용됨')
                 ? 'bg-status-healthy/10 text-status-healthy border-status-healthy/30'
                 : 'bg-status-critical/10 text-status-critical border-status-critical/30'
             }`}>

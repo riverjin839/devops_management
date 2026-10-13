@@ -31,14 +31,14 @@ function NodeView({
 
   if (filtered.length === 0) {
     return (
-      <div className="bg-card border border-border rounded-xl p-8 text-center text-muted-foreground text-sm">
+      <div className="bg-card border border-border rounded-md p-8 text-center text-muted-foreground text-sm">
         {searchQuery ? `"${searchQuery}"에 해당하는 노드가 없습니다.` : '노드 정보가 없습니다.'}
       </div>
     );
   }
 
   return (
-    <div className="bg-card border border-border rounded-xl overflow-hidden">
+    <div className="bg-card border border-border rounded-md overflow-hidden">
       <table className="w-full text-sm">
         <thead className="bg-muted/20">
           <tr>
@@ -72,7 +72,7 @@ function NodeView({
                 <td className="px-4 py-3">
                   <span className={`px-2 py-0.5 text-sm rounded-full font-medium ${
                     node.status === 'ready'
-                      ? 'bg-status-healthy/10 text-status-healthy border border-status-healthy/20'
+                      ? 'bg-secondary text-muted-foreground border border-border'
                       : 'bg-status-critical/10 text-status-critical border border-status-critical/20'
                   }`}>
                     {node.status}
@@ -136,14 +136,14 @@ function LabelView({
 
   if (filtered.length === 0) {
     return (
-      <div className="bg-card border border-border rounded-xl p-8 text-center text-muted-foreground text-sm">
+      <div className="bg-card border border-border rounded-md p-8 text-center text-muted-foreground text-sm">
         {searchQuery ? `"${searchQuery}"에 해당하는 레이블이 없습니다.` : '레이블 정보가 없습니다.'}
       </div>
     );
   }
 
   return (
-    <div className="bg-card border border-border rounded-xl overflow-hidden">
+    <div className="bg-card border border-border rounded-md overflow-hidden">
       <table className="w-full text-sm">
         <thead className="bg-muted/20">
           <tr>

@@ -221,7 +221,7 @@ export function SavedCreds({ job }: SavedCredsProps) {
 function CredBadge({ label, present }: { label: string; present: boolean }) {
   if (present) {
     return (
-      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-status-healthy/10 text-status-healthy border border-status-healthy/30">
+      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-secondary text-muted-foreground border border-border">
         <ShieldCheck className="w-3 h-3" />
         {label} 저장됨
       </span>

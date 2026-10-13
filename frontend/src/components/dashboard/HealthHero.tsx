@@ -67,7 +67,7 @@ export function HealthHero({ stats, isLoading, lastCheckTime }: HealthHeroProps)
   const overallLabel = total === 0 ? '데이터 없음' : s.critical > 0 ? '위험' : s.warning > 0 ? '주의 필요' : '정상';
   const overallColor = total === 0
     ? 'text-muted-foreground'
-    : s.critical > 0 ? 'text-status-critical' : s.warning > 0 ? 'text-status-warning' : 'text-status-healthy';
+    : s.critical > 0 ? 'text-status-critical' : s.warning > 0 ? 'text-status-warning' : 'text-foreground';
 
   return (
     <section className="grid grid-cols-12 gap-3 mb-3">

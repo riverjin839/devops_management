@@ -83,7 +83,7 @@ export function StandardizeClusterNamesModal({ open, clusters, onClose, onRename
     <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/40 p-4" onClick={onClose}>
       <div
         ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby={titleId}
-        className="w-full max-w-3xl max-h-[85vh] flex flex-col rounded-2xl border border-border bg-card shadow-xl"
+        className="w-full max-w-3xl max-h-[85vh] flex flex-col rounded-md border border-border bg-card shadow-xl"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center gap-2 px-5 py-3 border-b border-border">

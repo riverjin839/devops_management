@@ -77,7 +77,7 @@ export function KubeadmCertsModal({ open, clusterId, onClose }: Props) {
     <div className="fixed inset-0 z-50 flex items-center justify-center">
       <div className="absolute inset-0 bg-black/60" onClick={() => !collectMut.isPending && onClose()} />
       <div ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby={titleId}
-        className="relative bg-card border border-border rounded-2xl shadow-2xl w-full max-w-2xl mx-4 overflow-hidden">
+        className="relative bg-card border border-border rounded-md shadow-2xl w-full max-w-2xl mx-4 overflow-hidden">
         <div className="flex items-center gap-3 px-5 py-4 border-b border-border bg-muted/30">
           <div className="w-9 h-9 rounded-lg flex items-center justify-center bg-primary/10 text-primary">
             <ShieldCheck className="w-4 h-4" />
@@ -235,7 +235,7 @@ export function KubeadmCertsModal({ open, clusterId, onClose }: Props) {
                       <td className="px-2 py-1 font-mono">{h.host}</td>
                       <td className="px-2 py-1">
                         {!h.error
-                          ? <CheckCircle2 className="w-3 h-3 text-status-healthy" />
+                          ? <CheckCircle2 className="w-3 h-3 text-muted-foreground" />
                           : <XCircle className="w-3 h-3 text-status-critical" />}
                       </td>
                       <td className="px-2 py-1 text-muted-foreground truncate max-w-[280px]" title={h.error ?? ''}>

@@ -28,7 +28,7 @@ function CheckRow({ label, ok, detail }: { label: string; ok: boolean; detail?: 
   return (
     <div className="flex items-start gap-2 py-1.5">
       {ok ? (
-        <Check className="w-4 h-4 text-status-healthy mt-0.5 shrink-0" />
+        <Check className="w-4 h-4 text-muted-foreground mt-0.5 shrink-0" />
       ) : (
         <X className="w-4 h-4 text-status-critical mt-0.5 shrink-0" />
       )}
@@ -86,7 +86,7 @@ export function NodeVerifyModal({ result, loading, onClose, run, showLog = true,
         role="dialog"
         aria-modal="true"
         aria-labelledby={titleId}
-        className="bg-card border border-border rounded-xl w-full max-w-lg max-h-[85vh] overflow-auto shadow-xl"
+        className="bg-card border border-border rounded-md w-full max-w-lg max-h-[85vh] overflow-auto shadow-xl"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between px-4 py-3 border-b border-border">

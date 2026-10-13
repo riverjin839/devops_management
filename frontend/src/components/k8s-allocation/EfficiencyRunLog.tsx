@@ -12,7 +12,7 @@ import { RUN_TYPE_LABEL, fmtTs, readLogPref, writeLogPref } from './effUtils';
 const STATE_META: Record<EffRunState, { label: string; cls: string }> = {
   queued: { label: '대기', cls: 'bg-muted text-muted-foreground border-border' },
   running: { label: '실행 중', cls: 'bg-status-info/10 text-status-info border-status-info/30' },
-  succeeded: { label: '성공', cls: 'bg-status-healthy/10 text-status-healthy border-status-healthy/30' },
+  succeeded: { label: '성공', cls: 'bg-secondary text-muted-foreground border-border' },
   partial: { label: '부분 성공', cls: 'bg-status-warning/10 text-status-warning border-status-warning/30' },
   failed: { label: '실패', cls: 'bg-status-critical/10 text-status-critical border-status-critical/30' },
   skipped: { label: '건너뜀', cls: 'bg-muted text-muted-foreground border-border' },
@@ -53,7 +53,7 @@ export function EfficiencyRunLog({ runId, onClose, onRollback, rollbackPending }
     && run.runType !== 'collect' && run.runType !== 'recommend' && !!onRollback;
 
   return (
-    <div className="rounded-lg border border-border bg-card">
+    <div className="rounded-md border border-border bg-card">
       <div className="flex items-center gap-2 px-3 py-2 border-b border-border flex-wrap">
         <RunStatePill state={run.runState} />
         <span className="text-sm font-medium">{RUN_TYPE_LABEL[run.runType] ?? run.runType}</span>

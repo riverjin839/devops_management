@@ -26,7 +26,7 @@ const BPF_PRESETS: { id: string; label: string; value: string }[] = [
 ];
 
 const STATUS_CLS: Record<string, string> = {
-  ok:            'bg-status-healthy/10 text-status-healthy border-status-healthy/30',
+  ok:            'bg-secondary text-muted-foreground border-border',
   error:         'bg-status-critical/10 text-status-critical border-status-critical/30',
   timeout:       'bg-status-warning/10 text-status-warning border-status-warning/30',
   auth_error:    'bg-status-critical/10 text-status-critical border-status-critical/30',
@@ -57,13 +57,13 @@ function PacketTable({ rows }: { rows: TcpdumpPacketRow[] }) {
       <table className="w-full text-sm">
         <thead className="bg-muted/30 text-left sticky top-0">
           <tr>
-            <th className="px-2 py-1.5 text-xs font-medium text-muted-foreground uppercase">Time</th>
-            <th className="px-2 py-1.5 text-xs font-medium text-muted-foreground uppercase">Proto</th>
-            <th className="px-2 py-1.5 text-xs font-medium text-muted-foreground uppercase">Source</th>
-            <th className="px-2 py-1.5 text-xs font-medium text-muted-foreground uppercase">Destination</th>
-            <th className="px-2 py-1.5 text-xs font-medium text-muted-foreground uppercase">Flags</th>
-            <th className="px-2 py-1.5 text-xs font-medium text-muted-foreground uppercase">Len</th>
-            <th className="px-2 py-1.5 text-xs font-medium text-muted-foreground uppercase">Summary</th>
+            <th className="px-2 py-1.5 text-xs font-medium text-muted-foreground">Time</th>
+            <th className="px-2 py-1.5 text-xs font-medium text-muted-foreground">Proto</th>
+            <th className="px-2 py-1.5 text-xs font-medium text-muted-foreground">Source</th>
+            <th className="px-2 py-1.5 text-xs font-medium text-muted-foreground">Destination</th>
+            <th className="px-2 py-1.5 text-xs font-medium text-muted-foreground">Flags</th>
+            <th className="px-2 py-1.5 text-xs font-medium text-muted-foreground">Len</th>
+            <th className="px-2 py-1.5 text-xs font-medium text-muted-foreground">Summary</th>
           </tr>
         </thead>
         <tbody>
@@ -190,7 +190,7 @@ export function TcpdumpPanel({ clusterId }: Props) {
 
   return (
     <div className="space-y-3">
-      <div className="bg-card border border-border rounded-xl p-3 space-y-3">
+      <div className="bg-card border border-border rounded-md p-3 space-y-3">
         {/* SSH 자격증명 + 노드 선택 */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
           <div>
@@ -349,7 +349,7 @@ export function TcpdumpPanel({ clusterId }: Props) {
 
       {/* 결과 */}
       {result && (
-        <div className="bg-card border border-border rounded-xl overflow-hidden">
+        <div className="bg-card border border-border rounded-md overflow-hidden">
           <div className="flex items-center gap-2 px-3 py-2 border-b border-border bg-muted/30">
             <StatusBadge status={result.status} />
             <span className="text-sm font-mono">{result.host}</span>
@@ -391,7 +391,7 @@ export function TcpdumpPanel({ clusterId }: Props) {
       )}
 
       {!result && (
-        <div className="bg-card border border-border rounded-xl p-10 text-center text-sm text-muted-foreground">
+        <div className="bg-card border border-border rounded-md p-10 text-center text-sm text-muted-foreground">
           <Info className="w-8 h-8 mx-auto mb-2 text-muted-foreground" />
           대상 노드/자격증명을 입력하고 "캡처 실행"을 눌러 원격에서 tcpdump 를 수행하세요.
           <br />

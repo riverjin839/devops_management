@@ -352,7 +352,7 @@ const GROUP_EXPANDED_STORAGE_KEY = 'pep:checkMatrixExpandedGroups';
 const GROUP_BADGE_CLS: Record<'critical' | 'warning' | 'healthy', string> = {
   critical: 'text-status-critical bg-status-critical-soft border-status-critical/40',
   warning: 'text-status-warning bg-status-warning-soft border-status-warning/40',
-  healthy: 'text-status-healthy bg-status-healthy-soft border-status-healthy/40',
+  healthy: 'text-muted-foreground bg-secondary border-border',
 };
 
 function loadExpandedGroups(): Record<string, boolean> {
@@ -843,7 +843,7 @@ export function PlatformStatusMatrix({ toolbarSlot }: PlatformStatusMatrixProps 
   const toolbarContent = (
     <>
       {toolbarSlot === undefined && (
-        <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground select-none">
+        <span className="text-xs font-semibold text-muted-foreground select-none">
           플랫폼 현황
         </span>
       )}

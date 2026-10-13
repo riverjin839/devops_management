@@ -50,7 +50,7 @@ export function NodeLabelEditorModal({ node, isOpen, onClose, onApply }: Props) 
         role="dialog"
         aria-modal="true"
         aria-labelledby={titleId}
-        className="bg-card border border-border rounded-xl w-full max-w-3xl p-5"
+        className="bg-card border border-border rounded-md w-full max-w-3xl p-5"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between mb-4">

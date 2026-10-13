@@ -207,7 +207,7 @@ export function MemberTodayTodos({ selectedClusterId }: MemberTodayTodosProps) {
           )}
           <span className="text-status-info">예정 {totals.today}</span>
           <span className="text-status-warning">진행 {totals.inProgress}</span>
-          <span className="text-status-healthy">완료 {totals.done}</span>
+          <span className="text-muted-foreground">완료 {totals.done}</span>
           <span className="text-primary font-semibold">{overall}%</span>
         </div>
       </div>
@@ -303,7 +303,7 @@ export function MemberTodayTodos({ selectedClusterId }: MemberTodayTodosProps) {
 
                 <div className="h-1 rounded-full bg-secondary overflow-hidden mb-1.5">
                   <div
-                    className="h-full bg-primary rounded-full transition-all duration-300"
+                    className="h-full bg-primary rounded-full transition-[width] duration-300"
                     style={{ width: `${pct}%` }}
                   />
                 </div>

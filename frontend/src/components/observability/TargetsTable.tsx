@@ -47,7 +47,7 @@ export function TargetsTable({ rows, isLoading, emptyMessage }: {
                   <td className={TD}>
                     <span className="inline-flex items-center gap-1.5 text-xs">
                       <HealthIcon healthy={up} />
-                      <span className={up ? 'text-muted-foreground' : 'text-[hsl(var(--status-critical))]'}>
+                      <span className={up ? 'text-muted-foreground' : 'text-status-critical'}>
                         {target.health}
                       </span>
                     </span>
@@ -62,7 +62,7 @@ export function TargetsTable({ rows, isLoading, emptyMessage }: {
                       ? formatDuration(target.lastScrapeDuration)
                       : '—'}
                   </td>
-                  <td className={`${TD} text-xs text-[hsl(var(--status-critical))] truncate max-w-[18rem]`}>
+                  <td className={`${TD} text-xs text-status-critical truncate max-w-[18rem]`}>
                     {target.lastError ?? ''}
                   </td>
                   <td className={`${TD} text-xs text-muted-foreground truncate max-w-[18rem]`}>

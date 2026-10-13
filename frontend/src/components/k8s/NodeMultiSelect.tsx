@@ -63,7 +63,7 @@ export function NodeMultiSelect({ clusterId, selected, onChange, max }: Props) {
           <div className="fixed inset-0 z-[60]" onClick={() => setOpen(false)} aria-hidden />
           <div
             style={{ top: pos.top, left: pos.left, width: PANEL_W, maxHeight: pos.maxHeight }}
-            className="fixed z-[61] rounded-xl border border-border bg-card shadow-lg py-1 flex flex-col"
+            className="fixed z-[61] rounded-md border border-border bg-card shadow-lg py-1 flex flex-col"
           >
             <div className="px-2 pb-1">
               <div className="relative">

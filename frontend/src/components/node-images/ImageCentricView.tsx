@@ -94,14 +94,14 @@ export function ImageCentricView({ nodes, searchQuery, onDistribute }: Props) {
 
   if (rows.length === 0) {
     return (
-      <div className="bg-card border border-border rounded-xl p-8 text-center text-muted-foreground text-sm">
+      <div className="bg-card border border-border rounded-md p-8 text-center text-muted-foreground text-sm">
         {searchQuery ? `"${searchQuery}"에 해당하는 이미지가 없습니다.` : '이미지 정보가 없습니다.'}
       </div>
     );
   }
 
   return (
-    <div className="bg-card border border-border rounded-xl overflow-hidden">
+    <div className="bg-card border border-border rounded-md overflow-hidden">
       <div className="px-4 py-2 bg-muted/10 border-b border-border flex items-center justify-between">
         <p className="text-sm text-muted-foreground">
           전체 <span className="font-semibold text-foreground tabular-nums">{rows.length}</span>개 고유 이미지

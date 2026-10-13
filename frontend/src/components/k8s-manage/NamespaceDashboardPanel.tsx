@@ -95,7 +95,7 @@ function healthFromPods(rows: K8sPodRichRow[]): Health {
 }
 
 const HealthCell = ({ n, tone }: { n: number; tone: 'ok' | 'warn' | 'crit' }) => (
-  <span className={`tabular-nums ${n === 0 ? 'text-muted-foreground' : tone === 'ok' ? 'text-status-healthy font-medium' : tone === 'warn' ? 'text-status-warning font-semibold' : 'text-status-critical font-semibold'}`}>
+  <span className={`tabular-nums ${n === 0 ? 'text-muted-foreground' : tone === 'ok' ? 'text-foreground font-medium' : tone === 'warn' ? 'text-status-warning font-semibold' : 'text-status-critical font-semibold'}`}>
     {n}
   </span>
 );

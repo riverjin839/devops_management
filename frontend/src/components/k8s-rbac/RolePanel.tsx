@@ -205,7 +205,7 @@ export function RolePanel({
                   {['범위', '이름', '규칙', ''].map((h, i) => (
                     <th
                       key={h || i}
-                      className="text-left px-3 py-2 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground whitespace-nowrap"
+                      className="text-left px-3 py-2 text-[11px] font-semibold text-muted-foreground whitespace-nowrap"
                     >
                       {h}
                     </th>

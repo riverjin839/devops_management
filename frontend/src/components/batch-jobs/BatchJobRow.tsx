@@ -1,7 +1,7 @@
 // frontend/src/components/batch-jobs/BatchJobRow.tsx
 import { useState } from 'react';
 import { createPortal } from 'react-dom';
-import { Play, PowerOff, Square } from 'lucide-react';
+import { AlertTriangle, Play, PowerOff, Square } from 'lucide-react';
 import type { BatchJob } from '@/services/api';
 import type { Cluster } from '@/types';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
@@ -12,18 +12,18 @@ import { StatusPill } from './StatusPill';
 import { CronBadge } from './CronBadge';
 import { cronHealth, type CronHealth } from './filters';
 
-// cron 상태 → 행 좌측 보더/hover 배경 색 — 표에서 스크롤만 해도 정상(초록)/
-// 비정상(레드)/중지(회색)/실행 중(블루)이 판독되게 한다. 선택 시엔 primary 유지.
+// cron 상태 → 행 좌측 보더/hover 배경 색 — 표에서 스크롤만 해도 비정상(레드)/실행 중(info)이
+// 판독되게 한다. 정상·중지는 무채색(DESIGN_SYSTEM §12.12-3). 선택 시엔 primary 유지.
 const ROW_BORDER: Record<CronHealth, string> = {
-  ok: 'border-l-status-healthy/60',
+  ok: 'border-l-border',
   failed: 'border-l-status-critical/70',
-  running: 'border-l-blue-500/70',
-  stopped: 'border-l-slate-400/50',
+  running: 'border-l-status-info/70',
+  stopped: 'border-l-border',
 };
 const ROW_HOVER: Record<CronHealth, string> = {
-  ok: 'hover:bg-status-healthy/5',
+  ok: 'hover:bg-secondary/50',
   failed: 'hover:bg-status-critical/5',
-  running: 'hover:bg-blue-500/5',
+  running: 'hover:bg-status-info/5',
   stopped: 'hover:bg-secondary/50',
 };
 
@@ -126,8 +126,8 @@ export function BatchJobRow({ job, cluster, selected, onClick, checkbox, checked
         )}
         {hasMissingCreds && (
           <div className="mt-0.5">
-            <span className="text-xs text-status-warning bg-status-warning/10 px-1.5 py-0.5 rounded">
-              ⚠ 자격증명 없음
+            <span className="inline-flex items-center gap-1 text-xs text-status-warning bg-status-warning/10 px-1.5 py-0.5 rounded">
+              <AlertTriangle className="w-3 h-3" aria-hidden /> 자격증명 없음
             </span>
           </div>
         )}

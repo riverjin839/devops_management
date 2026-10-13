@@ -43,7 +43,7 @@ export function statusColor(status: string): string {
   switch (status) {
     case 'critical': return 'hsl(var(--status-critical))';
     case 'warning': return 'hsl(var(--status-warning))';
-    case 'healthy': return 'hsl(var(--status-healthy))';
+    case 'healthy': return 'hsl(var(--muted-foreground) / 0.4)'; // 정상은 무채색(DESIGN_SYSTEM §12.12-3)
     default: return 'hsl(var(--status-pending))';
   }
 }

@@ -364,7 +364,7 @@ export function ClusterOpsCheckPanel({ clusterId, clusterName }: Props) {
             role="dialog"
             aria-modal="true"
             aria-labelledby="ops-detail-title"
-            className="bg-card rounded-2xl border border-border w-full max-w-3xl max-h-[85vh] overflow-auto"
+            className="bg-card rounded-md border border-border w-full max-w-3xl max-h-[85vh] overflow-auto"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="sticky top-0 bg-card flex items-center gap-2 px-5 py-3 border-b border-border">
