@@ -1703,7 +1703,11 @@ _PRESET_FIELDS = (
 
 def _load_provision_preset(db: Session, user_id: str) -> dict:
     """저장된 프리셋 — 형식이 깨진 값은 무시하고 빈 dict 로 폴백(개인 설정은 best-effort)."""
-    raw = get_user_setting(db, user_id, PROVISION_PRESET_KEY, {}) or {}
+    return normalize_provision_preset(get_user_setting(db, user_id, PROVISION_PRESET_KEY, {}) or {})
+
+
+def normalize_provision_preset(raw) -> dict:
+    """프리셋 값 정규화 — 알려진 필드만, 빈 값 제거. 개인 설정 가져오기도 같은 규칙을 쓴다."""
     if not isinstance(raw, dict):
         return {}
     out: dict = {}

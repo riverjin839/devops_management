@@ -1,7 +1,8 @@
 import { useState } from 'react';
 import { Check, Plus, LayoutGrid, AlertTriangle, RotateCcw } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
-import type { InstallableAppSection } from './installableApps';
+import type { InstallableApp, InstallableAppSection } from './installableApps';
+import { InstalledAppOrder } from './InstalledAppOrder';
 
 interface AddAppDialogProps {
   open: boolean;
@@ -15,6 +16,8 @@ interface AddAppDialogProps {
   customized?: boolean;
   /** 사용자 지정 목록을 버리고 조직 기본값으로 돌아간다(사이드바·상단바 공용 목록 전체). */
   onReset?: () => void;
+  /** 설치 항목 순서 변경 — 주면 창 상단에 끌어서 정렬하는 "표시 순서" 영역이 생긴다. */
+  onMove?: (id: string, before: string | null) => void;
 }
 
 /**
@@ -22,14 +25,17 @@ interface AddAppDialogProps {
  * Sidebar(플랫폼/시스템 도메인)와 AppTopBar(업무 도메인) 양쪽이 이 컴포넌트를 공유하고,
  * 각자의 섹션 목록(installableApps.ts 의 sidebarAppSections/topbarAppSections)만 다르게 넘긴다.
  * 설치 단위는 그룹이 아니라 leaf 페이지 하나하나라, 그룹 헤더로 섹션을 나눠 스캔하기 쉽게 한다.
- * 순서는 설치한 순서 그대로 레일/상단바에 반영된다(재정렬은 아직 지원하지 않음 — 후속 과제).
+ * 순서는 설치한 순서가 기본이고, 창 상단 "표시 순서" 영역에서 끌어서 바꾼다(`InstalledAppOrder`).
  */
 export function AddAppDialog({
-  open, onClose, title, description, sections, installedApps, onToggle, customized = false, onReset,
+  open, onClose, title, description, sections, installedApps, onToggle, customized = false, onReset, onMove,
 }: AddAppDialogProps) {
   // 초기화는 사이드바·상단바의 개인 목록을 한 번에 버리므로 두 번 눌러 확인한다.
   const [confirmReset, setConfirmReset] = useState(false);
   const close = () => { setConfirmReset(false); onClose(); };
+  // 이 창의 카탈로그에 속한 설치 항목만, 설치(표시) 순서대로 — 정렬 영역에 쓴다.
+  const byId = new Map<string, InstallableApp>(sections.flatMap((sec) => sec.apps).map((a) => [a.id, a]));
+  const installedHere = installedApps.map((id) => byId.get(id)).filter((a): a is InstallableApp => !!a);
   return (
     <Dialog open={open} onOpenChange={(next) => { if (!next) close(); }}>
       <DialogContent className="max-w-lg">
@@ -44,6 +50,7 @@ export function AddAppDialog({
         </DialogHeader>
 
         <div className="px-5 pb-5 space-y-4">
+          {onMove && <InstalledAppOrder apps={installedHere} onMove={onMove} />}
           {sections.map((section) => (
             <div
               key={section.label}

@@ -7,7 +7,10 @@
 쓰기는 행 잠금(``SELECT … FOR UPDATE``) 아래에서 읽기-수정-쓰기를 한 트랜잭션으로 처리한다 —
 두 기기·탭이 동시에 앱을 추가/제거해도 서로의 변경을 덮지 않는다(델타 연산과 함께).
 """
-from fastapi import APIRouter, Depends
+import json
+
+from fastapi import APIRouter, Depends, HTTPException, Request
+from pydantic import BaseModel, Field
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -17,6 +20,7 @@ from app.models.user_setting import UserSetting
 from app.auth.deps import get_current_user
 from app.schemas.home_prefs import HomePrefsOut, HomePrefsUpdate
 from app.services.home_prefs import apply_update, get_default_installed_apps, load_prefs, to_out
+from app.services import audit_logger, personal_settings
 from app.services.user_settings import get_user_setting
 
 router = APIRouter(prefix="/me", tags=["home-prefs"])
@@ -65,3 +69,42 @@ def update_home_prefs(
             if attempt == 1:
                 raise
     return to_out(updated, defaults)
+
+
+# ── 개인 설정 내보내기 / 가져오기 ─────────────────────────────────────────────
+# 본인 설정 중 이식 가능한 키만(services/personal_settings.py 허용 목록). 브라우저 로컬 설정은
+# 화면이 같은 파일의 "local" 에 직접 담고 복원한다.
+
+@router.get("/settings-export")
+def export_personal_settings(db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    # 문서는 JSON **문자열** 로 감싼다 — axios 인터셉터의 키 camelCase/snake_case 자동 변환이
+    # 설정 값 안의 키(프로필 이름 등)까지 바꾸지 못하게.
+    return {"document": json.dumps(personal_settings.export_settings(db, user), ensure_ascii=False)}
+
+
+class SettingsImportRequest(BaseModel):
+    document: str = Field(..., max_length=2_000_000)
+
+
+@router.post("/settings-import")
+def import_personal_settings(
+    payload: SettingsImportRequest,
+    request: Request,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    try:
+        doc = json.loads(payload.document)
+        result = personal_settings.import_settings(db, user, doc)
+    except (ValueError, TypeError) as e:  # json.JSONDecodeError 는 ValueError
+        raise HTTPException(status_code=400, detail=f"가져오기 실패: {e}") from e
+    audit_logger.record(
+        db,
+        action="user.settings_import",
+        actor=user,
+        target_type="user",
+        target_id=user.id,
+        details=result,
+        request=request,
+    )
+    return result

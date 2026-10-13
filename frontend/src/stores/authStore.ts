@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { activateProfile, clearSessionSecrets } from '@/lib/personalStorage';
 
 // API response interceptor converts snake_case → camelCase, so we model the
 // shape the React tree actually receives.
@@ -68,10 +69,19 @@ export const useAuthStore = create<AuthState>((set) => ({
   returnTo: null,
   setSession: (token, user) => {
     const u = normalizeUser(user);
+    // 공용 PC — 직전에 다른 계정이 쓰던 브라우저면 그 사람의 로컬 개인 설정(테마·접힘 등)을
+    // 보관하고 이 계정 것으로 바꿔 끼운다(lib/personalStorage.ts).
+    const switched = activateProfile(u.id);
     try {
       localStorage.setItem(TOKEN_KEY, token);
       localStorage.setItem(USER_KEY, JSON.stringify(u));
     } catch { /* ignore */ }
+    if (switched) {
+      // 모듈 로드 시점에 localStorage 를 읽어 둔 store(테마·사이드바 등)와 서버 캐시가 이전
+      // 사람 값을 들고 있으므로 새로 고친다. 직전 사람의 복귀 경로(returnTo)도 함께 버려진다.
+      window.location.replace('/');
+      return;
+    }
     // returnTo 는 LoginPage 가 로그인 직후 읽어 복귀에 쓰고 나서 직접 지운다 — 여기서
     // 같이 지우면 setSession 이 먼저 돌아 복귀 경로를 잃는다.
     set({ token, user: u, logoutReason: null });
@@ -85,6 +95,7 @@ export const useAuthStore = create<AuthState>((set) => ({
     set({ user: u });
   },
   clear: () => {
+    clearSessionSecrets();
     try {
       localStorage.removeItem(TOKEN_KEY);
       localStorage.removeItem(USER_KEY);
@@ -94,6 +105,7 @@ export const useAuthStore = create<AuthState>((set) => ({
   markSessionExpired: (returnTo) => {
     // 이미 로그아웃된 상태에서 401 이 연달아 오면(동시 요청 여러 개) 첫 기록을 유지한다.
     if (!useAuthStore.getState().token) return;
+    clearSessionSecrets();
     try {
       localStorage.removeItem(TOKEN_KEY);
       localStorage.removeItem(USER_KEY);
@@ -101,6 +113,14 @@ export const useAuthStore = create<AuthState>((set) => ({
     set({ token: null, user: null, logoutReason: 'expired', returnTo: returnTo ?? null });
   },
 }));
+
+// 이미 로그인된 채 새 버전이 배포된 브라우저 — 지금 깔린 로컬 개인 설정의 주인을 이 계정으로
+// 기록해 둔다(다음에 다른 사람이 로그인하면 그때 바꿔 끼울 수 있게). 드물게 주인이 다르면
+// (다른 탭에서 계정이 바뀐 경우) 바꿔 끼우고 새로 고친다 — 주인이 맞춰졌으므로 한 번뿐이다.
+{
+  const bootUser = useAuthStore.getState().user;
+  if (bootUser && activateProfile(bootUser.id)) window.location.reload();
+}
 
 // Stable accessor used by the axios interceptor (it can't subscribe to React).
 export function getAuthToken(): string | null {
