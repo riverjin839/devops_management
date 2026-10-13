@@ -26,6 +26,7 @@ from app.models.work_item import WorkItem
 from app.models.user import User
 from app.auth.deps import get_cluster_scope, get_current_user, require_operator
 from app.services.cluster_access import ClusterScope
+from app.services.cluster_endpoint_policy import check_endpoint
 from app.services.cluster_network_mask import mask_cluster, should_mask
 from app.services.health_checker import HealthChecker
 from app.services.k8s_diagnose import diagnose_connect_error
@@ -300,21 +301,22 @@ def reorder_clusters(
     _: User = Depends(require_operator),
 ):
     """순서 일괄 갱신 — 받은 순서대로 seq 를 10 간격으로 재할당."""
-    seen: set[UUID] = set()
-    for i, cid in enumerate(payload.cluster_ids):
-        if cid in seen:
-            raise HTTPException(
-                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-                detail="cluster_ids 에 중복 id 가 포함되어 있습니다.",
-            )
-        seen.add(cid)
-        cluster = db.query(Cluster).filter(Cluster.id == cid).first()
-        if not cluster:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Cluster {cid} not found",
-            )
-        cluster.seq = 1000 + i * 10
+    ids = payload.cluster_ids
+    if len(set(ids)) != len(ids):
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="cluster_ids 에 중복 id 가 포함되어 있습니다.",
+        )
+    # 한 번의 IN 조회로 가져온다 (예전엔 id 마다 1건씩 조회 — N+1).
+    by_id = {c.id: c for c in db.query(Cluster).filter(Cluster.id.in_(ids)).all()}
+    missing = next((cid for cid in ids if cid not in by_id), None)
+    if missing is not None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Cluster {missing} not found",
+        )
+    for i, cid in enumerate(ids):
+        by_id[cid].seq = 1000 + i * 10
     db.commit()
     return {"updated": len(payload.cluster_ids)}
 
@@ -372,6 +374,12 @@ def create_cluster(
     # 경로(/etc/passwd 등)를 등록해 읽어내는 우회로를 막는다. (content 가 있으면 저장 경로로 대체됨)
     if effective_path and not (content and content.strip()):
         _validate_kubeconfig_path(effective_path)
+
+    # 허용 대역 정책 — 연결 검증 생략(skip) 여부와 무관하게 확인한다. 등록되면 이후 점검·수집이
+    # 이 주소로 요청을 보내기 때문이다. (임시 파일을 만들기 전에 거절)
+    denied = check_endpoint(db, cluster_data.api_endpoint or "")
+    if denied:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=denied)
 
     temp_kubeconfig_path = None
     if content and content.strip():
@@ -529,6 +537,12 @@ def update_cluster(
     new_path = update_data.get("kubeconfig_path")
     if new_path and new_path != cluster.kubeconfig_path:
         _validate_kubeconfig_path(new_path)
+
+    new_endpoint = update_data.get("api_endpoint")
+    if new_endpoint is not None and new_endpoint != cluster.api_endpoint:
+        denied = check_endpoint(db, new_endpoint)
+        if denied:
+            raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=denied)
 
     for key, value in update_data.items():
         setattr(cluster, key, value)
@@ -808,8 +822,18 @@ def _verify_step_kubectl_nodes(cluster, kc_path: str | None, kc_reason: str) -> 
         return {"check": "kubectl_nodes", "ok": False, "detail": str(e)[:80]}
 
 
-def _iter_verify_steps(cluster):
-    """검증 단계를 하나씩 실행하며 결과 dict 를 yield 한다 (동기·스트림 공용)."""
+def _iter_verify_steps(cluster, denied_reason: str | None = None):
+    """검증 단계를 하나씩 실행하며 결과 dict 를 yield 한다 (동기·스트림 공용).
+
+    ``denied_reason`` 이 있으면(엔드포인트가 허용 대역 밖) 그 주소로 요청을 보내지 않는다 —
+    api_server 는 실패, 나머지 단계는 건너뜀으로 남긴다.
+    """
+    if denied_reason:
+        yield {"check": "api_server", "ok": False, "detail": denied_reason}
+        skip = "허용 대역 밖 엔드포인트라 실행하지 않음"
+        yield {"check": "kubeconfig_auth", "ok": None, "detail": skip}
+        yield {"check": "kubectl_nodes", "ok": None, "detail": skip}
+        return
     yield _verify_step_api_server(cluster)
     kc_path, kc_reason = _resolve_kubeconfig(cluster)
     yield _verify_step_kubeconfig_auth(kc_path, kc_reason)
@@ -890,7 +914,7 @@ def verify_cluster(
 ):
     """클러스터 연결 상태 상세 검증 (전 단계 완료 후 한 번에 응답)."""
     cluster = _get_cluster_or_404(db, cluster_id)
-    results = list(_iter_verify_steps(cluster))
+    results = list(_iter_verify_steps(cluster, check_endpoint(db, cluster.api_endpoint or "")))
     return _finalize_verify(db, cluster, results, actor, request)
 
 
@@ -913,7 +937,7 @@ def verify_event_stream(db: Session, cluster, actor: User, request: Request):
     """
     labels = dict(VERIFY_STEPS)
     results: list[dict] = []
-    steps = _iter_verify_steps(cluster)
+    steps = _iter_verify_steps(cluster, check_endpoint(db, cluster.api_endpoint or ""))
     try:
         for check, label in VERIFY_STEPS:
             yield _sse({"type": "step", "check": check, "label": label, "status": "running"})
