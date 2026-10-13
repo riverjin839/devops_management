@@ -46,7 +46,7 @@ export function BindingPanel({
   onIncludeSystemChange,
   isLoading,
 }: Props) {
-  const { canOperate, withHint } = useCanOperate(clusterId);
+  const { canOperate, withHint, ariaWithHint } = useCanOperate(clusterId);
   const toast = useToastSafe();
   const [query, setQuery] = useState('');
   const [pendingDelete, setPendingDelete] = useState<RbacBinding | null>(null);
@@ -177,7 +177,7 @@ export function BindingPanel({
           onClick={() => setCreating(!creating)}
           disabled={!canOperate}
           title={withHint('새 바인딩 추가 — 기존 SA 에 기존 Role/ClusterRole 을 묶는다')}
-          aria-label={withHint('새 바인딩 추가')}
+          aria-label={ariaWithHint('새 바인딩 추가')}
           className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-primary text-primary-foreground text-xs font-medium disabled:opacity-50 disabled:cursor-not-allowed"
         >
           <Plus className="w-3.5 h-3.5" /> 바인딩 추가
@@ -372,7 +372,7 @@ export function BindingPanel({
                         onClick={() => setPendingDelete(b)}
                         disabled={!canOperate}
                         title={withHint('바인딩 삭제')}
-                        aria-label={withHint(`${b.name} 삭제`)}
+                        aria-label={ariaWithHint(`${b.name} 삭제`)}
                         className="p-1.5 rounded-lg text-muted-foreground hover:text-destructive hover:bg-destructive/10 disabled:opacity-50"
                       >
                         <Trash2 className="w-4 h-4" />

@@ -596,7 +596,7 @@ export function PlatformStatusMatrix({ toolbarSlot }: PlatformStatusMatrixProps 
 
   // 권한 — 역할(viewer 면 전부 비활성 + 사유)과 테넌트 바인딩(클러스터별 operate 여부)을 함께 본다.
   // 예전엔 클러스터 없이 판정해 읽기 전용 바인딩 클러스터에서도 ▶ 가 눌려 403 이 났다.
-  const { canOperate, role, hint: operateHint, withHint } = useCanOperate();
+  const { canOperate, role, hint: operateHint, withHint, ariaWithHint } = useCanOperate();
   const { data: myAccess } = useMyClusterAccess(canOperate && role !== 'admin');
   const clusterHint = (clusterId: string): string | undefined => {
     if (operateHint) return operateHint;
@@ -930,7 +930,7 @@ export function PlatformStatusMatrix({ toolbarSlot }: PlatformStatusMatrixProps 
           disabled={!canOperate}
           className="p-1.5 rounded-xl hover:bg-secondary transition-colors text-muted-foreground disabled:opacity-50 disabled:cursor-not-allowed"
           title={withHint('매트릭스 설정 — 이력 보관 기간')}
-          aria-label={withHint('매트릭스 설정')}
+          aria-label={ariaWithHint('매트릭스 설정')}
         >
           <Settings className="w-4 h-4" />
         </button>
@@ -1212,7 +1212,7 @@ export function PlatformStatusMatrix({ toolbarSlot }: PlatformStatusMatrixProps 
                                 disabled={!canOperate || itemRequesting}
                                 className="inline-flex items-center gap-0.5 px-1.5 py-0.5 text-[11px] rounded-xl border border-transparent text-muted-foreground hover:text-primary hover:border-primary/40 hover:bg-secondary disabled:opacity-50 disabled:cursor-not-allowed"
                                 title={withHint('실행 권한이 있는 모든 클러스터에서 이 항목을 지금 실행')}
-                                aria-label={withHint(`${item.name} — 전 클러스터 실행`)}
+                                aria-label={ariaWithHint(`${item.name} — 전 클러스터 실행`)}
                               >
                                 {itemRequesting || itemActive
                                   ? <Loader2 className={`w-3 h-3 ${itemActive ? 'text-status-info' : ''} animate-spin`} aria-hidden="true" />

@@ -52,6 +52,10 @@
   rebinding) 없앴다 — 호스트명은 허용 대역에 그 호스트명(또는 `*.도메인`)을 직접 적어야 허용된다.
   Backend: `routers/clusters.py` `_ensure_kubeconfig_server_allowed`, `services/cluster_endpoint_policy.py`.
 
+### Fixed
+
+- **권한 없는 버튼의 접근성 이름 보존** — viewer 등 권한이 없을 때 실행·편집 버튼의 `aria-label` 이 사유 문구로 통째로 바뀌어 스크린리더가 모든 버튼을 같은 이름으로 읽던 문제를 고쳤다. 이제 "지금 실행 — operator 이상 권한이 필요합니다" 처럼 액션 이름 뒤에 사유를 붙인다. Frontend: `useCanOperate().ariaWithHint` 추가, 점검 매트릭스·RBAC·토폴로지·병목 진단·K8s 이벤트 화면 19곳 교체.
+
 ## [1.52.0] - 2026-10-13
 
 ### Added

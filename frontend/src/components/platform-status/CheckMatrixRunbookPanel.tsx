@@ -309,7 +309,7 @@ export function CheckMatrixRunbookPanel({ runbook, isLoading, editTarget, latest
   const [showSshCollect, setShowSshCollect] = useState(false);
   // D-082 — 설정 편집은 operator 이상만. viewer 에겐 비활성 + 사유. (early return 위에서 호출)
   // 테넌트 바인딩까지 본다 — 읽기 전용 바인딩 클러스터에서 편집 버튼이 눌린 뒤 403 이 나지 않게.
-  const { canOperate, withHint } = useCanOperate(runbook?.clusterId);
+  const { canOperate, withHint, ariaWithHint } = useCanOperate(runbook?.clusterId);
   if (isLoading) {
     return <div className="py-8 text-center text-sm text-muted-foreground">실행 계획 불러오는 중…</div>;
   }
@@ -436,7 +436,7 @@ export function CheckMatrixRunbookPanel({ runbook, isLoading, editTarget, latest
                   disabled={!canOperate}
                   className="inline-flex items-center gap-1 px-2 py-1 text-xs rounded-xl border border-border hover:bg-secondary text-muted-foreground disabled:opacity-50 disabled:cursor-not-allowed"
                   title={withHint('이 점검의 임계값/파라미터를 여기서 바로 수정')}
-                  aria-label={withHint('소스 설정 편집')}
+                  aria-label={ariaWithHint('소스 설정 편집')}
                 >
                   <Pencil className="w-3 h-3" /> 설정 편집
                 </button>

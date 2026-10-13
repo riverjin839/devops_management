@@ -154,7 +154,7 @@ export function ServiceTopologyPage() {
   };
 
   // mutations
-  const { canOperate, withHint } = useCanOperate(clusterId);
+  const { canOperate, withHint, ariaWithHint } = useCanOperate(clusterId);
   const createLink = useCreateTopologyLink(clusterId);
   const deleteLink = useDeleteTopologyLink();
   const createExt = useCreateExternalNode(clusterId);
@@ -517,6 +517,7 @@ export function ServiceTopologyPage() {
                   onDeleteExternal={requestDeleteExternal}
                   canOperate={canOperate}
                   withHint={withHint}
+                  ariaWithHint={ariaWithHint}
                 />
               )}
             </div>

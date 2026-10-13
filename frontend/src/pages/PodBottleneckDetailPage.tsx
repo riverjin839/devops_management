@@ -30,7 +30,7 @@ export function PodBottleneckDetailPage() {
   const { data: probes = [] } = useBottleneckProbes();
   const del = useDeleteBottleneckRun();
   // 훅은 조기 return 앞에서 호출해야 한다 — run 이 아직 없으면 clusterId 는 undefined(클러스터 제한 판정 없음).
-  const { canOperate, withHint } = useCanOperate(run?.clusterId);
+  const { canOperate, withHint, ariaWithHint } = useCanOperate(run?.clusterId);
 
   const probeMetaMap = useMemo(
     () => Object.fromEntries(probes.map((p) => [p.probeKey, p])),
@@ -113,7 +113,7 @@ export function PodBottleneckDetailPage() {
             onClick={() => setConfirmDelete(true)}
             disabled={del.isPending || !canOperate}
             title={withHint('진단 결과 삭제')}
-            aria-label={withHint('진단 결과 삭제')}
+            aria-label={ariaWithHint('진단 결과 삭제')}
             className="inline-flex items-center gap-1.5 rounded-xl border border-border bg-card px-3 py-1.5 text-sm text-status-critical hover:bg-status-critical/10 disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <Trash2 className="w-3.5 h-3.5" />

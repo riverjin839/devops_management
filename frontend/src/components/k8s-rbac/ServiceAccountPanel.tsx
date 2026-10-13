@@ -30,7 +30,7 @@ export function ServiceAccountPanel({
   isLoading,
   onSelectRole,
 }: Props) {
-  const { canOperate, withHint } = useCanOperate(clusterId);
+  const { canOperate, withHint, ariaWithHint } = useCanOperate(clusterId);
   const toast = useToastSafe();
   const [query, setQuery] = useState('');
   const [nsFilter, setNsFilter] = useState('');
@@ -140,7 +140,7 @@ export function ServiceAccountPanel({
             onClick={() => setCreating(!creating)}
             disabled={!canOperate}
             title={withHint('ServiceAccount 추가')}
-            aria-label={withHint('ServiceAccount 추가')}
+            aria-label={ariaWithHint('ServiceAccount 추가')}
             className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-primary text-primary-foreground text-xs font-medium disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <UserPlus className="w-3.5 h-3.5" /> ServiceAccount 추가
@@ -256,7 +256,7 @@ export function ServiceAccountPanel({
                               onClick={() => handleKubeconfig(sa)}
                               disabled={!canOperate || issue.isPending}
                               title={withHint('kubeconfig 발급')}
-                              aria-label={withHint(`${sa.name} kubeconfig 발급`)}
+                              aria-label={ariaWithHint(`${sa.name} kubeconfig 발급`)}
                               className="inline-flex items-center gap-1 px-2 py-1 rounded-lg border border-border text-xs hover:border-primary hover:text-primary disabled:opacity-50"
                             >
                               <KeyRound className="w-3.5 h-3.5" /> kubeconfig
@@ -266,7 +266,7 @@ export function ServiceAccountPanel({
                               onClick={() => setPendingDelete(sa)}
                               disabled={!canOperate}
                               title={withHint('ServiceAccount 삭제')}
-                              aria-label={withHint(`${sa.name} 삭제`)}
+                              aria-label={ariaWithHint(`${sa.name} 삭제`)}
                               className="p-1.5 rounded-lg text-muted-foreground hover:text-destructive hover:bg-destructive/10 disabled:opacity-50"
                             >
                               <Trash2 className="w-4 h-4" />

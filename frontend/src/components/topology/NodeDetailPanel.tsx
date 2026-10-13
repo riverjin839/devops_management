@@ -22,10 +22,11 @@ interface Props {
   /** D-090 — 삭제는 서버가 operator 이상을 요구한다. 없으면(기본) 항상 활성. */
   canOperate?: boolean;
   withHint?: (title: string) => string;
+  ariaWithHint?: (label: string) => string;
 }
 
 export function NodeDetailPanel({
-  node, edges, nodeName, onClose, onDeleteLink, onDeleteExternal, canOperate = true, withHint = (t) => t,
+  node, edges, nodeName, onClose, onDeleteLink, onDeleteExternal, canOperate = true, withHint = (t) => t, ariaWithHint = (t) => t,
 }: Props) {
   const related = edges.filter((e) => e.source === node.id || e.target === node.id);
   const cpuR = usageRatio(node.metrics.cpu.usage, node.metrics.cpu.request, node.metrics.cpu.limit);
@@ -100,7 +101,7 @@ export function NodeDetailPanel({
                   </span>
                   {e.type === 'manual' && e.manualId && onDeleteLink && (
                     <button onClick={() => onDeleteLink(e.manualId!)} disabled={!canOperate} title={withHint('링크 삭제')}
-                      className="text-status-critical hover:text-status-critical flex-shrink-0 disabled:opacity-40 disabled:cursor-not-allowed" aria-label={withHint('링크 삭제')}>
+                      className="text-status-critical hover:text-status-critical flex-shrink-0 disabled:opacity-40 disabled:cursor-not-allowed" aria-label={ariaWithHint('링크 삭제')}>
                       <Trash2 className="w-3 h-3" />
                     </button>
                   )}

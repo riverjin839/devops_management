@@ -16,6 +16,11 @@ export interface CanOperate {
   hint: string | undefined;
   /** 원래 title 을 받아 권한에 따라 사유로 바꿔주는 헬퍼 — `title={withHint('지금 실행')}`. */
   withHint: (title: string) => string;
+  /**
+   * `aria-label` 용 — 액션 이름을 지우지 않고 사유를 덧붙인다(`"지금 실행 — operator 이상 …"`).
+   * `withHint` 를 aria-label 에 쓰면 스크린리더·테스트가 버튼 이름을 잃는다.
+   */
+  ariaWithHint: (label: string) => string;
 }
 
 /**
@@ -41,7 +46,13 @@ export function useCanOperate(clusterId?: string | null): CanOperate {
       : !clusterOk
         ? CLUSTER_OPERATE_REQUIRED_HINT
         : undefined;
-    return { canOperate, role, hint, withHint: (title: string) => hint ?? title };
+    return {
+      canOperate,
+      role,
+      hint,
+      withHint: (title: string) => hint ?? title,
+      ariaWithHint: (label: string) => (hint ? `${label} — ${hint}` : label),
+    };
   }, [user, clusterId, clusterAccess.data]);
 }
 

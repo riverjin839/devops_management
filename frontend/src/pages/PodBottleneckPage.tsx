@@ -73,7 +73,7 @@ export function PodBottleneckPage() {
   const abortRef = useRef<AbortController | null>(null);
   // 화면을 떠나면 진행 중 스트림을 끊는다(연결이 끊기면 서버도 그 진단을 중단해 저장하지 않는다).
   useEffect(() => () => abortRef.current?.abort(), []);
-  const { canOperate, withHint } = useCanOperate(selectedClusterId);
+  const { canOperate, withHint, ariaWithHint } = useCanOperate(selectedClusterId);
 
   const {
     data: runsData, isLoading: runsLoading, error: runsError,
@@ -194,7 +194,7 @@ export function PodBottleneckPage() {
                   type="submit"
                   disabled={!selectedClusterId || running || !canOperate}
                   title={withHint('병목 진단 실행')}
-                  aria-label={withHint('병목 진단 실행')}
+                  aria-label={ariaWithHint('병목 진단 실행')}
                   className="w-full inline-flex items-center justify-center gap-1.5 rounded-xl bg-primary text-primary-foreground px-3 py-2 text-sm font-semibold hover:opacity-90 disabled:opacity-50"
                 >
                   <Play className="w-4 h-4" />
