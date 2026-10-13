@@ -1,5 +1,6 @@
 // K8S 자원 관리 화면 공용 표/셀 프리미티브 — 정렬 헤더, 페이저, 미터바, 사용률 배지, Stat 카드.
 import type { ReactNode } from 'react';
+import { StatTile } from '@/components/common/StatTile';
 import {
   ArrowUp, ArrowDown, ChevronsUpDown, FileSpreadsheet, Search, Cpu, MemoryStick, HelpCircle,
   AlertTriangle, RefreshCw,
@@ -197,25 +198,26 @@ export function StatTooltip({ children }: { children: ReactNode }) {
   );
 }
 
-// warn: true = 주의(주황, 낭비 등 경미), 'critical' = 위험(빨강, 오버커밋/스로틀 등 심각).
-// 색상 단독으로 위험도를 전달하지 않도록 AlertTriangle 아이콘을 함께 표시한다.
-export function Stat({ label, value, sub, icon, warn, help, valueClassName }: {
+// 공용 StatTile 위임(D-118) — warn: true = 주의, 'critical' = 위험. 색 단독으로 위험도를 전달하지 않도록
+// 경고·위험이면 값 앞에 AlertTriangle 을 함께 그린다. icon 은 회색 타일 규칙상 표시하지 않는다(호환용으로만 받음).
+export function Stat({ label, value, sub, warn, help, valueClassName }: {
   label: string; value: string; sub?: string; icon?: ReactNode; warn?: boolean | 'critical'; help?: ReactNode;
   valueClassName?: string;
 }) {
-  const warnCls = warn === 'critical' ? 'text-status-critical' : warn ? 'text-status-warning' : (valueClassName ?? '');
   return (
-    <div className="rounded-lg border border-border bg-card/50 px-2.5 py-2">
-      <div className="text-xs text-muted-foreground flex items-center gap-1">
-        {icon}{label}
-        {help && <StatTooltip>{help}</StatTooltip>}
-      </div>
-      <div className={`text-xl font-semibold leading-tight mt-0.5 flex items-center gap-1 ${warnCls}`}>
-        {warn && <AlertTriangle className="w-3.5 h-3.5 flex-shrink-0" aria-hidden="true" />}
-        {value}
-      </div>
+    <StatTile
+      label={label}
+      tone={warn === 'critical' ? 'critical' : warn ? 'warning' : undefined}
+      value={
+        <span className={`inline-flex items-center gap-1 ${warn ? '' : (valueClassName ?? '')}`}>
+          {warn && <AlertTriangle className="w-3.5 h-3.5 flex-shrink-0" aria-hidden="true" />}
+          {value}
+        </span>
+      }
+      hint={help ? <StatTooltip>{help}</StatTooltip> : undefined}
+    >
       {sub && <div className="text-xs text-muted-foreground mt-0.5 truncate" title={sub}>{sub}</div>}
-    </div>
+    </StatTile>
   );
 }
 

@@ -3,7 +3,7 @@ import {
   Terminal, Globe, Server, Database, KeyRound, AlertTriangle, Info, Target, Pencil, Save, Plus, X,
   ShieldCheck, Workflow,
 } from 'lucide-react';
-import { EmptyState, StatusBadge, useToast } from '@/components/common';
+import { EmptyState, StatusBadge, useToast, LoadingState } from '@/components/common';
 import { ExecutionStepsTimeline } from '@/components/daily-check/ExecutionStepsTimeline';
 import { KubeadmCertsModal, EtcdSystemdModal } from '@/components/versions';
 import { useUpdateSourceConfig } from '@/hooks/useCheckMatrix';
@@ -311,10 +311,10 @@ export function CheckMatrixRunbookPanel({ runbook, isLoading, editTarget, latest
   // 테넌트 바인딩까지 본다 — 읽기 전용 바인딩 클러스터에서 편집 버튼이 눌린 뒤 403 이 나지 않게.
   const { canOperate, withHint, ariaWithHint } = useCanOperate(runbook?.clusterId);
   if (isLoading) {
-    return <div className="py-8 text-center text-sm text-muted-foreground">실행 계획 불러오는 중…</div>;
+    return <LoadingState compact label="실행 계획 불러오는 중…" />;
   }
   if (!runbook) {
-    return <div className="py-8 text-center text-sm text-muted-foreground">실행 계획을 불러오지 못했습니다.</div>;
+    return <EmptyState compact title="실행 계획을 불러오지 못했습니다." description="잠시 후 다시 열거나 항목 설정을 확인하세요." />;
   }
   const canEdit = !!editTarget && runbook.configEditable;
   const running = latestRun?.runState === 'queued' || latestRun?.runState === 'running';
