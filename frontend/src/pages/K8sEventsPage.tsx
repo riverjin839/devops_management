@@ -32,8 +32,9 @@ function SeverityBadge({ severity }: { severity: K8sEventSeverity }) {
       </span>
     );
   }
+  // info(= K8s Normal 이벤트)는 정상 범주라 무채색 (§12.12-3, D-119)
   return (
-    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold bg-status-info/10 text-status-info">
+    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-secondary text-muted-foreground">
       <Info className="w-3 h-3" /> Info
     </span>
   );
@@ -137,10 +138,11 @@ export function K8sEventsPage() {
                   const colors = {
                     critical: 'bg-status-critical/10 border-status-critical/30 text-status-critical',
                     warning: 'bg-status-warning/10 border-status-warning/30 text-status-warning',
-                    info: 'bg-status-info/10 border-status-info/30 text-status-info',
+                    info: 'bg-secondary border-border text-muted-foreground',
                   };
+                  // 값이 0 이면 중립색 (§12.12-2)
                   return (
-                    <div key={sev} className={`px-3 py-1.5 rounded-xl border text-sm font-medium ${colors[sev]}`}>
+                    <div key={sev} className={`px-3 py-1.5 rounded-xl border text-sm font-medium tabular-nums ${count > 0 ? colors[sev] : colors.info}`}>
                       {sev.charAt(0).toUpperCase() + sev.slice(1)}: {count}
                     </div>
                   );

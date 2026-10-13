@@ -5,7 +5,8 @@ import type { AxiosError } from 'axios';
 import { Play, Settings, RefreshCw } from 'lucide-react';
 import { MacCard } from '@/components/ui/MacCard';
 import { ClusterSidebar } from '@/components/common/ClusterSidebar';
-import { Skeleton } from '@/components/common';
+import { Skeleton, StatusBadge } from '@/components/common';
+import type { StatusVariant } from '@/components/common';
 import {
   AiSummaryCard,
   TrendChart,
@@ -156,7 +157,7 @@ export function DailyCheckReviewPage() {
               )}
               {!reviewLoading && reviewIsError && (
                 <MacCard title="AI 자동 리뷰">
-                  <div className="rounded-xl border border-status-critical/40 bg-status-critical-soft p-3 text-sm">
+                  <div className="rounded-md border border-status-critical/40 bg-status-critical-soft p-3 text-sm">
                     <p className="font-medium text-status-critical">리뷰를 불러오지 못했습니다</p>
                     <p className="mt-1 text-muted-foreground break-words">{errMsg(reviewError)}</p>
                     <button
@@ -183,22 +184,20 @@ export function DailyCheckReviewPage() {
   );
 }
 
-// status 별 visual marker — native <option> 은 children 스타일링이 불가하므로 텍스트 접두사로 표현.
-// 진짜 컬러 badge 가 필요해지면 components/ui/Select 를 Radix dropdown-menu 기반으로 추가하는
-// 별도 design system 작업이 필요.
-const STATUS_MARKER: Record<string, string> = {
-  healthy: '🟢',
-  warning: '🟡',
-  critical: '🔴',
-  pending: '⚪',
+// status 한국어 라벨 — native <option> 은 아이콘을 넣을 수 없어 텍스트로 표현 (이모지 금지, D-126).
+const STATUS_LABEL: Record<string, string> = {
+  healthy: '정상',
+  warning: '경고',
+  critical: '위험',
+  pending: '대기',
 };
 
-// 회차 배지 색 — 고정 팔레트 대신 status 토큰 (D-020)
-const STATUS_BADGE: Record<string, string> = {
-  healthy: 'bg-status-healthy-soft text-status-healthy',
-  warning: 'bg-status-warning-soft text-status-warning',
-  critical: 'bg-status-critical-soft text-status-critical',
-  pending: 'bg-status-unknown-soft text-status-unknown',
+// 회차 배지 — 공용 StatusBadge (정상은 무채색, D-119)
+const STATUS_VARIANT: Record<string, StatusVariant> = {
+  healthy: 'healthy',
+  warning: 'warning',
+  critical: 'critical',
+  pending: 'pending',
 };
 
 const SCHEDULE_LABEL: Record<string, string> = {
@@ -232,24 +231,21 @@ function DailyCheckLogPicker({
           className="flex-1 rounded-xl border border-border bg-card px-3 py-2 text-sm"
         >
           {logs.map((l) => {
-            const marker = STATUS_MARKER[l.overallStatus] ?? '⚪';
+            const statusKr = STATUS_LABEL[l.overallStatus] ?? l.overallStatus;
             const scheduleKr = SCHEDULE_LABEL[l.scheduleType] ?? l.scheduleType;
             const dt = parseUTC(l.checkedAt).toLocaleString('ko-KR');
             return (
               <option key={l.id} value={l.id}>
-                {marker} {dt} · {scheduleKr} · {l.overallStatus}
+                {statusKr} · {dt} · {scheduleKr}
               </option>
             );
           })}
         </select>
         {selected && (
-          <span
-            className={`text-xs font-medium px-2 py-1 rounded-full ${
-              STATUS_BADGE[selected.overallStatus] ?? STATUS_BADGE.pending
-            }`}
-          >
-            {selected.overallStatus}
-          </span>
+          <StatusBadge
+            variant={STATUS_VARIANT[selected.overallStatus] ?? 'pending'}
+            label={STATUS_LABEL[selected.overallStatus] ?? selected.overallStatus}
+          />
         )}
       </div>
     </MacCard>

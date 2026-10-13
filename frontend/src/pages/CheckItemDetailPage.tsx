@@ -397,10 +397,10 @@ function TestTab({ item, clusters }: { item: CheckMatrixItem; clusters: Cluster[
     switch (item.sourceType) {
       case 'manual': return '수동 입력 항목은 자동 실행이 없어 테스트할 것이 없습니다.';
       case 'core_bundle':
-        return '핵심 점검 번들은 미리 실행을 지원하지 않습니다 — "실행 주기" 탭의 ▶ 로 실제 점검을 실행하면 실시간 로그로 결과를 볼 수 있습니다.';
+        return '핵심 점검 번들은 미리 실행을 지원하지 않습니다 — "실행 주기" 탭의 실행 버튼으로 실제 점검을 실행하면 실시간 로그로 결과를 볼 수 있습니다.';
       case 'batch_job':
       case 'playbook':
-        return `등록된 ${item.sourceType === 'batch_job' ? '배치잡' : '플레이북'}은 안전상 미리 실행하지 않습니다(실제 변경이 나갈 수 있음) — "실행 주기" 탭의 ▶ 로 실행하면 실시간 로그로 결과를 볼 수 있습니다.`;
+        return `등록된 ${item.sourceType === 'batch_job' ? '배치잡' : '플레이북'}은 안전상 미리 실행하지 않습니다(실제 변경이 나갈 수 있음) — "실행 주기" 탭의 실행 버튼으로 실행하면 실시간 로그로 결과를 볼 수 있습니다.`;
       default: return null;
     }
   })();
@@ -498,7 +498,7 @@ function ApplyTab({ item, cells }: { item: CheckMatrixItem; cells: CheckMatrixIt
           {isCoreBundle
             ? '핵심 점검 번들의 cron 은 클러스터 단위 — 여기서 클러스터별로 켜고 끕니다.'
             : 'cron 을 비워두면 자동 실행되지 않습니다(수동/매트릭스 일괄 실행만 가능).'}
-          {runnable && ' ▶ 실행은 실시간 로그 패널로 진행 상황을 보여줍니다.'}
+          {runnable && ' 실행 버튼은 실시간 로그 패널로 진행 상황을 보여줍니다.'}
         </p>
         {runnable && (
           <button

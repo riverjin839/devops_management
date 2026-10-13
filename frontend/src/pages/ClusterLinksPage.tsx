@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
-  Link2, Plus, Pencil, Trash2, ExternalLink, X, Check, Globe,
+  Link2, Plus, Pencil, Trash2, ExternalLink, X, Check, Globe, Server,
   GripVertical, Table2, LayoutList, LayoutGrid, Search,
 } from 'lucide-react';
 import {
@@ -104,9 +104,9 @@ function LinkForm({ initial, onSave, onCancel }: LinkFormProps) {
 // ── Link card (vertical/horizontal modes) ─────────────────────────────────────
 function LinkCard({ link, onEdit, onDelete }: { link: ClusterLink; onEdit: () => void; onDelete: () => void }) {
   return (
-    <div className="group relative flex items-start gap-3 px-3.5 py-3 bg-background/60 hover:bg-secondary/60 border border-border/60 hover:border-primary/30 rounded-xl transition-all hover:shadow-sm">
-      <div className="w-8 h-8 bg-primary/10 ring-1 ring-primary/15 rounded-lg flex items-center justify-center flex-shrink-0 mt-0.5">
-        <Link2 className="w-4 h-4 text-primary" />
+    <div className="group relative flex items-start gap-3 px-3.5 py-3 bg-background hover:bg-secondary/60 border border-border/60 hover:border-primary/30 rounded-md transition-colors">
+      <div className="w-8 h-8 bg-secondary rounded-md flex items-center justify-center flex-shrink-0 mt-0.5">
+        <Link2 className="w-4 h-4 text-muted-foreground" />
       </div>
       <div className="flex-1 min-w-0">
         <a href={link.url} target="_blank" rel="noopener noreferrer"
@@ -327,12 +327,12 @@ export function ClusterLinksPage() {
     // ── Header row ──
     // Common header
     cells.push(
-      <div key="h-common" className={`relative flex items-center gap-1.5 border-b border-r ${borderCls} px-3 py-2 bg-status-healthy/10 sticky top-0 z-10`}>
-        <Globe className="w-3.5 h-3.5 text-status-healthy flex-shrink-0" />
-        <span className="font-semibold text-xs uppercase tracking-wider text-status-healthy truncate">공통 링크</span>
+      <div key="h-common" className={`relative flex items-center gap-1.5 border-b border-r ${borderCls} px-3 py-2 bg-secondary sticky top-0 z-10`}>
+        <Globe className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
+        <span className="font-semibold text-xs text-foreground truncate">공통 링크</span>
         <span className="ml-auto text-xs text-muted-foreground tabular-nums flex-shrink-0">({filteredCommonLinks.length})</span>
         <button onClick={() => { setTableFormTarget('common'); setEditingCommon(null); setEditingLink(null); }}
-          className="ml-1 p-0.5 rounded text-status-healthy/60 hover:text-status-healthy dark:hover:text-status-healthy hover:bg-status-healthy/15 transition-colors flex-shrink-0" title="공통 링크 추가" aria-label="공통 링크 추가">
+          className="ml-1 p-0.5 rounded text-muted-foreground opacity-60 hover:opacity-100 hover:text-foreground hover:bg-muted transition-colors flex-shrink-0" title="공통 링크 추가" aria-label="공통 링크 추가">
           <Plus className="w-3 h-3" />
         </button>
         <ColResizeHandle colId="common" currentWidth={colW('common')} onResize={handleColResize} onResizeDone={handleColResizeDone} />
@@ -342,8 +342,8 @@ export function ClusterLinksPage() {
       cells.push(
         <div key={`h-${g.clusterId}`}
           className={`relative flex items-center gap-1.5 border-b ${borderCls} px-3 py-2 ${hdrBg} sticky top-0 z-10${idx < groups.length - 1 ? ` border-r ${borderCls}` : ''}`}>
-          <span className="text-sm leading-none text-primary">☸</span>
-          <span className={`font-semibold text-xs uppercase tracking-wider truncate ${hdrText}`}>{g.clusterName}</span>
+          <Server aria-hidden="true" className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
+          <span className={`font-semibold text-xs truncate ${hdrText}`}>{g.clusterName}</span>
           <span className="ml-auto text-xs text-muted-foreground tabular-nums flex-shrink-0">({g.links.length})</span>
           <button onClick={() => { setTableFormTarget(g.clusterId); setEditingLink(null); setEditingCommon(null); }}
             className={`ml-1 p-0.5 rounded transition-colors flex-shrink-0 ${hdrText} opacity-60 hover:opacity-100 hover:bg-muted`} title="링크 추가" aria-label="링크 추가">
@@ -479,8 +479,8 @@ export function ClusterLinksPage() {
             <GripVertical className="w-3.5 h-3.5" />
           </span>
         )}
-        <span className="text-sm leading-none text-primary">☸</span>
-        <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground select-none truncate">
+        <Server aria-hidden="true" className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
+        <span className="text-xs font-medium text-muted-foreground select-none truncate">
           {g.clusterName}
         </span>
         {isOrphan && (
@@ -580,13 +580,13 @@ export function ClusterLinksPage() {
             {/* Common links section */}
             <MacCard bodyPadding="p-0">
               <div className="flex items-center px-4 py-2.5 border-b border-border bg-muted/40 gap-2">
-                <Globe aria-hidden="true" className="w-3.5 h-3.5 text-status-healthy" />
-                <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground select-none">
+                <Globe aria-hidden="true" className="w-3.5 h-3.5 text-muted-foreground" />
+                <span className="text-xs font-medium text-muted-foreground select-none">
                   공통 서비스 링크
                 </span>
                 <span className="text-xs text-muted-foreground tabular-nums">({filteredCommonLinks.length})</span>
                 <button onClick={() => { setAddingCommon(true); setEditingCommon(null); }}
-                  className="ml-auto px-2 py-1 text-xs font-medium bg-status-healthy/10 hover:bg-status-healthy/15 text-status-healthy border border-status-healthy/25 rounded-md transition-colors flex items-center gap-1">
+                  className="ml-auto px-2 py-1 text-xs font-medium bg-secondary hover:bg-muted text-foreground border border-border rounded-xl transition-colors flex items-center gap-1">
                   <Plus className="w-3 h-3" /> 추가
                 </button>
               </div>

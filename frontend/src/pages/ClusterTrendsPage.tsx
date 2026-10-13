@@ -244,7 +244,7 @@ export function ClusterTrendsPage() {
               ) : (
                 <div className="grid gap-2" style={{ gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))` }}>
                   {cells.map((cell) => (
-                    <div key={`${cell.node}__${cell.metric}`} className="rounded-xl border border-border bg-card p-2.5">
+                    <div key={`${cell.node}__${cell.metric}`} className="rounded-md border border-border bg-card p-2.5">
                       <div className="flex items-center justify-between gap-1 mb-1 min-w-0">
                         <span className="text-xs font-medium truncate" title={cell.node}>{cell.node}</span>
                         <span className="text-[11px] text-muted-foreground whitespace-nowrap">{METRIC_LABEL[cell.metric]}</span>

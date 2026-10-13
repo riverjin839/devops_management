@@ -82,7 +82,7 @@ function SortableClusterCard(
       {canDrag && (
         <button
           {...attributes} {...listeners}
-          className="absolute top-2 left-2 z-10 cursor-grab active:cursor-grabbing p-1 rounded text-muted-foreground/30 opacity-0 group-hover/card:opacity-100 focus-visible:opacity-100 hover:text-muted-foreground hover:bg-secondary transition-all"
+          className="absolute top-2 left-2 z-10 cursor-grab active:cursor-grabbing p-1 rounded text-muted-foreground/30 opacity-0 group-hover/card:opacity-100 focus-visible:opacity-100 hover:text-muted-foreground hover:bg-secondary transition-colors"
           title="드래그하여 순서 변경 (정렬: 수동 모드)"
           aria-label="순서 변경 핸들"
         >
@@ -785,7 +785,7 @@ export function ClusterManagePage() {
                     ref={toolsRef}
                     role="dialog"
                     aria-label="테이블 도구"
-                    className="absolute z-50 top-full mt-1 right-0 w-64 bg-card border border-border rounded-lg shadow-xl p-2 space-y-1"
+                    className="absolute z-50 top-full mt-1 right-0 w-64 bg-card border border-border rounded-md shadow-xl p-2 space-y-1"
                   >
                     {canEdit && (
                       <button
@@ -845,7 +845,7 @@ export function ClusterManagePage() {
           <MacCard rootClassName="mb-5" bodyPadding="p-0">
             <div className="flex items-center gap-2 px-4 py-2 border-b border-border bg-surface-container-high">
               <ScrollText className="w-3.5 h-3.5 text-muted-foreground" aria-hidden />
-              <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground select-none">실행 로그</span>
+              <span className="text-xs font-medium text-muted-foreground select-none">실행 로그</span>
               <div className="ml-auto flex items-center gap-1.5">
                 {lastBulkFailedIds.length > 0 && !bulkCollecting && canEdit && (
                   <button
@@ -1037,12 +1037,12 @@ export function ClusterManagePage() {
                       {group.label && (
                         <tr className="bg-primary/5 border-y border-primary/20">
                           <td colSpan={visibleColumns.length + customFields.length + 1}
-                            className="px-3 py-1.5 text-xs font-bold uppercase tracking-wider text-primary">
+                            className="px-3 py-1.5 text-xs font-semibold text-primary">
                             <span className="inline-flex items-center gap-1.5 align-middle">
                               <GroupIcon className="w-3 h-3" aria-hidden />
                               {groupLabelPrefix} {group.label}
                             </span>
-                            <span className="ml-2 text-muted-foreground font-normal normal-case tracking-normal">
+                            <span className="ml-2 text-muted-foreground font-normal">
                               {group.clusters.length}개
                             </span>
                           </td>
@@ -1087,7 +1087,7 @@ export function ClusterManagePage() {
                 <div key={group.key}>
                   {group.label && (
                     <div className="flex items-baseline gap-2 mb-2 px-1 border-l-2 border-primary pl-3">
-                      <span className="inline-flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-primary">
+                      <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-primary">
                         <GroupIcon className="w-3 h-3" aria-hidden />
                         {groupLabelPrefix} {group.label}
                       </span>

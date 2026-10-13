@@ -25,7 +25,8 @@ import { EXPORT_COLUMNS, NODE_SPEC_COLUMNS, serializeCellValue } from '@/compone
 // --status-* 토큰을 쓴다. dot 색을 배지 클래스 문자열에서 split(' ')[0] 으로 뽑아내던
 // 방식은 클래스 순서가 바뀌면 깨지는 취약한 패턴이라 별도 필드로 분리했다.
 const STATUS_TONE: Record<string, { badge: string; dot: string }> = {
-  active:       { badge: 'bg-status-healthy/10 text-status-healthy border-status-healthy/30', dot: 'bg-status-healthy' },
+  // 운영(active)은 정상이라 무채색 (§12.12-3, D-119).
+  active:       { badge: 'bg-secondary text-muted-foreground border-border', dot: 'bg-muted-foreground/40' },
   spare:        { badge: 'bg-status-info/10 text-status-info border-status-info/30', dot: 'bg-status-info' },
   maintenance:  { badge: 'bg-status-warning/10 text-status-warning border-status-warning/30', dot: 'bg-status-warning' },
   decommission: { badge: 'bg-status-unknown/10 text-status-unknown border-status-unknown/30', dot: 'bg-status-unknown' },
@@ -78,7 +79,7 @@ function HeaderMenu({ label, icon: Icon, items }: { label: string; icon: typeof 
             ref={popRef}
             role="menu"
             aria-label={label}
-            className="absolute z-50 top-full mt-1 left-0 min-w-[200px] bg-card border border-border rounded-lg shadow-xl py-1"
+            className="absolute z-50 top-full mt-1 left-0 min-w-[200px] bg-card border border-border rounded-md shadow-xl py-1"
           >
             {items.map((it, i) => (
               <button
@@ -756,7 +757,7 @@ export function NodeSpecPage() {
                               saveField(r.id, { isSsd: next });
                             }}
                             className={`px-1 rounded hover:bg-primary/10 disabled:opacity-40 ${
-                              r.isSsd === true ? 'text-status-healthy font-bold'
+                              r.isSsd === true ? 'text-foreground font-bold'
                               : r.isSsd === false ? 'text-muted-foreground'
                               : 'text-muted-foreground/30'
                             }`}
@@ -783,7 +784,7 @@ export function NodeSpecPage() {
                             saveField(r.id, { isVm: next });
                           }}
                           className={`px-1 rounded text-sm font-mono hover:bg-primary/10 disabled:opacity-40 ${
-                            r.isVm === true ? 'text-status-info font-bold'
+                            r.isVm === true ? 'text-foreground font-bold'
                             : r.isVm === false ? 'text-muted-foreground'
                             : 'text-muted-foreground/30'
                           }`}
@@ -894,7 +895,7 @@ export function NodeSpecPage() {
       {hostFactsOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center">
           <div className="absolute inset-0 bg-black/50" onClick={() => !collectingFacts && closeHostFacts()} />
-          <div ref={hostFactsRef} role="dialog" aria-modal="true" aria-label="Host Facts 수집" className="relative w-full max-w-2xl bg-card border border-border rounded-xl p-5 shadow-2xl max-h-[90vh] overflow-y-auto">
+          <div ref={hostFactsRef} role="dialog" aria-modal="true" aria-label="Host Facts 수집" className="relative w-full max-w-2xl bg-card border border-border rounded-md p-5 shadow-2xl max-h-[90vh] overflow-y-auto">
             <h3 className="text-base font-semibold mb-3">Host Facts 수집 (bond/disk/vm)</h3>
             <div className="grid grid-cols-2 gap-3">
               <input value={sshUser} onChange={(e) => setSshUser(e.target.value)} placeholder="SSH user (root)"

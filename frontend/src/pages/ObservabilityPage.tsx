@@ -284,7 +284,7 @@ export function ObservabilityPage() {
             </div>
 
             {detail ? (
-              <p className="px-4 py-2 text-xs text-[hsl(var(--status-warning))] border-b border-border">
+              <p className="px-4 py-2 text-xs text-status-warning border-b border-border">
                 {detail}
               </p>
             ) : null}
@@ -365,10 +365,11 @@ function FilterGroup({ options, value, onChange, labels }: {
 }
 
 // Tailwind JIT 는 클래스명을 정적으로 스캔하므로 템플릿 리터럴로 조립하면 안 된다 — 고정 맵.
+// 정상은 무채색, 상태색은 비정상 + 값≠0 일 때만 (DESIGN_SYSTEM §12.12-3, D-119·D-132).
 const CHIP_CLS: Record<'healthy' | 'warning' | 'critical' | 'muted', string> = {
-  healthy: 'text-[hsl(var(--status-healthy))] border-[hsl(var(--status-healthy)/0.35)]',
-  warning: 'text-[hsl(var(--status-warning))] border-[hsl(var(--status-warning)/0.35)]',
-  critical: 'text-[hsl(var(--status-critical))] border-[hsl(var(--status-critical)/0.35)]',
+  healthy: 'text-muted-foreground border-border',
+  warning: 'text-status-warning border-status-warning/30',
+  critical: 'text-status-critical border-status-critical/30',
   muted: 'text-muted-foreground border-border',
 };
 
@@ -378,7 +379,7 @@ function Chip({ tone, label, count }: {
   count: number;
 }) {
   return (
-    <span className={`px-2 py-0.5 rounded-xl border ${CHIP_CLS[tone]}`}>
+    <span className={`px-2 py-0.5 rounded-xl border tabular-nums ${CHIP_CLS[count > 0 ? tone : 'muted']}`}>
       {label} {count}
     </span>
   );

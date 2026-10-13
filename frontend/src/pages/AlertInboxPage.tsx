@@ -42,30 +42,34 @@ const STATUS_TABS: Array<{ value: string; label: string }> = [
 ];
 
 /**
- * 심각도별 시각 구분 — 좌측 3px 바 + 행 배경 그라데이션 + 글자 굵기.
- * 색은 전부 테마 토큰이라 3개 테마에서 자동 대응한다(DESIGN_SYSTEM §12.4: raw hex 금지).
+ * 심각도별 시각 구분 — 좌측 바(색) + 심각도 열 글자색. 알람명은 굵기로만 위계를 준다
+ * (상태당 신호 1~2개, 그라데이션 금지 — DESIGN_SYSTEM §12.12-3·4).
  * Tailwind JIT 가 정적으로 스캔하므로 클래스는 조립하지 않고 고정 문자열로 둔다.
  */
-const SEVERITY_ROW: Record<AlertSeverity, { bar: string; grad: string; text: string; label: string }> = {
+const SEVERITY_ROW: Record<AlertSeverity, { bar: string; text: string; name: string; label: string }> = {
   critical: {
-    bar: 'bg-[hsl(var(--status-critical))]',
-    grad: 'bg-gradient-to-r from-[hsl(var(--status-critical)/0.14)] via-[hsl(var(--status-critical)/0.05)] to-transparent',
-    text: 'text-[hsl(var(--status-critical))] font-semibold',
+    bar: 'bg-status-critical',
+    text: 'text-status-critical font-semibold',
+    name: 'text-foreground font-semibold',
     label: 'Critical',
   },
   warning: {
-    bar: 'bg-[hsl(var(--status-warning))]',
-    grad: 'bg-gradient-to-r from-[hsl(var(--status-warning)/0.12)] via-[hsl(var(--status-warning)/0.04)] to-transparent',
-    text: 'text-[hsl(var(--status-warning))] font-medium',
+    bar: 'bg-status-warning',
+    text: 'text-status-warning font-medium',
+    name: 'text-foreground font-medium',
     label: 'Warning',
   },
   info: {
-    bar: 'bg-[hsl(var(--status-info))]',
-    grad: 'bg-gradient-to-r from-[hsl(var(--status-info)/0.10)] to-transparent',
-    text: 'text-[hsl(var(--status-info))]',
+    bar: 'bg-status-info',
+    text: 'text-status-info',
+    name: 'text-foreground',
     label: 'Info',
   },
 };
+
+// 최근 24시간 요약 칩 — 값이 0 이면 중립색 (§12.12-2).
+const statChip = (count: number, tone: string) =>
+  `px-2 py-0.5 rounded-xl border tabular-nums ${count > 0 ? tone : 'border-border text-muted-foreground'}`;
 
 const COLS = 10;
 
@@ -231,13 +235,13 @@ export function AlertInboxPage() {
               {stats ? (
                 <div className="flex flex-wrap items-center gap-2 px-4 py-2 border-b border-border bg-muted/10 text-xs">
                   <span className="text-muted-foreground">최근 24시간</span>
-                  <span className="px-2 py-0.5 rounded-xl border border-[hsl(var(--status-critical)/0.35)] text-[hsl(var(--status-critical))]">
+                  <span className={statChip(stats.critical, 'border-status-critical/30 text-status-critical')}>
                     Critical {stats.critical}
                   </span>
-                  <span className="px-2 py-0.5 rounded-xl border border-[hsl(var(--status-warning)/0.35)] text-[hsl(var(--status-warning))]">
+                  <span className={statChip(stats.warning, 'border-status-warning/30 text-status-warning')}>
                     Warning {stats.warning}
                   </span>
-                  <span className="px-2 py-0.5 rounded-xl border border-[hsl(var(--status-info)/0.35)] text-[hsl(var(--status-info))]">
+                  <span className={statChip(stats.info, 'border-status-info/30 text-status-info')}>
                     Info {stats.info}
                   </span>
                   <span className="px-2 py-0.5 rounded-xl border border-border text-muted-foreground">
@@ -282,7 +286,7 @@ export function AlertInboxPage() {
                           <tr
                             key={alert.id}
                             onClick={() => setExpandedId(isOpen ? null : alert.id)}
-                            className={`${ROW} cursor-pointer ${resolved ? 'opacity-60' : sev.grad}`}
+                            className={`${ROW} cursor-pointer ${resolved ? 'opacity-60' : ''}`}
                           >
                             {/* 심각도 색 바 — 순수 장식(같은 정보가 '심각도' 열에 글자로 있음) */}
                             <td className="p-0 w-1" aria-hidden="true">
@@ -293,8 +297,8 @@ export function AlertInboxPage() {
                             </td>
                             <td className={`${TD} text-xs`}>
                               <span className={resolved
-                                ? 'text-[hsl(var(--status-healthy))]'
-                                : 'text-[hsl(var(--status-critical))]'}>
+                                ? 'text-muted-foreground'
+                                : 'text-foreground font-medium'}>
                                 {resolved ? '해소' : '발생중'}
                               </span>
                             </td>
@@ -302,7 +306,7 @@ export function AlertInboxPage() {
                             <td className={`${TD} text-xs text-muted-foreground truncate`}>
                               {alert.clusterName ?? '—'}
                             </td>
-                            <td className={`${TD} truncate max-w-[16rem] ${sev.text}`}>
+                            <td className={`${TD} truncate max-w-[16rem] ${sev.name}`}>
                               {alert.alertname}
                               {alert.severitySource === 'rule' ? (
                                 <span className="ml-1.5 text-[11px] text-muted-foreground" title="알림 규칙이 심각도를 재정의했습니다">
@@ -336,7 +340,7 @@ export function AlertInboxPage() {
                                   aria-label={alert.acked ? '확인 해제' : '확인 처리'}
                                   className={`p-1 rounded-xl transition-colors ${
                                     alert.acked
-                                      ? 'text-[hsl(var(--status-healthy))] hover:bg-secondary'
+                                      ? 'text-foreground hover:bg-secondary'
                                       : 'text-muted-foreground hover:bg-secondary'
                                   }`}
                                 >
@@ -348,7 +352,7 @@ export function AlertInboxPage() {
                                     onClick={(e) => { e.stopPropagation(); void handleDelete(alert); }}
                                     title="알람 삭제"
                                     aria-label="알람 삭제"
-                                    className="p-1 rounded-xl text-muted-foreground hover:bg-secondary hover:text-[hsl(var(--status-critical))] transition-colors"
+                                    className="p-1 rounded-xl text-muted-foreground hover:bg-secondary hover:text-status-critical transition-colors"
                                   >
                                     <Trash2 className="w-3.5 h-3.5" />
                                   </button>

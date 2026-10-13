@@ -590,7 +590,7 @@ function Legend() {
   // 색만으로 구분하지 않도록 실제 선 패턴(dash)까지 그린다 — 캔버스와 같은 edgeStyleToken(D-096/D-097)
   const items = ['routes', 'exposes', 'owns', 'uses_config', 'uses_secret', 'mounts_pvc', 'manual', 'traffic'];
   return (
-    <div className="absolute bottom-3 left-3 bg-card/90 backdrop-blur border border-border rounded-md px-3 py-2 z-10 max-w-[60%]">
+    <div className="absolute bottom-3 left-3 bg-card border border-border rounded-md px-3 py-2 z-10 max-w-[60%]">
       <ul className="flex flex-wrap gap-x-3 gap-y-1" aria-label="엣지 범례">
         {items.map((type) => (
           <li key={type} className="inline-flex items-center gap-1 text-xs text-muted-foreground">

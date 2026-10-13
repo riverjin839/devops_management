@@ -84,7 +84,7 @@ function NodeCard({ node, onEdit, onDelete, onVerify, canOperate, withHint, aria
             disabled={!canOperate}
             title={withHint('노드 추가 검증')}
             aria-label={ariaWithHint('노드 추가 검증')}
-            className="p-1 rounded-xl hover:bg-status-healthy/10 text-muted-foreground hover:text-status-healthy transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+            className="p-1 rounded-xl hover:bg-secondary text-muted-foreground hover:text-foreground transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
           >
             <ShieldCheck className="w-3 h-3" />
           </button>
@@ -156,7 +156,7 @@ function NodeCard({ node, onEdit, onDelete, onVerify, canOperate, withHint, aria
 
       {/* Auto-synced 배지 */}
       {node.autoSynced && (
-        <span className="inline-flex items-center gap-1 self-start px-1.5 py-0.5 rounded-md text-sm bg-status-info/10 border border-status-info/20 text-status-info">
+        <span className="inline-flex items-center gap-1 self-start px-1.5 py-0.5 rounded-md text-sm bg-secondary border border-border text-muted-foreground">
           <RefreshCw className="w-2.5 h-2.5" />K8s 동기화
         </span>
       )}
@@ -263,7 +263,7 @@ function NodeModal({ clusterId, clusterMeta, initial, onClose }: NodeModalProps)
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60">
-      <div ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby={f('title')} className="bg-card border border-border rounded-xl shadow-card w-full max-w-lg max-h-[90vh] overflow-y-auto">
+      <div ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby={f('title')} className="bg-card border border-border rounded-md shadow-card w-full max-w-lg max-h-[90vh] overflow-y-auto">
         <div className="flex items-center justify-between p-5 border-b border-border">
           <h2 id={f('title')} className="text-base font-semibold text-foreground">
             {isEdit ? '노드 수정' : '노드 추가'}
@@ -447,7 +447,7 @@ function DeleteConfirm({ node, onConfirm, onCancel, isPending, error }: DeleteCo
   const dialogRef = useModalA11y(true, onCancel);
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60">
-      <div ref={dialogRef} role="dialog" aria-modal="true" aria-label="노드 삭제 확인" className="bg-card border border-border rounded-xl shadow-card w-full max-w-sm p-6 flex flex-col gap-4">
+      <div ref={dialogRef} role="dialog" aria-modal="true" aria-label="노드 삭제 확인" className="bg-card border border-border rounded-md shadow-card w-full max-w-sm p-6 flex flex-col gap-4">
         <div className="flex items-center gap-3">
           <div className="p-2 rounded-full bg-status-critical/10">
             <AlertTriangle className="w-5 h-5 text-status-critical" />
@@ -799,7 +799,9 @@ export function InfraTopologyPage() {
             {/* sync 직후 신규 노드 검증 요약 */}
             {syncSummary && (
               <div className="flex items-center gap-2 text-sm bg-card border border-border rounded-md px-3 py-2 mb-4">
-                <ShieldCheck className="w-3.5 h-3.5 flex-shrink-0 text-status-healthy" />
+                {syncSummary.some(v => !v.ok)
+                  ? <AlertTriangle className="w-3.5 h-3.5 flex-shrink-0 text-status-warning" />
+                  : <ShieldCheck className="w-3.5 h-3.5 flex-shrink-0 text-status-healthy" />}
                 <span>
                   신규 노드 {syncSummary.length}개 검증 — 정상 {syncSummary.filter(v => v.ok).length},{' '}
                   이상 {syncSummary.filter(v => !v.ok).length}
@@ -999,13 +1001,13 @@ export function InfraTopologyPage() {
                 {switches.map(({ switchName, nodeCount, racks: swRacks }) => (
                   <section
                     key={switchName}
-                    className="rounded-md border border-status-info/30 bg-status-info/[0.03] overflow-hidden"
+                    className="rounded-md border border-border overflow-hidden"
                   >
                     {/* 스위치 헤더 (L2/L3) */}
-                    <header className="flex items-center gap-2 px-4 py-2.5 bg-status-info/10 border-b border-status-info/20">
-                      <Network className="w-4 h-4 text-status-info flex-shrink-0" />
-                      <span className="text-sm font-semibold text-status-info">{switchName}</span>
-                      <span className="text-xs font-mono text-status-info/70">ToR / Leaf</span>
+                    <header className="flex items-center gap-2 px-4 py-2.5 bg-secondary border-b border-border">
+                      <Network className="w-4 h-4 text-muted-foreground flex-shrink-0" />
+                      <span className="text-sm font-semibold text-foreground">{switchName}</span>
+                      <span className="text-xs font-mono text-muted-foreground">ToR / Leaf</span>
                       <span className="ml-auto text-sm text-muted-foreground">
                         {swRacks.length}개 랙 · {nodeCount}개 노드
                       </span>

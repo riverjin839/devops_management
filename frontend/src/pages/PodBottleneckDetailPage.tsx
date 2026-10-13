@@ -15,7 +15,7 @@ import type { BottleneckStatus } from '@/types';
 import { formatApiError, parseUTC } from '@/lib/utils';
 
 const STATUS_BADGE: Record<BottleneckStatus, { label: string; cls: string }> = {
-  healthy:  { label: '정상',  cls: 'bg-status-healthy/10 text-status-healthy border-status-healthy/30' },
+  healthy:  { label: '정상',  cls: 'bg-secondary text-muted-foreground border-border' },
   warning:  { label: '경고',  cls: 'bg-status-warning/10 text-status-warning border-status-warning/30' },
   critical: { label: '위험',  cls: 'bg-status-critical/10 text-status-critical border-status-critical/30' },
   pending:  { label: '미연결', cls: 'bg-status-unknown/10 text-status-unknown border-status-unknown/30' },
@@ -139,7 +139,7 @@ export function PodBottleneckDetailPage() {
             <div role="status" className="flex flex-wrap items-center gap-2 text-sm">
               <span className="text-muted-foreground">원인 후보</span>
               {bad.length === 0 ? (
-                <span className="inline-flex items-center gap-1 rounded-full border border-status-healthy/30 bg-status-healthy/10 px-2.5 py-0.5 text-status-healthy">
+                <span className="inline-flex items-center gap-1 rounded-full border border-border bg-secondary px-2.5 py-0.5 text-muted-foreground">
                   이상 없음
                 </span>
               ) : bad.map(({ k, r }) => {

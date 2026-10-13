@@ -73,11 +73,11 @@ function NodeDetailPanel({ node, onClose, onAnalyzeImpact }: {
   const hasConfig = node.entityType === 'config_item' || node.entityType === 'kernel_param';
 
   return (
-    <div className="absolute top-4 right-4 w-72 bg-card border border-border rounded-xl shadow-2xl overflow-hidden z-10">
+    <div className="absolute top-4 right-4 w-72 bg-card border border-border rounded-md shadow-card overflow-hidden z-10">
       <div className="flex items-center justify-between px-4 py-3 border-b border-border"
         style={{ borderLeftColor: color, borderLeftWidth: 4 }}>
         <div className="min-w-0">
-          <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+          <p className="text-xs font-medium text-muted-foreground">
             {ENTITY_LABEL[node.entityType] ?? node.entityType}
           </p>
           <p className="text-sm font-bold text-foreground truncate">{node.name}</p>
@@ -90,19 +90,19 @@ function NodeDetailPanel({ node, onClose, onAnalyzeImpact }: {
       <div className="px-4 py-3 space-y-3 max-h-[420px] overflow-y-auto">
         {node.version && (
           <div>
-            <p className="text-xs text-muted-foreground uppercase font-semibold mb-0.5">버전</p>
+            <p className="text-xs font-medium text-muted-foreground mb-0.5">버전</p>
             <p className="text-sm font-mono text-foreground">{node.version}</p>
           </div>
         )}
         {node.__degree !== undefined && (
           <div>
-            <p className="text-xs text-muted-foreground uppercase font-semibold mb-0.5">연결 수</p>
+            <p className="text-xs font-medium text-muted-foreground mb-0.5">연결 수</p>
             <p className="text-sm text-foreground">{node.__degree}개 관계</p>
           </div>
         )}
         {Object.keys(node.properties).length > 0 && (
           <div>
-            <p className="text-xs text-muted-foreground uppercase font-semibold mb-1">속성</p>
+            <p className="text-xs font-medium text-muted-foreground mb-1">속성</p>
             <div className="space-y-1">
               {Object.entries(node.properties).map(([k, v]) => (
                 <div key={k} className="flex items-start justify-between gap-2 text-sm">
@@ -119,7 +119,7 @@ function NodeDetailPanel({ node, onClose, onAnalyzeImpact }: {
         <div className="px-4 py-3 border-t border-border">
           <button
             onClick={() => onAnalyzeImpact(node.id)}
-            className="w-full flex items-center justify-center gap-2 px-3 py-2 bg-status-warning/15 hover:bg-status-warning/25 text-status-warning border border-status-warning/30 rounded-lg text-sm font-semibold transition-colors"
+            className="w-full flex items-center justify-center gap-2 px-3 py-2 bg-secondary hover:bg-muted text-foreground border border-border rounded-xl text-sm font-medium transition-colors"
           >
             <Zap className="w-3.5 h-3.5" />
             변경 영향 분석
@@ -135,14 +135,14 @@ function ImpactPanel({ result, onClose }: {
   result: { blastRadiusScore: number; impactedEntities: { id: string; name: string; entityType: OntologyEntityType }[]; impactPaths: { pathNames: string[]; pathRelations: string[]; score: number }[] };
   onClose: () => void;
 }) {
-  const scoreColor = result.blastRadiusScore >= 0.7 ? 'text-status-critical' : result.blastRadiusScore >= 0.4 ? 'text-status-warning' : 'text-status-healthy';
+  const scoreColor = result.blastRadiusScore >= 0.7 ? 'text-status-critical' : result.blastRadiusScore >= 0.4 ? 'text-status-warning' : 'text-foreground';
 
   return (
-    <div className="absolute bottom-4 left-4 w-80 bg-card border border-status-warning/40 rounded-xl shadow-2xl overflow-hidden z-10">
-      <div className="flex items-center justify-between px-4 py-3 border-b border-border bg-status-warning/10">
+    <div className="absolute bottom-4 left-4 w-80 bg-card border border-border rounded-md shadow-card overflow-hidden z-10">
+      <div className="flex items-center justify-between px-4 py-3 border-b border-border">
         <div className="flex items-center gap-2">
           <AlertTriangle className="w-4 h-4 text-status-warning" />
-          <p className="text-sm font-bold text-status-warning">변경 영향 분석</p>
+          <p className="text-sm font-semibold text-foreground">변경 영향 분석</p>
         </div>
         <button onClick={onClose} aria-label="닫기" className="p-1 hover:bg-secondary rounded text-muted-foreground">
           <X className="w-4 h-4" />
@@ -155,7 +155,7 @@ function ImpactPanel({ result, onClose }: {
         </div>
         {result.impactedEntities.length > 0 && (
           <div>
-            <p className="text-xs text-muted-foreground uppercase font-semibold mb-1.5">
+            <p className="text-xs font-medium text-muted-foreground mb-1.5">
               영향 받는 엔티티 ({result.impactedEntities.length})
             </p>
             <div className="space-y-1">
@@ -172,10 +172,10 @@ function ImpactPanel({ result, onClose }: {
           </div>
         )}
         {result.impactPaths.slice(0, 3).map((path, i) => (
-          <div key={i} className="rounded-lg bg-secondary/40 px-3 py-2">
+          <div key={i} className="rounded-md bg-secondary/40 px-3 py-2">
             <div className="flex items-center justify-between mb-1">
               <p className="text-xs text-muted-foreground">경로 {i + 1}</p>
-              <p className="text-xs font-semibold text-status-warning">{(path.score * 100).toFixed(0)}%</p>
+              <p className="text-xs font-semibold text-foreground tabular-nums">{(path.score * 100).toFixed(0)}%</p>
             </div>
             <p className="text-xs text-foreground font-mono">
               {path.pathNames.join(' → ')}
@@ -401,14 +401,14 @@ export function OntologyPage() {
       </div>
 
       {/* 타입 필터 바 */}
-      <div className="flex items-center gap-1.5 px-4 py-2 bg-card/60 border-b border-border/60 flex-shrink-0 overflow-x-auto">
+      <div className="flex items-center gap-1.5 px-4 py-2 bg-card border-b border-border/60 flex-shrink-0 overflow-x-auto">
         {ALL_TYPES.map((t) => {
           const active = activeTypes.has(t);
           return (
             <button
               key={t}
               onClick={() => toggleType(t)}
-              className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium border flex-shrink-0 transition-all ${
+              className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium border flex-shrink-0 transition-opacity ${
                 active ? 'opacity-100' : 'opacity-35'
               }`}
               style={{
@@ -433,7 +433,7 @@ export function OntologyPage() {
         )}
 
         {analyzing && (
-          <div className="absolute top-4 left-1/2 -translate-x-1/2 flex items-center gap-2 bg-status-warning/20 border border-status-warning/40 rounded-full px-4 py-2 text-sm text-status-warning z-20">
+          <div className="absolute top-4 left-1/2 -translate-x-1/2 flex items-center gap-2 bg-card border border-border rounded-full px-4 py-2 text-sm text-muted-foreground shadow-card z-20">
             <Loader2 className="w-4 h-4 animate-spin" />영향 분석 중…
           </div>
         )}
@@ -485,8 +485,8 @@ export function OntologyPage() {
 
         {/* 범례 패널 */}
         {showLegend && (
-          <div className="absolute top-4 left-4 bg-card/90 backdrop-blur border border-border rounded-xl px-4 py-3 space-y-1.5 z-10">
-            <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-2">엔티티 타입</p>
+          <div className="absolute top-4 left-4 bg-card border border-border rounded-md px-4 py-3 space-y-1.5 z-10">
+            <p className="text-xs font-medium text-muted-foreground mb-2">엔티티 타입</p>
             {ALL_TYPES.map((t) => (
               <div key={t} className="flex items-center gap-2">
                 <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ background: ENTITY_COLOR[t] }} />

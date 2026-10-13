@@ -16,15 +16,16 @@ import { podBottleneckStreamUrl } from '@/services/api';
 import type { BottleneckRun, BottleneckStatus } from '@/types';
 import { formatApiError, parseUTC } from '@/lib/utils';
 
+// 좌측 보더만 상태색(비정상), 면 채색 없음 — 정상은 무채색 (§12.12-3, D-119).
 const STATUS_COLOR: Record<BottleneckStatus, string> = {
-  healthy:  'border-status-healthy/40 bg-status-healthy/5',
-  warning:  'border-status-warning/40 bg-status-warning/5',
-  critical: 'border-status-critical/40 bg-status-critical/5',
-  pending:  'border-status-unknown/40 bg-status-unknown/5',
+  healthy:  'border-transparent',
+  warning:  'border-status-warning/60',
+  critical: 'border-status-critical/60',
+  pending:  'border-status-unknown/60',
 };
 
 const STATUS_TEXT: Record<BottleneckStatus, string> = {
-  healthy: 'text-status-healthy',
+  healthy: 'text-muted-foreground',
   warning: 'text-status-warning',
   critical: 'text-status-critical',
   pending: 'text-status-unknown',

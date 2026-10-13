@@ -25,7 +25,7 @@ const FLOW_HIDDEN_KINDS = new Set(['PVC']);
 
 function syncStatusMeta(status: string): { color: string; label: string } {
   switch (status) {
-    case 'ok': return { color: 'bg-status-healthy', label: '최신' };
+    case 'ok': return { color: 'bg-muted-foreground/40', label: '최신' };
     case 'partial': return { color: 'bg-status-warning', label: '부분 성공' };
     case 'failed': return { color: 'bg-status-critical', label: '실패' };
     default: return { color: 'bg-status-unknown', label: '미생성' };
@@ -322,7 +322,7 @@ export function ServiceArchitecturePage() {
                 disabled={!doc}
                 aria-label="편집 모드" title="편집 모드 — 노드 두 개를 차례로 클릭해 연결"
                 className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium rounded-xl border ${
-                  editMode ? 'border-status-warning text-status-warning bg-secondary/60' : 'border-border bg-card hover:bg-secondary'
+                  editMode ? 'border-primary/40 text-primary bg-primary/10' : 'border-border bg-card hover:bg-secondary'
                 } disabled:opacity-50`}
               >
                 <Pencil className="w-3.5 h-3.5" />{editMode ? '편집 중' : '편집'}
@@ -372,7 +372,7 @@ export function ServiceArchitecturePage() {
             </div>
 
             {editMode && (
-              <div className="px-4 py-1.5 text-[11px] text-status-warning bg-secondary/40 border-b border-border">
+              <div className="px-4 py-1.5 text-xs text-primary bg-secondary/40 border-b border-border">
                 편집 모드: {linkSourceId
                   ? `${nodeName(linkSourceId)} → 연결할 대상 노드를 클릭하세요`
                   : '연결 시작 노드를 클릭하세요'}
@@ -411,7 +411,7 @@ export function ServiceArchitecturePage() {
                   />
                 )}
                 {warnings.length > 0 && (
-                  <div className="absolute bottom-2 left-2 right-2 text-[11px] text-status-warning bg-card/80 border border-border rounded-lg px-2 py-1 truncate"
+                  <div className="absolute bottom-2 left-2 right-2 text-[11px] text-status-warning bg-card border border-border rounded-md px-2 py-1 truncate"
                     title={warnings.join('\n')}>
                     <AlertTriangle className="inline w-3 h-3 mr-1 -mt-0.5" aria-hidden="true" />{warnings[0]}{warnings.length > 1 ? ` 외 ${warnings.length - 1}건` : ''}
                   </div>
