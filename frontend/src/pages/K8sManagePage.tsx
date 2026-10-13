@@ -15,7 +15,7 @@ import type { AxiosError } from 'axios';
 import { MacCard } from '@/components/ui/MacCard';
 import { ClusterSidebar } from '@/components/common/ClusterSidebar';
 import { LogViewer } from '@/components/common/LogViewer';
-import { ConfirmDialog, useModalA11y, Skeleton } from '@/components/common';
+import { ConfirmDialog, useModalA11y, Skeleton, SkeletonCard, EmptyState, LoadingState, StatTile, StatTileRow } from '@/components/common';
 import { RoleGate } from '@/components/auth/RoleGate';
 import { useClusters } from '@/hooks/useCluster';
 import { k8sResourcesApi, k8sHelmApi } from '@/services/api';
@@ -371,21 +371,21 @@ export function K8sManagePage() {
 
         {/* 본문 */}
         <div className="flex-1 min-w-0 space-y-3">
-          <div className="flex items-center gap-3 flex-wrap">
-            <PageHeader
-              back={{ to: '/cluster-overview', label: '클러스터 현황' }}
-              icon={Boxes}
-              title={<>{cluster ? cluster.name : '클러스터'} — {leaf.label}</>}
-            />
-            <RoleGate allow={['admin', 'operator']} fallback={
-              <span className="text-xs rounded px-1.5 py-0.5 bg-muted text-muted-foreground">읽기 전용 (viewer)</span>
-            }>
-              <span className="text-xs rounded px-1.5 py-0.5 bg-status-healthy/15 text-status-healthy">쓰기 가능 (operator)</span>
-            </RoleGate>
-          </div>
+          <PageHeader
+            back={{ to: '/cluster-overview', label: '클러스터 현황' }}
+            icon={Boxes}
+            title={<>{cluster ? cluster.name : '클러스터'} — {leaf.label}</>}
+            titleExtra={
+              <RoleGate allow={['admin', 'operator']} fallback={
+                <span className="text-xs rounded px-1.5 py-0.5 bg-muted text-muted-foreground">읽기 전용 (viewer)</span>
+              }>
+                <span className="text-xs rounded px-1.5 py-0.5 bg-secondary text-muted-foreground">쓰기 가능 (operator)</span>
+              </RoleGate>
+            }
+          />
 
           {actionMsg && (
-            <div className={`flex items-center gap-2 rounded-xl px-3 py-2 text-sm ${actionMsg.kind === 'ok' ? 'bg-status-healthy/10 text-status-healthy' : 'bg-destructive/10 text-destructive'}`}>
+            <div className={`flex items-center gap-2 rounded-xl px-3 py-2 text-sm ${actionMsg.kind === 'ok' ? 'bg-status-healthy/10 text-status-healthy' : 'bg-status-critical/10 text-status-critical'}`}>
               {actionMsg.kind === 'ok' ? <CheckCircle2 className="w-4 h-4" /> : <AlertTriangle className="w-4 h-4" />}
               {actionMsg.text}
             </div>
@@ -646,9 +646,9 @@ export function ResourceTablePanel(p: ResourceTablePanelProps) {
       {isLoading ? (
         <RowsSkeleton rows={8} />
       ) : isError ? (
-        <div className="p-6 text-sm text-destructive">조회 실패: {errMsg(error)}</div>
+        <div className="p-6 text-sm text-status-critical">조회 실패: {errMsg(error)}</div>
       ) : filtered.length === 0 ? (
-        <div className="p-10 text-center text-sm text-muted-foreground">표시할 리소스가 없습니다.</div>
+        <EmptyState compact title="표시할 리소스가 없습니다." description="네임스페이스 필터나 검색어를 바꿔 보세요." />
       ) : (
         <Virtuoso
           style={{ height: '64vh' }}
@@ -725,18 +725,11 @@ function OverviewPanel({ clusterId }: { clusterId: string }) {
   const nodeItems = nodes.data?.items ?? [];
   const readyNodes = nodeItems.filter((n) => (n.summary || '').startsWith('Ready')).length;
 
-  const Stat = ({ label, value, sub }: { label: string; value: string | number; sub?: string }) => (
-    <MacCard title={label}>
-      <div className="text-3xl font-bold tabular-nums">{value}</div>
-      {sub && <div className="text-sm text-muted-foreground mt-1">{sub}</div>}
-    </MacCard>
-  );
-
   // 조회 실패 시 — "노드 0·상태 점검" 위장 대신 명시적 에러 배너
   if (nodes.isError || namespaces.isError) {
     return (
       <MacCard title="클러스터 리소스 개요">
-        <div className="flex items-center gap-2 p-4 text-sm text-destructive">
+        <div className="flex items-center gap-2 p-4 text-sm text-status-critical">
           <AlertTriangle className="w-4 h-4 flex-shrink-0" />
           조회 실패: {errMsg(nodes.error ?? namespaces.error)}
         </div>
@@ -746,24 +739,19 @@ function OverviewPanel({ clusterId }: { clusterId: string }) {
   // 로딩 중 — 실제 3-스탯 그리드 구조를 흉내낸 skeleton (레이아웃 시프트 최소화)
   if (nodes.isLoading || namespaces.isLoading) {
     return (
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3" aria-busy="true" aria-label="개요 불러오는 중">
-        {[...Array(3)].map((_, i) => (
-          <div key={i} className="rounded-md border border-border bg-card p-4 space-y-2">
-            <Skeleton height={10} width="40%" />
-            <Skeleton height={24} width="60%" />
-          </div>
-        ))}
-      </div>
+      <StatTileRow>
+        {[...Array(3)].map((_, i) => <SkeletonCard key={i} className="rounded-md" />)}
+      </StatTileRow>
     );
   }
 
   const healthy = readyNodes === nodeItems.length && nodeItems.length > 0;
   return (
-    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-      <Stat label="노드" value={nodeItems.length} sub={`Ready ${readyNodes} / ${nodeItems.length}`} />
-      <Stat label="네임스페이스" value={namespaces.data?.items.length ?? '-'} />
-      <Stat label="상태" value={healthy ? 'Healthy' : '점검'} />
-    </div>
+    <StatTileRow>
+      <StatTile label="노드" value={nodeItems.length} hint={`Ready ${readyNodes} / ${nodeItems.length}`} />
+      <StatTile label="네임스페이스" value={namespaces.data?.items.length ?? '-'} />
+      <StatTile label="상태" value={healthy ? '정상' : '점검 필요'} tone={healthy ? undefined : 'warning'} />
+    </StatTileRow>
   );
 }
 
@@ -783,9 +771,9 @@ function HelmPanel({ clusterId, onViewValues }: { clusterId: string; onViewValue
       {isLoading ? (
         <RowsSkeleton />
       ) : isError ? (
-        <div className="p-6 text-sm text-destructive">조회 실패: {errMsg(error)}</div>
+        <div className="p-6 text-sm text-status-critical">조회 실패: {errMsg(error)}</div>
       ) : (data?.items.length ?? 0) === 0 ? (
-        <div className="p-10 text-center text-sm text-muted-foreground">Helm 릴리스가 없습니다.</div>
+        <EmptyState compact title="Helm 릴리스가 없습니다." description="이 클러스터에 helm 으로 설치된 릴리스가 없습니다." />
       ) : (
         data!.items.map((r) => (
           <div key={`${r.namespace}/${r.name}`} className="grid grid-cols-[1fr_140px_70px_1fr_90px] gap-2 px-4 py-1.5 text-sm border-b border-border/40 items-center">
@@ -851,9 +839,9 @@ function CrdPanel({ clusterId, selectedCrd, setSelectedCrd, onOpenObject }: CrdP
         {objects.isLoading ? (
           <RowsSkeleton />
         ) : objects.isError ? (
-          <div className="p-6 text-sm text-destructive">조회 실패: {errMsg(objects.error)}</div>
+          <div className="p-6 text-sm text-status-critical">조회 실패: {errMsg(objects.error)}</div>
         ) : (objects.data?.items.length ?? 0) === 0 ? (
-          <div className="p-10 text-center text-sm text-muted-foreground">오브젝트가 없습니다.</div>
+          <EmptyState compact title="오브젝트가 없습니다." description="이 CRD 로 만든 오브젝트가 아직 없습니다." />
         ) : (
           objects.data!.items.map((r) => (
             <button key={`${r.namespace}/${r.name}`} onClick={() => onOpenObject(selectedCrd, r)}
@@ -881,9 +869,9 @@ function CrdPanel({ clusterId, selectedCrd, setSelectedCrd, onOpenObject }: CrdP
       {crds.isLoading ? (
         <RowsSkeleton />
       ) : crds.isError ? (
-        <div className="p-6 text-sm text-destructive">조회 실패: {errMsg(crds.error)}</div>
+        <div className="p-6 text-sm text-status-critical">조회 실패: {errMsg(crds.error)}</div>
       ) : (crds.data?.items.length ?? 0) === 0 ? (
-        <div className="p-10 text-center text-sm text-muted-foreground">CRD 가 없습니다.</div>
+        <EmptyState compact title="CRD 가 없습니다." description="이 클러스터에 설치된 CustomResourceDefinition 이 없습니다." />
       ) : (
         crds.data!.items.map((c) => (
           <button key={c.name} onClick={() => setSelectedCrd(c)}
@@ -967,9 +955,9 @@ function DetailDrawer({ clusterId, detail, editing, draft, setDraft, onStartEdit
         </div>
         <div className="p-4">
           {yamlQuery.isLoading ? (
-            <div className="text-sm text-muted-foreground">불러오는 중…</div>
+            <LoadingState compact />
           ) : yamlQuery.isError ? (
-            <div className="text-sm text-destructive">조회 실패: {errMsg(yamlQuery.error)}</div>
+            <div className="text-sm text-status-critical">조회 실패: {errMsg(yamlQuery.error)}</div>
           ) : (
             <Tabs.Root value={editing || (!hasSections && tab === 'summary') ? 'yaml' : tab} onValueChange={(v) => setTab(v as 'summary' | 'yaml' | 'events')}>
               <Tabs.List className="flex gap-1 mb-3 border-b border-border">
@@ -1031,9 +1019,9 @@ function RelatedEventsView({ loading, error, items }: { loading: boolean; error:
     const sec = Math.max(0, Math.floor((Date.now() - new Date(iso).getTime()) / 1000));
     return `${age(sec)} 전`;
   };
-  if (loading) return <div className="text-sm text-muted-foreground">이벤트 불러오는 중…</div>;
-  if (error) return <div className="text-sm text-destructive">이벤트 조회 실패: {error}</div>;
-  if (items.length === 0) return <div className="text-sm text-muted-foreground p-6 text-center">관련 이벤트 없음</div>;
+  if (loading) return <LoadingState compact />;
+  if (error) return <div className="text-sm text-status-critical">이벤트 조회 실패: {error}</div>;
+  if (items.length === 0) return <EmptyState compact title="관련 이벤트가 없습니다." description="이 리소스와 연결된 이벤트가 클러스터에 남아 있지 않습니다. 이벤트는 보존 기간이 지나면 사라집니다." />;
   return (
     <div className="space-y-2 max-h-[80vh] overflow-auto pr-1">
       {items.map((ev, i) => (
@@ -1153,9 +1141,9 @@ function NodesPanel({ clusterId, onOpenDetail, onCordon, onDrain }: NodesPanelPr
       {isLoading ? (
         <RowsSkeleton />
       ) : isError ? (
-        <div className="p-6 text-sm text-destructive">조회 실패: {errMsg(error)}</div>
+        <div className="p-6 text-sm text-status-critical">조회 실패: {errMsg(error)}</div>
       ) : rows.length === 0 ? (
-        <div className="p-10 text-center text-sm text-muted-foreground">노드가 없습니다.</div>
+        <EmptyState compact title="노드가 없습니다." description="클러스터 API 가 노드를 하나도 반환하지 않았습니다." />
       ) : (
         rows.map((n) => {
           const ready = n.conditions.includes('Ready');
@@ -1304,9 +1292,9 @@ export function PodsPanel(p: PodsPanelProps) {
       {isLoading ? (
         <RowsSkeleton rows={8} />
       ) : isError ? (
-        <div className="p-6 text-sm text-destructive">조회 실패: {errMsg(error)}</div>
+        <div className="p-6 text-sm text-status-critical">조회 실패: {errMsg(error)}</div>
       ) : filtered.length === 0 ? (
-        <div className="p-10 text-center text-sm text-muted-foreground">표시할 파드가 없습니다.</div>
+        <EmptyState compact title="표시할 파드가 없습니다." description="네임스페이스 필터나 검색어를 바꿔 보세요." />
       ) : (
         <Virtuoso
           style={{ height: '64vh' }}

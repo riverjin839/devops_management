@@ -3,7 +3,7 @@ import {
   AlertTriangle, CheckCircle, Info, Loader2, Search, Zap,
   Server, Layers, Package, RefreshCw, Download, Play, Square, Filter, X,
 } from 'lucide-react';
-import { SearchableSelect, LogViewTabs } from '@/components/common';
+import { SearchableSelect, LogViewTabs, PageHeader } from '@/components/common';
 import {
   useAnalyzeIncident, useAnalyzerHealth,
   useAnalyzeNamespaces, useAnalyzePods, useFetchIncidentContext,
@@ -17,7 +17,7 @@ import { formatApiError, parseUTC } from '@/lib/utils';
 const SEVERITY_STYLE: Record<string, { icon: typeof AlertTriangle; bg: string; border: string; text: string; badge: string }> = {
   critical: { icon: AlertTriangle, bg: 'bg-status-critical/10',    border: 'border-status-critical/40',    text: 'text-status-critical',    badge: 'bg-status-critical/15 text-status-critical border-status-critical/30' },
   warning:  { icon: AlertTriangle, bg: 'bg-status-warning/10',  border: 'border-status-warning/40',  text: 'text-status-warning',  badge: 'bg-status-warning/15 text-status-warning border-status-warning/30' },
-  info:     { icon: Info,          bg: 'bg-blue-500/10',   border: 'border-blue-500/40',   text: 'text-blue-400',   badge: 'bg-blue-500/15 text-blue-400 border-blue-500/30' },
+  info:     { icon: Info,          bg: 'bg-status-info/10',     border: 'border-status-info/40',     text: 'text-status-info',     badge: 'bg-status-info/15 text-status-info border-status-info/30' },
 };
 
 const BACKEND_LABEL: Record<string, string> = {
@@ -308,16 +308,15 @@ export function IncidentAnalysisPage() {
       <main className="max-w-[1500px] mx-auto px-6 py-8">
 
         {/* 헤더 */}
-        <div className="flex items-center justify-between mb-6 gap-3 flex-wrap">
-          <div className="flex items-center gap-3">
-            <Zap className="w-6 h-6 text-primary" />
-            <h1 className="text-xl font-bold">K8s 로그 — AI 분석</h1>
-            <LogViewTabs current="analysis" />
-          </div>
-          {health && (
+        <PageHeader
+          className="mb-6"
+          icon={Zap}
+          title="K8s 로그 — AI 분석"
+          titleExtra={<LogViewTabs current="analysis" />}
+          actions={health && (
             <div className="flex items-center gap-2 text-sm">
               {health.available
-                ? <CheckCircle className="w-4 h-4 text-status-healthy" />
+                ? <CheckCircle className="w-4 h-4 text-muted-foreground" />
                 : <AlertTriangle className="w-4 h-4 text-status-warning" />}
               <span className="text-muted-foreground">
                 {BACKEND_LABEL[health.backend] ?? health.backend}
@@ -325,7 +324,7 @@ export function IncidentAnalysisPage() {
               </span>
             </div>
           )}
-        </div>
+        />
 
         {/* ── 드릴다운 선택 (Cluster → Namespace → Pod) ── */}
         <div className="bg-card border border-border rounded-xl p-5 mb-5 space-y-4">
@@ -375,7 +374,7 @@ export function IncidentAnalysisPage() {
                 </div>
               </div>
               <p className="text-xs text-muted-foreground">
-                💡 콤마 구분, <code>*</code> <code>?</code> 와일드카드. 비워두면 전체 ns 스캔.
+                콤마 구분, <code>*</code> <code>?</code> 와일드카드. 비워두면 전체 ns 스캔.
                 Namespace 를 선택하면 이 입력은 사라지고 그 ns 만 스캔합니다.
               </p>
             </div>

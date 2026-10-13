@@ -10,7 +10,7 @@ import { useClusters } from '@/hooks/useCluster';
 import { useClusterStore } from '@/stores/clusterStore';
 import { useQueryClient } from '@tanstack/react-query';
 import { useOperationLevels } from '@/hooks/useOperationLevels';
-import { ConfirmDialog, Skeleton, useToast, EmptyState } from '@/components/common';
+import { ConfirmDialog, Skeleton, useToast, EmptyState, PageHeader } from '@/components/common';
 import { MacCard } from '@/components/ui/MacCard';
 import { Button } from '@/components/ui/button';
 import { formatApiError } from '@/lib/utils';
@@ -428,7 +428,8 @@ export function ClusterMetaFormPage() {
     <div className="app-min-h-screen bg-background">
       <main className="max-w-[1200px] mx-auto px-8 py-8">
         {/* Page header */}
-        <div className="flex items-center gap-3 mb-6">
+        {/* 뒤로가기는 미저장 변경 확인(requestLeave)을 거쳐야 해서 PageHeader 의 Link 형 back 대신 버튼을 둔다. */}
+        <div className="flex items-start gap-2 mb-6">
           <Button
             type="button"
             variant="ghost"
@@ -439,11 +440,7 @@ export function ClusterMetaFormPage() {
           >
             <ArrowLeft className="w-4 h-4" />
           </Button>
-          <Server className="w-6 h-6 text-primary" />
-          <div>
-            <h1 className="text-xl font-bold">클러스터 정보 수정</h1>
-            <p className="text-sm text-muted-foreground mt-0.5">{cluster?.name}</p>
-          </div>
+          <PageHeader className="flex-1" icon={Server} title="클러스터 정보 수정" description={cluster?.name} />
         </div>
 
         <form onSubmit={handleSubmit}>
@@ -501,7 +498,7 @@ export function ClusterMetaFormPage() {
           <div className="p-6 space-y-5">
             {/* 저장 실패·검증 오류는 스크린리더에도 즉시 고지 (D-036) */}
             {error && (
-              <div role="alert" className="px-3 py-2 bg-destructive/10 border border-destructive/30 rounded-md text-sm text-destructive">
+              <div role="alert" className="px-3 py-2 bg-status-critical/10 border border-status-critical/30 rounded-md text-sm text-status-critical">
                 {error}
               </div>
             )}

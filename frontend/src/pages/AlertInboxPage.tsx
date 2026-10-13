@@ -1,9 +1,9 @@
 import { useMemo, useState } from 'react';
-import { BellOff, Check, ExternalLink, RefreshCw, Search, Trash2 } from 'lucide-react';
+import { BellOff, BellRing, Check, ExternalLink, RefreshCw, Search, Trash2 } from 'lucide-react';
 import { MacCard } from '@/components/ui/MacCard';
 import { ClusterSidebar } from '@/components/common/ClusterSidebar';
 import { AlertAnalysisPanel } from '@/components/observability/AlertAnalysisPanel';
-import { ConfirmDialog, useToast } from '@/components/common';
+import { ConfirmDialog, useToast, PageHeader } from '@/components/common';
 import { useClusters } from '@/hooks/useCluster';
 import {
   useAckAlert,
@@ -154,6 +154,12 @@ export function AlertInboxPage() {
         />
 
         <div className="flex-1 min-w-0 space-y-3">
+          <PageHeader
+            icon={BellRing}
+            title="알람 인박스"
+            description="Alertmanager 에서 받은 알람을 확인·분석하고 알림 규칙을 관리합니다."
+          />
+
           <AlertReceiverGuide />
 
           <div className="flex items-center gap-1">

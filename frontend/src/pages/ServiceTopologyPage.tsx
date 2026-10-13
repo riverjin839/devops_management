@@ -9,6 +9,7 @@ import { useCanOperate } from '@/hooks/useCanOperate';
 import { analyzeApi } from '@/services/api';
 import {
   ClusterSidebar, ConfirmDialog, DebugLogPanel, NamespaceSingleSelect, RunLogPanel, SnapshotProgressCard, useToast,
+  PageHeader, LoadingState, EmptyState,
 } from '@/components/common';
 import { MacCard } from '@/components/ui/MacCard';
 import {
@@ -263,11 +264,12 @@ export function ServiceTopologyPage() {
           <DebugLogPanel pageKey="service-topology" extra={{ clusterId, scope, namespace, clusterMode, view, nodes: graph?.nodes.length ?? 0 }} />
 
           {/* 헤더 */}
-          <div className="flex items-center gap-3 mb-2">
-            <Workflow className="w-6 h-6 text-primary" />
-            <h1 className="text-xl font-bold">서비스 토폴로지</h1>
-            <span className="text-sm text-muted-foreground">pod 통신 · 자원 연계 · 사용량/한계 가시화</span>
-          </div>
+          <PageHeader
+            className="mb-2"
+            icon={Workflow}
+            title="서비스 토폴로지"
+            description="Pod 통신 · 자원 연계 · 사용량과 한계를 한 그래프로 보여 줍니다."
+          />
 
           {/* 툴바 */}
           <MacCard title="컨트롤" className="mb-3" bodyPadding="p-3">
@@ -449,8 +451,8 @@ export function ServiceTopologyPage() {
                   </div>
                 </div>
               ) : activeQuery.isLoading ? (
-                <div className="absolute inset-0 flex items-center justify-center text-muted-foreground gap-2">
-                  <Loader2 className="w-5 h-5 animate-spin" /> 토폴로지 수집 중…
+                <div className="absolute inset-0 flex items-center justify-center">
+                  <LoadingState label="토폴로지 수집 중…" />
                 </div>
               ) : activeQuery.isError ? (
                 <div className="absolute inset-0 flex items-center justify-center text-center px-6">
@@ -464,8 +466,12 @@ export function ServiceTopologyPage() {
                   </div>
                 </div>
               ) : !graph || graph.nodes.length === 0 ? (
-                <div className="absolute inset-0 flex items-center justify-center text-sm text-muted-foreground">
-                  {isCluster ? '표시할 리소스가 없습니다.' : '이 네임스페이스에 표시할 리소스가 없습니다.'}
+                <div className="absolute inset-0 flex items-center justify-center">
+                  <EmptyState
+                    icon={Boxes}
+                    title={isCluster ? '표시할 리소스가 없습니다.' : '이 네임스페이스에 표시할 리소스가 없습니다.'}
+                    description={isCluster ? '클러스터에서 수집된 워크로드가 없습니다. 새로고침으로 다시 수집해 보세요.' : '다른 네임스페이스를 고르거나 "미참조 설정"·"Pod 표시"를 켜 보세요.'}
+                  />
                 </div>
               ) : view === '2d' ? (
                 <TopologyCanvas

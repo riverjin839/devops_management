@@ -1,6 +1,6 @@
 import { Fragment, useId, useMemo, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { ViewModeBar, DebugLogPanel, useToast, DoubleScrollX, ConfirmDialog, Skeleton, SkeletonTable, EmptyState, LogViewer } from '@/components/common';
+import { ViewModeBar, DebugLogPanel, useToast, DoubleScrollX, ConfirmDialog, Skeleton, SkeletonTable, EmptyState, LogViewer, PageHeader } from '@/components/common';
 import { useModalA11y } from '@/components/common/useModalA11y';
 import { MacCard } from '@/components/ui/MacCard';
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
@@ -676,10 +676,11 @@ export function ClusterManagePage() {
         <DebugLogPanel pageKey="cluster-manage" extra={{ clusters: clusters.length, filtered: filteredClusters.length, autoUpdating: [...autoUpdatingIds].join(','), diffRowsCount: diffRows.length }} />
 
         {/* 페이지 헤더 — 액션이 많아 좁은 폭에서 줄바꿈 허용 (D-051) */}
-        <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
-          <div className="flex flex-wrap items-center gap-3">
-            <Server className="w-6 h-6 text-primary" />
-            <h1 className="text-xl font-bold">클러스터 관리</h1>
+        <PageHeader
+          className="mb-6"
+          icon={Server}
+          title="클러스터 관리"
+          titleExtra={<>
             {clusters.length > 0 && (
               <span className="text-sm px-2 py-0.5 rounded-full bg-secondary text-muted-foreground border border-border">
                 {filteredClusters.length} / {clusters.length}
@@ -704,8 +705,8 @@ export function ClusterManagePage() {
                 커스텀 컬럼 조회 실패
               </span>
             )}
-          </div>
-          <div className="flex flex-wrap items-center gap-2">
+          </>}
+          actions={<>
             <ViewModeBar
               modes={[
                 { id: 'table', label: '테이블', icon: <LayoutList className="w-3.5 h-3.5" /> },
@@ -836,8 +837,8 @@ export function ClusterManagePage() {
                 </>
               )}
             </div>
-          </div>
-        </div>
+          </>}
+        />
 
         {/* 수집 실행 로그 — 실행 결과를 토스트 요약이 아니라 대상별 한 줄 기록으로 (CLAUDE.md 실행-로그 규칙) */}
         {collectLogOpen && (

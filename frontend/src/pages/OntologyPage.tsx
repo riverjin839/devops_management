@@ -5,6 +5,7 @@ import { AlertTriangle, Filter, Info, Loader2, RefreshCw, Search, Share2, X, Zap
 import { useClusters } from '@/hooks/useCluster';
 import { useOntologyGraph, useAnalyzeImpact } from '@/hooks/useOntology';
 import type { OntologyEntityType } from '@/types';
+import { PageHeader, LoadingState, EmptyState } from '@/components/common';
 
 // ── 엔티티 타입별 색상 ─────────────────────────────────────────────────────────
 const ENTITY_COLOR: Record<OntologyEntityType, string> = {
@@ -324,72 +325,79 @@ export function OntologyPage() {
     <div className="app-h-screen bg-background flex flex-col overflow-hidden">
       {/* 상단 툴바 */}
       <div className="flex items-center gap-3 px-4 py-2.5 border-b border-border bg-card flex-shrink-0 z-20">
-        <Share2 className="w-5 h-5 text-primary flex-shrink-0" />
-        <h1 className="text-base font-bold flex-shrink-0">온톨로지 그래프</h1>
+        <PageHeader
+          className="flex-1 items-center"
+          icon={Share2}
+          title="온톨로지 그래프"
+          titleExtra={<>
+            <div className="h-5 w-px bg-border mx-1" />
 
-        <div className="h-5 w-px bg-border" />
+            {/* 클러스터 선택 */}
+            <select
+              value={clusterId}
+              onChange={(e) => setClusterId(e.target.value)}
+              aria-label="클러스터 선택"
+              className="px-2 py-1 bg-secondary border border-border rounded-xl text-sm focus:outline-none focus:ring-1 focus:ring-primary"
+            >
+              <option value="">— 클러스터 선택 —</option>
+              {clusters.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+            </select>
 
-        {/* 클러스터 선택 */}
-        <select
-          value={clusterId}
-          onChange={(e) => setClusterId(e.target.value)}
-          className="px-2 py-1 bg-secondary border border-border rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-primary"
-        >
-          <option value="">— 클러스터 선택 —</option>
-          {clusters.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-        </select>
+            {/* 검색 */}
+            <div className="relative">
+              <Search className="absolute left-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
+              <input
+                type="text"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="노드 검색..."
+                aria-label="노드 검색"
+                className="pl-7 pr-3 py-1 bg-secondary border border-border rounded-xl text-sm focus:outline-none focus:ring-1 focus:ring-primary w-44"
+              />
+            </div>
 
-        {/* 검색 */}
-        <div className="relative">
-          <Search className="absolute left-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
-          <input
-            type="text"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="노드 검색..."
-            className="pl-7 pr-3 py-1 bg-secondary border border-border rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-primary w-44"
-          />
-        </div>
+            {/* 통계 */}
+            {graph && (
+              <div className="flex items-center gap-3 text-sm text-muted-foreground">
+                <span><b className="text-foreground">{graphData.nodes.length}</b>/{graph.entities.length} 노드</span>
+                <span><b className="text-foreground">{graphData.links.length}</b> 관계</span>
+              </div>
+            )}
+          </>}
+          actions={<>
+            {/* 범례 토글 */}
+            <button
+              onClick={() => setShowLegend((v) => !v)}
+              aria-pressed={showLegend}
+              className={`flex items-center gap-1.5 px-2.5 py-1 rounded-xl text-sm border transition-colors ${
+                showLegend ? 'bg-primary/10 border-primary/30 text-primary' : 'bg-secondary border-border text-muted-foreground'
+              }`}
+            >
+              <Info className="w-3.5 h-3.5" />범례
+            </button>
 
-        {/* 통계 */}
-        {graph && (
-          <div className="flex items-center gap-3 text-sm text-muted-foreground">
-            <span><b className="text-foreground">{graphData.nodes.length}</b>/{graph.entities.length} 노드</span>
-            <span><b className="text-foreground">{graphData.links.length}</b> 관계</span>
-          </div>
-        )}
+            {/* 필터 초기화 */}
+            {activeTypes.size < ALL_TYPES.length && (
+              <button
+                onClick={() => setActiveTypes(new Set(ALL_TYPES))}
+                className="flex items-center gap-1 px-2.5 py-1 rounded-xl text-sm bg-secondary border border-border text-muted-foreground hover:text-foreground"
+              >
+                <Filter className="w-3.5 h-3.5" />전체
+              </button>
+            )}
 
-        <div className="flex-1" />
-
-        {/* 범례 토글 */}
-        <button
-          onClick={() => setShowLegend((v) => !v)}
-          className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-sm border transition-colors ${
-            showLegend ? 'bg-primary/10 border-primary/30 text-primary' : 'bg-secondary border-border text-muted-foreground'
-          }`}
-        >
-          <Info className="w-3.5 h-3.5" />범례
-        </button>
-
-        {/* 필터 초기화 */}
-        {activeTypes.size < ALL_TYPES.length && (
-          <button
-            onClick={() => setActiveTypes(new Set(ALL_TYPES))}
-            className="flex items-center gap-1 px-2.5 py-1 rounded-lg text-sm bg-secondary border border-border text-muted-foreground hover:text-foreground"
-          >
-            <Filter className="w-3.5 h-3.5" />전체
-          </button>
-        )}
-
-        {/* 새로고침 */}
-        <button
-          onClick={() => refetch()}
-          disabled={isLoading}
-          aria-label="새로고침"
-          className="p-1.5 hover:bg-secondary rounded-lg text-muted-foreground hover:text-foreground transition-colors"
-        >
-          <RefreshCw className={`w-4 h-4 ${isLoading ? 'animate-spin' : ''}`} />
-        </button>
+            {/* 새로고침 */}
+            <button
+              onClick={() => refetch()}
+              disabled={isLoading}
+              title="새로고침"
+              aria-label="새로고침"
+              className="p-1.5 hover:bg-secondary rounded-xl text-muted-foreground hover:text-foreground transition-colors"
+            >
+              <RefreshCw className={`w-4 h-4 ${isLoading ? 'animate-spin' : ''}`} />
+            </button>
+          </>}
+        />
       </div>
 
       {/* 타입 필터 바 */}
@@ -420,7 +428,7 @@ export function OntologyPage() {
       <div ref={containerRef} className="flex-1 relative overflow-hidden">
         {isLoading && (
           <div className="absolute inset-0 flex items-center justify-center bg-background/70 z-10">
-            <Loader2 className="w-8 h-8 animate-spin text-primary" />
+            <LoadingState />
           </div>
         )}
 
@@ -431,13 +439,16 @@ export function OntologyPage() {
         )}
 
         {isEmpty ? (
-          <div className="flex flex-col items-center justify-center h-full text-muted-foreground">
-            <Share2 className="w-16 h-16 mb-4" />
-            <p className="text-base">이 클러스터에 온톨로지 데이터가 없습니다</p>
-            <p className="text-sm mt-1">API로 엔티티와 관계를 먼저 등록하세요</p>
-            <code className="mt-3 px-3 py-1.5 bg-secondary rounded text-sm font-mono">
-              POST /api/v1/ontology/entities
-            </code>
+          <div className="flex items-center justify-center h-full">
+            <EmptyState
+              icon={Share2}
+              title="이 클러스터에 온톨로지 데이터가 없습니다."
+              description="API 로 엔티티와 관계를 먼저 등록하면 그래프가 그려집니다."
+            >
+              <code className="mt-3 px-3 py-1.5 bg-secondary rounded text-sm font-mono text-muted-foreground">
+                POST /api/v1/ontology/entities
+              </code>
+            </EmptyState>
           </div>
         ) : (
           <ForceGraph3D

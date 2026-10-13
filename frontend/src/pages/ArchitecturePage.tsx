@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { GitBranch } from 'lucide-react';
 import { useClusters } from '@/hooks/useCluster';
 import { usePepArchitectureGraph, useClusterAddonGraph } from '@/hooks/useArchitecture';
-import { ClusterSidebar, EmptyState, SelectClusterEmptyState, LoadingState } from '@/components/common';
+import { ClusterSidebar, EmptyState, SelectClusterEmptyState, LoadingState, PageHeader } from '@/components/common';
 import { MacCard } from '@/components/ui/MacCard';
 import { FlowDiagram, STATUS_COLOR } from '@/components/architecture';
 import { statusToVariant, type StatusVariant } from '@/components/common/StatusBadge';
@@ -41,13 +41,11 @@ export function ArchitecturePage() {
         )}
 
         <div className="flex-1 min-w-0 space-y-4">
-          <div className="flex items-center gap-3">
-            <GitBranch className="w-6 h-6 text-primary" />
-            <h1 className="text-xl font-bold">서비스 모듈 관계도</h1>
-            <span className="text-sm text-muted-foreground">
-              PEP 아키텍처와 클러스터 애드온 관계를 실시간 상태와 함께 흐름으로 시각화
-            </span>
-          </div>
+          <PageHeader
+            icon={GitBranch}
+            title="서비스 모듈 관계도"
+            description="PEP 아키텍처와 클러스터 애드온 관계를 실시간 상태와 함께 흐름으로 보여 줍니다."
+          />
 
           <div className="flex items-center rounded-lg border border-border overflow-hidden text-sm w-fit">
             <TabSeg active={tab === 'pep'} onClick={() => setTab('pep')} label="PEP 아키텍처" />
@@ -65,7 +63,7 @@ export function ArchitecturePage() {
             </MacCard>
           ) : (
             <MacCard
-              title={selectedCluster ? `${selectedCluster.name} 애드온 관계` : '클러스터를 선택하세요'}
+              title={selectedCluster ? `${selectedCluster.name} 애드온 관계` : '클러스터 애드온 관계'}
               bodyPadding="p-4"
             >
               {!clusterId ? (

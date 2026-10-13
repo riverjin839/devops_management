@@ -8,7 +8,7 @@ import {
 import { useClusters } from '@/hooks/useCluster';
 import {
   ClusterSidebar, DebugLogPanel, ConfirmDialog, GridCell, InlineTextCell, useToast,
-  SkeletonTable, EmptyState, ResizeGrip, DoubleScrollX, useModalA11y, LogViewer} from '@/components/common';
+  SkeletonTable, EmptyState, ResizeGrip, DoubleScrollX, useModalA11y, LogViewer, PageHeader } from '@/components/common';
 import { MacCard } from '@/components/ui/MacCard';
 import { useColumnWidths } from '@/hooks/useColumnWidths';
 import { formatApiError } from '@/lib/utils';
@@ -470,13 +470,16 @@ export function NodeSpecPage() {
           <DebugLogPanel pageKey="node-specs" extra={{ clusterId, total: rows.length, statusFilter, roleFilter, search }} />
 
           {/* 헤더 */}
-          <div className="flex items-center gap-3 mb-2">
-            <ClipboardCheck className="w-6 h-6 text-primary" />
-            <h1 className="text-xl font-bold">노드 서버스펙 관리 대장</h1>
-            <span className="text-sm px-2 py-0.5 rounded-full bg-secondary text-muted-foreground border border-border">
-              {stats.total} 건
-            </span>
-            <div className="ml-auto flex items-center gap-1.5">
+          <PageHeader
+            className="mb-2"
+            icon={ClipboardCheck}
+            title="노드 서버스펙 관리 대장"
+            titleExtra={
+              <span className="text-sm px-2 py-0.5 rounded-full bg-secondary text-muted-foreground border border-border">
+                {stats.total} 건
+              </span>
+            }
+            actions={<>
               <HeaderMenu label="내보내기" icon={Download} items={[
                 { icon: Download, label: 'CSV 내보내기', onClick: () => exportCsv(rows), disabled: rows.length === 0 },
                 { icon: FileDown, label: '템플릿 다운로드', onClick: downloadCsvTemplate, title: '현재 테이블 컬럼 기준 빈 템플릿 다운로드' },
@@ -503,8 +506,8 @@ export function NodeSpecPage() {
                 className="px-3 py-1 text-sm font-semibold bg-primary hover:bg-primary/90 text-primary-foreground rounded-lg flex items-center gap-1.5">
                 <Plus className="w-3.5 h-3.5" /> 신규 등록
               </button>
-            </div>
-          </div>
+            </>}
+          />
 
           {/* 통계 pills + 필터 + 전체 합계 — 한 줄로 통합 (pills 클릭 시 상태 필터 연동) */}
           <div className="flex flex-wrap items-center gap-1.5 mb-3">

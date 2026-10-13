@@ -18,7 +18,7 @@ import {
 import { PlaybookCard, AddPlaybookModal, RunCredsModal } from '@/components/playbooks';
 import type { PlaybookSshCreds } from '@/types';
 import { MacCard } from '@/components/ui/MacCard';
-import { ClusterSidebar, DebugLogPanel, ConfirmDialog, useToast, StatusBadge, statusToVariant } from '@/components/common';
+import { ClusterSidebar, DebugLogPanel, ConfirmDialog, useToast, StatusBadge, statusToVariant, EmptyState, PageHeader } from '@/components/common';
 import { useClusterStore } from '@/stores/clusterStore';
 import { usePlaybookStore } from '@/stores/playbookStore';
 import { useClusters, useSummary, useAddons, useHealthCheck, useCreateAddon, useDeleteAddon, useAddonHealthCheck, useCheckHistoryHeatmap, useClusterStatusBreakdown } from '@/hooks/useCluster';
@@ -40,9 +40,11 @@ interface ClusterOverviewGridProps {
 function ClusterOverviewGrid({ clusters, addons, onSelectCluster }: ClusterOverviewGridProps) {
   if (clusters.length === 0) {
     return (
-      <div className="text-center py-12 text-muted-foreground text-sm">
-        등록된 클러스터가 없습니다. 클러스터를 추가하세요.
-      </div>
+      <EmptyState
+        icon={Server}
+        title="등록된 클러스터가 없습니다."
+        description="상단의 + 클러스터 버튼으로 클러스터를 추가하면 여기에서 상태를 한눈에 볼 수 있습니다."
+      />
     );
   }
 
@@ -330,14 +332,15 @@ export function Dashboard() {
     <div className="app-min-h-screen bg-background">
       {/* ── Top bar ──────────────────────────────────────────────────────── */}
       <div className="sticky top-0 z-20 px-4 lg:px-6 py-2 bg-background/95 backdrop-blur border-b border-border flex flex-wrap items-center gap-x-3 gap-y-1.5">
-        <h1 className="text-sm font-semibold whitespace-nowrap">클러스터 현황</h1>
-        {lastCheckTime && (
-          <p className="text-xs text-muted-foreground font-mono hidden sm:block">
-            마지막 점검: {formatDateTime(lastCheckTime)}
-          </p>
-        )}
-
-        <div className="ml-auto flex flex-wrap items-center gap-1.5">
+        <PageHeader
+          className="flex-1 items-center"
+          title="클러스터 현황"
+          titleExtra={lastCheckTime && (
+            <span className="text-xs text-muted-foreground font-mono hidden sm:inline">
+              마지막 점검: {formatDateTime(lastCheckTime)}
+            </span>
+          )}
+          actions={<>
           <button
             onClick={() => setShowAddCluster(true)}
             className="px-2.5 py-1 text-sm font-medium bg-primary/10 hover:bg-primary/20 text-primary border border-primary/20 rounded-xl transition-colors flex items-center gap-1"
@@ -392,7 +395,8 @@ export function Dashboard() {
             <RefreshCw className={`w-3.5 h-3.5 ${isChecking ? 'animate-spin' : ''}`} />
             {isChecking ? '점검 중…' : '점검 실행'}
           </button>
-        </div>
+          </>}
+        />
       </div>
 
       <div className="py-3 pr-3 flex gap-3">

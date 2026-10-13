@@ -16,7 +16,7 @@ import { useClusters } from '@/hooks/useCluster';
 import { useClusterLinks, useUpdateClusterLinks } from '@/hooks/useUiSettings';
 import { useClusterStore } from '@/stores/clusterStore';
 import { useTableViewStore, TS } from '@/stores/tableViewStore';
-import { ViewModeBar, EmptyState } from '@/components/common';
+import { ViewModeBar, EmptyState, PageHeader, StatTile, StatTileRow } from '@/components/common';
 import { MacCard } from '@/components/ui/MacCard';
 import { ClusterLink, ClusterLinkGroup } from '@/types';
 
@@ -537,47 +537,30 @@ export function ClusterLinksPage() {
   return (
     <div className="app-min-h-screen bg-background">
       <main className="mx-auto max-w-[1600px] px-5 md:px-8 py-6 md:py-8 space-y-3">
-        {/* ── Hero / Header ─────────────────────────────────────────────── */}
-        <MacCard bodyPadding="p-4 md:p-5">
-          <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-            <div className="flex items-center gap-3 min-w-0">
-              <span
-                aria-hidden="true"
-                className="inline-flex items-center justify-center w-9 h-9 rounded-lg bg-primary/10 text-primary ring-1 ring-primary/15 flex-shrink-0"
-              >
-                <Link2 className="w-4 h-4" />
-              </span>
-              <div className="min-w-0">
-                <h1 className="text-lg font-semibold leading-tight truncate">클러스터 주요 링크</h1>
-                <p className="text-sm text-muted-foreground mt-0.5">
-                  운영 클러스터별 대시보드 · 모니터링 · 관리 콘솔을 한곳에서 빠르게 접근하세요.
-                </p>
-              </div>
-            </div>
-            <div className="flex items-center gap-2 flex-shrink-0">
-              <ViewModeBar modes={VIEW_MODES} active={layout} onChange={changeLayout} />
-            </div>
-          </div>
+        <PageHeader
+          icon={Link2}
+          title="클러스터 주요 링크"
+          description="운영 클러스터별 대시보드 · 모니터링 · 관리 콘솔을 한곳에서 빠르게 접근하세요."
+          actions={<ViewModeBar modes={VIEW_MODES} active={layout} onChange={changeLayout} />}
+        />
 
-          {/* Stats row */}
-          <div className="mt-4 grid grid-cols-3 gap-2">
-            <StatTile label="전체 링크"   value={totalLinks} />
-            <StatTile label="클러스터"    value={orderedGroups.length} />
-            <StatTile label="공통 링크"   value={commonLinks.length} accent />
-          </div>
+        <StatTileRow>
+          <StatTile label="전체 링크" value={totalLinks} />
+          <StatTile label="클러스터" value={orderedGroups.length} />
+          <StatTile label="공통 링크" value={commonLinks.length} />
+        </StatTileRow>
 
-          {/* Search */}
-          <div className="mt-3 relative">
-            <Search aria-hidden="true" className="w-4 h-4 text-muted-foreground absolute left-3 top-1/2 -translate-y-1/2" />
-            <input
-              value={keyword}
-              onChange={e => setKeyword(e.target.value)}
-              placeholder="링크 이름, 설명, URL 검색"
-              aria-label="링크 검색"
-              className="w-full rounded-lg border border-border bg-background pl-9 pr-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary transition-colors"
-            />
-          </div>
-        </MacCard>
+        {/* Search */}
+        <div className="relative">
+          <Search aria-hidden="true" className="w-4 h-4 text-muted-foreground absolute left-3 top-1/2 -translate-y-1/2" />
+          <input
+            value={keyword}
+            onChange={e => setKeyword(e.target.value)}
+            placeholder="링크 이름, 설명, URL 검색"
+            aria-label="링크 검색"
+            className="w-full rounded-xl border border-border bg-background pl-9 pr-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary transition-colors"
+          />
+        </div>
 
         {/* ── Empty: no clusters ────────────────────────────────────────── */}
         {noClusters ? (
@@ -658,18 +641,6 @@ export function ClusterLinksPage() {
           </>
         )}
       </main>
-    </div>
-  );
-}
-
-// ── Small stat tile (header) ──────────────────────────────────────────────────
-function StatTile({ label, value, accent }: { label: string; value: number; accent?: boolean }) {
-  return (
-    <div className="rounded-lg border border-border bg-muted/30 px-3 py-2">
-      <p className="text-xs uppercase tracking-wider text-muted-foreground">{label}</p>
-      <p className={`text-lg font-semibold tabular-nums leading-tight ${accent ? 'text-status-healthy' : 'text-foreground'}`}>
-        {value}
-      </p>
     </div>
   );
 }

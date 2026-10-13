@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
-import { SelectClusterEmptyState } from '@/components/common';
-import { Plus, RefreshCw, Search } from 'lucide-react';
+import { SelectClusterEmptyState, PageHeader, LoadingState, EmptyState } from '@/components/common';
+import { Activity, Plus, RefreshCw, Search } from 'lucide-react';
 import { MacCard } from '@/components/ui/MacCard';
 import { ClusterSidebar } from '@/components/common/ClusterSidebar';
 import { useClusters } from '@/hooks/useCluster';
@@ -138,13 +138,23 @@ export function ObservabilityPage() {
         />
 
         <div className="flex-1 min-w-0 space-y-3">
+          <PageHeader
+            icon={Activity}
+            title="관측 지표"
+            description="모듈별 지표 · 알람 규칙 · 스크레이프 타겟 · 발화 중 알람을 한곳에서 봅니다."
+          />
+
           {/* 모듈 탭 — 지표가 등록된 모듈만 활성, 나머지는 '준비중' */}
-          <MacCard title="Observability 모듈">
-            <div className="flex flex-wrap items-center gap-2">
+          <div>
+            <div role="group" aria-label="관측 모듈" className="flex flex-wrap items-center gap-2">
               {modulesLoading ? (
-                <span className="text-sm text-muted-foreground">모듈을 불러오는 중…</span>
+                <LoadingState compact />
               ) : modules.length === 0 ? (
-                <span className="text-sm text-muted-foreground">등록된 모듈이 없습니다.</span>
+                <EmptyState
+                  compact
+                  title="등록된 모듈이 없습니다."
+                  description="관측 모듈 카탈로그가 비어 있습니다. 서버 시드 상태를 확인하세요."
+                />
               ) : (
                 modules.map((mod) => {
                   const planned = mod.status !== 'active';
@@ -171,9 +181,9 @@ export function ObservabilityPage() {
               )}
             </div>
             {activeModule?.description ? (
-              <p className="mt-3 text-xs text-muted-foreground">{activeModule.description}</p>
+              <p className="mt-2 text-xs text-muted-foreground">{activeModule.description}</p>
             ) : null}
-          </MacCard>
+          </div>
 
           <MacCard title={activeModule?.label ?? moduleKey} bodyPadding="p-0">
             {/* 툴바 — 뷰 탭 · 필터 · 신선도 · 새로고침 */}
