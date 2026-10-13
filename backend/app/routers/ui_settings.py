@@ -12,6 +12,12 @@ from app.auth.feature_access import FEATURE_ACCESS_KEY, normalize_feature_access
 from app.auth.security import hash_password
 from app.services import audit_logger
 from app.services.assignee_accounts import ASSIGNEE_ACCOUNT_ROLE
+from app.services.cluster_endpoint_policy import (
+    CLUSTER_ENDPOINT_ALLOWLIST_KEY,
+    DEFAULT_CLUSTER_ENDPOINT_ALLOWLIST,
+    InvalidAllowlistEntry,
+    normalize_allowlist,
+)
 from app.services.cluster_network_mask import (
     CLUSTER_VIEWER_MASK_KEY,
     DEFAULT_CLUSTER_VIEWER_MASK,
@@ -493,6 +499,48 @@ def update_home_prefs_defaults(
             request=request,
         )
     return HomePrefsDefaults(installed_apps=after)
+
+
+# ── 클러스터 API 엔드포인트 허용 대역 (Settings → 접근 제어) ───────────────────
+# 비어 있으면 제한 없음. 채우면 클러스터 생성·api_endpoint 변경·연결 검증이 이 대역(CIDR/호스트명)
+# 밖의 주소로 요청을 보내지 않는다 — services/cluster_endpoint_policy.py.
+@router.get("/cluster-endpoint-allowlist")
+def get_cluster_endpoint_allowlist(
+    db: Session = Depends(get_db),
+    _: User = Depends(get_current_user),
+):
+    setting = _get_or_create(db, CLUSTER_ENDPOINT_ALLOWLIST_KEY, DEFAULT_CLUSTER_ENDPOINT_ALLOWLIST)
+    return {"data": normalize_allowlist(setting.value)}
+
+
+@router.put("/cluster-endpoint-allowlist")
+def update_cluster_endpoint_allowlist(
+    payload: dict,
+    request: Request,
+    db: Session = Depends(get_db),
+    actor: User = Depends(require_admin),
+):
+    """허용 대역 저장 — admin 전용. 잘못된 항목은 422 로 항목명을 알려준다. 변경 시 감사 기록."""
+    try:
+        value = normalize_allowlist(payload.get("data", payload), strict=True)
+    except InvalidAllowlistEntry as e:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))
+    setting = _get_or_create(db, CLUSTER_ENDPOINT_ALLOWLIST_KEY, DEFAULT_CLUSTER_ENDPOINT_ALLOWLIST)
+    before = normalize_allowlist(setting.value)
+    setting.value = value
+    db.commit()
+    db.refresh(setting)
+    if before != value:
+        audit_logger.record(
+            db,
+            action="settings.cluster_endpoint_allowlist.update",
+            actor=actor,
+            target_type="app_setting",
+            target_id=CLUSTER_ENDPOINT_ALLOWLIST_KEY,
+            details={"entries_from": before["entries"], "entries_to": value["entries"]},
+            request=request,
+        )
+    return {"data": value}
 
 
 # ── 업무 관리 게시판 공통 설정 (Settings) ─────────────────────────────────────────

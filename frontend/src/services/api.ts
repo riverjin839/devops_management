@@ -1169,6 +1169,10 @@ export const uiSettingsApi = {
     api.get<{ data: import('@/types').ClusterViewerMaskSetting }>('/ui-settings/cluster-viewer-mask'),
   updateClusterViewerMask: (data: import('@/types').ClusterViewerMaskSetting) =>
     api.put<{ data: import('@/types').ClusterViewerMaskSetting }>('/ui-settings/cluster-viewer-mask', { data }),
+  getClusterEndpointAllowlist: () =>
+    api.get<{ data: import('@/types').ClusterEndpointAllowlist }>('/ui-settings/cluster-endpoint-allowlist'),
+  updateClusterEndpointAllowlist: (data: import('@/types').ClusterEndpointAllowlist) =>
+    api.put<{ data: import('@/types').ClusterEndpointAllowlist }>('/ui-settings/cluster-endpoint-allowlist', { data }),
 };
 
 export const nodeLabelsApi = {

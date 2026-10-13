@@ -10,6 +10,17 @@
 
 1.50.0 이후 main 에 병합된 변경 (다음 릴리스 후보).
 
+### Added
+- **클러스터 API 엔드포인트 허용 대역**: Settings → 접근 제어에서 CIDR·호스트명 목록을 정하면, 그 밖의 주소로는
+  클러스터를 등록하거나 엔드포인트를 바꿀 수 없고 연결 검증도 요청을 보내지 않는다(서버가 임의 주소로 요청을 보내는
+  경로 차단). 비어 있으면 제한 없음(기본)이라 기존 동작은 그대로다. 변경은 감사 로그에 남는다.
+  Backend: `services/cluster_endpoint_policy.py`, `GET/PUT /ui-settings/cluster-endpoint-allowlist`.
+  Frontend: `ClusterEndpointAllowlistSetting`.
+
+### Changed
+- **클러스터 순서 저장 조회 1회로**: `POST /clusters/reorder` 가 클러스터마다 1건씩 조회하던 것을 한 번의 조회로
+  바꿨다. `ClusterCreate.kubeconfig_content` 주석을 실제 동작(암호화 저장)에 맞게 고쳤다.
+
 ## [1.50.0] - 2026-10-13
 
 ### Added

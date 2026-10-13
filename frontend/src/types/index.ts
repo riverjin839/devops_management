@@ -5621,3 +5621,8 @@ export interface TenantRunSlots {
 export interface ClusterViewerMaskSetting {
   enabled: boolean;
 }
+
+/** Settings → 접근 제어 — 클러스터 API 엔드포인트 허용 대역(CIDR·호스트명). 비어 있으면 제한 없음. */
+export interface ClusterEndpointAllowlist {
+  entries: string[];
+}

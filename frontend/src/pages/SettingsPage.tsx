@@ -7,6 +7,7 @@ import { TenantManager } from '@/components/settings/TenantManager';
 import { SchemaHealthPanel } from '@/components/settings/SchemaHealthPanel';
 import { FeatureAccessManager } from '@/components/settings/FeatureAccessManager';
 import { ClusterViewerMaskSetting } from '@/components/settings/ClusterViewerMaskSetting';
+import { ClusterEndpointAllowlistSetting } from '@/components/settings/ClusterEndpointAllowlistSetting';
 import { JiraIntegrationPanel } from '@/components/settings/JiraIntegrationPanel';
 import { ServiceNowIntegrationPanel } from '@/components/settings/ServiceNowIntegrationPanel';
 import { OperationLevelsManager } from '@/components/settings/OperationLevelsManager';
@@ -1292,6 +1293,7 @@ export function SettingsPage() {
           <div className="space-y-4">
             <FeatureAccessManager />
             <ClusterViewerMaskSetting />
+            <ClusterEndpointAllowlistSetting />
           </div>
         )}
         {activeTab === 'tenant' && <TenantManager />}
