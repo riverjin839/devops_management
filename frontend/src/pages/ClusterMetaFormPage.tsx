@@ -759,7 +759,7 @@ export function ClusterMetaFormPage() {
               취소
             </Button>
             <Button type="submit" disabled={saving}>
-              {saving ? '저장 중...' : '저장'}
+              {saving ? '저장 중…' : '저장'}
             </Button>
           </div>
           </MacCard>

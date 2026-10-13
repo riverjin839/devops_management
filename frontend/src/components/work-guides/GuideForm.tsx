@@ -181,7 +181,7 @@ export function GuideForm({ initial, allGuides, defaultParentId, onCancel, onSav
           </button>
           <button type="submit" disabled={saving}
             className="px-4 py-2 text-sm font-medium bg-primary hover:bg-primary/90 text-primary-foreground rounded-lg transition-colors disabled:opacity-60">
-            {saving ? '저장 중...' : isEdit ? '저장' : '등록'}
+            {saving ? '저장 중…' : isEdit ? '저장' : '등록'}
           </button>
         </div>
       </form>

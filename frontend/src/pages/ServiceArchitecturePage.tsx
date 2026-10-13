@@ -230,7 +230,7 @@ export function ServiceArchitecturePage() {
               <div className="flex justify-center py-6"><Loader2 className="w-4 h-4 animate-spin text-muted-foreground" /></div>
             ) : modules.length === 0 ? (
               <p className="text-xs text-muted-foreground px-2 py-4">
-                이 클러스터에 등록된 서비스 모듈이 없습니다. Settings → PEP/APP 서비스에서 모듈(namespace 포함)을 등록하세요.
+                이 클러스터에 등록된 서비스 모듈이 없습니다. 설정 → PEP/APP 서비스에서 모듈(namespace 포함)을 등록하세요.
               </p>
             ) : (
               <ul className="space-y-1">

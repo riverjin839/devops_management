@@ -120,7 +120,7 @@ export function DailyCheckReviewPage() {
               className="inline-flex items-center gap-1.5 rounded-xl border border-border bg-card px-3 py-1.5 text-sm hover:bg-muted"
             >
               <Settings className="w-3.5 h-3.5" />
-              체크 정의
+              점검 정의
             </Link>
           </div>
 

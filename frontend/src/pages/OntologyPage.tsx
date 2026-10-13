@@ -426,7 +426,7 @@ export function OntologyPage() {
 
         {analyzing && (
           <div className="absolute top-4 left-1/2 -translate-x-1/2 flex items-center gap-2 bg-status-warning/20 border border-status-warning/40 rounded-full px-4 py-2 text-sm text-status-warning z-20">
-            <Loader2 className="w-4 h-4 animate-spin" />영향 분석 중...
+            <Loader2 className="w-4 h-4 animate-spin" />영향 분석 중…
           </div>
         )}
 

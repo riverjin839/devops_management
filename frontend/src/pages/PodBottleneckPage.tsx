@@ -156,7 +156,7 @@ export function PodBottleneckPage() {
           <div className="flex items-center gap-3 flex-wrap">
             <PageHeader
               icon={Activity}
-              title="Pod 병목 진단"
+              title="파드 병목 진단"
               description="두 pod 사이 L4 TCP / L7 DNS / K8s endpoints 4축 통합 진단"
               className="flex-1 min-w-[180px]"
             />

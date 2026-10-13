@@ -585,7 +585,7 @@ export function ClusterLinksPage() {
             <EmptyState
               icon={Link2}
               title="등록된 클러스터가 없습니다"
-              description="Settings에서 클러스터를 먼저 등록한 뒤 링크를 관리할 수 있습니다."
+              description="설정에서 클러스터를 먼저 등록한 뒤 링크를 관리할 수 있습니다."
             />
           </MacCard>
         ) : layout === 'table' ? (

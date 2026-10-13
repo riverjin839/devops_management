@@ -323,7 +323,7 @@ export function ClusterItemModal({ isOpen, onClose, clusterId, editingItem }: Cl
               disabled={!title.trim() || saving}
               className="flex-1 px-4 py-2 text-sm font-medium bg-primary hover:bg-primary/90 text-primary-foreground rounded-lg transition-colors disabled:opacity-40"
             >
-              {saving ? '저장 중...' : isEdit ? '저장' : '추가'}
+              {saving ? '저장 중…' : isEdit ? '저장' : '추가'}
             </button>
           </div>
         </div>

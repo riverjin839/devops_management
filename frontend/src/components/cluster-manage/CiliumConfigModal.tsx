@@ -76,7 +76,7 @@ export function CiliumConfigModal({ cluster, onClose }: CiliumConfigModalProps) 
           {isLoading ? (
             <div className="flex items-center justify-center py-16">
               <Loader2 className="w-6 h-6 animate-spin text-primary" />
-              <span className="ml-2 text-sm text-muted-foreground">kubectl로 Cilium 설정 조회 중...</span>
+              <span className="ml-2 text-sm text-muted-foreground">kubectl로 Cilium 설정 조회 중…</span>
             </div>
           ) : error ? (
             <div className="text-sm py-4 text-center space-y-1">

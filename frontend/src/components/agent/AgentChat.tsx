@@ -223,7 +223,7 @@ export function AgentChat() {
             )));
           } else {
             // 델타 없이 done 만 온 경우(전체 실패) — 오프라인 안내 메시지로 대체.
-            addMessage('system', 'AI 서버가 응답하지 않습니다. Settings → AI/LLM 에서 연결 상태를 확인하세요.');
+            addMessage('system', 'AI 서버가 응답하지 않습니다. 설정 → AI/LLM 에서 연결 상태를 확인하세요.');
           }
         },
       );
@@ -241,7 +241,7 @@ export function AgentChat() {
           await sendQueryNonStreaming(query);
         } catch {
           setIsOnline(false);
-          addMessage('system', 'AI 서버가 응답하지 않습니다. Settings → AI/LLM 에서 연결 상태를 확인하세요.');
+          addMessage('system', 'AI 서버가 응답하지 않습니다. 설정 → AI/LLM 에서 연결 상태를 확인하세요.');
         }
       }
     } finally {
@@ -471,7 +471,7 @@ export function AgentChat() {
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
                 onKeyDown={handleKeyDown}
-                placeholder={isOnline === false ? 'AI 오프라인 — Settings → AI/LLM 확인' : '클러스터에 대해 질문하세요…'}
+                placeholder={isOnline === false ? 'AI 오프라인 — 설정 → AI/LLM 확인' : '클러스터에 대해 질문하세요…'}
                 disabled={isLoading}
                 className="flex-1 bg-secondary border border-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50 disabled:opacity-50 placeholder:text-muted-foreground"
               />

@@ -956,7 +956,7 @@ export function NodeSpecPage() {
                 {hostFactsResult ? '닫기' : '취소'}
               </button>
               <button onClick={() => setConfirmHostFacts(true)} disabled={collectingFacts} className="px-3 py-1.5 text-sm rounded-lg bg-primary text-primary-foreground hover:bg-primary/90">
-                {collectingFacts ? '수집 중...' : '수집 실행'}
+                {collectingFacts ? '수집 중…' : '수집 실행'}
               </button>
             </div>
           </div>

@@ -231,7 +231,7 @@ export function ClusterManagePage() {
     { key: 'region',   label: '지역',         w: 100,
       tip: '운영 지역 라벨. 사용자가 직접 입력하며 그룹/필터 키로 사용됩니다 (예: 서울, IDC1).' },
     { key: 'level',    label: '운영레벨',     w: 130,
-      tip: 'Settings → 운영레벨 탭에서 정의한 레벨 (예: 운영/검증/개발). 클러스터 그룹/필터 키로도 사용.' },
+      tip: '설정 → 운영레벨 탭에서 정의한 레벨 (예: 운영/검증/개발). 클러스터 그룹/필터 키로도 사용.' },
     { key: 'bgp',      label: 'BGP / AS',    w: 110,
       tip: 'Cilium 의 cilium-config ConfigMap 에서 enable-bgp-control-plane 과 cluster-pool 의 AS 번호를 자동 추출. ConfigMap 이 없으면 비어 있음.' },
     { key: 'cidr',     label: 'INTERNAL_IP', w: 220,
@@ -873,7 +873,7 @@ export function ClusterManagePage() {
 
         {/* 필터 패널 — 수제 카드 div 대신 MacCard (D-050). 검색은 툴바 상시 노출로 이동. */}
         {showFilter && (
-          <MacCard title="필터" rootClassName="mb-5" className="flex flex-wrap items-end gap-3">
+          <MacCard title="클러스터 필터" rootClassName="mb-5" className="flex flex-wrap items-end gap-3">
             <div className="min-w-[160px]">
               <label htmlFor={f('level')} className="block text-sm text-muted-foreground mb-1">운영레벨</label>
               <select id={f('level')} value={filterLevel} onChange={(e) => setFilterLevel(e.target.value)}

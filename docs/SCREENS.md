@@ -22,7 +22,7 @@ PEP(Platform Engineering Portal)의 모든 화면(라우트)을 화면 단위로
 
 1. [홈 / 인증 / 시스템](#홈--인증--시스템)
 2. [클러스터 — 모니터링 / 리소스 관리](#클러스터--모니터링--리소스-관리)
-3. [클러스터 — 운영 점검 / 로그·분석 / Pod 병목](#클러스터--운영-점검--로그분석--pod-병목)
+3. [클러스터 — 운영 점검 / 로그·분석 / 파드 병목](#클러스터--운영-점검--로그분석--파드-병목)
 4. [클러스터 — 관리 / 버전 / 실행 콘솔 / LAKE / APM](#클러스터--관리--버전--실행-콘솔--lake--apm)
 5. [서버·인프라 / 네트워크 / 스토리지](#서버인프라--네트워크--스토리지)
 6. [DevOps — Playbook / Batch Job / 명령어](#devops--playbook--batch-job--명령어)
@@ -478,7 +478,7 @@ hover 시 flyout 자체가 라벨을 보여주므로 이름만 뜨는 중복 툴
 
 ---
 
-## 클러스터 — 운영 점검 / 로그·분석 / Pod 병목
+## 클러스터 — 운영 점검 / 로그·분석 / 파드 병목
 
 ### 운영 점검 콘솔 (`/ops-checks`, `/ops-checks/:clusterId`)
 
@@ -630,7 +630,7 @@ hover 시 flyout 자체가 라벨을 보여주므로 이름만 뜨는 중복 툴
   - _(여기에 개선/수정 요청을 직접 적어주세요)_
   - **[2026-09-08, D-063·D-064·D-065]** 이 화면을 `/checks/:itemId` 항목 상세로 흡수: 탭을 라이프사이클(정의·테스트·적용·실행방식·로그·히스토리) 순으로 재구성, 클러스터별 오버라이드 표(글로벌 값 vs 클러스터 값)를 추가하고 편집 시 클러스터 전용 정의를 copy-on-write 로 자동 생성(현재는 클러스터 전용 정의가 없으면 글로벌 정의를 직접 수정). "미리 실행" 버튼을 매트릭스 항목 등록 마법사의 테스트 단계로도 재사용. 설계안: [점검 체계 통합 설계안](https://claude.ai/code/artifact/9d204e4a-c106-48e8-91b8-4d0b37ebc250) §1·§3·§8
 
-### Pod 병목 진단 (`/pod-bottleneck`)
+### 파드 병목 진단 (`/pod-bottleneck`)
 
 - **파일**: `frontend/src/pages/PodBottleneckPage.tsx` (+ `components/common/{NamespaceSingleSelect,PodSingleSelect}`)
 - **목적 / UX**: 두 pod 사이의 네트워크 병목을 4개 축(TCP 상태/TCP 성능/DNS 지연/K8s endpoints)으로 진단하는 폼과 최근 진단 이력 목록을 제공한다. `PacketFlowPage` 등 다른 화면에서 `?cluster=&ns=&src=&dst=&svc=` 쿼리로 넘어와 폼을 prefill 할 수 있다.
@@ -650,7 +650,7 @@ hover 시 flyout 자체가 라벨을 보여주므로 이름만 뜨는 중복 툴
 - **요청사항 (수정 요청)**:
   - _(여기에 개선/수정 요청을 직접 적어주세요)_
 
-### Pod 병목 진단 상세 (`/pod-bottleneck/:id`)
+### 파드 병목 진단 상세 (`/pod-bottleneck/:id`)
 
 - **파일**: `frontend/src/pages/PodBottleneckDetailPage.tsx` (+ `components/pod-bottleneck/ProbeResultCard`, `components/common/ConfirmDialog`)
 - **목적 / UX**: 특정 진단 run 1건의 4개 probe(`tcp_state`/`tcp_perf`/`dns_latency`/`endpoints`) 결과를 카드 그리드로 상세히 보여주고, 필요 시 해당 진단 결과를 삭제할 수 있다.

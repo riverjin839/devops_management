@@ -43,7 +43,7 @@ const STEP_TYPE_KEYS = Object.keys(STEP_TYPE) as WorkflowStepType[];
 // 기획 게시판용 상태. 실행 색채 제거: pulse 애니메이션 없음, "실패" 빨간색 → "막힘" amber.
 type StepStatusCfg = { label: string; cls: string; barCls: string };
 const STEP_STATUS: Record<WorkflowStepStatus, StepStatusCfg> = {
-  'todo':        { label: '할 일',    cls: 'bg-status-unknown/15 text-status-unknown',     barCls: 'bg-zinc-400/60' },
+  'todo':        { label: '할일',     cls: 'bg-status-unknown/15 text-status-unknown',     barCls: 'bg-zinc-400/60' },
   'in-progress': { label: '진행 중',  cls: 'bg-blue-500/15 text-blue-600',     barCls: 'bg-blue-500' },
   'blocked':     { label: '막힘',     cls: 'bg-status-warning/15 text-status-warning',   barCls: 'bg-status-warning' },
   'done':        { label: '완료',     cls: 'bg-status-healthy/15 text-status-healthy',barCls: 'bg-status-healthy' },

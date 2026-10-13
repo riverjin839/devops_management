@@ -73,7 +73,7 @@ function TrendItemCard({ item }: { item: TrendItem }) {
               <p className="text-sm text-foreground leading-relaxed whitespace-pre-wrap">{item.summaryKo}</p>
             </div>
           ) : (
-            <p className="mt-3 text-sm text-muted-foreground italic">요약 준비 중...</p>
+            <p className="mt-3 text-sm text-muted-foreground italic">요약 준비 중…</p>
           )}
           <a
             href={item.url}
@@ -125,7 +125,7 @@ function DigestPanel({ digest }: { digest: TrendDigest }) {
           </>
         ) : (
           <p className="text-sm text-muted-foreground italic">
-            {digest.status === 'done' ? '종합 요약 없음' : '요약 생성 중...'}
+            {digest.status === 'done' ? '종합 요약 없음' : '요약 생성 중…'}
           </p>
         )}
       </MacCard>
@@ -458,7 +458,7 @@ export function TrendDigestPage() {
             className="w-full flex items-center justify-center gap-1.5 text-sm font-medium px-3 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 disabled:opacity-60 transition-colors"
           >
             <RefreshCw className={`w-3.5 h-3.5 ${triggerCollect.isPending ? 'animate-spin' : ''}`} />
-            {triggerCollect.isPending ? '수집 중...' : '지금 수집'}
+            {triggerCollect.isPending ? '수집 중…' : '지금 수집'}
           </button>
         </div>
 

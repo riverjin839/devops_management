@@ -48,7 +48,7 @@ export function DebugLogPanel({ pageKey, extra }: Props) {
         <span className="text-xs font-semibold text-status-warning">Debug — {pageKey}</span>
         {!globalOn && (
           <span className="text-xs text-muted-foreground">
-            (Settings → Debug → "전역" 을 켜야 API 호출이 기록됩니다)
+            (설정 → Debug → "전역" 을 켜야 API 호출이 기록됩니다)
           </span>
         )}
         <div className="ml-auto flex items-center gap-1">
