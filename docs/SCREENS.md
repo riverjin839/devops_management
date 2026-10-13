@@ -260,6 +260,8 @@ hover 시 flyout 자체가 라벨을 보여주므로 이름만 뜨는 중복 툴
 
 ### 클러스터 대시보드 (`/cluster-overview`)
 
+> **2026-10-14 (D-119)**: 클러스터 카드는 위험 → 경고 → 미연결 → 정상 순으로 정렬되고(`sortByStatus`), 정상 카드는 색 없이 회색 점·아이콘만 쓴다. 애드온 카드 아이콘은 타입별 lucide(`AddonCard` `ADDON_TYPE_ICON`).
+
 - **파일**: `frontend/src/pages/Dashboard.tsx` (+ `components/dashboard/{SummaryStats,AddonGrid,MetricCardGrid,KanbanSummaryCharts,ClusterItemsGrid,AddClusterModal,AddAddonModal,AddMetricCardModal,KubeconfigEditModal,ClusterItemModal}`, `components/playbooks/{PlaybookCard,AddPlaybookModal,RunCredsModal}`)
 - **메트릭 카드 공유 범위(멀티테넌시 4단계)**: `AddMetricCardModal` 의 `공유 범위`(`TenantScopeSelect`)로 카드를 테넌트 전용으로 둘 수 있다 — 목록·단건·쿼리·스파크라인·`/promql/query/all`(캐시 후 사용자별 필터)에서 그 멤버·admin 에게만 보인다(`routers/promql.py`).
 - **목적 / UX**: PEP 의 오리지널 핵심 화면. 등록된 K8s 클러스터의 헬스(API 서버/컨트롤플레인/etcd/노드/애드온), PromQL 기반 Prometheus 인사이트, 대시보드 노출용 Ansible 플레이북, 업무 현황(칸반)을 한 화면에서 훑고 즉시 점검(Run Check)을 트리거하는 랜딩 화면.
