@@ -8,7 +8,9 @@
 
 ## [Unreleased]
 
-1.53.0 이후 main 에 병합된 변경 (다음 릴리스 후보).
+1.53.1 이후 main 에 병합된 변경 (다음 릴리스 후보).
+
+## [1.53.1] - 2026-10-13
 
 ### Changed
 - **페이지 헤더 표준화 1차**: 공용 `PageHeader`(제목 `text-xl font-semibold`, 아이콘은 회색, 뒤로가기는 텍스트 링크)를
@@ -34,6 +36,7 @@
   일일 점검 리뷰의 "기록 없음" 안내가 없는 버튼("Daily Check 실행")을 가리키던 문구를 실제 버튼명으로 고쳤다.
   레거시 운영 점검 콘솔(`/ops-checks`)을 사이드바에서 뺐고(라우트·북마크는 유지, 정본은 `/clusters/:id`),
   `/batch-jobs` 링크·북마크는 홈 첫 탭이 아니라 플랫폼 현황 ▸ 배치잡 서브탭으로 바로 떨어진다. (DESIGN.md D-129)
+- **권한 없는 버튼의 접근성 이름 보존** — viewer 등 권한이 없을 때 실행·편집 버튼의 `aria-label` 이 사유 문구로 통째로 바뀌어 스크린리더가 모든 버튼을 같은 이름으로 읽던 문제를 고쳤다. 이제 "지금 실행 — operator 이상 권한이 필요합니다" 처럼 액션 이름 뒤에 사유를 붙인다. Frontend: `useCanOperate().ariaWithHint` 추가, 점검 매트릭스·RBAC·토폴로지·병목 진단·K8s 이벤트 화면 19곳 교체.
 
 ## [1.53.0] - 2026-10-13
 
@@ -51,10 +54,6 @@
   않는다. ② 호스트명 엔드포인트를 DNS 로 풀어 CIDR 과 비교하던 판정은 실제 접속 때 DNS 응답을 바꿔 우회할 수 있어(DNS
   rebinding) 없앴다 — 호스트명은 허용 대역에 그 호스트명(또는 `*.도메인`)을 직접 적어야 허용된다.
   Backend: `routers/clusters.py` `_ensure_kubeconfig_server_allowed`, `services/cluster_endpoint_policy.py`.
-
-### Fixed
-
-- **권한 없는 버튼의 접근성 이름 보존** — viewer 등 권한이 없을 때 실행·편집 버튼의 `aria-label` 이 사유 문구로 통째로 바뀌어 스크린리더가 모든 버튼을 같은 이름으로 읽던 문제를 고쳤다. 이제 "지금 실행 — operator 이상 권한이 필요합니다" 처럼 액션 이름 뒤에 사유를 붙인다. Frontend: `useCanOperate().ariaWithHint` 추가, 점검 매트릭스·RBAC·토폴로지·병목 진단·K8s 이벤트 화면 19곳 교체.
 
 ## [1.52.0] - 2026-10-13
 
