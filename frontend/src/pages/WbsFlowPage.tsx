@@ -49,7 +49,7 @@ const KANBAN_LABEL: Record<string, string> = {
 const PRIORITY_COLOR: Record<string, string> = {
   high:   'bg-status-critical/15 text-status-critical border-status-critical/25',
   medium: 'bg-status-warning/15 text-status-warning border-status-warning/25',
-  low:    'bg-status-healthy/15 text-status-healthy border-status-healthy/25',
+  low:    'bg-secondary text-muted-foreground border-border',
 };
 const MODULE_COLOR: Record<string, string> = {
   k8s:        'bg-chart-1/15 text-chart-1',
@@ -94,13 +94,13 @@ interface AssigneeRow {
 function StatusIcon({ status, type }: { status: string; type: 'task' | 'issue' }) {
   if (type === 'issue') {
     return status === 'resolved'
-      ? <CheckCircle2 className="w-3 h-3 text-status-healthy flex-shrink-0" />
+      ? <CheckCircle2 className="w-3 h-3 text-muted-foreground flex-shrink-0" />
       : <AlertCircle className="w-3 h-3 text-status-critical flex-shrink-0" />;
   }
   const icons: Record<string, JSX.Element> = {
-    done:        <CheckCircle2 className="w-3 h-3 text-status-healthy flex-shrink-0" />,
-    in_progress: <Clock className="w-3 h-3 text-status-info flex-shrink-0" />,
-    review_test: <Clock className="w-3 h-3 text-status-warning flex-shrink-0" />,
+    done:        <CheckCircle2 className="w-3 h-3 text-muted-foreground flex-shrink-0" />,
+    in_progress: <Clock className="w-3 h-3 text-chart-3 flex-shrink-0" />,
+    review_test: <Clock className="w-3 h-3 text-chart-4 flex-shrink-0" />,
     todo:        <Circle className="w-3 h-3 text-muted-foreground flex-shrink-0" />,
     backlog:     <Circle className="w-3 h-3 text-muted-foreground flex-shrink-0" />,
   };
@@ -111,16 +111,16 @@ function ItemCard({ item, onClick }: { item: DayItem; onClick: () => void }) {
   const isIssue = item.type === 'issue';
   const base = isIssue
     ? (item.resolved
-        ? 'border-l-status-healthy bg-status-healthy/5'
-        : 'border-l-chart-7 bg-chart-7/5')
+        ? 'border-l-border'
+        : 'border-l-chart-7')
     : item.isSubTask
-      ? 'border-l-chart-4 bg-chart-4/5 opacity-90'
-      : 'border-l-status-info bg-status-info/5';
+      ? 'border-l-chart-4 opacity-90'
+      : 'border-l-chart-1';
 
   return (
     <button
       onClick={onClick}
-      className={`w-full border-l-[3px] ${base} rounded-r-md px-2 py-1 cursor-pointer hover:bg-secondary/40 hover:shadow-sm transition-all text-left ${item.isSubTask ? 'ml-2' : ''}`}
+      className={`w-full border-l-[3px] ${base} rounded-r-md px-2 py-1 cursor-pointer hover:bg-secondary/40 transition-colors text-left ${item.isSubTask ? 'ml-2' : ''}`}
     >
       <div className="flex items-center gap-1 min-w-0">
         <StatusIcon status={isIssue ? (item.resolved ? 'resolved' : 'open') : item.status} type={item.type} />
@@ -141,7 +141,7 @@ function ItemCard({ item, onClick }: { item: DayItem; onClick: () => void }) {
           </span>
         )}
         {isIssue && (
-          <span className={`text-[11px] px-1 rounded-md ${item.resolved ? 'bg-status-healthy/15 text-status-healthy' : 'bg-status-warning/15 text-status-warning'}`}>
+          <span className={`text-[11px] px-1 rounded-md ${item.resolved ? 'bg-secondary text-muted-foreground' : 'bg-status-warning/15 text-status-warning'}`}>
             {item.resolved ? '해결' : '미해결'}
           </span>
         )}
@@ -156,7 +156,7 @@ function DetailModal({ item, onClose }: { item: DayItem; onClose: () => void }) 
   const isIssue = item.type === 'issue';
   const title = (
     <div className="flex items-center gap-2 flex-wrap min-w-0">
-      <span className={`text-xs px-2 py-0.5 rounded-full font-semibold flex-shrink-0 ${isIssue ? 'bg-chart-7/15 text-chart-7' : 'bg-status-info/15 text-status-info'}`}>
+      <span className={`text-xs px-2 py-0.5 rounded-full font-semibold flex-shrink-0 ${isIssue ? 'bg-chart-7/15 text-chart-7' : 'bg-chart-1/15 text-chart-1'}`}>
         {isIssue ? '이슈' : '작업'}
       </span>
       {item.module && (
@@ -177,17 +177,17 @@ function DetailModal({ item, onClose }: { item: DayItem; onClose: () => void }) 
       {item.sub && <p className="text-sm text-muted-foreground mb-4">{item.sub}</p>}
       <dl className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
         <div className="rounded-lg bg-secondary/40 px-3 py-2">
-          <dt className="text-xs uppercase tracking-wide text-muted-foreground">시작일</dt>
+          <dt className="text-xs text-muted-foreground">시작일</dt>
           <dd className="font-medium tabular-nums">{item.startDate || '—'}</dd>
         </div>
         {item.endDate && (
           <div className="rounded-lg bg-secondary/40 px-3 py-2">
-            <dt className="text-xs uppercase tracking-wide text-muted-foreground">완료일</dt>
+            <dt className="text-xs text-muted-foreground">완료일</dt>
             <dd className="font-medium tabular-nums">{item.endDate}</dd>
           </div>
         )}
         <div className="rounded-lg bg-secondary/40 px-3 py-2">
-          <dt className="text-xs uppercase tracking-wide text-muted-foreground">상태</dt>
+          <dt className="text-xs text-muted-foreground">상태</dt>
           <dd className="font-medium">
             {isIssue ? (item.resolved ? '해결' : '미해결') : (KANBAN_LABEL[item.status] ?? item.status)}
           </dd>
@@ -254,8 +254,8 @@ function ProgressBar({ value }: { value: number }) {
 }
 
 const CHIP_COLOR: Record<string, string> = {
-  emerald: 'bg-status-healthy/15 text-status-healthy',
-  sky:     'bg-status-info/15 text-status-info',
+  emerald: 'bg-secondary text-muted-foreground',
+  sky:     'bg-chart-3/15 text-chart-3',
   slate:   'bg-status-unknown/15 text-status-unknown',
   red:     'bg-status-critical/15 text-status-critical',
 };
@@ -270,9 +270,9 @@ function Chip({ color, children }: { color: keyof typeof CHIP_COLOR | string; ch
 
 // ── 개인별 Gantt 보기 ──────────────────────────────────────────────────────────
 const STATUS_CELL: Record<string, string> = {
-  done:        'bg-status-healthy/30 border-status-healthy/50',
-  in_progress: 'bg-status-info/40 border-status-info/55',
-  review_test: 'bg-status-warning/30 border-status-warning/50',
+  done:        'bg-muted-foreground/20 border-muted-foreground/30',
+  in_progress: 'bg-chart-3/40 border-chart-3/55',
+  review_test: 'bg-chart-4/30 border-chart-4/50',
   todo:        'bg-primary/20 border-primary/30',
   backlog:     'bg-secondary border-border',
 };
@@ -425,8 +425,8 @@ function PersonalGanttView({
                         style={{ minWidth: COL_W, width: COL_W, height: 34 }}>
                         {on && (
                           <div className={`mx-0.5 rounded border h-[22px] ${cellColor} flex items-center justify-center gap-0.5`}>
-                            {t.kanbanStatus === 'done' && <CheckCircle2 className="w-2.5 h-2.5 text-status-healthy" />}
-                            {t.kanbanStatus === 'in_progress' && <Clock className="w-2.5 h-2.5 text-status-info" />}
+                            {t.kanbanStatus === 'done' && <CheckCircle2 className="w-2.5 h-2.5 text-muted-foreground" />}
+                            {t.kanbanStatus === 'in_progress' && <Clock className="w-2.5 h-2.5 text-chart-3" />}
                           </div>
                         )}
                       </td>
@@ -447,7 +447,7 @@ function PersonalGanttView({
                   <td className="sticky left-0 z-10 border-b border-r border-border px-3 py-1.5 align-middle"
                     style={{ backgroundColor: bgBase }}>
                     <div className="flex items-center gap-1.5">
-                      <AlertCircle className={`w-3 h-3 flex-shrink-0 ${iss.closedAt ? 'text-status-healthy' : 'text-status-critical'}`} />
+                      <AlertCircle className={`w-3 h-3 flex-shrink-0 ${iss.closedAt ? 'text-muted-foreground' : 'text-status-critical'}`} />
                       <span className="truncate max-w-[180px] font-medium leading-tight">{stripHtml(iss.content)}</span>
                     </div>
                     <div className="text-xs text-muted-foreground mt-0.5 ml-4">{iss.category}</div>
@@ -462,8 +462,8 @@ function PersonalGanttView({
                         className={`border-b border-r border-border align-middle ${isTd ? 'bg-primary/5' : isWeekend(d) ? 'bg-secondary/20' : ''} ${on ? 'cursor-pointer' : ''}`}
                         style={{ minWidth: COL_W, width: COL_W, height: 34 }}>
                         {on && (
-                          <div className={`mx-0.5 rounded border h-[22px] ${iss.closedAt ? 'bg-status-healthy/30 border-status-healthy/50' : 'bg-chart-7/30 border-chart-7/50'} flex items-center justify-center`}>
-                            <AlertCircle className={`w-2.5 h-2.5 ${iss.closedAt ? 'text-status-healthy' : 'text-chart-7'}`} />
+                          <div className={`mx-0.5 rounded border h-[22px] ${iss.closedAt ? 'bg-muted-foreground/20 border-muted-foreground/30' : 'bg-chart-7/30 border-chart-7/50'} flex items-center justify-center`}>
+                            <AlertCircle className={`w-2.5 h-2.5 ${iss.closedAt ? 'text-muted-foreground' : 'text-chart-7'}`} />
                           </div>
                         )}
                       </td>
@@ -975,10 +975,10 @@ export function WbsFlowPage() {
         {/* ── Legend ──────────────────────────────────────────────────── */}
         <div className="flex items-center gap-3 text-sm text-muted-foreground flex-wrap px-1">
           <span className="font-medium">범례:</span>
-          <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-sm bg-status-info/30 inline-block" /> 작업</span>
+          <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-sm bg-chart-1/30 inline-block" /> 작업</span>
           <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-sm bg-chart-7/30 inline-block" /> 이슈</span>
-          <span className="flex items-center gap-1"><CheckCircle2 className="w-3 h-3 text-status-healthy" /> 완료/해결</span>
-          <span className="flex items-center gap-1"><Clock className="w-3 h-3 text-status-info" /> 진행중</span>
+          <span className="flex items-center gap-1"><CheckCircle2 className="w-3 h-3 text-muted-foreground" /> 완료/해결</span>
+          <span className="flex items-center gap-1"><Clock className="w-3 h-3 text-chart-3" /> 진행중</span>
           <span className="flex items-center gap-1"><AlertCircle className="w-3 h-3 text-status-critical" /> 미해결</span>
           <span className="ml-auto text-xs">클릭 시 상세 정보</span>
         </div>

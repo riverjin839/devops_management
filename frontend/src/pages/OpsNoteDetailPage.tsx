@@ -7,7 +7,6 @@ import { OpsNoteForm, OpsNoteReadView } from '@/components/ops-notes';
 import { useToast, EmptyState } from '@/components/common';
 import { formatApiError } from '@/lib/utils';
 import { useMemo } from 'react';
-import { cn } from '@/lib/utils';
 
 export function OpsNoteDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -64,7 +63,7 @@ export function OpsNoteDetailPage() {
 
   return (
     <div className="app-min-h-screen bg-background">
-      <div className="sticky top-0 z-10 bg-background/85 backdrop-blur-md border-b border-border">
+      <div className="sticky top-0 z-10 bg-background border-b border-border">
         <div className="max-w-[1400px] mx-auto px-8 py-2.5 flex items-center gap-2">
           <button
             onClick={() => navigate('/ops-notes')}
@@ -101,7 +100,7 @@ export function OpsNoteDetailPage() {
         {editMode ? (
           <>
             <PageHeader title="Q&A 수정" description="필요한 항목을 수정한 뒤 폼 하단의 저장 버튼을 누르세요." className="mb-8" />
-            <div className={cn('border border-border rounded-2xl p-8 shadow-card', 'bg-card')}>
+            <div className="bg-card border border-border rounded-md p-8 shadow-card">
               <OpsNoteForm
                 initial={note}
                 onCancel={() => navigate(`/ops-notes/${note.id}`)}
@@ -110,7 +109,7 @@ export function OpsNoteDetailPage() {
             </div>
           </>
         ) : (
-          <div className={cn('border border-border rounded-2xl p-8 shadow-card', 'bg-card')}>
+          <div className="bg-card border border-border rounded-md p-8 shadow-card">
             <OpsNoteReadView note={note} />
           </div>
         )}

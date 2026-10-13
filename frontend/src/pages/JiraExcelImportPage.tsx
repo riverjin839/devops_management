@@ -269,7 +269,7 @@ export function JiraExcelImportPage() {
                   <col />
                 </colgroup>
                 <thead>
-                  <tr className="bg-secondary/40 border-b border-border text-xs text-muted-foreground uppercase">
+                  <tr className="bg-secondary/40 border-b border-border text-xs text-muted-foreground">
                     <th className="text-left px-3 py-2 font-medium">Key</th>
                     <th className="text-left px-3 py-2 font-medium">Summary</th>
                     <th className="text-left px-3 py-2 font-medium">Issue Type</th>
@@ -320,7 +320,7 @@ function ImportSummaryBadges({ result }: { result: JiraExcelImportResult | null 
       <span className="px-2 py-0.5 rounded-full bg-primary/10 text-primary border border-primary/20 text-sm">
         총 {result.total}건
       </span>
-      <span className="px-2 py-0.5 rounded-full bg-status-healthy/10 text-status-healthy border border-status-healthy/30 text-sm">
+      <span className="px-2 py-0.5 rounded-full bg-secondary text-muted-foreground border border-border text-sm">
         담당자 매칭 {result.matched}건
       </span>
       {result.total - result.matched > 0 && (
@@ -356,7 +356,7 @@ function JiraExcelTableRow({ row }: { row: JiraExcelRow }) {
       <td className="px-3 py-2.5">
         {row.assigneeMatched ? (
           <span className="inline-flex items-center gap-1 text-foreground">
-            <CheckCircle2 className="w-3.5 h-3.5 text-status-healthy flex-shrink-0" />
+            <CheckCircle2 className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
             {row.assigneeName}
           </span>
         ) : (

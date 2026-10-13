@@ -11,8 +11,8 @@ import { parseUTC } from '@/lib/utils';
 const CATEGORY_COLORS: Record<string, string> = {
   k8s:    'bg-chart-1/15 text-chart-1',
   cilium: 'bg-chart-7/15 text-chart-7',
-  linux:  'bg-status-warning/10 text-status-warning',
-  cncf:   'bg-status-healthy/10 text-status-healthy',
+  linux:  'bg-chart-3/15 text-chart-3',
+  cncf:   'bg-chart-2/15 text-chart-2',
 };
 
 const CATEGORY_LABEL: Record<string, string> = {
@@ -27,7 +27,7 @@ const STATUS_INFO: Record<string, { icon: import('react').ReactNode; label: stri
   pending:     { icon: <Clock className="w-3.5 h-3.5" />, label: '대기',   cls: 'text-muted-foreground' },
   collecting:  { icon: <Loader2 className="w-3.5 h-3.5 animate-spin" />, label: '수집 중', cls: 'text-status-info' },
   summarizing: { icon: <Loader2 className="w-3.5 h-3.5 animate-spin" />, label: '요약 중', cls: 'text-status-info' },
-  done:        { icon: <CheckCircle2 className="w-3.5 h-3.5" />, label: '완료',   cls: 'text-status-healthy' },
+  done:        { icon: <CheckCircle2 className="w-3.5 h-3.5" />, label: '완료',   cls: 'text-muted-foreground' },
   failed:      { icon: <AlertCircle className="w-3.5 h-3.5" />, label: '실패',   cls: 'text-status-critical' },
 };
 
@@ -37,7 +37,7 @@ function TrendItemCard({ item }: { item: TrendItem }) {
   const catCls = CATEGORY_COLORS[item.category] ?? 'bg-secondary text-muted-foreground';
 
   return (
-    <div className="border border-border rounded-lg bg-card overflow-hidden">
+    <div className="border border-border rounded-md bg-card overflow-hidden">
       <button
         className="w-full text-left px-4 py-3 flex items-start gap-3 hover:bg-secondary/30 transition-colors"
         onClick={() => setOpen((v) => !v)}
@@ -187,7 +187,7 @@ function DigestPanel({ digest }: { digest: TrendDigest }) {
 // ── 소스 관리 패널 ───────────────────────────────────────────────
 
 const SOURCE_STATUS_CLS: Record<string, string> = {
-  ok:    'bg-status-healthy/10 text-status-healthy border-status-healthy/30',
+  ok:    'bg-secondary text-muted-foreground border-border',
   empty: 'bg-status-unknown/10 text-status-unknown border-status-unknown/30',
   error: 'bg-status-critical/10 text-status-critical border-status-critical/30',
 };
@@ -215,7 +215,7 @@ function SourceRow({ s }: { s: TrendSource }) {
 
   if (editing) {
     return (
-      <div className="p-3 border border-primary/40 rounded-lg bg-card space-y-2">
+      <div className="p-3 border border-primary/40 rounded-md bg-card space-y-2">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
           <input value={name} onChange={(e) => setName(e.target.value)} placeholder="이름"
             className="px-2 py-1 text-sm bg-background border border-border rounded" />
@@ -249,7 +249,7 @@ function SourceRow({ s }: { s: TrendSource }) {
   }
 
   return (
-    <div className="p-3 border border-border rounded-lg bg-card">
+    <div className="p-3 border border-border rounded-md bg-card">
       <div className="flex items-start gap-3">
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
@@ -259,7 +259,7 @@ function SourceRow({ s }: { s: TrendSource }) {
             </span>
             {s.lastStatus && (
               <span className={`text-xs px-1.5 py-0.5 rounded border ${statusCls}`}>
-                {s.lastStatus === 'ok' ? `✓ 최근 +${s.lastItemCount ?? 0}` : s.lastStatus === 'empty' ? '· 수집 없음' : '✗ 실패'}
+                {s.lastStatus === 'ok' ? `최근 +${s.lastItemCount ?? 0}` : s.lastStatus === 'empty' ? '수집 없음' : '실패'}
               </span>
             )}
           </div>
@@ -318,7 +318,7 @@ function AddSourceForm({ onClose }: { onClose: () => void }) {
   const canSubmit = name.trim() && url.trim() && category.trim();
 
   return (
-    <div className="p-3 border border-primary/40 rounded-lg bg-card space-y-2">
+    <div className="p-3 border border-primary/40 rounded-md bg-card space-y-2">
       <div className="flex items-center justify-between">
         <p className="text-sm font-semibold text-primary">새 소스 추가</p>
         <button onClick={onClose} aria-label="닫기" className="p-1 text-muted-foreground hover:text-foreground">

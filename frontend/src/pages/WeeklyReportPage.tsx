@@ -34,9 +34,9 @@ const TABS: { id: TabId; label: string }[] = [
 const STATUSES = ['진행', '완료', '지연'] as const;
 
 function statusClass(status: string) {
-  if (status === '완료') return 'text-status-healthy';
+  if (status === '완료') return 'text-muted-foreground';
   if (status === '지연') return 'text-status-critical';
-  return 'text-status-info';
+  return 'text-foreground';
 }
 
 /** 컬럼 헤더 클릭 정렬 — 같은 키 재클릭 시 asc ↔ desc 토글. */
@@ -284,7 +284,7 @@ export function WeeklyReportPage() {
         {TABS.map((t) => (
           <button key={t.id} type="button" onClick={() => setTab(t.id)} aria-pressed={tab === t.id}
             className={`px-3 py-2 rounded-xl border text-sm font-medium transition-colors ${
-              tab === t.id ? 'bg-primary/10 text-primary border-primary/30 ring-2 ring-primary/20'
+              tab === t.id ? 'bg-primary/10 text-primary border-primary/40'
                 : 'bg-secondary border-border text-muted-foreground hover:text-foreground'
             }`}>
             {t.label}
@@ -307,9 +307,9 @@ export function WeeklyReportPage() {
               <tbody>
                 <tr>
                   <td className={td}>{summary.total}</td>
-                  <td className={`${td} text-status-info`}>{summary.inProgress}</td>
-                  <td className={`${td} text-status-healthy`}>{summary.done}</td>
-                  <td className={`${td} text-status-critical`}>{summary.delayed}</td>
+                  <td className={td}>{summary.inProgress}</td>
+                  <td className={td}>{summary.done}</td>
+                  <td className={`${td} ${summary.delayed > 0 ? 'text-status-critical' : ''}`}>{summary.delayed}</td>
                   <td className={td}>{filterActive ? '필터 적용된 집계' : (report?.summary.note ?? '')}</td>
                 </tr>
               </tbody>
@@ -359,11 +359,11 @@ export function WeeklyReportPage() {
                     </td>
                     <td className={td}>{r.plannedRate}</td>
                     <td className={td}>{r.actualRate}</td>
-                    <td className={`${td} ${r.achievementRate >= 100 ? 'text-status-healthy' : r.achievementRate < 80 ? 'text-status-critical' : 'text-status-info'}`}>
+                    <td className={`${td} ${r.achievementRate < 80 ? 'text-status-critical' : ''}`}>
                       {r.achievementRate}
                     </td>
-                    <td className={`${td} text-status-healthy`}>{r.doneCount}</td>
-                    <td className={`${td} text-status-info`}>{r.inProgressCount}</td>
+                    <td className={td}>{r.doneCount}</td>
+                    <td className={td}>{r.inProgressCount}</td>
                     <td className={td}>{r.totalCount}</td>
                   </tr>
                 ))}

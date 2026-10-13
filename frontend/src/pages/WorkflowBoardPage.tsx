@@ -44,9 +44,9 @@ const STEP_TYPE_KEYS = Object.keys(STEP_TYPE) as WorkflowStepType[];
 type StepStatusCfg = { label: string; cls: string; barCls: string };
 const STEP_STATUS: Record<WorkflowStepStatus, StepStatusCfg> = {
   'todo':        { label: '할일',     cls: 'bg-status-unknown/15 text-status-unknown',     barCls: 'bg-muted-foreground/40' },
-  'in-progress': { label: '진행 중',  cls: 'bg-status-info/15 text-status-info', barCls: 'bg-status-info' },
+  'in-progress': { label: '진행 중',  cls: 'bg-chart-3/15 text-chart-3', barCls: 'bg-chart-3' },
   'blocked':     { label: '막힘',     cls: 'bg-status-warning/15 text-status-warning',   barCls: 'bg-status-warning' },
-  'done':        { label: '완료',     cls: 'bg-status-healthy/15 text-status-healthy',barCls: 'bg-status-healthy' },
+  'done':        { label: '완료',     cls: 'bg-secondary text-muted-foreground', barCls: 'bg-muted-foreground/60' },
   'skipped':     { label: '제외',     cls: 'bg-status-unknown/10 text-status-unknown opacity-60', barCls: 'bg-muted-foreground/20' },
 };
 const STEP_STATUS_KEYS = Object.keys(STEP_STATUS) as WorkflowStepStatus[];
@@ -525,7 +525,7 @@ export function WorkflowBoardPage() {
                       <button
                         onClick={() => wfEditTitle.trim() && updateWorkflow.mutate({ id: wf.id, d: { title: wfEditTitle.trim() } })}
                         aria-label="제목 저장"
-                        className="p-1 rounded text-status-healthy hover:bg-status-healthy/10"
+                        className="p-1 rounded text-primary hover:bg-primary/10"
                       >
                         <Check className="w-3.5 h-3.5" />
                       </button>
@@ -546,7 +546,7 @@ export function WorkflowBoardPage() {
                         <p className="text-sm text-muted-foreground">{total}단계 · {doneCount}/{total} 완료</p>
                         {total > 0 && (
                           <div className="mt-1 h-1 bg-secondary rounded-full overflow-hidden">
-                            <div className="h-full bg-status-healthy rounded-full transition-all" style={{ width: `${(doneCount / total) * 100}%` }} />
+                            <div className="h-full bg-primary rounded-full transition-[width]" style={{ width: `${(doneCount / total) * 100}%` }} />
                           </div>
                         )}
                       </div>
@@ -610,7 +610,7 @@ export function WorkflowBoardPage() {
                     <button
                       onClick={() => headerTitleDraft.trim() && updateWorkflow.mutate({ id: selectedWf.id, d: { title: headerTitleDraft.trim() } })}
                       aria-label="제목 저장"
-                      className="p-1 rounded text-status-healthy hover:bg-status-healthy/10"
+                      className="p-1 rounded text-primary hover:bg-primary/10"
                     >
                       <Check className="w-3.5 h-3.5" />
                     </button>
@@ -630,7 +630,7 @@ export function WorkflowBoardPage() {
                   </button>
                 )}
 
-                {/* Confluence 링크 — 설정되어 있으면 열기 + ✏ 로 인라인 편집, 없으면 + Confluence */}
+                {/* Confluence 링크 — 설정되어 있으면 열기 + 연필 아이콘으로 인라인 편집, 없으면 + Confluence */}
                 {editingHeaderConfluence ? (
                   <div className="flex items-center gap-1">
                     <input
@@ -660,7 +660,7 @@ export function WorkflowBoardPage() {
                         setEditingHeaderConfluence(false);
                       }}
                       aria-label="Confluence 링크 저장"
-                      className="p-1 rounded text-status-healthy hover:bg-status-healthy/10"
+                      className="p-1 rounded text-primary hover:bg-primary/10"
                     >
                       <Check className="w-3 h-3" />
                     </button>
@@ -872,7 +872,7 @@ export function WorkflowBoardPage() {
                               deleteEdge.mutate({ wfId: selectedWf.id, edgeId: edge.id });
                             }}
                           >
-                            <circle cx={mx} cy={my} r={9} fill="hsl(var(--card))" stroke="hsl(var(--rose-400, 251 113 133))" strokeWidth={1.6} className="stroke-status-critical" />
+                            <circle cx={mx} cy={my} r={9} fill="hsl(var(--card))" strokeWidth={1.6} className="stroke-status-critical" />
                             <line x1={mx - 3.5} y1={my - 3.5} x2={mx + 3.5} y2={my + 3.5} stroke="currentColor" className="text-status-critical" strokeWidth={1.8} strokeLinecap="round" />
                             <line x1={mx + 3.5} y1={my - 3.5} x2={mx - 3.5} y2={my + 3.5} stroke="currentColor" className="text-status-critical" strokeWidth={1.8} strokeLinecap="round" />
                           </g>
@@ -912,9 +912,9 @@ export function WorkflowBoardPage() {
                           position: 'absolute', left: pos.x, top: pos.y, width: CARD_W,
                           zIndex: isDraggingThis ? 20 : isEditing ? 15 : 1,
                         }}
-                        className={`rounded-xl border-2 shadow-sm select-none bg-card transition-shadow ${typeCfg.border} ${
+                        className={`rounded-md border-2 shadow-sm select-none bg-card transition-shadow ${typeCfg.border} ${
                           step.completed ? 'opacity-70' : ''
-                        } ${isSourceOfPending ? 'ring-2 ring-primary/60 shadow-lg' : ''} ${
+                        } ${isSourceOfPending ? 'ring-1 ring-primary' : ''} ${
                           isDraggingThis ? 'shadow-xl opacity-90' : ''
                         }`}
                         onPointerDown={(e) => handleCardPointerDown(e, step)}
@@ -922,7 +922,7 @@ export function WorkflowBoardPage() {
                         onPointerUp={() => handleCardPointerUp(step)}
                       >
                         {/* Header */}
-                        <div className={`flex items-center justify-between px-3 py-2 rounded-t-[10px] border-b border-border ${typeCfg.header} cursor-grab active:cursor-grabbing`}>
+                        <div className={`flex items-center justify-between px-3 py-2 rounded-t-sm border-b border-border ${typeCfg.header} cursor-grab active:cursor-grabbing`}>
                           <div className="flex items-center gap-1.5" data-no-drag>
                             {/* type selector */}
                             <div className="relative" onClick={(e) => e.stopPropagation()}>
@@ -935,7 +935,7 @@ export function WorkflowBoardPage() {
                                 <span className="text-foreground/70">{typeCfg.label}</span>
                               </button>
                               {typeMenuStep === step.id && (
-                                <div className="absolute top-full left-0 mt-1 bg-card border border-border rounded-lg shadow-xl z-50 py-1 min-w-[150px]">
+                                <div className="absolute top-full left-0 mt-1 bg-card border border-border rounded-md shadow-xl z-50 py-1 min-w-[150px]">
                                   {STEP_TYPE_KEYS.map((t) => (
                                     <button key={t}
                                       onClick={() => { if (selectedWf) updateStep.mutate({ wfId: selectedWf.id, stepId: step.id, stepData: { stepType: t } }); setTypeMenuStep(null); }}
@@ -959,7 +959,7 @@ export function WorkflowBoardPage() {
                                 {statusCfg.label}
                               </button>
                               {statusMenuStep === step.id && (
-                                <div className="absolute top-full left-0 mt-1 bg-card border border-border rounded-lg shadow-xl z-50 py-1 min-w-[120px]">
+                                <div className="absolute top-full left-0 mt-1 bg-card border border-border rounded-md shadow-xl z-50 py-1 min-w-[120px]">
                                   {STEP_STATUS_KEYS.map((st) => (
                                     <button key={st}
                                       onClick={() => { if (selectedWf) updateStep.mutate({ wfId: selectedWf.id, stepId: step.id, stepData: { status: st } }); setStatusMenuStep(null); }}
@@ -991,7 +991,7 @@ export function WorkflowBoardPage() {
                             <button
                               onClick={(e) => { e.stopPropagation(); if (selectedWf) updateStep.mutate({ wfId: selectedWf.id, stepId: step.id, stepData: { completed: !step.completed } }); }}
                               aria-label={step.completed ? '완료 해제' : '완료로 표시'}
-                              className={`flex-shrink-0 w-[18px] h-[18px] rounded border-2 flex items-center justify-center transition-colors mt-0.5 ${step.completed ? 'bg-status-healthy border-status-healthy text-white' : 'border-border hover:border-status-healthy'}`}
+                              className={`flex-shrink-0 w-[18px] h-[18px] rounded border-2 flex items-center justify-center transition-colors mt-0.5 ${step.completed ? 'bg-muted-foreground border-muted-foreground text-background' : 'border-border hover:border-primary'}`}
                             >
                               {step.completed && <Check className="w-2.5 h-2.5" />}
                             </button>

@@ -20,7 +20,7 @@ import type { GuideSearchItem, WorkGuide } from '@/types';
 const CATEGORIES = ['배포', '트러블슈팅', '모니터링', '보안', '기타'];
 const STATUS_CFG: Record<string, { label: string; cls: string }> = {
   draft: { label: 'draft', cls: 'bg-secondary text-muted-foreground' },
-  active: { label: 'active', cls: 'bg-status-healthy/10 text-status-healthy' },
+  active: { label: 'active', cls: 'bg-secondary text-foreground' },
   archived: { label: 'archived', cls: 'bg-secondary text-muted-foreground line-through' },
 };
 
@@ -163,7 +163,7 @@ export function DocumentsPage() {
           type="button" onClick={() => setAiMode((v) => !v)} aria-pressed={aiMode}
           title="임베딩 기반 의미 검색 (Ollama 미기동 시 일반 검색으로 폴백)"
           className={`inline-flex items-center gap-1.5 px-3 py-2 rounded-xl border text-sm font-medium transition-colors ${
-            aiMode ? 'bg-primary/10 text-primary border-primary/30 ring-2 ring-primary/20'
+            aiMode ? 'bg-primary/10 text-primary border-primary/40'
               : 'bg-card border-border text-muted-foreground hover:text-foreground'
           }`}
         >
@@ -201,14 +201,14 @@ export function DocumentsPage() {
         <div className="overflow-x-auto">
           <table className="w-full min-w-[820px] text-sm">
             <thead>
-              <tr className="text-left text-[11px] uppercase tracking-wide text-muted-foreground border-b border-border">
-                <th className="px-4 py-2.5 font-semibold">제목</th>
-                <th className="px-3 py-2.5 font-semibold">분류</th>
-                <th className="px-3 py-2.5 font-semibold">상태</th>
-                <th className="px-3 py-2.5 font-semibold">작성자</th>
-                <th className="px-3 py-2.5 font-semibold">출처</th>
-                <th className="px-3 py-2.5 font-semibold">동기화</th>
-                <th className="px-3 py-2.5 font-semibold">수정일</th>
+              <tr className="text-left text-xs text-muted-foreground border-b border-border">
+                <th className="px-4 py-2.5 font-medium">제목</th>
+                <th className="px-3 py-2.5 font-medium">분류</th>
+                <th className="px-3 py-2.5 font-medium">상태</th>
+                <th className="px-3 py-2.5 font-medium">작성자</th>
+                <th className="px-3 py-2.5 font-medium">출처</th>
+                <th className="px-3 py-2.5 font-medium">동기화</th>
+                <th className="px-3 py-2.5 font-medium">수정일</th>
                 <th className="px-3 py-2.5" aria-label="행 동작" />
               </tr>
             </thead>

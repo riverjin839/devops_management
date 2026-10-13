@@ -59,20 +59,11 @@ const KIND_META: Record<HubKind, {
 
 const STATUS_DOT_TONE: Record<NonNullable<HubItem['statusTone']>, string> = {
   amber:   'bg-status-warning',
-  emerald: 'bg-status-healthy',
+  emerald: 'bg-muted-foreground/40',
   red:     'bg-status-critical',
   slate:   'bg-status-unknown',
   primary: 'bg-primary',
   sky:     'bg-status-info',
-};
-
-const STATUS_TEXT_TONE: Record<NonNullable<HubItem['statusTone']>, string> = {
-  amber:   'text-status-warning',
-  emerald: 'text-status-healthy',
-  red:     'text-status-critical',
-  slate:   'text-muted-foreground',
-  primary: 'text-primary',
-  sky:     'text-status-info',
 };
 
 // 허브 상단 탭 — 지식 목록(집계 표) + 임베드 도구(Q&A·마인드맵·온톨로지·기술동향).
@@ -201,7 +192,7 @@ export function KnowledgeHubPage() {
         service: n.service,
         pinned: n.pinned,
         statusLabel: n.pinned ? '고정' : undefined,
-        statusTone: n.pinned ? 'amber' : undefined,
+        statusTone: n.pinned ? 'primary' : undefined,
         updatedAt: n.updatedAt,
         href: `/ops-notes/${n.id}`,
         searchBlob: `${n.title} ${stripHtml(n.content ?? '')} ${stripHtml(n.backContent ?? '')} ${n.author ?? ''} ${n.service}`.toLowerCase(),
@@ -565,7 +556,7 @@ export function KnowledgeHubPage() {
                           {it.statusLabel && it.statusTone ? (
                             <span className="inline-flex items-center gap-1.5">
                               <span className={`w-2 h-2 rounded-full ${STATUS_DOT_TONE[it.statusTone]}`} />
-                              <span className={`text-sm font-medium ${STATUS_TEXT_TONE[it.statusTone]}`}>{it.statusLabel}</span>
+                              <span className="text-sm font-medium text-foreground">{it.statusLabel}</span>
                             </span>
                           ) : (
                             <span className="text-sm text-muted-foreground/40">—</span>

@@ -121,9 +121,9 @@ function ClusterOverviewGrid({ clusters, addons, onSelectCluster }: ClusterOverv
                   <span className="font-medium">{total}</span>
                 </div>
                 <div className="flex gap-2">
-                  <div className="flex items-center gap-1 text-sm text-status-healthy">
+                  <div className="flex items-center gap-1 text-sm text-muted-foreground">
                     <CheckCircle className="w-3 h-3" />
-                    <span>{healthy}</span>
+                    <span className="tabular-nums">{healthy}</span>
                   </div>
                   {warning > 0 && (
                     <div className="flex items-center gap-1 text-sm text-status-warning">
@@ -336,7 +336,7 @@ export function Dashboard() {
   return (
     <div className="app-min-h-screen bg-background">
       {/* ── Top bar ──────────────────────────────────────────────────────── */}
-      <div className="sticky top-0 z-20 px-4 lg:px-6 py-2 bg-background/95 backdrop-blur border-b border-border flex flex-wrap items-center gap-x-3 gap-y-1.5">
+      <div className="sticky top-0 z-20 px-4 lg:px-6 py-2 bg-background border-b border-border flex flex-wrap items-center gap-x-3 gap-y-1.5">
         <PageHeader
           className="flex-1 items-center"
           title="클러스터 현황"

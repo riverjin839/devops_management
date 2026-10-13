@@ -2,7 +2,6 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { PageHeader } from '@/components/common/PageHeader';
 import { ArrowLeft, HelpCircle } from 'lucide-react';
 import { OpsNoteForm } from '@/components/ops-notes';
-import { cn } from '@/lib/utils';
 
 export function OpsNoteFormPage() {
   const navigate = useNavigate();
@@ -12,7 +11,7 @@ export function OpsNoteFormPage() {
 
   return (
     <div className="app-min-h-screen bg-background">
-      <div className="sticky top-0 z-10 bg-background/85 backdrop-blur-md border-b border-border">
+      <div className="sticky top-0 z-10 bg-background border-b border-border">
         <div className="max-w-[1400px] mx-auto px-8 py-2.5 flex items-center gap-2">
           <button
             onClick={() => navigate('/ops-notes')}
@@ -30,7 +29,7 @@ export function OpsNoteFormPage() {
       <main className="max-w-[1400px] mx-auto px-8 pt-10 pb-16">
         <PageHeader title="새 Q&A" description="서비스, 질문, 답변, 히스토리를 입력하세요." className="mb-8" />
 
-        <div className={cn('border border-border rounded-2xl p-8 shadow-card', 'bg-card')}>
+        <div className="bg-card border border-border rounded-md p-8 shadow-card">
           <OpsNoteForm
             defaultService={defaultService}
             onCancel={() => navigate('/ops-notes')}

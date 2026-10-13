@@ -10,11 +10,11 @@ import type { WorkItem, Assignee } from '@/types';
 // ── 상태 스타일 ──────────────────────────────────────────────────────────────
 
 const KANBAN_STYLE: Record<string, { label: string; cls: string }> = {
-  backlog:     { label: 'Backlog',  cls: 'bg-status-unknown/10 text-status-unknown border-status-unknown/30' },
+  backlog:     { label: 'Backlog',  cls: 'bg-chart-8/10 text-chart-8 border-chart-8/30' },
   todo:        { label: 'To Do',    cls: 'bg-chart-1/10 text-chart-1 border-chart-1/30' },
-  in_progress: { label: 'WIP',      cls: 'bg-status-warning/10 text-status-warning border-status-warning/30' },
+  in_progress: { label: 'WIP',      cls: 'bg-chart-3/10 text-chart-3 border-chart-3/30' },
   review_test: { label: 'Review',   cls: 'bg-chart-4/10 text-chart-4 border-chart-4/30' },
-  done:        { label: 'Done',     cls: 'bg-status-healthy/10 text-status-healthy border-status-healthy/30' },
+  done:        { label: 'Done',     cls: 'bg-secondary text-muted-foreground border-border' },
 };
 
 const PRIORITY_DOT: Record<string, string> = {
@@ -159,8 +159,8 @@ function MemberSection({ bucket, onTaskClick, onIssueClick }: {
           {/* 작업 */}
           <div className="p-4">
             <div className="flex items-center gap-2 mb-3">
-              <ListTodo className="w-4 h-4 text-primary" />
-              <span className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">작업</span>
+              <ListTodo className="w-4 h-4 text-muted-foreground" />
+              <span className="text-sm font-medium text-muted-foreground">작업</span>
             </div>
             {bucket.tasks.length === 0 ? (
               <EmptyState compact icon={ListTodo} title="할당된 작업이 없습니다." description="이 멤버를 담당자로 지정한 작업이 아직 없습니다." />
@@ -197,8 +197,8 @@ function MemberSection({ bucket, onTaskClick, onIssueClick }: {
           {/* 이슈 */}
           <div className="p-4">
             <div className="flex items-center gap-2 mb-3">
-              <ClipboardList className="w-4 h-4 text-status-warning" />
-              <span className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">이슈</span>
+              <ClipboardList className="w-4 h-4 text-muted-foreground" />
+              <span className="text-sm font-medium text-muted-foreground">이슈</span>
             </div>
             {bucket.issues.length === 0 ? (
               <EmptyState compact icon={ClipboardList} title="할당된 이슈가 없습니다." description="이 멤버를 담당자로 지정한 이슈가 아직 없습니다." />
@@ -210,10 +210,9 @@ function MemberSection({ bucket, onTaskClick, onIssueClick }: {
                     onClick={() => onIssueClick(i)}
                     className="flex items-center gap-2 px-2 py-1.5 rounded hover:bg-muted/40 cursor-pointer"
                   >
-                    <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${i.closedAt ? 'bg-status-healthy' : 'bg-status-warning'}`} />
                     <span className={`text-xs px-1.5 py-0.5 rounded-full border flex-shrink-0 ${
                       i.closedAt
-                        ? 'bg-status-healthy/10 text-status-healthy border-status-healthy/30'
+                        ? 'bg-secondary text-muted-foreground border-border'
                         : 'bg-status-warning/10 text-status-warning border-status-warning/30'
                     }`}>
                       {i.closedAt ? '완료' : '미조치'}
@@ -421,7 +420,7 @@ export function MemberBoardPage() {
         />
 
         {/* 필터 */}
-        <div className="bg-card border border-border rounded-xl p-4 mb-5">
+        <div className="bg-card border border-border rounded-md p-4 mb-5">
           <div className="flex flex-wrap items-center gap-3">
             {/* 보기 범위: 나만 / 전체 (당일 스케줄과 동일) */}
             <div className="flex items-center rounded-lg border border-border overflow-hidden text-sm">
@@ -459,7 +458,7 @@ export function MemberBoardPage() {
                 <button
                   key={f}
                   onClick={() => setFilter(f)}
-                  className={`px-3 py-1.5 text-sm font-medium rounded-md transition-all ${
+                  className={`px-3 py-1.5 text-sm font-medium rounded-md transition-colors ${
                     filter === f
                       ? 'bg-background text-foreground shadow-sm'
                       : 'text-muted-foreground hover:text-foreground'
@@ -475,7 +474,7 @@ export function MemberBoardPage() {
                 <button
                   key={p}
                   onClick={() => setPeriod(p)}
-                  className={`px-3 py-1.5 text-sm font-medium rounded-md transition-all ${
+                  className={`px-3 py-1.5 text-sm font-medium rounded-md transition-colors ${
                     period === p
                       ? 'bg-background text-foreground shadow-sm'
                       : 'text-muted-foreground hover:text-foreground'

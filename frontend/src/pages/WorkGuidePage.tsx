@@ -16,7 +16,7 @@ import { GuideForm, GuidePageView } from '@/components/work-guides';
 // ── Constants ─────────────────────────────────────────────────────────────────
 const STATUS_CFG: Record<string, { label: string; icon: React.ReactNode; cls: string }> = {
   draft:    { label: '초안', icon: <FileText className="w-3 h-3" />,    cls: 'bg-status-unknown/10 text-status-unknown border-status-unknown/30' },
-  active:   { label: '활성', icon: <CheckCircle className="w-3 h-3" />, cls: 'bg-status-healthy/10 text-status-healthy border-status-healthy/30' },
+  active:   { label: '활성', icon: <CheckCircle className="w-3 h-3" />, cls: 'bg-secondary text-muted-foreground border-border' },
   archived: { label: '보관', icon: <Archive className="w-3 h-3" />,     cls: 'bg-status-unknown/10 text-status-unknown border-status-unknown/30' },
 };
 

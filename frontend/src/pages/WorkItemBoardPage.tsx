@@ -100,7 +100,7 @@ function TypeFilterDropdown({
       {open && (
         <>
           <div className="fixed inset-0 z-30" onClick={() => setOpen(false)} />
-          <div className="absolute left-0 top-full mt-1 z-40 bg-card border border-border rounded-lg shadow-card p-1 min-w-[140px]" role="listbox">
+          <div className="absolute left-0 top-full mt-1 z-40 bg-card border border-border rounded-md shadow-card p-1 min-w-[140px]" role="listbox">
             <button
               type="button"
               onClick={() => { onChange('all'); setOpen(false); }}
@@ -160,7 +160,7 @@ function StatusFilterDropdown({
       {open && (
         <>
           <div className="fixed inset-0 z-30" onClick={() => setOpen(false)} />
-          <div className="absolute left-0 top-full mt-1 z-40 bg-card border border-border rounded-lg shadow-card p-1 min-w-[140px]" role="listbox">
+          <div className="absolute left-0 top-full mt-1 z-40 bg-card border border-border rounded-md shadow-card p-1 min-w-[140px]" role="listbox">
             <button
               type="button"
               onClick={() => { onChange('all'); setOpen(false); }}
@@ -759,7 +759,7 @@ export function WorkItemBoardPage() {
                   </span>
                 )}
                 {boardSettings?.badgeVisibility.done && doneCount > 0 && (
-                  <span className="text-sm px-2 py-0.5 rounded-full bg-status-healthy/15 text-status-healthy border border-status-healthy/30">
+                  <span className="text-sm px-2 py-0.5 rounded-full bg-secondary text-muted-foreground border border-border">
                     Done {doneCount}
                   </span>
                 )}

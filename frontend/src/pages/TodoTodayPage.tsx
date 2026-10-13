@@ -67,11 +67,11 @@ const PRIORITY_DOT: Record<string, string> = {
   high: 'bg-status-critical', medium: 'bg-chart-1', low: 'bg-chart-8',
 };
 const STATUS_META: Record<KanbanStatus, { label: string; cls: string }> = {
-  backlog:     { label: '백로그',     cls: 'bg-status-unknown/10 text-status-unknown border-status-unknown/30' },
+  backlog:     { label: '백로그',     cls: 'bg-chart-8/10 text-chart-8 border-chart-8/30' },
   todo:        { label: '할일',       cls: 'bg-chart-1/10 text-chart-1 border-chart-1/30' },
-  in_progress: { label: '진행중',     cls: 'bg-status-warning/10 text-status-warning border-status-warning/30' },
+  in_progress: { label: '진행중',     cls: 'bg-chart-3/10 text-chart-3 border-chart-3/30' },
   review_test: { label: '검토/테스트', cls: 'bg-chart-4/10 text-chart-4 border-chart-4/30' },
-  done:        { label: '완료',       cls: 'bg-status-healthy/10 text-status-healthy border-status-healthy/30' },
+  done:        { label: '완료',       cls: 'bg-secondary text-muted-foreground border-border' },
 };
 
 type ViewMode = 'sprint' | 'schedule' | 'card' | 'list';
@@ -90,10 +90,10 @@ function fmtRange(start: string, end: string): string {
 }
 type BucketTone = 'overdue' | 'today' | 'upcoming' | 'done';
 const TONE: Record<BucketTone, { ring: string; text: string; dot: string }> = {
-  overdue:  { ring: 'border-status-critical/30',    text: 'text-status-critical',     dot: 'bg-status-critical' },
-  today:    { ring: 'border-status-info/30', text: 'text-status-info', dot: 'bg-status-info' },
+  overdue:  { ring: 'border-border', text: 'text-status-critical', dot: 'bg-status-critical' },
+  today:    { ring: 'border-border', text: 'text-foreground', dot: 'bg-chart-1' },
   upcoming: { ring: 'border-border',        text: 'text-muted-foreground', dot: 'bg-muted-foreground/50' },
-  done:     { ring: 'border-status-healthy/30', text: 'text-status-healthy', dot: 'bg-status-healthy' },
+  done:     { ring: 'border-border', text: 'text-muted-foreground', dot: 'bg-muted-foreground/40' },
 };
 
 // ── item renderers ────────────────────────────────────────────────────────────
@@ -113,7 +113,7 @@ function CompleteBtn({ item, busy, onToggleDone }: Omit<ItemProps, 'onOpen'>) {
       onClick={(e) => { e.stopPropagation(); onToggleDone(item); }}
       title={done ? '완료 취소' : '완료 처리'}
       aria-label={done ? '완료 취소' : '완료 처리'}
-      className={`flex-shrink-0 rounded-full transition-colors disabled:opacity-50 ${done ? 'text-status-healthy' : 'text-muted-foreground/40 hover:text-status-healthy'}`}
+      className={`flex-shrink-0 rounded-full transition-colors disabled:opacity-50 ${done ? 'text-muted-foreground' : 'text-muted-foreground/40 hover:text-primary'}`}
     >
       {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : done ? <CheckCircle2 className="w-4 h-4" /> : <Circle className="w-4 h-4" />}
     </button>
@@ -126,7 +126,7 @@ function ItemCard({ item, busy, onToggleDone, onOpen }: ItemProps) {
   return (
     <div
       onClick={() => onOpen(item)}
-      className="group cursor-pointer rounded-xl border border-border bg-card/60 hover:bg-card hover:border-primary/30 p-2 transition-colors"
+      className="group cursor-pointer rounded-md border border-border bg-card hover:border-primary/30 p-2 transition-colors"
     >
       <div className="flex items-start gap-2">
         <CompleteBtn item={item} busy={busy} onToggleDone={onToggleDone} />
@@ -181,7 +181,7 @@ function Section({
   if (items.length === 0) return null;
   const t = TONE[tone];
   return (
-    <div className={`rounded-2xl border ${t.ring} bg-card/40 overflow-hidden`}>
+    <div className={`rounded-md border ${t.ring} bg-card overflow-hidden`}>
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
@@ -435,7 +435,7 @@ export function TodoTodayPage() {
                   </div>
                 </div>
                 <div className="flex items-center gap-3 text-sm">
-                  <span className="text-status-healthy">완료 {sprint.doneCount}</span>
+                  <span className="text-muted-foreground">완료 {sprint.doneCount}</span>
                   <span className="text-muted-foreground">전체 {sprint.total}</span>
                   {sprint.effort > 0 && <span className="text-muted-foreground">{sprint.effort}h</span>}
                   <span className="text-primary font-semibold">{sprint.pct}%</span>
@@ -447,7 +447,7 @@ export function TodoTodayPage() {
                 </p>
               )}
               <div className="h-2 rounded-full bg-secondary overflow-hidden">
-                <div className="h-full bg-primary rounded-full transition-all duration-300" style={{ width: `${sprint.pct}%` }} />
+                <div className="h-full bg-primary rounded-full transition-[width] duration-300" style={{ width: `${sprint.pct}%` }} />
               </div>
             </MacCard>
 
@@ -465,7 +465,7 @@ export function TodoTodayPage() {
 
                 {/* 스프린트에 추가 후보 */}
                 {sprint.candidates.length > 0 && (
-                  <div className="rounded-2xl border border-dashed border-border bg-card/30 overflow-hidden">
+                  <div className="rounded-md border border-dashed border-border bg-card overflow-hidden">
                     <div className="flex items-center gap-2 px-4 py-2.5 border-b border-border/60">
                       <Plus className="w-4 h-4 text-muted-foreground" />
                       <span className="text-sm font-semibold text-muted-foreground">스프린트에 추가</span>
@@ -519,7 +519,7 @@ export function TodoTodayPage() {
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
-                  <tr className="bg-muted/40 border-b border-border text-xs uppercase tracking-wider text-muted-foreground">
+                  <tr className="bg-muted/40 border-b border-border text-xs font-medium text-muted-foreground">
                     <th className="text-left px-3 py-2 w-16">시간</th>
                     <th className="text-left px-3 py-2">업무</th>
                     <th className="text-left px-3 py-2 w-20">상태</th>

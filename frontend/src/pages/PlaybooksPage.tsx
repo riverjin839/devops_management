@@ -35,7 +35,7 @@ function SortableCardCell({ playbook, isRunning, onRun, onEdit, onDelete, onTogg
     <div ref={setNodeRef} style={style} className="relative group/card">
       <button
         {...attributes} {...listeners}
-        className="absolute top-2 left-2 z-10 cursor-grab active:cursor-grabbing p-1 rounded text-muted-foreground/30 opacity-0 group-hover/card:opacity-100 hover:text-muted-foreground hover:bg-secondary transition-all"
+        className="absolute top-2 left-2 z-10 cursor-grab active:cursor-grabbing p-1 rounded text-muted-foreground/30 opacity-0 group-hover/card:opacity-100 hover:text-muted-foreground hover:bg-secondary transition"
         title="드래그하여 순서 변경"
         aria-label="드래그하여 순서 변경"
       >
@@ -250,7 +250,7 @@ export function PlaybooksPage() {
             <>
               {statusCounts.total > 0 && (
                 <div className="flex items-center gap-2 ml-2">
-                  <span className="text-sm px-2 py-0.5 rounded-full bg-status-healthy/15 text-status-healthy border border-status-healthy/30">
+                  <span className="text-sm px-2 py-0.5 rounded-full bg-secondary text-muted-foreground border border-border">
                     {statusCounts.healthy} OK
                   </span>
                   {statusCounts.warning > 0 && (
@@ -336,7 +336,7 @@ export function PlaybooksPage() {
                   <RoleGate allow={['admin', 'operator']}>
                     <button
                       onClick={handleRunAll}
-                      className="px-4 py-2 text-sm font-medium bg-status-healthy hover:bg-status-healthy text-white rounded-lg transition-colors flex items-center gap-2"
+                      className="px-4 py-2 text-sm font-medium bg-primary hover:bg-primary/90 text-primary-foreground rounded-lg transition-colors flex items-center gap-2"
                     >
                       <Play className="w-4 h-4" />
                       Run All

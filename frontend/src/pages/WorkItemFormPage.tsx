@@ -25,7 +25,7 @@ export function WorkItemFormPage() {
 
   return (
     <div className="app-min-h-screen bg-background">
-      <div className="sticky top-0 z-10 bg-background/85 backdrop-blur-md border-b border-border">
+      <div className="sticky top-0 z-10 bg-background border-b border-border">
         <PageHeader
           className="max-w-[1400px] mx-auto px-8 py-2.5 items-center"
           back={{ to: '/tasks-mgmt', label: '업무 목록' }}
@@ -44,7 +44,7 @@ export function WorkItemFormPage() {
       </div>
 
       <main className="max-w-[1400px] mx-auto px-6 pt-4 pb-6">
-        <div className="border border-border rounded-2xl p-5 shadow-card bg-card">
+        <div className="bg-card border border-border rounded-md p-5 shadow-card">
           <WorkItemForm
             defaultType={defaultType}
             parentItem={parentItem}

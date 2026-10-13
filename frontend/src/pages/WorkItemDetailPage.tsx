@@ -4,7 +4,7 @@ import { ListTodo, Plus, Trash2, UploadCloud, Ticket } from 'lucide-react';
 import { WorkItemForm, WorkItemReadView, JiraPushDialog, ServiceNowRegisterDialog } from '@/components/work-items';
 import { ConfirmDialog, useToast, EmptyState, PageHeader } from '@/components/common';
 import { useWorkItem, useDeleteWorkItem } from '@/hooks/useWorkItems';
-import { cn, formatApiError } from '@/lib/utils';
+import { formatApiError } from '@/lib/utils';
 
 export function WorkItemDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -62,7 +62,7 @@ export function WorkItemDetailPage() {
 
   return (
     <div className="app-min-h-screen bg-background">
-      <div className="sticky top-0 z-10 bg-background/85 backdrop-blur-md border-b border-border">
+      <div className="sticky top-0 z-10 bg-background border-b border-border">
         <PageHeader
           className="max-w-[1400px] mx-auto px-8 py-2.5 items-center"
           back={{ to: '/tasks-mgmt', label: '업무 목록' }}
@@ -114,7 +114,7 @@ export function WorkItemDetailPage() {
 
       <main className="max-w-[1400px] mx-auto px-8 pt-4 pb-16">
         {isEditing ? (
-          <div className={cn('border border-border rounded-2xl p-5 shadow-card', 'bg-card')}>
+          <div className="bg-card border border-border rounded-md p-5 shadow-card">
             <WorkItemForm
               initial={item}
               onCancel={() => setIsEditing(false)}
@@ -123,7 +123,7 @@ export function WorkItemDetailPage() {
             />
           </div>
         ) : (
-          <div className={cn('border border-border rounded-2xl p-8 shadow-card', 'bg-card')}>
+          <div className="bg-card border border-border rounded-md p-8 shadow-card">
             <WorkItemReadView item={item} onEdit={() => setIsEditing(true)} />
           </div>
         )}

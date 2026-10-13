@@ -37,13 +37,13 @@ const SERVICES: ServiceMeta[] = [
 ];
 const SERVICE_MAP = Object.fromEntries(SERVICES.map((s) => [s.value, s]));
 
-// ── 카드 색상 (앞면 살짝 은은한 tint) ──────────────────────────────────────────
-const CARD_TINT: Record<OpsNoteColor, { stripe: string; tint: string; chip: string }> = {
-  yellow: { stripe: 'bg-status-warning',  tint: 'bg-status-warning/5',  chip: 'bg-status-warning/15 text-status-warning' },
-  green:  { stripe: 'bg-status-healthy', tint: 'bg-status-healthy/5', chip: 'bg-status-healthy/15 text-status-healthy' },
-  blue:   { stripe: 'bg-status-info',    tint: 'bg-status-info/5',      chip: 'bg-status-info/15 text-status-info' },
-  pink:   { stripe: 'bg-chart-5',        tint: 'bg-chart-5/5',          chip: 'bg-chart-5/15 text-chart-5' },
-  purple: { stripe: 'bg-chart-4',        tint: 'bg-chart-4/5',          chip: 'bg-chart-4/15 text-chart-4' },
+// ── 카드 색상 (좌측 띠 하나로만 구분 — 사용자 선택 색은 카테고리라 chart-* 토큰) ─────────────
+const CARD_TINT: Record<OpsNoteColor, { stripe: string }> = {
+  yellow: { stripe: 'bg-chart-3' },
+  green:  { stripe: 'bg-chart-2' },
+  blue:   { stripe: 'bg-chart-1' },
+  pink:   { stripe: 'bg-chart-5' },
+  purple: { stripe: 'bg-chart-4' },
 };
 
 // ── 빈 상태 (리스트·카드 공용) ─────────────────────────────────────────────────
@@ -95,7 +95,7 @@ function QnaCard({ note, onOpen, onEdit, onDelete, onTogglePin }: QnaCardProps) 
       tabIndex={0}
       onClick={onOpen}
       onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onOpen(); } }}
-      className={`group relative rounded-2xl border border-border overflow-hidden bg-card hover:shadow-md hover:-translate-y-0.5 transition-all flex flex-col cursor-pointer focus:outline-none focus:ring-2 focus:ring-primary/40 ${tint.tint}`}
+      className="group relative rounded-md border border-border overflow-hidden bg-card hover:border-muted-foreground/30 transition-colors flex flex-col cursor-pointer focus:outline-none focus:ring-2 focus:ring-primary/40"
       style={{ minHeight: '230px' }}
     >
       {/* 색상 띠 (좌측) */}
@@ -179,8 +179,8 @@ function QnaCard({ note, onOpen, onEdit, onDelete, onTogglePin }: QnaCardProps) 
           <span
             className={`inline-flex items-center justify-center w-5 h-5 rounded-md text-xs font-bold flex-shrink-0 mt-0.5 ${
               activeTab === 'answer'
-                ? 'bg-status-healthy/15 text-status-healthy'
-                : 'bg-status-unknown/15 text-status-unknown'
+                ? 'bg-secondary text-foreground'
+                : 'bg-secondary text-muted-foreground'
             }`}
           >
             {activeTab === 'answer' ? 'A' : 'H'}

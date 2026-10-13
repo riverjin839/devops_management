@@ -34,8 +34,8 @@ function fmtDate(s: string): string {
 
 const STATUS_META: Record<SprintStatus, { label: string; cls: string }> = {
   planning:  { label: '계획',   cls: 'bg-status-unknown/10 text-status-unknown border-status-unknown/30' },
-  active:    { label: '진행중', cls: 'bg-status-info/10 text-status-info border-status-info/30' },
-  completed: { label: '완료',   cls: 'bg-status-healthy/10 text-status-healthy border-status-healthy/30' },
+  active:    { label: '진행중', cls: 'bg-chart-1/10 text-chart-1 border-chart-1/30' },
+  completed: { label: '완료',   cls: 'bg-secondary text-muted-foreground border-border' },
 };
 
 // ── create / edit modal ────────────────────────────────────────────────────
@@ -71,7 +71,7 @@ function SprintModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={onClose}>
-      <div ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby={titleId} className="bg-card border border-border rounded-2xl w-full max-w-md shadow-xl" onClick={(e) => e.stopPropagation()}>
+      <div ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby={titleId} className="bg-card border border-border rounded-md w-full max-w-md shadow-xl" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between px-5 py-3 border-b border-border">
           <h2 id={titleId} className="font-bold flex items-center gap-2"><Rocket className="w-4 h-4 text-primary" />{initial ? '스프린트 수정' : '새 스프린트'}</h2>
           <button onClick={onClose} aria-label="닫기" className="p-1 rounded-lg hover:bg-secondary text-muted-foreground"><X className="w-4 h-4" /></button>
@@ -206,7 +206,7 @@ function CarryOverModal({
   const remaining = source.totalItems - source.doneItems;
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={onClose}>
-      <div ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby={titleId} className="bg-card border border-border rounded-2xl w-full max-w-md shadow-xl" onClick={(e) => e.stopPropagation()}>
+      <div ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby={titleId} className="bg-card border border-border rounded-md w-full max-w-md shadow-xl" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between px-5 py-3 border-b border-border">
           <h2 id={titleId} className="font-bold flex items-center gap-2"><ArrowRightLeft className="w-4 h-4 text-primary" />미완료 이월</h2>
           <button onClick={onClose} aria-label="닫기" className="p-1 rounded-lg hover:bg-secondary text-muted-foreground"><X className="w-4 h-4" /></button>
@@ -266,7 +266,7 @@ function SprintCard({
   const left = daysBetween(todayStr(), sprint.endDate);
   const meta = STATUS_META[sprint.status];
   return (
-    <div className="bg-card border border-border rounded-2xl p-3 flex flex-col gap-2">
+    <div className="bg-card border border-border rounded-md p-3 flex flex-col gap-2">
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
           <div className="flex items-center gap-2 mb-0.5">
@@ -300,12 +300,12 @@ function SprintCard({
           <span className="font-semibold text-primary">{pct}%</span>
         </div>
         <div className="h-2 rounded-full bg-secondary overflow-hidden">
-          <div className="h-full bg-primary rounded-full transition-all" style={{ width: `${pct}%` }} />
+          <div className="h-full bg-primary rounded-full transition-[width]" style={{ width: `${pct}%` }} />
         </div>
       </div>
 
       <div className="flex items-center gap-3 text-sm text-muted-foreground flex-wrap">
-        <span className="text-status-healthy">완료 {sprint.doneItems}</span>
+        <span>완료 {sprint.doneItems}</span>
         <span>전체 {sprint.totalItems}</span>
         {remaining > 0 && <span className="text-status-warning">미완료 {remaining}</span>}
         {sprint.totalEffortHours > 0 && <span className="inline-flex items-center gap-0.5"><Clock className="w-3 h-3" />{sprint.totalEffortHours}h</span>}
@@ -323,7 +323,7 @@ function SprintCard({
                 <ArrowRightLeft className="w-3 h-3" />이월
               </button>
             )}
-            <button onClick={() => onComplete(sprint)} className="ml-auto text-sm px-2.5 py-1.5 rounded-lg bg-status-healthy/10 text-status-healthy hover:bg-status-healthy/20 transition-colors inline-flex items-center gap-1">
+            <button onClick={() => onComplete(sprint)} className="ml-auto text-sm px-2.5 py-1.5 rounded-lg bg-secondary hover:bg-secondary/80 border border-border text-muted-foreground hover:text-foreground transition-colors inline-flex items-center gap-1">
               <CheckCircle2 className="w-3 h-3" />종료
             </button>
           </>

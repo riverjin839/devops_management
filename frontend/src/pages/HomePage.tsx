@@ -112,7 +112,7 @@ export function HomePage() {
           제거해 이 탭 줄이 홈의 최상단이 됐다 — 신호는 위험/실패가 있을 때만 뜨는
           탭 배지 하나로 압축했다. 플랫폼 탭일 때는 오른쪽에 매트릭스 툴바(portal slot)를
           같은 줄에 이어 붙여 카드 헤더 줄 하나를 통째로 줄인다. ───────── */}
-      <div className="flex-none flex items-center gap-2 px-3 lg:px-4 py-2 border-b border-border bg-background/95 backdrop-blur">
+      <div className="flex-none flex items-center gap-2 px-3 lg:px-4 py-2 border-b border-border bg-background">
         <div
           role="tablist"
           aria-label="홈 화면 보기"
@@ -226,8 +226,8 @@ export function HomePage() {
               className="flex-1 min-h-0 flex flex-col"
             >
               <div className="flex-none flex items-center gap-2 px-4 py-2.5 border-b border-border bg-muted/40">
-                <CalendarClock className="w-3.5 h-3.5 text-primary" />
-                <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground select-none">
+                <CalendarClock className="w-3.5 h-3.5 text-muted-foreground" />
+                <span className="text-xs font-medium text-muted-foreground select-none">
                   당일 스케줄
                 </span>
               </div>
@@ -243,10 +243,10 @@ export function HomePage() {
               className="flex-1 min-h-0 flex flex-col"
             >
               <div className="flex-none flex items-center gap-2 px-4 py-2.5 border-b border-border bg-muted/40">
-                <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground select-none">
+                <span className="text-xs font-medium text-muted-foreground select-none">
                   담당자별 진행 현황
                 </span>
-                <CalendarDays className="w-3.5 h-3.5 text-primary" />
+                <CalendarDays className="w-3.5 h-3.5 text-muted-foreground" />
                 <div className="ml-auto flex items-center rounded-md border border-border overflow-hidden text-xs">
                   <button
                     onClick={() => setWeeklyTab('week')}

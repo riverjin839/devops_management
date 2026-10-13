@@ -1,6 +1,6 @@
 import { useEffect, useId, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { Settings as SettingsIcon, Server, Pencil, Trash2, Plus, Globe, ShieldCheck, AlertTriangle, Loader2, Eye, MonitorDot, Wifi, WifiOff, HelpCircle, UserCheck, Bug, HardDrive, Database, Home, Palette, FileSearch, Wand2, Bot, Ticket, Users } from 'lucide-react';
+import { Settings as SettingsIcon, Server, Pencil, Trash2, Plus, Globe, ShieldCheck, AlertTriangle, Loader2, Eye, MonitorDot, Wifi, WifiOff, HelpCircle, UserCheck, Bug, HardDrive, Database, Home, Palette, FileSearch, Wand2, Bot, Ticket, Users, CheckCircle2, XCircle, Check, X } from 'lucide-react';
 import { MacCard } from '@/components/ui/MacCard';
 import { BackupRestorePanel } from '@/components/settings/BackupRestorePanel';
 import { TenantManager } from '@/components/settings/TenantManager';
@@ -104,7 +104,7 @@ function EditClusterModal({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
       <div className="absolute inset-0 bg-black/60" onClick={onClose} />
-      <div ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby={f('title')} className="relative bg-card border border-border rounded-2xl shadow-2xl w-full max-w-2xl mx-4 p-8 max-h-[90vh] overflow-y-auto">
+      <div ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby={f('title')} className="relative bg-card border border-border rounded-md shadow-2xl w-full max-w-2xl mx-4 p-8 max-h-[90vh] overflow-y-auto">
         <h2 id={f('title')} className="text-2xl font-bold tracking-tight mb-1">클러스터 수정</h2>
         <p className="text-sm text-muted-foreground mb-6">이름·API Endpoint·kubeconfig 경로만 변경됩니다. 자세한 설정은 클러스터 관리 페이지에서 가능합니다.</p>
         <form onSubmit={handleSubmit} className="space-y-5">
@@ -272,7 +272,7 @@ function ManagementServerModal({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
       <div className="absolute inset-0 bg-black/60" onClick={onClose} />
-      <div ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby={f('title')} className="relative bg-card border border-border rounded-2xl shadow-2xl w-full max-w-3xl mx-4 p-8 max-h-[90vh] overflow-y-auto">
+      <div ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby={f('title')} className="relative bg-card border border-border rounded-md shadow-2xl w-full max-w-3xl mx-4 p-8 max-h-[90vh] overflow-y-auto">
         <h2 id={f('title')} className="text-2xl font-bold tracking-tight mb-1">{server ? '관리서버 수정' : '관리서버 추가'}</h2>
         <p className="text-sm text-muted-foreground mb-6">SSH 접속 정보와 라벨 / 카테고리만 등록되며, 비밀번호 / 키는 DB 에 저장하지 않습니다.</p>
         <form onSubmit={handleSubmit} className="space-y-5">
@@ -340,7 +340,7 @@ function ManagementServerModal({
 
 function ServerStatusBadge({ status }: { status: string }) {
   if (status === 'online') return (
-    <span className="inline-flex items-center gap-1 text-sm px-2 py-0.5 rounded-full bg-status-healthy/10 text-status-healthy border border-status-healthy/30">
+    <span className="inline-flex items-center gap-1 text-sm px-2 py-0.5 rounded-full bg-secondary text-muted-foreground border border-border">
       <Wifi className="w-3 h-3" /> online
     </span>
   );
@@ -364,7 +364,7 @@ function ClusterIconButton({ cluster, onClick }: { cluster: Cluster; onClick: (e
     <button
       type="button"
       onClick={onClick}
-      className="flex items-center justify-center w-10 h-10 rounded-lg border border-border bg-card hover:bg-secondary hover:ring-2 hover:ring-primary/30 transition-all flex-shrink-0"
+      className="flex items-center justify-center w-10 h-10 rounded-lg border border-border bg-card hover:bg-secondary hover:border-primary/40 transition-colors flex-shrink-0"
       title={cluster.icon ? '아이콘 변경' : '아이콘 설정 (lucide / 이모지 / 이미지 업로드)'}
       aria-label="클러스터 아이콘 설정"
     >
@@ -641,7 +641,7 @@ export function SettingsPage() {
             <button
               key={tab.id}
               onClick={() => setActiveTab(tab.id)}
-              className={`flex items-center gap-2 px-5 py-2.5 rounded-lg text-sm font-medium transition-all ${
+              className={`flex items-center gap-2 px-5 py-2.5 rounded-lg text-sm font-medium transition-colors ${
                 activeTab === tab.id
                   ? 'bg-card text-foreground shadow-sm border border-border'
                   : 'text-muted-foreground hover:text-foreground'
@@ -930,7 +930,7 @@ export function SettingsPage() {
                       <span
                         className={`text-sm px-2 py-0.5 rounded-full border ${
                           cluster.status === 'healthy'
-                            ? 'bg-status-healthy/10 text-status-healthy border-status-healthy/30'
+                            ? 'bg-secondary text-muted-foreground border-border'
                             : cluster.status === 'warning'
                             ? 'bg-status-warning/10 text-status-warning border-status-warning/30'
                             : cluster.status === 'critical'
@@ -967,10 +967,11 @@ export function SettingsPage() {
                           ? 'bg-status-warning/10 text-status-warning'
                           : 'bg-status-critical/10 text-status-critical';
                       const headline = vr.ok
-                        ? '✓ 연결 정상'
+                        ? '연결 정상'
                         : vr.status === 'warning'
-                          ? '△ 부분 이상 — API 는 도달하지만 kubeconfig 기반 기능(배치잡/점검)이 실패할 상태'
-                          : '✗ 연결 이상';
+                          ? '부분 이상 — API 는 도달하지만 kubeconfig 기반 기능(배치잡/점검)이 실패할 상태'
+                          : '연결 이상';
+                      const HeadIcon = vr.ok ? CheckCircle2 : vr.status === 'warning' ? AlertTriangle : XCircle;
                       const CHECK_LABEL: Record<string, string> = {
                         api_server: 'API 서버 (/healthz)',
                         kubeconfig_auth: 'kubeconfig 인증',
@@ -978,12 +979,12 @@ export function SettingsPage() {
                       };
                       return (
                         <div className={`text-sm mt-1 px-2 py-1.5 rounded ${tone}`}>
-                          <div className="font-medium">{headline}</div>
+                          <div className="font-medium flex items-center gap-1.5"><HeadIcon className="w-3.5 h-3.5 flex-shrink-0" />{headline}</div>
                           <ul className="mt-1 space-y-0.5">
                             {vr.checks.map((c) => (
                               <li key={c.check} className="flex items-start gap-1.5 text-xs">
-                                <span className="flex-shrink-0 mt-px">
-                                  {c.ok === true ? '✓' : c.ok === false ? '✗' : '—'}
+                                <span className="flex-shrink-0 mt-0.5">
+                                  {c.ok === true ? <Check className="w-3 h-3" aria-label="통과" /> : c.ok === false ? <X className="w-3 h-3" aria-label="실패" /> : '—'}
                                 </span>
                                 <span className="flex-shrink-0 font-medium">{CHECK_LABEL[c.check] ?? c.check}</span>
                                 <span className="min-w-0 opacity-80 break-all">{c.detail}</span>
@@ -1130,10 +1131,13 @@ export function SettingsPage() {
                       {server.lastChecked && <span className="ml-4">마지막 확인: {formatDateTime(server.lastChecked)}</span>}
                     </div>
                     {pingResults[server.id] && (
-                      <div className={`text-sm mt-1 px-2 py-1 rounded ${
+                      <div className={`text-sm mt-1 px-2 py-1 rounded flex items-center gap-1.5 ${
                         pingResults[server.id].ok ? 'bg-status-healthy/10 text-status-healthy' : 'bg-status-critical/10 text-status-critical'
                       }`}>
-                        {pingResults[server.id].ok ? '✓ 연결 확인됨' : '✗ 연결 실패'} — {pingResults[server.id].detail}
+                        {pingResults[server.id].ok
+                          ? <CheckCircle2 className="w-3.5 h-3.5 flex-shrink-0" />
+                          : <XCircle className="w-3.5 h-3.5 flex-shrink-0" />}
+                        <span>{pingResults[server.id].ok ? '연결 확인됨' : '연결 실패'} — {pingResults[server.id].detail}</span>
                       </div>
                     )}
                   </div>
