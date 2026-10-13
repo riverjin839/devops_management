@@ -22,7 +22,11 @@ interface KpiCellProps {
   className?: string;
 }
 
-function KpiCell({ icon: Icon, label, value, colorClass, bgClass, className = '' }: KpiCellProps) {
+function KpiCell({ icon: Icon, label, value, colorClass: toneClass, bgClass: toneBg, className = '' }: KpiCellProps) {
+  // 0 은 알릴 게 없다 — "위험 0" 을 빨갛게 그리지 않는다(§12.12-2·3, D-118/D-119).
+  const quiet = typeof value === 'number' && value === 0;
+  const colorClass = quiet ? 'text-muted-foreground' : toneClass;
+  const bgClass = quiet ? 'bg-muted' : toneBg;
   return (
     <MacCard rootClassName={className} bodyPadding="p-4">
       <div className="flex items-center justify-between h-full">

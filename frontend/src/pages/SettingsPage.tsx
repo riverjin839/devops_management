@@ -1,6 +1,6 @@
 import { useEffect, useId, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { Settings as SettingsIcon, Server, Pencil, Trash2, Plus, Globe, ShieldCheck, Clock, AlertTriangle, Loader2, Eye, MonitorDot, Wifi, WifiOff, HelpCircle, UserCheck, Bug, HardDrive, Database, Home, Palette, FileSearch, Wand2, Bot, Ticket, Users } from 'lucide-react';
+import { Settings as SettingsIcon, Server, Pencil, Trash2, Plus, Globe, ShieldCheck, AlertTriangle, Loader2, Eye, MonitorDot, Wifi, WifiOff, HelpCircle, UserCheck, Bug, HardDrive, Database, Home, Palette, FileSearch, Wand2, Bot, Ticket, Users } from 'lucide-react';
 import { MacCard } from '@/components/ui/MacCard';
 import { BackupRestorePanel } from '@/components/settings/BackupRestorePanel';
 import { TenantManager } from '@/components/settings/TenantManager';
@@ -584,12 +584,6 @@ export function SettingsPage() {
     }
   };
 
-  const statusCounts = {
-    healthy: clusters.filter((c) => c.status === 'healthy').length,
-    warning: clusters.filter((c) => c.status === 'warning').length,
-    critical: clusters.filter((c) => c.status === 'critical').length,
-  };
-
   const serverTypeLabelMap: Record<string, string> = {
     jump_host: 'Jump Host',
     bastion: 'Bastion',
@@ -850,38 +844,6 @@ export function SettingsPage() {
             }}
           />
         )}
-
-        {/* Cluster Tab: Summary Cards */}
-        {activeTab === 'cluster' && <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
-          <div className="bg-card border border-border rounded-xl p-4">
-            <div className="flex items-center gap-2 text-muted-foreground text-sm mb-1">
-              <Server className="w-4 h-4" />
-              전체 클러스터
-            </div>
-            <p className="text-2xl font-bold">{clusters.length}</p>
-          </div>
-          <div className="bg-card border border-border rounded-xl p-4">
-            <div className="flex items-center gap-2 text-status-healthy text-sm mb-1">
-              <ShieldCheck className="w-4 h-4" />
-              Healthy
-            </div>
-            <p className="text-2xl font-bold text-status-healthy">{statusCounts.healthy}</p>
-          </div>
-          <div className="bg-card border border-border rounded-xl p-4">
-            <div className="flex items-center gap-2 text-status-warning text-sm mb-1">
-              <Clock className="w-4 h-4" />
-              Warning
-            </div>
-            <p className="text-2xl font-bold text-status-warning">{statusCounts.warning}</p>
-          </div>
-          <div className="bg-card border border-border rounded-xl p-4">
-            <div className="flex items-center gap-2 text-status-critical text-sm mb-1">
-              <Globe className="w-4 h-4" />
-              Critical
-            </div>
-            <p className="text-2xl font-bold text-status-critical">{statusCounts.critical}</p>
-          </div>
-        </div>}
 
         {/* 운영레벨 관리 — 별도 탭 */}
         {activeTab === 'operations' && (

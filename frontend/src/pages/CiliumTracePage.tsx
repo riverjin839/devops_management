@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { StatTile, StatTileRow } from '@/components/common/StatTile';
 import { PageHeader } from '@/components/common/PageHeader';
 import { createPortal } from 'react-dom';
 import {
@@ -290,53 +291,33 @@ function StatusStrip({ status, loading, agentCount }: StatusStripProps) {
     );
   }
   return (
-    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-      <StatusCell
-        icon={<Boxes className="w-4 h-4" />}
+    <StatTileRow>
+      <StatTile
+        icon={Boxes}
         label="Cilium"
         value={status.ciliumInstalled ? '설치됨' : '미설치'}
-        accent={status.ciliumInstalled ? 'text-status-healthy' : 'text-muted-foreground'}
+        tone={status.ciliumInstalled ? undefined : 'warning'}
         hint={status.ciliumVersion ?? undefined}
       />
-      <StatusCell
-        icon={<Server className="w-4 h-4" />}
-        label="Agent Pods"
-        value={agentCount}
-        accent="text-primary"
-        hint={`${status.namespace}`}
-      />
-      <StatusCell
-        icon={<Waves className="w-4 h-4" />}
+      <StatTile icon={Server} label="Agent 파드" value={agentCount} hint={status.namespace} />
+      <StatTile
+        icon={Waves}
         label="Hubble Relay"
         value={status.hubbleRelayInstalled ? '활성' : '없음'}
-        accent={status.hubbleRelayInstalled ? 'text-status-healthy' : 'text-muted-foreground'}
-        hint={status.hubbleRelayInstalled ? 'svc/hubble-relay' : 'install required'}
+        tone={status.hubbleRelayInstalled ? undefined : 'warning'}
+        hint={status.hubbleRelayInstalled ? 'svc/hubble-relay' : '설치 필요'}
       />
-      <StatusCell
-        icon={<Activity className="w-4 h-4" />}
+      <StatTile
+        icon={Activity}
         label="Trace 가용성"
         value={
           status.ciliumInstalled
             ? (status.hubbleRelayInstalled ? 'BPF + Hubble' : 'BPF only')
             : '미가용'
         }
-        accent={status.ciliumInstalled ? 'text-foreground' : 'text-muted-foreground'}
+        tone={status.ciliumInstalled ? undefined : 'warning'}
       />
-    </div>
-  );
-}
-
-interface StatusCellProps { icon: React.ReactNode; label: string; value: string | number; accent?: string; hint?: string }
-function StatusCell({ icon, label, value, accent = 'text-foreground', hint }: StatusCellProps) {
-  return (
-    <div className="rounded-2xl border border-border bg-card px-4 py-3 flex items-center gap-3">
-      <div className={`w-9 h-9 rounded-xl bg-secondary flex items-center justify-center ${accent}`}>{icon}</div>
-      <div className="min-w-0">
-        <p className="text-xs text-muted-foreground">{label}</p>
-        <p className={`text-base font-bold leading-tight ${accent}`}>{value}</p>
-        {hint && <p className="text-xs text-muted-foreground truncate">{hint}</p>}
-      </div>
-    </div>
+    </StatTileRow>
   );
 }
 

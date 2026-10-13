@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import { StatTile, StatTileRow } from '@/components/common/StatTile';
 import { useNavigate } from 'react-router-dom';
 import {
   DownloadCloud, FilePlus2, Loader2, Pencil, RefreshCw, Search, Settings2,
@@ -138,24 +139,16 @@ export function DocumentsPage() {
       </div>
 
       {/* 요약 타일 */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+      <StatTileRow>
         {([
-          { label: '전체 문서', value: stats.total, onClick: () => setSource('') },
-          { label: 'PEP 작성', value: stats.pep, onClick: () => setSource('pep') },
-          { label: 'Confluence 연동', value: stats.confluence, onClick: () => setSource('confluence') },
-          { label: '동기화 필요', value: stats.needSync, onClick: () => setSource('needSync'), attention: stats.needSync > 0 },
-        ] as const).map((t) => (
-          <button
-            key={t.label} type="button" onClick={t.onClick}
-            className={`text-left rounded-md border bg-card px-4 py-3 hover:bg-secondary/50 transition-colors ${
-              'attention' in t && t.attention ? 'border-status-warning/60' : 'border-border'
-            }`}
-          >
-            <div className="text-[11px] font-semibold tracking-wide text-muted-foreground">{t.label}</div>
-            <div className={`text-xl font-bold tabular-nums ${'attention' in t && t.attention ? 'text-status-warning' : ''}`}>{t.value}</div>
-          </button>
+          { key: '', label: '전체 문서', value: stats.total },
+          { key: 'pep', label: 'PEP 작성', value: stats.pep },
+          { key: 'confluence', label: 'Confluence 연동', value: stats.confluence },
+          { key: 'needSync', label: '동기화 필요', value: stats.needSync, tone: 'warning' as const },
+        ]).map((t) => (
+          <StatTile key={t.label} label={t.label} value={t.value} tone={t.tone} onClick={() => setSource(t.key)} active={source === t.key} />
         ))}
-      </div>
+      </StatTileRow>
 
       {/* 검색 + 필터 */}
       <div className="flex items-center gap-2 flex-wrap">

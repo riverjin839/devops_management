@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import { StatTile, StatTileRow } from '@/components/common/StatTile';
 import { Link, useNavigate } from 'react-router-dom';
 import {
   CalendarCheck2, Clock, CheckCircle2, Circle, AlertTriangle,
@@ -316,11 +317,11 @@ export function TodoTodayPage() {
   };
   const onOpen = (t: WorkItem) => navigate(`/tasks-mgmt/${t.id}`);
 
-  const stats = [
-    { label: '지연', value: buckets.overdue.length, cls: 'text-status-critical' },
-    { label: '오늘', value: buckets.todayList.length, cls: 'text-blue-500' },
-    { label: '진행중', value: buckets.inProgress, cls: 'text-status-warning' },
-    { label: '예정', value: buckets.upcoming.length, cls: 'text-foreground' },
+  const stats: Array<{ label: string; value: number; tone?: 'critical' | 'warning' | 'info' }> = [
+    { label: '지연', value: buckets.overdue.length, tone: 'critical' },
+    { label: '오늘', value: buckets.todayList.length, tone: 'info' },
+    { label: '진행중', value: buckets.inProgress },
+    { label: '예정', value: buckets.upcoming.length },
   ];
   const totalOpen = buckets.overdue.length + buckets.todayList.length + buckets.upcoming.length;
 
@@ -372,14 +373,11 @@ export function TodoTodayPage() {
       </div>
 
       {/* 요약 통계 */}
-      <div className="grid grid-cols-4 gap-3">
+      <StatTileRow>
         {stats.map((s) => (
-          <div key={s.label} className="bg-card border border-border rounded-xl px-4 py-3">
-            <p className="text-sm text-muted-foreground mb-0.5">{s.label}</p>
-            <p className={`text-2xl font-bold tabular-nums ${s.cls}`}>{s.value}</p>
-          </div>
+          <StatTile key={s.label} label={s.label} value={s.value} tone={s.tone} />
         ))}
-      </div>
+      </StatTileRow>
 
       {/* 본문 */}
       {!myName ? (

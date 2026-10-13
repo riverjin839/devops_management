@@ -22,6 +22,7 @@ export type { Toast, ToastVariant } from './Toast';
 export { Skeleton, SkeletonRow, SkeletonTable, SkeletonCard } from './Skeleton';
 export { EmptyState } from './EmptyState';
 export { PageHeader } from './PageHeader';
+export { StatTile, StatTileRow } from './StatTile';
 export { StatusBadge, StatusDot, statusToVariant } from './StatusBadge';
 export type { StatusVariant } from './StatusBadge';
 export { ResizeGrip } from './ResizeGrip';
