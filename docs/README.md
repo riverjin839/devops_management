@@ -36,6 +36,7 @@ PEP 문서 모음. 루트의 [README](../README.md) · [CHANGELOG](../CHANGELOG.
 - [openlens-architecture-roadmap.md](openlens-architecture-roadmap.md) — 범용 K8s 관리 + 300노드 실시간 로드맵(P0~P5)
 - [collab-tooling-borrow-report.md](collab-tooling-borrow-report.md) — AFFiNE/AppFlowy 차용 분석
 - [03-analysis/check-matrix-commercial-review.md](03-analysis/check-matrix-commercial-review.md) — **점검 매트릭스 상용화 전면 재검토(2026-10)**: 상용화 불가 판정 원인(테넌트 격리·값 유실·실행 피드백·스케줄러·직관성) 감사와 조치, 잔여 백로그, 재검증 체크리스트
+- [03-analysis/ai-look-audit-2026-10.md](03-analysis/ai-look-audit-2026-10.md) — **AI 개발티 조합 수준 감사(2026-10)**: 페이지 헤더 템플릿·KPI 타일 복붙·정상 과잉 채색·무지개 팔레트·카드 남용·밀도·빈 상태·이모지·용어 전수 증거(file:line), 화면별 매트릭스, D-117~D-134 백로그, DESIGN_SYSTEM §12.12 조합 규칙 근거, 재집계 명령·재검증 체크리스트
 - [03-analysis/backend-language-migration-review.md](03-analysis/backend-language-migration-review.md) — **백엔드 언어 변경(Python→TypeScript) 검토**: 무응답 원인(스레드풀 고갈)·타입 게이트 부재 실측, 권고 = 변경하지 않음
 - [03-analysis/personalization-review.md](03-analysis/personalization-review.md) — **개인화 설정 상용화 검토**: 배포 후 사이드바 설치 목록 초기화 버그 원인(전역 sentinel + 운영 DB pytest)·수정, 남은 P1/P2 과제
 - [architecture.drawio](architecture.drawio) — 아키텍처 다이어그램 소스
