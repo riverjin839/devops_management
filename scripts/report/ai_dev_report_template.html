@@ -638,7 +638,45 @@ function build() {
     $("#cost-x", s92).textContent = `실제 대비 — 기능 기반 ${(rows[1].v / base).toFixed(1)}배 · LoC ${(rows[2].v / base).toFixed(1)}배 · COCOMO ${(rows[3].v / base).toFixed(1)}배`;
     $("#cost-src", s92).innerHTML = `<h3>산식과 근거</h3>${rows.map(r => `<div class="csrc"><b>${r.k} <span class="num acc">${eok(r.v)}억</span></b><div class="num">${r.f}</div>${r.src.filter(Boolean).map(x => `<div class="hint">· ${x}</div>`).join("")}</div>`).join("")}`;
   });
-  s92.querySelectorAll(".calc input").forEach(inp => inp.oninput = () => { const v = parseFloat(inp.value); if (!isNaN(v) && v >= 0) { S.cost = { ...(S.cost || {}), [inp.dataset.k]: v }; CO[inp.dataset.k] = v; renderChart(costChart); } });
+
+  /* 9-3. 총 사용비용 vs 고급 인력 개발비 */
+  const won = v => v >= 1e8 ? `${eok(v)}억` : `${fmt(Math.round(v / 1e4))}만원`;
+  const seniorCalc = () => {
+    const c = CO, rows = costCalc(), featDays = rows[1].v / c.dayRate;
+    const ai = costMonths * c.aiMonthlyUsd * c.fx, senior = featDays * c.seniorRate;
+    return { ai, real: rows[0].v, avgDev: rows[1].v, senior, featDays, months: featDays / (c.seniorTeam * c.workDays) };
+  };
+  const s93 = add("cost-senior", "COST · 2", "총 사용비용 vs 고급 인력 개발비 — 같은 결과물을 고급 인력이 만들었다면", h(`
+    <div class="card noprint"><div class="calc">${[["seniorRate", "고급 인력 일단가(원)"], ["seniorTeam", "고급 인력 팀 인원(명)"], ["aiMonthlyUsd", "AI 구독(USD/월)"]]
+      .map(([k, l]) => `<label>${l}<input type="number" min="0" step="any" data-k="${k}" value="${CO[k]}"></label>`).join("")}</div>
+      <p class="hint" style="margin:8px 0 0">일단가·인원·구독료를 바꾸면 즉시 다시 계산된다. 공수(인일)는 앞 장의 기능 기반 추정과 같다.</p></div>
+    <div class="grid g4" style="margin-top:16px" id="sr-kpi"></div>
+    <div class="grid g2" style="margin-top:16px"><div class="card"><h3>총비용 비교</h3><div class="chart" id="c-senior"></div></div>
+    <div class="card" id="sr-src"></div></div>
+    <p class="note">고급 인력 = KOSA 2025 직무별 일평균임금 중 IT아키텍트(492,609원). 등급별(초급~특급) 단가 대신 현재 공표되는 직무별 단가 중 상위 직무를 고급 인력으로 본다. 공수는 사람 기준 가정치이고, AI 사용비용은 구독료만 센다(전기·장비·개인 시간 제외).</p>`));
+  const seniorChart = chart($("#c-senior", s93), c => {
+    const r = seniorCalc(), C2 = CO;
+    hbars(c, { rows: [
+      { label: "AI 총 사용비용", value: r.ai / 1e8, text: won(r.ai), hl: true },
+      { label: "총 투입 (1인 + AI)", value: r.real / 1e8, text: won(r.real) },
+      { label: "SW기술자 평균 단가", value: r.avgDev / 1e8, text: `${won(r.avgDev)} · ×${(r.avgDev / r.real).toFixed(1)}` },
+      { label: "고급 인력 단가", value: r.senior / 1e8, text: `${won(r.senior)} · ×${(r.senior / r.real).toFixed(1)}` } ] });
+    $("#sr-kpi", s93).innerHTML = [
+      [won(r.ai), "AI 총 사용비용", `구독 $${C2.aiMonthlyUsd} × ${costMonths}개월 = $${fmt(C2.aiMonthlyUsd * costMonths)}`, true],
+      [won(r.senior), "고급 인력 기준 개발비", `${fmt(Math.round(r.featDays))}인일 × ${fmt(C2.seniorRate)}원`],
+      [`${(r.ai / r.senior * 100).toFixed(1)}%`, "AI 사용비용 비중", `고급 인력 개발비 대비 (1/${fmt(Math.round(r.senior / r.ai))})`],
+      [`${r.months.toFixed(1)}개월`, `고급 인력 ${C2.seniorTeam}명 소요 기간`, `실제 ${costMonths}개월 (1인 + AI)`]]
+      .map(([v, l, d, hl]) => `<div class="card kpi ${hl ? "hl" : ""}"><div class="v num">${v}</div><div class="l">${l}</div><div class="d">${d}</div></div>`).join("");
+    $("#sr-src", s93).innerHTML = `<h3>산식과 근거</h3>
+      <div class="csrc"><b>AI 총 사용비용 <span class="num acc">${won(r.ai)}</span></b><div class="num">$${C2.aiMonthlyUsd} × ${costMonths}개월 × ${fmt(C2.fx)}원</div><div class="hint">· ${C2.aiMonthlySrc}</div></div>
+      <div class="csrc"><b>총 투입비용 <span class="num acc">${won(r.real)}</span></b><div class="num">본인 인건비(평균 단가) + AI 구독</div><div class="hint">· 앞 장 '실제 (AI + 1인)' 와 같다</div></div>
+      <div class="csrc"><b>고급 인력 기준 <span class="num acc">${won(r.senior)}</span></b><div class="num">기능 기반 ${fmt(Math.round(r.featDays))}인일 × ${fmt(C2.seniorRate)}원</div><div class="hint">· ${C2.seniorRateSrc}</div></div>
+      <div class="csrc"><b>결론</b><div>총 투입 대비 <b class="acc num">${(r.senior / r.real).toFixed(1)}배</b>, AI 사용비용만 보면 <b class="acc num">${fmt(Math.round(r.senior / r.ai))}분의 1</b>. 기간은 고급 인력 ${C2.seniorTeam}명 기준 약 ${r.months.toFixed(0)}개월 vs 실제 ${costMonths}개월.</div></div>`;
+  });
+  [s92, s93].forEach(sec => sec.querySelectorAll(".calc input").forEach(inp => inp.oninput = () => { const v = parseFloat(inp.value); if (!isNaN(v) && v >= 0) {
+    S.cost = { ...(S.cost || {}), [inp.dataset.k]: v }; CO[inp.dataset.k] = v;
+    document.querySelectorAll(`.calc input[data-k="${inp.dataset.k}"]`).forEach(o => { if (o !== inp) o.value = v; });
+    renderChart(costChart); renderChart(seniorChart); } }));
 
   /* 10. 성숙도 */
   add("maturity", "MATURITY", "AI 활용 성숙도 — 4단계로 진화", h(`<div class="steps">${N.maturity.map((st, i) => {

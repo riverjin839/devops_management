@@ -953,7 +953,10 @@
     "daysPerRouter": 5,
     "daysInfra": 60,
     "featureSrc": "화면 1개 10인일(설계·구현·테스트), API 라우터 1개 5인일, 배포·CI 체계 60인일 — 사내 추정 가정치",
-    "cocomoSrc": "COCOMO II 공칭식 Effort(PM) = 2.94 × KSLOC^1.0997 (모든 비용 인자 Nominal), 1PM = 152시간"
+    "cocomoSrc": "COCOMO II 공칭식 Effort(PM) = 2.94 × KSLOC^1.0997 (모든 비용 인자 Nominal), 1PM = 152시간",
+    "seniorRate": 492609,
+    "seniorRateSrc": "KOSA 2025년 적용 SW기술자 평균임금 직무별 일평균임금 — IT아키텍트 492,609원 (참고: IT PM 443,955원, 전체 평균 396,307원)",
+    "seniorTeam": 4
   },
   "cases": [
     {
