@@ -34,46 +34,36 @@ def test_normalize_strict_rejects_bad_entry_lenient_skips_it():
 
 # ── 판정 ──────────────────────────────────────────────────────────────────────
 
-def _no_dns(_host):
-    raise AssertionError("DNS 를 조회하면 안 되는 경우")
-
-
 @pytest.mark.parametrize("endpoint", ["https://10.1.2.3:6443", "10.1.2.3:6443", "https://[fd00::1]:6443"])
 def test_ip_endpoint_inside_cidr_is_allowed(endpoint):
-    entries = ["10.0.0.0/8", "fd00::/8"]
-    assert policy.endpoint_denied_reason(entries, endpoint, resolver=_no_dns) is None
+    assert policy.endpoint_denied_reason(["10.0.0.0/8", "fd00::/8"], endpoint) is None
 
 
 def test_ip_endpoint_outside_cidr_is_denied():
-    reason = policy.endpoint_denied_reason(["10.0.0.0/8"], "https://169.254.169.254", resolver=_no_dns)
+    reason = policy.endpoint_denied_reason(["10.0.0.0/8"], "https://169.254.169.254")
     assert reason and "허용 대역 밖" in reason
 
 
 def test_empty_allowlist_or_empty_endpoint_allows_everything():
-    assert policy.endpoint_denied_reason([], "https://8.8.8.8", resolver=_no_dns) is None
-    assert policy.endpoint_denied_reason(["10.0.0.0/8"], "", resolver=_no_dns) is None
+    assert policy.endpoint_denied_reason([], "https://8.8.8.8") is None
+    assert policy.endpoint_denied_reason(["10.0.0.0/8"], "") is None
 
 
 def test_hostname_entry_exact_and_wildcard():
     entries = ["api.k8s.local", "*.prod.local"]
-    assert policy.endpoint_denied_reason(entries, "https://api.k8s.local:6443", resolver=_no_dns) is None
-    assert policy.endpoint_denied_reason(entries, "https://a.b.prod.local", resolver=_no_dns) is None
-    # hostname 항목만 있고 CIDR 이 없으면 DNS 를 보지 않고 거절
-    assert policy.endpoint_denied_reason(entries, "https://evil.example", resolver=_no_dns)
+    assert policy.endpoint_denied_reason(entries, "https://api.k8s.local:6443") is None
+    assert policy.endpoint_denied_reason(entries, "https://a.b.prod.local") is None
+    assert policy.endpoint_denied_reason(entries, "https://evil.example")
+    # 와일드카드는 접미사 경계를 지킨다 — "xprod.local" 은 "*.prod.local" 이 아니다
+    assert policy.endpoint_denied_reason(entries, "https://xprod.local")
 
 
-def test_hostname_resolved_all_addresses_must_be_inside():
-    entries = ["10.0.0.0/8"]
-    assert policy.endpoint_denied_reason(entries, "https://api.lab", resolver=lambda h: ["10.0.0.7"]) is None
-    # 하나라도 밖이면 거절 — DNS 응답 순서에 따라 우회되지 않게
-    assert policy.endpoint_denied_reason(entries, "https://api.lab", resolver=lambda h: ["10.0.0.7", "8.8.8.8"])
-
-
-def test_unresolvable_hostname_is_denied_with_reason():
-    def boom(_h):
-        raise OSError("Name or service not known")
-    reason = policy.endpoint_denied_reason(["10.0.0.0/8"], "https://nope.lab", resolver=boom)
-    assert reason and "해석할 수 없어" in reason
+def test_hostname_is_never_allowed_via_cidr_dns_resolution(monkeypatch):
+    """DNS rebinding 방지 — 호스트명은 CIDR 항목으로 허용되지 않고 DNS 도 조회하지 않는다."""
+    import socket
+    monkeypatch.setattr(socket, "getaddrinfo", lambda *a, **k: (_ for _ in ()).throw(AssertionError("DNS 조회 금지")))
+    reason = policy.endpoint_denied_reason(["10.0.0.0/8"], "https://api.lab:6443")
+    assert reason and "허용 대역에 직접 추가" in reason
 
 
 def test_get_allowlist_fail_safe_on_db_error():
@@ -118,7 +108,7 @@ def test_verify_does_not_contact_denied_endpoint(monkeypatch):
     cluster = Cluster(id=uuid.uuid4(), name="c", api_endpoint="https://8.8.8.8:6443", status=StatusEnum.healthy)
     db = MagicMock()
     db.query.return_value.filter.return_value.first.return_value = cluster
-    monkeypatch.setattr(clusters_router, "check_endpoint", lambda _db, ep: "허용 대역 밖입니다")
+    monkeypatch.setattr(clusters_router, "get_allowlist", lambda _db: ["10.0.0.0/8"])
     monkeypatch.setattr(clusters_router.audit_logger, "record", lambda *a, **k: None)
     monkeypatch.setattr(clusters_router.httpx, "Client", lambda *a, **k: (_ for _ in ()).throw(AssertionError("HTTP 호출 금지")))
     monkeypatch.setattr(clusters_router.subprocess, "run", lambda *a, **k: (_ for _ in ()).throw(AssertionError("kubectl 금지")))
@@ -173,3 +163,67 @@ def test_update_allowlist_validates_and_audits_on_change(monkeypatch):
     assert [r["action"] for r in records] == ["settings.cluster_endpoint_allowlist.update"]
     ui_settings_router.update_cluster_endpoint_allowlist({"data": {"entries": ["10.0.0.0/8"]}}, MagicMock(), db, _user("admin"))
     assert len(records) == 1
+
+
+# ── kubeconfig server 도 허용 대역 확인 (Codex P1) ──────────────────────────────
+
+_KC_TEMPLATE = """apiVersion: v1
+kind: Config
+clusters:
+- name: c
+  cluster:
+    server: {server}
+contexts:
+- name: ctx
+  context: {{cluster: c, user: u}}
+current-context: ctx
+users:
+- name: u
+  user: {{token: x}}
+"""
+
+
+def test_create_rejects_kubeconfig_server_outside_allowlist_on_skip_path(monkeypatch):
+    db = MagicMock()
+    db.query.return_value.filter.return_value.first.return_value = None
+    monkeypatch.setattr(clusters_router, "get_allowlist", lambda _db: ["10.0.0.0/8"])
+    monkeypatch.setattr(clusters_router, "check_endpoint", lambda _db, ep: None)  # api_endpoint 는 허용
+    data = ClusterCreate(
+        name="x", api_endpoint="https://10.0.0.1:6443", skip_connectivity_check=True,
+        kubeconfig_content=_KC_TEMPLATE.format(server="https://169.254.169.254:6443"),
+    )
+    with pytest.raises(HTTPException) as exc:
+        clusters_router.create_cluster(data, MagicMock(), db, _user())
+    assert exc.value.status_code == 422 and "kubeconfig 의 server" in exc.value.detail
+    db.add.assert_not_called()
+
+
+def test_create_skip_path_keeps_old_behavior_when_allowlist_empty(monkeypatch):
+    """정책이 비어 있으면 kubeconfig 를 파싱하지 않는다 — 임시 등록(skip) 흐름 그대로."""
+    monkeypatch.setattr(clusters_router, "get_allowlist", lambda _db: [])
+    monkeypatch.setattr(clusters_router, "_parse_kubeconfig_text", lambda t: (_ for _ in ()).throw(AssertionError("파싱 금지")))
+    assert clusters_router._kubeconfig_server_denied([], {"clusters": []}) is None
+
+
+def test_update_kubeconfig_path_checks_server(monkeypatch, tmp_path):
+    kc = tmp_path / "kc.yaml"
+    kc.write_text(_KC_TEMPLATE.format(server="https://8.8.8.8:6443"))
+    cluster = Cluster(id=uuid.uuid4(), name="c", api_endpoint="https://10.0.0.1:6443")
+    db = MagicMock()
+    db.query.return_value.filter.return_value.first.return_value = cluster
+    monkeypatch.setattr(clusters_router, "get_allowlist", lambda _db: ["10.0.0.0/8"])
+    with pytest.raises(HTTPException) as exc:
+        clusters_router.update_cluster(cluster.id, ClusterUpdate(kubeconfig_path=str(kc)), MagicMock(), db, _user())
+    assert exc.value.status_code == 422 and "kubeconfig 의 server" in exc.value.detail
+
+
+def test_verify_skips_auth_when_kubeconfig_server_outside(monkeypatch, tmp_path):
+    kc = tmp_path / "kc.yaml"
+    kc.write_text(_KC_TEMPLATE.format(server="https://8.8.8.8:6443"))
+    cluster = Cluster(id=uuid.uuid4(), name="c", api_endpoint="https://10.0.0.1:6443")
+    monkeypatch.setattr(clusters_router, "_verify_step_api_server", lambda c: {"check": "api_server", "ok": True, "detail": "HTTP 200"})
+    monkeypatch.setattr(clusters_router, "_resolve_kubeconfig", lambda c: (str(kc), ""))
+    monkeypatch.setattr(clusters_router, "_verify_step_kubeconfig_auth", lambda *a: (_ for _ in ()).throw(AssertionError("SDK 접속 금지")))
+    monkeypatch.setattr(clusters_router, "_verify_step_kubectl_nodes", lambda *a: {"check": "kubectl_nodes", "ok": True, "detail": "ok"})
+    by = {r["check"]: r for r in clusters_router._iter_verify_steps(cluster, ["10.0.0.0/8"])}
+    assert by["kubeconfig_auth"]["ok"] is None and "kubeconfig 의 server" in by["kubeconfig_auth"]["detail"]

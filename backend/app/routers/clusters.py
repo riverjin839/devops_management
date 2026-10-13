@@ -26,7 +26,7 @@ from app.models.work_item import WorkItem
 from app.models.user import User
 from app.auth.deps import get_cluster_scope, get_current_user, require_operator
 from app.services.cluster_access import ClusterScope
-from app.services.cluster_endpoint_policy import check_endpoint
+from app.services.cluster_endpoint_policy import check_endpoint, endpoint_denied_reason, get_allowlist
 from app.services.cluster_network_mask import mask_cluster, should_mask
 from app.services.health_checker import HealthChecker
 from app.services.k8s_diagnose import diagnose_connect_error
@@ -222,7 +222,7 @@ def _validate_kubeconfig_for_cluster(text: str, api_endpoint: str | None) -> str
     return server
 
 
-def _validate_kubeconfig_path(path: str) -> None:
+def _validate_kubeconfig_path(path: str) -> dict:
     """kubeconfig_path 로 지정된 파일이 실제 kubeconfig 인지 확인 — 임의 파일 경로 지정 방지.
 
     GET /kubeconfig 는 경로의 파일 내용을 그대로 돌려주므로 (구 레코드 호환),
@@ -241,7 +241,23 @@ def _validate_kubeconfig_path(path: str) -> None:
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail=f"kubeconfig 파일을 읽을 수 없습니다: '{path}'.",
         )
-    _parse_kubeconfig_text(text)
+    return _parse_kubeconfig_text(text)
+
+
+def _kubeconfig_server_denied(entries: list[str], doc: dict) -> str | None:
+    """kubeconfig 의 server(current-context) 가 허용 대역 밖이면 사유. 연결 검증의 인증 단계(k8s SDK)는
+    api_endpoint 가 아니라 이 주소로 접속하므로 api_endpoint 와 별도로 본다."""
+    server = _kubeconfig_server(doc)
+    if not entries or not server:
+        return None
+    denied = endpoint_denied_reason(entries, server)
+    return f"kubeconfig 의 server — {denied}" if denied else None
+
+
+def _ensure_kubeconfig_server_allowed(db: Session, doc: dict) -> None:
+    denied = _kubeconfig_server_denied(get_allowlist(db), doc)
+    if denied:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=denied)
 
 
 # ── 클러스터 생성 시 자동 등록할 기본 애드온 ─────────────────────────────────
@@ -373,13 +389,18 @@ def create_cluster(
     # 확인한다. GET /kubeconfig 가 경로의 파일 내용을 그대로 돌려주므로(구 레코드 호환) 임의 파일
     # 경로(/etc/passwd 등)를 등록해 읽어내는 우회로를 막는다. (content 가 있으면 저장 경로로 대체됨)
     if effective_path and not (content and content.strip()):
-        _validate_kubeconfig_path(effective_path)
+        _ensure_kubeconfig_server_allowed(db, _validate_kubeconfig_path(effective_path))
 
     # 허용 대역 정책 — 연결 검증 생략(skip) 여부와 무관하게 확인한다. 등록되면 이후 점검·수집이
     # 이 주소로 요청을 보내기 때문이다. (임시 파일을 만들기 전에 거절)
     denied = check_endpoint(db, cluster_data.api_endpoint or "")
     if denied:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=denied)
+    # 업로드한 kubeconfig 의 server 도 확인한다 — 연결 검증을 생략하면 server 와 api_endpoint 의
+    # 일치 비교가 없어, 허용된 api_endpoint 에 대역 밖 server 를 가진 kubeconfig 를 짝지을 수 있다.
+    # (정책이 비어 있으면 파싱하지 않아 기존 동작 그대로)
+    if content and content.strip() and get_allowlist(db):
+        _ensure_kubeconfig_server_allowed(db, _parse_kubeconfig_text(content.strip()))
 
     temp_kubeconfig_path = None
     if content and content.strip():
@@ -536,7 +557,7 @@ def update_cluster(
 
     new_path = update_data.get("kubeconfig_path")
     if new_path and new_path != cluster.kubeconfig_path:
-        _validate_kubeconfig_path(new_path)
+        _ensure_kubeconfig_server_allowed(db, _validate_kubeconfig_path(new_path))
 
     new_endpoint = update_data.get("api_endpoint")
     if new_endpoint is not None and new_endpoint != cluster.api_endpoint:
@@ -747,6 +768,7 @@ def update_kubeconfig(
     cleaned = body.content.strip()
     # 저장 전 검증 — 잘못된 kubeconfig 가 들어가면 이후 모든 점검·배치잡이 실패한다.
     server = _validate_kubeconfig_for_cluster(cleaned, cluster.api_endpoint)
+    _ensure_kubeconfig_server_allowed(db, _parse_kubeconfig_text(cleaned))
     saved_path = _save_kubeconfig_content(cluster_id, cleaned)
     cluster.kubeconfig_path = saved_path
     cluster.kubeconfig_content = cleaned
@@ -822,12 +844,26 @@ def _verify_step_kubectl_nodes(cluster, kc_path: str | None, kc_reason: str) -> 
         return {"check": "kubectl_nodes", "ok": False, "detail": str(e)[:80]}
 
 
-def _iter_verify_steps(cluster, denied_reason: str | None = None):
+def _kubeconfig_file_server_denied(entries: list[str], kc_path: str | None) -> str | None:
+    if not entries or not (kc_path and os.path.exists(kc_path)):
+        return None
+    try:
+        with open(kc_path, encoding="utf-8") as f:
+            doc = yaml.safe_load(f.read(1024 * 1024))
+    except (OSError, UnicodeDecodeError, yaml.YAMLError):
+        return None  # 읽기·파싱 실패는 인증 단계가 그대로 사유를 보여준다
+    return _kubeconfig_server_denied(entries, doc) if isinstance(doc, dict) else None
+
+
+def _iter_verify_steps(cluster, allowlist: list[str] | None = None):
     """검증 단계를 하나씩 실행하며 결과 dict 를 yield 한다 (동기·스트림 공용).
 
-    ``denied_reason`` 이 있으면(엔드포인트가 허용 대역 밖) 그 주소로 요청을 보내지 않는다 —
-    api_server 는 실패, 나머지 단계는 건너뜀으로 남긴다.
+    ``allowlist``(엔드포인트 허용 대역)가 있으면 대역 밖 주소로는 요청을 보내지 않는다 —
+    api_endpoint 가 밖이면 api_server 실패 + 나머지 건너뜀, kubeconfig 의 server 만 밖이면
+    인증 단계(k8s SDK 가 그 server 로 접속)만 건너뜀. kubectl 단계는 ``--server`` 로 api_endpoint 를 쓴다.
     """
+    entries = allowlist or []
+    denied_reason = endpoint_denied_reason(entries, cluster.api_endpoint or "")
     if denied_reason:
         yield {"check": "api_server", "ok": False, "detail": denied_reason}
         skip = "허용 대역 밖 엔드포인트라 실행하지 않음"
@@ -836,7 +872,11 @@ def _iter_verify_steps(cluster, denied_reason: str | None = None):
         return
     yield _verify_step_api_server(cluster)
     kc_path, kc_reason = _resolve_kubeconfig(cluster)
-    yield _verify_step_kubeconfig_auth(kc_path, kc_reason)
+    kc_denied = _kubeconfig_file_server_denied(entries, kc_path)
+    if kc_denied:
+        yield {"check": "kubeconfig_auth", "ok": None, "detail": f"{kc_denied} — 인증 확인을 실행하지 않음"}
+    else:
+        yield _verify_step_kubeconfig_auth(kc_path, kc_reason)
     yield _verify_step_kubectl_nodes(cluster, kc_path, kc_reason)
 
 
@@ -914,7 +954,7 @@ def verify_cluster(
 ):
     """클러스터 연결 상태 상세 검증 (전 단계 완료 후 한 번에 응답)."""
     cluster = _get_cluster_or_404(db, cluster_id)
-    results = list(_iter_verify_steps(cluster, check_endpoint(db, cluster.api_endpoint or "")))
+    results = list(_iter_verify_steps(cluster, get_allowlist(db)))
     return _finalize_verify(db, cluster, results, actor, request)
 
 
@@ -937,7 +977,7 @@ def verify_event_stream(db: Session, cluster, actor: User, request: Request):
     """
     labels = dict(VERIFY_STEPS)
     results: list[dict] = []
-    steps = _iter_verify_steps(cluster, check_endpoint(db, cluster.api_endpoint or ""))
+    steps = _iter_verify_steps(cluster, get_allowlist(db))
     try:
         for check, label in VERIFY_STEPS:
             yield _sse({"type": "step", "check": check, "label": label, "status": "running"})
