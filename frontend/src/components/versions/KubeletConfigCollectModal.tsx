@@ -212,7 +212,7 @@ export function KubeletConfigCollectModal({ open, clusterId, onClose }: Props) {
             <div className="max-h-52 overflow-y-auto border border-border rounded-lg bg-background p-1">
               {nodes.length === 0 ? (
                 <p className="text-center py-3 text-sm text-muted-foreground">
-                  {nodeQ.isLoading ? '노드 로딩 중...' : nodeQ.isError ? (
+                  {nodeQ.isLoading ? '노드 불러오는 중…' : nodeQ.isError ? (
                     <span className="block space-y-1.5">
                       <span className="block text-status-critical">노드 목록을 불러오지 못했습니다.</span>
                       <span className="block text-xs text-muted-foreground">{formatApiError(nodeQ.error)}</span>

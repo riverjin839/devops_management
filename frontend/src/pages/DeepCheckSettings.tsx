@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
-import { Link } from 'react-router-dom';
-import { ArrowLeft, Plus, Search } from 'lucide-react';
+import { PageHeader } from '@/components/common/PageHeader';
+import { Plus, Search } from 'lucide-react';
 import { MacCard } from '@/components/ui/MacCard';
 import { ClusterSidebar } from '@/components/common/ClusterSidebar';
 import { useToast } from '@/components/common';
@@ -106,20 +106,12 @@ export function DeepCheckSettingsPage() {
         </div>
         <div className="flex-1 min-w-0 space-y-4">
           <div className="flex items-center gap-3">
-            <Link
-              to="/"
-              className="inline-flex items-center gap-1.5 rounded-xl border border-border bg-card px-3 py-1.5 text-sm hover:bg-muted"
-            >
-              <ArrowLeft className="w-3.5 h-3.5" />
-              대시보드
-            </Link>
-            <div className="flex-1 min-w-0">
-              <h1 className="text-lg font-semibold">점검 항목 관리 (Deep Check 정의)</h1>
-              <p className="text-xs text-muted-foreground mt-0.5">
-                여기서 만든 정의가 <span className="font-medium">운영 점검</span> 콘솔의 카탈로그로 노출되고,
-                활성 정의는 스케줄(cron)에 따라 자동 실행됩니다.
-              </p>
-            </div>
+            <PageHeader
+              back={{ to: '/', label: '홈' }}
+              title="점검 항목 관리 (Deep Check 정의)"
+              description={<>여기서 만든 정의가 <span className="font-medium">운영 점검</span> 콘솔의 카탈로그로 노출되고, 활성 정의는 스케줄(cron)에 따라 자동 실행됩니다.</>}
+              className="flex-1 min-w-0"
+            />
             <button
               type="button"
               onClick={() => {

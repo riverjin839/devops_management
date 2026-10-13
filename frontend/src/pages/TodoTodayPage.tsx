@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import { StatTile, StatTileRow } from '@/components/common/StatTile';
 import { Link, useNavigate } from 'react-router-dom';
 import {
   CalendarCheck2, Clock, CheckCircle2, Circle, AlertTriangle,
@@ -316,11 +317,11 @@ export function TodoTodayPage() {
   };
   const onOpen = (t: WorkItem) => navigate(`/tasks-mgmt/${t.id}`);
 
-  const stats = [
-    { label: '지연', value: buckets.overdue.length, cls: 'text-status-critical' },
-    { label: '오늘', value: buckets.todayList.length, cls: 'text-blue-500' },
-    { label: '진행중', value: buckets.inProgress, cls: 'text-status-warning' },
-    { label: '예정', value: buckets.upcoming.length, cls: 'text-foreground' },
+  const stats: Array<{ label: string; value: number; tone?: 'critical' | 'warning' | 'info' }> = [
+    { label: '지연', value: buckets.overdue.length, tone: 'critical' },
+    { label: '오늘', value: buckets.todayList.length, tone: 'info' },
+    { label: '진행중', value: buckets.inProgress },
+    { label: '예정', value: buckets.upcoming.length },
   ];
   const totalOpen = buckets.overdue.length + buckets.todayList.length + buckets.upcoming.length;
 
@@ -331,7 +332,7 @@ export function TodoTodayPage() {
         <div>
           <div className="flex items-center gap-2 mb-1">
             <CalendarCheck2 className="w-5 h-5 text-primary" />
-            <h1 className="text-xl font-bold">{myName ? `${myName}님의 오늘 할 일` : '오늘 할 일'}</h1>
+            <h1 className="text-xl font-bold">{myName ? `${myName}님의 오늘 할일` : '오늘 할 일'}</h1>
           </div>
           <p className="text-sm text-muted-foreground">내 일정·할일만 모아 봅니다 (다른 사람 일정은 표시되지 않습니다).</p>
         </div>
@@ -372,14 +373,11 @@ export function TodoTodayPage() {
       </div>
 
       {/* 요약 통계 */}
-      <div className="grid grid-cols-4 gap-3">
+      <StatTileRow>
         {stats.map((s) => (
-          <div key={s.label} className="bg-card border border-border rounded-xl px-4 py-3">
-            <p className="text-sm text-muted-foreground mb-0.5">{s.label}</p>
-            <p className={`text-2xl font-bold tabular-nums ${s.cls}`}>{s.value}</p>
-          </div>
+          <StatTile key={s.label} label={s.label} value={s.value} tone={s.tone} />
         ))}
-      </div>
+      </StatTileRow>
 
       {/* 본문 */}
       {!myName ? (
@@ -563,7 +561,7 @@ export function TodoTodayPage() {
         <div className="flex flex-col items-center justify-center py-20 gap-3 text-muted-foreground">
           <CheckCircle2 className="w-12 h-12 opacity-30 text-status-healthy" />
           <div className="text-center">
-            <p className="text-base font-medium">처리할 할일이 없습니다 🎉</p>
+            <p className="text-base font-medium">처리할 할일이 없습니다.</p>
             <p className="text-sm mt-1 opacity-70">담당으로 지정된 미완료 업무가 없습니다.</p>
           </div>
           <button onClick={() => navigate('/tasks-mgmt/new')} className="flex items-center gap-1.5 px-4 py-2 text-sm bg-primary/10 text-primary hover:bg-primary/20 rounded-lg transition-colors">

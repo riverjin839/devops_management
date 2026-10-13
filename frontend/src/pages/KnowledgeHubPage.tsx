@@ -1,4 +1,5 @@
 import { useMemo, useState, type ComponentType } from 'react';
+import { PageHeader } from '@/components/common/PageHeader';
 import { useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import {
@@ -14,7 +15,7 @@ import type {
   OpsNote, CommandEntry, WorkGuide, WorkItem, Workflow, CommandImportance,
 } from '@/types';
 import { formatRelativeTime, stripHtml, parseUTC } from '@/lib/utils';
-import { ServiceSidebar } from '@/components/common';
+import { ServiceSidebar, EmptyState } from '@/components/common';
 import { MacCard } from '@/components/ui/MacCard';
 import { useServiceCatalog } from '@/hooks/useServiceCatalog';
 import { useSprints } from '@/hooks/useSprints';
@@ -335,17 +336,12 @@ export function KnowledgeHubPage() {
         {/* ── 헤더 + 탭 ─────────────────────────────────────────────── */}
         <div className="px-4 lg:px-6 pt-5 pb-2 border-b border-border">
           <div className="flex items-center justify-between gap-3 flex-wrap mb-3">
-            <div className="flex items-center gap-3 min-w-0">
-              <div className="w-10 h-10 rounded-2xl bg-primary/10 flex items-center justify-center flex-shrink-0">
-                <Library className="w-5 h-5 text-primary" />
-              </div>
-              <div className="min-w-0">
-                <h1 className="text-xl font-bold leading-tight">지식 허브</h1>
-                <p className="text-sm text-muted-foreground">
-                  업무 · 노트 · 명령어 · 가이드 · 이슈 · 워크플로우 + 분석 도구를 한 곳에서.
-                </p>
-              </div>
-            </div>
+            <PageHeader
+              icon={Library}
+              title="지식 허브"
+              description="업무 · 노트 · 명령어 · 가이드 · 이슈 · 워크플로우 + 분석 도구를 한 곳에서."
+              className="flex-1 min-w-0"
+            />
           </div>
           {/* 탭 바 */}
           <div className="flex items-center gap-1 flex-wrap">
@@ -504,20 +500,12 @@ export function KnowledgeHubPage() {
             ))}
           </MacCard>
         ) : sorted.length === 0 ? (
-          <MacCard className="text-center" bodyPadding="py-20">
-            <FileQuestion className="w-12 h-12 mx-auto mb-4 text-muted-foreground/30" />
-            <p className="text-muted-foreground mb-4">
-              {hasFilters ? '검색 조건에 해당하는 지식 항목이 없습니다.' : '아직 등록된 지식 항목이 없습니다.'}
-            </p>
-            {hasFilters && (
-              <button
-                onClick={clearFilters}
-                className="px-4 py-2 text-sm font-medium bg-primary/10 hover:bg-primary/20 text-primary border border-primary/20 rounded-lg transition-colors"
-              >
-                필터 초기화
-              </button>
-            )}
-          </MacCard>
+          <EmptyState
+            icon={FileQuestion}
+            title={hasFilters ? '검색 조건에 해당하는 지식 항목이 없습니다.' : '아직 등록된 지식 항목이 없습니다.'}
+            description={hasFilters ? '검색어나 필터를 바꿔 보세요.' : '업무·노트·명령어·가이드를 등록하면 여기에 모입니다.'}
+            action={hasFilters ? { label: '필터 초기화', onClick: clearFilters, variant: 'secondary' } : undefined}
+          />
         ) : (
           <MacCard bodyPadding="p-0">
             <div className="overflow-x-auto">

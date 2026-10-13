@@ -1,7 +1,8 @@
 import { useEffect } from 'react';
+import { PageHeader } from '@/components/common/PageHeader';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import type { AxiosError } from 'axios';
-import { ArrowLeft, Play, Settings, RefreshCw } from 'lucide-react';
+import { Play, Settings, RefreshCw } from 'lucide-react';
 import { MacCard } from '@/components/ui/MacCard';
 import { ClusterSidebar } from '@/components/common/ClusterSidebar';
 import { Skeleton } from '@/components/common';
@@ -83,16 +84,11 @@ export function DailyCheckReviewPage() {
         </div>
         <div className="flex-1 min-w-0 space-y-4">
           <div className="flex items-center gap-3 flex-wrap">
-            <Link
-              to="/"
-              className="inline-flex items-center gap-1.5 rounded-xl border border-border bg-card px-3 py-1.5 text-sm hover:bg-muted"
-            >
-              <ArrowLeft className="w-3.5 h-3.5" />
-              대시보드
-            </Link>
-            <h1 className="text-lg font-semibold flex-1 min-w-[200px]">
-              {cluster ? `${cluster.name} — 일일 점검 리뷰` : '일일 점검 리뷰'}
-            </h1>
+            <PageHeader
+              back={{ to: '/', label: '홈' }}
+              title={cluster ? `${cluster.name} — 일일 점검 리뷰` : '일일 점검 리뷰'}
+              className="flex-1 min-w-[200px]"
+            />
             <button
               type="button"
               onClick={() => {
@@ -124,7 +120,7 @@ export function DailyCheckReviewPage() {
               className="inline-flex items-center gap-1.5 rounded-xl border border-border bg-card px-3 py-1.5 text-sm hover:bg-muted"
             >
               <Settings className="w-3.5 h-3.5" />
-              체크 정의
+              점검 정의
             </Link>
           </div>
 
@@ -137,10 +133,11 @@ export function DailyCheckReviewPage() {
           {clusterId && <ResourceTrendChecklist clusterId={clusterId} />}
 
           {!dailyCheckLogId && (
-            <MacCard title="안내">
-              <div className="text-sm text-muted-foreground italic">
-                해당 클러스터의 점검 기록이 없습니다. 상단의 <strong>"Daily Check 실행"</strong> 버튼을 눌러 새 회차를 생성하세요.
-                (Dashboard 의 "체크 실행" 은 별개 파이프라인이라 여기에 결과가 나타나지 않습니다.)
+            <MacCard title="점검 기록 없음">
+              <div className="text-sm text-muted-foreground">
+                해당 클러스터의 점검 기록이 없습니다. 상단의 <strong>「기본 점검 실행」</strong>으로 새 회차를 만들고,
+                <strong>「심층 점검 실행」</strong>으로 등록된 심층 점검 결과를 그 회차에 묶으세요.
+                (클러스터 현황의 「점검 실행」은 별개 파이프라인이라 여기에 결과가 나타나지 않습니다.)
               </div>
             </MacCard>
           )}

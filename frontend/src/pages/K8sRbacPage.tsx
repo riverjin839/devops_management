@@ -1,5 +1,5 @@
 /**
- * K8S 접근 권한 (`/k8s-rbac`)
+ * K8s 접근 권한 (`/k8s-rbac`)
  *
  * 개발자가 자기 LOCAL 의 kubectl 로 클러스터에 붙어 **배포하고 로그를 보는** 데 필요한
  * ServiceAccount · 권한 · 바인딩 · kubeconfig 한 세트를 만들고 편집·회수하는 화면.
@@ -8,7 +8,7 @@
  */
 import { useMemo, useState } from 'react';
 import { KeyRound, Link2, Shield, ShieldCheck, Wand2 } from 'lucide-react';
-import { ClusterSidebar } from '@/components/common';
+import { ClusterSidebar, SelectClusterEmptyState } from '@/components/common';
 import {
   AccessReviewPanel,
   BindingPanel,
@@ -93,7 +93,7 @@ export function K8sRbacPage() {
         <div className="flex-1 min-w-0 space-y-3">
           <div className="flex items-center gap-2 flex-wrap">
             <Shield className="w-5 h-5 text-primary" />
-            <h1 className="text-xl font-semibold">K8S 접근 권한</h1>
+            <h1 className="text-xl font-semibold">K8s 접근 권한</h1>
             <span className="text-sm text-muted-foreground">
               — <span className="font-medium text-foreground">{cluster?.name ?? '-'}</span>
               {namespaces.length > 0 && (
@@ -147,9 +147,7 @@ export function K8sRbacPage() {
           </div>
 
           {!clusterId ? (
-            <div className="py-16 text-center text-sm text-muted-foreground">
-              왼쪽에서 클러스터를 고르세요.
-            </div>
+            <SelectClusterEmptyState />
           ) : tab === 'wizard' ? (
             <div className="grid grid-cols-1 xl:grid-cols-2 gap-3 items-start">
               <ProvisionWizard

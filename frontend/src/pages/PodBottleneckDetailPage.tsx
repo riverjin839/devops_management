@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
+import { PageHeader } from '@/components/common/PageHeader';
 import { Link, useNavigate, useParams } from 'react-router-dom';
-import { ArrowLeft, Trash2, AlertCircle } from 'lucide-react';
+import { Trash2, AlertCircle } from 'lucide-react';
 import { MacCard } from '@/components/ui/MacCard';
 import { ConfirmDialog } from '@/components/common';
 import { ProbeResultCard, BOTTLENECK_STATUS_META } from '@/components/pod-bottleneck';
@@ -80,30 +81,26 @@ export function PodBottleneckDetailPage() {
     <div className="app-min-h-screen bg-background p-5">
       <div className="max-w-[1400px] mx-auto space-y-4">
         <div className="flex items-center gap-3 flex-wrap">
-          <Link
-            to="/pod-bottleneck"
-            aria-label="진단 목록으로"
-            className="inline-flex items-center gap-1.5 rounded-xl border border-border bg-card px-3 py-1.5 text-sm hover:bg-muted"
-          >
-            <ArrowLeft className="w-3.5 h-3.5" />
-            목록
-          </Link>
-          <div className="flex-1 min-w-[200px]">
-            <h1 className="text-lg font-semibold font-mono">
-              <span className="text-muted-foreground">{run.namespace}/</span>
-              {run.sourcePod}
-              <span className="text-muted-foreground mx-2">→</span>
-              {run.destPod}
-              {run.destService && (
-                <span className="text-sm text-muted-foreground ml-2">(svc: {run.destService})</span>
-              )}
-            </h1>
-            <p className="text-sm text-muted-foreground mt-0.5">
+          <PageHeader
+            back={{ to: '/pod-bottleneck', label: '목록' }}
+            title={
+              <span className="font-mono">
+                <span className="text-muted-foreground">{run.namespace}/</span>
+                {run.sourcePod}
+                <span className="text-muted-foreground mx-2">→</span>
+                {run.destPod}
+                {run.destService && (
+                  <span className="text-sm text-muted-foreground ml-2">(svc: {run.destService})</span>
+                )}
+              </span>
+            }
+            description={<>
               {parseUTC(run.createdAt).toLocaleString('ko-KR')}
               {run.triggeredByUser && ` · ${run.triggeredByUser}`}
               {run.durationMs != null && ` · ${run.durationMs}ms`}
-            </p>
-          </div>
+            </>}
+            className="flex-1 min-w-[200px]"
+          />
           <span
             className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-sm font-semibold ${status.cls}`}
             aria-label={`전체 상태: ${status.label}`}

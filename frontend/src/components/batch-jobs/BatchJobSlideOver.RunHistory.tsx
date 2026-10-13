@@ -32,7 +32,7 @@ export function RunHistory({ runs, isLoading, stepPlan }: RunHistoryProps) {
   const [openId, setOpenId] = useState<string | null>(null);
 
   if (isLoading) {
-    return <p className="text-sm text-muted-foreground py-2">이력 로딩 중…</p>;
+    return <p className="text-sm text-muted-foreground py-2">이력 불러오는 중…</p>;
   }
   if (runs.length === 0) {
     return <p className="text-sm text-muted-foreground py-2">아직 실행 이력이 없습니다.</p>;

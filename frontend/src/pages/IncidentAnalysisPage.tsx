@@ -488,7 +488,7 @@ export function IncidentAnalysisPage() {
                 className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium bg-primary/10 hover:bg-primary/20 text-primary border border-primary/30 rounded-lg disabled:opacity-50"
               >
                 {fetchCtx.isPending
-                  ? <><Loader2 className="w-3.5 h-3.5 animate-spin" />수집 중...</>
+                  ? <><Loader2 className="w-3.5 h-3.5 animate-spin" />수집 중…</>
                   : <><Download className="w-3.5 h-3.5" />로그/이벤트/Describe 자동 채우기</>}
               </button>
             </div>
@@ -681,7 +681,7 @@ export function IncidentAnalysisPage() {
             className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-primary hover:bg-primary/90 text-primary-foreground rounded-lg text-sm font-semibold transition-colors disabled:opacity-60"
           >
             {analyzing
-              ? <><Loader2 className="w-4 h-4 animate-spin" />분석 중...</>
+              ? <><Loader2 className="w-4 h-4 animate-spin" />분석 중…</>
               : <><Search className="w-4 h-4" />장애 분석 시작</>}
           </button>
 

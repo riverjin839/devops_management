@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { StatTile, StatTileRow } from '@/components/common/StatTile';
+import { PageHeader } from '@/components/common/PageHeader';
 import { createPortal } from 'react-dom';
 import {
   Activity,
@@ -22,7 +24,7 @@ import { useQuery } from '@tanstack/react-query';
 import { useClusters } from '@/hooks/useCluster';
 import { useTerminalEnvSync } from '@/hooks/useTerminalEnvSync';
 import { useClusterStore } from '@/stores/clusterStore';
-import { ClusterSidebar, LogViewer, SearchableSelect } from '@/components/common';
+import { ClusterSidebar, LogViewer, SearchableSelect, EmptyState, SelectClusterEmptyState } from '@/components/common';
 import { MacCard } from '@/components/ui/MacCard';
 import { RoleGate } from '@/components/auth/RoleGate';
 import { getAuthToken } from '@/stores/authStore';
@@ -215,15 +217,7 @@ export function CiliumTracePage() {
       <main className="flex-1 min-w-0 px-4 lg:px-6 py-5 space-y-4 max-w-[1700px]">
         {/* Header */}
         <div className="flex items-center justify-between gap-3 flex-wrap">
-          <div className="flex items-center gap-3 min-w-0">
-            <div className="w-10 h-10 rounded-2xl bg-primary/10 flex items-center justify-center flex-shrink-0">
-              <Waves className="w-5 h-5 text-primary" />
-            </div>
-            <div className="min-w-0">
-              <h1 className="text-xl font-bold leading-tight">Cilium BPF 추적</h1>
-              <p className="text-sm text-muted-foreground">BPF 맵 인스펙터 · cilium monitor · Hubble flow</p>
-            </div>
-          </div>
+          <PageHeader icon={Waves} title="Cilium BPF 추적" description="BPF 맵 인스펙터 · cilium monitor · Hubble flow" className="flex-1 min-w-0" />
           <button
             onClick={() => refetchStatus()}
             disabled={statusLoading || !cid}
@@ -259,9 +253,7 @@ export function CiliumTracePage() {
 
         {/* Tab body */}
         {!cid ? (
-          <MacCard bodyPadding="p-10">
-            <div className="text-center text-sm text-muted-foreground">왼쪽에서 클러스터를 선택하세요.</div>
-          </MacCard>
+          <SelectClusterEmptyState />
         ) : tab === 'bpf' ? (
           <BpfInspectorTab clusterId={cid} agents={agents} />
         ) : tab === 'monitor' ? (
@@ -297,53 +289,33 @@ function StatusStrip({ status, loading, agentCount }: StatusStripProps) {
     );
   }
   return (
-    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-      <StatusCell
-        icon={<Boxes className="w-4 h-4" />}
+    <StatTileRow>
+      <StatTile
+        icon={Boxes}
         label="Cilium"
         value={status.ciliumInstalled ? '설치됨' : '미설치'}
-        accent={status.ciliumInstalled ? 'text-status-healthy' : 'text-muted-foreground'}
+        tone={status.ciliumInstalled ? undefined : 'warning'}
         hint={status.ciliumVersion ?? undefined}
       />
-      <StatusCell
-        icon={<Server className="w-4 h-4" />}
-        label="Agent Pods"
-        value={agentCount}
-        accent="text-primary"
-        hint={`${status.namespace}`}
-      />
-      <StatusCell
-        icon={<Waves className="w-4 h-4" />}
+      <StatTile icon={Server} label="Agent 파드" value={agentCount} hint={status.namespace} />
+      <StatTile
+        icon={Waves}
         label="Hubble Relay"
         value={status.hubbleRelayInstalled ? '활성' : '없음'}
-        accent={status.hubbleRelayInstalled ? 'text-status-healthy' : 'text-muted-foreground'}
-        hint={status.hubbleRelayInstalled ? 'svc/hubble-relay' : 'install required'}
+        tone={status.hubbleRelayInstalled ? undefined : 'warning'}
+        hint={status.hubbleRelayInstalled ? 'svc/hubble-relay' : '설치 필요'}
       />
-      <StatusCell
-        icon={<Activity className="w-4 h-4" />}
+      <StatTile
+        icon={Activity}
         label="Trace 가용성"
         value={
           status.ciliumInstalled
             ? (status.hubbleRelayInstalled ? 'BPF + Hubble' : 'BPF only')
             : '미가용'
         }
-        accent={status.ciliumInstalled ? 'text-foreground' : 'text-muted-foreground'}
+        tone={status.ciliumInstalled ? undefined : 'warning'}
       />
-    </div>
-  );
-}
-
-interface StatusCellProps { icon: React.ReactNode; label: string; value: string | number; accent?: string; hint?: string }
-function StatusCell({ icon, label, value, accent = 'text-foreground', hint }: StatusCellProps) {
-  return (
-    <div className="rounded-2xl border border-border bg-card px-4 py-3 flex items-center gap-3">
-      <div className={`w-9 h-9 rounded-xl bg-secondary flex items-center justify-center ${accent}`}>{icon}</div>
-      <div className="min-w-0">
-        <p className="text-xs text-muted-foreground">{label}</p>
-        <p className={`text-base font-bold leading-tight ${accent}`}>{value}</p>
-        {hint && <p className="text-xs text-muted-foreground truncate">{hint}</p>}
-      </div>
-    </div>
+    </StatTileRow>
   );
 }
 
@@ -912,9 +884,7 @@ function EventList({ events }: { events: MonitorEvent[] }) {
 
   if (events.length === 0) {
     return (
-      <div className="py-16 text-center text-sm text-muted-foreground">
-        이벤트가 없습니다. 시작 버튼을 누르거나 잠시 기다려 주세요.
-      </div>
+      <EmptyState title="이벤트가 없습니다." description="시작 버튼을 누르거나 잠시 기다려 주세요." />
     );
   }
   return (
@@ -1266,9 +1236,7 @@ function FlowList({ events }: { events: HubbleFlowEvent[] }) {
   }, [events.length]);
   if (events.length === 0) {
     return (
-      <div className="py-16 text-center text-sm text-muted-foreground">
-        flow 가 아직 없습니다. 시작 버튼을 눌러 hubble observe --follow 를 시작하세요.
-      </div>
+      <EmptyState title="flow 가 아직 없습니다." description="시작 버튼을 눌러 hubble observe --follow 를 시작하세요." />
     );
   }
   return (

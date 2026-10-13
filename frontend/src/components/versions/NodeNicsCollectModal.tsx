@@ -234,7 +234,7 @@ export function NodeNicsCollectModal({ open, clusterId, onClose }: Props) {
               {nodes.length === 0 ? (
                 <div className="text-center py-3 text-sm">
                   {nodeQ.isLoading ? (
-                    <p className="text-muted-foreground">노드 로딩 중...</p>
+                    <p className="text-muted-foreground">노드 불러오는 중…</p>
                   ) : nodeQ.isError ? (
                     <div className="space-y-1.5">
                       <p className="text-status-critical">노드 목록을 불러오지 못했습니다.</p>

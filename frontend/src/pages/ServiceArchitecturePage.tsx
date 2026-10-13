@@ -4,7 +4,7 @@ import {
   Pencil, RefreshCw, Trash2,
 } from 'lucide-react';
 import { useClusters } from '@/hooks/useCluster';
-import { ClusterSidebar, useToast } from '@/components/common';
+import { ClusterSidebar, useToast, EmptyState } from '@/components/common';
 import { MacCard } from '@/components/ui/MacCard';
 import {
   ArchDocCanvas, ManualNodeDialog, ManualEdgeDialog, NodeDetailPanel, LlmSummaryPanel,
@@ -230,7 +230,7 @@ export function ServiceArchitecturePage() {
               <div className="flex justify-center py-6"><Loader2 className="w-4 h-4 animate-spin text-muted-foreground" /></div>
             ) : modules.length === 0 ? (
               <p className="text-xs text-muted-foreground px-2 py-4">
-                이 클러스터에 등록된 서비스 모듈이 없습니다. Settings → PEP/APP 서비스에서 모듈(namespace 포함)을 등록하세요.
+                이 클러스터에 등록된 서비스 모듈이 없습니다. 설정 → PEP/APP 서비스에서 모듈(namespace 포함)을 등록하세요.
               </p>
             ) : (
               <ul className="space-y-1">
@@ -373,16 +373,18 @@ export function ServiceArchitecturePage() {
             <div className="flex" style={{ height: '58vh' }}>
               <div className="flex-1 min-w-0 relative">
                 {!serviceId ? (
-                  <EmptyState text="좌측에서 서비스 모듈을 선택하세요." />
+                  <EmptyState title="서비스 모듈을 선택하세요" description="왼쪽 목록에서 모듈을 고르면 아키텍처 다이어그램이 표시됩니다." className="h-full" />
                 ) : docQuery.isLoading ? (
                   <div className="h-full flex items-center justify-center">
                     <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
                   </div>
                 ) : !doc?.autoGraph ? (
                   <EmptyState
-                    text={doc?.lastSyncStatus === 'failed'
-                      ? (doc.syncError || '동기화에 실패했습니다.')
-                      : '아직 생성된 다이어그램이 없습니다. [동기화] 를 눌러 K8s 리소스를 자동 수집하세요.'}
+                    title={doc?.lastSyncStatus === 'failed' ? '동기화에 실패했습니다.' : '아직 생성된 다이어그램이 없습니다.'}
+                    description={doc?.lastSyncStatus === 'failed'
+                      ? (doc.syncError || '동기화 로그를 확인하세요.')
+                      : '「동기화」를 눌러 K8s 리소스를 자동 수집하세요.'}
+                    className="h-full"
                   />
                 ) : (
                   <ArchDocCanvas
@@ -500,10 +502,3 @@ export function ServiceArchitecturePage() {
   );
 }
 
-function EmptyState({ text }: { text: string }) {
-  return (
-    <div className="h-full flex items-center justify-center px-8">
-      <p className="text-sm text-muted-foreground text-center max-w-md">{text}</p>
-    </div>
-  );
-}

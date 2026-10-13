@@ -290,7 +290,7 @@ function AddToWorkflowModal({ guide, onClose }: AddToWorkflowModalProps) {
             <button onClick={handleAdd} disabled={adding || workflows.length === 0}
               className="px-3 py-1.5 text-sm bg-primary hover:bg-primary/90 text-primary-foreground rounded-lg transition-colors disabled:opacity-60 flex items-center gap-1.5">
               <GitFork className="w-3.5 h-3.5" />
-              {adding ? '추가 중...' : '워크플로에 추가'}
+              {adding ? '추가 중…' : '워크플로에 추가'}
             </button>
           </div>
         </>
@@ -402,7 +402,7 @@ export function WorkGuidePage() {
 
         <div className="flex-1 overflow-y-auto py-2 px-2">
           {isLoading ? (
-            <div className="text-sm text-muted-foreground text-center py-6">불러오는 중...</div>
+            <div className="text-sm text-muted-foreground text-center py-6">불러오는 중…</div>
           ) : rootGuides.length === 0 ? (
             <div className="text-sm text-muted-foreground text-center py-6">
               페이지가 없습니다

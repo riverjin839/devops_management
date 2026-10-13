@@ -201,7 +201,7 @@ export function TcpdumpPanel({ clusterId }: Props) {
               <select id={f('node')} value={selectedNode}
                 onChange={(e) => { setSelectedNode(e.target.value); setIfaceOptions([]); }}
                 className="flex-1 px-2 py-1 text-sm bg-background border border-border rounded-lg">
-                <option value="">{nodeQ.isLoading ? '노드 로딩 중...' : '노드를 선택하세요'}</option>
+                <option value="">{nodeQ.isLoading ? '노드 불러오는 중…' : '노드를 선택하세요'}</option>
                 {nodes.map((n) => (
                   <option key={n.name} value={n.name}>
                     {n.name} {n.internalIp ? `(${n.internalIp})` : ''}

@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { Users, User, Search, X, ClipboardList, ListTodo, Mail, Hash, ChevronDown, ChevronUp, Copy } from 'lucide-react';
 import { useAssignees } from '@/hooks/useAssignees';
 import { useWorkItems } from '@/hooks/useWorkItems';
-import { useToast } from '@/components/common';
+import { useToast, EmptyState } from '@/components/common';
 import { useAuthStore } from '@/stores/authStore';
 import type { WorkItem, Assignee } from '@/types';
 
@@ -517,22 +517,12 @@ export function MemberBoardPage() {
 
         {/* 멤버 섹션 리스트 */}
         {filtered.length === 0 ? (
-          <div className="text-center py-20">
-            <Users className="w-12 h-12 mx-auto mb-4 text-muted-foreground/30" />
-            {scope === 'me' ? (
-              <>
-                <p className="text-muted-foreground">{me ? '내 담당 업무가 없습니다.' : '로그인하면 내 업무를 볼 수 있습니다.'}</p>
-                <button
-                  onClick={() => changeScope('all')}
-                  className="mt-3 inline-flex items-center gap-1 px-3 py-1.5 text-sm font-medium rounded-lg border border-border bg-secondary text-muted-foreground hover:text-foreground transition-colors"
-                >
-                  <Users className="w-3.5 h-3.5" /> 전체 보기
-                </button>
-              </>
-            ) : (
-              <p className="text-muted-foreground">조건에 맞는 멤버가 없습니다.</p>
-            )}
-          </div>
+          <EmptyState
+            icon={Users}
+            title={scope === 'me' ? (me ? '내 담당 업무가 없습니다.' : '로그인하면 내 업무를 볼 수 있습니다.') : '조건에 맞는 멤버가 없습니다.'}
+            description={scope === 'me' ? '전체 보기로 바꾸면 모든 멤버의 업무를 볼 수 있습니다.' : '검색어나 필터를 바꿔 보세요.'}
+            action={scope === 'me' ? { label: '전체 보기', onClick: () => changeScope('all'), variant: 'secondary' } : undefined}
+          />
         ) : (
           <div className="space-y-4">
             {filtered.map((b) => (

@@ -1,4 +1,6 @@
 import { useState, useMemo } from 'react';
+import { StatTile, StatTileRow } from '@/components/common/StatTile';
+import { PageHeader } from '@/components/common/PageHeader';
 import { useQuery } from '@tanstack/react-query';
 import { workItemsApi } from '@/services/api';
 import type { WorkItem } from '@/types';
@@ -216,77 +218,37 @@ function SummaryBar({ tasks, issues }: { tasks: WorkItem[]; issues: WorkItem[] }
   }), [issues]);
 
   const taskProgress = taskCounts.total > 0 ? Math.round((taskCounts.done / taskCounts.total) * 100) : 0;
+  const issueProgress = issueCounts.total > 0 ? Math.round((issueCounts.resolved / issueCounts.total) * 100) : 0;
 
   return (
-    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-      <SummaryStat
-        icon={<ListChecks className="w-4 h-4" />}
-        label="작업"
-        value={taskCounts.total}
-        breakdown={
-          <>
-            <Chip color="emerald">완료 {taskCounts.done}</Chip>
-            <Chip color="sky">진행 {taskCounts.in_progress}</Chip>
-            <Chip color="slate">대기 {taskCounts.todo + taskCounts.backlog}</Chip>
-          </>
-        }
-      />
-      <SummaryStat
-        icon={<BarChart3 className="w-4 h-4" />}
-        label="작업 진행률"
-        value={`${taskProgress}%`}
-        accent="text-primary"
-        progress={taskProgress}
-      />
-      <SummaryStat
-        icon={<Activity className="w-4 h-4" />}
-        label="이슈"
-        value={issueCounts.total}
-        breakdown={
-          <>
-            <Chip color="emerald">해결 {issueCounts.resolved}</Chip>
-            <Chip color="red">미해결 {issueCounts.open}</Chip>
-          </>
-        }
-      />
-      <SummaryStat
-        icon={<CheckCircle2 className="w-4 h-4" />}
-        label="이슈 해결률"
-        value={`${issueCounts.total > 0 ? Math.round((issueCounts.resolved / issueCounts.total) * 100) : 0}%`}
-        accent="text-status-healthy"
-        progress={issueCounts.total > 0 ? Math.round((issueCounts.resolved / issueCounts.total) * 100) : 0}
-      />
-    </div>
+    <StatTileRow>
+      <StatTile icon={ListChecks} label="작업" value={taskCounts.total}>
+        <div className="flex items-center gap-1.5 mt-2 flex-wrap">
+          <Chip color="emerald">완료 {taskCounts.done}</Chip>
+          <Chip color="sky">진행 {taskCounts.in_progress}</Chip>
+          <Chip color="slate">대기 {taskCounts.todo + taskCounts.backlog}</Chip>
+        </div>
+      </StatTile>
+      <StatTile icon={BarChart3} label="작업 진행률" value={`${taskProgress}%`}>
+        <ProgressBar value={taskProgress} />
+      </StatTile>
+      <StatTile icon={Activity} label="이슈" value={issueCounts.total} tone={issueCounts.open > 0 ? 'warning' : undefined}>
+        <div className="flex items-center gap-1.5 mt-2 flex-wrap">
+          <Chip color="emerald">해결 {issueCounts.resolved}</Chip>
+          <Chip color="red">미해결 {issueCounts.open}</Chip>
+        </div>
+      </StatTile>
+      <StatTile icon={CheckCircle2} label="이슈 해결률" value={`${issueProgress}%`}>
+        <ProgressBar value={issueProgress} />
+      </StatTile>
+    </StatTileRow>
   );
 }
 
-interface SummaryStatProps {
-  icon: React.ReactNode;
-  label: string;
-  value: number | string;
-  accent?: string;
-  breakdown?: React.ReactNode;
-  progress?: number;
-}
-
-function SummaryStat({ icon, label, value, accent = 'text-foreground', breakdown, progress }: SummaryStatProps) {
+function ProgressBar({ value }: { value: number }) {
   return (
-    <div className="rounded-2xl border border-border bg-card px-4 py-3">
-      <div className="flex items-center gap-3">
-        <div className={`w-9 h-9 rounded-xl bg-secondary flex items-center justify-center ${accent}`}>
-          {icon}
-        </div>
-        <div className="min-w-0 flex-1">
-          <p className="text-xs text-muted-foreground">{label}</p>
-          <p className={`text-lg font-bold leading-tight ${accent}`}>{value}</p>
-        </div>
-      </div>
-      {breakdown && <div className="flex items-center gap-1.5 mt-2 flex-wrap">{breakdown}</div>}
-      {progress != null && (
-        <div className="h-1.5 mt-2 rounded-full bg-secondary overflow-hidden">
-          <div className="h-full bg-primary rounded-full transition-all" style={{ width: `${progress}%` }} />
-        </div>
-      )}
+    <div className="h-1.5 mt-2 rounded-full bg-secondary overflow-hidden" role="progressbar" aria-label={`진행률 ${value}%`} aria-valuenow={value} aria-valuemin={0} aria-valuemax={100}>
+      <div className="h-full bg-primary rounded-full" style={{ width: `${value}%` }} />
     </div>
   );
 }
@@ -681,15 +643,7 @@ export function WbsFlowPage() {
       <main className="mx-auto px-4 lg:px-6 py-5 space-y-4 max-w-[1800px]">
         {/* ── Page header ─────────────────────────────────────────────── */}
         <div className="flex items-center justify-between gap-3 flex-wrap">
-          <div className="flex items-center gap-3 min-w-0">
-            <div className="w-10 h-10 rounded-2xl bg-primary/10 flex items-center justify-center flex-shrink-0">
-              <BarChart3 className="w-5 h-5 text-primary" />
-            </div>
-            <div className="min-w-0">
-              <h1 className="text-xl font-bold leading-tight">WBS 작업 흐름</h1>
-              <p className="text-sm text-muted-foreground">담당자별 역할 · 날짜별 업무 현황</p>
-            </div>
-          </div>
+          <PageHeader icon={BarChart3} title="WBS 작업 흐름" description="담당자별 역할 · 날짜별 업무 현황" className="flex-1 min-w-0" />
           <div className="flex items-center gap-2">
             {/* 보기 모드 토글 */}
             <div className="flex items-center gap-0.5 bg-secondary rounded-xl p-0.5 text-sm">

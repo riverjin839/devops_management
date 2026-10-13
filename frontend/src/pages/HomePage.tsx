@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import {
   CalendarClock, CalendarDays,
   ListTodo, ServerCog, LayoutGrid, ListTree,
@@ -60,11 +61,27 @@ export function HomePage() {
   const criticalClusters = useMemo(() => clusters.filter((c) => c.status === 'critical').length, [clusters]);
 
   // 플랫폼 탭 서브뷰 — 점검 매트릭스 / 배치잡. 배치잡은 예전엔 별도 라우트(/batch-jobs)
-  // 였지만 화면 개수를 줄이려 여기 서브탭으로 접었다(/batch-jobs 는 하위호환 리다이렉트).
-  // NAV_MAP 항목은 그대로 남아 있어 접근 제어(Settings)로 이 서브탭 자체를 끌 수 있다.
+  // 였지만 화면 개수를 줄이려 여기 서브탭으로 접었다(/batch-jobs 는 `/?tab=platform&view=batch`
+  // 로 리다이렉트). NAV_MAP 항목은 그대로 남아 있어 접근 제어(Settings)로 이 서브탭 자체를 끌 수 있다.
   const { featureAllowed } = useNavCatalog();
   const batchJobsAllowed = featureAllowed('/batch-jobs');
   const [platformView, setPlatformView] = useState<'matrix' | 'batch'>('matrix');
+
+  // URL 로 탭/서브뷰를 지정해 들어온 경우(`/batch-jobs` 리다이렉트, 점검 항목 상세의 "해당 화면"
+  // 링크 등) 한 번 적용하고 쿼리를 지운다. 서버 기본 탭보다 명시적 링크가 우선이라
+  // appliedServerDefault 도 함께 소진한다(D-129).
+  const [searchParams, setSearchParams] = useSearchParams();
+  useEffect(() => {
+    const tab = searchParams.get('tab');
+    const view = searchParams.get('view');
+    if (tab == null && view == null) return;
+    if (tab === 'work' || tab === 'platform') {
+      setHomeTab(tab);
+      appliedServerDefault.current = true;
+    }
+    if (view === 'matrix' || view === 'batch') setPlatformView(view);
+    setSearchParams({}, { replace: true });
+  }, [searchParams, setSearchParams, setHomeTab]);
 
   // 기본 탭 = '주간' — WeeklyStatusTimeline(담당자 기준 스윔레인 뷰)도 이제 담당자별
   // 표시 개수 제한(기본 5개) + "더보기/접기", 항상 최상단 "전체" 요약 행, 화면당 표시

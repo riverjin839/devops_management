@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { GitBranch } from 'lucide-react';
 import { useClusters } from '@/hooks/useCluster';
 import { usePepArchitectureGraph, useClusterAddonGraph } from '@/hooks/useArchitecture';
-import { ClusterSidebar } from '@/components/common';
+import { ClusterSidebar, EmptyState, SelectClusterEmptyState, LoadingState } from '@/components/common';
 import { MacCard } from '@/components/ui/MacCard';
 import { FlowDiagram, STATUS_COLOR } from '@/components/architecture';
 import { statusToVariant, type StatusVariant } from '@/components/common/StatusBadge';
@@ -57,7 +57,7 @@ export function ArchitecturePage() {
           {tab === 'pep' ? (
             <MacCard title="PEP 서비스 모듈 흐름" bodyPadding="p-4">
               {pep.isLoading ? (
-                <EmptyState text="상태 확인 중..." />
+                <LoadingState />
               ) : (
                 <FlowDiagram nodes={pep.nodes} edges={pep.edges} width={pep.width} height={pep.height} />
               )}
@@ -69,11 +69,11 @@ export function ArchitecturePage() {
               bodyPadding="p-4"
             >
               {!clusterId ? (
-                <EmptyState text="좌측에서 클러스터를 선택하세요." />
+                <SelectClusterEmptyState />
               ) : clusterGraph.isLoading ? (
-                <EmptyState text="애드온 조회 중..." />
+                <LoadingState />
               ) : clusterGraph.addons.length === 0 ? (
-                <EmptyState text="등록된 애드온이 없습니다." />
+                <EmptyState title="등록된 애드온이 없습니다." description="클러스터 관리에서 애드온을 등록하면 관계도가 그려집니다." />
               ) : (
                 <FlowDiagram
                   nodes={clusterGraph.nodes}
@@ -89,10 +89,6 @@ export function ArchitecturePage() {
       </div>
     </div>
   );
-}
-
-function EmptyState({ text }: { text: string }) {
-  return <div className="py-16 text-center text-sm text-muted-foreground">{text}</div>;
 }
 
 function TabSeg({ active, onClick, label, border }: { active: boolean; onClick: () => void; label: string; border?: boolean }) {

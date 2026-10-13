@@ -1,5 +1,6 @@
 // frontend/src/pages/BatchJobsPage.tsx
 import { useEffect, useState } from 'react';
+import { PageHeader } from '@/components/common/PageHeader';
 import { ListTree, Plus, Play, X } from 'lucide-react';
 
 import { MacCard } from '@/components/ui/MacCard';
@@ -185,15 +186,7 @@ export function BatchJobsPage() {
       <main className="flex-1 min-w-0 px-4 lg:px-6 py-5 space-y-4 max-w-[1700px]">
         {/* Page Header */}
         <div className="flex items-center justify-between gap-3 flex-wrap">
-          <div className="flex items-center gap-3 min-w-0">
-            <div className="w-10 h-10 rounded-2xl bg-primary/10 flex items-center justify-center flex-shrink-0">
-              <ListTree className="w-5 h-5 text-primary" />
-            </div>
-            <div className="min-w-0">
-              <h1 className="text-xl font-bold leading-tight">배치잡</h1>
-              <p className="text-sm text-muted-foreground">{headerSubtitle}</p>
-            </div>
-          </div>
+          <PageHeader icon={ListTree} title="배치잡" description={headerSubtitle} className="flex-1 min-w-0" />
           <button
             type="button"
             onClick={openCreateFromHeader}
@@ -217,7 +210,7 @@ export function BatchJobsPage() {
           <div className="flex-1 min-w-0 space-y-4">
             <MacCard title="배치 잡" bodyPadding="p-4">
               {allJobsQ.isLoading ? (
-                <p className="text-sm text-muted-foreground py-6 text-center">로딩 중…</p>
+                <p className="text-sm text-muted-foreground py-6 text-center">불러오는 중…</p>
               ) : clusters.length === 0 ? (
                 <p className="text-sm text-muted-foreground py-10 text-center">
                   등록된 클러스터가 없습니다. /cluster-manage 에서 추가하세요.

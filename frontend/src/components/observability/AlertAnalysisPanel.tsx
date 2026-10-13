@@ -17,7 +17,7 @@ export function AlertAnalysisPanel({ alert }: { alert: AlertEvent }) {
         return res.data;
       }}
       invalidateKeys={[['alert-inbox']]}
-      emptyHint="아직 분석되지 않은 알람입니다. Settings → AI/LLM 의 자동 분석 범위에 매칭되면 자동 분석되며, 위 버튼으로 수동 실행할 수도 있습니다."
+      emptyHint="아직 분석되지 않은 알람입니다. 설정 → AI/LLM 의 자동 분석 범위에 매칭되면 자동 분석되며, 위 버튼으로 수동 실행할 수도 있습니다."
     />
   );
 }

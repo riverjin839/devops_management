@@ -109,7 +109,7 @@ export function PlaybookLogDialog({ playbook, onClose }: PlaybookLogDialogProps)
         <div className="flex-1 overflow-y-auto p-5 space-y-5">
           {/* Summary */}
           <section>
-            <SectionTitle icon={isSuccess ? CheckCircle : XCircle} title="요약" tone={isSuccess ? 'success' : 'error'} />
+            <SectionTitle icon={isSuccess ? CheckCircle : XCircle} title="실행 요약" tone={isSuccess ? 'success' : 'error'} />
             <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2">
               <SummaryCell label="Return Code" value={returncode ?? '—'} accent={returncode === 0 ? 'success' : returncode == null ? 'neutral' : 'error'} />
               <SummaryCell label="OK"          value={totals.ok ?? 0}          accent="success" />

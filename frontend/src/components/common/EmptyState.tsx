@@ -1,5 +1,5 @@
-import { type ComponentType } from 'react';
-import { Inbox } from 'lucide-react';
+import { type ComponentType, type ReactNode } from 'react';
+import { Inbox, Loader2, Server } from 'lucide-react';
 
 interface EmptyStateProps {
   icon?: ComponentType<{ className?: string }>;
@@ -15,6 +15,8 @@ interface EmptyStateProps {
   className?: string;
   /** 컴팩트한 형태 (테이블 내부 사용 시) */
   compact?: boolean;
+  /** 액션 아래 추가 내용(권한 게이트로 감싼 버튼 등). */
+  children?: ReactNode;
 }
 
 /** 빈 상태 — 아이콘 + 제목 + 설명 + (선택) 주요/보조 액션.
@@ -27,6 +29,7 @@ export function EmptyState({
   secondaryAction,
   className = '',
   compact = false,
+  children,
 }: EmptyStateProps) {
   return (
     <div
@@ -69,6 +72,30 @@ export function EmptyState({
           )}
         </div>
       )}
+      {children}
+    </div>
+  );
+}
+
+/** "클러스터를 선택하세요" 단일 변형 — 13개 화면이 5가지 방식으로 그리던 것을 여기로 모은다(D-124). */
+export function SelectClusterEmptyState({
+  description = '왼쪽 사이드바에서 클러스터를 고르면 이 화면의 내용이 표시됩니다.',
+  compact = false,
+}: { description?: string; compact?: boolean }) {
+  return <EmptyState icon={Server} title="클러스터를 선택하세요" description={description} compact={compact} />;
+}
+
+/** 로딩 자리표시 — 문구는 "불러오는 중…" 하나만 쓴다(§12.12-6). 골격이 필요하면 `Skeleton` 을 우선한다. */
+export function LoadingState({ label = '불러오는 중…', compact = false }: { label?: string; compact?: boolean }) {
+  return (
+    <div
+      role="status"
+      aria-live="polite"
+      aria-busy="true"
+      className={`flex items-center justify-center gap-2 text-sm text-muted-foreground ${compact ? 'py-6' : 'py-12'}`}
+    >
+      <Loader2 className="w-4 h-4 animate-spin" aria-hidden="true" />
+      {label}
     </div>
   );
 }

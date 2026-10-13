@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import { SelectClusterEmptyState } from '@/components/common';
 import { Plus, RefreshCw, Search } from 'lucide-react';
 import { MacCard } from '@/components/ui/MacCard';
 import { ClusterSidebar } from '@/components/common/ClusterSidebar';
@@ -279,9 +280,7 @@ export function ObservabilityPage() {
             ) : null}
 
             {!hasCluster ? (
-              <p className="px-4 py-12 text-center text-sm text-muted-foreground">
-                왼쪽에서 클러스터를 선택하세요.
-              </p>
+              <SelectClusterEmptyState />
             ) : effectiveView === 'metrics' ? (
               <MetricsTable
                 rows={metricRows}

@@ -102,6 +102,8 @@ export function ClusterManagePage() {
   // "눌러보고서야 403 으로 안다"를 없앤다.
   const authUser = useAuthStore((s) => s.user);
   const canEdit = hasRole(authUser, 'admin', 'operator');
+  // /settings 는 RequireAdmin 라우트라 빈 상태의 등록 CTA 는 admin 에게만 보인다(D-129).
+  const isAdmin = hasRole(authUser, 'admin');
   // 로딩/조회실패를 "등록된 클러스터가 없습니다" 로 위장하지 않도록 쿼리 상태를 사용한다 (D-043).
   const { isLoading: clustersLoading, isError: clustersError, error: clustersLoadError, refetch: refetchClusters } = useClusters();
   const queryClient = useQueryClient();
@@ -229,7 +231,7 @@ export function ClusterManagePage() {
     { key: 'region',   label: '지역',         w: 100,
       tip: '운영 지역 라벨. 사용자가 직접 입력하며 그룹/필터 키로 사용됩니다 (예: 서울, IDC1).' },
     { key: 'level',    label: '운영레벨',     w: 130,
-      tip: 'Settings → 운영레벨 탭에서 정의한 레벨 (예: 운영/검증/개발). 클러스터 그룹/필터 키로도 사용.' },
+      tip: '설정 → 운영레벨 탭에서 정의한 레벨 (예: 운영/검증/개발). 클러스터 그룹/필터 키로도 사용.' },
     { key: 'bgp',      label: 'BGP / AS',    w: 110,
       tip: 'Cilium 의 cilium-config ConfigMap 에서 enable-bgp-control-plane 과 cluster-pool 의 AS 번호를 자동 추출. ConfigMap 이 없으면 비어 있음.' },
     { key: 'cidr',     label: 'INTERNAL_IP', w: 220,
@@ -871,7 +873,7 @@ export function ClusterManagePage() {
 
         {/* 필터 패널 — 수제 카드 div 대신 MacCard (D-050). 검색은 툴바 상시 노출로 이동. */}
         {showFilter && (
-          <MacCard title="필터" rootClassName="mb-5" className="flex flex-wrap items-end gap-3">
+          <MacCard title="클러스터 필터" rootClassName="mb-5" className="flex flex-wrap items-end gap-3">
             <div className="min-w-[160px]">
               <label htmlFor={f('level')} className="block text-sm text-muted-foreground mb-1">운영레벨</label>
               <select id={f('level')} value={filterLevel} onChange={(e) => setFilterLevel(e.target.value)}
@@ -945,8 +947,10 @@ export function ClusterManagePage() {
           <EmptyState
             icon={Server}
             title="등록된 클러스터가 없습니다."
-            description="클러스터 등록과 API/kubeconfig 설정은 Settings → 클러스터 탭에서 할 수 있습니다."
-            action={{ label: 'Settings 에서 클러스터 등록', onClick: () => navigate('/settings?tab=clusters') }}
+            description={isAdmin
+              ? '클러스터 등록과 API/kubeconfig 설정은 설정 → 클러스터 탭에서 할 수 있습니다.'
+              : '클러스터 등록은 관리자만 할 수 있습니다. 관리자에게 설정 → 클러스터 탭에서 등록을 요청하세요.'}
+            action={isAdmin ? { label: '설정에서 클러스터 등록', onClick: () => navigate('/settings?tab=cluster') } : undefined}
           />
         ) : filteredClusters.length === 0 ? (
           <EmptyState

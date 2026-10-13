@@ -1,13 +1,12 @@
 import { useEffect, useRef, useState } from 'react';
+import { PageHeader } from '@/components/common/PageHeader';
 import type { ReactNode } from 'react';
-import { Link } from 'react-router-dom';
 import { useClusterRouteParam } from '@/hooks/useClusterRouteParam';
 import {
-  ArrowLeft, Gauge, RefreshCw, AlertTriangle, Server, Layers, BarChart3, Sparkles,
+  Gauge, RefreshCw, AlertTriangle, Server, Layers, BarChart3, Sparkles,
 } from 'lucide-react';
-import { MacCard } from '@/components/ui/MacCard';
 import { ClusterSidebar } from '@/components/common/ClusterSidebar';
-import { EmptyState, SnapshotProgressBar, ExportMenu } from '@/components/common';
+import { SnapshotProgressBar, ExportMenu, SelectClusterEmptyState } from '@/components/common';
 import { useClusters } from '@/hooks/useCluster';
 import { useAllocProgress, useForceAllocRefresh, useSoftAllocRefresh } from '@/hooks/useK8sAllocation';
 import {
@@ -90,13 +89,12 @@ export function K8sAllocationPage() {
 
         <div ref={contentRef} className="flex-1 min-w-0 space-y-1.5">
           <div className="flex items-center gap-3 flex-wrap">
-            <Link to="/cluster-overview" className="text-sm text-muted-foreground hover:text-foreground flex items-center gap-1">
-              <ArrowLeft className="w-4 h-4" /> 클러스터 현황
-            </Link>
-            <h1 className="text-lg font-semibold flex items-center gap-2">
-              <Gauge className="w-5 h-5 text-status-warning" /> K8S 자원 관리
-            </h1>
-            <span className="text-sm text-muted-foreground">노드 여유 대비 request·사용량(slack) 진단</span>
+            <PageHeader
+              back={{ to: '/cluster-overview', label: '클러스터 현황' }}
+              icon={Gauge}
+              title="K8s 자원 관리"
+              description="노드 여유 대비 request·사용량(slack) 진단"
+            />
 
             {clusterId && (
               <div className="ml-auto flex items-center gap-2" data-export-ignore>
@@ -157,7 +155,7 @@ export function K8sAllocationPage() {
           )}
 
           {!clusterId ? (
-            <MacCard><EmptyState title="클러스터를 선택하세요" description="좌측에서 클러스터를 고르면 자원 현황이 표시됩니다." /></MacCard>
+            <SelectClusterEmptyState description="좌측에서 클러스터를 고르면 자원 현황이 표시됩니다." />
           ) : (
             <>
               <SummaryStrip clusterId={clusterId} expanded={summaryDetail} onToggle={toggleSummaryDetail} />

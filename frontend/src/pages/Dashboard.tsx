@@ -330,7 +330,7 @@ export function Dashboard() {
     <div className="app-min-h-screen bg-background">
       {/* ── Top bar ──────────────────────────────────────────────────────── */}
       <div className="sticky top-0 z-20 px-4 lg:px-6 py-2 bg-background/95 backdrop-blur border-b border-border flex flex-wrap items-center gap-x-3 gap-y-1.5">
-        <h1 className="font-bold text-sm tracking-tight whitespace-nowrap">DEVOPS MANAGEMENT</h1>
+        <h1 className="text-sm font-semibold whitespace-nowrap">클러스터 현황</h1>
         {lastCheckTime && (
           <p className="text-xs text-muted-foreground font-mono hidden sm:block">
             마지막 점검: {formatDateTime(lastCheckTime)}
@@ -390,7 +390,7 @@ export function Dashboard() {
             className="px-3 py-1 text-sm font-semibold bg-primary hover:bg-primary/90 text-primary-foreground rounded-xl transition-colors flex items-center gap-1.5 disabled:opacity-50 shadow-card"
           >
             <RefreshCw className={`w-3.5 h-3.5 ${isChecking ? 'animate-spin' : ''}`} />
-            {isChecking ? '점검 중...' : '점검 실행'}
+            {isChecking ? '점검 중…' : '점검 실행'}
           </button>
         </div>
       </div>
@@ -446,7 +446,7 @@ export function Dashboard() {
         <div className="space-y-3 min-w-0">
 
         {/* ── Cluster Status ─────────────────────────────────────────────── */}
-        <MacCard title="Cluster Status" bodyPadding="p-4" className="overflow-hidden" rootClassName="min-w-0">
+        <MacCard title="클러스터 상태" bodyPadding="p-4" className="overflow-hidden" rootClassName="min-w-0">
           {selectedClusterId === null ? (
             <ClusterOverviewGrid clusters={clusters} addons={addons} onSelectCluster={setSelectedClusterId} />
           ) : (
@@ -478,7 +478,7 @@ export function Dashboard() {
                     </p>
                     <p className="text-sm text-muted-foreground">
                       API 서버 또는 kubeconfig 인증이 실패했습니다. 아래 점검 카드는 마지막 성공 시점의 값으로 <b>비활성화</b> 되어 있습니다.
-                      Settings → "연결 확인"을 실행하거나 kubeconfig 를 점검한 뒤 다시 시도하세요.
+                      설정 → "연결 확인"을 실행하거나 kubeconfig 를 점검한 뒤 다시 시도하세요.
                     </p>
                   </div>
                 </div>
@@ -498,10 +498,10 @@ export function Dashboard() {
         </MacCard>
 
         {/* ── Prometheus Insights (우측 컬럼) ─────────────────────────────── */}
-        <MacCard title="Prometheus Insights" bodyPadding="p-4" className="overflow-hidden" rootClassName="min-w-0">
+        <MacCard title="Prometheus 지표" bodyPadding="p-4" className="overflow-hidden" rootClassName="min-w-0">
           <div className="flex items-center gap-2 text-muted-foreground text-sm mb-3">
             <Activity className="w-4 h-4 text-primary" />
-            <span>{metricCards.length} cards</span>
+            <span>{metricCards.length}개 카드</span>
           </div>
           <MetricCardGrid
             cards={metricCards}
@@ -522,10 +522,10 @@ export function Dashboard() {
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
           {/* ── Playbook Checks ──────────────────────────────────────────── */}
           {dashboardPlaybooks.length > 0 && (
-            <MacCard title="Playbook Checks" bodyPadding="p-4">
+            <MacCard title="플레이북 점검" bodyPadding="p-4">
               <div className="flex items-center gap-2 text-muted-foreground text-sm mb-3">
                 <BookOpen className="w-4 h-4 text-primary" />
-                <span>{dashboardPlaybooks.length} playbooks</span>
+                <span>{dashboardPlaybooks.length}개 플레이북</span>
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 {dashboardPlaybooks.map((playbook) => (
@@ -567,7 +567,7 @@ export function Dashboard() {
         </div>
 
         {/* ── Recent Check History (Heat Map) ──────────────────────────── */}
-        <MacCard title="Recent Check History" bodyPadding="p-0">
+        <MacCard title="최근 점검 이력" bodyPadding="p-0">
           <CheckHistoryHeatmap logs={historyLogs} isLoading={historyLoading} />
         </MacCard>
 

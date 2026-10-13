@@ -510,7 +510,7 @@ export function AddClusterModal({ isOpen, onClose }: AddClusterModalProps) {
           {isSubmitting && (
             <div className="flex items-center gap-2 px-3 py-2.5 bg-blue-500/10 border border-blue-500/20 rounded-lg text-sm text-blue-400 mt-4">
               <Loader2 className="w-4 h-4 animate-spin flex-shrink-0" />
-              <span>클러스터 연결 검증 중... (최대 5초)</span>
+              <span>클러스터 연결 검증 중… (최대 5초)</span>
             </div>
           )}
         </div>

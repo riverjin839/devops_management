@@ -94,7 +94,7 @@ export function ServiceNowIntegrationPanel() {
           사내에 구축된 ServiceNow ITSM 의 Base URL 을 설정합니다. 실제 인스턴스의 테이블명·필드
           스펙이 아래 기본값(표준 Table API 가정)과 다르면 코드 수정 없이 여기서 조정하세요.
           인증은 별도 자격증명 없이 현재 로그인 사용자의 Jira/SSO 세션을 재사용합니다
-          (Settings → 연동(Jira)에서 SSO 자동 로그인 필요) — 전용 인증은 추후 개선 예정입니다.
+          (설정 → 연동(Jira)에서 SSO 자동 로그인 필요) — 전용 인증은 추후 개선 예정입니다.
         </p>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
           <div className="md:col-span-2">

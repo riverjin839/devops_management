@@ -27,7 +27,7 @@ export const NAV_MAP: Record<string, { defaultLabel: string; icon: ComponentType
   '/daily-check/review': { defaultLabel: '점검 결과 리뷰',  icon: ClipboardCheck },
   '/daily-check/settings':{ defaultLabel: '점검 항목 관리',  icon: Sparkles },
   '/lake-services':      { defaultLabel: 'LAKE 서비스',     icon: Database },
-  '/pod-bottleneck':     { defaultLabel: 'Pod 병목 진단',   icon: Activity },
+  '/pod-bottleneck':     { defaultLabel: '파드 병목 진단',   icon: Activity },
   '/docs':               { defaultLabel: '지식 허브 홈',    icon: Library },
   '/playbooks':          { defaultLabel: '플레이북',        icon: BookOpen },
   '/tasks-mgmt':         { defaultLabel: '업무 관리',      icon: ListTodo },
@@ -47,7 +47,7 @@ export const NAV_MAP: Record<string, { defaultLabel: string; icon: ComponentType
   '/node-specs':         { defaultLabel: '노드 서버스펙',  icon: ClipboardCheck },
   '/links':              { defaultLabel: '클러스터 링크',  icon: Link2 },
   '/node-labels':        { defaultLabel: 'K8s 노드 라벨',   icon: Tags },
-  '/k8s-rbac':           { defaultLabel: 'K8S 접근 권한',  icon: KeyRound },
+  '/k8s-rbac':           { defaultLabel: 'K8s 접근 권한',  icon: KeyRound },
   '/node-images':        { defaultLabel: 'K8s 노드 이미지', icon: Boxes },
   '/cidr':               { defaultLabel: 'CIDR 계산기',    icon: Calculator },
   '/k8s-events':         { defaultLabel: 'K8s 실시간 이벤트', icon: Bell, iconColor: 'text-orange-500' },
@@ -105,8 +105,11 @@ export interface NavGroup {
 export const GROUPS: NavGroup[] = [
   { id: 'observe',   label: '클러스터 · 관측',     icon: Activity,    description: '상태를 본다 — 읽기 전용', domain: 'platform',
     paths: ['/cluster-overview', '/cluster-trends', '/observability', '/alerts', '/k8s-events', '/k8s-logs', '/incident-analysis'] },
+  // '/ops-checks'(운영 점검 콘솔, 레거시)는 사이드바에서 뺐다 — 같은 패널을 종합 상태까지 포함해
+  // 보여주는 '/clusters/:id' 로 대체됐다(App.tsx 주석). 라우트·NAV_MAP 은 북마크/아일랜드 패널
+  // 호환으로 유지(D-129).
   { id: 'inspect',   label: '클러스터 · 점검',     icon: ShieldCheck, description: '상태를 확인하고 기록한다', domain: 'platform',
-    paths: ['/ops-checks', '/daily-check/review', '/daily-check/settings', '/pod-bottleneck', '/versions'] },
+    paths: ['/daily-check/review', '/daily-check/settings', '/pod-bottleneck', '/versions'] },
   { id: 'operate',   label: '클러스터 · 운영 조작', icon: Terminal,    description: '클러스터·노드에 명령을 보낸다 — 실행 전 대상을 확인할 것', domain: 'platform', tone: 'danger',
     paths: ['/k8s-manage', '/k9s', '/bulk-exec', '/node-ssh', '/etcdctl'] },
   { id: 'configure', label: '클러스터 · 구성',     icon: Layers,      description: '클러스터 등록·자원·권한을 관리한다', domain: 'platform',

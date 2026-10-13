@@ -7,7 +7,7 @@ import {
 } from 'lucide-react';
 import { useClusters } from '@/hooks/useCluster';
 import { useTerminalEnvSync } from '@/hooks/useTerminalEnvSync';
-import { ConfirmDialog, LogViewer, ClusterSidebar, SavedCommands } from '@/components/common';
+import { ConfirmDialog, LogViewer, ClusterSidebar, SavedCommands, SelectClusterEmptyState, LoadingState } from '@/components/common';
 import { MacCard } from '@/components/ui/MacCard';
 import {
   bulkExecApi, type NodeSummary, type BulkExecResultItem, type BulkExecResponse,
@@ -341,9 +341,9 @@ export function KernelParamsPage() {
               </header>
               <div className="max-h-[540px] overflow-y-auto">
                 {!clusterId ? (
-                  <p className="text-center text-muted-foreground text-sm py-10">클러스터를 선택하세요.</p>
+                  <SelectClusterEmptyState compact />
                 ) : nodesQ.isLoading ? (
-                  <p className="text-center text-muted-foreground text-sm py-10">불러오는 중…</p>
+                  <LoadingState compact />
                 ) : (nodesQ.data?.nodes ?? []).map((n) => (
                   <NodeRow key={n.name} node={n} checked={selected.has(n.name)} onToggle={() => toggle(n.name)} />
                 ))}

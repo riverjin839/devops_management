@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type RefObject } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { ViewModeBar, DoubleScrollX, ConfirmDialog, useToast } from '@/components/common';
+import { ViewModeBar, DoubleScrollX, ConfirmDialog, useToast, EmptyState } from '@/components/common';
 import { MacCard } from '@/components/ui/MacCard';
 import { formatApiError } from '@/lib/utils';
 import { Plus, Download, ListTodo, X, CalendarDays, List, ChevronUp, ChevronDown, ArrowUpDown, Kanban, ListTree, AlertCircle, AlertTriangle, GripVertical, ListFilter, DownloadCloud, CalendarRange, UserRound, Search, Save, Settings } from 'lucide-react';
@@ -1044,22 +1044,16 @@ export function WorkItemBoardPage() {
               ))}
             </MacCard>
           ) : items.length === 0 ? (
-            <div className="text-center py-20">
-              <ListTodo className="w-12 h-12 mx-auto mb-4 text-muted-foreground/30" />
-              <p className="text-muted-foreground mb-4">
-                {onlyMine && myName && !hasFilters
-                  ? `${myName} 담당 업무가 없습니다 — "내 업무" 를 끄면 전체를 볼 수 있습니다.`
-                  : isFilteredView ? '검색 조건에 해당하는 업무가 없습니다.' : '등록된 업무가 없습니다.'}
-              </p>
-              {!isFilteredView && (
-                <button
-                  onClick={handleCreateNew}
-                  className="px-4 py-2 text-sm font-medium bg-primary/10 hover:bg-primary/20 text-primary border border-primary/20 rounded-lg transition-colors"
-                >
-                  + 첫 번째 업무 등록
-                </button>
-              )}
-            </div>
+            <EmptyState
+              icon={ListTodo}
+              title={onlyMine && myName && !hasFilters
+                ? `${myName} 담당 업무가 없습니다.`
+                : isFilteredView ? '검색 조건에 해당하는 업무가 없습니다.' : '등록된 업무가 없습니다.'}
+              description={onlyMine && myName && !hasFilters
+                ? '"내 업무" 를 끄면 전체 업무를 볼 수 있습니다.'
+                : isFilteredView ? '검색어나 필터를 바꿔 보세요.' : '첫 업무를 등록하면 보드와 표에 나타납니다.'}
+              action={!isFilteredView ? { label: '첫 번째 업무 등록', onClick: handleCreateNew } : undefined}
+            />
           ) : (
             <MacCard bodyPadding="p-0" rootClassName="overflow-hidden">
               <WorkItemEpicView
@@ -1090,22 +1084,16 @@ export function WorkItemBoardPage() {
               ))}
             </MacCard>
           ) : items.length === 0 ? (
-            <div className="text-center py-20">
-              <ListTodo className="w-12 h-12 mx-auto mb-4 text-muted-foreground/30" />
-              <p className="text-muted-foreground mb-4">
-                {onlyMine && myName && !hasFilters
-                  ? `${myName} 담당 업무가 없습니다 — "내 업무" 를 끄면 전체를 볼 수 있습니다.`
-                  : isFilteredView ? '검색 조건에 해당하는 업무가 없습니다.' : '등록된 업무가 없습니다.'}
-              </p>
-              {!isFilteredView && (
-                <button
-                  onClick={handleCreateNew}
-                  className="px-4 py-2 text-sm font-medium bg-primary/10 hover:bg-primary/20 text-primary border border-primary/20 rounded-lg transition-colors"
-                >
-                  + 첫 번째 업무 등록
-                </button>
-              )}
-            </div>
+            <EmptyState
+              icon={ListTodo}
+              title={onlyMine && myName && !hasFilters
+                ? `${myName} 담당 업무가 없습니다.`
+                : isFilteredView ? '검색 조건에 해당하는 업무가 없습니다.' : '등록된 업무가 없습니다.'}
+              description={onlyMine && myName && !hasFilters
+                ? '"내 업무" 를 끄면 전체 업무를 볼 수 있습니다.'
+                : isFilteredView ? '검색어나 필터를 바꿔 보세요.' : '첫 업무를 등록하면 보드와 표에 나타납니다.'}
+              action={!isFilteredView ? { label: '첫 번째 업무 등록', onClick: handleCreateNew } : undefined}
+            />
           ) : (
             <MacCard bodyPadding="p-0" rootClassName="overflow-hidden">
               <DoubleScrollX>

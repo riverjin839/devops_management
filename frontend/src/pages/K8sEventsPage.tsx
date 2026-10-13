@@ -148,7 +148,7 @@ export function K8sEventsPage() {
 
             {/* 이벤트 테이블 */}
             {isLoading ? (
-              <div className="text-center py-12 text-muted-foreground text-sm">로딩 중…</div>
+              <div className="text-center py-12 text-muted-foreground text-sm">불러오는 중…</div>
             ) : events.length === 0 ? (
               <div className="text-center py-12 text-muted-foreground text-sm space-y-1">
                 <p>이벤트 없음</p>

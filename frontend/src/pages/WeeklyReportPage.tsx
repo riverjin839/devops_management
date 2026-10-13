@@ -239,7 +239,7 @@ export function WeeklyReportPage() {
       </div>
 
       {/* 필터바 — 날짜 외 다양한 조건 */}
-      <MacCard title="필터">
+      <MacCard title="보고서 필터">
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2">
           <div>
             <span className="block text-xs font-medium text-muted-foreground mb-1">구분(component)</span>

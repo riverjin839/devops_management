@@ -343,7 +343,7 @@ export function ImageDistributeDialog({
             <div className="max-h-56 overflow-y-auto border border-border rounded-lg bg-background p-1">
               {nodes.length === 0 ? (
                 <p className="text-center py-3 text-sm text-muted-foreground">
-                  {nodeQ.isLoading ? '노드 로딩 중...' : nodeQ.isError ? '노드 조회 실패' : '노드 없음'}
+                  {nodeQ.isLoading ? '노드 불러오는 중…' : nodeQ.isError ? '노드 조회 실패' : '노드 없음'}
                 </p>
               ) : nodes.map((n) => {
                 const on = selected.has(n.name);

@@ -216,7 +216,7 @@ function TenantDetail({ tenant, users, clusters, runSlots }: DetailProps) {
 
   return (
     <div className="space-y-4">
-      <MacCard title="정보">
+      <MacCard title="테넌트 정보">
         <div className="grid grid-cols-1 md:grid-cols-[1fr_2fr_140px_auto] gap-2 items-end">
           <label className="text-xs text-muted-foreground">
             이름

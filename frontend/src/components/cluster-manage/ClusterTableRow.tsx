@@ -153,7 +153,7 @@ export function ClusterTableRow({ cluster, onEdit, onDelete, deletingId, overlap
           <span
             ref={iconAnchorRef}
             className="flex items-center justify-center w-6 h-6 rounded-md text-muted-foreground flex-shrink-0"
-            title="아이콘 변경: 시스템 → Settings → 클러스터 탭에서"
+            title="아이콘 변경: 시스템 → 설정 → 클러스터 탭에서"
             aria-hidden
           >
             {resolvedIcon?.kind === 'image'

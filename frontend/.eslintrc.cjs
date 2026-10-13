@@ -1,13 +1,93 @@
 /* 상태 의미 고정 팔레트 금지 (P1) — 정상/경고/장애/정보 색은 테마를 따라가는 status 토큰만 쓴다
    (text-status-healthy · bg-status-critical/10 · border-status-warning/30 …). emerald/red/amber 같은
    고정 팔레트는 테마마다 대비가 깨진다(예: text-emerald-400 은 라이트 테마에서 1.9:1).
-   장식용 계열(blue·violet·purple·orange·cyan 등)과 slate 콘솔 배경은 대상이 아니다. */
+   slate/zinc 콘솔(터미널) 배경은 대상이 아니다. */
 const STATUS_PALETTE_RE = String.raw`/(^|[^\w-])(text|bg|border|ring|fill|stroke|from|to|via|divide|outline|decoration|placeholder|accent|caret|shadow)(-[a-z]+)?-(emerald|green|red|rose|amber|yellow|sky)-\d{2,3}/`;
+/* 장식·카테고리 고정 팔레트 금지 (D-120, DESIGN_SYSTEM §12.12-7) — 예전엔 "장식용 계열은 대상이 아니다" 로
+   뒀더니 blue·orange·violet·indigo·cyan·pink 가 329건까지 자라 Tailwind 기본 팔레트(= AI 템플릿 룩)가 됐다.
+   종류 구분 색은 --chart-1..8 토큰, 상태는 status 토큰만 쓴다. 기존 위반 파일은 아래 DECO_PALETTE_ALLOWLIST
+   (래칫 — 파일을 지울 수만 있고 추가하지 않는다)에서 이 검사만 면제된다. 새 파일·새 코드는 바로 걸린다. */
+const DECO_PALETTE_RE = String.raw`/(^|[^\w-])(text|bg|border|ring|fill|stroke|from|to|via|divide|outline|decoration|placeholder|accent|caret|shadow)(-[a-z]+)?-(blue|orange|purple|violet|indigo|cyan|pink|fuchsia|teal|lime)-\d{2,3}/`;
+const DECO_PALETTE_MSG = '장식·카테고리 색도 고정 팔레트를 쓰지 않는다 — 종류 구분은 --chart-1..8 토큰, 상태는 status 토큰 (DESIGN_SYSTEM §12.12-7, D-120). 기존 파일은 .eslintrc.cjs DECO_PALETTE_ALLOWLIST(줄이기만 한다)';
+const DECO_PALETTE_ALLOWLIST = [
+  'src/components/batch-jobs/BatchJobClusterGroup.tsx',
+  'src/components/batch-jobs/BatchJobFilters.tsx',
+  'src/components/batch-jobs/BatchJobRow.tsx',
+  'src/components/batch-jobs/StatusPill.tsx',
+  'src/components/bulk-exec/SavedScriptPanel.tsx',
+  'src/components/commands/constants.ts',
+  'src/components/common/ViewModeBar.tsx',
+  'src/components/dashboard/AddClusterModal.tsx',
+  'src/components/dashboard/AddMetricCardModal.tsx',
+  'src/components/dashboard/WeeklyWorkTable.tsx',
+  'src/components/documents/ConfluenceImportModal.tsx',
+  'src/components/layout/VocBoardPanel.tsx',
+  'src/components/layout/navConfig.ts',
+  'src/components/node-images/ImageDistributeDialog.tsx',
+  'src/components/node-labels/NodeLabelsTable.tsx',
+  'src/components/ops-notes/OpsNoteForm.tsx',
+  'src/components/ops-notes/OpsNoteReadView.tsx',
+  'src/components/packet-flow/HopDetailPanel.tsx',
+  'src/components/playbooks/PlaybookCard.tsx',
+  'src/components/playbooks/PlaybookListRow.tsx',
+  'src/components/playbooks/PlaybookLogDialog.tsx',
+  'src/components/services/serviceCatalog.ts',
+  'src/components/settings/AssigneeManager.tsx',
+  'src/components/settings/TerminalAppearanceSettings.tsx',
+  'src/components/ui/DateTimePicker.tsx',
+  'src/components/wbs/ProjectFormModal.tsx',
+  'src/components/wbs/ProjectHeader.tsx',
+  'src/components/work-guides/GuidePageView.tsx',
+  'src/components/work-items/JiraImportModal.tsx',
+  'src/components/work-items/JiraIssueChip.tsx',
+  'src/components/work-items/JiraLinkDialog.tsx',
+  'src/components/work-items/JiraPushDialog.tsx',
+  'src/components/work-items/WorkItemEpicView.tsx',
+  'src/components/work-items/WorkItemForm.tsx',
+  'src/components/work-items/WorkItemReadView.tsx',
+  'src/components/work-items/WorkItemTableRow.tsx',
+  'src/hooks/useOperationLevels.ts',
+  'src/pages/BulkExecPage.tsx',
+  'src/pages/CidrCalculatorPage.tsx',
+  'src/pages/ClusterTrendsPage.tsx',
+  'src/pages/DocumentsPage.tsx',
+  'src/pages/EtcdCtlPage.tsx',
+  'src/pages/IncidentAnalysisPage.tsx',
+  'src/pages/K8sEventsPage.tsx',
+  'src/pages/KernelParamsPage.tsx',
+  'src/pages/KnowledgeHubPage.tsx',
+  'src/pages/McClientPage.tsx',
+  'src/pages/MemberBoardPage.tsx',
+  'src/pages/NodeSshPage.tsx',
+  'src/pages/OpsNotesPage.tsx',
+  'src/pages/PacketFlowPage.tsx',
+  'src/pages/ServiceArchitecturePage.tsx',
+  'src/pages/SprintsPage.tsx',
+  'src/pages/TodoTodayPage.tsx',
+  'src/pages/TrendDigestPage.tsx',
+  'src/pages/VersionsPage.tsx',
+  'src/pages/WbsFlowPage.tsx',
+  'src/pages/WeeklyReportPage.tsx',
+  'src/pages/WorkItemDetailPage.tsx',
+  'src/pages/WorkflowBoardPage.tsx',
+  'src/stores/tableViewStore.ts',
+];
 /* P2 타이포 — 흐린 보조 글자(text-muted-foreground/50~90 → 라이트에서 1.96~3.23:1)와 11px 미만 글자 금지.
    placeholder: 변형은 입력 안내 글자라 예외. esquery 정규식은 '/' 를 못 쓰므로 슬래시 자리는 '.' 로 매칭. */
 const TYPO_RE = String.raw`/((?<!placeholder:)(?<![\w-])text-muted-foreground.[5-9]\d(?!\d))|text-\[(8|9|10)px\]/`;
 const TYPO_MSG = '보조 글자는 text-muted-foreground(투명도 없이), 최소 글자는 text-[11px] — 흐리게 하거나 더 작게 하지 않는다 (DESIGN_SYSTEM §12 타이포)';
 const STATUS_PALETTE_MSG = '상태색은 status 토큰을 쓴다 — text-status-healthy|warning|critical|info, bg-status-*/10, border-status-*/30 (DESIGN_SYSTEM §2.4)';
+
+const BASE_RESTRICTED = [
+  { selector: `Literal[value=${STATUS_PALETTE_RE}]`, message: STATUS_PALETTE_MSG },
+  { selector: `TemplateElement[value.raw=${STATUS_PALETTE_RE}]`, message: STATUS_PALETTE_MSG },
+  { selector: `Literal[value=${TYPO_RE}]`, message: TYPO_MSG },
+  { selector: `TemplateElement[value.raw=${TYPO_RE}]`, message: TYPO_MSG },
+];
+const DECO_RESTRICTED = [
+  { selector: `Literal[value=${DECO_PALETTE_RE}]`, message: DECO_PALETTE_MSG },
+  { selector: `TemplateElement[value.raw=${DECO_PALETTE_RE}]`, message: DECO_PALETTE_MSG },
+];
 
 module.exports = {
   root: true,
@@ -49,11 +129,10 @@ module.exports = {
        프리셋엔 없지만 W4 접근성 패스에서 전수 검사 후 위반 54건을 모두 고쳤다(2026-07).
        회귀 방지를 위해 명시적으로 켜둔다. */
     'jsx-a11y/control-has-associated-label': 'warn',
-    'no-restricted-syntax': ['error',
-      { selector: `Literal[value=${STATUS_PALETTE_RE}]`, message: STATUS_PALETTE_MSG },
-      { selector: `TemplateElement[value.raw=${STATUS_PALETTE_RE}]`, message: STATUS_PALETTE_MSG },
-      { selector: `Literal[value=${TYPO_RE}]`, message: TYPO_MSG },
-      { selector: `TemplateElement[value.raw=${TYPO_RE}]`, message: TYPO_MSG },
-    ],
+    'no-restricted-syntax': ['error', ...BASE_RESTRICTED, ...DECO_RESTRICTED],
   },
+  overrides: [
+    /* D-120 래칫 — 장식 팔레트 검사만 면제. 파일을 토큰으로 이관하면 목록에서 지운다. */
+    { files: DECO_PALETTE_ALLOWLIST, rules: { 'no-restricted-syntax': ['error', ...BASE_RESTRICTED] } },
+  ],
 };

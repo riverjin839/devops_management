@@ -229,7 +229,7 @@ function BackupRestorePanelBody() {
         <button onClick={handleExport} disabled={exporting}
           className="flex items-center gap-2 px-4 py-2 text-sm font-semibold bg-primary hover:bg-primary/90 text-primary-foreground rounded-lg disabled:opacity-50">
           {exporting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
-          {exporting ? '내보내는 중...' : '백업 파일 다운로드'}
+          {exporting ? '내보내는 중…' : '백업 파일 다운로드'}
         </button>
       </section>
 

@@ -1,4 +1,5 @@
 import { useId, useMemo, useRef, useState } from 'react';
+import { PageHeader } from '@/components/common/PageHeader';
 import {
   Network, Plus, RefreshCw, Server, Cpu, Database, HardDrive,
   Trash2, Pencil, X, ChevronDown, AlertTriangle, Loader2, Tag, Activity, ShieldCheck,
@@ -713,15 +714,7 @@ export function InfraTopologyPage() {
 
         {/* 헤더 */}
         <div className="flex items-center justify-between gap-4 mb-6">
-          <div className="flex items-center gap-3">
-            <div className="p-2 rounded-md bg-primary/10">
-              <Network className="w-5 h-5 text-primary" />
-            </div>
-            <div>
-              <h1 className="text-xl font-bold text-foreground">인프라 토폴로지</h1>
-              <p className="text-sm text-muted-foreground mt-0.5">클러스터별 물리 노드 구성 시각화</p>
-            </div>
-          </div>
+          <PageHeader icon={Network} title="인프라 토폴로지" description="클러스터별 물리 노드 구성 시각화" className="flex-1 min-w-0" />
 
           <div className="flex items-center gap-2">
             <button
@@ -751,7 +744,7 @@ export function InfraTopologyPage() {
 
         {clustersLoading ? (
           <div className="flex items-center gap-2 text-muted-foreground text-sm mb-6">
-            <Loader2 className="w-4 h-4 animate-spin" />로딩 중...
+            <Loader2 className="w-4 h-4 animate-spin" />불러오는 중…
           </div>
         ) : clusters.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-20 text-muted-foreground">

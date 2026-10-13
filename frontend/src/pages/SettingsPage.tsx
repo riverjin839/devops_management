@@ -1,6 +1,6 @@
 import { useEffect, useId, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { Settings as SettingsIcon, Server, Pencil, Trash2, Plus, Globe, ShieldCheck, Clock, AlertTriangle, Loader2, Eye, MonitorDot, Wifi, WifiOff, HelpCircle, UserCheck, Bug, HardDrive, Database, Home, Palette, FileSearch, Wand2, Bot, Ticket, Users } from 'lucide-react';
+import { Settings as SettingsIcon, Server, Pencil, Trash2, Plus, Globe, ShieldCheck, AlertTriangle, Loader2, Eye, MonitorDot, Wifi, WifiOff, HelpCircle, UserCheck, Bug, HardDrive, Database, Home, Palette, FileSearch, Wand2, Bot, Ticket, Users } from 'lucide-react';
 import { MacCard } from '@/components/ui/MacCard';
 import { BackupRestorePanel } from '@/components/settings/BackupRestorePanel';
 import { TenantManager } from '@/components/settings/TenantManager';
@@ -32,7 +32,7 @@ import { Cluster, ManagementServer, ManagementServerCreate, ServiceDomain } from
 import { getStatusIcon, formatDateTime, formatApiError, cn } from '@/lib/utils';
 import { useHomeStore } from '@/stores/homeStore';
 import { useHomePrefs, useUpdateHomePrefs } from '@/hooks/useHomePrefs';
-import { useToast, ClusterIconPicker, useModalA11y } from '@/components/common';
+import { useToast, ClusterIconPicker, useModalA11y, EmptyState } from '@/components/common';
 import { resolveClusterIcon } from '@/lib/clusterIcons';
 import {
   buildClusterIconSvg, svgToDataUrl, suggestInitials, suggestRegionAbbr,
@@ -584,12 +584,6 @@ export function SettingsPage() {
     }
   };
 
-  const statusCounts = {
-    healthy: clusters.filter((c) => c.status === 'healthy').length,
-    warning: clusters.filter((c) => c.status === 'warning').length,
-    critical: clusters.filter((c) => c.status === 'critical').length,
-  };
-
   const serverTypeLabelMap: Record<string, string> = {
     jump_host: 'Jump Host',
     bastion: 'Bastion',
@@ -851,38 +845,6 @@ export function SettingsPage() {
           />
         )}
 
-        {/* Cluster Tab: Summary Cards */}
-        {activeTab === 'cluster' && <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
-          <div className="bg-card border border-border rounded-xl p-4">
-            <div className="flex items-center gap-2 text-muted-foreground text-sm mb-1">
-              <Server className="w-4 h-4" />
-              전체 클러스터
-            </div>
-            <p className="text-2xl font-bold">{clusters.length}</p>
-          </div>
-          <div className="bg-card border border-border rounded-xl p-4">
-            <div className="flex items-center gap-2 text-status-healthy text-sm mb-1">
-              <ShieldCheck className="w-4 h-4" />
-              Healthy
-            </div>
-            <p className="text-2xl font-bold text-status-healthy">{statusCounts.healthy}</p>
-          </div>
-          <div className="bg-card border border-border rounded-xl p-4">
-            <div className="flex items-center gap-2 text-status-warning text-sm mb-1">
-              <Clock className="w-4 h-4" />
-              Warning
-            </div>
-            <p className="text-2xl font-bold text-status-warning">{statusCounts.warning}</p>
-          </div>
-          <div className="bg-card border border-border rounded-xl p-4">
-            <div className="flex items-center gap-2 text-status-critical text-sm mb-1">
-              <Globe className="w-4 h-4" />
-              Critical
-            </div>
-            <p className="text-2xl font-bold text-status-critical">{statusCounts.critical}</p>
-          </div>
-        </div>}
-
         {/* 운영레벨 관리 — 별도 탭 */}
         {activeTab === 'operations' && (
           <div className="mb-8">
@@ -943,16 +905,12 @@ export function SettingsPage() {
           </div>
 
           {clusters.length === 0 ? (
-            <div className="text-center py-16">
-              <Server className="w-12 h-12 mx-auto mb-4 text-muted-foreground/30" />
-              <p className="text-muted-foreground mb-4">등록된 클러스터가 없습니다.</p>
-              <button
-                onClick={() => setShowAddModal(true)}
-                className="px-4 py-2 text-sm font-medium bg-primary/10 hover:bg-primary/20 text-primary border border-primary/20 rounded-lg transition-colors"
-              >
-                + 첫 번째 클러스터 등록
-              </button>
-            </div>
+            <EmptyState
+              icon={Server}
+              title="등록된 클러스터가 없습니다."
+              description="클러스터를 등록하면 점검·운영 화면에서 바로 쓸 수 있습니다."
+              action={{ label: '첫 번째 클러스터 등록', onClick: () => setShowAddModal(true) }}
+            />
           ) : (
             <div className="divide-y divide-border">
               {clusters.map((cluster) => {

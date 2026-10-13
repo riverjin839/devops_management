@@ -1,7 +1,8 @@
 import { useMemo, useState } from 'react';
+import { PageHeader } from '@/components/common/PageHeader';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import {
-  ArrowLeft, Play, Trash2, AlertCircle, History,
+  Play, Trash2, AlertCircle, History,
 } from 'lucide-react';
 import { MacCard } from '@/components/ui/MacCard';
 import { ConfirmDialog } from '@/components/common';
@@ -91,23 +92,13 @@ export function LakeServiceDetailPage() {
       <div className="max-w-[1400px] mx-auto space-y-4">
         {/* Header */}
         <div className="flex items-center gap-3 flex-wrap">
-          <Link
-            to="/lake-services"
-            aria-label="LAKE 서비스 목록으로"
-            className="inline-flex items-center gap-1.5 rounded-xl border border-border bg-card px-3 py-1.5 text-sm hover:bg-muted"
-          >
-            <ArrowLeft className="w-3.5 h-3.5" />
-            목록
-          </Link>
-          <div className="w-9 h-9 rounded-md bg-primary/10 text-primary flex items-center justify-center flex-shrink-0">
-            <ServiceTypeIcon serviceType={svc.serviceType} className="w-4 h-4" />
-          </div>
-          <div className="flex-1 min-w-[180px]">
-            <h1 className="text-lg font-semibold">{svc.name}</h1>
-            <p className="text-sm text-muted-foreground">
-              {typeInfo?.label ?? svc.serviceType} · {svc.category} · {svc.endpointUrl}
-            </p>
-          </div>
+          <PageHeader
+            back={{ to: '/lake-services', label: '목록' }}
+            title={svc.name}
+            titleExtra={<ServiceTypeIcon serviceType={svc.serviceType} className="w-4 h-4 text-muted-foreground" />}
+            description={<>{typeInfo?.label ?? svc.serviceType} · {svc.category} · {svc.endpointUrl}</>}
+            className="flex-1 min-w-[180px]"
+          />
           <HealthBadge status={svc.status} size="md" />
           <button
             type="button"
