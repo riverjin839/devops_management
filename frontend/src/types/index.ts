@@ -5376,6 +5376,8 @@ export type HomePrefsUpdate = Partial<Omit<HomePrefs, 'layoutVersion' | 'install
   installedAppsRemove?: string[];
   /** true = 사용자 지정 목록을 버리고 조직 기본값을 따름. */
   installedAppsReset?: boolean;
+  /** 순서 변경 — id 를 before 앞으로(before 없으면 맨 끝). 한 항목만 옮기는 원자적 연산. */
+  installedAppsMove?: { id: string; before?: string | null };
 };
 
 /** 조직 기본 설치 목록 — 개인화하지 않은 계정의 사이드바/상단바. */
@@ -5620,4 +5622,9 @@ export interface TenantRunSlots {
 /** Settings → 접근 제어 — viewer 의 /clusters 응답에서 망 구성 정보를 숨길지 (admin 전용 편집). */
 export interface ClusterViewerMaskSetting {
   enabled: boolean;
+}
+
+/** Settings → 접근 제어 — 클러스터 API 엔드포인트 허용 대역(CIDR·호스트명). 비어 있으면 제한 없음. */
+export interface ClusterEndpointAllowlist {
+  entries: string[];
 }

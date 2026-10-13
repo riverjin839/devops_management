@@ -1,12 +1,13 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { uiSettingsApi } from '@/services/api';
-import { ClusterLinksPayload, ClusterViewerMaskSetting, UiSettings, WorkItemBoardSettings } from '@/types';
+import { ClusterEndpointAllowlist, ClusterLinksPayload, ClusterViewerMaskSetting, UiSettings, WorkItemBoardSettings } from '@/types';
 
 export const uiSettingsKeys = {
   settings: ['uiSettings'] as const,
   clusterLinks: ['clusterLinks'] as const,
   workItemBoardSettings: ['workItemBoardSettings'] as const,
   clusterViewerMask: ['clusterViewerMask'] as const,
+  clusterEndpointAllowlist: ['clusterEndpointAllowlist'] as const,
 };
 
 export function useUiSettings() {
@@ -87,6 +88,27 @@ export function useUpdateClusterViewerMask() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: uiSettingsKeys.clusterViewerMask });
       queryClient.invalidateQueries({ queryKey: ['clusters'] });
+    },
+  });
+}
+
+/** 클러스터 API 엔드포인트 허용 대역 — 클러스터 생성·엔드포인트 변경·연결 검증에 적용. */
+export function useClusterEndpointAllowlist() {
+  return useQuery({
+    queryKey: uiSettingsKeys.clusterEndpointAllowlist,
+    queryFn: async () => {
+      const { data } = await uiSettingsApi.getClusterEndpointAllowlist();
+      return data.data;
+    },
+  });
+}
+
+export function useUpdateClusterEndpointAllowlist() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (payload: ClusterEndpointAllowlist) => uiSettingsApi.updateClusterEndpointAllowlist(payload),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: uiSettingsKeys.clusterEndpointAllowlist });
     },
   });
 }

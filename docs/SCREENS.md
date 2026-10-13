@@ -74,6 +74,12 @@ Jira Excel 가져오기)·문서 관리 그룹 전체·즐겨찾기·Your Island
 `_migrate_home_prefs_layout()` 가 행 단위 `layout_version` 으로 한 번만 변환한다(전역 sentinel
 없음 — 재실행돼도 사용자 목록을 바꾸지 않는다).
 
+**사용자 메뉴 — 개인 설정 내보내기/가져오기**: 사용자 flyout 의 "개인 설정 내보내기"는 서버 개인 설정
+(`GET /me/settings-export`, 허용 키만 — 비밀 제외)과 브라우저 개인 키(`lib/personalStorage.ts` `snapshotPersonal`)를
+한 JSON 파일로 내려받고, "개인 설정 가져오기"는 확인 창 뒤 `POST /me/settings-import` + 로컬 키 교체 후 새로 고친다
+(`components/layout/usePersonalSettingsTransfer.tsx`). "앱 추가" 창 상단 "표시 순서"에서 설치 앱을 끌어 순서를
+바꾼다(`InstalledAppOrder`, `installedAppsMove` 델타).
+
 **flyout — 호버로 열림 + 클러스터 그룹 섹션 구분**: 좌측 사이드바에서 설치된 leaf 는 개별
 직행 링크라 flyout 이 없고(설치 단위 자체가 이미 최하위 메뉴), 상단바에 설치된 `favorites`/
 `island` 특수 항목만 여전히 flyout(즐겨찾기 목록 / 내 아일랜드가 여러 개일 때의 선택지)을
@@ -189,6 +195,7 @@ hover 시 flyout 자체가 라벨을 보여주므로 이름만 뜨는 중복 툴
 - **Backend**: `POST /api/v1/auth/login` (`backend/app/routers/auth.py`) — `User` 모델(`backend/app/models/user.py`) 조회 후 `verify_password` 검증, 성공 시 `create_access_token`으로 JWT 발급 + `audit_logger.record(action="login.success"/"login.failure")` 감사 로그 기록. 실패 시 401 + 한글 상세 메시지.
 - **핵심 기능**:
   - 사용자명/비밀번호 로그인, JWT + `AuthUser` 세션을 `localStorage`(`k8s:auth:token`, `k8s:auth:user`)에 저장.
+  - **계정별 로컬 설정 분리**: 로그인 시 `lib/personalStorage.ts` `activateProfile` 이 브라우저에 깔린 개인 설정(테마·접힘·보기 모드 등)의 주인(`pep:profile-owner`)을 확인해, 다른 계정 것이면 `pep:profile:{id}` 로 보관하고 이 계정 것으로 바꿔 끼운 뒤 `/` 로 새로 고친다(공용 PC). 창·패널 폭 등 기기 설정과 로그인 토큰은 대상이 아니다. 로그아웃·세션 만료 시 탭에 기억된 플레이북 SSH 자격증명(sessionStorage)을 지운다.
   - **세션 만료 흐름(D-079)**: axios 401 → `expireAuthSession()`(보던 `pathname+search` 를 `returnTo` 로 기록 + 사유 `'expired'`) / `hooks/useSessionExpiryWatch`(AppShell 에서 JWT `exp` 를 읽어 만료 5분 전 경고 토스트, 만료 시각 지나면 401 을 기다리지 않고 같은 처리). 재로그인 성공 시 `consumeReturnTo()` 로 복귀 경로를 소비해 현재 URL 과 다르면 `navigate(returnTo)`.
   - 로그인 성공 시 홈 탭을 강제로 되돌리지 않는다 — 마지막으로 보던 탭(또는 Settings 에서 지정한 기본 홈 탭)이 로그인 후에도 유지된다.
   - 로그인 성공/실패 모두 감사 로그(`audit_logs`)에 기록.
@@ -226,6 +233,7 @@ hover 시 flyout 자체가 라벨을 보여주므로 이름만 뜨는 중복 툴
   - `스키마 점검` 탭: `SchemaHealthPanel` — 모델(`Base.metadata`)과 실제 DB 를 비교해 드리프트(missing_table / missing_column / not_null_drift / orphan_not_null_column — 모델에 없는 DB 전용 컬럼이 NOT NULL+기본값 없음이라 모든 저장이 실패하는 경우)를 표로 보여주고, **안전한 것만**(컬럼 추가 nullable · 레거시 NOT NULL 해제) 복구한다. `실행 계획 보기`(dry-run)로 실행될 SQL 을 먼저 확인할 수 있다. Alembic 없이 `create_all` 로 운영하는 구조상 오래된 DB 가 모델과 어긋나 특정 기능만 500 이 나는 문제를 서버 로그 없이 화면에서 진단·복구하기 위한 탭.
   - `접근 제어` 탭(`FeatureAccessManager`): **화면별 노출**(단순 on/off) + **세부 역할 제한(고급, WBS 전용)** 두 섹션, 단일 저장 버튼(같은 draft 를 공유해 서로 덮어쓰지 않음). "화면별 노출"은 `ScreenCatalogList`(공용 — Your Island 화면추가 피커와 그룹/검색 렌더링을 공유)로 NAV_MAP 전체 화면(자기 자신·admin 전용 화면 제외)을 그룹별로 나열하고, 각 줄 체크박스로 `feature_access[path].enabled=false` 를 토글한다. admin 은 항상 접근 가능하고 기본값은 열림. 하나를 끄면 **사이드바 메뉴 숨김 + Your Island 화면추가 목록 제외 + 이미 담긴 Island 패널 접근 차단(잠금 안내) + 직접 URL 접근 차단(홈으로 리다이렉트)** 이 동시에 적용된다 — `useNavCatalog` 의 `featureAllowed`, `IslandPanelHost`, `App.tsx` 의 `RouteAccessGate` 가 전부 같은 `canAccessFeature(feature_access, path, user)` 판정을 공유하기 때문. `feature_access` 맵의 키는 라우트 경로 자체(예: `/wbs`)라 화면별 개별 매핑이 필요 없다. 서버도 같은 규칙을 강제한다 — `backend/app/auth/feature_access.py` 의 `FEATURE_API_PATTERNS` 에 등록된 **화면 전용 API** 는 인증 라우터 공통 의존성(`enforce_feature_access`)이 403 으로 막는다(여러 화면이 공유하는 API 는 등록하지 않는다). 새 화면 전용 API 를 만들면 이 표에도 추가한다.
   - `접근 제어` 탭 하단 `ClusterViewerMaskSetting`(MacCard "클러스터 네트워크 정보 (viewer)"): 켜면 viewer(및 admin·operator 외 역할)의 `/clusters` 목록·상세 응답에서 IP·CIDR·bond IP/MAC·호스트명·AS 번호·API 엔드포인트·Prometheus/Alertmanager 주소·`node_ips`·`kubeconfig_path`·`cilium_config` 를 비우고 `network_masked=true` 를 붙이며, `GET /clusters/{id}/cilium-config` 는 kubectl 없이 `source: "masked"` 를 준다. 기본 off. `GET/PUT /api/v1/ui-settings/cluster-viewer-mask`(PUT admin 전용, 값이 바뀌면 감사 `settings.cluster_viewer_mask.update`) — 판정 `backend/app/services/cluster_network_mask.py`. 다른 화면(인프라 노드·토폴로지)의 IP 는 "화면별 노출"로 막는다.
+  - `접근 제어` 탭 하단 `ClusterEndpointAllowlistSetting`(MacCard "클러스터 API 엔드포인트 허용 대역"): 한 줄에 하나씩 CIDR 또는 호스트명(`*.k8s.local` 와일드카드). 비어 있으면 제한 없음(기본). 채우면 클러스터 생성(연결 검증 생략 시에도)·`api_endpoint` 변경이 대역 밖이면 422 로 거절되고, 연결 검증(`/verify`·`/verify/stream`)은 그 주소로 요청을 보내지 않고 api_server 실패 + 나머지 건너뜀으로 남긴다. 호스트명 엔드포인트는 DNS 로 푼 주소가 **모두** CIDR 안이어야 허용. `GET/PUT /api/v1/ui-settings/cluster-endpoint-allowlist`(PUT admin, 잘못된 항목 422, 변경 시 감사 `settings.cluster_endpoint_allowlist.update`) — 판정 `backend/app/services/cluster_endpoint_policy.py`.
   - 나머지 탭은 각각 전용 매니저 컴포넌트를 그대로 렌더(운영레벨/서비스/LAKE타입/시스템 담당자/Jira/백업/감사로그).
   - `테넌트` 탭(`TenantManager`, 멀티테넌시 1단계): 좌측 테넌트 목록(추가) + 우측 정보(이름/설명·삭제) · 멤버(operator/viewer 체크) · 클러스터 바인딩(클러스터별 `바인딩 없음`/`read`/`operate`) 카드, 카드별 저장. 바인딩이 있는 클러스터는 바인딩된 테넌트 멤버에게만 보이고(클러스터 목록·사이드바·대시보드·점검 매트릭스·이력·이벤트·알람에서 제외, 조회 API 403), 실행·변경은 `operate` 멤버만 가능 — 서버 판정 `services/cluster_access.py`, API `GET/POST/PUT/DELETE /api/v1/tenants`, `PUT /tenants/{id}/members`·`/bindings`, `GET /tenants/my-cluster-access`(`routers/tenants.py`, 관리 API 는 admin 전용·감사 로그 `tenant.*`). 상세 하단 **LLM 라우팅 (테넌트 전용)** 카드(`TenantLlmRoutingCard`, 멀티테넌시 4단계): 용도별 primary/fallback 프로필(임베딩 제외)을 지정하면 이 테넌트 멤버의 Agent 채팅이 전역 라우팅 대신 그 프로필을 쓴다(`PUT /tenants/{id}/llm-routing`, 판정 `services/llm/service.py` `effective_route`). 테넌트 목록 항목에 최근 24h LLM 호출 수(`GET /tenants/llm-usage`)가 붙는다. 정보 카드의 **동시 실행 상한**(멀티테넌시 5단계, `tenants.max_concurrent_runs`, 비우면 제한 없음)을 지정하면 이 테넌트 소유 클러스터(operate 바인딩 우선)에 대한 배치잡·운영 점검·점검 매트릭스 일괄 수행·심층 점검·효율화 적용이 그 수만큼만 동시에 돌고, 나머지는 15초 간격 재시도로 대기한다(`services/tenant_concurrency.py`). 상세의 **실행 슬롯** 카드(`TenantRunSlotsCard`, `GET /tenants/run-slots` 5초 폴링)에 실행 중·대기 중 목록이, 목록 항목에 `실행 n/상한 (대기 m)` 이 붙는다.
   - 테넌트는 업무·지식 데이터의 **공유 범위** 단위이기도 하다(멀티테넌시 3단계): 업무 항목·프로젝트·업무 가이드·운영 노트·마인드맵 폼의 `TenantScopeSelect`(선택지 `GET /tenants/mine`)로 테넌트를 고르면 그 멤버·admin 만 본다(`services/tenant_scope.py`). 데이터가 남은 테넌트는 삭제 시 409 로 테이블별 건수를 알려준다.

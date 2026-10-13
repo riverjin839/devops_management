@@ -60,6 +60,10 @@ export function AppTopBar() {
     // 델타 연산 — 서버가 행 잠금 아래에서 합쳐 다른 기기·탭의 변경을 덮지 않는다.
     updateHomePrefs.mutate(installedApps.includes(id) ? { installedAppsRemove: [id] } : { installedAppsAdd: [id] });
   };
+  const moveInstalledApp = (id: string, before: string | null) => {
+    if (!homePrefs) return;
+    updateHomePrefs.mutate({ installedAppsMove: { id, before } });
+  };
   const resetInstalledApps = () => {
     if (!homePrefs) return;
     updateHomePrefs.mutate({ installedAppsReset: true });
@@ -463,6 +467,7 @@ export function AppTopBar() {
         onToggle={toggleInstalledApp}
         customized={homePrefs?.installedAppsCustomized ?? false}
         onReset={resetInstalledApps}
+        onMove={moveInstalledApp}
       />
     </header>
   );

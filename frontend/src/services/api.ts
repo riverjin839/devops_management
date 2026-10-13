@@ -1169,6 +1169,10 @@ export const uiSettingsApi = {
     api.get<{ data: import('@/types').ClusterViewerMaskSetting }>('/ui-settings/cluster-viewer-mask'),
   updateClusterViewerMask: (data: import('@/types').ClusterViewerMaskSetting) =>
     api.put<{ data: import('@/types').ClusterViewerMaskSetting }>('/ui-settings/cluster-viewer-mask', { data }),
+  getClusterEndpointAllowlist: () =>
+    api.get<{ data: import('@/types').ClusterEndpointAllowlist }>('/ui-settings/cluster-endpoint-allowlist'),
+  updateClusterEndpointAllowlist: (data: import('@/types').ClusterEndpointAllowlist) =>
+    api.put<{ data: import('@/types').ClusterEndpointAllowlist }>('/ui-settings/cluster-endpoint-allowlist', { data }),
 };
 
 export const nodeLabelsApi = {
@@ -2816,6 +2820,10 @@ export const homePrefsApi = {
   get: () => api.get<import('@/types').HomePrefs>('/me/home-prefs'),
   update: (data: import('@/types').HomePrefsUpdate) =>
     api.put<import('@/types').HomePrefs>('/me/home-prefs', data),
+  /** 개인 설정 내보내기 — 본문은 JSON 문자열(키 자동 변환을 피하려고 감싼다). */
+  exportSettings: () => api.get<{ document: string }>('/me/settings-export'),
+  importSettings: (document: string) =>
+    api.post<{ applied: string[]; skipped: string[] }>('/me/settings-import', { document }),
   getDefaults: () => api.get<import('@/types').HomePrefsDefaults>('/ui-settings/home-prefs-defaults'),
   updateDefaults: (data: import('@/types').HomePrefsDefaults) =>
     api.put<import('@/types').HomePrefsDefaults>('/ui-settings/home-prefs-defaults', data),

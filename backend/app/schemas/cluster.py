@@ -62,7 +62,8 @@ class ClusterBase(BaseModel):
 
 
 class ClusterCreate(ClusterBase):
-    # kubeconfig YAML 원문 (직접 입력 / 파일 업로드 시 사용, DB에 저장하지 않음)
+    # kubeconfig YAML 원문 (직접 입력 / 파일 업로드 시 사용). 연결 검증에 임시 파일로 쓰고,
+    # 등록되면 clusters.kubeconfig_content 에 암호화(EncryptedText)해 저장한다 — 응답에는 싣지 않는다.
     kubeconfig_content: Optional[str] = None
     # 연결 검증 생략 여부 (네트워크 미연결 환경에서 임시 등록 시 사용)
     skip_connectivity_check: bool = False

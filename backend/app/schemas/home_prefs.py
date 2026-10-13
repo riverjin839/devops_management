@@ -55,9 +55,21 @@ class HomePrefsUpdate(BaseModel):
     installed_apps_remove: Optional[list[str]] = Field(None, max_length=MAX_INSTALLED_APPS)
     # True 면 사용자 지정 목록을 버리고 조직 기본값을 따르는 상태로 돌아간다.
     installed_apps_reset: Optional[bool] = None
+    # 순서 변경(드래그) — 한 항목만 옮기는 원자적 연산이라 다른 기기의 추가/제거와 충돌하지 않는다.
+    installed_apps_move: Optional["InstalledAppMove"] = None
+
+
+class InstalledAppMove(BaseModel):
+    """``id`` 를 ``before`` 앞으로 옮긴다. ``before`` 가 None(또는 목록에 없음)이면 맨 끝으로."""
+
+    id: str
+    before: Optional[str] = None
 
 
 class HomePrefsDefaults(BaseModel):
     """조직 기본 설치 목록 — ``installed_apps_customized`` 가 False 인 모든 계정의 실효 목록."""
 
     installed_apps: list[str] = Field(default_factory=list, max_length=MAX_INSTALLED_APPS)
+
+
+HomePrefsUpdate.model_rebuild()

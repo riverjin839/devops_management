@@ -8,7 +8,38 @@
 
 ## [Unreleased]
 
-1.50.0 이후 main 에 병합된 변경 (다음 릴리스 후보).
+1.52.0 이후 main 에 병합된 변경 (다음 릴리스 후보).
+
+## [1.52.0] - 2026-10-13
+
+### Added
+- **클러스터 API 엔드포인트 허용 대역**: Settings → 접근 제어에서 CIDR·호스트명 목록을 정하면, 그 밖의 주소로는
+  클러스터를 등록하거나 엔드포인트를 바꿀 수 없고 연결 검증도 요청을 보내지 않는다(서버가 임의 주소로 요청을 보내는
+  경로 차단). 비어 있으면 제한 없음(기본)이라 기존 동작은 그대로다. 변경은 감사 로그에 남는다.
+  Backend: `services/cluster_endpoint_policy.py`, `GET/PUT /ui-settings/cluster-endpoint-allowlist`.
+  Frontend: `ClusterEndpointAllowlistSetting`.
+
+### Changed
+- **클러스터 순서 저장 조회 1회로**: `POST /clusters/reorder` 가 클러스터마다 1건씩 조회하던 것을 한 번의 조회로
+  바꿨다. `ClusterCreate.kubeconfig_content` 주석을 실제 동작(암호화 저장)에 맞게 고쳤다.
+
+## [1.51.0] - 2026-10-13
+
+### Added
+- **개인 설정 내보내기/가져오기**: 사용자 메뉴(사이드바 하단 사람 아이콘)에서 내 설정을 파일로 받고, 새 환경·새 PC 에서
+  그 파일로 되돌린다. 홈·사이드바·즐겨찾기·터미널 색상·Jira 생성 기본값(서버)과 테마·화면별 보기 설정(브라우저)을 함께
+  옮기며, 비밀번호·자격증명은 담지 않는다. 가져오기는 감사 로그(`user.settings_import`)에 남는다. Backend:
+  `GET /me/settings-export`, `POST /me/settings-import`(`services/personal_settings.py` 허용 목록). Frontend:
+  `lib/personalSettingsFile.ts`, `usePersonalSettingsTransfer`.
+- **사이드바·상단바 앱 순서 바꾸기**: "앱 추가" 창 상단 "표시 순서"에서 설치한 앱을 끌어서(또는 키보드로) 옮긴다. 한 항목만
+  옮기는 원자적 연산(`installed_apps_move`)이라 다른 기기에서 동시에 앱을 추가·제거해도 서로 덮지 않는다.
+
+### Fixed
+- **공용 PC 에서 다른 사람의 테마·화면 설정을 물려받던 문제**: 브라우저에 저장되는 개인 설정(테마·강조색·그룹 접힘·화면별
+  보기 모드 등)이 계정 구분 없이 저장돼, 같은 브라우저에서 다른 계정으로 로그인하면 이전 사람 설정이 그대로 보였다. 이제
+  로그인할 때 다른 계정 것이 깔려 있으면 보관하고 내 것으로 바꿔 끼운다(창·패널 폭 같은 기기 설정은 그대로). 로그아웃·세션
+  만료 시 탭에 기억된 플레이북 SSH 자격증명도 지운다 — 다음 사람이 이전 사람 자격증명으로 실행하던 경로 차단.
+  Frontend: `lib/personalStorage.ts`, `authStore.setSession`.
 
 ### Fixed
 
