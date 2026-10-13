@@ -10,6 +10,14 @@
 
 1.52.0 이후 main 에 병합된 변경 (다음 릴리스 후보).
 
+### Fixed
+- **클러스터 API 엔드포인트 허용 대역 우회 경로 2건 차단**: ① 연결 검증을 생략하고 등록하면 업로드한 kubeconfig 의
+  server 주소는 검사하지 않아, 허용된 엔드포인트에 대역 밖 server 를 가진 kubeconfig 를 짝지을 수 있었다 — 이제 등록·
+  kubeconfig 경로 변경·교체 때 kubeconfig server 도 같은 대역으로 검사하고, 연결 검증은 대역 밖 server 로 인증을 시도하지
+  않는다. ② 호스트명 엔드포인트를 DNS 로 풀어 CIDR 과 비교하던 판정은 실제 접속 때 DNS 응답을 바꿔 우회할 수 있어(DNS
+  rebinding) 없앴다 — 호스트명은 허용 대역에 그 호스트명(또는 `*.도메인`)을 직접 적어야 허용된다.
+  Backend: `routers/clusters.py` `_ensure_kubeconfig_server_allowed`, `services/cluster_endpoint_policy.py`.
+
 ## [1.52.0] - 2026-10-13
 
 ### Added

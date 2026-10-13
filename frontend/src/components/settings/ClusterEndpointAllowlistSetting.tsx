@@ -42,8 +42,9 @@ export function ClusterEndpointAllowlistSetting() {
             </p>
             <p className="text-xs text-muted-foreground">
               한 줄에 하나씩 — CIDR(<code>10.0.0.0/8</code>, 단일 IP 도 가능) 또는 호스트명(<code>api.k8s.local</code>,
-              하위 도메인 전체는 <code>*.k8s.local</code>). 호스트명 엔드포인트는 DNS 로 푼 주소가 모두 CIDR 안에
-              있어야 허용됩니다. 이미 등록된 클러스터는 바뀌지 않으며, 대역 밖이면 연결 검증에서 실패로 드러납니다.
+              하위 도메인 전체는 <code>*.k8s.local</code>). 호스트명 엔드포인트는 그 호스트명을 직접 적어야 허용되며
+              CIDR 로는 허용되지 않습니다(DNS 응답을 바꿔 대역 밖으로 접속하는 우회 방지). kubeconfig 의 server 주소도
+              같은 기준으로 확인합니다. 이미 등록된 클러스터는 바뀌지 않으며, 대역 밖이면 연결 검증에서 드러납니다.
             </p>
           </div>
         </div>
