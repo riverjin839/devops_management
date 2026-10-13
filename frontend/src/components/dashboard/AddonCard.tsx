@@ -1,6 +1,6 @@
 import { Addon } from '@/types';
 import { Pencil, Play, Trash2, Crown, ClipboardList, Clock, AlertTriangle } from 'lucide-react';
-import { StatusBadge } from './StatusBadge';
+import { StatusBadge, statusToVariant } from '@/components/common/StatusBadge';
 import { formatRelativeTime } from '@/lib/utils';
 
 interface AddonCardProps {
@@ -405,7 +405,7 @@ export function AddonCard({ addon, onClick, onEdit, onDelete, onRun }: AddonCard
           {addon.icon}
         </div>
         <div className="flex items-center gap-2 shrink-0">
-          <StatusBadge status={addon.status} />
+          <StatusBadge variant={statusToVariant(addon.status)} />
           {onRun && (
             <button
               onClick={(e) => {

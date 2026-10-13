@@ -699,7 +699,7 @@ export function SettingsPage() {
               className="flex items-center gap-2 pl-1.5 pr-3 py-1.5 rounded-lg border border-border bg-secondary hover:bg-secondary/70 transition-colors"
               title="클릭하여 아이콘 변경"
             >
-              <span className="w-7 h-7 rounded-md bg-gradient-to-br from-primary to-status-info text-white flex items-center justify-center flex-shrink-0">
+              <span className="w-7 h-7 rounded-md bg-primary text-primary-foreground flex items-center justify-center flex-shrink-0">
                 {renderHomeIconPreview(uiSettings?.homeIcons?.work)}
               </span>
               <span className="text-sm text-muted-foreground">변경</span>

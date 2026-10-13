@@ -37,6 +37,13 @@ interface ClusterOverviewGridProps {
   onSelectCluster: (id: string) => void;
 }
 
+// 비정상 우선 정렬 — 운영 화면의 1차 목적은 예외 발견이다 (§12.12-3, D-119).
+const STATUS_RANK: Record<string, number> = { critical: 0, warning: 1, pending: 2, healthy: 3 };
+function sortByStatus<T extends { status: string; name: string }>(list: T[]): T[] {
+  return [...list].sort((a, b) =>
+    (STATUS_RANK[a.status] ?? 4) - (STATUS_RANK[b.status] ?? 4) || a.name.localeCompare(b.name));
+}
+
 function ClusterOverviewGrid({ clusters, addons, onSelectCluster }: ClusterOverviewGridProps) {
   if (clusters.length === 0) {
     return (
@@ -53,7 +60,7 @@ function ClusterOverviewGrid({ clusters, addons, onSelectCluster }: ClusterOverv
       className="grid gap-3"
       style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))' }}
     >
-      {clusters.map((cluster) => {
+      {sortByStatus(clusters).map((cluster) => {
         const clusterAddons = addons[cluster.id] ?? [];
         const healthy  = clusterAddons.filter((a) => a.status === 'healthy').length;
         const warning  = clusterAddons.filter((a) => a.status === 'warning').length;
@@ -61,7 +68,7 @@ function ClusterOverviewGrid({ clusters, addons, onSelectCluster }: ClusterOverv
         const total    = clusterAddons.length;
 
         const statusColor = {
-          healthy:  { border: 'border-status-healthy/40',  bg: 'bg-status-healthy/10',  text: 'text-status-healthy',  dot: 'bg-status-healthy'  },
+          healthy:  { border: 'border-border',              bg: 'bg-secondary',          text: 'text-muted-foreground', dot: 'bg-muted-foreground/40' },
           warning:  { border: 'border-status-warning/40',  bg: 'bg-status-warning/10',  text: 'text-status-warning',  dot: 'bg-status-warning'  },
           critical: { border: 'border-status-critical/40', bg: 'bg-status-critical/10', text: 'text-status-critical', dot: 'bg-status-critical' },
           pending:  { border: 'border-status-unknown/40',  bg: 'bg-status-unknown/10',  text: 'text-status-unknown',  dot: 'bg-status-unknown'  },
@@ -71,14 +78,12 @@ function ClusterOverviewGrid({ clusters, addons, onSelectCluster }: ClusterOverv
           <button
             key={cluster.id}
             onClick={() => onSelectCluster(cluster.id)}
-            className={`bg-card border rounded-xl p-4 text-left transition-all hover:-translate-y-0.5 group ${statusColor.border} hover:border-primary/40`}
+            className={`bg-card border rounded-md p-4 text-left transition-colors group ${statusColor.border} hover:border-primary/40`}
           >
             {/* Header */}
             <div className="flex items-start justify-between mb-3 min-w-0">
               <div className="flex items-center gap-2 min-w-0">
-                <div className={`w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 ${statusColor.bg}`}>
-                  <Server className={`w-4 h-4 ${statusColor.text}`} />
-                </div>
+                <Server className={`w-4 h-4 flex-shrink-0 ${statusColor.text}`} aria-hidden="true" />
                 <div className="min-w-0">
                   <p className="text-sm font-semibold truncate group-hover:text-primary transition-colors">
                     {cluster.name}
@@ -358,7 +363,7 @@ export function Dashboard() {
           {canManageMetricCards && (
             <button
               onClick={() => { setEditingMetricCard(null); setShowAddMetric(true); }}
-              className="px-2.5 py-1 text-sm font-medium bg-brand-ai/10 hover:bg-brand-ai/20 text-brand-ai border border-brand-ai/20 rounded-xl transition-colors flex items-center gap-1"
+              className="px-2.5 py-1 text-sm font-medium bg-secondary hover:bg-secondary/80 text-foreground border border-border rounded-xl transition-colors flex items-center gap-1"
             >
               <Plus className="w-3 h-3" /> 메트릭
             </button>

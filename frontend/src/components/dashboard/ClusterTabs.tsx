@@ -1,6 +1,6 @@
 import { cn } from '@/lib/utils';
 import { Cluster } from '@/types';
-import { StatusDot } from './StatusBadge';
+import { StatusDot, statusToVariant } from '@/components/common/StatusBadge';
 
 interface ClusterTabsProps {
   clusters: Cluster[];
@@ -33,7 +33,7 @@ export function ClusterTabs({ clusters, selectedId, onSelect }: ClusterTabsProps
               : 'bg-transparent border border-border text-muted-foreground hover:text-foreground hover:bg-secondary'
           )}
         >
-          <StatusDot status={cluster.status} size="sm" />
+          <StatusDot variant={statusToVariant(cluster.status)} />
           {cluster.name}
         </button>
       ))}

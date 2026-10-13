@@ -112,7 +112,7 @@ export function HealthHero({ stats, isLoading, lastCheckTime }: HealthHeroProps)
       <KpiCell className="col-span-6 lg:col-span-3" icon={AlertTriangle} label="경고" value={s.warning}
         colorClass="text-status-warning" bgClass="bg-status-warning/10" />
       <KpiCell className="col-span-6 lg:col-span-3" icon={CheckCircle} label="정상" value={s.healthy}
-        colorClass="text-status-healthy" bgClass="bg-status-healthy/10" />
+        colorClass="text-muted-foreground" bgClass="bg-muted" />
       <KpiCell className="col-span-6 lg:col-span-3" icon={Clock} label="마지막 점검"
         value={lastCheckTime ? formatRelativeTime(lastCheckTime) : '—'}
         colorClass="text-foreground" bgClass="bg-primary/10" />

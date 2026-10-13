@@ -855,6 +855,20 @@ D-117~D-134)에서 원자는 지켜지는데 화면이 "AI 가 만든 템플릿"
 | 11 | **용어는 한국어 우선 표준어** | K8S · Pod(본문) · 체크 · Settings · 할 일 · 신규 등록/업무 등록(동일 동작에 다른 라벨) · `...` · `-`(빈 값) · 토스트 어미 혼용 · 도메인 명사 없는 제목("안내"·"개요"·"정보"·"필터") · 영어 섹션 제목 | K8s · 파드 · 네임스페이스(표 헤더만 NS) · 점검 · 실행 · 저장 · 설정 · 할일 · 추가(생성)/등록(외부 반입) · 새로고침(화면)/재수집(데이터)/동기화(외부) · 삭제. 생략 `…`, 빈 값 `—`, 진행 "~ 중…", 토스트 "~됨"(예: "저장됨"·"항목 추가됨"·"Jira 가져옴", 목적격 조사 생략) |
 | 12 | **실행 버튼은 §12.9.1 `RunLogPanel` + "로그 보기" 필수**(CLAUDE.md riverjin839 요청) | 토스트·완료 요약·스피너 문구만 주는 실행/수집/점검/스냅샷 버튼 | `useRunLog` + `RunLogPanel` + `useLogPref` 토글 |
 
+**판정 기준과 예외 (Phase 2, 2026-10-14)** — 3·4·8·9번을 코드에 적용할 때의 경계선이다.
+
+- **3 정상 무채색**: 정상(healthy·ok·synced·succeeded·done·연결됨)은 `text-muted-foreground` + 회색 `CheckCircle2`, 점은 `bg-muted-foreground/40`.
+  녹색(`status-healthy`)이 남는 곳은 세 가지뿐이다. ① **방금 한 행동의 결과**(성공 토스트 아이콘, 실행 직후 성공 배너, 연결 테스트 성공 메시지)
+  ② **diff·변경량의 "추가(+)"** ③ **범례가 있는 차트 시리즈**(정상 비율 막대·불릿 차트 구간). 공용 `StatusBadge`·`StatusDot`·`ClusterSidebar` 가 이 기준을 이미 따른다.
+  업무 칸반 단계(backlog·todo·진행중·검토)는 상태가 아니라 종류라 `chart-*`, 완료는 무채색(`lib/statusColors.ts`). 목록은 비정상 우선 정렬.
+- **4 장식**: `bg-card` 와 같이 쓰는 라운딩은 `rounded-md` 하나(입력·버튼의 `rounded-xl` 은 그대로). `shadow-lg+` 는 떠 있는 레이어(대화상자·팝오버·
+  드롭다운·토스트·명령 팔레트)에만. `backdrop-blur` 는 모달 스크림(`bg-black/..`)에만 — sticky 헤더는 불투명 `bg-background`. hover-lift(`hover:-translate-y`·
+  `hover:scale`)·그라데이션(`bg-gradient-to`)·비로딩 `animate-ping` 금지. `transition-all` 대신 `transition-colors`(크기 애니메이션은 `transition-[width]` 처럼 대상 지정).
+- **8 아이브로우**: `uppercase tracking-wide*` 는 `MacCard` 헤더 내장 한 곳. 표 헤더(`th`)는 `text-xs font-medium text-muted-foreground`(대소문자 그대로).
+- **9 이모지 예외**: 사용자가 고르고 DB 에 저장하는 값은 데이터다 — `lib/clusterIcons.ts` 피커, `hooks/useOperationLevels.ts` 운영레벨 아이콘, 문서 템플릿·사용자 콘텐츠.
+  UI 크롬·상태·카테고리 표시에 쓰인 이모지와 ⚠/✓/✗ 문자 접두는 lucide 아이콘 + 상태 토큰.
+- **상태 글자색**: `text-[hsl(var(--status-*))]` 금지 — `text-status-*` 가 4.5:1 대비 토큰(`--status-*-text`)을 쓴다. 면은 `bg-status-*/N`·`border-status-*/N`.
+
 **자가 점검(PR 전)** — 변경한 화면에서 ① h1 이 하나이고 PageHeader 인가 ② KPI 행이 있는가 ③ 정상에 색이 있는가
 ④ class 에 Tailwind 색상명이 있는가 ⑤ `bg-card` 가 `rounded-md` 인가 ⑥ 카드가 한 요소만 감싸는가 ⑦ 루트가 3종 중 하나인가
 ⑧ 빈 상태가 `EmptyState` 인가 ⑨ 본문에 uppercase 가 있는가 ⑩ 이모지·⚠✓✗ 가 있는가 ⑪ K8S·Pod·체크·Settings 가 보이는가
