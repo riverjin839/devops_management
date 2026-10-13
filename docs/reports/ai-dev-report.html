@@ -2562,7 +2562,7 @@ function build() {
   main.appendChild(cover);
 
   /* 2. 요약 */
-  add("summary", "SUMMARY", "한 장 요약 — 구현은 AI, 사람은 의도·검증·하네스", h(`
+  add("summary", "SUMMARY", "한 장 요약 — AI 는 구현, 사람은 의도·검증·하네스 담당", h(`
     <div class="grid g4">
       <div class="card kpi"><div class="v num">${last ? Math.round(loc(last) / 1000) + "K" : "-"}</div><div class="l">코드 라인</div><div class="d">Python ${last ? Math.round(last.py / 1000) : 0}K + TS ${last ? Math.round(last.ts / 1000) : 0}K${first && loc(first) ? ` · 기간 시작 대비 ${(loc(last) / loc(first)).toFixed(1)}배` : ""}</div></div>
       <div class="card kpi"><div class="v num">${last ? fmt(last.tests) : "-"}</div><div class="l">백엔드 테스트</div><div class="d">월말 스냅샷의 def test_ 수</div></div>
@@ -2572,17 +2572,17 @@ function build() {
     <div class="card" style="margin-top:20px">${N.summary.map(([k, v]) => `<p style="margin:6px 0"><b class="acc">${k}</b> ${v}</p>`).join("")}</div>`));
 
   /* 3. Before / After */
-  add("how", "HOW WE WORK", "개발 방식은 어떻게 바뀌었나", h(`<div class="tablewrap"><table><thead><tr><th>영역</th><th>BEFORE</th><th class="acc">AFTER (AI 페어)</th></tr></thead><tbody>
+  add("how", "HOW WE WORK", "AI 도입 전후로 달라진 개발 방식", h(`<div class="tablewrap"><table><thead><tr><th>영역</th><th>BEFORE</th><th class="acc">AFTER (AI 페어)</th></tr></thead><tbody>
     ${N.beforeAfter.map(([a, b, c]) => `<tr><td>${a}</td><td class="muted">${b}</td><td>${c}</td></tr>`).join("")}</tbody></table></div>`));
 
   /* 4. 하네스 타임라인 */
   const keyLabels = new Set(["CLAUDE.md 도입", "스킬 + CHANGELOG", "자동 릴리스", "UX 에이전트·DESIGN.md"]);
-  add("timeline", "TIMELINE", "AI 를 잘 쓰기 위한 '하네스'가 쌓여 온 과정", h(`
+  add("timeline", "TIMELINE", "AI 활용도를 높인 '하네스' 구축 과정", h(`
     <div class="card"><div class="timeline">${D.harness.map(x => `<div class="tl ${keyLabels.has(x.label) ? "key" : ""}"><div class="d num">${x.d.slice(5)}</div><div class="dot"></div><div class="t">${x.label}</div></div>`).join("")}</div></div>
     <div class="card hl" style="margin-top:16px"><b class="acc">핵심 관찰</b> 모델이 아니라 '저장소에 남긴 규칙'이 생산성을 바꿨다. 아래 처리량 섹션에서 하네스 도입 전후 월 PR 을 직접 비교할 수 있다.</div>`));
 
   /* 5. AI 기여도 */
-  const s5 = add("share", "AI SHARE", `작성 주체 — 커밋의 ${share}% 를 AI 가 작성`, h(`
+  const s5 = add("share", "AI SHARE", `작성 주체 — AI 가 작성한 커밋 ${share}%`, h(`
     <div class="grid g2"><div class="card"><h3>월별 커밋 (병합·봇 제외)</h3><div class="chart" id="c-share"></div><p class="hint">범례를 누르면 계열을 숨긴다. 막대를 누르면 그 달 PR 목록이 열린다.</p></div>
     <div class="grid" style="align-content:start">
       <div class="card kpi hl"><div class="v num">${fmt(A.ai)} / ${fmt(A.commits.length)}</div><div class="d">AI 작성 커밋 (${share}%) — 작성자 Claude 또는 Co-Authored-By 트레일러</div></div>
@@ -2593,7 +2593,7 @@ function build() {
 
   /* 6. 처리량 */
   const prCounts = M.map(m => A.pm[m].length), peak = prCounts.indexOf(Math.max(...prCounts));
-  const s6 = add("throughput", "THROUGHPUT", `처리량 — ${L[peak] || ""} 정점 ${fmt(prCounts[peak] || 0)} PR`, h(`
+  const s6 = add("throughput", "THROUGHPUT", `처리량 — ${L[peak] || ""} ${fmt(prCounts[peak] || 0)} PR 정점 후 안정화 구간`, h(`
     <div class="grid g2"><div class="card"><h3>월별 병합 PR <span class="hint">(막대 클릭 → PR 목록)</span></h3><div class="chart" id="c-pr"></div></div>
     <div class="card"><h3>작업일당 PR</h3><div class="chart" id="c-ppd"></div></div></div>`));
   chart($("#c-pr", s6), c => bars(c, { labels: L, onClick: i => openDrawer(M[i]),
@@ -2620,9 +2620,9 @@ function build() {
   const firstTouch = k => { const c = D.commits.find(x => hasMod(x, k)); return c ? c[0] : null; };
   const heat = MODS.map(m => M.map(mm => A.cm[mm].filter(c => hasMod(c, m.key)).length));
   const hmax = Math.max(1, ...heat.flat());
-  /* 7-0. 무엇을 만들었나 — 기능 지도 */
+  /* 7-0. 구현 기능 지도 */
   const INV = D.inventory || {}, stripPage = n => n.replace(/Page$/, "");
-  add("features", "WHAT WE BUILT", `무엇을 만들었나 — 화면 ${last ? last.pages : 0} · API 라우터 ${last ? last.routers : 0} · 모듈 ${MODS.length}`, h(`
+  add("features", "WHAT WE BUILT", `구현 기능 지도 — 화면 ${last ? last.pages : 0} · API 라우터 ${last ? last.routers : 0} · 모듈 ${MODS.length}`, h(`
     <div class="mods">${MODS.map(m => {
       const inv = INV[m.key] || { pages: [], routers: [] }, pg = inv.pages.map(stripPage);
       return `<div class="card feat"><div class="top"><span class="name">${m.label}</span><span class="hint num">화면 ${inv.pages.length} · API ${inv.routers.length}</span></div>
@@ -2631,12 +2631,12 @@ function build() {
     <p class="note">화면 = frontend/src/pages/*.tsx, API = backend/app/routers/*.py (현재 ${D.meta.head} 기준, 모듈 경로 규칙으로 분류). 기능 문구는 narrative.json 의 modules[].features.</p>`));
 
   /* 7-0b. 실무 요청 사례 */
-  add("cases", "FROM THE FIELD", "기존 도구에 없던 기능 — 실무에서 직접 요청해 만든 사례", h(`
+  add("cases", "FROM THE FIELD", "실무 요청으로 만든, 기존 도구에 없던 기능 사례", h(`
     <div class="cases">${(N.cases || []).map((c, i) => `<div class="card case ${i === 0 ? "hl" : ""}"><div class="top"><b>${c.title}</b><span class="chip acc num">v${c.ver}</span></div>
       <p class="pr"><span class="tag">문제</span>${c.problem}</p><p class="bt"><span class="tag acc">만든 것</span>${c.built}</p></div>`).join("")}</div>
     <p class="note">${N.cases_note || ""}</p>`));
 
-  const s71 = add("modules", "MODULES", "모듈별로 무엇이 바뀌었나", h(`
+  const s71 = add("modules", "MODULES", "모듈별 월간 변화량", h(`
     <div class="card"><h3>모듈 × 월 커밋 히트맵 <span class="hint">(칸을 누르면 그 달·그 모듈의 PR 목록)</span></h3>
       <div class="tablewrap"><table class="heat"><thead><tr><th></th>${L.map(l => `<th class="num">${l}</th>`).join("")}<th>합계</th></tr></thead><tbody>
       ${MODS.map((m, r) => `<tr><th class="rowh">${m.label}</th>${heat[r].map((v, i) => `<td class="${v ? "" : "zero"}" style="--a:${v ? (0.12 + 0.88 * v / hmax).toFixed(2) : 0}" data-m="${M[i]}" data-k="${m.key}" title="${m.label} · ${L[i]} · ${v}커밋">${v || ""}</td>`).join("")}<th class="num">${heat[r].reduce((a, b) => a + b, 0)}</th></tr>`).join("")}
@@ -2658,7 +2658,7 @@ function build() {
   /* 7-2. 도입 기술 타임라인 */
   const techIn = TECH.filter(t => t.date.slice(0, 7) >= S.from && t.date.slice(0, 7) <= S.to).sort((a, b) => a.date.localeCompare(b.date));
   const depsIn = D.deps.filter(x => x.added.slice(0, 7) >= S.from && x.added.slice(0, 7) <= S.to);
-  const s72 = add("tech", "TECH STACK", `어떤 기술이 언제 들어왔나 — 주요 기술 ${techIn.length}종`, h(`
+  const s72 = add("tech", "TECH STACK", `시기별 도입 기술 — 주요 기술 ${techIn.length}종`, h(`
     <div class="card"><div class="filters noprint" role="group" aria-label="모듈 필터"><button type="button" class="on" data-f="">전체</button>${MODS.filter(m => techIn.some(t => t.module === m.key)).map(m => `<button type="button" data-f="${m.key}">${m.label}</button>`).join("")}</div>
       <div id="tl-list"></div>
       <details class="deps" style="margin-top:14px"><summary>기간 내 추가된 의존성 전체 ${depsIn.length}개 (현재 사용 ${depsIn.filter(x => x.present).length}개, 이후 제거 ${depsIn.filter(x => !x.present).length}개)</summary>
@@ -2684,7 +2684,7 @@ function build() {
   });
   const b0 = eraStats[0], idx = (v, b) => b ? Math.round(v / b * 100) : 0;
   const monthOpts = sel => D.months.map(m => `<option ${m === sel ? "selected" : ""}>${m}</option>`).join("");
-  const s8 = add("models", "MODEL EVOLUTION", "모델 세대가 바뀔 때마다 기능 구현 규모가 커졌다", h(`
+  const s8 = add("models", "MODEL EVOLUTION", "모델 세대 변경시마다 커진 기능 구현 규모", h(`
     <div class="card noprint"><div class="era-edit">${S.eras.map((e, i) => `<span><b>${e.key}</b><select data-era="${i}" data-k="from" aria-label="${e.key} 시작">${monthOpts(e.from)}</select>~<select data-era="${i}" data-k="to" aria-label="${e.key} 끝">${monthOpts(e.to)}</select></span>`).join("")}</div>
       <p class="hint" style="margin:0">세대 구간을 바꾸면 지수가 즉시 다시 계산된다. 기본값은 PPT 리포트와 같은 구간이다.</p></div>
     <div class="grid g2" style="margin-top:16px"><div class="card"><h3>세대별 성장 지수 (첫 세대 = 100)</h3><div class="chart" id="c-era"></div></div>
@@ -2738,7 +2738,7 @@ function build() {
   const ev = k => k && EV[k] ? `<span class="ev num" title="data.json 에서 계산">${EV[k]}</span>` : "";
 
   /* 9. 품질 */
-  const s9 = add("quality", "QUALITY", "품질 — 버그 급증을 테스트·게이트로 되잡았다", h(`
+  const s9 = add("quality", "QUALITY", "품질 — 테스트·게이트로 되잡은 버그 급증", h(`
     <div class="grid g2e"><div class="card"><h3>백엔드 테스트 함수 (월말)</h3><div class="chart" id="c-test"></div></div>
     <div class="card"><h3>월별 feat vs fix 커밋</h3><div class="chart" id="c-ff"></div><p class="hint" id="ff-note"></p></div></div>`));
   chart($("#c-test", s9), c => bars(c, { labels: A.snaps.map(s => mLabel(s.m)), series: [{ name: "테스트", color: C.acc, values: A.snaps.map(s => s.tests) }] }));
@@ -2750,7 +2750,7 @@ function build() {
   /* 9-1. 일반 개발 대비 장단점 */
   const CMP = N.compare || { pros: [], cons: [] };
   const cmpLi = ([t, d, k]) => `<li><b>${t}</b><span class="d">${d}</span><div style="margin-top:4px">${k ? ev(k) : '<span class="ev muted">정성 평가</span>'}</div></li>`;
-  add("vs-dev", "AI vs 일반 개발", "일반 개발자 개발과 비교하면 — 장점과 단점", h(`<div class="pb">
+  add("vs-dev", "AI vs 일반 개발", "일반 개발 대비 AI 개발의 장점과 단점", h(`<div class="pb">
     <div class="card hl"><h3 class="acc">장점</h3><ul>${CMP.pros.map(cmpLi).join("")}</ul></div>
     <div class="card"><h3>단점</h3><ul>${CMP.cons.map(cmpLi).join("")}</ul></div></div>
     <p class="note">근거 칩은 data.json 에서 계산한 이 저장소 실측치, '정성 평가'는 개발자 본인의 판단이다. 같은 기능을 일반 개발팀이 만든 대조군은 없으므로 비교는 경험·업계 통념 기준이다.</p>`));
@@ -2758,7 +2758,7 @@ function build() {
   /* 9-2. 비용 비교 (입력 조정 가능) */
   const CO = { ...(N.cost || {}), ...S.cost };
   const costMonths = M.length, ksloc = loc(last) / 1000;
-  const s92 = add("cost", "COST", "비용 비교 — AI 와 1인 개발 vs 일반 개발 추정", h(`
+  const s92 = add("cost", "COST", "비용 비교 — AI + 1인 개발 vs 일반 개발 추정", h(`
     <div class="card noprint"><div class="calc">${[["dayRate", "일평균임금(원)"], ["workDays", "월 근무일"], ["humanFte", "투입 인원(FTE)"], ["aiMonthlyUsd", "AI 구독(USD/월)"], ["fx", "환율(원/USD)"], ["locPerDay", "LoC/인일"], ["daysPerPage", "화면당 인일"], ["daysPerRouter", "라우터당 인일"], ["daysInfra", "배포·CI 인일"]]
       .map(([k, l]) => `<label>${l}<input type="number" min="0" step="any" data-k="${k}" value="${CO[k]}"></label>`).join("")}</div>
       <p class="hint" style="margin:8px 0 0">값을 바꾸면 아래 막대·배수가 즉시 다시 계산된다.</p></div>
@@ -2791,7 +2791,7 @@ function build() {
     const ai = costMonths * c.aiMonthlyUsd * c.fx, senior = featDays * c.seniorRate;
     return { ai, real: rows[0].v, avgDev: rows[1].v, senior, featDays, months: featDays / (c.seniorTeam * c.workDays) };
   };
-  const s93 = add("cost-senior", "COST · 2", "총 사용비용 vs 고급 인력 개발비 — 같은 결과물을 고급 인력이 만들었다면", h(`
+  const s93 = add("cost-senior", "COST · 2", "총 사용비용 vs 같은 결과물의 고급 인력 개발비", h(`
     <div class="card noprint"><div class="calc">${[["seniorRate", "고급 인력 일단가(원)"], ["seniorTeam", "고급 인력 팀 인원(명)"], ["aiMonthlyUsd", "AI 구독(USD/월)"]]
       .map(([k, l]) => `<label>${l}<input type="number" min="0" step="any" data-k="${k}" value="${CO[k]}"></label>`).join("")}</div>
       <p class="hint" style="margin:8px 0 0">일단가·인원·구독료를 바꾸면 즉시 다시 계산된다. 공수(인일)는 앞 장의 기능 기반 추정과 같다.</p></div>
@@ -2824,14 +2824,14 @@ function build() {
     renderChart(costChart); renderChart(seniorChart); } }));
 
   /* 10. 성숙도 */
-  add("maturity", "MATURITY", "AI 활용 성숙도 — 4단계로 진화", h(`<div class="steps">${N.maturity.map((st, i) => {
+  add("maturity", "MATURITY", "4단계로 진화한 AI 활용 성숙도", h(`<div class="steps">${N.maturity.map((st, i) => {
     const ms = D.months.filter(m => m >= st.from && m <= st.to), avg = Math.round(D.prs.filter(p => ms.includes(p.d.slice(0, 7))).length / (ms.length || 1));
     const cur = i === N.maturity.length - 1;
     return `<div class="card step ${cur ? "hl" : ""}"><div class="n num">${st.n}</div><div class="t">${st.title}</div><div class="p">${mLabel(st.from)}~${mLabel(st.to)}</div><div class="muted" style="font-size:14px">${st.desc}</div><div class="m ${cur ? "acc" : ""}">PR <span class="num">${avg}</span>건/월</div></div>`; }).join("")}</div>
     <p class="note">PR/월 = 해당 구간 월평균 병합 PR (기간 필터와 무관하게 단계 구간 기준)</p>`));
 
   /* 11. 상용화 진척도 (조정 가능) */
-  const s11 = add("readiness", "READINESS", `상용화까지 얼마나 왔나 — 종합 <span data-overall>${overall}%</span>`, h(`
+  const s11 = add("readiness", "READINESS", `상용화 진척도 — 종합 <span data-overall>${overall}%</span>`, h(`
     <div class="grid g2"><div class="card"><h3>영역별 진척도 <span class="hint">(슬라이더로 가정 조정 → 종합 즉시 재계산)</span></h3><div id="rd"></div>
       <div class="noprint" style="display:flex;gap:8px;margin-top:12px"><button type="button" id="rd-target">목표 달성 시 보기</button><button type="button" id="rd-reset">평가값으로 되돌리기</button></div></div>
     <div class="card"><h3>평가 근거</h3>${N.readiness.map(r => `<p style="margin:6px 0;font-size:14px"><b class="acc">${r.area}</b> <span class="muted">${r.evidence}</span></p>`).join("")}</div></div>
@@ -2848,7 +2848,7 @@ function build() {
   $("#rd-reset", s11).onclick = () => setScores(N.readiness.map(r => r.score));
 
   /* 12. 남은 과제 */
-  add("next", "NEXT", "남은 과제 — 상용 전환을 막는 5가지", h(`<div class="tablewrap"><table><thead><tr><th>우선</th><th>과제</th><th>내용</th><th>목표 지표</th></tr></thead><tbody>
+  add("next", "NEXT", "상용 전환을 막는 남은 과제 5가지", h(`<div class="tablewrap"><table><thead><tr><th>우선</th><th>과제</th><th>내용</th><th>목표 지표</th></tr></thead><tbody>
     ${N.tasks.map(t => { const r = N.readiness.find(x => x.area === t.area); return `<tr><td><span class="chip ${t.p === "P0" ? "acc" : ""}">${t.p}</span></td><td><b>${t.title}</b></td><td class="muted">${t.desc}</td><td class="num">${t.area} ${r.score} → <b class="acc">${r.target}</b></td></tr>`; }).join("")}
     </tbody></table></div><p class="note">목표를 모두 달성하면 종합 ${overall}% → ${Math.round(N.readiness.reduce((a, r) => a + r.target, 0) / N.readiness.length)}% (진척도 섹션의 '목표 달성 시 보기'와 같다)</p>`));
 
@@ -2856,7 +2856,7 @@ function build() {
   const RM = N.roadmap_next || { quarters: [], lanes: [] };
   const rdBy = a => N.readiness.find(r => r.area === a);
   const target = Math.round(N.readiness.reduce((a, r) => a + r.target, 0) / N.readiness.length);
-  add("roadmap-next", "ROADMAP", `향후 남은 과제 — 제품 상용화와 AI 개발 방식, 두 갈래로`, h(`
+  add("roadmap-next", "ROADMAP", `향후 로드맵 — 제품 상용화와 AI 개발 방식의 두 갈래`, h(`
     <div class="rm"><div></div>${RM.quarters.map(q => `<div class="qh num">${q}</div>`).join("")}
     ${RM.lanes.map(l => `<div class="lh">${l.label}</div>${RM.quarters.map(q => `<div class="cell lane-${l.key}">${l.items.filter(it => it.q === q).map(it => {
       const r = it.area ? rdBy(it.area) : null;
@@ -2864,28 +2864,28 @@ function build() {
     <div class="card hl" style="margin-top:16px"><b class="acc">완료 시</b> 상용화 종합 진척도 <b class="num">${overall}% → ${target}%</b> (상용 베타 수준). AI 개발 방식 레인은 이 숫자를 지키는 장치다 — 측정·게이트·라우팅이 없으면 속도가 품질로 되돌아온다.</div>`));
 
   /* 12-3. 모델 발전 방향과 활용법 */
-  add("ai-trends", "AI CODING · 1", "모델은 어디로 가고, 우리는 어떻게 써야 하나", h(`<div class="tablewrap"><table><thead><tr><th>모델 발전 방향</th><th class="acc">그래서 이렇게 쓴다</th><th>이 저장소 근거</th></tr></thead><tbody>
+  add("ai-trends", "AI CODING · 1", "모델 발전 방향에 맞춘 AI 활용법", h(`<div class="tablewrap"><table><thead><tr><th>모델 발전 방향</th><th class="acc">그래서 이렇게 쓴다</th><th>이 저장소 근거</th></tr></thead><tbody>
     ${(N.ai_trends || []).map(t => `<tr><td>${t.trend}<div class="hint" style="font-weight:400">${t.detail}</div></td><td>${t.practice}</td><td class="acc-cell" style="font-weight:600">${EV[t.evidence] || ""}</td></tr>`).join("")}
     </tbody></table></div><p class="note">발전 방향은 일반적인 추세 수준으로만 적었다 — 특정 미래 모델의 성능·출시를 가정하지 않는다. 근거 칸은 data.json 에서 계산해 매월 갱신된다.</p>`));
 
   /* 12-4. AI 코딩 운영 원칙 */
   const PB = N.playbook || { do: [], dont: [] };
-  add("ai-playbook", "AI CODING · 2", "AI 코딩을 가장 잘 쓰는 법 — 이번 8개월이 남긴 원칙", h(`<div class="pb">
+  add("ai-playbook", "AI CODING · 2", "8개월간 정립한 AI 코딩 운영 원칙", h(`<div class="pb">
     <div class="card hl"><h3 class="acc">DO</h3><ul>${PB.do.map(([t, d, k]) => `<li><b>${t}</b><span class="d">${d}</span>${k ? `<div style="margin-top:4px">${ev(k)}</div>` : ""}</li>`).join("")}</ul></div>
     <div class="card"><h3>DON'T</h3><ul>${PB.dont.map(([t, d, k]) => `<li><b>${t}</b><span class="d">${d}</span>${k ? `<div style="margin-top:4px">${ev(k)}</div>` : ""}</li>`).join("")}</ul></div>
   </div>`));
 
   /* 13. 복기 */
-  add("retro", "RETROSPECTIVE", "과거로 돌아간다면 — 무엇을 다르게 했어야 했나", h(`<div class="tablewrap"><table><thead><tr><th>영역</th><th>실제로 한 것</th><th>치른 대가</th><th class="acc">다시 한다면</th></tr></thead><tbody>
+  add("retro", "RETROSPECTIVE", "과거로 돌아간다면 다르게 했을 선택", h(`<div class="tablewrap"><table><thead><tr><th>영역</th><th>실제로 한 것</th><th>치른 대가</th><th class="acc">다시 한다면</th></tr></thead><tbody>
     ${N.retro.map(([a, b, c, d]) => `<tr><td>${a}</td><td class="muted">${b}</td><td><b>${c}</b></td><td class="acc-cell">${d}</td></tr>`).join("")}</tbody></table></div>`));
 
   /* 14. 다시 짠다면 */
-  add("restart", "IF WE STARTED OVER", "다시 짠다면 — 기능보다 '틀'을 먼저 깐다", h(`<div class="steps">${N.roadmap.map(([w, t, d], i) => `<div class="card step ${i === 0 ? "hl" : ""}"><div class="p acc" style="font-weight:700">${w}</div><div class="t">${t}</div><div class="muted" style="font-size:14px;margin-top:8px">${d}</div></div>`).join("")}</div>
+  add("restart", "IF WE STARTED OVER", "다시 시작한다면 — 기능보다 '틀'이 먼저인 순서", h(`<div class="steps">${N.roadmap.map(([w, t, d], i) => `<div class="card step ${i === 0 ? "hl" : ""}"><div class="p acc" style="font-weight:700">${w}</div><div class="t">${t}</div><div class="muted" style="font-size:14px;margin-top:8px">${d}</div></div>`).join("")}</div>
     <div class="grid g2e" style="margin-top:16px"><div class="card"><b class="muted">실제 순서</b><p style="margin:6px 0 0">기능 → 컨텍스트 → 게이트 → 안정화 → 비기능(미완)</p></div>
     <div class="card hl"><b class="acc">기대 효과 (추정)</b><p style="margin:6px 0 0">남은 과제 5개 중 4개를 먼저 깔고 기능을 얹었을 것. fix 급증과 UX 재작업이 가장 크게 줄었을 구간이다.</p></div></div>`));
 
   /* 15. 교훈 */
-  add("lessons", "LESSONS", "얻은 3가지 — AI 는 속도를 주고, 하네스는 방향을 준다", h(`<div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(240px,1fr))">${N.lessons.map(([t, d], i) => `<div class="card"><div class="step"><div class="n num" style="background:hsl(var(--primary));color:hsl(var(--primary-foreground))">${i + 1}</div></div><div style="font-size:18px;font-weight:800">${t}</div><p class="muted">${d}</p></div>`).join("")}</div>`));
+  add("lessons", "LESSONS", "8개월간 얻은 교훈 3가지 — AI 는 속도, 하네스는 방향", h(`<div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(240px,1fr))">${N.lessons.map(([t, d], i) => `<div class="card"><div class="step"><div class="n num" style="background:hsl(var(--primary));color:hsl(var(--primary-foreground))">${i + 1}</div></div><div style="font-size:18px;font-weight:800">${t}</div><p class="muted">${d}</p></div>`).join("")}</div>`));
 
   charts.forEach(renderChart);
   if (document.body.classList.contains("present")) show(cur, 0);
