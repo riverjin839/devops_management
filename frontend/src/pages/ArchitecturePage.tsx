@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { GitBranch } from 'lucide-react';
 import { useClusters } from '@/hooks/useCluster';
 import { usePepArchitectureGraph, useClusterAddonGraph } from '@/hooks/useArchitecture';
-import { ClusterSidebar, EmptyState, SelectClusterEmptyState, LoadingState, PageHeader } from '@/components/common';
+import { ClusterSidebar, EmptyState, SelectClusterEmptyState, LoadingState, PageHeader, PageShell } from '@/components/common';
 import { MacCard } from '@/components/ui/MacCard';
 import { FlowDiagram, STATUS_COLOR } from '@/components/architecture';
 import { statusToVariant, type StatusVariant } from '@/components/common/StatusBadge';
@@ -27,64 +27,61 @@ export function ArchitecturePage() {
   );
 
   return (
-    <div className="app-min-h-screen bg-background p-5">
-      <div className="flex gap-4 max-w-[1600px] mx-auto">
-        {tab === 'cluster' && (
-          <div className="sticky top-4 self-start">
-            <ClusterSidebar
-              clusters={clusters}
-              selectedId={clusterId || null}
-              onSelect={(id) => setClusterId(id ?? '')}
-              iconOnly
-            />
-          </div>
-        )}
+    <div className="app-min-h-screen bg-background flex">
+      {tab === 'cluster' && (
+        <ClusterSidebar
+          clusters={clusters}
+          selectedId={clusterId || null}
+          onSelect={(id) => setClusterId(id ?? '')}
+          iconOnly
+        />
+      )}
 
-        <div className="flex-1 min-w-0 space-y-4">
-          <PageHeader
-            icon={GitBranch}
-            title="서비스 모듈 관계도"
-            description="PEP 아키텍처와 클러스터 애드온 관계를 실시간 상태와 함께 흐름으로 보여 줍니다."
-          />
+      {/* D-123: 클러스터 탭에서 ClusterSidebar 가 붙으므로 console 밀도 — PEP 탭은 사이드바 없음 → pl-3 */}
+      <PageShell density="console" sidebar={tab === 'cluster'} className="space-y-4">
+        <PageHeader
+          icon={GitBranch}
+          title="서비스 모듈 관계도"
+          description="PEP 아키텍처와 클러스터 애드온 관계를 실시간 상태와 함께 흐름으로 보여 줍니다."
+        />
 
-          <div className="flex items-center rounded-lg border border-border overflow-hidden text-sm w-fit">
-            <TabSeg active={tab === 'pep'} onClick={() => setTab('pep')} label="PEP 아키텍처" />
-            <TabSeg active={tab === 'cluster'} onClick={() => setTab('cluster')} label="클러스터 토폴로지" border />
-          </div>
-
-          {tab === 'pep' ? (
-            <MacCard title="PEP 서비스 모듈 흐름" bodyPadding="p-4">
-              {pep.isLoading ? (
-                <LoadingState />
-              ) : (
-                <FlowDiagram nodes={pep.nodes} edges={pep.edges} width={pep.width} height={pep.height} />
-              )}
-              <Legend />
-            </MacCard>
-          ) : (
-            <MacCard
-              title={selectedCluster ? `${selectedCluster.name} 애드온 관계` : '클러스터 애드온 관계'}
-              bodyPadding="p-4"
-            >
-              {!clusterId ? (
-                <SelectClusterEmptyState />
-              ) : clusterGraph.isLoading ? (
-                <LoadingState />
-              ) : clusterGraph.addons.length === 0 ? (
-                <EmptyState title="등록된 애드온이 없습니다." description="클러스터 관리에서 애드온을 등록하면 관계도가 그려집니다." />
-              ) : (
-                <FlowDiagram
-                  nodes={clusterGraph.nodes}
-                  edges={clusterGraph.edges}
-                  width={clusterGraph.width}
-                  height={clusterGraph.height}
-                />
-              )}
-              <Legend />
-            </MacCard>
-          )}
+        <div className="flex items-center rounded-lg border border-border overflow-hidden text-sm w-fit">
+          <TabSeg active={tab === 'pep'} onClick={() => setTab('pep')} label="PEP 아키텍처" />
+          <TabSeg active={tab === 'cluster'} onClick={() => setTab('cluster')} label="클러스터 토폴로지" border />
         </div>
-      </div>
+
+        {tab === 'pep' ? (
+          <MacCard title="PEP 서비스 모듈 흐름" bodyPadding="p-4">
+            {pep.isLoading ? (
+              <LoadingState />
+            ) : (
+              <FlowDiagram nodes={pep.nodes} edges={pep.edges} width={pep.width} height={pep.height} />
+            )}
+            <Legend />
+          </MacCard>
+        ) : (
+          <MacCard
+            title={selectedCluster ? `${selectedCluster.name} 애드온 관계` : '클러스터 애드온 관계'}
+            bodyPadding="p-4"
+          >
+            {!clusterId ? (
+              <SelectClusterEmptyState />
+            ) : clusterGraph.isLoading ? (
+              <LoadingState />
+            ) : clusterGraph.addons.length === 0 ? (
+              <EmptyState title="등록된 애드온이 없습니다." description="클러스터 관리에서 애드온을 등록하면 관계도가 그려집니다." />
+            ) : (
+              <FlowDiagram
+                nodes={clusterGraph.nodes}
+                edges={clusterGraph.edges}
+                width={clusterGraph.width}
+                height={clusterGraph.height}
+              />
+            )}
+            <Legend />
+          </MacCard>
+        )}
+      </PageShell>
     </div>
   );
 }

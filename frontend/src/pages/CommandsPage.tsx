@@ -5,7 +5,7 @@ import {
 } from 'lucide-react';
 
 import { MacCard } from '@/components/ui/MacCard';
-import { ConfirmDialog, LoadingState } from '@/components/common';
+import { ConfirmDialog, LoadingState, PageShell } from '@/components/common';
 import { PageHeader } from '@/components/common/PageHeader';
 import { CommandsTable } from '@/components/commands/CommandsTable';
 import {
@@ -56,7 +56,7 @@ export function CommandsPage() {
   }, [entries]);
 
   return (
-    <main className="mx-auto p-5 space-y-4 max-w-[1400px]">
+    <PageShell density="hub" className="space-y-4">
       <PageHeader
         icon={Terminal}
         title="주요 명령어 / 파라미터 모음"
@@ -79,44 +79,44 @@ export function CommandsPage() {
         }
       />
 
-      {/* 필터 / 검색 바 */}
-      <MacCard bodyPadding="p-3">
-        <div className="flex items-center gap-2 flex-wrap">
-          <div className="relative flex-1 min-w-[220px]">
-            <Search className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
-            <input
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="명령어 / 의미 / 주의사항 / 태그 검색"
-              className="w-full pl-8 pr-3 py-1.5 text-sm bg-background border border-border rounded-xl"
-            />
+      {/* 리스트 — D-122: 필터 바를 별도 툴바 카드 대신 목록 카드의 헤더 바로 올림 */}
+      <MacCard
+        bodyPadding="p-0"
+        actions={
+          <div className="flex items-center gap-2 flex-wrap w-full">
+            <div className="relative flex-1 min-w-[220px]">
+              <Search className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
+              <input
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="명령어 / 의미 / 주의사항 / 태그 검색"
+                className="w-full pl-8 pr-3 py-1.5 text-sm bg-background border border-border rounded-xl"
+              />
+            </div>
+            <select
+              value={filterCategory}
+              onChange={(e) => setFilterCategory(e.target.value)}
+              className="px-2 py-1.5 text-sm bg-background border border-border rounded-xl"
+            >
+              <option value="">모든 카테고리</option>
+              {categories.map((c) => <option key={c} value={c}>{c}</option>)}
+            </select>
+            <select
+              value={filterImportance}
+              onChange={(e) => setFilterImportance(e.target.value as CommandImportance | '')}
+              className="px-2 py-1.5 text-sm bg-background border border-border rounded-xl"
+            >
+              <option value="">모든 중요도</option>
+              {IMPORTANCE_OPTIONS.map((v) => (
+                <option key={v} value={v}>{IMPORTANCE_META[v].label}</option>
+              ))}
+            </select>
+            <span className="text-xs text-muted-foreground tabular-nums ml-auto">
+              {entries.length}건
+            </span>
           </div>
-          <select
-            value={filterCategory}
-            onChange={(e) => setFilterCategory(e.target.value)}
-            className="px-2 py-1.5 text-sm bg-background border border-border rounded-xl"
-          >
-            <option value="">모든 카테고리</option>
-            {categories.map((c) => <option key={c} value={c}>{c}</option>)}
-          </select>
-          <select
-            value={filterImportance}
-            onChange={(e) => setFilterImportance(e.target.value as CommandImportance | '')}
-            className="px-2 py-1.5 text-sm bg-background border border-border rounded-xl"
-          >
-            <option value="">모든 중요도</option>
-            {IMPORTANCE_OPTIONS.map((v) => (
-              <option key={v} value={v}>{IMPORTANCE_META[v].label}</option>
-            ))}
-          </select>
-          <span className="text-xs text-muted-foreground tabular-nums ml-auto">
-            {entries.length}건
-          </span>
-        </div>
-      </MacCard>
-
-      {/* 리스트 */}
-      <MacCard bodyPadding="p-0">
+        }
+      >
         {isLoading ? (
           <LoadingState compact />
         ) : (
@@ -145,6 +145,6 @@ export function CommandsPage() {
           onCancel={() => setConfirmDelete(null)}
         />
       )}
-    </main>
+    </PageShell>
   );
 }

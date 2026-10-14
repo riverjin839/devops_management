@@ -8,7 +8,7 @@ import {
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { workGuidesApi, workflowsApi } from '@/services/api';
 import type { WorkGuide } from '@/types';
-import { useToast, SidePane, EmptyState, LoadingState } from '@/components/common';
+import { useToast, SidePane, EmptyState, LoadingState, PageShell } from '@/components/common';
 import { PageHeader } from '@/components/common/PageHeader';
 import { formatApiError } from '@/lib/utils';
 import { GuideForm, GuidePageView } from '@/components/work-guides';
@@ -432,7 +432,7 @@ export function WorkGuidePage() {
       <main className="flex-1 flex flex-col min-w-0 overflow-hidden">
         {isNewMode ? (
           <div className="flex-1 overflow-y-auto">
-            <div className="max-w-4xl mx-auto px-10 py-8">
+            <PageShell density="doc" as="div">
               <PageHeader
                 title="새 페이지"
                 description="제목과 본문을 입력하고 저장하면 트리에 추가됩니다."
@@ -448,11 +448,11 @@ export function WorkGuidePage() {
                   else navigate('/work-guides');
                 }}
               />
-            </div>
+            </PageShell>
           </div>
         ) : isEditMode && selectedGuide ? (
           <div className="flex-1 overflow-y-auto">
-            <div className="max-w-4xl mx-auto px-10 py-8">
+            <PageShell density="doc" as="div">
               <PageHeader
                 title="페이지 수정"
                 description="필요한 항목을 수정한 뒤 저장 버튼을 누르세요."
@@ -467,7 +467,7 @@ export function WorkGuidePage() {
                   else formCancelTarget();
                 }}
               />
-            </div>
+            </PageShell>
           </div>
         ) : isReadMode && selectedGuide ? (
           <GuidePageView

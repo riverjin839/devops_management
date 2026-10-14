@@ -4,7 +4,7 @@ import {
   Rocket, Plus, Target, Pencil, Trash2, X, Loader2, CheckCircle2,
   ArrowRightLeft, CalendarDays, Users, Clock,
 } from 'lucide-react';
-import { ConfirmDialog, useToast, useModalA11y, PageHeader, EmptyState, LoadingState } from '@/components/common';
+import { ConfirmDialog, useToast, useModalA11y, PageHeader, PageShell, EmptyState, LoadingState } from '@/components/common';
 import { formatApiError } from '@/lib/utils';
 import {
   useSprints, useCreateSprint, useUpdateSprint, useDeleteSprint, useCarryOverSprint,
@@ -415,7 +415,7 @@ export function SprintsPage() {
 
   return (
     <div className="app-min-h-screen bg-background">
-      <main className="max-w-[1400px] mx-auto px-4 lg:px-6 py-5 space-y-5">
+      <PageShell density="hub" className="space-y-5">
         <PageHeader
           icon={Rocket}
           title="스프린트"
@@ -446,7 +446,7 @@ export function SprintsPage() {
             {renderGroup('완료', completed)}
           </div>
         )}
-      </main>
+      </PageShell>
 
       {modal?.mode === 'create' && (
         <SprintModal onClose={() => setModal(null)} onSubmit={handleCreate} busy={createSprint.isPending} />

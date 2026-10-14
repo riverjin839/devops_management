@@ -3,7 +3,8 @@ import {
   AlertTriangle, CheckCircle, Info, Loader2, Search, Zap,
   Server, Layers, Package, RefreshCw, Download, Play, Square, Filter, X,
 } from 'lucide-react';
-import { SearchableSelect, LogViewTabs, PageHeader } from '@/components/common';
+import { SearchableSelect, LogViewTabs, PageHeader, PageShell } from '@/components/common';
+import { MacCard } from '@/components/ui/MacCard';
 import {
   useAnalyzeIncident, useAnalyzerHealth,
   useAnalyzeNamespaces, useAnalyzePods, useFetchIncidentContext,
@@ -45,23 +46,28 @@ function ResultPanel({ result }: { result: IncidentAnalysisResult }) {
   const SeverityIcon = st.icon;
 
   return (
-    <div className="rounded-md border border-border bg-card p-5 space-y-4">
-      <div className="flex items-start justify-between gap-3">
-        <div className="flex items-center gap-2">
-          <SeverityIcon className={`w-5 h-5 flex-shrink-0 ${st.text}`} />
+    <MacCard
+      title="분석 결과"
+      titleExtra={
+        <span className="inline-flex items-center gap-1.5">
+          <SeverityIcon className={`w-4 h-4 flex-shrink-0 ${st.text}`} />
           <span className={`text-sm font-semibold ${st.text}`}>{SEVERITY_STYLE[result.severity] ? st.label : result.severity}</span>
-        </div>
-        <div className="flex items-center gap-2">
+        </span>
+      }
+      actions={
+        <>
           <span className="text-xs px-2 py-0.5 rounded-full border bg-secondary border-border text-muted-foreground">
             {BACKEND_LABEL[result.analyzedBy] ?? result.analyzedBy}
           </span>
           <span className="text-xs text-muted-foreground">
             {parseUTC(result.analyzedAt).toLocaleTimeString('ko-KR')}
           </span>
-        </div>
-      </div>
-
-      <div className="rounded-md bg-background border border-border px-4 py-3">
+        </>
+      }
+      bodyPadding="p-5"
+      className="space-y-4"
+    >
+      <div className="rounded-md bg-secondary/40 px-4 py-3">
         <p className="text-xs font-semibold text-muted-foreground mb-1">근본 원인</p>
         <p className="text-sm text-foreground">{result.rootCause}</p>
       </div>
@@ -99,7 +105,7 @@ function ResultPanel({ result }: { result: IncidentAnalysisResult }) {
           </div>
         </div>
       )}
-    </div>
+    </MacCard>
   );
 }
 
@@ -306,11 +312,10 @@ export function IncidentAnalysisPage() {
 
   return (
     <div className="app-min-h-screen bg-background">
-      <main className="max-w-[1500px] mx-auto px-6 py-8">
+      <PageShell density="hub" className="space-y-5">
 
         {/* 헤더 */}
         <PageHeader
-          className="mb-6"
           icon={Zap}
           title="K8s 로그 — AI 분석"
           titleExtra={<LogViewTabs current="analysis" />}
@@ -328,11 +333,11 @@ export function IncidentAnalysisPage() {
         />
 
         {/* ── 드릴다운 선택 (Cluster → Namespace → Pod) ── */}
-        <div className="bg-card border border-border rounded-md p-5 mb-5 space-y-4">
-          <div className="flex items-center justify-between">
-            <p className="text-sm font-semibold text-muted-foreground">
-              대상 선택
-            </p>
+        <MacCard
+          title="대상 선택"
+          bodyPadding="p-5"
+          className="space-y-4"
+          actions={
             <label className="flex items-center gap-1.5 text-xs text-muted-foreground cursor-pointer"
               title="OFF: namespace 이름만 빠르게 조회 (큰 클러스터 권장). ON: 클러스터 전체 pod 를 스캔해 비정상 ns/pod 만 추림 (느림 — 큰 클러스터에서 1분 이상 소요 가능). ns 가 이미 선택돼 있으면 그 ns 만 스캔.">
               <input
@@ -343,7 +348,8 @@ export function IncidentAnalysisPage() {
               />
               이슈 있는 항목만 보기 (느림)
             </label>
-          </div>
+          }
+        >
 
           {/* 이슈만 + ns 미선택일 때 — glob 패턴으로 스캔 범위 좁히기 */}
           {onlyIssues && !namespace && (
@@ -511,15 +517,17 @@ export function IncidentAnalysisPage() {
               선택이 변경되었습니다. 다시 자동 채우기를 누르세요.
             </p>
           )}
-        </div>
+        </MacCard>
 
         {/* ── 입력 (전폭) ── */}
         {/* 전폭으로 펼쳐 textarea 폭이 "대상 선택" 패널과 동일. 결과 패널은 아래로. */}
         <div className="space-y-4">
-          <div className="bg-card border border-border rounded-md p-5 space-y-4">
-            <p className="text-sm font-semibold text-muted-foreground">
-              이벤트 ({events.length}건)
-            </p>
+          <MacCard
+            title="이벤트"
+            titleExtra={<span className="text-xs text-muted-foreground tabular-nums">{events.length}건</span>}
+            bodyPadding="p-5"
+            className="space-y-4"
+          >
             {events.length > 0 ? (
               <div className="rounded-md border border-border overflow-hidden">
                 <div className="grid grid-cols-[80px_70px_60px_1fr] gap-2 px-3 py-1.5 bg-secondary/50 text-xs font-semibold text-muted-foreground">
@@ -543,13 +551,14 @@ export function IncidentAnalysisPage() {
                 className={`${ic} font-mono text-sm resize-none`}
               />
             </div>
-          </div>
+          </MacCard>
 
-          <div className="bg-card border border-border rounded-md p-5 space-y-4">
-            <div className="flex items-center justify-between flex-wrap gap-2">
-              <p className="text-sm font-semibold text-muted-foreground">로그 / Describe</p>
-
-              {/* 실시간 스트리밍 + 로그 라인 필터 컨트롤 */}
+          <MacCard
+            title="로그 / Describe"
+            bodyPadding="p-5"
+            className="space-y-4"
+            actions={
+              /* 실시간 스트리밍 + 로그 라인 필터 컨트롤 */
               <div className="flex items-center gap-2 flex-wrap">
                 {/* 라인 필터 */}
                 <div className="relative">
@@ -607,7 +616,8 @@ export function IncidentAnalysisPage() {
                   </button>
                 )}
               </div>
-            </div>
+            }
+          >
 
             {streaming && (
               <div className="flex items-center gap-2 text-xs text-muted-foreground">
@@ -672,7 +682,7 @@ export function IncidentAnalysisPage() {
                 placeholder="kubectl describe pod 출력을 붙여넣으세요..."
                 rows={10} className={`${ic} font-mono text-sm resize-y`} />
             </div>
-          </div>
+          </MacCard>
 
           <button
             onClick={handleSubmit}
@@ -700,7 +710,7 @@ export function IncidentAnalysisPage() {
             )}
           </div>
         </div>
-      </main>
+      </PageShell>
     </div>
   );
 }

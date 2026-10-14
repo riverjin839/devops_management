@@ -2,7 +2,8 @@ import { useState } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { ListTodo, Plus, Trash2, UploadCloud, Ticket } from 'lucide-react';
 import { WorkItemForm, WorkItemReadView, JiraPushDialog, ServiceNowRegisterDialog } from '@/components/work-items';
-import { ConfirmDialog, useToast, EmptyState, PageHeader } from '@/components/common';
+import { ConfirmDialog, useToast, EmptyState, PageHeader, PageShell } from '@/components/common';
+import { MacCard } from '@/components/ui/MacCard';
 import { useWorkItem, useDeleteWorkItem } from '@/hooks/useWorkItems';
 import { formatApiError } from '@/lib/utils';
 
@@ -28,14 +29,14 @@ export function WorkItemDetailPage() {
   if (!isLoading && (isError || !item)) {
     return (
       <div className="app-min-h-screen bg-background">
-        <main className="max-w-[1200px] mx-auto px-8 py-8">
+        <PageShell density="hub">
           <EmptyState
             icon={ListTodo}
             title="업무를 찾을 수 없습니다."
             description="삭제됐거나 주소가 잘못됐을 수 있습니다."
             action={{ label: '업무 목록으로', onClick: () => navigate('/tasks-mgmt') }}
           />
-        </main>
+        </PageShell>
       </div>
     );
   }
@@ -63,71 +64,75 @@ export function WorkItemDetailPage() {
   return (
     <div className="app-min-h-screen bg-background">
       <div className="sticky top-0 z-10 bg-background border-b border-border">
-        <PageHeader
-          className="max-w-[1400px] mx-auto px-8 py-2.5 items-center"
-          back={{ to: '/tasks-mgmt', label: '업무 목록' }}
-          icon={ListTodo}
-          title={pageTitle}
-          actions={<>
-            {!isEditing && item.jiraIssueKey && (
-              <button
-                onClick={() => setPushOpen(true)}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium bg-brand-jira/10 text-brand-jira dark:text-blue-300 hover:bg-brand-jira/20 border border-brand-jira/20 rounded-lg transition-colors disabled:opacity-50"
-                title={`편집 내용을 Jira ${item.jiraIssueKey} 에 반영`}
-              >
-                <UploadCloud className="w-3.5 h-3.5" />
-                Jira 반영
-              </button>
-            )}
-            {!isEditing && item.jiraIssueKey && (
-              <button
-                onClick={() => setServiceNowOpen(true)}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium bg-brand-servicenow/10 text-brand-servicenow hover:bg-brand-servicenow/20 border border-brand-servicenow/20 rounded-lg transition-colors disabled:opacity-50"
-                title={item.servicenowNumber
-                  ? `ServiceNow ${item.servicenowNumber} 등록됨 — 다시 등록`
-                  : '사내 ServiceNow ITSM 에 등록'}
-              >
-                <Ticket className="w-3.5 h-3.5" />
-                {item.servicenowNumber ? 'ServiceNow 재등록' : 'ServiceNow 등록'}
-              </button>
-            )}
-            {!isEditing && (
-              <>
+        {/* D-123: sticky 헤더 폭·좌측 여백을 본문(hub)과 맞춘다 — 세로 패딩만 얇게 덮어쓴다 */}
+        <PageShell density="hub" as="div" className="py-2.5">
+          <PageHeader
+            className="items-center"
+            back={{ to: '/tasks-mgmt', label: '업무 목록' }}
+            icon={ListTodo}
+            title={pageTitle}
+            actions={<>
+              {!isEditing && item.jiraIssueKey && (
                 <button
-                  onClick={() => navigate(`/tasks-mgmt/new?parentId=${item.id}`)}
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium bg-secondary hover:bg-secondary/80 border border-border rounded-lg transition-colors"
-                  title="하위 업무 추가"
+                  onClick={() => setPushOpen(true)}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium bg-brand-jira/10 text-brand-jira dark:text-blue-300 hover:bg-brand-jira/20 border border-brand-jira/20 rounded-lg transition-colors disabled:opacity-50"
+                  title={`편집 내용을 Jira ${item.jiraIssueKey} 에 반영`}
                 >
-                  <Plus className="w-3.5 h-3.5" /> 하위
+                  <UploadCloud className="w-3.5 h-3.5" />
+                  Jira 반영
                 </button>
+              )}
+              {!isEditing && item.jiraIssueKey && (
                 <button
-                  onClick={handleDelete}
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-status-critical hover:bg-status-critical/10 border border-border rounded-lg transition-colors"
+                  onClick={() => setServiceNowOpen(true)}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium bg-brand-servicenow/10 text-brand-servicenow hover:bg-brand-servicenow/20 border border-brand-servicenow/20 rounded-lg transition-colors disabled:opacity-50"
+                  title={item.servicenowNumber
+                    ? `ServiceNow ${item.servicenowNumber} 등록됨 — 다시 등록`
+                    : '사내 ServiceNow ITSM 에 등록'}
                 >
-                  <Trash2 className="w-3.5 h-3.5" /> 삭제
+                  <Ticket className="w-3.5 h-3.5" />
+                  {item.servicenowNumber ? 'ServiceNow 재등록' : 'ServiceNow 등록'}
                 </button>
-              </>
-            )}
-          </>}
-        />
+              )}
+              {!isEditing && (
+                <>
+                  <button
+                    onClick={() => navigate(`/tasks-mgmt/new?parentId=${item.id}`)}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium bg-secondary hover:bg-secondary/80 border border-border rounded-lg transition-colors"
+                    title="하위 업무 추가"
+                  >
+                    <Plus className="w-3.5 h-3.5" /> 하위
+                  </button>
+                  <button
+                    onClick={handleDelete}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-status-critical hover:bg-status-critical/10 border border-border rounded-lg transition-colors"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" /> 삭제
+                  </button>
+                </>
+              )}
+            </>}
+          />
+        </PageShell>
       </div>
 
-      <main className="max-w-[1400px] mx-auto px-8 pt-4 pb-16">
+      {/* D-123: WorkItemForm 은 최대 10칸 필드 그리드라 4xl(doc)에 안 들어가 hub 밀도 */}
+      <PageShell density="hub">
         {isEditing ? (
-          <div className="bg-card border border-border rounded-md p-5 shadow-card">
+          <MacCard title="업무 정보" bodyPadding="p-5">
             <WorkItemForm
               initial={item}
               onCancel={() => setIsEditing(false)}
               onSaved={() => setIsEditing(false)}
               embedded
             />
-          </div>
+          </MacCard>
         ) : (
-          <div className="bg-card border border-border rounded-md p-8 shadow-card">
+          <MacCard title="업무 정보" bodyPadding="p-8">
             <WorkItemReadView item={item} onEdit={() => setIsEditing(true)} />
-          </div>
+          </MacCard>
         )}
-      </main>
+      </PageShell>
       <ConfirmDialog
         open={confirmDeleteOpen}
         title="업무 삭제"

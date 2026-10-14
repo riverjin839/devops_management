@@ -4,7 +4,8 @@ import { ArrowLeft, HelpCircle, Pencil, Trash2 } from 'lucide-react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { opsNotesApi } from '@/services/api';
 import { OpsNoteForm, OpsNoteReadView } from '@/components/ops-notes';
-import { useToast, EmptyState } from '@/components/common';
+import { useToast, EmptyState, PageShell } from '@/components/common';
+import { MacCard } from '@/components/ui/MacCard';
 import { formatApiError } from '@/lib/utils';
 import { useMemo } from 'react';
 
@@ -31,14 +32,14 @@ export function OpsNoteDetailPage() {
   if (!isLoading && !note) {
     return (
       <div className="app-min-h-screen bg-background">
-        <main className="max-w-[1200px] mx-auto px-8 py-8">
+        <PageShell density="doc">
           <EmptyState
             icon={HelpCircle}
             title="Q&A 를 찾을 수 없습니다."
             description="삭제됐거나 주소가 잘못됐을 수 있습니다."
             action={{ label: 'Q&A 목록으로', onClick: () => navigate('/ops-notes') }}
           />
-        </main>
+        </PageShell>
       </div>
     );
   }
@@ -64,7 +65,7 @@ export function OpsNoteDetailPage() {
   return (
     <div className="app-min-h-screen bg-background">
       <div className="sticky top-0 z-10 bg-background border-b border-border">
-        <div className="max-w-[1400px] mx-auto px-8 py-2.5 flex items-center gap-2">
+        <div className="max-w-4xl mx-auto px-8 py-2.5 flex items-center gap-2">
           <button
             onClick={() => navigate('/ops-notes')}
             className="p-1.5 hover:bg-secondary rounded-lg transition-colors text-muted-foreground hover:text-foreground"
@@ -96,24 +97,23 @@ export function OpsNoteDetailPage() {
         </div>
       </div>
 
-      <main className="max-w-[1400px] mx-auto px-8 pt-8 pb-16">
+      <PageShell density="doc">
         {editMode ? (
           <>
             <PageHeader title="Q&A 수정" description="필요한 항목을 수정한 뒤 폼 하단의 저장 버튼을 누르세요." className="mb-8" />
-            <div className="bg-card border border-border rounded-md p-8 shadow-card">
+            <MacCard title="Q&A 정보" bodyPadding="p-8">
               <OpsNoteForm
                 initial={note}
                 onCancel={() => navigate(`/ops-notes/${note.id}`)}
                 onSaved={() => navigate(`/ops-notes/${note.id}`)}
               />
-            </div>
+            </MacCard>
           </>
         ) : (
-          <div className="bg-card border border-border rounded-md p-8 shadow-card">
-            <OpsNoteReadView note={note} />
-          </div>
+          // D-122: 읽기 뷰 하나만 감싸던 카드를 걷음 — doc 밀도에서 본문으로 바로 읽힌다.
+          <OpsNoteReadView note={note} />
         )}
-      </main>
+      </PageShell>
     </div>
   );
 }

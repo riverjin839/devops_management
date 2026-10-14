@@ -3,7 +3,7 @@ import {
   Plus, Pencil, Trash2, GitFork, Loader2, RefreshCw, UploadCloud, ChevronRight, FileText, CheckCircle, Archive, FileText as FileTextIcon, ExternalLink, PenLine,
 } from 'lucide-react';
 import { RichContent } from '@/components/editor';
-import { ReactionBar, useToast } from '@/components/common';
+import { PageShell, ReactionBar, useToast } from '@/components/common';
 import { ConfluenceExportDialog, SyncStatusBadge } from '@/components/documents';
 import { useConfluenceDocPull } from '@/hooks/useConfluenceDocs';
 import { formatApiError } from '@/lib/utils';
@@ -77,7 +77,7 @@ export function GuidePageView({ guide, allGuides, onSelect, onEdit, onAddChild, 
 
   return (
     <div className="flex-1 overflow-y-auto">
-      <div className="max-w-4xl mx-auto px-10 py-8">
+      <PageShell density="doc" as="div">
         <Breadcrumb guide={guide} allGuides={allGuides} onSelect={onSelect} />
 
         <div className="flex items-start justify-between gap-4 mb-5">
@@ -190,7 +190,7 @@ export function GuidePageView({ guide, allGuides, onSelect, onEdit, onAddChild, 
             </div>
           </div>
         )}
-      </div>
+      </PageShell>
 
       <ConfluenceExportDialog open={exportOpen} onClose={() => setExportOpen(false)} guide={guide} />
     </div>

@@ -3,7 +3,8 @@ import { useNavigate } from 'react-router-dom';
 import { Users, User, Search, X, ClipboardList, ListTodo, Mail, Hash, ChevronDown, ChevronUp, Copy } from 'lucide-react';
 import { useAssignees } from '@/hooks/useAssignees';
 import { useWorkItems } from '@/hooks/useWorkItems';
-import { useToast, EmptyState, PageHeader } from '@/components/common';
+import { useToast, EmptyState, PageHeader, PageShell } from '@/components/common';
+import { MacCard } from '@/components/ui/MacCard';
 import { useAuthStore } from '@/stores/authStore';
 import type { WorkItem, Assignee } from '@/types';
 
@@ -114,29 +115,25 @@ function MemberSection({ bucket, onTaskClick, onIssueClick }: {
   const [expanded, setExpanded] = useState(true);
 
   return (
-    <div className="bg-card border border-border rounded-md overflow-hidden">
-      {/* 헤더 */}
-      <div className="flex items-center justify-between px-5 py-1.5 border-b border-border bg-muted/20">
-        <div className="flex items-center gap-3">
-          <div className="w-9 h-9 rounded-full bg-primary/10 text-primary flex items-center justify-center text-sm font-bold">
-            {bucket.assignee.slice(0, 2)}
-          </div>
-          <div>
-            <p className="text-sm font-semibold">{bucket.assignee}</p>
-            <div className="flex items-center gap-2 text-xs text-muted-foreground mt-0.5">
-              {bucket.info?.employeeId && (
-                <span className="flex items-center gap-0.5"><Hash className="w-2.5 h-2.5" />{bucket.info.employeeId}</span>
-              )}
-              {bucket.info?.email && (
-                <span className="flex items-center gap-0.5"><Mail className="w-2.5 h-2.5" />{bucket.info.email}</span>
-              )}
-              {bucket.info?.primaryRole && (
-                <span>{bucket.info.primaryRole}</span>
-              )}
-            </div>
-          </div>
-        </div>
-        <div className="flex items-center gap-2">
+    <MacCard
+      title={bucket.assignee}
+      icon={User}
+      description={(bucket.info?.employeeId || bucket.info?.email || bucket.info?.primaryRole) && (
+        <span className="inline-flex items-center gap-2">
+          {bucket.info?.employeeId && (
+            <span className="inline-flex items-center gap-0.5"><Hash className="w-2.5 h-2.5" />{bucket.info.employeeId}</span>
+          )}
+          {bucket.info?.email && (
+            <span className="inline-flex items-center gap-0.5"><Mail className="w-2.5 h-2.5" />{bucket.info.email}</span>
+          )}
+          {bucket.info?.primaryRole && (
+            <span>{bucket.info.primaryRole}</span>
+          )}
+        </span>
+      )}
+      bodyPadding="p-0"
+      actions={
+        <>
           <span className="text-sm px-2 py-0.5 rounded-full bg-chart-1/10 text-chart-1 border border-chart-1/30">
             작업 {bucket.tasks.length} (진행 {bucket.openTasks} / 완료 {bucket.doneTasks})
           </span>
@@ -150,9 +147,9 @@ function MemberSection({ bucket, onTaskClick, onIssueClick }: {
           >
             {expanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
           </button>
-        </div>
-      </div>
-
+        </>
+      }
+    >
       {/* 본문 */}
       {expanded && (
         <div className="grid grid-cols-1 md:grid-cols-2 divide-x divide-border">
@@ -235,7 +232,7 @@ function MemberSection({ bucket, onTaskClick, onIssueClick }: {
           </div>
         </div>
       )}
-    </div>
+    </MacCard>
   );
 }
 
@@ -401,10 +398,9 @@ export function MemberBoardPage() {
 
   return (
     <div className="app-min-h-screen bg-background">
-      <main className="mx-auto px-8 py-8">
+      <PageShell density="hub" className="space-y-5">
         {/* 헤더 */}
         <PageHeader
-          className="mb-6"
           icon={Users}
           title="멤버별 업무"
           titleExtra={<>
@@ -419,100 +415,98 @@ export function MemberBoardPage() {
           </>}
         />
 
-        {/* 필터 */}
-        <div className="bg-card border border-border rounded-md p-4 mb-5">
-          <div className="flex flex-wrap items-center gap-3">
-            {/* 보기 범위: 나만 / 전체 (당일 스케줄과 동일) */}
-            <div className="flex items-center rounded-lg border border-border overflow-hidden text-sm">
-              <button
-                onClick={() => changeScope('me')}
-                aria-pressed={scope === 'me'}
-                className={`flex items-center gap-1 px-3 py-1.5 transition-colors ${
-                  scope === 'me' ? 'bg-primary text-primary-foreground' : 'hover:bg-secondary text-muted-foreground'
-                }`}
-              >
-                <User className="w-3.5 h-3.5" /> 나만
-              </button>
-              <button
-                onClick={() => changeScope('all')}
-                aria-pressed={scope === 'all'}
-                className={`flex items-center gap-1 px-3 py-1.5 border-l border-border transition-colors ${
-                  scope === 'all' ? 'bg-primary text-primary-foreground' : 'hover:bg-secondary text-muted-foreground'
-                }`}
-              >
-                <Users className="w-3.5 h-3.5" /> 전체
-              </button>
-            </div>
-            <div className="flex-1 min-w-[220px] relative">
-              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
-              <input
-                type="text"
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                placeholder="이름 / 사번 / 이메일 / 역할 검색"
-                className="w-full pl-8 pr-3 py-2 text-sm bg-background border border-border rounded-lg focus:outline-none focus:ring-1 focus:ring-primary"
-              />
-            </div>
-            <div className="flex items-center bg-secondary/60 rounded-lg p-[3px] gap-px">
-              {(['all', 'active', 'withOpen'] as MemberFilter[]).map((f) => (
-                <button
-                  key={f}
-                  onClick={() => setFilter(f)}
-                  className={`px-3 py-1.5 text-sm font-medium rounded-md transition-colors ${
-                    filter === f
-                      ? 'bg-background text-foreground shadow-sm'
-                      : 'text-muted-foreground hover:text-foreground'
-                  }`}
-                >
-                  {f === 'all' ? '전체 멤버' : f === 'active' ? '업무 있음' : '미완료 있음'}
-                </button>
-              ))}
-            </div>
-            {/* 기간 필터 — 그 주에 진행/완료된 업무만 */}
-            <div className="flex items-center bg-secondary/60 rounded-lg p-[3px] gap-px">
-              {(['all', 'thisWeek', 'lastWeek'] as Period[]).map((p) => (
-                <button
-                  key={p}
-                  onClick={() => setPeriod(p)}
-                  className={`px-3 py-1.5 text-sm font-medium rounded-md transition-colors ${
-                    period === p
-                      ? 'bg-background text-foreground shadow-sm'
-                      : 'text-muted-foreground hover:text-foreground'
-                  }`}
-                >
-                  {PERIOD_LABEL[p]}
-                </button>
-              ))}
-            </div>
-            {range && (
-              <span className="text-xs font-mono text-muted-foreground">{fmtRange(range)}</span>
-            )}
+        {/* 필터 — D-122: 툴바만 감싸던 카드를 걷음 */}
+        <div className="flex flex-wrap items-center gap-3">
+          {/* 보기 범위: 나만 / 전체 (당일 스케줄과 동일) */}
+          <div className="flex items-center rounded-lg border border-border overflow-hidden text-sm">
             <button
-              onClick={handleCopy}
-              title="현재 목록을 텍스트로 클립보드에 복사"
-              className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-lg border border-border bg-secondary text-muted-foreground hover:text-foreground hover:bg-secondary/80 transition-colors"
+              onClick={() => changeScope('me')}
+              aria-pressed={scope === 'me'}
+              className={`flex items-center gap-1 px-3 py-1.5 transition-colors ${
+                scope === 'me' ? 'bg-primary text-primary-foreground' : 'hover:bg-secondary text-muted-foreground'
+              }`}
             >
-              <Copy className="w-3.5 h-3.5" /> 텍스트 복사
+              <User className="w-3.5 h-3.5" /> 나만
             </button>
-            <label className="flex items-center gap-1.5 text-sm text-muted-foreground cursor-pointer select-none">
-              <input
-                type="checkbox"
-                checked={includeSecondary}
-                onChange={(e) => setIncludeSecondary(e.target.checked)}
-                className="w-3.5 h-3.5 accent-primary"
-              />
-              부 담당자도 포함
-            </label>
-            {(search || filter !== 'active' || period !== 'all') && (
-              <button
-                onClick={() => { setSearch(''); setFilter('active'); setPeriod('all'); }}
-                className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground transition-colors"
-              >
-                <X className="w-3 h-3" />
-                초기화
-              </button>
-            )}
+            <button
+              onClick={() => changeScope('all')}
+              aria-pressed={scope === 'all'}
+              className={`flex items-center gap-1 px-3 py-1.5 border-l border-border transition-colors ${
+                scope === 'all' ? 'bg-primary text-primary-foreground' : 'hover:bg-secondary text-muted-foreground'
+              }`}
+            >
+              <Users className="w-3.5 h-3.5" /> 전체
+            </button>
           </div>
+          <div className="flex-1 min-w-[220px] relative">
+            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
+            <input
+              type="text"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="이름 / 사번 / 이메일 / 역할 검색"
+              className="w-full pl-8 pr-3 py-2 text-sm bg-background border border-border rounded-lg focus:outline-none focus:ring-1 focus:ring-primary"
+            />
+          </div>
+          <div className="flex items-center bg-secondary/60 rounded-lg p-[3px] gap-px">
+            {(['all', 'active', 'withOpen'] as MemberFilter[]).map((f) => (
+              <button
+                key={f}
+                onClick={() => setFilter(f)}
+                className={`px-3 py-1.5 text-sm font-medium rounded-md transition-colors ${
+                  filter === f
+                    ? 'bg-background text-foreground shadow-sm'
+                    : 'text-muted-foreground hover:text-foreground'
+                }`}
+              >
+                {f === 'all' ? '전체 멤버' : f === 'active' ? '업무 있음' : '미완료 있음'}
+              </button>
+            ))}
+          </div>
+          {/* 기간 필터 — 그 주에 진행/완료된 업무만 */}
+          <div className="flex items-center bg-secondary/60 rounded-lg p-[3px] gap-px">
+            {(['all', 'thisWeek', 'lastWeek'] as Period[]).map((p) => (
+              <button
+                key={p}
+                onClick={() => setPeriod(p)}
+                className={`px-3 py-1.5 text-sm font-medium rounded-md transition-colors ${
+                  period === p
+                    ? 'bg-background text-foreground shadow-sm'
+                    : 'text-muted-foreground hover:text-foreground'
+                }`}
+              >
+                {PERIOD_LABEL[p]}
+              </button>
+            ))}
+          </div>
+          {range && (
+            <span className="text-xs font-mono text-muted-foreground">{fmtRange(range)}</span>
+          )}
+          <button
+            onClick={handleCopy}
+            title="현재 목록을 텍스트로 클립보드에 복사"
+            className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-lg border border-border bg-secondary text-muted-foreground hover:text-foreground hover:bg-secondary/80 transition-colors"
+          >
+            <Copy className="w-3.5 h-3.5" /> 텍스트 복사
+          </button>
+          <label className="flex items-center gap-1.5 text-sm text-muted-foreground cursor-pointer select-none">
+            <input
+              type="checkbox"
+              checked={includeSecondary}
+              onChange={(e) => setIncludeSecondary(e.target.checked)}
+              className="w-3.5 h-3.5 accent-primary"
+            />
+            부 담당자도 포함
+          </label>
+          {(search || filter !== 'active' || period !== 'all') && (
+            <button
+              onClick={() => { setSearch(''); setFilter('active'); setPeriod('all'); }}
+              className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground transition-colors"
+            >
+              <X className="w-3 h-3" />
+              초기화
+            </button>
+          )}
         </div>
 
         {/* 멤버 섹션 리스트 */}
@@ -535,7 +529,7 @@ export function MemberBoardPage() {
             ))}
           </div>
         )}
-      </main>
+      </PageShell>
     </div>
   );
 }

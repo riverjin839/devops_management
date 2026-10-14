@@ -272,7 +272,8 @@ export function OpsNoteTable({
   const serviceMap = Object.fromEntries(services.map((s) => [s.value, s])) as Record<string, OpsNoteServiceMeta>;
 
   return (
-    <div className="bg-card border border-border rounded-md overflow-hidden">
+    // D-122: 부모(OpsNotesPage)의 MacCard 안에서 렌더되므로 자체 카드 면·테두리를 두지 않는다(카드 안 카드 금지).
+    <div className="overflow-hidden">
       <DoubleScrollX>
         <table className="w-full text-sm">
           <thead>

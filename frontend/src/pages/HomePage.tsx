@@ -220,34 +220,29 @@ export function HomePage() {
           <div className="grid grid-cols-10 gap-3 xl:flex-1 xl:min-h-0">
 
             {/* ── 당일 시간단위 스케줄 (담당자 기준) (4/10) ─────────────────── */}
+            {/* D-122: 수제 헤더 바 → MacCard title/icon 슬롯 */}
             <MacCard
+              title="당일 스케줄"
+              icon={CalendarClock}
               rootClassName="col-span-10 xl:col-span-4 flex flex-col min-h-[420px] xl:min-h-0"
               bodyPadding="p-0"
               className="flex-1 min-h-0 flex flex-col"
             >
-              <div className="flex-none flex items-center gap-2 px-4 py-2.5 border-b border-border bg-muted/40">
-                <CalendarClock className="w-3.5 h-3.5 text-muted-foreground" />
-                <span className="text-xs font-medium text-muted-foreground select-none">
-                  당일 스케줄
-                </span>
-              </div>
               <div className="flex-1 min-h-0 p-3">
                 <DayScheduleBoard selectedClusterId={null} />
               </div>
             </MacCard>
 
             {/* ── 담당자별 진행 현황 (주간 / 월간 / 담당자) (6/10) ──────────── */}
+            {/* D-122: 제목+주간/월간/담당자 토글 수제 헤더 바 → MacCard title·actions 슬롯 */}
             <MacCard
+              title="담당자별 진행 현황"
+              icon={CalendarDays}
               rootClassName="col-span-10 xl:col-span-6 flex flex-col min-h-[420px] xl:min-h-0"
               bodyPadding="p-0"
               className="flex-1 min-h-0 flex flex-col"
-            >
-              <div className="flex-none flex items-center gap-2 px-4 py-2.5 border-b border-border bg-muted/40">
-                <span className="text-xs font-medium text-muted-foreground select-none">
-                  담당자별 진행 현황
-                </span>
-                <CalendarDays className="w-3.5 h-3.5 text-muted-foreground" />
-                <div className="ml-auto flex items-center rounded-md border border-border overflow-hidden text-xs">
+              actions={
+                <div className="flex items-center rounded-md border border-border overflow-hidden text-xs">
                   <button
                     onClick={() => setWeeklyTab('week')}
                     className={cn(
@@ -276,7 +271,8 @@ export function HomePage() {
                     담당자
                   </button>
                 </div>
-              </div>
+              }
+            >
               <div className="flex-1 min-h-0 overflow-hidden">
                 {weeklyTab === 'week' && (
                   <div className="h-full overflow-y-auto p-3"><WeeklyStatusTimeline selectedClusterId={null} /></div>

@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { RefreshCw, ExternalLink, ChevronDown, ChevronRight, Settings2, AlertCircle, Loader2, CheckCircle2, Clock, Plus, Pencil, Trash2, X, Check } from 'lucide-react';
 import { useTrendDigests, useTrendItems, useTrendSources, useTriggerCollect, useToggleSource, useCreateSource, useUpdateSource, useDeleteSource } from '@/hooks/useTrends';
 import { MacCard } from '@/components/ui/MacCard';
-import { EmptyState, LoadingState } from '@/components/common';
+import { EmptyState, LoadingState, PageShell } from '@/components/common';
 import { PageHeader } from '@/components/common/PageHeader';
 import type { TrendDigest, TrendItem, TrendSource } from '@/types';
 import { parseUTC } from '@/lib/utils';
@@ -109,22 +109,23 @@ function DigestPanel({ digest }: { digest: TrendDigest }) {
   return (
     <div className="space-y-4">
       {/* 상태 + 종합 요약 */}
-      <MacCard>
-        <div className="flex items-center gap-2 mb-3">
-          <span className={`flex items-center gap-1 text-sm font-medium ${statusInfo.cls}`}>
-            {statusInfo.icon} {statusInfo.label}
+      {/* D-122: 상태·건수 수제 헤더 행 → MacCard 슬롯 */}
+      <MacCard
+        title="기술 동향 요약"
+        titleExtra={
+          <span className="inline-flex items-center gap-2 min-w-0">
+            <span className={`flex items-center gap-1 text-xs font-medium ${statusInfo.cls}`}>
+              {statusInfo.icon} {statusInfo.label}
+            </span>
+            <span className="text-xs text-muted-foreground tabular-nums">· {digest.itemCount}건 수집</span>
+            {digest.errorMessage && (
+              <span className="text-xs text-status-critical truncate" title={digest.errorMessage}>{digest.errorMessage}</span>
+            )}
           </span>
-          <span className="text-sm text-muted-foreground">· {digest.itemCount}건 수집</span>
-          {digest.errorMessage && (
-            <span className="text-sm text-status-critical truncate ml-1">{digest.errorMessage}</span>
-          )}
-        </div>
-
+        }
+      >
         {digest.overallSummaryKo ? (
-          <>
-            <p className="text-sm font-semibold text-muted-foreground mb-1.5">오늘의 기술 동향 요약</p>
-            <p className="text-sm text-foreground leading-relaxed whitespace-pre-wrap">{digest.overallSummaryKo}</p>
-          </>
+          <p className="text-sm text-foreground leading-relaxed whitespace-pre-wrap">{digest.overallSummaryKo}</p>
         ) : (
           <p className="text-sm text-muted-foreground italic">
             {digest.status === 'done' ? '종합 요약 없음' : '요약 생성 중…'}
@@ -318,13 +319,16 @@ function AddSourceForm({ onClose }: { onClose: () => void }) {
   const canSubmit = name.trim() && url.trim() && category.trim();
 
   return (
-    <div className="p-3 border border-primary/40 rounded-md bg-card space-y-2">
-      <div className="flex items-center justify-between">
-        <p className="text-sm font-semibold text-primary">새 소스 추가</p>
-        <button onClick={onClose} aria-label="닫기" className="p-1 text-muted-foreground hover:text-foreground">
+    <MacCard
+      title="새 소스 추가"
+      bodyPadding="p-3"
+      className="space-y-2"
+      actions={
+        <button onClick={onClose} aria-label="닫기" title="닫기" className="p-1 text-muted-foreground hover:text-foreground">
           <X className="w-3.5 h-3.5" />
         </button>
-      </div>
+      }
+    >
       <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
         <input value={name} onChange={(e) => setName(e.target.value)} placeholder="이름 (예: Istio 블로그)"
           className="px-2 py-1.5 text-sm bg-background border border-border rounded" />
@@ -356,7 +360,7 @@ function AddSourceForm({ onClose }: { onClose: () => void }) {
           추가
         </button>
       </div>
-    </div>
+    </MacCard>
   );
 }
 
@@ -515,7 +519,7 @@ export function TrendDigestPage() {
 
       {/* 우측: 콘텐츠 */}
       <main className="flex-1 min-w-0 overflow-y-auto">
-        <div className="max-w-4xl mx-auto px-6 py-6">
+        <PageShell density="doc" as="div">
           {activeTab === 'sources' ? (
             <>
               <PageHeader title="수집 소스 관리" className="mb-4" />
@@ -559,7 +563,7 @@ export function TrendDigestPage() {
               </EmptyState>
             </>
           )}
-        </div>
+        </PageShell>
       </main>
     </div>
   );

@@ -4,7 +4,7 @@ import {
 } from 'lucide-react';
 import { MacCard } from '@/components/ui/MacCard';
 import { JiraIssueChip } from '@/components/work-items';
-import { useToast, PageHeader, EmptyState } from '@/components/common';
+import { useToast, PageHeader, PageShell, EmptyState } from '@/components/common';
 import { formatApiError } from '@/lib/utils';
 import { useAuthStore } from '@/stores/authStore';
 import {
@@ -220,7 +220,7 @@ export function WeeklyReportPage() {
   const resetFilters = () => { setFComponent(''); setFAssignee(''); setFStatus(''); setFSearch(''); };
 
   return (
-    <div className="p-6 space-y-4">
+    <PageShell density="hub" className="space-y-4">
       <PageHeader
         icon={FileText}
         title="주간보고"
@@ -319,22 +319,23 @@ export function WeeklyReportPage() {
       )}
 
       {tab === 'summary' && (
-        <MacCard title="진척률">
-          <div className="flex items-center gap-2 mb-2 flex-wrap">
-            {settings?.ganttUrl ? (
-              <a href={settings.ganttUrl} target="_blank" rel="noreferrer"
-                className="inline-flex items-center gap-1 text-sm text-primary hover:underline">
-                <ExternalLink className="w-3.5 h-3.5" /> Jira WBS 간트 차트 열기
-              </a>
-            ) : (
-              <span className="text-xs text-muted-foreground">
-                간트 차트 링크가 설정되지 않았습니다 — Confluence 게시 탭의 자동 생성 설정에서 등록하세요.
-              </span>
-            )}
-            <span className="ml-auto text-[11px] text-muted-foreground">
-              계획진도율 = 일정 경과 비율 · 실적진도율 = 완료 비율 · 달성률 = 실적/계획
+        // D-122: 간트 링크 행을 헤더 actions 로 올림
+        <MacCard
+          title="진척률"
+          actions={settings?.ganttUrl ? (
+            <a href={settings.ganttUrl} target="_blank" rel="noreferrer"
+              className="inline-flex items-center gap-1 text-sm text-primary hover:underline">
+              <ExternalLink className="w-3.5 h-3.5" /> Jira WBS 간트 차트 열기
+            </a>
+          ) : (
+            <span className="text-xs text-muted-foreground">
+              간트 차트 링크가 설정되지 않았습니다 — Confluence 게시 탭의 자동 생성 설정에서 등록하세요.
             </span>
-          </div>
+          )}
+        >
+          <p className="mb-2 text-xs text-muted-foreground">
+            계획진도율 = 일정 경과 비율 · 실적진도율 = 완료 비율 · 달성률 = 실적/계획
+          </p>
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
@@ -535,7 +536,7 @@ export function WeeklyReportPage() {
           )}
         </>
       )}
-    </div>
+    </PageShell>
   );
 }
 

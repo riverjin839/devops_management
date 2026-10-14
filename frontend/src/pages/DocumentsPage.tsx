@@ -6,7 +6,7 @@ import {
   Sparkles, UploadCloud,
 } from 'lucide-react';
 import { MacCard } from '@/components/ui/MacCard';
-import { EmptyState, LoadingState, useToast } from '@/components/common';
+import { EmptyState, LoadingState, PageShell, useToast } from '@/components/common';
 import { PageHeader } from '@/components/common/PageHeader';
 import {
   ConfluenceDocsSettingsDialog, ConfluenceExportDialog, ConfluenceImportModal, SyncStatusBadge,
@@ -105,7 +105,7 @@ export function DocumentsPage() {
   };
 
   return (
-    <div className="p-6 space-y-4">
+    <PageShell density="hub" className="space-y-4">
       {/* 헤더 + 툴바 */}
       <PageHeader
         title="문서 관리"
@@ -302,6 +302,6 @@ export function DocumentsPage() {
       <ConfluenceImportModal open={importOpen} onClose={() => setImportOpen(false)} />
       <ConfluenceExportDialog open={Boolean(exportTarget)} onClose={() => setExportTarget(null)} guide={exportTarget} />
       <ConfluenceDocsSettingsDialog open={settingsOpen} onClose={() => setSettingsOpen(false)} />
-    </div>
+    </PageShell>
   );
 }

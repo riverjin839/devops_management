@@ -11,7 +11,7 @@ import { useWorkItems, usePatchWorkItemStatus, useUpdateWorkItem } from '@/hooks
 import { useCurrentSprint, useCreateSprint } from '@/hooks/useSprints';
 import { useToday } from '@/hooks/useToday';
 import { useAuthStore } from '@/stores/authStore';
-import { ViewModeBar, useToast, PageHeader, EmptyState, LoadingState } from '@/components/common';
+import { ViewModeBar, useToast, PageHeader, PageShell, EmptyState, LoadingState } from '@/components/common';
 import { MacCard } from '@/components/ui/MacCard';
 import { stripHtml, formatApiError } from '@/lib/utils';
 import { isAssignedTo, itemDateKey } from '@/lib/workItems';
@@ -181,19 +181,31 @@ function Section({
   if (items.length === 0) return null;
   const t = TONE[tone];
   return (
-    <div className={`rounded-md border ${t.ring} bg-card overflow-hidden`}>
-      <button
-        type="button"
-        onClick={() => setOpen((v) => !v)}
-        className="w-full flex items-center gap-2 px-4 py-1.5 text-left hover:bg-secondary/30 transition-colors"
-      >
-        <span className={`w-2 h-2 rounded-full ${t.dot}`} />
-        <span className={`text-sm font-semibold ${t.text}`}>{title}</span>
-        <span className="text-sm text-muted-foreground">{items.length}</span>
-        <ChevronRight className={`w-4 h-4 text-muted-foreground ml-auto transition-transform ${open ? 'rotate-90' : ''}`} />
-      </button>
+    // D-122: 손으로 그린 접이식 헤더 행 → MacCard 슬롯(제목·건수·접기 버튼).
+    <MacCard
+      title={title}
+      titleExtra={
+        <span className="inline-flex items-center gap-1.5">
+          <span className={`w-2 h-2 rounded-full ${t.dot}`} aria-hidden />
+          <span className={`text-xs tabular-nums ${tone === 'overdue' ? t.text : 'text-muted-foreground'}`}>{items.length}</span>
+        </span>
+      }
+      actions={
+        <button
+          type="button"
+          onClick={() => setOpen((v) => !v)}
+          aria-expanded={open}
+          aria-label={open ? `${title} 접기` : `${title} 펼치기`}
+          title={open ? '접기' : '펼치기'}
+          className="p-1 rounded-md text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors"
+        >
+          <ChevronRight className={`w-4 h-4 transition-transform ${open ? 'rotate-90' : ''}`} />
+        </button>
+      }
+      bodyPadding={open ? (view === 'card' ? 'p-3' : 'px-2 py-1') : 'p-0'}
+    >
       {open && (
-        <div className={view === 'card' ? 'p-3 pt-0 grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-2' : 'px-2 pb-2 divide-y divide-border/40'}>
+        <div className={view === 'card' ? 'grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-2' : 'divide-y divide-border/40'}>
           {items.map((it) =>
             view === 'card'
               ? <ItemCard key={it.id} item={it} busy={busyId === it.id} onToggleDone={onToggleDone} onOpen={onOpen} />
@@ -201,7 +213,7 @@ function Section({
           )}
         </div>
       )}
-    </div>
+    </MacCard>
   );
 }
 
@@ -326,7 +338,7 @@ export function TodoTodayPage() {
   const totalOpen = buckets.overdue.length + buckets.todayList.length + buckets.upcoming.length;
 
   return (
-    <div className="p-6 flex flex-col gap-5 app-min-h-screen max-w-[1200px] mx-auto">
+    <PageShell density="hub" className="flex flex-col gap-5 app-min-h-screen">
       {/* 헤더 */}
       <PageHeader
         icon={CalendarCheck2}
@@ -417,30 +429,30 @@ export function TodoTodayPage() {
         ) : (
           <div className="flex flex-col gap-3">
             {/* 스프린트 헤더 */}
-            <MacCard>
-              <div className="flex items-start justify-between gap-3 flex-wrap mb-3">
-                <div className="flex items-center gap-2 min-w-0">
-                  <Rocket className="w-5 h-5 text-primary flex-shrink-0" />
-                  <div className="min-w-0">
-                    <h2 className="text-base font-bold truncate">{currentSprint.name}</h2>
-                    <p className="text-sm text-muted-foreground">
-                      {fmtRange(currentSprint.startDate, currentSprint.endDate)}
-                      {(() => {
-                        const left = daysBetween(today, currentSprint.endDate);
-                        if (left < 0) return <span className="ml-1.5 text-status-critical font-medium">종료됨</span>;
-                        if (left === 0) return <span className="ml-1.5 text-status-warning font-medium">오늘 마감</span>;
-                        return <span className="ml-1.5 text-primary font-medium">D-{left}</span>;
-                      })()}
-                    </p>
-                  </div>
-                </div>
-                <div className="flex items-center gap-3 text-sm">
+            {/* D-122: 스프린트 이름·기간·통계 수제 헤더 행 → MacCard 슬롯 */}
+            <MacCard
+              title={currentSprint.name}
+              icon={Rocket}
+              description={
+                <>
+                  {fmtRange(currentSprint.startDate, currentSprint.endDate)}
+                  {(() => {
+                    const left = daysBetween(today, currentSprint.endDate);
+                    if (left < 0) return <span className="ml-1.5 text-status-critical font-medium">종료됨</span>;
+                    if (left === 0) return <span className="ml-1.5 text-status-warning font-medium">오늘 마감</span>;
+                    return <span className="ml-1.5 text-primary font-medium">D-{left}</span>;
+                  })()}
+                </>
+              }
+              actions={
+                <div className="flex items-center gap-3 text-sm tabular-nums">
                   <span className="text-muted-foreground">완료 {sprint.doneCount}</span>
                   <span className="text-muted-foreground">전체 {sprint.total}</span>
                   {sprint.effort > 0 && <span className="text-muted-foreground">{sprint.effort}h</span>}
                   <span className="text-primary font-semibold">{sprint.pct}%</span>
                 </div>
-              </div>
+              }
+            >
               {currentSprint.goal && (
                 <p className="flex items-start gap-1.5 text-sm text-muted-foreground mb-3">
                   <Target className="w-3.5 h-3.5 mt-0.5 flex-shrink-0 text-primary/70" />{currentSprint.goal}
@@ -465,14 +477,14 @@ export function TodoTodayPage() {
 
                 {/* 스프린트에 추가 후보 */}
                 {sprint.candidates.length > 0 && (
-                  <div className="rounded-md border border-dashed border-border bg-card overflow-hidden">
-                    <div className="flex items-center gap-2 px-4 py-2.5 border-b border-border/60">
-                      <Plus className="w-4 h-4 text-muted-foreground" />
-                      <span className="text-sm font-semibold text-muted-foreground">스프린트에 추가</span>
-                      <span className="text-sm text-muted-foreground">{sprint.candidates.length}</span>
-                      <span className="ml-auto text-xs text-muted-foreground">미배정 · 미완료 내 할일</span>
-                    </div>
-                    <div className="px-2 py-1 divide-y divide-border/40">
+                  <MacCard
+                    title="스프린트에 추가"
+                    icon={Plus}
+                    titleExtra={<span className="text-xs text-muted-foreground tabular-nums">{sprint.candidates.length}</span>}
+                    description="미배정 · 미완료 내 할일"
+                    bodyPadding="px-2 py-1"
+                  >
+                    <div className="divide-y divide-border/40">
                       {sprint.candidates.map((t) => {
                         const cl = clusterLabel(t);
                         return (
@@ -492,27 +504,33 @@ export function TodoTodayPage() {
                         );
                       })}
                     </div>
-                  </div>
+                  </MacCard>
                 )}
               </>
             )}
           </div>
         )
       ) : view === 'schedule' ? (
-        <MacCard bodyPadding="p-0">
-          <div className="flex items-center gap-2 px-4 py-2.5 border-b border-border">
-            <CalendarDays className="w-4 h-4 text-primary flex-shrink-0" />
-            <button onClick={() => setScheduleDate((d) => addDaysStr(d, -1))} className="p-1 rounded hover:bg-secondary text-muted-foreground" aria-label="이전 날"><ChevronLeft className="w-4 h-4" /></button>
-            <span className="text-sm font-semibold min-w-[150px] text-center">
-              {fmtDateLabel(scheduleDate)}
-              {scheduleDate === today && <span className="ml-1.5 text-sm text-primary font-medium">오늘</span>}
-            </span>
-            <button onClick={() => setScheduleDate((d) => addDaysStr(d, 1))} className="p-1 rounded hover:bg-secondary text-muted-foreground" aria-label="다음 날"><ChevronRight className="w-4 h-4" /></button>
-            {scheduleDate !== today && (
-              <button onClick={() => setScheduleDate(today)} className="text-sm px-2 py-0.5 rounded-full border border-primary/30 text-primary hover:bg-primary/10 transition-colors">오늘로</button>
-            )}
-            <span className="ml-auto text-sm text-muted-foreground">{daySchedule.length}건</span>
-          </div>
+        // D-122: 날짜 내비 수제 헤더 바 → MacCard 슬롯(제목·건수·내비 actions)
+        <MacCard
+          title="일정"
+          icon={CalendarDays}
+          titleExtra={<span className="text-xs text-muted-foreground tabular-nums">{daySchedule.length}건</span>}
+          bodyPadding="p-0"
+          actions={
+            <div className="flex items-center gap-2">
+              <button onClick={() => setScheduleDate((d) => addDaysStr(d, -1))} className="p-1 rounded hover:bg-secondary text-muted-foreground" aria-label="이전 날" title="이전 날"><ChevronLeft className="w-4 h-4" /></button>
+              <span className="text-sm font-semibold min-w-[150px] text-center">
+                {fmtDateLabel(scheduleDate)}
+                {scheduleDate === today && <span className="ml-1.5 text-sm text-primary font-medium">오늘</span>}
+              </span>
+              <button onClick={() => setScheduleDate((d) => addDaysStr(d, 1))} className="p-1 rounded hover:bg-secondary text-muted-foreground" aria-label="다음 날" title="다음 날"><ChevronRight className="w-4 h-4" /></button>
+              {scheduleDate !== today && (
+                <button onClick={() => setScheduleDate(today)} className="text-sm px-2 py-0.5 rounded-full border border-primary/30 text-primary hover:bg-primary/10 transition-colors">오늘로</button>
+              )}
+            </div>
+          }
+        >
           {daySchedule.length === 0 ? (
             <EmptyState compact icon={CalendarDays} title="이 날짜에 예정된 일정이 없습니다." description="이전·다음 날로 이동하거나 업무에 일정을 지정해 보세요." />
           ) : (
@@ -569,6 +587,6 @@ export function TodoTodayPage() {
           <Section title="최근 완료" tone="done" items={buckets.doneRecent} view={view} busyId={busyId} onToggleDone={onToggleDone} onOpen={onOpen} defaultOpen={false} />
         </div>
       )}
-    </div>
+    </PageShell>
   );
 }

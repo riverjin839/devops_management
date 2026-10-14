@@ -10,7 +10,7 @@ import { useClusters } from '@/hooks/useCluster';
 import { useClusterStore } from '@/stores/clusterStore';
 import { useQueryClient } from '@tanstack/react-query';
 import { useOperationLevels } from '@/hooks/useOperationLevels';
-import { ConfirmDialog, Skeleton, useToast, EmptyState, PageHeader } from '@/components/common';
+import { ConfirmDialog, Skeleton, useToast, EmptyState, PageHeader, PageShell } from '@/components/common';
 import { MacCard } from '@/components/ui/MacCard';
 import { Button } from '@/components/ui/button';
 import { formatApiError } from '@/lib/utils';
@@ -225,7 +225,7 @@ export function ClusterMetaFormPage() {
   // ── D-032: 로딩/에러/미발견 3분기 — 데이터가 확정되기 전엔 폼을 렌더하지 않는다 ──
   const shell = (children: ReactNode) => (
     <div className="app-min-h-screen bg-background">
-      <main className="max-w-[1200px] mx-auto px-8 py-8">{children}</main>
+      <PageShell density="doc">{children}</PageShell>
     </div>
   );
 
@@ -242,7 +242,7 @@ export function ClusterMetaFormPage() {
             <Skeleton height={12} width={120} />
           </div>
         </div>
-        <div className="bg-card border border-border rounded-md p-6 space-y-5">
+        <MacCard title="클러스터 정보" bodyPadding="p-6" className="space-y-5">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             {[...Array(3)].map((_, i) => <Skeleton key={i} height={38} />)}
           </div>
@@ -250,7 +250,7 @@ export function ClusterMetaFormPage() {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {[...Array(4)].map((_, i) => <Skeleton key={i} height={38} />)}
           </div>
-        </div>
+        </MacCard>
       </div>,
     );
   }
@@ -426,7 +426,7 @@ export function ClusterMetaFormPage() {
 
   return (
     <div className="app-min-h-screen bg-background">
-      <main className="max-w-[1200px] mx-auto px-8 py-8">
+      <PageShell density="doc">
         {/* Page header */}
         {/* 뒤로가기는 미저장 변경 확인(requestLeave)을 거쳐야 해서 PageHeader 의 Link 형 back 대신 버튼을 둔다. */}
         <div className="flex items-start gap-2 mb-6">
@@ -773,7 +773,7 @@ export function ClusterMetaFormPage() {
           onConfirm={() => { setLeaveOpen(false); navigate('/cluster-manage'); }}
           onCancel={() => setLeaveOpen(false)}
         />
-      </main>
+      </PageShell>
     </div>
   );
 }

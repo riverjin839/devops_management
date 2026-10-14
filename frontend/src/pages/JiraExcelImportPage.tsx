@@ -7,7 +7,7 @@ import {
 import { jiraApi } from '@/services/api';
 import type { JiraExcelImportResult, JiraExcelRow, JiraImportResult } from '@/types';
 import { formatApiError } from '@/lib/utils';
-import { ViewModeBar, EmptyState, PageHeader } from '@/components/common';
+import { ViewModeBar, EmptyState, PageHeader, PageShell } from '@/components/common';
 import { MacCard } from '@/components/ui/MacCard';
 
 type ImportMode = 'file' | 'paste';
@@ -102,9 +102,8 @@ export function JiraExcelImportPage() {
 
   return (
     <div className="app-min-h-screen bg-background">
-      <main className="max-w-[1400px] mx-auto px-8 py-8">
+      <PageShell density="hub" className="space-y-4">
         <PageHeader
-          className="mb-6"
           icon={FileSpreadsheet}
           title="Jira Excel 가져오기"
           description={'Jira 에서 내려받은 이슈 목록(.xlsx, .xls)을 업로드하거나 표를 복사해 붙여넣어 미리보고, "저장"을 누르면 업무 관리 게시판에 매핑되어 저장됩니다.'}
@@ -136,7 +135,7 @@ export function JiraExcelImportPage() {
 
         {/* 저장 결과 배너 */}
         {saveResult && (
-          <div className="mb-4 px-4 py-3 rounded-xl border border-status-healthy/30 bg-status-healthy/10 text-sm text-status-healthy flex items-center gap-3 flex-wrap">
+          <div className="px-4 py-3 rounded-xl border border-status-healthy/30 bg-status-healthy/10 text-sm text-status-healthy flex items-center gap-3 flex-wrap">
             <CheckCircle2 className="w-4 h-4 flex-shrink-0" />
             <span>
               업무 관리 게시판에 저장했습니다 — 생성 {saveResult.imported}건 · 갱신 {saveResult.updated}건
@@ -156,14 +155,14 @@ export function JiraExcelImportPage() {
           </div>
         )}
         {saveError && (
-          <div className="mb-4 px-4 py-3 rounded-xl border border-status-critical/30 bg-status-critical/10 text-sm text-status-critical flex items-start gap-1.5">
+          <div className="px-4 py-3 rounded-xl border border-status-critical/30 bg-status-critical/10 text-sm text-status-critical flex items-start gap-1.5">
             <AlertTriangle className="w-4 h-4 flex-shrink-0 mt-0.5" />
             {saveError}
           </div>
         )}
 
         {/* 파일 업로드 / 붙여넣기 */}
-        <MacCard rootClassName="mb-4">
+        <MacCard title={mode === 'file' ? '파일 업로드' : '표 붙여넣기'}>
           {mode === 'file' ? (
             <div className="flex items-center gap-2 flex-wrap">
               <label className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium bg-primary/10 hover:bg-primary/20 text-primary border border-primary/30 rounded-lg cursor-pointer">
@@ -253,7 +252,11 @@ export function JiraExcelImportPage() {
 
         {/* 결과 테이블 */}
         {result && result.rows.length > 0 && (
-          <MacCard bodyPadding="p-0">
+          <MacCard
+            title="미리보기"
+            titleExtra={<span className="text-xs text-muted-foreground tabular-nums">{result.rows.length}건</span>}
+            bodyPadding="p-0"
+          >
             <div className="overflow-x-auto">
               <table className="w-full text-sm" style={{ tableLayout: 'fixed' }}>
                 <colgroup>
@@ -297,17 +300,15 @@ export function JiraExcelImportPage() {
         )}
 
         {!result && !error && !loading && (
-          <MacCard>
-            <EmptyState
-              icon={FileSpreadsheet}
-              title="아직 불러온 이슈 목록이 없습니다."
-              description={mode === 'file'
-                ? 'Jira 에서 내보낸(Export) .xlsx 파일을 업로드하면 여기에 미리보기가 나타납니다.'
-                : 'Jira 이슈 목록이나 엑셀 표를 복사해 위 칸에 붙여넣으면 여기에 미리보기가 나타납니다.'}
-            />
-          </MacCard>
+          <EmptyState
+            icon={FileSpreadsheet}
+            title="아직 불러온 이슈 목록이 없습니다."
+            description={mode === 'file'
+              ? 'Jira 에서 내보낸(Export) .xlsx 파일을 업로드하면 여기에 미리보기가 나타납니다.'
+              : 'Jira 이슈 목록이나 엑셀 표를 복사해 위 칸에 붙여넣으면 여기에 미리보기가 나타납니다.'}
+          />
         )}
-      </main>
+      </PageShell>
     </div>
   );
 }

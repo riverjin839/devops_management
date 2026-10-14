@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { FileCode2 } from 'lucide-react';
 import { MacCard } from '@/components/ui/MacCard';
-import { EmptyState } from '@/components/common';
+import { EmptyState, PageShell } from '@/components/common';
 import { PageHeader } from '@/components/common/PageHeader';
 import { ScriptListPanel, ScriptCreateForm, ScriptDetailPanel } from '@/components/scripts';
 import { useScripts } from '@/hooks/useScripts';
@@ -22,7 +22,7 @@ export function ScriptsPage() {
   const { data: scripts, isLoading } = useScripts(filter);
 
   return (
-    <main className="mx-auto p-5 space-y-4 max-w-[1400px]">
+    <PageShell density="hub" className="space-y-4">
       <PageHeader
         icon={FileCode2}
         title="스크립트 라이브러리"
@@ -30,7 +30,14 @@ export function ScriptsPage() {
       />
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
-        <MacCard rootClassName="lg:col-span-3 min-w-0" bodyPadding="p-0" className="lg:h-[calc(100vh-220px)] overflow-hidden">
+        {/* D-122: 제목 없이 패널 하나만 감싸던 카드에 제목을 달아 마스터·디테일 두 칸을 섹션으로 만든다 */}
+        <MacCard
+          title="스크립트 목록"
+          titleExtra={scripts ? <span className="text-xs text-muted-foreground tabular-nums">{scripts.length}</span> : undefined}
+          rootClassName="lg:col-span-3 min-w-0"
+          bodyPadding="p-0"
+          className="lg:h-[calc(100vh-260px)] overflow-hidden"
+        >
           <ScriptListPanel
             scripts={scripts ?? []}
             isLoading={isLoading}
@@ -44,7 +51,12 @@ export function ScriptsPage() {
           />
         </MacCard>
 
-        <MacCard rootClassName="lg:col-span-9 min-w-0" bodyPadding="p-0" className="lg:h-[calc(100vh-220px)] overflow-hidden">
+        <MacCard
+          title={creating ? '새 스크립트' : '스크립트 상세'}
+          rootClassName="lg:col-span-9 min-w-0"
+          bodyPadding="p-0"
+          className="lg:h-[calc(100vh-260px)] overflow-hidden"
+        >
           {creating ? (
             <div className="h-full overflow-y-auto">
               <ScriptCreateForm
@@ -65,6 +77,6 @@ export function ScriptsPage() {
           )}
         </MacCard>
       </div>
-    </main>
+    </PageShell>
   );
 }

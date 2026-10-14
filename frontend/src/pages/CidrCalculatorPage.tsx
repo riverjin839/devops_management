@@ -20,7 +20,7 @@ import {
 import { useClusters } from '@/hooks/useCluster';
 import { useClusterStore } from '@/stores/clusterStore';
 import { clustersApi } from '@/services/api';
-import { ResizeGrip, DoubleScrollX} from '@/components/common';
+import { ResizeGrip, DoubleScrollX, PageShell } from '@/components/common';
 import { useColumnWidths } from '@/hooks/useColumnWidths';
 import { MacCard } from '@/components/ui/MacCard';
 
@@ -416,19 +416,23 @@ export function CidrCalculatorPage() {
 
   return (
     <div className="app-min-h-screen bg-background">
-      <main className="max-w-[1440px] mx-auto px-6 py-6 space-y-5">
+      <PageShell density="hub" className="space-y-5">
         {/* ── Page Header ─────────────────────────────────────────────────── */}
-        <header className="flex items-center justify-between gap-4 flex-wrap">
-          <PageHeader icon={Calculator} title="CIDR 계산기" description="서브넷 계산 · 분할 · 충돌 검사" className="flex-1 min-w-0" />
-          <div className="flex items-center gap-3 text-xs text-muted-foreground">
-            <span className="inline-flex items-center gap-1.5">
-              <span className="w-1.5 h-1.5 rounded-full bg-chart-1" /> Private (RFC1918)
-            </span>
-            <span className="inline-flex items-center gap-1.5">
-              <span className="w-1.5 h-1.5 rounded-full bg-chart-3" /> Public
-            </span>
-          </div>
-        </header>
+        <PageHeader
+          icon={Calculator}
+          title="CIDR 계산기"
+          description="서브넷 계산 · 분할 · 충돌 검사"
+          actions={
+            <div className="flex items-center gap-3 text-xs text-muted-foreground">
+              <span className="inline-flex items-center gap-1.5">
+                <span className="w-1.5 h-1.5 rounded-full bg-chart-1" /> Private (RFC1918)
+              </span>
+              <span className="inline-flex items-center gap-1.5">
+                <span className="w-1.5 h-1.5 rounded-full bg-chart-3" /> Public
+              </span>
+            </div>
+          }
+        />
 
         {/* ── HERO: input + summary ──────────────────────────────────────── */}
         <MacCard title="CIDR 입력" bodyPadding="p-0">
@@ -722,12 +726,11 @@ export function CidrCalculatorPage() {
             )}
 
             {/* Multi-CIDR comparator — 같은 충돌 그룹은 같은 색으로 묶어 표시 */}
-            <MacCard title="멀티 CIDR 겹침 비교">
-              <div className="flex items-center justify-between mb-3">
-                <p className="text-xs text-muted-foreground inline-flex items-center gap-1.5">
-                  <GitCompare className="w-3.5 h-3.5" />
-                  여러 CIDR 블록의 주소 충돌을 한눈에 확인합니다 — 같은 색은 서로 겹치는 그룹
-                </p>
+            {/* D-122: 설명+추가 버튼 수제 행 → 추가 버튼은 헤더 actions, 설명은 본문 첫 줄 */}
+            <MacCard
+              title="멀티 CIDR 겹침 비교"
+              icon={GitCompare}
+              actions={
                 <button
                   type="button"
                   onClick={addEntry}
@@ -736,7 +739,11 @@ export function CidrCalculatorPage() {
                   <Plus className="w-3 h-3" />
                   추가
                 </button>
-              </div>
+              }
+            >
+              <p className="mb-3 text-xs text-muted-foreground">
+                여러 CIDR 블록의 주소 충돌을 한눈에 확인합니다 — 같은 색은 서로 겹치는 그룹
+              </p>
 
               <div className="space-y-2 mb-4">
                 {entries.map((entry) => {
@@ -1050,7 +1057,7 @@ export function CidrCalculatorPage() {
             </MacCard>
           </div>
         </div>
-      </main>
+      </PageShell>
     </div>
   );
 }

@@ -1,6 +1,6 @@
 import { Plus, Search, FileCode, Boxes, Terminal } from 'lucide-react';
 import type { ExecutableScript, ScriptKind } from '@/types';
-import { EmptyState } from '@/components/common';
+import { EmptyState, LoadingState } from '@/components/common';
 
 const KIND_META: Record<ScriptKind, { label: string; icon: typeof FileCode; cls: string }> = {
   python: { label: 'Python', icon: FileCode, cls: 'text-chart-2 border-chart-2/40 bg-chart-2/10' },
@@ -77,7 +77,7 @@ export function ScriptListPanel({
 
       <div className="flex-1 min-h-0 overflow-y-auto">
         {isLoading ? (
-          <div className="p-3 text-xs text-muted-foreground">불러오는 중…</div>
+          <LoadingState compact />
         ) : scripts.length === 0 ? (
           <EmptyState
             compact

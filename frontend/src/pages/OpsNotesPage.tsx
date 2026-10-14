@@ -11,7 +11,7 @@ import { RichContent } from '@/components/editor';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { opsNotesApi } from '@/services/api';
 import type { OpsNote, OpsNoteColor } from '@/types';
-import { EmptyState, Skeleton, useToast, ViewModeBar } from '@/components/common';
+import { EmptyState, PageShell, Skeleton, useToast, ViewModeBar } from '@/components/common';
 import { formatApiError, formatRelativeTime } from '@/lib/utils';
 import { MacCard } from '@/components/ui/MacCard';
 import { OpsNoteTable, type OpsNoteSortKey } from '@/components/ops-notes/OpsNoteTable';
@@ -368,28 +368,32 @@ export function OpsNotesPage() {
 
   return (
     <div className="app-min-h-screen bg-background">
-      <main className="mx-auto px-4 lg:px-6 py-5 space-y-4 max-w-[1600px]">
+      <PageShell density="hub" className="space-y-4">
         {/* ── Page header ─────────────────────────────────────────────── */}
-        <div className="flex items-center justify-between gap-3 flex-wrap">
-          <PageHeader icon={HelpCircle} title="DevOps Q&A" description="운영 중 만난 질문과 해결책을 한 곳에서." className="flex-1 min-w-0" />
-          <div className="flex items-center gap-3">
-            <ViewModeBar
-              modes={[
-                { id: 'table', label: '리스트', icon: <List       className="w-3.5 h-3.5" /> },
-                { id: 'card',  label: '카드',   icon: <LayoutGrid className="w-3.5 h-3.5" /> },
-              ]}
-              active={viewMode}
-              onChange={(v) => setViewMode(v as ViewMode)}
-              showStylePanel={false}
-            />
-            <button
-              onClick={() => navigate(newNoteHref)}
-              className="flex items-center gap-1.5 px-3.5 py-2 text-sm font-semibold bg-primary hover:bg-primary/90 text-primary-foreground rounded-xl transition-colors shadow-card"
-            >
-              <Plus className="w-4 h-4" /> 새 Q&amp;A
-            </button>
-          </div>
-        </div>
+        <PageHeader
+          icon={HelpCircle}
+          title="DevOps Q&A"
+          description="운영 중 만난 질문과 해결책을 한 곳에서."
+          actions={
+            <>
+              <ViewModeBar
+                modes={[
+                  { id: 'table', label: '리스트', icon: <List       className="w-3.5 h-3.5" /> },
+                  { id: 'card',  label: '카드',   icon: <LayoutGrid className="w-3.5 h-3.5" /> },
+                ]}
+                active={viewMode}
+                onChange={(v) => setViewMode(v as ViewMode)}
+                showStylePanel={false}
+              />
+              <button
+                onClick={() => navigate(newNoteHref)}
+                className="flex items-center gap-1.5 px-3.5 py-2 text-sm font-semibold bg-primary hover:bg-primary/90 text-primary-foreground rounded-xl transition-colors shadow-card"
+              >
+                <Plus className="w-4 h-4" /> 새 Q&amp;A
+              </button>
+            </>
+          }
+        />
 
         {/* ── Stat strip ──────────────────────────────────────────────── */}
         <StatTileRow>
@@ -399,69 +403,64 @@ export function OpsNotesPage() {
           <StatTile label="작성자" value={meta.authorCount} hint="명" icon={HelpCircle} />
         </StatTileRow>
 
-        {/* ── Filter + search ─────────────────────────────────────────── */}
-        <MacCard bodyPadding="p-3">
-          <div className="flex items-center gap-2 flex-wrap">
-            <button
-              onClick={() => setFilterService('')}
-              className={`flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-full border transition-colors ${
-                !filterService
-                  ? 'bg-primary text-primary-foreground border-primary'
-                  : 'bg-background border-border text-muted-foreground hover:border-primary/50'
-              }`}
-            >
-              전체 <span className="opacity-70">({allNotes.length})</span>
-            </button>
-            {SERVICES.map((s) => {
-              const count = countByService[s.value] ?? 0;
-              const isActive = filterService === s.value;
-              if (count === 0 && !isActive) return null;
-              const Icon = s.Icon;
-              return (
-                <button
-                  key={s.value}
-                  onClick={() => setFilterService(isActive ? '' : s.value)}
-                  className={`flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-full border transition-colors ${
-                    isActive
-                      ? `${s.soft} border-transparent ring-1 ${s.ring}`
-                      : 'bg-background border-border text-muted-foreground hover:border-primary/50'
-                  }`}
-                >
-                  <Icon className="w-3.5 h-3.5" />{s.label}
-                  <span className="opacity-70">({count})</span>
-                </button>
-              );
-            })}
-            <div className="ml-auto relative w-full sm:w-72">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
-              <input
-                type="text"
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                placeholder="질문, 답변, 작성자 검색…"
-                className="w-full pl-9 pr-8 py-1.5 text-sm bg-background border border-border rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/40"
-              />
-              {search && (
-                <button
-                  onClick={() => setSearch('')}
-                  className="absolute right-2 top-1/2 -translate-y-1/2 p-0.5 rounded hover:bg-secondary text-muted-foreground"
-                  aria-label="검색어 지우기"
-                >
-                  <X className="w-3.5 h-3.5" />
-                </button>
-              )}
-            </div>
+        {/* ── Filter + search — D-122: 툴바만 감싸던 카드를 걷음 ─────────── */}
+        <div className="flex items-center gap-2 flex-wrap">
+          <button
+            onClick={() => setFilterService('')}
+            className={`flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-full border transition-colors ${
+              !filterService
+                ? 'bg-primary text-primary-foreground border-primary'
+                : 'bg-background border-border text-muted-foreground hover:border-primary/50'
+            }`}
+          >
+            전체 <span className="opacity-70">({allNotes.length})</span>
+          </button>
+          {SERVICES.map((s) => {
+            const count = countByService[s.value] ?? 0;
+            const isActive = filterService === s.value;
+            if (count === 0 && !isActive) return null;
+            const Icon = s.Icon;
+            return (
+              <button
+                key={s.value}
+                onClick={() => setFilterService(isActive ? '' : s.value)}
+                className={`flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-full border transition-colors ${
+                  isActive
+                    ? `${s.soft} border-transparent ring-1 ${s.ring}`
+                    : 'bg-background border-border text-muted-foreground hover:border-primary/50'
+                }`}
+              >
+                <Icon className="w-3.5 h-3.5" />{s.label}
+                <span className="opacity-70">({count})</span>
+              </button>
+            );
+          })}
+          <div className="ml-auto relative w-full sm:w-72">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
+            <input
+              type="text"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="질문, 답변, 작성자 검색…"
+              className="w-full pl-9 pr-8 py-1.5 text-sm bg-background border border-border rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/40"
+            />
+            {search && (
+              <button
+                onClick={() => setSearch('')}
+                className="absolute right-2 top-1/2 -translate-y-1/2 p-0.5 rounded hover:bg-secondary text-muted-foreground"
+                aria-label="검색어 지우기"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            )}
           </div>
-        </MacCard>
+        </div>
 
         {viewMode === 'table' ? (
           /* ── 리스트(테이블) 뷰 — 디폴트 ─────────────────────────────── */
           <MacCard
-            title={
-              filterService
-                ? `${SERVICE_MAP[filterService]?.label ?? filterService} · ${tableNotes.length}`
-                : `Q&A · ${tableNotes.length}`
-            }
+            title={filterService ? (SERVICE_MAP[filterService]?.label ?? filterService) : 'Q&A'}
+            titleExtra={<span className="text-xs text-muted-foreground tabular-nums">{tableNotes.length}</span>}
             bodyPadding="p-0"
           >
             {isLoading ? (
@@ -497,7 +496,11 @@ export function OpsNotesPage() {
           <>
             {/* Pinned section */}
             {!isLoading && pinnedNotes.length > 0 && (
-              <MacCard title={`고정 Q&A · ${pinnedNotes.length}`} bodyPadding="p-4">
+              // D-122: QnaCard 타일 그리드를 또 MacCard 로 감싸지 않는다 — 타일이 1단 카드.
+              <section className="space-y-2">
+                <h2 className="text-sm font-semibold text-foreground">
+                  고정 Q&amp;A <span className="ml-1 text-xs font-normal text-muted-foreground tabular-nums">{pinnedNotes.length}</span>
+                </h2>
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
                   {pinnedNotes.map((note) => (
                     <div key={note.id} className={deletingId === note.id ? 'opacity-40 pointer-events-none' : ''}>
@@ -511,18 +514,15 @@ export function OpsNotesPage() {
                     </div>
                   ))}
                 </div>
-              </MacCard>
+              </section>
             )}
 
             {/* Regular grid */}
-            <MacCard
-              title={
-                filterService
-                  ? `${SERVICE_MAP[filterService]?.label ?? filterService} · ${regularNotes.length}`
-                  : `최근 Q&A · ${regularNotes.length}`
-              }
-              bodyPadding="p-4"
-            >
+            <section className="space-y-2">
+              <h2 className="text-sm font-semibold text-foreground">
+                {filterService ? (SERVICE_MAP[filterService]?.label ?? filterService) : '최근 Q&A'}
+                <span className="ml-1.5 text-xs font-normal text-muted-foreground tabular-nums">{regularNotes.length}</span>
+              </h2>
               {isLoading ? (
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
                   {[...Array(8)].map((_, i) => (
@@ -550,10 +550,10 @@ export function OpsNotesPage() {
                   ))}
                 </div>
               )}
-            </MacCard>
+            </section>
           </>
         )}
-      </main>
+      </PageShell>
     </div>
   );
 }
