@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { ChevronDown, ChevronRight, Play, X } from 'lucide-react';
 import { MacCard } from '@/components/ui/MacCard';
+import { EmptyState, LoadingState } from '@/components/common/EmptyState';
 import { ExecutionStepsTimeline } from '@/components/daily-check/ExecutionStepsTimeline';
 import {
   useDefinitionResults,
@@ -15,10 +16,17 @@ const STATUS_DOT: Record<string, string> = {
   healthy: 'bg-muted-foreground/40',
   warning: 'bg-status-warning',
   critical: 'bg-status-critical',
-  pending: 'bg-zinc-400',
+  pending: 'bg-status-unknown',
 };
 
 const STATUS_FILTERS = ['all', 'healthy', 'warning', 'critical', 'pending'] as const;
+const STATUS_FILTER_LABEL: Record<(typeof STATUS_FILTERS)[number], string> = {
+  all: '전체',
+  healthy: '정상',
+  warning: '경고',
+  critical: '위험',
+  pending: '대기',
+};
 
 /** 응답 인터셉터가 details._steps 키를 camelize(→ Steps) 하므로 둘 다 조회. */
 function extractSteps(result: DeepCheckResult): DeepCheckExecStep[] | undefined {
@@ -59,60 +67,65 @@ export function DeepCheckRunHistory({ definition, clusters, runClusterId, onClos
   const effectiveRunClusterId = definition.clusterId ?? runClusterId ?? undefined;
 
   return (
-    <MacCard title={`실행 이력 — ${definition.name}`} bodyPadding="p-0">
-      <div className="flex items-center gap-2 px-4 py-2.5 border-b border-border">
-        <div className="flex items-center gap-1">
-          {STATUS_FILTERS.map((s) => (
-            <button
-              key={s}
-              type="button"
-              onClick={() => {
-                setStatusFilter(s);
-                setOffset(0);
-              }}
-              className={`rounded-lg px-2 py-1 text-xs ${
-                statusFilter === s
-                  ? 'bg-primary text-primary-foreground'
-                  : 'text-muted-foreground hover:bg-muted'
-              }`}
-            >
-              {s === 'all' ? '전체' : s}
-            </button>
-          ))}
-        </div>
-        <span className="text-xs text-muted-foreground ml-1">총 {total}건</span>
-        <div className="flex-1" />
-        <button
-          type="button"
-          onClick={() => run.mutate({ id: definition.id, clusterId: effectiveRunClusterId })}
-          disabled={run.isPending || !effectiveRunClusterId}
-          title={
-            effectiveRunClusterId
-              ? '즉시 1회 실행하고 이력에 기록'
-              : '글로벌 정의는 좌측에서 클러스터를 선택해야 실행할 수 있습니다'
-          }
-          className="inline-flex items-center gap-1.5 rounded-xl border border-border bg-card px-2.5 py-1 text-xs hover:bg-muted disabled:opacity-50"
-        >
-          <Play className="w-3 h-3" />
-          {run.isPending ? '실행 중…' : '지금 실행'}
-        </button>
-        <button
-          type="button"
-          onClick={onClose}
-          className="rounded-lg p-1.5 text-muted-foreground hover:bg-muted"
-          title="닫기"
-        >
-          <X className="w-4 h-4" />
-        </button>
-      </div>
-
-      {isLoading && (
-        <div className="px-4 py-6 text-sm text-muted-foreground">이력을 불러오는 중…</div>
-      )}
+    <MacCard
+      title={`실행 이력 — ${definition.name}`}
+      titleExtra={<span className="text-xs text-muted-foreground tabular-nums">총 {total}건</span>}
+      bodyPadding="p-0"
+      actions={
+        <>
+          <div className="flex items-center gap-1" role="group" aria-label="상태 필터">
+            {STATUS_FILTERS.map((s) => (
+              <button
+                key={s}
+                type="button"
+                onClick={() => {
+                  setStatusFilter(s);
+                  setOffset(0);
+                }}
+                aria-pressed={statusFilter === s}
+                className={`rounded-xl px-2 py-1 text-xs ${
+                  statusFilter === s
+                    ? 'bg-primary text-primary-foreground'
+                    : 'text-muted-foreground hover:bg-muted'
+                }`}
+              >
+                {STATUS_FILTER_LABEL[s]}
+              </button>
+            ))}
+          </div>
+          <button
+            type="button"
+            onClick={() => run.mutate({ id: definition.id, clusterId: effectiveRunClusterId })}
+            disabled={run.isPending || !effectiveRunClusterId}
+            title={
+              effectiveRunClusterId
+                ? '즉시 1회 실행하고 이력에 기록'
+                : '글로벌 정의는 좌측에서 클러스터를 선택해야 실행할 수 있습니다'
+            }
+            className="inline-flex items-center gap-1.5 rounded-xl border border-border bg-card px-2.5 py-1 text-xs hover:bg-muted disabled:opacity-50"
+          >
+            <Play className="w-3 h-3" />
+            {run.isPending ? '실행 중…' : '지금 실행'}
+          </button>
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-xl p-1.5 text-muted-foreground hover:bg-muted"
+            title="닫기"
+            aria-label="실행 이력 닫기"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </>
+      }
+    >
+      {isLoading && <LoadingState compact />}
       {!isLoading && results.length === 0 && (
-        <div className="px-4 py-6 text-sm text-muted-foreground italic">
-          실행 이력이 없습니다. "지금 실행"으로 첫 기록을 남겨보세요.
-        </div>
+        <EmptyState
+          compact
+          title="실행 이력 없음"
+          description="헤더의 「지금 실행」으로 1회 실행하면 단계 로그와 결과가 여기에 기록됩니다."
+        />
       )}
 
       <ul className="divide-y divide-border">
@@ -132,7 +145,7 @@ export function DeepCheckRunHistory({ definition, clusters, runClusterId, onClos
                   <ChevronRight className="w-3.5 h-3.5 flex-shrink-0 text-muted-foreground" />
                 )}
                 <span
-                  className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${STATUS_DOT[r.status] ?? 'bg-zinc-400'}`}
+                  className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${STATUS_DOT[r.status] ?? 'bg-status-unknown'}`}
                   title={r.status}
                 />
                 <span className="text-xs font-mono text-muted-foreground whitespace-nowrap">

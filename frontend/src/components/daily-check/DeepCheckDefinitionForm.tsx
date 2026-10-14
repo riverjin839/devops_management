@@ -507,7 +507,7 @@ function FieldGroup({
 }) {
   if (fields.length === 0) return null;
   return (
-    <div className="rounded-md border border-border bg-card p-3 space-y-2">
+    <div className="rounded-md bg-secondary/40 p-3 space-y-2">
       <div className="text-xs font-semibold text-muted-foreground">
         {title}
       </div>

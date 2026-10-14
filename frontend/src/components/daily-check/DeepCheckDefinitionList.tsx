@@ -11,6 +11,7 @@ import {
   Trash2,
 } from 'lucide-react';
 import { MacCard } from '@/components/ui/MacCard';
+import { EmptyState } from '@/components/common/EmptyState';
 import {
   useDeleteDefinition,
   useDuplicateDefinition,
@@ -24,7 +25,7 @@ const STATUS_DOT: Record<string, string> = {
   healthy: 'bg-muted-foreground/40',
   warning: 'bg-status-warning',
   critical: 'bg-status-critical',
-  pending: 'bg-zinc-400',
+  pending: 'bg-status-unknown',
 };
 
 interface Props {
@@ -102,16 +103,16 @@ export function DeepCheckDefinitionList({
 
   if (definitions.length === 0) {
     return (
-      <MacCard title="Deep Check 정의">
-        <div className="text-sm text-muted-foreground italic">
-          정의가 없습니다. 우측 상단의 "추가" 버튼으로 새 deep check 정의를 생성하세요.
-        </div>
-      </MacCard>
+      <EmptyState
+        compact
+        title="심층 점검 정의 없음"
+        description="우측 상단의 「추가」로 정의를 만들면 클러스터별 심층 점검이 cron 과 수동 실행에 쓰입니다."
+      />
     );
   }
 
   return (
-    <MacCard title="Deep Check 정의" bodyPadding="p-0">
+    <MacCard title="심층 점검 정의" titleExtra={<span className="text-xs text-muted-foreground tabular-nums">{definitions.length}개</span>} bodyPadding="p-0">
       <ul className="divide-y divide-border">
         {definitions.map((d) => (
           <li key={d.id} className="flex items-center gap-3 px-4 py-3 hover:bg-muted/40">
@@ -132,7 +133,7 @@ export function DeepCheckDefinitionList({
               <div className="flex items-center gap-2 text-sm font-medium">
                 {d.lastStatus && (
                   <span
-                    className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${STATUS_DOT[d.lastStatus] ?? 'bg-zinc-400'}`}
+                    className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${STATUS_DOT[d.lastStatus] ?? 'bg-status-unknown'}`}
                     title={`최근 실행: ${d.lastStatus}`}
                   />
                 )}

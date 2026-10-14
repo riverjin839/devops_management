@@ -7,7 +7,6 @@ import {
   Users, AlertTriangle,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { MacCard } from '@/components/ui/MacCard';
 import { EmptyState } from '@/components/common/EmptyState';
 import { todayWorkItemsApi } from '@/services/api';
 import { useAssignees } from '@/hooks/useAssignees';
@@ -265,10 +264,10 @@ export function MemberTodayTodos({ selectedClusterId }: MemberTodayTodosProps) {
             const visible = isExpanded ? all : all.slice(0, itemLimit);
 
             return (
-              <MacCard
+              // 홈의 "담당자별 진행 현황" 카드 안에 들어가므로 담당자 묶음은 카드 대신 비카드 면(D-122).
+              <div
                 key={g.assignee}
-                rootClassName={isTeam ? 'lg:col-span-2 border-primary/40 bg-primary/5' : ''}
-                bodyPadding="p-2.5"
+                className={`rounded-md p-2.5 ${isTeam ? 'lg:col-span-2 bg-primary/5' : 'bg-secondary/40'}`}
               >
                 {/* 헤더 1줄 압축 — 이름은 작게, 카드 높이를 줄여 더 많은 담당자가 보이게 */}
                 <div className="flex items-center gap-1.5 mb-1.5">
@@ -352,7 +351,7 @@ export function MemberTodayTodos({ selectedClusterId }: MemberTodayTodosProps) {
                     </li>
                   )}
                 </ul>
-              </MacCard>
+              </div>
             );
           })}
         </div>

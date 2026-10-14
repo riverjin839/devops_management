@@ -53,50 +53,47 @@ export function AiSummaryCard({ review }: Props) {
   })();
 
   return (
-    <MacCard title="AI 자동 리뷰">
-      <div className="space-y-4">
-        <div className="flex items-start justify-between gap-3">
-          <div className="flex items-center gap-2 text-sm text-muted-foreground">
-            <Sparkles className="w-4 h-4 text-primary" />
-            <span>
-              {review.aiGeneratedAt
-                ? parseUTC(review.aiGeneratedAt).toLocaleString('ko-KR')
-                : '아직 생성되지 않음'}
-            </span>
-            {statusBadge && (
-              <span
-                className={`inline-flex items-center gap-1 ${
-                  statusBadge.tone === 'red'
-                    ? 'text-status-critical'
-                    : 'text-status-warning'
-                }`}
-              >
-                <AlertCircle className="w-3.5 h-3.5" />
-                {statusBadge.label}
-              </span>
-            )}
-          </div>
-          <button
-            type="button"
-            onClick={handleRegenerate}
-            disabled={regenerating}
-            className="inline-flex items-center gap-1.5 rounded-xl border border-border bg-card px-3 py-1.5 text-sm font-medium hover:bg-muted disabled:opacity-50"
+    <MacCard
+      title="AI 자동 리뷰"
+      icon={Sparkles}
+      description={
+        review.aiGeneratedAt
+          ? `생성 ${parseUTC(review.aiGeneratedAt).toLocaleString('ko-KR')}`
+          : '아직 생성되지 않음'
+      }
+      titleExtra={
+        statusBadge && (
+          <span
+            className={`inline-flex items-center gap-1 text-xs ${
+              statusBadge.tone === 'red' ? 'text-status-critical' : 'text-status-warning'
+            }`}
           >
-            <RefreshCw
-              className={`w-3.5 h-3.5 ${regenerating ? 'animate-spin' : ''}`}
-            />
-            재생성
-          </button>
-        </div>
-
+            <AlertCircle className="w-3.5 h-3.5" />
+            {statusBadge.label}
+          </span>
+        )
+      }
+      actions={
+        <button
+          type="button"
+          onClick={handleRegenerate}
+          disabled={regenerating}
+          className="inline-flex items-center gap-1.5 rounded-xl border border-border bg-card px-3 py-1.5 text-sm font-medium hover:bg-muted disabled:opacity-50"
+        >
+          <RefreshCw className={`w-3.5 h-3.5 ${regenerating ? 'animate-spin' : ''}`} />
+          재생성
+        </button>
+      }
+    >
+      <div className="space-y-4">
         {review.aiSummary ? (
           <div className="text-sm">
             <Md text={review.aiSummary} />
           </div>
         ) : (
-          <div className="text-sm text-muted-foreground italic">
-            아직 AI 리뷰가 생성되지 않았습니다. "재생성" 버튼을 눌러 수동으로 요청할 수 있습니다.
-          </div>
+          <p className="text-sm text-muted-foreground">
+            AI 리뷰가 아직 생성되지 않았습니다. 헤더의 「재생성」으로 수동 요청할 수 있습니다.
+          </p>
         )}
 
         {review.aiRemediation && (

@@ -83,9 +83,10 @@ export function KanbanSummaryCharts({ items, isLoading, selectedClusterId }: Kan
   const totalIssues = filteredIssues.length;
 
   return (
-    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+    // 바깥 MacCard("업무 현황") 안에 들어가므로 두 분포는 카드 면 없이 세로 구분선으로만 나눈다(D-122).
+    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
       {/* WorkItem 상태 분포 */}
-      <div className="bg-card border border-border rounded-md p-5">
+      <div className="min-w-0">
         <div className="flex items-center justify-between mb-4">
           <div>
             <h3 className="text-sm font-semibold">작업 상태 분포</h3>
@@ -127,8 +128,8 @@ export function KanbanSummaryCharts({ items, isLoading, selectedClusterId }: Kan
         )}
       </div>
 
-      {/* WorkItem 상태 분포 */}
-      <div className="bg-card border border-border rounded-md p-5">
+      {/* 이슈 상태 분포 */}
+      <div className="min-w-0 border-t border-border pt-4 md:border-t-0 md:pt-0 md:border-l md:pl-6">
         <div className="flex items-center justify-between mb-4">
           <div>
             <h3 className="text-sm font-semibold">이슈 상태 분포</h3>

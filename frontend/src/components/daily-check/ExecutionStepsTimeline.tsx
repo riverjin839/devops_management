@@ -69,7 +69,7 @@ export function ExecutionStepsTimeline({ stepPlan, steps }: Props) {
   if (nodes.length === 0) return null;
 
   return (
-    <div className="rounded-md border border-border bg-card p-3">
+    <div className="rounded-md bg-secondary/40 p-3">
       <div className="flex items-center gap-2 mb-3">
         <span className="text-xs font-semibold text-muted-foreground">실행 단계 (메커니즘)</span>
         <button onClick={replay} className="ml-auto inline-flex items-center gap-1 rounded-lg border border-border px-2 py-1 text-xs hover:bg-secondary">
