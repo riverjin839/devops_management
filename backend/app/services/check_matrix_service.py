@@ -1529,6 +1529,26 @@ def _progress(db: Session, run: CheckMatrixRun, text: str) -> None:
         db.rollback()
 
 
+_COLLECTION_ERROR_LABEL = {"kubeconfig": "kubeconfig", "tls": "TLS 인증서", "connection": "연결"}
+# TLS 는 체커 메시지 자체에 조치 안내가 들어 있어 여기서 덧붙이지 않는다.
+_COLLECTION_ERROR_HINT = {
+    "kubeconfig": "kubeconfig 를 불러오지 못해 점검하지 못했습니다 — /cluster-manage 에서 kubeconfig 를 다시 등록하세요",
+    "connection": "API 서버에 연결하지 못해 점검하지 못했습니다 — 엔드포인트·네트워크를 확인하세요",
+}
+
+
+def _step_log_text(st: dict[str, Any]) -> str:
+    """체커 단계(ExecutionStep dict) 한 건을 실행 로그 한 줄로."""
+    label = st.get("label") or st.get("id") or "?"
+    status = st.get("status") or ""
+    if status == "running":
+        return f"단계 시작 — {label}"
+    detail = st.get("detail") or st.get("message") or ""
+    dur = st.get("duration_ms")
+    tail = f" ({dur}ms)" if isinstance(dur, int) and dur > 0 else ""
+    return f"단계 {label}: {status} {detail}".rstrip() + tail
+
+
 def _finish_run(
     run: CheckMatrixRun,
     state: CheckMatrixRunState,
@@ -1679,10 +1699,36 @@ def _execute_into_run(
         from app.services.registered_checks.registry import extract_cell_value
 
         _progress(db, run, f"점검 정의 «{definition.name}» 실행 중 (check_type={definition.check_type})")
-        res = DeepCheckService(db).run_definition_once(definition.id, cluster=cluster, persist=True)
-        for st in (res.get("details") or {}).get("_steps") or res.get("steps") or []:
-            if isinstance(st, dict):
-                _progress(db, run, f"단계 {st.get('label') or st.get('id')}: {st.get('status', '')} {st.get('detail') or st.get('message') or ''}".rstrip())
+        streamed = [0]
+
+        def _on_step(st: dict[str, Any]) -> None:
+            # 체커 단계 진입·종료를 그 자리에서 실행 로그에 남긴다 — 끝난 뒤 몰아서가 아니라
+            # 실행 중에 무엇을 하고 있는지 보이게(2초 폴링 패널). 기록 실패는 _progress 가 삼킨다.
+            _progress(db, run, _step_log_text(st))
+            streamed[0] += 1
+
+        res = DeepCheckService(db).run_definition_once(
+            definition.id, cluster=cluster, persist=True, on_step=_on_step,
+        )
+        if not streamed[0]:
+            # 실시간 콜백이 하나도 안 왔으면(체커가 _step 을 안 쓰는 등) 결과의 단계로 폴백.
+            for st in (res.get("details") or {}).get("_steps") or res.get("steps") or []:
+                if isinstance(st, dict):
+                    _progress(db, run, _step_log_text(st))
+        collection_error = res.get("collection_error")
+        if collection_error:
+            # 클러스터에 붙지도 못한 수집 실패 — 클러스터 상태를 판정한 게 아니므로 셀 값을
+            # 덮지 않고(이전 결과 유지) 실행 실패로 남긴다. 셀에는 실패 표식이 붙는다.
+            _progress(db, run, f"수집 실패({_COLLECTION_ERROR_LABEL.get(collection_error, collection_error)}) — 판정하지 않고 이전 값을 유지합니다.")
+            hint = _COLLECTION_ERROR_HINT.get(collection_error)
+            reason = res.get("message") or "클러스터에 연결하지 못했습니다."
+            _finish_run(
+                run, CheckMatrixRunState.failed,
+                error=f"{hint} — {reason}" if hint else reason,
+                details={**base_details, **(res.get("details") or {}), "_step_plan": res.get("step_plan") or []},
+            )
+            db.commit()
+            return
         try:
             status = StatusEnum(res.get("status", "pending"))
         except ValueError:

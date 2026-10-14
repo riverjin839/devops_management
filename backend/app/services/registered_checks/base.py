@@ -19,7 +19,7 @@ from kubernetes import client
 
 from app.models import Cluster, StatusEnum
 from app.services.kubeconfig import ensure_kubeconfig_file
-from app.services.k8s_client_pool import get_api_client_for_path, get_incluster_api_client
+from app.services.k8s_client_pool import K8sClientError, get_api_client_for_path, get_incluster_api_client
 
 logger = logging.getLogger(__name__)
 
@@ -127,6 +127,10 @@ class DeepCheckOutcome:
     steps: list[dict[str, Any]] = field(default_factory=list)  # 실시간 실행 단계(직렬화 dict)
     # 실제로 대상 클러스터에 나간 명령(kubectl) 기록 — 런북(설계)과 대조하는 실측값.
     commands: list[dict[str, Any]] = field(default_factory=list)
+    # 클러스터에 붙지도 못한 "수집 실패" 의 원인 — kubeconfig | tls | connection.
+    # 값이 있으면 status 는 클러스터 상태가 아니라 PEP 쪽 수집 문제를 뜻한다. 점검 매트릭스는
+    # 이걸 보고 셀을 판정하지 않고 "실행 실패" 로 남긴다(이전 값 유지).
+    collection_error: Optional[str] = None
 
 
 class DeepCheckerBase(ABC):
@@ -325,22 +329,29 @@ class DeepCheckerBase(ABC):
             # TLS/인증서 문제는 "연결 실패" 힌트와 문자열이 겹치는 경우가 많아(예:
             # "Max retries exceeded ... Caused by SSLError(...)") 더 구체적인 TLS 패턴을
             # 먼저 확인한다 — pending(곧 나아질 것)이 아니라 critical + 조치 안내로.
+            collection_error: Optional[str] = None
             if any(h in msg for h in _TLS_ERROR_HINTS):
                 status = StatusEnum.critical
                 message = f"{self.display_name} 실패 — {_TLS_ERROR_HINT_MESSAGE} (원문: {str(e)[:200]})"
+                collection_error = "tls"
             else:
-                status = (
-                    StatusEnum.pending
-                    if any(h in msg for h in _CONNECTION_ERROR_HINTS)
-                    else StatusEnum.critical
-                )
+                connection = any(h in msg for h in _CONNECTION_ERROR_HINTS)
+                status = StatusEnum.pending if connection else StatusEnum.critical
                 message = f"{self.display_name} 실패: {str(e)[:200]}"
+                if isinstance(e, K8sClientError):
+                    collection_error = "kubeconfig"
+                elif connection:
+                    collection_error = "connection"
             logger.warning("Deep check %s failed: %s", self.check_type, e)
+            details: dict[str, Any] = {"error": str(e)[:1000]}
+            if collection_error:
+                details["_collection_error"] = collection_error
             return DeepCheckOutcome(
                 status=status,
                 message=message,
-                details={"error": str(e)[:1000]},
+                details=details,
                 duration_ms=int((time.time() - start) * 1000),
                 steps=self._collected_steps(),
                 commands=self._collected_commands(),
+                collection_error=collection_error,
             )

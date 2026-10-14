@@ -10,6 +10,11 @@
 
 1.53.1 이후 main 에 병합된 변경 (다음 릴리스 후보).
 
+### Changed
+
+- **점검 매트릭스 — 연결 실패를 「위험」 이 아닌 「실행 실패」 로**: kubeconfig 로드 실패·API 서버 연결 불가·TLS 인증서 불일치처럼 클러스터에 붙지도 못한 경우, 셀을 위험으로 칠하거나 대기로 덮지 않고 이전 값을 그대로 둔 채 실패 표식과 「최근 실행 실패 — 원인 보기」 를 붙인다. 실행 로그 마감 줄에 원인별 조치(kubeconfig 재등록·엔드포인트 확인 등)가 나온다. Backend: `DeepCheckOutcome.collection_error`(체커 베이스 `safe_run` 분류), `check_matrix_service` deep_check 분기.
+- **점검 매트릭스 — 단계 로그 실시간 반영**: 심층 점검의 단계 진입·종료가 끝난 뒤 몰아서가 아니라 진행되는 대로 실행 로그에 쌓인다(「단계 시작 — …」 → 「단계 …: success (…ms)」). Backend: `run_definition_once(on_step=)`.
+
 ## [1.53.1] - 2026-10-13
 
 ### Changed

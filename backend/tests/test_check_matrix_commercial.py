@@ -13,6 +13,8 @@
   CR-6  행 전용 정의는 행 삭제 시 함께 지워져 공유 행을 오염시키지 않는다.
   CR-7  입력 검증 — NaN 수동 값·빈 이름·너무 긴 단위는 422.
   CR-8  런북은 애드온 config 의 비밀값을 가린다.
+  CR-10 kubeconfig·연결 실패는 판정이 아니라 실행 실패 — 셀은 이전 값을 유지한다. 체커 단계
+        로그는 끝난 뒤가 아니라 실행 중에 진행 로그로 쌓인다.
 """
 import json
 import uuid
@@ -519,3 +521,84 @@ def test_playbook_timeout_extends_task_limit(db, world):
         db.delete(item)
         db.delete(pb)
         db.commit()
+
+
+# ── CR-10 수집 실패 분리 · 단계 로그 실시간 ─────────────────────────────────────
+
+def _fake_checker(raise_exc=None):
+    from app.models import StatusEnum
+    from app.services.registered_checks.base import DeepCheckerBase, DeepCheckOutcome
+
+    class _Fake(DeepCheckerBase):
+        check_type = "pvc_health"
+        display_name = "가짜 PVC"
+
+        def run(self, ctx):
+            with self._step("probe", "PVC 조회"):
+                if raise_exc is not None:
+                    raise raise_exc
+            return DeepCheckOutcome(status=StatusEnum.warning, message="pending PVC 1", details={})
+
+    return _Fake
+
+
+@pytest.fixture
+def deep_def(db, world, monkeypatch):
+    """world["deep"] 에 전용 정의를 걸고, 이전 정상 결과(값 7)를 셀에 넣어 둔다."""
+    from app.models import DeepCheckResult, StatusEnum
+
+    d = svc.create_dedicated_definition(db, "pvc_health", name="cr-collect")
+    world["deep"].definition_id = d.id
+    db.commit()
+    svc._upsert_result(db, world["deep"].id, world["open"].id, StatusEnum.healthy, 7.0, "이전 정상", None)
+    db.commit()
+    yield d
+    db.rollback()
+    db.query(DeepCheckResult).filter(DeepCheckResult.definition_id == d.id).delete(synchronize_session=False)
+    db.commit()
+
+
+def _use_fake(monkeypatch, cls):
+    from app.services.registered_checks.registry import REGISTRY
+
+    monkeypatch.setitem(REGISTRY, "pvc_health", (cls, REGISTRY["pvc_health"][1]))
+
+
+def _cell(db, world):
+    db.expire_all()
+    return db.query(CheckMatrixResult).filter(
+        CheckMatrixResult.item_id == world["deep"].id, CheckMatrixResult.cluster_id == world["open"].id,
+    ).one()
+
+
+@pytest.mark.parametrize("exc,kind,hint", [
+    (None, "kubeconfig", "/cluster-manage"),
+    (ConnectionError("Max retries exceeded: connection refused"), "connection", "엔드포인트"),
+])
+def test_collection_error_fails_run_and_keeps_previous_value(db, world, deep_def, monkeypatch, exc, kind, hint):
+    from app.models import StatusEnum
+    from app.services.k8s_client_pool import K8sClientError
+
+    _use_fake(monkeypatch, _fake_checker(exc or K8sClientError("kubeconfig 로드 실패: No configuration found")))
+    run = svc.create_run(db, world["deep"], world["open"], trigger=CheckMatrixTrigger.manual_cell,
+                         triggered_by="tester")
+    svc.execute_run(db, run.id)
+    out = svc.get_run(db, run.id)
+    assert out["run_state"] == "failed"
+    assert hint in (out["error"] or "")
+    assert any("수집 실패" in line for line in out["log_lines"])
+    cell = _cell(db, world)
+    assert cell.status == StatusEnum.healthy and cell.value == 7.0  # 이전 값 그대로
+
+
+def test_step_logs_stream_before_finish(db, world, deep_def, monkeypatch):
+    _use_fake(monkeypatch, _fake_checker())
+    run = svc.create_run(db, world["deep"], world["open"], trigger=CheckMatrixTrigger.manual_cell,
+                         triggered_by="tester")
+    svc.execute_run(db, run.id)
+    lines = svc.get_run(db, run.id)["log_lines"]
+    start = next(i for i, ln in enumerate(lines) if "단계 시작 — PVC 조회" in ln)
+    done = next(i for i, ln in enumerate(lines) if "단계 PVC 조회: success" in ln)
+    assert start < done < len(lines) - 1  # 마감 줄보다 앞
+    assert sum("단계 PVC 조회: success" in ln for ln in lines) == 1  # 끝난 뒤 재기록 없음
+    assert _cell(db, world).message == "pending PVC 1"  # 정상 실행은 셀을 갱신한다
