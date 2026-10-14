@@ -22,6 +22,8 @@ export type { Toast, ToastVariant } from './Toast';
 export { Skeleton, SkeletonRow, SkeletonTable, SkeletonCard } from './Skeleton';
 export { EmptyState, SelectClusterEmptyState, LoadingState } from './EmptyState';
 export { PageHeader } from './PageHeader';
+export { PageShell } from './PageShell';
+export type { PageDensity } from './PageShell';
 export { StatTile, StatTileRow } from './StatTile';
 export { StatusBadge, StatusDot, statusToVariant } from './StatusBadge';
 export type { StatusVariant } from './StatusBadge';

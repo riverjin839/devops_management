@@ -3,7 +3,6 @@ import { create } from 'zustand';
 // Sidebar width is fixed in the new design — no resize handle, no icon-only.
 // The resize-related localStorage keys (k8s:sidebar-width-v2) are ignored.
 const CLUSTER_KEY = 'k8s:cluster-sidebar-width';
-const NAV_GROUPS_KEY = 'k8s:sidebar-collapsed-groups-v1';
 const ICON_RAIL_WIDTH_KEY = 'k8s:cluster-icon-rail-width';
 
 // 아이콘 전용 레일 — 호버 툴팁 + 클릭 popover 디자인. 패널은 클릭한 아이콘 우측에 컴팩트하게 떠서 폭/높이 자동.
@@ -31,25 +30,6 @@ export const ICON_RAIL_DEFAULT = 64;
 export const ICON_RAIL_MIN = 48;
 export const ICON_RAIL_MAX = 120;
 
-function loadCollapsedGroups(): Record<string, boolean> {
-  try {
-    const raw = localStorage.getItem(NAV_GROUPS_KEY);
-    if (raw) {
-      const parsed = JSON.parse(raw);
-      if (parsed && typeof parsed === 'object') return parsed as Record<string, boolean>;
-    }
-  } catch { /* ignore */ }
-  // 기본값: 모든 그룹 접기 — 사용자가 그룹 제목만 보고 클릭해 펼치도록.
-  return {
-    monitoring: true,
-    work: true,
-    cluster: true,
-    analysis: true,
-    docs: true,
-    system: true,
-  };
-}
-
 interface SidebarState {
   clusterSidebarWidth: number;
   setClusterSidebarWidth: (w: number) => void;
@@ -60,12 +40,6 @@ interface SidebarState {
   setClusterIconRailWidth: (w: number) => void;
   resetClusterIconRailWidth: () => void;
 
-  /** 그룹 ID → 접힘 여부. true = 접힘(자식 항목 숨김). */
-  collapsedGroups: Record<string, boolean>;
-  toggleGroup: (id: string) => void;
-  setGroupCollapsed: (id: string, collapsed: boolean) => void;
-  collapseAllGroups: () => void;
-  expandAllGroups: () => void;
 }
 
 export const useSidebarStore = create<SidebarState>()((set) => ({
@@ -90,26 +64,4 @@ export const useSidebarStore = create<SidebarState>()((set) => ({
     try { localStorage.setItem(ICON_RAIL_WIDTH_KEY, String(ICON_RAIL_DEFAULT)); } catch { /* ignore */ }
     set({ clusterIconRailWidth: ICON_RAIL_DEFAULT });
   },
-
-  collapsedGroups: loadCollapsedGroups(),
-  toggleGroup: (id) => set((s) => {
-    const next = { ...s.collapsedGroups, [id]: !s.collapsedGroups[id] };
-    try { localStorage.setItem(NAV_GROUPS_KEY, JSON.stringify(next)); } catch { /* ignore */ }
-    return { collapsedGroups: next };
-  }),
-  setGroupCollapsed: (id, collapsed) => set((s) => {
-    const next = { ...s.collapsedGroups, [id]: collapsed };
-    try { localStorage.setItem(NAV_GROUPS_KEY, JSON.stringify(next)); } catch { /* ignore */ }
-    return { collapsedGroups: next };
-  }),
-  collapseAllGroups: () => set(() => {
-    const next = { monitoring: true, work: true, cluster: true, analysis: true, docs: true, system: true };
-    try { localStorage.setItem(NAV_GROUPS_KEY, JSON.stringify(next)); } catch { /* ignore */ }
-    return { collapsedGroups: next };
-  }),
-  expandAllGroups: () => set(() => {
-    const next = { monitoring: false, work: false, cluster: false, analysis: false, docs: false, system: false };
-    try { localStorage.setItem(NAV_GROUPS_KEY, JSON.stringify(next)); } catch { /* ignore */ }
-    return { collapsedGroups: next };
-  }),
 }));

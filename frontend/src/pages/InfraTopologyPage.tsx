@@ -17,7 +17,7 @@ import {
 } from '@/hooks/useInfraNodes';
 import { NodeVerifyModal } from '@/components/infra/NodeVerifyModal';
 import { ClusterSidebar, RunLogPanel, useModalA11y, EmptyState, LoadingState } from '@/components/common';
-import { useRunLog, applyRunEvent } from '@/hooks/useRunLog';
+import { useRunLog, applyRunEvent, elapsed } from '@/hooks/useRunLog';
 import { useLogPref } from '@/hooks/useLogPref';
 import { MacCard } from '@/components/ui/MacCard';
 import { topologyTraceApi } from '@/services/api';
@@ -483,8 +483,6 @@ function DeleteConfirm({ node, onConfirm, onCancel, isPending, error }: DeleteCo
     </div>
   );
 }
-
-const elapsed = (t0: number) => `${Math.round(performance.now() - t0)}ms`;
 
 // ── 메인 페이지 ──────────────────────────────────────────────────────────────
 export function InfraTopologyPage() {

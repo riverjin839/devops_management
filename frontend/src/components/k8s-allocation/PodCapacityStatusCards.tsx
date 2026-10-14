@@ -5,7 +5,7 @@ import { EmptyState, Skeleton } from '@/components/common';
 import { usePodsSummary } from '@/hooks/useK8sAllocation';
 import { fmtN } from './format';
 import { StatTile } from '@/components/common/StatTile';
-import { CardHeader, StatTooltip } from './primitives';
+import { RefreshIconButton, StatTooltip } from './primitives';
 
 // tone 은 비정상 버킷에만 — Running/Succeeded 같은 정상 수치는 중립(D-118). 0 이면 StatTile 이 자동 중립.
 const POD_STATUS_META: { key: string; label: string; tone?: 'warning' | 'critical' }[] = [
@@ -30,8 +30,8 @@ export function PodCapacityStatusCards({ clusterId }: { clusterId: string }) {
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
-      <MacCard bodyPadding="p-3">
-        <CardHeader title="파드 용량" onRefresh={onRefresh} refreshing={isFetching} />
+      <MacCard title="파드 용량" bodyPadding="p-3"
+        actions={<RefreshIconButton label="파드 용량" onRefresh={onRefresh} refreshing={isFetching} />}>
         <div className="min-h-16">
           {loading ? <Skeleton className="h-16 w-full" />
             : failed ? <EmptyState title="조회 실패" description={(error as Error)?.message ?? '파드 용량/상태를 불러오지 못했습니다.'} />
@@ -48,8 +48,8 @@ export function PodCapacityStatusCards({ clusterId }: { clusterId: string }) {
             )}
         </div>
       </MacCard>
-      <MacCard bodyPadding="p-3">
-        <CardHeader title="파드 상태" onRefresh={onRefresh} refreshing={isFetching} />
+      <MacCard title="파드 상태" bodyPadding="p-3"
+        actions={<RefreshIconButton label="파드 상태" onRefresh={onRefresh} refreshing={isFetching} />}>
         <div className="min-h-16">
           {loading || computing || (!data && !failed) ? <Skeleton className="h-16 w-full" />
             : failed ? <EmptyState title="조회 실패" description="파드 상태를 불러오지 못했습니다." />

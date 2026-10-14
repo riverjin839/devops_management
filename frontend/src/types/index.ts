@@ -271,6 +271,23 @@ export interface ApiResponse<T> {
   message?: string;
 }
 
+/** POST /health/check/{id} 응답 — 애드온별 요약은 실행 로그 줄의 원천(D-128). */
+export interface HealthCheckAddonSummary {
+  id: string;
+  name: string;
+  type: string;
+  status: string;
+  responseTime: number | null;
+  message: string | null;
+  lastCheck: string | null;
+}
+export interface HealthCheckRunResult {
+  message: string;
+  clusterId: string;
+  addonsUpdated: number;
+  addons: HealthCheckAddonSummary[];
+}
+
 export interface PaginatedResponse<T> {
   data: T[];
   total: number;

@@ -77,7 +77,7 @@ export const NAV_MAP: Record<string, { defaultLabel: string; icon: ComponentType
 // 사이드바 레일에 표시되는 그룹들
 export type GroupId =
   | 'observe' | 'inspect' | 'operate' | 'configure'
-  | 'infra' | 'network' | 'devops' | 'collab' | 'documents' | 'system';
+  | 'topology' | 'automate' | 'collab' | 'documents' | 'system';
 /**
  * `domain` — 예전엔 홈 모드(work/platform)가 이 값으로 사이드바 그룹 자체를 게이팅했다
  * (D-054). 지금은 게이팅에 쓰지 않고 **배치 위치 결정**에만 쓴다: `platform` → 좌측
@@ -98,34 +98,35 @@ export interface NavGroup {
 
 /**
  * P1 메뉴 재편(2026-09) — 23개가 몰려 있던 '클러스터' 그룹을 하는 일 기준으로 나눴다.
- * 관측(읽기) / 점검(확인·기록) / 운영 조작(명령 전송, danger) / 구성(등록·자원·권한).
- * 서버/인프라·스토리지·서비스/앱(1~3개짜리)은 '인프라' 하나로 합쳤다.
- * 설치 단위는 leaf path 라 그룹 id 를 바꿔도 사용자가 설치해 둔 레일 아이콘은 그대로다.
+ * D-133 재편(2026-10) — 앞 4그룹은 작업 유형("클러스터 · 관측"…), 뒤 3그룹은 도메인(인프라/네트워크/DevOps)
+ * 으로 같은 깊이에서 분류 축이 섞여 있었다. 플랫폼 그룹을 **하는 일 한 축**으로 통일했다:
+ * 관측(읽기) / 점검·진단(확인·추적) / 운영 조작(명령 전송, danger) / 구성·자산(등록·자원·권한·스펙) /
+ * 토폴로지(구조 지도) / 자동화·도구. 업무·지식 그룹은 리프("업무 관리"·"문서 관리")와 이름이 겹치지 않게 바꿨다.
+ * 설치 단위는 leaf path 라 그룹 id 를 바꿔도 사용자가 설치해 둔 레일 아이콘·라벨·페이지 스타일은 그대로다.
  */
 export const GROUPS: NavGroup[] = [
-  { id: 'observe',   label: '클러스터 · 관측',     icon: Activity,    description: '상태를 본다 — 읽기 전용', domain: 'platform',
-    paths: ['/cluster-overview', '/cluster-trends', '/observability', '/alerts', '/k8s-events', '/k8s-logs', '/incident-analysis'] },
+  { id: 'observe',   label: '관측',       icon: Activity,    description: '상태를 본다 — 읽기 전용', domain: 'platform',
+    paths: ['/cluster-overview', '/cluster-trends', '/observability', '/alerts', '/k8s-events', '/k8s-logs', '/incident-analysis', '/isilon-nfs', '/lake-services'] },
   // '/ops-checks'(운영 점검 콘솔, 레거시)는 사이드바에서 뺐다 — 같은 패널을 종합 상태까지 포함해
   // 보여주는 '/clusters/:id' 로 대체됐다(App.tsx 주석). 라우트·NAV_MAP 은 북마크/아일랜드 패널
   // 호환으로 유지(D-129).
-  { id: 'inspect',   label: '클러스터 · 점검',     icon: ShieldCheck, description: '상태를 확인하고 기록한다', domain: 'platform',
-    paths: ['/daily-check/review', '/daily-check/settings', '/pod-bottleneck', '/versions'] },
-  { id: 'operate',   label: '클러스터 · 운영 조작', icon: Terminal,    description: '클러스터·노드에 명령을 보낸다 — 실행 전 대상을 확인할 것', domain: 'platform', tone: 'danger',
-    paths: ['/k8s-manage', '/k9s', '/bulk-exec', '/node-ssh', '/etcdctl'] },
-  { id: 'configure', label: '클러스터 · 구성',     icon: Layers,      description: '클러스터 등록·자원·권한을 관리한다', domain: 'platform',
-    paths: ['/clusters', '/cluster-manage', '/k8s-allocation', '/k8s-rbac', '/node-labels', '/node-images'] },
-  // 서버/인프라(3) + 스토리지(2) + 서비스/앱(1) 통합. /coroot 는 COROOT APM 통합 제거로 없는 라우트 — 재추가하지 않음.
-  { id: 'infra',     label: '인프라',     icon: Server,    domain: 'platform',
-    paths: ['/node-specs', '/kernel-params', '/infra-topology', '/mc', '/isilon-nfs', '/lake-services'] },
-  { id: 'network',   label: '네트워크',   icon: Network,   paths: ['/cilium-trace', '/service-topology', '/service-architecture', '/architecture', '/packet-flow', '/cidr', '/links'], domain: 'platform' },
+  { id: 'inspect',   label: '점검·진단',  icon: ShieldCheck, description: '상태를 확인·기록하고 원인을 추적한다', domain: 'platform',
+    paths: ['/daily-check/review', '/daily-check/settings', '/pod-bottleneck', '/cilium-trace', '/packet-flow', '/versions'] },
+  { id: 'operate',   label: '운영 조작',  icon: Terminal,    description: '클러스터·노드·스토리지에 명령을 보낸다 — 실행 전 대상을 확인할 것', domain: 'platform', tone: 'danger',
+    paths: ['/k8s-manage', '/k9s', '/bulk-exec', '/node-ssh', '/etcdctl', '/mc', '/kernel-params'] },
+  { id: 'configure', label: '구성·자산',  icon: Layers,      description: '클러스터 등록·자원·권한·노드 자산을 관리한다', domain: 'platform',
+    paths: ['/clusters', '/cluster-manage', '/k8s-allocation', '/k8s-rbac', '/node-labels', '/node-images', '/node-specs', '/links'] },
+  { id: 'topology',  label: '토폴로지',   icon: Network,     description: '인프라·서비스 구조를 지도로 본다', domain: 'platform',
+    paths: ['/infra-topology', '/service-topology', '/service-architecture', '/architecture'] },
   // '/batch-jobs' 는 사이드바 진입점에서 뺐다 — 홈 화면 "플랫폼 현황" 탭의 서브탭으로
   // 병합됐다(NAV_MAP 항목은 접근 제어/라벨 커스터마이징/Island 패널을 위해 유지).
-  { id: 'devops',    label: 'DevOps',     icon: GitBranch, paths: ['/playbooks', '/commands', '/scripts'], domain: 'platform' },
-  { id: 'collab',    label: '업무 관리',  icon: Users,     paths: ['/tasks-mgmt', '/todo-today', '/sprints', '/members', '/workflow', '/wbs', '/weekly-report', '/jira-import'], domain: 'work' },
-  // "문서 관리" — /documents(Confluence 가져오기/내보내기 대시보드)가 진입점. 2026-07 사이드바
+  { id: 'automate',  label: '자동화·도구', icon: GitBranch,  description: '플레이북·스크립트·명령어·계산기', domain: 'platform',
+    paths: ['/playbooks', '/scripts', '/commands', '/cidr'] },
+  { id: 'collab',    label: '업무',       icon: Users,     paths: ['/tasks-mgmt', '/todo-today', '/sprints', '/members', '/workflow', '/wbs', '/weekly-report', '/jira-import'], domain: 'work' },
+  // "지식·문서" — /documents(Confluence 가져오기/내보내기 대시보드)가 진입점. 2026-07 사이드바
   // 개편 때 그룹을 잃고 URL 전용으로 남았던 지식 화면들(/work-guides, /docs, /ops-notes,
   // /mindmap, /ontology, /trends)을 이 그룹으로 복귀시킨다.
-  { id: 'documents', label: '문서 관리',  icon: Library,   paths: ['/documents', '/work-guides', '/docs', '/ops-notes', '/mindmap', '/ontology', '/trends'], domain: 'work' },
+  { id: 'documents', label: '지식·문서',  icon: Library,   paths: ['/documents', '/work-guides', '/docs', '/ops-notes', '/mindmap', '/ontology', '/trends'], domain: 'work' },
   { id: 'system',    label: '시스템',     icon: Settings,  paths: ['/settings'], domain: 'system' },
 ];
 

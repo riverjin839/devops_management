@@ -34,7 +34,7 @@ function KpiCell({ icon: Icon, label, value, colorClass: toneClass, bgClass: ton
           <p className="text-xs text-muted-foreground mb-1.5 truncate">
             {label}
           </p>
-          <p className={`font-bold font-mono leading-none ${colorClass} ${typeof value === 'number' ? 'text-3xl' : 'text-lg'}`}>
+          <p className={`font-semibold tabular-nums leading-none ${colorClass} ${typeof value === 'number' ? 'text-2xl' : 'text-lg'}`}>
             {value}
           </p>
         </div>
@@ -80,7 +80,7 @@ export function HealthHero({ stats, isLoading, lastCheckTime }: HealthHeroProps)
       >
         <div>
           <div className="flex items-baseline gap-2">
-            <span className={`text-5xl font-bold font-mono leading-none ${overallColor}`}>{healthyPct}%</span>
+            <span className={`text-4xl font-semibold tabular-nums leading-none ${overallColor}`}>{healthyPct}%</span>
             <span className={`text-sm font-semibold ${overallColor}`}>{overallLabel}</span>
           </div>
           <p className="text-xs text-muted-foreground mt-2">

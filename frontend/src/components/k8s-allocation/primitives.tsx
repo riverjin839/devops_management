@@ -221,15 +221,12 @@ export function Stat({ label, value, sub, warn, help, valueClassName }: {
   );
 }
 
-/** 카드 헤더 + 우측 개별 새로고침 버튼 (MacCard 는 title 만 지원하므로 body 내부에 직접 구성). */
-export function CardHeader({ title, onRefresh, refreshing }: { title: string; onRefresh: () => void; refreshing: boolean }) {
+/** 카드 헤더 우측 개별 새로고침 버튼 — MacCard `actions` 슬롯에 넣는다(D-122). */
+export function RefreshIconButton({ label, onRefresh, refreshing }: { label: string; onRefresh: () => void; refreshing: boolean }) {
   return (
-    <div className="flex items-center justify-between mb-2">
-      <span className="text-xs font-semibold text-muted-foreground select-none">{title}</span>
-      <button type="button" onClick={onRefresh} title="새로고침" aria-label={`${title} 새로고침`}
-        className="p-1 rounded-md text-muted-foreground hover:bg-secondary hover:text-foreground">
-        <RefreshCw className={`w-3.5 h-3.5 ${refreshing ? 'animate-spin' : ''}`} />
-      </button>
-    </div>
+    <button type="button" onClick={onRefresh} title="새로고침" aria-label={`${label} 새로고침`}
+      className="p-1 rounded-md text-muted-foreground hover:bg-secondary hover:text-foreground">
+      <RefreshCw className={`w-3.5 h-3.5 ${refreshing ? 'animate-spin' : ''}`} />
+    </button>
   );
 }
