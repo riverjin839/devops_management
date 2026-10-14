@@ -9,7 +9,7 @@ import { SortableContext, verticalListSortingStrategy, horizontalListSortingStra
 import { CSS } from '@dnd-kit/utilities';
 import { WorkItemCalendar, WorkItemKanban, WorkItemTableRow, WorkItemEpicView, ColumnSettingsMenu, JiraProvisionModal, JiraLinkDialog, ServiceNowRegisterDialog } from '@/components/work-items';
 import { WORK_ITEM_COLUMNS, DEFAULT_COLUMN_ORDER, DEFAULT_VISIBLE_COLUMNS, ALWAYS_VISIBLE_COLUMNS, COLUMN_WIDTH_DEFAULTS, type WorkItemColumnKey, type WorkItemSortKey } from '@/components/work-items';
-import { ResizeGrip } from '@/components/common';
+import { ResizeGrip, PageShell } from '@/components/common';
 import { useColumnWidths } from '@/hooks/useColumnWidths';
 import { useColumnLayout } from '@/hooks/useColumnLayout';
 import { JiraImportModal } from '@/components/work-items/JiraImportModal';
@@ -720,7 +720,7 @@ export function WorkItemBoardPage() {
 
   return (
     <div className="app-min-h-screen bg-background">
-      <main className="mx-auto px-4 lg:px-6 py-4">
+      <PageShell density="console" sidebar={false}>
         <div className="min-w-0">
         {/* Page Header */}
         <PageHeader
@@ -1167,7 +1167,7 @@ export function WorkItemBoardPage() {
           )
         )}
         </div>
-      </main>
+      </PageShell>
 
       <JiraImportModal open={jiraOpen} onClose={() => setJiraOpen(false)} defaultProjectKey={jiraConfig?.defaultProjectKey} />
       <ConfluenceLinkModal open={confluenceOpen} onClose={() => setConfluenceOpen(false)} />

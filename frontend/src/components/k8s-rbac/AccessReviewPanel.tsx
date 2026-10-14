@@ -80,8 +80,9 @@ export function AccessReviewPanel({ clusterId, serviceAccounts, showLogs }: Prop
   const denied = entries?.filter((e) => !e.allowed) ?? [];
 
   return (
-    <MacCard title="권한 점검">
-      <div className="flex flex-wrap items-center gap-2 mb-3">
+    <MacCard
+      title="권한 점검"
+      actions={<>
         <label className="flex items-center gap-2 text-xs text-muted-foreground font-medium">
           대상
           <select
@@ -108,7 +109,6 @@ export function AccessReviewPanel({ clusterId, serviceAccounts, showLogs }: Prop
         >
           <Play className="w-3.5 h-3.5" /> {review.isPending ? '점검 중…' : '점검 실행'}
         </button>
-        <div className="flex-1" />
         {entries && (
           <span className="text-xs text-muted-foreground">
             <b className="text-foreground">
@@ -117,8 +117,8 @@ export function AccessReviewPanel({ clusterId, serviceAccounts, showLogs }: Prop
             /{entries.length} 통과
           </span>
         )}
-      </div>
-
+      </>}
+    >
       {!matrix ? (
         <EmptyState
           icon={ShieldCheck}

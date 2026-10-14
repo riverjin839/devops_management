@@ -3,7 +3,7 @@ import { PageHeader } from '@/components/common/PageHeader';
 import { useQueryClient } from '@tanstack/react-query';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Activity, Play, AlertCircle, ListTree, Loader2, ExternalLink } from 'lucide-react';
-import { ClusterSidebar, EmptyState, NamespaceSingleSelect, PodSingleSelect, RunLogPanel, SelectClusterEmptyState, Skeleton } from '@/components/common';
+import { ClusterSidebar, EmptyState, NamespaceSingleSelect, PodSingleSelect, RunLogPanel, SelectClusterEmptyState, Skeleton, PageShell } from '@/components/common';
 import { MacCard } from '@/components/ui/MacCard';
 import { useClusters } from '@/hooks/useCluster';
 import { useCanOperate } from '@/hooks/useCanOperate';
@@ -141,7 +141,7 @@ export function PodBottleneckPage() {
 
   return (
     <div className="app-min-h-screen bg-background">
-      <main className="pr-3 py-3 flex gap-3">
+      <PageShell density="console" className="flex gap-3">
         <div className="sticky top-4 self-start">
           <ClusterSidebar
             clusters={clusters}
@@ -287,7 +287,7 @@ export function PodBottleneckPage() {
             )}
           </MacCard>
         </div>
-      </main>
+      </PageShell>
     </div>
   );
 }

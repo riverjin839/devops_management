@@ -3,7 +3,7 @@ import { PageHeader } from '@/components/common/PageHeader';
 import { Link, useParams } from 'react-router-dom';
 import { AlertTriangle, Loader2, Play, Save } from 'lucide-react';
 import { MacCard } from '@/components/ui/MacCard';
-import { StatusBadge, useToast, DoubleScrollX, LogViewer, ConfirmDialog } from '@/components/common';
+import { StatusBadge, useToast, DoubleScrollX, LogViewer, ConfirmDialog, PageShell } from '@/components/common';
 import { useClusters } from '@/hooks/useCluster';
 import { useAuthStore, hasRole } from '@/stores/authStore';
 import { useCanOperate } from '@/hooks/useCanOperate';
@@ -84,12 +84,18 @@ export function CheckItemDetailPage() {
   const tabsId = useId();
 
   if (isLoading) {
-    return <div className="app-min-h-screen bg-background py-3 pr-3 pl-3 text-sm text-muted-foreground">불러오는 중…</div>;
+    return (
+      <div className="app-min-h-screen bg-background">
+        <PageShell density="console" sidebar={false} className="text-sm text-muted-foreground">불러오는 중…</PageShell>
+      </div>
+    );
   }
   if (!detail) {
     return (
-      <div className="app-min-h-screen bg-background py-3 pr-3 pl-3 space-y-3">
-        <PageHeader back={{ to: '/', label: '홈' }} title="점검 항목" description="항목을 찾을 수 없습니다." />
+      <div className="app-min-h-screen bg-background">
+        <PageShell density="console" sidebar={false} className="space-y-3">
+          <PageHeader back={{ to: '/', label: '홈' }} title="점검 항목" description="항목을 찾을 수 없습니다." />
+        </PageShell>
       </div>
     );
   }
@@ -107,8 +113,8 @@ export function CheckItemDetailPage() {
   };
 
   return (
-    <div className="app-min-h-screen bg-background py-3 pr-3 pl-3">
-      <div className="max-w-5xl mx-auto space-y-4">
+    <div className="app-min-h-screen bg-background">
+      <PageShell density="console" sidebar={false} className="space-y-4">
         <div className="flex items-start gap-3">
           <PageHeader
             back={{ to: '/', label: '홈' }}
@@ -177,7 +183,7 @@ export function CheckItemDetailPage() {
           {tab === 'logs' && <LogsTab itemId={item.id} />}
           {tab === 'history' && <HistoryTab itemId={item.id} unit={item.unit} itemName={item.name} clusters={clusters} />}
         </div>
-      </div>
+      </PageShell>
       {/* 이 화면의 ▶ / 전체 실행 로그 — 매트릭스 화면과 같은 패널을 쓴다. */}
       <CheckMatrixRunLogPanel />
     </div>
@@ -202,17 +208,15 @@ function DefinitionTab({ item, clusters }: { item: CheckMatrixItem; clusters: Cl
 
   if (item.sourceType !== 'deep_check') {
     return (
-      <MacCard title="정의">
-        <p className="text-sm text-muted-foreground">
-          {item.sourceType === 'core_bundle' && '핵심 점검 번들 — 별도 정의가 없습니다. "실행 주기" 탭에서 클러스터별 cron 을 켜고 끕니다.'}
-          {item.sourceType === 'addon' && '애드온 — 접속 주소/인증 등 설정은 "실행 계획" 탭의 설정 편집에서 클러스터별로 관리합니다.'}
-          {(item.sourceType === 'batch_job' || item.sourceType === 'playbook') && (
-            <>등록된 {item.sourceType === 'batch_job' ? '배치잡' : '플레이북'} <span className="font-mono">{item.sourceRef}</span> 을(를) 이름으로 연결한 항목입니다.
-              값/자격증명 편집은 <Link to={item.sourceType === 'batch_job' ? '/batch-jobs' : '/playbooks'} className="text-primary underline">해당 화면</Link>에서 합니다.</>
-          )}
-          {item.sourceType === 'manual' && '수동 입력 항목 — 자동 실행이 없습니다. "실행 주기" 탭 대신 매트릭스 셀에서 값을 직접 기록합니다.'}
-        </p>
-      </MacCard>
+      <p className="text-sm text-muted-foreground">
+        {item.sourceType === 'core_bundle' && '핵심 점검 번들 — 별도 정의가 없습니다. "실행 주기" 탭에서 클러스터별 cron 을 켜고 끕니다.'}
+        {item.sourceType === 'addon' && '애드온 — 접속 주소/인증 등 설정은 "실행 계획" 탭의 설정 편집에서 클러스터별로 관리합니다.'}
+        {(item.sourceType === 'batch_job' || item.sourceType === 'playbook') && (
+          <>등록된 {item.sourceType === 'batch_job' ? '배치잡' : '플레이북'} <span className="font-mono">{item.sourceRef}</span> 을(를) 이름으로 연결한 항목입니다.
+            값/자격증명 편집은 <Link to={item.sourceType === 'batch_job' ? '/batch-jobs' : '/playbooks'} className="text-primary underline">해당 화면</Link>에서 합니다.</>
+        )}
+        {item.sourceType === 'manual' && '수동 입력 항목 — 자동 실행이 없습니다. "실행 주기" 탭 대신 매트릭스 셀에서 값을 직접 기록합니다.'}
+      </p>
     );
   }
 
@@ -492,26 +496,27 @@ function ApplyTab({ item, cells }: { item: CheckMatrixItem; cells: CheckMatrixIt
   };
 
   return (
-    <MacCard title="클러스터별 실행 주기" className="p-0">
-      <div className="p-4 flex items-center justify-between gap-2">
-        <p className="text-xs text-muted-foreground">
-          {isCoreBundle
-            ? '핵심 점검 번들의 cron 은 클러스터 단위 — 여기서 클러스터별로 켜고 끕니다.'
-            : 'cron 을 비워두면 자동 실행되지 않습니다(수동/매트릭스 일괄 실행만 가능).'}
-          {runnable && ' 실행 버튼은 실시간 로그 패널로 진행 상황을 보여줍니다.'}
-        </p>
-        {runnable && (
-          <button
-            onClick={runAll}
-            disabled={!canOperate || runItem.isPending || cells.length === 0}
-            title={withHint('모든 클러스터에서 지금 실행')}
-            className="flex-shrink-0 inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-primary text-primary-foreground rounded-xl hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            {runItem.isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin" aria-hidden="true" /> : <Play className="w-3.5 h-3.5" aria-hidden="true" />}
-            전체 실행
-          </button>
-        )}
-      </div>
+    <MacCard
+      title="클러스터별 실행 주기"
+      bodyPadding="p-0"
+      actions={runnable ? (
+        <button
+          onClick={runAll}
+          disabled={!canOperate || runItem.isPending || cells.length === 0}
+          title={withHint('모든 클러스터에서 지금 실행')}
+          className="flex-shrink-0 inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-primary text-primary-foreground rounded-xl hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          {runItem.isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin" aria-hidden="true" /> : <Play className="w-3.5 h-3.5" aria-hidden="true" />}
+          전체 실행
+        </button>
+      ) : undefined}
+    >
+      <p className="px-4 py-2.5 text-xs text-muted-foreground">
+        {isCoreBundle
+          ? '핵심 점검 번들의 cron 은 클러스터 단위 — 여기서 클러스터별로 켜고 끕니다.'
+          : 'cron 을 비워두면 자동 실행되지 않습니다(수동/매트릭스 일괄 실행만 가능).'}
+        {runnable && ' 실행 버튼은 실시간 로그 패널로 진행 상황을 보여줍니다.'}
+      </p>
       <DoubleScrollX className="border-t border-border">
         <table className="w-full text-sm">
           <thead>
@@ -732,11 +737,11 @@ function HistoryTab({
 }: { itemId: string; unit?: string | null; itemName: string; clusters: Cluster[] }) {
   const [clusterId, setClusterId] = useClusterPick(clusters);
   return (
-    <MacCard title="추이 · 이력">
-      <div className="space-y-4">
-        <ClusterSelect clusters={clusters} value={clusterId} onChange={setClusterId} />
-        {clusterId && <CheckMatrixHistoryPanel itemId={itemId} clusterId={clusterId} unit={unit} seriesName={itemName} />}
-      </div>
+    <MacCard
+      title="추이 · 이력"
+      actions={<ClusterSelect clusters={clusters} value={clusterId} onChange={setClusterId} />}
+    >
+      {clusterId && <CheckMatrixHistoryPanel itemId={itemId} clusterId={clusterId} unit={unit} seriesName={itemName} />}
     </MacCard>
   );
 }

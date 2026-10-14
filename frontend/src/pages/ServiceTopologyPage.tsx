@@ -9,7 +9,7 @@ import { useCanOperate } from '@/hooks/useCanOperate';
 import { analyzeApi } from '@/services/api';
 import {
   ClusterSidebar, ConfirmDialog, DebugLogPanel, NamespaceSingleSelect, RunLogPanel, SnapshotProgressCard, useToast,
-  PageHeader, LoadingState, EmptyState,
+  PageHeader, LoadingState, EmptyState, PageShell,
 } from '@/components/common';
 import { MacCard } from '@/components/ui/MacCard';
 import {
@@ -252,7 +252,7 @@ export function ServiceTopologyPage() {
 
   return (
     <div className="app-min-h-screen bg-background">
-      <main className="pr-3 py-3 flex gap-3">
+      <PageShell density="console" className="flex gap-3">
         <ClusterSidebar
           clusters={clusters}
           selectedId={clusterId || null}
@@ -272,7 +272,7 @@ export function ServiceTopologyPage() {
           />
 
           {/* 툴바 */}
-          <MacCard title="컨트롤" className="mb-3" bodyPadding="p-3">
+          <div className="mb-3">
             <div className="flex flex-wrap items-center gap-2">
               {/* scope: 네임스페이스 / 전체 클러스터 */}
               <div role="group" aria-label="범위" className="flex items-center rounded-xl border border-border overflow-hidden text-sm">
@@ -433,10 +433,14 @@ export function ServiceTopologyPage() {
                 <RunLogPanel run={trafficLog} show={showTrafficLog} onShowChange={setShowTrafficLog} maxHeight="max-h-48" />
               </div>
             )}
-          </MacCard>
+          </div>
 
           {/* 캔버스 */}
-          <MacCard title={`그래프 · ${graph?.nodes.length ?? 0} 노드 / ${graph?.edges.length ?? 0} 엣지`} bodyPadding="p-0">
+          <MacCard
+            title="그래프"
+            titleExtra={<span className="text-xs text-muted-foreground tabular-nums">노드 {graph?.nodes.length ?? 0} · 엣지 {graph?.edges.length ?? 0}</span>}
+            bodyPadding="p-0"
+          >
             <div ref={canvasRef} className="relative w-full h-[calc(100vh-260px)] min-h-[420px] overflow-hidden rounded-b-md">
               {computing ? (
                 <div className="absolute inset-0 flex items-center justify-center p-6">
@@ -529,7 +533,7 @@ export function ServiceTopologyPage() {
             </div>
           </MacCard>
         </div>
-      </main>
+      </PageShell>
 
       {/* 다이얼로그 */}
       {linkTargetId && linkSourceId && nodeById.get(linkSourceId) && nodeById.get(linkTargetId) && (

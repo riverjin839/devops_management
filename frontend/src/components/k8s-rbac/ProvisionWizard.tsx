@@ -32,18 +32,6 @@ const TTL_OPTIONS = [
   { label: '90일', value: 90 * 24 * 3600 },
 ];
 
-function StepHeader({ n, title, hint }: { n: number; title: string; hint?: string }) {
-  return (
-    <div className="flex items-center gap-2.5 mb-3">
-      <span className="w-5 h-5 shrink-0 grid place-items-center rounded-full bg-primary/10 border border-primary/30 text-primary text-[11px] font-bold font-mono">
-        {n}
-      </span>
-      <span className="text-sm font-semibold">{title}</span>
-      {hint && <span className="text-xs text-muted-foreground">{hint}</span>}
-    </div>
-  );
-}
-
 function Toggle({
   checked,
   onChange,
@@ -179,8 +167,7 @@ export function ProvisionWizard({ catalog, namespaces, running, onRun }: Provisi
   return (
     <div className="space-y-3">
       {/* 1. 프리셋 */}
-      <MacCard title="권한 프리셋">
-        <StepHeader n={1} title="무엇을 할 수 있게 할 것인가" hint="고른 뒤 아래 규칙 표에서 그대로 고친다" />
+      <MacCard title="1 · 권한 프리셋" description="무엇을 할 수 있게 할 것인가 — 고른 뒤 아래 규칙 표에서 그대로 고친다">
         <div className="grid gap-2 [grid-template-columns:repeat(auto-fit,minmax(220px,1fr))]">
           {(catalog?.presets ?? []).map((p) => {
             const on = p.key === presetKey;
@@ -212,8 +199,7 @@ export function ProvisionWizard({ catalog, namespaces, running, onRun }: Provisi
       </MacCard>
 
       {/* 2. 대상 */}
-      <MacCard title="대상">
-        <StepHeader n={2} title="누구에게, 어느 네임스페이스에" />
+      <MacCard title="2 · 대상" description="누구에게, 어느 네임스페이스에">
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <label className="flex flex-col gap-1.5 text-xs text-muted-foreground font-medium">
             ServiceAccount 이름
@@ -321,8 +307,7 @@ export function ProvisionWizard({ catalog, namespaces, running, onRun }: Provisi
       </MacCard>
 
       {/* 3. 바인딩 방식 */}
-      <MacCard title="바인딩 방식">
-        <StepHeader n={3} title="권한을 어떻게 붙일 것인가" />
+      <MacCard title="3 · 바인딩 방식" description="권한을 어떻게 붙일 것인가">
         <div className="flex flex-col gap-2" role="radiogroup" aria-label="바인딩 방식">
           {(catalog?.bindingModes ?? []).map((m) => {
             const on = m.key === bindingMode;
@@ -356,12 +341,10 @@ export function ProvisionWizard({ catalog, namespaces, running, onRun }: Provisi
       </MacCard>
 
       {/* 4. 규칙 */}
-      <MacCard title="권한 규칙">
-        <StepHeader
-          n={4}
-          title="실제로 적용될 규칙"
-          hint={rulesTouched ? '프리셋에서 수정됨' : `프리셋: ${preset?.name ?? '—'}`}
-        />
+      <MacCard
+        title="4 · 권한 규칙"
+        description={`실제로 적용될 규칙 — ${rulesTouched ? '프리셋에서 수정됨' : `프리셋: ${preset?.name ?? '—'}`}`}
+      >
         <RuleEditor
           rules={rules}
           onChange={(next) => {
@@ -374,8 +357,7 @@ export function ProvisionWizard({ catalog, namespaces, running, onRun }: Provisi
       </MacCard>
 
       {/* 5. 옵션 */}
-      <MacCard title="발급 옵션">
-        <StepHeader n={5} title="토큰과 검증" />
+      <MacCard title="5 · 발급 옵션" description="토큰과 검증">
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <label className="flex flex-col gap-1.5 text-xs text-muted-foreground font-medium">
             토큰 방식

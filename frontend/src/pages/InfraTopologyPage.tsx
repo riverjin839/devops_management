@@ -16,7 +16,7 @@ import {
   useVerifyInfraNode,
 } from '@/hooks/useInfraNodes';
 import { NodeVerifyModal } from '@/components/infra/NodeVerifyModal';
-import { ClusterSidebar, RunLogPanel, useModalA11y, EmptyState, LoadingState } from '@/components/common';
+import { ClusterSidebar, RunLogPanel, useModalA11y, EmptyState, LoadingState, PageShell } from '@/components/common';
 import { useRunLog, applyRunEvent, elapsed } from '@/hooks/useRunLog';
 import { useLogPref } from '@/hooks/useLogPref';
 import { MacCard } from '@/components/ui/MacCard';
@@ -702,7 +702,7 @@ export function InfraTopologyPage() {
 
   return (
     <div className="app-min-h-screen bg-background">
-      <main className="pr-3 py-3 flex gap-3">
+      <PageShell density="console" className="flex gap-3">
         <ClusterSidebar
           clusters={clusters}
           selectedId={activeClusterId || null}
@@ -710,7 +710,7 @@ export function InfraTopologyPage() {
           iconOnly
         />
 
-        <div className="flex-1 min-w-0 px-5">
+        <div className="flex-1 min-w-0">
 
         {/* 헤더 */}
         <PageHeader
@@ -819,7 +819,7 @@ export function InfraTopologyPage() {
 
             {/* 요약 통계 — 5칸이라 KPI 타일 대신 한 줄 표 (D-118) */}
             {activeCluster && (
-              <MacCard rootClassName="mb-6" bodyPadding="p-0">
+              <MacCard title="노드 구성" rootClassName="mb-6" bodyPadding="p-0">
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="border-b border-border text-xs text-muted-foreground">
@@ -851,11 +851,12 @@ export function InfraTopologyPage() {
 
             {/* Trace 패널 */}
             {activeCluster && (
-              <MacCard title="Pod/Service → Switch Trace" rootClassName="mb-6">
-                <div className="flex items-center gap-2 mb-2">
-                  <p className="text-sm text-muted-foreground flex-1">
-                    Pod/Service 가 거치는 노드·스위치 경로와 지연·오류가 큰 홉을 찾는다.
-                  </p>
+              <MacCard
+                title="파드/서비스 → 스위치 경로 추적"
+                description="파드·서비스가 거치는 노드·스위치 경로와 지연·오류가 큰 홉을 찾는다."
+                rootClassName="mb-6"
+                bodyPadding={traceOpen || traceResult || traceError ? 'p-4' : 'p-0'}
+                actions={
                   <button
                     type="button"
                     onClick={() => {
@@ -869,7 +870,8 @@ export function InfraTopologyPage() {
                   >
                     {traceOpen || traceResult || traceError ? '접기' : '펼치기'}
                   </button>
-                </div>
+                }
+              >
                 {(traceOpen || traceResult || traceError) && (
                 <div id="infra-trace-body">
                 {/* <form> 이라 Enter 로 실행되고, 각 입력에 라벨이 붙는다(D-095) */}
@@ -1049,7 +1051,7 @@ export function InfraTopologyPage() {
           </>
         )}
         </div>
-      </main>
+      </PageShell>
 
       {/* 추가/수정 모달 */}
       {modalOpen && activeClusterId && (

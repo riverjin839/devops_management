@@ -842,11 +842,6 @@ export function PlatformStatusMatrix({ toolbarSlot }: PlatformStatusMatrixProps 
   const activeCount = activeRuns?.total ?? 0;
   const toolbarContent = (
     <>
-      {toolbarSlot === undefined && (
-        <span className="text-xs font-semibold text-muted-foreground select-none">
-          플랫폼 현황
-        </span>
-      )}
       <button
         onClick={() => setHelpOpen(true)}
         className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-xl text-[11px] text-muted-foreground hover:text-primary hover:bg-secondary transition-colors flex-shrink-0"
@@ -963,12 +958,13 @@ export function PlatformStatusMatrix({ toolbarSlot }: PlatformStatusMatrixProps 
   return (
     <div className="flex flex-col gap-2 min-h-0 flex-1">
       {toolbarSlot && createPortal(toolbarContent, toolbarSlot)}
-      <MacCard bodyPadding="p-0" rootClassName="min-h-0 flex-1 flex flex-col" className="flex-1 min-h-0 flex flex-col">
-        {toolbarSlot === undefined && (
-          <div className="flex-shrink-0 flex items-center gap-2 px-4 py-2.5 border-b border-border bg-surface-container-high">
-            {toolbarContent}
-          </div>
-        )}
+      <MacCard
+        bodyPadding="p-0"
+        rootClassName="min-h-0 flex-1 flex flex-col"
+        className="flex-1 min-h-0 flex flex-col"
+        title={toolbarSlot === undefined ? '플랫폼 현황' : undefined}
+        actions={toolbarSlot === undefined ? toolbarContent : undefined}
+      >
 
         {isLoading ? (
           <div className="flex-1 min-h-0 overflow-auto p-3 space-y-2" aria-busy="true" aria-label="점검 매트릭스 불러오는 중">

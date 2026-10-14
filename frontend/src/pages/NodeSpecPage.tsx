@@ -8,7 +8,7 @@ import {
 import { useClusters } from '@/hooks/useCluster';
 import {
   ClusterSidebar, DebugLogPanel, ConfirmDialog, GridCell, InlineTextCell, useToast,
-  SkeletonTable, EmptyState, ResizeGrip, DoubleScrollX, useModalA11y, LogViewer, PageHeader } from '@/components/common';
+  SkeletonTable, EmptyState, ResizeGrip, DoubleScrollX, useModalA11y, LogViewer, PageHeader, PageShell } from '@/components/common';
 import { MacCard } from '@/components/ui/MacCard';
 import { useColumnWidths } from '@/hooks/useColumnWidths';
 import { formatApiError } from '@/lib/utils';
@@ -457,7 +457,7 @@ export function NodeSpecPage() {
 
   return (
     <div className="app-min-h-screen bg-background">
-      <main className="pr-3 py-3 flex gap-3">
+      <PageShell density="console" className="flex gap-3">
         <ClusterSidebar
           clusters={clusters}
           selectedId={clusterId}
@@ -834,7 +834,7 @@ export function NodeSpecPage() {
             벤더/시리얼/랙/자산태그 등은 수기로 입력하세요.
           </p>
         </div>
-      </main>
+      </PageShell>
 
       {(editTarget || creating) && (
         <NodeSpecEditModal

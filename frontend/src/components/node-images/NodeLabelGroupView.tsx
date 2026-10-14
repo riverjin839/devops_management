@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import { EmptyState } from '@/components/common';
 import { Layers, Tag } from 'lucide-react';
 import type { NodeImagesInfo } from '@/hooks/useNodeImages';
 import { formatBytes } from './utils';
@@ -75,9 +76,11 @@ export function NodeLabelGroupView({ nodes, searchQuery }: Props) {
 
   if (filtered.length === 0) {
     return (
-      <div className="bg-card border border-border rounded-md p-8 text-center text-muted-foreground text-sm">
-        {searchQuery ? `"${searchQuery}"에 해당하는 노드/이미지가 없습니다.` : '노드 이미지 정보가 없습니다.'}
-      </div>
+      <EmptyState
+        icon={Layers}
+        title={searchQuery ? `"${searchQuery}"에 해당하는 노드/이미지가 없습니다.` : '노드 이미지 정보가 없습니다.'}
+        description={searchQuery ? '검색어를 바꿔 보세요.' : '노드 이미지 수집이 끝나면 여기에 표시됩니다.'}
+      />
     );
   }
 

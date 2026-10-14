@@ -30,7 +30,7 @@ export function EfficiencyRunPanel({ clusterId, onRollback, rollbackPending }: {
                 </button>
                 {open === r.id && (
                   <div className="px-3 pb-3">
-                    <EfficiencyRunLog runId={r.id} onRollback={onRollback} rollbackPending={rollbackPending} />
+                    <EfficiencyRunLog runId={r.id} onRollback={onRollback} rollbackPending={rollbackPending} embedded />
                   </div>
                 )}
               </div>

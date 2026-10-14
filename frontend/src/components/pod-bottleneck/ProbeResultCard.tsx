@@ -19,17 +19,18 @@ export function ProbeResultCard({ probeKey, label, axis, result }: ProbeResultCa
   const Icon = meta.icon;
 
   return (
-    <MacCard title={label}>
+    <MacCard
+      title={label}
+      titleExtra={
+        <span className="inline-flex items-center gap-2">
+          <Icon className={`w-4 h-4 ${meta.cls}`} aria-label={`상태: ${meta.label}`} />
+          <span className={`text-sm font-semibold ${meta.cls}`}>{meta.label}</span>
+          <ProbeAxisBadge axis={axis} />
+        </span>
+      }
+      actions={<span className="text-xs font-mono text-muted-foreground">{probeKey}</span>}
+    >
       <div className="space-y-3">
-        <div className="flex items-start justify-between gap-2">
-          <div className="flex items-center gap-2">
-            <Icon className={`w-5 h-5 ${meta.cls}`} aria-label={`상태: ${meta.label}`} />
-            <span className={`text-sm font-semibold ${meta.cls}`}>{meta.label}</span>
-            <ProbeAxisBadge axis={axis} />
-          </div>
-          <span className="text-xs font-mono text-muted-foreground">{probeKey}</span>
-        </div>
-
         <p className="text-sm">{result.message}</p>
 
         {result.recommendation && (

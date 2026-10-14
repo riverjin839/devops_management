@@ -3,7 +3,7 @@ import { PageHeader } from '@/components/common/PageHeader';
 import { Plus, Search } from 'lucide-react';
 import { MacCard } from '@/components/ui/MacCard';
 import { ClusterSidebar } from '@/components/common/ClusterSidebar';
-import { useToast } from '@/components/common';
+import { useToast, PageShell } from '@/components/common';
 import { formatApiError } from '@/lib/utils';
 import {
   DeepCheckDefinitionForm,
@@ -92,8 +92,8 @@ export function DeepCheckSettingsPage() {
   };
 
   return (
-    <div className="app-min-h-screen bg-background py-3 pr-3">
-      <div className="flex gap-3">
+    <div className="app-min-h-screen bg-background">
+      <PageShell density="console" className="flex gap-3">
         <div className="sticky top-4 self-start">
           <ClusterSidebar
             clusters={clusters}
@@ -202,7 +202,7 @@ export function DeepCheckSettingsPage() {
 
           <NotificationSettingsPanel />
         </div>
-      </div>
+      </PageShell>
     </div>
   );
 }

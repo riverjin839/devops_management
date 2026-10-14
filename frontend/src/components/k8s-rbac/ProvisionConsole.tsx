@@ -89,38 +89,35 @@ export function ProvisionConsole({ stream, showLogs }: ProvisionConsoleProps) {
 
   if (!running && logs.length === 0 && !result && !error) {
     return (
-      <MacCard title="실행 결과">
-        <EmptyState icon={ShieldCheck} title="아직 발급을 실행하지 않았습니다."
-          description="왼쪽에서 대상과 권한을 정한 뒤 '액세스 발급 실행'을 누르면 단계별 로그와 발급된 kubeconfig 가 여기에 나옵니다." />
-      </MacCard>
+      <EmptyState icon={ShieldCheck} title="아직 발급을 실행하지 않았습니다."
+        description="왼쪽에서 대상과 권한을 정한 뒤 '액세스 발급 실행'을 누르면 단계별 로그와 발급된 kubeconfig 가 여기에 나옵니다." />
     );
   }
 
   return (
     <div className="space-y-3">
-      <MacCard title="실행 로그">
+      <MacCard
+        title="실행 로그"
+        titleExtra={<span className="text-xs text-muted-foreground tabular-nums">{logs.length}줄</span>}
+        actions={running ? (
+          <>
+            <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-muted-foreground">
+              <Loader2 className="w-3.5 h-3.5 animate-spin" /> 실행 중
+            </span>
+            <button
+              type="button"
+              onClick={abort}
+              title="실행 중단 (이미 만들어진 오브젝트는 남는다)"
+              aria-label="실행 중단"
+              className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-xl border border-border text-xs hover:border-destructive hover:text-destructive"
+            >
+              <Square className="w-3 h-3" /> 중단
+            </button>
+          </>
+        ) : undefined}
+      >
         <div className="space-y-3">
-          <div className="flex items-center gap-3 flex-wrap">
-            <StepChips steps={steps} running={running} />
-            <div className="flex-1" />
-            {running && (
-              <>
-                <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-muted-foreground">
-                  <Loader2 className="w-3.5 h-3.5 animate-spin" /> 실행 중
-                </span>
-                <button
-                  type="button"
-                  onClick={abort}
-                  title="실행 중단 (이미 만들어진 오브젝트는 남는다)"
-                  aria-label="실행 중단"
-                  className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-xl border border-border text-xs hover:border-destructive hover:text-destructive"
-                >
-                  <Square className="w-3 h-3" /> 중단
-                </button>
-              </>
-            )}
-            <span className="text-xs text-muted-foreground">{logs.length}줄</span>
-          </div>
+          <StepChips steps={steps} running={running} />
 
           {error && (
             <div className="text-sm rounded-md border border-status-critical/40 bg-status-critical/10 text-status-critical px-3 py-2">

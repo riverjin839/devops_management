@@ -4,7 +4,7 @@ import {
   Pencil, RefreshCw, Trash2,
 } from 'lucide-react';
 import { useClusters } from '@/hooks/useCluster';
-import { ClusterSidebar, useToast, EmptyState, LoadingState } from '@/components/common';
+import { ClusterSidebar, useToast, EmptyState, LoadingState, PageShell } from '@/components/common';
 import { PageHeader } from '@/components/common/PageHeader';
 import { MacCard } from '@/components/ui/MacCard';
 import {
@@ -216,7 +216,7 @@ export function ServiceArchitecturePage() {
 
   return (
     <div className="app-min-h-screen bg-background">
-      <main className="py-3 pr-3 flex gap-3">
+      <PageShell density="console" className="flex gap-3">
         <ClusterSidebar
           clusters={clusters}
           selectedId={clusterId || null}
@@ -280,9 +280,29 @@ export function ServiceArchitecturePage() {
           </MacCard>
 
           {/* 본문 */}
-          <MacCard title={selectedModule?.serviceName ?? '다이어그램'} rootClassName="flex-1 min-w-0" bodyPadding="p-0">
-            {/* 헤더 툴바 */}
-            <div className="flex flex-wrap items-center gap-2 px-4 py-2.5 border-b border-border">
+          <MacCard
+            title={selectedModule?.serviceName ?? '다이어그램'}
+            rootClassName="flex-1 min-w-0"
+            bodyPadding="p-0"
+            titleExtra={
+              <span className="flex items-center gap-2 text-[11px] text-muted-foreground min-w-0">
+                {doc?.lastSyncedAt && (
+                  <span>현행화: {new Date(doc.lastSyncedAt).toLocaleString('ko-KR')}</span>
+                )}
+                {driftTotal > 0 && (
+                  <span className="inline-flex items-center gap-1 text-status-warning font-semibold"
+                    title={`추가 ${drift?.added?.length ?? 0} · 제거 ${drift?.removed?.length ?? 0} · 변경 ${drift?.changed?.length ?? 0}`}>
+                    <AlertTriangle className="w-3.5 h-3.5" /> 변경 {driftTotal}건
+                  </span>
+                )}
+                {doc?.lastSyncStatus === 'failed' && (
+                  <span className="text-status-critical truncate" title={doc.syncError ?? ''}>
+                    동기화 실패: {doc.syncError}
+                  </span>
+                )}
+              </span>
+            }
+            actions={<>
               <div className="flex items-center rounded-xl border border-border overflow-hidden">
                 {([
                   { key: 'architecture', label: '아키텍처', icon: Network },
@@ -299,24 +319,6 @@ export function ServiceArchitecturePage() {
                   </button>
                 ))}
               </div>
-
-              <div className="flex-1 min-w-0 flex items-center gap-2 text-[11px] text-muted-foreground">
-                {doc?.lastSyncedAt && (
-                  <span>현행화: {new Date(doc.lastSyncedAt).toLocaleString('ko-KR')}</span>
-                )}
-                {driftTotal > 0 && (
-                  <span className="inline-flex items-center gap-1 text-status-warning font-semibold"
-                    title={`추가 ${drift?.added?.length ?? 0} · 제거 ${drift?.removed?.length ?? 0} · 변경 ${drift?.changed?.length ?? 0}`}>
-                    <AlertTriangle className="w-3.5 h-3.5" /> 변경 {driftTotal}건
-                  </span>
-                )}
-                {doc?.lastSyncStatus === 'failed' && (
-                  <span className="text-status-critical truncate" title={doc.syncError ?? ''}>
-                    동기화 실패: {doc.syncError}
-                  </span>
-                )}
-              </div>
-
               <button
                 onClick={() => setEditMode((v) => { if (v) setLinkSourceId(null); return !v; })}
                 disabled={!doc}
@@ -369,8 +371,8 @@ export function ServiceArchitecturePage() {
                   : <RefreshCw className="w-3.5 h-3.5" />}
                 동기화
               </button>
-            </div>
-
+            </>}
+          >
             {editMode && (
               <div className="px-4 py-1.5 text-xs text-primary bg-secondary/40 border-b border-border">
                 편집 모드: {linkSourceId
@@ -466,7 +468,7 @@ export function ServiceArchitecturePage() {
           </MacCard>
         </div>
         </div>
-      </main>
+      </PageShell>
 
       {/* dialogs */}
       {nodeDialogOpen && (

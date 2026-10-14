@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { ChevronDown, ChevronRight, Loader2, RotateCcw, X } from 'lucide-react';
 import { LogViewer } from '@/components/common';
+import { MacCard } from '@/components/ui/MacCard';
 import { ExecutionStepsTimeline } from '@/components/daily-check';
 import { RoleGate } from '@/components/auth/RoleGate';
 import { useEffRun } from '@/hooks/useK8sEfficiency';
@@ -39,8 +40,10 @@ function toTimeline(run: EffRun): { plan: { id: string; label: string }[]; steps
   return { plan, steps };
 }
 
-export function EfficiencyRunLog({ runId, onClose, onRollback, rollbackPending }: {
+export function EfficiencyRunLog({ runId, onClose, onRollback, rollbackPending, embedded = false }: {
   runId: string; onClose?: () => void; onRollback?: (runId: string) => void; rollbackPending?: boolean;
+  /** 다른 카드(실행 이력) 안에 펼칠 때 — 카드 안 카드가 되지 않게 비카드 면으로 그린다(D-122). */
+  embedded?: boolean;
 }) {
   const { data: run, isLoading, isError } = useEffRun(runId);
   const [showLog, setShowLog] = useState<boolean>(() => readLogPref());
@@ -52,40 +55,43 @@ export function EfficiencyRunLog({ runId, onClose, onRollback, rollbackPending }
   const canRollback = !run.dryRun && (run.runState === 'succeeded' || run.runState === 'partial')
     && run.runType !== 'collect' && run.runType !== 'recommend' && !!onRollback;
 
-  return (
-    <div className="rounded-md border border-border bg-card">
-      <div className="flex items-center gap-2 px-3 py-2 border-b border-border flex-wrap">
-        <RunStatePill state={run.runState} />
-        <span className="text-sm font-medium">{RUN_TYPE_LABEL[run.runType] ?? run.runType}</span>
-        <span className="text-xs text-muted-foreground">
-          {TRIGGER_LABEL[run.trigger] ?? run.trigger} · {run.triggeredBy ?? '—'} · {fmtTs(run.queuedAt)}
-          {run.dryRun && <span className="ml-1 px-1.5 py-0.5 rounded bg-status-info/10 text-status-info">dry-run</span>}
-          {run.rollbackOf && <span className="ml-1">· 롤백 of {run.rollbackOf.slice(0, 8)}</span>}
-        </span>
-        {run.durationMs > 0 && <span className="text-xs text-muted-foreground tabular-nums">{(run.durationMs / 1000).toFixed(1)}s</span>}
-        <div className="ml-auto flex items-center gap-2">
-          {canRollback && (
-            <RoleGate allow={['admin', 'operator']}>
-              <button type="button" onClick={() => onRollback?.(run.id)} disabled={rollbackPending}
-                title="이 실행의 before 값으로 되돌리기" aria-label="롤백"
-                className="text-xs inline-flex items-center gap-1 px-2 py-1 rounded-xl border border-border bg-card hover:bg-secondary disabled:opacity-50">
-                <RotateCcw className="w-3.5 h-3.5" /> 롤백
-              </button>
-            </RoleGate>
-          )}
-          <button type="button" onClick={() => setShowLog((v) => !v)} aria-pressed={showLog}
-            title={showLog ? '로그 숨기기' : '로그 보기'} aria-label={showLog ? '로그 숨기기' : '로그 보기'}
-            className="text-xs inline-flex items-center gap-1 px-2 py-1 rounded-xl border border-border bg-card hover:bg-secondary">
-            {showLog ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />} 로그 보기
+  const title = RUN_TYPE_LABEL[run.runType] ?? run.runType;
+  const meta = (
+    <>
+      <span className="text-xs text-muted-foreground">
+        {TRIGGER_LABEL[run.trigger] ?? run.trigger} · {run.triggeredBy ?? '—'} · {fmtTs(run.queuedAt)}
+        {run.dryRun && <span className="ml-1 px-1.5 py-0.5 rounded bg-status-info/10 text-status-info">dry-run</span>}
+        {run.rollbackOf && <span className="ml-1">· 롤백 of {run.rollbackOf.slice(0, 8)}</span>}
+      </span>
+      {run.durationMs > 0 && <span className="text-xs text-muted-foreground tabular-nums">{(run.durationMs / 1000).toFixed(1)}s</span>}
+    </>
+  );
+  const actions = (
+    <>
+      {canRollback && (
+        <RoleGate allow={['admin', 'operator']}>
+          <button type="button" onClick={() => onRollback?.(run.id)} disabled={rollbackPending}
+            title="이 실행의 before 값으로 되돌리기" aria-label="롤백"
+            className="text-xs inline-flex items-center gap-1 px-2 py-1 rounded-xl border border-border bg-card hover:bg-secondary disabled:opacity-50">
+            <RotateCcw className="w-3.5 h-3.5" /> 롤백
           </button>
-          {onClose && (
-            <button type="button" onClick={onClose} title="닫기" aria-label="닫기"
-              className="p-1 rounded-md text-muted-foreground hover:bg-secondary hover:text-foreground">
-              <X className="w-3.5 h-3.5" />
-            </button>
-          )}
-        </div>
-      </div>
+        </RoleGate>
+      )}
+      <button type="button" onClick={() => setShowLog((v) => !v)} aria-pressed={showLog}
+        title={showLog ? '로그 숨기기' : '로그 보기'} aria-label={showLog ? '로그 숨기기' : '로그 보기'}
+        className="text-xs inline-flex items-center gap-1 px-2 py-1 rounded-xl border border-border bg-card hover:bg-secondary">
+        {showLog ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />} 로그 보기
+      </button>
+      {onClose && (
+        <button type="button" onClick={onClose} title="닫기" aria-label="닫기"
+          className="p-1 rounded-md text-muted-foreground hover:bg-secondary hover:text-foreground">
+          <X className="w-3.5 h-3.5" />
+        </button>
+      )}
+    </>
+  );
+  const body = (
+    <>
       {run.error && <div className="px-3 py-2 text-sm text-status-critical border-b border-border">{run.error}</div>}
       {plan.length > 0 && (
         <div className="px-3 py-2 border-b border-border">
@@ -97,6 +103,31 @@ export function EfficiencyRunLog({ runId, onClose, onRollback, rollbackPending }
           <LogViewer text={run.logLines || '(아직 로그가 없습니다)'} maxHeight="max-h-72" />
         </div>
       )}
-    </div>
+    </>
+  );
+
+  if (embedded) {
+    return (
+      <div className="rounded-md border border-border bg-secondary/40">
+        <div className="flex items-center gap-2 px-3 py-2 border-b border-border flex-wrap">
+          <RunStatePill state={run.runState} />
+          <span className="text-sm font-medium">{title}</span>
+          {meta}
+          <div className="ml-auto flex items-center gap-2">{actions}</div>
+        </div>
+        {body}
+      </div>
+    );
+  }
+
+  return (
+    <MacCard
+      title={title}
+      titleExtra={<><RunStatePill state={run.runState} />{meta}</>}
+      actions={actions}
+      bodyPadding="p-0"
+    >
+      {body}
+    </MacCard>
   );
 }

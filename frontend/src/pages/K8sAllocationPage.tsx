@@ -6,7 +6,7 @@ import {
   Gauge, RefreshCw, AlertTriangle, Server, Layers, BarChart3, Sparkles,
 } from 'lucide-react';
 import { ClusterSidebar } from '@/components/common/ClusterSidebar';
-import { SnapshotProgressBar, ExportMenu, SelectClusterEmptyState } from '@/components/common';
+import { SnapshotProgressBar, ExportMenu, SelectClusterEmptyState, PageShell } from '@/components/common';
 import { useClusters } from '@/hooks/useCluster';
 import { useAllocProgress, useForceAllocRefresh, useSoftAllocRefresh } from '@/hooks/useK8sAllocation';
 import {
@@ -76,8 +76,8 @@ export function K8sAllocationPage() {
   }, [autoMs, clusterId, forceRefresh, rolling, softRefresh]);
 
   return (
-    <div className="app-min-h-screen bg-background py-2 pr-3">
-      <div className="flex gap-3">
+    <div className="app-min-h-screen bg-background">
+      <PageShell density="console" className="flex gap-3">
         <div className="sticky top-2 self-start">
           <ClusterSidebar
             clusters={clusters}
@@ -201,7 +201,7 @@ export function K8sAllocationPage() {
             </>
           )}
         </div>
-      </div>
+      </PageShell>
     </div>
   );
 }

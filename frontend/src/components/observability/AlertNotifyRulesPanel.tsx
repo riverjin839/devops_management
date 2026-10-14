@@ -129,22 +129,23 @@ export function AlertNotifyRulesPanel({ clusters, canEdit }: {
     <div className="space-y-3">
       <GlobalSettingsCard settings={settings} canEdit={canEdit} />
 
-      <MacCard title="알림 규칙" bodyPadding="p-0">
-        <div className="flex items-center justify-between px-4 py-3 border-b border-border">
-          <p className="text-xs text-muted-foreground">
-            priority 가 작은 규칙부터 평가하고 <b className="text-foreground">첫 매칭 1건</b>만 적용합니다.
-            매칭되는 규칙이 없으면 위의 전역 기본값을 씁니다.
-          </p>
-          {canEdit ? (
-            <button
-              type="button"
-              onClick={startNew}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-sm bg-secondary text-muted-foreground hover:bg-secondary/80 transition-colors"
-            >
-              <Plus className="w-3.5 h-3.5" aria-hidden /> 규칙 추가
-            </button>
-          ) : null}
-        </div>
+      <MacCard
+        title="알림 규칙"
+        bodyPadding="p-0"
+        actions={canEdit ? (
+          <button
+            type="button"
+            onClick={startNew}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-sm bg-secondary text-muted-foreground hover:bg-secondary/80 transition-colors"
+          >
+            <Plus className="w-3.5 h-3.5" aria-hidden /> 규칙 추가
+          </button>
+        ) : undefined}
+      >
+        <p className="px-4 py-2.5 text-xs text-muted-foreground border-b border-border">
+          priority 가 작은 규칙부터 평가하고 <b className="text-foreground">첫 매칭 1건</b>만 적용합니다.
+          매칭되는 규칙이 없으면 위의 전역 기본값을 씁니다.
+        </p>
 
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
@@ -260,7 +261,7 @@ function GlobalSettingsCard({ settings, canEdit }: {
   useEffect(() => { if (settings) setForm(settings); }, [settings]);
 
   if (!form) {
-    return <MacCard title="전역 기본값"><p className="text-sm text-muted-foreground">불러오는 중…</p></MacCard>;
+    return <LoadingState compact />;
   }
 
   const save = async () => {

@@ -55,23 +55,12 @@ export function EfficiencyTab({ clusterId }: { clusterId: string; clusterName?: 
   return (
     <div className="space-y-2">
       {/* 툴바 */}
-      <MacCard bodyPadding="p-2">
-        <div className="flex items-center gap-2 flex-wrap">
-          <Sparkles className="w-4 h-4 text-primary" />
-          <span className="text-sm font-medium">자원 효율화</span>
-          <span className="text-xs text-muted-foreground">
-            수집 {scheduleQ.data?.enabled === false ? '중지' : (mine?.effectiveCron ?? scheduleQ.data?.defaultCron ?? '—')}
-            {mine?.lastRunAt ? ` · 마지막 ${fmtTs(mine.lastRunAt)}` : ''}
-            {' · '}자동 적용 <b className={automationOn ? 'text-status-warning' : 'text-muted-foreground'}>{automationOn ? 'ON' : 'OFF'}</b>
-            {' · '}사용률 소스 {defaultsQ.data?.usageSource ?? '—'}
-          </span>
-          {totals && (
-            <span className="text-xs text-muted-foreground">
-              · 절감 가능 CPU <b className="text-foreground">{fmtCores(totals.cpuM)}</b> / MEM <b className="text-foreground">{fmtGi(totals.memB)}</b>
-              {' '}(적용 가능 {fmtN(totals.applicable)} · 추천만 {fmtN(totals.recommendOnly)})
-            </span>
-          )}
-          <div className="ml-auto flex items-center gap-2" data-export-ignore>
+      <MacCard
+        title="자원 효율화"
+        icon={Sparkles}
+        bodyPadding="px-4 py-2"
+        actions={
+          <div className="flex items-center gap-2" data-export-ignore>
             <RoleGate allow={['admin', 'operator']}>
               <button type="button" className={BTN} onClick={() => setCollectConfirm(true)} disabled={m.collect.isPending} title="지금 샘플을 한 번 수집(전수 순회 → 추천 → 자동화 평가)">
                 <Play className="w-3.5 h-3.5" /> 지금 수집
@@ -84,6 +73,21 @@ export function EfficiencyTab({ clusterId }: { clusterId: string; clusterName?: 
               <Settings2 className="w-3.5 h-3.5" /> 정책 설정
             </button>
           </div>
+        }
+      >
+        <div className="flex items-center gap-2 flex-wrap">
+          <span className="text-xs text-muted-foreground">
+            수집 {scheduleQ.data?.enabled === false ? '중지' : (mine?.effectiveCron ?? scheduleQ.data?.defaultCron ?? '—')}
+            {mine?.lastRunAt ? ` · 마지막 ${fmtTs(mine.lastRunAt)}` : ''}
+            {' · '}자동 적용 <b className={automationOn ? 'text-status-warning' : 'text-muted-foreground'}>{automationOn ? 'ON' : 'OFF'}</b>
+            {' · '}사용률 소스 {defaultsQ.data?.usageSource ?? '—'}
+          </span>
+          {totals && (
+            <span className="text-xs text-muted-foreground">
+              · 절감 가능 CPU <b className="text-foreground">{fmtCores(totals.cpuM)}</b> / MEM <b className="text-foreground">{fmtGi(totals.memB)}</b>
+              {' '}(적용 가능 {fmtN(totals.applicable)} · 추천만 {fmtN(totals.recommendOnly)})
+            </span>
+          )}
         </div>
       </MacCard>
 
@@ -105,18 +109,26 @@ export function EfficiencyTab({ clusterId }: { clusterId: string; clusterName?: 
 
       {/* 추이 */}
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-2">
-        <MacCard title="네임스페이스 자원 추이 (request · 실사용 · Quota)" bodyPadding="p-3">
-          <div className="flex items-center gap-2 mb-2"><RangeToggle value={range} onChange={setRange} /><MetricToggle value={metric} onChange={setMetric} /></div>
+        <MacCard
+          title="네임스페이스 자원 추이"
+          description="request · 실사용 · Quota"
+          bodyPadding="p-3"
+          actions={<><RangeToggle value={range} onChange={setRange} /><MetricToggle value={metric} onChange={setMetric} /></>}
+        >
           <NsTrendChart clusterId={clusterId} range={range} metric={metric} namespace={ns} onNamespace={setNs} />
         </MacCard>
-        <MacCard title="저효율 네임스페이스 추이 (사용효율 낮은 순)" bodyPadding="p-3">
-          <div className="flex items-center gap-2 mb-2"><RangeToggle value={range} onChange={setRange} /><MetricToggle value={metric} onChange={setMetric} /></div>
+        <MacCard
+          title="저효율 네임스페이스 추이"
+          description="사용효율 낮은 순"
+          bodyPadding="p-3"
+          actions={<><RangeToggle value={range} onChange={setRange} /><MetricToggle value={metric} onChange={setMetric} /></>}
+        >
           <LowEfficiencyRankingChart clusterId={clusterId} range={range} metric={metric} onPick={setNs} />
         </MacCard>
       </div>
 
       {/* 실행 이력 */}
-      <MacCard title="실행 이력 (수집 · 적용 · 롤백 · Quota 조정)" bodyPadding="p-0">
+      <MacCard title="실행 이력" description="수집 · 적용 · 롤백 · Quota 조정" bodyPadding="p-0">
         <EfficiencyRunPanel clusterId={clusterId}
           onRollback={(id) => void runGuard(() => m.rollback.mutateAsync(id), '롤백 시작')} rollbackPending={m.rollback.isPending} />
       </MacCard>

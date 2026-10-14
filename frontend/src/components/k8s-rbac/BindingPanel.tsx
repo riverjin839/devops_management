@@ -146,8 +146,10 @@ export function BindingPanel({
   };
 
   return (
-    <MacCard title="Binding">
-      <div className="flex flex-wrap items-center gap-2 mb-3">
+    <MacCard
+      title="바인딩"
+      titleExtra={<span className="text-xs text-muted-foreground tabular-nums">{rows.length}건</span>}
+      actions={<>
         <div className="relative flex-1 min-w-[180px] max-w-sm">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
           <input
@@ -170,8 +172,6 @@ export function BindingPanel({
         >
           system:* 포함
         </button>
-        <div className="flex-1" />
-        <span className="text-xs text-muted-foreground">{rows.length}건</span>
         <button
           type="button"
           onClick={() => setCreating(!creating)}
@@ -182,8 +182,8 @@ export function BindingPanel({
         >
           <Plus className="w-3.5 h-3.5" /> 바인딩 추가
         </button>
-      </div>
-
+      </>}
+    >
       {creating && (
         <div className="mb-3 p-3 rounded-xl border border-border bg-secondary space-y-3">
           <div className="flex flex-wrap items-end gap-2">

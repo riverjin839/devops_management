@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { SelectClusterEmptyState, PageHeader, LoadingState, EmptyState } from '@/components/common';
+import { SelectClusterEmptyState, PageHeader, LoadingState, EmptyState, PageShell } from '@/components/common';
 import { Activity, Plus, RefreshCw, Search } from 'lucide-react';
 import { MacCard } from '@/components/ui/MacCard';
 import { ClusterSidebar } from '@/components/common/ClusterSidebar';
@@ -128,8 +128,8 @@ export function ObservabilityPage() {
   };
 
   return (
-    <div className="app-min-h-screen bg-background py-3 pr-3">
-      <div className="flex gap-3">
+    <div className="app-min-h-screen bg-background">
+      <PageShell density="console" className="flex gap-3">
         <ClusterSidebar
           clusters={clusters}
           selectedId={clusterId || null}
@@ -185,9 +185,11 @@ export function ObservabilityPage() {
             ) : null}
           </div>
 
-          <MacCard title={activeModule?.label ?? moduleKey} bodyPadding="p-0">
-            {/* 툴바 — 뷰 탭 · 필터 · 신선도 · 새로고침 */}
-            <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-3 border-b border-border">
+          <MacCard
+            title={activeModule?.label ?? moduleKey}
+            bodyPadding="p-0"
+            actions={<>
+              {/* 뷰 탭 · 신선도 · 새로고침 */}
               <div className="flex flex-wrap items-center gap-1">
                 {VIEW_TABS.map((tab) => {
                   const disabled = !isPromModule && tab.value !== 'metrics';
@@ -231,8 +233,8 @@ export function ObservabilityPage() {
                   새로고침
                 </button>
               </div>
-            </div>
-
+            </>}
+          >
             {/* 뷰별 보조 필터 + 요약 */}
             <div className="flex flex-wrap items-center gap-3 px-4 py-2 border-b border-border bg-muted/10">
               {effectiveView === 'metrics' ? (
@@ -307,7 +309,7 @@ export function ObservabilityPage() {
             )}
           </MacCard>
         </div>
-      </div>
+      </PageShell>
 
       <MetricEditModal
         isOpen={editorOpen}

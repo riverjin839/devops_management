@@ -9,7 +9,7 @@ import {
   CheckCircle2, Clock, AlertCircle, Circle, BarChart3,
   ListChecks, Activity, Plus, FolderOpen,
 } from 'lucide-react';
-import { ViewModeBar, SidePane, EmptyState } from '@/components/common';
+import { ViewModeBar, SidePane, EmptyState, PageShell } from '@/components/common';
 import { MacCard } from '@/components/ui/MacCard';
 import { stripHtml } from '@/lib/utils';
 import { useProjects } from '@/hooks/useProjects';
@@ -641,7 +641,7 @@ export function WbsFlowPage() {
 
   return (
     <div className="app-min-h-screen bg-background">
-      <main className="mx-auto px-4 lg:px-6 py-5 space-y-4 max-w-[1800px]">
+      <PageShell density="console" sidebar={false} className="space-y-4">
         {/* ── Page header ─────────────────────────────────────────────── */}
         <div className="flex items-center justify-between gap-3 flex-wrap">
           <PageHeader icon={BarChart3} title="WBS 작업 흐름" description="담당자별 역할 · 날짜별 업무 현황" className="flex-1 min-w-0" />
@@ -680,102 +680,100 @@ export function WbsFlowPage() {
         <SummaryBar tasks={tasks} issues={issues} />
 
         {/* ── Toolbar ─────────────────────────────────────────────────── */}
-        <MacCard bodyPadding="p-3">
-          <div className="flex items-center gap-2 flex-wrap">
-            {/* Date nav */}
-            <div className="flex items-center gap-0.5 bg-secondary rounded-xl p-0.5">
-              <button
-                onClick={movePrev}
-                className="p-1.5 hover:bg-card rounded-lg text-muted-foreground hover:text-foreground transition-colors"
-                aria-label="이전 기간"
-              >
-                <ChevronLeft className="w-4 h-4" />
-              </button>
-              <button
-                onClick={moveToday}
-                className="px-3 py-1 text-sm font-medium hover:bg-card rounded-lg text-foreground transition-colors flex items-center gap-1.5 tabular-nums"
-              >
-                <Calendar className="w-3.5 h-3.5 text-primary" />
-                {startStr} <span className="text-muted-foreground">~</span> {endStr}
-              </button>
-              <button
-                onClick={moveNext}
-                className="p-1.5 hover:bg-card rounded-lg text-muted-foreground hover:text-foreground transition-colors"
-                aria-label="다음 기간"
-              >
-                <ChevronRight className="w-4 h-4" />
-              </button>
-            </div>
+        <div className="flex items-center gap-2 flex-wrap">
+          {/* Date nav */}
+          <div className="flex items-center gap-0.5 bg-secondary rounded-xl p-0.5">
+            <button
+              onClick={movePrev}
+              className="p-1.5 hover:bg-card rounded-lg text-muted-foreground hover:text-foreground transition-colors"
+              aria-label="이전 기간"
+            >
+              <ChevronLeft className="w-4 h-4" />
+            </button>
+            <button
+              onClick={moveToday}
+              className="px-3 py-1 text-sm font-medium hover:bg-card rounded-lg text-foreground transition-colors flex items-center gap-1.5 tabular-nums"
+            >
+              <Calendar className="w-3.5 h-3.5 text-primary" />
+              {startStr} <span className="text-muted-foreground">~</span> {endStr}
+            </button>
+            <button
+              onClick={moveNext}
+              className="p-1.5 hover:bg-card rounded-lg text-muted-foreground hover:text-foreground transition-colors"
+              aria-label="다음 기간"
+            >
+              <ChevronRight className="w-4 h-4" />
+            </button>
+          </div>
 
-            <ViewModeBar
-              modes={[
-                { id: 'week',    label: '1주' },
-                { id: 'twoWeek', label: '2주' },
-                { id: 'month',   label: '1달' },
-              ]}
-              active={viewMode}
-              onChange={(v) => setViewMode(v as ViewMode)}
-              showStylePanel={false}
-            />
+          <ViewModeBar
+            modes={[
+              { id: 'week',    label: '1주' },
+              { id: 'twoWeek', label: '2주' },
+              { id: 'month',   label: '1달' },
+            ]}
+            active={viewMode}
+            onChange={(v) => setViewMode(v as ViewMode)}
+            showStylePanel={false}
+          />
 
-            {pageView === 'project' && projects.length > 0 && (
-              <div className="flex items-center gap-1.5">
-                <FolderOpen className="w-3.5 h-3.5 text-primary" />
-                <select
-                  value={selectedProjectId}
-                  onChange={e => setSelectedProjectId(e.target.value)}
-                  className="text-sm bg-background border border-border rounded-xl px-2.5 py-1.5 text-foreground focus:outline-none focus:ring-2 focus:ring-primary/40"
-                >
-                  <option value="">전체 프로젝트</option>
-                  {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-                </select>
-              </div>
-            )}
-
-            {pageView === 'personal' && (
-              <div className="flex items-center gap-1.5">
-                <Users className="w-3.5 h-3.5 text-primary" />
-                <select
-                  value={personalAssignee}
-                  onChange={e => setPersonalAssignee(e.target.value)}
-                  className="text-sm bg-background border border-border rounded-xl px-2.5 py-1.5 text-foreground focus:outline-none focus:ring-2 focus:ring-primary/40"
-                >
-                  <option value="">담당자 선택…</option>
-                  {allAssignees.map(a => <option key={a} value={a}>{a}</option>)}
-                </select>
-              </div>
-            )}
-
+          {pageView === 'project' && projects.length > 0 && (
             <div className="flex items-center gap-1.5">
-              <Filter className="w-3.5 h-3.5 text-muted-foreground" />
+              <FolderOpen className="w-3.5 h-3.5 text-primary" />
               <select
-                value={filterAssignee}
-                onChange={e => setFilterAssignee(e.target.value)}
+                value={selectedProjectId}
+                onChange={e => setSelectedProjectId(e.target.value)}
                 className="text-sm bg-background border border-border rounded-xl px-2.5 py-1.5 text-foreground focus:outline-none focus:ring-2 focus:ring-primary/40"
               >
-                <option value="">전체 담당자</option>
+                <option value="">전체 프로젝트</option>
+                {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+              </select>
+            </div>
+          )}
+
+          {pageView === 'personal' && (
+            <div className="flex items-center gap-1.5">
+              <Users className="w-3.5 h-3.5 text-primary" />
+              <select
+                value={personalAssignee}
+                onChange={e => setPersonalAssignee(e.target.value)}
+                className="text-sm bg-background border border-border rounded-xl px-2.5 py-1.5 text-foreground focus:outline-none focus:ring-2 focus:ring-primary/40"
+              >
+                <option value="">담당자 선택…</option>
                 {allAssignees.map(a => <option key={a} value={a}>{a}</option>)}
               </select>
             </div>
+          )}
 
-            <label className="flex items-center gap-1.5 text-sm text-muted-foreground cursor-pointer select-none px-2.5 py-1.5 rounded-xl border border-border hover:bg-secondary/40 transition-colors">
-              <input
-                type="checkbox"
-                checked={showOnlyActive}
-                onChange={e => setShowOnlyActive(e.target.checked)}
-                className="accent-primary"
-              />
-              진행중만
-            </label>
-
-            <div className="ml-auto flex items-center gap-2 text-sm text-muted-foreground">
-              <Users className="w-3.5 h-3.5" />
-              <span className="tabular-nums">{filteredRows.length}명</span>
-              <span>·</span>
-              <span className="tabular-nums">{totalItems}건</span>
-            </div>
+          <div className="flex items-center gap-1.5">
+            <Filter className="w-3.5 h-3.5 text-muted-foreground" />
+            <select
+              value={filterAssignee}
+              onChange={e => setFilterAssignee(e.target.value)}
+              className="text-sm bg-background border border-border rounded-xl px-2.5 py-1.5 text-foreground focus:outline-none focus:ring-2 focus:ring-primary/40"
+            >
+              <option value="">전체 담당자</option>
+              {allAssignees.map(a => <option key={a} value={a}>{a}</option>)}
+            </select>
           </div>
-        </MacCard>
+
+          <label className="flex items-center gap-1.5 text-sm text-muted-foreground cursor-pointer select-none px-2.5 py-1.5 rounded-xl border border-border hover:bg-secondary/40 transition-colors">
+            <input
+              type="checkbox"
+              checked={showOnlyActive}
+              onChange={e => setShowOnlyActive(e.target.checked)}
+              className="accent-primary"
+            />
+            진행중만
+          </label>
+
+          <div className="ml-auto flex items-center gap-2 text-sm text-muted-foreground">
+            <Users className="w-3.5 h-3.5" />
+            <span className="tabular-nums">{filteredRows.length}명</span>
+            <span>·</span>
+            <span className="tabular-nums">{totalItems}건</span>
+          </div>
+        </div>
 
         {/* ── 프로젝트 뷰 ─────────────────────────────────────────────── */}
         {pageView === 'project' && (
@@ -798,11 +796,13 @@ export function WbsFlowPage() {
                       onDeleted={() => selectedProjectId === project.id && setSelectedProjectId('')}
                     />
                     {(pTasks.length > 0 || pIssues.length > 0) ? (
-                      <MacCard bodyPadding="p-0" className="overflow-hidden">
-                        <div className="px-4 py-2 border-b border-border bg-muted/20 flex items-center gap-2">
-                          <BarChart3 className="w-3.5 h-3.5 text-muted-foreground" />
-                          <span className="text-sm font-medium text-muted-foreground">간트 · {pTasks.length + pIssues.length}건</span>
-                        </div>
+                      <MacCard
+                        title="간트"
+                        icon={BarChart3}
+                        titleExtra={<span className="text-xs text-muted-foreground tabular-nums">{pTasks.length + pIssues.length}건</span>}
+                        bodyPadding="p-0"
+                        className="overflow-hidden"
+                      >
                         <PersonalGanttView
                           assignee=""
                           tasks={pTasks}
@@ -828,11 +828,13 @@ export function WbsFlowPage() {
               const uIssues = unclassified.filter(w => w.type === 'issue');
               return (
                 <div className="space-y-2">
-                  <div className="rounded-2xl border border-dashed border-border/60 bg-secondary/10 p-4">
-                    <p className="text-sm font-semibold text-muted-foreground">미분류 ({unclassified.length}건)</p>
-                    <p className="text-sm text-muted-foreground mt-0.5">프로젝트에 소속되지 않은 업무</p>
-                  </div>
-                  <MacCard bodyPadding="p-0" className="overflow-hidden">
+                  <MacCard
+                    title="미분류"
+                    titleExtra={<span className="text-xs text-muted-foreground tabular-nums">{unclassified.length}건</span>}
+                    description="프로젝트에 소속되지 않은 업무"
+                    bodyPadding="p-0"
+                    className="overflow-hidden"
+                  >
                     <PersonalGanttView
                       assignee=""
                       tasks={uTasks}
@@ -982,7 +984,7 @@ export function WbsFlowPage() {
           <span className="flex items-center gap-1"><AlertCircle className="w-3 h-3 text-status-critical" /> 미해결</span>
           <span className="ml-auto text-xs">클릭 시 상세 정보</span>
         </div>
-      </main>
+      </PageShell>
 
       {selectedItem && (
         <DetailModal item={selectedItem} onClose={() => setSelectedItem(null)} />

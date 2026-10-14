@@ -6,7 +6,7 @@ import { CSS } from '@dnd-kit/utilities';
 import { PlaybookCard, PlaybookListRow, PlaybookLogDialog, AddPlaybookModal, RunCredsModal } from '@/components/playbooks';
 import type { PlaybookFormSubmit } from '@/components/playbooks/AddPlaybookModal';
 import type { PlaybookSshCreds } from '@/types';
-import { ClusterSidebar, EmptyState, Skeleton } from '@/components/common';
+import { ClusterSidebar, EmptyState, Skeleton, PageShell } from '@/components/common';
 import { PageHeader } from '@/components/common/PageHeader';
 import { RoleGate } from '@/components/auth/RoleGate';
 import { usePlaybooks, useCreatePlaybook, useUpdatePlaybook, useDeletePlaybook, useRunPlaybook, useToggleDashboard } from '@/hooks/usePlaybook';
@@ -226,7 +226,7 @@ export function PlaybooksPage() {
 
   return (
     <div className="app-min-h-screen bg-background">
-      <main className="pr-3 py-3 flex gap-3">
+      <PageShell density="console" className="flex gap-3">
         {/* 좌측 클러스터 사이드바 — 다중 선택. 빈 배열 = 전체. */}
         <ClusterSidebar
           clusters={clusters}
@@ -445,7 +445,7 @@ export function PlaybooksPage() {
             </DndContext>
           )}
         </div>
-      </main>
+      </PageShell>
 
       {/* Modal (add / edit) */}
       <AddPlaybookModal

@@ -97,8 +97,9 @@ export function ServiceAccountPanel({
 
   return (
     <div className="space-y-3">
-      <MacCard title="ServiceAccount">
-        <div className="flex flex-wrap items-center gap-2 mb-3">
+      <MacCard
+        title="ServiceAccount"
+        actions={<>
           <div className="relative flex-1 min-w-[180px] max-w-sm">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
             <input
@@ -134,7 +135,6 @@ export function ServiceAccountPanel({
           >
             PEP 생성분만
           </button>
-          <div className="flex-1" />
           <button
             type="button"
             onClick={() => setCreating(!creating)}
@@ -145,8 +145,8 @@ export function ServiceAccountPanel({
           >
             <UserPlus className="w-3.5 h-3.5" /> ServiceAccount 추가
           </button>
-        </div>
-
+        </>}
+      >
         {creating && (
           <div className="flex flex-wrap items-end gap-2 mb-3 p-3 rounded-xl border border-border bg-secondary">
             <label className="flex flex-col gap-1.5 text-xs text-muted-foreground font-medium">

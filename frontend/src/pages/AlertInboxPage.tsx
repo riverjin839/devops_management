@@ -3,7 +3,7 @@ import { BellOff, BellRing, Check, ExternalLink, RefreshCw, Search, Trash2 } fro
 import { MacCard } from '@/components/ui/MacCard';
 import { ClusterSidebar } from '@/components/common/ClusterSidebar';
 import { AlertAnalysisPanel } from '@/components/observability/AlertAnalysisPanel';
-import { ConfirmDialog, useToast, PageHeader } from '@/components/common';
+import { ConfirmDialog, useToast, PageHeader, PageShell } from '@/components/common';
 import { useClusters } from '@/hooks/useCluster';
 import {
   useAckAlert,
@@ -146,8 +146,8 @@ export function AlertInboxPage() {
   };
 
   return (
-    <div className="app-min-h-screen bg-background py-3 pr-3">
-      <div className="flex gap-3">
+    <div className="app-min-h-screen bg-background">
+      <PageShell density="console" className="flex gap-3">
         <ClusterSidebar
           clusters={clusters}
           selectedId={clusterId}
@@ -178,9 +178,10 @@ export function AlertInboxPage() {
           {tab === 'rules' ? (
             <AlertNotifyRulesPanel clusters={clusters} canEdit={canEdit} />
           ) : (
-            <MacCard title="수신 알람" bodyPadding="p-0">
-              {/* 필터 툴바 */}
-              <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-3 border-b border-border">
+            <MacCard
+              title="수신 알람"
+              bodyPadding="p-0"
+              actions={<>
                 <div className="flex flex-wrap items-center gap-1">
                   {SEVERITY_TABS.map((t) => (
                     <button key={t.value} type="button" className={pill(severity === t.value)}
@@ -229,8 +230,8 @@ export function AlertInboxPage() {
                     새로고침
                   </button>
                 </div>
-              </div>
-
+              </>}
+            >
               {/* 요약 (최근 24시간) */}
               {stats ? (
                 <div className="flex flex-wrap items-center gap-2 px-4 py-2 border-b border-border bg-muted/10 text-xs">
@@ -409,7 +410,7 @@ export function AlertInboxPage() {
             </MacCard>
           )}
         </div>
-      </div>
+      </PageShell>
       <ConfirmDialog
         open={ackAllOpen}
         title="미확인 알람 일괄 확인"

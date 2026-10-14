@@ -2,7 +2,8 @@ import { useMemo, useState } from 'react';
 import { ArrowDown, ArrowUp, Layers, Server, Send } from 'lucide-react';
 import type { NodeImagesInfo } from '@/hooks/useNodeImages';
 import { formatBytes, pickPrimaryName } from './utils';
-import { DoubleScrollX } from '@/components/common';
+import { DoubleScrollX, EmptyState } from '@/components/common';
+import { MacCard } from '@/components/ui/MacCard';
 
 interface Props {
   nodes: NodeImagesInfo[];
@@ -94,21 +95,21 @@ export function ImageCentricView({ nodes, searchQuery, onDistribute }: Props) {
 
   if (rows.length === 0) {
     return (
-      <div className="bg-card border border-border rounded-md p-8 text-center text-muted-foreground text-sm">
-        {searchQuery ? `"${searchQuery}"에 해당하는 이미지가 없습니다.` : '이미지 정보가 없습니다.'}
-      </div>
+      <EmptyState
+        icon={Layers}
+        title={searchQuery ? `"${searchQuery}"에 해당하는 이미지가 없습니다.` : '이미지 정보가 없습니다.'}
+        description={searchQuery ? '검색어를 바꿔 보세요.' : '노드 이미지 수집이 끝나면 여기에 표시됩니다.'}
+      />
     );
   }
 
   return (
-    <div className="bg-card border border-border rounded-md overflow-hidden">
-      <div className="px-4 py-2 bg-muted/10 border-b border-border flex items-center justify-between">
-        <p className="text-sm text-muted-foreground">
-          전체 <span className="font-semibold text-foreground tabular-nums">{rows.length}</span>개 고유 이미지
-          <span className="mx-1.5 text-muted-foreground/40">·</span>
-          {totalNodes}개 노드 기준
-        </p>
-      </div>
+    <MacCard
+      title="이미지별 분포"
+      titleExtra={<span className="text-xs text-muted-foreground tabular-nums">고유 이미지 {rows.length}개 · {totalNodes}개 노드 기준</span>}
+      bodyPadding="p-0"
+      className="overflow-hidden"
+    >
       <DoubleScrollX>
         <table className="w-full text-sm">
           <thead className="bg-muted/20">
@@ -195,7 +196,7 @@ export function ImageCentricView({ nodes, searchQuery, onDistribute }: Props) {
           </tbody>
         </table>
       </DoubleScrollX>
-    </div>
+    </MacCard>
   );
 }
 

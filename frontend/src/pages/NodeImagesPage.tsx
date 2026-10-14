@@ -3,10 +3,9 @@ import { Boxes, Search, AlertTriangle, LayoutList, LayoutGrid, Layers } from 'lu
 import { useClusters } from '@/hooks/useCluster';
 import { useNodeImageList } from '@/hooks/useNodeImages';
 import { NodeImagesTable, NodeLabelGroupView, ImageCentricView, NodeImagesCsvExportMenu, ImageDistributeDialog } from '@/components/node-images';
-import { ClusterSidebar, SnapshotProgressCard, ExportMenu, SelectClusterEmptyState, LoadingState } from '@/components/common';
+import { ClusterSidebar, SnapshotProgressCard, ExportMenu, SelectClusterEmptyState, LoadingState, EmptyState, PageShell } from '@/components/common';
 import { PageHeader } from '@/components/common/PageHeader';
 import { StatTile, StatTileRow } from '@/components/common/StatTile';
-import { MacCard } from '@/components/ui/MacCard';
 import { formatApiError } from '@/lib/utils';
 
 function extractErrorMessage(error: unknown): string {
@@ -66,7 +65,7 @@ export function NodeImagesPage() {
 
   return (
     <div className="app-min-h-screen bg-background">
-      <main className="pr-3 py-3 flex gap-3">
+      <PageShell density="console" className="flex gap-3">
         <ClusterSidebar
           clusters={clusters}
           selectedId={activeClusterId || null}
@@ -140,9 +139,7 @@ export function NodeImagesPage() {
           </div>
 
           {isLoading ? (
-            <MacCard bodyPadding="p-0">
-              <LoadingState />
-            </MacCard>
+            <LoadingState />
           ) : computing ? (
             <SnapshotProgressCard
               processed={result?.processed ?? 0}
@@ -154,20 +151,11 @@ export function NodeImagesPage() {
           ) : !activeClusterId ? (
             <SelectClusterEmptyState />
           ) : nodesError ? (
-            <MacCard rootClassName="border-status-critical/30" bodyPadding="p-8">
-              <div className="flex flex-col items-center gap-3 text-center">
-                <AlertTriangle className="w-8 h-8 text-status-critical" />
-                <div>
-                  <p className="font-medium text-status-critical mb-1">노드 이미지 정보를 불러올 수 없습니다</p>
-                  <p className="text-sm text-muted-foreground max-w-lg">
-                    {extractErrorMessage(nodesErrorDetail)}
-                  </p>
-                </div>
-                <p className="text-sm text-muted-foreground mt-1">
-                  클러스터의 kubeconfig 경로와 API Endpoint 설정을 확인하세요.
-                </p>
-              </div>
-            </MacCard>
+            <EmptyState
+              icon={AlertTriangle}
+              title="노드 이미지 정보를 불러올 수 없습니다."
+              description={`${extractErrorMessage(nodesErrorDetail)} — 클러스터의 kubeconfig 경로와 API Endpoint 설정을 확인하세요.`}
+            />
           ) : view === 'node-table' ? (
             <NodeImagesTable nodes={nodes} searchQuery={searchQuery} onDistribute={setDistributeImage} />
           ) : view === 'label-group' ? (
@@ -176,7 +164,7 @@ export function NodeImagesPage() {
             <ImageCentricView nodes={nodes} searchQuery={searchQuery} onDistribute={setDistributeImage} />
           )}
         </div>
-      </main>
+      </PageShell>
 
       {distributeImage && activeClusterId && (
         <ImageDistributeDialog

@@ -1,5 +1,7 @@
 import { useMemo } from 'react';
-import { Pencil } from 'lucide-react';
+import { Pencil, Server, Tag } from 'lucide-react';
+import { EmptyState } from '@/components/common';
+import { MacCard } from '@/components/ui/MacCard';
 import { NodeRow } from '@/hooks/useNodeLabels';
 import { matchesSearch, buildLabelEntries, filterLabelEntries, type LabelEntry } from './nodeLabelsShared';
 
@@ -31,14 +33,16 @@ function NodeView({
 
   if (filtered.length === 0) {
     return (
-      <div className="bg-card border border-border rounded-md p-8 text-center text-muted-foreground text-sm">
-        {searchQuery ? `"${searchQuery}"에 해당하는 노드가 없습니다.` : '노드 정보가 없습니다.'}
-      </div>
+      <EmptyState
+        icon={Server}
+        title={searchQuery ? `"${searchQuery}"에 해당하는 노드가 없습니다.` : '노드 정보가 없습니다.'}
+        description={searchQuery ? '검색어를 바꿔 보세요.' : '클러스터를 다시 고르거나 새로고침해 보세요.'}
+      />
     );
   }
 
   return (
-    <div className="bg-card border border-border rounded-md overflow-hidden">
+    <MacCard bodyPadding="p-0" className="overflow-hidden">
       <table className="w-full text-sm">
         <thead className="bg-muted/20">
           <tr>
@@ -117,7 +121,7 @@ function NodeView({
           })}
         </tbody>
       </table>
-    </div>
+    </MacCard>
   );
 }
 
@@ -136,14 +140,16 @@ function LabelView({
 
   if (filtered.length === 0) {
     return (
-      <div className="bg-card border border-border rounded-md p-8 text-center text-muted-foreground text-sm">
-        {searchQuery ? `"${searchQuery}"에 해당하는 레이블이 없습니다.` : '레이블 정보가 없습니다.'}
-      </div>
+      <EmptyState
+        icon={Tag}
+        title={searchQuery ? `"${searchQuery}"에 해당하는 레이블이 없습니다.` : '레이블 정보가 없습니다.'}
+        description={searchQuery ? '검색어를 바꿔 보세요.' : '노드에 레이블이 붙으면 여기에 모아 보여 줍니다.'}
+      />
     );
   }
 
   return (
-    <div className="bg-card border border-border rounded-md overflow-hidden">
+    <MacCard bodyPadding="p-0" className="overflow-hidden">
       <table className="w-full text-sm">
         <thead className="bg-muted/20">
           <tr>
@@ -207,7 +213,7 @@ function LabelView({
           })}
         </tbody>
       </table>
-    </div>
+    </MacCard>
   );
 }
 

@@ -8,7 +8,7 @@
  */
 import { useMemo, useState } from 'react';
 import { KeyRound, Link2, Shield, ShieldCheck, Wand2 } from 'lucide-react';
-import { ClusterSidebar, SelectClusterEmptyState } from '@/components/common';
+import { ClusterSidebar, SelectClusterEmptyState, PageShell } from '@/components/common';
 import { PageHeader } from '@/components/common/PageHeader';
 import {
   AccessReviewPanel,
@@ -83,7 +83,7 @@ export function K8sRbacPage() {
 
   return (
     <div className="app-min-h-screen bg-background">
-      <main className="pr-3 py-3 flex gap-3">
+      <PageShell density="console" className="flex gap-3">
         <ClusterSidebar
           clusters={clusters}
           selectedId={clusterId || null}
@@ -203,7 +203,7 @@ export function K8sRbacPage() {
             />
           )}
         </div>
-      </main>
+      </PageShell>
     </div>
   );
 }

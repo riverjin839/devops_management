@@ -305,67 +305,68 @@ export function NodesView({ clusterId, clusterName, onOpenDetail }: {
   }
 
   return (
-    <MacCard title="노드별 자원" bodyPadding="p-0">
-      <div className="flex items-center justify-between px-3 py-2 border-b border-border flex-wrap gap-2">
-        <div className="flex items-center gap-2 flex-wrap">
-          {/* 뷰 전환 토글 */}
-          <div className="inline-flex rounded-lg border border-border bg-muted/20 p-0.5">
-            <button
-              type="button"
-              onClick={() => setViewStyle('table')}
-              title="테이블 뷰"
-              aria-label="테이블 뷰"
-              className={`p-1.5 rounded-md ${viewStyle === 'table' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground'}`}
-            >
-              <List className="w-3.5 h-3.5" />
-            </button>
-            <button
-              type="button"
-              onClick={() => setViewStyle('card')}
-              title="카드 뷰"
-              aria-label="카드 뷰"
-              className={`p-1.5 rounded-md ${viewStyle === 'card' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground'}`}
-            >
-              <LayoutGrid className="w-3.5 h-3.5" />
-            </button>
-          </div>
-          <SearchInput value={q} onChange={setQ} placeholder="노드 찾기" />
-          <span className="text-xs text-muted-foreground">노드명을 클릭하면 그 노드의 리소스 상세가 열립니다</span>
-          {viewStyle === 'table' && (
-            <span className="text-xs text-muted-foreground inline-flex items-center">
-              열 머리글을 클릭해 정렬
-              <StatTooltip>
-                <p><b>R</b> = 사용 ÷ 요청(request) 비율 · <b>L</b> = 사용 ÷ 제한(limit) 비율</p>
-                <p className="text-muted-foreground mt-1">노드/네임스페이스/워크로드/파드 표 전반에서 공통으로 쓰이는 표기입니다.</p>
-              </StatTooltip>
-            </span>
-          )}
-          {viewStyle === 'card' && (
-            <>
-              <label className="flex items-center gap-1 text-xs text-muted-foreground">
-                열 수
-                <select
-                  value={String(colMode)}
-                  onChange={(e) => setColMode(e.target.value === 'auto' ? 'auto' : (Number(e.target.value) as ColMode))}
-                  className="text-sm px-1.5 py-0.5 rounded-lg border border-border bg-card text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
-                  title="한 줄에 표시할 카드 열 수"
-                >
-                  {COL_OPTIONS.map((o) => <option key={o.label} value={String(o.value)}>{o.label}</option>)}
-                </select>
-              </label>
-              <span className="text-xs text-muted-foreground">노드 {rows.length}개 · {gridCols}열{virtual ? ' · 가상 스크롤' : ''}</span>
-            </>
-          )}
-          {viewStyle === 'table' && virtual && (
-            <span className="text-xs text-muted-foreground">노드 {rows.length}개 · 가상 스크롤</span>
-          )}
-        </div>
-        <div className="flex items-center gap-3">
-          <CsvButton onClick={exportCsv} disabled={!rows.length} />
-          <button type="button" onClick={() => refetch()} className="text-sm text-muted-foreground hover:text-foreground flex items-center gap-1">
-            <RefreshCw className={`w-3.5 h-3.5 ${isFetching ? 'animate-spin' : ''}`} /> 새로고침
+    <MacCard
+      title="노드별 자원"
+      bodyPadding="p-0"
+      actions={<>
+        {/* 뷰 전환 토글 */}
+        <div className="inline-flex rounded-lg border border-border bg-muted/20 p-0.5">
+          <button
+            type="button"
+            onClick={() => setViewStyle('table')}
+            title="테이블 뷰"
+            aria-label="테이블 뷰"
+            className={`p-1.5 rounded-md ${viewStyle === 'table' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground'}`}
+          >
+            <List className="w-3.5 h-3.5" />
+          </button>
+          <button
+            type="button"
+            onClick={() => setViewStyle('card')}
+            title="카드 뷰"
+            aria-label="카드 뷰"
+            className={`p-1.5 rounded-md ${viewStyle === 'card' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground'}`}
+          >
+            <LayoutGrid className="w-3.5 h-3.5" />
           </button>
         </div>
+        <CsvButton onClick={exportCsv} disabled={!rows.length} />
+        <button type="button" onClick={() => refetch()} className="text-sm text-muted-foreground hover:text-foreground flex items-center gap-1">
+          <RefreshCw className={`w-3.5 h-3.5 ${isFetching ? 'animate-spin' : ''}`} /> 새로고침
+        </button>
+      </>}
+    >
+      <div className="flex items-center gap-2 flex-wrap px-3 py-2 border-b border-border">
+        <SearchInput value={q} onChange={setQ} placeholder="노드 찾기" />
+        <span className="text-xs text-muted-foreground">노드명을 클릭하면 그 노드의 리소스 상세가 열립니다</span>
+        {viewStyle === 'table' && (
+          <span className="text-xs text-muted-foreground inline-flex items-center">
+            열 머리글을 클릭해 정렬
+            <StatTooltip>
+              <p><b>R</b> = 사용 ÷ 요청(request) 비율 · <b>L</b> = 사용 ÷ 제한(limit) 비율</p>
+              <p className="text-muted-foreground mt-1">노드/네임스페이스/워크로드/파드 표 전반에서 공통으로 쓰이는 표기입니다.</p>
+            </StatTooltip>
+          </span>
+        )}
+        {viewStyle === 'card' && (
+          <>
+            <label className="flex items-center gap-1 text-xs text-muted-foreground">
+              열 수
+              <select
+                value={String(colMode)}
+                onChange={(e) => setColMode(e.target.value === 'auto' ? 'auto' : (Number(e.target.value) as ColMode))}
+                className="text-sm px-1.5 py-0.5 rounded-lg border border-border bg-card text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+                title="한 줄에 표시할 카드 열 수"
+              >
+                {COL_OPTIONS.map((o) => <option key={o.label} value={String(o.value)}>{o.label}</option>)}
+              </select>
+            </label>
+            <span className="text-xs text-muted-foreground">노드 {rows.length}개 · {gridCols}열{virtual ? ' · 가상 스크롤' : ''}</span>
+          </>
+        )}
+        {viewStyle === 'table' && virtual && (
+          <span className="text-xs text-muted-foreground">노드 {rows.length}개 · 가상 스크롤</span>
+        )}
       </div>
       <div className="min-h-40">{body}</div>
     </MacCard>
