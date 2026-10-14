@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { RotateCcw, Save, X } from 'lucide-react';
 import { useUiSettings, useUpdateUiSettings } from '@/hooks/useUiSettings';
 import { useToast } from '@/components/common';
+import { MacCard } from '@/components/ui/MacCard';
 import { NAV_MAP, GROUPS } from '@/components/layout/navConfig';
 import {
   PAGE_STYLE_DEFAULT_KEY,
@@ -86,13 +87,10 @@ export function PageStyleManager() {
   const targetLabel = targets.flatMap((g) => g.items).find((i) => i.key === target)?.label ?? target;
 
   return (
-    <div className="rounded-md border border-border bg-card overflow-hidden">
-      <div className="px-4 py-3 border-b border-border bg-muted/40">
-        <h3 className="text-sm font-semibold">페이지별 화면 스타일</h3>
-        <p className="text-xs text-muted-foreground mt-0.5">
-          폰트 · 글자 크기 · 글자색 · 배경색을 페이지별로 지정합니다. &lsquo;전체 기본&rsquo; 위에 페이지별 설정이 덮어써집니다. (서버 저장 · 모든 사용자 공통)
-        </p>
-      </div>
+    <MacCard title="페이지별 화면 스타일" bodyPadding="p-0">
+      <p className="px-4 py-2 text-xs text-muted-foreground border-b border-border">
+        폰트 · 글자 크기 · 글자색 · 배경색을 페이지별로 지정합니다. &lsquo;전체 기본&rsquo; 위에 페이지별 설정이 덮어써집니다. (서버 저장 · 모든 사용자 공통)
+      </p>
 
       <div className="px-4 py-3 space-y-4">
         {/* 대상 페이지 선택 */}
@@ -195,7 +193,7 @@ export function PageStyleManager() {
           </button>
         </div>
       </div>
-    </div>
+    </MacCard>
   );
 }
 

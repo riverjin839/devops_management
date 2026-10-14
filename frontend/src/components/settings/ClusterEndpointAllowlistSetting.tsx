@@ -30,10 +30,9 @@ export function ClusterEndpointAllowlistSetting() {
     });
 
   return (
-    <MacCard title="클러스터 API 엔드포인트 허용 대역">
+    <MacCard title="클러스터 API 엔드포인트 허용 대역" icon={Network}>
       <div className="space-y-3">
-        <div className="flex items-start gap-3">
-          <Network className="w-5 h-5 text-primary flex-shrink-0 mt-0.5" aria-hidden />
+        <div>
           <div className="space-y-1.5 min-w-0">
             <p className="text-sm text-muted-foreground">
               클러스터 등록·수정·연결 검증 때 서버가 API 엔드포인트로 직접 요청을 보냅니다. 여기에 대역을 적으면

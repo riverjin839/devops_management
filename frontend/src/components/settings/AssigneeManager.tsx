@@ -5,6 +5,7 @@ import {
   KeyRound, Loader2, ShieldPlus,
 } from 'lucide-react';
 import { useAssignees, useUpdateAssignees } from '@/hooks/useAssignees';
+import { MacCard } from '@/components/ui/MacCard';
 import { useToast, ResizeGrip, DoubleScrollX, ConfirmDialog, useModalA11y } from '@/components/common';
 import { useColumnWidths } from '@/hooks/useColumnWidths';
 import { authApi, type UserRoleApi } from '@/services/api';
@@ -301,19 +302,18 @@ export function AssigneeManager() {
   const sortedAssignees = useMemo(() => assignees, [assignees]);
 
   return (
-    <div className="bg-card border border-border rounded-md">
-      <div className="px-6 py-4 border-b border-border flex flex-wrap items-center justify-between gap-3">
-        <div className="flex flex-wrap items-center gap-2 min-w-0">
-          <UserCheck className="w-4 h-4 text-primary flex-shrink-0" />
-          <h2 className="font-semibold">담당자 관리</h2>
-          <span className="text-sm text-muted-foreground ml-1">작업/이슈 등록 시 자동완성 · 행 클릭으로 바로 수정 · 로그인 계정 겸용</span>
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
+    <MacCard
+      bodyPadding="p-0"
+      title="담당자 관리"
+      icon={UserCheck}
+      description="작업/이슈 등록 시 자동완성 · 행 클릭으로 바로 수정 · 로그인 계정 겸용"
+      actions={
+        <>
           <button
             onClick={handleCopyMarkdown}
             disabled={assignees.length === 0}
             title="마크다운 표로 클립보드에 복사"
-            className="px-3 py-2 text-sm font-medium bg-secondary hover:bg-muted border border-border rounded-lg transition-colors flex items-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed"
+            className="px-3 py-1.5 text-sm font-medium bg-secondary hover:bg-muted border border-border rounded-lg transition-colors flex items-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed"
           >
             <ClipboardCopy className="w-4 h-4" />
             .md 복사
@@ -322,7 +322,7 @@ export function AssigneeManager() {
             onClick={handleExportCsv}
             disabled={assignees.length === 0}
             title="CSV 파일로 내보내기"
-            className="px-3 py-2 text-sm font-medium bg-secondary hover:bg-muted border border-border rounded-lg transition-colors flex items-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed"
+            className="px-3 py-1.5 text-sm font-medium bg-secondary hover:bg-muted border border-border rounded-lg transition-colors flex items-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed"
           >
             <Download className="w-4 h-4" />
             CSV 내보내기
@@ -330,20 +330,21 @@ export function AssigneeManager() {
           <button
             onClick={() => setCreateAccountOpen(true)}
             title="담당자 명부와 무관한 로그인 전용 계정 추가"
-            className="px-3 py-2 text-sm font-medium bg-secondary hover:bg-muted border border-border rounded-lg transition-colors flex items-center gap-2"
+            className="px-3 py-1.5 text-sm font-medium bg-secondary hover:bg-muted border border-border rounded-lg transition-colors flex items-center gap-2"
           >
             <ShieldPlus className="w-4 h-4" />
             관리자 계정 추가
           </button>
           <button
             onClick={() => { setShowAddRow(true); setEditingIdx(null); setAddForm({ name: '' }); }}
-            className="px-4 py-2 text-sm font-medium bg-primary hover:bg-primary/90 text-primary-foreground rounded-lg transition-colors flex items-center gap-2"
+            className="px-3 py-1.5 text-sm font-medium bg-primary hover:bg-primary/90 text-primary-foreground rounded-lg transition-colors flex items-center gap-2"
           >
             <UserPlus className="w-4 h-4" />
             담당자 추가
           </button>
-        </div>
-      </div>
+        </>
+      }
+    >
 
       <div className="px-6 py-3 border-b border-border bg-primary/5 text-sm text-muted-foreground leading-relaxed">
         사번을 입력해 담당자를 등록하면 <b className="text-foreground font-medium">자동으로 로그인 계정</b>이 생성됩니다 —
@@ -445,14 +446,14 @@ export function AssigneeManager() {
                   <td className="px-4 py-2.5">
                     {isEditing ? cellInput('primaryRole', 'Backend Engineer') : (
                       a.primaryRole
-                        ? <span className="text-sm px-2 py-0.5 rounded-full bg-blue-500/10 text-blue-400 border border-blue-500/20">{a.primaryRole}</span>
+                        ? <span className="text-sm px-2 py-0.5 rounded-full bg-chart-1/10 text-chart-1 border border-chart-1/20">{a.primaryRole}</span>
                         : <span className="text-muted-foreground">—</span>
                     )}
                   </td>
                   <td className="px-4 py-2.5">
                     {isEditing ? cellInput('secondaryRole', 'DevOps') : (
                       a.secondaryRole
-                        ? <span className="text-sm px-2 py-0.5 rounded-full bg-purple-500/10 text-purple-400 border border-purple-500/20">{a.secondaryRole}</span>
+                        ? <span className="text-sm px-2 py-0.5 rounded-full bg-chart-3/10 text-chart-3 border border-chart-3/20">{a.secondaryRole}</span>
                         : <span className="text-muted-foreground">—</span>
                     )}
                   </td>
@@ -576,6 +577,6 @@ export function AssigneeManager() {
         onConfirm={handleDeleteConfirmed}
         onCancel={() => setDeleteTarget(null)}
       />
-    </div>
+    </MacCard>
   );
 }

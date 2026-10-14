@@ -21,21 +21,11 @@ export function ClusterViewerMaskSetting() {
     });
 
   return (
-    <MacCard title="클러스터 네트워크 정보 (viewer)">
-      <div className="flex items-start gap-3">
-        <EyeOff className="w-5 h-5 text-primary flex-shrink-0 mt-0.5" aria-hidden />
-        <div className="flex-1 min-w-0 space-y-1.5">
-          <p className="text-sm text-muted-foreground">
-            켜면 <b>viewer</b> 의 클러스터 목록·상세 응답에서 내부 IP·CIDR(Node/Pod/Service)·
-            bond IP/MAC·호스트명·AS 번호·API 엔드포인트·Prometheus/Alertmanager 주소를 비우고, Cilium 설정 보기를
-            막습니다. 이름·지역·운영레벨·상태·노드 수는 그대로 보입니다. admin·operator 에는 적용되지 않습니다.
-          </p>
-          <p className="text-xs text-muted-foreground">
-            적용 범위는 클러스터 관리·사이드바 등 <code>/clusters</code> 응답입니다. 인프라 노드·토폴로지처럼 IP 를
-            보여주는 다른 화면은 위 <b>화면별 노출</b>로 막으세요. 변경은 감사 로그에 남습니다.
-          </p>
-        </div>
-        <label className="flex items-center gap-2 text-sm cursor-pointer select-none flex-shrink-0">
+    <MacCard
+      title="클러스터 네트워크 정보 (viewer)"
+      icon={EyeOff}
+      actions={
+        <label className="flex items-center gap-2 text-sm cursor-pointer select-none">
           <input
             type="checkbox"
             checked={enabled}
@@ -46,6 +36,18 @@ export function ClusterViewerMaskSetting() {
           />
           숨김
         </label>
+      }
+    >
+      <div className="space-y-1.5">
+        <p className="text-sm text-muted-foreground">
+          켜면 <b>viewer</b> 의 클러스터 목록·상세 응답에서 내부 IP·CIDR(Node/Pod/Service)·
+          bond IP/MAC·호스트명·AS 번호·API 엔드포인트·Prometheus/Alertmanager 주소를 비우고, Cilium 설정 보기를
+          막습니다. 이름·지역·운영레벨·상태·노드 수는 그대로 보입니다. admin·operator 에는 적용되지 않습니다.
+        </p>
+        <p className="text-xs text-muted-foreground">
+          적용 범위는 클러스터 관리·사이드바 등 <code>/clusters</code> 응답입니다. 인프라 노드·토폴로지처럼 IP 를
+          보여주는 다른 화면은 위 <b>화면별 노출</b>로 막으세요. 변경은 감사 로그에 남습니다.
+        </p>
       </div>
     </MacCard>
   );

@@ -1,6 +1,7 @@
 import { useEffect, useId, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { Settings as SettingsIcon, Server, Pencil, Trash2, Plus, Globe, ShieldCheck, AlertTriangle, Loader2, Eye, MonitorDot, Wifi, WifiOff, HelpCircle, UserCheck, Bug, HardDrive, Database, Home, Palette, FileSearch, Wand2, Bot, Ticket, Users, CheckCircle2, XCircle, Check, X } from 'lucide-react';
+import { Settings as SettingsIcon, Server, Pencil, Trash2, Plus, Globe, ShieldCheck, AlertTriangle, Loader2, Eye, MonitorDot, Wifi, WifiOff, HelpCircle, UserCheck, Bug, HardDrive, DatabaseZap, Boxes, Layers, Lock, Home, Palette, FileSearch, Wand2, Bot, Ticket, Users, CheckCircle2, XCircle, Check, X } from 'lucide-react';
+import type { LucideIcon } from 'lucide-react';
 import { MacCard } from '@/components/ui/MacCard';
 import { BackupRestorePanel } from '@/components/settings/BackupRestorePanel';
 import { TenantManager } from '@/components/settings/TenantManager';
@@ -33,7 +34,7 @@ import { formatDateTime, formatApiError, cn } from '@/lib/utils';
 import { StatusDot, statusToVariant } from '@/components/common/StatusBadge';
 import { useHomeStore } from '@/stores/homeStore';
 import { useHomePrefs, useUpdateHomePrefs } from '@/hooks/useHomePrefs';
-import { useToast, ClusterIconPicker, useModalA11y, EmptyState, PageHeader } from '@/components/common';
+import { useToast, ClusterIconPicker, useModalA11y, EmptyState, PageHeader, PageShell } from '@/components/common';
 import { resolveClusterIcon } from '@/lib/clusterIcons';
 import {
   buildClusterIconSvg, svgToDataUrl, suggestInitials, suggestRegionAbbr,
@@ -342,17 +343,17 @@ function ManagementServerModal({
 function ServerStatusBadge({ status }: { status: string }) {
   if (status === 'online') return (
     <span className="inline-flex items-center gap-1 text-sm px-2 py-0.5 rounded-full bg-secondary text-muted-foreground border border-border">
-      <Wifi className="w-3 h-3" /> online
+      <Wifi className="w-3 h-3" /> 온라인
     </span>
   );
   if (status === 'offline') return (
     <span className="inline-flex items-center gap-1 text-sm px-2 py-0.5 rounded-full bg-status-critical/10 text-status-critical border border-status-critical/30">
-      <WifiOff className="w-3 h-3" /> offline
+      <WifiOff className="w-3 h-3" /> 오프라인
     </span>
   );
   return (
     <span className="inline-flex items-center gap-1 text-sm px-2 py-0.5 rounded-full bg-muted/50 text-muted-foreground border border-border">
-      <HelpCircle className="w-3 h-3" /> unknown
+      <HelpCircle className="w-3 h-3" /> 미확인
     </span>
   );
 }
@@ -380,6 +381,63 @@ function ClusterIconButton({ cluster, onClick }: { cluster: Cluster; onClick: (e
       )}
     </button>
   );
+}
+
+// ── 설정 메뉴 구성 (D-130) ──────────────────────────────────────────────────
+// 탭 id 는 외부 딥링크(`/settings?tab=…` — App.tsx `/settings/users`→assignee,
+// ClusterManagePage → cluster)가 쓰므로 바꾸지 않는다. 그룹·순서·라벨만 여기서 정한다.
+
+type TabId = 'cluster' | 'server' | 'assignee' | 'operations' | 'mgmt-service' | 'access' | 'tenant' | 'debug' | 'backup' | 'jira' | 'servicenow' | 'screen-ui' | 'audit-log' | 'schema' | 'ai-llm';
+
+const TAB_GROUPS: { label: string; tabs: { id: TabId; label: string; icon: LucideIcon }[] }[] = [
+  {
+    label: '클러스터·서버',
+    tabs: [
+      { id: 'cluster', label: '클러스터', icon: Server },
+      { id: 'server', label: '관리서버', icon: MonitorDot },
+      { id: 'operations', label: '운영레벨', icon: Layers },
+      { id: 'mgmt-service', label: '관리 서비스', icon: Boxes },
+    ],
+  },
+  {
+    label: '사용자·접근',
+    tabs: [
+      { id: 'assignee', label: '시스템 담당자', icon: UserCheck },
+      { id: 'access', label: '접근 제어', icon: Lock },
+      { id: 'tenant', label: '테넌트', icon: Users },
+    ],
+  },
+  {
+    label: '연동',
+    tabs: [
+      { id: 'jira', label: 'Jira 연동', icon: Globe },
+      { id: 'servicenow', label: 'ServiceNow 연동', icon: Ticket },
+      { id: 'ai-llm', label: 'AI·LLM', icon: Bot },
+    ],
+  },
+  {
+    label: '시스템',
+    tabs: [
+      { id: 'screen-ui', label: '화면 UI 설정', icon: Palette },
+      { id: 'backup', label: '백업 / 복구', icon: HardDrive },
+      { id: 'audit-log', label: '감사 로그', icon: FileSearch },
+      { id: 'schema', label: '스키마 점검', icon: DatabaseZap },
+      { id: 'debug', label: '디버그', icon: Bug },
+    ],
+  },
+];
+
+const TAB_IDS = new Set<string>(TAB_GROUPS.flatMap((g) => g.tabs.map((t) => t.id)));
+
+// 레거시 딥링크 호환: 최상위 "서비스"(service) 탭과 "서비스 카테고리"(service-categories)
+// 탭은 "관리 서비스"(mgmt-service) 로 통합됐다 → 둘 다 mgmt-service 로 리다이렉트.
+const LEGACY_MGMT_TABS = ['service', 'service-categories'];
+
+/** `?tab=` 값 → 유효한 탭. 레거시 값은 mgmt-service, 알 수 없는 값·미지정은 cluster. */
+function resolveTab(raw: string | null): TabId {
+  if (raw && LEGACY_MGMT_TABS.includes(raw)) return 'mgmt-service';
+  if (raw && TAB_IDS.has(raw)) return raw as TabId;
+  return 'cluster';
 }
 
 // ── Main Page ───────────────────────────────────────────────────────────────
@@ -591,18 +649,14 @@ export function SettingsPage() {
     cicd: 'CI/CD',
   };
 
-  type TabId = 'cluster' | 'server' | 'assignee' | 'operations' | 'mgmt-service' | 'access' | 'tenant' | 'debug' | 'backup' | 'jira' | 'servicenow' | 'screen-ui' | 'audit-log' | 'schema' | 'ai-llm';
-  const [searchParams] = useSearchParams();
-  const rawTab = searchParams.get('tab');
-  // 레거시 딥링크 호환: 최상위 "서비스"(service) 탭과 "서비스 카테고리"(service-categories)
-  // 탭은 "관리 서비스"(mgmt-service) 로 통합됐다 → 둘 다 mgmt-service 로 리다이렉트.
-  const LEGACY_MGMT_TABS = ['service', 'service-categories'];
-  const initialTab = (LEGACY_MGMT_TABS.includes(rawTab ?? '') ? 'mgmt-service' : rawTab) as TabId | null;
-  const [activeTab, setActiveTab] = useState<TabId>(initialTab ?? 'cluster');
+  // 활성 탭은 URL(`?tab=`)이 원천 — 새로고침·링크 공유·뒤로가기에서 같은 탭이 열린다.
+  const [searchParams, setSearchParams] = useSearchParams();
+  const activeTab = resolveTab(searchParams.get('tab'));
+  const setActiveTab = (tab: TabId) => setSearchParams({ tab }, { replace: true });
   // "관리 서비스" 탭 내부 서브탭 — PEP 서비스 / APP 서비스 도메인 구분. 각 서브탭은
   // 해당 도메인의 카테고리 + 서비스 타입을 한 화면에서 관리한다.
   const [mgmtDomain, setMgmtDomain] = useState<ServiceDomain>('pep');
-  // Debug 설정
+  // 디버그 설정
   const debugEnabled = useDebugStore((s) => s.enabled);
   const debugToggle  = useDebugStore((s) => s.toggle);
   const debugEventsCount = useDebugStore((s) => s.events.length);
@@ -610,81 +664,65 @@ export function SettingsPage() {
 
   const { data: assignees = [] } = useAssignees();
 
-  const TABS: { id: TabId; label: string; icon: JSX.Element; count: number }[] = [
-    { id: 'cluster', label: '클러스터', icon: <Server className="w-4 h-4" />, count: clusters.length },
-    { id: 'server', label: '관리서버', icon: <MonitorDot className="w-4 h-4" />, count: servers.length },
-    { id: 'assignee', label: '시스템 담당자', icon: <UserCheck className="w-4 h-4" />, count: assignees.length },
-    { id: 'operations', label: '운영레벨', icon: <ShieldCheck className="w-4 h-4" />, count: 0 },
-    { id: 'mgmt-service', label: '관리 서비스', icon: <Database className="w-4 h-4" />, count: 0 },
-    { id: 'screen-ui', label: '화면 UI 설정', icon: <Palette className="w-4 h-4" />, count: 0 },
-    { id: 'access', label: '접근 제어', icon: <ShieldCheck className="w-4 h-4" />, count: 0 },
-    { id: 'tenant', label: '테넌트', icon: <Users className="w-4 h-4" />, count: 0 },
-    { id: 'jira', label: '연동 (Jira)', icon: <Globe className="w-4 h-4" />, count: 0 },
-    { id: 'servicenow', label: '연동 (ServiceNow)', icon: <Ticket className="w-4 h-4" />, count: 0 },
-    { id: 'ai-llm', label: 'AI / LLM', icon: <Bot className="w-4 h-4" />, count: 0 },
-    { id: 'debug', label: 'Debug', icon: <Bug className="w-4 h-4" />, count: debugActiveCount },
-    { id: 'backup', label: '백업 / 복구', icon: <HardDrive className="w-4 h-4" />, count: 0 },
-    { id: 'audit-log', label: '감사 로그', icon: <FileSearch className="w-4 h-4" />, count: 0 },
-    { id: 'schema', label: '스키마 점검', icon: <Database className="w-4 h-4" />, count: 0 },
-  ];
+  // 카운트는 실제 값이 있는 메뉴만 — 0 이면 숨긴다(D-130).
+  const TAB_COUNTS: Partial<Record<TabId, number>> = {
+    cluster: clusters.length,
+    server: servers.length,
+    assignee: assignees.length,
+    debug: debugActiveCount,
+  };
 
   return (
     <div className="app-min-h-screen bg-background">
-      <main className="max-w-[1700px] px-4 lg:px-6 py-5">
-        {/* Page Header + Tabs */}
+      <PageShell density="hub">
         <PageHeader className="mb-6" icon={SettingsIcon} title="설정" />
 
-        {/* Tab Navigation */}
-        <div className="flex gap-1 mb-6 bg-secondary/50 rounded-xl p-1 w-fit">
-          {TABS.map((tab) => (
-            <button
-              key={tab.id}
-              onClick={() => setActiveTab(tab.id)}
-              className={`flex items-center gap-2 px-5 py-2.5 rounded-lg text-sm font-medium transition-colors ${
-                activeTab === tab.id
-                  ? 'bg-card text-foreground shadow-sm border border-border'
-                  : 'text-muted-foreground hover:text-foreground'
-              }`}
-            >
-              {tab.icon}
-              {tab.label}
-              <span className={`text-sm px-1.5 py-0.5 rounded-full ${
-                activeTab === tab.id ? 'bg-primary/15 text-primary' : 'bg-secondary text-muted-foreground'
-              }`}>
-                {tab.count}
-              </span>
-            </button>
+        <div className="flex flex-col md:flex-row gap-6 md:gap-8">
+        {/* 설정 메뉴 — 4그룹 세로 목록, 좁은 화면에서는 위쪽 가로 스크롤 목록 */}
+        <nav
+          aria-label="설정 메뉴"
+          className="md:w-48 shrink-0 flex md:flex-col gap-4 md:gap-5 overflow-x-auto md:overflow-visible pb-1 md:pb-0 md:sticky md:top-4 md:self-start"
+        >
+          {TAB_GROUPS.map((group) => (
+            <div key={group.label} className="flex md:flex-col items-center md:items-stretch gap-0.5 shrink-0">
+              <p className="px-2.5 md:pb-1 text-xs font-medium text-muted-foreground whitespace-nowrap">{group.label}</p>
+              {group.tabs.map((tab) => {
+                const active = activeTab === tab.id;
+                const count = TAB_COUNTS[tab.id] ?? 0;
+                const Icon = tab.icon;
+                return (
+                  <button
+                    key={tab.id}
+                    type="button"
+                    onClick={() => setActiveTab(tab.id)}
+                    aria-current={active ? 'page' : undefined}
+                    className={cn(
+                      'flex items-center gap-2 px-2.5 py-1.5 rounded-xl text-sm text-left whitespace-nowrap transition-colors',
+                      active
+                        ? 'bg-secondary text-foreground font-medium'
+                        : 'text-muted-foreground hover:text-foreground hover:bg-secondary/60',
+                    )}
+                  >
+                    <Icon className="w-4 h-4 shrink-0" aria-hidden />
+                    <span className="flex-1">{tab.label}</span>
+                    {count > 0 && (
+                      <span className="text-xs tabular-nums text-muted-foreground">{count}</span>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
           ))}
-        </div>
+        </nav>
 
+        <div className="flex-1 min-w-0">
         {/* ── 화면 UI 설정 탭 ── */}
         {activeTab === 'screen-ui' && (
         <div className="space-y-6 mb-6">
         {/* 홈 화면 설정 */}
-        <MacCard title="홈 화면 설정" bodyPadding="p-0">
-          <p className="px-4 py-2 text-xs text-muted-foreground border-b border-border">PEP 홈 페이지 표시 옵션</p>
-          <div className="px-4 py-3 flex items-center justify-between">
-            <div>
-              <p className="text-sm">업무 모드에서 클러스터 필터 표시</p>
-              <p className="text-xs text-muted-foreground">업무 현황을 특정 클러스터로 필터링</p>
-            </div>
-            <div className="flex items-center gap-2">
-              <span className="px-1.5 py-0.5 text-xs font-medium bg-muted text-muted-foreground rounded">
-                추후 지원
-              </span>
-              <button
-                type="button"
-                disabled
-                className="relative w-9 h-5 rounded-full bg-muted border border-border opacity-50 cursor-not-allowed"
-                aria-label="추후 지원 예정"
-              >
-                <span className="absolute left-0.5 top-0.5 w-4 h-4 rounded-full bg-white shadow-sm transition-transform" />
-              </button>
-            </div>
-          </div>
-
+        <MacCard title="홈 화면 설정" description="PEP 홈 페이지 표시 옵션" bodyPadding="p-0">
           {/* 홈 버튼 아이콘 커스터마이즈 — 좌측 상단 홈 버튼(홈으로 이동 전용, 모드 폐지) */}
-          <div className="px-4 py-3 flex items-center justify-between border-t border-border">
+          <div className="px-4 py-3 flex items-center justify-between">
             <div>
               <p className="text-sm">홈 아이콘</p>
               <p className="text-xs text-muted-foreground">좌측 상단 홈 버튼 (기본: 홈 아이콘)</p>
@@ -875,28 +913,35 @@ export function SettingsPage() {
         )}
 
         {/* Cluster List */}
-        {activeTab === 'cluster' && <MacCard rootClassName="mb-8" bodyPadding="p-0">
-          <div className="px-6 py-4 border-b border-border flex items-center justify-between gap-2 flex-wrap">
-            <h2 className="font-semibold">등록된 클러스터</h2>
-            <div className="flex items-center gap-2">
+        {activeTab === 'cluster' && <MacCard
+          rootClassName="mb-8"
+          bodyPadding="p-0"
+          title="등록된 클러스터"
+          icon={Server}
+          titleExtra={clusters.length > 0 ? <span className="text-xs text-muted-foreground tabular-nums">{clusters.length}개</span> : undefined}
+          actions={
+            <>
               <button
+                type="button"
                 onClick={handleBulkGenerateIcons}
                 disabled={bulkGenBusy}
                 title="아이콘이 비어있는 클러스터에 이니셜+환경색+지역 조합 아이콘을 자동 생성 (기존 아이콘은 유지)"
-                className="px-3 py-2 text-sm font-medium bg-secondary hover:bg-secondary/80 text-foreground border border-border rounded-lg transition-colors flex items-center gap-2 disabled:opacity-50"
+                className="px-3 py-1.5 text-sm font-medium bg-secondary hover:bg-secondary/80 text-foreground border border-border rounded-lg transition-colors flex items-center gap-2 disabled:opacity-50"
               >
                 {bulkGenBusy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Wand2 className="w-4 h-4" />}
                 아이콘 일괄 생성
               </button>
               <button
+                type="button"
                 onClick={() => setShowAddModal(true)}
-                className="px-4 py-2 text-sm font-medium bg-primary hover:bg-primary/90 text-primary-foreground rounded-lg transition-colors flex items-center gap-2"
+                className="px-3 py-1.5 text-sm font-medium bg-primary hover:bg-primary/90 text-primary-foreground rounded-lg transition-colors flex items-center gap-2"
               >
                 <Plus className="w-4 h-4" />
                 클러스터 추가
               </button>
-            </div>
-          </div>
+            </>
+          }
+        >
 
           {clusters.length === 0 ? (
             <EmptyState
@@ -911,7 +956,7 @@ export function SettingsPage() {
                 return (
                 <div
                   key={cluster.id}
-                  className="px-6 py-4 flex items-center gap-4 hover:bg-muted/20 transition-colors"
+                  className="px-4 py-4 flex items-center gap-4 hover:bg-muted/20 transition-colors"
                 >
                   {/* 아이콘 버튼 — 클릭 시 picker 노출. 미설정이면 status emoji 표시.
                       아이콘 빌더로 만든 아이콘(iconConfig 있음)은 현재 테마로 매번 다시 렌더된다. */}
@@ -1069,21 +1114,23 @@ export function SettingsPage() {
         </MacCard>}
 
         {/* Management Server List */}
-        {activeTab === 'server' && <MacCard bodyPadding="p-0">
-          <div className="px-6 py-4 border-b border-border flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <MonitorDot className="w-4 h-4 text-primary" />
-              <h2 className="font-semibold">관리서버</h2>
-              <span className="text-sm text-muted-foreground ml-1">Jump Host / Bastion / 관리 서버</span>
-            </div>
+        {activeTab === 'server' && <MacCard
+          bodyPadding="p-0"
+          title="관리서버"
+          icon={MonitorDot}
+          titleExtra={servers.length > 0 ? <span className="text-xs text-muted-foreground tabular-nums">{servers.length}대</span> : undefined}
+          description="Jump Host · Bastion · 관리 서버"
+          actions={
             <button
+              type="button"
               onClick={() => { setEditServer(null); setShowServerModal(true); }}
-              className="px-4 py-2 text-sm font-medium bg-primary hover:bg-primary/90 text-primary-foreground rounded-lg transition-colors flex items-center gap-2"
+              className="px-3 py-1.5 text-sm font-medium bg-primary hover:bg-primary/90 text-primary-foreground rounded-lg transition-colors flex items-center gap-2"
             >
               <Plus className="w-4 h-4" />
               관리서버 추가
             </button>
-          </div>
+          }
+        >
 
           {servers.length === 0 ? (
             <EmptyState
@@ -1095,7 +1142,7 @@ export function SettingsPage() {
           ) : (
             <div className="divide-y divide-border">
               {servers.map((server) => (
-                <div key={server.id} className="px-6 py-4 flex items-start gap-4 hover:bg-muted/20 transition-colors">
+                <div key={server.id} className="px-4 py-4 flex items-start gap-4 hover:bg-muted/20 transition-colors">
                   <div className="mt-0.5">
                     <MonitorDot className="w-5 h-5 text-muted-foreground" />
                   </div>
@@ -1179,22 +1226,15 @@ export function SettingsPage() {
             "사용자 관리" 페이지도 여기로 통합됐다. */}
         {activeTab === 'assignee' && <AssigneeManager />}
 
-        {/* Debug 탭: 대시보드 별 상세 로그 토글 */}
+        {/* 디버그 탭: 대시보드 별 상세 로그 토글 */}
         {activeTab === 'debug' && (
-          <MacCard title="Debug 모드" bodyPadding="p-6" className="space-y-5">
-            <div className="flex items-start gap-3">
-              <div className="w-10 h-10 rounded-lg bg-status-warning/10 flex items-center justify-center flex-shrink-0">
-                <Bug className="w-5 h-5 text-status-warning" />
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-sm text-muted-foreground leading-relaxed">
-                  각 대시보드의 상세 실행 로그를 표시합니다. "전역"을 켜면 모든 API 호출
-                  (요청/응답/에러)이 debug 패널에 기록되며, 개별 페이지 토글을 켜면 해당
-                  페이지에 로그 패널이 나타납니다. 현재 {debugEventsCount}개 이벤트가
-                  버퍼에 있습니다.
-                </p>
-              </div>
-            </div>
+          <MacCard title="디버그 모드" icon={Bug} bodyPadding="p-5" className="space-y-5">
+            <p className="text-sm text-muted-foreground leading-relaxed">
+              각 대시보드의 상세 실행 로그를 표시합니다. "전역"을 켜면 모든 API 호출
+              (요청/응답/오류)이 디버그 패널에 기록되며, 개별 페이지 토글을 켜면 해당
+              페이지에 로그 패널이 나타납니다. 현재 <span className="tabular-nums">{debugEventsCount}</span>개 이벤트가
+              버퍼에 있습니다.
+            </p>
 
             <div className="border-t border-border pt-4">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
@@ -1210,7 +1250,7 @@ export function SettingsPage() {
                           {p.label}
                           {p.key === 'global' && (
                             <span className="ml-1.5 text-xs text-muted-foreground font-normal">
-                              (axios interceptor)
+                              (모든 API 요청)
                             </span>
                           )}
                         </p>
@@ -1230,17 +1270,17 @@ export function SettingsPage() {
             </div>
 
             <div className="border-t border-border pt-4 text-sm text-muted-foreground space-y-1">
-              <p className="font-medium text-foreground">팁</p>
+              <p className="font-medium text-foreground">디버그 사용 팁</p>
               <ul className="list-disc pl-4 space-y-0.5">
                 <li>"전역" 만 켜도 브라우저 콘솔에 모든 API 호출이 기록됩니다.</li>
-                <li>페이지 토글만 켜면 해당 페이지에 DebugLogPanel 이 상단에 표시됩니다.</li>
-                <li>설정은 브라우저 localStorage 에 저장되며 새로고침 후에도 유지됩니다.</li>
+                <li>페이지 토글만 켜면 해당 페이지 상단에 디버그 로그 패널이 표시됩니다.</li>
+                <li>설정은 이 브라우저에 저장되며 새로고침 후에도 유지됩니다.</li>
               </ul>
             </div>
           </MacCard>
         )}
 
-        {/* Backup / Restore 탭 */}
+        {/* 접근 제어 탭 — 기능 접근 권한 · viewer 네트워크 정보 마스킹 · API 엔드포인트 허용 대역 */}
         {activeTab === 'access' && (
           <div className="space-y-4">
             <FeatureAccessManager />
@@ -1258,7 +1298,9 @@ export function SettingsPage() {
         {activeTab === 'servicenow' && <ServiceNowIntegrationPanel />}
 
         {activeTab === 'audit-log' && <AuditLogManager />}
-      </main>
+        </div>
+        </div>
+      </PageShell>
 
       {/* Add Cluster Modal */}
       <AddClusterModal

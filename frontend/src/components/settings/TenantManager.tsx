@@ -4,7 +4,7 @@ import { Building2, Plus, Save, Trash2, Users as UsersIcon, Server, Bot, Gauge }
 import { authApi, llmApi } from '@/services/api';
 import { useClusters } from '@/hooks/useCluster';
 import { useTenantLlmUsage, useTenantMutations, useTenantRunSlots, useTenants } from '@/hooks/useTenants';
-import { ConfirmDialog, useToast } from '@/components/common';
+import { ConfirmDialog, EmptyState, useToast } from '@/components/common';
 import { MacCard } from '@/components/ui/MacCard';
 import { formatApiError, formatRelativeTime } from '@/lib/utils';
 import type { ClusterAccessLevel, Tenant, TenantLlmRouting, TenantRunSlotEntry, TenantRunSlots } from '@/types';
@@ -136,9 +136,12 @@ export function TenantManager() {
             runSlots={slotsBy.get(selected.id)}
           />
         ) : (
-          <MacCard>
-            <p className="text-sm text-muted-foreground">왼쪽에서 테넌트를 추가하거나 선택하세요.</p>
-          </MacCard>
+          <EmptyState
+            icon={Building2}
+            compact
+            title="선택된 테넌트가 없습니다"
+            description="왼쪽에서 테넌트를 추가하거나 선택하면 멤버·클러스터 바인딩을 편집할 수 있습니다."
+          />
         )}
       </div>
     </div>
@@ -264,7 +267,10 @@ function TenantDetail({ tenant, users, clusters, runSlots }: DetailProps) {
       </MacCard>
 
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
-        <MacCard title={`멤버 (${memberIds.size})`}>
+        <MacCard
+          title="멤버"
+          titleExtra={<span className="text-xs text-muted-foreground tabular-nums">{memberIds.size}명</span>}
+        >
           <div className="max-h-[50vh] overflow-y-auto space-y-1">
             {candidates.length === 0 && (
               <p className="text-sm text-muted-foreground">로그인 계정이 있는 operator/viewer 사용자가 없습니다.</p>
@@ -290,7 +296,14 @@ function TenantDetail({ tenant, users, clusters, runSlots }: DetailProps) {
           </div>
         </MacCard>
 
-        <MacCard title={`클러스터 바인딩 (${Object.values(bindings).filter((v) => v !== 'none').length})`}>
+        <MacCard
+          title="클러스터 바인딩"
+          titleExtra={
+            <span className="text-xs text-muted-foreground tabular-nums">
+              {Object.values(bindings).filter((v) => v !== 'none').length}개
+            </span>
+          }
+        >
           <div className="max-h-[50vh] overflow-y-auto space-y-1">
             {clusters.map((c) => (
               <div key={c.id} className="flex items-center gap-2 rounded-xl px-2 py-1.5 hover:bg-secondary text-sm">
@@ -422,7 +435,7 @@ const TENANT_LLM_PURPOSES: { key: string; label: string }[] = [
 
 /**
  * 멀티테넌시 4단계 — 이 테넌트 멤버가 사용자 요청(현재 Agent 채팅)으로 LLM 을 부를 때 쓰는
- * 용도별 프로필. 비우면 전역 라우팅(Settings ▸ AI / LLM)을 따른다. 테넌트 전용 키
+ * 용도별 프로필. 비우면 전역 라우팅(설정 ▸ AI·LLM)을 따른다. 테넌트 전용 키
  * (`credential:<name>`)를 쓰는 프로필로 보내면 비용이 분리된다.
  */
 function TenantLlmRoutingCard({ tenant }: { tenant: Tenant }) {

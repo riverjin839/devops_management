@@ -27,8 +27,6 @@ const DECO_PALETTE_ALLOWLIST = [
   'src/components/node-labels/NodeLabelsTable.tsx',
   'src/components/packet-flow/HopDetailPanel.tsx',
   'src/components/playbooks/PlaybookLogDialog.tsx',
-  'src/components/settings/AssigneeManager.tsx',
-  'src/components/settings/TerminalAppearanceSettings.tsx',
   'src/components/ui/DateTimePicker.tsx',
   'src/components/work-guides/GuidePageView.tsx',
   'src/components/work-items/JiraImportModal.tsx',

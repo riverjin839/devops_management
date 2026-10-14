@@ -5,6 +5,7 @@ import { authApi } from '@/services/api';
 import { useFeatureAccess, useUpdateFeatureAccess } from '@/hooks/useFeatureAccess';
 import { useNavCatalog } from '@/hooks/useNavCatalog';
 import { ScreenCatalogList, useToast } from '@/components/common';
+import { MacCard } from '@/components/ui/MacCard';
 import { formatApiError } from '@/lib/utils';
 import type { FeatureAccessMap, FeatureAccessRule } from '@/types';
 
@@ -79,16 +80,16 @@ export function FeatureAccessManager() {
   return (
     <div className="space-y-4">
       {/* ── 화면별 노출 — 단순 on/off ──────────────────────────────────────── */}
-      <div className="bg-card border border-border rounded-md p-5 space-y-3">
-        <div className="flex items-center gap-2">
-          <EyeOff className="w-5 h-5 text-primary" />
-          <h2 className="text-base font-semibold">화면별 노출</h2>
-          {disabledCount > 0 && (
-            <span className="text-xs px-2 py-0.5 rounded-full bg-status-warning-soft text-status-warning">
-              비활성화 {disabledCount}개
-            </span>
-          )}
-        </div>
+      <MacCard
+        title="화면별 노출"
+        icon={EyeOff}
+        className="space-y-3"
+        titleExtra={disabledCount > 0 ? (
+          <span className="text-xs px-2 py-0.5 rounded-full bg-status-warning-soft text-status-warning">
+            비활성화 {disabledCount}개
+          </span>
+        ) : undefined}
+      >
         <p className="text-sm text-muted-foreground">
           admin 은 항상 모든 화면에 접근할 수 있습니다. <b>비활성화</b>로 체크한 화면은
           일반 사용자(operator·viewer)의 사이드바 메뉴·Your Island 화면 추가 목록에서 사라지고,
@@ -128,14 +129,10 @@ export function FeatureAccessManager() {
             );
           }}
         />
-      </div>
+      </MacCard>
 
       {/* ── 세부 역할/사용자 제한 (고급) ───────────────────────────────────── */}
-      <div className="bg-card border border-border rounded-md p-5 space-y-4">
-        <div className="flex items-center gap-2">
-          <ShieldCheck className="w-5 h-5 text-primary" />
-          <h2 className="text-base font-semibold">세부 역할 제한 (고급)</h2>
-        </div>
+      <MacCard title="세부 역할 제한 (고급)" icon={ShieldCheck} className="space-y-4">
         <p className="text-sm text-muted-foreground">
           특정 역할·사용자에게만 열어주고 싶은 화면은 여기서 지정합니다. <b>역할 또는 사용자를
           하나라도 지정하면</b> 그 대상(+admin)만 접근할 수 있고, <b>아무것도 지정하지 않으면
@@ -146,7 +143,7 @@ export function FeatureAccessManager() {
           const rule = ruleOf(f.key);
           const restricted = rule.roles.length > 0 || rule.users.length > 0;
           return (
-            <div key={f.key} className="rounded-lg border border-border p-4 space-y-3">
+            <div key={f.key} className="border-t border-border pt-4 space-y-3">
               <div className="flex items-center gap-2">
                 <span className="text-sm font-semibold">{f.label}</span>
                 <span className="text-xs text-muted-foreground font-mono">{f.path}</span>
@@ -209,7 +206,7 @@ export function FeatureAccessManager() {
             </div>
           );
         })}
-      </div>
+      </MacCard>
 
       <div className="flex justify-end">
         <button

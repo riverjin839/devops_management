@@ -12,6 +12,7 @@ import {
 import { deriveToneSet, isValidHex } from '@/lib/colorTone';
 import { COLOR_PATTERNS } from '@/lib/colorPatterns';
 import { useToast } from '@/components/common';
+import { MacCard } from '@/components/ui/MacCard';
 import { formatApiError } from '@/lib/utils';
 
 /** 큐레이션 배색 프리셋(Burnt Sienna 등)에서 커스텀 hex 를 고르는 팝오버. */
@@ -212,23 +213,15 @@ export function OperationLevelsManager() {
   };
 
   return (
-    <div className="bg-card border border-border rounded-md p-5 space-y-4">
-      <div className="flex items-start gap-3">
-        <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center flex-shrink-0">
-          <Layers className="w-5 h-5 text-primary" />
-        </div>
-        <div className="flex-1 min-w-0">
-          <h2 className="font-semibold">운영레벨 관리</h2>
-          <p className="text-sm text-muted-foreground mt-1 leading-relaxed">
-            클러스터 운영 단계 라벨/색상/이모지를 자유롭게 정의합니다. 여기서 정의한 항목은 클러스터 관리 페이지의
-            "운영레벨" 컬럼/필터/모달과 클러스터 카드 이모지, 클러스터 아이콘 빌더의 테두리·배경 색에
-            즉시 반영됩니다. <strong>value</strong> 는 저장된 식별자(라벨이 비어 있으면 자동 생성),
-            <strong> label</strong> 은 화면 표시 이름, <strong>이모지</strong>는 클러스터 카드 앞에
-            표시됩니다(자동 = 운영레벨 이름으로 추론). <Sparkles className="w-3 h-3 inline -mt-0.5" /> 아이콘을
-            누르면 큐레이션 배색 패턴(Burnt Sienna 등)에서 커스텀 색을 바로 고를 수 있습니다.
-          </p>
-        </div>
-      </div>
+    <MacCard title="운영레벨 관리" icon={Layers} className="space-y-4">
+      <p className="text-sm text-muted-foreground leading-relaxed">
+        클러스터 운영 단계 라벨/색상/이모지를 자유롭게 정의합니다. 여기서 정의한 항목은 클러스터 관리 페이지의
+        "운영레벨" 컬럼/필터/모달과 클러스터 카드 이모지, 클러스터 아이콘 빌더의 테두리·배경 색에
+        즉시 반영됩니다. <strong>value</strong> 는 저장된 식별자(라벨이 비어 있으면 자동 생성),
+        <strong> label</strong> 은 화면 표시 이름, <strong>이모지</strong>는 클러스터 카드 앞에
+        표시됩니다(자동 = 운영레벨 이름으로 추론). <Sparkles className="w-3 h-3 inline -mt-0.5" /> 아이콘을
+        누르면 큐레이션 배색 패턴(Burnt Sienna 등)에서 커스텀 색을 바로 고를 수 있습니다.
+      </p>
 
       <div className="border border-border rounded-xl overflow-hidden">
         <table className="w-full text-sm">
@@ -373,6 +366,6 @@ export function OperationLevelsManager() {
           </button>
         </div>
       </div>
-    </div>
+    </MacCard>
   );
 }

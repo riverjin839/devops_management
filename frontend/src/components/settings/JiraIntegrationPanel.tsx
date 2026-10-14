@@ -8,7 +8,8 @@ import {
 import { useAuthStore } from '@/stores/authStore';
 import { JiraConnectCard } from '@/components/settings/JiraConnectCard';
 import { jiraApi } from '@/services/api';
-import { useToast } from '@/components/common';
+import { LoadingState, useToast } from '@/components/common';
+import { MacCard } from '@/components/ui/MacCard';
 import { formatApiError, parseUTC } from '@/lib/utils';
 import type { SsoDiagnoseResult } from '@/types';
 
@@ -185,18 +186,17 @@ export function JiraIntegrationPanel() {
   };
 
   if (cfgLoading) {
-    return <div className="flex items-center gap-2 text-muted-foreground text-sm p-6"><Loader2 className="w-4 h-4 animate-spin" /> 불러오는 중…</div>;
+    return <LoadingState compact />;
   }
 
   return (
     <div className="space-y-6">
       {/* 공통 설정 (관리자) */}
-      <div className="bg-card border border-border rounded-md p-5">
-        <div className="flex items-center gap-2 mb-1">
-          <Globe className="w-4 h-4 text-primary" />
-          <h3 className="font-semibold">Jira 공통 설정</h3>
-          {!isAdmin && <span className="text-xs text-muted-foreground">(관리자만 수정 가능)</span>}
-        </div>
+      <MacCard
+        title="Jira 공통 설정"
+        icon={Globe}
+        description={!isAdmin ? '관리자만 수정 가능' : undefined}
+      >
         <p className="text-sm text-muted-foreground mb-4">
           폐쇄망 내부 Jira(Server/Data Center) 의 Base URL 을 설정합니다. 가져오기는 백엔드에서 실행되므로
           백엔드 서버가 이 도메인에 접근 가능해야 합니다.
@@ -279,14 +279,10 @@ export function JiraIntegrationPanel() {
             </button>
           </div>
         )}
-      </div>
+      </MacCard>
 
       {/* 내 인증 (전 사용자) — PAT 또는 세션 쿠키 */}
-      <div className="bg-card border border-border rounded-md p-5">
-        <div className="flex items-center gap-2 mb-1">
-          <KeyRound className="w-4 h-4 text-primary" />
-          <h3 className="font-semibold">내 Jira 인증</h3>
-        </div>
+      <MacCard title="내 Jira 인증" icon={KeyRound}>
         <p className="text-sm text-muted-foreground mb-4">
           본인 Jira 계정 자격을 등록하면 <b>본인 권한</b>으로 이슈를 가져옵니다. 자격은 암호화되어 저장되며
           화면에 다시 표시되지 않습니다. <b>SSO 자동 로그인</b>이 가장 간편합니다 — 토큰이나 쿠키를 직접
@@ -516,7 +512,7 @@ export function JiraIntegrationPanel() {
             {confTestResult.detail}
           </div>
         )}
-      </div>
+      </MacCard>
     </div>
   );
 }

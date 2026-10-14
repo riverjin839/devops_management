@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import { Pencil } from 'lucide-react';
 import { useUiSettings, useUpdateUiSettings } from '@/hooks/useUiSettings';
 import { InlineEdit } from '@/components/common';
+import { MacCard } from '@/components/ui/MacCard';
 import { NAV_MAP, GROUPS, DEFAULT_TITLE } from '@/components/layout/navConfig';
 
 /**
@@ -32,11 +33,8 @@ export function NavMenuManager() {
   };
 
   return (
-    <div className="rounded-md border border-border bg-card overflow-hidden">
-      <div className="px-4 py-3 border-b border-border bg-muted/40">
-        <h3 className="text-sm font-semibold">메뉴 이름 편집</h3>
-        <p className="text-xs text-muted-foreground mt-0.5">사이드바 메뉴 이름과 앱 타이틀을 변경합니다. 이름만 바뀌며 모든 사용자에게 적용됩니다.</p>
-      </div>
+    <MacCard title="메뉴 이름 편집" bodyPadding="p-0">
+      <p className="px-4 py-2 text-xs text-muted-foreground border-b border-border">사이드바 메뉴 이름과 앱 타이틀을 변경합니다. 이름만 바뀌며 모든 사용자에게 적용됩니다.</p>
 
       {/* 앱 타이틀 */}
       <div className="px-4 py-3 border-b border-border">
@@ -91,6 +89,6 @@ export function NavMenuManager() {
           );
         })}
       </div>
-    </div>
+    </MacCard>
   );
 }
