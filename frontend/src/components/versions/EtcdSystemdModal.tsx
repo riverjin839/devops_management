@@ -5,21 +5,26 @@ import type { NodeSummary } from '@/services/api';
 import type { EtcdSystemdCollectResponse } from '@/types';
 import { useQuery } from '@tanstack/react-query';
 import { useAbortableMutation } from '@/hooks/useAbortableMutation';
-import { DoubleScrollX } from '@/components/common';
+import { useRunLog, runLogged } from '@/hooks/useRunLog';
+import { useLogPref } from '@/hooks/useLogPref';
+import { DoubleScrollX, RunLogPanel } from '@/components/common';
 import { useModalA11y } from '@/components/common/useModalA11y';
 import { RawOutputDetails, CollectErrorList } from './RawOutputDetails';
+import { collectFirstLine, summarizeCollect } from './collectRunLog';
 import { formatApiError } from '@/lib/utils';
 
 interface Props {
   open: boolean;
   clusterId: string;
+  /** 실행 로그 첫 줄에 표시할 클러스터 이름(없으면 생략). */
+  clusterName?: string;
   onClose: () => void;
 }
 
 /** 클러스터의 master 노드에 SSH 로 접속해 etcd (systemd) 상태/버전을 수집하는 모달.
  *  SSH 자격증명은 요청에만 사용되고 DB 에 저장되지 않는다.
  */
-export function EtcdSystemdModal({ open, clusterId, onClose }: Props) {
+export function EtcdSystemdModal({ open, clusterId, clusterName, onClose }: Props) {
   const [username, setUsername] = useState('root');
   const [port, setPort] = useState(22);
   const [authMode, setAuthMode] = useState<'password' | 'key'>('password');
@@ -74,6 +79,18 @@ export function EtcdSystemdModal({ open, clusterId, onClose }: Props) {
     },
     onSuccess: (d) => setResult(d),
   });
+
+  // 실행 로그(D-128) — 동기 1응답 수집을 요청·대기·호스트별 결과·요약 줄로 남긴다. 결과 표·토스트는 기존대로.
+  const runLog = useRunLog();
+  const [showLog, setShowLog] = useLogPref('versions-etcd-systemd');
+  const handleRun = () => {
+    void runLogged(runLog, {
+      title: 'etcd systemd 수집',
+      first: collectFirstLine(clusterName, selected.size, 'etcd systemd', useSudo),
+      fn: () => collectMut.mutateAsync(),
+      summarize: (res) => summarizeCollect(res, (h) => [h.version ? `v${h.version}` : null, h.activeState].filter(Boolean).join(' ')),
+    });
+  };
 
   const canRun = selected.size > 0
     && (authMode === 'password' ? !!password : !!privateKey.trim());
@@ -241,6 +258,8 @@ export function EtcdSystemdModal({ open, clusterId, onClose }: Props) {
             </div>
           </div>
 
+          <RunLogPanel run={runLog} show={showLog} onShowChange={setShowLog} maxHeight="max-h-56" />
+
           {runErr && (
             <div className="px-3 py-2 text-sm rounded-lg bg-status-critical/10 text-status-critical border border-status-critical/30">
               {runErr.response?.data?.detail ?? runErr.message}
@@ -312,7 +331,7 @@ export function EtcdSystemdModal({ open, clusterId, onClose }: Props) {
               <Loader2 className="w-3 h-3 animate-spin" /> 중지
             </button>
           ) : (
-            <button onClick={() => collectMut.mutate()}
+            <button onClick={handleRun}
               disabled={!canRun}
               className="flex items-center gap-1.5 px-4 py-1.5 text-sm font-semibold bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 disabled:opacity-50">
               <Play className="w-3 h-3" /> 수집 실행

@@ -7,7 +7,7 @@ import {
   AlertTriangle, ScrollText,
 } from 'lucide-react';
 import { useClusters } from '@/hooks/useCluster';
-import { ClusterSidebar, DebugLogPanel, useToast, EmptyState, LoadingState, SkeletonCard, DoubleScrollX, LogViewer } from '@/components/common';
+import { ClusterSidebar, DebugLogPanel, useToast, EmptyState, LoadingState, SkeletonCard, DoubleScrollX, LogViewer, PageShell } from '@/components/common';
 import { MacCard } from '@/components/ui/MacCard';
 import { PageHeader } from '@/components/common/PageHeader';
 import { formatApiError, parseUTC } from '@/lib/utils';
@@ -777,21 +777,18 @@ function DiffPanel({
   });
 
   return (
-    <MacCard rootClassName="mt-4" bodyPadding="p-5">
-      <div className="flex items-start justify-between mb-3">
-        <div>
-          <h3 className="text-sm font-semibold mb-0.5">
-            <span className="text-muted-foreground">Diff: </span>
-            <span className="font-mono">{from.component}</span>
-          </h3>
-          <p className="text-sm text-muted-foreground font-mono">
-            {formatDateTime(from.collectedAt)} → {formatDateTime(to.collectedAt)}
-          </p>
-        </div>
-        <button onClick={onClose} aria-label="diff 닫기" className="p-1 rounded hover:bg-secondary text-muted-foreground">
+    <MacCard
+      rootClassName="mt-4"
+      bodyPadding="p-5"
+      title="스냅샷 비교"
+      titleExtra={<span className="text-xs font-mono text-foreground">{from.component}</span>}
+      description={<span className="font-mono">{formatDateTime(from.collectedAt)} → {formatDateTime(to.collectedAt)}</span>}
+      actions={(
+        <button onClick={onClose} aria-label="diff 닫기" title="diff 닫기" className="p-1 rounded hover:bg-secondary text-muted-foreground">
           <X className="w-4 h-4" />
         </button>
-      </div>
+      )}
+    >
       {isLoading ? (
         <LoadingState compact />
       ) : isError ? (
@@ -962,18 +959,18 @@ export function VersionsPage() {
   }, [current, nodeSearch]);
 
   const totalComponents = current?.components?.length ?? 0;
+  const clusterName = clusters.find((c) => c.id === clusterId)?.name;
   const visibleComponents = grouped.reduce((acc, g) => acc + g.items.length, 0);
 
   return (
-    <div className="app-min-h-screen bg-background">
-      <main className="mx-auto px-3 py-3 flex gap-3">
-        <ClusterSidebar
-          clusters={clusters}
-          selectedId={clusterId || null}
-          onSelect={(id) => setClusterId(id ?? '')}
-          iconOnly
-        />
-        <div className="flex-1 min-w-0">
+    <div className="app-min-h-screen bg-background flex">
+      <ClusterSidebar
+        clusters={clusters}
+        selectedId={clusterId || null}
+        onSelect={(id) => setClusterId(id ?? '')}
+        iconOnly
+      />
+      <PageShell density="console">
         <DebugLogPanel pageKey="versions" extra={{ clusterId, components: current?.components?.length ?? 0, pending: collect.isPending }} />
         {/* 헤더 */}
         <PageHeader
@@ -982,7 +979,7 @@ export function VersionsPage() {
           title="버전 / 설정 관리"
           titleExtra={clusterId && current?.components ? (
             <>
-              <span className="text-sm font-mono text-muted-foreground">· {clusters.find((c) => c.id === clusterId)?.name}</span>
+              <span className="text-sm font-mono text-muted-foreground">· {clusterName}</span>
               <span className="text-sm px-2 py-0.5 rounded-full bg-secondary text-muted-foreground border border-border">
                 {current.components.length}개 컴포넌트
               </span>
@@ -1106,28 +1103,31 @@ export function VersionsPage() {
         {clusterId && (
           <>
             {collectLogOpen && (
-              <MacCard rootClassName="mb-4" bodyPadding="p-0">
-                <div className="flex items-center gap-2 px-4 py-2 border-b border-border bg-surface-container-high">
-                  <ScrollText className="w-3.5 h-3.5 text-muted-foreground" aria-hidden />
-                  <span className="text-xs font-medium text-muted-foreground select-none">수집 로그</span>
+              <MacCard
+                rootClassName="mb-4"
+                bodyPadding="p-0"
+                title="수집 로그"
+                icon={ScrollText}
+                actions={(
                   <button
                     onClick={() => setCollectLog([])}
                     disabled={collectLog.length === 0}
-                    className="ml-auto px-2 py-1 text-xs rounded-lg hover:bg-secondary text-muted-foreground disabled:opacity-40 transition-colors"
+                    className="px-2 py-1 text-xs rounded-lg hover:bg-secondary text-muted-foreground disabled:opacity-40 transition-colors"
                   >
                     지우기
                   </button>
-                </div>
+                )}
+              >
                 <LogViewer
                   text={collectLog.length > 0 ? collectLog.join('\n') : '아직 수집 실행 기록이 없습니다 — 지금 수집 / MinIO 수집 결과가 여기에 쌓입니다. (SSH 수집 모달은 각 모달 안에서 per-host raw 출력을 제공합니다)'}
                   maxHeight="max-h-48"
                 />
               </MacCard>
             )}
-            <div className="bg-card border border-border rounded-md p-4 mb-5 text-sm text-muted-foreground leading-relaxed">
+            <p className="mb-5 text-sm text-muted-foreground leading-relaxed">
               kubeconfig 를 통해 K8s/Cilium 버전, core component image tag, command/args 플래그, cilium-config ConfigMap 을 수집합니다.
               동일 hash 가 감지되면 저장하지 않으므로 반복 실행해도 안전. 변경이 발생한 시점에만 히스토리에 새 레코드가 생깁니다.
-            </div>
+            </p>
 
             {/* 노드/컴포넌트 검색 — 노드가 많을 때 빠르게 찾기.
                 키워드는 component 이름 / version / data 의 host·config_path 에 매칭한다. */}
@@ -1197,46 +1197,51 @@ export function VersionsPage() {
               const groupCollapsed = collapsedGroups.has(category);
               const groupExpandedCount = items.filter((s) => expanded.has(s.component)).length;
               return (
-                <MacCard key={category} bodyPadding="p-0">
-                  <header className="flex items-center gap-2 px-5 py-3 border-b border-border bg-muted/20">
-                    <button
-                      onClick={() => toggleGroup(category)}
-                      className="flex items-center gap-2 flex-1 text-left hover:opacity-80 transition-opacity"
-                      aria-label={`${meta.label} 섹션 ${groupCollapsed ? '펼치기' : '접기'}`}
-                    >
-                      {groupCollapsed
-                        ? <ChevronDown className="w-4 h-4 text-muted-foreground flex-shrink-0" />
-                        : <ChevronUp className="w-4 h-4 text-muted-foreground flex-shrink-0" />}
-                      <Icon className="w-4 h-4 text-muted-foreground" />
-                      <h2 className="text-sm font-semibold">{meta.label}</h2>
-                      <span className={`text-xs px-2 py-0.5 rounded-full border ${meta.cls}`}>
-                        {items.length}
-                      </span>
-                      {groupCollapsed && groupExpandedCount > 0 && (
-                        <span className="text-xs text-muted-foreground">
-                          ({groupExpandedCount}개 상세 펼침)
-                        </span>
-                      )}
-                    </button>
-                    {!groupCollapsed && items.length > 1 && (
+                <MacCard
+                  key={category}
+                  bodyPadding="p-0"
+                  actions={(
+                    <>
                       <button
-                        onClick={() => {
-                          // 모두 펼침/접기 토글 — 이 섹션 안의 컴포넌트만 영향.
-                          const compNames = items.map((s) => s.component);
-                          const anyOpen = compNames.some((c) => expanded.has(c));
-                          setExpanded((prev) => {
-                            const next = new Set(prev);
-                            if (anyOpen) compNames.forEach((c) => next.delete(c));
-                            else compNames.forEach((c) => next.add(c));
-                            return next;
-                          });
-                        }}
-                        className="text-xs px-2 py-0.5 rounded text-muted-foreground hover:text-foreground hover:bg-secondary"
+                        onClick={() => toggleGroup(category)}
+                        className="flex items-center gap-2 flex-1 text-left hover:opacity-80 transition-opacity"
+                        aria-label={`${meta.label} 섹션 ${groupCollapsed ? '펼치기' : '접기'}`}
                       >
-                        {items.some((s) => expanded.has(s.component)) ? '모두 접기' : '모두 펼치기'}
+                        {groupCollapsed
+                          ? <ChevronDown className="w-4 h-4 text-muted-foreground flex-shrink-0" />
+                          : <ChevronUp className="w-4 h-4 text-muted-foreground flex-shrink-0" />}
+                        <Icon className="w-4 h-4 text-muted-foreground" />
+                        <h2 className="text-sm font-semibold">{meta.label}</h2>
+                        <span className={`text-xs px-2 py-0.5 rounded-full border ${meta.cls}`}>
+                          {items.length}
+                        </span>
+                        {groupCollapsed && groupExpandedCount > 0 && (
+                          <span className="text-xs text-muted-foreground">
+                            ({groupExpandedCount}개 상세 펼침)
+                          </span>
+                        )}
                       </button>
-                    )}
-                  </header>
+                      {!groupCollapsed && items.length > 1 && (
+                        <button
+                          onClick={() => {
+                            // 모두 펼침/접기 토글 — 이 섹션 안의 컴포넌트만 영향.
+                            const compNames = items.map((s) => s.component);
+                            const anyOpen = compNames.some((c) => expanded.has(c));
+                            setExpanded((prev) => {
+                              const next = new Set(prev);
+                              if (anyOpen) compNames.forEach((c) => next.delete(c));
+                              else compNames.forEach((c) => next.add(c));
+                              return next;
+                            });
+                          }}
+                          className="text-xs px-2 py-0.5 rounded text-muted-foreground hover:text-foreground hover:bg-secondary"
+                        >
+                          {items.some((s) => expanded.has(s.component)) ? '모두 접기' : '모두 펼치기'}
+                        </button>
+                      )}
+                    </>
+                  )}
+                >
                   {!groupCollapsed && (
                   <ul className="divide-y divide-border">
                     {items.map((snap) => {
@@ -1296,27 +1301,30 @@ export function VersionsPage() {
             )}
           </div>
         )}
-        </div>
-      </main>
+      </PageShell>
 
       <EtcdSystemdModal
         open={etcdModalOpen && !!clusterId}
         clusterId={clusterId}
+        clusterName={clusterName}
         onClose={() => setEtcdModalOpen(false)}
       />
       <KubeadmCertsModal
         open={certsModalOpen && !!clusterId}
         clusterId={clusterId}
+        clusterName={clusterName}
         onClose={() => setCertsModalOpen(false)}
       />
       <KernelParamsCollectModal
         open={kernelModalOpen && !!clusterId}
         clusterId={clusterId}
+        clusterName={clusterName}
         onClose={() => setKernelModalOpen(false)}
       />
       <NodeNicsCollectModal
         open={nicsModalOpen && !!clusterId}
         clusterId={clusterId}
+        clusterName={clusterName}
         onClose={() => {
           setNicsModalOpen(false);
           // Cluster 정보 (node_ips) 가 갱신됐을 수 있으므로 클러스터 캐시 무효화
@@ -1326,6 +1334,7 @@ export function VersionsPage() {
       <KubeletConfigCollectModal
         open={kubeletModalOpen && !!clusterId}
         clusterId={clusterId}
+        clusterName={clusterName}
         onClose={() => {
           setKubeletModalOpen(false);
           // 새 kubelet_config 스냅샷이 생겼을 수 있으니 current 캐시 무효화
@@ -1335,7 +1344,7 @@ export function VersionsPage() {
       <CsvExportModal
         open={csvModalOpen && !!clusterId}
         clusterId={clusterId}
-        clusterName={clusters.find((c) => c.id === clusterId)?.name ?? clusterId}
+        clusterName={clusterName ?? clusterId}
         components={current?.components ?? []}
         onClose={() => setCsvModalOpen(false)}
       />
