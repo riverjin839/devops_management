@@ -21,19 +21,19 @@
 
 ## 1. 스타일 — 후보 3개 비교
 
-> ⚠ 아래 후보 B/C 의 "KPI cards row"·"large KPI" 는 2026-10 감사 결과 **§12.12 가 우선**한다 — KPI 타일 행은 `/cluster-overview` Health Hero 1곳만 허용(D-118·D-134).
+> 2026-10 정합(D-134): 아래 표는 2026-05 스타일 검토 기록이다. 채택 결과는 **§12.12 조합 규칙이 우선**한다 — KPI 타일 행은 `/cluster-overview` Health Hero 1곳만, 본문 밀도는 §12.12-5 밀도 3종(`PageShell`)으로 구현한다.
 
 ui-ux-pro-max 검색에서 운영 도구에 매칭된 상위 3개 (출처: `styles.csv`).
 
 | # | 스타일 카테고리 | 키워드 | 장점 | 단점 | 적합도 |
 |---|---|---|---|---|---|
 | **A** | **Real-Time Monitoring** | live status, streaming charts, alert pulse, status indicators | 운영 도메인 직격, status color 4단계 패턴 검증, light/dark 모두 지원, WCAG AA | pulse/blink 애니메이션 과하면 피로 — `prefers-reduced-motion` 필수 | ⭐⭐⭐⭐⭐ |
-| **B** | **Data-Dense Dashboard** | 12-col grid, KPI cards row, minimal padding (8-12px), data tables | 정보 밀도 ↑ (운영자가 한 화면에서 다 보고 싶어함), 12-col grid 표준 | 과도한 밀도는 인지 부하 — 컴포넌트별 여백 규칙 엄격해야 | ⭐⭐⭐⭐⭐ |
+| **B** | **Data-Dense Dashboard** | 12-col grid, compact tables, minimal padding (8-12px) | 정보 밀도 ↑ (운영자가 한 화면에서 다 보고 싶어함), 12-col grid 표준 | 과도한 밀도는 인지 부하 — 컴포넌트별 여백 규칙 엄격해야 | ⭐⭐⭐⭐⭐ |
 | **C** | **Executive Dashboard** | large KPI (24-48px), traffic-light indicators, 4-6 cards max, sparkline | 한눈에 인지 (Health Hero에 부분 활용 가치), 인지 부하 낮음 | 정보 밀도 부족 — 본문 영역엔 불충분 | ⭐⭐⭐ |
 
 ### ✅ 최종 채택: **A + B 하이브리드**
-- **Health Hero / Top 영역** → A (Real-Time Monitoring) + C의 large KPI 패턴 차용
-- **본문(메트릭/플레이북/히스토리)** → B (Data-Dense Dashboard, 12-col grid)
+- **Health Hero(`/cluster-overview` 전용)** → A (Real-Time Monitoring) + C의 large KPI 패턴 차용 — 다른 화면에 KPI 행을 복제하지 않는다(§12.12-2)
+- **본문(메트릭/플레이북/히스토리)** → B (Data-Dense Dashboard) — 표·목록 중심, 페이지 밀도는 §12.12-5 콘솔/허브/문서 3종
 - **근거**: 운영 모니터링은 "상단 hero에서 즉시 인지 → 하단에서 상세 분석" 2단 흐름이고, 단일 스타일로는 두 요구를 동시에 만족할 수 없음. 스킬 데이터의 #1·#5·#6 결과가 같은 결론을 가리킴.
 
 **면(fill) / 글자(text) 분리와 사용 규칙** (P0·P1, 2026-09):
@@ -50,7 +50,9 @@ ui-ux-pro-max 검색에서 운영 도구에 매칭된 상위 3개 (출처: `styl
 
 ---
 
-## 2. 컬러 팔레트 (Dark Mode)
+## 2. 컬러 팔레트 (다크 테마 값)
+
+> 2026-10 정합(D-134): 기본 테마는 `light`(슬레이트)이고 바탕 테마는 16종이다. 이 절의 Ops Slate 값은 `html.dark` 의 토큰 값 기록이다 — 실측값 원천은 `frontend/src/index.css`, 테마 매트릭스는 §12.
 
 ### 검증: 161 팔레트 중 모니터링 적합 후보
 
@@ -182,48 +184,33 @@ status: {
 | 2 | Developer Mono | JetBrains Mono | IBM Plex Sans | "Developer-focused, CLI apps" — 우리 도구도 부합 |
 | 3 | Science/Tech | Exo | Roboto Mono | 데이터 사이트, 다소 마케팅 톤 |
 
-### ✅ 최종 채택: **"Ops Stack"** (Inter UI + JetBrains Mono numeric + Pretendard fallback)
+### ✅ 최종 채택(2026-10 개정, D-131): **시스템 폰트 스택** — 웹폰트 다운로드 없음
 
-> **근거 (한 줄)**: ui-ux-pro-max #1·#2 검증 결과를 절충 — 본문은 한국어 호환 강한 **Inter + Pretendard**, 숫자/코드/PromQL은 0/O 1/l 5/S 구분이 가장 명확한 **JetBrains Mono**. Fira는 한국어 fallback 매칭이 아쉬워 본문 폰트로는 부적합 판단.
+> **근거**: 2026-05 에 채택했던 "Ops Stack"(Inter + JetBrains Mono + Pretendard, Google Fonts·jsDelivr CDN)은 실제로는
+> body 가 시스템 스택으로 덮어써 Inter 가 본문에 쓰이지 않았고, CDN 은 폐쇄망 배포에서 실패해 `font-mono` 가 generic
+> monospace 로 떨어졌다. 다운로드만 하고 쓰지 않는 폰트를 걷고, 화면·폐쇄망·터미널이 같은 글꼴로 그려지도록 시스템 스택으로 일원화했다.
 
-| 역할 | 폰트 | 사이즈 / Weight | Google Fonts URL |
-|---|---|---|---|
-| **Heading** | **Inter** | 24/20/16px · 600~700 | `https://fonts.google.com/specimen/Inter` |
-| **Body** | **Inter** | 14px · 400~500 | (위와 동일) |
-| **Numeric / Mono** | **JetBrains Mono** | 14~28px · 500 | `https://fonts.google.com/specimen/JetBrains+Mono` |
-| **Korean fallback** | **Pretendard Variable** | 본문 전용 | `https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/variable/pretendardvariable-dynamic-subset.css` |
+| 역할 | 스택 | 정의 위치 |
+|---|---|---|
+| **UI(sans)** | `-apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, "Apple SD Gothic Neo", "Malgun Gothic", "Noto Sans KR", Helvetica, Arial, sans-serif` | `tailwind.config.js` `fontFamily.sans` = `index.css` body |
+| **Mono** | `ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace` | `tailwind.config.js` `fontFamily.mono` (터미널 기본 `XTERM_DEFAULT_FONT` 와 같은 계열) |
+| **선택 폰트** | Geist·Outfit(`@fontsource`, 번들 포함 — 폐쇄망 안전) | 설정 > 화면 UI 설정 > 페이지 스타일 (`lib/pageStyles.ts`) |
 
-#### 3.1 CSS Import
+- 외부 폰트 CDN(`fonts.googleapis.com`·jsDelivr)을 `index.html`·CSS 에 넣지 않는다. 새 폰트가 필요하면 `@fontsource` 로 번들한다.
+- 숫자는 `font-mono` 가 아니라 `tabular-nums` 로 자리를 맞춘다(코드·로그·PromQL 만 mono).
 
-```css
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap');
-@import url('https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/variable/pretendardvariable-dynamic-subset.css');
+#### 3.1 타입 스케일 (§12.12-10)
 
-:root {
-  --font-sans: 'Inter', 'Pretendard Variable', -apple-system, system-ui, sans-serif;
-  --font-mono: 'JetBrains Mono', 'D2Coding', ui-monospace, monospace;
-}
+Tailwind 기본 스케일을 그대로 쓰고, 역할마다 한 단계만 쓴다.
 
-/* 메트릭 큰 숫자에 tabular-nums 강제 */
-.font-tabular {
-  font-feature-settings: "tnum" 1, "ss01" 1;
-  font-variant-numeric: tabular-nums;
-}
-```
-
-> **이전 제안과의 델타**: 본문 폰트 후보로 Fira Sans도 검토했으나 한국어 결합 시 자간이 어색 → Inter + Pretendard로 확정. JetBrains Mono는 ui-ux-pro-max #2·#6 결과에서 모두 채택되어 유지.
-
-#### 3.2 타입 스케일
-
-| 역할 | px | weight | 비고 |
-|---|---|---|---|
-| Display (Health Hero 큰 숫자) | 48 | 700 | mono, tnum |
-| H1 | 24 | 700 | sans |
-| H2 / Section | 20 | 700 | sans |
-| H3 / Card title | 16 | 600 | sans |
-| Body | 14 | 400 | sans |
-| Caption / Label | 12 | 500 | sans, uppercase 옵션 |
-| Mono inline (PromQL/log) | 13 | 400 | mono |
+| 역할 | 클래스 | 비고 |
+|---|---|---|
+| 페이지 제목(h1) | `text-xl font-semibold` | `PageHeader` 만 그린다 — 화면당 1개 |
+| 카드 제목 | `text-xs font-semibold` (MacCard 헤더 내장) | 카드 안에 `<h2>` 를 중복하지 않는다 |
+| 본문 | `text-sm` | 표·목록·폼 |
+| 보조·라벨 | `text-xs text-muted-foreground` | 최소 11px(`text-[11px]`) |
+| 큰 숫자 | `text-2xl`~`text-4xl font-semibold tabular-nums` | Health Hero 한정 |
+| 코드·로그 | `font-mono text-xs` | LogViewer·ExecOutputTabs |
 
 ---
 
@@ -244,7 +231,7 @@ ui-ux-pro-max `landing.csv` 검색 결과:
 
 ### ✅ 최종 채택: **Asymmetric Bento Grid (12-col)** — Real-Time Operations 패턴의 hero 구획에 적용
 
-> **근거 (한 줄)**: ui-ux-pro-max가 명시적으로 추천한 두 패턴이 **Bento Grid Showcase**와 **Real-Time / Operations Landing**이고, 둘의 교집합이 정확히 "비대칭 셀로 우선순위를 시각화하는 12-col grid". Hero+Cards는 1 KPI만 강조 가능, Split-Pane은 좌우 2분할만 가능 — 우리는 1 hero + 4 KPI를 동시에 표현해야 함.
+> **근거 (한 줄)**: ui-ux-pro-max가 명시적으로 추천한 두 패턴이 **Bento Grid Showcase**와 **Real-Time / Operations Landing**이고, 둘의 교집합이 정확히 "비대칭 셀로 우선순위를 시각화하는 12-col grid". Hero+Cards는 1 KPI만 강조 가능, Split-Pane은 좌우 2분할만 가능 — Health Hero 는 1 hero + 4 KPI를 동시에 표현해야 함(이 구성은 `/cluster-overview` 한정).
 
 #### 4.1 구조
 
@@ -274,7 +261,7 @@ ui-ux-pro-max `landing.csv` 검색 결과:
 ```
 
 - 모바일(< sm): 자동 1~2 col reflow
-- 셀 크기 = 정보 우선순위 (Hero 4×, KPI 1×)
+- 셀 크기 = 정보 우선순위 (Hero 4×, KPI 1×) — Health Hero 내부 규칙이다. 다른 화면의 수치 요약은 `StatTile`(4개 이하) 또는 한 줄 표(§12.12-2)
 - gap은 `--space-4` (16px) 고정
 - 본문은 같은 12-col 격자 위에서 `col-span-12` / `col-span-8 + col-span-4` 등으로 자유 배치
 
@@ -296,12 +283,12 @@ ui-ux-pro-max `landing.csv` 검색 결과:
 
 #### ① Bullet Chart (Health Hero 메인) — *Radial Gauge 대신 채택*
 > **근거 (한 줄)**: ui-ux-pro-max 기준 **A11y AAA** (Gauge는 AA), 동일 셀에서 actual + target + threshold zone을 모두 표현 가능, 다중 KPI 비교 가능. Recharts 미지원이라 SVG 직접 구현 또는 D3 활용.
-- **위치**: Health Hero 좌측 큰 셀 + 본문 KPI 비교 카드
+- **위치**: Health Hero 좌측 큰 셀(본문에 KPI 비교 카드를 따로 두지 않는다 — §12.12-2)
 - **시각**: 가로 막대 + 타겟 마커 + 3-zone 배경 (`status-critical-bg` / `status-warning-bg` / `status-healthy-bg`)
 - **Recharts 호환**: 제한적 → SVG 컴포넌트 직접 작성 권장
 
-#### ② Sparkline (KPI 카드 트렌드)
-> **근거 (한 줄)**: ui-ux-pro-max `Trend Over Time` 결과 — Recharts 9/10 호환, KPI 카드 1장 안에 "현재 값 + 최근 N분 추세"를 동시 표현하는 사실상 표준.
+#### ② Sparkline (메트릭 카드 트렌드)
+> **근거 (한 줄)**: ui-ux-pro-max `Trend Over Time` 결과 — Recharts 9/10 호환, 메트릭 카드(PromQL `MetricCard`) 1장 안에 "현재 값 + 최근 N분 추세"를 동시 표현하는 사실상 표준.
 - **위치**: Critical/Warning/CPU/Memory 카드 하단
 - **Recharts**: `<LineChart data={...} width={120} height={32}>` + 축/툴팁 숨김
 - **색**: 추세에 따라 `status-healthy` / `status-critical` 자동 전환
@@ -414,9 +401,9 @@ ui-ux-pro-max Pre-Delivery Checklist에서 추출.
 ## 11. 결정 요약 (한 줄씩)
 
 - **스타일**: Real-Time Monitoring + Data-Dense Dashboard 하이브리드 (ui-ux-pro-max 검증)
-- **팔레트**: Ops Slate — bg `#0F172A`, primary `#3B82F6`, status (`#22C55E` / `#F59E0B` / `#DC2626` / `#6B7280`)
-- **폰트**: Inter (UI) + JetBrains Mono (numeric) + Pretendard (KO fallback)
-- **레이아웃**: 12-col Asymmetric Bento Grid for Health Hero
+- **팔레트**: 토큰 기반 바탕 테마 16종(기본 `light` 슬레이트) + 강조색 6종 — 다크 값은 Ops Slate(§2). 정상은 무채색, 상태색은 비정상에만(§12.12-3)
+- **폰트**: 시스템 폰트 스택(sans·mono), 웹폰트 CDN 없음, 숫자 `tabular-nums`(§3, D-131)
+- **레이아웃**: 12-col Asymmetric Bento Grid for Health Hero(`/cluster-overview` 한정) · 그 외 페이지는 `PageShell` 밀도 3종(§12.12-5)
 - **차트**: Bullet Chart (health) + Sparkline (trend) + Heat Map (cluster × time)
 - **컴포넌트**: shadcn/ui Card·Button·Badge·Tooltip·Dialog·Sonner 표준 사용
 
@@ -493,7 +480,7 @@ Semantic status(`--status-healthy/warning/critical/...`), Surface Container 5단
 
 ### 12.3 MacCard (`frontend/src/components/ui/MacCard.tsx`)
 
-모든 주요 섹션은 `MacCard` 로 감싼다. shadcn `Card` 프리미티브의 어댑터로, 평평한 표면 + 1px 보더,
+주요 섹션은 `MacCard` 로 감싼다(단일 요소·카드 안 카드는 §12.12-4 로 금지). shadcn `Card` 프리미티브의 어댑터로, 평평한 표면 + 1px 보더,
 좌측 정렬 소형 대문자 라벨 헤더(`bg-surface-container-high`), 라운딩 `rounded-md` 토큰이다.
 (P3 에서 신호등 3점 장식의 `variant="mac"` 과 `--mac-red/yellow/green` 토큰을 삭제했다 — 사용처 0건,
 누를 수 없는 장식이 상태색과 같은 hue 라 "장애"로 읽혔다.)
@@ -501,10 +488,24 @@ Semantic status(`--status-healthy/warning/critical/...`), Surface Container 5단
 ```tsx
 import { MacCard } from '@/components/ui/MacCard';
 
-<MacCard title="Cluster Status">{/* content */}</MacCard>
+<MacCard title="클러스터 상태">{/* content */}</MacCard>
+
+// 헤더 슬롯(D-122) — 카드 첫 줄에 제목+버튼 행을 손으로 그리지 않는다
+<MacCard
+  title="공통 서비스 링크" icon={Link2}
+  titleExtra={<span className="text-xs text-muted-foreground tabular-nums">12건</span>}
+  description="모든 클러스터에 공통으로 보이는 링크"
+  actions={<button …>추가</button>}
+>…</MacCard>
+
+// 툴바 카드 — title 없이 actions 만 주면 헤더 바 전체가 필터·검색 줄이 된다
+<MacCard actions={<FilterBar … />}>…</MacCard>
 ```
 
-Props: `title?`, `children`, `className?`(body), `rootClassName?`, `bodyPadding?`(기본 `p-4`).
+Props: `title?`, `icon?`(회색 lucide), `description?`(제목 옆 한 줄 보조), `titleExtra?`(배지·건수), `actions?`(헤더 우측),
+`children`, `className?`(body), `rootClassName?`, `bodyPadding?`(기본 `p-4`).
+헤더 바는 `title` 또는 `actions` 가 있을 때만 그린다. 본문 첫 줄의 수제 헤더(`flex justify-between` + `h2/h3` + 버튼),
+MacCard `title` 아래 또 그린 툴바 행(이중 헤더), 같은 모양의 로컬 헬퍼(구 `k8s-allocation` `CardHeader`)는 리뷰 반려 대상이다.
 
 ### 12.4 컴포넌트 컨벤션
 
@@ -726,6 +727,18 @@ runLog.begin('K8s 동기화', '요청 전송'); … runLog.log('info', '생성 3
   동기(blocking) 작업은 실행 함수를 `emit` 콜백형으로 짜서 동기 엔드포인트와 SSE 엔드포인트가 같은 코드를 쓰게 하고,
   SSE 쪽은 작업 스레드 + 큐로 흘린다(`infra_nodes.py` `_stream_job` — 15초 무이벤트 시 `: ping` 주석). 딥체커 단계를
   실시간으로 받으려면 `run_check_type_once(..., on_step=cb)` 를 쓴다(체커 `_step` 진입·종료마다 호출).
+- **헬퍼(D-128, `hooks/useRunLog.ts`)** — 손 배선 대신 이것을 쓴다.
+  - `runLogged(runLog, { title, first?, fn, summarize?, heartbeatMs=5000, keepOpen? })`: 동기 1응답 요청을 감싼다.
+    begin → 응답을 기다리는 동안 5초마다 "응답 대기 중 · N초 경과" → "응답 수신 · 소요" → `summarize(res)` 가 돌려준
+    `[level, message][]`(대상별 한 줄 + 요약 줄) → end. 실패는 error 줄(`formatApiError`), abort 는 "사용자 중지" warn 줄.
+    throw 하지 않고 `{ok, data} | {ok:false, error, aborted}` 를 돌려준다(기존 토스트·결과 표는 호출자가 이어서 처리).
+  - `pollIntoRunLog(runLog, { fetch, describe, isDone, intervalMs=2000, timeoutMs=180000, signal })`: Celery 큐잉형
+    실행(응답이 `task_id` 뿐인 것)의 진행을 도메인 리소스 폴링으로 이어 쓴다. `describe(snap, prev)` 는 **새로 생긴 변화만**
+    줄로 돌려준다. 조회 실패는 warn 한 줄 후 계속, 시간 초과는 "백그라운드에서 계속 진행될 수 있음" warn. 끝나면 end.
+    큐잉 응답 직후 이어 쓰려면 `runLogged(…, { keepOpen: true })` 다음에 호출한다. 언마운트 시 `signal` 을 abort 한다.
+  - `elapsed(t0)`: 소요 표기("1234ms"/"12.3s") 공용.
+  - 적용 레퍼런스: versions 수집 모달 5종(`runLogged`, 호스트별 줄), `/cluster-overview` 점검 실행(클러스터·애드온별 줄 —
+    `POST /health/check/{id}` 응답 `addons[]`), `/daily-check/review` 심층 점검·배치잡 일괄 실행·지금 스냅샷(`pollIntoRunLog`).
 - 모달이 페이지의 실행 로그 패널을 가리는 실행(예: 노드 검증)은 모달 안에도 같은 `RunLogPanel` 을 렌더한다.
 - 패널은 실행 전에는 렌더되지 않고(null), 로그를 접어 두면 마지막 한 줄만 보인다. 레퍼런스:
   `/pod-bottleneck`(SSE), `/infra-topology`(동기화·검증 SSE, Trace 응답 단위), `/service-topology`(실트래픽).
@@ -838,22 +851,22 @@ PEP 는 운영자용 내부 콘솔이라 모바일 전용 레이아웃을 만들
 §12.1~12.11 은 **원자**(테마·라운딩·카드·사이드바·콘솔·권한) 규칙이다. 2026-10 감사(`docs/03-analysis/ai-look-audit-2026-10.md`,
 D-117~D-134)에서 원자는 지켜지는데 화면이 "AI 가 만든 템플릿" 처럼 보이는 원인이 **조합**(헤더 템플릿·KPI 복붙·정상 과잉
 채색·무지개 팔레트·카드 남용·밀도·빈 상태·이모지·용어)에 있음이 확인됐다. 아래는 **위반 시 리뷰 반려** 규칙이다.
-§1·§4 의 "KPI cards row"·Bento Health Hero 서술과 충돌하면 **이 절이 우선**한다.
+§1~§5 는 2026-10 에 이 절과 맞게 정정했다(D-134). 이후에도 충돌이 보이면 **이 절이 우선**한다.
 
 | # | 규칙 | 금지 | 대신 |
 |---|---|---|---|
 | 1 | **페이지 헤더는 공용 `PageHeader` 하나**(`components/common/PageHeader.tsx`, D-117 — props `title`·`description`·`icon`·`back`·`titleExtra`·`actions`). 모든 페이지에 `<h1>` 정확히 1개, `text-xl font-semibold`. 전체화면 캔버스·탭 루트(Home·MindMap·WorkGuide 랜딩)는 `<h1 className="sr-only">`. **예외 4**: Login·ChangePassword(인증 중앙 카드), K9sPopup·NodeSshPopup(팝업 창) | 아이콘 타일(`rounded-* bg-primary/10` 박스), `text-2xl` 이상 h1, uppercase h1, 페이지 헤더를 MacCard 로 감싸기, 첫 MacCard 제목으로 h1 대체 | h1 앞 아이콘은 선택이되 `w-5 h-5 text-muted-foreground`. 부제는 1줄 `text-sm text-muted-foreground` 선택. 뒤로가기는 텍스트 링크 1종 |
 | 2 | **요약 수치는 Health Hero(`/cluster-overview`) 외 KPI 타일 행 금지** | 페이지 상단 "큰 숫자 + 작은 라벨" 3~7개 행, 설정·목록·콘솔 화면의 KPI, 타일 로컬 구현 | 공용 `StatTile`/`StatTileRow`(`components/common/StatTile.tsx`, D-118, ≤4개, `tabular-nums`, 색은 `tone` 지정 + 값≠0 일 때만) 또는 한 줄 표(`WeeklyReportPage`·`k8s-allocation/SummarySection` 방식) — **5개 이상이면 표**. 0 은 중립색, 아이콘은 의미와 일치 |
 | 3 | **상태색은 비정상에만** | 정상(healthy/done/synced/ok)에 `status-healthy` 보더·배경·점·pill, 한 상태에 시각 신호 2개 이상(보더+배경+점+pill), 상태 토큰을 카테고리·nav 아이콘·업무 진행 상태·버튼 톤에 전용, `brand-ai` 를 AI 배지 외에 사용 | 정상 = `text-muted-foreground` + 체크 아이콘, 색 없음. 상태당 신호 1개. 목록은 비정상 우선 정렬 |
-| 4 | **카드는 섹션 1단, `rounded-md` 만** | 단일 요소(문단·EmptyState·탭 줄·헤더) 래핑, 카드 안 카드, `bg-card` + `rounded-xl/2xl/lg`, hover-lift(`hover:-translate-y`·`hover:scale`), `shadow-lg/xl/2xl`, 비모달 `backdrop-blur`, `bg-gradient-*`, `transition-all`, 비로딩 `animate-pulse/ping` | 구분선·여백·정렬로 먼저 해결. 카드가 필요하면 `MacCard`(헤더 액션은 D-122 슬롯). 그림자는 `shadow-card` 만. 로고는 단색 |
-| 5 | **페이지 루트는 밀도 클래스 3종 중 하나** | 그 외 `max-w-*`, 콘솔 페이지의 `mx-auto`, 루트 패딩 임의값 | **콘솔**(exec·표·매트릭스): `py-3 pr-3`, 폭 제한 없음, 표 `text-xs`, 빈 상태 `py-10` · **허브/목록**: `px-6 py-5`, `max-w-[1600px]` 좌정렬 · **문서**(상세·폼·가이드): `max-w-4xl mx-auto px-8 py-8`, 빈 상태 `py-16` |
+| 4 | **카드는 섹션 1단, `rounded-md` 만** | 단일 요소(문단·EmptyState·탭 줄·헤더) 래핑, 카드 안 카드, `bg-card` + `rounded-xl/2xl/lg`, hover-lift(`hover:-translate-y`·`hover:scale`), `shadow-lg/xl/2xl`, 비모달 `backdrop-blur`, `bg-gradient-*`, `transition-all`, 비로딩 `animate-pulse/ping` | 구분선·여백·정렬로 먼저 해결. 카드가 필요하면 `MacCard`(헤더는 §12.3 슬롯 `icon`·`description`·`titleExtra`·`actions`). 섹션을 `bg-card border rounded-md` div 로 직접 조합하지 않는다(목록 아이템 타일은 예외). 그림자는 `shadow-card` 만. 로고는 단색 |
+| 5 | **페이지 루트는 밀도 클래스 3종 중 하나** | 그 외 `max-w-*`, 콘솔 페이지의 `mx-auto`, 루트 패딩 임의값 | 공용 **`PageShell density="console"｜"hub"｜"doc"`**(`components/common/PageShell.tsx`, D-123)로 본문 컨테이너를 감싼다. **콘솔**(exec·표·매트릭스, ClusterSidebar 가 있는 per-cluster 화면 전부): `py-3 pr-3`, 폭 제한 없음(사이드바 없으면 `sidebar={false}` → `pl-3`), 표 `text-xs`, 빈 상태 `py-10` · **허브/목록**: `px-6 py-5`, `max-w-[1600px]` 좌정렬 · **문서**(단일 칼럼 폼·읽기): `max-w-4xl mx-auto px-8 py-8`, 빈 상태 `py-16`. **예외**(셸 미사용): 전체 높이 캔버스(Home·Ontology·VersionGraph·WorkflowBoard·MindMap·Island), Login·ChangePassword·K9sPopup·NodeSshPopup. `max-w-[NNNNpx]` 는 `.eslintrc.cjs` `WIDTH_RE` 가 PageShell 밖에서 막는다 |
 | 6 | **빈·로딩·에러 상태는 공용만** | 인라인 빈 상태 div/p, 로컬 `EmptyState` 재정의, 이모지·영어 문구, "~가 없습니다" 만 있는 문구, 로딩 문구 변형("로딩", "불러오는 중...") , 에러에 `text-destructive` | `common/EmptyState` 단일 — "클러스터를 선택하세요" 는 프리셋 `SelectClusterEmptyState`, 로딩은 `LoadingState`(둘 다 `components/common/EmptyState.tsx`). 권한 게이트 버튼은 `children` 으로. 문구 = 왜 비었나 + 다음 행동(`ClusterManagePage:866` 참고). 로딩 "불러오는 중…"(`…` 1글자) 또는 `Skeleton`. 에러 `text-status-critical`(`text-destructive` 는 파괴 액션 버튼 전용) |
 | 7 | **카테고리·종류 구분 색은 `--chart-1..8` 토큰만** | Tailwind 색상명(blue·orange·purple·violet·indigo·cyan·pink·fuchsia·teal) — 장식 용도 포함, hex 기본색, 유색 배경 위 `text-white` 칩 | `--chart-*` 토큰(`text-[hsl(var(--chart-3))]` 아닌 유틸 클래스). slate/zinc 는 콘솔(터미널) 배경에만. `.eslintrc.cjs` 의 `DECO_PALETTE_RE` 가 기계로 막는다(D-120). 기존 위반 파일은 `DECO_PALETTE_ALLOWLIST` 래칫에 있고 **파일을 지울 수만 있다** — 토큰으로 이관한 파일은 목록에서 제거한다 |
 | 8 | **uppercase 아이브로우는 MacCard 헤더 내장만** | 페이지 본문·h1·버튼·탭·폼 라벨의 `uppercase tracking-wider`, 전부 대문자 제목("CIDR INPUT") | 라벨은 `text-xs text-muted-foreground`(대소문자 그대로). 상태 배지는 `common/StatusBadge` 한국어 1종 |
 | 9 | **아이콘은 lucide 만** | 이모지를 상태(🟢🟡🔴)·카테고리·아이콘·장식(🎉💡☸)으로, ⚠/✓/✗ 문자 접두, 모든 아이콘 `text-primary` 틴트 | lucide + 상태 토큰. `text-primary` 틴트는 클릭 가능한 액션에만. 사용자 데이터로 저장된 클러스터 아이콘(`clusterIcons`)의 예외 여부는 D-126 에서 판정 |
-| 10 | **타이포 위계 4단** | 페이지 내 `text-2xl` 이상(Health Hero 외), h1 크기 변형, 숫자 `font-mono`, `text-[11px]` 를 표 밖에 | h1 `text-xl font-semibold` · 카드 제목 MacCard 내장 · 본문 `text-sm` · 보조 `text-xs`. 숫자는 `tabular-nums`(`font-mono` 는 식별자·코드·로그만). `text-[11px]` 는 표 셀만 |
+| 10 | **타이포 위계 4단** | 페이지 내 `text-2xl` 이상(Health Hero 외), h1 크기 변형, 숫자 `font-mono`, `text-[11px]` 를 표 밖에 | h1 `text-xl font-semibold` · 카드 제목 MacCard 내장 · 본문 `text-sm` · 보조 `text-xs`. 숫자는 `tabular-nums`(`font-mono` 는 식별자·코드·로그만). `text-[11px]` 는 표 셀만. 글꼴은 시스템 스택만 — 웹폰트 CDN 금지(§3, D-131) |
 | 11 | **용어는 한국어 우선 표준어** | K8S · Pod(본문) · 체크 · Settings · 할 일 · 신규 등록/업무 등록(동일 동작에 다른 라벨) · `...` · `-`(빈 값) · 토스트 어미 혼용 · 도메인 명사 없는 제목("안내"·"개요"·"정보"·"필터") · 영어 섹션 제목 | K8s · 파드 · 네임스페이스(표 헤더만 NS) · 점검 · 실행 · 저장 · 설정 · 할일 · 추가(생성)/등록(외부 반입) · 새로고침(화면)/재수집(데이터)/동기화(외부) · 삭제. 생략 `…`, 빈 값 `—`, 진행 "~ 중…", 토스트 "~됨"(예: "저장됨"·"항목 추가됨"·"Jira 가져옴", 목적격 조사 생략) |
-| 12 | **실행 버튼은 §12.9.1 `RunLogPanel` + "로그 보기" 필수**(CLAUDE.md riverjin839 요청) | 토스트·완료 요약·스피너 문구만 주는 실행/수집/점검/스냅샷 버튼 | `useRunLog` + `RunLogPanel` + `useLogPref` 토글 |
+| 12 | **실행 버튼은 §12.9.1 `RunLogPanel` + "로그 보기" 필수**(CLAUDE.md riverjin839 요청) | 토스트·완료 요약·스피너 문구만 주는 실행/수집/점검/스냅샷 버튼 | `useRunLog` + `RunLogPanel` + `useLogPref` 토글. 단건 요청은 `runLogged`, 큐잉 실행은 `pollIntoRunLog`(§12.9.1) |
 
 **판정 기준과 예외 (Phase 2, 2026-10-14)** — 3·4·8·9번을 코드에 적용할 때의 경계선이다.
 

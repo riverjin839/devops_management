@@ -23,8 +23,8 @@ _최근 감사일: **2026-10-13** (R-4 10차 — AI 개발티 조합 수준 전�
 ### 1.1 디자인 시스템 요약
 
 - **테마**: 라이트 `light`(슬레이트) + 강조색 `blue` 기본(`themeStore.ts:75-76`). 바탕 16종 + `system`, 강조색 6종 — 전수는 CLAUDE.md §UI Design System. (구 "다크 Ops Slate 기본" 서술은 폐기 — D-134)
-- **레이아웃**: MacCard 섹션 카드 + ClusterSidebar(iconOnly, 56px 레일) + 12-col Bento Health Hero.
-- **타이포**: `index.html` 이 Inter·JetBrains Mono 를 로드하고 `tailwind.config.js` sans=Inter 이지만 **`index.css:1339` body 가 system stack(-apple-system…Roboto)으로 덮어써 본문에 Inter 가 적용되지 않는다** (D-131 에서 결정). 숫자·코드는 JetBrains Mono.
+- **레이아웃**: MacCard 섹션 카드(헤더 슬롯 `icon`·`description`·`titleExtra`·`actions`, D-122) + ClusterSidebar(iconOnly, 56px 레일) + 페이지 밀도 `PageShell` 3종(콘솔/허브/문서, D-123). 12-col Bento Health Hero 는 `/cluster-overview` 한정.
+- **타이포**: 시스템 폰트 스택 일원화(D-131) — sans 는 `tailwind.config.js` `fontFamily.sans` = `index.css` body(한글 Apple SD Gothic Neo·맑은 고딕), mono 는 `ui-monospace` 계열(터미널 기본과 동일). 웹폰트 CDN 없음(폐쇄망 동일 렌더). 위계 4단: h1 `text-xl` · 카드 제목(MacCard) · 본문 `text-sm` · 보조 `text-xs`, 숫자 `tabular-nums`.
 - **차트**: Bullet Chart(SVG) · Sparkline · CheckHistoryHeatmap — Gauge/Pie 비추천.
 - **DESIGN_SYSTEM.md 적용 로드맵 상태**: W3(Health Hero)·W4(접근성 패스)·W5(차트 교체) 완료,
   W1(raw hex 전수 치환)·W2(shadcn 5종 도입) 진행 중.
