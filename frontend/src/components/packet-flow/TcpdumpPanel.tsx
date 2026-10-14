@@ -7,7 +7,8 @@ import {
 import { bulkExecApi, topologyTraceApi } from '@/services/api';
 import type { NodeSummary } from '@/services/api';
 import type { TcpdumpCaptureResponse, TcpdumpPacketRow } from '@/types';
-import { ConfirmDialog, LogViewer, DoubleScrollX} from '@/components/common';
+import { ConfirmDialog, LogViewer, DoubleScrollX, EmptyState } from '@/components/common';
+import { MacCard } from '@/components/ui/MacCard';
 import { useAbortableMutation } from '@/hooks/useAbortableMutation';
 
 interface Props {
@@ -190,7 +191,7 @@ export function TcpdumpPanel({ clusterId }: Props) {
 
   return (
     <div className="space-y-3">
-      <div className="bg-card border border-border rounded-md p-3 space-y-3">
+      <MacCard title="캡처 설정" bodyPadding="p-3" className="space-y-3">
         {/* SSH 자격증명 + 노드 선택 */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
           <div>
@@ -345,25 +346,30 @@ export function TcpdumpPanel({ clusterId }: Props) {
             </button>
           )}
         </div>
-      </div>
+      </MacCard>
 
       {/* 결과 */}
       {result && (
-        <div className="bg-card border border-border rounded-md overflow-hidden">
-          <div className="flex items-center gap-2 px-3 py-2 border-b border-border bg-muted/30">
-            <StatusBadge status={result.status} />
-            <span className="text-sm font-mono">{result.host}</span>
-            <span className="text-sm text-muted-foreground">· {result.packets.length} packets · {result.durationMs}ms</span>
-            {result.exitCode != null && (
-              <span className="text-xs text-muted-foreground font-mono">exit {result.exitCode}</span>
-            )}
-            <div className="ml-auto flex items-center gap-1">
-              <button onClick={downloadRaw} disabled={!result.raw}
-                className="flex items-center gap-1 px-2 py-1 text-xs rounded bg-secondary hover:bg-secondary/80 disabled:opacity-50">
-                <Download className="w-3 h-3" /> raw
-              </button>
-            </div>
-          </div>
+        <MacCard
+          title="캡처 결과"
+          bodyPadding="p-0"
+          titleExtra={
+            <span className="flex items-center gap-2 flex-wrap min-w-0">
+              <StatusBadge status={result.status} />
+              <span className="text-sm font-mono">{result.host}</span>
+              <span className="text-sm text-muted-foreground tabular-nums">· {result.packets.length} packets · {result.durationMs}ms</span>
+              {result.exitCode != null && (
+                <span className="text-xs text-muted-foreground font-mono">exit {result.exitCode}</span>
+              )}
+            </span>
+          }
+          actions={
+            <button onClick={downloadRaw} disabled={!result.raw}
+              className="flex items-center gap-1 px-2 py-1 text-xs rounded bg-secondary hover:bg-secondary/80 disabled:opacity-50">
+              <Download className="w-3 h-3" /> raw
+            </button>
+          }
+        >
 
           {result.error && (
             <div className="px-3 py-2 flex items-start gap-2 bg-status-critical/5 border-b border-border">
@@ -387,16 +393,15 @@ export function TcpdumpPanel({ clusterId }: Props) {
               <LogViewer text={result.stderr} maxHeight="max-h-40" asError hideToolbar />
             </div>
           )}
-        </div>
+        </MacCard>
       )}
 
       {!result && (
-        <div className="bg-card border border-border rounded-md p-10 text-center text-sm text-muted-foreground">
-          <Info className="w-8 h-8 mx-auto mb-2 text-muted-foreground" />
-          대상 노드/자격증명을 입력하고 "캡처 실행"을 눌러 원격에서 tcpdump 를 수행하세요.
-          <br />
-          <span className="text-xs">실행 전 확인 모달이 표시됩니다.</span>
-        </div>
+        <EmptyState
+          icon={Info}
+          title="아직 캡처한 패킷이 없습니다"
+          description={'대상 노드와 자격증명을 입력하고 "캡처 실행"을 누르면 원격에서 tcpdump 를 수행합니다. 실행 전 확인 창이 뜹니다.'}
+        />
       )}
 
       <ConfirmDialog

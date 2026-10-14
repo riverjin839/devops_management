@@ -15,7 +15,7 @@ import type { AxiosError } from 'axios';
 import { MacCard } from '@/components/ui/MacCard';
 import { ClusterSidebar } from '@/components/common/ClusterSidebar';
 import { LogViewer } from '@/components/common/LogViewer';
-import { ConfirmDialog, useModalA11y, Skeleton, SkeletonCard, EmptyState, LoadingState, StatTile, StatTileRow } from '@/components/common';
+import { ConfirmDialog, useModalA11y, Skeleton, SkeletonCard, EmptyState, LoadingState, StatTile, StatTileRow, PageShell } from '@/components/common';
 import { RoleGate } from '@/components/auth/RoleGate';
 import { useClusters } from '@/hooks/useCluster';
 import { k8sResourcesApi, k8sHelmApi } from '@/services/api';
@@ -295,8 +295,8 @@ export function K8sManagePage() {
   const closeDetail = () => { setDetail(null); setEditing(false); setDraft(''); };
 
   return (
-    <div className="app-min-h-screen bg-background py-3 pr-3">
-      <div className="flex gap-3">
+    <div className="app-min-h-screen bg-background">
+      <PageShell density="console" as="div" className="flex gap-3">
         {/* 클러스터 선택 레일 */}
         <div className="sticky top-4 self-start">
           <ClusterSidebar
@@ -453,9 +453,7 @@ export function K8sManagePage() {
 
           {leaf.mode === 'overview' && <OverviewPanel clusterId={clusterId} />}
           {leaf.mode === 'events' && (
-            <MacCard title="이벤트 (실시간)">
-              <EventsStream clusterId={clusterId} selectedNs={selectedNs} onSelectedNsChange={setSelectedNs} />
-            </MacCard>
+            <EventsStream clusterId={clusterId} selectedNs={selectedNs} onSelectedNsChange={setSelectedNs} />
           )}
           {leaf.mode === 'helm' && (
             <HelmPanel clusterId={clusterId} onViewValues={(r) => setDetail({ kind: 'helmValues', namespace: r.namespace, name: r.name })} />
@@ -472,7 +470,7 @@ export function K8sManagePage() {
             />
           )}
         </div>
-      </div>
+      </PageShell>
 
       {/* 상세 / YAML 드로어 */}
       {detail && (
@@ -566,6 +564,8 @@ export interface ResourceTablePanelProps {
   onTerminal: (ns: string, name: string) => void;
   /** NS 대시보드처럼 네임스페이스가 이미 상위에서 고정된 곳에 임베드할 때 내장 선택기를 숨긴다. */
   hideNsSelector?: boolean;
+  /** 카드 제목 — 기본은 kind 그대로. NS 대시보드가 한국어 종류명을 넘긴다. */
+  title?: string;
 }
 
 export function ResourceTablePanel(p: ResourceTablePanelProps) {
@@ -612,8 +612,10 @@ export function ResourceTablePanel(p: ResourceTablePanelProps) {
   ].filter(Boolean).join(' ');
 
   return (
-    <MacCard title={kind} bodyPadding="p-0">
-      <div className="flex items-center gap-2 flex-wrap px-3 py-2.5 border-b border-border">
+    <MacCard
+      title={p.title ?? kind}
+      bodyPadding="p-0"
+      actions={<>
         {isNamespaced && !p.hideNsSelector && (
           <NamespaceMultiSelect clusterId={clusterId} selected={selectedNs} onChange={setSelectedNs} />
         )}
@@ -626,13 +628,12 @@ export function ResourceTablePanel(p: ResourceTablePanelProps) {
             className="rounded-xl border border-border bg-card pl-7 pr-2 py-1 text-sm w-48 focus:outline-none focus:ring-1 focus:ring-primary"
           />
         </div>
-        <div className="ml-auto flex items-center gap-1">
-          <ColumnToggle columns={allColumns} hidden={hidden} onToggle={toggle} />
-          <button onClick={forceRefetch} title="새로고침" aria-label="새로고침" className="p-1.5 rounded-lg hover:bg-secondary text-muted-foreground">
-            <RefreshCw className={`w-3.5 h-3.5 ${isFetching ? 'animate-spin' : ''}`} />
-          </button>
-        </div>
-      </div>
+        <ColumnToggle columns={allColumns} hidden={hidden} onToggle={toggle} />
+        <button onClick={forceRefetch} title="새로고침" aria-label="새로고침" className="p-1.5 rounded-lg hover:bg-secondary text-muted-foreground">
+          <RefreshCw className={`w-3.5 h-3.5 ${isFetching ? 'animate-spin' : ''}`} />
+        </button>
+      </>}
+    >
 
       <div className="overflow-x-auto">
       <div className="min-w-[760px]">
@@ -765,7 +766,7 @@ function HelmPanel({ clusterId, onViewValues }: { clusterId: string; onViewValue
     retry: false,
   });
   return (
-    <MacCard title="Helm Releases" bodyPadding="p-0">
+    <MacCard title="Helm 릴리스" bodyPadding="p-0">
       <div className="grid grid-cols-[1fr_140px_70px_1fr_90px] gap-2 px-4 py-1.5 text-xs font-semibold text-muted-foreground border-b border-border bg-secondary/30">
         <span>이름</span><span>네임스페이스</span><span>rev</span><span>차트</span><span className="text-right pr-2">values</span>
       </div>
@@ -825,12 +826,15 @@ function CrdPanel({ clusterId, selectedCrd, setSelectedCrd, onOpenObject }: CrdP
       ].join(' '),
     };
     return (
-      <MacCard title={`${selectedCrd.kind} (${selectedCrd.group})`} bodyPadding="p-0">
-        <div className="px-4 py-2 border-b border-border">
+      <MacCard
+        title={`${selectedCrd.kind} (${selectedCrd.group})`}
+        bodyPadding="p-0"
+        actions={
           <button onClick={() => setSelectedCrd(null)} className="inline-flex items-center gap-1.5 text-sm text-primary hover:underline">
             <ArrowLeft className="w-3.5 h-3.5" /> CRD 목록
           </button>
-        </div>
+        }
+      >
         <div className="grid gap-2 px-4 py-1.5 text-xs font-semibold text-muted-foreground border-b border-border bg-secondary/30" style={grid}>
           <span>이름</span>
           {namespaced && <span>네임스페이스</span>}
@@ -863,7 +867,7 @@ function CrdPanel({ clusterId, selectedCrd, setSelectedCrd, onOpenObject }: CrdP
   }
 
   return (
-    <MacCard title="Custom Resource Definitions" bodyPadding="p-0">
+    <MacCard title="CRD 목록" bodyPadding="p-0">
       <div className="grid grid-cols-[1fr_1fr_90px] gap-2 px-4 py-1.5 text-xs font-semibold text-muted-foreground border-b border-border bg-secondary/30">
         <span>Kind</span><span>Group</span><span>Scope</span>
       </div>
@@ -1122,16 +1126,18 @@ function NodesPanel({ clusterId, onOpenDetail, onCordon, onDrain }: NodesPanelPr
   };
 
   return (
-    <MacCard title="Nodes" bodyPadding="p-0">
-      <div className="flex items-center gap-2 px-3 py-2 border-b border-border">
-        <span className="text-sm text-muted-foreground">{rows.length} nodes{data && !data.metricsAvailable ? ' · metrics-server 없음(usage 생략)' : ''}</span>
-        <div className="ml-auto flex items-center gap-1">
-          <ColumnToggle columns={NODES_TOGGLE_COLS} hidden={hidden} onToggle={toggle} />
-          <button onClick={forceRefetch} title="새로고침" aria-label="새로고침" className="p-1.5 rounded-lg hover:bg-secondary text-muted-foreground">
-            <RefreshCw className={`w-3.5 h-3.5 ${isFetching ? 'animate-spin' : ''}`} />
-          </button>
-        </div>
-      </div>
+    <MacCard
+      title="노드"
+      bodyPadding="p-0"
+      titleExtra={<span className="text-xs text-muted-foreground tabular-nums">{rows.length}개</span>}
+      description={data && !data.metricsAvailable ? 'metrics-server 없음(usage 생략)' : undefined}
+      actions={<>
+        <ColumnToggle columns={NODES_TOGGLE_COLS} hidden={hidden} onToggle={toggle} />
+        <button onClick={forceRefetch} title="새로고침" aria-label="새로고침" className="p-1.5 rounded-lg hover:bg-secondary text-muted-foreground">
+          <RefreshCw className={`w-3.5 h-3.5 ${isFetching ? 'animate-spin' : ''}`} />
+        </button>
+      </>}
+    >
       <div className="overflow-x-auto">
       <div className="min-w-[720px]">
       <div className="grid gap-2 px-4 py-1.5 text-xs font-semibold text-muted-foreground border-b border-border bg-secondary/30" style={gridStyle}>
@@ -1195,6 +1201,8 @@ export interface PodsPanelProps {
   onDelete: (kind: string, ns: string, name: string) => void;
   onTerminal: (ns: string, name: string) => void;
   hideNsSelector?: boolean;
+  /** 카드 제목 — 기본 "파드". */
+  title?: string;
 }
 /** 파드 목록 페이지 크기 — 첫 화면을 빨리 띄우고 나머지는 스크롤 시 continue 토큰으로 이어 받는다. */
 const POD_PAGE_SIZE = 200;
@@ -1266,8 +1274,10 @@ export function PodsPanel(p: PodsPanelProps) {
   };
 
   return (
-    <MacCard title="Pods" bodyPadding="p-0">
-      <div className="flex items-center gap-2 flex-wrap px-3 py-2.5 border-b border-border">
+    <MacCard
+      title={p.title ?? '파드'}
+      bodyPadding="p-0"
+      actions={<>
         {!p.hideNsSelector && (
           <NamespaceMultiSelect clusterId={clusterId} selected={selectedNs} onChange={setSelectedNs} />
         )}
@@ -1276,13 +1286,12 @@ export function PodsPanel(p: PodsPanelProps) {
           <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="이름/노드/소유자 검색"
             className="rounded-xl border border-border bg-card pl-7 pr-2 py-1 text-sm w-52 focus:outline-none focus:ring-1 focus:ring-primary" />
         </div>
-        <div className="ml-auto flex items-center gap-1">
-          <ColumnToggle columns={PODS_TOGGLE_COLS} hidden={hidden} onToggle={toggle} />
-          <button onClick={forceRefetch} title="새로고침" aria-label="새로고침" className="p-1.5 rounded-lg hover:bg-secondary text-muted-foreground">
-            <RefreshCw className={`w-3.5 h-3.5 ${isFetching ? 'animate-spin' : ''}`} />
-          </button>
-        </div>
-      </div>
+        <ColumnToggle columns={PODS_TOGGLE_COLS} hidden={hidden} onToggle={toggle} />
+        <button onClick={forceRefetch} title="새로고침" aria-label="새로고침" className="p-1.5 rounded-lg hover:bg-secondary text-muted-foreground">
+          <RefreshCw className={`w-3.5 h-3.5 ${isFetching ? 'animate-spin' : ''}`} />
+        </button>
+      </>}
+    >
       <div className="overflow-x-auto">
       <div className="min-w-[900px]">
       <div className="grid gap-2 px-4 py-1.5 text-xs font-semibold text-muted-foreground border-b border-border bg-secondary/30" style={gridStyle}>

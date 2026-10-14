@@ -24,7 +24,7 @@ import { useQuery } from '@tanstack/react-query';
 import { useClusters } from '@/hooks/useCluster';
 import { useTerminalEnvSync } from '@/hooks/useTerminalEnvSync';
 import { useClusterStore } from '@/stores/clusterStore';
-import { ClusterSidebar, LogViewer, SearchableSelect, EmptyState, SelectClusterEmptyState, LoadingState, Skeleton } from '@/components/common';
+import { ClusterSidebar, LogViewer, SearchableSelect, EmptyState, SelectClusterEmptyState, LoadingState, Skeleton, PageShell } from '@/components/common';
 import { MacCard } from '@/components/ui/MacCard';
 import { RoleGate } from '@/components/auth/RoleGate';
 import { getAuthToken } from '@/stores/authStore';
@@ -214,19 +214,23 @@ export function CiliumTracePage() {
         allowAll={false}
         iconOnly
       />
-      <main className="flex-1 min-w-0 px-4 lg:px-6 py-5 space-y-4 max-w-[1700px]">
+      <PageShell density="console" className="space-y-4">
         {/* Header */}
-        <div className="flex items-center justify-between gap-3 flex-wrap">
-          <PageHeader icon={Waves} title="Cilium BPF 추적" description="BPF 맵 인스펙터 · cilium monitor · Hubble flow" className="flex-1 min-w-0" />
-          <button
-            onClick={() => refetchStatus()}
-            disabled={statusLoading || !cid}
-            className="px-3 py-1.5 text-sm font-semibold bg-secondary hover:bg-secondary/80 border border-border rounded-xl transition-colors flex items-center gap-1.5 disabled:opacity-50"
-          >
-            <RefreshCw className={`w-3.5 h-3.5 ${statusLoading ? 'animate-spin' : ''}`} />
-            상태 새로고침
-          </button>
-        </div>
+        <PageHeader
+          icon={Waves}
+          title="Cilium BPF 추적"
+          description="BPF 맵 인스펙터 · cilium monitor · Hubble flow"
+          actions={
+            <button
+              onClick={() => refetchStatus()}
+              disabled={statusLoading || !cid}
+              className="px-3 py-1.5 text-sm font-semibold bg-secondary hover:bg-secondary/80 border border-border rounded-xl transition-colors flex items-center gap-1.5 disabled:opacity-50"
+            >
+              <RefreshCw className={`w-3.5 h-3.5 ${statusLoading ? 'animate-spin' : ''}`} />
+              상태 새로고침
+            </button>
+          }
+        />
 
         {/* Status strip */}
         <StatusStrip status={status} loading={statusLoading} agentCount={agents.length} />
@@ -261,7 +265,7 @@ export function CiliumTracePage() {
         ) : (
           <HubbleTab clusterId={cid} hubbleInstalled={status?.hubbleRelayInstalled ?? false} />
         )}
-      </main>
+      </PageShell>
     </div>
   );
 }
@@ -410,8 +414,12 @@ function BpfInspectorTab({ clusterId, agents }: { clusterId: string; agents: Cil
     // 자리(우측)에 플레이스홀더로 고정되어 결과가 나와도 레이아웃이 흔들리지 않는다.
     <div className="grid grid-cols-1 lg:grid-cols-10 gap-4 items-start">
       <div className="lg:col-span-4 min-w-0 space-y-4">
-      {/* Toolbar */}
-      <MacCard bodyPadding="p-3">
+      {/* 조회 컨트롤 — 콘솔 좌측 컨트롤 카드(제목 + 폼) */}
+      <MacCard
+        title="BPF 맵 조회"
+        description={BPF_KINDS.find((k) => k.id === kind)?.desc}
+        bodyPadding="p-3"
+      >
         <div className="flex items-center gap-2 flex-wrap">
           <div className="flex items-center gap-1.5">
             <Database className="w-3.5 h-3.5 text-muted-foreground" />
@@ -464,9 +472,6 @@ function BpfInspectorTab({ clusterId, agents }: { clusterId: string; agents: Cil
               <Download className="w-3.5 h-3.5" /> 내보내기
             </button>
           )}
-          <span className="ml-auto text-xs text-muted-foreground">
-            {BPF_KINDS.find((k) => k.id === kind)?.desc}
-          </span>
         </div>
       </MacCard>
 
@@ -706,7 +711,15 @@ function MonitorTab({ clusterId, agents }: { clusterId: string; agents: CiliumAg
     // 라인에 나와 세로 공간을 온전히 쓴다 (MC 클라이언트 콘솔과 동일 패턴).
     <div className="grid grid-cols-1 lg:grid-cols-10 gap-4 items-start">
       <div className="lg:col-span-4 min-w-0 space-y-4">
-      <MacCard bodyPadding="p-3">
+      <MacCard
+        title="모니터 스트림"
+        titleExtra={
+          <span className="text-xs text-muted-foreground tabular-nums">
+            <span className={running ? 'text-status-healthy' : ''}>●</span> {events.length}건
+          </span>
+        }
+        bodyPadding="p-3"
+      >
         <div className="flex items-center gap-2 flex-wrap">
           <div className="flex items-center gap-1.5">
             <Server className="w-3.5 h-3.5 text-muted-foreground" />
@@ -762,9 +775,6 @@ function MonitorTab({ clusterId, agents }: { clusterId: string; agents: CiliumAg
           >
             <Trash2 className="w-3.5 h-3.5" /> 비우기
           </button>
-          <span className="ml-auto text-xs text-muted-foreground tabular-nums">
-            <span className={running ? 'text-status-healthy' : ''}>●</span> {events.length}건
-          </span>
         </div>
       </MacCard>
 
@@ -780,16 +790,19 @@ function MonitorTab({ clusterId, agents }: { clusterId: string; agents: CiliumAg
         rootClassName="lg:col-span-6 min-w-0"
         bodyPadding="p-0"
         className="overflow-hidden"
+        actions={
+          <div className="flex items-center gap-2">
+            <Filter className="w-3.5 h-3.5 text-muted-foreground" aria-hidden />
+            <input
+              value={filterText}
+              onChange={(e) => setFilterText(e.target.value)}
+              placeholder="텍스트로 필터링…"
+              aria-label="이벤트 텍스트 필터"
+              className="w-56 text-sm bg-background border border-border rounded-lg px-2.5 py-1.5 focus:outline-none focus:ring-2 focus:ring-primary/40"
+            />
+          </div>
+        }
       >
-        <div className="px-3 py-2 border-b border-border flex items-center gap-2">
-          <Filter className="w-3.5 h-3.5 text-muted-foreground" />
-          <input
-            value={filterText}
-            onChange={(e) => setFilterText(e.target.value)}
-            placeholder="텍스트로 필터링…"
-            className="flex-1 text-sm bg-background border border-border rounded-lg px-2.5 py-1.5 focus:outline-none focus:ring-2 focus:ring-primary/40"
-          />
-        </div>
         <EventList events={filtered} />
       </MacCard>
     </div>
@@ -1088,15 +1101,13 @@ function HubbleTab({ clusterId, hubbleInstalled }: { clusterId: string; hubbleIn
 
   if (!hubbleInstalled) {
     return (
-      <MacCard bodyPadding="p-0">
-        <EmptyState
-          icon={AlertTriangle}
-          title="Hubble Relay 가 설치되어 있지 않습니다."
-          description="아래 명령 또는 helm 으로 hubble-relay 를 배포하면 flow 를 볼 수 있습니다."
-        >
-          <code className="mt-3 px-1.5 py-0.5 rounded bg-secondary text-sm">cilium hubble enable --ui</code>
-        </EmptyState>
-      </MacCard>
+      <EmptyState
+        icon={AlertTriangle}
+        title="Hubble Relay 가 설치되어 있지 않습니다."
+        description="아래 명령 또는 helm 으로 hubble-relay 를 배포하면 flow 를 볼 수 있습니다."
+      >
+        <code className="mt-3 px-1.5 py-0.5 rounded bg-secondary text-sm">cilium hubble enable --ui</code>
+      </EmptyState>
     );
   }
 
@@ -1104,7 +1115,7 @@ function HubbleTab({ clusterId, hubbleInstalled }: { clusterId: string; hubbleIn
     // 좌(필터/컨트롤)/우(flow 로그) 고정 배치 — MC 클라이언트 콘솔과 동일 패턴.
     <div className="grid grid-cols-1 lg:grid-cols-10 gap-4 items-start">
       <div className="lg:col-span-4 min-w-0 space-y-4">
-      <MacCard bodyPadding="p-3">
+      <MacCard title="Hubble 필터" bodyPadding="p-3">
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-1 xl:grid-cols-2 gap-2 mb-2">
           <input
             value={filters.fromNamespace}
@@ -1222,7 +1233,7 @@ function HubbleTab({ clusterId, hubbleInstalled }: { clusterId: string; hubbleIn
       )}
       </div>
 
-      <MacCard title="Hubble flows" rootClassName="lg:col-span-6 min-w-0" bodyPadding="p-0" className="overflow-hidden">
+      <MacCard title="Hubble 플로우" rootClassName="lg:col-span-6 min-w-0" bodyPadding="p-0" className="overflow-hidden">
         <FlowList events={events} />
       </MacCard>
     </div>

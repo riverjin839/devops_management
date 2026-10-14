@@ -7,7 +7,7 @@ import {
 } from 'lucide-react';
 import { useClusters } from '@/hooks/useCluster';
 import { useTerminalEnvSync } from '@/hooks/useTerminalEnvSync';
-import { ConfirmDialog, ExecOutputTabs, ClusterSidebar, SavedCommands, EmptyState } from '@/components/common';
+import { ConfirmDialog, ExecOutputTabs, ClusterSidebar, SavedCommands, EmptyState, PageShell } from '@/components/common';
 import { PageHeader } from '@/components/common/PageHeader';
 import { MacCard } from '@/components/ui/MacCard';
 import {
@@ -30,22 +30,24 @@ const STATUS_META: Record<EtcdCtlRunResponse['status'], { label: string; cls: st
 function ResultPanel({ result, tab }: { result: EtcdCtlRunResponse | null; tab: Tab }) {
   if (!result) {
     return (
-      <MacCard rootClassName="lg:col-span-5 min-w-0" bodyPadding="p-5" className="flex items-center justify-center min-h-[200px] lg:h-[calc(100vh-260px)]">
+      <div className="lg:col-span-5 min-w-0 flex items-center justify-center min-h-[200px] lg:h-[calc(100vh-260px)]">
         <EmptyState
           compact
           icon={tab === 'run' ? Terminal : ScrollText}
           title="아직 실행 결과가 없습니다."
           description={tab === 'run' ? 'etcdctl 명령을 실행하면 결과가 여기에 표시됩니다.' : '로그를 가져오면 결과가 여기에 표시됩니다.'}
         />
-      </MacCard>
+      </div>
     );
   }
   const meta = STATUS_META[result.status];
   const Icon = meta.icon;
+  // 헤더(상태·호스트·exit·소요)는 고정, 본문만 세로 스크롤 — 예전 sticky header 와 같은 동작.
   return (
-    <MacCard rootClassName="lg:col-span-5 min-w-0 overflow-y-auto overflow-x-hidden lg:h-[calc(100vh-260px)]" bodyPadding="p-0">
-      <header className="sticky top-0 z-10 px-5 py-3 border-b border-border flex items-center justify-between bg-muted">
-        <div className="flex items-center gap-3 flex-wrap">
+    <MacCard
+      title={tab === 'run' ? '실행 결과' : '서비스 로그'}
+      titleExtra={
+        <span className="flex items-center gap-3 flex-wrap min-w-0">
           <span className={`inline-flex items-center gap-1 text-sm px-2 py-0.5 rounded-full border font-medium ${meta.cls}`}>
             <Icon className="w-3 h-3" />
             {meta.label}
@@ -54,21 +56,23 @@ function ResultPanel({ result, tab }: { result: EtcdCtlRunResponse | null; tab: 
           {result.exitCode !== null && result.exitCode !== undefined && (
             <span className="text-sm font-mono text-muted-foreground">exit {result.exitCode}</span>
           )}
-          <span className="text-sm font-mono text-muted-foreground">{result.durationMs}ms</span>
-        </div>
-        {result.error && (
-          <span className="text-sm text-status-critical inline-flex items-start gap-1"><AlertTriangle className="w-3.5 h-3.5 mt-0.5 shrink-0" aria-hidden="true" />{result.error}</span>
-        )}
-      </header>
-      <div className="px-5 py-3 space-y-3">
-        <div>
-          <p className="text-xs font-medium text-muted-foreground mb-1">실행된 명령</p>
-          <pre className="text-xs font-mono bg-background border border-border rounded p-2 overflow-auto whitespace-pre-wrap break-all text-foreground/80">
-            {result.executedCommand || '(not provided)'}
-          </pre>
-        </div>
-        <ExecOutputTabs stdout={result.stdout} stderr={result.stderr} maxHeight="max-h-[440px]" />
+          <span className="text-sm text-muted-foreground tabular-nums">{result.durationMs}ms</span>
+        </span>
+      }
+      actions={result.error ? (
+        <span className="text-sm text-status-critical inline-flex items-start gap-1"><AlertTriangle className="w-3.5 h-3.5 mt-0.5 shrink-0" aria-hidden="true" />{result.error}</span>
+      ) : undefined}
+      rootClassName="lg:col-span-5 min-w-0 flex flex-col lg:h-[calc(100vh-260px)]"
+      bodyPadding="px-5 py-3"
+      className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden space-y-3"
+    >
+      <div>
+        <p className="text-xs font-medium text-muted-foreground mb-1">실행된 명령</p>
+        <pre className="text-xs font-mono bg-background border border-border rounded p-2 overflow-auto whitespace-pre-wrap break-all text-foreground/80">
+          {result.executedCommand || '(not provided)'}
+        </pre>
       </div>
+      <ExecOutputTabs stdout={result.stdout} stderr={result.stderr} maxHeight="max-h-[440px]" />
     </MacCard>
   );
 }
@@ -186,7 +190,7 @@ export function EtcdCtlPage() {
 
   return (
     <div className="app-min-h-screen bg-background">
-      <main className="pr-6 py-6 flex gap-5">
+      <PageShell density="console" className="flex gap-3">
         <ClusterSidebar
           clusters={clusters}
           selectedId={clusterId || null}
@@ -207,12 +211,12 @@ export function EtcdCtlPage() {
         />
 
         {/* 안내 */}
-        <MacCard rootClassName="mb-5" className="text-sm text-muted-foreground leading-relaxed">
+        <p className="mb-5 text-sm text-muted-foreground leading-relaxed">
           기본 가정: control-plane(master1) 서버에 <code className="font-mono text-foreground">etcd.service</code> 가 systemd 로 동작하고
           <code className="font-mono text-foreground"> /etc/etcd.env</code> 에 <code className="font-mono text-foreground">ETCDCTL_*</code> 환경변수가 정의됨.
           다르면 "env 파일" 경로를 바꾸거나 env 로드를 끄고 extra env 로 직접 지정 가능.
           SSH 인증정보는 이 실행에만 사용되고 저장되지 않습니다.
-        </MacCard>
+        </p>
 
         {/* 탭 */}
         <div className="flex items-center gap-1 mb-5">
@@ -331,7 +335,7 @@ export function EtcdCtlPage() {
           </MacCard>
 
           {/* 중: 실행 구성 */}
-          <MacCard rootClassName="lg:col-span-3 min-w-0" bodyPadding="p-5" className="space-y-4">
+          <MacCard title={tab === 'run' ? '명령' : '로그 조회'} rootClassName="lg:col-span-3 min-w-0" bodyPadding="p-5" className="space-y-4">
             {tab === 'run' ? (
               <>
                 {/* 프리셋 */}
@@ -521,7 +525,7 @@ export function EtcdCtlPage() {
           <ResultPanel result={result} tab={tab} />
         </div>
         </div>
-      </main>
+      </PageShell>
 
       {/* 실행 확인 모달 */}
       <ConfirmDialog

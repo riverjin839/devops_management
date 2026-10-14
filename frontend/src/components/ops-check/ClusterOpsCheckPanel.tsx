@@ -1,12 +1,12 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
-  Play, Search, RefreshCw, CheckCircle2, Loader2, Circle, X, AlertTriangle,
+  Play, Search, RefreshCw, CheckCircle2, Loader2, Circle, X, AlertTriangle, ListChecks,
 } from 'lucide-react';
 import { MacCard } from '@/components/ui/MacCard';
 import { Button } from '@/components/ui/button';
 import { StatusBadge, statusToVariant } from '@/components/common/StatusBadge';
 import { LogViewer } from '@/components/common/LogViewer';
-import { useToast, ConfirmDialog, useModalA11y } from '@/components/common';
+import { useToast, ConfirmDialog, useModalA11y, EmptyState, LoadingState } from '@/components/common';
 import { ExecutionStepsTimeline } from '@/components/daily-check/ExecutionStepsTimeline';
 import { ExecTechBadge } from '@/components/platform-status/ExecTechBadge';
 import { formatApiError, parseUTC } from '@/lib/utils';
@@ -135,9 +135,10 @@ export function ClusterOpsCheckPanel({ clusterId, clusterName }: Props) {
   return (
     <div className="space-y-4">
       {/* catalog + bulk run */}
-      <MacCard title="점검 항목" bodyPadding="p-0">
-        {/* toolbar */}
-        <div className="flex items-center gap-2 flex-wrap px-4 py-3 border-b border-border">
+      <MacCard
+        title="점검 항목"
+        bodyPadding="p-0"
+        actions={<>
           <button
             onClick={() => setCategory('all')}
             className={`rounded-full px-3 py-1 text-sm font-medium border ${category === 'all' ? 'bg-primary text-primary-foreground border-primary' : 'bg-card text-muted-foreground border-border hover:bg-secondary/60'}`}>
@@ -154,7 +155,7 @@ export function ClusterOpsCheckPanel({ clusterId, clusterName }: Props) {
               </span>
             </button>
           ))}
-          <div className="relative ml-auto">
+          <div className="relative">
             <Search className="absolute left-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
             <input
               value={search}
@@ -163,7 +164,8 @@ export function ClusterOpsCheckPanel({ clusterId, clusterName }: Props) {
               className="rounded-xl border border-border bg-card pl-7 pr-2 py-1 text-sm w-44 focus:outline-none focus:ring-1 focus:ring-primary"
             />
           </div>
-        </div>
+        </>}
+      >
 
         {/* bulk action bar */}
         <div className="flex items-center gap-3 px-4 py-2 bg-secondary/30 border-b border-border">
@@ -183,7 +185,7 @@ export function ClusterOpsCheckPanel({ clusterId, clusterName }: Props) {
 
         {/* list */}
         {isLoading ? (
-          <div className="p-6 text-sm text-muted-foreground">불러오는 중…</div>
+          <LoadingState compact />
         ) : isError ? (
           <div className="m-4 rounded-md border border-status-critical/30 bg-status-critical/10 p-4">
             <div className="flex items-start gap-2 text-sm text-status-critical">
@@ -198,7 +200,12 @@ export function ClusterOpsCheckPanel({ clusterId, clusterName }: Props) {
             </Button>
           </div>
         ) : filtered.length === 0 ? (
-          <div className="p-10 text-center text-sm text-muted-foreground">표시할 점검 항목이 없습니다.</div>
+          <EmptyState
+            compact
+            icon={ListChecks}
+            title="표시할 점검 항목이 없습니다"
+            description="분류 필터나 검색어를 바꾸거나, 점검 항목 관리에서 항목을 활성화하세요."
+          />
         ) : (
           <div className="overflow-x-auto">
           <table className="w-full text-sm min-w-[640px]">
@@ -293,17 +300,23 @@ export function ClusterOpsCheckPanel({ clusterId, clusterName }: Props) {
 
       {/* run progress */}
       {activeRunId && run && (
-        <MacCard title="실행 진행">
-          <div className="flex items-center gap-3 mb-3 text-sm">
-            {isRunning ? <Loader2 className="w-4 h-4 animate-spin text-primary" /> : <CheckCircle2 className="w-4 h-4 text-status-healthy" />}
-            <span className="font-medium">{isRunning ? '실행 중…' : '완료'}</span>
-            <span className="text-sm text-muted-foreground">
-              총 {run.total} · 정상 {run.okCount} · 경고 {run.warnCount} · 위험 {run.critCount} · 실패 {run.errorCount}
+        <MacCard
+          title="실행 진행"
+          titleExtra={
+            <span className="flex items-center gap-2 text-sm">
+              {isRunning ? <Loader2 className="w-4 h-4 animate-spin text-primary" /> : <CheckCircle2 className="w-4 h-4 text-status-healthy" />}
+              <span className="font-medium">{isRunning ? '실행 중…' : '완료'}</span>
+              <span className="text-sm text-muted-foreground tabular-nums">
+                총 {run.total} · 정상 {run.okCount} · 경고 {run.warnCount} · 위험 {run.critCount} · 실패 {run.errorCount}
+              </span>
             </span>
-            <button onClick={() => setActiveRunId(null)} className="ml-auto text-muted-foreground hover:text-foreground" aria-label="닫기">
+          }
+          actions={
+            <button onClick={() => setActiveRunId(null)} className="text-muted-foreground hover:text-foreground" title="닫기" aria-label="닫기">
               <X className="w-4 h-4" />
             </button>
-          </div>
+          }
+        >
           <div className="divide-y divide-border/50">
             {runItems.map((it) => (
               <button

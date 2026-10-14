@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
-  HardDrive, Plus, Pencil, ServerCog, AlertTriangle,
+  HardDrive, Plus, Pencil, ServerCog, AlertTriangle, Settings2,
 } from 'lucide-react';
 import { MacCard } from '@/components/ui/MacCard';
-import { StatusBadge, StatusDot, statusToVariant, EmptyState, LoadingState, LogViewer } from '@/components/common';
+import { StatusBadge, StatusDot, statusToVariant, EmptyState, LoadingState, LogViewer, PageShell } from '@/components/common';
 import { PageHeader } from '@/components/common/PageHeader';
 import { IsilonServerModal, IsilonCommandManager, IsilonCommandSelector, ISILON_SECTION_LABEL } from '@/components/isilon';
 import { useIsilonServers, useRunIsilonCommands } from '@/hooks/useIsilonNfs';
@@ -59,8 +59,8 @@ export function IsilonNfsPage() {
   };
 
   return (
-    <div className="app-min-h-screen bg-background py-3 pr-3">
-      <div className="flex gap-3">
+    <div className="app-min-h-screen bg-background">
+      <PageShell density="console" as="div" className="flex gap-3">
         {/* 좌측 서버 레일 — 클러스터가 아닌 서버 스코프라 ClusterSidebar 대신 전용 레일 사용 */}
         <div className="sticky top-4 self-start w-56 flex-shrink-0">
           <MacCard title="Isilon 서버" bodyPadding="p-2">
@@ -102,25 +102,23 @@ export function IsilonNfsPage() {
           />
 
           {!loadingServers && servers.length === 0 ? (
-            <MacCard>
-              <EmptyState
-                icon={ServerCog}
-                title="Isilon 서버를 먼저 등록하세요"
-                description="SSH 접속 대상(host/계정/비밀번호)을 등록하면 isi 명령으로 NFS 현황을 수집합니다."
-                action={{ label: '서버 추가', onClick: () => setServerModal({ open: true, edit: null }) }}
-              />
-            </MacCard>
+            <EmptyState
+              icon={ServerCog}
+              title="Isilon 서버를 먼저 등록하세요"
+              description="SSH 접속 대상(host/계정/비밀번호)을 등록하면 isi 명령으로 NFS 현황을 수집합니다."
+              action={{ label: '서버 추가', onClick: () => setServerModal({ open: true, edit: null }) }}
+            />
           ) : selected ? (
             <>
-              {/* 서버 헤더 */}
-              <MacCard bodyPadding="p-4">
+              {/* 서버 헤더 — 헤더만 감싸던 카드를 걷고 구분선 한 줄로(§12.12-4) */}
+              <div className="pb-3 border-b border-border">
                 <div className="flex flex-wrap items-center gap-3">
                   <div className="min-w-0">
                     <div className="flex items-center gap-2">
-                      <span className="font-semibold">{selected.name}</span>
+                      <h2 className="text-sm font-semibold">{selected.name}</h2>
                       <button onClick={() => setServerModal({ open: true, edit: selected })}
-                        className="text-muted-foreground hover:text-foreground" aria-label="편집">
-                        <Pencil className="w-3.5 h-3.5" />
+                        className="text-muted-foreground hover:text-foreground" title="서버 편집" aria-label="서버 편집">
+                        <Pencil className="w-3.5 h-3.5" aria-hidden />
                       </button>
                     </div>
                     <span className="text-xs text-muted-foreground">{selected.username}@{selected.host}:{selected.port}</span>
@@ -140,7 +138,7 @@ export function IsilonNfsPage() {
                 {runResult?.skippedKeys && runResult.skippedKeys.length > 0 && (
                   <p className="mt-2 text-xs text-status-warning">등록/활성화되지 않아 건너뜀: {runResult.skippedKeys.join(', ')}</p>
                 )}
-              </MacCard>
+              </div>
 
               {/* K8s NFS PV ↔ export 매칭 (직전 실행에 exports 명령이 포함된 경우에만 채워짐) */}
               <MacCard title="K8s 가 사용하는 NFS (PV ↔ Isilon export)">
@@ -149,7 +147,19 @@ export function IsilonNfsPage() {
 
               {/* 좌(명령 선택) / 우(결과) 한 로우 고정 — 콘솔 화면 표준(§12.6) */}
               <div className="grid grid-cols-1 lg:grid-cols-10 gap-4 items-start">
-                <MacCard title="명령 선택" rootClassName="lg:col-span-4 min-w-0" bodyPadding="p-4">
+                <MacCard
+                  title="명령 선택"
+                  rootClassName="lg:col-span-4 min-w-0"
+                  bodyPadding="p-4"
+                  actions={
+                    <button
+                      onClick={() => setCmdOpen(true)}
+                      className="inline-flex items-center gap-1 text-xs px-2 py-1 rounded-lg border border-border hover:bg-muted"
+                    >
+                      <Settings2 className="w-3.5 h-3.5" aria-hidden /> 명령 관리
+                    </button>
+                  }
+                >
                   <IsilonCommandSelector
                     serverId={selectedId}
                     selectedKeys={selectedKeys}
@@ -157,7 +167,6 @@ export function IsilonNfsPage() {
                     onSelectAll={(keys) => setSelectedKeys(new Set(keys))}
                     onClear={() => setSelectedKeys(new Set())}
                     onRun={handleRun}
-                    onManage={() => setCmdOpen(true)}
                     running={runMut.isPending}
                   />
                 </MacCard>
@@ -167,7 +176,7 @@ export function IsilonNfsPage() {
             </>
           ) : null}
         </div>
-      </div>
+      </PageShell>
 
       {serverModal.open && (
         <IsilonServerModal server={serverModal.edit} onClose={() => setServerModal({ open: false })} />
@@ -267,18 +276,24 @@ function K8sNfsTable({ runResult }: { runResult: IsilonRunResponse | null }) {
 function RunResultPanel({ runResult, running }: { runResult: IsilonRunResponse | null; running: boolean }) {
   if (!runResult && !running) {
     return (
-      <MacCard rootClassName="lg:col-span-6 min-w-0" bodyPadding="p-5" className="flex items-center justify-center min-h-[200px] lg:h-[calc(100vh-360px)]">
+      <div className="lg:col-span-6 min-w-0 flex items-center justify-center min-h-[200px] lg:h-[calc(100vh-360px)]">
         <EmptyState
           compact
           title="아직 실행 결과가 없습니다."
           description="왼쪽에서 isi 명령을 선택하고 실행하면 결과가 여기에 표시됩니다."
         />
-      </MacCard>
+      </div>
     );
   }
   const results = runResult?.results ?? [];
   return (
-    <MacCard rootClassName="lg:col-span-6 min-w-0 overflow-y-auto overflow-x-hidden lg:h-[calc(100vh-360px)]" bodyPadding="p-0">
+    <MacCard
+      title="실행 결과"
+      titleExtra={results.length > 0 ? <span className="text-xs text-muted-foreground tabular-nums">{results.length}건</span> : undefined}
+      rootClassName="lg:col-span-6 min-w-0 flex flex-col lg:h-[calc(100vh-360px)]"
+      bodyPadding="p-0"
+      className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden"
+    >
       {running && !runResult ? (
         <LoadingState label="실행 중…" />
       ) : results.length === 0 ? (

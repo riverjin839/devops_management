@@ -3,6 +3,7 @@ import { PageHeader } from '@/components/common/PageHeader';
 import { useClusterRouteParam } from '@/hooks/useClusterRouteParam';
 import { ClipboardCheck, LayoutGrid, Settings } from 'lucide-react';
 import { ClusterSidebar } from '@/components/common/ClusterSidebar';
+import { PageShell } from '@/components/common/PageShell';
 import { useClusters } from '@/hooks/useCluster';
 import { ClusterOpsCheckPanel } from '@/components/ops-check';
 
@@ -15,8 +16,8 @@ export function OpsCheckConsolePage() {
   const cluster = clusters.find((c) => c.id === clusterId);
 
   return (
-    <div className="app-min-h-screen bg-background py-3 pr-3">
-      <div className="flex gap-3">
+    <div className="app-min-h-screen bg-background">
+      <PageShell density="console" as="div" className="flex gap-3">
         <div className="sticky top-4 self-start">
           <ClusterSidebar
             clusters={clusters}
@@ -51,7 +52,7 @@ export function OpsCheckConsolePage() {
 
           <ClusterOpsCheckPanel clusterId={clusterId} clusterName={cluster?.name} />
         </div>
-      </div>
+      </PageShell>
     </div>
   );
 }

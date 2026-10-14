@@ -2,7 +2,7 @@ import { Fragment, useState } from 'react';
 import { AlertCircle, AlertTriangle, Bell, Info, Loader2, RefreshCw, Trash2 } from 'lucide-react';
 import { MacCard } from '@/components/ui/MacCard';
 import { ClusterSidebar } from '@/components/common/ClusterSidebar';
-import { ConfirmDialog, useToast, PageHeader, LoadingState, EmptyState } from '@/components/common';
+import { ConfirmDialog, useToast, PageHeader, PageShell, LoadingState, EmptyState } from '@/components/common';
 import { useClusters } from '@/hooks/useCluster';
 import { useCanOperate } from '@/hooks/useCanOperate';
 import { useK8sEvents, useDeleteK8sEvent } from '@/hooks/useK8sEvents';
@@ -85,8 +85,8 @@ export function K8sEventsPage() {
   const selectedClusterName = clusters.find((c) => c.id === selectedClusterId)?.name;
 
   return (
-    <div className="app-min-h-screen bg-background py-3 pr-3">
-      <div className="flex gap-3">
+    <div className="app-min-h-screen bg-background">
+      <PageShell density="console" as="div" className="flex gap-3">
         <ClusterSidebar
           clusters={clusters}
           selectedId={selectedClusterId}
@@ -102,34 +102,39 @@ export function K8sEventsPage() {
             title="K8s 실시간 이벤트"
             description="kubewatch 웹훅으로 받은 리소스 이벤트를 심각도별로 확인하고 분석합니다."
           />
-          <MacCard title="수신 이벤트">
-            {/* 필터 탭 + 새로고침 */}
-            <div className="flex items-center justify-between mb-4">
-              <div className="flex gap-1">
-                {SEVERITY_TABS.map((tab) => (
-                  <button
-                    key={tab.value}
-                    onClick={() => setSeverityTab(tab.value)}
-                    className={`px-3 py-1.5 rounded-xl text-sm font-medium transition-colors ${
-                      severityTab === tab.value
-                        ? 'bg-primary text-primary-foreground'
-                        : 'bg-secondary text-muted-foreground hover:bg-secondary/80'
-                    }`}
-                  >
-                    {tab.label}
-                  </button>
-                ))}
-              </div>
-              <button
-                onClick={() => refetch()}
-                disabled={isFetching}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-sm bg-secondary text-muted-foreground hover:bg-secondary/80 transition-colors disabled:opacity-50"
-              >
-                <RefreshCw className={`w-3.5 h-3.5 ${isFetching ? 'animate-spin' : ''}`} />
-                새로고침
-              </button>
-            </div>
-
+          <MacCard
+            title="수신 이벤트"
+            titleExtra={data ? (
+              <span className="text-xs text-muted-foreground tabular-nums">총 {data.total}건 중 {events.length}건</span>
+            ) : undefined}
+            actions={
+              <>
+                <div className="flex gap-1">
+                  {SEVERITY_TABS.map((tab) => (
+                    <button
+                      key={tab.value}
+                      onClick={() => setSeverityTab(tab.value)}
+                      className={`px-3 py-1.5 rounded-xl text-sm font-medium transition-colors ${
+                        severityTab === tab.value
+                          ? 'bg-primary text-primary-foreground'
+                          : 'bg-secondary text-muted-foreground hover:bg-secondary/80'
+                      }`}
+                    >
+                      {tab.label}
+                    </button>
+                  ))}
+                </div>
+                <button
+                  onClick={() => refetch()}
+                  disabled={isFetching}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-sm bg-secondary text-muted-foreground hover:bg-secondary/80 transition-colors disabled:opacity-50"
+                >
+                  <RefreshCw className={`w-3.5 h-3.5 ${isFetching ? 'animate-spin' : ''}`} />
+                  새로고침
+                </button>
+              </>
+            }
+          >
             {/* 요약 카운터 */}
             {data && (
               <div className="flex gap-3 mb-4">
@@ -147,9 +152,6 @@ export function K8sEventsPage() {
                     </div>
                   );
                 })}
-                <div className="ml-auto text-sm text-muted-foreground self-center">
-                  총 {data.total}건 중 {events.length}건 표시
-                </div>
               </div>
             )}
 
@@ -250,7 +252,7 @@ export function K8sEventsPage() {
             )}
           </MacCard>
         </div>
-      </div>
+      </PageShell>
       <ConfirmDialog
         open={pendingDelete !== null}
         danger

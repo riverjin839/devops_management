@@ -6,7 +6,7 @@ import {
 } from 'lucide-react';
 import { useAbortableMutation } from '@/hooks/useAbortableMutation';
 import { useClusters } from '@/hooks/useCluster';
-import { ClusterSidebar, DebugLogPanel, SelectClusterEmptyState, EmptyState } from '@/components/common';
+import { ClusterSidebar, DebugLogPanel, SelectClusterEmptyState, EmptyState, PageShell } from '@/components/common';
 import { PageHeader } from '@/components/common/PageHeader';
 import { MacCard } from '@/components/ui/MacCard';
 import { topologyTraceApi } from '@/services/api';
@@ -203,7 +203,7 @@ export function PacketFlowPage() {
 
   return (
     <div className="app-min-h-screen bg-background">
-      <main className="pr-6 py-6 flex gap-5">
+      <PageShell density="console" className="flex gap-3">
         <ClusterSidebar
           clusters={clusters}
           selectedId={clusterId || null}
@@ -221,8 +221,11 @@ export function PacketFlowPage() {
           />
 
           {/* Target 구성 바 */}
-          <section className="bg-card border border-border rounded-md p-4 mb-4 space-y-3">
-            <div className="flex items-center gap-2 flex-wrap">
+          <MacCard
+            title="추적 대상"
+            rootClassName="mb-4"
+            className="space-y-3"
+            actions={<>
               <div className="flex items-center bg-secondary/60 rounded-lg p-[3px] gap-px">
                 {(['north-south', 'east-west'] as PacketDirection[]).map((d) => (
                   <button key={d} onClick={() => setDirection(d)}
@@ -233,7 +236,7 @@ export function PacketFlowPage() {
                   </button>
                 ))}
               </div>
-              <div className="flex items-center gap-1 ml-auto">
+              <div className="flex items-center gap-1">
                 {/* Pod-bottleneck cross-link (pod-bottleneck-analyzer PDCA) */}
                 {bottleneckPrefill && (
                   <button
@@ -266,7 +269,8 @@ export function PacketFlowPage() {
                   </button>
                 )}
               </div>
-            </div>
+            </>}
+          >
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               <div>
@@ -328,7 +332,7 @@ export function PacketFlowPage() {
                 {formatApiError(runError)}
               </div>
             )}
-          </section>
+          </MacCard>
 
           {/* 탭 */}
           <div className="flex items-center gap-1 mb-3 border-b border-border">
@@ -353,40 +357,41 @@ export function PacketFlowPage() {
           {tab === 'graph' && (
             <>
               {!response ? (
-                <MacCard bodyPadding="p-0">
-                  <EmptyState
-                    icon={Info}
-                    title="아직 추적한 경로가 없습니다."
-                    description={'source/destination 을 입력하고 "추적" 을 누르면 경로를 그래프로 확인할 수 있습니다.'}
-                  />
-                </MacCard>
+                <EmptyState
+                  icon={Info}
+                  title="아직 추적한 경로가 없습니다."
+                  description={'source/destination 을 입력하고 "추적" 을 누르면 경로를 그래프로 확인할 수 있습니다.'}
+                />
               ) : (
                 <>
                   <HopBreadcrumb hops={response.hops} selectedIndex={selectedIdx} onSelect={setSelectedIdx} />
-                  <div
-                    ref={graphBoxRef}
-                    className="relative bg-card border border-border rounded-md overflow-hidden"
-                    style={{ height: 560 }}
+                  <MacCard
+                    title="경로 그래프"
+                    description="노드 클릭 → 해당 홉의 적용 정책(CNP/KNP), Cilium Identity, 관련 리소스 확인"
+                    bodyPadding="p-0"
                   >
-                    <FlowGraph3D
-                      hops={response.hops}
-                      onSelectHop={setSelectedIdx}
-                      selectedIndex={selectedIdx}
-                      width={graphDim.w}
-                      height={graphDim.h}
-                    />
-                    {selectedHop && (
-                      <HopDetailPanel
-                        hop={selectedHop}
-                        index={selectedIdx!}
-                        totalHops={response.hops.length}
-                        onClose={() => setSelectedIdx(null)}
+                    <div
+                      ref={graphBoxRef}
+                      className="relative overflow-hidden"
+                      style={{ height: 560 }}
+                    >
+                      <FlowGraph3D
+                        hops={response.hops}
+                        onSelectHop={setSelectedIdx}
+                        selectedIndex={selectedIdx}
+                        width={graphDim.w}
+                        height={graphDim.h}
                       />
-                    )}
-                  </div>
-                  <p className="text-xs text-muted-foreground mt-2">
-                    노드 클릭 → 해당 홉의 적용 정책(CNP/KNP), Cilium Identity, 관련 리소스 확인.
-                  </p>
+                      {selectedHop && (
+                        <HopDetailPanel
+                          hop={selectedHop}
+                          index={selectedIdx!}
+                          totalHops={response.hops.length}
+                          onClose={() => setSelectedIdx(null)}
+                        />
+                      )}
+                    </div>
+                  </MacCard>
                 </>
               )}
             </>
@@ -413,7 +418,7 @@ export function PacketFlowPage() {
             )
           )}
         </div>
-      </main>
+      </PageShell>
     </div>
   );
 }

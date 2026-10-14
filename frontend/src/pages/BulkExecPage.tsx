@@ -3,11 +3,12 @@ import { useQueries } from '@tanstack/react-query';
 import { useAbortableMutation } from '@/hooks/useAbortableMutation';
 import {
   Terminal, RefreshCw, Play, Square, CheckCircle2, XCircle, AlertTriangle, Key, Upload, ChevronDown, ChevronRight,
-  Wifi, FileText, ShieldAlert, Zap, Clock, Download, LayoutList, Rows, Server, FolderInput, Loader2,
+  Wifi, FileText, ShieldAlert, Zap, Clock, Download, LayoutList, Rows, Server, FolderInput, Loader2, X,
 } from 'lucide-react';
 import { useClusters } from '@/hooks/useCluster';
 import { useTerminalEnvSync } from '@/hooks/useTerminalEnvSync';
-import { ConfirmDialog, ExecOutputTabs, ClusterSidebar, CommandTraceList, DebugLogPanel, Skeleton, EmptyState, SelectClusterEmptyState, ResizeGrip, DoubleScrollX} from '@/components/common';
+import { ConfirmDialog, ExecOutputTabs, ClusterSidebar, CommandTraceList, DebugLogPanel, Skeleton, EmptyState, SelectClusterEmptyState, ResizeGrip, DoubleScrollX, PageShell } from '@/components/common';
+import { MacCard } from '@/components/ui/MacCard';
 import { PageHeader } from '@/components/common/PageHeader';
 import { ExecutionStepsTimeline } from '@/components/daily-check';
 import { SavedScriptPanel } from '@/components/bulk-exec';
@@ -680,7 +681,7 @@ export function BulkExecPage() {
 
   return (
     <div className="app-min-h-screen bg-background">
-      <main className="pr-3 py-3 flex gap-3">
+      <PageShell density="console" className="flex gap-3">
         {/* 좌측: 클러스터 사이드바 — 다중 선택 모드 */}
         <ClusterSidebar
           clusters={clusters}
@@ -722,9 +723,11 @@ export function BulkExecPage() {
             12컬럼 그리드 3:4:5 — 결과는 항상 우측 같은 자리에 고정된다. */}
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-3 items-start">
           {/* 왼쪽: 노드 선택 — 클러스터별 그룹 */}
-          <section className="lg:col-span-3 min-w-0 bg-card border border-border rounded-md overflow-hidden">
-            <header className="px-3 py-2 border-b border-border bg-muted/20 flex items-center justify-between">
-              <h2 className="text-sm font-semibold">타겟 노드</h2>
+          <MacCard
+            title="타겟 노드"
+            rootClassName="lg:col-span-3 min-w-0"
+            bodyPadding="p-0"
+            actions={
               <button
                 onClick={toggleAllAcrossClusters}
                 disabled={totalNodesShown === 0}
@@ -732,7 +735,8 @@ export function BulkExecPage() {
               >
                 {selected.size === totalNodesShown && totalNodesShown > 0 ? '전체 해제' : '전체 선택'}
               </button>
-            </header>
+            }
+          >
             <div className="max-h-[calc(100vh-160px)] overflow-y-auto">
               {clusterIds.length === 0 ? (
                 <SelectClusterEmptyState compact description="왼쪽 사이드바에서 한 개 이상의 클러스터를 체크하세요." />
@@ -758,10 +762,10 @@ export function BulkExecPage() {
                 })
               )}
             </div>
-          </section>
+          </MacCard>
 
           {/* 가운데: 실행 구성 (명령 메뉴) */}
-          <section className="lg:col-span-4 min-w-0 bg-card border border-border rounded-md p-4 space-y-3">
+          <MacCard title="실행 구성" rootClassName="lg:col-span-4 min-w-0" className="space-y-3">
             {/* Action 토글 */}
             <div className="flex items-center gap-2 flex-wrap">
               <div className="flex items-center bg-secondary/60 rounded-lg p-[3px] gap-px">
@@ -1132,109 +1136,113 @@ export function BulkExecPage() {
                 </button>
               )}
             </div>
-          </section>
+          </MacCard>
 
           {/* 우측: 실행 결과 — mc 콘솔처럼 항상 같은 자리에 고정, 실행 전엔 플레이스홀더.
               내부에서만 스크롤되어 세 컬럼이 한 화면 폭 안에 들어온다. */}
-          <section className="lg:col-span-5 min-w-0 bg-card border border-border rounded-md overflow-hidden flex flex-col lg:h-[calc(100vh-160px)] min-h-[280px]">
-            {!runResponse ? (
-              <div className="flex-1 flex items-center justify-center p-6">
-                <EmptyState
-                  compact
-                  icon={Terminal}
-                  title="아직 실행 결과가 없습니다."
-                  description="명령을 실행하면 결과가 여기에 표시됩니다."
-                />
-              </div>
-            ) : (
-              <>
-                <header className="px-3 py-2 border-b border-border bg-muted/20 flex flex-wrap items-center gap-2">
-                  <h2 className="text-sm font-semibold">실행 결과</h2>
-                  <span className="text-xs px-2 py-0.5 rounded-full bg-status-healthy/10 text-status-healthy border border-status-healthy/30">
-                    성공 {runResponse.okCount}
-                  </span>
-                  <span className="text-xs px-2 py-0.5 rounded-full bg-status-critical/10 text-status-critical border border-status-critical/30">
-                    실패 {runResponse.errorCount}
-                  </span>
-                  <span className="text-xs text-muted-foreground whitespace-nowrap">
-                    {runResponse.totalDurationMs}ms · {runResponse.mode}
-                  </span>
+          {!runResponse ? (
+            <div className="lg:col-span-5 min-w-0 flex items-center justify-center p-6 lg:h-[calc(100vh-160px)] min-h-[280px]">
+              <EmptyState
+                compact
+                icon={Terminal}
+                title="아직 실행 결과가 없습니다."
+                description="명령을 실행하면 결과가 여기에 표시됩니다."
+              />
+            </div>
+          ) : (
+          <MacCard
+            title="실행 결과"
+            rootClassName="lg:col-span-5 min-w-0 flex flex-col lg:h-[calc(100vh-160px)] min-h-[280px]"
+            bodyPadding="p-0"
+            className="flex-1 min-h-0 flex flex-col"
+            titleExtra={
+              <span className="flex flex-wrap items-center gap-2">
+                <span className="text-xs px-2 py-0.5 rounded-full bg-status-healthy/10 text-status-healthy border border-status-healthy/30">
+                  성공 {runResponse.okCount}
+                </span>
+                <span className="text-xs px-2 py-0.5 rounded-full bg-status-critical/10 text-status-critical border border-status-critical/30">
+                  실패 {runResponse.errorCount}
+                </span>
+                <span className="text-xs text-muted-foreground whitespace-nowrap tabular-nums">
+                  {runResponse.totalDurationMs}ms · {runResponse.mode}
+                </span>
+              </span>
+            }
+            actions={<>
+                {/* 뷰 모드 토글 */}
+                <div className="flex items-center bg-secondary/60 rounded-md p-[2px] gap-px">
+                  <button onClick={() => setResultView('summary')}
+                    className={`flex items-center gap-1 px-2 py-1 text-xs font-medium rounded transition-colors ${
+                      resultView === 'summary' ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
+                    }`}
+                    title="모든 노드 한 줄 요약">
+                    <LayoutList className="w-3 h-3" /> 요약
+                  </button>
+                  <button onClick={() => setResultView('detail')}
+                    className={`flex items-center gap-1 px-2 py-1 text-xs font-medium rounded transition-colors ${
+                      resultView === 'detail' ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
+                    }`}
+                    title="호스트별 stdout/stderr 전체">
+                    <Rows className="w-3 h-3" /> 상세
+                  </button>
+                </div>
 
-                  <div className="ml-auto flex items-center gap-1.5 flex-wrap">
-                    {/* 뷰 모드 토글 */}
-                    <div className="flex items-center bg-secondary/60 rounded-md p-[2px] gap-px">
-                      <button onClick={() => setResultView('summary')}
-                        className={`flex items-center gap-1 px-2 py-1 text-xs font-medium rounded transition-colors ${
-                          resultView === 'summary' ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
-                        }`}
-                        title="모든 노드 한 줄 요약">
-                        <LayoutList className="w-3 h-3" /> 요약
-                      </button>
-                      <button onClick={() => setResultView('detail')}
-                        className={`flex items-center gap-1 px-2 py-1 text-xs font-medium rounded transition-colors ${
-                          resultView === 'detail' ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
-                        }`}
-                        title="호스트별 stdout/stderr 전체">
-                        <Rows className="w-3 h-3" /> 상세
-                      </button>
-                    </div>
+                {/* 공통 필터 */}
+                <div className="relative">
+                  <input
+                    value={globalFilter}
+                    onChange={(e) => setGlobalFilter(e.target.value)}
+                    placeholder="공통 필터…"
+                    className="pl-2 pr-6 py-1 text-sm bg-background border border-border rounded-md focus:outline-none focus:ring-1 focus:ring-primary w-36"
+                  />
+                  {globalFilter && (
+                    <button
+                      onClick={() => setGlobalFilter('')}
+                      className="absolute right-1.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                      title="필터 지우기"
+                      aria-label="필터 지우기"
+                    ><X className="w-3.5 h-3.5" aria-hidden /></button>
+                  )}
+                </div>
 
-                    {/* 공통 필터 */}
-                    <div className="relative">
-                      <input
-                        value={globalFilter}
-                        onChange={(e) => setGlobalFilter(e.target.value)}
-                        placeholder="공통 필터..."
-                        className="pl-2 pr-6 py-1 text-sm bg-background border border-border rounded-md focus:outline-none focus:ring-1 focus:ring-primary w-36"
-                      />
-                      {globalFilter && (
-                        <button
-                          onClick={() => setGlobalFilter('')}
-                          className="absolute right-1.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-                          aria-label="필터 지우기"
-                        >×</button>
-                      )}
-                    </div>
-
-                    {/* 내보내기 */}
-                    <div className="flex items-center gap-1">
-                      <button onClick={() => {
-                          const ts = new Date().toISOString().slice(0, 19).replace(/[:]/g, '-');
-                          downloadBlob(
-                            resultsToCsv(runResponse.results, globalFilter, command),
-                            `bulk-exec-${ts}.csv`,
-                            'text/csv',
-                          );
-                        }}
-                        className="flex items-center gap-1 px-2 py-1 text-xs font-medium bg-secondary hover:bg-secondary/80 border border-border rounded-md"
-                        title="필터 반영 CSV 내보내기">
-                        <Download className="w-3 h-3" /> CSV
-                      </button>
-                      <button onClick={() => {
-                          const ts = new Date().toISOString().slice(0, 19).replace(/[:]/g, '-');
-                          downloadBlob(
-                            resultsToTxt(runResponse.results, globalFilter, command),
-                            `bulk-exec-${ts}.txt`,
-                            'text/plain',
-                          );
-                        }}
-                        className="flex items-center gap-1 px-2 py-1 text-xs font-medium bg-secondary hover:bg-secondary/80 border border-border rounded-md"
-                        title="필터 반영 텍스트 내보내기">
-                        <Download className="w-3 h-3" /> TXT
-                      </button>
-                      <button onClick={async () => {
-                          const ok = await copyToClipboard(resultsToTxt(runResponse.results, globalFilter, command));
-                          setCopyToast(ok ? '클립보드에 복사됨' : '복사 실패');
-                          setTimeout(() => setCopyToast(null), 1500);
-                        }}
-                        className="flex items-center gap-1 px-2 py-1 text-xs font-medium bg-secondary hover:bg-secondary/80 border border-border rounded-md"
-                        title="필터 반영 결과 클립보드 복사">
-                        <FileText className="w-3 h-3" /> 복사
-                      </button>
-                    </div>
-                  </div>
-                </header>
-
+                {/* 내보내기 */}
+                <div className="flex items-center gap-1">
+                  <button onClick={() => {
+                      const ts = new Date().toISOString().slice(0, 19).replace(/[:]/g, '-');
+                      downloadBlob(
+                        resultsToCsv(runResponse.results, globalFilter, command),
+                        `bulk-exec-${ts}.csv`,
+                        'text/csv',
+                      );
+                    }}
+                    className="flex items-center gap-1 px-2 py-1 text-xs font-medium bg-secondary hover:bg-secondary/80 border border-border rounded-md"
+                    title="필터 반영 CSV 내보내기">
+                    <Download className="w-3 h-3" /> CSV
+                  </button>
+                  <button onClick={() => {
+                      const ts = new Date().toISOString().slice(0, 19).replace(/[:]/g, '-');
+                      downloadBlob(
+                        resultsToTxt(runResponse.results, globalFilter, command),
+                        `bulk-exec-${ts}.txt`,
+                        'text/plain',
+                      );
+                    }}
+                    className="flex items-center gap-1 px-2 py-1 text-xs font-medium bg-secondary hover:bg-secondary/80 border border-border rounded-md"
+                    title="필터 반영 텍스트 내보내기">
+                    <Download className="w-3 h-3" /> TXT
+                  </button>
+                  <button onClick={async () => {
+                      const ok = await copyToClipboard(resultsToTxt(runResponse.results, globalFilter, command));
+                      setCopyToast(ok ? '클립보드에 복사됨' : '복사 실패');
+                      setTimeout(() => setCopyToast(null), 1500);
+                    }}
+                    className="flex items-center gap-1 px-2 py-1 text-xs font-medium bg-secondary hover:bg-secondary/80 border border-border rounded-md"
+                    title="필터 반영 결과 클립보드 복사">
+                    <FileText className="w-3 h-3" /> 복사
+                  </button>
+                </div>
+            </>}
+          >
                 {copyToast && (
                   <div className="px-3 py-1.5 text-xs bg-primary/5 text-primary border-b border-primary/20">
                     {copyToast}
@@ -1285,12 +1293,11 @@ export function BulkExecPage() {
                     </DoubleScrollX>
                   )}
                 </div>
-              </>
-            )}
-          </section>
+          </MacCard>
+          )}
         </div>
         </div>
-      </main>
+      </PageShell>
 
       {/* 실행 확인 모달 */}
       <ConfirmDialog

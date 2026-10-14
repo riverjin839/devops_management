@@ -3,7 +3,8 @@ import { Play, Square, CheckCircle2, XCircle, Info, AlertTriangle, RefreshCw } f
 import { topologyTraceApi } from '@/services/api';
 import { useAbortableMutation } from '@/hooks/useAbortableMutation';
 import type { HubbleFlow, HubbleFlowsResponse } from '@/types';
-import { DoubleScrollX } from '@/components/common';
+import { DoubleScrollX, EmptyState } from '@/components/common';
+import { MacCard } from '@/components/ui/MacCard';
 
 interface Props {
   clusterId: string;
@@ -99,7 +100,7 @@ export function HubbleTimeline({ clusterId, initialFromPod, initialToPod, initia
 
   return (
     <div className="space-y-3">
-      <div className="bg-card border border-border rounded-md p-3 flex items-end gap-2 flex-wrap">
+      <MacCard title="플로우 조회 조건" bodyPadding="p-3" className="flex items-end gap-2 flex-wrap">
         <div className="flex-1 min-w-[180px]">
           <label htmlFor={f('fromPod')} className="block text-xs text-muted-foreground mb-0.5">From Pod (ns/name)</label>
           <input id={f('fromPod')} value={fromPod} onChange={(e) => setFromPod(e.target.value)}
@@ -158,7 +159,7 @@ export function HubbleTimeline({ clusterId, initialFromPod, initialToPod, initia
             플로우 조회
           </button>
         )}
-      </div>
+      </MacCard>
 
       {resp?.error && (
         <div className="px-3 py-2 rounded-lg bg-status-warning/10 border border-status-warning/30 text-status-warning text-sm flex items-start gap-2">
@@ -179,45 +180,43 @@ export function HubbleTimeline({ clusterId, initialFromPod, initialToPod, initia
       )}
 
       {resp && !resp.error && (
-        <>
-          <div className="flex items-center gap-2 text-sm text-muted-foreground">
-            <span>{resp.count} flows</span>
-            {resp.executed && (
-              <span className="ml-2 font-mono text-xs truncate" title={resp.executed}>
-                {resp.executed}
-              </span>
-            )}
-          </div>
-          <div className="bg-card border border-border rounded-md overflow-hidden">
-            <DoubleScrollX>
-              <table className="w-full text-sm">
-                <thead className="bg-muted/30 text-left">
-                  <tr>
-                    <th className="px-2 py-1.5 text-xs font-medium text-muted-foreground">Time</th>
-                    <th className="px-2 py-1.5 text-xs font-medium text-muted-foreground">Verdict</th>
-                    <th className="px-2 py-1.5 text-xs font-medium text-muted-foreground">Source</th>
-                    <th className="px-2 py-1.5 text-xs font-medium text-muted-foreground">Destination</th>
-                    <th className="px-2 py-1.5 text-xs font-medium text-muted-foreground">L4</th>
-                    <th className="px-2 py-1.5 text-xs font-medium text-muted-foreground">Dir</th>
-                    <th className="px-2 py-1.5 text-xs font-medium text-muted-foreground">Summary / Drop Reason</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {resp.flows.length === 0 ? (
-                    <tr><td colSpan={7} className="text-center py-6 text-muted-foreground">조건에 맞는 flow 가 없습니다.</td></tr>
-                  ) : resp.flows.map((f, i) => <FlowRow key={i} f={f} />)}
-                </tbody>
-              </table>
-            </DoubleScrollX>
-          </div>
-        </>
+        <MacCard
+          title="Hubble 플로우"
+          titleExtra={<span className="text-xs text-muted-foreground tabular-nums">{resp.count}건</span>}
+          description={resp.executed ? (
+            <span className="font-mono" title={resp.executed}>{resp.executed}</span>
+          ) : undefined}
+          bodyPadding="p-0"
+        >
+          <DoubleScrollX>
+            <table className="w-full text-sm">
+              <thead className="bg-muted/30 text-left">
+                <tr>
+                  <th className="px-2 py-1.5 text-xs font-medium text-muted-foreground">Time</th>
+                  <th className="px-2 py-1.5 text-xs font-medium text-muted-foreground">Verdict</th>
+                  <th className="px-2 py-1.5 text-xs font-medium text-muted-foreground">Source</th>
+                  <th className="px-2 py-1.5 text-xs font-medium text-muted-foreground">Destination</th>
+                  <th className="px-2 py-1.5 text-xs font-medium text-muted-foreground">L4</th>
+                  <th className="px-2 py-1.5 text-xs font-medium text-muted-foreground">Dir</th>
+                  <th className="px-2 py-1.5 text-xs font-medium text-muted-foreground">Summary / Drop Reason</th>
+                </tr>
+              </thead>
+              <tbody>
+                {resp.flows.length === 0 ? (
+                  <tr><td colSpan={7} className="text-center py-6 text-muted-foreground">조건에 맞는 flow 가 없습니다.</td></tr>
+                ) : resp.flows.map((f, i) => <FlowRow key={i} f={f} />)}
+              </tbody>
+            </table>
+          </DoubleScrollX>
+        </MacCard>
       )}
 
       {!resp && (
-        <div className="bg-card border border-border rounded-md p-10 text-center text-sm text-muted-foreground">
-          <Info className="w-8 h-8 mx-auto mb-2 text-muted-foreground" />
-          필터를 입력하고 "플로우 조회" 를 눌러 Hubble Relay 에서 최근 패킷 플로우를 가져오세요.
-        </div>
+        <EmptyState
+          icon={Info}
+          title="아직 조회한 플로우가 없습니다"
+          description={'필터를 입력하고 "플로우 조회" 를 눌러 Hubble Relay 에서 최근 패킷 플로우를 가져오세요.'}
+        />
       )}
     </div>
   );

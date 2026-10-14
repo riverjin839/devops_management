@@ -3,11 +3,11 @@ import { useQuery } from '@tanstack/react-query';
 import { useAbortableMutation } from '@/hooks/useAbortableMutation';
 import {
   Cpu, Play, Square, CheckCircle2, XCircle, Clock, AlertTriangle,
-  ShieldAlert, Wifi, Terminal, ChevronDown, ChevronRight,
+  ShieldAlert, Wifi, Terminal, ChevronDown, ChevronRight, X,
 } from 'lucide-react';
 import { useClusters } from '@/hooks/useCluster';
 import { useTerminalEnvSync } from '@/hooks/useTerminalEnvSync';
-import { ConfirmDialog, LogViewer, ClusterSidebar, SavedCommands, SelectClusterEmptyState, LoadingState } from '@/components/common';
+import { ConfirmDialog, LogViewer, ClusterSidebar, SavedCommands, SelectClusterEmptyState, LoadingState, EmptyState, PageShell } from '@/components/common';
 import { PageHeader } from '@/components/common/PageHeader';
 import { MacCard } from '@/components/ui/MacCard';
 import {
@@ -163,7 +163,7 @@ function ResultCard({
       : '';
 
   return (
-    <div className="bg-card border border-border rounded-md overflow-hidden">
+    <div>
       <button
         onClick={() => setOpen((v) => !v)}
         className="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-muted/30 transition-colors text-left"
@@ -308,7 +308,7 @@ export function KernelParamsPage() {
 
   return (
     <div className="app-min-h-screen bg-background">
-      <main className="mx-auto px-3 py-3 flex gap-3">
+      <PageShell density="console" className="flex gap-3">
         <ClusterSidebar clusters={clusters} selectedId={clusterId || null} onSelect={(id) => setClusterId(id ?? '')} iconOnly />
 
         <div className="flex-1 min-w-0">
@@ -323,16 +323,17 @@ export function KernelParamsPage() {
             ) : undefined}
           />
 
-          <MacCard rootClassName="mb-5" className="text-sm text-muted-foreground leading-relaxed">
+          <p className="mb-5 text-sm text-muted-foreground leading-relaxed">
             노드에 SSH 로 접속해 sysctl / limits / 모듈 / 디스크 등의 상태를 조회합니다.
             수정은 하지 않으며(읽기 전용), 인증정보는 이 실행에만 사용되고 저장되지 않습니다.
-          </MacCard>
+          </p>
 
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
-            {/* 좌: 노드 선택 — 헤더에 전체 선택 액션이 있어 title 없이 MacCard 로 감싼다 */}
-            <MacCard bodyPadding="p-0">
-              <header className="px-4 py-3 border-b border-border bg-muted/20 flex items-center justify-between">
-                <h2 className="text-sm font-semibold">대상 노드</h2>
+            {/* 좌: 노드 선택 — 전체 선택 액션은 헤더 actions 슬롯 */}
+            <MacCard
+              title="대상 노드"
+              bodyPadding="p-0"
+              actions={
                 <button
                   onClick={toggleAll}
                   disabled={!nodesQ.data?.nodes?.length}
@@ -340,7 +341,8 @@ export function KernelParamsPage() {
                 >
                   {selected.size === (nodesQ.data?.nodes?.length ?? 0) ? '전체 해제' : '전체 선택'}
                 </button>
-              </header>
+              }
+            >
               <div className="max-h-[540px] overflow-y-auto">
                 {!clusterId ? (
                   <SelectClusterEmptyState compact />
@@ -500,70 +502,84 @@ export function KernelParamsPage() {
             </MacCard>
           </div>
 
-          {/* 결과: 노드별 카드 */}
+          {/* 결과: 노드별 접이식 행 — 한 카드 안에서 divide-y 로 구분 */}
           {runResponse && (
-            <section ref={resultsRef} className="mt-6 space-y-3 scroll-mt-6">
-              <div className="flex items-center gap-2 flex-wrap">
-                <h2 className="text-sm font-semibold">결과 — {runResponse.total}개 노드</h2>
-                <span className="text-xs px-2 py-0.5 rounded-full bg-status-healthy/10 text-status-healthy border border-status-healthy/30">
-                  정상 {runResponse.okCount}
-                </span>
-                {runResponse.errorCount > 0 && (
-                  <span className="text-xs px-2 py-0.5 rounded-full bg-status-critical/10 text-status-critical border border-status-critical/30">
-                    실패 {runResponse.errorCount}
-                  </span>
-                )}
-                <span className="text-xs text-muted-foreground">
-                  {runResponse.totalDurationMs}ms · {runResponse.mode}
-                </span>
-                {/* 전체 펼침/접힘 토글 — 키 변경으로 카드 defaultOpen 다시 적용 */}
-                <button
-                  onClick={() => setAllOpen((v) => !v)}
-                  className="text-xs px-2 py-1 rounded-md border border-border bg-card hover:bg-secondary"
-                >
-                  {allOpen ? '전체 접기' : '전체 펼치기'}
-                </button>
-                {/* 전 노드 공통 필터 */}
-                <div className="ml-auto flex items-center gap-1.5">
-                  <div className="relative">
-                    <input
-                      value={globalFilter}
-                      onChange={(e) => setGlobalFilter(e.target.value)}
-                      placeholder="모든 노드 결과 공통 필터..."
-                      className="pl-2 pr-7 py-1 text-sm bg-background border border-border rounded-md focus:outline-none focus:ring-1 focus:ring-primary w-64"
-                    />
-                    {globalFilter && (
-                      <button
-                        onClick={() => setGlobalFilter('')}
-                        aria-label="필터 지우기"
-                        className="absolute right-1.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-                      >
-                        ×
-                      </button>
+            <section ref={resultsRef} className="mt-6 scroll-mt-6">
+              <MacCard
+                title="조회 결과"
+                bodyPadding="p-0"
+                className="divide-y divide-border"
+                titleExtra={
+                  <span className="flex items-center gap-2 flex-wrap">
+                    <span className="text-xs text-muted-foreground tabular-nums">{runResponse.total}개 노드</span>
+                    <span className="text-xs px-2 py-0.5 rounded-full bg-status-healthy/10 text-status-healthy border border-status-healthy/30">
+                      정상 {runResponse.okCount}
+                    </span>
+                    {runResponse.errorCount > 0 && (
+                      <span className="text-xs px-2 py-0.5 rounded-full bg-status-critical/10 text-status-critical border border-status-critical/30">
+                        실패 {runResponse.errorCount}
+                      </span>
                     )}
-                  </div>
-                </div>
-              </div>
-              {runResponse.results.length === 0 ? (
-                <p className="text-sm text-muted-foreground italic px-3 py-2 bg-card border border-border rounded-md">
-                  (노드 결과가 비어있음 — targets 가 비어있었는지 확인하세요.)
-                </p>
-              ) : (
-                runResponse.results.map((r) => (
-                  <ResultCard
-                    // allOpen 토글 시 카드 강제 재마운트로 defaultOpen 재적용
-                    key={`${r.host}-${allOpen ? 'open' : 'closed'}`}
-                    result={r}
-                    command={commandToRun}
-                    globalFilter={globalFilter}
-                    defaultOpen={allOpen}
+                    <span className="text-xs text-muted-foreground tabular-nums">
+                      {runResponse.totalDurationMs}ms · {runResponse.mode}
+                    </span>
+                  </span>
+                }
+                actions={
+                  <>
+                    {/* 전체 펼침/접힘 토글 — 키 변경으로 행 defaultOpen 다시 적용 */}
+                    <button
+                      onClick={() => setAllOpen((v) => !v)}
+                      className="text-xs px-2 py-1 rounded-md border border-border bg-card hover:bg-secondary"
+                    >
+                      {allOpen ? '전체 접기' : '전체 펼치기'}
+                    </button>
+                    {/* 전 노드 공통 필터 */}
+                    <div className="relative">
+                      <input
+                        value={globalFilter}
+                        onChange={(e) => setGlobalFilter(e.target.value)}
+                        placeholder="모든 노드 결과 공통 필터…"
+                        className="pl-2 pr-7 py-1 text-sm bg-background border border-border rounded-md focus:outline-none focus:ring-1 focus:ring-primary w-64"
+                      />
+                      {globalFilter && (
+                        <button
+                          onClick={() => setGlobalFilter('')}
+                          aria-label="필터 지우기"
+                          title="필터 지우기"
+                          className="absolute right-1.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                        >
+                          <X className="w-3.5 h-3.5" aria-hidden />
+                        </button>
+                      )}
+                    </div>
+                  </>
+                }
+              >
+                {runResponse.results.length === 0 ? (
+                  <EmptyState
+                    compact
+                    icon={Cpu}
+                    title="노드 결과가 비어 있습니다"
+                    description="대상 노드가 비어 있었는지 확인한 뒤 다시 조회하세요."
                   />
-                ))
-              )}
+                ) : (
+                  runResponse.results.map((r) => (
+                    <ResultCard
+                      // allOpen 토글 시 행 강제 재마운트로 defaultOpen 재적용
+                      key={`${r.host}-${allOpen ? 'open' : 'closed'}`}
+                      result={r}
+                      command={commandToRun}
+                      globalFilter={globalFilter}
+                      defaultOpen={allOpen}
+                    />
+                  ))
+                )}
+              </MacCard>
             </section>
           )}
         </div>
-      </main>
+      </PageShell>
 
       <ConfirmDialog
         open={confirmOpen}
