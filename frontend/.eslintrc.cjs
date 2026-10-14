@@ -14,9 +14,13 @@ const DECO_PALETTE_MSG = '장식·카테고리 색도 고정 팔레트를 쓰지
    상태 글자색 arbitrary 값(text-[hsl(var(--status-*))] — 4.5:1 대비 토큰 text-status-* 를 우회한다). */
 const FX_RE = String.raw`/(^|[^\w-])(hover:-translate-y-|hover:scale-|active:scale-|bg-gradient-to-|transition-all(?![\w-])|animate-ping|animate-bounce)|text-\[hsl\(var\(--status/`;
 const FX_MSG = '장식 효과 금지 — hover-lift·그라데이션·transition-all(→ transition-colors)·장식 ping/bounce·text-[hsl(var(--status-*))](→ text-status-*) (DESIGN_SYSTEM §12.12-4, D-121·D-132)';
-/* 대문자 아이브로우 금지 (D-125, §12.12-8) — MacCard·Card 헤더(components/ui)에 내장된 한 곳만 허용. */
+/* 대문자 아이브로우 금지 (D-125, §12.12-8) — 예외 없음(Phase 3 에서 MacCard·Card 헤더의 uppercase 도 걷었다). */
 const EYEBROW_RE = String.raw`/(^|\s)uppercase(\s.*)?\stracking-(wide|wider|widest)|(^|\s)tracking-(wide|wider|widest)(\s.*)?\suppercase(\s|$)/`;
 const EYEBROW_MSG = '대문자 아이브로우(uppercase + tracking-wide*) 금지 — 라벨은 text-xs font-medium text-muted-foreground (DESIGN_SYSTEM §12.12-8, D-125)';
+/* 페이지 폭 임의값 금지 (D-123, §12.12-5) — 본문 폭은 PageShell 밀도 3종(console·hub 1600·doc 4xl)만.
+   1200~2999px 고정 폭(max-w-[1400px] 등)은 PageShell 밖에서 막는다. 모달·팝오버 폭은 대개 3자리라 걸리지 않는다. */
+const WIDTH_RE = String.raw`/(^|[^\w-])max-w-\[(1[2-9]|2\d)\d\dpx\]/`;
+const WIDTH_MSG = '페이지 폭은 PageShell density(console|hub|doc)로만 정한다 — max-w-[NNNNpx] 금지 (DESIGN_SYSTEM §12.12-5, D-123)';
 const DECO_PALETTE_ALLOWLIST = [
   'src/components/commands/constants.ts',
   'src/components/common/ViewModeBar.tsx',
@@ -57,6 +61,10 @@ const FX_RESTRICTED = [
   { selector: `TemplateElement[value.raw=${FX_RE}]`, message: FX_MSG },
   { selector: `Literal[value=${EYEBROW_RE}]`, message: EYEBROW_MSG },
   { selector: `TemplateElement[value.raw=${EYEBROW_RE}]`, message: EYEBROW_MSG },
+];
+const WIDTH_RESTRICTED = [
+  { selector: `Literal[value=${WIDTH_RE}]`, message: WIDTH_MSG },
+  { selector: `TemplateElement[value.raw=${WIDTH_RE}]`, message: WIDTH_MSG },
 ];
 const DECO_RESTRICTED = [
   { selector: `Literal[value=${DECO_PALETTE_RE}]`, message: DECO_PALETTE_MSG },
@@ -103,12 +111,12 @@ module.exports = {
        프리셋엔 없지만 W4 접근성 패스에서 전수 검사 후 위반 54건을 모두 고쳤다(2026-07).
        회귀 방지를 위해 명시적으로 켜둔다. */
     'jsx-a11y/control-has-associated-label': 'warn',
-    'no-restricted-syntax': ['error', ...BASE_RESTRICTED, ...DECO_RESTRICTED, ...FX_RESTRICTED],
+    'no-restricted-syntax': ['error', ...BASE_RESTRICTED, ...DECO_RESTRICTED, ...FX_RESTRICTED, ...WIDTH_RESTRICTED],
   },
   overrides: [
     /* D-120 래칫 — 장식 팔레트 검사만 면제. 파일을 토큰으로 이관하면 목록에서 지운다. */
-    { files: DECO_PALETTE_ALLOWLIST, rules: { 'no-restricted-syntax': ['error', ...BASE_RESTRICTED, ...FX_RESTRICTED] } },
-    /* MacCard·Card 헤더 아이브로우는 디자인 시스템이 정한 유일한 허용처. */
-    { files: ['src/components/ui/MacCard.tsx', 'src/components/ui/card.tsx'], rules: { 'no-restricted-syntax': ['error', ...BASE_RESTRICTED, ...DECO_RESTRICTED] } },
+    { files: DECO_PALETTE_ALLOWLIST, rules: { 'no-restricted-syntax': ['error', ...BASE_RESTRICTED, ...FX_RESTRICTED, ...WIDTH_RESTRICTED] } },
+    /* PageShell 은 허브 폭(max-w-[1600px])을 정의하는 유일한 곳. */
+    { files: ['src/components/common/PageShell.tsx'], rules: { 'no-restricted-syntax': ['error', ...BASE_RESTRICTED, ...DECO_RESTRICTED, ...FX_RESTRICTED] } },
   ],
 };

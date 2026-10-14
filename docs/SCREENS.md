@@ -30,8 +30,11 @@ PEP(Platform Engineering Portal)의 모든 화면(라우트)을 화면 단위로
 8. [관리 서비스 (서비스 타입/카테고리 관리)](#관리-서비스-서비스-타입카테고리-관리)
 9. [지식 허브](#지식-허브)
 
-각 그룹은 `frontend/src/components/layout/navConfig.ts` 의 그룹 분류(클러스터/서버·인프라/
-네트워크/스토리지/DevOps/업무 관리(구 협업)/문서 관리/시스템)를 기준으로 나눴습니다. 과거 있던
+이 문서의 장(章)은 작성 당시 `frontend/src/components/layout/navConfig.ts` 의 그룹 분류(클러스터/서버·인프라/
+네트워크/스토리지/DevOps/업무 관리(구 협업)/문서 관리/시스템)를 기준으로 나눴습니다.
+> **사이드바 그룹 재편(2026-10-14, D-133)**: 현재 사이드바 그룹은 작업 유형 한 축이다 — 관측 / 점검·진단 / 운영 조작 /
+> 구성·자산 / 토폴로지 / 자동화·도구(이상 platform 레일) · 업무 / 지식·문서(상단바) · 시스템. 화면 경로는 그대로라
+> 이 문서의 장 구분은 바꾸지 않았다. 그룹별 소속은 `navConfig.ts` `GROUPS` 가 원천이다. 과거 있던
 "PEP 서비스"/"APP 서비스" 그룹과 그 화면들(`/services`, `/pep-services`, `/app-services`)은
 문서 관리 그룹과 기능이 중복되어 완전히 삭제되었다 — §8 참고.
 
@@ -221,6 +224,10 @@ hover 시 flyout 자체가 라벨을 보여주므로 이름만 뜨는 중복 툴
 
 ### 시스템 설정 (`/settings`, admin)
 
+> **2026-10-14 (D-130)**: 탭 15개를 좌측 세로 목록 4그룹(클러스터·서버 / 사용자·접근 / 연동 / 시스템)으로 재배치했다. 고른 탭은 `?tab=` 에
+> `replace` 로 기록되고(새로고침·링크 유지), 모르는 값은 `cluster` 로 폴백한다. 숫자 배지는 클러스터·관리서버·시스템 담당자·디버그(0 이면 숨김)만,
+> "추후 지원" 토글은 제거. 라벨: 디버그·AI·LLM·Jira 연동·ServiceNow 연동. 본문 폭은 `PageShell hub`.
+
 - **파일**: `frontend/src/pages/SettingsPage.tsx` (+ `components/settings/BackupRestorePanel.tsx`, `FeatureAccessManager.tsx`, `JiraIntegrationPanel.tsx`, `ServiceNowIntegrationPanel.tsx`, `OperationLevelsManager.tsx`, `ServiceCategoryManager.tsx`, `LakeServiceTypeManager.tsx`, `NavMenuManager.tsx`, `PageStyleManager.tsx`, `ThemeGallery.tsx`, `TerminalAppearanceSettings.tsx`, `AssigneeManager.tsx`, `AuditLogManager.tsx`, `SchemaHealthPanel.tsx`, `LlmSettingsTab.tsx`, `components/dashboard`의 `AddClusterModal`/`KubeconfigEditModal`, `components/common`의 `ClusterIconPicker`)
 - **목적 / UX**: 클러스터·시스템 담당자·운영레벨·관리 서비스·화면 UI·접근제어·Jira 연동·ServiceNow 연동·Debug·백업/복구·감사로그·스키마 점검·테넌트까지 플랫폼 전역 설정을 15개 탭으로 모아둔 관리자 콘솔 (AI/LLM 탭 포함). 구 사이드바 독립 "사용자 관리"(`/settings/users`, 로그인 계정 CRUD) 페이지와 "담당자 명부"/"로그인 계정" 서브탭 2개로 나뉘어 있던 구성은 모두 **시스템 담당자 탭 하나(서브탭 없음)로 통합**됐다 — `users` 테이블 자체가 담당자 명부 겸 로그인 계정이라(`backend/app/models/user.py` docstring) 두 화면으로 나눌 이유가 없어졌다. 구 라우트 `/settings/users` 는 `/settings?tab=assignee` 로 리다이렉트된다(`App.tsx`).
 - **UI 구성**:
@@ -259,6 +266,9 @@ hover 시 flyout 자체가 라벨을 보여주므로 이름만 뜨는 중복 툴
 ## 클러스터 — 모니터링 / 리소스 관리
 
 ### 클러스터 대시보드 (`/cluster-overview`)
+
+> **2026-10-14 (D-128)**: "점검 실행" 이 실행 로그 패널(`RunLogPanel` + 로그 보기)을 띄운다 — 클러스터별 시작 줄, 응답 대기 하트비트, 애드온별
+> 상태·응답 ms·메시지 줄(`POST /health/check/{id}` 응답 `addons[]`), 클러스터·전체 요약. 실패한 클러스터는 오류 줄을 남기고 다음으로 진행.
 
 > **2026-10-14 (D-119)**: 클러스터 카드는 위험 → 경고 → 미연결 → 정상 순으로 정렬되고(`sortByStatus`), 정상 카드는 색 없이 회색 점·아이콘만 쓴다. 애드온 카드 아이콘은 타입별 lucide(`AddonCard` `ADDON_TYPE_ICON`).
 
@@ -590,6 +600,9 @@ hover 시 flyout 자체가 라벨을 보여주므로 이름만 뜨는 중복 툴
 
 ### 일일 점검 리뷰 (`/daily-check/review`, `/daily-check/review/:clusterId`)
 
+> **2026-10-14 (D-128)**: 기본 점검 실행은 API 서버·컴포넌트·노드 Ready·kube-system 파드·경고/오류 줄을, 심층 점검 실행은 큐잉 후 결과를
+> 폴링해 정의별 결과 줄 + 요약을 실행 로그에 남긴다(실패 시 아무 표시가 없던 문제 해소). 리소스 추이 "지금 스냅샷" 도 수집 완료를 폴링해 기록한다.
+
 - **파일**: `frontend/src/pages/DailyCheckReview.tsx` (+ `components/daily-check/{AiSummaryCard,TrendChart,DiffPanel,DeepCheckGrid,NotificationSettingsPanel,ResourceTrendChecklist}`)
 - **목적 / UX**: 클러스터별 daily check 회차(점검 회차 선택 드롭다운)를 고르면, 그 회차의 AI 요약/원격조치 제안, deep-check 항목별 결과 그리드, 이전 회차와의 diff, 최근 7일 트렌드 차트를 한 화면에서 확인한다. 상단 버튼으로 기본 헬스체크와 등록된 심층 점검 정의 실행을 각각 트리거할 수 있다.
 - **UI 구성**:
@@ -749,6 +762,9 @@ hover 시 flyout 자체가 라벨을 보여주므로 이름만 뜨는 중복 툴
 
 ### 버전 / 설정 관리 (`/versions`)
 
+> **2026-10-14 (D-128)**: 수집 모달 5종(etcd systemd·kubeadm 인증서·커널 파라미터·kubelet 설정·노드 NIC)의 "수집 실행" 이 모달 안 실행 로그를
+> 띄운다 — 요청 줄, 응답 대기 하트비트, 호스트별 상태·exit·저장 여부·오류 줄, 요약(`components/versions/collectRunLog.ts`). 화면 상단 "지금 수집" 은 D-135.
+
 - **파일**: `frontend/src/pages/VersionsPage.tsx` (+ `components/versions/EtcdSystemdModal.tsx`, `KubeadmCertsModal.tsx`, `KernelParamsCollectModal.tsx`, `NodeNicsCollectModal.tsx`, `KubeletConfigCollectModal.tsx`, `CsvExportModal.tsx`)
 - **목적 / UX**: kubeconfig(+ SSH)로 클러스터의 K8s/Cilium 버전, 컨트롤플레인·kubelet·CNI·OS(sysctl/etcd systemd/kubeadm 인증서)·MinIO/DirectPV 스토리지 설정을 스냅샷으로 수집하고, 컴포넌트별 현재값·변경 히스토리·diff를 확인한다. 운영자가 "언제 무엇이 바뀌었는지" 추적하는 감사 성격의 화면.
 - **UI 구성**:
@@ -873,6 +889,8 @@ hover 시 flyout 자체가 라벨을 보여주므로 이름만 뜨는 중복 툴
   - _(여기에 개선/수정 요청을 직접 적어주세요)_
 
 ### LAKE 서비스 (`/lake-services`)
+
+> **2026-10-14 (D-128)**: 목록 카드·상세의 "지금 점검" 이 실행 로그(상태·응답 ms·메시지·details 키·점검 시각, 비활성 409 는 경고)를 띄운다 — 공용 `components/lake-services/runLakeCheckLogged.ts`.
 
 - **파일**: `frontend/src/pages/LakeServicesPage.tsx` (+ `components/lake-services/{LakeServiceCard,AddLakeServiceModal}`)
 - **목적 / UX**: K8s 위에 올라간 LAKE 도메인 OSS(airflow/spark/iceberg/trino/starrocks/jupyterlab/superset/polaris) 인스턴스를 클러스터·카테고리(카탈로그/런타임/분석)별로 목록 조회하고, 카드에서 바로 헬스체크를 실행하거나 상세로 진입한다.
@@ -1179,6 +1197,8 @@ hover 시 flyout 자체가 라벨을 보여주므로 이름만 뜨는 중복 툴
   - **[2026-10-12]** 등록·수정 모달(`AddPlaybookModal`)에 **실행 제한 시간(초, 10~1800)** 입력 — `playbooks.timeout_seconds`, 비우면 기본 30초. 점검 매트릭스·스케줄 실행에 그대로 적용되고 매트릭스 셀 태스크 한도도 +60초로 늘어난다.
 
 ### Batch Jobs (홈 `/` → **플랫폼 현황** 탭의 **배치잡** 서브탭, 구 독립 라우트 `/batch-jobs`)
+
+> **2026-10-14 (D-128)**: "선택 N개 실행" 이 잡별 큐잉/스킵(사유) 줄을 남긴 뒤 각 잡의 bulk run 을 폴링해 상태 변화·exit·오류를 실행 로그와 단계 칩으로 보여준다.
 
 > **화면 병합(2026-08)**: 독립 사이드바 메뉴였던 Batch Jobs 를 삭제하고 홈의 "플랫폼 현황" 탭
 > 안 서브탭으로 접었다 — 둘 다 클러스터 단위 운영 화면이라 화면 수를 줄인 것뿐, 데이터

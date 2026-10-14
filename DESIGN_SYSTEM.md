@@ -481,7 +481,7 @@ Semantic status(`--status-healthy/warning/critical/...`), Surface Container 5단
 ### 12.3 MacCard (`frontend/src/components/ui/MacCard.tsx`)
 
 주요 섹션은 `MacCard` 로 감싼다(단일 요소·카드 안 카드는 §12.12-4 로 금지). shadcn `Card` 프리미티브의 어댑터로, 평평한 표면 + 1px 보더,
-좌측 정렬 소형 대문자 라벨 헤더(`bg-surface-container-high`), 라운딩 `rounded-md` 토큰이다.
+좌측 정렬 소형 회색 라벨 헤더(`bg-surface-container-high`, 대소문자 그대로 — 2026-10 Phase 3 에서 uppercase 제거: 슬롯에 클러스터·담당자 이름 같은 데이터가 들어온다), 라운딩 `rounded-md` 토큰이다.
 (P3 에서 신호등 3점 장식의 `variant="mac"` 과 `--mac-red/yellow/green` 토큰을 삭제했다 — 사용처 0건,
 누를 수 없는 장식이 상태색과 같은 hue 라 "장애"로 읽혔다.)
 
@@ -862,7 +862,7 @@ D-117~D-134)에서 원자는 지켜지는데 화면이 "AI 가 만든 템플릿"
 | 5 | **페이지 루트는 밀도 클래스 3종 중 하나** | 그 외 `max-w-*`, 콘솔 페이지의 `mx-auto`, 루트 패딩 임의값 | 공용 **`PageShell density="console"｜"hub"｜"doc"`**(`components/common/PageShell.tsx`, D-123)로 본문 컨테이너를 감싼다. **콘솔**(exec·표·매트릭스, ClusterSidebar 가 있는 per-cluster 화면 전부): `py-3 pr-3`, 폭 제한 없음(사이드바 없으면 `sidebar={false}` → `pl-3`), 표 `text-xs`, 빈 상태 `py-10` · **허브/목록**: `px-6 py-5`, `max-w-[1600px]` 좌정렬 · **문서**(단일 칼럼 폼·읽기): `max-w-4xl mx-auto px-8 py-8`, 빈 상태 `py-16`. **예외**(셸 미사용): 전체 높이 캔버스(Home·Ontology·VersionGraph·WorkflowBoard·MindMap·Island), Login·ChangePassword·K9sPopup·NodeSshPopup. `max-w-[NNNNpx]` 는 `.eslintrc.cjs` `WIDTH_RE` 가 PageShell 밖에서 막는다 |
 | 6 | **빈·로딩·에러 상태는 공용만** | 인라인 빈 상태 div/p, 로컬 `EmptyState` 재정의, 이모지·영어 문구, "~가 없습니다" 만 있는 문구, 로딩 문구 변형("로딩", "불러오는 중...") , 에러에 `text-destructive` | `common/EmptyState` 단일 — "클러스터를 선택하세요" 는 프리셋 `SelectClusterEmptyState`, 로딩은 `LoadingState`(둘 다 `components/common/EmptyState.tsx`). 권한 게이트 버튼은 `children` 으로. 문구 = 왜 비었나 + 다음 행동(`ClusterManagePage:866` 참고). 로딩 "불러오는 중…"(`…` 1글자) 또는 `Skeleton`. 에러 `text-status-critical`(`text-destructive` 는 파괴 액션 버튼 전용) |
 | 7 | **카테고리·종류 구분 색은 `--chart-1..8` 토큰만** | Tailwind 색상명(blue·orange·purple·violet·indigo·cyan·pink·fuchsia·teal) — 장식 용도 포함, hex 기본색, 유색 배경 위 `text-white` 칩 | `--chart-*` 토큰(`text-[hsl(var(--chart-3))]` 아닌 유틸 클래스). slate/zinc 는 콘솔(터미널) 배경에만. `.eslintrc.cjs` 의 `DECO_PALETTE_RE` 가 기계로 막는다(D-120). 기존 위반 파일은 `DECO_PALETTE_ALLOWLIST` 래칫에 있고 **파일을 지울 수만 있다** — 토큰으로 이관한 파일은 목록에서 제거한다 |
-| 8 | **uppercase 아이브로우는 MacCard 헤더 내장만** | 페이지 본문·h1·버튼·탭·폼 라벨의 `uppercase tracking-wider`, 전부 대문자 제목("CIDR INPUT") | 라벨은 `text-xs text-muted-foreground`(대소문자 그대로). 상태 배지는 `common/StatusBadge` 한국어 1종 |
+| 8 | **uppercase 아이브로우 금지(예외 없음)** | 페이지 본문·h1·버튼·탭·폼 라벨의 `uppercase tracking-wider`, 전부 대문자 제목("CIDR INPUT") | 라벨은 `text-xs text-muted-foreground`(대소문자 그대로). 상태 배지는 `common/StatusBadge` 한국어 1종 |
 | 9 | **아이콘은 lucide 만** | 이모지를 상태(🟢🟡🔴)·카테고리·아이콘·장식(🎉💡☸)으로, ⚠/✓/✗ 문자 접두, 모든 아이콘 `text-primary` 틴트 | lucide + 상태 토큰. `text-primary` 틴트는 클릭 가능한 액션에만. 사용자 데이터로 저장된 클러스터 아이콘(`clusterIcons`)의 예외 여부는 D-126 에서 판정 |
 | 10 | **타이포 위계 4단** | 페이지 내 `text-2xl` 이상(Health Hero 외), h1 크기 변형, 숫자 `font-mono`, `text-[11px]` 를 표 밖에 | h1 `text-xl font-semibold` · 카드 제목 MacCard 내장 · 본문 `text-sm` · 보조 `text-xs`. 숫자는 `tabular-nums`(`font-mono` 는 식별자·코드·로그만). `text-[11px]` 는 표 셀만. 글꼴은 시스템 스택만 — 웹폰트 CDN 금지(§3, D-131) |
 | 11 | **용어는 한국어 우선 표준어** | K8S · Pod(본문) · 체크 · Settings · 할 일 · 신규 등록/업무 등록(동일 동작에 다른 라벨) · `...` · `-`(빈 값) · 토스트 어미 혼용 · 도메인 명사 없는 제목("안내"·"개요"·"정보"·"필터") · 영어 섹션 제목 | K8s · 파드 · 네임스페이스(표 헤더만 NS) · 점검 · 실행 · 저장 · 설정 · 할일 · 추가(생성)/등록(외부 반입) · 새로고침(화면)/재수집(데이터)/동기화(외부) · 삭제. 생략 `…`, 빈 값 `—`, 진행 "~ 중…", 토스트 "~됨"(예: "저장됨"·"항목 추가됨"·"Jira 가져옴", 목적격 조사 생략) |
@@ -877,7 +877,7 @@ D-117~D-134)에서 원자는 지켜지는데 화면이 "AI 가 만든 템플릿"
 - **4 장식**: `bg-card` 와 같이 쓰는 라운딩은 `rounded-md` 하나(입력·버튼의 `rounded-xl` 은 그대로). `shadow-lg+` 는 떠 있는 레이어(대화상자·팝오버·
   드롭다운·토스트·명령 팔레트)에만. `backdrop-blur` 는 모달 스크림(`bg-black/..`)에만 — sticky 헤더는 불투명 `bg-background`. hover-lift(`hover:-translate-y`·
   `hover:scale`)·그라데이션(`bg-gradient-to`)·비로딩 `animate-ping` 금지. `transition-all` 대신 `transition-colors`(크기 애니메이션은 `transition-[width]` 처럼 대상 지정).
-- **8 아이브로우**: `uppercase tracking-wide*` 는 `MacCard` 헤더 내장 한 곳. 표 헤더(`th`)는 `text-xs font-medium text-muted-foreground`(대소문자 그대로).
+- **8 아이브로우**: `uppercase tracking-wide*` 는 쓰지 않는다(MacCard·Card 헤더 내장도 Phase 3 에서 제거 — 제목 슬롯에 데이터가 들어온다). 표 헤더(`th`)는 `text-xs font-medium text-muted-foreground`(대소문자 그대로).
 - **9 이모지 예외**: 사용자가 고르고 DB 에 저장하는 값은 데이터다 — `lib/clusterIcons.ts` 피커, `hooks/useOperationLevels.ts` 운영레벨 아이콘, 문서 템플릿·사용자 콘텐츠.
   UI 크롬·상태·카테고리 표시에 쓰인 이모지와 ⚠/✓/✗ 문자 접두는 lucide 아이콘 + 상태 토큰.
 - **상태 글자색**: `text-[hsl(var(--status-*))]` 금지 — `text-status-*` 가 4.5:1 대비 토큰(`--status-*-text`)을 쓴다. 면은 `bg-status-*/N`·`border-status-*/N`.
