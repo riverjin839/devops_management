@@ -4,15 +4,17 @@ import {
 } from 'lucide-react';
 import { MacCard } from '@/components/ui/MacCard';
 import { JiraIssueChip } from '@/components/work-items';
-import { useToast, PageHeader, PageShell, EmptyState } from '@/components/common';
+import { useToast, PageHeader, PageShell, EmptyState, RunLogPanel } from '@/components/common';
 import { formatApiError } from '@/lib/utils';
+import { useLogPref } from '@/hooks/useLogPref';
+import { runLogged, useRunLog, type RunLogEntry } from '@/hooks/useRunLog';
 import { useAuthStore } from '@/stores/authStore';
 import {
   useWeeklyReportPreview, useWeeklyReportPublish,
   useWeeklyReportSettings, useUpdateWeeklyReportSettings,
 } from '@/hooks/useJira';
 import type {
-  WeeklyReport, WeeklyReportSettings, WeeklyDetailRow, WeeklyOwnerRow, WeeklyProgressRow,
+  WeeklyPublishResult, WeeklyReport, WeeklyReportSettings, WeeklyDetailRow, WeeklyOwnerRow, WeeklyProgressRow,
 } from '@/types';
 
 const inputCls =
@@ -86,6 +88,9 @@ export function WeeklyReportPage() {
   const publishMut = useWeeklyReportPublish();
   const { data: settings } = useWeeklyReportSettings();
   const updateSettings = useUpdateWeeklyReportSettings();
+  const runLog = useRunLog();
+  const [showLog, setShowLog] = useLogPref('weekly-report');
+  const [published, setPublished] = useState<WeeklyPublishResult | null>(null);
 
   const [report, setReport] = useState<WeeklyReport | null>(null);
   const [tab, setTab] = useState<TabId>('summary');
@@ -110,13 +115,40 @@ export function WeeklyReportPage() {
     }
   }, [settings]);
 
-  const loadPreview = async () => {
-    try {
-      const { data } = await previewMut.mutateAsync({ weekOf: weekOf || undefined });
-      setReport(data);
-      setTitle((prev) => prev || data.title);
-    } catch (err) {
-      toast.error('주간보고 생성 실패', formatApiError(err));
+  /** 미리보기 생성. 마운트 시 자동 로딩은 로그 없이, 사용자가 "다시 생성" 을 누른 경우만 실행 로그를 남긴다. */
+  const loadPreview = async ({ logged = false }: { logged?: boolean } = {}) => {
+    if (!logged) {
+      try {
+        const { data } = await previewMut.mutateAsync({ weekOf: weekOf || undefined });
+        setReport(data);
+        setTitle((prev) => prev || data.title);
+      } catch (err) {
+        toast.error('주간보고 생성 실패', formatApiError(err));
+      }
+      return;
+    }
+    const r = await runLogged(runLog, {
+      title: '주간보고 생성',
+      first: `주간보고 미리보기 생성 요청 — ${weekOf ? `${weekOf} 가 속한 주` : '이번 주'}`,
+      fn: () => previewMut.mutateAsync({ weekOf: weekOf || undefined }),
+      summarize: ({ data }) => {
+        const assignees = new Set(data.owners.map((o) => o.assignee).filter(Boolean));
+        const components = new Set(data.details.map((d) => d.component).filter(Boolean));
+        const out: RunLogEntry[] = [
+          ['info', `기간 ${data.periodStart} ~ ${data.periodEnd} · 제목 "${data.title}"`],
+          ['info', `요약 — 전체 ${data.summary.total} · 진행 ${data.summary.inProgress} · 완료 ${data.summary.done} · 지연 ${data.summary.delayed}`],
+          ['info', `진척 ${data.progress.length}행 · 상세 ${data.details.length}행(구분 ${components.size}) · 담당자별 ${data.owners.length}행(담당자 ${assignees.size}명)`],
+        ];
+        if (data.summary.note) out.push(['info', `비고 — ${data.summary.note}`]);
+        if (data.details.length === 0) out.push(['warn', '해당 주에 집계된 업무가 없습니다 — Jira 가져오기·기간을 확인하세요.']);
+        return out;
+      },
+    });
+    if (r.ok) {
+      setReport(r.data.data);
+      setTitle((prev) => prev || r.data.data.title);
+    } else if (!r.aborted) {
+      toast.error('주간보고 생성 실패', formatApiError(r.error));
     }
   };
 
@@ -191,18 +223,43 @@ export function WeeklyReportPage() {
     progressRows as (WeeklyProgressRow & Record<string, unknown>)[], 'category');
 
   const publish = async () => {
-    try {
-      const { data } = await publishMut.mutateAsync({
+    setPublished(null);
+    const space = spaceKey.trim() || settings?.spaceKey || '(설정값)';
+    const parent = parentPageId.trim() || settings?.parentPageId || '';
+    const r = await runLogged(runLog, {
+      title: '주간보고 Confluence 게시',
+      first: `주간보고 게시 요청 — ${weekOf ? `${weekOf} 가 속한 주` : '이번 주'} · 스페이스 ${space}`
+        + `${parent ? ` · 상위 ${parent}` : ''}${title.trim() ? ` · 제목 "${title.trim()}"` : ' · 제목 템플릿'}`,
+      fn: () => publishMut.mutateAsync({
         weekOf: weekOf || undefined,
         spaceKey: spaceKey.trim() || undefined,
         parentPageId: parentPageId.trim() || undefined,
         title: title.trim() || undefined,
-      });
-      if (data.status === 'ok') toast.success('Confluence 게시됨', data.detail);
-      else toast.error('게시 실패', data.detail);
-    } catch (err) {
-      toast.error('게시 실패', formatApiError(err));
+      }),
+      summarize: ({ data }) => {
+        if (data.status !== 'ok') {
+          const label = data.status === 'offline' ? '연결 실패' : `상태 ${data.status}`;
+          return [['error', `게시 실패 · ${label}${data.detail ? ` — ${data.detail}` : ''}`]];
+        }
+        const out: RunLogEntry[] = [
+          ['info', '보고서 빌드 완료(해당 주 전체, 필터 무관)'],
+          ['info', 'Confluence 세션 확인 완료'],
+          ['info', `페이지 ${data.action === 'created' ? '생성' : data.action === 'updated' ? '갱신(새 버전)' : data.action || '처리'} 완료`
+            + `${data.pageId ? ` · 페이지 ${data.pageId}` : ''}`],
+        ];
+        if (data.pageUrl) out.push(['info', `페이지 URL — ${data.pageUrl}`]);
+        return out;
+      },
+    });
+    if (!r.ok) {
+      if (!r.aborted) toast.error('게시 실패', formatApiError(r.error));
+      return;
     }
+    const { data } = r.data;
+    if (data.status === 'ok') {
+      setPublished(data);
+      toast.success('Confluence 게시됨', data.detail);
+    } else toast.error('게시 실패', data.detail);
   };
 
   const saveSettings = async () => {
@@ -230,13 +287,15 @@ export function WeeklyReportPage() {
         actions={<>
           <input type="date" className={`${inputCls} w-auto`} value={weekOf}
             onChange={(e) => setWeekOf(e.target.value)} title="해당 주(월~금) 선택" />
-          <button onClick={() => void loadPreview()} disabled={busy}
+          <button onClick={() => void loadPreview({ logged: true })} disabled={busy}
             className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl border border-border bg-secondary text-sm hover:bg-secondary/80 disabled:opacity-50">
             {previewMut.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
             다시 생성
           </button>
         </>}
       />
+
+      <RunLogPanel run={runLog} show={showLog} onShowChange={setShowLog} maxHeight="max-h-56" />
 
       {/* 필터바 — 날짜 외 다양한 조건 */}
       <MacCard title="보고서 필터">
@@ -481,6 +540,17 @@ export function WeeklyReportPage() {
                 {publishMut.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
                 Confluence 에 게시
               </button>
+              {published && (
+                <p className="mt-2 text-sm text-muted-foreground">
+                  {published.action === 'created' ? '새 페이지를 생성했습니다.' : '기존 페이지를 새 버전으로 갱신했습니다.'}
+                  {published.pageUrl && (
+                    <a href={published.pageUrl} target="_blank" rel="noopener noreferrer"
+                      className="ml-2 inline-flex items-center gap-1 text-primary hover:underline">
+                      <ExternalLink className="w-3.5 h-3.5" aria-hidden /> Confluence 에서 열기
+                    </a>
+                  )}
+                </p>
+              )}
             </div>
           </MacCard>
 

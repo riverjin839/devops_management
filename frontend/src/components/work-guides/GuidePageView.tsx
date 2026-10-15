@@ -1,12 +1,13 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   Plus, Pencil, Trash2, GitFork, Loader2, RefreshCw, UploadCloud, ChevronRight, FileText, CheckCircle, Archive, FileText as FileTextIcon, ExternalLink, PenLine,
 } from 'lucide-react';
 import { RichContent } from '@/components/editor';
-import { PageShell, ReactionBar, useToast } from '@/components/common';
+import { PageShell, ReactionBar, RunLogPanel, useToast } from '@/components/common';
 import { ConfluenceExportDialog, SyncStatusBadge } from '@/components/documents';
 import { useConfluenceDocPull } from '@/hooks/useConfluenceDocs';
-import { formatApiError } from '@/lib/utils';
+import { useLogPref } from '@/hooks/useLogPref';
+import { runLogged, useRunLog, type RunLogEntry } from '@/hooks/useRunLog';
 import type { WorkGuide } from '@/types';
 
 const STATUS_CFG: Record<string, { label: string; icon: React.ReactNode; cls: string }> = {
@@ -60,18 +61,43 @@ export function GuidePageView({ guide, allGuides, onSelect, onEdit, onAddChild, 
   const toast = useToast();
   const pullMut = useConfluenceDocPull();
   const [exportOpen, setExportOpen] = useState(false);
+  const runLog = useRunLog();
+  const [showLog, setShowLog] = useLogPref('guide-pull');
+  // 다른 문서로 이동하면 이전 문서의 다시 가져오기 로그를 비운다.
+  const clearLog = runLog.clear;
+  useEffect(() => { clearLog(); }, [guide.id, clearLog]);
   const sc = STATUS_CFG[guide.status] ?? STATUS_CFG.draft;
   const pc = PRIORITY_DOT[guide.priority] ?? PRIORITY_DOT.medium;
   const tagList = guide.tags ? guide.tags.split(',').map((t) => t.trim()).filter(Boolean) : [];
   const childPages = allGuides.filter((g) => g.parentId === guide.id);
 
   const pull = async () => {
-    try {
-      const res = await pullMut.mutateAsync(guide.id);
-      if (res.status !== 'ok') toast.error('다시 가져오기 실패', res.detail);
-      else toast.success('다시 가져옴', `Confluence v${res.version ?? '?'} 내용으로 갱신했습니다.`);
-    } catch (err) {
-      toast.error('다시 가져오기 실패', formatApiError(err));
+    const prevVersion = guide.confluenceVersion;
+    const r = await runLogged(runLog, {
+      title: 'Confluence 다시 가져오기',
+      first: `「${guide.title}」 — 페이지 ${guide.confluencePageId ?? '?'}(현재 v${prevVersion ?? '?'}) 최신본 가져오기 요청`,
+      fn: () => pullMut.mutateAsync(guide.id),
+      summarize: (res) => {
+        const out: RunLogEntry[] = [];
+        if (res.status !== 'ok') {
+          const soft = res.status === 'conflict' || res.status === 'partial' || res.status === 'missing';
+          out.push([soft ? 'warn' : 'error', `다시 가져오기 실패 · 상태 ${res.status}${res.detail ? ` — ${res.detail}` : ''}`]);
+        } else {
+          out.push(['info', `갱신 완료 · v${prevVersion ?? '?'} → v${res.version ?? '?'}`]);
+        }
+        for (const w of res.warnings ?? []) out.push(['warn', `변환 경고 — ${w}`]);
+        return out;
+      },
+    });
+    if (!r.ok) {
+      if (!r.aborted) toast.error('다시 가져오기 실패', '실행 로그에서 사유를 확인하세요.');
+      return;
+    }
+    const res = r.data;
+    if (res.status !== 'ok') toast.error('다시 가져오기 실패', res.detail);
+    else {
+      const warn = res.warnings?.length ? ` · 변환 경고 ${res.warnings.length}건(실행 로그 참고)` : '';
+      toast.success('다시 가져옴', `Confluence v${res.version ?? '?'} 내용으로 갱신했습니다.${warn}`);
     }
   };
 
@@ -148,6 +174,10 @@ export function GuidePageView({ guide, allGuides, onSelect, onEdit, onAddChild, 
               <Trash2 className="w-3.5 h-3.5" /> 삭제
             </button>
           </div>
+        </div>
+
+        <div className="mb-5 empty:hidden">
+          <RunLogPanel run={runLog} show={showLog} onShowChange={setShowLog} maxHeight="max-h-48" />
         </div>
 
         {tagList.length > 0 && (
