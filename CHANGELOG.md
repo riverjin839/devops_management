@@ -10,6 +10,13 @@
 
 1.55.1 이후 main 에 병합된 변경 (다음 릴리스 후보).
 
+### Fixed
+- **백업 가져오기(미리보기·적용)도 backend 메모리를 넘기던 문제**: 업로드 파일을 통째로 읽어 `json.loads` 로 전부 객체로 만들고,
+  미리보기는 기존 테이블 행을 모든 컬럼째 올려 운영 DB 크기 백업이면 OOMKilled 될 수 있었다. 이제 디스크에 받은 업로드를 한 번
+  훑어 검증·색인한 뒤 테이블별로 행을 흘려 읽고, 기존 행은 PK 만 조회한다 — 210MB 백업 미리보기 최대 메모리 1.5GiB → 150MiB
+  (5만 행 merge 적용도 150MiB). 행 오류는 응답에 앞쪽 500건만 싣고 나머지는 개수로 요약한다. Backend: `services/backup_reader.py`,
+  `backup_service.open_backup_file`, `/backup/import*` sync 핸들러.
+
 ## [1.55.1] - 2026-10-15
 
 ### Fixed

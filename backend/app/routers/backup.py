@@ -27,7 +27,7 @@ from app.services.backup_service import (
     current_meta,
     export_filename,
     iter_export_json,
-    parse_backup,
+    open_backup_file,
 )
 from app.services import audit_logger
 
@@ -108,8 +108,11 @@ def export_backup(
     )
 
 
+# 가져오기는 업로드를 통째로 읽지 않는다 — Starlette 가 이미 디스크 임시 파일(``file.file``)로 받아 둔 것을
+# ``open_backup_file`` 이 한 번 훑어 검증·색인하고, 미리보기/적용이 테이블별로 다시 흘려 읽는다(OOM 방지).
+# 파일 I/O·DB 작업이 길어 이벤트 루프를 막지 않도록 sync 핸들러(스레드풀)로 둔다.
 @router.post("/import/preview", response_model=BackupImportPreviewResponse)
-async def import_preview(
+def import_preview(
     file: UploadFile = File(..., description="JSON 백업 파일"),
     mode: str = Form(default="merge"),
     include_logs: bool = Form(default=False),
@@ -119,13 +122,12 @@ async def import_preview(
     if mode not in ("merge", "replace"):
         raise HTTPException(status_code=422, detail="mode 는 'merge' 또는 'replace' 이어야 합니다.")
     try:
-        raw = await file.read()
-        envelope = parse_backup(raw)
+        source = open_backup_file(file.file)
     except ValueError as e:
         raise HTTPException(status_code=422, detail=str(e)) from e
 
     try:
-        result = apply_import(db, envelope, mode=mode, include_logs=include_logs, dry_run=True)
+        result = apply_import(db, source, mode=mode, include_logs=include_logs, dry_run=True)
     except Exception as e:  # noqa: BLE001
         _log.exception("backup/import/preview failed")
         raise HTTPException(
@@ -141,7 +143,7 @@ async def import_preview(
 
 
 @router.post("/import", response_model=BackupImportResponse)
-async def import_apply(
+def import_apply(
     request: Request,
     file: UploadFile = File(..., description="JSON 백업 파일"),
     mode: str = Form(default="merge"),
@@ -158,13 +160,12 @@ async def import_apply(
             detail="'replace' 모드는 기존 데이터를 모두 덮어씁니다. confirm=true 를 명시하세요.",
         )
     try:
-        raw = await file.read()
-        envelope = parse_backup(raw)
+        source = open_backup_file(file.file)
     except ValueError as e:
         raise HTTPException(status_code=422, detail=str(e)) from e
 
     try:
-        result = apply_import(db, envelope, mode=mode, include_logs=include_logs, dry_run=False)
+        result = apply_import(db, source, mode=mode, include_logs=include_logs, dry_run=False)
     except Exception as e:
         audit_logger.record(
             db,
