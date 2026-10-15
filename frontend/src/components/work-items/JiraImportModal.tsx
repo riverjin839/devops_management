@@ -7,9 +7,52 @@ import { useJiraImport, useJiraCredential, useJiraVerifyLinks, useJiraUnlink } f
 import { JiraConnectCard } from '@/components/settings/JiraConnectCard';
 import { jiraApi } from '@/services/api';
 import { useModalA11y } from '@/components/common/useModalA11y';
-import { ConfirmDialog, useToast } from '@/components/common';
+import { ConfirmDialog, RunLogPanel, useToast } from '@/components/common';
+import { useRunLog, runLogged, type RunLogEntry } from '@/hooks/useRunLog';
+import { useLogPref } from '@/hooks/useLogPref';
 import { formatApiError } from '@/lib/utils';
 import type { JiraImportResult, JiraExcelImportResult, JiraVerifyLinksResult } from '@/types';
+
+/** 로그 항목 줄 상한 — 수백 건이면 앞 200건 + "외 N건" 줄(D-136). */
+const LOG_ITEM_CAP = 200;
+const ACTION_LABEL: Record<string, string> = { create: '생성', update: '갱신', unchanged: '변경 없음' };
+
+/** 가져오기/저장 응답(JiraImportResult) → 실행 로그 줄: JQL · 항목별 · 오류 전부 · 절삭 경고 · 합계. */
+function importResultLines(data: JiraImportResult): RunLogEntry[] {
+  const out: RunLogEntry[] = [];
+  if (data.appliedJql) out.push(['info', `JQL ${data.appliedJql}`]);
+  if (data.status !== 'ok') {
+    out.push(['error', `${data.dryRun ? '미리보기' : '가져오기'} 실패(${data.status}) — ${data.detail || '사유 없음'}`]);
+  }
+  const items = data.items ?? [];
+  const prefix = data.dryRun ? '미리보기 · ' : '';
+  for (const it of items.slice(0, LOG_ITEM_CAP)) {
+    const n = it.changes?.length ?? 0;
+    out.push(['info', `${prefix}${it.jiraKey} ${it.title} · ${ACTION_LABEL[it.action] ?? it.action}${n ? ` (변경 필드 ${n})` : ''}`]);
+  }
+  if (items.length > LOG_ITEM_CAP) out.push(['info', `외 ${items.length - LOG_ITEM_CAP}건`]);
+  for (const e of data.errors ?? []) out.push(['error', e]);
+  if (data.truncated) out.push(['warn', '조회 상한에 걸려 일부 이슈만 가져왔습니다 — 조건(기간·프로젝트)을 좁혀 다시 실행하세요']);
+  if (data.status === 'ok') {
+    const errs = data.errors?.length ?? 0;
+    out.push([errs ? 'warn' : 'info',
+      `${data.dryRun ? '미리보기 완료' : '완료'} · 총 ${data.total} · 신규 ${data.imported} · 갱신 ${data.updated} · 변경 없음 ${data.skipped}${errs ? ` · 오류 ${errs}` : ''}`]);
+  }
+  return out;
+}
+
+/** Excel·붙여넣기 파싱 응답 → 실행 로그 줄: 담당자 매칭 결과 + 매칭 실패 행. */
+function excelParseLines(data: JiraExcelImportResult): RunLogEntry[] {
+  if (data.status !== 'ok') return [['error', `파싱 실패 — ${data.detail || '사유 없음'}`]];
+  const out: RunLogEntry[] = [];
+  const unmatched = (data.rows ?? []).filter((r) => !r.assigneeMatched);
+  for (const r of unmatched.slice(0, LOG_ITEM_CAP)) {
+    out.push(['warn', `${r.key} ${r.summary} · 담당자 매칭 실패 (${r.assigneeRaw || '비어 있음'})`]);
+  }
+  if (unmatched.length > LOG_ITEM_CAP) out.push(['warn', `외 ${unmatched.length - LOG_ITEM_CAP}건 매칭 실패`]);
+  out.push([unmatched.length ? 'warn' : 'info', `행 ${data.total} · 담당자 매칭 ${data.matched}/${data.total}${data.detail ? ` — ${data.detail}` : ''}`]);
+  return out;
+}
 
 interface JiraImportModalProps {
   open: boolean;
@@ -76,6 +119,10 @@ export function JiraImportModal({ open, onClose, defaultProjectKey }: JiraImport
   // 벌크 삭제(업무 행까지 제거)는 단일 삭제 흐름들과 동일하게 확인을 받는다.
   const [confirmDeleteCount, setConfirmDeleteCount] = useState<number | null>(null);
 
+  // 모달 안 실행(미리보기·가져오기·Excel 파싱/저장·연결 점검/정리)의 실행 로그(D-136).
+  const runLog = useRunLog();
+  const [showLog, setShowLog] = useLogPref('jira-import');
+
   if (!open) return null;
 
   const busy = importMut.isPending || excelBusy || verifyMut.isPending || cleaning;
@@ -90,19 +137,35 @@ export function JiraImportModal({ open, onClose, defaultProjectKey }: JiraImport
   const runVerify = async () => {
     setVerifyResult(null);
     setPickedMissing(new Set());
-    try {
-      const { data } = await verifyMut.mutateAsync(false);
-      if (data.status !== 'ok') {
-        toast.error('연결 점검 실패', data.detail);
-        return;
-      }
-      setVerifyResult(data);
-      // 찾지 못한 연결은 기본으로 전부 선택 — 대개 그대로 정리하려는 흐름이다.
-      setPickedMissing(new Set(data.missing.map((m) => m.workItemId)));
-      toast.info('연결 점검됨', data.detail);
-    } catch (err) {
-      toast.error('연결 점검 실패', formatApiError(err));
+    const r = await runLogged(runLog, {
+      title: 'Jira 연결 점검',
+      first: '내 업무에 연결된 Jira 이슈가 아직 있는지 점검 요청',
+      fn: async () => (await verifyMut.mutateAsync(false)).data,
+      summarize: (data): RunLogEntry[] => {
+        if (data.status !== 'ok') return [['error', `점검 실패(${data.status}) — ${data.detail}`]];
+        const out: RunLogEntry[] = [];
+        for (const m of data.missing.slice(0, LOG_ITEM_CAP)) {
+          out.push(['warn', `${m.jiraKey} ${m.title} · 찾을 수 없음 — ${m.detail}`]);
+        }
+        if (data.missing.length > LOG_ITEM_CAP) out.push(['warn', `외 ${data.missing.length - LOG_ITEM_CAP}건`]);
+        if (data.truncated) out.push(['warn', '점검 상한에 걸려 일부 연결만 확인했습니다']);
+        out.push([data.missing.length ? 'warn' : 'info', `점검 ${data.checked} · 찾을 수 없음 ${data.missing.length}`]);
+        return out;
+      },
+    });
+    if (!r.ok) {
+      if (!r.aborted) toast.error('연결 점검 실패', formatApiError(r.error));
+      return;
     }
+    const data = r.data;
+    if (data.status !== 'ok') {
+      toast.error('연결 점검 실패', data.detail);
+      return;
+    }
+    setVerifyResult(data);
+    // 찾지 못한 연결은 기본으로 전부 선택 — 대개 그대로 정리하려는 흐름이다.
+    setPickedMissing(new Set(data.missing.map((m) => m.workItemId)));
+    toast.info('연결 점검됨', data.detail);
   };
 
   /** 고른 죽은 링크를 일괄 정리. deleteWorkItem=true 면 업무 행까지 삭제한다. */
@@ -110,17 +173,39 @@ export function JiraImportModal({ open, onClose, defaultProjectKey }: JiraImport
     const ids = [...pickedMissing];
     if (!ids.length) return;
     setCleaning(true);
+    const verb = deleteWorkItem ? '업무 삭제' : '연결 해제';
+    const byId = new Map((verifyResult?.missing ?? []).map((m) => [m.workItemId, m]));
     let ok = 0;
-    const failed: string[] = [];
-    for (const id of ids) {
-      try {
-        const { data } = await unlinkMut.mutateAsync({ itemId: id, data: { deleteWorkItem } });
-        if (data.status === 'ok') ok += 1;
-        else failed.push(data.detail);
-      } catch (err) {
-        failed.push(formatApiError(err));
-      }
-    }
+    let failed = 0;
+    // 브라우저 루프 — 항목마다 단계·결과 줄, 한 건 실패가 나머지를 막지 않는다(D-136).
+    await runLogged(runLog, {
+      title: deleteWorkItem ? 'Jira 연결 정리 · 업무 삭제' : 'Jira 연결 정리 · 연결 해제',
+      first: `찾을 수 없는 연결 ${ids.length}건 ${verb} 시작`,
+      fn: async () => {
+        for (const id of ids) {
+          const m = byId.get(id);
+          const label = m ? `${m.jiraKey} ${m.title}` : id;
+          runLog.setStep(id, m?.jiraKey || id, 'running');
+          try {
+            const { data } = await unlinkMut.mutateAsync({ itemId: id, data: { deleteWorkItem } });
+            if (data.status === 'ok') {
+              ok += 1;
+              runLog.setStep(id, '', 'done');
+              runLog.log('info', `${label} · ${data.workItemDeleted ? '연결 해제 + 업무 삭제' : '연결 해제'} 완료`);
+            } else {
+              failed += 1;
+              runLog.setStep(id, '', 'failed');
+              runLog.log('error', `${label} · ${verb} 실패 — ${data.detail}`);
+            }
+          } catch (err) {
+            failed += 1;
+            runLog.setStep(id, '', 'failed');
+            runLog.log('error', `${label} · ${verb} 실패 — ${formatApiError(err)}`);
+          }
+        }
+      },
+      summarize: () => [[failed ? 'warn' : 'info', `${verb} 대상 ${ids.length} · 성공 ${ok} · 실패 ${failed}`]],
+    });
     setCleaning(false);
     if (ok) {
       toast.success(deleteWorkItem ? '업무 삭제 완료' : '연결 해제 완료', `${ok}건 처리했습니다.`);
@@ -130,16 +215,19 @@ export function JiraImportModal({ open, onClose, defaultProjectKey }: JiraImport
       });
       setPickedMissing(new Set());
     }
-    if (failed.length) toast.error('일부 실패', failed.slice(0, 3).join(' / '));
+    if (failed) toast.error('일부 실패', `${failed}건 실패 — 실행 로그에서 항목별 사유를 확인하세요.`);
   };
 
   const run = async (dryRun: boolean) => {
     if (!dryRun) setDone(null);
-    try {
-      const applicable = (preview?.items ?? [])
-        .filter((it) => it.action !== 'unchanged')
-        .map((it) => it.jiraKey);
-      const { data } = await importMut.mutateAsync({
+    const applicable = (preview?.items ?? [])
+      .filter((it) => it.action !== 'unchanged')
+      .map((it) => it.jiraKey);
+    const scopeLabel = SCOPES.find((x) => x.id === scope)?.label ?? scope;
+    const r = await runLogged(runLog, {
+      title: dryRun ? 'Jira 가져오기 미리보기' : 'Jira 가져오기',
+      first: `${scopeLabel} 조건으로 ${dryRun ? '미리보기(저장 없음)' : '가져오기'} 요청${!dryRun && excluded.size > 0 ? ` · 제외 ${excluded.size}건` : ''}`,
+      fn: async () => (await importMut.mutateAsync({
         scope,
         projectKey: scope === 'project' || scope === 'filter' ? projectKey.trim() : undefined,
         jql: scope === 'jql' ? jql.trim() : undefined,
@@ -152,70 +240,79 @@ export function JiraImportModal({ open, onClose, defaultProjectKey }: JiraImport
         updatedSinceDays: scope !== 'jql' && sinceDays.trim() ? Number(sinceDays) : undefined,
         onlyKeys: !dryRun && excluded.size > 0 ? applicable.filter((k) => !excluded.has(k)) : undefined,
         dryRun,
-      });
-      if (data.status !== 'ok') {
-        toast.error('Jira ' + (data.status === 'offline' ? '연결 실패' : '오류'), data.detail || '가져오기에 실패했습니다.');
-        setPreview(data);
-        return;
-      }
-      if (dryRun) {
-        setPreview(data);
-        setExcluded(new Set());
-        toast.info('미리보기 생성됨', `신규 ${data.imported} · 갱신 ${data.updated} · 변경없음 ${data.skipped}`);
-      } else {
-        setDone(data);
-        setPreview(null);
-        toast.success('Jira 가져옴', `신규 ${data.imported} · 갱신 ${data.updated}`);
-      }
-    } catch (err) {
-      toast.error('요청 실패', formatApiError(err));
+      })).data,
+      summarize: importResultLines,
+    });
+    if (!r.ok) {
+      if (!r.aborted) toast.error('요청 실패', formatApiError(r.error));
+      return;
+    }
+    const data = r.data;
+    if (data.status !== 'ok') {
+      toast.error('Jira ' + (data.status === 'offline' ? '연결 실패' : '오류'), data.detail || '가져오기에 실패했습니다.');
+      setPreview(data);
+      return;
+    }
+    if (dryRun) {
+      setPreview(data);
+      setExcluded(new Set());
+      toast.info('미리보기 생성됨', `신규 ${data.imported} · 갱신 ${data.updated} · 변경없음 ${data.skipped}`);
+    } else {
+      setDone(data);
+      setPreview(null);
+      toast.success('Jira 가져옴', `신규 ${data.imported} · 갱신 ${data.updated}`);
     }
   };
 
-  const handleFile = async (file: File) => {
+  /** Excel 파일/붙여넣기 파싱 공통 — 실행 로그에 매칭 결과·매칭 실패 행을 남기고 인라인 오류도 유지한다. */
+  const parseExcel = async (title: string, first: string, fn: () => Promise<JiraExcelImportResult>) => {
     setExcelBusy(true); setExcelError(null); setExcelRows(null);
-    try {
-      const { data } = await jiraApi.importExcel(file);
-      if (data.status !== 'ok') setExcelError(data.detail || '파싱 실패');
-      else setExcelRows(data);
-    } catch (err) {
-      setExcelError(formatApiError(err));
-    } finally {
-      setExcelBusy(false);
+    const r = await runLogged(runLog, { title, first, fn, summarize: excelParseLines });
+    setExcelBusy(false);
+    if (!r.ok) {
+      if (!r.aborted) setExcelError(formatApiError(r.error));
+      return;
     }
+    if (r.data.status !== 'ok') setExcelError(r.data.detail || '파싱 실패');
+    else setExcelRows(r.data);
   };
+
+  const handleFile = (file: File) => parseExcel(
+    'Excel 파일 읽기', `${file.name} (${Math.max(1, Math.round(file.size / 1024))}KB) 업로드·파싱 요청`,
+    async () => (await jiraApi.importExcel(file)).data,
+  );
 
   const handlePaste = async () => {
     if (!pasteText.trim()) { toast.error('붙여넣은 내용이 없습니다'); return; }
-    setExcelBusy(true); setExcelError(null); setExcelRows(null);
-    try {
-      const { data } = await jiraApi.importPaste(pasteText);
-      if (data.status !== 'ok') setExcelError(data.detail || '파싱 실패');
-      else setExcelRows(data);
-    } catch (err) {
-      setExcelError(formatApiError(err));
-    } finally {
-      setExcelBusy(false);
-    }
+    await parseExcel(
+      '붙여넣기 변환', `붙여넣은 표 ${pasteText.split('\n').filter((l) => l.trim()).length}줄 변환 요청`,
+      async () => (await jiraApi.importPaste(pasteText)).data,
+    );
   };
 
   const saveExcelRows = async () => {
     if (!excelRows?.rows.length) return;
     setExcelBusy(true);
-    try {
-      const { data } = await jiraApi.importSaveToBoard(excelRows.rows);
-      if (data.status !== 'ok') {
-        toast.error('저장 실패', data.detail || '업무 저장에 실패했습니다.');
-        return;
-      }
-      setDone(data);
-      setExcelRows(null);
-      toast.success('업무 관리에 저장됨', `신규 ${data.imported} · 갱신 ${data.updated}`);
-    } catch (err) {
-      toast.error('저장 실패', formatApiError(err));
-    } finally {
-      setExcelBusy(false);
+    const rows = excelRows.rows;
+    const r = await runLogged(runLog, {
+      title: '업무 관리에 저장',
+      first: `Excel·붙여넣기 ${rows.length}행 업무 관리 저장 요청`,
+      fn: async () => (await jiraApi.importSaveToBoard(rows)).data,
+      summarize: importResultLines,
+    });
+    setExcelBusy(false);
+    if (!r.ok) {
+      if (!r.aborted) toast.error('저장 실패', formatApiError(r.error));
+      return;
     }
+    const data = r.data;
+    if (data.status !== 'ok') {
+      toast.error('저장 실패', data.detail || '업무 저장에 실패했습니다.');
+      return;
+    }
+    setDone(data);
+    setExcelRows(null);
+    toast.success('업무 관리에 저장됨', `신규 ${data.imported} · 갱신 ${data.updated}`);
   };
 
   return (
@@ -240,6 +337,7 @@ export function JiraImportModal({ open, onClose, defaultProjectKey }: JiraImport
         </div>
 
         <div className="px-5 pb-5 space-y-3.5">
+          <RunLogPanel run={runLog} show={showLog} onShowChange={setShowLog} maxHeight="max-h-56" />
           {done ? (
             /* 완료 상태 — 결과만 보여주고 닫기 / 다시 가져오기 */
             <>
