@@ -241,7 +241,7 @@ function CommandRow({ entry: e, onUpdate, onDelete, onTogglePin, onOpenForm }: C
             () => null,
             e.description ? (
               <p className="text-[12px] text-foreground/90">
-                <span className="text-xs uppercase tracking-wider text-muted-foreground mr-1.5">의미</span>
+                <span className="text-xs text-muted-foreground mr-1.5">의미</span>
                 {e.description}
               </p>
             ) : (
@@ -263,7 +263,7 @@ function CommandRow({ entry: e, onUpdate, onDelete, onTogglePin, onOpenForm }: C
             () => null,
             e.caution ? (
               <div className={`text-[12px] rounded-md px-2 py-1.5 border ${meta.badge}`}>
-                <span className="text-xs uppercase tracking-wider mr-1.5">주의</span>
+                <span className="text-xs mr-1.5">주의</span>
                 {e.caution}
               </div>
             ) : (

@@ -33,7 +33,7 @@ export function NodeDetailPanel({
     <div className="w-72 shrink-0 border-l border-border bg-card/60 p-4 space-y-4 overflow-y-auto">
       <div className="flex items-start gap-2">
         <div className="flex-1 min-w-0">
-          <div className="text-[11px] font-bold uppercase text-muted-foreground">{node.kind}</div>
+          <div className="text-xs font-medium text-muted-foreground">{node.kind}</div>
           <div className="text-sm font-semibold break-all">{node.name}</div>
           {node.stale && (
             <div className="mt-1 text-[11px] text-status-warning">

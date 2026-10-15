@@ -240,7 +240,7 @@ export function AppTopBar() {
   });
 
   return (
-    <header className="sticky top-0 z-30 flex-none h-[var(--topbar-h)] flex items-center gap-3 pl-3 lg:pl-4 pr-3 lg:pr-4 border-b border-border bg-background/95 backdrop-blur">
+    <header className="sticky top-0 z-30 flex-none h-[var(--topbar-h)] flex items-center gap-3 pl-3 lg:pl-4 pr-3 lg:pr-4 border-b border-border bg-background">
       {/* 사용자 / 날짜 */}
       <div className="relative z-10 flex items-center gap-2 min-w-0 flex-shrink-0">
         <Sun className="w-4 h-4 text-primary flex-shrink-0" />
@@ -436,7 +436,7 @@ export function AppTopBar() {
               {sharedIslands.length > 0 && (
                 <>
                   <div className="mx-2 my-1 border-t border-border" />
-                  <p className="px-2.5 pb-0.5 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                  <p className="px-2.5 pb-0.5 text-xs font-medium text-muted-foreground">
                     팀 공유
                   </p>
                   {sharedIslands.map((isl) => (

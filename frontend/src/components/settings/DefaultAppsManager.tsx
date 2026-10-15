@@ -38,47 +38,49 @@ export function DefaultAppsManager() {
 
   const save = () =>
     update.mutate({ installedApps: current }, {
-      onSuccess: () => { setDraft(null); toast.success('조직 기본 앱 구성을 저장했습니다.'); },
+      onSuccess: () => { setDraft(null); toast.success('조직 기본 앱 구성 저장됨'); },
       onError: (e) => toast.error('저장 실패', formatApiError(e)),
     });
 
   return (
-    <MacCard title="기본 앱 구성 (사이드바·상단바)">
+    <MacCard
+      title="기본 앱 구성 (사이드바·상단바)"
+      icon={LayoutGrid}
+      actions={
+        <>
+          <button
+            type="button"
+            onClick={() => setDraft(null)}
+            disabled={!dirty || update.isPending}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-border text-xs text-muted-foreground hover:bg-secondary disabled:opacity-50"
+          >
+            <RotateCcw className="w-3.5 h-3.5" aria-hidden />
+            되돌리기
+          </button>
+          <button
+            type="button"
+            onClick={save}
+            disabled={!dirty || update.isPending}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-primary text-primary-foreground text-xs hover:bg-primary/90 disabled:opacity-50"
+          >
+            <Save className="w-3.5 h-3.5" aria-hidden />
+            저장
+          </button>
+        </>
+      }
+    >
       <div className="space-y-4">
-        <div className="flex items-start gap-3">
-          <LayoutGrid className="w-5 h-5 text-primary flex-shrink-0 mt-0.5" aria-hidden />
-          <p className="flex-1 text-sm text-muted-foreground">
-            앱을 직접 고른 적이 없는 사용자의 사이드바·상단바 구성입니다. 이미 직접 고른 사용자는 바뀌지 않으며,
-            각자 "앱 추가" 창의 <b>기본값으로 초기화</b>로 이 구성을 따를 수 있습니다. 고른 순서가 표시 순서입니다.
-          </p>
-          <div className="flex items-center gap-2 flex-shrink-0">
-            <button
-              type="button"
-              onClick={() => setDraft(null)}
-              disabled={!dirty || update.isPending}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-border text-xs text-muted-foreground hover:bg-secondary disabled:opacity-50"
-            >
-              <RotateCcw className="w-3.5 h-3.5" aria-hidden />
-              되돌리기
-            </button>
-            <button
-              type="button"
-              onClick={save}
-              disabled={!dirty || update.isPending}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-primary text-primary-foreground text-xs hover:bg-primary/90 disabled:opacity-50"
-            >
-              <Save className="w-3.5 h-3.5" aria-hidden />
-              저장
-            </button>
-          </div>
-        </div>
+        <p className="text-sm text-muted-foreground">
+          앱을 직접 고른 적이 없는 사용자의 사이드바·상단바 구성입니다. 이미 직접 고른 사용자는 바뀌지 않으며,
+          각자 "앱 추가" 창의 <b>기본값으로 초기화</b>로 이 구성을 따를 수 있습니다. 고른 순서가 표시 순서입니다.
+        </p>
 
         {isLoading ? (
           <p className="text-sm text-muted-foreground">불러오는 중…</p>
         ) : (
           sections.map((section) => (
             <div key={section.label}>
-              <p className="px-0.5 pb-1.5 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+              <p className="px-0.5 pb-1.5 text-xs font-medium text-muted-foreground">
                 {section.label}
               </p>
               <div className="flex flex-wrap gap-1.5">

@@ -24,7 +24,7 @@ import { useQuery } from '@tanstack/react-query';
 import { useClusters } from '@/hooks/useCluster';
 import { useTerminalEnvSync } from '@/hooks/useTerminalEnvSync';
 import { useClusterStore } from '@/stores/clusterStore';
-import { ClusterSidebar, LogViewer, SearchableSelect, EmptyState, SelectClusterEmptyState } from '@/components/common';
+import { ClusterSidebar, LogViewer, SearchableSelect, EmptyState, SelectClusterEmptyState, LoadingState, Skeleton, PageShell } from '@/components/common';
 import { MacCard } from '@/components/ui/MacCard';
 import { RoleGate } from '@/components/auth/RoleGate';
 import { getAuthToken } from '@/stores/authStore';
@@ -214,19 +214,23 @@ export function CiliumTracePage() {
         allowAll={false}
         iconOnly
       />
-      <main className="flex-1 min-w-0 px-4 lg:px-6 py-5 space-y-4 max-w-[1700px]">
+      <PageShell density="console" className="space-y-4">
         {/* Header */}
-        <div className="flex items-center justify-between gap-3 flex-wrap">
-          <PageHeader icon={Waves} title="Cilium BPF 추적" description="BPF 맵 인스펙터 · cilium monitor · Hubble flow" className="flex-1 min-w-0" />
-          <button
-            onClick={() => refetchStatus()}
-            disabled={statusLoading || !cid}
-            className="px-3 py-1.5 text-sm font-semibold bg-secondary hover:bg-secondary/80 border border-border rounded-xl transition-colors flex items-center gap-1.5 disabled:opacity-50"
-          >
-            <RefreshCw className={`w-3.5 h-3.5 ${statusLoading ? 'animate-spin' : ''}`} />
-            상태 새로고침
-          </button>
-        </div>
+        <PageHeader
+          icon={Waves}
+          title="Cilium BPF 추적"
+          description="BPF 맵 인스펙터 · cilium monitor · Hubble flow"
+          actions={
+            <button
+              onClick={() => refetchStatus()}
+              disabled={statusLoading || !cid}
+              className="px-3 py-1.5 text-sm font-semibold bg-secondary hover:bg-secondary/80 border border-border rounded-xl transition-colors flex items-center gap-1.5 disabled:opacity-50"
+            >
+              <RefreshCw className={`w-3.5 h-3.5 ${statusLoading ? 'animate-spin' : ''}`} />
+              상태 새로고침
+            </button>
+          }
+        />
 
         {/* Status strip */}
         <StatusStrip status={status} loading={statusLoading} agentCount={agents.length} />
@@ -261,7 +265,7 @@ export function CiliumTracePage() {
         ) : (
           <HubbleTab clusterId={cid} hubbleInstalled={status?.hubbleRelayInstalled ?? false} />
         )}
-      </main>
+      </PageShell>
     </div>
   );
 }
@@ -272,14 +276,14 @@ interface StatusStripProps { status?: CiliumStatus; loading: boolean; agentCount
 
 function StatusStrip({ status, loading, agentCount }: StatusStripProps) {
   if (loading) {
-    return <div className="h-20 rounded-2xl bg-secondary/40 animate-pulse" />;
+    return <Skeleton className="block w-full h-20 rounded-md" />;
   }
   if (!status) {
     return null;
   }
   if (status.error) {
     return (
-      <div className="rounded-2xl border border-status-warning/40 bg-status-warning/10 px-4 py-3 flex items-start gap-2">
+      <div className="rounded-md border border-status-warning/40 bg-status-warning/10 px-4 py-3 flex items-start gap-2">
         <AlertTriangle className="w-4 h-4 text-status-warning flex-shrink-0 mt-0.5" />
         <div>
           <p className="text-sm font-semibold">상태 점검 중 문제가 발생했습니다.</p>
@@ -410,8 +414,12 @@ function BpfInspectorTab({ clusterId, agents }: { clusterId: string; agents: Cil
     // 자리(우측)에 플레이스홀더로 고정되어 결과가 나와도 레이아웃이 흔들리지 않는다.
     <div className="grid grid-cols-1 lg:grid-cols-10 gap-4 items-start">
       <div className="lg:col-span-4 min-w-0 space-y-4">
-      {/* Toolbar */}
-      <MacCard bodyPadding="p-3">
+      {/* 조회 컨트롤 — 콘솔 좌측 컨트롤 카드(제목 + 폼) */}
+      <MacCard
+        title="BPF 맵 조회"
+        description={BPF_KINDS.find((k) => k.id === kind)?.desc}
+        bodyPadding="p-3"
+      >
         <div className="flex items-center gap-2 flex-wrap">
           <div className="flex items-center gap-1.5">
             <Database className="w-3.5 h-3.5 text-muted-foreground" />
@@ -464,9 +472,6 @@ function BpfInspectorTab({ clusterId, agents }: { clusterId: string; agents: Cil
               <Download className="w-3.5 h-3.5" /> 내보내기
             </button>
           )}
-          <span className="ml-auto text-xs text-muted-foreground">
-            {BPF_KINDS.find((k) => k.id === kind)?.desc}
-          </span>
         </div>
       </MacCard>
 
@@ -541,14 +546,14 @@ function BpfInspectorTab({ clusterId, agents }: { clusterId: string; agents: Cil
           </div>
         )}
         {!data && !loading && (
-          <div className="text-center py-16 text-sm text-muted-foreground">
-            대상 BPF 맵을 선택하고 <kbd className="mx-1 px-1.5 py-0.5 rounded bg-secondary border border-border text-xs">조회</kbd> 를 누르세요.
-          </div>
+          <EmptyState
+            icon={Database}
+            title="조회한 BPF 맵이 없습니다."
+            description="대상 BPF 맵을 선택하고 '조회'를 누르면 cilium-dbg 결과가 여기에 표시됩니다."
+          />
         )}
         {loading && (
-          <div className="text-center py-16 text-sm text-muted-foreground flex items-center justify-center gap-2">
-            <RefreshCw className="w-4 h-4 animate-spin" /> cilium-dbg 실행 중…
-          </div>
+          <LoadingState label="cilium-dbg 실행 중…" />
         )}
         {data && data.isJson && Array.isArray(data.parsed) && (
           <BpfJsonTable rows={data.parsed} />
@@ -570,7 +575,7 @@ function BpfJsonTable({ rows }: { rows: Record<string, unknown>[] }) {
     return Array.from(set);
   }, [rows]);
   if (rows.length === 0) {
-    return <div className="text-center py-12 text-sm text-muted-foreground">결과가 비어있습니다.</div>;
+    return <EmptyState compact title="결과가 비어 있습니다." description="선택한 맵에 항목이 없습니다. 다른 맵이나 에이전트를 골라 다시 조회하세요." />;
   }
   return (
     <div className="overflow-auto max-h-[60vh] lg:max-h-[calc(100vh-300px)]">
@@ -578,7 +583,7 @@ function BpfJsonTable({ rows }: { rows: Record<string, unknown>[] }) {
         <thead className="sticky top-0 bg-card">
           <tr>
             {cols.map((c) => (
-              <th key={c} className="text-left px-3 py-2 border-b border-border font-semibold uppercase tracking-wide text-xs text-muted-foreground whitespace-nowrap">
+              <th key={c} className="text-left px-3 py-2 border-b border-border font-medium text-xs text-muted-foreground whitespace-nowrap">
                 {c}
               </th>
             ))}
@@ -706,7 +711,15 @@ function MonitorTab({ clusterId, agents }: { clusterId: string; agents: CiliumAg
     // 라인에 나와 세로 공간을 온전히 쓴다 (MC 클라이언트 콘솔과 동일 패턴).
     <div className="grid grid-cols-1 lg:grid-cols-10 gap-4 items-start">
       <div className="lg:col-span-4 min-w-0 space-y-4">
-      <MacCard bodyPadding="p-3">
+      <MacCard
+        title="모니터 스트림"
+        titleExtra={
+          <span className="text-xs text-muted-foreground tabular-nums">
+            <span className={running ? 'text-status-healthy' : ''}>●</span> {events.length}건
+          </span>
+        }
+        bodyPadding="p-3"
+      >
         <div className="flex items-center gap-2 flex-wrap">
           <div className="flex items-center gap-1.5">
             <Server className="w-3.5 h-3.5 text-muted-foreground" />
@@ -742,7 +755,7 @@ function MonitorTab({ clusterId, agents }: { clusterId: string; agents: CiliumAg
           ) : (
             <button
               onClick={stop}
-              className="px-3.5 py-1.5 text-sm font-semibold bg-status-critical hover:bg-status-critical text-white rounded-xl transition-colors flex items-center gap-1.5"
+              className="px-3.5 py-1.5 text-sm font-semibold bg-status-critical hover:bg-status-critical text-primary-foreground rounded-xl transition-colors flex items-center gap-1.5"
             >
               <X className="w-3.5 h-3.5" /> 중단
             </button>
@@ -762,14 +775,11 @@ function MonitorTab({ clusterId, agents }: { clusterId: string; agents: CiliumAg
           >
             <Trash2 className="w-3.5 h-3.5" /> 비우기
           </button>
-          <span className="ml-auto text-xs text-muted-foreground tabular-nums">
-            <span className={running ? 'text-status-healthy' : ''}>●</span> {events.length}건
-          </span>
         </div>
       </MacCard>
 
       {err && (
-        <div className="rounded-xl border border-status-warning/40 bg-status-warning/10 px-3 py-2 text-sm text-status-warning flex items-center gap-2">
+        <div className="rounded-md border border-status-warning/40 bg-status-warning/10 px-3 py-2 text-sm text-status-warning flex items-center gap-2">
           <AlertTriangle className="w-3.5 h-3.5" /> {err}
         </div>
       )}
@@ -780,16 +790,19 @@ function MonitorTab({ clusterId, agents }: { clusterId: string; agents: CiliumAg
         rootClassName="lg:col-span-6 min-w-0"
         bodyPadding="p-0"
         className="overflow-hidden"
+        actions={
+          <div className="flex items-center gap-2">
+            <Filter className="w-3.5 h-3.5 text-muted-foreground" aria-hidden />
+            <input
+              value={filterText}
+              onChange={(e) => setFilterText(e.target.value)}
+              placeholder="텍스트로 필터링…"
+              aria-label="이벤트 텍스트 필터"
+              className="w-56 text-sm bg-background border border-border rounded-lg px-2.5 py-1.5 focus:outline-none focus:ring-2 focus:ring-primary/40"
+            />
+          </div>
+        }
       >
-        <div className="px-3 py-2 border-b border-border flex items-center gap-2">
-          <Filter className="w-3.5 h-3.5 text-muted-foreground" />
-          <input
-            value={filterText}
-            onChange={(e) => setFilterText(e.target.value)}
-            placeholder="텍스트로 필터링…"
-            className="flex-1 text-sm bg-background border border-border rounded-lg px-2.5 py-1.5 focus:outline-none focus:ring-2 focus:ring-primary/40"
-          />
-        </div>
         <EventList events={filtered} />
       </MacCard>
     </div>
@@ -851,7 +864,7 @@ function TypeFilter({ types, setTypes, disabled }: { types: Set<MonitorType>; se
         <div
           ref={popRef}
           style={{ top: pos.top, left: pos.left }}
-          className="fixed z-50 w-56 bg-card border border-border rounded-xl shadow-card p-2 space-y-1"
+          className="fixed z-50 w-56 bg-card border border-border rounded-md shadow-card p-2 space-y-1"
         >
           {MONITOR_TYPES.map((t) => (
             <label key={t} className="flex items-center gap-2 text-sm px-2 py-1 rounded hover:bg-secondary cursor-pointer">
@@ -1088,15 +1101,13 @@ function HubbleTab({ clusterId, hubbleInstalled }: { clusterId: string; hubbleIn
 
   if (!hubbleInstalled) {
     return (
-      <MacCard bodyPadding="p-8">
-        <div className="text-center space-y-2">
-          <AlertTriangle className="w-10 h-10 mx-auto text-status-warning" />
-          <p className="text-sm font-semibold">Hubble Relay 가 설치되어 있지 않습니다.</p>
-          <p className="text-sm text-muted-foreground">
-            <code className="px-1 py-0.5 rounded bg-secondary">cilium hubble enable --ui</code> 또는 helm 으로 hubble-relay 를 배포해 주세요.
-          </p>
-        </div>
-      </MacCard>
+      <EmptyState
+        icon={AlertTriangle}
+        title="Hubble Relay 가 설치되어 있지 않습니다."
+        description="아래 명령 또는 helm 으로 hubble-relay 를 배포하면 flow 를 볼 수 있습니다."
+      >
+        <code className="mt-3 px-1.5 py-0.5 rounded bg-secondary text-sm">cilium hubble enable --ui</code>
+      </EmptyState>
     );
   }
 
@@ -1104,7 +1115,7 @@ function HubbleTab({ clusterId, hubbleInstalled }: { clusterId: string; hubbleIn
     // 좌(필터/컨트롤)/우(flow 로그) 고정 배치 — MC 클라이언트 콘솔과 동일 패턴.
     <div className="grid grid-cols-1 lg:grid-cols-10 gap-4 items-start">
       <div className="lg:col-span-4 min-w-0 space-y-4">
-      <MacCard bodyPadding="p-3">
+      <MacCard title="Hubble 필터" bodyPadding="p-3">
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-1 xl:grid-cols-2 gap-2 mb-2">
           <input
             value={filters.fromNamespace}
@@ -1183,7 +1194,7 @@ function HubbleTab({ clusterId, hubbleInstalled }: { clusterId: string; hubbleIn
           ) : (
             <button
               onClick={stop}
-              className="px-3.5 py-1.5 text-sm font-semibold bg-status-critical hover:bg-status-critical text-white rounded-xl transition-colors flex items-center gap-1.5"
+              className="px-3.5 py-1.5 text-sm font-semibold bg-status-critical hover:bg-status-critical text-primary-foreground rounded-xl transition-colors flex items-center gap-1.5"
             >
               <X className="w-3.5 h-3.5" /> 중단
             </button>
@@ -1204,10 +1215,10 @@ function HubbleTab({ clusterId, hubbleInstalled }: { clusterId: string; hubbleIn
             <Trash2 className="w-3.5 h-3.5" /> 비우기
           </button>
           <div className="ml-auto flex items-center gap-3 text-xs text-muted-foreground">
-            <span className="inline-flex items-center gap-1 text-status-healthy">
+            <span className="inline-flex items-center gap-1 text-muted-foreground" title="FORWARDED">
               <CheckCircle2 className="w-3 h-3" /> {verdictCounts.FORWARDED}
             </span>
-            <span className="inline-flex items-center gap-1 text-status-critical">
+            <span className={`inline-flex items-center gap-1 ${verdictCounts.DROPPED > 0 ? 'text-status-critical' : 'text-muted-foreground'}`} title="DROPPED">
               <X className="w-3 h-3" /> {verdictCounts.DROPPED}
             </span>
             <span>전체 {events.length}</span>
@@ -1216,13 +1227,13 @@ function HubbleTab({ clusterId, hubbleInstalled }: { clusterId: string; hubbleIn
       </MacCard>
 
       {err && (
-        <div className="rounded-xl border border-status-warning/40 bg-status-warning/10 px-3 py-2 text-sm text-status-warning flex items-center gap-2">
+        <div className="rounded-md border border-status-warning/40 bg-status-warning/10 px-3 py-2 text-sm text-status-warning flex items-center gap-2">
           <AlertTriangle className="w-3.5 h-3.5" /> {err}
         </div>
       )}
       </div>
 
-      <MacCard title="Hubble flows" rootClassName="lg:col-span-6 min-w-0" bodyPadding="p-0" className="overflow-hidden">
+      <MacCard title="Hubble 플로우" rootClassName="lg:col-span-6 min-w-0" bodyPadding="p-0" className="overflow-hidden">
         <FlowList events={events} />
       </MacCard>
     </div>
@@ -1245,8 +1256,7 @@ function FlowList({ events }: { events: HubbleFlowEvent[] }) {
         const flow = ((e.parsed?.flow as Record<string, unknown>) ?? e.parsed ?? {}) as Record<string, unknown>;
         const verdict = String(flow.verdict ?? '');
         const verdictClr =
-          verdict === 'FORWARDED' ? 'text-status-healthy'
-          : verdict === 'DROPPED' ? 'text-status-critical'
+          verdict === 'DROPPED' ? 'text-status-critical'
           : verdict === 'AUDIT' ? 'text-status-warning' : 'text-muted-foreground';
         const summary = String(flow.Summary ?? flow.summary ?? '');
         const src = flow.source as Record<string, unknown> | undefined;

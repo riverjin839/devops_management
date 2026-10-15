@@ -3,7 +3,7 @@ import { PageHeader } from '@/components/common/PageHeader';
 import { useQueryClient } from '@tanstack/react-query';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Activity, Play, AlertCircle, ListTree, Loader2, ExternalLink } from 'lucide-react';
-import { ClusterSidebar, NamespaceSingleSelect, PodSingleSelect, RunLogPanel } from '@/components/common';
+import { ClusterSidebar, EmptyState, NamespaceSingleSelect, PodSingleSelect, RunLogPanel, SelectClusterEmptyState, Skeleton, PageShell } from '@/components/common';
 import { MacCard } from '@/components/ui/MacCard';
 import { useClusters } from '@/hooks/useCluster';
 import { useCanOperate } from '@/hooks/useCanOperate';
@@ -16,15 +16,16 @@ import { podBottleneckStreamUrl } from '@/services/api';
 import type { BottleneckRun, BottleneckStatus } from '@/types';
 import { formatApiError, parseUTC } from '@/lib/utils';
 
+// 좌측 보더만 상태색(비정상), 면 채색 없음 — 정상은 무채색 (§12.12-3, D-119).
 const STATUS_COLOR: Record<BottleneckStatus, string> = {
-  healthy:  'border-status-healthy/40 bg-status-healthy/5',
-  warning:  'border-status-warning/40 bg-status-warning/5',
-  critical: 'border-status-critical/40 bg-status-critical/5',
-  pending:  'border-status-unknown/40 bg-status-unknown/5',
+  healthy:  'border-transparent',
+  warning:  'border-status-warning/60',
+  critical: 'border-status-critical/60',
+  pending:  'border-status-unknown/60',
 };
 
 const STATUS_TEXT: Record<BottleneckStatus, string> = {
-  healthy: 'text-status-healthy',
+  healthy: 'text-muted-foreground',
   warning: 'text-status-warning',
   critical: 'text-status-critical',
   pending: 'text-status-unknown',
@@ -140,7 +141,7 @@ export function PodBottleneckPage() {
 
   return (
     <div className="app-min-h-screen bg-background">
-      <main className="pr-3 py-3 flex gap-3">
+      <PageShell density="console" className="flex gap-3">
         <div className="sticky top-4 self-start">
           <ClusterSidebar
             clusters={clusters}
@@ -208,7 +209,9 @@ export function PodBottleneckPage() {
               </div>
             )}
             {!selectedClusterId && (
-              <p className="mt-3 text-sm text-muted-foreground">좌측 사이드바에서 클러스터를 먼저 선택하세요.</p>
+              <div className="mt-3">
+                <SelectClusterEmptyState compact description="왼쪽 사이드바에서 클러스터를 고르면 진단을 실행할 수 있습니다." />
+              </div>
             )}
             <div className="mt-3">
               <RunLogPanel
@@ -243,14 +246,16 @@ export function PodBottleneckPage() {
             ) : runsLoading ? (
               <div className="space-y-2">
                 {Array.from({ length: 3 }).map((_, i) => (
-                  <div key={i} className="h-12 rounded-md bg-muted/30 animate-pulse" />
+                  <Skeleton key={i} className="block w-full h-12 rounded-md" />
                 ))}
               </div>
             ) : runs.length === 0 ? (
-              <div className="text-center py-10 text-sm text-muted-foreground">
-                <ListTree className="w-8 h-8 mx-auto mb-2 text-muted-foreground/30" />
-                <p>진단 결과가 없습니다. 위 폼에서 첫 진단을 실행하세요.</p>
-              </div>
+              <EmptyState
+                compact
+                icon={ListTree}
+                title="진단 결과가 없습니다."
+                description="위 폼에서 대상 파드를 골라 첫 진단을 실행하세요."
+              />
             ) : (
               <>
                 <ul className="divide-y divide-border">
@@ -282,7 +287,7 @@ export function PodBottleneckPage() {
             )}
           </MacCard>
         </div>
-      </main>
+      </PageShell>
     </div>
   );
 }

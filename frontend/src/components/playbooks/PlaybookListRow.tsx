@@ -16,11 +16,11 @@ interface PlaybookListRowProps {
 }
 
 const STATUS_CONFIG: Record<string, { dot: string; label: string; text: string }> = {
-  healthy: { dot: 'bg-status-healthy', label: 'OK', text: 'text-status-healthy' },
+  healthy: { dot: 'bg-muted-foreground/40', label: 'OK', text: 'text-muted-foreground' },
   warning: { dot: 'bg-status-warning', label: 'Changed', text: 'text-status-warning' },
   critical: { dot: 'bg-status-critical', label: 'Failed', text: 'text-status-critical' },
-  running: { dot: 'bg-blue-500', label: 'Running', text: 'text-blue-600 dark:text-blue-400' },
-  unknown: { dot: 'bg-slate-400', label: 'Not Run', text: 'text-muted-foreground' },
+  running: { dot: 'bg-status-info', label: 'Running', text: 'text-status-info' },
+  unknown: { dot: 'bg-status-unknown', label: 'Not Run', text: 'text-muted-foreground' },
 };
 
 function formatTimeAgo(dateStr?: string): string {
@@ -49,7 +49,7 @@ export function PlaybookListRow({
     <div
       ref={setNodeRef}
       style={style}
-      className="group flex items-center gap-3 px-3 py-2 bg-card border border-border rounded-lg hover:border-primary/40 transition-colors"
+      className="group flex items-center gap-3 px-3 py-2 bg-card border border-border rounded-md hover:border-primary/40 transition-colors"
     >
       {/* Drag handle */}
       <button
@@ -89,7 +89,7 @@ export function PlaybookListRow({
           <div className="flex items-center gap-2 text-xs text-muted-foreground truncate">
             {playbook.description && <span className="truncate">{playbook.description}</span>}
             {playbook.description && <span aria-hidden>·</span>}
-            <span className="font-mono truncate" title={fileLabel}>📄 {fileLabel}</span>
+            <span className="inline-flex items-center gap-1 font-mono truncate" title={fileLabel}><FileText className="w-3 h-3 flex-shrink-0" aria-hidden />{fileLabel}</span>
           </div>
         )}
       </div>
@@ -97,11 +97,11 @@ export function PlaybookListRow({
       {/* Stats (compact) */}
       {totals ? (
         <div className="hidden md:flex items-center gap-2 text-xs flex-shrink-0 tabular-nums">
-          <Stat label="OK"   value={totals.ok}          color="text-status-healthy" />
+          <Stat label="OK"   value={totals.ok}          color="text-muted-foreground" />
           <Stat label="Chg"  value={totals.changed}     color="text-status-warning" />
           <Stat label="Fail" value={totals.failures}    color="text-status-critical" />
-          <Stat label="Unr"  value={totals.unreachable} color="text-orange-500" />
-          <Stat label="Skip" value={totals.skipped}     color="text-slate-400" />
+          <Stat label="Unr"  value={totals.unreachable} color="text-status-warning" />
+          <Stat label="Skip" value={totals.skipped}     color="text-status-unknown" />
         </div>
       ) : (
         <div className="hidden md:block text-xs text-muted-foreground italic flex-shrink-0">no stats</div>

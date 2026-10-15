@@ -3,7 +3,8 @@ import {
   AlertTriangle, CheckCircle, Info, Loader2, Search, Zap,
   Server, Layers, Package, RefreshCw, Download, Play, Square, Filter, X,
 } from 'lucide-react';
-import { SearchableSelect, LogViewTabs } from '@/components/common';
+import { SearchableSelect, LogViewTabs, PageHeader, PageShell } from '@/components/common';
+import { MacCard } from '@/components/ui/MacCard';
 import {
   useAnalyzeIncident, useAnalyzerHealth,
   useAnalyzeNamespaces, useAnalyzePods, useFetchIncidentContext,
@@ -14,10 +15,11 @@ import type {
 } from '@/types';
 import { formatApiError, parseUTC } from '@/lib/utils';
 
-const SEVERITY_STYLE: Record<string, { icon: typeof AlertTriangle; bg: string; border: string; text: string; badge: string }> = {
-  critical: { icon: AlertTriangle, bg: 'bg-status-critical/10',    border: 'border-status-critical/40',    text: 'text-status-critical',    badge: 'bg-status-critical/15 text-status-critical border-status-critical/30' },
-  warning:  { icon: AlertTriangle, bg: 'bg-status-warning/10',  border: 'border-status-warning/40',  text: 'text-status-warning',  badge: 'bg-status-warning/15 text-status-warning border-status-warning/30' },
-  info:     { icon: Info,          bg: 'bg-blue-500/10',   border: 'border-blue-500/40',   text: 'text-blue-400',   badge: 'bg-blue-500/15 text-blue-400 border-blue-500/30' },
+// 심각도 신호는 아이콘 + 라벨 글자색 하나만 — 카드 면·보더·배지는 중립 (§12.12-3, D-119).
+const SEVERITY_STYLE: Record<string, { icon: typeof AlertTriangle; text: string; label: string }> = {
+  critical: { icon: AlertTriangle, text: 'text-status-critical', label: '위험' },
+  warning:  { icon: AlertTriangle, text: 'text-status-warning',  label: '경고' },
+  info:     { icon: Info,          text: 'text-status-info',     label: '정보' },
 };
 
 const BACKEND_LABEL: Record<string, string> = {
@@ -28,7 +30,7 @@ const BACKEND_LABEL: Record<string, string> = {
 
 function ConfidenceBar({ value }: { value: number }) {
   const pct = Math.round(value * 100);
-  const color = pct >= 80 ? 'bg-status-healthy' : pct >= 50 ? 'bg-status-warning' : 'bg-status-critical';
+  const color = pct >= 80 ? 'bg-muted-foreground/60' : pct >= 50 ? 'bg-status-warning' : 'bg-status-critical';
   return (
     <div className="flex items-center gap-2">
       <div className="flex-1 bg-secondary rounded-full h-1.5">
@@ -44,39 +46,44 @@ function ResultPanel({ result }: { result: IncidentAnalysisResult }) {
   const SeverityIcon = st.icon;
 
   return (
-    <div className={`rounded-xl border ${st.border} ${st.bg} p-5 space-y-4`}>
-      <div className="flex items-start justify-between gap-3">
-        <div className="flex items-center gap-2">
-          <SeverityIcon className={`w-5 h-5 flex-shrink-0 ${st.text}`} />
-          <span className={`text-sm font-bold ${st.text} uppercase tracking-wide`}>{result.severity}</span>
-        </div>
-        <div className="flex items-center gap-2">
-          <span className={`text-xs px-2 py-0.5 rounded-full border ${st.badge}`}>
+    <MacCard
+      title="분석 결과"
+      titleExtra={
+        <span className="inline-flex items-center gap-1.5">
+          <SeverityIcon className={`w-4 h-4 flex-shrink-0 ${st.text}`} />
+          <span className={`text-sm font-semibold ${st.text}`}>{SEVERITY_STYLE[result.severity] ? st.label : result.severity}</span>
+        </span>
+      }
+      actions={
+        <>
+          <span className="text-xs px-2 py-0.5 rounded-full border bg-secondary border-border text-muted-foreground">
             {BACKEND_LABEL[result.analyzedBy] ?? result.analyzedBy}
           </span>
           <span className="text-xs text-muted-foreground">
             {parseUTC(result.analyzedAt).toLocaleTimeString('ko-KR')}
           </span>
-        </div>
-      </div>
-
-      <div className="rounded-lg bg-background/60 border border-border px-4 py-3">
-        <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1">근본 원인</p>
+        </>
+      }
+      bodyPadding="p-5"
+      className="space-y-4"
+    >
+      <div className="rounded-md bg-secondary/40 px-4 py-3">
+        <p className="text-xs font-semibold text-muted-foreground mb-1">근본 원인</p>
         <p className="text-sm text-foreground">{result.rootCause}</p>
       </div>
 
       <div>
-        <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">신뢰도</p>
+        <p className="text-xs font-semibold text-muted-foreground mb-1.5">신뢰도</p>
         <ConfidenceBar value={result.confidence} />
       </div>
 
       {result.suggestedActions.length > 0 && (
         <div>
-          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">조치 방안</p>
+          <p className="text-xs font-semibold text-muted-foreground mb-2">조치 방안</p>
           <ol className="space-y-1.5">
             {result.suggestedActions.map((action, i) => (
               <li key={i} className="flex items-start gap-2 text-sm text-foreground">
-                <span className={`flex-shrink-0 w-5 h-5 rounded-full flex items-center justify-center text-xs font-bold ${st.badge} border`}>
+                <span className={`flex-shrink-0 w-5 h-5 rounded-full flex items-center justify-center text-xs font-semibold bg-secondary border-border text-muted-foreground border`}>
                   {i + 1}
                 </span>
                 {action}
@@ -88,7 +95,7 @@ function ResultPanel({ result }: { result: IncidentAnalysisResult }) {
 
       {result.relatedRunbooks && result.relatedRunbooks.length > 0 && (
         <div>
-          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">관련 런북</p>
+          <p className="text-xs font-semibold text-muted-foreground mb-1.5">관련 런북</p>
           <div className="flex flex-wrap gap-1.5">
             {result.relatedRunbooks.map((rb) => (
               <span key={rb} className="text-xs px-2 py-0.5 rounded-full bg-secondary border border-border text-muted-foreground">
@@ -98,7 +105,7 @@ function ResultPanel({ result }: { result: IncidentAnalysisResult }) {
           </div>
         </div>
       )}
-    </div>
+    </MacCard>
   );
 }
 
@@ -117,7 +124,7 @@ function podOptionLabel(pod: AnalyzePodItem): string {
   const restart = pod.restartCount > 0 ? ` ↻${pod.restartCount}` : '';
   const node = pod.node ? ` @ ${pod.node}` : '';
   const issue = pod.issueReason ? ` — ${pod.issueReason}` : '';
-  return `${pod.hasIssue ? '⚠ ' : ''}${pod.name}  [${pod.ready} ${pod.phase}${restart}]${node}${issue}`;
+  return `${pod.hasIssue ? '[이상] ' : ''}${pod.name}  [${pod.ready} ${pod.phase}${restart}]${node}${issue}`;
 }
 
 export function IncidentAnalysisPage() {
@@ -305,19 +312,17 @@ export function IncidentAnalysisPage() {
 
   return (
     <div className="app-min-h-screen bg-background">
-      <main className="max-w-[1500px] mx-auto px-6 py-8">
+      <PageShell density="hub" className="space-y-5">
 
         {/* 헤더 */}
-        <div className="flex items-center justify-between mb-6 gap-3 flex-wrap">
-          <div className="flex items-center gap-3">
-            <Zap className="w-6 h-6 text-primary" />
-            <h1 className="text-xl font-bold">K8s 로그 — AI 분석</h1>
-            <LogViewTabs current="analysis" />
-          </div>
-          {health && (
+        <PageHeader
+          icon={Zap}
+          title="K8s 로그 — AI 분석"
+          titleExtra={<LogViewTabs current="analysis" />}
+          actions={health && (
             <div className="flex items-center gap-2 text-sm">
               {health.available
-                ? <CheckCircle className="w-4 h-4 text-status-healthy" />
+                ? <CheckCircle className="w-4 h-4 text-muted-foreground" />
                 : <AlertTriangle className="w-4 h-4 text-status-warning" />}
               <span className="text-muted-foreground">
                 {BACKEND_LABEL[health.backend] ?? health.backend}
@@ -325,14 +330,14 @@ export function IncidentAnalysisPage() {
               </span>
             </div>
           )}
-        </div>
+        />
 
         {/* ── 드릴다운 선택 (Cluster → Namespace → Pod) ── */}
-        <div className="bg-card border border-border rounded-xl p-5 mb-5 space-y-4">
-          <div className="flex items-center justify-between">
-            <p className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">
-              대상 선택
-            </p>
+        <MacCard
+          title="대상 선택"
+          bodyPadding="p-5"
+          className="space-y-4"
+          actions={
             <label className="flex items-center gap-1.5 text-xs text-muted-foreground cursor-pointer"
               title="OFF: namespace 이름만 빠르게 조회 (큰 클러스터 권장). ON: 클러스터 전체 pod 를 스캔해 비정상 ns/pod 만 추림 (느림 — 큰 클러스터에서 1분 이상 소요 가능). ns 가 이미 선택돼 있으면 그 ns 만 스캔.">
               <input
@@ -343,11 +348,12 @@ export function IncidentAnalysisPage() {
               />
               이슈 있는 항목만 보기 (느림)
             </label>
-          </div>
+          }
+        >
 
           {/* 이슈만 + ns 미선택일 때 — glob 패턴으로 스캔 범위 좁히기 */}
           {onlyIssues && !namespace && (
-            <div className="rounded-lg border border-status-warning/30 bg-status-warning/5 p-3 space-y-2">
+            <div className="rounded-md border border-status-warning/30 bg-status-warning/5 p-3 space-y-2">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
                 <div>
                   <label htmlFor={f('nsPattern')} className={lc}>
@@ -363,7 +369,7 @@ export function IncidentAnalysisPage() {
                 </div>
                 <div>
                   <label htmlFor={f('podPattern')} className={lc}>
-                    Pod 이름 패턴 (선택)
+                    파드 이름 패턴 (선택)
                   </label>
                   <input
                     id={f('podPattern')}
@@ -375,7 +381,7 @@ export function IncidentAnalysisPage() {
                 </div>
               </div>
               <p className="text-xs text-muted-foreground">
-                💡 콤마 구분, <code>*</code> <code>?</code> 와일드카드. 비워두면 전체 ns 스캔.
+                콤마 구분, <code>*</code> <code>?</code> 와일드카드. 비워두면 전체 ns 스캔.
                 Namespace 를 선택하면 이 입력은 사라지고 그 ns 만 스캔합니다.
               </p>
             </div>
@@ -419,7 +425,7 @@ export function IncidentAnalysisPage() {
                 options={nsQ.data?.namespaces ?? []}
                 getKey={(n) => n.name}
                 getLabel={(n) =>
-                  `${n.hasUnhealthy ? '⚠ ' : ''}${n.name}` +
+                  `${n.hasUnhealthy ? '[이상] ' : ''}${n.name}` +
                   (typeof n.podCount === 'number' ? ` (${n.podCount} pods)` : '')
                 }
                 placeholder="namespace 검색..."
@@ -511,18 +517,20 @@ export function IncidentAnalysisPage() {
               선택이 변경되었습니다. 다시 자동 채우기를 누르세요.
             </p>
           )}
-        </div>
+        </MacCard>
 
         {/* ── 입력 (전폭) ── */}
         {/* 전폭으로 펼쳐 textarea 폭이 "대상 선택" 패널과 동일. 결과 패널은 아래로. */}
         <div className="space-y-4">
-          <div className="bg-card border border-border rounded-xl p-5 space-y-4">
-            <p className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">
-              이벤트 ({events.length}건)
-            </p>
+          <MacCard
+            title="이벤트"
+            titleExtra={<span className="text-xs text-muted-foreground tabular-nums">{events.length}건</span>}
+            bodyPadding="p-5"
+            className="space-y-4"
+          >
             {events.length > 0 ? (
-              <div className="rounded-lg border border-border overflow-hidden">
-                <div className="grid grid-cols-[80px_70px_60px_1fr] gap-2 px-3 py-1.5 bg-secondary/50 text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+              <div className="rounded-md border border-border overflow-hidden">
+                <div className="grid grid-cols-[80px_70px_60px_1fr] gap-2 px-3 py-1.5 bg-secondary/50 text-xs font-semibold text-muted-foreground">
                   <span>Type</span><span>Reason</span><span className="text-center">Count</span><span>Message</span>
                 </div>
                 {events.slice(0, 20).map((ev, i) => <EventRow key={i} event={ev} index={i} />)}
@@ -543,13 +551,14 @@ export function IncidentAnalysisPage() {
                 className={`${ic} font-mono text-sm resize-none`}
               />
             </div>
-          </div>
+          </MacCard>
 
-          <div className="bg-card border border-border rounded-xl p-5 space-y-4">
-            <div className="flex items-center justify-between flex-wrap gap-2">
-              <p className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">로그 / Describe</p>
-
-              {/* 실시간 스트리밍 + 로그 라인 필터 컨트롤 */}
+          <MacCard
+            title="로그 / Describe"
+            bodyPadding="p-5"
+            className="space-y-4"
+            actions={
+              /* 실시간 스트리밍 + 로그 라인 필터 컨트롤 */
               <div className="flex items-center gap-2 flex-wrap">
                 {/* 라인 필터 */}
                 <div className="relative">
@@ -607,15 +616,15 @@ export function IncidentAnalysisPage() {
                   </button>
                 )}
               </div>
-            </div>
+            }
+          >
 
             {streaming && (
               <div className="flex items-center gap-2 text-xs text-muted-foreground">
                 <span className="relative flex w-2 h-2">
-                  <span className="absolute inline-flex w-full h-full rounded-full bg-status-healthy opacity-60 animate-ping" />
-                  <span className="relative inline-flex w-2 h-2 rounded-full bg-status-healthy" />
+                  <span className="relative inline-flex w-2 h-2 rounded-full bg-primary" />
                 </span>
-                <span>LIVE · 매 {streamIntervalSec}초 갱신</span>
+                <span>실시간 · 매 {streamIntervalSec}초 갱신</span>
                 {lastStreamAt && (
                   <span className="text-muted-foreground">
                     마지막 {Math.max(0, Math.round((Date.now() - lastStreamAt) / 1000))}초 전
@@ -673,7 +682,7 @@ export function IncidentAnalysisPage() {
                 placeholder="kubectl describe pod 출력을 붙여넣으세요..."
                 rows={10} className={`${ic} font-mono text-sm resize-y`} />
             </div>
-          </div>
+          </MacCard>
 
           <button
             onClick={handleSubmit}
@@ -690,18 +699,18 @@ export function IncidentAnalysisPage() {
             {response?.result ? (
               <ResultPanel result={response.result} />
             ) : response?.error ? (
-              <div className="rounded-xl border border-status-critical/40 bg-status-critical/10 p-5 text-sm text-status-critical">
+              <div className="rounded-md border border-status-critical/40 bg-status-critical/10 p-5 text-sm text-status-critical">
                 분석 실패: {response.error}
               </div>
             ) : (
-              <div className="flex flex-col items-center justify-center min-h-[160px] text-muted-foreground rounded-xl border border-dashed border-border">
+              <div className="flex flex-col items-center justify-center min-h-[160px] text-muted-foreground rounded-md border border-dashed border-border">
                 <Zap className="w-10 h-10 mb-2" />
                 <p className="text-sm">로그 / 이벤트 / describe 입력 후 분석을 시작하세요</p>
               </div>
             )}
           </div>
         </div>
-      </main>
+      </PageShell>
     </div>
   );
 }

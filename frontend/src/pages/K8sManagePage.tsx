@@ -15,7 +15,7 @@ import type { AxiosError } from 'axios';
 import { MacCard } from '@/components/ui/MacCard';
 import { ClusterSidebar } from '@/components/common/ClusterSidebar';
 import { LogViewer } from '@/components/common/LogViewer';
-import { ConfirmDialog, useModalA11y, Skeleton } from '@/components/common';
+import { ConfirmDialog, useModalA11y, Skeleton, SkeletonCard, EmptyState, LoadingState, StatTile, StatTileRow, PageShell } from '@/components/common';
 import { RoleGate } from '@/components/auth/RoleGate';
 import { useClusters } from '@/hooks/useCluster';
 import { k8sResourcesApi, k8sHelmApi } from '@/services/api';
@@ -31,12 +31,13 @@ import type {
   K8sPodRichRow, K8sCellColor, K8sRelatedEvent,
 } from '@/types';
 
-// 셀 색상 → Tailwind 클래스
+// 셀 색상 → Tailwind 클래스 (정상(green)은 무채색 — §12.12 #3, StatusDot 과 동일)
 const CELL_BG: Record<K8sCellColor, string> = {
-  green: 'bg-status-healthy', amber: 'bg-status-warning', red: 'bg-status-critical', gray: 'bg-status-unknown',
+  green: 'bg-muted-foreground/40', amber: 'bg-status-warning', red: 'bg-status-critical', gray: 'bg-status-unknown',
 };
+// 파드 phase 글자색 — 상태 신호는 앞의 점 하나로 충분하므로 글자는 무채색(정상은 보조색)
 const STATUS_TEXT: Record<K8sCellColor, string> = {
-  green: 'text-status-healthy', amber: 'text-status-warning', red: 'text-status-critical', gray: 'text-status-unknown',
+  green: 'text-muted-foreground', amber: 'text-foreground', red: 'text-foreground', gray: 'text-foreground',
 };
 // 컨테이너 색칸 접근성 라벨 (D-024)
 const CELL_LABEL: Record<K8sCellColor, string> = {
@@ -294,8 +295,8 @@ export function K8sManagePage() {
   const closeDetail = () => { setDetail(null); setEditing(false); setDraft(''); };
 
   return (
-    <div className="app-min-h-screen bg-background py-3 pr-3">
-      <div className="flex gap-3">
+    <div className="app-min-h-screen bg-background">
+      <PageShell density="console" as="div" className="flex gap-3">
         {/* 클러스터 선택 레일 */}
         <div className="sticky top-4 self-start">
           <ClusterSidebar
@@ -335,7 +336,7 @@ export function K8sManagePage() {
                       type="button"
                       onClick={() => toggleCatCollapse(cat.id)}
                       aria-expanded={!isCollapsed}
-                      className="w-full flex items-center gap-1.5 px-2 py-0.5 rounded text-xs font-semibold uppercase tracking-wider text-muted-foreground hover:text-foreground hover:bg-secondary/40"
+                      className="w-full flex items-center gap-1.5 px-2 py-0.5 rounded text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-secondary/40"
                     >
                       <Icon className="w-3 h-3 flex-shrink-0" />
                       <span className="flex-1 text-left truncate">{cat.label}</span>
@@ -371,21 +372,21 @@ export function K8sManagePage() {
 
         {/* 본문 */}
         <div className="flex-1 min-w-0 space-y-3">
-          <div className="flex items-center gap-3 flex-wrap">
-            <PageHeader
-              back={{ to: '/cluster-overview', label: '클러스터 현황' }}
-              icon={Boxes}
-              title={<>{cluster ? cluster.name : '클러스터'} — {leaf.label}</>}
-            />
-            <RoleGate allow={['admin', 'operator']} fallback={
-              <span className="text-xs rounded px-1.5 py-0.5 bg-muted text-muted-foreground">읽기 전용 (viewer)</span>
-            }>
-              <span className="text-xs rounded px-1.5 py-0.5 bg-status-healthy/15 text-status-healthy">쓰기 가능 (operator)</span>
-            </RoleGate>
-          </div>
+          <PageHeader
+            back={{ to: '/cluster-overview', label: '클러스터 현황' }}
+            icon={Boxes}
+            title={<>{cluster ? cluster.name : '클러스터'} — {leaf.label}</>}
+            titleExtra={
+              <RoleGate allow={['admin', 'operator']} fallback={
+                <span className="text-xs rounded px-1.5 py-0.5 bg-muted text-muted-foreground">읽기 전용 (viewer)</span>
+              }>
+                <span className="text-xs rounded px-1.5 py-0.5 bg-secondary text-muted-foreground">쓰기 가능 (operator)</span>
+              </RoleGate>
+            }
+          />
 
           {actionMsg && (
-            <div className={`flex items-center gap-2 rounded-xl px-3 py-2 text-sm ${actionMsg.kind === 'ok' ? 'bg-status-healthy/10 text-status-healthy' : 'bg-destructive/10 text-destructive'}`}>
+            <div className={`flex items-center gap-2 rounded-xl px-3 py-2 text-sm ${actionMsg.kind === 'ok' ? 'bg-status-healthy/10 text-status-healthy' : 'bg-status-critical/10 text-status-critical'}`}>
               {actionMsg.kind === 'ok' ? <CheckCircle2 className="w-4 h-4" /> : <AlertTriangle className="w-4 h-4" />}
               {actionMsg.text}
             </div>
@@ -452,9 +453,7 @@ export function K8sManagePage() {
 
           {leaf.mode === 'overview' && <OverviewPanel clusterId={clusterId} />}
           {leaf.mode === 'events' && (
-            <MacCard title="이벤트 (실시간)">
-              <EventsStream clusterId={clusterId} selectedNs={selectedNs} onSelectedNsChange={setSelectedNs} />
-            </MacCard>
+            <EventsStream clusterId={clusterId} selectedNs={selectedNs} onSelectedNsChange={setSelectedNs} />
           )}
           {leaf.mode === 'helm' && (
             <HelmPanel clusterId={clusterId} onViewValues={(r) => setDetail({ kind: 'helmValues', namespace: r.namespace, name: r.name })} />
@@ -471,7 +470,7 @@ export function K8sManagePage() {
             />
           )}
         </div>
-      </div>
+      </PageShell>
 
       {/* 상세 / YAML 드로어 */}
       {detail && (
@@ -565,6 +564,8 @@ export interface ResourceTablePanelProps {
   onTerminal: (ns: string, name: string) => void;
   /** NS 대시보드처럼 네임스페이스가 이미 상위에서 고정된 곳에 임베드할 때 내장 선택기를 숨긴다. */
   hideNsSelector?: boolean;
+  /** 카드 제목 — 기본은 kind 그대로. NS 대시보드가 한국어 종류명을 넘긴다. */
+  title?: string;
 }
 
 export function ResourceTablePanel(p: ResourceTablePanelProps) {
@@ -611,8 +612,10 @@ export function ResourceTablePanel(p: ResourceTablePanelProps) {
   ].filter(Boolean).join(' ');
 
   return (
-    <MacCard title={kind} bodyPadding="p-0">
-      <div className="flex items-center gap-2 flex-wrap px-3 py-2.5 border-b border-border">
+    <MacCard
+      title={p.title ?? kind}
+      bodyPadding="p-0"
+      actions={<>
         {isNamespaced && !p.hideNsSelector && (
           <NamespaceMultiSelect clusterId={clusterId} selected={selectedNs} onChange={setSelectedNs} />
         )}
@@ -625,13 +628,12 @@ export function ResourceTablePanel(p: ResourceTablePanelProps) {
             className="rounded-xl border border-border bg-card pl-7 pr-2 py-1 text-sm w-48 focus:outline-none focus:ring-1 focus:ring-primary"
           />
         </div>
-        <div className="ml-auto flex items-center gap-1">
-          <ColumnToggle columns={allColumns} hidden={hidden} onToggle={toggle} />
-          <button onClick={forceRefetch} title="새로고침" aria-label="새로고침" className="p-1.5 rounded-lg hover:bg-secondary text-muted-foreground">
-            <RefreshCw className={`w-3.5 h-3.5 ${isFetching ? 'animate-spin' : ''}`} />
-          </button>
-        </div>
-      </div>
+        <ColumnToggle columns={allColumns} hidden={hidden} onToggle={toggle} />
+        <button onClick={forceRefetch} title="새로고침" aria-label="새로고침" className="p-1.5 rounded-lg hover:bg-secondary text-muted-foreground">
+          <RefreshCw className={`w-3.5 h-3.5 ${isFetching ? 'animate-spin' : ''}`} />
+        </button>
+      </>}
+    >
 
       <div className="overflow-x-auto">
       <div className="min-w-[760px]">
@@ -646,9 +648,9 @@ export function ResourceTablePanel(p: ResourceTablePanelProps) {
       {isLoading ? (
         <RowsSkeleton rows={8} />
       ) : isError ? (
-        <div className="p-6 text-sm text-destructive">조회 실패: {errMsg(error)}</div>
+        <div className="p-6 text-sm text-status-critical">조회 실패: {errMsg(error)}</div>
       ) : filtered.length === 0 ? (
-        <div className="p-10 text-center text-sm text-muted-foreground">표시할 리소스가 없습니다.</div>
+        <EmptyState compact title="표시할 리소스가 없습니다." description="네임스페이스 필터나 검색어를 바꿔 보세요." />
       ) : (
         <Virtuoso
           style={{ height: '64vh' }}
@@ -658,12 +660,12 @@ export function ResourceTablePanel(p: ResourceTablePanelProps) {
             return (
               <div className="grid gap-2 px-4 py-1.5 text-sm border-b border-border/40 hover:bg-secondary/30 items-center" style={{ gridTemplateColumns: gridTemplate }}>
                 <button onClick={() => p.onOpenDetail(r, !!caps?.editable)} className="truncate font-medium text-left hover:text-primary">{r.name}</button>
-                {isNamespaced && <span className="truncate text-muted-foreground">{r.namespace ?? '-'}</span>}
+                {isNamespaced && <span className="truncate text-muted-foreground">{r.namespace ?? '—'}</span>}
                 {useSummary ? (
                   <span className="truncate text-muted-foreground">{r.summary}</span>
                 ) : (
                   columns.map((c) => (
-                    <span key={c.key} className="truncate text-muted-foreground" title={r.cols?.[c.key] ?? ''}>{r.cols?.[c.key] ?? '-'}</span>
+                    <span key={c.key} className="truncate text-muted-foreground" title={r.cols?.[c.key] ?? ''}>{r.cols?.[c.key] ?? '—'}</span>
                   ))
                 )}
                 <span className="text-right text-muted-foreground tabular-nums">{age(r.ageSeconds)}</span>
@@ -725,18 +727,11 @@ function OverviewPanel({ clusterId }: { clusterId: string }) {
   const nodeItems = nodes.data?.items ?? [];
   const readyNodes = nodeItems.filter((n) => (n.summary || '').startsWith('Ready')).length;
 
-  const Stat = ({ label, value, sub }: { label: string; value: string | number; sub?: string }) => (
-    <MacCard title={label}>
-      <div className="text-3xl font-bold tabular-nums">{value}</div>
-      {sub && <div className="text-sm text-muted-foreground mt-1">{sub}</div>}
-    </MacCard>
-  );
-
   // 조회 실패 시 — "노드 0·상태 점검" 위장 대신 명시적 에러 배너
   if (nodes.isError || namespaces.isError) {
     return (
       <MacCard title="클러스터 리소스 개요">
-        <div className="flex items-center gap-2 p-4 text-sm text-destructive">
+        <div className="flex items-center gap-2 p-4 text-sm text-status-critical">
           <AlertTriangle className="w-4 h-4 flex-shrink-0" />
           조회 실패: {errMsg(nodes.error ?? namespaces.error)}
         </div>
@@ -746,24 +741,19 @@ function OverviewPanel({ clusterId }: { clusterId: string }) {
   // 로딩 중 — 실제 3-스탯 그리드 구조를 흉내낸 skeleton (레이아웃 시프트 최소화)
   if (nodes.isLoading || namespaces.isLoading) {
     return (
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3" aria-busy="true" aria-label="개요 불러오는 중">
-        {[...Array(3)].map((_, i) => (
-          <div key={i} className="rounded-md border border-border bg-card p-4 space-y-2">
-            <Skeleton height={10} width="40%" />
-            <Skeleton height={24} width="60%" />
-          </div>
-        ))}
-      </div>
+      <StatTileRow>
+        {[...Array(3)].map((_, i) => <SkeletonCard key={i} className="rounded-md" />)}
+      </StatTileRow>
     );
   }
 
   const healthy = readyNodes === nodeItems.length && nodeItems.length > 0;
   return (
-    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-      <Stat label="노드" value={nodeItems.length} sub={`Ready ${readyNodes} / ${nodeItems.length}`} />
-      <Stat label="네임스페이스" value={namespaces.data?.items.length ?? '-'} />
-      <Stat label="상태" value={healthy ? 'Healthy' : '점검'} />
-    </div>
+    <StatTileRow>
+      <StatTile label="노드" value={nodeItems.length} hint={`Ready ${readyNodes} / ${nodeItems.length}`} />
+      <StatTile label="네임스페이스" value={namespaces.data?.items.length ?? '—'} />
+      <StatTile label="상태" value={healthy ? '정상' : '점검 필요'} tone={healthy ? undefined : 'warning'} />
+    </StatTileRow>
   );
 }
 
@@ -776,16 +766,16 @@ function HelmPanel({ clusterId, onViewValues }: { clusterId: string; onViewValue
     retry: false,
   });
   return (
-    <MacCard title="Helm Releases" bodyPadding="p-0">
+    <MacCard title="Helm 릴리스" bodyPadding="p-0">
       <div className="grid grid-cols-[1fr_140px_70px_1fr_90px] gap-2 px-4 py-1.5 text-xs font-semibold text-muted-foreground border-b border-border bg-secondary/30">
         <span>이름</span><span>네임스페이스</span><span>rev</span><span>차트</span><span className="text-right pr-2">values</span>
       </div>
       {isLoading ? (
         <RowsSkeleton />
       ) : isError ? (
-        <div className="p-6 text-sm text-destructive">조회 실패: {errMsg(error)}</div>
+        <div className="p-6 text-sm text-status-critical">조회 실패: {errMsg(error)}</div>
       ) : (data?.items.length ?? 0) === 0 ? (
-        <div className="p-10 text-center text-sm text-muted-foreground">Helm 릴리스가 없습니다.</div>
+        <EmptyState compact title="Helm 릴리스가 없습니다." description="이 클러스터에 helm 으로 설치된 릴리스가 없습니다." />
       ) : (
         data!.items.map((r) => (
           <div key={`${r.namespace}/${r.name}`} className="grid grid-cols-[1fr_140px_70px_1fr_90px] gap-2 px-4 py-1.5 text-sm border-b border-border/40 items-center">
@@ -836,12 +826,15 @@ function CrdPanel({ clusterId, selectedCrd, setSelectedCrd, onOpenObject }: CrdP
       ].join(' '),
     };
     return (
-      <MacCard title={`${selectedCrd.kind} (${selectedCrd.group})`} bodyPadding="p-0">
-        <div className="px-4 py-2 border-b border-border">
+      <MacCard
+        title={`${selectedCrd.kind} (${selectedCrd.group})`}
+        bodyPadding="p-0"
+        actions={
           <button onClick={() => setSelectedCrd(null)} className="inline-flex items-center gap-1.5 text-sm text-primary hover:underline">
             <ArrowLeft className="w-3.5 h-3.5" /> CRD 목록
           </button>
-        </div>
+        }
+      >
         <div className="grid gap-2 px-4 py-1.5 text-xs font-semibold text-muted-foreground border-b border-border bg-secondary/30" style={grid}>
           <span>이름</span>
           {namespaced && <span>네임스페이스</span>}
@@ -851,18 +844,18 @@ function CrdPanel({ clusterId, selectedCrd, setSelectedCrd, onOpenObject }: CrdP
         {objects.isLoading ? (
           <RowsSkeleton />
         ) : objects.isError ? (
-          <div className="p-6 text-sm text-destructive">조회 실패: {errMsg(objects.error)}</div>
+          <div className="p-6 text-sm text-status-critical">조회 실패: {errMsg(objects.error)}</div>
         ) : (objects.data?.items.length ?? 0) === 0 ? (
-          <div className="p-10 text-center text-sm text-muted-foreground">오브젝트가 없습니다.</div>
+          <EmptyState compact title="오브젝트가 없습니다." description="이 CRD 로 만든 오브젝트가 아직 없습니다." />
         ) : (
           objects.data!.items.map((r) => (
             <button key={`${r.namespace}/${r.name}`} onClick={() => onOpenObject(selectedCrd, r)}
               className="w-full grid gap-2 px-4 py-1.5 text-sm text-left border-b border-border/40 hover:bg-secondary/30 items-center" style={grid}>
               <span className="truncate font-medium">{r.name}</span>
-              {namespaced && <span className="truncate text-muted-foreground">{r.namespace ?? '-'}</span>}
+              {namespaced && <span className="truncate text-muted-foreground">{r.namespace ?? '—'}</span>}
               {dynCols.length > 0
                 ? dynCols.map((c) => (
-                    <span key={c.key} className="truncate text-muted-foreground" title={r.cols?.[c.key] ?? ''}>{r.cols?.[c.key] ?? '-'}</span>
+                    <span key={c.key} className="truncate text-muted-foreground" title={r.cols?.[c.key] ?? ''}>{r.cols?.[c.key] ?? '—'}</span>
                   ))
                 : <span className="truncate text-muted-foreground">{r.summary}</span>}
               <span className="text-right text-muted-foreground tabular-nums">{age(r.ageSeconds)}</span>
@@ -874,16 +867,16 @@ function CrdPanel({ clusterId, selectedCrd, setSelectedCrd, onOpenObject }: CrdP
   }
 
   return (
-    <MacCard title="Custom Resource Definitions" bodyPadding="p-0">
+    <MacCard title="CRD 목록" bodyPadding="p-0">
       <div className="grid grid-cols-[1fr_1fr_90px] gap-2 px-4 py-1.5 text-xs font-semibold text-muted-foreground border-b border-border bg-secondary/30">
         <span>Kind</span><span>Group</span><span>Scope</span>
       </div>
       {crds.isLoading ? (
         <RowsSkeleton />
       ) : crds.isError ? (
-        <div className="p-6 text-sm text-destructive">조회 실패: {errMsg(crds.error)}</div>
+        <div className="p-6 text-sm text-status-critical">조회 실패: {errMsg(crds.error)}</div>
       ) : (crds.data?.items.length ?? 0) === 0 ? (
-        <div className="p-10 text-center text-sm text-muted-foreground">CRD 가 없습니다.</div>
+        <EmptyState compact title="CRD 가 없습니다." description="이 클러스터에 설치된 CustomResourceDefinition 이 없습니다." />
       ) : (
         crds.data!.items.map((c) => (
           <button key={c.name} onClick={() => setSelectedCrd(c)}
@@ -967,9 +960,9 @@ function DetailDrawer({ clusterId, detail, editing, draft, setDraft, onStartEdit
         </div>
         <div className="p-4">
           {yamlQuery.isLoading ? (
-            <div className="text-sm text-muted-foreground">불러오는 중…</div>
+            <LoadingState compact />
           ) : yamlQuery.isError ? (
-            <div className="text-sm text-destructive">조회 실패: {errMsg(yamlQuery.error)}</div>
+            <div className="text-sm text-status-critical">조회 실패: {errMsg(yamlQuery.error)}</div>
           ) : (
             <Tabs.Root value={editing || (!hasSections && tab === 'summary') ? 'yaml' : tab} onValueChange={(v) => setTab(v as 'summary' | 'yaml' | 'events')}>
               <Tabs.List className="flex gap-1 mb-3 border-b border-border">
@@ -1031,9 +1024,9 @@ function RelatedEventsView({ loading, error, items }: { loading: boolean; error:
     const sec = Math.max(0, Math.floor((Date.now() - new Date(iso).getTime()) / 1000));
     return `${age(sec)} 전`;
   };
-  if (loading) return <div className="text-sm text-muted-foreground">이벤트 불러오는 중…</div>;
-  if (error) return <div className="text-sm text-destructive">이벤트 조회 실패: {error}</div>;
-  if (items.length === 0) return <div className="text-sm text-muted-foreground p-6 text-center">관련 이벤트 없음</div>;
+  if (loading) return <LoadingState compact />;
+  if (error) return <div className="text-sm text-status-critical">이벤트 조회 실패: {error}</div>;
+  if (items.length === 0) return <EmptyState compact title="관련 이벤트가 없습니다." description="이 리소스와 연결된 이벤트가 클러스터에 남아 있지 않습니다. 이벤트는 보존 기간이 지나면 사라집니다." />;
   return (
     <div className="space-y-2 max-h-[80vh] overflow-auto pr-1">
       {items.map((ev, i) => (
@@ -1045,7 +1038,7 @@ function RelatedEventsView({ loading, error, items }: { loading: boolean; error:
             {ev.type === 'Warning'
               ? <AlertTriangle className="w-3.5 h-3.5 text-status-warning shrink-0" />
               : <CheckCircle2 className="w-3.5 h-3.5 text-muted-foreground shrink-0" />}
-            <span className="font-medium truncate">{ev.reason ?? '-'}</span>
+            <span className="font-medium truncate">{ev.reason ?? '—'}</span>
             {(ev.count ?? 0) > 1 && <span className="text-xs text-muted-foreground">×{ev.count}</span>}
             <span className="ml-auto text-xs text-muted-foreground tabular-nums shrink-0" title={ev.lastTimestamp ?? ''}>
               {rel(ev.lastTimestamp)}
@@ -1065,7 +1058,7 @@ function SectionsView({ sections }: { sections: ResourceDetailSection[] }) {
     <div className="space-y-4 max-h-[80vh] overflow-auto pr-1">
       {sections.map((s, i) => (
         <div key={i} className="rounded-xl border border-border overflow-hidden">
-          <div className="px-3 py-1.5 text-xs font-semibold uppercase tracking-wider text-muted-foreground bg-secondary/40 border-b border-border">
+          <div className="px-3 py-1.5 text-xs font-medium text-muted-foreground bg-secondary/40 border-b border-border">
             {s.title}
           </div>
           <div className="p-3 text-sm">
@@ -1133,16 +1126,18 @@ function NodesPanel({ clusterId, onOpenDetail, onCordon, onDrain }: NodesPanelPr
   };
 
   return (
-    <MacCard title="Nodes" bodyPadding="p-0">
-      <div className="flex items-center gap-2 px-3 py-2 border-b border-border">
-        <span className="text-sm text-muted-foreground">{rows.length} nodes{data && !data.metricsAvailable ? ' · metrics-server 없음(usage 생략)' : ''}</span>
-        <div className="ml-auto flex items-center gap-1">
-          <ColumnToggle columns={NODES_TOGGLE_COLS} hidden={hidden} onToggle={toggle} />
-          <button onClick={forceRefetch} title="새로고침" aria-label="새로고침" className="p-1.5 rounded-lg hover:bg-secondary text-muted-foreground">
-            <RefreshCw className={`w-3.5 h-3.5 ${isFetching ? 'animate-spin' : ''}`} />
-          </button>
-        </div>
-      </div>
+    <MacCard
+      title="노드"
+      bodyPadding="p-0"
+      titleExtra={<span className="text-xs text-muted-foreground tabular-nums">{rows.length}개</span>}
+      description={data && !data.metricsAvailable ? 'metrics-server 없음(usage 생략)' : undefined}
+      actions={<>
+        <ColumnToggle columns={NODES_TOGGLE_COLS} hidden={hidden} onToggle={toggle} />
+        <button onClick={forceRefetch} title="새로고침" aria-label="새로고침" className="p-1.5 rounded-lg hover:bg-secondary text-muted-foreground">
+          <RefreshCw className={`w-3.5 h-3.5 ${isFetching ? 'animate-spin' : ''}`} />
+        </button>
+      </>}
+    >
       <div className="overflow-x-auto">
       <div className="min-w-[720px]">
       <div className="grid gap-2 px-4 py-1.5 text-xs font-semibold text-muted-foreground border-b border-border bg-secondary/30" style={gridStyle}>
@@ -1153,9 +1148,9 @@ function NodesPanel({ clusterId, onOpenDetail, onCordon, onDrain }: NodesPanelPr
       {isLoading ? (
         <RowsSkeleton />
       ) : isError ? (
-        <div className="p-6 text-sm text-destructive">조회 실패: {errMsg(error)}</div>
+        <div className="p-6 text-sm text-status-critical">조회 실패: {errMsg(error)}</div>
       ) : rows.length === 0 ? (
-        <div className="p-10 text-center text-sm text-muted-foreground">노드가 없습니다.</div>
+        <EmptyState compact title="노드가 없습니다." description="클러스터 API 가 노드를 하나도 반환하지 않았습니다." />
       ) : (
         rows.map((n) => {
           const ready = n.conditions.includes('Ready');
@@ -1164,19 +1159,19 @@ function NodesPanel({ clusterId, onOpenDetail, onCordon, onDrain }: NodesPanelPr
             <div key={n.name} className="grid gap-2 px-4 py-1.5 text-sm border-b border-border/40 hover:bg-secondary/30 items-center" style={gridStyle}>
               <button onClick={() => onOpenDetail(n.name)} className="truncate font-medium text-left hover:text-primary flex items-center gap-1.5">
                 {ready
-                  ? <CheckCircle2 className="w-3.5 h-3.5 text-status-healthy flex-shrink-0" aria-label="Ready" />
+                  ? <CheckCircle2 className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" aria-label="Ready" />
                   : <AlertTriangle className="w-3.5 h-3.5 text-status-critical flex-shrink-0" aria-label="NotReady" />}
                 <span className="truncate">{n.name}</span>
                 {n.unschedulable && <span className="text-[11px] rounded px-1 bg-status-warning/15 text-status-warning">cordoned</span>}
               </button>
               {!isHidden('roles') && <span className="truncate text-muted-foreground">{n.roles.join(', ')}</span>}
-              {!isHidden('version') && <span className="truncate text-muted-foreground">{n.version ?? '-'}</span>}
+              {!isHidden('version') && <span className="truncate text-muted-foreground">{n.version ?? '—'}</span>}
               {!isHidden('taints') && <span className="text-muted-foreground tabular-nums">{n.taints}</span>}
-              {!isHidden('cpu') && <span className="truncate text-muted-foreground">{n.cpuUsage ? `${n.cpuUsage} / ` : ''}{n.cpuCapacity ?? '-'}</span>}
-              {!isHidden('memory') && <span className="truncate text-muted-foreground">{n.memUsage ? `${n.memUsage} / ` : ''}{n.memCapacity ?? '-'}</span>}
+              {!isHidden('cpu') && <span className="truncate text-muted-foreground">{n.cpuUsage ? `${n.cpuUsage} / ` : ''}{n.cpuCapacity ?? '—'}</span>}
+              {!isHidden('memory') && <span className="truncate text-muted-foreground">{n.memUsage ? `${n.memUsage} / ` : ''}{n.memCapacity ?? '—'}</span>}
               {!isHidden('age') && <span className="text-right text-muted-foreground tabular-nums">{age(n.ageSeconds)}</span>}
               <div className="flex items-center justify-end gap-1">
-                {warn.length > 0 && <span className="text-[11px] text-status-warning mr-1" title={warn.join(',')}>{warn.length}⚠</span>}
+                {warn.length > 0 && <span className="inline-flex items-center gap-0.5 text-[11px] text-status-warning mr-1" title={warn.join(',')}>{warn.length}<AlertTriangle className="w-3 h-3" aria-hidden="true" /></span>}
                 <RoleGate allow={['admin', 'operator']}>
                   <IconBtn title={n.unschedulable ? 'uncordon' : 'cordon'} onClick={() => onCordon(n.name, !n.unschedulable)}>
                     {n.unschedulable ? <CheckCircle2 className="w-3.5 h-3.5" /> : <Ban className="w-3.5 h-3.5" />}
@@ -1206,6 +1201,8 @@ export interface PodsPanelProps {
   onDelete: (kind: string, ns: string, name: string) => void;
   onTerminal: (ns: string, name: string) => void;
   hideNsSelector?: boolean;
+  /** 카드 제목 — 기본 "파드". */
+  title?: string;
 }
 /** 파드 목록 페이지 크기 — 첫 화면을 빨리 띄우고 나머지는 스크롤 시 continue 토큰으로 이어 받는다. */
 const POD_PAGE_SIZE = 200;
@@ -1277,8 +1274,10 @@ export function PodsPanel(p: PodsPanelProps) {
   };
 
   return (
-    <MacCard title="Pods" bodyPadding="p-0">
-      <div className="flex items-center gap-2 flex-wrap px-3 py-2.5 border-b border-border">
+    <MacCard
+      title={p.title ?? '파드'}
+      bodyPadding="p-0"
+      actions={<>
         {!p.hideNsSelector && (
           <NamespaceMultiSelect clusterId={clusterId} selected={selectedNs} onChange={setSelectedNs} />
         )}
@@ -1287,13 +1286,12 @@ export function PodsPanel(p: PodsPanelProps) {
           <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="이름/노드/소유자 검색"
             className="rounded-xl border border-border bg-card pl-7 pr-2 py-1 text-sm w-52 focus:outline-none focus:ring-1 focus:ring-primary" />
         </div>
-        <div className="ml-auto flex items-center gap-1">
-          <ColumnToggle columns={PODS_TOGGLE_COLS} hidden={hidden} onToggle={toggle} />
-          <button onClick={forceRefetch} title="새로고침" aria-label="새로고침" className="p-1.5 rounded-lg hover:bg-secondary text-muted-foreground">
-            <RefreshCw className={`w-3.5 h-3.5 ${isFetching ? 'animate-spin' : ''}`} />
-          </button>
-        </div>
-      </div>
+        <ColumnToggle columns={PODS_TOGGLE_COLS} hidden={hidden} onToggle={toggle} />
+        <button onClick={forceRefetch} title="새로고침" aria-label="새로고침" className="p-1.5 rounded-lg hover:bg-secondary text-muted-foreground">
+          <RefreshCw className={`w-3.5 h-3.5 ${isFetching ? 'animate-spin' : ''}`} />
+        </button>
+      </>}
+    >
       <div className="overflow-x-auto">
       <div className="min-w-[900px]">
       <div className="grid gap-2 px-4 py-1.5 text-xs font-semibold text-muted-foreground border-b border-border bg-secondary/30" style={gridStyle}>
@@ -1304,9 +1302,9 @@ export function PodsPanel(p: PodsPanelProps) {
       {isLoading ? (
         <RowsSkeleton rows={8} />
       ) : isError ? (
-        <div className="p-6 text-sm text-destructive">조회 실패: {errMsg(error)}</div>
+        <div className="p-6 text-sm text-status-critical">조회 실패: {errMsg(error)}</div>
       ) : filtered.length === 0 ? (
-        <div className="p-10 text-center text-sm text-muted-foreground">표시할 파드가 없습니다.</div>
+        <EmptyState compact title="표시할 파드가 없습니다." description="네임스페이스 필터나 검색어를 바꿔 보세요." />
       ) : (
         <Virtuoso
           style={{ height: '64vh' }}
@@ -1317,7 +1315,7 @@ export function PodsPanel(p: PodsPanelProps) {
             return (
               <div className="grid gap-2 px-4 py-1.5 text-sm border-b border-border/40 hover:bg-secondary/30 items-center" style={gridStyle}>
                 <button onClick={() => p.onOpenDetail(r)} className="truncate font-medium text-left hover:text-primary">{r.name}</button>
-                {!isHidden('namespace') && <span className="truncate text-muted-foreground">{r.namespace ?? '-'}</span>}
+                {!isHidden('namespace') && <span className="truncate text-muted-foreground">{r.namespace ?? '—'}</span>}
                 {!isHidden('containers') && (
                   <span className="flex items-center gap-0.5" title={r.containers.map((c) => `${c.name}: ${c.state}${c.reason ? ` (${c.reason})` : ''}`).join('\n')}>
                     {r.containers.slice(0, 12).map((c, j) => (
@@ -1332,11 +1330,11 @@ export function PodsPanel(p: PodsPanelProps) {
                   </span>
                 )}
                 {!isHidden('restarts') && <span className={`tabular-nums ${r.restarts > 0 ? 'text-status-warning font-medium' : 'text-muted-foreground'}`}>{r.restarts}</span>}
-                {!isHidden('cpu') && <span className="truncate text-muted-foreground tabular-nums">{r.cpuUsage ?? '-'}</span>}
-                {!isHidden('mem') && <span className="truncate text-muted-foreground tabular-nums">{r.memUsage ?? '-'}</span>}
-                {!isHidden('controlledBy') && <span className="truncate text-muted-foreground" title={r.controlledBy ?? ''}>{r.controlledBy ?? '-'}</span>}
-                {!isHidden('node') && <span className="truncate text-muted-foreground" title={r.node ?? ''}>{r.node ?? '-'}</span>}
-                {!isHidden('qos') && <span className="truncate text-muted-foreground">{r.qos ?? '-'}</span>}
+                {!isHidden('cpu') && <span className="truncate text-muted-foreground tabular-nums">{r.cpuUsage ?? '—'}</span>}
+                {!isHidden('mem') && <span className="truncate text-muted-foreground tabular-nums">{r.memUsage ?? '—'}</span>}
+                {!isHidden('controlledBy') && <span className="truncate text-muted-foreground" title={r.controlledBy ?? ''}>{r.controlledBy ?? '—'}</span>}
+                {!isHidden('node') && <span className="truncate text-muted-foreground" title={r.node ?? ''}>{r.node ?? '—'}</span>}
+                {!isHidden('qos') && <span className="truncate text-muted-foreground">{r.qos ?? '—'}</span>}
                 {!isHidden('age') && <span className="text-right text-muted-foreground tabular-nums">{age(r.ageSeconds)}</span>}
                 <span className={`truncate font-medium ${STATUS_TEXT[r.statusColor]}`} title={r.phase}>
                   <span className={`inline-block w-1.5 h-1.5 rounded-full mr-1 ${CELL_BG[r.statusColor]}`} />{r.phase}

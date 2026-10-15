@@ -6,6 +6,8 @@ import {
   useUpdateSharedTemplates,
 } from '@/hooks/useTerminalAppearance';
 import { useAuthStore } from '@/stores/authStore';
+import { MacCard } from '@/components/ui/MacCard';
+import { LoadingState } from '@/components/common';
 import {
   BUILTIN_TEMPLATES,
   DEFAULT_APPEARANCE,
@@ -62,9 +64,9 @@ function ProfileEditor({
   };
 
   return (
-    <div className="rounded-lg border border-border bg-card overflow-hidden">
-      <div className="px-3 py-2 border-b border-border bg-muted/40 flex items-center gap-2">
-        <span className={`w-2 h-2 rounded-full ${env === 'ops' ? 'bg-status-critical' : 'bg-blue-500'}`} />
+    <div className="rounded-md bg-secondary/40 overflow-hidden">
+      <div className="px-3 py-2 border-b border-border flex items-center gap-2">
+        <span className={`w-2 h-2 rounded-full ${env === 'ops' ? 'bg-status-critical' : 'bg-chart-1'}`} />
         <h4 className="text-sm font-semibold">{env === 'ops' ? '운영 (Production)' : '개발 (Dev)'} 프로파일</h4>
       </div>
       <div className="p-3 space-y-3">
@@ -155,7 +157,7 @@ export function TerminalAppearanceSettings() {
   }, [data]);
 
   if (isLoading) {
-    return <div className="rounded-md border border-border bg-card p-4 text-sm text-muted-foreground flex items-center gap-2"><Loader2 className="w-4 h-4 animate-spin" /> 불러오는 중…</div>;
+    return <LoadingState compact />;
   }
 
   const setProfile = (env: TerminalEnv, p: TerminalProfile) =>
@@ -175,16 +177,9 @@ export function TerminalAppearanceSettings() {
     setDraft((d) => ({ ...d, customTemplates: d.customTemplates.filter((t) => t.id !== id) }));
 
   return (
-    <div className="rounded-md border border-border bg-card overflow-hidden">
-      <div className="px-4 py-3 border-b border-border bg-muted/40 flex items-center gap-2">
-        <Monitor className="w-4 h-4 text-primary" />
-        <div>
-          <h3 className="text-sm font-semibold">터미널 / 로그 화면 색상 (Appearance)</h3>
-          <p className="text-xs text-muted-foreground mt-0.5">mc 클라이언트 등 모든 로그 출력 화면에 적용 · PuTTY/SecureCRT/Tera Term 스타일 템플릿 · 개발/운영 구분</p>
-        </div>
-      </div>
+    <MacCard title="터미널 / 로그 화면 색상" icon={Monitor} className="space-y-4">
+        <p className="text-xs text-muted-foreground">mc 클라이언트 등 모든 로그 출력 화면에 적용 · PuTTY/SecureCRT/Tera Term 스타일 템플릿 · 개발/운영 구분</p>
 
-      <div className="p-4 space-y-4">
         {/* 적용 기준 */}
         <div>
           <p className="text-xs text-muted-foreground mb-1">적용 기준</p>
@@ -210,7 +205,7 @@ export function TerminalAppearanceSettings() {
         </div>
 
         {/* 커스텀 템플릿 */}
-        <div className="rounded-lg border border-border p-3 space-y-2">
+        <div className="rounded-md bg-secondary/40 p-3 space-y-2">
           <p className="text-xs font-semibold">내 커스텀 템플릿</p>
           <div className="flex flex-wrap items-center gap-1.5">
             {draft.customTemplates.length === 0 && <span className="text-xs text-muted-foreground">아직 없습니다. 현재 프로파일 색상을 저장해 보세요.</span>}
@@ -222,7 +217,7 @@ export function TerminalAppearanceSettings() {
                   <button
                     onClick={() => sharedMut.mutate([...shared.filter((s) => s.id !== t.id), { ...t, group: '공용' }])}
                     title="공용으로 배포"
-                    className="p-0.5 rounded hover:bg-background text-status-info"
+                    className="p-0.5 rounded hover:bg-background text-primary"
                   >
                     <Megaphone className="w-3 h-3" />
                   </button>
@@ -251,7 +246,7 @@ export function TerminalAppearanceSettings() {
               <p className="text-[11px] text-muted-foreground mb-1">공용 배포된 템플릿 (admin)</p>
               <div className="flex flex-wrap gap-1.5">
                 {shared.map((t) => (
-                  <span key={t.id} className="inline-flex items-center gap-1 px-2 py-1 text-xs rounded border border-status-info/30 bg-status-info/5">
+                  <span key={t.id} className="inline-flex items-center gap-1 px-2 py-1 text-xs rounded border border-border bg-secondary">
                     <span className="w-3 h-3 rounded-sm border border-border" style={{ backgroundColor: t.palette.bg || '#888' }} />
                     {t.name}
                     <button onClick={() => sharedMut.mutate(shared.filter((s) => s.id !== t.id))} className="p-0.5 rounded hover:bg-background text-muted-foreground"><Trash2 className="w-3 h-3" /></button>
@@ -277,7 +272,6 @@ export function TerminalAppearanceSettings() {
             {saveMut.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />} 저장
           </button>
         </div>
-      </div>
-    </div>
+    </MacCard>
   );
 }

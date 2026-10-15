@@ -203,12 +203,12 @@ export function ClusterIconPicker({
         role="dialog"
         aria-label={title ?? '아이콘 선택'}
         style={{ width: POPOVER_WIDTH, maxHeight: POPOVER_MAX_HEIGHT, ...positionStyle }}
-        className="fixed z-[60] bg-card border border-border rounded-xl shadow-2xl flex flex-col overflow-hidden"
+        className="fixed z-[60] bg-card border border-border rounded-md shadow-2xl flex flex-col overflow-hidden"
       >
         {/* Header */}
         <div className="flex items-center justify-between px-3 py-2 border-b border-border">
           <div className="min-w-0">
-            <p className="text-xs uppercase tracking-wider text-muted-foreground">{title ?? '아이콘 선택'}</p>
+            <p className="text-xs text-muted-foreground">{title ?? '아이콘 선택'}</p>
             {clusterName && <p className="text-sm font-semibold truncate">{clusterName}</p>}
           </div>
           <button
@@ -258,7 +258,7 @@ export function ClusterIconPicker({
             CLUSTER_ICON_GROUPS.map((group) => (
               <section key={group.key}>
                 <header className="flex items-baseline gap-2 px-1 mb-1.5">
-                  <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                  <h3 className="text-xs font-medium text-muted-foreground">
                     {group.label}
                   </h3>
                   {group.hint && (
@@ -311,7 +311,7 @@ export function ClusterIconPicker({
               {CLUSTER_EMOJI_GROUPS.map((group) => (
                 <section key={group.key}>
                   <header className="flex items-baseline gap-2 px-1 mb-1.5">
-                    <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                    <h3 className="text-xs font-medium text-muted-foreground">
                       {group.label}
                     </h3>
                     {group.hint && (
@@ -539,7 +539,7 @@ function BuilderTab({ context, onApply }: { context: IconBuilderContext; onApply
                     title={hex}
                     aria-label={`${pattern.label} ${hex}`}
                     style={{ backgroundColor: hex }}
-                    className={`w-5 h-5 rounded-full border transition-transform hover:scale-110 ${
+                    className={`w-5 h-5 rounded-full border transition-colors ${
                       patternHex === hex ? 'border-primary ring-1 ring-primary' : 'border-border/60'
                     }`}
                   />

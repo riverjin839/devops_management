@@ -3,7 +3,8 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { ShipWheel, Key, Play, ShieldAlert, ExternalLink } from 'lucide-react';
 import { useClusters } from '@/hooks/useCluster';
-import { ClusterSidebar, SelectClusterEmptyState } from '@/components/common';
+import { ClusterSidebar, PageShell, SelectClusterEmptyState } from '@/components/common';
+import { PageHeader } from '@/components/common/PageHeader';
 import { MacCard } from '@/components/ui/MacCard';
 import { K9sTerminal, type K9sConnectParams } from '@/components/k8s';
 import { openK9sPopout } from '@/lib/k9sPopout';
@@ -101,8 +102,8 @@ export function K9sPage() {
   };
 
   return (
-    <div className="app-min-h-screen bg-background py-3 pr-3">
-      <div className="flex gap-3">
+    <div className="app-min-h-screen bg-background">
+      <PageShell density="console" as="div" className="flex gap-3">
         <div className="sticky top-3 self-start">
           <ClusterSidebar
             clusters={clusters}
@@ -113,30 +114,27 @@ export function K9sPage() {
         </div>
 
         <div className="flex-1 min-w-0 space-y-3">
-          <div className="flex items-center gap-3 flex-wrap">
-            <h1 className="text-lg font-semibold flex items-center gap-2">
-              <ShipWheel className="w-5 h-5 text-primary" /> k9s 콘솔
-            </h1>
-            <span className="text-sm text-muted-foreground">
-              control-plane 서버에 내장된 k9s 를 SSH 로 실행해 스트리밍
-            </span>
-            {effectiveHost && (
-              <span className="ml-auto text-sm px-2 py-0.5 rounded-full bg-status-unknown/15 text-status-unknown border border-status-unknown/30 font-mono">
+          <PageHeader
+            icon={ShipWheel}
+            title="k9s 콘솔"
+            description="control-plane 서버에 내장된 k9s 를 SSH 로 실행해 스트리밍"
+            actions={effectiveHost ? (
+              <span className="text-sm px-2 py-0.5 rounded-full bg-secondary text-muted-foreground border border-border font-mono">
                 → {username}@{effectiveHost}
               </span>
-            )}
-          </div>
+            ) : undefined}
+          />
 
           {!clusterId ? (
             <SelectClusterEmptyState description="좌측에서 클러스터를 고르면 k9s 접속 정보를 입력할 수 있습니다." />
           ) : session ? (
             <>
-              <MacCard className="text-sm text-muted-foreground leading-relaxed">
+              <p className="text-sm text-muted-foreground leading-relaxed">
                 k9s 세션이 <b className="text-foreground">플로팅 창</b>으로 열려 있습니다 —
                 창 상단바를 <b className="text-foreground">드래그해 위치를 이동</b>하고, 우하단 모서리를 끌어 크기를 조절할 수 있습니다.
                 단, 다른 페이지로 이동하면 세션이 끊기므로 계속 쓰려면 창 상단바의
                 <b className="text-foreground"> 새 창으로 빼기</b>(별도 브라우저 창)를 이용하세요.
-              </MacCard>
+              </p>
               {popoutMsg && (
                 <p className="text-xs text-status-warning flex items-center gap-1">
                   <ShieldAlert className="w-3 h-3" /> {popoutMsg}
@@ -146,13 +144,13 @@ export function K9sPage() {
             </>
           ) : (
             <>
-              <MacCard className="text-sm text-muted-foreground leading-relaxed">
+              <p className="text-sm text-muted-foreground leading-relaxed">
                 전제: 각 클러스터의 <b className="text-foreground">control-plane(master) 서버에 <code className="font-mono">k9s</code> 가 설치</b>되어 있고,
                 해당 계정의 기본 kubeconfig(<code className="font-mono">~/.kube/config</code>)로 클러스터에 접근 가능해야 합니다.
                 SSH 인증정보는 이 세션에만 사용되고 저장되지 않습니다. (admin/operator 권한 필요)
                 <br /><b className="text-foreground">“연결”</b> 은 이 화면 안에 <b className="text-foreground">드래그로 이동·크기 조절이 가능한 플로팅 창</b>으로 k9s 를 엽니다.
                 <b className="text-foreground"> “새 창으로 열기”</b> 를 쓰면 k9s 가 별도 브라우저 창에서 열려, 메인 화면에서는 다른 페이지로 이동하며 함께 활용할 수 있습니다.
-              </MacCard>
+              </p>
 
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
                 {/* 타겟 */}
@@ -221,7 +219,7 @@ export function K9sPage() {
                         <button
                           key={m}
                           onClick={() => setAuthMode(m)}
-                          className={`flex-1 px-2 py-1.5 text-sm font-medium rounded-md transition-all ${
+                          className={`flex-1 px-2 py-1.5 text-sm font-medium rounded-md transition-colors ${
                             authMode === m ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
                           }`}
                         >
@@ -304,7 +302,7 @@ export function K9sPage() {
             </>
           )}
         </div>
-      </div>
+      </PageShell>
     </div>
   );
 }

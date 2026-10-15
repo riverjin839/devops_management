@@ -79,7 +79,7 @@ export function LogThemeButton() {
           <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
           <div
             style={{ position: 'fixed', top: pos.top, right: pos.right }}
-            className="z-50 w-64 max-h-[80vh] overflow-y-auto rounded-lg border border-border bg-card shadow-lg p-3 space-y-3 text-xs"
+            className="z-50 w-64 max-h-[80vh] overflow-y-auto rounded-md border border-border bg-card shadow-lg p-3 space-y-3 text-xs"
           >
             {/* mode */}
             <div>

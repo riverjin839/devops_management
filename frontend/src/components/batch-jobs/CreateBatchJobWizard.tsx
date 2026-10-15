@@ -136,7 +136,7 @@ export function CreateBatchJobWizard({
         role="dialog"
         aria-modal="true"
         aria-labelledby={`${uid}-title`}
-        className="bg-card border border-border rounded-2xl shadow-xl w-full max-w-2xl max-h-[92vh] overflow-hidden flex flex-col"
+        className="bg-card border border-border rounded-md shadow-xl w-full max-w-2xl max-h-[92vh] overflow-hidden flex flex-col"
         onClick={(e) => e.stopPropagation()}
       >
         <header className="px-5 py-3 border-b border-border flex items-center justify-between">
@@ -161,7 +161,7 @@ export function CreateBatchJobWizard({
                   <div
                     className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-semibold ${
                       active ? 'bg-primary text-primary-foreground' :
-                      done ? 'bg-status-healthy text-white' :
+                      done ? 'bg-secondary text-foreground ring-1 ring-inset ring-border' :
                       'bg-secondary text-muted-foreground'
                     }`}
                     aria-label={done ? `${label} — 완료` : label}

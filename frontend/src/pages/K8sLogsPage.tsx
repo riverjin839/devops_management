@@ -5,7 +5,8 @@ import { useClusterRouteParam } from '@/hooks/useClusterRouteParam';
 import { ScrollText } from 'lucide-react';
 import { MacCard } from '@/components/ui/MacCard';
 import { ClusterSidebar } from '@/components/common/ClusterSidebar';
-import { LogViewTabs, NamespaceSingleSelect, PodSingleSelect } from '@/components/common';
+import { PageShell } from '@/components/common/PageShell';
+import { EmptyState, LogViewTabs, NamespaceSingleSelect, PodSingleSelect } from '@/components/common';
 import { PodLogStream } from '@/components/k8s';
 import { useClusters } from '@/hooks/useCluster';
 
@@ -41,8 +42,8 @@ export function K8sLogsPage() {
   const deepLinked = !!(qsNamespace && qsPod && namespace === qsNamespace && pod === qsPod);
 
   return (
-    <div className="app-min-h-screen bg-background py-3 pr-3">
-      <div className="flex gap-3">
+    <div className="app-min-h-screen bg-background">
+      <PageShell density="console" as="div" className="flex gap-3">
         <div className="sticky top-4 self-start">
           <ClusterSidebar
             clusters={clusters}
@@ -64,32 +65,35 @@ export function K8sLogsPage() {
             <LogViewTabs current="stream" />
           </div>
 
-          <MacCard title="로그 스트림" bodyPadding="p-4">
-            {/* 대상 선택 */}
-            <div className="flex items-end gap-2 flex-wrap mb-3">
-              <div className="flex flex-col gap-1 text-sm">
-                <span className="text-muted-foreground">네임스페이스</span>
-                <div className="min-w-[200px]">
-                  <NamespaceSingleSelect
-                    clusterId={clusterId}
-                    value={namespace}
-                    onChange={(ns) => { setNamespace(ns); setPod(''); }}
-                  />
+          <MacCard
+            title="로그 스트림"
+            bodyPadding="p-4"
+            actions={
+              <>
+                <div className="flex items-center gap-1.5">
+                  <span className="text-xs text-muted-foreground">네임스페이스</span>
+                  <div className="min-w-[200px] text-sm">
+                    <NamespaceSingleSelect
+                      clusterId={clusterId}
+                      value={namespace}
+                      onChange={(ns) => { setNamespace(ns); setPod(''); }}
+                    />
+                  </div>
                 </div>
-              </div>
-              <div className="flex flex-col gap-1 text-sm">
-                <span className="text-muted-foreground">파드</span>
-                <div className="min-w-[240px]">
-                  <PodSingleSelect
-                    clusterId={clusterId}
-                    namespace={namespace}
-                    value={pod}
-                    onChange={setPod}
-                  />
+                <div className="flex items-center gap-1.5">
+                  <span className="text-xs text-muted-foreground">파드</span>
+                  <div className="min-w-[240px] text-sm">
+                    <PodSingleSelect
+                      clusterId={clusterId}
+                      namespace={namespace}
+                      value={pod}
+                      onChange={setPod}
+                    />
+                  </div>
                 </div>
-              </div>
-            </div>
-
+              </>
+            }
+          >
             {namespace && pod ? (
               <PodLogStream
                 key={`${clusterId}/${namespace}/${pod}`}
@@ -100,13 +104,15 @@ export function K8sLogsPage() {
                 initialContainer={deepLinked && qsContainer ? qsContainer : undefined}
               />
             ) : (
-              <div className="rounded-xl border border-dashed border-border p-8 text-center text-sm text-muted-foreground">
-                네임스페이스와 파드를 선택하세요.
-              </div>
+              <EmptyState
+                icon={ScrollText}
+                title="스트림할 파드를 고르세요"
+                description="헤더에서 네임스페이스와 파드를 선택하면 로그를 실시간으로 받아 옵니다."
+              />
             )}
           </MacCard>
         </div>
-      </div>
+      </PageShell>
     </div>
   );
 }

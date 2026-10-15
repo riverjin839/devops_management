@@ -12,6 +12,7 @@ import {
 import { deriveToneSet, isValidHex } from '@/lib/colorTone';
 import { COLOR_PATTERNS } from '@/lib/colorPatterns';
 import { useToast } from '@/components/common';
+import { MacCard } from '@/components/ui/MacCard';
 import { formatApiError } from '@/lib/utils';
 
 /** 큐레이션 배색 프리셋(Burnt Sienna 등)에서 커스텀 hex 를 고르는 팝오버. */
@@ -40,7 +41,7 @@ function PatternColorPicker({ onPick }: { onPick: (hex: string) => void }) {
         <Sparkles className="w-3 h-3" />
       </button>
       {open && (
-        <div className="absolute z-20 mt-1 left-0 w-64 p-2 bg-card border border-border rounded-lg shadow-lg space-y-2">
+        <div className="absolute z-20 mt-1 left-0 w-64 p-2 bg-card border border-border rounded-md shadow-lg space-y-2">
           {COLOR_PATTERNS.map((pattern) => (
             <div key={pattern.key}>
               <p className="text-[11px] text-muted-foreground mb-1">{pattern.label}</p>
@@ -53,7 +54,7 @@ function PatternColorPicker({ onPick }: { onPick: (hex: string) => void }) {
                     title={hex}
                     aria-label={`${pattern.label} ${hex}`}
                     style={{ backgroundColor: hex }}
-                    className="w-5 h-5 rounded-full border border-border/60 hover:scale-110 transition-transform"
+                    className="w-5 h-5 rounded-full border border-border/60 hover:border-foreground transition-colors"
                   />
                 ))}
               </div>
@@ -102,7 +103,7 @@ function EmojiPicker({
         <ChevronDown className="w-3 h-3 text-muted-foreground" />
       </button>
       {open && (
-        <div className="absolute z-20 mt-1 left-0 w-56 p-2 bg-card border border-border rounded-lg shadow-lg">
+        <div className="absolute z-20 mt-1 left-0 w-56 p-2 bg-card border border-border rounded-md shadow-lg">
           <div className="grid grid-cols-5 gap-1">
             {EMOJI_OPTIONS.map((opt) => (
               <button
@@ -212,28 +213,20 @@ export function OperationLevelsManager() {
   };
 
   return (
-    <div className="bg-card border border-border rounded-xl p-5 space-y-4">
-      <div className="flex items-start gap-3">
-        <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center flex-shrink-0">
-          <Layers className="w-5 h-5 text-primary" />
-        </div>
-        <div className="flex-1 min-w-0">
-          <h2 className="font-semibold">운영레벨 관리</h2>
-          <p className="text-sm text-muted-foreground mt-1 leading-relaxed">
-            클러스터 운영 단계 라벨/색상/이모지를 자유롭게 정의합니다. 여기서 정의한 항목은 클러스터 관리 페이지의
-            "운영레벨" 컬럼/필터/모달과 클러스터 카드 이모지, 클러스터 아이콘 빌더의 테두리·배경 색에
-            즉시 반영됩니다. <strong>value</strong> 는 저장된 식별자(라벨이 비어 있으면 자동 생성),
-            <strong> label</strong> 은 화면 표시 이름, <strong>이모지</strong>는 클러스터 카드 앞에
-            표시됩니다(자동 = 운영레벨 이름으로 추론). <Sparkles className="w-3 h-3 inline -mt-0.5" /> 아이콘을
-            누르면 큐레이션 배색 패턴(Burnt Sienna 등)에서 커스텀 색을 바로 고를 수 있습니다.
-          </p>
-        </div>
-      </div>
+    <MacCard title="운영레벨 관리" icon={Layers} className="space-y-4">
+      <p className="text-sm text-muted-foreground leading-relaxed">
+        클러스터 운영 단계 라벨/색상/이모지를 자유롭게 정의합니다. 여기서 정의한 항목은 클러스터 관리 페이지의
+        "운영레벨" 컬럼/필터/모달과 클러스터 카드 이모지, 클러스터 아이콘 빌더의 테두리·배경 색에
+        즉시 반영됩니다. <strong>value</strong> 는 저장된 식별자(라벨이 비어 있으면 자동 생성),
+        <strong> label</strong> 은 화면 표시 이름, <strong>이모지</strong>는 클러스터 카드 앞에
+        표시됩니다(자동 = 운영레벨 이름으로 추론). <Sparkles className="w-3 h-3 inline -mt-0.5" /> 아이콘을
+        누르면 큐레이션 배색 패턴(Burnt Sienna 등)에서 커스텀 색을 바로 고를 수 있습니다.
+      </p>
 
       <div className="border border-border rounded-xl overflow-hidden">
         <table className="w-full text-sm">
           <thead className="bg-muted/30 text-left">
-            <tr className="text-xs text-muted-foreground uppercase">
+            <tr className="text-xs font-medium text-muted-foreground">
               <th className="px-2 py-1.5 w-8"><span className="sr-only">순서</span></th>
               <th className="px-2 py-1.5">표시 라벨</th>
               <th className="px-2 py-1.5">value (식별자)</th>
@@ -373,6 +366,6 @@ export function OperationLevelsManager() {
           </button>
         </div>
       </div>
-    </div>
+    </MacCard>
   );
 }

@@ -208,7 +208,7 @@ export function ClusterCard({ cluster, onEdit, onDelete, deletingId, overlapGrou
             )}
             {hasBondData ? (
               <div className="space-y-2">
-                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">NIC</p>
+                <p className="text-xs font-semibold text-muted-foreground">NIC</p>
                 <div className="grid grid-cols-2 gap-2">
                   <NicCompact
                     label="bond0"
@@ -252,7 +252,7 @@ export function ClusterCard({ cluster, onEdit, onDelete, deletingId, overlapGrou
               overlapColor={cluster.svcCidr ? overlapColor : null} />
             {cluster.ciliumConfig && (
               <div className="mt-1 pt-2 border-t border-border/40">
-                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1">Cilium 설정</p>
+                <p className="text-xs font-semibold text-muted-foreground mb-1">Cilium 설정</p>
                 <pre className="text-xs font-mono text-muted-foreground bg-muted/20 rounded p-2 whitespace-pre-wrap max-h-20 overflow-y-auto">
                   {cluster.ciliumConfig}
                 </pre>
@@ -301,7 +301,7 @@ function NicCompact({
       {/* IP — 그룹 표기 우선, 없으면 master 단일 값 fallback */}
       {hasGroups ? (
         <div className="mb-1">
-          <p className="text-[11px] text-muted-foreground uppercase">IP</p>
+          <p className="text-[11px] text-muted-foreground">IP</p>
           <div className="space-y-0.5">
             {groups.map((g, i) => (
               <p key={i} className="text-xs font-mono text-foreground tabular-nums"
@@ -313,14 +313,14 @@ function NicCompact({
         </div>
       ) : fallbackIp ? (
         <div className="mb-1">
-          <p className="text-[11px] text-muted-foreground uppercase">IP (master)</p>
+          <p className="text-[11px] text-muted-foreground">IP (master)</p>
           <p className="text-xs font-mono text-foreground">{fallbackIp}</p>
         </div>
       ) : null}
       {/* MAC — 모든 노드 MAC 나열 (보통 5개 이하). fallback 은 master 단일 */}
       {hasMacs ? (
         <div>
-          <p className="text-[11px] text-muted-foreground uppercase">MAC ({macs.length})</p>
+          <p className="text-[11px] text-muted-foreground">MAC ({macs.length})</p>
           <div className="space-y-0.5">
             {macs.map((m) => (
               <p key={m} className="text-xs font-mono text-foreground/90">{m}</p>
@@ -329,7 +329,7 @@ function NicCompact({
         </div>
       ) : fallbackMac ? (
         <div>
-          <p className="text-[11px] text-muted-foreground uppercase">MAC (master)</p>
+          <p className="text-[11px] text-muted-foreground">MAC (master)</p>
           <p className="text-xs font-mono text-foreground">{fallbackMac}</p>
         </div>
       ) : null}

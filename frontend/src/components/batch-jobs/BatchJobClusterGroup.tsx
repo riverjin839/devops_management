@@ -21,18 +21,18 @@ const LEVEL_LABEL: Record<string, string> = {
 };
 
 // cron 상태 → 섹션 테두리/상태 dot 색. 접힌 상태에서도 "펼치지 않고 판독"이 목표 —
-// 정상 실행 중이면 초록, 비정상(에러 등)이면 레드, 중지/미설정이면 회색톤.
+// 상태 신호는 dot 하나만 칠한다(정상은 무채색, 비정상만 색 — DESIGN_SYSTEM §12.12-3).
 const GROUP_BORDER: Record<CronHealth, string> = {
-  ok: 'border-status-healthy/40 hover:border-status-healthy/70',
-  failed: 'border-status-critical/50 hover:border-status-critical/80',
-  running: 'border-blue-500/40 hover:border-blue-500/70',
+  ok: 'border-border hover:border-muted-foreground/40',
+  failed: 'border-border hover:border-muted-foreground/40',
+  running: 'border-border hover:border-muted-foreground/40',
   stopped: 'border-border hover:border-muted-foreground/40',
 };
 const GROUP_DOT: Record<CronHealth, string> = {
-  ok: 'bg-status-healthy',
+  ok: 'bg-muted-foreground/40',
   failed: 'bg-status-critical',
-  running: 'bg-blue-500 animate-pulse',
-  stopped: 'bg-slate-400',
+  running: 'bg-status-info',
+  stopped: 'bg-muted-foreground/20',
 };
 const GROUP_DOT_LABEL: Record<CronHealth, string> = {
   ok: 'cron 정상 동작 중',
@@ -74,7 +74,7 @@ export function BatchJobClusterGroup({
   const health = aggregateCronHealth(allClusterJobs);
 
   return (
-    <div className={`border rounded-xl overflow-hidden transition-colors ${GROUP_BORDER[health]}`}>
+    <div className={`border rounded-md overflow-hidden transition-colors ${GROUP_BORDER[health]}`}>
       <button
         type="button"
         onClick={onToggleCollapsed}
@@ -101,7 +101,7 @@ export function BatchJobClusterGroup({
         <span className="ml-auto flex items-center gap-2 text-xs text-muted-foreground flex-shrink-0">
           <span>잡 {allClusterJobs.length}{filtered ? ` (${jobs.length}건 표시)` : ''}</span>
           {failed > 0 && <span className="text-status-critical font-medium">실패 {failed}</span>}
-          {running > 0 && <span className="text-blue-500 font-medium">실행 중 {running}</span>}
+          {running > 0 && <span className="text-status-info font-medium">실행 중 {running}</span>}
         </span>
       </button>
       {!collapsed && (

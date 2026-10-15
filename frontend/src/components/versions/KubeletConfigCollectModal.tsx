@@ -5,14 +5,19 @@ import type { NodeSummary } from '@/services/api';
 import type { KubeletConfigCollectResponse } from '@/types';
 import { useQuery } from '@tanstack/react-query';
 import { useAbortableMutation } from '@/hooks/useAbortableMutation';
-import { useToast, DoubleScrollX} from '@/components/common';
+import { useRunLog, runLogged } from '@/hooks/useRunLog';
+import { useLogPref } from '@/hooks/useLogPref';
+import { useToast, DoubleScrollX, RunLogPanel } from '@/components/common';
 import { useModalA11y } from '@/components/common/useModalA11y';
 import { RawOutputDetails, CollectErrorList } from './RawOutputDetails';
+import { collectFirstLine, summarizeCollect } from './collectRunLog';
 import { formatApiError } from '@/lib/utils';
 
 interface Props {
   open: boolean;
   clusterId: string;
+  /** 실행 로그 첫 줄에 표시할 클러스터 이름(없으면 생략). */
+  clusterName?: string;
   onClose: () => void;
 }
 
@@ -29,7 +34,7 @@ const DEFAULT_FALLBACKS = [
  *  `kubelet_config:{host}` 컴포넌트 스냅샷으로 저장.
  *  발견 출처를 모두 기록하므로 사용자가 어디서 온 값인지 즉시 식별 가능.
  */
-export function KubeletConfigCollectModal({ open, clusterId, onClose }: Props) {
+export function KubeletConfigCollectModal({ open, clusterId, clusterName, onClose }: Props) {
   const toast = useToast();
 
   const [username, setUsername] = useState('root');
@@ -89,11 +94,11 @@ export function KubeletConfigCollectModal({ open, clusterId, onClose }: Props) {
       const found = d.hosts.filter((h) => h.configFile).length;
       if (d.changed > 0) {
         toast.success(
-          'kubelet config 수집 완료',
+          'kubelet config 수집됨',
           `${d.changed}개 노드 변경 감지 · 경로 식별 ${found}/${d.hosts.length}`,
         );
       } else if (found > 0) {
-        toast.info('kubelet config 수집 완료', `변경 없음 · 경로 식별 ${found}/${d.hosts.length}`);
+        toast.info('kubelet config 수집됨', `변경 없음 · 경로 식별 ${found}/${d.hosts.length}`);
       } else {
         toast.warning('config 파일을 찾지 못함', 'ps/-eo args 에서 --config 가 없고 fallback 경로도 모두 실패');
       }
@@ -102,6 +107,18 @@ export function KubeletConfigCollectModal({ open, clusterId, onClose }: Props) {
       toast.error('수집 실패', formatApiError(e));
     },
   });
+
+  // 실행 로그(D-128) — 동기 1응답 수집을 요청·대기·호스트별 결과·요약 줄로 남긴다. 결과 표·토스트는 기존대로.
+  const runLog = useRunLog();
+  const [showLog, setShowLog] = useLogPref('versions-kubelet-config');
+  const handleRun = () => {
+    void runLogged(runLog, {
+      title: 'kubelet config 수집',
+      first: collectFirstLine(clusterName, selected.size, 'kubelet config', useSudo),
+      fn: () => collectMut.mutateAsync(),
+      summarize: (res) => summarizeCollect(res, (h) => (h.configFile ? `config ${h.configFile}` : 'config 경로 미식별')),
+    });
+  };
 
   const canRun = selected.size > 0
     && (authMode === 'password' ? !!password : !!privateKey.trim())
@@ -113,7 +130,7 @@ export function KubeletConfigCollectModal({ open, clusterId, onClose }: Props) {
     <div className="fixed inset-0 z-50 flex items-center justify-center">
       <div className="absolute inset-0 bg-black/60" onClick={() => !collectMut.isPending && onClose()} />
       <div ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby={titleId}
-        className="relative bg-card border border-border rounded-2xl shadow-2xl w-full max-w-3xl mx-4 max-h-[90vh] overflow-hidden flex flex-col">
+        className="relative bg-card border border-border rounded-md shadow-2xl w-full max-w-3xl mx-4 max-h-[90vh] overflow-hidden flex flex-col">
         <div className="flex items-center gap-3 px-5 py-4 border-b border-border bg-muted/30">
           <div className="w-9 h-9 rounded-lg flex items-center justify-center bg-primary/10 text-primary">
             <Cpu className="w-4 h-4" />
@@ -245,6 +262,8 @@ export function KubeletConfigCollectModal({ open, clusterId, onClose }: Props) {
             </div>
           </div>
 
+          <RunLogPanel run={runLog} show={showLog} onShowChange={setShowLog} maxHeight="max-h-56" />
+
           {result && (
             <div className="border border-border rounded-xl overflow-hidden">
               <div className="flex items-center gap-2 px-3 py-2 bg-muted/30 border-b border-border">
@@ -310,7 +329,7 @@ export function KubeletConfigCollectModal({ open, clusterId, onClose }: Props) {
               <Loader2 className="w-3 h-3 animate-spin" /> 중지
             </button>
           ) : (
-            <button onClick={() => collectMut.mutate()}
+            <button onClick={handleRun}
               disabled={!canRun}
               className="flex items-center gap-1.5 px-4 py-1.5 text-sm font-semibold bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 disabled:opacity-50">
               <Play className="w-3 h-3" /> 수집 실행

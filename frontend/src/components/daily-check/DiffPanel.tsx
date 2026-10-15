@@ -1,5 +1,6 @@
 import { Plus, Minus, ArrowRight } from 'lucide-react';
 import { MacCard } from '@/components/ui/MacCard';
+import { EmptyState } from '@/components/common/EmptyState';
 import type { DiffSummary } from '@/types';
 
 interface Props {
@@ -9,11 +10,11 @@ interface Props {
 export function DiffPanel({ diff }: Props) {
   if (!diff || !diff.available) {
     return (
-      <MacCard title="이전 점검 대비 변동">
-        <div className="text-sm text-muted-foreground italic">
-          비교할 이전 점검 기록이 없습니다.
-        </div>
-      </MacCard>
+      <EmptyState
+        compact
+        title="비교할 이전 회차 없음"
+        description="비교할 이전 점검 회차가 없습니다. 기본 점검이 두 번 이상 쌓이면 새로 생기거나 해소된 에러·경고가 표시됩니다."
+      />
     );
   }
 
@@ -48,7 +49,7 @@ export function DiffPanel({ diff }: Props) {
         {sections.map((s) =>
           s.items && s.items.length > 0 ? (
             <div key={s.label}>
-              <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-1">
+              <div className="text-xs font-semibold text-muted-foreground mb-1">
                 {s.label}
               </div>
               <ul className="space-y-1">

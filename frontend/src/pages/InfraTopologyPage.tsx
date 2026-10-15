@@ -16,8 +16,8 @@ import {
   useVerifyInfraNode,
 } from '@/hooks/useInfraNodes';
 import { NodeVerifyModal } from '@/components/infra/NodeVerifyModal';
-import { ClusterSidebar, RunLogPanel, useModalA11y } from '@/components/common';
-import { useRunLog, applyRunEvent } from '@/hooks/useRunLog';
+import { ClusterSidebar, RunLogPanel, useModalA11y, EmptyState, LoadingState, PageShell } from '@/components/common';
+import { useRunLog, applyRunEvent, elapsed } from '@/hooks/useRunLog';
 import { useLogPref } from '@/hooks/useLogPref';
 import { MacCard } from '@/components/ui/MacCard';
 import { topologyTraceApi } from '@/services/api';
@@ -33,10 +33,11 @@ import type {
 
 // ── Role 메타 ────────────────────────────────────────────────────────────────
 const ROLE_META: Record<InfraNodeRole, { label: string; color: string; bg: string; dot: string }> = {
-  master:  { label: 'Master',  color: 'text-chart-1',    bg: 'bg-chart-1/10 border-chart-1/30',     dot: 'bg-chart-1'    },
-  worker:  { label: 'Worker',  color: 'text-status-healthy', bg: 'bg-status-healthy/10 border-status-healthy/30', dot: 'bg-status-healthy' },
-  storage: { label: 'Storage', color: 'text-status-warning',  bg: 'bg-status-warning/10 border-status-warning/30',  dot: 'bg-status-warning'  },
-  infra:   { label: 'Infra',   color: 'text-chart-4',    bg: 'bg-chart-4/10 border-chart-4/30',     dot: 'bg-chart-4'    },
+  // 역할은 상태가 아니라 종류 구분이라 status-* 가 아니라 chart-* 카테고리 색을 쓴다 (D-120).
+  master:  { label: 'Master',  color: 'text-chart-1', bg: 'bg-chart-1/15 border-chart-1/30', dot: 'bg-chart-1' },
+  worker:  { label: 'Worker',  color: 'text-chart-2', bg: 'bg-chart-2/15 border-chart-2/30', dot: 'bg-chart-2' },
+  storage: { label: 'Storage', color: 'text-chart-3', bg: 'bg-chart-3/15 border-chart-3/30', dot: 'bg-chart-3' },
+  infra:   { label: 'Infra',   color: 'text-chart-4', bg: 'bg-chart-4/15 border-chart-4/30', dot: 'bg-chart-4' },
 };
 
 const ROLES: InfraNodeRole[] = ['master', 'worker', 'storage', 'infra'];
@@ -83,7 +84,7 @@ function NodeCard({ node, onEdit, onDelete, onVerify, canOperate, withHint, aria
             disabled={!canOperate}
             title={withHint('노드 추가 검증')}
             aria-label={ariaWithHint('노드 추가 검증')}
-            className="p-1 rounded-xl hover:bg-status-healthy/10 text-muted-foreground hover:text-status-healthy transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+            className="p-1 rounded-xl hover:bg-secondary text-muted-foreground hover:text-foreground transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
           >
             <ShieldCheck className="w-3 h-3" />
           </button>
@@ -155,7 +156,7 @@ function NodeCard({ node, onEdit, onDelete, onVerify, canOperate, withHint, aria
 
       {/* Auto-synced 배지 */}
       {node.autoSynced && (
-        <span className="inline-flex items-center gap-1 self-start px-1.5 py-0.5 rounded-md text-sm bg-status-info/10 border border-status-info/20 text-status-info">
+        <span className="inline-flex items-center gap-1 self-start px-1.5 py-0.5 rounded-md text-sm bg-secondary border border-border text-muted-foreground">
           <RefreshCw className="w-2.5 h-2.5" />K8s 동기화
         </span>
       )}
@@ -262,7 +263,7 @@ function NodeModal({ clusterId, clusterMeta, initial, onClose }: NodeModalProps)
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60">
-      <div ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby={f('title')} className="bg-card border border-border rounded-xl shadow-card w-full max-w-lg max-h-[90vh] overflow-y-auto">
+      <div ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby={f('title')} className="bg-card border border-border rounded-md shadow-card w-full max-w-lg max-h-[90vh] overflow-y-auto">
         <div className="flex items-center justify-between p-5 border-b border-border">
           <h2 id={f('title')} className="text-base font-semibold text-foreground">
             {isEdit ? '노드 수정' : '노드 추가'}
@@ -446,7 +447,7 @@ function DeleteConfirm({ node, onConfirm, onCancel, isPending, error }: DeleteCo
   const dialogRef = useModalA11y(true, onCancel);
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60">
-      <div ref={dialogRef} role="dialog" aria-modal="true" aria-label="노드 삭제 확인" className="bg-card border border-border rounded-xl shadow-card w-full max-w-sm p-6 flex flex-col gap-4">
+      <div ref={dialogRef} role="dialog" aria-modal="true" aria-label="노드 삭제 확인" className="bg-card border border-border rounded-md shadow-card w-full max-w-sm p-6 flex flex-col gap-4">
         <div className="flex items-center gap-3">
           <div className="p-2 rounded-full bg-status-critical/10">
             <AlertTriangle className="w-5 h-5 text-status-critical" />
@@ -482,8 +483,6 @@ function DeleteConfirm({ node, onConfirm, onCancel, isPending, error }: DeleteCo
     </div>
   );
 }
-
-const elapsed = (t0: number) => `${Math.round(performance.now() - t0)}ms`;
 
 // ── 메인 페이지 ──────────────────────────────────────────────────────────────
 export function InfraTopologyPage() {
@@ -703,7 +702,7 @@ export function InfraTopologyPage() {
 
   return (
     <div className="app-min-h-screen bg-background">
-      <main className="pr-3 py-3 flex gap-3">
+      <PageShell density="console" className="flex gap-3">
         <ClusterSidebar
           clusters={clusters}
           selectedId={activeClusterId || null}
@@ -711,13 +710,15 @@ export function InfraTopologyPage() {
           iconOnly
         />
 
-        <div className="flex-1 min-w-0 px-5">
+        <div className="flex-1 min-w-0">
 
         {/* 헤더 */}
-        <div className="flex items-center justify-between gap-4 mb-6">
-          <PageHeader icon={Network} title="인프라 토폴로지" description="클러스터별 물리 노드 구성 시각화" className="flex-1 min-w-0" />
-
-          <div className="flex items-center gap-2">
+        <PageHeader
+          className="mb-6"
+          icon={Network}
+          title="인프라 토폴로지"
+          description="클러스터별 물리 노드 구성 시각화"
+          actions={<>
             <button
               onClick={handleSync}
               disabled={!activeClusterId || syncNodes.isPending || !canOperate}
@@ -736,22 +737,21 @@ export function InfraTopologyPage() {
               <Plus className="w-3.5 h-3.5" />
               노드 추가
             </button>
-          </div>
-        </div>
+          </>}
+        />
 
         <div className="mb-4 empty:mb-0">
           <RunLogPanel run={runLog} show={showLog} onShowChange={setShowLog} />
         </div>
 
         {clustersLoading ? (
-          <div className="flex items-center gap-2 text-muted-foreground text-sm mb-6">
-            <Loader2 className="w-4 h-4 animate-spin" />불러오는 중…
-          </div>
+          <LoadingState />
         ) : clusters.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-20 text-muted-foreground">
-            <Server className="w-10 h-10 opacity-30 mb-3" />
-            <p className="text-sm">등록된 클러스터가 없습니다.</p>
-          </div>
+          <EmptyState
+            icon={Server}
+            title="등록된 클러스터가 없습니다."
+            description="클러스터 관리에서 클러스터를 먼저 등록하면 노드 토폴로지를 구성할 수 있습니다."
+          />
         ) : (
           <>
 
@@ -797,7 +797,9 @@ export function InfraTopologyPage() {
             {/* sync 직후 신규 노드 검증 요약 */}
             {syncSummary && (
               <div className="flex items-center gap-2 text-sm bg-card border border-border rounded-md px-3 py-2 mb-4">
-                <ShieldCheck className="w-3.5 h-3.5 flex-shrink-0 text-status-healthy" />
+                {syncSummary.some(v => !v.ok)
+                  ? <AlertTriangle className="w-3.5 h-3.5 flex-shrink-0 text-status-warning" />
+                  : <ShieldCheck className="w-3.5 h-3.5 flex-shrink-0 text-status-healthy" />}
                 <span>
                   신규 노드 {syncSummary.length}개 검증 — 정상 {syncSummary.filter(v => v.ok).length},{' '}
                   이상 {syncSummary.filter(v => !v.ok).length}
@@ -815,37 +817,46 @@ export function InfraTopologyPage() {
               </div>
             )}
 
-            {/* 요약 통계 */}
+            {/* 요약 통계 — 5칸이라 KPI 타일 대신 한 줄 표 (D-118) */}
             {activeCluster && (
-              <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-5 gap-3 mb-6">
-                <div className="col-span-2 sm:col-span-4 lg:col-span-1 bg-card border border-border rounded-md p-4 flex flex-col gap-1">
-                  <p className="text-sm text-muted-foreground">전체 노드</p>
-                  <p className="text-2xl font-bold text-foreground">{nodes.length}</p>
-                  <p className="text-sm text-muted-foreground">{activeCluster.name}</p>
-                </div>
-                {ROLES.map(role => {
-                  const meta = ROLE_META[role];
-                  return (
-                    <div key={role} className="bg-card border border-border rounded-md p-4 flex flex-col gap-1">
-                      <p className="text-sm text-muted-foreground">{meta.label}</p>
-                      <p className={`text-2xl font-bold ${meta.color}`}>{stats[role]}</p>
-                      <div className="flex items-center gap-1">
-                        <span className={`w-2 h-2 rounded-full ${meta.dot}`} />
-                        <span className="text-sm text-muted-foreground">노드</span>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
+              <MacCard title="노드 구성" rootClassName="mb-6" bodyPadding="p-0">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-border text-xs text-muted-foreground">
+                      <th scope="col" className="px-4 py-2 text-left font-medium">전체 노드</th>
+                      {ROLES.map(role => (
+                        <th key={role} scope="col" className="px-4 py-2 text-left font-medium">
+                          <span className="inline-flex items-center gap-1.5">
+                            <span className={`w-2 h-2 rounded-full ${ROLE_META[role].dot}`} aria-hidden="true" />
+                            {ROLE_META[role].label}
+                          </span>
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr>
+                      <td className="px-4 py-2.5 font-semibold tabular-nums">
+                        {nodes.length}
+                        <span className="ml-2 text-xs font-normal text-muted-foreground">{activeCluster.name}</span>
+                      </td>
+                      {ROLES.map(role => (
+                        <td key={role} className="px-4 py-2.5 font-semibold tabular-nums">{stats[role]}</td>
+                      ))}
+                    </tr>
+                  </tbody>
+                </table>
+              </MacCard>
             )}
 
             {/* Trace 패널 */}
             {activeCluster && (
-              <MacCard title="Pod/Service → Switch Trace" rootClassName="mb-6">
-                <div className="flex items-center gap-2 mb-2">
-                  <p className="text-sm text-muted-foreground flex-1">
-                    Pod/Service 가 거치는 노드·스위치 경로와 지연·오류가 큰 홉을 찾는다.
-                  </p>
+              <MacCard
+                title="파드/서비스 → 스위치 경로 추적"
+                description="파드·서비스가 거치는 노드·스위치 경로와 지연·오류가 큰 홉을 찾는다."
+                rootClassName="mb-6"
+                bodyPadding={traceOpen || traceResult || traceError ? 'p-4' : 'p-0'}
+                actions={
                   <button
                     type="button"
                     onClick={() => {
@@ -859,7 +870,8 @@ export function InfraTopologyPage() {
                   >
                     {traceOpen || traceResult || traceError ? '접기' : '펼치기'}
                   </button>
-                </div>
+                }
+              >
                 {(traceOpen || traceResult || traceError) && (
                 <div id="infra-trace-body">
                 {/* <form> 이라 Enter 로 실행되고, 각 입력에 라벨이 붙는다(D-095) */}
@@ -924,7 +936,7 @@ export function InfraTopologyPage() {
                         <Activity className="w-3.5 h-3.5" />
                         병목 의심 홉: <span className="font-semibold">{traceBottleneck.hop.name}</span>
                         <span className="opacity-80">
-                          (latency: {traceBottleneck.hop.latencyMs ?? '-'}ms, errors: {traceBottleneck.hop.errorCount ?? 0})
+                          (latency: {traceBottleneck.hop.latencyMs ?? '—'}ms, errors: {traceBottleneck.hop.errorCount ?? 0})
                         </span>
                       </div>
                     )}
@@ -937,7 +949,7 @@ export function InfraTopologyPage() {
                             <span className="font-medium text-foreground">{hop.name}</span>
                             {(hop.latencyMs !== undefined || hop.errorCount !== undefined) && (
                               <span className="ml-1 text-muted-foreground">
-                                ({hop.latencyMs ?? '-'}ms / err {hop.errorCount ?? 0})
+                                ({hop.latencyMs ?? '—'}ms / err {hop.errorCount ?? 0})
                               </span>
                             )}
                           </div>
@@ -956,9 +968,7 @@ export function InfraTopologyPage() {
 
             {/* 토폴로지 본문 */}
             {nodesLoading ? (
-              <div className="flex items-center justify-center py-20 text-muted-foreground">
-                <Loader2 className="w-6 h-6 animate-spin" />
-              </div>
+              <LoadingState />
             ) : nodesError && !nodesResp ? (
               <div role="alert" className="flex flex-col items-center justify-center py-16 gap-3 border border-status-critical/30 bg-status-critical/5 rounded-md text-status-critical">
                 <AlertTriangle className="w-8 h-8" />
@@ -971,30 +981,33 @@ export function InfraTopologyPage() {
                 </button>
               </div>
             ) : nodes.length === 0 ? (
-              <div className="flex flex-col items-center justify-center py-20 gap-3 text-muted-foreground border border-dashed border-border rounded-xl">
-                <Server className="w-10 h-10 opacity-30" />
-                <p className="text-sm">이 클러스터에 노드가 없습니다.</p>
+              <EmptyState
+                icon={Server}
+                title="이 클러스터에 노드가 없습니다."
+                description="K8s 동기화로 노드를 가져오거나 직접 추가하세요."
+                className="border border-dashed border-border rounded-xl"
+              >
                 <button
                   onClick={() => { setEditTarget(null); setModalOpen(true); }}
                   disabled={!canOperate}
                   title={withHint('첫 노드 추가')}
-                  className="flex items-center gap-2 px-3 py-1.5 text-sm rounded-xl bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="mt-4 flex items-center gap-2 px-3 py-1.5 text-sm rounded-xl bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   <Plus className="w-3.5 h-3.5" />첫 노드 추가
                 </button>
-              </div>
+              </EmptyState>
             ) : (
               <div className="space-y-5">
                 {switches.map(({ switchName, nodeCount, racks: swRacks }) => (
                   <section
                     key={switchName}
-                    className="rounded-md border border-status-info/30 bg-status-info/[0.03] overflow-hidden"
+                    className="rounded-md border border-border overflow-hidden"
                   >
                     {/* 스위치 헤더 (L2/L3) */}
-                    <header className="flex items-center gap-2 px-4 py-2.5 bg-status-info/10 border-b border-status-info/20">
-                      <Network className="w-4 h-4 text-status-info flex-shrink-0" />
-                      <span className="text-sm font-semibold text-status-info">{switchName}</span>
-                      <span className="text-xs font-mono text-status-info/70">ToR / Leaf</span>
+                    <header className="flex items-center gap-2 px-4 py-2.5 bg-secondary border-b border-border">
+                      <Network className="w-4 h-4 text-muted-foreground flex-shrink-0" />
+                      <span className="text-sm font-semibold text-foreground">{switchName}</span>
+                      <span className="text-xs font-mono text-muted-foreground">ToR / Leaf</span>
                       <span className="ml-auto text-sm text-muted-foreground">
                         {swRacks.length}개 랙 · {nodeCount}개 노드
                       </span>
@@ -1038,7 +1051,7 @@ export function InfraTopologyPage() {
           </>
         )}
         </div>
-      </main>
+      </PageShell>
 
       {/* 추가/수정 모달 */}
       {modalOpen && activeClusterId && (

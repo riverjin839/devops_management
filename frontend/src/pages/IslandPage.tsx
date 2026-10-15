@@ -1,11 +1,12 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
-import { LayoutGrid, PanelLeft, Settings2, Palmtree, Plus } from 'lucide-react';
+import { LayoutGrid, PanelLeft, Settings2, Palmtree } from 'lucide-react';
 import { useIslands, useUpdateIsland } from '@/hooks/useIslands';
 import { useNavCatalog } from '@/hooks/useNavCatalog';
 import { useIslandStore } from '@/stores/islandStore';
 import { useAuthStore } from '@/stores/authStore';
-import { useToast } from '@/components/common';
+import { EmptyState, useToast } from '@/components/common';
+import { PageHeader } from '@/components/common/PageHeader';
 import {
   IslandManagerPane, IslandPanelHost, IslandRail, IslandTabBar, PanelPickerDialog,
   PanelEditDialog, MAX_PANELS, type IslandPanelView,
@@ -22,21 +23,18 @@ function nextPanelKey(panels: IslandPanel[]): string {
 
 function EmptyIslandState({ onOpenManager }: { onOpenManager: () => void }) {
   return (
-    <div className="flex flex-col items-center justify-center gap-3 py-24 text-center">
-      <Palmtree className="w-10 h-10 text-muted-foreground" />
-      <h1 className="text-lg font-semibold text-foreground">나의 아일랜드</h1>
-      <p className="max-w-md text-sm text-muted-foreground">
-        자주 쓰는 PEP 화면을 하나에 모아두는 개인 화면입니다. 아일랜드를 만들고 원하는 화면을
-        패널로 추가하면 탭이나 좌측 사이드바로 즉시 전환할 수 있습니다.
-      </p>
-      <button
-        type="button"
-        onClick={onOpenManager}
-        className="mt-1 flex items-center gap-1.5 px-4 py-2 text-sm font-medium rounded-xl bg-primary text-primary-foreground"
-      >
-        <Plus className="w-4 h-4" />
-        첫 아일랜드 만들기
-      </button>
+    <div className="space-y-4">
+      <PageHeader
+        icon={Palmtree}
+        title="나의 아일랜드"
+        description="자주 쓰는 PEP 화면을 하나에 모아두는 개인 화면입니다."
+      />
+      <EmptyState
+        icon={Palmtree}
+        title="아직 만든 아일랜드가 없습니다."
+        description="아일랜드를 만들고 원하는 화면을 패널로 추가하면 탭이나 좌측 사이드바로 바로 전환할 수 있습니다."
+        action={{ label: '첫 아일랜드 만들기', onClick: onOpenManager }}
+      />
     </div>
   );
 }
@@ -177,14 +175,15 @@ export function IslandPage() {
   }
 
   const header = (
-    <div className="flex items-center gap-2 min-w-0">
-      <h1 className="text-sm font-semibold text-foreground truncate">{island.name}</h1>
-      {!editable && (
+    <PageHeader
+      title={island.name}
+      titleExtra={!editable && (
         <span className="px-1.5 py-0.5 text-xs rounded bg-secondary text-muted-foreground whitespace-nowrap">
           {island.ownerName || '공유'} · 읽기 전용
         </span>
       )}
-      <div className="flex-1" />
+      actions={
+      <>
       {editable && (
         <button
           type="button"
@@ -207,20 +206,21 @@ export function IslandPage() {
       >
         <Settings2 className="w-4 h-4" />
       </button>
-    </div>
+      </>
+      }
+    />
   );
 
   const body = activePanel
     ? <IslandPanelHost path={activePanel.path} label={activePanel.label || getLabel(activePanel.path)} />
     : (
-      <div className="flex flex-col items-center justify-center gap-3 py-24 text-center">
-        <Palmtree className="w-8 h-8 text-muted-foreground" />
-        <p className="text-sm text-muted-foreground">
-          {editable
-            ? '아직 담긴 화면이 없습니다. "화면 추가"로 자주 쓰는 화면을 담아보세요.'
-            : '이 아일랜드에는 담긴 화면이 없습니다.'}
-        </p>
-      </div>
+      <EmptyState
+        icon={Palmtree}
+        title="담긴 화면이 없습니다."
+        description={editable
+          ? "'화면 추가'로 자주 쓰는 화면을 이 아일랜드에 담으세요."
+          : '아일랜드 소유자가 화면을 추가하면 여기에 표시됩니다.'}
+      />
     );
 
   return (

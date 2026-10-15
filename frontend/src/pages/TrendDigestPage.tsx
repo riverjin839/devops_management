@@ -2,15 +2,17 @@ import { useState } from 'react';
 import { RefreshCw, ExternalLink, ChevronDown, ChevronRight, Settings2, AlertCircle, Loader2, CheckCircle2, Clock, Plus, Pencil, Trash2, X, Check } from 'lucide-react';
 import { useTrendDigests, useTrendItems, useTrendSources, useTriggerCollect, useToggleSource, useCreateSource, useUpdateSource, useDeleteSource } from '@/hooks/useTrends';
 import { MacCard } from '@/components/ui/MacCard';
+import { EmptyState, LoadingState, PageShell } from '@/components/common';
+import { PageHeader } from '@/components/common/PageHeader';
 import type { TrendDigest, TrendItem, TrendSource } from '@/types';
 import { parseUTC } from '@/lib/utils';
 
 // ── 카테고리 색상 ────────────────────────────────────────────────
 const CATEGORY_COLORS: Record<string, string> = {
-  k8s:    'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300',
-  cilium: 'bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-300',
-  linux:  'bg-status-warning/10 text-status-warning',
-  cncf:   'bg-status-healthy/10 text-status-healthy',
+  k8s:    'bg-chart-1/15 text-chart-1',
+  cilium: 'bg-chart-7/15 text-chart-7',
+  linux:  'bg-chart-3/15 text-chart-3',
+  cncf:   'bg-chart-2/15 text-chart-2',
 };
 
 const CATEGORY_LABEL: Record<string, string> = {
@@ -23,9 +25,9 @@ const ITEM_TYPE_LABEL: Record<string, string> = {
 
 const STATUS_INFO: Record<string, { icon: import('react').ReactNode; label: string; cls: string }> = {
   pending:     { icon: <Clock className="w-3.5 h-3.5" />, label: '대기',   cls: 'text-muted-foreground' },
-  collecting:  { icon: <Loader2 className="w-3.5 h-3.5 animate-spin" />, label: '수집 중', cls: 'text-blue-500' },
-  summarizing: { icon: <Loader2 className="w-3.5 h-3.5 animate-spin" />, label: '요약 중', cls: 'text-purple-500' },
-  done:        { icon: <CheckCircle2 className="w-3.5 h-3.5" />, label: '완료',   cls: 'text-status-healthy' },
+  collecting:  { icon: <Loader2 className="w-3.5 h-3.5 animate-spin" />, label: '수집 중', cls: 'text-status-info' },
+  summarizing: { icon: <Loader2 className="w-3.5 h-3.5 animate-spin" />, label: '요약 중', cls: 'text-status-info' },
+  done:        { icon: <CheckCircle2 className="w-3.5 h-3.5" />, label: '완료',   cls: 'text-muted-foreground' },
   failed:      { icon: <AlertCircle className="w-3.5 h-3.5" />, label: '실패',   cls: 'text-status-critical' },
 };
 
@@ -35,7 +37,7 @@ function TrendItemCard({ item }: { item: TrendItem }) {
   const catCls = CATEGORY_COLORS[item.category] ?? 'bg-secondary text-muted-foreground';
 
   return (
-    <div className="border border-border rounded-lg bg-card overflow-hidden">
+    <div className="border border-border rounded-md bg-card overflow-hidden">
       <button
         className="w-full text-left px-4 py-3 flex items-start gap-3 hover:bg-secondary/30 transition-colors"
         onClick={() => setOpen((v) => !v)}
@@ -107,22 +109,23 @@ function DigestPanel({ digest }: { digest: TrendDigest }) {
   return (
     <div className="space-y-4">
       {/* 상태 + 종합 요약 */}
-      <MacCard>
-        <div className="flex items-center gap-2 mb-3">
-          <span className={`flex items-center gap-1 text-sm font-medium ${statusInfo.cls}`}>
-            {statusInfo.icon} {statusInfo.label}
+      {/* D-122: 상태·건수 수제 헤더 행 → MacCard 슬롯 */}
+      <MacCard
+        title="기술 동향 요약"
+        titleExtra={
+          <span className="inline-flex items-center gap-2 min-w-0">
+            <span className={`flex items-center gap-1 text-xs font-medium ${statusInfo.cls}`}>
+              {statusInfo.icon} {statusInfo.label}
+            </span>
+            <span className="text-xs text-muted-foreground tabular-nums">· {digest.itemCount}건 수집</span>
+            {digest.errorMessage && (
+              <span className="text-xs text-status-critical truncate" title={digest.errorMessage}>{digest.errorMessage}</span>
+            )}
           </span>
-          <span className="text-sm text-muted-foreground">· {digest.itemCount}건 수집</span>
-          {digest.errorMessage && (
-            <span className="text-sm text-status-critical truncate ml-1">{digest.errorMessage}</span>
-          )}
-        </div>
-
+        }
+      >
         {digest.overallSummaryKo ? (
-          <>
-            <p className="text-sm font-semibold text-muted-foreground mb-1.5">오늘의 기술 동향 요약</p>
-            <p className="text-sm text-foreground leading-relaxed whitespace-pre-wrap">{digest.overallSummaryKo}</p>
-          </>
+          <p className="text-sm text-foreground leading-relaxed whitespace-pre-wrap">{digest.overallSummaryKo}</p>
         ) : (
           <p className="text-sm text-muted-foreground italic">
             {digest.status === 'done' ? '종합 요약 없음' : '요약 생성 중…'}
@@ -168,11 +171,9 @@ function DigestPanel({ digest }: { digest: TrendDigest }) {
 
       {/* 아이템 목록 */}
       {isLoading ? (
-        <div className="flex justify-center py-10">
-          <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
-        </div>
+        <LoadingState compact />
       ) : items.length === 0 ? (
-        <p className="text-sm text-muted-foreground text-center py-10">해당 조건의 항목이 없습니다</p>
+        <EmptyState compact title="해당 조건의 항목이 없습니다." description="카테고리·유형 필터를 바꾸거나 수집 기간을 늘려 다시 수집하세요." />
       ) : (
         <div className="space-y-2">
           {items.map((item) => (
@@ -187,7 +188,7 @@ function DigestPanel({ digest }: { digest: TrendDigest }) {
 // ── 소스 관리 패널 ───────────────────────────────────────────────
 
 const SOURCE_STATUS_CLS: Record<string, string> = {
-  ok:    'bg-status-healthy/10 text-status-healthy border-status-healthy/30',
+  ok:    'bg-secondary text-muted-foreground border-border',
   empty: 'bg-status-unknown/10 text-status-unknown border-status-unknown/30',
   error: 'bg-status-critical/10 text-status-critical border-status-critical/30',
 };
@@ -215,7 +216,7 @@ function SourceRow({ s }: { s: TrendSource }) {
 
   if (editing) {
     return (
-      <div className="p-3 border border-primary/40 rounded-lg bg-card space-y-2">
+      <div className="p-3 border border-primary/40 rounded-md bg-card space-y-2">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
           <input value={name} onChange={(e) => setName(e.target.value)} placeholder="이름"
             className="px-2 py-1 text-sm bg-background border border-border rounded" />
@@ -249,7 +250,7 @@ function SourceRow({ s }: { s: TrendSource }) {
   }
 
   return (
-    <div className="p-3 border border-border rounded-lg bg-card">
+    <div className="p-3 border border-border rounded-md bg-card">
       <div className="flex items-start gap-3">
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
@@ -259,7 +260,7 @@ function SourceRow({ s }: { s: TrendSource }) {
             </span>
             {s.lastStatus && (
               <span className={`text-xs px-1.5 py-0.5 rounded border ${statusCls}`}>
-                {s.lastStatus === 'ok' ? `✓ 최근 +${s.lastItemCount ?? 0}` : s.lastStatus === 'empty' ? '· 수집 없음' : '✗ 실패'}
+                {s.lastStatus === 'ok' ? `최근 +${s.lastItemCount ?? 0}` : s.lastStatus === 'empty' ? '수집 없음' : '실패'}
               </span>
             )}
           </div>
@@ -318,13 +319,16 @@ function AddSourceForm({ onClose }: { onClose: () => void }) {
   const canSubmit = name.trim() && url.trim() && category.trim();
 
   return (
-    <div className="p-3 border border-primary/40 rounded-lg bg-card space-y-2">
-      <div className="flex items-center justify-between">
-        <p className="text-sm font-semibold text-primary">새 소스 추가</p>
-        <button onClick={onClose} aria-label="닫기" className="p-1 text-muted-foreground hover:text-foreground">
+    <MacCard
+      title="새 소스 추가"
+      bodyPadding="p-3"
+      className="space-y-2"
+      actions={
+        <button onClick={onClose} aria-label="닫기" title="닫기" className="p-1 text-muted-foreground hover:text-foreground">
           <X className="w-3.5 h-3.5" />
         </button>
-      </div>
+      }
+    >
       <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
         <input value={name} onChange={(e) => setName(e.target.value)} placeholder="이름 (예: Istio 블로그)"
           className="px-2 py-1.5 text-sm bg-background border border-border rounded" />
@@ -356,7 +360,7 @@ function AddSourceForm({ onClose }: { onClose: () => void }) {
           추가
         </button>
       </div>
-    </div>
+    </MacCard>
   );
 }
 
@@ -376,7 +380,11 @@ function SourcesPanel() {
       <div className="flex items-center justify-between">
         <div className="text-sm text-muted-foreground">
           총 {sources.length}개 · 활성 {sources.filter((s) => s.enabled).length}개
-          {totalErrors > 0 && <span className="ml-2 text-status-critical">⚠ 수집 실패 {totalErrors}개</span>}
+          {totalErrors > 0 && (
+            <span className="ml-2 inline-flex items-center gap-1 text-status-critical">
+              <AlertCircle className="w-3.5 h-3.5" aria-hidden="true" /> 수집 실패 {totalErrors}개
+            </span>
+          )}
         </div>
         {!adding && (
           <button
@@ -464,13 +472,9 @@ export function TrendDigestPage() {
 
         <nav className="flex-1 overflow-y-auto py-2">
           {digestsLoading ? (
-            <div className="flex justify-center pt-4">
-              <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />
-            </div>
+            <LoadingState compact />
           ) : displayDigests.length === 0 ? (
-            <p className="text-sm text-muted-foreground text-center pt-6 px-3">
-              수집된 동향이 없습니다.<br />위 버튼을 눌러 시작하세요.
-            </p>
+            <EmptyState compact title="수집된 동향이 없습니다." description="위 '지금 수집' 버튼으로 시작하세요." />
           ) : (
             displayDigests.map((d) => {
               const si = STATUS_INFO[d.status] ?? STATUS_INFO.pending;
@@ -515,18 +519,18 @@ export function TrendDigestPage() {
 
       {/* 우측: 콘텐츠 */}
       <main className="flex-1 min-w-0 overflow-y-auto">
-        <div className="max-w-4xl mx-auto px-6 py-6">
+        <PageShell density="doc" as="div">
           {activeTab === 'sources' ? (
             <>
-              <h1 className="text-lg font-bold mb-4">수집 소스 관리</h1>
+              <PageHeader title="수집 소스 관리" className="mb-4" />
               <SourcesPanel />
             </>
           ) : activeDigest ? (
             <>
-              <div className="flex items-center justify-between mb-4 gap-3 flex-wrap">
-                <h1 className="text-lg font-bold">
-                  {activeDigest.digestDate} 기술 동향
-                </h1>
+              <PageHeader
+                title={`${activeDigest.digestDate} 기술 동향`}
+                className="mb-4"
+                actions={
                 <button
                   onClick={handleCollect}
                   disabled={triggerCollect.isPending}
@@ -536,25 +540,30 @@ export function TrendDigestPage() {
                   <RefreshCw className={`w-3.5 h-3.5 ${triggerCollect.isPending ? 'animate-spin' : ''}`} />
                   {LOOKBACK_OPTIONS.find((o) => o.value === lookbackDays)?.label ?? '재수집'} 다시 수집
                 </button>
-              </div>
+                }
+              />
               <DigestPanel digest={activeDigest} />
             </>
           ) : (
-            <div className="flex flex-col items-center justify-center py-20 text-center">
-              <p className="text-muted-foreground text-sm mb-4">
-                아직 수집된 동향이 없습니다.
-              </p>
+            <>
+              <PageHeader title="기술 동향" description="K8s · Cilium · Linux · CNCF 릴리즈와 블로그를 모아 요약합니다." />
+              <EmptyState
+                icon={RefreshCw}
+                title="아직 수집된 동향이 없습니다."
+                description="수집 기간을 고른 뒤 지금 수집을 시작하세요."
+              >
               <button
                 onClick={handleCollect}
                 disabled={triggerCollect.isPending}
-                className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 text-sm"
+                className="mt-4 flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 text-sm"
               >
                 <RefreshCw className={`w-4 h-4 ${triggerCollect.isPending ? 'animate-spin' : ''}`} />
                 지금 수집 시작
               </button>
-            </div>
+              </EmptyState>
+            </>
           )}
-        </div>
+        </PageShell>
       </main>
     </div>
   );

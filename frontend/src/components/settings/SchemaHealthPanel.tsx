@@ -51,14 +51,14 @@ export function SchemaHealthPanel() {
     try {
       const res = await repairMut.mutateAsync(dryRun);
       if (dryRun) {
-        toast.info('실행 계획만 확인했습니다.', `${res.applied.length}건이 실행 대상입니다.`);
+        toast.info('실행 계획만 확인됨', `${res.applied.length}건이 실행 대상입니다.`);
       } else if (res.errors.length) {
         toast.warning(
           `${res.applied.length}건 복구, ${res.errors.length}건 실패`,
           '실패 항목은 아래 결과에서 확인하세요.',
         );
       } else {
-        toast.success(`${res.applied.length}건을 복구했습니다.`, `남은 드리프트 ${res.remaining ?? 0}건`);
+        toast.success(`${res.applied.length}건 복구됨`, `남은 드리프트 ${res.remaining ?? 0}건`);
       }
     } catch (e) {
       toast.error('스키마 복구 실패', formatApiError(e));
@@ -86,7 +86,7 @@ export function SchemaHealthPanel() {
           <>
             <div className="flex flex-wrap items-center gap-3 mb-3">
               {data.healthy ? (
-                <span className="inline-flex items-center gap-1.5 text-sm text-status-healthy font-medium">
+                <span className="inline-flex items-center gap-1.5 text-sm text-muted-foreground font-medium">
                   <ShieldCheck className="w-4 h-4" /> 모델과 DB 가 일치합니다
                 </span>
               ) : (

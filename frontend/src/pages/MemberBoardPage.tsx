@@ -3,24 +3,25 @@ import { useNavigate } from 'react-router-dom';
 import { Users, User, Search, X, ClipboardList, ListTodo, Mail, Hash, ChevronDown, ChevronUp, Copy } from 'lucide-react';
 import { useAssignees } from '@/hooks/useAssignees';
 import { useWorkItems } from '@/hooks/useWorkItems';
-import { useToast, EmptyState } from '@/components/common';
+import { useToast, EmptyState, PageHeader, PageShell } from '@/components/common';
+import { MacCard } from '@/components/ui/MacCard';
 import { useAuthStore } from '@/stores/authStore';
 import type { WorkItem, Assignee } from '@/types';
 
 // ── 상태 스타일 ──────────────────────────────────────────────────────────────
 
 const KANBAN_STYLE: Record<string, { label: string; cls: string }> = {
-  backlog:     { label: 'Backlog',  cls: 'bg-status-unknown/10 text-status-unknown border-status-unknown/30' },
-  todo:        { label: 'To Do',    cls: 'bg-blue-500/10 text-blue-400 border-blue-500/30' },
-  in_progress: { label: 'WIP',      cls: 'bg-status-warning/10 text-status-warning border-status-warning/30' },
-  review_test: { label: 'Review',   cls: 'bg-purple-500/10 text-purple-400 border-purple-500/30' },
-  done:        { label: 'Done',     cls: 'bg-status-healthy/10 text-status-healthy border-status-healthy/30' },
+  backlog:     { label: 'Backlog',  cls: 'bg-chart-8/10 text-chart-8 border-chart-8/30' },
+  todo:        { label: 'To Do',    cls: 'bg-chart-1/10 text-chart-1 border-chart-1/30' },
+  in_progress: { label: 'WIP',      cls: 'bg-chart-3/10 text-chart-3 border-chart-3/30' },
+  review_test: { label: 'Review',   cls: 'bg-chart-4/10 text-chart-4 border-chart-4/30' },
+  done:        { label: 'Done',     cls: 'bg-secondary text-muted-foreground border-border' },
 };
 
 const PRIORITY_DOT: Record<string, string> = {
   high:   'bg-status-critical',
-  medium: 'bg-blue-500',
-  low:    'bg-slate-400',
+  medium: 'bg-chart-1',
+  low:    'bg-chart-8',
 };
 
 // ── 유틸 ────────────────────────────────────────────────────────────────────
@@ -114,30 +115,26 @@ function MemberSection({ bucket, onTaskClick, onIssueClick }: {
   const [expanded, setExpanded] = useState(true);
 
   return (
-    <div className="bg-card border border-border rounded-md overflow-hidden">
-      {/* 헤더 */}
-      <div className="flex items-center justify-between px-5 py-1.5 border-b border-border bg-muted/20">
-        <div className="flex items-center gap-3">
-          <div className="w-9 h-9 rounded-full bg-primary/10 text-primary flex items-center justify-center text-sm font-bold">
-            {bucket.assignee.slice(0, 2)}
-          </div>
-          <div>
-            <p className="text-sm font-semibold">{bucket.assignee}</p>
-            <div className="flex items-center gap-2 text-xs text-muted-foreground mt-0.5">
-              {bucket.info?.employeeId && (
-                <span className="flex items-center gap-0.5"><Hash className="w-2.5 h-2.5" />{bucket.info.employeeId}</span>
-              )}
-              {bucket.info?.email && (
-                <span className="flex items-center gap-0.5"><Mail className="w-2.5 h-2.5" />{bucket.info.email}</span>
-              )}
-              {bucket.info?.primaryRole && (
-                <span>{bucket.info.primaryRole}</span>
-              )}
-            </div>
-          </div>
-        </div>
-        <div className="flex items-center gap-2">
-          <span className="text-sm px-2 py-0.5 rounded-full bg-blue-500/10 text-blue-400 border border-blue-500/30">
+    <MacCard
+      title={bucket.assignee}
+      icon={User}
+      description={(bucket.info?.employeeId || bucket.info?.email || bucket.info?.primaryRole) && (
+        <span className="inline-flex items-center gap-2">
+          {bucket.info?.employeeId && (
+            <span className="inline-flex items-center gap-0.5"><Hash className="w-2.5 h-2.5" />{bucket.info.employeeId}</span>
+          )}
+          {bucket.info?.email && (
+            <span className="inline-flex items-center gap-0.5"><Mail className="w-2.5 h-2.5" />{bucket.info.email}</span>
+          )}
+          {bucket.info?.primaryRole && (
+            <span>{bucket.info.primaryRole}</span>
+          )}
+        </span>
+      )}
+      bodyPadding="p-0"
+      actions={
+        <>
+          <span className="text-sm px-2 py-0.5 rounded-full bg-chart-1/10 text-chart-1 border border-chart-1/30">
             작업 {bucket.tasks.length} (진행 {bucket.openTasks} / 완료 {bucket.doneTasks})
           </span>
           <span className="text-sm px-2 py-0.5 rounded-full bg-status-warning/10 text-status-warning border border-status-warning/30">
@@ -150,20 +147,20 @@ function MemberSection({ bucket, onTaskClick, onIssueClick }: {
           >
             {expanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
           </button>
-        </div>
-      </div>
-
+        </>
+      }
+    >
       {/* 본문 */}
       {expanded && (
         <div className="grid grid-cols-1 md:grid-cols-2 divide-x divide-border">
           {/* 작업 */}
           <div className="p-4">
             <div className="flex items-center gap-2 mb-3">
-              <ListTodo className="w-4 h-4 text-primary" />
-              <span className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">작업</span>
+              <ListTodo className="w-4 h-4 text-muted-foreground" />
+              <span className="text-sm font-medium text-muted-foreground">작업</span>
             </div>
             {bucket.tasks.length === 0 ? (
-              <p className="text-sm text-muted-foreground text-center py-6">할당된 작업 없음</p>
+              <EmptyState compact icon={ListTodo} title="할당된 작업이 없습니다." description="이 멤버를 담당자로 지정한 작업이 아직 없습니다." />
             ) : (
               <ul className="space-y-1">
                 {bucket.tasks.slice(0, 10).map((t) => {
@@ -174,7 +171,7 @@ function MemberSection({ bucket, onTaskClick, onIssueClick }: {
                       onClick={() => onTaskClick(t)}
                       className="flex items-center gap-2 px-2 py-1 rounded hover:bg-muted/40 cursor-pointer group"
                     >
-                      <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${PRIORITY_DOT[t.priority] ?? 'bg-slate-400'}`} />
+                      <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${PRIORITY_DOT[t.priority] ?? 'bg-chart-8'}`} />
                       <span className={`text-xs px-1.5 py-0.5 rounded-full border flex-shrink-0 ${ks.cls}`}>{ks.label}</span>
                       <span className="text-sm text-foreground truncate flex-1" title={stripHtml(t.content)}>
                         {stripHtml(t.content) || t.category}
@@ -197,11 +194,11 @@ function MemberSection({ bucket, onTaskClick, onIssueClick }: {
           {/* 이슈 */}
           <div className="p-4">
             <div className="flex items-center gap-2 mb-3">
-              <ClipboardList className="w-4 h-4 text-status-warning" />
-              <span className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">이슈</span>
+              <ClipboardList className="w-4 h-4 text-muted-foreground" />
+              <span className="text-sm font-medium text-muted-foreground">이슈</span>
             </div>
             {bucket.issues.length === 0 ? (
-              <p className="text-sm text-muted-foreground text-center py-6">할당된 이슈 없음</p>
+              <EmptyState compact icon={ClipboardList} title="할당된 이슈가 없습니다." description="이 멤버를 담당자로 지정한 이슈가 아직 없습니다." />
             ) : (
               <ul className="space-y-1">
                 {bucket.issues.slice(0, 10).map((i) => (
@@ -210,10 +207,9 @@ function MemberSection({ bucket, onTaskClick, onIssueClick }: {
                     onClick={() => onIssueClick(i)}
                     className="flex items-center gap-2 px-2 py-1.5 rounded hover:bg-muted/40 cursor-pointer"
                   >
-                    <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${i.closedAt ? 'bg-status-healthy' : 'bg-status-warning'}`} />
                     <span className={`text-xs px-1.5 py-0.5 rounded-full border flex-shrink-0 ${
                       i.closedAt
-                        ? 'bg-status-healthy/10 text-status-healthy border-status-healthy/30'
+                        ? 'bg-secondary text-muted-foreground border-border'
                         : 'bg-status-warning/10 text-status-warning border-status-warning/30'
                     }`}>
                       {i.closedAt ? '완료' : '미조치'}
@@ -236,7 +232,7 @@ function MemberSection({ bucket, onTaskClick, onIssueClick }: {
           </div>
         </div>
       )}
-    </div>
+    </MacCard>
   );
 }
 
@@ -402,12 +398,12 @@ export function MemberBoardPage() {
 
   return (
     <div className="app-min-h-screen bg-background">
-      <main className="mx-auto px-8 py-8">
+      <PageShell density="hub" className="space-y-5">
         {/* 헤더 */}
-        <div className="flex items-center justify-between mb-6">
-          <div className="flex items-center gap-3">
-            <Users className="w-6 h-6 text-primary" />
-            <h1 className="text-xl font-bold">멤버별 업무</h1>
+        <PageHeader
+          icon={Users}
+          title="멤버별 업무"
+          titleExtra={<>
             <span className="text-sm px-2 py-0.5 rounded-full bg-status-unknown/15 text-status-unknown border border-status-unknown/30">
               멤버 {filtered.length} / 전체 {buckets.length}
             </span>
@@ -416,103 +412,101 @@ export function MemberBoardPage() {
                 진행중 합계 {totalOpen}
               </span>
             )}
-          </div>
-        </div>
+          </>}
+        />
 
-        {/* 필터 */}
-        <div className="bg-card border border-border rounded-xl p-4 mb-5">
-          <div className="flex flex-wrap items-center gap-3">
-            {/* 보기 범위: 나만 / 전체 (당일 스케줄과 동일) */}
-            <div className="flex items-center rounded-lg border border-border overflow-hidden text-sm">
-              <button
-                onClick={() => changeScope('me')}
-                aria-pressed={scope === 'me'}
-                className={`flex items-center gap-1 px-3 py-1.5 transition-colors ${
-                  scope === 'me' ? 'bg-primary text-primary-foreground' : 'hover:bg-secondary text-muted-foreground'
-                }`}
-              >
-                <User className="w-3.5 h-3.5" /> 나만
-              </button>
-              <button
-                onClick={() => changeScope('all')}
-                aria-pressed={scope === 'all'}
-                className={`flex items-center gap-1 px-3 py-1.5 border-l border-border transition-colors ${
-                  scope === 'all' ? 'bg-primary text-primary-foreground' : 'hover:bg-secondary text-muted-foreground'
-                }`}
-              >
-                <Users className="w-3.5 h-3.5" /> 전체
-              </button>
-            </div>
-            <div className="flex-1 min-w-[220px] relative">
-              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
-              <input
-                type="text"
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                placeholder="이름 / 사번 / 이메일 / 역할 검색"
-                className="w-full pl-8 pr-3 py-2 text-sm bg-background border border-border rounded-lg focus:outline-none focus:ring-1 focus:ring-primary"
-              />
-            </div>
-            <div className="flex items-center bg-secondary/60 rounded-lg p-[3px] gap-px">
-              {(['all', 'active', 'withOpen'] as MemberFilter[]).map((f) => (
-                <button
-                  key={f}
-                  onClick={() => setFilter(f)}
-                  className={`px-3 py-1.5 text-sm font-medium rounded-md transition-all ${
-                    filter === f
-                      ? 'bg-background text-foreground shadow-sm'
-                      : 'text-muted-foreground hover:text-foreground'
-                  }`}
-                >
-                  {f === 'all' ? '전체 멤버' : f === 'active' ? '업무 있음' : '미완료 있음'}
-                </button>
-              ))}
-            </div>
-            {/* 기간 필터 — 그 주에 진행/완료된 업무만 */}
-            <div className="flex items-center bg-secondary/60 rounded-lg p-[3px] gap-px">
-              {(['all', 'thisWeek', 'lastWeek'] as Period[]).map((p) => (
-                <button
-                  key={p}
-                  onClick={() => setPeriod(p)}
-                  className={`px-3 py-1.5 text-sm font-medium rounded-md transition-all ${
-                    period === p
-                      ? 'bg-background text-foreground shadow-sm'
-                      : 'text-muted-foreground hover:text-foreground'
-                  }`}
-                >
-                  {PERIOD_LABEL[p]}
-                </button>
-              ))}
-            </div>
-            {range && (
-              <span className="text-xs font-mono text-muted-foreground">{fmtRange(range)}</span>
-            )}
+        {/* 필터 — D-122: 툴바만 감싸던 카드를 걷음 */}
+        <div className="flex flex-wrap items-center gap-3">
+          {/* 보기 범위: 나만 / 전체 (당일 스케줄과 동일) */}
+          <div className="flex items-center rounded-lg border border-border overflow-hidden text-sm">
             <button
-              onClick={handleCopy}
-              title="현재 목록을 텍스트로 클립보드에 복사"
-              className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-lg border border-border bg-secondary text-muted-foreground hover:text-foreground hover:bg-secondary/80 transition-colors"
+              onClick={() => changeScope('me')}
+              aria-pressed={scope === 'me'}
+              className={`flex items-center gap-1 px-3 py-1.5 transition-colors ${
+                scope === 'me' ? 'bg-primary text-primary-foreground' : 'hover:bg-secondary text-muted-foreground'
+              }`}
             >
-              <Copy className="w-3.5 h-3.5" /> 텍스트 복사
+              <User className="w-3.5 h-3.5" /> 나만
             </button>
-            <label className="flex items-center gap-1.5 text-sm text-muted-foreground cursor-pointer select-none">
-              <input
-                type="checkbox"
-                checked={includeSecondary}
-                onChange={(e) => setIncludeSecondary(e.target.checked)}
-                className="w-3.5 h-3.5 accent-primary"
-              />
-              부 담당자도 포함
-            </label>
-            {(search || filter !== 'active' || period !== 'all') && (
-              <button
-                onClick={() => { setSearch(''); setFilter('active'); setPeriod('all'); }}
-                className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground transition-colors"
-              >
-                <X className="w-3 h-3" />
-                초기화
-              </button>
-            )}
+            <button
+              onClick={() => changeScope('all')}
+              aria-pressed={scope === 'all'}
+              className={`flex items-center gap-1 px-3 py-1.5 border-l border-border transition-colors ${
+                scope === 'all' ? 'bg-primary text-primary-foreground' : 'hover:bg-secondary text-muted-foreground'
+              }`}
+            >
+              <Users className="w-3.5 h-3.5" /> 전체
+            </button>
           </div>
+          <div className="flex-1 min-w-[220px] relative">
+            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
+            <input
+              type="text"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="이름 / 사번 / 이메일 / 역할 검색"
+              className="w-full pl-8 pr-3 py-2 text-sm bg-background border border-border rounded-lg focus:outline-none focus:ring-1 focus:ring-primary"
+            />
+          </div>
+          <div className="flex items-center bg-secondary/60 rounded-lg p-[3px] gap-px">
+            {(['all', 'active', 'withOpen'] as MemberFilter[]).map((f) => (
+              <button
+                key={f}
+                onClick={() => setFilter(f)}
+                className={`px-3 py-1.5 text-sm font-medium rounded-md transition-colors ${
+                  filter === f
+                    ? 'bg-background text-foreground shadow-sm'
+                    : 'text-muted-foreground hover:text-foreground'
+                }`}
+              >
+                {f === 'all' ? '전체 멤버' : f === 'active' ? '업무 있음' : '미완료 있음'}
+              </button>
+            ))}
+          </div>
+          {/* 기간 필터 — 그 주에 진행/완료된 업무만 */}
+          <div className="flex items-center bg-secondary/60 rounded-lg p-[3px] gap-px">
+            {(['all', 'thisWeek', 'lastWeek'] as Period[]).map((p) => (
+              <button
+                key={p}
+                onClick={() => setPeriod(p)}
+                className={`px-3 py-1.5 text-sm font-medium rounded-md transition-colors ${
+                  period === p
+                    ? 'bg-background text-foreground shadow-sm'
+                    : 'text-muted-foreground hover:text-foreground'
+                }`}
+              >
+                {PERIOD_LABEL[p]}
+              </button>
+            ))}
+          </div>
+          {range && (
+            <span className="text-xs font-mono text-muted-foreground">{fmtRange(range)}</span>
+          )}
+          <button
+            onClick={handleCopy}
+            title="현재 목록을 텍스트로 클립보드에 복사"
+            className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-lg border border-border bg-secondary text-muted-foreground hover:text-foreground hover:bg-secondary/80 transition-colors"
+          >
+            <Copy className="w-3.5 h-3.5" /> 텍스트 복사
+          </button>
+          <label className="flex items-center gap-1.5 text-sm text-muted-foreground cursor-pointer select-none">
+            <input
+              type="checkbox"
+              checked={includeSecondary}
+              onChange={(e) => setIncludeSecondary(e.target.checked)}
+              className="w-3.5 h-3.5 accent-primary"
+            />
+            부 담당자도 포함
+          </label>
+          {(search || filter !== 'active' || period !== 'all') && (
+            <button
+              onClick={() => { setSearch(''); setFilter('active'); setPeriod('all'); }}
+              className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground transition-colors"
+            >
+              <X className="w-3 h-3" />
+              초기화
+            </button>
+          )}
         </div>
 
         {/* 멤버 섹션 리스트 */}
@@ -535,7 +529,7 @@ export function MemberBoardPage() {
             ))}
           </div>
         )}
-      </main>
+      </PageShell>
     </div>
   );
 }

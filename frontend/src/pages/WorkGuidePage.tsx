@@ -8,14 +8,15 @@ import {
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { workGuidesApi, workflowsApi } from '@/services/api';
 import type { WorkGuide } from '@/types';
-import { useToast, SidePane } from '@/components/common';
+import { useToast, SidePane, EmptyState, LoadingState, PageShell } from '@/components/common';
+import { PageHeader } from '@/components/common/PageHeader';
 import { formatApiError } from '@/lib/utils';
 import { GuideForm, GuidePageView } from '@/components/work-guides';
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 const STATUS_CFG: Record<string, { label: string; icon: React.ReactNode; cls: string }> = {
   draft:    { label: '초안', icon: <FileText className="w-3 h-3" />,    cls: 'bg-status-unknown/10 text-status-unknown border-status-unknown/30' },
-  active:   { label: '활성', icon: <CheckCircle className="w-3 h-3" />, cls: 'bg-status-healthy/10 text-status-healthy border-status-healthy/30' },
+  active:   { label: '활성', icon: <CheckCircle className="w-3 h-3" />, cls: 'bg-secondary text-muted-foreground border-border' },
   archived: { label: '보관', icon: <Archive className="w-3 h-3" />,     cls: 'bg-status-unknown/10 text-status-unknown border-status-unknown/30' },
 };
 
@@ -263,11 +264,11 @@ function AddToWorkflowModal({ guide, onClose }: AddToWorkflowModalProps) {
         </div>
       ) : (
         <>
-          {error && <p className="text-sm text-destructive mb-3">{error}</p>}
+          {error && <p className="text-sm text-status-critical mb-3">{error}</p>}
           <div className="mb-4">
             <label htmlFor={wfId} className="block text-sm font-medium mb-1.5">워크플로 선택</label>
             {workflows.length === 0 ? (
-              <p className="text-sm text-muted-foreground">등록된 워크플로가 없습니다.</p>
+              <EmptyState compact icon={GitFork} title="등록된 워크플로가 없습니다." description="워크플로 화면에서 먼저 워크플로를 만드세요." />
             ) : (
               <select
                 id={wfId}
@@ -402,11 +403,9 @@ export function WorkGuidePage() {
 
         <div className="flex-1 overflow-y-auto py-2 px-2">
           {isLoading ? (
-            <div className="text-sm text-muted-foreground text-center py-6">불러오는 중…</div>
+            <LoadingState compact />
           ) : rootGuides.length === 0 ? (
-            <div className="text-sm text-muted-foreground text-center py-6">
-              페이지가 없습니다
-            </div>
+            <EmptyState compact icon={FileText} title="페이지가 없습니다." description="위 + 버튼으로 첫 페이지를 만드세요." />
           ) : (
             rootGuides.map((guide) => (
               <TreeNode
@@ -433,13 +432,12 @@ export function WorkGuidePage() {
       <main className="flex-1 flex flex-col min-w-0 overflow-hidden">
         {isNewMode ? (
           <div className="flex-1 overflow-y-auto">
-            <div className="max-w-4xl mx-auto px-10 py-8">
-              <div className="mb-6">
-                <h1 className="text-2xl font-bold leading-tight">새 페이지</h1>
-                <p className="text-sm text-muted-foreground mt-1">
-                  제목과 본문을 입력하고 저장하면 트리에 추가됩니다.
-                </p>
-              </div>
+            <PageShell density="doc" as="div">
+              <PageHeader
+                title="새 페이지"
+                description="제목과 본문을 입력하고 저장하면 트리에 추가됩니다."
+                className="mb-6"
+              />
               <GuideForm
                 initial={null}
                 allGuides={allGuides}
@@ -450,17 +448,16 @@ export function WorkGuidePage() {
                   else navigate('/work-guides');
                 }}
               />
-            </div>
+            </PageShell>
           </div>
         ) : isEditMode && selectedGuide ? (
           <div className="flex-1 overflow-y-auto">
-            <div className="max-w-4xl mx-auto px-10 py-8">
-              <div className="mb-6">
-                <h1 className="text-2xl font-bold leading-tight">페이지 수정</h1>
-                <p className="text-sm text-muted-foreground mt-1">
-                  필요한 항목을 수정한 뒤 저장 버튼을 누르세요.
-                </p>
-              </div>
+            <PageShell density="doc" as="div">
+              <PageHeader
+                title="페이지 수정"
+                description="필요한 항목을 수정한 뒤 저장 버튼을 누르세요."
+                className="mb-6"
+              />
               <GuideForm
                 initial={formInitial}
                 allGuides={allGuides}
@@ -470,7 +467,7 @@ export function WorkGuidePage() {
                   else formCancelTarget();
                 }}
               />
-            </div>
+            </PageShell>
           </div>
         ) : isReadMode && selectedGuide ? (
           <GuidePageView
@@ -483,33 +480,24 @@ export function WorkGuidePage() {
             onDelete={() => handleDelete(selectedGuide)}
           />
         ) : isReadMode && !selectedGuide && !isLoading ? (
-          <div className="flex-1 flex flex-col items-center justify-center text-center px-8">
-            <BookMarked className="w-16 h-16 text-muted-foreground/20 mb-4" />
-            <h2 className="text-xl font-semibold mb-2">페이지를 찾을 수 없습니다</h2>
-            <p className="text-muted-foreground mb-6 max-w-md text-sm leading-relaxed">
-              요청하신 페이지가 삭제되었거나 존재하지 않습니다.
-            </p>
-            <button
-              onClick={() => navigate('/work-guides')}
-              className="inline-flex items-center gap-2 px-4 py-2 bg-primary hover:bg-primary/90 text-primary-foreground rounded-lg transition-colors text-sm"
-            >
-              목록으로
-            </button>
+          <div className="flex-1 flex flex-col items-center justify-center px-8">
+            <h1 className="sr-only">작업 가이드</h1>
+            <EmptyState
+              icon={BookMarked}
+              title="페이지를 찾을 수 없습니다."
+              description="요청한 페이지가 삭제되었거나 존재하지 않습니다. 목록에서 다른 페이지를 고르세요."
+              action={{ label: '목록으로', onClick: () => navigate('/work-guides') }}
+            />
           </div>
         ) : (
-          <div className="flex-1 flex flex-col items-center justify-center text-center px-8">
-            <BookMarked className="w-16 h-16 text-muted-foreground/20 mb-4" />
-            <h2 className="text-xl font-semibold mb-2">작업 가이드</h2>
-            <p className="text-muted-foreground mb-6 max-w-md text-sm leading-relaxed">
-              운영 절차, 배포 가이드, 트러블슈팅 등 팀의 지식을 계층적으로 관리하세요.
-              왼쪽 트리에서 페이지를 선택하거나 새 페이지를 만드세요.
-            </p>
-            <button
-              onClick={() => navigate('/work-guides/new')}
-              className="inline-flex items-center gap-2 px-4 py-2 bg-primary hover:bg-primary/90 text-primary-foreground rounded-lg transition-colors text-sm"
-            >
-              <Plus className="w-4 h-4" /> 첫 번째 페이지 만들기
-            </button>
+          <div className="flex-1 flex flex-col items-center justify-center px-8">
+            <h1 className="sr-only">작업 가이드</h1>
+            <EmptyState
+              icon={BookMarked}
+              title="선택된 페이지가 없습니다."
+              description="운영 절차·배포 가이드·트러블슈팅을 계층으로 관리합니다. 왼쪽 트리에서 페이지를 고르거나 새 페이지를 만드세요."
+              action={{ label: '새 페이지 만들기', onClick: () => navigate('/work-guides/new') }}
+            />
           </div>
         )}
       </main>

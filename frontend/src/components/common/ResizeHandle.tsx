@@ -60,7 +60,7 @@ export function ResizeHandle({
       title="드래그해서 폭 조절 · 더블클릭으로 기본값 리셋"
       className={`absolute top-0 ${side === 'right' ? 'right-0 -mr-0.5' : 'left-0 -ml-0.5'} w-1.5 h-full cursor-col-resize group z-[60] ${className}`}
     >
-      <div className="absolute inset-y-0 left-1/2 -translate-x-1/2 w-px bg-border group-hover:bg-primary/60 group-hover:w-[2px] transition-all" />
+      <div className="absolute inset-y-0 left-1/2 -translate-x-1/2 w-px bg-border group-hover:bg-primary/60 group-hover:w-[2px] transition-[width,background-color]" />
     </div>
   );
 }

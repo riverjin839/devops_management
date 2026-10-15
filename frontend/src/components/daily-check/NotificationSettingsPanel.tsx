@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Plus, Trash2, Power, PowerOff, Send } from 'lucide-react';
 import { MacCard } from '@/components/ui/MacCard';
+import { EmptyState } from '@/components/common/EmptyState';
 import {
   useNotificationChannels,
   useCreateChannel,
@@ -26,18 +27,21 @@ export function NotificationSettingsPanel() {
   const [adding, setAdding] = useState(false);
 
   return (
-    <MacCard title="알림 채널">
+    <MacCard
+      title="알림 채널"
+      titleExtra={<span className="text-xs text-muted-foreground tabular-nums">{channels.length}개</span>}
+      actions={
+        <button
+          type="button"
+          onClick={() => setAdding((v) => !v)}
+          className="inline-flex items-center gap-1.5 rounded-xl border border-border bg-card px-3 py-1.5 text-sm hover:bg-muted"
+        >
+          <Plus className="w-3.5 h-3.5" />
+          {adding ? '닫기' : '채널 추가'}
+        </button>
+      }
+    >
       <div className="space-y-3">
-        <div className="flex justify-end">
-          <button
-            type="button"
-            onClick={() => setAdding((v) => !v)}
-            className="inline-flex items-center gap-1.5 rounded-xl border border-border bg-card px-3 py-1.5 text-sm hover:bg-muted"
-          >
-            <Plus className="w-3.5 h-3.5" />
-            {adding ? '닫기' : '채널 추가'}
-          </button>
-        </div>
 
         {adding && (
           <ChannelForm
@@ -49,11 +53,13 @@ export function NotificationSettingsPanel() {
         )}
 
         {channels.length === 0 ? (
-          <div className="text-sm text-muted-foreground italic">
-            등록된 채널이 없습니다.
-          </div>
+          <EmptyState
+            compact
+            title="알림 채널 없음"
+            description="헤더의 「채널 추가」로 Slack·이메일·웹훅을 등록하면 점검 결과가 그 채널로 전송됩니다."
+          />
         ) : (
-          <ul className="divide-y divide-border rounded-xl border border-border bg-card overflow-hidden">
+          <ul className="divide-y divide-border">
             {channels.map((c) => (
               <ChannelRow
                 key={c.id}
@@ -108,7 +114,7 @@ function ChannelRow({
         title={channel.enabled ? '비활성화' : '활성화'}
         className={`rounded-lg p-1.5 ${
           channel.enabled
-            ? 'text-status-healthy hover:bg-status-healthy/10'
+            ? 'text-primary hover:bg-primary/10'
             : 'text-muted-foreground hover:bg-muted'
         }`}
       >
@@ -166,7 +172,7 @@ function ChannelForm({
   };
 
   return (
-    <div className="rounded-xl border border-border bg-card/50 p-3 space-y-3">
+    <div className="rounded-md bg-secondary/40 p-3 space-y-3">
       <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
         <input
           value={name}

@@ -315,7 +315,7 @@ function Toolbar({ editor, surfaceBg, bgColor, onPickBg, extraTemplates }: {
           {tblOpen && (
             <>
               <div className="fixed inset-0 z-40" onClick={() => setTblOpen(false)} aria-hidden />
-              <div className="absolute left-0 top-full mt-1 z-50 w-44 rounded-lg border border-border bg-card shadow-lg py-1 text-sm">
+              <div className="absolute left-0 top-full mt-1 z-50 w-44 rounded-md border border-border bg-card shadow-lg py-1 text-sm">
                 {([
                   ['행 위에 추가', () => editor.chain().focus().addRowBefore().run()],
                   ['행 아래 추가', () => editor.chain().focus().addRowAfter().run()],
@@ -378,8 +378,8 @@ function Toolbar({ editor, surfaceBg, bgColor, onPickBg, extraTemplates }: {
         {tplOpen && (
           <>
             <div className="fixed inset-0 z-40" onClick={() => setTplOpen(false)} aria-hidden />
-            <div className="absolute left-0 top-full mt-1 z-50 w-64 rounded-lg border border-border bg-card shadow-lg py-1">
-              <div className="px-3 py-1.5 text-xs font-semibold uppercase tracking-wider text-muted-foreground">실무 템플릿</div>
+            <div className="absolute left-0 top-full mt-1 z-50 w-64 rounded-md border border-border bg-card shadow-lg py-1">
+              <div className="px-3 py-1.5 text-xs font-medium text-muted-foreground">실무 템플릿</div>
               {[...(extraTemplates ?? []), ...DOC_TEMPLATES].map((tpl) => (
                 <button
                   key={tpl.id}
@@ -410,7 +410,7 @@ function Toolbar({ editor, surfaceBg, bgColor, onPickBg, extraTemplates }: {
             title={`배경색 ${c}`}
             aria-label={`배경색 ${c}`}
             onClick={() => onPickBg?.(c)}
-            className={`w-5 h-5 rounded border ${bgColor === c ? 'ring-2 ring-primary ring-offset-1' : 'border-border'}`}
+            className={`w-5 h-5 rounded border ${bgColor === c ? 'ring-1 ring-primary ring-offset-1' : 'border-border'}`}
             style={{ backgroundColor: c }}
           />
         ))}
@@ -733,7 +733,7 @@ export function RichTextEditor({
         <div
           role="listbox"
           aria-label="빠른 삽입"
-          className="fixed z-[60] w-52 max-h-64 overflow-y-auto rounded-lg border border-border bg-card shadow-xl py-1"
+          className="fixed z-[60] w-52 max-h-64 overflow-y-auto rounded-md border border-border bg-card shadow-xl py-1"
           style={{ left: slash.left, top: slash.top + 4 }}
         >
           {slashItems.map((it, i) => {
@@ -762,7 +762,7 @@ export function RichTextEditor({
         <div
           role="listbox"
           aria-label="내부 링크"
-          className="fixed z-[60] w-64 max-h-64 overflow-y-auto rounded-lg border border-border bg-card shadow-xl py-1"
+          className="fixed z-[60] w-64 max-h-64 overflow-y-auto rounded-md border border-border bg-card shadow-xl py-1"
           style={{ left: link.left, top: link.top + 4 }}
         >
           {linkResults.map((opt, i) => {

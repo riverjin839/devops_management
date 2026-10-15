@@ -1,10 +1,10 @@
 // 색은 전부 테마 토큰 경유 — 고정 팔레트(text-*-400 등)는 테마마다 대비가 깨진다 (D-049).
-// 의미색(상태) = `status-*`, 범주 구분색(겹침 그룹) = categorical `chart-*`.
+// 의미색(상태) = `status-*`(비정상만 — 정상은 무채색, DESIGN_SYSTEM §12.12-3), 범주 구분색(겹침 그룹) = categorical `chart-*`.
 // (구 `OPERATION_LEVELS`/`LEVEL_BADGE` 는 운영레벨이 Settings 기반 `useOperationLevels`
 //  로 옮겨간 뒤 참조가 0건이라 제거했다.)
 
 export const STATUS_STYLE: Record<string, { dot: string; border: string; badge: string; label: string }> = {
-  healthy:  { dot: 'bg-status-healthy',  border: 'border-l-status-healthy',  badge: 'bg-status-healthy/10 text-status-healthy',   label: 'Healthy'  },
+  healthy:  { dot: 'bg-muted-foreground/40', border: 'border-l-border',     badge: 'bg-secondary text-muted-foreground',          label: 'Healthy'  },
   warning:  { dot: 'bg-status-warning',  border: 'border-l-status-warning',  badge: 'bg-status-warning/10 text-status-warning',   label: 'Warning'  },
   critical: { dot: 'bg-status-critical', border: 'border-l-status-critical', badge: 'bg-status-critical/10 text-status-critical', label: 'Critical' },
   pending:  { dot: 'bg-status-unknown',  border: 'border-l-status-unknown',  badge: 'bg-status-unknown/10 text-status-unknown',   label: '미연결'   },

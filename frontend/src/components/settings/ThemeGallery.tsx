@@ -16,7 +16,7 @@ function PreviewChip({ theme }: { theme: Theme }) {
   if (!swatch) {
     // system — OS 설정을 따라가 고정 색이 없다.
     return (
-      <div className="w-full h-14 rounded-md border border-border bg-gradient-to-br from-muted to-foreground/10 flex items-center justify-center">
+      <div className="w-full h-14 rounded-md border border-border bg-muted flex items-center justify-center">
         <Monitor className="w-5 h-5 text-muted-foreground" />
       </div>
     );
@@ -45,7 +45,7 @@ export function ThemeGallery() {
       <p className="text-xs text-muted-foreground mb-3">
         미리보기를 클릭하면 바로 적용된다 — 사이드바 사용자 메뉴의 테마·강조색 목록과 같은 선택을 공유한다.
       </p>
-      <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground mb-1.5">바탕</p>
+      <p className="text-xs font-medium text-muted-foreground mb-1.5">바탕</p>
       <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3">
         {THEMES.map((t) => {
           const active = theme === t;
@@ -57,7 +57,7 @@ export function ThemeGallery() {
               aria-pressed={active}
               title={`${THEME_LABEL[t]} 테마로 변경`}
               className={`relative rounded-lg border p-1.5 text-left transition-colors ${
-                active ? 'border-primary ring-2 ring-primary/30' : 'border-border hover:border-primary/50'
+                active ? 'border-primary ring-1 ring-primary' : 'border-border hover:border-primary/50'
               }`}
             >
               <PreviewChip theme={t} />
@@ -70,7 +70,7 @@ export function ThemeGallery() {
         })}
       </div>
 
-      <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground mt-4 mb-1.5">강조색</p>
+      <p className="text-xs font-medium text-muted-foreground mt-4 mb-1.5">강조색</p>
       <p className="text-xs text-muted-foreground mb-2">
         버튼·링크·선택 탭·활성 메뉴에만 쓰인다. 라이트·다크(시스템 포함) 바탕에 적용되고, 컴포트·고대비와 그림 테마(움버·플래스터·아침 식사·릴리프·할리퀸과 목걸이를 한 여인·오장팡 자개·김환기 창·피카소·후안 그리스)는 자체 색을 쓴다.
       </p>

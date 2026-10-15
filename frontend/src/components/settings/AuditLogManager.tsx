@@ -10,6 +10,7 @@ import { RefreshCw, Search } from 'lucide-react';
 
 import { MacCard } from '@/components/ui/MacCard';
 import { auditLogsApi } from '@/services/api';
+import { EmptyState } from '@/components/common/EmptyState';
 import { useTenants } from '@/hooks/useTenants';
 import type { AuditLog } from '@/types';
 import { formatApiError, parseUTC } from '@/lib/utils';
@@ -65,7 +66,7 @@ const ACTIONS: string[] = [
 function StatusBadge({ status }: { status: string }) {
   const cls =
     status === 'success'
-      ? 'bg-status-healthy/15 text-status-healthy border-status-healthy/30'
+      ? 'bg-secondary text-muted-foreground border-border'
       : 'bg-status-critical/15 text-status-critical border-status-critical/30';
   return (
     <span className={`inline-flex items-center px-2 py-0.5 text-sm font-medium border rounded-md ${cls}`}>
@@ -248,12 +249,12 @@ export function AuditLogManager() {
           새로고침
         </button>
         <div className="ml-auto text-sm text-muted-foreground">
-          {data ? `총 ${data.total}건 · ${data.page}/${totalPages}` : '-'}
+          {data ? `총 ${data.total}건 · ${data.page}/${totalPages}` : '—'}
         </div>
       </div>
 
       {error && (
-        <p role="alert" className="text-sm text-destructive mb-3">
+        <p role="alert" className="text-sm text-status-critical mb-3">
           감사 로그 조회 실패: {formatApiError(error)}
         </p>
       )}
@@ -281,19 +282,19 @@ export function AuditLogManager() {
                 <td className="py-2 pr-3 font-medium">{row.actorUsername}</td>
                 <td className="py-2 pr-3"><code className="text-sm">{row.action}</code></td>
                 <td className="py-2 pr-3 text-sm text-muted-foreground">
-                  {row.targetType ? `${row.targetType}` : '-'}
+                  {row.targetType ? `${row.targetType}` : '—'}
                   {row.targetId ? <span className="block text-xs opacity-70 break-all">{row.targetId}</span> : null}
                 </td>
-                <td className="py-2 pr-3 text-sm text-muted-foreground whitespace-nowrap">{row.tenantName || '-'}</td>
+                <td className="py-2 pr-3 text-sm text-muted-foreground whitespace-nowrap">{row.tenantName || '—'}</td>
                 <td className="py-2 pr-3"><StatusBadge status={row.status} /></td>
-                <td className="py-2 pr-3 text-sm text-muted-foreground font-mono">{row.ip || '-'}</td>
+                <td className="py-2 pr-3 text-sm text-muted-foreground font-mono">{row.ip || '—'}</td>
                 <td className="py-2 pr-3 max-w-[420px]"><DetailsCell row={row} /></td>
               </tr>
             ))}
             {!isFetching && (!data || data.items.length === 0) && (
               <tr>
-                <td colSpan={8} className="py-10 text-center text-sm text-muted-foreground">
-                  표시할 감사 로그가 없습니다.
+                <td colSpan={8}>
+                  <EmptyState compact title="표시할 감사 로그가 없습니다." description="필터 조건을 바꾸거나 기간을 넓혀 보세요." />
                 </td>
               </tr>
             )}

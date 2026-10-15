@@ -42,7 +42,7 @@ export function PodScheduleCalc({ clusterId }: { clusterId: string }) {
   return (
     <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm border-t border-border pt-2">
       <span className="flex items-center gap-1.5 text-muted-foreground">
-        <Cpu className="w-4 h-4 text-status-info" /> Pod 스케줄 가능 수:
+        <Cpu className="w-4 h-4 text-status-info" /> 파드 스케줄 가능 수:
       </span>
       <label className="flex items-center gap-1 text-xs text-muted-foreground">
         CPU
@@ -67,7 +67,7 @@ export function PodScheduleCalc({ clusterId }: { clusterId: string }) {
             {result.per.length > 0 && (
               <div data-export-ignore
                 className="hidden group-hover:block group-focus-within:block absolute left-0 top-full mt-1 z-50 w-72 max-h-72 overflow-auto
-                  rounded-lg border border-border bg-card shadow-lg p-2 text-xs">
+                  rounded-md border border-border bg-card shadow-lg p-2 text-xs">
                 <div className="text-muted-foreground mb-1">배치 가능 노드 (alloc−req · max-pods 기준)</div>
                 {result.per.slice(0, 30).map((p) => (
                   <div key={p.name} className="flex items-center justify-between gap-2 py-0.5">

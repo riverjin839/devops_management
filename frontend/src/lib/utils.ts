@@ -103,7 +103,7 @@ export function generateUUID(): string {
 export function getStatusColor(status: Status): string {
   switch (status) {
     case 'healthy':
-      return 'text-status-healthy';
+      return 'text-muted-foreground';
     case 'warning':
       return 'text-status-warning';
     case 'critical':
@@ -116,26 +116,13 @@ export function getStatusColor(status: Status): string {
 export function getStatusBgColor(status: Status): string {
   switch (status) {
     case 'healthy':
-      return 'bg-status-healthy/10';
+      return 'bg-secondary';
     case 'warning':
       return 'bg-status-warning/10';
     case 'critical':
       return 'bg-status-critical/10';
     default:
       return 'bg-muted';
-  }
-}
-
-export function getStatusIcon(status: Status): string {
-  switch (status) {
-    case 'healthy':
-      return '🟢';
-    case 'warning':
-      return '🟠';
-    case 'critical':
-      return '🔴';
-    default:
-      return '⚪';
   }
 }
 

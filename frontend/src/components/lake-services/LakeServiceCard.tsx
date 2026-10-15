@@ -27,7 +27,7 @@ export function LakeServiceCard({
         }
       }}
       aria-label={`${service.name} 상세 보기`}
-      className="group text-left bg-card border border-border rounded-md p-4 hover:border-primary/40 transition-all cursor-pointer"
+      className="group text-left bg-card border border-border rounded-md p-4 hover:border-primary/40 transition-colors cursor-pointer"
     >
       {/* Header */}
       <div className="flex items-start justify-between gap-2 mb-3">

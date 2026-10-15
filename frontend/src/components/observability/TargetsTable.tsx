@@ -47,7 +47,7 @@ export function TargetsTable({ rows, isLoading, emptyMessage }: {
                   <td className={TD}>
                     <span className="inline-flex items-center gap-1.5 text-xs">
                       <HealthIcon healthy={up} />
-                      <span className={up ? 'text-muted-foreground' : 'text-[hsl(var(--status-critical))]'}>
+                      <span className={up ? 'text-muted-foreground' : 'text-status-critical'}>
                         {target.health}
                       </span>
                     </span>
@@ -60,9 +60,9 @@ export function TargetsTable({ rows, isLoading, emptyMessage }: {
                   <td className={`${TD} text-right text-xs font-mono text-muted-foreground`}>
                     {target.lastScrapeDuration !== null && target.lastScrapeDuration !== undefined
                       ? formatDuration(target.lastScrapeDuration)
-                      : '-'}
+                      : '—'}
                   </td>
-                  <td className={`${TD} text-xs text-[hsl(var(--status-critical))] truncate max-w-[18rem]`}>
+                  <td className={`${TD} text-xs text-status-critical truncate max-w-[18rem]`}>
                     {target.lastError ?? ''}
                   </td>
                   <td className={`${TD} text-xs text-muted-foreground truncate max-w-[18rem]`}>
@@ -73,7 +73,7 @@ export function TargetsTable({ rows, isLoading, emptyMessage }: {
                   <tr key={`${rowKey}-detail`} className="bg-muted/10 border-t border-border">
                     <td colSpan={COLS} className="px-4 py-3 space-y-3">
                       <div className="text-xs text-muted-foreground break-all">
-                        스크레이프 URL: {target.scrapeUrl ?? '-'} · 풀: {target.scrapePool ?? '-'}
+                        스크레이프 URL: {target.scrapeUrl ?? '—'} · 풀: {target.scrapePool ?? '—'}
                       </div>
                       <LabelTable title="라벨" pairs={target.labels} />
                     </td>

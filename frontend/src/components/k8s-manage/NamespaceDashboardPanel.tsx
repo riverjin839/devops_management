@@ -95,7 +95,7 @@ function healthFromPods(rows: K8sPodRichRow[]): Health {
 }
 
 const HealthCell = ({ n, tone }: { n: number; tone: 'ok' | 'warn' | 'crit' }) => (
-  <span className={`tabular-nums ${n === 0 ? 'text-muted-foreground' : tone === 'ok' ? 'text-status-healthy font-medium' : tone === 'warn' ? 'text-status-warning font-semibold' : 'text-status-critical font-semibold'}`}>
+  <span className={`tabular-nums ${n === 0 ? 'text-muted-foreground' : tone === 'ok' ? 'text-foreground font-medium' : tone === 'warn' ? 'text-status-warning font-semibold' : 'text-status-critical font-semibold'}`}>
     {n}
   </span>
 );
@@ -161,33 +161,30 @@ export function NamespaceDashboardPanel(p: NamespaceDashboardPanelProps) {
 
   return (
     <div className="space-y-3">
-      <MacCard title="네임스페이스 선택" bodyPadding="p-3">
-        <div className="flex items-center gap-3 flex-wrap">
-          <NamespaceMultiSelect
-            clusterId={clusterId} selected={nsSet} singleSelect
-            onChange={(next) => { setNs([...next][0] ?? ''); setActiveKind(null); }}
-          />
-          {ns && <span className="text-xs text-muted-foreground">종류 {flatKinds.length}개 · 리소스 {totalCount}개</span>}
-          <div className="ml-auto inline-flex rounded-xl border border-border p-0.5 bg-secondary/30">
-            <button type="button" onClick={() => setMode('tab')}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium ${mode === 'tab' ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}>
-              <Rows3 className="w-3.5 h-3.5" /> 탭 드릴인형
-            </button>
-            <button type="button" onClick={() => setMode('list')}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium ${mode === 'list' ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}>
-              <LayoutGrid className="w-3.5 h-3.5" /> 전체 나열형
-            </button>
-          </div>
+      {/* 네임스페이스 선택 툴바 — 툴바만 감싸던 카드를 걷었다(§12.12-4) */}
+      <div className="flex items-center gap-3 flex-wrap">
+        <NamespaceMultiSelect
+          clusterId={clusterId} selected={nsSet} singleSelect
+          onChange={(next) => { setNs([...next][0] ?? ''); setActiveKind(null); }}
+        />
+        {ns && <span className="text-xs text-muted-foreground">종류 {flatKinds.length}개 · 리소스 {totalCount}개</span>}
+        <div className="ml-auto inline-flex rounded-xl border border-border p-0.5 bg-secondary/30">
+          <button type="button" onClick={() => setMode('tab')}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium ${mode === 'tab' ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}>
+            <Rows3 className="w-3.5 h-3.5" /> 탭 드릴인형
+          </button>
+          <button type="button" onClick={() => setMode('list')}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium ${mode === 'list' ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}>
+            <LayoutGrid className="w-3.5 h-3.5" /> 전체 나열형
+          </button>
         </div>
-      </MacCard>
+      </div>
 
       {!ns ? (
-        <MacCard bodyPadding="p-0">
-          <EmptyState title="네임스페이스를 선택하세요" description="위에서 네임스페이스를 고르면 그 안의 workload/config/network/storage 리소스가 한 화면에 모입니다." />
-        </MacCard>
+        <EmptyState title="네임스페이스를 선택하세요" description="위에서 네임스페이스를 고르면 그 안의 workload/config/network/storage 리소스가 한 화면에 모입니다." />
       ) : (() => {
         const inventoryCard = (
-          <MacCard title="리소스 인벤토리" bodyPadding="p-0">
+          <MacCard title="리소스 인벤토리" description="행 클릭 시 해당 종류의 상세 목록으로 이동" bodyPadding="p-0">
             <div className="grid gap-2 px-4 py-1 text-xs font-semibold text-muted-foreground border-b border-border bg-secondary/30"
               style={{ gridTemplateColumns: 'minmax(150px,1.6fr) 110px 70px 60px 60px 60px 1fr' }}>
               <span>종류</span><span>구분</span><span className="text-right">개수</span>
@@ -205,7 +202,7 @@ export function NamespaceDashboardPanel(p: NamespaceDashboardPanelProps) {
                 {isLoading ? (
                   <span className="col-span-4"><Skeleton className="h-3 w-20" /></span>
                 ) : isError ? (
-                  <span className="col-span-4 text-xs text-destructive">조회 실패</span>
+                  <span className="col-span-4 text-xs text-status-critical">조회 실패</span>
                 ) : (
                   <>
                     <span className="text-right tabular-nums">{count}</span>
@@ -225,9 +222,6 @@ export function NamespaceDashboardPanel(p: NamespaceDashboardPanelProps) {
                 )}
               </button>
             ))}
-            <div className="px-4 py-1 text-xs text-muted-foreground border-t border-border">
-              행 클릭 시 해당 종류의 상세 목록으로 이동합니다.
-            </div>
           </MacCard>
         );
 
@@ -279,12 +273,15 @@ export function NamespaceDashboardPanel(p: NamespaceDashboardPanelProps) {
               {CATS.map((cat) => {
                 const kinds = cat.kinds.filter(isVisible);
                 return (
-                  <MacCard key={cat.id} title={cat.label} bodyPadding="p-3" className="space-y-3">
+                  // 카테고리는 구분 제목만 — 종류별 KindPanel 이 각자 MacCard 라 바깥 카드를 걷었다(카드 안 카드 금지).
+                  <section key={cat.id} className="space-y-2">
+                    <h3 className="flex items-center gap-1.5 text-sm font-semibold text-foreground">
+                      <cat.icon className="w-3.5 h-3.5 text-muted-foreground" aria-hidden />{cat.label}
+                    </h3>
                     {kinds.length === 0 ? (
-                      <div className="text-sm text-muted-foreground">이 네임스페이스에는 {cat.label} 리소스가 없습니다.</div>
+                      <EmptyState compact icon={cat.icon} title={`이 네임스페이스에는 ${cat.label} 리소스가 없습니다`} description="다른 네임스페이스를 고르거나 탭 드릴인형으로 전환해 보세요." />
                     ) : kinds.map((k) => (
                       <div key={k} id={`nsdash-kind-${k}`}>
-                        <div className="text-xs font-semibold text-muted-foreground mb-1.5">{KIND_LABEL[k] ?? k}</div>
                         <KindPanel
                           clusterId={clusterId} ns={ns} kind={k} caps={caps[k]}
                           onOpenDetail={onOpenDetail} onScale={onScale} onRestart={onRestart} onDelete={onDelete} onTerminal={onTerminal}
@@ -292,7 +289,7 @@ export function NamespaceDashboardPanel(p: NamespaceDashboardPanelProps) {
                         />
                       </div>
                     ))}
-                  </MacCard>
+                  </section>
                 );
               })}
             </div>
@@ -324,7 +321,7 @@ function KindPanel({ clusterId, ns, kind, caps, onOpenDetail, onScale, onRestart
     return (
       <PodsPanel
         clusterId={clusterId} caps={caps} selectedNs={selectedNs} setSelectedNs={setSelectedNs}
-        search={search} setSearch={setSearch} hideNsSelector
+        search={search} setSearch={setSearch} hideNsSelector title={KIND_LABEL.pods ?? '파드'}
         onOpenDetail={(row) => onOpenDetail('pods', row, !!caps?.editable)}
         onDelete={onDelete} onTerminal={onTerminal}
       />
@@ -333,7 +330,7 @@ function KindPanel({ clusterId, ns, kind, caps, onOpenDetail, onScale, onRestart
   return (
     <ResourceTablePanel
       clusterId={clusterId} kind={kind} caps={caps} selectedNs={selectedNs} setSelectedNs={setSelectedNs}
-      search={search} setSearch={setSearch} hideNsSelector
+      search={search} setSearch={setSearch} hideNsSelector title={KIND_LABEL[kind] ?? kind}
       onOpenDetail={(row, editable) => onOpenDetail(kind, row, editable)}
       onScale={onScale} onRestart={onRestart} onDelete={onDelete}
       onCordon={onCordon} onDrain={onDrain} onTerminal={onTerminal}

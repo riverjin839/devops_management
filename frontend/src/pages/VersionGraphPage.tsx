@@ -1,12 +1,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams } from 'react-router-dom';
 import ForceGraph3D, { type ForceGraph3DInstance, type NodeObject, type LinkObject } from 'react-force-graph-3d';
 import * as THREE from 'three';
-import { ArrowLeft, RefreshCw, Share2, X } from 'lucide-react';
+import { RefreshCw, Share2, X } from 'lucide-react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { versionsApi, type VersionGraphNode, type VersionGraphEdge } from '@/services/api';
 import { useClusters } from '@/hooks/useCluster';
-import { useToast, SelectClusterEmptyState, LoadingState } from '@/components/common';
+import { useToast, SelectClusterEmptyState, LoadingState, EmptyState, PageHeader } from '@/components/common';
 import { formatApiError } from '@/lib/utils';
 
 // ── 타입별 색상 (D-005: 차트 토큰 체계) ─────────────────────────────────────
@@ -75,11 +75,11 @@ function makeNodeObject(node: NodeObject): THREE.Mesh {
 
 function NodeDetail({ node, onClose }: { node: GNode; onClose: () => void }) {
   return (
-    <div className="absolute top-4 right-4 w-80 bg-card border border-border rounded-xl shadow-2xl overflow-hidden z-10">
+    <div className="absolute top-4 right-4 w-80 bg-card border border-border rounded-md shadow-2xl overflow-hidden z-10">
       <div className="flex items-center justify-between px-4 py-3 border-b border-border"
         style={{ borderLeftColor: chartTokenColor(NODE_TOKEN[node.type]), borderLeftWidth: 4 }}>
         <div className="min-w-0">
-          <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+          <p className="text-xs font-medium text-muted-foreground">
             {node.type}
           </p>
           <p className="text-sm font-bold text-foreground truncate">{node.label}</p>
@@ -91,25 +91,25 @@ function NodeDetail({ node, onClose }: { node: GNode; onClose: () => void }) {
       <div className="px-4 py-3 space-y-3 max-h-[420px] overflow-y-auto text-sm">
         {node.version && (
           <div>
-            <p className="text-xs text-muted-foreground uppercase mb-0.5">Version</p>
+            <p className="text-xs font-medium text-muted-foreground mb-0.5">버전</p>
             <p className="font-mono text-foreground">{node.version}</p>
           </div>
         )}
         {node.value && (
           <div>
-            <p className="text-xs text-muted-foreground uppercase mb-0.5">Value</p>
+            <p className="text-xs font-medium text-muted-foreground mb-0.5">값</p>
             <p className="font-mono text-foreground break-all">{node.value}</p>
           </div>
         )}
         {node.category && (
           <div>
-            <p className="text-xs text-muted-foreground uppercase mb-0.5">Category</p>
+            <p className="text-xs font-medium text-muted-foreground mb-0.5">카테고리</p>
             <p className="font-mono text-foreground">{node.category}</p>
           </div>
         )}
         {node.collectedAt && (
           <div>
-            <p className="text-xs text-muted-foreground uppercase mb-0.5">Collected</p>
+            <p className="text-xs font-medium text-muted-foreground mb-0.5">수집 시각</p>
             <p className="font-mono text-foreground text-xs">{node.collectedAt}</p>
           </div>
         )}
@@ -122,7 +122,6 @@ function NodeDetail({ node, onClose }: { node: GNode; onClose: () => void }) {
 
 export function VersionGraphPage() {
   const { clusterId: paramClusterId } = useParams<{ clusterId: string }>();
-  const navigate = useNavigate();
   const queryClient = useQueryClient();
   const toast = useToast();
   const { data: clusters = [] } = useClusters();
@@ -189,7 +188,7 @@ export function VersionGraphPage() {
     try {
       await versionsApi.collect(selectedId);
       queryClient.invalidateQueries({ queryKey: ['versions'] });
-      toast.success('수집 완료');
+      toast.success('수집됨');
     } catch (e) {
       toast.error('수집 실패', formatApiError(e));
     }
@@ -199,38 +198,41 @@ export function VersionGraphPage() {
     <div className="app-h-screen bg-background flex flex-col overflow-hidden">
       {/* 툴바 */}
       <div className="flex items-center gap-3 px-4 py-2.5 border-b border-border bg-card flex-shrink-0 z-20">
-        <button onClick={() => navigate('/versions')}
-          className="p-1.5 hover:bg-secondary rounded text-muted-foreground hover:text-foreground"
-          title="버전 페이지로" aria-label="버전 페이지로">
-          <ArrowLeft className="w-4 h-4" />
-        </button>
-        <Share2 className="w-5 h-5 text-primary flex-shrink-0" />
-        <h1 className="text-base font-bold flex-shrink-0">컴포넌트 관계 그래프</h1>
-        <div className="h-5 w-px bg-border" />
-        <select
-          value={selectedId}
-          onChange={(e) => setSelectedId(e.target.value)}
-          className="px-2 py-1 bg-secondary border border-border rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-primary"
-        >
-          <option value="">— 클러스터 선택 —</option>
-          {clusters.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-        </select>
-        <div className="flex items-center gap-1 ml-auto text-xs text-muted-foreground flex-wrap">
-          {(Object.entries(NODE_TOKEN) as Array<[VersionGraphNode['type'], string]>).map(([k, v]) => (
-            <span key={k} className="inline-flex items-center gap-1">
-              <span className="w-2 h-2 rounded-full" style={{ background: `hsl(var(${v}))` }} />
-              {k}
-            </span>
-          ))}
-        </div>
-        <button
-          onClick={collectAndRefresh}
-          disabled={!selectedId}
-          className="flex items-center gap-1 px-2 py-1 text-sm bg-primary/10 text-primary border border-primary/30 hover:bg-primary/20 rounded transition-colors disabled:opacity-50"
-        >
-          <RefreshCw className="w-3 h-3" />
-          재수집
-        </button>
+        <PageHeader
+          className="flex-1 items-center"
+          back={{ to: '/versions', label: '버전' }}
+          icon={Share2}
+          title="컴포넌트 관계 그래프"
+          titleExtra={
+            <select
+              value={selectedId}
+              onChange={(e) => setSelectedId(e.target.value)}
+              aria-label="클러스터 선택"
+              className="ml-1 px-2 py-1 bg-secondary border border-border rounded-xl text-sm focus:outline-none focus:ring-1 focus:ring-primary"
+            >
+              <option value="">— 클러스터 선택 —</option>
+              {clusters.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+            </select>
+          }
+          actions={<>
+            <div className="flex items-center gap-1 text-xs text-muted-foreground flex-wrap">
+              {(Object.entries(NODE_TOKEN) as Array<[VersionGraphNode['type'], string]>).map(([k, v]) => (
+                <span key={k} className="inline-flex items-center gap-1">
+                  <span className="w-2 h-2 rounded-full" style={{ background: `hsl(var(${v}))` }} />
+                  {k}
+                </span>
+              ))}
+            </div>
+            <button
+              onClick={collectAndRefresh}
+              disabled={!selectedId}
+              className="flex items-center gap-1 px-2 py-1 text-sm bg-primary/10 text-primary border border-primary/30 hover:bg-primary/20 rounded-xl transition-colors disabled:opacity-50"
+            >
+              <RefreshCw className="w-3 h-3" />
+              재수집
+            </button>
+          </>}
+        />
       </div>
 
       {/* 그래프 */}
@@ -244,14 +246,13 @@ export function VersionGraphPage() {
             <LoadingState />
           </div>
         ) : graphData.nodes.length === 0 ? (
-          <div className="absolute inset-0 flex flex-col items-center justify-center text-muted-foreground text-sm gap-2">
-            <p>아직 수집된 스냅샷이 없습니다.</p>
-            <button
-              onClick={collectAndRefresh}
-              className="px-3 py-1.5 text-sm bg-primary text-primary-foreground rounded-lg"
-            >
-              지금 수집
-            </button>
+          <div className="absolute inset-0 flex items-center justify-center">
+            <EmptyState
+              icon={Share2}
+              title="아직 수집된 스냅샷이 없습니다."
+              description="이 클러스터의 컴포넌트 버전을 수집하면 관계 그래프가 그려집니다."
+              action={{ label: '지금 수집', onClick: collectAndRefresh }}
+            />
           </div>
         ) : (
           <ForceGraph3D

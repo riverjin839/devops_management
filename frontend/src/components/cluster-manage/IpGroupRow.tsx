@@ -45,7 +45,7 @@ export function IpGroupRow({
   if (!hasContent) {
     return (
       <div className="rounded-lg border border-dashed border-border/40 px-3 py-2.5">
-        <p className={`text-xs font-semibold uppercase tracking-wider mb-0.5 ${ACCENT[accent].label}`}>
+        <p className={`text-xs font-semibold mb-0.5 ${ACCENT[accent].label}`}>
           {label}
         </p>
         <p className="text-sm text-muted-foreground">{emptyMessage}</p>
@@ -61,7 +61,7 @@ export function IpGroupRow({
   return (
     <div className={`rounded-lg border px-3 py-2.5 ${surface}`}>
       <div className="flex items-center justify-between gap-2 mb-1.5">
-        <p className={`text-xs font-semibold uppercase tracking-wider ${labelCls}`}>
+        <p className={`text-xs font-semibold ${labelCls}`}>
           {label}
         </p>
         <div className="flex items-center gap-2">

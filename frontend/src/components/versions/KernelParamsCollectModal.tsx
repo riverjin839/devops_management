@@ -5,14 +5,19 @@ import type { NodeSummary } from '@/services/api';
 import type { KernelParamsCollectResponse } from '@/types';
 import { useQuery } from '@tanstack/react-query';
 import { useAbortableMutation } from '@/hooks/useAbortableMutation';
-import { useToast, DoubleScrollX} from '@/components/common';
+import { useRunLog, runLogged } from '@/hooks/useRunLog';
+import { useLogPref } from '@/hooks/useLogPref';
+import { useToast, DoubleScrollX, RunLogPanel } from '@/components/common';
 import { useModalA11y } from '@/components/common/useModalA11y';
 import { RawOutputDetails, CollectErrorList } from './RawOutputDetails';
+import { collectFirstLine, summarizeCollect } from './collectRunLog';
 import { formatApiError } from '@/lib/utils';
 
 interface Props {
   open: boolean;
   clusterId: string;
+  /** 실행 로그 첫 줄에 표시할 클러스터 이름(없으면 생략). */
+  clusterName?: string;
   onClose: () => void;
 }
 
@@ -30,7 +35,7 @@ const DEFAULT_PREFIXES = [
 /** 노드별 sysctl 값을 수집해 `kernel_params:{host}` 컴포넌트로 저장.
  *  백엔드는 content-hash dedup → 값 변경 있을 때만 새 스냅샷 누적 (history 자동).
  */
-export function KernelParamsCollectModal({ open, clusterId, onClose }: Props) {
+export function KernelParamsCollectModal({ open, clusterId, clusterName, onClose }: Props) {
   const toast = useToast();
 
   // 자격증명 (세션 한정)
@@ -92,17 +97,29 @@ export function KernelParamsCollectModal({ open, clusterId, onClose }: Props) {
       setResult(d);
       if (d.changed > 0) {
         toast.success(
-          '커널 파라미터 수집 완료',
+          '커널 파라미터 수집됨',
           `${d.changed}개 노드 변경 감지 · 히스토리에 누적`,
         );
       } else {
-        toast.info('커널 파라미터 수집 완료', '변경 없음 (히스토리 동일)');
+        toast.info('커널 파라미터 수집됨', '변경 없음 (히스토리 동일)');
       }
     },
     onError: (e: unknown) => {
       toast.error('수집 실패', formatApiError(e));
     },
   });
+
+  // 실행 로그(D-128) — 동기 1응답 수집을 요청·대기·호스트별 결과·요약 줄로 남긴다. 결과 표·토스트는 기존대로.
+  const runLog = useRunLog();
+  const [showLog, setShowLog] = useLogPref('versions-kernel-params');
+  const handleRun = () => {
+    void runLogged(runLog, {
+      title: '커널 파라미터 수집',
+      first: collectFirstLine(clusterName, selected.size, '커널 파라미터', useSudo),
+      fn: () => collectMut.mutateAsync(),
+      summarize: (res) => summarizeCollect(res, (h) => (h.paramCount !== undefined ? `파라미터 ${h.paramCount}개` : null)),
+    });
+  };
 
   const canRun = selected.size > 0
     && (authMode === 'password' ? !!password : !!privateKey.trim())
@@ -114,7 +131,7 @@ export function KernelParamsCollectModal({ open, clusterId, onClose }: Props) {
     <div className="fixed inset-0 z-50 flex items-center justify-center">
       <div className="absolute inset-0 bg-black/60" onClick={() => !collectMut.isPending && onClose()} />
       <div ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby={titleId}
-        className="relative bg-card border border-border rounded-2xl shadow-2xl w-full max-w-3xl mx-4 max-h-[90vh] overflow-hidden flex flex-col">
+        className="relative bg-card border border-border rounded-md shadow-2xl w-full max-w-3xl mx-4 max-h-[90vh] overflow-hidden flex flex-col">
         <div className="flex items-center gap-3 px-5 py-4 border-b border-border bg-muted/30">
           <div className="w-9 h-9 rounded-lg flex items-center justify-center bg-primary/10 text-primary">
             <Cpu className="w-4 h-4" />
@@ -259,6 +276,8 @@ export function KernelParamsCollectModal({ open, clusterId, onClose }: Props) {
           </div>
 
           {/* 결과 */}
+          <RunLogPanel run={runLog} show={showLog} onShowChange={setShowLog} maxHeight="max-h-56" />
+
           {result && (
             <div className="border border-border rounded-xl overflow-hidden">
               <div className="flex items-center gap-2 px-3 py-2 bg-muted/30 border-b border-border">
@@ -286,10 +305,10 @@ export function KernelParamsCollectModal({ open, clusterId, onClose }: Props) {
                     {result.hosts.map((h) => (
                       <tr key={h.host} className="border-t border-border">
                         <td className="px-2 py-1 font-mono">{h.host}</td>
-                        <td className={`px-2 py-1 ${h.status === 'ok' ? 'text-status-healthy' : 'text-status-critical'}`}>
+                        <td className={`px-2 py-1 ${h.status === 'ok' ? 'text-muted-foreground' : 'text-status-critical'}`}>
                           {h.status}
                         </td>
-                        <td className="px-2 py-1 font-mono">{h.paramCount ?? '-'}</td>
+                        <td className="px-2 py-1 font-mono">{h.paramCount ?? '—'}</td>
                         <td className="px-2 py-1">
                           {h.stored === true
                             ? <span className="text-xs text-status-healthy">신규 저장</span>
@@ -321,7 +340,7 @@ export function KernelParamsCollectModal({ open, clusterId, onClose }: Props) {
               <Loader2 className="w-3 h-3 animate-spin" /> 중지
             </button>
           ) : (
-            <button onClick={() => collectMut.mutate()}
+            <button onClick={handleRun}
               disabled={!canRun}
               className="flex items-center gap-1.5 px-4 py-1.5 text-sm font-semibold bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 disabled:opacity-50">
               <Play className="w-3 h-3" /> 수집 실행

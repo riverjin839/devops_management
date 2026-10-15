@@ -1,4 +1,4 @@
-import { Play, Trash2, Clock, Loader2, LayoutDashboard, Pencil } from 'lucide-react';
+import { Play, Trash2, Clock, Loader2, LayoutDashboard, Pencil, FileText } from 'lucide-react';
 import { Playbook } from '@/types';
 
 interface PlaybookCardProps {
@@ -11,11 +11,12 @@ interface PlaybookCardProps {
 }
 
 const statusConfig: Record<string, { color: string; bg: string; label: string }> = {
-  healthy: { color: 'text-status-healthy', bg: 'bg-status-healthy/15 border-status-healthy/30', label: 'OK' },
-  warning: { color: 'text-status-warning', bg: 'bg-status-warning/15 border-status-warning/30', label: 'Changed' },
-  critical: { color: 'text-status-critical', bg: 'bg-status-critical/15 border-status-critical/30', label: 'Failed' },
-  running: { color: 'text-blue-400', bg: 'bg-blue-500/15 border-blue-500/30', label: 'Running' },
-  unknown: { color: 'text-status-unknown', bg: 'bg-status-unknown/15 border-status-unknown/30', label: 'Not Run' },
+  // 상태 신호는 상태 pill 하나에만 — 카드 면·보더는 중립, 정상은 무채색(DESIGN_SYSTEM §12.12-3).
+  healthy: { color: 'text-muted-foreground', bg: 'border-border', label: 'OK' },
+  warning: { color: 'text-status-warning', bg: 'border-status-warning/40', label: 'Changed' },
+  critical: { color: 'text-status-critical', bg: 'border-status-critical/40', label: 'Failed' },
+  running: { color: 'text-status-info', bg: 'border-status-info/40', label: 'Running' },
+  unknown: { color: 'text-status-unknown', bg: 'border-border', label: 'Not Run' },
 };
 
 function formatTimeAgo(dateStr?: string): string {
@@ -36,7 +37,7 @@ export function PlaybookCard({ playbook, isRunning, onRun, onDelete, onEdit, onT
   const totals = result?.stats?.totals;
 
   return (
-    <div className={`bg-card border rounded-xl p-5 transition-all hover:shadow-md ${config.bg}`}>
+    <div className="bg-card border border-border rounded-md p-5">
       {/* Header */}
       <div className="flex items-start justify-between mb-3">
         <div className="flex-1 min-w-0">
@@ -59,7 +60,7 @@ export function PlaybookCard({ playbook, isRunning, onRun, onDelete, onEdit, onT
       <div className="text-sm text-muted-foreground font-mono bg-background/50 rounded px-2 py-1 mb-3 space-y-0.5">
         {playbook.playbookFileName ? (
           <div className="truncate">
-            <span className="text-foreground/80">📄 {playbook.playbookFileName}</span>
+            <span className="inline-flex items-center gap-1 text-foreground/80"><FileText className="w-3.5 h-3.5 flex-shrink-0" aria-hidden />{playbook.playbookFileName}</span>
             {playbook.inventoryName && (
               <span className="ml-2 text-foreground/60">· {playbook.inventoryName}</span>
             )}
@@ -74,10 +75,10 @@ export function PlaybookCard({ playbook, isRunning, onRun, onDelete, onEdit, onT
       {/* Stats (if available) */}
       {totals && (
         <div className="grid grid-cols-5 gap-1 mb-3">
-          <StatBadge label="OK" value={totals.ok} color="text-status-healthy" />
+          <StatBadge label="OK" value={totals.ok} color="text-muted-foreground" />
           <StatBadge label="Chg" value={totals.changed} color="text-status-warning" />
           <StatBadge label="Fail" value={totals.failures} color="text-status-critical" />
-          <StatBadge label="Unr" value={totals.unreachable} color="text-orange-400" />
+          <StatBadge label="Unr" value={totals.unreachable} color="text-status-warning" />
           <StatBadge label="Skip" value={totals.skipped} color="text-status-unknown" />
         </div>
       )}

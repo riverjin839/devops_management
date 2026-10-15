@@ -170,7 +170,7 @@ export function AddAddonModal({ isOpen, onClose, clusterId, editingAddon }: AddA
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={onClose}>
-      <div ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby={titleId} className="bg-card border border-border rounded-2xl shadow-xl w-full max-w-3xl mx-4" onClick={(e) => e.stopPropagation()}>
+      <div ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby={titleId} className="bg-card border border-border rounded-md shadow-xl w-full max-w-3xl mx-4" onClick={(e) => e.stopPropagation()}>
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-border">
           <h2 id={titleId} className="text-lg font-semibold">
@@ -187,7 +187,7 @@ export function AddAddonModal({ isOpen, onClose, clusterId, editingAddon }: AddA
             <div className="space-y-5">
               {ADDON_TEMPLATES.map((group) => (
                 <div key={group.label}>
-                  <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-2">
+                  <h3 className="text-sm font-semibold text-muted-foreground mb-2">
                     {group.label}
                   </h3>
                   <div className="grid grid-cols-2 gap-2">
@@ -195,7 +195,7 @@ export function AddAddonModal({ isOpen, onClose, clusterId, editingAddon }: AddA
                       <button
                         key={tpl.type}
                         onClick={() => handleSelect(tpl)}
-                        className="flex items-center gap-3 p-3 rounded-xl border border-border hover:border-primary/40 hover:bg-primary/5 transition-all text-left"
+                        className="flex items-center gap-3 p-3 rounded-xl border border-border hover:border-primary/40 hover:bg-primary/5 transition-colors text-left"
                       >
                         <span className="text-2xl">{tpl.icon}</span>
                         <div>

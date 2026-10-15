@@ -146,8 +146,10 @@ export function BindingPanel({
   };
 
   return (
-    <MacCard title="Binding">
-      <div className="flex flex-wrap items-center gap-2 mb-3">
+    <MacCard
+      title="바인딩"
+      titleExtra={<span className="text-xs text-muted-foreground tabular-nums">{rows.length}건</span>}
+      actions={<>
         <div className="relative flex-1 min-w-[180px] max-w-sm">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
           <input
@@ -170,8 +172,6 @@ export function BindingPanel({
         >
           system:* 포함
         </button>
-        <div className="flex-1" />
-        <span className="text-xs text-muted-foreground">{rows.length}건</span>
         <button
           type="button"
           onClick={() => setCreating(!creating)}
@@ -182,8 +182,8 @@ export function BindingPanel({
         >
           <Plus className="w-3.5 h-3.5" /> 바인딩 추가
         </button>
-      </div>
-
+      </>}
+    >
       {creating && (
         <div className="mb-3 p-3 rounded-xl border border-border bg-secondary space-y-3">
           <div className="flex flex-wrap items-end gap-2">
@@ -329,7 +329,7 @@ export function BindingPanel({
                 {['종류', '이름', '적용 범위', '대상(subject)', '참조 롤', ''].map((h, i) => (
                   <th
                     key={h || i}
-                    className="text-left px-3 py-2 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground whitespace-nowrap"
+                    className="text-left px-3 py-2 text-[11px] font-semibold text-muted-foreground whitespace-nowrap"
                   >
                     {h}
                   </th>
@@ -339,7 +339,7 @@ export function BindingPanel({
             <tbody>
               {rows.map((b) => (
                 <tr
-                  key={`${b.kind}:${b.namespace ?? '-'}:${b.name}`}
+                  key={`${b.kind}:${b.namespace ?? '—'}:${b.name}`}
                   className="border-t border-border hover:bg-secondary/60"
                 >
                   <td className="px-3 py-2">

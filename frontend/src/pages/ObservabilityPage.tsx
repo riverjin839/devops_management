@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
-import { SelectClusterEmptyState } from '@/components/common';
-import { Plus, RefreshCw, Search } from 'lucide-react';
+import { SelectClusterEmptyState, PageHeader, LoadingState, EmptyState, PageShell } from '@/components/common';
+import { Activity, Plus, RefreshCw, Search } from 'lucide-react';
 import { MacCard } from '@/components/ui/MacCard';
 import { ClusterSidebar } from '@/components/common/ClusterSidebar';
 import { useClusters } from '@/hooks/useCluster';
@@ -128,8 +128,8 @@ export function ObservabilityPage() {
   };
 
   return (
-    <div className="app-min-h-screen bg-background py-3 pr-3">
-      <div className="flex gap-3">
+    <div className="app-min-h-screen bg-background">
+      <PageShell density="console" className="flex gap-3">
         <ClusterSidebar
           clusters={clusters}
           selectedId={clusterId || null}
@@ -138,13 +138,23 @@ export function ObservabilityPage() {
         />
 
         <div className="flex-1 min-w-0 space-y-3">
+          <PageHeader
+            icon={Activity}
+            title="관측 지표"
+            description="모듈별 지표 · 알람 규칙 · 스크레이프 타겟 · 발화 중 알람을 한곳에서 봅니다."
+          />
+
           {/* 모듈 탭 — 지표가 등록된 모듈만 활성, 나머지는 '준비중' */}
-          <MacCard title="Observability 모듈">
-            <div className="flex flex-wrap items-center gap-2">
+          <div>
+            <div role="group" aria-label="관측 모듈" className="flex flex-wrap items-center gap-2">
               {modulesLoading ? (
-                <span className="text-sm text-muted-foreground">모듈을 불러오는 중…</span>
+                <LoadingState compact />
               ) : modules.length === 0 ? (
-                <span className="text-sm text-muted-foreground">등록된 모듈이 없습니다.</span>
+                <EmptyState
+                  compact
+                  title="등록된 모듈이 없습니다."
+                  description="관측 모듈 카탈로그가 비어 있습니다. 서버 시드 상태를 확인하세요."
+                />
               ) : (
                 modules.map((mod) => {
                   const planned = mod.status !== 'active';
@@ -171,13 +181,15 @@ export function ObservabilityPage() {
               )}
             </div>
             {activeModule?.description ? (
-              <p className="mt-3 text-xs text-muted-foreground">{activeModule.description}</p>
+              <p className="mt-2 text-xs text-muted-foreground">{activeModule.description}</p>
             ) : null}
-          </MacCard>
+          </div>
 
-          <MacCard title={activeModule?.label ?? moduleKey} bodyPadding="p-0">
-            {/* 툴바 — 뷰 탭 · 필터 · 신선도 · 새로고침 */}
-            <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-3 border-b border-border">
+          <MacCard
+            title={activeModule?.label ?? moduleKey}
+            bodyPadding="p-0"
+            actions={<>
+              {/* 뷰 탭 · 신선도 · 새로고침 */}
               <div className="flex flex-wrap items-center gap-1">
                 {VIEW_TABS.map((tab) => {
                   const disabled = !isPromModule && tab.value !== 'metrics';
@@ -221,8 +233,8 @@ export function ObservabilityPage() {
                   새로고침
                 </button>
               </div>
-            </div>
-
+            </>}
+          >
             {/* 뷰별 보조 필터 + 요약 */}
             <div className="flex flex-wrap items-center gap-3 px-4 py-2 border-b border-border bg-muted/10">
               {effectiveView === 'metrics' ? (
@@ -274,7 +286,7 @@ export function ObservabilityPage() {
             </div>
 
             {detail ? (
-              <p className="px-4 py-2 text-xs text-[hsl(var(--status-warning))] border-b border-border">
+              <p className="px-4 py-2 text-xs text-status-warning border-b border-border">
                 {detail}
               </p>
             ) : null}
@@ -297,7 +309,7 @@ export function ObservabilityPage() {
             )}
           </MacCard>
         </div>
-      </div>
+      </PageShell>
 
       <MetricEditModal
         isOpen={editorOpen}
@@ -355,10 +367,11 @@ function FilterGroup({ options, value, onChange, labels }: {
 }
 
 // Tailwind JIT 는 클래스명을 정적으로 스캔하므로 템플릿 리터럴로 조립하면 안 된다 — 고정 맵.
+// 정상은 무채색, 상태색은 비정상 + 값≠0 일 때만 (DESIGN_SYSTEM §12.12-3, D-119·D-132).
 const CHIP_CLS: Record<'healthy' | 'warning' | 'critical' | 'muted', string> = {
-  healthy: 'text-[hsl(var(--status-healthy))] border-[hsl(var(--status-healthy)/0.35)]',
-  warning: 'text-[hsl(var(--status-warning))] border-[hsl(var(--status-warning)/0.35)]',
-  critical: 'text-[hsl(var(--status-critical))] border-[hsl(var(--status-critical)/0.35)]',
+  healthy: 'text-muted-foreground border-border',
+  warning: 'text-status-warning border-status-warning/30',
+  critical: 'text-status-critical border-status-critical/30',
   muted: 'text-muted-foreground border-border',
 };
 
@@ -368,7 +381,7 @@ function Chip({ tone, label, count }: {
   count: number;
 }) {
   return (
-    <span className={`px-2 py-0.5 rounded-xl border ${CHIP_CLS[tone]}`}>
+    <span className={`px-2 py-0.5 rounded-xl border tabular-nums ${CHIP_CLS[count > 0 ? tone : 'muted']}`}>
       {label} {count}
     </span>
   );

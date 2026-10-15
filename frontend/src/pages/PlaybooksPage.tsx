@@ -6,7 +6,8 @@ import { CSS } from '@dnd-kit/utilities';
 import { PlaybookCard, PlaybookListRow, PlaybookLogDialog, AddPlaybookModal, RunCredsModal } from '@/components/playbooks';
 import type { PlaybookFormSubmit } from '@/components/playbooks/AddPlaybookModal';
 import type { PlaybookSshCreds } from '@/types';
-import { ClusterSidebar, EmptyState } from '@/components/common';
+import { ClusterSidebar, EmptyState, Skeleton, PageShell } from '@/components/common';
+import { PageHeader } from '@/components/common/PageHeader';
 import { RoleGate } from '@/components/auth/RoleGate';
 import { usePlaybooks, useCreatePlaybook, useUpdatePlaybook, useDeletePlaybook, useRunPlaybook, useToggleDashboard } from '@/hooks/usePlaybook';
 import { playbooksApi } from '@/services/api';
@@ -34,7 +35,7 @@ function SortableCardCell({ playbook, isRunning, onRun, onEdit, onDelete, onTogg
     <div ref={setNodeRef} style={style} className="relative group/card">
       <button
         {...attributes} {...listeners}
-        className="absolute top-2 left-2 z-10 cursor-grab active:cursor-grabbing p-1 rounded text-muted-foreground/30 opacity-0 group-hover/card:opacity-100 hover:text-muted-foreground hover:bg-secondary transition-all"
+        className="absolute top-2 left-2 z-10 cursor-grab active:cursor-grabbing p-1 rounded text-muted-foreground/30 opacity-0 group-hover/card:opacity-100 hover:text-muted-foreground hover:bg-secondary transition"
         title="드래그하여 순서 변경"
         aria-label="드래그하여 순서 변경"
       >
@@ -225,7 +226,7 @@ export function PlaybooksPage() {
 
   return (
     <div className="app-min-h-screen bg-background">
-      <main className="pr-3 py-3 flex gap-3">
+      <PageShell density="console" className="flex gap-3">
         {/* 좌측 클러스터 사이드바 — 다중 선택. 빈 배열 = 전체. */}
         <ClusterSidebar
           clusters={clusters}
@@ -241,13 +242,15 @@ export function PlaybooksPage() {
 
         <div className="flex-1 min-w-0">
           {/* Page Header */}
-          <div className="flex items-center justify-between mb-6 gap-3 flex-wrap">
-            <div className="flex items-center gap-3 min-w-0">
-              <BookOpen className="w-6 h-6 text-primary flex-shrink-0" />
-              <h1 className="text-xl font-bold">Ansible 플레이북</h1>
+          <PageHeader
+            icon={BookOpen}
+            title="Ansible 플레이북"
+            className="mb-6"
+            titleExtra={
+            <>
               {statusCounts.total > 0 && (
                 <div className="flex items-center gap-2 ml-2">
-                  <span className="text-sm px-2 py-0.5 rounded-full bg-status-healthy/15 text-status-healthy border border-status-healthy/30">
+                  <span className="text-sm px-2 py-0.5 rounded-full bg-secondary text-muted-foreground border border-border">
                     {statusCounts.healthy} OK
                   </span>
                   {statusCounts.warning > 0 && (
@@ -267,8 +270,9 @@ export function PlaybooksPage() {
                   ? `· 전체 (${clusters.length}개 클러스터)`
                   : `· ${selectedClusterIds.length}개 클러스터 선택됨`}
               </span>
-            </div>
-
+            </>
+            }
+            actions={
             <div className="flex items-center gap-3 flex-wrap">
               {/* View Mode Toggle */}
               <div className="inline-flex items-center bg-background border border-border rounded-lg p-0.5">
@@ -332,7 +336,7 @@ export function PlaybooksPage() {
                   <RoleGate allow={['admin', 'operator']}>
                     <button
                       onClick={handleRunAll}
-                      className="px-4 py-2 text-sm font-medium bg-status-healthy hover:bg-status-healthy text-white rounded-lg transition-colors flex items-center gap-2"
+                      className="px-4 py-2 text-sm font-medium bg-primary hover:bg-primary/90 text-primary-foreground rounded-lg transition-colors flex items-center gap-2"
                     >
                       <Play className="w-4 h-4" />
                       Run All
@@ -351,20 +355,21 @@ export function PlaybooksPage() {
                 </button>
               </RoleGate>
             </div>
-          </div>
+            }
+          />
 
           {/* Content */}
           {isLoading ? (
             viewMode === 'list' ? (
               <div className="space-y-2">
                 {[...Array(5)].map((_, i) => (
-                  <div key={i} className="bg-card border border-border rounded-lg h-12 animate-pulse" />
+                  <Skeleton key={i} className="block w-full h-12 rounded-lg" />
                 ))}
               </div>
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
                 {[...Array(4)].map((_, i) => (
-                  <div key={i} className="bg-card border border-border rounded-xl p-5 h-48 animate-pulse" />
+                  <Skeleton key={i} className="block w-full h-48 rounded-md" />
                 ))}
               </div>
             )
@@ -440,7 +445,7 @@ export function PlaybooksPage() {
             </DndContext>
           )}
         </div>
-      </main>
+      </PageShell>
 
       {/* Modal (add / edit) */}
       <AddPlaybookModal

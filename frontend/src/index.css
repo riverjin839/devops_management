@@ -1336,7 +1336,8 @@ html.high-contrast :where(p, li, td, dd) a { text-decoration: underline; text-un
     @apply bg-background text-foreground;
     /* Databricks tone — flat background, no decorative gradient */
     font-feature-settings: "rlig" 1, "calt" 1;
-    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    /* D-131: tailwind fontFamily.sans 와 같은 스택 — 웹폰트 다운로드 없음(폐쇄망 동일 렌더) */
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, "Apple SD Gothic Neo", "Malgun Gothic", "Noto Sans KR", Helvetica, Arial, sans-serif;
     font-size: 16px;
     line-height: 1.55;
     font-weight: 400;  /* P2: 500→400 — 한글 획 뭉침 방지, medium/semibold 와의 위계 회복 */
@@ -1360,7 +1361,9 @@ html.high-contrast :where(p, li, td, dd) a { text-decoration: underline; text-un
    8~10px 를 전부 text-[11px] 로 명시해 보정 규칙을 없앴다 — 11px 미만은 쓰지 않는다. */
 
 /* Tailwind defaults restored (no overrides) — relying on tailwind.css's
-   built-in text-xs (12px) / text-sm (14px) / text-base (16px) etc. */
+   built-in text-xs (12px) / text-sm (14px) / text-base (16px) etc.
+   타입 스케일(D-131, DESIGN_SYSTEM §12.12-10): 페이지 h1 = PageHeader text-xl semibold 1종 ·
+   카드 제목 = MacCard 헤더 1종 · 본문 text-sm · 보조 text-xs · 숫자는 font-mono 대신 tabular-nums. */
 /* font-weight: also restored — let Tailwind's font-medium=500,
    font-semibold=600, font-bold=700 do their job. Headings carry weight via
    the @layer base h1/h2/h3 rules above. */

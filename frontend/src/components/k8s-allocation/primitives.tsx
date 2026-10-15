@@ -1,5 +1,6 @@
 // K8S 자원 관리 화면 공용 표/셀 프리미티브 — 정렬 헤더, 페이저, 미터바, 사용률 배지, Stat 카드.
 import type { ReactNode } from 'react';
+import { StatTile } from '@/components/common/StatTile';
 import {
   ArrowUp, ArrowDown, ChevronsUpDown, FileSpreadsheet, Search, Cpu, MemoryStick, HelpCircle,
   AlertTriangle, RefreshCw,
@@ -111,8 +112,8 @@ export function UtilPct({ usage, req, lim, className = '' }: {
   const rRatio = utilRatio(usage, req);
   const lRatio = utilRatio(usage, lim);
   if (rRatio == null && lRatio == null) return null;
-  // req 대비: 30% 미만 낭비(amber) · 105% 초과 request 초과(red) · 그 외 적정(green)
-  const rCls = rRatio == null ? 'text-muted-foreground' : rRatio > 1.05 ? 'text-status-critical' : rRatio < 0.3 ? 'text-status-warning' : 'text-status-healthy';
+  // req 대비: 30% 미만 낭비(amber) · 105% 초과 request 초과(red) · 그 외 적정(무채색)
+  const rCls = rRatio == null ? 'text-muted-foreground' : rRatio > 1.05 ? 'text-status-critical' : rRatio < 0.3 ? 'text-status-warning' : 'text-muted-foreground';
   // limit 대비: 90% 이상 스로틀/OOM 위험(red) · 그 외 muted
   const lCls = lRatio == null ? 'text-muted-foreground' : lRatio >= 0.9 ? 'text-status-critical' : 'text-muted-foreground';
   return (
@@ -197,37 +198,35 @@ export function StatTooltip({ children }: { children: ReactNode }) {
   );
 }
 
-// warn: true = 주의(주황, 낭비 등 경미), 'critical' = 위험(빨강, 오버커밋/스로틀 등 심각).
-// 색상 단독으로 위험도를 전달하지 않도록 AlertTriangle 아이콘을 함께 표시한다.
-export function Stat({ label, value, sub, icon, warn, help, valueClassName }: {
+// 공용 StatTile 위임(D-118) — warn: true = 주의, 'critical' = 위험. 색 단독으로 위험도를 전달하지 않도록
+// 경고·위험이면 값 앞에 AlertTriangle 을 함께 그린다. icon 은 회색 타일 규칙상 표시하지 않는다(호환용으로만 받음).
+export function Stat({ label, value, sub, warn, help, valueClassName }: {
   label: string; value: string; sub?: string; icon?: ReactNode; warn?: boolean | 'critical'; help?: ReactNode;
   valueClassName?: string;
 }) {
-  const warnCls = warn === 'critical' ? 'text-status-critical' : warn ? 'text-status-warning' : (valueClassName ?? '');
   return (
-    <div className="rounded-lg border border-border bg-card/50 px-2.5 py-2">
-      <div className="text-xs text-muted-foreground flex items-center gap-1">
-        {icon}{label}
-        {help && <StatTooltip>{help}</StatTooltip>}
-      </div>
-      <div className={`text-xl font-semibold leading-tight mt-0.5 flex items-center gap-1 ${warnCls}`}>
-        {warn && <AlertTriangle className="w-3.5 h-3.5 flex-shrink-0" aria-hidden="true" />}
-        {value}
-      </div>
+    <StatTile
+      label={label}
+      tone={warn === 'critical' ? 'critical' : warn ? 'warning' : undefined}
+      value={
+        <span className={`inline-flex items-center gap-1 ${warn ? '' : (valueClassName ?? '')}`}>
+          {warn && <AlertTriangle className="w-3.5 h-3.5 flex-shrink-0" aria-hidden="true" />}
+          {value}
+        </span>
+      }
+      hint={help ? <StatTooltip>{help}</StatTooltip> : undefined}
+    >
       {sub && <div className="text-xs text-muted-foreground mt-0.5 truncate" title={sub}>{sub}</div>}
-    </div>
+    </StatTile>
   );
 }
 
-/** 카드 헤더 + 우측 개별 새로고침 버튼 (MacCard 는 title 만 지원하므로 body 내부에 직접 구성). */
-export function CardHeader({ title, onRefresh, refreshing }: { title: string; onRefresh: () => void; refreshing: boolean }) {
+/** 카드 헤더 우측 개별 새로고침 버튼 — MacCard `actions` 슬롯에 넣는다(D-122). */
+export function RefreshIconButton({ label, onRefresh, refreshing }: { label: string; onRefresh: () => void; refreshing: boolean }) {
   return (
-    <div className="flex items-center justify-between mb-2">
-      <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground select-none">{title}</span>
-      <button type="button" onClick={onRefresh} title="새로고침" aria-label={`${title} 새로고침`}
-        className="p-1 rounded-md text-muted-foreground hover:bg-secondary hover:text-foreground">
-        <RefreshCw className={`w-3.5 h-3.5 ${refreshing ? 'animate-spin' : ''}`} />
-      </button>
-    </div>
+    <button type="button" onClick={onRefresh} title="새로고침" aria-label={`${label} 새로고침`}
+      className="p-1 rounded-md text-muted-foreground hover:bg-secondary hover:text-foreground">
+      <RefreshCw className={`w-3.5 h-3.5 ${refreshing ? 'animate-spin' : ''}`} />
+    </button>
   );
 }

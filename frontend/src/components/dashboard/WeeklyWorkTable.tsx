@@ -13,7 +13,7 @@ const STATUS_DOT: Record<KanbanStatus, string> = {
   todo: 'bg-blue-400',
   in_progress: 'bg-status-warning',
   review_test: 'bg-purple-400',
-  done: 'bg-status-healthy',
+  done: 'bg-muted-foreground/40',
 };
 
 interface WeekDay {

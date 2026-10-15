@@ -7,6 +7,7 @@
 import { useState } from 'react';
 import { Plus, Trash2, Code2, Table2 } from 'lucide-react';
 import type { RbacPolicyRule } from '@/types';
+import { EmptyState } from '@/components/common/EmptyState';
 import {
   COMMON_API_GROUPS,
   VERB_OPTIONS,
@@ -104,21 +105,21 @@ export function RuleEditor({ rules, onChange, disabled, disabledHint }: RuleEdit
           {toYaml(rules) || 'rules: []'}
         </pre>
       ) : rules.length === 0 ? (
-        <div className="border border-dashed border-border rounded-md py-8 text-center text-sm text-muted-foreground">
-          규칙이 없다 — 최소 한 줄은 있어야 발급할 수 있다.
+        <div className="border border-dashed border-border rounded-md">
+          <EmptyState compact title="규칙이 없습니다." description="최소 한 줄은 있어야 발급할 수 있습니다. 위의 규칙 추가로 시작하세요." />
         </div>
       ) : (
         <div className="overflow-x-auto border border-border rounded-md">
           <table className="w-full min-w-[720px] text-sm">
             <thead>
               <tr className="bg-secondary">
-                <th className="text-left px-3 py-2 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground w-[180px]">
+                <th className="text-left px-3 py-2 text-[11px] font-semibold text-muted-foreground w-[180px]">
                   API 그룹
                 </th>
-                <th className="text-left px-3 py-2 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                <th className="text-left px-3 py-2 text-[11px] font-semibold text-muted-foreground">
                   리소스
                 </th>
-                <th className="text-left px-3 py-2 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground w-[330px]">
+                <th className="text-left px-3 py-2 text-[11px] font-semibold text-muted-foreground w-[330px]">
                   동작(verb)
                 </th>
                 <th className="w-10"><span className="sr-only">규칙 삭제</span></th>

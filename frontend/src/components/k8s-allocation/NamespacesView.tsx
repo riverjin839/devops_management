@@ -112,8 +112,8 @@ export function NamespacesView({ clusterId, clusterName, onOpenDetail }: {
             <tbody>
               {!rows.length && (
                 <tr className="border-t border-border">
-                  <td colSpan={7} className="px-3 py-6 text-center text-sm text-muted-foreground">
-                    '{q}' 와 일치하는 네임스페이스가 없습니다.
+                  <td colSpan={7}>
+                    <EmptyState compact title={`'${q}' 와 일치하는 네임스페이스가 없습니다.`} description="검색어를 줄이거나 지우면 전체 목록이 다시 보입니다." />
                   </td>
                 </tr>
               )}
@@ -138,25 +138,29 @@ export function NamespacesView({ clusterId, clusterName, onOpenDetail }: {
   }
 
   return (
-    <MacCard title={allItems.length ? `네임스페이스별 자원 (${fmtN(rows.length)}/${fmtN(allItems.length)}개)` : '네임스페이스별 자원'} bodyPadding="p-0">
-      <div className="flex items-center justify-between px-3 py-2 border-b border-border flex-wrap gap-2">
-        <div className="flex items-center gap-3 flex-wrap">
-          <SearchInput value={q} onChange={setQ} placeholder="네임스페이스 찾기" width="w-52" />
-          <span className="text-xs text-muted-foreground inline-flex items-center">
-            NS 명 클릭=상세 · 행 클릭=펼치기 · 열 머리글을 클릭해 정렬
-            <StatTooltip>
-              <p><b>R</b> = 사용 ÷ 요청(request) 비율 · <b>L</b> = 사용 ÷ 제한(limit) 비율</p>
-              <p className="text-muted-foreground mt-1">네임스페이스/워크로드/파드 표 전반에서 공통으로 쓰이는 표기입니다.</p>
-            </StatTooltip>
-          </span>
-          <PageSizeSelect value={pageSize} onChange={setPageSize} options={NS_PAGE_SIZES} />
-        </div>
-        <div className="flex items-center gap-3">
-          <CsvButton onClick={exportCsv} disabled={!rows.length} />
-          <button type="button" onClick={() => refetch()} className="text-sm text-muted-foreground hover:text-foreground flex items-center gap-1">
-            <RefreshCw className={`w-3.5 h-3.5 ${isFetching ? 'animate-spin' : ''}`} /> 새로고침
-          </button>
-        </div>
+    <MacCard
+      title="네임스페이스별 자원"
+      titleExtra={allItems.length ? (
+        <span className="text-xs text-muted-foreground tabular-nums">{fmtN(rows.length)}/{fmtN(allItems.length)}개</span>
+      ) : undefined}
+      bodyPadding="p-0"
+      actions={<>
+        <CsvButton onClick={exportCsv} disabled={!rows.length} />
+        <button type="button" onClick={() => refetch()} className="text-sm text-muted-foreground hover:text-foreground flex items-center gap-1">
+          <RefreshCw className={`w-3.5 h-3.5 ${isFetching ? 'animate-spin' : ''}`} /> 새로고침
+        </button>
+      </>}
+    >
+      <div className="flex items-center gap-3 flex-wrap px-3 py-2 border-b border-border">
+        <SearchInput value={q} onChange={setQ} placeholder="네임스페이스 찾기" width="w-52" />
+        <span className="text-xs text-muted-foreground inline-flex items-center">
+          NS 명 클릭=상세 · 행 클릭=펼치기 · 열 머리글을 클릭해 정렬
+          <StatTooltip>
+            <p><b>R</b> = 사용 ÷ 요청(request) 비율 · <b>L</b> = 사용 ÷ 제한(limit) 비율</p>
+            <p className="text-muted-foreground mt-1">네임스페이스/워크로드/파드 표 전반에서 공통으로 쓰이는 표기입니다.</p>
+          </StatTooltip>
+        </span>
+        <PageSizeSelect value={pageSize} onChange={setPageSize} options={NS_PAGE_SIZES} />
       </div>
       <div className="min-h-40">{body}</div>
     </MacCard>

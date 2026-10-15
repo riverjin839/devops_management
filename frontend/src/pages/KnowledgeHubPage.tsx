@@ -15,7 +15,7 @@ import type {
   OpsNote, CommandEntry, WorkGuide, WorkItem, Workflow, CommandImportance,
 } from '@/types';
 import { formatRelativeTime, stripHtml, parseUTC } from '@/lib/utils';
-import { ServiceSidebar, EmptyState } from '@/components/common';
+import { ServiceSidebar, EmptyState, Skeleton, PageShell } from '@/components/common';
 import { MacCard } from '@/components/ui/MacCard';
 import { useServiceCatalog } from '@/hooks/useServiceCatalog';
 import { useSprints } from '@/hooks/useSprints';
@@ -49,30 +49,21 @@ const KIND_META: Record<HubKind, {
   accent: string;
   chip: string;
 }> = {
-  task:     { label: '업무',       Icon: ListTodo,      accent: 'text-indigo-500',  chip: 'bg-indigo-500/10 text-indigo-700 dark:text-indigo-300 border-indigo-500/30' },
-  note:     { label: '노트',       Icon: StickyNote,    accent: 'text-status-warning',   chip: 'bg-status-warning/10 text-status-warning border-status-warning/30' },
-  command:  { label: '명령어',     Icon: Terminal,      accent: 'text-status-info',     chip: 'bg-status-info/10 text-status-info border-status-info/30' },
-  guide:    { label: '가이드',     Icon: BookMarked,    accent: 'text-status-healthy', chip: 'bg-status-healthy/10 text-status-healthy border-status-healthy/30' },
-  item:     { label: '이슈',       Icon: AlertCircle,   accent: 'text-status-critical',     chip: 'bg-status-critical/10 text-status-critical border-status-critical/30' },
-  workflow: { label: '워크플로우', Icon: GitFork,       accent: 'text-violet-500',  chip: 'bg-violet-500/10 text-violet-700 dark:text-violet-300 border-violet-500/30' },
+  task:     { label: '업무',       Icon: ListTodo,      accent: 'text-chart-1', chip: 'bg-chart-1/15 text-chart-1 border-chart-1/30' },
+  note:     { label: '노트',       Icon: StickyNote,    accent: 'text-chart-3', chip: 'bg-chart-3/15 text-chart-3 border-chart-3/30' },
+  command:  { label: '명령어',     Icon: Terminal,      accent: 'text-chart-6', chip: 'bg-chart-6/15 text-chart-6 border-chart-6/30' },
+  guide:    { label: '가이드',     Icon: BookMarked,    accent: 'text-chart-2', chip: 'bg-chart-2/15 text-chart-2 border-chart-2/30' },
+  item:     { label: '이슈',       Icon: AlertCircle,   accent: 'text-chart-5', chip: 'bg-chart-5/15 text-chart-5 border-chart-5/30' },
+  workflow: { label: '워크플로우', Icon: GitFork,       accent: 'text-chart-4', chip: 'bg-chart-4/15 text-chart-4 border-chart-4/30' },
 };
 
 const STATUS_DOT_TONE: Record<NonNullable<HubItem['statusTone']>, string> = {
   amber:   'bg-status-warning',
-  emerald: 'bg-status-healthy',
+  emerald: 'bg-muted-foreground/40',
   red:     'bg-status-critical',
-  slate:   'bg-slate-400',
+  slate:   'bg-status-unknown',
   primary: 'bg-primary',
   sky:     'bg-status-info',
-};
-
-const STATUS_TEXT_TONE: Record<NonNullable<HubItem['statusTone']>, string> = {
-  amber:   'text-status-warning',
-  emerald: 'text-status-healthy',
-  red:     'text-status-critical',
-  slate:   'text-slate-600 dark:text-slate-400',
-  primary: 'text-primary',
-  sky:     'text-status-info',
 };
 
 // 허브 상단 탭 — 지식 목록(집계 표) + 임베드 도구(Q&A·마인드맵·온톨로지·기술동향).
@@ -201,7 +192,7 @@ export function KnowledgeHubPage() {
         service: n.service,
         pinned: n.pinned,
         statusLabel: n.pinned ? '고정' : undefined,
-        statusTone: n.pinned ? 'amber' : undefined,
+        statusTone: n.pinned ? 'primary' : undefined,
         updatedAt: n.updatedAt,
         href: `/ops-notes/${n.id}`,
         searchBlob: `${n.title} ${stripHtml(n.content ?? '')} ${stripHtml(n.backContent ?? '')} ${n.author ?? ''} ${n.service}`.toLowerCase(),
@@ -370,223 +361,228 @@ export function KnowledgeHubPage() {
           tab === 'ontology' ? <OntologyPage /> :
           <TrendDigestPage />
         ) : (
-        <div className="px-4 lg:px-6 py-5 space-y-4 max-w-[1600px]">
-        {/* ── Filter / Search bar ─────────────────────────────────────── */}
-        <MacCard>
-          {hasFilters && (
-            <div className="flex items-center justify-end mb-2">
-              <button
-                onClick={clearFilters}
-                className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground transition-colors"
-              >
-                <X className="w-3 h-3" /> 초기화
-              </button>
-            </div>
-          )}
-
-          <div className="flex items-center gap-2 flex-wrap">
-            <button
-              onClick={() => setKindFilter('')}
-              className={`flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-full border transition-colors ${
-                !kindFilter
-                  ? 'bg-primary text-primary-foreground border-primary'
-                  : 'bg-background border-border text-muted-foreground hover:border-primary/50'
-              }`}
-            >
-              전체 <span className="opacity-70">({items.length})</span>
-            </button>
-            {(Object.keys(KIND_META) as HubKind[]).map((k) => {
-              const meta = KIND_META[k];
-              const Icon = meta.Icon;
-              const count = countByKind[k];
-              const isActive = kindFilter === k;
-              if (count === 0 && !isActive) return null;
-              return (
+        <PageShell density="hub" as="div">
+        {/* ── 필터·검색 바 + 목록 — D-122: 툴바 전용 카드를 걷고 목록 카드의 헤더 바로 올림 ── */}
+        <MacCard
+          bodyPadding="p-0"
+          actions={
+            <>
+            {hasFilters && (
+              <div className="w-full flex items-center justify-end">
                 <button
-                  key={k}
-                  onClick={() => setKindFilter(isActive ? '' : k)}
-                  className={`flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-full border transition-colors ${
-                    isActive
-                      ? `${meta.chip} border-transparent ring-1 ring-current/30`
-                      : 'bg-background border-border text-muted-foreground hover:border-primary/50'
-                  }`}
+                  onClick={clearFilters}
+                  className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground transition-colors"
                 >
-                  <Icon className={`w-3.5 h-3.5 ${meta.accent}`} /> {meta.label}
-                  <span className="opacity-70">({count})</span>
+                  <X className="w-3 h-3" /> 초기화
                 </button>
-              );
-            })}
-
-            {/* 미해결 이슈 빠른 필터 — kind='item' && statusLabel='미조치' 교차 필터 */}
-            {(openIssueCount > 0 || openOnly) && (
-              <button
-                onClick={() => setOpenOnly((v) => !v)}
-                title="미조치 상태인 이슈만 보기"
-                className={`flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-full border transition-colors ${
- openOnly
- ? 'bg-status-critical/10 text-status-critical border-status-critical/40 ring-1 ring-status-critical/30'
- : 'bg-background border-border text-muted-foreground hover:border-status-critical/50'
- }`}
-              >
-                <AlertCircle className={`w-3.5 h-3.5 ${openOnly ? 'text-status-critical' : 'text-status-critical/70'}`} />
-                미해결 이슈
-                <span className="opacity-70">({openIssueCount})</span>
-              </button>
+              </div>
             )}
 
-            <div className="w-px h-5 bg-border mx-1" />
-
-            {/* 기간 필터 — 주 / 월 / 분기 (updatedAt 기준) */}
-            {PERIOD_META.map(({ key, label }) => {
-              const isActive = periodFilter === key;
-              return (
-                <button
-                  key={key}
-                  onClick={() => setPeriodFilter(isActive ? '' : key)}
-                  className={`flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-full border transition-colors ${
-                    isActive
-                      ? 'bg-primary/10 text-primary border-primary/40 ring-1 ring-primary/30'
-                      : 'bg-background border-border text-muted-foreground hover:border-primary/50'
-                  }`}
-                >
-                  {label}
-                </button>
-              );
-            })}
-
-            {/* 스프린트 필터 — sprintId 매칭 (업무/이슈에만 적용) */}
-            {sprints.length > 0 && (
-              <select
-                value={sprintFilter}
-                onChange={(e) => setSprintFilter(e.target.value)}
-                className={`px-3 py-1.5 text-sm font-medium rounded-full border bg-background focus:outline-none focus:ring-2 focus:ring-primary/40 ${
-                  sprintFilter ? 'text-primary border-primary/40' : 'text-muted-foreground border-border'
+            <div className="w-full flex items-center gap-2 flex-wrap">
+              <button
+                onClick={() => setKindFilter('')}
+                className={`flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-full border transition-colors ${
+                  !kindFilter
+                    ? 'bg-primary text-primary-foreground border-primary'
+                    : 'bg-background border-border text-muted-foreground hover:border-primary/50'
                 }`}
               >
-                <option value="">스프린트 전체</option>
-                {sprints.map((s) => (
-                  <option key={s.id} value={s.id}>{s.name}</option>
-                ))}
-              </select>
-            )}
+                전체 <span className="opacity-70">({items.length})</span>
+              </button>
+              {(Object.keys(KIND_META) as HubKind[]).map((k) => {
+                const meta = KIND_META[k];
+                const Icon = meta.Icon;
+                const count = countByKind[k];
+                const isActive = kindFilter === k;
+                if (count === 0 && !isActive) return null;
+                return (
+                  <button
+                    key={k}
+                    onClick={() => setKindFilter(isActive ? '' : k)}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-full border transition-colors ${
+                      isActive
+                        ? `${meta.chip} border-transparent ring-1 ring-current/30`
+                        : 'bg-background border-border text-muted-foreground hover:border-primary/50'
+                    }`}
+                  >
+                    <Icon className={`w-3.5 h-3.5 ${meta.accent}`} /> {meta.label}
+                    <span className="opacity-70">({count})</span>
+                  </button>
+                );
+              })}
 
-            <div className="ml-auto relative w-full sm:w-80">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
-              <input
-                type="text"
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                placeholder="제목, 본문, 카테고리에서 찾기…"
-                className="w-full pl-9 pr-8 py-2 text-sm bg-background border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/40"
-              />
-              {search && (
+              {/* 미해결 이슈 빠른 필터 — kind='item' && statusLabel='미조치' 교차 필터 */}
+              {(openIssueCount > 0 || openOnly) && (
                 <button
-                  onClick={() => setSearch('')}
-                  className="absolute right-2 top-1/2 -translate-y-1/2 p-0.5 rounded hover:bg-secondary text-muted-foreground"
-                  aria-label="검색어 지우기"
+                  onClick={() => setOpenOnly((v) => !v)}
+                  title="미조치 상태인 이슈만 보기"
+                  className={`flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-full border transition-colors ${
+   openOnly
+   ? 'bg-status-critical/10 text-status-critical border-status-critical/40 ring-1 ring-status-critical/30'
+   : 'bg-background border-border text-muted-foreground hover:border-status-critical/50'
+   }`}
                 >
-                  <X className="w-3.5 h-3.5" />
+                  <AlertCircle className={`w-3.5 h-3.5 ${openOnly ? 'text-status-critical' : 'text-status-critical/70'}`} />
+                  미해결 이슈
+                  <span className="opacity-70">({openIssueCount})</span>
                 </button>
               )}
-            </div>
-          </div>
-        </MacCard>
 
-        {/* ── Table (list) view ───────────────────────────────────────── */}
-        {isLoading ? (
-          <MacCard bodyPadding="p-0">
-            {[...Array(6)].map((_, i) => (
-              <div key={i} className="h-14 border-b border-border last:border-b-0 animate-pulse bg-muted/30" />
-            ))}
-          </MacCard>
-        ) : sorted.length === 0 ? (
-          <EmptyState
-            icon={FileQuestion}
-            title={hasFilters ? '검색 조건에 해당하는 지식 항목이 없습니다.' : '아직 등록된 지식 항목이 없습니다.'}
-            description={hasFilters ? '검색어나 필터를 바꿔 보세요.' : '업무·노트·명령어·가이드를 등록하면 여기에 모입니다.'}
-            action={hasFilters ? { label: '필터 초기화', onClick: clearFilters, variant: 'secondary' } : undefined}
-          />
-        ) : (
-          <MacCard bodyPadding="p-0">
-            <div className="overflow-x-auto">
-              <table className="text-sm w-full">
-                <colgroup>
-                  <col style={{ width: '110px' }} />
-                  <col />
-                  <col style={{ width: '180px' }} />
-                  <col style={{ width: '120px' }} />
-                  <col style={{ width: '140px' }} />
-                  <col style={{ width: '80px' }} />
-                </colgroup>
-                <thead>
-                  <tr className="border-b border-border bg-muted/30">
-                    <SortTh label="종류"     col="kind"      sortKey={sortKey} sortDir={sortDir} onSort={handleSort} />
-                    <SortTh label="제목"     col="title"     sortKey={sortKey} sortDir={sortDir} onSort={handleSort} />
-                    <SortTh label="카테고리" col="category"  sortKey={sortKey} sortDir={sortDir} onSort={handleSort} />
-                    <SortTh label="상태"     col="status"    sortKey={sortKey} sortDir={sortDir} onSort={handleSort} />
-                    <SortTh label="업데이트" col="updatedAt" sortKey={sortKey} sortDir={sortDir} onSort={handleSort} />
-                    <th className="px-4 py-3 text-center font-medium text-muted-foreground whitespace-nowrap">열기</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {sorted.map((it) => {
-                    const meta = KIND_META[it.kind];
-                    const KindIcon = meta.Icon;
-                    return (
-                      <tr
-                        key={it.id}
-                        onClick={() => navigate(it.href)}
-                        className="border-b border-border last:border-b-0 hover:bg-muted/20 transition-colors cursor-pointer"
-                      >
-                        <td className="px-4 py-3 whitespace-nowrap">
-                          <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 text-xs font-medium rounded-full border ${meta.chip}`}>
-                            <KindIcon className="w-3 h-3" /> {meta.label}
-                          </span>
-                        </td>
-                        <td className="px-4 py-3 min-w-0">
-                          <div className="flex items-center gap-1.5">
-                            {it.pinned && <Pin className="w-3 h-3 text-status-warning flex-shrink-0" />}
-                            <span className="line-clamp-1 font-medium text-foreground">{it.title}</span>
-                            {it.kind === 'command' && it.statusTone === 'red' && (
-                              <AlertTriangle className="w-3.5 h-3.5 text-status-critical flex-shrink-0" />
-                            )}
-                          </div>
-                        </td>
-                        <td className="px-4 py-3 whitespace-nowrap">
-                          {it.category ? (
-                            <span className="line-clamp-1 text-sm text-muted-foreground">{it.category}</span>
-                          ) : (
-                            <span className="text-sm text-muted-foreground/40">—</span>
-                          )}
-                        </td>
-                        <td className="px-4 py-3 whitespace-nowrap">
-                          {it.statusLabel && it.statusTone ? (
-                            <span className="inline-flex items-center gap-1.5">
-                              <span className={`w-2 h-2 rounded-full ${STATUS_DOT_TONE[it.statusTone]}`} />
-                              <span className={`text-sm font-medium ${STATUS_TEXT_TONE[it.statusTone]}`}>{it.statusLabel}</span>
+              <div className="w-px h-5 bg-border mx-1" />
+
+              {/* 기간 필터 — 주 / 월 / 분기 (updatedAt 기준) */}
+              {PERIOD_META.map(({ key, label }) => {
+                const isActive = periodFilter === key;
+                return (
+                  <button
+                    key={key}
+                    onClick={() => setPeriodFilter(isActive ? '' : key)}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-full border transition-colors ${
+                      isActive
+                        ? 'bg-primary/10 text-primary border-primary/40 ring-1 ring-primary/30'
+                        : 'bg-background border-border text-muted-foreground hover:border-primary/50'
+                    }`}
+                  >
+                    {label}
+                  </button>
+                );
+              })}
+
+              {/* 스프린트 필터 — sprintId 매칭 (업무/이슈에만 적용) */}
+              {sprints.length > 0 && (
+                <select
+                  value={sprintFilter}
+                  onChange={(e) => setSprintFilter(e.target.value)}
+                  className={`px-3 py-1.5 text-sm font-medium rounded-full border bg-background focus:outline-none focus:ring-2 focus:ring-primary/40 ${
+                    sprintFilter ? 'text-primary border-primary/40' : 'text-muted-foreground border-border'
+                  }`}
+                >
+                  <option value="">스프린트 전체</option>
+                  {sprints.map((s) => (
+                    <option key={s.id} value={s.id}>{s.name}</option>
+                  ))}
+                </select>
+              )}
+
+              <div className="ml-auto relative w-full sm:w-80">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
+                <input
+                  type="text"
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  placeholder="제목, 본문, 카테고리에서 찾기…"
+                  className="w-full pl-9 pr-8 py-2 text-sm bg-background border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/40"
+                />
+                {search && (
+                  <button
+                    onClick={() => setSearch('')}
+                    className="absolute right-2 top-1/2 -translate-y-1/2 p-0.5 rounded hover:bg-secondary text-muted-foreground"
+                    aria-label="검색어 지우기"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                )}
+              </div>
+            </div>
+            </>
+          }
+        >
+          {/* ── Table (list) view ───────────────────────────────────────── */}
+          {isLoading ? (
+            [...Array(6)].map((_, i) => (
+              <div key={i} className="h-14 px-4 flex items-center border-b border-border last:border-b-0">
+                <Skeleton className="block w-full h-4 rounded" />
+              </div>
+            ))
+          ) : sorted.length === 0 ? (
+            <EmptyState
+              icon={FileQuestion}
+              title={hasFilters ? '검색 조건에 해당하는 지식 항목이 없습니다.' : '아직 등록된 지식 항목이 없습니다.'}
+              description={hasFilters ? '검색어나 필터를 바꿔 보세요.' : '업무·노트·명령어·가이드를 등록하면 여기에 모입니다.'}
+              action={hasFilters ? { label: '필터 초기화', onClick: clearFilters, variant: 'secondary' } : undefined}
+            />
+          ) : (
+            <>
+              <div className="overflow-x-auto">
+                <table className="text-sm w-full">
+                  <colgroup>
+                    <col style={{ width: '110px' }} />
+                    <col />
+                    <col style={{ width: '180px' }} />
+                    <col style={{ width: '120px' }} />
+                    <col style={{ width: '140px' }} />
+                    <col style={{ width: '80px' }} />
+                  </colgroup>
+                  <thead>
+                    <tr className="border-b border-border bg-muted/30">
+                      <SortTh label="종류"     col="kind"      sortKey={sortKey} sortDir={sortDir} onSort={handleSort} />
+                      <SortTh label="제목"     col="title"     sortKey={sortKey} sortDir={sortDir} onSort={handleSort} />
+                      <SortTh label="카테고리" col="category"  sortKey={sortKey} sortDir={sortDir} onSort={handleSort} />
+                      <SortTh label="상태"     col="status"    sortKey={sortKey} sortDir={sortDir} onSort={handleSort} />
+                      <SortTh label="업데이트" col="updatedAt" sortKey={sortKey} sortDir={sortDir} onSort={handleSort} />
+                      <th className="px-4 py-3 text-center font-medium text-muted-foreground whitespace-nowrap">열기</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {sorted.map((it) => {
+                      const meta = KIND_META[it.kind];
+                      const KindIcon = meta.Icon;
+                      return (
+                        <tr
+                          key={it.id}
+                          onClick={() => navigate(it.href)}
+                          className="border-b border-border last:border-b-0 hover:bg-muted/20 transition-colors cursor-pointer"
+                        >
+                          <td className="px-4 py-3 whitespace-nowrap">
+                            <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 text-xs font-medium rounded-full border ${meta.chip}`}>
+                              <KindIcon className="w-3 h-3" /> {meta.label}
                             </span>
-                          ) : (
-                            <span className="text-sm text-muted-foreground/40">—</span>
-                          )}
-                        </td>
-                        <td className="px-4 py-3 whitespace-nowrap text-sm text-muted-foreground tabular-nums">
-                          {formatRelativeTime(it.updatedAt)}
-                        </td>
-                        <td className="px-4 py-3 text-center">
-                          <ChevronRight className="w-4 h-4 text-muted-foreground inline-block" />
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-            <div className="px-4 py-2 border-t border-border bg-muted/20 text-xs text-muted-foreground tabular-nums">
-              총 {sorted.length}건{hasFilters && items.length !== sorted.length ? ` · 전체 ${items.length}건 중` : ''}
-            </div>
-          </MacCard>
-        )}
-        </div>
+                          </td>
+                          <td className="px-4 py-3 min-w-0">
+                            <div className="flex items-center gap-1.5">
+                              {it.pinned && <Pin className="w-3 h-3 text-status-warning flex-shrink-0" />}
+                              <span className="line-clamp-1 font-medium text-foreground">{it.title}</span>
+                              {it.kind === 'command' && it.statusTone === 'red' && (
+                                <AlertTriangle className="w-3.5 h-3.5 text-status-critical flex-shrink-0" />
+                              )}
+                            </div>
+                          </td>
+                          <td className="px-4 py-3 whitespace-nowrap">
+                            {it.category ? (
+                              <span className="line-clamp-1 text-sm text-muted-foreground">{it.category}</span>
+                            ) : (
+                              <span className="text-sm text-muted-foreground/40">—</span>
+                            )}
+                          </td>
+                          <td className="px-4 py-3 whitespace-nowrap">
+                            {it.statusLabel && it.statusTone ? (
+                              <span className="inline-flex items-center gap-1.5">
+                                <span className={`w-2 h-2 rounded-full ${STATUS_DOT_TONE[it.statusTone]}`} />
+                                <span className="text-sm font-medium text-foreground">{it.statusLabel}</span>
+                              </span>
+                            ) : (
+                              <span className="text-sm text-muted-foreground/40">—</span>
+                            )}
+                          </td>
+                          <td className="px-4 py-3 whitespace-nowrap text-sm text-muted-foreground tabular-nums">
+                            {formatRelativeTime(it.updatedAt)}
+                          </td>
+                          <td className="px-4 py-3 text-center">
+                            <ChevronRight className="w-4 h-4 text-muted-foreground inline-block" />
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+              <div className="px-4 py-2 border-t border-border bg-muted/20 text-xs text-muted-foreground tabular-nums">
+                총 {sorted.length}건{hasFilters && items.length !== sorted.length ? ` · 전체 ${items.length}건 중` : ''}
+              </div>
+            </>
+          )}
+        </MacCard>
+        </PageShell>
         )}
       </main>
     </div>

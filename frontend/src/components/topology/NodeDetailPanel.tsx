@@ -6,7 +6,7 @@ import {
 
 // 상태 점 — 색 토큰 + 상태 글자를 함께 쓴다(D-096/D-097)
 const STATUS_DOT: Record<string, string> = {
-  critical: 'bg-status-critical', warning: 'bg-status-warning', healthy: 'bg-status-healthy',
+  critical: 'bg-status-critical', warning: 'bg-status-warning', healthy: 'bg-muted-foreground/40',
 };
 const STATUS_LABEL: Record<string, string> = {
   critical: '위험', warning: '경고', healthy: '정상',
@@ -33,7 +33,7 @@ export function NodeDetailPanel({
   const memR = usageRatio(node.metrics.mem.usage, node.metrics.mem.request, node.metrics.mem.limit);
 
   return (
-    <div role="region" aria-label={`${node.name} 상세`} className="absolute top-3 right-3 w-72 max-h-[calc(100%-1.5rem)] overflow-y-auto bg-card/95 backdrop-blur border border-border rounded-md shadow-card z-20">
+    <div role="region" aria-label={`${node.name} 상세`} className="absolute top-3 right-3 w-72 max-h-[calc(100%-1.5rem)] overflow-y-auto bg-card border border-border rounded-md shadow-card z-20">
       <div className="flex items-start gap-2 px-4 pt-3.5 pb-2 border-b border-border">
         <span className="text-[11px] font-bold px-1.5 py-0.5 rounded-md mt-0.5 bg-secondary text-foreground border border-border">
           {KIND_ABBR[node.kind] ?? node.kind}
@@ -85,7 +85,7 @@ export function NodeDetailPanel({
 
         {/* 연결된 엣지 */}
         <div>
-          <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-1.5">
+          <p className="text-xs font-semibold text-muted-foreground mb-1.5">
             연결 · {related.length}
           </p>
           <div className="space-y-1">
@@ -124,7 +124,7 @@ function MetricBar({ icon, label, ratio, usage, req, lim }: {
     ? 'bg-status-unknown'
     : ratio > 0.9 ? 'bg-status-critical'
     : ratio > 0.7 ? 'bg-status-warning'
-    : 'bg-status-healthy';
+    : 'bg-muted-foreground/50';
   return (
     <div>
       <div className="flex items-center gap-1.5 text-xs mb-0.5">
@@ -136,7 +136,7 @@ function MetricBar({ icon, label, ratio, usage, req, lim }: {
       </div>
       <div className="h-1.5 rounded-full bg-secondary overflow-hidden">
         {/* 폭은 값에 따라 달라지는 유일한 인라인 스타일 */}
-        <div className={`h-full rounded-full transition-all ${barCls}`} style={{ width: `${pct}%` }} />
+        <div className={`h-full rounded-full transition-[width] ${barCls}`} style={{ width: `${pct}%` }} />
       </div>
     </div>
   );

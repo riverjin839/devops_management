@@ -1,5 +1,5 @@
 import { X, ArrowRight, Loader2, AlertTriangle, CheckCircle2 } from 'lucide-react';
-import { useModalA11y } from '@/components/common';
+import { EmptyState, useModalA11y } from '@/components/common';
 
 export interface DiffRow {
   field: string;
@@ -79,7 +79,7 @@ export function ClusterUpdateDiffDialog({
   return (
     <div ref={dialogRef} className="fixed inset-0 z-50 flex items-center justify-center" role="dialog" aria-modal="true" aria-label={`클러스터 정보 수집 결과 — ${clusterName}`}>
       <div className="absolute inset-0 bg-black/60" onClick={() => !applying && onCancel()} />
-      <div className="relative bg-card border border-border rounded-2xl shadow-2xl w-full max-w-3xl mx-4 overflow-hidden">
+      <div className="relative bg-card border border-border rounded-md shadow-2xl w-full max-w-3xl mx-4 overflow-hidden">
         <div className="flex items-center gap-3 px-5 py-4 border-b border-border bg-muted/30">
           <div className="w-9 h-9 rounded-lg flex items-center justify-center bg-primary/10 text-primary">
             {changed.length > 0 ? <AlertTriangle className="w-4 h-4" /> : <CheckCircle2 className="w-4 h-4" />}
@@ -112,7 +112,7 @@ export function ClusterUpdateDiffDialog({
 
           {changed.length > 0 && (
             <div className="px-5 py-3">
-              <p className="text-xs font-medium text-muted-foreground uppercase mb-2">변경 예정</p>
+              <p className="text-xs font-medium text-muted-foreground mb-2">변경 예정</p>
               <table className="w-full text-sm">
                 <thead>
                   <tr className="text-left text-xs text-muted-foreground border-b border-border">
@@ -160,9 +160,7 @@ export function ClusterUpdateDiffDialog({
           )}
 
           {diff.length === 0 && (
-            <div className="px-5 py-8 text-center text-sm text-muted-foreground">
-              수집된 정보가 없습니다. (kubeconfig 접근은 성공했으나 추출 가능한 필드가 없음)
-            </div>
+            <EmptyState compact title="수집된 정보가 없습니다." description="kubeconfig 접근은 성공했으나 추출 가능한 필드가 없습니다." />
           )}
         </div>
 

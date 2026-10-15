@@ -10,7 +10,7 @@ import {
 import { useAssignees } from '@/hooks/useAssignees';
 import { useToday } from '@/hooks/useToday';
 import { useAuthStore } from '@/stores/authStore';
-import { ConfirmDialog, useToast } from '@/components/common';
+import { ConfirmDialog, EmptyState, useToast } from '@/components/common';
 import { Button } from '@/components/ui/button';
 import { stripHtml, cn, assigneeNames } from '@/lib/utils';
 import { WORK_ITEM_TYPE_CONFIG } from '@/components/work-items/workItemKanbanUtils';
@@ -472,8 +472,8 @@ export function DayScheduleBoard({ selectedClusterId }: DayScheduleBoardProps) {
         <button
           onClick={() => setQuickAdd({ time: isToday ? `${String(Math.min(new Date().getHours(), 23)).padStart(2, '0')}:00` : '09:00', assignee: meOnly ? (selectedName || undefined) : undefined })}
           className="inline-flex items-center gap-1 px-2 py-1 rounded-lg border border-primary/30 bg-primary/10 text-primary text-xs font-semibold hover:bg-primary/20"
-          title="업무 등록">
-          <Plus className="w-3 h-3" /> 업무 등록
+          title="업무 추가">
+          <Plus className="w-3 h-3" /> 업무 추가
         </button>
       </div>
 
@@ -598,7 +598,7 @@ export function DayScheduleBoard({ selectedClusterId }: DayScheduleBoardProps) {
             {/* 시간 미지정 (하단) */}
             {allDay.length > 0 && (
               <div className="mt-2 rounded-xl border border-border/60 bg-secondary/20 p-2">
-                <div className="flex items-center gap-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-1.5">
+                <div className="flex items-center gap-1 text-xs font-semibold text-muted-foreground mb-1.5">
                   <Clock3 className="w-3 h-3" /> 시간 미지정 · {allDay.length}
                 </div>
                 <div className="space-y-1">
@@ -608,16 +608,18 @@ export function DayScheduleBoard({ selectedClusterId }: DayScheduleBoardProps) {
             )}
 
             {totalCount === 0 && (
-              <div className="rounded-xl border border-dashed border-border/60 py-10 mt-2 text-center text-sm text-muted-foreground">
-                {meOnly && !selectedName
-                  ? '로그인 후 나의 일정을 볼 수 있습니다. "전체" 로 모든 일정을 볼 수 있어요.'
-                  : `${isToday ? '오늘' : '해당 날짜'} ${meOnly ? `${selectedName === myName ? '나의' : `${selectedName}의`} ` : ''}일정이 없습니다.`}
-                <div>
-                  <button onClick={() => setQuickAdd({ time: '09:00', assignee: meOnly ? (selectedName || undefined) : undefined })}
-                    className="mt-2 inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs bg-primary/10 text-primary hover:bg-primary/20">
-                    <Plus className="w-3 h-3" /> 업무 등록
-                  </button>
-                </div>
+              <div className="rounded-md border border-dashed border-border/60 mt-2">
+                <EmptyState
+                  compact
+                  icon={CalendarClock}
+                  title={meOnly && !selectedName
+                    ? '로그인 후 나의 일정을 볼 수 있습니다.'
+                    : `${isToday ? '오늘' : '해당 날짜'} ${meOnly ? `${selectedName === myName ? '나의' : `${selectedName}의`} ` : ''}일정이 없습니다.`}
+                  description={meOnly && !selectedName
+                    ? '"전체" 로 모든 일정을 볼 수 있습니다.'
+                    : '업무를 등록하면 시간표에 표시됩니다.'}
+                  action={{ label: '업무 추가', onClick: () => setQuickAdd({ time: '09:00', assignee: meOnly ? (selectedName || undefined) : undefined }) }}
+                />
               </div>
             )}
           </>
@@ -752,7 +754,7 @@ function AddBlockMenu({
   return (
     <>
       <div className="fixed inset-0 z-30" onClick={onClose} />
-      <div className="absolute left-2 right-2 z-40 bg-card border border-border rounded-xl shadow-card p-1.5"
+      <div className="absolute left-2 right-2 z-40 bg-card border border-border rounded-md shadow-card p-1.5"
         style={{ top: Math.max(0, y) }}>
         <div className="flex items-center justify-between px-1.5 py-1">
           <span className="text-xs font-semibold tabular-nums">{fmtMin(minute)} 에 추가</span>
@@ -760,7 +762,7 @@ function AddBlockMenu({
         </div>
         {candidates.length > 0 && (
           <>
-            <div className="px-1.5 py-0.5 text-[11px] uppercase tracking-wide text-muted-foreground">기존 업무에 시간 추가</div>
+            <div className="px-1.5 py-0.5 text-[11px] text-muted-foreground">기존 업무에 시간 추가</div>
             <div className="max-h-40 overflow-y-auto">
               {candidates.map((it) => (
                 <button key={it.id} onClick={() => onPickItem(it)}
@@ -774,7 +776,7 @@ function AddBlockMenu({
         )}
         <button onClick={onNewTask}
           className="w-full text-left px-1.5 py-1 rounded-lg hover:bg-secondary text-xs text-primary font-medium inline-flex items-center gap-1">
-          <Plus className="w-3 h-3" /> 새 업무 등록
+          <Plus className="w-3 h-3" /> 새 업무 추가
         </button>
       </div>
     </>

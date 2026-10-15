@@ -226,7 +226,7 @@ export function LogViewer({
       {/* 툴바 */}
       {!hideToolbar && (
       <div className="flex items-center gap-2 px-2 py-1.5 border-b border-border bg-muted/30 text-xs">
-        <span className="px-1.5 py-0.5 rounded bg-secondary text-muted-foreground uppercase tracking-wider">
+        <span className="px-1.5 py-0.5 rounded bg-secondary text-muted-foreground">
           {formatLabel}
         </span>
         <span className="text-muted-foreground">{lineCount} lines · {text.length}B</span>

@@ -4,7 +4,7 @@ import {
   AlertTriangle, Activity, Radar,
 } from 'lucide-react';
 import { MacCard } from '@/components/ui/MacCard';
-import { useToast, ConfirmDialog } from '@/components/common';
+import { useToast, ConfirmDialog, LoadingState } from '@/components/common';
 import { llmApi } from '@/services/api';
 import { formatApiError } from '@/lib/utils';
 import {
@@ -121,7 +121,7 @@ export function LlmSettingsTab() {
       if (res.warnings?.length) {
         res.warnings.forEach((w) => toast.warning('저장됨 (주의)', w));
       } else {
-        toast.success('저장 완료', 'LLM 설정이 저장되었습니다. (반영까지 최대 1분)');
+        toast.success('저장됨', 'LLM 설정이 저장되었습니다. (반영까지 최대 1분)');
       }
     } catch (e) {
       toast.error('저장 실패', formatApiError(e));
@@ -187,7 +187,7 @@ export function LlmSettingsTab() {
       const res = await llmApi.testProfile(name);
       setTestResult({ profile: name, result: res.data });
       if (res.data.status === 'ok') {
-        toast.success('연결 확인 완료', `${name}: ${res.data.latencyMs}ms`);
+        toast.success('연결 확인됨', `${name}: ${res.data.latencyMs}ms`);
       } else {
         toast.error('연결 실패', `${name}: ${res.data.error ?? res.data.status}`);
       }
@@ -217,7 +217,7 @@ export function LlmSettingsTab() {
       return <span className="px-2 py-0.5 text-xs rounded-full bg-status-warning/15 text-status-warning" title={h.detail}>모델 미준비</span>;
     }
     if (h.status === 'online') {
-      return <span className="px-2 py-0.5 text-xs rounded-full bg-status-healthy/15 text-status-healthy">온라인 · {h.latencyMs}ms</span>;
+      return <span className="px-2 py-0.5 text-xs rounded-full bg-secondary text-muted-foreground">온라인 · {h.latencyMs}ms</span>;
     }
     return <span className="px-2 py-0.5 text-xs rounded-full bg-status-critical/15 text-status-critical" title={h.detail}>오프라인</span>;
   };
@@ -225,11 +225,10 @@ export function LlmSettingsTab() {
   return (
     <div className="space-y-6 mb-6">
       {/* ── LLM 엔드포인트 프로필 ── */}
-      <MacCard title="LLM 엔드포인트 프로필" bodyPadding="p-0">
-        <div className="px-4 py-2 text-xs text-muted-foreground border-b border-border flex items-center justify-between">
-          <span>
-            사내 LLM 서비스(OpenAI 호환)와 인클러스터 Ollama 를 프로필로 등록하고, 아래 용도별 라우팅에서 어느 LLM 을 쓸지 지정합니다.
-          </span>
+      <MacCard
+        title="LLM 엔드포인트 프로필"
+        bodyPadding="p-0"
+        actions={
           <button
             type="button"
             onClick={() => { setEditing({ ...EMPTY_PROFILE }); setEditingOriginalName(null); }}
@@ -237,7 +236,11 @@ export function LlmSettingsTab() {
           >
             <Plus className="w-3.5 h-3.5" /> 프로필 추가
           </button>
-        </div>
+        }
+      >
+        <p className="px-4 py-2 text-xs text-muted-foreground border-b border-border">
+          사내 LLM 서비스(OpenAI 호환)와 인클러스터 Ollama 를 프로필로 등록하고, 아래 용도별 라우팅에서 어느 LLM 을 쓸지 지정합니다.
+        </p>
         <div className="divide-y divide-border">
           {draft.profiles.map((p) => (
             <div key={p.name} className="px-4 py-3 flex items-center gap-3">
@@ -435,11 +438,10 @@ export function LlmSettingsTab() {
       <AnalysisScopePanel />
 
       {/* ── API 키 (자격증명) ── */}
-      <MacCard title="API 키 (자격증명)" bodyPadding="p-0">
-        <div className="px-4 py-2 text-xs text-muted-foreground border-b border-border flex items-center justify-between">
-          <span>
-            사내 LLM 서비스의 API 키를 암호화 저장합니다. 프로필에서 <code>credential:&lt;이름&gt;</code> 으로 참조하세요. 키 원문은 다시 표시되지 않습니다.
-          </span>
+      <MacCard
+        title="API 키 (자격증명)"
+        bodyPadding="p-0"
+        actions={
           <button
             type="button"
             onClick={() => { setCredName(''); setCredKey(''); setCredModalOpen(true); }}
@@ -447,7 +449,11 @@ export function LlmSettingsTab() {
           >
             <Plus className="w-3.5 h-3.5" /> 키 등록
           </button>
-        </div>
+        }
+      >
+        <p className="px-4 py-2 text-xs text-muted-foreground border-b border-border">
+          사내 LLM 서비스의 API 키를 암호화 저장합니다. 프로필에서 <code>credential:&lt;이름&gt;</code> 으로 참조하세요. 키 원문은 다시 표시되지 않습니다.
+        </p>
         {(credentials ?? []).length === 0 ? (
           <p className="px-4 py-4 text-sm text-muted-foreground">등록된 키가 없습니다.</p>
         ) : (
@@ -463,7 +469,7 @@ export function LlmSettingsTab() {
                   onClick={async () => {
                     try {
                       await deleteCredMut.mutateAsync(c.name);
-                      toast.success('삭제 완료', `자격증명 '${c.name}' 을 삭제했습니다.`);
+                      toast.success('삭제됨', `자격증명 '${c.name}' 을 삭제했습니다.`);
                     } catch (e) {
                       toast.error('삭제 실패', formatApiError(e));
                     }
@@ -572,7 +578,7 @@ export function LlmSettingsTab() {
                 onClick={async () => {
                   try {
                     await createCredMut.mutateAsync({ name: credName.trim(), apiKey: credKey.trim() });
-                    toast.success('등록 완료', `자격증명 '${credName.trim()}' 을 저장했습니다.`);
+                    toast.success('등록됨', `자격증명 '${credName.trim()}' 을 저장했습니다.`);
                     setCredModalOpen(false);
                   } catch (e) {
                     toast.error('등록 실패', formatApiError(e));
@@ -631,11 +637,7 @@ function AnalysisScopePanel() {
 
   if (!draft) {
     return (
-      <MacCard title="알람 자동 분석 범위" bodyPadding="p-4">
-        <div className="flex items-center gap-2 text-muted-foreground text-sm">
-          <Loader2 className="w-4 h-4 animate-spin" /> 불러오는 중…
-        </div>
-      </MacCard>
+      <LoadingState compact />
     );
   }
 
@@ -646,7 +648,7 @@ function AnalysisScopePanel() {
       if (res.warnings?.length) {
         res.warnings.forEach((w) => toast.warning('저장됨 (주의)', w));
       } else {
-        toast.success('저장 완료', '자동 분석 범위가 저장되었습니다. (반영까지 최대 1분)');
+        toast.success('저장됨', '자동 분석 범위가 저장되었습니다. (반영까지 최대 1분)');
       }
     } catch (e) {
       toast.error('저장 실패', formatApiError(e));
@@ -669,13 +671,10 @@ function AnalysisScopePanel() {
   };
 
   return (
-    <MacCard title="자동 분석 범위 (알람 · K8s 이벤트)" bodyPadding="p-0">
-      <div className="px-4 py-2 text-xs text-muted-foreground border-b border-border flex items-center justify-between gap-3">
-        <span>
-          알람 또는 K8s 이벤트(kubewatch) 수신 시 규칙(소스/클러스터/네임스페이스/알람명·reason/심각도)에 매칭되면
-          AI 분석을 자동 실행합니다. 규칙은 priority 오름차순 first-match, 같은 대상은 두 소스 어느 쪽이 먼저 와도
-          디바운스로 중복 분석되지 않습니다. 시간당 상한·디바운스로 부하를 제한하며, 아래 사용량 표를 보면서 점진적으로 넓히세요.
-        </span>
+    <MacCard
+      title="자동 분석 범위 (알람 · K8s 이벤트)"
+      bodyPadding="p-0"
+      actions={
         <label className="flex items-center gap-2 text-sm shrink-0">
           <input
             type="checkbox"
@@ -685,7 +684,13 @@ function AnalysisScopePanel() {
           />
           자동 분석 활성화
         </label>
-      </div>
+      }
+    >
+      <p className="px-4 py-2 text-xs text-muted-foreground border-b border-border">
+        알람 또는 K8s 이벤트(kubewatch) 수신 시 규칙(소스/클러스터/네임스페이스/알람명·reason/심각도)에 매칭되면
+        AI 분석을 자동 실행합니다. 규칙은 priority 오름차순 first-match, 같은 대상은 두 소스 어느 쪽이 먼저 와도
+        디바운스로 중복 분석되지 않습니다. 시간당 상한·디바운스로 부하를 제한하며, 아래 사용량 표를 보면서 점진적으로 넓히세요.
+      </p>
 
       <div className="px-4 py-3 flex flex-wrap items-center gap-4 border-b border-border text-sm">
         <label className="flex items-center gap-2 text-xs text-muted-foreground">

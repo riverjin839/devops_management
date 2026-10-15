@@ -129,9 +129,12 @@ export default {
         card: "var(--card-shadow)",
         "card-hover": "var(--card-shadow-hover)",
       },
+      // D-131: 외부 CDN 웹폰트(Inter·JetBrains Mono)를 걷고 시스템 스택으로 일원화 — 폐쇄망에서도
+      // 같은 글꼴로 그려진다. sans 는 index.css body 와 같은 스택(한글은 Apple SD Gothic Neo·맑은 고딕),
+      // mono 는 터미널 기본값(useTerminalAppearance XTERM_DEFAULT_FONT)과 같은 스택이다.
       fontFamily: {
-        sans: ["Inter", "system-ui", "sans-serif"],
-        mono: ["JetBrains Mono", "monospace"],
+        sans: ["-apple-system", "BlinkMacSystemFont", '"SF Pro Text"', '"Segoe UI"', "Roboto", '"Apple SD Gothic Neo"', '"Malgun Gothic"', '"Noto Sans KR"', "Helvetica", "Arial", "sans-serif"],
+        mono: ["ui-monospace", "SFMono-Regular", "Menlo", "Consolas", '"Liberation Mono"', "monospace"],
       },
     },
   },

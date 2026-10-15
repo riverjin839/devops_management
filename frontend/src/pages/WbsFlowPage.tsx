@@ -9,7 +9,7 @@ import {
   CheckCircle2, Clock, AlertCircle, Circle, BarChart3,
   ListChecks, Activity, Plus, FolderOpen,
 } from 'lucide-react';
-import { ViewModeBar, SidePane } from '@/components/common';
+import { ViewModeBar, SidePane, EmptyState, PageShell } from '@/components/common';
 import { MacCard } from '@/components/ui/MacCard';
 import { stripHtml } from '@/lib/utils';
 import { useProjects } from '@/hooks/useProjects';
@@ -49,19 +49,19 @@ const KANBAN_LABEL: Record<string, string> = {
 const PRIORITY_COLOR: Record<string, string> = {
   high:   'bg-status-critical/15 text-status-critical border-status-critical/25',
   medium: 'bg-status-warning/15 text-status-warning border-status-warning/25',
-  low:    'bg-status-healthy/15 text-status-healthy border-status-healthy/25',
+  low:    'bg-secondary text-muted-foreground border-border',
 };
 const MODULE_COLOR: Record<string, string> = {
-  k8s:        'bg-status-info/15 text-status-info',
-  keycloak:   'bg-purple-500/15 text-purple-600 dark:text-purple-300',
-  nexus:      'bg-orange-500/15 text-orange-600 dark:text-orange-300',
-  cilium:     'bg-cyan-500/15 text-cyan-600 dark:text-cyan-300',
-  argocd:     'bg-status-healthy/15 text-status-healthy',
-  jenkins:    'bg-status-critical/15 text-status-critical',
-  backend:    'bg-indigo-500/15 text-indigo-600 dark:text-indigo-300',
-  frontend:   'bg-pink-500/15 text-pink-600 dark:text-pink-300',
-  monitoring: 'bg-teal-500/15 text-teal-600 dark:text-teal-300',
-  infra:      'bg-status-unknown/15 text-status-unknown dark:text-slate-300',
+  k8s:        'bg-chart-1/15 text-chart-1',
+  keycloak:   'bg-chart-4/15 text-chart-4',
+  nexus:      'bg-chart-7/15 text-chart-7',
+  cilium:     'bg-chart-6/15 text-chart-6',
+  argocd:     'bg-chart-2/15 text-chart-2',
+  jenkins:    'bg-chart-5/15 text-chart-5',
+  backend:    'bg-chart-3/15 text-chart-3',
+  frontend:   'bg-chart-5/15 text-chart-5',
+  monitoring: 'bg-chart-2/15 text-chart-2',
+  infra:      'bg-chart-8/15 text-chart-8',
 };
 
 // ── types ─────────────────────────────────────────────────────────────────────
@@ -94,13 +94,13 @@ interface AssigneeRow {
 function StatusIcon({ status, type }: { status: string; type: 'task' | 'issue' }) {
   if (type === 'issue') {
     return status === 'resolved'
-      ? <CheckCircle2 className="w-3 h-3 text-status-healthy flex-shrink-0" />
+      ? <CheckCircle2 className="w-3 h-3 text-muted-foreground flex-shrink-0" />
       : <AlertCircle className="w-3 h-3 text-status-critical flex-shrink-0" />;
   }
   const icons: Record<string, JSX.Element> = {
-    done:        <CheckCircle2 className="w-3 h-3 text-status-healthy flex-shrink-0" />,
-    in_progress: <Clock className="w-3 h-3 text-status-info flex-shrink-0" />,
-    review_test: <Clock className="w-3 h-3 text-status-warning flex-shrink-0" />,
+    done:        <CheckCircle2 className="w-3 h-3 text-muted-foreground flex-shrink-0" />,
+    in_progress: <Clock className="w-3 h-3 text-chart-3 flex-shrink-0" />,
+    review_test: <Clock className="w-3 h-3 text-chart-4 flex-shrink-0" />,
     todo:        <Circle className="w-3 h-3 text-muted-foreground flex-shrink-0" />,
     backlog:     <Circle className="w-3 h-3 text-muted-foreground flex-shrink-0" />,
   };
@@ -111,16 +111,16 @@ function ItemCard({ item, onClick }: { item: DayItem; onClick: () => void }) {
   const isIssue = item.type === 'issue';
   const base = isIssue
     ? (item.resolved
-        ? 'border-l-status-healthy bg-status-healthy/5'
-        : 'border-l-orange-500 bg-orange-500/5')
+        ? 'border-l-border'
+        : 'border-l-chart-7')
     : item.isSubTask
-      ? 'border-l-indigo-400 bg-indigo-500/5 opacity-90'
-      : 'border-l-status-info bg-status-info/5';
+      ? 'border-l-chart-4 opacity-90'
+      : 'border-l-chart-1';
 
   return (
     <button
       onClick={onClick}
-      className={`w-full border-l-[3px] ${base} rounded-r-md px-2 py-1 cursor-pointer hover:bg-secondary/40 hover:shadow-sm transition-all text-left ${item.isSubTask ? 'ml-2' : ''}`}
+      className={`w-full border-l-[3px] ${base} rounded-r-md px-2 py-1 cursor-pointer hover:bg-secondary/40 transition-colors text-left ${item.isSubTask ? 'ml-2' : ''}`}
     >
       <div className="flex items-center gap-1 min-w-0">
         <StatusIcon status={isIssue ? (item.resolved ? 'resolved' : 'open') : item.status} type={item.type} />
@@ -141,7 +141,7 @@ function ItemCard({ item, onClick }: { item: DayItem; onClick: () => void }) {
           </span>
         )}
         {isIssue && (
-          <span className={`text-[11px] px-1 rounded-md ${item.resolved ? 'bg-status-healthy/15 text-status-healthy' : 'bg-orange-500/15 text-orange-600 dark:text-orange-300'}`}>
+          <span className={`text-[11px] px-1 rounded-md ${item.resolved ? 'bg-secondary text-muted-foreground' : 'bg-status-warning/15 text-status-warning'}`}>
             {item.resolved ? '해결' : '미해결'}
           </span>
         )}
@@ -156,7 +156,7 @@ function DetailModal({ item, onClose }: { item: DayItem; onClose: () => void }) 
   const isIssue = item.type === 'issue';
   const title = (
     <div className="flex items-center gap-2 flex-wrap min-w-0">
-      <span className={`text-xs px-2 py-0.5 rounded-full font-semibold flex-shrink-0 ${isIssue ? 'bg-orange-500/15 text-orange-600 dark:text-orange-300' : 'bg-status-info/15 text-status-info'}`}>
+      <span className={`text-xs px-2 py-0.5 rounded-full font-semibold flex-shrink-0 ${isIssue ? 'bg-chart-7/15 text-chart-7' : 'bg-chart-1/15 text-chart-1'}`}>
         {isIssue ? '이슈' : '작업'}
       </span>
       {item.module && (
@@ -177,17 +177,17 @@ function DetailModal({ item, onClose }: { item: DayItem; onClose: () => void }) 
       {item.sub && <p className="text-sm text-muted-foreground mb-4">{item.sub}</p>}
       <dl className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
         <div className="rounded-lg bg-secondary/40 px-3 py-2">
-          <dt className="text-xs uppercase tracking-wide text-muted-foreground">시작일</dt>
-          <dd className="font-medium tabular-nums">{item.startDate || '-'}</dd>
+          <dt className="text-xs text-muted-foreground">시작일</dt>
+          <dd className="font-medium tabular-nums">{item.startDate || '—'}</dd>
         </div>
         {item.endDate && (
           <div className="rounded-lg bg-secondary/40 px-3 py-2">
-            <dt className="text-xs uppercase tracking-wide text-muted-foreground">완료일</dt>
+            <dt className="text-xs text-muted-foreground">완료일</dt>
             <dd className="font-medium tabular-nums">{item.endDate}</dd>
           </div>
         )}
         <div className="rounded-lg bg-secondary/40 px-3 py-2">
-          <dt className="text-xs uppercase tracking-wide text-muted-foreground">상태</dt>
+          <dt className="text-xs text-muted-foreground">상태</dt>
           <dd className="font-medium">
             {isIssue ? (item.resolved ? '해결' : '미해결') : (KANBAN_LABEL[item.status] ?? item.status)}
           </dd>
@@ -254,9 +254,9 @@ function ProgressBar({ value }: { value: number }) {
 }
 
 const CHIP_COLOR: Record<string, string> = {
-  emerald: 'bg-status-healthy/15 text-status-healthy',
-  sky:     'bg-status-info/15 text-status-info',
-  slate:   'bg-status-unknown/15 text-status-unknown dark:text-slate-300',
+  emerald: 'bg-secondary text-muted-foreground',
+  sky:     'bg-chart-3/15 text-chart-3',
+  slate:   'bg-status-unknown/15 text-status-unknown',
   red:     'bg-status-critical/15 text-status-critical',
 };
 
@@ -270,9 +270,9 @@ function Chip({ color, children }: { color: keyof typeof CHIP_COLOR | string; ch
 
 // ── 개인별 Gantt 보기 ──────────────────────────────────────────────────────────
 const STATUS_CELL: Record<string, string> = {
-  done:        'bg-status-healthy/30 border-status-healthy/50',
-  in_progress: 'bg-status-info/40 border-status-info/55',
-  review_test: 'bg-status-warning/30 border-status-warning/50',
+  done:        'bg-muted-foreground/20 border-muted-foreground/30',
+  in_progress: 'bg-chart-3/40 border-chart-3/55',
+  review_test: 'bg-chart-4/30 border-chart-4/50',
   todo:        'bg-primary/20 border-primary/30',
   backlog:     'bg-secondary border-border',
 };
@@ -353,10 +353,11 @@ function PersonalGanttView({
 
   if (rows.length === 0) {
     return (
-      <div className="flex flex-col items-center justify-center py-24 text-muted-foreground">
-        <Users className="w-12 h-12 mb-3 opacity-30" />
-        <p className="text-sm">"{assignee}"의 작업/이슈가 없습니다.</p>
-      </div>
+      <EmptyState
+        icon={Users}
+        title={`"${assignee}"의 작업·이슈가 없습니다.`}
+        description="이 기간에 담당한 작업이나 이슈가 없습니다. 기간을 바꿔 보세요."
+      />
     );
   }
 
@@ -424,8 +425,8 @@ function PersonalGanttView({
                         style={{ minWidth: COL_W, width: COL_W, height: 34 }}>
                         {on && (
                           <div className={`mx-0.5 rounded border h-[22px] ${cellColor} flex items-center justify-center gap-0.5`}>
-                            {t.kanbanStatus === 'done' && <CheckCircle2 className="w-2.5 h-2.5 text-status-healthy" />}
-                            {t.kanbanStatus === 'in_progress' && <Clock className="w-2.5 h-2.5 text-blue-400" />}
+                            {t.kanbanStatus === 'done' && <CheckCircle2 className="w-2.5 h-2.5 text-muted-foreground" />}
+                            {t.kanbanStatus === 'in_progress' && <Clock className="w-2.5 h-2.5 text-chart-3" />}
                           </div>
                         )}
                       </td>
@@ -446,7 +447,7 @@ function PersonalGanttView({
                   <td className="sticky left-0 z-10 border-b border-r border-border px-3 py-1.5 align-middle"
                     style={{ backgroundColor: bgBase }}>
                     <div className="flex items-center gap-1.5">
-                      <AlertCircle className={`w-3 h-3 flex-shrink-0 ${iss.closedAt ? 'text-status-healthy' : 'text-status-critical'}`} />
+                      <AlertCircle className={`w-3 h-3 flex-shrink-0 ${iss.closedAt ? 'text-muted-foreground' : 'text-status-critical'}`} />
                       <span className="truncate max-w-[180px] font-medium leading-tight">{stripHtml(iss.content)}</span>
                     </div>
                     <div className="text-xs text-muted-foreground mt-0.5 ml-4">{iss.category}</div>
@@ -461,8 +462,8 @@ function PersonalGanttView({
                         className={`border-b border-r border-border align-middle ${isTd ? 'bg-primary/5' : isWeekend(d) ? 'bg-secondary/20' : ''} ${on ? 'cursor-pointer' : ''}`}
                         style={{ minWidth: COL_W, width: COL_W, height: 34 }}>
                         {on && (
-                          <div className={`mx-0.5 rounded border h-[22px] ${iss.closedAt ? 'bg-status-healthy/30 border-status-healthy/50' : 'bg-orange-500/30 border-orange-500/50'} flex items-center justify-center`}>
-                            <AlertCircle className={`w-2.5 h-2.5 ${iss.closedAt ? 'text-status-healthy' : 'text-orange-400'}`} />
+                          <div className={`mx-0.5 rounded border h-[22px] ${iss.closedAt ? 'bg-muted-foreground/20 border-muted-foreground/30' : 'bg-chart-7/30 border-chart-7/50'} flex items-center justify-center`}>
+                            <AlertCircle className={`w-2.5 h-2.5 ${iss.closedAt ? 'text-muted-foreground' : 'text-chart-7'}`} />
                           </div>
                         )}
                       </td>
@@ -640,7 +641,7 @@ export function WbsFlowPage() {
 
   return (
     <div className="app-min-h-screen bg-background">
-      <main className="mx-auto px-4 lg:px-6 py-5 space-y-4 max-w-[1800px]">
+      <PageShell density="console" sidebar={false} className="space-y-4">
         {/* ── Page header ─────────────────────────────────────────────── */}
         <div className="flex items-center justify-between gap-3 flex-wrap">
           <PageHeader icon={BarChart3} title="WBS 작업 흐름" description="담당자별 역할 · 날짜별 업무 현황" className="flex-1 min-w-0" />
@@ -679,119 +680,111 @@ export function WbsFlowPage() {
         <SummaryBar tasks={tasks} issues={issues} />
 
         {/* ── Toolbar ─────────────────────────────────────────────────── */}
-        <MacCard bodyPadding="p-3">
-          <div className="flex items-center gap-2 flex-wrap">
-            {/* Date nav */}
-            <div className="flex items-center gap-0.5 bg-secondary rounded-xl p-0.5">
-              <button
-                onClick={movePrev}
-                className="p-1.5 hover:bg-card rounded-lg text-muted-foreground hover:text-foreground transition-colors"
-                aria-label="이전 기간"
-              >
-                <ChevronLeft className="w-4 h-4" />
-              </button>
-              <button
-                onClick={moveToday}
-                className="px-3 py-1 text-sm font-medium hover:bg-card rounded-lg text-foreground transition-colors flex items-center gap-1.5 tabular-nums"
-              >
-                <Calendar className="w-3.5 h-3.5 text-primary" />
-                {startStr} <span className="text-muted-foreground">~</span> {endStr}
-              </button>
-              <button
-                onClick={moveNext}
-                className="p-1.5 hover:bg-card rounded-lg text-muted-foreground hover:text-foreground transition-colors"
-                aria-label="다음 기간"
-              >
-                <ChevronRight className="w-4 h-4" />
-              </button>
-            </div>
+        <div className="flex items-center gap-2 flex-wrap">
+          {/* Date nav */}
+          <div className="flex items-center gap-0.5 bg-secondary rounded-xl p-0.5">
+            <button
+              onClick={movePrev}
+              className="p-1.5 hover:bg-card rounded-lg text-muted-foreground hover:text-foreground transition-colors"
+              aria-label="이전 기간"
+            >
+              <ChevronLeft className="w-4 h-4" />
+            </button>
+            <button
+              onClick={moveToday}
+              className="px-3 py-1 text-sm font-medium hover:bg-card rounded-lg text-foreground transition-colors flex items-center gap-1.5 tabular-nums"
+            >
+              <Calendar className="w-3.5 h-3.5 text-primary" />
+              {startStr} <span className="text-muted-foreground">~</span> {endStr}
+            </button>
+            <button
+              onClick={moveNext}
+              className="p-1.5 hover:bg-card rounded-lg text-muted-foreground hover:text-foreground transition-colors"
+              aria-label="다음 기간"
+            >
+              <ChevronRight className="w-4 h-4" />
+            </button>
+          </div>
 
-            <ViewModeBar
-              modes={[
-                { id: 'week',    label: '1주' },
-                { id: 'twoWeek', label: '2주' },
-                { id: 'month',   label: '1달' },
-              ]}
-              active={viewMode}
-              onChange={(v) => setViewMode(v as ViewMode)}
-              showStylePanel={false}
-            />
+          <ViewModeBar
+            modes={[
+              { id: 'week',    label: '1주' },
+              { id: 'twoWeek', label: '2주' },
+              { id: 'month',   label: '1달' },
+            ]}
+            active={viewMode}
+            onChange={(v) => setViewMode(v as ViewMode)}
+            showStylePanel={false}
+          />
 
-            {pageView === 'project' && projects.length > 0 && (
-              <div className="flex items-center gap-1.5">
-                <FolderOpen className="w-3.5 h-3.5 text-primary" />
-                <select
-                  value={selectedProjectId}
-                  onChange={e => setSelectedProjectId(e.target.value)}
-                  className="text-sm bg-background border border-border rounded-xl px-2.5 py-1.5 text-foreground focus:outline-none focus:ring-2 focus:ring-primary/40"
-                >
-                  <option value="">전체 프로젝트</option>
-                  {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-                </select>
-              </div>
-            )}
-
-            {pageView === 'personal' && (
-              <div className="flex items-center gap-1.5">
-                <Users className="w-3.5 h-3.5 text-primary" />
-                <select
-                  value={personalAssignee}
-                  onChange={e => setPersonalAssignee(e.target.value)}
-                  className="text-sm bg-background border border-border rounded-xl px-2.5 py-1.5 text-foreground focus:outline-none focus:ring-2 focus:ring-primary/40"
-                >
-                  <option value="">담당자 선택…</option>
-                  {allAssignees.map(a => <option key={a} value={a}>{a}</option>)}
-                </select>
-              </div>
-            )}
-
+          {pageView === 'project' && projects.length > 0 && (
             <div className="flex items-center gap-1.5">
-              <Filter className="w-3.5 h-3.5 text-muted-foreground" />
+              <FolderOpen className="w-3.5 h-3.5 text-primary" />
               <select
-                value={filterAssignee}
-                onChange={e => setFilterAssignee(e.target.value)}
+                value={selectedProjectId}
+                onChange={e => setSelectedProjectId(e.target.value)}
                 className="text-sm bg-background border border-border rounded-xl px-2.5 py-1.5 text-foreground focus:outline-none focus:ring-2 focus:ring-primary/40"
               >
-                <option value="">전체 담당자</option>
+                <option value="">전체 프로젝트</option>
+                {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+              </select>
+            </div>
+          )}
+
+          {pageView === 'personal' && (
+            <div className="flex items-center gap-1.5">
+              <Users className="w-3.5 h-3.5 text-primary" />
+              <select
+                value={personalAssignee}
+                onChange={e => setPersonalAssignee(e.target.value)}
+                className="text-sm bg-background border border-border rounded-xl px-2.5 py-1.5 text-foreground focus:outline-none focus:ring-2 focus:ring-primary/40"
+              >
+                <option value="">담당자 선택…</option>
                 {allAssignees.map(a => <option key={a} value={a}>{a}</option>)}
               </select>
             </div>
+          )}
 
-            <label className="flex items-center gap-1.5 text-sm text-muted-foreground cursor-pointer select-none px-2.5 py-1.5 rounded-xl border border-border hover:bg-secondary/40 transition-colors">
-              <input
-                type="checkbox"
-                checked={showOnlyActive}
-                onChange={e => setShowOnlyActive(e.target.checked)}
-                className="accent-primary"
-              />
-              진행중만
-            </label>
-
-            <div className="ml-auto flex items-center gap-2 text-sm text-muted-foreground">
-              <Users className="w-3.5 h-3.5" />
-              <span className="tabular-nums">{filteredRows.length}명</span>
-              <span>·</span>
-              <span className="tabular-nums">{totalItems}건</span>
-            </div>
+          <div className="flex items-center gap-1.5">
+            <Filter className="w-3.5 h-3.5 text-muted-foreground" />
+            <select
+              value={filterAssignee}
+              onChange={e => setFilterAssignee(e.target.value)}
+              className="text-sm bg-background border border-border rounded-xl px-2.5 py-1.5 text-foreground focus:outline-none focus:ring-2 focus:ring-primary/40"
+            >
+              <option value="">전체 담당자</option>
+              {allAssignees.map(a => <option key={a} value={a}>{a}</option>)}
+            </select>
           </div>
-        </MacCard>
+
+          <label className="flex items-center gap-1.5 text-sm text-muted-foreground cursor-pointer select-none px-2.5 py-1.5 rounded-xl border border-border hover:bg-secondary/40 transition-colors">
+            <input
+              type="checkbox"
+              checked={showOnlyActive}
+              onChange={e => setShowOnlyActive(e.target.checked)}
+              className="accent-primary"
+            />
+            진행중만
+          </label>
+
+          <div className="ml-auto flex items-center gap-2 text-sm text-muted-foreground">
+            <Users className="w-3.5 h-3.5" />
+            <span className="tabular-nums">{filteredRows.length}명</span>
+            <span>·</span>
+            <span className="tabular-nums">{totalItems}건</span>
+          </div>
+        </div>
 
         {/* ── 프로젝트 뷰 ─────────────────────────────────────────────── */}
         {pageView === 'project' && (
           <div className="space-y-4">
             {projects.length === 0 ? (
-              <div className="flex flex-col items-center justify-center py-20 text-muted-foreground">
-                <div className="w-14 h-14 rounded-2xl bg-secondary flex items-center justify-center mb-3">
-                  <FolderOpen className="w-7 h-7 opacity-50" />
-                </div>
-                <p className="text-sm mb-3">아직 프로젝트가 없습니다.</p>
-                <button
-                  onClick={() => setShowNewProjectModal(true)}
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-semibold bg-primary hover:bg-primary/90 text-primary-foreground rounded-xl shadow-card"
-                >
-                  <Plus className="w-3.5 h-3.5" /> 첫 프로젝트 만들기
-                </button>
-              </div>
+              <EmptyState
+                icon={FolderOpen}
+                title="아직 프로젝트가 없습니다."
+                description="프로젝트를 만들면 소속 업무를 묶어 흐름을 볼 수 있습니다."
+                action={{ label: '첫 프로젝트 만들기', onClick: () => setShowNewProjectModal(true) }}
+              />
             ) : (
               (selectedProjectId ? projects.filter(p => p.id === selectedProjectId) : projects).map((project) => {
                 const pTasks = allItems.filter(w => w.projectId === project.id && w.type === 'task');
@@ -803,11 +796,13 @@ export function WbsFlowPage() {
                       onDeleted={() => selectedProjectId === project.id && setSelectedProjectId('')}
                     />
                     {(pTasks.length > 0 || pIssues.length > 0) ? (
-                      <MacCard bodyPadding="p-0" className="overflow-hidden">
-                        <div className="px-4 py-2 border-b border-border bg-muted/20 flex items-center gap-2">
-                          <BarChart3 className="w-3.5 h-3.5 text-muted-foreground" />
-                          <span className="text-sm font-medium text-muted-foreground">간트 · {pTasks.length + pIssues.length}건</span>
-                        </div>
+                      <MacCard
+                        title="간트"
+                        icon={BarChart3}
+                        titleExtra={<span className="text-xs text-muted-foreground tabular-nums">{pTasks.length + pIssues.length}건</span>}
+                        bodyPadding="p-0"
+                        className="overflow-hidden"
+                      >
                         <PersonalGanttView
                           assignee=""
                           tasks={pTasks}
@@ -819,7 +814,7 @@ export function WbsFlowPage() {
                         />
                       </MacCard>
                     ) : (
-                      <p className="text-sm text-muted-foreground px-1 py-2">소속 업무가 없습니다.</p>
+                      <EmptyState compact title="소속 업무가 없습니다." description="업무를 이 프로젝트에 연결하면 여기에 나타납니다." />
                     )}
                   </div>
                 );
@@ -833,11 +828,13 @@ export function WbsFlowPage() {
               const uIssues = unclassified.filter(w => w.type === 'issue');
               return (
                 <div className="space-y-2">
-                  <div className="rounded-2xl border border-dashed border-border/60 bg-secondary/10 p-4">
-                    <p className="text-sm font-semibold text-muted-foreground">미분류 ({unclassified.length}건)</p>
-                    <p className="text-sm text-muted-foreground mt-0.5">프로젝트에 소속되지 않은 업무</p>
-                  </div>
-                  <MacCard bodyPadding="p-0" className="overflow-hidden">
+                  <MacCard
+                    title="미분류"
+                    titleExtra={<span className="text-xs text-muted-foreground tabular-nums">{unclassified.length}건</span>}
+                    description="프로젝트에 소속되지 않은 업무"
+                    bodyPadding="p-0"
+                    className="overflow-hidden"
+                  >
                     <PersonalGanttView
                       assignee=""
                       tasks={uTasks}
@@ -874,22 +871,20 @@ export function WbsFlowPage() {
               onItemClick={setSelectedItem}
             />
           ) : (
-            <div className="flex flex-col items-center justify-center py-20 text-muted-foreground">
-              <div className="w-14 h-14 rounded-2xl bg-secondary flex items-center justify-center mb-3">
-                <Users className="w-7 h-7 opacity-50" />
-              </div>
-              <p className="text-sm">상단에서 담당자를 선택하세요.</p>
-            </div>
+            <EmptyState
+              icon={Users}
+              title="선택된 담당자가 없습니다."
+              description="상단에서 담당자를 선택하면 작업 흐름이 나타납니다."
+            />
           )
         ) : (
           <div className="overflow-auto">
             {filteredRows.length === 0 ? (
-              <div className="flex flex-col items-center justify-center py-20 text-muted-foreground">
-                <div className="w-14 h-14 rounded-2xl bg-secondary flex items-center justify-center mb-3">
-                  <Users className="w-7 h-7 opacity-50" />
-                </div>
-                <p className="text-sm">이 기간에 해당하는 작업/이슈가 없습니다.</p>
-              </div>
+              <EmptyState
+                icon={Users}
+                title="이 기간에 해당하는 작업·이슈가 없습니다."
+                description="기간을 넓히거나 다른 담당자를 선택해 보세요."
+              />
             ) : (
               <table className="border-collapse min-w-full text-sm">
             <thead className="sticky top-0 z-20 bg-card">
@@ -982,14 +977,14 @@ export function WbsFlowPage() {
         {/* ── Legend ──────────────────────────────────────────────────── */}
         <div className="flex items-center gap-3 text-sm text-muted-foreground flex-wrap px-1">
           <span className="font-medium">범례:</span>
-          <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-sm bg-status-info/30 inline-block" /> 작업</span>
-          <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-sm bg-orange-500/30 inline-block" /> 이슈</span>
-          <span className="flex items-center gap-1"><CheckCircle2 className="w-3 h-3 text-status-healthy" /> 완료/해결</span>
-          <span className="flex items-center gap-1"><Clock className="w-3 h-3 text-status-info" /> 진행중</span>
+          <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-sm bg-chart-1/30 inline-block" /> 작업</span>
+          <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-sm bg-chart-7/30 inline-block" /> 이슈</span>
+          <span className="flex items-center gap-1"><CheckCircle2 className="w-3 h-3 text-muted-foreground" /> 완료/해결</span>
+          <span className="flex items-center gap-1"><Clock className="w-3 h-3 text-chart-3" /> 진행중</span>
           <span className="flex items-center gap-1"><AlertCircle className="w-3 h-3 text-status-critical" /> 미해결</span>
           <span className="ml-auto text-xs">클릭 시 상세 정보</span>
         </div>
-      </main>
+      </PageShell>
 
       {selectedItem && (
         <DetailModal item={selectedItem} onClose={() => setSelectedItem(null)} />

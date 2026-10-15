@@ -83,7 +83,7 @@ export function CsvExportModal({ open, clusterId, clusterName, components, onClo
     <div className="fixed inset-0 z-50 flex items-center justify-center">
       <div className="absolute inset-0 bg-black/60" onClick={() => !exportMut.isPending && onClose()} />
       <div ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby={titleId}
-        className="relative bg-card border border-border rounded-2xl shadow-2xl w-full max-w-xl mx-4">
+        className="relative bg-card border border-border rounded-md shadow-2xl w-full max-w-xl mx-4">
         <div className="flex items-center gap-3 px-5 py-4 border-b border-border bg-muted/30">
           <div className="w-9 h-9 rounded-lg flex items-center justify-center bg-primary/10 text-primary">
             <FileSpreadsheet className="w-4 h-4" />
@@ -103,7 +103,7 @@ export function CsvExportModal({ open, clusterId, clusterName, components, onClo
         <div className="px-5 py-4 space-y-4">
           {/* 디테일 레벨 */}
           <fieldset>
-            <legend className="text-xs uppercase tracking-wider text-muted-foreground mb-2 block">
+            <legend className="text-xs text-muted-foreground mb-2 block">
               디테일 레벨
             </legend>
             <div className="space-y-1.5">
@@ -129,7 +129,7 @@ export function CsvExportModal({ open, clusterId, clusterName, components, onClo
           {/* 카테고리 필터 */}
           <div>
             <div className="flex items-center justify-between mb-2">
-              <label className="text-xs uppercase tracking-wider text-muted-foreground">
+              <label className="text-xs text-muted-foreground">
                 카테고리 필터 ({allCatsPicked ? '전체' : `${pickedCategories.size}개`})
               </label>
               {!allCatsPicked && (

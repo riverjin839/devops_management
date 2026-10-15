@@ -6,7 +6,9 @@ import {
 } from 'lucide-react';
 import { useAbortableMutation } from '@/hooks/useAbortableMutation';
 import { useClusters } from '@/hooks/useCluster';
-import { ClusterSidebar, DebugLogPanel, SelectClusterEmptyState } from '@/components/common';
+import { ClusterSidebar, DebugLogPanel, SelectClusterEmptyState, EmptyState, PageShell } from '@/components/common';
+import { PageHeader } from '@/components/common/PageHeader';
+import { MacCard } from '@/components/ui/MacCard';
 import { topologyTraceApi } from '@/services/api';
 import { formatApiError } from '@/lib/utils';
 import type {
@@ -20,14 +22,14 @@ import { TcpdumpPanel } from '@/components/packet-flow/TcpdumpPanel';
 type Tab = 'graph' | 'hubble' | 'tcpdump';
 
 const ENTITY_LABEL: Record<string, { icon: typeof Globe; label: string; color: string }> = {
-  external:           { icon: Globe,   label: 'External',  color: 'text-status-info' },
-  dns:                { icon: Globe,   label: 'DNS',       color: 'text-indigo-400' },
-  ingress_controller: { icon: Share2,  label: 'Ingress Pod', color: 'text-violet-400' },
-  ingress:            { icon: Route,   label: 'Ingress',   color: 'text-purple-400' },
-  service:            { icon: Share2,  label: 'Service',   color: 'text-status-healthy' },
-  pod:                { icon: Box,     label: 'Pod',       color: 'text-status-warning' },
-  node:               { icon: Server,  label: 'Node',      color: 'text-orange-400' },
-  switch:             { icon: Network, label: 'Switch',    color: 'text-status-critical' },
+  external:           { icon: Globe,   label: 'External',  color: 'text-chart-1' },
+  dns:                { icon: Globe,   label: 'DNS',       color: 'text-chart-6' },
+  ingress_controller: { icon: Share2,  label: 'Ingress Pod', color: 'text-chart-4' },
+  ingress:            { icon: Route,   label: 'Ingress',   color: 'text-chart-5' },
+  service:            { icon: Share2,  label: 'Service',   color: 'text-chart-2' },
+  pod:                { icon: Box,     label: 'Pod',       color: 'text-chart-3' },
+  node:               { icon: Server,  label: 'Node',      color: 'text-chart-7' },
+  switch:             { icon: Network, label: 'Switch',    color: 'text-chart-8' },
   error:              { icon: AlertTriangle, label: 'Error', color: 'text-status-critical' },
 };
 
@@ -39,9 +41,9 @@ function HopBreadcrumb({
       {hops.map((h, i) => {
         const meta = ENTITY_LABEL[h.entityType] ?? ENTITY_LABEL.external;
         const Icon = meta.icon;
+        // allow(정상)는 기본 보더 — 상태색은 비정상(deny/warn)에만 (§12.12 #3)
         const verdictCls =
-          h.verdict === 'allow' ? 'border-status-healthy/40'
-          : h.verdict === 'deny' ? 'border-status-critical/50'
+          h.verdict === 'deny' ? 'border-status-critical/50'
           : h.verdict === 'warn' ? 'border-status-warning/50'
           : 'border-border';
         const active = selectedIndex === i;
@@ -201,7 +203,7 @@ export function PacketFlowPage() {
 
   return (
     <div className="app-min-h-screen bg-background">
-      <main className="pr-6 py-6 flex gap-5">
+      <PageShell density="console" className="flex gap-3">
         <ClusterSidebar
           clusters={clusters}
           selectedId={clusterId || null}
@@ -211,26 +213,30 @@ export function PacketFlowPage() {
 
         <div className="flex-1 min-w-0">
           <DebugLogPanel pageKey="packet-flow" extra={{ clusterId, direction, source, destination, tab, pending: runMut.isPending }} />
-          <div className="flex items-center gap-3 mb-5">
-            <Route className="w-6 h-6 text-primary" />
-            <h1 className="text-xl font-bold">패킷 흐름 분석</h1>
-            <p className="text-sm text-muted-foreground">외부 → Ingress → Service → Pod / Pod ↔ Pod</p>
-          </div>
+          <PageHeader
+            className="mb-5"
+            icon={Route}
+            title="패킷 흐름 분석"
+            description="외부 → Ingress → Service → Pod / Pod ↔ Pod"
+          />
 
           {/* Target 구성 바 */}
-          <section className="bg-card border border-border rounded-xl p-4 mb-4 space-y-3">
-            <div className="flex items-center gap-2 flex-wrap">
+          <MacCard
+            title="추적 대상"
+            rootClassName="mb-4"
+            className="space-y-3"
+            actions={<>
               <div className="flex items-center bg-secondary/60 rounded-lg p-[3px] gap-px">
                 {(['north-south', 'east-west'] as PacketDirection[]).map((d) => (
                   <button key={d} onClick={() => setDirection(d)}
-                    className={`px-3 py-1.5 text-sm font-medium rounded-md transition-all ${
+                    className={`px-3 py-1.5 text-sm font-medium rounded-md transition-colors ${
                       direction === d ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
                     }`}>
                     {d === 'north-south' ? '외부 → Pod (N-S)' : 'Pod ↔ Pod (E-W)'}
                   </button>
                 ))}
               </div>
-              <div className="flex items-center gap-1 ml-auto">
+              <div className="flex items-center gap-1">
                 {/* Pod-bottleneck cross-link (pod-bottleneck-analyzer PDCA) */}
                 {bottleneckPrefill && (
                   <button
@@ -263,7 +269,8 @@ export function PacketFlowPage() {
                   </button>
                 )}
               </div>
-            </div>
+            </>}
+          >
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               <div>
@@ -321,11 +328,11 @@ export function PacketFlowPage() {
             </div>
 
             {runError && (
-              <div className="px-3 py-2 text-sm rounded-lg bg-destructive/10 text-destructive border border-destructive/30">
+              <div className="px-3 py-2 text-sm rounded-lg bg-status-critical/10 text-status-critical border border-status-critical/30">
                 {formatApiError(runError)}
               </div>
             )}
-          </section>
+          </MacCard>
 
           {/* 탭 */}
           <div className="flex items-center gap-1 mb-3 border-b border-border">
@@ -350,37 +357,41 @@ export function PacketFlowPage() {
           {tab === 'graph' && (
             <>
               {!response ? (
-                <div className="bg-card border border-border rounded-xl p-10 text-center text-sm text-muted-foreground">
-                  <Info className="w-8 h-8 mx-auto mb-2 text-muted-foreground" />
-                  source/destination 를 입력하고 "추적" 을 눌러 경로를 그래프로 확인하세요.
-                </div>
+                <EmptyState
+                  icon={Info}
+                  title="아직 추적한 경로가 없습니다."
+                  description={'source/destination 을 입력하고 "추적" 을 누르면 경로를 그래프로 확인할 수 있습니다.'}
+                />
               ) : (
                 <>
                   <HopBreadcrumb hops={response.hops} selectedIndex={selectedIdx} onSelect={setSelectedIdx} />
-                  <div
-                    ref={graphBoxRef}
-                    className="relative bg-card border border-border rounded-xl overflow-hidden"
-                    style={{ height: 560 }}
+                  <MacCard
+                    title="경로 그래프"
+                    description="노드 클릭 → 해당 홉의 적용 정책(CNP/KNP), Cilium Identity, 관련 리소스 확인"
+                    bodyPadding="p-0"
                   >
-                    <FlowGraph3D
-                      hops={response.hops}
-                      onSelectHop={setSelectedIdx}
-                      selectedIndex={selectedIdx}
-                      width={graphDim.w}
-                      height={graphDim.h}
-                    />
-                    {selectedHop && (
-                      <HopDetailPanel
-                        hop={selectedHop}
-                        index={selectedIdx!}
-                        totalHops={response.hops.length}
-                        onClose={() => setSelectedIdx(null)}
+                    <div
+                      ref={graphBoxRef}
+                      className="relative overflow-hidden"
+                      style={{ height: 560 }}
+                    >
+                      <FlowGraph3D
+                        hops={response.hops}
+                        onSelectHop={setSelectedIdx}
+                        selectedIndex={selectedIdx}
+                        width={graphDim.w}
+                        height={graphDim.h}
                       />
-                    )}
-                  </div>
-                  <p className="text-xs text-muted-foreground mt-2">
-                    노드 클릭 → 해당 홉의 적용 정책(CNP/KNP), Cilium Identity, 관련 리소스 확인.
-                  </p>
+                      {selectedHop && (
+                        <HopDetailPanel
+                          hop={selectedHop}
+                          index={selectedIdx!}
+                          totalHops={response.hops.length}
+                          onClose={() => setSelectedIdx(null)}
+                        />
+                      )}
+                    </div>
+                  </MacCard>
                 </>
               )}
             </>
@@ -407,7 +418,7 @@ export function PacketFlowPage() {
             )
           )}
         </div>
-      </main>
+      </PageShell>
     </div>
   );
 }

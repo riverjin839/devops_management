@@ -11,7 +11,7 @@ interface JiraIssueChipProps {
 }
 
 function statusClass(status: string) {
-  if (status === '완료') return 'bg-status-healthy/15 text-status-healthy border-status-healthy/30';
+  if (status === '완료') return 'bg-secondary text-muted-foreground border-border';
   if (status === '지연') return 'bg-status-critical/15 text-status-critical border-status-critical/30';
   if (status === '진행') return 'bg-status-info/15 text-status-info border-status-info/30';
   return 'bg-secondary text-muted-foreground border-border';

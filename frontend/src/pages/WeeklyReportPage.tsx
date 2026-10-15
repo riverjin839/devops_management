@@ -4,7 +4,7 @@ import {
 } from 'lucide-react';
 import { MacCard } from '@/components/ui/MacCard';
 import { JiraIssueChip } from '@/components/work-items';
-import { useToast } from '@/components/common';
+import { useToast, PageHeader, PageShell, EmptyState } from '@/components/common';
 import { formatApiError } from '@/lib/utils';
 import { useAuthStore } from '@/stores/authStore';
 import {
@@ -34,9 +34,9 @@ const TABS: { id: TabId; label: string }[] = [
 const STATUSES = ['진행', '완료', '지연'] as const;
 
 function statusClass(status: string) {
-  if (status === '완료') return 'text-status-healthy';
+  if (status === '완료') return 'text-muted-foreground';
   if (status === '지연') return 'text-status-critical';
-  return 'text-blue-500';
+  return 'text-foreground';
 }
 
 /** 컬럼 헤더 클릭 정렬 — 같은 키 재클릭 시 asc ↔ desc 토글. */
@@ -198,7 +198,7 @@ export function WeeklyReportPage() {
         parentPageId: parentPageId.trim() || undefined,
         title: title.trim() || undefined,
       });
-      if (data.status === 'ok') toast.success('Confluence 게시 완료', data.detail);
+      if (data.status === 'ok') toast.success('Confluence 게시됨', data.detail);
       else toast.error('게시 실패', data.detail);
     } catch (err) {
       toast.error('게시 실패', formatApiError(err));
@@ -220,14 +220,14 @@ export function WeeklyReportPage() {
   const resetFilters = () => { setFComponent(''); setFAssignee(''); setFStatus(''); setFSearch(''); };
 
   return (
-    <div className="p-6 space-y-4">
-      <div className="flex items-center gap-2 flex-wrap">
-        <FileText className="w-5 h-5 text-primary" />
-        <h1 className="text-lg font-semibold">주간보고</h1>
-        {report && (
+    <PageShell density="hub" className="space-y-4">
+      <PageHeader
+        icon={FileText}
+        title="주간보고"
+        titleExtra={report && (
           <span className="text-sm text-muted-foreground">{report.periodStart} ~ {report.periodEnd}</span>
         )}
-        <div className="ml-auto flex items-center gap-2">
+        actions={<>
           <input type="date" className={`${inputCls} w-auto`} value={weekOf}
             onChange={(e) => setWeekOf(e.target.value)} title="해당 주(월~금) 선택" />
           <button onClick={() => void loadPreview()} disabled={busy}
@@ -235,8 +235,8 @@ export function WeeklyReportPage() {
             {previewMut.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
             다시 생성
           </button>
-        </div>
-      </div>
+        </>}
+      />
 
       {/* 필터바 — 날짜 외 다양한 조건 */}
       <MacCard title="보고서 필터">
@@ -284,7 +284,7 @@ export function WeeklyReportPage() {
         {TABS.map((t) => (
           <button key={t.id} type="button" onClick={() => setTab(t.id)} aria-pressed={tab === t.id}
             className={`px-3 py-2 rounded-xl border text-sm font-medium transition-colors ${
-              tab === t.id ? 'bg-primary/10 text-primary border-primary/30 ring-2 ring-primary/20'
+              tab === t.id ? 'bg-primary/10 text-primary border-primary/40'
                 : 'bg-secondary border-border text-muted-foreground hover:text-foreground'
             }`}>
             {t.label}
@@ -307,9 +307,9 @@ export function WeeklyReportPage() {
               <tbody>
                 <tr>
                   <td className={td}>{summary.total}</td>
-                  <td className={`${td} text-blue-500`}>{summary.inProgress}</td>
-                  <td className={`${td} text-status-healthy`}>{summary.done}</td>
-                  <td className={`${td} text-status-critical`}>{summary.delayed}</td>
+                  <td className={td}>{summary.inProgress}</td>
+                  <td className={td}>{summary.done}</td>
+                  <td className={`${td} ${summary.delayed > 0 ? 'text-status-critical' : ''}`}>{summary.delayed}</td>
                   <td className={td}>{filterActive ? '필터 적용된 집계' : (report?.summary.note ?? '')}</td>
                 </tr>
               </tbody>
@@ -319,22 +319,23 @@ export function WeeklyReportPage() {
       )}
 
       {tab === 'summary' && (
-        <MacCard title="진척률">
-          <div className="flex items-center gap-2 mb-2 flex-wrap">
-            {settings?.ganttUrl ? (
-              <a href={settings.ganttUrl} target="_blank" rel="noreferrer"
-                className="inline-flex items-center gap-1 text-sm text-primary hover:underline">
-                <ExternalLink className="w-3.5 h-3.5" /> Jira WBS 간트 차트 열기
-              </a>
-            ) : (
-              <span className="text-xs text-muted-foreground">
-                간트 차트 링크가 설정되지 않았습니다 — Confluence 게시 탭의 자동 생성 설정에서 등록하세요.
-              </span>
-            )}
-            <span className="ml-auto text-[11px] text-muted-foreground">
-              계획진도율 = 일정 경과 비율 · 실적진도율 = 완료 비율 · 달성률 = 실적/계획
+        // D-122: 간트 링크 행을 헤더 actions 로 올림
+        <MacCard
+          title="진척률"
+          actions={settings?.ganttUrl ? (
+            <a href={settings.ganttUrl} target="_blank" rel="noreferrer"
+              className="inline-flex items-center gap-1 text-sm text-primary hover:underline">
+              <ExternalLink className="w-3.5 h-3.5" /> Jira WBS 간트 차트 열기
+            </a>
+          ) : (
+            <span className="text-xs text-muted-foreground">
+              간트 차트 링크가 설정되지 않았습니다 — Confluence 게시 탭의 자동 생성 설정에서 등록하세요.
             </span>
-          </div>
+          )}
+        >
+          <p className="mb-2 text-xs text-muted-foreground">
+            계획진도율 = 일정 경과 비율 · 실적진도율 = 완료 비율 · 달성률 = 실적/계획
+          </p>
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
@@ -359,16 +360,16 @@ export function WeeklyReportPage() {
                     </td>
                     <td className={td}>{r.plannedRate}</td>
                     <td className={td}>{r.actualRate}</td>
-                    <td className={`${td} ${r.achievementRate >= 100 ? 'text-status-healthy' : r.achievementRate < 80 ? 'text-status-critical' : 'text-blue-500'}`}>
+                    <td className={`${td} ${r.achievementRate < 80 ? 'text-status-critical' : ''}`}>
                       {r.achievementRate}
                     </td>
-                    <td className={`${td} text-status-healthy`}>{r.doneCount}</td>
-                    <td className={`${td} text-blue-500`}>{r.inProgressCount}</td>
+                    <td className={td}>{r.doneCount}</td>
+                    <td className={td}>{r.inProgressCount}</td>
                     <td className={td}>{r.totalCount}</td>
                   </tr>
                 ))}
                 {progressSort.sorted.length === 0 && (
-                  <tr><td className={`${td} text-muted-foreground`} colSpan={8}>표시할 진척 데이터가 없습니다.</td></tr>
+                  <tr><td colSpan={8}><EmptyState compact title="표시할 진척 데이터가 없습니다." description={filterActive ? '필터 조건을 바꾸거나 초기화해 보세요.' : '선택한 주에 집계된 진척 데이터가 없습니다.'} /></td></tr>
                 )}
               </tbody>
             </table>
@@ -413,7 +414,7 @@ export function WeeklyReportPage() {
                   </tr>
                 ))}
                 {detailSort.sorted.length === 0 && (
-                  <tr><td className={`${td} text-muted-foreground`} colSpan={9}>표시할 업무가 없습니다.</td></tr>
+                  <tr><td colSpan={9}><EmptyState compact title="표시할 업무가 없습니다." description={filterActive ? '필터 조건을 바꾸거나 초기화해 보세요.' : '선택한 주에 집계된 업무가 없습니다.'} /></td></tr>
                 )}
               </tbody>
             </table>
@@ -443,7 +444,7 @@ export function WeeklyReportPage() {
                   </tr>
                 ))}
                 {ownerSort.sorted.length === 0 && (
-                  <tr><td className={`${td} text-muted-foreground`} colSpan={4}>표시할 업무가 없습니다.</td></tr>
+                  <tr><td colSpan={4}><EmptyState compact title="표시할 업무가 없습니다." description={filterActive ? '필터 조건을 바꾸거나 초기화해 보세요.' : '선택한 주에 집계된 업무가 없습니다.'} /></td></tr>
                 )}
               </tbody>
             </table>
@@ -535,7 +536,7 @@ export function WeeklyReportPage() {
           )}
         </>
       )}
-    </div>
+    </PageShell>
   );
 }
 

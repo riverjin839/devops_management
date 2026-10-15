@@ -5,9 +5,9 @@ import { mcApi, type McPreset } from '@/services/api';
 import type { McEffectivePreset, McPresetSource } from '@/types';
 
 const SOURCE_BADGE: Record<McPresetSource, { label: string; cls: string }> = {
-  builtin:  { label: '기본',  cls: 'bg-status-unknown/10 text-status-unknown border-status-unknown/30' },
-  shared:   { label: '공용',  cls: 'bg-status-info/10 text-status-info border-status-info/30' },
-  personal: { label: '개인',  cls: 'bg-status-healthy/10 text-status-healthy border-status-healthy/30' },
+  builtin:  { label: '기본',  cls: 'bg-chart-8/10 text-chart-8 border-chart-8/30' },
+  shared:   { label: '공용',  cls: 'bg-chart-1/10 text-chart-1 border-chart-1/30' },
+  personal: { label: '개인',  cls: 'bg-chart-2/10 text-chart-2 border-chart-2/30' },
 };
 
 interface EditRow {
@@ -80,7 +80,7 @@ export function McPresetManager({
             title={p.args}
           >
             <span className={`w-1.5 h-1.5 rounded-full ${
-              p.source === 'personal' ? 'bg-status-healthy' : p.source === 'shared' ? 'bg-status-info' : 'bg-slate-400'
+              p.source === 'personal' ? 'bg-chart-2' : p.source === 'shared' ? 'bg-chart-1' : 'bg-chart-8'
             }`} />
             {p.label}
           </button>
@@ -277,7 +277,7 @@ function SharedEditor({ onClose, qcInvalidate }: { onClose: () => void; qcInvali
           <Plus className="w-3 h-3" /> 항목 추가
         </button>
         <button onClick={() => saveMut.mutate()} disabled={saveMut.isPending}
-          className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold bg-status-info hover:bg-status-info/90 text-white rounded disabled:opacity-50">
+          className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold bg-primary hover:bg-primary/90 text-primary-foreground rounded disabled:opacity-50">
           {saveMut.isPending ? <Loader2 className="w-3 h-3 animate-spin" /> : <Save className="w-3 h-3" />} 배포
         </button>
       </div>

@@ -10,7 +10,7 @@ import { useClusters } from '@/hooks/useCluster';
 import { useClusterStore } from '@/stores/clusterStore';
 import { useQueryClient } from '@tanstack/react-query';
 import { useOperationLevels } from '@/hooks/useOperationLevels';
-import { ConfirmDialog, Skeleton, useToast, EmptyState } from '@/components/common';
+import { ConfirmDialog, Skeleton, useToast, EmptyState, PageHeader, PageShell } from '@/components/common';
 import { MacCard } from '@/components/ui/MacCard';
 import { Button } from '@/components/ui/button';
 import { formatApiError } from '@/lib/utils';
@@ -225,7 +225,7 @@ export function ClusterMetaFormPage() {
   // ── D-032: 로딩/에러/미발견 3분기 — 데이터가 확정되기 전엔 폼을 렌더하지 않는다 ──
   const shell = (children: ReactNode) => (
     <div className="app-min-h-screen bg-background">
-      <main className="max-w-[1200px] mx-auto px-8 py-8">{children}</main>
+      <PageShell density="doc">{children}</PageShell>
     </div>
   );
 
@@ -242,7 +242,7 @@ export function ClusterMetaFormPage() {
             <Skeleton height={12} width={120} />
           </div>
         </div>
-        <div className="bg-card border border-border rounded-xl p-6 space-y-5">
+        <MacCard title="클러스터 정보" bodyPadding="p-6" className="space-y-5">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             {[...Array(3)].map((_, i) => <Skeleton key={i} height={38} />)}
           </div>
@@ -250,7 +250,7 @@ export function ClusterMetaFormPage() {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {[...Array(4)].map((_, i) => <Skeleton key={i} height={38} />)}
           </div>
-        </div>
+        </MacCard>
       </div>,
     );
   }
@@ -413,7 +413,7 @@ export function ClusterMetaFormPage() {
       await clustersApi.update(cluster.id, payload as Record<string, unknown>);
       queryClient.invalidateQueries({ queryKey: ['clusters'] });
       // 저장 성공을 명시적으로 알린다 — 이전엔 목록으로 튕기기만 해 반영 여부가 불확실했다 (D-037)
-      toast.success('클러스터 정보를 저장했습니다.', cluster.name);
+      toast.success('클러스터 정보 저장됨', cluster.name);
       baselineRef.current = serialize(snapshot);   // 이탈 경고가 뜨지 않도록 기준 갱신
       navigate('/cluster-manage');
     } catch (err) {
@@ -426,9 +426,10 @@ export function ClusterMetaFormPage() {
 
   return (
     <div className="app-min-h-screen bg-background">
-      <main className="max-w-[1200px] mx-auto px-8 py-8">
+      <PageShell density="doc">
         {/* Page header */}
-        <div className="flex items-center gap-3 mb-6">
+        {/* 뒤로가기는 미저장 변경 확인(requestLeave)을 거쳐야 해서 PageHeader 의 Link 형 back 대신 버튼을 둔다. */}
+        <div className="flex items-start gap-2 mb-6">
           <Button
             type="button"
             variant="ghost"
@@ -439,11 +440,7 @@ export function ClusterMetaFormPage() {
           >
             <ArrowLeft className="w-4 h-4" />
           </Button>
-          <Server className="w-6 h-6 text-primary" />
-          <div>
-            <h1 className="text-xl font-bold">클러스터 정보 수정</h1>
-            <p className="text-sm text-muted-foreground mt-0.5">{cluster?.name}</p>
-          </div>
+          <PageHeader className="flex-1" icon={Server} title="클러스터 정보 수정" description={cluster?.name} />
         </div>
 
         <form onSubmit={handleSubmit}>
@@ -501,7 +498,7 @@ export function ClusterMetaFormPage() {
           <div className="p-6 space-y-5">
             {/* 저장 실패·검증 오류는 스크린리더에도 즉시 고지 (D-036) */}
             {error && (
-              <div role="alert" className="px-3 py-2 bg-destructive/10 border border-destructive/30 rounded-md text-sm text-destructive">
+              <div role="alert" className="px-3 py-2 bg-status-critical/10 border border-status-critical/30 rounded-md text-sm text-status-critical">
                 {error}
               </div>
             )}
@@ -515,7 +512,7 @@ export function ClusterMetaFormPage() {
             {tab === 'node' && (
               <>
                 <div>
-                  <p className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-3">노드 스펙</p>
+                  <p className="text-sm font-semibold text-muted-foreground mb-3">노드 스펙</p>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
                       <label htmlFor={f('nodeCount')} className={lc}>노드 수</label>
@@ -531,7 +528,7 @@ export function ClusterMetaFormPage() {
                 </div>
 
                 <div>
-                  <p className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-3">NIC 정보 (ifconfig)</p>
+                  <p className="text-sm font-semibold text-muted-foreground mb-3">NIC 정보 (ifconfig)</p>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div className="space-y-3 border border-border rounded-md p-4 bg-muted/10">
                       <p className="text-sm font-semibold text-primary">bond0</p>
@@ -571,7 +568,7 @@ export function ClusterMetaFormPage() {
                 </div>
 
                 <div>
-                  <p className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-3">BGP 설정</p>
+                  <p className="text-sm font-semibold text-muted-foreground mb-3">BGP 설정</p>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div className="flex items-center gap-3 px-3 py-2.5 bg-background border border-border rounded-xl">
                       <label className="flex items-center gap-2 cursor-pointer select-none">
@@ -609,7 +606,7 @@ export function ClusterMetaFormPage() {
                     categorical chart 토큰을 쓴다 — 고정 팔레트는 테마 전환 시 톤이 어긋난다 (D-034) */}
                 <div className="rounded-md border border-chart-1/20 bg-chart-1/5 p-4 space-y-4">
                   <div>
-                    <p className="text-sm font-semibold text-chart-1 uppercase tracking-wider">INTERNAL_IP — 수동 입력</p>
+                    <p className="text-sm font-semibold text-chart-1">INTERNAL_IP — 수동 입력</p>
                     <p className="text-xs text-muted-foreground mt-0.5">
                       자동수집(kubectl) nodeIps &gt; 수동 IP 리스트(정규식) &gt; fallback CIDR 순으로 표시됩니다.
                     </p>
@@ -618,7 +615,7 @@ export function ClusterMetaFormPage() {
                   <div>
                     <label htmlFor={f('internalIps')} className={lc}>
                       IP 리스트 (정규식)
-                      <span className="ml-1.5 text-xs text-muted-foreground font-normal normal-case">
+                      <span className="ml-1.5 text-xs text-muted-foreground font-normal">
                         한 줄에 한 그룹, 마지막 옥텟은 <code className="font-mono">[5-7,10]</code> 형태로 압축
                       </span>
                     </label>
@@ -634,9 +631,9 @@ export function ClusterMetaFormPage() {
                   </div>
 
                   <div>
-                    <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">
+                    <p className="text-xs font-semibold text-muted-foreground mb-2">
                       Fallback CIDR
-                      <span className="ml-1.5 text-xs text-muted-foreground font-normal normal-case">
+                      <span className="ml-1.5 text-xs text-muted-foreground font-normal">
                         — IP 리스트가 비었을 때 표시 + CIDR Calculator 의 겹침 검사에 사용
                       </span>
                     </p>
@@ -655,7 +652,7 @@ export function ClusterMetaFormPage() {
                 </div>
 
                 <div className="rounded-md border border-chart-2/20 bg-chart-2/5 p-4">
-                  <p className="text-sm font-semibold text-chart-2 uppercase tracking-wider mb-3">Pod CIDR 대역</p>
+                  <p className="text-sm font-semibold text-chart-2 mb-3">Pod CIDR 대역</p>
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                     <div><label htmlFor={f('podCidr')} className={lc}>Pod CIDR</label>
                       <input id={f('podCidr')} type="text" value={podCidr} onChange={(e) => setPodCidr(e.target.value)} aria-invalid={!!fieldErrors.podCidr} placeholder="10.244.0.0/16" className={ic + invalidCls('podCidr')} />
@@ -670,7 +667,7 @@ export function ClusterMetaFormPage() {
                 </div>
 
                 <div className="rounded-md border border-chart-3/20 bg-chart-3/5 p-4">
-                  <p className="text-sm font-semibold text-chart-3 uppercase tracking-wider mb-3">Service CIDR 대역</p>
+                  <p className="text-sm font-semibold text-chart-3 mb-3">Service CIDR 대역</p>
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                     <div><label htmlFor={f('svcCidr')} className={lc}>Service CIDR</label>
                       <input id={f('svcCidr')} type="text" value={svcCidr} onChange={(e) => setSvcCidr(e.target.value)} aria-invalid={!!fieldErrors.svcCidr} placeholder="10.96.0.0/12" className={ic + invalidCls('svcCidr')} />
@@ -703,7 +700,7 @@ export function ClusterMetaFormPage() {
 
                 {/* Cluster Trends — per-cluster Prometheus 연동 (노드 메트릭 추이) */}
                 <div className="rounded-md border border-chart-4/20 bg-chart-4/5 p-4 space-y-3">
-                  <p className="text-sm font-semibold text-chart-4 uppercase tracking-wider">메트릭 추이 (Prometheus)</p>
+                  <p className="text-sm font-semibold text-chart-4">메트릭 추이 (Prometheus)</p>
                   <label className="flex items-center gap-2 text-sm cursor-pointer">
                     <input type="checkbox" className="accent-primary" checked={prometheusEnabled}
                       onChange={(e) => setPrometheusEnabled(e.target.checked)} />
@@ -776,7 +773,7 @@ export function ClusterMetaFormPage() {
           onConfirm={() => { setLeaveOpen(false); navigate('/cluster-manage'); }}
           onCancel={() => setLeaveOpen(false)}
         />
-      </main>
+      </PageShell>
     </div>
   );
 }

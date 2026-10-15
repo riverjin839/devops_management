@@ -19,7 +19,7 @@ export function UnregisteredTypeChips({ clusterJobs, allTypes, onPick }: Unregis
 
   return (
     <div className="pt-3 border-t border-dashed border-border">
-      <div className="text-xs text-muted-foreground mb-2 uppercase tracking-wider">
+      <div className="text-xs text-muted-foreground mb-2">
         미등록 잡 타입
       </div>
       <div className="flex flex-wrap gap-2">

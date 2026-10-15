@@ -233,7 +233,7 @@ function ClusterCronBadge({
       await mutation.mutateAsync({
         clusterId: cluster.id, checkCronExpr: value.trim() || null, checkCronEnabled: enabled,
       });
-      toast.success(`${cluster.name} 핵심 점검 주기를 저장했습니다.`);
+      toast.success(`${cluster.name} 핵심 점검 주기 저장됨`);
       setOpen(false);
     } catch (e) {
       toast.error('저장 실패', formatApiError(e));
@@ -352,7 +352,7 @@ const GROUP_EXPANDED_STORAGE_KEY = 'pep:checkMatrixExpandedGroups';
 const GROUP_BADGE_CLS: Record<'critical' | 'warning' | 'healthy', string> = {
   critical: 'text-status-critical bg-status-critical-soft border-status-critical/40',
   warning: 'text-status-warning bg-status-warning-soft border-status-warning/40',
-  healthy: 'text-status-healthy bg-status-healthy-soft border-status-healthy/40',
+  healthy: 'text-muted-foreground bg-secondary border-border',
 };
 
 function loadExpandedGroups(): Record<string, boolean> {
@@ -833,7 +833,7 @@ export function PlatformStatusMatrix({ toolbarSlot }: PlatformStatusMatrixProps 
     setDeleteTarget(null);
     try {
       await deleteMut.mutateAsync(target.id);
-      toast.success('항목을 삭제했습니다.', target.name);
+      toast.success('항목 삭제됨', target.name);
     } catch (e) {
       toast.error('삭제 실패', formatApiError(e));
     }
@@ -842,11 +842,6 @@ export function PlatformStatusMatrix({ toolbarSlot }: PlatformStatusMatrixProps 
   const activeCount = activeRuns?.total ?? 0;
   const toolbarContent = (
     <>
-      {toolbarSlot === undefined && (
-        <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground select-none">
-          플랫폼 현황
-        </span>
-      )}
       <button
         onClick={() => setHelpOpen(true)}
         className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-xl text-[11px] text-muted-foreground hover:text-primary hover:bg-secondary transition-colors flex-shrink-0"
@@ -963,12 +958,13 @@ export function PlatformStatusMatrix({ toolbarSlot }: PlatformStatusMatrixProps 
   return (
     <div className="flex flex-col gap-2 min-h-0 flex-1">
       {toolbarSlot && createPortal(toolbarContent, toolbarSlot)}
-      <MacCard bodyPadding="p-0" rootClassName="min-h-0 flex-1 flex flex-col" className="flex-1 min-h-0 flex flex-col">
-        {toolbarSlot === undefined && (
-          <div className="flex-shrink-0 flex items-center gap-2 px-4 py-2.5 border-b border-border bg-surface-container-high">
-            {toolbarContent}
-          </div>
-        )}
+      <MacCard
+        bodyPadding="p-0"
+        rootClassName="min-h-0 flex-1 flex flex-col"
+        className="flex-1 min-h-0 flex flex-col"
+        title={toolbarSlot === undefined ? '플랫폼 현황' : undefined}
+        actions={toolbarSlot === undefined ? toolbarContent : undefined}
+      >
 
         {isLoading ? (
           <div className="flex-1 min-h-0 overflow-auto p-3 space-y-2" aria-busy="true" aria-label="점검 매트릭스 불러오는 중">

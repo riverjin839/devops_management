@@ -6,8 +6,8 @@
  * 실행이 끝난 뒤 펼쳐도 전체 로그가 그대로 있다.
  */
 import { useMemo, useState } from 'react';
-import { Check, Copy, Download, Loader2, ShieldCheck, ShieldX, Square } from 'lucide-react';
-import { LogViewer } from '@/components/common';
+import { Check, Copy, Download, Loader2, ShieldCheck, ShieldX, Square, X } from 'lucide-react';
+import { EmptyState, LogViewer } from '@/components/common';
 import { MacCard } from '@/components/ui/MacCard';
 import { PROVISION_STEPS, type ProvisionStream } from '@/hooks/useK8sRbac';
 
@@ -23,7 +23,7 @@ function StepChips({ steps, running }: { steps: ProvisionStream['steps']; runnin
         const status = steps[key] ?? 'pending';
         const cls =
           status === 'done'
-            ? 'bg-status-healthy/10 border-status-healthy/30 text-status-healthy font-medium'
+            ? 'bg-secondary border-border text-foreground font-medium'
             : status === 'running'
               ? 'bg-primary/10 border-primary text-primary font-semibold'
               : 'bg-secondary border-border text-muted-foreground';
@@ -89,45 +89,38 @@ export function ProvisionConsole({ stream, showLogs }: ProvisionConsoleProps) {
 
   if (!running && logs.length === 0 && !result && !error) {
     return (
-      <MacCard title="실행 결과">
-        <div className="py-10 text-center text-sm text-muted-foreground">
-          왼쪽에서 대상과 권한을 정한 뒤 <span className="text-foreground font-medium">액세스 발급 실행</span>
-          을 누르면
-          <br />
-          단계별 로그와 발급된 kubeconfig 가 여기에 나온다.
-        </div>
-      </MacCard>
+      <EmptyState icon={ShieldCheck} title="아직 발급을 실행하지 않았습니다."
+        description="왼쪽에서 대상과 권한을 정한 뒤 '액세스 발급 실행'을 누르면 단계별 로그와 발급된 kubeconfig 가 여기에 나옵니다." />
     );
   }
 
   return (
     <div className="space-y-3">
-      <MacCard title="실행 로그">
+      <MacCard
+        title="실행 로그"
+        titleExtra={<span className="text-xs text-muted-foreground tabular-nums">{logs.length}줄</span>}
+        actions={running ? (
+          <>
+            <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-muted-foreground">
+              <Loader2 className="w-3.5 h-3.5 animate-spin" /> 실행 중
+            </span>
+            <button
+              type="button"
+              onClick={abort}
+              title="실행 중단 (이미 만들어진 오브젝트는 남는다)"
+              aria-label="실행 중단"
+              className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-xl border border-border text-xs hover:border-destructive hover:text-destructive"
+            >
+              <Square className="w-3 h-3" /> 중단
+            </button>
+          </>
+        ) : undefined}
+      >
         <div className="space-y-3">
-          <div className="flex items-center gap-3 flex-wrap">
-            <StepChips steps={steps} running={running} />
-            <div className="flex-1" />
-            {running && (
-              <>
-                <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-status-healthy">
-                  <Loader2 className="w-3.5 h-3.5 animate-spin" /> 실행 중
-                </span>
-                <button
-                  type="button"
-                  onClick={abort}
-                  title="실행 중단 (이미 만들어진 오브젝트는 남는다)"
-                  aria-label="실행 중단"
-                  className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-xl border border-border text-xs hover:border-destructive hover:text-destructive"
-                >
-                  <Square className="w-3 h-3" /> 중단
-                </button>
-              </>
-            )}
-            <span className="text-xs text-muted-foreground">{logs.length}줄</span>
-          </div>
+          <StepChips steps={steps} running={running} />
 
           {error && (
-            <div className="text-sm rounded-md border border-destructive/40 bg-destructive/10 text-destructive px-3 py-2">
+            <div className="text-sm rounded-md border border-status-critical/40 bg-status-critical/10 text-status-critical px-3 py-2">
               {error}
             </div>
           )}
@@ -200,9 +193,10 @@ export function ProvisionConsole({ stream, showLogs }: ProvisionConsoleProps) {
                 {denied.length > 0 && (
                   <ul className="space-y-0.5">
                     {denied.map((d, i) => (
-                      <li key={i} className="text-status-warning">
-                        ✘ [{d.namespace}] {d.label}
-                        {d.reason ? ` — ${d.reason}` : ''}
+                      <li key={i} className="flex items-start gap-1 text-status-warning">
+                        <X className="w-3 h-3 mt-0.5 flex-shrink-0" aria-hidden />
+                        <span>[{d.namespace}] {d.label}
+                        {d.reason ? ` — ${d.reason}` : ''}</span>
                       </li>
                     ))}
                   </ul>

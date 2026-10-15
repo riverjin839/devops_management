@@ -206,7 +206,7 @@ export function TopologyCanvas({
               </path>
               <text x={(a.x + b.x) / 2} y={(a.y + b.y) / 2 - 4} fontSize={9}
                 fill={st.stroke} textAnchor="middle" className="pointer-events-none">
-                {t.flowCount}{t.droppedCount > 0 ? ` ⚠${t.droppedCount}` : ''}
+                {t.flowCount}{t.droppedCount > 0 ? ` · 드롭 ${t.droppedCount}` : ''}
               </text>
             </g>
           );
@@ -285,7 +285,7 @@ export function TopologyCanvas({
                     <>
                       <rect x={NODE_W - 50} y={38} width={38} height={4} rx={2} fill="hsl(var(--secondary))" />
                       <rect x={NODE_W - 50} y={38} width={38 * cpuR} height={4} rx={2}
-                        fill={cpuR > 0.9 ? 'hsl(var(--status-critical))' : cpuR > 0.7 ? 'hsl(var(--status-warning))' : 'hsl(var(--status-healthy))'} />
+                        fill={cpuR > 0.9 ? 'hsl(var(--status-critical))' : cpuR > 0.7 ? 'hsl(var(--status-warning))' : 'hsl(var(--muted-foreground))'} />
                     </>
                   )}
                   {memR != null && (

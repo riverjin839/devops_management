@@ -371,7 +371,7 @@ export function Sidebar() {
             onClick={handleHomeClick}
             title="홈으로"
             aria-label="홈으로"
-            className={`w-9 h-9 bg-gradient-to-br from-primary to-status-info rounded-md flex items-center justify-center text-white shadow-sm transition-transform hover:scale-105 active:scale-95 ${
+            className={`w-9 h-9 bg-primary rounded-md flex items-center justify-center text-primary-foreground transition-colors hover:bg-primary/90 ${
               location.pathname === '/' ? 'ring-2 ring-primary/50' : ''
             }`}
           >
@@ -544,7 +544,7 @@ export function Sidebar() {
                 onSelect={() => { setUserFlyoutAnchor(null); settingsTransfer.startImport(); }}
               />
               <div className="mx-2 my-1 border-t border-border" />
-              <p className="px-2.5 pt-1.5 pb-0.5 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-1">
+              <p className="px-2.5 pt-1.5 pb-0.5 text-xs font-medium text-muted-foreground flex items-center gap-1">
                 <Palette className="w-3 h-3" aria-hidden="true" /> 테마
               </p>
               {THEMES.map((t) => (

@@ -1,6 +1,6 @@
 // frontend/src/components/batch-jobs/BatchJobSlideOver.RunForm.tsx
 import { useId, useState } from 'react';
-import { Play, Plug, PowerOff, ShieldCheck } from 'lucide-react';
+import { Check, Play, Plug, PowerOff, ShieldCheck, X } from 'lucide-react';
 import type { BatchJob, BatchJobRun, BatchJobTestConnectionResponse } from '@/services/api';
 import { MasterHostPicker } from '@/components/common';
 import { formatApiError } from '@/lib/utils';
@@ -159,7 +159,7 @@ export function RunForm({ job }: RunFormProps) {
           </div>
 
           {hasSavedCreds && !credsProvided && (
-            <div className="inline-flex items-center gap-1.5 text-xs text-status-healthy bg-status-healthy/10 border border-status-healthy/30 rounded-lg px-2 py-1">
+            <div className="inline-flex items-center gap-1.5 text-xs text-muted-foreground bg-secondary border border-border rounded-lg px-2 py-1">
               <ShieldCheck className="w-3 h-3" />
               저장된 자격증명을 사용합니다 ({[job.hasSavedPassword && '비밀번호', job.hasSavedPrivateKey && '개인키'].filter(Boolean).join(' / ')})
             </div>
@@ -303,7 +303,11 @@ export function TestConnectionResult({ result }: { result: BatchJobTestConnectio
           {result.checks!.map((c) => (
             <li key={c.check} className="flex items-start gap-1.5 text-foreground/90">
               <span className="flex-shrink-0 mt-px">
-                {c.ok === true ? '✓' : c.ok === false ? '✗' : '—'}
+                {c.ok === true
+                  ? <Check className="w-3.5 h-3.5 text-muted-foreground" aria-label="통과" />
+                  : c.ok === false
+                    ? <X className="w-3.5 h-3.5 text-status-critical" aria-label="실패" />
+                    : '—'}
               </span>
               <span className="flex-shrink-0 font-medium">
                 {PREFLIGHT_CHECK_LABEL[c.check] ?? c.check}

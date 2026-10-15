@@ -6,7 +6,8 @@ import {
   Sparkles, UploadCloud,
 } from 'lucide-react';
 import { MacCard } from '@/components/ui/MacCard';
-import { EmptyState, useToast } from '@/components/common';
+import { EmptyState, LoadingState, PageShell, useToast } from '@/components/common';
+import { PageHeader } from '@/components/common/PageHeader';
 import {
   ConfluenceDocsSettingsDialog, ConfluenceExportDialog, ConfluenceImportModal, SyncStatusBadge,
 } from '@/components/documents';
@@ -19,7 +20,7 @@ import type { GuideSearchItem, WorkGuide } from '@/types';
 const CATEGORIES = ['배포', '트러블슈팅', '모니터링', '보안', '기타'];
 const STATUS_CFG: Record<string, { label: string; cls: string }> = {
   draft: { label: 'draft', cls: 'bg-secondary text-muted-foreground' },
-  active: { label: 'active', cls: 'bg-status-healthy/10 text-status-healthy' },
+  active: { label: 'active', cls: 'bg-secondary text-foreground' },
   archived: { label: 'archived', cls: 'bg-secondary text-muted-foreground line-through' },
 };
 
@@ -95,7 +96,7 @@ export function DocumentsPage() {
     try {
       const res = await pullMut.mutateAsync(guide.id);
       if (res.status !== 'ok') toast.error('다시 가져오기 실패', res.detail);
-      else toast.success('다시 가져오기 완료', `「${guide.title}」 v${res.version ?? '?'} 로 갱신했습니다.`);
+      else toast.success('다시 가져옴', `「${guide.title}」 v${res.version ?? '?'} 로 갱신했습니다.`);
     } catch (err) {
       toast.error('다시 가져오기 실패', formatApiError(err));
     } finally {
@@ -104,16 +105,13 @@ export function DocumentsPage() {
   };
 
   return (
-    <div className="p-6 space-y-4">
+    <PageShell density="hub" className="space-y-4">
       {/* 헤더 + 툴바 */}
-      <div className="flex items-center justify-between gap-3 flex-wrap">
-        <div>
-          <h1 className="text-lg font-semibold">문서 관리</h1>
-          <p className="text-xs text-muted-foreground">
-            파트 문서를 한곳에서 관리하고 Confluence 와 동기화합니다 — 가져온 문서는 AI 검색·LLM 학습 소스로 자동 편입됩니다.
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
+      <PageHeader
+        title="문서 관리"
+        description="파트 문서를 한곳에서 관리하고 Confluence 와 동기화합니다 — 가져온 문서는 AI 검색·LLM 학습 소스로 자동 편입됩니다."
+        actions={
+          <>
           <button
             type="button" onClick={() => navigate('/work-guides/new')}
             className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl border border-border bg-secondary text-sm font-medium hover:bg-secondary/80"
@@ -135,8 +133,9 @@ export function DocumentsPage() {
               <Settings2 className="w-4 h-4" />
             </button>
           )}
-        </div>
-      </div>
+          </>
+        }
+      />
 
       {/* 요약 타일 */}
       <StatTileRow>
@@ -164,7 +163,7 @@ export function DocumentsPage() {
           type="button" onClick={() => setAiMode((v) => !v)} aria-pressed={aiMode}
           title="임베딩 기반 의미 검색 (Ollama 미기동 시 일반 검색으로 폴백)"
           className={`inline-flex items-center gap-1.5 px-3 py-2 rounded-xl border text-sm font-medium transition-colors ${
-            aiMode ? 'bg-primary/10 text-primary border-primary/30 ring-2 ring-primary/20'
+            aiMode ? 'bg-primary/10 text-primary border-primary/40'
               : 'bg-card border-border text-muted-foreground hover:text-foreground'
           }`}
         >
@@ -202,14 +201,14 @@ export function DocumentsPage() {
         <div className="overflow-x-auto">
           <table className="w-full min-w-[820px] text-sm">
             <thead>
-              <tr className="text-left text-[11px] uppercase tracking-wide text-muted-foreground border-b border-border">
-                <th className="px-4 py-2.5 font-semibold">제목</th>
-                <th className="px-3 py-2.5 font-semibold">분류</th>
-                <th className="px-3 py-2.5 font-semibold">상태</th>
-                <th className="px-3 py-2.5 font-semibold">작성자</th>
-                <th className="px-3 py-2.5 font-semibold">출처</th>
-                <th className="px-3 py-2.5 font-semibold">동기화</th>
-                <th className="px-3 py-2.5 font-semibold">수정일</th>
+              <tr className="text-left text-xs text-muted-foreground border-b border-border">
+                <th className="px-4 py-2.5 font-medium">제목</th>
+                <th className="px-3 py-2.5 font-medium">분류</th>
+                <th className="px-3 py-2.5 font-medium">상태</th>
+                <th className="px-3 py-2.5 font-medium">작성자</th>
+                <th className="px-3 py-2.5 font-medium">출처</th>
+                <th className="px-3 py-2.5 font-medium">동기화</th>
+                <th className="px-3 py-2.5 font-medium">수정일</th>
                 <th className="px-3 py-2.5" aria-label="행 동작" />
               </tr>
             </thead>
@@ -236,7 +235,7 @@ export function DocumentsPage() {
                     <td className="px-3 py-2.5">
                       <span className={`px-2 py-0.5 rounded-full text-[11px] font-medium ${
                         guide.confluencePageId || guide.source === 'confluence'
-                          ? 'bg-blue-500/10 text-blue-500' : 'bg-secondary text-muted-foreground'
+                          ? 'bg-chart-1/15 text-chart-1' : 'bg-secondary text-muted-foreground'
                       }`}>
                         {guide.confluencePageId || guide.source === 'confluence' ? 'Confluence' : 'PEP'}
                       </span>
@@ -295,9 +294,7 @@ export function DocumentsPage() {
             </div>
           )}
           {isLoading && (
-            <div className="py-10 flex justify-center text-muted-foreground">
-              <Loader2 className="w-5 h-5 animate-spin" />
-            </div>
+            <LoadingState />
           )}
         </div>
       </MacCard>
@@ -305,6 +302,6 @@ export function DocumentsPage() {
       <ConfluenceImportModal open={importOpen} onClose={() => setImportOpen(false)} />
       <ConfluenceExportDialog open={Boolean(exportTarget)} onClose={() => setExportTarget(null)} guide={exportTarget} />
       <ConfluenceDocsSettingsDialog open={settingsOpen} onClose={() => setSettingsOpen(false)} />
-    </div>
+    </PageShell>
   );
 }

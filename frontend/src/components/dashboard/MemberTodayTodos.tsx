@@ -7,7 +7,7 @@ import {
   Users, AlertTriangle,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { MacCard } from '@/components/ui/MacCard';
+import { EmptyState } from '@/components/common/EmptyState';
 import { todayWorkItemsApi } from '@/services/api';
 import { useAssignees } from '@/hooks/useAssignees';
 import { useWorkItems } from '@/hooks/useWorkItems';
@@ -206,7 +206,7 @@ export function MemberTodayTodos({ selectedClusterId }: MemberTodayTodosProps) {
           )}
           <span className="text-status-info">예정 {totals.today}</span>
           <span className="text-status-warning">진행 {totals.inProgress}</span>
-          <span className="text-status-healthy">완료 {totals.done}</span>
+          <span className="text-muted-foreground">완료 {totals.done}</span>
           <span className="text-primary font-semibold">{overall}%</span>
         </div>
       </div>
@@ -246,8 +246,10 @@ export function MemberTodayTodos({ selectedClusterId }: MemberTodayTodosProps) {
           </div>
         </div>
       ) : displayGroups.length === 0 ? (
-        <div className="rounded-xl border border-dashed border-border/60 py-10 text-center text-sm text-muted-foreground">
-          {isToday ? '오늘 예정된 업무가 없습니다.' : '해당 날짜에 예정된 업무가 없습니다.'}
+        <div className="rounded-md border border-dashed border-border/60">
+          <EmptyState compact icon={CalendarCheck2}
+            title={isToday ? '오늘 예정된 업무가 없습니다.' : '해당 날짜에 예정된 업무가 없습니다.'}
+            description="업무에 기한이나 시작일을 지정하면 해당 날짜에 표시됩니다." />
         </div>
       ) : (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-2 pr-1">
@@ -262,10 +264,10 @@ export function MemberTodayTodos({ selectedClusterId }: MemberTodayTodosProps) {
             const visible = isExpanded ? all : all.slice(0, itemLimit);
 
             return (
-              <MacCard
+              // 홈의 "담당자별 진행 현황" 카드 안에 들어가므로 담당자 묶음은 카드 대신 비카드 면(D-122).
+              <div
                 key={g.assignee}
-                rootClassName={isTeam ? 'lg:col-span-2 border-primary/40 bg-primary/5' : ''}
-                bodyPadding="p-2.5"
+                className={`rounded-md p-2.5 ${isTeam ? 'lg:col-span-2 bg-primary/5' : 'bg-secondary/40'}`}
               >
                 {/* 헤더 1줄 압축 — 이름은 작게, 카드 높이를 줄여 더 많은 담당자가 보이게 */}
                 <div className="flex items-center gap-1.5 mb-1.5">
@@ -300,7 +302,7 @@ export function MemberTodayTodos({ selectedClusterId }: MemberTodayTodosProps) {
 
                 <div className="h-1 rounded-full bg-secondary overflow-hidden mb-1.5">
                   <div
-                    className="h-full bg-primary rounded-full transition-all duration-300"
+                    className="h-full bg-primary rounded-full transition-[width] duration-300"
                     style={{ width: `${pct}%` }}
                   />
                 </div>
@@ -349,7 +351,7 @@ export function MemberTodayTodos({ selectedClusterId }: MemberTodayTodosProps) {
                     </li>
                   )}
                 </ul>
-              </MacCard>
+              </div>
             );
           })}
         </div>

@@ -12,7 +12,7 @@ export function CommandTraceList({ commands }: { commands: BatchJobCommandTrace[
   if (commands.length === 0) return null;
   return (
     <div>
-      <p className="text-xs uppercase tracking-wider text-muted-foreground mb-1">
+      <p className="text-xs text-muted-foreground mb-1">
         실행된 명령 ({commands.length})
       </p>
       <div className="space-y-1">
@@ -27,7 +27,7 @@ export function CommandTraceList({ commands }: { commands: BatchJobCommandTrace[
                 onClick={() => hasOutput && setOpenIdx(open ? null : i)}
                 className={`w-full px-2 py-1.5 flex items-center gap-2 text-left ${hasOutput ? 'hover:bg-secondary/50 cursor-pointer' : 'cursor-default'}`}
               >
-                <span className="text-[11px] px-1.5 py-0.5 rounded bg-secondary text-muted-foreground uppercase flex-shrink-0">
+                <span className="text-[11px] px-1.5 py-0.5 rounded bg-secondary text-muted-foreground flex-shrink-0">
                   {c.kind}
                 </span>
                 <code className="flex-1 min-w-0 text-xs font-mono truncate" title={c.command}>

@@ -72,7 +72,7 @@ export function ServiceSidebar({ services, selectedKey, onSelect, allLabel = 'ì 
   return (
     <aside
       style={{ width: ICON_RAIL_WIDTH }}
-      className="flex-shrink-0 bg-card border border-border rounded-xl py-2 h-fit sticky top-4"
+      className="flex-shrink-0 bg-card border border-border rounded-md py-2 h-fit sticky top-4"
     >
       <div className="flex flex-col items-center gap-1">
         <RailButton

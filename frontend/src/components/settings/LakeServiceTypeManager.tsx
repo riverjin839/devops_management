@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { Plus, Pencil, Trash2, Lock, AlertCircle, X, Loader2 } from 'lucide-react';
+import { MacCard } from '@/components/ui/MacCard';
 import { ConfirmDialog, useModalA11y } from '@/components/common';
 import { resolveClusterIcon } from '@/lib/clusterIcons';
 import {
@@ -56,17 +57,10 @@ export function LakeServiceTypeManager({ domain }: { domain: ServiceDomain }) {
   };
 
   return (
-    <div className="space-y-4">
-      {/* Header + Add button */}
-      <div className="flex items-center justify-between gap-3 flex-wrap">
-        <div>
-          <h2 className="text-sm font-semibold">서비스 타입</h2>
-          <p className="text-sm text-muted-foreground">
-            {domain === 'app'
-              ? '8 builtin (airflow/spark/...) 은 비활성화만 가능, 커스텀 타입은 자유 추가/삭제'
-              : '커스텀 타입 자유 추가/삭제 — 아이콘/색상은 /services 지식 카탈로그·업무 태그에도 사용된다.'}
-          </p>
-        </div>
+    <MacCard
+      title="서비스 타입"
+      className="space-y-4"
+      actions={
         <button
           type="button"
           onClick={() => setAdding(true)}
@@ -76,7 +70,13 @@ export function LakeServiceTypeManager({ domain }: { domain: ServiceDomain }) {
           <Plus className="w-3.5 h-3.5" />
           커스텀 추가
         </button>
-      </div>
+      }
+    >
+      <p className="text-sm text-muted-foreground">
+        {domain === 'app'
+          ? '8 builtin (airflow/spark/...) 은 비활성화만 가능, 커스텀 타입은 자유 추가/삭제'
+          : '커스텀 타입 자유 추가/삭제 — 아이콘/색상은 /services 지식 카탈로그·업무 태그에도 사용된다.'}
+      </p>
 
       {/* Error/loading/empty */}
       {error && (
@@ -109,7 +109,7 @@ export function LakeServiceTypeManager({ domain }: { domain: ServiceDomain }) {
 
       {/* Table */}
       {!isLoading && rows.length > 0 && (
-        <div className="bg-card border border-border rounded-md overflow-hidden">
+        <div className="border border-border rounded-md overflow-hidden">
           <table className="w-full text-sm">
             <thead className="text-sm text-muted-foreground bg-muted/40">
               <tr>
@@ -226,7 +226,7 @@ export function LakeServiceTypeManager({ domain }: { domain: ServiceDomain }) {
         onConfirm={doDelete}
         onCancel={() => setConfirmDelete(null)}
       />
-    </div>
+    </MacCard>
   );
 }
 
@@ -316,7 +316,7 @@ function TypeFormModal({ mode, domain, row, onClose, onError }: TypeFormModalPro
   return (
     <div ref={dialogRef} className="fixed inset-0 z-50 flex items-center justify-center" role="dialog" aria-modal="true" aria-label="서비스 타입 폼">
       <div className="absolute inset-0 bg-black/60" onClick={onClose} aria-hidden />
-      <div className="relative bg-card border border-border rounded-2xl shadow-2xl w-full max-w-xl mx-4 overflow-hidden">
+      <div className="relative bg-card border border-border rounded-md shadow-2xl w-full max-w-xl mx-4 overflow-hidden">
         <div className="flex items-center justify-between px-5 py-4 border-b border-border bg-muted/30">
           <h2 className="text-sm font-semibold">
             {mode === 'create'

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Loader2, Wifi, WifiOff, Trash2, Save, KeyRound, Globe, LogIn, ShieldCheck, Download, Copy, Stethoscope } from 'lucide-react';
+import { Loader2, Wifi, WifiOff, Trash2, Save, KeyRound, Globe, LogIn, ShieldCheck, Download, Copy, Stethoscope, AlertTriangle } from 'lucide-react';
 import {
   useJiraConfig, useUpdateJiraConfig, useJiraCredential,
   useDeleteJiraCredential, useJiraTest, useJiraSsoLogin,
@@ -8,7 +8,8 @@ import {
 import { useAuthStore } from '@/stores/authStore';
 import { JiraConnectCard } from '@/components/settings/JiraConnectCard';
 import { jiraApi } from '@/services/api';
-import { useToast } from '@/components/common';
+import { LoadingState, useToast } from '@/components/common';
+import { MacCard } from '@/components/ui/MacCard';
 import { formatApiError, parseUTC } from '@/lib/utils';
 import type { SsoDiagnoseResult } from '@/types';
 
@@ -69,7 +70,7 @@ export function JiraIntegrationPanel() {
       const { data } = await ssoLogin.mutateAsync(payload);
       if (data.ok) {
         setSsoPw('');
-        toast.success('SSO 로그인 완료', data.displayName ? `${data.displayName} 세션이 저장되었습니다.` : data.detail);
+        toast.success('SSO 로그인 성공', data.displayName ? `${data.displayName} 세션이 저장되었습니다.` : data.detail);
         // Confluence 동시 로그인이 시도됐고 실패한 경우만 별도 안내 (Jira 는 정상).
         if (data.confluenceOk === false) {
           toast.error('Confluence 로그인 실패', data.confluenceDetail || 'Jira 세션은 정상 저장되었습니다.');
@@ -185,18 +186,17 @@ export function JiraIntegrationPanel() {
   };
 
   if (cfgLoading) {
-    return <div className="flex items-center gap-2 text-muted-foreground text-sm p-6"><Loader2 className="w-4 h-4 animate-spin" /> 불러오는 중…</div>;
+    return <LoadingState compact />;
   }
 
   return (
     <div className="space-y-6">
       {/* 공통 설정 (관리자) */}
-      <div className="bg-card border border-border rounded-xl p-5">
-        <div className="flex items-center gap-2 mb-1">
-          <Globe className="w-4 h-4 text-primary" />
-          <h3 className="font-semibold">Jira 공통 설정</h3>
-          {!isAdmin && <span className="text-xs text-muted-foreground">(관리자만 수정 가능)</span>}
-        </div>
+      <MacCard
+        title="Jira 공통 설정"
+        icon={Globe}
+        description={!isAdmin ? '관리자만 수정 가능' : undefined}
+      >
         <p className="text-sm text-muted-foreground mb-4">
           폐쇄망 내부 Jira(Server/Data Center) 의 Base URL 을 설정합니다. 가져오기는 백엔드에서 실행되므로
           백엔드 서버가 이 도메인에 접근 가능해야 합니다.
@@ -241,7 +241,7 @@ export function JiraIntegrationPanel() {
               onChange={(e) => setEpicField(e.target.value)} disabled={!isAdmin} />
             <p className="text-xs text-muted-foreground mt-1">
               Jira Server/DC 는 이슈-Epic 연결이 <b>커스텀 필드</b>라 인스턴스마다 필드 ID 가
-              다릅니다. 비워두면 "업무 등록" 화면에서 Epic 을 선택해 Task 를 만들어도
+              다릅니다. 비워두면 "업무 추가" 화면에서 Epic 을 선택해 Task 를 만들어도
               <b> 실제 Jira 에는 Epic 연결이 반영되지 않습니다</b>(이슈 자체는 생성됨). 프로젝트
               화면(관리 &gt; 필드) 또는 이슈 편집 화면 URL 에서 Epic Link 필드의 customfield ID 를
               확인해 입력하세요.
@@ -279,14 +279,10 @@ export function JiraIntegrationPanel() {
             </button>
           </div>
         )}
-      </div>
+      </MacCard>
 
       {/* 내 인증 (전 사용자) — PAT 또는 세션 쿠키 */}
-      <div className="bg-card border border-border rounded-xl p-5">
-        <div className="flex items-center gap-2 mb-1">
-          <KeyRound className="w-4 h-4 text-primary" />
-          <h3 className="font-semibold">내 Jira 인증</h3>
-        </div>
+      <MacCard title="내 Jira 인증" icon={KeyRound}>
         <p className="text-sm text-muted-foreground mb-4">
           본인 Jira 계정 자격을 등록하면 <b>본인 권한</b>으로 이슈를 가져옵니다. 자격은 암호화되어 저장되며
           화면에 다시 표시되지 않습니다. <b>SSO 자동 로그인</b>이 가장 간편합니다 — 토큰이나 쿠키를 직접
@@ -297,7 +293,7 @@ export function JiraIntegrationPanel() {
         <div className="flex items-center gap-2 mb-4 flex-wrap">
           <span className={`inline-flex items-center gap-1 text-sm px-2 py-0.5 rounded-full border ${
             cred?.configured
-              ? 'bg-status-healthy/10 text-status-healthy border-status-healthy/30'
+              ? 'bg-secondary text-foreground border-border'
               : 'bg-secondary text-muted-foreground border-border'
           }`}>
             {cred?.configured
@@ -305,7 +301,7 @@ export function JiraIntegrationPanel() {
               : '미등록'}
           </span>
           {cred?.hasConfluence && (
-            <span className="inline-flex items-center gap-1 text-sm px-2 py-0.5 rounded-full border bg-status-healthy/10 text-status-healthy border-status-healthy/30">
+            <span className="inline-flex items-center gap-1 text-sm px-2 py-0.5 rounded-full border bg-secondary text-muted-foreground border-border">
               Confluence 세션
             </span>
           )}
@@ -390,19 +386,19 @@ export function JiraIntegrationPanel() {
                       {diagResult.entries.map((e, i) => (
                         <tr key={`${e.product}-${e.url}-${i}`} className="border-t border-border">
                           <td className="px-2 py-1 align-top break-all">{e.product} {e.url}</td>
-                          <td className="px-2 py-1 align-top break-all">{e.finalUrl || '-'}</td>
-                          <td className="px-2 py-1 align-top">{e.httpStatus ?? '-'}</td>
+                          <td className="px-2 py-1 align-top break-all">{e.finalUrl || '—'}</td>
+                          <td className="px-2 py-1 align-top">{e.httpStatus ?? '—'}</td>
                           <td className={`px-2 py-1 align-top ${e.passwordInputs > 0 ? 'text-status-healthy' : ''}`}>
                             {e.forms}/{e.passwordInputs}
                           </td>
                           <td className="px-2 py-1 align-top break-all">
-                            {e.usernameField || '-'}{e.wantsBase64 ? ' (base64)' : ''}
+                            {e.usernameField || '—'}{e.wantsBase64 ? ' (base64)' : ''}
                           </td>
                           <td className="px-2 py-1 align-top break-all max-w-[16rem]">
-                            {Object.entries(e.hiddenFields ?? {}).map(([k, v]) => `${k}=${v}`).join(' · ') || '-'}
+                            {Object.entries(e.hiddenFields ?? {}).map(([k, v]) => `${k}=${v}`).join(' · ') || '—'}
                           </td>
                           <td className="px-2 py-1 align-top break-all">
-                            {e.error || e.clientRedirect || e.wwwAuthenticate || e.title || '-'}
+                            {e.error || e.clientRedirect || e.wwwAuthenticate || e.title || '—'}
                           </td>
                         </tr>
                       ))}
@@ -419,7 +415,7 @@ export function JiraIntegrationPanel() {
                     )}
                     {(e.cryptoHints?.length ?? 0) > 0 && (
                       <p className="text-status-warning leading-relaxed">
-                        ⚠ 클라이언트 암호화/보안모듈 흔적: {(e.cryptoHints ?? []).join(', ')} —
+                        <AlertTriangle className="inline w-3 h-3 mr-1 align-[-2px]" aria-hidden />클라이언트 암호화/보안모듈 흔적: {(e.cryptoHints ?? []).join(', ')} —
                         이런 페이지는 서버측 폼 로그인이 원리상 불가하므로 "내 PC 도우미" 또는 PAT/세션 쿠키를 사용하세요.
                       </p>
                     )}
@@ -427,7 +423,7 @@ export function JiraIntegrationPanel() {
                 ))}
                 {(diagResult.podSourceIp || diagResult.podHostname) && (
                   <p className="text-[11px] text-muted-foreground font-mono break-all">
-                    이 파드: {diagResult.podHostname || '-'} · 출발지 IP {diagResult.podSourceIp || '-'}
+                    이 파드: {diagResult.podHostname || '—'} · 출발지 IP {diagResult.podSourceIp || '—'}
                     <span className="font-sans"> — SSO 가 클라이언트 IP 를 검사하는 구성이면 이 IP(보통 노드/게이트웨이 IP 로 NAT 됨)를 허용해야 합니다.</span>
                   </p>
                 )}
@@ -516,7 +512,7 @@ export function JiraIntegrationPanel() {
             {confTestResult.detail}
           </div>
         )}
-      </div>
+      </MacCard>
     </div>
   );
 }

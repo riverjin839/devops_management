@@ -56,7 +56,7 @@ export function AddAppDialog({
               key={section.label}
               className={section.tone === 'danger' ? 'rounded-xl border border-status-warning/40 bg-status-warning/5 p-2.5' : undefined}
             >
-              <p className={`flex items-center gap-1.5 px-0.5 text-[11px] font-semibold uppercase tracking-wider ${
+              <p className={`flex items-center gap-1.5 px-0.5 text-xs font-medium ${
                 section.tone === 'danger' ? 'text-status-warning' : 'text-muted-foreground'
               } ${section.description ? 'pb-0.5' : 'pb-1.5'}`}>
                 {section.tone === 'danger' && <AlertTriangle className="w-3.5 h-3.5" aria-hidden />}

@@ -4,8 +4,8 @@ import { useClusters } from '@/hooks/useCluster';
 import { useClustersNodes, usePatchNodeLabels, NodeRow } from '@/hooks/useNodeLabels';
 import { NodeLabelEditorModal, NodeLabelsTable } from '@/components/node-labels';
 import { matchesSearch, buildLabelEntries, filterLabelEntries } from '@/components/node-labels/nodeLabelsShared';
-import { ClusterSidebar, ExportMenu } from '@/components/common';
-import { MacCard } from '@/components/ui/MacCard';
+import { ClusterSidebar, ExportMenu, EmptyState, LoadingState, PageShell } from '@/components/common';
+import { PageHeader } from '@/components/common/PageHeader';
 import { buildCsv, downloadCsv } from '@/lib/csv';
 import { formatApiError } from '@/lib/utils';
 
@@ -47,7 +47,7 @@ export function NodeLabelsPage() {
   const showCluster = targetClusters.length > 1;
 
   const headerLabel = useMemo(() => {
-    if (effectiveSelection) return clusters.find((c) => c.id === effectiveSelection)?.name || '-';
+    if (effectiveSelection) return clusters.find((c) => c.id === effectiveSelection)?.name || '—';
     return `전체 클러스터 (${clusters.length})`;
   }, [clusters, effectiveSelection]);
 
@@ -80,7 +80,7 @@ export function NodeLabelsPage() {
 
   return (
     <div className="app-min-h-screen bg-background">
-      <main className="pr-3 py-3 flex gap-3">
+      <PageShell density="console" className="flex gap-3">
         <ClusterSidebar
           clusters={clusters}
           selectedId={effectiveSelection}
@@ -91,15 +91,16 @@ export function NodeLabelsPage() {
         />
         <div ref={contentRef} className="flex-1 min-w-0">
         {/* Header */}
-        <div className="flex items-center justify-between mb-6">
-          <div className="flex items-center gap-2">
-            <Tags className="w-5 h-5 text-primary" />
-            <h1 className="text-xl font-semibold">K8s 노드 라벨</h1>
+        <PageHeader
+          className="mb-6"
+          icon={Tags}
+          title="K8s 노드 라벨"
+          titleExtra={
             <span className="text-sm text-muted-foreground">
               — <span className="font-medium text-foreground">{headerLabel}</span>
             </span>
-          </div>
-        </div>
+          }
+        />
 
         {/* Toolbar: search + view mode */}
         <div className="flex items-center gap-3 mb-4">
@@ -199,28 +200,15 @@ export function NodeLabelsPage() {
 
         {/* Table */}
         {isLoading ? (
-          <MacCard bodyPadding="p-8" className="text-center text-muted-foreground">
-            {clustersLoading ? 'Loading clusters...' : 'Loading nodes...'}
-          </MacCard>
+          <LoadingState />
         ) : clusters.length === 0 ? (
-          <MacCard bodyPadding="p-8" className="text-center text-muted-foreground">
-            등록된 클러스터가 없습니다.
-          </MacCard>
+          <EmptyState title="등록된 클러스터가 없습니다." description="클러스터 관리에서 클러스터를 등록하면 노드 라벨을 조회할 수 있습니다." />
         ) : isError ? (
-          <MacCard rootClassName="border-status-critical/30" bodyPadding="p-8">
-            <div className="flex flex-col items-center gap-3 text-center">
-              <AlertTriangle className="w-8 h-8 text-status-critical" />
-              <div>
-                <p className="font-medium text-status-critical mb-1">노드 정보를 불러올 수 없습니다</p>
-                <p className="text-sm text-muted-foreground max-w-lg">
-                  {extractErrorMessage(errors[0]?.error)}
-                </p>
-              </div>
-              <p className="text-sm text-muted-foreground mt-1">
-                클러스터의 kubeconfig 경로와 API Endpoint 설정을 확인하세요.
-              </p>
-            </div>
-          </MacCard>
+          <EmptyState
+            icon={AlertTriangle}
+            title="노드 정보를 불러올 수 없습니다."
+            description={`${extractErrorMessage(errors[0]?.error)} — 클러스터의 kubeconfig 경로와 API Endpoint 설정을 확인하세요.`}
+          />
         ) : (
           <NodeLabelsTable
             nodes={nodes}
@@ -231,7 +219,7 @@ export function NodeLabelsPage() {
           />
         )}
         </div>
-      </main>
+      </PageShell>
 
       <NodeLabelEditorModal
         node={selectedNode}

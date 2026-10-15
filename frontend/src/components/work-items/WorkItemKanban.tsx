@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Pencil, Trash2, CalendarDays, User, Server, ChevronRight, ChevronLeft, Clock, AlertTriangle } from 'lucide-react';
+import { Pencil, Trash2, CalendarDays, User, Server, ChevronRight, ChevronLeft, Clock, AlertTriangle, CheckCircle2 } from 'lucide-react';
 import type { WorkItem, KanbanStatus } from '@/types';
 import { stripHtml, formatApiError } from '@/lib/utils';
 import { useToast } from '@/components/common';
@@ -44,7 +44,7 @@ interface WipToastProps {
 
 function WipToast({ onClose }: WipToastProps) {
   return (
-    <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 flex items-center gap-3 px-4 py-3 bg-status-warning text-primary-foreground rounded-xl shadow-lg text-sm font-medium backdrop-blur-sm animate-in fade-in slide-in-from-bottom-4 duration-300">
+    <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 flex items-center gap-3 px-4 py-3 bg-status-warning text-primary-foreground rounded-xl shadow-lg text-sm font-medium animate-in fade-in slide-in-from-bottom-4 duration-300">
       <AlertTriangle className="w-4 h-4 flex-shrink-0" />
       {/* 실제로 전이를 막지 않는 소프트 경고 — "제한됩니다"는 강제처럼 읽혀 카피를 정정 */}
       <span>WIP 권장 한도 초과 — In Progress 동시 진행은 2개를 권장합니다.</span>
@@ -75,7 +75,7 @@ function MoveMenu({ currentStatus, onMove }: MoveMenuProps) {
       {open && (
         <>
           <div className="fixed inset-0 z-10" onClick={() => setOpen(false)} />
-          <div className="absolute right-0 bottom-full mb-1 z-20 bg-card border border-border rounded-lg shadow-xl overflow-hidden min-w-[140px]">
+          <div className="absolute right-0 bottom-full mb-1 z-20 bg-card border border-border rounded-md shadow-xl overflow-hidden min-w-[140px]">
             {others.map((s) => (
               <button
                 key={s}
@@ -143,7 +143,7 @@ function TaskCard({ item, onClick, onEdit, onDelete, onMove }: TaskCardProps) {
       {/* 완료 조건 (in_progress / review_test 에서만 표시) */}
       {item.doneCondition && (item.kanbanStatus === 'in_progress' || item.kanbanStatus === 'review_test') && (
         <p className="text-xs text-muted-foreground line-clamp-1 mb-1.5 italic">
-          ✓ {item.doneCondition}
+          <CheckCircle2 className="inline w-3 h-3 mr-1 align-[-2px]" aria-hidden />{item.doneCondition}
         </p>
       )}
 

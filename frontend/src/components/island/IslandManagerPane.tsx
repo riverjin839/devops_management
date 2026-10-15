@@ -199,7 +199,7 @@ export function IslandManagerPane({ open, onClose, currentId }: IslandManagerPan
       onSuccess: (res) => {
         setLastIslandId(res.data.id);
         navigate(`/island/${res.data.id}`);
-        toast.success('복제 완료', `"${res.data.name}" 이(가) 내 아일랜드에 추가되었습니다.`);
+        toast.success('복제됨', `"${res.data.name}" 이(가) 내 아일랜드에 추가되었습니다.`);
       },
       onError: () => toast.error('복제 실패'),
     });
@@ -215,7 +215,7 @@ export function IslandManagerPane({ open, onClose, currentId }: IslandManagerPan
           setLastIslandId(null);
           navigate('/island');
         }
-        toast.success('삭제 완료', `"${target.name}" 을(를) 삭제했습니다.`);
+        toast.success('삭제됨', `"${target.name}" 을(를) 삭제했습니다.`);
       },
       onError: () => toast.error('삭제 실패'),
     });
@@ -247,7 +247,7 @@ export function IslandManagerPane({ open, onClose, currentId }: IslandManagerPan
         </div>
 
         {/* 내 아일랜드 */}
-        <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+        <p className="mb-2 text-xs font-medium text-muted-foreground">
           내 아일랜드
         </p>
         <div className="space-y-2 mb-6">
@@ -279,13 +279,13 @@ export function IslandManagerPane({ open, onClose, currentId }: IslandManagerPan
         {/* 공유된 아일랜드 — 읽기 전용, 복제만 가능 */}
         {shared.length > 0 && (
           <>
-            <p className="mb-2 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+            <p className="mb-2 flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
               <Users className="w-3.5 h-3.5" />
               팀 공유 아일랜드
             </p>
             <div className="space-y-2">
               {shared.map((island) => (
-                <div key={island.id} className="flex items-center gap-2 p-2.5 rounded-xl border border-border bg-card">
+                <div key={island.id} className="flex items-center gap-2 p-2.5 rounded-md border border-border bg-card">
                   <span className="flex items-center justify-center w-8 h-8 rounded-lg bg-secondary text-muted-foreground flex-shrink-0">
                     <IslandIcon icon={island.icon} className="w-4 h-4" />
                   </span>

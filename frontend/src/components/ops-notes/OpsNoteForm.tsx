@@ -1,27 +1,27 @@
-import { useId, useState } from 'react';
-import { History, Pin } from 'lucide-react';
+import { useId, useState, type ComponentType } from 'react';
+import { History, Pin, Ship, KeyRound, Bug, Hammer, RefreshCw, Package, Layers } from 'lucide-react';
 import { useQueryClient } from '@tanstack/react-query';
 import { opsNotesApi } from '@/services/api';
 import type { OpsNote, OpsNoteCreate, OpsNoteColor, OpsNoteUpdate } from '@/types';
 import { ConfluenceUrlInput, TenantScopeSelect } from '@/components/common';
 import { RichTextEditor } from '@/components/editor';
 
-const SERVICES = [
-  { value: 'k8s',       label: 'Kubernetes', icon: '☸' },
-  { value: 'keycloak',  label: 'Keycloak',   icon: '🔑' },
-  { value: 'cilium',    label: 'Cilium',     icon: '🐝' },
-  { value: 'jenkins',   label: 'Jenkins',    icon: '🏗' },
-  { value: 'argocd',    label: 'ArgoCD',     icon: '🔄' },
-  { value: 'nexus',     label: 'Nexus',      icon: '📦' },
-  { value: 'etc',       label: '기타',        icon: '📋' },
+const SERVICES: { value: string; label: string; Icon: ComponentType<{ className?: string }> }[] = [
+  { value: 'k8s',      label: 'Kubernetes', Icon: Ship },
+  { value: 'keycloak', label: 'Keycloak',   Icon: KeyRound },
+  { value: 'cilium',   label: 'Cilium',     Icon: Bug },
+  { value: 'jenkins',  label: 'Jenkins',    Icon: Hammer },
+  { value: 'argocd',   label: 'ArgoCD',     Icon: RefreshCw },
+  { value: 'nexus',    label: 'Nexus',      Icon: Package },
+  { value: 'etc',      label: '기타',        Icon: Layers },
 ];
 
 const COLOR_OPTIONS: { value: OpsNoteColor; label: string; swatch: string }[] = [
-  { value: 'yellow', label: '노랑', swatch: 'bg-status-warning' },
-  { value: 'green',  label: '초록', swatch: 'bg-status-healthy' },
-  { value: 'blue',   label: '파랑', swatch: 'bg-status-info' },
-  { value: 'pink',   label: '분홍', swatch: 'bg-pink-300' },
-  { value: 'purple', label: '보라', swatch: 'bg-purple-300' },
+  { value: 'yellow', label: '노랑', swatch: 'bg-chart-3' },
+  { value: 'green',  label: '초록', swatch: 'bg-chart-2' },
+  { value: 'blue',   label: '파랑', swatch: 'bg-chart-1' },
+  { value: 'pink',   label: '분홍', swatch: 'bg-chart-5' },
+  { value: 'purple', label: '보라', swatch: 'bg-chart-4' },
 ];
 
 interface OpsNoteFormProps {
@@ -92,7 +92,7 @@ export function OpsNoteForm({ initial, defaultService, onCancel, onSaved }: OpsN
   return (
     <>
       {error && (
-        <div className="mb-4 px-3 py-2 bg-destructive/10 border border-destructive/30 rounded-lg text-sm text-destructive">{error}</div>
+        <div className="mb-4 px-3 py-2 bg-status-critical/10 border border-status-critical/30 rounded-lg text-sm text-status-critical">{error}</div>
       )}
 
       <form onSubmit={handleSubmit} className="space-y-4">
@@ -111,7 +111,7 @@ export function OpsNoteForm({ initial, defaultService, onCancel, onSaved }: OpsN
                     : 'bg-background border-border text-muted-foreground hover:border-primary/50'
                 }`}
               >
-                <span>{s.icon}</span>{s.label}
+                <s.Icon className="w-3.5 h-3.5" aria-hidden />{s.label}
               </button>
             ))}
           </div>
@@ -142,8 +142,8 @@ export function OpsNoteForm({ initial, defaultService, onCancel, onSaved }: OpsN
                   key={c.value}
                   type="button"
                   onClick={() => setColor(c.value)}
-                  className={`w-7 h-7 rounded-full border-2 transition-all ${c.swatch} ${
-                    color === c.value ? 'border-foreground scale-110 shadow' : 'border-transparent hover:scale-105'
+                  className={`w-7 h-7 rounded-full border-2 transition-colors ${c.swatch} ${
+                    color === c.value ? 'border-foreground' : 'border-transparent hover:border-border'
                   }`}
                   title={c.label}
                   aria-label={`색상 ${c.label}`}
@@ -166,7 +166,7 @@ export function OpsNoteForm({ initial, defaultService, onCancel, onSaved }: OpsN
         {/* 답변 */}
         <div>
           <label htmlFor={f('front')} className={labelCls}>
-            <span className="text-status-healthy font-bold mr-1">A.</span>답변 / 핵심 요약
+            <span className="text-foreground font-bold mr-1">A.</span>답변 / 핵심 요약
           </label>
           <div id={f('front')}>
             <RichTextEditor

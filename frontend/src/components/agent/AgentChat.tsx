@@ -10,6 +10,7 @@ import { useAgentChatStore } from '@/stores/agentChatStore';
 import { NAV_WIDTH } from '@/stores/sidebarStore';
 import { useFeatureAccess, canAccessFeature } from '@/hooks/useFeatureAccess';
 import { CitationList } from '@/components/common/CitationList';
+import { EmptyState } from '@/components/common/EmptyState';
 import { InfoRequestChips } from '@/components/agent/InfoRequestChips';
 import type { AgentInfoRequest, RagCitation } from '@/types';
 import { generateUUID } from '@/lib/utils';
@@ -317,7 +318,7 @@ export function AgentChat() {
       {isOpen && (
         <div
           style={{ left: NAV_WIDTH + 12 }}
-          className="fixed bottom-4 z-50 w-[420px] h-[560px] bg-card border border-border rounded-2xl shadow-2xl flex flex-col overflow-hidden"
+          className="fixed bottom-4 z-50 w-[420px] h-[560px] bg-card border border-border rounded-md shadow-2xl flex flex-col overflow-hidden"
         >
           {/* Header */}
           <div className="px-4 py-3 border-b border-border flex items-center justify-between bg-card">
@@ -325,7 +326,7 @@ export function AgentChat() {
               <Bot className="w-5 h-5 text-primary" />
               <span className="font-semibold text-sm">AI 어시스턴트</span>
               {isOnline === true && (
-                <span className="w-2 h-2 rounded-full bg-status-healthy" title="온라인" />
+                <span className="w-2 h-2 rounded-full bg-muted-foreground/40" title="온라인" />
               )}
               {isOnline === false && (
                 <span className="flex items-center gap-1 text-sm text-status-warning">
@@ -365,7 +366,7 @@ export function AgentChat() {
           {drawerOpen && (
             <div className="border-b border-border max-h-48 overflow-y-auto bg-secondary/30">
               {conversations.length === 0 ? (
-                <p className="px-4 py-3 text-xs text-muted-foreground">저장된 대화가 없습니다.</p>
+                <EmptyState compact icon={History} title="저장된 대화가 없습니다." description="질문을 보내면 대화가 자동으로 저장됩니다." />
               ) : (
                 conversations.map((c) => (
                   <div key={c.id} className="px-3 py-1.5 flex items-center gap-2 hover:bg-secondary/60">
@@ -393,16 +394,15 @@ export function AgentChat() {
           {/* Messages */}
           <div className="flex-1 overflow-y-auto px-4 py-3 space-y-3">
             {messages.length === 0 && (
-              <div className="text-center text-muted-foreground text-sm py-12">
-                <Bot className="w-10 h-10 mx-auto mb-3 opacity-30" />
-                <p>클러스터 운영에 대해 무엇이든 물어보세요.</p>
-                <p className="text-sm mt-1 opacity-70">
-                  예: &quot;파드가 CrashLoop 인 이유가 뭐야?&quot;
-                </p>
-                <p className="text-xs mt-2 opacity-60">
+              <EmptyState
+                icon={Bot}
+                title="클러스터 운영에 대해 무엇이든 물어보세요."
+                description='예: "파드가 CrashLoop 인 이유가 뭐야?"'
+              >
+                <p className="text-xs mt-2 text-muted-foreground">
                   답변에는 사내 문서 근거가 인용되며, AI 는 분석·조언만 하고 아무것도 직접 실행하지 않습니다.
                 </p>
-              </div>
+              </EmptyState>
             )}
 
             {messages.map((msg) => (

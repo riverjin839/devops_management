@@ -38,27 +38,13 @@ const DEFAULT_DURATION: Record<ToastVariant, number> = {
   error:   7000,
 };
 
-const VARIANT_META: Record<ToastVariant, { cls: string; icon: typeof CheckCircle2; bar: string }> = {
-  success: {
-    cls: 'border-[hsl(var(--status-healthy))] bg-[hsl(var(--status-healthy-bg))] text-[hsl(var(--status-healthy))]',
-    icon: CheckCircle2,
-    bar: 'bg-[hsl(var(--status-healthy))]',
-  },
-  error: {
-    cls: 'border-[hsl(var(--status-critical))] bg-[hsl(var(--status-critical-bg))] text-[hsl(var(--status-critical))]',
-    icon: AlertCircle,
-    bar: 'bg-[hsl(var(--status-critical))]',
-  },
-  warning: {
-    cls: 'border-[hsl(var(--status-warning))] bg-[hsl(var(--status-warning-bg))] text-[hsl(var(--status-warning))]',
-    icon: AlertTriangle,
-    bar: 'bg-[hsl(var(--status-warning))]',
-  },
-  info: {
-    cls: 'border-[hsl(var(--status-info))] bg-[hsl(var(--status-info-bg))] text-[hsl(var(--status-info))]',
-    icon: Info,
-    bar: 'bg-[hsl(var(--status-info))]',
-  },
+// D-119/D-132: 카드 면은 중립(bg-card + border-border), 상태 신호는 아이콘 색 하나.
+// 성공 아이콘의 녹색은 "방금 한 행동의 결과"(예외 ①)라 유지한다.
+const VARIANT_META: Record<ToastVariant, { iconCls: string; icon: typeof CheckCircle2 }> = {
+  success: { iconCls: 'text-status-healthy', icon: CheckCircle2 },
+  error: { iconCls: 'text-status-critical', icon: AlertCircle },
+  warning: { iconCls: 'text-status-warning', icon: AlertTriangle },
+  info: { iconCls: 'text-status-info', icon: Info },
 };
 
 const MAX_STACK = 5;
@@ -177,11 +163,11 @@ function ToastCard({ toast, onDismiss }: { toast: Toast; onDismiss: (id: string)
   const Icon = meta.icon;
   return (
     <div
-      className={`toast-enter pointer-events-auto w-[360px] max-w-[calc(100vw-2rem)] shadow-lg rounded-xl border overflow-hidden bg-card ${meta.cls}`}
+      className={`toast-enter pointer-events-auto w-[360px] max-w-[calc(100vw-2rem)] shadow-lg rounded-md border border-border overflow-hidden bg-card`}
       role="status"
     >
       <div className="flex items-start gap-2 px-3 py-2.5">
-        <Icon className="w-4 h-4 mt-0.5 flex-shrink-0" />
+        <Icon className={`w-4 h-4 mt-0.5 flex-shrink-0 ${meta.iconCls}`} />
         <div className="flex-1 min-w-0">
           <p className="text-sm font-semibold text-foreground leading-snug">{toast.title}</p>
           {toast.description && (

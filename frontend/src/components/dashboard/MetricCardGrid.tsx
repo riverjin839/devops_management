@@ -113,7 +113,7 @@ export function MetricCardGrid({ cards, results, isLoading, onDeleteCard, onEdit
     return (
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
         {[...Array(4)].map((_, i) => (
-          <div key={i} className="bg-card border border-border rounded-xl p-5 h-48 animate-pulse" />
+          <div key={i} className="bg-card border border-border rounded-md p-5 h-48 animate-pulse" />
         ))}
       </div>
     );

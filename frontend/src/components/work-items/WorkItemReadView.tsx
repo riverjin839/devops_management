@@ -1,4 +1,4 @@
-import { ImagePlus, ExternalLink, Pencil } from 'lucide-react';
+import { ImagePlus, ExternalLink, Pencil, Users, User } from 'lucide-react';
 import { WorkItem } from '@/types';
 import { stripHtml } from '@/lib/utils';
 import { loadWorkItemImages } from '@/lib/workItemImages';
@@ -66,10 +66,9 @@ export function WorkItemReadView({ item, onEdit }: WorkItemReadViewProps) {
       <div className="flex items-center gap-x-2 gap-y-1 flex-wrap text-xs">
         <span className={`flex items-center gap-1 font-medium px-2 py-0.5 rounded-full border ${
           isCompleted
-            ? 'bg-status-healthy/10 text-status-healthy border-status-healthy/30'
+            ? 'bg-secondary text-muted-foreground border-border'
             : 'bg-status-warning/10 text-status-warning border-status-warning/30'
         }`}>
-          <span className={`w-1.5 h-1.5 rounded-full ${isCompleted ? 'bg-status-healthy' : 'bg-status-warning'}`} />
           {kanbanLabel}
         </span>
         <span className={`flex items-center gap-1 font-medium ${pStyle.text}`}>
@@ -86,12 +85,12 @@ export function WorkItemReadView({ item, onEdit }: WorkItemReadViewProps) {
           <span className={`px-2 py-0.5 rounded-full ${typeCfg.cls}`}>{typeCfg.label}</span>
         )}
         {item.allAttendees && (
-          <span className="px-2 py-0.5 rounded-full bg-indigo-500/10 text-indigo-500 border border-indigo-500/30 font-medium">
-            👥 공통업무
+          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-chart-4/10 text-chart-4 border border-chart-4/30 font-medium">
+            <Users className="w-3 h-3" aria-hidden />공통업무
           </span>
         )}
         <span className="inline-flex items-center gap-x-2 flex-wrap text-muted-foreground">
-          {item.assignee && <span>👤 {item.assignee}</span>}
+          {item.assignee && <span className="inline-flex items-center gap-1"><User className="w-3 h-3" aria-hidden />{item.assignee}</span>}
           {(item.clusterNames?.length ? item.clusterNames.join(', ') : item.clusterName) && (
             <span>· {item.clusterNames?.length ? item.clusterNames.join(', ') : item.clusterName}</span>
           )}
@@ -146,8 +145,8 @@ export function WorkItemReadView({ item, onEdit }: WorkItemReadViewProps) {
       {item.doneCondition && (
         <div>
           <p className="text-sm font-medium text-muted-foreground mb-1">완료 조건</p>
-          <p className="text-sm text-foreground/80 bg-status-healthy/5 border border-status-healthy/20 rounded-lg px-3 py-2">
-            ✓ {item.doneCondition}
+          <p className="text-sm text-foreground/80 bg-secondary/50 border border-border rounded-lg px-3 py-2">
+            {item.doneCondition}
           </p>
         </div>
       )}

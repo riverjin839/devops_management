@@ -1,11 +1,11 @@
 import { Plus, Search, FileCode, Boxes, Terminal } from 'lucide-react';
 import type { ExecutableScript, ScriptKind } from '@/types';
-import { EmptyState } from '@/components/common';
+import { EmptyState, LoadingState } from '@/components/common';
 
 const KIND_META: Record<ScriptKind, { label: string; icon: typeof FileCode; cls: string }> = {
-  python: { label: 'Python', icon: FileCode, cls: 'text-status-healthy border-status-healthy/40 bg-status-healthy-soft' },
-  ansible_playbook: { label: 'Ansible', icon: Boxes, cls: 'text-status-warning border-status-warning/40 bg-status-warning-soft' },
-  shell: { label: 'Shell', icon: Terminal, cls: 'text-status-info border-status-info/40 bg-status-info-soft' },
+  python: { label: 'Python', icon: FileCode, cls: 'text-chart-2 border-chart-2/40 bg-chart-2/10' },
+  ansible_playbook: { label: 'Ansible', icon: Boxes, cls: 'text-chart-3 border-chart-3/40 bg-chart-3/10' },
+  shell: { label: 'Shell', icon: Terminal, cls: 'text-chart-1 border-chart-1/40 bg-chart-1/10' },
 };
 
 const KIND_FILTERS: { value: ScriptKind | null; label: string }[] = [
@@ -77,7 +77,7 @@ export function ScriptListPanel({
 
       <div className="flex-1 min-h-0 overflow-y-auto">
         {isLoading ? (
-          <div className="p-3 text-xs text-muted-foreground">불러오는 중…</div>
+          <LoadingState compact />
         ) : scripts.length === 0 ? (
           <EmptyState
             compact
