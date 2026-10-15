@@ -727,6 +727,10 @@ runLog.begin('K8s 동기화', '요청 전송'); … runLog.log('info', '생성 3
   동기(blocking) 작업은 실행 함수를 `emit` 콜백형으로 짜서 동기 엔드포인트와 SSE 엔드포인트가 같은 코드를 쓰게 하고,
   SSE 쪽은 작업 스레드 + 큐로 흘린다(`infra_nodes.py` `_stream_job` — 15초 무이벤트 시 `: ping` 주석). 딥체커 단계를
   실시간으로 받으려면 `run_check_type_once(..., on_step=cb)` 를 쓴다(체커 `_step` 진입·종료마다 호출).
+  **공용 모듈 `backend/app/services/sse.py`(D-135)**: `SSE_HEADERS`·`sse_line`·`log_evt`·`step_evt`·`stream_async_job(job)` —
+  새 SSE 엔드포인트는 헤더·직렬화·ping·세션·종료 이벤트를 손으로 다시 짜지 않는다. `stream_async_job` 의 `emit` 은 스레드 안전하고
+  결과·오류까지 같은 경로로 넣어 **마지막 이벤트가 항상 `result`/`error`** 다. 기존 동기 엔드포인트를 그대로 재사용하는 패턴은
+  `routers/versions.py` 수집(`_collect_emit` ContextVar 에 emit 을 꽂고 같은 함수를 호출 → 응답 본문이 동기와 동일).
 - **헬퍼(D-128, `hooks/useRunLog.ts`)** — 손 배선 대신 이것을 쓴다.
   - `runLogged(runLog, { title, first?, fn, summarize?, heartbeatMs=5000, keepOpen? })`: 동기 1응답 요청을 감싼다.
     begin → 응답을 기다리는 동안 5초마다 "응답 대기 중 · N초 경과" → "응답 수신 · 소요" → `summarize(res)` 가 돌려준
@@ -736,10 +740,23 @@ runLog.begin('K8s 동기화', '요청 전송'); … runLog.log('info', '생성 3
     실행(응답이 `task_id` 뿐인 것)의 진행을 도메인 리소스 폴링으로 이어 쓴다. `describe(snap, prev)` 는 **새로 생긴 변화만**
     줄로 돌려준다. 조회 실패는 warn 한 줄 후 계속, 시간 초과는 "백그라운드에서 계속 진행될 수 있음" warn. 끝나면 end.
     큐잉 응답 직후 이어 쓰려면 `runLogged(…, { keepOpen: true })` 다음에 호출한다. 언마운트 시 `signal` 을 abort 한다.
+  - `streamLogged<T>(runLog, { title, first?, url, body, signal?, headers?, summarize? })`(D-135): SSE 실행을 감싼다.
+    서버 `log`·`step` 을 그대로 쌓고 `result` 를 camelCase 로 돌려준다. 본문은 camelCase 로 넘기면 snake_case 로 바꿔 보낸다.
+  - `consoleRunLines(res | res[], label?)`(D-135): 콘솔형 실행(stdout/stderr) 응답 → "host · status · exit · ms · 오류 — stderr 첫 줄"
+    + 여러 대면 합계 줄. 출력 본문은 ExecOutputTabs/LogViewer 가 그대로 보여주고, 실행 로그에는 요약만 남긴다.
   - `elapsed(t0)`: 소요 표기("1234ms"/"12.3s") 공용.
-  - 적용 레퍼런스: versions 수집 모달 5종(`runLogged`, 호스트별 줄), `/cluster-overview` 점검 실행(클러스터·애드온별 줄 —
+  - 적용 레퍼런스: versions 수집 모달 5종(`streamLogged` — 호스트가 끝날 때마다 줄, `…/collect-*/stream`), `/cluster-overview` 점검 실행(클러스터·애드온별 줄 —
     `POST /health/check/{id}` 응답 `addons[]`), `/daily-check/review` 심층 점검·배치잡 일괄 실행·지금 스냅샷(`pollIntoRunLog`).
 - 모달이 페이지의 실행 로그 패널을 가리는 실행(예: 노드 검증)은 모달 안에도 같은 `RunLogPanel` 을 렌더한다.
+  실행 직후 닫히는 모달(자격증명 입력 등)은 **페이지** 실행 로그에 기록한다.
+- **적용 범위(D-135)** — 필수: 클러스터·노드·외부 시스템에 명령을 보내거나 수 초 이상 걸리는 실행·수집·점검·배포·적용·복구·분석·
+  내보내기 버튼(단건 ▶·일괄·"테스트 실행"·"미리 실행" 포함). **예외**(실행 로그 대신 인라인 결과로 충분): ① 설정 폼의 즉시 응답
+  "연결 테스트"(LLM·PromQL·알림 채널·Isilon 서버·노드 SSH 접속) — 단 실패 사유는 인라인으로 반드시 보인다 ② 실행 이력을 자체 진행
+  패널로 이미 보여주는 도메인 패널(`EfficiencyRunLog`·`ProvisionConsole`·`CheckMatrixRunLogPanel`·`ClusterOpsCheckPanel` 진행 카드)
+  ③ 라이브 스트림 뷰(Cilium Monitor/Hubble, K8s 이벤트·파드 로그). Jira·Confluence·ServiceNow 연동 작업은 D-136 에서 정한다.
+- **새 실행 버튼 체크리스트**: ① `useRunLog` + `useLogPref('<화면키>')` + `RunLogPanel` ② 동기=`runLogged`·SSE=`streamLogged`·큐잉=
+  `pollIntoRunLog` ③ 대상(호스트·클러스터·항목)별 한 줄 + 합계 줄 ④ 실패 사유가 error 줄로 남는가(훅에 `onError` 가 없어도)
+  ⑤ 자격증명·비밀값을 로그에 싣지 않는가 ⑥ 기존 결과 뷰(표·출력·타임라인)는 그대로인가.
 - 패널은 실행 전에는 렌더되지 않고(null), 로그를 접어 두면 마지막 한 줄만 보인다. 레퍼런스:
   `/pod-bottleneck`(SSE), `/infra-topology`(동기화·검증 SSE, Trace 응답 단위), `/service-topology`(실트래픽).
 

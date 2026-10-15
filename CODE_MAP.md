@@ -23,6 +23,7 @@ AI 어시스턴트 + 사람 개발자용 — 기능 → 파일 경로와 자주 
 | **K8s 목록 성능 헬퍼** | `backend/app/services/k8s_raw.py`(`raw_call` — `_preload_content=False` 로 받아 `K8sObj` 로 typed 모델처럼 읽기, 역직렬화 생략) · `services/swr_cache.py`(`SWRCache` — fresh/stale SWR + single-flight + Redis 세대 무효화 `bump(group)`) · `services/k8s_list_cache.py`(`list_cache` 인스턴스 — 그룹 키는 apiserver host, 풀 클라이언트 쓰기 시 `note_write` 자동 무효화, 풀 우회 쓰기용 `invalidate_kubeconfig(path)`) | — |
 | 자동 업데이트 (k8s API) | `POST /clusters/{id}/auto-update` (clusters.py) | `clustersApi.autoUpdate` in `api.ts` |
 | 버전/설정 스냅샷 수집 + 히스토리 | `backend/app/routers/versions.py` · model: `backend/app/models/config_snapshot.py` | `frontend/src/pages/VersionsPage.tsx` |
+| SSH 수집 실시간 스트림 (D-135) | `POST /clusters/{id}/collect-{etcd-systemd,kernel-params,kubelet-config,kubeadm-certs,node-nics}/stream` in `versions.py`(`_collect_emit` ContextVar — 동기 엔드포인트와 같은 함수) · SSE 공용 `backend/app/services/sse.py`(`stream_async_job`) | `components/versions/*Modal.tsx` → `streamLogged` + `versionsCollectStreamUrl` |
 | 컴포넌트 관계 3D 그래프 | `GET /clusters/{id}/versions/graph` | `frontend/src/pages/VersionGraphPage.tsx` |
 | 노드 일괄 SSH/SCP 실행 | `backend/app/routers/bulk_exec.py` + `backend/app/services/ssh_runner.py` (paramiko) + `services/script_wrap.py`(python 스크립트 → heredoc 래핑) | `frontend/src/pages/BulkExecPage.tsx` |
 | 클러스터 노드 목록 조회 (선택용) | `GET /clusters/{id}/node-list` in `bulk_exec.py` | `bulkExecApi.nodeList` |
