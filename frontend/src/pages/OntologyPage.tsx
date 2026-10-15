@@ -4,8 +4,10 @@ import * as THREE from 'three';
 import { AlertTriangle, Filter, Info, Loader2, RefreshCw, Search, Share2, X, Zap } from 'lucide-react';
 import { useClusters } from '@/hooks/useCluster';
 import { useOntologyGraph, useAnalyzeImpact } from '@/hooks/useOntology';
-import type { OntologyEntityType } from '@/types';
-import { PageHeader, LoadingState, EmptyState } from '@/components/common';
+import type { OntologyEntityType, OntologyImpactResponse } from '@/types';
+import { PageHeader, LoadingState, EmptyState, RunLogPanel } from '@/components/common';
+import { useRunLog, runLogged, type RunLogEntry } from '@/hooks/useRunLog';
+import { useLogPref } from '@/hooks/useLogPref';
 
 // ── 엔티티 타입별 색상 ─────────────────────────────────────────────────────────
 const ENTITY_COLOR: Record<OntologyEntityType, string> = {
@@ -35,6 +37,27 @@ const ENTITY_LABEL: Record<OntologyEntityType, string> = {
 };
 
 const ALL_TYPES = Object.keys(ENTITY_COLOR) as OntologyEntityType[];
+
+const IMPACT_MAX_DEPTH = 4;
+const LOG_ITEM_CAP = 200;
+
+/** 영향 분석 응답 → 실행 로그 줄(영향 엔티티·경로는 한 건당 한 줄, 200건 초과분은 "외 N건"). */
+function impactLines(r: OntologyImpactResponse): RunLogEntry[] {
+  const out: RunLogEntry[] = [[
+    'info',
+    `분석 완료 — Blast Radius ${(r.blastRadiusScore * 100).toFixed(0)}% · 영향 엔티티 ${r.impactedEntities.length} · 영향 경로 ${r.impactPaths.length} · 최대 깊이 ${IMPACT_MAX_DEPTH} · 이벤트 ${r.eventId.slice(0, 8)}`,
+  ]];
+  if (r.impactedEntities.length === 0) out.push(['info', '영향 받는 엔티티 없음']);
+  for (const e of r.impactedEntities.slice(0, LOG_ITEM_CAP)) {
+    out.push(['info', `영향 엔티티 — ${e.name} (${ENTITY_LABEL[e.entityType] ?? e.entityType})`]);
+  }
+  if (r.impactedEntities.length > LOG_ITEM_CAP) out.push(['info', `영향 엔티티 외 ${r.impactedEntities.length - LOG_ITEM_CAP}건`]);
+  r.impactPaths.slice(0, LOG_ITEM_CAP).forEach((p, i) => {
+    out.push(['info', `경로 ${i + 1} · ${(p.score * 100).toFixed(0)}% · 깊이 ${Math.max(p.pathNames.length - 1, 0)} — ${p.pathNames.join(' → ')}`]);
+  });
+  if (r.impactPaths.length > LOG_ITEM_CAP) out.push(['info', `경로 외 ${r.impactPaths.length - LOG_ITEM_CAP}건`]);
+  return out;
+}
 
 // ── 그래프 노드/링크 타입 ──────────────────────────────────────────────────────
 interface GNode extends NodeObject {
@@ -203,7 +226,9 @@ export function OntologyPage() {
   const [showLegend, setShowLegend] = useState(true);
 
   const { data: graph, isLoading, refetch } = useOntologyGraph(clusterId || null);
-  const { mutate: analyzeImpact, isPending: analyzing } = useAnalyzeImpact();
+  const { mutateAsync: analyzeImpact, isPending: analyzing } = useAnalyzeImpact();
+  const runLog = useRunLog();
+  const [showLog, setShowLog] = useLogPref('ontology-impact');
 
   // 컨테이너 크기 추적
   useEffect(() => {
@@ -283,19 +308,26 @@ export function OntologyPage() {
     }
   }, []);
 
-  const handleAnalyzeImpact = useCallback((entityId: string) => {
+  const handleAnalyzeImpact = useCallback(async (entityId: string) => {
     if (!clusterId) return;
-    analyzeImpact({
-      clusterId,
-      configEntityId: entityId,
-      category: 'config_change',
-      severity: 'warning',
-      title: `${selectedNode?.name ?? entityId} 변경 영향 분석`,
-      maxDepth: 4,
-    }, {
-      onSuccess: (data) => setImpactResult(data),
+    const name = selectedNode?.name ?? entityId;
+    const typeLabel = selectedNode ? (ENTITY_LABEL[selectedNode.entityType] ?? selectedNode.entityType) : '';
+    const clusterName = clusters.find((c) => c.id === clusterId)?.name ?? clusterId;
+    const r = await runLogged(runLog, {
+      title: '변경 영향 분석',
+      first: `${clusterName} · ${name}${typeLabel ? ` (${typeLabel})` : ''} — 변경 영향 분석 요청(최대 깊이 ${IMPACT_MAX_DEPTH})`,
+      fn: () => analyzeImpact({
+        clusterId,
+        configEntityId: entityId,
+        category: 'config_change',
+        severity: 'warning',
+        title: `${name} 변경 영향 분석`,
+        maxDepth: IMPACT_MAX_DEPTH,
+      }),
+      summarize: impactLines,
     });
-  }, [clusterId, selectedNode, analyzeImpact]);
+    if (r.ok) setImpactResult(r.data);
+  }, [clusterId, clusters, selectedNode, analyzeImpact, runLog]);
 
   const toggleType = (t: OntologyEntityType) => {
     setActiveTypes((prev) => {
@@ -424,6 +456,13 @@ export function OntologyPage() {
         })}
       </div>
 
+      {/* 영향 분석 실행 로그 — 캔버스를 가리지 않도록 툴바 아래 고정 영역 */}
+      {(runLog.running || runLog.lines.length > 0) && (
+        <div className="px-4 py-2 bg-card border-b border-border/60 flex-shrink-0">
+          <RunLogPanel run={runLog} show={showLog} onShowChange={setShowLog} maxHeight="max-h-40" />
+        </div>
+      )}
+
       {/* 3D 그래프 영역 */}
       <div ref={containerRef} className="flex-1 relative overflow-hidden">
         {isLoading && (
@@ -507,7 +546,7 @@ export function OntologyPage() {
           <NodeDetailPanel
             node={selectedNode}
             onClose={() => { setSelectedNode(null); setImpactResult(null); }}
-            onAnalyzeImpact={handleAnalyzeImpact}
+            onAnalyzeImpact={(id) => { void handleAnalyzeImpact(id); }}
           />
         )}
 
