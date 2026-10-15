@@ -7,7 +7,9 @@ import {
   useProvisionDefaults, useProvision, useJiraIssueLookup, useConfluencePageInfo, useConfluenceChildren,
 } from '@/hooks/useJira';
 import { useModalA11y } from '@/components/common/useModalA11y';
-import { useToast } from '@/components/common';
+import { useToast, RunLogPanel } from '@/components/common';
+import { useRunLog, runLogged, type RunLog, type RunLogEntry } from '@/hooks/useRunLog';
+import { useLogPref } from '@/hooks/useLogPref';
 import { JiraConnectCard } from '@/components/settings/JiraConnectCard';
 import { formatApiError } from '@/lib/utils';
 import type { ConfluenceChildPage, JiraIssueLookupItem, ProvisionResult, WorkItem } from '@/types';
@@ -119,6 +121,58 @@ function ChildPagePicker({
   );
 }
 
+/** 생성 응답 → 실행 로그 줄 + 단계 칩(jira·confluence: 완료/실패/건너뜀).
+ *  요청하지 않은 쪽, 이미 연결돼 있어 서버가 건너뛴 쪽(`linked`)은 건너뜀으로 남긴다. */
+function provisionLogLines(
+  run: Pick<RunLog, 'setStep'>,
+  res: ProvisionResult,
+  requested: { jira: boolean; confluence: boolean },
+  linked: { jira: boolean; confluence: boolean },
+): RunLogEntry[] {
+  const out: RunLogEntry[] = [];
+  if (requested.jira && linked.jira && res.jiraKey) {
+    run.setStep('jira', 'Jira 이슈 · 건너뜀', 'done');
+    out.push(['info', `Jira 이슈 · 건너뜀 — ${res.jiraDetail || `이미 ${res.jiraKey} 연결됨`}`]);
+  } else if (requested.jira) {
+    if (res.jiraKey) {
+      run.setStep('jira', 'Jira 이슈', 'done');
+      out.push(['info', `Jira 이슈 ${res.jiraKey} 생성 완료`]);
+      if (res.jiraUrl) out.push(['info', `Jira URL ${res.jiraUrl}`]);
+      // 이슈는 만들어졌지만 Epic 연결 등 일부가 실패한 경우 jiraDetail 이 채워진다.
+      if (res.jiraDetail) out.push(['warn', `Jira 일부 실패 — ${res.jiraDetail}`]);
+    } else {
+      run.setStep('jira', 'Jira 이슈', 'failed');
+      out.push(['error', `Jira 이슈 생성 실패 — ${res.jiraDetail || res.detail || '사유 없음'}`]);
+    }
+    if (res.jiraAuthIssue) out.push(['warn', 'Jira 인증(토큰/세션) 문제로 보임 — 연결 설정을 고친 뒤 다시 시도']);
+  } else {
+    run.setStep('jira', 'Jira 이슈 · 건너뜀', 'done');
+    out.push(['info', 'Jira 이슈 · 건너뜀(선택 안 함)']);
+  }
+  if (requested.confluence && linked.confluence && (res.confluenceUrl || res.confluencePageId)) {
+    run.setStep('confluence', 'Confluence 문서 · 건너뜀', 'done');
+    out.push(['info', `Confluence 문서 · 건너뜀 — ${res.confluenceDetail || '이미 연결된 문서 있음'}`]);
+  } else if (requested.confluence) {
+    if (res.confluenceUrl || res.confluencePageId) {
+      run.setStep('confluence', 'Confluence 문서', 'done');
+      out.push(['info', `Confluence 문서 생성 완료${res.confluencePageId ? ` · 페이지 ${res.confluencePageId}` : ''}`]);
+      if (res.confluenceUrl) out.push(['info', `Confluence URL ${res.confluenceUrl}`]);
+      if (res.confluenceDetail) out.push(['warn', `Confluence 일부 실패 — ${res.confluenceDetail}`]);
+    } else {
+      run.setStep('confluence', 'Confluence 문서', 'failed');
+      out.push(['error', `Confluence 문서 생성 실패 — ${res.confluenceDetail || res.detail || '사유 없음'}`]);
+    }
+    if (res.confluenceAuthIssue) out.push(['warn', 'Confluence 인증(세션) 문제로 보임 — 세션 쿠키를 다시 등록한 뒤 다시 시도']);
+  } else {
+    run.setStep('confluence', 'Confluence 문서 · 건너뜀', 'done');
+    out.push(['info', 'Confluence 문서 · 건너뜀(선택 안 함)']);
+  }
+  if (res.status === 'ok') out.push(['info', `완료 — ${res.detail}`]);
+  else if (res.status === 'partial') out.push(['warn', `일부만 생성 — ${res.detail}`]);
+  else out.push(['error', `실패(${res.status}) — ${res.detail || '사유 없음'}`]);
+  return out;
+}
+
 interface JiraProvisionModalProps {
   open: boolean;
   onClose: () => void;
@@ -173,6 +227,13 @@ export function JiraProvisionModal({ open, onClose, item }: JiraProvisionModalPr
   const [contributor, setContributor] = useState('');
   const [rememberPreset, setRememberPreset] = useState(true);
   const [result, setResult] = useState<ProvisionResult | null>(null);
+  // 생성 실행 로그 — 요청·2분 대기 하트비트·Jira/Confluence 단계 결과·인증 경고(D-136).
+  const runLog = useRunLog();
+  const [showLog, setShowLog] = useLogPref('jira-provision');
+  const clearLog = runLog.clear;
+  useEffect(() => {
+    if (open) clearLog();
+  }, [open, clearLog]);
 
   // 상위 페이지 ID 입력이 멈춘 뒤(디바운스) 제목을 조회 — mouseover 시 title 속성으로
   // 보여줄 값을 준비한다. ID 를 지우면 즉시 초기화.
@@ -267,27 +328,45 @@ export function JiraProvisionModal({ open, onClose, item }: JiraProvisionModalPr
       toast.error('입력 필요', '프로젝트 키는 필수 입력입니다.');
       return;
     }
-    try {
-      const { data } = await provision.mutateAsync({
-        workItemId: item.id,
-        createJira, createConfluence,
-        projectKey: projectKey.trim() || undefined,
-        issueType, priority: priority.trim() || undefined,
-        labels: csv(labels), components: csv(components),
-        summary: summary.trim() || undefined,
-        description: description || undefined,
-        epicKey: issueType === 'Task' ? (epicKey.trim() || undefined) : undefined,
-        parentKey: issueType === 'Sub-task' ? (parentKey.trim() || undefined) : undefined,
-        epicName: issueType === 'Epic' ? (epicName.trim() || summary.trim() || undefined) : undefined,
-        assigneeUsername: assigneeUsername || undefined,
-        spaceKey: spaceKey.trim() || undefined,
-        pageId: pageId.trim() || undefined,
-        parentPageId: parentPageId.trim() || undefined,
-        pageTitle: pageTitle.trim() || undefined,
-        confluenceLabels: csv(confluenceLabels),
-        contributor: contributor.trim() || undefined,
-        rememberPreset,
-      });
+    const requested = { jira: createJira, confluence: createConfluence };
+    const linked = { jira: Boolean(item.jiraIssueKey), confluence: Boolean(item.confluencePageId) };
+    const targets = [
+      createJira ? `Jira ${item.jiraIssueKey ? `(${item.jiraIssueKey} 연결됨)` : `${projectKey.trim()} · ${issueType}`}` : null,
+      createConfluence ? `Confluence ${spaceKey.trim() || '기본 스페이스'}` : null,
+    ].filter(Boolean).join(' / ');
+    const r = await runLogged(runLog, {
+      title: 'Jira · Confluence 생성',
+      first: `${item.title || item.content} — ${targets} 생성 요청`,
+      fn: async () => {
+        runLog.setStep('jira', requested.jira ? 'Jira 이슈' : 'Jira 이슈 · 건너뜀', requested.jira ? 'running' : 'done');
+        runLog.setStep('confluence', requested.confluence ? 'Confluence 문서' : 'Confluence 문서 · 건너뜀',
+          requested.confluence ? 'running' : 'done');
+        const { data } = await provision.mutateAsync({
+          workItemId: item.id,
+          createJira, createConfluence,
+          projectKey: projectKey.trim() || undefined,
+          issueType, priority: priority.trim() || undefined,
+          labels: csv(labels), components: csv(components),
+          summary: summary.trim() || undefined,
+          description: description || undefined,
+          epicKey: issueType === 'Task' ? (epicKey.trim() || undefined) : undefined,
+          parentKey: issueType === 'Sub-task' ? (parentKey.trim() || undefined) : undefined,
+          epicName: issueType === 'Epic' ? (epicName.trim() || summary.trim() || undefined) : undefined,
+          assigneeUsername: assigneeUsername || undefined,
+          spaceKey: spaceKey.trim() || undefined,
+          pageId: pageId.trim() || undefined,
+          parentPageId: parentPageId.trim() || undefined,
+          pageTitle: pageTitle.trim() || undefined,
+          confluenceLabels: csv(confluenceLabels),
+          contributor: contributor.trim() || undefined,
+          rememberPreset,
+        });
+        return data;
+      },
+      summarize: (res) => provisionLogLines(runLog, res, requested, linked),
+    });
+    if (r.ok) {
+      const data = r.data;
       setResult(data);
       // 성공한 쪽은 체크 해제 — "다시 시도"를 누르면 이 submit() 을 그대로 재사용해도
       // 남은 쪽만 다시 보낸다(서버도 이미 연결된 쪽은 멱등하게 건너뛰지만, 화면에서부터
@@ -297,8 +376,10 @@ export function JiraProvisionModal({ open, onClose, item }: JiraProvisionModalPr
       if (data.status === 'ok') toast.success('생성됨', data.detail);
       else if (data.status === 'partial') toast.error('일부만 생성됨', data.detail);
       else toast.error('생성 실패', data.detail);
-    } catch (err) {
-      toast.error('요청 실패', formatApiError(err));
+    } else if (!r.aborted) {
+      if (requested.jira) runLog.setStep('jira', 'Jira 이슈', 'failed');
+      if (requested.confluence) runLog.setStep('confluence', 'Confluence 문서', 'failed');
+      toast.error('요청 실패', formatApiError(r.error));
     }
   };
 
@@ -690,6 +771,9 @@ export function JiraProvisionModal({ open, onClose, item }: JiraProvisionModalPr
               </div>
             </>
           )}
+
+          {/* 실행 로그 — 생성 요청·대기·Jira/Confluence 단계 결과. "로그 보기" 는 사용자가 정한다. */}
+          <RunLogPanel run={runLog} show={showLog} onShowChange={setShowLog} maxHeight="max-h-56" />
         </div>
       </div>
     </div>

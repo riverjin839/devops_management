@@ -1,7 +1,9 @@
 import { useEffect, useState } from 'react';
-import { Loader2, Ticket, ExternalLink, ScrollText, AlertTriangle } from 'lucide-react';
+import { Loader2, Ticket, ExternalLink, AlertTriangle } from 'lucide-react';
 import { useServiceNowRegister } from '@/hooks/useServiceNow';
-import { useToast, LogViewer } from '@/components/common';
+import { useRunLog, runLogged, type RunLogEntry } from '@/hooks/useRunLog';
+import { useLogPref } from '@/hooks/useLogPref';
+import { useToast, RunLogPanel } from '@/components/common';
 import { formatApiError } from '@/lib/utils';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
@@ -13,45 +15,71 @@ interface ServiceNowRegisterDialogProps {
   item: WorkItem | null;
 }
 
-// 단계별 로그(steps)를 사람이 읽는 텍스트로 변환 — LogViewer 는 텍스트 블롭 하나만 받는다.
-// CLAUDE.md: 모든 "실행" 버튼은 상세 로그 출력 + 로그 보기 옵션을 함께 제공해야 한다.
-function buildRegisterLog(res: ServiceNowRegisterResult): string {
-  return res.steps.map((s) => `[${s.status}] ${s.step} — ${s.message}`).join('\n');
+// 등록 응답 → 실행 로그 줄. 단계(steps)는 한 건당 한 줄(절삭 없음), 이어서 티켓 번호·URL,
+// 인증 문제 경고, 마지막에 결과 요약 줄(로그를 접어 두면 이 줄이 보인다).
+function registerLogLines(res: ServiceNowRegisterResult): RunLogEntry[] {
+  const out: RunLogEntry[] = res.steps.map((s) => [
+    s.status === 'ok' ? 'info' : 'error',
+    `${s.step} · ${s.status === 'ok' ? '완료' : '실패'}${s.message ? ` — ${s.message}` : ''}`,
+  ]);
+  if (res.ticketNumber) out.push(['info', `티켓 번호 ${res.ticketNumber}`]);
+  if (res.ticketUrl) out.push(['info', `티켓 URL ${res.ticketUrl}`]);
+  if (res.authIssue) {
+    out.push(['warn', '인증 문제 — 설정 → 연동(Jira)에서 SSO 자동 로그인 후 다시 시도하세요.']);
+  }
+  out.push(res.status === 'ok'
+    ? ['info', `등록 완료 — ${res.ticketNumber ?? res.detail}`]
+    : ['error', `등록 실패 — ${res.detail || '사유 없음'}`]);
+  return out;
 }
+
+/** 단계 이름을 칩 id 로 — 같은 이름이 반복돼도 칩이 겹치지 않게 순번을 붙인다. */
+const stepId = (i: number, step: string) => `${i}-${step}`;
 
 /**
  * 업무의 ServiceNow ITSM **수동 등록** — Jira 와 이미 연동된 업무만 대상.
  *
- * 등록은 짧은(수 초) 다단계 서버 호출이라 SSH/exec 콘솔이 아니라, 응답에 담긴 단계별
- * 구조화 로그(steps)를 "로그 보기" 토글로 펼쳐 보여주는 패턴을 쓴다
- * (`NodeSpecPage.tsx` 의 Host Facts 수집 버튼과 동일).
+ * 등록은 짧은(수 초) 다단계 서버 호출이라 표준 실행 로그(`RunLogPanel`, DESIGN_SYSTEM.md §12.9.1)로
+ * 요청·대기·응답의 단계별 구조화 로그(steps → 단계 칩 + 줄)·티켓·인증 경고를 보여준다.
+ * 펼침 여부("로그 보기")는 `servicenow-register` 키로 기억한다.
  */
 export function ServiceNowRegisterDialog({ open, onClose, item }: ServiceNowRegisterDialogProps) {
   const toast = useToast();
   const register = useServiceNowRegister();
   const [result, setResult] = useState<ServiceNowRegisterResult | null>(null);
-  const [logOpen, setLogOpen] = useState(false);
+  const runLog = useRunLog();
+  const [showLog, setShowLog] = useLogPref('servicenow-register');
+  const clearLog = runLog.clear;
 
   useEffect(() => {
-    if (open) { setResult(null); setLogOpen(false); }
-  }, [open]);
+    if (open) { setResult(null); clearLog(); }
+  }, [open, clearLog]);
 
   if (!item) return null;
   const busy = register.isPending;
   const alreadyRegistered = Boolean(item.servicenowNumber);
 
   const runRegister = async () => {
-    try {
-      const { data } = await register.mutateAsync(item.id);
-      setResult(data);
-      if (data.status === 'ok') {
-        toast.success('ServiceNow 등록됨', `${data.ticketNumber ?? ''} 생성됨`);
+    setResult(null);
+    const label = item.jiraIssueKey || item.title || item.id;
+    const r = await runLogged(runLog, {
+      title: 'ServiceNow 등록',
+      first: `${label} — ServiceNow ITSM 티켓 ${alreadyRegistered ? '재등록' : '등록'} 요청`,
+      fn: async () => (await register.mutateAsync(item.id)).data,
+      summarize: (res) => {
+        res.steps.forEach((s, i) => runLog.setStep(stepId(i, s.step), s.step, s.status === 'ok' ? 'done' : 'failed'));
+        return registerLogLines(res);
+      },
+    });
+    if (r.ok) {
+      setResult(r.data);
+      if (r.data.status === 'ok') {
+        toast.success('ServiceNow 등록됨', `${r.data.ticketNumber ?? ''} 생성됨`);
       } else {
-        toast.warning('ServiceNow 등록 실패', data.detail || '아래 로그를 확인하세요.');
-        setLogOpen(true);
+        toast.warning('ServiceNow 등록 실패', r.data.detail || '아래 로그를 확인하세요.');
       }
-    } catch (err) {
-      toast.error('ServiceNow 등록 실패', formatApiError(err));
+    } else if (!r.aborted) {
+      toast.error('ServiceNow 등록 실패', formatApiError(r.error));
     }
   };
 
@@ -107,27 +135,8 @@ export function ServiceNowRegisterDialog({ open, onClose, item }: ServiceNowRegi
             </div>
           )}
 
-          {/* 실행 결과 — 요약 + 상세 로그(사용자가 켜고 끄는 "로그 보기"). CLAUDE.md:
-              모든 "실행" 버튼은 상세 로그 출력 + 로그 보기 옵션을 함께 제공해야 한다. */}
-          {result && (
-            <div className="border border-border rounded-lg overflow-hidden">
-              <div className="flex items-center gap-2 px-3 py-2 bg-muted/30">
-                <span className={`text-sm ${result.status === 'ok' ? 'text-status-healthy' : 'text-status-critical'}`}>
-                  {result.status === 'ok' ? `등록 완료 — ${result.ticketNumber}` : `등록 실패 — ${result.detail}`}
-                </span>
-                <button
-                  type="button"
-                  onClick={() => setLogOpen((v) => !v)}
-                  className="ml-auto flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
-                  aria-expanded={logOpen}
-                >
-                  <ScrollText className="w-3.5 h-3.5" />
-                  {logOpen ? '로그 숨기기' : `로그 보기 (${result.steps.length}단계)`}
-                </button>
-              </div>
-              {logOpen && <LogViewer text={buildRegisterLog(result)} maxHeight="max-h-64" />}
-            </div>
-          )}
+          {/* 실행 로그 — 요청·대기·단계(steps)·티켓·인증 경고. "로그 보기" 는 사용자가 정한다. */}
+          <RunLogPanel run={runLog} show={showLog} onShowChange={setShowLog} maxHeight="max-h-64" />
         </div>
 
         <DialogFooter>
