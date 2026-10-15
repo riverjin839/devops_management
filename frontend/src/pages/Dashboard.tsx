@@ -29,7 +29,7 @@ import { useMetricCards, useMetricResults, useDeleteMetricCard } from '@/hooks/u
 import { useClusterItems, useRunClusterItem, useUpdateClusterItem, useDeleteClusterItem } from '@/hooks/useClusterItems';
 import { useWorkItems } from '@/hooks/useWorkItems';
 import { healthApi } from '@/services/api';
-import { Addon, Cluster, ClusterItem, ClusterItemCardSize, MetricCard, Playbook } from '@/types';
+import { Addon, AddonCheckRunResult, Cluster, ClusterItem, ClusterItemCardSize, MetricCard, Playbook } from '@/types';
 import { useAuthStore, hasRole } from '@/stores/authStore';
 
 // ── Cluster Overview Grid (shown when All tab is selected) ─────────────────────
@@ -173,12 +173,11 @@ type PendingDelete =
   | { kind: 'playbook'; playbook: Playbook }
   | null;
 
-// POST /health/check/{cid}/addons/{aid} 응답 — 타입 선언(ApiResponse<void>)보다 실제 본문이 넓어 여기서 좁힌다.
-function addonCheckLines(addon: Addon, body: unknown): RunLogEntry[] {
-  const r = (body && typeof body === 'object' ? body : {}) as { status?: unknown; responseTime?: unknown; log?: unknown };
-  const st = typeof r.status === 'string' ? r.status : 'unknown';
-  const ms = typeof r.responseTime === 'number' ? ` · ${r.responseTime}ms` : '';
-  const msg = typeof r.log === 'string' && r.log ? ` · ${r.log}` : '';
+// POST /health/check/{cid}/addons/{aid} 응답 → 결과 줄.
+function addonCheckLines(addon: Addon, r: AddonCheckRunResult): RunLogEntry[] {
+  const st = r.status || 'unknown';
+  const ms = r.responseTime != null ? ` · ${r.responseTime}ms` : '';
+  const msg = r.log ? ` · ${r.log}` : '';
   return [[ADDON_STATUS_LEVEL[st] ?? 'warn', `${addon.name} · ${ADDON_STATUS_KO[st] ?? st}${ms}${msg}`]];
 }
 

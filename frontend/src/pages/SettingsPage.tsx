@@ -657,8 +657,8 @@ export function SettingsPage() {
 
   const handlePing = async (server: ManagementServer) => {
     setPingingId(server.id);
-    // 응답은 axios 인터셉터가 camelCase 로 바꾼다 — 타입의 latency_ms 는 실제로 latencyMs 로 온다.
-    const latencyOf = (d: { latency_ms?: number | null; latencyMs?: number | null }) => d.latencyMs ?? d.latency_ms ?? null;
+    // 응답은 axios 인터셉터가 camelCase 로 바꾼다(서버 latency_ms → latencyMs).
+    const latencyOf = (d: { latencyMs?: number | null }) => d.latencyMs ?? null;
     const detailOf = (v: unknown) => (typeof v === 'string' ? v : JSON.stringify(v ?? ''));
     try {
       const r = await runLogged(serverRunLog, {

@@ -281,6 +281,16 @@ export interface HealthCheckAddonSummary {
   message: string | null;
   lastCheck: string | null;
 }
+/** POST /health/check/{id}/addons/{addonId} 응답 — 애드온 단건 점검(D-135 실행 로그 원천). */
+export interface AddonCheckRunResult {
+  message: string;
+  clusterId: string;
+  addonId: string;
+  status: string;
+  responseTime: number | null;
+  log: string | null;
+  details: Record<string, unknown>;
+}
 export interface HealthCheckRunResult {
   message: string;
   clusterId: string;

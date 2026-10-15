@@ -763,7 +763,8 @@ hover 시 flyout 자체가 라벨을 보여주므로 이름만 뜨는 중복 툴
 ### 버전 / 설정 관리 (`/versions`)
 
 > **2026-10-14 (D-128)**: 수집 모달 5종(etcd systemd·kubeadm 인증서·커널 파라미터·kubelet 설정·노드 NIC)의 "수집 실행" 이 모달 안 실행 로그를
-> 띄운다 — 요청 줄, 응답 대기 하트비트, 호스트별 상태·exit·저장 여부·오류 줄, 요약(`components/versions/collectRunLog.ts`). 화면 상단 "지금 수집" 은 D-135.
+> 띄운다 — 요청 줄, 응답 대기 하트비트, 호스트별 상태·exit·저장 여부·오류 줄, 요약(`components/versions/collectRunLog.ts`).
+> **2026-10-15 (D-135)**: 수집 모달은 `POST …/collect-*/stream`(SSE)으로 호스트가 끝날 때마다 줄·칩이 실시간으로 찍힌다(`streamLogged`). 화면 상단 "지금 수집"·MinIO 는 자체 수집 로그 카드 대신 표준 실행 로그(`versions-collect`).
 
 - **파일**: `frontend/src/pages/VersionsPage.tsx` (+ `components/versions/EtcdSystemdModal.tsx`, `KubeadmCertsModal.tsx`, `KernelParamsCollectModal.tsx`, `NodeNicsCollectModal.tsx`, `KubeletConfigCollectModal.tsx`, `CsvExportModal.tsx`)
 - **목적 / UX**: kubeconfig(+ SSH)로 클러스터의 K8s/Cilium 버전, 컨트롤플레인·kubelet·CNI·OS(sysctl/etcd systemd/kubeadm 인증서)·MinIO/DirectPV 스토리지 설정을 스냅샷으로 수집하고, 컴포넌트별 현재값·변경 히스토리·diff를 확인한다. 운영자가 "언제 무엇이 바뀌었는지" 추적하는 감사 성격의 화면.
@@ -842,6 +843,8 @@ hover 시 flyout 자체가 라벨을 보여주므로 이름만 뜨는 중복 툴
   - _(여기에 개선/수정 요청을 직접 적어주세요)_
 
 ### 클러스터 관리 (`/cluster-manage`)
+
+> **2026-10-15 (D-135)**: 자체 실행 로그(`appendLog`·LogViewer 카드·수동 SSE 파서)를 표준 실행 로그(`cluster-manage`)로 대체했다. 검증은 `components/cluster-manage/verifyLogged.ts`(`/verify/stream` → 단계 칩, 설정 화면과 공유), 재수집·IP 수집·일괄 수집(클러스터별 칩)·적용은 `runLogged`, 실패 재시도는 패널 버튼.
 
 - **파일**: `frontend/src/pages/ClusterManagePage.tsx` (+ `components/cluster-manage/{CiliumConfigModal,ClusterCard,ClusterTableRow,ClusterUpdateDiffDialog,ClusterCustomFieldsManager,StandardizeClusterNamesModal}`, `components/versions/NodeNicsCollectModal`)
 - **목적 / UX**: 등록된 전체 클러스터를 테이블/카드 뷰로 관리 — 검색/필터/정렬/그룹화(지역·운영레벨), CIDR 겹침 감지, kubeconfig 기반 자동 정보 수집(diff 미리보기 후 적용), 커스텀 컬럼 추가, 드래그 정렬. `/cluster-manage/:id/edit`으로 이동해 상세 메타를 편집한다.
@@ -935,6 +938,8 @@ hover 시 flyout 자체가 라벨을 보여주므로 이름만 뜨는 중복 툴
 ## 서버·인프라 / 네트워크 / 스토리지
 
 ### 노드 서버스펙 관리 대장 (`/node-specs`)
+
+> **2026-10-15 (D-135)**: Host Facts 수집은 자체 결과 LogViewer 대신 표준 실행 로그(호스트별 줄), 클러스터 임포트는 `errors[]` 를 줄별로 남긴다.
 
 - **파일**: `frontend/src/pages/NodeSpecPage.tsx` (+ `components/node-specs/NodeSpecEditModal.tsx`, `NodeSpecCsvUploadModal.tsx`, `NodeSpecPasteModal.tsx`, `columns.tsx`)
 - **목적 / UX**: 물리 서버(호스트명, CPU/RAM/Disk, bond0/bond1 IP, OS/커널, SSD/VM 여부, 랙 위치, 현재 용도)를 자산 대장 형태로 등록·조회한다. kubeconfig 기반 클러스터 임포트, CSV 업로드/붙여넣기(엑셀), SSH Host Facts 수집(bond IP·디스크·SSD 자동판별)으로 대량 입력 부담을 줄이는 것이 핵심 목적.
@@ -1174,6 +1179,8 @@ hover 시 flyout 자체가 라벨을 보여주므로 이름만 뜨는 중복 툴
 ## DevOps — Playbook / Batch Job / 명령어
 
 ### Ansible Playbooks (`/playbooks`)
+
+> **2026-10-15 (D-135)**: 단건 실행(카드·행·자격증명 모달)과 전체 실행(플레이북별 칩, allSettled)이 페이지 실행 로그(`playbooks-run`)에 상태·호스트 통계·실패 태스크를 남긴다(이전엔 실패 무표시).
 
 - **파일**: `frontend/src/pages/PlaybooksPage.tsx` (+ `components/playbooks/PlaybookCard.tsx`, `PlaybookListRow.tsx`, `AddPlaybookModal.tsx`, `RunCredsModal.tsx`, `PlaybookLogDialog.tsx`, 공통 `components/common/ClusterSidebar.tsx`)
 - **목적 / UX**: 클러스터별로 등록된 Ansible playbook을 조회·실행하고 실행 결과(OK/Changed/FAILED)를 확인한다. 운영자가 여러 클러스터에 걸쳐 동일 계열의 점검/조치 playbook을 한 화면에서 일괄(Run All) 또는 개별 실행하고, 결과를 Markdown 리포트로 export 할 수 있다.

@@ -1,5 +1,5 @@
 import axios, { type InternalAxiosRequestConfig } from 'axios';
-import { Cluster, Addon, CheckLog, SummaryStats, ApiResponse, PaginatedResponse, Playbook, PlaybookRunResult, PlaybookSshCreds, AgentChatRequest, AgentChatResponse, AgentHealthResponse, MetricCard, MetricQueryResult, MetricSparklineResult, ClusterItem, WorkItem, WorkItemType, WorkItemListResponse, WorkItemCreate, WorkItemUpdate, WorkItemStatusResponse, KanbanStatus, UiSettings, ClusterLinksPayload, WorkGuide, WorkGuideCreate, WorkGuideUpdate, WorkGuideListResponse, OpsNote, OpsNoteCreate, OpsNoteUpdate, OpsNoteListResponse, MindMap, MindMapListItem, MindMapCreate, MindMapUpdate, MindMapNode, MindMapNodeCreate, MindMapNodeUpdate, ManagementServer, ManagementServerCreate, ManagementServerUpdate, ManagementServerListResponse, TopologyTraceRequest, TopologyTraceResponse, TrendDigest, TrendItem, TrendSource, ClusterTrendsResponse, ReleaseNotesResponse, CheckMatrixItem, CheckMatrixItemInput, CheckMatrixGrid, CheckMatrixHistory, CheckMatrixSettings, CheckMatrixRunbook, CheckMatrixRun, CheckMatrixRunDetail, CheckMatrixRunList, CheckMatrixBatchResult, CheckMatrixSourceConfigEntry, CheckMatrixCatalog, CheckMatrixItemPreviewInput, CheckMatrixItemPreviewResult, CheckMatrixItemSourceConfig, CheckMatrixItemDetail, ClusterStatusBreakdown, SchemaHealthReport, SchemaRepairResult, LlmSettings, LlmHealthEntry, LlmTestResult, LlmCredentialSummary, LlmUsageBucket, Tenant, TenantBrief, ClusterAccessLevel, HealthCheckRunResult } from '@/types';
+import { Cluster, Addon, CheckLog, SummaryStats, ApiResponse, PaginatedResponse, Playbook, PlaybookRunResult, PlaybookSshCreds, AgentChatRequest, AgentChatResponse, AgentHealthResponse, MetricCard, MetricQueryResult, MetricSparklineResult, ClusterItem, WorkItem, WorkItemType, WorkItemListResponse, WorkItemCreate, WorkItemUpdate, WorkItemStatusResponse, KanbanStatus, UiSettings, ClusterLinksPayload, WorkGuide, WorkGuideCreate, WorkGuideUpdate, WorkGuideListResponse, OpsNote, OpsNoteCreate, OpsNoteUpdate, OpsNoteListResponse, MindMap, MindMapListItem, MindMapCreate, MindMapUpdate, MindMapNode, MindMapNodeCreate, MindMapNodeUpdate, ManagementServer, ManagementServerCreate, ManagementServerUpdate, ManagementServerListResponse, TopologyTraceRequest, TopologyTraceResponse, TrendDigest, TrendItem, TrendSource, ClusterTrendsResponse, ReleaseNotesResponse, CheckMatrixItem, CheckMatrixItemInput, CheckMatrixGrid, CheckMatrixHistory, CheckMatrixSettings, CheckMatrixRunbook, CheckMatrixRun, CheckMatrixRunDetail, CheckMatrixRunList, CheckMatrixBatchResult, CheckMatrixSourceConfigEntry, CheckMatrixCatalog, CheckMatrixItemPreviewInput, CheckMatrixItemPreviewResult, CheckMatrixItemSourceConfig, CheckMatrixItemDetail, ClusterStatusBreakdown, SchemaHealthReport, SchemaRepairResult, LlmSettings, LlmHealthEntry, LlmTestResult, LlmCredentialSummary, LlmUsageBucket, Tenant, TenantBrief, ClusterAccessLevel, HealthCheckRunResult, AddonCheckRunResult } from '@/types';
 import { isDebugEnabled, useDebugStore } from '@/stores/debugStore';
 import { getAuthToken, expireAuthSession, type AuthUser } from '@/stores/authStore';
 
@@ -738,7 +738,7 @@ export const etcdctlApi = {
 export const healthApi = {
   runCheck: (clusterId: string) => api.post<HealthCheckRunResult>(`/health/check/${clusterId}`),
   runAddonCheck: (clusterId: string, addonId: string) =>
-    api.post<ApiResponse<void>>(`/health/check/${clusterId}/addons/${addonId}`),
+    api.post<AddonCheckRunResult>(`/health/check/${clusterId}/addons/${addonId}`),
   getStatus: (clusterId: string) => api.get<ApiResponse<Cluster>>(`/health/status/${clusterId}`),
   getAddons: (clusterId: string) => api.get<ApiResponse<Addon[]>>(`/health/addons/${clusterId}`),
   getSummary: () => api.get<ApiResponse<SummaryStats>>('/health/summary'),
@@ -1545,7 +1545,8 @@ export const managementServersApi = {
     api.put<ManagementServer>(`/management-servers/${id}`, data),
   delete: (id: string) => api.delete(`/management-servers/${id}`),
   ping: (id: string) =>
-    api.post<{ ok: boolean; host: string; port: number; latency_ms: number | null; detail: string }>(
+    // 응답 키는 axios 인터셉터가 camelCase 로 바꾼다(서버 latency_ms → latencyMs).
+    api.post<{ ok: boolean; host: string; port: number; latencyMs: number | null; detail: string }>(
       `/management-servers/${id}/ping`
     ),
 };
