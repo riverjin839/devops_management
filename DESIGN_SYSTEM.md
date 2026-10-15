@@ -596,6 +596,15 @@ MacCard `title` 아래 또 그린 툴바 행(이중 헤더), 같은 모양의 �
 - 사이드바는 `sticky top-4` 로 고정되어 스크롤해도 따라온다.
 - `MacCard` 등 본문 wrapper 와 같은 row 에 둔다.
 
+**URL 동기화 — `hooks/useClusterRouteParam.ts`:** 선택을 `/<base>/:clusterId` 에 담는다(파라미터가 없으면 첫 클러스터로 replace).
+`useClusterRouteParam(base, clusters, { pathFor?, local? })` — `pathFor` 는 id 가 경로 가운데 오는 라우트(`/versions/:id/graph`)용,
+`local` 은 허브 탭 안에 다시 마운트된 화면(지식 허브의 온톨로지)처럼 이동하면 안 되는 곳용이다. `pathFor` 는 모듈 스코프 함수로 넘긴다.
+예: `K8sLogsPage`·`IncidentAnalysisPage`(쿼리 `?namespace=&pod=` 병행)·`VersionGraphPage`·`OntologyPage`.
+
+**전체 높이 캔버스 페이지(PageShell 예외)**: 루트를 `app-h-screen flex overflow-hidden` 가로 행으로 두고
+`<div className="py-3 flex-shrink-0"><ClusterSidebar iconOnly … /></div>` + `<div className="flex-1 min-w-0 flex flex-col">`(툴바·캔버스)로 나눈다.
+캔버스는 ResizeObserver 로 줄어든 폭을 따라간다. 예: `VersionGraphPage`·`OntologyPage`.
+
 **금지:**
 - ❌ 와이드 폼 (`iconOnly` 없이 사용) — 신규 페이지에서 절대 사용 금지. 기존 페이지도 모두 iconOnly 로 마이그레이션됨.
 - ❌ `seq` 번호를 별도로 표시하는 어떤 UI 도 금지 (레거시 동작).
@@ -882,7 +891,7 @@ D-117~D-134)에서 원자는 지켜지는데 화면이 "AI 가 만든 템플릿"
 | 4 | **카드는 섹션 1단, `rounded-md` 만** | 단일 요소(문단·EmptyState·탭 줄·헤더) 래핑, 카드 안 카드, `bg-card` + `rounded-xl/2xl/lg`, hover-lift(`hover:-translate-y`·`hover:scale`), `shadow-lg/xl/2xl`, 비모달 `backdrop-blur`, `bg-gradient-*`, `transition-all`, 비로딩 `animate-pulse/ping` | 구분선·여백·정렬로 먼저 해결. 카드가 필요하면 `MacCard`(헤더는 §12.3 슬롯 `icon`·`description`·`titleExtra`·`actions`). 섹션을 `bg-card border rounded-md` div 로 직접 조합하지 않는다(목록 아이템 타일은 예외). 그림자는 `shadow-card` 만. 로고는 단색 |
 | 5 | **페이지 루트는 밀도 클래스 3종 중 하나** | 그 외 `max-w-*`, 콘솔 페이지의 `mx-auto`, 루트 패딩 임의값 | 공용 **`PageShell density="console"｜"hub"｜"doc"`**(`components/common/PageShell.tsx`, D-123)로 본문 컨테이너를 감싼다. **콘솔**(exec·표·매트릭스, ClusterSidebar 가 있는 per-cluster 화면 전부): `py-3 pr-3`, 폭 제한 없음(사이드바 없으면 `sidebar={false}` → `pl-3`), 표 `text-xs`, 빈 상태 `py-10` · **허브/목록**: `px-6 py-5`, `max-w-[1600px]` 좌정렬 · **문서**(단일 칼럼 폼·읽기): `max-w-4xl mx-auto px-8 py-8`, 빈 상태 `py-16`. **예외**(셸 미사용): 전체 높이 캔버스(Home·Ontology·VersionGraph·WorkflowBoard·MindMap·Island), Login·ChangePassword·K9sPopup·NodeSshPopup. `max-w-[NNNNpx]` 는 `.eslintrc.cjs` `WIDTH_RE` 가 PageShell 밖에서 막는다 |
 | 6 | **빈·로딩·에러 상태는 공용만** | 인라인 빈 상태 div/p, 로컬 `EmptyState` 재정의, 이모지·영어 문구, "~가 없습니다" 만 있는 문구, 로딩 문구 변형("로딩", "불러오는 중...") , 에러에 `text-destructive` | `common/EmptyState` 단일 — "클러스터를 선택하세요" 는 프리셋 `SelectClusterEmptyState`, 로딩은 `LoadingState`(둘 다 `components/common/EmptyState.tsx`). 권한 게이트 버튼은 `children` 으로. 문구 = 왜 비었나 + 다음 행동(`ClusterManagePage:866` 참고). 로딩 "불러오는 중…"(`…` 1글자) 또는 `Skeleton`. 에러 `text-status-critical`(`text-destructive` 는 파괴 액션 버튼 전용) |
-| 7 | **카테고리·종류 구분 색은 `--chart-1..8` 토큰만** | Tailwind 색상명(blue·orange·purple·violet·indigo·cyan·pink·fuchsia·teal) — 장식 용도 포함, hex 기본색, 유색 배경 위 `text-white` 칩 | `--chart-*` 토큰(`text-[hsl(var(--chart-3))]` 아닌 유틸 클래스). slate/zinc 는 콘솔(터미널) 배경에만. `.eslintrc.cjs` 의 `DECO_PALETTE_RE` 가 기계로 막는다(D-120). 기존 위반 파일은 `DECO_PALETTE_ALLOWLIST` 래칫에 있고 **파일을 지울 수만 있다** — 토큰으로 이관한 파일은 목록에서 제거한다 |
+| 7 | **카테고리·종류 구분 색은 `--chart-1..8` 토큰만** | Tailwind 색상명(blue·orange·purple·violet·indigo·cyan·pink·fuchsia·teal) — 장식 용도 포함, hex 기본색, 유색 배경 위 `text-white` 칩 | `--chart-*` 토큰(`text-[hsl(var(--chart-3))]` 아닌 유틸 클래스). slate/zinc 는 콘솔(터미널) 배경에만. `.eslintrc.cjs` 의 `DECO_PALETTE_RE` 가 **예외 없이** 막는다(D-120, 2026-10-15 allowlist 0). 클래스를 못 쓰는 렌더러(three.js·canvas·SVG 문자열)는 `lib/chartTokens.ts` `cssVarColor(token, {alpha, lighten})` 로 CSS 변수를 읽고, 색 memo 의존성에 `useThemeColorKey()` 를 넣어 테마 전환 시 다시 칠한다(hex 금지). 토큰보다 종류가 많으면 같은 계열의 `lighten` 변형으로 구분한다. 브랜드 글자는 `text-brand-jira`(= `--brand-jira-text`, 다크 계열 테마에서 밝은 값) — `dark:` 우회를 붙이지 않는다. **예외**: 사용자가 골라 저장한 색(MindMap 노드 색 등)은 데이터라 토큰 대상이 아니다 |
 | 8 | **uppercase 아이브로우 금지(예외 없음)** | 페이지 본문·h1·버튼·탭·폼 라벨의 `uppercase tracking-wider`, 전부 대문자 제목("CIDR INPUT") | 라벨은 `text-xs text-muted-foreground`(대소문자 그대로). 상태 배지는 `common/StatusBadge` 한국어 1종 |
 | 9 | **아이콘은 lucide 만** | 이모지를 상태(🟢🟡🔴)·카테고리·아이콘·장식(🎉💡☸)으로, ⚠/✓/✗ 문자 접두, 모든 아이콘 `text-primary` 틴트 | lucide + 상태 토큰. `text-primary` 틴트는 클릭 가능한 액션에만. 사용자 데이터로 저장된 클러스터 아이콘(`clusterIcons`)의 예외 여부는 D-126 에서 판정 |
 | 10 | **타이포 위계 4단** | 페이지 내 `text-2xl` 이상(Health Hero 외), h1 크기 변형, 숫자 `font-mono`, `text-[11px]` 를 표 밖에 | h1 `text-xl font-semibold` · 카드 제목 MacCard 내장 · 본문 `text-sm` · 보조 `text-xs`. 숫자는 `tabular-nums`(`font-mono` 는 식별자·코드·로그만). `text-[11px]` 는 표 셀만. 글꼴은 시스템 스택만 — 웹폰트 CDN 금지(§3, D-131) |

@@ -584,12 +584,12 @@ hover 시 flyout 자체가 라벨을 보여주므로 이름만 뜨는 중복 툴
 - **파일**: `frontend/src/pages/IncidentAnalysisPage.tsx` (+ `components/common/SearchableSelect`, `components/common/LogViewTabs`)
 - **목적 / UX**: 클러스터 → namespace → pod 를 드릴다운으로 선택하고, `kubectl logs`/`events`/`describe` 를 자동 수집(또는 직접 붙여넣기)한 뒤 LLM(또는 rule-based) 분석기에 보내 근본 원인·신뢰도·조치 방안을 받는다. 실시간 로그 스트리밍(폴링), 로그 라인 필터도 제공한다.
 - **UI 구성**:
-  - `ClusterSidebar` 미사용 — 상단에 `<select>` 드롭다운(클러스터) + `SearchableSelect`(namespace/pod) 로 대상 선택(레거시 패턴, CLAUDE.md 표준 사이드바 미적용).
+  - 좌측 `ClusterSidebar iconOnly`(K8s 로그 화면과 같은 console 밀도 레이아웃) + 드릴다운 카드의 `SearchableSelect`(namespace/pod) 2열로 대상 선택. 선택은 URL 에 담긴다 — `/incident-analysis/:clusterId?namespace=&pod=`(딥링크·공유 가능, 클러스터를 바꾸면 namespace/pod 초기화). (D-113)
   - "대상 선택" 패널 — "이슈 있는 항목만 보기(느림)" 토글, glob 패턴(`nsPattern`/`podPattern`)으로 스캔 범위 축소, "자동 채우기" 버튼.
   - 이벤트 테이블(최대 20건), 로그/Describe textarea 3개(현재 로그/이전 로그/describe) + 실시간 LIVE 토글 + 로그 라인 필터.
   - 결과 패널(`ResultPanel`) — severity 배지, 근본 원인, confidence bar, 조치 방안 순번 리스트, 관련 런북.
-  - `LogViewTabs current="analysis"` 로 로그 관련 다른 화면과 탭 전환.
-- **Frontend**: `useAnalyzerHealth()`, `useAnalyzeIncident()`(mutation), `useAnalyzeNamespaces(clusterId, onlyWithIssues, withCounts, nsPattern, podPattern)`(300ms 디바운스), `useAnalyzePods(clusterId, namespace, onlyWithIssues)`, `useFetchIncidentContext()`(mutation, 자동채우기/스트리밍 공용). `useClusters()`. 로컬 state 다수(`clusterId`/`namespace`/`podName`/`onlyIssues`/로그 텍스트/`streaming`/`logFilter` 등). api.ts: `analyzeApi.health`, `analyzeApi.analyze`, `analyzeApi.listNamespaces`, `analyzeApi.listPods`, `analyzeApi.fetchContext`.
+  - `LogViewTabs current="analysis"` 로 로그 관련 다른 화면과 탭 전환 — 탭을 바꿔도 선택한 클러스터를 이어 간다.
+- **Frontend**: `useAnalyzerHealth()`, `useAnalyzeIncident()`(mutation), `useAnalyzeNamespaces(clusterId, onlyWithIssues, withCounts, nsPattern, podPattern)`(300ms 디바운스), `useAnalyzePods(clusterId, namespace, onlyWithIssues)`, `useFetchIncidentContext()`(mutation, 자동채우기/스트리밍 공용). `useClusters()`, `useClusterRouteParam('/incident-analysis', clusters)`(클러스터), `useSearchParams`(namespace/pod). 로컬 state 다수(`onlyIssues`/로그 텍스트/`streaming`/`logFilter` 등). api.ts: `analyzeApi.health`, `analyzeApi.analyze`, `analyzeApi.listNamespaces`, `analyzeApi.listPods`, `analyzeApi.fetchContext`.
 - **Backend**: `POST /api/v1/analyze/incident`, `GET /api/v1/analyze/health`, `GET /api/v1/analyze/clusters/{cluster_id}/namespaces`, `GET /api/v1/analyze/clusters/{cluster_id}/namespaces/{namespace}/pods`, `GET /api/v1/analyze/clusters/{cluster_id}/namespaces/{namespace}/pods/{podName}/context` — `backend/app/routers/analyze.py`. `kubernetes` SDK(`CoreV1Api`)로 실시간 조회, `app/services/analyzers.py`(`get_analyzer()` — `ANALYZER_BACKEND` env 로 Claude/Local LLM/Rule-based 선택).
 - **핵심 기능**:
   - 대용량 클러스터 대응 fast/slow path 분리(`onlyIssues`/`withCounts` 미지정 시 이름만 빠르게 조회, 큰 클러스터에서 axios 타임아웃 최대 150s).
@@ -790,15 +790,15 @@ hover 시 flyout 자체가 라벨을 보여주므로 이름만 뜨는 중복 툴
 
 - **파일**: `frontend/src/pages/VersionGraphPage.tsx` (react-force-graph-3d + three.js)
 - **목적 / UX**: `/versions` 페이지의 스냅샷 데이터를 클러스터→카테고리→컴포넌트→플래그 계층의 3D 노드-엣지 그래프로 시각화해, 어떤 플래그/설정이 어떤 컴포넌트에 속하는지 탐색한다.
-- **UI 구성**: 상단 툴바(뒤로가기, 클러스터 `<select>` 드롭다운 — ClusterSidebar 미사용, 색상 범례, 재수집 버튼), 전체 화면 3D 그래프 캔버스, 노드 클릭 시 우상단 상세 패널(`NodeDetail`: type/version/value/category/collectedAt).
-- **Frontend**: `useClusters()`, `useQuery(['versions','graph',selectedId])` → `versionsApi.graph`. 로컬 state: `selectedId`(URL param `clusterId` 우선), `dims`(ResizeObserver), `selectedNode`. 호출 함수: `versionsApi.graph`, `versionsApi.collect`(재수집).
+- **UI 구성**: 좌측 `ClusterSidebar iconOnly` 레일 + 오른쪽 열(상단 툴바: 뒤로가기, 색상 범례, 재수집 버튼 / 전체 높이 3D 그래프 캔버스), 노드 클릭 시 우상단 상세 패널(`NodeDetail`: type/version/value/category/collectedAt).
+- **Frontend**: `useClusters()`, `useQuery(['versions','graph',selectedId])` → `versionsApi.graph`. 선택은 `useClusterRouteParam('/versions', clusters, { pathFor })` — URL 이 곧 선택이다. 로컬 state: `dims`(ResizeObserver), `selectedNode`. 노드·링크·툴팁 색은 `lib/chartTokens.ts` `cssVarColor`(테마 전환 시 다시 칠함). 호출 함수: `versionsApi.graph`, `versionsApi.collect`(재수집).
 - **Backend**: `GET /api/v1/clusters/{cluster_id}/versions/graph` — `backend/app/routers/versions.py` (1248행). `ClusterConfigSnapshot`을 카테고리/컴포넌트/플래그 노드+엣지(`contains`/`param`/`configures`/`replaces`)로 변환해 반환. 재수집은 `POST /clusters/{id}/collect-versions` 재사용.
 - **핵심 기능**:
   - 클러스터/카테고리/컴포넌트/플래그 4-tier 3D 그래프 (타입별 색상/크기)
   - 노드 클릭 시 카메라 이동 + 상세 패널
   - `/versions` 페이지와 캐시 공유(`queryKey: ['versions', ...]`) — 재수집 시 양쪽 모두 무효화
 - **요청사항 (수정 요청)**:
-  - ClusterSidebar iconOnly 표준을 따르지 않고 `<select>` 드롭다운을 사용 중 — CLAUDE.md 컨벤션상 금지 패턴(❌ 페이지 내 dropdown 형태 클러스터 선택기)이므로 표준화 필요 여부 확인
+  - ~~`<select>` 드롭다운 클러스터 선택기 표준화~~ — 2026-10-15 D-113 에서 `ClusterSidebar iconOnly` 로 교체 완료(select 를 바꿔도 URL 이 그대로라 화면과 어긋나던 문제도 해소)
   - _(추가 개선/수정 요청을 여기에 적어주세요)_
 
 ### 노드 일괄 실행 (SSH/SCP) (`/bulk-exec`)
@@ -1668,8 +1668,9 @@ hover 시 flyout 자체가 라벨을 보여주므로 이름만 뜨는 중복 툴
 - **파일**: `frontend/src/pages/OntologyPage.tsx` (3D 그래프는 `react-force-graph-3d` + `three` 직접 사용, 별도 하위 컴포넌트 없이 `NodeDetailPanel`/`ImpactPanel`을 페이지 내부에 정의)
 - **목적 / UX**: 클러스터 내 인프라 구성요소(노드/하드웨어/OS/커널 파라미터/네트워크/K8s·Cilium 컴포넌트/워크로드/서비스/설정 항목)와 그 관계를 3D 그래프로 시각화하고, 설정 변경(config_item/kernel_param)이 다른 엔티티에 미치는 파급 범위(blast radius)를 분석하는 화면.
 - **UI 구성**:
-  - 상단 툴바: 클러스터 선택, 노드 검색, 노드/관계 수 통계, 범례 토글, 필터 초기화, 새로고침
-  - 엔티티 타입별 chip 필터 바(10종, 색상 구분)
+  - 좌측 `ClusterSidebar iconOnly` 레일로 클러스터 선택(`/ontology/:clusterId`, 지식 허브 탭 안에서는 URL 대신 로컬 선택 — `embedded` prop) (D-113)
+  - 상단 툴바: 노드 검색, 노드/관계 수 통계, 범례 토글, 필터 초기화, 새로고침
+  - 엔티티 타입별 chip 필터 바(10종, 색상 구분 — `--chart-*` 8토큰 + 같은 계열 명도 변형 2종, `lib/chartTokens.ts` `cssVarColor`, 배경·링크도 테마 토큰)
   - 중앙 3D 포스 그래프(구체 크기=연결 수, 파티클=관계 방향, 링크 굵기=가중치)
   - 좌상단 범례 패널, 우상단 노드 상세 패널(속성 + "변경 영향 분석" 버튼), 좌하단 영향 분석 결과 패널(blast radius score, 영향 엔티티, 영향 경로)
 - **Frontend**: `useClusters()`(클러스터 목록), `frontend/src/hooks/useOntology.ts`의 `useOntologyGraph(clusterId)`(`useQuery`), `useAnalyzeImpact()`(`useMutation`, 성공 시 그래프 쿼리 invalidate).
