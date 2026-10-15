@@ -20,6 +20,7 @@ from fastapi.responses import StreamingResponse
 from kubernetes.client.rest import ApiException
 from sqlalchemy.orm import Session
 
+from app.services.sse import SSE_HEADERS as _SHARED_SSE_HEADERS
 from app.auth.deps import require_operator
 from app.database import get_db
 from app.models.cluster import Cluster
@@ -53,11 +54,7 @@ from app.services.k8s_rbac_service import (
 
 router = APIRouter(prefix="/clusters/{cluster_id}/rbac", tags=["k8s-rbac"])
 
-SSE_HEADERS = {
-    "Cache-Control": "no-cache",
-    "X-Accel-Buffering": "no",
-    "Connection": "keep-alive",
-}
+SSE_HEADERS = _SHARED_SSE_HEADERS  # services/sse.py 공용(D-135)
 
 
 def _service(cluster_id: UUID, db: Session) -> tuple[Cluster, RbacService]:

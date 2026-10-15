@@ -2,8 +2,9 @@
 // 서버가 SSE 로 단계를 흘려주는 실행은 그 이벤트를 그대로 쌓고(appendServer), 단건 요청형 실행은
 // 화면이 요청 시작·응답 요약·오류를 직접 기록한다(log). 보여줄지는 RunLogPanel 의 "로그 보기" 가 정한다.
 import { useCallback, useState } from 'react';
-import type { SseEvent } from '@/lib/sse';
+import { postSse, type SseEvent } from '@/lib/sse';
 import { formatApiError } from '@/lib/utils';
+import { camelizeKeys, snakeizeKeys } from '@/services/api';
 
 export type RunLogLevel = 'info' | 'warn' | 'error';
 export interface RunLogLine { ts: string; level: RunLogLevel; message: string }
@@ -194,4 +195,85 @@ export async function pollIntoRunLog<S>(
   } finally {
     run.end();
   }
+}
+
+/**
+ * SSE 실행(서버가 단계를 흘리는 실행)을 실행 로그로 감싼다(D-135).
+ * begin → 서버의 log·step 을 그대로 쌓고(applyRunEvent) → ``result`` 는 camelCase 로 바꿔 돌려주며
+ * ``summarize`` 의 줄을 덧붙인다 → ``error`` 이벤트·연결 실패는 error 줄 → end.
+ * 본문은 camelCase 로 넘기면 snake_case 로 바꿔 보낸다(SSE 는 axios 인터셉터를 타지 않는다).
+ * throw 하지 않고 `runLogged` 와 같은 결과 union 을 돌려준다.
+ */
+export async function streamLogged<T>(
+  run: Pick<RunLog, 'begin' | 'log' | 'setStep' | 'end'>,
+  opts: {
+    title: string;
+    first?: string;
+    url: string;
+    body: unknown;
+    signal?: AbortSignal;
+    headers?: Record<string, string>;
+    summarize?: (res: T) => RunLogEntry[];
+  },
+): Promise<RunLoggedResult<T>> {
+  const { title, first, url, body, signal, headers, summarize } = opts;
+  const t0 = performance.now();
+  run.begin(title, first ?? `${title} 요청 전송`);
+  let result: T | undefined;
+  let streamError: string | null = null;
+  try {
+    await postSse(url, snakeizeKeys(body), (evt) => {
+      if (evt.type === 'result') result = camelizeKeys<T>(evt.result);
+      else if (evt.type === 'error') streamError = String(evt.message ?? '실행 실패');
+      else applyRunEvent(run, evt);
+    }, signal, headers);
+    if (streamError) throw new Error(streamError);
+    if (result === undefined) throw new Error('결과 없이 스트림이 끝났습니다.');
+    for (const [level, msg] of summarize?.(result) ?? []) run.log(level, msg);
+    run.log('info', `총 소요 ${elapsed(t0)}`);
+    run.end();
+    return { ok: true, data: result };
+  } catch (error) {
+    const aborted = isAbortError(error);
+    if (aborted) run.log('warn', `사용자 중지 · ${elapsed(t0)}`);
+    else run.log('error', `실패 · ${elapsed(t0)} — ${error instanceof Error && !('response' in error) ? error.message : formatApiError(error)}`);
+    run.end();
+    return { ok: false, error, aborted };
+  }
+}
+
+/** 콘솔형 단건 실행(stdout/stderr 를 돌려주는 SSH·kubectl 실행) 응답 → 실행 로그 줄(D-135).
+ *  출력 본문은 ExecOutputTabs/LogViewer 가 보여주므로 여기서는 결과 요약만 남긴다. */
+export interface ConsoleRunLike {
+  host?: string | null;
+  exitCode?: number | null;
+  durationMs?: number | null;
+  stderr?: string | null;
+  error?: string | null;
+  status?: string | null;
+  executedCommand?: string | null;
+}
+
+export function consoleRunLines(res: ConsoleRunLike | ConsoleRunLike[], label?: string): RunLogEntry[] {
+  const rows = Array.isArray(res) ? res : [res];
+  const out: RunLogEntry[] = [];
+  let failed = 0;
+  for (const r of rows) {
+    const firstErr = (r.error || '').trim()
+      || (r.stderr || '').split('\n').map((l) => l.trim()).find(Boolean)
+      || '';
+    const bad = !!r.error || (r.status != null && r.status !== 'ok' && r.status !== 'success')
+      || (r.exitCode != null && r.exitCode !== 0);
+    if (bad) failed += 1;
+    const parts = [r.host || label || '결과'];
+    if (r.status) parts.push(r.status);
+    parts.push(`exit ${r.exitCode ?? '—'}`);
+    if (r.durationMs != null) parts.push(`${r.durationMs}ms`);
+    if (bad && firstErr) parts.push(`오류 — ${firstErr.slice(0, 200)}`);
+    out.push([bad ? 'error' : 'info', parts.join(' · ')]);
+  }
+  if (rows.length > 1) {
+    out.push([failed ? 'warn' : 'info', `대상 ${rows.length} · 성공 ${rows.length - failed} · 실패 ${failed}`]);
+  }
+  return out;
 }

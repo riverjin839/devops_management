@@ -14,6 +14,7 @@ from pydantic import BaseModel
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
+from app.services.sse import SSE_HEADERS as _SHARED_SSE_HEADERS
 from app.auth.deps import require_operator
 from app.database import SessionLocal, get_db
 from app.models.cluster import Cluster
@@ -258,11 +259,7 @@ def delete_infra_node(
 
 Emit = Callable[[dict], None]
 
-SSE_HEADERS = {
-    "Cache-Control": "no-cache",
-    "X-Accel-Buffering": "no",
-    "Connection": "keep-alive",
-}
+SSE_HEADERS = _SHARED_SSE_HEADERS  # services/sse.py 공용(D-135)
 # 이벤트 없이 이 시간이 지나면 SSE 주석(ping)을 보내 프록시 유휴 타임아웃을 피한다.
 _SSE_PING_SEC = 15.0
 
