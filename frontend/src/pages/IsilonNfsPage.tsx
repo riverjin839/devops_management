@@ -3,7 +3,9 @@ import {
   HardDrive, Plus, Pencil, ServerCog, AlertTriangle, Settings2,
 } from 'lucide-react';
 import { MacCard } from '@/components/ui/MacCard';
-import { StatusBadge, StatusDot, statusToVariant, EmptyState, LoadingState, LogViewer, PageShell } from '@/components/common';
+import { StatusBadge, StatusDot, statusToVariant, EmptyState, LoadingState, LogViewer, PageShell, RunLogPanel } from '@/components/common';
+import { useRunLog, runLogged, type RunLogEntry } from '@/hooks/useRunLog';
+import { useLogPref } from '@/hooks/useLogPref';
 import { PageHeader } from '@/components/common/PageHeader';
 import { IsilonServerModal, IsilonCommandManager, IsilonCommandSelector, ISILON_SECTION_LABEL } from '@/components/isilon';
 import { useIsilonServers, useRunIsilonCommands } from '@/hooks/useIsilonNfs';
@@ -20,6 +22,9 @@ export function IsilonNfsPage() {
   const [cmdOpen, setCmdOpen] = useState(false);
   const [selectedKeys, setSelectedKeys] = useState<Set<string>>(new Set());
   const [runResult, setRunResult] = useState<IsilonRunResponse | null>(null);
+  const runLog = useRunLog();
+  const { clear: clearRunLog } = runLog;
+  const [showLog, setShowLog] = useLogPref('isilon-nfs-run');
 
   // 서버가 tied 된 K8s 클러스터가 없는 서버 스코프 화면이라 항상 전역 기본(dev) 프로파일 —
   // 그래도 콘솔 화면 표준(§12.6 rule 4)에 맞춰 최상단에서 호출한다.
@@ -37,7 +42,8 @@ export function IsilonNfsPage() {
   useEffect(() => {
     setSelectedKeys(new Set());
     setRunResult(null);
-  }, [selectedId]);
+    clearRunLog();
+  }, [selectedId, clearRunLog]);
 
   const selected = servers.find((s) => s.id === selectedId);
   const runMut = useRunIsilonCommands();
@@ -50,12 +56,17 @@ export function IsilonNfsPage() {
     });
   };
 
-  const handleRun = () => {
+  const handleRun = async () => {
     if (!selectedId || selectedKeys.size === 0) return;
-    runMut.mutate(
-      { serverId: selectedId, keys: [...selectedKeys] },
-      { onSuccess: (data) => setRunResult(data) },
-    );
+    const keys = [...selectedKeys];
+    const target = selected ? `${selected.name} (${selected.username}@${selected.host}:${selected.port})` : selectedId;
+    const r = await runLogged(runLog, {
+      title: 'Isilon 명령 실행',
+      first: `${target} — 명령 ${keys.length}개 실행 요청: ${keys.join(', ')}`,
+      fn: () => runMut.mutateAsync({ serverId: selectedId, keys }),
+      summarize: isilonRunLines,
+    });
+    if (r.ok) setRunResult(r.data);
   };
 
   return (
@@ -145,6 +156,9 @@ export function IsilonNfsPage() {
                 <K8sNfsTable runResult={runResult} />
               </MacCard>
 
+              {/* 실행 로그 — 요청·대기·명령별 결과 요약·실패 사유(본문 출력은 우측 실행 결과). */}
+              <RunLogPanel run={runLog} show={showLog} onShowChange={setShowLog} maxHeight="max-h-56" />
+
               {/* 좌(명령 선택) / 우(결과) 한 로우 고정 — 콘솔 화면 표준(§12.6) */}
               <div className="grid grid-cols-1 lg:grid-cols-10 gap-4 items-start">
                 <MacCard
@@ -189,6 +203,27 @@ export function IsilonNfsPage() {
 }
 
 // ── 하위 렌더 조각 (module-local, 비-export) ──────────────────────────────────
+// 실행 로그 요약 — 접속 결과 · 명령별 "섹션 · 라벨 · exit · ms · 오류" · 건너뜀 · 합계.
+function isilonRunLines(res: IsilonRunResponse): RunLogEntry[] {
+  const out: RunLogEntry[] = [];
+  if (res.connectionOk === false) out.push(['error', `SSH 접속 실패 — ${res.connectionError ?? '사유 미상'}`]);
+  else if (res.connectionOk) out.push(['info', 'SSH 접속 성공']);
+  const results = res.results ?? [];
+  for (const r of results) {
+    const parts = [`${ISILON_SECTION_LABEL[r.section] ?? r.section} · ${r.label}`, `exit ${r.exitCode ?? '—'}`, `${r.durationMs}ms`];
+    if (!r.ok) {
+      const firstErr = (r.error ?? '').trim() || (r.raw ?? '').split('\n').map((l) => l.trim()).find(Boolean) || '';
+      if (firstErr) parts.push(`오류 — ${firstErr.slice(0, 200)}`);
+    }
+    out.push([r.ok ? 'info' : 'error', parts.join(' · ')]);
+  }
+  if (res.skippedKeys && res.skippedKeys.length > 0) out.push(['warn', `등록/활성화되지 않아 건너뜀: ${res.skippedKeys.join(', ')}`]);
+  if (res.k8sNfsPvs) out.push(['info', `K8s NFS PV ${res.k8sNfsPvs.length}개 조회`]);
+  const failed = results.filter((r) => !r.ok).length;
+  out.push([failed ? 'warn' : 'info', `명령 ${results.length} · 성공 ${results.length - failed} · 실패 ${failed}`]);
+  return out;
+}
+
 function ConnBadge({ runResult, running }: { runResult: IsilonRunResponse | null; running: boolean }) {
   if (running) return <StatusBadge variant="loading" label="실행 중" />;
   if (!runResult) return <StatusBadge variant="neutral" label="미실행" />;

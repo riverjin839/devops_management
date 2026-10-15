@@ -1,10 +1,20 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Loader2, RefreshCw, Sparkles } from 'lucide-react';
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useToast } from '@/components/common/Toast';
 import { CitationList } from '@/components/common/CitationList';
+import { RunLogPanel } from '@/components/common/RunLogPanel';
 import { formatApiError } from '@/lib/utils';
+import { useRunLog, runLogged, pollIntoRunLog, type RunLogEntry } from '@/hooks/useRunLog';
+import { useLogPref } from '@/hooks/useLogPref';
 import type { AlertIncidentAnalysis } from '@/types';
+
+const TERMINAL = new Set(['done', 'failed', 'skipped']);
+
+/** 분석 결과가 아직 없으면 404 — 폴링 중엔 "아직 없음"(null)으로 본다. */
+function isNotFound(e: unknown): boolean {
+  return (e as { response?: { status?: number } } | null)?.response?.status === 404;
+}
 
 const STATUS_META: Record<string, { label: string; cls: string }> = {
   queued: { label: '분석 대기', cls: 'bg-secondary text-muted-foreground' },
@@ -36,6 +46,11 @@ export function IncidentAnalysisPanel({
   const toast = useToast();
   const qc = useQueryClient();
   const [triggering, setTriggering] = useState(false);
+  // 실행 로그(D-089/D-135) — 큐잉 요청 → 분석 레코드 폴링(상태 변화 줄) → 완료/실패. 펼침 여부는 사용자가 정한다.
+  const runLog = useRunLog();
+  const [showLog, setShowLog] = useLogPref('incident-analysis-panel');
+  const pollAbort = useRef<AbortController | null>(null);
+  useEffect(() => () => pollAbort.current?.abort(), []);
 
   const status = analysisStatus ?? null;
   const { data: analysis, isFetching } = useQuery({
@@ -45,17 +60,66 @@ export function IncidentAnalysisPanel({
     retry: false,
   });
 
-  const trigger = async () => {
-    setTriggering(true);
+  const refreshViews = () => {
+    invalidateKeys.forEach((key) => qc.invalidateQueries({ queryKey: key as never }));
+    qc.invalidateQueries({ queryKey: [queryKeyPrefix, subjectId] });
+  };
+
+  const fetchLatest = async (): Promise<AlertIncidentAnalysis | null> => {
     try {
-      const res = await triggerAnalysis(subjectId);
-      toast.success('AI 분석 요청됨', res.detail ?? '전용 큐에서 분석이 실행됩니다. 잠시 후 새로고침하세요.');
-      invalidateKeys.forEach((key) => qc.invalidateQueries({ queryKey: key as never }));
+      return await fetchAnalysis(subjectId);
     } catch (e) {
-      toast.error('분석 요청 실패', formatApiError(e));
-    } finally {
-      setTriggering(false);
+      if (isNotFound(e)) return null;
+      throw e;
     }
+  };
+
+  const trigger = async () => {
+    pollAbort.current?.abort();
+    setTriggering(true);
+    // 재분석이면 이전 결과 레코드가 남아 있다 — 그걸 기준선으로 잡아 "새 레코드의 완료"만 완료로 본다.
+    const baseline = await fetchLatest().catch(() => null);
+    const baselineActive = !!baseline && !TERMINAL.has(baseline.status);
+    const r = await runLogged(runLog, {
+      title: 'AI 분석',
+      first: `AI 분석 요청 — 전용 llm 큐로 보냄${status ? ` (현재 상태: ${STATUS_META[status]?.label ?? status})` : ''}`,
+      fn: () => triggerAnalysis(subjectId),
+      summarize: (res): RunLogEntry[] => [['info', `큐잉됨 · 상태 ${res.status}${res.detail ? ` — ${res.detail}` : ''}`]],
+      keepOpen: true,
+    });
+    setTriggering(false);
+    if (!r.ok) {
+      if (!r.aborted) toast.error('분석 요청 실패', formatApiError(r.error));
+      return;
+    }
+    toast.success('AI 분석 요청됨', r.data.detail ?? '전용 큐에서 분석이 실행됩니다. 진행 상황은 실행 로그에 표시됩니다.');
+    refreshViews();
+    const ctrl = new AbortController();
+    pollAbort.current = ctrl;
+    const isNew = (a: AlertIncidentAnalysis) => !baseline || a.id !== baseline.id || baselineActive;
+    await pollIntoRunLog<AlertIncidentAnalysis | null>(runLog, {
+      fetch: fetchLatest,
+      describe: (snap, prev) => {
+        if (!snap || !isNew(snap)) return [];
+        if (prev && prev.id === snap.id && prev.status === snap.status) return [];
+        refreshViews();
+        const label = STATUS_META[snap.status]?.label ?? snap.status;
+        if (snap.status === 'done') {
+          const out: RunLogEntry[] = [['info', `${label}${snap.durationMs != null ? ` · ${snap.durationMs}ms` : ''} · 분석기 ${snap.analyzedBy ?? '—'}`]];
+          out.push(['info', `심각도 ${snap.severity ?? '—'}${typeof snap.confidence === 'number' ? ` · 신뢰도 ${(snap.confidence * 100).toFixed(0)}%` : ''} · 조치 가이드 ${snap.suggestedActions.length}건`]);
+          return out;
+        }
+        if (snap.status === 'failed') return [['error', `${label} — ${snap.error ?? '사유 미상'}`]];
+        if (snap.status === 'skipped') return [['warn', label]];
+        return [['info', label]];
+      },
+      isDone: (snap) => !!snap && isNew(snap) && TERMINAL.has(snap.status),
+      intervalMs: 3000,
+      timeoutMs: 180_000,
+      signal: ctrl.signal,
+    });
+    if (pollAbort.current === ctrl) pollAbort.current = null;
+    refreshViews();
   };
 
   const meta = status ? STATUS_META[status] : null;
@@ -82,17 +146,19 @@ export function IncidentAnalysisPanel({
         <button
           type="button"
           onClick={() => void trigger()}
-          disabled={triggering || status === 'queued' || status === 'running'}
+          disabled={triggering || runLog.running || status === 'queued' || status === 'running'}
           title={status ? 'AI 재분석' : 'AI 분석 실행'}
           aria-label={status ? 'AI 재분석' : 'AI 분석 실행'}
           className="flex items-center gap-1 px-2.5 py-1 rounded-xl text-xs font-medium bg-secondary border border-border hover:bg-muted disabled:opacity-50"
         >
-          {triggering || status === 'queued' || status === 'running'
+          {triggering || runLog.running || status === 'queued' || status === 'running'
             ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
             : <RefreshCw className="w-3.5 h-3.5" />}
           {status ? '재분석' : 'AI 분석 실행'}
         </button>
       </div>
+
+      <RunLogPanel run={runLog} show={showLog} onShowChange={setShowLog} maxHeight="max-h-40" />
 
       {isFetching && (
         <p className="text-xs text-muted-foreground flex items-center gap-1">

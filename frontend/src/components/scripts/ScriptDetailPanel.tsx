@@ -1,7 +1,9 @@
 import { useEffect, useState } from 'react';
 import { Save, Play, Loader2, RotateCcw, Trash2, Pencil } from 'lucide-react';
 import type { ScriptTestRunResponse } from '@/types';
-import { ConfirmDialog, useToast } from '@/components/common';
+import { ConfirmDialog, RunLogPanel, useToast } from '@/components/common';
+import { useRunLog, runLogged, type RunLogEntry } from '@/hooks/useRunLog';
+import { useLogPref } from '@/hooks/useLogPref';
 import { CommandTraceList } from '@/components/common/CommandTraceList';
 import { ExecutionStepsTimeline } from '@/components/daily-check/ExecutionStepsTimeline';
 import { formatApiError } from '@/lib/utils';
@@ -56,7 +58,15 @@ export function ScriptDetailPanel({ scriptId, onDeleted }: Props) {
   });
   const [inventoryContent, setInventoryContent] = useState('');
   const [runResult, setRunResult] = useState<ScriptTestRunResponse | null>(null);
-  const [runError, setRunError] = useState<string | null>(null);
+  // 테스트 실행 로그(D-089/D-135) — 요청·대기·단계별 결과·실패 사유. 펼침 여부는 사용자가 정한다.
+  const runLog = useRunLog();
+  const { clear: clearRunLog } = runLog;
+  const [showLog, setShowLog] = useLogPref('scripts-test-run');
+  // 다른 스크립트를 고르면 이전 스크립트의 실행 결과·로그를 들고 있지 않는다.
+  useEffect(() => {
+    setRunResult(null);
+    clearRunLog();
+  }, [scriptId, clearRunLog]);
 
   if (isLoading || !script) {
     return <div className="p-4 text-xs text-muted-foreground">불러오는 중…</div>;
@@ -117,14 +127,18 @@ export function ScriptDetailPanel({ scriptId, onDeleted }: Props) {
   };
 
   const handleTestRun = async () => {
-    setRunError(null);
     setRunResult(null);
     if (target.host.trim() === '' && script.kind !== 'ansible_playbook') {
       toast.error('대상 호스트를 입력해주세요.');
       return;
     }
-    try {
-      const result = await testRun.mutateAsync({
+    const where = target.host.trim()
+      ? `${target.username}@${target.host.trim()}:${target.port}`
+      : '인벤토리 대상';
+    const r = await runLogged(runLog, {
+      title: '스크립트 테스트 실행',
+      first: `${script.name} (${script.kind}${dirty ? ', 저장 안 된 편집본' : ''}) → ${where} 실행 요청`,
+      fn: () => testRun.mutateAsync({
         content: draft,
         inventoryContent: script.kind === 'ansible_playbook' ? (inventoryContent || undefined) : undefined,
         target: {
@@ -135,11 +149,24 @@ export function ScriptDetailPanel({ scriptId, onDeleted }: Props) {
           password: target.authMethod === 'password' ? target.secret : undefined,
           privateKey: target.authMethod === 'privateKey' ? target.secret : undefined,
         },
-      });
-      setRunResult(result);
-    } catch (e) {
-      setRunError(formatApiError(e));
-    }
+      }),
+      summarize: (res): RunLogEntry[] => {
+        const out: RunLogEntry[] = res.steps.map((st): RunLogEntry => [
+          st.status === 'failed' ? 'error' : st.status === 'skipped' ? 'warn' : 'info',
+          `단계 ${st.label} · ${st.status === 'success' ? '완료' : st.status === 'failed' ? '실패' : st.status === 'skipped' ? '건너뜀' : '진행 중'}`
+            + `${st.durationMs != null ? ` · ${st.durationMs}ms` : ''}${st.detail ? ` — ${st.detail.slice(0, 200)}` : ''}`,
+        ]);
+        if (res.error) out.push(['error', `오류 — ${res.error}`]);
+        else if (res.exitCode != null && res.exitCode !== 0) {
+          const firstErr = (res.stderr || '').split('\n').map((l) => l.trim()).find(Boolean);
+          out.push(['error', `exit ${res.exitCode}${firstErr ? ` — ${firstErr.slice(0, 200)}` : ''}`]);
+        }
+        out.push([res.status === 'success' || res.status === 'ok' ? 'info' : 'warn',
+          `상태 ${res.status} · exit ${res.exitCode ?? '—'} · 명령 ${res.commands.length}개 · ${res.durationMs}ms`]);
+        return out;
+      },
+    });
+    if (r.ok) setRunResult(r.data);
   };
 
   return (
@@ -358,11 +385,7 @@ export function ScriptDetailPanel({ scriptId, onDeleted }: Props) {
               테스트 실행 (현재 편집 중인 내용 기준)
             </button>
 
-            {runError && (
-              <div className="px-3 py-2 rounded-xl border border-status-critical/40 bg-status-critical-soft text-xs text-status-critical whitespace-pre-wrap">
-                {runError}
-              </div>
-            )}
+            <RunLogPanel run={runLog} show={showLog} onShowChange={setShowLog} maxHeight="max-h-56" />
             {runResult && (
               <div className="space-y-3 pt-2 border-t border-border">
                 <ExecutionStepsTimeline steps={runResult.steps} />

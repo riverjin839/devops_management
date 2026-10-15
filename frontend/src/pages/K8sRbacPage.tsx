@@ -20,6 +20,7 @@ import {
   type RbacRoleFocusRequest,
 } from '@/components/k8s-rbac';
 import { useClusters } from '@/hooks/useCluster';
+import { useLogPref } from '@/hooks/useLogPref';
 import {
   useProvisionStream,
   useRbacBindings,
@@ -46,8 +47,9 @@ export function K8sRbacPage() {
   const [selectedClusterId, setSelectedClusterId] = useState<string | null>(null);
   const [tab, setTab] = useState<TabKey>('wizard');
   const [includeSystem, setIncludeSystem] = useState(false);
-  // 실행 로그를 펼쳐 볼지 — 로그는 항상 수집하고 표시 여부만 사용자가 정한다.
-  const [showLogs, setShowLogs] = useState(true);
+  // 발급 마법사 실행 로그(ProvisionConsole)를 펼쳐 볼지 — 로그는 항상 수집하고 표시 여부만
+  // 사용자가 정한다(화면별 localStorage). 권한 점검 탭은 패널 자체의 표준 실행 로그를 쓴다.
+  const [showLogs, setShowLogs] = useLogPref('k8s-rbac-provision');
   // ServiceAccount 탭의 "연결된 권한" 클릭 → Role/ClusterRole 탭으로 이동해 그 롤을 연다.
   const [roleFocus, setRoleFocus] = useState<RbacRoleFocusRequest | null>(null);
 
@@ -103,7 +105,7 @@ export function K8sRbacPage() {
                 )}
               </span>
             }
-            actions={
+            actions={tab === 'wizard' && (
             <button
               type="button"
               role="switch"
@@ -126,7 +128,7 @@ export function K8sRbacPage() {
               </span>
               로그 보기
             </button>
-            }
+            )}
           />
 
           <div className="flex gap-1 flex-wrap border-b border-border" role="tablist">
@@ -199,7 +201,6 @@ export function K8sRbacPage() {
             <AccessReviewPanel
               clusterId={clusterId}
               serviceAccounts={serviceAccounts}
-              showLogs={showLogs}
             />
           )}
         </div>

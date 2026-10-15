@@ -3,7 +3,9 @@ import { PageHeader } from '@/components/common/PageHeader';
 import { Link, useParams } from 'react-router-dom';
 import { AlertTriangle, Loader2, Play, Save } from 'lucide-react';
 import { MacCard } from '@/components/ui/MacCard';
-import { StatusBadge, useToast, DoubleScrollX, LogViewer, ConfirmDialog, PageShell } from '@/components/common';
+import { StatusBadge, useToast, DoubleScrollX, LogViewer, ConfirmDialog, PageShell, RunLogPanel } from '@/components/common';
+import { useRunLog, runLogged, type RunLogEntry } from '@/hooks/useRunLog';
+import { useLogPref } from '@/hooks/useLogPref';
 import { useClusters } from '@/hooks/useCluster';
 import { useAuthStore, hasRole } from '@/stores/authStore';
 import { useCanOperate } from '@/hooks/useCanOperate';
@@ -396,6 +398,9 @@ function TestTab({ item, clusters }: { item: CheckMatrixItem; clusters: Cluster[
   // 결과는 실행한 클러스터와 함께 보관 — 다른 클러스터를 고르면 이전 결과를 그 클러스터 결과처럼 보이지 않는다.
   const [result, setResult] = useState<{ clusterId: string; data: CheckMatrixItemPreviewResult } | null>(null);
   const shown = result && result.clusterId === clusterId ? result.data : null;
+  // 미리 실행 로그(D-089/D-135) — 요청·대기·결과 요약·실패 사유. 상세 출력은 아래 결과의 LogViewer.
+  const runLog = useRunLog();
+  const [showLog, setShowLog] = useLogPref('check-item-preview');
 
   const explanation = (() => {
     switch (item.sourceType) {
@@ -412,13 +417,27 @@ function TestTab({ item, clusters }: { item: CheckMatrixItem; clusters: Cluster[
   const handlePreview = async () => {
     if (!clusterId) return;
     const target = clusterId;
-    try {
-      const r = await preview.mutateAsync({
+    const clusterName = clusters.find((c) => c.id === target)?.name ?? target;
+    const r = await runLogged(runLog, {
+      title: '미리 실행',
+      first: `${item.name} — ${clusterName} 에서 1회 실행 요청 (저장 안 함)`,
+      fn: () => preview.mutateAsync({
         sourceType: item.sourceType, sourceRef: item.sourceRef, clusterId: target, itemId: item.id,
-      });
-      setResult({ clusterId: target, data: r });
-    } catch (e) {
-      const msg = formatApiError(e, '테스트 실행 중 오류가 발생했습니다.');
+      }),
+      summarize: (res): RunLogEntry[] => {
+        if (res.skipped) return [['warn', `실행 안 함 — ${res.message || '안전상 실제 실행을 건너뜀'}`]];
+        const level: RunLogEntry[0] = res.status === 'critical' ? 'error' : res.status === 'warning' ? 'warn' : 'info';
+        const msg = (res.message ?? '').split('\n').map((l) => l.trim()).find(Boolean);
+        const out: RunLogEntry[] = [[level, `결과 ${res.status}${res.durationMs != null ? ` · ${res.durationMs}ms` : ''}${msg ? ` — ${msg.slice(0, 200)}` : ''}`]];
+        const logLines = res.log ? res.log.split('\n').length : 0;
+        if (logLines) out.push(['info', `상세 로그 ${logLines}줄 — 아래 결과의 상세 로그에서 확인`]);
+        return out;
+      },
+    });
+    if (r.ok) {
+      setResult({ clusterId: target, data: r.data });
+    } else if (!r.aborted) {
+      const msg = formatApiError(r.error, '테스트 실행 중 오류가 발생했습니다.');
       setResult({ clusterId: target, data: { status: 'critical', message: msg } });
       toast.error('테스트 실행 실패', msg);
     }
@@ -449,12 +468,8 @@ function TestTab({ item, clusters }: { item: CheckMatrixItem; clusters: Cluster[
               {preview.isPending ? '실행 중…' : '미리 실행'}
             </button>
           </div>
-          {preview.isPending ? (
-            <div className="rounded-xl border border-border p-3 flex items-center gap-2 text-sm" role="status" aria-live="polite">
-              <Loader2 className="w-4 h-4 animate-spin text-primary" aria-hidden="true" />
-              실행 중… <span className="text-xs text-muted-foreground">끝나면 결과와 상세 로그가 표시됩니다.</span>
-            </div>
-          ) : shown && (
+          <RunLogPanel run={runLog} show={showLog} onShowChange={setShowLog} maxHeight="max-h-56" />
+          {!preview.isPending && shown && (
             <div className="rounded-xl border border-border p-3 space-y-2" aria-live="polite">
               <div className="flex items-center gap-2">
                 {shown.skipped

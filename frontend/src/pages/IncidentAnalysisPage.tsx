@@ -3,7 +3,9 @@ import {
   AlertTriangle, CheckCircle, Info, Loader2, Search, Zap,
   Server, Layers, Package, RefreshCw, Download, Play, Square, Filter, X,
 } from 'lucide-react';
-import { SearchableSelect, LogViewTabs, PageHeader, PageShell } from '@/components/common';
+import { SearchableSelect, LogViewTabs, PageHeader, PageShell, RunLogPanel } from '@/components/common';
+import { useRunLog, runLogged, type RunLogEntry } from '@/hooks/useRunLog';
+import { useLogPref } from '@/hooks/useLogPref';
 import { MacCard } from '@/components/ui/MacCard';
 import {
   useAnalyzeIncident, useAnalyzerHealth,
@@ -129,8 +131,13 @@ function podOptionLabel(pod: AnalyzePodItem): string {
 
 export function IncidentAnalysisPage() {
   const { data: health } = useAnalyzerHealth();
-  const { mutate: analyze, isPending: analyzing, data: response } = useAnalyzeIncident();
+  const { mutateAsync: analyzeAsync, isPending: analyzing, data: response } = useAnalyzeIncident();
   const fetchCtx = useFetchIncidentContext();
+  // 실행 로그(D-089/D-135) — 자동 채우기(수집)와 장애 분석 각각. 펼침 여부는 사용자가 정한다.
+  const autofillLog = useRunLog();
+  const [showAutofillLog, setShowAutofillLog] = useLogPref('incident-analysis-autofill');
+  const analyzeLog = useRunLog();
+  const [showAnalyzeLog, setShowAnalyzeLog] = useLogPref('incident-analysis-run');
 
   const fid = useId();
   const f = (k: string) => `${fid}-${k}`;
@@ -215,21 +222,33 @@ export function IncidentAnalysisPage() {
 
   const events = structuredEvents.length > 0 ? structuredEvents : parseEventsFromText();
 
-  const handleAutofill = () => {
+  const handleAutofill = async () => {
     if (!clusterId || !namespace || !podName) return;
-    fetchCtx.mutate(
-      { clusterId, namespace, podName, tailLines: 200 },
-      {
-        onSuccess: (data) => {
-          setLogs(data.currentLogs ?? '');
-          setPreviousLogs(data.previousLogs ?? '');
-          setDescribe(data.describeOutput ?? '');
-          setStructuredEvents(data.events ?? []);
-          setRawEvents(''); // 구조화된 events 가 우선이므로 raw 는 비움
-          setAutofilledFor(`${clusterId}/${namespace}/${podName}`);
-        },
+    const clusterName = clusters.find((c) => c.id === clusterId)?.name ?? clusterId;
+    const sel = { clusterId, namespace, podName };
+    const r = await runLogged(autofillLog, {
+      title: '컨텍스트 자동 수집',
+      first: `${clusterName} · ${namespace}/${podName} — logs(tail 200) · previous logs · events · describe 수집 요청`,
+      fn: () => fetchCtx.mutateAsync({ ...sel, tailLines: 200 }),
+      summarize: (data): RunLogEntry[] => {
+        const lines = (t?: string | null) => (t ? t.split('\n').filter(Boolean).length : 0);
+        const evs = data.events ?? [];
+        const warnEvents = evs.filter((e) => e.type === 'Warning').length;
+        return [
+          ['info', `events ${evs.length}건${warnEvents ? ` (Warning ${warnEvents})` : ''}`],
+          ['info', `현재 로그 ${lines(data.currentLogs)}줄 · 이전 컨테이너 로그 ${lines(data.previousLogs)}줄`],
+          [data.describeOutput ? 'info' : 'warn', data.describeOutput ? `describe ${lines(data.describeOutput)}줄` : 'describe 출력 없음'],
+        ];
       },
-    );
+    });
+    if (!r.ok) return;
+    const data = r.data;
+    setLogs(data.currentLogs ?? '');
+    setPreviousLogs(data.previousLogs ?? '');
+    setDescribe(data.describeOutput ?? '');
+    setStructuredEvents(data.events ?? []);
+    setRawEvents(''); // 구조화된 events 가 우선이므로 raw 는 비움
+    setAutofilledFor(`${sel.clusterId}/${sel.namespace}/${sel.podName}`);
   };
 
   const currentSelection = `${clusterId}/${namespace}/${podName}`;
@@ -294,7 +313,7 @@ export function IncidentAnalysisPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [previousLogs, logFilter]);
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     if (!podName.trim() || !namespace.trim()) return;
     const payload: IncidentAnalysisRequest = {
       podName:       podName.trim(),
@@ -305,7 +324,23 @@ export function IncidentAnalysisPage() {
       previousLogs:  previousLogs || undefined,
       describeOutput: describeOut,
     };
-    analyze(payload);
+    const backend = health ? (BACKEND_LABEL[health.backend] ?? health.backend) : '분석기';
+    const logLines = currentLogs ? currentLogs.split('\n').length : 0;
+    // 동기 LLM 호출 — 수십 초 걸릴 수 있어 대기 중 경과를 남기고, 전송 오류도 로그에 남긴다(예전엔 무음).
+    await runLogged(analyzeLog, {
+      title: '장애 분석',
+      first: `${payload.namespace}/${payload.podName} — ${backend}${health && !health.available ? '(오프라인)' : ''} 에 분석 요청 · events ${events.length}건 · 로그 ${logLines}줄${previousLogs ? ' · 이전 로그 포함' : ''}${describeOut ? ' · describe 포함' : ''}`,
+      fn: () => analyzeAsync(payload),
+      summarize: (res): RunLogEntry[] => {
+        if (res.status === 'error' || !res.result) return [['error', `분석 실패 — ${res.error ?? '결과 없음'}`]];
+        const a = res.result;
+        return [
+          [a.severity === 'critical' ? 'error' : a.severity === 'warning' ? 'warn' : 'info',
+            `심각도 ${a.severity} · 신뢰도 ${Math.round(a.confidence * 100)}% · 분석기 ${BACKEND_LABEL[a.analyzedBy] ?? a.analyzedBy}`],
+          ['info', `조치 제안 ${a.suggestedActions.length}건 · 관련 런북 ${a.relatedRunbooks.length}건`],
+        ];
+      },
+    });
   };
 
   const canAutofill = !!clusterId && !!namespace && !!podName;
@@ -498,6 +533,10 @@ export function IncidentAnalysisPage() {
                   : <><Download className="w-3.5 h-3.5" />로그/이벤트/Describe 자동 채우기</>}
               </button>
             </div>
+          )}
+
+          {(autofillLog.running || autofillLog.lines.length > 0) && (
+            <RunLogPanel run={autofillLog} show={showAutofillLog} onShowChange={setShowAutofillLog} maxHeight="max-h-48" />
           )}
 
           {fetchCtx.isError && (
@@ -693,6 +732,8 @@ export function IncidentAnalysisPage() {
               ? <><Loader2 className="w-4 h-4 animate-spin" />분석 중…</>
               : <><Search className="w-4 h-4" />장애 분석 시작</>}
           </button>
+
+          <RunLogPanel run={analyzeLog} show={showAnalyzeLog} onShowChange={setShowAnalyzeLog} maxHeight="max-h-48" />
 
           {/* 결과 — 입력 아래로 이동 (입력 영역이 전폭이라 결과는 stack) */}
           <div>

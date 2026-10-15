@@ -3,19 +3,21 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   ClipboardCheck, Plus, Search, RefreshCw, Download, Upload, Trash2, Pencil,
   Server, Cpu, HardDrive, MapPin, Square, Copy, ClipboardPaste, FileDown, Terminal,
-  AlertTriangle, ScrollText, ChevronDown, ChevronUp,
+  AlertTriangle, ChevronDown, ChevronUp,
 } from 'lucide-react';
 import { useClusters } from '@/hooks/useCluster';
 import {
   ClusterSidebar, DebugLogPanel, ConfirmDialog, GridCell, InlineTextCell, useToast,
-  SkeletonTable, EmptyState, ResizeGrip, DoubleScrollX, useModalA11y, LogViewer, PageHeader, PageShell } from '@/components/common';
+  SkeletonTable, EmptyState, ResizeGrip, DoubleScrollX, useModalA11y, PageHeader, PageShell, RunLogPanel } from '@/components/common';
+import { useRunLog, runLogged, type RunLogEntry } from '@/hooks/useRunLog';
+import { useLogPref } from '@/hooks/useLogPref';
 import { MacCard } from '@/components/ui/MacCard';
 import { useColumnWidths } from '@/hooks/useColumnWidths';
 import { formatApiError } from '@/lib/utils';
 import { useAbortableMutation } from '@/hooks/useAbortableMutation';
 import { useGridSelection } from '@/hooks/useGridSelection';
 import { nodeSpecsApi } from '@/services/api';
-import type { NodeServerSpec, NodeSpecStatus, NodeSpecHostFactsCollectResponse } from '@/types';
+import type { NodeServerSpec, NodeSpecStatus, NodeSpecHostFactsCollectResponse, NodeSpecHostFactsItem, NodeSpecImportResult } from '@/types';
 import { NodeSpecEditModal } from '@/components/node-specs/NodeSpecEditModal';
 import { NodeSpecCsvUploadModal } from '@/components/node-specs/NodeSpecCsvUploadModal';
 import { NodeSpecPasteModal } from '@/components/node-specs/NodeSpecPasteModal';
@@ -195,16 +197,16 @@ export function NodeSpecPage() {
   const [useSudo, setUseSudo] = useState(false);
   const [selectedHosts, setSelectedHosts] = useState<string[]>([]);
   const [confirmHostFacts, setConfirmHostFacts] = useState(false);
-  // 실행 결과 — 건수 토스트만으로는 "어느 호스트가 왜 실패했는지" 알 수 없다.
-  // CLAUDE.md 필수 규칙(모든 "실행" 버튼은 상세 로그 + 사용자가 켜고 끄는 로그 보기)에 따라
-  // 호스트별 상세를 로그 형태로 남기고 접었다 펼 수 있게 한다.
-  const [hostFactsResult, setHostFactsResult] = useState<NodeSpecHostFactsCollectResponse | null>(null);
-  const [hostFactsLogOpen, setHostFactsLogOpen] = useState(false);
+  // 실행 로그(D-089/D-135) — Host Facts 수집은 모달 안 실행 로그(호스트별 줄 + 합계),
+  // 클러스터 임포트는 페이지 실행 로그. 펼침 여부는 사용자가 "로그 보기" 로 정한다.
+  const hostFactsLog = useRunLog();
+  const [showHostFactsLog, setShowHostFactsLog] = useLogPref('node-specs-host-facts');
+  const pageLog = useRunLog();
+  const [showPageLog, setShowPageLog] = useLogPref('node-specs-import');
   // Host Facts 수집 모달 접근성 (Escape·포커스 트랩·초점 복원). 수집 중엔 닫기 무시.
   const closeHostFacts = () => {
     setHostFactsOpen(false);
-    setHostFactsResult(null);
-    setHostFactsLogOpen(false);
+    hostFactsLog.clear();
   };
   const hostFactsRef = useModalA11y(hostFactsOpen, () => { if (!collectingFacts) closeHostFacts(); });
 
@@ -371,6 +373,19 @@ export function NodeSpecPage() {
     },
   });
 
+  const handleImport = async () => {
+    const clusterName = clusters.find((c) => c.id === clusterId)?.name ?? clusterId ?? '';
+    await runLogged(pageLog, {
+      title: '클러스터 임포트',
+      first: `${clusterName} — kubeconfig 로 노드 메타데이터 임포트 요청 (upsert)`,
+      fn: () => importMut.mutateAsync(),
+      summarize: (d: NodeSpecImportResult): RunLogEntry[] => [
+        ...d.errors.map((e): RunLogEntry => ['error', `오류 — ${e}`]),
+        [d.errors.length ? 'warn' : 'info', `신규 ${d.inserted} · 업데이트 ${d.updated} · 변경없음 ${d.skipped} · 오류 ${d.errors.length}`],
+      ],
+    });
+  };
+
   const handleDelete = async () => {
     if (!confirmDelete) return;
     try {
@@ -401,46 +416,59 @@ export function NodeSpecPage() {
       return;
     }
     setCollectingFacts(true);
-    setHostFactsResult(null);
-    try {
-      const res = await nodeSpecsApi.collectHostFacts(clusterId, {
+    // 성공/실패와 무관하게 모달은 열어둔다 — 자동으로 닫히면 방금 뭐가 실패했는지 볼 기회가 없다.
+    const r = await runLogged(hostFactsLog, {
+      title: 'Host Facts 수집',
+      first: `호스트 ${hosts.length}대에 SSH(${sshUser || 'root'}${useSudo ? ', sudo' : ''}) 접속해 bond/disk/vm 수집 요청`,
+      fn: async () => (await nodeSpecsApi.collectHostFacts(clusterId, {
         hosts,
         username: sshUser || 'root',
         password: sshPassword || undefined,
         privateKey: sshPrivateKey.trim() || undefined,
         useSudo,
         upsert: true,
-      });
+      })).data,
+      summarize: hostFactsLines,
+    });
+    setCollectingFacts(false);
+    if (r.ok) {
       qc.invalidateQueries({ queryKey: ['node-specs'] });
-      toast.success('Host Facts 수집됨', `신규 ${res.data.inserted} · 업데이트 ${res.data.updated} · 스킵 ${res.data.skipped}`);
-      if (res.data.errors.length > 0) toast.warning('일부 오류', `${res.data.errors.length}건 — 아래 상세 로그를 확인하세요.`);
-      // 성공/실패와 무관하게 모달은 열어둔다 — 자동으로 닫히면 방금 뭐가 실패했는지 볼 기회가 없다.
-      setHostFactsResult(res.data);
-      if (res.data.errors.length > 0) setHostFactsLogOpen(true);
-    } catch (e: unknown) {
-      toast.error('Host Facts 수집 실패', formatApiError(e));
-    } finally {
-      setCollectingFacts(false);
+      toast.success('Host Facts 수집됨', `신규 ${r.data.inserted} · 업데이트 ${r.data.updated} · 스킵 ${r.data.skipped}`);
+      if (r.data.errors.length > 0) {
+        toast.warning('일부 오류', `${r.data.errors.length}건 — 실행 로그를 확인하세요.`);
+        setShowHostFactsLog(true);
+      }
+    } else if (!r.aborted) {
+      toast.error('Host Facts 수집 실패', formatApiError(r.error));
     }
   };
 
-  // 호스트별 상세 — "실행" 버튼의 결과를 건수 토스트 하나로 뭉개지 않고 로그로 남긴다.
-  function buildHostFactsLog(res: NodeSpecHostFactsCollectResponse): string {
-    return res.items.map((it) => {
-      const parts = [`[${it.status}]`, it.host];
-      if (it.message) parts.push(`— ${it.message}`);
-      if (it.status === 'updated') {
-        const facts: string[] = [];
-        if (it.bond0Ip) facts.push(`bond0=${it.bond0Ip}`);
-        if (it.bond1Ip) facts.push(`bond1=${it.bond1Ip}`);
-        if (it.diskTotalGb != null) facts.push(`disk=${it.diskTotalGb}GB`);
-        if (it.diskType) facts.push(`type=${it.diskType}`);
-        if (it.isSsd != null) facts.push(`ssd=${it.isSsd ? 'O' : 'X'}`);
-        if (it.isVm != null) facts.push(`vm=${it.isVm ? 'O' : 'X'}`);
-        if (facts.length) parts.push(`(${facts.join(', ')})`);
-      }
-      return parts.join(' ');
-    }).join('\n');
+  // 호스트별 상세 — "실행" 버튼의 결과를 건수 토스트 하나로 뭉개지 않고 실행 로그 줄로 남긴다.
+  function hostFactsItemLine(it: NodeSpecHostFactsItem): RunLogEntry {
+    const parts = [it.host, it.status];
+    if (it.status === 'updated') {
+      const facts: string[] = [];
+      if (it.bond0Ip) facts.push(`bond0=${it.bond0Ip}`);
+      if (it.bond1Ip) facts.push(`bond1=${it.bond1Ip}`);
+      if (it.diskCount != null) facts.push(`disk ${it.diskCount}개`);
+      if (it.diskTotalGb != null) facts.push(`disk=${it.diskTotalGb}GB`);
+      if (it.diskType) facts.push(`type=${it.diskType}`);
+      if (it.isSsd != null) facts.push(`ssd=${it.isSsd ? 'O' : 'X'}`);
+      if (it.isVm != null) facts.push(`vm=${it.isVm ? 'O' : 'X'}`);
+      if (facts.length) parts.push(facts.join(', '));
+    }
+    if (it.message) parts.push(`${it.status === 'error' ? '오류 — ' : ''}${it.message}`);
+    const st = it.status.toLowerCase();
+    const level = st === 'error' || st === 'failed' ? 'error' : st === 'skipped' ? 'warn' : 'info';
+    return [level, parts.join(' · ')];
+  }
+
+  function hostFactsLines(res: NodeSpecHostFactsCollectResponse): RunLogEntry[] {
+    // errors[] 는 items 의 error 행과 같은 내용(host: 사유)이라 items 기준으로만 줄을 만든다.
+    const out: RunLogEntry[] = res.items.map(hostFactsItemLine);
+    out.push([res.errors.length ? 'warn' : 'info',
+      `합계 · 호스트 ${res.items.length} · 신규 ${res.inserted} · 업데이트 ${res.updated} · 스킵 ${res.skipped} · 오류 ${res.errors.length}`]);
+    return out;
   }
 
   const clusterNodeCandidates = useMemo(() => {
@@ -490,7 +518,7 @@ export function NodeSpecPage() {
                 { icon: ClipboardPaste, label: '엑셀 붙여넣기', onClick: () => setPasteOpen(true), title: '엑셀/구글시트에서 복사한 블록 붙여넣기' },
                 ...(clusterId ? [{
                   icon: Terminal, label: 'Host Facts 수집 (SSH)',
-                  onClick: () => { setSelectedHosts(clusterNodeCandidates); setHostFactsResult(null); setHostFactsLogOpen(false); setHostFactsOpen(true); },
+                  onClick: () => { setSelectedHosts(clusterNodeCandidates); hostFactsLog.clear(); setHostFactsOpen(true); },
                 }] : []),
                 ...(clusterId ? [{
                   icon: RefreshCw, label: '클러스터 임포트 (kubeconfig)',
@@ -509,6 +537,13 @@ export function NodeSpecPage() {
               </button>
             </>}
           />
+
+          {/* 클러스터 임포트 실행 로그 — 실행 전엔 렌더되지 않는다. */}
+          {(pageLog.running || pageLog.lines.length > 0) && (
+            <div className="mb-3">
+              <RunLogPanel run={pageLog} show={showPageLog} onShowChange={setShowPageLog} maxHeight="max-h-56" />
+            </div>
+          )}
 
           {/* 통계 pills + 필터 + 전체 합계 — 한 줄로 통합 (pills 클릭 시 상태 필터 연동) */}
           <div className="flex flex-wrap items-center gap-1.5 mb-3">
@@ -856,7 +891,7 @@ export function NodeSpecPage() {
         title="클러스터 노드 임포트"
         description="kubeconfig 로 노드 메타데이터를 가져와 신규 등록 또는 자동수집 필드만 갱신합니다 (벤더/자산태그 등은 보존)."
         onCancel={() => setConfirmImport(false)}
-        onConfirm={() => { setConfirmImport(false); importMut.mutate(); }}
+        onConfirm={() => { setConfirmImport(false); void handleImport(); }}
       >
         <div className="space-y-1 font-mono text-xs text-muted-foreground">
           <div>cluster: {clusters.find((c) => c.id === clusterId)?.name ?? clusterId}</div>
@@ -931,33 +966,14 @@ export function NodeSpecPage() {
               sudo -n 사용
             </label>
 
-            {/* 실행 결과 — 건수 요약 + 상세 로그(사용자가 켜고 끄는 "로그 보기"). CLAUDE.md:
-                모든 "실행" 버튼은 상세 로그 출력 + 로그 보기 옵션을 함께 제공해야 한다. */}
-            {hostFactsResult && (
-              <div className="mt-4 border border-border rounded-lg overflow-hidden">
-                <div className="flex items-center gap-2 px-3 py-2 bg-muted/30">
-                  <span className={`text-sm ${hostFactsResult.errors.length > 0 ? 'text-status-warning' : 'text-status-healthy'}`}>
-                    신규 {hostFactsResult.inserted} · 업데이트 {hostFactsResult.updated} · 스킵 {hostFactsResult.skipped}
-                    {hostFactsResult.errors.length > 0 && ` · 오류 ${hostFactsResult.errors.length}`}
-                  </span>
-                  <button
-                    onClick={() => setHostFactsLogOpen((v) => !v)}
-                    className="ml-auto flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
-                    aria-expanded={hostFactsLogOpen}
-                  >
-                    <ScrollText className="w-3.5 h-3.5" />
-                    {hostFactsLogOpen ? '로그 숨기기' : `로그 보기 (호스트 ${hostFactsResult.items.length}건)`}
-                  </button>
-                </div>
-                {hostFactsLogOpen && (
-                  <LogViewer text={buildHostFactsLog(hostFactsResult)} maxHeight="max-h-64" />
-                )}
-              </div>
-            )}
+            {/* 실행 로그 — 요청·대기·호스트별 결과·합계(사용자가 켜고 끄는 "로그 보기"). */}
+            <div className="mt-4">
+              <RunLogPanel run={hostFactsLog} show={showHostFactsLog} onShowChange={setShowHostFactsLog} maxHeight="max-h-64" />
+            </div>
 
             <div className="mt-4 flex justify-end gap-2">
               <button onClick={closeHostFacts} disabled={collectingFacts} className="px-3 py-1.5 text-sm rounded-lg border border-border bg-secondary hover:bg-secondary/80">
-                {hostFactsResult ? '닫기' : '취소'}
+                {hostFactsLog.lines.length > 0 ? '닫기' : '취소'}
               </button>
               <button onClick={() => setConfirmHostFacts(true)} disabled={collectingFacts} className="px-3 py-1.5 text-sm rounded-lg bg-primary text-primary-foreground hover:bg-primary/90">
                 {collectingFacts ? '수집 중…' : '수집 실행'}
