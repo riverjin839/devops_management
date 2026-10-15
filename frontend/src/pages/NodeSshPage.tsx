@@ -6,7 +6,8 @@ import {
   CheckCircle, XCircle, Wifi, Clock, Plug,
 } from 'lucide-react';
 import { useClusters } from '@/hooks/useCluster';
-import { ClusterSidebar, SelectClusterEmptyState } from '@/components/common';
+import { ClusterSidebar, PageShell, SelectClusterEmptyState, EmptyState, LoadingState } from '@/components/common';
+import { PageHeader } from '@/components/common/PageHeader';
 import { MacCard } from '@/components/ui/MacCard';
 import { NodeSshTerminal, type NodeSshConnectParams } from '@/components/k8s';
 import { openNodeSshPopout } from '@/lib/nodeSshPopout';
@@ -21,7 +22,7 @@ const TEST_STATUS_META: Record<
   ok:            { label: '연결 성공', cls: 'bg-status-healthy/10 text-status-healthy border-status-healthy/30', icon: CheckCircle },
   error:         { label: '에러',      cls: 'bg-status-critical/10 text-status-critical border-status-critical/30',             icon: XCircle },
   timeout:       { label: '타임아웃',  cls: 'bg-status-warning/10 text-status-warning border-status-warning/30',       icon: Clock },
-  auth_error:    { label: '인증 실패', cls: 'bg-orange-500/10 text-orange-400 border-orange-500/30',    icon: ShieldAlert },
+  auth_error:    { label: '인증 실패', cls: 'bg-status-warning/10 text-status-warning border-status-warning/30',    icon: ShieldAlert },
   connect_error: { label: '연결 실패', cls: 'bg-status-unknown/10 text-status-unknown border-status-unknown/30',       icon: Wifi },
 };
 
@@ -150,8 +151,8 @@ export function NodeSshPage() {
   const TestIcon = testMeta?.icon;
 
   return (
-    <div className="app-min-h-screen bg-background py-3 pr-3">
-      <div className="flex gap-3">
+    <div className="app-min-h-screen bg-background">
+      <PageShell density="console" as="div" className="flex gap-3">
         <div className="sticky top-3 self-start">
           <ClusterSidebar
             clusters={clusters}
@@ -162,30 +163,27 @@ export function NodeSshPage() {
         </div>
 
         <div className="flex-1 min-w-0 space-y-3">
-          <div className="flex items-center gap-3 flex-wrap">
-            <h1 className="text-lg font-semibold flex items-center gap-2">
-              <TerminalSquare className="w-5 h-5 text-primary" /> 노드 SSH 터미널
-            </h1>
-            <span className="text-sm text-muted-foreground">
-              개별 노드에 SSH 로그인 셸을 열어 웹 터미널로 사용
-            </span>
-            {effectiveHost && (
-              <span className="ml-auto text-sm px-2 py-0.5 rounded-full bg-status-unknown/15 text-status-unknown border border-status-unknown/30 font-mono">
+          <PageHeader
+            icon={TerminalSquare}
+            title="노드 SSH 터미널"
+            description="개별 노드에 SSH 로그인 셸을 열어 웹 터미널로 사용"
+            actions={effectiveHost ? (
+              <span className="text-sm px-2 py-0.5 rounded-full bg-status-unknown/15 text-status-unknown border border-status-unknown/30 font-mono">
                 → {username}@{effectiveHost}:{port}
               </span>
-            )}
-          </div>
+            ) : undefined}
+          />
 
           {!clusterId ? (
             <SelectClusterEmptyState description="왼쪽에서 클러스터를 고르면 노드 목록과 접속 정보를 입력할 수 있습니다." />
           ) : session ? (
             <>
-              <MacCard className="text-sm text-muted-foreground leading-relaxed">
+              <p className="text-sm text-muted-foreground leading-relaxed">
                 SSH 세션이 <b className="text-foreground">플로팅 창</b>으로 열려 있습니다 —
                 창 상단바를 <b className="text-foreground">드래그해 위치를 이동</b>하고, 우하단 모서리를 끌어 크기를 조절할 수 있습니다.
                 단, 다른 페이지로 이동하면 세션이 끊기므로 계속 쓰려면 창 상단바의
                 <b className="text-foreground"> 새 창으로 빼기</b>(별도 브라우저 창)를 이용하세요.
-              </MacCard>
+              </p>
               {popoutMsg && (
                 <p className="text-xs text-status-warning flex items-center gap-1">
                   <ShieldAlert className="w-3 h-3" /> {popoutMsg}
@@ -195,14 +193,14 @@ export function NodeSshPage() {
             </>
           ) : (
             <>
-              <MacCard className="text-sm text-muted-foreground leading-relaxed">
+              <p className="text-sm text-muted-foreground leading-relaxed">
                 선택한 노드에 SSH 로 접속해 <b className="text-foreground">로그인 셸을 그대로</b> 웹 터미널(tty + resize)로 씁니다 —
                 `journalctl`, `top`, `vi` 같은 인터랙티브 명령도 동작합니다.
                 SSH 인증정보는 이 세션에만 사용되고 저장되지 않습니다. (admin/operator 권한 필요)
                 <br />
                 여러 노드에 <b className="text-foreground">같은 명령을 한 번에</b> 돌려야 한다면 <b className="text-foreground">노드 일괄 실행</b>,
                 클러스터 리소스를 TUI 로 탐색하려면 <b className="text-foreground">k9s 콘솔</b>을 쓰세요.
-              </MacCard>
+              </p>
 
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 items-start">
                 {/* 타겟 노드 */}
@@ -221,9 +219,7 @@ export function NodeSshPage() {
 
                   <div className="max-h-64 overflow-y-auto rounded-xl border border-border divide-y divide-border">
                     {nodesQ.isLoading && (
-                      <p className="px-3 py-4 text-sm text-muted-foreground flex items-center gap-2">
-                        <Loader2 className="w-3.5 h-3.5 animate-spin" /> 노드 목록 불러오는 중…
-                      </p>
+                      <LoadingState compact />
                     )}
                     {nodesQ.isError && (
                       <p className="px-3 py-4 text-sm text-status-critical">
@@ -231,7 +227,12 @@ export function NodeSshPage() {
                       </p>
                     )}
                     {!nodesQ.isLoading && !nodesQ.isError && filteredNodes.length === 0 && (
-                      <p className="px-3 py-4 text-sm text-muted-foreground">조건에 맞는 노드가 없습니다.</p>
+                      <EmptyState
+                        compact
+                        icon={Search}
+                        title="조건에 맞는 노드가 없습니다."
+                        description="검색어를 바꾸거나 아래에 호스트를 직접 입력하세요."
+                      />
                     )}
                     {filteredNodes.map((n: NodeSummary) => {
                       const active = !customHost.trim() && n.name === selectedNodeName;
@@ -245,7 +246,7 @@ export function NodeSshPage() {
                           }`}
                         >
                           <span
-                            className={`w-1.5 h-1.5 rounded-full shrink-0 ${n.ready ? 'bg-status-healthy' : 'bg-status-critical'}`}
+                            className={`w-1.5 h-1.5 rounded-full shrink-0 ${n.ready ? 'bg-muted-foreground/40' : 'bg-status-critical'}`}
                             title={n.ready ? 'Ready' : 'NotReady'}
                           />
                           <span className={`text-sm truncate ${active ? 'text-foreground font-medium' : 'text-foreground/80'}`}>
@@ -255,7 +256,7 @@ export function NodeSshPage() {
                             {n.internalIp ?? '—'}
                           </span>
                           {n.roles.includes('control-plane') && (
-                            <span className="text-[11px] px-1.5 py-0.5 rounded-full bg-orange-500/15 text-orange-400 border border-orange-500/30 shrink-0">
+                            <span className="text-[11px] px-1.5 py-0.5 rounded-full bg-chart-7/15 text-chart-7 border border-chart-7/30 shrink-0">
                               master
                             </span>
                           )}
@@ -307,7 +308,7 @@ export function NodeSshPage() {
                         <button
                           key={m}
                           onClick={() => setAuthMode(m)}
-                          className={`flex-1 px-2 py-1.5 text-sm font-medium rounded-md transition-all ${
+                          className={`flex-1 px-2 py-1.5 text-sm font-medium rounded-md transition-colors ${
                             authMode === m ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
                           }`}
                         >
@@ -407,7 +408,7 @@ export function NodeSshPage() {
             </>
           )}
         </div>
-      </div>
+      </PageShell>
     </div>
   );
 }

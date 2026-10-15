@@ -93,10 +93,10 @@ export function MetricEditModal({ isOpen, onClose, moduleKey, editing }: MetricE
     try {
       if (editing) {
         await updateMetric.mutateAsync({ id: editing.id, data: form });
-        toast.success('지표를 수정했습니다.');
+        toast.success('지표 수정됨');
       } else {
         await createMetric.mutateAsync(form);
-        toast.success('지표를 추가했습니다.');
+        toast.success('지표 추가됨');
       }
       onClose();
     } catch (err) {
@@ -108,7 +108,7 @@ export function MetricEditModal({ isOpen, onClose, moduleKey, editing }: MetricE
     if (!editing) return;
     try {
       await deleteMetric.mutateAsync(editing.id);
-      toast.success('지표를 삭제했습니다.');
+      toast.success('지표 삭제됨');
       onClose();
     } catch (err) {
       toast.error(formatApiError(err, '지표 삭제 실패'));
@@ -126,7 +126,7 @@ export function MetricEditModal({ isOpen, onClose, moduleKey, editing }: MetricE
         role="dialog"
         aria-modal="true"
         aria-labelledby={`${formId}-title`}
-        className="bg-card border border-border rounded-2xl shadow-xl w-full max-w-2xl mx-4 max-h-[90vh] overflow-y-auto"
+        className="bg-card border border-border rounded-md shadow-xl w-full max-w-2xl mx-4 max-h-[90vh] overflow-y-auto"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between px-6 py-4 border-b border-border sticky top-0 bg-card rounded-t-2xl z-10">
@@ -276,7 +276,7 @@ export function MetricEditModal({ isOpen, onClose, moduleKey, editing }: MetricE
             <button
               onClick={handleDelete}
               disabled={busy}
-              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-sm text-[hsl(var(--status-critical))] hover:bg-secondary transition-colors disabled:opacity-50"
+              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-sm text-status-critical hover:bg-secondary transition-colors disabled:opacity-50"
             >
               <Trash2 className="w-4 h-4" aria-hidden /> 삭제
             </button>

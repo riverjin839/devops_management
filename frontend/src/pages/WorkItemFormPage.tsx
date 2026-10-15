@@ -1,5 +1,7 @@
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { ArrowLeft, ListTodo } from 'lucide-react';
+import { ListTodo } from 'lucide-react';
+import { PageHeader, PageShell } from '@/components/common';
+import { MacCard } from '@/components/ui/MacCard';
 import { WorkItemForm } from '@/components/work-items';
 import { useWorkItems } from '@/hooks/useWorkItems';
 import type { WorkItemType } from '@/types';
@@ -20,36 +22,34 @@ export function WorkItemFormPage() {
   const { data: listData } = useWorkItems();
   const parentItem = parentId ? listData?.data.find((x) => x.id === parentId) ?? null : null;
 
-  const pageTitle = parentItem ? '하위 업무 등록' : '업무 등록';
+  const pageTitle = parentItem ? '하위 업무 추가' : '업무 추가';
 
   return (
     <div className="app-min-h-screen bg-background">
-      <div className="sticky top-0 z-10 bg-background/85 backdrop-blur-md border-b border-border">
-        <div className="max-w-[1400px] mx-auto px-8 py-2.5 flex items-center gap-2">
-          <button
-            onClick={() => navigate('/tasks-mgmt')}
-            className="p-1.5 hover:bg-secondary rounded-lg transition-colors text-muted-foreground hover:text-foreground"
-            title="목록으로"
-            aria-label="목록으로"
-          >
-            <ArrowLeft className="w-4 h-4" />
-          </button>
-          <ListTodo className="w-4 h-4 text-muted-foreground" />
-          <span className="text-sm text-muted-foreground">{pageTitle}</span>
-          {parentItem && (
-            <span className="ml-2 text-sm text-muted-foreground truncate max-w-[400px]">
-              ↳ 상위:&nbsp;
-              <span className="text-foreground/80">
-                {parentItem.content.replace(/<[^>]*>/g, '').slice(0, 60)}
-                {parentItem.content.replace(/<[^>]*>/g, '').length > 60 ? '…' : ''}
+      <div className="sticky top-0 z-10 bg-background border-b border-border">
+        {/* D-123: sticky 헤더 폭·좌측 여백을 본문(hub)과 맞춘다 — 세로 패딩만 얇게 덮어쓴다 */}
+        <PageShell density="hub" as="div" className="py-2.5">
+          <PageHeader
+            className="items-center"
+            back={{ to: '/tasks-mgmt', label: '업무 목록' }}
+            icon={ListTodo}
+            title={pageTitle}
+            titleExtra={parentItem && (
+              <span className="text-sm text-muted-foreground truncate max-w-[400px]">
+                상위:&nbsp;
+                <span className="text-foreground/80">
+                  {parentItem.content.replace(/<[^>]*>/g, '').slice(0, 60)}
+                  {parentItem.content.replace(/<[^>]*>/g, '').length > 60 ? '…' : ''}
+                </span>
               </span>
-            </span>
-          )}
-        </div>
+            )}
+          />
+        </PageShell>
       </div>
 
-      <main className="max-w-[1400px] mx-auto px-6 pt-4 pb-6">
-        <div className="border border-border rounded-2xl p-5 shadow-card bg-card">
+      {/* D-123: WorkItemForm 은 최대 10칸 필드 그리드라 4xl(doc)에 안 들어가 hub 밀도 */}
+      <PageShell density="hub">
+        <MacCard title="업무 정보" bodyPadding="p-5">
           <WorkItemForm
             defaultType={defaultType}
             parentItem={parentItem}
@@ -58,8 +58,8 @@ export function WorkItemFormPage() {
             onSaved={() => navigate('/tasks-mgmt')}
             embedded
           />
-        </div>
-      </main>
+        </MacCard>
+      </PageShell>
     </div>
   );
 }

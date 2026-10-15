@@ -52,7 +52,7 @@ export function FavoritesFlyoutBody({ onClose }: { onClose: () => void }) {
     <div className="space-y-1 pb-2">
       {visiblePinned.length > 0 && (
         <>
-          <p className="px-2.5 pt-1.5 pb-0.5 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+          <p className="px-2.5 pt-1.5 pb-0.5 text-xs font-medium text-muted-foreground">
             즐겨찾기
           </p>
           {visiblePinned.map(renderItem)}
@@ -61,7 +61,7 @@ export function FavoritesFlyoutBody({ onClose }: { onClose: () => void }) {
       {visibleRecent.length > 0 && (
         <>
           {visiblePinned.length > 0 && <div className="mx-2 my-1 border-t border-border" />}
-          <p className="px-2.5 pt-1.5 pb-0.5 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+          <p className="px-2.5 pt-1.5 pb-0.5 text-xs font-medium text-muted-foreground">
             최근 방문
           </p>
           {visibleRecent.map(renderItem)}

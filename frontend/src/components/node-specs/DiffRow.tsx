@@ -55,7 +55,7 @@ export function DiffRow({ d }: { d: NodeSpecCsvDiff }) {
       <td className="px-2 py-1.5 font-mono text-sm">{d.hostname}</td>
       <td className="px-2 py-1.5 text-xs">
         {d.action === 'error' ? (
-          <span className="text-status-critical">{d.error ?? '-'}</span>
+          <span className="text-status-critical">{d.error ?? '—'}</span>
         ) : changeKeys.length === 0 ? (
           <span className="text-muted-foreground">-</span>
         ) : (

@@ -1,5 +1,5 @@
 import { useEffect, useId, useMemo, useState } from 'react';
-import { Plus, Settings2, ChevronDown } from 'lucide-react';
+import { Plus, Settings2, ChevronDown, Users } from 'lucide-react';
 import { WorkItem, WorkItemCreate, WorkItemUpdate, WorkItemType, KanbanStatus, WorkItemModule, WorkItemTypeLabel } from '@/types';
 import { loadWorkItemImages, saveWorkItemImages } from '@/lib/workItemImages';
 import { RichTextEditor, assigneeWorkTableTemplate } from '@/components/editor';
@@ -467,7 +467,7 @@ export function WorkItemForm({ initial, parentItem, defaultStartedAt, onCancel, 
               onChange={(e) => setAllAttendees(e.target.checked)}
               className="accent-primary"
             />
-            <span className="font-medium whitespace-nowrap">👥 공통업무</span>
+            <span className="inline-flex items-center gap-1 font-medium whitespace-nowrap"><Users className="w-3.5 h-3.5 text-muted-foreground" aria-hidden />공통업무</span>
           </label>
         </div>
         {/* 공유 범위 (멀티테넌시) — 테넌트가 없으면 렌더하지 않는다 */}
@@ -576,7 +576,7 @@ export function WorkItemForm({ initial, parentItem, defaultStartedAt, onCancel, 
       </div>
 
       {/* ── 업무 내용 — 접이식 (기본 접힘) ──────────────────────────────── */}
-      <details className="group rounded-lg border border-border bg-muted/10 open:bg-card open:shadow-sm">
+      <details className="group rounded-md border border-border bg-muted/10 open:bg-card open:shadow-sm">
         <summary className="flex items-center gap-2 px-3 py-2 cursor-pointer text-sm font-medium select-none">
           <ChevronDown className="w-4 h-4 text-muted-foreground transition-transform group-open:rotate-180" />
           <span>{type === 'issue' ? '이슈 내용' : '업무 내용'}</span>
@@ -598,7 +598,7 @@ export function WorkItemForm({ initial, parentItem, defaultStartedAt, onCancel, 
 
       {/* ── 이슈 상세 — type=issue 일 때만, 접이식 ────────────────────────── */}
       {type === 'issue' && (
-        <details className="group rounded-lg border border-border bg-muted/10 open:bg-card open:shadow-sm">
+        <details className="group rounded-md border border-border bg-muted/10 open:bg-card open:shadow-sm">
           <summary className="flex items-center gap-2 px-3 py-2 cursor-pointer text-sm font-medium select-none">
             <ChevronDown className="w-4 h-4 text-muted-foreground transition-transform group-open:rotate-180" />
             <span>이슈 상세</span>
@@ -621,7 +621,7 @@ export function WorkItemForm({ initial, parentItem, defaultStartedAt, onCancel, 
 
       {/* ── 사용자 정의 필드 ─────────────────────────────────────────────── */}
       {customFields.length > 0 && (
-        <details className="group rounded-lg border border-border bg-muted/10 open:bg-card open:shadow-sm" open>
+        <details className="group rounded-md border border-border bg-muted/10 open:bg-card open:shadow-sm" open>
           <summary className="flex items-center gap-2 px-3 py-2 cursor-pointer text-sm font-medium select-none">
             <ChevronDown className="w-4 h-4 text-muted-foreground transition-transform group-open:rotate-180" />
             <span>사용자 정의 필드</span>
@@ -682,7 +682,7 @@ export function WorkItemForm({ initial, parentItem, defaultStartedAt, onCancel, 
 
   if (embedded) return formInner;
   return (
-    <div className="bg-card border border-border rounded-2xl p-5 shadow-card">
+    <div className="bg-card border border-border rounded-md p-5 shadow-card">
       {formInner}
     </div>
   );

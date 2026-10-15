@@ -188,7 +188,7 @@ export function SearchableSelect<T>({
             ref={listRef}
             role="listbox"
             style={menuPortal && menuPos ? { position: 'fixed', top: menuPos.top, left: menuPos.left, width: menuPos.width } : undefined}
-            className={`${menuPortal ? 'z-50' : 'absolute z-30 mt-1 w-full'} max-h-72 overflow-auto rounded-lg border border-border bg-card shadow-lg py-1`}
+            className={`${menuPortal ? 'z-50' : 'absolute z-30 mt-1 w-full'} max-h-72 overflow-auto rounded-md border border-border bg-card shadow-lg py-1`}
           >
             {filtered.length === 0 ? (
               <li className="px-3 py-2 text-sm text-muted-foreground italic">

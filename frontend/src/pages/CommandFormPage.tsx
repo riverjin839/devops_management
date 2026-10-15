@@ -3,7 +3,8 @@ import { PageHeader } from '@/components/common/PageHeader';
 import { useNavigate, useParams } from 'react-router-dom';
 import { ArrowLeft, Terminal } from 'lucide-react';
 
-import { ConfluenceUrlInput, useToast } from '@/components/common';
+import { ConfluenceUrlInput, useToast, PageShell, LoadingState, EmptyState } from '@/components/common';
+import { MacCard } from '@/components/ui/MacCard';
 import {
   useCommands, useCreateCommand, useUpdateCommand,
 } from '@/hooks/useCommands';
@@ -29,8 +30,8 @@ export function CommandFormPage() {
 
   return (
     <div className="app-min-h-screen bg-background">
-      <div className="sticky top-0 z-10 bg-background/85 backdrop-blur-md border-b border-border">
-        <div className="max-w-[1400px] mx-auto px-8 py-2.5 flex items-center gap-2">
+      <div className="sticky top-0 z-10 bg-background border-b border-border">
+        <div className="max-w-4xl mx-auto px-8 py-2.5 flex items-center gap-2">
           <button
             onClick={() => navigate('/commands')}
             className="p-1.5 hover:bg-secondary rounded-lg transition-colors text-muted-foreground hover:text-foreground"
@@ -40,31 +41,35 @@ export function CommandFormPage() {
             <ArrowLeft className="w-4 h-4" />
           </button>
           <Terminal className="w-4 h-4 text-muted-foreground" />
-          <span className="text-sm text-muted-foreground">{editMode ? '명령어 수정' : '새 명령어'}</span>
+          <span className="text-sm text-muted-foreground">{editMode ? '명령어 수정' : '명령어 추가'}</span>
         </div>
       </div>
 
-      <main className="max-w-[1400px] mx-auto px-8 pt-10 pb-16">
+      <PageShell density="doc">
         <PageHeader
-          title={editMode ? '명령어 수정' : '새 명령어 등록'}
+          title={editMode ? '명령어 수정' : '명령어 추가'}
           description="자주 쓰는 CLI 한 줄을 의미·주의사항·중요도와 함께 기록합니다."
           className="mb-8"
         />
 
-        <div className="bg-card border border-border rounded-2xl p-8 shadow-card">
-          {editMode && listLoading ? (
-            <p className="text-sm text-muted-foreground">불러오는 중…</p>
-          ) : editMode && !initial ? (
-            <p className="text-sm text-destructive">명령어를 찾을 수 없습니다.</p>
-          ) : (
+        {editMode && listLoading ? (
+          <LoadingState />
+        ) : editMode && !initial ? (
+          <EmptyState
+            title="명령어를 찾을 수 없습니다"
+            description="삭제됐거나 주소가 잘못됐을 수 있습니다. 목록에서 다시 선택하세요."
+            action={{ label: '목록으로', variant: 'secondary', onClick: () => navigate('/commands') }}
+          />
+        ) : (
+          <MacCard title="명령어 정보" bodyPadding="p-8">
             <CommandForm
               initial={initial}
               onCancel={() => navigate('/commands')}
               onSaved={() => navigate('/commands')}
             />
-          )}
-        </div>
-      </main>
+          </MacCard>
+        )}
+      </PageShell>
     </div>
   );
 }
@@ -114,10 +119,10 @@ function CommandForm({ initial, onCancel, onSaved }: CommandFormProps) {
     try {
       if (initial) {
         await update.mutateAsync({ id: initial.id, data: payload });
-        toast.success('수정 완료', '명령어 정보가 업데이트되었습니다.');
+        toast.success('수정됨', '명령어 정보가 업데이트되었습니다.');
       } else {
         await create.mutateAsync(payload);
-        toast.success('등록 완료', '새 명령어가 추가되었습니다.');
+        toast.success('명령어 추가됨');
       }
       onSaved();
     } catch (e) {

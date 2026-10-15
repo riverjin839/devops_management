@@ -1,9 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Play, Square, Search } from 'lucide-react';
+import { Play, Square, Search, Radio } from 'lucide-react';
 import { Virtuoso } from 'react-virtuoso';
 import { getAuthToken } from '@/stores/authStore';
 import { k8sStreamUrls } from '@/services/api';
 import { NamespaceMultiSelect } from '@/components/k8s/NamespaceMultiSelect';
+import { EmptyState } from '@/components/common';
+import { MacCard } from '@/components/ui/MacCard';
 
 interface K8sEvent {
   watchType?: string;
@@ -147,8 +149,11 @@ export function EventsStream({ clusterId, selectedNs, onSelectedNsChange }: Prop
   }, [events, selectedNs, typeFilter, search]);
 
   return (
-    <div className="space-y-3">
-      <div className="flex items-center gap-2 flex-wrap">
+    <MacCard
+      title="이벤트 (실시간)"
+      bodyPadding="p-0"
+      titleExtra={<span className="text-xs text-muted-foreground tabular-nums">{filtered.length} / {events.length}건</span>}
+      actions={<>
         {streaming ? (
           <button onClick={stop} className="inline-flex items-center gap-1.5 rounded-xl bg-status-critical/10 text-status-critical border border-status-critical/30 px-3 py-1.5 text-sm font-medium">
             <Square className="w-3.5 h-3.5" /> 중지
@@ -176,37 +181,39 @@ export function EventsStream({ clusterId, selectedNs, onSelectedNsChange }: Prop
             className="rounded-xl border border-border bg-card pl-7 pr-2 py-1.5 text-sm w-44 focus:outline-none focus:ring-1 focus:ring-primary" />
         </div>
 
-        <span className="text-sm text-muted-foreground ml-auto">{filtered.length} / {events.length}건</span>
-        {err && <span className="text-sm text-status-critical">· {err}</span>}
-      </div>
-
-      <div className="rounded-xl border border-border overflow-hidden">
+        {err && <span className="text-sm text-status-critical">{err}</span>}
+      </>}
+    >
+      <div>
         <div className={`grid ${COLS} gap-2 px-3 py-1.5 text-xs font-semibold text-muted-foreground bg-secondary/30 border-b border-border`}>
           <span>유형</span><span>네임스페이스</span><span>Reason</span><span>메시지</span><span>대상</span><span>Source</span><span className="text-right">횟수</span><span className="text-right">Last Seen</span>
         </div>
         {filtered.length === 0 ? (
-          <div className="p-8 text-center text-sm text-muted-foreground">
-            {streaming ? '조건에 맞는 이벤트 대기 중…' : '재시작을 눌러 이벤트를 수신하세요.'}
-          </div>
+          <EmptyState
+            compact
+            icon={Radio}
+            title={streaming ? '조건에 맞는 이벤트 대기 중…' : '이벤트 수신이 멈춰 있습니다'}
+            description={streaming ? '새 이벤트가 들어오면 여기에 바로 쌓입니다.' : '헤더의 재시작을 누르면 이벤트를 다시 수신합니다.'}
+          />
         ) : (
           <Virtuoso
             style={{ height: '60vh' }}
             data={filtered}
             itemContent={(_i, e) => (
               <div className={`grid ${COLS} gap-2 px-3 py-1.5 text-sm border-b border-border/40 items-center`}>
-                <span className={e.type === 'Warning' ? 'text-status-warning font-medium' : 'text-muted-foreground'}>{e.type ?? '-'}</span>
-                <span className="truncate text-muted-foreground">{e.namespace ?? '-'}</span>
-                <span className="truncate font-medium" title={e.reason ?? ''}>{e.reason ?? '-'}</span>
+                <span className={e.type === 'Warning' ? 'text-status-warning font-medium' : 'text-muted-foreground'}>{e.type ?? '—'}</span>
+                <span className="truncate text-muted-foreground">{e.namespace ?? '—'}</span>
+                <span className="truncate font-medium" title={e.reason ?? ''}>{e.reason ?? '—'}</span>
                 <span className="truncate" title={e.message ?? ''}>{e.message}</span>
                 <span className="truncate text-muted-foreground" title={`${e.involvedKind}/${e.involvedName}`}>{e.involvedKind}: {e.involvedName}</span>
-                <span className="truncate text-muted-foreground" title={e.source ?? ''}>{e.source ?? '-'}</span>
-                <span className="text-right text-muted-foreground tabular-nums">{e.count ?? '-'}</span>
+                <span className="truncate text-muted-foreground" title={e.source ?? ''}>{e.source ?? '—'}</span>
+                <span className="text-right text-muted-foreground tabular-nums">{e.count ?? '—'}</span>
                 <span className="text-right text-muted-foreground tabular-nums">{rel(e.lastTimestamp)}</span>
               </div>
             )}
           />
         )}
       </div>
-    </div>
+    </MacCard>
   );
 }

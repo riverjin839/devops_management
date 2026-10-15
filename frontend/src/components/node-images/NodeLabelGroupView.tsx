@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import { EmptyState } from '@/components/common';
 import { Layers, Tag } from 'lucide-react';
 import type { NodeImagesInfo } from '@/hooks/useNodeImages';
 import { formatBytes } from './utils';
@@ -75,9 +76,11 @@ export function NodeLabelGroupView({ nodes, searchQuery }: Props) {
 
   if (filtered.length === 0) {
     return (
-      <div className="bg-card border border-border rounded-xl p-8 text-center text-muted-foreground text-sm">
-        {searchQuery ? `"${searchQuery}"에 해당하는 노드/이미지가 없습니다.` : '노드 이미지 정보가 없습니다.'}
-      </div>
+      <EmptyState
+        icon={Layers}
+        title={searchQuery ? `"${searchQuery}"에 해당하는 노드/이미지가 없습니다.` : '노드 이미지 정보가 없습니다.'}
+        description={searchQuery ? '검색어를 바꿔 보세요.' : '노드 이미지 수집이 끝나면 여기에 표시됩니다.'}
+      />
     );
   }
 
@@ -123,12 +126,12 @@ export function NodeLabelGroupView({ nodes, searchQuery }: Props) {
       {/* 그룹 카드 그리드 */}
       <div className="grid gap-4" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(340px, 1fr))' }}>
         {groups.map((g) => (
-          <div key={g.value} className="bg-card border border-border rounded-xl overflow-hidden flex flex-col">
+          <div key={g.value} className="bg-card border border-border rounded-md overflow-hidden flex flex-col">
             {/* 카드 헤더 */}
             <div className="px-4 py-3 bg-muted/20 border-b border-border">
               <div className="flex items-baseline justify-between gap-2 flex-wrap">
                 <div className="flex items-center gap-1.5 min-w-0">
-                  <span className="text-xs font-mono text-muted-foreground uppercase tracking-wider truncate">
+                  <span className="text-xs font-mono text-muted-foreground truncate">
                     {groupKey}
                   </span>
                   <span className="text-sm font-semibold text-foreground font-mono truncate" title={g.value}>
@@ -161,7 +164,7 @@ export function NodeLabelGroupView({ nodes, searchQuery }: Props) {
                         n.role === 'control-plane' ? 'bg-primary/10 text-primary' : 'bg-secondary text-muted-foreground'
                       }`}>{n.role}</span>
                       <span className={`text-[9.5px] px-1.5 py-0.5 rounded ${
-                        n.status === 'ready' ? 'bg-status-healthy/15 text-status-healthy' :
+                        n.status === 'ready' ? 'bg-secondary text-muted-foreground' :
                         n.status === 'not-ready' ? 'bg-status-critical/15 text-status-critical' :
                         'bg-muted text-muted-foreground'
                       }`}>{n.status}</span>

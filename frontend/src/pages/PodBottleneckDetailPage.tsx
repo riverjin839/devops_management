@@ -3,7 +3,7 @@ import { PageHeader } from '@/components/common/PageHeader';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { Trash2, AlertCircle } from 'lucide-react';
 import { MacCard } from '@/components/ui/MacCard';
-import { ConfirmDialog } from '@/components/common';
+import { ConfirmDialog, PageShell, Skeleton } from '@/components/common';
 import { ProbeResultCard, BOTTLENECK_STATUS_META } from '@/components/pod-bottleneck';
 import {
   useBottleneckRun,
@@ -15,7 +15,7 @@ import type { BottleneckStatus } from '@/types';
 import { formatApiError, parseUTC } from '@/lib/utils';
 
 const STATUS_BADGE: Record<BottleneckStatus, { label: string; cls: string }> = {
-  healthy:  { label: '정상',  cls: 'bg-status-healthy/10 text-status-healthy border-status-healthy/30' },
+  healthy:  { label: '정상',  cls: 'bg-secondary text-muted-foreground border-border' },
   warning:  { label: '경고',  cls: 'bg-status-warning/10 text-status-warning border-status-warning/30' },
   critical: { label: '위험',  cls: 'bg-status-critical/10 text-status-critical border-status-critical/30' },
   pending:  { label: '미연결', cls: 'bg-status-unknown/10 text-status-unknown border-status-unknown/30' },
@@ -44,30 +44,32 @@ export function PodBottleneckDetailPage() {
 
   if (isLoading) {
     return (
-      <div className="app-min-h-screen bg-background p-6">
-        <div className="max-w-[1400px] mx-auto space-y-3">
-          <div className="h-8 w-64 bg-muted/30 animate-pulse rounded-md" />
-          <div className="h-32 bg-muted/30 animate-pulse rounded-md" />
-        </div>
+      <div className="app-min-h-screen bg-background">
+        <PageShell density="hub" className="space-y-3">
+          <Skeleton className="block h-8 w-64 rounded-md" />
+          <Skeleton className="block h-32 w-full rounded-md" />
+        </PageShell>
       </div>
     );
   }
 
   if (error || !run) {
     return (
-      <div className="app-min-h-screen bg-background p-6">
-        <div className="max-w-[800px] mx-auto rounded-md border border-status-critical/40 bg-status-critical/5 p-4 text-sm text-status-critical flex items-start gap-2">
-          <AlertCircle className="w-4 h-4 mt-0.5 flex-shrink-0" />
-          <div>
-            <div className="font-medium">진단 결과 조회 실패</div>
-            <div className="text-sm text-muted-foreground mt-0.5">
-              {error instanceof Error ? error.message : '결과를 찾을 수 없습니다.'}
+      <div className="app-min-h-screen bg-background">
+        <PageShell density="hub">
+          <div className="rounded-md border border-status-critical/40 bg-status-critical/5 p-4 text-sm text-status-critical flex items-start gap-2">
+            <AlertCircle className="w-4 h-4 mt-0.5 flex-shrink-0" />
+            <div>
+              <div className="font-medium">진단 결과 조회 실패</div>
+              <div className="text-sm text-muted-foreground mt-0.5">
+                {error instanceof Error ? error.message : '결과를 찾을 수 없습니다.'}
+              </div>
+              <Link to="/pod-bottleneck" className="inline-block mt-2 text-sm underline">
+                진단 목록으로
+              </Link>
             </div>
-            <Link to="/pod-bottleneck" className="inline-block mt-2 text-sm underline">
-              진단 목록으로
-            </Link>
           </div>
-        </div>
+        </PageShell>
       </div>
     );
   }
@@ -78,48 +80,47 @@ export function PodBottleneckDetailPage() {
   const orderedKeys: Array<keyof typeof run.probes> = ['tcp_state', 'tcp_perf', 'dns_latency', 'endpoints'];
 
   return (
-    <div className="app-min-h-screen bg-background p-5">
-      <div className="max-w-[1400px] mx-auto space-y-4">
-        <div className="flex items-center gap-3 flex-wrap">
-          <PageHeader
-            back={{ to: '/pod-bottleneck', label: '목록' }}
-            title={
-              <span className="font-mono">
-                <span className="text-muted-foreground">{run.namespace}/</span>
-                {run.sourcePod}
-                <span className="text-muted-foreground mx-2">→</span>
-                {run.destPod}
-                {run.destService && (
-                  <span className="text-sm text-muted-foreground ml-2">(svc: {run.destService})</span>
-                )}
-              </span>
-            }
-            description={<>
-              {parseUTC(run.createdAt).toLocaleString('ko-KR')}
-              {run.triggeredByUser && ` · ${run.triggeredByUser}`}
-              {run.durationMs != null && ` · ${run.durationMs}ms`}
-            </>}
-            className="flex-1 min-w-[200px]"
-          />
-          <span
-            className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-sm font-semibold ${status.cls}`}
-            aria-label={`전체 상태: ${status.label}`}
-          >
-            <StatusIcon className="w-4 h-4" aria-hidden />
-            {status.label}
-          </span>
-          <button
-            type="button"
-            onClick={() => setConfirmDelete(true)}
-            disabled={del.isPending || !canOperate}
-            title={withHint('진단 결과 삭제')}
-            aria-label={ariaWithHint('진단 결과 삭제')}
-            className="inline-flex items-center gap-1.5 rounded-xl border border-border bg-card px-3 py-1.5 text-sm text-status-critical hover:bg-status-critical/10 disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            <Trash2 className="w-3.5 h-3.5" />
-            삭제
-          </button>
-        </div>
+    <div className="app-min-h-screen bg-background">
+      <PageShell density="hub" className="space-y-4">
+        <PageHeader
+          back={{ to: '/pod-bottleneck', label: '목록' }}
+          title={
+            <span className="font-mono">
+              <span className="text-muted-foreground">{run.namespace}/</span>
+              {run.sourcePod}
+              <span className="text-muted-foreground mx-2">→</span>
+              {run.destPod}
+              {run.destService && (
+                <span className="text-sm text-muted-foreground ml-2">(svc: {run.destService})</span>
+              )}
+            </span>
+          }
+          description={<>
+            {parseUTC(run.createdAt).toLocaleString('ko-KR')}
+            {run.triggeredByUser && ` · ${run.triggeredByUser}`}
+            {run.durationMs != null && ` · ${run.durationMs}ms`}
+          </>}
+          actions={<>
+            <span
+              className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-sm font-semibold ${status.cls}`}
+              aria-label={`전체 상태: ${status.label}`}
+            >
+              <StatusIcon className="w-4 h-4" aria-hidden />
+              {status.label}
+            </span>
+            <button
+              type="button"
+              onClick={() => setConfirmDelete(true)}
+              disabled={del.isPending || !canOperate}
+              title={withHint('진단 결과 삭제')}
+              aria-label={ariaWithHint('진단 결과 삭제')}
+              className="inline-flex items-center gap-1.5 rounded-xl border border-border bg-card px-3 py-1.5 text-sm text-status-critical hover:bg-status-critical/10 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+              삭제
+            </button>
+          </>}
+        />
 
         {del.isError && (
           <div role="alert" className="flex items-start gap-2 rounded-md border border-status-critical/40 bg-status-critical/5 p-3 text-sm text-status-critical">
@@ -139,7 +140,7 @@ export function PodBottleneckDetailPage() {
             <div role="status" className="flex flex-wrap items-center gap-2 text-sm">
               <span className="text-muted-foreground">원인 후보</span>
               {bad.length === 0 ? (
-                <span className="inline-flex items-center gap-1 rounded-full border border-status-healthy/30 bg-status-healthy/10 px-2.5 py-0.5 text-status-healthy">
+                <span className="inline-flex items-center gap-1 rounded-full border border-border bg-secondary px-2.5 py-0.5 text-muted-foreground">
                   이상 없음
                 </span>
               ) : bad.map(({ k, r }) => {
@@ -181,7 +182,7 @@ export function PodBottleneckDetailPage() {
             );
           })}
         </div>
-      </div>
+      </PageShell>
 
       <ConfirmDialog
         open={confirmDelete}

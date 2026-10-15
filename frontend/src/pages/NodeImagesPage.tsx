@@ -3,8 +3,9 @@ import { Boxes, Search, AlertTriangle, LayoutList, LayoutGrid, Layers } from 'lu
 import { useClusters } from '@/hooks/useCluster';
 import { useNodeImageList } from '@/hooks/useNodeImages';
 import { NodeImagesTable, NodeLabelGroupView, ImageCentricView, NodeImagesCsvExportMenu, ImageDistributeDialog } from '@/components/node-images';
-import { ClusterSidebar, SnapshotProgressCard, ExportMenu, SelectClusterEmptyState } from '@/components/common';
-import { MacCard } from '@/components/ui/MacCard';
+import { ClusterSidebar, SnapshotProgressCard, ExportMenu, SelectClusterEmptyState, LoadingState, EmptyState, PageShell } from '@/components/common';
+import { PageHeader } from '@/components/common/PageHeader';
+import { StatTile, StatTileRow } from '@/components/common/StatTile';
 import { formatApiError } from '@/lib/utils';
 
 function extractErrorMessage(error: unknown): string {
@@ -40,7 +41,7 @@ export function NodeImagesPage() {
   const computing = result?.status === 'computing' && nodes.length === 0;
 
   const activeClusterName = useMemo(
-    () => clusters.find((c) => c.id === activeClusterId)?.name || '-',
+    () => clusters.find((c) => c.id === activeClusterId)?.name || '—',
     [clusters, activeClusterId],
   );
 
@@ -64,7 +65,7 @@ export function NodeImagesPage() {
 
   return (
     <div className="app-min-h-screen bg-background">
-      <main className="pr-3 py-3 flex gap-3">
+      <PageShell density="console" className="flex gap-3">
         <ClusterSidebar
           clusters={clusters}
           selectedId={activeClusterId || null}
@@ -72,28 +73,29 @@ export function NodeImagesPage() {
           iconOnly
         />
         <div ref={contentRef} className="flex-1 min-w-0">
-          <div className="flex items-center justify-between mb-6">
-            <div className="flex items-center gap-2">
-              <Boxes className="w-5 h-5 text-primary" />
-              <h1 className="text-xl font-semibold">K8s 노드 이미지</h1>
-              {activeClusterName !== '-' && (
-                <span className="text-sm text-muted-foreground">
-                  — <span className="font-medium text-foreground">{activeClusterName}</span>
-                </span>
-              )}
-            </div>
-          </div>
+          <PageHeader
+            className="mb-6"
+            icon={Boxes}
+            title="K8s 노드 이미지"
+            titleExtra={activeClusterName !== '-' ? (
+              <span className="text-sm text-muted-foreground">
+                — <span className="font-medium text-foreground">{activeClusterName}</span>
+              </span>
+            ) : undefined}
+          />
 
           {/* 통계 요약 카드 — image_count 가 안 보이던 문제 해결 + 한눈에 파악 */}
           {!isLoading && nodes.length > 0 && (
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
-              <SummaryTile label="노드" value={nodes.length.toLocaleString()} unit="개" />
-              <SummaryTile label="총 이미지 슬롯" value={totals.totalImages.toLocaleString()} unit="개"
-                tip="모든 노드의 이미지 수 합 — 같은 이미지가 N개 노드에 있으면 N으로 카운트" />
-              <SummaryTile label="고유 이미지" value={totals.uniqueImages.toLocaleString()} unit="개"
-                tip="primary name 기준 dedup" />
-              <SummaryTile label="총 용량" value={formatTotalSize(totals.totalSize)} unit="" />
-            </div>
+            <StatTileRow className="mb-4">
+              <StatTile label="노드" value={nodes.length.toLocaleString()} hint="개" />
+              <div title="모든 노드의 이미지 수 합 — 같은 이미지가 N개 노드에 있으면 N으로 카운트" className="min-w-0">
+                <StatTile label="총 이미지 슬롯" value={totals.totalImages.toLocaleString()} hint="개" />
+              </div>
+              <div title="대표 이미지 이름 기준으로 중복 제거" className="min-w-0">
+                <StatTile label="고유 이미지" value={totals.uniqueImages.toLocaleString()} hint="개" />
+              </div>
+              <StatTile label="총 용량" value={formatTotalSize(totals.totalSize)} />
+            </StatTileRow>
           )}
 
           {/* 검색 + 탭 */}
@@ -137,9 +139,7 @@ export function NodeImagesPage() {
           </div>
 
           {isLoading ? (
-            <MacCard bodyPadding="p-8" className="text-center text-muted-foreground">
-              {clustersLoading ? 'Loading clusters...' : 'Loading node images...'}
-            </MacCard>
+            <LoadingState />
           ) : computing ? (
             <SnapshotProgressCard
               processed={result?.processed ?? 0}
@@ -151,20 +151,11 @@ export function NodeImagesPage() {
           ) : !activeClusterId ? (
             <SelectClusterEmptyState />
           ) : nodesError ? (
-            <MacCard rootClassName="border-status-critical/30" bodyPadding="p-8">
-              <div className="flex flex-col items-center gap-3 text-center">
-                <AlertTriangle className="w-8 h-8 text-status-critical" />
-                <div>
-                  <p className="font-medium text-status-critical mb-1">노드 이미지 정보를 불러올 수 없습니다</p>
-                  <p className="text-sm text-muted-foreground max-w-lg">
-                    {extractErrorMessage(nodesErrorDetail)}
-                  </p>
-                </div>
-                <p className="text-sm text-muted-foreground mt-1">
-                  클러스터의 kubeconfig 경로와 API Endpoint 설정을 확인하세요.
-                </p>
-              </div>
-            </MacCard>
+            <EmptyState
+              icon={AlertTriangle}
+              title="노드 이미지 정보를 불러올 수 없습니다."
+              description={`${extractErrorMessage(nodesErrorDetail)} — 클러스터의 kubeconfig 경로와 API Endpoint 설정을 확인하세요.`}
+            />
           ) : view === 'node-table' ? (
             <NodeImagesTable nodes={nodes} searchQuery={searchQuery} onDistribute={setDistributeImage} />
           ) : view === 'label-group' ? (
@@ -173,7 +164,7 @@ export function NodeImagesPage() {
             <ImageCentricView nodes={nodes} searchQuery={searchQuery} onDistribute={setDistributeImage} />
           )}
         </div>
-      </main>
+      </PageShell>
 
       {distributeImage && activeClusterId && (
         <ImageDistributeDialog
@@ -184,21 +175,6 @@ export function NodeImagesPage() {
           clusters={clusters.map((c) => ({ id: c.id, name: c.name }))}
         />
       )}
-    </div>
-  );
-}
-
-function SummaryTile({ label, value, unit, tip }: { label: string; value: string; unit: string; tip?: string }) {
-  return (
-    <div
-      className="bg-card border border-border rounded-lg px-3 py-2.5"
-      title={tip}
-    >
-      <p className="text-xs uppercase tracking-wider text-muted-foreground">{label}</p>
-      <p className="mt-0.5 flex items-baseline gap-1">
-        <span className="text-lg font-bold tabular-nums text-foreground">{value}</span>
-        {unit && <span className="text-xs text-muted-foreground">{unit}</span>}
-      </p>
     </div>
   );
 }

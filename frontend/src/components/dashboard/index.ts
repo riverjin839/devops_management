@@ -1,4 +1,3 @@
-export { StatusBadge, StatusDot } from './StatusBadge';
 export { HealthHero } from './HealthHero';
 export { CheckHistoryHeatmap } from './CheckHistoryHeatmap';
 export { AddonCard, AddonGrid } from './AddonCard';

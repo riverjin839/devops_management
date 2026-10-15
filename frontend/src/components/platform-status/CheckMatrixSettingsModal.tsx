@@ -33,7 +33,7 @@ export function CheckMatrixSettingsModal({ isOpen, onClose }: Props) {
     if (!valid) return;
     try {
       await updateMut.mutateAsync(days);
-      toast.success('보관 주기를 저장했습니다.');
+      toast.success('보관 주기 저장됨');
       onClose();
     } catch (e) {
       toast.error('저장 실패', formatApiError(e));
@@ -47,7 +47,7 @@ export function CheckMatrixSettingsModal({ isOpen, onClose }: Props) {
         role="dialog"
         aria-modal="true"
         aria-labelledby={titleId}
-        className="bg-card border border-border rounded-2xl shadow-xl w-full max-w-sm mx-4"
+        className="bg-card border border-border rounded-md shadow-xl w-full max-w-sm mx-4"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between px-6 py-4 border-b border-border">

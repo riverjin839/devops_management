@@ -1,13 +1,16 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { RefreshCw, Camera, Settings2, Plus, Trash2, ArrowUp, ArrowDown, Minus, Check, Clock } from 'lucide-react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import type { AxiosError } from 'axios';
 import { MacCard } from '@/components/ui/MacCard';
 import { RoleGate } from '@/components/auth/RoleGate';
 import { metricTrendApi } from '@/services/api';
-import type { MetricTrendRow, MetricChecklistItemT } from '@/types';
+import type { MetricTrendRow, MetricChecklistItemT, MetricTrendResponse } from '@/types';
 import { parseUTC } from '@/lib/utils';
 import { useModalA11y } from '@/components/common/useModalA11y';
+import { EmptyState, LoadingState, RunLogPanel } from '@/components/common';
+import { useRunLog, runLogged, pollIntoRunLog, type RunLogEntry } from '@/hooks/useRunLog';
+import { useLogPref } from '@/hooks/useLogPref';
 
 function errMsg(e: unknown): string {
   const ax = e as AxiosError<{ detail?: string }>;
@@ -35,6 +38,11 @@ export function ResourceTrendChecklist({ clusterId }: { clusterId: string }) {
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
   const [showItems, setShowItems] = useState(false);
   const [showSchedule, setShowSchedule] = useState(false);
+  const runLog = useRunLog();
+  const [showLog, setShowLog] = useLogPref('daily-check-metric-snapshot');
+  const pollAbort = useRef<AbortController | null>(null);
+  // 언마운트·클러스터 전환 시 진행 추적 중지
+  useEffect(() => () => pollAbort.current?.abort(), [clusterId]);
 
   const { data, isLoading, isError, error, refetch, isFetching } = useQuery({
     queryKey: ['metric-trend', clusterId],
@@ -46,14 +54,51 @@ export function ResourceTrendChecklist({ clusterId }: { clusterId: string }) {
   const reload = () => qc.invalidateQueries({ queryKey: ['metric-trend', clusterId] });
 
   const doSnapshot = async () => {
+    pollAbort.current?.abort();
+    const ctrl = new AbortController();
+    pollAbort.current = ctrl;
+    const beforeId = data?.latestSnapshotId ?? null;
+    const beforeAt = data?.latestCollectedAt ?? null;
     setBusy(true);
-    try {
-      await metricTrendApi.snapshot(clusterId);
-      flash(true, '백그라운드 수집을 시작했습니다 — 대규모 클러스터는 수십 초 걸릴 수 있고 완료되면 자동 갱신됩니다.');
-      // 비동기(Celery) 수집 — 완료 시점을 알 수 없어 몇 차례 자동 새로고침으로 폴링.
-      [8000, 20000, 40000, 70000].forEach((d) => window.setTimeout(reload, d));
-    } catch (e) { flash(false, errMsg(e)); }
-    finally { setBusy(false); }
+    const r = await runLogged(runLog, {
+      title: '리소스 수 스냅샷',
+      first: `스냅샷 수집 요청 — 직전 수집 ${beforeAt ? parseUTC(beforeAt).toLocaleString('ko-KR') : '없음'}`,
+      fn: async () => (await metricTrendApi.snapshot(clusterId)).data,
+      summarize: (res) => [
+        ['info', res.queued ? `큐잉됨 · task ${res.taskId || '—'}` : '수집 요청 처리됨'],
+        ['info', '수집 완료(최근 수집 시각 변경)를 기다리는 중 — 대규모 클러스터는 수십 초 걸릴 수 있음'],
+      ],
+      keepOpen: true,
+    });
+    setBusy(false);
+    if (!r.ok) {
+      if (!r.aborted) flash(false, errMsg(r.error));
+      return;
+    }
+    flash(true, '백그라운드 수집을 시작했습니다 — 대규모 클러스터는 수십 초 걸릴 수 있고 완료되면 자동 갱신됩니다.');
+    // 비동기(Celery) 수집 — 최근 수집 시각/스냅샷 ID 가 바뀌면 완료로 본다.
+    const changed = (s: MetricTrendResponse) =>
+      (s.latestSnapshotId ?? null) !== beforeId || (s.latestCollectedAt ?? null) !== beforeAt;
+    const last = await pollIntoRunLog(runLog, {
+      fetch: async () => (await metricTrendApi.get(clusterId)).data,
+      describe: (snap, prev) => {
+        if (!changed(snap) || (prev && changed(prev))) return [];
+        const at = snap.latestCollectedAt ? parseUTC(snap.latestCollectedAt).toLocaleString('ko-KR') : '—';
+        return [
+          ['info', `스냅샷 수집됨 · ${at}`],
+          ...snap.items.map((row): RunLogEntry => [
+            'info',
+            `${row.label} · 오늘 ${num(row.today)} · 어제 ${num(row.yesterday)}${row.delta != null && row.delta !== 0 ? ` (${row.delta > 0 ? '+' : ''}${row.delta})` : ''}${row.truncated ? ' · 집계 상한 초과(근사)' : ''}`,
+          ]),
+          ['info', `항목 ${snap.items.length}개 갱신`],
+        ];
+      },
+      isDone: changed,
+      intervalMs: 3000,
+      timeoutMs: 180_000,
+      signal: ctrl.signal,
+    });
+    if (last && changed(last)) reload();
   };
   const toggleCheck = async (row: MetricTrendRow) => {
     try { await metricTrendApi.check(clusterId, row.itemKey, !row.isChecked, data?.date); reload(); }
@@ -70,33 +115,42 @@ export function ResourceTrendChecklist({ clusterId }: { clusterId: string }) {
   };
 
   const COLS = 'grid-cols-[1.4fr_70px_70px_70px_70px_70px_110px_56px]';
+  const snapshotBusy = busy || runLog.running;
 
   return (
-    <MacCard title="리소스 수 추세 체크리스트" bodyPadding="p-0">
-      <div className="flex items-center gap-2 flex-wrap px-3 py-2.5 border-b border-border">
-        <span className="text-sm text-muted-foreground">
-          {data?.latestCollectedAt ? `최근 수집: ${parseUTC(data.latestCollectedAt).toLocaleString('ko-KR')}` : '수집된 스냅샷 없음'}
-        </span>
-        <RoleGate allow={['admin', 'operator']}>
-          <button onClick={doSnapshot} disabled={busy}
-            className="inline-flex items-center gap-1.5 rounded-xl bg-primary text-primary-foreground px-3 py-1.5 text-sm font-medium disabled:opacity-50">
-            <Camera className="w-3.5 h-3.5" /> {busy ? '수집 중…' : '지금 스냅샷'}
+    <MacCard
+      title="리소스 수 추세 체크리스트"
+      description={data?.latestCollectedAt ? `최근 수집 ${parseUTC(data.latestCollectedAt).toLocaleString('ko-KR')}` : '수집된 스냅샷 없음'}
+      bodyPadding="p-0"
+      actions={
+        <>
+          <RoleGate allow={['admin', 'operator']}>
+            <button onClick={doSnapshot} disabled={snapshotBusy}
+              className="inline-flex items-center gap-1.5 rounded-xl bg-primary text-primary-foreground px-3 py-1.5 text-sm font-medium disabled:opacity-50">
+              <Camera className="w-3.5 h-3.5" /> {snapshotBusy ? '수집 중…' : '지금 스냅샷'}
+            </button>
+          </RoleGate>
+          <RoleGate allow={['admin']}>
+            <button onClick={() => setShowItems(true)}
+              className="inline-flex items-center gap-1.5 rounded-xl border border-border bg-card px-3 py-1.5 text-sm hover:bg-secondary/60">
+              <Settings2 className="w-3.5 h-3.5" /> 항목 관리
+            </button>
+            <button onClick={() => setShowSchedule(true)}
+              className="inline-flex items-center gap-1.5 rounded-xl border border-border bg-card px-3 py-1.5 text-sm hover:bg-secondary/60">
+              <Clock className="w-3.5 h-3.5" /> 주기 설정
+            </button>
+          </RoleGate>
+          <button onClick={() => refetch()} title="새로고침" aria-label="새로고침" className="p-1.5 rounded-xl hover:bg-secondary text-muted-foreground">
+            <RefreshCw className={`w-3.5 h-3.5 ${isFetching ? 'animate-spin' : ''}`} />
           </button>
-        </RoleGate>
-        <RoleGate allow={['admin']}>
-          <button onClick={() => setShowItems(true)}
-            className="inline-flex items-center gap-1.5 rounded-xl border border-border bg-card px-3 py-1.5 text-sm hover:bg-secondary/60">
-            <Settings2 className="w-3.5 h-3.5" /> 항목 관리
-          </button>
-          <button onClick={() => setShowSchedule(true)}
-            className="inline-flex items-center gap-1.5 rounded-xl border border-border bg-card px-3 py-1.5 text-sm hover:bg-secondary/60">
-            <Clock className="w-3.5 h-3.5" /> 주기 설정
-          </button>
-        </RoleGate>
-        <button onClick={() => refetch()} title="새로고침" aria-label="새로고침" className="ml-auto p-1.5 rounded-lg hover:bg-secondary text-muted-foreground">
-          <RefreshCw className={`w-3.5 h-3.5 ${isFetching ? 'animate-spin' : ''}`} />
-        </button>
-      </div>
+        </>
+      }
+    >
+      {(runLog.running || runLog.lines.length > 0) && (
+        <div className="px-3 py-2 border-b border-border">
+          <RunLogPanel run={runLog} show={showLog} onShowChange={setShowLog} />
+        </div>
+      )}
 
       {msg && (
         <div className={`px-4 py-2 text-sm ${msg.ok ? 'text-status-healthy bg-status-healthy-soft' : 'text-status-critical bg-status-critical-soft'}`}>{msg.text}</div>
@@ -109,11 +163,11 @@ export function ResourceTrendChecklist({ clusterId }: { clusterId: string }) {
       </div>
 
       {isLoading ? (
-        <div className="p-6 text-sm text-muted-foreground">불러오는 중…</div>
+        <LoadingState compact />
       ) : isError ? (
         <div className="p-6 text-sm text-status-critical">조회 실패: {errMsg(error)}</div>
       ) : (data?.items.length ?? 0) === 0 ? (
-        <div className="p-8 text-center text-sm text-muted-foreground">추적 항목이 없습니다. "항목 관리"에서 추가하세요.</div>
+        <EmptyState compact title="추적 항목 없음" description="admin 이 「항목 관리」에서 추적할 리소스 종류를 추가하면 여기에 추세가 표시됩니다." />
       ) : (
         data!.items.map((r) => (
           <div key={r.itemKey} className={`grid ${COLS} gap-2 px-4 py-1.5 text-sm border-b border-border/40 items-center`}>
@@ -127,7 +181,7 @@ export function ResourceTrendChecklist({ clusterId }: { clusterId: string }) {
             <span className="text-right tabular-nums text-muted-foreground">{num(r.d28)}</span>
             <span className="text-sm"><TrendCell row={r} /></span>
             <span className="flex justify-center">
-              <RoleGate allow={['admin', 'operator']} fallback={r.isChecked ? <Check className="w-4 h-4 text-status-healthy" /> : <span className="text-muted-foreground">-</span>}>
+              <RoleGate allow={['admin', 'operator']} fallback={r.isChecked ? <Check className="w-4 h-4 text-muted-foreground" /> : <span className="text-muted-foreground">-</span>}>
                 <input type="checkbox" checked={r.isChecked} onChange={() => toggleCheck(r)} title={r.checkedBy ? `${r.checkedBy} · ${r.checkedAt ? parseUTC(r.checkedAt).toLocaleString('ko-KR') : ''}` : ''}
                   className="w-4 h-4 accent-primary cursor-pointer" />
               </RoleGate>
@@ -183,7 +237,7 @@ function ScheduleModal({ onClose }: { onClose: () => void }) {
 
   return (
     <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4" onClick={onClose}>
-      <div ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby="trend-schedule-title" className="bg-card w-full max-w-md rounded-2xl border border-border overflow-hidden" onClick={(e) => e.stopPropagation()}>
+      <div ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby="trend-schedule-title" className="bg-card w-full max-w-md rounded-md border border-border overflow-hidden" onClick={(e) => e.stopPropagation()}>
         <div id="trend-schedule-title" className="px-5 py-3 border-b border-border font-semibold text-sm">자동 스냅샷 동작 주기</div>
         <div className="p-4 space-y-4 text-sm">
           <label className="flex items-center gap-2">
@@ -258,7 +312,7 @@ function ItemsModal({ clusterId, onClose }: { clusterId: string; onClose: () => 
 
   return (
     <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4" onClick={onClose}>
-      <div ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby="trend-items-title" className="bg-card w-full max-w-2xl max-h-[80vh] rounded-2xl border border-border flex flex-col overflow-hidden" onClick={(e) => e.stopPropagation()}>
+      <div ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby="trend-items-title" className="bg-card w-full max-w-2xl max-h-[80vh] rounded-md border border-border flex flex-col overflow-hidden" onClick={(e) => e.stopPropagation()}>
         <div id="trend-items-title" className="px-5 py-3 border-b border-border font-semibold text-sm">추적 항목 관리</div>
         <div className="p-4 space-y-3 overflow-auto">
           {err && <div className="text-sm text-status-critical">{err}</div>}

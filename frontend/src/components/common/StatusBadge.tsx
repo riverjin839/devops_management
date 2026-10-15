@@ -31,19 +31,20 @@ const VARIANT_META: Record<StatusVariant, { icon: ComponentType<{ className?: st
   critical: { icon: XCircle,       defaultLabel: '위험' },
   pending:  { icon: WifiOff,       defaultLabel: '미연결' },
   info:     { icon: Info,          defaultLabel: 'Info' },
-  neutral:  { icon: Circle,        defaultLabel: '-' },
+  neutral:  { icon: Circle,        defaultLabel: '—' },
   loading:  { icon: Loader2,       defaultLabel: '로딩' },
 };
 
-// CSS var 기반 — light/dark 에서 모두 자동 동작
+// 상태 토큰 — 글자는 4.5:1 대비를 보장하는 text-status-*(→ --status-*-text), 면은 bg/border-status-*/N.
+// 정상(healthy)·중립은 색을 쓰지 않는다 — 상태색은 비정상에만 (DESIGN_SYSTEM §12.12-3, D-119·D-132).
 const VARIANT_CLS: Record<StatusVariant, string> = {
-  healthy:  'bg-[hsl(var(--status-healthy-bg))]  text-[hsl(var(--status-healthy))]  border-[hsl(var(--status-healthy)/0.3)]',
-  warning:  'bg-[hsl(var(--status-warning-bg))]  text-[hsl(var(--status-warning))]  border-[hsl(var(--status-warning)/0.3)]',
-  critical: 'bg-[hsl(var(--status-critical-bg))] text-[hsl(var(--status-critical))] border-[hsl(var(--status-critical)/0.3)]',
-  pending:  'bg-[hsl(var(--status-pending-bg))]  text-[hsl(var(--status-pending))]  border-[hsl(var(--status-pending)/0.3)]',
-  info:     'bg-[hsl(var(--status-info-bg))]     text-[hsl(var(--status-info))]     border-[hsl(var(--status-info)/0.3)]',
-  neutral:  'bg-[hsl(var(--status-neutral-bg))]  text-[hsl(var(--status-neutral))]  border-[hsl(var(--status-neutral)/0.3)]',
-  loading:  'bg-[hsl(var(--status-info-bg))]     text-[hsl(var(--status-info))]     border-[hsl(var(--status-info)/0.3)]',
+  healthy:  'bg-secondary text-muted-foreground border-border',
+  warning:  'bg-status-warning/10 text-status-warning border-status-warning/30',
+  critical: 'bg-status-critical/10 text-status-critical border-status-critical/30',
+  pending:  'bg-status-unknown/10 text-status-unknown border-status-unknown/30',
+  info:     'bg-status-info/10 text-status-info border-status-info/30',
+  neutral:  'bg-secondary text-muted-foreground border-border',
+  loading:  'bg-status-info/10 text-status-info border-status-info/30',
 };
 
 function StatusBadgeBase({
@@ -80,13 +81,13 @@ interface StatusDotProps {
 
 export function StatusDot({ variant, pulse = false, className = '', title }: StatusDotProps) {
   const colorMap: Record<StatusVariant, string> = {
-    healthy:  'bg-[hsl(var(--status-healthy))]',
-    warning:  'bg-[hsl(var(--status-warning))]',
-    critical: 'bg-[hsl(var(--status-critical))]',
-    pending:  'bg-[hsl(var(--status-pending))]',
-    info:     'bg-[hsl(var(--status-info))]',
-    neutral:  'bg-[hsl(var(--status-neutral))]',
-    loading:  'bg-[hsl(var(--status-info))]',
+    healthy:  'bg-muted-foreground/40',
+    warning:  'bg-status-warning',
+    critical: 'bg-status-critical',
+    pending:  'bg-status-unknown',
+    info:     'bg-status-info',
+    neutral:  'bg-muted-foreground/40',
+    loading:  'bg-status-info',
   };
   return (
     <span

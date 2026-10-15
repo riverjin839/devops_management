@@ -10,6 +10,7 @@ import {
   Sparkles,
   AlertTriangle,
   Maximize2,
+  Monitor,
 } from 'lucide-react';
 
 interface ClusterItemCardProps {
@@ -24,9 +25,9 @@ interface ClusterItemCardProps {
 const SIZE_LABEL: Record<ClusterItemCardSize, string> = { sm: 'S', md: 'M', lg: 'L' };
 const SIZE_ORDER: ClusterItemCardSize[] = ['sm', 'md', 'lg'];
 
-// 도메인 상태(result_status) → 색상 dot.
+// 도메인 상태(result_status) → 색상 dot. 정상은 무채색, 비정상만 상태색(DESIGN_SYSTEM §12.12-3).
 const STATUS_DOT: Record<string, string> = {
-  healthy: 'bg-status-healthy',
+  healthy: 'bg-muted-foreground/40',
   warning: 'bg-status-warning',
   critical: 'bg-status-critical',
   info: 'bg-muted-foreground/50',
@@ -37,7 +38,7 @@ function detailLine(item: ClusterItem): ReactNode {
   const d = item.resultDetail || {};
   switch (item.itemType) {
     case 'node_count':
-      return d.ready != null ? `Ready ${d.ready}/${d.total ?? '-'}` : null;
+      return d.ready != null ? `Ready ${d.ready}/${d.total ?? '—'}` : null;
     case 'workload_count':
       return d.namespaces != null
         ? `네임스페이스 ${d.namespaces}${d.pending ? ` · 대기 ${d.pending}` : ''}${d.failed ? ` · 실패 ${d.failed}` : ''}`
@@ -58,7 +59,7 @@ function detailLine(item: ClusterItem): ReactNode {
 // 결과 수집 방식 배지 (수동/자동/AI)
 function SourceBadge({ mode }: { mode: ClusterItem['sourceMode'] }) {
   const map = {
-    manual: { label: '수동', icon: Hand, cls: 'bg-status-warning/10 text-status-warning border-status-warning/20' },
+    manual: { label: '수동', icon: Hand, cls: 'bg-secondary text-muted-foreground border-border' },
     auto: { label: '자동', icon: Clock3, cls: 'bg-primary/10 text-primary border-primary/20' },
     ai: { label: 'AI', icon: Sparkles, cls: 'bg-brand-ai/10 text-brand-ai border-brand-ai/20' },
   }[mode] ?? { label: mode, icon: Clock3, cls: 'bg-secondary text-muted-foreground border-border' };
@@ -91,12 +92,12 @@ export function ClusterItemCard({ item, isRunning, onRun, onEdit, onDelete, onRe
   const sub = detailLine(item);
 
   return (
-    <div className="h-full bg-card border border-border rounded-xl p-4 hover:border-muted-foreground/30 transition-all relative group flex flex-col">
+    <div className="h-full bg-card border border-border rounded-md p-4 hover:border-muted-foreground/30 transition-colors relative group flex flex-col">
       {/* Header */}
       <div className="flex items-start justify-between mb-3">
         <div className="flex items-center gap-2 min-w-0">
           <div className="w-9 h-9 rounded-lg bg-secondary flex items-center justify-center text-lg flex-shrink-0">
-            {item.icon || '🖥️'}
+            {item.icon || <Monitor className="w-4 h-4 text-muted-foreground" aria-hidden />}
           </div>
           <div className="min-w-0">
             <h3 className="text-sm font-semibold truncate flex items-center gap-1.5">
@@ -181,7 +182,7 @@ export function ClusterItemCard({ item, isRunning, onRun, onEdit, onDelete, onRe
         ) : (
           // 수치형
           <div className="flex items-baseline gap-1.5">
-            <span className="text-4xl font-bold font-mono text-foreground">{valueText}</span>
+            <span className="text-4xl font-bold tabular-nums text-foreground">{valueText}</span>
           </div>
         )}
         {!hasError && sub && (

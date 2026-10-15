@@ -1,7 +1,6 @@
 import { useRef, useState } from 'react';
 import {
-  X, Loader2, DownloadCloud, AlertTriangle, CheckCircle2,
-  FileSpreadsheet, ClipboardPaste, RotateCcw, Upload, Link2Off, ShieldCheck, Trash2,
+  X, Loader2, DownloadCloud, AlertTriangle, CheckCircle2, FileSpreadsheet, ClipboardPaste, RotateCcw, Upload, Link2Off, ShieldCheck, Trash2,
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { useJiraImport, useJiraCredential, useJiraVerifyLinks, useJiraUnlink } from '@/hooks/useJira';
@@ -100,7 +99,7 @@ export function JiraImportModal({ open, onClose, defaultProjectKey }: JiraImport
       setVerifyResult(data);
       // 찾지 못한 연결은 기본으로 전부 선택 — 대개 그대로 정리하려는 흐름이다.
       setPickedMissing(new Set(data.missing.map((m) => m.workItemId)));
-      toast.info('연결 점검 완료', data.detail);
+      toast.info('연결 점검됨', data.detail);
     } catch (err) {
       toast.error('연결 점검 실패', formatApiError(err));
     }
@@ -162,11 +161,11 @@ export function JiraImportModal({ open, onClose, defaultProjectKey }: JiraImport
       if (dryRun) {
         setPreview(data);
         setExcluded(new Set());
-        toast.info('미리보기 완료', `신규 ${data.imported} · 갱신 ${data.updated} · 변경없음 ${data.skipped}`);
+        toast.info('미리보기 생성됨', `신규 ${data.imported} · 갱신 ${data.updated} · 변경없음 ${data.skipped}`);
       } else {
         setDone(data);
         setPreview(null);
-        toast.success('Jira 가져오기 완료', `신규 ${data.imported} · 갱신 ${data.updated}`);
+        toast.success('Jira 가져옴', `신규 ${data.imported} · 갱신 ${data.updated}`);
       }
     } catch (err) {
       toast.error('요청 실패', formatApiError(err));
@@ -211,7 +210,7 @@ export function JiraImportModal({ open, onClose, defaultProjectKey }: JiraImport
       }
       setDone(data);
       setExcelRows(null);
-      toast.success('업무 관리에 저장 완료', `신규 ${data.imported} · 갱신 ${data.updated}`);
+      toast.success('업무 관리에 저장됨', `신규 ${data.imported} · 갱신 ${data.updated}`);
     } catch (err) {
       toast.error('저장 실패', formatApiError(err));
     } finally {
@@ -223,7 +222,7 @@ export function JiraImportModal({ open, onClose, defaultProjectKey }: JiraImport
     <div className="fixed inset-0 z-50 flex items-center justify-center">
       <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={() => !busy && onClose()} />
       <div ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby="jira-import-modal-title"
-        className="relative bg-card border border-border rounded-2xl shadow-card w-full max-w-2xl mx-4 max-h-[92vh] overflow-y-auto">
+        className="relative bg-card border border-border rounded-md shadow-card w-full max-w-2xl mx-4 max-h-[92vh] overflow-y-auto">
         <div className="flex items-center gap-3 px-5 pt-5 pb-3">
           <div className="w-10 h-10 rounded-2xl bg-primary/10 flex items-center justify-center flex-shrink-0">
             <DownloadCloud className="w-5 h-5 text-primary" />
@@ -258,7 +257,7 @@ export function JiraImportModal({ open, onClose, defaultProjectKey }: JiraImport
                 )}
                 {done.errors.length > 0 && (
                   <div className="mt-2 text-xs text-status-critical">
-                    {done.errors.slice(0, 5).map((e, i) => <div key={i}>⚠ {e}</div>)}
+                    {done.errors.slice(0, 5).map((e, i) => <div key={i}><AlertTriangle className="inline w-3 h-3 mr-1 align-[-2px]" aria-hidden />{e}</div>)}
                   </div>
                 )}
               </div>
@@ -289,7 +288,7 @@ export function JiraImportModal({ open, onClose, defaultProjectKey }: JiraImport
                   return (
                     <button key={m.id} type="button" onClick={() => setSource(m.id)} aria-pressed={source === m.id}
                       className={`flex-1 inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl border text-sm font-medium transition-colors ${
-                        source === m.id ? 'bg-primary/10 text-primary border-primary/30 ring-2 ring-primary/20'
+                        source === m.id ? 'bg-primary/10 text-primary border-primary/30'
                           : 'bg-secondary border-border text-muted-foreground hover:text-foreground'
                       }`}>
                       <Icon className="w-4 h-4" /> {m.label}
@@ -305,7 +304,7 @@ export function JiraImportModal({ open, onClose, defaultProjectKey }: JiraImport
                       <button key={s.id} type="button" onClick={() => { setScope(s.id); setPreview(null); }}
                         aria-pressed={scope === s.id}
                         className={`flex-1 px-2 py-2 rounded-xl border text-xs font-medium transition-colors ${
-                          scope === s.id ? 'bg-primary/10 text-primary border-primary/30 ring-2 ring-primary/20'
+                          scope === s.id ? 'bg-primary/10 text-primary border-primary/30'
                             : 'bg-secondary border-border text-muted-foreground hover:text-foreground'
                         }`}>
                         {s.label}
@@ -506,7 +505,7 @@ export function JiraImportModal({ open, onClose, defaultProjectKey }: JiraImport
                     <div className="rounded-xl border border-border bg-secondary/30 p-3 text-sm">
                       <div className="flex items-center gap-3 font-medium">
                         <span>총 {excelRows.total}건</span>
-                        <span className="text-status-healthy">담당자 매칭 {excelRows.matched}</span>
+                        <span>담당자 매칭 {excelRows.matched}</span>
                         <span className="text-muted-foreground">미매칭 {excelRows.total - excelRows.matched}</span>
                       </div>
                       <ul className="mt-2 max-h-40 overflow-y-auto divide-y divide-border/40">

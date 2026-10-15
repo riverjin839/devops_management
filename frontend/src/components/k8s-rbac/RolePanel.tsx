@@ -33,7 +33,7 @@ interface Props {
 }
 
 function roleKey(r: RbacRole): string {
-  return `${r.scope}:${r.namespace ?? '-'}:${r.name}`;
+  return `${r.scope}:${r.namespace ?? '—'}:${r.name}`;
 }
 
 export function RolePanel({
@@ -169,8 +169,9 @@ export function RolePanel({
 
   return (
     <div className="grid grid-cols-1 xl:grid-cols-2 gap-3 items-start">
-      <MacCard title="Role / ClusterRole">
-        <div className="flex flex-wrap items-center gap-2 mb-3">
+      <MacCard
+        title="Role / ClusterRole"
+        actions={<>
           <div className="relative flex-1 min-w-[180px]">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
             <input
@@ -193,8 +194,8 @@ export function RolePanel({
           >
             system:* 포함
           </button>
-        </div>
-
+        </>}
+      >
         {rows.length === 0 ? (
           <EmptyState icon={Shield} title={isLoading ? '불러오는 중…' : '롤이 없다'} compact />
         ) : (
@@ -205,7 +206,7 @@ export function RolePanel({
                   {['범위', '이름', '규칙', ''].map((h, i) => (
                     <th
                       key={h || i}
-                      className="text-left px-3 py-2 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground whitespace-nowrap"
+                      className="text-left px-3 py-2 text-[11px] font-semibold text-muted-foreground whitespace-nowrap"
                     >
                       {h}
                     </th>

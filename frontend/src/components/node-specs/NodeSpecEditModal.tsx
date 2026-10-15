@@ -102,10 +102,10 @@ export function NodeSpecEditModal({ mode, spec, defaultClusterId, clusters, onCl
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
       <div className="absolute inset-0 bg-black/60" onClick={() => !saving && onClose()} />
-      <div ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby="node-spec-edit-modal-title" className="relative bg-card border border-border rounded-2xl shadow-2xl w-full max-w-5xl mx-4 max-h-[90vh] overflow-hidden flex flex-col">
+      <div ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby="node-spec-edit-modal-title" className="relative bg-card border border-border rounded-md shadow-2xl w-full max-w-5xl mx-4 max-h-[90vh] overflow-hidden flex flex-col">
         <div className="flex items-center gap-3 px-5 py-3 border-b border-border bg-muted/30">
           <h2 id="node-spec-edit-modal-title" className="text-sm font-semibold">
-            {mode === 'create' ? '서버스펙 신규 등록' : `서버스펙 수정 — ${spec?.hostname}`}
+            {mode === 'create' ? '서버 스펙 추가' : `서버스펙 수정 — ${spec?.hostname}`}
           </h2>
           <button onClick={onClose} disabled={saving} title="닫기" aria-label="닫기"
             className="ml-auto p-1 rounded hover:bg-secondary text-muted-foreground disabled:opacity-40">
@@ -116,7 +116,7 @@ export function NodeSpecEditModal({ mode, spec, defaultClusterId, clusters, onCl
         <div className="flex-1 overflow-y-auto p-5 space-y-5">
           {/* 기본 */}
           <section>
-            <h3 className="text-sm font-bold text-muted-foreground uppercase mb-2">기본 정보</h3>
+            <h3 className="text-sm font-bold text-muted-foreground mb-2">기본 정보</h3>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
               <Field label="hostname *">
                 <input value={form.hostname ?? ''} onChange={set('hostname')} className={monoCls} />
@@ -146,7 +146,7 @@ export function NodeSpecEditModal({ mode, spec, defaultClusterId, clusters, onCl
 
           {/* 네트워크 */}
           <section>
-            <h3 className="text-sm font-bold text-muted-foreground uppercase mb-2">네트워크</h3>
+            <h3 className="text-sm font-bold text-muted-foreground mb-2">네트워크</h3>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
               <Field label="public IP (bond0)">
                 <input value={form.bond0Ip ?? ''} onChange={set('bond0Ip')} className={monoCls}
@@ -174,7 +174,7 @@ export function NodeSpecEditModal({ mode, spec, defaultClusterId, clusters, onCl
 
           {/* 하드웨어 */}
           <section>
-            <h3 className="text-sm font-bold text-muted-foreground uppercase mb-2">하드웨어</h3>
+            <h3 className="text-sm font-bold text-muted-foreground mb-2">하드웨어</h3>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
               <div className="md:col-span-2">
                 <Field label="CPU 모델">
@@ -246,7 +246,7 @@ export function NodeSpecEditModal({ mode, spec, defaultClusterId, clusters, onCl
 
           {/* 위치 */}
           <section>
-            <h3 className="text-sm font-bold text-muted-foreground uppercase mb-2">위치</h3>
+            <h3 className="text-sm font-bold text-muted-foreground mb-2">위치</h3>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
               <Field label="데이터센터">
                 <input value={form.datacenter ?? ''} onChange={set('datacenter')} className={inputCls} placeholder="DC1" />
@@ -265,7 +265,7 @@ export function NodeSpecEditModal({ mode, spec, defaultClusterId, clusters, onCl
 
           {/* 소프트웨어 */}
           <section>
-            <h3 className="text-sm font-bold text-muted-foreground uppercase mb-2">소프트웨어 (자동 수집 대상)</h3>
+            <h3 className="text-sm font-bold text-muted-foreground mb-2">소프트웨어 (자동 수집 대상)</h3>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
               <div className="md:col-span-2">
                 <Field label="OS Image">
@@ -288,7 +288,7 @@ export function NodeSpecEditModal({ mode, spec, defaultClusterId, clusters, onCl
 
           {/* 운영 정보 — 자산/계약 항목(자산태그·구매일·보증·담당자·구입목적) 은 사용자 요청으로 제거. */}
           <section>
-            <h3 className="text-sm font-bold text-muted-foreground uppercase mb-2">운영</h3>
+            <h3 className="text-sm font-bold text-muted-foreground mb-2">운영</h3>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               <div className="md:col-span-2">
                 <Field label="현재 용도">
@@ -308,7 +308,7 @@ export function NodeSpecEditModal({ mode, spec, defaultClusterId, clusters, onCl
           </section>
 
           {error && (
-            <div className="px-3 py-2 text-sm rounded-lg bg-destructive/10 text-destructive border border-destructive/30">
+            <div className="px-3 py-2 text-sm rounded-lg bg-status-critical/10 text-status-critical border border-status-critical/30">
               {error}
             </div>
           )}

@@ -46,7 +46,7 @@ export function ColumnSettingsMenu({ order, isVisible, onToggle, onReset, onSave
       </button>
 
       {open && (
-        <div className="absolute right-0 mt-1.5 z-30 w-52 rounded-xl border border-border bg-card shadow-lg p-1.5">
+        <div className="absolute right-0 mt-1.5 z-30 w-52 rounded-md border border-border bg-card shadow-lg p-1.5">
           <div className="px-2 py-1.5 text-xs font-medium text-muted-foreground">표시할 컬럼</div>
           <div className="max-h-72 overflow-y-auto">
             {order.map((k) => {

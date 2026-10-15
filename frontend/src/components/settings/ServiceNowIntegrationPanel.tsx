@@ -3,6 +3,7 @@ import { Loader2, Wifi, WifiOff, Save, Globe } from 'lucide-react';
 import { useServiceNowConfig, useUpdateServiceNowConfig, useServiceNowTest } from '@/hooks/useServiceNow';
 import { useAuthStore } from '@/stores/authStore';
 import { useToast } from '@/components/common';
+import { MacCard } from '@/components/ui/MacCard';
 import { formatApiError } from '@/lib/utils';
 
 const inputCls =
@@ -84,17 +85,16 @@ export function ServiceNowIntegrationPanel() {
 
   return (
     <div className="space-y-6">
-      <div className="bg-card border border-border rounded-xl p-5">
-        <div className="flex items-center gap-2 mb-1">
-          <Globe className="w-4 h-4 text-primary" />
-          <h3 className="font-semibold">ServiceNow 공통 설정</h3>
-          {!isAdmin && <span className="text-xs text-muted-foreground">(관리자만 수정 가능)</span>}
-        </div>
+      <MacCard
+        title="ServiceNow 공통 설정"
+        icon={Globe}
+        description={!isAdmin ? '관리자만 수정 가능' : undefined}
+      >
         <p className="text-sm text-muted-foreground mb-4">
           사내에 구축된 ServiceNow ITSM 의 Base URL 을 설정합니다. 실제 인스턴스의 테이블명·필드
           스펙이 아래 기본값(표준 Table API 가정)과 다르면 코드 수정 없이 여기서 조정하세요.
           인증은 별도 자격증명 없이 현재 로그인 사용자의 Jira/SSO 세션을 재사용합니다
-          (설정 → 연동(Jira)에서 SSO 자동 로그인 필요) — 전용 인증은 추후 개선 예정입니다.
+          (설정 → Jira 연동에서 SSO 자동 로그인 필요) — 전용 인증은 추후 개선 예정입니다.
         </p>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
           <div className="md:col-span-2">
@@ -141,10 +141,9 @@ export function ServiceNowIntegrationPanel() {
             </button>
           </div>
         )}
-      </div>
+      </MacCard>
 
-      <div className="bg-card border border-border rounded-xl p-5">
-        <h3 className="font-semibold mb-3">연결 테스트</h3>
+      <MacCard title="연결 테스트" icon={Wifi}>
         <button onClick={() => void runTest()} disabled={testConn.isPending}
           className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg border border-border bg-secondary hover:bg-secondary/80 text-sm font-medium disabled:opacity-50">
           {testConn.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Wifi className="w-4 h-4" />}
@@ -156,7 +155,7 @@ export function ServiceNowIntegrationPanel() {
             {testResult.detail}
           </p>
         )}
-      </div>
+      </MacCard>
     </div>
   );
 }

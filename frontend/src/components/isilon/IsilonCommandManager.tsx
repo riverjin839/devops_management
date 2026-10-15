@@ -71,7 +71,7 @@ export function IsilonCommandManager({ serverId, onClose }: Props) {
       } else {
         await createMut.mutateAsync({ ...form, serverId: serverId ?? null });
       }
-      toast.success('저장되었습니다.');
+      toast.success('저장됨');
       startNew();
     } catch (e) {
       // 422 = 부하/변경 명령 거부 등 — 서버 메시지 그대로 노출
@@ -82,7 +82,7 @@ export function IsilonCommandManager({ serverId, onClose }: Props) {
   const doDelete = async (id: string) => {
     try {
       await deleteMut.mutateAsync(id);
-      toast.success('삭제되었습니다.');
+      toast.success('삭제됨');
       if (editing?.id === id) startNew();
     } catch (e) {
       toast.error('삭제 실패', errMessage(e, '오류'));
@@ -98,7 +98,7 @@ export function IsilonCommandManager({ serverId, onClose }: Props) {
         role="dialog"
         aria-modal="true"
         aria-labelledby={titleId}
-        className="bg-card rounded-2xl border border-border shadow-card w-full max-w-3xl max-h-[90vh] overflow-hidden flex flex-col"
+        className="bg-card rounded-md border border-border shadow-card w-full max-w-3xl max-h-[90vh] overflow-hidden flex flex-col"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between px-5 py-3 border-b border-border">
@@ -117,7 +117,7 @@ export function IsilonCommandManager({ serverId, onClose }: Props) {
           {/* 목록 */}
           <div className="space-y-2">
             <div className="flex items-center justify-between">
-              <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">등록된 명령</span>
+              <span className="text-xs font-semibold text-muted-foreground">등록된 명령</span>
               <button onClick={startNew} className="inline-flex items-center gap-1 text-xs px-2 py-1 rounded-lg border border-border hover:bg-muted">
                 <Plus className="w-3.5 h-3.5" /> 새 명령
               </button>
@@ -150,7 +150,7 @@ export function IsilonCommandManager({ serverId, onClose }: Props) {
           {/* 편집 폼 */}
           <div className="space-y-3">
             <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-              <ShieldCheck className="w-3.5 h-3.5 text-status-healthy" />
+              <ShieldCheck className="w-3.5 h-3.5 text-muted-foreground" />
               변경·위험 동사, 셸 메타문자(;|`), --repeat 등은 저장이 거부됩니다.
             </div>
             <Field label="key (식별자) *">

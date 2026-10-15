@@ -31,10 +31,10 @@ function KpiCell({ icon: Icon, label, value, colorClass: toneClass, bgClass: ton
     <MacCard rootClassName={className} bodyPadding="p-4">
       <div className="flex items-center justify-between h-full">
         <div className="min-w-0">
-          <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground mb-1.5 truncate">
+          <p className="text-xs text-muted-foreground mb-1.5 truncate">
             {label}
           </p>
-          <p className={`font-bold font-mono leading-none ${colorClass} ${typeof value === 'number' ? 'text-3xl' : 'text-lg'}`}>
+          <p className={`font-semibold tabular-nums leading-none ${colorClass} ${typeof value === 'number' ? 'text-2xl' : 'text-lg'}`}>
             {value}
           </p>
         </div>
@@ -67,7 +67,7 @@ export function HealthHero({ stats, isLoading, lastCheckTime }: HealthHeroProps)
   const overallLabel = total === 0 ? '데이터 없음' : s.critical > 0 ? '위험' : s.warning > 0 ? '주의 필요' : '정상';
   const overallColor = total === 0
     ? 'text-muted-foreground'
-    : s.critical > 0 ? 'text-status-critical' : s.warning > 0 ? 'text-status-warning' : 'text-status-healthy';
+    : s.critical > 0 ? 'text-status-critical' : s.warning > 0 ? 'text-status-warning' : 'text-foreground';
 
   return (
     <section className="grid grid-cols-12 gap-3 mb-3">
@@ -80,7 +80,7 @@ export function HealthHero({ stats, isLoading, lastCheckTime }: HealthHeroProps)
       >
         <div>
           <div className="flex items-baseline gap-2">
-            <span className={`text-5xl font-bold font-mono leading-none ${overallColor}`}>{healthyPct}%</span>
+            <span className={`text-4xl font-semibold tabular-nums leading-none ${overallColor}`}>{healthyPct}%</span>
             <span className={`text-sm font-semibold ${overallColor}`}>{overallLabel}</span>
           </div>
           <p className="text-xs text-muted-foreground mt-2">
@@ -112,9 +112,9 @@ export function HealthHero({ stats, isLoading, lastCheckTime }: HealthHeroProps)
       <KpiCell className="col-span-6 lg:col-span-3" icon={AlertTriangle} label="경고" value={s.warning}
         colorClass="text-status-warning" bgClass="bg-status-warning/10" />
       <KpiCell className="col-span-6 lg:col-span-3" icon={CheckCircle} label="정상" value={s.healthy}
-        colorClass="text-status-healthy" bgClass="bg-status-healthy/10" />
+        colorClass="text-muted-foreground" bgClass="bg-muted" />
       <KpiCell className="col-span-6 lg:col-span-3" icon={Clock} label="마지막 점검"
-        value={lastCheckTime ? formatRelativeTime(lastCheckTime) : '-'}
+        value={lastCheckTime ? formatRelativeTime(lastCheckTime) : '—'}
         colorClass="text-foreground" bgClass="bg-primary/10" />
     </section>
   );

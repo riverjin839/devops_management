@@ -8,7 +8,8 @@
  */
 import { useMemo, useState } from 'react';
 import { KeyRound, Link2, Shield, ShieldCheck, Wand2 } from 'lucide-react';
-import { ClusterSidebar, SelectClusterEmptyState } from '@/components/common';
+import { ClusterSidebar, SelectClusterEmptyState, PageShell } from '@/components/common';
+import { PageHeader } from '@/components/common/PageHeader';
 import {
   AccessReviewPanel,
   BindingPanel,
@@ -82,7 +83,7 @@ export function K8sRbacPage() {
 
   return (
     <div className="app-min-h-screen bg-background">
-      <main className="pr-3 py-3 flex gap-3">
+      <PageShell density="console" className="flex gap-3">
         <ClusterSidebar
           clusters={clusters}
           selectedId={clusterId || null}
@@ -91,16 +92,18 @@ export function K8sRbacPage() {
         />
 
         <div className="flex-1 min-w-0 space-y-3">
-          <div className="flex items-center gap-2 flex-wrap">
-            <Shield className="w-5 h-5 text-primary" />
-            <h1 className="text-xl font-semibold">K8s 접근 권한</h1>
-            <span className="text-sm text-muted-foreground">
-              — <span className="font-medium text-foreground">{cluster?.name ?? '-'}</span>
-              {namespaces.length > 0 && (
-                <span className="ml-2">네임스페이스 {namespaces.length}</span>
-              )}
-            </span>
-            <div className="flex-1" />
+          <PageHeader
+            icon={Shield}
+            title="K8s 접근 권한"
+            titleExtra={
+              <span className="text-sm text-muted-foreground">
+                — <span className="font-medium text-foreground">{cluster?.name ?? '—'}</span>
+                {namespaces.length > 0 && (
+                  <span className="ml-2">네임스페이스 {namespaces.length}</span>
+                )}
+              </span>
+            }
+            actions={
             <button
               type="button"
               role="switch"
@@ -123,7 +126,8 @@ export function K8sRbacPage() {
               </span>
               로그 보기
             </button>
-          </div>
+            }
+          />
 
           <div className="flex gap-1 flex-wrap border-b border-border" role="tablist">
             {TABS.map(({ key, label, icon: Icon }) => (
@@ -199,7 +203,7 @@ export function K8sRbacPage() {
             />
           )}
         </div>
-      </main>
+      </PageShell>
     </div>
   );
 }

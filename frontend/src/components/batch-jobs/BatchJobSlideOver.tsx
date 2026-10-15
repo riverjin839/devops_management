@@ -57,12 +57,21 @@ export function BatchJobSlideOver({ job, onClose, onDelete, overlayMode = false 
   const body = (
     <MacCard
       title={job.name}
+      description={<span className="font-mono">{job.executionMode === 'script' ? (job.scriptName ?? '스크립트') : job.jobType}</span>}
+      actions={
+        <button
+          type="button"
+          onClick={onClose}
+          className="inline-flex items-center justify-center w-7 h-7 rounded-xl hover:bg-secondary text-muted-foreground hover:text-foreground"
+          title="닫기"
+          aria-label="닫기"
+        >
+          <X className="w-3.5 h-3.5" />
+        </button>
+      }
       bodyPadding="p-4"
       rootClassName={overlayMode ? '' : 'sticky top-4'}
     >
-      <div className="text-xs text-muted-foreground font-mono mb-3 break-all">
-        {job.executionMode === 'script' ? (job.scriptName ?? '스크립트') : job.jobType}
-      </div>
 
       {/* 액션 바 */}
       <div className="flex items-center gap-1.5 mb-3 flex-wrap">
@@ -118,14 +127,6 @@ export function BatchJobSlideOver({ job, onClose, onDelete, overlayMode = false 
           <Trash2 className="w-3.5 h-3.5" />
           삭제
         </button>
-        <button
-          type="button"
-          onClick={onClose}
-          className="ml-auto inline-flex items-center justify-center w-7 h-7 rounded-lg hover:bg-secondary text-muted-foreground hover:text-foreground"
-          aria-label="닫기"
-        >
-          <X className="w-3.5 h-3.5" />
-        </button>
       </div>
 
       {/* 실행 폼 — expandable */}
@@ -155,7 +156,7 @@ export function BatchJobSlideOver({ job, onClose, onDelete, overlayMode = false 
         <div className="mb-4 pb-4 border-b border-border">
           <div className="flex items-center gap-1.5 mb-2">
             <Terminal className="w-3.5 h-3.5 text-muted-foreground" />
-            <span className="text-xs uppercase tracking-wider text-muted-foreground">최근 실행 로그</span>
+            <span className="text-xs text-muted-foreground">최근 실행 로그</span>
           </div>
           <BatchJobLogDetail run={runsQ.data![0]} stepPlan={stepPlan} />
         </div>
@@ -165,7 +166,7 @@ export function BatchJobSlideOver({ job, onClose, onDelete, overlayMode = false 
       <div>
         <div className="flex items-center gap-1.5 mb-2">
           <History className="w-3.5 h-3.5 text-muted-foreground" />
-          <span className="text-xs uppercase tracking-wider text-muted-foreground">실행 이력</span>
+          <span className="text-xs text-muted-foreground">실행 이력</span>
         </div>
         <RunHistory runs={runsQ.data ?? []} isLoading={runsQ.isLoading} stepPlan={stepPlan} />
       </div>

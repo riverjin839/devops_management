@@ -1,5 +1,6 @@
 import { Link } from 'react-router-dom';
 import { PageHeader } from '@/components/common/PageHeader';
+import { PageShell } from '@/components/common';
 import { ClipboardCheck, Settings, AlertTriangle, Loader2 } from 'lucide-react';
 import { ClusterSidebar } from '@/components/common/ClusterSidebar';
 import { MacCard } from '@/components/ui/MacCard';
@@ -46,8 +47,8 @@ export function ClusterDetailPage() {
     useClusterStatusBreakdown(clusterId || undefined);
 
   return (
-    <div className="app-min-h-screen bg-background py-3 pr-3">
-      <div className="flex gap-3">
+    <div className="app-min-h-screen bg-background">
+      <PageShell density="console" className="flex gap-3">
         <div className="sticky top-4 self-start">
           <ClusterSidebar
             clusters={clusters}
@@ -84,7 +85,7 @@ export function ClusterDetailPage() {
                 <Loader2 className="w-4 h-4 animate-spin" /> 불러오는 중…
               </div>
             ) : breakdownError || !breakdown ? (
-              <div className="flex items-center gap-2 text-sm text-destructive py-4">
+              <div className="flex items-center gap-2 text-sm text-status-critical py-4">
                 <AlertTriangle className="w-4 h-4" /> 종합 상태를 불러오지 못했습니다.
               </div>
             ) : (
@@ -110,7 +111,7 @@ export function ClusterDetailPage() {
 
           <ClusterOpsCheckPanel clusterId={clusterId} clusterName={cluster?.name} />
         </div>
-      </div>
+      </PageShell>
     </div>
   );
 }

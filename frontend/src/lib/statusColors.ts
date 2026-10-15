@@ -20,28 +20,31 @@ export interface StatusColorEntry {
   label: string;
 }
 
+// 업무 단계는 "상태(정상/경고/위험)" 가 아니라 종류다 — status 토큰을 빌려 쓰지 않고 chart 토큰으로 구분하고,
+// 끝난 일(done)은 무채색으로 가라앉힌다 (DESIGN_SYSTEM §12.12-3·7, D-119).
 export const STATUS_COLOR: Record<KanbanStatus, StatusColorEntry> = {
   backlog: {
-    cssVar: '--status-unknown', bgClass: 'bg-status-unknown', textClass: 'text-status-unknown',
-    tintClass: 'bg-status-unknown/10', ringClass: 'ring-status-unknown/30', label: 'Backlog',
+    cssVar: '--chart-8', bgClass: 'bg-chart-8', textClass: 'text-chart-8',
+    tintClass: 'bg-chart-8/10', ringClass: 'ring-chart-8/30', label: 'Backlog',
   },
   todo: {
-    cssVar: '--status-info', bgClass: 'bg-status-info', textClass: 'text-status-info',
-    tintClass: 'bg-status-info/10', ringClass: 'ring-status-info/30', label: 'Todo',
+    cssVar: '--chart-1', bgClass: 'bg-chart-1', textClass: 'text-chart-1',
+    tintClass: 'bg-chart-1/10', ringClass: 'ring-chart-1/30', label: 'Todo',
   },
   in_progress: {
-    cssVar: '--status-warning', bgClass: 'bg-status-warning', textClass: 'text-status-warning',
-    tintClass: 'bg-status-warning/10', ringClass: 'ring-status-warning/30', label: '진행중',
+    cssVar: '--chart-3', bgClass: 'bg-chart-3', textClass: 'text-chart-3',
+    tintClass: 'bg-chart-3/10', ringClass: 'ring-chart-3/30', label: '진행중',
   },
   review_test: {
     cssVar: '--chart-4', bgClass: 'bg-chart-4', textClass: 'text-chart-4',
     tintClass: 'bg-chart-4/10', ringClass: 'ring-chart-4/30', label: '검토',
   },
   done: {
-    cssVar: '--status-healthy', bgClass: 'bg-status-healthy', textClass: 'text-status-healthy',
-    tintClass: 'bg-status-healthy/10', ringClass: 'ring-status-healthy/30', label: '완료',
+    cssVar: '--muted-foreground', bgClass: 'bg-muted-foreground', textClass: 'text-muted-foreground',
+    tintClass: 'bg-muted', ringClass: 'ring-border', label: '완료',
   },
 };
+
 
 /** 색상에 의존하지 않는 보조 신호(모양) — done=체크, in_progress/review_test=시계, backlog=점선원, todo=원. */
 export const STATUS_ICON: Record<KanbanStatus, ComponentType<LucideProps>> = {

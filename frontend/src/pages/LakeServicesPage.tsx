@@ -2,7 +2,9 @@ import { useMemo, useState } from 'react';
 import { PageHeader } from '@/components/common/PageHeader';
 import { useNavigate } from 'react-router-dom';
 import { Database, Plus, AlertCircle } from 'lucide-react';
-import { ClusterSidebar } from '@/components/common';
+import { ClusterSidebar, EmptyState, PageShell, RunLogPanel, Skeleton } from '@/components/common';
+import { useRunLog } from '@/hooks/useRunLog';
+import { useLogPref } from '@/hooks/useLogPref';
 import { useClusters } from '@/hooks/useCluster';
 import {
   useLakeServices,
@@ -12,6 +14,7 @@ import {
 import {
   LakeServiceCard,
   AddLakeServiceModal,
+  runLakeCheckLogged,
 } from '@/components/lake-services';
 import type { LakeService } from '@/types';
 
@@ -49,8 +52,15 @@ export function LakeServicesPage() {
     navigate(`/lake-services/${svc.id}`);
   };
 
-  const handleRunCheck = (svc: LakeService) => {
-    runCheck.mutate(svc.id);
+  // 카드의 "지금 점검" — 페이지 상단 실행 로그 하나에 어느 서비스인지 제목으로 남긴다(D-128).
+  const runLog = useRunLog();
+  const [showRunLog, setShowRunLog] = useLogPref('lake-services-check');
+  const handleRunCheck = async (svc: LakeService) => {
+    await runLakeCheckLogged(runLog, {
+      name: svc.name,
+      endpoint: svc.endpointUrl,
+      call: async () => (await runCheck.mutateAsync(svc.id)).data,
+    });
   };
 
   // 카테고리별 카운트 (filter chip 보조) — listData?.data 를 직접 의존
@@ -65,7 +75,7 @@ export function LakeServicesPage() {
 
   return (
     <div className="app-min-h-screen bg-background">
-      <main className="pr-3 py-3 flex gap-3">
+      <PageShell density="console" className="flex gap-3">
         <div className="sticky top-4 self-start">
           <ClusterSidebar
             clusters={clusters}
@@ -116,6 +126,8 @@ export function LakeServicesPage() {
             ))}
           </div>
 
+          <RunLogPanel run={runLog} show={showRunLog} onShowChange={setShowRunLog} />
+
           {/* Error state */}
           {error && (
             <div className="rounded-md border border-status-critical/40 bg-status-critical/5 p-3 flex items-start gap-2 text-sm text-status-critical">
@@ -133,20 +145,19 @@ export function LakeServicesPage() {
           {isLoading && (
             <div className="grid gap-3 grid-cols-[repeat(auto-fill,minmax(280px,1fr))]">
               {Array.from({ length: 4 }).map((_, i) => (
-                <div key={i} className="h-32 rounded-md bg-muted/30 animate-pulse" />
+                <Skeleton key={i} className="block w-full h-32 rounded-md" />
               ))}
             </div>
           )}
 
           {/* Empty state */}
           {!isLoading && !error && services.length === 0 && (
-            <div className="text-center py-16 text-muted-foreground text-sm">
-              <Database className="w-10 h-10 mx-auto mb-3 text-muted-foreground/30" />
-              <p className="mb-2">등록된 LAKE 서비스가 없습니다.</p>
-              <p className="text-sm text-muted-foreground">
-                상단의 <strong>"서비스 등록"</strong> 버튼으로 인스턴스를 추가하세요.
-              </p>
-            </div>
+            <EmptyState
+              icon={Database}
+              title="등록된 LAKE 서비스 없음"
+              description="「서비스 등록」으로 엔드포인트를 추가하면 여기서 상태를 모니터링하고 즉시 점검할 수 있습니다."
+              action={{ label: '서비스 등록', onClick: () => setAddOpen(true) }}
+            />
           )}
 
           {/* Cards grid */}
@@ -165,7 +176,7 @@ export function LakeServicesPage() {
             </div>
           )}
         </div>
-      </main>
+      </PageShell>
 
       <AddLakeServiceModal
         open={addOpen}

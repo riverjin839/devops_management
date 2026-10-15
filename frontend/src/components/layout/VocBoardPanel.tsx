@@ -22,10 +22,11 @@ const STATUS_VARIANT: Record<VocStatus, StatusVariant> = {
   '완료': 'healthy',
 };
 const CATEGORY_CLS: Record<VocCategory, string> = {
-  '문의': 'bg-status-info/10 text-status-info',
-  '개선': 'bg-violet-500/10 text-violet-600',
-  '불만': 'bg-status-critical/10 text-status-critical',
-  '제안': 'bg-status-healthy/10 text-status-healthy',
+  // 분류는 상태가 아니라 종류 — chart 토큰(D-119/§12.12-7).
+  '문의': 'bg-chart-1/10 text-chart-1',
+  '개선': 'bg-chart-4/10 text-chart-4',
+  '불만': 'bg-chart-5/10 text-chart-5',
+  '제안': 'bg-chart-2/10 text-chart-2',
 };
 
 function errMessage(e: unknown, fallback: string): string {
@@ -101,7 +102,7 @@ export function VocBoardPanel({ open }: Props) {
         {isLoading ? (
           <div className="flex items-center justify-center py-12 text-muted-foreground"><Loader2 className="w-5 h-5 animate-spin" /></div>
         ) : error ? (
-          <p className="text-sm text-destructive py-6 text-center">VOC 목록을 불러오지 못했습니다.</p>
+          <p className="text-sm text-status-critical py-6 text-center">VOC 목록을 불러오지 못했습니다.</p>
         ) : !posts || posts.length === 0 ? (
           <div className="flex flex-col items-center gap-2 py-12 text-muted-foreground">
             <MessageSquarePlus className="w-8 h-8 opacity-40" />
@@ -161,7 +162,7 @@ function VocDetail({
   const saveReply = async () => {
     try {
       await replyMut.mutateAsync({ id: post.id, data: { adminReply: replyText, status: statusVal } });
-      toast.success('답변이 저장되었습니다.');
+      toast.success('답변이 저장됨');
     } catch (e) {
       toast.error('답변 저장 실패', errMessage(e, '오류'));
     }
@@ -170,7 +171,7 @@ function VocDetail({
   const doDelete = async () => {
     try {
       await deleteMut.mutateAsync(post.id);
-      toast.success('삭제되었습니다.');
+      toast.success('삭제됨');
       onDeleted();
     } catch (e) {
       toast.error('삭제 실패', errMessage(e, '오류'));
@@ -264,7 +265,7 @@ function VocForm({ post, onDone, onBack }: { post?: VocPost; onDone: () => void;
     try {
       if (post) await updateMut.mutateAsync({ id: post.id, data: { title, content, category } });
       else await createMut.mutateAsync({ title, content, category });
-      toast.success('저장되었습니다.');
+      toast.success('저장됨');
       onDone();
     } catch (e) {
       toast.error('저장 실패', errMessage(e, '오류'));

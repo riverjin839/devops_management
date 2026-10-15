@@ -66,10 +66,10 @@ export function MetricsTable({ rows, isLoading, emptyMessage, onEdit }: MetricsT
                       : formatMetricValue(row.value, row.displayType, row.unit)}
                   </td>
                   <td className={`${TD} text-xs text-muted-foreground font-mono`}>
-                    {row.thresholds || '-'}
+                    {row.thresholds || '—'}
                   </td>
                   <td className={`${TD} text-xs text-muted-foreground truncate max-w-[14rem]`}>
-                    {labelsSummary(row.labels, ['__name__']) || '-'}
+                    {labelsSummary(row.labels, ['__name__']) || '—'}
                     {row.seriesCount > 1 ? (
                       <span className="ml-1 text-[11px] text-muted-foreground">
                         (+{row.seriesCount - 1})
@@ -101,7 +101,7 @@ export function MetricsTable({ rows, isLoading, emptyMessage, onEdit }: MetricsT
                           <p className="text-xs text-muted-foreground">{row.help}</p>
                         ) : null}
                         {row.error ? (
-                          <p className="text-xs text-[hsl(var(--status-critical))]">{row.error}</p>
+                          <p className="text-xs text-status-critical">{row.error}</p>
                         ) : null}
                         <div>
                           <div className="text-xs font-semibold text-muted-foreground mb-1">PromQL</div>

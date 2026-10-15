@@ -244,9 +244,7 @@ export function useHealthCheck() {
         queryClient.refetchQueries({ queryKey: queryKeys.logs() }),
       ]);
     },
-    onError: (error) => {
-      console.error('Health check failed:', error);
-    },
+    // 실패 사유는 호출 화면의 실행 로그(RunLogPanel)가 보여준다(D-128).
     onSettled: () => {
       setIsChecking(false);
     },

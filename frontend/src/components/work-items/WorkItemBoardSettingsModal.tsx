@@ -70,7 +70,7 @@ export function WorkItemBoardSettingsModal({ open, onClose }: WorkItemBoardSetti
     if (!draft) return;
     try {
       await updateMut.mutateAsync(draft);
-      toast.success('설정 저장 완료', '업무 관리 게시판 공통 설정이 저장되었습니다.');
+      toast.success('설정 저장됨', '업무 관리 게시판 공통 설정이 저장되었습니다.');
       onClose();
     } catch (err) {
       toast.error('저장 실패', formatApiError(err));
@@ -85,7 +85,7 @@ export function WorkItemBoardSettingsModal({ open, onClose }: WorkItemBoardSetti
         role="dialog"
         aria-modal="true"
         aria-labelledby="work-item-board-settings-title"
-        className="relative bg-card border border-border rounded-2xl shadow-card w-full max-w-md mx-4 max-h-[92vh] overflow-y-auto"
+        className="relative bg-card border border-border rounded-md shadow-card w-full max-w-md mx-4 max-h-[92vh] overflow-y-auto"
       >
         <div className="flex items-center gap-3 px-5 pt-5 pb-3">
           <div className="w-10 h-10 rounded-2xl bg-primary/10 flex items-center justify-center flex-shrink-0">

@@ -5,6 +5,7 @@ import {
   KeyRound, Loader2, ShieldPlus,
 } from 'lucide-react';
 import { useAssignees, useUpdateAssignees } from '@/hooks/useAssignees';
+import { MacCard } from '@/components/ui/MacCard';
 import { useToast, ResizeGrip, DoubleScrollX, ConfirmDialog, useModalA11y } from '@/components/common';
 import { useColumnWidths } from '@/hooks/useColumnWidths';
 import { authApi, type UserRoleApi } from '@/services/api';
@@ -79,7 +80,7 @@ function CreateAccountModal({ open, onClose }: { open: boolean; onClose: () => v
         role,
         displayName: displayName.trim() || undefined,
       });
-      toast.success(`계정 ${username} 이(가) 추가되었습니다.`);
+      toast.success(`계정 ${username} 추가됨`);
       qc.invalidateQueries({ queryKey: ['assignees'] });
       setUsername(''); setPassword(''); setDisplayName(''); setRole('viewer');
       onClose();
@@ -92,7 +93,7 @@ function CreateAccountModal({ open, onClose }: { open: boolean; onClose: () => v
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-      <div ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby={f('title')} className="w-full max-w-md bg-card border border-border rounded-2xl p-5 shadow-card">
+      <div ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby={f('title')} className="w-full max-w-md bg-card border border-border rounded-md p-5 shadow-card">
         <h3 id={f('title')} className="text-base font-bold mb-1">관리자 / 서비스 계정 추가</h3>
         <p className="text-sm text-muted-foreground mb-4">담당자 명부에 없는(사번 없는) 로그인 전용 계정을 만듭니다.</p>
         <div className="space-y-3">
@@ -118,7 +119,7 @@ function CreateAccountModal({ open, onClose }: { open: boolean; onClose: () => v
               {ACCOUNT_ROLES.map((r) => <option key={r.value} value={r.value}>{r.label} — {r.desc}</option>)}
             </select>
           </div>
-          {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
+          {error && <p role="alert" className="text-sm text-status-critical">{error}</p>}
         </div>
         <div className="flex justify-end gap-2 mt-5">
           <button type="button" onClick={onClose} disabled={submitting}
@@ -151,7 +152,7 @@ function ResetPasswordModal({ target, onClose }: { target: Assignee | null; onCl
     setSubmitting(true);
     try {
       await authApi.resetPassword(target.id, newPassword);
-      toast.success(`${target.username} 비밀번호가 재설정되었습니다.`);
+      toast.success(`${target.username} 비밀번호가 재설정됨`);
       qc.invalidateQueries({ queryKey: ['assignees'] });
       setNewPassword('');
       onClose();
@@ -164,12 +165,12 @@ function ResetPasswordModal({ target, onClose }: { target: Assignee | null; onCl
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-      <div ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby={titleId} className="w-full max-w-sm bg-card border border-border rounded-2xl p-5 shadow-card">
+      <div ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby={titleId} className="w-full max-w-sm bg-card border border-border rounded-md p-5 shadow-card">
         <h3 id={titleId} className="text-base font-bold mb-2">{target.username} 비밀번호 재설정</h3>
         <p className="text-sm text-muted-foreground mb-3">새 비밀번호를 입력하세요. 변경 즉시 적용됩니다.</p>
         <input type="password" autoComplete="new-password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)}
           minLength={4} className="w-full px-3 py-2 bg-background border border-border rounded-xl text-sm" />
-        {error && <p role="alert" className="text-sm text-destructive mt-2">{error}</p>}
+        {error && <p role="alert" className="text-sm text-status-critical mt-2">{error}</p>}
         <div className="flex justify-end gap-2 mt-4">
           <button type="button" onClick={onClose} disabled={submitting}
             className="px-3 py-1.5 text-sm bg-secondary border border-border rounded-xl hover:bg-muted">취소</button>
@@ -262,7 +263,7 @@ export function AssigneeManager() {
     setRoleUpdatingId(a.id);
     try {
       await authApi.updateUserRole(a.id, role);
-      toast.success('역할이 변경되었습니다.');
+      toast.success('역할이 변경됨');
       qc.invalidateQueries({ queryKey: ['assignees'] });
     } catch (err) {
       toast.error('역할 변경 실패', formatApiError(err) ?? undefined);
@@ -301,19 +302,18 @@ export function AssigneeManager() {
   const sortedAssignees = useMemo(() => assignees, [assignees]);
 
   return (
-    <div className="bg-card border border-border rounded-xl">
-      <div className="px-6 py-4 border-b border-border flex flex-wrap items-center justify-between gap-3">
-        <div className="flex flex-wrap items-center gap-2 min-w-0">
-          <UserCheck className="w-4 h-4 text-primary flex-shrink-0" />
-          <h2 className="font-semibold">담당자 관리</h2>
-          <span className="text-sm text-muted-foreground ml-1">작업/이슈 등록 시 자동완성 · 행 클릭으로 바로 수정 · 로그인 계정 겸용</span>
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
+    <MacCard
+      bodyPadding="p-0"
+      title="담당자 관리"
+      icon={UserCheck}
+      description="작업/이슈 등록 시 자동완성 · 행 클릭으로 바로 수정 · 로그인 계정 겸용"
+      actions={
+        <>
           <button
             onClick={handleCopyMarkdown}
             disabled={assignees.length === 0}
             title="마크다운 표로 클립보드에 복사"
-            className="px-3 py-2 text-sm font-medium bg-secondary hover:bg-muted border border-border rounded-lg transition-colors flex items-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed"
+            className="px-3 py-1.5 text-sm font-medium bg-secondary hover:bg-muted border border-border rounded-lg transition-colors flex items-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed"
           >
             <ClipboardCopy className="w-4 h-4" />
             .md 복사
@@ -322,7 +322,7 @@ export function AssigneeManager() {
             onClick={handleExportCsv}
             disabled={assignees.length === 0}
             title="CSV 파일로 내보내기"
-            className="px-3 py-2 text-sm font-medium bg-secondary hover:bg-muted border border-border rounded-lg transition-colors flex items-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed"
+            className="px-3 py-1.5 text-sm font-medium bg-secondary hover:bg-muted border border-border rounded-lg transition-colors flex items-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed"
           >
             <Download className="w-4 h-4" />
             CSV 내보내기
@@ -330,20 +330,21 @@ export function AssigneeManager() {
           <button
             onClick={() => setCreateAccountOpen(true)}
             title="담당자 명부와 무관한 로그인 전용 계정 추가"
-            className="px-3 py-2 text-sm font-medium bg-secondary hover:bg-muted border border-border rounded-lg transition-colors flex items-center gap-2"
+            className="px-3 py-1.5 text-sm font-medium bg-secondary hover:bg-muted border border-border rounded-lg transition-colors flex items-center gap-2"
           >
             <ShieldPlus className="w-4 h-4" />
             관리자 계정 추가
           </button>
           <button
             onClick={() => { setShowAddRow(true); setEditingIdx(null); setAddForm({ name: '' }); }}
-            className="px-4 py-2 text-sm font-medium bg-primary hover:bg-primary/90 text-primary-foreground rounded-lg transition-colors flex items-center gap-2"
+            className="px-3 py-1.5 text-sm font-medium bg-primary hover:bg-primary/90 text-primary-foreground rounded-lg transition-colors flex items-center gap-2"
           >
             <UserPlus className="w-4 h-4" />
             담당자 추가
           </button>
-        </div>
-      </div>
+        </>
+      }
+    >
 
       <div className="px-6 py-3 border-b border-border bg-primary/5 text-sm text-muted-foreground leading-relaxed">
         사번을 입력해 담당자를 등록하면 <b className="text-foreground font-medium">자동으로 로그인 계정</b>이 생성됩니다 —
@@ -445,14 +446,14 @@ export function AssigneeManager() {
                   <td className="px-4 py-2.5">
                     {isEditing ? cellInput('primaryRole', 'Backend Engineer') : (
                       a.primaryRole
-                        ? <span className="text-sm px-2 py-0.5 rounded-full bg-blue-500/10 text-blue-400 border border-blue-500/20">{a.primaryRole}</span>
+                        ? <span className="text-sm px-2 py-0.5 rounded-full bg-chart-1/10 text-chart-1 border border-chart-1/20">{a.primaryRole}</span>
                         : <span className="text-muted-foreground">—</span>
                     )}
                   </td>
                   <td className="px-4 py-2.5">
                     {isEditing ? cellInput('secondaryRole', 'DevOps') : (
                       a.secondaryRole
-                        ? <span className="text-sm px-2 py-0.5 rounded-full bg-purple-500/10 text-purple-400 border border-purple-500/20">{a.secondaryRole}</span>
+                        ? <span className="text-sm px-2 py-0.5 rounded-full bg-chart-3/10 text-chart-3 border border-chart-3/20">{a.secondaryRole}</span>
                         : <span className="text-muted-foreground">—</span>
                     )}
                   </td>
@@ -507,7 +508,7 @@ export function AssigneeManager() {
 
             {/* Add new row */}
             {showAddRow && (
-              <tr className="bg-status-healthy/5 border-t-2 border-status-healthy/30">
+              <tr className="bg-primary/5 border-t-2 border-primary/30">
                 {(['employeeId', 'name', 'email', 'ip', 'seatLocation', 'primaryRole', 'secondaryRole'] as (keyof Assignee)[]).map((field) => (
                   <td key={field} className="px-4 py-2.5">
                     <input
@@ -534,7 +535,7 @@ export function AssigneeManager() {
                         : '부담당 역할 입력'
                       }
                       autoFocus={field === 'name'}
-                      className="w-full px-2 py-1 bg-background border border-status-healthy/40 rounded text-sm focus:outline-none focus:ring-1 focus:ring-status-healthy"
+                      className="w-full px-2 py-1 bg-background border border-border rounded text-sm focus:outline-none focus:ring-1 focus:ring-ring"
                     />
                   </td>
                 ))}
@@ -542,7 +543,7 @@ export function AssigneeManager() {
                 <td className="px-3 py-2.5">
                   <div className="flex items-center gap-1">
                     <button onClick={handleAddAssignee} disabled={!addForm.name.trim()} title="추가" aria-label="추가"
-                      className="p-1.5 rounded bg-status-healthy/10 hover:bg-status-healthy/20 text-status-healthy transition-colors disabled:opacity-40">
+                      className="p-1.5 rounded bg-primary/10 hover:bg-primary/20 text-primary transition-colors disabled:opacity-40">
                       <Check className="w-3.5 h-3.5" />
                     </button>
                     <button onClick={() => setShowAddRow(false)} title="취소" aria-label="취소"
@@ -576,6 +577,6 @@ export function AssigneeManager() {
         onConfirm={handleDeleteConfirmed}
         onCancel={() => setDeleteTarget(null)}
       />
-    </div>
+    </MacCard>
   );
 }

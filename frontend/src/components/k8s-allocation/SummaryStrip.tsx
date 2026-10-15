@@ -13,7 +13,6 @@ function Chip({ label, value, tone = 'default', title }: {
 }) {
   const cls = tone === 'critical' ? 'text-status-critical'
     : tone === 'warn' ? 'text-status-warning'
-    : tone === 'good' ? 'text-status-healthy'
     : tone === 'info' ? 'text-status-info'
     : 'text-foreground';
   return (

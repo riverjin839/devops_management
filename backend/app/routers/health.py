@@ -38,25 +38,34 @@ def run_health_check(
     checker = HealthChecker(db)
     checker.run_check(cluster_id)
 
-    # 점검 완료된 addon 데이터를 응답에 포함 (프론트엔드 즉시 반영용)
+    # 점검 완료된 addon 데이터를 응답에 포함 (프론트엔드 즉시 반영 + 실행 로그 애드온별 줄, D-128)
     addons = db.query(Addon).filter(Addon.cluster_id == cluster_id).all()
-    addon_list = [
-        {
-            "id": str(a.id),
-            "status": a.status.value if hasattr(a.status, "value") else a.status,
-            "response_time": a.response_time,
-            "last_check": a.last_check.isoformat() if a.last_check else None,
-        }
-        for a in addons
-    ]
+    addon_list = addon_check_summaries(addons)
 
     return {
         "message": "Health check completed",
         "cluster_id": str(cluster_id),
         "addons_updated": len(addon_list),
+        "addons": addon_list,
     }
 
 
+def addon_check_summaries(addons) -> list[dict]:
+    """점검 직후 애드온별 요약 — 실행 로그가 한 줄씩 그린다. details 의 message/error 가 있으면 같이 싣는다."""
+    out: list[dict] = []
+    for a in addons:
+        details = a.details if isinstance(a.details, dict) else {}
+        msg = details.get("message") or details.get("error") or None
+        out.append({
+            "id": str(a.id),
+            "name": a.name,
+            "type": a.type,
+            "status": a.status.value if hasattr(a.status, "value") else a.status,
+            "response_time": a.response_time,
+            "message": str(msg) if msg is not None else None,
+            "last_check": a.last_check.isoformat() if a.last_check else None,
+        })
+    return out
 
 
 @router.post("/check/{cluster_id}/addons/{addon_id}")

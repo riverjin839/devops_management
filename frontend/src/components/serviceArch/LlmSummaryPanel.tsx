@@ -27,7 +27,7 @@ export function LlmSummaryPanel({
     <div className="border-t border-border p-4 space-y-3">
       <div className="flex items-center gap-2">
         <Bot className="w-4 h-4 text-muted-foreground" />
-        <span className="text-xs font-bold uppercase tracking-wide text-muted-foreground flex-1">
+        <span className="text-xs font-medium text-muted-foreground flex-1">
           AI 아키텍처 분석
           {doc.llmContent?.model && (
             <span className="ml-2 font-normal normal-case">({doc.llmContent.model})</span>

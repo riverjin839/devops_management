@@ -1,4 +1,4 @@
-import { CheckCircle2, XCircle, AlertTriangle, Info, X, ShieldAlert, Tag, Link as LinkIcon } from 'lucide-react';
+import { CheckCircle2, XCircle, AlertTriangle, Info, X, ShieldAlert, Tag, Timer, Link as LinkIcon } from 'lucide-react';
 import type { TopologyTraceHopV2, HopVerdict, HopPolicy } from '@/types';
 
 interface Props {
@@ -9,7 +9,7 @@ interface Props {
 }
 
 const VERDICT_META: Record<HopVerdict, { icon: typeof CheckCircle2; cls: string; label: string }> = {
-  allow: { icon: CheckCircle2, cls: 'bg-status-healthy/10 text-status-healthy border-status-healthy/30', label: 'allow' },
+  allow: { icon: CheckCircle2, cls: 'bg-secondary text-muted-foreground border-border', label: 'allow' },
   deny:  { icon: XCircle,      cls: 'bg-status-critical/10 text-status-critical border-status-critical/30',             label: 'deny'  },
   warn:  { icon: AlertTriangle,cls: 'bg-status-warning/10 text-status-warning border-status-warning/30',       label: 'warn'  },
   info:  { icon: Info,         cls: 'bg-status-unknown/10 text-status-unknown border-status-unknown/30',       label: 'info'  },
@@ -23,7 +23,7 @@ function PolicyItem({ p }: { p: HopPolicy }) {
     <div className="border border-border rounded p-2 bg-muted/20">
       <div className="flex items-center gap-1.5 mb-1 flex-wrap">
         <span className={`text-xs px-1.5 py-0.5 rounded border ${kindColor}`}>{p.kind}</span>
-        <span className="text-xs text-muted-foreground uppercase tracking-wider">{p.direction}</span>
+        <span className="text-xs text-muted-foreground">{p.direction}</span>
         <span className="text-sm font-mono text-foreground truncate" title={p.name}>{p.name}</span>
       </div>
       <p className="text-xs font-mono text-muted-foreground break-all">{p.summary}</p>
@@ -36,10 +36,10 @@ export function HopDetailPanel({ hop, index, totalHops, onClose }: Props) {
   const Icon = meta.icon;
 
   return (
-    <div className="absolute top-3 right-3 w-96 max-h-[calc(100%-1.5rem)] bg-card border border-border rounded-xl shadow-2xl overflow-hidden flex flex-col z-10">
+    <div className="absolute top-3 right-3 w-96 max-h-[calc(100%-1.5rem)] bg-card border border-border rounded-md shadow-card overflow-hidden flex flex-col z-10">
       <header className="flex items-start gap-2 px-4 py-3 border-b border-border bg-muted/20">
         <div className="flex-1 min-w-0">
-          <p className="text-xs uppercase tracking-wider text-muted-foreground">
+          <p className="text-xs text-muted-foreground">
             홉 {index + 1} / {totalHops} · {hop.entityType}
           </p>
           <p className="text-sm font-semibold truncate" title={hop.name}>{hop.name}</p>
@@ -62,9 +62,9 @@ export function HopDetailPanel({ hop, index, totalHops, onClose }: Props) {
         {/* 메트릭 */}
         {(hop.latencyMs != null || hop.errorCount != null) && (
           <div className="flex gap-3 text-xs text-muted-foreground">
-            {hop.latencyMs != null && <span>⏱ {hop.latencyMs}ms</span>}
-            {hop.errorCount != null && <span className={hop.errorCount > 0 ? 'text-status-warning' : ''}>
-              ⚠ errors: {hop.errorCount}
+            {hop.latencyMs != null && <span className="inline-flex items-center gap-1"><Timer className="w-3 h-3" aria-hidden />{hop.latencyMs}ms</span>}
+            {hop.errorCount != null && <span className={`inline-flex items-center gap-1 ${hop.errorCount > 0 ? 'text-status-warning' : ''}`}>
+              <AlertTriangle className="w-3 h-3" aria-hidden /> errors: {hop.errorCount}
             </span>}
           </div>
         )}
@@ -72,7 +72,7 @@ export function HopDetailPanel({ hop, index, totalHops, onClose }: Props) {
         {/* notes */}
         {hop.notes.length > 0 && (
           <div>
-            <p className="text-xs uppercase tracking-wider text-muted-foreground mb-1">Notes</p>
+            <p className="text-xs text-muted-foreground mb-1">Notes</p>
             <ul className="space-y-0.5">
               {hop.notes.map((n, i) => (
                 <li key={i} className="text-sm text-foreground">• {n}</li>
@@ -84,7 +84,7 @@ export function HopDetailPanel({ hop, index, totalHops, onClose }: Props) {
         {/* policies */}
         {hop.policies.length > 0 && (
           <div>
-            <p className="text-xs uppercase tracking-wider text-muted-foreground mb-1 flex items-center gap-1">
+            <p className="text-xs text-muted-foreground mb-1 flex items-center gap-1">
               <ShieldAlert className="w-3 h-3" /> 적용 정책 ({hop.policies.length})
             </p>
             <div className="space-y-1.5">
@@ -96,7 +96,7 @@ export function HopDetailPanel({ hop, index, totalHops, onClose }: Props) {
         {/* identity */}
         {hop.identity && (
           <div>
-            <p className="text-xs uppercase tracking-wider text-muted-foreground mb-1 flex items-center gap-1">
+            <p className="text-xs text-muted-foreground mb-1 flex items-center gap-1">
               <Tag className="w-3 h-3" /> Cilium Identity
             </p>
             <pre className="text-xs font-mono bg-background border border-border rounded p-2 overflow-auto max-h-32 whitespace-pre-wrap">
@@ -108,7 +108,7 @@ export function HopDetailPanel({ hop, index, totalHops, onClose }: Props) {
         {/* refs */}
         {hop.refs.length > 0 && (
           <div>
-            <p className="text-xs uppercase tracking-wider text-muted-foreground mb-1 flex items-center gap-1">
+            <p className="text-xs text-muted-foreground mb-1 flex items-center gap-1">
               <LinkIcon className="w-3 h-3" /> 연관 리소스
             </p>
             <ul className="space-y-0.5">

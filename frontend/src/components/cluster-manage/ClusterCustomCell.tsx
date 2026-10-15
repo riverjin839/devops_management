@@ -102,7 +102,7 @@ export function ClusterCustomCell({ cluster, field, canEdit = true }: Props) {
       return (
         <span
           className={`font-mono text-sm px-1 ${
-            current === true ? 'text-status-healthy font-bold'
+            current === true ? 'text-foreground font-bold'
             : current === false ? 'text-muted-foreground'
             : 'text-muted-foreground/30'
           }`}
@@ -124,7 +124,7 @@ export function ClusterCustomCell({ cluster, field, canEdit = true }: Props) {
           commit(next);
         }}
         className={`font-mono text-sm px-1 rounded hover:bg-primary/10 disabled:opacity-40 ${
-          current === true ? 'text-status-healthy font-bold'
+          current === true ? 'text-foreground font-bold'
           : current === false ? 'text-muted-foreground'
           : 'text-muted-foreground/30'
         }`}

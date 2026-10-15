@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { Plus, Pencil, Trash2, Lock, AlertCircle, X, Loader2 } from 'lucide-react';
+import { MacCard } from '@/components/ui/MacCard';
 import { ConfirmDialog, useModalA11y } from '@/components/common';
 import { resolveClusterIcon } from '@/lib/clusterIcons';
 import {
@@ -41,16 +42,10 @@ export function ServiceCategoryManager({ domain }: { domain: ServiceDomain }) {
   };
 
   return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between gap-3 flex-wrap">
-        <div>
-          <h2 className="text-sm font-semibold">카테고리</h2>
-          <p className="text-sm text-muted-foreground">
-            {domain === 'app'
-              ? 'APP 서비스 사이드바의 상위 카테고리(Runtime/Catalog/Workbench/AI Ready) — builtin 4개는 비활성화만, custom 은 자유 추가/삭제.'
-              : 'PEP 서비스는 기본적으로 카테고리 없이 평면 목록으로 관리된다 — 필요하면 상위 카테고리를 직접 추가할 수 있다.'}
-          </p>
-        </div>
+    <MacCard
+      title="서비스 카테고리"
+      className="space-y-4"
+      actions={
         <button
           type="button"
           onClick={() => setAdding(true)}
@@ -60,7 +55,13 @@ export function ServiceCategoryManager({ domain }: { domain: ServiceDomain }) {
           <Plus className="w-3.5 h-3.5" />
           카테고리 추가
         </button>
-      </div>
+      }
+    >
+      <p className="text-sm text-muted-foreground">
+        {domain === 'app'
+          ? 'APP 서비스 사이드바의 상위 카테고리(Runtime/Catalog/Workbench/AI Ready) — builtin 4개는 비활성화만, custom 은 자유 추가/삭제.'
+          : 'PEP 서비스는 기본적으로 카테고리 없이 평면 목록으로 관리된다 — 필요하면 상위 카테고리를 직접 추가할 수 있다.'}
+      </p>
 
       {error && (
         <div className="rounded-md border border-status-critical/40 bg-status-critical/5 p-3 flex items-start gap-2 text-sm text-status-critical">
@@ -91,7 +92,7 @@ export function ServiceCategoryManager({ domain }: { domain: ServiceDomain }) {
       )}
 
       {!isLoading && rows.length > 0 && (
-        <div className="bg-card border border-border rounded-md overflow-hidden">
+        <div className="border border-border rounded-md overflow-hidden">
           <table className="w-full text-sm">
             <thead className="text-sm text-muted-foreground bg-muted/40">
               <tr>
@@ -120,7 +121,7 @@ export function ServiceCategoryManager({ domain }: { domain: ServiceDomain }) {
                     )}
                   </td>
                   <td className="px-3 py-2 text-center">
-                    <span className={`text-xs rounded-full px-2 py-0.5 ${r.enabled ? 'bg-status-healthy/10 text-status-healthy' : 'bg-secondary text-muted-foreground'}`}>
+                    <span className={`text-xs rounded-full px-2 py-0.5 ${r.enabled ? 'bg-secondary text-foreground' : 'bg-secondary text-muted-foreground'}`}>
                       {r.enabled ? '활성' : '비활성'}
                     </span>
                   </td>
@@ -161,7 +162,7 @@ export function ServiceCategoryManager({ domain }: { domain: ServiceDomain }) {
         onConfirm={doDelete}
         onCancel={() => setConfirmDelete(null)}
       />
-    </div>
+    </MacCard>
   );
 }
 
@@ -222,7 +223,7 @@ function CategoryFormModal({ mode, domain, row, onClose, onError }: CategoryForm
   return (
     <div ref={dialogRef} className="fixed inset-0 z-50 flex items-center justify-center" role="dialog" aria-modal="true" aria-label="카테고리 폼">
       <div className="absolute inset-0 bg-black/60" onClick={onClose} aria-hidden />
-      <div className="relative bg-card border border-border rounded-2xl shadow-2xl w-full max-w-xl mx-4 overflow-hidden">
+      <div className="relative bg-card border border-border rounded-md shadow-2xl w-full max-w-xl mx-4 overflow-hidden">
         <div className="flex items-center justify-between px-5 py-4 border-b border-border bg-muted/30">
           <h2 className="text-sm font-semibold">
             {mode === 'create' ? `카테고리 추가 (${domain === 'pep' ? 'PEP' : 'APP'} 서비스)` : `카테고리 편집 — ${row?.key}`}

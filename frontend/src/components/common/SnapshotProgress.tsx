@@ -14,7 +14,7 @@ interface SnapshotProgressBarProps {
 export function SnapshotProgressBar({ processed, total, progress, label }: SnapshotProgressBarProps) {
   const pct = progress != null ? Math.min(100, Math.round(progress * 100)) : null;
   return (
-    <div className="flex items-center gap-2 rounded-lg border border-border bg-card/60 px-3 py-1.5">
+    <div className="flex items-center gap-2 rounded-md border border-border bg-card px-3 py-1.5">
       <Loader2 className="w-3.5 h-3.5 text-primary animate-spin shrink-0" />
       <span className="text-xs text-muted-foreground whitespace-nowrap">
         {label ?? '집계 중'}{pct != null ? ` · ${pct}%` : ''} · {processed.toLocaleString()}
@@ -22,7 +22,7 @@ export function SnapshotProgressBar({ processed, total, progress, label }: Snaps
       </span>
       <div className="flex-1 h-1.5 rounded-full bg-muted overflow-hidden min-w-[80px]">
         {pct != null ? (
-          <div className="h-full bg-primary transition-all duration-500" style={{ width: `${pct}%` }} />
+          <div className="h-full bg-primary transition-[width] duration-500" style={{ width: `${pct}%` }} />
         ) : (
           <div className="h-full w-1/3 bg-primary/70 animate-pulse" />
         )}
@@ -60,7 +60,7 @@ export function SnapshotProgressCard({
 }: SnapshotProgressCardProps) {
   const pct = progress != null ? Math.min(100, Math.round(progress * 100)) : null;
   return (
-    <div className="bg-card border border-border rounded-xl p-8">
+    <div className="bg-card border border-border rounded-md p-8">
       <div className="flex flex-col items-center gap-4 text-center">
         <Loader2 className="w-8 h-8 text-primary animate-spin" />
         <div>
@@ -77,7 +77,7 @@ export function SnapshotProgressCard({
         <div className="w-full max-w-md h-2 rounded-full bg-muted overflow-hidden">
           {pct != null ? (
             <div
-              className="h-full bg-primary transition-all duration-500"
+              className="h-full bg-primary transition-[width] duration-500"
               style={{ width: `${pct}%` }}
             />
           ) : (

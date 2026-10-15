@@ -1,18 +1,20 @@
 // frontend/src/pages/BatchJobsPage.tsx
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { PageHeader } from '@/components/common/PageHeader';
-import { ListTree, Plus, Play, X } from 'lucide-react';
+import { ListTree, Plus, Play, Server, X } from 'lucide-react';
 
 import { MacCard } from '@/components/ui/MacCard';
-import { ClusterSidebar, ConfirmDialog, useToast } from '@/components/common';
+import { ClusterSidebar, ConfirmDialog, EmptyState, LoadingState, PageShell, RunLogPanel, useToast } from '@/components/common';
+import { useRunLog, runLogged, pollIntoRunLog, type RunLogEntry, type RunLogLevel } from '@/hooks/useRunLog';
+import { useLogPref } from '@/hooks/useLogPref';
 import { useClusters } from '@/hooks/useCluster';
 import {
   useBatchJobTypes,
   useBatchJobs,
   useDeleteBatchJob,
 } from '@/hooks/useBatchJobs';
-import { batchJobsApi, type BatchJob } from '@/services/api';
-import { formatApiError } from '@/lib/utils';
+import { batchJobsApi, type BatchJob, type BatchJobRun } from '@/services/api';
+import { formatApiError, parseUTC } from '@/lib/utils';
 import {
   BatchJobClusterGroup,
   BatchJobFilters,
@@ -25,6 +27,12 @@ import {
   type FilterKey,
   type SortState,
 } from '@/components/batch-jobs';
+
+// 배치 잡 run 상태 → 실행 로그 표기(StatusPill 과 같은 라벨)
+const BULK_STATUS_KO: Record<string, string> = {
+  ok: '성공', error: '에러', timeout: '타임아웃', auth_error: '인증 실패',
+  connect_error: '연결 실패', cancelled: '중지됨',
+};
 
 const DEFAULT_SORT: SortState = { key: 'lastRunAt', dir: 'desc' };
 
@@ -96,26 +104,105 @@ export function BatchJobsPage() {
     });
   const clearSel = () => setSelectedIds(new Set());
 
+  // 일괄 실행 로그 — 잡별 큐잉/스킵 → 각 잡의 bulk 실행(run) 상태 변화를 폴링해 줄로 남긴다(D-128).
+  const runLog = useRunLog();
+  const [showRunLog, setShowRunLog] = useLogPref('batch-jobs-bulk-run');
+  const bulkAbort = useRef<AbortController | null>(null);
+  useEffect(() => () => bulkAbort.current?.abort(), []);
+
   const runBulk = async () => {
     const ids = [...selectedIds];
     if (ids.length === 0) return;
+    bulkAbort.current?.abort();
+    const ctrl = new AbortController();
+    bulkAbort.current = ctrl;
+    const jobName = new Map(allJobs.map((j) => [j.id, j.name]));
+    const nameOf = (id: string) => jobName.get(id) ?? id.slice(0, 8);
+    const clickedAt = Date.now();
     setBulkRunning(true);
-    try {
-      const { data } = await batchJobsApi.bulkRun(ids);
-      const reasons = [...new Set(data.results.filter((r) => !r.queued).map((r) => r.reason).filter(Boolean))];
-      if (data.queued > 0) {
-        toast.success('일괄 실행 시작', `${data.queued}건 백그라운드 실행${data.skipped ? ` · ${data.skipped}건 스킵` : ''}`);
-      }
-      if (data.skipped > 0) {
-        toast.warning(`${data.skipped}건 스킵`, reasons.join(' · ') || '저장된 자격증명 없음 등');
-      }
-      clearSel();
-      allJobsQ.refetch();
-    } catch (e) {
-      toast.error('일괄 실행 실패', formatApiError(e));
-    } finally {
-      setBulkRunning(false);
+    const r = await runLogged(runLog, {
+      title: `배치 잡 일괄 실행 — ${ids.length}개`,
+      first: `선택한 잡 ${ids.length}개 일괄 실행 요청`,
+      fn: async () => (await batchJobsApi.bulkRun(ids)).data,
+      summarize: (data) => [
+        ...data.results.map((x): RunLogEntry =>
+          x.queued
+            ? ['info', `${nameOf(x.jobId)} · 큐잉됨`]
+            : ['warn', `${nameOf(x.jobId)} · 스킵 — ${x.reason || '사유 없음'}`]),
+        [data.skipped > 0 ? 'warn' : 'info', `큐잉 ${data.queued} · 스킵 ${data.skipped}`],
+      ],
+      keepOpen: true,
+    });
+    setBulkRunning(false);
+    if (!r.ok) {
+      if (!r.aborted) toast.error('일괄 실행 실패', formatApiError(r.error));
+      return;
     }
+    const data = r.data;
+    const reasons = [...new Set(data.results.filter((x) => !x.queued).map((x) => x.reason).filter(Boolean))];
+    if (data.queued > 0) {
+      toast.success('일괄 실행 시작', `${data.queued}건 백그라운드 실행${data.skipped ? ` · ${data.skipped}건 스킵` : ''}`);
+    }
+    if (data.skipped > 0) {
+      toast.warning(`${data.skipped}건 스킵`, reasons.join(' · ') || '저장된 자격증명 없음 등');
+    }
+    clearSel();
+    allJobsQ.refetch();
+
+    const queuedIds = data.results.filter((x) => x.queued).map((x) => x.jobId);
+    if (queuedIds.length === 0) {
+      runLog.end();
+      return;
+    }
+    queuedIds.forEach((id) => runLog.setStep(id, nameOf(id), 'running'));
+    // 이번 일괄 실행의 run — trigger 가 bulk 이고 클릭 시각(시계 차이 10초 여유) 이후 시작한 가장 최근 run.
+    const pickRun = (runs: BatchJobRun[]) =>
+      runs.find((x) => x.trigger === 'bulk' && parseUTC(x.startedAt).getTime() >= clickedAt - 10_000) ?? null;
+    const isActive = (st: string) => st === 'running' || st === 'queued' || st === 'pending';
+    type Snap = Record<string, BatchJobRun | null>;
+    await pollIntoRunLog<Snap>(runLog, {
+      fetch: async () => {
+        const pairs = await Promise.all(queuedIds.map(async (id) => {
+          const runs = (await batchJobsApi.listRuns(id, 5)).data.data;
+          return [id, pickRun(runs)] as const;
+        }));
+        return Object.fromEntries(pairs);
+      },
+      describe: (snap, prev) => {
+        const lines: RunLogEntry[] = [];
+        for (const id of queuedIds) {
+          const cur = snap[id];
+          const before = prev?.[id] ?? null;
+          if (!cur || (before && before.id === cur.id && before.status === cur.status)) continue;
+          if (isActive(cur.status)) {
+            lines.push(['info', `${nameOf(id)} · 실행 시작${cur.host ? ` · ${cur.host}` : ''}`]);
+            runLog.setStep(id, nameOf(id), 'running');
+            continue;
+          }
+          const ok = cur.status === 'ok';
+          const level: RunLogLevel = ok ? 'info' : cur.status === 'cancelled' ? 'warn' : 'error';
+          lines.push([
+            level,
+            `${nameOf(id)} · ${BULK_STATUS_KO[cur.status] ?? cur.status}${cur.exitCode != null ? ` · exit ${cur.exitCode}` : ''} · ${cur.durationMs}ms${cur.error ? ` — ${cur.error}` : ''}`,
+          ]);
+          runLog.setStep(id, nameOf(id), ok ? 'done' : 'failed');
+        }
+        const finished = queuedIds.filter((id) => snap[id] && !isActive(snap[id]!.status));
+        if (finished.length === queuedIds.length) {
+          const okCnt = finished.filter((id) => snap[id]!.status === 'ok').length;
+          lines.push([
+            okCnt === finished.length ? 'info' : 'warn',
+            `요약 · 성공 ${okCnt} · 실패 ${finished.length - okCnt} · 스킵 ${data.skipped}`,
+          ]);
+        }
+        return lines;
+      },
+      isDone: (snap) => queuedIds.every((id) => snap[id] && !isActive(snap[id]!.status)),
+      intervalMs: 3000,
+      timeoutMs: 600_000,
+      signal: ctrl.signal,
+    });
+    allJobsQ.refetch();
   };
 
   // allJobs 가 바뀔 때마다 selectedJob 을 최신 데이터로 동기화.
@@ -161,6 +248,7 @@ export function BatchJobsPage() {
       })();
 
   const canCreate = clusters.length > 0 && types.length > 0;
+  const showFilters = !allJobsQ.isLoading && canCreate;
 
   // "+ 새 잡" 헤더 버튼: 단일 모드면 그 cluster 로 prefilled, 전체 모드면 빈 wizard.
   const openCreateFromHeader = () => {
@@ -183,7 +271,7 @@ export function BatchJobsPage() {
         iconOnly
       />
 
-      <main className="flex-1 min-w-0 px-4 lg:px-6 py-5 space-y-4 max-w-[1700px]">
+      <PageShell density="console" className="space-y-4">
         {/* Page Header */}
         <div className="flex items-center justify-between gap-3 flex-wrap">
           <PageHeader icon={ListTree} title="배치잡" description={headerSubtitle} className="flex-1 min-w-0" />
@@ -205,29 +293,39 @@ export function BatchJobsPage() {
           </button>
         </div>
 
+        <RunLogPanel run={runLog} show={showRunLog} onShowChange={setShowRunLog} />
+
         {/* Body: 본문 + 슬라이드오버 */}
         <div className="flex gap-4">
           <div className="flex-1 min-w-0 space-y-4">
-            <MacCard title="배치 잡" bodyPadding="p-4">
+            <MacCard
+              title="배치 잡"
+              bodyPadding="p-4"
+              actions={showFilters ? (
+                <BatchJobFilters
+                  jobs={scopedJobs}
+                  active={statusFilter}
+                  onChange={setStatusFilter}
+                  search={search}
+                  onSearchChange={setSearch}
+                />
+              ) : undefined}
+            >
               {allJobsQ.isLoading ? (
-                <p className="text-sm text-muted-foreground py-6 text-center">불러오는 중…</p>
+                <LoadingState />
               ) : clusters.length === 0 ? (
-                <p className="text-sm text-muted-foreground py-10 text-center">
-                  등록된 클러스터가 없습니다. /cluster-manage 에서 추가하세요.
-                </p>
+                <EmptyState
+                  icon={Server}
+                  title="등록된 클러스터 없음"
+                  description="클러스터 관리(/cluster-manage)에서 클러스터를 추가하면 그 클러스터에 배치 잡을 등록할 수 있습니다."
+                />
               ) : types.length === 0 ? (
-                <p className="text-sm text-muted-foreground py-10 text-center">
-                  사용 가능한 잡 타입이 없습니다 — 백엔드 batch-jobs/types 응답을 확인해 주세요.
-                </p>
+                <EmptyState
+                  title="사용 가능한 잡 타입 없음"
+                  description="백엔드 /batch-jobs/types 응답이 비어 있습니다. 백엔드 로그와 잡 타입 등록 상태를 확인하세요."
+                />
               ) : (
                 <div className="space-y-4">
-                  <BatchJobFilters
-                    jobs={scopedJobs}
-                    active={statusFilter}
-                    onChange={setStatusFilter}
-                    search={search}
-                    onSearchChange={setSearch}
-                  />
                   {selectedIds.size > 0 && (
                     <div className="flex items-center gap-2 mb-2 px-3 py-2 rounded-lg border border-primary/30 bg-primary/5 text-sm">
                       <span className="font-medium text-primary">{selectedIds.size}개 선택됨</span>
@@ -251,11 +349,17 @@ export function BatchJobsPage() {
                   )}
                   {selectedClusterId === null ? (
                     clusterGroups.length === 0 ? (
-                      <p className="text-sm text-muted-foreground py-10 text-center">
-                        {scopedJobs.length === 0
-                          ? '아직 등록된 배치 잡이 없습니다. ＋ 새 잡 으로 시작하세요.'
-                          : '필터에 일치하는 잡이 없습니다. 필터를 해제해 보세요.'}
-                      </p>
+                      scopedJobs.length === 0 ? (
+                        <EmptyState
+                          title="등록된 배치 잡 없음"
+                          description="상단의 「새 잡」으로 클러스터와 잡 타입을 골라 첫 배치 잡을 등록하세요."
+                        />
+                      ) : (
+                        <EmptyState
+                          title="필터에 맞는 잡 없음"
+                          description="상태 필터를 「전체」로 바꾸거나 검색어를 지워 보세요."
+                        />
+                      )
                     ) : (
                       <div className="space-y-3">
                         {clusterGroups.map(({ cluster, jobs, allClusterJobs }) => (
@@ -317,7 +421,7 @@ export function BatchJobsPage() {
             />
           )}
         </div>
-      </main>
+      </PageShell>
 
       {/* Overlay 모드 슬라이드오버 — 좁은 뷰포트 */}
       {selectedJob && overlayMode && (

@@ -9,6 +9,7 @@ import { useCanOperate } from '@/hooks/useCanOperate';
 import { analyzeApi } from '@/services/api';
 import {
   ClusterSidebar, ConfirmDialog, DebugLogPanel, NamespaceSingleSelect, RunLogPanel, SnapshotProgressCard, useToast,
+  PageHeader, LoadingState, EmptyState, PageShell,
 } from '@/components/common';
 import { MacCard } from '@/components/ui/MacCard';
 import {
@@ -119,7 +120,7 @@ export function ServiceTopologyPage() {
         if (d.status === 'ok') {
           const dropped = d.edges.filter((e) => e.droppedCount > 0).length;
           tLog(dropped ? 'warn' : 'info',
-            `수집 완료 · ${ms}ms — 소스 ${d.source ?? '-'} · 엣지 ${d.edges.length}개${dropped ? ` · drop 발생 ${dropped}개` : ''}`);
+            `수집 완료 · ${ms}ms — 소스 ${d.source ?? '—'} · 엣지 ${d.edges.length}개${dropped ? ` · drop 발생 ${dropped}개` : ''}`);
           [...d.edges].sort((a, b) => b.flowCount - a.flowCount).slice(0, 10).forEach((e) => {
             tLog(e.droppedCount > 0 ? 'warn' : 'info',
               `  ${e.source} → ${e.target}: flow ${e.flowCount}${e.droppedCount > 0 ? ` · drop ${e.droppedCount}` : ''}`);
@@ -251,7 +252,7 @@ export function ServiceTopologyPage() {
 
   return (
     <div className="app-min-h-screen bg-background">
-      <main className="pr-3 py-3 flex gap-3">
+      <PageShell density="console" className="flex gap-3">
         <ClusterSidebar
           clusters={clusters}
           selectedId={clusterId || null}
@@ -263,14 +264,15 @@ export function ServiceTopologyPage() {
           <DebugLogPanel pageKey="service-topology" extra={{ clusterId, scope, namespace, clusterMode, view, nodes: graph?.nodes.length ?? 0 }} />
 
           {/* 헤더 */}
-          <div className="flex items-center gap-3 mb-2">
-            <Workflow className="w-6 h-6 text-primary" />
-            <h1 className="text-xl font-bold">서비스 토폴로지</h1>
-            <span className="text-sm text-muted-foreground">pod 통신 · 자원 연계 · 사용량/한계 가시화</span>
-          </div>
+          <PageHeader
+            className="mb-2"
+            icon={Workflow}
+            title="서비스 토폴로지"
+            description="파드 통신 · 자원 연계 · 사용량과 한계를 한 그래프로 보여 줍니다."
+          />
 
           {/* 툴바 */}
-          <MacCard title="컨트롤" className="mb-3" bodyPadding="p-3">
+          <div className="mb-3">
             <div className="flex flex-wrap items-center gap-2">
               {/* scope: 네임스페이스 / 전체 클러스터 */}
               <div role="group" aria-label="범위" className="flex items-center rounded-xl border border-border overflow-hidden text-sm">
@@ -379,7 +381,7 @@ export function ServiceTopologyPage() {
               )}
               {graph?.truncated && (
                 <span className="inline-flex items-center gap-1 text-status-warning">
-                  <AlertTriangle className="w-3 h-3" /> 노드 수 상한을 넘어 일부만 표시 중 — Pod 표시를 끄거나 범위를 좁혀라
+                  <AlertTriangle className="w-3 h-3" /> 노드 수 상한을 넘어 일부만 표시 중 — 파드 표시를 끄거나 범위를 좁혀라
                 </span>
               )}
               {isCluster && clusterData?.summaryRecommended && clusterMode === 'detail' && (
@@ -431,10 +433,14 @@ export function ServiceTopologyPage() {
                 <RunLogPanel run={trafficLog} show={showTrafficLog} onShowChange={setShowTrafficLog} maxHeight="max-h-48" />
               </div>
             )}
-          </MacCard>
+          </div>
 
           {/* 캔버스 */}
-          <MacCard title={`그래프 · ${graph?.nodes.length ?? 0} 노드 / ${graph?.edges.length ?? 0} 엣지`} bodyPadding="p-0">
+          <MacCard
+            title="그래프"
+            titleExtra={<span className="text-xs text-muted-foreground tabular-nums">노드 {graph?.nodes.length ?? 0} · 엣지 {graph?.edges.length ?? 0}</span>}
+            bodyPadding="p-0"
+          >
             <div ref={canvasRef} className="relative w-full h-[calc(100vh-260px)] min-h-[420px] overflow-hidden rounded-b-md">
               {computing ? (
                 <div className="absolute inset-0 flex items-center justify-center p-6">
@@ -449,8 +455,8 @@ export function ServiceTopologyPage() {
                   </div>
                 </div>
               ) : activeQuery.isLoading ? (
-                <div className="absolute inset-0 flex items-center justify-center text-muted-foreground gap-2">
-                  <Loader2 className="w-5 h-5 animate-spin" /> 토폴로지 수집 중…
+                <div className="absolute inset-0 flex items-center justify-center">
+                  <LoadingState label="토폴로지 수집 중…" />
                 </div>
               ) : activeQuery.isError ? (
                 <div className="absolute inset-0 flex items-center justify-center text-center px-6">
@@ -464,8 +470,12 @@ export function ServiceTopologyPage() {
                   </div>
                 </div>
               ) : !graph || graph.nodes.length === 0 ? (
-                <div className="absolute inset-0 flex items-center justify-center text-sm text-muted-foreground">
-                  {isCluster ? '표시할 리소스가 없습니다.' : '이 네임스페이스에 표시할 리소스가 없습니다.'}
+                <div className="absolute inset-0 flex items-center justify-center">
+                  <EmptyState
+                    icon={Boxes}
+                    title={isCluster ? '표시할 리소스가 없습니다.' : '이 네임스페이스에 표시할 리소스가 없습니다.'}
+                    description={isCluster ? '클러스터에서 수집된 워크로드가 없습니다. 새로고침으로 다시 수집해 보세요.' : '다른 네임스페이스를 고르거나 "미참조 설정"·"Pod 표시"를 켜 보세요.'}
+                  />
                 </div>
               ) : view === '2d' ? (
                 <TopologyCanvas
@@ -523,7 +533,7 @@ export function ServiceTopologyPage() {
             </div>
           </MacCard>
         </div>
-      </main>
+      </PageShell>
 
       {/* 다이얼로그 */}
       {linkTargetId && linkSourceId && nodeById.get(linkSourceId) && nodeById.get(linkTargetId) && (
@@ -584,7 +594,7 @@ function Legend() {
   // 색만으로 구분하지 않도록 실제 선 패턴(dash)까지 그린다 — 캔버스와 같은 edgeStyleToken(D-096/D-097)
   const items = ['routes', 'exposes', 'owns', 'uses_config', 'uses_secret', 'mounts_pvc', 'manual', 'traffic'];
   return (
-    <div className="absolute bottom-3 left-3 bg-card/90 backdrop-blur border border-border rounded-md px-3 py-2 z-10 max-w-[60%]">
+    <div className="absolute bottom-3 left-3 bg-card border border-border rounded-md px-3 py-2 z-10 max-w-[60%]">
       <ul className="flex flex-wrap gap-x-3 gap-y-1" aria-label="엣지 범례">
         {items.map((type) => (
           <li key={type} className="inline-flex items-center gap-1 text-xs text-muted-foreground">

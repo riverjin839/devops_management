@@ -69,7 +69,7 @@ export function BatchJobLogDetail({ run, stepPlan, maxHeight = 'max-h-[320px]', 
         ) : run.executedCommand ? (
           // 구버전 run (steps/commands 없음) fallback
           <div>
-            <p className="text-xs uppercase tracking-wider text-muted-foreground mb-1">command</p>
+            <p className="text-xs text-muted-foreground mb-1">command</p>
             <pre className="text-xs font-mono bg-background border border-border rounded p-2 overflow-auto whitespace-pre-wrap break-all">
               {run.executedCommand}
             </pre>
@@ -78,7 +78,7 @@ export function BatchJobLogDetail({ run, stepPlan, maxHeight = 'max-h-[320px]', 
         <ExecOutputTabs stdout={run.stdout} stderr={run.stderr} maxHeight={maxHeight} />
         {run.error && (
           <div>
-            <p className="text-xs uppercase tracking-wider text-muted-foreground mb-1">error</p>
+            <p className="text-xs text-muted-foreground mb-1">error</p>
             <pre className="text-xs font-mono bg-status-critical/10 border border-status-critical/30 text-status-critical rounded p-2 overflow-auto whitespace-pre-wrap">
               {run.error}
             </pre>
@@ -86,7 +86,7 @@ export function BatchJobLogDetail({ run, stepPlan, maxHeight = 'max-h-[320px]', 
         )}
         {hasParams && (
           <details className="text-xs text-muted-foreground">
-            <summary className="cursor-pointer hover:text-foreground uppercase tracking-wider">
+            <summary className="cursor-pointer hover:text-foreground">
               실행 파라미터 (admin 감사용 스냅샷)
             </summary>
             <pre className="mt-1 font-mono bg-background border border-border rounded p-2 overflow-auto whitespace-pre-wrap">

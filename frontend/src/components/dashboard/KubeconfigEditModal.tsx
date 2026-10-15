@@ -92,7 +92,7 @@ export function KubeconfigEditModal({
       <div className="absolute inset-0 bg-black/60" onClick={onClose} />
 
       {/* Modal */}
-      <div ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby={headingId} className="relative bg-card border border-border rounded-2xl shadow-2xl w-full max-w-3xl mx-4 p-6">
+      <div ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby={headingId} className="relative bg-card border border-border rounded-md shadow-2xl w-full max-w-3xl mx-4 p-6">
         {/* Header */}
         <div className="flex items-center justify-between mb-5">
           <div>
@@ -150,7 +150,7 @@ export function KubeconfigEditModal({
               />
             </div>
             {saveError && (
-              <div className="flex items-start gap-2 px-3 py-2.5 bg-destructive/10 border border-destructive/20 rounded-lg text-sm text-destructive">
+              <div className="flex items-start gap-2 px-3 py-2.5 bg-status-critical/10 border border-status-critical/20 rounded-lg text-sm text-status-critical">
                 <AlertTriangle className="w-4 h-4 flex-shrink-0 mt-0.5" />
                 <span>{saveError}</span>
               </div>
@@ -200,7 +200,7 @@ export function KubeconfigEditModal({
               className="w-full px-3 py-2.5 bg-secondary border border-border rounded-lg text-sm font-mono text-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary resize-none"
             />
             {saveError && (
-              <div className="flex items-start gap-2 px-3 py-2.5 bg-destructive/10 border border-destructive/20 rounded-lg text-sm text-destructive">
+              <div className="flex items-start gap-2 px-3 py-2.5 bg-status-critical/10 border border-status-critical/20 rounded-lg text-sm text-status-critical">
                 <AlertTriangle className="w-4 h-4 flex-shrink-0 mt-0.5" />
                 <span>{saveError}</span>
               </div>

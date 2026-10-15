@@ -1,10 +1,9 @@
 import { useState } from 'react';
 import {
-  Plus, Pencil, Trash2, GitFork, Loader2, RefreshCw, UploadCloud,
-  ChevronRight, FileText, CheckCircle, Archive, FileText as FileTextIcon, ExternalLink,
+  Plus, Pencil, Trash2, GitFork, Loader2, RefreshCw, UploadCloud, ChevronRight, FileText, CheckCircle, Archive, FileText as FileTextIcon, ExternalLink, PenLine,
 } from 'lucide-react';
 import { RichContent } from '@/components/editor';
-import { ReactionBar, useToast } from '@/components/common';
+import { PageShell, ReactionBar, useToast } from '@/components/common';
 import { ConfluenceExportDialog, SyncStatusBadge } from '@/components/documents';
 import { useConfluenceDocPull } from '@/hooks/useConfluenceDocs';
 import { formatApiError } from '@/lib/utils';
@@ -12,7 +11,7 @@ import type { WorkGuide } from '@/types';
 
 const STATUS_CFG: Record<string, { label: string; icon: React.ReactNode; cls: string }> = {
   draft:    { label: '초안', icon: <FileTextIcon className="w-3 h-3" />, cls: 'bg-status-unknown/10 text-status-unknown border-status-unknown/30' },
-  active:   { label: '활성', icon: <CheckCircle className="w-3 h-3" />,  cls: 'bg-status-healthy/10 text-status-healthy border-status-healthy/30' },
+  active:   { label: '활성', icon: <CheckCircle className="w-3 h-3" />,  cls: 'bg-secondary text-muted-foreground border-border' },
   archived: { label: '보관', icon: <Archive className="w-3 h-3" />,      cls: 'bg-status-unknown/10 text-status-unknown border-status-unknown/30' },
 };
 
@@ -70,7 +69,7 @@ export function GuidePageView({ guide, allGuides, onSelect, onEdit, onAddChild, 
     try {
       const res = await pullMut.mutateAsync(guide.id);
       if (res.status !== 'ok') toast.error('다시 가져오기 실패', res.detail);
-      else toast.success('다시 가져오기 완료', `Confluence v${res.version ?? '?'} 내용으로 갱신했습니다.`);
+      else toast.success('다시 가져옴', `Confluence v${res.version ?? '?'} 내용으로 갱신했습니다.`);
     } catch (err) {
       toast.error('다시 가져오기 실패', formatApiError(err));
     }
@@ -78,7 +77,7 @@ export function GuidePageView({ guide, allGuides, onSelect, onEdit, onAddChild, 
 
   return (
     <div className="flex-1 overflow-y-auto">
-      <div className="max-w-4xl mx-auto px-10 py-8">
+      <PageShell density="doc" as="div">
         <Breadcrumb guide={guide} allGuides={allGuides} onSelect={onSelect} />
 
         <div className="flex items-start justify-between gap-4 mb-5">
@@ -97,7 +96,7 @@ export function GuidePageView({ guide, allGuides, onSelect, onEdit, onAddChild, 
                 <span className={`inline-block w-1.5 h-1.5 rounded-full ${pc.dot} mr-1`} />
                 {pc.label}
               </span>
-              {guide.author && <span className="text-muted-foreground">✍ {guide.author}</span>}
+              {guide.author && <span className="inline-flex items-center gap-1 text-muted-foreground"><PenLine className="w-3 h-3" aria-hidden />{guide.author}</span>}
               {guide.confluenceUrl && (
                 <a
                   href={guide.confluenceUrl}
@@ -191,7 +190,7 @@ export function GuidePageView({ guide, allGuides, onSelect, onEdit, onAddChild, 
             </div>
           </div>
         )}
-      </div>
+      </PageShell>
 
       <ConfluenceExportDialog open={exportOpen} onClose={() => setExportOpen(false)} guide={guide} />
     </div>

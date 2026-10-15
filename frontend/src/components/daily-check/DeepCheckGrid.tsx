@@ -1,5 +1,6 @@
-import { CheckCircle2, AlertTriangle, XCircle, Clock } from 'lucide-react';
+import { CheckCircle2, AlertTriangle, XCircle, Clock, ListChecks } from 'lucide-react';
 import { MacCard } from '@/components/ui/MacCard';
+import { EmptyState } from '@/components/common/EmptyState';
 import { ExecutionStepsTimeline } from '@/components/daily-check/ExecutionStepsTimeline';
 import type { DeepCheckResult, DeepCheckExecStep, Status } from '@/types';
 import { parseUTC } from '@/lib/utils';
@@ -9,7 +10,7 @@ interface Props {
 }
 
 const STATUS_ICON: Record<Status, { Icon: typeof CheckCircle2; color: string }> = {
-  healthy:  { Icon: CheckCircle2,  color: 'text-status-healthy'  },
+  healthy:  { Icon: CheckCircle2,  color: 'text-muted-foreground' },
   warning:  { Icon: AlertTriangle, color: 'text-status-warning'  },
   critical: { Icon: XCircle,       color: 'text-status-critical' },
   pending:  { Icon: Clock,         color: 'text-status-unknown'  },
@@ -18,12 +19,12 @@ const STATUS_ICON: Record<Status, { Icon: typeof CheckCircle2; color: string }> 
 export function DeepCheckGrid({ results }: Props) {
   if (!results.length) {
     return (
-      <MacCard title="심층 점검 결과">
-        <div className="text-sm text-muted-foreground italic">
-          아직 심층 점검 결과가 없습니다. Super Pod 가 다음 점검 회차에 결과를 보내거나,
-          상단의 "지금 실행" 버튼을 눌러 즉시 실행할 수 있습니다.
-        </div>
-      </MacCard>
+      <EmptyState
+        compact
+        icon={ListChecks}
+        title="심층 점검 결과 없음"
+        description="Super Pod 가 다음 점검 회차에 결과를 보내거나, 상단의 「심층 점검 실행」으로 즉시 실행하면 이 회차에 결과가 묶입니다."
+      />
     );
   }
 
@@ -36,7 +37,7 @@ export function DeepCheckGrid({ results }: Props) {
           return (
             <div
               key={r.id}
-              className="rounded-xl border border-border bg-card p-3.5 space-y-2"
+              className="rounded-md bg-secondary/40 p-3.5 space-y-2"
             >
               <div className="flex items-start gap-2">
                 <Icon className={`w-4 h-4 mt-0.5 flex-shrink-0 ${meta.color}`} />

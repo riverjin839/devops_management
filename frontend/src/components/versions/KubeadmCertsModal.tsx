@@ -5,13 +5,19 @@ import type { NodeSummary } from '@/services/api';
 import type { KubeadmCertsCollectResponse } from '@/types';
 import { useQuery } from '@tanstack/react-query';
 import { useAbortableMutation } from '@/hooks/useAbortableMutation';
+import { useRunLog, runLogged } from '@/hooks/useRunLog';
+import { useLogPref } from '@/hooks/useLogPref';
+import { RunLogPanel } from '@/components/common';
 import { useModalA11y } from '@/components/common/useModalA11y';
 import { RawOutputDetails, CollectErrorList } from './RawOutputDetails';
+import { collectFirstLine, summarizeCollect } from './collectRunLog';
 import { formatApiError } from '@/lib/utils';
 
 interface Props {
   open: boolean;
   clusterId: string;
+  /** 실행 로그 첫 줄에 표시할 클러스터 이름(없으면 생략). */
+  clusterName?: string;
   onClose: () => void;
 }
 
@@ -20,7 +26,7 @@ interface Props {
  *  kubectl exec 로는 kubeadm 을 실행할 수 없어, Ops Checks 의 `cert_expiry` 체커가
  *  source=snapshot(또는 auto 폴백)일 때 여기서 수집한 스냅샷을 읽는다.
  *  SSH 자격증명은 요청에만 사용되고 DB 에 저장되지 않는다. */
-export function KubeadmCertsModal({ open, clusterId, onClose }: Props) {
+export function KubeadmCertsModal({ open, clusterId, clusterName, onClose }: Props) {
   const [username, setUsername] = useState('root');
   const [port, setPort] = useState(22);
   const [authMode, setAuthMode] = useState<'password' | 'key'>('password');
@@ -66,6 +72,18 @@ export function KubeadmCertsModal({ open, clusterId, onClose }: Props) {
     onSuccess: (d) => setResult(d),
   });
 
+  // 실행 로그(D-128) — 동기 1응답 수집을 요청·대기·호스트별 결과·요약 줄로 남긴다. 결과 표·토스트는 기존대로.
+  const runLog = useRunLog();
+  const [showLog, setShowLog] = useLogPref('versions-kubeadm-certs');
+  const handleRun = () => {
+    void runLogged(runLog, {
+      title: 'kubeadm 인증서 만료 수집',
+      first: collectFirstLine(clusterName, selected.size, 'kubeadm 인증서', useSudo),
+      fn: () => collectMut.mutateAsync(),
+      summarize: (res) => summarizeCollect(res),
+    });
+  };
+
   const canRun = selected.size > 0
     && (authMode === 'password' ? !!password : !!privateKey.trim());
 
@@ -77,7 +95,7 @@ export function KubeadmCertsModal({ open, clusterId, onClose }: Props) {
     <div className="fixed inset-0 z-50 flex items-center justify-center">
       <div className="absolute inset-0 bg-black/60" onClick={() => !collectMut.isPending && onClose()} />
       <div ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby={titleId}
-        className="relative bg-card border border-border rounded-2xl shadow-2xl w-full max-w-2xl mx-4 overflow-hidden">
+        className="relative bg-card border border-border rounded-md shadow-2xl w-full max-w-2xl mx-4 overflow-hidden">
         <div className="flex items-center gap-3 px-5 py-4 border-b border-border bg-muted/30">
           <div className="w-9 h-9 rounded-lg flex items-center justify-center bg-primary/10 text-primary">
             <ShieldCheck className="w-4 h-4" />
@@ -203,8 +221,10 @@ export function KubeadmCertsModal({ open, clusterId, onClose }: Props) {
             </div>
           </div>
 
+          <RunLogPanel run={runLog} show={showLog} onShowChange={setShowLog} maxHeight="max-h-56" />
+
           {runErr && (
-            <div className="px-3 py-2 text-sm rounded-lg bg-destructive/10 text-destructive border border-destructive/30">
+            <div className="px-3 py-2 text-sm rounded-lg bg-status-critical/10 text-status-critical border border-status-critical/30">
               {runErr.response?.data?.detail ?? runErr.message}
             </div>
           )}
@@ -235,7 +255,7 @@ export function KubeadmCertsModal({ open, clusterId, onClose }: Props) {
                       <td className="px-2 py-1 font-mono">{h.host}</td>
                       <td className="px-2 py-1">
                         {!h.error
-                          ? <CheckCircle2 className="w-3 h-3 text-status-healthy" />
+                          ? <CheckCircle2 className="w-3 h-3 text-muted-foreground" />
                           : <XCircle className="w-3 h-3 text-status-critical" />}
                       </td>
                       <td className="px-2 py-1 text-muted-foreground truncate max-w-[280px]" title={h.error ?? ''}>
@@ -264,7 +284,7 @@ export function KubeadmCertsModal({ open, clusterId, onClose }: Props) {
               <Loader2 className="w-3 h-3 animate-spin" /> 중지
             </button>
           ) : (
-            <button onClick={() => collectMut.mutate()}
+            <button onClick={handleRun}
               disabled={!canRun}
               className="flex items-center gap-1.5 px-4 py-1.5 text-sm font-semibold bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 disabled:opacity-50">
               <Play className="w-3 h-3" /> 수집 실행

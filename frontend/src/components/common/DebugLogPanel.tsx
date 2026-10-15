@@ -9,8 +9,8 @@ interface Props {
 }
 
 const KIND_CLS: Record<string, string> = {
-  request:  'text-status-info',
-  response: 'text-status-healthy',
+  request:  'text-chart-1',
+  response: 'text-chart-2',
   error:    'text-status-critical',
   info:     'text-muted-foreground',
 };
@@ -42,7 +42,7 @@ export function DebugLogPanel({ pageKey, extra }: Props) {
   const globalOn = !!enabledMap.global;
 
   return (
-    <div className="bg-card border border-status-warning/30 rounded-xl overflow-hidden mb-3">
+    <div className="bg-card border border-status-warning/30 rounded-md overflow-hidden mb-3">
       <div className="flex items-center gap-2 px-3 py-1.5 bg-status-warning/5 border-b border-status-warning/20">
         <Bug className="w-3.5 h-3.5 text-status-warning" />
         <span className="text-xs font-semibold text-status-warning">Debug — {pageKey}</span>
@@ -67,7 +67,7 @@ export function DebugLogPanel({ pageKey, extra }: Props) {
         <>
           {extra && Object.keys(extra).length > 0 && (
             <div className="px-3 py-2 border-b border-border/50 bg-muted/10">
-              <p className="text-xs text-muted-foreground uppercase mb-1">context</p>
+              <p className="text-xs text-muted-foreground mb-1">컨텍스트</p>
               <pre className="text-xs font-mono text-foreground/80 whitespace-pre-wrap break-all">
                 {JSON.stringify(extra, null, 2)}
               </pre>

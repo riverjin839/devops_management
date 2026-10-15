@@ -24,13 +24,13 @@ export function EfficiencyRunPanel({ clusterId, onRollback, rollbackPending }: {
                   <RunStatePill state={r.runState} />
                   <span className="font-medium">{RUN_TYPE_LABEL[r.runType] ?? r.runType}</span>
                   {r.dryRun && <span className="text-[11px] px-1.5 py-0.5 rounded bg-status-info/10 text-status-info">dry-run</span>}
-                  <span className="text-xs text-muted-foreground">{r.trigger} · {r.triggeredBy ?? '-'}</span>
+                  <span className="text-xs text-muted-foreground">{r.trigger} · {r.triggeredBy ?? '—'}</span>
                   <span className="text-xs text-muted-foreground tabular-nums">대상 {r.targets?.length ?? 0}</span>
                   <span className="ml-auto text-xs text-muted-foreground tabular-nums">{fmtTs(r.queuedAt)}</span>
                 </button>
                 {open === r.id && (
                   <div className="px-3 pb-3">
-                    <EfficiencyRunLog runId={r.id} onRollback={onRollback} rollbackPending={rollbackPending} />
+                    <EfficiencyRunLog runId={r.id} onRollback={onRollback} rollbackPending={rollbackPending} embedded />
                   </div>
                 )}
               </div>

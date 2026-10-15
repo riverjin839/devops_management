@@ -1,6 +1,6 @@
 import { Fragment, useId, useMemo, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { ViewModeBar, DebugLogPanel, useToast, DoubleScrollX, ConfirmDialog, Skeleton, SkeletonTable, EmptyState, LogViewer } from '@/components/common';
+import { ViewModeBar, DebugLogPanel, useToast, DoubleScrollX, ConfirmDialog, Skeleton, SkeletonTable, EmptyState, LogViewer, PageHeader } from '@/components/common';
 import { useModalA11y } from '@/components/common/useModalA11y';
 import { MacCard } from '@/components/ui/MacCard';
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
@@ -27,7 +27,7 @@ import {
 import { NodeNicsCollectModal } from '@/components/versions';
 import { useOperationLevels, levelLabel } from '@/hooks/useOperationLevels';
 import { useColumnWidths } from '@/hooks/useColumnWidths';
-import { ResizeGrip } from '@/components/common';
+import { ResizeGrip, PageShell } from '@/components/common';
 import { useClusterCustomFields, sortedFields } from '@/hooks/useClusterCustomFields';
 import { EyeOff, Settings2, Wand2 } from 'lucide-react';
 import { StandardizeClusterNamesModal } from '@/components/cluster-manage/StandardizeClusterNamesModal';
@@ -82,7 +82,7 @@ function SortableClusterCard(
       {canDrag && (
         <button
           {...attributes} {...listeners}
-          className="absolute top-2 left-2 z-10 cursor-grab active:cursor-grabbing p-1 rounded text-muted-foreground/30 opacity-0 group-hover/card:opacity-100 focus-visible:opacity-100 hover:text-muted-foreground hover:bg-secondary transition-all"
+          className="absolute top-2 left-2 z-10 cursor-grab active:cursor-grabbing p-1 rounded text-muted-foreground/30 opacity-0 group-hover/card:opacity-100 focus-visible:opacity-100 hover:text-muted-foreground hover:bg-secondary transition-colors"
           title="드래그하여 순서 변경 (정렬: 수동 모드)"
           aria-label="순서 변경 핸들"
         >
@@ -444,7 +444,7 @@ export function ClusterManagePage() {
       const open = diffClusterRef.current;
       if (open && open.id !== cluster.id) {
         // 다른 클러스터의 diff 가 열려 있음 — 덮어쓰면 사용자가 엉뚱한 대상에 적용할 수 있다.
-        toast.info(`${cluster.name} 수집 완료`, `${open.name} 의 변경 미리보기가 열려 있어 표시하지 않았습니다. 닫은 뒤 다시 새로고침하세요.`);
+        toast.info(`${cluster.name} 수집됨`, `${open.name} 의 변경 미리보기가 열려 있어 표시하지 않았습니다. 닫은 뒤 다시 새로고침하세요.`);
       } else {
         openDiff(cluster, (data.diff ?? []) as DiffRow[], data.warnings ?? []);
       }
@@ -576,7 +576,7 @@ export function ClusterManagePage() {
       await clustersApi.autoUpdate(cluster.id);
       await queryClient.refetchQueries({ queryKey: ['clusters'] });
       appendLog(`[IP 수집] ok ${cluster.name} — 노드 IP / k8s 버전 등 갱신됨`);
-      toast.success('수집 완료', `${cluster.name} 의 노드 IP / k8s 버전 등이 갱신됐습니다.`);
+      toast.success('수집됨', `${cluster.name} 의 노드 IP / k8s 버전 등이 갱신됐습니다.`);
     } catch (e: unknown) {
       appendLog(`[IP 수집] FAIL ${cluster.name} — ${formatApiError(e)}`);
       toast.error('노드 IP 수집 실패', formatApiError(e));
@@ -645,7 +645,7 @@ export function ClusterManagePage() {
     if (fail > 0 && ok === 0) toast.error('일괄 수집 실패', `${summary} — 상세는 수집 로그 참조`);
     else if (fail > 0) toast.warning('일괄 수집 부분 실패', `${summary} — 상세는 수집 로그 참조`);
     else if (aborted) toast.info('일괄 수집 중단됨', summary);
-    else toast.success('일괄 수집 완료', summary);
+    else toast.success('일괄 수집됨', summary);
   };
 
   const handleApplyDiff = async () => {
@@ -672,14 +672,15 @@ export function ClusterManagePage() {
 
   return (
     <div className="app-min-h-screen bg-background">
-      <main className="max-w-[2400px] mx-auto px-4 py-6">
+      <PageShell density="console" sidebar={false}>
         <DebugLogPanel pageKey="cluster-manage" extra={{ clusters: clusters.length, filtered: filteredClusters.length, autoUpdating: [...autoUpdatingIds].join(','), diffRowsCount: diffRows.length }} />
 
         {/* 페이지 헤더 — 액션이 많아 좁은 폭에서 줄바꿈 허용 (D-051) */}
-        <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
-          <div className="flex flex-wrap items-center gap-3">
-            <Server className="w-6 h-6 text-primary" />
-            <h1 className="text-xl font-bold">클러스터 관리</h1>
+        <PageHeader
+          className="mb-6"
+          icon={Server}
+          title="클러스터 관리"
+          titleExtra={<>
             {clusters.length > 0 && (
               <span className="text-sm px-2 py-0.5 rounded-full bg-secondary text-muted-foreground border border-border">
                 {filteredClusters.length} / {clusters.length}
@@ -704,8 +705,8 @@ export function ClusterManagePage() {
                 커스텀 컬럼 조회 실패
               </span>
             )}
-          </div>
-          <div className="flex flex-wrap items-center gap-2">
+          </>}
+          actions={<>
             <ViewModeBar
               modes={[
                 { id: 'table', label: '테이블', icon: <LayoutList className="w-3.5 h-3.5" /> },
@@ -784,7 +785,7 @@ export function ClusterManagePage() {
                     ref={toolsRef}
                     role="dialog"
                     aria-label="테이블 도구"
-                    className="absolute z-50 top-full mt-1 right-0 w-64 bg-card border border-border rounded-lg shadow-xl p-2 space-y-1"
+                    className="absolute z-50 top-full mt-1 right-0 w-64 bg-card border border-border rounded-md shadow-xl p-2 space-y-1"
                   >
                     {canEdit && (
                       <button
@@ -836,34 +837,35 @@ export function ClusterManagePage() {
                 </>
               )}
             </div>
-          </div>
-        </div>
+          </>}
+        />
 
         {/* 수집 실행 로그 — 실행 결과를 토스트 요약이 아니라 대상별 한 줄 기록으로 (CLAUDE.md 실행-로그 규칙) */}
         {collectLogOpen && (
-          <MacCard rootClassName="mb-5" bodyPadding="p-0">
-            <div className="flex items-center gap-2 px-4 py-2 border-b border-border bg-surface-container-high">
-              <ScrollText className="w-3.5 h-3.5 text-muted-foreground" aria-hidden />
-              <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground select-none">실행 로그</span>
-              <div className="ml-auto flex items-center gap-1.5">
-                {lastBulkFailedIds.length > 0 && !bulkCollecting && canEdit && (
-                  <button
-                    onClick={() => executeBulkCollect(clusters.filter((c) => lastBulkFailedIds.includes(c.id)))}
-                    className="px-2 py-1 text-xs font-medium rounded-lg bg-status-warning/10 text-status-warning border border-status-warning/30 hover:bg-status-warning/20 transition-colors"
-                    title="직전 일괄 수집에서 실패한 클러스터만 다시 수집합니다"
-                  >
-                    실패 {lastBulkFailedIds.length}개 재시도
-                  </button>
-                )}
+          <MacCard
+            title="실행 로그"
+            icon={ScrollText}
+            rootClassName="mb-5"
+            bodyPadding="p-0"
+            actions={<>
+              {lastBulkFailedIds.length > 0 && !bulkCollecting && canEdit && (
                 <button
-                  onClick={() => { setCollectLog([]); setLastBulkFailedIds([]); }}
-                  disabled={collectLog.length === 0}
-                  className="px-2 py-1 text-xs rounded-lg hover:bg-secondary text-muted-foreground disabled:opacity-40 transition-colors"
+                  onClick={() => executeBulkCollect(clusters.filter((c) => lastBulkFailedIds.includes(c.id)))}
+                  className="px-2 py-1 text-xs font-medium rounded-lg bg-status-warning/10 text-status-warning border border-status-warning/30 hover:bg-status-warning/20 transition-colors"
+                  title="직전 일괄 수집에서 실패한 클러스터만 다시 수집합니다"
                 >
-                  지우기
+                  실패 {lastBulkFailedIds.length}개 재시도
                 </button>
-              </div>
-            </div>
+              )}
+              <button
+                onClick={() => { setCollectLog([]); setLastBulkFailedIds([]); }}
+                disabled={collectLog.length === 0}
+                className="px-2 py-1 text-xs rounded-lg hover:bg-secondary text-muted-foreground disabled:opacity-40 transition-colors"
+              >
+                지우기
+              </button>
+            </>}
+          >
             <LogViewer
               text={collectLog.length > 0 ? collectLog.join('\n') : '아직 실행 기록이 없습니다 — 연결 검증 / 재수집 / IP 수집 / 일괄 수집 결과가 여기에 대상별로 쌓입니다.'}
               maxHeight="max-h-48"
@@ -912,12 +914,10 @@ export function ClusterManagePage() {
 
         {/* viewer 네트워크 정보 숨김 정책 — 빈 IP·CIDR 칸이 "미수집" 으로 오해되지 않게 안내 */}
         {clusters.some((c) => c.networkMasked) && (
-          <MacCard rootClassName="mb-5">
-            <p className="text-sm text-muted-foreground flex items-center gap-2">
-              <EyeOff className="w-4 h-4 text-primary flex-shrink-0" aria-hidden />
-              관리자 정책으로 IP·CIDR·MAC·호스트명·API 엔드포인트가 숨김 처리되어 빈 칸으로 보입니다 (viewer 권한).
-            </p>
-          </MacCard>
+          <p className="mb-5 text-sm text-muted-foreground flex items-center gap-2">
+            <EyeOff className="w-4 h-4 text-muted-foreground flex-shrink-0" aria-hidden />
+            관리자 정책으로 IP·CIDR·MAC·호스트명·API 엔드포인트가 숨김 처리되어 빈 칸으로 보입니다 (viewer 권한).
+          </p>
         )}
 
         {/* 클러스터 목록 — 로딩/조회실패/0건 3분기 (D-043) */}
@@ -1036,12 +1036,12 @@ export function ClusterManagePage() {
                       {group.label && (
                         <tr className="bg-primary/5 border-y border-primary/20">
                           <td colSpan={visibleColumns.length + customFields.length + 1}
-                            className="px-3 py-1.5 text-xs font-bold uppercase tracking-wider text-primary">
+                            className="px-3 py-1.5 text-xs font-semibold text-primary">
                             <span className="inline-flex items-center gap-1.5 align-middle">
                               <GroupIcon className="w-3 h-3" aria-hidden />
                               {groupLabelPrefix} {group.label}
                             </span>
-                            <span className="ml-2 text-muted-foreground font-normal normal-case tracking-normal">
+                            <span className="ml-2 text-muted-foreground font-normal">
                               {group.clusters.length}개
                             </span>
                           </td>
@@ -1086,7 +1086,7 @@ export function ClusterManagePage() {
                 <div key={group.key}>
                   {group.label && (
                     <div className="flex items-baseline gap-2 mb-2 px-1 border-l-2 border-primary pl-3">
-                      <span className="inline-flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-primary">
+                      <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-primary">
                         <GroupIcon className="w-3 h-3" aria-hidden />
                         {groupLabelPrefix} {group.label}
                       </span>
@@ -1127,7 +1127,7 @@ export function ClusterManagePage() {
         <p className="text-sm text-muted-foreground mt-6 text-center">
           클러스터 등록 및 API/kubeconfig 설정은 <strong>설정</strong> 페이지에서 할 수 있습니다.
         </p>
-      </main>
+      </PageShell>
 
       <StandardizeClusterNamesModal
         open={standardizeOpen}

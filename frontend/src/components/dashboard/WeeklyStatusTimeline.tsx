@@ -409,7 +409,7 @@ export function WeeklyStatusTimeline({ items, isLoading, selectedClusterId }: We
           </span>
         ))}
         <span className="flex items-center gap-1"><Star className="w-3 h-3 text-status-warning fill-status-warning" />미해결 이슈</span>
-        <span className="flex items-center gap-1"><AlertCircle className="w-3 h-3 text-status-healthy" />해결 이슈</span>
+        <span className="flex items-center gap-1"><AlertCircle className="w-3 h-3 text-muted-foreground" />해결 이슈</span>
         <span className="flex items-center gap-1"><ChevronRight className="w-3 h-3 text-foreground/60" />진행 중(완료일 미입력)</span>
       </div>
 
@@ -456,7 +456,7 @@ export function WeeklyStatusTimeline({ items, isLoading, selectedClusterId }: We
             disabled={!canNext}
             aria-label="다음 주"
             title="다음 주"
-            className="absolute right-1 top-1/2 -translate-y-1/2 z-[1] p-1 rounded-md bg-card/90 backdrop-blur-sm text-muted-foreground border border-border shadow-sm hover:text-foreground transition-colors disabled:opacity-40 disabled:cursor-not-allowed">
+            className="absolute right-1 top-1/2 -translate-y-1/2 z-[1] p-1 rounded-md bg-card text-muted-foreground border border-border shadow-sm hover:text-foreground transition-colors disabled:opacity-40 disabled:cursor-not-allowed">
             <ChevronRight className="w-4 h-4" />
           </button>
         </div>
@@ -509,8 +509,8 @@ export function WeeklyStatusTimeline({ items, isLoading, selectedClusterId }: We
                               onClick={() => openWorkItem(issue.id)}
                               className="flex items-center gap-1 px-1 text-left rounded hover:bg-status-warning/10 transition-colors cursor-pointer min-w-0"
                               title={stripHtml(issue.content)}>
-                              <Star className={`w-3.5 h-3.5 flex-shrink-0 ${resolved ? 'text-status-healthy fill-status-healthy' : 'text-status-warning fill-status-warning'}`} />
-                              <span className={`text-xs font-medium truncate ${resolved ? 'text-status-healthy' : 'text-status-warning'}`}>
+                              <Star className={`w-3.5 h-3.5 flex-shrink-0 ${resolved ? 'text-muted-foreground' : 'text-status-warning fill-status-warning'}`} />
+                              <span className={`text-xs font-medium truncate ${resolved ? 'text-muted-foreground' : 'text-status-warning'}`}>
                                 {issue.title?.trim() || stripHtml(issue.content)}
                               </span>
                             </button>
@@ -557,7 +557,7 @@ export function WeeklyStatusTimeline({ items, isLoading, selectedClusterId }: We
                         ${clippedLeft ? 'rounded-l-none' : ''} ${clippedRight || growing ? 'rounded-r-none' : ''}`}>
                         <StatusGlyph status={status} />
                         <span className="text-xs font-semibold truncate">{team || sv.label}</span>
-                        {growing && <ChevronRight className="w-3 h-3 flex-shrink-0 ml-auto animate-pulse" aria-label="진행 중" />}
+                        {growing && <ChevronRight className="w-3 h-3 flex-shrink-0 ml-auto" aria-label="진행 중" />}
                       </button>
                     </div>
                   </div>
@@ -627,7 +627,7 @@ export function WeeklyStatusTimeline({ items, isLoading, selectedClusterId }: We
                               ${clippedLeft ? 'rounded-l-none' : ''} ${clippedRight || growing ? 'rounded-r-none' : ''}`}>
                               <StatusGlyph status={status} />
                               <span className="text-[11px] font-semibold truncate">{item.title?.trim() || stripHtml(item.content)}</span>
-                              {growing && <ChevronRight className="w-3 h-3 flex-shrink-0 ml-auto animate-pulse" aria-label="진행 중" />}
+                              {growing && <ChevronRight className="w-3 h-3 flex-shrink-0 ml-auto" aria-label="진행 중" />}
                             </button>
                           </div>
                         );

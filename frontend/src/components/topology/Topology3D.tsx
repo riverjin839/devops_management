@@ -72,16 +72,16 @@ export function Topology3D({ graph, trafficEdges = [], showTraffic, width, heigh
       <div className="absolute top-3 left-3 z-10 flex items-center gap-1.5">
         {onShowTable && (
           <button type="button" onClick={onShowTable}
-            className="inline-flex items-center gap-1 px-2 py-1 text-xs rounded-xl border border-border bg-card/90 text-foreground hover:bg-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+            className="inline-flex items-center gap-1 px-2 py-1 text-xs rounded-xl border border-border bg-card text-foreground hover:bg-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
             <Table2 className="w-3.5 h-3.5" aria-hidden /> 표로 보기
           </button>
         )}
         <button type="button" onClick={() => ref.current?.zoomToFit(400)}
           title="화면 맞춤" aria-label="화면 맞춤"
-          className="inline-flex items-center gap-1 px-2 py-1 text-xs rounded-xl border border-border bg-card/90 text-foreground hover:bg-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+          className="inline-flex items-center gap-1 px-2 py-1 text-xs rounded-xl border border-border bg-card text-foreground hover:bg-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
           <Maximize2 className="w-3.5 h-3.5" aria-hidden />
         </button>
-        <span aria-hidden className="hidden sm:inline text-[11px] text-muted-foreground bg-card/80 rounded-xl px-2 py-0.5">
+        <span aria-hidden className="hidden sm:inline text-[11px] text-muted-foreground bg-card rounded-xl px-2 py-0.5">
           드래그 회전 · 휠 확대 · 클릭 선택
         </span>
       </div>

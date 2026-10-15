@@ -125,8 +125,12 @@ export function NsRankingView({ clusterId, onOpenDetail }: {
   }
 
   return (
-    <MacCard title={`네임스페이스 비효율 랭킹 (${fmtN(nsRanked.length)}개 · req vs 실사용, 간격이 클수록 낭비)`} bodyPadding="p-3">
-      <div className="flex items-center gap-2 mb-2 flex-wrap">
+    <MacCard
+      title="네임스페이스 비효율 랭킹"
+      titleExtra={<span className="text-xs text-muted-foreground tabular-nums">{fmtN(nsRanked.length)}개</span>}
+      description="req vs 실사용 — 간격이 클수록 낭비"
+      bodyPadding="p-3"
+      actions={<>
         <span className="text-sm text-muted-foreground">기준</span>
         {(['cpu', 'mem'] as ChartMetric[]).map((m) => (
           <button key={m} type="button" onClick={() => setMetric(m)}
@@ -134,6 +138,9 @@ export function NsRankingView({ clusterId, onOpenDetail }: {
             {m === 'cpu' ? 'CPU' : 'MEM'}
           </button>
         ))}
+      </>}
+    >
+      <div className="flex items-center gap-2 mb-2 flex-wrap">
         <SearchInput value={q} onChange={setQ} placeholder="네임스페이스 찾기" width="w-52" />
         <span className="text-xs text-muted-foreground ml-1">비효율(req−use) 내림차순 · 막대/NS 명 클릭 시 상세</span>
         <div className="ml-auto flex items-center gap-3">

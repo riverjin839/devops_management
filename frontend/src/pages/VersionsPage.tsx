@@ -7,8 +7,9 @@ import {
   AlertTriangle, ScrollText,
 } from 'lucide-react';
 import { useClusters } from '@/hooks/useCluster';
-import { ClusterSidebar, DebugLogPanel, useToast, EmptyState, SkeletonCard, DoubleScrollX, LogViewer } from '@/components/common';
+import { ClusterSidebar, DebugLogPanel, useToast, EmptyState, LoadingState, SkeletonCard, DoubleScrollX, LogViewer, PageShell } from '@/components/common';
 import { MacCard } from '@/components/ui/MacCard';
+import { PageHeader } from '@/components/common/PageHeader';
 import { formatApiError, parseUTC } from '@/lib/utils';
 import { versionsApi, type ComponentSnapshot } from '@/services/api';
 import { useAbortableMutation } from '@/hooks/useAbortableMutation';
@@ -21,14 +22,14 @@ import { Database, ShieldCheck } from 'lucide-react';
 // ── 유틸 ────────────────────────────────────────────────────────────────────
 
 const CATEGORY_META: Record<string, { label: string; icon: React.ComponentType<{ className?: string }>; cls: string }> = {
-  control_plane: { label: 'Control Plane', icon: Server,     cls: 'bg-indigo-500/10 text-indigo-400 border-indigo-500/30' },
-  kubelet:       { label: 'Kubelet',        icon: Cpu,        cls: 'bg-status-info/10 text-status-info border-status-info/30' },
-  cni:           { label: 'CNI / Cilium',   icon: Network,    cls: 'bg-purple-500/10 text-purple-400 border-purple-500/30' },
+  control_plane: { label: 'Control Plane', icon: Server,     cls: 'bg-chart-4/15 text-chart-4 border-chart-4/30' },
+  kubelet:       { label: 'Kubelet',        icon: Cpu,        cls: 'bg-chart-1/15 text-chart-1 border-chart-1/30' },
+  cni:           { label: 'CNI / Cilium',   icon: Network,    cls: 'bg-chart-5/15 text-chart-5 border-chart-5/30' },
   // OS 레벨 — kernel sysctl · etcd systemd · etcdctl config 를 한 카테고리로.
-  os:            { label: 'OS',              icon: Cpu,        cls: 'bg-status-warning/10 text-status-warning border-status-warning/30' },
+  os:            { label: 'OS',              icon: Cpu,        cls: 'bg-chart-3/15 text-chart-3 border-chart-3/30' },
   // Storage — MinIO / AIStor / DirectPV 등 객체스토리지 레이어
-  storage:       { label: 'Storage (S3/MinIO)', icon: HardDrive, cls: 'bg-status-healthy/10 text-status-healthy border-status-healthy/30' },
-  cluster:       { label: 'Cluster',        icon: Server,     cls: 'bg-status-unknown/10 text-status-unknown border-status-unknown/30' },
+  storage:       { label: 'Storage (S3/MinIO)', icon: HardDrive, cls: 'bg-chart-6/15 text-chart-6 border-chart-6/30' },
+  cluster:       { label: 'Cluster',        icon: Server,     cls: 'bg-chart-8/15 text-chart-8 border-chart-8/30' },
   other:         { label: 'Other',          icon: Settings2,  cls: 'bg-muted text-muted-foreground border-border' },
 };
 
@@ -88,9 +89,11 @@ function KernelParamsDetails({ data }: { data: Record<string, unknown> }) {
 
   if (entries.length === 0) {
     return (
-      <p className="text-sm text-muted-foreground">
-        수집된 sysctl 값이 없습니다. (수집이 실패했거나 값이 없는 호스트)
-      </p>
+      <EmptyState
+        compact
+        title="수집된 sysctl 값이 없습니다."
+        description="수집이 실패했거나 값이 없는 호스트입니다. 커널 파라미터 수집을 다시 실행해 보세요."
+      />
     );
   }
 
@@ -112,7 +115,7 @@ function KernelParamsDetails({ data }: { data: Record<string, unknown> }) {
       <div className="space-y-2">
         {orderedKeys.map((g) => (
           <details key={g} open className="rounded-md border border-border bg-muted/30">
-            <summary className="cursor-pointer px-3 py-1.5 text-xs uppercase tracking-wider text-muted-foreground select-none flex items-center justify-between">
+            <summary className="cursor-pointer px-3 py-1.5 text-xs font-medium text-muted-foreground select-none flex items-center justify-between">
               <span>{g}</span>
               <span className="font-mono text-foreground/60">{groups[g].length}</span>
             </summary>
@@ -157,7 +160,7 @@ function SourcesNote({ sources }: { sources?: Record<string, string> | null }) {
   }
   return (
     <div className="rounded-md border border-border bg-muted/20 p-2">
-      <p className="text-xs uppercase tracking-wider text-muted-foreground mb-1">데이터 출처</p>
+      <p className="text-xs font-medium text-muted-foreground mb-1">데이터 출처</p>
       <ul className="space-y-0.5">
         {Array.from(groups.entries()).map(([src, fields]) => (
           <li key={src} className="font-mono text-xs break-all">
@@ -223,7 +226,7 @@ function EtcdSystemdDetails({ data }: { data: Record<string, unknown> }) {
         )}
         {activeState && (
           <div><span className="text-xs text-muted-foreground">ActiveState<SourceBadge src={sources?.active_state} /></span>
-            <p className={`font-mono ${activeState === 'active' ? 'text-status-healthy' : 'text-status-warning'}`}>
+            <p className={`font-mono ${activeState === 'active' ? 'text-muted-foreground' : 'text-status-warning'}`}>
               {activeState}{subState ? ` / ${subState}` : ''}
             </p></div>
         )}
@@ -234,7 +237,7 @@ function EtcdSystemdDetails({ data }: { data: Record<string, unknown> }) {
       </div>
 
       <div>
-        <p className="text-xs text-muted-foreground uppercase mb-1">설정 파일 경로 (출처별)</p>
+        <p className="text-xs font-medium text-muted-foreground mb-1">설정 파일 경로 (출처별)</p>
         <div className="space-y-1 rounded-md bg-muted/30 p-2">
           {pathRows.map((r) => (
             <div key={r.label} className="font-mono text-xs break-all flex flex-wrap items-center gap-1">
@@ -250,7 +253,7 @@ function EtcdSystemdDetails({ data }: { data: Record<string, unknown> }) {
 
       {execStart && (
         <div>
-          <p className="text-xs text-muted-foreground uppercase mb-1">
+          <p className="text-xs font-medium text-muted-foreground mb-1">
             ExecStart<SourceBadge src={sources?.exec_start} />
           </p>
           <pre className="text-xs font-mono bg-muted/30 rounded-md p-2 break-all whitespace-pre-wrap max-h-32 overflow-auto">{execStart}</pre>
@@ -259,7 +262,7 @@ function EtcdSystemdDetails({ data }: { data: Record<string, unknown> }) {
 
       {psCmdline && (
         <div>
-          <p className="text-xs text-muted-foreground uppercase mb-1">
+          <p className="text-xs font-medium text-muted-foreground mb-1">
             ps -ef cmdline<SourceBadge src={sources?.ps_cmdline} />
           </p>
           <pre className="text-xs font-mono bg-muted/30 rounded-md p-2 break-all whitespace-pre-wrap max-h-24 overflow-auto">{psCmdline}</pre>
@@ -269,7 +272,7 @@ function EtcdSystemdDetails({ data }: { data: Record<string, unknown> }) {
       {envContent && (
         <div>
           <div className="flex items-center justify-between mb-1">
-            <p className="text-xs text-muted-foreground uppercase">
+            <p className="text-xs font-medium text-muted-foreground">
               env 파일 내용 ({envFile})<SourceBadge src={sources?.env_content} />
             </p>
           </div>
@@ -344,7 +347,7 @@ function KubeletConfigDetails({ data }: { data: Record<string, unknown> }) {
 
       {psCmdline && (
         <div>
-          <p className="text-xs text-muted-foreground uppercase mb-1">
+          <p className="text-xs font-medium text-muted-foreground mb-1">
             ps -ef cmdline<SourceBadge src={sources?.ps_cmdline} />
           </p>
           <pre className="text-xs font-mono bg-muted/30 rounded-md p-2 break-all whitespace-pre-wrap max-h-24 overflow-auto">{psCmdline}</pre>
@@ -353,7 +356,7 @@ function KubeletConfigDetails({ data }: { data: Record<string, unknown> }) {
 
       {configContent && (
         <div>
-          <p className="text-xs text-muted-foreground uppercase mb-1">
+          <p className="text-xs font-medium text-muted-foreground mb-1">
             config 파일 내용<SourceBadge src={sources?.config_content} />
           </p>
           <input
@@ -442,7 +445,7 @@ function GenericComponentDetails({
     <div className="space-y-3 text-sm">
       {image && (
         <div>
-          <p className="text-xs text-muted-foreground uppercase mb-0.5">Image</p>
+          <p className="text-xs font-medium text-muted-foreground mb-0.5">이미지</p>
           <p className="font-mono text-foreground break-all">{image}</p>
         </div>
       )}
@@ -458,7 +461,7 @@ function GenericComponentDetails({
 
       {flags && (
         <div>
-          <p className="text-xs text-muted-foreground uppercase mb-0.5">
+          <p className="text-xs font-medium text-muted-foreground mb-0.5">
             Flags ({flagsEntries.length}{filter ? ` / ${Object.keys(flags).length}` : ''})
           </p>
           <div className="max-h-60 overflow-y-auto space-y-0.5 rounded-md bg-muted/30 p-2">
@@ -476,7 +479,7 @@ function GenericComponentDetails({
       )}
       {cmData && (
         <div>
-          <p className="text-xs text-muted-foreground uppercase mb-0.5">
+          <p className="text-xs font-medium text-muted-foreground mb-0.5">
             ConfigMap data ({cmEntries.length}{filter ? ` / ${Object.keys(cmData).length}` : ''})
           </p>
           <div className="max-h-60 overflow-y-auto space-y-0.5 rounded-md bg-muted/30 p-2">
@@ -529,8 +532,8 @@ function MinioTenantDetails({ data }: { data: Record<string, unknown> }) {
 
   const stat = (label: string, value: React.ReactNode, color?: string) => (
     <div className="bg-muted/40 rounded-md px-2 py-1.5">
-      <p className="text-[11px] uppercase text-muted-foreground tracking-wider">{label}</p>
-      <p className={`text-sm font-semibold font-mono ${color ?? 'text-foreground'}`}>{value ?? '-'}</p>
+      <p className="text-[11px] text-muted-foreground">{label}</p>
+      <p className={`text-sm font-semibold font-mono ${color ?? 'text-foreground'}`}>{value ?? '—'}</p>
     </div>
   );
 
@@ -538,29 +541,29 @@ function MinioTenantDetails({ data }: { data: Record<string, unknown> }) {
     <div className="space-y-3 text-sm">
       {str('image') && (
         <div>
-          <p className="text-xs text-muted-foreground uppercase mb-0.5">Image</p>
+          <p className="text-xs font-medium text-muted-foreground mb-0.5">이미지</p>
           <p className="font-mono text-foreground break-all">{str('image')}</p>
         </div>
       )}
       <div className="grid grid-cols-3 gap-1.5">
-        {stat('서버 수',   totalServers,  'text-status-info')}
-        {stat('드라이브',  totalDrives,   'text-status-healthy')}
+        {stat('서버 수',   totalServers)}
+        {stat('드라이브',  totalDrives)}
         {stat('Erasure Set', drivesPerSet)}
       </div>
       <div className="grid grid-cols-3 gap-1.5">
-        {stat('Parity (EC)', ecParity != null ? `${ecParity}${ecExplicit ? ' (명시)' : ' (default)'}` : '-', 'text-status-warning')}
+        {stat('Parity (EC)', ecParity != null ? `${ecParity}${ecExplicit ? ' (명시)' : ' (default)'}` : '-')}
         {stat('Data shards', ecDataShards)}
-        {stat('Auto TLS', requestAutoCert ? 'Yes' : 'No', requestAutoCert ? 'text-status-healthy' : 'text-muted-foreground')}
+        {stat('Auto TLS', requestAutoCert ? 'Yes' : 'No', 'text-muted-foreground')}
       </div>
       {ecRatio && (
-        <p className="text-xs font-mono text-status-healthy/80 bg-status-healthy/5 border border-status-healthy/20 rounded-md px-2 py-1">
+        <p className="text-xs font-mono text-muted-foreground bg-muted/30 border border-border rounded-md px-2 py-1">
           {ecRatio} — 손실 허용 디스크: {ecParity}개
         </p>
       )}
 
       {pools.length > 0 && (
         <div>
-          <p className="text-xs text-muted-foreground uppercase mb-1 tracking-wider">
+          <p className="text-xs font-medium text-muted-foreground mb-1">
             Pools ({pools.length})
           </p>
           <DoubleScrollX className="rounded-md border border-border">
@@ -579,11 +582,11 @@ function MinioTenantDetails({ data }: { data: Record<string, unknown> }) {
                 {pools.map((p, i) => (
                   <tr key={i} className="border-t border-border font-mono">
                     <td className="px-2 py-1">{String(p.name ?? `pool-${i}`)}</td>
-                    <td className="px-2 py-1">{String(p.servers ?? '-')}</td>
-                    <td className="px-2 py-1">{String(p.volumesPerServer ?? '-')}</td>
-                    <td className="px-2 py-1 text-status-healthy">{String(p.drives ?? '-')}</td>
-                    <td className="px-2 py-1">{String(p.volumeSize ?? '-')}</td>
-                    <td className="px-2 py-1 truncate max-w-[140px]" title={String(p.storageClass ?? '')}>{String(p.storageClass ?? '-')}</td>
+                    <td className="px-2 py-1">{String(p.servers ?? '—')}</td>
+                    <td className="px-2 py-1">{String(p.volumesPerServer ?? '—')}</td>
+                    <td className="px-2 py-1">{String(p.drives ?? '—')}</td>
+                    <td className="px-2 py-1">{String(p.volumeSize ?? '—')}</td>
+                    <td className="px-2 py-1 truncate max-w-[140px]" title={String(p.storageClass ?? '')}>{String(p.storageClass ?? '—')}</td>
                   </tr>
                 ))}
               </tbody>
@@ -596,7 +599,7 @@ function MinioTenantDetails({ data }: { data: Record<string, unknown> }) {
       <div className="grid grid-cols-2 md:grid-cols-4 gap-1.5">
         {stat('currentState', str('currentState'))}
         {stat('health', str('healthStatus'))}
-        {stat('online', num('drivesOnline'), 'text-status-healthy')}
+        {stat('online', num('drivesOnline'))}
         {stat('offline', num('drivesOffline'),
           (num('drivesOffline') ?? 0) > 0 ? 'text-status-critical' : undefined)}
       </div>
@@ -622,16 +625,16 @@ function DirectPVDetails({ data }: { data: Record<string, unknown> }) {
 
   const stat = (label: string, value: React.ReactNode, color?: string) => (
     <div className="bg-muted/40 rounded-md px-2 py-1.5">
-      <p className="text-[11px] uppercase text-muted-foreground tracking-wider">{label}</p>
-      <p className={`text-sm font-semibold font-mono ${color ?? 'text-foreground'}`}>{value ?? '-'}</p>
+      <p className="text-[11px] text-muted-foreground">{label}</p>
+      <p className={`text-sm font-semibold font-mono ${color ?? 'text-foreground'}`}>{value ?? '—'}</p>
     </div>
   );
   return (
     <div className="space-y-3 text-sm">
       <div className="grid grid-cols-3 gap-1.5">
-        {stat('총 드라이브', totalDrives, 'text-status-healthy')}
-        {stat('Ready', `${readyDrives} / ${totalDrives}`, readyDrives === totalDrives ? 'text-status-healthy' : 'text-status-warning')}
-        {stat('노드 수', nodeCount, 'text-status-info')}
+        {stat('총 드라이브', totalDrives)}
+        {stat('Ready', `${readyDrives} / ${totalDrives}`, readyDrives === totalDrives ? undefined : 'text-status-warning')}
+        {stat('노드 수', nodeCount)}
       </div>
       <div className="grid grid-cols-2 gap-1.5">
         {stat('총 용량', fmtBytes(totalCap))}
@@ -640,8 +643,8 @@ function DirectPVDetails({ data }: { data: Record<string, unknown> }) {
       </div>
       {nodes.length > 0 && (
         <div>
-          <p className="text-xs text-muted-foreground uppercase mb-1 tracking-wider">
-            Per-node ({nodes.length})
+          <p className="text-xs font-medium text-muted-foreground mb-1">
+            노드별 ({nodes.length})
           </p>
           <div className="max-h-60 overflow-y-auto rounded-md border border-border">
             <table className="w-full text-xs">
@@ -657,11 +660,11 @@ function DirectPVDetails({ data }: { data: Record<string, unknown> }) {
               <tbody>
                 {nodes.map((n, i) => (
                   <tr key={i} className="border-t border-border font-mono">
-                    <td className="px-2 py-1 break-all">{String(n.node ?? '-')}</td>
-                    <td className="px-2 py-1">{String(n.drives ?? '-')}</td>
-                    <td className="px-2 py-1">{String(n.ready ?? '-')}</td>
+                    <td className="px-2 py-1 break-all">{String(n.node ?? '—')}</td>
+                    <td className="px-2 py-1">{String(n.drives ?? '—')}</td>
+                    <td className="px-2 py-1">{String(n.ready ?? '—')}</td>
                     <td className="px-2 py-1">{fmtBytes(Number(n.total ?? 0))}</td>
-                    <td className="px-2 py-1">{Array.isArray(n.fsTypes) ? (n.fsTypes as string[]).join(', ') : '-'}</td>
+                    <td className="px-2 py-1">{Array.isArray(n.fsTypes) ? (n.fsTypes as string[]).join(', ') : '—'}</td>
                   </tr>
                 ))}
               </tbody>
@@ -708,7 +711,7 @@ function HistoryTimeline({
     }
   }, [pickedIds, snapshots, onPickDiff]);
 
-  if (isLoading) return <p className="text-sm text-muted-foreground px-4 py-3">불러오는 중…</p>;
+  if (isLoading) return <LoadingState compact />;
   if (isError) {
     return (
       <p className="text-sm px-4 py-3">
@@ -717,7 +720,9 @@ function HistoryTimeline({
       </p>
     );
   }
-  if (snapshots.length === 0) return <p className="text-sm text-muted-foreground px-4 py-3">히스토리 없음</p>;
+  if (snapshots.length === 0) {
+    return <EmptyState compact title="히스토리가 없습니다." description="수집을 실행할 때마다 스냅샷이 여기에 쌓입니다." />;
+  }
 
   return (
     <div className="space-y-1 px-4 py-3">
@@ -772,30 +777,27 @@ function DiffPanel({
   });
 
   return (
-    <MacCard rootClassName="mt-4" bodyPadding="p-5">
-      <div className="flex items-start justify-between mb-3">
-        <div>
-          <h3 className="text-sm font-semibold mb-0.5">
-            <span className="text-muted-foreground">Diff: </span>
-            <span className="font-mono">{from.component}</span>
-          </h3>
-          <p className="text-sm text-muted-foreground font-mono">
-            {formatDateTime(from.collectedAt)} → {formatDateTime(to.collectedAt)}
-          </p>
-        </div>
-        <button onClick={onClose} aria-label="diff 닫기" className="p-1 rounded hover:bg-secondary text-muted-foreground">
+    <MacCard
+      rootClassName="mt-4"
+      bodyPadding="p-5"
+      title="스냅샷 비교"
+      titleExtra={<span className="text-xs font-mono text-foreground">{from.component}</span>}
+      description={<span className="font-mono">{formatDateTime(from.collectedAt)} → {formatDateTime(to.collectedAt)}</span>}
+      actions={(
+        <button onClick={onClose} aria-label="diff 닫기" title="diff 닫기" className="p-1 rounded hover:bg-secondary text-muted-foreground">
           <X className="w-4 h-4" />
         </button>
-      </div>
+      )}
+    >
       {isLoading ? (
-        <p className="text-sm text-muted-foreground">분석 중…</p>
+        <LoadingState compact />
       ) : isError ? (
         <p className="text-sm">
           <span className="text-status-critical">diff 를 불러오지 못했습니다.</span>{' '}
           <span className="text-xs text-muted-foreground">{formatApiError(error)}</span>
         </p>
       ) : data?.changes.length === 0 ? (
-        <p className="text-sm text-muted-foreground">변경 없음</p>
+        <EmptyState compact title="변경 사항이 없습니다." description="선택한 두 스냅샷의 값이 같습니다." />
       ) : (
         <div className="space-y-1.5 max-h-80 overflow-y-auto">
           {data?.versionChanged && (
@@ -957,35 +959,34 @@ export function VersionsPage() {
   }, [current, nodeSearch]);
 
   const totalComponents = current?.components?.length ?? 0;
+  const clusterName = clusters.find((c) => c.id === clusterId)?.name;
   const visibleComponents = grouped.reduce((acc, g) => acc + g.items.length, 0);
 
   return (
-    <div className="app-min-h-screen bg-background">
-      <main className="mx-auto px-3 py-3 flex gap-3">
-        <ClusterSidebar
-          clusters={clusters}
-          selectedId={clusterId || null}
-          onSelect={(id) => setClusterId(id ?? '')}
-          iconOnly
-        />
-        <div className="flex-1 min-w-0">
+    <div className="app-min-h-screen bg-background flex">
+      <ClusterSidebar
+        clusters={clusters}
+        selectedId={clusterId || null}
+        onSelect={(id) => setClusterId(id ?? '')}
+        iconOnly
+      />
+      <PageShell density="console">
         <DebugLogPanel pageKey="versions" extra={{ clusterId, components: current?.components?.length ?? 0, pending: collect.isPending }} />
         {/* 헤더 */}
-        <div className="flex items-center justify-between mb-6">
-          <div className="flex items-center gap-3">
-            <GitCommit className="w-6 h-6 text-primary" />
-            <h1 className="text-xl font-bold">버전 / 설정 관리</h1>
-            {clusterId && current?.components && (
-              <>
-                <span className="text-sm font-mono text-muted-foreground">· {clusters.find((c) => c.id === clusterId)?.name}</span>
-                <span className="text-sm px-2 py-0.5 rounded-full bg-status-unknown/15 text-status-unknown border border-status-unknown/30">
-                  {current.components.length}개 컴포넌트
-                </span>
-              </>
-            )}
-          </div>
-          {clusterId && (
-            <div className="flex items-center gap-2">
+        <PageHeader
+          className="mb-6"
+          icon={GitCommit}
+          title="버전 / 설정 관리"
+          titleExtra={clusterId && current?.components ? (
+            <>
+              <span className="text-sm font-mono text-muted-foreground">· {clusterName}</span>
+              <span className="text-sm px-2 py-0.5 rounded-full bg-secondary text-muted-foreground border border-border">
+                {current.components.length}개 컴포넌트
+              </span>
+            </>
+          ) : undefined}
+          actions={clusterId ? (
+            <>
               <Link
                 to={`/versions/${clusterId}/graph`}
                 className="flex items-center gap-1.5 px-3 py-2 text-sm font-medium bg-secondary hover:bg-secondary/80 border border-border rounded-lg text-foreground transition-colors"
@@ -1090,9 +1091,9 @@ export function VersionsPage() {
                   지금 수집
                 </button>
               )}
-            </div>
-          )}
-        </div>
+            </>
+          ) : undefined}
+        />
 
         {!clusterId && clusters.length === 0 && (
           <EmptyState title="등록된 클러스터가 없습니다." description="클러스터 관리에서 등록하면 버전 수집 대상이 됩니다." />
@@ -1102,33 +1103,36 @@ export function VersionsPage() {
         {clusterId && (
           <>
             {collectLogOpen && (
-              <MacCard rootClassName="mb-4" bodyPadding="p-0">
-                <div className="flex items-center gap-2 px-4 py-2 border-b border-border bg-surface-container-high">
-                  <ScrollText className="w-3.5 h-3.5 text-muted-foreground" aria-hidden />
-                  <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground select-none">수집 로그</span>
+              <MacCard
+                rootClassName="mb-4"
+                bodyPadding="p-0"
+                title="수집 로그"
+                icon={ScrollText}
+                actions={(
                   <button
                     onClick={() => setCollectLog([])}
                     disabled={collectLog.length === 0}
-                    className="ml-auto px-2 py-1 text-xs rounded-lg hover:bg-secondary text-muted-foreground disabled:opacity-40 transition-colors"
+                    className="px-2 py-1 text-xs rounded-lg hover:bg-secondary text-muted-foreground disabled:opacity-40 transition-colors"
                   >
                     지우기
                   </button>
-                </div>
+                )}
+              >
                 <LogViewer
                   text={collectLog.length > 0 ? collectLog.join('\n') : '아직 수집 실행 기록이 없습니다 — 지금 수집 / MinIO 수집 결과가 여기에 쌓입니다. (SSH 수집 모달은 각 모달 안에서 per-host raw 출력을 제공합니다)'}
                   maxHeight="max-h-48"
                 />
               </MacCard>
             )}
-            <div className="bg-card border border-border rounded-xl p-4 mb-5 text-sm text-muted-foreground leading-relaxed">
+            <p className="mb-5 text-sm text-muted-foreground leading-relaxed">
               kubeconfig 를 통해 K8s/Cilium 버전, core component image tag, command/args 플래그, cilium-config ConfigMap 을 수집합니다.
               동일 hash 가 감지되면 저장하지 않으므로 반복 실행해도 안전. 변경이 발생한 시점에만 히스토리에 새 레코드가 생깁니다.
-            </div>
+            </p>
 
             {/* 노드/컴포넌트 검색 — 노드가 많을 때 빠르게 찾기.
                 키워드는 component 이름 / version / data 의 host·config_path 에 매칭한다. */}
             {totalComponents > 0 && (
-              <div className="bg-card border border-border rounded-xl px-4 py-2.5 mb-4 flex items-center gap-3 focus-within:ring-1 focus-within:ring-primary">
+              <div className="bg-card border border-border rounded-md px-4 py-2.5 mb-4 flex items-center gap-3 focus-within:ring-1 focus-within:ring-primary">
                 <Search className="w-4 h-4 text-muted-foreground" />
                 <input
                   value={nodeSearch}
@@ -1193,46 +1197,51 @@ export function VersionsPage() {
               const groupCollapsed = collapsedGroups.has(category);
               const groupExpandedCount = items.filter((s) => expanded.has(s.component)).length;
               return (
-                <MacCard key={category} bodyPadding="p-0">
-                  <header className="flex items-center gap-2 px-5 py-3 border-b border-border bg-muted/20">
-                    <button
-                      onClick={() => toggleGroup(category)}
-                      className="flex items-center gap-2 flex-1 text-left hover:opacity-80 transition-opacity"
-                      aria-label={`${meta.label} 섹션 ${groupCollapsed ? '펼치기' : '접기'}`}
-                    >
-                      {groupCollapsed
-                        ? <ChevronDown className="w-4 h-4 text-muted-foreground flex-shrink-0" />
-                        : <ChevronUp className="w-4 h-4 text-muted-foreground flex-shrink-0" />}
-                      <Icon className="w-4 h-4 text-muted-foreground" />
-                      <h2 className="text-sm font-semibold">{meta.label}</h2>
-                      <span className={`text-xs px-2 py-0.5 rounded-full border ${meta.cls}`}>
-                        {items.length}
-                      </span>
-                      {groupCollapsed && groupExpandedCount > 0 && (
-                        <span className="text-xs text-muted-foreground">
-                          ({groupExpandedCount}개 상세 펼침)
-                        </span>
-                      )}
-                    </button>
-                    {!groupCollapsed && items.length > 1 && (
+                <MacCard
+                  key={category}
+                  bodyPadding="p-0"
+                  actions={(
+                    <>
                       <button
-                        onClick={() => {
-                          // 모두 펼침/접기 토글 — 이 섹션 안의 컴포넌트만 영향.
-                          const compNames = items.map((s) => s.component);
-                          const anyOpen = compNames.some((c) => expanded.has(c));
-                          setExpanded((prev) => {
-                            const next = new Set(prev);
-                            if (anyOpen) compNames.forEach((c) => next.delete(c));
-                            else compNames.forEach((c) => next.add(c));
-                            return next;
-                          });
-                        }}
-                        className="text-xs px-2 py-0.5 rounded text-muted-foreground hover:text-foreground hover:bg-secondary"
+                        onClick={() => toggleGroup(category)}
+                        className="flex items-center gap-2 flex-1 text-left hover:opacity-80 transition-opacity"
+                        aria-label={`${meta.label} 섹션 ${groupCollapsed ? '펼치기' : '접기'}`}
                       >
-                        {items.some((s) => expanded.has(s.component)) ? '모두 접기' : '모두 펼치기'}
+                        {groupCollapsed
+                          ? <ChevronDown className="w-4 h-4 text-muted-foreground flex-shrink-0" />
+                          : <ChevronUp className="w-4 h-4 text-muted-foreground flex-shrink-0" />}
+                        <Icon className="w-4 h-4 text-muted-foreground" />
+                        <h2 className="text-sm font-semibold">{meta.label}</h2>
+                        <span className={`text-xs px-2 py-0.5 rounded-full border ${meta.cls}`}>
+                          {items.length}
+                        </span>
+                        {groupCollapsed && groupExpandedCount > 0 && (
+                          <span className="text-xs text-muted-foreground">
+                            ({groupExpandedCount}개 상세 펼침)
+                          </span>
+                        )}
                       </button>
-                    )}
-                  </header>
+                      {!groupCollapsed && items.length > 1 && (
+                        <button
+                          onClick={() => {
+                            // 모두 펼침/접기 토글 — 이 섹션 안의 컴포넌트만 영향.
+                            const compNames = items.map((s) => s.component);
+                            const anyOpen = compNames.some((c) => expanded.has(c));
+                            setExpanded((prev) => {
+                              const next = new Set(prev);
+                              if (anyOpen) compNames.forEach((c) => next.delete(c));
+                              else compNames.forEach((c) => next.add(c));
+                              return next;
+                            });
+                          }}
+                          className="text-xs px-2 py-0.5 rounded text-muted-foreground hover:text-foreground hover:bg-secondary"
+                        >
+                          {items.some((s) => expanded.has(s.component)) ? '모두 접기' : '모두 펼치기'}
+                        </button>
+                      )}
+                    </>
+                  )}
+                >
                   {!groupCollapsed && (
                   <ul className="divide-y divide-border">
                     {items.map((snap) => {
@@ -1260,11 +1269,11 @@ export function VersionsPage() {
                           {isOpen && (
                             <div className="grid grid-cols-1 lg:grid-cols-2 divide-y lg:divide-y-0 lg:divide-x divide-border border-t border-border bg-muted/10">
                               <div className="px-5 py-4">
-                                <p className="text-xs text-muted-foreground uppercase mb-2 tracking-wider">현재 값</p>
+                                <p className="text-xs font-medium text-muted-foreground mb-2">현재 값</p>
                                 <ComponentDetails snap={snap} />
                               </div>
                               <div>
-                                <p className="text-xs text-muted-foreground uppercase px-4 pt-4 tracking-wider">히스토리</p>
+                                <p className="text-xs font-medium text-muted-foreground px-4 pt-4">히스토리</p>
                                 <HistoryTimeline
                                   clusterId={clusterId}
                                   component={snap.component}
@@ -1292,27 +1301,30 @@ export function VersionsPage() {
             )}
           </div>
         )}
-        </div>
-      </main>
+      </PageShell>
 
       <EtcdSystemdModal
         open={etcdModalOpen && !!clusterId}
         clusterId={clusterId}
+        clusterName={clusterName}
         onClose={() => setEtcdModalOpen(false)}
       />
       <KubeadmCertsModal
         open={certsModalOpen && !!clusterId}
         clusterId={clusterId}
+        clusterName={clusterName}
         onClose={() => setCertsModalOpen(false)}
       />
       <KernelParamsCollectModal
         open={kernelModalOpen && !!clusterId}
         clusterId={clusterId}
+        clusterName={clusterName}
         onClose={() => setKernelModalOpen(false)}
       />
       <NodeNicsCollectModal
         open={nicsModalOpen && !!clusterId}
         clusterId={clusterId}
+        clusterName={clusterName}
         onClose={() => {
           setNicsModalOpen(false);
           // Cluster 정보 (node_ips) 가 갱신됐을 수 있으므로 클러스터 캐시 무효화
@@ -1322,6 +1334,7 @@ export function VersionsPage() {
       <KubeletConfigCollectModal
         open={kubeletModalOpen && !!clusterId}
         clusterId={clusterId}
+        clusterName={clusterName}
         onClose={() => {
           setKubeletModalOpen(false);
           // 새 kubelet_config 스냅샷이 생겼을 수 있으니 current 캐시 무효화
@@ -1331,7 +1344,7 @@ export function VersionsPage() {
       <CsvExportModal
         open={csvModalOpen && !!clusterId}
         clusterId={clusterId}
-        clusterName={clusters.find((c) => c.id === clusterId)?.name ?? clusterId}
+        clusterName={clusterName ?? clusterId}
         components={current?.components ?? []}
         onClose={() => setCsvModalOpen(false)}
       />

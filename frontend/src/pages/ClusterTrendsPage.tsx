@@ -1,14 +1,14 @@
 import { useMemo, useState } from 'react';
-import { Link, useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
 import {
-  ArrowLeft, TrendingUp, ArrowUp, ArrowDown, ChevronsUpDown, AlertTriangle, RefreshCw,
+  TrendingUp, ArrowUp, ArrowDown, ChevronsUpDown, AlertTriangle, RefreshCw,
 } from 'lucide-react';
 import {
   ResponsiveContainer, LineChart, Line, XAxis, YAxis, Tooltip, CartesianGrid,
 } from 'recharts';
-import { MacCard } from '@/components/ui/MacCard';
 import { ClusterSidebar } from '@/components/common/ClusterSidebar';
-import { EmptyState, SelectClusterEmptyState } from '@/components/common';
+import { EmptyState, SelectClusterEmptyState, PageShell } from '@/components/common';
+import { PageHeader } from '@/components/common/PageHeader';
 import { NodeMultiSelect } from '@/components/k8s/NodeMultiSelect';
 import { useClusters } from '@/hooks/useCluster';
 import { useClusterTrends } from '@/hooks/useClusterTrends';
@@ -139,145 +139,138 @@ export function ClusterTrendsPage() {
   const noSelection = nodeList.length === 0 || metricList.length === 0;
 
   return (
-    <div className="app-min-h-screen bg-background p-3">
-      <div className="flex gap-3 max-w-[1800px] mx-auto">
-        <div className="sticky top-3 self-start">
-          <ClusterSidebar
-            clusters={clusters}
-            selectedId={clusterId || null}
-            onSelect={(id) => { if (id) navigate(`/cluster-trends/${id}`); }}
-            iconOnly
-          />
-        </div>
+    <div className="app-min-h-screen bg-background flex">
+      <ClusterSidebar
+        clusters={clusters}
+        selectedId={clusterId || null}
+        onSelect={(id) => { if (id) navigate(`/cluster-trends/${id}`); }}
+        iconOnly
+      />
 
-        <div className="flex-1 min-w-0 space-y-2">
-          <div className="flex items-center gap-3 flex-wrap">
-            <Link to="/cluster-overview" className="text-sm text-muted-foreground hover:text-foreground flex items-center gap-1">
-              <ArrowLeft className="w-4 h-4" /> 클러스터 현황
-            </Link>
-            <h1 className="text-lg font-semibold flex items-center gap-2">
-              <TrendingUp className="w-5 h-5 text-cyan-500" /> 클러스터 추이
-            </h1>
-            <span className="text-sm text-muted-foreground">노드별 메트릭 시계열 (선택 노드 한정)</span>
-            {query.isFetching && <RefreshCw className="w-4 h-4 text-muted-foreground animate-spin" />}
-          </div>
+      <PageShell density="console" className="space-y-2">
+        <PageHeader
+          back={{ to: '/cluster-overview', label: '클러스터 현황' }}
+          icon={TrendingUp}
+          title="클러스터 추이"
+          description="노드별 메트릭 시계열 (선택 노드 한정)"
+          titleExtra={query.isFetching ? <RefreshCw className="w-4 h-4 text-muted-foreground animate-spin" aria-label="갱신 중" /> : undefined}
+        />
 
-          {!clusterId ? (
-            <SelectClusterEmptyState />
-          ) : (
-            <>
-              {/* ── 컨트롤 바 ── */}
-              <MacCard bodyPadding="p-3">
-                <div className="flex flex-wrap items-center gap-2">
-                  {/* 시간창 */}
-                  <div className="inline-flex rounded-xl border border-border bg-card p-1">
-                    {RANGES.map((r) => (
-                      <button key={r} onClick={() => setRange(r)}
-                        className={`px-3 py-1.5 rounded-lg text-sm ${range === r ? 'bg-primary text-white' : 'text-muted-foreground hover:text-foreground'}`}>
-                        {r}
-                      </button>
-                    ))}
-                  </div>
-
-                  <span className="mx-1 h-5 w-px bg-border" />
-
-                  {/* 지표 토글 */}
-                  <div className="flex flex-wrap items-center gap-1.5">
-                    {METRICS.map((m) => (
-                      <button key={m.key} onClick={() => toggleMetric(m.key)}
-                        className={`px-2.5 py-1 rounded-lg border text-sm ${metrics.has(m.key) ? 'border-primary text-primary' : 'border-border text-muted-foreground hover:text-foreground'}`}>
-                        {m.label}
-                      </button>
-                    ))}
-                  </div>
-
-                  <span className="mx-1 h-5 w-px bg-border" />
-
-                  {/* 노드 선택 */}
-                  <NodeMultiSelect clusterId={clusterId} selected={nodes} onChange={setNodes} max={MAX_NODES} />
-
-                  <div className="ml-auto flex items-center gap-2">
-                    {/* 정렬 */}
-                    <button onClick={() => onSort('name')}
-                      className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-lg border text-sm ${sortKey === 'name' ? 'border-primary text-primary' : 'border-border text-muted-foreground'}`}>
-                      이름 <SortIcon className="w-3 h-3" />
+        {!clusterId ? (
+          <SelectClusterEmptyState />
+        ) : (
+          <>
+            {/* ── 컨트롤 바 (D-122: 툴바만 감싸던 카드를 걷음) ── */}
+            <div>
+              <div className="flex flex-wrap items-center gap-2">
+                {/* 시간창 */}
+                <div className="inline-flex rounded-xl border border-border bg-card p-1">
+                  {RANGES.map((r) => (
+                    <button key={r} onClick={() => setRange(r)}
+                      className={`px-3 py-1.5 rounded-lg text-sm ${range === r ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground'}`}>
+                      {r}
                     </button>
-                    <button onClick={() => onSort('latest')}
-                      className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-lg border text-sm ${sortKey === 'latest' ? 'border-primary text-primary' : 'border-border text-muted-foreground'}`}>
-                      최신값 <LatestIcon className="w-3 h-3" />
-                    </button>
-
-                    <span className="mx-1 h-5 w-px bg-border" />
-
-                    {/* 컬럼 수 */}
-                    <span className="text-sm text-muted-foreground">컬럼</span>
-                    <div className="inline-flex rounded-xl border border-border bg-card p-1">
-                      {COLS.map((c) => (
-                        <button key={c} onClick={() => setCols(c)}
-                          className={`px-2.5 py-1 rounded-lg text-sm ${cols === c ? 'bg-primary text-white' : 'text-muted-foreground hover:text-foreground'}`}>
-                          {c}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-
-                {/* 상태/경고 라인 */}
-                {resp?.status === 'offline' && (
-                  <div className="mt-2 flex items-center gap-1.5 text-sm text-status-warning">
-                    <AlertTriangle className="w-4 h-4" /> Prometheus offline — {resp.error || '클러스터 관리에서 Prometheus URL 을 설정/활성화하세요.'}
-                  </div>
-                )}
-                {resp?.status === 'error' && (
-                  <div className="mt-2 flex items-center gap-1.5 text-sm text-destructive">
-                    <AlertTriangle className="w-4 h-4" /> 조회 오류 — {resp.error}
-                  </div>
-                )}
-                {resp?.dropped && resp.dropped.length > 0 && (
-                  <div className="mt-2 flex items-center gap-1.5 text-sm text-status-warning">
-                    <AlertTriangle className="w-4 h-4" /> 상한({MAX_NODES}) 초과로 {resp.dropped.length}개 노드 제외: {resp.dropped.join(', ')}
-                  </div>
-                )}
-              </MacCard>
-
-              {/* ── 차트 그리드 ── */}
-              {noSelection ? (
-                <EmptyState title="노드와 지표를 선택하세요" description={`노드를 최대 ${MAX_NODES}개까지 선택할 수 있습니다.`} />
-              ) : (
-                <div className="grid gap-2" style={{ gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))` }}>
-                  {cells.map((cell) => (
-                    <div key={`${cell.node}__${cell.metric}`} className="rounded-xl border border-border bg-card p-2.5">
-                      <div className="flex items-center justify-between gap-1 mb-1 min-w-0">
-                        <span className="text-xs font-medium truncate" title={cell.node}>{cell.node}</span>
-                        <span className="text-[11px] text-muted-foreground whitespace-nowrap">{METRIC_LABEL[cell.metric]}</span>
-                      </div>
-                      <div className="text-sm font-semibold mb-1" style={{ color: METRIC_COLOR[cell.metric] }}>
-                        {fmtVal(cell.latest, cell.unit)}
-                      </div>
-                      {cell.data.length === 0 ? (
-                        <div className="h-[110px] flex items-center justify-center text-xs text-muted-foreground">데이터 없음</div>
-                      ) : (
-                        <ResponsiveContainer width="100%" height={110}>
-                          <LineChart data={cell.data} margin={{ top: 4, right: 4, bottom: 0, left: 0 }}>
-                            <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-                            <XAxis dataKey="t" tick={{ fontSize: 9 }} tickFormatter={(t) => fmtTime(t, range)} minTickGap={24} />
-                            <YAxis tick={{ fontSize: 9 }} width={34} domain={cell.unit === '%' ? [0, 100] : ['auto', 'auto']} />
-                            <Tooltip
-                              labelFormatter={(t) => fmtTime(Number(t), range)}
-                              formatter={(v) => [fmtVal(typeof v === 'number' ? v : null, cell.unit), METRIC_LABEL[cell.metric]]}
-                            />
-                            <Line type="monotone" dataKey="v" stroke={METRIC_COLOR[cell.metric]} strokeWidth={1.5} dot={false} isAnimationActive={false} connectNulls />
-                          </LineChart>
-                        </ResponsiveContainer>
-                      )}
-                    </div>
                   ))}
                 </div>
+
+                <span className="mx-1 h-5 w-px bg-border" />
+
+                {/* 지표 토글 */}
+                <div className="flex flex-wrap items-center gap-1.5">
+                  {METRICS.map((m) => (
+                    <button key={m.key} onClick={() => toggleMetric(m.key)}
+                      className={`px-2.5 py-1 rounded-lg border text-sm ${metrics.has(m.key) ? 'border-primary text-primary' : 'border-border text-muted-foreground hover:text-foreground'}`}>
+                      {m.label}
+                    </button>
+                  ))}
+                </div>
+
+                <span className="mx-1 h-5 w-px bg-border" />
+
+                {/* 노드 선택 */}
+                <NodeMultiSelect clusterId={clusterId} selected={nodes} onChange={setNodes} max={MAX_NODES} />
+
+                <div className="ml-auto flex items-center gap-2">
+                  {/* 정렬 */}
+                  <button onClick={() => onSort('name')}
+                    className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-lg border text-sm ${sortKey === 'name' ? 'border-primary text-primary' : 'border-border text-muted-foreground'}`}>
+                    이름 <SortIcon className="w-3 h-3" />
+                  </button>
+                  <button onClick={() => onSort('latest')}
+                    className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-lg border text-sm ${sortKey === 'latest' ? 'border-primary text-primary' : 'border-border text-muted-foreground'}`}>
+                    최신값 <LatestIcon className="w-3 h-3" />
+                  </button>
+
+                  <span className="mx-1 h-5 w-px bg-border" />
+
+                  {/* 컬럼 수 */}
+                  <span className="text-sm text-muted-foreground">컬럼</span>
+                  <div className="inline-flex rounded-xl border border-border bg-card p-1">
+                    {COLS.map((c) => (
+                      <button key={c} onClick={() => setCols(c)}
+                        className={`px-2.5 py-1 rounded-lg text-sm ${cols === c ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground'}`}>
+                        {c}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              {/* 상태/경고 라인 */}
+              {resp?.status === 'offline' && (
+                <div className="mt-2 flex items-center gap-1.5 text-sm text-status-warning">
+                  <AlertTriangle className="w-4 h-4" /> Prometheus offline — {resp.error || '클러스터 관리에서 Prometheus URL 을 설정/활성화하세요.'}
+                </div>
               )}
-            </>
-          )}
-        </div>
-      </div>
+              {resp?.status === 'error' && (
+                <div className="mt-2 flex items-center gap-1.5 text-sm text-status-critical">
+                  <AlertTriangle className="w-4 h-4" /> 조회 오류 — {resp.error}
+                </div>
+              )}
+              {resp?.dropped && resp.dropped.length > 0 && (
+                <div className="mt-2 flex items-center gap-1.5 text-sm text-status-warning">
+                  <AlertTriangle className="w-4 h-4" /> 상한({MAX_NODES}) 초과로 {resp.dropped.length}개 노드 제외: {resp.dropped.join(', ')}
+                </div>
+              )}
+            </div>
+
+            {/* ── 차트 그리드 ── */}
+            {noSelection ? (
+              <EmptyState title="노드와 지표를 선택하세요" description={`노드를 최대 ${MAX_NODES}개까지 선택할 수 있습니다.`} />
+            ) : (
+              <div className="grid gap-2" style={{ gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))` }}>
+                {cells.map((cell) => (
+                  <div key={`${cell.node}__${cell.metric}`} className="rounded-md border border-border bg-card p-2.5">
+                    <div className="flex items-center justify-between gap-1 mb-1 min-w-0">
+                      <span className="text-xs font-medium truncate" title={cell.node}>{cell.node}</span>
+                      <span className="text-[11px] text-muted-foreground whitespace-nowrap">{METRIC_LABEL[cell.metric]}</span>
+                    </div>
+                    <div className="text-sm font-semibold mb-1" style={{ color: METRIC_COLOR[cell.metric] }}>
+                      {fmtVal(cell.latest, cell.unit)}
+                    </div>
+                    {cell.data.length === 0 ? (
+                      <div className="h-[110px] flex items-center justify-center text-xs text-muted-foreground">데이터 없음</div>
+                    ) : (
+                      <ResponsiveContainer width="100%" height={110}>
+                        <LineChart data={cell.data} margin={{ top: 4, right: 4, bottom: 0, left: 0 }}>
+                          <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                          <XAxis dataKey="t" tick={{ fontSize: 9 }} tickFormatter={(t) => fmtTime(t, range)} minTickGap={24} />
+                          <YAxis tick={{ fontSize: 9 }} width={34} domain={cell.unit === '%' ? [0, 100] : ['auto', 'auto']} />
+                          <Tooltip
+                            labelFormatter={(t) => fmtTime(Number(t), range)}
+                            formatter={(v) => [fmtVal(typeof v === 'number' ? v : null, cell.unit), METRIC_LABEL[cell.metric]]}
+                          />
+                          <Line type="monotone" dataKey="v" stroke={METRIC_COLOR[cell.metric]} strokeWidth={1.5} dot={false} isAnimationActive={false} connectNulls />
+                        </LineChart>
+                      </ResponsiveContainer>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </>
+        )}
+      </PageShell>
     </div>
   );
 }

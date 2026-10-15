@@ -1,7 +1,7 @@
 import { useEffect, useId, useState } from 'react';
 import { Plus, Trash2 } from 'lucide-react';
 import { MacCard } from '@/components/ui/MacCard';
-import { useToast } from '@/components/common';
+import { EmptyState, LoadingState, useToast } from '@/components/common';
 import { useNotificationChannels } from '@/hooks/useNotifications';
 import {
   useAlertRules,
@@ -118,7 +118,7 @@ export function AlertNotifyRulesPanel({ clusters, canEdit }: {
   const remove = async (rule: AlertNotifyRule) => {
     try {
       await deleteRule.mutateAsync(rule.id);
-      toast.success('규칙을 삭제했습니다.');
+      toast.success('규칙 삭제됨');
       if (editing?.id === rule.id) { setDraft(null); setEditing(null); }
     } catch (err) {
       toast.error(formatApiError(err, '규칙 삭제 실패'));
@@ -129,22 +129,23 @@ export function AlertNotifyRulesPanel({ clusters, canEdit }: {
     <div className="space-y-3">
       <GlobalSettingsCard settings={settings} canEdit={canEdit} />
 
-      <MacCard title="알림 규칙" bodyPadding="p-0">
-        <div className="flex items-center justify-between px-4 py-3 border-b border-border">
-          <p className="text-xs text-muted-foreground">
-            priority 가 작은 규칙부터 평가하고 <b className="text-foreground">첫 매칭 1건</b>만 적용합니다.
-            매칭되는 규칙이 없으면 위의 전역 기본값을 씁니다.
-          </p>
-          {canEdit ? (
-            <button
-              type="button"
-              onClick={startNew}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-sm bg-secondary text-muted-foreground hover:bg-secondary/80 transition-colors"
-            >
-              <Plus className="w-3.5 h-3.5" aria-hidden /> 규칙 추가
-            </button>
-          ) : null}
-        </div>
+      <MacCard
+        title="알림 규칙"
+        bodyPadding="p-0"
+        actions={canEdit ? (
+          <button
+            type="button"
+            onClick={startNew}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-sm bg-secondary text-muted-foreground hover:bg-secondary/80 transition-colors"
+          >
+            <Plus className="w-3.5 h-3.5" aria-hidden /> 규칙 추가
+          </button>
+        ) : undefined}
+      >
+        <p className="px-4 py-2.5 text-xs text-muted-foreground border-b border-border">
+          priority 가 작은 규칙부터 평가하고 <b className="text-foreground">첫 매칭 1건</b>만 적용합니다.
+          매칭되는 규칙이 없으면 위의 전역 기본값을 씁니다.
+        </p>
 
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
@@ -164,10 +165,10 @@ export function AlertNotifyRulesPanel({ clusters, canEdit }: {
             </thead>
             <tbody>
               {isLoading ? (
-                <tr><td colSpan={10} className="py-8 text-center text-sm text-muted-foreground">불러오는 중…</td></tr>
+                <tr><td colSpan={10}><LoadingState compact /></td></tr>
               ) : rules.length === 0 ? (
-                <tr><td colSpan={10} className="py-8 text-center text-sm text-muted-foreground">
-                  등록된 규칙이 없습니다 — 전역 기본값으로만 동작합니다.
+                <tr><td colSpan={10}>
+                  <EmptyState compact title="등록된 규칙이 없습니다." description="지금은 전역 기본값으로만 동작합니다. 위에서 규칙을 추가하면 라우팅·중복 억제가 적용됩니다." />
                 </td></tr>
               ) : (
                 rules.map((rule) => (
@@ -185,18 +186,18 @@ export function AlertNotifyRulesPanel({ clusters, canEdit }: {
                       {NOTIFY_MODES.find((m) => m.value === rule.notifyMode)?.label ?? rule.notifyMode}
                     </td>
                     <td className={`${TD} text-xs text-muted-foreground truncate max-w-[10rem]`}>
-                      {rule.recipients.length ? rule.recipients.join(', ') : '-'}
+                      {rule.recipients.length ? rule.recipients.join(', ') : '—'}
                     </td>
                     <td className={`${TD} text-xs text-muted-foreground`}>
                       {Math.round(rule.dedupWindowSec / 60)}분 ·{' '}
                       {DEDUP_MODES.find((d) => d.value === rule.dedupMode)?.label ?? rule.dedupMode}
                     </td>
                     <td className={`${TD} text-xs text-muted-foreground`}>
-                      {rule.severityMin ?? '-'}
+                      {rule.severityMin ?? '—'}
                       {rule.severityOverride ? ` → ${rule.severityOverride}` : ''}
                     </td>
                     <td className={`${TD} text-xs text-muted-foreground`}>
-                      {rule.channelIds.length ? `채널 ${rule.channelIds.length}` : '-'}
+                      {rule.channelIds.length ? `채널 ${rule.channelIds.length}` : '—'}
                     </td>
                     <td className={`${TD} text-xs`}>{rule.enabled ? '사용' : '중지'}</td>
                     <td className={TD}>
@@ -206,7 +207,7 @@ export function AlertNotifyRulesPanel({ clusters, canEdit }: {
                           onClick={(e) => { e.stopPropagation(); void remove(rule); }}
                           title="규칙 삭제"
                           aria-label={`${rule.name} 규칙 삭제`}
-                          className="p-1 rounded-xl text-muted-foreground hover:bg-secondary hover:text-[hsl(var(--status-critical))] transition-colors"
+                          className="p-1 rounded-xl text-muted-foreground hover:bg-secondary hover:text-status-critical transition-colors"
                         >
                           <Trash2 className="w-3.5 h-3.5" />
                         </button>
@@ -260,13 +261,13 @@ function GlobalSettingsCard({ settings, canEdit }: {
   useEffect(() => { if (settings) setForm(settings); }, [settings]);
 
   if (!form) {
-    return <MacCard title="전역 기본값"><p className="text-sm text-muted-foreground">불러오는 중…</p></MacCard>;
+    return <LoadingState compact />;
   }
 
   const save = async () => {
     try {
       await updateSettings.mutateAsync(form);
-      toast.success('전역 기본값을 저장했습니다.');
+      toast.success('전역 기본값 저장됨');
     } catch (err) {
       toast.error(formatApiError(err, '설정 저장 실패'));
     }
@@ -496,9 +497,7 @@ function RuleEditor({ draft, setDraft, clusters, channels, isEdit, busy, onCance
         <div className="sm:col-span-2 lg:col-span-3">
           <span className={labelCls}>재전파 채널 (선택)</span>
           {channels.length === 0 ? (
-            <p className="text-xs text-muted-foreground">
-              등록된 알림 채널이 없습니다 — 점검 항목 관리 → 알림 채널에서 먼저 등록하세요.
-            </p>
+            <EmptyState compact title="등록된 알림 채널이 없습니다." description="점검 항목 관리 → 알림 채널에서 먼저 등록하세요." />
           ) : (
             <div className="flex flex-wrap gap-x-4 gap-y-2">
               {channels.map((channel) => (

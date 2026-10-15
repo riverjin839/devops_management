@@ -5,6 +5,7 @@ import { AlertTriangle, Filter, Info, Loader2, RefreshCw, Search, Share2, X, Zap
 import { useClusters } from '@/hooks/useCluster';
 import { useOntologyGraph, useAnalyzeImpact } from '@/hooks/useOntology';
 import type { OntologyEntityType } from '@/types';
+import { PageHeader, LoadingState, EmptyState } from '@/components/common';
 
 // ── 엔티티 타입별 색상 ─────────────────────────────────────────────────────────
 const ENTITY_COLOR: Record<OntologyEntityType, string> = {
@@ -72,11 +73,11 @@ function NodeDetailPanel({ node, onClose, onAnalyzeImpact }: {
   const hasConfig = node.entityType === 'config_item' || node.entityType === 'kernel_param';
 
   return (
-    <div className="absolute top-4 right-4 w-72 bg-card border border-border rounded-xl shadow-2xl overflow-hidden z-10">
+    <div className="absolute top-4 right-4 w-72 bg-card border border-border rounded-md shadow-card overflow-hidden z-10">
       <div className="flex items-center justify-between px-4 py-3 border-b border-border"
         style={{ borderLeftColor: color, borderLeftWidth: 4 }}>
         <div className="min-w-0">
-          <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+          <p className="text-xs font-medium text-muted-foreground">
             {ENTITY_LABEL[node.entityType] ?? node.entityType}
           </p>
           <p className="text-sm font-bold text-foreground truncate">{node.name}</p>
@@ -89,19 +90,19 @@ function NodeDetailPanel({ node, onClose, onAnalyzeImpact }: {
       <div className="px-4 py-3 space-y-3 max-h-[420px] overflow-y-auto">
         {node.version && (
           <div>
-            <p className="text-xs text-muted-foreground uppercase font-semibold mb-0.5">버전</p>
+            <p className="text-xs font-medium text-muted-foreground mb-0.5">버전</p>
             <p className="text-sm font-mono text-foreground">{node.version}</p>
           </div>
         )}
         {node.__degree !== undefined && (
           <div>
-            <p className="text-xs text-muted-foreground uppercase font-semibold mb-0.5">연결 수</p>
+            <p className="text-xs font-medium text-muted-foreground mb-0.5">연결 수</p>
             <p className="text-sm text-foreground">{node.__degree}개 관계</p>
           </div>
         )}
         {Object.keys(node.properties).length > 0 && (
           <div>
-            <p className="text-xs text-muted-foreground uppercase font-semibold mb-1">속성</p>
+            <p className="text-xs font-medium text-muted-foreground mb-1">속성</p>
             <div className="space-y-1">
               {Object.entries(node.properties).map(([k, v]) => (
                 <div key={k} className="flex items-start justify-between gap-2 text-sm">
@@ -118,7 +119,7 @@ function NodeDetailPanel({ node, onClose, onAnalyzeImpact }: {
         <div className="px-4 py-3 border-t border-border">
           <button
             onClick={() => onAnalyzeImpact(node.id)}
-            className="w-full flex items-center justify-center gap-2 px-3 py-2 bg-status-warning/15 hover:bg-status-warning/25 text-status-warning border border-status-warning/30 rounded-lg text-sm font-semibold transition-colors"
+            className="w-full flex items-center justify-center gap-2 px-3 py-2 bg-secondary hover:bg-muted text-foreground border border-border rounded-xl text-sm font-medium transition-colors"
           >
             <Zap className="w-3.5 h-3.5" />
             변경 영향 분석
@@ -134,14 +135,14 @@ function ImpactPanel({ result, onClose }: {
   result: { blastRadiusScore: number; impactedEntities: { id: string; name: string; entityType: OntologyEntityType }[]; impactPaths: { pathNames: string[]; pathRelations: string[]; score: number }[] };
   onClose: () => void;
 }) {
-  const scoreColor = result.blastRadiusScore >= 0.7 ? 'text-status-critical' : result.blastRadiusScore >= 0.4 ? 'text-status-warning' : 'text-status-healthy';
+  const scoreColor = result.blastRadiusScore >= 0.7 ? 'text-status-critical' : result.blastRadiusScore >= 0.4 ? 'text-status-warning' : 'text-foreground';
 
   return (
-    <div className="absolute bottom-4 left-4 w-80 bg-card border border-status-warning/40 rounded-xl shadow-2xl overflow-hidden z-10">
-      <div className="flex items-center justify-between px-4 py-3 border-b border-border bg-status-warning/10">
+    <div className="absolute bottom-4 left-4 w-80 bg-card border border-border rounded-md shadow-card overflow-hidden z-10">
+      <div className="flex items-center justify-between px-4 py-3 border-b border-border">
         <div className="flex items-center gap-2">
           <AlertTriangle className="w-4 h-4 text-status-warning" />
-          <p className="text-sm font-bold text-status-warning">변경 영향 분석</p>
+          <p className="text-sm font-semibold text-foreground">변경 영향 분석</p>
         </div>
         <button onClick={onClose} aria-label="닫기" className="p-1 hover:bg-secondary rounded text-muted-foreground">
           <X className="w-4 h-4" />
@@ -154,7 +155,7 @@ function ImpactPanel({ result, onClose }: {
         </div>
         {result.impactedEntities.length > 0 && (
           <div>
-            <p className="text-xs text-muted-foreground uppercase font-semibold mb-1.5">
+            <p className="text-xs font-medium text-muted-foreground mb-1.5">
               영향 받는 엔티티 ({result.impactedEntities.length})
             </p>
             <div className="space-y-1">
@@ -171,10 +172,10 @@ function ImpactPanel({ result, onClose }: {
           </div>
         )}
         {result.impactPaths.slice(0, 3).map((path, i) => (
-          <div key={i} className="rounded-lg bg-secondary/40 px-3 py-2">
+          <div key={i} className="rounded-md bg-secondary/40 px-3 py-2">
             <div className="flex items-center justify-between mb-1">
               <p className="text-xs text-muted-foreground">경로 {i + 1}</p>
-              <p className="text-xs font-semibold text-status-warning">{(path.score * 100).toFixed(0)}%</p>
+              <p className="text-xs font-semibold text-foreground tabular-nums">{(path.score * 100).toFixed(0)}%</p>
             </div>
             <p className="text-xs text-foreground font-mono">
               {path.pathNames.join(' → ')}
@@ -324,83 +325,90 @@ export function OntologyPage() {
     <div className="app-h-screen bg-background flex flex-col overflow-hidden">
       {/* 상단 툴바 */}
       <div className="flex items-center gap-3 px-4 py-2.5 border-b border-border bg-card flex-shrink-0 z-20">
-        <Share2 className="w-5 h-5 text-primary flex-shrink-0" />
-        <h1 className="text-base font-bold flex-shrink-0">온톨로지 그래프</h1>
+        <PageHeader
+          className="flex-1 items-center"
+          icon={Share2}
+          title="온톨로지 그래프"
+          titleExtra={<>
+            <div className="h-5 w-px bg-border mx-1" />
 
-        <div className="h-5 w-px bg-border" />
+            {/* 클러스터 선택 */}
+            <select
+              value={clusterId}
+              onChange={(e) => setClusterId(e.target.value)}
+              aria-label="클러스터 선택"
+              className="px-2 py-1 bg-secondary border border-border rounded-xl text-sm focus:outline-none focus:ring-1 focus:ring-primary"
+            >
+              <option value="">— 클러스터 선택 —</option>
+              {clusters.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+            </select>
 
-        {/* 클러스터 선택 */}
-        <select
-          value={clusterId}
-          onChange={(e) => setClusterId(e.target.value)}
-          className="px-2 py-1 bg-secondary border border-border rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-primary"
-        >
-          <option value="">— 클러스터 선택 —</option>
-          {clusters.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-        </select>
+            {/* 검색 */}
+            <div className="relative">
+              <Search className="absolute left-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
+              <input
+                type="text"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="노드 검색..."
+                aria-label="노드 검색"
+                className="pl-7 pr-3 py-1 bg-secondary border border-border rounded-xl text-sm focus:outline-none focus:ring-1 focus:ring-primary w-44"
+              />
+            </div>
 
-        {/* 검색 */}
-        <div className="relative">
-          <Search className="absolute left-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
-          <input
-            type="text"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="노드 검색..."
-            className="pl-7 pr-3 py-1 bg-secondary border border-border rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-primary w-44"
-          />
-        </div>
+            {/* 통계 */}
+            {graph && (
+              <div className="flex items-center gap-3 text-sm text-muted-foreground">
+                <span><b className="text-foreground">{graphData.nodes.length}</b>/{graph.entities.length} 노드</span>
+                <span><b className="text-foreground">{graphData.links.length}</b> 관계</span>
+              </div>
+            )}
+          </>}
+          actions={<>
+            {/* 범례 토글 */}
+            <button
+              onClick={() => setShowLegend((v) => !v)}
+              aria-pressed={showLegend}
+              className={`flex items-center gap-1.5 px-2.5 py-1 rounded-xl text-sm border transition-colors ${
+                showLegend ? 'bg-primary/10 border-primary/30 text-primary' : 'bg-secondary border-border text-muted-foreground'
+              }`}
+            >
+              <Info className="w-3.5 h-3.5" />범례
+            </button>
 
-        {/* 통계 */}
-        {graph && (
-          <div className="flex items-center gap-3 text-sm text-muted-foreground">
-            <span><b className="text-foreground">{graphData.nodes.length}</b>/{graph.entities.length} 노드</span>
-            <span><b className="text-foreground">{graphData.links.length}</b> 관계</span>
-          </div>
-        )}
+            {/* 필터 초기화 */}
+            {activeTypes.size < ALL_TYPES.length && (
+              <button
+                onClick={() => setActiveTypes(new Set(ALL_TYPES))}
+                className="flex items-center gap-1 px-2.5 py-1 rounded-xl text-sm bg-secondary border border-border text-muted-foreground hover:text-foreground"
+              >
+                <Filter className="w-3.5 h-3.5" />전체
+              </button>
+            )}
 
-        <div className="flex-1" />
-
-        {/* 범례 토글 */}
-        <button
-          onClick={() => setShowLegend((v) => !v)}
-          className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-sm border transition-colors ${
-            showLegend ? 'bg-primary/10 border-primary/30 text-primary' : 'bg-secondary border-border text-muted-foreground'
-          }`}
-        >
-          <Info className="w-3.5 h-3.5" />범례
-        </button>
-
-        {/* 필터 초기화 */}
-        {activeTypes.size < ALL_TYPES.length && (
-          <button
-            onClick={() => setActiveTypes(new Set(ALL_TYPES))}
-            className="flex items-center gap-1 px-2.5 py-1 rounded-lg text-sm bg-secondary border border-border text-muted-foreground hover:text-foreground"
-          >
-            <Filter className="w-3.5 h-3.5" />전체
-          </button>
-        )}
-
-        {/* 새로고침 */}
-        <button
-          onClick={() => refetch()}
-          disabled={isLoading}
-          aria-label="새로고침"
-          className="p-1.5 hover:bg-secondary rounded-lg text-muted-foreground hover:text-foreground transition-colors"
-        >
-          <RefreshCw className={`w-4 h-4 ${isLoading ? 'animate-spin' : ''}`} />
-        </button>
+            {/* 새로고침 */}
+            <button
+              onClick={() => refetch()}
+              disabled={isLoading}
+              title="새로고침"
+              aria-label="새로고침"
+              className="p-1.5 hover:bg-secondary rounded-xl text-muted-foreground hover:text-foreground transition-colors"
+            >
+              <RefreshCw className={`w-4 h-4 ${isLoading ? 'animate-spin' : ''}`} />
+            </button>
+          </>}
+        />
       </div>
 
       {/* 타입 필터 바 */}
-      <div className="flex items-center gap-1.5 px-4 py-2 bg-card/60 border-b border-border/60 flex-shrink-0 overflow-x-auto">
+      <div className="flex items-center gap-1.5 px-4 py-2 bg-card border-b border-border/60 flex-shrink-0 overflow-x-auto">
         {ALL_TYPES.map((t) => {
           const active = activeTypes.has(t);
           return (
             <button
               key={t}
               onClick={() => toggleType(t)}
-              className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium border flex-shrink-0 transition-all ${
+              className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium border flex-shrink-0 transition-opacity ${
                 active ? 'opacity-100' : 'opacity-35'
               }`}
               style={{
@@ -420,24 +428,27 @@ export function OntologyPage() {
       <div ref={containerRef} className="flex-1 relative overflow-hidden">
         {isLoading && (
           <div className="absolute inset-0 flex items-center justify-center bg-background/70 z-10">
-            <Loader2 className="w-8 h-8 animate-spin text-primary" />
+            <LoadingState />
           </div>
         )}
 
         {analyzing && (
-          <div className="absolute top-4 left-1/2 -translate-x-1/2 flex items-center gap-2 bg-status-warning/20 border border-status-warning/40 rounded-full px-4 py-2 text-sm text-status-warning z-20">
+          <div className="absolute top-4 left-1/2 -translate-x-1/2 flex items-center gap-2 bg-card border border-border rounded-full px-4 py-2 text-sm text-muted-foreground shadow-card z-20">
             <Loader2 className="w-4 h-4 animate-spin" />영향 분석 중…
           </div>
         )}
 
         {isEmpty ? (
-          <div className="flex flex-col items-center justify-center h-full text-muted-foreground">
-            <Share2 className="w-16 h-16 mb-4" />
-            <p className="text-base">이 클러스터에 온톨로지 데이터가 없습니다</p>
-            <p className="text-sm mt-1">API로 엔티티와 관계를 먼저 등록하세요</p>
-            <code className="mt-3 px-3 py-1.5 bg-secondary rounded text-sm font-mono">
-              POST /api/v1/ontology/entities
-            </code>
+          <div className="flex items-center justify-center h-full">
+            <EmptyState
+              icon={Share2}
+              title="이 클러스터에 온톨로지 데이터가 없습니다."
+              description="API 로 엔티티와 관계를 먼저 등록하면 그래프가 그려집니다."
+            >
+              <code className="mt-3 px-3 py-1.5 bg-secondary rounded text-sm font-mono text-muted-foreground">
+                POST /api/v1/ontology/entities
+              </code>
+            </EmptyState>
           </div>
         ) : (
           <ForceGraph3D
@@ -474,8 +485,8 @@ export function OntologyPage() {
 
         {/* 범례 패널 */}
         {showLegend && (
-          <div className="absolute top-4 left-4 bg-card/90 backdrop-blur border border-border rounded-xl px-4 py-3 space-y-1.5 z-10">
-            <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-2">엔티티 타입</p>
+          <div className="absolute top-4 left-4 bg-card border border-border rounded-md px-4 py-3 space-y-1.5 z-10">
+            <p className="text-xs font-medium text-muted-foreground mb-2">엔티티 타입</p>
             {ALL_TYPES.map((t) => (
               <div key={t} className="flex items-center gap-2">
                 <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ background: ENTITY_COLOR[t] }} />

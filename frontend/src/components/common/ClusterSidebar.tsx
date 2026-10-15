@@ -66,10 +66,11 @@ const STATUS_ICON: Record<Status, React.ComponentType<{ className?: string }>> =
 };
 
 const STATUS_DOT: Record<Status, string> = {
-  healthy:  'bg-status-healthy',
+  // 정상은 무채색 점 — 비정상만 색으로 튀게 (§12.12-3, D-119)
+  healthy:  'bg-muted-foreground/40',
   warning:  'bg-status-warning',
   critical: 'bg-status-critical',
-  pending:  'bg-slate-400',
+  pending:  'bg-status-unknown',
 };
 
 interface RowProps {
@@ -297,7 +298,7 @@ function ClusterSidebarIconRail({
   return (
     <aside
       style={{ width: size.rail }}
-      className="relative flex-shrink-0 bg-card border border-border rounded-xl py-2 h-fit sticky top-4"
+      className="relative flex-shrink-0 bg-card border border-border rounded-md py-2 h-fit sticky top-4"
     >
       <div className="flex flex-col items-center gap-1">
         {allowAll && (
@@ -406,10 +407,10 @@ export function ClusterSidebar({
   return (
     <aside
       style={{ width }}
-      className="flex-shrink-0 bg-card border border-border rounded-xl p-2 h-fit sticky top-4 relative"
+      className="flex-shrink-0 bg-card border border-border rounded-md p-2 h-fit sticky top-4 relative"
     >
       <div className="flex items-center justify-between px-2 py-1.5">
-        <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+        <p className="text-xs font-medium text-muted-foreground">
           {title}
           <span className="ml-1 text-muted-foreground">
             {multiSelect ? `(${selectedSet?.size ?? 0}/${totalN})` : `(${totalN})`}

@@ -86,7 +86,7 @@ export function GuideForm({ initial, allGuides, defaultParentId, onCancel, onSav
   return (
     <>
       {error && (
-        <div className="mb-4 px-3 py-2 bg-destructive/10 border border-destructive/30 rounded-lg text-sm text-destructive flex items-center gap-2">
+        <div className="mb-4 px-3 py-2 bg-status-critical/10 border border-status-critical/30 rounded-lg text-sm text-status-critical flex items-center gap-2">
           <AlertCircle className="w-4 h-4 flex-shrink-0" />{error}
         </div>
       )}

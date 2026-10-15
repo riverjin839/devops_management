@@ -1,8 +1,8 @@
 import { Fragment, useState } from 'react';
-import { AlertCircle, AlertTriangle, Info, Loader2, RefreshCw, Trash2 } from 'lucide-react';
+import { AlertCircle, AlertTriangle, Bell, Info, Loader2, RefreshCw, Trash2 } from 'lucide-react';
 import { MacCard } from '@/components/ui/MacCard';
 import { ClusterSidebar } from '@/components/common/ClusterSidebar';
-import { ConfirmDialog, useToast } from '@/components/common';
+import { ConfirmDialog, useToast, PageHeader, PageShell, LoadingState, EmptyState } from '@/components/common';
 import { useClusters } from '@/hooks/useCluster';
 import { useCanOperate } from '@/hooks/useCanOperate';
 import { useK8sEvents, useDeleteK8sEvent } from '@/hooks/useK8sEvents';
@@ -32,8 +32,9 @@ function SeverityBadge({ severity }: { severity: K8sEventSeverity }) {
       </span>
     );
   }
+  // info(= K8s Normal 이벤트)는 정상 범주라 무채색 (§12.12-3, D-119)
   return (
-    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold bg-blue-100 text-blue-600">
+    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-secondary text-muted-foreground">
       <Info className="w-3 h-3" /> Info
     </span>
   );
@@ -74,7 +75,7 @@ export function K8sEventsPage() {
     if (!ev) return;
     try {
       await deleteEvent.mutateAsync(ev.id);
-      toast.success('이벤트를 삭제했습니다.');
+      toast.success('이벤트 삭제됨');
     } catch (err) {
       toast.error(formatApiError(err, '이벤트 삭제 실패'));
     }
@@ -84,8 +85,8 @@ export function K8sEventsPage() {
   const selectedClusterName = clusters.find((c) => c.id === selectedClusterId)?.name;
 
   return (
-    <div className="app-min-h-screen bg-background py-3 pr-3">
-      <div className="flex gap-3">
+    <div className="app-min-h-screen bg-background">
+      <PageShell density="console" as="div" className="flex gap-3">
         <ClusterSidebar
           clusters={clusters}
           selectedId={selectedClusterId}
@@ -95,35 +96,45 @@ export function K8sEventsPage() {
           iconOnly
         />
 
-        <div className="flex-1 min-w-0">
-          <MacCard title="K8s 실시간 이벤트">
-            {/* 필터 탭 + 새로고침 */}
-            <div className="flex items-center justify-between mb-4">
-              <div className="flex gap-1">
-                {SEVERITY_TABS.map((tab) => (
-                  <button
-                    key={tab.value}
-                    onClick={() => setSeverityTab(tab.value)}
-                    className={`px-3 py-1.5 rounded-xl text-sm font-medium transition-colors ${
-                      severityTab === tab.value
-                        ? 'bg-primary text-white'
-                        : 'bg-secondary text-muted-foreground hover:bg-secondary/80'
-                    }`}
-                  >
-                    {tab.label}
-                  </button>
-                ))}
-              </div>
-              <button
-                onClick={() => refetch()}
-                disabled={isFetching}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-sm bg-secondary text-muted-foreground hover:bg-secondary/80 transition-colors disabled:opacity-50"
-              >
-                <RefreshCw className={`w-3.5 h-3.5 ${isFetching ? 'animate-spin' : ''}`} />
-                새로고침
-              </button>
-            </div>
-
+        <div className="flex-1 min-w-0 space-y-3">
+          <PageHeader
+            icon={Bell}
+            title="K8s 실시간 이벤트"
+            description="kubewatch 웹훅으로 받은 리소스 이벤트를 심각도별로 확인하고 분석합니다."
+          />
+          <MacCard
+            title="수신 이벤트"
+            titleExtra={data ? (
+              <span className="text-xs text-muted-foreground tabular-nums">총 {data.total}건 중 {events.length}건</span>
+            ) : undefined}
+            actions={
+              <>
+                <div className="flex gap-1">
+                  {SEVERITY_TABS.map((tab) => (
+                    <button
+                      key={tab.value}
+                      onClick={() => setSeverityTab(tab.value)}
+                      className={`px-3 py-1.5 rounded-xl text-sm font-medium transition-colors ${
+                        severityTab === tab.value
+                          ? 'bg-primary text-primary-foreground'
+                          : 'bg-secondary text-muted-foreground hover:bg-secondary/80'
+                      }`}
+                    >
+                      {tab.label}
+                    </button>
+                  ))}
+                </div>
+                <button
+                  onClick={() => refetch()}
+                  disabled={isFetching}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-sm bg-secondary text-muted-foreground hover:bg-secondary/80 transition-colors disabled:opacity-50"
+                >
+                  <RefreshCw className={`w-3.5 h-3.5 ${isFetching ? 'animate-spin' : ''}`} />
+                  새로고침
+                </button>
+              </>
+            }
+          >
             {/* 요약 카운터 */}
             {data && (
               <div className="flex gap-3 mb-4">
@@ -132,35 +143,36 @@ export function K8sEventsPage() {
                   const colors = {
                     critical: 'bg-status-critical/10 border-status-critical/30 text-status-critical',
                     warning: 'bg-status-warning/10 border-status-warning/30 text-status-warning',
-                    info: 'bg-blue-50 border-blue-200 text-blue-600',
+                    info: 'bg-secondary border-border text-muted-foreground',
                   };
+                  // 값이 0 이면 중립색 (§12.12-2)
                   return (
-                    <div key={sev} className={`px-3 py-1.5 rounded-xl border text-sm font-medium ${colors[sev]}`}>
+                    <div key={sev} className={`px-3 py-1.5 rounded-xl border text-sm font-medium tabular-nums ${count > 0 ? colors[sev] : colors.info}`}>
                       {sev.charAt(0).toUpperCase() + sev.slice(1)}: {count}
                     </div>
                   );
                 })}
-                <div className="ml-auto text-sm text-muted-foreground self-center">
-                  총 {data.total}건 중 {events.length}건 표시
-                </div>
               </div>
             )}
 
             {/* 이벤트 테이블 */}
             {isLoading ? (
-              <div className="text-center py-12 text-muted-foreground text-sm">불러오는 중…</div>
+              <LoadingState />
             ) : events.length === 0 ? (
-              <div className="text-center py-12 text-muted-foreground text-sm space-y-1">
-                <p>이벤트 없음</p>
+              <EmptyState
+                icon={Bell}
+                title="수신된 이벤트가 없습니다."
+                description={severityTab === 'all' ? 'kubewatch 가 이 서버로 이벤트를 보내면 여기에 쌓입니다.' : '다른 심각도 탭을 선택해 보세요.'}
+              >
                 {selectedClusterId && (
                   // D-101 — kubewatch 페이로드에는 클러스터 정보가 없다. 웹훅 URL 에 클러스터를 붙여야 이 필터에 모인다.
-                  <p className="text-xs">
+                  <p className="mt-2 max-w-md text-xs text-muted-foreground">
                     클러스터별로 모으려면 이 클러스터의 kubewatch 웹훅 URL 끝에{' '}
                     <code className="font-mono text-foreground">?cluster={selectedClusterName ?? '<클러스터 이름>'}</code>
                     {' '}를 붙인다. 붙이지 않은 이벤트는 "전체 클러스터"에만 보인다.
                   </p>
                 )}
-              </div>
+              </EmptyState>
             ) : (
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
@@ -196,13 +208,13 @@ export function K8sEventsPage() {
                             {ev.resourceName}
                           </td>
                           <td className="py-2 pr-3 text-muted-foreground text-xs truncate">
-                            {ev.namespace ?? '-'}
+                            {ev.namespace ?? '—'}
                           </td>
                           <td className="py-2 pr-3 text-xs text-muted-foreground">
-                            {ev.reason ?? '-'}
+                            {ev.reason ?? '—'}
                           </td>
                           <td className="py-2 text-xs text-muted-foreground truncate max-w-[200px]">
-                            {ev.message ?? '-'}
+                            {ev.message ?? '—'}
                           </td>
                           <td className="py-2 pl-2">
                             <button
@@ -240,7 +252,7 @@ export function K8sEventsPage() {
             )}
           </MacCard>
         </div>
-      </div>
+      </PageShell>
       <ConfirmDialog
         open={pendingDelete !== null}
         danger

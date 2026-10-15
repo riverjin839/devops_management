@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import { X, Upload, Loader2, AlertTriangle, CheckCircle2, FileSpreadsheet, Info } from 'lucide-react';
 import { nodeSpecsApi } from '@/services/api';
 import { useModalA11y } from '@/components/common/useModalA11y';
+import { EmptyState } from '@/components/common/EmptyState';
 import type {
   NodeSpecCsvPreviewResponse, NodeSpecCsvRow,
 } from '@/types';
@@ -175,7 +176,7 @@ export function NodeSpecCsvUploadModal({ open, onClose, onApplied }: Props) {
         ignoreEmptyOnUpdate,
       });
       const data = r.data;
-      setResultMsg(`✓ 신규 ${data.inserted} / 업데이트 ${data.updated} / 건너뜀 ${data.skipped}` +
+      setResultMsg(`적용됨 — 신규 ${data.inserted} / 업데이트 ${data.updated} / 건너뜀 ${data.skipped}` +
         (data.errors.length ? ` · 오류 ${data.errors.length}건` : ''));
       setApplyErrors(data.errors);
       onApplied();
@@ -201,7 +202,7 @@ export function NodeSpecCsvUploadModal({ open, onClose, onApplied }: Props) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
       <div className="absolute inset-0 bg-black/60" onClick={() => !applying && onClose()} />
-      <div ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby="node-spec-csv-upload-modal-title" className="relative bg-card border border-border rounded-2xl shadow-2xl w-full max-w-5xl mx-4 max-h-[90vh] overflow-hidden flex flex-col">
+      <div ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby="node-spec-csv-upload-modal-title" className="relative bg-card border border-border rounded-md shadow-2xl w-full max-w-5xl mx-4 max-h-[90vh] overflow-hidden flex flex-col">
         <div className="flex items-center gap-3 px-5 py-3 border-b border-border bg-muted/30">
           <FileSpreadsheet className="w-5 h-5 text-primary" />
           <h2 id="node-spec-csv-upload-modal-title" className="text-sm font-semibold">CSV 업로드 — 노드 서버스펙</h2>
@@ -291,7 +292,7 @@ export function NodeSpecCsvUploadModal({ open, onClose, onApplied }: Props) {
               <div className="border border-border rounded-xl overflow-hidden max-h-[400px] overflow-y-auto">
                 <table className="w-full text-sm">
                   <thead className="bg-muted/30 sticky top-0">
-                    <tr className="text-left text-xs text-muted-foreground uppercase">
+                    <tr className="text-left text-xs text-muted-foreground">
                       <th className="px-2 py-1.5">#</th>
                       <th className="px-2 py-1.5">동작</th>
                       <th className="px-2 py-1.5">hostname</th>
@@ -301,7 +302,7 @@ export function NodeSpecCsvUploadModal({ open, onClose, onApplied }: Props) {
                   <tbody>
                     {diffs.map((d) => <DiffRow key={d.rowIndex} d={d} />)}
                     {diffs.length === 0 && (
-                      <tr><td colSpan={4} className="text-center py-4 text-sm text-muted-foreground">표시할 행 없음</td></tr>
+                      <tr><td colSpan={4}><EmptyState compact title="표시할 행이 없습니다." description="CSV 에 데이터 행이 있는지, 선택한 필터에 해당하는 행이 있는지 확인하세요." /></td></tr>
                     )}
                   </tbody>
                 </table>
@@ -331,9 +332,9 @@ export function NodeSpecCsvUploadModal({ open, onClose, onApplied }: Props) {
 
           {resultMsg && (
             <div className={`px-3 py-2 rounded-lg text-sm border ${
-              resultMsg.startsWith('✓')
+              resultMsg.startsWith('적용됨')
                 ? 'bg-status-healthy/10 text-status-healthy border-status-healthy/30'
-                : 'bg-destructive/10 text-destructive border-destructive/30'
+                : 'bg-status-critical/10 text-status-critical border-status-critical/30'
             }`}>
               <p>{resultMsg}</p>
               {/* 적용 후 오류는 건수만으론 어느 행이 실패했는지 알 수 없다 — 미리보기 단계처럼 itemize. */}

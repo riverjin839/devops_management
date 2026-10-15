@@ -5,8 +5,10 @@ import {
   Play, Trash2, AlertCircle, History,
 } from 'lucide-react';
 import { MacCard } from '@/components/ui/MacCard';
-import { ConfirmDialog } from '@/components/common';
-import { HealthBadge, ServiceTypeIcon } from '@/components/lake-services';
+import { ConfirmDialog, EmptyState, PageShell, RunLogPanel, Skeleton } from '@/components/common';
+import { HealthBadge, ServiceTypeIcon, runLakeCheckLogged } from '@/components/lake-services';
+import { useRunLog } from '@/hooks/useRunLog';
+import { useLogPref } from '@/hooks/useLogPref';
 import {
   useLakeService,
   useLakeServiceTypes,
@@ -50,6 +52,18 @@ export function LakeServiceDetailPage() {
     return items.sort((a, b) => (a.at < b.at ? 1 : a.at > b.at ? -1 : 0));
   }, [checksData?.data]);
 
+  // "지금 점검" 실행 로그(D-128) — 비활성 서비스(409)는 warn 줄.
+  const runLog = useRunLog();
+  const [showRunLog, setShowRunLog] = useLogPref('lake-service-detail-check');
+  const handleRunCheck = async () => {
+    if (!svc) return;
+    await runLakeCheckLogged(runLog, {
+      name: svc.name,
+      endpoint: svc.endpointUrl,
+      call: async () => (await runCheck.mutateAsync(id)).data,
+    });
+  };
+
   const doDelete = () => {
     setConfirmDelete(false);
     delMutation.mutate(id, { onSuccess: () => navigate('/lake-services') });
@@ -57,19 +71,19 @@ export function LakeServiceDetailPage() {
 
   if (isLoading) {
     return (
-      <div className="app-min-h-screen bg-background p-6">
-        <div className="max-w-[1400px] mx-auto space-y-3">
-          <div className="h-8 w-48 bg-muted/30 animate-pulse rounded" />
-          <div className="h-48 bg-muted/30 animate-pulse rounded-md" />
-        </div>
+      <div className="app-min-h-screen bg-background">
+        <PageShell density="hub" className="space-y-3">
+          <Skeleton className="block h-8 w-48 rounded" />
+          <Skeleton className="block h-48 w-full rounded-md" />
+        </PageShell>
       </div>
     );
   }
 
   if (error || !svc) {
     return (
-      <div className="app-min-h-screen bg-background p-6">
-        <div className="max-w-[800px] mx-auto">
+      <div className="app-min-h-screen bg-background">
+        <PageShell density="hub">
           <div className="rounded-md border border-status-critical/40 bg-status-critical/5 p-4 flex items-start gap-2 text-sm text-status-critical">
             <AlertCircle className="w-4 h-4 flex-shrink-0 mt-0.5" />
             <div>
@@ -82,14 +96,14 @@ export function LakeServiceDetailPage() {
               </Link>
             </div>
           </div>
-        </div>
+        </PageShell>
       </div>
     );
   }
 
   return (
-    <div className="app-min-h-screen bg-background p-5">
-      <div className="max-w-[1400px] mx-auto space-y-4">
+    <div className="app-min-h-screen bg-background">
+      <PageShell density="hub" className="space-y-4">
         {/* Header */}
         <div className="flex items-center gap-3 flex-wrap">
           <PageHeader
@@ -102,7 +116,7 @@ export function LakeServiceDetailPage() {
           <HealthBadge status={svc.status} size="md" />
           <button
             type="button"
-            onClick={() => runCheck.mutate(id)}
+            onClick={handleRunCheck}
             disabled={runCheck.isPending}
             aria-label="지금 점검"
             className="inline-flex items-center gap-1.5 rounded-xl border border-border bg-card px-3 py-1.5 text-sm hover:bg-muted disabled:opacity-50"
@@ -120,6 +134,8 @@ export function LakeServiceDetailPage() {
             삭제
           </button>
         </div>
+
+        <RunLogPanel run={runLog} show={showRunLog} onShowChange={setShowRunLog} />
 
         {/* Health summary */}
         <MacCard title="현재 상태">
@@ -151,10 +167,12 @@ export function LakeServiceDetailPage() {
         {/* 점검 이력 (LakeServiceCheck) */}
         <MacCard title="점검 이력">
           {timeline.length === 0 ? (
-            <div className="text-sm text-muted-foreground italic">
-              <History className="w-4 h-4 inline-block mr-1.5 -mt-0.5" />
-              아직 점검 기록이 없습니다. 상단 "지금 점검" 버튼으로 첫 회차를 생성하세요.
-            </div>
+            <EmptyState
+              compact
+              icon={History}
+              title="점검 기록 없음"
+              description="상단의 「지금 점검」으로 첫 헬스체크를 실행하면 결과가 이 이력에 쌓입니다."
+            />
           ) : (
             <ul className="space-y-1.5">
               {timeline.slice(0, 50).map((t) => (
@@ -179,7 +197,7 @@ export function LakeServiceDetailPage() {
             </ul>
           )}
         </MacCard>
-      </div>
+      </PageShell>
 
       <ConfirmDialog
         open={confirmDelete}

@@ -4,27 +4,29 @@ import type { Project } from '@/types';
 import { useDeleteProject } from '@/hooks/useProjects';
 import { ProjectFormModal } from './ProjectFormModal';
 
+// 프로젝트 색은 종류 구분(카테고리)이라 chart-N 토큰으로 그린다(D-120). 키는 저장값 호환을 위해 유지.
+
 const COLOR_MAP: Record<string, string> = {
-  blue:    'from-blue-500/20 to-blue-500/5 border-blue-500/30',
-  emerald: 'from-status-healthy/20 to-status-healthy/5 border-status-healthy/30',
-  violet:  'from-violet-500/20 to-violet-500/5 border-violet-500/30',
-  amber:   'from-status-warning/20 to-status-warning/5 border-status-warning/30',
-  rose:    'from-status-critical/20 to-status-critical/5 border-status-critical/30',
-  slate:   'from-slate-500/20 to-slate-500/5 border-slate-500/30',
+  blue:    'bg-chart-1/10 border-chart-1/30',
+  emerald: 'bg-chart-2/10 border-chart-2/30',
+  amber:   'bg-chart-3/10 border-chart-3/30',
+  violet:  'bg-chart-4/10 border-chart-4/30',
+  rose:    'bg-chart-5/10 border-chart-5/30',
+  slate:   'bg-chart-8/10 border-chart-8/30',
 };
 
 const BADGE_MAP: Record<string, string> = {
-  blue:    'bg-blue-500/15 text-blue-600 dark:text-blue-300',
-  emerald: 'bg-status-healthy/15 text-status-healthy',
-  violet:  'bg-violet-500/15 text-violet-600 dark:text-violet-300',
-  amber:   'bg-status-warning/15 text-status-warning',
-  rose:    'bg-status-critical/15 text-status-critical',
-  slate:   'bg-status-unknown/15 text-status-unknown dark:text-slate-300',
+  blue:    'bg-chart-1/15 text-chart-1',
+  emerald: 'bg-chart-2/15 text-chart-2',
+  amber:   'bg-chart-3/15 text-chart-3',
+  violet:  'bg-chart-4/15 text-chart-4',
+  rose:    'bg-chart-5/15 text-chart-5',
+  slate:   'bg-chart-8/15 text-chart-8',
 };
 
 const DOT_MAP: Record<string, string> = {
-  blue: 'bg-blue-500', emerald: 'bg-status-healthy', violet: 'bg-violet-500',
-  amber: 'bg-status-warning', rose: 'bg-status-critical', slate: 'bg-slate-500',
+  blue: 'bg-chart-1', emerald: 'bg-chart-2', amber: 'bg-chart-3',
+  violet: 'bg-chart-4', rose: 'bg-chart-5', slate: 'bg-chart-8',
 };
 
 interface Props {
@@ -36,7 +38,7 @@ export function ProjectHeader({ project, onDeleted }: Props) {
   const [editOpen, setEditOpen] = useState(false);
   const deleteMut = useDeleteProject();
 
-  const gradient = COLOR_MAP[project.color] ?? COLOR_MAP.blue;
+  const surface = COLOR_MAP[project.color] ?? COLOR_MAP.blue;
   const badge = BADGE_MAP[project.color] ?? BADGE_MAP.blue;
   const dot = DOT_MAP[project.color] ?? DOT_MAP.blue;
 
@@ -56,7 +58,7 @@ export function ProjectHeader({ project, onDeleted }: Props) {
 
   return (
     <>
-      <div className={`rounded-2xl border bg-gradient-to-r ${gradient} p-4`}>
+      <div className={`rounded-md border ${surface} p-4`}>
         <div className="flex items-start justify-between gap-3">
           <div className="flex items-center gap-2.5 min-w-0 flex-1">
             <span className={`w-3 h-3 rounded-full flex-shrink-0 ${dot}`} />
@@ -115,7 +117,7 @@ export function ProjectHeader({ project, onDeleted }: Props) {
           </div>
           <div className="h-2 rounded-full bg-black/10 overflow-hidden">
             <div
-              className={`h-full rounded-full transition-all ${dot}`}
+              className={`h-full rounded-full transition-[width] ${dot}`}
               style={{ width: `${project.achievementRate}%` }}
             />
           </div>

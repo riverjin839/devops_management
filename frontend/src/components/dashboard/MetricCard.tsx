@@ -31,7 +31,7 @@ function getThresholdColor(value: number | null | undefined, thresholds?: string
   if (!t) return 'text-foreground';
   if (value >= t.critical) return 'text-status-critical';
   if (value >= t.warning) return 'text-status-warning';
-  return 'text-status-healthy';
+  return 'text-foreground';
 }
 
 function getThresholdBgColor(value: number | null | undefined, thresholds?: string): string {
@@ -40,18 +40,18 @@ function getThresholdBgColor(value: number | null | undefined, thresholds?: stri
   if (!t) return 'bg-primary';
   if (value >= t.critical) return 'bg-status-critical';
   if (value >= t.warning) return 'bg-status-warning';
-  return 'bg-status-healthy';
+  return 'bg-muted-foreground/50';
 }
 
 /** Sparkline stroke 는 Tailwind class 가 아니라 실제 CSS color 값이 필요 — getThresholdColor 와
- *  같은 판정 로직을 hsl(var(--status-*)) 문자열로 반환. */
+ *  같은 판정 로직을 CSS color 문자열로 반환. 임계 미만(정상)은 무채색(DESIGN_SYSTEM §12.12-3). */
 function getThresholdStrokeColor(value: number | null | undefined, thresholds?: string): string {
   if (value == null) return 'hsl(var(--muted-foreground))';
   const t = parseThresholds(thresholds);
   if (!t) return 'hsl(var(--foreground))';
   if (value >= t.critical) return 'hsl(var(--status-critical))';
   if (value >= t.warning) return 'hsl(var(--status-warning))';
-  return 'hsl(var(--status-healthy))';
+  return 'hsl(var(--muted-foreground))';
 }
 
 // ── Format value ─────────────────────────────────────────
@@ -87,7 +87,7 @@ function GaugeDisplay({ value, thresholds, unit }: { value: number | null | unde
       </div>
       <div className="w-full bg-secondary rounded-full h-2">
         <div
-          className={`h-2 rounded-full transition-all duration-500 ${color}`}
+          className={`h-2 rounded-full transition-[width] duration-500 ${color}`}
           style={{ width: `${pct}%` }}
         />
       </div>
@@ -109,7 +109,7 @@ function ValueDisplay({ value, thresholds, unit }: { value: number | null | unde
 // ── List display ─────────────────────────────────────────
 function ListDisplay({ results }: { results?: Array<Record<string, unknown>> | null }) {
   if (!results || results.length === 0) {
-    return <span className="text-sm text-status-healthy font-mono">None detected</span>;
+    return <span className="text-sm text-muted-foreground font-mono">None detected</span>;
   }
 
   return (
@@ -239,7 +239,7 @@ export function MetricCard({ card, result, onDelete, onEdit }: MetricCardProps) 
   const { data: sparkline } = useMetricSparkline(card.id, showSparkline);
 
   return (
-    <div className="bg-card border border-border rounded-xl p-5 hover:border-muted-foreground/30 transition-all hover:-translate-y-0.5 relative group">
+    <div className="bg-card border border-border rounded-md p-5 hover:border-muted-foreground/30 transition-colors relative group">
       {/* Header */}
       <div className="flex items-start justify-between mb-4">
         <div className="w-11 h-11 rounded-lg bg-secondary flex items-center justify-center text-xl">
@@ -277,7 +277,7 @@ export function MetricCard({ card, result, onDelete, onEdit }: MetricCardProps) 
               <Pencil className="w-3.5 h-3.5 text-primary" />
             </button>
           )}
-          <span className="px-2 py-0.5 text-xs font-medium rounded-full bg-secondary text-muted-foreground uppercase tracking-wider">
+          <span className="px-2 py-0.5 text-xs font-medium rounded-full bg-secondary text-muted-foreground">
             {card.category}
           </span>
         </div>

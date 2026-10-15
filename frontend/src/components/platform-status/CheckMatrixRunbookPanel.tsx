@@ -3,7 +3,7 @@ import {
   Terminal, Globe, Server, Database, KeyRound, AlertTriangle, Info, Target, Pencil, Save, Plus, X,
   ShieldCheck, Workflow,
 } from 'lucide-react';
-import { StatusBadge, useToast } from '@/components/common';
+import { EmptyState, StatusBadge, useToast, LoadingState } from '@/components/common';
 import { ExecutionStepsTimeline } from '@/components/daily-check/ExecutionStepsTimeline';
 import { KubeadmCertsModal, EtcdSystemdModal } from '@/components/versions';
 import { useUpdateSourceConfig } from '@/hooks/useCheckMatrix';
@@ -109,13 +109,13 @@ function InputsBlock({ inputs, action }: { inputs: CheckMatrixRunbookInput[]; ac
   return (
     <section>
       <div className="flex items-center justify-between mb-2">
-        <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+        <h3 className="text-xs font-semibold text-muted-foreground">
           적용되는 설정값
         </h3>
         {action}
       </div>
       {groups.length === 0 && (
-        <p className="text-xs text-muted-foreground italic">저장된 설정값이 없습니다 — 기본값으로 동작합니다.</p>
+        <EmptyState compact title="저장된 설정값이 없습니다." description="기본값으로 동작합니다." />
       )}
       <div className="space-y-3 max-h-72 overflow-y-auto pr-1">
         {groups.map(({ group, rows }) => (
@@ -188,7 +188,7 @@ function SourceConfigEditor({
         itemId: editTarget.itemId, clusterId: editTarget.clusterId, entries: rows,
       });
       toast.success(
-        '소스 설정을 저장했습니다.',
+        '소스 설정 저장됨',
         res.copiedFromGlobal
           ? '글로벌 정의를 복제해 이 클러스터 전용 정의를 만들었습니다 — 다른 클러스터에는 영향 없습니다.'
           : undefined,
@@ -253,7 +253,7 @@ function SourceConfigEditor({
           );
         })}
         {rows.length === 0 && (
-          <p className="text-xs text-muted-foreground italic">편집할 설정이 없습니다{isAddon ? ' — 아래에서 키를 추가하세요.' : '.'}</p>
+          <EmptyState compact title="편집할 설정이 없습니다." description={isAddon ? '아래에서 키를 추가하세요.' : undefined} />
         )}
       </div>
       {isAddon && (
@@ -311,10 +311,10 @@ export function CheckMatrixRunbookPanel({ runbook, isLoading, editTarget, latest
   // 테넌트 바인딩까지 본다 — 읽기 전용 바인딩 클러스터에서 편집 버튼이 눌린 뒤 403 이 나지 않게.
   const { canOperate, withHint, ariaWithHint } = useCanOperate(runbook?.clusterId);
   if (isLoading) {
-    return <div className="py-8 text-center text-sm text-muted-foreground">실행 계획 불러오는 중…</div>;
+    return <LoadingState compact label="실행 계획 불러오는 중…" />;
   }
   if (!runbook) {
-    return <div className="py-8 text-center text-sm text-muted-foreground">실행 계획을 불러오지 못했습니다.</div>;
+    return <EmptyState compact title="실행 계획을 불러오지 못했습니다." description="잠시 후 다시 열거나 항목 설정을 확인하세요." />;
   }
   const canEdit = !!editTarget && runbook.configEditable;
   const running = latestRun?.runState === 'queued' || latestRun?.runState === 'running';
@@ -366,8 +366,8 @@ export function CheckMatrixRunbookPanel({ runbook, isLoading, editTarget, latest
             )}
           </section>
         ) : (
-          <section className="rounded-md border border-dashed border-border p-3 flex items-center">
-            <p className="text-xs text-muted-foreground italic">아직 실행 기록이 없습니다 — 위 "지금 실행"으로 돌려보세요.</p>
+          <section className="rounded-md border border-dashed border-border flex items-center justify-center">
+            <EmptyState compact title="아직 실행 기록이 없습니다." description="위의 '지금 실행'으로 돌려보세요." />
           </section>
         )}
       </div>
@@ -403,11 +403,11 @@ export function CheckMatrixRunbookPanel({ runbook, isLoading, editTarget, latest
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <section className="min-w-0">
-          <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">
+          <h3 className="text-xs font-semibold text-muted-foreground mb-2">
             수행되는 명령
           </h3>
           {runbook.commands.length === 0 ? (
-            <p className="text-sm text-muted-foreground italic">등록된 명령 정보가 없습니다.</p>
+            <EmptyState compact icon={Terminal} title="등록된 명령 정보가 없습니다." description="이 점검 타입의 런북 명령 목록이 아직 정의되지 않았습니다." />
           ) : (
             // 명령이 많은 점검(복수 kubectl/ssh 단계)도 이 목록만 내부 스크롤하게 해
             // 팝업 전체가 늘어나지 않게 한다.
@@ -422,7 +422,7 @@ export function CheckMatrixRunbookPanel({ runbook, isLoading, editTarget, latest
         <div className="min-w-0 space-y-3">
           {canEdit && editing && editTarget ? (
             <section>
-              <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">
+              <h3 className="text-xs font-semibold text-muted-foreground mb-2">
                 소스 설정 편집
               </h3>
               <SourceConfigEditor runbook={runbook} editTarget={editTarget} onDone={() => setEditing(false)} />
@@ -446,7 +446,7 @@ export function CheckMatrixRunbookPanel({ runbook, isLoading, editTarget, latest
 
           {runbook.notes.length > 0 && (
             <section>
-              <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">
+              <h3 className="text-xs font-semibold text-muted-foreground mb-2">
                 알아둘 점
               </h3>
               <ul className="space-y-1.5">

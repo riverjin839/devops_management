@@ -42,7 +42,7 @@ function PillGroup({
         <button
           key={o.value}
           onClick={() => onChange(o.value)}
-          className={`px-2 py-[3px] text-xs font-medium rounded transition-all duration-100 leading-none ${
+          className={`px-2 py-[3px] text-xs font-medium rounded transition-colors duration-100 leading-none ${
             value === o.value
               ? 'bg-background text-foreground shadow-sm'
               : 'text-muted-foreground hover:text-muted-foreground'
@@ -91,7 +91,7 @@ const HEADER_SWATCHES = [
   { value: 'default', color: 'bg-slate-400',   title: '기본' },
   { value: 'blue',    color: 'bg-blue-400',    title: '파랑' },
   { value: 'indigo',  color: 'bg-indigo-400',  title: '인디고' },
-  { value: 'emerald', color: 'bg-status-healthy', title: '초록' },
+  { value: 'emerald', color: 'bg-chart-2', title: '초록' },
 ] as const;
 
 // ── Style panel (popover) ──────────────────────────────────────────────────────
@@ -141,10 +141,10 @@ function StylePanel({ style, patchStyle }: {
               title={s.title}
               aria-label={s.title}
               onClick={() => patchStyle({ headerTheme: s.value })}
-              className={`w-[18px] h-[18px] rounded-full transition-all duration-100 ${s.color} ${
+              className={`w-[18px] h-[18px] rounded-full transition-opacity duration-100 ${s.color} ${
                 style.headerTheme === s.value
-                  ? 'ring-2 ring-primary ring-offset-[2px] ring-offset-card scale-110'
-                  : 'opacity-50 hover:opacity-80 hover:scale-105'
+                  ? 'ring-1 ring-primary ring-offset-[2px] ring-offset-card'
+                  : 'opacity-50 hover:opacity-80'
               }`}
             />
           ))}
@@ -189,13 +189,13 @@ export function ViewModeBar({
   return (
     <div className={`flex items-center gap-1 ${className}`}>
       {/* ── Segmented view toggle ── */}
-      <div className="flex items-center bg-secondary/60 backdrop-blur-sm rounded-lg p-[3px] gap-px">
+      <div className="flex items-center bg-secondary rounded-lg p-[3px] gap-px">
         {modes.map((mode) => (
           <button
             key={mode.id}
             onClick={() => onChange(mode.id)}
             title={mode.label}
-            className={`flex items-center gap-1.5 px-2.5 py-[5px] text-sm font-medium rounded-md transition-all duration-150 whitespace-nowrap ${
+            className={`flex items-center gap-1.5 px-2.5 py-[5px] text-sm font-medium rounded-md transition-colors duration-150 whitespace-nowrap ${
               active === mode.id
                 ? 'bg-background text-foreground shadow-sm'
                 : 'text-muted-foreground hover:text-foreground'
@@ -215,7 +215,7 @@ export function ViewModeBar({
             onClick={() => setOpen((v) => !v)}
             title="표 스타일 설정"
             aria-label="표 스타일 설정"
-            className={`p-[6px] rounded-lg border transition-all duration-150 ${
+            className={`p-[6px] rounded-lg border transition-colors duration-150 ${
               open
                 ? 'border-primary/40 bg-primary/10 text-primary'
                 : 'border-transparent text-muted-foreground hover:text-foreground hover:border-border/60 hover:bg-secondary/70'
@@ -228,12 +228,12 @@ export function ViewModeBar({
           {open && (
             <div
               ref={panelRef}
-              className="absolute right-0 top-full mt-1.5 z-50 w-56 bg-card border border-border/50 rounded-xl shadow-2xl overflow-hidden"
+              className="absolute right-0 top-full mt-1.5 z-50 w-56 bg-card border border-border/50 rounded-md shadow-2xl overflow-hidden"
               style={{ boxShadow: '0 8px 32px rgba(0,0,0,0.35), 0 1px 0 rgba(255,255,255,0.05)' }}
             >
               {/* header */}
               <div className="px-3 py-2 border-b border-border/25 flex items-center justify-between">
-                <span className="text-xs font-semibold tracking-widest uppercase text-muted-foreground">
+                <span className="text-xs font-medium text-muted-foreground">
                   표 스타일
                 </span>
                 <div className="flex items-center gap-1 text-muted-foreground">
@@ -245,7 +245,7 @@ export function ViewModeBar({
                         : style.headerTheme === 'indigo'
                         ? 'bg-indigo-400'
                         : style.headerTheme === 'emerald'
-                        ? 'bg-status-healthy'
+                        ? 'bg-chart-2'
                         : 'bg-slate-400'
                     }`}
                   />

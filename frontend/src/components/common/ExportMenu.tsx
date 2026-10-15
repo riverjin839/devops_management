@@ -60,7 +60,7 @@ export function ExportMenu({ targetRef, filenameBase, disabled }: ExportMenuProp
         내보내기 <ChevronDown className="w-3 h-3" />
       </button>
       {open && (
-        <div className="absolute right-0 mt-1 z-50 min-w-[140px] rounded-lg border border-border bg-card shadow-lg py-1">
+        <div className="absolute right-0 mt-1 z-50 min-w-[140px] rounded-md border border-border bg-card shadow-lg py-1">
           {ITEMS.map(({ fmt, label, icon: Icon }) => (
             <button
               key={fmt}

@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
 import { PageHeader } from '@/components/common/PageHeader';
+import { StatTile, StatTileRow } from '@/components/common/StatTile';
 import { useSearchParams } from 'react-router-dom';
 import {
   AlertTriangle,
@@ -19,7 +20,7 @@ import {
 import { useClusters } from '@/hooks/useCluster';
 import { useClusterStore } from '@/stores/clusterStore';
 import { clustersApi } from '@/services/api';
-import { ResizeGrip, DoubleScrollX} from '@/components/common';
+import { ResizeGrip, DoubleScrollX, PageShell } from '@/components/common';
 import { useColumnWidths } from '@/hooks/useColumnWidths';
 import { MacCard } from '@/components/ui/MacCard';
 
@@ -191,33 +192,6 @@ function CopyButton({ value, className = '' }: { value: string; className?: stri
   );
 }
 
-interface StatTileProps {
-  label: string;
-  value: string;
-  accent?: 'default' | 'primary' | 'success';
-}
-
-function StatTile({ label, value, accent = 'default' }: StatTileProps) {
-  const accentCls =
-    accent === 'primary' ? 'text-primary' :
-    accent === 'success' ? 'text-status-healthy' : 'text-foreground';
-  return (
-    <div className="group relative bg-secondary/40 hover:bg-secondary/70 border border-border rounded-lg px-3 py-2.5 transition-colors">
-      <div className="flex items-center justify-between mb-1">
-        <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-          {label}
-        </span>
-        <span className="opacity-0 group-hover:opacity-100 transition-opacity">
-          <CopyButton value={value} />
-        </span>
-      </div>
-      <div className={`font-mono text-sm tabular-nums truncate ${accentCls}`} title={value}>
-        {value}
-      </div>
-    </div>
-  );
-}
-
 /**
  * 한 쌍의 겹침을 "A ↔ B + 겹치는 IP 구간" 형태로 보여준다.
  * 가독성 개선의 핵심: 좌/우 어느 쪽이 어느 CIDR 인지, 그리고 *어디까지* 겹치는지를
@@ -233,11 +207,11 @@ interface OverlapPairProps {
 }
 
 const HUE_TOKENS = {
-  amber:   { bg: 'bg-status-warning/10',   border: 'border-status-warning/30',   dot: 'bg-status-warning',   text: 'text-status-warning' },
-  rose:    { bg: 'bg-status-critical/10',    border: 'border-status-critical/30',    dot: 'bg-status-critical',    text: 'text-status-critical' },
-  fuchsia: { bg: 'bg-fuchsia-500/10', border: 'border-fuchsia-500/30', dot: 'bg-fuchsia-500', text: 'text-fuchsia-600' },
-  orange:  { bg: 'bg-orange-500/10',  border: 'border-orange-500/30',  dot: 'bg-orange-500',  text: 'text-orange-600' },
-  cyan:    { bg: 'bg-cyan-500/10',    border: 'border-cyan-500/30',    dot: 'bg-cyan-500',    text: 'text-cyan-600' },
+  amber:   { bg: 'bg-chart-3/10', border: 'border-chart-3/30', dot: 'bg-chart-3', text: 'text-chart-3' },
+  rose:    { bg: 'bg-chart-5/10', border: 'border-chart-5/30', dot: 'bg-chart-5', text: 'text-chart-5' },
+  fuchsia: { bg: 'bg-chart-4/10', border: 'border-chart-4/30', dot: 'bg-chart-4', text: 'text-chart-4' },
+  orange:  { bg: 'bg-chart-7/10', border: 'border-chart-7/30', dot: 'bg-chart-7', text: 'text-chart-7' },
+  cyan:    { bg: 'bg-chart-6/10', border: 'border-chart-6/30', dot: 'bg-chart-6', text: 'text-chart-6' },
 } as const;
 
 function OverlapPair({ leftLabel, leftCidr, rightLabel, rightCidr, hue = 'amber' }: OverlapPairProps) {
@@ -261,7 +235,7 @@ function OverlapPair({ leftLabel, leftCidr, rightLabel, rightCidr, hue = 'amber'
       </div>
       {overlap && (
         <div className="mt-1.5 pt-1.5 border-t border-border/40 flex items-center gap-1.5 text-xs">
-          <span className="uppercase tracking-wider text-muted-foreground">겹침 구간</span>
+          <span className="text-muted-foreground">겹침 구간</span>
           <span className="font-mono tabular-nums text-foreground truncate">
             {overlap.start} – {overlap.end}
           </span>
@@ -442,30 +416,34 @@ export function CidrCalculatorPage() {
 
   return (
     <div className="app-min-h-screen bg-background">
-      <main className="max-w-[1440px] mx-auto px-6 py-6 space-y-5">
+      <PageShell density="hub" className="space-y-5">
         {/* ── Page Header ─────────────────────────────────────────────────── */}
-        <header className="flex items-center justify-between gap-4 flex-wrap">
-          <PageHeader icon={Calculator} title="CIDR 계산기" description="서브넷 계산 · 분할 · 충돌 검사" className="flex-1 min-w-0" />
-          <div className="flex items-center gap-3 text-xs text-muted-foreground">
-            <span className="inline-flex items-center gap-1.5">
-              <span className="w-1.5 h-1.5 rounded-full bg-status-info" /> Private (RFC1918)
-            </span>
-            <span className="inline-flex items-center gap-1.5">
-              <span className="w-1.5 h-1.5 rounded-full bg-status-warning" /> Public
-            </span>
-          </div>
-        </header>
+        <PageHeader
+          icon={Calculator}
+          title="CIDR 계산기"
+          description="서브넷 계산 · 분할 · 충돌 검사"
+          actions={
+            <div className="flex items-center gap-3 text-xs text-muted-foreground">
+              <span className="inline-flex items-center gap-1.5">
+                <span className="w-1.5 h-1.5 rounded-full bg-chart-1" /> Private (RFC1918)
+              </span>
+              <span className="inline-flex items-center gap-1.5">
+                <span className="w-1.5 h-1.5 rounded-full bg-chart-3" /> Public
+              </span>
+            </div>
+          }
+        />
 
         {/* ── HERO: input + summary ──────────────────────────────────────── */}
-        <MacCard title="CIDR INPUT" bodyPadding="p-0">
+        <MacCard title="CIDR 입력" bodyPadding="p-0">
           <div className="grid grid-cols-1 lg:grid-cols-[1.05fr,1fr] divide-y lg:divide-y-0 lg:divide-x divide-border">
             {/* Left: input + slider */}
             <div className="p-5 lg:p-6">
               <label
                 htmlFor="cidr-input-main"
-                className="block text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2"
+                className="block text-xs font-medium text-muted-foreground mb-2"
               >
-                CIDR Notation
+                CIDR 표기
               </label>
               <div className="relative">
                 <input
@@ -478,7 +456,7 @@ export function CidrCalculatorPage() {
                   className={[
                     'w-full px-4 py-3 pr-36 bg-secondary/60 border border-border rounded-xl',
                     'text-lg font-mono tabular-nums tracking-tight',
-                    'focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary transition-all',
+                    'focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary transition-colors',
                     inputError ? 'border-status-critical/60 focus:ring-status-critical/30' : '',
                   ].join(' ')}
                 />
@@ -491,8 +469,8 @@ export function CidrCalculatorPage() {
                       className={[
                         'px-2 py-0.5 text-xs font-semibold rounded-md border inline-flex items-center gap-1',
                         isPrivate
-                          ? 'bg-status-info/10 text-status-info border-status-info/30'
-                          : 'bg-status-warning/10 text-status-warning border-status-warning/30',
+                          ? 'bg-chart-1/10 text-chart-1 border-chart-1/30'
+                          : 'bg-chart-3/10 text-chart-3 border-chart-3/30',
                       ].join(' ')}
                     >
                       {isPrivate ? <Lock className="w-2.5 h-2.5" /> : <Globe className="w-2.5 h-2.5" />}
@@ -512,18 +490,18 @@ export function CidrCalculatorPage() {
               {/* Address space slider */}
               {info && (
                 <div className="mt-6">
-                  <div className="flex items-center justify-between text-xs uppercase tracking-wider text-muted-foreground mb-2">
-                    <span>Address Space</span>
+                  <div className="flex items-center justify-between text-xs font-medium text-muted-foreground mb-2">
+                    <span>주소 공간</span>
                     <span className="font-mono tabular-nums">/{info.prefix}</span>
                   </div>
                   <div className="relative h-2 bg-secondary rounded-full overflow-visible">
                     <div
-                      className="absolute inset-y-0 left-0 bg-gradient-to-r from-primary/50 to-primary rounded-full transition-all"
+                      className="absolute inset-y-0 left-0 bg-primary rounded-full transition-[width]"
                       style={{ width: `${sliderPct}%` }}
                     />
                     <div
-                      className="absolute top-1/2 -translate-y-1/2 -translate-x-1/2 w-3.5 h-3.5 bg-card border-2 border-primary rounded-full transition-all"
-                      style={{ left: `${sliderPct}%`, boxShadow: '0 1px 4px rgba(0,0,0,0.12)' }}
+                      className="absolute top-1/2 -translate-y-1/2 -translate-x-1/2 w-3.5 h-3.5 bg-card border-2 border-primary rounded-full transition-[left]"
+                      style={{ left: `${sliderPct}%` }}
                       aria-hidden
                     />
                   </div>
@@ -543,8 +521,8 @@ export function CidrCalculatorPage() {
               <div className="p-5 lg:p-6 bg-muted/30">
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <div className="text-xs uppercase tracking-wider text-muted-foreground mb-1">
-                      Usable Hosts
+                    <div className="text-xs font-medium text-muted-foreground mb-1">
+                      사용 가능 호스트
                     </div>
                     <div className="text-3xl font-bold tabular-nums text-primary leading-none">
                       {formatHosts(info.usableHosts)}
@@ -554,8 +532,8 @@ export function CidrCalculatorPage() {
                     </div>
                   </div>
                   <div>
-                    <div className="text-xs uppercase tracking-wider text-muted-foreground mb-1">
-                      Total
+                    <div className="text-xs font-medium text-muted-foreground mb-1">
+                      전체 주소
                     </div>
                     <div className="text-3xl font-bold tabular-nums text-foreground leading-none">
                       {formatHosts(info.totalHosts)}
@@ -567,13 +545,13 @@ export function CidrCalculatorPage() {
                 </div>
 
                 <div className="mt-4 pt-4 border-t border-border">
-                  <div className="text-xs uppercase tracking-wider text-muted-foreground mb-2">
-                    Host Range
+                  <div className="text-xs font-medium text-muted-foreground mb-2">
+                    호스트 범위
                   </div>
                   <div className="flex items-center gap-2 font-mono tabular-nums text-sm">
-                    <span className="text-status-healthy font-medium">{info.firstHost}</span>
+                    <span className="text-foreground font-medium">{info.firstHost}</span>
                     <ArrowRight className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
-                    <span className="text-status-healthy font-medium">{info.lastHost}</span>
+                    <span className="text-foreground font-medium">{info.lastHost}</span>
                     <CopyButton value={`${info.firstHost} - ${info.lastHost}`} className="ml-auto" />
                   </div>
                 </div>
@@ -588,19 +566,19 @@ export function CidrCalculatorPage() {
 
         {/* ── Network Details (tiles + binary mask) ──────────────────────── */}
         {info && (
-          <MacCard title="Network Details">
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-2.5">
-              <StatTile label="Network" value={`${info.network}/${info.prefix}`} accent="primary" />
-              <StatTile label="Broadcast" value={info.broadcast} />
-              <StatTile label="Subnet Mask" value={info.mask} />
-              <StatTile label="Wildcard" value={info.wildcard} />
-            </div>
+          <MacCard title="네트워크 정보">
+            <StatTileRow>
+              <StatTile label="네트워크" value={`${info.network}/${info.prefix}`} hint={<CopyButton value={`${info.network}/${info.prefix}`} />} />
+              <StatTile label="브로드캐스트" value={info.broadcast} hint={<CopyButton value={info.broadcast} />} />
+              <StatTile label="서브넷 마스크" value={info.mask} hint={<CopyButton value={info.mask} />} />
+              <StatTile label="와일드카드" value={info.wildcard} hint={<CopyButton value={info.wildcard} />} />
+            </StatTileRow>
 
             {/* Binary mask visualization */}
             <div className="mt-4 p-3.5 bg-secondary/40 border border-border rounded-lg">
               <div className="flex items-center justify-between mb-2 flex-wrap gap-2">
-                <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                  Binary Mask
+                <span className="text-xs font-medium text-muted-foreground">
+                  이진 마스크
                 </span>
                 <div className="flex items-center gap-3 text-xs text-muted-foreground">
                   <span className="inline-flex items-center gap-1.5">
@@ -673,12 +651,12 @@ export function CidrCalculatorPage() {
           <div className="space-y-5 min-w-0">
             {/* Subnet divider */}
             {info && (
-              <MacCard title="서브넷 분할 (SUBNET DIVIDER)">
+              <MacCard title="서브넷 분할">
                 <div className="flex items-end gap-3 flex-wrap">
                   <div className="flex-shrink-0">
                     <label
                       htmlFor="cidr-divide-count"
-                      className="block text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-1.5"
+                      className="block text-xs font-medium text-muted-foreground mb-1.5"
                     >
                       분할 개수
                     </label>
@@ -748,12 +726,11 @@ export function CidrCalculatorPage() {
             )}
 
             {/* Multi-CIDR comparator — 같은 충돌 그룹은 같은 색으로 묶어 표시 */}
-            <MacCard title="멀티 CIDR 비교 (OVERLAP CHECK)">
-              <div className="flex items-center justify-between mb-3">
-                <p className="text-xs text-muted-foreground inline-flex items-center gap-1.5">
-                  <GitCompare className="w-3.5 h-3.5" />
-                  여러 CIDR 블록의 주소 충돌을 한눈에 확인합니다 — 같은 색은 서로 겹치는 그룹
-                </p>
+            {/* D-122: 설명+추가 버튼 수제 행 → 추가 버튼은 헤더 actions, 설명은 본문 첫 줄 */}
+            <MacCard
+              title="멀티 CIDR 겹침 비교"
+              icon={GitCompare}
+              actions={
                 <button
                   type="button"
                   onClick={addEntry}
@@ -762,7 +739,11 @@ export function CidrCalculatorPage() {
                   <Plus className="w-3 h-3" />
                   추가
                 </button>
-              </div>
+              }
+            >
+              <p className="mb-3 text-xs text-muted-foreground">
+                여러 CIDR 블록의 주소 충돌을 한눈에 확인합니다 — 같은 색은 서로 겹치는 그룹
+              </p>
 
               <div className="space-y-2 mb-4">
                 {entries.map((entry) => {
@@ -815,23 +796,23 @@ export function CidrCalculatorPage() {
                   </colgroup>
                   <thead>
                     <tr className="bg-muted/40 border-b border-border">
-                      <th className="relative text-left py-2 px-3 text-muted-foreground font-medium uppercase text-xs tracking-wider">
+                      <th className="relative text-left py-2 px-3 text-muted-foreground font-medium text-xs">
                         Label
                         <ResizeGrip onMouseDown={(e) => compareColW.beginResize('label', e)} onDoubleClick={() => compareColW.autoFit('label')} />
                       </th>
-                      <th className="relative text-left py-2 px-3 text-muted-foreground font-medium uppercase text-xs tracking-wider">
+                      <th className="relative text-left py-2 px-3 text-muted-foreground font-medium text-xs">
                         Network
                         <ResizeGrip onMouseDown={(e) => compareColW.beginResize('network', e)} onDoubleClick={() => compareColW.autoFit('network')} />
                       </th>
-                      <th className="relative text-left py-2 px-3 text-muted-foreground font-medium uppercase text-xs tracking-wider">
+                      <th className="relative text-left py-2 px-3 text-muted-foreground font-medium text-xs">
                         Mask
                         <ResizeGrip onMouseDown={(e) => compareColW.beginResize('mask', e)} onDoubleClick={() => compareColW.autoFit('mask')} />
                       </th>
-                      <th className="relative text-right py-2 px-3 text-muted-foreground font-medium uppercase text-xs tracking-wider">
+                      <th className="relative text-right py-2 px-3 text-muted-foreground font-medium text-xs">
                         Usable
                         <ResizeGrip onMouseDown={(e) => compareColW.beginResize('hosts', e)} onDoubleClick={() => compareColW.autoFit('hosts')} />
                       </th>
-                      <th className="relative text-left py-2 px-3 text-muted-foreground font-medium uppercase text-xs tracking-wider">
+                      <th className="relative text-left py-2 px-3 text-muted-foreground font-medium text-xs">
                         겹침 상대
                         <ResizeGrip onMouseDown={(e) => compareColW.beginResize('overlap', e)} onDoubleClick={() => compareColW.autoFit('overlap')} />
                       </th>
@@ -896,9 +877,9 @@ export function CidrCalculatorPage() {
                                 })}
                               </div>
                             ) : ei ? (
-                              <span className="inline-flex items-center gap-1 text-xs px-1.5 py-0.5 rounded-md bg-status-healthy/10 text-status-healthy border border-status-healthy/30">
+                              <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
                                 <Check className="w-2.5 h-2.5" />
-                                clean
+                                겹침 없음
                               </span>
                             ) : (
                               <span className="text-muted-foreground/40">—</span>
@@ -950,7 +931,7 @@ export function CidrCalculatorPage() {
           <div className="space-y-5 min-w-0">
             {/* Apply to cluster */}
             {info && clusters.length > 0 && (
-              <MacCard title="클러스터에 적용 (APPLY)">
+              <MacCard title="클러스터에 적용">
                 <p className="text-xs text-muted-foreground mb-3 inline-flex items-center gap-1.5">
                   <ExternalLink className="w-3 h-3" />
                   계산된 Network CIDR 을 클러스터 메타정보에 저장
@@ -959,9 +940,9 @@ export function CidrCalculatorPage() {
                 <div className="space-y-2">
                   <label
                     htmlFor="cidr-apply-cluster-select"
-                    className="block text-xs font-semibold uppercase tracking-wider text-muted-foreground"
+                    className="block text-xs font-medium text-muted-foreground"
                   >
-                    Target Cluster
+                    대상 클러스터
                   </label>
                   <select
                     id="cidr-apply-cluster-select"
@@ -981,7 +962,7 @@ export function CidrCalculatorPage() {
                 {/* Preview of what will be saved */}
                 {applyClusterId && (
                   <div className="mt-3 p-3 bg-secondary/40 border border-border rounded-lg">
-                    <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">
+                    <div className="text-xs font-medium text-muted-foreground mb-2">
                       저장될 값
                     </div>
                     <dl className="space-y-1 text-sm font-mono tabular-nums">
@@ -991,11 +972,11 @@ export function CidrCalculatorPage() {
                       </div>
                       <div className="flex justify-between gap-2">
                         <dt className="text-muted-foreground">first_host</dt>
-                        <dd className="text-status-healthy truncate">{info.firstHost}</dd>
+                        <dd className="text-foreground truncate">{info.firstHost}</dd>
                       </div>
                       <div className="flex justify-between gap-2">
                         <dt className="text-muted-foreground">last_host</dt>
-                        <dd className="text-status-healthy truncate">{info.lastHost}</dd>
+                        <dd className="text-foreground truncate">{info.lastHost}</dd>
                       </div>
                     </dl>
                   </div>
@@ -1052,7 +1033,7 @@ export function CidrCalculatorPage() {
             )}
 
             {/* Quick reference */}
-            <MacCard title="QUICK REFERENCE">
+            <MacCard title="prefix 빠른 참조">
               <p className="text-xs text-muted-foreground mb-3 inline-flex items-center gap-1.5">
                 <BookOpen className="w-3 h-3" />
                 자주 쓰이는 prefix별 호스트 수
@@ -1076,7 +1057,7 @@ export function CidrCalculatorPage() {
             </MacCard>
           </div>
         </div>
-      </main>
+      </PageShell>
     </div>
   );
 }

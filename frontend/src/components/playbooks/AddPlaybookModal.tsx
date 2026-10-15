@@ -384,7 +384,7 @@ export function AddPlaybookModal({
         role="dialog"
         aria-modal="true"
         aria-labelledby={titleId}
-        className="relative bg-card border border-border rounded-xl shadow-xl w-full max-w-3xl max-h-[90vh] overflow-y-auto p-6"
+        className="relative bg-card border border-border rounded-md shadow-xl w-full max-w-3xl max-h-[90vh] overflow-y-auto p-6"
       >
         <div className="flex items-center justify-between mb-4">
           <h2 id={titleId} className="text-lg font-semibold">{initialData ? 'Edit Playbook' : 'Register Playbook'}</h2>
@@ -519,7 +519,7 @@ export function AddPlaybookModal({
                     <option value="">— 선택 안 함 (Ansible 기본 inventory 사용) —</option>
                     {inventories.map((i) => (
                       <option key={i.id} value={i.id}>
-                        {i.isDefault ? '★ ' : ''}{i.name}{i.description ? ` — ${i.description}` : ''}
+                        {i.name}{i.isDefault ? ' (기본)' : ''}{i.description ? ` — ${i.description}` : ''}
                       </option>
                     ))}
                   </select>

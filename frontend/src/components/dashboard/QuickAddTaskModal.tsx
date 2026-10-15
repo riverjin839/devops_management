@@ -42,7 +42,7 @@ interface QuickAddTaskModalProps {
 const PRIORITY_OPTIONS: { value: 'high' | 'medium' | 'low'; label: string; dot: string }[] = [
   { value: 'high',   label: '높음', dot: 'bg-status-critical' },
   { value: 'medium', label: '보통', dot: 'bg-status-warning' },
-  { value: 'low',    label: '낮음', dot: 'bg-status-healthy' },
+  { value: 'low',    label: '낮음', dot: 'bg-muted-foreground/40' },
 ];
 
 
@@ -210,7 +210,7 @@ export function QuickAddTaskModal({
             clusterName: cluster?.name,
           },
         });
-        toast.success('업무 수정 완료', trimmedTitle);
+        toast.success('업무 수정됨', trimmedTitle);
         onSaved?.();
         onClose();
         return;
@@ -232,7 +232,7 @@ export function QuickAddTaskModal({
       });
       const typeLabel = WORK_ITEM_TYPE_CONFIG[selectedType].label;
       toast.success(
-        parentItem ? '하위 업무 등록 완료' : `${typeLabel} 등록 완료`,
+        parentItem ? '하위 업무 추가 완료' : `${typeLabel} 등록 완료`,
         `${formatDateLabel(effectiveDate)} · ${time}`,
       );
       // 연동이 켜져 있으면 바로 Jira/Confluence 생성 단계로 이어준다 — PEP 저장은
@@ -257,7 +257,7 @@ export function QuickAddTaskModal({
         aria-modal="true"
         aria-labelledby={f('heading')}
         onSubmit={handleSubmit}
-        className="relative bg-card border border-border rounded-2xl shadow-card w-full max-w-md mx-4 max-h-[92vh] overflow-y-auto"
+        className="relative bg-card border border-border rounded-md shadow-card w-full max-w-md mx-4 max-h-[92vh] overflow-y-auto"
       >
         {/* Header */}
         <div className="flex items-center gap-3 px-5 pt-5 pb-3">
@@ -266,7 +266,7 @@ export function QuickAddTaskModal({
           </div>
           <div className="min-w-0 flex-1">
             <h2 id={f('heading')} className="text-base font-semibold leading-tight">
-              {isEdit ? '업무 수정' : parentItem ? '하위 업무 등록' : '업무 등록'}
+              {isEdit ? '업무 수정' : parentItem ? '하위 업무 추가' : '업무 추가'}
             </h2>
             <p className="text-xs text-muted-foreground">{formatDateLabel(effectiveDate)}</p>
           </div>
@@ -321,7 +321,7 @@ export function QuickAddTaskModal({
                       aria-pressed={active}
                       className={`flex-1 flex flex-col items-center justify-center gap-1 px-2 py-2 rounded-xl border text-xs font-medium transition-colors ${
                         active
-                          ? `${cfg.cls} border-current ring-2 ring-primary/30`
+                          ? `${cfg.cls} border-current ring-1 ring-primary/30`
                           : 'bg-secondary border-border text-muted-foreground hover:text-foreground hover:bg-secondary/80'
                       }`}
                     >
@@ -463,7 +463,7 @@ export function QuickAddTaskModal({
               ) : (
                 <CheckCircle2 className="w-3.5 h-3.5" />
               )}
-              {isEdit ? (busy ? '저장 중…' : '저장') : (busy ? '등록 중…' : '업무 등록')}
+              {isEdit ? (busy ? '저장 중…' : '저장') : (busy ? '추가 중…' : '업무 추가')}
             </button>
           </div>
         </div>

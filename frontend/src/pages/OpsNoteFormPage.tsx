@@ -2,7 +2,8 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { PageHeader } from '@/components/common/PageHeader';
 import { ArrowLeft, HelpCircle } from 'lucide-react';
 import { OpsNoteForm } from '@/components/ops-notes';
-import { cn } from '@/lib/utils';
+import { PageShell } from '@/components/common';
+import { MacCard } from '@/components/ui/MacCard';
 
 export function OpsNoteFormPage() {
   const navigate = useNavigate();
@@ -12,8 +13,8 @@ export function OpsNoteFormPage() {
 
   return (
     <div className="app-min-h-screen bg-background">
-      <div className="sticky top-0 z-10 bg-background/85 backdrop-blur-md border-b border-border">
-        <div className="max-w-[1400px] mx-auto px-8 py-2.5 flex items-center gap-2">
+      <div className="sticky top-0 z-10 bg-background border-b border-border">
+        <div className="max-w-4xl mx-auto px-8 py-2.5 flex items-center gap-2">
           <button
             onClick={() => navigate('/ops-notes')}
             className="p-1.5 hover:bg-secondary rounded-lg transition-colors text-muted-foreground hover:text-foreground"
@@ -27,10 +28,10 @@ export function OpsNoteFormPage() {
         </div>
       </div>
 
-      <main className="max-w-[1400px] mx-auto px-8 pt-10 pb-16">
+      <PageShell density="doc">
         <PageHeader title="새 Q&A" description="서비스, 질문, 답변, 히스토리를 입력하세요." className="mb-8" />
 
-        <div className={cn('border border-border rounded-2xl p-8 shadow-card', 'bg-card')}>
+        <MacCard title="Q&A 정보" bodyPadding="p-8">
           <OpsNoteForm
             defaultService={defaultService}
             onCancel={() => navigate('/ops-notes')}
@@ -39,8 +40,8 @@ export function OpsNoteFormPage() {
               else navigate('/ops-notes');
             }}
           />
-        </div>
-      </main>
+        </MacCard>
+      </PageShell>
     </div>
   );
 }

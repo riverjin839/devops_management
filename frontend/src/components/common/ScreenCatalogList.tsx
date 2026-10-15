@@ -1,6 +1,7 @@
 import { useMemo, useState, type ReactNode } from 'react';
 import { Search } from 'lucide-react';
 import { useNavCatalog, groupLabelForPath } from '@/hooks/useNavCatalog';
+import { EmptyState } from './EmptyState';
 
 const UNGROUPED_LABEL = '기타';
 
@@ -76,13 +77,12 @@ export function ScreenCatalogList({
 
       <div className="overflow-y-auto space-y-4 pr-1" style={{ maxHeight: maxHeight ?? '55vh' }}>
         {grouped.length === 0 && (
-          <p className="py-10 text-center text-sm text-muted-foreground">
-            {emptyText ?? '조건에 맞는 화면이 없습니다.'}
-          </p>
+          <EmptyState compact icon={Search} title={emptyText ?? '조건에 맞는 화면이 없습니다.'}
+            description={emptyText ? undefined : '검색어를 바꾸거나 지워 보세요.'} />
         )}
         {grouped.map((group) => (
           <div key={group.label}>
-            <p className="mb-1.5 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+            <p className="mb-1.5 text-xs font-medium text-muted-foreground">
               {group.label}
             </p>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-1">

@@ -320,7 +320,7 @@ export function PodLogStream({
           <History className="w-3.5 h-3.5" /> previous
         </label>
         {streaming ? (
-          <button onClick={stop} className="inline-flex items-center gap-1.5 rounded-xl bg-status-critical/90 text-white px-3 py-1.5 text-sm font-medium hover:bg-status-critical">
+          <button onClick={stop} className="inline-flex items-center gap-1.5 rounded-xl border border-border bg-secondary text-foreground px-3 py-1.5 text-sm font-medium hover:bg-muted">
             <Square className="w-3.5 h-3.5" /> 중지
           </button>
         ) : (

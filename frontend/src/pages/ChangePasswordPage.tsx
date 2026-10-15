@@ -63,9 +63,9 @@ export function ChangePasswordPage() {
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-background px-4">
-      <div className="w-full max-w-md bg-card border border-border rounded-2xl p-6 shadow-card">
+      <div className="w-full max-w-md bg-card border border-border rounded-md p-6 shadow-card">
         <div className="flex items-center gap-2 mb-5">
-          <div className="w-9 h-9 bg-gradient-to-br from-primary to-status-info rounded-md flex items-center justify-center text-white">
+          <div className="w-9 h-9 bg-primary rounded-md flex items-center justify-center text-primary-foreground">
             <KeyRound className="w-4 h-4" />
           </div>
           <div>

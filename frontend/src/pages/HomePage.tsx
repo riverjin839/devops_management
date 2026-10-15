@@ -104,6 +104,7 @@ export function HomePage() {
 
   return (
     <div className="app-h-screen overflow-hidden bg-background flex flex-col">
+      <h1 className="sr-only">홈</h1>
 
       {/* ── 세그먼트 탭 — 홈 본문에서 뭘 볼지 고르는 로컬 선택. 예전엔 사이드바 전체를
           게이팅하는 "모드"였지만(D-054), 지금은 이 홈 화면 안에서만 의미가 있다.
@@ -111,7 +112,7 @@ export function HomePage() {
           제거해 이 탭 줄이 홈의 최상단이 됐다 — 신호는 위험/실패가 있을 때만 뜨는
           탭 배지 하나로 압축했다. 플랫폼 탭일 때는 오른쪽에 매트릭스 툴바(portal slot)를
           같은 줄에 이어 붙여 카드 헤더 줄 하나를 통째로 줄인다. ───────── */}
-      <div className="flex-none flex items-center gap-2 px-3 lg:px-4 py-2 border-b border-border bg-background/95 backdrop-blur">
+      <div className="flex-none flex items-center gap-2 px-3 lg:px-4 py-2 border-b border-border bg-background">
         <div
           role="tablist"
           aria-label="홈 화면 보기"
@@ -219,34 +220,29 @@ export function HomePage() {
           <div className="grid grid-cols-10 gap-3 xl:flex-1 xl:min-h-0">
 
             {/* ── 당일 시간단위 스케줄 (담당자 기준) (4/10) ─────────────────── */}
+            {/* D-122: 수제 헤더 바 → MacCard title/icon 슬롯 */}
             <MacCard
+              title="당일 스케줄"
+              icon={CalendarClock}
               rootClassName="col-span-10 xl:col-span-4 flex flex-col min-h-[420px] xl:min-h-0"
               bodyPadding="p-0"
               className="flex-1 min-h-0 flex flex-col"
             >
-              <div className="flex-none flex items-center gap-2 px-4 py-2.5 border-b border-border bg-muted/40">
-                <CalendarClock className="w-3.5 h-3.5 text-primary" />
-                <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground select-none">
-                  당일 스케줄
-                </span>
-              </div>
               <div className="flex-1 min-h-0 p-3">
                 <DayScheduleBoard selectedClusterId={null} />
               </div>
             </MacCard>
 
             {/* ── 담당자별 진행 현황 (주간 / 월간 / 담당자) (6/10) ──────────── */}
+            {/* D-122: 제목+주간/월간/담당자 토글 수제 헤더 바 → MacCard title·actions 슬롯 */}
             <MacCard
+              title="담당자별 진행 현황"
+              icon={CalendarDays}
               rootClassName="col-span-10 xl:col-span-6 flex flex-col min-h-[420px] xl:min-h-0"
               bodyPadding="p-0"
               className="flex-1 min-h-0 flex flex-col"
-            >
-              <div className="flex-none flex items-center gap-2 px-4 py-2.5 border-b border-border bg-muted/40">
-                <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground select-none">
-                  담당자별 진행 현황
-                </span>
-                <CalendarDays className="w-3.5 h-3.5 text-primary" />
-                <div className="ml-auto flex items-center rounded-md border border-border overflow-hidden text-xs">
+              actions={
+                <div className="flex items-center rounded-md border border-border overflow-hidden text-xs">
                   <button
                     onClick={() => setWeeklyTab('week')}
                     className={cn(
@@ -275,7 +271,8 @@ export function HomePage() {
                     담당자
                   </button>
                 </div>
-              </div>
+              }
+            >
               <div className="flex-1 min-h-0 overflow-hidden">
                 {weeklyTab === 'week' && (
                   <div className="h-full overflow-y-auto p-3"><WeeklyStatusTimeline selectedClusterId={null} /></div>

@@ -10,6 +10,7 @@ import {
 } from 'recharts';
 import type { AxiosError } from 'axios';
 import { MacCard } from '@/components/ui/MacCard';
+import { EmptyState } from '@/components/common/EmptyState';
 import type { DailyCheckTrend } from '@/types';
 import { parseUTC } from '@/lib/utils';
 
@@ -39,11 +40,11 @@ export function TrendChart({ trend, days = 7, isError, error }: Props) {
   }
   if (!trend || trend.points.length === 0) {
     return (
-      <MacCard title={`최근 ${days}일 추이`}>
-        <div className="text-sm text-muted-foreground italic">
-          최근 {days}일간의 점검 기록이 없습니다.
-        </div>
-      </MacCard>
+      <EmptyState
+        compact
+        title={`최근 ${days}일 추이 없음`}
+        description={`최근 ${days}일간 기본 점검 기록이 없습니다. 상단의 「기본 점검 실행」이나 예약 점검이 돌면 에러·경고·노드 추이가 그려집니다.`}
+      />
     );
   }
 

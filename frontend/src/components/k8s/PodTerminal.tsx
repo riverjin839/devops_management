@@ -129,7 +129,7 @@ export function PodTerminal({ clusterId, namespace, pod, container: initialConta
   }, [connect]);
 
   const statusColor =
-    status === 'open' ? 'text-status-healthy' : status === 'error' ? 'text-status-critical' : 'text-muted-foreground';
+    status === 'open' ? 'text-muted-foreground' : status === 'error' ? 'text-status-critical' : 'text-muted-foreground';
   const containers = containersData?.containers?.filter((c) => !c.init) ?? [];
 
   return (
@@ -139,7 +139,7 @@ export function PodTerminal({ clusterId, namespace, pod, container: initialConta
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center gap-2 px-4 py-2.5 border-b border-zinc-700 bg-zinc-800">
-          <TerminalIcon className="w-4 h-4 text-status-healthy" />
+          <TerminalIcon className="w-4 h-4 text-muted-foreground" />
           <span className="text-sm font-medium truncate">{namespace}/{pod}</span>
           {containers.length > 1 ? (
             <select

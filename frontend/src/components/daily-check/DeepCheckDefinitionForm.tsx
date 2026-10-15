@@ -417,7 +417,7 @@ export function DeepCheckDefinitionForm({
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div className="space-y-1">
-      <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+      <div className="text-xs font-semibold text-muted-foreground">
         {label}
       </div>
       {children}
@@ -507,8 +507,8 @@ function FieldGroup({
 }) {
   if (fields.length === 0) return null;
   return (
-    <div className="rounded-xl border border-border bg-card/50 p-3 space-y-2">
-      <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+    <div className="rounded-md bg-secondary/40 p-3 space-y-2">
+      <div className="text-xs font-semibold text-muted-foreground">
         {title}
       </div>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">

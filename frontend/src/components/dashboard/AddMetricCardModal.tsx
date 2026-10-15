@@ -13,11 +13,11 @@ interface AddMetricCardModalProps {
 }
 
 const CATEGORY_OPTIONS = [
-  { value: 'alert', label: 'Alert', icon: '🚨' },
-  { value: 'resource', label: 'Resource', icon: '⚡' },
-  { value: 'storage', label: 'Storage', icon: '💾' },
-  { value: 'network', label: 'Network', icon: '🌐' },
-  { value: 'general', label: 'General', icon: '📊' },
+  { value: 'alert', label: 'Alert' },
+  { value: 'resource', label: 'Resource' },
+  { value: 'storage', label: 'Storage' },
+  { value: 'network', label: 'Network' },
+  { value: 'general', label: 'General' },
 ];
 
 const DISPLAY_TYPES = [
@@ -310,7 +310,7 @@ export function AddMetricCardModal({ isOpen, onClose, editingCard }: AddMetricCa
         role="dialog"
         aria-modal="true"
         aria-labelledby={titleHeadingId}
-        className="bg-card border border-border rounded-2xl shadow-xl w-full max-w-3xl mx-4 max-h-[90vh] overflow-y-auto"
+        className="bg-card border border-border rounded-md shadow-xl w-full max-w-3xl mx-4 max-h-[90vh] overflow-y-auto"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between px-6 py-4 border-b border-border sticky top-0 bg-card rounded-t-2xl z-10">
@@ -377,7 +377,7 @@ export function AddMetricCardModal({ isOpen, onClose, editingCard }: AddMetricCa
           </div>
 
           <div>
-            <p className="block text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-2">
+            <p className="block text-sm font-semibold text-muted-foreground mb-2">
               Quick Templates
             </p>
             <div className="space-y-3">
@@ -392,7 +392,7 @@ export function AddMetricCardModal({ isOpen, onClose, editingCard }: AddMetricCa
                         key={tpl.label}
                         onClick={() => handleTemplateSelect(tpl)}
                         title={tpl.source ? `필요 exporter: ${tpl.source}` : undefined}
-                        className="text-left p-2.5 rounded-lg border border-border hover:border-primary/40 hover:bg-primary/5 transition-all"
+                        className="text-left p-2.5 rounded-lg border border-border hover:border-primary/40 hover:bg-primary/5 transition-colors"
                       >
                         <div className="text-sm font-medium">{tpl.label}</div>
                         <div className="text-xs text-muted-foreground font-mono truncate mt-0.5">{tpl.promql}</div>
@@ -492,7 +492,7 @@ export function AddMetricCardModal({ isOpen, onClose, editingCard }: AddMetricCa
               >
                 {CATEGORY_OPTIONS.map((opt) => (
                   <option key={opt.value} value={opt.value}>
-                    {opt.icon} {opt.label}
+                    {opt.label}
                   </option>
                 ))}
               </select>

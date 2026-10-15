@@ -142,13 +142,13 @@ function CommandTrace({
               <div className="p-2 space-y-2 border-t border-border">
                 {c.stdout ? (
                   <div>
-                    <p className="text-[11px] uppercase tracking-wider text-muted-foreground mb-1">stdout</p>
+                    <p className="text-[11px] text-muted-foreground mb-1">stdout</p>
                     <LogViewer text={c.stdout} maxHeight="max-h-56" collapsible />
                   </div>
                 ) : null}
                 {c.stderr ? (
                   <div>
-                    <p className="text-[11px] uppercase tracking-wider text-muted-foreground mb-1">stderr</p>
+                    <p className="text-[11px] text-muted-foreground mb-1">stderr</p>
                     <LogViewer text={c.stderr} maxHeight="max-h-40" asError collapsible />
                   </div>
                 ) : null}
@@ -241,7 +241,7 @@ export function CheckMatrixRunDetailView({ runId }: { runId: string }) {
       </section>
 
       <section aria-live="polite">
-        <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2 inline-flex items-center gap-1.5">
+        <h3 className="text-xs font-semibold text-muted-foreground mb-2 inline-flex items-center gap-1.5">
           실행 로그
           {live && (
             <span className="inline-flex items-center gap-1 normal-case tracking-normal font-normal text-status-info">
@@ -264,7 +264,7 @@ export function CheckMatrixRunDetailView({ runId }: { runId: string }) {
       )}
 
       <section>
-        <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">
+        <h3 className="text-xs font-semibold text-muted-foreground mb-2">
           실행된 명령
         </h3>
         {run.commands.length === 0 ? (
@@ -281,7 +281,7 @@ export function CheckMatrixRunDetailView({ runId }: { runId: string }) {
         <section>
           <button
             onClick={() => setShowRunbook((v) => !v)}
-            className="text-xs font-semibold uppercase tracking-wider text-muted-foreground hover:text-foreground inline-flex items-center gap-1"
+            className="text-xs font-semibold text-muted-foreground hover:text-foreground inline-flex items-center gap-1"
           >
             <ChevronRight className={`w-3.5 h-3.5 transition-transform ${showRunbook ? 'rotate-90' : ''}`} />
             이 수행 시점의 실행 계획
@@ -298,7 +298,7 @@ export function CheckMatrixRunDetailView({ runId }: { runId: string }) {
         <section>
           <button
             onClick={() => setShowRaw((v) => !v)}
-            className="text-xs font-semibold uppercase tracking-wider text-muted-foreground hover:text-foreground inline-flex items-center gap-1"
+            className="text-xs font-semibold text-muted-foreground hover:text-foreground inline-flex items-center gap-1"
           >
             <ChevronRight className={`w-3.5 h-3.5 transition-transform ${showRaw ? 'rotate-90' : ''}`} />
             결과 상세 ({rawKeys.length}개 필드)

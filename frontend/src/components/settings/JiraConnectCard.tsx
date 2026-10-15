@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import {
-  Loader2, Save, Wifi, WifiOff, Cookie, KeyRound, Trash2, CheckCircle2, HelpCircle,
+  Loader2, Save, Wifi, WifiOff, Cookie, KeyRound, Trash2, CheckCircle2, HelpCircle, AlertTriangle,
 } from 'lucide-react';
 import {
   useJiraCredential, useSaveJiraCredential, useDeleteJiraCredential, useJiraTest,
@@ -91,7 +91,7 @@ export function JiraConnectCard({ compact = false }: { compact?: boolean }) {
       <div className="flex items-center gap-2 flex-wrap">
         <span className="text-sm font-semibold">내 Jira 연결</span>
         <span className={`inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full border ${
-          connected ? 'bg-status-healthy/10 text-status-healthy border-status-healthy/30'
+          connected ? 'bg-secondary text-muted-foreground border-border'
             : 'bg-status-warning/10 text-status-warning border-status-warning/30'
         }`}>
           {connected
@@ -143,7 +143,7 @@ export function JiraConnectCard({ compact = false }: { compact?: boolean }) {
                   onClick={() => { setAuthType(m.id); setToken(''); setResult(null); }}
                   aria-pressed={authType === m.id}
                   className={`flex-1 inline-flex items-center justify-center gap-1.5 px-2 py-1.5 rounded-xl border text-xs font-medium transition-colors ${
-                    authType === m.id ? 'bg-primary/10 text-primary border-primary/30 ring-2 ring-primary/20'
+                    authType === m.id ? 'bg-primary/10 text-primary border-primary/30'
                       : 'bg-secondary border-border text-muted-foreground hover:text-foreground'
                   }`}>
                   <Icon className="w-3.5 h-3.5" /> {m.label}
@@ -181,7 +181,7 @@ export function JiraConnectCard({ compact = false }: { compact?: boolean }) {
           </div>
 
           {showGuide && (
-            <div className="rounded-lg bg-card border border-border px-3 py-2 text-xs text-muted-foreground leading-relaxed space-y-1.5">
+            <div className="rounded-md bg-card border border-border px-3 py-2 text-xs text-muted-foreground leading-relaxed space-y-1.5">
               {authType === 'cookie' ? (
                 <>
                   <p className="font-medium text-foreground">세션 쿠키 얻는 법</p>
@@ -193,7 +193,7 @@ export function JiraConnectCard({ compact = false }: { compact?: boolean }) {
                     <li>저장하면 자동으로 연결 테스트까지 수행합니다.</li>
                   </ol>
                   <p className="text-status-warning">
-                    ⚠ <b>값만 넣으면 안 됩니다</b> — <code className="px-1 rounded bg-secondary">이름=값</code> 형식이어야 하고,
+                    <AlertTriangle className="inline w-3 h-3 mr-1 align-[-2px]" aria-hidden /><b>값만 넣으면 안 됩니다</b> — <code className="px-1 rounded bg-secondary">이름=값</code> 형식이어야 하고,
                     여러 개면 <code className="px-1 rounded bg-secondary">;</code> 로 연결합니다. SSO 환경은 JSESSIONID
                     하나로 부족한 경우가 많아 <b>Cookie 헤더 전체</b>가 확실합니다.
                   </p>

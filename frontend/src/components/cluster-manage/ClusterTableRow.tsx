@@ -71,7 +71,7 @@ function EditableCell({
         // 더블클릭 안전망 — detail===2 가 dblclick 보다 먼저 들어오므로 무시
         if (e.detail === 2) return;
       }}
-      title="더블클릭 또는 ✏️ 클릭으로 수정"
+      title="더블클릭 또는 연필 아이콘 클릭으로 수정"
     >
       {children}
       <button
@@ -141,7 +141,7 @@ export function ClusterTableRow({ cluster, onEdit, onDelete, deletingId, overlap
             <button
               type="button"
               {...attributes} {...listeners}
-              className="p-0.5 -ml-1 rounded cursor-grab active:cursor-grabbing text-muted-foreground/30 opacity-0 group-hover/row:opacity-100 focus-visible:opacity-100 hover:text-muted-foreground hover:bg-secondary transition-all flex-shrink-0"
+              className="p-0.5 -ml-1 rounded cursor-grab active:cursor-grabbing text-muted-foreground/30 opacity-0 group-hover/row:opacity-100 focus-visible:opacity-100 hover:text-muted-foreground hover:bg-secondary transition-colors flex-shrink-0"
               title="드래그하여 순서 변경 (정렬: 수동 모드)"
               aria-label="순서 변경 핸들"
             >

@@ -1,8 +1,8 @@
 import { useEffect, useId, useState } from 'react';
-import { X, Wand2, ArrowRight, Loader2, CheckCircle2 } from 'lucide-react';
+import { X, Wand2, ArrowRight, Loader2, CheckCircle2, Server } from 'lucide-react';
 import type { Cluster } from '@/types';
 import { clustersApi } from '@/services/api';
-import { ConfirmDialog, useToast } from '@/components/common';
+import { ConfirmDialog, EmptyState, useToast } from '@/components/common';
 import { useModalA11y } from '@/components/common/useModalA11y';
 import { formatApiError } from '@/lib/utils';
 import { CLUSTER_NAME_OPS as OPS, parseClusterName } from '@/lib/clusterName';
@@ -83,7 +83,7 @@ export function StandardizeClusterNamesModal({ open, clusters, onClose, onRename
     <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/40 p-4" onClick={onClose}>
       <div
         ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby={titleId}
-        className="w-full max-w-3xl max-h-[85vh] flex flex-col rounded-2xl border border-border bg-card shadow-xl"
+        className="w-full max-w-3xl max-h-[85vh] flex flex-col rounded-md border border-border bg-card shadow-xl"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center gap-2 px-5 py-3 border-b border-border">
@@ -97,7 +97,7 @@ export function StandardizeClusterNamesModal({ open, clusters, onClose, onRename
 
         <div className="flex-1 overflow-y-auto p-4 space-y-2">
           {clusters.length === 0 && (
-            <p className="text-center text-sm text-muted-foreground py-8">클러스터가 없습니다.</p>
+            <EmptyState compact icon={Server} title="클러스터가 없습니다." description="클러스터를 먼저 등록하면 이름 표준화를 적용할 수 있습니다." />
           )}
           {clusters.map((c) => {
             const p = edits[c.id] ?? parseName(c.name);

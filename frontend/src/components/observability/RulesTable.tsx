@@ -7,15 +7,15 @@ import {
 const COLS = 8;
 
 const STATE_CLS: Record<string, string> = {
-  firing: 'text-[hsl(var(--status-critical))]',
-  pending: 'text-[hsl(var(--status-warning))]',
+  firing: 'text-status-critical',
+  pending: 'text-status-warning',
   inactive: 'text-muted-foreground',
 };
 
 const SEVERITY_CLS: Record<string, string> = {
-  critical: 'text-[hsl(var(--status-critical))]',
-  warning: 'text-[hsl(var(--status-warning))]',
-  info: 'text-[hsl(var(--status-info))]',
+  critical: 'text-status-critical',
+  warning: 'text-status-warning',
+  info: 'text-status-info',
 };
 
 /** Prometheus 알람/기록 규칙 dense 테이블. */
@@ -58,27 +58,27 @@ export function RulesTable({ rows, isLoading, emptyMessage }: {
                   onClick={() => setExpanded(isOpen ? null : rowKey)}
                 >
                   <td className={`${TD} text-xs ${STATE_CLS[rule.state ?? ''] ?? 'text-muted-foreground'}`}>
-                    {rule.type === 'recording' ? 'record' : (rule.state ?? '-')}
+                    {rule.type === 'recording' ? 'record' : (rule.state ?? '—')}
                   </td>
                   <td className={`${TD} font-medium truncate max-w-[18rem]`}>{rule.name}</td>
                   <td className={`${TD} text-xs text-muted-foreground truncate max-w-[11rem]`}>
                     {rule.group}
                   </td>
                   <td className={`${TD} text-xs ${SEVERITY_CLS[rule.severity ?? ''] ?? 'text-muted-foreground'}`}>
-                    {rule.severity ?? '-'}
+                    {rule.severity ?? '—'}
                   </td>
                   <td className={`${TD} text-right text-xs font-mono text-muted-foreground`}>
-                    {rule.duration ? formatDuration(rule.duration) : '-'}
+                    {rule.duration ? formatDuration(rule.duration) : '—'}
                   </td>
                   <td className={`${TD} text-right text-xs font-mono ${
-                    rule.activeAlerts > 0 ? 'text-[hsl(var(--status-critical))]' : 'text-muted-foreground'
+                    rule.activeAlerts > 0 ? 'text-status-critical' : 'text-muted-foreground'
                   }`}>
-                    {rule.activeAlerts || '-'}
+                    {rule.activeAlerts || '—'}
                   </td>
                   <td className={`${TD} text-xs ${
-                    unhealthy ? 'text-[hsl(var(--status-critical))]' : 'text-muted-foreground'
+                    unhealthy ? 'text-status-critical' : 'text-muted-foreground'
                   }`}>
-                    {rule.health ?? '-'}
+                    {rule.health ?? '—'}
                   </td>
                   <td className={`${TD} font-mono text-xs text-muted-foreground truncate max-w-[22rem]`}>
                     {rule.query}
@@ -94,7 +94,7 @@ export function RulesTable({ rows, isLoading, emptyMessage }: {
                         </pre>
                       </div>
                       {rule.lastError ? (
-                        <p className="text-xs text-[hsl(var(--status-critical))]">
+                        <p className="text-xs text-status-critical">
                           마지막 평가 오류: {rule.lastError}
                         </p>
                       ) : null}
@@ -103,7 +103,7 @@ export function RulesTable({ rows, isLoading, emptyMessage }: {
                         <LabelTable title="어노테이션" pairs={rule.annotations} />
                       </div>
                       <div className="text-xs text-muted-foreground">
-                        파일 {rule.file ?? '-'} · 마지막 평가 {formatTime(rule.lastEvaluation)}
+                        파일 {rule.file ?? '—'} · 마지막 평가 {formatTime(rule.lastEvaluation)}
                         {rule.evaluationTime !== null && rule.evaluationTime !== undefined
                           ? ` · 소요 ${formatDuration(rule.evaluationTime)}`
                           : ''}

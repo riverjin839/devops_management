@@ -4,7 +4,7 @@ import {
   Rocket, Plus, Target, Pencil, Trash2, X, Loader2, CheckCircle2,
   ArrowRightLeft, CalendarDays, Users, Clock,
 } from 'lucide-react';
-import { ConfirmDialog, useToast, useModalA11y } from '@/components/common';
+import { ConfirmDialog, useToast, useModalA11y, PageHeader, PageShell, EmptyState, LoadingState } from '@/components/common';
 import { formatApiError } from '@/lib/utils';
 import {
   useSprints, useCreateSprint, useUpdateSprint, useDeleteSprint, useCarryOverSprint,
@@ -34,8 +34,8 @@ function fmtDate(s: string): string {
 
 const STATUS_META: Record<SprintStatus, { label: string; cls: string }> = {
   planning:  { label: '계획',   cls: 'bg-status-unknown/10 text-status-unknown border-status-unknown/30' },
-  active:    { label: '진행중', cls: 'bg-blue-500/10 text-blue-500 border-blue-500/30' },
-  completed: { label: '완료',   cls: 'bg-status-healthy/10 text-status-healthy border-status-healthy/30' },
+  active:    { label: '진행중', cls: 'bg-chart-1/10 text-chart-1 border-chart-1/30' },
+  completed: { label: '완료',   cls: 'bg-secondary text-muted-foreground border-border' },
 };
 
 // ── create / edit modal ────────────────────────────────────────────────────
@@ -71,7 +71,7 @@ function SprintModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={onClose}>
-      <div ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby={titleId} className="bg-card border border-border rounded-2xl w-full max-w-md shadow-xl" onClick={(e) => e.stopPropagation()}>
+      <div ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby={titleId} className="bg-card border border-border rounded-md w-full max-w-md shadow-xl" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between px-5 py-3 border-b border-border">
           <h2 id={titleId} className="font-bold flex items-center gap-2"><Rocket className="w-4 h-4 text-primary" />{initial ? '스프린트 수정' : '새 스프린트'}</h2>
           <button onClick={onClose} aria-label="닫기" className="p-1 rounded-lg hover:bg-secondary text-muted-foreground"><X className="w-4 h-4" /></button>
@@ -206,7 +206,7 @@ function CarryOverModal({
   const remaining = source.totalItems - source.doneItems;
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={onClose}>
-      <div ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby={titleId} className="bg-card border border-border rounded-2xl w-full max-w-md shadow-xl" onClick={(e) => e.stopPropagation()}>
+      <div ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby={titleId} className="bg-card border border-border rounded-md w-full max-w-md shadow-xl" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between px-5 py-3 border-b border-border">
           <h2 id={titleId} className="font-bold flex items-center gap-2"><ArrowRightLeft className="w-4 h-4 text-primary" />미완료 이월</h2>
           <button onClick={onClose} aria-label="닫기" className="p-1 rounded-lg hover:bg-secondary text-muted-foreground"><X className="w-4 h-4" /></button>
@@ -266,7 +266,7 @@ function SprintCard({
   const left = daysBetween(todayStr(), sprint.endDate);
   const meta = STATUS_META[sprint.status];
   return (
-    <div className="bg-card border border-border rounded-2xl p-3 flex flex-col gap-2">
+    <div className="bg-card border border-border rounded-md p-3 flex flex-col gap-2">
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
           <div className="flex items-center gap-2 mb-0.5">
@@ -300,12 +300,12 @@ function SprintCard({
           <span className="font-semibold text-primary">{pct}%</span>
         </div>
         <div className="h-2 rounded-full bg-secondary overflow-hidden">
-          <div className="h-full bg-primary rounded-full transition-all" style={{ width: `${pct}%` }} />
+          <div className="h-full bg-primary rounded-full transition-[width]" style={{ width: `${pct}%` }} />
         </div>
       </div>
 
       <div className="flex items-center gap-3 text-sm text-muted-foreground flex-wrap">
-        <span className="text-status-healthy">완료 {sprint.doneItems}</span>
+        <span>완료 {sprint.doneItems}</span>
         <span>전체 {sprint.totalItems}</span>
         {remaining > 0 && <span className="text-status-warning">미완료 {remaining}</span>}
         {sprint.totalEffortHours > 0 && <span className="inline-flex items-center gap-0.5"><Clock className="w-3 h-3" />{sprint.totalEffortHours}h</span>}
@@ -323,7 +323,7 @@ function SprintCard({
                 <ArrowRightLeft className="w-3 h-3" />이월
               </button>
             )}
-            <button onClick={() => onComplete(sprint)} className="ml-auto text-sm px-2.5 py-1.5 rounded-lg bg-status-healthy/10 text-status-healthy hover:bg-status-healthy/20 transition-colors inline-flex items-center gap-1">
+            <button onClick={() => onComplete(sprint)} className="ml-auto text-sm px-2.5 py-1.5 rounded-lg bg-secondary hover:bg-secondary/80 border border-border text-muted-foreground hover:text-foreground transition-colors inline-flex items-center gap-1">
               <CheckCircle2 className="w-3 h-3" />종료
             </button>
           </>
@@ -375,7 +375,7 @@ export function SprintsPage() {
   const handleCarryOver = (toId: string) => {
     if (!carryOverFor) return;
     carryOver.mutate({ id: carryOverFor.id, to: toId }, {
-      onSuccess: () => { setCarryOverFor(null); toast.success('이월 완료', '미완료 항목을 옮겼습니다.'); },
+      onSuccess: () => { setCarryOverFor(null); toast.success('이월됨', '미완료 항목을 옮겼습니다.'); },
       onError: (err) => toast.error('이월 실패', formatApiError(err, '항목을 이월할 수 없습니다.')),
     });
   };
@@ -415,39 +415,30 @@ export function SprintsPage() {
 
   return (
     <div className="app-min-h-screen bg-background">
-      <main className="max-w-[1400px] mx-auto px-4 lg:px-6 py-5 space-y-5">
-        <div className="flex items-center justify-between gap-3 flex-wrap">
-          <div className="flex items-center gap-2">
-            <Rocket className="w-5 h-5 text-primary" />
-            <div>
-              <h1 className="text-xl font-bold">스프린트</h1>
-              <p className="text-sm text-muted-foreground">반복(iteration) 단위로 업무를 계획·추적합니다.</p>
-            </div>
-          </div>
-          <button
-            onClick={() => setModal({ mode: 'create' })}
-            className="px-4 py-2 text-sm font-medium bg-primary hover:bg-primary/90 text-primary-foreground rounded-lg transition-colors inline-flex items-center gap-1.5"
-          >
-            <Plus className="w-4 h-4" />새 스프린트
-          </button>
-        </div>
-
-        {isLoading ? (
-          <div className="flex items-center justify-center py-20"><Loader2 className="w-8 h-8 animate-spin text-primary" /></div>
-        ) : sprints.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-20 gap-4 text-muted-foreground">
-            <Rocket className="w-12 h-12 opacity-30 text-primary" />
-            <div className="text-center">
-              <p className="text-base font-medium text-foreground">아직 스프린트가 없습니다</p>
-              <p className="text-sm mt-1 opacity-70">1~4주 등 원하는 기간의 반복으로 팀의 업무를 묶어 추적해보세요.</p>
-            </div>
+      <PageShell density="hub" className="space-y-5">
+        <PageHeader
+          icon={Rocket}
+          title="스프린트"
+          description="반복(iteration) 단위로 업무를 계획·추적합니다."
+          actions={
             <button
               onClick={() => setModal({ mode: 'create' })}
-              className="px-4 py-2 text-sm bg-primary hover:bg-primary/90 text-primary-foreground rounded-lg inline-flex items-center gap-1.5"
+              className="px-4 py-2 text-sm font-medium bg-primary hover:bg-primary/90 text-primary-foreground rounded-lg transition-colors inline-flex items-center gap-1.5"
             >
-              <Plus className="w-4 h-4" />첫 스프린트 만들기
+              <Plus className="w-4 h-4" />새 스프린트
             </button>
-          </div>
+          }
+        />
+
+        {isLoading ? (
+          <LoadingState label="스프린트를 불러오는 중…" />
+        ) : sprints.length === 0 ? (
+          <EmptyState
+            icon={Rocket}
+            title="아직 스프린트가 없습니다."
+            description="1~4주 등 원하는 기간의 반복으로 팀의 업무를 묶어 추적해 보세요."
+            action={{ label: '첫 스프린트 만들기', onClick: () => setModal({ mode: 'create' }) }}
+          />
         ) : (
           <div className="space-y-6">
             {renderGroup('진행중', active)}
@@ -455,7 +446,7 @@ export function SprintsPage() {
             {renderGroup('완료', completed)}
           </div>
         )}
-      </main>
+      </PageShell>
 
       {modal?.mode === 'create' && (
         <SprintModal onClose={() => setModal(null)} onSubmit={handleCreate} busy={createSprint.isPending} />

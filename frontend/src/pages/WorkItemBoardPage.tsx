@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type RefObject } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { ViewModeBar, DoubleScrollX, ConfirmDialog, useToast, EmptyState } from '@/components/common';
+import { ViewModeBar, DoubleScrollX, ConfirmDialog, useToast, EmptyState, PageHeader, Skeleton } from '@/components/common';
 import { MacCard } from '@/components/ui/MacCard';
 import { formatApiError } from '@/lib/utils';
 import { Plus, Download, ListTodo, X, CalendarDays, List, ChevronUp, ChevronDown, ArrowUpDown, Kanban, ListTree, AlertCircle, AlertTriangle, GripVertical, ListFilter, DownloadCloud, CalendarRange, UserRound, Search, Save, Settings } from 'lucide-react';
@@ -9,7 +9,7 @@ import { SortableContext, verticalListSortingStrategy, horizontalListSortingStra
 import { CSS } from '@dnd-kit/utilities';
 import { WorkItemCalendar, WorkItemKanban, WorkItemTableRow, WorkItemEpicView, ColumnSettingsMenu, JiraProvisionModal, JiraLinkDialog, ServiceNowRegisterDialog } from '@/components/work-items';
 import { WORK_ITEM_COLUMNS, DEFAULT_COLUMN_ORDER, DEFAULT_VISIBLE_COLUMNS, ALWAYS_VISIBLE_COLUMNS, COLUMN_WIDTH_DEFAULTS, type WorkItemColumnKey, type WorkItemSortKey } from '@/components/work-items';
-import { ResizeGrip } from '@/components/common';
+import { ResizeGrip, PageShell } from '@/components/common';
 import { useColumnWidths } from '@/hooks/useColumnWidths';
 import { useColumnLayout } from '@/hooks/useColumnLayout';
 import { JiraImportModal } from '@/components/work-items/JiraImportModal';
@@ -100,7 +100,7 @@ function TypeFilterDropdown({
       {open && (
         <>
           <div className="fixed inset-0 z-30" onClick={() => setOpen(false)} />
-          <div className="absolute left-0 top-full mt-1 z-40 bg-card border border-border rounded-lg shadow-card p-1 min-w-[140px]" role="listbox">
+          <div className="absolute left-0 top-full mt-1 z-40 bg-card border border-border rounded-md shadow-card p-1 min-w-[140px]" role="listbox">
             <button
               type="button"
               onClick={() => { onChange('all'); setOpen(false); }}
@@ -160,7 +160,7 @@ function StatusFilterDropdown({
       {open && (
         <>
           <div className="fixed inset-0 z-30" onClick={() => setOpen(false)} />
-          <div className="absolute left-0 top-full mt-1 z-40 bg-card border border-border rounded-lg shadow-card p-1 min-w-[140px]" role="listbox">
+          <div className="absolute left-0 top-full mt-1 z-40 bg-card border border-border rounded-md shadow-card p-1 min-w-[140px]" role="listbox">
             <button
               type="button"
               onClick={() => { onChange('all'); setOpen(false); }}
@@ -556,7 +556,7 @@ export function WorkItemBoardPage() {
         data.fieldsUpdated.length ? `필드 ${data.fieldsUpdated.join(', ')}` : '',
         data.transitioned ? '상태 전이' : '',
       ].filter(Boolean);
-      toast.success(`${item.jiraIssueKey} 반영 완료`, parts.join(' · ') || data.detail);
+      toast.success(`${item.jiraIssueKey} 반영됨`, parts.join(' · ') || data.detail);
     } catch (err) {
       toast.error('Jira 반영 실패', formatApiError(err));
     } finally {
@@ -572,7 +572,7 @@ export function WorkItemBoardPage() {
         toast.error('Confluence 반영 실패', data.detail);
         return;
       }
-      toast.success('Confluence 문서 반영 완료', data.detail);
+      toast.success('Confluence 문서 반영됨', data.detail);
     } catch (err) {
       toast.error('Confluence 반영 실패', formatApiError(err));
     } finally {
@@ -720,13 +720,14 @@ export function WorkItemBoardPage() {
 
   return (
     <div className="app-min-h-screen bg-background">
-      <main className="mx-auto px-4 lg:px-6 py-4">
+      <PageShell density="console" sidebar={false}>
         <div className="min-w-0">
         {/* Page Header */}
-        <div className="flex items-center justify-between mb-4">
-          <div className="flex items-center gap-3">
-            <ListTodo className="w-6 h-6 text-primary" />
-            <h1 className="text-xl font-bold">업무 관리 게시판</h1>
+        <PageHeader
+          className="mb-4"
+          icon={ListTodo}
+          title="업무 관리 게시판"
+          titleExtra={<>
             {isAdmin && (
               <button
                 type="button"
@@ -739,7 +740,7 @@ export function WorkItemBoardPage() {
               </button>
             )}
             {items.length > 0 && (
-              <div className="flex items-center gap-2 ml-4">
+              <div className="flex items-center gap-2 ml-2">
                 {boardSettings?.badgeVisibility.total && (
                   <span className="text-sm px-2 py-0.5 rounded-full bg-status-unknown/15 text-status-unknown border border-status-unknown/30">
                     전체 {items.length}
@@ -758,7 +759,7 @@ export function WorkItemBoardPage() {
                   </span>
                 )}
                 {boardSettings?.badgeVisibility.done && doneCount > 0 && (
-                  <span className="text-sm px-2 py-0.5 rounded-full bg-status-healthy/15 text-status-healthy border border-status-healthy/30">
+                  <span className="text-sm px-2 py-0.5 rounded-full bg-secondary text-muted-foreground border border-border">
                     Done {doneCount}
                   </span>
                 )}
@@ -775,9 +776,8 @@ export function WorkItemBoardPage() {
                 )}
               </div>
             )}
-          </div>
-
-          <div className="flex items-center gap-3">
+          </>}
+          actions={<>
             {/* View mode toggle */}
             <ViewModeBar
               modes={[
@@ -826,10 +826,10 @@ export function WorkItemBoardPage() {
               className="px-4 py-2 text-sm font-medium bg-primary hover:bg-primary/90 text-primary-foreground rounded-lg transition-colors flex items-center gap-2"
             >
               <Plus className="w-4 h-4" />
-              업무 등록
+              업무 추가
             </button>
-          </div>
-        </div>
+          </>}
+        />
 
         {/* 필터 바 — 모든 조건을 한 줄에 인라인으로 노출한다("필터 더보기" 팝오버로 묶지
             않음). 기본 필터링은 항상 비어 있고(EMPTY_FILTER_PREFS), "필터 저장" 을 눌러야
@@ -1005,7 +1005,7 @@ export function WorkItemBoardPage() {
                     <span className="text-sm font-semibold">{col.label}</span>
                   </div>
                   {[...Array(3)].map((_, i) => (
-                    <div key={i} className="h-24 rounded-md border border-border bg-muted/20 animate-pulse" />
+                    <Skeleton key={i} className="block h-24 w-full rounded-md" />
                   ))}
                 </div>
               ))}
@@ -1026,7 +1026,7 @@ export function WorkItemBoardPage() {
             {isLoading ? (
               <div className="grid grid-cols-7 gap-0">
                 {[...Array(35)].map((_, i) => (
-                  <div key={i} className="h-[88px] border border-border animate-pulse bg-muted/20" />
+                  <div key={i} className="h-[88px] border border-border p-1"><Skeleton className="block h-full w-full" /></div>
                 ))}
               </div>
             ) : (
@@ -1040,7 +1040,7 @@ export function WorkItemBoardPage() {
           isLoading ? (
             <MacCard bodyPadding="p-0" rootClassName="overflow-hidden">
               {[...Array(5)].map((_, i) => (
-                <div key={i} className="h-14 border-b border-border last:border-b-0 animate-pulse bg-muted/30" />
+                <div key={i} className="h-14 px-4 flex items-center border-b border-border last:border-b-0"><Skeleton className="h-4 w-full" /></div>
               ))}
             </MacCard>
           ) : items.length === 0 ? (
@@ -1052,7 +1052,7 @@ export function WorkItemBoardPage() {
               description={onlyMine && myName && !hasFilters
                 ? '"내 업무" 를 끄면 전체 업무를 볼 수 있습니다.'
                 : isFilteredView ? '검색어나 필터를 바꿔 보세요.' : '첫 업무를 등록하면 보드와 표에 나타납니다.'}
-              action={!isFilteredView ? { label: '첫 번째 업무 등록', onClick: handleCreateNew } : undefined}
+              action={!isFilteredView ? { label: '첫 번째 업무 추가', onClick: handleCreateNew } : undefined}
             />
           ) : (
             <MacCard bodyPadding="p-0" rootClassName="overflow-hidden">
@@ -1080,7 +1080,7 @@ export function WorkItemBoardPage() {
           isLoading ? (
             <MacCard bodyPadding="p-0" rootClassName="overflow-hidden">
               {[...Array(5)].map((_, i) => (
-                <div key={i} className="h-14 border-b border-border last:border-b-0 animate-pulse bg-muted/30" />
+                <div key={i} className="h-14 px-4 flex items-center border-b border-border last:border-b-0"><Skeleton className="h-4 w-full" /></div>
               ))}
             </MacCard>
           ) : items.length === 0 ? (
@@ -1092,7 +1092,7 @@ export function WorkItemBoardPage() {
               description={onlyMine && myName && !hasFilters
                 ? '"내 업무" 를 끄면 전체 업무를 볼 수 있습니다.'
                 : isFilteredView ? '검색어나 필터를 바꿔 보세요.' : '첫 업무를 등록하면 보드와 표에 나타납니다.'}
-              action={!isFilteredView ? { label: '첫 번째 업무 등록', onClick: handleCreateNew } : undefined}
+              action={!isFilteredView ? { label: '첫 번째 업무 추가', onClick: handleCreateNew } : undefined}
             />
           ) : (
             <MacCard bodyPadding="p-0" rootClassName="overflow-hidden">
@@ -1167,7 +1167,7 @@ export function WorkItemBoardPage() {
           )
         )}
         </div>
-      </main>
+      </PageShell>
 
       <JiraImportModal open={jiraOpen} onClose={() => setJiraOpen(false)} defaultProjectKey={jiraConfig?.defaultProjectKey} />
       <ConfluenceLinkModal open={confluenceOpen} onClose={() => setConfluenceOpen(false)} />
@@ -1188,7 +1188,7 @@ export function WorkItemBoardPage() {
       />
 
       {/* 업무 등록/수정/하위 업무 등록 — 홈 "업무 현황"과 동일한 팝업. initial 지정 시 수정
-          모드, subItemParent 지정 시 하위 업무 등록 모드(상위 업무 읽기전용 표시 + Jira/
+          모드, subItemParent 지정 시 하위 업무 추가 모드(상위 업무 읽기전용 표시 + Jira/
           Confluence 자동 생성 체이닝은 모달 내부에서 자체 처리). */}
       <QuickAddTaskModal
         open={quickAddOpen || !!editingItem || !!subItemParent}

@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { RotateCcw, Save, X } from 'lucide-react';
 import { useUiSettings, useUpdateUiSettings } from '@/hooks/useUiSettings';
 import { useToast } from '@/components/common';
+import { MacCard } from '@/components/ui/MacCard';
 import { NAV_MAP, GROUPS } from '@/components/layout/navConfig';
 import {
   PAGE_STYLE_DEFAULT_KEY,
@@ -69,7 +70,7 @@ export function PageStyleManager() {
     else delete next[target];
     updateSettings.mutate(
       { pageStyles: next },
-      { onSuccess: () => toast.success('화면 스타일이 저장되었습니다.'), onError: () => toast.error('저장에 실패했습니다.') },
+      { onSuccess: () => toast.success('화면 스타일이 저장됨'), onError: () => toast.error('저장에 실패했습니다.') },
     );
   };
 
@@ -79,25 +80,22 @@ export function PageStyleManager() {
     delete next[target];
     updateSettings.mutate(
       { pageStyles: next },
-      { onSuccess: () => toast.success('이 페이지 설정을 초기화했습니다.') },
+      { onSuccess: () => toast.success('이 페이지 설정 초기화됨') },
     );
   };
 
   const targetLabel = targets.flatMap((g) => g.items).find((i) => i.key === target)?.label ?? target;
 
   return (
-    <div className="rounded-md border border-border bg-card overflow-hidden">
-      <div className="px-4 py-3 border-b border-border bg-muted/40">
-        <h3 className="text-sm font-semibold">페이지별 화면 스타일</h3>
-        <p className="text-xs text-muted-foreground mt-0.5">
-          폰트 · 글자 크기 · 글자색 · 배경색을 페이지별로 지정합니다. &lsquo;전체 기본&rsquo; 위에 페이지별 설정이 덮어써집니다. (서버 저장 · 모든 사용자 공통)
-        </p>
-      </div>
+    <MacCard title="페이지별 화면 스타일" bodyPadding="p-0">
+      <p className="px-4 py-2 text-xs text-muted-foreground border-b border-border">
+        폰트 · 글자 크기 · 글자색 · 배경색을 페이지별로 지정합니다. &lsquo;전체 기본&rsquo; 위에 페이지별 설정이 덮어써집니다. (서버 저장 · 모든 사용자 공통)
+      </p>
 
       <div className="px-4 py-3 space-y-4">
         {/* 대상 페이지 선택 */}
         <div>
-          <span className="block text-xs text-muted-foreground mb-1 uppercase tracking-wider">대상 페이지</span>
+          <span className="block text-xs text-muted-foreground mb-1">대상 페이지</span>
           <select
             value={target}
             onChange={(e) => setTarget(e.target.value)}
@@ -118,7 +116,7 @@ export function PageStyleManager() {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-4">
           {/* 폰트 */}
           <div>
-            <span className="block text-xs text-muted-foreground mb-1 uppercase tracking-wider">폰트</span>
+            <span className="block text-xs text-muted-foreground mb-1">폰트</span>
             <select
               value={draft.fontFamily ?? ''}
               onChange={(e) => set('fontFamily', e.target.value || undefined)}
@@ -132,7 +130,7 @@ export function PageStyleManager() {
 
           {/* 글자 크기 */}
           <div>
-            <span className="block text-xs text-muted-foreground mb-1 uppercase tracking-wider">글자 크기</span>
+            <span className="block text-xs text-muted-foreground mb-1">글자 크기</span>
             <select
               value={draft.fontScale != null ? String(draft.fontScale) : ''}
               onChange={(e) => set('fontScale', e.target.value ? Number(e.target.value) : undefined)}
@@ -147,7 +145,7 @@ export function PageStyleManager() {
 
           {/* 글자색 */}
           <div>
-            <span className="block text-xs text-muted-foreground mb-1 uppercase tracking-wider">글자색</span>
+            <span className="block text-xs text-muted-foreground mb-1">글자색</span>
             <ColorField
               value={draft.textColor}
               fallback="#1e293b"
@@ -157,7 +155,7 @@ export function PageStyleManager() {
 
           {/* 배경색 */}
           <div>
-            <span className="block text-xs text-muted-foreground mb-1 uppercase tracking-wider">배경색</span>
+            <span className="block text-xs text-muted-foreground mb-1">배경색</span>
             <ColorField
               value={draft.bgColor}
               fallback="#ffffff"
@@ -168,7 +166,7 @@ export function PageStyleManager() {
 
         {/* 미리보기 */}
         <div>
-          <p className="text-xs text-muted-foreground mb-1 uppercase tracking-wider">미리보기 — {targetLabel}</p>
+          <p className="text-xs text-muted-foreground mb-1">미리보기 — {targetLabel}</p>
           <div className="rounded-lg border border-border p-4" style={pageStyleToCss(cleanStyle(draft))}>
             <p className="text-base font-semibold">가나다라 ABCDdefg 0123 — 제목 텍스트</p>
             <p className="text-sm opacity-80 mt-1">이 페이지의 본문은 이렇게 표시됩니다. 폰트 · 크기 · 글자색 · 배경색이 적용됩니다.</p>
@@ -195,7 +193,7 @@ export function PageStyleManager() {
           </button>
         </div>
       </div>
-    </div>
+    </MacCard>
   );
 }
 

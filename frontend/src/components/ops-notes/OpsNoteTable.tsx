@@ -117,7 +117,7 @@ function OpsNoteRow({
           </select>
         ) : svc ? (
           <span
-            className={`inline-flex items-center gap-1 text-xs font-semibold px-2 py-0.5 rounded-md text-white cursor-pointer ${svc.accent}`}
+            className={`inline-flex items-center gap-1 text-xs font-semibold px-2 py-0.5 rounded-md cursor-pointer ${svc.soft}`}
             title="클릭하여 서비스 변경"
           >
             <svc.Icon className="w-3 h-3" />{svc.label}
@@ -272,7 +272,8 @@ export function OpsNoteTable({
   const serviceMap = Object.fromEntries(services.map((s) => [s.value, s])) as Record<string, OpsNoteServiceMeta>;
 
   return (
-    <div className="bg-card border border-border rounded-xl overflow-hidden">
+    // D-122: 부모(OpsNotesPage)의 MacCard 안에서 렌더되므로 자체 카드 면·테두리를 두지 않는다(카드 안 카드 금지).
+    <div className="overflow-hidden">
       <DoubleScrollX>
         <table className="w-full text-sm">
           <thead>

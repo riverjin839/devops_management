@@ -1,4 +1,5 @@
-import { Loader2, Play, Settings2 } from 'lucide-react';
+import { Loader2, Play, Settings2, ListChecks } from 'lucide-react';
+import { EmptyState, LoadingState } from '@/components/common';
 import type { IsilonCommand } from '@/types';
 import { useIsilonCommands } from '@/hooks/useIsilonNfs';
 import { ISILON_SECTION_LABEL } from './sectionLabels';
@@ -10,7 +11,8 @@ interface Props {
   onSelectAll: (keys: string[]) => void;
   onClear: () => void;
   onRun: () => void;
-  onManage: () => void;
+  /** 주면 목록 위에 "명령 관리" 버튼을 그린다. 페이지가 카드 헤더 actions 에 두는 경우엔 생략. */
+  onManage?: () => void;
   running: boolean;
 }
 
@@ -41,19 +43,26 @@ export function IsilonCommandSelector({
   return (
     <div className="space-y-3">
       <div className="flex items-center justify-between">
-        <span className="text-sm font-medium text-muted-foreground">등록된 isi 명령 중 선택 (복수 선택 가능)</span>
-        <button
-          onClick={onManage}
-          className="inline-flex items-center gap-1 text-xs px-2 py-1 rounded-lg border border-border hover:bg-muted"
-        >
-          <Settings2 className="w-3.5 h-3.5" /> 명령 관리
-        </button>
+        <span className="text-sm text-muted-foreground">등록된 isi 명령 중 선택 (복수 선택 가능)</span>
+        {onManage && (
+          <button
+            onClick={onManage}
+            className="inline-flex items-center gap-1 text-xs px-2 py-1 rounded-lg border border-border hover:bg-muted"
+          >
+            <Settings2 className="w-3.5 h-3.5" /> 명령 관리
+          </button>
+        )}
       </div>
 
       {isLoading ? (
-        <div className="text-sm text-muted-foreground py-6 text-center"><Loader2 className="w-4 h-4 animate-spin inline" /> 불러오는 중…</div>
+        <LoadingState compact />
       ) : effective.length === 0 ? (
-        <p className="text-sm text-muted-foreground py-4 text-center">활성화된 명령이 없습니다. 명령 관리에서 등록/활성화하세요.</p>
+        <EmptyState
+          compact
+          icon={ListChecks}
+          title="활성화된 명령이 없습니다"
+          description="명령 관리에서 isi 명령을 등록하거나 활성화하면 여기서 골라 실행할 수 있습니다."
+        />
       ) : (
         <ul className="space-y-1.5 max-h-[420px] overflow-y-auto pr-0.5">
           {effective.map((c) => (

@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
-  Link2, Plus, Pencil, Trash2, ExternalLink, X, Check, Globe,
+  Link2, Plus, Pencil, Trash2, ExternalLink, X, Check, Globe, Server,
   GripVertical, Table2, LayoutList, LayoutGrid, Search,
 } from 'lucide-react';
 import {
@@ -16,7 +16,7 @@ import { useClusters } from '@/hooks/useCluster';
 import { useClusterLinks, useUpdateClusterLinks } from '@/hooks/useUiSettings';
 import { useClusterStore } from '@/stores/clusterStore';
 import { useTableViewStore, TS } from '@/stores/tableViewStore';
-import { ViewModeBar, EmptyState } from '@/components/common';
+import { ViewModeBar, EmptyState, PageHeader, PageShell, StatTile, StatTileRow } from '@/components/common';
 import { MacCard } from '@/components/ui/MacCard';
 import { ClusterLink, ClusterLinkGroup } from '@/types';
 
@@ -104,9 +104,9 @@ function LinkForm({ initial, onSave, onCancel }: LinkFormProps) {
 // ── Link card (vertical/horizontal modes) ─────────────────────────────────────
 function LinkCard({ link, onEdit, onDelete }: { link: ClusterLink; onEdit: () => void; onDelete: () => void }) {
   return (
-    <div className="group relative flex items-start gap-3 px-3.5 py-3 bg-background/60 hover:bg-secondary/60 border border-border/60 hover:border-primary/30 rounded-xl transition-all hover:shadow-sm">
-      <div className="w-8 h-8 bg-primary/10 ring-1 ring-primary/15 rounded-lg flex items-center justify-center flex-shrink-0 mt-0.5">
-        <Link2 className="w-4 h-4 text-primary" />
+    <div className="group relative flex items-start gap-3 px-3.5 py-3 bg-background hover:bg-secondary/60 border border-border/60 hover:border-primary/30 rounded-md transition-colors">
+      <div className="w-8 h-8 bg-secondary rounded-md flex items-center justify-center flex-shrink-0 mt-0.5">
+        <Link2 className="w-4 h-4 text-muted-foreground" />
       </div>
       <div className="flex-1 min-w-0">
         <a href={link.url} target="_blank" rel="noopener noreferrer"
@@ -327,12 +327,12 @@ export function ClusterLinksPage() {
     // ── Header row ──
     // Common header
     cells.push(
-      <div key="h-common" className={`relative flex items-center gap-1.5 border-b border-r ${borderCls} px-3 py-2 bg-status-healthy/10 sticky top-0 z-10`}>
-        <Globe className="w-3.5 h-3.5 text-status-healthy flex-shrink-0" />
-        <span className="font-semibold text-xs uppercase tracking-wider text-status-healthy truncate">공통 링크</span>
+      <div key="h-common" className={`relative flex items-center gap-1.5 border-b border-r ${borderCls} px-3 py-2 bg-secondary sticky top-0 z-10`}>
+        <Globe className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
+        <span className="font-semibold text-xs text-foreground truncate">공통 링크</span>
         <span className="ml-auto text-xs text-muted-foreground tabular-nums flex-shrink-0">({filteredCommonLinks.length})</span>
         <button onClick={() => { setTableFormTarget('common'); setEditingCommon(null); setEditingLink(null); }}
-          className="ml-1 p-0.5 rounded text-status-healthy/60 hover:text-status-healthy dark:hover:text-status-healthy hover:bg-status-healthy/15 transition-colors flex-shrink-0" title="공통 링크 추가" aria-label="공통 링크 추가">
+          className="ml-1 p-0.5 rounded text-muted-foreground opacity-60 hover:opacity-100 hover:text-foreground hover:bg-muted transition-colors flex-shrink-0" title="공통 링크 추가" aria-label="공통 링크 추가">
           <Plus className="w-3 h-3" />
         </button>
         <ColResizeHandle colId="common" currentWidth={colW('common')} onResize={handleColResize} onResizeDone={handleColResizeDone} />
@@ -342,8 +342,8 @@ export function ClusterLinksPage() {
       cells.push(
         <div key={`h-${g.clusterId}`}
           className={`relative flex items-center gap-1.5 border-b ${borderCls} px-3 py-2 ${hdrBg} sticky top-0 z-10${idx < groups.length - 1 ? ` border-r ${borderCls}` : ''}`}>
-          <span className="text-sm leading-none text-primary">☸</span>
-          <span className={`font-semibold text-xs uppercase tracking-wider truncate ${hdrText}`}>{g.clusterName}</span>
+          <Server aria-hidden="true" className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
+          <span className={`font-semibold text-xs truncate ${hdrText}`}>{g.clusterName}</span>
           <span className="ml-auto text-xs text-muted-foreground tabular-nums flex-shrink-0">({g.links.length})</span>
           <button onClick={() => { setTableFormTarget(g.clusterId); setEditingLink(null); setEditingCommon(null); }}
             className={`ml-1 p-0.5 rounded transition-colors flex-shrink-0 ${hdrText} opacity-60 hover:opacity-100 hover:bg-muted`} title="링크 추가" aria-label="링크 추가">
@@ -472,122 +472,104 @@ export function ClusterLinksPage() {
 
   // ── Cluster group card (vertical/horizontal modes) ─────────────────────────
   const renderGroupCard = (g: ClusterLinkGroup, isOrphan: boolean, dragHandle: React.HTMLAttributes<HTMLElement>) => (
-    <div className="bg-card rounded-md border border-border overflow-hidden h-full flex flex-col">
-      <div className="flex items-center px-4 py-2.5 border-b border-border bg-muted/40 gap-2">
-        {!isOrphan && (
-          <span {...dragHandle} className="cursor-grab active:cursor-grabbing p-0.5 rounded text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors" title="드래그하여 순서 변경">
-            <GripVertical className="w-3.5 h-3.5" />
-          </span>
-        )}
-        <span className="text-sm leading-none text-primary">☸</span>
-        <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground select-none truncate">
-          {g.clusterName}
-        </span>
-        {isOrphan && (
-          <span className="text-xs text-muted-foreground px-1.5 py-0.5 rounded bg-muted">삭제됨</span>
-        )}
-        <span className="ml-auto text-xs text-muted-foreground tabular-nums">{g.links.length}</span>
-        {!isOrphan && (
+    <MacCard
+      title={g.clusterName}
+      icon={Server}
+      titleExtra={
+        <>
+          {isOrphan && (
+            <span className="text-xs text-muted-foreground px-1.5 py-0.5 rounded bg-muted">삭제됨</span>
+          )}
+          <span className="text-xs text-muted-foreground tabular-nums">{g.links.length}</span>
+        </>
+      }
+      actions={!isOrphan && (
+        <>
           <button onClick={() => { setAddingTo(g.clusterId); setEditingLink(null); }}
-            className="ml-2 px-2 py-1 text-xs font-medium bg-primary/10 hover:bg-primary/15 text-primary border border-primary/20 rounded-md transition-colors flex items-center gap-1"
+            className="px-2 py-1 text-xs font-medium bg-primary/10 hover:bg-primary/15 text-primary border border-primary/20 rounded-md transition-colors flex items-center gap-1"
             title="링크 추가">
             <Plus className="w-3 h-3" /> 추가
           </button>
-        )}
-      </div>
-      <div className="p-4 space-y-2 flex-1">
-        {addingTo === g.clusterId && (
-          <LinkForm onSave={link => handleAddLink(g.clusterId, g.clusterName, link)} onCancel={() => setAddingTo(null)} />
-        )}
-        {g.links.length === 0 && addingTo !== g.clusterId ? (
-          <EmptyState
-            compact
-            icon={Link2}
-            title="등록된 링크가 없습니다"
-            description={isOrphan ? '클러스터가 삭제되어 링크 추가가 비활성화되었습니다.' : undefined}
-            action={isOrphan ? undefined : {
-              label: '+ 첫 번째 링크 추가',
-              variant: 'secondary',
-              onClick: () => { setAddingTo(g.clusterId); setEditingLink(null); },
-            }}
-          />
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-2">
-            {g.links.map(link => (
-              <div key={link.id}>
-                {editingLink?.clusterId === g.clusterId && editingLink.link.id === link.id ? (
-                  <LinkForm initial={link}
-                    onSave={updated => handleEditLink(g.clusterId, g.clusterName, updated)}
-                    onCancel={() => setEditingLink(null)} />
-                ) : (
-                  <LinkCard link={link}
-                    onEdit={() => { setEditingLink({ clusterId: g.clusterId, link }); setAddingTo(null); }}
-                    onDelete={() => { if (confirm(`"${link.label}" 링크를 삭제하시겠습니까?`)) handleDeleteLink(g.clusterId, link.id); }} />
-                )}
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
-    </div>
+          <span {...dragHandle} className="cursor-grab active:cursor-grabbing p-0.5 rounded text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors" title="드래그하여 순서 변경">
+            <GripVertical className="w-3.5 h-3.5" />
+          </span>
+        </>
+      )}
+      rootClassName="h-full flex flex-col"
+      className="space-y-2 flex-1"
+    >
+      {addingTo === g.clusterId && (
+        <LinkForm onSave={link => handleAddLink(g.clusterId, g.clusterName, link)} onCancel={() => setAddingTo(null)} />
+      )}
+      {g.links.length === 0 && addingTo !== g.clusterId ? (
+        <EmptyState
+          compact
+          icon={Link2}
+          title="등록된 링크가 없습니다"
+          description={isOrphan ? '클러스터가 삭제되어 링크 추가가 비활성화되었습니다.' : undefined}
+          action={isOrphan ? undefined : {
+            label: '+ 첫 번째 링크 추가',
+            variant: 'secondary',
+            onClick: () => { setAddingTo(g.clusterId); setEditingLink(null); },
+          }}
+        />
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-2">
+          {g.links.map(link => (
+            <div key={link.id}>
+              {editingLink?.clusterId === g.clusterId && editingLink.link.id === link.id ? (
+                <LinkForm initial={link}
+                  onSave={updated => handleEditLink(g.clusterId, g.clusterName, updated)}
+                  onCancel={() => setEditingLink(null)} />
+              ) : (
+                <LinkCard link={link}
+                  onEdit={() => { setEditingLink({ clusterId: g.clusterId, link }); setAddingTo(null); }}
+                  onDelete={() => { if (confirm(`"${link.label}" 링크를 삭제하시겠습니까?`)) handleDeleteLink(g.clusterId, link.id); }} />
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+    </MacCard>
   );
 
   const noClusters = clusters.length === 0 && orphanGroups.length === 0;
 
   return (
     <div className="app-min-h-screen bg-background">
-      <main className="mx-auto max-w-[1600px] px-5 md:px-8 py-6 md:py-8 space-y-3">
-        {/* ── Hero / Header ─────────────────────────────────────────────── */}
-        <MacCard bodyPadding="p-4 md:p-5">
-          <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-            <div className="flex items-center gap-3 min-w-0">
-              <span
-                aria-hidden="true"
-                className="inline-flex items-center justify-center w-9 h-9 rounded-lg bg-primary/10 text-primary ring-1 ring-primary/15 flex-shrink-0"
-              >
-                <Link2 className="w-4 h-4" />
-              </span>
-              <div className="min-w-0">
-                <h1 className="text-lg font-semibold leading-tight truncate">클러스터 주요 링크</h1>
-                <p className="text-sm text-muted-foreground mt-0.5">
-                  운영 클러스터별 대시보드 · 모니터링 · 관리 콘솔을 한곳에서 빠르게 접근하세요.
-                </p>
-              </div>
-            </div>
-            <div className="flex items-center gap-2 flex-shrink-0">
-              <ViewModeBar modes={VIEW_MODES} active={layout} onChange={changeLayout} />
-            </div>
-          </div>
+      <PageShell density="hub" className="space-y-3">
+        <PageHeader
+          icon={Link2}
+          title="클러스터 주요 링크"
+          description="운영 클러스터별 대시보드 · 모니터링 · 관리 콘솔을 한곳에서 빠르게 접근하세요."
+          actions={<ViewModeBar modes={VIEW_MODES} active={layout} onChange={changeLayout} />}
+        />
 
-          {/* Stats row */}
-          <div className="mt-4 grid grid-cols-3 gap-2">
-            <StatTile label="전체 링크"   value={totalLinks} />
-            <StatTile label="클러스터"    value={orderedGroups.length} />
-            <StatTile label="공통 링크"   value={commonLinks.length} accent />
-          </div>
+        <StatTileRow>
+          <StatTile label="전체 링크" value={totalLinks} />
+          <StatTile label="클러스터" value={orderedGroups.length} />
+          <StatTile label="공통 링크" value={commonLinks.length} />
+        </StatTileRow>
 
-          {/* Search */}
-          <div className="mt-3 relative">
-            <Search aria-hidden="true" className="w-4 h-4 text-muted-foreground absolute left-3 top-1/2 -translate-y-1/2" />
-            <input
-              value={keyword}
-              onChange={e => setKeyword(e.target.value)}
-              placeholder="링크 이름, 설명, URL 검색"
-              aria-label="링크 검색"
-              className="w-full rounded-lg border border-border bg-background pl-9 pr-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary transition-colors"
-            />
-          </div>
-        </MacCard>
+        {/* Search */}
+        <div className="relative">
+          <Search aria-hidden="true" className="w-4 h-4 text-muted-foreground absolute left-3 top-1/2 -translate-y-1/2" />
+          <input
+            value={keyword}
+            onChange={e => setKeyword(e.target.value)}
+            placeholder="링크 이름, 설명, URL 검색"
+            aria-label="링크 검색"
+            className="w-full rounded-xl border border-border bg-background pl-9 pr-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary transition-colors"
+          />
+        </div>
 
         {/* ── Empty: no clusters ────────────────────────────────────────── */}
         {noClusters ? (
-          <MacCard bodyPadding="p-0">
-            <EmptyState
-              icon={Link2}
-              title="등록된 클러스터가 없습니다"
-              description="설정에서 클러스터를 먼저 등록한 뒤 링크를 관리할 수 있습니다."
-            />
-          </MacCard>
+          <EmptyState
+            icon={Link2}
+            title="등록된 클러스터가 없습니다"
+            description="설정에서 클러스터를 먼저 등록한 뒤 링크를 관리할 수 있습니다."
+          />
         ) : layout === 'table' ? (
           /* ── Table view ── */
           renderTableView()
@@ -595,44 +577,42 @@ export function ClusterLinksPage() {
           /* ── Card views (vertical / horizontal) ── */
           <>
             {/* Common links section */}
-            <MacCard bodyPadding="p-0">
-              <div className="flex items-center px-4 py-2.5 border-b border-border bg-muted/40 gap-2">
-                <Globe aria-hidden="true" className="w-3.5 h-3.5 text-status-healthy" />
-                <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground select-none">
-                  공통 서비스 링크
-                </span>
-                <span className="text-xs text-muted-foreground tabular-nums">({filteredCommonLinks.length})</span>
+            <MacCard
+              title="공통 서비스 링크"
+              icon={Globe}
+              titleExtra={<span className="text-xs text-muted-foreground tabular-nums">{filteredCommonLinks.length}</span>}
+              actions={
                 <button onClick={() => { setAddingCommon(true); setEditingCommon(null); }}
-                  className="ml-auto px-2 py-1 text-xs font-medium bg-status-healthy/10 hover:bg-status-healthy/15 text-status-healthy border border-status-healthy/25 rounded-md transition-colors flex items-center gap-1">
+                  className="px-2 py-1 text-xs font-medium bg-secondary hover:bg-muted text-foreground border border-border rounded-xl transition-colors flex items-center gap-1">
                   <Plus className="w-3 h-3" /> 추가
                 </button>
-              </div>
-              <div className="p-4 space-y-2">
-                {addingCommon && <LinkForm onSave={handleAddCommon} onCancel={() => setAddingCommon(false)} />}
-                {filteredCommonLinks.length === 0 && !addingCommon ? (
-                  <EmptyState
-                    compact
-                    icon={Globe}
-                    title="공통 링크가 없습니다"
-                    description="모든 클러스터에서 공통으로 사용하는 링크를 등록하세요."
-                    action={{ label: '+ 첫 번째 공통 링크 추가', variant: 'secondary', onClick: () => setAddingCommon(true) }}
-                  />
-                ) : (
-                  <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-2">
-                    {filteredCommonLinks.map(link => (
-                      <div key={link.id}>
-                        {editingCommon?.id === link.id ? (
-                          <LinkForm initial={link} onSave={handleEditCommon} onCancel={() => setEditingCommon(null)} />
-                        ) : (
-                          <LinkCard link={link}
-                            onEdit={() => { setEditingCommon(link); setAddingCommon(false); }}
-                            onDelete={() => handleDeleteCommon(link.id)} />
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
+              }
+              className="space-y-2"
+            >
+              {addingCommon && <LinkForm onSave={handleAddCommon} onCancel={() => setAddingCommon(false)} />}
+              {filteredCommonLinks.length === 0 && !addingCommon ? (
+                <EmptyState
+                  compact
+                  icon={Globe}
+                  title="공통 링크가 없습니다"
+                  description="모든 클러스터에서 공통으로 사용하는 링크를 등록하세요."
+                  action={{ label: '+ 첫 번째 공통 링크 추가', variant: 'secondary', onClick: () => setAddingCommon(true) }}
+                />
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-2">
+                  {filteredCommonLinks.map(link => (
+                    <div key={link.id}>
+                      {editingCommon?.id === link.id ? (
+                        <LinkForm initial={link} onSave={handleEditCommon} onCancel={() => setEditingCommon(null)} />
+                      ) : (
+                        <LinkCard link={link}
+                          onEdit={() => { setEditingCommon(link); setAddingCommon(false); }}
+                          onDelete={() => handleDeleteCommon(link.id)} />
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
             </MacCard>
 
             {/* Cluster groups */}
@@ -657,19 +637,7 @@ export function ClusterLinksPage() {
             </DndContext>
           </>
         )}
-      </main>
-    </div>
-  );
-}
-
-// ── Small stat tile (header) ──────────────────────────────────────────────────
-function StatTile({ label, value, accent }: { label: string; value: number; accent?: boolean }) {
-  return (
-    <div className="rounded-lg border border-border bg-muted/30 px-3 py-2">
-      <p className="text-xs uppercase tracking-wider text-muted-foreground">{label}</p>
-      <p className={`text-lg font-semibold tabular-nums leading-tight ${accent ? 'text-status-healthy' : 'text-foreground'}`}>
-        {value}
-      </p>
+      </PageShell>
     </div>
   );
 }

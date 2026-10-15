@@ -18,7 +18,9 @@ import {
 import { PlaybookCard, AddPlaybookModal, RunCredsModal } from '@/components/playbooks';
 import type { PlaybookSshCreds } from '@/types';
 import { MacCard } from '@/components/ui/MacCard';
-import { ClusterSidebar, DebugLogPanel, ConfirmDialog, useToast, StatusBadge, statusToVariant } from '@/components/common';
+import { ClusterSidebar, DebugLogPanel, ConfirmDialog, useToast, StatusBadge, statusToVariant, EmptyState, PageHeader, PageShell, RunLogPanel } from '@/components/common';
+import { useRunLog, elapsed, type RunLogLevel } from '@/hooks/useRunLog';
+import { useLogPref } from '@/hooks/useLogPref';
 import { useClusterStore } from '@/stores/clusterStore';
 import { usePlaybookStore } from '@/stores/playbookStore';
 import { useClusters, useSummary, useAddons, useHealthCheck, useCreateAddon, useDeleteAddon, useAddonHealthCheck, useCheckHistoryHeatmap, useClusterStatusBreakdown } from '@/hooks/useCluster';
@@ -37,12 +39,21 @@ interface ClusterOverviewGridProps {
   onSelectCluster: (id: string) => void;
 }
 
+// 비정상 우선 정렬 — 운영 화면의 1차 목적은 예외 발견이다 (§12.12-3, D-119).
+const STATUS_RANK: Record<string, number> = { critical: 0, warning: 1, pending: 2, healthy: 3 };
+function sortByStatus<T extends { status: string; name: string }>(list: T[]): T[] {
+  return [...list].sort((a, b) =>
+    (STATUS_RANK[a.status] ?? 4) - (STATUS_RANK[b.status] ?? 4) || a.name.localeCompare(b.name));
+}
+
 function ClusterOverviewGrid({ clusters, addons, onSelectCluster }: ClusterOverviewGridProps) {
   if (clusters.length === 0) {
     return (
-      <div className="text-center py-12 text-muted-foreground text-sm">
-        등록된 클러스터가 없습니다. 클러스터를 추가하세요.
-      </div>
+      <EmptyState
+        icon={Server}
+        title="등록된 클러스터가 없습니다."
+        description="상단의 + 클러스터 버튼으로 클러스터를 추가하면 여기에서 상태를 한눈에 볼 수 있습니다."
+      />
     );
   }
 
@@ -51,7 +62,7 @@ function ClusterOverviewGrid({ clusters, addons, onSelectCluster }: ClusterOverv
       className="grid gap-3"
       style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))' }}
     >
-      {clusters.map((cluster) => {
+      {sortByStatus(clusters).map((cluster) => {
         const clusterAddons = addons[cluster.id] ?? [];
         const healthy  = clusterAddons.filter((a) => a.status === 'healthy').length;
         const warning  = clusterAddons.filter((a) => a.status === 'warning').length;
@@ -59,7 +70,7 @@ function ClusterOverviewGrid({ clusters, addons, onSelectCluster }: ClusterOverv
         const total    = clusterAddons.length;
 
         const statusColor = {
-          healthy:  { border: 'border-status-healthy/40',  bg: 'bg-status-healthy/10',  text: 'text-status-healthy',  dot: 'bg-status-healthy'  },
+          healthy:  { border: 'border-border',              bg: 'bg-secondary',          text: 'text-muted-foreground', dot: 'bg-muted-foreground/40' },
           warning:  { border: 'border-status-warning/40',  bg: 'bg-status-warning/10',  text: 'text-status-warning',  dot: 'bg-status-warning'  },
           critical: { border: 'border-status-critical/40', bg: 'bg-status-critical/10', text: 'text-status-critical', dot: 'bg-status-critical' },
           pending:  { border: 'border-status-unknown/40',  bg: 'bg-status-unknown/10',  text: 'text-status-unknown',  dot: 'bg-status-unknown'  },
@@ -69,14 +80,12 @@ function ClusterOverviewGrid({ clusters, addons, onSelectCluster }: ClusterOverv
           <button
             key={cluster.id}
             onClick={() => onSelectCluster(cluster.id)}
-            className={`bg-card border rounded-xl p-4 text-left transition-all hover:-translate-y-0.5 group ${statusColor.border} hover:border-primary/40`}
+            className={`bg-card border rounded-md p-4 text-left transition-colors group ${statusColor.border} hover:border-primary/40`}
           >
             {/* Header */}
             <div className="flex items-start justify-between mb-3 min-w-0">
               <div className="flex items-center gap-2 min-w-0">
-                <div className={`w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 ${statusColor.bg}`}>
-                  <Server className={`w-4 h-4 ${statusColor.text}`} />
-                </div>
+                <Server className={`w-4 h-4 flex-shrink-0 ${statusColor.text}`} aria-hidden="true" />
                 <div className="min-w-0">
                   <p className="text-sm font-semibold truncate group-hover:text-primary transition-colors">
                     {cluster.name}
@@ -114,9 +123,9 @@ function ClusterOverviewGrid({ clusters, addons, onSelectCluster }: ClusterOverv
                   <span className="font-medium">{total}</span>
                 </div>
                 <div className="flex gap-2">
-                  <div className="flex items-center gap-1 text-sm text-status-healthy">
+                  <div className="flex items-center gap-1 text-sm text-muted-foreground">
                     <CheckCircle className="w-3 h-3" />
-                    <span>{healthy}</span>
+                    <span className="tabular-nums">{healthy}</span>
                   </div>
                   {warning > 0 && (
                     <div className="flex items-center gap-1 text-sm text-status-warning">
@@ -151,6 +160,10 @@ function ClusterOverviewGrid({ clusters, addons, onSelectCluster }: ClusterOverv
     </div>
   );
 }
+
+// 애드온 점검 결과 상태 → 실행 로그 표기
+const ADDON_STATUS_KO: Record<string, string> = { healthy: '정상', warning: '경고', critical: '위험', pending: '미연결', unknown: '알 수 없음' };
+const ADDON_STATUS_LEVEL: Record<string, RunLogLevel> = { healthy: 'info', warning: 'warn', critical: 'error', pending: 'warn', unknown: 'warn' };
 
 // ── 삭제 확인 대상 (ConfirmDialog 하나를 여러 삭제 액션이 공유) ────────────
 type PendingDelete =
@@ -265,19 +278,63 @@ export function Dashboard() {
   const { data: workItemsData, isLoading: workItemsLoading } = useWorkItems();
   const allWorkItems = workItemsData?.data ?? [];
 
+  // 점검 실행 로그 — 선택 클러스터 1개 또는 전 클러스터 순차(D-128).
+  const runLog = useRunLog();
+  const [showRunLog, setShowRunLog] = useLogPref('dashboard-health-check');
+
   const handleRunCheck = async () => {
-    if (selectedClusterId) {
-      healthCheck.mutate(selectedClusterId);
-    } else if (clusters.length > 0) {
-      // 순차 실행: 각 클러스터 점검 완료 후 다음 진행
-      for (const cluster of clusters) {
-        try {
-          await healthCheck.mutateAsync(cluster.id);
-        } catch (e) {
-          console.error(`Check failed for ${cluster.name}:`, e);
+    const targets = selectedClusterId
+      ? clusters.filter((c) => c.id === selectedClusterId)
+      : clusters;
+    if (targets.length === 0) return;
+    const tAll = performance.now();
+    runLog.begin(
+      targets.length === 1 ? `점검 실행 — ${targets[0].name}` : `점검 실행 — 전체 ${targets.length}개 클러스터`,
+      targets.length === 1 ? `${targets[0].name} 애드온 점검 요청` : `클러스터 ${targets.length}개 순차 점검 시작`,
+    );
+    let okClusters = 0;
+    let failedClusters = 0;
+    const totals = { healthy: 0, warning: 0, critical: 0, other: 0 };
+    // 순차 실행: 각 클러스터 점검 완료 후 다음 진행 — 실패한 클러스터는 error 줄로 남기고 계속한다.
+    for (const cluster of targets) {
+      const t0 = performance.now();
+      if (targets.length > 1) runLog.log('info', `[${cluster.name}] 점검 시작`);
+      const hb = setInterval(
+        () => runLog.log('info', `[${cluster.name}] 응답 대기 중 · ${Math.round((performance.now() - t0) / 1000)}초 경과`),
+        5000,
+      );
+      try {
+        const { data } = await healthCheck.mutateAsync(cluster.id);
+        clearInterval(hb);
+        const counts = { healthy: 0, warning: 0, critical: 0, other: 0 };
+        for (const a of data.addons ?? []) {
+          const key = a.status === 'healthy' || a.status === 'warning' || a.status === 'critical' ? a.status : 'other';
+          counts[key] += 1;
+          totals[key] += 1;
+          runLog.log(
+            ADDON_STATUS_LEVEL[a.status] ?? 'warn',
+            `[${cluster.name}] ${a.name} · ${ADDON_STATUS_KO[a.status] ?? a.status}${a.responseTime != null ? ` · ${a.responseTime}ms` : ''}${a.message ? ` · ${a.message}` : ''}`,
+          );
         }
+        const level: RunLogLevel = counts.critical > 0 ? 'error' : counts.warning > 0 || counts.other > 0 ? 'warn' : 'info';
+        runLog.log(
+          level,
+          `[${cluster.name}] 애드온 ${data.addonsUpdated}개 갱신 · 정상 ${counts.healthy} · 경고 ${counts.warning} · 위험 ${counts.critical}${counts.other ? ` · 기타 ${counts.other}` : ''} · ${elapsed(t0)}`,
+        );
+        okClusters += 1;
+      } catch (e) {
+        clearInterval(hb);
+        failedClusters += 1;
+        runLog.log('error', `[${cluster.name}] 점검 실패 · ${elapsed(t0)} — ${formatApiError(e)}`);
       }
     }
+    if (targets.length > 1 || failedClusters > 0) {
+      runLog.log(
+        failedClusters > 0 || totals.critical > 0 ? 'error' : totals.warning > 0 ? 'warn' : 'info',
+        `전체 요약 · 클러스터 성공 ${okClusters} · 실패 ${failedClusters} · 애드온 정상 ${totals.healthy} · 경고 ${totals.warning} · 위험 ${totals.critical} · ${elapsed(tAll)}`,
+      );
+    }
+    runLog.end();
   };
 
   const DEFAULT_ADDONS = [
@@ -329,15 +386,16 @@ export function Dashboard() {
   return (
     <div className="app-min-h-screen bg-background">
       {/* ── Top bar ──────────────────────────────────────────────────────── */}
-      <div className="sticky top-0 z-20 px-4 lg:px-6 py-2 bg-background/95 backdrop-blur border-b border-border flex flex-wrap items-center gap-x-3 gap-y-1.5">
-        <h1 className="text-sm font-semibold whitespace-nowrap">클러스터 현황</h1>
-        {lastCheckTime && (
-          <p className="text-xs text-muted-foreground font-mono hidden sm:block">
-            마지막 점검: {formatDateTime(lastCheckTime)}
-          </p>
-        )}
-
-        <div className="ml-auto flex flex-wrap items-center gap-1.5">
+      <div className="sticky top-0 z-20 px-4 lg:px-6 py-2 bg-background border-b border-border flex flex-wrap items-center gap-x-3 gap-y-1.5">
+        <PageHeader
+          className="flex-1 items-center"
+          title="클러스터 현황"
+          titleExtra={lastCheckTime && (
+            <span className="text-xs text-muted-foreground font-mono hidden sm:inline">
+              마지막 점검: {formatDateTime(lastCheckTime)}
+            </span>
+          )}
+          actions={<>
           <button
             onClick={() => setShowAddCluster(true)}
             className="px-2.5 py-1 text-sm font-medium bg-primary/10 hover:bg-primary/20 text-primary border border-primary/20 rounded-xl transition-colors flex items-center gap-1"
@@ -355,7 +413,7 @@ export function Dashboard() {
           {canManageMetricCards && (
             <button
               onClick={() => { setEditingMetricCard(null); setShowAddMetric(true); }}
-              className="px-2.5 py-1 text-sm font-medium bg-brand-ai/10 hover:bg-brand-ai/20 text-brand-ai border border-brand-ai/20 rounded-xl transition-colors flex items-center gap-1"
+              className="px-2.5 py-1 text-sm font-medium bg-secondary hover:bg-secondary/80 text-foreground border border-border rounded-xl transition-colors flex items-center gap-1"
             >
               <Plus className="w-3 h-3" /> 메트릭
             </button>
@@ -386,16 +444,17 @@ export function Dashboard() {
           <div className="w-px h-4 bg-border mx-0.5" />
           <button
             onClick={handleRunCheck}
-            disabled={isChecking}
+            disabled={isChecking || runLog.running || clusters.length === 0}
             className="px-3 py-1 text-sm font-semibold bg-primary hover:bg-primary/90 text-primary-foreground rounded-xl transition-colors flex items-center gap-1.5 disabled:opacity-50 shadow-card"
           >
-            <RefreshCw className={`w-3.5 h-3.5 ${isChecking ? 'animate-spin' : ''}`} />
-            {isChecking ? '점검 중…' : '점검 실행'}
+            <RefreshCw className={`w-3.5 h-3.5 ${isChecking || runLog.running ? 'animate-spin' : ''}`} />
+            {isChecking || runLog.running ? '점검 중…' : '점검 실행'}
           </button>
-        </div>
+          </>}
+        />
       </div>
 
-      <div className="py-3 pr-3 flex gap-3">
+      <PageShell density="console" as="div" className="flex gap-3">
         <ClusterSidebar
           clusters={clusters}
           selectedId={selectedClusterId}
@@ -407,6 +466,8 @@ export function Dashboard() {
 
       <main className="flex-1 min-w-0 space-y-3">
         <DebugLogPanel pageKey="dashboard" extra={{ activeClusterId, clusters: clusters.length, metricCards: metricCards.length }} />
+
+        <RunLogPanel run={runLog} show={showRunLog} onShowChange={setShowRunLog} />
 
         {/* ── Health Hero (Bento) ──────────────────────────────────────────── */}
         <HealthHero
@@ -498,11 +559,14 @@ export function Dashboard() {
         </MacCard>
 
         {/* ── Prometheus Insights (우측 컬럼) ─────────────────────────────── */}
-        <MacCard title="Prometheus 지표" bodyPadding="p-4" className="overflow-hidden" rootClassName="min-w-0">
-          <div className="flex items-center gap-2 text-muted-foreground text-sm mb-3">
-            <Activity className="w-4 h-4 text-primary" />
-            <span>{metricCards.length}개 카드</span>
-          </div>
+        <MacCard
+          title="Prometheus 지표"
+          icon={Activity}
+          titleExtra={<span className="text-xs text-muted-foreground tabular-nums">{metricCards.length}개</span>}
+          bodyPadding="p-4"
+          className="overflow-hidden"
+          rootClassName="min-w-0"
+        >
           <MetricCardGrid
             cards={metricCards}
             results={metricResults}
@@ -522,11 +586,12 @@ export function Dashboard() {
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
           {/* ── Playbook Checks ──────────────────────────────────────────── */}
           {dashboardPlaybooks.length > 0 && (
-            <MacCard title="플레이북 점검" bodyPadding="p-4">
-              <div className="flex items-center gap-2 text-muted-foreground text-sm mb-3">
-                <BookOpen className="w-4 h-4 text-primary" />
-                <span>{dashboardPlaybooks.length}개 플레이북</span>
-              </div>
+            <MacCard
+              title="플레이북 점검"
+              icon={BookOpen}
+              titleExtra={<span className="text-xs text-muted-foreground tabular-nums">{dashboardPlaybooks.length}개</span>}
+              bodyPadding="p-4"
+            >
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 {dashboardPlaybooks.map((playbook) => (
                   <PlaybookCard
@@ -572,7 +637,7 @@ export function Dashboard() {
         </MacCard>
 
       </main>
-      </div>
+      </PageShell>
 
       {/* Add Cluster Modal */}
       <AddClusterModal

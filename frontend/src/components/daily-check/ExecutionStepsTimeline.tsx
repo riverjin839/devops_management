@@ -10,14 +10,14 @@ interface Props {
 type NodeStatus = 'success' | 'failed' | 'running' | 'skipped' | 'pending';
 
 const RING: Record<NodeStatus, string> = {
-  success: 'border-status-healthy text-status-healthy bg-status-healthy-soft',
+  success: 'border-muted-foreground/40 text-muted-foreground bg-secondary',
   failed: 'border-status-critical text-status-critical bg-status-critical-soft',
   running: 'border-status-warning text-status-warning bg-status-warning-soft animate-pulse',
   skipped: 'border-status-unknown text-muted-foreground bg-secondary/40',
   pending: 'border-border text-muted-foreground bg-card',
 };
 const LINE: Record<NodeStatus, string> = {
-  success: 'bg-status-healthy', failed: 'bg-status-critical', running: 'bg-status-warning',
+  success: 'bg-muted-foreground/40', failed: 'bg-status-critical', running: 'bg-status-warning',
   skipped: 'bg-status-unknown', pending: 'bg-border',
 };
 
@@ -69,9 +69,9 @@ export function ExecutionStepsTimeline({ stepPlan, steps }: Props) {
   if (nodes.length === 0) return null;
 
   return (
-    <div className="rounded-xl border border-border bg-card p-3">
+    <div className="rounded-md bg-secondary/40 p-3">
       <div className="flex items-center gap-2 mb-3">
-        <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">실행 단계 (메커니즘)</span>
+        <span className="text-xs font-semibold text-muted-foreground">실행 단계 (메커니즘)</span>
         <button onClick={replay} className="ml-auto inline-flex items-center gap-1 rounded-lg border border-border px-2 py-1 text-xs hover:bg-secondary">
           <Play className="w-3 h-3" /> 재생
         </button>
@@ -90,7 +90,7 @@ export function ExecutionStepsTimeline({ stepPlan, steps }: Props) {
                   title={`${n.label}${n.detail ? `\n${n.detail}` : ''}${n.durationMs != null ? `\n${n.durationMs}ms` : ''}\n(클릭해서 상세 로그 보기)`}
                   aria-label={`${n.label} 단계 상세 로그 ${expandedId === n.id ? '닫기' : '열기'}`}
                   aria-expanded={expandedId === n.id}
-                  className={`flex items-center justify-center w-9 h-9 rounded-full border-2 transition-all duration-300 cursor-pointer hover:brightness-95 ${RING[st]} ${shown ? 'scale-100 opacity-100' : 'scale-90 opacity-40'} ${expandedId === n.id ? 'ring-2 ring-offset-1 ring-offset-card ring-primary/50' : ''}`}
+                  className={`flex items-center justify-center w-9 h-9 rounded-full border-2 transition duration-300 cursor-pointer hover:brightness-95 ${RING[st]} ${shown ? 'scale-100 opacity-100' : 'scale-90 opacity-40'} ${expandedId === n.id ? 'ring-1 ring-offset-1 ring-offset-card ring-primary/50' : ''}`}
                 >
                   <StatusIcon s={st} />
                 </button>

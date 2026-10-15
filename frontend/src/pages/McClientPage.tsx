@@ -1,10 +1,11 @@
 import { useEffect, useId, useState } from 'react';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import {
-  HardDrive, Play, Loader2, CheckCircle, XCircle, Key, ShieldAlert, Wifi, Clock, Terminal,
+  HardDrive, Play, Loader2, CheckCircle, XCircle, AlertTriangle, Key, ShieldAlert, Wifi, Clock, Terminal,
 } from 'lucide-react';
 import { useClusters } from '@/hooks/useCluster';
-import { ConfirmDialog, ExecOutputTabs, ClusterSidebar, SavedCommands } from '@/components/common';
+import { ConfirmDialog, ExecOutputTabs, ClusterSidebar, SavedCommands, EmptyState, PageShell } from '@/components/common';
+import { PageHeader } from '@/components/common/PageHeader';
 import { MacCard } from '@/components/ui/MacCard';
 import { McPresetManager } from '@/components/mc/McPresetManager';
 import { mcApi, bulkExecApi, type EtcdCtlRunResponse, type NodeSummary } from '@/services/api';
@@ -16,7 +17,7 @@ const STATUS_META: Record<EtcdCtlRunResponse['status'], { label: string; cls: st
   ok:            { label: '정상',     cls: 'bg-status-healthy/10 text-status-healthy border-status-healthy/30',  icon: CheckCircle },
   error:         { label: '에러',     cls: 'bg-status-critical/10 text-status-critical border-status-critical/30',              icon: XCircle },
   timeout:       { label: '타임아웃', cls: 'bg-status-warning/10 text-status-warning border-status-warning/30',        icon: Clock },
-  auth_error:    { label: '인증 실패', cls: 'bg-orange-500/10 text-orange-400 border-orange-500/30',    icon: ShieldAlert },
+  auth_error:    { label: '인증 실패', cls: 'bg-status-warning/10 text-status-warning border-status-warning/30',    icon: ShieldAlert },
   connect_error: { label: '연결 실패', cls: 'bg-status-unknown/10 text-status-unknown border-status-unknown/30',       icon: Wifi },
 };
 
@@ -27,19 +28,24 @@ const STATUS_META: Record<EtcdCtlRunResponse['status'], { label: string; cls: st
 function ResultPanel({ result }: { result: EtcdCtlRunResponse | null }) {
   if (!result) {
     return (
-      <MacCard rootClassName="lg:col-span-5 min-w-0" bodyPadding="p-5" className="flex items-center justify-center min-h-[200px] lg:h-[calc(100vh-220px)]">
-        <p className="text-sm text-muted-foreground text-center">
-          mc 명령을 실행하면<br />결과가 여기에 표시됩니다.
-        </p>
-      </MacCard>
+      <div className="lg:col-span-5 min-w-0 flex items-center justify-center min-h-[200px] lg:h-[calc(100vh-220px)]">
+        <EmptyState
+          compact
+          icon={Terminal}
+          title="아직 실행 결과가 없습니다."
+          description="mc 명령을 실행하면 결과가 여기에 표시됩니다."
+        />
+      </div>
     );
   }
   const meta = STATUS_META[result.status];
   const Icon = meta.icon;
+  // 헤더(상태·호스트·exit·소요)는 고정, 본문만 세로 스크롤 — 예전 sticky header 와 같은 동작.
   return (
-    <MacCard rootClassName="lg:col-span-5 min-w-0 overflow-y-auto overflow-x-hidden lg:h-[calc(100vh-220px)]" bodyPadding="p-0">
-      <header className="sticky top-0 z-10 px-5 py-3 border-b border-border flex items-center justify-between bg-muted/90 backdrop-blur-sm">
-        <div className="flex items-center gap-3 flex-wrap">
+    <MacCard
+      title="실행 결과"
+      titleExtra={
+        <span className="flex items-center gap-3 flex-wrap min-w-0">
           <span className={`inline-flex items-center gap-1 text-sm px-2 py-0.5 rounded-full border font-medium ${meta.cls}`}>
             <Icon className="w-3 h-3" />
             {meta.label}
@@ -48,19 +54,23 @@ function ResultPanel({ result }: { result: EtcdCtlRunResponse | null }) {
           {result.exitCode !== null && result.exitCode !== undefined && (
             <span className="text-sm font-mono text-muted-foreground">exit {result.exitCode}</span>
           )}
-          <span className="text-sm font-mono text-muted-foreground">{result.durationMs}ms</span>
-        </div>
-        {result.error && <span className="text-sm text-status-critical">⚠ {result.error}</span>}
-      </header>
-      <div className="px-5 py-3 space-y-3">
-        <div>
-          <p className="text-xs uppercase tracking-wider text-muted-foreground mb-1">executed</p>
-          <pre className="text-xs font-mono bg-background border border-border rounded p-2 overflow-auto whitespace-pre-wrap break-all text-foreground/80">
-            {result.executedCommand || '(not provided)'}
-          </pre>
-        </div>
-        <ExecOutputTabs stdout={result.stdout} stderr={result.stderr} maxHeight="max-h-[440px]" />
+          <span className="text-sm text-muted-foreground tabular-nums">{result.durationMs}ms</span>
+        </span>
+      }
+      actions={result.error ? (
+        <span className="text-sm text-status-critical inline-flex items-start gap-1"><AlertTriangle className="w-3.5 h-3.5 mt-0.5 shrink-0" aria-hidden="true" />{result.error}</span>
+      ) : undefined}
+      rootClassName="lg:col-span-5 min-w-0 flex flex-col lg:h-[calc(100vh-220px)]"
+      bodyPadding="px-5 py-3"
+      className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden space-y-3"
+    >
+      <div>
+        <p className="text-xs font-medium text-muted-foreground mb-1">실행된 명령</p>
+        <pre className="text-xs font-mono bg-background border border-border rounded p-2 overflow-auto whitespace-pre-wrap break-all text-foreground/80">
+          {result.executedCommand || '(not provided)'}
+        </pre>
       </div>
+      <ExecOutputTabs stdout={result.stdout} stderr={result.stderr} maxHeight="max-h-[440px]" />
     </MacCard>
   );
 }
@@ -140,24 +150,25 @@ export function McClientPage() {
 
   return (
     <div className="app-min-h-screen bg-background">
-      <main className="pr-6 py-6 flex gap-5">
+      <PageShell density="console" className="flex gap-3">
         <ClusterSidebar clusters={clusters} selectedId={clusterId || null} onSelect={(id) => { setClusterId(id ?? ''); setResult(null); }} iconOnly />
 
         <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-3 mb-6">
-            <HardDrive className="w-6 h-6 text-primary" />
-            <h1 className="text-xl font-bold">mc 클라이언트 콘솔</h1>
-            {effectiveHost && (
+          <PageHeader
+            className="mb-6"
+            icon={HardDrive}
+            title="mc 클라이언트 콘솔"
+            titleExtra={effectiveHost ? (
               <span className="text-sm px-2 py-0.5 rounded-full bg-status-unknown/15 text-status-unknown border border-status-unknown/30 font-mono">
                 → {effectiveHost}
               </span>
-            )}
-          </div>
+            ) : undefined}
+          />
 
-          <MacCard rootClassName="mb-5" className="text-sm text-muted-foreground leading-relaxed">
+          <p className="mb-5 text-sm text-muted-foreground leading-relaxed">
             MinIO <code className="font-mono text-foreground">mc</code> 가 설치된 호스트에 SSH 로 접속해 명령 실행.
             alias 는 미리 <code className="font-mono text-foreground">mc alias set</code> 으로 구성돼 있어야 합니다 (기본값: <code className="font-mono text-foreground">local</code>). 프리셋의 <code className="font-mono text-foreground">{'{alias}'}</code> 는 아래 alias 값으로 치환됩니다.
-          </MacCard>
+          </p>
 
           {/* 타겟 2 : 프리셋 3 : 결과 5 비율 (10 컬럼 그리드) — 결과는 항상 같은 자리(우측)에 고정,
               내부에서만 세로 스크롤(가로 스크롤 없음)되어 카드들이 한 화면 폭 안에 들어온다. */}
@@ -211,7 +222,7 @@ export function McClientPage() {
                 <div className="flex items-center bg-secondary/60 rounded-lg p-[3px] gap-px">
                   {(['password', 'key'] as const).map((m) => (
                     <button key={m} onClick={() => setAuthMode(m)}
-                      className={`flex-1 px-2 py-1.5 text-sm font-medium rounded-md transition-all ${
+                      className={`flex-1 px-2 py-1.5 text-sm font-medium rounded-md transition-colors ${
                         authMode === m ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
                       }`}>
                       {m === 'password' ? '비밀번호' : 'Private Key'}
@@ -234,7 +245,7 @@ export function McClientPage() {
             </MacCard>
 
             {/* 중: 프리셋 + 명령 */}
-            <MacCard rootClassName="lg:col-span-3 min-w-0" bodyPadding="p-5" className="space-y-4">
+            <MacCard title="명령" rootClassName="lg:col-span-3 min-w-0" bodyPadding="p-5" className="space-y-4">
               <McPresetManager clusterId={clusterId} isAdmin={isAdmin} onPick={setArgs} />
 
               <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
@@ -275,7 +286,7 @@ export function McClientPage() {
               </div>
 
               {runError && (
-                <div className="px-3 py-2 text-sm rounded-lg bg-destructive/10 text-destructive border border-destructive/30">
+                <div className="px-3 py-2 text-sm rounded-lg bg-status-critical/10 text-status-critical border border-status-critical/30">
                   {formatApiError(runError)}
                 </div>
               )}
@@ -296,7 +307,7 @@ export function McClientPage() {
             <ResultPanel result={result} />
           </div>
         </div>
-      </main>
+      </PageShell>
 
       <ConfirmDialog
         open={confirmOpen}
@@ -309,7 +320,7 @@ export function McClientPage() {
       >
         <div className="space-y-3">
           <div>
-            <p className="text-xs uppercase tracking-wider text-muted-foreground mb-1">타겟</p>
+            <p className="text-xs font-medium text-muted-foreground mb-1">타겟</p>
             <p className="font-mono">
               <span className="text-primary">{username}</span>
               <span className="text-muted-foreground">@</span>
@@ -318,14 +329,15 @@ export function McClientPage() {
             </p>
           </div>
           <div>
-            <p className="text-xs uppercase tracking-wider text-muted-foreground mb-1">실행</p>
+            <p className="text-xs font-medium text-muted-foreground mb-1">실행</p>
             <pre className="text-xs font-mono bg-background border border-border rounded p-2 max-h-32 overflow-auto whitespace-pre-wrap break-all">
               {mcPath} {args.replace(/\{alias\}/g, alias)}
             </pre>
           </div>
           {isDanger && (
-            <div className="text-sm text-status-critical border border-status-critical/30 bg-status-critical/5 rounded p-2">
-              ⚠ 쓰기 성격 명령(rm/mirror/admin service restart/policy set 등)이 감지되었습니다. 정말 진행하시겠습니까?
+            <div className="text-sm text-status-critical border border-status-critical/30 bg-status-critical/5 rounded p-2 flex items-start gap-1.5">
+              <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0" aria-hidden="true" />
+              <span>쓰기 성격 명령(rm/mirror/admin service restart/policy set 등)이 감지되었습니다. 정말 진행하시겠습니까?</span>
             </div>
           )}
         </div>

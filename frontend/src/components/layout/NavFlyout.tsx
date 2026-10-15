@@ -128,7 +128,7 @@ export function FlyoutShell({
       aria-label={title}
     >
       <div className="px-3 py-1.5 border-b border-border flex items-center justify-between bg-muted/40">
-        <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider truncate">{title}</span>
+        <span className="text-xs font-medium text-muted-foreground truncate">{title}</span>
         <button
           type="button"
           onClick={onClose}

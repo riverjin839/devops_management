@@ -2,12 +2,13 @@ import { useEffect, useId, useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useAbortableMutation } from '@/hooks/useAbortableMutation';
 import {
-  Database, Play, Square, CheckCircle, XCircle, Key, FileText, Terminal,
+  Database, Play, Square, CheckCircle, XCircle, AlertTriangle, Key, FileText, Terminal,
   ShieldAlert, Wifi, Clock, ScrollText,
 } from 'lucide-react';
 import { useClusters } from '@/hooks/useCluster';
 import { useTerminalEnvSync } from '@/hooks/useTerminalEnvSync';
-import { ConfirmDialog, ExecOutputTabs, ClusterSidebar, SavedCommands } from '@/components/common';
+import { ConfirmDialog, ExecOutputTabs, ClusterSidebar, SavedCommands, EmptyState, PageShell } from '@/components/common';
+import { PageHeader } from '@/components/common/PageHeader';
 import { MacCard } from '@/components/ui/MacCard';
 import {
   etcdctlApi, type EtcdPreset, type EtcdMasterCandidate, type EtcdCtlRunResponse,
@@ -18,7 +19,7 @@ const STATUS_META: Record<EtcdCtlRunResponse['status'], { label: string; cls: st
   ok:            { label: '정상',     cls: 'bg-status-healthy/10 text-status-healthy border-status-healthy/30',  icon: CheckCircle },
   error:         { label: '에러',     cls: 'bg-status-critical/10 text-status-critical border-status-critical/30',              icon: XCircle },
   timeout:       { label: '타임아웃', cls: 'bg-status-warning/10 text-status-warning border-status-warning/30',        icon: Clock },
-  auth_error:    { label: '인증 실패', cls: 'bg-orange-500/10 text-orange-400 border-orange-500/30',    icon: ShieldAlert },
+  auth_error:    { label: '인증 실패', cls: 'bg-status-warning/10 text-status-warning border-status-warning/30',    icon: ShieldAlert },
   connect_error: { label: '연결 실패', cls: 'bg-status-unknown/10 text-status-unknown border-status-unknown/30',       icon: Wifi },
 };
 
@@ -29,19 +30,24 @@ const STATUS_META: Record<EtcdCtlRunResponse['status'], { label: string; cls: st
 function ResultPanel({ result, tab }: { result: EtcdCtlRunResponse | null; tab: Tab }) {
   if (!result) {
     return (
-      <MacCard rootClassName="lg:col-span-5 min-w-0" bodyPadding="p-5" className="flex items-center justify-center min-h-[200px] lg:h-[calc(100vh-260px)]">
-        <p className="text-sm text-muted-foreground text-center">
-          {tab === 'run' ? 'etcdctl 명령을 실행하면' : '로그를 가져오면'}<br />결과가 여기에 표시됩니다.
-        </p>
-      </MacCard>
+      <div className="lg:col-span-5 min-w-0 flex items-center justify-center min-h-[200px] lg:h-[calc(100vh-260px)]">
+        <EmptyState
+          compact
+          icon={tab === 'run' ? Terminal : ScrollText}
+          title="아직 실행 결과가 없습니다."
+          description={tab === 'run' ? 'etcdctl 명령을 실행하면 결과가 여기에 표시됩니다.' : '로그를 가져오면 결과가 여기에 표시됩니다.'}
+        />
+      </div>
     );
   }
   const meta = STATUS_META[result.status];
   const Icon = meta.icon;
+  // 헤더(상태·호스트·exit·소요)는 고정, 본문만 세로 스크롤 — 예전 sticky header 와 같은 동작.
   return (
-    <MacCard rootClassName="lg:col-span-5 min-w-0 overflow-y-auto overflow-x-hidden lg:h-[calc(100vh-260px)]" bodyPadding="p-0">
-      <header className="sticky top-0 z-10 px-5 py-3 border-b border-border flex items-center justify-between bg-muted/90 backdrop-blur-sm">
-        <div className="flex items-center gap-3 flex-wrap">
+    <MacCard
+      title={tab === 'run' ? '실행 결과' : '서비스 로그'}
+      titleExtra={
+        <span className="flex items-center gap-3 flex-wrap min-w-0">
           <span className={`inline-flex items-center gap-1 text-sm px-2 py-0.5 rounded-full border font-medium ${meta.cls}`}>
             <Icon className="w-3 h-3" />
             {meta.label}
@@ -50,21 +56,23 @@ function ResultPanel({ result, tab }: { result: EtcdCtlRunResponse | null; tab: 
           {result.exitCode !== null && result.exitCode !== undefined && (
             <span className="text-sm font-mono text-muted-foreground">exit {result.exitCode}</span>
           )}
-          <span className="text-sm font-mono text-muted-foreground">{result.durationMs}ms</span>
-        </div>
-        {result.error && (
-          <span className="text-sm text-status-critical">⚠ {result.error}</span>
-        )}
-      </header>
-      <div className="px-5 py-3 space-y-3">
-        <div>
-          <p className="text-xs uppercase tracking-wider text-muted-foreground mb-1">executed</p>
-          <pre className="text-xs font-mono bg-background border border-border rounded p-2 overflow-auto whitespace-pre-wrap break-all text-foreground/80">
-            {result.executedCommand || '(not provided)'}
-          </pre>
-        </div>
-        <ExecOutputTabs stdout={result.stdout} stderr={result.stderr} maxHeight="max-h-[440px]" />
+          <span className="text-sm text-muted-foreground tabular-nums">{result.durationMs}ms</span>
+        </span>
+      }
+      actions={result.error ? (
+        <span className="text-sm text-status-critical inline-flex items-start gap-1"><AlertTriangle className="w-3.5 h-3.5 mt-0.5 shrink-0" aria-hidden="true" />{result.error}</span>
+      ) : undefined}
+      rootClassName="lg:col-span-5 min-w-0 flex flex-col lg:h-[calc(100vh-260px)]"
+      bodyPadding="px-5 py-3"
+      className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden space-y-3"
+    >
+      <div>
+        <p className="text-xs font-medium text-muted-foreground mb-1">실행된 명령</p>
+        <pre className="text-xs font-mono bg-background border border-border rounded p-2 overflow-auto whitespace-pre-wrap break-all text-foreground/80">
+          {result.executedCommand || '(not provided)'}
+        </pre>
       </div>
+      <ExecOutputTabs stdout={result.stdout} stderr={result.stderr} maxHeight="max-h-[440px]" />
     </MacCard>
   );
 }
@@ -182,7 +190,7 @@ export function EtcdCtlPage() {
 
   return (
     <div className="app-min-h-screen bg-background">
-      <main className="pr-6 py-6 flex gap-5">
+      <PageShell density="console" className="flex gap-3">
         <ClusterSidebar
           clusters={clusters}
           selectedId={clusterId || null}
@@ -191,25 +199,24 @@ export function EtcdCtlPage() {
         />
         <div className="flex-1 min-w-0">
         {/* 헤더 */}
-        <div className="flex items-center justify-between mb-6">
-          <div className="flex items-center gap-3">
-            <Database className="w-6 h-6 text-primary" />
-            <h1 className="text-xl font-bold">etcdctl 콘솔</h1>
-            {effectiveHost && (
-              <span className="text-sm px-2 py-0.5 rounded-full bg-status-unknown/15 text-status-unknown border border-status-unknown/30 font-mono">
-                → {effectiveHost}
-              </span>
-            )}
-          </div>
-        </div>
+        <PageHeader
+          className="mb-6"
+          icon={Database}
+          title="etcdctl 콘솔"
+          titleExtra={effectiveHost ? (
+            <span className="text-sm px-2 py-0.5 rounded-full bg-status-unknown/15 text-status-unknown border border-status-unknown/30 font-mono">
+              → {effectiveHost}
+            </span>
+          ) : undefined}
+        />
 
         {/* 안내 */}
-        <MacCard rootClassName="mb-5" className="text-sm text-muted-foreground leading-relaxed">
+        <p className="mb-5 text-sm text-muted-foreground leading-relaxed">
           기본 가정: control-plane(master1) 서버에 <code className="font-mono text-foreground">etcd.service</code> 가 systemd 로 동작하고
           <code className="font-mono text-foreground"> /etc/etcd.env</code> 에 <code className="font-mono text-foreground">ETCDCTL_*</code> 환경변수가 정의됨.
           다르면 "env 파일" 경로를 바꾸거나 env 로드를 끄고 extra env 로 직접 지정 가능.
           SSH 인증정보는 이 실행에만 사용되고 저장되지 않습니다.
-        </MacCard>
+        </p>
 
         {/* 탭 */}
         <div className="flex items-center gap-1 mb-5">
@@ -296,7 +303,7 @@ export function EtcdCtlPage() {
                   <button
                     key={m}
                     onClick={() => setAuthMode(m)}
-                    className={`flex-1 px-2 py-1.5 text-sm font-medium rounded-md transition-all ${
+                    className={`flex-1 px-2 py-1.5 text-sm font-medium rounded-md transition-colors ${
                       authMode === m ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
                     }`}
                   >
@@ -328,7 +335,7 @@ export function EtcdCtlPage() {
           </MacCard>
 
           {/* 중: 실행 구성 */}
-          <MacCard rootClassName="lg:col-span-3 min-w-0" bodyPadding="p-5" className="space-y-4">
+          <MacCard title={tab === 'run' ? '명령' : '로그 조회'} rootClassName="lg:col-span-3 min-w-0" bodyPadding="p-5" className="space-y-4">
             {tab === 'run' ? (
               <>
                 {/* 프리셋 */}
@@ -416,7 +423,7 @@ export function EtcdCtlPage() {
                 </div>
 
                 {runError && (
-                  <div className="px-3 py-2 text-sm rounded-lg bg-destructive/10 text-destructive border border-destructive/30">
+                  <div className="px-3 py-2 text-sm rounded-lg bg-status-critical/10 text-status-critical border border-status-critical/30">
                     {formatApiError(runError)}
                   </div>
                 )}
@@ -485,7 +492,7 @@ export function EtcdCtlPage() {
                 </div>
 
                 {runError && (
-                  <div className="px-3 py-2 text-sm rounded-lg bg-destructive/10 text-destructive border border-destructive/30">
+                  <div className="px-3 py-2 text-sm rounded-lg bg-status-critical/10 text-status-critical border border-status-critical/30">
                     {formatApiError(runError)}
                   </div>
                 )}
@@ -518,7 +525,7 @@ export function EtcdCtlPage() {
           <ResultPanel result={result} tab={tab} />
         </div>
         </div>
-      </main>
+      </PageShell>
 
       {/* 실행 확인 모달 */}
       <ConfirmDialog
@@ -539,7 +546,7 @@ export function EtcdCtlPage() {
       >
         <div className="space-y-3">
           <div>
-            <p className="text-xs uppercase tracking-wider text-muted-foreground mb-1">타겟</p>
+            <p className="text-xs font-medium text-muted-foreground mb-1">타겟</p>
             <p className="font-mono">
               <span className="text-primary">{username}</span>
               <span className="text-muted-foreground">@</span>
@@ -552,14 +559,14 @@ export function EtcdCtlPage() {
           </div>
           {confirmAction === 'run' ? (
             <div>
-              <p className="text-xs uppercase tracking-wider text-muted-foreground mb-1">실행</p>
+              <p className="text-xs font-medium text-muted-foreground mb-1">실행</p>
               <pre className="text-xs font-mono bg-background border border-border rounded p-2 max-h-32 overflow-auto whitespace-pre-wrap break-all">
                 {useEnv && envFile ? `source ${envFile} && ` : ''}{etcdctlPath} {args}
               </pre>
             </div>
           ) : (
             <div>
-              <p className="text-xs uppercase tracking-wider text-muted-foreground mb-1">journalctl</p>
+              <p className="text-xs font-medium text-muted-foreground mb-1">journalctl</p>
               <pre className="text-xs font-mono bg-background border border-border rounded p-2 overflow-auto whitespace-pre-wrap">
                 journalctl -u {unit} -n {tail}
                 {since && ` --since "${since}"`}

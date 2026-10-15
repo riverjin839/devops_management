@@ -58,7 +58,7 @@ export function NodeImagesCsvExportMenu({ clusterId, disabled }: { clusterId: st
         CSV <ChevronDown className="w-3 h-3" />
       </button>
       {open && (
-        <div className="absolute right-0 mt-1 z-50 min-w-[200px] rounded-lg border border-border bg-card shadow-lg py-1">
+        <div className="absolute right-0 mt-1 z-50 min-w-[200px] rounded-md border border-border bg-card shadow-lg py-1">
           {OPTIONS.map(({ value, label, hint }) => (
             <button
               key={value}

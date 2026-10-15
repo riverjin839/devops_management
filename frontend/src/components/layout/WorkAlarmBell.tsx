@@ -6,6 +6,7 @@ import { Bell, AlertTriangle, CalendarClock, MessageSquare, X } from 'lucide-rea
 import { useHomeWorkItems } from '@/hooks/useWorkItems';
 import { useAuthStore } from '@/stores/authStore';
 import { notificationsApi } from '@/services/api';
+import { EmptyState } from '@/components/common/EmptyState';
 import { stripHtml, assigneeNames, toLocalDateKey } from '@/lib/utils';
 import type { WorkItem } from '@/types';
 
@@ -195,7 +196,7 @@ export function WorkAlarmBell() {
             top: Math.max(8, Math.min(anchor.bottom + 8, window.innerHeight - 8 - 440)),
             right: Math.max(8, window.innerWidth - anchor.right),
           }}
-          className="fixed z-[60] w-80 max-h-[70vh] rounded-xl border border-border bg-card shadow-xl flex flex-col overflow-hidden"
+          className="fixed z-[60] w-80 max-h-[70vh] rounded-md border border-border bg-card shadow-xl flex flex-col overflow-hidden"
         >
           <div className="flex items-center justify-between px-3 py-2.5 border-b border-border flex-shrink-0">
             <div className="flex items-center gap-2">
@@ -215,9 +216,7 @@ export function WorkAlarmBell() {
 
           <div className="overflow-y-auto flex-1">
             {grandTotal === 0 ? (
-              <div className="px-4 py-10 text-center text-sm text-muted-foreground">
-                처리할 미완료 업무가 없습니다 🎉
-              </div>
+              <EmptyState compact icon={Bell} title="처리할 미완료 업무가 없습니다." description="지연되거나 오늘 마감인 업무가 생기면 여기에 표시됩니다." />
             ) : (
               <>
                 {notifications.length > 0 && (
