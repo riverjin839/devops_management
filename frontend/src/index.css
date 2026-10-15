@@ -89,6 +89,7 @@
 
     /* ── Brand tokens (외부 서비스 고유색. 앱 primary 와 구분) ── */
     --brand-jira:         216 100% 40%;  /* #0052CC Atlassian/Jira blue */
+    --brand-jira-text:    216 100% 40%;  /* 글자 전용(text-brand-jira) — 다크 계열 테마는 밝은 값으로 재정의 */
     --brand-servicenow:   160 84% 25%;   /* #04724D ServiceNow green */
     --brand-ai:           271 81% 56%;   /* #9333EA purple-600 — AI 관련 기능 배지 전용 */
 
@@ -111,6 +112,7 @@
     --primary-foreground: 220 18% 7%;  /* P0: 밝은 primary 면 → 어두운 글자 */
     /* P0 대비: 글자 전용 파생 토큰 — text-primary / text-status-* 가 참조(면색과 분리, 4.5:1 이상) */
     --primary-text: 212 100% 63%;
+    --brand-jira-text: 216 90% 70%;   /* 다크 바탕 위 Jira 키 글자(4.5:1) */
     --status-healthy-text: 142 71% 45%;
     --status-warning-text: 38 92% 50%;
     --status-critical-text: 0 84% 66%;
@@ -367,6 +369,7 @@
     --primary: 45 96% 52%;
     --primary-foreground: 8 14% 11%;
     --primary-text: 45 96% 58%;
+    --brand-jira-text: 216 90% 72%;   /* 다크 바탕 위 Jira 키 글자(4.5:1) */
     --secondary: 16 14% 21%;
     --secondary-foreground: 40 28% 90%;
     --muted: 16 12% 19%;
@@ -583,6 +586,7 @@
     --primary: 219 77% 64%;
     --primary-foreground: 230 14% 8%;
     --primary-text: 219 80% 72%;
+    --brand-jira-text: 216 90% 72%;   /* 다크 바탕 위 Jira 키 글자(4.5:1) */
     --secondary: 210 9% 17%;
     --secondary-foreground: 38 22% 88%;
     --muted: 210 8% 15%;
@@ -1097,6 +1101,7 @@
     --primary: 228 50% 72%;
     --primary-foreground: 155 30% 8%;
     --primary-text: 228 60% 80%;
+    --brand-jira-text: 216 90% 72%;   /* 다크 바탕 위 Jira 키 글자(4.5:1) */
     --secondary: 155 18% 20%;
     --secondary-foreground: 40 20% 91%;
     --muted: 155 18% 18%;

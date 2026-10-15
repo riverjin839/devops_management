@@ -19,11 +19,21 @@ interface ClusterRouteParam {
  *
  * @param basePath 라우트 접두사 (예: '/ops-checks')
  * @param clusters 선택 대상 목록 — 비어 있으면 아무것도 하지 않는다.
+ * @param opts.pathFor 클러스터 id 가 경로 가운데에 오는 라우트(예: `/versions/:id/graph`)의 경로 생성기.
+ *   없으면 `${basePath}/${id}`.
+ * @param opts.local true 면 URL 을 건드리지 않고 로컬 state 로 동작한다 — 허브 탭 안에 다른 화면을
+ *   그대로 마운트한 경우(예: 지식 허브의 온톨로지 탭)처럼 이동하면 탭을 벗어나는 곳에서 쓴다.
  */
-export function useClusterRouteParam(basePath: string, clusters: Cluster[]): ClusterRouteParam {
+export function useClusterRouteParam(
+  basePath: string,
+  clusters: Cluster[],
+  opts: { pathFor?: (id: string) => string; local?: boolean } = {},
+): ClusterRouteParam {
   const { clusterId: routeClusterId = '' } = useParams<{ clusterId: string }>();
   const navigate = useNavigate();
-  const embedded = useIsIslandEmbedded();
+  const islandEmbedded = useIsIslandEmbedded();
+  const embedded = islandEmbedded || !!opts.local;
+  const { pathFor } = opts;
   const [localClusterId, setLocalClusterId] = useState('');
 
   const clusterId = embedded ? localClusterId : routeClusterId;
@@ -31,14 +41,14 @@ export function useClusterRouteParam(basePath: string, clusters: Cluster[]): Clu
   useEffect(() => {
     if (clusterId || clusters.length === 0) return;
     if (embedded) setLocalClusterId(clusters[0].id);
-    else navigate(`${basePath}/${clusters[0].id}`, { replace: true });
-  }, [clusterId, clusters, embedded, basePath, navigate]);
+    else navigate(pathFor ? pathFor(clusters[0].id) : `${basePath}/${clusters[0].id}`, { replace: true });
+  }, [clusterId, clusters, embedded, basePath, pathFor, navigate]);
 
   const selectCluster = useCallback((id: string | null) => {
     if (!id) return;
     if (embedded) setLocalClusterId(id);
-    else navigate(`${basePath}/${id}`);
-  }, [embedded, basePath, navigate]);
+    else navigate(pathFor ? pathFor(id) : `${basePath}/${id}`);
+  }, [embedded, basePath, pathFor, navigate]);
 
   return { clusterId, selectCluster };
 }

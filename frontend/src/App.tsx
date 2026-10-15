@@ -225,8 +225,10 @@ function AppShell() {
                   NAV_MAP 을 통해 범용으로 처리한다(Settings "접근 제어"). */}
               <Route path="/wbs" element={<WbsFlowPage />} />
               <Route path="/incident-analysis" element={<IncidentAnalysisPage />} />
+              <Route path="/incident-analysis/:clusterId" element={<IncidentAnalysisPage />} />
               <Route path="/packet-flow" element={<PacketFlowPage />} />
               <Route path="/ontology" element={<OntologyPage />} />
+              <Route path="/ontology/:clusterId" element={<OntologyPage />} />
               <Route path="/trends" element={<TrendDigestPage />} />
               <Route path="/cilium-trace" element={<CiliumTracePage />} />
               <Route path="/service-topology" element={<ServiceTopologyPage />} />
