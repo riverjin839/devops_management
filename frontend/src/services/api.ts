@@ -313,6 +313,8 @@ export const backupApi = {
     api.get('/backup/export', {
       params: { include_logs: includeLogs, include_sensitive: includeSensitive },
       responseType: 'blob',
+      // 서버가 테이블을 차례로 스트리밍한다 — 대형 DB 는 전송에 수 분이 걸려 기본 30초에 끊긴다.
+      timeout: 10 * 60_000,
     }),
   importPreview: (file: File, mode: 'merge' | 'replace', includeLogs: boolean) => {
     const fd = new FormData();

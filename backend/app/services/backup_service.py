@@ -243,11 +243,105 @@ def export_all(
 
 
 def export_to_bytes(db: Session, **kwargs) -> tuple[bytes, str]:
-    """export_all 결과를 JSON bytes + 파일명 으로."""
+    """export_all 결과를 JSON bytes + 파일명 으로. **소규모·테스트 전용** — 전체 DB 를 메모리에
+    올리므로 운영 엔드포인트는 `iter_export_json()` 스트리밍을 쓴다."""
     envelope = export_all(db, **kwargs)
     raw = json.dumps(envelope, ensure_ascii=False, indent=2).encode("utf-8")
+    return raw, export_filename()
+
+
+def export_filename() -> str:
     ts = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S")
-    return raw, f"k8s-monitor-backup-{ts}.json"
+    return f"k8s-monitor-backup-{ts}.json"
+
+
+# 스트리밍 export — 서버측 커서로 테이블당 이 행 수만큼씩 읽고, 출력은 이 크기쯤 모아 흘려보낸다.
+# 메모리 상한 ≈ (chunk 행 수 × 행 크기) + flush 버퍼. 전체 DB 크기와 무관하다.
+EXPORT_YIELD_PER = 500
+EXPORT_FLUSH_BYTES = 256 * 1024
+
+
+def iter_export_json(
+    db: Session,
+    *,
+    include_logs: bool = False,
+    include_sensitive: bool = False,
+    summary: dict | None = None,
+):
+    """`export_all()` 과 같은 envelope 을 **조각(bytes)으로 흘려보내는** 생성기.
+
+    예전 export 는 모든 테이블 행 → 직렬화 dict → JSON 문자열(indent 2) → bytes 를 한 워커 메모리에
+    동시에 들고 있어, 운영 DB 에서는 수백 MB~GB 가 돼 backend 파드가 OOMKilled 됐다. 여기서는
+    테이블마다 서버측 커서(`stream_results` + `yield_per`)로 조금씩 읽어 행 단위로 쓰고 바로 내보낸다.
+
+    - 파일 모양은 그대로다(복구 `parse_backup` 이 그대로 읽는다). 단 ``counts``·``errors``·
+      ``skipped_tables`` 는 다 흘려보낸 뒤에야 알 수 있어 **파일 끝**에 온다(JSON 키 순서는 무의미).
+    - per-table fault-tolerant 유지: 한 테이블이 실패하면 rollback 하고 다음 테이블로 간다. 행을
+      일부 내보낸 뒤 실패하면 그 테이블 배열을 닫고 ``errors`` 에 "partial" 로 남긴다(JSON 은 항상 유효).
+    - ``summary`` 를 넘기면 끝난 뒤 counts/errors/bytes 를 채운다(감사 로그용).
+    """
+    tables = _filter_tables(include_logs)
+    counts: dict[str, int] = {}
+    errors: dict[str, str] = {}
+    skipped: list[str] = []
+    total = 0
+    buf: list[str] = []
+    buf_len = 0
+
+    def _emit(piece: str):
+        nonlocal buf_len
+        buf.append(piece)
+        buf_len += len(piece)
+
+    def _flush() -> bytes:
+        nonlocal buf_len
+        out = "".join(buf).encode("utf-8")
+        buf.clear()
+        buf_len = 0
+        return out
+
+    head = {
+        "version": BACKUP_VERSION,
+        "created_at": datetime.now(timezone.utc).isoformat(),
+        "options": {"include_logs": include_logs, "include_sensitive": include_sensitive},
+    }
+    _emit(json.dumps(head, ensure_ascii=False)[:-1] + ', "tables": {')
+
+    for ti, t in enumerate(tables):
+        _emit(("," if ti else "") + f"\n{json.dumps(t.name)}: [")
+        n = 0
+        try:
+            result = db.execute(t.select().execution_options(stream_results=True, yield_per=EXPORT_YIELD_PER))
+            for r in result.mappings():
+                row_dict = {k: _serialize_value(v) for k, v in dict(r).items()}
+                row_dict = _mask_sensitive(t.name, row_dict, include_sensitive)
+                _emit(("," if n else "") + "\n" + json.dumps(row_dict, ensure_ascii=False))
+                n += 1
+                if buf_len >= EXPORT_FLUSH_BYTES:
+                    chunk = _flush()
+                    total += len(chunk)
+                    yield chunk
+        except Exception as e:  # noqa: BLE001 — 한 테이블 실패가 전체 export 를 죽이지 않게
+            try:
+                db.rollback()
+            except Exception:  # noqa: BLE001
+                pass
+            msg = f"{type(e).__name__}: {str(e)[:300]}"
+            if n:
+                msg = f"partial ({n} rows written) — {msg}"
+            _log.warning("backup: export %s failed — %s", t.name, msg)
+            errors[t.name] = msg
+            skipped.append(t.name)
+        _emit("]")
+        counts[t.name] = n
+
+    tail = {"counts": counts, "errors": errors, "skipped_tables": skipped}
+    _emit("\n}, " + json.dumps(tail, ensure_ascii=False)[1:] + "\n")
+    chunk = _flush()
+    total += len(chunk)
+    if summary is not None:
+        summary.update({"counts": counts, "errors": errors, "skipped_tables": skipped, "bytes": total})
+    yield chunk
 
 
 # ── Import (preview + apply) ─────────────────────────────────────────────

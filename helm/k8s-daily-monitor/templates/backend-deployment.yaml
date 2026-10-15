@@ -40,7 +40,10 @@ spec:
             - secretRef:
                 name: k8s-monitor-secret
           env:
-            # uvicorn --workers 2(Dockerfile) 라 pod 당 SQLAlchemy 엔진이 2개 뜬다.
+            # uvicorn 워커 수(values backend.workers) — 워커마다 메모리·DB 풀이 배수로 는다.
+            - name: WEB_CONCURRENCY
+              value: {{ .Values.backend.workers | default 2 | quote }}
+            # 워커 2개(기본)라 pod 당 SQLAlchemy 엔진이 2개 뜬다.
             # 기본 풀(10+20=30)을 그대로 두면 pod 당 예산이 60 으로 배가된다 — 워커
             # 수만큼 나눠서 이전과 같은 pod 당 총 예산(30)을 유지 (celery-worker-llm.yaml
             # 과 동일 패턴).
