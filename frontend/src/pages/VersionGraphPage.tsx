@@ -6,7 +6,9 @@ import { RefreshCw, Share2, X } from 'lucide-react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { versionsApi, type VersionGraphNode, type VersionGraphEdge } from '@/services/api';
 import { useClusters } from '@/hooks/useCluster';
-import { useToast, SelectClusterEmptyState, LoadingState, EmptyState, PageHeader } from '@/components/common';
+import { useToast, SelectClusterEmptyState, LoadingState, EmptyState, PageHeader, RunLogPanel } from '@/components/common';
+import { useRunLog, runLogged, type RunLogEntry } from '@/hooks/useRunLog';
+import { useLogPref } from '@/hooks/useLogPref';
 import { formatApiError } from '@/lib/utils';
 
 // ── 타입별 색상 (D-005: 차트 토큰 체계) ─────────────────────────────────────
@@ -183,14 +185,29 @@ export function VersionGraphPage() {
     }
   }, []);
 
+  // 실행 로그(D-135) — 재수집/지금 수집을 요청·대기·응답 요약·경고 줄로 남긴다(응답 errors[] 도 버리지 않는다).
+  const runLog = useRunLog();
+  const [showLog, setShowLog] = useLogPref('version-graph-collect');
+
   const collectAndRefresh = async () => {
-    if (!selectedId) return;
-    try {
-      await versionsApi.collect(selectedId);
+    if (!selectedId || runLog.running) return;
+    const name = clusters.find((c) => c.id === selectedId)?.name ?? selectedId;
+    const r = await runLogged(runLog, {
+      title: '버전 재수집',
+      first: `${name} — kubeconfig 로 컴포넌트 버전·플래그 수집 요청`,
+      fn: () => versionsApi.collect(selectedId).then((res) => res.data),
+      summarize: (d) => {
+        const out: RunLogEntry[] = d.errors.map((e): RunLogEntry => ['warn', `경고 — ${e}`]);
+        out.push([d.errors.length > 0 ? 'warn' : 'info', `완료 — 변경 ${d.changed}건 · 경고 ${d.errors.length}건 · 그래프 새로고침`]);
+        return out;
+      },
+    });
+    if (r.ok) {
       queryClient.invalidateQueries({ queryKey: ['versions'] });
-      toast.success('수집됨');
-    } catch (e) {
-      toast.error('수집 실패', formatApiError(e));
+      if (r.data.errors.length > 0) toast.warning(`수집됨 · 경고 ${r.data.errors.length}건`, '상세는 실행 로그 참조');
+      else toast.success('수집됨');
+    } else if (!r.aborted) {
+      toast.error('수집 실패', formatApiError(r.error));
     }
   };
 
@@ -225,15 +242,22 @@ export function VersionGraphPage() {
             </div>
             <button
               onClick={collectAndRefresh}
-              disabled={!selectedId}
+              disabled={!selectedId || runLog.running}
               className="flex items-center gap-1 px-2 py-1 text-sm bg-primary/10 text-primary border border-primary/30 hover:bg-primary/20 rounded-xl transition-colors disabled:opacity-50"
             >
-              <RefreshCw className="w-3 h-3" />
-              재수집
+              <RefreshCw className={`w-3 h-3 ${runLog.running ? 'animate-spin' : ''}`} />
+              {runLog.running ? '수집 중' : '재수집'}
             </button>
           </>}
         />
       </div>
+
+      {/* 실행 로그 — 툴바 아래 별도 줄(캔버스를 덮지 않고 그만큼 캔버스 높이가 줄어든다). 실행 전엔 렌더되지 않는다. */}
+      {(runLog.running || runLog.lines.length > 0) && (
+        <div className="flex-shrink-0 px-4 py-2 border-b border-border bg-card">
+          <RunLogPanel run={runLog} show={showLog} onShowChange={setShowLog} maxHeight="max-h-40" />
+        </div>
+      )}
 
       {/* 그래프 */}
       <div ref={containerRef} className="flex-1 relative">
