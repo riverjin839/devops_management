@@ -24,7 +24,10 @@ import { useQuery } from '@tanstack/react-query';
 import { useClusters } from '@/hooks/useCluster';
 import { useTerminalEnvSync } from '@/hooks/useTerminalEnvSync';
 import { useClusterStore } from '@/stores/clusterStore';
-import { ClusterSidebar, LogViewer, SearchableSelect, EmptyState, SelectClusterEmptyState, LoadingState, Skeleton, PageShell } from '@/components/common';
+import { ClusterSidebar, LogViewer, SearchableSelect, EmptyState, SelectClusterEmptyState, LoadingState, Skeleton, PageShell, RunLogPanel } from '@/components/common';
+import { useRunLog, runLogged, consoleRunLines } from '@/hooks/useRunLog';
+import { useLogPref } from '@/hooks/useLogPref';
+import { formatApiError } from '@/lib/utils';
 import { MacCard } from '@/components/ui/MacCard';
 import { RoleGate } from '@/components/auth/RoleGate';
 import { getAuthToken } from '@/stores/authStore';
@@ -343,37 +346,57 @@ function BpfInspectorTab({ clusterId, agents }: { clusterId: string; agents: Cil
   const createCmd = useCreateCommand();
   const presets = presetsResp?.data ?? [];
 
+  // 실행 수명주기 로그(BPF 조회·직접 명령·프리셋 저장 공유) — 출력 본문은 결과 카드/LogViewer.
+  const runLog = useRunLog();
+  const [showLog, setShowLog] = useLogPref('cilium-bpf');
+  const agentDesc = (name: string) => {
+    const a = agents.find((x) => x.podName === name);
+    return a ? agentLabel(a) : (name || '기본 agent');
+  };
+
   const runAdhoc = useCallback(async () => {
     if (!clusterId || !adhoc.trim()) return;
     setAdhocBusy(true); setAdhocErr(null); setAdhocOut(null);
-    try {
-      const res = await ciliumApi.execCommand(clusterId, { commandArgs: adhoc.trim(), podName: podName || undefined });
-      setAdhocOut(res.raw || '(출력 없음)');
-      if (res.error) setAdhocErr(res.error);
-    } catch (e) {
-      setAdhocErr(e instanceof Error ? e.message : String(e));
-    } finally {
-      setAdhocBusy(false);
+    const cmd = adhoc.trim();
+    const r = await runLogged(runLog, {
+      title: 'cilium-dbg 직접 명령',
+      first: `${agentDesc(podName)} 에서 cilium-dbg ${cmd} 실행 요청`,
+      fn: () => ciliumApi.execCommand(clusterId, { commandArgs: cmd, podName: podName || undefined }),
+      summarize: (res) => [
+        ...consoleRunLines({ host: res.podName, exitCode: res.exitCode, durationMs: res.durationMs, error: res.error }),
+        ['info', `출력 ${res.raw ? res.raw.split('\n').filter((l) => l.trim()).length : 0}줄 — 본문은 아래 출력`],
+      ],
+    });
+    if (r.ok) {
+      setAdhocOut(r.data.raw || '(출력 없음)');
+      if (r.data.error) setAdhocErr(r.data.error);
+    } else if (!r.aborted) {
+      setAdhocErr(formatApiError(r.error));
     }
-  }, [clusterId, adhoc, podName]);
+    setAdhocBusy(false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- runLog 함수들은 안정적, agentDesc 는 agents 로 결정
+  }, [clusterId, adhoc, podName, agents]);
 
   const savePreset = useCallback(async () => {
     const cmd = adhoc.trim();
     if (!cmd) return;
     const desc = window.prompt('프리셋 설명(라벨)을 입력하세요', cmd);
     if (desc == null) return;
-    try {
-      await createCmd.mutateAsync({
+    const full = cmd.startsWith('cilium-dbg') ? cmd : `cilium-dbg ${cmd}`;
+    await runLogged(runLog, {
+      title: '프리셋 저장',
+      first: `주요 명령어(category=cilium)에 "${desc || cmd}" — ${full} 저장 요청`,
+      heartbeatMs: 0,
+      fn: () => createCmd.mutateAsync({
         category: 'cilium',
-        command: cmd.startsWith('cilium-dbg') ? cmd : `cilium-dbg ${cmd}`,
+        command: full,
         description: desc || cmd,
         importance: 'medium',
         tags: 'cilium,bpf',
-      });
-      window.alert('프리셋으로 저장했습니다.');
-    } catch (e) {
-      window.alert(`저장 실패: ${e instanceof Error ? e.message : String(e)}`);
-    }
+      }),
+      summarize: () => [['info', '프리셋 저장 완료 — 저장된 프리셋 목록에서 고를 수 있음']],
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- runLog 함수들은 안정적
   }, [adhoc, createCmd]);
 
   useEffect(() => {
@@ -383,20 +406,33 @@ function BpfInspectorTab({ clusterId, agents }: { clusterId: string; agents: Cil
   const run = useCallback(async () => {
     if (!clusterId) return;
     setLoading(true); setError(null);
-    try {
-      const res = await ciliumApi.bpfInspect(clusterId, {
+    const spec = BPF_KINDS.find((k) => k.id === kind);
+    const what = kind === 'policy' ? `bpf policy get ${endpointId}` : (spec?.desc ?? kind);
+    const r = await runLogged(runLog, {
+      title: `BPF 맵 조회 · ${spec?.label ?? kind}`,
+      first: `${agentDesc(podName)} 에서 ${what} 실행 요청`,
+      fn: () => ciliumApi.bpfInspect(clusterId, {
         kind,
         podName: podName || undefined,
         endpointId: kind === 'policy' ? (endpointId || undefined) : undefined,
-      });
-      setData(res);
-      if (res.error) setError(res.error);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
-    } finally {
-      setLoading(false);
+      }),
+      summarize: (res) => {
+        const rows = res.isJson && Array.isArray(res.parsed) ? `${res.parsed.length}행(JSON)` : `${res.raw ? res.raw.split('\n').filter((l) => l.trim()).length : 0}줄(텍스트)`;
+        return [
+          ['info', `${res.podName} · ${res.kind} · 결과 ${rows}${res.executed ? ` · ${res.executed}` : ''}`],
+          ...(res.error ? [['error', `오류 — ${res.error}`] as ['error', string]] : []),
+        ];
+      },
+    });
+    if (r.ok) {
+      setData(r.data);
+      if (r.data.error) setError(r.data.error);
+    } else if (!r.aborted) {
+      setError(formatApiError(r.error));
     }
-  }, [clusterId, kind, podName, endpointId]);
+    setLoading(false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- runLog 함수들은 안정적, agentDesc 는 agents 로 결정
+  }, [clusterId, kind, podName, endpointId, agents]);
 
   const downloadRaw = () => {
     if (!data?.raw) return;
@@ -532,10 +568,12 @@ function BpfInspectorTab({ clusterId, agents }: { clusterId: string; agents: Cil
       </RoleGate>
       </div>
 
-      {/* Result — 우측 고정 (실행 전엔 플레이스홀더) */}
+      {/* Result — 우측 고정 (실행 전엔 플레이스홀더), 위에 실행 수명주기 로그 */}
+      <div className="lg:col-span-6 min-w-0 flex flex-col gap-3">
+      <RunLogPanel run={runLog} show={showLog} onShowChange={setShowLog} maxHeight="max-h-56" />
       <MacCard
         title={data ? `결과 · ${data.kind} · ${data.podName}` : '결과'}
-        rootClassName="lg:col-span-6 min-w-0"
+        rootClassName="min-w-0"
         bodyPadding="p-0"
         className="overflow-hidden"
       >
@@ -564,6 +602,7 @@ function BpfInspectorTab({ clusterId, agents }: { clusterId: string; agents: Cil
           </div>
         )}
       </MacCard>
+      </div>
     </div>
   );
 }

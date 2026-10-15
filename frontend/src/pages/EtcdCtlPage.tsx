@@ -7,7 +7,9 @@ import {
 } from 'lucide-react';
 import { useClusters } from '@/hooks/useCluster';
 import { useTerminalEnvSync } from '@/hooks/useTerminalEnvSync';
-import { ConfirmDialog, ExecOutputTabs, ClusterSidebar, SavedCommands, EmptyState, PageShell } from '@/components/common';
+import { useRunLog, runLogged, consoleRunLines, type RunLogEntry } from '@/hooks/useRunLog';
+import { useLogPref } from '@/hooks/useLogPref';
+import { ConfirmDialog, ExecOutputTabs, ClusterSidebar, SavedCommands, EmptyState, PageShell, RunLogPanel } from '@/components/common';
 import { PageHeader } from '@/components/common/PageHeader';
 import { MacCard } from '@/components/ui/MacCard';
 import {
@@ -23,6 +25,16 @@ const STATUS_META: Record<EtcdCtlRunResponse['status'], { label: string; cls: st
   connect_error: { label: '연결 실패', cls: 'bg-status-unknown/10 text-status-unknown border-status-unknown/30',       icon: Wifi },
 };
 
+// 실행 로그에 남길 명령 요약 — etcdctl 인증 플래그(--user/--password) 값은 가린다.
+function maskEtcdArgs(a: string): string {
+  return a.replace(/(--(?:user|password)[=\s])\S+/gi, '$1****');
+}
+
+function outputLines(res: EtcdCtlRunResponse): RunLogEntry[] {
+  const count = (s: string) => (s ? s.split('\n').filter((l) => l.trim()).length : 0);
+  return [['info', `출력 stdout ${count(res.stdout)}줄 · stderr ${count(res.stderr)}줄 — 본문은 결과 패널`]];
+}
+
 // 타겟/실행 구성 옆(우측)에 고정 위치로 배치 — mc 클라이언트 콘솔과 동일한 패턴이다.
 // 실행 전에도 같은 자리에 플레이스홀더를 보여줘 결과가 나와도 레이아웃이 흔들리지 않는다.
 // 카드 자체는 화면 높이에 맞춰 세로 스크롤만 허용(overflow-y-auto)하고 가로 스크롤은
@@ -30,7 +42,7 @@ const STATUS_META: Record<EtcdCtlRunResponse['status'], { label: string; cls: st
 function ResultPanel({ result, tab }: { result: EtcdCtlRunResponse | null; tab: Tab }) {
   if (!result) {
     return (
-      <div className="lg:col-span-5 min-w-0 flex items-center justify-center min-h-[200px] lg:h-[calc(100vh-260px)]">
+      <div className="min-w-0 flex items-center justify-center min-h-[200px] lg:h-[calc(100vh-260px)]">
         <EmptyState
           compact
           icon={tab === 'run' ? Terminal : ScrollText}
@@ -62,7 +74,7 @@ function ResultPanel({ result, tab }: { result: EtcdCtlRunResponse | null; tab: 
       actions={result.error ? (
         <span className="text-sm text-status-critical inline-flex items-start gap-1"><AlertTriangle className="w-3.5 h-3.5 mt-0.5 shrink-0" aria-hidden="true" />{result.error}</span>
       ) : undefined}
-      rootClassName="lg:col-span-5 min-w-0 flex flex-col lg:h-[calc(100vh-260px)]"
+      rootClassName="min-w-0 flex flex-col lg:h-[calc(100vh-260px)]"
       bodyPadding="px-5 py-3"
       className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden space-y-3"
     >
@@ -157,7 +169,6 @@ export function EtcdCtlPage() {
       }, signal);
       return res.data;
     },
-    onSuccess: (d) => setResult(d),
   });
 
   const logsMut = useAbortableMutation({
@@ -175,8 +186,32 @@ export function EtcdCtlPage() {
       }, signal);
       return res.data;
     },
-    onSuccess: (d) => setResult(d),
   });
+
+  // 실행 수명주기 로그(두 탭 공유) — 출력 본문은 결과 패널, 여기는 요청·대기·결과 요약·실패 사유.
+  const runLog = useRunLog();
+  const [showLog, setShowLog] = useLogPref('etcdctl-run');
+  const target = `${username}@${effectiveHost}:${port}`;
+  const doRun = async () => {
+    const cmd = `${useEnv && envFile ? `source ${envFile} && ` : ''}${etcdctlPath} ${maskEtcdArgs(args)}`;
+    const r = await runLogged(runLog, {
+      title: 'etcdctl 실행',
+      first: `${target} 에 SSH 접속 후 실행 요청 — ${cmd} (timeout ${timeout}s)`,
+      fn: () => runMut.mutateAsync(),
+      summarize: (res) => [...consoleRunLines(res), ...outputLines(res)],
+    });
+    if (r.ok) setResult(r.data);
+  };
+  const doLogs = async () => {
+    const cmd = `journalctl -u ${unit} -n ${tail}${since.trim() ? ` --since "${since.trim()}"` : ''}${grep.trim() ? ` | grep -i "${grep.trim()}"` : ''}`;
+    const r = await runLogged(runLog, {
+      title: 'etcd 서비스 로그 조회',
+      first: `${target} 에 SSH 접속 후 조회 요청 — ${cmd}`,
+      fn: () => logsMut.mutateAsync(),
+      summarize: (res) => [...consoleRunLines(res), ...outputLines(res)],
+    });
+    if (r.ok) setResult(r.data);
+  };
 
   const baseReady = !!clusterId && !!effectiveHost
     && (authMode === 'password' ? !!password : !!privateKey.trim());
@@ -521,8 +556,11 @@ export function EtcdCtlPage() {
             )}
           </MacCard>
 
-          {/* 우: 결과 — 항상 같은 위치(우측)에 고정, 실행 전엔 플레이스홀더 */}
-          <ResultPanel result={result} tab={tab} />
+          {/* 우: 실행 로그(수명주기) + 결과 — 항상 같은 위치(우측)에 고정, 실행 전엔 플레이스홀더 */}
+          <div className="lg:col-span-5 min-w-0 flex flex-col gap-3">
+            <RunLogPanel run={runLog} show={showLog} onShowChange={setShowLog} maxHeight="max-h-56" />
+            <ResultPanel result={result} tab={tab} />
+          </div>
         </div>
         </div>
       </PageShell>
@@ -540,8 +578,8 @@ export function EtcdCtlPage() {
         onConfirm={() => {
           const which = confirmAction;
           setConfirmAction(null);
-          if (which === 'run') runMut.mutate();
-          else if (which === 'logs') logsMut.mutate();
+          if (which === 'run') void doRun();
+          else if (which === 'logs') void doLogs();
         }}
       >
         <div className="space-y-3">
