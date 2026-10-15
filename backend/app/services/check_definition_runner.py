@@ -158,8 +158,13 @@ class DeepCheckService:
         cluster: Cluster | None = None,
         in_cluster: bool = False,
         persist: bool = False,
+        on_step: Callable[[dict[str, Any]], None] | None = None,
     ) -> dict[str, Any]:
-        """단일 정의를 1회 실행 — UI 의 "Test now" 미리보기용."""
+        """단일 정의를 1회 실행 — UI 의 "Test now" 미리보기용.
+
+        ``on_step`` 을 주면 체커의 단계 진입·종료(ExecutionStep dict)를 실행 중에 받는다(점검 매트릭스
+        실행 로그를 실시간으로 채우는 데 쓴다).
+        """
         d = (
             self.db.query(DeepCheckDefinition)
             .filter(DeepCheckDefinition.id == definition_id)
@@ -171,7 +176,7 @@ class DeepCheckService:
         if cluster is None and d.cluster_id is not None:
             cluster = self.db.query(Cluster).filter(Cluster.id == d.cluster_id).first()
 
-        outcome = self._run_one(d, cluster, in_cluster)
+        outcome = self._run_one(d, cluster, in_cluster, on_step=on_step)
         from app.services.registered_checks.registry import get_step_plan
         steps = getattr(outcome, "steps", []) or []
         commands = getattr(outcome, "commands", []) or []
@@ -191,6 +196,7 @@ class DeepCheckService:
             "steps": steps,
             "commands": commands,
             "step_plan": get_step_plan(d.check_type),
+            "collection_error": outcome.collection_error,
         }
 
         if persist and cluster is not None:
@@ -274,6 +280,7 @@ class DeepCheckService:
             "steps": steps,
             "commands": commands,
             "step_plan": get_step_plan(check_type),
+            "collection_error": outcome.collection_error,
         }
         if persist and cluster is not None:
             row = DeepCheckResult(
@@ -372,6 +379,7 @@ class DeepCheckService:
         d: DeepCheckDefinition,
         cluster: Cluster | None,
         in_cluster: bool,
+        on_step: Callable[[dict[str, Any]], None] | None = None,
     ) -> DeepCheckOutcome:
         from app.models import StatusEnum
 
@@ -384,6 +392,7 @@ class DeepCheckService:
             )
 
         instance = cls()
+        instance._on_step = on_step
         ctx = DeepCheckContext(
             cluster=cluster,
             thresholds=d.thresholds or {},
