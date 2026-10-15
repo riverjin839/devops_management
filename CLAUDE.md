@@ -185,7 +185,9 @@ JSON 기반 애플리케이션 백업이 `backend/app/services/backup_service.py
 
 **규칙** (스키마 변경 시 반드시 함께 점검):
 1. 모든 테이블 순회는 `_safe_select_rows(db, t)` 같이 per-table try/except + `db.rollback()` 패턴. 한 테이블 실패는 envelope 의 `errors` / `skipped_tables` 에 사유 기록하고 다음 테이블로 진행.
-2. `export_all` / `compute_diff` / `current_meta` 모두 위 패턴을 따른다. 새 helper 추가 시 같은 패턴 강제.
+2. `export_all` / `iter_export_json` / `compute_diff` / `current_meta` 모두 위 패턴을 따른다. 새 helper 추가 시 같은 패턴 강제.
+   **export 엔드포인트는 `iter_export_json` 스트리밍만 쓴다** — 전체 DB 를 한 워커 메모리에 올리는 `export_all`/
+   `export_to_bytes` 는 테스트·소규모 전용(운영 DB 에서 backend OOMKilled 이력, 210MB 백업에 피크 1.6GiB → 스트리밍 131MiB).
 3. Router 엔드포인트 (`backend/app/routers/backup.py`) 는 서비스 호출을 try/except 로 감싸 `HTTPException(500, detail=...)` 로 구체적 사유 노출. **빈 500 금지**.
 4. 새 컬럼/테이블을 model 에 추가하면:
    - `_run_migrations()` 에 `_safe_add_column` 으로 보강 (구버전 DB 호환).

@@ -11,10 +11,10 @@
 import logging
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Request, UploadFile
-from fastapi.responses import Response
+from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
-from app.database import get_db
+from app.database import SessionLocal, get_db
 from app.models.user import User
 from app.auth.deps import require_admin
 from app.schemas.backup import (
@@ -25,7 +25,8 @@ from app.schemas.backup import (
 from app.services.backup_service import (
     apply_import,
     current_meta,
-    export_to_bytes,
+    export_filename,
+    iter_export_json,
     parse_backup,
 )
 from app.services import audit_logger
@@ -55,49 +56,55 @@ def export_backup(
     request: Request,
     include_logs: bool = Query(default=False, description="로그성 테이블 포함 여부"),
     include_sensitive: bool = Query(default=False, description="kubeconfig 등 민감 필드 포함 여부"),
-    db: Session = Depends(get_db),
     actor: User = Depends(require_admin),
 ):
-    try:
-        raw, filename = export_to_bytes(
-            db,
-            include_logs=include_logs,
-            include_sensitive=include_sensitive,
-        )
-    except Exception as e:  # noqa: BLE001
-        # backup_service 가 per-table 격리를 하지만 예상치 못한 envelope/JSON 단계 실패도
-        # 여기서 잡아 사용자에게 명시적 메시지를 돌려준다 (500 빈 응답 방지).
-        _log.exception("backup/export failed")
-        audit_logger.record(
-            db,
-            action="backup.export",
-            actor=actor,
-            status="failure",
-            details={"include_logs": include_logs, "include_sensitive": include_sensitive,
-                     "error": str(e)[:200]},
-            request=request,
-        )
-        raise HTTPException(
-            status_code=500,
-            detail=f"백업 export 실패 ({type(e).__name__}): {str(e)[:200]}",
-        ) from e
-    # 민감정보 포함 여부와 무관하게 전체 데이터 반출이므로 항상 감사 로그에 남긴다.
-    audit_logger.record(
-        db,
-        action="backup.export",
-        actor=actor,
-        status="success",
-        details={"include_logs": include_logs, "include_sensitive": include_sensitive,
-                 "bytes": len(raw)},
-        request=request,
-    )
-    return Response(
-        content=raw,
+    """전체 DB 를 JSON 으로 **스트리밍** 내려준다 — 운영 DB 를 한 워커 메모리에 통째로 올리던 예전
+    방식은 backend 파드를 OOMKilled 시켰다(`backup_service.iter_export_json`).
+
+    응답 시작 후에는 상태 코드를 바꿀 수 없으므로, 테이블 단위 실패는 파일 끝의 ``errors`` /
+    ``skipped_tables`` 에 남고 감사 로그에도 기록된다. FastAPI 는 스트리밍 전에 의존성 세션을 닫으므로
+    생성기가 자기 세션을 연다.
+    """
+    client_ip = request.client.host if request.client else None
+    actor_id, actor_name = actor.id, actor.username
+
+    def _stream():
+        db = SessionLocal()
+        summary: dict = {}
+        status = "success"
+        err: str | None = None
+        try:
+            yield from iter_export_json(
+                db, include_logs=include_logs, include_sensitive=include_sensitive, summary=summary,
+            )
+        except GeneratorExit:
+            status, err = "failure", "client disconnected"
+            raise
+        except Exception as e:  # noqa: BLE001 — 응답이 이미 시작돼 HTTP 오류로 바꿀 수 없다
+            status, err = "failure", f"{type(e).__name__}: {str(e)[:200]}"
+            _log.exception("backup/export stream failed")
+        finally:
+            # 민감정보 포함 여부와 무관하게 전체 데이터 반출이므로 항상 감사 로그에 남긴다.
+            try:
+                audit_logger.record(
+                    db,
+                    action="backup.export",
+                    actor=db.get(User, actor_id),
+                    actor_username=actor_name,
+                    status=status,
+                    details={
+                        "include_logs": include_logs, "include_sensitive": include_sensitive,
+                        "bytes": summary.get("bytes"), "skipped_tables": summary.get("skipped_tables"),
+                        "error": err, "client_ip": client_ip,
+                    },
+                )
+            finally:
+                db.close()
+
+    return StreamingResponse(
+        _stream(),
         media_type="application/json",
-        headers={
-            "Content-Disposition": f'attachment; filename="{filename}"',
-            "X-Backup-Bytes": str(len(raw)),
-        },
+        headers={"Content-Disposition": f'attachment; filename="{export_filename()}"'},
     )
 
 
