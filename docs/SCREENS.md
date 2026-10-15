@@ -579,7 +579,7 @@ hover 시 flyout 자체가 라벨을 보여주므로 이름만 뜨는 중복 툴
   - _(여기에 개선/수정 요청을 직접 적어주세요)_
   - **[2026-10-12, 상용화 재검토]** 탭 이름 통일, 실행 주기 행마다 `CronInput`(즉시 검증·다음 실행) + 행별 저장 상태, 초안을 `cells` 에서 파생(새 클러스터 행 크래시 수정), 클러스터별 `useCanOperate(clusterId)`, 최근 실행 실패 칩, "글로벌로 복귀" `ConfirmDialog danger`, 배치잡 링크 `/batch-jobs` 수정.
 
-### K8s 로그 — AI 장애 분석 (`/incident-analysis`)
+### K8s 로그 — AI 장애 분석 (`/incident-analysis`, `/incident-analysis/:clusterId`)
 
 - **파일**: `frontend/src/pages/IncidentAnalysisPage.tsx` (+ `components/common/SearchableSelect`, `components/common/LogViewTabs`)
 - **목적 / UX**: 클러스터 → namespace → pod 를 드릴다운으로 선택하고, `kubectl logs`/`events`/`describe` 를 자동 수집(또는 직접 붙여넣기)한 뒤 LLM(또는 rule-based) 분석기에 보내 근본 원인·신뢰도·조치 방안을 받는다. 실시간 로그 스트리밍(폴링), 로그 라인 필터도 제공한다.
@@ -1663,7 +1663,7 @@ hover 시 flyout 자체가 라벨을 보여주므로 이름만 뜨는 중복 툴
 - **요청사항 (수정 요청)**:
   - _(여기에 개선/수정 요청을 직접 적어주세요)_
 
-### 온톨로지 그래프 (`/ontology`)
+### 온톨로지 그래프 (`/ontology`, `/ontology/:clusterId`)
 
 - **파일**: `frontend/src/pages/OntologyPage.tsx` (3D 그래프는 `react-force-graph-3d` + `three` 직접 사용, 별도 하위 컴포넌트 없이 `NodeDetailPanel`/`ImpactPanel`을 페이지 내부에 정의)
 - **목적 / UX**: 클러스터 내 인프라 구성요소(노드/하드웨어/OS/커널 파라미터/네트워크/K8s·Cilium 컴포넌트/워크로드/서비스/설정 항목)와 그 관계를 3D 그래프로 시각화하고, 설정 변경(config_item/kernel_param)이 다른 엔티티에 미치는 파급 범위(blast radius)를 분석하는 화면.
