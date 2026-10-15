@@ -4,9 +4,11 @@ import {
   ShieldCheck, AlertTriangle, Wrench, RefreshCw, Loader2, Database, Info,
 } from 'lucide-react';
 import { MacCard } from '@/components/ui/MacCard';
-import { useToast, ConfirmDialog, Skeleton, LogViewer } from '@/components/common';
+import { useToast, ConfirmDialog, Skeleton, LogViewer, RunLogPanel } from '@/components/common';
 import { schemaHealthApi } from '@/services/api';
 import { formatApiError } from '@/lib/utils';
+import { useRunLog, runLogged, type RunLogEntry } from '@/hooks/useRunLog';
+import { useLogPref } from '@/hooks/useLogPref';
 import type { SchemaDriftIssue, SchemaRepairResult } from '@/types';
 
 const KIND_META: Record<SchemaDriftIssue['kind'], { label: string; cls: string }> = {
@@ -33,6 +35,10 @@ export function SchemaHealthPanel() {
   const qc = useQueryClient();
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [lastResult, setLastResult] = useState<SchemaRepairResult | null>(null);
+  // 실행 로그 — 복구/실행 계획의 요청·소요·적용/건너뜀/실패 요약(실패는 대상별 줄). SQL 원문 상세는
+  // 아래 "복구 결과" LogViewer 가 그대로 보여준다(D-135).
+  const runLog = useRunLog();
+  const [showLog, setShowLog] = useLogPref('settings-schema-repair');
 
   const { data, isLoading, isFetching, refetch } = useQuery({
     queryKey: ['schemaHealth'],
@@ -47,23 +53,42 @@ export function SchemaHealthPanel() {
     },
   });
 
+  const target = (a: { table: string; column?: string | null }) => `${a.table}${a.column ? `.${a.column}` : ''}`;
+
   const runRepair = async (dryRun: boolean) => {
-    try {
-      const res = await repairMut.mutateAsync(dryRun);
-      if (dryRun) {
-        toast.info('실행 계획만 확인됨', `${res.applied.length}건이 실행 대상입니다.`);
-      } else if (res.errors.length) {
-        toast.warning(
-          `${res.applied.length}건 복구, ${res.errors.length}건 실패`,
-          '실패 항목은 아래 결과에서 확인하세요.',
-        );
-      } else {
-        toast.success(`${res.applied.length}건 복구됨`, `남은 드리프트 ${res.remaining ?? 0}건`);
-      }
-    } catch (e) {
-      toast.error('스키마 복구 실패', formatApiError(e));
-    } finally {
-      setConfirmOpen(false);
+    setConfirmOpen(false);
+    const r = await runLogged(runLog, {
+      title: dryRun ? '스키마 복구 — 실행 계획' : '스키마 복구',
+      first: dryRun
+        ? `복구 실행 계획 조회 요청 — 대상 ${repairable}건, DB 는 바꾸지 않음`
+        : `드리프트 ${repairable}건 복구 요청 — 컬럼 추가(NULL 허용)·NOT NULL 해제만`,
+      fn: () => repairMut.mutateAsync(dryRun),
+      summarize: (res): RunLogEntry[] => {
+        const out: RunLogEntry[] = [[
+          'info',
+          `감지 ${res.detected} · ${res.dryRun ? '실행 예정' : '적용'} ${res.applied.length} · 건너뜀 ${res.skipped.length} · 실패 ${res.errors.length}`,
+        ]];
+        for (const a of res.applied) out.push(['info', `${res.dryRun ? '계획' : '적용'} — ${target(a)}`]);
+        for (const sk of res.skipped) out.push(['warn', `건너뜀 — ${target(sk)}${sk.reason ? ` · ${sk.reason}` : ''}`]);
+        for (const e of res.errors) out.push(['error', `실패 — ${target(e)}${e.error ? ` · ${e.error}` : ''}`]);
+        if (!res.dryRun) out.push([res.remaining ? 'warn' : 'info', `남은 드리프트 ${res.remaining ?? 0}건`]);
+        return out;
+      },
+    });
+    if (!r.ok) {
+      if (!r.aborted) toast.error('스키마 복구 실패', formatApiError(r.error));
+      return;
+    }
+    const res = r.data;
+    if (dryRun) {
+      toast.info('실행 계획만 확인됨', `${res.applied.length}건이 실행 대상입니다.`);
+    } else if (res.errors.length) {
+      toast.warning(
+        `${res.applied.length}건 복구, ${res.errors.length}건 실패`,
+        '실패 항목은 실행 로그와 아래 결과에서 확인하세요.',
+      );
+    } else {
+      toast.success(`${res.applied.length}건 복구됨`, `남은 드리프트 ${res.remaining ?? 0}건`);
     }
   };
 
@@ -129,6 +154,12 @@ export function SchemaHealthPanel() {
                 )}
               </div>
             </div>
+
+            {(runLog.running || runLog.lines.length > 0) && (
+              <div className="mb-3">
+                <RunLogPanel run={runLog} show={showLog} onShowChange={setShowLog} maxHeight="max-h-56" />
+              </div>
+            )}
 
             {/* 부팅 자동 복구 결과 — "재시작하면 자동으로 고쳐진다"가 실제로 지켜졌는지.
                 실패했다면(주로 DDL 락 경합) 조용히 넘어가지 않고 여기서 사유를 보여준다. */}

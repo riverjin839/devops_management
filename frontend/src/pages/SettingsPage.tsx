@@ -26,7 +26,7 @@ import { DEBUG_PAGES, useDebugStore } from '@/stores/debugStore';
 import { useClusters, useUpdateCluster, useDeleteCluster } from '@/hooks/useCluster';
 import { useAssignees } from '@/hooks/useAssignees';
 import { useUiSettings, useUpdateUiSettings } from '@/hooks/useUiSettings';
-import { clustersApi, managementServersApi } from '@/services/api';
+import { managementServersApi } from '@/services/api';
 import { useClusterStore } from '@/stores/clusterStore';
 import { AddClusterModal, KubeconfigEditModal } from '@/components/dashboard';
 import { Cluster, ManagementServer, ManagementServerCreate, ServiceDomain } from '@/types';
@@ -34,7 +34,10 @@ import { formatDateTime, formatApiError, cn } from '@/lib/utils';
 import { StatusDot, statusToVariant } from '@/components/common/StatusBadge';
 import { useHomeStore } from '@/stores/homeStore';
 import { useHomePrefs, useUpdateHomePrefs } from '@/hooks/useHomePrefs';
-import { useToast, ClusterIconPicker, useModalA11y, EmptyState, PageHeader, PageShell } from '@/components/common';
+import { useToast, ClusterIconPicker, useModalA11y, EmptyState, PageHeader, PageShell, RunLogPanel, ConfirmDialog } from '@/components/common';
+import { verifyClusterLogged } from '@/components/cluster-manage';
+import { useRunLog, runLogged, type RunLogEntry } from '@/hooks/useRunLog';
+import { useLogPref } from '@/hooks/useLogPref';
 import { resolveClusterIcon } from '@/lib/clusterIcons';
 import {
   buildClusterIconSvg, svgToDataUrl, suggestInitials, suggestRegionAbbr,
@@ -472,6 +475,12 @@ export function SettingsPage() {
   const updateClusterMut = useUpdateCluster();
   const { data: opLevels } = useOperationLevels();
   const [bulkGenBusy, setBulkGenBusy] = useState(false);
+  const [bulkIconConfirmOpen, setBulkIconConfirmOpen] = useState(false);
+  // 실행 로그 — 클러스터 탭(연결 확인·아이콘 일괄 생성)과 관리서버 탭(Ping)이 각자 하나씩(D-135).
+  const clusterRunLog = useRunLog();
+  const [showClusterLog, setShowClusterLog] = useLogPref('settings-cluster');
+  const serverRunLog = useRunLog();
+  const [showServerLog, setShowServerLog] = useLogPref('settings-server');
 
   // 홈 버튼 아이콘 커스터마이즈 (업무/플랫폼 모드별).
   const { data: uiSettings } = useUiSettings();
@@ -539,93 +548,141 @@ export function SettingsPage() {
     }
   };
 
+  // 연결 확인 — SSE(/verify/stream)로 단계(API server → kubeconfig 인증 → kubectl)를 실행 로그에 실시간으로 남기고,
+  // 끝나면 체크별 결과를 행 아래 인라인으로도 보존한다(클러스터 관리 화면과 같은 verifyClusterLogged).
   const handleVerify = async (cluster: Cluster) => {
     setVerifyingId(cluster.id);
     try {
-      const res = await clustersApi.verify(cluster.id);
-      const data = res.data;
-      // 체크별 결과를 그대로 보존 — "healthz OK / kubeconfig 없음" 같은 모순을
-      // 한 줄 요약으로 뭉개지 않고 행 단위로 보여주기 위함.
-      setVerifyResults((prev) => ({
-        ...prev,
-        [cluster.id]: {
-          ok: data.ok,
-          status: data.status,
-          statusReason: data.statusReason,
-          checks: data.results.map((r) => ({
-            check: r.check,
-            ok: r.ok,
-            detail: typeof r.detail === 'string' ? r.detail : JSON.stringify(r.detail ?? ''),
-          })),
-        },
-      }));
-    } catch {
-      setVerifyResults((prev) => ({
-        ...prev,
-        [cluster.id]: { ok: false, checks: [{ check: 'api_server', ok: false, detail: '연결 확인 실패' }] },
-      }));
+      const r = await verifyClusterLogged(clusterRunLog, cluster);
+      if (r.ok) {
+        const data = r.data;
+        // 체크별 결과를 그대로 보존 — "healthz OK / kubeconfig 없음" 같은 모순을
+        // 한 줄 요약으로 뭉개지 않고 행 단위로 보여주기 위함.
+        setVerifyResults((prev) => ({
+          ...prev,
+          [cluster.id]: {
+            ok: data.ok,
+            status: data.status,
+            statusReason: data.statusReason,
+            checks: (data.results ?? []).map((c) => ({
+              check: c.check,
+              ok: c.ok,
+              detail: typeof c.detail === 'string' ? c.detail : JSON.stringify(c.detail ?? ''),
+            })),
+          },
+        }));
+      } else if (!r.aborted) {
+        const reason = r.error instanceof Error ? r.error.message : formatApiError(r.error);
+        setVerifyResults((prev) => ({
+          ...prev,
+          [cluster.id]: { ok: false, checks: [{ check: 'api_server', ok: false, detail: `연결 확인 실패 — ${reason}` }] },
+        }));
+      }
     } finally {
       setVerifyingId(null);
+      // 서버가 cluster.status 를 갱신했을 수 있으니 목록을 다시 읽는다.
+      queryClient.invalidateQueries({ queryKey: ['clusters'] });
     }
   };
 
   /** 아이콘이 비어있는 클러스터에 빌더 아이콘(이니셜+환경색+지역) 일괄 생성.
    *  이미 아이콘이 설정된 클러스터는 절대 덮어쓰지 않는다. */
-  const handleBulkGenerateIcons = async () => {
-    const targets = clusters.filter((c) => !c.icon);
-    if (targets.length === 0) {
+  const iconTargets = clusters.filter((c) => !c.icon);
+  const handleBulkGenerateIcons = () => {
+    if (iconTargets.length === 0) {
       toast.info('대상 없음', '모든 클러스터에 이미 아이콘이 설정되어 있습니다.');
       return;
     }
-    if (!window.confirm(`아이콘이 없는 클러스터 ${targets.length}개에 빌더 아이콘(이니셜+환경색+지역)을 자동 생성할까요?\n(기존에 설정된 아이콘은 변경되지 않습니다)`)) {
+    setBulkIconConfirmOpen(true);
+  };
+
+  // 클러스터마다 PUT /clusters/{id} 를 클라이언트에서 순회한다 — 대상별 단계 칩·결과 줄을 남기고
+  // 한 클러스터 실패가 나머지를 멈추지 않는다(실패 클러스터명·사유가 로그에 남는다).
+  const executeBulkGenerateIcons = async () => {
+    setBulkIconConfirmOpen(false);
+    const targets = clusters.filter((c) => !c.icon);
+    if (targets.length === 0) return;
+    setBulkGenBusy(true);
+    const r = await runLogged(clusterRunLog, {
+      title: '아이콘 일괄 생성',
+      first: `아이콘이 없는 클러스터 ${targets.length}개에 빌더 아이콘 생성 — 기존 아이콘은 변경하지 않음`,
+      heartbeatMs: 0,
+      fn: async () => {
+        let ok = 0;
+        let fail = 0;
+        for (const c of targets) {
+          clusterRunLog.setStep(c.id, c.name, 'running');
+          try {
+            const workName = suggestInitials(c.name);
+            const attribute = suggestAttribute(c.name);
+            const regionAbbr = suggestRegionAbbr(c.region);
+            const level = c.operationLevel ?? '';
+            const svg = buildClusterIconSvg({
+              workName,
+              attribute,
+              regionAbbr,
+              colorToken: levelColor(opLevels, level),
+              customHex: levelCustomHex(opLevels, level),
+            });
+            // colorMode: 'theme' — 뷰어의 활성 테마에 맞춰 색이 매번 다시 계산된다(테마 동기화).
+            // icon 은 최초 저장 시점 스냅샷(iconConfig 미지원 소비처를 위한 폴백)일 뿐이다.
+            await updateClusterMut.mutateAsync({
+              id: c.id,
+              data: {
+                icon: svgToDataUrl(svg),
+                iconConfig: { workName, attribute, regionAbbr, shape: 'square', watermark: true, level, colorMode: 'theme' },
+              },
+            });
+            ok++;
+            clusterRunLog.setStep(c.id, c.name, 'done');
+            clusterRunLog.log('info', `${c.name} 생성 완료 — ${workName}${attribute ? ` · ${attribute}` : ''}${regionAbbr ? ` · ${regionAbbr}` : ''}`);
+          } catch (e) {
+            fail++;
+            clusterRunLog.setStep(c.id, c.name, 'failed');
+            clusterRunLog.log('error', `${c.name} 실패 — ${formatApiError(e)}`);
+          }
+        }
+        return { ok, fail };
+      },
+      summarize: (res): RunLogEntry[] => [[res.fail ? 'warn' : 'info', `성공 ${res.ok} · 실패 ${res.fail} · 대상 ${targets.length}`]],
+    });
+    setBulkGenBusy(false);
+    if (!r.ok) {
+      toast.error('아이콘 일괄 생성 실패', formatApiError(r.error));
       return;
     }
-    setBulkGenBusy(true);
-    let ok = 0;
-    let fail = 0;
-    for (const c of targets) {
-      try {
-        const workName = suggestInitials(c.name);
-        const attribute = suggestAttribute(c.name);
-        const regionAbbr = suggestRegionAbbr(c.region);
-        const level = c.operationLevel ?? '';
-        const svg = buildClusterIconSvg({
-          workName,
-          attribute,
-          regionAbbr,
-          colorToken: levelColor(opLevels, level),
-          customHex: levelCustomHex(opLevels, level),
-        });
-        // colorMode: 'theme' — 뷰어의 활성 테마에 맞춰 색이 매번 다시 계산된다(테마 동기화).
-        // icon 은 최초 저장 시점 스냅샷(iconConfig 미지원 소비처를 위한 폴백)일 뿐이다.
-        await updateClusterMut.mutateAsync({
-          id: c.id,
-          data: {
-            icon: svgToDataUrl(svg),
-            iconConfig: { workName, attribute, regionAbbr, shape: 'square', watermark: true, level, colorMode: 'theme' },
-          },
-        });
-        ok++;
-      } catch {
-        fail++;
-      }
-    }
-    setBulkGenBusy(false);
-    if (fail === 0) toast.success('아이콘 일괄 생성됨', `${ok}개 생성`);
-    else toast.warning('아이콘 일괄 생성 부분 완료', `${ok}개 성공 · ${fail}개 실패`);
+    if (r.data.fail === 0) toast.success('아이콘 일괄 생성됨', `${r.data.ok}개 생성`);
+    else toast.warning('아이콘 일괄 생성 부분 완료', `${r.data.ok}개 성공 · ${r.data.fail}개 실패 — 사유는 실행 로그`);
   };
 
   const handlePing = async (server: ManagementServer) => {
     setPingingId(server.id);
+    // 응답은 axios 인터셉터가 camelCase 로 바꾼다 — 타입의 latency_ms 는 실제로 latencyMs 로 온다.
+    const latencyOf = (d: { latency_ms?: number | null; latencyMs?: number | null }) => d.latencyMs ?? d.latency_ms ?? null;
+    const detailOf = (v: unknown) => (typeof v === 'string' ? v : JSON.stringify(v ?? ''));
     try {
-      const res = await managementServersApi.ping(server.id);
-      const d = res.data;
-      const rawDetail = typeof d.detail === 'string' ? d.detail : JSON.stringify(d.detail ?? '');
-      const detail = d.latency_ms != null ? `${d.latency_ms}ms — ${rawDetail}` : rawDetail;
-      setPingResults((prev) => ({ ...prev, [server.id]: { ok: d.ok, detail } }));
-      await refetchServers();
-    } catch {
-      setPingResults((prev) => ({ ...prev, [server.id]: { ok: false, detail: '핑 요청 실패' } }));
+      const r = await runLogged(serverRunLog, {
+        title: `연결 확인 — ${server.name}`,
+        first: `${server.name} (${server.host}:${server.port}) 연결 확인 요청`,
+        fn: () => managementServersApi.ping(server.id).then((res) => res.data),
+        summarize: (d): RunLogEntry[] => {
+          const latency = latencyOf(d);
+          return [[
+            d.ok ? 'info' : 'error',
+            `${server.name} ${d.ok ? '연결 확인됨' : '연결 실패'}${latency != null ? ` · 지연 ${latency}ms` : ''} — ${detailOf(d.detail)}`,
+          ]];
+        },
+      });
+      if (r.ok) {
+        const d = r.data;
+        const latency = latencyOf(d);
+        const rawDetail = detailOf(d.detail);
+        const detail = latency != null ? `${latency}ms — ${rawDetail}` : rawDetail;
+        setPingResults((prev) => ({ ...prev, [server.id]: { ok: d.ok, detail } }));
+        await refetchServers();
+      } else {
+        setPingResults((prev) => ({ ...prev, [server.id]: { ok: false, detail: `핑 요청 실패 — ${formatApiError(r.error)}` } }));
+      }
     } finally {
       setPingingId(null);
     }
@@ -943,6 +1000,12 @@ export function SettingsPage() {
           }
         >
 
+          {(clusterRunLog.running || clusterRunLog.lines.length > 0) && (
+            <div className="px-4 py-3 border-b border-border">
+              <RunLogPanel run={clusterRunLog} show={showClusterLog} onShowChange={setShowClusterLog} maxHeight="max-h-56" />
+            </div>
+          )}
+
           {clusters.length === 0 ? (
             <EmptyState
               icon={Server}
@@ -1113,6 +1176,24 @@ export function SettingsPage() {
           )}
         </MacCard>}
 
+        {/* 아이콘 일괄 생성 확인 — 대상·범위를 보여주고 실행(진행·실패 사유는 위 실행 로그) */}
+        <ConfirmDialog
+          open={bulkIconConfirmOpen}
+          title="아이콘 일괄 생성"
+          description={`아이콘이 없는 클러스터 ${iconTargets.length}개에 빌더 아이콘(이니셜+환경색+지역)을 자동 생성합니다.`}
+          confirmLabel={`${iconTargets.length}개 생성`}
+          onConfirm={executeBulkGenerateIcons}
+          onCancel={() => setBulkIconConfirmOpen(false)}
+        >
+          <div className="space-y-1 text-muted-foreground">
+            <p>기존에 설정된 아이콘은 변경되지 않습니다.</p>
+            <p className="text-xs">
+              대상: {iconTargets.slice(0, 8).map((c) => c.name).join(', ')}
+              {iconTargets.length > 8 && ` 외 ${iconTargets.length - 8}개`}
+            </p>
+          </div>
+        </ConfirmDialog>
+
         {/* Management Server List */}
         {activeTab === 'server' && <MacCard
           bodyPadding="p-0"
@@ -1131,6 +1212,12 @@ export function SettingsPage() {
             </button>
           }
         >
+
+          {(serverRunLog.running || serverRunLog.lines.length > 0) && (
+            <div className="px-4 py-3 border-b border-border">
+              <RunLogPanel run={serverRunLog} show={showServerLog} onShowChange={setShowServerLog} maxHeight="max-h-56" />
+            </div>
+          )}
 
           {servers.length === 0 ? (
             <EmptyState
