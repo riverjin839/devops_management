@@ -751,9 +751,13 @@ runLog.begin('K8s 동기화', '요청 전송'); … runLog.log('info', '생성 3
   실행 직후 닫히는 모달(자격증명 입력 등)은 **페이지** 실행 로그에 기록한다.
 - **적용 범위(D-135)** — 필수: 클러스터·노드·외부 시스템에 명령을 보내거나 수 초 이상 걸리는 실행·수집·점검·배포·적용·복구·분석·
   내보내기 버튼(단건 ▶·일괄·"테스트 실행"·"미리 실행" 포함). **예외**(실행 로그 대신 인라인 결과로 충분): ① 설정 폼의 즉시 응답
-  "연결 테스트"(LLM·PromQL·알림 채널·Isilon 서버·노드 SSH 접속) — 단 실패 사유는 인라인으로 반드시 보인다 ② 실행 이력을 자체 진행
+  "연결 테스트"(LLM 프로필·PromQL·알림 채널·Isilon 서버·노드 SSH 접속·Jira·Confluence·ServiceNow·`JiraConnectCard`) — 단 실패 사유는 인라인으로 반드시 보인다 ② 실행 이력을 자체 진행
   패널로 이미 보여주는 도메인 패널(`EfficiencyRunLog`·`ProvisionConsole`·`CheckMatrixRunLogPanel`·`ClusterOpsCheckPanel` 진행 카드)
-  ③ 라이브 스트림 뷰(Cilium Monitor/Hubble, K8s 이벤트·파드 로그). Jira·Confluence·ServiceNow 연동 작업은 D-136 에서 정한다.
+  ③ 라이브 스트림 뷰(Cilium Monitor/Hubble, K8s 이벤트·파드 로그) ④ 화면을 열 때 자동으로 도는 조회(주간보고 미리보기 마운트 로딩 등 — 사용자가 버튼을 누른 경우만 로그).
+- **연동 작업(Jira·Confluence·ServiceNow, D-136)**: 응답이 HTTP 200 + `status`/`ok` 로 실패를 알리므로 `summarize` 에서 `status !== 'ok'` 를 error
+  (conflict·partial·missing 은 warn)로 판정하고, status 가 ok 가 아니면 성공 토스트를 띄우지 않는다. 응답 배열(`items[]`·`changes[]`·`errors[]`·
+  `warnings[]`·`missing[]`·`steps[]`·`entries[]`·`fieldErrors[]`)은 절삭하지 않고 한 건당 한 줄(수백 건이면 앞 200건 + "외 N건").
+  성공 시 자동으로 닫히는 대화상자는 부분 실패(warn/error)면 닫지 않고 로그를 보여준다. 자격증명·쿠키·토큰은 로그 금지(계정 이름까지만).
 - **새 실행 버튼 체크리스트**: ① `useRunLog` + `useLogPref('<화면키>')` + `RunLogPanel` ② 동기=`runLogged`·SSE=`streamLogged`·큐잉=
   `pollIntoRunLog` ③ 대상(호스트·클러스터·항목)별 한 줄 + 합계 줄 ④ 실패 사유가 error 줄로 남는가(훅에 `onError` 가 없어도)
   ⑤ 자격증명·비밀값을 로그에 싣지 않는가 ⑥ 기존 결과 뷰(표·출력·타임라인)는 그대로인가.
