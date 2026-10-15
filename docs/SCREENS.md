@@ -224,6 +224,8 @@ hover 시 flyout 자체가 라벨을 보여주므로 이름만 뜨는 중복 툴
 
 ### 시스템 설정 (`/settings`, admin)
 
+> **2026-10-15 (D-136)**: Jira 연동 패널의 SSO 진단·로그인 3종이 실행 로그(`jira-sso`)를 남긴다. 연결 테스트는 인라인 결과(§12.9.1 예외).
+
 > **2026-10-14 (D-130)**: 탭 15개를 좌측 세로 목록 4그룹(클러스터·서버 / 사용자·접근 / 연동 / 시스템)으로 재배치했다. 고른 탭은 `?tab=` 에
 > `replace` 로 기록되고(새로고침·링크 유지), 모르는 값은 `cluster` 로 폴백한다. 숫자 배지는 클러스터·관리서버·시스템 담당자·디버그(0 이면 숨김)만,
 > "추후 지원" 토글은 제거. 라벨: 디버그·AI·LLM·Jira 연동·ServiceNow 연동. 본문 폭은 `PageShell hub`.
@@ -1043,6 +1045,8 @@ hover 시 flyout 자체가 라벨을 보여주므로 이름만 뜨는 중복 툴
 
 ### 서비스 아키텍처 (`/service-architecture`)
 
+> **2026-10-15 (D-136)**: 동기화·정리 동기화·AI 재생성이 실행 로그(`arch-doc-sync`)를 남긴다 — partial 은 경고, 첫 동기화 뒤 LLM 생성 진행을 폴링해 이어 쓴다. AI 재생성 failed 는 오류로 표시.
+
 - **파일**: `frontend/src/pages/ServiceArchitecturePage.tsx` (+ `components/serviceArch/{ArchDocCanvas,ManualNodeDialog,ManualEdgeDialog,NodeDetailPanel,LlmSummaryPanel,exportDiagram}.tsx`)
 - **목적 / UX**: Settings 에 등록된 서비스 모듈(`LakeService` — cluster+namespace) 단위로 K8s 리소스를 자동 탐색해 **아키텍처 다이어그램/서비스 플로우 도식을 영속 문서로 생성·현행화**하고, 자동화가 부족한 부분(외부 DB/API 연계, 주석, 배치)은 사용자가 수동 편집한다. LLM(Ollama) 이 있으면 아키텍처 요약·컴포넌트 역할·플로우 스텝을 자동 서술한다(없어도 완전 동작).
 - **UI 구성**:
@@ -1315,6 +1319,8 @@ hover 시 flyout 자체가 라벨을 보여주므로 이름만 뜨는 중복 툴
 
 ### 업무 관리 게시판 (`/tasks-mgmt`)
 
+> **2026-10-15 (D-136)**: 행 메뉴 Jira 새로고침·보내기·Confluence 반영이 보드 실행 로그(`work-items-integration`)에 필드별 결과를 남긴다(보내기 `fieldErrors` 포함). Jira 가져오기·Confluence 연결 모달과 Jira 보내기·연결·발급·ServiceNow 등록 대화상자도 각자 실행 로그를 쓴다.
+
 - **파일**: `frontend/src/pages/WorkItemBoardPage.tsx` (+ `components/work-items/WorkItemKanban.tsx`, `WorkItemCalendar.tsx`, `WorkItemTableRow.tsx`, `WorkItemEpicView.tsx`, `WorkItemActionsMenu.tsx`, `ColumnSettingsMenu.tsx`, `WorkItemBoardSettingsModal.tsx`, `JiraImportModal.tsx`, `JiraProvisionModal.tsx`, `JiraLinkDialog.tsx`, `ServiceNowRegisterDialog.tsx`, `JiraIssueChip.tsx`, `DocLinkChip.tsx`, `ConfluenceLinkCell.tsx`, `components/dashboard/QuickAddTaskModal.tsx`)
 - **목적 / UX**: 전사 업무(유형: 이슈 대응/회의/운영 대응/기타 — 내부 저장값은 `issue`/`meeting`/`task`/`etc`, 레거시 `training` 도 조회는 계속 됨)를 표(목록)/달력/칸반/에픽뷰 4가지 뷰로 조회·필터링·정렬하고, 등록·수정·삭제·CSV 추출·Jira 가져오기까지 처리하는 업무 관리의 메인 허브.
 - **공유 범위(멀티테넌시 3단계)**: 폼의 `공유 범위`(`TenantScopeSelect`)로 항목을 테넌트 전용으로 둘 수 있다. 목록·CSV·오늘 요약·상세·댓글·활동·시간 블록 모두 항목 자체와 **소속 프로젝트**의 테넌트를 따라 걸러진다(`services/tenant_scope.py` `work_item_visibility`) — 비공개 프로젝트 안의 항목은 프로젝트 멤버에게만 보인다.
@@ -1491,6 +1497,8 @@ hover 시 flyout 자체가 라벨을 보여주므로 이름만 뜨는 중복 툴
   - _(여기에 개선/수정 요청을 직접 적어주세요)_
 
 ### 주간보고 (`/weekly-report`)
+
+> **2026-10-15 (D-136)**: "다시 생성"(버튼 클릭만, 화면 진입 자동 로딩 제외)과 Confluence 게시가 실행 로그(`weekly-report`)를 남기고, 게시 후 페이지 링크를 보여준다.
 
 - **파일**: `frontend/src/pages/WeeklyReportPage.tsx`
 - **목적 / UX**: 한 주(월~금)의 업무를 자동 집계해 **정해진 3개 표**로 보여주고, 그대로 Confluence 에 게시하는 화면. 게시 위치(스페이스/상위 페이지/제목)를 매번 바꿀 수 있고, 관리자는 cron 으로 자동 생성·게시를 켤 수 있다.
@@ -1693,6 +1701,8 @@ hover 시 flyout 자체가 라벨을 보여주므로 이름만 뜨는 중복 툴
   - _(여기에 개선/수정 요청을 직접 적어주세요)_
 
 ### 문서 관리 (`/documents`)
+
+> **2026-10-15 (D-136)**: Confluence 가져오기(페이지별 결과·경고 전부)·게시·다시 가져오기(경고 표시)가 실행 로그를 남긴다.
 
 - **파일**: `frontend/src/pages/DocumentsPage.tsx` (+ `frontend/src/components/documents/` 의 `ConfluenceImportModal`, `ConfluenceExportDialog`, `ConfluenceDocsSettingsDialog`, `SyncStatusBadge`)
 - **목적 / UX**: 파트 문서(WorkGuide)를 한 화면의 테이블로 관리하고 Confluence 가져오기/게시/재동기화를 실행하는 대시보드. 사이드바 work 모드의 신규 "문서 관리" 그룹 진입점이며, 같은 그룹에 2026-07 개편 때 고아가 됐던 지식 화면들(`/work-guides` `/docs` `/ops-notes` `/mindmap` `/ontology` `/trends`)이 복귀했다. 문서 편집 자체는 기존 `/work-guides/:id` 화면을 그대로 쓴다.
