@@ -29,6 +29,8 @@ secrets:
 # ============================================
 backend:
   replicaCount: 2
+  # pod 당 uvicorn 워커 수(WEB_CONCURRENCY). 워커당 유휴 메모리 약 280MiB — 메모리 한도를 낮추면 함께 줄인다.
+  workers: 2
   image:
     repository: k8s-daily-monitor/backend
     tag: latest

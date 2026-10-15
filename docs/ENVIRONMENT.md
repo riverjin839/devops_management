@@ -18,6 +18,7 @@
 | `DATABASE_URL` | `postgresql://postgres:postgres@localhost:5432/k8s_monitor` | PostgreSQL connection string |
 | `DB_POOL_SIZE` | `10` | SQLAlchemy 엔진 풀 크기. backend/celery worker/beat 가 같은 engine 코드를 공유하므로, replica 합계 × (pool_size+max_overflow) 가 Postgres `max_connections` 를 넘지 않게 배포별로 오버라이드(worker/beat 는 k8s 매니페스트에서 더 작게 설정됨) |
 | `DB_MAX_OVERFLOW` | `20` | SQLAlchemy 엔진 풀의 추가 오버플로 커넥션 수 |
+| `WEB_CONCURRENCY` | `2` (backend 이미지) | backend uvicorn 워커 수 — `config.py` 가 아니라 uvicorn 이 직접 읽는다. 워커마다 앱 전체가 떠서 메모리(유휴 약 280MiB/워커)와 DB 풀이 배수로 늘어난다. 메모리 한도가 빠듯하면 배포 매니페스트(k8s base `backend` env, helm `backend.workers`)에서 줄인다 — 이미지 재빌드 불필요 |
 | `REDIS_URL` | `redis://localhost:6379/0` | Redis connection |
 | `CELERY_BROKER_URL` | `redis://localhost:6379/0` | Celery broker |
 | `CELERY_RESULT_BACKEND` | `redis://localhost:6379/0` | Celery result store |

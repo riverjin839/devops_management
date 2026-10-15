@@ -69,9 +69,12 @@ COPY . .
 EXPOSE 8000
 
 # 실행
-# --workers 2: 단일 프로세스는 sync 라우트(전체의 89%)가 전부 같은 anyio 스레드풀을
-# 나눠 쓰므로, 로그 스트림 등 오래 걸리는 요청 하나가 한 프로세스의 슬롯을 다 먹으면
-# 그 프로세스가 받는 나머지 요청 전체가 멈춘다. 워커 2개(=replicas 2 와 동일 배수)로
-# 그 장애가 최소 절반의 용량에만 미치게 한다. celery worker/beat 는 별도 컨테이너/
-# 커맨드로 이 이미지를 쓰므로 영향 없음.
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "2"]
+# 워커 수 = WEB_CONCURRENCY(uvicorn 이 --workers 미지정 시 읽는 표준 env, 기본 2).
+# 단일 프로세스는 sync 라우트(전체의 89%)가 전부 같은 anyio 스레드풀을 나눠 쓰므로, 로그 스트림 등
+# 오래 걸리는 요청 하나가 한 프로세스의 슬롯을 다 먹으면 그 프로세스가 받는 나머지 요청 전체가 멈춘다.
+# 워커 2개로 그 장애가 최소 절반의 용량에만 미치게 한다. 대신 워커당 메모리(유휴 약 280MiB)가 그대로
+# 배수로 늘어나므로, 메모리 한도가 빠듯한 환경(폐쇄망 등)은 이미지를 다시 빌드하지 않고 배포 매니페스트의
+# WEB_CONCURRENCY 로 줄인다. DB 풀(DB_POOL_SIZE/DB_MAX_OVERFLOW)은 워커마다 따로 생기니 함께 맞춘다.
+# celery worker/beat 는 별도 커맨드로 이 이미지를 쓰므로 영향 없음.
+ENV WEB_CONCURRENCY=2
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
