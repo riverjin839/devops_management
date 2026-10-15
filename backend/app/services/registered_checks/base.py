@@ -62,6 +62,42 @@ _TLS_ERROR_HINT_MESSAGE = (
     "있습니다. /cluster-manage 에서 kubeconfig 를 최신 상태로 다시 등록하세요."
 )
 
+# 체커가 예외 없이 결과를 돌려줬지만(예: kubectl 비정상 종료를 critical 로 반환) 실제로는 클러스터에
+# 붙지도 못한 경우를 kubectl stderr 로 알아본다. 예외 메시지 분류(_CONNECTION_ERROR_HINTS)와
+# 달리 kubectl 이 내는 문구 기준이다.
+_KUBECTL_KUBECONFIG_HINTS = (
+    "error loading config file",
+    "invalid configuration",
+    "no configuration has been provided",
+    "unable to load in-cluster configuration",
+)
+_KUBECTL_CONNECTION_HINTS = (
+    "the connection to the server",
+    "connection refused",
+    "no route to host",
+    "i/o timeout",
+    "dial tcp",
+    "unable to connect to the server",
+)
+
+
+def _classify_command_failure(commands: list[dict[str, Any]]) -> Optional[str]:
+    """기록된 명령이 **하나도 성공하지 못했고** stderr 가 연결·kubeconfig·TLS 문제를 가리키면 그 종류.
+
+    한 명령이라도 exit 0 이면 클러스터에는 닿은 것이므로 수집 실패로 보지 않는다.
+    """
+    if not commands or any(c.get("exit_code") == 0 for c in commands):
+        return None
+    text = " ".join(str(c.get("stderr") or "") for c in commands).lower()
+    if any(h in text for h in _TLS_ERROR_HINTS):
+        return "tls"
+    if any(h in text for h in _KUBECTL_KUBECONFIG_HINTS):
+        return "kubeconfig"
+    if any(h in text for h in _KUBECTL_CONNECTION_HINTS):
+        return "connection"
+    return None
+
+
 # K8s API 서버가 응답하지 않을 때(다운/네트워크 단절) 호출이 무한정 대기하다 Celery 의
 # soft time limit(240s, celery_app.py)에 걸려서야 SoftTimeLimitExceeded 로 죽는 문제가
 # 있었다 — kubernetes 파이썬 클라이언트는 Configuration 레벨 전역 기본 타임아웃을 지원하지
@@ -314,6 +350,11 @@ class DeepCheckerBase(ABC):
                 outcome.steps = self._collected_steps()
             if not outcome.commands:
                 outcome.commands = self._collected_commands()
+            if outcome.collection_error is None and outcome.status in (StatusEnum.critical, StatusEnum.pending):
+                kind = _classify_command_failure(outcome.commands)
+                if kind:
+                    outcome.collection_error = kind
+                    outcome.details = {**(outcome.details or {}), "_collection_error": kind}
             return outcome
         except FileNotFoundError as e:
             return DeepCheckOutcome(

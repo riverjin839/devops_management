@@ -602,3 +602,50 @@ def test_step_logs_stream_before_finish(db, world, deep_def, monkeypatch):
     assert start < done < len(lines) - 1  # 마감 줄보다 앞
     assert sum("단계 PVC 조회: success" in ln for ln in lines) == 1  # 끝난 뒤 재기록 없음
     assert _cell(db, world).message == "pending PVC 1"  # 정상 실행은 셀을 갱신한다
+
+
+def test_returned_kubectl_tls_failure_is_collection_error(db, world, deep_def, monkeypatch):
+    """예외 없이 critical 을 돌려주는 체커라도 kubectl 이 하나도 성공 못 하고 x509 로 끝났으면 수집 실패."""
+    import time
+
+    from app.models import StatusEnum
+    from app.services.registered_checks.base import DeepCheckerBase, DeepCheckOutcome
+
+    class _KubectlTls(DeepCheckerBase):
+        check_type = "pvc_health"
+        display_name = "가짜 kubectl"
+
+        def run(self, ctx):
+            self._record_command(
+                ["kubectl", "get", "pvc"], time.time(), exit_code=1, stdout="",
+                stderr="Unable to connect to the server: x509: certificate signed by unknown authority",
+            )
+            return DeepCheckOutcome(status=StatusEnum.critical, message="kubectl 종료 코드 1", details={})
+
+    _use_fake(monkeypatch, _KubectlTls)
+    run = svc.create_run(db, world["deep"], world["open"], trigger=CheckMatrixTrigger.manual_cell,
+                         triggered_by="tester")
+    svc.execute_run(db, run.id)
+    assert svc.get_run(db, run.id)["run_state"] == "failed"
+    assert _cell(db, world).value == 7.0
+
+
+def test_collection_error_does_not_drive_cluster_status(db, world, deep_def, monkeypatch):
+    """affects_cluster_status 정의라도 수집 실패 결과는 클러스터 롤업에서 빠지고 직전 판정이 쓰인다."""
+    from app.models import DeepCheckResult, StatusEnum
+    from app.services.cluster_status_service import recompute
+    from app.services.k8s_client_pool import K8sClientError
+
+    deep_def.affects_cluster_status = True
+    db.add(DeepCheckResult(cluster_id=world["open"].id, definition_id=deep_def.id, check_type="pvc_health",
+                           status=StatusEnum.healthy, message="이전 정상", details={},
+                           checked_at=datetime.utcnow() - timedelta(hours=1)))
+    db.commit()
+    _use_fake(monkeypatch, _fake_checker(K8sClientError("kubeconfig 로드 실패: x")))
+    run = svc.create_run(db, world["deep"], world["open"], trigger=CheckMatrixTrigger.manual_cell,
+                         triggered_by="tester")
+    svc.execute_run(db, run.id)
+    out = recompute(db, world["open"].id)
+    mine = [c for c in out["contributors"] if c.get("message") == "이전 정상"]
+    assert mine and mine[0]["status"] == "healthy"
+    assert out["status"] != "critical"

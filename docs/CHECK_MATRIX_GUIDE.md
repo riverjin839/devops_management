@@ -319,7 +319,9 @@ NAS 콘솔, 네트워크 스위치, 외주 점검 결과처럼 PEP 가 직접 �
 > 그리고 **수집 실패**(kubeconfig 로드 실패·API 서버 연결 불가·TLS 인증서 불일치) → 실패. 수집 실패는 PEP 가
 > 클러스터에 붙지 못한 것이지 클러스터가 아픈 게 아니므로 셀을 「위험」 으로 칠하지 않는다. 원인별 조치
 > 안내(kubeconfig 재등록, 엔드포인트·네트워크 확인, CA 갱신)가 실행 로그 마감 줄과 셀 툴팁에 붙는다.
-> 판정은 체커 베이스(`registered_checks/base.py` `safe_run`)가 `collection_error` 로 분류한다.
+> 판정은 체커 베이스(`registered_checks/base.py` `safe_run`)가 `collection_error` 로 분류한다 — 예외뿐 아니라,
+> 체커가 결과를 돌려줬어도 kubectl 명령이 하나도 성공하지 못하고 stderr 가 연결·kubeconfig·TLS 문제면 같다.
+> 수집 실패 결과는 클러스터 상태 롤업(`affects_cluster_status`)에서도 빠져 직전 판정이 유지된다.
 >
 > 심층 점검의 **단계 로그**(「단계 시작 — …」, 「단계 …: success (…ms)」)는 체커가 단계를 지날 때마다
 > 바로 실행 로그에 쌓인다 — 오래 걸리는 점검도 지금 어느 단계인지 보인다.

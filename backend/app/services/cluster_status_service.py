@@ -90,6 +90,12 @@ def _latest_group_result(db: Session, cluster_id, group: dict[str, Any]) -> Opti
                 DeepCheckResult.definition_id.is_(None),
             ),
         )
+    # 수집 실패(kubeconfig·연결·TLS — PEP 가 클러스터에 붙지 못한 것)는 클러스터 판정이 아니므로
+    # 롤업에서 빼고 직전의 실제 판정을 쓴다. 점검 매트릭스가 셀을 이전 값으로 두는 것과 같은 의미.
+    q = q.filter(or_(
+        DeepCheckResult.details.is_(None),
+        ~DeepCheckResult.details.has_key("_collection_error"),
+    ))
     return q.order_by(DeepCheckResult.checked_at.desc()).first()
 
 
