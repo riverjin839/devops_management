@@ -211,7 +211,8 @@ AI 어시스턴트 + 사람 개발자용 — 기능 → 파일 경로와 자주 
 | 권한 UX(viewer 쓰기 버튼 비활성+사유) | `frontend/src/hooks/useCanOperate.ts` — 적용처 `components/platform-status/*` (`DESIGN_SYSTEM.md` §12.9) |
 | 세션 만료 UX(임박 경고·선제 로그아웃·returnTo) | `frontend/src/hooks/useSessionExpiryWatch.ts` · `lib/jwt.ts` · `stores/authStore.ts`(`markSessionExpired`/`expireAuthSession`/`consumeReturnTo`) → `pages/LoginPage.tsx` 배너 |
 | 홈 개인화 (기본 홈 탭 · 즐겨찾기 · 최근 방문) | `backend/app/routers/home_prefs.py` + `schemas/home_prefs.py`(`user_settings` 재사용) → `frontend/src/hooks/useHomePrefs.ts` · `hooks/useFavorites.ts` · `stores/recentPathsStore.ts` · `components/layout/FavoritesFlyoutBody.tsx`(AppTopBar·Sidebar 공유 드롭다운) |
-| 개인 설정 내보내기/가져오기 · 계정별 로컬 설정 분리 | `backend/app/routers/home_prefs.py`(`GET /me/settings-export`, `POST /me/settings-import`) + `services/personal_settings.py`(허용 키·정규화) → `frontend/src/lib/personalSettingsFile.ts` · `components/layout/usePersonalSettingsTransfer.tsx`(사용자 메뉴) · `lib/personalStorage.ts`(localStorage 개인 키 계정별 바꿔 끼우기, `authStore.setSession` 에서 호출) |
+| 개인 설정 내보내기/가져오기 · 계정별 로컬 설정 분리 | `backend/app/routers/home_prefs.py`(`GET /me/settings-export`, `POST /me/settings-import`) + `services/personal_settings.py`(허용 키·정규화) → `frontend/src/lib/personalSettingsFile.ts` · `components/layout/usePersonalSettingsTransfer.tsx`(사용자 메뉴) · `lib/personalStorage.ts`(localStorage 개인 키 계정별 바꿔 끼우기 + 오래된 보관본 정리 `pruneProfiles`, `authStore.setSession` 에서 호출) |
+| 로컬 개인 설정 기기 간 동기화 | `backend/app/routers/home_prefs.py`(`GET/PATCH /me/local-prefs`) + `services/local_prefs.py`(허용 키·제외 목록·크기 상한, `user_settings.local_prefs` 델타 병합) → `frontend/src/lib/localPrefsSync.ts`(앱 로드 전 3-way 동기화 `bootLocalPrefsSync` — `main.tsx`, 로그인 후 `syncLocalPrefs`, 15초·탭 숨김·로그아웃 직전 업로드 `pushLocalPrefs`) |
 | 라우팅 | `frontend/src/App.tsx` |
 | Axios API 클라이언트 | `frontend/src/services/api.ts` (snake_case→camelCase 자동 변환) |
 | TanStack Query 훅 | `frontend/src/hooks/use*.ts` |

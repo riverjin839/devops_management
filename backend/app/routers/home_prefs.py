@@ -20,7 +20,7 @@ from app.models.user_setting import UserSetting
 from app.auth.deps import get_current_user
 from app.schemas.home_prefs import HomePrefsOut, HomePrefsUpdate
 from app.services.home_prefs import apply_update, get_default_installed_apps, load_prefs, to_out
-from app.services import audit_logger, personal_settings
+from app.services import audit_logger, local_prefs, personal_settings
 from app.services.user_settings import get_user_setting
 
 router = APIRouter(prefix="/me", tags=["home-prefs"])
@@ -108,3 +108,31 @@ def import_personal_settings(
         request=request,
     )
     return result
+
+
+# ── 브라우저 로컬 개인 설정 동기화 ───────────────────────────────────────────────
+# 그룹 접힘·보기 모드처럼 localStorage 에 있던 개인 설정을 다른 PC 로 따라오게 한다(services/local_prefs.py).
+# 화면은 axios 가 아니라 fetch 로 부른다 — 응답 값의 키("pep:homeTab" 등)가 camelCase 변환에 바뀌지 않게.
+
+@router.get("/local-prefs")
+def get_local_prefs(db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    return local_prefs.get_local_prefs(db, user.id)
+
+
+class LocalPrefsDelta(BaseModel):
+    set: dict[str, str] = Field(default_factory=dict)
+    remove: list[str] = Field(default_factory=list, max_length=local_prefs.MAX_KEYS)
+
+
+@router.patch("/local-prefs")
+def patch_local_prefs(
+    payload: LocalPrefsDelta,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    if len(payload.set) > local_prefs.MAX_KEYS:
+        raise HTTPException(status_code=413, detail=f"한 번에 {local_prefs.MAX_KEYS}개까지 저장할 수 있다")
+    try:
+        return local_prefs.apply_delta(db, user.id, payload.set, payload.remove)
+    except local_prefs.LocalPrefsTooLarge as e:
+        raise HTTPException(status_code=413, detail=str(e)) from e
