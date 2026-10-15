@@ -2,10 +2,12 @@
 import { useId, useState } from 'react';
 import { Check, Play, Plug, PowerOff, ShieldCheck, X } from 'lucide-react';
 import type { BatchJob, BatchJobRun, BatchJobTestConnectionResponse } from '@/services/api';
-import { MasterHostPicker } from '@/components/common';
-import { formatApiError } from '@/lib/utils';
+import { MasterHostPicker, RunLogPanel } from '@/components/common';
 import { useBatchJobTypes, useRunBatchJob, useTestBatchJobConnection } from '@/hooks/useBatchJobs';
+import { runLogged, useRunLog } from '@/hooks/useRunLog';
+import { useLogPref } from '@/hooks/useLogPref';
 import { BatchJobLogDetail } from './BatchJobLogDetail';
+import { PREFLIGHT_CHECK_LABEL, batchJobRunLines, testConnectionLines } from './runLogLines';
 
 interface RunFormProps {
   job: BatchJob;
@@ -31,6 +33,8 @@ export function RunForm({ job }: RunFormProps) {
   const [result, setResult] = useState<BatchJobRun | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [testResult, setTestResult] = useState<BatchJobTestConnectionResponse | null>(null);
+  const runLog = useRunLog();
+  const [showLog, setShowLog] = useLogPref('batch-job-run-form');
 
   const hasSavedCreds = job.hasSavedPassword || job.hasSavedPrivateKey;
   const credsProvided = Boolean(password || privateKey);
@@ -56,8 +60,12 @@ export function RunForm({ job }: RunFormProps) {
         return;
       }
     }
-    try {
-      const { data } = await run.mutateAsync({
+    // 요청 실패는 실행 로그 error 줄로 남는다(인라인 오류 텍스트는 입력 검증용으로만 쓴다).
+    const target = isSsh ? `${username.trim() || 'root'}@${host.trim()}:${port}` : 'kubeconfig(클러스터 스코프)';
+    const r = await runLogged(runLog, {
+      title: '배치잡 실행',
+      first: `${job.name} — ${target} 대상 실행 요청 (타임아웃 ${timeoutSec}초)`,
+      fn: () => run.mutateAsync({
         id: job.id,
         payload: isSsh
           ? {
@@ -70,11 +78,10 @@ export function RunForm({ job }: RunFormProps) {
               timeout: timeoutSec,
             }
           : { paramOverride, timeout: timeoutSec },
-      });
-      setResult(data);
-    } catch (e) {
-      setError(formatApiError(e));
-    }
+      }),
+      summarize: ({ data }) => batchJobRunLines(data),
+    });
+    if (r.ok) setResult(r.data.data);
   };
 
   const runTest = async () => {
@@ -88,8 +95,12 @@ export function RunForm({ job }: RunFormProps) {
         return;
       }
     }
-    try {
-      const { data } = await testConn.mutateAsync({
+    const r = await runLogged(runLog, {
+      title: isSsh ? '연결 테스트' : '사전 점검',
+      first: isSsh
+        ? `${job.name} — ${username.trim() || 'root'}@${host.trim()}:${port} SSH 연결 테스트 요청`
+        : `${job.name} — kubeconfig → kubectl → API → RBAC 사전 점검 요청`,
+      fn: () => testConn.mutateAsync({
         id: job.id,
         payload: isSsh
           ? {
@@ -100,11 +111,10 @@ export function RunForm({ job }: RunFormProps) {
               privateKey: privateKey || undefined,
             }
           : {},
-      });
-      setTestResult(data);
-    } catch (e) {
-      setError(formatApiError(e));
-    }
+      }),
+      summarize: ({ data }) => testConnectionLines(data),
+    });
+    if (r.ok) setTestResult(r.data.data);
   };
 
   return (
@@ -251,17 +261,12 @@ export function RunForm({ job }: RunFormProps) {
         </button>
       </div>
 
+      <RunLogPanel run={runLog} show={showLog} onShowChange={setShowLog} maxHeight="max-h-56" />
+
       {result && <BatchJobLogDetail run={result} stepPlan={stepPlan} maxHeight="max-h-[240px]" />}
     </div>
   );
 }
-
-const PREFLIGHT_CHECK_LABEL: Record<string, string> = {
-  kubeconfig: 'kubeconfig 해석',
-  kubectl_binary: 'kubectl 바이너리',
-  api_server: 'API 서버 (인증 프로브)',
-  rbac_jobs: 'Job 조회 권한 (RBAC)',
-};
 
 /**
  * Shared test-connection result banner. Exported so SavedCreds can reuse the

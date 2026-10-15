@@ -15,7 +15,6 @@ import { EmptyState } from '@/components/common/EmptyState';
 import {
   useDeleteDefinition,
   useDuplicateDefinition,
-  useRunDefinition,
   useUpdateDefinition,
 } from '@/hooks/useDeepCheckDefinitions';
 import type { DeepCheckDefinition } from '@/types';
@@ -36,6 +35,8 @@ interface Props {
   runClusterId?: string | null;
   /** 글로벌 정의를 현재 선택 클러스터 전용으로 복제 — 제공 시 글로벌 행에 복제 버튼 노출. */
   onDuplicateToCluster?: (d: DeepCheckDefinition) => void;
+  /** 즉시 1회 실행 — 페이지의 실행 로그(RunLogPanel)에 수명주기를 남기고 성공 여부를 돌려준다. */
+  onRun: (d: DeepCheckDefinition, clusterId: string) => Promise<boolean>;
 }
 
 export function DeepCheckDefinitionList({
@@ -44,11 +45,11 @@ export function DeepCheckDefinitionList({
   onShowHistory,
   runClusterId,
   onDuplicateToCluster,
+  onRun,
 }: Props) {
   const update = useUpdateDefinition();
   const remove = useDeleteDefinition();
   const duplicate = useDuplicateDefinition();
-  const run = useRunDefinition();
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [runningId, setRunningId] = useState<string | null>(null);
 
@@ -88,17 +89,11 @@ export function DeepCheckDefinitionList({
 
   const runNow = async (d: DeepCheckDefinition) => {
     const clusterId = d.clusterId ?? runClusterId ?? undefined;
-    if (!clusterId) {
-      window.alert('글로벌 정의는 좌측 사이드바에서 클러스터를 선택한 뒤 실행할 수 있습니다.');
-      return;
-    }
+    if (!clusterId) return; // 버튼이 disabled + 사유 title 로 막는다.
     setRunningId(d.id);
-    try {
-      await run.mutateAsync({ id: d.id, clusterId });
-      onShowHistory(d);
-    } finally {
-      setRunningId(null);
-    }
+    const ok = await onRun(d, clusterId);
+    setRunningId(null);
+    if (ok) onShowHistory(d);
   };
 
   if (definitions.length === 0) {
@@ -184,9 +179,11 @@ export function DeepCheckDefinitionList({
             <button
               type="button"
               onClick={() => runNow(d)}
-              disabled={runningId === d.id}
-              className="flex-shrink-0 rounded-lg p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground disabled:opacity-50"
-              title="즉시 실행 (이력에 기록)"
+              disabled={runningId === d.id || !(d.clusterId ?? runClusterId)}
+              className="flex-shrink-0 rounded-lg p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground disabled:opacity-50 disabled:cursor-not-allowed"
+              title={d.clusterId ?? runClusterId
+                ? '즉시 실행 (이력에 기록)'
+                : '글로벌 정의는 좌측 사이드바에서 클러스터를 선택한 뒤 실행할 수 있습니다'}
               aria-label={`${d.name} 즉시 실행`}
             >
               <Play className={`w-4 h-4 ${runningId === d.id ? 'animate-pulse' : ''}`} />

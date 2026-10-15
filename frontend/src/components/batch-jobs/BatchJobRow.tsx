@@ -8,6 +8,8 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { ConfirmDialog, useToast } from '@/components/common';
 import { formatApiError } from '@/lib/utils';
 import { useRunBatchJob, useStopBatchJob } from '@/hooks/useBatchJobs';
+import { runLogged, type RunLog } from '@/hooks/useRunLog';
+import { batchJobRunLines } from './runLogLines';
 import { StatusPill } from './StatusPill';
 import { CronBadge } from './CronBadge';
 import { cronHealth, type CronHealth } from './filters';
@@ -36,6 +38,8 @@ interface BatchJobRowProps {
   checkbox?: boolean;
   checked?: boolean;
   onToggleSelect?: (id: string) => void;
+  /** 빠른 실행(▶) 수명주기를 남길 실행 로그 — 표(BatchJobTable) 위 RunLogPanel 이 보여준다. */
+  runLog: RunLog;
 }
 
 function formatShortDate(iso: string | null | undefined): string {
@@ -46,7 +50,7 @@ function formatShortDate(iso: string | null | undefined): string {
   return `${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 
-export function BatchJobRow({ job, cluster, selected, onClick, checkbox, checked, onToggleSelect }: BatchJobRowProps) {
+export function BatchJobRow({ job, cluster, selected, onClick, checkbox, checked, onToggleSelect, runLog }: BatchJobRowProps) {
   const hasMissingCreds =
     job.requiresSsh !== false && !!job.cron && !job.hasSavedPassword && !job.hasSavedPrivateKey;
   const showCluster = !!cluster;
@@ -64,15 +68,24 @@ export function BatchJobRow({ job, cluster, selected, onClick, checkbox, checked
 
   const quickRun = async (e: React.MouseEvent) => {
     e.stopPropagation();
-    try {
-      const { data } = await runMut.mutateAsync({ id: job.id, payload: {} });
+    const target = job.requiresSsh === false
+      ? 'kubeconfig(클러스터 스코프)'
+      : `${job.defaultHost || '기본 호스트'} · 저장된 자격증명`;
+    const r = await runLogged(runLog, {
+      title: '배치잡 즉시 실행',
+      first: `${job.name}${cluster ? ` (${cluster.name})` : ''} — ${target} 대상 실행 요청`,
+      fn: () => runMut.mutateAsync({ id: job.id, payload: {} }),
+      summarize: ({ data }) => batchJobRunLines(data),
+    });
+    if (r.ok) {
+      const data = r.data.data;
       if (data.status === 'ok') {
         toast.success(`${job.name} 실행됨`, `${data.durationMs}ms`);
       } else {
         toast.error(`${job.name} 실행 실패`, data.error ?? data.status);
       }
-    } catch (err) {
-      toast.error('즉시 실행 실패', formatApiError(err));
+    } else if (!r.aborted) {
+      toast.error('즉시 실행 실패', formatApiError(r.error));
     }
   };
 

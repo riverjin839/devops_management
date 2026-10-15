@@ -3,8 +3,10 @@ import { PageHeader } from '@/components/common/PageHeader';
 import { Plus, Search } from 'lucide-react';
 import { MacCard } from '@/components/ui/MacCard';
 import { ClusterSidebar } from '@/components/common/ClusterSidebar';
-import { useToast, PageShell } from '@/components/common';
+import { useToast, PageShell, RunLogPanel } from '@/components/common';
 import { formatApiError } from '@/lib/utils';
+import { runLogged, useRunLog, type RunLogEntry, type RunLogLevel } from '@/hooks/useRunLog';
+import { useLogPref } from '@/hooks/useLogPref';
 import {
   DeepCheckDefinitionForm,
   DeepCheckDefinitionList,
@@ -17,8 +19,9 @@ import {
   useDeepCheckDefinitions,
   useCreateDefinition,
   useUpdateDefinition,
+  useRunDefinition,
 } from '@/hooks/useDeepCheckDefinitions';
-import type { DeepCheckDefinition } from '@/types';
+import type { DeepCheckDefinition, DeepCheckExecStep, DeepCheckTestResult } from '@/types';
 
 const CATEGORY_LABELS: Record<string, string> = {
   all: '전체',
@@ -28,6 +31,26 @@ const CATEGORY_LABELS: Record<string, string> = {
   network: '네트워크',
   app: '앱',
 };
+
+const STATUS_KO: Record<string, string> = { healthy: '정상', warning: '경고', critical: '위험', pending: '대기' };
+const STATUS_LEVEL: Record<string, RunLogLevel> = { healthy: 'info', warning: 'warn', critical: 'error', pending: 'warn' };
+const STEP_KO: Record<string, string> = { success: '완료', failed: '실패', skipped: '건너뜀', running: '진행 중' };
+
+/** 즉시 실행 응답 → 실행 로그 줄. 응답 인터셉터가 details._steps 를 camelize(→ Steps) 하므로 둘 다 조회. */
+function deepCheckResultLines(res: DeepCheckTestResult): RunLogEntry[] {
+  const details = (res.details ?? {}) as Record<string, unknown>;
+  const raw = details._steps ?? details.Steps;
+  const steps = Array.isArray(raw) ? (raw as DeepCheckExecStep[]) : [];
+  const out: RunLogEntry[] = steps.map((st) => {
+    const head = `단계 ${st.label || st.id} · ${STEP_KO[st.status] ?? st.status}${st.durationMs != null ? ` · ${st.durationMs}ms` : ''}`;
+    return [st.status === 'failed' ? 'error' : 'info', st.detail ? `${head} — ${st.detail.slice(0, 200)}` : head];
+  });
+  out.push([
+    STATUS_LEVEL[res.status] ?? 'warn',
+    `결과 ${STATUS_KO[res.status] ?? res.status} · 서버 소요 ${res.durationMs}ms${res.message ? ` — ${res.message}` : ''}`,
+  ]);
+  return out;
+}
 
 export function DeepCheckSettingsPage() {
   const { data: clusters = [] } = useClusters();
@@ -44,6 +67,10 @@ export function DeepCheckSettingsPage() {
   const { data: definitions = [] } = useDeepCheckDefinitions(filterClusterId, true, true);
   const create = useCreateDefinition();
   const update = useUpdateDefinition();
+  const runDef = useRunDefinition();
+  // 정의 ▶ · 이력 패널 「지금 실행」 공용 실행 로그(D-135).
+  const runLog = useRunLog();
+  const [showRunLog, setShowRunLog] = useLogPref('deep-check-run');
 
   const categoryByType = useMemo(
     () => new Map(checkTypes.map((t) => [t.checkType, t.category ?? 'k8s'])),
@@ -67,6 +94,18 @@ export function DeepCheckSettingsPage() {
   }, [definitions, search, category, categoryByType]);
 
   const selectedCluster = clusters.find((c) => c.id === selectedClusterId);
+
+  /** 정의 1회 즉시 실행(이력 기록) — 요청·대기·단계별 결과·실패 사유를 실행 로그에 남기고 성공 여부를 돌려준다. */
+  const runDefinition = async (d: DeepCheckDefinition, clusterId: string): Promise<boolean> => {
+    const cname = clusters.find((c) => c.id === clusterId)?.name ?? clusterId.slice(0, 8);
+    const r = await runLogged(runLog, {
+      title: `심층 점검 실행 — ${d.name}`,
+      first: `${d.name}(${d.checkType}) — ${cname} 대상 1회 실행 요청`,
+      fn: () => runDef.mutateAsync({ id: d.id, clusterId }),
+      summarize: ({ data }) => deepCheckResultLines(data),
+    });
+    return r.ok;
+  };
 
   // 글로벌 정의를 현재 선택 클러스터 전용으로 복제 — 임계/파라미터를 그대로 이어받아
   // 운영자가 매번 다시 입력하지 않게 한다.
@@ -180,11 +219,15 @@ export function DeepCheckSettingsPage() {
             </MacCard>
           )}
 
+          <RunLogPanel run={runLog} show={showRunLog} onShowChange={setShowRunLog} />
+
           {historyOf && (
             <DeepCheckRunHistory
               definition={historyOf}
               clusters={clusters}
               runClusterId={selectedClusterId}
+              onRun={runDefinition}
+              running={runLog.running}
               onClose={() => setHistoryOf(null)}
             />
           )}
@@ -197,6 +240,7 @@ export function DeepCheckSettingsPage() {
             }}
             onShowHistory={(d) => setHistoryOf(d)}
             runClusterId={selectedClusterId}
+            onRun={runDefinition}
             onDuplicateToCluster={selectedClusterId ? duplicateToCluster : undefined}
           />
 
