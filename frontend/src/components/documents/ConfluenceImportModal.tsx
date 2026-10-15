@@ -15,7 +15,7 @@ const inputCls =
 
 const ACTION_META: Record<string, { label: string; cls: string }> = {
   create: { label: 'create', cls: 'bg-status-healthy/10 text-status-healthy' },
-  update: { label: 'update', cls: 'bg-blue-500/10 text-blue-500' },
+  update: { label: 'update', cls: 'bg-status-info/10 text-status-info' },
   unchanged: { label: 'unchanged', cls: 'bg-secondary text-muted-foreground' },
   error: { label: 'error', cls: 'bg-status-critical/10 text-status-critical' },
 };
@@ -288,7 +288,7 @@ export function ConfluenceImportModal({ open, onClose }: Props) {
                 </div>
                 <div className="mt-2 grid grid-cols-3 gap-2 text-sm">
                   <div><span className="text-muted-foreground">신규</span> <b className="text-status-healthy">{done.imported}</b></div>
-                  <div><span className="text-muted-foreground">갱신</span> <b className="text-blue-500">{done.updated}</b></div>
+                  <div><span className="text-muted-foreground">갱신</span> <b className="text-status-info">{done.updated}</b></div>
                   <div><span className="text-muted-foreground">건너뜀</span> <b>{done.skipped}</b></div>
                 </div>
                 {done.errors.length > 0 && (

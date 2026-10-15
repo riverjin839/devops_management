@@ -686,7 +686,7 @@ export function JiraImportModal({ open, onClose, defaultProjectKey }: JiraImport
                                   })}
                                   aria-label={`${m.jiraKey} 선택`}
                                 />
-                                <span className="font-mono text-xs text-brand-jira dark:text-blue-300">{m.jiraKey}</span>
+                                <span className="font-mono text-xs text-brand-jira">{m.jiraKey}</span>
                                 <span className="truncate flex-1">{m.title}</span>
                               </li>
                             ))}

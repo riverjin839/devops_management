@@ -113,7 +113,7 @@ export function JiraLinkDialog({ open, onClose, item, missingDetail }: JiraLinkD
         <DialogContent className="max-w-md">
           <DialogHeader className="flex-row items-center gap-3">
             <div className="w-10 h-10 rounded-2xl bg-brand-jira/10 flex items-center justify-center flex-shrink-0">
-              <Link2 className="w-5 h-5 text-brand-jira dark:text-blue-300" />
+              <Link2 className="w-5 h-5 text-brand-jira" />
             </div>
             <div className="min-w-0 flex-1">
               <DialogTitle>Jira 연결 관리</DialogTitle>
@@ -138,7 +138,7 @@ export function JiraLinkDialog({ open, onClose, item, missingDetail }: JiraLinkD
                 {currentKey ? (
                   item.jiraUrl ? (
                     <a href={item.jiraUrl} target="_blank" rel="noreferrer"
-                      className="font-mono text-brand-jira dark:text-blue-300 hover:underline inline-flex items-center gap-1">
+                      className="font-mono text-brand-jira hover:underline inline-flex items-center gap-1">
                       {currentKey} <ExternalLink className="w-3 h-3" />
                     </a>
                   ) : <span className="font-mono">{currentKey}</span>

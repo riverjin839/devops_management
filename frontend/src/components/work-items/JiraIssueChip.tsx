@@ -30,7 +30,7 @@ export function JiraIssueChip({ issueKey, title, status, url, className = '' }: 
       {issueKey && (
         url ? (
           <a href={url} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()}
-            className="inline-flex items-center gap-0.5 font-mono text-[11px] font-semibold text-brand-jira dark:text-blue-300 hover:underline flex-shrink-0"
+            className="inline-flex items-center gap-0.5 font-mono text-[11px] font-semibold text-brand-jira hover:underline flex-shrink-0"
             title={`${issueKey} 열기`}>
             {issueKey}<ExternalLink className="w-2.5 h-2.5" />
           </a>

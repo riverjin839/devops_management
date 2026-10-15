@@ -18,8 +18,8 @@ const STATUS_CFG: Record<string, { label: string; icon: React.ReactNode; cls: st
 
 const PRIORITY_DOT: Record<string, { dot: string; cls: string; label: string }> = {
   high:   { dot: 'bg-status-critical',   cls: 'text-status-critical',   label: '높음' },
-  medium: { dot: 'bg-blue-400',  cls: 'text-blue-400',  label: '보통' },
-  low:    { dot: 'bg-slate-400', cls: 'text-slate-400', label: '낮음' },
+  medium: { dot: 'bg-status-warning', cls: 'text-status-warning', label: '보통' },
+  low:    { dot: 'bg-status-info',    cls: 'text-status-info',    label: '낮음' },
 };
 
 function Breadcrumb({ guide, allGuides, onSelect }: { guide: WorkGuide; allGuides: WorkGuide[]; onSelect: (id: string) => void }) {

@@ -1,9 +1,11 @@
 import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import {
   AlertTriangle, CheckCircle, Info, Loader2, Search, Zap,
-  Server, Layers, Package, RefreshCw, Download, Play, Square, Filter, X,
+  Layers, Package, RefreshCw, Download, Play, Square, Filter, X,
 } from 'lucide-react';
-import { SearchableSelect, LogViewTabs, PageHeader, PageShell, RunLogPanel } from '@/components/common';
+import { useSearchParams } from 'react-router-dom';
+import { ClusterSidebar, SearchableSelect, LogViewTabs, PageHeader, PageShell, RunLogPanel } from '@/components/common';
+import { useClusterRouteParam } from '@/hooks/useClusterRouteParam';
 import { useRunLog, runLogged, type RunLogEntry } from '@/hooks/useRunLog';
 import { useLogPref } from '@/hooks/useLogPref';
 import { MacCard } from '@/components/ui/MacCard';
@@ -143,20 +145,18 @@ export function IncidentAnalysisPage() {
   const f = (k: string) => `${fid}-${k}`;
 
   // ── 클러스터 / namespace / pod 선택 상태 ──
+  // 클러스터는 경로(`/incident-analysis/:clusterId`), namespace·pod 는 쿼리(`?namespace=&pod=`) — 딥링크 가능.
   const { data: clusters = [] } = useClusters();
-  const [clusterId, setClusterId] = useState('');
-  const [namespace, setNamespace] = useState('');
-  const [podName, setPodName] = useState('');
+  const { clusterId, selectCluster } = useClusterRouteParam('/incident-analysis', clusters);
+  const [searchParams, setSearchParams] = useSearchParams();
+  const [namespace, setNamespace] = useState(() => searchParams.get('namespace') ?? '');
+  const [podName, setPodName] = useState(() => searchParams.get('pod') ?? '');
   // 거대 클러스터(수천 namespace) 에서도 첫 응답이 즉시 오도록 기본은 false (빠른 경로).
   // 백엔드의 list_namespaces 가 with_counts/only_with_issues 둘 다 false 면 pod 조회를 생략한다.
   // 사용자가 토글 켜면 느린 경로 (전체 pod fetch) 가 발동되며 axios 타임아웃도 2분 30초로 확장됨.
   const [onlyIssues, setOnlyIssues] = useState(false);
   const [nsPattern, setNsPattern] = useState('');
   const [podPattern, setPodPattern] = useState('');
-
-  useEffect(() => {
-    if (!clusterId && clusters.length > 0) setClusterId(clusters[0].id);
-  }, [clusters, clusterId]);
 
   // ns 가 이미 선택돼 있으면 클러스터 전체 스캔은 불필요 — pod 쿼리에서만 onlyIssues 적용.
   const effectiveOnlyIssues = onlyIssues && !namespace;
@@ -165,10 +165,41 @@ export function IncidentAnalysisPage() {
   );
   const podsQ = useAnalyzePods(clusterId, namespace, onlyIssues);
 
-  // 클러스터 변경 시 ns/pod 초기화
-  useEffect(() => { setNamespace(''); setPodName(''); }, [clusterId]);
-  // namespace 변경 시 pod 초기화
-  useEffect(() => { setPodName(''); }, [namespace]);
+  // 클러스터 변경 시 ns/pod 초기화 — 이전 값과 비교해 실제로 바뀐 경우만.
+  // ''→첫 클러스터(최초 해석)는 변경으로 보지 않아 쿼리로 들어온 ns/pod 를 지우지 않는다.
+  const prevClusterRef = useRef(clusterId);
+  const clusterResetRef = useRef(false);
+  useEffect(() => {
+    const prev = prevClusterRef.current;
+    prevClusterRef.current = clusterId;
+    if (prev && prev !== clusterId) {
+      clusterResetRef.current = true;
+      setNamespace('');
+      setPodName('');
+    }
+  }, [clusterId]);
+  // namespace 변경 시 pod 초기화 (마운트 시 쿼리로 들어온 pod 는 유지)
+  const prevNsRef = useRef(namespace);
+  useEffect(() => {
+    if (prevNsRef.current === namespace) return;
+    prevNsRef.current = namespace;
+    setPodName('');
+  }, [namespace]);
+
+  // ns/pod → URL 쿼리 동기화 (replace — 선택마다 히스토리를 쌓지 않음).
+  // 클러스터 해석 전에는 쓰지 않는다(경로 이동이 쿼리를 덮어씀). 클러스터 전환 직후 커밋은
+  // 아직 이전 ns/pod 를 들고 있으므로 건너뛰고, 초기화된 값으로 다음 커밋에서 쓴다.
+  useEffect(() => {
+    if (!clusterId) return;
+    if (clusterResetRef.current) { clusterResetRef.current = false; return; }
+    const curNs = searchParams.get('namespace') ?? '';
+    const curPod = searchParams.get('pod') ?? '';
+    if (curNs === namespace && curPod === podName) return;
+    const next = new URLSearchParams(searchParams);
+    if (namespace) next.set('namespace', namespace); else next.delete('namespace');
+    if (podName) next.set('pod', podName); else next.delete('pod');
+    setSearchParams(next, { replace: true });
+  }, [clusterId, namespace, podName, searchParams, setSearchParams]);
 
   // 첫 namespace 자동 선택 (이슈 있는 ns 우선)
   useEffect(() => {
@@ -347,408 +378,401 @@ export function IncidentAnalysisPage() {
 
   return (
     <div className="app-min-h-screen bg-background">
-      <PageShell density="hub" className="space-y-5">
+      <PageShell density="console" as="div" className="flex gap-3">
+        <div className="sticky top-4 self-start">
+          <ClusterSidebar
+            clusters={clusters}
+            selectedId={clusterId || null}
+            onSelect={selectCluster}
+            iconOnly
+          />
+        </div>
 
-        {/* 헤더 */}
-        <PageHeader
-          icon={Zap}
-          title="K8s 로그 — AI 분석"
-          titleExtra={<LogViewTabs current="analysis" />}
-          actions={health && (
-            <div className="flex items-center gap-2 text-sm">
-              {health.available
-                ? <CheckCircle className="w-4 h-4 text-muted-foreground" />
-                : <AlertTriangle className="w-4 h-4 text-status-warning" />}
-              <span className="text-muted-foreground">
-                {BACKEND_LABEL[health.backend] ?? health.backend}
-                {health.available ? ' 연결됨' : ' 오프라인'}
-              </span>
-            </div>
-          )}
-        />
-
-        {/* ── 드릴다운 선택 (Cluster → Namespace → Pod) ── */}
-        <MacCard
-          title="대상 선택"
-          bodyPadding="p-5"
-          className="space-y-4"
-          actions={
-            <label className="flex items-center gap-1.5 text-xs text-muted-foreground cursor-pointer"
-              title="OFF: namespace 이름만 빠르게 조회 (큰 클러스터 권장). ON: 클러스터 전체 pod 를 스캔해 비정상 ns/pod 만 추림 (느림 — 큰 클러스터에서 1분 이상 소요 가능). ns 가 이미 선택돼 있으면 그 ns 만 스캔.">
-              <input
-                type="checkbox"
-                checked={onlyIssues}
-                onChange={(e) => setOnlyIssues(e.target.checked)}
-                className="w-3.5 h-3.5 accent-primary"
-              />
-              이슈 있는 항목만 보기 (느림)
-            </label>
-          }
-        >
-
-          {/* 이슈만 + ns 미선택일 때 — glob 패턴으로 스캔 범위 좁히기 */}
-          {onlyIssues && !namespace && (
-            <div className="rounded-md border border-status-warning/30 bg-status-warning/5 p-3 space-y-2">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-                <div>
-                  <label htmlFor={f('nsPattern')} className={lc}>
-                    Namespace 패턴 (선택)
-                  </label>
-                  <input
-                    id={f('nsPattern')}
-                    value={nsPattern}
-                    onChange={(e) => setNsPattern(e.target.value)}
-                    placeholder="kube-*,monitoring,argocd"
-                    className={`${ic} font-mono text-sm`}
-                  />
-                </div>
-                <div>
-                  <label htmlFor={f('podPattern')} className={lc}>
-                    파드 이름 패턴 (선택)
-                  </label>
-                  <input
-                    id={f('podPattern')}
-                    value={podPattern}
-                    onChange={(e) => setPodPattern(e.target.value)}
-                    placeholder="*nginx*,*api*"
-                    className={`${ic} font-mono text-sm`}
-                  />
-                </div>
+        <div className="flex-1 min-w-0 space-y-4">
+          {/* 헤더 */}
+          <PageHeader
+            icon={Zap}
+            title="K8s 로그 — AI 분석"
+            titleExtra={<LogViewTabs current="analysis" />}
+            actions={health && (
+              <div className="flex items-center gap-2 text-sm">
+                {health.available
+                  ? <CheckCircle className="w-4 h-4 text-muted-foreground" />
+                  : <AlertTriangle className="w-4 h-4 text-status-warning" />}
+                <span className="text-muted-foreground">
+                  {BACKEND_LABEL[health.backend] ?? health.backend}
+                  {health.available ? ' 연결됨' : ' 오프라인'}
+                </span>
               </div>
-              <p className="text-xs text-muted-foreground">
-                콤마 구분, <code>*</code> <code>?</code> 와일드카드. 비워두면 전체 ns 스캔.
-                Namespace 를 선택하면 이 입력은 사라지고 그 ns 만 스캔합니다.
-              </p>
-            </div>
-          )}
-
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
-            {/* Cluster */}
-            <div>
-              <label htmlFor={f('cluster')} className={lc}>
-                <Server className="w-3 h-3 inline mr-1" />
-                Kubernetes 클러스터
-              </label>
-              <select
-                id={f('cluster')}
-                value={clusterId}
-                onChange={(e) => setClusterId(e.target.value)}
-                className={ic}
-              >
-                <option value="">— 클러스터 선택 —</option>
-                {clusters.map((c) => (
-                  <option key={c.id} value={c.id}>{c.name}</option>
-                ))}
-              </select>
-            </div>
-
-            {/* Namespace */}
-            <div>
-              <label className={lc}>
-                <Layers className="w-3 h-3 inline mr-1" />
-                Namespace
-                {nsQ.isLoading && <Loader2 className="w-3 h-3 inline ml-1 animate-spin" />}
-                {nsQ.data && (
-                  <span className="ml-1 text-xs opacity-60">
-                    ({nsQ.data.namespaces.length})
-                  </span>
-                )}
-              </label>
-              <SearchableSelect
-                value={namespace}
-                onChange={setNamespace}
-                options={nsQ.data?.namespaces ?? []}
-                getKey={(n) => n.name}
-                getLabel={(n) =>
-                  `${n.hasUnhealthy ? '[이상] ' : ''}${n.name}` +
-                  (typeof n.podCount === 'number' ? ` (${n.podCount} pods)` : '')
-                }
-                placeholder="namespace 검색..."
-                disabled={!clusterId || nsQ.isLoading}
-                loading={nsQ.isLoading}
-                emptyText="namespace 없음"
-              />
-              {nsQ.isError && (
-                <p className="text-xs text-status-critical mt-1">
-                  {formatApiError(nsQ.error)}
-                </p>
-              )}
-            </div>
-
-            {/* Pod */}
-            <div>
-              <label className={lc}>
-                <Package className="w-3 h-3 inline mr-1" />
-                Pod
-                {podsQ.isLoading && <Loader2 className="w-3 h-3 inline ml-1 animate-spin" />}
-                {podsQ.data && (
-                  <span className="ml-1 text-xs opacity-60">
-                    ({podsQ.data.pods.length})
-                  </span>
-                )}
-              </label>
-              <SearchableSelect
-                value={podName}
-                onChange={setPodName}
-                options={podsQ.data?.pods ?? []}
-                getKey={(p) => p.name}
-                getLabel={podOptionLabel}
-                placeholder="pod 검색..."
-                disabled={!namespace || podsQ.isLoading}
-                loading={podsQ.isLoading}
-                emptyText="pod 없음"
-                className="font-mono text-sm"
-              />
-              {podsQ.isError && (
-                <p className="text-xs text-status-critical mt-1">
-                  {formatApiError(podsQ.error)}
-                </p>
-              )}
-            </div>
-          </div>
-
-          {/* 선택된 Pod 요약 + 자동 채우기 버튼 */}
-          {selectedPod && (
-            <div className="flex items-center justify-between gap-3 flex-wrap pt-2 border-t border-border">
-              <div className="text-sm space-y-0.5">
-                <p className="font-mono text-foreground">
-                  {namespace}/<span className="text-primary">{selectedPod.name}</span>
-                </p>
-                <p className="text-xs text-muted-foreground">
-                  {selectedPod.phase} · ready {selectedPod.ready} · restart {selectedPod.restartCount}
-                  {selectedPod.node && ` · node ${selectedPod.node}`}
-                  {selectedPod.issueReason && (
-                    <span className="text-status-warning ml-1">· {selectedPod.issueReason}</span>
-                  )}
-                </p>
-              </div>
-              <button
-                onClick={handleAutofill}
-                disabled={!canAutofill || fetchCtx.isPending}
-                title="kubectl logs / events / describe 를 자동으로 가져와 아래 입력란을 채웁니다."
-                className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium bg-primary/10 hover:bg-primary/20 text-primary border border-primary/30 rounded-lg disabled:opacity-50"
-              >
-                {fetchCtx.isPending
-                  ? <><Loader2 className="w-3.5 h-3.5 animate-spin" />수집 중…</>
-                  : <><Download className="w-3.5 h-3.5" />로그/이벤트/Describe 자동 채우기</>}
-              </button>
-            </div>
-          )}
-
-          {(autofillLog.running || autofillLog.lines.length > 0) && (
-            <RunLogPanel run={autofillLog} show={showAutofillLog} onShowChange={setShowAutofillLog} maxHeight="max-h-48" />
-          )}
-
-          {fetchCtx.isError && (
-            <p className="text-xs text-status-critical">
-              자동 수집 실패: {formatApiError(fetchCtx.error)}
-            </p>
-          )}
-          {autofilledFor && !autofillStale && fetchCtx.isSuccess && (
-            <p className="text-xs text-status-healthy flex items-center gap-1">
-              <CheckCircle className="w-3 h-3" />
-              자동 수집 완료 — events {events.length}건, logs {currentLogs.length} 자.
-            </p>
-          )}
-          {autofillStale && (
-            <p className="text-xs text-status-warning flex items-center gap-1">
-              <RefreshCw className="w-3 h-3" />
-              선택이 변경되었습니다. 다시 자동 채우기를 누르세요.
-            </p>
-          )}
-        </MacCard>
-
-        {/* ── 입력 (전폭) ── */}
-        {/* 전폭으로 펼쳐 textarea 폭이 "대상 선택" 패널과 동일. 결과 패널은 아래로. */}
-        <div className="space-y-4">
-          <MacCard
-            title="이벤트"
-            titleExtra={<span className="text-xs text-muted-foreground tabular-nums">{events.length}건</span>}
-            bodyPadding="p-5"
-            className="space-y-4"
-          >
-            {events.length > 0 ? (
-              <div className="rounded-md border border-border overflow-hidden">
-                <div className="grid grid-cols-[80px_70px_60px_1fr] gap-2 px-3 py-1.5 bg-secondary/50 text-xs font-semibold text-muted-foreground">
-                  <span>Type</span><span>Reason</span><span className="text-center">Count</span><span>Message</span>
-                </div>
-                {events.slice(0, 20).map((ev, i) => <EventRow key={i} event={ev} index={i} />)}
-              </div>
-            ) : (
-              <p className="text-sm text-muted-foreground italic">
-                자동 채우기를 누르거나, 아래에 직접 붙여넣으세요.
-              </p>
             )}
-            <div>
-              <label htmlFor={f('rawEvents')} className={lc}>kubectl get events 출력 (선택, 직접 입력 시)</label>
-              <textarea
-                id={f('rawEvents')}
-                value={rawEvents}
-                onChange={(e) => { setRawEvents(e.target.value); setStructuredEvents([]); }}
-                placeholder={'Warning  BackOff  3  Back-off restarting failed container'}
-                rows={3}
-                className={`${ic} font-mono text-sm resize-none`}
-              />
-            </div>
-          </MacCard>
+          />
 
+          {/* ── 드릴다운 선택 (Namespace → Pod, 클러스터는 좌측 레일) ── */}
           <MacCard
-            title="로그 / Describe"
+            title="대상 선택"
             bodyPadding="p-5"
             className="space-y-4"
             actions={
-              /* 실시간 스트리밍 + 로그 라인 필터 컨트롤 */
-              <div className="flex items-center gap-2 flex-wrap">
-                {/* 라인 필터 */}
-                <div className="relative">
-                  <Filter className="absolute left-2 top-1/2 -translate-y-1/2 w-3 h-3 text-muted-foreground" />
-                  <input
-                    value={logFilter}
-                    onChange={(e) => setLogFilter(e.target.value)}
-                    placeholder="로그 라인 필터 (예: ERROR, OOMKilled)"
-                    className="pl-7 pr-7 py-1.5 text-xs font-mono bg-background border border-border rounded-md focus:outline-none focus:ring-1 focus:ring-primary w-72"
-                  />
-                  {logFilter && (
-                    <button
-                      onClick={() => setLogFilter('')}
-                      className="absolute right-1 top-1/2 -translate-y-1/2 p-0.5 text-muted-foreground hover:text-foreground"
-                      aria-label="필터 지우기"
-                    >
-                      <X className="w-3 h-3" />
-                    </button>
-                  )}
-                </div>
-
-                {/* 폴링 간격 */}
-                <label className="flex items-center gap-1 text-xs text-muted-foreground"
-                  title="실시간 로그 갱신 간격 (초)">
-                  매
-                  <input
-                    type="number"
-                    min={1}
-                    max={300}
-                    value={streamIntervalSec}
-                    onChange={(e) => setStreamIntervalSec(Number(e.target.value) || 5)}
-                    className="w-12 px-1 py-0.5 text-xs font-mono bg-background border border-border rounded text-center"
-                  />초
-                </label>
-
-                {/* 실시간 토글 */}
-                {streaming ? (
-                  <button
-                    onClick={() => setStreaming(false)}
-                    className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-semibold bg-status-critical/10 hover:bg-status-critical/20 text-status-critical border border-status-critical/30 rounded-md"
-                    title="실시간 갱신 중지"
-                  >
-                    <Square className="w-3 h-3 fill-current" />
-                    LIVE 중지
-                  </button>
-                ) : (
-                  <button
-                    onClick={() => setStreaming(true)}
-                    disabled={!canAutofill}
-                    title="N초마다 fetch-context 를 다시 호출해 로그/이벤트/describe 를 갱신"
-                    className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-semibold bg-primary/10 hover:bg-primary/20 text-primary border border-primary/30 rounded-md disabled:opacity-50"
-                  >
-                    <Play className="w-3 h-3" />
-                    실시간 시작
-                  </button>
-                )}
-              </div>
+              <label className="flex items-center gap-1.5 text-xs text-muted-foreground cursor-pointer"
+                title="OFF: namespace 이름만 빠르게 조회 (큰 클러스터 권장). ON: 클러스터 전체 pod 를 스캔해 비정상 ns/pod 만 추림 (느림 — 큰 클러스터에서 1분 이상 소요 가능). ns 가 이미 선택돼 있으면 그 ns 만 스캔.">
+                <input
+                  type="checkbox"
+                  checked={onlyIssues}
+                  onChange={(e) => setOnlyIssues(e.target.checked)}
+                  className="w-3.5 h-3.5 accent-primary"
+                />
+                이슈 있는 항목만 보기 (느림)
+              </label>
             }
           >
 
-            {streaming && (
-              <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                <span className="relative flex w-2 h-2">
-                  <span className="relative inline-flex w-2 h-2 rounded-full bg-primary" />
-                </span>
-                <span>실시간 · 매 {streamIntervalSec}초 갱신</span>
-                {lastStreamAt && (
-                  <span className="text-muted-foreground">
-                    마지막 {Math.max(0, Math.round((Date.now() - lastStreamAt) / 1000))}초 전
-                  </span>
-                )}
-                {fetchCtx.isPending && <Loader2 className="w-3 h-3 animate-spin" />}
+            {/* 이슈만 + ns 미선택일 때 — glob 패턴으로 스캔 범위 좁히기 */}
+            {onlyIssues && !namespace && (
+              <div className="rounded-md border border-status-warning/30 bg-status-warning/5 p-3 space-y-2">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                  <div>
+                    <label htmlFor={f('nsPattern')} className={lc}>
+                      Namespace 패턴 (선택)
+                    </label>
+                    <input
+                      id={f('nsPattern')}
+                      value={nsPattern}
+                      onChange={(e) => setNsPattern(e.target.value)}
+                      placeholder="kube-*,monitoring,argocd"
+                      className={`${ic} font-mono text-sm`}
+                    />
+                  </div>
+                  <div>
+                    <label htmlFor={f('podPattern')} className={lc}>
+                      파드 이름 패턴 (선택)
+                    </label>
+                    <input
+                      id={f('podPattern')}
+                      value={podPattern}
+                      onChange={(e) => setPodPattern(e.target.value)}
+                      placeholder="*nginx*,*api*"
+                      className={`${ic} font-mono text-sm`}
+                    />
+                  </div>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  콤마 구분, <code>*</code> <code>?</code> 와일드카드. 비워두면 전체 ns 스캔.
+                  Namespace 를 선택하면 이 입력은 사라지고 그 ns 만 스캔합니다.
+                </p>
               </div>
             )}
 
-            <div>
-              <label className={lc}>
-                현재 컨테이너 로그
-                {logFilter && (
-                  <span className="ml-2 text-primary">
-                    필터 일치 {curFiltered.lines.length} / {curFiltered.total}
-                  </span>
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+              {/* Namespace */}
+              <div>
+                <label htmlFor={f('namespace')} className={lc}>
+                  <Layers className="w-3 h-3 inline mr-1" />
+                  Namespace
+                  {nsQ.isLoading && <Loader2 className="w-3 h-3 inline ml-1 animate-spin" />}
+                  {nsQ.data && (
+                    <span className="ml-1 text-xs opacity-60">
+                      ({nsQ.data.namespaces.length})
+                    </span>
+                  )}
+                </label>
+                <SearchableSelect
+                  id={f('namespace')}
+                  value={namespace}
+                  onChange={setNamespace}
+                  options={nsQ.data?.namespaces ?? []}
+                  getKey={(n) => n.name}
+                  getLabel={(n) =>
+                    `${n.hasUnhealthy ? '[이상] ' : ''}${n.name}` +
+                    (typeof n.podCount === 'number' ? ` (${n.podCount} pods)` : '')
+                  }
+                  placeholder="namespace 검색..."
+                  disabled={!clusterId || nsQ.isLoading}
+                  loading={nsQ.isLoading}
+                  emptyText="namespace 없음"
+                />
+                {nsQ.isError && (
+                  <p className="text-xs text-status-critical mt-1">
+                    {formatApiError(nsQ.error)}
+                  </p>
                 )}
-              </label>
-              <textarea value={currentLogs} onChange={(e) => setLogs(e.target.value)}
-                onFocus={() => { editingRef.current = true; }}
-                onBlur={() => { editingRef.current = false; }}
-                placeholder="자동 채우기를 누르거나 직접 붙여넣으세요..."
-                rows={12} className={`${ic} font-mono text-sm resize-y`} />
-              {logFilter && curFiltered.lines.length > 0 && (
-                <pre className="mt-1 text-xs font-mono bg-muted/30 border border-border rounded-md p-2 max-h-64 overflow-auto whitespace-pre-wrap">
-                  {curFiltered.lines.join('\n')}
-                </pre>
-              )}
-            </div>
-            <div>
-              <label className={lc}>
-                이전 컨테이너 로그 (재시작 직전)
-                {logFilter && previousLogs && (
-                  <span className="ml-2 text-primary">
-                    필터 일치 {prevFiltered.lines.length} / {prevFiltered.total}
-                  </span>
+              </div>
+
+              {/* Pod */}
+              <div>
+                <label htmlFor={f('pod')} className={lc}>
+                  <Package className="w-3 h-3 inline mr-1" />
+                  Pod
+                  {podsQ.isLoading && <Loader2 className="w-3 h-3 inline ml-1 animate-spin" />}
+                  {podsQ.data && (
+                    <span className="ml-1 text-xs opacity-60">
+                      ({podsQ.data.pods.length})
+                    </span>
+                  )}
+                </label>
+                <SearchableSelect
+                  id={f('pod')}
+                  value={podName}
+                  onChange={setPodName}
+                  options={podsQ.data?.pods ?? []}
+                  getKey={(p) => p.name}
+                  getLabel={podOptionLabel}
+                  placeholder="pod 검색..."
+                  disabled={!namespace || podsQ.isLoading}
+                  loading={podsQ.isLoading}
+                  emptyText="pod 없음"
+                  className="font-mono text-sm"
+                />
+                {podsQ.isError && (
+                  <p className="text-xs text-status-critical mt-1">
+                    {formatApiError(podsQ.error)}
+                  </p>
                 )}
-              </label>
-              <textarea value={previousLogs} onChange={(e) => setPreviousLogs(e.target.value)}
-                onFocus={() => { editingRef.current = true; }}
-                onBlur={() => { editingRef.current = false; }}
-                placeholder="kubectl logs --previous 출력 (재시작이 있을 때만)"
-                rows={8} className={`${ic} font-mono text-sm resize-y`} />
-              {logFilter && prevFiltered.lines.length > 0 && (
-                <pre className="mt-1 text-xs font-mono bg-muted/30 border border-border rounded-md p-2 max-h-48 overflow-auto whitespace-pre-wrap">
-                  {prevFiltered.lines.join('\n')}
-                </pre>
-              )}
+              </div>
             </div>
-            <div>
-              <label htmlFor={f('describeOut')} className={lc}>kubectl describe pod 출력</label>
-              <textarea id={f('describeOut')} value={describeOut} onChange={(e) => setDescribe(e.target.value)}
-                onFocus={() => { editingRef.current = true; }}
-                onBlur={() => { editingRef.current = false; }}
-                placeholder="kubectl describe pod 출력을 붙여넣으세요..."
-                rows={10} className={`${ic} font-mono text-sm resize-y`} />
-            </div>
+
+            {/* 선택된 Pod 요약 + 자동 채우기 버튼 */}
+            {selectedPod && (
+              <div className="flex items-center justify-between gap-3 flex-wrap pt-2 border-t border-border">
+                <div className="text-sm space-y-0.5">
+                  <p className="font-mono text-foreground">
+                    {namespace}/<span className="text-primary">{selectedPod.name}</span>
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    {selectedPod.phase} · ready {selectedPod.ready} · restart {selectedPod.restartCount}
+                    {selectedPod.node && ` · node ${selectedPod.node}`}
+                    {selectedPod.issueReason && (
+                      <span className="text-status-warning ml-1">· {selectedPod.issueReason}</span>
+                    )}
+                  </p>
+                </div>
+                <button
+                  onClick={handleAutofill}
+                  disabled={!canAutofill || fetchCtx.isPending}
+                  title="kubectl logs / events / describe 를 자동으로 가져와 아래 입력란을 채웁니다."
+                  className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium bg-primary/10 hover:bg-primary/20 text-primary border border-primary/30 rounded-lg disabled:opacity-50"
+                >
+                  {fetchCtx.isPending
+                    ? <><Loader2 className="w-3.5 h-3.5 animate-spin" />수집 중…</>
+                    : <><Download className="w-3.5 h-3.5" />로그/이벤트/Describe 자동 채우기</>}
+                </button>
+              </div>
+            )}
+
+            {(autofillLog.running || autofillLog.lines.length > 0) && (
+              <RunLogPanel run={autofillLog} show={showAutofillLog} onShowChange={setShowAutofillLog} maxHeight="max-h-48" />
+            )}
+
+            {fetchCtx.isError && (
+              <p className="text-xs text-status-critical">
+                자동 수집 실패: {formatApiError(fetchCtx.error)}
+              </p>
+            )}
+            {autofilledFor && !autofillStale && fetchCtx.isSuccess && (
+              <p className="text-xs text-status-healthy flex items-center gap-1">
+                <CheckCircle className="w-3 h-3" />
+                자동 수집 완료 — events {events.length}건, logs {currentLogs.length} 자.
+              </p>
+            )}
+            {autofillStale && (
+              <p className="text-xs text-status-warning flex items-center gap-1">
+                <RefreshCw className="w-3 h-3" />
+                선택이 변경되었습니다. 다시 자동 채우기를 누르세요.
+              </p>
+            )}
           </MacCard>
 
-          <button
-            onClick={handleSubmit}
-            disabled={analyzing || !podName.trim() || !namespace.trim()}
-            className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-primary hover:bg-primary/90 text-primary-foreground rounded-lg text-sm font-semibold transition-colors disabled:opacity-60"
-          >
-            {analyzing
-              ? <><Loader2 className="w-4 h-4 animate-spin" />분석 중…</>
-              : <><Search className="w-4 h-4" />장애 분석 시작</>}
-          </button>
-
-          <RunLogPanel run={analyzeLog} show={showAnalyzeLog} onShowChange={setShowAnalyzeLog} maxHeight="max-h-48" />
-
-          {/* 결과 — 입력 아래로 이동 (입력 영역이 전폭이라 결과는 stack) */}
-          <div>
-            {response?.result ? (
-              <ResultPanel result={response.result} />
-            ) : response?.error ? (
-              <div className="rounded-md border border-status-critical/40 bg-status-critical/10 p-5 text-sm text-status-critical">
-                분석 실패: {response.error}
+          {/* ── 입력 (전폭) ── */}
+          {/* 전폭으로 펼쳐 textarea 폭이 "대상 선택" 패널과 동일. 결과 패널은 아래로. */}
+          <div className="space-y-4">
+            <MacCard
+              title="이벤트"
+              titleExtra={<span className="text-xs text-muted-foreground tabular-nums">{events.length}건</span>}
+              bodyPadding="p-5"
+              className="space-y-4"
+            >
+              {events.length > 0 ? (
+                <div className="rounded-md border border-border overflow-hidden">
+                  <div className="grid grid-cols-[80px_70px_60px_1fr] gap-2 px-3 py-1.5 bg-secondary/50 text-xs font-semibold text-muted-foreground">
+                    <span>Type</span><span>Reason</span><span className="text-center">Count</span><span>Message</span>
+                  </div>
+                  {events.slice(0, 20).map((ev, i) => <EventRow key={i} event={ev} index={i} />)}
+                </div>
+              ) : (
+                <p className="text-sm text-muted-foreground italic">
+                  자동 채우기를 누르거나, 아래에 직접 붙여넣으세요.
+                </p>
+              )}
+              <div>
+                <label htmlFor={f('rawEvents')} className={lc}>kubectl get events 출력 (선택, 직접 입력 시)</label>
+                <textarea
+                  id={f('rawEvents')}
+                  value={rawEvents}
+                  onChange={(e) => { setRawEvents(e.target.value); setStructuredEvents([]); }}
+                  placeholder={'Warning  BackOff  3  Back-off restarting failed container'}
+                  rows={3}
+                  className={`${ic} font-mono text-sm resize-none`}
+                />
               </div>
-            ) : (
-              <div className="flex flex-col items-center justify-center min-h-[160px] text-muted-foreground rounded-md border border-dashed border-border">
-                <Zap className="w-10 h-10 mb-2" />
-                <p className="text-sm">로그 / 이벤트 / describe 입력 후 분석을 시작하세요</p>
+            </MacCard>
+
+            <MacCard
+              title="로그 / Describe"
+              bodyPadding="p-5"
+              className="space-y-4"
+              actions={
+                /* 실시간 스트리밍 + 로그 라인 필터 컨트롤 */
+                <div className="flex items-center gap-2 flex-wrap">
+                  {/* 라인 필터 */}
+                  <div className="relative">
+                    <Filter className="absolute left-2 top-1/2 -translate-y-1/2 w-3 h-3 text-muted-foreground" />
+                    <input
+                      value={logFilter}
+                      onChange={(e) => setLogFilter(e.target.value)}
+                      placeholder="로그 라인 필터 (예: ERROR, OOMKilled)"
+                      className="pl-7 pr-7 py-1.5 text-xs font-mono bg-background border border-border rounded-md focus:outline-none focus:ring-1 focus:ring-primary w-72"
+                    />
+                    {logFilter && (
+                      <button
+                        onClick={() => setLogFilter('')}
+                        className="absolute right-1 top-1/2 -translate-y-1/2 p-0.5 text-muted-foreground hover:text-foreground"
+                        aria-label="필터 지우기"
+                      >
+                        <X className="w-3 h-3" />
+                      </button>
+                    )}
+                  </div>
+
+                  {/* 폴링 간격 */}
+                  <label className="flex items-center gap-1 text-xs text-muted-foreground"
+                    title="실시간 로그 갱신 간격 (초)">
+                    매
+                    <input
+                      type="number"
+                      min={1}
+                      max={300}
+                      value={streamIntervalSec}
+                      onChange={(e) => setStreamIntervalSec(Number(e.target.value) || 5)}
+                      className="w-12 px-1 py-0.5 text-xs font-mono bg-background border border-border rounded text-center"
+                    />초
+                  </label>
+
+                  {/* 실시간 토글 */}
+                  {streaming ? (
+                    <button
+                      onClick={() => setStreaming(false)}
+                      className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-semibold bg-status-critical/10 hover:bg-status-critical/20 text-status-critical border border-status-critical/30 rounded-md"
+                      title="실시간 갱신 중지"
+                    >
+                      <Square className="w-3 h-3 fill-current" />
+                      LIVE 중지
+                    </button>
+                  ) : (
+                    <button
+                      onClick={() => setStreaming(true)}
+                      disabled={!canAutofill}
+                      title="N초마다 fetch-context 를 다시 호출해 로그/이벤트/describe 를 갱신"
+                      className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-semibold bg-primary/10 hover:bg-primary/20 text-primary border border-primary/30 rounded-md disabled:opacity-50"
+                    >
+                      <Play className="w-3 h-3" />
+                      실시간 시작
+                    </button>
+                  )}
+                </div>
+              }
+            >
+
+              {streaming && (
+                <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                  <span className="relative flex w-2 h-2">
+                    <span className="relative inline-flex w-2 h-2 rounded-full bg-primary" />
+                  </span>
+                  <span>실시간 · 매 {streamIntervalSec}초 갱신</span>
+                  {lastStreamAt && (
+                    <span className="text-muted-foreground">
+                      마지막 {Math.max(0, Math.round((Date.now() - lastStreamAt) / 1000))}초 전
+                    </span>
+                  )}
+                  {fetchCtx.isPending && <Loader2 className="w-3 h-3 animate-spin" />}
+                </div>
+              )}
+
+              <div>
+                <label className={lc}>
+                  현재 컨테이너 로그
+                  {logFilter && (
+                    <span className="ml-2 text-primary">
+                      필터 일치 {curFiltered.lines.length} / {curFiltered.total}
+                    </span>
+                  )}
+                </label>
+                <textarea value={currentLogs} onChange={(e) => setLogs(e.target.value)}
+                  onFocus={() => { editingRef.current = true; }}
+                  onBlur={() => { editingRef.current = false; }}
+                  placeholder="자동 채우기를 누르거나 직접 붙여넣으세요..."
+                  rows={12} className={`${ic} font-mono text-sm resize-y`} />
+                {logFilter && curFiltered.lines.length > 0 && (
+                  <pre className="mt-1 text-xs font-mono bg-muted/30 border border-border rounded-md p-2 max-h-64 overflow-auto whitespace-pre-wrap">
+                    {curFiltered.lines.join('\n')}
+                  </pre>
+                )}
               </div>
-            )}
+              <div>
+                <label className={lc}>
+                  이전 컨테이너 로그 (재시작 직전)
+                  {logFilter && previousLogs && (
+                    <span className="ml-2 text-primary">
+                      필터 일치 {prevFiltered.lines.length} / {prevFiltered.total}
+                    </span>
+                  )}
+                </label>
+                <textarea value={previousLogs} onChange={(e) => setPreviousLogs(e.target.value)}
+                  onFocus={() => { editingRef.current = true; }}
+                  onBlur={() => { editingRef.current = false; }}
+                  placeholder="kubectl logs --previous 출력 (재시작이 있을 때만)"
+                  rows={8} className={`${ic} font-mono text-sm resize-y`} />
+                {logFilter && prevFiltered.lines.length > 0 && (
+                  <pre className="mt-1 text-xs font-mono bg-muted/30 border border-border rounded-md p-2 max-h-48 overflow-auto whitespace-pre-wrap">
+                    {prevFiltered.lines.join('\n')}
+                  </pre>
+                )}
+              </div>
+              <div>
+                <label htmlFor={f('describeOut')} className={lc}>kubectl describe pod 출력</label>
+                <textarea id={f('describeOut')} value={describeOut} onChange={(e) => setDescribe(e.target.value)}
+                  onFocus={() => { editingRef.current = true; }}
+                  onBlur={() => { editingRef.current = false; }}
+                  placeholder="kubectl describe pod 출력을 붙여넣으세요..."
+                  rows={10} className={`${ic} font-mono text-sm resize-y`} />
+              </div>
+            </MacCard>
+
+            <button
+              onClick={handleSubmit}
+              disabled={analyzing || !podName.trim() || !namespace.trim()}
+              className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-primary hover:bg-primary/90 text-primary-foreground rounded-lg text-sm font-semibold transition-colors disabled:opacity-60"
+            >
+              {analyzing
+                ? <><Loader2 className="w-4 h-4 animate-spin" />분석 중…</>
+                : <><Search className="w-4 h-4" />장애 분석 시작</>}
+            </button>
+
+            <RunLogPanel run={analyzeLog} show={showAnalyzeLog} onShowChange={setShowAnalyzeLog} maxHeight="max-h-48" />
+
+            {/* 결과 — 입력 아래로 이동 (입력 영역이 전폭이라 결과는 stack) */}
+            <div>
+              {response?.result ? (
+                <ResultPanel result={response.result} />
+              ) : response?.error ? (
+                <div className="rounded-md border border-status-critical/40 bg-status-critical/10 p-5 text-sm text-status-critical">
+                  분석 실패: {response.error}
+                </div>
+              ) : (
+                <div className="flex flex-col items-center justify-center min-h-[160px] text-muted-foreground rounded-md border border-dashed border-border">
+                  <Zap className="w-10 h-10 mb-2" />
+                  <p className="text-sm">로그 / 이벤트 / describe 입력 후 분석을 시작하세요</p>
+                </div>
+              )}
+            </div>
           </div>
         </div>
       </PageShell>

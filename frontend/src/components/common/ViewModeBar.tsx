@@ -89,8 +89,8 @@ function MiniToggle({
 
 const HEADER_SWATCHES = [
   { value: 'default', color: 'bg-slate-400',   title: '기본' },
-  { value: 'blue',    color: 'bg-blue-400',    title: '파랑' },
-  { value: 'indigo',  color: 'bg-indigo-400',  title: '인디고' },
+  { value: 'blue',    color: 'bg-chart-1',     title: '파랑' },
+  { value: 'indigo',  color: 'bg-chart-4',     title: '인디고' },
   { value: 'emerald', color: 'bg-chart-2', title: '초록' },
 ] as const;
 
@@ -240,13 +240,7 @@ export function ViewModeBar({
                   {/* live preview dot — matches active headerTheme */}
                   <div
                     className={`w-2 h-2 rounded-full ${
-                      style.headerTheme === 'blue'
-                        ? 'bg-blue-400'
-                        : style.headerTheme === 'indigo'
-                        ? 'bg-indigo-400'
-                        : style.headerTheme === 'emerald'
-                        ? 'bg-chart-2'
-                        : 'bg-slate-400'
+                      (HEADER_SWATCHES.find(s => s.value === style.headerTheme) ?? HEADER_SWATCHES[0]).color
                     }`}
                   />
                   <span className="text-xs font-mono">

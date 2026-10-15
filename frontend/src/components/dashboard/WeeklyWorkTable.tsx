@@ -4,17 +4,10 @@ import { ChevronLeft, ChevronRight, RotateCcw } from 'lucide-react';
 import { useWorkItems } from '@/hooks/useWorkItems';
 import { KANBAN_STATUS_LABEL, WORK_ITEM_TYPE_CONFIG } from '@/components/work-items/workItemKanbanUtils';
 import { stripHtml, cn } from '@/lib/utils';
-import type { WorkItem, KanbanStatus } from '@/types';
+import { STATUS_COLOR } from '@/lib/statusColors';
+import type { WorkItem } from '@/types';
 
 const WEEKDAY_SHORT = ['일', '월', '화', '수', '목', '금', '토'];
-
-const STATUS_DOT: Record<KanbanStatus, string> = {
-  backlog: 'bg-slate-400',
-  todo: 'bg-blue-400',
-  in_progress: 'bg-status-warning',
-  review_test: 'bg-purple-400',
-  done: 'bg-muted-foreground/40',
-};
 
 interface WeekDay {
   dateKey: string;
@@ -156,7 +149,7 @@ export function WeeklyWorkTable() {
                   <td className="px-2 py-1.5">
                     <span className="flex items-center gap-1 whitespace-nowrap">
                       <span
-                        className={cn('w-1.5 h-1.5 rounded-full flex-shrink-0', STATUS_DOT[item.kanbanStatus])}
+                        className={cn('w-1.5 h-1.5 rounded-full flex-shrink-0', STATUS_COLOR[item.kanbanStatus]?.bgClass)}
                       />
                       {KANBAN_STATUS_LABEL[item.kanbanStatus]}
                     </span>

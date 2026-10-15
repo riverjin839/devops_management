@@ -107,7 +107,7 @@ export function JiraPushDialog({ open, onClose, item }: JiraPushDialogProps) {
       <DialogContent className="max-w-md">
         <DialogHeader className="flex-row items-center gap-3">
           <div className="w-10 h-10 rounded-2xl bg-brand-jira/10 flex items-center justify-center flex-shrink-0">
-            <UploadCloud className="w-5 h-5 text-brand-jira dark:text-blue-300" />
+            <UploadCloud className="w-5 h-5 text-brand-jira" />
           </div>
           <div className="min-w-0 flex-1">
             <DialogTitle>Jira 반영</DialogTitle>
