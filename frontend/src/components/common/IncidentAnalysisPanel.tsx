@@ -94,7 +94,10 @@ export function IncidentAnalysisPanel({
     pollAbort.current?.abort();
     setTriggering(true);
     // 재분석이면 이전 결과 레코드가 남아 있다 — 그걸 기준선으로 잡아 "새 레코드의 완료"만 완료로 본다.
-    const baseline = await fetchLatest().catch(() => null);
+    // 기준선 조회가 실패하면(404 외) 이전 레코드를 구분할 수 없다 — 그때는 요청 시각 이후에 생긴 레코드만 새 것으로 본다.
+    const triggeredAt = Date.now();
+    let baselineUnknown = false;
+    const baseline = await fetchLatest().catch(() => { baselineUnknown = true; return null; });
     const baselineActive = !!baseline && !TERMINAL.has(baseline.status);
     const r = await runLogged(runLog, {
       title: 'AI 분석',
@@ -112,7 +115,10 @@ export function IncidentAnalysisPanel({
     refreshViews();
     const ctrl = new AbortController();
     pollAbort.current = ctrl;
-    const isNew = (a: AlertIncidentAnalysis) => !baseline || a.id !== baseline.id || baselineActive;
+    const isNew = (a: AlertIncidentAnalysis) => {
+      if (baselineUnknown) return Date.parse(a.createdAt) >= triggeredAt - 5_000;  // 서버·브라우저 시계 차 여유
+      return !baseline || a.id !== baseline.id || baselineActive;
+    };
     await pollIntoRunLog<AlertIncidentAnalysis | null>(runLog, {
       fetch: fetchLatest,
       describe: (snap, prev) => {

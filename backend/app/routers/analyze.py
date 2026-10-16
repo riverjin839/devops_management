@@ -956,7 +956,9 @@ def _pod_issue(pod) -> tuple[bool, Optional[str]]:
             st.terminated.reason in _BAD_TERMINATED_REASONS or (st.terminated.exit_code or 0) != 0
         ):
             return True, f"Init:{st.terminated.reason or 'Error'}"
-        if (cs.restart_count or 0) >= 5:
+        # 재시작이 잦았어도 결국 정상 완료(exit 0)한 init 은 문제가 아니다 — 계속 이상으로 남기지 않는다.
+        completed_ok = bool(st and st.terminated and (st.terminated.exit_code or 0) == 0)
+        if (cs.restart_count or 0) >= 5 and not completed_ok:
             return True, f"Init:Restarts={cs.restart_count}"
     for cs in (pod.status.container_statuses or []):
         st = cs.state

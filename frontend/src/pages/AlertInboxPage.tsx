@@ -116,7 +116,11 @@ export function AlertInboxPage() {
   const ackAll = useAckAllAlerts();
   const removeAlert = useDeleteAlert();
 
-  const alerts: AlertEvent[] = useMemo(() => data?.pages.flatMap((page) => page.data) ?? [], [data]);
+  // 반복 수신은 received_at 을 갱신해 행이 앞으로 올라온다 — 페이지 사이에 같은 알람이 다시 실릴 수 있어 id 로 중복을 걷는다(D-111).
+  const alerts: AlertEvent[] = useMemo(() => {
+    const seen = new Set<string>();
+    return (data?.pages.flatMap((page) => page.data) ?? []).filter((a) => (seen.has(a.id) ? false : (seen.add(a.id), true)));
+  }, [data]);
   const total = data?.pages[0]?.total ?? 0;
 
   const handleAck = async (alert: AlertEvent) => {

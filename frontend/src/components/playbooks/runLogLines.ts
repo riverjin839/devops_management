@@ -48,7 +48,7 @@ export function playbookRunLines(res: PlaybookRunResult, prefix = ''): RunLogEnt
   for (const t of unreachable.slice(0, 5)) {
     out.push(['warn', `${p}도달 불가 [${t.host ?? '?'}] ${t.task ?? ''} — ${String(t.msg ?? '').slice(0, 200)}`]);
   }
-  if (failed.length + unreachable.length > 10) out.push(['info', `${p}나머지 태스크 이슈는 실행 이력에서 확인`]);
+  if (failed.length > 5 || unreachable.length > 5) out.push(['info', `${p}나머지 태스크 이슈는 실행 이력에서 확인`]);
   if (res.message) out.push([level, `${p}${res.message.slice(0, 300)}`]);
   return out;
 }

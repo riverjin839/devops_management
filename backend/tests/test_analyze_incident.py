@@ -277,7 +277,10 @@ def test_clamp_confidence(raw, expected):
 
 
 @pytest.mark.parametrize("raw, expected", [
-    ("critical", "critical"), ("Warning ", "warning"), ("high", "info"), (None, "info"), ("", "info"),
+    ("critical", "critical"), ("Warning ", "warning"), (None, "info"), ("", "info"), ("bogus", "info"),
+    # LLM 동의어는 위험도를 낮추지 않는다
+    ("high", "critical"), ("Error", "critical"), ("severe", "critical"),
+    ("medium", "warning"), ("moderate", "warning"), ("low", "info"),
 ])
 def test_normalize_severity(raw, expected):
     assert normalize_severity(raw) == expected
@@ -288,7 +291,7 @@ def test_out_of_range_llm_values_do_not_500(client):
     r = client.post(URL, json=_body())
     assert r.status_code == 200, r.text
     res = r.json()["result"]
-    assert res["severity"] == "info"
+    assert res["severity"] == "critical"  # HIGH → critical (동의어)
     assert res["confidence"] == pytest.approx(0.92)
     assert res["suggested_actions"] == ["재시작"]
 
@@ -325,7 +328,7 @@ def test_local_llm_unparseable_is_degraded_and_parsed_is_clamped(monkeypatch):
     assert bad.degraded is True and "파싱" in (bad.degraded_reason or "")
     ok = asyncio.run(mod.LocalLLMAnalyzer().analyze(ctx))
     assert ok.degraded is False
-    assert ok.severity == "info" and ok.confidence == pytest.approx(0.75)
+    assert ok.severity == "critical" and ok.confidence == pytest.approx(0.75)
 
 
 def test_claude_api_error_and_bad_json_are_degraded():
@@ -552,6 +555,20 @@ def test_pod_issue_sees_init_containers():
                 statuses=[_cs("app", running=True)],
                 init_statuses=[_cs("migrate", terminated="Completed", exit_code=0)])
     assert analyze._pod_issue(pod2) == (False, None)
+
+
+def test_pod_issue_ignores_completed_init_with_many_restarts():
+    # DB 를 기다리며 여러 번 재시작했지만 결국 정상 완료한 init — 계속 이상으로 남지 않는다
+    pod = _pod(["app"], inits=["wait-db"],
+               statuses=[_cs("app", running=True)],
+               init_statuses=[_cs("wait-db", terminated="Completed", exit_code=0, restarts=7)])
+    assert analyze._pod_issue(pod) == (False, None)
+    # 아직 완료하지 못한 채 재시작이 많으면 여전히 이상
+    pod2 = _pod(["app"], inits=["wait-db"],
+                statuses=[_cs("app", waiting="PodInitializing")],
+                init_statuses=[_cs("wait-db", running=True, restarts=7)],
+                phase="Pending")
+    assert analyze._pod_issue(pod2) == (True, "Init:Restarts=7")
 
 
 class _FakeV1:

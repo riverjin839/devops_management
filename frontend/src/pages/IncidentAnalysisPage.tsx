@@ -723,7 +723,7 @@ export function IncidentAnalysisPage() {
                   onChange={(e) => setContainer(e.target.value)}
                   disabled={!podName}
                   title={!podName ? 'pod 를 먼저 선택하세요' : '비우면 서버가 고릅니다(default-container 어노테이션 → 실패·재시작 컨테이너 → 첫 컨테이너)'}
-                  className={`${ic} font-mono disabled:opacity-50`}
+                  className={`${ic} disabled:opacity-50`}
                 >
                   <option value="">
                     서버 추천{containersQ.data?.defaultContainer ? ` (기본 ${containersQ.data.defaultContainer})` : ''}

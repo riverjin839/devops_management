@@ -465,14 +465,15 @@ export function OntologyPage({ embedded = false }: { embedded?: boolean } = {}) 
             return (
               <button
                 key={t}
+                type="button"
+                aria-pressed={active}
                 onClick={() => toggleType(t)}
-                className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium border flex-shrink-0 transition-opacity ${
+                className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium text-foreground border flex-shrink-0 transition-opacity ${
                   active ? 'opacity-100' : 'opacity-35'
                 }`}
                 style={{
                   background: active ? colors[t].tint : 'transparent',
                   borderColor: colors[t].edge,
-                  color: colors[t].solid,
                 }}
               >
                 <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: colors[t].solid }} />

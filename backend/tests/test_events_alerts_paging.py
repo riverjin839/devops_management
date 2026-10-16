@@ -121,6 +121,20 @@ def test_event_list_has_more(client, world):
     assert filtered["total"] == 2 and filtered["has_more"] is False
 
 
+def test_event_pages_do_not_overlap(client, world):
+    # 같은 시각 행이 있어도 페이지 경계가 고정돼 겹치거나 빠지지 않는다
+    p = {"cluster_id": str(world["open"].id), "limit": 4}
+    ids: list[str] = []
+    for off in (0, 4, 8):
+        ids += [e["id"] for e in client.get("/api/v1/events/", params={**p, "offset": off}).json()["data"]]
+    assert len(ids) == 9 and len(set(ids)) == 9
+
+
+def test_event_list_rejects_negative_offset(client, world):
+    r = client.get("/api/v1/events/", params={"offset": -1})
+    assert r.status_code == 422
+
+
 def test_alert_list_has_more(client, world):
     p = {"cluster_id": str(world["open"].id), "limit": 3}
     first = client.get("/api/v1/observability/alerts", params={**p, "offset": 0})
