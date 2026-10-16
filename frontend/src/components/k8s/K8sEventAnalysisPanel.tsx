@@ -1,5 +1,6 @@
 import { k8sEventsApi } from '@/services/api';
 import { IncidentAnalysisPanel } from '@/components/common/IncidentAnalysisPanel';
+import { useCanOperate } from '@/hooks/useCanOperate';
 import type { K8sEvent } from '@/types';
 
 /**
@@ -7,8 +8,12 @@ import type { K8sEvent } from '@/types';
  * 알람 파이프라인과 별도로, kubewatch 로 수신된 이벤트를 직접 트리거로 분석한다.
  */
 export function K8sEventAnalysisPanel({ event }: { event: K8sEvent }) {
+  // D-105 — 분석 트리거는 서버가 operator + 클러스터 operate 를 요구한다. 숨기지 않고 사유와 함께 막는다.
+  const { canOperate, hint } = useCanOperate(event.clusterId);
   return (
     <IncidentAnalysisPanel
+      canOperate={canOperate}
+      hint={hint}
       subjectId={event.id}
       analysisStatus={event.analysisStatus}
       queryKeyPrefix="k8s-event-analysis"
