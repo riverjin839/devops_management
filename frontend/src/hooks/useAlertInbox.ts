@@ -1,4 +1,6 @@
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import {
+  keepPreviousData, useInfiniteQuery, useMutation, useQuery, useQueryClient,
+} from '@tanstack/react-query';
 import { observabilityApi } from '@/services/api';
 import type { AlertNotifyRuleInput, AlertSettings } from '@/types';
 
@@ -19,10 +21,27 @@ interface UseAlertsParams {
   limit?: number;
 }
 
-export function useAlerts(params?: UseAlertsParams) {
-  return useQuery({
-    queryKey: alertInboxKeys.list(params),
-    queryFn: async () => (await observabilityApi.alerts(params)).data,
+/** 알람 목록 한 페이지 크기 (D-111). */
+export const ALERT_PAGE_SIZE = 100;
+
+/**
+ * 알람 목록 — offset 페이지를 "더 보기"로 이어 붙인다(D-111: 예전엔 200건 고정이라 그 뒤는 열람 불가).
+ * 키는 'alert-inbox' 접두사를 유지해 확인·삭제 후 무효화가 그대로 걸린다.
+ * 검색어가 바뀌는 동안 이전 결과를 유지해(placeholderData) 표가 깜빡이지 않게 한다.
+ */
+export function useAlertsPaged(params: Omit<UseAlertsParams, 'limit'>) {
+  return useInfiniteQuery({
+    queryKey: [...alertInboxKeys.list(params), 'paged', ALERT_PAGE_SIZE] as const,
+    initialPageParam: 0,
+    queryFn: async ({ pageParam }) =>
+      (await observabilityApi.alerts({ ...params, limit: ALERT_PAGE_SIZE, offset: pageParam })).data,
+    getNextPageParam: (last, _all, lastOffset) => {
+      const next = lastOffset + last.data.length;
+      // hasMore 가 없는 구버전 응답이면 total 로 판정한다.
+      const more = last.hasMore ?? next < last.total;
+      return more && last.data.length > 0 ? next : undefined;
+    },
+    placeholderData: keepPreviousData,
     refetchInterval: 30_000,
   });
 }
