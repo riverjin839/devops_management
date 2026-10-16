@@ -627,7 +627,6 @@ export function ClusterManagePage() {
     const { ok, fail, aborted, failedIds } = r.data;
     setLastBulkFailedIds(failedIds);
     const summary = `성공 ${ok} · 실패 ${fail} · 대상 ${targets.length}${aborted ? ' · 중단됨' : ''}`;
-    if (fail > 0) setShowLog(true);
     if (fail > 0 && ok === 0) toast.error('일괄 수집 실패', `${summary} — 상세는 실행 로그 참조`);
     else if (fail > 0) toast.warning('일괄 수집 부분 실패', `${summary} — 상세는 실행 로그 참조`);
     else if (aborted) toast.info('일괄 수집 중단됨', summary);

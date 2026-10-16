@@ -9,6 +9,14 @@ logger = logging.getLogger(__name__)
 SEVERITIES: frozenset[str] = frozenset({"critical", "warning", "info"})
 
 
+_SEVERITY_SYNONYMS = {
+    "high": "critical", "error": "critical", "severe": "critical", "major": "critical",
+    "fatal": "critical", "emergency": "critical",
+    "medium": "warning", "moderate": "warning", "warn": "warning", "minor": "warning",
+    "low": "info", "informational": "info", "notice": "info",
+}
+
+
 def normalize_severity(value: Any) -> str:
     """LLM 이 돌려준 severity 를 critical|warning|info 로 정규화한다.
 
@@ -18,6 +26,9 @@ def normalize_severity(value: Any) -> str:
     sev = str(value or "").strip().lower()
     if sev in SEVERITIES:
         return sev
+    # LLM 이 흔히 쓰는 동의어 — 위험도를 낮춰 버리지 않게 가까운 등급으로 올린다.
+    if sev in _SEVERITY_SYNONYMS:
+        return _SEVERITY_SYNONYMS[sev]
     logger.warning("analyzer: 알 수 없는 severity %r → 'info' 로 정규화", value)
     return "info"
 

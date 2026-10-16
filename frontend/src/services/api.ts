@@ -395,43 +395,6 @@ export const versionsApi = {
     api.post<{ clusterId: string; changed: number; errors: string[]; collectedAt: string }>(
       `/clusters/${clusterId}/collect-versions`, undefined, { signal },
     ),
-  collectEtcdSystemd: (clusterId: string, payload: import('@/types').EtcdSystemdCollectRequest, signal?: AbortSignal) => {
-    const n = payload.hosts.length;
-    const parallel = payload.parallelism ?? 10;
-    const perHost = ((payload.connectTimeout ?? 8) + 25) * 1000;
-    const est = Math.ceil(n / parallel) * perHost + 10_000;
-    const timeout = Math.max(60_000, Math.min(est, 30 * 60_000));
-    return api.post<import('@/types').EtcdSystemdCollectResponse>(
-      `/clusters/${clusterId}/collect-etcd-systemd`, payload, { signal, timeout },
-    );
-  },
-  collectKubeadmCerts: (
-    clusterId: string,
-    payload: import('@/types').KubeadmCertsCollectRequest,
-    signal?: AbortSignal,
-  ) => {
-    const n = payload.hosts.length;
-    const perHost = ((payload.connectTimeout ?? 8) + 25) * 1000;
-    const est = n * perHost + 10_000;   // 순차 수집(collect_etcdctl_config 와 동일 패턴)
-    const timeout = Math.max(60_000, Math.min(est, 30 * 60_000));
-    return api.post<import('@/types').KubeadmCertsCollectResponse>(
-      `/clusters/${clusterId}/collect-kubeadm-certs`, payload, { signal, timeout },
-    );
-  },
-  collectKernelParams: (
-    clusterId: string,
-    payload: import('@/types').KernelParamsCollectRequest,
-    signal?: AbortSignal,
-  ) => {
-    const n = payload.hosts.length;
-    const parallel = payload.parallelism ?? 10;
-    const perHost = ((payload.connectTimeout ?? 8) + 20) * 1000;
-    const est = Math.ceil(n / parallel) * perHost + 10_000;
-    const timeout = Math.max(60_000, Math.min(est, 30 * 60_000));
-    return api.post<import('@/types').KernelParamsCollectResponse>(
-      `/clusters/${clusterId}/collect-kernel-params`, payload, { signal, timeout },
-    );
-  },
   collectEtcdctlConfig: (
     clusterId: string,
     payload: import('@/types').EtcdctlConfigCollectRequest,
@@ -445,38 +408,10 @@ export const versionsApi = {
       `/clusters/${clusterId}/collect-etcdctl-config`, payload, { signal, timeout },
     );
   },
-  collectNodeNics: (
-    clusterId: string,
-    payload: import('@/types').NodeNicsCollectRequest,
-    signal?: AbortSignal,
-  ) => {
-    const n = payload.hosts.length;
-    const parallel = payload.parallelism ?? 10;
-    const perHost = ((payload.connectTimeout ?? 8) + 18) * 1000;
-    const est = Math.ceil(n / parallel) * perHost + 10_000;
-    const timeout = Math.max(60_000, Math.min(est, 30 * 60_000));
-    return api.post<import('@/types').NodeNicsCollectResponse>(
-      `/clusters/${clusterId}/collect-node-nics`, payload, { signal, timeout },
-    );
-  },
   collectMinio: (clusterId: string, signal?: AbortSignal) =>
     api.post<import('@/types').MinioCollectResponse>(
       `/clusters/${clusterId}/collect-minio`, undefined, { signal, timeout: 120_000 },
     ),
-  collectKubeletConfig: (
-    clusterId: string,
-    payload: import('@/types').KubeletConfigCollectRequest,
-    signal?: AbortSignal,
-  ) => {
-    const n = payload.hosts.length;
-    const parallel = payload.parallelism ?? 10;
-    const perHost = ((payload.connectTimeout ?? 8) + 20) * 1000;
-    const est = Math.ceil(n / parallel) * perHost + 10_000;
-    const timeout = Math.max(60_000, Math.min(est, 30 * 60_000));
-    return api.post<import('@/types').KubeletConfigCollectResponse>(
-      `/clusters/${clusterId}/collect-kubelet-config`, payload, { signal, timeout },
-    );
-  },
   /** 현재 스냅샷 CSV 내보내기. detail 로 컬럼 풍부도 조절. */
   exportCsv: (
     clusterId: string,

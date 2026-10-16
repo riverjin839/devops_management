@@ -198,12 +198,13 @@ def list_k8s_events(
     cluster_id: Optional[UUID] = None,
     severity: Optional[str] = None,
     resource_kind: Optional[str] = None,
-    limit: int = Query(default=100, le=500),
-    offset: int = 0,
+    limit: int = Query(default=100, ge=1, le=500),
+    offset: int = Query(default=0, ge=0),
     db: Session = Depends(get_db),
     scope: ClusterScope = Depends(get_cluster_scope),
 ) -> K8sEventListResponse:
-    q = scope.apply(db.query(K8sEvent), K8sEvent.cluster_id, nullable=True).order_by(desc(K8sEvent.received_at))
+    # id 를 보조 정렬키로 — 같은 시각에 들어온 이벤트가 페이지 경계에서 겹치거나 빠지지 않게(D-111).
+    q = scope.apply(db.query(K8sEvent), K8sEvent.cluster_id, nullable=True).order_by(desc(K8sEvent.received_at), desc(K8sEvent.id))
     if cluster_id:
         q = q.filter(K8sEvent.cluster_id == cluster_id)
     if severity:

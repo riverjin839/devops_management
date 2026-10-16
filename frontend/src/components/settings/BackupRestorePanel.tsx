@@ -159,7 +159,6 @@ function BackupRestorePanelBody() {
     });
     if (r.ok) {
       if (r.data.errors.length) {
-        setShowLog(true);
         toast.warning('복구 부분 완료', `오류 ${r.data.errors.length}건 — 실행 로그에서 확인하세요.`);
       } else {
         toast.success('복구 완료', `신규 ${r.data.inserted} · 업데이트 ${r.data.updated} · 삭제 ${r.data.deleted}`);

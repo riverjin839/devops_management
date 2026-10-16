@@ -1,4 +1,4 @@
-import { Fragment, useState } from 'react';
+import { Fragment, useMemo, useState } from 'react';
 import { AlertCircle, AlertTriangle, Bell, Info, Loader2, RefreshCw, Trash2 } from 'lucide-react';
 import { MacCard } from '@/components/ui/MacCard';
 import { ClusterSidebar } from '@/components/common/ClusterSidebar';
@@ -91,7 +91,11 @@ export function K8sEventsPage() {
     }
   };
 
-  const events: K8sEvent[] = data?.pages.flatMap((p) => p.data) ?? [];
+  // 페이지 사이에 새 이벤트가 들어오면 경계 행이 다음 페이지에 다시 실린다 — id 로 중복을 걷는다(D-111).
+  const events: K8sEvent[] = useMemo(() => {
+    const seen = new Set<string>();
+    return (data?.pages.flatMap((p) => p.data) ?? []).filter((e) => (seen.has(e.id) ? false : (seen.add(e.id), true)));
+  }, [data]);
   // 첫 페이지 기준 total — 이후 페이지가 받은 시점의 total 보다 최신이다.
   const total = data?.pages[0]?.total;
   const selectedClusterName = clusters.find((c) => c.id === selectedClusterId)?.name;

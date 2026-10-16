@@ -436,7 +436,6 @@ export function NodeSpecPage() {
       toast.success('Host Facts 수집됨', `신규 ${r.data.inserted} · 업데이트 ${r.data.updated} · 스킵 ${r.data.skipped}`);
       if (r.data.errors.length > 0) {
         toast.warning('일부 오류', `${r.data.errors.length}건 — 실행 로그를 확인하세요.`);
-        setShowHostFactsLog(true);
       }
     } else if (!r.aborted) {
       toast.error('Host Facts 수집 실패', formatApiError(r.error));

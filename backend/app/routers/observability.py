@@ -765,7 +765,8 @@ def list_alerts(
         query = query.filter(AlertEvent.received_at <= to)
 
     total = query.count()
-    rows = query.order_by(desc(AlertEvent.received_at)).offset(offset).limit(limit).all()
+    # id 보조 정렬 — 같은 시각 행의 순서를 고정해 "더 보기" 경계가 흔들리지 않게(D-111).
+    rows = query.order_by(desc(AlertEvent.received_at), desc(AlertEvent.id)).offset(offset).limit(limit).all()
     names = _cluster_names(db)
     data = [_alert_out(r, names) for r in rows]
     return AlertEventPageResponse(data=data, total=total, has_more=offset + len(data) < total)
