@@ -1336,13 +1336,18 @@ def run_auto_incident_analysis(self, alert_event_id: str, rule_id: str | None = 
         try:
             from app.services.analyzers.factory import get_analyzer
             from app.services.incident_context_builder import build_context_from_alert
+            from app.services.llm.service import llm_tenant_context
+            from app.services.tenant_scope import llm_tenant_for_cluster
 
             ctx = build_context_from_alert(db, event, include_logs=include_logs)
             analyzer = get_analyzer(db)
+            # 클러스터 소유 테넌트의 LLM 라우팅·사용량 귀속을 따른다 (D-114 — 사용자 요청과 같은 경로)
+            llm_tenant = llm_tenant_for_cluster(db, event.cluster_id)
             loop = asyncio.new_event_loop()
             asyncio.set_event_loop(loop)
             try:
-                result = loop.run_until_complete(analyzer.analyze(ctx))
+                with llm_tenant_context(llm_tenant):
+                    result = loop.run_until_complete(analyzer.analyze(ctx))
             finally:
                 loop.close()
 
@@ -1439,13 +1444,18 @@ def run_auto_incident_analysis_k8s_event(self, k8s_event_id: str, rule_id: str |
         try:
             from app.services.analyzers.factory import get_analyzer
             from app.services.incident_context_builder import build_context_from_k8s_event
+            from app.services.llm.service import llm_tenant_context
+            from app.services.tenant_scope import llm_tenant_for_cluster
 
             ctx = build_context_from_k8s_event(db, event, include_logs=include_logs)
             analyzer = get_analyzer(db)
+            # 클러스터 소유 테넌트의 LLM 라우팅·사용량 귀속을 따른다 (D-114 — 사용자 요청과 같은 경로)
+            llm_tenant = llm_tenant_for_cluster(db, event.cluster_id)
             loop = asyncio.new_event_loop()
             asyncio.set_event_loop(loop)
             try:
-                result = loop.run_until_complete(analyzer.analyze(ctx))
+                with llm_tenant_context(llm_tenant):
+                    result = loop.run_until_complete(analyzer.analyze(ctx))
             finally:
                 loop.close()
 

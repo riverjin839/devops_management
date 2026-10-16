@@ -24,7 +24,7 @@ def get_analyzer(db=None) -> BaseAnalyzer:
 
     if backend == "claude":
         from app.services.analyzers.claude_analyzer import ClaudeAnalyzer
-        return ClaudeAnalyzer()
+        return ClaudeAnalyzer(db=db)   # 테넌트 라우팅 고정 시 게이트웨이 우회에 db 사용
 
     if backend == "local_llm":
         from app.services.analyzers.local_llm_analyzer import LocalLLMAnalyzer

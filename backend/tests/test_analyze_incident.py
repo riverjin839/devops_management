@@ -352,6 +352,134 @@ def test_claude_api_error_and_bad_json_are_degraded():
     assert res.degraded is True and "파싱" in (res.degraded_reason or "")
 
 
+# ── Claude 분석기 테넌트 LLM 라우팅 (D-114 잔여) ───────────────────────────
+# 실제 chat_for_purpose → effective_route 를 타게 두고 provider·통계 적재만 가짜로 바꾼다.
+
+_GATEWAY_CFG = {
+    "profiles": [
+        {"name": "local-ollama", "provider": "ollama", "base_url": "http://ollama:11434", "model": "llama3"},
+        {"name": "internal-llm", "provider": "openai_compat", "base_url": "http://llm.internal/v1",
+         "model": "inhouse-7b"},
+    ],
+    "routing": {"incident_analysis": {"primary": "local-ollama", "fallback": None}},
+}
+_PINNED = {"id": "t-pinned", "name": "team-pinned",
+           "routing": {"incident_analysis": {"primary": "internal-llm", "fallback": None}}}
+_CLAUDE_JSON = '{"severity":"warning","root_cause":"rc","suggested_actions":["a"],"confidence":0.6}'
+
+
+@pytest.fixture
+def gateway(monkeypatch):
+    """게이트웨이 설정·provider·사용량 적재를 가짜로 — 실제 라우팅 로직은 그대로."""
+    from app.services.llm import service as llm_mod
+    from app.services.llm.base import LLMResult
+
+    cfg = llm_mod.merge_llm_settings(_GATEWAY_CFG)
+    state = {"profiles": [], "stats": [], "status": "ok"}
+
+    class _Provider:
+        def __init__(self, profile):
+            self.profile = profile
+
+        async def chat(self, prompt, *, system=None, options=None):
+            state["profiles"].append(self.profile.name)
+            if state["status"] != "ok":
+                return LLMResult(status=state["status"], error="connection refused",
+                                 profile=self.profile.name, model=self.profile.model)
+            return LLMResult(status="ok", text=_CLAUDE_JSON, profile=self.profile.name,
+                             model=self.profile.model, prompt_tokens=11, completion_tokens=7)
+
+    def _record(profile_name, purpose, result):
+        state["stats"].append((profile_name, purpose, result, current_llm_tenant()))
+
+    monkeypatch.setattr(llm_mod.llm_service, "resolve_settings", lambda db=None: cfg)
+    monkeypatch.setattr(llm_mod.llm_service, "build_provider", lambda profile: _Provider(profile))
+    monkeypatch.setattr(llm_mod.LLMService, "_record_stats", staticmethod(_record))
+    return state
+
+
+def _claude_with_fake_api():
+    from app.services.analyzers.claude_analyzer import ClaudeAnalyzer
+
+    an = ClaudeAnalyzer(api_key="test")
+    an.api_calls = 0  # type: ignore[attr-defined]
+
+    async def fake_create(_msg):
+        an.api_calls += 1  # type: ignore[attr-defined]
+        return SimpleNamespace(
+            content=[SimpleNamespace(type="text", text=_CLAUDE_JSON)],
+            model="claude-opus-4-7",
+            usage=SimpleNamespace(input_tokens=120, output_tokens=30),
+        )
+
+    an._create = fake_create  # type: ignore[method-assign]
+    return an
+
+
+def _run_in_tenant(an, tenant):
+    from app.services.analyzers.base import IncidentContext
+    from app.services.llm.service import llm_tenant_context
+
+    ctx = IncidentContext(pod_name="p", namespace="n", timestamp="t", events=[],
+                          current_logs="log", describe_output="")
+
+    async def _go():
+        with llm_tenant_context(tenant):
+            return await an.analyze(ctx)
+
+    return asyncio.run(_go())
+
+
+def test_claude_pinned_tenant_goes_through_gateway(gateway):
+    an = _claude_with_fake_api()
+    res = _run_in_tenant(an, _PINNED)
+    assert an.api_calls == 0                       # 외부(anthropic) 호출 없음
+    assert gateway["profiles"] == ["internal-llm"]  # 테넌트 라우팅 적용
+    assert res.analyzed_by == "local_llm:internal-llm:inhouse-7b"
+    assert res.degraded is False and res.severity == "warning"
+    (profile, purpose, _, tenant), = gateway["stats"]
+    assert (profile, purpose) == ("internal-llm", "incident_analysis")
+    assert tenant["id"] == "t-pinned"                # 사용량 테넌트 귀속
+
+
+def test_claude_pinned_tenant_gateway_offline_is_degraded(gateway):
+    gateway["status"] = "offline"
+    an = _claude_with_fake_api()
+    res = _run_in_tenant(an, _PINNED)
+    assert an.api_calls == 0
+    assert res.degraded is True and "offline" in (res.degraded_reason or "")
+
+
+@pytest.mark.parametrize("tenant", [
+    None,
+    {"id": "t-open", "name": "team-open", "routing": {}},
+    {"id": "t-chat", "name": "team-chat", "routing": {"chat": {"primary": "internal-llm"}}},
+    {"id": "t-gone", "name": "team-gone", "routing": {"incident_analysis": {"primary": "deleted-profile"}}},
+])
+def test_claude_direct_when_tenant_does_not_pin(gateway, tenant):
+    an = _claude_with_fake_api()
+    res = _run_in_tenant(an, tenant)
+    assert an.api_calls == 1 and gateway["profiles"] == []
+    assert res.analyzed_by == "claude" and res.degraded is False
+    (profile, purpose, result, seen), = gateway["stats"]
+    assert (profile, purpose) == ("claude-direct", "incident_analysis")
+    assert (result.status, result.prompt_tokens, result.completion_tokens) == ("ok", 120, 30)
+    assert (seen or {}).get("id") == (tenant or {}).get("id")
+
+
+def test_claude_direct_api_error_is_recorded_as_error(gateway):
+    an = _claude_with_fake_api()
+
+    async def raising(_msg):
+        raise ConnectionError("network down")
+
+    an._create = raising  # type: ignore[method-assign]
+    res = _run_in_tenant(an, None)
+    assert res.degraded is True
+    (profile, _, result, _), = gateway["stats"]
+    assert profile == "claude-direct" and result.status == "error" and "network down" in result.error
+
+
 # ── 컨텍스트 수집: 컨테이너 선택·예외 매핑·init 이상 (D-115) ───────────────
 
 def _cs(name, *, waiting=None, terminated=None, exit_code=0, restarts=0, running=False):

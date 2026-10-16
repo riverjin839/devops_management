@@ -108,3 +108,21 @@ def resolve_llm_tenant(db: Session, user: User) -> Optional[dict]:
         return None
     chosen = next((t for t in rows if t.llm_routing), rows[0])
     return {"id": str(chosen.id), "name": chosen.name, "routing": chosen.llm_routing or {}}
+
+
+def llm_tenant_for_cluster(db: Session, cluster_id) -> Optional[dict]:
+    """사용자 없는 호출(Celery 자동 장애 분석 등)의 LLM 테넌트 컨텍스트 — 클러스터 소유 테넌트.
+
+    ``resolve_llm_tenant`` 와 같은 모양을 ``llm_tenant_context`` 에 넘긴다. 바인딩이 없거나
+    조회가 실패하면 None(전역 라우팅) — 분석 자체를 막지 않는다.
+    """
+    from app.services.tenant_concurrency import owner_tenant
+
+    try:
+        tenant = owner_tenant(db, cluster_id)
+    except Exception:  # noqa: BLE001
+        db.rollback()
+        return None
+    if tenant is None:
+        return None
+    return {"id": str(tenant.id), "name": tenant.name, "routing": tenant.llm_routing or {}}

@@ -74,24 +74,30 @@ def current_llm_tenant() -> Optional[dict]:
     return _llm_tenant.get()
 
 
-def effective_route(cfg: dict, purpose: str) -> dict:
-    """전역 라우팅 위에 현재 테넌트의 오버라이드를 얹은 purpose 라우팅.
+def tenant_route_override(cfg: dict, purpose: str) -> Optional[dict]:
+    """현재 테넌트가 이 purpose 를 게이트웨이 프로필로 고정했으면 그 route, 아니면 None.
 
-    오버라이드가 존재하지 않는 프로필을 가리키면(프로필 삭제 등) 무시하고 전역값을 쓴다.
+    오버라이드가 존재하지 않는 프로필을 가리키면(프로필 삭제 등) 고정이 없는 것으로 본다.
+    게이트웨이 밖 호출(Claude 분석기의 anthropic 직접 호출)은 이 값이 있으면 게이트웨이로
+    우회해야 한다 — 테넌트가 정한 반출 경로를 벗어나지 않게.
     """
-    route = cfg["routing"].get(purpose) or cfg["routing"]["chat"]
     tenant = _llm_tenant.get()
     if not tenant or purpose in TENANT_ROUTING_EXCLUDED:
-        return route
+        return None
     ov = (tenant.get("routing") or {}).get(purpose)
     if not isinstance(ov, dict):
-        return route
+        return None
     names = {p["name"] for p in cfg["profiles"]}
     primary = ov.get("primary")
     if primary not in names:
-        return route
+        return None
     fallback = ov.get("fallback")
     return {"primary": primary, "fallback": fallback if (fallback in names and fallback != primary) else None}
+
+
+def effective_route(cfg: dict, purpose: str) -> dict:
+    """전역 라우팅 위에 현재 테넌트의 오버라이드를 얹은 purpose 라우팅."""
+    return tenant_route_override(cfg, purpose) or cfg["routing"].get(purpose) or cfg["routing"]["chat"]
 
 _redis_client = None
 
@@ -514,6 +520,11 @@ class LLMService:
                 self._semaphores.clear()
             self._semaphores[key] = sem
         return sem
+
+    def record_usage(self, profile_name: str, purpose: str, result: LLMResult) -> None:
+        """게이트웨이 밖에서 직접 부른 LLM 호출(예: Claude 분석기 ``claude-direct``)도 같은
+        사용량 통계·테넌트 귀속(``llm:tstats``)에 적재한다 (fail-open)."""
+        self._record_stats(profile_name, purpose, result)
 
     @staticmethod
     def _record_stats(profile_name: str, purpose: str, result: LLMResult) -> None:

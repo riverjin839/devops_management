@@ -149,3 +149,57 @@ def test_task_missing_k8s_event_is_noop():
 def test_task_bad_id_is_noop():
     result = run_auto_incident_analysis_k8s_event("not-a-uuid")
     assert result == {"ok": False, "reason": "bad_id"}
+
+
+# ── 클러스터 소유 테넌트의 LLM 컨텍스트 (D-114 잔여) ──────────────────────
+
+class _TenantSpyAnalyzer(_FakeAnalyzer):
+    """분석 시점의 LLM 테넌트 컨텍스트를 기록한다."""
+    seen = "unset"
+
+    async def analyze(self, context):
+        from app.services.llm.service import current_llm_tenant
+        _TenantSpyAnalyzer.seen = current_llm_tenant()
+        return await super().analyze(context)
+
+
+@pytest.fixture
+def bound_cluster(db):
+    from app.models.cluster import Cluster
+    from app.models.tenant import ClusterBinding, Tenant
+
+    tag = uuid.uuid4().hex[:8]
+    cluster = Cluster(name=f"auto-an-{tag}", api_endpoint="https://auto-an:6443")
+    tenant = Tenant(name=f"auto-an-team-{tag}",
+                    llm_routing={"incident_analysis": {"primary": "internal-llm"}})
+    db.add_all([cluster, tenant])
+    db.commit()
+    db.add(ClusterBinding(tenant_id=tenant.id, cluster_id=cluster.id, access="operate"))
+    db.commit()
+    yield cluster, tenant
+    db.rollback()
+    db.query(ClusterBinding).filter(ClusterBinding.tenant_id == tenant.id).delete(synchronize_session=False)
+    db.query(Tenant).filter(Tenant.id == tenant.id).delete(synchronize_session=False)
+    db.query(Cluster).filter(Cluster.id == cluster.id).delete(synchronize_session=False)
+    db.commit()
+
+
+def test_task_runs_in_cluster_owner_tenant_llm_context(db, monkeypatch, bound_cluster):
+    cluster, tenant = bound_cluster
+    monkeypatch.setattr(factory_module, "get_analyzer", lambda dbb=None: _TenantSpyAnalyzer())
+    event = _make_k8s_event(db)
+    event.cluster_id = cluster.id
+    db.commit()
+
+    assert run_auto_incident_analysis_k8s_event(str(event.id))["status"] == "done"
+    seen = _TenantSpyAnalyzer.seen
+    assert isinstance(seen, dict) and seen["id"] == str(tenant.id)
+    assert seen["routing"] == {"incident_analysis": {"primary": "internal-llm"}}
+
+
+def test_task_unbound_cluster_has_no_tenant_context(db, monkeypatch):
+    monkeypatch.setattr(factory_module, "get_analyzer", lambda dbb=None: _TenantSpyAnalyzer())
+    event = _make_k8s_event(db)
+
+    assert run_auto_incident_analysis_k8s_event(str(event.id))["status"] == "done"
+    assert _TenantSpyAnalyzer.seen is None
