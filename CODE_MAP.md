@@ -36,6 +36,7 @@ AI 어시스턴트 + 사람 개발자용 — 기능 → 파일 경로와 자주 
 | 공용 UI: 페이지 밀도 셸 (콘솔/허브/문서 3종, D-123) · 섹션 카드 헤더 슬롯(D-122) | — | `frontend/src/components/common/PageShell.tsx` · `frontend/src/components/ui/MacCard.tsx`(`icon`·`description`·`titleExtra`·`actions`) |
 | 공용 UI: 실행 확인 모달 | — | `frontend/src/components/common/ConfirmDialog.tsx` |
 | 공용 UI: 로그 뷰어 (JSON/journal/table 자동감지) | — | `frontend/src/components/common/LogViewer.tsx` |
+| 공용 훅: 입력 debounce (검색어 등, `keepPreviousData` 와 함께) | — | `frontend/src/hooks/useDebouncedValue.ts` |
 | 공용 UI: 실행 로그 패널 (실행 버튼 실시간 로그 + "로그 보기", D-089 — 단건 요청 `runLogged`·큐잉 실행 `pollIntoRunLog` 헬퍼, D-128) | — | `frontend/src/components/common/RunLogPanel.tsx` · `hooks/useRunLog.ts` · `hooks/useLogPref.ts` · `lib/sse.ts`(POST SSE 소비 `postSse`) |
 | 공용 훅: OS "동작 줄이기" 감지 (무한 애니메이션 끄기, D-096) | — | `frontend/src/hooks/usePrefersReducedMotion.ts` |
 | 연결 검증 + status 반영 | `POST /clusters/{id}/verify` (clusters.py) | `clustersApi.verify` |
@@ -112,7 +113,7 @@ AI 어시스턴트 + 사람 개발자용 — 기능 → 파일 경로와 자주 
 | Deep Check 정의/실행/수집 | `backend/app/routers/check_results_router.py` · `check_definitions_router.py`(정의별 이력/run/duplicate/preview) + `backend/app/services/registered_checks/`(UI 정의형 `custom_http`·`custom_kubectl`·`custom_promql` 포함) → `frontend/src/pages/DeepCheckSettings.tsx`(전 항목 검색/일괄 관리 — 단일 항목 편집은 `/checks/:itemId` 가 우선) (+ `components/daily-check/DeepCheckRunHistory.tsx`) |
 | 운영 점검 콘솔(레거시) | `backend/app/routers/ops_check.py` + `services/ops_check_service.py`(카탈로그·실행 소스 4종: deep_check/addon/batch_job/playbook — D-066) → `frontend/src/pages/OpsCheckConsolePage.tsx` (+ `components/ops-check/ClusterOpsCheckPanel.tsx` — `/clusters/:id` 와 공유) |
 | 클러스터 상세(종합 상태+원인) | `backend/app/routers/clusters.py`(`/status-breakdown`) + `services/cluster_status_service.py`(`recompute()` 단일 롤업) → `frontend/src/pages/ClusterDetailPage.tsx` |
-| K8s 실시간 이벤트 (kubewatch) | `backend/app/routers/k8s_events.py`(수신 직후 `analysis_hook.maybe_enqueue_analysis_for_k8s_event` 훅 + `/{id}/analysis`,`/analyze`) + `services/k8s_event_classifier.py` → `frontend/src/pages/K8sEventsPage.tsx` |
+| K8s 실시간 이벤트 (kubewatch) | `backend/app/routers/k8s_events.py`(수신 직후 `analysis_hook.maybe_enqueue_analysis_for_k8s_event` 훅 + `/{id}/analysis`,`/analyze`, 심각도별 건수 `/stats`, 목록 `has_more`) + `services/k8s_event_classifier.py` → `frontend/src/pages/K8sEventsPage.tsx` |
 | Observability 지표 대시보드 (kube-prometheus-stack) | `backend/app/routers/observability.py` + `services/observability/catalog_seed.py` · `services/alertmanager_service.py` · `services/prometheus_service.py`(rules/targets/status) + `models/observability.py` → `frontend/src/pages/ObservabilityPage.tsx` + `components/observability/` |
 | 인시던트 알람 수신 / 인박스 | `backend/app/routers/observability.py`(`ingest_router`) + `services/observability/alert_ingest.py`(Alertmanager v4 · generic 파서) · `alert_router.py`(라우팅·중복억제) + `models/alert_event.py` · `models/alert_notify_rule.py` → `frontend/src/pages/AlertInboxPage.tsx` |
 | Pod 병목 진단 | `backend/app/routers/bottleneck.py`(`POST /run` · SSE `POST /run/stream`) + `services/bottleneck_probes/` → `frontend/src/pages/PodBottleneckPage.tsx` · `PodBottleneckDetailPage.tsx` |

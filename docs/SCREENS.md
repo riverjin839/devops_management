@@ -418,10 +418,11 @@ hover 시 flyout 자체가 라벨을 보여주므로 이름만 뜨는 중복 툴
 - **UI 구성**:
   - `ClusterSidebar` — `iconOnly` + `allowAll`(`allLabel="전체 클러스터"`) 단일 선택.
   - 심각도 필터 탭(전체/Critical/Warning/Info) + 새로고침 버튼.
-  - 요약 카운터(critical/warning/info 건수, 표시 건수/총 건수).
-  - 이벤트 테이블(시각/심각도/Kind/이름/네임스페이스/Reason/메시지) — 행 클릭 시 raw JSON 펼침, 행별 삭제 버튼.
-- **Frontend**: `useK8sEvents({clusterId, severity, limit:200})`(`hooks/useK8sEvents.ts`, 30초 `refetchInterval`), `useDeleteK8sEvent`. `useClusters`. api.ts: `k8sEventsApi.{list,delete}`.
-- **Backend**: `GET /api/v1/events/` (`response_model=K8sEventListResponse`), `DELETE /api/v1/events/{id}`(operator + 클러스터 operate, 안 보이는 이벤트는 404 — D-102) — 라우터 `backend/app/routers/k8s_events.py`(조회용 `router`, prefix `/events`; 별도 `ingest_router`가 kubewatch 웹훅 수신 담당, `/api/v1` 최상위 마운트로 인증 미들웨어 제외). 모델: `models/k8s_event.py`(`K8sEvent` — `event_type`, `resource_kind`, `resource_name`, `namespace`, `reason`, `message`, `severity`, `raw` JSONB, `received_at`).
+  - 요약 카운터(critical/warning/info 건수) — 심각도 필터·페이지와 무관한 서버 집계(`GET /events/stats`, D-111). 표시 건수/총 건수.
+  - 이벤트 테이블(시각/심각도/Kind/이름/네임스페이스/Reason/메시지) — 이름 셀 버튼(키보드·`aria-expanded`)이나 행 클릭으로 raw JSON(`LogViewer`) 펼침, 행별 삭제 버튼. 목록 아래 "N / 총 M건" + **더 보기**(100건 단위, D-111).
+  - 조회 실패는 "이벤트 없음" 대신 오류+다시 시도, 30초 갱신만 실패하면 목록 위 경고 한 줄(D-104).
+- **Frontend**: `useK8sEventsPaged({clusterId, severity})`(`useInfiniteQuery`, 30초 `refetchInterval`), `useK8sEventStats(clusterId)`, `useDeleteK8sEvent`(`hooks/useK8sEvents.ts`). `useClusters`. api.ts: `k8sEventsApi.{list,stats,delete}`.
+- **Backend**: `GET /api/v1/events/` (`response_model=K8sEventListResponse`, `has_more`), `GET /api/v1/events/stats`(심각도별 건수, `/{id}` 보다 먼저 선언), `DELETE /api/v1/events/{id}`(operator + 클러스터 operate, 안 보이는 이벤트는 404 — D-102) — 라우터 `backend/app/routers/k8s_events.py`(조회용 `router`, prefix `/events`; 별도 `ingest_router`가 kubewatch 웹훅 수신 담당, `/api/v1` 최상위 마운트로 인증 미들웨어 제외). 모델: `models/k8s_event.py`(`K8sEvent` — `event_type`, `resource_kind`, `resource_name`, `namespace`, `reason`, `message`, `severity`, `raw` JSONB, `received_at`).
 - **핵심 기능**:
   - 클러스터별/전체 이벤트 조회, 심각도 필터.
   - 30초 주기 자동 새로고침 + 수동 새로고침.
@@ -459,10 +460,11 @@ hover 시 flyout 자체가 라벨을 보여주므로 이름만 뜨는 중복 툴
   - `ClusterSidebar` — `iconOnly` + `allowAll`(`allLabel="전체 클러스터"`).
   - 접이식 "알람 수신 설정 방법" 안내 — Alertmanager `webhook_configs` YAML + curl 테스트 스니펫 복사 버튼(토큰 값은 마스킹).
   - 메인 탭 — **알람 인박스 / 알림 규칙**.
-  - 필터 — 심각도(전체/Critical/Warning/Info) + 상태(발생중/해소/전체) + 검색 + 일괄 확인 + 새로고침. 최근 24시간 요약 pill.
+  - 필터 — 심각도(전체/Critical/Warning/Info) + 상태(발생중/해소/전체) + 검색(300ms debounce) + 일괄 확인 + 새로고침. 요약 pill 은 "최근 24시간 · 해소 포함 · 필터 미적용" 기준을 명시한다. 목록 아래 "총 N건 중 M건" + **더 보기**(100건 단위, D-111).
+  - 목록·규칙·전역 설정·요약이 실패하면 오류+다시 시도, 갱신만 실패하면 경고 한 줄(D-104). 삭제·규칙 편집·설정 저장은 viewer 에게 숨기지 않고 사유와 함께 비활성(`useCanOperate`, D-105).
   - 알람 테이블 — 좌측 심각도 색 바 + 행 배경 그라데이션 + 글자 굵기로 심각도 구분. 수신 · 상태 · 심각도 · 클러스터 · 알람 · 대상 · 요약 · 반복(×N, 억제 n) · 확인. 행 클릭 시 라벨/어노테이션/generatorURL/원본 페이로드 펼침 + **AI 분석 패널**(`AlertAnalysisPanel`) — 자동 분석 상태 배지(대기/분석 중/완료/실패/건너뜀), 원인 분석·조치 가이드(실행 없음 — 사람이 수행), analyzed_by(규칙 기반/LLM 프로필) 투명 표기, 수동 'AI 분석 실행/재분석' 버튼(operator+, `POST /observability/alerts/{id}/analyze` → 전용 llm Celery 큐). 자동 분석 범위는 Settings → AI/LLM 의 '알람 자동 분석 범위'(AppSetting `llm_analysis_scope`)에서 규칙(클러스터/네임스페이스/알람명/심각도, 시간당 상한·디바운스)으로 관리.
   - 알림 규칙 탭 — 전역 기본값(알림 대상/최소 심각도/중복 억제 창·모드/기본 담당자/보존일) + 규칙 목록·편집기. 규칙 편집기에서 매처(클러스터·**모듈/서비스 패턴**·알람명·네임스페이스·라벨·최소 심각도), 알림 대상/담당자, 심각도 재정의, 중복 억제 창·모드, **재전파 채널**(기존 `NotificationChannel` 다중 선택)을 모두 편집한다.
-- **Frontend**: `useAlerts`, `useAlertStats`, `useAckAlert`, `useAckAllAlerts`, `useDeleteAlert`, `useAlertRules`, `useAlertSettings` 등(`hooks/useAlertInbox.ts`, 30초 `refetchInterval`). api.ts: `observabilityApi.{alerts,alertStats,ackAlert,ackAllAlerts,alertRules,alertSettings,…}`.
+- **Frontend**: `useAlertsPaged`(`useInfiniteQuery`), `useAlertStats`, `useAckAlert`, `useAckAllAlerts`, `useDeleteAlert`, `useAlertRules`, `useAlertSettings` 등(`hooks/useAlertInbox.ts`, 30초 `refetchInterval`). api.ts: `observabilityApi.{alerts,alertStats,ackAlert,ackAllAlerts,alertRules,alertSettings,…}`.
 - **Backend**: 수신 `POST /api/v1/observability/alerts/ingest`(JWT 없음 — `ALERT_INGEST_TOKEN` Bearer 자체 검증, **미설정 시 503 fail-closed**), 조회 `GET /observability/alerts`·`/alerts/stats`·`/alerts/{id}`, `POST /alerts/{id}/ack`·`/alerts/ack-all`, 규칙/설정 CRUD(`require_operator`). 라우터 `backend/app/routers/observability.py`(`ingest_router` + `router`). 모델: `models/alert_event.py`, `models/alert_notify_rule.py`. 서비스: `services/observability/alert_ingest.py`(포맷 2종 파싱), `alert_router.py`(규칙 매칭·중복 억제·알림 생성).
 - **핵심 기능**:
   - **수신 포맷 2종** — Alertmanager webhook v4 우선, 아니면 generic fallback(사내 forwarder 의 임의 JSON 을 최선노력 정규화).
@@ -586,15 +588,19 @@ hover 시 flyout 자체가 라벨을 보여주므로 이름만 뜨는 중복 툴
 - **UI 구성**:
   - 좌측 `ClusterSidebar iconOnly`(K8s 로그 화면과 같은 console 밀도 레이아웃) + 드릴다운 카드의 `SearchableSelect`(namespace/pod) 2열로 대상 선택. 선택은 URL 에 담긴다 — `/incident-analysis/:clusterId?namespace=&pod=`(딥링크·공유 가능, 클러스터를 바꾸면 namespace/pod 초기화). (D-113)
   - "대상 선택" 패널 — "이슈 있는 항목만 보기(느림)" 토글, glob 패턴(`nsPattern`/`podPattern`)으로 스캔 범위 축소, "자동 채우기" 버튼.
-  - 이벤트 테이블(최대 20건), 로그/Describe textarea 3개(현재 로그/이전 로그/describe) + 실시간 LIVE 토글 + 로그 라인 필터.
-  - 결과 패널(`ResultPanel`) — severity 배지, 근본 원인, confidence bar, 조치 방안 순번 리스트, 관련 런북.
+  - 컨테이너 선택기(`analyzeApi.podContainers`, init 구분, 기본 "서버 추천") — 자동 채우기·실시간 로그가 같은 컨테이너를 쓴다.
+  - 이벤트 테이블(최대 20건, `kubectl get events` 헤더를 인식하는 붙여넣기 파서), 로그/Describe textarea 3개(현재 로그/이전 로그/describe) + 로그 라인 필터(필터 결과는 `LogViewer`).
+  - "실시간 로그" 카드 — `PodLogStream`(SSE, `logs/stream`) 으로 선택 Pod 를 따라 본다(예전 LIVE 폴링 대체, D-112).
+  - 대상(cluster/ns/pod/container)이 바뀌면 입력·결과를 비우고, 다른 대상의 입력이면 분석 시작을 막는다(D-110). 분석 중 "중지"(150초 타임아웃, D-109).
+  - 결과 패널(`ResultPanel`) — 분석 대상·시각, severity 배지, 근본 원인, confidence bar, 조치 방안 순번 리스트, 관련 런북, RAG 근거 목록. 분석기 실패 대체 결과(`degraded`)는 경고 배너(D-115). 실패는 결과 영역에 오류로 표시.
   - `LogViewTabs current="analysis"` 로 로그 관련 다른 화면과 탭 전환 — 탭을 바꿔도 선택한 클러스터를 이어 간다.
 - **Frontend**: `useAnalyzerHealth()`, `useAnalyzeIncident()`(mutation), `useAnalyzeNamespaces(clusterId, onlyWithIssues, withCounts, nsPattern, podPattern)`(300ms 디바운스), `useAnalyzePods(clusterId, namespace, onlyWithIssues)`, `useFetchIncidentContext()`(mutation, 자동채우기/스트리밍 공용). `useClusters()`, `useClusterRouteParam('/incident-analysis', clusters)`(클러스터), `useSearchParams`(namespace/pod). 로컬 state 다수(`onlyIssues`/로그 텍스트/`streaming`/`logFilter` 등). api.ts: `analyzeApi.health`, `analyzeApi.analyze`, `analyzeApi.listNamespaces`, `analyzeApi.listPods`, `analyzeApi.fetchContext`.
 - **Backend**: `POST /api/v1/analyze/incident`, `GET /api/v1/analyze/health`, `GET /api/v1/analyze/clusters/{cluster_id}/namespaces`, `GET /api/v1/analyze/clusters/{cluster_id}/namespaces/{namespace}/pods`, `GET /api/v1/analyze/clusters/{cluster_id}/namespaces/{namespace}/pods/{podName}/context` — `backend/app/routers/analyze.py`. `kubernetes` SDK(`CoreV1Api`)로 실시간 조회, `app/services/analyzers.py`(`get_analyzer()` — `ANALYZER_BACKEND` env 로 Claude/Local LLM/Rule-based 선택).
 - **핵심 기능**:
   - 대용량 클러스터 대응 fast/slow path 분리(`onlyIssues`/`withCounts` 미지정 시 이름만 빠르게 조회, 큰 클러스터에서 axios 타임아웃 최대 150s).
   - "자동 채우기" 로 logs/previous logs/events/describe 한 번에 수집.
-  - SSE/WebSocket 미지원 백엔드 특성상 동일 fetch-context 엔드포인트를 N초 간격 폴링해 "실시간" 흉내(`streaming` 토글, textarea 포커스 중엔 갱신 일시정지).
+  - 실시간 로그는 SSE 스트림(`PodLogStream`) — 분석 입력은 자동 채우기·붙여넣기로만 채운다.
+  - 분석 요청에 `clusterId` — 서버가 클러스터 read 접근을 확인하고 테넌트 LLM 라우팅·감사 로그(`incident.analyze`)·입력 길이 제한을 적용한다(D-114).
   - severity(critical/warning/info)별 색상 결과 패널 + confidence bar + 조치 방안/런북.
   - 로그 라인 필터(클라이언트 사이드 텍스트 매칭).
 - **요청사항 (수정 요청)**:
