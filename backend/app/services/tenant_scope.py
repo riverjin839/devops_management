@@ -107,4 +107,11 @@ def resolve_llm_tenant(db: Session, user: User) -> Optional[dict]:
     if not rows:
         return None
     chosen = next((t for t in rows if t.llm_routing), rows[0])
-    return {"id": str(chosen.id), "name": chosen.name, "routing": chosen.llm_routing or {}}
+    return llm_tenant_dict(chosen)
+
+
+def llm_tenant_dict(tenant) -> Optional[dict]:
+    """``Tenant`` 행 → ``llm_tenant_context`` 에 넘기는 dict. None 이면 None."""
+    if tenant is None:
+        return None
+    return {"id": str(tenant.id), "name": tenant.name, "routing": tenant.llm_routing or {}}

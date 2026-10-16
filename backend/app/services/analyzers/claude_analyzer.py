@@ -6,11 +6,14 @@ Caches the system prompt to reduce token costs on repeated K8s incident analysis
 import json
 import logging
 import re
+import time
 from datetime import datetime, timezone
 from typing import Any
 
 import anthropic
 
+from app.services.llm import llm_service
+from app.services.llm.base import LLMResult
 from app.services.analyzers.base import (
     AnalysisResult,
     BaseAnalyzer,
@@ -18,6 +21,8 @@ from app.services.analyzers.base import (
 )
 
 logger = logging.getLogger(__name__)
+
+CLAUDE_MODEL = "claude-opus-4-7"
 
 _SYSTEM_PROMPT = """\
 You are an expert Kubernetes Site Reliability Engineer specializing in incident analysis.
@@ -95,6 +100,19 @@ def _degraded_result(reason: str, *, root_cause: str, actions: list[str], confid
     )
 
 
+def _record_usage(started: float, *, status: str, prompt_tokens=None, completion_tokens=None,
+                  error: str | None = None) -> None:
+    """Claude 직접 호출도 LLM 사용량 대시보드·테넌트별 사용량에 남긴다(프로필명 ``claude``, fail-open)."""
+    try:
+        llm_service.record_external_usage("claude", "incident_analysis", LLMResult(
+            status=status, model=CLAUDE_MODEL, profile="claude",
+            latency_ms=int((time.monotonic() - started) * 1000),
+            prompt_tokens=prompt_tokens, completion_tokens=completion_tokens, error=error,
+        ))
+    except Exception:  # noqa: BLE001 — 통계 기록이 분석을 막지 않는다
+        logger.debug("claude analyzer: 사용량 기록 실패", exc_info=True)
+
+
 class ClaudeAnalyzer(BaseAnalyzer):
     def __init__(self, api_key: str | None = None) -> None:
         # api_key=None lets the SDK pick up ANTHROPIC_API_KEY from env
@@ -103,10 +121,12 @@ class ClaudeAnalyzer(BaseAnalyzer):
     async def analyze(self, context: IncidentContext) -> AnalysisResult:
         user_msg = _build_user_message(context)
 
+        started = time.monotonic()
         try:
             response = await self._create(user_msg)
         except Exception as exc:  # noqa: BLE001 — API 미가용·HTTP 오류는 degraded 결과로
             logger.warning("claude analyzer: API 호출 실패 — %s", exc)
+            _record_usage(started, status="error", error=f"{type(exc).__name__}: {exc}")
             return _degraded_result(
                 f"Claude API 호출 실패: {type(exc).__name__}: {str(exc)[:200]}",
                 root_cause="Claude 분석을 수행하지 못했습니다 — 수동 확인이 필요합니다.",
@@ -114,6 +134,11 @@ class ClaudeAnalyzer(BaseAnalyzer):
                          "Settings → AI/LLM 에서 분석기 설정과 Claude API 키를 확인하세요."],
                 confidence=0.0,
             )
+
+        usage = getattr(response, "usage", None)
+        _record_usage(started, status="ok",
+                      prompt_tokens=getattr(usage, "input_tokens", None),
+                      completion_tokens=getattr(usage, "output_tokens", None))
 
         try:
             raw = ""
@@ -145,7 +170,7 @@ class ClaudeAnalyzer(BaseAnalyzer):
 
     async def _create(self, user_msg: str):
         return await self._client.messages.create(
-            model="claude-opus-4-7",
+            model=CLAUDE_MODEL,
             max_tokens=1024,
             thinking={"type": "adaptive"},
             system=[
@@ -160,7 +185,7 @@ class ClaudeAnalyzer(BaseAnalyzer):
 
     async def health_check(self) -> bool:
         try:
-            await self._client.models.retrieve("claude-opus-4-7")
+            await self._client.models.retrieve(CLAUDE_MODEL)
             return True
         except Exception:
             return False

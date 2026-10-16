@@ -501,3 +501,87 @@ def test_containers_endpoint_maps_pod_errors(client, world, monkeypatch):
                         lambda cluster: _FakeV1(exc=ApiException(status=404, reason="Not Found")))
     r = client.get(f"/api/v1/analyze/clusters/{world['open'].id}/namespaces/prod/pods/api-0/containers")
     assert r.status_code == 404
+
+
+# ── D-114 잔여: Claude 분석기의 테넌트 라우팅·사용량 귀속 ───────────────────────
+
+def _settings_with_profiles(*names):
+    return {"profiles": [{"name": n} for n in names], "routing": {}, "analyzer_backend": "claude"}
+
+
+@pytest.mark.parametrize("routing, profiles, expected", [
+    ({"incident_analysis": {"primary": "onprem"}}, ("onprem",), "LocalLLMAnalyzer"),  # 테넌트 지정 → 게이트웨이
+    ({"incident_analysis": {"primary": "gone"}}, ("onprem",), "ClaudeAnalyzer"),      # 없는 프로필은 무시
+    ({"chat": {"primary": "onprem"}}, ("onprem",), "ClaudeAnalyzer"),                  # 다른 용도 지정은 무관
+    (None, ("onprem",), "ClaudeAnalyzer"),                                             # 테넌트 없음
+])
+def test_factory_honours_tenant_incident_llm(monkeypatch, routing, profiles, expected):
+    from app.services.analyzers import factory
+    from app.services.llm.service import llm_tenant_context
+
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "test-key")
+    monkeypatch.setattr(factory, "get_analyzer_backend", lambda db=None: "claude")
+    monkeypatch.setattr(factory.llm_service, "resolve_settings", lambda db=None: _settings_with_profiles(*profiles))
+    tenant = None if routing is None else {"id": "t1", "name": "t", "routing": routing}
+    with llm_tenant_context(tenant):
+        analyzer = factory.get_analyzer()
+    assert type(analyzer).__name__ == expected
+
+
+def test_analyzer_is_selected_inside_tenant_context(world, monkeypatch):
+    """분석기 선택(get_analyzer)이 사용자 테넌트 컨텍스트 안에서 일어나야 factory 가 테넌트 지정을 본다."""
+    from fastapi.testclient import TestClient
+
+    from app.auth.deps import get_current_user
+    from app.main import app
+
+    seen: list = []
+
+    def _get(db=None):
+        seen.append(current_llm_tenant())
+        return _FakeAnalyzer()
+
+    monkeypatch.setattr(analyze, "get_analyzer", _get)
+    app.dependency_overrides[get_current_user] = lambda: world["member"]
+    try:
+        r = TestClient(app).post(URL, json=_body())
+    finally:
+        app.dependency_overrides.pop(get_current_user, None)
+    assert r.status_code == 200, r.text
+    assert seen and seen[0] is not None and seen[0]["id"] == str(world["tenant"].id)
+
+
+def test_claude_analyzer_records_usage(monkeypatch):
+    from app.services.analyzers import claude_analyzer as mod
+    from app.services.analyzers.base import IncidentContext
+    from app.services.llm.service import llm_tenant_context
+
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "test-key")
+    calls: list = []
+    monkeypatch.setattr(mod.llm_service, "record_external_usage",
+                        lambda profile, purpose, result: calls.append((profile, purpose, result, current_llm_tenant())))
+    ctx = IncidentContext(pod_name="p", namespace="n", timestamp="t", events=[], current_logs="", describe_output="")
+
+    ok_resp = SimpleNamespace(
+        content=[SimpleNamespace(type="text", text='{"severity":"warning","root_cause":"x","suggested_actions":[],"confidence":0.6}')],
+        usage=SimpleNamespace(input_tokens=120, output_tokens=30),
+    )
+    a = mod.ClaudeAnalyzer()
+
+    async def ok_create(_msg):
+        return ok_resp
+    monkeypatch.setattr(a, "_create", ok_create)
+    with llm_tenant_context({"id": "t1", "name": "t", "routing": {}}):
+        res = asyncio.run(a.analyze(ctx))
+    assert res.degraded is False
+    profile, purpose, result, tenant = calls[-1]
+    assert (profile, purpose, result.status) == ("claude", "incident_analysis", "ok")
+    assert (result.prompt_tokens, result.completion_tokens) == (120, 30)
+    assert tenant and tenant["id"] == "t1"  # 테넌트 사용량에 귀속
+
+    async def boom(_msg):
+        raise RuntimeError("api down")
+    monkeypatch.setattr(a, "_create", boom)
+    res = asyncio.run(a.analyze(ctx))
+    assert res.degraded is True
+    assert calls[-1][2].status == "error" and "api down" in (calls[-1][2].error or "")

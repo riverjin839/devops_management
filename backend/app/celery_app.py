@@ -1285,6 +1285,36 @@ def dispatch_weekly_report(self):
         db.close()
 
 
+
+def _run_incident_analyzer(db, cluster_id, ctx):
+    """자동 분석 실행 — 클러스터 소유 테넌트의 LLM 컨텍스트 안에서 분석기를 고르고 돌린다(D-114).
+
+    테넌트가 incident_analysis LLM 을 지정했으면 게이트웨이 경유 분석기가 선택되고(factory),
+    LLM 사용량도 그 테넌트에 귀속된다. 소유 테넌트가 없으면 전역 설정 그대로.
+    """
+    from app.services.analyzers.factory import get_analyzer
+    from app.services.llm.service import llm_tenant_context
+    from app.services.tenant_concurrency import owner_tenant
+    from app.services.tenant_scope import llm_tenant_dict
+
+    import logging
+
+    log = logging.getLogger(__name__)
+    try:
+        tenant = llm_tenant_dict(owner_tenant(db, cluster_id))
+    except Exception:  # noqa: BLE001 — 테넌트 조회 실패가 분석을 막지 않게(전역 설정으로)
+        log.warning("auto incident analysis: 소유 테넌트 조회 실패 (cluster=%s)", cluster_id, exc_info=True)
+        tenant = None
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+    try:
+        with llm_tenant_context(tenant):
+            analyzer = get_analyzer(db)
+            # run_until_complete 가 만드는 태스크는 현재 contextvars 를 복사하므로 테넌트가 이어진다.
+            return loop.run_until_complete(analyzer.analyze(ctx))
+    finally:
+        loop.close()
+
 @celery_app.task(bind=True, name="app.celery_app.run_auto_incident_analysis",
                  ignore_result=True, time_limit=240)
 def run_auto_incident_analysis(self, alert_event_id: str, rule_id: str | None = None,
@@ -1334,17 +1364,10 @@ def run_auto_incident_analysis(self, alert_event_id: str, rule_id: str | None = 
 
         started = _time.monotonic()
         try:
-            from app.services.analyzers.factory import get_analyzer
             from app.services.incident_context_builder import build_context_from_alert
 
             ctx = build_context_from_alert(db, event, include_logs=include_logs)
-            analyzer = get_analyzer(db)
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
-            try:
-                result = loop.run_until_complete(analyzer.analyze(ctx))
-            finally:
-                loop.close()
+            result = _run_incident_analyzer(db, event.cluster_id, ctx)
 
             analysis.severity = result.severity
             analysis.root_cause = result.root_cause
@@ -1437,17 +1460,10 @@ def run_auto_incident_analysis_k8s_event(self, k8s_event_id: str, rule_id: str |
 
         started = _time.monotonic()
         try:
-            from app.services.analyzers.factory import get_analyzer
             from app.services.incident_context_builder import build_context_from_k8s_event
 
             ctx = build_context_from_k8s_event(db, event, include_logs=include_logs)
-            analyzer = get_analyzer(db)
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
-            try:
-                result = loop.run_until_complete(analyzer.analyze(ctx))
-            finally:
-                loop.close()
+            result = _run_incident_analyzer(db, event.cluster_id, ctx)
 
             analysis.severity = result.severity
             analysis.root_cause = result.root_cause

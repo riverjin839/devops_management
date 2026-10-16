@@ -98,7 +98,7 @@ AI 어시스턴트 + 사람 개발자용 — 기능 → 파일 경로와 자주 
 | RAG 근거 인용 (사내 지식 pgvector 검색) | `backend/app/services/rag_service.py` (`GET /llm/rag-search`, `POST /llm/backfill-embeddings`) — work_guides/work_items/ops_notes/ontology_events(`compute_ontology_event_embedding`, `routers/ontology.py` 커밋 직후 큐잉) 임베딩 |
 | LLM 정보요청 파서 (need_more_info) | `backend/app/services/llm/response_parser.py` |
 | 알람/K8s 이벤트 AI 자동 분석 (scope·디바운스·llm 큐) | `backend/app/services/observability/analysis_hook.py`(`sources` 로 알람/K8s 이벤트 규칙 적용 범위 선택, 공유 디바운스 키) + `services/incident_context_builder.py` + `models/incident_analysis.py` + `celery_app.run_auto_incident_analysis`/`run_auto_incident_analysis_k8s_event`(전용 `llm` 큐, `k8s/base/celery/worker-llm-deployment.yaml`) → 공용 `frontend/src/components/common/IncidentAnalysisPanel.tsx`(래퍼: `components/observability/AlertAnalysisPanel.tsx`, `components/k8s/K8sEventAnalysisPanel.tsx`) |
-| AI 장애 분석 (분석 전용) | `backend/app/routers/analyze.py` + `backend/app/services/analyzers/` (claude/local_llm/rule_based — 백엔드 선택은 `llm_settings.analyzer_backend`) → `frontend/src/pages/IncidentAnalysisPage.tsx` |
+| AI 장애 분석 (분석 전용) | `backend/app/routers/analyze.py` + `backend/app/services/analyzers/` (claude/local_llm/rule_based — 백엔드 선택은 `llm_settings.analyzer_backend`, 테넌트가 `incident_analysis` LLM 을 지정하면 Claude 대신 게이트웨이 경유 — `factory.tenant_pins_incident_llm`) → `frontend/src/pages/IncidentAnalysisPage.tsx` |
 | 파드 로그 스트리밍 (SSE) | `analyze.py` 의 `/logs/stream` → `frontend/src/pages/K8sLogsPage.tsx` |
 | 임베딩 (WorkItem/WorkGuide 유사 검색) | `backend/app/services/embedding_service.py` (pgvector, llm 게이트웨이 위임) |
 

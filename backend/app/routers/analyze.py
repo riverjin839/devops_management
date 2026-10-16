@@ -228,7 +228,8 @@ async def analyze_incident(
     cluster_id = _parse_cluster_id(body.cluster_id)
     require_cluster_access(db, user, cluster_id, "read")
 
-    analyzer = get_analyzer(db)
+    llm_tenant = resolve_llm_tenant(db, user)
+    analyzer_name = "unknown"
 
     ctx = IncidentContext(
         pod_name=body.pod_name,
@@ -270,13 +271,16 @@ async def analyze_incident(
 
     try:
         # 멀티테넌시 4단계 — 사용자 테넌트의 LLM 라우팅 오버라이드 + 사용량 귀속.
-        # (llm_service 게이트웨이를 경유하는 local_llm 분석기만 이 컨텍스트를 따른다.)
-        with llm_tenant_context(resolve_llm_tenant(db, user)):
+        # 분석기 선택도 컨텍스트 안에서 한다: 테넌트가 incident_analysis LLM 을 지정했으면
+        # Claude 직접 호출 대신 게이트웨이 경유 분석기를 고른다(factory.tenant_pins_incident_llm).
+        with llm_tenant_context(llm_tenant):
+            analyzer = get_analyzer(db)
+            analyzer_name = type(analyzer).__name__
             result: AnalysisResult = await analyzer.analyze(ctx)
     except Exception as exc:
         _audit_incident_analyze(
             db, user=user, request=request, body=body, cluster_id=cluster_id,
-            analyzer_name=type(analyzer).__name__, degraded=None, status="failure",
+            analyzer_name=analyzer_name, degraded=None, status="failure",
             error=f"{type(exc).__name__}: {exc}",
         )
         raise HTTPException(status_code=502, detail=f"Analyzer error: {str(exc)[:300]}") from exc
