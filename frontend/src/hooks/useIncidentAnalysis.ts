@@ -1,18 +1,7 @@
-import { useEffect, useState } from 'react';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { analyzeApi } from '@/services/api';
 import type { IncidentAnalysisRequest } from '@/types';
-
-/** 값이 N ms 동안 안정되면 그 시점의 값을 반환. 타이핑 중 매 키 입력마다
- *  refetch 가 발생하지 않게 하기 위함. */
-function useDebouncedValue<T>(value: T, delayMs: number): T {
-  const [debounced, setDebounced] = useState(value);
-  useEffect(() => {
-    const t = window.setTimeout(() => setDebounced(value), delayMs);
-    return () => window.clearTimeout(t);
-  }, [value, delayMs]);
-  return debounced;
-}
+import { useDebouncedValue } from './useDebouncedValue';
 
 export function useAnalyzerHealth() {
   return useQuery({

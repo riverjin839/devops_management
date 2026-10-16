@@ -243,6 +243,14 @@ export interface K8sEvent {
 export interface K8sEventListResponse {
   data: K8sEvent[];
   total: number;
+  /** 이 페이지 뒤에 더 있는지(offset 페이지네이션, D-111). */
+  hasMore?: boolean;
+}
+
+/** GET /events/stats — 심각도 필터와 무관한 클러스터 범위 집계(D-111). */
+export interface K8sEventStats {
+  total: number;
+  bySeverity: { critical: number; warning: number; info: number };
 }
 
 // Check Log
@@ -2885,6 +2893,8 @@ export interface KubeEvent {
 }
 
 export interface IncidentAnalysisRequest {
+  /** 분석 대상 클러스터 — 접근 권한·테넌트 LLM 라우팅·감사 기준(D-114). */
+  clusterId?: string;
   podName: string;
   namespace: string;
   timestamp: string;
@@ -2909,9 +2919,16 @@ export interface IncidentAnalysisResult {
   rootCause: string;
   suggestedActions: string[];
   relatedRunbooks: string[];
+  /** 0~1 (서버가 clamp). */
   confidence: number;
-  analyzedBy: 'claude' | 'local_llm' | 'rule_based';
+  /** 'claude' | 'rule_based' | 'local_llm:<profile>:<model>' — 접두사로 판정한다. */
+  analyzedBy: string;
   analyzedAt: string;
+  /** 분석기 실패·응답 파싱 실패로 만든 대체 결과 — 성공 결과처럼 보이면 안 된다(D-115). */
+  degraded?: boolean;
+  degradedReason?: string | null;
+  /** RAG 근거 — 본문 [n] 인용의 출처. */
+  citations?: RagCitation[];
 }
 
 export interface IncidentAnalysisResponse {
@@ -5215,6 +5232,8 @@ export interface AlertEvent {
 export interface AlertEventListResponse {
   data: AlertEvent[];
   total: number;
+  /** 이 페이지 뒤에 더 있는지(offset 페이지네이션, D-111). */
+  hasMore?: boolean;
 }
 
 export interface AlertStats {

@@ -1694,8 +1694,9 @@ export const ontologyApi = {
 
 // Incident Analysis API
 export const analyzeApi = {
-  analyze: (data: import('@/types').IncidentAnalysisRequest) =>
-    api.post<import('@/types').IncidentAnalysisResponse>('/analyze/incident', data),
+  /** LLM 타임아웃(120초)보다 길게 — axios 기본 30초면 분석이 끝나기 전에 끊긴다(D-109). */
+  analyze: (data: import('@/types').IncidentAnalysisRequest, signal?: AbortSignal) =>
+    api.post<import('@/types').IncidentAnalysisResponse>('/analyze/incident', data, { timeout: 150_000, signal }),
   health: () =>
     api.get<import('@/types').AnalyzerHealthResponse>('/analyze/health'),
   listNamespaces: (
@@ -1723,10 +1724,11 @@ export const analyzeApi = {
       `/analyze/clusters/${clusterId}/namespaces/${namespace}/pods`,
       { params: { only_with_issues: onlyWithIssues }, timeout: 120_000 },
     ),
-  fetchContext: (clusterId: string, namespace: string, podName: string, tailLines = 200) =>
+  /** container 를 비우면 서버가 고른다(default-container 어노테이션 → 실패·재시작 컨테이너 → 첫 컨테이너, D-115). */
+  fetchContext: (clusterId: string, namespace: string, podName: string, tailLines = 200, container?: string) =>
     api.get<import('@/types').AnalyzeIncidentContext>(
       `/analyze/clusters/${clusterId}/namespaces/${namespace}/pods/${podName}/context`,
-      { params: { tail_lines: tailLines } },
+      { params: { tail_lines: tailLines, ...(container ? { container } : {}) } },
     ),
   /** 파드 컨테이너(+init) 목록 — 로그/터미널 셀렉터용. */
   podContainers: (clusterId: string, namespace: string, podName: string) =>
@@ -1876,6 +1878,11 @@ export const k8sEventsApi = {
     limit?: number;
     offset?: number;
   }) => api.get<import('@/types').K8sEventListResponse>('/events/', { params }),
+  /** 심각도별 건수 — 목록의 심각도 필터·limit 과 무관한 서버 집계(D-111). */
+  stats: (clusterId?: string | null) =>
+    api.get<import('@/types').K8sEventStats>('/events/stats', {
+      params: clusterId ? { cluster_id: clusterId } : {},
+    }),
   get: (id: string) => api.get<import('@/types').K8sEvent>(`/events/${id}`),
   delete: (id: string) => api.delete(`/events/${id}`),
   getAnalysis: (id: string) =>
