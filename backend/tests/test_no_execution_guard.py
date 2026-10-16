@@ -119,4 +119,5 @@ def test_analysis_result_has_no_executable_fields():
     assert names == {
         "severity", "root_cause", "suggested_actions", "confidence",
         "analyzed_by", "analyzed_at", "related_runbooks", "citations",
+        "degraded", "degraded_reason",  # D-115 — 대체 결과 표시(실행성 아님)
     }, "AnalysisResult 필드가 변경됐습니다 — 무실행 계약을 확인하고 이 테스트를 갱신하세요."

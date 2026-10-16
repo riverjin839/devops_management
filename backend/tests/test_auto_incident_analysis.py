@@ -76,6 +76,24 @@ class _FakeAnalyzer:
         return True
 
 
+class _DegradedAnalyzer:
+    """LLM 연결 실패 등으로 대체 결과를 돌려주는 분석기 (D-115)."""
+    async def analyze(self, context):
+        return AnalysisResult(
+            severity="info",
+            root_cause="LLM 응답 없음 — 대체 결과",
+            suggested_actions=[],
+            confidence=0.0,
+            analyzed_by="local_llm:test-profile:test-model",
+            analyzed_at="2026-07-29T00:00:00Z",
+            degraded=True,
+            degraded_reason="LLM 연결 실패",
+        )
+
+    async def health_check(self):
+        return False
+
+
 class _BoomAnalyzer:
     async def analyze(self, context):
         raise RuntimeError("llm exploded")
@@ -148,3 +166,18 @@ def test_task_missing_alert_is_noop():
 def test_task_bad_id_is_noop():
     result = run_auto_incident_analysis("not-a-uuid")
     assert result == {"ok": False, "reason": "bad_id"}
+
+
+def test_task_degraded_result_is_recorded_as_failed(db, monkeypatch):
+    """대체 결과(degraded)를 성공(done)으로 저장하지 않는다 (D-115)."""
+    monkeypatch.setattr(factory_module, "get_analyzer", lambda dbb=None: _DegradedAnalyzer())
+    event = _make_alert(db)
+
+    result = run_auto_incident_analysis(str(event.id), rule_id="r1")
+    assert result["status"] == "failed"
+
+    db.expire_all()
+    row = db.query(IncidentAnalysis).filter(
+        IncidentAnalysis.alert_event_id == event.id).first()
+    assert row.status == "failed"
+    assert "LLM 연결 실패" in (row.error or "")
