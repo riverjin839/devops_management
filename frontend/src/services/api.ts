@@ -1705,6 +1705,7 @@ export const analyzeApi = {
     withCounts = false,
     namespacePattern = '',
     podPattern = '',
+    signal?: AbortSignal,
   ) =>
     api.get<import('@/types').AnalyzeNamespacesResponse>(
       `/analyze/clusters/${clusterId}/namespaces`,
@@ -1717,12 +1718,13 @@ export const analyzeApi = {
         },
         // 거대 클러스터에서 with_counts/only_with_issues 일 때만 무거우므로 그 경우만 긴 타임아웃.
         timeout: (onlyWithIssues || withCounts) ? 150_000 : 30_000,
+        signal,
       },
     ),
-  listPods: (clusterId: string, namespace: string, onlyWithIssues = false) =>
+  listPods: (clusterId: string, namespace: string, onlyWithIssues = false, signal?: AbortSignal) =>
     api.get<import('@/types').AnalyzePodsResponse>(
       `/analyze/clusters/${clusterId}/namespaces/${namespace}/pods`,
-      { params: { only_with_issues: onlyWithIssues }, timeout: 120_000 },
+      { params: { only_with_issues: onlyWithIssues }, timeout: 120_000, signal },
     ),
   /** container 를 비우면 서버가 고른다(default-container 어노테이션 → 실패·재시작 컨테이너 → 첫 컨테이너, D-115). */
   fetchContext: (clusterId: string, namespace: string, podName: string, tailLines = 200, container?: string) =>

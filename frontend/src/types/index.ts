@@ -3212,6 +3212,8 @@ export interface AnalyzeIncidentContext {
   currentLogs: string;
   previousLogs?: string | null;
   describeOutput: string;
+  /** 서버가 실제로 로그를 읽은 컨테이너(쿼리 미지정 시 서버 추천, D-115). */
+  container?: string | null;
 }
 
 // Trend Digest
