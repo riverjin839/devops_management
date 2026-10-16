@@ -7,7 +7,7 @@ const COLS = 7;
 const SEVERITY_CLS: Record<string, string> = {
   critical: 'text-status-critical font-semibold',
   warning: 'text-status-warning',
-  info: 'text-status-info',
+  info: 'text-muted-foreground', // 정상 범주는 무채색(§12.12-3)
 };
 
 /** 지금 발화/대기 중인 알람 (Prometheus + Alertmanager 병합). */

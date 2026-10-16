@@ -61,9 +61,10 @@ const SEVERITY_ROW: Record<AlertSeverity, { bar: string; text: string; name: str
     name: 'text-foreground font-medium',
     label: 'Warning',
   },
+  // info 는 정상 범주라 무채색 — K8s 이벤트와 같은 표현(§12.12-3).
   info: {
-    bar: 'bg-status-info',
-    text: 'text-status-info',
+    bar: 'bg-border',
+    text: 'text-muted-foreground',
     name: 'text-foreground',
     label: 'Info',
   },
@@ -265,7 +266,7 @@ export function AlertInboxPage() {
                     <span className={statChip(stats.warning, 'border-status-warning/30 text-status-warning')}>
                       Warning {stats.warning}
                     </span>
-                    <span className={statChip(stats.info, 'border-status-info/30 text-status-info')}>
+                    <span className={statChip(stats.info, 'border-border text-muted-foreground')}>
                       Info {stats.info}
                     </span>
                     <span

@@ -15,7 +15,7 @@ const STATE_CLS: Record<string, string> = {
 const SEVERITY_CLS: Record<string, string> = {
   critical: 'text-status-critical',
   warning: 'text-status-warning',
-  info: 'text-status-info',
+  info: 'text-muted-foreground', // 정상 범주는 무채색(§12.12-3)
 };
 
 /** Prometheus 알람/기록 규칙 dense 테이블. */
