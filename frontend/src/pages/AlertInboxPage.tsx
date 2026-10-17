@@ -16,6 +16,7 @@ import {
 } from '@/hooks/useAlertInbox';
 import { useCanOperate } from '@/hooks/useCanOperate';
 import { useDebouncedValue } from '@/hooks/useDebouncedValue';
+import { pickParam, useUrlParams } from '@/hooks/useUrlParams';
 import {
   AlertNotifyRulesPanel,
   AlertReceiverGuide,
@@ -28,7 +29,9 @@ import {
 import type { AlertEvent, AlertSeverity } from '@/types';
 import { formatApiError } from '@/lib/utils';
 
-type MainTab = 'inbox' | 'rules';
+const MAIN_TABS = ['inbox', 'rules'] as const;
+const SEVERITY_VALUES = ['all', 'critical', 'warning', 'info'] as const;
+const STATUS_VALUES = ['firing', 'resolved', 'all'] as const;
 
 const SEVERITY_TABS: Array<{ value: string; label: string }> = [
   { value: 'all', label: '전체' },
@@ -93,11 +96,13 @@ export function AlertInboxPage() {
   const toast = useToast();
   const { data: clusters = [] } = useClusters();
 
-  const [tab, setTab] = useState<MainTab>('inbox');
-  const [clusterId, setClusterId] = useState<string | null>(null);
-  const [severity, setSeverity] = useState('all');
-  const [status, setStatus] = useState('firing');
-  const [query, setQuery] = useState('');
+  // 탭·클러스터·심각도·상태·검색어는 URL 쿼리(D-029) — 새로고침·링크 공유·뒤로가기에도 같은 조건으로 열린다.
+  const [params, setParams] = useUrlParams({ tab: 'inbox', cluster: '', sev: 'all', status: 'firing', q: '' });
+  const tab = pickParam(params.tab, MAIN_TABS, 'inbox');
+  const clusterId: string | null = params.cluster || null;
+  const severity: string = pickParam(params.sev, SEVERITY_VALUES, 'all');
+  const status: string = pickParam(params.status, STATUS_VALUES, 'firing');
+  const query = params.q;
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [ackAllOpen, setAckAllOpen] = useState(false);
 
@@ -164,7 +169,7 @@ export function AlertInboxPage() {
         <ClusterSidebar
           clusters={clusters}
           selectedId={clusterId}
-          onSelect={(id) => setClusterId(id ?? null)}
+          onSelect={(id) => setParams({ cluster: id ?? '' })}
           allowAll
           allLabel="전체 클러스터"
           iconOnly
@@ -181,11 +186,11 @@ export function AlertInboxPage() {
 
           <div className="flex items-center gap-1">
             <button type="button" aria-pressed={tab === 'inbox'} className={pill(tab === 'inbox')}
-              onClick={() => setTab('inbox')}>
+              onClick={() => setParams({ tab: 'inbox' })}>
               알람 인박스
             </button>
             <button type="button" aria-pressed={tab === 'rules'} className={pill(tab === 'rules')}
-              onClick={() => setTab('rules')}>
+              onClick={() => setParams({ tab: 'rules' })}>
               알림 규칙
             </button>
           </div>
@@ -201,7 +206,7 @@ export function AlertInboxPage() {
                   {SEVERITY_TABS.map((t) => (
                     <button key={t.value} type="button" aria-pressed={severity === t.value}
                       className={pill(severity === t.value)}
-                      onClick={() => setSeverity(t.value)}>
+                      onClick={() => setParams({ sev: t.value })}>
                       {t.label}
                     </button>
                   ))}
@@ -209,7 +214,7 @@ export function AlertInboxPage() {
                   {STATUS_TABS.map((t) => (
                     <button key={t.value} type="button" aria-pressed={status === t.value}
                       className={pill(status === t.value)}
-                      onClick={() => setStatus(t.value)}>
+                      onClick={() => setParams({ status: t.value })}>
                       {t.label}
                     </button>
                   ))}
@@ -220,7 +225,7 @@ export function AlertInboxPage() {
                     <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" aria-hidden />
                     <input
                       value={query}
-                      onChange={(e) => setQuery(e.target.value)}
+                      onChange={(e) => setParams({ q: e.target.value })}
                       placeholder="알람명 · 요약 · 대상 검색"
                       aria-label="알람 검색"
                       className="pl-8 pr-3 py-1.5 w-56 rounded-xl bg-secondary border border-border text-sm focus:outline-none focus:ring-2 focus:ring-primary/40"

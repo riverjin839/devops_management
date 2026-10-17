@@ -5,10 +5,13 @@ import { ClusterSidebar } from '@/components/common/ClusterSidebar';
 import { ConfirmDialog, useToast, PageHeader, PageShell, LoadingState, EmptyState, LogViewer } from '@/components/common';
 import { useClusters } from '@/hooks/useCluster';
 import { useCanOperate } from '@/hooks/useCanOperate';
+import { pickParam, useUrlParams } from '@/hooks/useUrlParams';
 import { useK8sEventsPaged, useK8sEventStats, useDeleteK8sEvent } from '@/hooks/useK8sEvents';
 import { K8sEventAnalysisPanel } from '@/components/k8s/K8sEventAnalysisPanel';
 import type { K8sEvent, K8sEventSeverity } from '@/types';
 import { formatApiError, parseUTC } from '@/lib/utils';
+
+const SEVERITY_VALUES = ['all', 'critical', 'warning', 'info'] as const;
 
 const SEVERITY_TABS: Array<{ value: string; label: string }> = [
   { value: 'all', label: '전체' },
@@ -53,8 +56,11 @@ function formatTime(iso: string) {
 
 export function K8sEventsPage() {
   const { data: clusters = [] } = useClusters();
-  const [selectedClusterId, setSelectedClusterId] = useState<string | null>(null);
-  const [severityTab, setSeverityTab] = useState<string>('all');
+  // 클러스터·심각도 탭은 URL 쿼리(D-029) — 새로고침·링크 공유·뒤로가기에도 같은 조건으로 열린다.
+  // Your Island 패널 임베드에서는 훅이 알아서 로컬 state 로 동작한다.
+  const [listParams, setListParams] = useUrlParams({ cluster: '', sev: 'all' });
+  const selectedClusterId: string | null = listParams.cluster || null;
+  const severityTab: string = pickParam(listParams.sev, SEVERITY_VALUES, 'all');
   const [expandedId, setExpandedId] = useState<string | null>(null);
 
   // D-111 — 100건 offset 페이지 + "더 보기". 30초 refetch 는 불러온 페이지 전체를 다시 받는다.
@@ -106,7 +112,7 @@ export function K8sEventsPage() {
         <ClusterSidebar
           clusters={clusters}
           selectedId={selectedClusterId}
-          onSelect={(id) => setSelectedClusterId(id ?? null)}
+          onSelect={(id) => setListParams({ cluster: id ?? '' })}
           allowAll
           allLabel="전체 클러스터"
           iconOnly
@@ -131,7 +137,7 @@ export function K8sEventsPage() {
                       key={tab.value}
                       type="button"
                       aria-pressed={severityTab === tab.value}
-                      onClick={() => setSeverityTab(tab.value)}
+                      onClick={() => setListParams({ sev: tab.value })}
                       className={`px-3 py-1.5 rounded-xl text-sm font-medium transition-colors ${
                         severityTab === tab.value
                           ? 'bg-primary text-primary-foreground'
