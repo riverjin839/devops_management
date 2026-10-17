@@ -1056,7 +1056,8 @@ def _pick_container(pod, *, prefer_failing: bool) -> Optional[str]:
 
     ``kubectl.kubernetes.io/default-container`` 어노테이션(실재하는 컨테이너일 때) →
     (``prefer_failing`` 이면) 실패·재시작 중인 컨테이너 — init 포함, 실패 여부 우선 그다음
-    restart_count 큰 것, 동률이면 init 이 먼저(init 실패가 일반 컨테이너 기동을 막으므로) →
+    restart_count 큰 것, 동률이면 init 이 먼저(init 실패가 일반 컨테이너 기동을 막으므로).
+    재시작했어도 결국 정상 완료(exit 0)한 init 은 후보에서 뺀다(``_pod_issue`` 와 같은 규칙) →
     첫 일반 컨테이너 → 첫 init 컨테이너.
     """
     names = _container_names(pod)
@@ -1069,13 +1070,19 @@ def _pick_container(pod, *, prefer_failing: bool) -> Optional[str]:
 
     if prefer_failing and pod.status is not None:
         best: Optional[tuple[tuple[bool, int], str]] = None
-        statuses = list(pod.status.init_container_statuses or []) + list(pod.status.container_statuses or [])
+        init_statuses = list(pod.status.init_container_statuses or [])
+        init_names = {cs.name for cs in init_statuses}
+        statuses = init_statuses + list(pod.status.container_statuses or [])
         for cs in statuses:
             if cs.name not in names:
                 continue
             failing = _container_failing(cs)
             restarts = int(cs.restart_count or 0)
             if not failing and restarts == 0:
+                continue
+            st = cs.state
+            if (cs.name in init_names and not failing and st is not None and st.terminated
+                    and (st.terminated.exit_code or 0) == 0):
                 continue
             key = (failing, restarts)
             if best is None or key > best[0]:

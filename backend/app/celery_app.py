@@ -1304,6 +1304,12 @@ def _run_incident_analyzer(db, cluster_id, ctx):
         tenant = llm_tenant_dict(owner_tenant(db, cluster_id))
     except Exception:  # noqa: BLE001 — 테넌트 조회 실패가 분석을 막지 않게(전역 설정으로)
         log.warning("auto incident analysis: 소유 테넌트 조회 실패 (cluster=%s)", cluster_id, exc_info=True)
+        # 실패한 쿼리로 세션이 aborted 상태로 남으면 이후 설정 조회·결과 commit 이 모두 실패해
+        # 분석 행이 running 에 고착된다 — 되돌려 두고 전역 설정으로 진행한다.
+        try:
+            db.rollback()
+        except Exception:  # noqa: BLE001
+            log.debug("auto incident analysis: rollback 실패", exc_info=True)
         tenant = None
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
