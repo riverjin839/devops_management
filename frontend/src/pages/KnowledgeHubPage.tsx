@@ -1,4 +1,4 @@
-import { useMemo, useState, type ComponentType } from 'react';
+import { useMemo, type ComponentType } from 'react';
 import { PageHeader } from '@/components/common/PageHeader';
 import { useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
@@ -19,6 +19,7 @@ import { ServiceSidebar, EmptyState, Skeleton, PageShell } from '@/components/co
 import { MacCard } from '@/components/ui/MacCard';
 import { useServiceCatalog } from '@/hooks/useServiceCatalog';
 import { useSprints } from '@/hooks/useSprints';
+import { useUrlParams, pickParam } from '@/hooks/useUrlParams';
 // 허브 탭으로 임베드하는 기존 도구 페이지들 (개별 메뉴는 제거됨)
 import { OpsNotesPage } from './OpsNotesPage';
 import { MindMapPage } from './MindMapPage';
@@ -76,6 +77,9 @@ const HUB_TABS: { key: HubTab; label: string; Icon: ComponentType<{ className?: 
   { key: 'trends',   label: '기술동향',  Icon: Rss },
 ];
 
+const HUB_TAB_KEYS: readonly HubTab[] = HUB_TABS.map((t) => t.key);
+const HUB_KINDS: readonly (HubKind | '')[] = ['', 'task', 'note', 'command', 'guide', 'item', 'workflow'];
+
 const IMPORTANCE_TONE: Record<CommandImportance, HubItem['statusTone']> = {
   info: 'slate',
   low: 'sky',
@@ -90,6 +94,8 @@ type SortDir = 'asc' | 'desc';
 
 // ── 기간 필터 (주 / 월 / 분기) ──────────────────────────────────────────────
 type PeriodFilter = '' | 'week' | 'month' | 'quarter';
+const PERIOD_KEYS: readonly PeriodFilter[] = ['', 'week', 'month', 'quarter'];
+const SORT_KEYS: readonly SortKey[] = ['kind', 'title', 'category', 'status', 'updatedAt'];
 const PERIOD_META: { key: PeriodFilter; label: string }[] = [
   { key: 'week',    label: '이번 주' },
   { key: 'month',   label: '이번 달' },
@@ -147,21 +153,31 @@ function SortTh({
 export function KnowledgeHubPage() {
   const navigate = useNavigate();
   const services = useServiceCatalog();
-  const [search, setSearch] = useState('');
-  const [serviceFilter, setServiceFilter] = useState<string | null>(null);
-  const [kindFilter, setKindFilter] = useState<HubKind | ''>('');
-  const [openOnly, setOpenOnly] = useState(false);
-  const [periodFilter, setPeriodFilter] = useState<PeriodFilter>('');
-  const [sprintFilter, setSprintFilter] = useState<string>('');
-  const [sortKey, setSortKey] = useState<SortKey | ''>('updatedAt');
-  const [sortDir, setSortDir] = useState<SortDir>('desc');
+  // 탭·필터·검색어·정렬은 URL 쿼리에 둔다(D-029) — 새로고침·링크 공유·항목 상세에서 뒤로가기로
+  // 돌아와도 같은 조건이 열린다. 허브 탭에 임베드되는 하위 화면(Q&A 노트·온톨로지)은 임베드
+  // 상태에서 로컬 state 를 쓰므로 이 키들과 섞이지 않는다.
+  const [p, setP] = useUrlParams({
+    tab: 'list', q: '', service: '', kind: '', open: '', period: '', sprint: '', sort: 'updatedAt', dir: 'desc',
+  });
+  const search = p.q;
+  const setSearch = (v: string) => setP({ q: v });
+  const serviceFilter = p.service || null;
+  const setServiceFilter = (v: string | null) => setP({ service: v });
+  const kindFilter = pickParam(p.kind, HUB_KINDS, '');
+  const setKindFilter = (v: HubKind | '') => setP({ kind: v });
+  const openOnly = p.open === '1';
+  const periodFilter = pickParam(p.period, PERIOD_KEYS, '');
+  const setPeriodFilter = (v: PeriodFilter) => setP({ period: v });
+  const sprintFilter = p.sprint;
+  const sortKey: SortKey | '' = pickParam(p.sort, SORT_KEYS, 'updatedAt');
+  const sortDir = pickParam<SortDir>(p.dir, ['asc', 'desc'], 'desc');
 
   const { data: sprintData } = useSprints();
   const sprints = useMemo(() => sprintData?.data ?? [], [sprintData]);
 
   const handleSort = (col: SortKey) => {
-    if (sortKey === col) setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'));
-    else { setSortKey(col); setSortDir('asc'); }
+    if (sortKey === col) setP({ dir: sortDir === 'asc' ? 'desc' : 'asc' });
+    else setP({ sort: col, dir: 'asc' });
   };
 
   const { data: opsData,      isLoading: opsLoading      } = useQuery({ queryKey: ['ops-notes'],   queryFn: () => opsNotesApi.getAll().then((r) => r.data),    staleTime: 1000 * 30 });
@@ -311,11 +327,11 @@ export function KnowledgeHubPage() {
 
   const hasFilters = !!serviceFilter || !!kindFilter || openOnly || !!periodFilter || !!sprintFilter || !!trimmed;
   const clearFilters = () => {
-    setServiceFilter(null); setKindFilter(''); setOpenOnly(false);
-    setPeriodFilter(''); setSprintFilter(''); setSearch('');
+    setP({ service: null, kind: null, open: null, period: null, sprint: null, q: null });
   };
 
-  const [tab, setTab] = useState<HubTab>('list');
+  const tab = pickParam(p.tab, HUB_TAB_KEYS, 'list');
+  const setTab = (v: HubTab) => setP({ tab: v });
 
   return (
     // 메인 사이드바 바로 옆에 서비스 사이드바를 붙인다(공백 없이 flush). 본문은 flex-1.
@@ -414,7 +430,7 @@ export function KnowledgeHubPage() {
               {/* 미해결 이슈 빠른 필터 — kind='item' && statusLabel='미조치' 교차 필터 */}
               {(openIssueCount > 0 || openOnly) && (
                 <button
-                  onClick={() => setOpenOnly((v) => !v)}
+                  onClick={() => setP({ open: openOnly ? '' : '1' })}
                   title="미조치 상태인 이슈만 보기"
                   className={`flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-full border transition-colors ${
    openOnly
@@ -452,7 +468,7 @@ export function KnowledgeHubPage() {
               {sprints.length > 0 && (
                 <select
                   value={sprintFilter}
-                  onChange={(e) => setSprintFilter(e.target.value)}
+                  onChange={(e) => setP({ sprint: e.target.value })}
                   className={`px-3 py-1.5 text-sm font-medium rounded-full border bg-background focus:outline-none focus:ring-2 focus:ring-primary/40 ${
                     sprintFilter ? 'text-primary border-primary/40' : 'text-muted-foreground border-border'
                   }`}
