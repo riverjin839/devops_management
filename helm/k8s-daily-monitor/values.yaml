@@ -199,6 +199,9 @@ monitoring:
       repository: prom/prometheus
       tag: "v2.51.0"
     retention: "15d"
+    # TSDB 는 emptyDir 이다 — 파드가 재시작하면 지표가 사라진다. sizeLimit 만 정한다.
+    storage:
+      size: "10Gi"
     resources:
       requests:
         memory: "256Mi"
