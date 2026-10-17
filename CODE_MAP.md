@@ -35,6 +35,7 @@ AI 어시스턴트 + 사람 개발자용 — 기능 → 파일 경로와 자주 
 | 공용 UI: 클러스터 좌측 사이드바 | — | `frontend/src/components/common/ClusterSidebar.tsx` |
 | 공용 UI: 페이지 밀도 셸 (콘솔/허브/문서 3종, D-123) · 섹션 카드 헤더 슬롯(D-122) | — | `frontend/src/components/common/PageShell.tsx` · `frontend/src/components/ui/MacCard.tsx`(`icon`·`description`·`titleExtra`·`actions`) |
 | 공용 UI: 실행 확인 모달 | — | `frontend/src/components/common/ConfirmDialog.tsx` |
+| 공용 UI: 모달 접근성·뒤로가기로 닫기 | — | `frontend/src/components/common/useModalA11y.ts`(Escape·포커스 트랩·`historyClose` 기본 켬) + `components/common/modalHistory.ts`(hash 기록 push·회수 큐, `history.state.idx` 판정, 고아 기록 건너뛰기) |
 | 공용 UI: 로그 뷰어 (JSON/journal/table 자동감지) | — | `frontend/src/components/common/LogViewer.tsx` |
 | 공용 훅: 입력 debounce (검색어 등, `keepPreviousData` 와 함께) | — | `frontend/src/hooks/useDebouncedValue.ts` |
 | 공용 UI: 실행 로그 패널 (실행 버튼 실시간 로그 + "로그 보기", D-089 — 단건 요청 `runLogged`·큐잉 실행 `pollIntoRunLog` 헬퍼, D-128) | — | `frontend/src/components/common/RunLogPanel.tsx` · `hooks/useRunLog.ts` · `hooks/useLogPref.ts` · `lib/sse.ts`(POST SSE 소비 `postSse`) |
@@ -188,7 +189,7 @@ AI 어시스턴트 + 사람 개발자용 — 기능 → 파일 경로와 자주 
 | 테넌트 실행 동시성 상한 · 감사 로그 테넌트 귀속 (멀티테넌시 5단계) | `backend/app/services/tenant_concurrency.py`(`owner_tenant`=클러스터 operate 바인딩 우선, `TenantRunSlots` Redis ZSET 슬롯·대기 등록, Celery 태스크용 `acquire_run_slot` → 상한 초과 시 `task.retry`·대기 초과 `TenantRunLimitTimeout`) + `celery_app.py` 적용 태스크(`run_batch_job`·`run_ops_check_batch`·`run_check_matrix_run_one`·`run_deep_check_for_cluster`·`run_k8s_efficiency_run`) + `tenants.max_concurrent_runs` · `routers/tenants.py` `GET /run-slots` · `services/audit_logger.py` `_resolve_tenant`(→ `audit_logs.tenant_id`/`tenant_name`) + `routers/audit_logs.py` `tenant_id` 필터 → `components/settings/TenantManager.tsx` `TenantRunSlotsCard` · `components/settings/AuditLogManager.tsx` |
 | 화면별 접근 제어 서버 강제 | `backend/app/auth/feature_access.py`(`FEATURE_API_PATTERNS` = 화면 → 전용 API 정규식, `enforce_feature_access` 는 `main.py` `_auth` 에 포함) — 판정은 프론트 `hooks/useFeatureAccess.ts` `canAccessFeature` 와 동일해야 한다 |
 | 스키마 점검/복구 (모델↔DB 드리프트) | `backend/app/routers/schema_health.py` + `services/schema_health.py` → `frontend/src/components/settings/SchemaHealthPanel.tsx` (Settings ▸ 스키마 점검 탭). 부팅 안전망은 `main.py` 의 `_sync_missing_model_columns`(누락 컬럼) + `_relax_not_null_drift`(레거시 NOT NULL) |
-| Your Island (사용자 커스텀 화면) | `backend/app/routers/island.py` + `models/island.py` → `frontend/src/pages/IslandPage.tsx` · `components/island/` (`panelRegistry.ts` = 임베드 가능 화면 등록부) · `hooks/useIslands.ts` · `hooks/useNavCatalog.ts` · `hooks/useClusterRouteParam.ts`(`/<base>/:clusterId` 동기화, `pathFor`·`local` 옵션) + `lib/islandEmbed.ts` (임베드 시 URL 이동 억제) |
+| Your Island (사용자 커스텀 화면) | `backend/app/routers/island.py` + `models/island.py` → `frontend/src/pages/IslandPage.tsx` · `components/island/` (`panelRegistry.ts` = 임베드 가능 화면 등록부) · `hooks/useIslands.ts` · `hooks/useNavCatalog.ts` · `hooks/useClusterRouteParam.ts`(`/<base>/:clusterId` 동기화, `pathFor`·`local` 옵션) · `hooks/useUrlParams.ts`(목록 탭·필터 URL 쿼리, 임베드 시 로컬) + `lib/islandEmbed.ts` (임베드 시 URL 이동 억제) |
 
 ### Playbook / Ansible / 기타
 | 기능 | 위치 |
