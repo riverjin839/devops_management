@@ -33,22 +33,48 @@ def normalize_severity(value: Any) -> str:
     return "info"
 
 
+_CONFIDENCE_WORDS = {
+    "very high": 0.9, "high": 0.8, "medium": 0.5, "moderate": 0.5, "low": 0.2, "very low": 0.1,
+}
+# 해석할 수 없는 값의 중립값 — 0.0 은 "분석기가 결과를 못 냈다"(degraded) 표식과 겹치므로 쓰지 않는다.
+_CONFIDENCE_UNKNOWN = 0.5
+
+
 def clamp_confidence(value: Any) -> float:
     """confidence 를 0.0~1.0 으로 강제한다.
 
-    LLM 이 퍼센트(예: 85)로 답하는 경우가 흔해 ``1 < x <= 100`` 은 100 으로 나눈다.
-    ``"85%"`` 같은 문자열도 받는다. 숫자로 해석 불가·NaN 은 0.0.
+    프롬프트는 0.0~1.0 을 요구하지만 LLM 이 다른 척도로 답하는 경우를 받아 준다:
+    ``1 < x <= 10`` 은 1~10 척도(/10), ``10 < x <= 100`` 은 퍼센트(/100),
+    ``"85%"`` 는 퍼센트, ``"8/10"`` 은 분수, ``"high"`` 같은 단어는 고정값으로 바꾼다.
+    해석 불가(None·알 수 없는 문자열)는 중립값 0.5, NaN·음수는 0.0.
     """
-    try:
-        if isinstance(value, str) and value.strip().endswith("%"):
-            x = float(value.strip()[:-1]) / 100.0
-        else:
+    x: float
+    if isinstance(value, str):
+        text = value.strip().lower()
+        if text in _CONFIDENCE_WORDS:
+            return _CONFIDENCE_WORDS[text]
+        try:
+            if text.endswith("%"):
+                return max(0.0, min(1.0, float(text[:-1]) / 100.0))
+            if "/" in text:
+                num, _, den = text.partition("/")
+                d = float(den)
+                if d <= 0:
+                    return _CONFIDENCE_UNKNOWN
+                return max(0.0, min(1.0, float(num) / d))
+            x = float(text)
+        except ValueError:
+            return _CONFIDENCE_UNKNOWN
+    else:
+        try:
             x = float(value)
-    except (TypeError, ValueError):
-        return 0.0
+        except (TypeError, ValueError):
+            return _CONFIDENCE_UNKNOWN
     if math.isnan(x):
         return 0.0
-    if 1.0 < x <= 100.0:
+    if 1.0 < x <= 10.0:
+        x = x / 10.0
+    elif 10.0 < x <= 100.0:
         x = x / 100.0
     return max(0.0, min(1.0, x))
 

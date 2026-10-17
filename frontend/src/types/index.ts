@@ -5394,6 +5394,8 @@ export interface AlertIncidentAnalysis {
   suggestedActions: string[];
   relatedRunbooks: string[];
   confidence: number | null;
+  /** 대체 결과 여부(서버 판정). null·없음 = 컬럼 도입 전 레코드 — 화면이 confidence 0 으로 보조 판정한다. */
+  degraded?: boolean | null;
   citations: RagCitation[];
   analyzedBy: string | null;
   matchedRuleId: string | null;

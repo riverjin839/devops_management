@@ -40,12 +40,12 @@ interface IncidentAnalysisPanelProps {
 }
 
 /**
- * 분석기가 결과를 내지 못했는데 status 는 done 인 경우(D-115) — local_llm 이 LLM 연결 실패 시
- * confidence 0 의 안내문을 정상 결과처럼 돌려준다. 서버가 `degraded` 를 붙이면 그것을 우선한다.
+ * 분석기가 결과를 내지 못해 대체 결과를 돌려줬는지(D-115). 서버가 레코드마다 `degraded` 를 저장하므로
+ * 그 판정을 그대로 쓴다. `degraded` 가 null 인 것은 이 컬럼이 생기기 전 레코드뿐이다 — 그때만
+ * 예전 local_llm 이 LLM 연결 실패 시 confidence 0 의 안내문을 done 으로 남기던 패턴으로 보조 판정한다.
  */
 function isDegraded(a: AlertIncidentAnalysis): boolean {
-  const flagged = (a as AlertIncidentAnalysis & { degraded?: boolean | null }).degraded;
-  if (typeof flagged === 'boolean') return flagged;
+  if (typeof a.degraded === 'boolean') return a.degraded;
   return a.status === 'done' && a.confidence === 0;
 }
 
@@ -119,7 +119,7 @@ export function IncidentAnalysisPanel({
       if (baselineUnknown) return Date.parse(a.createdAt) >= triggeredAt - 5_000;  // 서버·브라우저 시계 차 여유
       return !baseline || a.id !== baseline.id || baselineActive;
     };
-    await pollIntoRunLog<AlertIncidentAnalysis | null>(runLog, {
+    await pollIntoRunLog<AlertIncidentAnalysis | null>(r.run, {
       fetch: fetchLatest,
       describe: (snap, prev) => {
         if (!snap || !isNew(snap)) return [];

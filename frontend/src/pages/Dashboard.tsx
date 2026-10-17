@@ -334,7 +334,7 @@ export function Dashboard() {
       : clusters;
     if (targets.length === 0) return;
     const tAll = performance.now();
-    runLog.begin(
+    const run = runLog.begin(
       targets.length === 1 ? `점검 실행 — ${targets[0].name}` : `점검 실행 — 전체 ${targets.length}개 클러스터`,
       targets.length === 1 ? `${targets[0].name} 애드온 점검 요청` : `클러스터 ${targets.length}개 순차 점검 시작`,
     );
@@ -344,9 +344,9 @@ export function Dashboard() {
     // 순차 실행: 각 클러스터 점검 완료 후 다음 진행 — 실패한 클러스터는 error 줄로 남기고 계속한다.
     for (const cluster of targets) {
       const t0 = performance.now();
-      if (targets.length > 1) runLog.log('info', `[${cluster.name}] 점검 시작`);
+      if (targets.length > 1) run.log('info', `[${cluster.name}] 점검 시작`);
       const hb = setInterval(
-        () => runLog.log('info', `[${cluster.name}] 응답 대기 중 · ${Math.round((performance.now() - t0) / 1000)}초 경과`),
+        () => run.log('info', `[${cluster.name}] 응답 대기 중 · ${Math.round((performance.now() - t0) / 1000)}초 경과`),
         5000,
       );
       try {
@@ -357,13 +357,13 @@ export function Dashboard() {
           const key = a.status === 'healthy' || a.status === 'warning' || a.status === 'critical' ? a.status : 'other';
           counts[key] += 1;
           totals[key] += 1;
-          runLog.log(
+          run.log(
             ADDON_STATUS_LEVEL[a.status] ?? 'warn',
             `[${cluster.name}] ${a.name} · ${ADDON_STATUS_KO[a.status] ?? a.status}${a.responseTime != null ? ` · ${a.responseTime}ms` : ''}${a.message ? ` · ${a.message}` : ''}`,
           );
         }
         const level: RunLogLevel = counts.critical > 0 ? 'error' : counts.warning > 0 || counts.other > 0 ? 'warn' : 'info';
-        runLog.log(
+        run.log(
           level,
           `[${cluster.name}] 애드온 ${data.addonsUpdated}개 갱신 · 정상 ${counts.healthy} · 경고 ${counts.warning} · 위험 ${counts.critical}${counts.other ? ` · 기타 ${counts.other}` : ''} · ${elapsed(t0)}`,
         );
@@ -371,16 +371,16 @@ export function Dashboard() {
       } catch (e) {
         clearInterval(hb);
         failedClusters += 1;
-        runLog.log('error', `[${cluster.name}] 점검 실패 · ${elapsed(t0)} — ${formatApiError(e)}`);
+        run.log('error', `[${cluster.name}] 점검 실패 · ${elapsed(t0)} — ${formatApiError(e)}`);
       }
     }
     if (targets.length > 1 || failedClusters > 0) {
-      runLog.log(
+      run.log(
         failedClusters > 0 || totals.critical > 0 ? 'error' : totals.warning > 0 ? 'warn' : 'info',
         `전체 요약 · 클러스터 성공 ${okClusters} · 실패 ${failedClusters} · 애드온 정상 ${totals.healthy} · 경고 ${totals.warning} · 위험 ${totals.critical} · ${elapsed(tAll)}`,
       );
     }
-    runLog.end();
+    run.end();
   };
 
   const DEFAULT_ADDONS = [

@@ -1376,8 +1376,9 @@ def run_auto_incident_analysis(self, alert_event_id: str, rule_id: str | None = 
             analysis.citations = list(getattr(result, "citations", None) or [])
             analysis.confidence = result.confidence
             analysis.analyzed_by = result.analyzed_by
+            analysis.degraded = bool(getattr(result, "degraded", False))
             # 분석기 실패·응답 파싱 실패로 만든 대체 결과는 성공(done)으로 저장하지 않는다 (D-115).
-            if getattr(result, "degraded", False):
+            if analysis.degraded:
                 analysis.status = "failed"
                 analysis.error = (result.degraded_reason or "분석기 응답 없음 — 대체 결과")[:500]
             else:
@@ -1385,6 +1386,7 @@ def run_auto_incident_analysis(self, alert_event_id: str, rule_id: str | None = 
         except Exception as exc:  # noqa: BLE001
             log.warning("auto incident analysis failed (alert=%s): %s", alert_event_id, exc)
             analysis.status = "failed"
+            analysis.degraded = False
             analysis.error = str(exc)[:500]
         analysis.duration_ms = int((_time.monotonic() - started) * 1000)
         analysis.finished_at = _dt.utcnow()
@@ -1472,8 +1474,9 @@ def run_auto_incident_analysis_k8s_event(self, k8s_event_id: str, rule_id: str |
             analysis.citations = list(getattr(result, "citations", None) or [])
             analysis.confidence = result.confidence
             analysis.analyzed_by = result.analyzed_by
+            analysis.degraded = bool(getattr(result, "degraded", False))
             # 분석기 실패·응답 파싱 실패로 만든 대체 결과는 성공(done)으로 저장하지 않는다 (D-115).
-            if getattr(result, "degraded", False):
+            if analysis.degraded:
                 analysis.status = "failed"
                 analysis.error = (result.degraded_reason or "분석기 응답 없음 — 대체 결과")[:500]
             else:
@@ -1481,6 +1484,7 @@ def run_auto_incident_analysis_k8s_event(self, k8s_event_id: str, rule_id: str |
         except Exception as exc:  # noqa: BLE001
             log.warning("auto incident analysis failed (k8s_event=%s): %s", k8s_event_id, exc)
             analysis.status = "failed"
+            analysis.degraded = False
             analysis.error = str(exc)[:500]
         analysis.duration_ms = int((_time.monotonic() - started) * 1000)
         analysis.finished_at = _dt.utcnow()

@@ -532,21 +532,21 @@ export function InfraTopologyPage() {
     setVerifyLive(true);
     setVerifyOpen(true);
     const t0 = performance.now();
-    runLog.begin('노드 검증', `${n.hostname} 검증 요청 (SSH/API 점검)`);
+    const run = runLog.begin('노드 검증', `${n.hostname} 검증 요청 (SSH/API 점검)`);
     try {
       // 체커 단계(Ready·Pressure·CNI…)가 진행되는 대로 서버가 step/log 를 흘린다(D-089).
-      const res = await verifyNode.mutateAsync({ id: n.id, onEvent: (evt) => applyRunEvent(runLog, evt) });
+      const res = await verifyNode.mutateAsync({ id: n.id, onEvent: (evt) => applyRunEvent(run, evt) });
       setVerifyResult(res);
-      runLog.log(res.ok ? 'info' : 'warn', `검증 ${res.ok ? '통과' : '미통과'} · ${elapsed(t0)}`);
+      run.log(res.ok ? 'info' : 'warn', `검증 ${res.ok ? '통과' : '미통과'} · ${elapsed(t0)}`);
     } catch (e) {
       const msg = extractError(e);
       setVerifyResult({
         hostname: n.hostname, status: 'error', ok: false,
         message: msg, details: {},
       });
-      runLog.log('error', `검증 실패 · ${elapsed(t0)} — ${msg}`);
+      run.log('error', `검증 실패 · ${elapsed(t0)} — ${msg}`);
     } finally {
-      runLog.end();
+      run.end();
     }
   }
 
@@ -625,28 +625,28 @@ export function InfraTopologyPage() {
     setSyncSummary(null);
     setSyncResult(null);
     const t0 = performance.now();
-    runLog.begin('K8s 동기화', `${activeCluster?.name ?? requestedFor} — kubectl get nodes 로 노드 정보 수집 요청`);
+    const run = runLog.begin('K8s 동기화', `${activeCluster?.name ?? requestedFor} — kubectl get nodes 로 노드 정보 수집 요청`);
     try {
       // kubeconfig 확인 → kubectl(재시도) → 노드별 반영 → 신규 노드 검증을 서버가 실시간으로 흘린다(D-089).
       // 그사이 클러스터를 바꿨다면 다른 클러스터 로그를 섞지 않는다(D-094).
       const res = await syncNodes.mutateAsync({
         clusterId: requestedFor,
-        onEvent: (evt) => { if (activeClusterRef.current === requestedFor) applyRunEvent(runLog, evt); },
+        onEvent: (evt) => { if (activeClusterRef.current === requestedFor) applyRunEvent(run, evt); },
       });
       if (activeClusterRef.current !== requestedFor) return;
       // 생성/갱신/실패 요약 — 신규 노드가 0개여도 "동기화가 됐다"는 피드백을 남긴다(D-088)
       setSyncResult(res);
       // 신규 노드 자동 검증 결과(있으면) 요약 배너로 노출
       setSyncSummary(res.verifications && res.verifications.length ? res.verifications : null);
-      runLog.log('info', `총 소요 ${elapsed(t0)}`);
-      if (res.verifiedTruncated) runLog.log('warn', '신규 노드가 많아 일부만 자동 검증했다 — 나머지는 노드 카드의 검증 버튼으로 실행');
+      run.log('info', `총 소요 ${elapsed(t0)}`);
+      if (res.verifiedTruncated) run.log('warn', '신규 노드가 많아 일부만 자동 검증했다 — 나머지는 노드 카드의 검증 버튼으로 실행');
     } catch (e) {
       if (activeClusterRef.current !== requestedFor) return;
       const msg = extractError(e);
       setSyncError(msg);
-      runLog.log('error', `동기화 실패 · ${elapsed(t0)} — ${msg}`);
+      run.log('error', `동기화 실패 · ${elapsed(t0)} — ${msg}`);
     } finally {
-      runLog.end();
+      run.end();
     }
   }
 
@@ -668,7 +668,7 @@ export function InfraTopologyPage() {
     setTraceError('');
     setTraceLoading(true);
     const t0 = performance.now();
-    runLog.begin('Trace', `${traceNamespace.trim()}/${traceTargetType} ${traceTargetName.trim()} → 스위치 경로 추적 요청`);
+    const run = runLog.begin('Trace', `${traceNamespace.trim()}/${traceTargetType} ${traceTargetName.trim()} → 스위치 경로 추적 요청`);
     try {
       const res = await topologyTraceApi.trace({
         clusterId: activeClusterId,
@@ -679,24 +679,24 @@ export function InfraTopologyPage() {
       if (activeClusterRef.current !== requestedFor) return;
       setTraceResult(res.data);
       const hops = res.data.hops ?? [];
-      runLog.log(hops.length ? 'info' : 'warn', `추적 완료 · ${elapsed(t0)} — hop ${hops.length}개`);
+      run.log(hops.length ? 'info' : 'warn', `추적 완료 · ${elapsed(t0)} — hop ${hops.length}개`);
       hops.forEach((h, i) => {
         const extra = [
           h.interface ? `if ${h.interface}` : '',
           h.latencyMs != null ? `${h.latencyMs}ms` : '',
           h.errorCount ? `errors ${h.errorCount}` : '',
         ].filter(Boolean).join(' · ');
-        runLog.log(h.errorCount ? 'warn' : 'info', `  #${i + 1} ${h.entityType} ${h.name}${extra ? ` (${extra})` : ''}`);
+        run.log(h.errorCount ? 'warn' : 'info', `  #${i + 1} ${h.entityType} ${h.name}${extra ? ` (${extra})` : ''}`);
       });
     } catch (e) {
       if (activeClusterRef.current !== requestedFor) return;
       const msg = extractError(e);
       setTraceResult(null);
       setTraceError(msg);
-      runLog.log('error', `추적 실패 · ${elapsed(t0)} — ${msg}`);
+      run.log('error', `추적 실패 · ${elapsed(t0)} — ${msg}`);
     } finally {
       setTraceLoading(false);
-      runLog.end();
+      run.end();
     }
   }
 

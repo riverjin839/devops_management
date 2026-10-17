@@ -121,6 +121,7 @@ def test_task_persists_analysis_and_links_alert(db, monkeypatch):
     assert row.analyzed_by == "local_llm:test-profile:test-model"
     assert row.matched_rule_id == "r1"
     assert row.duration_ms is not None
+    assert row.degraded is False  # 서버 판정이 있으면 화면이 confidence 추정을 쓰지 않는다
 
     fresh = db.query(AlertEvent).filter(AlertEvent.id == event.id).first()
     assert fresh.analysis_id == row.id
@@ -180,6 +181,7 @@ def test_task_degraded_result_is_recorded_as_failed(db, monkeypatch):
     row = db.query(IncidentAnalysis).filter(
         IncidentAnalysis.alert_event_id == event.id).first()
     assert row.status == "failed"
+    assert row.degraded is True
     assert "LLM 연결 실패" in (row.error or "")
 
 

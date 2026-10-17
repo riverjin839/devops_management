@@ -1205,6 +1205,7 @@ def _run_migrations():
     # incident_analyses: alert 트리거로 처음 생성됐던 테이블에 k8s_event 트리거 지원 추가.
     if "incident_analyses" in inspector.get_table_names():
         _safe_add_column("incident_analyses", "k8s_event_id", "UUID")
+        _safe_add_column("incident_analyses", "degraded", "BOOLEAN")
         _safe_create_index("ix_incident_analyses_k8s_event", "incident_analyses", "(k8s_event_id)")
 
     # observability_*: 관측 모듈/지표 카탈로그 + push 모드 스냅샷.

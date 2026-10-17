@@ -754,6 +754,11 @@ runLog.begin('K8s 동기화', '요청 전송'); … runLog.log('info', '생성 3
   - `consoleRunLines(res | res[], label?)`(D-135): 콘솔형 실행(stdout/stderr) 응답 → "host · status · exit · ms · 오류 — stderr 첫 줄"
     + 여러 대면 합계 줄. 출력 본문은 ExecOutputTabs/LogViewer 가 그대로 보여주고, 실행 로그에는 요약만 남긴다.
   - `elapsed(t0)`: 소요 표기("1234ms"/"12.3s") 공용.
+  - **동시 실행**: `runLog.begin()` 은 그 실행 전용 핸들(`{log, setStep, end}`)을 돌려준다. 헬퍼는 이 핸들로만 기록·종료하고,
+    `RunLoggedResult.run` 으로 돌려준다(`keepOpen` 뒤 `pollIntoRunLog(r.run, …)`·`r.run.end()`). 직접 `begin` 하는 화면도
+    `const run = runLog.begin(…)` 후 `run.log`·`run.end` 를 쓴다. 앞 실행이 진행 중일 때 `begin` 하면 줄을 지우지 않고 이어 쓰며
+    진행 중인 실행 모두의 줄·단계 앞에 `[제목]` 을 붙인다. `running` 은 진행 중인 실행이 하나라도 있으면 참, 헤더는 "첫 실행 외 N건".
+    핸들 없는 `runLog.log`·`runLog.end` 는 단일 실행 화면의 하위 호환이다(`runLog.end` 는 진행 중인 실행 전부를 끝낸다).
   - 적용 레퍼런스: versions 수집 모달 5종(`streamLogged` — 호스트가 끝날 때마다 줄, `…/collect-*/stream`), `/cluster-overview` 점검 실행(클러스터·애드온별 줄 —
     `POST /health/check/{id}` 응답 `addons[]`), `/daily-check/review` 심층 점검·배치잡 일괄 실행·지금 스냅샷(`pollIntoRunLog`).
 - 모달이 페이지의 실행 로그 패널을 가리는 실행(예: 노드 검증)은 모달 안에도 같은 `RunLogPanel` 을 렌더한다.

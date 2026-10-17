@@ -269,8 +269,12 @@ def test_default_not_degraded(client):
 
 
 @pytest.mark.parametrize("raw, expected", [
-    (0.7, 0.7), (1, 1.0), (85, 0.85), ("85%", 0.85), (250, 1.0), (-0.3, 0.0),
-    ("abc", 0.0), (None, 0.0), (float("nan"), 0.0),
+    (0.7, 0.7), (1, 1.0), (85, 0.85), ("85%", 0.85), (250, 1.0), (-0.3, 0.0), (float("nan"), 0.0),
+    # 1~10 척도·분수·단어 — 예전엔 8 이 8% 로, "high" 가 0 으로 읽혔다.
+    (8, 0.8), ("7.5", 0.75), (10, 1.0), (40, 0.4), ("8/10", 0.8), ("3/0", 0.5),
+    ("High", 0.8), ("very low", 0.1), ("0.9", 0.9),
+    # 해석 불가는 중립값 — 0.0 은 degraded 표식과 겹친다.
+    ("abc", 0.5), (None, 0.5), ("x/10", 0.5),
 ])
 def test_clamp_confidence(raw, expected):
     assert clamp_confidence(raw) == pytest.approx(expected)

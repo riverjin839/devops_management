@@ -43,12 +43,13 @@ function isAbort(e: unknown): boolean {
  *  throw 하지 않는다(`runLogged` 와 같은 결과 union). 검증 자체가 "실패 항목 있음"이어도 요청이
  *  끝까지 갔으면 `ok: true` 이고 판정은 `data.ok` 로 본다. */
 export async function verifyClusterLogged(
-  run: Pick<RunLog, 'begin' | 'log' | 'setStep' | 'end'>,
+  runLog: Pick<RunLog, 'begin'>,
   cluster: { id: string; name: string },
   signal?: AbortSignal,
 ): Promise<RunLoggedResult<ClusterVerifyResult>> {
   const t0 = performance.now();
-  run.begin(
+  // 실행별 핸들 — 다른 클러스터 검증과 동시에 돌아도 줄이 섞이거나 서로를 끝내지 않는다.
+  const run = runLog.begin(
     `연결 검증 — ${cluster.name}`,
     `${cluster.name} 연결 검증 요청 — API server → kubeconfig 인증 → kubectl 순서로 점검`,
   );
@@ -90,7 +91,7 @@ export async function verifyClusterLogged(
     );
     run.log('info', `총 소요 ${elapsed(t0)}`);
     run.end();
-    return { ok: true, data: r };
+    return { ok: true, data: r, run };
   } catch (error) {
     const aborted = !!signal?.aborted || isAbort(error);
     if (aborted) {
@@ -100,6 +101,6 @@ export async function verifyClusterLogged(
       run.log('error', `실패 · ${elapsed(t0)} — ${msg}`);
     }
     run.end();
-    return { ok: false, error, aborted };
+    return { ok: false, error, aborted, run };
   }
 }

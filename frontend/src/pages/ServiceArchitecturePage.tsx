@@ -311,13 +311,13 @@ export function ServiceArchitecturePage() {
     // 첫 동기화 성공 시 백엔드가 LLM 생성을 Celery 로 걸어 둔다 — 문서를 재조회해 llmStatus 변화를 이어 쓴다.
     const llmQueued = (d.lastSyncStatus === 'ok' || d.lastSyncStatus === 'partial') && d.llmStatus === 'none';
     if (!llmQueued && d.llmStatus !== 'pending') {
-      runLog.end();
+      r.run.end();
       return;
     }
-    runLog.log('info', 'AI 아키텍처 분석이 백그라운드로 요청됨 — 완료까지 진행 추적');
+    r.run.log('info', 'AI 아키텍처 분석이 백그라운드로 요청됨 — 완료까지 진행 추적');
     const ctrl = new AbortController();
     pollAbort.current = ctrl;
-    const p = pollIntoRunLog<ArchDoc>(runLog, {
+    const p = pollIntoRunLog<ArchDoc>(r.run, {
       fetch: () => architectureDocsApi.get(sid).then((res) => res.data),
       describe: (snap, prev) => (prev && prev.llmStatus === snap.llmStatus ? [] : llmResultLines(snap)),
       isDone: (snap) => LLM_DONE.has(snap.llmStatus),

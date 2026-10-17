@@ -308,6 +308,7 @@ def get_k8s_event_analysis(
         suggested_actions=list(row.suggested_actions or []),
         related_runbooks=list(row.related_runbooks or []),
         confidence=row.confidence,
+        degraded=row.degraded,
         citations=list(row.citations or []),
         analyzed_by=row.analyzed_by,
         matched_rule_id=row.matched_rule_id,
