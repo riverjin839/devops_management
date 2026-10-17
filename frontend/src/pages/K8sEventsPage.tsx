@@ -1,11 +1,11 @@
-import { Fragment, useState } from 'react';
+import { Fragment, useMemo, useState } from 'react';
 import { AlertCircle, AlertTriangle, Bell, Info, Loader2, RefreshCw, Trash2 } from 'lucide-react';
 import { MacCard } from '@/components/ui/MacCard';
 import { ClusterSidebar } from '@/components/common/ClusterSidebar';
-import { ConfirmDialog, useToast, PageHeader, PageShell, LoadingState, EmptyState } from '@/components/common';
+import { ConfirmDialog, useToast, PageHeader, PageShell, LoadingState, EmptyState, LogViewer } from '@/components/common';
 import { useClusters } from '@/hooks/useCluster';
 import { useCanOperate } from '@/hooks/useCanOperate';
-import { useK8sEvents, useDeleteK8sEvent } from '@/hooks/useK8sEvents';
+import { useK8sEventsPaged, useK8sEventStats, useDeleteK8sEvent } from '@/hooks/useK8sEvents';
 import { K8sEventAnalysisPanel } from '@/components/k8s/K8sEventAnalysisPanel';
 import type { K8sEvent, K8sEventSeverity } from '@/types';
 import { formatApiError, parseUTC } from '@/lib/utils';
@@ -57,11 +57,21 @@ export function K8sEventsPage() {
   const [severityTab, setSeverityTab] = useState<string>('all');
   const [expandedId, setExpandedId] = useState<string | null>(null);
 
-  const { data, isLoading, refetch, isFetching } = useK8sEvents({
+  // D-111 — 100건 offset 페이지 + "더 보기". 30초 refetch 는 불러온 페이지 전체를 다시 받는다.
+  const {
+    data, isLoading, isError, error, refetch, isFetching,
+    fetchNextPage, hasNextPage, isFetchingNextPage,
+  } = useK8sEventsPaged({
     clusterId: selectedClusterId ?? undefined,
     severity: severityTab === 'all' ? undefined : severityTab,
-    limit: 200,
+    pageSize: 100,
   });
+  // D-111 — 심각도 카운터는 서버 집계(필터·페이지와 무관). 예전엔 받아온 200건만 셌다.
+  const stats = useK8sEventStats(selectedClusterId);
+  const refreshAll = () => {
+    void refetch();
+    void stats.refetch();
+  };
 
   const toast = useToast();
   const deleteEvent = useDeleteK8sEvent();
@@ -81,7 +91,13 @@ export function K8sEventsPage() {
     }
   };
 
-  const events: K8sEvent[] = data?.data ?? [];
+  // 페이지 사이에 새 이벤트가 들어오면 경계 행이 다음 페이지에 다시 실린다 — id 로 중복을 걷는다(D-111).
+  const events: K8sEvent[] = useMemo(() => {
+    const seen = new Set<string>();
+    return (data?.pages.flatMap((p) => p.data) ?? []).filter((e) => (seen.has(e.id) ? false : (seen.add(e.id), true)));
+  }, [data]);
+  // 첫 페이지 기준 total — 이후 페이지가 받은 시점의 total 보다 최신이다.
+  const total = data?.pages[0]?.total;
   const selectedClusterName = clusters.find((c) => c.id === selectedClusterId)?.name;
 
   return (
@@ -104,8 +120,8 @@ export function K8sEventsPage() {
           />
           <MacCard
             title="수신 이벤트"
-            titleExtra={data ? (
-              <span className="text-xs text-muted-foreground tabular-nums">총 {data.total}건 중 {events.length}건</span>
+            titleExtra={total !== undefined ? (
+              <span className="text-xs text-muted-foreground tabular-nums">총 {total}건 중 {events.length}건</span>
             ) : undefined}
             actions={
               <>
@@ -113,6 +129,8 @@ export function K8sEventsPage() {
                   {SEVERITY_TABS.map((tab) => (
                     <button
                       key={tab.value}
+                      type="button"
+                      aria-pressed={severityTab === tab.value}
                       onClick={() => setSeverityTab(tab.value)}
                       className={`px-3 py-1.5 rounded-xl text-sm font-medium transition-colors ${
                         severityTab === tab.value
@@ -125,7 +143,8 @@ export function K8sEventsPage() {
                   ))}
                 </div>
                 <button
-                  onClick={() => refetch()}
+                  type="button"
+                  onClick={refreshAll}
                   disabled={isFetching}
                   className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-sm bg-secondary text-muted-foreground hover:bg-secondary/80 transition-colors disabled:opacity-50"
                 >
@@ -135,11 +154,11 @@ export function K8sEventsPage() {
               </>
             }
           >
-            {/* 요약 카운터 */}
-            {data && (
+            {/* 요약 카운터 — 서버 집계(심각도 탭·페이지와 무관, D-111) */}
+            {stats.data ? (
               <div className="flex gap-3 mb-4">
                 {(['critical', 'warning', 'info'] as K8sEventSeverity[]).map((sev) => {
-                  const count = events.filter((e) => e.severity === sev).length;
+                  const count = stats.data.bySeverity[sev] ?? 0;
                   const colors = {
                     critical: 'bg-status-critical/10 border-status-critical/30 text-status-critical',
                     warning: 'bg-status-warning/10 border-status-warning/30 text-status-warning',
@@ -153,11 +172,32 @@ export function K8sEventsPage() {
                   );
                 })}
               </div>
+            ) : stats.isError ? (
+              <p className="mb-4 text-xs text-muted-foreground">
+                심각도 집계를 불러오지 못했습니다 — {formatApiError(stats.error)}
+              </p>
+            ) : null}
+
+            {/* D-104 — 데이터가 있는데 백그라운드 갱신만 실패하면 목록은 유지하고 낡았음을 알린다. */}
+            {isError && data && (
+              <p className="mb-3 text-xs text-status-warning" role="status">
+                최근 갱신 실패 — {formatApiError(error)}{' '}
+                <button type="button" onClick={refreshAll} className="underline underline-offset-2 hover:text-foreground">
+                  다시 시도
+                </button>
+              </p>
             )}
 
             {/* 이벤트 테이블 */}
             {isLoading ? (
               <LoadingState />
+            ) : isError && !data ? (
+              <EmptyState
+                icon={AlertTriangle}
+                title="이벤트 목록을 불러오지 못했습니다"
+                description={formatApiError(error)}
+                action={{ label: '다시 시도', onClick: refreshAll, variant: 'secondary' }}
+              />
             ) : events.length === 0 ? (
               <EmptyState
                 icon={Bell}
@@ -189,10 +229,15 @@ export function K8sEventsPage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {events.map((ev) => (
+                    {events.map((ev) => {
+                      const open = expandedId === ev.id;
+                      const detailId = `k8s-event-detail-${ev.id}`;
+                      const toggle = () => setExpandedId(open ? null : ev.id);
+                      return (
                       <Fragment key={ev.id}>
+                        {/* 행 클릭은 마우스 편의 — 키보드 조작은 이름 셀 버튼이 담당한다(D-107). */}
                         <tr
-                          onClick={() => setExpandedId(expandedId === ev.id ? null : ev.id)}
+                          onClick={toggle}
                           className="border-b border-border/50 hover:bg-muted/30 cursor-pointer transition-colors"
                         >
                           <td className="py-2 pr-3 text-muted-foreground text-xs whitespace-nowrap">
@@ -204,8 +249,20 @@ export function K8sEventsPage() {
                           <td className="py-2 pr-3 font-mono text-xs text-muted-foreground">
                             {ev.resourceKind}
                           </td>
-                          <td className="py-2 pr-3 font-medium truncate max-w-[180px]">
-                            {ev.resourceName}
+                          <td className="py-2 pr-3 font-medium max-w-[180px]">
+                            <button
+                              type="button"
+                              aria-expanded={open}
+                              aria-controls={detailId}
+                              title={open ? '상세 접기' : '상세 펼치기'}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                toggle();
+                              }}
+                              className="block w-full truncate text-left rounded-xl hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                            >
+                              {ev.resourceName}
+                            </button>
                           </td>
                           <td className="py-2 pr-3 text-muted-foreground text-xs truncate">
                             {ev.namespace ?? '—'}
@@ -234,20 +291,34 @@ export function K8sEventsPage() {
                             </button>
                           </td>
                         </tr>
-                        {expandedId === ev.id && (
-                          <tr className="bg-muted/20">
+                        {open && (
+                          <tr id={detailId} className="bg-muted/20">
                             <td colSpan={8} className="px-4 py-3 space-y-3">
                               <K8sEventAnalysisPanel event={ev} />
-                              <pre className="text-xs font-mono text-muted-foreground whitespace-pre-wrap break-all">
-                                {JSON.stringify(ev.raw ?? {}, null, 2)}
-                              </pre>
+                              {/* D-116 — 원본 페이로드는 LogViewer(JSON 자동 감지·하이라이트·검색·복사) */}
+                              <LogViewer text={JSON.stringify(ev.raw ?? {}, null, 2)} maxHeight="max-h-80" />
                             </td>
                           </tr>
                         )}
                       </Fragment>
-                    ))}
+                      );
+                    })}
                   </tbody>
                 </table>
+                <div className="flex items-center justify-between gap-2 pt-3 text-xs text-muted-foreground">
+                  <span className="tabular-nums">{events.length} / {total ?? events.length}건</span>
+                  {hasNextPage && (
+                    <button
+                      type="button"
+                      onClick={() => void fetchNextPage()}
+                      disabled={isFetchingNextPage}
+                      className="inline-flex items-center gap-1.5 rounded-xl border border-border bg-secondary px-3 py-1.5 text-sm text-foreground hover:bg-secondary/80 disabled:opacity-50"
+                    >
+                      {isFetchingNextPage && <Loader2 className="w-3.5 h-3.5 animate-spin" aria-hidden />}
+                      더 보기
+                    </button>
+                  )}
+                </div>
               </div>
             )}
           </MacCard>

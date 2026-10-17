@@ -8,10 +8,12 @@ import {
 import { useAuthStore } from '@/stores/authStore';
 import { JiraConnectCard } from '@/components/settings/JiraConnectCard';
 import { jiraApi } from '@/services/api';
-import { LoadingState, useToast } from '@/components/common';
+import { LoadingState, RunLogPanel, useToast } from '@/components/common';
+import { useRunLog, runLogged, type RunLogEntry } from '@/hooks/useRunLog';
+import { useLogPref } from '@/hooks/useLogPref';
 import { MacCard } from '@/components/ui/MacCard';
 import { formatApiError, parseUTC } from '@/lib/utils';
-import type { SsoDiagnoseResult } from '@/types';
+import type { JiraSsoLoginRequest, JiraSsoLoginResult, SsoDiagnoseResult } from '@/types';
 
 const inputCls =
   'w-full px-3 py-2 bg-secondary border border-border rounded-lg text-sm text-foreground ' +
@@ -29,6 +31,9 @@ export function JiraIntegrationPanel() {
   const confluenceTest = useConfluenceTest();
   const ssoDiagnose = useSsoDiagnose();
   const ssoLogin = useJiraSsoLogin();
+  // SSO 로그인·진단 실행 로그 (D-136) — 비밀번호·쿠키·토큰은 싣지 않는다(계정 이름까지만).
+  const runLog = useRunLog();
+  const [showLog, setShowLog] = useLogPref('jira-sso');
 
   // 관리자 설정 폼 상태
   const [baseUrl, setBaseUrl] = useState('');
@@ -64,10 +69,56 @@ export function JiraIntegrationPanel() {
   const [ssoPw, setSsoPw] = useState('');
   const [ssoSave, setSsoSave] = useState(true);
 
-  const runSsoLogin = async (payload?: import('@/types').JiraSsoLoginRequest) => {
+  const runSsoLogin = async (payload?: JiraSsoLoginRequest) => {
     setTestResult(null);
-    try {
-      const { data } = await ssoLogin.mutateAsync(payload);
+    const confluenceConfigured = !!config?.confluenceBaseUrl;
+    const browserMode = !payload;
+    const title = payload?.useSaved
+      ? 'SSO 재로그인 (저장된 로그인 정보)'
+      : browserMode ? 'SSO 로그인 (서버 브라우저)' : 'SSO 로그인 (ID/PW 폼)';
+    const first = payload?.useSaved
+      ? '저장된 로그인 정보로 SSO 재로그인 요청'
+      : browserMode
+        ? '서버 브라우저로 SSO 로그인 요청 — 백엔드 호스트의 브라우저 창에서 로그인을 마칠 때까지 최대 4분 대기'
+        : `SSO 폼 로그인 요청 — 계정 ${payload?.username ?? '—'} · 로그인 정보 저장 ${payload?.saveLogin ? '예' : '아니오'}`;
+    const markSteps = (res: JiraSsoLoginResult) => {
+      runLog.setStep('jira', 'Jira', res.ok ? 'done' : 'failed');
+      if (res.confluenceOk === true) runLog.setStep('confluence', 'Confluence', 'done');
+      else if (res.confluenceOk === false) runLog.setStep('confluence', 'Confluence', 'failed');
+      else if (confluenceConfigured) runLog.setStep('confluence', 'Confluence (미시도)', res.ok ? 'done' : 'failed');
+    };
+    const r = await runLogged(runLog, {
+      title,
+      first,
+      heartbeatMs: browserMode ? 10_000 : 5000,
+      fn: async () => {
+        runLog.setStep('jira', 'Jira', 'running');
+        if (confluenceConfigured) runLog.setStep('confluence', 'Confluence', 'running');
+        return (await ssoLogin.mutateAsync(payload)).data;
+      },
+      summarize: (res) => {
+        markSteps(res);
+        const lines: RunLogEntry[] = [];
+        if (res.ok) {
+          lines.push(['info', `Jira 로그인 완료 — 계정 ${res.jiraAccount || '—'} · 표시 이름 ${res.displayName || '—'}`]);
+          if (res.detail) lines.push(['info', `서버 응답 — ${res.detail}`]);
+        } else {
+          lines.push(['error', `Jira 로그인 실패 — ${res.detail || '사유 없음'}`]);
+        }
+        if (res.confluenceOk === true) {
+          lines.push(['info', `Confluence 로그인 완료${res.confluenceDetail ? ` — ${res.confluenceDetail}` : ''}`]);
+        } else if (res.confluenceOk === false) {
+          // Jira 는 성공하고 Confluence 만 실패하면 부분 실패(warn), 둘 다 실패면 error.
+          lines.push([res.ok ? 'warn' : 'error', `Confluence 로그인 실패 — ${res.confluenceDetail || '사유 없음'}${res.ok ? ' (Jira 세션은 정상 저장됨)' : ''}`]);
+        } else {
+          lines.push(['info', confluenceConfigured ? 'Confluence 로그인 시도 안 함' : 'Confluence URL 미설정 — Confluence 로그인 시도 안 함']);
+        }
+        if (res.ok) lines.push(['info', res.confluenceOk === false ? 'SSO 로그인 부분 완료 — Jira 세션 저장, Confluence 실패' : 'SSO 로그인 완료 — 세션 저장됨']);
+        return lines;
+      },
+    });
+    if (r.ok) {
+      const data = r.data;
       if (data.ok) {
         setSsoPw('');
         toast.success('SSO 로그인 성공', data.displayName ? `${data.displayName} 세션이 저장되었습니다.` : data.detail);
@@ -78,8 +129,10 @@ export function JiraIntegrationPanel() {
       } else {
         toast.error('SSO 로그인 실패', data.detail);
       }
-    } catch (err) {
-      toast.error('SSO 로그인 실패', formatApiError(err));
+    } else if (!r.aborted) {
+      runLog.setStep('jira', 'Jira', 'failed');
+      if (confluenceConfigured) runLog.setStep('confluence', 'Confluence', 'failed');
+      toast.error('SSO 로그인 실패', formatApiError(r.error));
     }
   };
 
@@ -152,12 +205,35 @@ export function JiraIntegrationPanel() {
 
   const handleSsoDiagnose = async () => {
     setDiagResult(null);
-    try {
-      const { data } = await ssoDiagnose.mutateAsync();
-      setDiagResult(data);
-    } catch (err) {
-      toast.error('SSO 진단 실패', formatApiError(err));
-    }
+    const r = await runLogged(runLog, {
+      title: 'SSO 진단',
+      first: 'SSO 진단 요청 — 백엔드가 Jira/Confluence 진입 경로를 따라가 로그인 페이지 도달 여부 확인 (최대 90초)',
+      fn: async () => (await ssoDiagnose.mutateAsync()).data,
+      summarize: (res) => {
+        const lines: RunLogEntry[] = [];
+        if (res.podHostname || res.podSourceIp) {
+          lines.push(['info', `이 파드: ${res.podHostname || '—'} · 출발지 IP ${res.podSourceIp || '—'}`]);
+        }
+        const LIMIT = 200;
+        res.entries.slice(0, LIMIT).forEach((e) => {
+          const base = `${e.product} · ${e.url} → ${e.finalUrl || '—'} · HTTP ${e.httpStatus ?? '—'} · 폼 ${e.forms} · 비밀번호 입력 ${e.passwordInputs}`;
+          const field = e.usernameField ? ` · 계정 필드 ${e.usernameField}${e.wantsBase64 ? ' (base64)' : ''}` : '';
+          if (e.error) lines.push(['warn', `${base}${field} — 오류: ${e.error}`]);
+          else lines.push(['info', `${base}${field}`]);
+          if ((e.cryptoHints?.length ?? 0) > 0) {
+            lines.push(['warn', `${e.product} · 클라이언트 암호화/보안모듈 흔적: ${(e.cryptoHints ?? []).join(', ')} — 서버측 폼 로그인 불가, 내 PC 도우미 또는 PAT/세션 쿠키 사용`]);
+          }
+        });
+        if (res.entries.length > LIMIT) lines.push(['info', `외 ${res.entries.length - LIMIT}건`]);
+        lines.push(['info', `진입 경로 ${res.entries.length}건 · 비밀번호 입력 발견 ${res.entries.filter((e) => e.passwordInputs > 0).length}건`]);
+        lines.push(res.ok
+          ? ['info', `진단 완료 — ${res.detail}`]
+          : ['error', `진단 결과 로그인 폼 미도달 — ${res.detail || '사유 없음'}`]);
+        return lines;
+      },
+    });
+    if (r.ok) setDiagResult(r.data);
+    else if (!r.aborted) toast.error('SSO 진단 실패', formatApiError(r.error));
   };
 
   const handleConfluenceTest = async () => {
@@ -351,6 +427,13 @@ export function JiraIntegrationPanel() {
               로그인 정보 저장 (세션 만료 시 원클릭 재로그인)
             </label>
           </div>
+
+          {/* SSO 로그인·진단 실행 로그 (실행 전에는 렌더되지 않음) */}
+          {(runLog.running || runLog.lines.length > 0) && (
+            <div className="mt-3">
+              <RunLogPanel run={runLog} show={showLog} onShowChange={setShowLog} maxHeight="max-h-56" />
+            </div>
+          )}
 
           {/* SSO 진단 — 파드가 실제로 보는 로그인 페이지를 확인 (폐쇄망 IdP 원인 판별) */}
           <div className="mt-3 pt-3 border-t border-border/60">

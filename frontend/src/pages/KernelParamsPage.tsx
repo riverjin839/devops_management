@@ -7,7 +7,9 @@ import {
 } from 'lucide-react';
 import { useClusters } from '@/hooks/useCluster';
 import { useTerminalEnvSync } from '@/hooks/useTerminalEnvSync';
-import { ConfirmDialog, LogViewer, ClusterSidebar, SavedCommands, SelectClusterEmptyState, LoadingState, EmptyState, PageShell } from '@/components/common';
+import { useRunLog, runLogged, consoleRunLines } from '@/hooks/useRunLog';
+import { useLogPref } from '@/hooks/useLogPref';
+import { ConfirmDialog, LogViewer, ClusterSidebar, SavedCommands, SelectClusterEmptyState, LoadingState, EmptyState, PageShell, RunLogPanel } from '@/components/common';
 import { PageHeader } from '@/components/common/PageHeader';
 import { MacCard } from '@/components/ui/MacCard';
 import {
@@ -290,15 +292,31 @@ export function KernelParamsPage() {
       }, signal);
       return res.data;
     },
-    onSuccess: (d) => {
-      setRunResponse(d);
+  });
+
+  // 실행 수명주기 로그 — 노드별 출력은 아래 결과 카드, 여기는 요청·대기·노드별 상태 요약·실패 사유.
+  const runLog = useRunLog();
+  const [showLog, setShowLog] = useLogPref('kernel-params-run');
+  const doRun = async () => {
+    const names = selectedHosts.map((t) => t.name);
+    const r = await runLogged(runLog, {
+      title: '커널 파라미터 조회',
+      first: `${names.length}개 노드(${names.slice(0, 5).join(', ')}${names.length > 5 ? ` 외 ${names.length - 5}` : ''}) — SSH ${username} 포트 ${port} · ${mode === 'parallel' ? '병렬' : '순차'} · 프리셋 ${preset?.label ?? '직접 입력'} 실행 요청`,
+      fn: () => runMut.mutateAsync(),
+      summarize: (res) => consoleRunLines(res.results.map((x) => ({
+        host: x.name && x.name !== x.host ? `${x.name}(${x.host})` : x.host,
+        status: x.status, exitCode: x.exitCode, durationMs: x.durationMs, stderr: x.stderr, error: x.error,
+      }))),
+    });
+    if (r.ok) {
+      setRunResponse(r.data);
       setAllOpen(true);
       // 결과가 화면 아래쪽에 그려져 사용자가 못 볼 가능성을 줄이기 위해 자동 스크롤
       requestAnimationFrame(() => {
         resultsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
       });
-    },
-  });
+    }
+  };
 
   const canRun = !!clusterId && selected.size > 0
     && (authMode === 'password' ? !!password : !!privateKey.trim())
@@ -502,6 +520,11 @@ export function KernelParamsPage() {
             </MacCard>
           </div>
 
+          {/* 실행 로그 — 조회 수명주기(요청·대기·노드별 상태·실패 사유) */}
+          <div className="mt-5 empty:hidden">
+            <RunLogPanel run={runLog} show={showLog} onShowChange={setShowLog} maxHeight="max-h-56" />
+          </div>
+
           {/* 결과: 노드별 접이식 행 — 한 카드 안에서 divide-y 로 구분 */}
           {runResponse && (
             <section ref={resultsRef} className="mt-6 scroll-mt-6">
@@ -587,7 +610,7 @@ export function KernelParamsPage() {
         description={`${selected.size}개 노드에 SSH 접속 후 조회 명령을 실행합니다 (읽기 전용).`}
         confirmLabel="조회"
         onCancel={() => setConfirmOpen(false)}
-        onConfirm={() => { setConfirmOpen(false); runMut.mutate(); }}
+        onConfirm={() => { setConfirmOpen(false); void doRun(); }}
       >
         <div className="space-y-2">
           <div>

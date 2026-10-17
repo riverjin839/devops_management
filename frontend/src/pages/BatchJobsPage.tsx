@@ -151,16 +151,16 @@ export function BatchJobsPage() {
 
     const queuedIds = data.results.filter((x) => x.queued).map((x) => x.jobId);
     if (queuedIds.length === 0) {
-      runLog.end();
+      r.run.end();
       return;
     }
-    queuedIds.forEach((id) => runLog.setStep(id, nameOf(id), 'running'));
+    queuedIds.forEach((id) => r.run.setStep(id, nameOf(id), 'running'));
     // 이번 일괄 실행의 run — trigger 가 bulk 이고 클릭 시각(시계 차이 10초 여유) 이후 시작한 가장 최근 run.
     const pickRun = (runs: BatchJobRun[]) =>
       runs.find((x) => x.trigger === 'bulk' && parseUTC(x.startedAt).getTime() >= clickedAt - 10_000) ?? null;
     const isActive = (st: string) => st === 'running' || st === 'queued' || st === 'pending';
     type Snap = Record<string, BatchJobRun | null>;
-    await pollIntoRunLog<Snap>(runLog, {
+    await pollIntoRunLog<Snap>(r.run, {
       fetch: async () => {
         const pairs = await Promise.all(queuedIds.map(async (id) => {
           const runs = (await batchJobsApi.listRuns(id, 5)).data.data;
@@ -176,7 +176,7 @@ export function BatchJobsPage() {
           if (!cur || (before && before.id === cur.id && before.status === cur.status)) continue;
           if (isActive(cur.status)) {
             lines.push(['info', `${nameOf(id)} · 실행 시작${cur.host ? ` · ${cur.host}` : ''}`]);
-            runLog.setStep(id, nameOf(id), 'running');
+            r.run.setStep(id, nameOf(id), 'running');
             continue;
           }
           const ok = cur.status === 'ok';
@@ -185,7 +185,7 @@ export function BatchJobsPage() {
             level,
             `${nameOf(id)} · ${BULK_STATUS_KO[cur.status] ?? cur.status}${cur.exitCode != null ? ` · exit ${cur.exitCode}` : ''} · ${cur.durationMs}ms${cur.error ? ` — ${cur.error}` : ''}`,
           ]);
-          runLog.setStep(id, nameOf(id), ok ? 'done' : 'failed');
+          r.run.setStep(id, nameOf(id), ok ? 'done' : 'failed');
         }
         const finished = queuedIds.filter((id) => snap[id] && !isActive(snap[id]!.status));
         if (finished.length === queuedIds.length) {

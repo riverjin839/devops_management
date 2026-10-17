@@ -4,15 +4,17 @@ import { Link } from 'react-router-dom';
 import {
   GitCommit, RefreshCw, Square, Clock, Share2, X, ChevronDown, ChevronUp,
   Server, Cpu, Network, Settings2, HardDrive, Search, FileSpreadsheet, FileText,
-  AlertTriangle, ScrollText,
+  AlertTriangle,
 } from 'lucide-react';
 import { useClusters } from '@/hooks/useCluster';
-import { ClusterSidebar, DebugLogPanel, useToast, EmptyState, LoadingState, SkeletonCard, DoubleScrollX, LogViewer, PageShell } from '@/components/common';
+import { ClusterSidebar, DebugLogPanel, useToast, EmptyState, LoadingState, SkeletonCard, DoubleScrollX, PageShell, RunLogPanel } from '@/components/common';
 import { MacCard } from '@/components/ui/MacCard';
 import { PageHeader } from '@/components/common/PageHeader';
 import { formatApiError, parseUTC } from '@/lib/utils';
 import { versionsApi, type ComponentSnapshot } from '@/services/api';
 import { useAbortableMutation } from '@/hooks/useAbortableMutation';
+import { useRunLog, runLogged, type RunLogEntry } from '@/hooks/useRunLog';
+import { useLogPref } from '@/hooks/useLogPref';
 import {
   EtcdSystemdModal, KubeadmCertsModal, KernelParamsCollectModal, NodeNicsCollectModal,
   KubeletConfigCollectModal, CsvExportModal,
@@ -849,33 +851,23 @@ export function VersionsPage() {
     staleTime: 30_000,
   });
 
-  // ── 수집 실행 로그 (CLAUDE.md 실행-로그 규칙) — 지금 수집/MinIO 결과를 토스트
-  // 요약(앞 3건 절단)으로 끝내지 않고 전체 오류·요약을 세션 로그로 남긴다.
-  const [collectLog, setCollectLog] = useState<string[]>([]);
-  const [collectLogOpen, setCollectLogOpen] = useState(false);
-  const appendCollectLog = useCallback((lines: string[]) => {
-    const ts = new Date().toLocaleTimeString('ko-KR', { hour12: false });
-    setCollectLog((prev) => [...prev, ...lines.map((l) => `${ts} ${l}`)]);
-  }, []);
+  // ── 수집 실행 로그(D-135, DESIGN_SYSTEM §12.9.1) — 지금 수집/MinIO 를 요청·대기·응답 요약·경고/오류 줄로 남긴다.
+  // 토스트는 요약(앞 몇 건 절단)이라 전체 경고·오류는 실행 로그에서 본다. 펼침 여부는 useLogPref 로 사용자가 정한다.
+  const runLog = useRunLog();
+  const [showLog, setShowLog] = useLogPref('versions-collect');
 
   const collect = useAbortableMutation({
     mutationFn: (_: void, signal) => versionsApi.collect(clusterId, signal),
     onSuccess: (res) => {
       queryClient.invalidateQueries({ queryKey: ['versions'] });
       const { changed, errors } = res.data;
-      appendCollectLog([
-        `[지금 수집] ok — 변경 ${changed}건${errors.length ? ` · 경고 ${errors.length}건` : ''}`,
-        ...errors.map((e) => `[지금 수집]   경고: ${e}`),
-      ]);
       if (errors.length > 0) {
-        setCollectLogOpen(true);
-        toast.warning(`${changed}개 변경 감지됨 · 경고 ${errors.length}건`, '상세는 수집 로그 참조');
+        toast.warning(`${changed}개 변경 감지됨 · 경고 ${errors.length}건`, '상세는 실행 로그 참조');
       } else {
         toast.success(`${changed}개 변경 감지됨`, '스냅샷 갱신 완료');
       }
     },
     onError: (err: unknown) => {
-      appendCollectLog([`[지금 수집] FAIL — ${formatApiError(err)}`]);
       toast.error('수집 실패', formatApiError(err));
     },
   });
@@ -889,10 +881,6 @@ export function VersionsPage() {
       const op = summary.operator ? '운영자 OK' : '운영자 X';
       const directpv = summary.directpv ? `DirectPV ${summary.directpv.totalDrives}드라이브` : 'DirectPV X';
       const desc = `${op} · 테넌트 ${tenants}개 · ${directpv}`;
-      appendCollectLog([
-        `[MinIO 수집] ok — 변경 ${changed}건 · ${desc}`,
-        ...warnings.map((w) => `[MinIO 수집]   경고: ${w}`),
-      ]);
       if (changed > 0) {
         toast.success(`MinIO ${changed}건 변경 감지`, desc);
       } else if (tenants === 0 && !summary.operator) {
@@ -902,10 +890,49 @@ export function VersionsPage() {
       }
     },
     onError: (err: unknown) => {
-      appendCollectLog([`[MinIO 수집] FAIL — ${formatApiError(err)}`]);
       toast.error('MinIO 수집 실패', formatApiError(err));
     },
   });
+
+  // 두 실행 모두 runLogged 로 감싼다 — 실패·중지 줄은 runLogged 가 남기고, 토스트·캐시 무효화는 위 mutation 콜백이 처리한다.
+  const runCollect = () => {
+    const name = clusters.find((c) => c.id === clusterId)?.name ?? clusterId;
+    void runLogged(runLog, {
+      title: '버전 지금 수집',
+      first: `${name} — kubeconfig 로 K8s·Cilium 버전·컴포넌트 이미지·플래그·cilium-config 수집 요청`,
+      fn: () => collect.mutateAsync(),
+      summarize: (res) => {
+        const { changed, errors, collectedAt } = res.data;
+        const out: RunLogEntry[] = errors.map((e): RunLogEntry => ['warn', `경고 — ${e}`]);
+        out.push([
+          errors.length > 0 ? 'warn' : 'info',
+          `완료 — 변경 ${changed}건 · 경고 ${errors.length}건${collectedAt ? ` · 수집 시각 ${parseUTC(collectedAt).toLocaleString('ko-KR', { hour12: false })}` : ''}`,
+        ]);
+        return out;
+      },
+    });
+  };
+
+  const runCollectMinio = () => {
+    const name = clusters.find((c) => c.id === clusterId)?.name ?? clusterId;
+    void runLogged(runLog, {
+      title: 'MinIO 수집',
+      first: `${name} — MinIO Operator · Tenant · DirectPV 정보 수집 요청`,
+      fn: () => collectMinio.mutateAsync(),
+      summarize: (res) => {
+        const { changed, summary, warnings } = res.data;
+        const tenants = summary.tenants ?? [];
+        const out: RunLogEntry[] = [
+          ['info', summary.operator ? '운영자(Operator) 감지' : '운영자(Operator) 없음'],
+          ['info', `테넌트 ${tenants.length}개`],
+          ['info', summary.directpv ? `DirectPV 드라이브 ${summary.directpv.totalDrives}개` : 'DirectPV 없음'],
+        ];
+        for (const w of warnings) out.push(['warn', `경고 — ${w}`]);
+        out.push([warnings.length > 0 ? 'warn' : 'info', `완료 — 변경 ${changed}건 · 경고 ${warnings.length}건`]);
+        return out;
+      },
+    });
+  };
 
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const toggle = (comp: string) => setExpanded((prev) => {
@@ -1044,17 +1071,6 @@ export function VersionsPage() {
                 <Network className="w-4 h-4" />
                 노드 NIC
               </button>
-              <button
-                onClick={() => setCollectLogOpen((v) => !v)}
-                aria-expanded={collectLogOpen}
-                className={`flex items-center gap-1.5 px-3 py-2 text-sm font-medium border border-border rounded-lg transition-colors ${
-                  collectLogOpen ? 'bg-secondary text-foreground' : 'bg-secondary/60 hover:bg-secondary text-muted-foreground hover:text-foreground'
-                }`}
-                title="수집 실행 로그 — 지금 수집/MinIO 수집의 결과·경고 전체 기록"
-              >
-                <ScrollText className="w-4 h-4" />
-                로그 보기{collectLog.length > 0 && ` (${collectLog.length})`}
-              </button>
               {collectMinio.isPending ? (
                 <button
                   onClick={collectMinio.abort}
@@ -1066,7 +1082,7 @@ export function VersionsPage() {
                 </button>
               ) : (
                 <button
-                  onClick={() => collectMinio.mutate()}
+                  onClick={runCollectMinio}
                   className="flex items-center gap-1.5 px-3 py-2 text-sm font-medium bg-secondary hover:bg-secondary/80 border border-border rounded-lg text-foreground transition-colors"
                   title="MinIO Operator + Tenant + DirectPV 정보 수집 (pool/disk/parity)"
                 >
@@ -1084,7 +1100,7 @@ export function VersionsPage() {
                 </button>
               ) : (
                 <button
-                  onClick={() => collect.mutate()}
+                  onClick={runCollect}
                   className="flex items-center gap-1.5 px-4 py-2 text-sm font-medium bg-primary hover:bg-primary/90 text-primary-foreground rounded-lg transition-colors"
                 >
                   <RefreshCw className="w-4 h-4" />
@@ -1102,27 +1118,11 @@ export function VersionsPage() {
         {/* 선택된 클러스터 상세 */}
         {clusterId && (
           <>
-            {collectLogOpen && (
-              <MacCard
-                rootClassName="mb-4"
-                bodyPadding="p-0"
-                title="수집 로그"
-                icon={ScrollText}
-                actions={(
-                  <button
-                    onClick={() => setCollectLog([])}
-                    disabled={collectLog.length === 0}
-                    className="px-2 py-1 text-xs rounded-lg hover:bg-secondary text-muted-foreground disabled:opacity-40 transition-colors"
-                  >
-                    지우기
-                  </button>
-                )}
-              >
-                <LogViewer
-                  text={collectLog.length > 0 ? collectLog.join('\n') : '아직 수집 실행 기록이 없습니다 — 지금 수집 / MinIO 수집 결과가 여기에 쌓입니다. (SSH 수집 모달은 각 모달 안에서 per-host raw 출력을 제공합니다)'}
-                  maxHeight="max-h-48"
-                />
-              </MacCard>
+            {/* 실행 로그 — 지금 수집/MinIO 수집. 실행 전엔 렌더되지 않는다. */}
+            {(runLog.running || runLog.lines.length > 0) && (
+              <div className="mb-4">
+                <RunLogPanel run={runLog} show={showLog} onShowChange={setShowLog} maxHeight="max-h-56" />
+              </div>
             )}
             <p className="mb-5 text-sm text-muted-foreground leading-relaxed">
               kubeconfig 를 통해 K8s/Cilium 버전, core component image tag, command/args 플래그, cilium-config ConfigMap 을 수집합니다.

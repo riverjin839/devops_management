@@ -192,6 +192,8 @@ export function LlmSettingsTab() {
         toast.error('연결 실패', `${name}: ${res.data.error ?? res.data.status}`);
       }
     } catch (e) {
+      // 요청 자체가 실패해도 사유가 인라인에 남게 한다(§12.9.1 예외 ① — 연결 테스트는 인라인 결과가 기준).
+      setTestResult({ profile: name, result: { status: 'error', latencyMs: 0, model: '', answerPreview: '', error: formatApiError(e) } });
       toast.error('연결 테스트 실패', formatApiError(e));
     } finally {
       setTesting(null);

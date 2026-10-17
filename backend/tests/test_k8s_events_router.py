@@ -155,6 +155,7 @@ def test_get_analysis_returns_linked_row(client, db):
         k8s_event_id=event.id, cluster_id=event.cluster_id, namespace=event.namespace,
         resource=event.resource_name, trigger="k8s_event", status="done",
         root_cause="OOMKilled", suggested_actions=["메모리 상향"], analyzed_by="rule_based",
+        degraded=False,
     )
     db.add(analysis)
     db.commit()
@@ -166,6 +167,7 @@ def test_get_analysis_returns_linked_row(client, db):
     assert data["alert_event_id"] is None
     assert data["trigger"] == "k8s_event"
     assert data["root_cause"] == "OOMKilled"
+    assert data["degraded"] is False  # 서버 판정을 내려준다(null 은 컬럼 도입 전 레코드)
 
 
 def test_trigger_analysis_queues_and_sets_status(client, db, monkeypatch):

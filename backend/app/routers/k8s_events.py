@@ -10,7 +10,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, Header, HTTPException, Query
 from fastapi.responses import Response
 from pydantic import BaseModel
-from sqlalchemy import desc
+from sqlalchemy import desc, func
 from sqlalchemy.orm import Session
 
 from app.auth.deps import get_cluster_scope, require_operator
@@ -56,6 +56,19 @@ class K8sEventOut(BaseModel):
 class K8sEventListResponse(BaseModel):
     data: list[K8sEventOut]
     total: int
+    # 이 페이지 뒤에 더 있는지 — offset + len(data) < total (D-111 "더 보기")
+    has_more: bool = False
+
+
+class K8sEventSeverityCounts(BaseModel):
+    critical: int = 0
+    warning: int = 0
+    info: int = 0
+
+
+class K8sEventStatsResponse(BaseModel):
+    total: int
+    by_severity: K8sEventSeverityCounts
 
 
 # ── 웹훅 수신 (ingest_router) ─────────────────────────────────────────
@@ -185,12 +198,13 @@ def list_k8s_events(
     cluster_id: Optional[UUID] = None,
     severity: Optional[str] = None,
     resource_kind: Optional[str] = None,
-    limit: int = Query(default=100, le=500),
-    offset: int = 0,
+    limit: int = Query(default=100, ge=1, le=500),
+    offset: int = Query(default=0, ge=0),
     db: Session = Depends(get_db),
     scope: ClusterScope = Depends(get_cluster_scope),
 ) -> K8sEventListResponse:
-    q = scope.apply(db.query(K8sEvent), K8sEvent.cluster_id, nullable=True).order_by(desc(K8sEvent.received_at))
+    # id 를 보조 정렬키로 — 같은 시각에 들어온 이벤트가 페이지 경계에서 겹치거나 빠지지 않게(D-111).
+    q = scope.apply(db.query(K8sEvent), K8sEvent.cluster_id, nullable=True).order_by(desc(K8sEvent.received_at), desc(K8sEvent.id))
     if cluster_id:
         q = q.filter(K8sEvent.cluster_id == cluster_id)
     if severity:
@@ -199,7 +213,35 @@ def list_k8s_events(
         q = q.filter(K8sEvent.resource_kind == resource_kind)
     total = q.count()
     events = q.offset(offset).limit(limit).all()
-    return K8sEventListResponse(data=events, total=total)
+    return K8sEventListResponse(data=events, total=total, has_more=offset + len(events) < total)
+
+
+# ⚠ `/{event_id}` 보다 먼저 선언해야 한다 — 뒤에 두면 "stats" 가 UUID 파싱 422 로 빠진다.
+@router.get("/stats", response_model=K8sEventStatsResponse)
+def k8s_event_stats(
+    cluster_id: Optional[UUID] = None,
+    db: Session = Depends(get_db),
+    scope: ClusterScope = Depends(get_cluster_scope),
+) -> K8sEventStatsResponse:
+    """심각도별 건수 — 목록의 severity/resource_kind 필터와 무관한 전체 집계(D-111).
+
+    테넌트·클러스터 가시 범위는 목록과 동일(`scope.apply`)하다. critical/warning/info 외의
+    severity 값은 total 에만 포함된다.
+    """
+    q = scope.apply(
+        db.query(K8sEvent.severity, func.count(K8sEvent.id)), K8sEvent.cluster_id, nullable=True,
+    )
+    if cluster_id:
+        q = q.filter(K8sEvent.cluster_id == cluster_id)
+    counts = {sev: int(n) for sev, n in q.group_by(K8sEvent.severity).all()}
+    return K8sEventStatsResponse(
+        total=sum(counts.values()),
+        by_severity=K8sEventSeverityCounts(
+            critical=counts.get("critical", 0),
+            warning=counts.get("warning", 0),
+            info=counts.get("info", 0),
+        ),
+    )
 
 
 @router.get("/{event_id}", response_model=K8sEventOut)
@@ -266,6 +308,7 @@ def get_k8s_event_analysis(
         suggested_actions=list(row.suggested_actions or []),
         related_runbooks=list(row.related_runbooks or []),
         confidence=row.confidence,
+        degraded=row.degraded,
         citations=list(row.citations or []),
         analyzed_by=row.analyzed_by,
         matched_rule_id=row.matched_rule_id,

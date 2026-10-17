@@ -1,5 +1,5 @@
 import axios, { type InternalAxiosRequestConfig } from 'axios';
-import { Cluster, Addon, CheckLog, SummaryStats, ApiResponse, PaginatedResponse, Playbook, PlaybookRunResult, PlaybookSshCreds, AgentChatRequest, AgentChatResponse, AgentHealthResponse, MetricCard, MetricQueryResult, MetricSparklineResult, ClusterItem, WorkItem, WorkItemType, WorkItemListResponse, WorkItemCreate, WorkItemUpdate, WorkItemStatusResponse, KanbanStatus, UiSettings, ClusterLinksPayload, WorkGuide, WorkGuideCreate, WorkGuideUpdate, WorkGuideListResponse, OpsNote, OpsNoteCreate, OpsNoteUpdate, OpsNoteListResponse, MindMap, MindMapListItem, MindMapCreate, MindMapUpdate, MindMapNode, MindMapNodeCreate, MindMapNodeUpdate, ManagementServer, ManagementServerCreate, ManagementServerUpdate, ManagementServerListResponse, TopologyTraceRequest, TopologyTraceResponse, TrendDigest, TrendItem, TrendSource, ClusterTrendsResponse, ReleaseNotesResponse, CheckMatrixItem, CheckMatrixItemInput, CheckMatrixGrid, CheckMatrixHistory, CheckMatrixSettings, CheckMatrixRunbook, CheckMatrixRun, CheckMatrixRunDetail, CheckMatrixRunList, CheckMatrixBatchResult, CheckMatrixSourceConfigEntry, CheckMatrixCatalog, CheckMatrixItemPreviewInput, CheckMatrixItemPreviewResult, CheckMatrixItemSourceConfig, CheckMatrixItemDetail, ClusterStatusBreakdown, SchemaHealthReport, SchemaRepairResult, LlmSettings, LlmHealthEntry, LlmTestResult, LlmCredentialSummary, LlmUsageBucket, Tenant, TenantBrief, ClusterAccessLevel, HealthCheckRunResult } from '@/types';
+import { Cluster, Addon, CheckLog, SummaryStats, ApiResponse, PaginatedResponse, Playbook, PlaybookRunResult, PlaybookSshCreds, AgentChatRequest, AgentChatResponse, AgentHealthResponse, MetricCard, MetricQueryResult, MetricSparklineResult, ClusterItem, WorkItem, WorkItemType, WorkItemListResponse, WorkItemCreate, WorkItemUpdate, WorkItemStatusResponse, KanbanStatus, UiSettings, ClusterLinksPayload, WorkGuide, WorkGuideCreate, WorkGuideUpdate, WorkGuideListResponse, OpsNote, OpsNoteCreate, OpsNoteUpdate, OpsNoteListResponse, MindMap, MindMapListItem, MindMapCreate, MindMapUpdate, MindMapNode, MindMapNodeCreate, MindMapNodeUpdate, ManagementServer, ManagementServerCreate, ManagementServerUpdate, ManagementServerListResponse, TopologyTraceRequest, TopologyTraceResponse, TrendDigest, TrendItem, TrendSource, ClusterTrendsResponse, ReleaseNotesResponse, CheckMatrixItem, CheckMatrixItemInput, CheckMatrixGrid, CheckMatrixHistory, CheckMatrixSettings, CheckMatrixRunbook, CheckMatrixRun, CheckMatrixRunDetail, CheckMatrixRunList, CheckMatrixBatchResult, CheckMatrixSourceConfigEntry, CheckMatrixCatalog, CheckMatrixItemPreviewInput, CheckMatrixItemPreviewResult, CheckMatrixItemSourceConfig, CheckMatrixItemDetail, ClusterStatusBreakdown, SchemaHealthReport, SchemaRepairResult, LlmSettings, LlmHealthEntry, LlmTestResult, LlmCredentialSummary, LlmUsageBucket, Tenant, TenantBrief, ClusterAccessLevel, HealthCheckRunResult, AddonCheckRunResult } from '@/types';
 import { isDebugEnabled, useDebugStore } from '@/stores/debugStore';
 import { getAuthToken, expireAuthSession, type AuthUser } from '@/stores/authStore';
 
@@ -34,6 +34,11 @@ function convertKeys(obj: unknown): unknown {
 /** axios 를 거치지 않는 응답(SSE 이벤트 본문 등)을 화면 타입(camelCase)으로 바꾼다. */
 export function camelizeKeys<T>(obj: unknown): T {
   return convertKeys(obj) as T;
+}
+
+/** 요청 본문 camelCase → snake_case. axios 를 거치지 않는 SSE(postSse) 본문을 만들 때 쓴다. */
+export function snakeizeKeys(obj: unknown): unknown {
+  return convertKeysToSnake(obj);
 }
 
 function convertKeysToSnake(obj: unknown): unknown {
@@ -390,43 +395,6 @@ export const versionsApi = {
     api.post<{ clusterId: string; changed: number; errors: string[]; collectedAt: string }>(
       `/clusters/${clusterId}/collect-versions`, undefined, { signal },
     ),
-  collectEtcdSystemd: (clusterId: string, payload: import('@/types').EtcdSystemdCollectRequest, signal?: AbortSignal) => {
-    const n = payload.hosts.length;
-    const parallel = payload.parallelism ?? 10;
-    const perHost = ((payload.connectTimeout ?? 8) + 25) * 1000;
-    const est = Math.ceil(n / parallel) * perHost + 10_000;
-    const timeout = Math.max(60_000, Math.min(est, 30 * 60_000));
-    return api.post<import('@/types').EtcdSystemdCollectResponse>(
-      `/clusters/${clusterId}/collect-etcd-systemd`, payload, { signal, timeout },
-    );
-  },
-  collectKubeadmCerts: (
-    clusterId: string,
-    payload: import('@/types').KubeadmCertsCollectRequest,
-    signal?: AbortSignal,
-  ) => {
-    const n = payload.hosts.length;
-    const perHost = ((payload.connectTimeout ?? 8) + 25) * 1000;
-    const est = n * perHost + 10_000;   // 순차 수집(collect_etcdctl_config 와 동일 패턴)
-    const timeout = Math.max(60_000, Math.min(est, 30 * 60_000));
-    return api.post<import('@/types').KubeadmCertsCollectResponse>(
-      `/clusters/${clusterId}/collect-kubeadm-certs`, payload, { signal, timeout },
-    );
-  },
-  collectKernelParams: (
-    clusterId: string,
-    payload: import('@/types').KernelParamsCollectRequest,
-    signal?: AbortSignal,
-  ) => {
-    const n = payload.hosts.length;
-    const parallel = payload.parallelism ?? 10;
-    const perHost = ((payload.connectTimeout ?? 8) + 20) * 1000;
-    const est = Math.ceil(n / parallel) * perHost + 10_000;
-    const timeout = Math.max(60_000, Math.min(est, 30 * 60_000));
-    return api.post<import('@/types').KernelParamsCollectResponse>(
-      `/clusters/${clusterId}/collect-kernel-params`, payload, { signal, timeout },
-    );
-  },
   collectEtcdctlConfig: (
     clusterId: string,
     payload: import('@/types').EtcdctlConfigCollectRequest,
@@ -440,38 +408,10 @@ export const versionsApi = {
       `/clusters/${clusterId}/collect-etcdctl-config`, payload, { signal, timeout },
     );
   },
-  collectNodeNics: (
-    clusterId: string,
-    payload: import('@/types').NodeNicsCollectRequest,
-    signal?: AbortSignal,
-  ) => {
-    const n = payload.hosts.length;
-    const parallel = payload.parallelism ?? 10;
-    const perHost = ((payload.connectTimeout ?? 8) + 18) * 1000;
-    const est = Math.ceil(n / parallel) * perHost + 10_000;
-    const timeout = Math.max(60_000, Math.min(est, 30 * 60_000));
-    return api.post<import('@/types').NodeNicsCollectResponse>(
-      `/clusters/${clusterId}/collect-node-nics`, payload, { signal, timeout },
-    );
-  },
   collectMinio: (clusterId: string, signal?: AbortSignal) =>
     api.post<import('@/types').MinioCollectResponse>(
       `/clusters/${clusterId}/collect-minio`, undefined, { signal, timeout: 120_000 },
     ),
-  collectKubeletConfig: (
-    clusterId: string,
-    payload: import('@/types').KubeletConfigCollectRequest,
-    signal?: AbortSignal,
-  ) => {
-    const n = payload.hosts.length;
-    const parallel = payload.parallelism ?? 10;
-    const perHost = ((payload.connectTimeout ?? 8) + 20) * 1000;
-    const est = Math.ceil(n / parallel) * perHost + 10_000;
-    const timeout = Math.max(60_000, Math.min(est, 30 * 60_000));
-    return api.post<import('@/types').KubeletConfigCollectResponse>(
-      `/clusters/${clusterId}/collect-kubelet-config`, payload, { signal, timeout },
-    );
-  },
   /** 현재 스냅샷 CSV 내보내기. detail 로 컬럼 풍부도 조절. */
   exportCsv: (
     clusterId: string,
@@ -735,7 +675,7 @@ export const etcdctlApi = {
 export const healthApi = {
   runCheck: (clusterId: string) => api.post<HealthCheckRunResult>(`/health/check/${clusterId}`),
   runAddonCheck: (clusterId: string, addonId: string) =>
-    api.post<ApiResponse<void>>(`/health/check/${clusterId}/addons/${addonId}`),
+    api.post<AddonCheckRunResult>(`/health/check/${clusterId}/addons/${addonId}`),
   getStatus: (clusterId: string) => api.get<ApiResponse<Cluster>>(`/health/status/${clusterId}`),
   getAddons: (clusterId: string) => api.get<ApiResponse<Addon[]>>(`/health/addons/${clusterId}`),
   getSummary: () => api.get<ApiResponse<SummaryStats>>('/health/summary'),
@@ -1542,7 +1482,8 @@ export const managementServersApi = {
     api.put<ManagementServer>(`/management-servers/${id}`, data),
   delete: (id: string) => api.delete(`/management-servers/${id}`),
   ping: (id: string) =>
-    api.post<{ ok: boolean; host: string; port: number; latency_ms: number | null; detail: string }>(
+    // 응답 키는 axios 인터셉터가 camelCase 로 바꾼다(서버 latency_ms → latencyMs).
+    api.post<{ ok: boolean; host: string; port: number; latencyMs: number | null; detail: string }>(
       `/management-servers/${id}/ping`
     ),
 };
@@ -1688,8 +1629,9 @@ export const ontologyApi = {
 
 // Incident Analysis API
 export const analyzeApi = {
-  analyze: (data: import('@/types').IncidentAnalysisRequest) =>
-    api.post<import('@/types').IncidentAnalysisResponse>('/analyze/incident', data),
+  /** LLM 타임아웃(120초)보다 길게 — axios 기본 30초면 분석이 끝나기 전에 끊긴다(D-109). */
+  analyze: (data: import('@/types').IncidentAnalysisRequest, signal?: AbortSignal) =>
+    api.post<import('@/types').IncidentAnalysisResponse>('/analyze/incident', data, { timeout: 150_000, signal }),
   health: () =>
     api.get<import('@/types').AnalyzerHealthResponse>('/analyze/health'),
   listNamespaces: (
@@ -1698,6 +1640,7 @@ export const analyzeApi = {
     withCounts = false,
     namespacePattern = '',
     podPattern = '',
+    signal?: AbortSignal,
   ) =>
     api.get<import('@/types').AnalyzeNamespacesResponse>(
       `/analyze/clusters/${clusterId}/namespaces`,
@@ -1710,17 +1653,19 @@ export const analyzeApi = {
         },
         // 거대 클러스터에서 with_counts/only_with_issues 일 때만 무거우므로 그 경우만 긴 타임아웃.
         timeout: (onlyWithIssues || withCounts) ? 150_000 : 30_000,
+        signal,
       },
     ),
-  listPods: (clusterId: string, namespace: string, onlyWithIssues = false) =>
+  listPods: (clusterId: string, namespace: string, onlyWithIssues = false, signal?: AbortSignal) =>
     api.get<import('@/types').AnalyzePodsResponse>(
       `/analyze/clusters/${clusterId}/namespaces/${namespace}/pods`,
-      { params: { only_with_issues: onlyWithIssues }, timeout: 120_000 },
+      { params: { only_with_issues: onlyWithIssues }, timeout: 120_000, signal },
     ),
-  fetchContext: (clusterId: string, namespace: string, podName: string, tailLines = 200) =>
+  /** container 를 비우면 서버가 고른다(default-container 어노테이션 → 실패·재시작 컨테이너 → 첫 컨테이너, D-115). */
+  fetchContext: (clusterId: string, namespace: string, podName: string, tailLines = 200, container?: string) =>
     api.get<import('@/types').AnalyzeIncidentContext>(
       `/analyze/clusters/${clusterId}/namespaces/${namespace}/pods/${podName}/context`,
-      { params: { tail_lines: tailLines } },
+      { params: { tail_lines: tailLines, ...(container ? { container } : {}) } },
     ),
   /** 파드 컨테이너(+init) 목록 — 로그/터미널 셀렉터용. */
   podContainers: (clusterId: string, namespace: string, podName: string) =>
@@ -1870,6 +1815,11 @@ export const k8sEventsApi = {
     limit?: number;
     offset?: number;
   }) => api.get<import('@/types').K8sEventListResponse>('/events/', { params }),
+  /** 심각도별 건수 — 목록의 심각도 필터·limit 과 무관한 서버 집계(D-111). */
+  stats: (clusterId?: string | null) =>
+    api.get<import('@/types').K8sEventStats>('/events/stats', {
+      params: clusterId ? { cluster_id: clusterId } : {},
+    }),
   get: (id: string) => api.get<import('@/types').K8sEvent>(`/events/${id}`),
   delete: (id: string) => api.delete(`/events/${id}`),
   getAnalysis: (id: string) =>
@@ -1990,6 +1940,10 @@ import type {
 
 /** 병목 진단 실행(SSE) — fetch+reader 로 소비(`lib/sse.ts` postSse). 본문은 snake_case. */
 export const podBottleneckStreamUrl = '/api/v1/pod-bottleneck/run/stream';
+/** versions SSH 수집의 SSE 버전(D-135) — 호스트가 끝날 때마다 log·step, 마지막에 동기 응답과 같은 result. */
+export type VersionsCollectKind = 'etcd-systemd' | 'kernel-params' | 'kubelet-config' | 'kubeadm-certs' | 'node-nics';
+export const versionsCollectStreamUrl = (clusterId: string, kind: VersionsCollectKind) =>
+  `/api/v1/clusters/${clusterId}/collect-${kind}/stream`;
 
 /** 인프라 K8s 동기화·노드 검증(SSE, D-089) — fetch+reader 로 소비. result 이벤트의 `result` 는 snake_case. */
 export const infraNodeStream = {

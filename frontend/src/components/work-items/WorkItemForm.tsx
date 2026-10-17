@@ -492,7 +492,7 @@ export function WorkItemForm({ initial, parentItem, defaultStartedAt, onCancel, 
             <>
               <span className={labelClass}>Jira 링크</span>
               <div className={`${inputClass} flex items-center gap-1.5 bg-secondary/50 text-muted-foreground`}>
-                <span className="font-mono text-xs text-brand-jira dark:text-blue-300">{initial.jiraIssueKey}</span>
+                <span className="font-mono text-xs text-brand-jira">{initial.jiraIssueKey}</span>
                 <span className="truncate">{jiraUrl || '—'}</span>
               </div>
               <p className="text-xs text-muted-foreground mt-0.5">

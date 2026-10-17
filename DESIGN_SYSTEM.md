@@ -596,6 +596,15 @@ MacCard `title` 아래 또 그린 툴바 행(이중 헤더), 같은 모양의 �
 - 사이드바는 `sticky top-4` 로 고정되어 스크롤해도 따라온다.
 - `MacCard` 등 본문 wrapper 와 같은 row 에 둔다.
 
+**URL 동기화 — `hooks/useClusterRouteParam.ts`:** 선택을 `/<base>/:clusterId` 에 담는다(파라미터가 없으면 첫 클러스터로 replace).
+`useClusterRouteParam(base, clusters, { pathFor?, local? })` — `pathFor` 는 id 가 경로 가운데 오는 라우트(`/versions/:id/graph`)용,
+`local` 은 허브 탭 안에 다시 마운트된 화면(지식 허브의 온톨로지)처럼 이동하면 안 되는 곳용이다. `pathFor` 는 모듈 스코프 함수로 넘긴다.
+예: `K8sLogsPage`·`IncidentAnalysisPage`(쿼리 `?namespace=&pod=` 병행)·`VersionGraphPage`·`OntologyPage`.
+
+**전체 높이 캔버스 페이지(PageShell 예외)**: 루트를 `app-h-screen flex overflow-hidden` 가로 행으로 두고
+`<div className="py-3 flex-shrink-0"><ClusterSidebar iconOnly … /></div>` + `<div className="flex-1 min-w-0 flex flex-col">`(툴바·캔버스)로 나눈다.
+캔버스는 ResizeObserver 로 줄어든 폭을 따라간다. 예: `VersionGraphPage`·`OntologyPage`.
+
 **금지:**
 - ❌ 와이드 폼 (`iconOnly` 없이 사용) — 신규 페이지에서 절대 사용 금지. 기존 페이지도 모두 iconOnly 로 마이그레이션됨.
 - ❌ `seq` 번호를 별도로 표시하는 어떤 UI 도 금지 (레거시 동작).
@@ -727,6 +736,10 @@ runLog.begin('K8s 동기화', '요청 전송'); … runLog.log('info', '생성 3
   동기(blocking) 작업은 실행 함수를 `emit` 콜백형으로 짜서 동기 엔드포인트와 SSE 엔드포인트가 같은 코드를 쓰게 하고,
   SSE 쪽은 작업 스레드 + 큐로 흘린다(`infra_nodes.py` `_stream_job` — 15초 무이벤트 시 `: ping` 주석). 딥체커 단계를
   실시간으로 받으려면 `run_check_type_once(..., on_step=cb)` 를 쓴다(체커 `_step` 진입·종료마다 호출).
+  **공용 모듈 `backend/app/services/sse.py`(D-135)**: `SSE_HEADERS`·`sse_line`·`log_evt`·`step_evt`·`stream_async_job(job)` —
+  새 SSE 엔드포인트는 헤더·직렬화·ping·세션·종료 이벤트를 손으로 다시 짜지 않는다. `stream_async_job` 의 `emit` 은 스레드 안전하고
+  결과·오류까지 같은 경로로 넣어 **마지막 이벤트가 항상 `result`/`error`** 다. 기존 동기 엔드포인트를 그대로 재사용하는 패턴은
+  `routers/versions.py` 수집(`_collect_emit` ContextVar 에 emit 을 꽂고 같은 함수를 호출 → 응답 본문이 동기와 동일).
 - **헬퍼(D-128, `hooks/useRunLog.ts`)** — 손 배선 대신 이것을 쓴다.
   - `runLogged(runLog, { title, first?, fn, summarize?, heartbeatMs=5000, keepOpen? })`: 동기 1응답 요청을 감싼다.
     begin → 응답을 기다리는 동안 5초마다 "응답 대기 중 · N초 경과" → "응답 수신 · 소요" → `summarize(res)` 가 돌려준
@@ -736,10 +749,32 @@ runLog.begin('K8s 동기화', '요청 전송'); … runLog.log('info', '생성 3
     실행(응답이 `task_id` 뿐인 것)의 진행을 도메인 리소스 폴링으로 이어 쓴다. `describe(snap, prev)` 는 **새로 생긴 변화만**
     줄로 돌려준다. 조회 실패는 warn 한 줄 후 계속, 시간 초과는 "백그라운드에서 계속 진행될 수 있음" warn. 끝나면 end.
     큐잉 응답 직후 이어 쓰려면 `runLogged(…, { keepOpen: true })` 다음에 호출한다. 언마운트 시 `signal` 을 abort 한다.
+  - `streamLogged<T>(runLog, { title, first?, url, body, signal?, headers?, summarize? })`(D-135): SSE 실행을 감싼다.
+    서버 `log`·`step` 을 그대로 쌓고 `result` 를 camelCase 로 돌려준다. 본문은 camelCase 로 넘기면 snake_case 로 바꿔 보낸다.
+  - `consoleRunLines(res | res[], label?)`(D-135): 콘솔형 실행(stdout/stderr) 응답 → "host · status · exit · ms · 오류 — stderr 첫 줄"
+    + 여러 대면 합계 줄. 출력 본문은 ExecOutputTabs/LogViewer 가 그대로 보여주고, 실행 로그에는 요약만 남긴다.
   - `elapsed(t0)`: 소요 표기("1234ms"/"12.3s") 공용.
-  - 적용 레퍼런스: versions 수집 모달 5종(`runLogged`, 호스트별 줄), `/cluster-overview` 점검 실행(클러스터·애드온별 줄 —
+  - **동시 실행**: `runLog.begin()` 은 그 실행 전용 핸들(`{log, setStep, end}`)을 돌려준다. 헬퍼는 이 핸들로만 기록·종료하고,
+    `RunLoggedResult.run` 으로 돌려준다(`keepOpen` 뒤 `pollIntoRunLog(r.run, …)`·`r.run.end()`). 직접 `begin` 하는 화면도
+    `const run = runLog.begin(…)` 후 `run.log`·`run.end` 를 쓴다. 앞 실행이 진행 중일 때 `begin` 하면 줄을 지우지 않고 이어 쓰며
+    진행 중인 실행 모두의 줄·단계 앞에 `[제목]` 을 붙인다. `running` 은 진행 중인 실행이 하나라도 있으면 참, 헤더는 "첫 실행 외 N건".
+    핸들 없는 `runLog.log`·`runLog.end` 는 단일 실행 화면의 하위 호환이다(`runLog.end` 는 진행 중인 실행 전부를 끝낸다).
+  - 적용 레퍼런스: versions 수집 모달 5종(`streamLogged` — 호스트가 끝날 때마다 줄, `…/collect-*/stream`), `/cluster-overview` 점검 실행(클러스터·애드온별 줄 —
     `POST /health/check/{id}` 응답 `addons[]`), `/daily-check/review` 심층 점검·배치잡 일괄 실행·지금 스냅샷(`pollIntoRunLog`).
 - 모달이 페이지의 실행 로그 패널을 가리는 실행(예: 노드 검증)은 모달 안에도 같은 `RunLogPanel` 을 렌더한다.
+  실행 직후 닫히는 모달(자격증명 입력 등)은 **페이지** 실행 로그에 기록한다.
+- **적용 범위(D-135)** — 필수: 클러스터·노드·외부 시스템에 명령을 보내거나 수 초 이상 걸리는 실행·수집·점검·배포·적용·복구·분석·
+  내보내기 버튼(단건 ▶·일괄·"테스트 실행"·"미리 실행" 포함). **예외**(실행 로그 대신 인라인 결과로 충분): ① 설정 폼의 즉시 응답
+  "연결 테스트"(LLM 프로필·PromQL·알림 채널·Isilon 서버·노드 SSH 접속·Jira·Confluence·ServiceNow·`JiraConnectCard`) — 단 실패 사유는 인라인으로 반드시 보인다 ② 실행 이력을 자체 진행
+  패널로 이미 보여주는 도메인 패널(`EfficiencyRunLog`·`ProvisionConsole`·`CheckMatrixRunLogPanel`·`ClusterOpsCheckPanel` 진행 카드)
+  ③ 라이브 스트림 뷰(Cilium Monitor/Hubble, K8s 이벤트·파드 로그) ④ 화면을 열 때 자동으로 도는 조회(주간보고 미리보기 마운트 로딩 등 — 사용자가 버튼을 누른 경우만 로그).
+- **연동 작업(Jira·Confluence·ServiceNow, D-136)**: 응답이 HTTP 200 + `status`/`ok` 로 실패를 알리므로 `summarize` 에서 `status !== 'ok'` 를 error
+  (conflict·partial·missing 은 warn)로 판정하고, status 가 ok 가 아니면 성공 토스트를 띄우지 않는다. 응답 배열(`items[]`·`changes[]`·`errors[]`·
+  `warnings[]`·`missing[]`·`steps[]`·`entries[]`·`fieldErrors[]`)은 절삭하지 않고 한 건당 한 줄(수백 건이면 앞 200건 + "외 N건").
+  성공 시 자동으로 닫히는 대화상자는 부분 실패(warn/error)면 닫지 않고 로그를 보여준다. 자격증명·쿠키·토큰은 로그 금지(계정 이름까지만).
+- **새 실행 버튼 체크리스트**: ① `useRunLog` + `useLogPref('<화면키>')` + `RunLogPanel` ② 동기=`runLogged`·SSE=`streamLogged`·큐잉=
+  `pollIntoRunLog` ③ 대상(호스트·클러스터·항목)별 한 줄 + 합계 줄 ④ 실패 사유가 error 줄로 남는가(훅에 `onError` 가 없어도)
+  ⑤ 자격증명·비밀값을 로그에 싣지 않는가 ⑥ 기존 결과 뷰(표·출력·타임라인)는 그대로인가.
 - 패널은 실행 전에는 렌더되지 않고(null), 로그를 접어 두면 마지막 한 줄만 보인다. 레퍼런스:
   `/pod-bottleneck`(SSE), `/infra-topology`(동기화·검증 SSE, Trace 응답 단위), `/service-topology`(실트래픽).
 
@@ -861,7 +896,7 @@ D-117~D-134)에서 원자는 지켜지는데 화면이 "AI 가 만든 템플릿"
 | 4 | **카드는 섹션 1단, `rounded-md` 만** | 단일 요소(문단·EmptyState·탭 줄·헤더) 래핑, 카드 안 카드, `bg-card` + `rounded-xl/2xl/lg`, hover-lift(`hover:-translate-y`·`hover:scale`), `shadow-lg/xl/2xl`, 비모달 `backdrop-blur`, `bg-gradient-*`, `transition-all`, 비로딩 `animate-pulse/ping` | 구분선·여백·정렬로 먼저 해결. 카드가 필요하면 `MacCard`(헤더는 §12.3 슬롯 `icon`·`description`·`titleExtra`·`actions`). 섹션을 `bg-card border rounded-md` div 로 직접 조합하지 않는다(목록 아이템 타일은 예외). 그림자는 `shadow-card` 만. 로고는 단색 |
 | 5 | **페이지 루트는 밀도 클래스 3종 중 하나** | 그 외 `max-w-*`, 콘솔 페이지의 `mx-auto`, 루트 패딩 임의값 | 공용 **`PageShell density="console"｜"hub"｜"doc"`**(`components/common/PageShell.tsx`, D-123)로 본문 컨테이너를 감싼다. **콘솔**(exec·표·매트릭스, ClusterSidebar 가 있는 per-cluster 화면 전부): `py-3 pr-3`, 폭 제한 없음(사이드바 없으면 `sidebar={false}` → `pl-3`), 표 `text-xs`, 빈 상태 `py-10` · **허브/목록**: `px-6 py-5`, `max-w-[1600px]` 좌정렬 · **문서**(단일 칼럼 폼·읽기): `max-w-4xl mx-auto px-8 py-8`, 빈 상태 `py-16`. **예외**(셸 미사용): 전체 높이 캔버스(Home·Ontology·VersionGraph·WorkflowBoard·MindMap·Island), Login·ChangePassword·K9sPopup·NodeSshPopup. `max-w-[NNNNpx]` 는 `.eslintrc.cjs` `WIDTH_RE` 가 PageShell 밖에서 막는다 |
 | 6 | **빈·로딩·에러 상태는 공용만** | 인라인 빈 상태 div/p, 로컬 `EmptyState` 재정의, 이모지·영어 문구, "~가 없습니다" 만 있는 문구, 로딩 문구 변형("로딩", "불러오는 중...") , 에러에 `text-destructive` | `common/EmptyState` 단일 — "클러스터를 선택하세요" 는 프리셋 `SelectClusterEmptyState`, 로딩은 `LoadingState`(둘 다 `components/common/EmptyState.tsx`). 권한 게이트 버튼은 `children` 으로. 문구 = 왜 비었나 + 다음 행동(`ClusterManagePage:866` 참고). 로딩 "불러오는 중…"(`…` 1글자) 또는 `Skeleton`. 에러 `text-status-critical`(`text-destructive` 는 파괴 액션 버튼 전용) |
-| 7 | **카테고리·종류 구분 색은 `--chart-1..8` 토큰만** | Tailwind 색상명(blue·orange·purple·violet·indigo·cyan·pink·fuchsia·teal) — 장식 용도 포함, hex 기본색, 유색 배경 위 `text-white` 칩 | `--chart-*` 토큰(`text-[hsl(var(--chart-3))]` 아닌 유틸 클래스). slate/zinc 는 콘솔(터미널) 배경에만. `.eslintrc.cjs` 의 `DECO_PALETTE_RE` 가 기계로 막는다(D-120). 기존 위반 파일은 `DECO_PALETTE_ALLOWLIST` 래칫에 있고 **파일을 지울 수만 있다** — 토큰으로 이관한 파일은 목록에서 제거한다 |
+| 7 | **카테고리·종류 구분 색은 `--chart-1..8` 토큰만** | Tailwind 색상명(blue·orange·purple·violet·indigo·cyan·pink·fuchsia·teal) — 장식 용도 포함, hex 기본색, 유색 배경 위 `text-white` 칩 | `--chart-*` 토큰(`text-[hsl(var(--chart-3))]` 아닌 유틸 클래스). slate/zinc 는 콘솔(터미널) 배경에만. `.eslintrc.cjs` 의 `DECO_PALETTE_RE` 가 **예외 없이** 막는다(D-120, 2026-10-15 allowlist 0). 클래스를 못 쓰는 렌더러(three.js·canvas·SVG 문자열)는 `lib/chartTokens.ts` `cssVarColor(token, {alpha, lighten})` 로 CSS 변수를 읽고, 색 memo 의존성에 `useThemeColorKey()` 를 넣어 테마 전환 시 다시 칠한다(hex 금지). 토큰보다 종류가 많으면 같은 계열의 `lighten` 변형으로 구분한다. 브랜드 글자는 `text-brand-jira`(= `--brand-jira-text`, 다크 계열 테마에서 밝은 값) — `dark:` 우회를 붙이지 않는다. **예외**: 사용자가 골라 저장한 색(MindMap 노드 색 등)은 데이터라 토큰 대상이 아니다 |
 | 8 | **uppercase 아이브로우 금지(예외 없음)** | 페이지 본문·h1·버튼·탭·폼 라벨의 `uppercase tracking-wider`, 전부 대문자 제목("CIDR INPUT") | 라벨은 `text-xs text-muted-foreground`(대소문자 그대로). 상태 배지는 `common/StatusBadge` 한국어 1종 |
 | 9 | **아이콘은 lucide 만** | 이모지를 상태(🟢🟡🔴)·카테고리·아이콘·장식(🎉💡☸)으로, ⚠/✓/✗ 문자 접두, 모든 아이콘 `text-primary` 틴트 | lucide + 상태 토큰. `text-primary` 틴트는 클릭 가능한 액션에만. 사용자 데이터로 저장된 클러스터 아이콘(`clusterIcons`)의 예외 여부는 D-126 에서 판정 |
 | 10 | **타이포 위계 4단** | 페이지 내 `text-2xl` 이상(Health Hero 외), h1 크기 변형, 숫자 `font-mono`, `text-[11px]` 를 표 밖에 | h1 `text-xl font-semibold` · 카드 제목 MacCard 내장 · 본문 `text-sm` · 보조 `text-xs`. 숫자는 `tabular-nums`(`font-mono` 는 식별자·코드·로그만). `text-[11px]` 는 표 셀만. 글꼴은 시스템 스택만 — 웹폰트 CDN 금지(§3, D-131) |

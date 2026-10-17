@@ -358,7 +358,7 @@ export function KnowledgeHubPage() {
           // 임베드 도구 — 자체 레이아웃을 가진 기존 페이지를 그대로 렌더.
           tab === 'qa' ? <OpsNotesPage /> :
           tab === 'mindmap' ? <MindMapPage /> :
-          tab === 'ontology' ? <OntologyPage /> :
+          tab === 'ontology' ? <OntologyPage embedded /> :
           <TrendDigestPage />
         ) : (
         <PageShell density="hub" as="div">

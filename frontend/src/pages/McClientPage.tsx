@@ -1,10 +1,13 @@
 import { useEffect, useId, useState } from 'react';
-import { useQuery, useMutation } from '@tanstack/react-query';
+import { useQuery } from '@tanstack/react-query';
 import {
-  HardDrive, Play, Loader2, CheckCircle, XCircle, AlertTriangle, Key, ShieldAlert, Wifi, Clock, Terminal,
+  HardDrive, Play, Square, CheckCircle, XCircle, AlertTriangle, Key, ShieldAlert, Wifi, Clock, Terminal,
 } from 'lucide-react';
 import { useClusters } from '@/hooks/useCluster';
-import { ConfirmDialog, ExecOutputTabs, ClusterSidebar, SavedCommands, EmptyState, PageShell } from '@/components/common';
+import { useAbortableMutation } from '@/hooks/useAbortableMutation';
+import { useRunLog, runLogged, consoleRunLines, type RunLogEntry } from '@/hooks/useRunLog';
+import { useLogPref } from '@/hooks/useLogPref';
+import { ConfirmDialog, ExecOutputTabs, ClusterSidebar, SavedCommands, EmptyState, PageShell, RunLogPanel } from '@/components/common';
 import { PageHeader } from '@/components/common/PageHeader';
 import { MacCard } from '@/components/ui/MacCard';
 import { McPresetManager } from '@/components/mc/McPresetManager';
@@ -21,6 +24,16 @@ const STATUS_META: Record<EtcdCtlRunResponse['status'], { label: string; cls: st
   connect_error: { label: '연결 실패', cls: 'bg-status-unknown/10 text-status-unknown border-status-unknown/30',       icon: Wifi },
 };
 
+// 실행 로그에 남길 명령 요약 — `mc alias set <name> <url> <access> <secret>` 의 키는 가린다.
+function maskMcArgs(a: string): string {
+  return a.replace(/(\balias\s+set\s+\S+\s+\S+)([\s\S]*)$/i, (_m, head: string, rest: string) => (rest.trim() ? `${head} ****` : head));
+}
+
+function outputLines(res: EtcdCtlRunResponse): RunLogEntry[] {
+  const count = (s: string) => (s ? s.split('\n').filter((l) => l.trim()).length : 0);
+  return [['info', `출력 stdout ${count(res.stdout)}줄 · stderr ${count(res.stderr)}줄 — 본문은 결과 패널`]];
+}
+
 // 타겟/프리셋 옆(우측)에 고정 위치로 배치 — 실행 전에도 같은 자리에 플레이스홀더를 보여줘
 // 결과가 나와도 레이아웃이 흔들리지 않는다. 카드 자체는 화면 높이에 맞춰 세로 스크롤만
 // 허용(overflow-y-auto) 하고 가로 스크롤은 막는다(overflow-x-hidden) — 좁은 카드 폭 안에
@@ -28,7 +41,7 @@ const STATUS_META: Record<EtcdCtlRunResponse['status'], { label: string; cls: st
 function ResultPanel({ result }: { result: EtcdCtlRunResponse | null }) {
   if (!result) {
     return (
-      <div className="lg:col-span-5 min-w-0 flex items-center justify-center min-h-[200px] lg:h-[calc(100vh-220px)]">
+      <div className="min-w-0 flex items-center justify-center min-h-[200px] lg:h-[calc(100vh-220px)]">
         <EmptyState
           compact
           icon={Terminal}
@@ -60,7 +73,7 @@ function ResultPanel({ result }: { result: EtcdCtlRunResponse | null }) {
       actions={result.error ? (
         <span className="text-sm text-status-critical inline-flex items-start gap-1"><AlertTriangle className="w-3.5 h-3.5 mt-0.5 shrink-0" aria-hidden="true" />{result.error}</span>
       ) : undefined}
-      rootClassName="lg:col-span-5 min-w-0 flex flex-col lg:h-[calc(100vh-220px)]"
+      rootClassName="min-w-0 flex flex-col lg:h-[calc(100vh-220px)]"
       bodyPadding="px-5 py-3"
       className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden space-y-3"
     >
@@ -126,18 +139,31 @@ export function McClientPage() {
   const [result, setResult] = useState<EtcdCtlRunResponse | null>(null);
   const [confirmOpen, setConfirmOpen] = useState(false);
 
-  const runMut = useMutation({
-    mutationFn: async () => {
+  const runMut = useAbortableMutation({
+    mutationFn: async (_: void, signal) => {
       const res = await mcApi.run(clusterId, {
         host: effectiveHost, port, username,
         password: authMode === 'password' ? password : undefined,
         privateKey: authMode === 'key' ? privateKey : undefined,
         args, alias, mcPath, timeout,
-      });
+      }, signal);
       return res.data;
     },
-    onSuccess: (d) => setResult(d),
   });
+
+  // 실행 수명주기 로그 — 출력 본문은 결과 패널(ExecOutputTabs), 여기는 요청·대기·결과 요약·실패 사유.
+  const runLog = useRunLog();
+  const [showLog, setShowLog] = useLogPref('mc-client-run');
+  const doRun = async () => {
+    const cmd = `${mcPath} ${maskMcArgs(args.replace(/\{alias\}/g, alias))}`;
+    const r = await runLogged(runLog, {
+      title: 'mc 실행',
+      first: `${username}@${effectiveHost}:${port} 에 SSH 접속 후 실행 요청 — ${cmd} (timeout ${timeout}s)`,
+      fn: () => runMut.mutateAsync(),
+      summarize: (res) => [...consoleRunLines(res), ...outputLines(res)],
+    });
+    if (r.ok) setResult(r.data);
+  };
 
   const canRun = !!clusterId && !!effectiveHost && !!args.trim()
     && (authMode === 'password' ? !!password : !!privateKey.trim());
@@ -292,19 +318,32 @@ export function McClientPage() {
               )}
 
               <div className="flex justify-end pt-2 border-t border-border">
-                <button
-                  onClick={() => setConfirmOpen(true)}
-                  disabled={!canRun || runMut.isPending}
-                  className="flex items-center gap-2 px-5 py-2.5 text-sm font-semibold bg-primary hover:bg-primary/90 text-primary-foreground rounded-lg transition-colors disabled:opacity-50"
-                >
-                  {runMut.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Play className="w-4 h-4" />}
-                  mc 실행
-                </button>
+                {runMut.isPending ? (
+                  <button
+                    onClick={runMut.abort}
+                    className="flex items-center gap-2 px-5 py-2.5 text-sm font-semibold bg-status-critical hover:bg-status-critical text-primary-foreground rounded-lg transition-colors"
+                  >
+                    <Square className="w-4 h-4 fill-current" />
+                    중지
+                  </button>
+                ) : (
+                  <button
+                    onClick={() => setConfirmOpen(true)}
+                    disabled={!canRun}
+                    className="flex items-center gap-2 px-5 py-2.5 text-sm font-semibold bg-primary hover:bg-primary/90 text-primary-foreground rounded-lg transition-colors disabled:opacity-50"
+                  >
+                    <Play className="w-4 h-4" />
+                    mc 실행
+                  </button>
+                )}
               </div>
             </MacCard>
 
-            {/* 우: 결과 — 항상 같은 위치(우측)에 고정, 실행 전엔 플레이스홀더 */}
-            <ResultPanel result={result} />
+            {/* 우: 실행 로그(수명주기) + 결과 — 항상 같은 위치(우측)에 고정, 실행 전엔 플레이스홀더 */}
+            <div className="lg:col-span-5 min-w-0 flex flex-col gap-3">
+              <RunLogPanel run={runLog} show={showLog} onShowChange={setShowLog} maxHeight="max-h-56" />
+              <ResultPanel result={result} />
+            </div>
           </div>
         </div>
       </PageShell>
@@ -316,7 +355,7 @@ export function McClientPage() {
         confirmLabel="mc 실행"
         danger={isDanger}
         onCancel={() => setConfirmOpen(false)}
-        onConfirm={() => { setConfirmOpen(false); runMut.mutate(); }}
+        onConfirm={() => { setConfirmOpen(false); void doRun(); }}
       >
         <div className="space-y-3">
           <div>

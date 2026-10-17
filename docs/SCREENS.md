@@ -224,6 +224,8 @@ hover 시 flyout 자체가 라벨을 보여주므로 이름만 뜨는 중복 툴
 
 ### 시스템 설정 (`/settings`, admin)
 
+> **2026-10-15 (D-136)**: Jira 연동 패널의 SSO 진단·로그인 3종이 실행 로그(`jira-sso`)를 남긴다. 연결 테스트는 인라인 결과(§12.9.1 예외).
+
 > **2026-10-14 (D-130)**: 탭 15개를 좌측 세로 목록 4그룹(클러스터·서버 / 사용자·접근 / 연동 / 시스템)으로 재배치했다. 고른 탭은 `?tab=` 에
 > `replace` 로 기록되고(새로고침·링크 유지), 모르는 값은 `cluster` 로 폴백한다. 숫자 배지는 클러스터·관리서버·시스템 담당자·디버그(0 이면 숨김)만,
 > "추후 지원" 토글은 제거. 라벨: 디버그·AI·LLM·Jira 연동·ServiceNow 연동. 본문 폭은 `PageShell hub`.
@@ -416,10 +418,11 @@ hover 시 flyout 자체가 라벨을 보여주므로 이름만 뜨는 중복 툴
 - **UI 구성**:
   - `ClusterSidebar` — `iconOnly` + `allowAll`(`allLabel="전체 클러스터"`) 단일 선택.
   - 심각도 필터 탭(전체/Critical/Warning/Info) + 새로고침 버튼.
-  - 요약 카운터(critical/warning/info 건수, 표시 건수/총 건수).
-  - 이벤트 테이블(시각/심각도/Kind/이름/네임스페이스/Reason/메시지) — 행 클릭 시 raw JSON 펼침, 행별 삭제 버튼.
-- **Frontend**: `useK8sEvents({clusterId, severity, limit:200})`(`hooks/useK8sEvents.ts`, 30초 `refetchInterval`), `useDeleteK8sEvent`. `useClusters`. api.ts: `k8sEventsApi.{list,delete}`.
-- **Backend**: `GET /api/v1/events/` (`response_model=K8sEventListResponse`), `DELETE /api/v1/events/{id}`(operator + 클러스터 operate, 안 보이는 이벤트는 404 — D-102) — 라우터 `backend/app/routers/k8s_events.py`(조회용 `router`, prefix `/events`; 별도 `ingest_router`가 kubewatch 웹훅 수신 담당, `/api/v1` 최상위 마운트로 인증 미들웨어 제외). 모델: `models/k8s_event.py`(`K8sEvent` — `event_type`, `resource_kind`, `resource_name`, `namespace`, `reason`, `message`, `severity`, `raw` JSONB, `received_at`).
+  - 요약 카운터(critical/warning/info 건수) — 심각도 필터·페이지와 무관한 서버 집계(`GET /events/stats`, D-111). 표시 건수/총 건수.
+  - 이벤트 테이블(시각/심각도/Kind/이름/네임스페이스/Reason/메시지) — 이름 셀 버튼(키보드·`aria-expanded`)이나 행 클릭으로 raw JSON(`LogViewer`) 펼침, 행별 삭제 버튼. 목록 아래 "N / 총 M건" + **더 보기**(100건 단위, D-111).
+  - 조회 실패는 "이벤트 없음" 대신 오류+다시 시도, 30초 갱신만 실패하면 목록 위 경고 한 줄(D-104).
+- **Frontend**: `useK8sEventsPaged({clusterId, severity})`(`useInfiniteQuery`, 30초 `refetchInterval`), `useK8sEventStats(clusterId)`, `useDeleteK8sEvent`(`hooks/useK8sEvents.ts`). `useClusters`. api.ts: `k8sEventsApi.{list,stats,delete}`.
+- **Backend**: `GET /api/v1/events/` (`response_model=K8sEventListResponse`, `has_more`), `GET /api/v1/events/stats`(심각도별 건수, `/{id}` 보다 먼저 선언), `DELETE /api/v1/events/{id}`(operator + 클러스터 operate, 안 보이는 이벤트는 404 — D-102) — 라우터 `backend/app/routers/k8s_events.py`(조회용 `router`, prefix `/events`; 별도 `ingest_router`가 kubewatch 웹훅 수신 담당, `/api/v1` 최상위 마운트로 인증 미들웨어 제외). 모델: `models/k8s_event.py`(`K8sEvent` — `event_type`, `resource_kind`, `resource_name`, `namespace`, `reason`, `message`, `severity`, `raw` JSONB, `received_at`).
 - **핵심 기능**:
   - 클러스터별/전체 이벤트 조회, 심각도 필터.
   - 30초 주기 자동 새로고침 + 수동 새로고침.
@@ -457,10 +460,11 @@ hover 시 flyout 자체가 라벨을 보여주므로 이름만 뜨는 중복 툴
   - `ClusterSidebar` — `iconOnly` + `allowAll`(`allLabel="전체 클러스터"`).
   - 접이식 "알람 수신 설정 방법" 안내 — Alertmanager `webhook_configs` YAML + curl 테스트 스니펫 복사 버튼(토큰 값은 마스킹).
   - 메인 탭 — **알람 인박스 / 알림 규칙**.
-  - 필터 — 심각도(전체/Critical/Warning/Info) + 상태(발생중/해소/전체) + 검색 + 일괄 확인 + 새로고침. 최근 24시간 요약 pill.
-  - 알람 테이블 — 좌측 심각도 색 바 + 행 배경 그라데이션 + 글자 굵기로 심각도 구분. 수신 · 상태 · 심각도 · 클러스터 · 알람 · 대상 · 요약 · 반복(×N, 억제 n) · 확인. 행 클릭 시 라벨/어노테이션/generatorURL/원본 페이로드 펼침 + **AI 분석 패널**(`AlertAnalysisPanel`) — 자동 분석 상태 배지(대기/분석 중/완료/실패/건너뜀), 원인 분석·조치 가이드(실행 없음 — 사람이 수행), analyzed_by(규칙 기반/LLM 프로필) 투명 표기, 수동 'AI 분석 실행/재분석' 버튼(operator+, `POST /observability/alerts/{id}/analyze` → 전용 llm Celery 큐). 자동 분석 범위는 Settings → AI/LLM 의 '알람 자동 분석 범위'(AppSetting `llm_analysis_scope`)에서 규칙(클러스터/네임스페이스/알람명/심각도, 시간당 상한·디바운스)으로 관리.
+  - 필터 — 심각도(전체/Critical/Warning/Info) + 상태(발생중/해소/전체) + 검색(300ms debounce) + 일괄 확인 + 새로고침. 요약 pill 은 "최근 24시간 · 해소 포함 · 필터 미적용" 기준을 명시한다. 목록 아래 "총 N건 중 M건" + **더 보기**(100건 단위, D-111).
+  - 목록·규칙·전역 설정·요약이 실패하면 오류+다시 시도, 갱신만 실패하면 경고 한 줄(D-104). 삭제·규칙 편집·설정 저장은 viewer 에게 숨기지 않고 사유와 함께 비활성(`useCanOperate`, D-105).
+  - 알람 테이블 — 좌측 심각도 색 바 + 행 배경 그라데이션 + 글자 굵기로 심각도 구분(Info 는 정상 범주라 무채색 — K8s 이벤트와 같은 표현, §12.12-3). 수신 · 상태 · 심각도 · 클러스터 · 알람 · 대상 · 요약 · 반복(×N, 억제 n) · 확인. 행 클릭 시 라벨/어노테이션/generatorURL/원본 페이로드 펼침 + **AI 분석 패널**(`AlertAnalysisPanel`) — 자동 분석 상태 배지(대기/분석 중/완료/실패/건너뜀), 원인 분석·조치 가이드(실행 없음 — 사람이 수행), analyzed_by(규칙 기반/LLM 프로필) 투명 표기, 수동 'AI 분석 실행/재분석' 버튼(operator+, `POST /observability/alerts/{id}/analyze` → 전용 llm Celery 큐). 자동 분석 범위는 Settings → AI/LLM 의 '알람 자동 분석 범위'(AppSetting `llm_analysis_scope`)에서 규칙(클러스터/네임스페이스/알람명/심각도, 시간당 상한·디바운스)으로 관리.
   - 알림 규칙 탭 — 전역 기본값(알림 대상/최소 심각도/중복 억제 창·모드/기본 담당자/보존일) + 규칙 목록·편집기. 규칙 편집기에서 매처(클러스터·**모듈/서비스 패턴**·알람명·네임스페이스·라벨·최소 심각도), 알림 대상/담당자, 심각도 재정의, 중복 억제 창·모드, **재전파 채널**(기존 `NotificationChannel` 다중 선택)을 모두 편집한다.
-- **Frontend**: `useAlerts`, `useAlertStats`, `useAckAlert`, `useAckAllAlerts`, `useDeleteAlert`, `useAlertRules`, `useAlertSettings` 등(`hooks/useAlertInbox.ts`, 30초 `refetchInterval`). api.ts: `observabilityApi.{alerts,alertStats,ackAlert,ackAllAlerts,alertRules,alertSettings,…}`.
+- **Frontend**: `useAlertsPaged`(`useInfiniteQuery`), `useAlertStats`, `useAckAlert`, `useAckAllAlerts`, `useDeleteAlert`, `useAlertRules`, `useAlertSettings` 등(`hooks/useAlertInbox.ts`, 30초 `refetchInterval`). api.ts: `observabilityApi.{alerts,alertStats,ackAlert,ackAllAlerts,alertRules,alertSettings,…}`.
 - **Backend**: 수신 `POST /api/v1/observability/alerts/ingest`(JWT 없음 — `ALERT_INGEST_TOKEN` Bearer 자체 검증, **미설정 시 503 fail-closed**), 조회 `GET /observability/alerts`·`/alerts/stats`·`/alerts/{id}`, `POST /alerts/{id}/ack`·`/alerts/ack-all`, 규칙/설정 CRUD(`require_operator`). 라우터 `backend/app/routers/observability.py`(`ingest_router` + `router`). 모델: `models/alert_event.py`, `models/alert_notify_rule.py`. 서비스: `services/observability/alert_ingest.py`(포맷 2종 파싱), `alert_router.py`(규칙 매칭·중복 억제·알림 생성).
 - **핵심 기능**:
   - **수신 포맷 2종** — Alertmanager webhook v4 우선, 아니면 generic fallback(사내 forwarder 의 임의 JSON 을 최선노력 정규화).
@@ -577,22 +581,26 @@ hover 시 flyout 자체가 라벨을 보여주므로 이름만 뜨는 중복 툴
   - _(여기에 개선/수정 요청을 직접 적어주세요)_
   - **[2026-10-12, 상용화 재검토]** 탭 이름 통일, 실행 주기 행마다 `CronInput`(즉시 검증·다음 실행) + 행별 저장 상태, 초안을 `cells` 에서 파생(새 클러스터 행 크래시 수정), 클러스터별 `useCanOperate(clusterId)`, 최근 실행 실패 칩, "글로벌로 복귀" `ConfirmDialog danger`, 배치잡 링크 `/batch-jobs` 수정.
 
-### K8s 로그 — AI 장애 분석 (`/incident-analysis`)
+### K8s 로그 — AI 장애 분석 (`/incident-analysis`, `/incident-analysis/:clusterId`)
 
 - **파일**: `frontend/src/pages/IncidentAnalysisPage.tsx` (+ `components/common/SearchableSelect`, `components/common/LogViewTabs`)
 - **목적 / UX**: 클러스터 → namespace → pod 를 드릴다운으로 선택하고, `kubectl logs`/`events`/`describe` 를 자동 수집(또는 직접 붙여넣기)한 뒤 LLM(또는 rule-based) 분석기에 보내 근본 원인·신뢰도·조치 방안을 받는다. 실시간 로그 스트리밍(폴링), 로그 라인 필터도 제공한다.
 - **UI 구성**:
-  - `ClusterSidebar` 미사용 — 상단에 `<select>` 드롭다운(클러스터) + `SearchableSelect`(namespace/pod) 로 대상 선택(레거시 패턴, CLAUDE.md 표준 사이드바 미적용).
+  - 좌측 `ClusterSidebar iconOnly`(K8s 로그 화면과 같은 console 밀도 레이아웃) + 드릴다운 카드의 `SearchableSelect`(namespace/pod) 2열로 대상 선택. 선택은 URL 에 담긴다 — `/incident-analysis/:clusterId?namespace=&pod=`(딥링크·공유 가능, 클러스터를 바꾸면 namespace/pod 초기화). (D-113)
   - "대상 선택" 패널 — "이슈 있는 항목만 보기(느림)" 토글, glob 패턴(`nsPattern`/`podPattern`)으로 스캔 범위 축소, "자동 채우기" 버튼.
-  - 이벤트 테이블(최대 20건), 로그/Describe textarea 3개(현재 로그/이전 로그/describe) + 실시간 LIVE 토글 + 로그 라인 필터.
-  - 결과 패널(`ResultPanel`) — severity 배지, 근본 원인, confidence bar, 조치 방안 순번 리스트, 관련 런북.
-  - `LogViewTabs current="analysis"` 로 로그 관련 다른 화면과 탭 전환.
-- **Frontend**: `useAnalyzerHealth()`, `useAnalyzeIncident()`(mutation), `useAnalyzeNamespaces(clusterId, onlyWithIssues, withCounts, nsPattern, podPattern)`(300ms 디바운스), `useAnalyzePods(clusterId, namespace, onlyWithIssues)`, `useFetchIncidentContext()`(mutation, 자동채우기/스트리밍 공용). `useClusters()`. 로컬 state 다수(`clusterId`/`namespace`/`podName`/`onlyIssues`/로그 텍스트/`streaming`/`logFilter` 등). api.ts: `analyzeApi.health`, `analyzeApi.analyze`, `analyzeApi.listNamespaces`, `analyzeApi.listPods`, `analyzeApi.fetchContext`.
+  - 컨테이너 선택기(`analyzeApi.podContainers`, init 구분, 기본 "서버 추천") — 자동 채우기·실시간 로그가 같은 컨테이너를 쓴다.
+  - 이벤트 테이블(최대 20건, `kubectl get events` 헤더를 인식하는 붙여넣기 파서), 로그/Describe textarea 3개(현재 로그/이전 로그/describe) + 로그 라인 필터(필터 결과는 `LogViewer`).
+  - "실시간 로그" 카드 — `PodLogStream`(SSE, `logs/stream`) 으로 선택 Pod 를 따라 본다(예전 LIVE 폴링 대체, D-112).
+  - 대상(cluster/ns/pod/container)이 바뀌면 입력·결과를 비우고, 다른 대상의 입력이면 분석 시작을 막는다(D-110). 분석 중 "중지"(150초 타임아웃, D-109).
+  - 결과 패널(`ResultPanel`) — 분석 대상·시각, severity 배지, 근본 원인, confidence bar, 조치 방안 순번 리스트, 관련 런북, RAG 근거 목록. 분석기 실패 대체 결과(`degraded`)는 경고 배너(D-115). 실패는 결과 영역에 오류로 표시.
+  - `LogViewTabs current="analysis"` 로 로그 관련 다른 화면과 탭 전환 — 탭을 바꿔도 선택한 클러스터를 이어 간다.
+- **Frontend**: `useAnalyzerHealth()`, `useAnalyzeIncident()`(mutation), `useAnalyzeNamespaces(clusterId, onlyWithIssues, withCounts, nsPattern, podPattern)`(300ms 디바운스), `useAnalyzePods(clusterId, namespace, onlyWithIssues)`, `useFetchIncidentContext()`(mutation, 자동채우기/스트리밍 공용). `useClusters()`, `useClusterRouteParam('/incident-analysis', clusters)`(클러스터), `useSearchParams`(namespace/pod). 로컬 state 다수(`onlyIssues`/로그 텍스트/`streaming`/`logFilter` 등). api.ts: `analyzeApi.health`, `analyzeApi.analyze`, `analyzeApi.listNamespaces`, `analyzeApi.listPods`, `analyzeApi.fetchContext`.
 - **Backend**: `POST /api/v1/analyze/incident`, `GET /api/v1/analyze/health`, `GET /api/v1/analyze/clusters/{cluster_id}/namespaces`, `GET /api/v1/analyze/clusters/{cluster_id}/namespaces/{namespace}/pods`, `GET /api/v1/analyze/clusters/{cluster_id}/namespaces/{namespace}/pods/{podName}/context` — `backend/app/routers/analyze.py`. `kubernetes` SDK(`CoreV1Api`)로 실시간 조회, `app/services/analyzers.py`(`get_analyzer()` — `ANALYZER_BACKEND` env 로 Claude/Local LLM/Rule-based 선택).
 - **핵심 기능**:
   - 대용량 클러스터 대응 fast/slow path 분리(`onlyIssues`/`withCounts` 미지정 시 이름만 빠르게 조회, 큰 클러스터에서 axios 타임아웃 최대 150s).
   - "자동 채우기" 로 logs/previous logs/events/describe 한 번에 수집.
-  - SSE/WebSocket 미지원 백엔드 특성상 동일 fetch-context 엔드포인트를 N초 간격 폴링해 "실시간" 흉내(`streaming` 토글, textarea 포커스 중엔 갱신 일시정지).
+  - 실시간 로그는 SSE 스트림(`PodLogStream`) — 분석 입력은 자동 채우기·붙여넣기로만 채운다.
+  - 분석 요청에 `clusterId` — 서버가 클러스터 read 접근을 확인하고 테넌트 LLM 라우팅·감사 로그(`incident.analyze`)·입력 길이 제한을 적용한다(D-114).
   - severity(critical/warning/info)별 색상 결과 패널 + confidence bar + 조치 방안/런북.
   - 로그 라인 필터(클라이언트 사이드 텍스트 매칭).
 - **요청사항 (수정 요청)**:
@@ -763,7 +771,8 @@ hover 시 flyout 자체가 라벨을 보여주므로 이름만 뜨는 중복 툴
 ### 버전 / 설정 관리 (`/versions`)
 
 > **2026-10-14 (D-128)**: 수집 모달 5종(etcd systemd·kubeadm 인증서·커널 파라미터·kubelet 설정·노드 NIC)의 "수집 실행" 이 모달 안 실행 로그를
-> 띄운다 — 요청 줄, 응답 대기 하트비트, 호스트별 상태·exit·저장 여부·오류 줄, 요약(`components/versions/collectRunLog.ts`). 화면 상단 "지금 수집" 은 D-135.
+> 띄운다 — 요청 줄, 응답 대기 하트비트, 호스트별 상태·exit·저장 여부·오류 줄, 요약(`components/versions/collectRunLog.ts`).
+> **2026-10-15 (D-135)**: 수집 모달은 `POST …/collect-*/stream`(SSE)으로 호스트가 끝날 때마다 줄·칩이 실시간으로 찍힌다(`streamLogged`). 화면 상단 "지금 수집"·MinIO 는 자체 수집 로그 카드 대신 표준 실행 로그(`versions-collect`).
 
 - **파일**: `frontend/src/pages/VersionsPage.tsx` (+ `components/versions/EtcdSystemdModal.tsx`, `KubeadmCertsModal.tsx`, `KernelParamsCollectModal.tsx`, `NodeNicsCollectModal.tsx`, `KubeletConfigCollectModal.tsx`, `CsvExportModal.tsx`)
 - **목적 / UX**: kubeconfig(+ SSH)로 클러스터의 K8s/Cilium 버전, 컨트롤플레인·kubelet·CNI·OS(sysctl/etcd systemd/kubeadm 인증서)·MinIO/DirectPV 스토리지 설정을 스냅샷으로 수집하고, 컴포넌트별 현재값·변경 히스토리·diff를 확인한다. 운영자가 "언제 무엇이 바뀌었는지" 추적하는 감사 성격의 화면.
@@ -787,15 +796,15 @@ hover 시 flyout 자체가 라벨을 보여주므로 이름만 뜨는 중복 툴
 
 - **파일**: `frontend/src/pages/VersionGraphPage.tsx` (react-force-graph-3d + three.js)
 - **목적 / UX**: `/versions` 페이지의 스냅샷 데이터를 클러스터→카테고리→컴포넌트→플래그 계층의 3D 노드-엣지 그래프로 시각화해, 어떤 플래그/설정이 어떤 컴포넌트에 속하는지 탐색한다.
-- **UI 구성**: 상단 툴바(뒤로가기, 클러스터 `<select>` 드롭다운 — ClusterSidebar 미사용, 색상 범례, 재수집 버튼), 전체 화면 3D 그래프 캔버스, 노드 클릭 시 우상단 상세 패널(`NodeDetail`: type/version/value/category/collectedAt).
-- **Frontend**: `useClusters()`, `useQuery(['versions','graph',selectedId])` → `versionsApi.graph`. 로컬 state: `selectedId`(URL param `clusterId` 우선), `dims`(ResizeObserver), `selectedNode`. 호출 함수: `versionsApi.graph`, `versionsApi.collect`(재수집).
+- **UI 구성**: 좌측 `ClusterSidebar iconOnly` 레일 + 오른쪽 열(상단 툴바: 뒤로가기, 색상 범례, 재수집 버튼 / 전체 높이 3D 그래프 캔버스), 노드 클릭 시 우상단 상세 패널(`NodeDetail`: type/version/value/category/collectedAt).
+- **Frontend**: `useClusters()`, `useQuery(['versions','graph',selectedId])` → `versionsApi.graph`. 선택은 `useClusterRouteParam('/versions', clusters, { pathFor })` — URL 이 곧 선택이다. 로컬 state: `dims`(ResizeObserver), `selectedNode`. 노드·링크·툴팁 색은 `lib/chartTokens.ts` `cssVarColor`(테마 전환 시 다시 칠함). 호출 함수: `versionsApi.graph`, `versionsApi.collect`(재수집).
 - **Backend**: `GET /api/v1/clusters/{cluster_id}/versions/graph` — `backend/app/routers/versions.py` (1248행). `ClusterConfigSnapshot`을 카테고리/컴포넌트/플래그 노드+엣지(`contains`/`param`/`configures`/`replaces`)로 변환해 반환. 재수집은 `POST /clusters/{id}/collect-versions` 재사용.
 - **핵심 기능**:
   - 클러스터/카테고리/컴포넌트/플래그 4-tier 3D 그래프 (타입별 색상/크기)
   - 노드 클릭 시 카메라 이동 + 상세 패널
   - `/versions` 페이지와 캐시 공유(`queryKey: ['versions', ...]`) — 재수집 시 양쪽 모두 무효화
 - **요청사항 (수정 요청)**:
-  - ClusterSidebar iconOnly 표준을 따르지 않고 `<select>` 드롭다운을 사용 중 — CLAUDE.md 컨벤션상 금지 패턴(❌ 페이지 내 dropdown 형태 클러스터 선택기)이므로 표준화 필요 여부 확인
+  - ~~`<select>` 드롭다운 클러스터 선택기 표준화~~ — 2026-10-15 D-113 에서 `ClusterSidebar iconOnly` 로 교체 완료(select 를 바꿔도 URL 이 그대로라 화면과 어긋나던 문제도 해소)
   - _(추가 개선/수정 요청을 여기에 적어주세요)_
 
 ### 노드 일괄 실행 (SSH/SCP) (`/bulk-exec`)
@@ -842,6 +851,8 @@ hover 시 flyout 자체가 라벨을 보여주므로 이름만 뜨는 중복 툴
   - _(여기에 개선/수정 요청을 직접 적어주세요)_
 
 ### 클러스터 관리 (`/cluster-manage`)
+
+> **2026-10-15 (D-135)**: 자체 실행 로그(`appendLog`·LogViewer 카드·수동 SSE 파서)를 표준 실행 로그(`cluster-manage`)로 대체했다. 검증은 `components/cluster-manage/verifyLogged.ts`(`/verify/stream` → 단계 칩, 설정 화면과 공유), 재수집·IP 수집·일괄 수집(클러스터별 칩)·적용은 `runLogged`, 실패 재시도는 패널 버튼.
 
 - **파일**: `frontend/src/pages/ClusterManagePage.tsx` (+ `components/cluster-manage/{CiliumConfigModal,ClusterCard,ClusterTableRow,ClusterUpdateDiffDialog,ClusterCustomFieldsManager,StandardizeClusterNamesModal}`, `components/versions/NodeNicsCollectModal`)
 - **목적 / UX**: 등록된 전체 클러스터를 테이블/카드 뷰로 관리 — 검색/필터/정렬/그룹화(지역·운영레벨), CIDR 겹침 감지, kubeconfig 기반 자동 정보 수집(diff 미리보기 후 적용), 커스텀 컬럼 추가, 드래그 정렬. `/cluster-manage/:id/edit`으로 이동해 상세 메타를 편집한다.
@@ -935,6 +946,8 @@ hover 시 flyout 자체가 라벨을 보여주므로 이름만 뜨는 중복 툴
 ## 서버·인프라 / 네트워크 / 스토리지
 
 ### 노드 서버스펙 관리 대장 (`/node-specs`)
+
+> **2026-10-15 (D-135)**: Host Facts 수집은 자체 결과 LogViewer 대신 표준 실행 로그(호스트별 줄), 클러스터 임포트는 `errors[]` 를 줄별로 남긴다.
 
 - **파일**: `frontend/src/pages/NodeSpecPage.tsx` (+ `components/node-specs/NodeSpecEditModal.tsx`, `NodeSpecCsvUploadModal.tsx`, `NodeSpecPasteModal.tsx`, `columns.tsx`)
 - **목적 / UX**: 물리 서버(호스트명, CPU/RAM/Disk, bond0/bond1 IP, OS/커널, SSD/VM 여부, 랙 위치, 현재 용도)를 자산 대장 형태로 등록·조회한다. kubeconfig 기반 클러스터 임포트, CSV 업로드/붙여넣기(엑셀), SSH Host Facts 수집(bond IP·디스크·SSD 자동판별)으로 대량 입력 부담을 줄이는 것이 핵심 목적.
@@ -1037,6 +1050,8 @@ hover 시 flyout 자체가 라벨을 보여주므로 이름만 뜨는 중복 툴
   - _(여기에 개선/수정 요청을 직접 적어주세요)_
 
 ### 서비스 아키텍처 (`/service-architecture`)
+
+> **2026-10-15 (D-136)**: 동기화·정리 동기화·AI 재생성이 실행 로그(`arch-doc-sync`)를 남긴다 — partial 은 경고, 첫 동기화 뒤 LLM 생성 진행을 폴링해 이어 쓴다. AI 재생성 failed 는 오류로 표시.
 
 - **파일**: `frontend/src/pages/ServiceArchitecturePage.tsx` (+ `components/serviceArch/{ArchDocCanvas,ManualNodeDialog,ManualEdgeDialog,NodeDetailPanel,LlmSummaryPanel,exportDiagram}.tsx`)
 - **목적 / UX**: Settings 에 등록된 서비스 모듈(`LakeService` — cluster+namespace) 단위로 K8s 리소스를 자동 탐색해 **아키텍처 다이어그램/서비스 플로우 도식을 영속 문서로 생성·현행화**하고, 자동화가 부족한 부분(외부 DB/API 연계, 주석, 배치)은 사용자가 수동 편집한다. LLM(Ollama) 이 있으면 아키텍처 요약·컴포넌트 역할·플로우 스텝을 자동 서술한다(없어도 완전 동작).
@@ -1175,6 +1190,8 @@ hover 시 flyout 자체가 라벨을 보여주므로 이름만 뜨는 중복 툴
 
 ### Ansible Playbooks (`/playbooks`)
 
+> **2026-10-15 (D-135)**: 단건 실행(카드·행·자격증명 모달)과 전체 실행(플레이북별 칩, allSettled)이 페이지 실행 로그(`playbooks-run`)에 상태·호스트 통계·실패 태스크를 남긴다(이전엔 실패 무표시).
+
 - **파일**: `frontend/src/pages/PlaybooksPage.tsx` (+ `components/playbooks/PlaybookCard.tsx`, `PlaybookListRow.tsx`, `AddPlaybookModal.tsx`, `RunCredsModal.tsx`, `PlaybookLogDialog.tsx`, 공통 `components/common/ClusterSidebar.tsx`)
 - **목적 / UX**: 클러스터별로 등록된 Ansible playbook을 조회·실행하고 실행 결과(OK/Changed/FAILED)를 확인한다. 운영자가 여러 클러스터에 걸쳐 동일 계열의 점검/조치 playbook을 한 화면에서 일괄(Run All) 또는 개별 실행하고, 결과를 Markdown 리포트로 export 할 수 있다.
 - **UI 구성**:
@@ -1307,6 +1324,8 @@ hover 시 flyout 자체가 라벨을 보여주므로 이름만 뜨는 중복 툴
 ## 업무 관리 그룹 — 업무 관리 게시판 / 스프린트 / 워크플로우
 
 ### 업무 관리 게시판 (`/tasks-mgmt`)
+
+> **2026-10-15 (D-136)**: 행 메뉴 Jira 새로고침·보내기·Confluence 반영이 보드 실행 로그(`work-items-integration`)에 필드별 결과를 남긴다(보내기 `fieldErrors` 포함). Jira 가져오기·Confluence 연결 모달과 Jira 보내기·연결·발급·ServiceNow 등록 대화상자도 각자 실행 로그를 쓴다.
 
 - **파일**: `frontend/src/pages/WorkItemBoardPage.tsx` (+ `components/work-items/WorkItemKanban.tsx`, `WorkItemCalendar.tsx`, `WorkItemTableRow.tsx`, `WorkItemEpicView.tsx`, `WorkItemActionsMenu.tsx`, `ColumnSettingsMenu.tsx`, `WorkItemBoardSettingsModal.tsx`, `JiraImportModal.tsx`, `JiraProvisionModal.tsx`, `JiraLinkDialog.tsx`, `ServiceNowRegisterDialog.tsx`, `JiraIssueChip.tsx`, `DocLinkChip.tsx`, `ConfluenceLinkCell.tsx`, `components/dashboard/QuickAddTaskModal.tsx`)
 - **목적 / UX**: 전사 업무(유형: 이슈 대응/회의/운영 대응/기타 — 내부 저장값은 `issue`/`meeting`/`task`/`etc`, 레거시 `training` 도 조회는 계속 됨)를 표(목록)/달력/칸반/에픽뷰 4가지 뷰로 조회·필터링·정렬하고, 등록·수정·삭제·CSV 추출·Jira 가져오기까지 처리하는 업무 관리의 메인 허브.
@@ -1485,6 +1504,8 @@ hover 시 flyout 자체가 라벨을 보여주므로 이름만 뜨는 중복 툴
 
 ### 주간보고 (`/weekly-report`)
 
+> **2026-10-15 (D-136)**: "다시 생성"(버튼 클릭만, 화면 진입 자동 로딩 제외)과 Confluence 게시가 실행 로그(`weekly-report`)를 남기고, 게시 후 페이지 링크를 보여준다.
+
 - **파일**: `frontend/src/pages/WeeklyReportPage.tsx`
 - **목적 / UX**: 한 주(월~금)의 업무를 자동 집계해 **정해진 3개 표**로 보여주고, 그대로 Confluence 에 게시하는 화면. 게시 위치(스페이스/상위 페이지/제목)를 매번 바꿀 수 있고, 관리자는 cron 으로 자동 생성·게시를 켤 수 있다.
 - **UI 구성**:
@@ -1648,13 +1669,14 @@ hover 시 flyout 자체가 라벨을 보여주므로 이름만 뜨는 중복 툴
 - **요청사항 (수정 요청)**:
   - _(여기에 개선/수정 요청을 직접 적어주세요)_
 
-### 온톨로지 그래프 (`/ontology`)
+### 온톨로지 그래프 (`/ontology`, `/ontology/:clusterId`)
 
 - **파일**: `frontend/src/pages/OntologyPage.tsx` (3D 그래프는 `react-force-graph-3d` + `three` 직접 사용, 별도 하위 컴포넌트 없이 `NodeDetailPanel`/`ImpactPanel`을 페이지 내부에 정의)
 - **목적 / UX**: 클러스터 내 인프라 구성요소(노드/하드웨어/OS/커널 파라미터/네트워크/K8s·Cilium 컴포넌트/워크로드/서비스/설정 항목)와 그 관계를 3D 그래프로 시각화하고, 설정 변경(config_item/kernel_param)이 다른 엔티티에 미치는 파급 범위(blast radius)를 분석하는 화면.
 - **UI 구성**:
-  - 상단 툴바: 클러스터 선택, 노드 검색, 노드/관계 수 통계, 범례 토글, 필터 초기화, 새로고침
-  - 엔티티 타입별 chip 필터 바(10종, 색상 구분)
+  - 좌측 `ClusterSidebar iconOnly` 레일로 클러스터 선택(`/ontology/:clusterId`, 지식 허브 탭 안에서는 URL 대신 로컬 선택 — `embedded` prop) (D-113)
+  - 상단 툴바: 노드 검색, 노드/관계 수 통계, 범례 토글, 필터 초기화, 새로고침
+  - 엔티티 타입별 chip 필터 바(10종, 색상 구분 — `--chart-*` 8토큰 + 같은 계열 명도 변형 2종, `lib/chartTokens.ts` `cssVarColor`, 배경·링크도 테마 토큰)
   - 중앙 3D 포스 그래프(구체 크기=연결 수, 파티클=관계 방향, 링크 굵기=가중치)
   - 좌상단 범례 패널, 우상단 노드 상세 패널(속성 + "변경 영향 분석" 버튼), 좌하단 영향 분석 결과 패널(blast radius score, 영향 엔티티, 영향 경로)
 - **Frontend**: `useClusters()`(클러스터 목록), `frontend/src/hooks/useOntology.ts`의 `useOntologyGraph(clusterId)`(`useQuery`), `useAnalyzeImpact()`(`useMutation`, 성공 시 그래프 쿼리 invalidate).
@@ -1686,6 +1708,8 @@ hover 시 flyout 자체가 라벨을 보여주므로 이름만 뜨는 중복 툴
   - _(여기에 개선/수정 요청을 직접 적어주세요)_
 
 ### 문서 관리 (`/documents`)
+
+> **2026-10-15 (D-136)**: Confluence 가져오기(페이지별 결과·경고 전부)·게시·다시 가져오기(경고 표시)가 실행 로그를 남긴다.
 
 - **파일**: `frontend/src/pages/DocumentsPage.tsx` (+ `frontend/src/components/documents/` 의 `ConfluenceImportModal`, `ConfluenceExportDialog`, `ConfluenceDocsSettingsDialog`, `SyncStatusBadge`)
 - **목적 / UX**: 파트 문서(WorkGuide)를 한 화면의 테이블로 관리하고 Confluence 가져오기/게시/재동기화를 실행하는 대시보드. 사이드바 work 모드의 신규 "문서 관리" 그룹 진입점이며, 같은 그룹에 2026-07 개편 때 고아가 됐던 지식 화면들(`/work-guides` `/docs` `/ops-notes` `/mindmap` `/ontology` `/trends`)이 복귀했다. 문서 편집 자체는 기존 `/work-guides/:id` 화면을 그대로 쓴다.

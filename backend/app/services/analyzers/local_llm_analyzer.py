@@ -78,12 +78,16 @@ class LocalLLMAnalyzer(BaseAnalyzer):
                 confidence=0.0,
                 analyzed_by=f"local_llm:{result.profile or 'unknown'}",
                 analyzed_at=datetime.now(timezone.utc).isoformat(),
+                degraded=True,
+                degraded_reason=f"LLM 호출 실패 ({result.status}): {(result.error or '')[:200]}".rstrip(": "),
             )
 
         analyzed_by = f"local_llm:{result.profile}:{result.model}"
         try:
             parsed = _parse(result.text)
-        except Exception:
+            if not isinstance(parsed, dict):
+                raise ValueError(f"JSON 객체가 아닙니다: {type(parsed).__name__}")
+        except Exception as exc:  # noqa: BLE001
             return AnalysisResult(
                 severity="info",
                 root_cause="LLM 이 해석 불가능한 응답을 반환했습니다.",
@@ -91,6 +95,9 @@ class LocalLLMAnalyzer(BaseAnalyzer):
                 confidence=0.1,
                 analyzed_by=analyzed_by,
                 analyzed_at=datetime.now(timezone.utc).isoformat(),
+                citations=citations,
+                degraded=True,
+                degraded_reason=f"LLM 응답 파싱 실패: {str(exc)[:200]}",
             )
 
         return AnalysisResult(
@@ -98,7 +105,7 @@ class LocalLLMAnalyzer(BaseAnalyzer):
             root_cause=parsed.get("root_cause", "Unknown"),
             suggested_actions=parsed.get("suggested_actions", []),
             related_runbooks=parsed.get("related_runbooks", []),
-            confidence=float(parsed.get("confidence", 0.4)),
+            confidence=parsed.get("confidence", 0.4),
             analyzed_by=analyzed_by,
             analyzed_at=datetime.now(timezone.utc).isoformat(),
             citations=citations,

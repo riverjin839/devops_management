@@ -6,23 +6,27 @@
  */
 import { useMemo, useState } from 'react';
 import { Check, Play, ShieldCheck, X } from 'lucide-react';
-import { EmptyState, LogViewer, useToastSafe } from '@/components/common';
+import { EmptyState, RunLogPanel, useToastSafe } from '@/components/common';
 import { MacCard } from '@/components/ui/MacCard';
 import { useAccessReview } from '@/hooks/useK8sRbac';
 import { formatApiError } from '@/lib/utils';
+import { useRunLog, runLogged, type RunLogEntry } from '@/hooks/useRunLog';
+import { useLogPref } from '@/hooks/useLogPref';
 import type { RbacAccessReviewEntry, RbacServiceAccount } from '@/types';
 
 interface Props {
   clusterId: string;
   serviceAccounts: RbacServiceAccount[];
-  showLogs: boolean;
 }
 
-export function AccessReviewPanel({ clusterId, serviceAccounts, showLogs }: Props) {
+export function AccessReviewPanel({ clusterId, serviceAccounts }: Props) {
   const toast = useToastSafe();
   const review = useAccessReview(clusterId);
   const [target, setTarget] = useState('');
   const [entries, setEntries] = useState<RbacAccessReviewEntry[] | null>(null);
+  // 실행 로그(D-089/D-135) — 요청·대기·허용/거부 요약·거부 항목. 펼침 여부는 화면별로 기억한다.
+  const runLog = useRunLog();
+  const [showLog, setShowLog] = useLogPref('k8s-rbac-access-review');
 
   const options = useMemo(
     () => serviceAccounts.filter((sa) => sa.name !== 'default'),
@@ -40,18 +44,32 @@ export function AccessReviewPanel({ clusterId, serviceAccounts, showLogs }: Prop
         ...chosen.bindings.map((b) => b.namespace).filter((n): n is string => !!n),
       ]),
     );
-    try {
-      const data = await review.mutateAsync({
+    const r = await runLogged(runLog, {
+      title: '권한 점검',
+      first: `${chosen.namespace}/${chosen.name} — 네임스페이스 ${namespaces.length}개(${namespaces.join(', ')}) SubjectAccessReview 요청`,
+      fn: () => review.mutateAsync({
         namespace: chosen.namespace,
         serviceAccount: chosen.name,
         namespaces,
-      });
-      setEntries(data);
-      const denied = data.filter((d) => !d.allowed).length;
-      if (denied === 0) toast.success('권한 점검됨', `${data.length}건 모두 허용`);
-      else toast.warning('권한 점검 완료', `${data.length}건 중 ${denied}건 거부`);
-    } catch (e) {
-      toast.error('점검 실패', formatApiError(e));
+      }),
+      summarize: (data): RunLogEntry[] => {
+        const out: RunLogEntry[] = [];
+        for (const e of data) {
+          const what = `[${e.namespace ?? '-'}] ${e.label} (${e.verb ?? ''} ${e.resource ?? ''}${e.subresource ? `/${e.subresource}` : ''})`;
+          if (!e.allowed) out.push(['error', `거부 · ${what}${e.reason ? ` — ${e.reason}` : ''}`]);
+        }
+        const deniedCount = out.length;
+        out.push([deniedCount ? 'warn' : 'info', `${data.length}건 · 허용 ${data.length - deniedCount} · 거부 ${deniedCount}`]);
+        return out;
+      },
+    });
+    if (r.ok) {
+      setEntries(r.data);
+      const denied = r.data.filter((d) => !d.allowed).length;
+      if (denied === 0) toast.success('권한 점검됨', `${r.data.length}건 모두 허용`);
+      else toast.warning('권한 점검 완료', `${r.data.length}건 중 ${denied}건 거부`);
+    } else if (!r.aborted) {
+      toast.error('점검 실패', formatApiError(r.error));
     }
   };
 
@@ -63,18 +81,6 @@ export function AccessReviewPanel({ clusterId, serviceAccounts, showLogs }: Prop
     const cell = new Map<string, RbacAccessReviewEntry>();
     entries.forEach((e) => cell.set(`${e.label}::${e.namespace ?? '—'}`, e));
     return { namespaces, labels, cell };
-  }, [entries]);
-
-  const logText = useMemo(() => {
-    if (!entries) return '';
-    return entries
-      .map(
-        (e) =>
-          `${e.allowed ? '허용' : '거부'}  [${e.namespace}] ${e.label}  (${e.verb} ${e.resource}${
-            e.subresource ? `/${e.subresource}` : ''
-          })${e.reason ? ` — ${e.reason}` : ''}`,
-      )
-      .join('\n');
   }, [entries]);
 
   const denied = entries?.filter((e) => !e.allowed) ?? [];
@@ -119,6 +125,11 @@ export function AccessReviewPanel({ clusterId, serviceAccounts, showLogs }: Prop
         )}
       </>}
     >
+      {(runLog.running || runLog.lines.length > 0) && (
+        <div className="mb-3">
+          <RunLogPanel run={runLog} show={showLog} onShowChange={setShowLog} maxHeight="max-h-56" />
+        </div>
+      )}
       {!matrix ? (
         <EmptyState
           icon={ShieldCheck}
@@ -188,8 +199,6 @@ export function AccessReviewPanel({ clusterId, serviceAccounts, showLogs }: Prop
               바인딩이 걸려 있지 않은지 확인한다.
             </p>
           )}
-
-          {showLogs && <LogViewer text={logText} maxHeight="max-h-72" />}
         </div>
       )}
     </MacCard>

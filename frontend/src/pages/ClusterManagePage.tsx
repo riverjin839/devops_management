@@ -1,6 +1,6 @@
 import { Fragment, useId, useMemo, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { ViewModeBar, DebugLogPanel, useToast, DoubleScrollX, ConfirmDialog, Skeleton, SkeletonTable, EmptyState, LogViewer, PageHeader } from '@/components/common';
+import { ViewModeBar, DebugLogPanel, useToast, DoubleScrollX, ConfirmDialog, Skeleton, SkeletonTable, EmptyState, PageHeader, RunLogPanel } from '@/components/common';
 import { useModalA11y } from '@/components/common/useModalA11y';
 import { MacCard } from '@/components/ui/MacCard';
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
@@ -8,13 +8,15 @@ import { formatApiError } from '@/lib/utils';
 import {
   Server, AlertTriangle, Search, ChevronDown,
   LayoutList, LayoutGrid, Network, Loader2, GripVertical, Globe, Tag,
-  ScrollText, Wrench, HelpCircle,
+  Wrench, HelpCircle,
 } from 'lucide-react';
 import type { Cluster } from '@/types';
 import { useClusters } from '@/hooks/useCluster';
 import { useClusterStore } from '@/stores/clusterStore';
-import { useAuthStore, hasRole, getAuthToken } from '@/stores/authStore';
-import { clustersApi, clustersVerifyStreamUrl } from '@/services/api';
+import { useAuthStore, hasRole } from '@/stores/authStore';
+import { clustersApi } from '@/services/api';
+import { useRunLog, runLogged, type RunLogEntry } from '@/hooks/useRunLog';
+import { useLogPref } from '@/hooks/useLogPref';
 import { useQueryClient } from '@tanstack/react-query';
 import {
   CiliumConfigModal,
@@ -22,6 +24,7 @@ import {
   ClusterTableRow,
   ClusterUpdateDiffDialog,
   ClusterCustomFieldsManager,
+  verifyClusterLogged,
   type DiffRow,
 } from '@/components/cluster-manage';
 import { NodeNicsCollectModal } from '@/components/versions';
@@ -189,16 +192,12 @@ export function ClusterManagePage() {
   const customFields = sortedFields(customFieldsRaw);
   const { data: opsLevels = [] } = useOperationLevels();
 
-  // ── 수집 실행 로그 (CLAUDE.md 실행-로그 규칙) ──────────────────────────────
-  // 실행 결과를 건수 토스트 하나로 뭉개지 않고 대상별 한 줄씩 남긴다 — 특히 일괄 수집의
-  // "실패 N"이 어느 클러스터가 왜 실패했는지 알 수 없던 막다른 골목을 없앤다.
-  const [collectLog, setCollectLog] = useState<string[]>([]);
-  const [collectLogOpen, setCollectLogOpen] = useState(false);
+  // ── 실행 로그 (CLAUDE.md 실행-로그 규칙, DESIGN_SYSTEM §12.9.1) ─────────────
+  // 연결 검증·재수집·IP 수집·일괄 수집·적용을 화면 하나의 표준 실행 로그에 남긴다 — 건수 토스트로
+  // 뭉개지 않고 대상별 한 줄씩(일괄 수집은 클러스터별 단계 칩 + 실패 사유). 펼침은 "로그 보기"가 정한다.
+  const runLog = useRunLog();
+  const [showLog, setShowLog] = useLogPref('cluster-manage');
   const [lastBulkFailedIds, setLastBulkFailedIds] = useState<string[]>([]);
-  const appendLog = (line: string) => {
-    const ts = new Date().toLocaleTimeString('ko-KR', { hour12: false });
-    setCollectLog((prev) => [...prev, `${ts} ${line}`]);
-  };
 
   // ── 기본 컬럼 표시/숨김 — IP 성격 컬럼 4개가 같은 nodeIps 데이터를 반복(≈900px)하던
   // 것을 사용자가 조절할 수 있게. bond0/bond1 은 기본 숨김(상세는 노드 IP 트리·카드 뷰·
@@ -436,23 +435,32 @@ export function ClusterManagePage() {
     aborts.set(cluster.id, ctrl);
     setAutoUpdatingIds((prev) => new Set(prev).add(cluster.id));
     try {
-      const { data } = await clustersApi.autoUpdate(cluster.id, {
-        dryRun: true,
-        signal: ctrl.signal,
+      const r = await runLogged(runLog, {
+        title: `재수집(미리보기) — ${cluster.name}`,
+        first: `${cluster.name} kubeconfig 기반 정보 재수집 요청 — dry-run, 아직 반영하지 않음`,
+        fn: () => clustersApi.autoUpdate(cluster.id, { dryRun: true, signal: ctrl.signal }).then((res) => res.data),
+        summarize: (data) => {
+          const changed = (data.diff ?? []).filter((d) => d.changed);
+          const out: RunLogEntry[] = [[
+            'info',
+            `변경 ${changed.length}건 · 변경 없음 ${(data.diff ?? []).length - changed.length}건 미리보기${changed.length ? ` — ${changed.map((d) => d.field).join(', ')}` : ''}`,
+          ]];
+          for (const w of data.warnings ?? []) out.push(['warn', `경고 — ${w}`]);
+          return out;
+        },
       });
-      appendLog(`[재수집] ok ${cluster.name} — 변경 ${(data.diff ?? []).length}건 미리보기${(data.warnings ?? []).length ? ` · 경고 ${(data.warnings ?? []).length}건` : ''}`);
-      const open = diffClusterRef.current;
-      if (open && open.id !== cluster.id) {
-        // 다른 클러스터의 diff 가 열려 있음 — 덮어쓰면 사용자가 엉뚱한 대상에 적용할 수 있다.
-        toast.info(`${cluster.name} 수집됨`, `${open.name} 의 변경 미리보기가 열려 있어 표시하지 않았습니다. 닫은 뒤 다시 새로고침하세요.`);
-      } else {
-        openDiff(cluster, (data.diff ?? []) as DiffRow[], data.warnings ?? []);
-      }
-    } catch (e: unknown) {
-      const err = e as { name?: string; code?: string };
-      if (err.name !== 'CanceledError' && err.code !== 'ERR_CANCELED') {
-        appendLog(`[재수집] FAIL ${cluster.name} — ${formatApiError(e)}`);
-        toast.error('클러스터 정보 수집 실패', `${cluster.name}: ${formatApiError(e)}`);
+      if (r.ok) {
+        const data = r.data;
+        const open = diffClusterRef.current;
+        if (open && open.id !== cluster.id) {
+          // 다른 클러스터의 diff 가 열려 있음 — 덮어쓰면 사용자가 엉뚱한 대상에 적용할 수 있다.
+          runLog.log('warn', `${open.name} 의 변경 미리보기가 열려 있어 ${cluster.name} 결과는 표시하지 않음`);
+          toast.info(`${cluster.name} 수집됨`, `${open.name} 의 변경 미리보기가 열려 있어 표시하지 않았습니다. 닫은 뒤 다시 새로고침하세요.`);
+        } else {
+          openDiff(cluster, (data.diff ?? []) as DiffRow[], data.warnings ?? []);
+        }
+      } else if (!r.aborted) {
+        toast.error('클러스터 정보 수집 실패', `${cluster.name}: ${formatApiError(r.error)}`);
       }
     } finally {
       aborts.delete(cluster.id);
@@ -464,16 +472,9 @@ export function ClusterManagePage() {
     }
   };
 
-  // 연결 검증 — POST /clusters/{id}/verify/stream(SSE) 를 fetch 로 소비해 단계(api_server /
-  // kubeconfig_auth / kubectl_nodes)가 시작·끝날 때마다 실행 로그에 바로 한 줄씩 남긴다.
+  // 연결 검증 — POST /clusters/{id}/verify/stream(SSE) 을 표준 실행 로그로 소비한다(verifyClusterLogged):
+  // 단계(api_server / kubeconfig_auth / kubectl_nodes)가 시작·끝날 때마다 단계 칩과 로그 줄이 바로 쌓인다.
   // 진행 중 버튼을 다시 누르면 abort — 서버는 남은 단계를 실행하지 않고 상태도 바꾸지 않는다(감사: aborted).
-  // 로그 패널은 자동으로 열지 않고 "로그 보기" 토글에 맡긴다(CLAUDE.md — 사용자가 결정).
-  const CHECK_LABEL: Record<string, string> = {
-    api_server: 'API server',
-    kubeconfig_auth: 'kubeconfig 인증',
-    kubectl_nodes: 'kubectl get nodes',
-  };
-  const STEP_MARK: Record<string, string> = { ok: 'ok', fail: 'FAIL', skip: 'SKIP' };
   const verifyAbortRef = useRef<Map<string, AbortController>>(new Map());
   const handleVerify = async (cluster: Cluster) => {
     const running = verifyAbortRef.current.get(cluster.id);
@@ -484,74 +485,15 @@ export function ClusterManagePage() {
     const ac = new AbortController();
     verifyAbortRef.current.set(cluster.id, ac);
     setVerifyingIds((prev) => new Set(prev).add(cluster.id));
-    appendLog(`[검증] start ${cluster.name} — API server → kubeconfig 인증 → kubectl 순서로 점검`);
-    let finished = false;
-    const handle = (evt: Record<string, unknown>) => {
-      const type = String(evt.type ?? '');
-      if (type === 'step') {
-        const label = CHECK_LABEL[String(evt.check)] ?? String(evt.check ?? '');
-        if (evt.status === 'running') appendLog(`[검증]   … ${label} 진행 중`);
-        else appendLog(`[검증]   ${STEP_MARK[String(evt.status)] ?? String(evt.status)} ${label} — ${String(evt.detail ?? '')}`);
-      } else if (type === 'done') {
-        finished = true;
-        appendLog(`[검증] ${evt.ok ? 'ok' : 'FAIL'} ${cluster.name} — 상태 ${String(evt.status ?? '-')}${evt.status_reason ? ` (${String(evt.status_reason)})` : ''}`);
-        if (evt.ok) toast.success('연결 검증 통과', cluster.name);
-        else toast.warning('연결 검증 실패 항목 있음', `${cluster.name} — 자세한 내용은 "로그 보기"`);
-      } else if (type === 'error') {
-        finished = true;
-        const msg = String(evt.message ?? '검증 처리 중 오류');
-        appendLog(`[검증] FAIL ${cluster.name} — ${msg}`);
-        toast.error('연결 검증 실패', `${cluster.name}: ${msg}`);
-      }
-    };
     try {
-      const token = getAuthToken();
-      const resp = await fetch(clustersVerifyStreamUrl(cluster.id), {
-        method: 'POST',
-        signal: ac.signal,
-        headers: token ? { Authorization: `Bearer ${token}` } : {},
-      });
-      if (!resp.ok || !resp.body) {
-        // 스트림 시작 전 거절(403/404 등)은 본문이 JSON 에러다.
-        let detail = `서버 오류 ${resp.status}`;
-        try {
-          const body = await resp.json();
-          if (body?.detail) detail = String(body.detail);
-        } catch {
-          /* 본문이 JSON 이 아니면 상태코드만 */
-        }
-        throw new Error(detail);
-      }
-      const reader = resp.body.getReader();
-      const decoder = new TextDecoder('utf-8');
-      let buf = '';
-      for (;;) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        buf += decoder.decode(value, { stream: true });
-        let idx;
-        while ((idx = buf.indexOf('\n\n')) >= 0) {
-          const block = buf.slice(0, idx);
-          buf = buf.slice(idx + 2);
-          for (const ln of block.split('\n')) {
-            if (!ln.startsWith('data:')) continue;
-            try {
-              handle(JSON.parse(ln.slice(5).replace(/^ /, '')));
-            } catch {
-              /* 깨진 줄은 건너뛴다 — 스트림 전체를 죽이지 않는다 */
-            }
-          }
-        }
-      }
-      if (!finished) appendLog(`[검증] FAIL ${cluster.name} — 결과 없이 스트림이 끊겼습니다`);
-    } catch (e: unknown) {
-      if (ac.signal.aborted) {
-        appendLog(`[검증] 중지 ${cluster.name} — 남은 단계는 실행하지 않았고 상태는 그대로입니다`);
+      const r = await verifyClusterLogged(runLog, cluster, ac.signal);
+      if (r.ok) {
+        if (r.data.ok) toast.success('연결 검증 통과', cluster.name);
+        else toast.warning('연결 검증 실패 항목 있음', `${cluster.name} — 자세한 내용은 실행 로그`);
+      } else if (r.aborted) {
         toast.info('연결 검증 중지', cluster.name);
       } else {
-        const msg = e instanceof Error ? e.message : formatApiError(e);
-        appendLog(`[검증] FAIL ${cluster.name} — ${msg}`);
-        toast.error('연결 검증 실패', `${cluster.name}: ${msg}`);
+        toast.error('연결 검증 실패', `${cluster.name}: ${r.error instanceof Error ? r.error.message : formatApiError(r.error)}`);
       }
     } finally {
       verifyAbortRef.current.delete(cluster.id);
@@ -570,16 +512,32 @@ export function ClusterManagePage() {
   // 추가 엔드포인트 없이 dryRun=false 호출 한 번이면 충분.
   // ※ invalidate 만 하면 Zustand 스토어가 다음 폴링 틱(30s) 까지 stale 일 수 있어
   //   refetchQueries 로 즉시 갱신을 보장.
+  // 반영(dryRun 없음) 응답 요약 — 갱신된 필드와 경고를 줄로 남긴다.
+  const autoUpdateLines = (data: { updated?: Record<string, unknown>; warnings?: string[] }): RunLogEntry[] => {
+    const fields = Object.keys(data.updated ?? {});
+    const out: RunLogEntry[] = [[
+      'info',
+      fields.length ? `갱신 ${fields.length}개 필드 — ${fields.join(', ')}` : '갱신된 필드 없음',
+    ]];
+    for (const w of data.warnings ?? []) out.push(['warn', `경고 — ${w}`]);
+    return out;
+  };
+
   const collectNodeIps = async (cluster: Cluster) => {
     setCollectingNodeIpsId(cluster.id);
     try {
-      await clustersApi.autoUpdate(cluster.id);
-      await queryClient.refetchQueries({ queryKey: ['clusters'] });
-      appendLog(`[IP 수집] ok ${cluster.name} — 노드 IP / k8s 버전 등 갱신됨`);
-      toast.success('수집됨', `${cluster.name} 의 노드 IP / k8s 버전 등이 갱신됐습니다.`);
-    } catch (e: unknown) {
-      appendLog(`[IP 수집] FAIL ${cluster.name} — ${formatApiError(e)}`);
-      toast.error('노드 IP 수집 실패', formatApiError(e));
+      const r = await runLogged(runLog, {
+        title: `노드 IP 수집 — ${cluster.name}`,
+        first: `${cluster.name} 노드 IP 수집 요청 — 미리보기 없이 바로 반영`,
+        fn: () => clustersApi.autoUpdate(cluster.id).then((res) => res.data),
+        summarize: autoUpdateLines,
+      });
+      if (r.ok) {
+        await queryClient.refetchQueries({ queryKey: ['clusters'] });
+        toast.success('수집됨', `${cluster.name} 의 노드 IP / k8s 버전 등이 갱신됐습니다.`);
+      } else if (!r.aborted) {
+        toast.error('노드 IP 수집 실패', formatApiError(r.error));
+      }
     } finally {
       setCollectingNodeIpsId(null);
     }
@@ -616,50 +574,84 @@ export function ClusterManagePage() {
     setBulkCollecting(true);
     bulkAbortRef.current = false;
     setBulkProgress({ done: 0, total: targets.length });
-    appendLog(`[일괄 수집] 시작 — 대상 ${targets.length}개`);
-    let ok = 0;
-    let fail = 0;
-    let aborted = false;
-    const failedIds: string[] = [];
-    for (const c of targets) {
-      if (bulkAbortRef.current) { aborted = true; break; }
-      try {
-        await clustersApi.autoUpdate(c.id);
-        ok += 1;
-        appendLog(`[일괄 수집] ok ${c.name}`);
-      } catch (e) {
-        fail += 1;
-        failedIds.push(c.id);
-        // 실패를 익명 카운트로 삼키지 않는다 — 어느 클러스터가 왜 실패했는지 로그에 남긴다.
-        appendLog(`[일괄 수집] FAIL ${c.name} — ${formatApiError(e)}`);
-      }
-      setBulkProgress({ done: ok + fail, total: targets.length });
-    }
+    // 클러스터를 클라이언트에서 순회한다 — 대상마다 단계 칩·결과 줄을 남기고, 한 대상 실패가
+    // 전체를 멈추지 않는다. 실패를 익명 카운트로 삼키지 않고 어느 클러스터가 왜 실패했는지 남긴다.
+    const r = await runLogged(runLog, {
+      title: targetsOverride ? '노드 IP 일괄 수집 — 실패분 재시도' : '노드 IP 일괄 수집',
+      first: `대상 ${targets.length}개 — ${targets.slice(0, 8).map((c) => c.name).join(', ')}${targets.length > 8 ? ` 외 ${targets.length - 8}개` : ''}`,
+      heartbeatMs: 0,
+      fn: async () => {
+        let ok = 0;
+        let fail = 0;
+        let aborted = false;
+        const failedIds: string[] = [];
+        for (const c of targets) {
+          if (bulkAbortRef.current) { aborted = true; break; }
+          const t0 = performance.now();
+          runLog.setStep(c.id, c.name, 'running');
+          runLog.log('info', `${c.name} 수집 중`);
+          try {
+            const { data } = await clustersApi.autoUpdate(c.id);
+            ok += 1;
+            runLog.setStep(c.id, c.name, 'done');
+            const fields = Object.keys(data.updated ?? {}).length;
+            runLog.log('info', `${c.name} 완료 · ${Math.round(performance.now() - t0)}ms · 갱신 ${fields}개 필드`);
+            for (const w of data.warnings ?? []) runLog.log('warn', `${c.name} 경고 — ${w}`);
+          } catch (e) {
+            fail += 1;
+            failedIds.push(c.id);
+            runLog.setStep(c.id, c.name, 'failed');
+            runLog.log('error', `${c.name} 실패 — ${formatApiError(e)}`);
+          }
+          setBulkProgress({ done: ok + fail, total: targets.length });
+        }
+        return { ok, fail, aborted, failedIds };
+      },
+      summarize: (res) => {
+        const out: RunLogEntry[] = [];
+        if (res.aborted) out.push(['warn', `사용자 중단 — 남은 ${targets.length - res.ok - res.fail}개는 수집하지 않음`]);
+        out.push([
+          res.fail ? 'warn' : 'info',
+          `성공 ${res.ok} · 실패 ${res.fail} · 대상 ${targets.length}${res.aborted ? ' · 중단됨' : ''}`,
+        ]);
+        return out;
+      },
+    });
     await queryClient.refetchQueries({ queryKey: ['clusters'] });
     setBulkCollecting(false);
     setBulkProgress(null);
+    if (!r.ok) {
+      toast.error('일괄 수집 실패', formatApiError(r.error));
+      return;
+    }
+    const { ok, fail, aborted, failedIds } = r.data;
     setLastBulkFailedIds(failedIds);
     const summary = `성공 ${ok} · 실패 ${fail} · 대상 ${targets.length}${aborted ? ' · 중단됨' : ''}`;
-    appendLog(`[일괄 수집] 종료 — ${summary}`);
-    if (fail > 0) setCollectLogOpen(true);
-    if (fail > 0 && ok === 0) toast.error('일괄 수집 실패', `${summary} — 상세는 수집 로그 참조`);
-    else if (fail > 0) toast.warning('일괄 수집 부분 실패', `${summary} — 상세는 수집 로그 참조`);
+    if (fail > 0 && ok === 0) toast.error('일괄 수집 실패', `${summary} — 상세는 실행 로그 참조`);
+    else if (fail > 0) toast.warning('일괄 수집 부분 실패', `${summary} — 상세는 실행 로그 참조`);
     else if (aborted) toast.info('일괄 수집 중단됨', summary);
     else toast.success('일괄 수집됨', summary);
   };
 
   const handleApplyDiff = async () => {
     if (!diffCluster) return;
-    setApplyingId(diffCluster.id);
+    const target = diffCluster;
+    const changed = diffRows.filter((d) => d.changed).length;
+    setApplyingId(target.id);
     try {
-      await clustersApi.autoUpdate(diffCluster.id);
-      queryClient.invalidateQueries({ queryKey: ['clusters'] });
-      appendLog(`[적용] ok ${diffCluster.name} — diff 미리보기 내용 반영됨`);
-      toast.success('클러스터 정보 갱신됨', diffCluster.name);
-      closeDiff();
-    } catch (e: unknown) {
-      appendLog(`[적용] FAIL ${diffCluster.name} — ${formatApiError(e)}`);
-      toast.error('적용 실패', formatApiError(e));
+      const r = await runLogged(runLog, {
+        title: `변경 적용 — ${target.name}`,
+        first: `${target.name} 미리보기 변경 ${changed}건 적용 요청 — 서버가 다시 수집해 반영`,
+        fn: () => clustersApi.autoUpdate(target.id).then((res) => res.data),
+        summarize: autoUpdateLines,
+      });
+      if (r.ok) {
+        queryClient.invalidateQueries({ queryKey: ['clusters'] });
+        toast.success('클러스터 정보 갱신됨', target.name);
+        closeDiff();
+      } else if (!r.aborted) {
+        toast.error('적용 실패', formatApiError(r.error));
+      }
     } finally {
       setApplyingId(null);
     }
@@ -669,6 +661,22 @@ export function ClusterManagePage() {
   // 토글을 함께 담는다. 툴바 6개 동일 비중 문제의 해소 지점.
   const [toolsOpen, setToolsOpen] = useState(false);
   const toolsRef = useModalA11y(toolsOpen, () => setToolsOpen(false));
+
+  const hasRunLog = runLog.running || runLog.lines.length > 0;
+  const runLogPanel = hasRunLog
+    ? <RunLogPanel run={runLog} show={showLog} onShowChange={setShowLog} maxHeight="max-h-40" />
+    : undefined;
+  // 직전 일괄 수집에서 실패한 클러스터만 다시 — 확인 다이얼로그를 이미 거친 동일 동작이라 재확인 없음.
+  const retryFailedButton = lastBulkFailedIds.length > 0 && !bulkCollecting && canEdit ? (
+    <button
+      type="button"
+      onClick={() => executeBulkCollect(clusters.filter((c) => lastBulkFailedIds.includes(c.id)))}
+      className="px-2 py-1 text-xs font-medium rounded-xl bg-status-warning/10 text-status-warning border border-status-warning/30 hover:bg-status-warning/20 transition-colors"
+      title="직전 일괄 수집에서 실패한 클러스터만 다시 수집합니다"
+    >
+      실패 {lastBulkFailedIds.length}개 재시도
+    </button>
+  ) : undefined;
 
   return (
     <div className="app-min-h-screen bg-background">
@@ -745,17 +753,6 @@ export function ClusterManagePage() {
                   : '노드 IP 일괄 수집'}
               </button>
             )}
-            <button
-              onClick={() => setCollectLogOpen((v) => !v)}
-              aria-expanded={collectLogOpen}
-              className={`flex items-center gap-1.5 px-3 py-1.5 text-sm border border-border rounded-lg transition-colors ${
-                collectLogOpen ? 'bg-secondary text-foreground' : 'bg-secondary/60 hover:bg-secondary text-muted-foreground hover:text-foreground'
-              }`}
-              title="실행 로그 — 연결 검증/재수집/IP 수집/일괄 수집의 대상별 성공·실패 기록"
-            >
-              <ScrollText className="w-3.5 h-3.5" />
-              로그 보기{collectLog.length > 0 && ` (${collectLog.length})`}
-            </button>
             <button
               onClick={() => setShowFilter(v => !v)}
               className="flex items-center gap-1.5 px-3 py-1.5 text-sm bg-secondary hover:bg-secondary/80 border border-border rounded-lg transition-colors text-muted-foreground hover:text-foreground"
@@ -840,37 +837,11 @@ export function ClusterManagePage() {
           </>}
         />
 
-        {/* 수집 실행 로그 — 실행 결과를 토스트 요약이 아니라 대상별 한 줄 기록으로 (CLAUDE.md 실행-로그 규칙) */}
-        {collectLogOpen && (
-          <MacCard
-            title="실행 로그"
-            icon={ScrollText}
-            rootClassName="mb-5"
-            bodyPadding="p-0"
-            actions={<>
-              {lastBulkFailedIds.length > 0 && !bulkCollecting && canEdit && (
-                <button
-                  onClick={() => executeBulkCollect(clusters.filter((c) => lastBulkFailedIds.includes(c.id)))}
-                  className="px-2 py-1 text-xs font-medium rounded-lg bg-status-warning/10 text-status-warning border border-status-warning/30 hover:bg-status-warning/20 transition-colors"
-                  title="직전 일괄 수집에서 실패한 클러스터만 다시 수집합니다"
-                >
-                  실패 {lastBulkFailedIds.length}개 재시도
-                </button>
-              )}
-              <button
-                onClick={() => { setCollectLog([]); setLastBulkFailedIds([]); }}
-                disabled={collectLog.length === 0}
-                className="px-2 py-1 text-xs rounded-lg hover:bg-secondary text-muted-foreground disabled:opacity-40 transition-colors"
-              >
-                지우기
-              </button>
-            </>}
-          >
-            <LogViewer
-              text={collectLog.length > 0 ? collectLog.join('\n') : '아직 실행 기록이 없습니다 — 연결 검증 / 재수집 / IP 수집 / 일괄 수집 결과가 여기에 대상별로 쌓입니다.'}
-              maxHeight="max-h-48"
-            />
-          </MacCard>
+        {/* 실행 로그 — 연결 검증/재수집/IP 수집/일괄 수집/적용의 수명주기·대상별 결과 (표준 RunLogPanel) */}
+        {hasRunLog && (
+          <div className="mb-5">
+            <RunLogPanel run={runLog} show={showLog} onShowChange={setShowLog} actions={retryFailedButton} maxHeight="max-h-56" />
+          </div>
         )}
 
         {/* 필터 패널 — 수제 카드 div 대신 MacCard (D-050). 검색은 툴바 상시 노출로 이동. */}
@@ -1151,6 +1122,7 @@ export function ClusterManagePage() {
         applying={applyingId === diffCluster?.id}
         onCancel={() => { if (!applyingId) closeDiff(); }}
         onConfirm={handleApplyDiff}
+        logSlot={runLogPanel}
       />
 
       <ClusterCustomFieldsManager

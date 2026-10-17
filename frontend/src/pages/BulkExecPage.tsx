@@ -7,7 +7,9 @@ import {
 } from 'lucide-react';
 import { useClusters } from '@/hooks/useCluster';
 import { useTerminalEnvSync } from '@/hooks/useTerminalEnvSync';
-import { ConfirmDialog, ExecOutputTabs, ClusterSidebar, CommandTraceList, DebugLogPanel, Skeleton, EmptyState, SelectClusterEmptyState, ResizeGrip, DoubleScrollX, PageShell } from '@/components/common';
+import { useRunLog, runLogged, consoleRunLines, type RunLogEntry } from '@/hooks/useRunLog';
+import { useLogPref } from '@/hooks/useLogPref';
+import { ConfirmDialog, ExecOutputTabs, ClusterSidebar, CommandTraceList, DebugLogPanel, Skeleton, EmptyState, SelectClusterEmptyState, ResizeGrip, DoubleScrollX, PageShell, RunLogPanel } from '@/components/common';
 import { MacCard } from '@/components/ui/MacCard';
 import { PageHeader } from '@/components/common/PageHeader';
 import { ExecutionStepsTimeline } from '@/components/daily-check';
@@ -627,7 +629,6 @@ export function BulkExecPage() {
       }, signal);
       return res.data;
     },
-    onSuccess: (data) => setRunResponse(data),
   });
 
   // SCP "다른 노드에서 불러오기"
@@ -665,6 +666,53 @@ export function BulkExecPage() {
     },
     onError: (err) => { setFetchError(formatApiError(err)); setFetchTrace(null); },
   });
+
+  // 실행 수명주기 로그(일괄 실행·파일 가져오기 공유) — 호스트별 출력은 결과 패널, 여기는 요청·대기·호스트별 상태·실패 사유.
+  const runLog = useRunLog();
+  const [showLog, setShowLog] = useLogPref('bulk-exec-run');
+
+  const doRun = async () => {
+    const n = selectedHosts.length;
+    const multiCluster = new Set(selectedHosts.map((t) => t.clusterId)).size > 1;
+    const what = action === 'ssh'
+      ? `${language} 명령 "${(command.trim().split('\n')[0] ?? '').slice(0, 120)}${command.trim().includes('\n') ? ' …' : ''}"`
+      : `파일 업로드 ${scpRemotePath} (${new Blob([scpContent]).size} bytes)`;
+    const r = await runLogged(runLog, {
+      title: action === 'ssh' ? '노드 일괄 SSH 실행' : '노드 일괄 SCP 업로드',
+      first: `${clusterIds.length}개 클러스터 · ${n}개 노드 — ${what} · SSH ${username} 포트 ${port} · ${mode === 'parallel' ? `병렬 ${parallelism}` : '순차'} · chunk ${chunkSize} · timeout ${connectTimeout}/${execTimeout}s 요청`,
+      fn: () => runMutation.mutateAsync(),
+      summarize: (res) => consoleRunLines(res.results.map((x) => {
+        const label = x.name && x.name !== x.host ? `${x.name}(${x.host})` : x.host;
+        return {
+          host: multiCluster && x.clusterName ? `${label} @ ${x.clusterName}` : label,
+          status: x.status, exitCode: x.exitCode, durationMs: x.durationMs, stderr: x.stderr, error: x.error,
+        };
+      })),
+    });
+    if (r.ok) setRunResponse(r.data);
+  };
+
+  // 파일 가져오기 — 단계 trace(ExecutionStepsTimeline)는 그대로 두고, 실행 로그에도 단계·결과를 남긴다.
+  const doFetchFile = async () => {
+    const node = knownNodes.find((x) => x.key === fetchSourceKey);
+    const r = await runLogged(runLog, {
+      title: '다른 노드에서 파일 가져오기',
+      first: `${node?.label ?? '(노드 미선택)'} — ${fetchRemotePath.trim() || '(경로 없음)'} 읽기 요청 · SSH ${username} 포트 ${port}`,
+      fn: () => fetchFileMutation.mutateAsync(),
+      summarize: (res) => {
+        const out: RunLogEntry[] = [];
+        for (const s of res.steps ?? []) {
+          runLog.setStep(s.id, s.label, s.status === 'failed' ? 'failed' : 'done');
+          out.push([s.status === 'failed' ? 'error' : 'info',
+            `단계 ${s.label} · ${s.status}${s.durationMs != null ? ` · ${s.durationMs}ms` : ''}${s.detail ? ` — ${s.detail}` : ''}`]);
+        }
+        out.push(...consoleRunLines({ host: res.host, status: res.status, error: res.error }));
+        if (res.status === 'ok') out.push(['info', `${res.size} bytes 를 업로드 내용으로 불러옴`]);
+        return out;
+      },
+    });
+    if (!r.ok && r.aborted) setFetchError(null);
+  };
 
   const canRun =
     clusterIds.length > 0 &&
@@ -1010,7 +1058,7 @@ export function BulkExecPage() {
                         </p>
                         <button
                           type="button"
-                          onClick={() => fetchFileMutation.mutate()}
+                          onClick={() => void doFetchFile()}
                           disabled={fetchFileMutation.isPending || !fetchSourceKey || !fetchRemotePath.trim()}
                           className="flex items-center gap-1 px-2.5 py-1 text-xs font-medium rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-40 disabled:cursor-not-allowed flex-shrink-0"
                         >
@@ -1138,10 +1186,12 @@ export function BulkExecPage() {
             </div>
           </MacCard>
 
-          {/* 우측: 실행 결과 — mc 콘솔처럼 항상 같은 자리에 고정, 실행 전엔 플레이스홀더.
+          {/* 우측: 실행 로그(수명주기) + 실행 결과 — mc 콘솔처럼 항상 같은 자리에 고정, 실행 전엔 플레이스홀더.
               내부에서만 스크롤되어 세 컬럼이 한 화면 폭 안에 들어온다. */}
+          <div className="lg:col-span-5 min-w-0 flex flex-col gap-3">
+          <RunLogPanel run={runLog} show={showLog} onShowChange={setShowLog} maxHeight="max-h-56" />
           {!runResponse ? (
-            <div className="lg:col-span-5 min-w-0 flex items-center justify-center p-6 lg:h-[calc(100vh-160px)] min-h-[280px]">
+            <div className="min-w-0 flex items-center justify-center p-6 lg:h-[calc(100vh-160px)] min-h-[280px]">
               <EmptyState
                 compact
                 icon={Terminal}
@@ -1152,7 +1202,7 @@ export function BulkExecPage() {
           ) : (
           <MacCard
             title="실행 결과"
-            rootClassName="lg:col-span-5 min-w-0 flex flex-col lg:h-[calc(100vh-160px)] min-h-[280px]"
+            rootClassName="min-w-0 flex flex-col lg:h-[calc(100vh-160px)] min-h-[280px]"
             bodyPadding="p-0"
             className="flex-1 min-h-0 flex flex-col"
             titleExtra={
@@ -1295,6 +1345,7 @@ export function BulkExecPage() {
                 </div>
           </MacCard>
           )}
+          </div>
         </div>
         </div>
       </PageShell>
@@ -1307,7 +1358,7 @@ export function BulkExecPage() {
         confirmLabel={action === 'ssh' ? '실행' : '업로드'}
         danger={action === 'ssh'}
         onCancel={() => setConfirmOpen(false)}
-        onConfirm={() => { setConfirmOpen(false); runMutation.mutate(); }}
+        onConfirm={() => { setConfirmOpen(false); void doRun(); }}
       >
         <div className="space-y-3">
           <div>

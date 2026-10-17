@@ -1,6 +1,7 @@
-import { useState } from 'react';
+import { useId, useState } from 'react';
 import { Check, ChevronDown, ChevronUp, Copy } from 'lucide-react';
 import { useToast } from '@/components/common';
+import { MacCard } from '@/components/ui/MacCard';
 
 /** Alertmanager 에 붙여넣을 receiver 설정 예시. 토큰은 실제 값을 노출하지 않는다. */
 const ALERTMANAGER_YAML = `# alertmanager.yaml — 기존 cube receiver 는 그대로 두고 PEP 를 추가한다.
@@ -44,6 +45,7 @@ export function AlertReceiverGuide() {
   const [open, setOpen] = useState(false);
   const [copied, setCopied] = useState<string | null>(null);
   const toast = useToast();
+  const bodyId = useId();
 
   const copy = async (key: string, text: string) => {
     try {
@@ -55,22 +57,28 @@ export function AlertReceiverGuide() {
     }
   };
 
+  // 수제 `rounded-md border` 카드 대신 MacCard — 제목은 title 슬롯, 펼침 토글은 actions 슬롯(D-116).
   return (
-    <div className="rounded-md border border-border bg-muted/20 overflow-hidden">
-      <button
-        type="button"
-        onClick={() => setOpen((v) => !v)}
-        aria-expanded={open}
-        className="w-full flex items-center justify-between px-4 py-2.5 text-sm font-medium hover:bg-muted/40 transition-colors"
-      >
-        <span>알람 수신 설정 방법 (Alertmanager · alert-forwarder)</span>
-        {open
-          ? <ChevronUp className="w-4 h-4 text-muted-foreground" aria-hidden />
-          : <ChevronDown className="w-4 h-4 text-muted-foreground" aria-hidden />}
-      </button>
-
+    <MacCard
+      title="알람 수신 설정 방법 (Alertmanager · alert-forwarder)"
+      bodyPadding={open ? 'p-4' : 'p-0'}
+      actions={(
+        <button
+          type="button"
+          onClick={() => setOpen((v) => !v)}
+          aria-expanded={open}
+          aria-controls={bodyId}
+          className="inline-flex items-center gap-1 px-2 py-1 rounded-xl text-xs text-muted-foreground hover:bg-secondary transition-colors"
+        >
+          {open ? '접기' : '펼치기'}
+          {open
+            ? <ChevronUp className="w-3.5 h-3.5" aria-hidden />
+            : <ChevronDown className="w-3.5 h-3.5" aria-hidden />}
+        </button>
+      )}
+    >
       {open ? (
-        <div className="px-4 pb-4 pt-1 space-y-4 border-t border-border">
+        <div id={bodyId} className="space-y-4">
           <p className="text-xs text-muted-foreground leading-relaxed">
             백엔드 환경변수 <code className="font-mono text-foreground">ALERT_INGEST_TOKEN</code> 을
             먼저 설정해야 합니다. 미설정이면 수신 엔드포인트가 <b className="text-foreground">503</b> 으로
@@ -95,7 +103,7 @@ export function AlertReceiverGuide() {
           </p>
         </div>
       ) : null}
-    </div>
+    </MacCard>
   );
 }
 

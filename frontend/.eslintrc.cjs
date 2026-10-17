@@ -5,10 +5,10 @@
 const STATUS_PALETTE_RE = String.raw`/(^|[^\w-])(text|bg|border|ring|fill|stroke|from|to|via|divide|outline|decoration|placeholder|accent|caret|shadow)(-[a-z]+)?-(emerald|green|red|rose|amber|yellow|sky)-\d{2,3}/`;
 /* 장식·카테고리 고정 팔레트 금지 (D-120, DESIGN_SYSTEM §12.12-7) — 예전엔 "장식용 계열은 대상이 아니다" 로
    뒀더니 blue·orange·violet·indigo·cyan·pink 가 329건까지 자라 Tailwind 기본 팔레트(= AI 템플릿 룩)가 됐다.
-   종류 구분 색은 --chart-1..8 토큰, 상태는 status 토큰만 쓴다. 기존 위반 파일은 아래 DECO_PALETTE_ALLOWLIST
-   (래칫 — 파일을 지울 수만 있고 추가하지 않는다)에서 이 검사만 면제된다. 새 파일·새 코드는 바로 걸린다. */
+   종류 구분 색은 --chart-1..8 토큰, 상태는 status 토큰만 쓴다. 래칫 allowlist(61파일)를 2026-10-15 에 0 으로
+   비우고 예외 없이 막는다. 캔버스·WebGL 처럼 클래스를 못 쓰는 렌더러는 lib/chartTokens.ts cssVarColor 를 쓴다. */
 const DECO_PALETTE_RE = String.raw`/(^|[^\w-])(text|bg|border|ring|fill|stroke|from|to|via|divide|outline|decoration|placeholder|accent|caret|shadow)(-[a-z]+)?-(blue|orange|purple|violet|indigo|cyan|pink|fuchsia|teal|lime)-\d{2,3}/`;
-const DECO_PALETTE_MSG = '장식·카테고리 색도 고정 팔레트를 쓰지 않는다 — 종류 구분은 --chart-1..8 토큰, 상태는 status 토큰 (DESIGN_SYSTEM §12.12-7, D-120). 기존 파일은 .eslintrc.cjs DECO_PALETTE_ALLOWLIST(줄이기만 한다)';
+const DECO_PALETTE_MSG = '장식·카테고리 색도 고정 팔레트를 쓰지 않는다 — 종류 구분은 --chart-1..8 토큰, 상태는 status 토큰 (DESIGN_SYSTEM §12.12-7, D-120)';
 /* 장식 효과·대비 우회 금지 (Phase 2, D-119·D-121·D-125·D-132, DESIGN_SYSTEM §12.12-4·8) — 전량 0 으로 만든 뒤 회귀 방지로 켠다.
    hover-lift(hover:-translate-y·hover:scale·active:scale), 그라데이션, transition-all, 장식 ping/bounce,
    상태 글자색 arbitrary 값(text-[hsl(var(--status-*))] — 4.5:1 대비 토큰 text-status-* 를 우회한다). */
@@ -21,29 +21,6 @@ const EYEBROW_MSG = '대문자 아이브로우(uppercase + tracking-wide*) 금�
    1200~2999px 고정 폭(max-w-[1400px] 등)은 PageShell 밖에서 막는다. 모달·팝오버 폭은 대개 3자리라 걸리지 않는다. */
 const WIDTH_RE = String.raw`/(^|[^\w-])max-w-\[(1[2-9]|2\d)\d\dpx\]/`;
 const WIDTH_MSG = '페이지 폭은 PageShell density(console|hub|doc)로만 정한다 — max-w-[NNNNpx] 금지 (DESIGN_SYSTEM §12.12-5, D-123)';
-const DECO_PALETTE_ALLOWLIST = [
-  'src/components/commands/constants.ts',
-  'src/components/common/ViewModeBar.tsx',
-  'src/components/dashboard/AddClusterModal.tsx',
-  'src/components/dashboard/AddMetricCardModal.tsx',
-  'src/components/dashboard/WeeklyWorkTable.tsx',
-  'src/components/documents/ConfluenceImportModal.tsx',
-  'src/components/node-labels/NodeLabelsTable.tsx',
-  'src/components/packet-flow/HopDetailPanel.tsx',
-  'src/components/playbooks/PlaybookLogDialog.tsx',
-  'src/components/ui/DateTimePicker.tsx',
-  'src/components/work-guides/GuidePageView.tsx',
-  'src/components/work-items/JiraImportModal.tsx',
-  'src/components/work-items/JiraIssueChip.tsx',
-  'src/components/work-items/JiraLinkDialog.tsx',
-  'src/components/work-items/JiraPushDialog.tsx',
-  'src/components/work-items/WorkItemEpicView.tsx',
-  'src/components/work-items/WorkItemForm.tsx',
-  'src/components/work-items/WorkItemReadView.tsx',
-  'src/components/work-items/WorkItemTableRow.tsx',
-  'src/pages/WorkItemDetailPage.tsx',
-  'src/stores/tableViewStore.ts',
-];
 /* P2 타이포 — 흐린 보조 글자(text-muted-foreground/50~90 → 라이트에서 1.96~3.23:1)와 11px 미만 글자 금지.
    placeholder: 변형은 입력 안내 글자라 예외. esquery 정규식은 '/' 를 못 쓰므로 슬래시 자리는 '.' 로 매칭. */
 const TYPO_RE = String.raw`/((?<!placeholder:)(?<![\w-])text-muted-foreground.[5-9]\d(?!\d))|text-\[(8|9|10)px\]/`;
@@ -114,8 +91,6 @@ module.exports = {
     'no-restricted-syntax': ['error', ...BASE_RESTRICTED, ...DECO_RESTRICTED, ...FX_RESTRICTED, ...WIDTH_RESTRICTED],
   },
   overrides: [
-    /* D-120 래칫 — 장식 팔레트 검사만 면제. 파일을 토큰으로 이관하면 목록에서 지운다. */
-    { files: DECO_PALETTE_ALLOWLIST, rules: { 'no-restricted-syntax': ['error', ...BASE_RESTRICTED, ...FX_RESTRICTED, ...WIDTH_RESTRICTED] } },
     /* PageShell 은 허브 폭(max-w-[1600px])을 정의하는 유일한 곳. */
     { files: ['src/components/common/PageShell.tsx'], rules: { 'no-restricted-syntax': ['error', ...BASE_RESTRICTED, ...DECO_RESTRICTED, ...FX_RESTRICTED] } },
   ],

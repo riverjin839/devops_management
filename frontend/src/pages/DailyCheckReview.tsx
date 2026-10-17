@@ -187,13 +187,13 @@ export function DailyCheckReviewPage() {
     });
     if (!r.ok) return;
     if (r.data.status !== 'queued') {
-      deepLog.end();
+      r.run.end();
       refetchReview();
       return;
     }
     if (expected === 0) {
-      deepLog.log('warn', '활성 심층 점검 정의가 없어 실행된 항목이 없음 — 「점검 정의」에서 활성화하세요');
-      deepLog.end();
+      r.run.log('warn', '활성 심층 점검 정의가 없어 실행된 항목이 없음 — 「점검 정의」에서 활성화하세요');
+      r.run.end();
       return;
     }
 
@@ -202,7 +202,7 @@ export function DailyCheckReviewPage() {
     type Snap = { fresh: DeepCheckResult[]; quietMs: number };
     const done = (s: Snap) =>
       expected != null ? s.fresh.length >= expected : s.fresh.length > 0 && s.quietMs >= 30_000;
-    await pollIntoRunLog<Snap>(deepLog, {
+    await pollIntoRunLog<Snap>(r.run, {
       fetch: async () => {
         const rows = (await deepCheckApi.listResults(clusterId, { limit: 100 })).data;
         const fresh = rows.filter(isNew).reverse();

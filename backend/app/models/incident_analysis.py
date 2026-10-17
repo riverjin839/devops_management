@@ -11,7 +11,7 @@ LLM 은 분석 전용이다: 이 결과에는 실행 가능한 필드가 없고,
 import uuid
 from datetime import datetime
 
-from sqlalchemy import Column, DateTime, Float, Index, Integer, String, Text, func
+from sqlalchemy import Boolean, Column, DateTime, Float, Index, Integer, String, Text, func
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 
 from app.database import Base
@@ -43,6 +43,9 @@ class IncidentAnalysis(Base):
     suggested_actions = Column(JSONB, nullable=True)                # list[str]
     related_runbooks = Column(JSONB, nullable=True)                 # list[str]
     confidence = Column(Float, nullable=True)
+    # 분석기가 결과를 내지 못해 대체 결과를 돌려줬는지(D-115). NULL = 이 컬럼 도입 전 레코드
+    # (화면이 confidence 0 보조 판정으로 대신한다). degraded 결과는 status=failed 로 저장된다.
+    degraded = Column(Boolean, nullable=True)
     # Phase 3(RAG)에서 채움 — {title, source_type, ref_id, route, snippet, similarity}[]
     citations = Column(JSONB, nullable=True)
 

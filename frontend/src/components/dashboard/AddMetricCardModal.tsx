@@ -463,7 +463,7 @@ export function AddMetricCardModal({ isOpen, onClose, editingCard }: AddMetricCa
               <button
                 onClick={handleTest}
                 disabled={!promql.trim() || testStatus === 'loading'}
-                className="px-3 py-1.5 text-sm font-medium bg-blue-500/10 hover:bg-blue-500/20 text-blue-400 border border-blue-500/20 rounded-lg transition-colors flex items-center gap-1.5 disabled:opacity-40"
+                className="px-3 py-1.5 text-sm font-medium bg-secondary hover:bg-secondary/80 text-secondary-foreground border border-border rounded-lg transition-colors flex items-center gap-1.5 disabled:opacity-40"
               >
                 <FlaskConical className="w-3 h-3" />
                 {testStatus === 'loading' ? 'Testing...' : 'Test Query'}

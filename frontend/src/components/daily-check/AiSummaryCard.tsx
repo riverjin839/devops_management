@@ -1,11 +1,36 @@
-import { useState } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { Sparkles, RefreshCw, AlertCircle } from 'lucide-react';
 import { MacCard } from '@/components/ui/MacCard';
+import { RunLogPanel } from '@/components/common';
 import { useRegenerateReview } from '@/hooks/useDeepCheck';
+import { useRunLog, runLogged, type RunLogEntry } from '@/hooks/useRunLog';
+import { useLogPref } from '@/hooks/useLogPref';
 import type { DeepCheckReview } from '@/types';
 import { parseUTC } from '@/lib/utils';
+
+/** Markdown 목록 항목 수(조치 권고가 몇 건인지 대략 세기 — 목록이 아니면 0). */
+function countListItems(md: string): number {
+  return md.split('\n').filter((l) => /^\s*(?:[-*+]|\d+[.)])\s+/.test(l)).length;
+}
+
+/** 재생성 응답 → 실행 로그 줄. offline/error 는 error 줄로 남긴다. */
+function reviewLines(r: DeepCheckReview): RunLogEntry[] {
+  const summaryLen = (r.aiSummary ?? '').length;
+  const remediation = r.aiRemediation ?? '';
+  const items = countListItems(remediation);
+  const detail = `요약 ${summaryLen}자 · 조치 권고 ${remediation ? (items ? `${items}건` : `${remediation.length}자`) : '없음'} · 심층 점검 결과 ${r.deepResults.length}건 · 종합 상태 ${r.overallStatus}`;
+  switch (r.aiStatus) {
+    case 'offline':
+      return [['error', 'AI 리뷰 실패 — Ollama 오프라인 · fallback 메시지로 대체'], ['info', detail]];
+    case 'error':
+      return [['error', 'AI 리뷰 실패 — 응답 처리 오류(모델/프롬프트 확인)'], ['info', detail]];
+    case 'ok':
+      return [['info', `AI 리뷰 생성 완료 — ${detail}`]];
+    default:
+      return [['warn', `AI 상태 ${r.aiStatus ?? '미상'} — ${detail}`]];
+  }
+}
 
 // Ollama 응답을 Markdown 으로 렌더 — react-markdown 이 기본적으로 HTML 을 escape 하므로
 // XSS 위험 없음. remark-gfm 으로 GitHub 스타일 (table/strike/task list) 까지 지원.
@@ -28,16 +53,19 @@ interface Props {
 }
 
 export function AiSummaryCard({ review }: Props) {
-  const [regenerating, setRegenerating] = useState(false);
   const regenerate = useRegenerateReview();
+  const regenerating = regenerate.isPending;
+  const runLog = useRunLog();
+  const [showLog, setShowLog] = useLogPref('ai-summary-regenerate');
 
+  // 실패는 runLogged 가 error 줄로 남긴다(예전엔 catch 가 없어 unhandled rejection 으로 조용히 실패).
   const handleRegenerate = async () => {
-    setRegenerating(true);
-    try {
-      await regenerate.mutateAsync(review.dailyCheckLogId);
-    } finally {
-      setRegenerating(false);
-    }
+    await runLogged(runLog, {
+      title: 'AI 리뷰 재생성',
+      first: `점검 로그 ${review.dailyCheckLogId.slice(0, 8)} — AI 리뷰 재생성 요청(LLM 응답 대기)`,
+      fn: () => regenerate.mutateAsync(review.dailyCheckLogId).then((res) => res.data),
+      summarize: reviewLines,
+    });
   };
 
   // ai_status: 'ok' | 'offline' | 'error' — 운영자가 원인을 구분할 수 있도록 3-way 분기.
@@ -86,6 +114,7 @@ export function AiSummaryCard({ review }: Props) {
       }
     >
       <div className="space-y-4">
+        <RunLogPanel run={runLog} show={showLog} onShowChange={setShowLog} maxHeight="max-h-56" />
         {review.aiSummary ? (
           <div className="text-sm">
             <Md text={review.aiSummary} />

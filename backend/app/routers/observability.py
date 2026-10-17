@@ -727,7 +727,16 @@ def _load_visible_alert(db: Session, alert_id: UUID, scope: ClusterScope) -> Ale
     return event
 
 
-@router.get("/alerts", response_model=AlertEventListResponse)
+class AlertEventPageResponse(AlertEventListResponse):
+    """알람 목록 한 페이지 — ``has_more`` 로 "더 보기" 여부를 알린다(D-111).
+
+    공용 스키마(`schemas/observability.py`)는 건드리지 않고 이 라우터에서만 확장한다.
+    """
+
+    has_more: bool = False
+
+
+@router.get("/alerts", response_model=AlertEventPageResponse)
 def list_alerts(
     cluster_id: Optional[UUID] = Query(default=None),
     severity: Optional[str] = Query(default=None),
@@ -741,7 +750,7 @@ def list_alerts(
     offset: int = Query(default=0, ge=0),
     db: Session = Depends(get_db),
     scope: ClusterScope = Depends(get_cluster_scope),
-) -> AlertEventListResponse:
+) -> AlertEventPageResponse:
     query = _filter_alerts(
         scope.apply(db.query(AlertEvent), AlertEvent.cluster_id, nullable=True),
         cluster_id=cluster_id, severity=severity, status=status, q=q,
@@ -756,9 +765,11 @@ def list_alerts(
         query = query.filter(AlertEvent.received_at <= to)
 
     total = query.count()
-    rows = query.order_by(desc(AlertEvent.received_at)).offset(offset).limit(limit).all()
+    # id 보조 정렬 — 같은 시각 행의 순서를 고정해 "더 보기" 경계가 흔들리지 않게(D-111).
+    rows = query.order_by(desc(AlertEvent.received_at), desc(AlertEvent.id)).offset(offset).limit(limit).all()
     names = _cluster_names(db)
-    return AlertEventListResponse(data=[_alert_out(r, names) for r in rows], total=total)
+    data = [_alert_out(r, names) for r in rows]
+    return AlertEventPageResponse(data=data, total=total, has_more=offset + len(data) < total)
 
 
 @router.get("/alerts/stats", response_model=AlertStatsResponse)
@@ -870,6 +881,7 @@ def get_alert_analysis(alert_id: UUID, db: Session = Depends(get_db),
         suggested_actions=list(row.suggested_actions or []),
         related_runbooks=list(row.related_runbooks or []),
         confidence=row.confidence,
+        degraded=row.degraded,
         citations=list(row.citations or []),
         analyzed_by=row.analyzed_by,
         matched_rule_id=row.matched_rule_id,

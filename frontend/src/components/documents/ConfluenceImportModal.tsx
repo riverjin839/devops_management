@@ -2,10 +2,11 @@ import { useMemo, useState } from 'react';
 import {
   AlertTriangle, CheckCircle2, ChevronDown, ChevronRight, DownloadCloud, ExternalLink, Loader2, RotateCcw, Search, X,
 } from 'lucide-react';
-import { useModalA11y, useToast } from '@/components/common';
+import { RunLogPanel, useModalA11y, useToast } from '@/components/common';
 import { useConfluenceDocImport, useConfluenceDocSearch } from '@/hooks/useConfluenceDocs';
 import { useWorkGuides } from '@/hooks/useWorkGuide';
-import { formatApiError } from '@/lib/utils';
+import { useLogPref } from '@/hooks/useLogPref';
+import { runLogged, useRunLog, type RunLogEntry } from '@/hooks/useRunLog';
 import type { ConfluenceDocImportResult, ConfluenceDocSearchItem } from '@/types';
 
 const inputCls =
@@ -14,7 +15,7 @@ const inputCls =
 
 const ACTION_META: Record<string, { label: string; cls: string }> = {
   create: { label: 'create', cls: 'bg-status-healthy/10 text-status-healthy' },
-  update: { label: 'update', cls: 'bg-blue-500/10 text-blue-500' },
+  update: { label: 'update', cls: 'bg-status-info/10 text-status-info' },
   unchanged: { label: 'unchanged', cls: 'bg-secondary text-muted-foreground' },
   error: { label: 'error', cls: 'bg-status-critical/10 text-status-critical' },
 };
@@ -34,6 +35,53 @@ const PERIOD_PRESET_OPTIONS: { value: string; label: string }[] = [
   { value: '30', label: '최근 30일' },
   { value: '90', label: '최근 90일' },
 ];
+
+/** 항목 줄이 수백 건이면 앞 200건 + "외 N건" 줄로 자른다(실행 로그 규약). */
+const LOG_ITEM_CAP = 200;
+function capEntries(entries: RunLogEntry[]): RunLogEntry[] {
+  if (entries.length <= LOG_ITEM_CAP) return entries;
+  return [...entries.slice(0, LOG_ITEM_CAP), ['info', `… 외 ${entries.length - LOG_ITEM_CAP}건`]];
+}
+
+/** 연동 응답 status 가 ok 가 아닐 때의 줄 — conflict·partial·missing 은 warn, 그 외는 error. */
+function statusEntry(status: string, detail: string, what: string): RunLogEntry {
+  const soft = status === 'conflict' || status === 'partial' || status === 'missing';
+  const label = status === 'offline' ? '연결 실패' : `상태 ${status}`;
+  return [soft ? 'warn' : 'error', `${what} ${label}${detail ? ` — ${detail}` : ''}`];
+}
+
+/** 가져오기(dry-run 포함) 응답 → 페이지별 줄 + 페이지 경고·변경 + 전체 오류·경고 + 합계. */
+function importLines(res: ConfluenceDocImportResult): RunLogEntry[] {
+  const out: RunLogEntry[] = [];
+  if (res.status !== 'ok') out.push(statusEntry(res.status, res.detail, res.dryRun ? '미리보기' : '가져오기'));
+  const perItem: RunLogEntry[] = [];
+  for (const it of res.items ?? []) {
+    const name = `${it.title || it.pageId} (${it.spaceKey}${it.version ? ` v${it.version}` : ''})`;
+    if (it.action === 'error') {
+      perItem.push(['error', `${name} — 오류${it.detail ? ` — ${it.detail}` : ''}`]);
+    } else {
+      perItem.push(['info', `${name} — ${it.action}${it.changes.length ? ` · 변경 ${it.changes.length}` : ''}`]);
+      for (const c of it.changes) {
+        perItem.push(['info', `  · ${c.field}${c.old != null ? `: ${c.old}` : ''}${c.new != null ? ` → ${c.new}` : ''}`]);
+      }
+    }
+    for (const w of it.warnings) perItem.push(['warn', `  ${it.title || it.pageId} 경고 — ${w}`]);
+  }
+  out.push(...capEntries(perItem));
+  out.push(...capEntries((res.errors ?? []).map((e): RunLogEntry => ['error', `오류 — ${e}`])));
+  out.push(...capEntries((res.warnings ?? []).map((w): RunLogEntry => ['warn', `변환 경고 — ${w}`])));
+  const items = res.items ?? [];
+  if (res.dryRun) {
+    const cnt = (a: string) => items.filter((i) => i.action === a).length;
+    out.push(['info', `미리보기 합계 — 신규 ${cnt('create')} · 갱신 ${cnt('update')} · 변경없음 ${cnt('unchanged')} · 오류 ${cnt('error')}`]);
+  } else {
+    out.push([
+      res.errors.length ? 'warn' : 'info',
+      `가져오기 합계 — 신규 ${res.imported} · 갱신 ${res.updated} · 건너뜀 ${res.skipped} · 오류 ${res.errors.length} · 경고 ${res.warnings.length}`,
+    ]);
+  }
+  return out;
+}
 
 /** 이번주 월요일부터 오늘까지 일수 — 기간 필터 기본값(Jira 가져오기 모달과 동일 패턴). */
 function daysSinceMonday(): number {
@@ -56,6 +104,8 @@ export function ConfluenceImportModal({ open, onClose }: Props) {
   const searchMut = useConfluenceDocSearch();
   const importMut = useConfluenceDocImport();
   const { data: guides } = useWorkGuides();
+  const runLog = useRunLog();
+  const [showLog, setShowLog] = useLogPref('confluence-doc-import');
 
   const [mode, setMode] = useState<SearchMode>('simple');
   const [spaceKey, setSpaceKey] = useState('');
@@ -95,8 +145,21 @@ export function ConfluenceImportModal({ open, onClose }: Props) {
 
   const runSearch = async () => {
     setFound(null); setPicked(new Set()); setPreview(null);
-    try {
-      const data = await searchMut.mutateAsync(
+    const cond = mode === 'cql'
+      ? `CQL: ${cql.trim()}`
+      : [
+          `기여자 ${contributorMode === 'user' ? contributorUser.trim() || '(미입력)' : contributorMode === 'me' ? '나' : '전체'}`,
+          spaceKey.trim() && `스페이스 ${spaceKey.trim()}`,
+          ancestorId.trim() && `상위 ${ancestorId.trim()}`,
+          title.trim() && `제목 "${title.trim()}"`,
+          text.trim() && `검색어 "${text.trim()}"`,
+          labelsInput.trim() && `라벨 ${labelsInput.trim()}`,
+          period ? `최근 ${period}일` : '전체 기간',
+        ].filter(Boolean).join(' · ');
+    const r = await runLogged(runLog, {
+      title: 'Confluence 검색',
+      first: `Confluence 페이지 검색 요청 — ${cond}`,
+      fn: () => searchMut.mutateAsync(
         mode === 'cql'
           ? { cql: cql.trim(), limit: 50 }
           : {
@@ -112,48 +175,71 @@ export function ConfluenceImportModal({ open, onClose }: Props) {
               updatedSinceDays: period ? Number(period) : undefined,
               limit: 50,
             },
-      );
-      if (data.status !== 'ok') {
-        toast.error('Confluence ' + (data.status === 'offline' ? '연결 실패' : '오류'), data.detail || '검색에 실패했습니다.');
-        return;
-      }
-      setFound(data.items);
-      // 미연결 페이지는 기본 선택 — 대개 그대로 가져오려는 흐름이다.
-      setPicked(new Set(data.items.filter((i) => !i.linked).map((i) => i.id)));
-      if (data.items.length === 0) toast.info('검색 결과 없음', '조건에 맞는 페이지가 없습니다.');
-    } catch (err) {
-      toast.error('검색 실패', formatApiError(err));
+      ),
+      summarize: (res) => {
+        if (res.status !== 'ok') return [statusEntry(res.status, res.detail, '검색')];
+        const items = res.items ?? [];
+        return [
+          ...capEntries(items.map((i): RunLogEntry => [
+            'info', `${i.title} (${i.spaceKey}${i.updated ? ` · ${i.updated.slice(0, 10)}` : ''})${i.linked ? ' · 이미 연결됨' : ''}`,
+          ])),
+          ['info', `검색 결과 ${items.length}건${res.total > items.length ? ` (전체 ${res.total}건 중)` : ''} · 미연결 ${items.filter((i) => !i.linked).length}건`],
+        ];
+      },
+    });
+    if (!r.ok) {
+      if (!r.aborted) toast.error('검색 실패', '실행 로그에서 사유를 확인하세요.');
+      return;
     }
+    const data = r.data;
+    if (data.status !== 'ok') {
+      toast.error('Confluence ' + (data.status === 'offline' ? '연결 실패' : '오류'), data.detail || '검색에 실패했습니다.');
+      return;
+    }
+    setFound(data.items);
+    // 미연결 페이지는 기본 선택 — 대개 그대로 가져오려는 흐름이다.
+    setPicked(new Set(data.items.filter((i) => !i.linked).map((i) => i.id)));
+    if (data.items.length === 0) toast.info('검색 결과 없음', '조건에 맞는 페이지가 없습니다.');
   };
 
   const runImport = async (dryRun: boolean) => {
     const pageIds = [...picked];
     if (!pageIds.length) { toast.error('선택된 페이지가 없습니다'); return; }
-    try {
-      const data = await importMut.mutateAsync({
+    const onlyPageIds = !dryRun && excluded.size > 0 ? pageIds.filter((p) => !excluded.has(p)) : undefined;
+    const target = onlyPageIds ? onlyPageIds.length : pageIds.length;
+    const parentTitle = parentGuideId ? parentOptions.find((g) => g.id === parentGuideId)?.title ?? parentGuideId : '최상위';
+    const r = await runLogged(runLog, {
+      title: dryRun ? 'Confluence 가져오기 미리보기' : 'Confluence 가져오기',
+      first: `${dryRun ? '미리보기(dry-run)' : '가져오기'} 요청 — 페이지 ${target}건 · 위치 ${parentTitle}`
+        + ` · 이미지 ${inlineImages ? '본문 저장' : '원본 링크'}`,
+      fn: () => importMut.mutateAsync({
         pageIds,
         dryRun,
-        onlyPageIds: !dryRun && excluded.size > 0 ? pageIds.filter((p) => !excluded.has(p)) : undefined,
+        onlyPageIds,
         parentGuideId: parentGuideId || undefined,
         inlineImages,
-      });
-      if (data.status !== 'ok') {
-        toast.error('가져오기 ' + (data.status === 'offline' ? '연결 실패' : '오류'), data.detail || '가져오기에 실패했습니다.');
-        return;
-      }
-      if (dryRun) {
-        setPreview(data);
-        setExcluded(new Set());
-        const c = data.items.filter((i) => i.action === 'create').length;
-        const u = data.items.filter((i) => i.action === 'update').length;
-        toast.info('미리보기 생성됨', `신규 ${c} · 갱신 ${u} · 변경없음 ${data.items.filter((i) => i.action === 'unchanged').length}`);
-      } else {
-        setDone(data);
-        setPreview(null);
-        toast.success('Confluence 가져옴', `신규 ${data.imported} · 갱신 ${data.updated}`);
-      }
-    } catch (err) {
-      toast.error('요청 실패', formatApiError(err));
+      }),
+      summarize: importLines,
+    });
+    if (!r.ok) {
+      if (!r.aborted) toast.error('요청 실패', '실행 로그에서 사유를 확인하세요.');
+      return;
+    }
+    const data = r.data;
+    if (data.status !== 'ok') {
+      toast.error('가져오기 ' + (data.status === 'offline' ? '연결 실패' : '오류'), data.detail || '가져오기에 실패했습니다.');
+      return;
+    }
+    if (dryRun) {
+      setPreview(data);
+      setExcluded(new Set());
+      const c = data.items.filter((i) => i.action === 'create').length;
+      const u = data.items.filter((i) => i.action === 'update').length;
+      toast.info('미리보기 생성됨', `신규 ${c} · 갱신 ${u} · 변경없음 ${data.items.filter((i) => i.action === 'unchanged').length}`);
+    } else {
+      setDone(data);
+      setPreview(null);
+      toast.success('Confluence 가져옴', `신규 ${data.imported} · 갱신 ${data.updated}`);
     }
   };
 
@@ -192,6 +278,7 @@ export function ConfluenceImportModal({ open, onClose }: Props) {
         </div>
 
         <div className="px-5 pb-5 space-y-3.5">
+          <RunLogPanel run={runLog} show={showLog} onShowChange={setShowLog} maxHeight="max-h-56" />
           {done ? (
             /* ── 3단계: 결과 ─────────────────────────────────────────── */
             <>
@@ -201,7 +288,7 @@ export function ConfluenceImportModal({ open, onClose }: Props) {
                 </div>
                 <div className="mt-2 grid grid-cols-3 gap-2 text-sm">
                   <div><span className="text-muted-foreground">신규</span> <b className="text-status-healthy">{done.imported}</b></div>
-                  <div><span className="text-muted-foreground">갱신</span> <b className="text-blue-500">{done.updated}</b></div>
+                  <div><span className="text-muted-foreground">갱신</span> <b className="text-status-info">{done.updated}</b></div>
                   <div><span className="text-muted-foreground">건너뜀</span> <b>{done.skipped}</b></div>
                 </div>
                 {done.errors.length > 0 && (

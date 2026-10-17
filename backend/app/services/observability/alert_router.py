@@ -195,7 +195,7 @@ def upsert_alert_event(
 ) -> tuple[AlertEvent, bool]:
     """(fingerprint, starts_at) 기준 upsert. (행, 신규여부) 를 반환한다.
 
-    같은 알람이 반복 수신되면 행을 늘리지 않고 `occurrences` 를 올린다.
+    같은 알람이 반복 수신(firing)되면 행을 늘리지 않고 `occurrences` 를 올린다.
     `resolved` 수신이면 같은 fingerprint 의 열린(firing) 행을 종료시킨다.
     """
     now = datetime.utcnow()
@@ -223,7 +223,10 @@ def upsert_alert_event(
         existing.status = alert.status
         existing.severity = severity
         existing.severity_source = severity_source
-        existing.occurrences = (existing.occurrences or 0) + 1
+        # 해소(resolved) 수신은 "같은 알람이 또 울렸다"가 아니라 종료 통지다 — 반복 횟수는
+        # firing 반복만 센다(해소 1회가 occurrences 를 부풀려 "x2" 로 보이던 문제).
+        if alert.status != "resolved":
+            existing.occurrences = (existing.occurrences or 0) + 1
         existing.updated_at = now
         existing.received_at = now
         if alert.ends_at:

@@ -1,18 +1,23 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useParams } from 'react-router-dom';
 import ForceGraph3D, { type ForceGraph3DInstance, type NodeObject, type LinkObject } from 'react-force-graph-3d';
 import * as THREE from 'three';
 import { RefreshCw, Share2, X } from 'lucide-react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { versionsApi, type VersionGraphNode, type VersionGraphEdge } from '@/services/api';
 import { useClusters } from '@/hooks/useCluster';
-import { useToast, SelectClusterEmptyState, LoadingState, EmptyState, PageHeader } from '@/components/common';
+import { useClusterRouteParam } from '@/hooks/useClusterRouteParam';
+import { useToast, SelectClusterEmptyState, LoadingState, EmptyState, PageHeader, RunLogPanel, ClusterSidebar } from '@/components/common';
+import { useRunLog, runLogged, type RunLogEntry } from '@/hooks/useRunLog';
+import { useLogPref } from '@/hooks/useLogPref';
 import { formatApiError } from '@/lib/utils';
+import { cssVarColor, useThemeColorKey } from '@/lib/chartTokens';
 
-// ── 타입별 색상 (D-005: 차트 토큰 체계) ─────────────────────────────────────
-// three.js(WebGL) 는 CSS var() 문자열을 해석하지 못하므로, 토큰명을 들고 있다가
-// 렌더 시점에 computed value 를 읽어 THREE.Color 와 DOM 이 모두 파싱 가능한
-// hsl(h, s%, l%) 문자열로 변환해 쓴다.
+// 클러스터 id 가 경로 가운데 오는 라우트 — 모듈 스코프(렌더마다 새 함수면 라우트 훅 effect 가 매번 돈다).
+const graphPath = (id: string) => `/versions/${id}/graph`;
+
+// ── 타입별 색상 (D-005·D-120: 차트 토큰 체계) ───────────────────────────────
+// three.js(WebGL) 는 CSS var() 를 해석하지 못하므로 토큰명을 들고 있다가 cssVarColor 로
+// 현재 테마 값을 hsl 문자열로 읽어 쓴다. DOM(범례 점·상세 패널 테두리)은 클래스로 칠한다.
 
 const NODE_TOKEN: Record<VersionGraphNode['type'], string> = {
   cluster:   '--chart-1', // blue
@@ -21,12 +26,12 @@ const NODE_TOKEN: Record<VersionGraphNode['type'], string> = {
   flag:      '--chart-3', // amber
 };
 
-function chartTokenColor(token: string | undefined): string {
-  if (!token) return 'hsl(215, 15%, 50%)'; // --chart-8 slate fallback
-  const v = getComputedStyle(document.documentElement).getPropertyValue(token).trim();
-  if (!v) return 'hsl(215, 15%, 50%)';
-  return `hsl(${v.split(/\s+/).join(', ')})`;
-}
+const NODE_CLASS: Record<VersionGraphNode['type'], { dot: string; border: string }> = {
+  cluster:   { dot: 'bg-chart-1', border: 'border-l-chart-1' },
+  category:  { dot: 'bg-chart-4', border: 'border-l-chart-4' },
+  component: { dot: 'bg-chart-2', border: 'border-l-chart-2' },
+  flag:      { dot: 'bg-chart-3', border: 'border-l-chart-3' },
+};
 
 const NODE_SIZE: Record<VersionGraphNode['type'], number> = {
   cluster:   14,
@@ -35,13 +40,13 @@ const NODE_SIZE: Record<VersionGraphNode['type'], number> = {
   flag:      3.5,
 };
 
-// EDGE_COLOR — 허용 예외(D-005): alpha 포함 hex 를 ForceGraph3D(WebGL 링크 블렌딩)가
-// 직접 파싱하므로 CSS 토큰으로 이관하지 않는다 (FlowGraph3D 등 canvas/three.js 와 동일 예외).
-const EDGE_COLOR: Record<VersionGraphEdge['type'], string> = {
-  contains:   '#ffffff55',
-  param:      '#fbbf2466',
-  configures: '#4ade8066',
-  replaces:   '#f8717188',
+// 링크 색 — 토큰 + alpha. ForceGraph3D 는 hsla 문자열을 파싱한다(tinycolor).
+// 교체(replaces)는 의미가 "구버전 대체" 경고라 status-critical, 나머지는 분류색.
+const EDGE_TOKEN: Record<VersionGraphEdge['type'], { token: string; alpha: number }> = {
+  contains:   { token: '--foreground',      alpha: 0.33 },
+  param:      { token: '--chart-3',         alpha: 0.4 },
+  configures: { token: '--chart-2',         alpha: 0.4 },
+  replaces:   { token: '--status-critical', alpha: 0.53 },
 };
 
 interface GNode extends NodeObject {
@@ -62,10 +67,10 @@ interface GLink extends LinkObject {
 
 // ── Three.js Mesh factory ──────────────────────────────────────────────────
 
-function makeNodeObject(node: NodeObject): THREE.Mesh {
+function makeNodeObject(node: NodeObject, colors: Record<VersionGraphNode['type'], string>): THREE.Mesh {
   const n = node as GNode;
   const size = NODE_SIZE[n.type] ?? 5;
-  const color = chartTokenColor(NODE_TOKEN[n.type]);
+  const color = colors[n.type] ?? cssVarColor('--chart-8');
   const geo = new THREE.SphereGeometry(size, 16, 16);
   const mat = new THREE.MeshLambertMaterial({ color, transparent: true, opacity: 0.92 });
   return new THREE.Mesh(geo, mat);
@@ -76,8 +81,7 @@ function makeNodeObject(node: NodeObject): THREE.Mesh {
 function NodeDetail({ node, onClose }: { node: GNode; onClose: () => void }) {
   return (
     <div className="absolute top-4 right-4 w-80 bg-card border border-border rounded-md shadow-2xl overflow-hidden z-10">
-      <div className="flex items-center justify-between px-4 py-3 border-b border-border"
-        style={{ borderLeftColor: chartTokenColor(NODE_TOKEN[node.type]), borderLeftWidth: 4 }}>
+      <div className={`flex items-center justify-between px-4 py-3 border-b border-border border-l-4 ${NODE_CLASS[node.type]?.border ?? 'border-l-chart-8'}`}>
         <div className="min-w-0">
           <p className="text-xs font-medium text-muted-foreground">
             {node.type}
@@ -121,16 +125,12 @@ function NodeDetail({ node, onClose }: { node: GNode; onClose: () => void }) {
 // ── 메인 페이지 ──────────────────────────────────────────────────────────────
 
 export function VersionGraphPage() {
-  const { clusterId: paramClusterId } = useParams<{ clusterId: string }>();
   const queryClient = useQueryClient();
   const toast = useToast();
-  const { data: clusters = [] } = useClusters();
-  const [selectedId, setSelectedId] = useState<string>('');
-
-  useEffect(() => {
-    if (paramClusterId) setSelectedId(paramClusterId);
-    else if (clusters.length > 0 && !selectedId) setSelectedId(clusters[0].id);
-  }, [paramClusterId, clusters, selectedId]);
+  const { data: clustersData } = useClusters();
+  const clusters = useMemo(() => clustersData ?? [], [clustersData]);
+  // 선택은 URL(/versions/:id/graph)이 원천 — 레일에서 바꾸면 경로가 바뀌어 화면과 URL 이 어긋나지 않는다.
+  const { clusterId: selectedId, selectCluster } = useClusterRouteParam('/versions', clusters, { pathFor: graphPath });
 
   const { data, isLoading } = useQuery({
     queryKey: ['versions', 'graph', selectedId],
@@ -142,6 +142,27 @@ export function VersionGraphPage() {
   const containerRef = useRef<HTMLDivElement>(null);
   const [dims, setDims] = useState({ w: 800, h: 600 });
   const [selectedNode, setSelectedNode] = useState<GNode | null>(null);
+
+  // 클러스터가 바뀌면 이전 클러스터의 노드 상세를 닫는다.
+  useEffect(() => { setSelectedNode(null); }, [selectedId]);
+
+  // 테마·강조색이 바뀌면 키가 달라진다 → 색 맵·nodeThreeObject·linkColor identity 가 바뀌어
+  // ForceGraph3D 가 노드 객체를 다시 만들고 링크를 다시 칠한다.
+  const themeKey = useThemeColorKey();
+  const nodeColors = useMemo(() => {
+    void themeKey;
+    return Object.fromEntries(
+      (Object.entries(NODE_TOKEN) as Array<[VersionGraphNode['type'], string]>).map(([k, t]) => [k, cssVarColor(t)]),
+    ) as Record<VersionGraphNode['type'], string>;
+  }, [themeKey]);
+  const edgeColors = useMemo(() => {
+    void themeKey;
+    return Object.fromEntries(
+      (Object.entries(EDGE_TOKEN) as Array<[VersionGraphEdge['type'], { token: string; alpha: number }]>)
+        .map(([k, v]) => [k, cssVarColor(v.token, { alpha: v.alpha })]),
+    ) as Record<VersionGraphEdge['type'], string>;
+  }, [themeKey]);
+  const nodeThreeObject = useCallback((n: NodeObject) => makeNodeObject(n, nodeColors), [nodeColors]);
 
   useEffect(() => {
     const ro = new ResizeObserver(() => {
@@ -160,12 +181,12 @@ export function VersionGraphPage() {
 
   const linkColor = useCallback((l: LinkObject) => {
     const link = l as GLink;
-    return EDGE_COLOR[link.type] ?? '#ffffff55';
-  }, []);
+    return edgeColors[link.type] ?? edgeColors.contains;
+  }, [edgeColors]);
 
   const nodeLabel = useCallback((n: NodeObject) => {
     const node = n as GNode;
-    return `<div style="background:rgba(0,0,0,0.85);padding:4px 8px;border-radius:4px;font-size:12px;color:#fff;font-family:ui-monospace,monospace">
+    return `<div style="background:hsl(var(--popover));border:1px solid hsl(var(--border));padding:4px 8px;border-radius:4px;font-size:12px;color:hsl(var(--popover-foreground));font-family:ui-monospace,monospace">
       <b>${node.label}</b>
       ${node.version ? `<br/><span style="opacity:.7">${node.version}</span>` : ''}
     </div>`;
@@ -183,98 +204,116 @@ export function VersionGraphPage() {
     }
   }, []);
 
+  // 실행 로그(D-135) — 재수집/지금 수집을 요청·대기·응답 요약·경고 줄로 남긴다(응답 errors[] 도 버리지 않는다).
+  const runLog = useRunLog();
+  const [showLog, setShowLog] = useLogPref('version-graph-collect');
+
   const collectAndRefresh = async () => {
-    if (!selectedId) return;
-    try {
-      await versionsApi.collect(selectedId);
+    if (!selectedId || runLog.running) return;
+    const name = clusters.find((c) => c.id === selectedId)?.name ?? selectedId;
+    const r = await runLogged(runLog, {
+      title: '버전 재수집',
+      first: `${name} — kubeconfig 로 컴포넌트 버전·플래그 수집 요청`,
+      fn: () => versionsApi.collect(selectedId).then((res) => res.data),
+      summarize: (d) => {
+        const out: RunLogEntry[] = d.errors.map((e): RunLogEntry => ['warn', `경고 — ${e}`]);
+        out.push([d.errors.length > 0 ? 'warn' : 'info', `완료 — 변경 ${d.changed}건 · 경고 ${d.errors.length}건 · 그래프 새로고침`]);
+        return out;
+      },
+    });
+    if (r.ok) {
       queryClient.invalidateQueries({ queryKey: ['versions'] });
-      toast.success('수집됨');
-    } catch (e) {
-      toast.error('수집 실패', formatApiError(e));
+      if (r.data.errors.length > 0) toast.warning(`수집됨 · 경고 ${r.data.errors.length}건`, '상세는 실행 로그 참조');
+      else toast.success('수집됨');
+    } else if (!r.aborted) {
+      toast.error('수집 실패', formatApiError(r.error));
     }
   };
 
   return (
-    <div className="app-h-screen bg-background flex flex-col overflow-hidden">
-      {/* 툴바 */}
-      <div className="flex items-center gap-3 px-4 py-2.5 border-b border-border bg-card flex-shrink-0 z-20">
-        <PageHeader
-          className="flex-1 items-center"
-          back={{ to: '/versions', label: '버전' }}
-          icon={Share2}
-          title="컴포넌트 관계 그래프"
-          titleExtra={
-            <select
-              value={selectedId}
-              onChange={(e) => setSelectedId(e.target.value)}
-              aria-label="클러스터 선택"
-              className="ml-1 px-2 py-1 bg-secondary border border-border rounded-xl text-sm focus:outline-none focus:ring-1 focus:ring-primary"
-            >
-              <option value="">— 클러스터 선택 —</option>
-              {clusters.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-            </select>
-          }
-          actions={<>
-            <div className="flex items-center gap-1 text-xs text-muted-foreground flex-wrap">
-              {(Object.entries(NODE_TOKEN) as Array<[VersionGraphNode['type'], string]>).map(([k, v]) => (
-                <span key={k} className="inline-flex items-center gap-1">
-                  <span className="w-2 h-2 rounded-full" style={{ background: `hsl(var(${v}))` }} />
-                  {k}
-                </span>
-              ))}
-            </div>
-            <button
-              onClick={collectAndRefresh}
-              disabled={!selectedId}
-              className="flex items-center gap-1 px-2 py-1 text-sm bg-primary/10 text-primary border border-primary/30 hover:bg-primary/20 rounded-xl transition-colors disabled:opacity-50"
-            >
-              <RefreshCw className="w-3 h-3" />
-              재수집
-            </button>
-          </>}
-        />
+    <div className="app-h-screen bg-background flex overflow-hidden">
+      {/* 클러스터 레일 (D-113) — 메인 사이드바에 flush, 좌측 패딩 없음 */}
+      <div className="py-3 flex-shrink-0">
+        <ClusterSidebar clusters={clusters} selectedId={selectedId || null} onSelect={selectCluster} iconOnly />
       </div>
 
-      {/* 그래프 */}
-      <div ref={containerRef} className="flex-1 relative">
-        {!selectedId ? (
-          <div className="absolute inset-0 flex items-center justify-center">
-            <SelectClusterEmptyState />
-          </div>
-        ) : isLoading ? (
-          <div className="absolute inset-0 flex items-center justify-center">
-            <LoadingState />
-          </div>
-        ) : graphData.nodes.length === 0 ? (
-          <div className="absolute inset-0 flex items-center justify-center">
-            <EmptyState
-              icon={Share2}
-              title="아직 수집된 스냅샷이 없습니다."
-              description="이 클러스터의 컴포넌트 버전을 수집하면 관계 그래프가 그려집니다."
-              action={{ label: '지금 수집', onClick: collectAndRefresh }}
-            />
-          </div>
-        ) : (
-          <ForceGraph3D
-            ref={graphRef}
-            graphData={graphData}
-            width={dims.w}
-            height={dims.h}
-            backgroundColor="rgba(0,0,0,0)"
-            nodeThreeObject={makeNodeObject}
-            nodeLabel={nodeLabel}
-            linkColor={linkColor}
-            linkWidth={1}
-            linkDirectionalArrowLength={3}
-            linkDirectionalArrowRelPos={1}
-            linkOpacity={0.6}
-            onNodeClick={handleNodeClick}
+      <div className="flex-1 min-w-0 flex flex-col">
+        {/* 툴바 */}
+        <div className="flex items-center gap-3 px-4 py-2.5 border-b border-border bg-card flex-shrink-0 z-20">
+          <PageHeader
+            className="flex-1 items-center"
+            back={{ to: '/versions', label: '버전' }}
+            icon={Share2}
+            title="컴포넌트 관계 그래프"
+            actions={<>
+              <div className="flex items-center gap-1 text-xs text-muted-foreground flex-wrap">
+                {(Object.entries(NODE_CLASS) as Array<[VersionGraphNode['type'], { dot: string }]>).map(([k, v]) => (
+                  <span key={k} className="inline-flex items-center gap-1">
+                    <span className={`w-2 h-2 rounded-full ${v.dot}`} />
+                    {k}
+                  </span>
+                ))}
+              </div>
+              <button
+                onClick={collectAndRefresh}
+                disabled={!selectedId || runLog.running}
+                className="flex items-center gap-1 px-2 py-1 text-sm bg-primary/10 text-primary border border-primary/30 hover:bg-primary/20 rounded-xl transition-colors disabled:opacity-50"
+              >
+                <RefreshCw className={`w-3 h-3 ${runLog.running ? 'animate-spin' : ''}`} />
+                {runLog.running ? '수집 중' : '재수집'}
+              </button>
+            </>}
           />
+        </div>
+
+        {/* 실행 로그 — 툴바 아래 별도 줄(캔버스를 덮지 않고 그만큼 캔버스 높이가 줄어든다). 실행 전엔 렌더되지 않는다. */}
+        {(runLog.running || runLog.lines.length > 0) && (
+          <div className="flex-shrink-0 px-4 py-2 border-b border-border bg-card">
+            <RunLogPanel run={runLog} show={showLog} onShowChange={setShowLog} maxHeight="max-h-40" />
+          </div>
         )}
 
-        {selectedNode && (
-          <NodeDetail node={selectedNode} onClose={() => setSelectedNode(null)} />
-        )}
+        {/* 그래프 */}
+        <div ref={containerRef} className="flex-1 relative">
+          {!selectedId ? (
+            <div className="absolute inset-0 flex items-center justify-center">
+              <SelectClusterEmptyState />
+            </div>
+          ) : isLoading ? (
+            <div className="absolute inset-0 flex items-center justify-center">
+              <LoadingState />
+            </div>
+          ) : graphData.nodes.length === 0 ? (
+            <div className="absolute inset-0 flex items-center justify-center">
+              <EmptyState
+                icon={Share2}
+                title="아직 수집된 스냅샷이 없습니다."
+                description="이 클러스터의 컴포넌트 버전을 수집하면 관계 그래프가 그려집니다."
+                action={{ label: '지금 수집', onClick: collectAndRefresh }}
+              />
+            </div>
+          ) : (
+            <ForceGraph3D
+              ref={graphRef}
+              graphData={graphData}
+              width={dims.w}
+              height={dims.h}
+              backgroundColor="rgba(0,0,0,0)"
+              nodeThreeObject={nodeThreeObject}
+              nodeLabel={nodeLabel}
+              linkColor={linkColor}
+              linkWidth={1}
+              linkDirectionalArrowLength={3}
+              linkDirectionalArrowRelPos={1}
+              linkOpacity={0.6}
+              onNodeClick={handleNodeClick}
+            />
+          )}
+
+          {selectedNode && (
+            <NodeDetail node={selectedNode} onClose={() => setSelectedNode(null)} />
+          )}
+        </div>
       </div>
     </div>
   );

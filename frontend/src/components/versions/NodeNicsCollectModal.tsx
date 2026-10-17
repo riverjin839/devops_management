@@ -1,16 +1,16 @@
 import { useEffect, useId, useMemo, useState } from 'react';
 import { X, Network, Play, Loader2, CheckCircle2, AlertTriangle, Globe, Lock } from 'lucide-react';
-import { bulkExecApi, versionsApi } from '@/services/api';
+import { bulkExecApi } from '@/services/api';
 import type { NodeSummary } from '@/services/api';
-import type { NodeNicsCollectResponse } from '@/types';
+import type { NodeNicsCollectRequest, NodeNicsCollectResponse } from '@/types';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useAbortableMutation } from '@/hooks/useAbortableMutation';
-import { useRunLog, runLogged } from '@/hooks/useRunLog';
+import { useRunLog } from '@/hooks/useRunLog';
 import { useLogPref } from '@/hooks/useLogPref';
 import { useToast, DoubleScrollX, RunLogPanel } from '@/components/common';
 import { useModalA11y } from '@/components/common/useModalA11y';
 import { RawOutputDetails, CollectErrorList } from './RawOutputDetails';
-import { collectFirstLine, summarizeCollect } from './collectRunLog';
+import { collectFirstLine, streamCollect } from './collectRunLog';
 import { formatApiError } from '@/lib/utils';
 
 interface Props {
@@ -73,20 +73,30 @@ export function NodeNicsCollectModal({ open, clusterId, clusterName, onClose }: 
     [skipText],
   );
 
+  // 실행 로그(D-135) — 수집을 SSE 스트림으로 실행해 서버가 흘리는 시작·호스트별 결과([i/N])·요약 줄을 실시간으로 쌓는다.
+  // 결과 표·토스트·중지는 기존 mutation 흐름 그대로(streamCollect 가 동기 응답과 같은 본문을 돌려준다).
+  const runLog = useRunLog();
+  const [showLog, setShowLog] = useLogPref('versions-node-nics');
   const collectMut = useAbortableMutation({
-    mutationFn: async (_: void, signal) => {
-      const r = await versionsApi.collectNodeNics(clusterId, {
-        hosts: Array.from(selected),
-        port,
-        username,
-        password: authMode === 'password' ? password : undefined,
-        privateKey: authMode === 'key' ? privateKey : undefined,
-        useSudo,
-        skipIfacePatterns: skipPatterns,
-        parallelism,
-      }, signal);
-      return r.data;
-    },
+    mutationFn: (_: void, signal) =>
+      streamCollect<NodeNicsCollectResponse>(runLog, {
+        title: '노드 NIC 수집',
+        first: collectFirstLine(clusterName, selected.size, '노드 NIC', useSudo),
+        clusterId,
+        kind: 'node-nics',
+        body: {
+          hosts: Array.from(selected),
+          port,
+          username,
+          password: authMode === 'password' ? password : undefined,
+          privateKey: authMode === 'key' ? privateKey : undefined,
+          useSudo,
+          skipIfacePatterns: skipPatterns,
+          parallelism,
+        } satisfies NodeNicsCollectRequest,
+        signal,
+        detail: (h) => `NIC ${h.interfaces?.length ?? 0} · IP ${h.allIps?.length ?? 0}`,
+      }),
     onSuccess: (d) => {
       setResult(d);
       const okCount = d.hosts.filter((h) => h.status === 'ok').length;
@@ -123,17 +133,7 @@ export function NodeNicsCollectModal({ open, clusterId, clusterName, onClose }: 
     },
   });
 
-  // 실행 로그(D-128) — 동기 1응답 수집을 요청·대기·호스트별 결과·요약 줄로 남긴다. 결과 표·토스트는 기존대로.
-  const runLog = useRunLog();
-  const [showLog, setShowLog] = useLogPref('versions-node-nics');
-  const handleRun = () => {
-    void runLogged(runLog, {
-      title: '노드 NIC 수집',
-      first: collectFirstLine(clusterName, selected.size, '노드 NIC', useSudo),
-      fn: () => collectMut.mutateAsync(),
-      summarize: (res) => summarizeCollect(res, (h) => `NIC ${h.interfaces?.length ?? 0} · IP ${h.allIps?.length ?? 0}`),
-    });
-  };
+  const handleRun = () => collectMut.mutate();
 
   const canRun = selected.size > 0
     && (authMode === 'password' ? !!password : !!privateKey.trim());

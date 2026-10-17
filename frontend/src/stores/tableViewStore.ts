@@ -41,14 +41,14 @@ export const TS = {
   },
   headerBg: {
     default: 'bg-white/[0.06]',
-    blue:    'bg-blue-500/[0.12]',
-    indigo:  'bg-indigo-500/[0.12]',
+    blue:    'bg-chart-1/[0.12]',
+    indigo:  'bg-chart-4/[0.12]',
     emerald: 'bg-status-healthy/[0.12]',
   },
   headerText: {
     default: 'text-foreground',
-    blue:    'text-blue-300',
-    indigo:  'text-indigo-300',
+    blue:    'text-chart-1',
+    indigo:  'text-chart-4',
     emerald: 'text-status-healthy',
   },
 } as const;

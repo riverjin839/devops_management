@@ -4,7 +4,11 @@ import { KeyRound, ShieldCheck, ShieldAlert, Save, Trash2, Plug } from 'lucide-r
 import type { BatchJob, BatchJobTestConnectionResponse } from '@/services/api';
 import { formatApiError } from '@/lib/utils';
 import { useUpdateBatchJob, useTestBatchJobConnection } from '@/hooks/useBatchJobs';
+import { runLogged, useRunLog } from '@/hooks/useRunLog';
+import { useLogPref } from '@/hooks/useLogPref';
+import { RunLogPanel } from '@/components/common';
 import { TestConnectionResult } from './BatchJobSlideOver.RunForm';
+import { testConnectionLines } from './runLogLines';
 
 interface SavedCredsProps {
   job: BatchJob;
@@ -29,6 +33,8 @@ export function SavedCreds({ job }: SavedCredsProps) {
   const [error, setError] = useState<string | null>(null);
   const [okMsg, setOkMsg] = useState<string | null>(null);
   const [testResult, setTestResult] = useState<BatchJobTestConnectionResponse | null>(null);
+  const runLog = useRunLog();
+  const [showLog, setShowLog] = useLogPref('batch-job-saved-creds-test');
 
   const hasAnyCreds = job.hasSavedPassword || job.hasSavedPrivateKey;
   const cronRequiresCreds = Boolean(job.cron) && !hasAnyCreds;
@@ -70,8 +76,10 @@ export function SavedCreds({ job }: SavedCredsProps) {
       setError('잡에 default_host 가 설정되어 있지 않아 테스트할 호스트를 결정할 수 없습니다. "지금 실행" 패널에서 호스트를 지정해 테스트하세요.');
       return;
     }
-    try {
-      const { data } = await testConn.mutateAsync({
+    const r = await runLogged(runLog, {
+      title: '연결 테스트',
+      first: `${job.name} — ${job.defaultUsername || 'root'}@${job.defaultHost}:${job.defaultPort} ${credsProvided ? '입력한' : '저장된'} 자격증명으로 연결 테스트 요청`,
+      fn: () => testConn.mutateAsync({
         id: job.id,
         payload: {
           // host/port/username 은 비워서 잡 default 사용.
@@ -79,11 +87,10 @@ export function SavedCreds({ job }: SavedCredsProps) {
           password: password || undefined,
           privateKey: privateKey || undefined,
         },
-      });
-      setTestResult(data);
-    } catch (e) {
-      setError(formatApiError(e));
-    }
+      }),
+      summarize: ({ data }) => testConnectionLines(data),
+    });
+    if (r.ok) setTestResult(r.data.data);
   };
 
   const clear = async (which: 'password' | 'privateKey') => {
@@ -186,6 +193,8 @@ export function SavedCreds({ job }: SavedCredsProps) {
       {okMsg && <div className="text-xs text-status-healthy">{okMsg}</div>}
 
       <TestConnectionResult result={testResult} />
+
+      <RunLogPanel run={runLog} show={showLog} onShowChange={setShowLog} maxHeight="max-h-56" />
 
       <div className="flex items-center gap-1.5">
         <button

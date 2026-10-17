@@ -6,7 +6,9 @@ import {
 } from 'lucide-react';
 import { useAbortableMutation } from '@/hooks/useAbortableMutation';
 import { useClusters } from '@/hooks/useCluster';
-import { ClusterSidebar, DebugLogPanel, SelectClusterEmptyState, EmptyState, PageShell } from '@/components/common';
+import { useRunLog, runLogged, type RunLogEntry } from '@/hooks/useRunLog';
+import { useLogPref } from '@/hooks/useLogPref';
+import { ClusterSidebar, DebugLogPanel, SelectClusterEmptyState, EmptyState, PageShell, RunLogPanel } from '@/components/common';
 import { PageHeader } from '@/components/common/PageHeader';
 import { MacCard } from '@/components/ui/MacCard';
 import { topologyTraceApi } from '@/services/api';
@@ -32,6 +34,23 @@ const ENTITY_LABEL: Record<string, { icon: typeof Globe; label: string; color: s
   switch:             { icon: Network, label: 'Switch',    color: 'text-chart-8' },
   error:              { icon: AlertTriangle, label: 'Error', color: 'text-status-critical' },
 };
+
+/** 추적 응답 → 실행 로그 요약: 홉 수·경로 한 줄 + deny/warn/error 홉의 첫 메모. */
+function summarizeTrace(res: PacketFlowResponseV2): RunLogEntry[] {
+  const out: RunLogEntry[] = [];
+  const path = res.hops.map((h) => h.name.split('/').pop() || h.name).join(' → ');
+  out.push(['info', `홉 ${res.hops.length}개 · ${res.direction} · ${res.protocol}${res.port ? `:${res.port}` : ''}${path ? ` — ${path}` : ''}`]);
+  res.hops.forEach((h, i) => {
+    const bad = h.entityType === 'error' || h.verdict === 'deny' || h.verdict === 'warn';
+    if (!bad) return;
+    const level = h.entityType === 'error' || h.verdict === 'deny' ? 'error' : 'warn';
+    out.push([level, `홉 ${i + 1} ${h.name} · ${h.verdict}${h.notes[0] ? ` — ${h.notes[0]}` : ''}`]);
+  });
+  const denied = res.hops.filter((h) => h.verdict === 'deny').length;
+  const warned = res.hops.filter((h) => h.verdict === 'warn').length;
+  if (denied || warned) out.push([denied ? 'warn' : 'info', `차단 ${denied} · 경고 ${warned} — 홉을 눌러 정책 상세 확인`]);
+  return out;
+}
 
 function HopBreadcrumb({
   hops, selectedIndex, onSelect,
@@ -118,8 +137,21 @@ export function PacketFlowPage() {
       }, signal);
       return r.data;
     },
-    onSuccess: (d) => { setResponse(d); setSelectedIdx(null); },
   });
+
+  // 실행 수명주기 로그(추적·Hubble 조회·tcpdump 공유) — 결과는 그래프/표, 여기는 요청·대기·요약·실패 사유.
+  const runLog = useRunLog();
+  const [showLog, setShowLog] = useLogPref('packet-flow');
+  const doTrace = async () => {
+    const cname = clusters.find((c) => c.id === clusterId)?.name ?? clusterId;
+    const r = await runLogged(runLog, {
+      title: '패킷 경로 추적',
+      first: `${cname} — ${direction === 'north-south' ? 'N-S' : 'E-W'} ${source.trim()} → ${destination.trim()} (${protocol}${port ? `:${port}` : ''}${direction === 'north-south' ? ` ${path.trim() || '/'}` : ''}) 추적 요청`,
+      fn: () => runMut.mutateAsync(),
+      summarize: summarizeTrace,
+    });
+    if (r.ok) { setResponse(r.data); setSelectedIdx(null); }
+  };
 
   const canRun = !!clusterId && !!source.trim() && !!destination.trim();
 
@@ -260,7 +292,7 @@ export function PacketFlowPage() {
                   </button>
                 ) : (
                   <button
-                    onClick={() => runMut.mutate()}
+                    onClick={() => void doTrace()}
                     disabled={!canRun}
                     className="flex items-center gap-1.5 px-4 py-1.5 text-sm font-semibold bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 disabled:opacity-50"
                   >
@@ -353,6 +385,11 @@ export function PacketFlowPage() {
             ))}
           </div>
 
+          {/* 실행 로그 — 탭과 무관하게 이 화면의 마지막 실행(추적·Hubble·tcpdump) */}
+          <div className="mb-3 empty:hidden">
+            <RunLogPanel run={runLog} show={showLog} onShowChange={setShowLog} maxHeight="max-h-56" />
+          </div>
+
           {/* 탭 콘텐츠 */}
           {tab === 'graph' && (
             <>
@@ -401,6 +438,7 @@ export function PacketFlowPage() {
             clusterId ? (
               <HubbleTimeline
                 clusterId={clusterId}
+                runLog={runLog}
                 initialFromPod={hubblePrefill.fromPod}
                 initialToPod={hubblePrefill.toPod}
                 initialToService={hubblePrefill.toService}
@@ -412,7 +450,7 @@ export function PacketFlowPage() {
 
           {tab === 'tcpdump' && (
             clusterId ? (
-              <TcpdumpPanel clusterId={clusterId} />
+              <TcpdumpPanel clusterId={clusterId} runLog={runLog} />
             ) : (
               <SelectClusterEmptyState />
             )

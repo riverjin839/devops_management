@@ -2,7 +2,9 @@ import { useState } from 'react';
 import { RefreshCw, ExternalLink, ChevronDown, ChevronRight, Settings2, AlertCircle, Loader2, CheckCircle2, Clock, Plus, Pencil, Trash2, X, Check } from 'lucide-react';
 import { useTrendDigests, useTrendItems, useTrendSources, useTriggerCollect, useToggleSource, useCreateSource, useUpdateSource, useDeleteSource } from '@/hooks/useTrends';
 import { MacCard } from '@/components/ui/MacCard';
-import { EmptyState, LoadingState, PageShell } from '@/components/common';
+import { EmptyState, LoadingState, PageShell, RunLogPanel } from '@/components/common';
+import { useRunLog, runLogged, type RunLogEntry } from '@/hooks/useRunLog';
+import { useLogPref } from '@/hooks/useLogPref';
 import { PageHeader } from '@/components/common/PageHeader';
 import type { TrendDigest, TrendItem, TrendSource } from '@/types';
 import { parseUTC } from '@/lib/utils';
@@ -429,15 +431,38 @@ export function TrendDigestPage() {
 
   const { data: digests = [], isLoading: digestsLoading } = useTrendDigests(30);
   const triggerCollect = useTriggerCollect();
+  const runLog = useRunLog();
+  const [showLog, setShowLog] = useLogPref('trends-collect');
 
   const displayDigests = digests;
   const activeDigest = selectedDate
     ? displayDigests.find((d) => d.digestDate === selectedDate)
     : displayDigests[0];
 
-  const handleCollect = () => {
-    triggerCollect.mutate({ lookbackDays });
+  const handleCollect = async () => {
+    const rangeLabel = LOOKBACK_OPTIONS.find((o) => o.value === lookbackDays)?.label ?? `최근 ${lookbackDays}일`;
+    await runLogged(runLog, {
+      title: '기술 동향 수집',
+      first: `${rangeLabel} 범위 수집 요청 — 소스 수집 후 요약까지 끝나면 응답`,
+      fn: () => triggerCollect.mutateAsync({ lookbackDays }),
+      summarize: (d: TrendDigest): RunLogEntry[] => {
+        const out: RunLogEntry[] = [];
+        const st = STATUS_INFO[d.status]?.label ?? d.status;
+        out.push([d.status === 'failed' ? 'error' : 'info', `${d.digestDate} 다이제스트 · 상태 ${st} · 항목 ${d.itemCount}건`]);
+        if (d.errorMessage) out.push(['error', `오류 — ${d.errorMessage}`]);
+        if (d.status === 'done' && d.itemCount === 0) out.push(['warn', '수집된 항목 없음 — 기간을 늘리거나 소스 관리에서 활성 소스를 확인하세요']);
+        if (d.status === 'done' && d.overallSummaryKo) out.push(['info', '전체 요약 생성 완료']);
+        return out;
+      },
+    });
   };
+
+  // 실행 로그 — 실행 전엔 렌더되지 않는다(빈 여백도 남기지 않게 래퍼까지 조건부).
+  const runLogPanel = (runLog.running || runLog.lines.length > 0) ? (
+    <div className="mb-4">
+      <RunLogPanel run={runLog} show={showLog} onShowChange={setShowLog} maxHeight="max-h-56" />
+    </div>
+  ) : null;
 
   return (
     <div className="flex app-h-screen overflow-hidden bg-background">
@@ -523,6 +548,7 @@ export function TrendDigestPage() {
           {activeTab === 'sources' ? (
             <>
               <PageHeader title="수집 소스 관리" className="mb-4" />
+              {runLogPanel}
               <SourcesPanel />
             </>
           ) : activeDigest ? (
@@ -542,11 +568,13 @@ export function TrendDigestPage() {
                 </button>
                 }
               />
+              {runLogPanel}
               <DigestPanel digest={activeDigest} />
             </>
           ) : (
             <>
               <PageHeader title="기술 동향" description="K8s · Cilium · Linux · CNCF 릴리즈와 블로그를 모아 요약합니다." />
+              {runLogPanel}
               <EmptyState
                 icon={RefreshCw}
                 title="아직 수집된 동향이 없습니다."

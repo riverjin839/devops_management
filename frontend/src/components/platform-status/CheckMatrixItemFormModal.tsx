@@ -2,7 +2,9 @@ import { useId, useMemo, useRef, useState } from 'react';
 import {
   X, Loader2, PlayCircle, Plus, Upload, FileCode, Search, AlertTriangle, RefreshCw, Check, ChevronDown,
 } from 'lucide-react';
-import { useToast, StatusBadge, LogViewer, Skeleton } from '@/components/common';
+import { useToast, StatusBadge, LogViewer, Skeleton, RunLogPanel } from '@/components/common';
+import { useRunLog, runLogged, type RunLogEntry } from '@/hooks/useRunLog';
+import { useLogPref } from '@/hooks/useLogPref';
 import { useClusters } from '@/hooks/useCluster';
 import { useCanOperate } from '@/hooks/useCanOperate';
 import {
@@ -436,6 +438,17 @@ function KeyValueRows({ rows, onChange, keyPlaceholder, labelPrefix, addLabel }:
       </button>
     </div>
   );
+}
+
+/** 미리 실행 응답 → 실행 로그 요약 줄(상태·소요·메시지 첫 줄·상세 로그 줄 수). */
+function previewRunLines(res: CheckMatrixItemPreviewResult): RunLogEntry[] {
+  if (res.skipped) return [['warn', `실행 안 함 — ${res.message || '안전상 실제 실행을 건너뜀'}`]];
+  const level: RunLogEntry[0] = res.status === 'critical' ? 'error' : res.status === 'warning' ? 'warn' : 'info';
+  const msg = (res.message ?? '').split('\n').map((l) => l.trim()).find(Boolean);
+  const out: RunLogEntry[] = [[level, `결과 ${res.status}${typeof res.durationMs === 'number' ? ` · ${res.durationMs}ms` : ''}${msg ? ` — ${msg.slice(0, 200)}` : ''}`]];
+  const logLines = res.log ? res.log.split('\n').length : 0;
+  if (logLines) out.push(['info', `상세 로그 ${logLines}줄 — 아래 결과의 상세 로그에서 확인`]);
+  return out;
 }
 
 /** 미리 실행 결과 — 상태 배지 + 메시지 + 상세 로그(펼친 상태). 요청 중엔 스피너. */
@@ -1102,6 +1115,9 @@ function RegisterItemWizard({ onClose }: { onClose: () => void }) {
   const [test, setTest] = useState<{ sig: string; result: CheckMatrixItemPreviewResult } | null>(null);
   const [pendingSig, setPendingSig] = useState<string | null>(null);
   const [ackFor, setAckFor] = useState<string | null>(null);
+  // 테스트 실행 로그(D-089/D-135) — 요청·대기·결과 요약·실패 사유. 상세 출력은 아래 결과 뷰의 LogViewer.
+  const testLog = useRunLog();
+  const [showTestLog, setShowTestLog] = useLogPref('check-matrix-item-test');
 
   const catalogItem = selection && selection.kind !== 'new_playbook' ? selection.item : null;
   const newPlaybookMode = selection?.kind === 'new_playbook';
@@ -1230,12 +1246,18 @@ function RegisterItemWizard({ onClose }: { onClose: () => void }) {
 
   const handleTest = async () => {
     if (!testClusterId || !sourceType) return;
+    if (!newPlaybookMode && !catalogItem) return;
     const sig = testSig;
     setPendingSig(sig);
-    try {
-      let res: CheckMatrixItemPreviewResult;
-      if (newPlaybookMode) {
-        res = await previewMut.mutateAsync({
+    const clusterName = clusters.find((c) => c.id === testClusterId)?.name ?? testClusterId;
+    const what = newPlaybookMode
+      ? `새 플레이북${checkMode ? ' (--check, dry-run)' : ' (실제 적용)'}`
+      : (catalogItem?.displayName ?? sourceType);
+    const r = await runLogged(testLog, {
+      title: '점검 항목 테스트 실행',
+      first: `${what} — ${clusterName} 에서 1회 실행 요청 (저장 안 함)`,
+      fn: () => (newPlaybookMode || !catalogItem
+        ? previewMut.mutateAsync({
           sourceType: 'playbook',
           sourceRef: null,
           clusterId: testClusterId,
@@ -1244,26 +1266,22 @@ function RegisterItemWizard({ onClose }: { onClose: () => void }) {
           extraVars: pbExtraVars(),
           tags: pb.tags.trim() || null,
           checkMode,
-        });
-      } else {
-        if (!catalogItem) return;
-        res = await previewMut.mutateAsync({
+        })
+        : previewMut.mutateAsync({
           sourceType: catalogItem.sourceType,
           sourceRef: catalogItem.sourceRef,
           clusterId: testClusterId,
           thresholds: isDeepCheck ? fieldValuesToObject(catalogItem.thresholdFields, thresholdDraft) : undefined,
           params: isDeepCheck ? fieldValuesToObject(catalogItem.paramFields, paramDraft) : undefined,
           config: catalogItem.sourceType === 'addon'
-            ? Object.fromEntries(addonConfigRows.filter((r) => r.key.trim()).map((r) => [r.key.trim(), r.value]))
+            ? Object.fromEntries(addonConfigRows.filter((row) => row.key.trim()).map((row) => [row.key.trim(), row.value]))
             : undefined,
-        });
-      }
-      setTest({ sig, result: res });
-    } catch (e) {
-      setTest({ sig, result: { status: 'critical', message: formatApiError(e, '테스트 실행 중 오류가 발생했습니다.') } });
-    } finally {
-      setPendingSig(null);
-    }
+        })),
+      summarize: previewRunLines,
+    });
+    if (r.ok) setTest({ sig, result: r.data });
+    else setTest({ sig, result: { status: 'critical', message: formatApiError(r.error, '테스트 실행 중 오류가 발생했습니다.') } });
+    setPendingSig(null);
   };
 
   // ── 저장 ─────────────────────────────────────────────────
@@ -1713,6 +1731,7 @@ function RegisterItemWizard({ onClose }: { onClose: () => void }) {
                   </span>
                 </label>
               )}
+              <RunLogPanel run={testLog} show={showTestLog} onShowChange={setShowTestLog} maxHeight="max-h-56" />
               <PreviewResultView result={testResult} pending={testPending} />
               {testFailed && (
                 <label className="flex items-start gap-2 text-xs rounded-xl border border-status-critical/40 bg-status-critical/5 px-3 py-2">

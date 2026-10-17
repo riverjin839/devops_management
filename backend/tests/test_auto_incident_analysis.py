@@ -43,7 +43,7 @@ def db():
 def _make_alert(db, **overrides) -> AlertEvent:
     event = AlertEvent(
         id=uuid.uuid4(),
-        cluster_id=uuid.uuid4(),
+        cluster_id=overrides.pop("cluster_id", uuid.uuid4()),
         source="alertmanager",
         fingerprint=uuid.uuid4().hex,
         alertname="KubePodCrashLooping",
@@ -76,6 +76,24 @@ class _FakeAnalyzer:
         return True
 
 
+class _DegradedAnalyzer:
+    """LLM 연결 실패 등으로 대체 결과를 돌려주는 분석기 (D-115)."""
+    async def analyze(self, context):
+        return AnalysisResult(
+            severity="info",
+            root_cause="LLM 응답 없음 — 대체 결과",
+            suggested_actions=[],
+            confidence=0.0,
+            analyzed_by="local_llm:test-profile:test-model",
+            analyzed_at="2026-07-29T00:00:00Z",
+            degraded=True,
+            degraded_reason="LLM 연결 실패",
+        )
+
+    async def health_check(self):
+        return False
+
+
 class _BoomAnalyzer:
     async def analyze(self, context):
         raise RuntimeError("llm exploded")
@@ -103,6 +121,7 @@ def test_task_persists_analysis_and_links_alert(db, monkeypatch):
     assert row.analyzed_by == "local_llm:test-profile:test-model"
     assert row.matched_rule_id == "r1"
     assert row.duration_ms is not None
+    assert row.degraded is False  # 서버 판정이 있으면 화면이 confidence 추정을 쓰지 않는다
 
     fresh = db.query(AlertEvent).filter(AlertEvent.id == event.id).first()
     assert fresh.analysis_id == row.id
@@ -148,3 +167,65 @@ def test_task_missing_alert_is_noop():
 def test_task_bad_id_is_noop():
     result = run_auto_incident_analysis("not-a-uuid")
     assert result == {"ok": False, "reason": "bad_id"}
+
+
+def test_task_degraded_result_is_recorded_as_failed(db, monkeypatch):
+    """대체 결과(degraded)를 성공(done)으로 저장하지 않는다 (D-115)."""
+    monkeypatch.setattr(factory_module, "get_analyzer", lambda dbb=None: _DegradedAnalyzer())
+    event = _make_alert(db)
+
+    result = run_auto_incident_analysis(str(event.id), rule_id="r1")
+    assert result["status"] == "failed"
+
+    db.expire_all()
+    row = db.query(IncidentAnalysis).filter(
+        IncidentAnalysis.alert_event_id == event.id).first()
+    assert row.status == "failed"
+    assert row.degraded is True
+    assert "LLM 연결 실패" in (row.error or "")
+
+
+def test_task_runs_analyzer_in_cluster_owner_tenant_context(db, monkeypatch):
+    """자동 분석은 클러스터 소유 테넌트의 LLM 컨텍스트 안에서 분석기를 고르고 돌린다 (D-114).
+
+    그래야 테넌트가 incident_analysis LLM 을 지정했을 때 factory 가 Claude 직접 호출 대신
+    게이트웨이를 고르고, LLM 사용량이 그 테넌트에 귀속된다.
+    """
+    from app.models.cluster import Cluster
+    from app.models.tenant import ClusterBinding, Tenant
+    from app.services.llm.service import current_llm_tenant
+
+    tag = uuid.uuid4().hex[:8]
+    cluster = Cluster(name=f"auto-an-{tag}", api_endpoint="https://c:6443")
+    tenant = Tenant(name=f"auto-an-team-{tag}", llm_routing={"incident_analysis": {"primary": "onprem"}})
+    db.add_all([cluster, tenant])
+    db.commit()
+    db.add(ClusterBinding(tenant_id=tenant.id, cluster_id=cluster.id, access="operate"))
+    db.commit()
+    seen: list = []
+
+    def _get(dbb=None):
+        seen.append(current_llm_tenant())
+        return _FakeAnalyzer()
+
+    monkeypatch.setattr(factory_module, "get_analyzer", _get)
+    try:
+        event = _make_alert(db, cluster_id=cluster.id)
+        result = run_auto_incident_analysis(str(event.id))
+        assert result["status"] == "done"
+        assert seen and seen[0]["id"] == str(tenant.id)
+        assert seen[0]["routing"] == {"incident_analysis": {"primary": "onprem"}}
+        assert current_llm_tenant() is None  # 태스크 밖으로 새지 않는다
+
+        # 바인딩 없는 클러스터는 테넌트 컨텍스트 없이(전역 설정)
+        seen.clear()
+        other = _make_alert(db)
+        run_auto_incident_analysis(str(other.id))
+        assert seen == [None]
+    finally:
+        db.query(IncidentAnalysis).filter(IncidentAnalysis.cluster_id == cluster.id).delete(synchronize_session=False)
+        db.query(AlertEvent).filter(AlertEvent.cluster_id == cluster.id).delete(synchronize_session=False)
+        db.query(ClusterBinding).filter(ClusterBinding.tenant_id == tenant.id).delete(synchronize_session=False)
+        db.query(Tenant).filter(Tenant.id == tenant.id).delete(synchronize_session=False)
+        db.query(Cluster).filter(Cluster.id == cluster.id).delete(synchronize_session=False)
+        db.commit()

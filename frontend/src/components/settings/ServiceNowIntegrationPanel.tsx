@@ -79,6 +79,8 @@ export function ServiceNowIntegrationPanel() {
       if (data.ok) toast.success('연결 성공', data.displayName ?? data.detail);
       else toast.error('연결 실패', data.detail);
     } catch (err) {
+      // 요청 자체가 실패해도 사유가 인라인에 남게 한다(§12.9.1 예외 ① — 연결 테스트는 인라인 결과가 기준).
+      setTestResult({ ok: false, detail: formatApiError(err) });
       toast.error('연결 실패', formatApiError(err));
     }
   };

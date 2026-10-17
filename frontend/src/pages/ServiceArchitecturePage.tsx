@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import {
   AlertTriangle, Boxes, Download, GitBranch, Image, Loader2, Network,
   Pencil, RefreshCw, Trash2,
 } from 'lucide-react';
 import { useClusters } from '@/hooks/useCluster';
-import { ClusterSidebar, useToast, EmptyState, LoadingState, PageShell } from '@/components/common';
+import { ClusterSidebar, useToast, EmptyState, LoadingState, PageShell, RunLogPanel } from '@/components/common';
 import { PageHeader } from '@/components/common/PageHeader';
 import { MacCard } from '@/components/ui/MacCard';
 import {
@@ -17,11 +18,86 @@ import {
   useUpdateArchLayout, useCreateManualNode, useUpdateManualNode, useDeleteManualNode,
   useCreateManualEdge, useDeleteManualEdge,
 } from '@/hooks/useArchDoc';
-import type { ArchDocSummary, ArchManualNode, ArchViewType } from '@/types';
+import { useRunLog, runLogged, pollIntoRunLog, type RunLogEntry, type RunLogLevel } from '@/hooks/useRunLog';
+import { useLogPref } from '@/hooks/useLogPref';
+import { architectureDocsApi } from '@/services/api';
+import type { ArchDoc, ArchDocSummary, ArchManualNode, ArchViewType } from '@/types';
 import { formatApiError } from '@/lib/utils';
 
 // 플로우 뷰에서는 스토리지 노드는 숨긴다 (요청 흐름 관점 노이즈)
 const FLOW_HIDDEN_KINDS = new Set(['PVC']);
+
+// ── 실행 로그 요약 (D-136) ────────────────────────────────────────────────────
+const LOG_ITEM_CAP = 200;
+const LLM_DONE = new Set<ArchDoc['llmStatus']>(['ok', 'failed', 'offline']);
+
+/** 배열 항목을 한 건당 한 줄로 — 앞 200건 + "외 N건". */
+function itemLines(items: string[], level: RunLogLevel, fmt: (v: string) => string): RunLogEntry[] {
+  const out: RunLogEntry[] = items.slice(0, LOG_ITEM_CAP).map((v) => [level, fmt(v)]);
+  if (items.length > LOG_ITEM_CAP) out.push([level, `외 ${items.length - LOG_ITEM_CAP}건`]);
+  return out;
+}
+
+/** 동기화 응답(ArchDoc) → 실행 로그 줄. */
+function syncSummaryLines(d: ArchDoc, prune: boolean): RunLogEntry[] {
+  const out: RunLogEntry[] = [];
+  if (d.lastSyncStatus === 'failed') {
+    out.push(['error', `동기화 실패 — ${d.syncError || '사유 미상'}`]);
+    return out;
+  }
+  const g = d.autoGraph;
+  const warnings = g?.warnings ?? [];
+  if (d.lastSyncStatus === 'partial') {
+    out.push(['warn', `부분 성공 — 경고 ${warnings.length}건${g?.truncated ? ' · 그래프 상한 초과로 잘림' : ''}`]);
+  } else if (d.lastSyncStatus === 'ok') {
+    out.push(['info', `동기화 완료${prune ? ' (stale 노드 정리 포함)' : ''}`]);
+  } else {
+    out.push(['warn', `동기화 상태 ${d.lastSyncStatus} — 아직 결과가 확정되지 않음`]);
+  }
+  if (g) {
+    const stale = g.nodes.filter((n) => n.stale).length;
+    out.push(['info', `노드 ${g.nodes.length}${stale ? `(사라진 노드 ${stale})` : ''} · 엣지 ${g.edges.length} · 실트래픽 엣지 ${d.trafficEdges.length} · 수동 노드 ${d.manualNodes.length} · 수동 엣지 ${d.manualEdges.length}`]);
+  }
+  out.push(...itemLines(warnings, 'warn', (w) => `경고 — ${w}`));
+  if (g?.truncated) out.push(['warn', '노드 수 상한으로 그래프가 잘림 — 일부 리소스가 다이어그램에 빠졌을 수 있음']);
+  const dr = d.drift;
+  const added = dr?.added ?? [];
+  const removed = dr?.removed ?? [];
+  const changed = dr?.changed ?? [];
+  if (added.length + removed.length + changed.length > 0) {
+    out.push(['info', `변경 감지 — 추가 ${added.length} · 제거 ${removed.length} · 변경 ${changed.length}`]);
+    out.push(...itemLines(added, 'info', (v) => `추가 — ${v}`));
+    out.push(...itemLines(removed, 'info', (v) => `제거 — ${v}`));
+    out.push(...itemLines(changed, 'info', (v) => `변경 — ${v}`));
+  } else {
+    out.push(['info', '이전 동기화 대비 변경 없음']);
+  }
+  return out;
+}
+
+/** LLM 결과 상태 → 실행 로그 줄(재생성 응답·첫 동기화 후 폴링 공용). */
+function llmResultLines(d: ArchDoc): RunLogEntry[] {
+  switch (d.llmStatus) {
+    case 'ok': {
+      const c = d.llmContent;
+      const out: RunLogEntry[] = [[
+        'info',
+        `AI 분석 완료 — 모델 ${c?.model || '—'} · 요약 ${(c?.summary ?? '').length}자 · 컴포넌트 역할 ${c?.components.length ?? 0} · 플로우 ${c?.flowSteps.length ?? 0}단계`,
+      ]];
+      if (c?.rawFallback) out.push(['warn', '응답 JSON 파싱 실패 — 원문 요약만 저장됨(재생성 권장)']);
+      if (d.summaryOverride != null) out.push(['info', '사용자 수정본이 있어 화면 요약은 수정본으로 표시됨']);
+      return out;
+    }
+    case 'offline':
+      return [['error', 'AI 분석 실패 — LLM(Ollama) 오프라인 · 기존 요약 유지']];
+    case 'failed':
+      return [['error', 'AI 분석 실패 — 다이어그램 노드가 없어 생성할 수 없음(먼저 동기화 필요)']];
+    case 'pending':
+      return [['info', 'AI 분석 생성 중']];
+    default:
+      return [['info', 'AI 분석 대기 중(백그라운드 큐)']];
+  }
+}
 
 function syncStatusMeta(status: string): { color: string; label: string } {
   switch (status) {
@@ -45,6 +121,23 @@ export function ServiceArchitecturePage() {
   const [nodeDialogOpen, setNodeDialogOpen] = useState(false);
   const [editingManualNode, setEditingManualNode] = useState<ArchManualNode | null>(null);
   const svgRef = useRef<SVGSVGElement>(null);
+  const qc = useQueryClient();
+
+  // 실행 로그 — 동기화·정리 동기화·AI 재생성이 공유한다. 패널은 마지막 실행 버튼 근처에 둔다.
+  const runLog = useRunLog();
+  const [showLog, setShowLog] = useLogPref('arch-doc-sync');
+  const [logSlot, setLogSlot] = useState<'sync' | 'llm'>('sync');
+  const pollAbort = useRef<AbortController | null>(null);
+  const pollDone = useRef<Promise<unknown> | null>(null);
+  useEffect(() => () => pollAbort.current?.abort(), []);
+
+  /** 이전 실행의 LLM 진행 추적을 멈추고 끝날 때까지 기다린다(로그가 섞이지 않게). */
+  const stopPoll = async () => {
+    pollAbort.current?.abort();
+    if (pollDone.current) await pollDone.current;
+    pollAbort.current = null;
+    pollDone.current = null;
+  };
 
   useEffect(() => {
     if (!clusterId && clusters.length > 0) setClusterId(clusters[0].id);
@@ -189,18 +282,86 @@ export function ServiceArchitecturePage() {
     setLinkTargetId(id);
   };
 
-  const runSync = (prune = false) => {
-    syncMut.mutate({ prune }, {
-      onSuccess: (d) => {
-        if (d.lastSyncStatus === 'failed') {
-          toast.error(d.syncError || '동기화에 실패했습니다.');
-        } else {
-          toast.success(prune ? '정리 동기화 완료' : '현행화 완료');
-        }
-      },
-      onError: (e) => toast.error(formatApiError(e)),
-    });
+  const moduleLabel = () => {
+    if (!selectedModule) return serviceId ?? '';
+    return `${selectedModule.serviceName}${selectedModule.namespace ? ` (${selectedModule.namespace})` : ''}`;
   };
+
+  const runSync = async (prune = false) => {
+    const sid = serviceId;
+    if (!sid) return;
+    await stopPoll();
+    setLogSlot('sync');
+    const r = await runLogged(runLog, {
+      title: prune ? '정리 동기화' : '동기화',
+      first: `${moduleLabel()} — ${prune ? '정리 동기화(참조되지 않는 stale 노드 제거)' : 'K8s 리소스 수집·현행화'} 요청`,
+      fn: () => syncMut.mutateAsync({ prune }),
+      summarize: (d) => syncSummaryLines(d, prune),
+      keepOpen: true,
+    });
+    if (!r.ok) {
+      if (!r.aborted) toast.error(formatApiError(r.error));
+      return;
+    }
+    const d = r.data;
+    if (d.lastSyncStatus === 'failed') toast.error(d.syncError || '동기화에 실패했습니다.');
+    else if (d.lastSyncStatus === 'partial') toast.warning(`${prune ? '정리 동기화' : '현행화'} 부분 성공 — 경고 ${d.autoGraph?.warnings.length ?? 0}건`, '실행 로그에서 경고를 확인하세요.');
+    else toast.success(prune ? '정리 동기화 완료' : '현행화 완료');
+
+    // 첫 동기화 성공 시 백엔드가 LLM 생성을 Celery 로 걸어 둔다 — 문서를 재조회해 llmStatus 변화를 이어 쓴다.
+    const llmQueued = (d.lastSyncStatus === 'ok' || d.lastSyncStatus === 'partial') && d.llmStatus === 'none';
+    if (!llmQueued && d.llmStatus !== 'pending') {
+      r.run.end();
+      return;
+    }
+    r.run.log('info', 'AI 아키텍처 분석이 백그라운드로 요청됨 — 완료까지 진행 추적');
+    const ctrl = new AbortController();
+    pollAbort.current = ctrl;
+    const p = pollIntoRunLog<ArchDoc>(r.run, {
+      fetch: () => architectureDocsApi.get(sid).then((res) => res.data),
+      describe: (snap, prev) => (prev && prev.llmStatus === snap.llmStatus ? [] : llmResultLines(snap)),
+      isDone: (snap) => LLM_DONE.has(snap.llmStatus),
+      intervalMs: 3000,
+      timeoutMs: 180_000,
+      signal: ctrl.signal,
+    }).then((last) => {
+      if (last && LLM_DONE.has(last.llmStatus)) {
+        qc.invalidateQueries({ queryKey: ['arch-doc', sid] });
+        qc.invalidateQueries({ queryKey: ['arch-docs'] });
+      }
+    });
+    pollDone.current = p;
+    await p;
+  };
+
+  const runRegenerate = async () => {
+    if (!serviceId) return;
+    if (syncMut.isPending) {
+      toast.info('동기화가 끝난 뒤 재생성하세요.');
+      return;
+    }
+    await stopPoll();
+    setLogSlot('llm');
+    const r = await runLogged(runLog, {
+      title: 'AI 재생성',
+      first: `${moduleLabel()} — AI 아키텍처 분석 재생성 요청(LLM 응답까지 최대 180초)`,
+      fn: () => llmMut.mutateAsync(),
+      summarize: llmResultLines,
+    });
+    if (!r.ok) {
+      if (!r.aborted) toast.error(formatApiError(r.error));
+      return;
+    }
+    const d = r.data;
+    if (d.llmStatus === 'offline') toast.error('LLM(Ollama) 이 오프라인입니다.');
+    else if (d.llmStatus === 'failed') toast.error('AI 분석 실패 — 먼저 동기화해 다이어그램을 생성하세요.');
+    else if (d.llmStatus === 'ok') toast.success('AI 분석 갱신됨');
+  };
+
+  const logPanel = (
+    <RunLogPanel run={runLog} show={showLog} onShowChange={setShowLog} maxHeight="max-h-56" />
+  );
+  const hasLog = runLog.running || runLog.lines.length > 0;
 
   const saveAnnotation = (nodeId: string, text: string | null) => {
     patchMut.mutate({ annotations: [{ id: nodeId, text }] }, {
@@ -354,16 +515,16 @@ export function ServiceArchitecturePage() {
                 <Download className="w-3.5 h-3.5" />
               </button>
               <button
-                onClick={() => runSync(true)}
-                disabled={!serviceId || syncMut.isPending}
+                onClick={() => { void runSync(true); }}
+                disabled={!serviceId || syncMut.isPending || llmMut.isPending}
                 aria-label="정리 동기화" title="정리 동기화 — 참조되지 않는 stale 노드를 제거하며 현행화"
                 className="p-1.5 rounded-xl border border-border bg-card hover:bg-secondary disabled:opacity-50"
               >
                 <Trash2 className="w-3.5 h-3.5" />
               </button>
               <button
-                onClick={() => runSync(false)}
-                disabled={!serviceId || syncMut.isPending}
+                onClick={() => { void runSync(false); }}
+                disabled={!serviceId || syncMut.isPending || llmMut.isPending}
                 className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold bg-primary hover:bg-primary/90 text-primary-foreground rounded-xl disabled:opacity-50"
               >
                 {syncMut.isPending
@@ -373,6 +534,10 @@ export function ServiceArchitecturePage() {
               </button>
             </>}
           >
+            {hasLog && logSlot === 'sync' && (
+              <div className="px-4 py-3 border-b border-border">{logPanel}</div>
+            )}
+
             {editMode && (
               <div className="px-4 py-1.5 text-xs text-primary bg-secondary/40 border-b border-border">
                 편집 모드: {linkSourceId
@@ -452,13 +617,8 @@ export function ServiceArchitecturePage() {
                 doc={doc}
                 nodeName={nodeName}
                 regenerating={llmMut.isPending}
-                onRegenerate={() => llmMut.mutate(undefined, {
-                  onSuccess: (d) => {
-                    if (d.llmStatus === 'offline') toast.error('LLM(Ollama) 이 오프라인입니다.');
-                    else toast.success('AI 분석 갱신됨');
-                  },
-                  onError: (e) => toast.error(formatApiError(e)),
-                })}
+                onRegenerate={() => { void runRegenerate(); }}
+                runLog={hasLog && logSlot === 'llm' ? logPanel : null}
                 savingSummary={patchMut.isPending}
                 onSaveSummaryOverride={(text) => patchMut.mutate({ summaryOverride: text }, {
                   onError: (e) => toast.error(formatApiError(e)),

@@ -18,15 +18,22 @@ from datetime import datetime
 from typing import Literal, Optional
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import PlainTextResponse, StreamingResponse
 from kubernetes import client as k8s_client, watch as k8s_watch
+from kubernetes.client.exceptions import ApiException
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
+from app.auth.deps import get_current_user
 from app.config import settings
 from app.database import get_db
 from app.models import Cluster
+from app.models.user import User
+from app.services import audit_logger
+from app.services.cluster_access import require_cluster_access
+from app.services.llm.service import llm_tenant_context
+from app.services.tenant_scope import resolve_llm_tenant
 from app.services.analyzers import (
     AnalysisResult,
     ArgocdStatus,
@@ -102,14 +109,22 @@ class ArgocdStatusSchema(BaseModel):
     last_sync_at: str
 
 
+# 분석 입력 상한 — 수 MB 로그를 그대로 붙여넣어 워커 메모리·LLM 토큰을 태우지 않게(D-114).
+# 초과는 422 (pydantic 검증). 분석기는 어차피 tail 수천 자만 프롬프트에 싣는다.
+_MAX_TEXT_CHARS = 200_000
+_MAX_EVENTS = 500
+
+
 class IncidentContextSchema(BaseModel):
     pod_name: str = Field(..., min_length=1)
     namespace: str = Field(..., min_length=1)
     timestamp: str
-    events: list[KubeEventSchema] = []
-    current_logs: str = ""
-    describe_output: str = ""
-    previous_logs: Optional[str] = None
+    # 선택 — 지정되면 그 클러스터의 read 권한을 확인한다(테넌트 바인딩).
+    cluster_id: Optional[str] = None
+    events: list[KubeEventSchema] = Field(default_factory=list, max_length=_MAX_EVENTS)
+    current_logs: str = Field(default="", max_length=_MAX_TEXT_CHARS)
+    describe_output: str = Field(default="", max_length=_MAX_TEXT_CHARS)
+    previous_logs: Optional[str] = Field(default=None, max_length=_MAX_TEXT_CHARS)
     related_workload: Optional[RelatedWorkloadSchema] = None
     argocd_status: Optional[ArgocdStatusSchema] = None
 
@@ -127,6 +142,9 @@ class AnalysisResultSchema(BaseModel):
     analyzed_at: str
     # RAG 근거 인용 — {title, source_type, ref_id, route, snippet, similarity}
     citations: list[dict] = []
+    # 분석기 실패(LLM 미가용·HTTP 오류)·응답 파싱 실패로 대체 결과를 돌려준 경우 True (D-115)
+    degraded: bool = False
+    degraded_reason: Optional[str] = None
 
 
 class AnalyzeResponse(BaseModel):
@@ -142,10 +160,76 @@ class HealthResponse(BaseModel):
 
 # ── Endpoints ─────────────────────────────────────────────────────────
 
+def _parse_cluster_id(raw: Optional[str]) -> Optional[UUID]:
+    if raw is None or not str(raw).strip():
+        return None
+    try:
+        return UUID(str(raw).strip())
+    except ValueError as e:
+        raise HTTPException(status_code=422, detail=f"cluster_id 형식이 올바르지 않습니다: {raw!r}") from e
+
+
+def _audit_incident_analyze(
+    db: Session,
+    *,
+    user: User,
+    request: Request,
+    body: "IncidentContextSchema",
+    cluster_id: Optional[UUID],
+    analyzer_name: str,
+    degraded: Optional[bool],
+    status: str,
+    error: Optional[str] = None,
+) -> None:
+    """분석 1회 감사 기록 — 대상·입력 크기·분석기·degraded 만. **로그/describe 본문은 남기지 않는다.**"""
+    try:
+        details: dict = {
+            "cluster_id": str(cluster_id) if cluster_id else None,
+            "namespace": body.namespace,
+            "pod": body.pod_name,
+            "input": {
+                "current_logs_chars": len(body.current_logs or ""),
+                "previous_logs_chars": len(body.previous_logs or ""),
+                "describe_chars": len(body.describe_output or ""),
+                "events": len(body.events or []),
+            },
+            "analyzer": analyzer_name,
+            "degraded": degraded,
+        }
+        if error:
+            details["error"] = error[:200]
+        audit_logger.record(
+            db,
+            action="incident.analyze",
+            actor=user,
+            status=status,
+            target_type="cluster" if cluster_id else "pod",
+            target_id=str(cluster_id) if cluster_id else f"{body.namespace}/{body.pod_name}",
+            details=details,
+            request=request,
+        )
+    except Exception as exc:  # noqa: BLE001 — 감사 실패가 분석 응답을 막으면 안 된다
+        logger.warning("incident.analyze 감사 기록 실패 — 무시: %s", exc)
+
+
 @router.post("/incident", response_model=AnalyzeResponse)
-async def analyze_incident(body: IncidentContextSchema, db: Session = Depends(get_db)):
-    """Analyze a Kubernetes pod incident and return structured insights."""
-    analyzer = get_analyzer(db)
+async def analyze_incident(
+    body: IncidentContextSchema,
+    request: Request,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    """Analyze a Kubernetes pod incident and return structured insights.
+
+    - ``cluster_id`` 가 있으면 그 클러스터 read 권한을 확인한다(없으면 403).
+    - 사용자 테넌트의 LLM 라우팅 컨텍스트 안에서 분석한다(``llm_tenant_context``).
+    - 분석 1회마다 감사 로그(``incident.analyze``)를 남긴다 — 본문 없이 크기·대상만.
+    """
+    cluster_id = _parse_cluster_id(body.cluster_id)
+    require_cluster_access(db, user, cluster_id, "read")
+
+    llm_tenant = resolve_llm_tenant(db, user)
+    analyzer_name = "unknown"
 
     ctx = IncidentContext(
         pod_name=body.pod_name,
@@ -186,9 +270,25 @@ async def analyze_incident(body: IncidentContextSchema, db: Session = Depends(ge
     )
 
     try:
-        result: AnalysisResult = await analyzer.analyze(ctx)
+        # 멀티테넌시 4단계 — 사용자 테넌트의 LLM 라우팅 오버라이드 + 사용량 귀속.
+        # 분석기 선택도 컨텍스트 안에서 한다: 테넌트가 incident_analysis LLM 을 지정했으면
+        # Claude 직접 호출 대신 게이트웨이 경유 분석기를 고른다(factory.tenant_pins_incident_llm).
+        with llm_tenant_context(llm_tenant):
+            analyzer = get_analyzer(db)
+            analyzer_name = type(analyzer).__name__
+            result: AnalysisResult = await analyzer.analyze(ctx)
     except Exception as exc:
-        raise HTTPException(status_code=502, detail=f"Analyzer error: {exc}") from exc
+        _audit_incident_analyze(
+            db, user=user, request=request, body=body, cluster_id=cluster_id,
+            analyzer_name=analyzer_name, degraded=None, status="failure",
+            error=f"{type(exc).__name__}: {exc}",
+        )
+        raise HTTPException(status_code=502, detail=f"Analyzer error: {str(exc)[:300]}") from exc
+
+    _audit_incident_analyze(
+        db, user=user, request=request, body=body, cluster_id=cluster_id,
+        analyzer_name=result.analyzed_by, degraded=bool(result.degraded), status="success",
+    )
 
     return AnalyzeResponse(
         status="ok",
@@ -201,6 +301,8 @@ async def analyze_incident(body: IncidentContextSchema, db: Session = Depends(ge
             analyzed_by=result.analyzed_by,
             analyzed_at=result.analyzed_at,
             citations=list(getattr(result, "citations", None) or []),
+            degraded=bool(getattr(result, "degraded", False)),
+            degraded_reason=getattr(result, "degraded_reason", None),
         ),
     )
 
@@ -472,6 +574,8 @@ class IncidentContextFetchResponse(BaseModel):
     current_logs: str
     previous_logs: Optional[str] = None
     describe_output: str
+    # 로그를 수집한 컨테이너 — 쿼리 → default-container 어노테이션 → 실패·재시작 컨테이너 → 첫 컨테이너
+    container: Optional[str] = None
 
 
 @router.get("/clusters/{cluster_id}/namespaces/{namespace}/pods/{pod_name}/logs/stream")
@@ -586,41 +690,21 @@ def list_pod_containers(
     """
     cluster = _require_cluster(cluster_id, db)
     v1 = _get_core_v1(cluster)
-    try:
-        pod = v1.read_namespaced_pod(pod_name, namespace, _request_timeout=_K8S_TIMEOUT)
-    except Exception as e:  # noqa: BLE001
-        raise HTTPException(status_code=502, detail=f"파드 조회 실패: {str(e)[:200]}") from e
-
-    def _state_of(statuses, name: str) -> tuple[Optional[str], int]:
-        for st in statuses or []:
-            if st.name != name:
-                continue
-            s = st.state
-            state = None
-            if s is not None:
-                if s.running:
-                    state = "running"
-                elif s.terminated:
-                    state = "terminated"
-                elif s.waiting:
-                    state = "waiting"
-            return state, int(st.restart_count or 0)
-        return None, 0
+    pod = _read_pod(v1, pod_name, namespace)
 
     items: list[PodContainerInfo] = []
     spec = pod.spec
     status = pod.status
-    for c in spec.containers or []:
+    for c in (spec.containers if spec else None) or []:
         state, restarts = _state_of(status.container_statuses if status else None, c.name)
         items.append(PodContainerInfo(name=c.name, init=False, state=state, restart_count=restarts))
-    for c in spec.init_containers or []:
+    for c in (spec.init_containers if spec else None) or []:
         state, restarts = _state_of(status.init_container_statuses if status else None, c.name)
         items.append(PodContainerInfo(name=c.name, init=True, state=state, restart_count=restarts))
 
-    annotations = (pod.metadata.annotations or {}) if pod.metadata else {}
-    default = annotations.get("kubectl.kubernetes.io/default-container")
-    if not default:
-        default = next((c.name for c in items if not c.init), None)
+    # 로그/터미널 셀렉터의 기본값 — 어노테이션 → 첫 일반 컨테이너 (실패 컨테이너 우선 선택은
+    # 장애 컨텍스트 수집에만 쓴다: 터미널 기본값이 죽은 init 컨테이너가 되면 exec 가 실패한다).
+    default = _pick_container(pod, prefer_failing=False)
     return PodContainersResponse(containers=items, default_container=default)
 
 
@@ -749,11 +833,14 @@ def fetch_incident_context(
     namespace: str,
     pod_name: str,
     tail_lines: int = 200,
+    container: Optional[str] = None,
     db: Session = Depends(get_db),
 ):
     """선택된 pod 의 logs / events / describe 를 한 번에 수집.
 
     UI 에서 "자동 채우기" 버튼으로 호출 → 그대로 ``/analyze/incident`` 에 보내면 됨.
+    로그 컨테이너는 ``container`` 쿼리 → ``kubectl.kubernetes.io/default-container`` 어노테이션
+    → 실패·재시작 중인 컨테이너(init 포함) → 첫 컨테이너 순으로 고르고, 응답 ``container`` 에 싣는다.
     """
     if tail_lines < 1 or tail_lines > 5000:
         raise HTTPException(status_code=422, detail="tail_lines 는 1~5000 사이여야 합니다")
@@ -762,13 +849,17 @@ def fetch_incident_context(
     v1 = _get_core_v1(cluster)
 
     # 1) Pod object — describe 와 컨테이너 목록을 위해 필요
-    try:
-        pod = v1.read_namespaced_pod(pod_name, namespace, _request_timeout=_K8S_TIMEOUT)
-    except Exception as e:
-        raise HTTPException(status_code=404, detail=f"pod 조회 실패: {str(e)[:200]}") from e
+    pod = _read_pod(v1, pod_name, namespace)
 
-    # 2) Logs — 첫 번째 컨테이너 우선. previous 는 best-effort.
-    container = (pod.spec.containers[0].name if pod.spec.containers else None)
+    # 2) Logs — 선택 규칙은 _pick_container. previous 는 best-effort.
+    requested = (container or "").strip() or None
+    if requested and requested not in _container_names(pod):
+        raise HTTPException(
+            status_code=422,
+            detail=f"컨테이너 '{requested}' 가 pod {namespace}/{pod_name} 에 없습니다 "
+                   f"(있는 컨테이너: {', '.join(_container_names(pod)) or '-'})",
+        )
+    container = requested or _pick_container(pod, prefer_failing=True)
     current_logs = ""
     previous_logs: Optional[str] = None
     if container:
@@ -820,6 +911,7 @@ def fetch_incident_context(
         current_logs=current_logs[:20000] if current_logs else "",
         previous_logs=previous_logs[:20000] if previous_logs else None,
         describe_output=describe_output,
+        container=container,
     )
 
 
@@ -855,10 +947,23 @@ _BAD_TERMINATED_REASONS = {"OOMKilled", "Error", "ContainerCannotRun"}
 
 
 def _pod_issue(pod) -> tuple[bool, Optional[str]]:
-    """Pod 의 비정상 여부와 사유 한 줄."""
+    """Pod 의 비정상 여부와 사유 한 줄. init 컨테이너 실패도 본다(Init:… 접두사)."""
     phase = pod.status.phase or ""
     if phase in ("Failed", "Unknown"):
         return True, phase
+    # init 컨테이너가 실패하면 일반 컨테이너는 아직 Waiting(PodInitializing)이라 아래 루프로는 안 잡힌다.
+    for cs in (pod.status.init_container_statuses or []):
+        st = cs.state
+        if st and st.waiting and st.waiting.reason in _BAD_WAITING_REASONS:
+            return True, f"Init:{st.waiting.reason}"
+        if st and st.terminated and (
+            st.terminated.reason in _BAD_TERMINATED_REASONS or (st.terminated.exit_code or 0) != 0
+        ):
+            return True, f"Init:{st.terminated.reason or 'Error'}"
+        # 재시작이 잦았어도 결국 정상 완료(exit 0)한 init 은 문제가 아니다 — 계속 이상으로 남기지 않는다.
+        completed_ok = bool(st and st.terminated and (st.terminated.exit_code or 0) == 0)
+        if (cs.restart_count or 0) >= 5 and not completed_ok:
+            return True, f"Init:Restarts={cs.restart_count}"
     for cs in (pod.status.container_statuses or []):
         st = cs.state
         if st and st.waiting and st.waiting.reason in _BAD_WAITING_REASONS:
@@ -875,6 +980,112 @@ def _pod_issue(pod) -> tuple[bool, Optional[str]]:
 
 def _is_pod_unhealthy(pod) -> bool:
     return _pod_issue(pod)[0]
+
+
+_DEFAULT_CONTAINER_ANNOTATION = "kubectl.kubernetes.io/default-container"
+# 정상 기동 과정에서도 잠깐 보이는 waiting 사유 — 실패로 치지 않는다.
+_BENIGN_WAITING_REASONS = {"ContainerCreating", "PodInitializing"}
+
+
+def _read_pod(v1: k8s_client.CoreV1Api, pod_name: str, namespace: str):
+    """pod 단건 조회 — K8s API 오류 상태를 그대로 매핑한다 (404→404, 403→403, 그 밖은 502)."""
+    try:
+        return v1.read_namespaced_pod(pod_name, namespace, _request_timeout=_K8S_TIMEOUT)
+    except ApiException as e:
+        reason = (getattr(e, "reason", None) or "") or str(e)[:200]
+        if e.status == 404:
+            raise HTTPException(
+                status_code=404, detail=f"pod {namespace}/{pod_name} 를 찾을 수 없습니다 ({reason})",
+            ) from e
+        if e.status == 403:
+            raise HTTPException(
+                status_code=403,
+                detail=f"클러스터가 pod {namespace}/{pod_name} 조회를 거부했습니다 — "
+                       f"kubeconfig 계정의 RBAC 를 확인하세요 ({reason})",
+            ) from e
+        raise HTTPException(
+            status_code=502, detail=f"pod 조회 실패 (K8s API {e.status}): {reason}",
+        ) from e
+    except Exception as e:  # noqa: BLE001 — 연결 실패·타임아웃 등
+        raise HTTPException(
+            status_code=502, detail=f"pod 조회 실패: {type(e).__name__}: {str(e)[:200]}",
+        ) from e
+
+
+def _state_of(statuses, name: str) -> tuple[Optional[str], int]:
+    """컨테이너 상태 요약 — (running|waiting|terminated|None, restart_count)."""
+    for st in statuses or []:
+        if st.name != name:
+            continue
+        s = st.state
+        state = None
+        if s is not None:
+            if s.running:
+                state = "running"
+            elif s.terminated:
+                state = "terminated"
+            elif s.waiting:
+                state = "waiting"
+        return state, int(st.restart_count or 0)
+    return None, 0
+
+
+def _container_names(pod) -> list[str]:
+    spec = pod.spec
+    if spec is None:
+        return []
+    return [c.name for c in (spec.containers or [])] + [c.name for c in (spec.init_containers or [])]
+
+
+def _container_failing(cs) -> bool:
+    """이 컨테이너 상태가 실패로 보이는가 — 비정상 waiting, 비정상 종료(exit≠0 / OOMKilled 등)."""
+    st = cs.state
+    if st is None:
+        return False
+    if st.waiting and (st.waiting.reason or "") not in _BENIGN_WAITING_REASONS:
+        return True
+    if st.terminated and (
+        st.terminated.reason in _BAD_TERMINATED_REASONS or (st.terminated.exit_code or 0) != 0
+    ):
+        return True
+    return False
+
+
+def _pick_container(pod, *, prefer_failing: bool) -> Optional[str]:
+    """pod 에서 기본으로 볼 컨테이너 이름.
+
+    ``kubectl.kubernetes.io/default-container`` 어노테이션(실재하는 컨테이너일 때) →
+    (``prefer_failing`` 이면) 실패·재시작 중인 컨테이너 — init 포함, 실패 여부 우선 그다음
+    restart_count 큰 것, 동률이면 init 이 먼저(init 실패가 일반 컨테이너 기동을 막으므로) →
+    첫 일반 컨테이너 → 첫 init 컨테이너.
+    """
+    names = _container_names(pod)
+    if not names:
+        return None
+    annotations = (pod.metadata.annotations or {}) if pod.metadata else {}
+    annotated = (annotations.get(_DEFAULT_CONTAINER_ANNOTATION) or "").strip()
+    if annotated and annotated in names:
+        return annotated
+
+    if prefer_failing and pod.status is not None:
+        best: Optional[tuple[tuple[bool, int], str]] = None
+        statuses = list(pod.status.init_container_statuses or []) + list(pod.status.container_statuses or [])
+        for cs in statuses:
+            if cs.name not in names:
+                continue
+            failing = _container_failing(cs)
+            restarts = int(cs.restart_count or 0)
+            if not failing and restarts == 0:
+                continue
+            key = (failing, restarts)
+            if best is None or key > best[0]:
+                best = (key, cs.name)
+        if best is not None:
+            return best[1]
+
+    spec = pod.spec
+    regular = [c.name for c in ((spec.containers if spec else None) or [])]
+    return regular[0] if regular else names[0]
 
 
 def _build_describe_text(pod, events: list[KubeEventSchema]) -> str:

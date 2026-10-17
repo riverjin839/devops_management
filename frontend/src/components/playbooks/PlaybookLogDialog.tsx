@@ -293,7 +293,7 @@ function SummaryCell({
 }
 
 function FailedTaskCard({ task, variant }: { task: FailedTask; variant: 'failed' | 'unreachable' }) {
-  const borderClass = variant === 'failed' ? 'border-status-critical/30 bg-status-critical/5' : 'border-orange-500/30 bg-orange-500/5';
+  const borderClass = variant === 'failed' ? 'border-status-critical/30 bg-status-critical/5' : 'border-status-warning/30 bg-status-warning/5';
   return (
     <div className={`border rounded-lg p-3 ${borderClass}`}>
       <div className="flex items-baseline gap-2 mb-1">

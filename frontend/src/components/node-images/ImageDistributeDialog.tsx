@@ -12,7 +12,9 @@ import {
 } from '@/services/api';
 import { useAbortableMutation } from '@/hooks/useAbortableMutation';
 import { useNodeImageList } from '@/hooks/useNodeImages';
-import { DoubleScrollX, useModalA11y } from '@/components/common';
+import { DoubleScrollX, RunLogPanel, useModalA11y } from '@/components/common';
+import { useRunLog, runLogged, consoleRunLines, type RunLogEntry } from '@/hooks/useRunLog';
+import { useLogPref } from '@/hooks/useLogPref';
 import { pickPrimaryName } from './utils';
 import { formatApiError } from '@/lib/utils';
 
@@ -111,6 +113,8 @@ export function ImageDistributeDialog({
   const [execTimeout, setExecTimeout] = useState(600);
 
   const [result, setResult] = useState<NodeImageDistributeResponse | null>(null);
+  const runLog = useRunLog();
+  const [showLog, setShowLog] = useLogPref('node-images-distribute');
 
   const uid = useId();
   const f = (k: string) => `${uid}-${k}`;
@@ -166,6 +170,22 @@ export function ImageDistributeDialog({
 
   // ESC 닫기(실행 중엔 무시) · 포커스 트랩 · 초점 복원 (공용 훅)
   const dialogRef = useModalA11y(open, () => { if (!runMut.isPending) onClose(); });
+
+  const handleRun = async () => {
+    const via = runtime === 'crictl' ? 'crictl' : `${runtime} (ns ${namespace})`;
+    await runLogged(runLog, {
+      title: '이미지 배포',
+      first: `${image} → ${targetClusterName} 노드 ${selectedTargets.length}대 · ${via}${useSudo ? ' · sudo' : ''} · 동시 ${parallelism} · 노드당 제한 ${execTimeout}s`,
+      fn: () => runMut.mutateAsync(),
+      summarize: (d: NodeImageDistributeResponse): RunLogEntry[] => [
+        ...consoleRunLines(d.results.map((r) => ({
+          host: r.name && r.name !== r.host ? `${r.name} (${r.host})` : (r.name || r.host),
+          status: r.status, exitCode: r.exitCode, durationMs: r.durationMs, stderr: r.stderr, error: r.error,
+        }))),
+        [d.errorCount ? 'warn' : 'info', `성공 ${d.okCount} · 실패 ${d.errorCount} · 총 ${d.totalDurationMs}ms`],
+      ],
+    });
+  };
 
   const canRun =
     selectedTargets.length > 0 &&
@@ -382,6 +402,9 @@ export function ImageDistributeDialog({
             </div>
           )}
 
+          {/* 실행 로그 — 요청·대기·노드별 결과 요약·실패 사유 */}
+          <RunLogPanel run={runLog} show={showLog} onShowChange={setShowLog} maxHeight="max-h-56" />
+
           {/* 결과 */}
           {result && (
             <div className="border border-border rounded-xl overflow-hidden">
@@ -432,7 +455,7 @@ export function ImageDistributeDialog({
                 <Loader2 className="w-3 h-3 animate-spin" /> 중지
               </button>
             ) : (
-              <button onClick={() => runMut.mutate()} disabled={!canRun}
+              <button onClick={() => { void handleRun(); }} disabled={!canRun}
                 className="flex items-center gap-1.5 px-4 py-1.5 text-sm font-semibold bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 disabled:opacity-50">
                 <Play className="w-3 h-3" /> 배포 실행 ({selectedTargets.length})
               </button>
