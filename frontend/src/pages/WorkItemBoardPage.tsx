@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type RefObject } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { ViewModeBar, DoubleScrollX, ConfirmDialog, useToast, EmptyState, PageHeader, Skeleton } from '@/components/common';
 import { MacCard } from '@/components/ui/MacCard';
 import { formatApiError } from '@/lib/utils';
@@ -29,6 +29,7 @@ import { workItemsApi } from '@/services/api';
 import { useLocalOrder } from '@/hooks/useLocalOrder';
 import { useAuthStore, hasRole } from '@/stores/authStore';
 import { useWorkItemBoardSettings } from '@/hooks/useUiSettings';
+import { useUrlParams, pickParam } from '@/hooks/useUrlParams';
 import { WorkItem, WorkItemModule, WorkItemType, JiraFieldChange, KanbanStatus } from '@/types';
 
 type ViewMode = 'table' | 'calendar' | 'kanban' | 'epic';
@@ -57,6 +58,32 @@ interface WorkItemFilterPrefs {
 const EMPTY_FILTER_PREFS: WorkItemFilterPrefs = {
   type: 'all', assignee: '', priority: '', status: 'all', jiraType: '', module: '', sprintId: '', from: '', to: '', searchTitle: '', onlyMine: false,
 };
+
+// URL 쿼리 키(D-029) — 값은 전부 문자열, 기본값과 같으면 쿼리에서 빠진다.
+const BOARD_PARAM_DEFAULTS = {
+  view: '', type: 'all', cluster: '', assignee: '', priority: '', status: 'all', jiraType: '', module: '',
+  sprint: '', from: '', to: '', q: '', mine: '', sort: 'startedAt', dir: 'desc',
+};
+type BoardParamKey = keyof typeof BOARD_PARAM_DEFAULTS;
+/** "필터" 로 보는 키 — 하나라도 URL 에 있으면 저장 필터를 적용하지 않는다(보기 모드·정렬은 제외). */
+const BOARD_FILTER_KEYS: BoardParamKey[] = [
+  'type', 'cluster', 'assignee', 'priority', 'status', 'jiraType', 'module', 'sprint', 'from', 'to', 'q', 'mine',
+];
+const VIEW_MODES: readonly ViewMode[] = ['table', 'calendar', 'kanban', 'epic'];
+const TYPE_FILTER_VALUES: readonly (WorkItemType | 'all')[] = ['all', 'task', 'issue', 'meeting', 'training', 'etc', 'build_response'];
+const STATUS_FILTER_VALUES: readonly (KanbanStatus | 'all')[] = ['all', 'backlog', 'todo', 'in_progress', 'review_test', 'done'];
+const MODULE_FILTER_VALUES = ['', ...Object.keys(MODULE_CONFIG)] as readonly (WorkItemModule | '')[];
+const SORT_KEYS: readonly WorkItemSortKey[] = [
+  'kanbanStatus', 'priority', 'assignee', 'clusterName', 'category', 'startedAt', 'closedAt', 'dueDate', 'jiraEpic', 'jiraType',
+];
+
+/** 저장 필터 → URL 쿼리 값. */
+function filterPrefsToParams(f: WorkItemFilterPrefs): Partial<Record<BoardParamKey, string>> {
+  return {
+    type: f.type, assignee: f.assignee, priority: f.priority, status: f.status, jiraType: f.jiraType,
+    module: f.module, sprint: f.sprintId, from: f.from, to: f.to, q: f.searchTitle, mine: f.onlyMine ? '1' : '',
+  };
+}
 
 function filterPrefsKey(username: string): string {
   return `k8s:item-board:filters:${username}`;
@@ -258,53 +285,61 @@ export function WorkItemBoardPage() {
   const currentUser = useAuthStore((s) => s.user);
   const myName = (currentUser?.displayName?.trim() || currentUser?.username || '').trim();
   const myUsername = currentUser?.username || '';
-  // 필터 개인화 — 로그인 사용자가 마지막으로 "필터 저장" 을 눌렀을 때의 조건을 이번
-  // 마운트에서 딱 1번만 읽는다(저장 버튼을 누르지 않으면 다음 방문은 항상 빈 필터로
-  // 시작한다). 사용자가 바뀌어도(재로그인) 컴포넌트가 다시 마운트되므로 그 시점 값을
-  // 다시 읽는다.
+  // 필터 개인화 — 로그인 사용자가 마지막으로 "필터 저장" 을 눌렀을 때의 조건. 화면 진입 시
+  // URL 에 필터 쿼리가 하나도 없을 때만 1번 적용한다(아래 seed effect). 사용자가 바뀌어도
+  // (재로그인) 컴포넌트가 다시 마운트되므로 그 시점 값을 다시 읽는다.
   const savedFilters = useMemo(() => loadFilterPrefs(myUsername), [myUsername]);
 
-  const [viewMode, setViewMode] = useState<ViewMode>('table');
+  // 탭·필터·검색어·정렬·보기 모드는 URL 쿼리에 둔다(D-029) — 새로고침·링크 공유·상세에서
+  // 뒤로가기로 돌아와도 같은 조건이 열린다. `?sprint=` 는 스프린트 페이지의 '게시판에서 보기'
+  // 딥링크와 같은 키다.
+  const [urlParams, setP] = useUrlParams(BOARD_PARAM_DEFAULTS);
+  // 저장 필터 seed — URL 에 이 화면의 필터 키가 하나라도 있으면 URL 이 우선하고 저장 필터는
+  // 적용하지 않는다. 없으면 저장 필터로 시작하되 그 값을 URL 에 1번 써 넣는다(replace).
+  // 사용자명이 늦게 채워지면(비동기 로그인 복원) 그 시점에 같은 규칙을 적용한다.
+  const [filtersSeeded, setFiltersSeeded] = useState(false);
+  const urlHasFilter = BOARD_FILTER_KEYS.some((k) => urlParams[k] !== BOARD_PARAM_DEFAULTS[k]);
+  const seedPending = !filtersSeeded && !!myUsername && !urlHasFilter;
+  useEffect(() => {
+    if (filtersSeeded || !myUsername) return;
+    setFiltersSeeded(true);
+    if (!urlHasFilter) setP(filterPrefsToParams(savedFilters));
+  }, [filtersSeeded, myUsername, urlHasFilter, savedFilters, setP]);
+  // seed 가 URL 에 반영되기 전 첫 렌더에도 저장 필터로 조회하게(빈 필터 조회 1회 방지).
+  const p = seedPending ? { ...urlParams, ...filterPrefsToParams(savedFilters) } : urlParams;
+
   // 업무 관리 게시판 공통 설정(admin 전용) — 뷰 노출/기본 뷰, 헤더 배지 노출.
   const { data: boardSettings } = useWorkItemBoardSettings();
   const isAdmin = hasRole(currentUser, 'admin');
-  // 서버 기본 뷰는 최초 로드 시 1번만 적용 — 이후 리페치로 사용자가 이미 바꾼 뷰를
-  // 덮어쓰지 않는다 (HomePage.tsx 의 appliedServerDefault 패턴과 동일).
-  const appliedDefaultView = useRef(false);
-  useEffect(() => {
-    if (appliedDefaultView.current || boardSettings === undefined) return;
-    appliedDefaultView.current = true;
-    setViewMode(boardSettings.defaultView);
-  }, [boardSettings]);
-  const [typeFilter, setTypeFilter] = useState<WorkItemType | 'all'>(savedFilters.type);
-  const [filterClusterId, setFilterClusterId] = useState('');
-  const [filterAssignee, setFilterAssignee] = useState(savedFilters.assignee);
-  const [filterPriority, setFilterPriority] = useState(savedFilters.priority);
-  const [filterFrom, setFilterFrom] = useState(savedFilters.from);
-  const [filterTo, setFilterTo] = useState(savedFilters.to);
-  const [filterModule, setFilterModule] = useState<WorkItemModule | ''>(savedFilters.module);
-  const [filterKanbanStatus, setFilterKanbanStatus] = useState<KanbanStatus | 'all'>(savedFilters.status);
-  const [filterJiraType, setFilterJiraType] = useState(savedFilters.jiraType);
+  // `?view=` 가 없으면 서버 기본 뷰(로드 전엔 목록) — 사용자가 고른 뷰는 쿼리에 남는다.
+  const viewMode: ViewMode = pickParam(p.view, VIEW_MODES, boardSettings?.defaultView ?? 'table');
+  const setViewMode = (v: ViewMode) => setP({ view: v });
+  const typeFilter = pickParam<WorkItemType | 'all'>(p.type, TYPE_FILTER_VALUES, 'all');
+  const setTypeFilter = (v: WorkItemType | 'all') => setP({ type: v });
+  const filterClusterId = p.cluster;
+  const filterAssignee = p.assignee;
+  const filterPriority = p.priority;
+  const filterFrom = p.from;
+  const filterTo = p.to;
+  const filterModule = pickParam<WorkItemModule | ''>(p.module, MODULE_FILTER_VALUES, '');
+  const filterKanbanStatus = pickParam<KanbanStatus | 'all'>(p.status, STATUS_FILTER_VALUES, 'all');
+  const setFilterKanbanStatus = (v: KanbanStatus | 'all') => setP({ status: v });
+  const filterJiraType = p.jiraType;
   // 제목 검색 — 서버사이드 ILIKE(title/content). 타이핑 중 매 키 입력마다 재조회하지
   // 않도록 300ms 디바운스 후 실제 필터(debouncedSearchTitle)에 반영.
-  const [searchTitle, setSearchTitle] = useState(savedFilters.searchTitle);
-  const [debouncedSearchTitle, setDebouncedSearchTitle] = useState(savedFilters.searchTitle);
+  const searchTitle = p.q;
+  const [debouncedSearchTitle, setDebouncedSearchTitle] = useState(searchTitle);
   useEffect(() => {
     const t = window.setTimeout(() => setDebouncedSearchTitle(searchTitle), 300);
     return () => window.clearTimeout(t);
   }, [searchTitle]);
-  // 스프린트 페이지의 '게시판에서 보기' 딥링크(?sprint=...) 를 초기 필터로 반영. 딥링크가
-  // 없으면 아래 useEffect 가 현재(진행중) 스프린트로 기본값을 채운다(개인화 저장 대상에서는
-  // 제외 — 그 기본값 effect 가 항상 덮어써 저장해봐야 의미가 없다).
-  const [searchParams] = useSearchParams();
-  // 스프린트 페이지의 '게시판에서 보기' 딥링크(?sprint=...)가 저장된 필터보다 우선한다.
-  const [filterSprintId, setFilterSprintId] = useState(searchParams.get('sprint') || savedFilters.sprintId);
+  const filterSprintId = p.sprint;
   // 기본 정렬 = 시작일 최신순(기존 백엔드 정렬과 동일 — 사용자가 다른 컬럼을 클릭하면 바뀐다).
-  const [sortKey, setSortKey] = useState<WorkItemSortKey | ''>('startedAt');
-  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
+  const sortKey: WorkItemSortKey | '' = pickParam<WorkItemSortKey>(p.sort, SORT_KEYS, 'startedAt');
+  const sortDir = pickParam(p.dir, ['asc', 'desc'] as const, 'desc');
   // "내 업무" 토글 — 기본은 꺼짐(전체 담당자). "필터 저장" 을 눌러야 다음 방문에도 유지된다.
-  const [onlyMine, setOnlyMine] = useState<boolean>(savedFilters.onlyMine);
-  const toggleOnlyMine = () => setOnlyMine((v) => !v);
+  const onlyMine = p.mine === '1';
+  const toggleOnlyMine = () => setP({ mine: onlyMine ? '' : '1' });
 
   // 컬럼 폭/순서/표시여부 개인화 — 필터와 동일하게 사용자별로 분리 저장한다(로그인 전
   // 짧은 순간은 공용 키로 폴백, loadFilterPrefs 와 같은 guard 패턴).
@@ -404,10 +439,9 @@ export function WorkItemBoardPage() {
 
   const handleSort = (col: WorkItemSortKey) => {
     if (sortKey === col) {
-      setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'));
+      setP({ dir: sortDir === 'asc' ? 'desc' : 'asc' });
     } else {
-      setSortKey(col);
-      setSortDir('asc');
+      setP({ sort: col, dir: 'asc' });
     }
   };
 
@@ -747,25 +781,18 @@ export function WorkItemBoardPage() {
     const idx = dateFilterMode ? DATE_RANGE_MODES.indexOf(dateFilterMode) : -1;
     const next = DATE_RANGE_MODES[idx + 1];
     if (!next) {
-      setFilterFrom('');
-      setFilterTo('');
+      setP({ from: '', to: '' });
     } else {
-      setFilterFrom(dateRanges[next][0]);
-      setFilterTo(dateRanges[next][1]);
+      setP({ from: dateRanges[next][0], to: dateRanges[next][1] });
     }
   };
 
   const clearFilters = () => {
-    setFilterClusterId('');
-    setFilterAssignee('');
-    setFilterPriority('');
-    setFilterKanbanStatus('all');
-    setFilterJiraType('');
-    setFilterModule('');
-    setFilterSprintId('');
-    setFilterFrom('');
-    setFilterTo('');
-    setSearchTitle('');
+    // 유형·"내 업무" 는 예전처럼 초기화 대상이 아니다 — 나머지 필터 쿼리 키만 지운다.
+    setP({
+      cluster: null, assignee: null, priority: null, status: null, jiraType: null,
+      module: null, sprint: null, from: null, to: null, q: null,
+    });
   };
 
   // "내 업무"(기본값)는 초기화 대상이 아니다 — 빈 목록이 떴을 때 안내 문구를 고르는 데만 쓴다.
@@ -785,9 +812,7 @@ export function WorkItemBoardPage() {
     (t) => !!t.dueDate && t.kanbanStatus !== 'done' && t.dueDate.slice(0, 10) < todayStr,
   ).length;
   const focusOverdue = () => {
-    setViewMode('table');
-    setSortKey('dueDate');
-    setSortDir('asc');
+    setP({ view: 'table', sort: 'dueDate', dir: 'asc' });
   };
 
   return (
@@ -914,7 +939,7 @@ export function WorkItemBoardPage() {
             <input
               type="text"
               value={searchTitle}
-              onChange={(e) => setSearchTitle(e.target.value)}
+              onChange={(e) => setP({ q: e.target.value })}
               placeholder="제목 검색"
               aria-label="제목 검색"
               className="w-32 pl-8 pr-3 py-1.5 text-sm bg-secondary border border-border rounded-lg focus:outline-none focus:border-primary/50"
@@ -936,14 +961,14 @@ export function WorkItemBoardPage() {
           <input
             type="text"
             value={filterAssignee}
-            onChange={(e) => setFilterAssignee(e.target.value)}
+            onChange={(e) => setP({ assignee: e.target.value })}
             placeholder={onlyMine && myName ? myName : '담당자'}
             aria-label="담당자"
             className="w-24 px-2.5 py-1.5 text-sm bg-secondary border border-border rounded-lg focus:outline-none focus:border-primary/50"
           />
           <select
             value={filterPriority}
-            onChange={(e) => setFilterPriority(e.target.value)}
+            onChange={(e) => setP({ priority: e.target.value })}
             aria-label="우선순위"
             className="px-2 py-1.5 text-sm bg-secondary border border-border rounded-lg focus:outline-none focus:border-primary/50"
           >
@@ -955,7 +980,7 @@ export function WorkItemBoardPage() {
           {seenJiraTypes.length > 0 && (
             <select
               value={filterJiraType}
-              onChange={(e) => setFilterJiraType(e.target.value)}
+              onChange={(e) => setP({ jiraType: e.target.value })}
               aria-label="등록 타입"
               className="px-2 py-1.5 text-sm bg-secondary border border-border rounded-lg focus:outline-none focus:border-primary/50"
             >
@@ -967,7 +992,7 @@ export function WorkItemBoardPage() {
           )}
           <select
             value={filterModule}
-            onChange={(e) => setFilterModule(e.target.value as WorkItemModule | '')}
+            onChange={(e) => setP({ module: e.target.value })}
             aria-label="모듈"
             className="px-2 py-1.5 text-sm bg-secondary border border-border rounded-lg focus:outline-none focus:border-primary/50"
           >
@@ -979,7 +1004,7 @@ export function WorkItemBoardPage() {
           {sprintList.length > 0 && (
             <select
               value={filterSprintId}
-              onChange={(e) => setFilterSprintId(e.target.value)}
+              onChange={(e) => setP({ sprint: e.target.value })}
               aria-label="스프린트"
               className="max-w-[140px] px-2 py-1.5 text-sm bg-secondary border border-border rounded-lg focus:outline-none focus:border-primary/50"
             >
@@ -1008,7 +1033,7 @@ export function WorkItemBoardPage() {
           <input
             type="date"
             value={filterFrom}
-            onChange={(e) => setFilterFrom(e.target.value)}
+            onChange={(e) => setP({ from: e.target.value })}
             aria-label="시작일 (이후)"
             title="시작일 (이후)"
             className="w-[130px] px-2 py-1.5 text-sm bg-secondary border border-border rounded-lg focus:outline-none focus:border-primary/50 font-mono"
@@ -1017,7 +1042,7 @@ export function WorkItemBoardPage() {
           <input
             type="date"
             value={filterTo}
-            onChange={(e) => setFilterTo(e.target.value)}
+            onChange={(e) => setP({ to: e.target.value })}
             aria-label="시작일 (이전)"
             title="시작일 (이전)"
             className="w-[130px] px-2 py-1.5 text-sm bg-secondary border border-border rounded-lg focus:outline-none focus:border-primary/50 font-mono"

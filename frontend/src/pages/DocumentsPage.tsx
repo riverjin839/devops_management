@@ -14,6 +14,7 @@ import {
 import { useWorkGuides } from '@/hooks/useWorkGuide';
 import { useConfluenceDocPull, useGuideSearch } from '@/hooks/useConfluenceDocs';
 import { useLogPref } from '@/hooks/useLogPref';
+import { useUrlParams, pickParam } from '@/hooks/useUrlParams';
 import { runLogged, useRunLog, type RunLogEntry } from '@/hooks/useRunLog';
 import { useAuthStore } from '@/stores/authStore';
 import { stripHtml } from '@/lib/utils';
@@ -40,11 +41,18 @@ export function DocumentsPage() {
   const runLog = useRunLog();
   const [showLog, setShowLog] = useLogPref('documents-pull');
 
-  const [query, setQuery] = useState('');
+  // 검색어·분류·상태·출처 필터는 URL 쿼리에 둔다(D-029). AI 검색 토글은 서버 시맨틱 검색을
+  // 호출하므로 링크로 열 때 자동 실행되지 않게 로컬 state 로 둔다.
+  const [urlParams, setUrlParams] = useUrlParams({ q: '', category: '', status: '', src: '' });
+  const query = urlParams.q;
+  const setQuery = (v: string) => setUrlParams({ q: v });
   const [aiMode, setAiMode] = useState(false);
-  const [category, setCategory] = useState('');
-  const [status, setStatus] = useState('');
-  const [source, setSource] = useState('');
+  const category = pickParam(urlParams.category, ['', ...CATEGORIES], '');
+  const setCategory = (v: string) => setUrlParams({ category: v });
+  const status = pickParam(urlParams.status, ['', 'draft', 'active', 'archived'], '');
+  const setStatus = (v: string) => setUrlParams({ status: v });
+  const source = pickParam(urlParams.src, ['', 'pep', 'confluence', 'needSync'], '');
+  const setSource = (v: string) => setUrlParams({ src: v });
   const [importOpen, setImportOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [exportTarget, setExportTarget] = useState<WorkGuide | null>(null);

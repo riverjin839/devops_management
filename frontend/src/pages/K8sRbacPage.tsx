@@ -21,6 +21,7 @@ import {
 } from '@/components/k8s-rbac';
 import { useClusters } from '@/hooks/useCluster';
 import { useLogPref } from '@/hooks/useLogPref';
+import { useUrlParams, pickParam } from '@/hooks/useUrlParams';
 import {
   useProvisionStream,
   useRbacBindings,
@@ -44,8 +45,12 @@ const TABS: { key: TabKey; label: string; icon: typeof Wand2 }[] = [
 
 export function K8sRbacPage() {
   const { data: clusters = [] } = useClusters();
-  const [selectedClusterId, setSelectedClusterId] = useState<string | null>(null);
-  const [tab, setTab] = useState<TabKey>('wizard');
+  // 클러스터 선택·탭은 URL 쿼리에 둔다(D-029) — 새로고침·링크 공유에도 같은 화면이 열린다.
+  const [urlParams, setUrlParams] = useUrlParams({ cluster: '', tab: 'wizard' });
+  const selectedClusterId = urlParams.cluster || null;
+  const setSelectedClusterId = (id: string | null) => setUrlParams({ cluster: id ?? '' });
+  const tab = pickParam<TabKey>(urlParams.tab, TABS.map((t) => t.key), 'wizard');
+  const setTab = (k: TabKey) => setUrlParams({ tab: k });
   const [includeSystem, setIncludeSystem] = useState(false);
   // 발급 마법사 실행 로그(ProvisionConsole)를 펼쳐 볼지 — 로그는 항상 수집하고 표시 여부만
   // 사용자가 정한다(화면별 localStorage). 권한 점검 탭은 패널 자체의 표준 실행 로그를 쓴다.

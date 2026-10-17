@@ -17,6 +17,7 @@ import { useClusterStore } from '@/stores/clusterStore';
 import { useLocalOrder } from '@/hooks/useLocalOrder';
 import { runLogged, useRunLog, type RunLogEntry } from '@/hooks/useRunLog';
 import { useLogPref } from '@/hooks/useLogPref';
+import { useUrlParams, pickParam } from '@/hooks/useUrlParams';
 import { formatApiError } from '@/lib/utils';
 import type { PlaybookRunResult } from '@/types';
 import { Playbook } from '@/types';
@@ -68,11 +69,19 @@ function readSessionCreds(): PlaybookSshCreds | null {
 export function PlaybooksPage() {
   const [showAdd, setShowAdd] = useState(false);
   const [editPlaybook, setEditPlaybook] = useState<Playbook | null>(null);
-  // 다중 선택 — 빈 배열 = 전체 클러스터.
-  const [selectedClusterIds, setSelectedClusterIds] = useState<string[]>([]);
-  const [sortKey, setSortKey] = useState<PlaybookSortKey>('name');
-  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
-  const [viewMode, setViewMode] = useState<ViewMode>('list');
+  // 클러스터 다중 선택·정렬·보기 모드는 URL 쿼리에 둔다(D-029) — 새로고침·링크 공유에도 유지.
+  const [urlParams, setUrlParams] = useUrlParams({ cluster: '', sort: 'name', dir: 'asc', view: 'list' });
+  // 다중 선택 — 빈 배열 = 전체 클러스터. 쿼리는 쉼표 구분.
+  const selectedClusterIds = useMemo(
+    () => (urlParams.cluster ? urlParams.cluster.split(',').filter(Boolean) : []),
+    [urlParams.cluster],
+  );
+  const setSelectedClusterIds = (ids: string[]) => setUrlParams({ cluster: ids.join(',') });
+  const sortKey = pickParam<PlaybookSortKey>(urlParams.sort, ['name', 'status', 'lastRunAt'], 'name');
+  const setSortKey = (k: PlaybookSortKey) => setUrlParams({ sort: k });
+  const sortDir = pickParam(urlParams.dir, ['asc', 'desc'] as const, 'asc');
+  const viewMode = pickParam<ViewMode>(urlParams.view, ['list', 'card'], 'list');
+  const setViewMode = (v: ViewMode) => setUrlParams({ view: v });
   // 단일 실행 시 자격증명 모달용 — 어떤 playbook 을 실행할지 보관.
   const [credsTarget, setCredsTarget] = useState<Playbook | null>(null);
   // 상세 로그 다이얼로그 — 클릭한 playbook 보관.
@@ -360,7 +369,7 @@ export function PlaybooksPage() {
                   <option value="lastRunAt">최근 실행순</option>
                 </select>
                 <button
-                  onClick={() => setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'))}
+                  onClick={() => setUrlParams({ dir: sortDir === 'asc' ? 'desc' : 'asc' })}
                   className="px-2 py-1.5 text-sm bg-background border border-border rounded-lg hover:bg-secondary transition-colors"
                   title={sortDir === 'asc' ? '오름차순' : '내림차순'}
                   aria-label={sortDir === 'asc' ? '오름차순' : '내림차순'}

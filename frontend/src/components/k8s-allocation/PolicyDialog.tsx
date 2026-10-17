@@ -369,7 +369,7 @@ export function PolicyDialog({ clusterId, open, onClose, initialTab = 'namespace
 }) {
   const [tab, setTab] = useState<Tab>(initialTab);
   useEffect(() => { if (open) setTab(initialTab); }, [open, initialTab]);
-  const ref = useModalA11y(open, onClose, { historyClose: true });
+  const ref = useModalA11y(open, onClose);
   if (!open) return null;
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 p-4" data-export-ignore>

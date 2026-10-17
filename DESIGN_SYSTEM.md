@@ -319,7 +319,7 @@ ui-ux-pro-max `landing.csv` 검색 결과:
 | 카드 컨테이너 | `Card` | 기존 `MacCard` → `Card` 어댑터로 통합. traffic-light 점 장식은 P3 에서 삭제 |
 | 버튼 | `Button` | variants: `default` / `secondary` / `ghost` / `destructive` × `sm` / `default` / `lg` |
 | 상태 라벨 | `Badge` | 색 dot + 텍스트 동시 표기 (a11y: 색만으로 의미 전달 금지) |
-| 모달 | `Dialog`, `Sheet` (모바일 사이드바) | 현재 자체 모달 교체 |
+| 모달 | `Dialog`, `Sheet` (모바일 사이드바) | 현재 자체 모달 교체 — 단 뒤로가기로 닫기(§12.13)를 먼저 붙인다 |
 | 툴팁 | `Tooltip` (Radix) | 현재 `PortalTooltip` 교체 — 키보드 트리거 자동 |
 | 탭 | `Tabs` | Dashboard Overview / Operations / History 분리에 사용 |
 | 액션 메뉴 | `DropdownMenu` | Top bar "+ Add" / "More" 메뉴 |
@@ -923,6 +923,34 @@ D-117~D-134)에서 원자는 지켜지는데 화면이 "AI 가 만든 템플릿"
 ⑫ 실행 버튼에 로그 패널이 뜨는가. 정량 재집계 명령은 보고서 §정량 지표.
 
 ---
+
+### 12.13 뒤로가기와 화면 상태 — 모달 기록 · URL 쿼리 (D-029)
+
+브라우저·폰의 뒤로가기는 "직전 화면 상태"로 돌아가야 한다. 모달을 열었으면 뒤로가기는 그 모달만 닫는다.
+목록 화면의 탭·필터·검색어는 새로고침·링크 공유·상세에서 돌아왔을 때 그대로 남는다.
+
+- **모달 — `useModalA11y` 의 `historyClose` 는 기본 켜짐.**
+  - 동작: 열 때 `#modal-<id>` 기록을 push 하고, 뒤로가기로 그 기록이 사라지면 `onClose` 를 부른다.
+  - X·Escape·저장으로 닫으면 남은 기록을 회수한다.
+  - 기록 관리는 `components/common/modalHistory.ts` 가 맡는다. 화면 코드가 history 를 직접 만지지 않는다.
+    - 판정은 router 의 `history.state.idx` 로 한다.
+    - push·회수를 큐로 직렬화한다. 그래서 중첩 모달(모달 안 `ConfirmDialog`), 모달 → 모달 전환, 열린 채 URL 쿼리를 바꾸는 경우에도 기록이 꼬이지 않는다.
+  - 실행 중이라 닫기를 무시하는 모달(`onClose` 에서 return)은 기록을 다시 push 한다. 그래서 다음 뒤로가기가 화면을 떠나지 않는다.
+  - 닫자마자 다른 화면으로 이동해 남은 모달 기록은 뒤로·앞으로 이동할 때 자동으로 건너뛴다.
+  - **`historyClose: false` 로 끄는 경우**: 팝오버·메뉴(`useModalA11y` 를 트랩용으로만 쓰는 것)와, 고르면 닫고 곧바로 `navigate()` 하는 UI(커맨드 팔레트).
+    - 현재 해당: `CommandPalette`, `ClusterManagePage` 도구 메뉴, `NodeSpecPage`·`PlatformStatusMatrix` 팝오버.
+  - shadcn `ui/dialog.tsx`(Base UI 래퍼)는 아직 이 동작이 없다. 자체 모달을 `Dialog` 로 옮길 때는 같은 기록 관리를 붙인 뒤에 옮긴다.
+- **목록 상태 — `hooks/useUrlParams.ts`.**
+  - 사용: `const [p, set] = useUrlParams({ tab: 'all', q: '' })` → `set({ q: 'x' })`.
+  - 값 하나만 쓸 때는 `useUrlParam(key, default)`, 허용 값으로 좁힐 때는 `pickParam(value, allowed, fallback)` 를 쓴다.
+  - 규칙
+    - 기본값과 같은 값은 쿼리에서 지운다.
+    - `replace` 로 갱신해 필터 조작이 히스토리에 쌓이지 않게 한다. 뒤로가기는 화면 단위로 움직인다.
+    - 다른 쿼리와 hash 는 보존한다.
+  - **`setSearchParams` 를 새로 쓰지 않는다.** react-router 의 `setSearchParams` 는 hash 를 지워 열린 모달 기록을 깨고, `{ tab }` 처럼 넘기면 다른 쿼리까지 지운다.
+  - 대상: 탭·필터·검색어·정렬·보기 모드. 펼침·선택 행·입력 중인 폼 같은 일시 상태는 넣지 않는다.
+  - 임베드: Your Island 패널 안이면 훅이 자동으로 로컬 state 로 동작한다(`lib/islandEmbed`). 다른 화면 안에 임베드되는 화면(허브 탭 등)은 `useUrlParams(defaults, { local: embedded })` 로 부모 쿼리와 섞이지 않게 한다.
+  - 클러스터 선택은 §12.5 `useClusterRouteParam`(경로)이 우선이다.
 
 ## 부록 A — 검증 출처
 

@@ -1,5 +1,5 @@
 import { Fragment, useId, useMemo, useRef, useState } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { ViewModeBar, DebugLogPanel, useToast, DoubleScrollX, ConfirmDialog, Skeleton, SkeletonTable, EmptyState, PageHeader, RunLogPanel } from '@/components/common';
 import { useModalA11y } from '@/components/common/useModalA11y';
 import { MacCard } from '@/components/ui/MacCard';
@@ -17,6 +17,7 @@ import { useAuthStore, hasRole } from '@/stores/authStore';
 import { clustersApi } from '@/services/api';
 import { useRunLog, runLogged, type RunLogEntry } from '@/hooks/useRunLog';
 import { useLogPref } from '@/hooks/useLogPref';
+import { pickParam, useUrlParams } from '@/hooks/useUrlParams';
 import { useQueryClient } from '@tanstack/react-query';
 import {
   CiliumConfigModal,
@@ -137,28 +138,19 @@ export function ClusterManagePage() {
   // 검색/필터/정렬/그룹/뷰모드를 URL 에 영속화 — 새로고침·공유·뒤로가기에서 유지된다
   // (D-029 후속 "목록 필터 URL 저장", D-038 의 `?tab=` 패턴 준용: `replace: true` 라
   //  필터 조작이 히스토리에 쌓이지 않아 전역 뒤로가기를 되짚지 않는다). (D-053)
-  const [searchParams, setSearchParams] = useSearchParams();
-  const setParam = (key: string, value: string, defaultValue: string) => {
-    setSearchParams((prev) => {
-      const next = new URLSearchParams(prev);
-      if (value === defaultValue) next.delete(key);
-      else next.set(key, value);
-      return next;
-    }, { replace: true });
-  };
-  const search      = searchParams.get('q') ?? '';
-  const filterLevel = searchParams.get('level') ?? '';
-  const sortParam   = searchParams.get('sort');
-  const sortBy: 'name' | 'status' | 'level' | 'manual' =
-    sortParam === 'name' || sortParam === 'status' || sortParam === 'level' ? sortParam : 'manual';
-  const groupParam  = searchParams.get('group');
-  const groupBy: GroupByMode = groupParam === 'region' || groupParam === 'level' ? groupParam : 'none';
-  const viewMode: 'table' | 'card' = searchParams.get('view') === 'card' ? 'card' : 'table';
-  const setSearch      = (v: string) => setParam('q', v, '');
-  const setFilterLevel = (v: string) => setParam('level', v, '');
-  const setSortBy      = (v: 'name' | 'status' | 'level' | 'manual') => setParam('sort', v, 'manual');
-  const setGroupBy     = (v: GroupByMode) => setParam('group', v, 'none');
-  const setViewMode    = (v: 'table' | 'card') => setParam('view', v, 'table');
+  // useUrlParams 는 다른 쿼리와 hash(모달 뒤로가기 기록)를 보존한다. Your Island 패널에
+  // 임베드되면 훅이 로컬 state 로 동작한다.
+  const [listParams, setListParams] = useUrlParams({ q: '', level: '', sort: 'manual', group: 'none', view: 'table' });
+  const search      = listParams.q;
+  const filterLevel = listParams.level;
+  const sortBy = pickParam(listParams.sort, ['name', 'status', 'level', 'manual'] as const, 'manual');
+  const groupBy: GroupByMode = pickParam(listParams.group, ['region', 'level', 'none'] as const, 'none');
+  const viewMode = pickParam(listParams.view, ['table', 'card'] as const, 'table');
+  const setSearch      = (v: string) => setListParams({ q: v });
+  const setFilterLevel = (v: string) => setListParams({ level: v });
+  const setSortBy      = (v: 'name' | 'status' | 'level' | 'manual') => setListParams({ sort: v });
+  const setGroupBy     = (v: GroupByMode) => setListParams({ group: v });
+  const setViewMode    = (v: 'table' | 'card') => setListParams({ view: v });
   // 필터가 URL 에 있으면 패널을 펼친 상태로 시작 (딥링크 진입 시 조건이 보이게).
   // 검색은 툴바 상시 노출로 옮겨져 패널 펼침 조건에서 빠졌다.
   const [showFilter, setShowFilter]       = useState(() => !!filterLevel);
@@ -660,7 +652,8 @@ export function ClusterManagePage() {
   // ── "도구" 팝오버 — 이름 표준화/컬럼 관리/너비 리셋(저빈도)을 접고, 표시 컬럼
   // 토글을 함께 담는다. 툴바 6개 동일 비중 문제의 해소 지점.
   const [toolsOpen, setToolsOpen] = useState(false);
-  const toolsRef = useModalA11y(toolsOpen, () => setToolsOpen(false));
+  // 도구 메뉴(팝오버) — 뒤로가기 기록을 남기지 않는다.
+  const toolsRef = useModalA11y(toolsOpen, () => setToolsOpen(false), { historyClose: false });
 
   const hasRunLog = runLog.running || runLog.lines.length > 0;
   const runLogPanel = hasRunLog

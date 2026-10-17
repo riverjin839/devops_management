@@ -1,5 +1,4 @@
 import { useEffect, useId, useState } from 'react';
-import { useSearchParams } from 'react-router-dom';
 import { Settings as SettingsIcon, Server, Pencil, Trash2, Plus, Globe, ShieldCheck, AlertTriangle, Loader2, Eye, MonitorDot, Wifi, WifiOff, HelpCircle, UserCheck, Bug, HardDrive, DatabaseZap, Boxes, Layers, Lock, Home, Palette, FileSearch, Wand2, Bot, Ticket, Users, CheckCircle2, XCircle, Check, X } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { MacCard } from '@/components/ui/MacCard';
@@ -38,6 +37,7 @@ import { useToast, ClusterIconPicker, useModalA11y, EmptyState, PageHeader, Page
 import { verifyClusterLogged } from '@/components/cluster-manage';
 import { useRunLog, runLogged, type RunLogEntry } from '@/hooks/useRunLog';
 import { useLogPref } from '@/hooks/useLogPref';
+import { pickParam, useUrlParams } from '@/hooks/useUrlParams';
 import { resolveClusterIcon } from '@/lib/clusterIcons';
 import {
   buildClusterIconSvg, svgToDataUrl, suggestInitials, suggestRegionAbbr,
@@ -430,6 +430,8 @@ const TAB_GROUPS: { label: string; tabs: { id: TabId; label: string; icon: Lucid
   },
 ];
 
+const SERVICE_DOMAINS: readonly ServiceDomain[] = ['pep', 'app'];
+
 const TAB_IDS = new Set<string>(TAB_GROUPS.flatMap((g) => g.tabs.map((t) => t.id)));
 
 // 레거시 딥링크 호환: 최상위 "서비스"(service) 탭과 "서비스 카테고리"(service-categories)
@@ -707,12 +709,14 @@ export function SettingsPage() {
   };
 
   // 활성 탭은 URL(`?tab=`)이 원천 — 새로고침·링크 공유·뒤로가기에서 같은 탭이 열린다.
-  const [searchParams, setSearchParams] = useSearchParams();
-  const activeTab = resolveTab(searchParams.get('tab'));
-  const setActiveTab = (tab: TabId) => setSearchParams({ tab }, { replace: true });
-  // "관리 서비스" 탭 내부 서브탭 — PEP 서비스 / APP 서비스 도메인 구분. 각 서브탭은
+  // useUrlParams 는 다른 쿼리와 hash(모달 뒤로가기 기록)를 보존한다(D-029).
+  const [urlParams, setUrlParams] = useUrlParams({ tab: '', domain: 'pep' });
+  const activeTab = resolveTab(urlParams.tab || null);
+  const setActiveTab = (tab: TabId) => setUrlParams({ tab });
+  // "관리 서비스" 탭 내부 서브탭(`?domain=`) — PEP 서비스 / APP 서비스 도메인 구분. 각 서브탭은
   // 해당 도메인의 카테고리 + 서비스 타입을 한 화면에서 관리한다.
-  const [mgmtDomain, setMgmtDomain] = useState<ServiceDomain>('pep');
+  const mgmtDomain: ServiceDomain = pickParam(urlParams.domain, SERVICE_DOMAINS, 'pep');
+  const setMgmtDomain = (domain: ServiceDomain) => setUrlParams({ domain });
   // 디버그 설정
   const debugEnabled = useDebugStore((s) => s.enabled);
   const debugToggle  = useDebugStore((s) => s.toggle);
