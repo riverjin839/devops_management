@@ -225,7 +225,8 @@ function ClusterCronBadge({
   const [value, setValue] = useState(cluster.checkCronExpr ?? '');
   const [enabled, setEnabled] = useState(cluster.checkCronEnabled);
   const mutation = usePutClusterCron();
-  const popRef = useModalA11y(open, () => setOpen(false));
+  // 팝오버 — 뒤로가기 기록을 남기지 않는다.
+  const popRef = useModalA11y(open, () => setOpen(false), { historyClose: false });
   const valid = checkCron(value, timezone).ok;
 
   const handleSave = async () => {
@@ -373,7 +374,8 @@ interface DisplaySettingsProps {
 
 function MatrixDisplaySettings(p: DisplaySettingsProps) {
   const [open, setOpen] = useState(false);
-  const popRef = useModalA11y(open, () => setOpen(false));
+  // 팝오버 — 뒤로가기 기록을 남기지 않는다.
+  const popRef = useModalA11y(open, () => setOpen(false), { historyClose: false });
   const autoOpenLog = useCheckMatrixLogStore((s) => s.autoOpen);
   const setAutoOpenLog = useCheckMatrixLogStore((s) => s.setAutoOpen);
   return (

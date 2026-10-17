@@ -47,7 +47,7 @@ const EMPTY: ObservabilityMetricInput = {
 export function MetricEditModal({ isOpen, onClose, moduleKey, editing }: MetricEditModalProps) {
   const toast = useToast();
   const formId = useId();
-  const dialogRef = useModalA11y(isOpen, onClose, { historyClose: true });
+  const dialogRef = useModalA11y(isOpen, onClose);
 
   const createMetric = useCreateMetric();
   const updateMetric = useUpdateMetric();

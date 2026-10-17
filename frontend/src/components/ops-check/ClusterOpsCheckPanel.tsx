@@ -48,7 +48,7 @@ export function ClusterOpsCheckPanel({ clusterId, clusterName }: Props) {
   // 운영 점검 실행은 모두 운영 위험 레벨 — 실행 전 대상/건수 확인 (D-014)
   const [confirmRun, setConfirmRun] = useState<OpsCheckCatalogItem[] | null>(null);
   const closeDetail = useCallback(() => setDetail(null), []);
-  const detailRef = useModalA11y(!!detail, closeDetail, { historyClose: true });
+  const detailRef = useModalA11y(!!detail, closeDetail);
 
   const { data: run } = useOpsRun(activeRunId ?? undefined);
   const isRunning = !!run && (run.status === 'pending' || run.status === 'running');

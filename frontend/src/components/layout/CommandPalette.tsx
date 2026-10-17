@@ -54,7 +54,8 @@ export function CommandPalette() {
   const setOpen = useCommandPaletteStore((s) => s.setOpen);
   const close = () => setOpen(false);
   const navigate = useNavigate();
-  const dialogRef = useModalA11y(open, close);
+  // 고르면 닫고 바로 다른 화면으로 이동하므로 뒤로가기 기록을 남기지 않는다.
+  const dialogRef = useModalA11y(open, close, { historyClose: false });
 
   const { navMap, getLabel, featureAllowed } = useNavCatalog();
   const recentPaths = useRecentPathsStore((s) => s.paths);
