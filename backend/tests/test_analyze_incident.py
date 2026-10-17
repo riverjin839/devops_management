@@ -416,6 +416,19 @@ def test_pick_container_failing_init_wins():
     assert analyze._pick_container(pod, prefer_failing=False) == "app"
 
 
+def test_pick_container_skips_completed_init_with_restarts():
+    # 재시작 끝에 정상 완료한 init 은 분석 대상이 아니다(_pod_issue 와 같은 규칙)
+    pod = _pod(["app"], inits=["wait-db"],
+               statuses=[_cs("app", running=True)],
+               init_statuses=[_cs("wait-db", terminated="Completed", exit_code=0, restarts=3)])
+    assert analyze._pick_container(pod, prefer_failing=True) == "app"
+    # 일반 컨테이너가 재시작 중이면 그쪽을 고른다
+    pod2 = _pod(["app"], inits=["wait-db"],
+                statuses=[_cs("app", running=True, restarts=2)],
+                init_statuses=[_cs("wait-db", terminated="Completed", exit_code=0, restarts=5)])
+    assert analyze._pick_container(pod2, prefer_failing=True) == "app"
+
+
 def test_pick_container_falls_back_to_first():
     pod = _pod(["app", "sidecar"], statuses=[_cs("app", running=True), _cs("sidecar", running=True)])
     assert analyze._pick_container(pod, prefer_failing=True) == "app"
