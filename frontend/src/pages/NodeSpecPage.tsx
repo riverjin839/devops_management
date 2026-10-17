@@ -11,6 +11,7 @@ import {
   SkeletonTable, EmptyState, ResizeGrip, DoubleScrollX, useModalA11y, PageHeader, PageShell, RunLogPanel } from '@/components/common';
 import { useRunLog, runLogged, type RunLogEntry } from '@/hooks/useRunLog';
 import { useLogPref } from '@/hooks/useLogPref';
+import { useUrlParams, pickParam } from '@/hooks/useUrlParams';
 import { MacCard } from '@/components/ui/MacCard';
 import { useColumnWidths } from '@/hooks/useColumnWidths';
 import { formatApiError } from '@/lib/utils';
@@ -62,7 +63,8 @@ interface HeaderMenuItem {
 // 인지 부하를 줄이고, 색은 다시 토큰으로 통일한다.
 function HeaderMenu({ label, icon: Icon, items }: { label: string; icon: typeof Download; items: HeaderMenuItem[] }) {
   const [open, setOpen] = useState(false);
-  const popRef = useModalA11y(open, () => setOpen(false));
+  // 팝오버 — 뒤로가기 기록을 남기지 않는다.
+  const popRef = useModalA11y(open, () => setOpen(false), { historyClose: false });
   return (
     <div className="relative inline-block">
       <button
@@ -177,10 +179,16 @@ export function NodeSpecPage() {
   const qc = useQueryClient();
   const toast = useToast();
 
-  const [clusterId, setClusterId] = useState<string | null>(null);
-  const [statusFilter, setStatusFilter] = useState<NodeSpecStatus | ''>('');
-  const [roleFilter, setRoleFilter] = useState('');
-  const [search, setSearch] = useState('');
+  // 클러스터·상태·역할·검색어는 URL 쿼리에 둔다(D-029) — 새로고침·링크 공유에도 유지.
+  const [urlParams, setUrlParams] = useUrlParams({ cluster: '', status: '', role: '', q: '' });
+  const clusterId = urlParams.cluster || null;
+  const setClusterId = (id: string | null) => setUrlParams({ cluster: id ?? '' });
+  const statusFilter = pickParam<NodeSpecStatus | ''>(urlParams.status, ['', 'active', 'spare', 'maintenance', 'decommission'], '');
+  const setStatusFilter = (v: NodeSpecStatus | '') => setUrlParams({ status: v });
+  const roleFilter = urlParams.role;
+  const setRoleFilter = (v: string) => setUrlParams({ role: v });
+  const search = urlParams.q;
+  const setSearch = (v: string) => setUrlParams({ q: v });
 
   const [editTarget, setEditTarget] = useState<NodeServerSpec | null>(null);
   const [creating, setCreating] = useState(false);

@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState, type ComponentType } from 'react';
 import { StatTile, StatTileRow } from '@/components/common/StatTile';
 import { PageHeader } from '@/components/common/PageHeader';
-import { useNavigate } from 'react-router-dom';
+import { useMatch, useNavigate } from 'react-router-dom';
+import { useUrlParams, pickParam } from '@/hooks/useUrlParams';
 import {
   HelpCircle, Plus, Pencil, Trash2, X, Pin, PinOff, Search, MessageSquare,
   FileQuestion, ExternalLink, List, LayoutGrid,
@@ -251,12 +252,23 @@ export function OpsNotesPage() {
   const toast = useToast();
   const navigate = useNavigate();
 
-  const [filterService, setFilterService] = useState('');
-  const [search, setSearch]               = useState('');
   const [deletingId, setDeletingId]       = useState<string | null>(null);
-  const [viewMode, setViewMode]           = useState<ViewMode>('table');
-  const [sortKey, setSortKey]             = useState<OpsNoteSortKey>('updatedAt');
-  const [sortDir, setSortDir]             = useState<'asc' | 'desc'>('desc');
+
+  // 서비스 필터·검색어·보기 모드·정렬은 URL 쿼리에 둔다(D-029). 지식 허브(/docs) 의 Q&A 탭으로
+  // 임베드될 때는 허브 자신의 q/sort/dir 와 충돌하지 않게 로컬 state 로 동작한다.
+  const embedded = useMatch('/ops-notes') === null;
+  const [urlParams, setUrlParams] = useUrlParams(
+    { svc: '', q: '', view: 'table', sort: 'updatedAt', dir: 'desc' },
+    { local: embedded },
+  );
+  const filterService = urlParams.svc;
+  const setFilterService = (v: string) => setUrlParams({ svc: v });
+  const search = urlParams.q;
+  const setSearch = (v: string) => setUrlParams({ q: v });
+  const viewMode = pickParam<ViewMode>(urlParams.view, ['table', 'card'], 'table');
+  const setViewMode = (v: ViewMode) => setUrlParams({ view: v });
+  const sortKey = pickParam<OpsNoteSortKey>(urlParams.sort, ['title', 'service', 'author', 'updatedAt'], 'updatedAt');
+  const sortDir = pickParam(urlParams.dir, ['asc', 'desc'] as const, 'desc');
 
   useEffect(() => {
     // 과거에 'card' 로 저장된 사용자가 있을 수 있으므로 마운트 시 캐시를 한 번 정리한다.
@@ -264,8 +276,8 @@ export function OpsNotesPage() {
   }, []);
 
   const handleSort = (key: OpsNoteSortKey) => {
-    if (sortKey === key) setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'));
-    else { setSortKey(key); setSortDir(key === 'updatedAt' ? 'desc' : 'asc'); }
+    if (sortKey === key) setUrlParams({ dir: sortDir === 'asc' ? 'desc' : 'asc' });
+    else setUrlParams({ sort: key, dir: key === 'updatedAt' ? 'desc' : 'asc' });
   };
 
   const { data, isLoading } = useQuery({
