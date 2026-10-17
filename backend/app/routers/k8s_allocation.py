@@ -109,12 +109,14 @@ def _cached(key: str, producer: Callable[[], Any]) -> Any:
             return hit[1]
     val = producer()
     with _CACHE_LOCK:
-        if len(_CACHE) >= _CACHE_MAX:
-            for k in [k for k, (t, _) in _CACHE.items() if (now - t) >= _CACHE_TTL]:
-                _CACHE.pop(k, None)
-            while len(_CACHE) >= _CACHE_MAX:
-                oldest = min(_CACHE.items(), key=lambda kv: kv[1][0])[0]
-                _CACHE.pop(oldest, None)
+        # 만료 항목은 저장할 때마다 지운다 — 상한에 닿을 때만 지우면 큰 NS 의 Pod 목록 같은 만료 값이
+        # 최대 _CACHE_MAX 개까지 워커 메모리에 계속 남는다(항목 수 ≤ 상한이라 매번 훑어도 싸다).
+        now = time.monotonic()
+        for k in [k for k, (t, _) in _CACHE.items() if (now - t) >= _CACHE_TTL]:
+            _CACHE.pop(k, None)
+        while len(_CACHE) >= _CACHE_MAX:
+            oldest = min(_CACHE.items(), key=lambda kv: kv[1][0])[0]
+            _CACHE.pop(oldest, None)
         _CACHE[key] = (now, val)
     return val
 
