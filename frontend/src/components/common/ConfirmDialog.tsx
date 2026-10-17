@@ -60,7 +60,9 @@ export function ConfirmDialog({
     // z-[60] — 다른 모달(shadcn/base-ui Dialog, z-50) 위에서 최종 확인을 받는 용도로도
     // 쓰이므로(예: JiraLinkDialog) 그 모달들보다 항상 위에 그려져야 한다. 같은 z-50 이면
     // DOM 순서(포탈로 나중에 붙는 쪽이 위)에 따라 뒤로 숨어 클릭이 먹지 않는 문제가 있었다.
-    <div className="fixed inset-0 z-[60] flex items-center justify-center">
+    // 클릭 전파를 여기서 끊는다 — 다른 모달 안에 중첩될 때 확인창 안의 클릭(취소·확인·배경)이
+    // 바깥 모달의 "배경 클릭 = 닫기" 핸들러까지 올라가 바깥 모달까지 함께 닫히던 문제(D-029 실측).
+    <div className="fixed inset-0 z-[60] flex items-center justify-center" onClick={(e) => e.stopPropagation()}>
       <div className="absolute inset-0 bg-black/60" onClick={onCancel} />
       <div
         ref={dialogRef}
