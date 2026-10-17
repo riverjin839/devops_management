@@ -9,11 +9,13 @@ interface Props {
   regenerating: boolean;
   onSaveSummaryOverride: (text: string | null) => void;
   savingSummary: boolean;
+  /** 재생성 실행 로그 패널(페이지가 소유 — 재생성 버튼 바로 아래에 렌더). */
+  runLog?: React.ReactNode;
 }
 
 /** 하단 AI 요약 패널 — 요약(사용자 수정 가능)/컴포넌트 역할/플로우 스텝. */
 export function LlmSummaryPanel({
-  doc, nodeName, onRegenerate, regenerating, onSaveSummaryOverride, savingSummary,
+  doc, nodeName, onRegenerate, regenerating, onSaveSummaryOverride, savingSummary, runLog,
 }: Props) {
   const summary = doc.summaryOverride ?? doc.llmContent?.summary ?? '';
   const [editing, setEditing] = useState(false);
@@ -53,6 +55,8 @@ export function LlmSummaryPanel({
           재생성
         </button>
       </div>
+
+      {runLog}
 
       {offline && (
         <div className="flex items-center gap-2 text-xs text-status-warning bg-secondary/40 border border-border rounded-xl px-3 py-2">

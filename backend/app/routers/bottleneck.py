@@ -12,6 +12,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
+from app.services.sse import SSE_HEADERS as _SHARED_SSE_HEADERS
 from app.database import SessionLocal, get_db
 from app.models import Cluster, BottleneckRun, User
 from app.auth.deps import require_operator, get_current_user
@@ -127,11 +128,7 @@ def delete_run(
 
 # ─── run (the core action) ───────────────────────────────────────────────
 
-SSE_HEADERS = {
-    "Cache-Control": "no-cache",
-    "X-Accel-Buffering": "no",
-    "Connection": "keep-alive",
-}
+SSE_HEADERS = _SHARED_SSE_HEADERS  # services/sse.py 공용(D-135)
 
 
 def _prepare_run(payload: BottleneckRunCreate, db: Session, actor: User):

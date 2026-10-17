@@ -1,6 +1,8 @@
 import { useState } from 'react';
 import { DownloadCloud, X, Loader2, Search, CheckCircle2, AlertTriangle, ExternalLink, RotateCcw } from 'lucide-react';
-import { useModalA11y, useToast } from '@/components/common';
+import { RunLogPanel, useModalA11y, useToast } from '@/components/common';
+import { useRunLog, runLogged, type RunLogEntry } from '@/hooks/useRunLog';
+import { useLogPref } from '@/hooks/useLogPref';
 import { useConfluenceSearch, useConfluenceLink } from '@/hooks/useJira';
 import { formatApiError } from '@/lib/utils';
 import type { ConfluenceSearchItem } from '@/types';
@@ -38,9 +40,14 @@ export function ConfluenceLinkModal({ open, onClose }: ConfluenceLinkModalProps)
   const [picked, setPicked] = useState<Set<string>>(new Set());
   const [searchError, setSearchError] = useState('');
   const [done, setDone] = useState<{ imported: number; failed: string[] } | null>(null);
+  // 페이지마다 요청하는 브라우저 루프 — 요청 사이에도 busy 를 유지한다.
+  const [importing, setImporting] = useState(false);
+  // 검색·가져오기 실행 로그(D-136).
+  const runLog = useRunLog();
+  const [showLog, setShowLog] = useLogPref('confluence-link');
 
   if (!open) return null;
-  const busy = searchMut.isPending || linkMut.isPending;
+  const busy = searchMut.isPending || linkMut.isPending || importing;
 
   const resetAll = () => {
     setResults(null);
@@ -54,17 +61,27 @@ export function ConfluenceLinkModal({ open, onClose }: ConfluenceLinkModalProps)
     setSearchError('');
     setResults(null);
     setPicked(new Set());
-    try {
-      const { data } = await searchMut.mutateAsync({ cql: buildCql(query) });
-      if (data.status !== 'ok') {
-        setSearchError(data.detail || 'Confluence 검색에 실패했습니다.');
-        return;
-      }
-      setResults(data.items);
-      if (data.items.length === 0) setSearchError('검색 결과가 없습니다.');
-    } catch (err) {
-      setSearchError(formatApiError(err));
+    const cql = buildCql(query);
+    const r = await runLogged(runLog, {
+      title: 'Confluence 검색',
+      first: `CQL ${cql}`,
+      fn: async () => (await searchMut.mutateAsync({ cql })).data,
+      summarize: (data): RunLogEntry[] => {
+        if (data.status !== 'ok') return [['error', `검색 실패(${data.status}) — ${data.detail || '사유 없음'}`]];
+        return [[data.items.length ? 'info' : 'warn', `검색 결과 ${data.items.length}건${data.total > data.items.length ? ` (전체 ${data.total})` : ''}`]];
+      },
+    });
+    if (!r.ok) {
+      if (!r.aborted) setSearchError(formatApiError(r.error));
+      return;
     }
+    const data = r.data;
+    if (data.status !== 'ok') {
+      setSearchError(data.detail || 'Confluence 검색에 실패했습니다.');
+      return;
+    }
+    setResults(data.items);
+    if (data.items.length === 0) setSearchError('검색 결과가 없습니다.');
   };
 
   const togglePick = (id: string) => {
@@ -80,17 +97,38 @@ export function ConfluenceLinkModal({ open, onClose }: ConfluenceLinkModalProps)
     if (!targets.length) return;
     let imported = 0;
     const failed: string[] = [];
-    for (const t of targets) {
-      try {
-        const { data } = await linkMut.mutateAsync({ pageId: t.id, title: t.title, url: t.url });
-        if (data?.id) imported += 1; else failed.push(t.title);
-      } catch (err) {
-        failed.push(`${t.title}: ${formatApiError(err)}`);
-      }
-    }
+    setImporting(true);
+    // 페이지마다 단계·결과 줄, 한 건 실패가 나머지를 막지 않는다(D-136).
+    await runLogged(runLog, {
+      title: 'Confluence 가져오기',
+      first: `선택한 문서 ${targets.length}건을 업무로 가져오기 시작`,
+      fn: async () => {
+        for (const t of targets) {
+          runLog.setStep(t.id, t.title, 'running');
+          try {
+            const { data } = await linkMut.mutateAsync({ pageId: t.id, title: t.title, url: t.url });
+            if (data?.id) {
+              imported += 1;
+              runLog.setStep(t.id, '', 'done');
+              runLog.log('info', `${t.title} · 업무 생성 완료${data.title ? ` — ${data.title}` : ''}`);
+            } else {
+              failed.push(t.title);
+              runLog.setStep(t.id, '', 'failed');
+              runLog.log('error', `${t.title} · 업무 생성 실패 — 응답에 업무 ID 없음`);
+            }
+          } catch (err) {
+            failed.push(`${t.title}: ${formatApiError(err)}`);
+            runLog.setStep(t.id, '', 'failed');
+            runLog.log('error', `${t.title} · 업무 생성 실패 — ${formatApiError(err)}`);
+          }
+        }
+      },
+      summarize: () => [[failed.length ? 'warn' : 'info', `대상 ${targets.length} · 생성 ${imported} · 실패 ${failed.length}`]],
+    });
+    setImporting(false);
     setDone({ imported, failed });
     if (imported) toast.success('업무 추가됨', `${imported}건을 업무 관리 게시판에 추가했습니다.`);
-    if (failed.length) toast.error('일부 실패', failed.slice(0, 3).join(' / '));
+    if (failed.length) toast.error('일부 실패', `${failed.length}건 실패 — 실행 로그에서 문서별 사유를 확인하세요.`);
   };
 
   return (
@@ -115,6 +153,7 @@ export function ConfluenceLinkModal({ open, onClose }: ConfluenceLinkModalProps)
         </div>
 
         <div className="px-5 pb-5 space-y-3.5">
+          <RunLogPanel run={runLog} show={showLog} onShowChange={setShowLog} maxHeight="max-h-56" />
           {done ? (
             <>
               <div className="rounded-xl border border-status-healthy/30 bg-status-healthy/5 p-4">

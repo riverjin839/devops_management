@@ -7,10 +7,47 @@ import {
 import { jiraApi } from '@/services/api';
 import type { JiraExcelImportResult, JiraExcelRow, JiraImportResult } from '@/types';
 import { formatApiError } from '@/lib/utils';
-import { ViewModeBar, EmptyState, PageHeader, PageShell } from '@/components/common';
+import { ViewModeBar, EmptyState, PageHeader, PageShell, RunLogPanel } from '@/components/common';
+import { useRunLog, runLogged, type RunLogEntry } from '@/hooks/useRunLog';
+import { useLogPref } from '@/hooks/useLogPref';
 import { MacCard } from '@/components/ui/MacCard';
 
 type ImportMode = 'file' | 'paste';
+
+/** 로그 항목 줄 상한 — 수백 건이면 앞 200건 + "외 N건" 줄(D-136). */
+const LOG_ITEM_CAP = 200;
+const ACTION_LABEL: Record<string, string> = { create: '생성', update: '갱신', unchanged: '변경 없음' };
+
+/** 파싱 응답 → 실행 로그 줄: 담당자 매칭 결과 + 매칭 실패 행. */
+function parseLines(data: JiraExcelImportResult): RunLogEntry[] {
+  if (data.status !== 'ok') return [['error', `파싱 실패 — ${data.detail || '사유 없음'}`]];
+  const out: RunLogEntry[] = [];
+  const unmatched = (data.rows ?? []).filter((r) => !r.assigneeMatched);
+  for (const r of unmatched.slice(0, LOG_ITEM_CAP)) {
+    out.push(['warn', `${r.key} ${r.summary} · 담당자 매칭 실패 (${r.assigneeRaw || '비어 있음'})`]);
+  }
+  if (unmatched.length > LOG_ITEM_CAP) out.push(['warn', `외 ${unmatched.length - LOG_ITEM_CAP}건 매칭 실패`]);
+  out.push([unmatched.length ? 'warn' : 'info', `행 ${data.total} · 담당자 매칭 ${data.matched}/${data.total}${data.detail ? ` — ${data.detail}` : ''}`]);
+  return out;
+}
+
+/** 저장 응답 → 실행 로그 줄: 항목별 · 오류 전부 · 합계. */
+function saveLines(data: JiraImportResult): RunLogEntry[] {
+  const out: RunLogEntry[] = [];
+  if (data.status !== 'ok') out.push(['error', `저장 실패(${data.status}) — ${data.detail || '사유 없음'}`]);
+  const items = data.items ?? [];
+  for (const it of items.slice(0, LOG_ITEM_CAP)) {
+    const n = it.changes?.length ?? 0;
+    out.push(['info', `${it.jiraKey} ${it.title} · ${ACTION_LABEL[it.action] ?? it.action}${n ? ` (변경 필드 ${n})` : ''}`]);
+  }
+  if (items.length > LOG_ITEM_CAP) out.push(['info', `외 ${items.length - LOG_ITEM_CAP}건`]);
+  for (const e of data.errors ?? []) out.push(['error', e]);
+  if (data.status === 'ok') {
+    const errs = data.errors?.length ?? 0;
+    out.push([errs ? 'warn' : 'info', `완료 · 총 ${data.total} · 생성 ${data.imported} · 갱신 ${data.updated} · 스킵 ${data.skipped}${errs ? ` · 오류 ${errs}` : ''}`]);
+  }
+  return out;
+}
 
 /**
  * Jira 에서 추출한 이슈 목록 Excel(.xlsx, .xls) 을 업로드하거나, 엑셀/Jira 표를 그대로
@@ -31,6 +68,10 @@ export function JiraExcelImportPage() {
   const [saveError, setSaveError] = useState<string | null>(null);
   const [saveResult, setSaveResult] = useState<JiraImportResult | null>(null);
 
+  // 파일 읽기·붙여넣기 변환·저장 실행 로그(D-136).
+  const runLog = useRunLog();
+  const [showLog, setShowLog] = useLogPref('jira-excel-import');
+
   const handleFile = async (file: File) => {
     setFileName(file.name);
     setError(null);
@@ -38,18 +79,19 @@ export function JiraExcelImportPage() {
     setSaveError(null);
     setSaveResult(null);
     setLoading(true);
-    try {
-      const res = await jiraApi.importExcel(file);
-      if (res.data.status === 'error') {
-        setError(res.data.detail || '가져오기에 실패했습니다.');
-      } else {
-        setResult(res.data);
-      }
-    } catch (e) {
-      setError(formatApiError(e, 'Excel 파일을 가져오는 중 오류가 발생했습니다.'));
-    } finally {
-      setLoading(false);
+    const r = await runLogged(runLog, {
+      title: 'Excel 파일 읽기',
+      first: `${file.name} (${Math.max(1, Math.round(file.size / 1024))}KB) 업로드·파싱 요청`,
+      fn: async () => (await jiraApi.importExcel(file)).data,
+      summarize: parseLines,
+    });
+    setLoading(false);
+    if (!r.ok) {
+      if (!r.aborted) setError(formatApiError(r.error, 'Excel 파일을 가져오는 중 오류가 발생했습니다.'));
+      return;
     }
+    if (r.data.status === 'error') setError(r.data.detail || '가져오기에 실패했습니다.');
+    else setResult(r.data);
   };
 
   const handlePaste = async () => {
@@ -59,36 +101,39 @@ export function JiraExcelImportPage() {
     setSaveError(null);
     setSaveResult(null);
     setLoading(true);
-    try {
-      const res = await jiraApi.importPaste(pasteText);
-      if (res.data.status === 'error') {
-        setError(res.data.detail || '가져오기에 실패했습니다.');
-      } else {
-        setResult(res.data);
-      }
-    } catch (e) {
-      setError(formatApiError(e, '붙여넣은 내용을 가져오는 중 오류가 발생했습니다.'));
-    } finally {
-      setLoading(false);
+    const r = await runLogged(runLog, {
+      title: '붙여넣기 변환',
+      first: `붙여넣은 표 ${pasteText.split('\n').filter((l) => l.trim()).length}줄 변환 요청`,
+      fn: async () => (await jiraApi.importPaste(pasteText)).data,
+      summarize: parseLines,
+    });
+    setLoading(false);
+    if (!r.ok) {
+      if (!r.aborted) setError(formatApiError(r.error, '붙여넣은 내용을 가져오는 중 오류가 발생했습니다.'));
+      return;
     }
+    if (r.data.status === 'error') setError(r.data.detail || '가져오기에 실패했습니다.');
+    else setResult(r.data);
   };
 
   const handleSave = async () => {
     if (!result || result.rows.length === 0 || saving) return;
     setSaveError(null);
     setSaving(true);
-    try {
-      const res = await jiraApi.importSaveToBoard(result.rows);
-      if (res.data.status === 'error') {
-        setSaveError(res.data.detail || '저장에 실패했습니다.');
-      } else {
-        setSaveResult(res.data);
-      }
-    } catch (e) {
-      setSaveError(formatApiError(e, '업무 관리 게시판에 저장하는 중 오류가 발생했습니다.'));
-    } finally {
-      setSaving(false);
+    const rows = result.rows;
+    const r = await runLogged(runLog, {
+      title: '업무 관리에 저장',
+      first: `${rows.length}행 업무 관리 게시판 저장 요청`,
+      fn: async () => (await jiraApi.importSaveToBoard(rows)).data,
+      summarize: saveLines,
+    });
+    setSaving(false);
+    if (!r.ok) {
+      if (!r.aborted) setSaveError(formatApiError(r.error, '업무 관리 게시판에 저장하는 중 오류가 발생했습니다.'));
+      return;
     }
+    if (r.data.status !== 'ok') setSaveError(r.data.detail || '저장에 실패했습니다.');
+    else setSaveResult(r.data);
   };
 
   const reset = () => {
@@ -132,6 +177,8 @@ export function JiraExcelImportPage() {
             )}
           </>}
         />
+
+        <RunLogPanel run={runLog} show={showLog} onShowChange={setShowLog} maxHeight="max-h-56" />
 
         {/* 저장 결과 배너 */}
         {saveResult && (

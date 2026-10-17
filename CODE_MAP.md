@@ -23,6 +23,7 @@ AI 어시스턴트 + 사람 개발자용 — 기능 → 파일 경로와 자주 
 | **K8s 목록 성능 헬퍼** | `backend/app/services/k8s_raw.py`(`raw_call` — `_preload_content=False` 로 받아 `K8sObj` 로 typed 모델처럼 읽기, 역직렬화 생략) · `services/swr_cache.py`(`SWRCache` — fresh/stale SWR + single-flight + Redis 세대 무효화 `bump(group)`) · `services/k8s_list_cache.py`(`list_cache` 인스턴스 — 그룹 키는 apiserver host, 풀 클라이언트 쓰기 시 `note_write` 자동 무효화, 풀 우회 쓰기용 `invalidate_kubeconfig(path)`) | — |
 | 자동 업데이트 (k8s API) | `POST /clusters/{id}/auto-update` (clusters.py) | `clustersApi.autoUpdate` in `api.ts` |
 | 버전/설정 스냅샷 수집 + 히스토리 | `backend/app/routers/versions.py` · model: `backend/app/models/config_snapshot.py` | `frontend/src/pages/VersionsPage.tsx` |
+| SSH 수집 실시간 스트림 (D-135) | `POST /clusters/{id}/collect-{etcd-systemd,kernel-params,kubelet-config,kubeadm-certs,node-nics}/stream` in `versions.py`(`_collect_emit` ContextVar — 동기 엔드포인트와 같은 함수) · SSE 공용 `backend/app/services/sse.py`(`stream_async_job`) | `components/versions/*Modal.tsx` → `streamLogged` + `versionsCollectStreamUrl` |
 | 컴포넌트 관계 3D 그래프 | `GET /clusters/{id}/versions/graph` | `frontend/src/pages/VersionGraphPage.tsx` |
 | 노드 일괄 SSH/SCP 실행 | `backend/app/routers/bulk_exec.py` + `backend/app/services/ssh_runner.py` (paramiko) + `services/script_wrap.py`(python 스크립트 → heredoc 래핑) | `frontend/src/pages/BulkExecPage.tsx` |
 | 클러스터 노드 목록 조회 (선택용) | `GET /clusters/{id}/node-list` in `bulk_exec.py` | `bulkExecApi.nodeList` |
@@ -35,6 +36,7 @@ AI 어시스턴트 + 사람 개발자용 — 기능 → 파일 경로와 자주 
 | 공용 UI: 페이지 밀도 셸 (콘솔/허브/문서 3종, D-123) · 섹션 카드 헤더 슬롯(D-122) | — | `frontend/src/components/common/PageShell.tsx` · `frontend/src/components/ui/MacCard.tsx`(`icon`·`description`·`titleExtra`·`actions`) |
 | 공용 UI: 실행 확인 모달 | — | `frontend/src/components/common/ConfirmDialog.tsx` |
 | 공용 UI: 로그 뷰어 (JSON/journal/table 자동감지) | — | `frontend/src/components/common/LogViewer.tsx` |
+| 공용 훅: 입력 debounce (검색어 등, `keepPreviousData` 와 함께) | — | `frontend/src/hooks/useDebouncedValue.ts` |
 | 공용 UI: 실행 로그 패널 (실행 버튼 실시간 로그 + "로그 보기", D-089 — 단건 요청 `runLogged`·큐잉 실행 `pollIntoRunLog` 헬퍼, D-128) | — | `frontend/src/components/common/RunLogPanel.tsx` · `hooks/useRunLog.ts` · `hooks/useLogPref.ts` · `lib/sse.ts`(POST SSE 소비 `postSse`) |
 | 공용 훅: OS "동작 줄이기" 감지 (무한 애니메이션 끄기, D-096) | — | `frontend/src/hooks/usePrefersReducedMotion.ts` |
 | 연결 검증 + status 반영 | `POST /clusters/{id}/verify` (clusters.py) | `clustersApi.verify` |
@@ -96,7 +98,7 @@ AI 어시스턴트 + 사람 개발자용 — 기능 → 파일 경로와 자주 
 | RAG 근거 인용 (사내 지식 pgvector 검색) | `backend/app/services/rag_service.py` (`GET /llm/rag-search`, `POST /llm/backfill-embeddings`) — work_guides/work_items/ops_notes/ontology_events(`compute_ontology_event_embedding`, `routers/ontology.py` 커밋 직후 큐잉) 임베딩 |
 | LLM 정보요청 파서 (need_more_info) | `backend/app/services/llm/response_parser.py` |
 | 알람/K8s 이벤트 AI 자동 분석 (scope·디바운스·llm 큐) | `backend/app/services/observability/analysis_hook.py`(`sources` 로 알람/K8s 이벤트 규칙 적용 범위 선택, 공유 디바운스 키) + `services/incident_context_builder.py` + `models/incident_analysis.py` + `celery_app.run_auto_incident_analysis`/`run_auto_incident_analysis_k8s_event`(전용 `llm` 큐, `k8s/base/celery/worker-llm-deployment.yaml`) → 공용 `frontend/src/components/common/IncidentAnalysisPanel.tsx`(래퍼: `components/observability/AlertAnalysisPanel.tsx`, `components/k8s/K8sEventAnalysisPanel.tsx`) |
-| AI 장애 분석 (분석 전용) | `backend/app/routers/analyze.py` + `backend/app/services/analyzers/` (claude/local_llm/rule_based — 백엔드 선택은 `llm_settings.analyzer_backend`) → `frontend/src/pages/IncidentAnalysisPage.tsx` |
+| AI 장애 분석 (분석 전용) | `backend/app/routers/analyze.py` + `backend/app/services/analyzers/` (claude/local_llm/rule_based — 백엔드 선택은 `llm_settings.analyzer_backend`, 테넌트가 `incident_analysis` LLM 을 지정하면 Claude 대신 게이트웨이 경유 — `factory.tenant_pins_incident_llm`) → `frontend/src/pages/IncidentAnalysisPage.tsx` |
 | 파드 로그 스트리밍 (SSE) | `analyze.py` 의 `/logs/stream` → `frontend/src/pages/K8sLogsPage.tsx` |
 | 임베딩 (WorkItem/WorkGuide 유사 검색) | `backend/app/services/embedding_service.py` (pgvector, llm 게이트웨이 위임) |
 
@@ -111,7 +113,7 @@ AI 어시스턴트 + 사람 개발자용 — 기능 → 파일 경로와 자주 
 | Deep Check 정의/실행/수집 | `backend/app/routers/check_results_router.py` · `check_definitions_router.py`(정의별 이력/run/duplicate/preview) + `backend/app/services/registered_checks/`(UI 정의형 `custom_http`·`custom_kubectl`·`custom_promql` 포함) → `frontend/src/pages/DeepCheckSettings.tsx`(전 항목 검색/일괄 관리 — 단일 항목 편집은 `/checks/:itemId` 가 우선) (+ `components/daily-check/DeepCheckRunHistory.tsx`) |
 | 운영 점검 콘솔(레거시) | `backend/app/routers/ops_check.py` + `services/ops_check_service.py`(카탈로그·실행 소스 4종: deep_check/addon/batch_job/playbook — D-066) → `frontend/src/pages/OpsCheckConsolePage.tsx` (+ `components/ops-check/ClusterOpsCheckPanel.tsx` — `/clusters/:id` 와 공유) |
 | 클러스터 상세(종합 상태+원인) | `backend/app/routers/clusters.py`(`/status-breakdown`) + `services/cluster_status_service.py`(`recompute()` 단일 롤업) → `frontend/src/pages/ClusterDetailPage.tsx` |
-| K8s 실시간 이벤트 (kubewatch) | `backend/app/routers/k8s_events.py`(수신 직후 `analysis_hook.maybe_enqueue_analysis_for_k8s_event` 훅 + `/{id}/analysis`,`/analyze`) + `services/k8s_event_classifier.py` → `frontend/src/pages/K8sEventsPage.tsx` |
+| K8s 실시간 이벤트 (kubewatch) | `backend/app/routers/k8s_events.py`(수신 직후 `analysis_hook.maybe_enqueue_analysis_for_k8s_event` 훅 + `/{id}/analysis`,`/analyze`, 심각도별 건수 `/stats`, 목록 `has_more`) + `services/k8s_event_classifier.py` → `frontend/src/pages/K8sEventsPage.tsx` |
 | Observability 지표 대시보드 (kube-prometheus-stack) | `backend/app/routers/observability.py` + `services/observability/catalog_seed.py` · `services/alertmanager_service.py` · `services/prometheus_service.py`(rules/targets/status) + `models/observability.py` → `frontend/src/pages/ObservabilityPage.tsx` + `components/observability/` |
 | 인시던트 알람 수신 / 인박스 | `backend/app/routers/observability.py`(`ingest_router`) + `services/observability/alert_ingest.py`(Alertmanager v4 · generic 파서) · `alert_router.py`(라우팅·중복억제) + `models/alert_event.py` · `models/alert_notify_rule.py` → `frontend/src/pages/AlertInboxPage.tsx` |
 | Pod 병목 진단 | `backend/app/routers/bottleneck.py`(`POST /run` · SSE `POST /run/stream`) + `services/bottleneck_probes/` → `frontend/src/pages/PodBottleneckPage.tsx` · `PodBottleneckDetailPage.tsx` |
@@ -186,7 +188,7 @@ AI 어시스턴트 + 사람 개발자용 — 기능 → 파일 경로와 자주 
 | 테넌트 실행 동시성 상한 · 감사 로그 테넌트 귀속 (멀티테넌시 5단계) | `backend/app/services/tenant_concurrency.py`(`owner_tenant`=클러스터 operate 바인딩 우선, `TenantRunSlots` Redis ZSET 슬롯·대기 등록, Celery 태스크용 `acquire_run_slot` → 상한 초과 시 `task.retry`·대기 초과 `TenantRunLimitTimeout`) + `celery_app.py` 적용 태스크(`run_batch_job`·`run_ops_check_batch`·`run_check_matrix_run_one`·`run_deep_check_for_cluster`·`run_k8s_efficiency_run`) + `tenants.max_concurrent_runs` · `routers/tenants.py` `GET /run-slots` · `services/audit_logger.py` `_resolve_tenant`(→ `audit_logs.tenant_id`/`tenant_name`) + `routers/audit_logs.py` `tenant_id` 필터 → `components/settings/TenantManager.tsx` `TenantRunSlotsCard` · `components/settings/AuditLogManager.tsx` |
 | 화면별 접근 제어 서버 강제 | `backend/app/auth/feature_access.py`(`FEATURE_API_PATTERNS` = 화면 → 전용 API 정규식, `enforce_feature_access` 는 `main.py` `_auth` 에 포함) — 판정은 프론트 `hooks/useFeatureAccess.ts` `canAccessFeature` 와 동일해야 한다 |
 | 스키마 점검/복구 (모델↔DB 드리프트) | `backend/app/routers/schema_health.py` + `services/schema_health.py` → `frontend/src/components/settings/SchemaHealthPanel.tsx` (Settings ▸ 스키마 점검 탭). 부팅 안전망은 `main.py` 의 `_sync_missing_model_columns`(누락 컬럼) + `_relax_not_null_drift`(레거시 NOT NULL) |
-| Your Island (사용자 커스텀 화면) | `backend/app/routers/island.py` + `models/island.py` → `frontend/src/pages/IslandPage.tsx` · `components/island/` (`panelRegistry.ts` = 임베드 가능 화면 등록부) · `hooks/useIslands.ts` · `hooks/useNavCatalog.ts` · `hooks/useClusterRouteParam.ts` + `lib/islandEmbed.ts` (임베드 시 URL 이동 억제) |
+| Your Island (사용자 커스텀 화면) | `backend/app/routers/island.py` + `models/island.py` → `frontend/src/pages/IslandPage.tsx` · `components/island/` (`panelRegistry.ts` = 임베드 가능 화면 등록부) · `hooks/useIslands.ts` · `hooks/useNavCatalog.ts` · `hooks/useClusterRouteParam.ts`(`/<base>/:clusterId` 동기화, `pathFor`·`local` 옵션) + `lib/islandEmbed.ts` (임베드 시 URL 이동 억제) |
 
 ### Playbook / Ansible / 기타
 | 기능 | 위치 |
@@ -201,7 +203,7 @@ AI 어시스턴트 + 사람 개발자용 — 기능 → 파일 경로와 자주 
 ### 공통 UI / 인프라
 | 기능 | 위치 |
 |---|---|
-| 테마 / CSS 변수 | `frontend/src/index.css` (`:root`, `html.light`, `html.dark`) — 대표 색 스냅샷은 `frontend/src/lib/themeSwatches.ts`(D-072, 사용자 메뉴 스와치·`components/settings/ThemeGallery.tsx` 가 공유). 선택값은 `stores/themeStore.ts`(localStorage 캐시) ↔ 서버 `home_prefs.theme`/`accent` 를 `hooks/useThemeSync.ts` 가 맞춘다 |
+| 테마 / CSS 변수 | `frontend/src/index.css` (`:root`, `html.light`, `html.dark`; 글자 전용 파생 토큰 `--primary-text`·`--status-*-text`·`--brand-jira-text`) — 캔버스·three.js 용 토큰 색은 `frontend/src/lib/chartTokens.ts`(`cssVarColor`·`useThemeColorKey`, D-120) — 대표 색 스냅샷은 `frontend/src/lib/themeSwatches.ts`(D-072, 사용자 메뉴 스와치·`components/settings/ThemeGallery.tsx` 가 공유). 선택값은 `stores/themeStore.ts`(localStorage 캐시) ↔ 서버 `home_prefs.theme`/`accent` 를 `hooks/useThemeSync.ts` 가 맞춘다 |
 | MacCard 공통 컴포넌트 | `frontend/src/components/ui/MacCard.tsx` |
 | Sidebar(플랫폼 도메인) + 네비 설정 | `frontend/src/components/layout/Sidebar.tsx` (`NAV_MAP`/`GROUPS` 는 `navConfig.ts` 로 분리, `GROUPS.domain` 이 배치 결정) |
 | leaf 단위 opt-in 앱 카탈로그(사이드바+상단바, Main UI 간소화 + 후속 개편) | `frontend/src/components/layout/installableApps.ts`(leaf 단위 설치 가능 카탈로그 + `sidebarAppSections()`/`topbarAppSections()`) + `AddAppDialog.tsx`(공용 카드형 추가 다이얼로그) → `HomePrefs.installedApps`(`backend/app/schemas/home_prefs.py` — `None` = 조직 기본값 따름, 리스트 = 사용자 지정; 공용 로직 `services/home_prefs.py`(`apply_update` 델타·초기화, `get/set_default_installed_apps`), `home_prefs.py` 라우터는 행 잠금 아래 갱신) · 조직 기본값 `GET/PUT /ui-settings/home-prefs-defaults` → `components/settings/DefaultAppsManager.tsx` · 순서 변경 `installed_apps_move` → `components/layout/InstalledAppOrder.tsx`(dnd-kit) — 옛 레이아웃 계정 이관은 `backend/app/main.py::_migrate_home_prefs_layout()`(행 단위 `layout_version` — 전역 sentinel 없음, 재실행 안전) |

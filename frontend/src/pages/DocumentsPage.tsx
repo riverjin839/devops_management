@@ -6,15 +6,17 @@ import {
   Sparkles, UploadCloud,
 } from 'lucide-react';
 import { MacCard } from '@/components/ui/MacCard';
-import { EmptyState, LoadingState, PageShell, useToast } from '@/components/common';
+import { EmptyState, LoadingState, PageShell, RunLogPanel, useToast } from '@/components/common';
 import { PageHeader } from '@/components/common/PageHeader';
 import {
   ConfluenceDocsSettingsDialog, ConfluenceExportDialog, ConfluenceImportModal, SyncStatusBadge,
 } from '@/components/documents';
 import { useWorkGuides } from '@/hooks/useWorkGuide';
 import { useConfluenceDocPull, useGuideSearch } from '@/hooks/useConfluenceDocs';
+import { useLogPref } from '@/hooks/useLogPref';
+import { runLogged, useRunLog, type RunLogEntry } from '@/hooks/useRunLog';
 import { useAuthStore } from '@/stores/authStore';
-import { formatApiError, stripHtml } from '@/lib/utils';
+import { stripHtml } from '@/lib/utils';
 import type { GuideSearchItem, WorkGuide } from '@/types';
 
 const CATEGORIES = ['배포', '트러블슈팅', '모니터링', '보안', '기타'];
@@ -35,6 +37,8 @@ export function DocumentsPage() {
   const { data, isLoading } = useWorkGuides();
   const pullMut = useConfluenceDocPull();
   const isAdmin = useAuthStore((s) => s.user?.role) === 'admin';
+  const runLog = useRunLog();
+  const [showLog, setShowLog] = useLogPref('documents-pull');
 
   const [query, setQuery] = useState('');
   const [aiMode, setAiMode] = useState(false);
@@ -93,14 +97,32 @@ export function DocumentsPage() {
 
   const pull = async (guide: WorkGuide) => {
     setPullingId(guide.id);
-    try {
-      const res = await pullMut.mutateAsync(guide.id);
-      if (res.status !== 'ok') toast.error('다시 가져오기 실패', res.detail);
-      else toast.success('다시 가져옴', `「${guide.title}」 v${res.version ?? '?'} 로 갱신했습니다.`);
-    } catch (err) {
-      toast.error('다시 가져오기 실패', formatApiError(err));
-    } finally {
-      setPullingId(null);
+    const r = await runLogged(runLog, {
+      title: 'Confluence 다시 가져오기',
+      first: `「${guide.title}」 — 페이지 ${guide.confluencePageId ?? '?'}(현재 v${guide.confluenceVersion ?? '?'}) 최신본 가져오기 요청`,
+      fn: () => pullMut.mutateAsync(guide.id),
+      summarize: (res) => {
+        const out: RunLogEntry[] = [];
+        if (res.status !== 'ok') {
+          const soft = res.status === 'conflict' || res.status === 'partial' || res.status === 'missing';
+          out.push([soft ? 'warn' : 'error', `다시 가져오기 실패 · 상태 ${res.status}${res.detail ? ` — ${res.detail}` : ''}`]);
+        } else {
+          out.push(['info', `갱신 완료 · v${guide.confluenceVersion ?? '?'} → v${res.version ?? '?'}`]);
+        }
+        for (const w of res.warnings ?? []) out.push(['warn', `변환 경고 — ${w}`]);
+        return out;
+      },
+    });
+    setPullingId(null);
+    if (!r.ok) {
+      if (!r.aborted) toast.error('다시 가져오기 실패', '실행 로그에서 사유를 확인하세요.');
+      return;
+    }
+    const res = r.data;
+    if (res.status !== 'ok') toast.error('다시 가져오기 실패', res.detail);
+    else {
+      const warn = res.warnings?.length ? ` · 변환 경고 ${res.warnings.length}건(실행 로그 참고)` : '';
+      toast.success('다시 가져옴', `「${guide.title}」 v${res.version ?? '?'} 로 갱신했습니다.${warn}`);
     }
   };
 
@@ -197,6 +219,8 @@ export function DocumentsPage() {
       )}
 
       {/* 문서 테이블 */}
+      <RunLogPanel run={runLog} show={showLog} onShowChange={setShowLog} maxHeight="max-h-56" />
+
       <MacCard title="문서" bodyPadding="p-0">
         <div className="overflow-x-auto">
           <table className="w-full min-w-[820px] text-sm">

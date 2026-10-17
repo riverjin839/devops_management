@@ -3,10 +3,10 @@ import { Plus, Play, BookOpen, Download, ArrowUpDown, LayoutGrid, List } from 'l
 import { DndContext, closestCenter, PointerSensor, useSensor, useSensors, type DragEndEvent } from '@dnd-kit/core';
 import { SortableContext, rectSortingStrategy, verticalListSortingStrategy, useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { PlaybookCard, PlaybookListRow, PlaybookLogDialog, AddPlaybookModal, RunCredsModal } from '@/components/playbooks';
+import { PlaybookCard, PlaybookListRow, PlaybookLogDialog, AddPlaybookModal, RunCredsModal, playbookRunLines } from '@/components/playbooks';
 import type { PlaybookFormSubmit } from '@/components/playbooks/AddPlaybookModal';
 import type { PlaybookSshCreds } from '@/types';
-import { ClusterSidebar, EmptyState, Skeleton, PageShell } from '@/components/common';
+import { ClusterSidebar, EmptyState, Skeleton, PageShell, RunLogPanel } from '@/components/common';
 import { PageHeader } from '@/components/common/PageHeader';
 import { RoleGate } from '@/components/auth/RoleGate';
 import { usePlaybooks, useCreatePlaybook, useUpdatePlaybook, useDeletePlaybook, useRunPlaybook, useToggleDashboard } from '@/hooks/usePlaybook';
@@ -15,6 +15,10 @@ import { usePlaybookStore } from '@/stores/playbookStore';
 import { useClusters } from '@/hooks/useCluster';
 import { useClusterStore } from '@/stores/clusterStore';
 import { useLocalOrder } from '@/hooks/useLocalOrder';
+import { runLogged, useRunLog, type RunLogEntry } from '@/hooks/useRunLog';
+import { useLogPref } from '@/hooks/useLogPref';
+import { formatApiError } from '@/lib/utils';
+import type { PlaybookRunResult } from '@/types';
 import { Playbook } from '@/types';
 
 type PlaybookSortKey = 'name' | 'status' | 'lastRunAt';
@@ -86,6 +90,9 @@ export function PlaybooksPage() {
   const deletePlaybook = useDeletePlaybook();
   const runPlaybook = useRunPlaybook();
   const toggleDashboard = useToggleDashboard();
+  // 플레이북 실행 로그(D-135) — 단건 ▶ · 자격증명 모달 · Run All · 리포트 내보내기가 공유한다.
+  const runLog = useRunLog();
+  const [showRunLog, setShowRunLog] = useLogPref('playbooks-run');
 
   // 사이드바에서 선택한 클러스터(들) 만 보여주기. 빈 배열이면 전체.
   const selectedClusterSet = useMemo(() => new Set(selectedClusterIds), [selectedClusterIds]);
@@ -175,42 +182,80 @@ export function PlaybooksPage() {
     setEditPlaybook(null);
   };
 
+  // 단건 실행 — 실행 로그에 요청·대기·상태/통계·실패 사유를 남긴다(실패해도 throw 하지 않음).
+  const runOneLogged = (pb: Playbook, creds?: PlaybookSshCreds) => runLogged(runLog, {
+    title: `플레이북 실행 — ${pb.name}`,
+    first: `${pb.name} — ${clusterNameMap[pb.clusterId] ?? pb.clusterId} 대상 실행 요청${creds?.ssh_username ? ` (SSH ${creds.ssh_username})` : ''}`,
+    fn: () => runPlaybook.mutateAsync({ id: pb.id, creds }),
+    summarize: ({ data }) => playbookRunLines(data),
+  });
+
   // 카드의 ▶ 버튼 클릭 — 세션에 저장된 자격증명이 있으면 그대로 실행, 없으면 모달.
   const handleRunOne = (pb: Playbook) => {
     if (runningIds.has(pb.id)) return;
     const cached = readSessionCreds();
     if (cached) {
-      runPlaybook.mutate({ id: pb.id, creds: cached });
+      void runOneLogged(pb, cached);
     } else {
       setCredsTarget(pb);
     }
   };
 
-  const handleRunAll = () => {
+  // Run All — 표시 중인 플레이북을 병렬 실행. 한 개 실패가 나머지를 막지 않는다(allSettled).
+  const handleRunAll = async () => {
     const cached = readSessionCreds();
-    filteredPlaybooks.forEach((p) => {
-      if (!runningIds.has(p.id)) {
-        runPlaybook.mutate({ id: p.id, creds: cached ?? undefined });
-      }
+    const targets = filteredPlaybooks.filter((p) => !runningIds.has(p.id));
+    if (targets.length === 0) return;
+    const results: { status: string | null }[] = [];
+    await runLogged(runLog, {
+      title: `플레이북 일괄 실행 — ${targets.length}개`,
+      first: `플레이북 ${targets.length}개 병렬 실행 요청${cached ? ` (세션 자격증명 ${cached.ssh_username ?? ''})` : ' (세션 자격증명 없음)'}`,
+      fn: () => Promise.allSettled(targets.map(async (p) => {
+        runLog.setStep(p.id, p.name, 'running');
+        try {
+          const { data } = await runPlaybook.mutateAsync({ id: p.id, creds: cached ?? undefined });
+          runLog.setStep(p.id, p.name, data.status === 'critical' ? 'failed' : 'done');
+          for (const [lv, msg] of playbookRunLines(data, p.name).slice(0, 2)) runLog.log(lv, msg);
+          results.push({ status: data.status });
+          return data;
+        } catch (e) {
+          runLog.setStep(p.id, p.name, 'failed');
+          runLog.log('error', `[${p.name}] 실패 — ${formatApiError(e)}`);
+          results.push({ status: null });
+          throw e;
+        }
+      })),
+      summarize: (settled: PromiseSettledResult<PlaybookRunResult>[]): RunLogEntry[] => {
+        const healthy = results.filter((r) => r.status === 'healthy').length;
+        const failed = results.filter((r) => r.status === null || r.status === 'critical').length;
+        const other = settled.length - healthy - failed;
+        return [[
+          failed > 0 ? 'error' : other > 0 ? 'warn' : 'info',
+          `합계 · 대상 ${settled.length} · 정상 ${healthy} · 경고 ${other} · 실패 ${failed}`,
+        ]];
+      },
     });
   };
 
   const handleExportReport = async () => {
-    try {
-      // 단일 클러스터 선택 시에만 cluster 한정 export. 여러 개 / 전체는 전체 export.
-      const exportClusterId = selectedClusterIds.length === 1 ? selectedClusterIds[0] : undefined;
-      const { data } = await playbooksApi.exportReport(exportClusterId);
-      const blob = data instanceof Blob ? data : new Blob([data], { type: 'text/markdown' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      const today = new Date().toISOString().slice(0, 10);
-      a.href = url;
-      a.download = `k8s-daily-report-${today}.md`;
-      a.click();
-      URL.revokeObjectURL(url);
-    } catch (e) {
-      console.error('Export failed:', e);
-    }
+    // 단일 클러스터 선택 시에만 cluster 한정 export. 여러 개 / 전체는 전체 export.
+    const exportClusterId = selectedClusterIds.length === 1 ? selectedClusterIds[0] : undefined;
+    await runLogged(runLog, {
+      title: '리포트 내보내기',
+      first: `${exportClusterId ? clusterNameMap[exportClusterId] ?? exportClusterId : '전체 클러스터'} 플레이북 리포트(.md) 요청`,
+      fn: () => playbooksApi.exportReport(exportClusterId),
+      summarize: ({ data }) => {
+        const blob = data instanceof Blob ? data : new Blob([data], { type: 'text/markdown' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        const today = new Date().toISOString().slice(0, 10);
+        a.href = url;
+        a.download = `k8s-daily-report-${today}.md`;
+        a.click();
+        URL.revokeObjectURL(url);
+        return [['info', `${a.download} 내려받기 · ${blob.size} bytes`]];
+      },
+    });
   };
 
   // 새 playbook 등록 모달의 default cluster — 하나만 선택돼 있으면 그것, 아니면 첫 번째.
@@ -358,6 +403,12 @@ export function PlaybooksPage() {
             }
           />
 
+          {(runLog.running || runLog.lines.length > 0) && (
+            <div className="mb-4">
+              <RunLogPanel run={runLog} show={showRunLog} onShowChange={setShowRunLog} />
+            </div>
+          )}
+
           {/* Content */}
           {isLoading ? (
             viewMode === 'list' ? (
@@ -464,7 +515,8 @@ export function PlaybooksPage() {
         onClose={() => setCredsTarget(null)}
         onRun={(creds) => {
           if (credsTarget) {
-            runPlaybook.mutate({ id: credsTarget.id, creds });
+            // 모달은 제출 즉시 닫히므로 실행 로그는 페이지 패널에 남긴다.
+            void runOneLogged(credsTarget, creds);
             setCredsTarget(null);
           }
         }}

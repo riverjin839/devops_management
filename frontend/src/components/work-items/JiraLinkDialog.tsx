@@ -1,7 +1,9 @@
 import { useEffect, useState } from 'react';
 import { Loader2, Link2, Link2Off, AlertTriangle, Trash2, ExternalLink } from 'lucide-react';
 import { useJiraUnlink, useJiraRelink } from '@/hooks/useJira';
-import { useToast, ConfirmDialog } from '@/components/common';
+import { useToast, ConfirmDialog, RunLogPanel } from '@/components/common';
+import { useRunLog, runLogged, type RunLogEntry } from '@/hooks/useRunLog';
+import { useLogPref } from '@/hooks/useLogPref';
 import { formatApiError } from '@/lib/utils';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
@@ -35,43 +37,74 @@ export function JiraLinkDialog({ open, onClose, item, missingDetail }: JiraLinkD
   const relink = useJiraRelink();
   const [keyOrUrl, setKeyOrUrl] = useState('');
   const [confirmDelete, setConfirmDelete] = useState(false);
+  // 연결 변경·해제·삭제 실행 로그(D-136). 성공하면 기존처럼 닫히고, 실패하면 열린 채 error 줄을 보여준다.
+  const runLog = useRunLog();
+  const [showLog, setShowLog] = useLogPref('jira-link');
+  const clearLog = runLog.clear;
 
   useEffect(() => {
-    if (open) { setKeyOrUrl(''); setConfirmDelete(false); }
-  }, [open]);
+    if (open) { setKeyOrUrl(''); setConfirmDelete(false); clearLog(); }
+  }, [open, clearLog]);
 
   if (!item) return null;
   const busy = unlink.isPending || relink.isPending;
   const currentKey = item.jiraIssueKey ?? '';
 
   const runUnlink = async (deleteWorkItem: boolean) => {
-    try {
-      const { data } = await unlink.mutateAsync({ itemId: item.id, data: { deleteWorkItem } });
-      if (data.status !== 'ok') {
-        toast.error('연결 해제 실패', data.detail);
-        return;
-      }
-      toast.success(deleteWorkItem ? '업무 삭제됨' : '연결 해제됨', data.detail);
-      onClose();
-    } catch (err) {
-      toast.error('연결 해제 실패', formatApiError(err));
+    const r = await runLogged(runLog, {
+      title: deleteWorkItem ? '연결 해제 · 업무 삭제' : '연결 해제',
+      first: `${currentKey || '연결 없음'} — ${deleteWorkItem ? '연결 해제 후 업무 삭제' : '연결 해제'} 요청`,
+      fn: async () => (await unlink.mutateAsync({ itemId: item.id, data: { deleteWorkItem } })).data,
+      summarize: (res): RunLogEntry[] => {
+        if (res.status !== 'ok') return [['error', `연결 해제 실패 — ${res.detail || '사유 없음'}`]];
+        const out: RunLogEntry[] = [['info', `연결 해제 완료 — ${res.detail}`]];
+        if (deleteWorkItem) {
+          out.push(res.workItemDeleted
+            ? ['info', '업무 삭제 완료']
+            : ['warn', '업무 삭제 안 됨 — 연결만 해제됨']);
+        }
+        return out;
+      },
+    });
+    if (!r.ok) {
+      if (!r.aborted) toast.error('연결 해제 실패', formatApiError(r.error));
+      return;
     }
+    if (r.data.status !== 'ok') {
+      toast.error('연결 해제 실패', r.data.detail);
+      return;
+    }
+    toast.success(deleteWorkItem ? '업무 삭제됨' : '연결 해제됨', r.data.detail);
+    onClose();
   };
 
   const runRelink = async () => {
     const value = keyOrUrl.trim();
     if (!value) return;
-    try {
-      const { data } = await relink.mutateAsync({ itemId: item.id, data: { keyOrUrl: value } });
-      if (data.status !== 'ok') {
-        toast.error('연결 변경 실패', data.detail);
-        return;
-      }
-      toast.success('연결 변경됨', data.detail);
-      onClose();
-    } catch (err) {
-      toast.error('연결 변경 실패', formatApiError(err));
+    const r = await runLogged(runLog, {
+      title: '연결 변경',
+      first: `${currentKey || '연결 없음'} → ${value} 연결 변경 요청`,
+      fn: async () => (await relink.mutateAsync({ itemId: item.id, data: { keyOrUrl: value } })).data,
+      summarize: (res): RunLogEntry[] => {
+        if (res.status === 'ok') {
+          const out: RunLogEntry[] = [['info', `연결 변경 완료 — ${res.jiraKey ?? value} · ${res.detail}`]];
+          if (res.jiraUrl) out.push(['info', `Jira URL ${res.jiraUrl}`]);
+          return out;
+        }
+        const level = res.status === 'missing' ? 'warn' : 'error';
+        return [[level, `연결 변경 실패(${res.status}) — ${res.detail || '사유 없음'}`]];
+      },
+    });
+    if (!r.ok) {
+      if (!r.aborted) toast.error('연결 변경 실패', formatApiError(r.error));
+      return;
     }
+    if (r.data.status !== 'ok') {
+      toast.error('연결 변경 실패', r.data.detail);
+      return;
+    }
+    toast.success('연결 변경됨', r.data.detail);
+    onClose();
   };
 
   return (
@@ -80,7 +113,7 @@ export function JiraLinkDialog({ open, onClose, item, missingDetail }: JiraLinkD
         <DialogContent className="max-w-md">
           <DialogHeader className="flex-row items-center gap-3">
             <div className="w-10 h-10 rounded-2xl bg-brand-jira/10 flex items-center justify-center flex-shrink-0">
-              <Link2 className="w-5 h-5 text-brand-jira dark:text-blue-300" />
+              <Link2 className="w-5 h-5 text-brand-jira" />
             </div>
             <div className="min-w-0 flex-1">
               <DialogTitle>Jira 연결 관리</DialogTitle>
@@ -105,7 +138,7 @@ export function JiraLinkDialog({ open, onClose, item, missingDetail }: JiraLinkD
                 {currentKey ? (
                   item.jiraUrl ? (
                     <a href={item.jiraUrl} target="_blank" rel="noreferrer"
-                      className="font-mono text-brand-jira dark:text-blue-300 hover:underline inline-flex items-center gap-1">
+                      className="font-mono text-brand-jira hover:underline inline-flex items-center gap-1">
                       {currentKey} <ExternalLink className="w-3 h-3" />
                     </a>
                   ) : <span className="font-mono">{currentKey}</span>
@@ -145,6 +178,9 @@ export function JiraLinkDialog({ open, onClose, item, missingDetail }: JiraLinkD
               <Trash2 className="w-3.5 h-3.5" />
               연결 해제하고 이 업무도 삭제
             </button>
+
+            {/* 실행 로그 — "로그 보기" 는 사용자가 정한다. */}
+            <RunLogPanel run={runLog} show={showLog} onShowChange={setShowLog} maxHeight="max-h-56" />
           </div>
 
           <DialogFooter className="pt-0">

@@ -577,7 +577,7 @@ export function WorkItemTableRow({
                 rel="noopener noreferrer"
                 onClick={(e) => e.stopPropagation()}
                 title={`Jira ${item.jiraIssueKey}${item.jiraStatus ? ` · ${item.jiraStatus}` : ''} (새 창)`}
-                className="inline-flex items-center font-mono text-[11px] font-semibold px-1 py-0.5 rounded bg-brand-jira/10 text-brand-jira dark:text-blue-300 border border-brand-jira/20 hover:bg-brand-jira/20"
+                className="inline-flex items-center font-mono text-[11px] font-semibold px-1 py-0.5 rounded bg-brand-jira/10 text-brand-jira border border-brand-jira/20 hover:bg-brand-jira/20"
               >
                 {item.jiraIssueKey}
               </a>

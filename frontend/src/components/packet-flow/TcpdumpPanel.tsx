@@ -10,9 +10,12 @@ import type { TcpdumpCaptureResponse, TcpdumpPacketRow } from '@/types';
 import { ConfirmDialog, LogViewer, DoubleScrollX, EmptyState } from '@/components/common';
 import { MacCard } from '@/components/ui/MacCard';
 import { useAbortableMutation } from '@/hooks/useAbortableMutation';
+import { runLogged, consoleRunLines, type RunLog } from '@/hooks/useRunLog';
 
 interface Props {
   clusterId: string;
+  /** 화면(패킷 흐름 분석) 공용 실행 로그 — 패널은 페이지가 탭 위에 렌더한다. */
+  runLog: RunLog;
 }
 
 const BPF_PRESETS: { id: string; label: string; value: string }[] = [
@@ -95,7 +98,7 @@ function PacketTable({ rows }: { rows: TcpdumpPacketRow[] }) {
   );
 }
 
-export function TcpdumpPanel({ clusterId }: Props) {
+export function TcpdumpPanel({ clusterId, runLog }: Props) {
   // ── 노드 목록 ────────────────────────────────────────────────────────────
   const nodeQ = useQuery({
     queryKey: ['tcpdump-nodes', clusterId],
@@ -150,11 +153,25 @@ export function TcpdumpPanel({ clusterId }: Props) {
       });
       return r.data.interfaces;
     },
-    onSuccess: (ifaces) => {
-      setIfaceOptions(ifaces);
-      if (ifaces.length > 0 && !ifaces.includes(iface)) setIface(ifaces[0]);
-    },
   });
+
+  const targetDesc = `${selectedNode ? `${selectedNode} ` : ''}${username}@${host}:${port}`;
+
+  // 인터페이스 조회 — 예전엔 실패가 화면에 남지 않았다(오류 무음). 이제 실행 로그에 사유가 남는다.
+  const doIfaceQuery = async () => {
+    const r = await runLogged(runLog, {
+      title: '인터페이스 조회',
+      first: `${targetDesc} 에 SSH 접속 후 네트워크 인터페이스 목록 조회 요청`,
+      fn: () => ifaceMut.mutateAsync(),
+      summarize: (ifaces) => (ifaces.length
+        ? [['info', `인터페이스 ${ifaces.length}개 — ${ifaces.slice(0, 12).join(', ')}${ifaces.length > 12 ? ' …' : ''}`]]
+        : [['warn', '조회된 인터페이스 없음 — 직접 입력하세요']]),
+    });
+    if (r.ok) {
+      setIfaceOptions(r.data);
+      if (r.data.length > 0 && !r.data.includes(iface)) setIface(r.data[0]);
+    }
+  };
 
   // ── 캡처 실행 ────────────────────────────────────────────────────────────
   const [result, setResult] = useState<TcpdumpCaptureResponse | null>(null);
@@ -173,8 +190,20 @@ export function TcpdumpPanel({ clusterId }: Props) {
       }, signal);
       return r.data;
     },
-    onSuccess: (d) => setResult(d),
   });
+
+  const doCapture = async () => {
+    const r = await runLogged(runLog, {
+      title: '원격 tcpdump 캡처',
+      first: `${targetDesc} — tcpdump -i ${iface}${bpf ? ` '${bpf}'` : ''} · ${duration}s · 최대 ${count}패킷${useSudo ? ' · sudo' : ''} 실행 요청`,
+      fn: () => runMut.mutateAsync(),
+      summarize: (res) => [
+        ...consoleRunLines({ host: res.host, status: res.status, exitCode: res.exitCode, durationMs: res.durationMs, stderr: res.stderr, error: res.error }),
+        [res.packets.length ? 'info' : 'warn', `캡처 패킷 ${res.packets.length}개${res.packets.length ? '' : ' — BPF 필터·duration 을 조정해 보세요'}`],
+      ],
+    });
+    if (r.ok) setResult(r.data);
+  };
 
   const runError = runMut.error as { response?: { data?: { detail?: string } }; message?: string } | null;
 
@@ -275,10 +304,10 @@ export function TcpdumpPanel({ clusterId }: Props) {
                   placeholder="bond0"
                   className="flex-1 px-2 py-1 text-sm font-mono bg-background border border-border rounded-lg" />
               )}
-              <button onClick={() => ifaceMut.mutate()}
+              <button onClick={() => void doIfaceQuery()}
                 disabled={!host || (authMode === 'password' ? !password : !privateKey) || ifaceMut.isPending}
                 className="p-1.5 rounded-lg bg-secondary hover:bg-secondary/80 disabled:opacity-50"
-                title="원격에서 인터페이스 조회">
+                title="원격에서 인터페이스 조회" aria-label="원격에서 인터페이스 조회">
                 <RefreshCw className={`w-4 h-4 ${ifaceMut.isPending ? 'animate-spin' : ''}`} />
               </button>
             </div>
@@ -410,7 +439,7 @@ export function TcpdumpPanel({ clusterId }: Props) {
         description={`${host || '(host)'} 에 SSH 로 접속해 tcpdump 를 수행합니다. (읽기 전용)`}
         confirmLabel="실행"
         onCancel={() => setConfirmOpen(false)}
-        onConfirm={() => { setConfirmOpen(false); runMut.mutate(); }}
+        onConfirm={() => { setConfirmOpen(false); void doCapture(); }}
       >
         <div className="space-y-1 font-mono text-xs text-muted-foreground">
           <div>host    : {host} ({username}@{port})</div>

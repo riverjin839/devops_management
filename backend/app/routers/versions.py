@@ -15,6 +15,7 @@ import os
 import re
 import asyncio
 from concurrent.futures import ThreadPoolExecutor
+from contextvars import ContextVar
 from datetime import datetime
 from typing import Any, Callable
 from uuid import UUID
@@ -36,6 +37,7 @@ from app.services.config_snapshot import (
     record_cluster_meta_snapshots,
 )
 from app.services.k8s_client_pool import get_api_client_for_path
+from app.services.sse import Emit, log_evt, noop_emit, step_evt, stream_async_job
 
 router = APIRouter(prefix="/clusters", tags=["versions"])
 
@@ -243,6 +245,61 @@ def collect_versions(
     return {"cluster_id": str(cluster_id), **summary}
 
 
+# ── 공통: 수집 진행 보고(SSE 실시간 로그, D-135) ──────────────────────────────
+# 동기 엔드포인트(`POST .../collect-X`)와 스트림 엔드포인트(`POST .../collect-X/stream`)가
+# **같은 함수**를 쓴다. 스트림 경로만 이 ContextVar 에 emit 을 꽂아 두고, 수집 헬퍼가 호스트가
+# 끝날 때마다 여기에 진행 이벤트를 흘린다. 동기 경로에서는 noop 이라 동작·응답이 그대로다.
+_collect_emit: ContextVar[Emit] = ContextVar("versions_collect_emit", default=noop_emit)
+
+# 호스트가 이보다 많으면 단계 칩(step)은 생략하고 로그 줄만 남긴다(칩 수백 개는 읽을 수 없다).
+_STEP_CHIP_MAX_HOSTS = 30
+
+
+def _collect_log(level: str, message: str) -> None:
+    log_evt(_collect_emit.get(), level, message)
+
+
+def _host_line(entry: dict) -> tuple[str, str]:
+    """호스트 결과 dict → (level, 한 줄). raw 출력은 싣지 않고 오류·stderr 첫 줄만."""
+    host = entry.get("host") or "?"
+    st = entry.get("status")
+    err = entry.get("error")
+    bad = bool(err) or (st is not None and st != "ok")
+    exit_code = entry.get("exit_code")
+    parts = [str(host)]
+    if st:
+        parts.append(str(st))
+    parts.append(f"exit {exit_code if exit_code is not None else '—'}")
+    reason = err or ""
+    if not reason and (bad or (exit_code not in (None, 0))):
+        reason = next((ln.strip() for ln in (entry.get("raw_stderr") or "").splitlines() if ln.strip()), "")
+    if reason:
+        parts.append(f"오류 — {str(reason)[:200]}")
+    level = "error" if bad else ("warn" if exit_code not in (None, 0) else "info")
+    return level, " · ".join(parts)
+
+
+def _report_host_done(index: int, total: int, entry: Any) -> None:
+    emit = _collect_emit.get()
+    if emit is noop_emit or not isinstance(entry, dict):
+        return
+    level, line = _host_line(entry)
+    log_evt(emit, level, f"[{index}/{total}] {line}")
+    if total <= _STEP_CHIP_MAX_HOSTS:
+        host = str(entry.get("host") or index)
+        step_evt(emit, host, host, "failed" if level == "error" else "done")
+
+
+def _report_hosts_start(hosts: list[str]) -> None:
+    emit = _collect_emit.get()
+    if emit is noop_emit:
+        return
+    log_evt(emit, "info", f"노드 {len(hosts)}대 SSH 수집 시작")
+    if len(hosts) <= _STEP_CHIP_MAX_HOSTS:
+        for h in hosts:
+            step_evt(emit, h, h, "running")
+
+
 # ── 공통: 병렬 SSH 수집 헬퍼 ─────────────────────────────────────────────────
 
 async def _parallel_collect(
@@ -266,12 +323,19 @@ async def _parallel_collect(
     chunk = max(1, chunk_size)
     loop = asyncio.get_event_loop()
     results: list[Any] = []
+    finished = 0
+    _report_hosts_start(hosts)
     with ThreadPoolExecutor(max_workers=workers) as pool:
         sem = asyncio.Semaphore(workers)
 
         async def bounded(h: str) -> Any:
+            nonlocal finished
             async with sem:
-                return await loop.run_in_executor(pool, worker, h)
+                r = await loop.run_in_executor(pool, worker, h)
+            # 이벤트 루프 스레드에서 호스트가 끝나는 순서대로 진행을 보고한다(반환 순서는 그대로).
+            finished += 1
+            _report_host_done(finished, n, r)
+            return r
 
         for i in range(0, n, chunk):
             batch = hosts[i:i + chunk]
@@ -279,6 +343,7 @@ async def _parallel_collect(
             results.extend(batch_res)
             if i + chunk < n and chunk_pause_ms > 0:
                 await asyncio.sleep(chunk_pause_ms / 1000.0)
+    _collect_log("info", "호스트 수집 완료 — 변경분 스냅샷 저장 중")
     return results
 
 
@@ -1067,8 +1132,10 @@ def collect_kubeadm_certs(
     changed = 0
     per_host: list[dict] = []
     errors: list[str] = []
+    total = len(payload.hosts)
+    _report_hosts_start(payload.hosts)
 
-    for host in payload.hosts:
+    for idx, host in enumerate(payload.hosts, start=1):
         target = SSHTarget(
             host=host, port=payload.port, username=payload.username,
             password=payload.password, private_key=payload.private_key,
@@ -1086,6 +1153,7 @@ def collect_kubeadm_certs(
             entry["error"] = r.error or "kubeadm certs check-expiration 실패 (kubeadm 미설치 또는 권한 부족)"
             errors.append(f"{host}: {entry['error']}")
             per_host.append(entry)
+            _report_host_done(idx, total, entry)
             continue
 
         data = {
@@ -1105,6 +1173,7 @@ def collect_kubeadm_certs(
         if stored:
             changed += 1
         per_host.append(entry)
+        _report_host_done(idx, total, entry)
 
     if changed:
         db.commit()
@@ -1609,6 +1678,7 @@ async def collect_node_nics(
     # 기존 데이터가 비어있거나 IP 만 있는 클러스터를 위해 k8s API 로도 hostname↔IP 매핑
     # 시도. 실패해도 (kubeconfig 미등록 / API 미접속) 무시 — 기존 폴백(host 그대로) 유지.
     if not name_by_ip:
+        _collect_log("info", "K8s API 로 노드 이름 ↔ IP 매핑 조회")
         try:
             kc_path = _ensure_kubeconfig_file_for(cluster)
             if kc_path:
@@ -2125,3 +2195,128 @@ def collect_minio(
         "summary": result["summary"],
         "collectedAt": now.isoformat(),
     }
+
+
+# ── 수집 실시간 스트림 (SSE, D-135) ──────────────────────────────────────────
+# 동기 수집 엔드포인트와 **같은 함수**를 부르되, _collect_emit 에 SSE emit 을 꽂아 호스트가 끝날 때마다
+# 진행(log·step)을 흘리고 마지막에 동기 응답과 같은 본문을 ``result`` 로 보낸다. 검증 실패(404/422)는
+# 스트림을 열기 전에 일반 HTTP 오류로 응답한다. 자격증명은 요청 본문에만 있고 이벤트에는 싣지 않는다.
+
+
+def _validate_collect(db: Session, cluster_id: UUID, payload: Any) -> None:
+    if not db.query(Cluster.id).filter(Cluster.id == cluster_id).first():
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Cluster not found")
+    if not getattr(payload, "password", None) and not getattr(payload, "private_key", None):
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="password 또는 private_key 중 하나는 필수입니다.",
+        )
+
+
+def _collect_stream(
+    cluster_id: UUID,
+    payload: Any,
+    user: User,
+    run: Callable[[Session, User], Any],
+    *,
+    label: str,
+):
+    async def job(sdb: Session, emit: Emit) -> Any:
+        token = _collect_emit.set(emit)
+        try:
+            log_evt(emit, "info", f"{label} 수집 요청 — 대상 노드 {len(payload.hosts)}대")
+            result = run(sdb, user)
+            if asyncio.iscoroutine(result):
+                result = await result
+            hosts = result.get("hosts") or []
+            failed = sum(1 for h in hosts if h.get("error") or (h.get("status") not in (None, "ok")))
+            log_evt(
+                emit, "warn" if failed else "info",
+                f"완료 — 호스트 {len(hosts)}대 · 변경 {result.get('changed', 0)} · 실패 {failed}",
+            )
+            return result
+        finally:
+            _collect_emit.reset(token)
+
+    return stream_async_job(job, name=f"versions-collect-{label}")
+
+
+@router.post("/{cluster_id}/collect-etcd-systemd/stream")
+async def collect_etcd_systemd_stream(
+    cluster_id: UUID,
+    payload: EtcdSystemdCollectRequest,
+    db: Session = Depends(get_db),
+    user: User = Depends(require_operator),
+):
+    """``collect-etcd-systemd`` 의 SSE 버전 — 호스트별 진행을 실시간으로 흘린다."""
+    _validate_collect(db, cluster_id, payload)
+    return _collect_stream(
+        cluster_id, payload, user,
+        lambda sdb, u: collect_etcd_systemd(cluster_id, payload, db=sdb, _=u),
+        label="etcd systemd",
+    )
+
+
+@router.post("/{cluster_id}/collect-kernel-params/stream")
+async def collect_kernel_params_stream(
+    cluster_id: UUID,
+    payload: KernelParamsCollectRequest,
+    db: Session = Depends(get_db),
+    user: User = Depends(require_operator),
+):
+    """``collect-kernel-params`` 의 SSE 버전."""
+    _validate_collect(db, cluster_id, payload)
+    return _collect_stream(
+        cluster_id, payload, user,
+        lambda sdb, u: collect_kernel_params(cluster_id, payload, db=sdb, _=u),
+        label="커널 파라미터",
+    )
+
+
+@router.post("/{cluster_id}/collect-kubelet-config/stream")
+async def collect_kubelet_config_stream(
+    cluster_id: UUID,
+    payload: KubeletConfigCollectRequest,
+    db: Session = Depends(get_db),
+    user: User = Depends(require_operator),
+):
+    """``collect-kubelet-config`` 의 SSE 버전."""
+    _validate_collect(db, cluster_id, payload)
+    return _collect_stream(
+        cluster_id, payload, user,
+        lambda sdb, u: collect_kubelet_config(cluster_id, payload, db=sdb, _=u),
+        label="kubelet 설정",
+    )
+
+
+@router.post("/{cluster_id}/collect-kubeadm-certs/stream")
+async def collect_kubeadm_certs_stream(
+    cluster_id: UUID,
+    payload: KubeadmCertsCollectRequest,
+    db: Session = Depends(get_db),
+    user: User = Depends(require_operator),
+):
+    """``collect-kubeadm-certs`` 의 SSE 버전 — 동기(순차) 수집을 작업 스레드에서 돌린다.
+    ``asyncio.to_thread`` 가 ContextVar 를 복사하므로 스레드 안의 진행 보고도 스트림으로 간다."""
+    _validate_collect(db, cluster_id, payload)
+    return _collect_stream(
+        cluster_id, payload, user,
+        lambda sdb, u: asyncio.to_thread(collect_kubeadm_certs, cluster_id, payload, sdb, u),
+        label="kubeadm 인증서",
+    )
+
+
+@router.post("/{cluster_id}/collect-node-nics/stream")
+async def collect_node_nics_stream(
+    cluster_id: UUID,
+    payload: NodeNicsCollectRequest,
+    db: Session = Depends(get_db),
+    user: User = Depends(require_operator),
+):
+    """``collect-node-nics`` 의 SSE 버전."""
+    _validate_collect(db, cluster_id, payload)
+    return _collect_stream(
+        cluster_id, payload, user,
+        lambda sdb, u: collect_node_nics(cluster_id, payload, db=sdb, _=u),
+        label="노드 NIC",
+    )

@@ -2,14 +2,16 @@ import { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import {
   Database, Download, Upload, AlertTriangle, CheckCircle2, Loader2,
-  Info, HardDrive, RotateCcw, Trash2, XCircle,
+  Info, HardDrive, RotateCcw, Trash2,
 } from 'lucide-react';
 import { backupApi } from '@/services/api';
 import type { BackupImportResponse } from '@/services/api';
-import { ConfirmDialog, EmptyState, useToast } from '@/components/common';
+import { ConfirmDialog, EmptyState, RunLogPanel, useToast } from '@/components/common';
 import { MacCard } from '@/components/ui/MacCard';
 import { StatTile, StatTileRow } from '@/components/common/StatTile';
 import { formatApiError, parseUTC } from '@/lib/utils';
+import { useRunLog, runLogged, type RunLogEntry } from '@/hooks/useRunLog';
+import { useLogPref } from '@/hooks/useLogPref';
 import { useAuthStore, hasRole } from '@/stores/authStore';
 
 type Mode = 'merge' | 'replace';
@@ -60,7 +62,12 @@ function BackupRestorePanelBody() {
   const [previewing, setPreviewing] = useState(false);
   const [applying, setApplying] = useState(false);
   const [confirmReplace, setConfirmReplace] = useState(false);
-  const [resultMsg, setResultMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  // 실행 로그 — 내보내기·미리보기·적용의 요청·소요·테이블별 요약·오류(errors[] 개별 줄)를 남긴다(D-135).
+  // 이전의 인라인 결과 문구(resultMsg)는 이 로그와 역할이 같아 대체했다.
+  const runLog = useRunLog();
+  const [showLog, setShowLog] = useLogPref('settings-backup');
+  // 로그 패널은 마지막 실행의 버튼 근처에 — 내보내기 카드 또는 복구 카드.
+  const [logScope, setLogScope] = useState<'export' | 'import'>('export');
 
   const totalRows = metaQ.data?.totalRows ?? 0;
   const logTableRows = useMemo(() => {
@@ -70,59 +77,97 @@ function BackupRestorePanelBody() {
 
   const handleExport = async () => {
     setExporting(true);
-    try {
-      const r = await backupApi.exportDownload(exportIncludeLogs, exportIncludeSensitive);
-      const blob = r.data instanceof Blob ? r.data : new Blob([JSON.stringify(r.data)], { type: 'application/json' });
-      const url = URL.createObjectURL(blob);
+    setLogScope('export');
+    const opts = [
+      exportIncludeLogs ? '로그성 테이블 포함' : '로그성 테이블 제외',
+      exportIncludeSensitive ? '민감 필드 포함' : '민감 필드 마스킹',
+    ].join(' · ');
+    const filename = `k8s-monitor-backup-${new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19)}.json`;
+    const r = await runLogged(runLog, {
+      title: '백업 내보내기',
+      first: `전체 테이블 JSON 내보내기 요청 — ${opts}`,
+      fn: async () => {
+        const res = await backupApi.exportDownload(exportIncludeLogs, exportIncludeSensitive);
+        return res.data instanceof Blob ? res.data : new Blob([JSON.stringify(res.data)], { type: 'application/json' });
+      },
+      summarize: (blob): RunLogEntry[] => [
+        ['info', `파일 ${filename} · ${formatBytes(blob.size)}`],
+        ['info', '브라우저 다운로드 시작'],
+      ],
+    });
+    if (r.ok) {
+      const url = URL.createObjectURL(r.data);
       const a = document.createElement('a');
-      const ts = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
       a.href = url;
-      a.download = `k8s-monitor-backup-${ts}.json`;
+      a.download = filename;
       a.click();
       URL.revokeObjectURL(url);
       toast.success('백업 파일 다운로드');
-    } catch (e: unknown) {
-      toast.error('내보내기 실패', formatApiError(e));
-    } finally {
-      setExporting(false);
+    } else if (!r.aborted) {
+      toast.error('내보내기 실패', formatApiError(r.error));
     }
+    setExporting(false);
+  };
+
+  // 테이블별 diff 요약 줄 — 변화가 있는 테이블만, 합계 줄을 마지막에.
+  const diffLines = (d: BackupImportResponse, m: Mode): RunLogEntry[] => {
+    const tables = d.diff.tables.filter((t) => t.insertCount > 0 || t.updateCount > 0 || (m === 'replace' && t.deleteCandidates > 0));
+    const out: RunLogEntry[] = [[
+      'info',
+      `${d.diff.version ? `백업 버전 ${d.diff.version}` : '버전 미상'} · 백업 ${d.diff.totalIncoming.toLocaleString()}행 · 현재 ${d.diff.totalExisting.toLocaleString()}행`,
+    ]];
+    for (const t of tables) {
+      out.push(['info', `${t.name} — 신규 ${t.insertCount} · 업데이트 ${t.updateCount}${m === 'replace' ? ` · 삭제 예정 ${t.deleteCandidates}` : ''}`]);
+    }
+    const sum = (k: 'insertCount' | 'updateCount' | 'deleteCandidates') => d.diff.tables.reduce((s, t) => s + t[k], 0);
+    out.push([
+      m === 'replace' && sum('deleteCandidates') > 0 ? 'warn' : 'info',
+      `변경 테이블 ${tables.length}개 · 신규 ${sum('insertCount')} · 업데이트 ${sum('updateCount')}${m === 'replace' ? ` · 삭제 예정 ${sum('deleteCandidates')}` : ''}`,
+    ]);
+    for (const e of d.errors ?? []) out.push(['error', `오류 — ${e}`]);
+    return out;
   };
 
   const handlePreview = async () => {
     if (!file) return;
     setPreviewing(true);
-    setResultMsg(null);
-    try {
-      const r = await backupApi.importPreview(file, mode, includeLogs);
-      setPreview(r.data);
-    } catch (e: unknown) {
-      const err = e as { response?: { data?: { detail?: string } }; message?: string };
-      setResultMsg({ ok: false, text: `미리보기 실패: ${err.response?.data?.detail ?? err.message}` });
-    } finally {
-      setPreviewing(false);
-    }
+    setLogScope('import');
+    const r = await runLogged(runLog, {
+      title: '복구 미리보기 (diff)',
+      first: `${file.name} (${formatBytes(file.size)}) 분석 요청 — ${mode === 'replace' ? '덮어쓰기' : '병합'} · 로그성 테이블 ${includeLogs ? '포함' : '제외'}`,
+      fn: () => backupApi.importPreview(file, mode, includeLogs).then((res) => res.data),
+      summarize: (d) => diffLines(d, mode),
+    });
+    if (r.ok) setPreview(r.data);
+    else if (!r.aborted) toast.error('미리보기 실패', formatApiError(r.error));
+    setPreviewing(false);
   };
 
   const doApply = async () => {
     if (!file || !preview) return;
     setApplying(true);
-    setResultMsg(null);
-    try {
-      const r = await backupApi.importApply(file, mode, includeLogs, mode === 'replace');
-      const d = r.data;
-      setResultMsg({
-        ok: true,
-        text: `복구 완료 — 신규 ${d.inserted} · 업데이트 ${d.updated} · 삭제 ${d.deleted}` +
-          (d.errors.length ? ` · 오류 ${d.errors.length}건` : ''),
-      });
+    setConfirmReplace(false);
+    setLogScope('import');
+    const r = await runLogged(runLog, {
+      title: mode === 'replace' ? '복구 — 덮어쓰기' : '복구 — 병합',
+      first: `${file.name} 적용 요청 — ${mode === 'replace' ? '대상 테이블 전체 교체' : 'PK 기준 upsert'} · 로그성 테이블 ${includeLogs ? '포함' : '제외'}`,
+      fn: () => backupApi.importApply(file, mode, includeLogs, mode === 'replace').then((res) => res.data),
+      summarize: (d): RunLogEntry[] => [
+        [d.errors.length ? 'warn' : 'info', `복구 ${d.errors.length ? '부분 완료' : '완료'} — 신규 ${d.inserted} · 업데이트 ${d.updated} · 삭제 ${d.deleted}${d.errors.length ? ` · 오류 ${d.errors.length}건` : ''}`],
+        ...d.errors.map((e): RunLogEntry => ['error', `오류 — ${e}`]),
+      ],
+    });
+    if (r.ok) {
+      if (r.data.errors.length) {
+        toast.warning('복구 부분 완료', `오류 ${r.data.errors.length}건 — 실행 로그에서 확인하세요.`);
+      } else {
+        toast.success('복구 완료', `신규 ${r.data.inserted} · 업데이트 ${r.data.updated} · 삭제 ${r.data.deleted}`);
+      }
       metaQ.refetch();
-    } catch (e: unknown) {
-      const err = e as { response?: { data?: { detail?: string } }; message?: string };
-      setResultMsg({ ok: false, text: `복구 실패: ${err.response?.data?.detail ?? err.message}` });
-    } finally {
-      setApplying(false);
-      setConfirmReplace(false);
+    } else if (!r.aborted) {
+      toast.error('복구 실패', formatApiError(r.error));
     }
+    setApplying(false);
   };
 
   const handleApply = () => {
@@ -136,7 +181,6 @@ function BackupRestorePanelBody() {
   const resetImport = () => {
     setFile(null);
     setPreview(null);
-    setResultMsg(null);
   };
 
   return (
@@ -212,6 +256,11 @@ function BackupRestorePanelBody() {
           {exporting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
           {exporting ? '내보내는 중…' : '백업 파일 다운로드'}
         </button>
+        {logScope === 'export' && (
+          <div className="mt-3">
+            <RunLogPanel run={runLog} show={showLog} onShowChange={setShowLog} maxHeight="max-h-56" />
+          </div>
+        )}
       </MacCard>
 
       {/* ── 복구 (Import) ────────────────────────────────────────────────── */}
@@ -234,7 +283,7 @@ function BackupRestorePanelBody() {
               <input type="file" accept=".json,application/json" className="hidden"
                 onChange={(e) => {
                   const f = e.target.files?.[0];
-                  if (f) { setFile(f); setPreview(null); setResultMsg(null); }
+                  if (f) { setFile(f); setPreview(null); }
                 }} />
             </label>
             {file && (
@@ -332,17 +381,9 @@ function BackupRestorePanelBody() {
             </div>
           )}
 
-          {resultMsg && (
-            <div className={`px-3 py-2 rounded-lg text-sm border ${
-              resultMsg.ok
-                ? 'bg-status-healthy/10 text-status-healthy border-status-healthy/30'
-                : 'bg-status-critical/10 text-status-critical border-status-critical/30'
-            }`}>
-              <span className="inline-flex items-center gap-1.5">
-                {resultMsg.ok ? <CheckCircle2 className="w-4 h-4 flex-shrink-0" aria-hidden /> : <XCircle className="w-4 h-4 flex-shrink-0" aria-hidden />}
-                {resultMsg.text}
-              </span>
-            </div>
+          {/* 실행 로그 — 미리보기·적용의 수명주기와 테이블별 요약, 적용 오류(errors[])는 한 줄씩 */}
+          {logScope === 'import' && (
+            <RunLogPanel run={runLog} show={showLog} onShowChange={setShowLog} maxHeight="max-h-56" />
           )}
 
           {/* apply */}

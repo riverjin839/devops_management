@@ -1,12 +1,14 @@
 import { useEffect, useState } from 'react';
 import { Loader2, UploadCloud, AlertTriangle, MessageSquare } from 'lucide-react';
 import { useJiraPush } from '@/hooks/useJira';
-import { useToast } from '@/components/common';
+import { useToast, RunLogPanel } from '@/components/common';
+import { useRunLog, runLogged, type RunLogEntry } from '@/hooks/useRunLog';
+import { useLogPref } from '@/hooks/useLogPref';
 import { formatApiError } from '@/lib/utils';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { KANBAN_STATUS_LABEL } from './workItemKanbanUtils';
-import type { WorkItem } from '@/types';
+import type { JiraPushResult, WorkItem } from '@/types';
 
 interface JiraPushDialogProps {
   open: boolean;
@@ -15,6 +17,34 @@ interface JiraPushDialogProps {
 }
 
 const PRIORITY_LABEL: Record<string, string> = { high: '높음', medium: '보통', low: '낮음' };
+const FIELD_LABEL: Record<string, string> = { summary: '제목', description: '설명', duedate: '마감일', priority: '우선순위' };
+
+/** 반영 응답 → 실행 로그 줄. 필드·필드 오류·전이 후보는 한 건당 한 줄(절삭 없음). */
+function pushLogLines(res: JiraPushResult, wantComment: boolean, pushFields: boolean): RunLogEntry[] {
+  const out: RunLogEntry[] = [];
+  for (const f of res.fieldsUpdated ?? []) out.push(['info', `필드 반영 · ${FIELD_LABEL[f] ?? f}(${f})`]);
+  for (const e of res.fieldErrors ?? []) out.push(['error', `필드 반영 실패 — ${e}`]);
+  if (pushFields && res.status === 'ok' && !(res.fieldsUpdated?.length) && !(res.fieldErrors?.length)) {
+    out.push(['info', '반영된 필드 없음']);
+  }
+  if (res.status === 'ok') {
+    out.push(['info', res.transitioned ? '상태 전이 완료' : '상태 전이 불필요(이미 같은 상태)']);
+    if (wantComment) {
+      out.push(res.commentAdded ? ['info', '코멘트 추가 완료'] : ['warn', '코멘트 추가 실패']);
+    }
+  }
+  for (const t of res.availableTransitions ?? []) out.push(['info', `가용 전이 · ${t}`]);
+  if (res.jiraStatus) out.push(['info', `Jira 현재 상태 ${res.jiraStatus}`]);
+  if (res.status === 'ok') {
+    const partial = (res.fieldErrors?.length ?? 0) > 0 || (wantComment && !res.commentAdded);
+    out.push([partial ? 'warn' : 'info', `${partial ? '일부 반영' : '반영 완료'} — ${res.detail}`]);
+  } else if (res.status === 'conflict') {
+    out.push(['warn', `충돌 — ${res.detail}`]);
+  } else {
+    out.push(['error', `반영 실패(${res.status}) — ${res.detail || '사유 없음'}`]);
+  }
+  return out;
+}
 
 /**
  * PEP work item 의 편집 내용을 연결된 Jira 이슈에 반영하는 확인 다이얼로그.
@@ -28,31 +58,48 @@ export function JiraPushDialog({ open, onClose, item }: JiraPushDialogProps) {
   const [comment, setComment] = useState('');
   const [pushFields, setPushFields] = useState(true);
   const [conflict, setConflict] = useState<string | null>(null);
+  // 반영 실행 로그 — 요청·대기·필드별 결과·필드 오류·전이·코멘트(D-136). 정상 완료 시에만 자동으로 닫는다.
+  const runLog = useRunLog();
+  const [showLog, setShowLog] = useLogPref('jira-push');
+  const clearLog = runLog.clear;
 
   useEffect(() => {
-    if (open) { setComment(''); setPushFields(true); setConflict(null); }
-  }, [open]);
+    if (open) { setComment(''); setPushFields(true); setConflict(null); clearLog(); }
+  }, [open, clearLog]);
 
   const busy = pushJira.isPending;
   const key = item.jiraIssueKey ?? '';
 
-  const run = (force: boolean) => {
+  const run = async (force: boolean) => {
     setConflict(null);
-    pushJira.mutate(
-      { itemId: item.id, data: { comment: comment.trim() || undefined, pushFields, force } },
-      {
-        onSuccess: ({ data }) => {
-          if (data.status === 'conflict') { setConflict(data.detail); return; }
-          if (data.status === 'ok') {
-            toast.success('Jira 반영', data.detail + (data.jiraStatus ? ` (현재: ${data.jiraStatus})` : ''));
-            onClose();
-            return;
-          }
-          toast.error('Jira 반영 실패', data.detail);
-        },
-        onError: (err) => toast.error('Jira 반영 실패', formatApiError(err)),
-      },
-    );
+    const text = comment.trim();
+    const what = [pushFields ? '필드' : null, '상태', text ? '코멘트' : null].filter(Boolean).join(' · ');
+    const r = await runLogged(runLog, {
+      title: force ? 'Jira 강제 반영' : 'Jira 반영',
+      first: `${key} — ${what} 반영 요청${force ? '(강제)' : ''}`,
+      fn: async () => (await pushJira.mutateAsync({
+        itemId: item.id, data: { comment: text || undefined, pushFields, force },
+      })).data,
+      summarize: (res) => pushLogLines(res, Boolean(text), pushFields),
+    });
+    if (!r.ok) {
+      if (!r.aborted) toast.error('Jira 반영 실패', formatApiError(r.error));
+      return;
+    }
+    const data = r.data;
+    if (data.status === 'conflict') { setConflict(data.detail); return; }
+    if (data.status === 'ok') {
+      const partial = (data.fieldErrors?.length ?? 0) > 0 || (Boolean(text) && !data.commentAdded);
+      if (partial) {
+        // 필드 오류·코멘트 실패가 있으면 닫지 않고 실행 로그로 사유를 보여준다.
+        toast.warning('Jira 일부 반영', data.detail);
+        return;
+      }
+      toast.success('Jira 반영', data.detail + (data.jiraStatus ? ` (현재: ${data.jiraStatus})` : ''));
+      onClose();
+      return;
+    }
+    toast.error('Jira 반영 실패', data.detail);
   };
 
   return (
@@ -60,7 +107,7 @@ export function JiraPushDialog({ open, onClose, item }: JiraPushDialogProps) {
       <DialogContent className="max-w-md">
         <DialogHeader className="flex-row items-center gap-3">
           <div className="w-10 h-10 rounded-2xl bg-brand-jira/10 flex items-center justify-center flex-shrink-0">
-            <UploadCloud className="w-5 h-5 text-brand-jira dark:text-blue-300" />
+            <UploadCloud className="w-5 h-5 text-brand-jira" />
           </div>
           <div className="min-w-0 flex-1">
             <DialogTitle>Jira 반영</DialogTitle>
@@ -121,18 +168,21 @@ export function JiraPushDialog({ open, onClose, item }: JiraPushDialogProps) {
               <span>{conflict}</span>
             </div>
           )}
+
+          {/* 실행 로그 — "로그 보기" 는 사용자가 정한다. */}
+          <RunLogPanel run={runLog} show={showLog} onShowChange={setShowLog} maxHeight="max-h-56" />
         </div>
 
         <DialogFooter className="pt-0">
           {conflict ? (
-            <Button type="button" variant="destructive" onClick={() => run(true)} disabled={busy}>
+            <Button type="button" variant="destructive" onClick={() => void run(true)} disabled={busy}>
               {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <UploadCloud className="w-4 h-4" />}
               강제 반영
             </Button>
           ) : (
             <Button
               type="button"
-              onClick={() => run(false)}
+              onClick={() => void run(false)}
               disabled={busy}
               className="bg-brand-jira text-white hover:bg-brand-jira/90"
             >

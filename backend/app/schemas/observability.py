@@ -237,6 +237,8 @@ class IncidentAnalysisOut(BaseModel):
     suggested_actions: list[str] = Field(default_factory=list)
     related_runbooks: list[str] = Field(default_factory=list)
     confidence: Optional[float] = None
+    # 대체 결과 여부 — null 은 컬럼 도입 전 레코드(화면이 confidence 0 으로 보조 판정).
+    degraded: Optional[bool] = None
     citations: list[dict] = Field(default_factory=list)
     analyzed_by: Optional[str] = None
     matched_rule_id: Optional[str] = None

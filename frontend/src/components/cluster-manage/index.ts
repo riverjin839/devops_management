@@ -10,3 +10,5 @@ export type { DiffRow } from './ClusterUpdateDiffDialog';
 export { ClusterCustomFieldsManager } from './ClusterCustomFieldsManager';
 export { ClusterCustomCell } from './ClusterCustomCell';
 export * from './constants';
+export { verifyClusterLogged, VERIFY_CHECK_LABEL } from './verifyLogged';
+export type { ClusterVerifyCheck, ClusterVerifyResult } from './verifyLogged';

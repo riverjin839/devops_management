@@ -3,10 +3,7 @@ import { ChevronDown, ChevronRight, Play, X } from 'lucide-react';
 import { MacCard } from '@/components/ui/MacCard';
 import { EmptyState, LoadingState } from '@/components/common/EmptyState';
 import { ExecutionStepsTimeline } from '@/components/daily-check/ExecutionStepsTimeline';
-import {
-  useDefinitionResults,
-  useRunDefinition,
-} from '@/hooks/useDeepCheckDefinitions';
+import { useDefinitionResults } from '@/hooks/useDeepCheckDefinitions';
 import type { Cluster, DeepCheckDefinition, DeepCheckExecStep, DeepCheckResult } from '@/types';
 import { parseUTC } from '@/lib/utils';
 
@@ -41,11 +38,15 @@ interface Props {
   clusters: Cluster[];
   /** 수동 실행 시 사용할 클러스터 (글로벌 정의일 때 필수) */
   runClusterId?: string | null;
+  /** 즉시 1회 실행 — 페이지의 실행 로그(RunLogPanel)에 수명주기를 남긴다. */
+  onRun: (d: DeepCheckDefinition, clusterId: string) => Promise<boolean>;
+  /** 페이지 실행 로그가 진행 중이면 버튼을 잠근다. */
+  running?: boolean;
   onClose: () => void;
 }
 
 /** 정의별 실행 이력 — 개별 실행의 단계 로그/상세 JSON 을 펼쳐볼 수 있다. */
-export function DeepCheckRunHistory({ definition, clusters, runClusterId, onClose }: Props) {
+export function DeepCheckRunHistory({ definition, clusters, runClusterId, onRun, running = false, onClose }: Props) {
   const [statusFilter, setStatusFilter] = useState<(typeof STATUS_FILTERS)[number]>('all');
   const [offset, setOffset] = useState(0);
   const [expandedId, setExpandedId] = useState<string | null>(null);
@@ -55,7 +56,6 @@ export function DeepCheckRunHistory({ definition, clusters, runClusterId, onClos
     offset,
     status: statusFilter === 'all' ? undefined : statusFilter,
   });
-  const run = useRunDefinition();
 
   const clusterName = useMemo(() => {
     const map = new Map(clusters.map((c) => [c.id, c.name]));
@@ -95,8 +95,8 @@ export function DeepCheckRunHistory({ definition, clusters, runClusterId, onClos
           </div>
           <button
             type="button"
-            onClick={() => run.mutate({ id: definition.id, clusterId: effectiveRunClusterId })}
-            disabled={run.isPending || !effectiveRunClusterId}
+            onClick={() => { if (effectiveRunClusterId) void onRun(definition, effectiveRunClusterId); }}
+            disabled={running || !effectiveRunClusterId}
             title={
               effectiveRunClusterId
                 ? '즉시 1회 실행하고 이력에 기록'
@@ -105,7 +105,7 @@ export function DeepCheckRunHistory({ definition, clusters, runClusterId, onClos
             className="inline-flex items-center gap-1.5 rounded-xl border border-border bg-card px-2.5 py-1 text-xs hover:bg-muted disabled:opacity-50"
           >
             <Play className="w-3 h-3" />
-            {run.isPending ? '실행 중…' : '지금 실행'}
+            {running ? '실행 중…' : '지금 실행'}
           </button>
           <button
             type="button"

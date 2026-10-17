@@ -9,7 +9,9 @@ import { SortableContext, verticalListSortingStrategy, horizontalListSortingStra
 import { CSS } from '@dnd-kit/utilities';
 import { WorkItemCalendar, WorkItemKanban, WorkItemTableRow, WorkItemEpicView, ColumnSettingsMenu, JiraProvisionModal, JiraLinkDialog, ServiceNowRegisterDialog } from '@/components/work-items';
 import { WORK_ITEM_COLUMNS, DEFAULT_COLUMN_ORDER, DEFAULT_VISIBLE_COLUMNS, ALWAYS_VISIBLE_COLUMNS, COLUMN_WIDTH_DEFAULTS, type WorkItemColumnKey, type WorkItemSortKey } from '@/components/work-items';
-import { ResizeGrip, PageShell } from '@/components/common';
+import { ResizeGrip, PageShell, RunLogPanel } from '@/components/common';
+import { useRunLog, runLogged, type RunLogEntry } from '@/hooks/useRunLog';
+import { useLogPref } from '@/hooks/useLogPref';
 import { useColumnWidths } from '@/hooks/useColumnWidths';
 import { useColumnLayout } from '@/hooks/useColumnLayout';
 import { JiraImportModal } from '@/components/work-items/JiraImportModal';
@@ -509,75 +511,145 @@ export function WorkItemBoardPage() {
     setLinkItem(item);
   };
 
+  // 행 메뉴 연동 작업(Jira 재가져오기·보내기·Confluence 반영)의 실행 로그 — 화면당 하나를 공유한다(D-136).
+  const integrationLog = useRunLog();
+  const [showIntegrationLog, setShowIntegrationLog] = useLogPref('work-items-integration');
+
+  const itemLabel = (item: WorkItem) => item.jiraIssueKey || item.title?.trim() || '업무';
+
   const handleJiraRefresh = async (item: WorkItem) => {
     setJiraBusyId(item.id);
-    try {
-      const { data } = await jiraRefresh.mutateAsync(item.id);
-      if (data.status === 'missing') {
-        // 이슈가 지워졌거나 권한이 없다 — 토스트로 끝내면 사용자가 할 수 있는 게 없으므로
-        // 연결을 해제/변경할 수 있는 다이얼로그를 바로 띄운다.
-        openJiraLink(item, data.detail);
-        return;
-      }
-      if (data.status !== 'ok') {
-        toast.error('Jira 재가져오기 실패', data.detail);
-        return;
-      }
-      const changed = data.items[0]?.changes ?? [];
-      toast.success(
-        changed.length ? `${item.jiraIssueKey} 갱신됨` : `${item.jiraIssueKey} 변경 없음`,
-        changed.length ? changed.map((c: JiraFieldChange) => c.label || c.field).join(', ') : data.detail,
-      );
-    } catch (err) {
-      toast.error('Jira 재가져오기 실패', formatApiError(err));
-    } finally {
-      setJiraBusyId(null);
+    const key = itemLabel(item);
+    const r = await runLogged(integrationLog, {
+      title: 'Jira 재가져오기',
+      first: `${key} — Jira 에서 최신 내용 가져오기 요청`,
+      fn: async () => (await jiraRefresh.mutateAsync(item.id)).data,
+      summarize: (data): RunLogEntry[] => {
+        if (data.status === 'missing') {
+          return [['warn', `Jira 에 이슈 없음 — ${data.detail || '삭제됐거나 권한 없음'} · 연결 관리 창을 엽니다`]];
+        }
+        if (data.status !== 'ok') return [['error', `재가져오기 실패(${data.status}) — ${data.detail}`]];
+        const out: RunLogEntry[] = [];
+        if (data.appliedJql) out.push(['info', `JQL ${data.appliedJql}`]);
+        const changed = data.items[0]?.changes ?? [];
+        for (const c of changed) {
+          out.push(['info', `${c.label || c.field}: ${c.old || '(비어 있음)'} → ${c.new || '(비어 있음)'}`]);
+        }
+        for (const e of data.errors ?? []) out.push(['error', e]);
+        out.push(['info', changed.length ? `${key} 갱신 완료 · 변경 필드 ${changed.length}` : `${key} 변경 없음${data.detail ? ` — ${data.detail}` : ''}`]);
+        return out;
+      },
+    });
+    setJiraBusyId(null);
+    if (!r.ok) {
+      if (!r.aborted) toast.error('Jira 재가져오기 실패', formatApiError(r.error));
+      return;
     }
+    const data = r.data;
+    if (data.status === 'missing') {
+      // 이슈가 지워졌거나 권한이 없다 — 토스트로 끝내면 사용자가 할 수 있는 게 없으므로
+      // 연결을 해제/변경할 수 있는 다이얼로그를 바로 띄운다.
+      openJiraLink(item, data.detail);
+      return;
+    }
+    if (data.status !== 'ok') {
+      toast.error('Jira 재가져오기 실패', data.detail);
+      return;
+    }
+    const changed = data.items[0]?.changes ?? [];
+    toast.success(
+      changed.length ? `${item.jiraIssueKey} 갱신됨` : `${item.jiraIssueKey} 변경 없음`,
+      changed.length ? changed.map((c: JiraFieldChange) => c.label || c.field).join(', ') : data.detail,
+    );
   };
 
   const handleJiraPush = async (item: WorkItem) => {
     setJiraBusyId(item.id);
-    try {
-      const { data } = await jiraPush.mutateAsync({ itemId: item.id, data: { pushFields: true } });
-      if (data.status === 'conflict') {
-        toast.show({
-          variant: 'error',
-          title: 'Jira 쪽이 더 최신입니다',
-          description: data.detail,
-          action: { label: '다시 가져오기', onClick: () => void handleJiraRefresh(item) },
-        });
-        return;
-      }
-      if (data.status !== 'ok') {
-        toast.error('Jira 반영 실패', data.detail);
-        return;
-      }
-      const parts = [
-        data.fieldsUpdated.length ? `필드 ${data.fieldsUpdated.join(', ')}` : '',
-        data.transitioned ? '상태 전이' : '',
-      ].filter(Boolean);
-      toast.success(`${item.jiraIssueKey} 반영됨`, parts.join(' · ') || data.detail);
-    } catch (err) {
-      toast.error('Jira 반영 실패', formatApiError(err));
-    } finally {
-      setJiraBusyId(null);
+    const key = itemLabel(item);
+    const r = await runLogged(integrationLog, {
+      title: 'Jira 보내기',
+      first: `${key} — 수정 내용(필드·상태) Jira 반영 요청`,
+      fn: async () => (await jiraPush.mutateAsync({ itemId: item.id, data: { pushFields: true } })).data,
+      summarize: (data): RunLogEntry[] => {
+        const out: RunLogEntry[] = [];
+        if (data.status === 'conflict') {
+          out.push(['warn', `충돌 — Jira 쪽이 더 최신입니다: ${data.detail} · 다시 가져온 뒤 보내세요`]);
+          return out;
+        }
+        if (data.status !== 'ok') {
+          out.push(['error', `반영 실패(${data.status}) — ${data.detail}`]);
+        }
+        for (const f of data.fieldsUpdated ?? []) out.push(['info', `필드 반영 · ${f}`]);
+        for (const fe of data.fieldErrors ?? []) out.push(['error', `필드 반영 실패 — ${fe}`]);
+        if (data.transitioned) out.push(['info', `상태 전이 완료${data.jiraStatus ? ` → ${data.jiraStatus}` : ''}`]);
+        else if (data.jiraStatus) out.push(['info', `Jira 상태 ${data.jiraStatus}(전이 없음)`]);
+        if (data.commentAdded) out.push(['info', '코멘트 추가']);
+        if (data.status === 'ok') {
+          const errs = data.fieldErrors?.length ?? 0;
+          out.push([errs ? 'warn' : 'info', `${key} 반영 ${errs ? '일부 완료' : '완료'} · 필드 ${data.fieldsUpdated?.length ?? 0}${errs ? ` · 실패 ${errs}` : ''}${data.detail ? ` — ${data.detail}` : ''}`]);
+        }
+        return out;
+      },
+    });
+    setJiraBusyId(null);
+    if (!r.ok) {
+      if (!r.aborted) toast.error('Jira 반영 실패', formatApiError(r.error));
+      return;
     }
+    const data = r.data;
+    if (data.status === 'conflict') {
+      toast.show({
+        variant: 'error',
+        title: 'Jira 쪽이 더 최신입니다',
+        description: data.detail,
+        action: { label: '다시 가져오기', onClick: () => void handleJiraRefresh(item) },
+      });
+      return;
+    }
+    if (data.status !== 'ok') {
+      toast.error('Jira 반영 실패', data.detail);
+      return;
+    }
+    if (data.fieldErrors?.length) {
+      toast.error(`${item.jiraIssueKey} 일부 필드 반영 실패`, '실행 로그에서 필드별 사유를 확인하세요.');
+      return;
+    }
+    const parts = [
+      data.fieldsUpdated.length ? `필드 ${data.fieldsUpdated.join(', ')}` : '',
+      data.transitioned ? '상태 전이' : '',
+    ].filter(Boolean);
+    toast.success(`${item.jiraIssueKey} 반영됨`, parts.join(' · ') || data.detail);
   };
 
   const handleConfluenceSync = async (item: WorkItem) => {
     setConfluenceBusyId(item.id);
-    try {
-      const { data } = await confluenceSync.mutateAsync(item.id);
-      if (data.status !== 'ok') {
-        toast.error('Confluence 반영 실패', data.detail);
-        return;
-      }
-      toast.success('Confluence 문서 반영됨', data.detail);
-    } catch (err) {
-      toast.error('Confluence 반영 실패', formatApiError(err));
-    } finally {
-      setConfluenceBusyId(null);
+    const label = item.title?.trim() || item.jiraIssueKey || '업무';
+    const r = await runLogged(integrationLog, {
+      title: 'Confluence 반영',
+      first: `${label} — 연결된 Confluence 문서에 업무 내용 반영 요청`,
+      fn: async () => (await confluenceSync.mutateAsync(item.id)).data,
+      summarize: (data): RunLogEntry[] => {
+        if (data.status !== 'ok') return [['error', `반영 실패(${data.status}) — ${data.detail}`]];
+        const out: RunLogEntry[] = [];
+        if (data.confluenceUrl) out.push(['info', `문서 ${data.confluenceUrl}`]);
+        if (data.syncedAt) {
+          const t = new Date(data.syncedAt);
+          out.push(['info', `반영 시각 ${Number.isNaN(t.getTime()) ? data.syncedAt : t.toLocaleString('ko-KR', { hour12: false })}`]);
+        }
+        out.push(['info', `반영 완료${data.detail ? ` — ${data.detail}` : ''}`]);
+        return out;
+      },
+    });
+    setConfluenceBusyId(null);
+    if (!r.ok) {
+      if (!r.aborted) toast.error('Confluence 반영 실패', formatApiError(r.error));
+      return;
     }
+    if (r.data.status !== 'ok') {
+      toast.error('Confluence 반영 실패', r.data.detail);
+      return;
+    }
+    toast.success('Confluence 문서 반영됨', r.data.detail);
   };
 
 
@@ -978,6 +1050,10 @@ export function WorkItemBoardPage() {
               onSave={saveColumnPrefs}
             />
           </div>
+        </div>
+
+        <div className="mb-3 empty:hidden">
+          <RunLogPanel run={integrationLog} show={showIntegrationLog} onShowChange={setShowIntegrationLog} maxHeight="max-h-56" />
         </div>
 
         {/* G-U2: error state 분기 — 이전엔 isLoading 만 있고 error 는 empty 로 흡수됐음 */}

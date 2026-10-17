@@ -97,7 +97,7 @@ export function PodBottleneckPage() {
     const ac = new AbortController();
     abortRef.current = ac;
     setLastRunId(null);
-    runLog.begin('병목 진단', '진단 요청 전송');
+    const run = runLog.begin('병목 진단', '진단 요청 전송');
     // 콜백 안에서 채우므로 객체로 둔다(let 은 TS 가 null 로 좁혀 버린다).
     const out: { runId: string | null; error: string | null } = { runId: null, error: null };
     try {
@@ -113,14 +113,14 @@ export function PodBottleneckPage() {
         (evt) => {
           if (evt.type === 'result') out.runId = String(evt.run_id ?? '') || null;
           else if (evt.type === 'error') out.error = String(evt.message ?? '진단 실패');
-          else applyRunEvent(runLog, evt);
+          else applyRunEvent(run, evt);
         },
         ac.signal,
       );
     } catch (e) {
       if (!ac.signal.aborted) out.error = e instanceof Error ? e.message : String(e);
     } finally {
-      runLog.end();
+      run.end();
       abortRef.current = null;
     }
     if (out.error) {

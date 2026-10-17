@@ -67,7 +67,7 @@ function NodeView({
                 <td className="px-4 py-3">
                   <span className={`px-2 py-0.5 text-sm rounded-full font-medium ${
                     node.role === 'control-plane'
-                      ? 'bg-blue-500/10 text-blue-400 border border-blue-500/20'
+                      ? 'bg-chart-4/15 text-chart-4 border border-chart-4/30'
                       : 'bg-secondary text-muted-foreground border border-border'
                   }`}>
                     {node.role}

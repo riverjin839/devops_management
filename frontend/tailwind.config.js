@@ -112,6 +112,10 @@ export default {
           unknown:  "hsl(var(--status-unknown-text)  / <alpha-value>)",
           info:     "hsl(var(--status-info-text)     / <alpha-value>)",
         },
+        // Jira 키 글자 — --brand-jira 면은 그대로, 글자만 다크 계열 테마에서 밝은 값(D-120).
+        brand: {
+          jira: "hsl(var(--brand-jira-text) / <alpha-value>)",
+        },
       },
       // P3 — 라운딩 전 단계를 --radius 기준으로. 예전엔 lg/md/sm 만 테마를 따르고
       // DEFAULT(4)·xl(12)·2xl(16) 은 고정이라 --radius 가 큰 테마(컴포트)에서 타일이 버튼보다

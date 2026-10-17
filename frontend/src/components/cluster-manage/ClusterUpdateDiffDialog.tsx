@@ -16,6 +16,8 @@ interface Props {
   applying: boolean;
   onCancel: () => void;
   onConfirm: () => void;
+  /** 실행 로그(RunLogPanel) — 모달이 페이지의 로그 패널을 가리므로 적용 진행·실패를 모달 안에서 보여준다(D-135). */
+  logSlot?: React.ReactNode;
 }
 
 const FIELD_LABELS: Record<string, string> = {
@@ -66,7 +68,7 @@ function renderValue(v: unknown, field?: string): string {
 }
 
 export function ClusterUpdateDiffDialog({
-  open, clusterName, diff, warnings, applying, onCancel, onConfirm,
+  open, clusterName, diff, warnings, applying, onCancel, onConfirm, logSlot,
 }: Props) {
   // ESC 닫기(적용 중엔 무시) · 포커스 트랩 · 초점 복원 (공용 훅)
   const dialogRef = useModalA11y(open, () => { if (!applying) onCancel(); });
@@ -163,6 +165,8 @@ export function ClusterUpdateDiffDialog({
             <EmptyState compact title="수집된 정보가 없습니다." description="kubeconfig 접근은 성공했으나 추출 가능한 필드가 없습니다." />
           )}
         </div>
+
+        {logSlot && <div className="px-5 py-3 border-t border-border">{logSlot}</div>}
 
         <div className="flex justify-end gap-2 px-5 py-3 border-t border-border bg-muted/10">
           <button onClick={onCancel} disabled={applying}

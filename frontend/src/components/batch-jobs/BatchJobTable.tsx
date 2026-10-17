@@ -4,6 +4,9 @@ import type { BatchJob } from '@/services/api';
 import type { Cluster } from '@/types';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { EmptyState } from '@/components/common/EmptyState';
+import { RunLogPanel } from '@/components/common';
+import { useRunLog } from '@/hooks/useRunLog';
+import { useLogPref } from '@/hooks/useLogPref';
 import { BatchJobRow } from './BatchJobRow';
 import { type SortKey, type SortState } from './types';
 
@@ -84,6 +87,10 @@ export function BatchJobTable({
     ? Object.fromEntries(clusters.map((c) => [c.id, c]))
     : null;
 
+  // 행의 빠른 실행(▶) 로그 — 표 바로 위에 패널을 두고 행들이 공유한다(마지막 실행 1건).
+  const runLog = useRunLog();
+  const [showLog, setShowLog] = useLogPref('batch-jobs-quick-run');
+
   const sorted = sortJobs(jobs, sort);
   const selectable = !!onToggleSelect && !!selectedIds;
   const allSelected = selectable && sorted.length > 0 && sorted.every((j) => selectedIds?.has(j.id) ?? false);
@@ -97,7 +104,8 @@ export function BatchJobTable({
 
   return (
     <TooltipProvider delay={150}>
-      <div className="overflow-x-auto">
+      <RunLogPanel run={runLog} show={showLog} onShowChange={setShowLog} maxHeight="max-h-56" />
+      <div className={`overflow-x-auto${runLog.running || runLog.lines.length > 0 ? ' mt-2' : ''}`}>
         <table className="w-full text-sm border-collapse">
           <thead>
             <tr className="border-b border-border">
@@ -142,6 +150,7 @@ export function BatchJobTable({
                 checkbox={selectable}
                 checked={selectedIds?.has(job.id) ?? false}
                 onToggleSelect={onToggleSelect}
+                runLog={runLog}
               />
             ))}
           </tbody>

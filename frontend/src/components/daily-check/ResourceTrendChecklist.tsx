@@ -79,7 +79,7 @@ export function ResourceTrendChecklist({ clusterId }: { clusterId: string }) {
     // 비동기(Celery) 수집 — 최근 수집 시각/스냅샷 ID 가 바뀌면 완료로 본다.
     const changed = (s: MetricTrendResponse) =>
       (s.latestSnapshotId ?? null) !== beforeId || (s.latestCollectedAt ?? null) !== beforeAt;
-    const last = await pollIntoRunLog(runLog, {
+    const last = await pollIntoRunLog(r.run, {
       fetch: async () => (await metricTrendApi.get(clusterId)).data,
       describe: (snap, prev) => {
         if (!changed(snap) || (prev && changed(prev))) return [];

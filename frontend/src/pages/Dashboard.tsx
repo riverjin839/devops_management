@@ -15,11 +15,11 @@ import {
   ClusterItemsGrid,
   ClusterItemModal,
 } from '@/components/dashboard';
-import { PlaybookCard, AddPlaybookModal, RunCredsModal } from '@/components/playbooks';
+import { PlaybookCard, AddPlaybookModal, RunCredsModal, playbookRunLines } from '@/components/playbooks';
 import type { PlaybookSshCreds } from '@/types';
 import { MacCard } from '@/components/ui/MacCard';
 import { ClusterSidebar, DebugLogPanel, ConfirmDialog, useToast, StatusBadge, statusToVariant, EmptyState, PageHeader, PageShell, RunLogPanel } from '@/components/common';
-import { useRunLog, elapsed, type RunLogLevel } from '@/hooks/useRunLog';
+import { useRunLog, runLogged, elapsed, type RunLogEntry, type RunLogLevel } from '@/hooks/useRunLog';
 import { useLogPref } from '@/hooks/useLogPref';
 import { useClusterStore } from '@/stores/clusterStore';
 import { usePlaybookStore } from '@/stores/playbookStore';
@@ -29,7 +29,7 @@ import { useMetricCards, useMetricResults, useDeleteMetricCard } from '@/hooks/u
 import { useClusterItems, useRunClusterItem, useUpdateClusterItem, useDeleteClusterItem } from '@/hooks/useClusterItems';
 import { useWorkItems } from '@/hooks/useWorkItems';
 import { healthApi } from '@/services/api';
-import { Addon, Cluster, ClusterItem, ClusterItemCardSize, MetricCard, Playbook } from '@/types';
+import { Addon, AddonCheckRunResult, Cluster, ClusterItem, ClusterItemCardSize, MetricCard, Playbook } from '@/types';
 import { useAuthStore, hasRole } from '@/stores/authStore';
 
 // ── Cluster Overview Grid (shown when All tab is selected) ─────────────────────
@@ -173,6 +173,28 @@ type PendingDelete =
   | { kind: 'playbook'; playbook: Playbook }
   | null;
 
+// POST /health/check/{cid}/addons/{aid} 응답 → 결과 줄.
+function addonCheckLines(addon: Addon, r: AddonCheckRunResult): RunLogEntry[] {
+  const st = r.status || 'unknown';
+  const ms = r.responseTime != null ? ` · ${r.responseTime}ms` : '';
+  const msg = r.log ? ` · ${r.log}` : '';
+  return [[ADDON_STATUS_LEVEL[st] ?? 'warn', `${addon.name} · ${ADDON_STATUS_KO[st] ?? st}${ms}${msg}`]];
+}
+
+// POST /cluster-items/{id}/run 응답(갱신된 ClusterItem) → 결과 줄.
+function clusterItemLines(item: ClusterItem): RunLogEntry[] {
+  const value = item.currentText ?? (item.currentValue != null ? `${item.currentValue}${item.unit ? ` ${item.unit}` : ''}` : '—');
+  if (item.lastStatus === 'error') {
+    return [['error', `${item.title} · 수집 실패${item.lastError ? ` — ${item.lastError}` : ''}`]];
+  }
+  const level: RunLogLevel = item.resultStatus === 'critical' ? 'error' : item.resultStatus === 'warning' ? 'warn' : 'info';
+  const lines: RunLogEntry[] = [[level, `${item.title} · 값 ${value}${item.resultStatus ? ` · ${ADDON_STATUS_KO[item.resultStatus] ?? item.resultStatus}` : ''}${item.lastSource ? ` · 출처 ${item.lastSource}` : ''}`]];
+  if (item.previousValue != null && item.currentValue != null && item.previousValue !== item.currentValue) {
+    lines.push(['info', `이전 값 ${item.previousValue} → ${item.currentValue}`]);
+  }
+  return lines;
+}
+
 export function Dashboard() {
   const [selectedClusterId, setSelectedClusterId] = useState<string | null>(null);
   const [showAddCluster, setShowAddCluster] = useState(false);
@@ -191,6 +213,10 @@ export function Dashboard() {
   const { clusters, summary, addons, isChecking, lastCheckTime } = useClusterStore();
   const authUser = useAuthStore((s) => s.user);
   const toast = useToast();
+  // 점검 실행 로그 — 점검 실행(선택 클러스터 1개 또는 전 클러스터 순차, D-128) · 애드온 단건 ▶ ·
+  // 현황 아이템 ▶ · 플레이북 실행이 공유한다(D-135). 헤더(title)가 어떤 실행인지 말해 준다.
+  const runLog = useRunLog();
+  const [showRunLog, setShowRunLog] = useLogPref('dashboard-health-check');
   // 카드 생성/수정/삭제/테스트는 백엔드가 operator 이상만 허용(require_operator) —
   // viewer 에게는 버튼 자체를 숨겨 403 을 미리 막는다.
   const canManageMetricCards = hasRole(authUser, 'admin', 'operator');
@@ -233,14 +259,38 @@ export function Dashboard() {
 
   const handleRunItem = (item: ClusterItem) => {
     setRunningItemIds((prev) => new Set(prev).add(item.id));
-    runClusterItem.mutate(item.id, {
-      onSettled: () => {
-        setRunningItemIds((prev) => {
-          const next = new Set(prev);
-          next.delete(item.id);
-          return next;
-        });
-      },
+    const clusterName = clusters.find((c) => c.id === item.clusterId)?.name;
+    void runLogged(runLog, {
+      title: `현황 아이템 수집 — ${item.title}`,
+      first: `${clusterName ? `[${clusterName}] ` : ''}${item.title}(${item.itemType}) 수집 요청`,
+      fn: () => runClusterItem.mutateAsync(item.id),
+      summarize: ({ data }) => clusterItemLines(data),
+    }).then(() => {
+      setRunningItemIds((prev) => {
+        const next = new Set(prev);
+        next.delete(item.id);
+        return next;
+      });
+    });
+  };
+
+  const handleRunAddon = (addon: Addon) => {
+    const clusterName = clusters.find((c) => c.id === addon.clusterId)?.name;
+    void runLogged(runLog, {
+      title: `애드온 점검 — ${addon.name}`,
+      first: `${clusterName ? `[${clusterName}] ` : ''}${addon.name} 점검 요청`,
+      fn: () => addonHealthCheck.mutateAsync({ clusterId: addon.clusterId, addonId: addon.id }),
+      summarize: ({ data }) => addonCheckLines(addon, data),
+    });
+  };
+
+  const runPlaybookLogged = (pb: Playbook, creds: PlaybookSshCreds) => {
+    const clusterName = clusters.find((c) => c.id === pb.clusterId)?.name ?? pb.clusterId;
+    void runLogged(runLog, {
+      title: `플레이북 실행 — ${pb.name}`,
+      first: `${pb.name} — ${clusterName} 대상 실행 요청${creds.ssh_username ? ` (SSH ${creds.ssh_username})` : ''}`,
+      fn: () => runPlaybook.mutateAsync({ id: pb.id, creds }),
+      summarize: ({ data }) => playbookRunLines(data),
     });
   };
 
@@ -278,17 +328,13 @@ export function Dashboard() {
   const { data: workItemsData, isLoading: workItemsLoading } = useWorkItems();
   const allWorkItems = workItemsData?.data ?? [];
 
-  // 점검 실행 로그 — 선택 클러스터 1개 또는 전 클러스터 순차(D-128).
-  const runLog = useRunLog();
-  const [showRunLog, setShowRunLog] = useLogPref('dashboard-health-check');
-
   const handleRunCheck = async () => {
     const targets = selectedClusterId
       ? clusters.filter((c) => c.id === selectedClusterId)
       : clusters;
     if (targets.length === 0) return;
     const tAll = performance.now();
-    runLog.begin(
+    const run = runLog.begin(
       targets.length === 1 ? `점검 실행 — ${targets[0].name}` : `점검 실행 — 전체 ${targets.length}개 클러스터`,
       targets.length === 1 ? `${targets[0].name} 애드온 점검 요청` : `클러스터 ${targets.length}개 순차 점검 시작`,
     );
@@ -298,9 +344,9 @@ export function Dashboard() {
     // 순차 실행: 각 클러스터 점검 완료 후 다음 진행 — 실패한 클러스터는 error 줄로 남기고 계속한다.
     for (const cluster of targets) {
       const t0 = performance.now();
-      if (targets.length > 1) runLog.log('info', `[${cluster.name}] 점검 시작`);
+      if (targets.length > 1) run.log('info', `[${cluster.name}] 점검 시작`);
       const hb = setInterval(
-        () => runLog.log('info', `[${cluster.name}] 응답 대기 중 · ${Math.round((performance.now() - t0) / 1000)}초 경과`),
+        () => run.log('info', `[${cluster.name}] 응답 대기 중 · ${Math.round((performance.now() - t0) / 1000)}초 경과`),
         5000,
       );
       try {
@@ -311,13 +357,13 @@ export function Dashboard() {
           const key = a.status === 'healthy' || a.status === 'warning' || a.status === 'critical' ? a.status : 'other';
           counts[key] += 1;
           totals[key] += 1;
-          runLog.log(
+          run.log(
             ADDON_STATUS_LEVEL[a.status] ?? 'warn',
             `[${cluster.name}] ${a.name} · ${ADDON_STATUS_KO[a.status] ?? a.status}${a.responseTime != null ? ` · ${a.responseTime}ms` : ''}${a.message ? ` · ${a.message}` : ''}`,
           );
         }
         const level: RunLogLevel = counts.critical > 0 ? 'error' : counts.warning > 0 || counts.other > 0 ? 'warn' : 'info';
-        runLog.log(
+        run.log(
           level,
           `[${cluster.name}] 애드온 ${data.addonsUpdated}개 갱신 · 정상 ${counts.healthy} · 경고 ${counts.warning} · 위험 ${counts.critical}${counts.other ? ` · 기타 ${counts.other}` : ''} · ${elapsed(t0)}`,
         );
@@ -325,16 +371,16 @@ export function Dashboard() {
       } catch (e) {
         clearInterval(hb);
         failedClusters += 1;
-        runLog.log('error', `[${cluster.name}] 점검 실패 · ${elapsed(t0)} — ${formatApiError(e)}`);
+        run.log('error', `[${cluster.name}] 점검 실패 · ${elapsed(t0)} — ${formatApiError(e)}`);
       }
     }
     if (targets.length > 1 || failedClusters > 0) {
-      runLog.log(
+      run.log(
         failedClusters > 0 || totals.critical > 0 ? 'error' : totals.warning > 0 ? 'warn' : 'info',
         `전체 요약 · 클러스터 성공 ${okClusters} · 실패 ${failedClusters} · 애드온 정상 ${totals.healthy} · 경고 ${totals.warning} · 위험 ${totals.critical} · ${elapsed(tAll)}`,
       );
     }
-    runLog.end();
+    run.end();
   };
 
   const DEFAULT_ADDONS = [
@@ -551,7 +597,7 @@ export function Dashboard() {
                   onAddDefaultAddons={!isSelectedDisconnected && clusters.length > 0 && missingAddons.length > 0 ? handleAddDefaultAddons : undefined}
                   onEditAddon={(addon) => { setEditingAddon(addon); setShowAddAddon(true); }}
                   onDeleteAddon={(addon) => setPendingDelete({ kind: 'addon', addon })}
-                  onRunAddon={(addon) => addonHealthCheck.mutate({ clusterId: addon.clusterId, addonId: addon.id })}
+                  onRunAddon={handleRunAddon}
                 />
               </div>
             </>
@@ -606,7 +652,7 @@ export function Dashboard() {
                         if (raw) cached = JSON.parse(raw);
                       } catch { /* ignore */ }
                       if (cached && (cached.ssh_username || cached.ssh_password || cached.ssh_private_key)) {
-                        runPlaybook.mutate({ id: playbook.id, creds: cached });
+                        runPlaybookLogged(playbook, cached);
                       } else {
                         setCredsTarget(playbook);
                       }
@@ -722,7 +768,8 @@ export function Dashboard() {
         onClose={() => setCredsTarget(null)}
         onRun={(creds) => {
           if (credsTarget) {
-            runPlaybook.mutate({ id: credsTarget.id, creds });
+            // 모달은 제출 즉시 닫히므로 실행 로그는 상단 패널에 남긴다.
+            runPlaybookLogged(credsTarget, creds);
             setCredsTarget(null);
           }
         }}

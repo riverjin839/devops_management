@@ -1,16 +1,16 @@
 import { useEffect, useId, useMemo, useState } from 'react';
 import { X, Cpu, Play, Loader2, CheckCircle2, AlertTriangle, FileText } from 'lucide-react';
-import { bulkExecApi, versionsApi } from '@/services/api';
+import { bulkExecApi } from '@/services/api';
 import type { NodeSummary } from '@/services/api';
-import type { KubeletConfigCollectResponse } from '@/types';
+import type { KubeletConfigCollectRequest, KubeletConfigCollectResponse } from '@/types';
 import { useQuery } from '@tanstack/react-query';
 import { useAbortableMutation } from '@/hooks/useAbortableMutation';
-import { useRunLog, runLogged } from '@/hooks/useRunLog';
+import { useRunLog } from '@/hooks/useRunLog';
 import { useLogPref } from '@/hooks/useLogPref';
 import { useToast, DoubleScrollX, RunLogPanel } from '@/components/common';
 import { useModalA11y } from '@/components/common/useModalA11y';
 import { RawOutputDetails, CollectErrorList } from './RawOutputDetails';
-import { collectFirstLine, summarizeCollect } from './collectRunLog';
+import { collectFirstLine, streamCollect } from './collectRunLog';
 import { formatApiError } from '@/lib/utils';
 
 interface Props {
@@ -75,20 +75,30 @@ export function KubeletConfigCollectModal({ open, clusterId, clusterName, onClos
     [fallbacksText],
   );
 
+  // 실행 로그(D-135) — 수집을 SSE 스트림으로 실행해 서버가 흘리는 시작·호스트별 결과([i/N])·요약 줄을 실시간으로 쌓는다.
+  // 결과 표·토스트·중지는 기존 mutation 흐름 그대로(streamCollect 가 동기 응답과 같은 본문을 돌려준다).
+  const runLog = useRunLog();
+  const [showLog, setShowLog] = useLogPref('versions-kubelet-config');
   const collectMut = useAbortableMutation({
-    mutationFn: async (_: void, signal) => {
-      const r = await versionsApi.collectKubeletConfig(clusterId, {
-        hosts: Array.from(selected),
-        port,
-        username,
-        password: authMode === 'password' ? password : undefined,
-        privateKey: authMode === 'key' ? privateKey : undefined,
-        useSudo,
-        fallbackPaths,
-        parallelism,
-      }, signal);
-      return r.data;
-    },
+    mutationFn: (_: void, signal) =>
+      streamCollect<KubeletConfigCollectResponse>(runLog, {
+        title: 'kubelet config 수집',
+        first: collectFirstLine(clusterName, selected.size, 'kubelet config', useSudo),
+        clusterId,
+        kind: 'kubelet-config',
+        body: {
+          hosts: Array.from(selected),
+          port,
+          username,
+          password: authMode === 'password' ? password : undefined,
+          privateKey: authMode === 'key' ? privateKey : undefined,
+          useSudo,
+          fallbackPaths,
+          parallelism,
+        } satisfies KubeletConfigCollectRequest,
+        signal,
+        detail: (h) => (h.configFile ? `config ${h.configFile}` : 'config 경로 미식별'),
+      }),
     onSuccess: (d) => {
       setResult(d);
       const found = d.hosts.filter((h) => h.configFile).length;
@@ -108,17 +118,7 @@ export function KubeletConfigCollectModal({ open, clusterId, clusterName, onClos
     },
   });
 
-  // 실행 로그(D-128) — 동기 1응답 수집을 요청·대기·호스트별 결과·요약 줄로 남긴다. 결과 표·토스트는 기존대로.
-  const runLog = useRunLog();
-  const [showLog, setShowLog] = useLogPref('versions-kubelet-config');
-  const handleRun = () => {
-    void runLogged(runLog, {
-      title: 'kubelet config 수집',
-      first: collectFirstLine(clusterName, selected.size, 'kubelet config', useSudo),
-      fn: () => collectMut.mutateAsync(),
-      summarize: (res) => summarizeCollect(res, (h) => (h.configFile ? `config ${h.configFile}` : 'config 경로 미식별')),
-    });
-  };
+  const handleRun = () => collectMut.mutate();
 
   const canRun = selected.size > 0
     && (authMode === 'password' ? !!password : !!privateKey.trim())

@@ -1,8 +1,10 @@
 import { useEffect, useMemo, useState } from 'react';
 import { FlaskConical, Play, Save, X } from 'lucide-react';
 import { ExecutionStepsTimeline } from '@/components/daily-check/ExecutionStepsTimeline';
-import { useToast } from '@/components/common';
+import { RunLogPanel, useToast } from '@/components/common';
 import { formatApiError } from '@/lib/utils';
+import { runLogged, useRunLog, type RunLogEntry } from '@/hooks/useRunLog';
+import { useLogPref } from '@/hooks/useLogPref';
 import {
   useCheckTypes,
   usePreviewCheck,
@@ -120,6 +122,9 @@ export function DeepCheckDefinitionForm({
   const testMut = useTestDefinition();
   const previewMut = usePreviewCheck();
   const toast = useToast();
+  // 미리 실행 / Test now 수명주기 로그(D-135) — 단계 상세는 아래 ExecutionStepsTimeline 이 보여준다.
+  const runLog = useRunLog();
+  const [showRunLog, setShowRunLog] = useLogPref('deep-check-form-test');
 
   const [checkType, setCheckType] = useState(initial?.checkType ?? '');
   const [name, setName] = useState(initial?.name ?? '');
@@ -178,18 +183,41 @@ export function DeepCheckDefinitionForm({
     }
   };
 
+  /** 응답 → 결과 요약 줄(단계별 상세는 타임라인이 보여주므로 개수만). */
+  const summarizeResult = ({ data }: { data: DeepCheckTestResult }): RunLogEntry[] => {
+    const details = (data.details ?? {}) as Record<string, unknown>;
+    const raw = details._steps ?? details.Steps;
+    const steps = Array.isArray(raw) ? (raw as { status?: string }[]) : [];
+    const failedSteps = steps.filter((st) => st.status === 'failed').length;
+    const lines: RunLogEntry[] = [];
+    if (steps.length > 0) {
+      lines.push([failedSteps ? 'error' : 'info', `단계 ${steps.length}개 · 실패 ${failedSteps} — 상세는 아래 실행 단계 타임라인`]);
+    }
+    lines.push([
+      data.status === 'critical' ? 'error' : data.status === 'healthy' ? 'info' : 'warn',
+      `결과 ${data.status} · 서버 소요 ${data.durationMs}ms${data.message ? ` — ${data.message}` : ''}`,
+    ]);
+    return lines;
+  };
+
   /** 저장 전에도 현재 폼 값 그대로 ad-hoc 실행해 미리 확인. */
   const handlePreview = async () => {
-    try {
-      const { data } = await previewMut.mutateAsync({
+    const cid = clusterId || initial?.clusterId || null;
+    const r = await runLogged(runLog, {
+      title: '미리 실행',
+      first: `${checkType} — ${cid ? `클러스터 ${cid.slice(0, 8)}` : '클러스터 미지정'} 대상, 현재 폼 값으로 1회 실행 요청(저장 없음)`,
+      fn: () => previewMut.mutateAsync({
         checkType,
-        clusterId: clusterId || initial?.clusterId || null,
+        clusterId: cid,
         thresholds,
         params,
-      });
-      setTestResult(data);
-    } catch (e) {
-      const msg = formatApiError(e);
+      }),
+      summarize: summarizeResult,
+    });
+    if (r.ok) {
+      setTestResult(r.data.data);
+    } else if (!r.aborted) {
+      const msg = formatApiError(r.error);
       toast.error('미리 실행 실패', msg);
       setTestResult({
         checkType,
@@ -202,11 +230,16 @@ export function DeepCheckDefinitionForm({
 
   const handleTest = async () => {
     if (!initial) return handlePreview();
-    try {
-      const { data } = await testMut.mutateAsync({ id: initial.id, clusterId });
-      setTestResult(data);
-    } catch (e) {
-      const msg = formatApiError(e);
+    const r = await runLogged(runLog, {
+      title: 'Test now',
+      first: `${initial.name}(${checkType}) — 저장된 정의 값으로 1회 실행 요청(기록 없음)`,
+      fn: () => testMut.mutateAsync({ id: initial.id, clusterId }),
+      summarize: summarizeResult,
+    });
+    if (r.ok) {
+      setTestResult(r.data.data);
+    } else if (!r.aborted) {
+      const msg = formatApiError(r.error);
       toast.error('Test 실행 실패', msg);
       setTestResult({
         definitionId: initial.id,
@@ -366,6 +399,8 @@ export function DeepCheckDefinitionForm({
           </div>
         </div>
       )}
+
+      <RunLogPanel run={runLog} show={showRunLog} onShowChange={setShowRunLog} maxHeight="max-h-56" />
 
       <div className="flex items-center justify-end gap-2 pt-2">
         <button

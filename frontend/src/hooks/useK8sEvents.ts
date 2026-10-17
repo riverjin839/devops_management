@@ -1,9 +1,10 @@
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useInfiniteQuery, useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { k8sEventsApi } from '@/services/api';
 
 export const k8sEventKeys = {
   all: ['k8s-events'] as const,
-  list: (params?: object) => ['k8s-events', 'list', params] as const,
+  paged: (params?: object) => ['k8s-events', 'paged', params] as const,
+  stats: (clusterId?: string | null) => ['k8s-events', 'stats', clusterId ?? null] as const,
   detail: (id: string) => ['k8s-events', id] as const,
 };
 
@@ -15,13 +16,34 @@ interface UseK8sEventsParams {
   offset?: number;
 }
 
-export function useK8sEvents(params?: UseK8sEventsParams) {
-  return useQuery({
-    queryKey: k8sEventKeys.list(params),
-    queryFn: async () => {
-      const { data } = await k8sEventsApi.list(params);
-      return data;
+/**
+ * 이벤트 목록 — offset 페이지를 "더 보기"로 이어 붙인다(D-111: 예전엔 200건 고정이라 그 뒤는 열람 불가).
+ * 키는 'k8s-events' 접두사를 유지해 삭제·분석 트리거 후 무효화가 그대로 걸린다.
+ * `hasMore` 가 없는 구버전 응답이면 `offset + data.length < total` 로 판정한다.
+ */
+export function useK8sEventsPaged(params: Omit<UseK8sEventsParams, 'limit' | 'offset'> & { pageSize?: number }) {
+  const { pageSize = 100, ...filters } = params;
+  return useInfiniteQuery({
+    queryKey: k8sEventKeys.paged({ ...filters, pageSize }),
+    initialPageParam: 0,
+    queryFn: async ({ pageParam }) => {
+      const { data } = await k8sEventsApi.list({ ...filters, limit: pageSize, offset: pageParam });
+      return { ...data, offset: pageParam };
     },
+    getNextPageParam: (last) => {
+      const next = last.offset + last.data.length;
+      const more = last.hasMore ?? next < last.total;
+      return more && last.data.length > 0 ? next : undefined;
+    },
+    refetchInterval: 30_000,
+  });
+}
+
+/** 심각도별 건수 — 목록의 심각도 필터·페이지와 무관한 서버 집계(D-111). */
+export function useK8sEventStats(clusterId?: string | null) {
+  return useQuery({
+    queryKey: k8sEventKeys.stats(clusterId),
+    queryFn: async () => (await k8sEventsApi.stats(clusterId)).data,
     refetchInterval: 30_000,
   });
 }

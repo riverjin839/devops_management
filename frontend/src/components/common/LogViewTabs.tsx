@@ -1,20 +1,22 @@
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
 import { Zap, ScrollText } from 'lucide-react';
 
 /**
  * K8s 로그 화면 전환 탭 — "AI 분석"(IncidentAnalysisPage, /incident-analysis) 과
  * "실시간 로그"(K8sLogsPage, /k8s-logs) 를 한 곳에서 오가도록 통합.
- * 두 페이지의 제목 옆에 동일하게 배치한다.
+ * 두 페이지의 제목 옆에 동일하게 배치한다. 두 화면 모두 `/:clusterId` 를 받으므로 탭을 바꿔도
+ * 선택한 클러스터를 이어 간다(D-113).
  */
 export function LogViewTabs({ current }: { current: 'analysis' | 'stream' }) {
   const navigate = useNavigate();
+  const { clusterId } = useParams<{ clusterId: string }>();
 
   const Tab = ({
     id, to, Icon, label,
   }: { id: 'analysis' | 'stream'; to: string; Icon: typeof Zap; label: string }) => (
     <button
       type="button"
-      onClick={() => navigate(to)}
+      onClick={() => navigate(clusterId ? `${to}/${clusterId}` : to)}
       aria-pressed={current === id}
       className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-lg border transition-colors ${
         current === id

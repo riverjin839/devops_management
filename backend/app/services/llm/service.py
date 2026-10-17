@@ -515,6 +515,11 @@ class LLMService:
             self._semaphores[key] = sem
         return sem
 
+    @classmethod
+    def record_external_usage(cls, profile_name: str, purpose: str, result: LLMResult) -> None:
+        """게이트웨이 밖에서 직접 부른 LLM 호출(예: Claude 분석기)도 같은 사용량 통계·테넌트 귀속에 남긴다."""
+        cls._record_stats(profile_name, purpose, result)
+
     @staticmethod
     def _record_stats(profile_name: str, purpose: str, result: LLMResult) -> None:
         """Redis 시간 버킷 통계 (fail-open). Settings 탭 사용량 대시보드의 데이터 소스."""

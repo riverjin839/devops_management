@@ -17,8 +17,8 @@ interface WorkItemReadViewProps {
 
 const PRIORITY_STYLES: Record<string, { dot: string; label: string; text: string }> = {
   high: { dot: 'bg-status-critical', label: '높음', text: 'text-status-critical' },
-  medium: { dot: 'bg-blue-500', label: '보통', text: 'text-blue-400' },
-  low: { dot: 'bg-slate-400', label: '낮음', text: 'text-slate-400' },
+  medium: { dot: 'bg-status-warning', label: '보통', text: 'text-status-warning' },
+  low: { dot: 'bg-status-info', label: '낮음', text: 'text-status-info' },
 };
 
 function formatDateTime(v?: string | null): string {

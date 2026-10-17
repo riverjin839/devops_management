@@ -2,12 +2,15 @@ import { useId, useState } from 'react';
 import { Play, Square, CheckCircle2, XCircle, Info, AlertTriangle, RefreshCw } from 'lucide-react';
 import { topologyTraceApi } from '@/services/api';
 import { useAbortableMutation } from '@/hooks/useAbortableMutation';
+import { runLogged, type RunLog, type RunLogEntry } from '@/hooks/useRunLog';
 import type { HubbleFlow, HubbleFlowsResponse } from '@/types';
 import { DoubleScrollX, EmptyState } from '@/components/common';
 import { MacCard } from '@/components/ui/MacCard';
 
 interface Props {
   clusterId: string;
+  /** 화면(패킷 흐름 분석) 공용 실행 로그 — 패널은 페이지가 탭 위에 렌더한다. */
+  runLog: RunLog;
   /** Phase A 의 source/dest 를 자동 프리필 */
   initialFromPod?: string;
   initialToPod?: string;
@@ -34,6 +37,27 @@ function formatEndpoint(ep: HubbleFlow['source']): string {
   if (ep.podName) return `${ep.namespace ?? '?'}/${ep.podName}`;
   if (ep.ip) return ep.ip;
   return `(${ep.identity ?? '—'})`;
+}
+
+/** 조회 응답 → 실행 로그 요약(건수·verdict 별 집계·drop 사유 상위 3). */
+function summarizeFlows(res: HubbleFlowsResponse): RunLogEntry[] {
+  if (res.error) return [['error', `Hubble Relay 조회 실패 — ${res.error}`]];
+  const byVerdict = new Map<string, number>();
+  const byDrop = new Map<string, number>();
+  for (const fl of res.flows) {
+    const v = fl.verdict ?? '—';
+    byVerdict.set(v, (byVerdict.get(v) ?? 0) + 1);
+    if (fl.dropReason) byDrop.set(fl.dropReason, (byDrop.get(fl.dropReason) ?? 0) + 1);
+  }
+  const verdicts = Array.from(byVerdict.entries()).map(([k, n]) => `${k} ${n}`).join(' · ');
+  const out: RunLogEntry[] = [['info', `플로우 ${res.count}건${verdicts ? ` · ${verdicts}` : ''}`]];
+  if (res.executed) out.push(['info', `실행 명령 — ${res.executed}`]);
+  const dropped = byVerdict.get('DROPPED') ?? 0;
+  if (dropped) {
+    const top = Array.from(byDrop.entries()).sort((a, b) => b[1] - a[1]).slice(0, 3);
+    out.push(['warn', `DROPPED ${dropped}건${top.length ? ` — 사유 ${top.map(([k, n]) => `${k} ${n}`).join(', ')}` : ''}`]);
+  }
+  return out;
 }
 
 function FlowRow({ f }: { f: HubbleFlow }) {
@@ -67,7 +91,7 @@ function FlowRow({ f }: { f: HubbleFlow }) {
   );
 }
 
-export function HubbleTimeline({ clusterId, initialFromPod, initialToPod, initialToService }: Props) {
+export function HubbleTimeline({ clusterId, runLog, initialFromPod, initialToPod, initialToService }: Props) {
   const [fromPod, setFromPod] = useState(initialFromPod ?? '');
   const [toPod, setToPod] = useState(initialToPod ?? '');
   const [toService, setToService] = useState(initialToService ?? '');
@@ -93,10 +117,25 @@ export function HubbleTimeline({ clusterId, initialFromPod, initialToPod, initia
       }, signal);
       return r.data;
     },
-    onSuccess: (d) => setResp(d),
   });
 
   const canRun = !!clusterId;
+
+  const doQuery = async () => {
+    const cond = [
+      fromPod.trim() && `from ${fromPod.trim()}`,
+      toPod.trim() && `to ${toPod.trim()}`,
+      toService.trim() && `svc ${toService.trim()}`,
+      verdict && `verdict ${verdict}`,
+    ].filter(Boolean).join(' · ') || '전체';
+    const r = await runLogged(runLog, {
+      title: 'Hubble 플로우 조회',
+      first: `Hubble Relay 조회 요청 — ${cond} · 최근 ${sinceSeconds}초 · 최대 ${limit}건`,
+      fn: () => runMut.mutateAsync(),
+      summarize: summarizeFlows,
+    });
+    if (r.ok) setResp(r.data);
+  };
 
   return (
     <div className="space-y-3">
@@ -151,7 +190,7 @@ export function HubbleTimeline({ clusterId, initialFromPod, initialToPod, initia
           </button>
         ) : (
           <button
-            onClick={() => runMut.mutate()}
+            onClick={() => void doQuery()}
             disabled={!canRun}
             className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-semibold bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 disabled:opacity-50"
           >
@@ -173,7 +212,7 @@ export function HubbleTimeline({ clusterId, initialFromPod, initialToPod, initia
               • 백엔드 컨테이너에 kubectl + hubble CLI 가 설치돼 있어야 합니다.
             </p>
           </div>
-          <button onClick={() => runMut.mutate()} className="p-1 rounded hover:bg-secondary" title="재시도">
+          <button onClick={() => void doQuery()} className="p-1 rounded hover:bg-secondary" title="재시도" aria-label="재시도">
             <RefreshCw className="w-4 h-4" />
           </button>
         </div>

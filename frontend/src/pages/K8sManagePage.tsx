@@ -15,7 +15,9 @@ import type { AxiosError } from 'axios';
 import { MacCard } from '@/components/ui/MacCard';
 import { ClusterSidebar } from '@/components/common/ClusterSidebar';
 import { LogViewer } from '@/components/common/LogViewer';
-import { ConfirmDialog, useModalA11y, Skeleton, SkeletonCard, EmptyState, LoadingState, StatTile, StatTileRow, PageShell } from '@/components/common';
+import { ConfirmDialog, useModalA11y, Skeleton, SkeletonCard, EmptyState, LoadingState, StatTile, StatTileRow, PageShell, RunLogPanel } from '@/components/common';
+import { useRunLog, runLogged, type RunLogEntry } from '@/hooks/useRunLog';
+import { useLogPref } from '@/hooks/useLogPref';
 import { RoleGate } from '@/components/auth/RoleGate';
 import { useClusters } from '@/hooks/useCluster';
 import { k8sResourcesApi, k8sHelmApi } from '@/services/api';
@@ -196,6 +198,9 @@ export function K8sManagePage() {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState('');
   const [actionMsg, setActionMsg] = useState<{ kind: 'ok' | 'err'; text: string } | null>(null);
+  // 실행 로그(D-089/D-135) — scale/restart/drain 실행의 요청·대기·결과(drain 은 파드별 줄). 펼침 여부는 사용자가 정한다.
+  const runLog = useRunLog();
+  const [showRunLog, setShowRunLog] = useLogPref('k8s-manage-actions');
   // 위험 동작(scale/restart/delete/drain)은 native prompt/confirm 대신 테마·포커스 확보된
   // ConfirmDialog 로 확인받는다 (D-022). scale 은 정수 입력을 다이얼로그 안에서 받는다.
   const [pending, setPending] = useState<PendingAction | null>(null);
@@ -263,20 +268,51 @@ export function K8sManagePage() {
       if (!Number.isInteger(n) || n < 0) { flash('err', 'replicas 는 0 이상의 정수여야 합니다.'); return; } // 다이얼로그 유지
     }
     setPending(null);
+    const clusterLabel = cluster?.name ?? clusterId;
+    if (p.type === 'scale') {
+      const replicas = Number(scaleInput);
+      const r = await runLogged(runLog, {
+        title: 'Replicas 조정',
+        first: `${clusterLabel} · ${p.kind}/${p.ns}/${p.name} → replicas ${replicas} 요청`,
+        fn: () => k8sResourcesApi.scale(clusterId, p.kind, p.ns, p.name, replicas),
+        summarize: () => [['info', `${p.name} replicas ${replicas} 반영 요청 완료`]],
+      });
+      if (r.ok) { flash('ok', `${p.name} → replicas ${replicas}`); reloadList(); } else if (!r.aborted) flash('err', errMsg(r.error));
+      return;
+    }
+    if (p.type === 'restart') {
+      const r = await runLogged(runLog, {
+        title: 'Rollout Restart',
+        first: `${clusterLabel} · ${p.kind}/${p.ns}/${p.name} rollout restart 요청`,
+        fn: () => k8sResourcesApi.restart(clusterId, p.kind, p.ns, p.name),
+        summarize: () => [['info', `${p.name} 재시작 트리거 완료 — 파드가 순차 재생성됨`]],
+      });
+      if (r.ok) { flash('ok', `${p.name} 재시작 트리거됨`); reloadList(); } else if (!r.aborted) flash('err', errMsg(r.error));
+      return;
+    }
+    if (p.type === 'drain') {
+      const r = await runLogged(runLog, {
+        title: 'Node Drain',
+        first: `${clusterLabel} · 노드 ${p.name} drain 요청 — cordon 후 DaemonSet/mirror 제외 파드 eviction (최대 120초)`,
+        fn: async () => (await k8sResourcesApi.drain(clusterId, p.name)).data,
+        summarize: (d): RunLogEntry[] => [
+          ...d.evicted.map((pod): RunLogEntry => ['info', `evicted · ${pod}`]),
+          ...d.skipped.map((s): RunLogEntry => ['warn', `skipped · ${s.pod} — ${s.reason}`]),
+          ...d.errors.map((e): RunLogEntry => ['error', `실패 · ${e.pod} — ${e.error}`]),
+          [d.ok ? 'info' : 'warn', `${d.node} drain ${d.ok ? '완료' : '일부 실패'} · evicted ${d.evicted.length} · skipped ${d.skipped.length} · errors ${d.errors.length}`],
+        ],
+      });
+      if (r.ok) {
+        flash(r.data.ok ? 'ok' : 'err',
+          `drain: evicted ${r.data.evicted.length} · skipped ${r.data.skipped.length} · errors ${r.data.errors.length}`);
+        reloadList();
+      } else if (!r.aborted) flash('err', errMsg(r.error));
+      return;
+    }
     try {
-      if (p.type === 'scale') {
-        await k8sResourcesApi.scale(clusterId, p.kind, p.ns, p.name, Number(scaleInput));
-        flash('ok', `${p.name} → replicas ${Number(scaleInput)}`);
-      } else if (p.type === 'restart') {
-        await k8sResourcesApi.restart(clusterId, p.kind, p.ns, p.name);
-        flash('ok', `${p.name} 재시작 트리거됨`);
-      } else if (p.type === 'delete') {
+      if (p.type === 'delete') {
         await k8sResourcesApi.remove(clusterId, p.kind, p.ns, p.name);
         flash('ok', `${p.name} 삭제됨`);
-      } else {
-        const res = await k8sResourcesApi.drain(clusterId, p.name);
-        flash(res.data.ok ? 'ok' : 'err',
-          `drain: evicted ${res.data.evicted.length} · skipped ${res.data.skipped.length} · errors ${res.data.errors.length}`);
       }
       reloadList();
     } catch (e) { flash('err', errMsg(e)); }
@@ -391,6 +427,8 @@ export function K8sManagePage() {
               {actionMsg.text}
             </div>
           )}
+
+          <RunLogPanel run={runLog} show={showRunLog} onShowChange={setShowRunLog} maxHeight="max-h-56" />
 
           {leaf.mode === 'kind' && leaf.kind === 'nodes' && (
             <NodesPanel
