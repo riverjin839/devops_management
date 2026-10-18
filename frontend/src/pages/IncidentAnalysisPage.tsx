@@ -11,6 +11,7 @@ import { PodLogStream } from '@/components/k8s';
 import { useClusterRouteParam } from '@/hooks/useClusterRouteParam';
 import { useRunLog, runLogged, type RunLogEntry } from '@/hooks/useRunLog';
 import { useLogPref } from '@/hooks/useLogPref';
+import { degradedHeadline } from '@/lib/analysisDegraded';
 import { MacCard } from '@/components/ui/MacCard';
 import {
   useAnalyzeIncident, useAnalyzerHealth, useAnalyzePodContainers,
@@ -207,7 +208,7 @@ function ResultPanel({ result, target }: { result: IncidentAnalysisResult; targe
         <div className="flex items-start gap-2 rounded-md bg-status-warning/10 px-4 py-3 text-sm text-status-warning">
           <AlertTriangle className="w-4 h-4 mt-0.5 flex-shrink-0" />
           <span>
-            분석기 응답을 해석하지 못해 대체 결과를 표시합니다 — {result.degradedReason || '사유 미상'}
+            {degradedHeadline(result.degradedReason)} — {result.degradedReason || '사유 미상'}
           </span>
         </div>
       )}
@@ -526,7 +527,7 @@ export function IncidentAnalysisPage() {
         if (!a) return [['warn', '응답에 분석 결과가 없습니다']];
         const pct = Math.round(Math.min(1, Math.max(0, a.confidence || 0)) * 100);
         const head: RunLogEntry = a.degraded
-          ? ['warn', `대체 결과 — ${a.degradedReason || '분석기 응답 해석 실패'} · 분석기 ${analyzerLabel(a.analyzedBy)}`]
+          ? ['warn', `${degradedHeadline(a.degradedReason)} — ${a.degradedReason || '사유 미상'} · 분석기 ${analyzerLabel(a.analyzedBy)}`]
           : [a.severity === 'critical' ? 'error' : a.severity === 'warning' ? 'warn' : 'info',
             `심각도 ${a.severity} · 신뢰도 ${pct}% · 분석기 ${analyzerLabel(a.analyzedBy)}`];
         return [
