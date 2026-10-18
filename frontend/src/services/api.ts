@@ -1814,6 +1814,8 @@ export const k8sEventsApi = {
     resourceKind?: string;
     limit?: number;
     offset?: number;
+    /** 이전 페이지 nextCursor — 주면 offset 은 무시된다(키셋 "더 보기"). */
+    cursor?: string;
   }) => api.get<import('@/types').K8sEventListResponse>('/events/', { params }),
   /** 심각도별 건수 — 목록의 심각도 필터·limit 과 무관한 서버 집계(D-111). */
   stats: (clusterId?: string | null) =>
@@ -2407,6 +2409,8 @@ export const observabilityApi = {
     acked?: boolean;
     limit?: number;
     offset?: number;
+    /** 이전 페이지 nextCursor — 주면 offset 은 무시된다(키셋 "더 보기"). */
+    cursor?: string;
   }) =>
     api.get<import('@/types').AlertEventListResponse>('/observability/alerts', {
       params: {
@@ -2417,6 +2421,7 @@ export const observabilityApi = {
         ...(params?.acked !== undefined ? { acked: params.acked } : {}),
         limit: params?.limit ?? 200,
         offset: params?.offset ?? 0,
+        ...(params?.cursor ? { cursor: params.cursor } : {}),
       },
     }),
   alertStats: (clusterId?: string | null, hours = 24) =>
