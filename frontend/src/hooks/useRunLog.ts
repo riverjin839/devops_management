@@ -34,8 +34,11 @@ export interface RunLog {
   /** 핸들 없이 기록(단일 실행 화면의 하위 호환). */
   log: (level: RunLogLevel, message: string) => void;
   setStep: (name: string, label: string, status: RunStepStatus) => void;
-  /** 진행 중인 실행 전부를 끝낸다. 실행 1건만 끝내려면 핸들의 `end` 를 쓴다. */
+  /** 진행 중인 실행 전부를 끝낸다. 그 실행들의 핸들은 이후 기록·종료가 무시된다
+   *  (새 실행 로그에 섞이지 않게). 실행 1건만 끝내려면 핸들의 `end` 를 쓴다. */
   end: () => void;
+  /** 보이는 줄·단계만 비운다. 진행 중인 실행은 그대로 진행 중이며 이어서 기록한다
+   *  (지운다고 실행이 끝난 것처럼 버튼이 다시 켜지지 않게). */
   clear: () => void;
 }
 
@@ -54,6 +57,8 @@ export function useRunLog(): RunLog {
   const [running, setRunning] = useState(false);
   const active = useRef(new Map<number, ActiveRun>());
   const seq = useRef(0);
+  // 전역 end() 세대 — 이전 세대 핸들의 기록·종료는 무시한다(고아 핸들이 새 실행 로그에 섞이지 않게).
+  const generation = useRef(0);
 
   const log = useCallback((level: RunLogLevel, message: string) => {
     setLines((prev) => [...prev, { ts: new Date().toISOString(), level, message }]);
@@ -101,26 +106,28 @@ export function useRunLog(): RunLog {
     }
     runs.set(id, me);
     sync();
+    const myGen = generation.current;
+    const live = () => myGen === generation.current;
     const tag = (msg: string) => (me.shared ? `[${t}] ${msg}` : msg);
     return {
-      log: (level, message) => log(level, tag(message)),
-      setStep: (name, label, status) => setStep(`${id}:${name}`, label ? tag(label) : label, status),
+      log: (level, message) => { if (live()) log(level, tag(message)); },
+      setStep: (name, label, status) => { if (live()) setStep(`${id}:${name}`, label ? tag(label) : label, status); },
       end: () => {
-        if (active.current.delete(id)) sync();
+        if (live() && active.current.delete(id)) sync();
       },
     };
   }, [log, setStep, sync]);
 
   const end = useCallback(() => {
+    generation.current += 1;
     active.current.clear();
     setRunning(false);
   }, []);
   const clear = useCallback(() => {
-    active.current.clear();
-    setTitle('');
+    // 진행 중인 실행은 건드리지 않는다 — 줄·단계만 비우고 제목·running 은 진행 상태를 따른다.
+    if (active.current.size === 0) setTitle('');
     setLines([]);
     setSteps([]);
-    setRunning(false);
   }, []);
 
   return { title, lines, steps, running, begin, log, setStep, end, clear };
@@ -180,8 +187,11 @@ export async function runLogged<T>(
   opts: {
     title: string;
     first?: string;
-    fn: () => Promise<T>;
-    summarize?: (res: T) => RunLogEntry[];
+    /** 실행 본체 — 진행 중 단계 칩·줄은 인자로 받은 이 실행의 핸들로 남긴다. */
+    fn: (run: RunLogHandle) => Promise<T>;
+    /** 응답 요약 줄. 단계 칩을 남기려면 두 번째 인자인 이 실행의 핸들(`run.setStep`)을 쓴다 —
+     *  페이지 전역 `runLog.setStep` 은 동시 실행 시 소속 표시(`[제목]`)·이름 구분이 빠진다. */
+    summarize?: (res: T, run: RunLogHandle) => RunLogEntry[];
     heartbeatMs?: number;
     keepOpen?: boolean;
   },
@@ -193,10 +203,10 @@ export async function runLogged<T>(
     ? setInterval(() => run.log('info', `응답 대기 중 · ${Math.round((performance.now() - t0) / 1000)}초 경과`), heartbeatMs)
     : null;
   try {
-    const data = await fn();
+    const data = await fn(run);
     if (hb) clearInterval(hb);
     run.log('info', `응답 수신 · ${elapsed(t0)}`);
-    for (const [level, msg] of summarize?.(data) ?? []) run.log(level, msg);
+    for (const [level, msg] of summarize?.(data, run) ?? []) run.log(level, msg);
     if (!keepOpen) run.end();
     return { ok: true, data, run };
   } catch (error) {

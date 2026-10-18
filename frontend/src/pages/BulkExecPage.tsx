@@ -699,10 +699,10 @@ export function BulkExecPage() {
       title: '다른 노드에서 파일 가져오기',
       first: `${node?.label ?? '(노드 미선택)'} — ${fetchRemotePath.trim() || '(경로 없음)'} 읽기 요청 · SSH ${username} 포트 ${port}`,
       fn: () => fetchFileMutation.mutateAsync(),
-      summarize: (res) => {
+      summarize: (res, run) => {
         const out: RunLogEntry[] = [];
         for (const s of res.steps ?? []) {
-          runLog.setStep(s.id, s.label, s.status === 'failed' ? 'failed' : 'done');
+          run.setStep(s.id, s.label, s.status === 'failed' ? 'failed' : 'done');
           out.push([s.status === 'failed' ? 'error' : 'info',
             `단계 ${s.label} · ${s.status}${s.durationMs != null ? ` · ${s.durationMs}ms` : ''}${s.detail ? ` — ${s.detail}` : ''}`]);
         }

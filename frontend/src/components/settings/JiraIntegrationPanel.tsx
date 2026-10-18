@@ -9,7 +9,7 @@ import { useAuthStore } from '@/stores/authStore';
 import { JiraConnectCard } from '@/components/settings/JiraConnectCard';
 import { jiraApi } from '@/services/api';
 import { LoadingState, RunLogPanel, useToast } from '@/components/common';
-import { useRunLog, runLogged, type RunLogEntry } from '@/hooks/useRunLog';
+import { useRunLog, runLogged, type RunLogEntry, type RunLogHandle } from '@/hooks/useRunLog';
 import { useLogPref } from '@/hooks/useLogPref';
 import { MacCard } from '@/components/ui/MacCard';
 import { formatApiError, parseUTC } from '@/lib/utils';
@@ -81,23 +81,23 @@ export function JiraIntegrationPanel() {
       : browserMode
         ? '서버 브라우저로 SSO 로그인 요청 — 백엔드 호스트의 브라우저 창에서 로그인을 마칠 때까지 최대 4분 대기'
         : `SSO 폼 로그인 요청 — 계정 ${payload?.username ?? '—'} · 로그인 정보 저장 ${payload?.saveLogin ? '예' : '아니오'}`;
-    const markSteps = (res: JiraSsoLoginResult) => {
-      runLog.setStep('jira', 'Jira', res.ok ? 'done' : 'failed');
-      if (res.confluenceOk === true) runLog.setStep('confluence', 'Confluence', 'done');
-      else if (res.confluenceOk === false) runLog.setStep('confluence', 'Confluence', 'failed');
-      else if (confluenceConfigured) runLog.setStep('confluence', 'Confluence (미시도)', res.ok ? 'done' : 'failed');
+    const markSteps = (run: RunLogHandle, res: JiraSsoLoginResult) => {
+      run.setStep('jira', 'Jira', res.ok ? 'done' : 'failed');
+      if (res.confluenceOk === true) run.setStep('confluence', 'Confluence', 'done');
+      else if (res.confluenceOk === false) run.setStep('confluence', 'Confluence', 'failed');
+      else if (confluenceConfigured) run.setStep('confluence', 'Confluence (미시도)', res.ok ? 'done' : 'failed');
     };
     const r = await runLogged(runLog, {
       title,
       first,
       heartbeatMs: browserMode ? 10_000 : 5000,
-      fn: async () => {
-        runLog.setStep('jira', 'Jira', 'running');
-        if (confluenceConfigured) runLog.setStep('confluence', 'Confluence', 'running');
+      fn: async (run) => {
+        run.setStep('jira', 'Jira', 'running');
+        if (confluenceConfigured) run.setStep('confluence', 'Confluence', 'running');
         return (await ssoLogin.mutateAsync(payload)).data;
       },
-      summarize: (res) => {
-        markSteps(res);
+      summarize: (res, run) => {
+        markSteps(run, res);
         const lines: RunLogEntry[] = [];
         if (res.ok) {
           lines.push(['info', `Jira 로그인 완료 — 계정 ${res.jiraAccount || '—'} · 표시 이름 ${res.displayName || '—'}`]);
@@ -130,8 +130,8 @@ export function JiraIntegrationPanel() {
         toast.error('SSO 로그인 실패', data.detail);
       }
     } else if (!r.aborted) {
-      runLog.setStep('jira', 'Jira', 'failed');
-      if (confluenceConfigured) runLog.setStep('confluence', 'Confluence', 'failed');
+      r.run.setStep('jira', 'Jira', 'failed');
+      if (confluenceConfigured) r.run.setStep('confluence', 'Confluence', 'failed');
       toast.error('SSO 로그인 실패', formatApiError(r.error));
     }
   };
