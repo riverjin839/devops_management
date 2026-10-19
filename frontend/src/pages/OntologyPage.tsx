@@ -12,7 +12,8 @@ import { useLogPref } from '@/hooks/useLogPref';
 import { cssVarColor, useThemeColorKey } from '@/lib/chartTokens';
 
 // ── 엔티티 타입별 색상 (D-120: 차트 토큰) ─────────────────────────────────────
-// three.js 재질·DOM 둘 다 쓰므로 토큰명을 들고 있다가 cssVarColor 로 현재 테마 값을 읽는다.
+// three.js 재질 전용 — 토큰명을 들고 있다가 cssVarColor 로 현재 테마 값을 읽는다.
+// DOM(칩·점·바)은 아래 ENTITY_CLASS 의 Tailwind 토큰 클래스를 쓴다 — 두 맵은 같이 바꾼다.
 // 분류색이 8종이라 10종 중 2종은 같은 계열의 명도 변형(lighten)으로 구분한다.
 const ENTITY_TOKEN: Record<OntologyEntityType, { token: string; lighten?: number }> = {
   node:              { token: '--chart-1' },              // blue
@@ -27,17 +28,34 @@ const ENTITY_TOKEN: Record<OntologyEntityType, { token: string; lighten?: number
   config_item:       { token: '--chart-3', lighten: 16 }, // 설정 계열 명도 변형
 };
 
-/** 엔티티 타입별 색 묶음 — solid(재질·점), tint(칩 배경), edge(칩 테두리). */
-interface EntityColors { solid: string; tint: string; edge: string }
+/** 엔티티 타입별 DOM 클래스 — dot(점), tint(활성 칩 배경), edge(칩 테두리), bar(상세 패널 좌측 바).
+ *  CSS 변수를 직접 참조하므로 테마가 바뀌면 리렌더 없이 따라간다. JIT 가 찾도록 전체 클래스명을 리터럴로 둔다. */
+const ENTITY_CLASS: Record<OntologyEntityType, { dot: string; tint: string; edge: string; bar: string }> = {
+  node:              { dot: 'bg-chart-1',       tint: 'bg-chart-1/[0.13]',       edge: 'border-chart-1/40',       bar: 'border-l-chart-1' },
+  hardware:          { dot: 'bg-chart-8',       tint: 'bg-chart-8/[0.13]',       edge: 'border-chart-8/40',       bar: 'border-l-chart-8' },
+  os:                { dot: 'bg-chart-2',       tint: 'bg-chart-2/[0.13]',       edge: 'border-chart-2/40',       bar: 'border-l-chart-2' },
+  kernel_param:      { dot: 'bg-chart-3',       tint: 'bg-chart-3/[0.13]',       edge: 'border-chart-3/40',       bar: 'border-l-chart-3' },
+  network:           { dot: 'bg-chart-6',       tint: 'bg-chart-6/[0.13]',       edge: 'border-chart-6/40',       bar: 'border-l-chart-6' },
+  k8s_component:     { dot: 'bg-chart-4',       tint: 'bg-chart-4/[0.13]',       edge: 'border-chart-4/40',       bar: 'border-l-chart-4' },
+  cilium_component:  { dot: 'bg-chart-6-light', tint: 'bg-chart-6-light/[0.13]', edge: 'border-chart-6-light/40', bar: 'border-l-chart-6-light' },
+  workload:          { dot: 'bg-chart-7',       tint: 'bg-chart-7/[0.13]',       edge: 'border-chart-7/40',       bar: 'border-l-chart-7' },
+  service:           { dot: 'bg-chart-5',       tint: 'bg-chart-5/[0.13]',       edge: 'border-chart-5/40',       bar: 'border-l-chart-5' },
+  config_item:       { dot: 'bg-chart-3-light', tint: 'bg-chart-3-light/[0.13]', edge: 'border-chart-3-light/40', bar: 'border-l-chart-3-light' },
+};
 
-function entityColors(): Record<OntologyEntityType, EntityColors> {
+const FALLBACK_CLASS = ENTITY_CLASS.hardware; // chart-8 slate
+
+function entityClass(t: OntologyEntityType) {
+  return ENTITY_CLASS[t] ?? FALLBACK_CLASS;
+}
+
+/** 엔티티 타입별 three.js 재질 색(alpha 없는 hsl). */
+function entityColors(): Record<OntologyEntityType, string> {
   return Object.fromEntries(
-    (Object.entries(ENTITY_TOKEN) as Array<[OntologyEntityType, { token: string; lighten?: number }]>).map(([t, { token, lighten }]) => [t, {
-      solid: cssVarColor(token, { lighten }),
-      tint: cssVarColor(token, { lighten, alpha: 0.13 }),
-      edge: cssVarColor(token, { lighten, alpha: 0.38 }),
-    }]),
-  ) as Record<OntologyEntityType, EntityColors>;
+    (Object.entries(ENTITY_TOKEN) as Array<[OntologyEntityType, { token: string; lighten?: number }]>).map(([t, { token, lighten }]) => [
+      t, cssVarColor(token, { lighten }),
+    ]),
+  ) as Record<OntologyEntityType, string>;
 }
 
 const ENTITY_LABEL: Record<OntologyEntityType, string> = {
@@ -94,10 +112,10 @@ interface GLink extends LinkObject {
 }
 
 // ── 노드 Three.js 객체 생성 ────────────────────────────────────────────────────
-function makeNodeObject(node: NodeObject, colors: Record<OntologyEntityType, EntityColors>): THREE.Mesh {
+function makeNodeObject(node: NodeObject, colors: Record<OntologyEntityType, string>): THREE.Mesh {
   const n = node as GNode;
-  // MeshLambertMaterial 은 hsl(…) 을 파싱한다 — alpha 없는 solid 만 넘긴다.
-  const color = colors[n.entityType]?.solid ?? cssVarColor('--chart-8');
+  // MeshLambertMaterial 은 hsl(…) 을 파싱한다 — alpha 없는 색만 넘긴다.
+  const color = colors[n.entityType] ?? cssVarColor('--chart-8');
   const size = 4 + Math.min((n.__degree ?? 1) * 0.8, 8);
   const geo = new THREE.SphereGeometry(size, 16, 16);
   const mat = new THREE.MeshLambertMaterial({ color, transparent: true, opacity: 0.92 });
@@ -105,9 +123,8 @@ function makeNodeObject(node: NodeObject, colors: Record<OntologyEntityType, Ent
 }
 
 // ── 상세 패널 ─────────────────────────────────────────────────────────────────
-function NodeDetailPanel({ node, color, onClose, onAnalyzeImpact }: {
+function NodeDetailPanel({ node, onClose, onAnalyzeImpact }: {
   node: GNode;
-  color: string;
   onClose: () => void;
   onAnalyzeImpact: (entityId: string) => void;
 }) {
@@ -115,8 +132,7 @@ function NodeDetailPanel({ node, color, onClose, onAnalyzeImpact }: {
 
   return (
     <div className="absolute top-4 right-4 w-72 bg-card border border-border rounded-md shadow-card overflow-hidden z-10">
-      <div className="flex items-center justify-between px-4 py-3 border-b border-border"
-        style={{ borderLeftColor: color, borderLeftWidth: 4 }}>
+      <div className={`flex items-center justify-between px-4 py-3 border-b border-border border-l-4 ${entityClass(node.entityType).bar}`}>
         <div className="min-w-0">
           <p className="text-xs font-medium text-muted-foreground">
             {ENTITY_LABEL[node.entityType] ?? node.entityType}
@@ -172,8 +188,7 @@ function NodeDetailPanel({ node, color, onClose, onAnalyzeImpact }: {
 }
 
 // ── Impact 결과 패널 ──────────────────────────────────────────────────────────
-function ImpactPanel({ result, colors, onClose }: {
-  colors: Record<OntologyEntityType, EntityColors>;
+function ImpactPanel({ result, onClose }: {
   result: { blastRadiusScore: number; impactedEntities: { id: string; name: string; entityType: OntologyEntityType }[]; impactPaths: { pathNames: string[]; pathRelations: string[]; score: number }[] };
   onClose: () => void;
 }) {
@@ -203,7 +218,7 @@ function ImpactPanel({ result, colors, onClose }: {
             <div className="space-y-1">
               {result.impactedEntities.slice(0, 8).map((e) => (
                 <div key={e.id} className="flex items-center gap-2 text-sm">
-                  <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: colors[e.entityType]?.solid }} />
+                  <span className={`w-2 h-2 rounded-full flex-shrink-0 ${entityClass(e.entityType).dot}`} />
                   <span className="text-foreground truncate">{e.name}</span>
                 </div>
               ))}
@@ -270,8 +285,8 @@ export function OntologyPage({ embedded = false }: { embedded?: boolean } = {}) 
     setImpactResult(null);
   }, [clusterId]);
 
-  // 테마·강조색이 바뀌면 키가 달라진다 → 색 맵·nodeThreeObject·linkColor identity 가 바뀌어
-  // ForceGraph3D 가 노드 객체를 다시 만들고 링크·배경을 다시 칠한다.
+  // 캔버스 전용: 테마·강조색이 바뀌면 키가 달라진다 → 색 맵·nodeThreeObject·linkColor identity 가 바뀌어
+  // ForceGraph3D 가 노드 객체를 다시 만들고 링크·배경을 다시 칠한다. DOM 색은 클래스라 이 키와 무관하다.
   const themeKey = useThemeColorKey();
   const colors = useMemo(() => { void themeKey; return entityColors(); }, [themeKey]);
   const canvasColors = useMemo(() => {
@@ -462,21 +477,18 @@ export function OntologyPage({ embedded = false }: { embedded?: boolean } = {}) 
         <div className="flex items-center gap-1.5 px-4 py-2 bg-card border-b border-border/60 flex-shrink-0 overflow-x-auto">
           {ALL_TYPES.map((t) => {
             const active = activeTypes.has(t);
+            const cls = ENTITY_CLASS[t];
             return (
               <button
                 key={t}
                 type="button"
                 aria-pressed={active}
                 onClick={() => toggleType(t)}
-                className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium text-foreground border flex-shrink-0 transition-opacity ${
-                  active ? 'opacity-100' : 'opacity-35'
+                className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium text-foreground border flex-shrink-0 transition-opacity ${cls.edge} ${
+                  active ? `opacity-100 ${cls.tint}` : 'opacity-35 bg-transparent'
                 }`}
-                style={{
-                  background: active ? colors[t].tint : 'transparent',
-                  borderColor: colors[t].edge,
-                }}
               >
-                <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: colors[t].solid }} />
+                <span className={`w-2 h-2 rounded-full flex-shrink-0 ${cls.dot}`} />
                 {ENTITY_LABEL[t]}
               </button>
             );
@@ -555,7 +567,7 @@ export function OntologyPage({ embedded = false }: { embedded?: boolean } = {}) 
               <p className="text-xs font-medium text-muted-foreground mb-2">엔티티 타입</p>
               {ALL_TYPES.map((t) => (
                 <div key={t} className="flex items-center gap-2">
-                  <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ background: colors[t].solid }} />
+                  <span className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${ENTITY_CLASS[t].dot}`} />
                   <span className="text-sm text-muted-foreground">{ENTITY_LABEL[t]}</span>
                 </div>
               ))}
@@ -572,7 +584,6 @@ export function OntologyPage({ embedded = false }: { embedded?: boolean } = {}) 
           {selectedNode && (
             <NodeDetailPanel
               node={selectedNode}
-              color={colors[selectedNode.entityType]?.solid ?? cssVarColor('--chart-8')}
               onClose={() => { setSelectedNode(null); setImpactResult(null); }}
               onAnalyzeImpact={(id) => { void handleAnalyzeImpact(id); }}
             />
@@ -582,7 +593,6 @@ export function OntologyPage({ embedded = false }: { embedded?: boolean } = {}) 
           {impactResult && (
             <ImpactPanel
               result={impactResult}
-              colors={colors}
               onClose={() => setImpactResult(null)}
             />
           )}

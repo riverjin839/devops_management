@@ -95,6 +95,11 @@ export default {
           6: "hsl(var(--chart-6) / <alpha-value>)",
           7: "hsl(var(--chart-7) / <alpha-value>)",
           8: "hsl(var(--chart-8) / <alpha-value>)",
+          // 토큰보다 종류가 많을 때 쓰는 같은 계열 명도 변형(Ontology 10종 > 8토큰).
+          // three.js 쪽 cssVarColor(token, { lighten: 16 }) 와 같은 식(L+16, 5~95 clamp)이라 색이 맞는다.
+          // CSS relative color 문법 — Chrome 122+ / Safari 18+ / Firefox 128+.
+          "3-light": "hsl(from hsl(var(--chart-3)) h s clamp(5, calc(l + 16), 95) / <alpha-value>)",
+          "6-light": "hsl(from hsl(var(--chart-6)) h s clamp(5, calc(l + 16), 95) / <alpha-value>)",
         },
       },
       // ── P0 대비: 글자 전용 파생 토큰 ──

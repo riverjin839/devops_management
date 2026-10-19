@@ -10,6 +10,9 @@
 
 1.57.0 이후 main 에 병합된 변경 (다음 릴리스 후보).
 
+### Changed
+- **온톨로지 그래프 칩·범례 색 테마 토큰화**: 엔티티 타입 필터 칩, 범례 점, 영향 분석 점, 노드 상세 좌측 바가 인라인 스타일 대신 `--chart-*` 유틸 클래스를 쓴다. 테마를 바꾸면 리렌더 없이 바로 바뀐다. 3D 구체 색과 똑같다. Frontend: Tailwind 토큰 `chart-3-light`·`chart-6-light`(CSS relative color, Chrome 122+/Safari 18+/Firefox 128+) 추가, `cssVarColor` 는 three.js 캔버스 전용.
+
 ## [1.57.0] - 2026-10-17
 
 ### Changed
