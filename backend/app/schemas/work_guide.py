@@ -1,4 +1,4 @@
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 from datetime import datetime
 from uuid import UUID
 from typing import Optional, List
@@ -32,6 +32,15 @@ class WorkGuideUpdate(BaseModel):
     parent_id: Optional[UUID] = None
     sort_order: Optional[int] = None
     confluence_url: Optional[str] = Field(None, max_length=2048)
+
+    # 수정에서 `null` 은 "비우기"다(D-162) — 본문·카테고리·태그·작성자·Confluence URL·상위 페이지·테넌트는
+    # null 로 비울 수 있다. NOT NULL 성격의 필드는 null 이 오면 500(IntegrityError) 대신 422 로 거부한다.
+    @field_validator("title", "priority", "status", "sort_order")
+    @classmethod
+    def _reject_null(cls, v, info):
+        if v is None:
+            raise ValueError(f"{info.field_name} 은(는) 비울 수 없습니다")
+        return v
 
 
 class WorkGuideResponse(BaseModel):

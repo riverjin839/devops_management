@@ -2,7 +2,7 @@ from datetime import date, datetime
 from typing import Optional
 from uuid import UUID
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 ProjectStatus = str  # active / completed / paused
 
@@ -33,6 +33,15 @@ class ProjectUpdate(BaseModel):
     start_date: Optional[date] = None
     end_date: Optional[date] = None
     status: Optional[ProjectStatus] = None
+
+    # D-162: 선택 필드(설명·목표·시작일·종료일·테넌트)는 명시적 null 로 비울 수 있다(키 생략 = 유지).
+    # 필수 컬럼(이름·색·상태)은 null 로 비울 수 없다 — DB NOT NULL 위반 500 대신 422.
+    @field_validator("name", "color", "status")
+    @classmethod
+    def _required_not_null(cls, v, info):
+        if v is None:
+            raise ValueError(f"{info.field_name} 은(는) 비울 수 없습니다")
+        return v
 
 
 class ProjectResponse(ProjectBase):

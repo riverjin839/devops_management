@@ -13,11 +13,8 @@ import { useIsilonServers, useRunIsilonCommands } from '@/hooks/useIsilonNfs';
 import { useClusters } from '@/hooks/useCluster';
 import { useTerminalEnvSync } from '@/hooks/useTerminalEnvSync';
 import type {
-  IsilonServer, IsilonCommandResult, IsilonRunResponse as IsilonRunResponseBase, IsilonK8sNfsPv,
+  IsilonServer, IsilonCommandResult, IsilonRunResponse, IsilonK8sNfsPv,
 } from '@/types';
-
-/** 실행 응답 + K8s PV 조회 오류(D-147, 백엔드 `k8s_nfs_pvs_error`). 성공이면 null. */
-type IsilonRunResponse = IsilonRunResponseBase & { k8sNfsPvsError?: string | null };
 
 export function IsilonNfsPage() {
   const {

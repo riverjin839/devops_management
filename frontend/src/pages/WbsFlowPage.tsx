@@ -9,9 +9,9 @@ import {
   CheckCircle2, Clock, AlertCircle, Circle, BarChart3,
   ListChecks, Activity, Plus, FolderOpen,
 } from 'lucide-react';
-import { ViewModeBar, SidePane, EmptyState, PageShell } from '@/components/common';
+import { ViewModeBar, SidePane, EmptyState, ErrorState, LoadingState, PageShell } from '@/components/common';
 import { MacCard } from '@/components/ui/MacCard';
-import { stripHtml } from '@/lib/utils';
+import { stripHtml, toLocalDateKey } from '@/lib/utils';
 import { useProjects } from '@/hooks/useProjects';
 import { ProjectHeader } from '@/components/wbs/ProjectHeader';
 import { ProjectFormModal } from '@/components/wbs/ProjectFormModal';
@@ -36,6 +36,10 @@ function dayLabel(d: Date): string {
 function isWeekend(d: Date): boolean {
   return d.getDay() === 0 || d.getDay() === 6;
 }
+/** UTC 저장값 → 로컬(KST) 날짜 키. 예전 `.slice(0, 10)` 은 UTC 앞자리라 KST 오전 업무가 전날로 샜다(D-163②). */
+function localKey(iso?: string | null): string | undefined {
+  return toLocalDateKey(iso) || undefined;
+}
 
 // 담당자 필드에 쉼표로 여러 명이 들어올 수 있다 (예: "A,B") — 한 명씩 분리한다.
 function splitAssignees(s?: string | null): string[] {
@@ -43,14 +47,16 @@ function splitAssignees(s?: string | null): string[] {
 }
 
 const KANBAN_LABEL: Record<string, string> = {
-  backlog: 'Backlog', todo: 'Todo', in_progress: '진행중',
+  backlog: '백로그', todo: '할일', in_progress: '진행중',
   review_test: '검토', done: '완료',
 };
+// 우선순위는 범주라 상태 토큰(status-*) 대신 --chart-* / 중립(§12.12-4).
 const PRIORITY_COLOR: Record<string, string> = {
-  high:   'bg-status-critical/15 text-status-critical border-status-critical/25',
-  medium: 'bg-status-warning/15 text-status-warning border-status-warning/25',
+  high:   'bg-chart-5/15 text-chart-5-text border-chart-5/25',
+  medium: 'bg-chart-3/15 text-chart-3-text border-chart-3/25',
   low:    'bg-secondary text-muted-foreground border-border',
 };
+const PRIORITY_LABEL: Record<string, string> = { high: '높음', medium: '보통', low: '낮음' };
 const MODULE_COLOR: Record<string, string> = {
   k8s:        'bg-chart-1/15 text-chart-1-text',
   keycloak:   'bg-chart-4/15 text-chart-4-text',
@@ -119,6 +125,7 @@ function ItemCard({ item, onClick }: { item: DayItem; onClick: () => void }) {
 
   return (
     <button
+      type="button"
       onClick={onClick}
       className={`w-full border-l-[3px] ${base} rounded-r-md px-2 py-1 cursor-pointer hover:bg-secondary/40 transition-colors text-left ${item.isSubTask ? 'ml-2' : ''}`}
     >
@@ -137,7 +144,7 @@ function ItemCard({ item, onClick }: { item: DayItem; onClick: () => void }) {
         )}
         {item.priority && (
           <span className={`text-[11px] px-1 rounded-md border ${PRIORITY_COLOR[item.priority] ?? ''}`}>
-            {item.priority}
+            {PRIORITY_LABEL[item.priority] ?? item.priority}
           </span>
         )}
         {isIssue && (
@@ -166,7 +173,7 @@ function DetailModal({ item, onClose }: { item: DayItem; onClose: () => void }) 
       )}
       {item.priority && (
         <span className={`text-xs px-2 py-0.5 rounded-full border flex-shrink-0 ${PRIORITY_COLOR[item.priority] ?? ''}`}>
-          {item.priority}
+          우선순위 {PRIORITY_LABEL[item.priority] ?? item.priority}
         </span>
       )}
     </div>
@@ -235,7 +242,7 @@ function SummaryBar({ tasks, issues }: { tasks: WorkItem[]; issues: WorkItem[] }
       <StatTile icon={Activity} label="이슈" value={issueCounts.total} tone={issueCounts.open > 0 ? 'warning' : undefined}>
         <div className="flex items-center gap-1.5 mt-2 flex-wrap">
           <Chip color="emerald">해결 {issueCounts.resolved}</Chip>
-          <Chip color="red">미해결 {issueCounts.open}</Chip>
+          <Chip color={issueCounts.open > 0 ? 'red' : 'slate'}>미해결 {issueCounts.open}</Chip>
         </div>
       </StatTile>
       <StatTile icon={CheckCircle2} label="이슈 해결률" value={`${issueProgress}%`}>
@@ -256,7 +263,7 @@ function ProgressBar({ value }: { value: number }) {
 const CHIP_COLOR: Record<string, string> = {
   emerald: 'bg-secondary text-muted-foreground',
   sky:     'bg-chart-3/15 text-chart-3-text',
-  slate:   'bg-status-unknown/15 text-status-unknown',
+  slate:   'bg-secondary text-muted-foreground',
   red:     'bg-status-critical/15 text-status-critical',
 };
 
@@ -308,9 +315,9 @@ function PersonalGanttView({
   const taskActiveDates = useMemo(() => {
     const map = new Map<string, Set<string>>();
     for (const item of myTasks) {
-      const ts = item.startedAt?.slice(0, 10);
+      const ts = localKey(item.startedAt);
       if (!ts) continue;
-      const te = item.closedAt?.slice(0, 10) ??
+      const te = localKey(item.closedAt) ??
         ((item as WorkItem & { parentId?: string }).kanbanStatus !== 'done' ? fmtDate(new Date()) : ts);
       const loopStart = ts > startStr ? parseDate(ts) : parseDate(startStr);
       const loopEnd   = te < endStr   ? parseDate(te)  : parseDate(endStr);
@@ -345,7 +352,7 @@ function PersonalGanttView({
       if (!addedIds.has(ct.id)) result.push({ item: ct, indent: true });
     }
     for (const issue of myIssues) {
-      const ds = issue.startedAt?.slice(0, 10);
+      const ds = localKey(issue.startedAt);
       if (ds && ds >= startStr && ds <= endStr) result.push({ item: issue, indent: false });
     }
     return result;
@@ -379,7 +386,7 @@ function PersonalGanttView({
                 <th key={ds} className={`border-b border-r border-border px-1 py-2 text-center font-medium ${isTd ? 'bg-primary/10 text-primary' : isWE ? 'text-muted-foreground bg-secondary/30' : 'text-muted-foreground'}`}
                   style={{ minWidth: COL_W, width: COL_W }}>
                   <div className="text-xs font-semibold">{dayLabel(d)}</div>
-                  {isTd && <div className="text-[11px] text-primary font-bold">TODAY</div>}
+                  {isTd && <div className="text-[11px] text-primary font-semibold">오늘</div>}
                 </th>
               );
             })}
@@ -387,8 +394,9 @@ function PersonalGanttView({
         </thead>
         <tbody>
           {rows.map((row, ri) => {
-            const bgBase = ri % 2 === 0 ? 'hsl(var(--background))' : 'hsl(var(--secondary)/0.08)';
             const bgClass = ri % 2 === 0 ? 'bg-background' : 'bg-secondary/5';
+            // 고정 열 배경 — 인라인 style 대신 토큰 클래스(§12.12-2).
+            const stickyBg = ri % 2 === 0 ? 'bg-background' : 'bg-secondary/10';
 
             if (row.item.type === 'task') {
               const t = row.item;
@@ -397,13 +405,13 @@ function PersonalGanttView({
               const dayItem: DayItem = {
                 type: 'task', id: t.id, label: t.content, sub: t.category,
                 status: t.kanbanStatus, priority: t.priority, module: t.module,
-                startDate: t.startedAt?.slice(0, 10) ?? '',
-                endDate: t.closedAt?.slice(0, 10),
+                startDate: localKey(t.startedAt) ?? '',
+                endDate: localKey(t.closedAt),
               };
+              const taskTitle = stripHtml(t.content);
               return (
                 <tr key={t.id} className={bgClass}>
-                  <td className="sticky left-0 z-10 border-b border-r border-border px-3 py-1.5 align-middle"
-                    style={{ backgroundColor: bgBase }}>
+                  <td className={`sticky left-0 z-10 border-b border-r border-border px-3 py-1.5 align-middle ${stickyBg}`}>
                     <div className={`flex items-center gap-1.5 ${row.indent ? 'ml-4' : ''}`}>
                       {row.indent && <span className="text-muted-foreground/40 text-sm flex-shrink-0">└</span>}
                       <StatusIcon status={t.kanbanStatus} type="task" />
@@ -420,14 +428,16 @@ function PersonalGanttView({
                     const isTd = ds === todayStr;
                     return (
                       <td key={ds}
-                        onClick={() => on && onItemClick(dayItem)}
-                        className={`border-b border-r border-border align-middle ${isTd ? 'bg-primary/5' : isWeekend(d) ? 'bg-secondary/20' : ''} ${on ? 'cursor-pointer hover:brightness-110' : ''}`}
+                        className={`border-b border-r border-border align-middle ${isTd ? 'bg-primary/5' : isWeekend(d) ? 'bg-secondary/20' : ''}`}
                         style={{ minWidth: COL_W, width: COL_W, height: 34 }}>
                         {on && (
-                          <div className={`mx-0.5 rounded border h-[22px] ${cellColor} flex items-center justify-center gap-0.5`}>
+                          // D-165: 셀 클릭(<td onClick>) 대신 막대를 버튼으로 — 키보드로 상세를 연다.
+                          <button type="button" onClick={() => onItemClick(dayItem)}
+                            title={`${taskTitle} · ${ds}`} aria-label={`${taskTitle} 상세 (${ds})`}
+                            className={`w-[calc(100%-4px)] mx-0.5 rounded border h-[22px] ${cellColor} flex items-center justify-center gap-0.5 hover:brightness-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50`}>
                             {t.kanbanStatus === 'done' && <CheckCircle2 className="w-2.5 h-2.5 text-muted-foreground" />}
                             {t.kanbanStatus === 'in_progress' && <Clock className="w-2.5 h-2.5 text-chart-3" />}
-                          </div>
+                          </button>
                         )}
                       </td>
                     );
@@ -436,7 +446,8 @@ function PersonalGanttView({
               );
             } else {
               const iss = row.item;
-              const ds = iss.startedAt?.slice(0, 10);
+              const ds = localKey(iss.startedAt);
+              const issueTitle = stripHtml(iss.content);
               const dayItem: DayItem = {
                 type: 'issue', id: iss.id, label: iss.content, sub: iss.category,
                 status: iss.closedAt ? 'resolved' : 'open',
@@ -444,8 +455,7 @@ function PersonalGanttView({
               };
               return (
                 <tr key={iss.id} className={bgClass}>
-                  <td className="sticky left-0 z-10 border-b border-r border-border px-3 py-1.5 align-middle"
-                    style={{ backgroundColor: bgBase }}>
+                  <td className={`sticky left-0 z-10 border-b border-r border-border px-3 py-1.5 align-middle ${stickyBg}`}>
                     <div className="flex items-center gap-1.5">
                       <AlertCircle className={`w-3 h-3 flex-shrink-0 ${iss.closedAt ? 'text-muted-foreground' : 'text-status-critical'}`} />
                       <span className="truncate max-w-[180px] font-medium leading-tight">{stripHtml(iss.content)}</span>
@@ -458,13 +468,14 @@ function PersonalGanttView({
                     const isTd = colDs === todayStr;
                     return (
                       <td key={colDs}
-                        onClick={() => on && onItemClick(dayItem)}
-                        className={`border-b border-r border-border align-middle ${isTd ? 'bg-primary/5' : isWeekend(d) ? 'bg-secondary/20' : ''} ${on ? 'cursor-pointer' : ''}`}
+                        className={`border-b border-r border-border align-middle ${isTd ? 'bg-primary/5' : isWeekend(d) ? 'bg-secondary/20' : ''}`}
                         style={{ minWidth: COL_W, width: COL_W, height: 34 }}>
                         {on && (
-                          <div className={`mx-0.5 rounded border h-[22px] ${iss.closedAt ? 'bg-muted-foreground/20 border-muted-foreground/30' : 'bg-chart-7/30 border-chart-7/50'} flex items-center justify-center`}>
+                          <button type="button" onClick={() => onItemClick(dayItem)}
+                            title={`${issueTitle} · ${colDs}`} aria-label={`이슈 ${issueTitle} 상세 (${colDs})`}
+                            className={`w-[calc(100%-4px)] mx-0.5 rounded border h-[22px] ${iss.closedAt ? 'bg-muted-foreground/20 border-muted-foreground/30' : 'bg-chart-7/30 border-chart-7/50'} flex items-center justify-center focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50`}>
                             <AlertCircle className={`w-2.5 h-2.5 ${iss.closedAt ? 'text-muted-foreground' : 'text-chart-7'}`} />
-                          </div>
+                          </button>
                         )}
                       </td>
                     );
@@ -498,14 +509,27 @@ export function WbsFlowPage() {
   const [showNewProjectModal, setShowNewProjectModal] = useState(false);
 
   // ── projects ──
-  const { data: projectsData } = useProjects();
+  const projectsQuery = useProjects();
+  const projectsData = projectsQuery.data;
   const projects = useMemo(() => projectsData?.data ?? [], [projectsData]);
 
   // ── data fetching ── 통합 work_items 한 번에 가져와 type 으로 분할
-  const { data: allRes } = useQuery({
+  const itemsQuery = useQuery({
     queryKey: ['wbs-work-items'],
     queryFn: () => workItemsApi.getAll().then(r => r.data.data),
   });
+  const allRes = itemsQuery.data;
+  // D-153: 로딩·실패를 "프로젝트 없음"·"작업 없음" 빈 상태로 보여 주지 않는다(빈 상태 CTA → 중복 생성).
+  const itemsBody = itemsQuery.isLoading
+    ? <LoadingState label="작업·이슈를 불러오는 중…" />
+    : itemsQuery.isError
+      ? <ErrorState error={itemsQuery.error} title="작업·이슈를 불러오지 못했습니다" onRetry={() => void itemsQuery.refetch()} />
+      : null;
+  const projectsBody = projectsQuery.isLoading
+    ? <LoadingState label="프로젝트를 불러오는 중…" />
+    : projectsQuery.isError
+      ? <ErrorState error={projectsQuery.error} title="프로젝트를 불러오지 못했습니다" onRetry={() => void projectsQuery.refetch()} />
+      : itemsBody;
   const allItems: WorkItem[] = useMemo(() => allRes ?? [], [allRes]);
   const tasks: WorkItem[]  = useMemo(() => allItems.filter(w => w.type === 'task'), [allItems]);
   const issues: WorkItem[] = useMemo(() => allItems.filter(w => w.type === 'issue'), [allItems]);
@@ -549,8 +573,8 @@ export function WbsFlowPage() {
       const assignees = splitAssignees(task.assignee);
       if (assignees.length === 0) assignees.push('미지정');
 
-      const taskStartStr = task.startedAt?.slice(0, 10);
-      const taskEndStr = task.closedAt?.slice(0, 10);
+      const taskStartStr = localKey(task.startedAt);
+      const taskEndStr = localKey(task.closedAt);
       const startD = taskStartStr ? parseDate(taskStartStr) : null;
       const endD = taskEndStr ? parseDate(taskEndStr) : null;
       if (!startD) continue;
@@ -588,7 +612,7 @@ export function WbsFlowPage() {
       const assignees = splitAssignees(issue.assignee);
       if (assignees.length === 0) assignees.push('미지정');
 
-      const issueDateStr = issue.startedAt?.slice(0, 10);
+      const issueDateStr = localKey(issue.startedAt);
       if (!issueDateStr) continue;
 
       const dayItem: DayItem = {
@@ -598,7 +622,7 @@ export function WbsFlowPage() {
         sub: issue.category,
         status: issue.closedAt ? 'resolved' : 'open',
         startDate: issueDateStr,
-        endDate: issue.closedAt ? issue.closedAt.slice(0, 10) : undefined,
+        endDate: localKey(issue.closedAt),
         resolved: !!issue.closedAt,
       };
 
@@ -647,21 +671,27 @@ export function WbsFlowPage() {
           <PageHeader icon={BarChart3} title="WBS 작업 흐름" description="담당자별 역할 · 날짜별 업무 현황" className="flex-1 min-w-0" />
           <div className="flex items-center gap-2">
             {/* 보기 모드 토글 */}
-            <div className="flex items-center gap-0.5 bg-secondary rounded-xl p-0.5 text-sm">
+            <div className="flex items-center gap-0.5 bg-secondary rounded-xl p-0.5 text-sm" role="group" aria-label="보기 방식">
               <button
+                type="button"
                 onClick={() => setPageView('project')}
+                aria-pressed={pageView === 'project'}
                 className={`px-3.5 py-1.5 rounded-lg font-medium transition-colors ${pageView === 'project' ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}
               >
                 프로젝트
               </button>
               <button
+                type="button"
                 onClick={() => setPageView('grid')}
+                aria-pressed={pageView === 'grid'}
                 className={`px-3.5 py-1.5 rounded-lg font-medium transition-colors ${pageView === 'grid' ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}
               >
                 전체 그리드
               </button>
               <button
+                type="button"
                 onClick={() => setPageView('personal')}
+                aria-pressed={pageView === 'personal'}
                 className={`px-3.5 py-1.5 rounded-lg font-medium transition-colors ${pageView === 'personal' ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}
               >
                 개인별 간트
@@ -677,7 +707,7 @@ export function WbsFlowPage() {
         </div>
 
         {/* ── Summary cards ───────────────────────────────────────────── */}
-        <SummaryBar tasks={tasks} issues={issues} />
+        {itemsQuery.isSuccess && <SummaryBar tasks={tasks} issues={issues} />}
 
         {/* ── Toolbar ─────────────────────────────────────────────────── */}
         <div className="flex items-center gap-2 flex-wrap">
@@ -692,6 +722,8 @@ export function WbsFlowPage() {
             </button>
             <button
               onClick={moveToday}
+              title="오늘이 있는 기간으로 이동"
+              aria-label={`표시 기간 ${startStr} ~ ${endStr} — 오늘로 이동`}
               className="px-3 py-1 text-sm font-medium hover:bg-card rounded-lg text-foreground transition-colors flex items-center gap-1.5 tabular-nums"
             >
               <Calendar className="w-3.5 h-3.5 text-primary" />
@@ -719,8 +751,9 @@ export function WbsFlowPage() {
 
           {pageView === 'project' && projects.length > 0 && (
             <div className="flex items-center gap-1.5">
-              <FolderOpen className="w-3.5 h-3.5 text-primary" />
+              <FolderOpen className="w-3.5 h-3.5 text-primary" aria-hidden />
               <select
+                aria-label="프로젝트 선택"
                 value={selectedProjectId}
                 onChange={e => setSelectedProjectId(e.target.value)}
                 className="text-sm bg-background border border-border rounded-xl px-2.5 py-1.5 text-foreground focus:outline-none focus:ring-2 focus:ring-primary/40"
@@ -733,8 +766,9 @@ export function WbsFlowPage() {
 
           {pageView === 'personal' && (
             <div className="flex items-center gap-1.5">
-              <Users className="w-3.5 h-3.5 text-primary" />
+              <Users className="w-3.5 h-3.5 text-primary" aria-hidden />
               <select
+                aria-label="간트 담당자 선택"
                 value={personalAssignee}
                 onChange={e => setPersonalAssignee(e.target.value)}
                 className="text-sm bg-background border border-border rounded-xl px-2.5 py-1.5 text-foreground focus:outline-none focus:ring-2 focus:ring-primary/40"
@@ -746,8 +780,9 @@ export function WbsFlowPage() {
           )}
 
           <div className="flex items-center gap-1.5">
-            <Filter className="w-3.5 h-3.5 text-muted-foreground" />
+            <Filter className="w-3.5 h-3.5 text-muted-foreground" aria-hidden />
             <select
+              aria-label="담당자 필터"
               value={filterAssignee}
               onChange={e => setFilterAssignee(e.target.value)}
               className="text-sm bg-background border border-border rounded-xl px-2.5 py-1.5 text-foreground focus:outline-none focus:ring-2 focus:ring-primary/40"
@@ -778,7 +813,9 @@ export function WbsFlowPage() {
         {/* ── 프로젝트 뷰 ─────────────────────────────────────────────── */}
         {pageView === 'project' && (
           <div className="space-y-4">
-            {projects.length === 0 ? (
+            {projectsBody ? (
+              <MacCard title="프로젝트">{projectsBody}</MacCard>
+            ) : projects.length === 0 ? (
               <EmptyState
                 icon={FolderOpen}
                 title="아직 프로젝트가 없습니다."
@@ -821,7 +858,7 @@ export function WbsFlowPage() {
               })
             )}
             {/* 미분류 */}
-            {!selectedProjectId && (() => {
+            {!projectsBody && !selectedProjectId && (() => {
               const unclassified = allItems.filter(w => !w.projectId);
               if (unclassified.length === 0) return null;
               const uTasks = unclassified.filter(w => w.type === 'task');
@@ -860,7 +897,7 @@ export function WbsFlowPage() {
             ? (personalAssignee ? `${personalAssignee} 의 간트` : '개인별 간트')
             : `담당자 그리드 · ${dayCount}일`}
         >
-        {pageView === 'personal' ? (
+        {itemsBody ? itemsBody : pageView === 'personal' ? (
           personalAssignee ? (
             <PersonalGanttView
               assignee={personalAssignee}
@@ -907,7 +944,7 @@ export function WbsFlowPage() {
                           {dayLabel(d)}
                         </div>
                         {isTodayCol && (
-                          <div className="text-[11px] text-primary font-bold">TODAY</div>
+                          <div className="text-[11px] text-primary font-semibold">오늘</div>
                         )}
                       </div>
                     </th>
@@ -922,8 +959,7 @@ export function WbsFlowPage() {
                   <tr key={row.assignee}
                     className={rowIdx % 2 === 0 ? 'bg-background' : 'bg-secondary/10'}>
                     {/* Assignee cell */}
-                    <td className="sticky left-0 z-10 border-b border-r border-border px-3 py-2 align-top"
-                      style={{ backgroundColor: rowIdx % 2 === 0 ? 'hsl(var(--background))' : 'hsl(var(--secondary)/0.1)' }}>
+                    <td className={`sticky left-0 z-10 border-b border-r border-border px-3 py-2 align-top ${rowIdx % 2 === 0 ? 'bg-background' : 'bg-secondary/10'}`}>
                       <div className="font-semibold text-foreground text-sm mb-0.5">{row.assignee}</div>
                       <div className="flex flex-wrap gap-1">
                         {row.roles.slice(0, 4).map(role => (

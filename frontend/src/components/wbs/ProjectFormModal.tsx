@@ -1,7 +1,7 @@
 import { useId, useState } from 'react';
 import { X, Loader2, FolderOpen } from 'lucide-react';
 import { TenantScopeSelect, useModalA11y } from '@/components/common';
-import type { Project, ProjectCreate } from '@/types';
+import type { Project, ProjectCreate, ProjectUpdate } from '@/types';
 import { useCreateProject, useUpdateProject } from '@/hooks/useProjects';
 import { formatApiError } from '@/lib/utils';
 
@@ -45,19 +45,34 @@ export function ProjectFormModal({ initial, onClose }: Props) {
     e.preventDefault();
     if (!name.trim()) return;
     setError(null);
-    const payload: ProjectCreate = {
-      name: name.trim(),
-      description: description.trim() || undefined,
-      goal: goal.trim() || undefined,
-      color,
-      startDate: startDate || undefined,
-      endDate: endDate || undefined,
-      tenantId,
-    };
+    if (startDate && endDate && startDate > endDate) {
+      setError('종료일이 시작일보다 빠릅니다.');
+      return;
+    }
     try {
       if (isEdit && initial) {
-        await updateMut.mutateAsync({ id: initial.id, data: payload });
+        // D-162: 수정 모드에서 지운 값은 null 로 보낸다 — 키를 생략하면 서버가 기존 값을 유지해
+        // 설명·목표·기간을 비울 수 없었다.
+        const data: ProjectUpdate = {
+          name: name.trim(),
+          description: description.trim() || null,
+          goal: goal.trim() || null,
+          color,
+          startDate: startDate || null,
+          endDate: endDate || null,
+          tenantId,
+        };
+        await updateMut.mutateAsync({ id: initial.id, data });
       } else {
+        const payload: ProjectCreate = {
+          name: name.trim(),
+          description: description.trim() || undefined,
+          goal: goal.trim() || undefined,
+          color,
+          startDate: startDate || undefined,
+          endDate: endDate || undefined,
+          tenantId,
+        };
         await createMut.mutateAsync(payload);
       }
       onClose();
@@ -76,14 +91,13 @@ export function ProjectFormModal({ initial, onClose }: Props) {
         onSubmit={handleSubmit}
         className="relative bg-card border border-border rounded-md shadow-card w-full max-w-md mx-4 max-h-[90vh] overflow-y-auto"
       >
-        <div className="flex items-center gap-3 px-5 pt-5 pb-3">
-          <div className="w-10 h-10 rounded-2xl bg-primary/10 flex items-center justify-center flex-shrink-0">
-            <FolderOpen className="w-5 h-5 text-primary" />
-          </div>
+        <div className="flex items-center gap-2 px-5 pt-5 pb-3">
+          {/* §12.12: 대화상자 헤더 아이콘 타일 대신 제목 앞 작은 아이콘 */}
+          <FolderOpen className="w-4 h-4 text-muted-foreground flex-shrink-0" aria-hidden />
           <div className="flex-1 min-w-0">
-            <h2 id={f('title')} className="text-base font-semibold">{isEdit ? '프로젝트 수정' : '새 프로젝트'}</h2>
+            <h2 id={f('title')} className="text-base font-semibold">{isEdit ? `프로젝트 수정: ${initial?.name ?? ''}` : '새 프로젝트'}</h2>
           </div>
-          <button type="button" onClick={onClose} disabled={isPending}
+          <button type="button" onClick={onClose} disabled={isPending} title="닫기" aria-label="닫기"
             className="p-1.5 rounded-lg text-muted-foreground hover:bg-secondary disabled:opacity-50">
             <X className="w-4 h-4" />
           </button>
@@ -136,14 +150,15 @@ export function ProjectFormModal({ initial, onClose }: Props) {
                     color === c.value ? 'ring-1 ring-offset-2 ring-primary' : 'opacity-60 hover:opacity-100'
                   }`}
                   title={c.label}
-                  aria-label={c.label}
+                  aria-label={`색상 ${c.label}`}
+                  aria-pressed={color === c.value}
                 />
               ))}
             </div>
           </div>
 
           {error && (
-            <p className="text-sm text-status-critical bg-status-critical/10 rounded-xl px-3 py-2">{error}</p>
+            <p role="alert" className="text-sm text-status-critical bg-status-critical/10 rounded-xl px-3 py-2">{error}</p>
           )}
         </div>
 

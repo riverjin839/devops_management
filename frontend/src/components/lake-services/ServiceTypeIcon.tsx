@@ -4,7 +4,7 @@ import {
 import type { ComponentType } from 'react';
 
 const ICON_MAP: Record<string, ComponentType<{ className?: string }>> = {
-  airflow:    Workflow,    // 워크플로우 오케스트레이션
+  airflow:    Workflow,    // 워크플로 오케스트레이션
   spark:      Zap,         // 분산 컴퓨팅 — '번개'
   iceberg:    Layers,      // 테이블 포맷 — 레이어드
   trino:      Database,    // 분산 SQL — DB

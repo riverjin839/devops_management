@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { Check, X } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 
 interface InlineEditProps {
   value: string;
@@ -11,6 +12,7 @@ interface InlineEditProps {
 }
 
 export function InlineEdit({ value: initial, onSave, onCancel, placeholder, inputClassName = '', className = '' }: InlineEditProps) {
+  const { t } = useTranslation();
   const [val, setVal] = useState(initial);
 
   const save = () => onSave(val.trim());
@@ -32,10 +34,10 @@ export function InlineEdit({ value: initial, onSave, onCancel, placeholder, inpu
         className={`flex-1 min-w-0 bg-transparent rounded px-0.5 focus:outline-none focus:ring-1 focus:ring-primary ${inputClassName}`}
         autoFocus
       />
-      <button type="button" onClick={save} title="저장" aria-label="저장" className="p-0.5 text-primary hover:text-primary/80 flex-shrink-0">
+      <button type="button" onClick={save} title={t('common.action.save')} aria-label={t('common.action.save')} className="p-0.5 text-primary hover:text-primary/80 flex-shrink-0">
         <Check className="w-3.5 h-3.5" />
       </button>
-      <button type="button" onClick={onCancel} title="취소" aria-label="취소" className="p-0.5 text-muted-foreground hover:text-foreground flex-shrink-0">
+      <button type="button" onClick={onCancel} title={t('common.action.cancel')} aria-label={t('common.action.cancel')} className="p-0.5 text-muted-foreground hover:text-foreground flex-shrink-0">
         <X className="w-3.5 h-3.5" />
       </button>
     </div>

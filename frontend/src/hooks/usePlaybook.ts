@@ -3,16 +3,7 @@ import { playbooksApi } from '@/services/api';
 import { usePlaybookStore } from '@/stores/playbookStore';
 import { useToastSafe } from '@/components/common/Toast';
 import { formatApiError } from '@/lib/utils';
-import { Playbook } from '@/types';
-
-/**
- * 수정 페이로드 — 설명·태그는 `null` 로 지운다(D-144). 서버 `PlaybookUpdate` 는 `exclude_unset`
- * 이라 생략한 필드는 유지하고, `null`(또는 빈 문자열)을 보내면 컬럼을 비운다.
- */
-export type PlaybookUpdatePayload = Omit<Partial<Playbook>, 'description' | 'tags'> & {
-  description?: string | null;
-  tags?: string | null;
-};
+import type { Playbook, PlaybookUpdatePayload } from '@/types';
 
 /*
  * 실패 피드백 분담(D-143) — 호출부와 토스트가 겹치지 않게 hook 별로 한 곳에서만 알린다.
@@ -59,9 +50,9 @@ export function useUpdatePlaybook() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    // playbooksApi.update 는 Partial<Playbook> 타입이지만 null 은 그대로 JSON 으로 나간다(D-144).
+    // 비운 설명·태그는 null 로 그대로 JSON 에 실린다(D-144).
     mutationFn: ({ id, data }: { id: string; data: PlaybookUpdatePayload }) =>
-      playbooksApi.update(id, data as Partial<Playbook>),
+      playbooksApi.update(id, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: playbookKeys.all });
     },

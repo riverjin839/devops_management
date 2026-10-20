@@ -123,5 +123,17 @@ def delete_guide(guide_id: UUID, db: Session = Depends(get_db),
     guide = db.query(WorkGuide).filter(WorkGuide.id == guide_id).first()
     if not guide or not scope.visible(guide.tenant_id):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Guide not found")
+    # D-158 — parent_id 는 FK 가 없어 부모만 지우면 하위 페이지(와 그 자손)가 트리에서 사라진다.
+    # 하위가 있으면 지우지 않고 409 로 사유를 돌려준다. 다른 테넌트의 하위도 고아가 되므로 범위와
+    # 상관없이 센다(개수만 알리고 제목은 노출하지 않는다).
+    child_count = db.query(WorkGuide).filter(WorkGuide.parent_id == guide.id).count()
+    if child_count:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=(
+                f"하위 페이지 {child_count}개가 있어 삭제할 수 없습니다. "
+                "하위 페이지를 다른 상위로 옮기거나 먼저 삭제하세요."
+            ),
+        )
     db.delete(guide)
     db.commit()

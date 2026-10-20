@@ -5,8 +5,11 @@ import { workGuidesApi } from '@/services/api';
 import type { WorkGuide, WorkGuideCreate, WorkGuideUpdate } from '@/types';
 import { ConfluenceUrlInput, TenantScopeSelect } from '@/components/common';
 import { RichTextEditor } from '@/components/editor';
+import { formatApiError } from '@/lib/utils';
 
 const CATEGORIES = ['배포', '트러블슈팅', '모니터링', '보안', '기타'];
+/** 리치 에디터는 비워도 `<p></p>` 를 남긴다 — 빈 문단뿐이면 빈 본문으로 본다. */
+const EMPTY_RICH_RE = /^\s*(<p>(\s|&nbsp;|<br\s*\/?>)*<\/p>\s*)*$/i;
 
 interface GuideFormProps {
   initial?: WorkGuide | null;
@@ -50,31 +53,44 @@ export function GuideForm({ initial, allGuides, defaultParentId, onCancel, onSav
     if (!title.trim()) { setError('제목은 필수입니다.'); return; }
     setSaving(true); setError('');
     try {
-      const payload: WorkGuideCreate = {
-        title: title.trim(),
-        content: content.trim() || undefined,
-        category: category || undefined,
-        priority,
-        tags: tags.trim() || undefined,
-        status,
-        author: author.trim() || undefined,
-        parentId: parentId || null,
-        confluenceUrl: confluenceUrl.trim() || undefined,
-        tenantId,
-      };
+      const body = EMPTY_RICH_RE.test(content) ? '' : content.trim();
       if (isEdit && initial) {
-        await workGuidesApi.update(initial.id, payload as WorkGuideUpdate);
+        // 수정 모드에서 비운 필드는 null — undefined 면 JSON 에서 빠져 옛 값이 남는다(D-162).
+        const patch: WorkGuideUpdate = {
+          title: title.trim(),
+          content: body || null,
+          category: category || null,
+          priority,
+          tags: tags.trim() || null,
+          status,
+          author: author.trim() || null,
+          parentId: parentId || null,
+          confluenceUrl: confluenceUrl.trim() || null,
+          tenantId,
+        };
+        await workGuidesApi.update(initial.id, patch);
         await qc.invalidateQueries({ queryKey: ['work-guides'] });
         onSaved(initial.id);
       } else {
+        const payload: WorkGuideCreate = {
+          title: title.trim(),
+          content: body || undefined,
+          category: category || undefined,
+          priority,
+          tags: tags.trim() || undefined,
+          status,
+          author: author.trim() || undefined,
+          parentId: parentId || null,
+          confluenceUrl: confluenceUrl.trim() || undefined,
+          tenantId,
+        };
         const res = await workGuidesApi.create(payload);
         await qc.invalidateQueries({ queryKey: ['work-guides'] });
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const newId = (res.data as any)?.id ?? (res.data as any)?.data?.id;
-        onSaved(newId);
+        onSaved(res.data?.id);
       }
-    } catch {
-      setError('저장에 실패했습니다.');
+    } catch (err) {
+      // 403·테넌트 422 등 서버 사유를 그대로 보여 준다(D-159).
+      setError(`저장에 실패했습니다 — ${formatApiError(err)}`);
     } finally {
       setSaving(false);
     }
@@ -86,7 +102,7 @@ export function GuideForm({ initial, allGuides, defaultParentId, onCancel, onSav
   return (
     <>
       {error && (
-        <div className="mb-4 px-3 py-2 bg-status-critical/10 border border-status-critical/30 rounded-lg text-sm text-status-critical flex items-center gap-2">
+        <div role="alert" className="mb-4 px-3 py-2 bg-status-critical/10 border border-status-critical/30 rounded-lg text-sm text-status-critical flex items-center gap-2">
           <AlertCircle className="w-4 h-4 flex-shrink-0" />{error}
         </div>
       )}

@@ -14,6 +14,8 @@ ansible-runner==2.3.5
 httpx==0.26.0
 # [crypto] — OIDC id_token(RS*/ES*) 서명 검증에 cryptography 가 필요하다(지금도 paramiko·ansible 이 끌어오지만 직접 의존으로 명시).
 PyJWT[crypto]==2.10.1
+# 사내 디렉터리(LDAP/AD) 로그인 — 순수 파이썬. 지연 import 라 없어도 앱·로컬 로그인은 동작한다.
+ldap3==2.9.1
 bcrypt==4.2.1
 python-multipart==0.0.6
 kubernetes==29.0.0

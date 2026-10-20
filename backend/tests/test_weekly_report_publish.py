@@ -257,6 +257,22 @@ def test_sync_publish_bad_title_template_is_422(client, settings_state, report, 
     assert report["calls"] == [] and confluence["calls"] == 0
 
 
+@pytest.mark.parametrize("path", [PUBLISH, STREAM])
+def test_bad_week_of_is_422_instead_of_this_week(client, settings_state, report, confluence, path):
+    """D-157: 형식이 틀린 주차를 조용히 '이번 주' 로 바꿔 게시하지 않는다."""
+    res = client.post(path, json={"week_of": "2026/10/21"})
+    assert res.status_code == 422
+    assert "주차 날짜 형식" in res.json()["detail"]
+    assert report["calls"] == [] and confluence["calls"] == 0
+
+
+def test_publish_uses_requested_week_anchor(client, settings_state, report, confluence):
+    """D-157: 화면이 보낸 주차(미리보기의 periodStart)를 그대로 빌드 기준일로 쓴다."""
+    body = client.post(PUBLISH, json={"week_of": "2026-10-12"}).json()
+    assert body["status"] == "ok"
+    assert str(report["calls"][0]["anchor"]) == "2026-10-12"
+
+
 def test_bad_template_is_ignored_when_title_is_given(client, settings_state, report, confluence):
     settings_state["weekly"]["title_template"] = "주간보고 {week}"
     body = client.post(PUBLISH, json={"title": "직접 {제목}"}).json()

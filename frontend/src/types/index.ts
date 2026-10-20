@@ -344,6 +344,15 @@ export interface Playbook {
   updatedAt: string;
 }
 
+/**
+ * 플레이북 수정 페이로드(`playbooksApi.update`) — 설명·태그는 `null` 로 지운다(D-144). 서버 `PlaybookUpdate` 는
+ * `exclude_unset` 이라 생략한 필드는 유지하고, `null`(또는 빈 문자열)을 보내면 컬럼을 비운다.
+ */
+export type PlaybookUpdatePayload = Omit<Partial<Playbook>, 'description' | 'tags'> & {
+  description?: string | null;
+  tags?: string | null;
+};
+
 /** D-066 — playbook_runs 이력 1건. `Playbook.lastResult`(최신 스냅샷 덮어쓰기)와 달리
  *  append-only 로 전부 보존된다(수동 실행 + 점검 매트릭스 셀 실행 모두 여기 쌓인다). */
 export interface PlaybookRunHistoryEntry {
@@ -509,7 +518,13 @@ export interface ProjectCreate {
   status?: ProjectStatus;
 }
 
-export interface ProjectUpdate extends Partial<ProjectCreate> {}
+/** 수정 — 선택 필드에 `null` 을 보내면 서버가 값을 비운다(키 생략은 기존 값 유지, D-162). */
+export interface ProjectUpdate extends Omit<Partial<ProjectCreate>, 'description' | 'goal' | 'startDate' | 'endDate'> {
+  description?: string | null;
+  goal?: string | null;
+  startDate?: string | null;
+  endDate?: string | null;
+}
 
 export interface ProjectListResponse {
   data: Project[];
@@ -547,7 +562,12 @@ export interface SprintCreate {
   status?: SprintStatus;
 }
 
-export interface SprintUpdate extends Partial<SprintCreate> {}
+/** 수정 payload — 비운 선택 필드(목표·JIRA NO·Confluence)는 `null` 로 보내야 서버(`exclude_unset`)가 컬럼을 비운다(D-144). */
+export interface SprintUpdate extends Partial<Omit<SprintCreate, 'goal' | 'jiraNo' | 'confluenceLink'>> {
+  goal?: string | null;
+  jiraNo?: string | null;
+  confluenceLink?: string | null;
+}
 
 export interface SprintListResponse {
   data: Sprint[];
@@ -1340,8 +1360,9 @@ export interface WorkflowCreate {
 
 export interface WorkflowUpdate {
   title?: string;
-  description?: string;
-  confluenceUrl?: string;
+  /** null = 비우기(D-162) — undefined 는 JSON 에서 빠져 기존 값이 유지된다. */
+  description?: string | null;
+  confluenceUrl?: string | null;
 }
 
 export interface WorkflowStepCreate {
@@ -1359,15 +1380,16 @@ export interface WorkflowStepCreate {
 
 export interface WorkflowStepUpdate {
   title?: string;
-  description?: string;
   completed?: boolean;
   stepType?: WorkflowStepType;
   status?: WorkflowStepStatus;
   posX?: number;
   posY?: number;
   orderIndex?: number;
-  referenceType?: string;
-  referenceId?: string;
+  /** null = 비우기(D-162) — 연결한 참조를 해제한다. */
+  description?: string | null;
+  referenceType?: string | null;
+  referenceId?: string | null;
 }
 
 export interface WorkflowEdgeCreate {
@@ -1421,7 +1443,15 @@ export interface WorkGuideCreate {
   confluenceUrl?: string;
 }
 
-export interface WorkGuideUpdate extends Partial<WorkGuideCreate> {}
+/** 수정에서 null = 비우기(D-162) — undefined 는 JSON 에서 빠져 기존 값이 유지된다. */
+export interface WorkGuideUpdate
+  extends Partial<Omit<WorkGuideCreate, 'content' | 'category' | 'tags' | 'author' | 'confluenceUrl'>> {
+  content?: string | null;
+  category?: string | null;
+  tags?: string | null;
+  author?: string | null;
+  confluenceUrl?: string | null;
+}
 
 export interface WorkGuideListResponse {
   data: WorkGuide[];
@@ -1606,7 +1636,15 @@ export interface OpsNoteCreate {
   dlUrl?: string;
 }
 
-export interface OpsNoteUpdate extends Partial<OpsNoteCreate> {}
+/** 수정 payload — 비운 선택 필드는 `null` 로 보내야 서버(`exclude_unset`)가 컬럼을 비운다(D-144). */
+export interface OpsNoteUpdate
+  extends Partial<Omit<OpsNoteCreate, 'content' | 'backContent' | 'author' | 'confluenceUrl' | 'dlUrl'>> {
+  content?: string | null;
+  backContent?: string | null;
+  author?: string | null;
+  confluenceUrl?: string | null;
+  dlUrl?: string | null;
+}
 
 export interface OpsNoteListResponse {
   data: OpsNote[];
@@ -1913,6 +1951,8 @@ export interface IsilonNfsOverview {
   results?: IsilonCommandResult[];
   errors?: string[];
   k8sNfsPvs?: IsilonK8sNfsPv[];
+  /** K8s NFS PV 조회 오류(D-147, 백엔드 `k8s_nfs_pvs_error`). 성공이면 null. */
+  k8sNfsPvsError?: string | null;
 }
 
 /** mc 클라이언트 패턴 — 등록된 isi 명령 중 선택한 것만 온디맨드 실행한 결과(캐시 미사용). */
@@ -1925,6 +1965,8 @@ export interface IsilonRunResponse {
   /** 등록/활성화되지 않아 실행에서 제외된 요청 키 */
   skippedKeys?: string[];
   k8sNfsPvs?: IsilonK8sNfsPv[];
+  /** K8s NFS PV 조회 오류(D-147, 백엔드 `k8s_nfs_pvs_error`). 성공이면 null. */
+  k8sNfsPvsError?: string | null;
 }
 
 export interface IsilonTestResult {
@@ -2438,6 +2480,21 @@ export interface CommandEntryCreate {
   confluenceUrl?: string;
 }
 
+/** 수정 payload — 비운 선택 필드는 `null` 로 보내야 서버(`exclude_unset`)가 컬럼을 비운다(D-144). */
+export interface CommandEntryUpdate {
+  category?: string | null;
+  command?: string;
+  description?: string | null;
+  caution?: string | null;
+  importance?: CommandImportance;
+  examples?: string | null;
+  tags?: string | null;
+  pinned?: boolean;
+  sortOrder?: number;
+  author?: string | null;
+  confluenceUrl?: string | null;
+}
+
 // ── 노드 일괄 실행(bulk-exec) 재사용 — 사용자별 저장 스크립트 ──────────────
 export type ScriptLanguage = 'bash' | 'python';
 
@@ -2462,7 +2519,8 @@ export interface SavedScriptUpdate {
   name?: string;
   language?: ScriptLanguage;
   content?: string;
-  description?: string;
+  /** null = 설명 비우기(D-162). 키 생략 = 유지. */
+  description?: string | null;
 }
 
 // ── 스크립트 라이브러리 — DB 저장·버전관리되는 실행 스크립트 (Phase 1) ─────────
@@ -3516,6 +3574,8 @@ export interface AuthUserDetail {
   isActive: boolean;
   mustChangePassword: boolean;
   createdAt: string;
+  /** 로그인 방식 — /auth/login·/auth/me·/auth/refresh 만 채운다(목록 응답은 null). */
+  authSource?: 'local' | 'ldap' | 'external' | null;
 }
 
 export interface AuditLog {

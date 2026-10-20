@@ -1,10 +1,9 @@
 import { useRef, useState, type ComponentType } from 'react';
 import { Pencil, Trash2, Pin, PinOff, ExternalLink, ChevronUp, ChevronDown, ArrowUpDown } from 'lucide-react';
-import type { OpsNote } from '@/types';
+import type { OpsNote, OpsNoteUpdate } from '@/types';
 import { formatRelativeTime, stripHtml } from '@/lib/utils';
 import { DoubleScrollX } from '@/components/common';
 import { useCanOperate } from '@/hooks/useCanOperate';
-import type { OpsNotePatch } from './OpsNoteForm';
 
 export type OpsNoteSortKey = 'title' | 'service' | 'author' | 'updatedAt';
 
@@ -26,7 +25,7 @@ interface OpsNoteTableProps {
   onEdit: (n: OpsNote) => void;
   onDelete: (n: OpsNote) => void;
   onTogglePin: (n: OpsNote) => void;
-  onUpdate: (id: string, data: OpsNotePatch) => void;
+  onUpdate: (id: string, data: OpsNoteUpdate) => void;
   deletingId: string | null;
 }
 
@@ -78,7 +77,7 @@ function OpsNoteRow({
   onEdit: (n: OpsNote) => void;
   onDelete: (n: OpsNote) => void;
   onTogglePin: (n: OpsNote) => void;
-  onUpdate: (id: string, data: OpsNotePatch) => void;
+  onUpdate: (id: string, data: OpsNoteUpdate) => void;
   deleting: boolean;
 }) {
   const [editing, setEditingRaw] = useState<CellKey | null>(null);
@@ -88,7 +87,7 @@ function OpsNoteRow({
   const svc = serviceMap[note.service];
   const answerText = stripHtml(note.content);
   const hasBack = !!note.backContent?.trim();
-  const save = (patch: OpsNotePatch) => { onUpdate(note.id, patch); setEditing(null); };
+  const save = (patch: OpsNoteUpdate) => { onUpdate(note.id, patch); setEditing(null); };
 
   return (
     <tr

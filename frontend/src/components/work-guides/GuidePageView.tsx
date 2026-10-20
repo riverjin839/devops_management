@@ -1,25 +1,22 @@
 import { useEffect, useState } from 'react';
 import {
-  Plus, Pencil, Trash2, GitFork, Loader2, RefreshCw, UploadCloud, ChevronRight, FileText, CheckCircle, Archive, FileText as FileTextIcon, ExternalLink, PenLine,
+  Plus, Pencil, Trash2, GitFork, Loader2, RefreshCw, UploadCloud, ChevronRight, FileText, ExternalLink, PenLine,
 } from 'lucide-react';
 import { RichContent } from '@/components/editor';
 import { PageShell, ReactionBar, RunLogPanel, useToast } from '@/components/common';
 import { ConfluenceExportDialog, SyncStatusBadge } from '@/components/documents';
 import { useConfluenceDocPull } from '@/hooks/useConfluenceDocs';
 import { useLogPref } from '@/hooks/useLogPref';
+import { useCanOperate } from '@/hooks/useCanOperate';
 import { runLogged, useRunLog, type RunLogEntry } from '@/hooks/useRunLog';
 import type { WorkGuide } from '@/types';
+import { guideStatusCfg } from './guideStatus';
 
-const STATUS_CFG: Record<string, { label: string; icon: React.ReactNode; cls: string }> = {
-  draft:    { label: '초안', icon: <FileTextIcon className="w-3 h-3" />, cls: 'bg-status-unknown/10 text-status-unknown border-status-unknown/30' },
-  active:   { label: '활성', icon: <CheckCircle className="w-3 h-3" />,  cls: 'bg-secondary text-muted-foreground border-border' },
-  archived: { label: '보관', icon: <Archive className="w-3 h-3" />,      cls: 'bg-status-unknown/10 text-status-unknown border-status-unknown/30' },
-};
-
+// 우선순위는 장애 상태가 아니라 분류라 status-* 대신 chart 계열(§12.12). 글자로도 표시한다.
 const PRIORITY_DOT: Record<string, { dot: string; cls: string; label: string }> = {
-  high:   { dot: 'bg-status-critical',   cls: 'text-status-critical',   label: '높음' },
-  medium: { dot: 'bg-status-warning', cls: 'text-status-warning', label: '보통' },
-  low:    { dot: 'bg-status-info',    cls: 'text-status-info',    label: '낮음' },
+  high:   { dot: 'bg-chart-5', cls: 'text-chart-5-text', label: '높음' },
+  medium: { dot: 'bg-chart-3', cls: 'text-chart-3-text', label: '보통' },
+  low:    { dot: 'bg-chart-8', cls: 'text-muted-foreground', label: '낮음' },
 };
 
 function Breadcrumb({ guide, allGuides, onSelect }: { guide: WorkGuide; allGuides: WorkGuide[]; onSelect: (id: string) => void }) {
@@ -66,10 +63,15 @@ export function GuidePageView({ guide, allGuides, onSelect, onEdit, onAddChild, 
   // 다른 문서로 이동하면 이전 문서의 다시 가져오기 로그를 비운다.
   const clearLog = runLog.clear;
   useEffect(() => { clearLog(); }, [guide.id, clearLog]);
-  const sc = STATUS_CFG[guide.status] ?? STATUS_CFG.draft;
+  const { canOperate, withHint, ariaWithHint } = useCanOperate();
+  const sc = guideStatusCfg(guide.status);
   const pc = PRIORITY_DOT[guide.priority] ?? PRIORITY_DOT.medium;
   const tagList = guide.tags ? guide.tags.split(',').map((t) => t.trim()).filter(Boolean) : [];
   const childPages = allGuides.filter((g) => g.parentId === guide.id);
+  // D-158 — 하위가 있으면 서버가 409 로 막는다. 버튼을 미리 잠그고 사유를 보여 준다.
+  const deleteBlockedHint = childPages.length > 0
+    ? `하위 페이지 ${childPages.length}개가 있어 삭제할 수 없습니다 — 하위 페이지를 다른 상위로 옮기거나 먼저 삭제하세요`
+    : undefined;
 
   const pull = async () => {
     const prevVersion = guide.confluenceVersion;
@@ -108,10 +110,10 @@ export function GuidePageView({ guide, allGuides, onSelect, onEdit, onAddChild, 
 
         <div className="flex items-start justify-between gap-4 mb-5">
           <div className="flex-1 min-w-0">
-            <h1 className="text-2xl font-bold leading-tight mb-3">{guide.title}</h1>
+            <h1 className="text-xl font-semibold leading-tight mb-3">{guide.title}</h1>
             <div className="flex items-center gap-2 flex-wrap text-sm">
               {guide.category && (
-                <span className="px-2 py-0.5 rounded-full bg-primary/10 text-primary border border-primary/20">
+                <span className="px-2 py-0.5 rounded-full bg-secondary text-foreground border border-border">
                   {guide.category}
                 </span>
               )}
@@ -153,14 +155,15 @@ export function GuidePageView({ guide, allGuides, onSelect, onEdit, onAddChild, 
               title="Confluence 게시" aria-label="Confluence 게시">
               <UploadCloud className="w-3.5 h-3.5" /> 게시
             </button>
-            <button onClick={onAddToWorkflow}
-              className="p-2 rounded-lg hover:bg-primary/10 text-muted-foreground hover:text-primary transition-colors"
-              title="워크플로에 추가">
+            {/* 워크플로 단계 생성은 서버가 operator 이상을 요구한다(D-160). */}
+            <button onClick={onAddToWorkflow} disabled={!canOperate}
+              className="p-2 rounded-lg hover:bg-primary/10 text-muted-foreground hover:text-primary transition-colors disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-transparent disabled:hover:text-muted-foreground"
+              title={withHint('워크플로에 추가')} aria-label={ariaWithHint('워크플로에 추가')}>
               <GitFork className="w-4 h-4" />
             </button>
             <button onClick={onAddChild}
               className="p-2 rounded-lg hover:bg-secondary text-muted-foreground hover:text-foreground transition-colors"
-              title="하위 페이지 추가">
+              title="하위 페이지 추가" aria-label="하위 페이지 추가">
               <Plus className="w-4 h-4" />
             </button>
             <button onClick={onEdit}
@@ -168,9 +171,10 @@ export function GuidePageView({ guide, allGuides, onSelect, onEdit, onAddChild, 
               title="수정">
               <Pencil className="w-3.5 h-3.5" /> 수정
             </button>
-            <button onClick={onDelete}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-status-critical hover:bg-status-critical/10 border border-border rounded-lg transition-colors"
-              title="삭제">
+            <button onClick={onDelete} disabled={Boolean(deleteBlockedHint)}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-status-critical hover:bg-status-critical/10 border border-border rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-transparent"
+              title={deleteBlockedHint ?? '삭제'}
+              aria-label={deleteBlockedHint ? `삭제 — ${deleteBlockedHint}` : '삭제'}>
               <Trash2 className="w-3.5 h-3.5" /> 삭제
             </button>
           </div>
@@ -200,10 +204,13 @@ export function GuidePageView({ guide, allGuides, onSelect, onEdit, onAddChild, 
 
         {childPages.length > 0 && (
           <div className="mt-10 pt-6 border-t border-border">
-            <h2 className="text-sm font-semibold text-muted-foreground mb-3">하위 페이지 ({childPages.length})</h2>
+            <h2 className="text-sm font-semibold text-muted-foreground mb-1">하위 페이지 ({childPages.length})</h2>
+            <p className="text-xs text-muted-foreground mb-3">
+              하위 페이지가 있으면 이 페이지를 삭제할 수 없습니다. 하위 페이지를 다른 상위로 옮기거나 먼저 삭제하세요.
+            </p>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
               {childPages.map((child) => {
-                const csc = STATUS_CFG[child.status] ?? STATUS_CFG.draft;
+                const csc = guideStatusCfg(child.status);
                 return (
                   <button key={child.id} onClick={() => onSelect(child.id)}
                     className="flex items-center gap-2 p-3 bg-secondary/40 hover:bg-secondary rounded-lg text-left transition-colors group">

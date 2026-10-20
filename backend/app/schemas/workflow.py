@@ -1,4 +1,4 @@
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 from datetime import datetime
 from uuid import UUID
 from typing import Optional, List
@@ -28,6 +28,15 @@ class WorkflowStepUpdate(BaseModel):
     order_index: Optional[int] = None
     reference_type: Optional[str] = None
     reference_id: Optional[str] = None
+
+    # 수정에서 `null` 은 "비우기"다(D-162) — 설명·참조 유형/ID 는 null 로 해제할 수 있다.
+    # NOT NULL 컬럼은 null 이 오면 500(IntegrityError) 대신 422 로 거부한다.
+    @field_validator("title", "completed", "step_type", "status", "pos_x", "pos_y", "order_index")
+    @classmethod
+    def _reject_null(cls, v, info):
+        if v is None:
+            raise ValueError(f"{info.field_name} 은(는) 비울 수 없습니다")
+        return v
 
 
 class WorkflowStepResponse(BaseModel):
@@ -76,6 +85,14 @@ class WorkflowUpdate(BaseModel):
     title: Optional[str] = Field(None, min_length=1, max_length=200)
     description: Optional[str] = None
     confluence_url: Optional[str] = Field(None, max_length=2048)
+
+    # 설명·Confluence URL 은 null 로 비울 수 있고(D-162), 제목은 비울 수 없다(422).
+    @field_validator("title")
+    @classmethod
+    def _reject_null(cls, v, info):
+        if v is None:
+            raise ValueError(f"{info.field_name} 은(는) 비울 수 없습니다")
+        return v
 
 
 class WorkflowResponse(BaseModel):

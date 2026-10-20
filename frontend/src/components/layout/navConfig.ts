@@ -80,7 +80,7 @@ export const NAV_MAP: Record<string, NavMapEntry> = {
   '/ops-notes':          { labelKey: 'opsNotes', defaultLabel: '운영 노트보드',   icon: Layers },
   '/wbs':                { labelKey: 'wbs', defaultLabel: 'WBS 작업흐름',   icon: BarChart3 },
   '/mindmap':            { labelKey: 'mindmap', defaultLabel: '마인드맵',       icon: Map },
-  '/workflow':           { labelKey: 'workflow', defaultLabel: '워크플로우',     icon: GitFork },
+  '/workflow':           { labelKey: 'workflow', defaultLabel: '워크플로',       icon: GitFork },
   '/settings':           { labelKey: 'settings', defaultLabel: '설정',           icon: Settings },
   '/jira-import':        { labelKey: 'jiraImport', defaultLabel: 'Jira Excel 가져오기', icon: FileSpreadsheet },
   '/weekly-report':      { labelKey: 'weeklyReport', defaultLabel: '주간보고', icon: FileText },
