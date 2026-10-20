@@ -215,6 +215,26 @@ export const ko = {
     submitting: '로그인 중…',
     submit: '로그인',
     failed: '로그인에 실패했습니다.',
+    or: '또는',
+    sso: '{{name}}(으)로 로그인',
+    ssoAria: '{{name}}(으)로 로그인 — 사내 인증 화면으로 이동',
+    /** 서버 콜백·교환 실패 사유 코드(`/login?error=`) — 코드 목록은 backend oidc_service.ERROR_CODES. */
+    ssoError: {
+      unknown: 'SSO 로그인에 실패했습니다. 다시 시도하세요.',
+      disabled: 'SSO 로그인이 꺼져 있습니다. 관리자에게 문의하세요.',
+      rateLimited: '로그인 시도가 너무 많습니다. 잠시 후 다시 시도하세요.',
+      stateInvalid: '로그인 요청이 만료됐거나 다른 브라우저에서 열렸습니다. 다시 시도하세요.',
+      idpError: '사내 인증 서버에서 로그인이 취소되거나 거절됐습니다.',
+      discoveryFailed: '사내 인증 서버에 연결하지 못했습니다. 잠시 후 다시 시도하거나 관리자에게 문의하세요.',
+      tokenExchangeFailed: '사내 인증 서버에서 로그인 확인에 실패했습니다. 다시 시도하세요.',
+      idTokenInvalid: '사내 인증 서버의 응답을 검증하지 못했습니다. 관리자에게 문의하세요.',
+      claimMissing: '사내 계정 정보에 사용자명이 없습니다. 관리자에게 문의하세요.',
+      domainNotAllowed: '허용되지 않은 조직(이메일 도메인)의 계정입니다.',
+      userNotFound: 'PEP 에 등록되지 않은 계정입니다. 관리자에게 계정 등록을 요청하세요.',
+      userInactive: '비활성화된 계정입니다. 관리자에게 문의하세요.',
+      provisionFailed: '계정을 자동으로 만들지 못했습니다. 관리자에게 문의하세요.',
+      exchangeFailed: '로그인 확인 시간이 지났습니다. 다시 시도하세요.',
+    },
   },
 };
 

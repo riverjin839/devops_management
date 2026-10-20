@@ -954,6 +954,19 @@ D-117~D-134)에서 원자는 지켜지는데 화면이 "AI 가 만든 템플릿"
   - 임베드: Your Island 패널 안이면 훅이 자동으로 로컬 state 로 동작한다(`lib/islandEmbed`). 다른 화면 안에 임베드되는 화면(허브 탭 등)은 `useUrlParams(defaults, { local: embedded })` 로 부모 쿼리와 섞이지 않게 한다.
   - 클러스터 선택은 §12.5 `useClusterRouteParam`(경로)이 우선이다.
 
+### 12.14 화면 문자열 다국어 — `react-i18next` (R-6)
+
+셸(사이드바·상단바·flyout)·홈·로그인은 한국어/영어를 고를 수 있다. 셸 밖 화면은 아직 한국어 고정이며 단계적으로 옮긴다.
+
+1. **리소스는 TS 파일 두 개.** `src/i18n/resources/ko.ts` 가 원천이고 `en.ts` 는 키가 정확히 같아야 한다(어긋나면 tsc 실패). JSON 리소스는 쓰지 않는다.
+2. **키 구조.** 최상위는 영역 접두사(`nav.*`·`shell.*`·`home.*`·`login.*`, 새 화면은 자기 접두사). 그 아래는 화면 요소 단위 camelCase(`shell.help.releaseNotes`). 문장 그대로를 키로 쓰지 않는다.
+3. **보간만 쓴다.** 변수는 `{{name}}`. 조각을 이어 붙여 문장을 만들지 않는다(어순이 언어마다 다르다).
+4. **사용법.** `const { t } = useTranslation()` 후 `t('key')`(컴파일 타임 검사). 동적 키는 union 타입 위의 템플릿 리터럴(`` t(`shell.theme.${theme}`) ``).
+5. **문자열 추가 순서.** `ko.ts` 에 키 → `en.ts` 에 같은 키(빠지면 tsc 가 잡는다) → 컴포넌트에서 `t()`.
+6. **메뉴 라벨은 `useNavLabel()`.** NAV_MAP 새 항목은 `labelKey` 와 `defaultLabel` 을 함께 둔다. 관리자가 바꾼 커스텀 메뉴 이름은 번역하지 않는다.
+7. **고유명사는 그대로.** 영어에서도 K8s·LAKE·Cilium·BPF·etcdctl·k9s·mc·CIDR·WBS·Jira·VOC 는 원어. 언어 메뉴의 "한국어"/"English" 는 번역하지 않는다.
+8. **언어 변경은 `useLocale().changeLocale`.** 즉시 적용 + 서버(`home_prefs.locale`) 저장. `i18n.changeLanguage` 를 직접 부르지 않는다. 원천 순서는 서버 → localStorage `pep.locale`(캐시) → `ko`, `<html lang>` 이 따라간다.
+
 ## 부록 A — 검증 출처
 
 | 항목 | ui-ux-pro-max 출처 |

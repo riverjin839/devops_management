@@ -25,7 +25,7 @@
     --secondary: 210 33% 95%;         /* #E8ECF1 — secondary surface */
     --secondary-foreground: 222 47% 11%;
     --muted: 210 33% 96%;
-    --muted-foreground: 215 16% 47%;  /* #64748B slate-500 */
+    --muted-foreground: 215 16% 43%;  /* #5D6B80 — slate-500 보다 진하게: secondary 위 4.84:1 · background 위 5.21:1 (WCAG AA) */
     --accent: 200 80% 95%;
     --accent-foreground: 222 47% 11%;
     --destructive: 0 73% 50%;         /* #DC2626 red-600 */
@@ -200,7 +200,7 @@
     --secondary: 210 33% 95%;
     --secondary-foreground: 222 47% 11%;
     --muted: 210 33% 96%;
-    --muted-foreground: 215 16% 47%;
+    --muted-foreground: 215 16% 43%;
     --accent: 200 80% 95%;
     --accent-foreground: 222 47% 11%;
     --destructive: 0 73% 50%;

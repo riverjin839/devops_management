@@ -1,30 +1,32 @@
 import { useId, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
+import { useTranslation } from 'react-i18next';
 import { Loader2, LogIn, Clock, KeyRound, ShipWheel, ShieldCheck, AlertCircle } from 'lucide-react';
 import { authApi } from '@/services/api';
 import { useAuthStore, consumeReturnTo } from '@/stores/authStore';
 import { OidcCallbackPage } from '@/pages/OidcCallbackPage';
+import type { TranslationResource } from '@/i18n/resources/ko';
 
 /** SSO 콜백 경로 — 미로그인 상태에서는 AuthGate 가 어느 경로든 이 화면을 그리므로 여기서 분기한다. */
 const OIDC_CALLBACK_PATH = '/auth/callback';
 
-/** 서버 콜백·교환 실패 사유 코드(`/login?error=`) → 사람 문구. 코드 목록은 backend oidc_service.ERROR_CODES. */
-const SSO_ERROR_MESSAGES: Record<string, string> = {
-  disabled: 'SSO 로그인이 꺼져 있습니다. 관리자에게 문의하세요.',
-  rate_limited: '로그인 시도가 너무 많습니다. 잠시 후 다시 시도하세요.',
-  state_invalid: '로그인 요청이 만료됐거나 다른 브라우저에서 열렸습니다. 다시 시도하세요.',
-  nonce_mismatch: '로그인 요청이 만료됐거나 다른 브라우저에서 열렸습니다. 다시 시도하세요.',
-  idp_error: '사내 인증 서버에서 로그인이 취소되거나 거절됐습니다.',
-  discovery_failed: '사내 인증 서버에 연결하지 못했습니다. 잠시 후 다시 시도하거나 관리자에게 문의하세요.',
-  token_exchange_failed: '사내 인증 서버에서 로그인 확인에 실패했습니다. 다시 시도하세요.',
-  id_token_invalid: '사내 인증 서버의 응답을 검증하지 못했습니다. 관리자에게 문의하세요.',
-  claim_missing: '사내 계정 정보에 사용자명이 없습니다. 관리자에게 문의하세요.',
-  domain_not_allowed: '허용되지 않은 조직(이메일 도메인)의 계정입니다.',
-  user_not_found: 'PEP 에 등록되지 않은 계정입니다. 관리자에게 계정 등록을 요청하세요.',
-  user_inactive: '비활성화된 계정입니다. 관리자에게 문의하세요.',
-  provision_failed: '계정을 자동으로 만들지 못했습니다. 관리자에게 문의하세요.',
-  exchange_failed: '로그인 확인 시간이 지났습니다. 다시 시도하세요.',
+/** 서버 콜백·교환 실패 사유 코드(`/login?error=`) → 문구 키. 코드 목록은 backend oidc_service.ERROR_CODES. */
+const SSO_ERROR_KEYS: Record<string, keyof TranslationResource['login']['ssoError']> = {
+  disabled: 'disabled',
+  rate_limited: 'rateLimited',
+  state_invalid: 'stateInvalid',
+  nonce_mismatch: 'stateInvalid',
+  idp_error: 'idpError',
+  discovery_failed: 'discoveryFailed',
+  token_exchange_failed: 'tokenExchangeFailed',
+  id_token_invalid: 'idTokenInvalid',
+  claim_missing: 'claimMissing',
+  domain_not_allowed: 'domainNotAllowed',
+  user_not_found: 'userNotFound',
+  user_inactive: 'userInactive',
+  provision_failed: 'provisionFailed',
+  exchange_failed: 'exchangeFailed',
 };
 
 export function LoginPage() {
@@ -34,6 +36,7 @@ export function LoginPage() {
 }
 
 function LoginForm() {
+  const { t } = useTranslation();
   const setSession = useAuthStore((s) => s.setSession);
   // D-079 — 세션 만료로 여기까지 왔으면 이유를 보여주고, 로그인 후 보던 화면으로 돌려보낸다.
   const logoutReason = useAuthStore((s) => s.logoutReason);
@@ -56,7 +59,7 @@ function LoginForm() {
     retry: false,
   });
   const ssoErrorCode = location.pathname === '/login' ? new URLSearchParams(location.search).get('error') : null;
-  const ssoError = ssoErrorCode ? (SSO_ERROR_MESSAGES[ssoErrorCode] ?? 'SSO 로그인에 실패했습니다. 다시 시도하세요.') : null;
+  const ssoError = ssoErrorCode ? t(`login.ssoError.${SSO_ERROR_KEYS[ssoErrorCode] ?? 'unknown'}`) : null;
   // 로그인 후 돌아갈 곳 — 세션 만료 때 기록된 경로, 없으면 지금 보던 화면(로그인·콜백 경로 제외).
   const here = `${location.pathname}${location.search}`;
   const ssoReturnTo = returnTo
@@ -77,8 +80,8 @@ function LoginForm() {
     } catch (err) {
       const msg = (err as { response?: { data?: { detail?: string } }; message?: string })?.response?.data?.detail
         ?? (err as { message?: string })?.message
-        ?? '로그인에 실패했습니다.';
-      setError(typeof msg === 'string' ? msg : '로그인에 실패했습니다.');
+        ?? t('login.failed');
+      setError(typeof msg === 'string' ? msg : t('login.failed'));
     } finally {
       setSubmitting(false);
     }
@@ -93,7 +96,7 @@ function LoginForm() {
           </div>
           <div>
             <h1 className="text-base font-bold leading-tight">PEP</h1>
-            <p className="text-xs text-muted-foreground">Platform Engineering Portal</p>
+            <p className="text-xs text-muted-foreground">{t('login.subtitle')}</p>
           </div>
         </div>
 
@@ -103,10 +106,7 @@ function LoginForm() {
             className="mb-4 flex items-start gap-2 rounded-md border border-border bg-secondary/60 px-3 py-2 text-xs text-foreground"
           >
             <Clock className="w-3.5 h-3.5 mt-0.5 flex-shrink-0 text-muted-foreground" aria-hidden="true" />
-            <span>
-              세션이 만료되어 로그아웃되었습니다. 다시 로그인하면
-              {returnTo ? ' 보던 화면으로 돌아갑니다.' : ' 계속 이용할 수 있습니다.'}
-            </span>
+            <span>{t(returnTo ? 'login.sessionExpiredReturn' : 'login.sessionExpiredContinue')}</span>
           </div>
         )}
         {logoutReason === 'password_changed' && (
@@ -115,10 +115,7 @@ function LoginForm() {
             className="mb-4 flex items-start gap-2 rounded-md border border-border bg-secondary/60 px-3 py-2 text-xs text-foreground"
           >
             <KeyRound className="w-3.5 h-3.5 mt-0.5 flex-shrink-0 text-muted-foreground" aria-hidden="true" />
-            <span>
-              다른 탭에서 비밀번호가 변경되어 로그아웃되었습니다. 새 비밀번호로 다시 로그인하면
-              {returnTo ? ' 보던 화면으로 돌아갑니다.' : ' 계속 이용할 수 있습니다.'}
-            </span>
+            <span>{t(returnTo ? 'login.passwordChangedReturn' : 'login.passwordChangedContinue')}</span>
           </div>
         )}
 
@@ -134,7 +131,7 @@ function LoginForm() {
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label htmlFor={f('username')} className="block text-sm font-medium mb-1">사용자명</label>
+            <label htmlFor={f('username')} className="block text-sm font-medium mb-1">{t('login.username')}</label>
             <input
               id={f('username')}
               type="text"
@@ -148,7 +145,7 @@ function LoginForm() {
           </div>
 
           <div>
-            <label htmlFor={f('password')} className="block text-sm font-medium mb-1">비밀번호</label>
+            <label htmlFor={f('password')} className="block text-sm font-medium mb-1">{t('login.password')}</label>
             <input
               id={f('password')}
               type="password"
@@ -171,7 +168,7 @@ function LoginForm() {
             className="w-full flex items-center justify-center gap-2 px-4 py-2 text-sm font-semibold bg-primary text-primary-foreground rounded-md hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
           >
             {submitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <LogIn className="w-4 h-4" />}
-            {submitting ? '로그인 중…' : '로그인'}
+            {submitting ? t('login.submitting') : t('login.submit')}
           </button>
         </form>
 
@@ -179,17 +176,17 @@ function LoginForm() {
           <>
             <div className="my-4 flex items-center gap-3 text-xs text-muted-foreground" aria-hidden="true">
               <span className="h-px flex-1 bg-border" />
-              또는
+              {t('login.or')}
               <span className="h-px flex-1 bg-border" />
             </div>
             {/* 링크 이동 — 서버가 state·PKCE 를 만들고 IdP 로 302 한다(axios 호출이 아니다). */}
             <a
               href={authApi.oidcLoginUrl(ssoReturnTo)}
-              aria-label={`${sso.displayName}(으)로 로그인 — 사내 인증 화면으로 이동`}
+              aria-label={t('login.ssoAria', { name: sso.displayName })}
               className="w-full flex items-center justify-center gap-2 px-4 py-2 text-sm font-semibold bg-secondary text-foreground border border-border rounded-md hover:bg-secondary/80 transition-colors focus:outline-none focus-visible:ring-1 focus-visible:ring-primary"
             >
               <ShieldCheck className="w-4 h-4" aria-hidden="true" />
-              {sso.displayName}(으)로 로그인
+              {t('login.sso', { name: sso.displayName })}
             </a>
           </>
         )}

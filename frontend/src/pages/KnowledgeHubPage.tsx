@@ -403,7 +403,7 @@ export function KnowledgeHubPage() {
                     : 'bg-background border-border text-muted-foreground hover:border-primary/50'
                 }`}
               >
-                전체 <span className="opacity-70">({items.length})</span>
+                전체 <span className="tabular-nums">({items.length})</span>
               </button>
               {(Object.keys(KIND_META) as HubKind[]).map((k) => {
                 const meta = KIND_META[k];
@@ -422,7 +422,7 @@ export function KnowledgeHubPage() {
                     }`}
                   >
                     <Icon className={`w-3.5 h-3.5 ${meta.accent}`} /> {meta.label}
-                    <span className="opacity-70">({count})</span>
+                    <span className="tabular-nums">({count})</span>
                   </button>
                 );
               })}
@@ -440,7 +440,7 @@ export function KnowledgeHubPage() {
                 >
                   <AlertCircle className={`w-3.5 h-3.5 ${openOnly ? 'text-status-critical' : 'text-status-critical/70'}`} />
                   미해결 이슈
-                  <span className="opacity-70">({openIssueCount})</span>
+                  <span className="tabular-nums">({openIssueCount})</span>
                 </button>
               )}
 
