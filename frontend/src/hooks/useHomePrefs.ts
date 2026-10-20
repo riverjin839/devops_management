@@ -8,7 +8,8 @@ export const homePrefsKeys = {
   defaults: ['homePrefsDefaults'] as const,
 };
 
-/** 서버 저장 홈/네비게이션 개인화(기본 홈 탭, 즐겨찾기, 설치 앱) — 기기·브라우저를 넘어 따라온다. */
+/** 서버 저장 홈/네비게이션 개인화(기본 홈 탭, 즐겨찾기, 설치 앱, 테마, 표시 언어 `locale`) — 기기·브라우저를
+ *  넘어 따라온다. `locale` 의 화면 반영은 `i18n/useLocale.ts`(useLocaleSync·useLocale)가 한다. */
 export function useHomePrefs() {
   return useQuery({
     queryKey: homePrefsKeys.all,

@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import {
   CalendarClock, CalendarDays,
   ListTodo, ServerCog, LayoutGrid, ListTree,
@@ -21,6 +22,7 @@ import { cn } from '@/lib/utils';
 
 // ── Main ─────────────────────────────────────────────────────────────────────
 export function HomePage() {
+  const { t } = useTranslation();
   const homeTab = useHomeStore((s) => s.homeTab);
   const setHomeTab = useHomeStore((s) => s.setHomeTab);
   const scheduleBg = useHomeStore((s) => s.scheduleBg);
@@ -92,8 +94,8 @@ export function HomePage() {
   // 플랫폼 탭 배지 — 위험 클러스터 + 위험(critical) 셀 합계. 0이면 배지를 숨겨 평상시엔 조용하다.
   const platformSignalCount = criticalClusters + (checkFailureCount ?? 0);
   const TABS: Array<{ key: HomeTab; label: string; Icon: typeof ListTodo; badge?: number }> = [
-    { key: 'work', label: '업무 현황', Icon: ListTodo },
-    { key: 'platform', label: '플랫폼 현황', Icon: ServerCog, badge: platformSignalCount || undefined },
+    { key: 'work', label: t('home.tab.work'), Icon: ListTodo },
+    { key: 'platform', label: t('home.tab.platform'), Icon: ServerCog, badge: platformSignalCount || undefined },
   ];
   const handleTabKeyDown = (e: React.KeyboardEvent, idx: number) => {
     if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
@@ -104,7 +106,7 @@ export function HomePage() {
 
   return (
     <div className="app-h-screen overflow-hidden bg-background flex flex-col">
-      <h1 className="sr-only">홈</h1>
+      <h1 className="sr-only">{t('home.title')}</h1>
 
       {/* ── 세그먼트 탭 — 홈 본문에서 뭘 볼지 고르는 로컬 선택. 예전엔 사이드바 전체를
           게이팅하는 "모드"였지만(D-054), 지금은 이 홈 화면 안에서만 의미가 있다.
@@ -115,39 +117,39 @@ export function HomePage() {
       <div className="flex-none flex items-center gap-2 px-3 lg:px-4 py-2 border-b border-border bg-background">
         <div
           role="tablist"
-          aria-label="홈 화면 보기"
+          aria-label={t('home.tabsAria')}
           className="flex-shrink-0 inline-flex items-center rounded-xl border border-border overflow-hidden text-sm"
         >
-          {TABS.map((t, idx) => (
+          {TABS.map((tab, idx) => (
             <button
-              key={t.key}
+              key={tab.key}
               type="button"
               role="tab"
-              aria-selected={homeTab === t.key}
-              tabIndex={homeTab === t.key ? 0 : -1}
-              onClick={() => selectHomeTab(t.key)}
+              aria-selected={homeTab === tab.key}
+              tabIndex={homeTab === tab.key ? 0 : -1}
+              onClick={() => selectHomeTab(tab.key)}
               onKeyDown={(e) => handleTabKeyDown(e, idx)}
               className={cn(
                 'flex items-center gap-1.5 px-3 py-1.5 transition-colors',
                 idx > 0 && 'border-l border-border',
-                homeTab === t.key
+                homeTab === tab.key
                   ? 'bg-primary text-primary-foreground font-semibold'
                   : 'text-muted-foreground hover:bg-secondary hover:text-foreground',
               )}
             >
-              <t.Icon className="w-3.5 h-3.5" />
-              {t.label}
-              {!!t.badge && (
+              <tab.Icon className="w-3.5 h-3.5" />
+              {tab.label}
+              {!!tab.badge && (
                 <span
                   className={cn(
                     'inline-flex items-center justify-center min-w-[1.1rem] h-[1.1rem] px-1 rounded-full text-[11px] font-bold tabular-nums',
-                    homeTab === t.key
+                    homeTab === tab.key
                       ? 'bg-primary-foreground/20 text-primary-foreground'
                       : 'bg-status-critical/15 text-status-critical',
                   )}
-                  title={`위험 클러스터 ${criticalClusters}곳 · 위험 셀 ${checkFailureCount ?? 0}개`}
+                  title={t('home.tab.badgeTitle', { clusters: criticalClusters, cells: checkFailureCount ?? 0 })}
                 >
-                  {t.badge}
+                  {tab.badge}
                 </span>
               )}
             </button>
@@ -177,7 +179,7 @@ export function HomePage() {
                       : 'text-muted-foreground hover:bg-secondary/60 hover:text-foreground',
                   )}
                 >
-                  <LayoutGrid className="w-3.5 h-3.5" /> 점검 매트릭스
+                  <LayoutGrid className="w-3.5 h-3.5" /> {t('home.view.matrix')}
                 </button>
                 <button
                   type="button"
@@ -189,7 +191,7 @@ export function HomePage() {
                       : 'text-muted-foreground hover:bg-secondary/60 hover:text-foreground',
                   )}
                 >
-                  <ListTree className="w-3.5 h-3.5" /> 배치잡
+                  <ListTree className="w-3.5 h-3.5" /> {t('home.view.batch')}
                 </button>
               </div>
             )}
@@ -222,7 +224,7 @@ export function HomePage() {
             {/* ── 당일 시간단위 스케줄 (담당자 기준) (4/10) ─────────────────── */}
             {/* D-122: 수제 헤더 바 → MacCard title/icon 슬롯 */}
             <MacCard
-              title="당일 스케줄"
+              title={t('home.card.schedule')}
               icon={CalendarClock}
               rootClassName="col-span-10 xl:col-span-4 flex flex-col min-h-[420px] xl:min-h-0"
               bodyPadding="p-0"
@@ -236,7 +238,7 @@ export function HomePage() {
             {/* ── 담당자별 진행 현황 (주간 / 월간 / 담당자) (6/10) ──────────── */}
             {/* D-122: 제목+주간/월간/담당자 토글 수제 헤더 바 → MacCard title·actions 슬롯 */}
             <MacCard
-              title="담당자별 진행 현황"
+              title={t('home.card.progress')}
               icon={CalendarDays}
               rootClassName="col-span-10 xl:col-span-6 flex flex-col min-h-[420px] xl:min-h-0"
               bodyPadding="p-0"
@@ -250,7 +252,7 @@ export function HomePage() {
                       weeklyTab === 'week' ? 'bg-primary text-primary-foreground' : 'hover:bg-secondary text-muted-foreground',
                     )}
                   >
-                    주간
+                    {t('home.range.week')}
                   </button>
                   <button
                     onClick={() => setWeeklyTab('month')}
@@ -259,7 +261,7 @@ export function HomePage() {
                       weeklyTab === 'month' ? 'bg-primary text-primary-foreground' : 'hover:bg-secondary text-muted-foreground',
                     )}
                   >
-                    월간
+                    {t('home.range.month')}
                   </button>
                   <button
                     onClick={() => setWeeklyTab('member')}
@@ -268,7 +270,7 @@ export function HomePage() {
                       weeklyTab === 'member' ? 'bg-primary text-primary-foreground' : 'hover:bg-secondary text-muted-foreground',
                     )}
                   >
-                    담당자
+                    {t('home.range.member')}
                   </button>
                 </div>
               }
