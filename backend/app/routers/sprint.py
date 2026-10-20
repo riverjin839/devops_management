@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 from app.database import get_db
 from app.models.sprint import Sprint
 from app.models.work_item import WorkItem
-from app.auth.deps import get_current_user
+from app.auth.deps import get_current_user, require_operator
 from app.models.user import User
 from app.schemas.sprint import (
     SprintCreate,
@@ -18,6 +18,10 @@ from app.schemas.sprint import (
 )
 
 router = APIRouter(prefix="/sprints", tags=["sprints"])
+
+# 권한 정책(D-145): 조회는 로그인 사용자 누구나, 생성·수정·삭제·이월은 operator 이상 —
+# 업무 항목(`work_items.py` 쓰기 = require_operator)과 같은 기준이다. 스프린트를 지우거나
+# 이월하면 그 스프린트에 묶인 업무의 sprint_id 가 바뀌므로 업무 쓰기와 같은 등급을 요구한다.
 
 
 def _not_found(sprint_id: UUID) -> HTTPException:
@@ -95,7 +99,7 @@ def current_sprint(
 def create_sprint(
     payload: SprintCreate,
     db: Session = Depends(get_db),
-    _: User = Depends(get_current_user),
+    _: User = Depends(require_operator),
 ):
     if payload.end_date < payload.start_date:
         raise HTTPException(
@@ -126,7 +130,7 @@ def update_sprint(
     sprint_id: UUID,
     payload: SprintUpdate,
     db: Session = Depends(get_db),
-    _: User = Depends(get_current_user),
+    _: User = Depends(require_operator),
 ):
     sprint = db.query(Sprint).filter(Sprint.id == sprint_id).first()
     if not sprint:
@@ -143,7 +147,7 @@ def carry_over(
     sprint_id: UUID,
     to: UUID = Query(..., description="미완료 항목을 옮길 대상 스프린트 ID"),
     db: Session = Depends(get_db),
-    _: User = Depends(get_current_user),
+    _: User = Depends(require_operator),
 ):
     """미완료(kanban_status != done) 항목을 다른 스프린트로 이월."""
     src = db.query(Sprint).filter(Sprint.id == sprint_id).first()
@@ -168,7 +172,7 @@ def carry_over(
 def delete_sprint(
     sprint_id: UUID,
     db: Session = Depends(get_db),
-    _: User = Depends(get_current_user),
+    _: User = Depends(require_operator),
 ):
     sprint = db.query(Sprint).filter(Sprint.id == sprint_id).first()
     if not sprint:

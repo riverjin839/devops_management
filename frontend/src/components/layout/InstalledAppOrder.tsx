@@ -6,7 +6,8 @@ import {
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { GripVertical } from 'lucide-react';
-import type { InstallableApp } from './installableApps';
+import { useTranslation } from 'react-i18next';
+import { useInstallableAppText, type InstallableApp } from './installableApps';
 
 interface InstalledAppOrderProps {
   /** 이 창(사이드바 또는 상단바)에 해당하는 설치 항목 — 표시 순서대로. */
@@ -17,6 +18,8 @@ interface InstalledAppOrderProps {
 
 function OrderChip({ app }: { app: InstallableApp }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: app.id });
+  const { t } = useTranslation();
+  const label = useInstallableAppText().appLabel(app);
   return (
     <div
       ref={setNodeRef}
@@ -30,20 +33,21 @@ function OrderChip({ app }: { app: InstallableApp }) {
         type="button"
         {...attributes}
         {...listeners}
-        aria-label={`${app.label} 순서 변경 — 끌어서 옮기거나, 스페이스 후 화살표 키`}
-        title="끌어서 순서 변경"
+        aria-label={t('apps.order.dragLabel', { label })}
+        title={t('apps.order.dragHint')}
         className="p-0.5 rounded text-muted-foreground hover:text-foreground cursor-grab active:cursor-grabbing"
       >
         <GripVertical className="w-3.5 h-3.5" aria-hidden />
       </button>
       <app.icon className={`w-3.5 h-3.5 ${app.iconColor || 'text-muted-foreground'}`} />
-      {app.label}
+      {label}
     </div>
   );
 }
 
 /** "앱 추가" 창 상단 — 설치된 항목을 끌어서 레일/상단바 표시 순서를 바꾼다(키보드로도 가능). */
 export function InstalledAppOrder({ apps, onMove }: InstalledAppOrderProps) {
+  const { t } = useTranslation();
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
@@ -64,7 +68,7 @@ export function InstalledAppOrder({ apps, onMove }: InstalledAppOrderProps) {
   return (
     <div>
       <p className="px-0.5 pb-1.5 text-xs font-medium text-muted-foreground">
-        표시 순서
+        {t('apps.order.title')}
       </p>
       <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
         <SortableContext items={apps.map((a) => a.id)} strategy={rectSortingStrategy}>

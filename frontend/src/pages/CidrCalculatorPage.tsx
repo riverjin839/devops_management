@@ -207,11 +207,11 @@ interface OverlapPairProps {
 }
 
 const HUE_TOKENS = {
-  amber:   { bg: 'bg-chart-3/10', border: 'border-chart-3/30', dot: 'bg-chart-3', text: 'text-chart-3' },
-  rose:    { bg: 'bg-chart-5/10', border: 'border-chart-5/30', dot: 'bg-chart-5', text: 'text-chart-5' },
-  fuchsia: { bg: 'bg-chart-4/10', border: 'border-chart-4/30', dot: 'bg-chart-4', text: 'text-chart-4' },
-  orange:  { bg: 'bg-chart-7/10', border: 'border-chart-7/30', dot: 'bg-chart-7', text: 'text-chart-7' },
-  cyan:    { bg: 'bg-chart-6/10', border: 'border-chart-6/30', dot: 'bg-chart-6', text: 'text-chart-6' },
+  amber:   { bg: 'bg-chart-3/10', border: 'border-chart-3/30', dot: 'bg-chart-3', text: 'text-chart-3-text' },
+  rose:    { bg: 'bg-chart-5/10', border: 'border-chart-5/30', dot: 'bg-chart-5', text: 'text-chart-5-text' },
+  fuchsia: { bg: 'bg-chart-4/10', border: 'border-chart-4/30', dot: 'bg-chart-4', text: 'text-chart-4-text' },
+  orange:  { bg: 'bg-chart-7/10', border: 'border-chart-7/30', dot: 'bg-chart-7', text: 'text-chart-7-text' },
+  cyan:    { bg: 'bg-chart-6/10', border: 'border-chart-6/30', dot: 'bg-chart-6', text: 'text-chart-6-text' },
 } as const;
 
 function OverlapPair({ leftLabel, leftCidr, rightLabel, rightCidr, hue = 'amber' }: OverlapPairProps) {
@@ -469,8 +469,8 @@ export function CidrCalculatorPage() {
                       className={[
                         'px-2 py-0.5 text-xs font-semibold rounded-md border inline-flex items-center gap-1',
                         isPrivate
-                          ? 'bg-chart-1/10 text-chart-1 border-chart-1/30'
-                          : 'bg-chart-3/10 text-chart-3 border-chart-3/30',
+                          ? 'bg-chart-1/10 text-chart-1-text border-chart-1/30'
+                          : 'bg-chart-3/10 text-chart-3-text border-chart-3/30',
                       ].join(' ')}
                     >
                       {isPrivate ? <Lock className="w-2.5 h-2.5" /> : <Globe className="w-2.5 h-2.5" />}

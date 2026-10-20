@@ -61,6 +61,7 @@ from app.routers import (
     ansible_files_router,
     ansible_inventories_router,
     auth_router,
+    auth_oidc_router,
     audit_logs_router,
     check_results_router,
     check_ingest_router,
@@ -2301,6 +2302,8 @@ app.add_middleware(GZipMiddleware, minimum_size=500)
 
 # Public routers (no auth) — login + liveness/readiness probes.
 app.include_router(auth_router, prefix="/api/v1")
+# 사내 IdP SSO(OIDC) — 로그인 진입점이라 public. 설정 조회·수정·연결 확인은 엔드포인트가 require_admin.
+app.include_router(auth_oidc_router, prefix="/api/v1")
 app.include_router(health_router, prefix="/api/v1")
 # Super pod ingest 는 bearer 토큰만 자체 검증 — JWT 의존성 없음.
 app.include_router(check_ingest_router, prefix="/api/v1")

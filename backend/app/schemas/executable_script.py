@@ -52,6 +52,22 @@ class ExecutableScriptUpdate(BaseModel):
     tags: Optional[list[str]] = None
 
 
+class ScriptUsageRef(BaseModel):
+    """이 스크립트를 참조하는 배치잡 1건 — 저장·롤백 확인 문구와 "어디서 쓰이나" 표용(D-146).
+
+    ``pinned=False`` 면 "항상 최신"(``script_version_id`` null) 참조라 저장·롤백이 다음 실행부터
+    곧바로 반영된다. ``pinned=True`` 면 ``pinned_version`` 에 고정돼 영향받지 않는다.
+    """
+    job_id: UUID
+    name: str
+    cluster_id: UUID
+    cluster_name: Optional[str] = None
+    pinned: bool = False
+    pinned_version: Optional[int] = None
+    enabled: bool = True
+    cron: Optional[str] = None
+
+
 class ExecutableScriptResponse(ExecutableScriptBase):
     id: UUID
     is_system: bool
@@ -63,6 +79,8 @@ class ExecutableScriptResponse(ExecutableScriptBase):
     current_version: Optional[ExecutableScriptVersionResponse] = None
     # "어디서 쓰이나" 역참조 개수 — Phase 2(BatchJob 연결)부터 0 이상이 된다.
     used_by_count: int = 0
+    # 참조 잡 목록(이름·고정 여부) — used_by_count 와 같은 집합(D-146).
+    used_by: list[ScriptUsageRef] = Field(default_factory=list)
 
     class Config:
         from_attributes = True

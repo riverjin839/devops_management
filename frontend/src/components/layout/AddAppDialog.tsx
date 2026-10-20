@@ -1,7 +1,8 @@
 import { useState } from 'react';
 import { Check, Plus, LayoutGrid, AlertTriangle, RotateCcw } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
-import type { InstallableApp, InstallableAppSection } from './installableApps';
+import { useInstallableAppText, type InstallableApp, type InstallableAppSection } from './installableApps';
 import { InstalledAppOrder } from './InstalledAppOrder';
 
 interface AddAppDialogProps {
@@ -32,6 +33,8 @@ export function AddAppDialog({
 }: AddAppDialogProps) {
   // 초기화는 사이드바·상단바의 개인 목록을 한 번에 버리므로 두 번 눌러 확인한다.
   const [confirmReset, setConfirmReset] = useState(false);
+  const { t } = useTranslation();
+  const { appLabel, appDescription, sectionLabel, sectionDescription } = useInstallableAppText();
   const close = () => { setConfirmReset(false); onClose(); };
   // 이 창의 카탈로그에 속한 설치 항목만, 설치(표시) 순서대로 — 정렬 영역에 쓴다.
   const byId = new Map<string, InstallableApp>(sections.flatMap((sec) => sec.apps).map((a) => [a.id, a]));
@@ -51,23 +54,26 @@ export function AddAppDialog({
 
         <div className="px-5 pb-5 space-y-4">
           {onMove && <InstalledAppOrder apps={installedHere} onMove={onMove} />}
-          {sections.map((section) => (
+          {sections.map((section) => {
+            const sectionDesc = sectionDescription(section);
+            return (
             <div
-              key={section.label}
+              key={section.sectionId}
               className={section.tone === 'danger' ? 'rounded-xl border border-status-warning/40 bg-status-warning/5 p-2.5' : undefined}
             >
               <p className={`flex items-center gap-1.5 px-0.5 text-xs font-medium ${
                 section.tone === 'danger' ? 'text-status-warning' : 'text-muted-foreground'
-              } ${section.description ? 'pb-0.5' : 'pb-1.5'}`}>
+              } ${sectionDesc ? 'pb-0.5' : 'pb-1.5'}`}>
                 {section.tone === 'danger' && <AlertTriangle className="w-3.5 h-3.5" aria-hidden />}
-                {section.label}
+                {sectionLabel(section)}
               </p>
-              {section.description && (
-                <p className="px-0.5 pb-1.5 text-[11px] text-muted-foreground">{section.description}</p>
+              {sectionDesc && (
+                <p className="px-0.5 pb-1.5 text-[11px] text-muted-foreground">{sectionDesc}</p>
               )}
               <div className="grid grid-cols-2 gap-2">
                 {section.apps.map((app) => {
                   const installed = installedApps.includes(app.id);
+                  const appDesc = appDescription(app);
                   return (
                     <button
                       key={app.id}
@@ -82,9 +88,9 @@ export function AddAppDialog({
                     >
                       <app.icon className={`w-4.5 h-4.5 mt-0.5 flex-shrink-0 ${app.iconColor || 'text-muted-foreground'}`} />
                       <div className="min-w-0 flex-1">
-                        <div className="text-sm font-medium">{app.label}</div>
-                        {app.description && (
-                          <div className="text-[11px] text-muted-foreground mt-0.5 leading-snug">{app.description}</div>
+                        <div className="text-sm font-medium">{appLabel(app)}</div>
+                        {appDesc && (
+                          <div className="text-[11px] text-muted-foreground mt-0.5 leading-snug">{appDesc}</div>
                         )}
                       </div>
                       <span className={`flex-shrink-0 w-5 h-5 rounded-full flex items-center justify-center ${
@@ -97,20 +103,18 @@ export function AddAppDialog({
                 })}
               </div>
             </div>
-          ))}
+            );
+          })}
           {/* installed_apps 는 메뉴 표시 개인화일 뿐 접근 제어가 아니다 — 권한 오해 방지 안내 */}
           <p className="px-0.5 text-[11px] text-muted-foreground">
-            설치는 내 메뉴에 보일지만 정합니다. 화면을 열 수 있는 권한은 관리자가 설정 → 접근 제어에서
-            정하며, 막힌 화면은 이 목록에 나오지 않습니다.
+            {t('apps.accessNote')}
           </p>
         </div>
 
         {onReset && (
           <div className="px-5 pb-4 -mt-1 flex items-center justify-between gap-3 border-t border-border pt-3">
             <p className="text-[11px] text-muted-foreground">
-              {customized
-                ? '직접 고른 구성이다. 초기화하면 사이드바·상단바 모두 조직 기본 구성으로 돌아간다.'
-                : '조직 기본 구성을 따르는 중이다. 앱을 추가·제거하면 내 구성으로 고정된다.'}
+              {customized ? t('apps.customizedNote') : t('apps.defaultNote')}
             </p>
             {customized && (
               <button
@@ -127,7 +131,7 @@ export function AddAppDialog({
                 }`}
               >
                 <RotateCcw className="w-3.5 h-3.5" aria-hidden />
-                {confirmReset ? '한 번 더 눌러 초기화' : '기본값으로 초기화'}
+                {confirmReset ? t('apps.resetConfirm') : t('apps.reset')}
               </button>
             )}
           </div>

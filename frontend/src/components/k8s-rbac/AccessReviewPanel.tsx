@@ -134,7 +134,7 @@ export function AccessReviewPanel({ clusterId, serviceAccounts }: Props) {
         <EmptyState
           icon={ShieldCheck}
           title="점검할 ServiceAccount 를 고르세요"
-          description="규칙을 읽어 추측하는 대신 API 서버에 직접 물어본다 — 겹친 바인딩까지 반영된 실제 결과가 나온다."
+          description="규칙을 읽어 추측하는 대신 API 서버에 직접 물어봅니다 — 겹친 바인딩까지 반영된 실제 결과가 나옵니다."
           compact
         />
       ) : (
@@ -195,8 +195,8 @@ export function AccessReviewPanel({ clusterId, serviceAccounts }: Props) {
 
           {denied.length > 0 && (
             <p className="text-[11.5px] leading-relaxed rounded-md border border-status-warning/30 bg-status-warning/10 text-status-warning px-3 py-2">
-              {denied.length}건이 거부됐다. 의도한 것이 아니라면 Binding 탭에서 그 네임스페이스에 다른
-              바인딩이 걸려 있지 않은지 확인한다.
+              {denied.length}건이 거부됐습니다. 의도한 것이 아니라면 Binding 탭에서 그 네임스페이스에 다른
+              바인딩이 걸려 있지 않은지 확인하세요.
             </p>
           )}
         </div>

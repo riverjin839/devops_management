@@ -24,14 +24,14 @@ import { Database, ShieldCheck } from 'lucide-react';
 // ── 유틸 ────────────────────────────────────────────────────────────────────
 
 const CATEGORY_META: Record<string, { label: string; icon: React.ComponentType<{ className?: string }>; cls: string }> = {
-  control_plane: { label: 'Control Plane', icon: Server,     cls: 'bg-chart-4/15 text-chart-4 border-chart-4/30' },
-  kubelet:       { label: 'Kubelet',        icon: Cpu,        cls: 'bg-chart-1/15 text-chart-1 border-chart-1/30' },
-  cni:           { label: 'CNI / Cilium',   icon: Network,    cls: 'bg-chart-5/15 text-chart-5 border-chart-5/30' },
+  control_plane: { label: 'Control Plane', icon: Server,     cls: 'bg-chart-4/15 text-chart-4-text border-chart-4/30' },
+  kubelet:       { label: 'Kubelet',        icon: Cpu,        cls: 'bg-chart-1/15 text-chart-1-text border-chart-1/30' },
+  cni:           { label: 'CNI / Cilium',   icon: Network,    cls: 'bg-chart-5/15 text-chart-5-text border-chart-5/30' },
   // OS 레벨 — kernel sysctl · etcd systemd · etcdctl config 를 한 카테고리로.
-  os:            { label: 'OS',              icon: Cpu,        cls: 'bg-chart-3/15 text-chart-3 border-chart-3/30' },
+  os:            { label: 'OS',              icon: Cpu,        cls: 'bg-chart-3/15 text-chart-3-text border-chart-3/30' },
   // Storage — MinIO / AIStor / DirectPV 등 객체스토리지 레이어
-  storage:       { label: 'Storage (S3/MinIO)', icon: HardDrive, cls: 'bg-chart-6/15 text-chart-6 border-chart-6/30' },
-  cluster:       { label: 'Cluster',        icon: Server,     cls: 'bg-chart-8/15 text-chart-8 border-chart-8/30' },
+  storage:       { label: 'Storage (S3/MinIO)', icon: HardDrive, cls: 'bg-chart-6/15 text-chart-6-text border-chart-6/30' },
+  cluster:       { label: 'Cluster',        icon: Server,     cls: 'bg-chart-8/15 text-chart-8-text border-chart-8/30' },
   other:         { label: 'Other',          icon: Settings2,  cls: 'bg-muted text-muted-foreground border-border' },
 };
 

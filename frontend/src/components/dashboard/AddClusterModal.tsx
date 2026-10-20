@@ -24,7 +24,7 @@ const PROVIDERS: ProviderOption[] = [
     label: 'On-Premises',
     sub: 'Bare metal / VM',
     icon: <Server className="w-6 h-6" />,
-    color: 'border-chart-1/40 bg-chart-1/10 text-chart-1',
+    color: 'border-chart-1/40 bg-chart-1/10 text-chart-1-text',
     defaultPort: '6443',
   },
   {
@@ -32,7 +32,7 @@ const PROVIDERS: ProviderOption[] = [
     label: 'AWS EKS',
     sub: 'Amazon Elastic K8s',
     icon: <Cloud className="w-6 h-6" />,
-    color: 'border-chart-7/40 bg-chart-7/10 text-chart-7',
+    color: 'border-chart-7/40 bg-chart-7/10 text-chart-7-text',
     defaultPort: '443',
   },
   {
@@ -40,7 +40,7 @@ const PROVIDERS: ProviderOption[] = [
     label: 'GCP GKE',
     sub: 'Google Kubernetes Engine',
     icon: <Globe className="w-6 h-6" />,
-    color: 'border-chart-2/40 bg-chart-2/10 text-chart-2',
+    color: 'border-chart-2/40 bg-chart-2/10 text-chart-2-text',
     defaultPort: '443',
   },
   {
@@ -48,7 +48,7 @@ const PROVIDERS: ProviderOption[] = [
     label: 'Azure AKS',
     sub: 'Azure Kubernetes Service',
     icon: <Layers className="w-6 h-6" />,
-    color: 'border-chart-6/40 bg-chart-6/10 text-chart-6',
+    color: 'border-chart-6/40 bg-chart-6/10 text-chart-6-text',
     defaultPort: '443',
   },
   {
@@ -56,7 +56,7 @@ const PROVIDERS: ProviderOption[] = [
     label: 'Rancher',
     sub: 'Rancher Managed',
     icon: <Zap className="w-6 h-6" />,
-    color: 'border-chart-8/40 bg-chart-8/10 text-chart-8',
+    color: 'border-chart-8/40 bg-chart-8/10 text-chart-8-text',
     defaultPort: '6443',
   },
   {
@@ -64,7 +64,7 @@ const PROVIDERS: ProviderOption[] = [
     label: 'Kind / k3s',
     sub: 'Local Dev Cluster',
     icon: <Box className="w-6 h-6" />,
-    color: 'border-chart-4/40 bg-chart-4/10 text-chart-4',
+    color: 'border-chart-4/40 bg-chart-4/10 text-chart-4-text',
     defaultPort: '6443',
   },
   {
@@ -72,7 +72,7 @@ const PROVIDERS: ProviderOption[] = [
     label: 'OpenShift',
     sub: 'Red Hat OpenShift',
     icon: <Cpu className="w-6 h-6" />,
-    color: 'border-chart-5/40 bg-chart-5/10 text-chart-5',
+    color: 'border-chart-5/40 bg-chart-5/10 text-chart-5-text',
     defaultPort: '6443',
   },
 ];

@@ -204,6 +204,18 @@ hover 시 flyout 자체가 라벨을 보여주므로 이름만 뜨는 중복 툴
   - 로그인 성공/실패 모두 감사 로그(`audit_logs`)에 기록.
   - 401 등 실패 응답의 `detail`을 그대로 폼 하단에 노출.
   - 이후 모든 API 호출은 axios 인터셉터가 저장된 token을 `Authorization: Bearer` 헤더로 첨부(`get_current_user`가 `OAuth2PasswordBearer(tokenUrl="/api/v1/auth/login")`로 검증).
+  - **사내 SSO(OIDC, R-7)**: `GET /auth/oidc/config` 가 켜져 있으면 폼 아래 "또는" 구분선과 "{표시 이름}(으)로 로그인" 링크 버튼(`authApi.oidcLoginUrl(returnTo)` → 서버가 state·PKCE 를 만들어 IdP 로 302). 실패하면 서버가 `/login?error=<code>` 로 돌려보내고, 폼 위에 코드별 안내 배너(`role="alert"`)를 띄운다.
+  - **문구 i18n(R-6)**: 화면 문자열은 `login.*` 키(`frontend/src/i18n/resources/ko.ts`·`en.ts`). 로그인 전에는 서버 설정이 없으므로 localStorage `pep.locale` 를 따른다.
+- **요청사항 (수정 요청)**:
+  - _(여기에 개선/수정 요청을 직접 적어주세요)_
+
+### SSO 로그인 콜백 (`/auth/callback`)
+
+- **파일**: `frontend/src/pages/OidcCallbackPage.tsx` (미로그인 상태에서는 `LoginPage` 가 이 경로를 보고 분기, 로그인 상태의 탭은 `App.tsx` 라우트)
+- **목적 / UX**: 사내 IdP 로그인 후 서버(`/api/v1/auth/oidc/callback`)가 1회용 handoff code(60초)를 붙여 보내는 착지 화면. 스피너만 보이고 곧바로 세션을 시작해 로그인 전에 보던 화면(`return_to`, 내부 경로만)으로 이동한다. 실패하면 `/login?error=exchange_failed` 로 간다.
+- **Frontend**: `authApi.oidcExchange(code)` → `setSession` → `navigate(returnTo)`. 개발 모드 이중 실행에서 code 를 두 번 쓰지 않도록 요청을 모듈 단위로 공유한다. 세션 토큰은 URL 에 실리지 않는다.
+- **Backend**: `backend/app/routers/auth_oidc.py` — `/login`(state·nonce·PKCE 저장 10분 + 브라우저 바인딩 HttpOnly 쿠키 `pep_oidc_bind`) → IdP → `/callback`(code 교환, id_token RS*/ES* 서명·`iss`/`aud`/`azp`/`exp`/`nonce` 검증, 필요 시 userinfo, 허용 도메인·계정 매핑·자동 생성, 감사 `login.success` `method: oidc`) → `/exchange`. 설정은 AppSetting `auth.oidc`(`services/oidc_service.py`).
+- **운영자 설정**: Settings ▸ 접근 제어 ▸ "사내 SSO 로그인 (OIDC)" 카드(`components/settings/OidcSettingsPanel.tsx`, admin) — Issuer·Client ID/Secret(암호화 저장, 조회 시 `has_secret` 만)·공개 주소·claim 매핑·자동 생성 역할(viewer/operator)·허용 도메인(+ IdP 검증 이메일만 허용 `require_email_verified`, 기본 켬 — 허용 도메인이 있으면 `email_verified=true` 가 없을 때 `email_unverified` 로 거부)·표시 여부. 표시되는 Redirect URI 를 IdP 에 등록하고 "연결 확인"(discovery·JWKS 조회, 실행 로그)으로 검증한다.
 - **요청사항 (수정 요청)**:
   - _(여기에 개선/수정 요청을 직접 적어주세요)_
 
@@ -243,6 +255,7 @@ hover 시 flyout 자체가 라벨을 보여주므로 이름만 뜨는 중복 툴
   - `접근 제어` 탭(`FeatureAccessManager`): **화면별 노출**(단순 on/off) + **세부 역할 제한(고급, WBS 전용)** 두 섹션, 단일 저장 버튼(같은 draft 를 공유해 서로 덮어쓰지 않음). "화면별 노출"은 `ScreenCatalogList`(공용 — Your Island 화면추가 피커와 그룹/검색 렌더링을 공유)로 NAV_MAP 전체 화면(자기 자신·admin 전용 화면 제외)을 그룹별로 나열하고, 각 줄 체크박스로 `feature_access[path].enabled=false` 를 토글한다. admin 은 항상 접근 가능하고 기본값은 열림. 하나를 끄면 **사이드바 메뉴 숨김 + Your Island 화면추가 목록 제외 + 이미 담긴 Island 패널 접근 차단(잠금 안내) + 직접 URL 접근 차단(홈으로 리다이렉트)** 이 동시에 적용된다 — `useNavCatalog` 의 `featureAllowed`, `IslandPanelHost`, `App.tsx` 의 `RouteAccessGate` 가 전부 같은 `canAccessFeature(feature_access, path, user)` 판정을 공유하기 때문. `feature_access` 맵의 키는 라우트 경로 자체(예: `/wbs`)라 화면별 개별 매핑이 필요 없다. 서버도 같은 규칙을 강제한다 — `backend/app/auth/feature_access.py` 의 `FEATURE_API_PATTERNS` 에 등록된 **화면 전용 API** 는 인증 라우터 공통 의존성(`enforce_feature_access`)이 403 으로 막는다(여러 화면이 공유하는 API 는 등록하지 않는다). 새 화면 전용 API 를 만들면 이 표에도 추가한다.
   - `접근 제어` 탭 하단 `ClusterViewerMaskSetting`(MacCard "클러스터 네트워크 정보 (viewer)"): 켜면 viewer(및 admin·operator 외 역할)의 `/clusters` 목록·상세 응답에서 IP·CIDR·bond IP/MAC·호스트명·AS 번호·API 엔드포인트·Prometheus/Alertmanager 주소·`node_ips`·`kubeconfig_path`·`cilium_config` 를 비우고 `network_masked=true` 를 붙이며, `GET /clusters/{id}/cilium-config` 는 kubectl 없이 `source: "masked"` 를 준다. 기본 off. `GET/PUT /api/v1/ui-settings/cluster-viewer-mask`(PUT admin 전용, 값이 바뀌면 감사 `settings.cluster_viewer_mask.update`) — 판정 `backend/app/services/cluster_network_mask.py`. 다른 화면(인프라 노드·토폴로지)의 IP 는 "화면별 노출"로 막는다.
   - `접근 제어` 탭 하단 `ClusterEndpointAllowlistSetting`(MacCard "클러스터 API 엔드포인트 허용 대역"): 한 줄에 하나씩 CIDR 또는 호스트명(`*.k8s.local` 와일드카드). 비어 있으면 제한 없음(기본). 채우면 클러스터 생성(연결 검증 생략 시에도)·`api_endpoint` 변경, 그리고 kubeconfig 등록·교체·경로 변경 시 kubeconfig 의 `server` 가 대역 밖이면 422 로 거절되고, 연결 검증(`/verify`·`/verify/stream`)은 그 주소로 요청을 보내지 않는다(api_endpoint 가 밖이면 api_server 실패 + 나머지 건너뜀, kubeconfig server 만 밖이면 인증 단계만 건너뜀). 호스트명 엔드포인트는 **호스트명 항목으로만** 허용되고 DNS 로 풀어 CIDR 과 비교하지 않는다(DNS rebinding 우회 방지). `GET/PUT /api/v1/ui-settings/cluster-endpoint-allowlist`(PUT admin, 잘못된 항목 422, 변경 시 감사 `settings.cluster_endpoint_allowlist.update`) — 판정 `backend/app/services/cluster_endpoint_policy.py`.
+  - `접근 제어` 탭 하단 `OidcSettingsPanel`(MacCard "사내 SSO 로그인 (OIDC)", R-7): 사내 IdP 로그인 설정 — AppSetting `auth.oidc`. 상세는 [SSO 로그인 콜백](#sso-로그인-콜백-authcallback) 절. `GET/PUT /api/v1/auth/oidc/settings`·`POST /settings/test`(admin, "연결 확인"은 `runLogged` 실행 로그).
   - 나머지 탭은 각각 전용 매니저 컴포넌트를 그대로 렌더(운영레벨/서비스/LAKE타입/시스템 담당자/Jira/백업/감사로그).
   - `테넌트` 탭(`TenantManager`, 멀티테넌시 1단계): 좌측 테넌트 목록(추가) + 우측 정보(이름/설명·삭제) · 멤버(operator/viewer 체크) · 클러스터 바인딩(클러스터별 `바인딩 없음`/`read`/`operate`) 카드, 카드별 저장. 바인딩이 있는 클러스터는 바인딩된 테넌트 멤버에게만 보이고(클러스터 목록·사이드바·대시보드·점검 매트릭스·이력·이벤트·알람에서 제외, 조회 API 403), 실행·변경은 `operate` 멤버만 가능 — 서버 판정 `services/cluster_access.py`, API `GET/POST/PUT/DELETE /api/v1/tenants`, `PUT /tenants/{id}/members`·`/bindings`, `GET /tenants/my-cluster-access`(`routers/tenants.py`, 관리 API 는 admin 전용·감사 로그 `tenant.*`). 상세 하단 **LLM 라우팅 (테넌트 전용)** 카드(`TenantLlmRoutingCard`, 멀티테넌시 4단계): 용도별 primary/fallback 프로필(임베딩 제외)을 지정하면 이 테넌트 멤버의 Agent 채팅이 전역 라우팅 대신 그 프로필을 쓴다(`PUT /tenants/{id}/llm-routing`, 판정 `services/llm/service.py` `effective_route`). 테넌트 목록 항목에 최근 24h LLM 호출 수(`GET /tenants/llm-usage`)가 붙는다. 정보 카드의 **동시 실행 상한**(멀티테넌시 5단계, `tenants.max_concurrent_runs`, 비우면 제한 없음)을 지정하면 이 테넌트 소유 클러스터(operate 바인딩 우선)에 대한 배치잡·운영 점검·점검 매트릭스 일괄 수행·심층 점검·효율화 적용이 그 수만큼만 동시에 돌고, 나머지는 15초 간격 재시도로 대기한다(`services/tenant_concurrency.py`). 상세의 **실행 슬롯** 카드(`TenantRunSlotsCard`, `GET /tenants/run-slots` 5초 폴링)에 실행 중·대기 중 목록이, 목록 항목에 `실행 n/상한 (대기 m)` 이 붙는다.
   - 테넌트는 업무·지식 데이터의 **공유 범위** 단위이기도 하다(멀티테넌시 3단계): 업무 항목·프로젝트·업무 가이드·운영 노트·마인드맵 폼의 `TenantScopeSelect`(선택지 `GET /tenants/mine`)로 테넌트를 고르면 그 멤버·admin 만 본다(`services/tenant_scope.py`). 데이터가 남은 테넌트는 삭제 시 409 로 테이블별 건수를 알려준다.
@@ -1187,6 +1200,7 @@ hover 시 flyout 자체가 라벨을 보여주므로 이름만 뜨는 중복 툴
   - SSH 기반 `isi` 명령 선택 실행(비밀번호/PEM 키), 읽기전용·무부하 보장.
   - K8s NFS PV ↔ Isilon export 매칭으로 "실제 K8s 가 쓰는 NFS" 가용성 가시화.
   - `isi` 명령 커스텀 등록(DB 관리, OneFS 버전별 편집) + deep checker 통합(쿼터/가용성/health 판정).
+- **11차 감사 반영(2026-10-20)**: 서버 편집 모달에 "서버 삭제"(ConfirmDialog danger — 서버 전용 명령 cascade 표시)·"저장된 비밀번호/개인키 지우기". 서버·명령 목록 조회 실패는 `ErrorState`, 선택 서버가 사라지면 기본 서버 재선택. PV 표는 미실행 / PV 없음 / K8s 조회 실패(`k8s_nfs_pvs_error` — `/overview`·`/servers/{id}/run` 응답 필드) 3분기, 접속 실패는 오류 배지. 쓰기·실행 버튼은 operator 미만에게 비활성 + 사유("명령 관리" 는 열람 허용).
 - **요청사항 (수정 요청)**:
   - _(여기에 개선/수정 요청을 직접 적어주세요)_
 
@@ -1304,6 +1318,10 @@ hover 시 flyout 자체가 라벨을 보여주므로 이름만 뜨는 중복 툴
   - 새 버전 저장은 자동으로 "현재 버전"이 되고, 이전 버전은 불변으로 남아 롤백 가능(포인터만 이동, 새 버전 생성 없음)
   - 테스트 실행은 저장 전 편집 중인 초안 그대로 실행 가능 — 결과/자격증명 모두 영속화하지 않음
   - is_system 스크립트(향후 Phase 2 에서 기존 executor 이관분)는 삭제 불가
+- **11차 감사 반영(2026-10-20)**:
+  - 목록이 403 이면 2단 레이아웃 대신 권한 안내(`ErrorState`), 상세는 로딩·404("목록으로")·오류(다시 시도)를 구분한다. 쓰기 버튼은 `useCanEditScripts`(operator + 관리자 전용 설정) 로 비활성 + 사유.
+  - 저장·롤백: `usedByCount > 0` 이면 확인 창 — "항상 최신으로 참조하는 배치잡 N건이 다음 실행부터 vN 을 씁니다" + 잡 목록(고정 잡은 영향 없음으로 별도 표시). 응답 `used_by[]`(`job_id`·`name`·`cluster_id`·`cluster_name`·`pinned`·`pinned_version`·`enabled`·`cron`).
+  - "어디서 쓰이나" 탭은 잡·클러스터·버전 참조·스케줄 표. 미저장 편집본이 있으면 다른 스크립트·새 스크립트로 넘어가기 전에 확인. Python 은 테스트 실행 미지원이라 버튼 비활성 + 사유.
 - **요청사항 (수정 요청)**:
   - _(여기에 개선/수정 요청을 직접 적어주세요)_
 
@@ -1449,6 +1467,7 @@ hover 시 flyout 자체가 라벨을 보여주므로 이름만 뜨는 중복 툴
   - 미완료 항목 이월(carry-over) — 자기 자신/완료된 스프린트는 대상에서 제외
   - 스프린트 종료(status→completed) 원클릭 처리
   - 삭제 시 업무 자체는 유지, 스프린트 배정만 해제됨을 안내
+- **권한(2026-10-20, D-145)**: 생성·수정·삭제·이월은 operator 이상(`routers/sprint.py` `require_operator`, 업무 항목과 동일). 화면 버튼과 `/todo-today` "2주 스프린트 시작" 은 viewer 에게 비활성 + 사유. 수정 시 비운 목표·Jira·Confluence 는 `null` 로 보내 실제로 비워진다.
 - **요청사항 (수정 요청)**:
   - _(여기에 개선/수정 요청을 직접 적어주세요)_
 

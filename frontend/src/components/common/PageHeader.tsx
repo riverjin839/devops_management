@@ -17,6 +17,9 @@ interface PageHeaderProps {
   /** 우측 액션 영역(선택). */
   actions?: ReactNode;
   className?: string;
+  /** 제목 heading 레벨 — 기본 1. 다른 페이지 안에 임베드돼 바깥에 이미 `<h1>` 이 있을 때만 2 로 낮춘다
+   *  (예: 홈 배치잡 탭의 `BatchJobsPage`, §12.12-1 — 화면당 h1 1개). 시각 크기는 같다. */
+  level?: 1 | 2;
 }
 
 /**
@@ -25,7 +28,8 @@ interface PageHeaderProps {
  * 또는 pill 모양 뒤로가기 + `text-lg font-semibold` 를 손으로 그려 h1 이 22가지 class 로 흩어져 있었다.
  * 제목 크기·굵기·아이콘 톤·뒤로가기 모양을 여기 한 곳에 고정한다.
  */
-export function PageHeader({ title, description, icon: Icon, back, titleExtra, actions, className }: PageHeaderProps) {
+export function PageHeader({ title, description, icon: Icon, back, titleExtra, actions, className, level = 1 }: PageHeaderProps) {
+  const Heading = level === 2 ? 'h2' : 'h1';
   return (
     <header className={cn('flex items-start justify-between gap-x-4 gap-y-2 flex-wrap', className)}>
       <div className="flex items-start gap-3 min-w-0 flex-1">
@@ -41,7 +45,7 @@ export function PageHeader({ title, description, icon: Icon, back, titleExtra, a
         <div className="min-w-0">
           <div className="flex items-center gap-2 min-w-0 flex-wrap">
             {Icon && <Icon className="w-5 h-5 text-muted-foreground shrink-0" aria-hidden="true" />}
-            <h1 className="text-xl font-semibold leading-tight min-w-0">{title}</h1>
+            <Heading className="text-xl font-semibold leading-tight min-w-0">{title}</Heading>
             {titleExtra}
           </div>
           {description && <div className="text-sm text-muted-foreground mt-0.5">{description}</div>}

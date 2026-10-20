@@ -12,11 +12,11 @@ export const STATUS_STYLE: Record<string, { dot: string; border: string; badge: 
 
 // CIDR 겹침 그룹 구분 — 의미가 아니라 "몇 번째 겹침 묶음인지" 를 나타내는 범주색.
 export const OVERLAP_COLORS = [
-  { bg: 'bg-chart-7/10', text: 'text-chart-7', border: 'border-chart-7/40', dot: 'bg-chart-7' },
-  { bg: 'bg-chart-5/10', text: 'text-chart-5', border: 'border-chart-5/40', dot: 'bg-chart-5' },
-  { bg: 'bg-chart-6/10', text: 'text-chart-6', border: 'border-chart-6/40', dot: 'bg-chart-6' },
-  { bg: 'bg-chart-3/10', text: 'text-chart-3', border: 'border-chart-3/40', dot: 'bg-chart-3' },
-  { bg: 'bg-chart-4/10', text: 'text-chart-4', border: 'border-chart-4/40', dot: 'bg-chart-4' },
+  { bg: 'bg-chart-7/10', text: 'text-chart-7-text', border: 'border-chart-7/40', dot: 'bg-chart-7' },
+  { bg: 'bg-chart-5/10', text: 'text-chart-5-text', border: 'border-chart-5/40', dot: 'bg-chart-5' },
+  { bg: 'bg-chart-6/10', text: 'text-chart-6-text', border: 'border-chart-6/40', dot: 'bg-chart-6' },
+  { bg: 'bg-chart-3/10', text: 'text-chart-3-text', border: 'border-chart-3/40', dot: 'bg-chart-3' },
+  { bg: 'bg-chart-4/10', text: 'text-chart-4-text', border: 'border-chart-4/40', dot: 'bg-chart-4' },
 ];
 
 export type OverlapColor = typeof OVERLAP_COLORS[0];

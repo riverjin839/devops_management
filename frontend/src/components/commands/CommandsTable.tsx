@@ -5,6 +5,8 @@ import {
 import type { CommandEntry, CommandEntryCreate, CommandImportance } from '@/types';
 import { IMPORTANCE_OPTIONS, IMPORTANCE_META } from './constants';
 import { DoubleScrollX } from '@/components/common';
+import { useCanOperate } from '@/hooks/useCanOperate';
+import type { CommandEntryPatch } from '@/hooks/useCommands';
 
 function ImportanceBadge({ value, onClick, title }: { value: CommandImportance; onClick?: () => void; title?: string }) {
   const meta = IMPORTANCE_META[value] ?? IMPORTANCE_META.medium;
@@ -131,7 +133,7 @@ type Editing = null | 'importance' | 'category' | 'command' | 'description' | 'c
 
 interface CommandRowProps {
   entry: CommandEntry;
-  onUpdate: (patch: Partial<CommandEntryCreate>) => void;
+  onUpdate: (patch: CommandEntryPatch) => void;
   onDelete: () => void;
   onTogglePin: () => void;
   onOpenForm: () => void;
@@ -139,14 +141,18 @@ interface CommandRowProps {
 
 function CommandRow({ entry: e, onUpdate, onDelete, onTogglePin, onOpenForm }: CommandRowProps) {
   const meta = IMPORTANCE_META[e.importance] ?? IMPORTANCE_META.medium;
-  const [editing, setEditing] = useState<Editing>(null);
+  const [editing, setEditingRaw] = useState<Editing>(null);
+  // 쓰기는 operator 이상(서버 require_operator) — viewer 는 인라인 편집에 들어가지 않고 사유를 본다(D-145).
+  const { canOperate, withHint, ariaWithHint } = useCanOperate();
+  const setEditing = (k: Editing) => { if (k === null || canOperate) setEditingRaw(k); };
+  const editHint = withHint('클릭하여 수정');
 
   const cell = <K extends Editing>(key: K, render: () => React.ReactNode, content: React.ReactNode) =>
     editing === key ? render() : (
       <div
-        className="cursor-pointer rounded hover:bg-primary/5 -mx-1 px-1 py-0.5 transition-colors"
+        className={`rounded -mx-1 px-1 py-0.5 transition-colors ${canOperate ? 'cursor-pointer hover:bg-primary/5' : ''}`}
         onClick={() => setEditing(key)}
-        title="클릭하여 수정"
+        title={editHint}
       >
         {content}
       </div>
@@ -168,12 +174,18 @@ function CommandRow({ entry: e, onUpdate, onDelete, onTogglePin, onOpenForm }: C
               {IMPORTANCE_OPTIONS.map((v) => <option key={v} value={v}>{IMPORTANCE_META[v].label}</option>)}
             </select>
           ) : (
-            <ImportanceBadge value={e.importance} onClick={() => setEditing('importance')} title="클릭하여 중요도 변경" />
+            <ImportanceBadge
+              value={e.importance}
+              onClick={canOperate ? () => setEditing('importance') : undefined}
+              title={withHint('클릭하여 중요도 변경')}
+            />
           )}
           <button
             onClick={onTogglePin}
-            className={`inline-flex items-center gap-1 text-xs ${e.pinned ? 'text-primary' : 'text-muted-foreground hover:text-primary'}`}
-            title={e.pinned ? '고정 해제' : '상단 고정'}
+            disabled={!canOperate}
+            className={`inline-flex items-center gap-1 text-xs disabled:opacity-50 disabled:cursor-not-allowed ${e.pinned ? 'text-primary' : 'text-muted-foreground hover:text-primary'}`}
+            title={withHint(e.pinned ? '고정 해제' : '상단 고정')}
+            aria-label={ariaWithHint(e.pinned ? '고정 해제' : '상단 고정')}
           >
             {e.pinned ? <Pin className="w-3 h-3" /> : <PinOff className="w-3 h-3" />}
             {e.pinned ? '고정' : '고정'}
@@ -187,7 +199,7 @@ function CommandRow({ entry: e, onUpdate, onDelete, onTogglePin, onOpenForm }: C
           () => (
             <InlineText
               initial={e.category ?? ''}
-              onSave={(v) => { onUpdate({ category: v || undefined }); setEditing(null); }}
+              onSave={(v) => { onUpdate({ category: v || null }); setEditing(null); }}
               onCancel={() => setEditing(null)}
               placeholder="kubectl / helm …"
               className="text-xs"
@@ -217,9 +229,9 @@ function CommandRow({ entry: e, onUpdate, onDelete, onTogglePin, onOpenForm }: C
           ) : (
             <div className="flex items-start gap-2">
               <pre
-                className="flex-1 text-[12px] font-mono bg-background border border-border rounded-lg px-2 py-1.5 whitespace-pre-wrap break-all cursor-pointer hover:border-primary/40 transition-colors"
+                className={`flex-1 text-[12px] font-mono bg-background border border-border rounded-lg px-2 py-1.5 whitespace-pre-wrap break-all transition-colors ${canOperate ? 'cursor-pointer hover:border-primary/40' : ''}`}
                 onClick={() => setEditing('command')}
-                title="클릭하여 수정"
+                title={editHint}
               >
                 {e.command}
               </pre>
@@ -231,7 +243,7 @@ function CommandRow({ entry: e, onUpdate, onDelete, onTogglePin, onOpenForm }: C
           {editing === 'description' ? (
             <InlineTextarea
               initial={e.description ?? ''}
-              onSave={(v) => { onUpdate({ description: v || undefined }); setEditing(null); }}
+              onSave={(v) => { onUpdate({ description: v || null }); setEditing(null); }}
               onCancel={() => setEditing(null)}
               placeholder="이 명령어가 무엇을 하는지"
               rows={2}
@@ -253,7 +265,7 @@ function CommandRow({ entry: e, onUpdate, onDelete, onTogglePin, onOpenForm }: C
           {editing === 'caution' ? (
             <InlineTextarea
               initial={e.caution ?? ''}
-              onSave={(v) => { onUpdate({ caution: v || undefined }); setEditing(null); }}
+              onSave={(v) => { onUpdate({ caution: v || null }); setEditing(null); }}
               onCancel={() => setEditing(null)}
               placeholder="실행 전 주의해야 할 점 / 부작용"
               rows={2}
@@ -275,7 +287,7 @@ function CommandRow({ entry: e, onUpdate, onDelete, onTogglePin, onOpenForm }: C
           {editing === 'examples' ? (
             <InlineTextarea
               initial={e.examples ?? ''}
-              onSave={(v) => { onUpdate({ examples: v || undefined }); setEditing(null); }}
+              onSave={(v) => { onUpdate({ examples: v || null }); setEditing(null); }}
               onCancel={() => setEditing(null)}
               placeholder="실제 사용 예시"
               rows={3}
@@ -296,8 +308,9 @@ function CommandRow({ entry: e, onUpdate, onDelete, onTogglePin, onOpenForm }: C
             </details>
           ) : (
             <p
-              className="text-xs text-muted-foreground italic cursor-pointer hover:text-primary transition-colors"
+              className={`text-xs text-muted-foreground italic transition-colors ${canOperate ? 'cursor-pointer hover:text-primary' : ''}`}
               onClick={() => setEditing('examples')}
+              title={editHint}
             >
               + 예시 추가
             </p>
@@ -307,7 +320,7 @@ function CommandRow({ entry: e, onUpdate, onDelete, onTogglePin, onOpenForm }: C
           {editing === 'tags' ? (
             <InlineText
               initial={e.tags ?? ''}
-              onSave={(v) => { onUpdate({ tags: v || undefined }); setEditing(null); }}
+              onSave={(v) => { onUpdate({ tags: v || null }); setEditing(null); }}
               onCancel={() => setEditing(null)}
               placeholder="node, maintenance, drain (쉼표 구분)"
               className="text-sm"
@@ -330,7 +343,7 @@ function CommandRow({ entry: e, onUpdate, onDelete, onTogglePin, onOpenForm }: C
           {editing === 'confluence' ? (
             <InlineText
               initial={e.confluenceUrl ?? ''}
-              onSave={(v) => { onUpdate({ confluenceUrl: v || undefined }); setEditing(null); }}
+              onSave={(v) => { onUpdate({ confluenceUrl: v || null }); setEditing(null); }}
               onCancel={() => setEditing(null)}
               placeholder="https://confluence.example.com/..."
               className="text-sm"
@@ -348,16 +361,19 @@ function CommandRow({ entry: e, onUpdate, onDelete, onTogglePin, onOpenForm }: C
               </a>
               <button
                 onClick={() => setEditing('confluence')}
-                className="p-0.5 text-muted-foreground/40 hover:text-primary"
-                title="Confluence URL 수정"
+                disabled={!canOperate}
+                className="p-0.5 text-muted-foreground/40 hover:text-primary disabled:cursor-not-allowed"
+                title={withHint('Confluence URL 수정')}
+                aria-label={ariaWithHint('Confluence URL 수정')}
               >
                 <Pencil className="w-2.5 h-2.5" />
               </button>
             </div>
           ) : (
             <p
-              className="text-xs text-muted-foreground italic cursor-pointer hover:text-primary transition-colors"
+              className={`text-xs text-muted-foreground italic transition-colors ${canOperate ? 'cursor-pointer hover:text-primary' : ''}`}
               onClick={() => setEditing('confluence')}
+              title={editHint}
             >
               + Confluence 링크 추가
             </p>
@@ -369,17 +385,19 @@ function CommandRow({ entry: e, onUpdate, onDelete, onTogglePin, onOpenForm }: C
         <div className="inline-flex items-center gap-1">
           <button
             onClick={onOpenForm}
-            className="inline-flex items-center gap-1 px-2 py-1 text-xs rounded-md bg-secondary hover:bg-secondary/80"
-            title="전체 폼으로 수정"
-            aria-label="전체 폼으로 수정"
+            disabled={!canOperate}
+            className="inline-flex items-center gap-1 px-2 py-1 text-xs rounded-md bg-secondary hover:bg-secondary/80 disabled:opacity-50 disabled:cursor-not-allowed"
+            title={withHint('전체 폼으로 수정')}
+            aria-label={ariaWithHint('전체 폼으로 수정')}
           >
             <Pencil className="w-3 h-3" /> 폼
           </button>
           <button
             onClick={onDelete}
-            className="inline-flex items-center justify-center px-1.5 py-1 text-xs rounded-md text-muted-foreground hover:bg-status-critical/10 hover:text-status-critical"
-            title="삭제"
-            aria-label="삭제"
+            disabled={!canOperate}
+            className="inline-flex items-center justify-center px-1.5 py-1 text-xs rounded-md text-muted-foreground hover:bg-status-critical/10 hover:text-status-critical disabled:opacity-50 disabled:cursor-not-allowed"
+            title={withHint('삭제')}
+            aria-label={ariaWithHint('삭제')}
           >
             <Trash2 className="w-3 h-3" />
           </button>
@@ -391,6 +409,7 @@ function CommandRow({ entry: e, onUpdate, onDelete, onTogglePin, onOpenForm }: C
 
 /** 인라인 행 추가 — 본 테이블의 꼬리 행. 기본 importance=medium. */
 function AddCommandRow({ onCreate }: { onCreate: (data: CommandEntryCreate) => void }) {
+  const { canOperate, withHint, ariaWithHint } = useCanOperate();
   const [open, setOpen] = useState(false);
   const [importance, setImportance] = useState<CommandImportance>('medium');
   const [category, setCategory] = useState('');
@@ -430,7 +449,10 @@ function AddCommandRow({ onCreate }: { onCreate: (data: CommandEntryCreate) => v
           <button
             type="button"
             onClick={() => setOpen(true)}
-            className="w-full px-3 py-2.5 text-sm text-muted-foreground hover:text-primary hover:bg-primary/5 flex items-center justify-center gap-1.5 transition-colors"
+            disabled={!canOperate}
+            title={withHint('행 추가')}
+            aria-label={ariaWithHint('행 추가')}
+            className="w-full px-3 py-2.5 text-sm text-muted-foreground hover:text-primary hover:bg-primary/5 flex items-center justify-center gap-1.5 transition-colors disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-transparent disabled:hover:text-muted-foreground"
           >
             <Plus className="w-3.5 h-3.5" /> 행 추가
           </button>
@@ -512,7 +534,7 @@ function AddCommandRow({ onCreate }: { onCreate: (data: CommandEntryCreate) => v
 
 interface CommandsTableProps {
   entries: CommandEntry[];
-  onUpdate: (id: string, data: Partial<CommandEntryCreate>) => void;
+  onUpdate: (id: string, data: CommandEntryPatch) => void;
   onCreate: (data: CommandEntryCreate) => void;
   onDelete: (entry: CommandEntry) => void;
   onTogglePin: (entry: CommandEntry) => void;

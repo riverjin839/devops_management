@@ -99,7 +99,8 @@ devops_management/
 ├── helm/k8s-daily-monitor/   # values / -dev / -prod / -airgap
 ├── scripts/             # kind-setup.sh, deploy-airgap.sh, init-cluster.sh,
 │                        #   release/{bump_version,decide_bump,changelog_sections,check_changelog_sections}.py,
-│                        #   docs/check_docs_sync.py, report/(AI 개발 리포트 집계·HTML 빌드)
+│                        #   docs/check_docs_sync.py, report/(AI 개발 리포트 집계·HTML 빌드),
+│                        #   a11y/(axe 접근성 스캔)
 ├── ansible/playbooks/  argocd/  docker/ vagrant/ windows-docker/
 ├── docs/                # 인덱스는 docs/README.md (01-plan/ 02-design/ 03-analysis/
 │                        #   archive/ superpowers/ 하위 폴더 포함)
@@ -346,8 +347,9 @@ All shared interfaces live in `src/types/index.ts`. Keep backend response shapes
 확인하거나 해당 라우터 파일을 읽는다. 마운트 목록은 `backend/app/routers/__init__.py`.
 
 대부분의 라우터는 JWT 인증(`_auth` dependency)이 걸려 있고, **비인증 마운트 예외는
-`auth`, `health`, `check_ingest`, `k8s_exec`, `k9s_ssh`, `node_ssh`, `k8s_events_ingest`,
+`auth`, `auth_oidc`, `health`, `check_ingest`, `k8s_exec`, `k9s_ssh`, `node_ssh`, `k8s_events_ingest`,
 `observability_ingest`** 다
+(`auth_oidc` 는 SSO 진입·콜백·교환과 공개 설정만 비인증이고 `/auth/oidc/settings*` 는 엔드포인트에 `require_admin` 을 직접 건다)
 (`k8s_exec`/`k9s_ssh`/`node_ssh` 는 WebSocket 이라 핸들러가 query token 을 직접 검증하고,
 `node_ssh` 의 REST `POST /node-ssh/test` 는 엔드포인트에 `require_operator` 를 직접 건다).
 앱 헬스 프로브만 `/api/v1` 접두사가 없다 — `GET /health` · `/health/live` · `/health/ready`(DB 확인).
@@ -356,7 +358,7 @@ All shared interfaces live in `src/types/index.ts`. Keep backend response shapes
 
 | 그룹 | 라우터 |
 |---|---|
-| 인증/사용자 | `auth`, `audit_logs`, `notifications`, `ui_settings`, `terminal_appearance`, `release_notes`, `backup`, `schema_health`, `island`, `home_prefs`, `tenants` |
+| 인증/사용자 | `auth`, `auth_oidc`, `audit_logs`, `notifications`, `ui_settings`, `terminal_appearance`, `release_notes`, `backup`, `schema_health`, `island`, `home_prefs`, `tenants` |
 | 모니터링/점검 | `clusters`, `core_bundle_router`, `check_matrix`, `check_results_router`(+ingest), `check_definitions_router`, `ops_check`, `history`, `metric_trend`, `cluster_trends`, `cluster_items`, `k8s_events`(+ingest), `observability`(+ingest), `promql`, `health` |
 | K8s 운영 | `k8s_resources`, `k8s_allocation`, `k8s_efficiency`(히스토리·추천·NS 정책·적용/롤백 run), `k8s_rbac`(SA·Role·ClusterRole·Binding + kubeconfig 발급), `k8s_helm`, `k8s_exec`, `k9s_ssh`, `node_ssh`, `bulk_exec`, `saved_scripts`, `etcdctl`, `commands`, `mc_client`, `bottleneck`, `node_labels`, `node_images` |
 | 네트워크/토폴로지 | `cilium_trace`, `topology_trace`, `service_topology`, `architecture_docs` |

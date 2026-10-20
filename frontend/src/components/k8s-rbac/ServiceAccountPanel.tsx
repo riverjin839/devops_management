@@ -1,7 +1,7 @@
 /** ServiceAccount 목록 — 연결된 권한을 함께 보여주고, kubeconfig 재발급·삭제를 한다. */
 import { useMemo, useState } from 'react';
 import { KeyRound, Search, Trash2, UserPlus } from 'lucide-react';
-import { ConfirmDialog, EmptyState, useToastSafe } from '@/components/common';
+import { ConfirmDialog, EmptyState, ErrorState, LoadingState, useToastSafe } from '@/components/common';
 import { MacCard } from '@/components/ui/MacCard';
 import { useCanOperate } from '@/hooks/useCanOperate';
 import {
@@ -19,6 +19,9 @@ interface Props {
   serviceAccounts: RbacServiceAccount[];
   namespaces: RbacNamespace[];
   isLoading: boolean;
+  /** 목록 조회 실패(kubeconfig·API 미도달·RBAC 403) — 있으면 빈 상태 대신 오류를 보인다(D-139). */
+  error?: unknown;
+  onRetry?: () => void;
   /** "연결된 권한" 태그 클릭 — Role/ClusterRole 탭으로 이동해 그 롤을 바로 연다. */
   onSelectRole: (binding: RbacBindingSummary) => void;
 }
@@ -28,6 +31,8 @@ export function ServiceAccountPanel({
   serviceAccounts,
   namespaces,
   isLoading,
+  error,
+  onRetry,
   onSelectRole,
 }: Props) {
   const { canOperate, withHint, ariaWithHint } = useCanOperate(clusterId);
@@ -189,11 +194,15 @@ export function ServiceAccountPanel({
           </div>
         )}
 
-        {rows.length === 0 ? (
+        {isLoading ? (
+          <LoadingState compact />
+        ) : error ? (
+          <ErrorState compact error={error} title="ServiceAccount 목록을 불러오지 못했습니다" onRetry={onRetry} />
+        ) : rows.length === 0 ? (
           <EmptyState
             icon={KeyRound}
-            title={isLoading ? '불러오는 중…' : 'ServiceAccount 가 없다'}
-            description={isLoading ? undefined : '액세스 발급 탭에서 개발자용 SA 를 만들 수 있다.'}
+            title="ServiceAccount 가 없습니다"
+            description="액세스 발급 탭에서 개발자용 SA 를 만들 수 있습니다."
             compact
           />
         ) : (
@@ -282,7 +291,7 @@ export function ServiceAccountPanel({
           </div>
         )}
         <p className="mt-2 text-xs text-muted-foreground">
-          삭제는 ServiceAccount 만 지운다 — 롤과 바인딩은 각 탭에서 따로 정리한다.
+          삭제는 ServiceAccount 만 지웁니다 — 롤과 바인딩은 각 탭에서 따로 정리하세요.
         </p>
       </MacCard>
 
@@ -308,7 +317,7 @@ export function ServiceAccountPanel({
         title="ServiceAccount 를 삭제할까요?"
         description={
           pendingDelete
-            ? `${pendingDelete.namespace}/${pendingDelete.name} 을(를) 지우면 이 SA 토큰으로 접속 중인 개발자와 파드가 즉시 인증에 실패한다.`
+            ? `${pendingDelete.namespace}/${pendingDelete.name} 을(를) 지우면 이 SA 토큰으로 접속 중인 개발자와 파드가 즉시 인증에 실패합니다.`
             : undefined
         }
         confirmLabel="삭제"

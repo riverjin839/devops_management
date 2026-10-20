@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { X } from 'lucide-react';
 import { ResizeHandle } from './ResizeHandle';
 import { useModalA11y } from './useModalA11y';
@@ -69,6 +69,11 @@ export function SidePane({
   // Escape 닫기(disableEscape 존중) · 포커스 트랩 · 초점 이동/복원 (공용 훅).
   // aside 는 슬라이드 transition 위해 항상 마운트되지만, 훅 내부 효과는 open 일 때만 활성.
   const dialogRef = useModalA11y(open, () => { if (!disableEscape) onClose(); });
+  // 닫힌 패널은 슬라이드 transition 때문에 마운트된 채 화면 밖에 있다 — aria-hidden 만으로는 Tab 이
+  // 안쪽 버튼으로 들어가므로(axe aria-hidden-focus) inert 로 포커스·클릭을 함께 막는다.
+  useEffect(() => {
+    if (dialogRef.current) dialogRef.current.inert = !open;
+  }, [open, dialogRef]);
 
   // 드래그 폭 — resizable 일 때만 사용. 초기값은 width prop(px 파싱) → localStorage 순.
   const initialPx = parseWidthPx(width, 480);

@@ -1,6 +1,7 @@
 // frontend/src/components/batch-jobs/UnregisteredTypeChips.tsx
 import { Plus } from 'lucide-react';
 import type { BatchJob, BatchJobTypeDescriptor } from '@/services/api';
+import { useCanOperate } from '@/hooks/useCanOperate';
 
 interface UnregisteredTypeChipsProps {
   /** 단일 클러스터 모드의 그 클러스터에 등록된 잡들. */
@@ -12,6 +13,8 @@ interface UnregisteredTypeChipsProps {
 }
 
 export function UnregisteredTypeChips({ clusterJobs, allTypes, onPick }: UnregisteredTypeChipsProps) {
+  // §12.9 — 잡 등록은 operator 이상(D-145). 칩을 숨기지 않고 비활성+사유.
+  const { canOperate, hint } = useCanOperate();
   const registered = new Set(clusterJobs.map((j) => j.jobType));
   const missing = allTypes.filter((t) => !registered.has(t.jobType));
 
@@ -28,8 +31,10 @@ export function UnregisteredTypeChips({ clusterJobs, allTypes, onPick }: Unregis
             key={t.jobType}
             type="button"
             onClick={() => onPick(t.jobType)}
-            title={t.description}
-            className="inline-flex items-center gap-1 px-3 py-1 rounded-full border border-dashed border-border bg-card hover:bg-secondary hover:border-primary/40 text-sm text-muted-foreground hover:text-primary transition-colors"
+            disabled={!canOperate}
+            title={hint ?? t.description}
+            aria-label={`${t.label} 잡 등록${hint ? ` — ${hint}` : ''}`}
+            className="inline-flex items-center gap-1 px-3 py-1 rounded-full border border-dashed border-border bg-card hover:bg-secondary hover:border-primary/40 text-sm text-muted-foreground hover:text-primary transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <Plus className="w-3 h-3" />
             {t.label}

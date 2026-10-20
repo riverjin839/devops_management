@@ -1,13 +1,14 @@
-import { useNavigate, useParams, useLocation } from 'react-router-dom';
+import { Link, useNavigate, useParams, useLocation } from 'react-router-dom';
 import { PageHeader } from '@/components/common/PageHeader';
 import { ArrowLeft, HelpCircle, Pencil, Trash2 } from 'lucide-react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { opsNotesApi } from '@/services/api';
 import { OpsNoteForm, OpsNoteReadView } from '@/components/ops-notes';
-import { useToast, EmptyState, PageShell } from '@/components/common';
+import { useToast, ConfirmDialog, EmptyState, ErrorState, LoadingState, PageShell } from '@/components/common';
 import { MacCard } from '@/components/ui/MacCard';
 import { formatApiError } from '@/lib/utils';
-import { useMemo } from 'react';
+import { useCanOperate } from '@/hooks/useCanOperate';
+import { useMemo, useState } from 'react';
 
 export function OpsNoteDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -16,9 +17,11 @@ export function OpsNoteDetailPage() {
   const qc = useQueryClient();
   const toast = useToast();
   const editMode = location.pathname.endsWith('/edit');
+  const { canOperate, withHint, ariaWithHint } = useCanOperate();
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
-
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, isError, error, refetch } = useQuery({
     queryKey: ['ops-notes'],
     queryFn: () => opsNotesApi.getAll().then((r) => r.data),
     staleTime: 1000 * 30,
@@ -29,7 +32,26 @@ export function OpsNoteDetailPage() {
     [data, id],
   );
 
-  if (!isLoading && !note) {
+  // 분기 순서: 로딩 → 조회 실패 → 없음(조회 성공 + 목록에 없을 때만, D-137).
+  if (isLoading) {
+    return (
+      <div className="app-min-h-screen bg-background">
+        <PageShell density="doc"><LoadingState /></PageShell>
+      </div>
+    );
+  }
+
+  if (isError && !note) {
+    return (
+      <div className="app-min-h-screen bg-background">
+        <PageShell density="doc">
+          <ErrorState error={error} title="Q&A 를 불러오지 못했습니다" onRetry={() => { void refetch(); }} />
+        </PageShell>
+      </div>
+    );
+  }
+
+  if (!note) {
     return (
       <div className="app-min-h-screen bg-background">
         <PageShell density="doc">
@@ -44,63 +66,36 @@ export function OpsNoteDetailPage() {
     );
   }
 
-  if (!note) {
-    return <div className="app-min-h-screen bg-background" />;
-  }
-
+  // 삭제는 ConfirmDialog(danger) 로 확인한다(D-142).
   const handleDelete = async () => {
-    if (!confirm(`"${note.title}" Q&A 를 삭제하시겠습니까?`)) return;
+    setDeleting(true);
     try {
       await opsNotesApi.delete(note.id);
       qc.invalidateQueries({ queryKey: ['ops-notes'] });
       toast.success('Q&A 삭제됨');
+      setConfirmOpen(false);
       navigate('/ops-notes');
     } catch (e) {
       toast.error('삭제 실패', formatApiError(e));
+    } finally {
+      setDeleting(false);
     }
   };
 
-  const pageTitle = editMode ? 'Q&A 수정' : 'Q&A 상세';
-
+  // D-149 ⑤: PageShell 밖에서 폭을 따로 잡던 sticky 바(`max-w-4xl mx-auto px-8`)와 h1 과 겹치던
+  // 바 라벨을 걷었다. 편집 모드는 PageHeader back 슬롯, 읽기 모드는 h1(제목)을 읽기 뷰가 그리므로
+  // 뒤로가기·수정·삭제만 PageShell 안 한 줄로 둔다.
   return (
     <div className="app-min-h-screen bg-background">
-      <div className="sticky top-0 z-10 bg-background border-b border-border">
-        <div className="max-w-4xl mx-auto px-8 py-2.5 flex items-center gap-2">
-          <button
-            onClick={() => navigate('/ops-notes')}
-            className="p-1.5 hover:bg-secondary rounded-lg transition-colors text-muted-foreground hover:text-foreground"
-            title="목록으로"
-            aria-label="목록으로"
-          >
-            <ArrowLeft className="w-4 h-4" />
-          </button>
-          <HelpCircle className="w-4 h-4 text-muted-foreground" />
-          <span className="text-sm text-muted-foreground">{pageTitle}</span>
-          <div className="ml-auto flex items-center gap-2">
-            {!editMode && (
-              <>
-                <button
-                  onClick={() => navigate(`/ops-notes/${note.id}/edit`)}
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium bg-secondary hover:bg-secondary/80 border border-border rounded-lg transition-colors"
-                >
-                  <Pencil className="w-3.5 h-3.5" /> 수정
-                </button>
-                <button
-                  onClick={handleDelete}
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-status-critical hover:bg-status-critical/10 border border-border rounded-lg transition-colors"
-                >
-                  <Trash2 className="w-3.5 h-3.5" /> 삭제
-                </button>
-              </>
-            )}
-          </div>
-        </div>
-      </div>
-
       <PageShell density="doc">
         {editMode ? (
           <>
-            <PageHeader title="Q&A 수정" description="필요한 항목을 수정한 뒤 폼 하단의 저장 버튼을 누르세요." className="mb-8" />
+            <PageHeader
+              title="Q&A 수정"
+              description="필요한 항목을 수정한 뒤 폼 하단의 저장 버튼을 누르세요."
+              back={{ to: `/ops-notes/${note.id}`, label: '상세로' }}
+              className="mb-8"
+            />
             <MacCard title="Q&A 정보" bodyPadding="p-8">
               <OpsNoteForm
                 initial={note}
@@ -110,10 +105,52 @@ export function OpsNoteDetailPage() {
             </MacCard>
           </>
         ) : (
-          // D-122: 읽기 뷰 하나만 감싸던 카드를 걷음 — doc 밀도에서 본문으로 바로 읽힌다.
-          <OpsNoteReadView note={note} />
+          <>
+            <nav aria-label="Q&A 상세 도구" className="flex items-center gap-2 mb-6">
+              <Link
+                to="/ops-notes"
+                className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground whitespace-nowrap"
+              >
+                <ArrowLeft className="w-4 h-4" aria-hidden="true" />
+                Q&amp;A 목록
+              </Link>
+              <div className="ml-auto flex items-center gap-2">
+                <button
+                  onClick={() => navigate(`/ops-notes/${note.id}/edit`)}
+                  disabled={!canOperate}
+                  title={withHint('수정')}
+                  aria-label={canOperate ? undefined : ariaWithHint('수정')}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium bg-secondary hover:bg-secondary/80 border border-border rounded-xl transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  <Pencil className="w-3.5 h-3.5" aria-hidden="true" /> 수정
+                </button>
+                <button
+                  onClick={() => setConfirmOpen(true)}
+                  disabled={!canOperate}
+                  title={withHint('삭제')}
+                  aria-label={canOperate ? undefined : ariaWithHint('삭제')}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-status-critical hover:bg-status-critical/10 border border-border rounded-xl transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  <Trash2 className="w-3.5 h-3.5" aria-hidden="true" /> 삭제
+                </button>
+              </div>
+            </nav>
+            {/* D-122: 읽기 뷰 하나만 감싸던 카드를 걷음 — doc 밀도에서 본문으로 바로 읽힌다. */}
+            <OpsNoteReadView note={note} />
+          </>
         )}
       </PageShell>
+
+      <ConfirmDialog
+        open={confirmOpen}
+        title="Q&A 삭제"
+        description={`"${note.title}" Q&A 를 삭제합니다. 답변·히스토리도 함께 지워지며 되돌릴 수 없습니다.`}
+        confirmLabel="삭제"
+        danger
+        busy={deleting}
+        onConfirm={() => { void handleDelete(); }}
+        onCancel={() => setConfirmOpen(false)}
+      />
     </div>
   );
 }

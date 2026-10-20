@@ -2,10 +2,12 @@
 import { isWriteVerb } from './rbacShared';
 
 const RISK_LABEL: Record<string, string> = { low: '낮음', medium: '보통', high: '높음' };
+// 글자는 text-foreground — 11px 글자를 상태색 틴트(/10) 위에 상태색으로 쓰면 일부 테마에서 대비가
+// 4.5:1 아래(axe 실측 ≈4.25:1)로 떨어진다. 위험 신호는 면·보더 틴트와 "위험도 높음" 문구가 전한다.
 const RISK_CLASS: Record<string, string> = {
   low: 'text-muted-foreground bg-secondary border-border',
-  medium: 'text-status-warning bg-status-warning/10 border-status-warning/30',
-  high: 'text-status-critical bg-status-critical/10 border-status-critical/30',
+  medium: 'text-foreground bg-status-warning/10 border-status-warning/40',
+  high: 'text-foreground bg-status-critical/10 border-status-critical/40',
 };
 
 export function RiskBadge({ risk }: { risk: 'low' | 'medium' | 'high' }) {

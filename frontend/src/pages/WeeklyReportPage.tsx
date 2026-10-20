@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import {
   Loader2, FileText, Send, Save, RefreshCw, ExternalLink, ArrowUp, ArrowDown, Search, X,
 } from 'lucide-react';
@@ -102,6 +102,7 @@ export function WeeklyReportPage() {
   const [weekOf, setWeekOf] = useState('');
 
   // 필터바 — 날짜 외 조건들 (클라이언트 필터, 표 3종에 공통 적용)
+  const filterId = useId();
   const [fComponent, setFComponent] = useState('');
   const [fAssignee, setFAssignee] = useState('');
   const [fStatus, setFStatus] = useState('');
@@ -310,31 +311,31 @@ export function WeeklyReportPage() {
       <MacCard title="보고서 필터">
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2">
           <div>
-            <span className="block text-xs font-medium text-muted-foreground mb-1">구분(component)</span>
-            <select className={inputCls} value={fComponent} onChange={(e) => setFComponent(e.target.value)}>
+            <label htmlFor={`${filterId}-component`} className="block text-xs font-medium text-muted-foreground mb-1">구분(component)</label>
+            <select id={`${filterId}-component`} className={inputCls} value={fComponent} onChange={(e) => setFComponent(e.target.value)}>
               <option value="">전체</option>
               {componentOptions.map((c) => <option key={c} value={c}>{c}</option>)}
             </select>
           </div>
           <div>
-            <span className="block text-xs font-medium text-muted-foreground mb-1">담당자</span>
-            <select className={inputCls} value={fAssignee} onChange={(e) => setFAssignee(e.target.value)}>
+            <label htmlFor={`${filterId}-assignee`} className="block text-xs font-medium text-muted-foreground mb-1">담당자</label>
+            <select id={`${filterId}-assignee`} className={inputCls} value={fAssignee} onChange={(e) => setFAssignee(e.target.value)}>
               <option value="">전체</option>
               {assigneeOptions.map((a) => <option key={a} value={a}>{a}</option>)}
             </select>
           </div>
           <div>
-            <span className="block text-xs font-medium text-muted-foreground mb-1">상태</span>
-            <select className={inputCls} value={fStatus} onChange={(e) => setFStatus(e.target.value)}>
+            <label htmlFor={`${filterId}-status`} className="block text-xs font-medium text-muted-foreground mb-1">상태</label>
+            <select id={`${filterId}-status`} className={inputCls} value={fStatus} onChange={(e) => setFStatus(e.target.value)}>
               <option value="">전체</option>
               {STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}
             </select>
           </div>
           <div>
-            <span className="block text-xs font-medium text-muted-foreground mb-1">검색</span>
+            <label htmlFor={`${filterId}-search`} className="block text-xs font-medium text-muted-foreground mb-1">검색</label>
             <div className="relative">
-              <Search className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
-              <input className={`${inputCls} pl-8`} placeholder="task · 이슈 · 비고 · Jira 키"
+              <Search className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
+              <input id={`${filterId}-search`} className={`${inputCls} pl-8`} placeholder="task · 이슈 · 비고 · Jira 키"
                 value={fSearch} onChange={(e) => setFSearch(e.target.value)} />
             </div>
           </div>
@@ -356,8 +357,8 @@ export function WeeklyReportPage() {
                 : 'bg-secondary border-border text-muted-foreground hover:text-foreground'
             }`}>
             {t.label}
-            {t.id === 'detail' && <span className="ml-1.5 text-xs opacity-70">{details.length}</span>}
-            {t.id === 'owner' && <span className="ml-1.5 text-xs opacity-70">{owners.length}</span>}
+            {t.id === 'detail' && <span className="ml-1.5 text-xs tabular-nums">{details.length}</span>}
+            {t.id === 'owner' && <span className="ml-1.5 text-xs tabular-nums">{owners.length}</span>}
           </button>
         ))}
       </div>

@@ -290,3 +290,62 @@ def test_delete_blocked_when_referenced_by_batch_job(db):
     db.delete(job)
     db.commit()
     scripts_router.delete_script(script.id, request=None, db=db, actor=user)  # 이제는 성공해야 한다
+
+
+def test_update_with_null_clears_description(db):
+    """D-144 — 수정 폼이 설명을 지우면 null 을 보내고, 서버는 컬럼을 비운다(안 보낸 필드는 유지)."""
+    user = _User()
+    script = _create(db, user, name="설명 지우기", description="옛 설명")
+
+    updated = scripts_router.update_script(
+        script.id, ExecutableScriptUpdate(description=None), request=None, db=db, actor=user,
+    )
+    assert updated.description is None
+    assert updated.name == "설명 지우기"
+    assert updated.tags == ["etcd"]
+
+    with pytest.raises(HTTPException) as exc_info:
+        scripts_router.update_script(
+            script.id, ExecutableScriptUpdate(name=None), request=None, db=db, actor=user,
+        )
+    assert exc_info.value.status_code == 422
+
+
+def test_used_by_lists_job_names_and_pinned_state(db):
+    """D-146 — 응답에 참조 배치잡 이름·클러스터·고정 버전이 담겨 저장/롤백 확인 문구에 쓸 수 있다."""
+    from app.models.batch_job import BatchJob
+    from app.models.cluster import Cluster
+
+    user = _User()
+    script = _create(db, user)
+    cluster = Cluster(name=f"c-{uuid.uuid4().hex[:8]}", api_endpoint="https://10.0.0.1:6443")
+    db.add(cluster)
+    db.commit()
+    latest = BatchJob(
+        cluster_id=cluster.id, name="a-항상 최신", job_type="script", execution_mode="script",
+        script_id=script.id, cron="0 * * * *",
+    )
+    pinned = BatchJob(
+        cluster_id=cluster.id, name="b-고정", job_type="script", execution_mode="script",
+        script_id=script.id, script_version_id=script.current_version_id,
+    )
+    db.add_all([latest, pinned])
+    db.commit()
+
+    try:
+        res = scripts_router.get_script(script.id, db=db, _=user)
+        assert res.used_by_count == 2
+        by_name = {u.name: u for u in res.used_by}
+        assert by_name["a-항상 최신"].pinned is False
+        assert by_name["a-항상 최신"].pinned_version is None
+        assert by_name["a-항상 최신"].cron == "0 * * * *"
+        assert by_name["a-항상 최신"].cluster_name == cluster.name
+        assert by_name["b-고정"].pinned is True
+        assert by_name["b-고정"].pinned_version == 1
+    finally:
+        db.delete(latest)
+        db.delete(pinned)
+        db.commit()
+        db.delete(cluster)
+        db.commit()
+        scripts_router.delete_script(script.id, request=None, db=db, actor=user)

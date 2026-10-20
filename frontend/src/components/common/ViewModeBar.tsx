@@ -88,7 +88,7 @@ function MiniToggle({
 }
 
 const HEADER_SWATCHES = [
-  { value: 'default', color: 'bg-slate-400',   title: '기본' },
+  { value: 'default', color: 'bg-muted-foreground', title: '기본' },
   { value: 'blue',    color: 'bg-chart-1',     title: '파랑' },
   { value: 'indigo',  color: 'bg-chart-4',     title: '인디고' },
   { value: 'emerald', color: 'bg-chart-2', title: '초록' },

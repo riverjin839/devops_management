@@ -1,11 +1,12 @@
 import { Plus, Search, FileCode, Boxes, Terminal } from 'lucide-react';
 import type { ExecutableScript, ScriptKind } from '@/types';
-import { EmptyState, LoadingState } from '@/components/common';
+import { EmptyState, ErrorState, LoadingState } from '@/components/common';
+import { useCanEditScripts } from '@/hooks/useScripts';
 
 const KIND_META: Record<ScriptKind, { label: string; icon: typeof FileCode; cls: string }> = {
-  python: { label: 'Python', icon: FileCode, cls: 'text-chart-2 border-chart-2/40 bg-chart-2/10' },
-  ansible_playbook: { label: 'Ansible', icon: Boxes, cls: 'text-chart-3 border-chart-3/40 bg-chart-3/10' },
-  shell: { label: 'Shell', icon: Terminal, cls: 'text-chart-1 border-chart-1/40 bg-chart-1/10' },
+  python: { label: 'Python', icon: FileCode, cls: 'text-chart-2-text border-chart-2/40 bg-chart-2/10' },
+  ansible_playbook: { label: 'Ansible', icon: Boxes, cls: 'text-chart-3-text border-chart-3/40 bg-chart-3/10' },
+  shell: { label: 'Shell', icon: Terminal, cls: 'text-chart-1-text border-chart-1/40 bg-chart-1/10' },
 };
 
 const KIND_FILTERS: { value: ScriptKind | null; label: string }[] = [
@@ -28,6 +29,9 @@ export function ScriptKindBadge({ kind }: { kind: ScriptKind }) {
 interface Props {
   scripts: ExecutableScript[];
   isLoading: boolean;
+  /** 조회 실패(D-137) — 빈 목록("새 스크립트를 만들어 시작하세요")으로 보여주지 않는다. */
+  error?: unknown;
+  onRetry?: () => void;
   selectedId: string | null;
   onSelect: (id: string) => void;
   kind: ScriptKind | null;
@@ -38,30 +42,38 @@ interface Props {
 }
 
 export function ScriptListPanel({
-  scripts, isLoading, selectedId, onSelect, kind, onKindChange, search, onSearchChange, onCreateNew,
+  scripts, isLoading, error, onRetry, selectedId, onSelect, kind, onKindChange, search, onSearchChange, onCreateNew,
 }: Props) {
+  // §12.9 — 생성은 operator 이상(관리자 전용 설정 시 admin). 숨기지 않고 비활성+사유(D-145).
+  const { canEdit, withHint, ariaWithHint } = useCanEditScripts();
   return (
     <div className="flex flex-col h-full min-h-0">
       <div className="flex-shrink-0 p-2 space-y-2 border-b border-border">
         <button
           onClick={onCreateNew}
-          className="w-full inline-flex items-center justify-center gap-1.5 px-3 py-2 text-xs font-medium bg-primary text-primary-foreground rounded-xl hover:bg-primary/90"
+          disabled={!canEdit}
+          title={withHint('새 스크립트 만들기')}
+          aria-label={ariaWithHint('새 스크립트')}
+          className="w-full inline-flex items-center justify-center gap-1.5 px-3 py-2 text-xs font-medium bg-primary text-primary-foreground rounded-xl hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed"
         >
           <Plus className="w-3.5 h-3.5" /> 새 스크립트
         </button>
         <div className="relative">
-          <Search className="absolute left-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
+          <Search className="absolute left-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" aria-hidden="true" />
           <input
             value={search}
             onChange={(e) => onSearchChange(e.target.value)}
+            aria-label="스크립트 이름 검색"
             placeholder="이름 검색"
             className="w-full pl-7 pr-2 py-1.5 text-xs rounded-xl border border-border bg-card focus:outline-none focus:ring-2 focus:ring-ring"
           />
         </div>
-        <div className="flex flex-wrap gap-1">
+        <div role="group" aria-label="종류 필터" className="flex flex-wrap gap-1">
           {KIND_FILTERS.map((f) => (
             <button
               key={f.label}
+              type="button"
+              aria-pressed={kind === f.value}
               onClick={() => onKindChange(f.value)}
               className={`px-2 py-1 text-[11px] rounded-lg border transition-colors ${
                 kind === f.value
@@ -78,11 +90,13 @@ export function ScriptListPanel({
       <div className="flex-1 min-h-0 overflow-y-auto">
         {isLoading ? (
           <LoadingState compact />
+        ) : error ? (
+          <ErrorState compact error={error} title="스크립트 목록을 불러오지 못했습니다" onRetry={onRetry} />
         ) : scripts.length === 0 ? (
           <EmptyState
             compact
             title="스크립트가 없습니다"
-            description={search || kind ? '검색/필터 조건에 맞는 스크립트가 없습니다.' : '새 스크립트를 만들어 시작하세요.'}
+            description={search || kind ? '검색/필터 조건에 맞는 스크립트가 없습니다.' : canEdit ? '새 스크립트를 만들어 시작하세요.' : '등록된 스크립트가 없습니다.'}
           />
         ) : (
           <ul className="p-1.5 space-y-1">

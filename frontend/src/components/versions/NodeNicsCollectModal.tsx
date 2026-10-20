@@ -362,7 +362,7 @@ export function NodeNicsCollectModal({ open, clusterId, clusterName, onClose }: 
                                         className={`text-xs font-mono px-1 rounded inline-flex items-center gap-0.5 ${
                                           isPub
                                             ? 'bg-status-warning/10 text-status-warning'
-                                            : 'bg-chart-1/10 text-chart-1'
+                                            : 'bg-chart-1/10 text-chart-1-text'
                                         }`}
                                         title={isPub ? 'public' : 'private'}>
                                         {isPub ? <Globe className="w-2.5 h-2.5" /> : <Lock className="w-2.5 h-2.5" />}

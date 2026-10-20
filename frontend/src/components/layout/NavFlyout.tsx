@@ -1,6 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState, type ComponentType } from 'react';
 import { createPortal } from 'react-dom';
 import { Link } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { Check, ChevronRight, Star, X } from 'lucide-react';
 import { NAV_WIDTH } from '@/stores/sidebarStore';
 
@@ -34,6 +35,7 @@ export function FlyoutShell({
   title, anchorRect, placement = 'right', children, onClose, onMouseEnter, onMouseLeave,
   autoFocus = false, returnFocusTo = null,
 }: FlyoutProps) {
+  const { t } = useTranslation();
   const ref = useRef<HTMLDivElement>(null);
   // 최신 콜백/트리거를 effect 재실행 없이 참조 — flyout 은 열려 있는 동안 anchor 가 바뀌지 않는다.
   const onCloseRef = useRef(onClose);
@@ -132,7 +134,8 @@ export function FlyoutShell({
         <button
           type="button"
           onClick={onClose}
-          aria-label="닫기"
+          aria-label={t('shell.flyout.close')}
+          title={t('shell.flyout.close')}
           className="p-0.5 rounded text-muted-foreground hover:bg-secondary hover:text-foreground"
         >
           <X className="w-3 h-3" />
@@ -163,6 +166,7 @@ export function FlyoutLink({
   isPinned?: boolean;
   onTogglePin?: () => void;
 }) {
+  const { t } = useTranslation();
   return (
     <div className="group flex items-center mx-1">
       <Link
@@ -180,8 +184,8 @@ export function FlyoutLink({
         <button
           type="button"
           onClick={(e) => { e.preventDefault(); e.stopPropagation(); onTogglePin(); }}
-          aria-label={isPinned ? `${label} 즐겨찾기 해제` : `${label} 즐겨찾기 추가`}
-          title={isPinned ? '즐겨찾기 해제' : '즐겨찾기 추가'}
+          aria-label={isPinned ? t('shell.flyout.unpinLabel', { label }) : t('shell.flyout.pinLabel', { label })}
+          title={isPinned ? t('shell.flyout.unpin') : t('shell.flyout.pin')}
           className={`flex-shrink-0 ml-0.5 p-1 rounded transition-opacity ${
             isPinned
               ? 'text-status-warning opacity-100'

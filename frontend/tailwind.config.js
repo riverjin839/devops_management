@@ -116,6 +116,18 @@ export default {
         brand: {
           jira: "hsl(var(--brand-jira-text) / <alpha-value>)",
         },
+        // 카테고리 배지 글자(D-152) — `bg-chart-N/15 text-chart-N-text`. 면·선(차트)은 colors.chart 그대로.
+        // text-chart-N 은 차트 SVG(currentColor) 용으로 남기고, 글자는 별도 키로 갈라낸다.
+        chart: {
+          "1-text": "hsl(var(--chart-1-text) / <alpha-value>)",
+          "2-text": "hsl(var(--chart-2-text) / <alpha-value>)",
+          "3-text": "hsl(var(--chart-3-text) / <alpha-value>)",
+          "4-text": "hsl(var(--chart-4-text) / <alpha-value>)",
+          "5-text": "hsl(var(--chart-5-text) / <alpha-value>)",
+          "6-text": "hsl(var(--chart-6-text) / <alpha-value>)",
+          "7-text": "hsl(var(--chart-7-text) / <alpha-value>)",
+          "8-text": "hsl(var(--chart-8-text) / <alpha-value>)",
+        },
       },
       // P3 — 라운딩 전 단계를 --radius 기준으로. 예전엔 lg/md/sm 만 테마를 따르고
       // DEFAULT(4)·xl(12)·2xl(16) 은 고정이라 --radius 가 큰 테마(컴포트)에서 타일이 버튼보다

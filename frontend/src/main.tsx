@@ -12,6 +12,8 @@ import { bootLocalPrefsSync } from './lib/localPrefsSync';
 async function start() {
   await bootLocalPrefsSync().catch(() => undefined);
   await import('./stores/themeStore'); // initialise theme before first render
+  // R-6 i18n — boot 동기화가 깐 `pep.locale` 을 읽어야 하므로 그 뒤에 초기화한다(정적 import 금지).
+  await import('./i18n');
   const [{ default: App }, { ErrorBoundary }] = await Promise.all([
     import('./App'),
     import('./components/ErrorBoundary'),

@@ -6,8 +6,9 @@ const STATUS_PALETTE_RE = String.raw`/(^|[^\w-])(text|bg|border|ring|fill|stroke
 /* 장식·카테고리 고정 팔레트 금지 (D-120, DESIGN_SYSTEM §12.12-7) — 예전엔 "장식용 계열은 대상이 아니다" 로
    뒀더니 blue·orange·violet·indigo·cyan·pink 가 329건까지 자라 Tailwind 기본 팔레트(= AI 템플릿 룩)가 됐다.
    종류 구분 색은 --chart-1..8 토큰, 상태는 status 토큰만 쓴다. 래칫 allowlist(61파일)를 2026-10-15 에 0 으로
-   비우고 예외 없이 막는다. 캔버스·WebGL 처럼 클래스를 못 쓰는 렌더러는 lib/chartTokens.ts cssVarColor 를 쓴다. */
-const DECO_PALETTE_RE = String.raw`/(^|[^\w-])(text|bg|border|ring|fill|stroke|from|to|via|divide|outline|decoration|placeholder|accent|caret|shadow)(-[a-z]+)?-(blue|orange|purple|violet|indigo|cyan|pink|fuchsia|teal|lime)-\d{2,3}/`;
+   비우고 예외 없이 막는다. 캔버스·WebGL 처럼 클래스를 못 쓰는 렌더러는 lib/chartTokens.ts cssVarColor 를 쓴다.
+   slate·gray·neutral·stone 회색 계열도 같다(D-149 — 무채색은 muted/border/status-unknown 토큰). 터미널 콘솔 배경은 zinc 만 쓴다. */
+const DECO_PALETTE_RE = String.raw`/(^|[^\w-])(text|bg|border|ring|fill|stroke|from|to|via|divide|outline|decoration|placeholder|accent|caret|shadow)(-[a-z]+)?-(blue|orange|purple|violet|indigo|cyan|pink|fuchsia|teal|lime|slate|gray|neutral|stone)-\d{2,3}/`;
 const DECO_PALETTE_MSG = '장식·카테고리 색도 고정 팔레트를 쓰지 않는다 — 종류 구분은 --chart-1..8 토큰, 상태는 status 토큰 (DESIGN_SYSTEM §12.12-7, D-120)';
 /* 장식 효과·대비 우회 금지 (Phase 2, D-119·D-121·D-125·D-132, DESIGN_SYSTEM §12.12-4·8) — 전량 0 으로 만든 뒤 회귀 방지로 켠다.
    hover-lift(hover:-translate-y·hover:scale·active:scale), 그라데이션, transition-all, 장식 ping/bounce,

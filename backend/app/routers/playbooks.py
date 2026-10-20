@@ -257,7 +257,14 @@ def update_playbook(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Playbook not found")
 
     _validate_assets(payload, db, current_cluster_id=playbook.cluster_id)
-    for key, value in payload.model_dump(exclude_unset=True).items():
+    data = payload.model_dump(exclude_unset=True)
+    if "name" in data and not (data["name"] or "").strip():
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="이름은 비울 수 없습니다.")
+    # D-144 — 설명·태그는 null(또는 빈 값)을 보내면 비운다. 안 보낸 필드는 그대로 둔다.
+    for key in ("description", "tags"):
+        if key in data and isinstance(data[key], str) and not data[key].strip():
+            data[key] = None
+    for key, value in data.items():
         setattr(playbook, key, value)
 
     db.commit()

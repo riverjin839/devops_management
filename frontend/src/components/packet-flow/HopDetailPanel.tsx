@@ -17,7 +17,7 @@ const VERDICT_META: Record<HopVerdict, { icon: typeof CheckCircle2; cls: string;
 
 function PolicyItem({ p }: { p: HopPolicy }) {
   const kindColor = p.kind.startsWith('Cilium')
-    ? 'bg-chart-4/10 text-chart-4 border-chart-4/30'
+    ? 'bg-chart-4/10 text-chart-4-text border-chart-4/30'
     : 'bg-status-info/10 text-status-info border-status-info/30';
   return (
     <div className="border border-border rounded p-2 bg-muted/20">

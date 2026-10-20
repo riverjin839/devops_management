@@ -344,7 +344,7 @@ def overview(
     except Exception as e:  # noqa: BLE001 — 빈 500 금지, 구체적 사유 노출.
         raise HTTPException(status_code=500, detail=f"Isilon 수집 실패: {str(e)[:300]}")
     snapshot["configured"] = True
-    snapshot["k8s_nfs_pvs"] = _list_k8s_nfs_pvs(server)
+    snapshot["k8s_nfs_pvs"], snapshot["k8s_nfs_pvs_error"] = _list_k8s_nfs_pvs(server)
     return snapshot
 
 
@@ -364,12 +364,16 @@ def run_commands(
         result = isilon_service.run_selected_commands(db, server, payload.keys)
     except Exception as e:  # noqa: BLE001 — 빈 500 금지, 구체적 사유 노출.
         raise HTTPException(status_code=500, detail=f"isi 명령 실행 실패: {str(e)[:300]}")
-    result["k8s_nfs_pvs"] = _list_k8s_nfs_pvs(server)
+    result["k8s_nfs_pvs"], result["k8s_nfs_pvs_error"] = _list_k8s_nfs_pvs(server)
     return result
 
 
-def _list_k8s_nfs_pvs(server: IsilonServer) -> list[dict[str, Any]]:
-    """관리 클러스터 K8s 에서 NFS 백엔드 PV 목록(무해, 실패 시 빈 목록)."""
+def _list_k8s_nfs_pvs(server: IsilonServer) -> tuple[list[dict[str, Any]], Optional[str]]:
+    """관리 클러스터 K8s 에서 NFS 백엔드 PV 목록(무해). ``(목록, 조회 오류)`` 를 돌려준다.
+
+    조회 실패는 예외로 올리지 않고(fail-safe) 빈 목록 + 사유 문자열로 돌려준다 — 화면이
+    "PV 없음" 과 "K8s 조회 실패" 를 구분해 보여줄 수 있게(D-147). 성공이면 오류는 ``None``.
+    """
     try:
         from kubernetes import client
 
@@ -390,6 +394,6 @@ def _list_k8s_nfs_pvs(server: IsilonServer) -> list[dict[str, Any]]:
                 "pvc": f"{claim.namespace}/{claim.name}" if claim else None,
                 "phase": pv.status.phase if pv.status else None,
             })
-        return out
-    except Exception:  # noqa: BLE001
-        return []
+        return out, None
+    except Exception as e:  # noqa: BLE001 — fail-safe: 사유만 노출.
+        return [], f"K8s PV 조회 실패: {str(e)[:300] or type(e).__name__}"

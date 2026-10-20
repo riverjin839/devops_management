@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import Optional
 from uuid import UUID
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 
 class OpsNoteCreate(BaseModel):
@@ -30,6 +30,15 @@ class OpsNoteUpdate(BaseModel):
     pinned: Optional[bool] = None
     confluence_url: Optional[str] = Field(None, max_length=2048)
     dl_url: Optional[str] = Field(None, max_length=2048)
+
+    # D-144 — 부분 수정(exclude_unset)에서 `null` 은 "값 비우기"다. 본문·답변·작성자·링크처럼
+    # nullable 컬럼은 null 로 비우고, NOT NULL 컬럼에 null 이 오면 500(IntegrityError) 대신 422 로 거부한다.
+    @field_validator("service", "title", "color", "pinned")
+    @classmethod
+    def _reject_null(cls, v, info):
+        if v is None:
+            raise ValueError(f"{info.field_name} 은(는) 비울 수 없습니다")
+        return v
 
 
 class OpsNoteResponse(BaseModel):

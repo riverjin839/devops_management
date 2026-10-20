@@ -7,8 +7,9 @@ import {
   useUpdateIsilonCommand,
   useDeleteIsilonCommand,
 } from '@/hooks/useIsilonNfs';
-import { useToast, ConfirmDialog } from '@/components/common';
+import { useToast, ConfirmDialog, ErrorState, LoadingState } from '@/components/common';
 import { useModalA11y } from '@/components/common/useModalA11y';
+import { useCanOperate } from '@/hooks/useCanOperate';
 
 const INP = 'w-full rounded-xl border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40';
 
@@ -34,7 +35,9 @@ export function IsilonCommandManager({ serverId, onClose }: Props) {
   const dialogRef = useModalA11y(true, onClose);
   const titleId = useId();
   const toast = useToast();
-  const { data: commands = [], isLoading } = useIsilonCommands(serverId);
+  const { data: commands = [], isLoading, isError, error, refetch } = useIsilonCommands(serverId);
+  // 명령 정의는 viewer 도 볼 수 있게 열어 두고(무슨 명령이 나가는지 가시화), 쓰기 버튼만 비활성+사유(§12.9).
+  const { canOperate, withHint, ariaWithHint } = useCanOperate();
   const createMut = useCreateIsilonCommand();
   const updateMut = useUpdateIsilonCommand();
   const deleteMut = useDeleteIsilonCommand();
@@ -118,12 +121,16 @@ export function IsilonCommandManager({ serverId, onClose }: Props) {
           <div className="space-y-2">
             <div className="flex items-center justify-between">
               <span className="text-xs font-semibold text-muted-foreground">등록된 명령</span>
-              <button onClick={startNew} className="inline-flex items-center gap-1 text-xs px-2 py-1 rounded-lg border border-border hover:bg-muted">
-                <Plus className="w-3.5 h-3.5" /> 새 명령
+              <button onClick={startNew} disabled={!canOperate}
+                title={withHint('새 명령')} aria-label={ariaWithHint('새 명령')}
+                className="inline-flex items-center gap-1 text-xs px-2 py-1 rounded-lg border border-border hover:bg-muted disabled:opacity-50 disabled:cursor-not-allowed">
+                <Plus className="w-3.5 h-3.5" aria-hidden="true" /> 새 명령
               </button>
             </div>
             {isLoading ? (
-              <div className="text-sm text-muted-foreground py-6 text-center"><Loader2 className="w-4 h-4 animate-spin inline" /> 불러오는 중…</div>
+              <LoadingState compact />
+            ) : isError ? (
+              <ErrorState compact error={error} title="명령 목록을 불러오지 못했습니다" onRetry={() => { void refetch(); }} />
             ) : (
               <ul className="space-y-1.5">
                 {commands.map((c) => (
@@ -197,12 +204,15 @@ export function IsilonCommandManager({ serverId, onClose }: Props) {
             </div>
             <div className="flex items-center justify-between pt-1">
               {editing && !editing.isBuiltin ? (
-                <button onClick={() => setConfirmId(editing.id)} className="inline-flex items-center gap-1 text-sm text-status-critical hover:text-status-critical">
-                  <Trash2 className="w-4 h-4" /> 삭제
+                <button onClick={() => setConfirmId(editing.id)} disabled={!canOperate}
+                  title={withHint('명령 삭제')} aria-label={ariaWithHint('명령 삭제')}
+                  className="inline-flex items-center gap-1 text-sm text-status-critical hover:underline disabled:opacity-50 disabled:cursor-not-allowed">
+                  <Trash2 className="w-4 h-4" aria-hidden="true" /> 삭제
                 </button>
               ) : <span className="text-xs text-muted-foreground">{editing?.isBuiltin ? '기본 명령은 삭제 불가(비활성만)' : ''}</span>}
-              <button onClick={save} disabled={createMut.isPending || updateMut.isPending}
-                className="inline-flex items-center gap-1.5 text-sm px-4 py-1.5 rounded-xl bg-primary text-primary-foreground hover:opacity-90 disabled:opacity-50">
+              <button onClick={save} disabled={!canOperate || createMut.isPending || updateMut.isPending}
+                title={withHint(editing ? '수정 저장' : '추가')} aria-label={ariaWithHint(editing ? '수정 저장' : '추가')}
+                className="inline-flex items-center gap-1.5 text-sm px-4 py-1.5 rounded-xl bg-primary text-primary-foreground hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed">
                 {(createMut.isPending || updateMut.isPending) && <Loader2 className="w-4 h-4 animate-spin" />}
                 {editing ? '수정 저장' : '추가'}
               </button>
@@ -218,6 +228,7 @@ export function IsilonCommandManager({ serverId, onClose }: Props) {
           description="이 커스텀 명령을 삭제하시겠습니까?"
           confirmLabel="삭제"
           danger
+          busy={deleteMut.isPending}
           onConfirm={() => doDelete(confirmId)}
           onCancel={() => setConfirmId(null)}
         />
