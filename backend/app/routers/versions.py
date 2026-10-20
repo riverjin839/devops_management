@@ -437,6 +437,22 @@ def _systemd_env_file_path(prop: str | None) -> str | None:
     return first.split("(", 1)[0].strip() or None
 
 
+def _require_collect_target(db: Session, cluster_id: UUID, payload: Any) -> Cluster:
+    """SSH 수집 공통 검증 — 동기 엔드포인트와 스트림 래퍼(스트림을 열기 전)가 같은 규칙을 쓴다.
+
+    클러스터가 없으면 404, SSH 자격증명(password·private_key)이 둘 다 없으면 422.
+    """
+    cluster = db.query(Cluster).filter(Cluster.id == cluster_id).first()
+    if not cluster:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Cluster not found")
+    if not getattr(payload, "password", None) and not getattr(payload, "private_key", None):
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="password 또는 private_key 중 하나는 필수입니다.",
+        )
+    return cluster
+
+
 @router.post("/{cluster_id}/collect-etcd-systemd")
 async def collect_etcd_systemd(
     cluster_id: UUID,
@@ -453,15 +469,7 @@ async def collect_etcd_systemd(
     **호스트별로 component 키 `etcd_systemd:{host}` 로 스냅샷을 저장** 해 값 변경 추적.
     병렬 SSH + 청크 실행으로 대규모 클러스터에서도 timeout 없이 수집.
     """
-    cluster = db.query(Cluster).filter(Cluster.id == cluster_id).first()
-    if not cluster:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Cluster not found")
-
-    if not payload.password and not payload.private_key:
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail="password 또는 private_key 중 하나는 필수입니다.",
-        )
+    cluster = _require_collect_target(db, cluster_id, payload)
 
     now = datetime.utcnow()
     sudo = "sudo -n " if payload.use_sudo else ""
@@ -659,14 +667,7 @@ async def collect_kernel_params(
     _: User = Depends(require_operator),
 ):
     """노드별 sysctl 값을 병렬로 수집해 히스토리에 누적. 내용 동일시 저장 생략."""
-    cluster = db.query(Cluster).filter(Cluster.id == cluster_id).first()
-    if not cluster:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Cluster not found")
-    if not payload.password and not payload.private_key:
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail="password 또는 private_key 중 하나는 필수입니다.",
-        )
+    cluster = _require_collect_target(db, cluster_id, payload)
 
     now = datetime.utcnow()
     sudo = "sudo -n " if payload.use_sudo else ""
@@ -804,14 +805,7 @@ async def collect_kubelet_config(
     - 추출 못하면 fallback_paths 중 처음 존재하는 파일
     - 모든 출처(`_sources`)가 결과 dict 에 명시적으로 기록됨
     """
-    cluster = db.query(Cluster).filter(Cluster.id == cluster_id).first()
-    if not cluster:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Cluster not found")
-    if not payload.password and not payload.private_key:
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail="password 또는 private_key 중 하나는 필수입니다.",
-        )
+    cluster = _require_collect_target(db, cluster_id, payload)
 
     now = datetime.utcnow()
     sudo = "sudo -n " if payload.use_sudo else ""
@@ -993,14 +987,7 @@ def collect_etcdctl_config(
     _: User = Depends(require_operator),
 ):
     """etcd 설정 (env 파일 + endpoint status) 을 수집해 histor 에 누적. dedup."""
-    cluster = db.query(Cluster).filter(Cluster.id == cluster_id).first()
-    if not cluster:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Cluster not found")
-    if not payload.password and not payload.private_key:
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail="password 또는 private_key 중 하나는 필수입니다.",
-        )
+    cluster = _require_collect_target(db, cluster_id, payload)
 
     now = datetime.utcnow()
     sudo = "sudo -n " if payload.use_sudo else ""
@@ -1117,14 +1104,7 @@ def collect_kubeadm_certs(
     스냅샷 저장. Ops Checks 의 `cert_expiry` 체커가 `source=snapshot`(또는 auto 폴백)
     일 때 이 스냅샷(component=`kubeadm_certs:{host}`)을 읽는다. 자격증명은 이
     요청에만 존재하고 저장되지 않는다."""
-    cluster = db.query(Cluster).filter(Cluster.id == cluster_id).first()
-    if not cluster:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Cluster not found")
-    if not payload.password and not payload.private_key:
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail="password 또는 private_key 중 하나는 필수입니다.",
-        )
+    cluster = _require_collect_target(db, cluster_id, payload)
 
     now = datetime.utcnow()
     sudo = "sudo -n " if payload.use_sudo else ""
@@ -1622,11 +1602,7 @@ async def collect_node_nics(
     _: User = Depends(require_operator),
 ):
     """SSH 로 각 노드의 ip 인터페이스 정보 수집 → node_nics:{host} 스냅샷 + Cluster.node_ips 갱신."""
-    cluster = db.query(Cluster).filter(Cluster.id == cluster_id).first()
-    if not cluster:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Cluster not found")
-    if not payload.password and not payload.private_key:
-        raise HTTPException(status_code=422, detail="password 또는 private_key 중 하나는 필수입니다.")
+    cluster = _require_collect_target(db, cluster_id, payload)
 
     sudo = "sudo -n " if payload.use_sudo else ""
     # k8s 워커는 pod 마다 veth*, calico cali*, cilium_*, kube-ipvs0, flannel.1 등이
@@ -2203,18 +2179,7 @@ def collect_minio(
 # 스트림을 열기 전에 일반 HTTP 오류로 응답한다. 자격증명은 요청 본문에만 있고 이벤트에는 싣지 않는다.
 
 
-def _validate_collect(db: Session, cluster_id: UUID, payload: Any) -> None:
-    if not db.query(Cluster.id).filter(Cluster.id == cluster_id).first():
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Cluster not found")
-    if not getattr(payload, "password", None) and not getattr(payload, "private_key", None):
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail="password 또는 private_key 중 하나는 필수입니다.",
-        )
-
-
 def _collect_stream(
-    cluster_id: UUID,
     payload: Any,
     user: User,
     run: Callable[[Session, User], Any],
@@ -2249,9 +2214,9 @@ async def collect_etcd_systemd_stream(
     user: User = Depends(require_operator),
 ):
     """``collect-etcd-systemd`` 의 SSE 버전 — 호스트별 진행을 실시간으로 흘린다."""
-    _validate_collect(db, cluster_id, payload)
+    _require_collect_target(db, cluster_id, payload)
     return _collect_stream(
-        cluster_id, payload, user,
+        payload, user,
         lambda sdb, u: collect_etcd_systemd(cluster_id, payload, db=sdb, _=u),
         label="etcd systemd",
     )
@@ -2265,9 +2230,9 @@ async def collect_kernel_params_stream(
     user: User = Depends(require_operator),
 ):
     """``collect-kernel-params`` 의 SSE 버전."""
-    _validate_collect(db, cluster_id, payload)
+    _require_collect_target(db, cluster_id, payload)
     return _collect_stream(
-        cluster_id, payload, user,
+        payload, user,
         lambda sdb, u: collect_kernel_params(cluster_id, payload, db=sdb, _=u),
         label="커널 파라미터",
     )
@@ -2281,9 +2246,9 @@ async def collect_kubelet_config_stream(
     user: User = Depends(require_operator),
 ):
     """``collect-kubelet-config`` 의 SSE 버전."""
-    _validate_collect(db, cluster_id, payload)
+    _require_collect_target(db, cluster_id, payload)
     return _collect_stream(
-        cluster_id, payload, user,
+        payload, user,
         lambda sdb, u: collect_kubelet_config(cluster_id, payload, db=sdb, _=u),
         label="kubelet 설정",
     )
@@ -2298,9 +2263,9 @@ async def collect_kubeadm_certs_stream(
 ):
     """``collect-kubeadm-certs`` 의 SSE 버전 — 동기(순차) 수집을 작업 스레드에서 돌린다.
     ``asyncio.to_thread`` 가 ContextVar 를 복사하므로 스레드 안의 진행 보고도 스트림으로 간다."""
-    _validate_collect(db, cluster_id, payload)
+    _require_collect_target(db, cluster_id, payload)
     return _collect_stream(
-        cluster_id, payload, user,
+        payload, user,
         lambda sdb, u: asyncio.to_thread(collect_kubeadm_certs, cluster_id, payload, sdb, u),
         label="kubeadm 인증서",
     )
@@ -2314,9 +2279,9 @@ async def collect_node_nics_stream(
     user: User = Depends(require_operator),
 ):
     """``collect-node-nics`` 의 SSE 버전."""
-    _validate_collect(db, cluster_id, payload)
+    _require_collect_target(db, cluster_id, payload)
     return _collect_stream(
-        cluster_id, payload, user,
+        payload, user,
         lambda sdb, u: collect_node_nics(cluster_id, payload, db=sdb, _=u),
         label="노드 NIC",
     )
