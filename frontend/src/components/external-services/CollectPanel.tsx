@@ -36,6 +36,8 @@ export function CollectPanel({ clusterId, clusterName }: { clusterId: string; cl
   const [open, setOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [resolver, setResolver] = useState<Resolver>('ssh');
+  const [forwardCheck, setForwardCheck] = useState(true);
+  const [probe, setProbe] = useState(true);
   const [host, setHost] = useState({ selectedName: '', customHost: '', effectiveHost: '' });
   const [port, setPort] = useState(22);
   const [username, setUsername] = useState('root');
@@ -59,6 +61,8 @@ export function CollectPanel({ clusterId, clusterName }: { clusterId: string; cl
         externalServicesApi.collectStreamUrl(clusterId),
         {
           resolver,
+          forward_check: forwardCheck,
+          probe,
           ssh: resolver === 'ssh' ? {
             host: host.effectiveHost, port, username,
             password: authMode === 'password' ? secret : null,
@@ -135,6 +139,23 @@ export function CollectPanel({ clusterId, clusterName }: { clusterId: string; cl
                   </span>
                 </label>
               ))}
+            </fieldset>
+            <fieldset className="space-y-1.5">
+              <legend className="text-xs text-muted-foreground mb-1">점검 — SSH 노드를 주면 그 노드에서, 아니면 backend 에서 실행</legend>
+              <label className="flex items-start gap-2 text-sm">
+                <input type="checkbox" className="accent-primary mt-1" checked={forwardCheck} onChange={(e) => setForwardCheck(e.target.checked)} />
+                <span>
+                  도메인 정방향 검증
+                  <span className="block text-[11px] text-muted-foreground leading-snug">도메인의 A 레코드가 엔드포인트 IP 를 가리키는지 다시 조회한다.</span>
+                </span>
+              </label>
+              <label className="flex items-start gap-2 text-sm">
+                <input type="checkbox" className="accent-primary mt-1" checked={probe} onChange={(e) => setProbe(e.target.checked)} />
+                <span>
+                  응답 확인
+                  <span className="block text-[11px] text-muted-foreground leading-snug">IP:Port 에 TCP 연결, Ingress 는 Host 헤더를 실은 HTTP 요청으로 상태코드·지연시간을 잰다.</span>
+                </span>
+              </label>
             </fieldset>
             {resolver === 'ssh' && (
               <div className="space-y-2 rounded-xl border border-border p-3">

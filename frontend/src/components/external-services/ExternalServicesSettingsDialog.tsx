@@ -104,6 +104,39 @@ export function ExternalServicesSettingsDialog({ open, onClose }: { open: boolea
             <Field label="노드 역조회 명령" help="{ip} 가 대상 IP 로 바뀐다. nslookup·host·getent 출력에서 이름을 읽는다(dig 는 'dig +short -x {ip}').">
               <input className={`${INPUT} font-mono`} value={form.ptrCommand} onChange={(e) => set('ptrCommand', e.target.value)} />
             </Field>
+            <Field label="점검 실행 위치" help="자동: SSH 자격증명을 준 수동 수집이면 그 노드(사내 DNS·내부망 기준), 아니면 backend. 노드: SSH 가 없으면 backend 로 폴백.">
+              <select className={INPUT} value={form.checkSource}
+                onChange={(e) => set('checkSource', e.target.value as ExternalServicesSettings['checkSource'])}>
+                <option value="auto">자동</option>
+                <option value="node">노드</option>
+                <option value="backend">backend</option>
+              </select>
+            </Field>
+            <Check checked={form.forwardCheck} onChange={(v) => set('forwardCheck', v)}
+              label="도메인 정방향 검증" help="Ingress host·역조회 이름의 A 레코드가 엔드포인트 IP 를 가리키는지 확인한다." />
+            <Field label="노드 정방향 조회 명령" help="{domain} 이 도메인으로 바뀐다. getent ahosts·nslookup 출력에서 IP 를 읽는다.">
+              <input className={`${INPUT} font-mono`} value={form.fwdCommand} onChange={(e) => set('fwdCommand', e.target.value)} />
+            </Field>
+            <div className="grid grid-cols-2 gap-3">
+              <Check checked={form.probeEnabled} onChange={(v) => set('probeEnabled', v)}
+                label="응답 확인" help="IP:Port 에 TCP 연결(NodePort 는 첫 노드 주소)." />
+              <Check checked={form.probeHttp} onChange={(v) => set('probeHttp', v)}
+                label="Ingress 는 HTTP 로" help="Host 헤더를 실어 GET / — 상태코드까지 본다(인증서 검증 안 함)." />
+              <Field label="응답 타임아웃(초)" help="엔드포인트 당(1~15).">
+                <input type="number" min={1} max={15} className={INPUT} value={form.probeTimeoutSec}
+                  onChange={(e) => set('probeTimeoutSec', Number(e.target.value))} />
+              </Field>
+              <Field label="응답 확인 최대 건수" help="수집 1회당(1~2000). 넘는 엔드포인트는 건너뛴다.">
+                <input type="number" min={1} max={2000} className={INPUT} value={form.probeMax}
+                  onChange={(e) => set('probeMax', Number(e.target.value))} />
+              </Field>
+            </div>
+            <Field label="노드 TCP 확인 명령" help="{ip}·{port}·{timeout}. 종료코드 0 이면 열림.">
+              <input className={`${INPUT} font-mono`} value={form.probeTcpCommand} onChange={(e) => set('probeTcpCommand', e.target.value)} />
+            </Field>
+            <Field label="노드 HTTP 확인 명령" help="{scheme}·{host}·{ip}·{port}·{timeout}. 마지막 줄의 3자리 숫자를 상태코드로 읽는다. 리터럴 중괄호는 {{ }}.">
+              <input className={`${INPUT} font-mono`} value={form.probeHttpCommand} onChange={(e) => set('probeHttpCommand', e.target.value)} />
+            </Field>
             <Field label="공개 클러스터"
               help="아무것도 고르지 않으면 테넌트에 묶이지 않은 클러스터 전체가 공개된다. 고르면 고른 것만 공개된다.">
               <div className="max-h-40 overflow-y-auto rounded-xl border border-border p-2 space-y-1">
