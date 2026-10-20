@@ -172,3 +172,17 @@ def test_workflow_and_step_put_null_clears_optional_fields(db, client):
         db.query(WorkflowStep).filter(WorkflowStep.workflow_id == wf_id).delete(synchronize_session=False)
         db.query(Workflow).filter(Workflow.id == wf_id).delete(synchronize_session=False)
         db.commit()
+
+
+def test_guide_parent_cycle_rejected(db, client):
+    """자기 자신·자기 하위를 상위로 지정하면 422 — 순환은 트리에서 사라지고 삭제도 막힌다."""
+    a = client.post("/api/v1/work-guides", json={"title": f"a-{uuid.uuid4().hex[:6]}"}).json()["id"]
+    b = client.post("/api/v1/work-guides", json={"title": "b", "parent_id": a}).json()["id"]
+    try:
+        assert client.put(f"/api/v1/work-guides/{a}", json={"parent_id": a}).status_code == 422
+        assert client.put(f"/api/v1/work-guides/{a}", json={"parent_id": b}).status_code == 422
+        assert client.put(f"/api/v1/work-guides/{b}", json={"parent_id": None}).status_code == 200
+        assert client.delete(f"/api/v1/work-guides/{b}").status_code == 204
+        assert client.delete(f"/api/v1/work-guides/{a}").status_code == 204
+    finally:
+        _cleanup_guides(db, [a, b])

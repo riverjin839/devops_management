@@ -325,6 +325,7 @@ def update_assignees(
     created_users: list[User] = []
     # (user, 해제 전 username, 해제 전 사번) — 커밋 후 감사 로그용.
     revoked: list[tuple[User, str | None, str]] = []
+    revoked_admin = False
     for a in cleaned:
         existing = db.query(User).filter(User.id == a["id"]).first() if a["id"] else None
         if existing is None and a["employeeId"]:
@@ -373,10 +374,20 @@ def update_assignees(
                         detail=f"본인 계정({existing.display_name or existing.username})의 사번은 비울 수 없습니다 "
                                "— 로그인이 해제됩니다. 다른 관리자에게 요청하세요.",
                     )
+                if existing.username != existing.employee_id:
+                    # 사번에서 파생되지 않은 로그인(부트스트랩 "admin"·LDAP·SSO 계정 등) — 사번만 떼고
+                    # 로그인은 그대로 둔다. 해제 대상은 사번으로 자동 발급된 계정뿐이다.
+                    existing.employee_id = None
+                    continue
                 revoked.append((existing, existing.username, existing.employee_id))
+                if existing.role == "admin":
+                    revoked_admin = True
                 existing.employee_id = None
                 existing.username = None
                 existing.hashed_password = None
+                # 역할을 남겨 두면 나중에 사번을 다시 붙일 때 예전 역할(admin 등)·초기 비밀번호(=사번)로
+                # 되살아난다 — 해제 시 기본 역할로 되돌린다.
+                existing.role = ASSIGNEE_ACCOUNT_ROLE
             # else: 원래 사번이 없던 계정 — 로그인 필드는 건드리지 않는다.
         else:
             new_user = User(
@@ -393,7 +404,7 @@ def update_assignees(
                 created_users.append(new_user)
             db.add(new_user)
 
-    if revoked and any(u.role == "admin" for u, _, _ in revoked):
+    if revoked_admin:
         db.flush()
         remaining_admins = db.query(User).filter(
             User.role == "admin", User.is_active.is_(True), User.username.isnot(None),

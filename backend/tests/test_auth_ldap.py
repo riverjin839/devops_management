@@ -187,9 +187,11 @@ def directory(monkeypatch):
 
 @pytest.fixture
 def rate(monkeypatch):
-    calls: dict[str, list] = {"failure": [], "success": []}
-    monkeypatch.setattr(login_rate_limiter, "check_login_allowed", lambda ip, u: (True, None))
+    calls: dict[str, list] = {"failure": [], "success": [], "ip_failure": [], "checked": []}
+    monkeypatch.setattr(login_rate_limiter, "check_login_allowed",
+                        lambda ip, u: (calls["checked"].append(u), (True, None))[1])
     monkeypatch.setattr(login_rate_limiter, "record_failure", lambda ip, u: calls["failure"].append(u))
+    monkeypatch.setattr(login_rate_limiter, "record_ip_failure", lambda ip: calls["ip_failure"].append(ip))
     monkeypatch.setattr(login_rate_limiter, "record_success", lambda ip, u: calls["success"].append(u))
     return calls
 
@@ -518,12 +520,10 @@ def test_local_first_order(client, directory, ldap_cfg, rate, db, users):
     assert _user_binds(directory) == []  # 로컬이 맞으면 LDAP 는 시도하지 않는다
     assert _last_login_audit(db, name).details == {"method": "local"}
     r = _login(client, name, USER_PW)  # 로컬 실패 → LDAP 성공
-    assert r.status_code == 200 and r.json()["user"]["auth_source"] == "ldap"
+    # 로컬 비밀번호가 살아 있는 계정은 LDAP 로 들어와도 auth_source 가 local(본인이 비밀번호를 바꿀 수 있게).
+    assert r.status_code == 200 and r.json()["user"]["auth_source"] == "local"
     audit = _last_login_audit(db, name)
     assert audit.details["method"] == "ldap"
-    # 다시 로컬로 로그인하면 표식이 지워진다(마지막 로그인 방식).
-    r = _login(client, name, "local-pw-1")
-    assert r.json()["user"]["auth_source"] == "local"
 
 
 def test_ldap_first_order(client, directory, ldap_cfg, rate, db, users):
@@ -535,7 +535,7 @@ def test_ldap_first_order(client, directory, ldap_cfg, rate, db, users):
     assert r.status_code == 200 and r.json()["user"]["auth_source"] == "local"
     assert _user_binds(directory) == [f"uid={name},{BASE_DN}"]
     r = _login(client, name, USER_PW)
-    assert r.status_code == 200 and r.json()["user"]["auth_source"] == "ldap"
+    assert r.status_code == 200 and _last_login_audit(db, name).details["method"] == "ldap"
     r = _login(client, name, "nope-nope")
     assert r.status_code == 401
     attempts = _last_login_audit(db, name).details["attempts"]
@@ -635,21 +635,64 @@ def test_audit_never_contains_password(client, directory, ldap_cfg, rate, db, us
 
 
 def test_password_change_blocked_for_ldap(client, directory, ldap_cfg, rate, db, users):
+    """로컬 비밀번호가 없는 LDAP 계정 — 비밀번호 변경은 디렉터리에서."""
+    name = _name()
+    directory.add_user(name)
+    _make_user(db, users, name, password=None)
+    token = _login(client, name, USER_PW).json()["access_token"]
+    h = {"Authorization": f"Bearer {token}"}
+    assert client.get("/api/v1/auth/me", headers=h).json()["auth_source"] == "ldap"
+    r = client.post("/api/v1/auth/me/password", headers=h,
+                    json={"current_password": "x", "new_password": "new-pw-1234"})
+    assert r.status_code == 400
+    assert "사내 디렉터리" in r.json()["detail"]
+    u = db.query(User).filter(User.username == name).first()
+    log = (db.query(AuditLog).filter(AuditLog.action == "user.password.change", AuditLog.target_id == u.id)
+           .order_by(AuditLog.created_at.desc()).first())
+    assert log.details == {"reason": "directory_account"}
+
+
+def test_local_password_stays_rotatable_after_ldap_login(client, directory, ldap_cfg, rate, db, users):
+    """담당자 명부가 발급한 약한 로컬 비밀번호(사번)가 있는 계정 — LDAP 로 로그인한 뒤에도 본인이 바꿀 수 있다."""
     name = _name()
     directory.add_user(name)
     _make_user(db, users, name, password="local-pw-7")
     token = _login(client, name, USER_PW).json()["access_token"]
     h = {"Authorization": f"Bearer {token}"}
+    assert client.get("/api/v1/auth/me", headers=h).json()["auth_source"] == "local"
     r = client.post("/api/v1/auth/me/password", headers=h,
                     json={"current_password": "local-pw-7", "new_password": "new-pw-1234"})
-    assert r.status_code == 400
-    assert "사내 디렉터리" in r.json()["detail"]
-    u = db.query(User).filter(User.username == name).first()
-    db.refresh(u)
-    assert u.password_changed_at is None
-    log = (db.query(AuditLog).filter(AuditLog.action == "user.password.change", AuditLog.target_id == u.id)
-           .order_by(AuditLog.created_at.desc()).first())
-    assert log.details == {"reason": "directory_account"}
+    assert r.status_code == 200, r.text
+
+
+def test_username_whitespace_normalized(client, directory, ldap_cfg, rate, db, users):
+    """앞뒤 공백 변형이 계정별 레이트리밋 키·조회를 우회하거나 중복 계정을 만들지 못한다."""
+    name = _name()
+    users.append(name)
+    directory.add_user(name)
+    ldap_cfg(auto_provision=True)
+    assert _login(client, f"  {name} ", "wrong-pw").status_code == 401
+    assert rate["checked"][-1] == name and rate["failure"][-1] == name
+    assert _login(client, f"{name}  ", USER_PW).status_code == 200
+    assert db.query(User).filter(User.username.like(f"%{name}%")).count() == 1
+
+
+def test_infra_failure_counts_ip_only(client, directory, ldap_cfg, rate, db, users):
+    name = _name()
+    _make_user(db, users, name)
+    directory.unreachable.add("ldap.corp.test")
+    assert _login(client, name, USER_PW).status_code == 503
+    assert rate["ip_failure"] and not rate["failure"]
+
+
+def test_upn_direct_mode_reads_bound_identity(client, directory, ldap_cfg, rate, db, users):
+    """UPN 으로 바인드하면 속성·그룹은 그 UPN 의 항목에서 읽는다(검색 필터의 다른 사용자 X)."""
+    name = _name()
+    directory.add_user(name, groups=[GROUP_OK])
+    _make_user(db, users, name)
+    ldap_cfg(bind_dn_template="{username}@corp.test", allowed_groups=[GROUP_OK])
+    assert _login(client, name, USER_PW).status_code == 200
+    assert directory.searches[-1] == (BASE_DN, f"(userPrincipalName={name}@corp.test)")
 
 
 def test_password_change_blocked_without_local_password(client, db, users):
@@ -738,6 +781,22 @@ def test_connection_check(client, directory, ldap_cfg, db, users):
 
     r = client.post("/api/v1/auth/ldap/settings/test", headers=h, json={"server_urls": ["ftp://x"]})
     assert r.status_code == 200 and r.json()["steps"][0]["name"] == "config"
+
+
+def test_connection_check_retarget_needs_password(client, directory, ldap_cfg, db, users):
+    """접속 대상을 바꾼 연결 확인에는 저장된 서비스 계정 비밀번호를 싣지 않는다(평문 유출 방지) + 감사."""
+    h = _admin_headers(db, users)
+    ldap_cfg(bind_mode="search")
+    directory.add(f"cn=other,{BASE_DN}", SVC_PW, {"cn": ["other"]})
+    r = client.post("/api/v1/auth/ldap/settings/test", headers=h,
+                    json={"server_urls": ["ldap://evil.corp.test"], "start_tls": False})
+    body = r.json()
+    assert r.status_code == 200
+    assert SVC_DN not in [b for b in directory.binds if b]  # 저장된 비밀번호로 바인드하지 않았다
+    assert any("다시 입력" in w for w in body.get("warnings", []))
+    log = (db.query(AuditLog).filter(AuditLog.action == "settings.ldap.test")
+           .order_by(AuditLog.created_at.desc()).first())
+    assert log is not None and log.details["retargeted"] and SVC_PW not in str(log.details)
 
 
 def test_backup_masks_bind_password():

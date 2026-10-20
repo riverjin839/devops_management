@@ -224,3 +224,37 @@ def test_adding_employee_id_to_named_admin_keeps_login_username(client, db, crea
     fresh = db.query(User).filter(User.id == boot.id).one()
     assert fresh.username == boot.username and fresh.employee_id == emp
     assert verify_password("pw", fresh.hashed_password)
+
+
+def test_clearing_employee_id_of_named_login_keeps_login(client, db, created, requester):
+    """사번에서 파생되지 않은 로그인(부트스트랩 admin 등)은 사번을 비워도 로그인이 유지된다."""
+    emp = f"E-{_tag()}"
+    boot = _add(db, created, username=f"boot-{_tag()}", employee_id=emp, hashed_password=hash_password("pw"),
+                role="admin", display_name=f"부트-{_tag()}")
+    rows = _roster(client, [requester.id, boot.id])
+    rows[1]["employeeId"] = ""
+    r = client.put(URL, json={"assignees": rows})
+    assert r.status_code == 200, r.text
+    assert r.json()["accounts"].get("revoked", []) == []
+    db.expire_all()
+    fresh = db.query(User).filter(User.id == boot.id).one()
+    assert fresh.username == boot.username and fresh.employee_id is None and fresh.role == "admin"
+    assert verify_password("pw", fresh.hashed_password)
+
+
+def test_revoke_resets_role_before_reissue(client, db, created, requester):
+    """해제된 계정에 사번을 다시 붙여도 예전 admin 역할로 되살아나지 않는다."""
+    emp = f"E-{_tag()}"
+    a = _add(db, created, username=emp, employee_id=emp, hashed_password=hash_password(emp),
+             role="admin", display_name=f"A-{_tag()}")
+    rows = _roster(client, [requester.id, a.id])
+    rows[1]["employeeId"] = ""
+    assert client.put(URL, json={"assignees": rows}).status_code == 200
+    db.expire_all()
+    assert db.query(User).filter(User.id == a.id).one().role != "admin"
+    rows = _roster(client, [requester.id, a.id])
+    rows[1]["employeeId"] = emp
+    assert client.put(URL, json={"assignees": rows}).status_code == 200
+    db.expire_all()
+    fresh = db.query(User).filter(User.id == a.id).one()
+    assert fresh.username == emp and fresh.role != "admin"

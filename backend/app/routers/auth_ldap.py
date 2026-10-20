@@ -115,17 +115,43 @@ def update_settings(
     return _out(cfg)
 
 
+# 저장된 서비스 계정 비밀번호를 보낼 대상이 바뀌는 필드 — 이 값이 저장값과 다르면 저장된 비밀번호를 쓰지 않는다.
+_TARGET_KEYS = ("server_urls", "start_tls", "tls_verify", "ca_cert_pem", "service_bind_dn")
+
+
 @router.post("/settings/test")
 def test_settings(
     payload: LdapTestRequest,
+    request: Request,
     db: Session = Depends(get_db),
-    _: User = Depends(require_admin),
+    actor: User = Depends(require_admin),
 ):
     """서버 연결 → 서비스 바인드 → (선택) 사용자 검색. 실패도 200 + 단계별 결과로 돌려준다."""
     patch = payload.model_dump(exclude_unset=True)
     test_username = patch.pop("test_username", None)
+    saved = ldap.load_config(db)
     try:
-        cfg, _changed = ldap.merge_config(ldap.load_config(db), patch, require_ready=False)
+        cfg, _changed = ldap.merge_config(saved, patch, require_ready=False)
     except ValueError as exc:
         return {"ok": False, "steps": [{"name": "config", "ok": False, "detail": str(exc)}]}
-    return ldap.check_connection(cfg, test_username)
+    retargeted = [k for k in _TARGET_KEYS if cfg.get(k) != saved.get(k)]
+    if retargeted and not patch.get("bind_password") and cfg.get("bind_password_encrypted"):
+        # 접속 대상을 바꾼 확인에 저장된 비밀번호를 실어 보내면 관리자 토큰만으로 임의 서버에서 평문을
+        # 받아 낼 수 있다 — 대상이 바뀌면 이번 요청에 비밀번호를 다시 입력해야 서비스 바인드를 한다.
+        cfg = {**cfg, "bind_password_encrypted": None}
+    result = ldap.check_connection(cfg, test_username)
+    if retargeted and not patch.get("bind_password") and saved.get("bind_password_encrypted"):
+        result.setdefault("warnings", []).append(
+            "서버·TLS·서비스 계정 DN 을 바꿔 확인할 때는 저장된 비밀번호를 쓰지 않습니다 — 비밀번호를 다시 입력하세요."
+        )
+    audit_logger.record(
+        db,
+        action="settings.ldap.test",
+        actor=actor,
+        status="success" if result.get("ok") else "failure",
+        target_type="app_setting",
+        target_id=ldap.SETTING_KEY,
+        details={"retargeted": retargeted, "ok": bool(result.get("ok")), "test_user": bool(test_username)},
+        request=request,
+    )
+    return result

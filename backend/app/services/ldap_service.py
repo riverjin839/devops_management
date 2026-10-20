@@ -622,8 +622,11 @@ def _read_self(lib: SimpleNamespace, cfg: dict[str, Any], conn: Any, dn: str, us
         if "=" in dn:
             ok = conn.search(search_base=dn, search_filter="(objectClass=*)", search_scope=lib.BASE,
                              attributes=_attr_names(cfg), size_limit=1)
-        elif cfg.get("user_search_base") and _has_token(cfg.get("user_search_filter")):
-            ok = conn.search(search_base=str(cfg["user_search_base"]), search_filter=search_filter(lib, cfg, username),
+        elif cfg.get("user_search_base"):
+            # UPN(`{username}@도메인`)으로 바인드했다면 실제로 인증된 그 UPN 으로 찾는다 — 검색 필터
+            # (sAMAccountName 등)로 찾으면 UPN 앞부분과 sAMAccountName 이 다른 AD 에서 남의 속성·그룹을 읽는다.
+            ok = conn.search(search_base=str(cfg["user_search_base"]),
+                             search_filter=f"(userPrincipalName={lib.escape_filter_chars(dn)})",
                              search_scope=lib.SUBTREE, attributes=_attr_names(cfg), size_limit=2)
         else:
             return None
@@ -769,14 +772,17 @@ def _check_connection(cfg: dict[str, Any], test_username: str | None, steps: lis
 
     svc_dn = str(cfg.get("service_bind_dn") or "").strip() if mode == "search" else ""
     svc_pw = bind_password(cfg) if svc_dn else None
-    if svc_dn and not password_acceptable(svc_pw):
-        steps.append({"name": "service_bind", "ok": False,
-                      "detail": "서비스 계정 비밀번호가 저장돼 있지 않음(빈 비밀번호 바인드는 하지 않음)"})
-        return out
+    missing_pw = bool(svc_dn) and not password_acceptable(svc_pw)
 
-    conn, _server, url = _connect_any(lib, cfg, user=svc_dn or None, password=svc_pw, log=steps)
+    # 비밀번호가 없어도 서버 연결 단계는 확인한다(빈 비밀번호로는 바인드하지 않는다).
+    conn, _server, url = _connect_any(lib, cfg, user=None if missing_pw else (svc_dn or None),
+                                      password=None if missing_pw else svc_pw, log=steps)
     out["server"] = url
     try:
+        if missing_pw:
+            steps.append({"name": "service_bind", "ok": False,
+                          "detail": "서비스 계정 비밀번호가 없음 — 입력하세요(빈 비밀번호 바인드는 하지 않음)"})
+            return out
         if mode == "search":
             t0 = time.perf_counter()
             ok, why = _bind(lib, conn)

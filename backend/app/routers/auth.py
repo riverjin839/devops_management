@@ -63,11 +63,13 @@ def _auth_source(db: Session, user: User) -> str:
     except Exception:  # noqa: BLE001 — 표식 조회 실패가 로그인·/me 를 막지 않게
         db.rollback()
         row = None
+    if user.hashed_password:
+        # 로컬 비밀번호가 살아 있으면(담당자 명부 자동 발급 등) LDAP 로 로그인한 적이 있어도 'local' 이다 —
+        # 'ldap' 으로 보면 약한 초기 비밀번호(사번)를 본인이 바꿀 수 없게 막아 버린다.
+        return "local"
     if row is not None and isinstance(row.value, dict) and row.value.get("source") == "ldap":
         return "ldap"
-    if not user.hashed_password:
-        return "external"
-    return "local"
+    return "external"
 
 
 def _mark_auth_source(db: Session, user: User, source: str) -> None:
@@ -174,6 +176,9 @@ def _login_order(cfg: dict, user: User | None) -> list[str]:
 
 @router.post("/login", response_model=TokenResponse)
 def login(payload: LoginRequest, request: Request, db: Session = Depends(get_db)):
+    # 앞뒤 공백을 한 번만 걷어 낸다 — 레이트리밋 키·계정 조회·LDAP 바인드가 같은 이름을 보게(공백 변형으로
+    # 계정별 카운터를 우회하거나 "alice " 같은 중복 계정이 자동 생성되지 않게).
+    payload = payload.model_copy(update={"username": payload.username.strip()})
     ip = login_rate_limiter.client_ip(request)
     allowed, reason = login_rate_limiter.check_login_allowed(ip, payload.username)
     if not allowed:
@@ -261,6 +266,9 @@ def login(payload: LoginRequest, request: Request, db: Session = Depends(get_db)
             a["method"] == "ldap" and a["reason"] in ldap_service.INFRA_CODES for a in attempts
         )
         if infra_only:
+            # 계정 카운터에는 넣지 않되 IP 카운터에는 넣는다 — 디렉터리 장애 중 연결 타임아웃을 오래 붙잡는
+            # 요청을 한 IP 가 무한히 반복해 워커를 고갈시키지 못하게.
+            login_rate_limiter.record_ip_failure(ip)
             raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=DIRECTORY_UNAVAILABLE_DETAIL)
         login_rate_limiter.record_failure(ip, payload.username)
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=INVALID_LOGIN_DETAIL)
