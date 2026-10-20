@@ -173,6 +173,22 @@ export function formatRelativeTime(dateString: string): string {
  * 안전하게 문자열화.
  */
 export function formatApiError(err: unknown, fallback = '요청 실패'): string {
+  const base = formatApiErrorBase(err, fallback);
+  // 서버 오류(5xx)·응답 없음(타임아웃·끊김)이면 요청 ID 를 붙인다 — 토스트가 "원인 보기"로 서버 오류 기록에 잇는다.
+  const e = err as {
+    response?: { status?: number; headers?: Record<string, unknown> };
+    config?: { headers?: Record<string, unknown> };
+    name?: string; code?: string;
+  } | null;
+  if (!e || base === '취소됨') return base;
+  const status = e.response?.status;
+  if (status !== undefined && status < 500) return base;
+  const rid = e.response?.headers?.['x-request-id'] ?? e.config?.headers?.['X-Request-ID'];
+  if (typeof rid !== 'string' || !rid || base.includes(rid)) return base;
+  return `${base}\n요청 ID ${rid}`;
+}
+
+function formatApiErrorBase(err: unknown, fallback: string): string {
   if (!err) return fallback;
   const e = err as {
     response?: { data?: { detail?: unknown; message?: unknown } };

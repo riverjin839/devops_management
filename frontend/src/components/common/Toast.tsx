@@ -1,7 +1,10 @@
 /* eslint-disable react-refresh/only-export-components */
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { AlertCircle, AlertTriangle, CheckCircle2, Info, X } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
+import { AlertCircle, AlertTriangle, CheckCircle2, Copy, Info, SearchCode, X } from 'lucide-react';
+import { extractRequestId, serverErrorsPath } from '@/lib/requestId';
+import { useAuthStore } from '@/stores/authStore';
 
 export type ToastVariant = 'success' | 'error' | 'warning' | 'info';
 
@@ -161,6 +164,7 @@ function ToastViewport({ toasts, onDismiss }: { toasts: Toast[]; onDismiss: (id:
 function ToastCard({ toast, onDismiss }: { toast: Toast; onDismiss: (id: string) => void }) {
   const meta = VARIANT_META[toast.variant];
   const Icon = meta.icon;
+  const rid = extractRequestId(toast.description);
   return (
     <div
       className={`toast-enter pointer-events-auto w-[360px] max-w-[calc(100vw-2rem)] shadow-lg rounded-md border border-border overflow-hidden bg-card`}
@@ -175,6 +179,7 @@ function ToastCard({ toast, onDismiss }: { toast: Toast; onDismiss: (id: string)
               {toast.description}
             </p>
           )}
+          {rid && <RequestIdActions requestId={rid} onNavigate={() => onDismiss(toast.id)} />}
           {toast.action && (
             <button
               onClick={() => { toast.action?.onClick(); onDismiss(toast.id); }}
@@ -192,6 +197,36 @@ function ToastCard({ toast, onDismiss }: { toast: Toast; onDismiss: (id: string)
           <X className="w-3.5 h-3.5" />
         </button>
       </div>
+    </div>
+  );
+}
+
+/**
+ * 오류 문구에 "요청 ID" 가 있으면 복사·원인 보기를 붙인다. 원인 보기는 admin 만(서버 오류 화면이 admin 전용).
+ * 토스트는 Router 밖이라 history 에 넣고 popstate 로 라우터를 깨운다.
+ */
+function RequestIdActions({ requestId, onNavigate }: { requestId: string; onNavigate: () => void }) {
+  const { t } = useTranslation();
+  const isAdmin = useAuthStore((s) => s.user?.role === 'admin');
+  const [copied, setCopied] = useState(false);
+  const copy = () => {
+    void navigator.clipboard?.writeText(requestId).then(() => setCopied(true), () => setCopied(false));
+  };
+  const open = () => {
+    window.history.pushState({}, '', serverErrorsPath(requestId));
+    window.dispatchEvent(new PopStateEvent('popstate'));
+    onNavigate();
+  };
+  return (
+    <div className="mt-1 flex items-center gap-2 text-xs">
+      <button type="button" onClick={copy} className="inline-flex items-center gap-1 underline hover:no-underline" title={t('common.requestId.copy')} aria-label={t('common.requestId.copy')}>
+        <Copy className="w-3 h-3" aria-hidden="true" />{copied ? t('common.requestId.copied') : t('common.requestId.copy')}
+      </button>
+      {isAdmin && (
+        <button type="button" onClick={open} className="inline-flex items-center gap-1 underline hover:no-underline">
+          <SearchCode className="w-3 h-3" aria-hidden="true" />{t('common.requestId.openCause')}
+        </button>
+      )}
     </div>
   );
 }

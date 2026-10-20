@@ -71,6 +71,8 @@ LOG_TABLES: frozenset[str] = frozenset({
     "k8s_ns_samples",
     "k8s_workload_samples",
     "k8s_efficiency_runs",
+    # 서버 오류 기록(요청 ID 추적) — 로그성.
+    "system_error_logs",
 })
 
 # 민감 컬럼을 마스킹할 때 쓰는 센티널. ``None`` 을 쓰면 "값이 원래 없었다"와

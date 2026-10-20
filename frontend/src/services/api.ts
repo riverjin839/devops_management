@@ -1,5 +1,6 @@
 import axios, { type InternalAxiosRequestConfig } from 'axios';
-import { Cluster, Addon, CheckLog, SummaryStats, ApiResponse, PaginatedResponse, Playbook, PlaybookRunResult, PlaybookSshCreds, AgentChatRequest, AgentChatResponse, AgentHealthResponse, MetricCard, MetricQueryResult, MetricSparklineResult, ClusterItem, WorkItem, WorkItemType, WorkItemListResponse, WorkItemCreate, WorkItemUpdate, WorkItemStatusResponse, KanbanStatus, UiSettings, ClusterLinksPayload, WorkGuide, WorkGuideCreate, WorkGuideUpdate, WorkGuideListResponse, OpsNote, OpsNoteCreate, OpsNoteUpdate, OpsNoteListResponse, MindMap, MindMapListItem, MindMapCreate, MindMapUpdate, MindMapNode, MindMapNodeCreate, MindMapNodeUpdate, ManagementServer, ManagementServerCreate, ManagementServerUpdate, ManagementServerListResponse, TopologyTraceRequest, TopologyTraceResponse, TrendDigest, TrendItem, TrendSource, ClusterTrendsResponse, ReleaseNotesResponse, CheckMatrixItem, CheckMatrixItemInput, CheckMatrixGrid, CheckMatrixHistory, CheckMatrixSettings, CheckMatrixRunbook, CheckMatrixRun, CheckMatrixRunDetail, CheckMatrixRunList, CheckMatrixBatchResult, CheckMatrixCancelResult, CheckMatrixSourceConfigEntry, CheckMatrixCatalog, CheckMatrixItemPreviewInput, CheckMatrixItemPreviewResult, CheckMatrixItemSourceConfig, CheckMatrixItemDetail, ClusterStatusBreakdown, SchemaHealthReport, SchemaRepairResult, LlmSettings, LlmHealthEntry, LlmTestResult, LlmCredentialSummary, LlmUsageBucket, Tenant, TenantBrief, ClusterAccessLevel, HealthCheckRunResult, AddonCheckRunResult } from '@/types';
+import { Cluster, Addon, CheckLog, SummaryStats, ApiResponse, PaginatedResponse, Playbook, PlaybookRunResult, PlaybookSshCreds, AgentChatRequest, AgentChatResponse, AgentHealthResponse, MetricCard, MetricQueryResult, MetricSparklineResult, ClusterItem, WorkItem, WorkItemType, WorkItemListResponse, WorkItemCreate, WorkItemUpdate, WorkItemStatusResponse, KanbanStatus, UiSettings, ClusterLinksPayload, WorkGuide, WorkGuideCreate, WorkGuideUpdate, WorkGuideListResponse, OpsNote, OpsNoteCreate, OpsNoteUpdate, OpsNoteListResponse, MindMap, MindMapListItem, MindMapCreate, MindMapUpdate, MindMapNode, MindMapNodeCreate, MindMapNodeUpdate, ManagementServer, ManagementServerCreate, ManagementServerUpdate, ManagementServerListResponse, TopologyTraceRequest, TopologyTraceResponse, TrendDigest, TrendItem, TrendSource, ClusterTrendsResponse, ReleaseNotesResponse, CheckMatrixItem, CheckMatrixItemInput, CheckMatrixGrid, CheckMatrixHistory, CheckMatrixSettings, CheckMatrixRunbook, CheckMatrixRun, CheckMatrixRunDetail, CheckMatrixRunList, CheckMatrixBatchResult, SystemErrorListResponse, CheckMatrixCancelResult, CheckMatrixSourceConfigEntry, CheckMatrixCatalog, CheckMatrixItemPreviewInput, CheckMatrixItemPreviewResult, CheckMatrixItemSourceConfig, CheckMatrixItemDetail, ClusterStatusBreakdown, SchemaHealthReport, SchemaRepairResult, LlmSettings, LlmHealthEntry, LlmTestResult, LlmCredentialSummary, LlmUsageBucket, Tenant, TenantBrief, ClusterAccessLevel, HealthCheckRunResult, AddonCheckRunResult } from '@/types';
+import { newRequestId, REQUEST_ID_HEADER } from '@/lib/requestId';
 import { isDebugEnabled, useDebugStore } from '@/stores/debugStore';
 import { getAuthToken, expireAuthSession, type AuthUser } from '@/stores/authStore';
 
@@ -72,6 +73,8 @@ api.interceptors.request.use(
     if (token) {
       config.headers.set('Authorization', `Bearer ${token}`);
     }
+    // 요청 추적 ID — 재시도는 같은 ID 를 유지한다(lib/requestId.ts).
+    if (!config.headers.has(REQUEST_ID_HEADER)) config.headers.set(REQUEST_ID_HEADER, newRequestId());
     // FormData/Blob/File 은 own-enumerable 프로퍼티가 없어 convertKeysToSnake 가
     // 빈 객체({})로 뭉개버린다 — multipart 업로드(backup import 등)가 깨지므로 건너뛴다.
     if (config.data && typeof config.data === 'object'
@@ -238,6 +241,18 @@ export interface AuditLogQuery {
   dateFrom?: string;
   dateTo?: string;
 }
+
+export const systemErrorsApi = {
+  list: (params: { requestId?: string; path?: string; page?: number; pageSize?: number } = {}) =>
+    api.get<SystemErrorListResponse>('/system-errors', {
+      params: {
+        request_id: params.requestId || undefined,
+        path: params.path || undefined,
+        page: params.page,
+        page_size: params.pageSize,
+      },
+    }),
+};
 
 export const auditLogsApi = {
   list: (params: AuditLogQuery = {}) => {

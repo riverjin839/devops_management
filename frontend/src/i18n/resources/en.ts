@@ -216,6 +216,11 @@ export const en: TranslationResource = {
       forbiddenTitle: 'You do not have permission to view this screen',
       forbiddenHint: 'Ask your administrator for access.',
     },
+    requestId: {
+      copy: 'Copy request ID',
+      copied: 'Copied',
+      openCause: 'View cause',
+    },
   },
   apps: {
     personalSection: 'Personal',

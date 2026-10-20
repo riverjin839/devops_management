@@ -47,6 +47,7 @@ from app.routers.ansible_assets import (
 from app.routers.auth import router as auth_router
 from app.routers.auth_oidc import router as auth_oidc_router
 from app.routers.audit_logs import router as audit_logs_router
+from app.routers.system_errors import router as system_errors_router
 from app.routers.check_results_router import router as check_results_router, ingest_router as check_ingest_router
 from app.routers.check_definitions_router import router as check_definitions_router
 from app.routers.notifications import router as notifications_router
@@ -141,6 +142,7 @@ __all__ = [
     "auth_router",
     "auth_oidc_router",
     "audit_logs_router",
+    "system_errors_router",
     "check_results_router",
     "check_ingest_router",
     "check_definitions_router",

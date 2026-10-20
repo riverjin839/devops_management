@@ -1,5 +1,5 @@
 import { useEffect, useId, useState } from 'react';
-import { Settings as SettingsIcon, Server, Pencil, Trash2, Plus, Globe, ShieldCheck, AlertTriangle, Loader2, Eye, MonitorDot, Wifi, WifiOff, HelpCircle, UserCheck, Bug, HardDrive, DatabaseZap, Boxes, Layers, Lock, Home, Palette, FileSearch, Wand2, Bot, Ticket, Users, CheckCircle2, XCircle, Check, X } from 'lucide-react';
+import { Settings as SettingsIcon, Server, Pencil, Trash2, Plus, Globe, ShieldCheck, AlertTriangle, Loader2, Eye, MonitorDot, Wifi, WifiOff, HelpCircle, UserCheck, Bug, HardDrive, DatabaseZap, Boxes, Layers, Lock, Home, Palette, FileSearch, ServerCrash, Wand2, Bot, Ticket, Users, CheckCircle2, XCircle, Check, X } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { MacCard } from '@/components/ui/MacCard';
 import { BackupRestorePanel } from '@/components/settings/BackupRestorePanel';
@@ -21,6 +21,7 @@ import { ThemeGallery } from '@/components/settings/ThemeGallery';
 import { TerminalAppearanceSettings } from '@/components/settings/TerminalAppearanceSettings';
 import { AssigneeManager } from '@/components/settings/AssigneeManager';
 import { AuditLogManager } from '@/components/settings/AuditLogManager';
+import { SystemErrorManager } from '@/components/settings/SystemErrorManager';
 import { LlmSettingsTab } from '@/components/settings/LlmSettingsTab';
 import { DEBUG_PAGES, useDebugStore } from '@/stores/debugStore';
 import { useClusters, useUpdateCluster, useDeleteCluster } from '@/hooks/useCluster';
@@ -391,7 +392,7 @@ function ClusterIconButton({ cluster, onClick }: { cluster: Cluster; onClick: (e
 // 탭 id 는 외부 딥링크(`/settings?tab=…` — App.tsx `/settings/users`→assignee,
 // ClusterManagePage → cluster)가 쓰므로 바꾸지 않는다. 그룹·순서·라벨만 여기서 정한다.
 
-type TabId = 'cluster' | 'server' | 'assignee' | 'operations' | 'mgmt-service' | 'access' | 'tenant' | 'debug' | 'backup' | 'jira' | 'servicenow' | 'screen-ui' | 'audit-log' | 'schema' | 'ai-llm';
+type TabId = 'cluster' | 'server' | 'assignee' | 'operations' | 'mgmt-service' | 'access' | 'tenant' | 'debug' | 'backup' | 'jira' | 'servicenow' | 'screen-ui' | 'audit-log' | 'server-errors' | 'schema' | 'ai-llm';
 
 const TAB_GROUPS: { label: string; tabs: { id: TabId; label: string; icon: LucideIcon }[] }[] = [
   {
@@ -425,6 +426,7 @@ const TAB_GROUPS: { label: string; tabs: { id: TabId; label: string; icon: Lucid
       { id: 'screen-ui', label: '화면 UI 설정', icon: Palette },
       { id: 'backup', label: '백업 / 복구', icon: HardDrive },
       { id: 'audit-log', label: '감사 로그', icon: FileSearch },
+      { id: 'server-errors', label: '서버 오류', icon: ServerCrash },
       { id: 'schema', label: '스키마 점검', icon: DatabaseZap },
       { id: 'debug', label: '디버그', icon: Bug },
     ],
@@ -1392,6 +1394,7 @@ export function SettingsPage() {
         {activeTab === 'servicenow' && <ServiceNowIntegrationPanel />}
 
         {activeTab === 'audit-log' && <AuditLogManager />}
+        {activeTab === 'server-errors' && <SystemErrorManager />}
         </div>
         </div>
       </PageShell>

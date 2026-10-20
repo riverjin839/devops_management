@@ -3518,6 +3518,41 @@ export interface AuthUserDetail {
   createdAt: string;
 }
 
+/** GET /system-errors — 서버 오류(처리 안 된 예외·5xx) 1건. 화면 오류 토스트의 요청 ID 로 찾는다. */
+export interface SystemErrorLog {
+  id: string;
+  requestId: string | null;
+  method: string | null;
+  path: string | null;
+  statusCode: number;
+  username: string | null;
+  pod: string | null;
+  appVersion: string | null;
+  errorType: string | null;
+  message: string | null;
+  traceback: string | null;
+  durationMs: number | null;
+  createdAt: string;
+}
+
+export interface SystemErrorRelatedAudit {
+  id: string;
+  action: string;
+  status: string;
+  actorUsername: string;
+  targetType: string | null;
+  targetId: string | null;
+  createdAt: string;
+}
+
+export interface SystemErrorListResponse {
+  total: number;
+  page: number;
+  pageSize: number;
+  items: SystemErrorLog[];
+  relatedAudit: SystemErrorRelatedAudit[];
+}
+
 export interface AuditLog {
   id: string;
   actorUserId?: string | null;

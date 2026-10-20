@@ -226,6 +226,12 @@ export const ko = {
       forbiddenTitle: '이 화면을 볼 권한이 없습니다',
       forbiddenHint: '관리자에게 권한을 요청하세요.',
     },
+    /** 오류 토스트의 요청 ID 동작(Toast — lib/requestId.ts). */
+    requestId: {
+      copy: '요청 ID 복사',
+      copied: '복사됨',
+      openCause: '원인 보기',
+    },
   },
   /** "앱 추가" 카탈로그(AddAppDialog·InstalledAppOrder) — leaf 화면 라벨은 `nav.page.*`, 그룹은 `nav.group.*`. */
   apps: {
