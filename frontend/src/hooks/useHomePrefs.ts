@@ -1,4 +1,7 @@
+import { useMemo } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useToastSafe } from '@/components/common/Toast';
+import { formatApiError } from '@/lib/utils';
 import { homePrefsApi } from '@/services/api';
 import { getAuthToken } from '@/stores/authStore';
 import type { HomePrefs, HomePrefsDefaults, HomePrefsUpdate } from '@/types';
@@ -85,4 +88,48 @@ export function useUpdateHomePrefsDefaults() {
       qc.invalidateQueries({ queryKey: homePrefsKeys.all });
     },
   });
+}
+
+/**
+ * 사이드바·상단바 "앱 추가" 조작 — 실패를 조용히 삼키지 않는다.
+ *
+ * 예전엔 설정을 못 받았으면(로딩·오류) 클릭을 그냥 무시하고, 저장이 실패하면 낙관적 갱신만 조용히
+ * 되돌려 "눌러도 추가가 안 되고 아무 메시지도 없는" 상태가 됐다(1.59 배포 직후 서버 응답 지연).
+ * 이제 두 경우 모두 사유를 토스트로 알리고, 못 받은 설정은 다시 불러온다.
+ */
+export function useInstalledAppsActions() {
+  const toast = useToastSafe();
+  const prefsQuery = useHomePrefs();
+  const homePrefs = prefsQuery.data;
+  const update = useUpdateHomePrefs();
+  const installedApps = useMemo(() => homePrefs?.installedApps ?? [], [homePrefs?.installedApps]);
+
+  const send = (payload: HomePrefsUpdate, failTitle: string) => {
+    // 설정을 아직 못 받았거나(로딩·오류) 빈 [] 폴백 상태에서 저장하면 서버 목록 전체를 덮어쓴다 —
+    // 로드된 원본이 있을 때만 저장하고, 없으면 이유를 알리고 다시 불러온다.
+    if (!homePrefs) {
+      toast.show({
+        variant: 'warning',
+        title: failTitle,
+        description: prefsQuery.isError
+          ? `내 화면 설정을 불러오지 못했습니다 — ${formatApiError(prefsQuery.error)}. 다시 불러오는 중입니다.`
+          : '내 화면 설정을 아직 불러오는 중입니다. 잠시 뒤 다시 눌러 주세요.',
+      });
+      void prefsQuery.refetch();
+      return;
+    }
+    update.mutate(payload, { onError: (e) => toast.error(failTitle, formatApiError(e)) });
+  };
+
+  return {
+    homePrefs,
+    installedApps,
+    // 델타 연산 — 서버가 행 잠금 아래에서 합쳐 다른 기기·탭의 변경을 덮지 않는다.
+    toggle: (id: string) => send(
+      installedApps.includes(id) ? { installedAppsRemove: [id] } : { installedAppsAdd: [id] },
+      installedApps.includes(id) ? '앱 제거 실패' : '앱 추가 실패',
+    ),
+    move: (id: string, before: string | null) => send({ installedAppsMove: { id, before } }, '앱 순서 변경 실패'),
+    reset: () => send({ installedAppsReset: true }, '앱 구성 초기화 실패'),
+  };
 }

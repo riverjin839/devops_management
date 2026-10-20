@@ -27,6 +27,14 @@ celery_app.conf.update(
     enable_utc=True,
     task_track_started=True,
     task_time_limit=300,  # 5분 타임아웃
+    # 브로커(Redis)가 느리거나 죽어 있을 때 publish 가 요청 스레드를 오래 물지 않게 — 기본값은 소켓
+    # 타임아웃이 없어(블랙홀 네트워크면 무한 대기) "실행" 버튼 요청이 응답없음이 됐다. 몇 초 안에
+    # 실패하면 호출부가 수행을 "큐잉 실패" 로 마감해 화면에 사유가 보인다.
+    broker_connection_timeout=3,
+    broker_transport_options={"socket_timeout": 10, "socket_connect_timeout": 3},
+    task_publish_retry_policy={"max_retries": 2, "interval_start": 0, "interval_step": 0.5, "interval_max": 1},
+    redis_socket_timeout=5,
+    redis_socket_connect_timeout=3,
 )
 
 # LLM 자동 분석은 전용 `llm` 큐로 라우팅한다 — 점검/배치잡이 쓰는 기본(celery) 큐의

@@ -32,6 +32,8 @@
 | `ALGORITHM` | `HS256` | JWT 알고리즘 |
 | `ACCESS_TOKEN_EXPIRE_MINUTES` | `120` (2h) | 액세스 토큰 수명이자 **유휴 타임아웃**. 화면을 쓰는 동안은 프론트가 만료 10분 전 `POST /auth/refresh` 로 자동 재발급한다(R-7). 예전 동작(24h 고정)이 필요하면 `1440` |
 | `SESSION_MAX_HOURS` | `24` | 로그인 1회로 재발급을 이어 갈 수 있는 **절대 상한**(시간). 넘으면 refresh 가 401 — 다시 로그인 |
+| `MIGRATION_LOCK_TIMEOUT_SECONDS` | `5.0` | 부팅 마이그레이션 DDL 의 lock 대기 상한(초). 넘으면 그 DDL 은 포기하고 대기열을 비켜 준다(다른 요청을 막지 않음) — 포기한 컬럼 추가는 부팅 뒤 30초마다 백그라운드 재시도 |
+| `MIGRATION_ADVISORY_WAIT_SECONDS` | `120` | replica 간 부팅 마이그레이션 직렬화(advisory lock) 대기 상한(초). 넘으면 락 없이 진행 |
 | `INITIAL_ADMIN_USERNAME` / `INITIAL_ADMIN_PASSWORD` | `admin` / `admin` | 사용자 0명일 때 부트스트랩 관리자 |
 
 ## 점검 / K8s

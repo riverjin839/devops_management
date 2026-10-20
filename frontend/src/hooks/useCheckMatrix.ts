@@ -346,6 +346,21 @@ export function useRunCheckMatrixItem() {
   });
 }
 
+/** 대기/실행 중 수행 취소 — 단건(runId) 또는 일괄(batchId). 끝나면 진행 상태를 즉시 다시 받는다. */
+export function useCancelCheckMatrixRuns() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (target: { runId?: string; batchId?: string }) =>
+      (target.batchId ? checkMatrixApi.cancelBatch(target.batchId) : checkMatrixApi.cancelRun(target.runId!))
+        .then((r) => r.data),
+    onSuccess: (_, target) => {
+      invalidateRunState(qc);
+      if (target.runId) qc.invalidateQueries({ queryKey: checkMatrixKeys.run(target.runId) });
+      qc.invalidateQueries({ queryKey: checkMatrixKeys.grid });
+    },
+  });
+}
+
 // ── 실행 로그 ──────────────────────────────────────────────────────────────
 /** 수행 로그 목록. `live` 면 실행 중인 배치를 따라가도록 짧은 주기로 폴링한다. */
 /** `live`: true = 3초 폴링, 숫자 = 그 주기(ms) 폴링, false = 폴링 없음. */

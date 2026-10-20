@@ -36,6 +36,12 @@ class Settings(BaseSettings):
     access_token_expire_minutes: int = 120
     # 로그인 1회로 재발급을 이어 갈 수 있는 절대 상한(시간). 넘으면 refresh 가 401 → 재로그인.
     session_max_hours: int = 24
+    # 부팅 마이그레이션 DDL 의 lock 대기 상한(초). 넘으면 그 DDL 은 포기하고 줄을 비켜 준다 —
+    # 이전 파드의 긴 트랜잭션 뒤에서 ALTER 가 대기열에 서서 모든 요청을 막던 장애 방지.
+    # 포기한 컬럼 추가는 부팅 뒤 백그라운드에서 30초마다 다시 시도한다.
+    migration_lock_timeout_seconds: float = 5.0
+    # replica 간 부팅 마이그레이션 직렬화(advisory lock) 대기 상한(초). 넘으면 락 없이 진행.
+    migration_advisory_wait_seconds: int = 120
     # Bootstrap: created on startup if no users exist. Skip if already present.
     initial_admin_username: str = "admin"
     initial_admin_password: str = "admin"

@@ -1,13 +1,14 @@
 import logging
 import os
 from contextlib import asynccontextmanager
+from typing import Callable
 
 from anyio.to_thread import current_default_thread_limiter
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import ORJSONResponse
-from sqlalchemy import text, inspect, func
+from sqlalchemy import event, text, inspect, func
 
 from app.config import settings
 from app.database import engine, Base, SessionLocal
@@ -134,24 +135,207 @@ def _ensure_pgvector_extension() -> None:
         )
 
 
-def _safe_add_column(table: str, col_name: str, col_type: str) -> None:
-    """ALTER TABLE ... ADD COLUMN IF NOT EXISTS 를 단일 트랜잭션으로 실행.
+# ── 부팅 마이그레이션 lock 가드 ───────────────────────────────────────────────
+# 1.59 배포 장애(CrashLoopBackOff + 전 화면 응답없음)의 원인: 부팅마다 `ALTER TABLE ... ADD COLUMN
+# IF NOT EXISTS` 를 150여 번 실행했는데, PostgreSQL 은 컬럼이 이미 있어도 **먼저 AccessExclusiveLock
+# 을 잡고** 존재를 확인한다. 이전 버전 파드에 오래 열린 트랜잭션(터미널 WebSocket·긴 요청)이 `users`
+# 를 읽고 있으면 새 파드의 ALTER 가 lock 대기열에 서고, 그 뒤로 모든 파드의 `users` 조회(=모든 인증
+# 요청)가 줄줄이 막혀 앱 전체가 멈춘다. 새 파드는 lifespan 이 끝나지 않아 /health 를 못 열고 liveness
+# 에 죽어 재시작을 반복한다.
+#
+# 그래서:
+#   1) 이미 있는 컬럼·인덱스는 카탈로그(information_schema/to_regclass)로 먼저 보고 DDL 을 아예 보내지
+#      않는다 — 평상시 부팅은 테이블 lock 을 하나도 잡지 않는다.
+#   2) 부팅 마이그레이션 구간의 모든 커넥션에 lock_timeout 을 건다 — 대기열에 서더라도 몇 초 안에
+#      포기하고 줄을 비켜 준다(다른 요청을 막지 않는다).
+#   3) lock 때문에 못 한 컬럼 추가는 부팅 뒤 백그라운드에서 주기적으로 다시 시도한다.
+_MIGRATION_DDL_ATTEMPTS = 3
+_migration_phase = {"active": False}
+_schema_cache: dict[str, set[str]] | None = None
+_pending_ddl: dict[str, Callable[[], None]] = {}  # label → 다시 실행할 함수 — lock 경합으로 미룬 DDL
 
-    PostgreSQL 9.6+ 의 IF NOT EXISTS 를 사용해 중복 추가 시도에도 멱등. 발생한
-    예외는 모두 잡아 로깅만 하고 부팅 자체를 막지 않는다 (defensive — 마이그레이션
-    실패가 backend 기동 자체를 막아 CrashLoopBackOff 가 되던 문제 해결).
+
+def _lock_timeout_ms() -> int:
+    return max(500, int(settings.migration_lock_timeout_seconds * 1000))
+
+
+@event.listens_for(engine, "checkout")
+def _migration_checkout(dbapi_conn, conn_record, _proxy):  # noqa: ANN001
+    """부팅 마이그레이션 구간에 풀에서 꺼내는 커넥션에 lock_timeout 을 건다(세션 단위)."""
+    if not _migration_phase["active"]:
+        return
+    try:
+        cur = dbapi_conn.cursor()
+        cur.execute(f"SET lock_timeout = {_lock_timeout_ms()}")
+        cur.close()
+        dbapi_conn.commit()
+        conn_record.info["pep_lock_timeout"] = True
+    except Exception:  # noqa: BLE001 — 설정 실패가 마이그레이션을 막지는 않는다
+        pass
+
+
+@event.listens_for(engine, "checkin")
+def _migration_checkin(dbapi_conn, conn_record):  # noqa: ANN001
+    """구간 밖으로 커넥션이 새지 않게 반납할 때 lock_timeout 을 원복한다."""
+    if not conn_record.info.pop("pep_lock_timeout", False):
+        return
+    try:
+        cur = dbapi_conn.cursor()
+        cur.execute("RESET lock_timeout")
+        cur.close()
+        dbapi_conn.commit()
+    except Exception:  # noqa: BLE001
+        conn_record.invalidate()
+
+
+def _reset_schema_cache() -> None:
+    global _schema_cache
+    _schema_cache = None
+
+
+def _known_columns(table: str) -> set[str] | None:
+    """현재 스키마의 컬럼 목록(카탈로그 조회 1회 캐시). 조회 실패면 None — 호출부는 DDL 로 폴백."""
+    global _schema_cache
+    if _schema_cache is None:
+        from sqlalchemy import text as _text
+        try:
+            with engine.connect() as conn:
+                rows = conn.execute(_text(
+                    "SELECT table_name, column_name FROM information_schema.columns "
+                    "WHERE table_schema = current_schema()"
+                )).all()
+            cache: dict[str, set[str]] = {}
+            for t, c in rows:
+                cache.setdefault(str(t).lower(), set()).add(str(c).lower())
+            _schema_cache = cache
+        except Exception as e:  # noqa: BLE001
+            _log.warning("migration: 컬럼 카탈로그 조회 실패(%s) — DDL 로 폴백", e)
+            return None
+    return _schema_cache.get(table.lower())
+
+
+def _relation_exists(name: str) -> bool:
+    from sqlalchemy import text as _text
+    try:
+        with engine.connect() as conn:
+            return conn.execute(_text("SELECT to_regclass(:n) IS NOT NULL"), {"n": name}).scalar() is True
+    except Exception:  # noqa: BLE001
+        return False
+
+
+def _is_lock_timeout(e: Exception) -> bool:
+    orig = getattr(e, "orig", None)
+    return getattr(orig, "pgcode", None) == "55P03" or "lock timeout" in str(e).lower()
+
+
+def _run_ddl(sql: str, *, label: str, attempts: int = _MIGRATION_DDL_ATTEMPTS) -> None:
+    """DDL 1건 — lock_timeout 아래에서 실행하고, lock 경합이면 짧게 물러났다 다시 시도한다.
+
+    끝까지 lock 을 못 잡으면 예외를 다시 올린다(호출부가 미룸 목록에 넣는다).
+    """
+    import time as _time
+    from sqlalchemy import text as _text
+    for attempt in range(1, attempts + 1):
+        try:
+            with engine.begin() as conn:
+                conn.execute(_text(f"SET LOCAL lock_timeout = {_lock_timeout_ms()}"))
+                conn.execute(_text(sql))
+            return
+        except Exception as e:  # noqa: BLE001
+            if not _is_lock_timeout(e) or attempt >= attempts:
+                raise
+            _log.warning(
+                "migration: %s — 다른 세션이 테이블을 잡고 있어 %.1fs 안에 lock 을 못 잡음, 재시도 %d/%d",
+                label, _lock_timeout_ms() / 1000, attempt, attempts - 1,
+            )
+            _time.sleep(attempt)
+
+
+def _create_all_with_retry() -> None:
+    """create_all — 새 테이블의 FK 가 참조 테이블 lock 을 못 잡으면 물러났다 다시, 끝내 못 하면 미룬다."""
+    import time as _time
+    for attempt in range(1, _MIGRATION_DDL_ATTEMPTS + 1):
+        try:
+            Base.metadata.create_all(bind=engine)
+            _pending_ddl.pop("create_all", None)
+            return
+        except Exception as e:  # noqa: BLE001
+            if _is_lock_timeout(e) and attempt < _MIGRATION_DDL_ATTEMPTS:
+                _log.warning("migration: create_all lock 경합 — 재시도 %d/%d", attempt, _MIGRATION_DDL_ATTEMPTS - 1)
+                _time.sleep(attempt)
+                continue
+            if _is_lock_timeout(e):
+                _pending_ddl["create_all"] = lambda: Base.metadata.create_all(bind=engine)
+                _log.warning("migration: create_all 을 미룬다 — lock 경합, 부팅 뒤 백그라운드에서 다시 시도")
+            else:
+                logging.getLogger("k8s_monitor.startup").exception("create_all failed — continuing: %s", e)
+            return
+
+
+def _safe_add_column(table: str, col_name: str, col_type: str) -> None:
+    """ALTER TABLE ... ADD COLUMN IF NOT EXISTS — 이미 있으면 DDL 을 보내지 않는다(lock 0).
+
+    없을 때만 lock_timeout 아래에서 추가하고, lock 경합으로 실패하면 부팅을 막지 않고
+    백그라운드 재시도 목록에 넣는다. 그 밖의 예외도 로깅만 한다 (마이그레이션 실패가
+    backend 기동 자체를 막아 CrashLoopBackOff 가 되던 문제 해결).
+    """
+    known = _known_columns(table)
+    if known is not None and col_name.lower() in known:
+        return
+    sql = f"ALTER TABLE {table} ADD COLUMN IF NOT EXISTS {col_name} {col_type}"
+    label = f"{table}.{col_name}"
+    try:
+        _run_ddl(sql, label=label)
+        if known is not None:
+            known.add(col_name.lower())
+        _pending_ddl.pop(label, None)
+        _log.info("migration: ensured %s exists", label)
+    except Exception as e:  # noqa: BLE001
+        if _is_lock_timeout(e):
+            _pending_ddl[label] = lambda: _run_ddl(sql, label=label, attempts=1)
+            _log.warning("migration: %s 추가를 미룬다 — lock 경합, 부팅 뒤 백그라운드에서 다시 시도", label)
+        else:
+            _log.warning("migration: failed to add %s (%s) — continuing", label, e)
+
+
+def _safe_add_enum_value(type_name: str, value: str) -> None:
+    """ALTER TYPE ... ADD VALUE IF NOT EXISTS — 값이 이미 있으면 보내지 않는다(타입 lock 0).
+
+    ADD VALUE 는 다른 DDL 과 한 트랜잭션에 묶으면 실패할 수 있어 단독 커넥션으로 실행한다.
     """
     from sqlalchemy import text as _text
     try:
-        with engine.begin() as conn:
-            conn.execute(_text(
-                f"ALTER TABLE {table} ADD COLUMN IF NOT EXISTS {col_name} {col_type}"
-            ))
-        _log.info("migration: ensured %s.%s exists", table, col_name)
+        with engine.connect() as conn:
+            present = conn.execute(_text(
+                "SELECT 1 FROM pg_enum e JOIN pg_type t ON t.oid = e.enumtypid "
+                "WHERE t.typname = :t AND e.enumlabel = :v"
+            ), {"t": type_name, "v": value}).first()
+        if present:
+            return
+        _run_ddl(f"ALTER TYPE {type_name} ADD VALUE IF NOT EXISTS '{value}'", label=f"enum {type_name}.{value}")
+        _log.info("migration: enum %s.%s added", type_name, value)
     except Exception as e:  # noqa: BLE001
-        _log.warning(
-            "migration: failed to add %s.%s (%s) — continuing", table, col_name, e
-        )
+        _log.warning("migration: enum %s.%s skipped (%s)", type_name, value, e)
+
+
+def _retry_pending_ddl_forever(interval_seconds: float = 30.0, max_rounds: int = 120) -> None:
+    """lock 경합으로 미룬 DDL 을 부팅 뒤 백그라운드에서 다시 시도한다(최대 1시간)."""
+    import time as _time
+    for _ in range(max_rounds):
+        if not _pending_ddl:
+            return
+        _time.sleep(interval_seconds)
+        for label, fn in list(_pending_ddl.items()):
+            try:
+                fn()
+                _pending_ddl.pop(label, None)
+                _log.info("migration: 미뤘던 %s 적용 완료", label)
+            except Exception as e:  # noqa: BLE001
+                if not _is_lock_timeout(e):
+                    _pending_ddl.pop(label, None)
+                    _log.warning("migration: 미뤘던 %s 실패(%s) — 포기", label, e)
+    if _pending_ddl:
+        _log.error("migration: 끝내 적용하지 못한 DDL — %s (재시작 시 다시 시도)", ", ".join(_pending_ddl))
 
 
 def _backfill_work_items_service_from_module() -> None:
@@ -189,10 +373,14 @@ def _safe_exec(sql: str, *, label: str = "") -> None:
     DROP NOT NULL, ALTER COLUMN TYPE ... USING, UPDATE backfill, ADD CONSTRAINT
     등 IF NOT EXISTS 가 없는 위험한 마이그레이션을 부팅 안전하게 감싼다.
     """
-    from sqlalchemy import text as _text
+    import re as _re
+    # 이미 있는 인덱스는 보내지 않는다 — CREATE INDEX 는 IF NOT EXISTS 여도 테이블에 ShareLock 을
+    # 먼저 잡아 그동안 쓰기를 막는다.
+    m = _re.match(r"\s*CREATE\s+(?:UNIQUE\s+)?INDEX\s+(?:CONCURRENTLY\s+)?IF\s+NOT\s+EXISTS\s+(\w+)", sql, _re.I)
+    if m and _relation_exists(m.group(1)):
+        return
     try:
-        with engine.begin() as conn:
-            conn.execute(_text(sql))
+        _run_ddl(sql, label=label or sql[:80])
         if label:
             _log.info("migration: %s ok", label)
     except Exception as e:  # noqa: BLE001
@@ -252,6 +440,7 @@ def _safe_add_constraint(
 
 def _run_migrations():
     """기존 테이블에 누락된 컬럼 추가 (경량 마이그레이션)"""
+    _reset_schema_cache()  # create_all 직후 스키마 기준으로 존재 확인
     inspector = inspect(engine)
     # 멀티테넌시 3단계 — 업무·지식 데이터 tenant_id (NULL = 전체 공유). tenants 테이블은 create_all 이
     # 먼저 만든다. ON DELETE RESTRICT: 데이터가 남은 테넌트를 지우면 그 데이터가 전체 공개로
@@ -1162,6 +1351,9 @@ def _run_migrations():
         )
         _safe_create_index("ix_check_matrix_runs_queued_at", "check_matrix_runs", "(queued_at DESC)")
         _safe_create_index("ix_check_matrix_runs_batch", "check_matrix_runs", "(batch_id)")
+
+    # checkmatrixrunstate: 'cancelled' — 대기/실행 중 수행 취소(1.59 후속). 이미 있으면 보내지 않는다.
+    _safe_add_enum_value("checkmatrixrunstate", "cancelled")
 
     # checkmatrixsourcetype: 'batch_job'/'playbook' 값 추가(D-066) — PostgreSQL enum 은
     # create_all 이 새로 만들 때만 전체 값을 반영하고, 기존 DB 의 이미 존재하는 enum 타입에는
@@ -2202,10 +2394,25 @@ async def lifespan(app: FastAPI):
     # 간 부팅 마이그레이션 시퀀스 전체를 직렬화한다 — 별도 커넥션을 부팅 동안 계속
     # 들고 있다가(다른 replica 는 lock 대기) 끝나면 명시적으로 unlock. pgvector 확장
     # 생성은 이미 자체 xact-lock(다른 키)이 있어 위에서 별도 처리됨.
+    # 대기는 상한을 둔다 — 다른 replica 가 오래 붙잡고 있어도 이 파드의 부팅이 무한정 멈추지 않게.
+    # (모든 DDL 에 lock_timeout 이 걸려 있어 락 없이 진행해도 다른 요청을 막지 않는다.)
     _lock_conn = None
+    _locked = False
     try:
+        import time as _time
         _lock_conn = engine.connect()
-        _lock_conn.execute(text("SELECT pg_advisory_lock(872346193)"))
+        _deadline = _time.monotonic() + settings.migration_advisory_wait_seconds
+        while True:
+            _locked = bool(_lock_conn.execute(text("SELECT pg_try_advisory_lock(872346193)")).scalar())
+            _lock_conn.commit()
+            if _locked or _time.monotonic() >= _deadline:
+                break
+            _time.sleep(2)
+        if not _locked:
+            _startup_log.warning(
+                "startup migration lock 을 %ss 안에 못 잡음 — 다른 replica 가 마이그레이션 중, 락 없이 진행",
+                settings.migration_advisory_wait_seconds,
+            )
     except Exception as e:  # noqa: BLE001
         _startup_log.warning("startup migration lock 획득 실패(%s) — 락 없이 진행", e)
         if _lock_conn is not None:
@@ -2215,11 +2422,9 @@ async def lifespan(app: FastAPI):
                 pass
             _lock_conn = None
 
+    _migration_phase["active"] = True
     try:
-        try:
-            Base.metadata.create_all(bind=engine)
-        except Exception as e:  # noqa: BLE001
-            _startup_log.exception("create_all failed — continuing: %s", e)
+        _create_all_with_retry()
         for step_name, step in [
             ("migrations", _run_migrations),
             ("sync_missing_model_columns", _sync_missing_model_columns),
@@ -2250,13 +2455,22 @@ async def lifespan(app: FastAPI):
             except Exception as e:  # noqa: BLE001
                 _startup_log.exception("startup step '%s' failed — continuing: %s", step_name, e)
     finally:
+        _migration_phase["active"] = False
         if _lock_conn is not None:
             try:
-                _lock_conn.execute(text("SELECT pg_advisory_unlock(872346193)"))
+                if _locked:
+                    _lock_conn.execute(text("SELECT pg_advisory_unlock(872346193)"))
             except Exception:  # noqa: BLE001
                 pass
             finally:
                 _lock_conn.close()
+    if _pending_ddl:
+        import threading
+        _startup_log.warning(
+            "lock 경합으로 미룬 DDL %d건 — 백그라운드에서 30초마다 다시 시도: %s",
+            len(_pending_ddl), ", ".join(_pending_ddl),
+        )
+        threading.Thread(target=_retry_pending_ddl_forever, name="pending-ddl", daemon=True).start()
     yield
     # Shutdown: 필요한 정리 작업
 

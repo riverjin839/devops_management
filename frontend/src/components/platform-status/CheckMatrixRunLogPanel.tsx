@@ -6,8 +6,9 @@ import { checkMatrixKeys, useCheckMatrixRuns } from '@/hooks/useCheckMatrix';
 import { useCheckMatrixLogStore } from '@/stores/checkMatrixLogStore';
 import type { CheckMatrixTrigger } from '@/types';
 import { CheckMatrixRunList, CheckMatrixRunDetailView } from './CheckMatrixRunLog';
+import { CancelRunsButton } from './CancelRunsButton';
 
-const TERMINAL_STATES = new Set(['success', 'failed', 'skipped']);
+const TERMINAL_STATES = new Set(['success', 'failed', 'skipped', 'cancelled']);
 
 const TRIGGER_FILTERS: { value: '' | CheckMatrixTrigger; label: string }[] = [
   { value: '', label: '전체' },
@@ -52,6 +53,7 @@ function PanelBody({
   const finished = runs.filter((r) => TERMINAL_STATES.has(r.runState)).length;
   const batchDone = !!batchId && !!batchData && (batchTotal === 0 || (finished >= batchTotal && runs.length >= batchTotal));
   const batchFailedCount = batchDone ? runs.filter((r) => r.runState === 'failed').length : 0;
+  const batchCancelledCount = batchDone ? runs.filter((r) => r.runState === 'cancelled').length : 0;
 
   // 완료되면 셀 결과가 바로 보이도록 그리드를 1회 갱신한다.
   const invalidatedFor = useRef<string | null>(null);
@@ -77,6 +79,7 @@ function PanelBody({
     >
       <div className="space-y-4 pb-4">
         {runId ? null : batchId ? (
+          <div className="flex flex-wrap items-center justify-between gap-2">
           <p className={`text-xs flex items-center gap-1.5 ${
             batchDone ? (batchFailedCount > 0 ? 'text-status-warning' : 'text-status-healthy') : 'text-muted-foreground'
           }`} aria-live="polite">
@@ -89,9 +92,13 @@ function PanelBody({
                 ? '새로 실행할 셀이 없었습니다 — 이미 실행 중이었거나 대상이 없습니다.'
                 : batchFailedCount > 0
                   ? `일괄 실행이 끝났습니다 — ${batchTotal}건 중 ${batchFailedCount}건 실패. 실패 행을 눌러 원인을 확인하세요.`
-                  : `일괄 실행이 끝났습니다 — ${batchTotal}건 모두 마쳤고 매트릭스 셀이 갱신되었습니다.`)
+                  : batchCancelledCount > 0
+                    ? `일괄 실행이 끝났습니다 — ${batchTotal}건 중 ${batchCancelledCount}건 취소.`
+                    : `일괄 실행이 끝났습니다 — ${batchTotal}건 모두 마쳤고 매트릭스 셀이 갱신되었습니다.`)
               : `진행 중 — ${finished}/${batchTotal}건 완료 · 3초마다 갱신. 행을 누르면 그 셀의 실시간 로그가 열립니다.`}
           </p>
+          {!batchDone && batchTotal > 0 && <CancelRunsButton batchId={batchId} />}
+          </div>
         ) : (
           <div className="flex flex-wrap items-center gap-1.5" role="group" aria-label="트리거 필터">
             <span className="text-xs text-muted-foreground">트리거</span>

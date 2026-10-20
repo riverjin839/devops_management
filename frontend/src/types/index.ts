@@ -4787,7 +4787,15 @@ export interface CheckMatrixRunbook {
 
 export type CheckMatrixTrigger =
   | 'cron' | 'manual_cell' | 'manual_cluster' | 'manual_item' | 'manual_entry';
-export type CheckMatrixRunState = 'queued' | 'running' | 'success' | 'failed' | 'skipped';
+export type CheckMatrixRunState = 'queued' | 'running' | 'success' | 'failed' | 'skipped' | 'cancelled';
+
+/** POST /check-matrix/runs/{id}/cancel · /batches/{id}/cancel */
+export interface CheckMatrixCancelResult {
+  cancelled: number;
+  wasRunning: number;
+  runIds: string[];
+  revokeErrors: string[];
+}
 
 /** 실제로 실행된 명령 1건 — 런북(설계)과 대조하는 실측값. */
 export interface CheckMatrixExecutedCommand {

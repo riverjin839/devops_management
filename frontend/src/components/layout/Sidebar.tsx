@@ -8,7 +8,7 @@ import {
 } from 'lucide-react';
 import { useUiSettings } from '@/hooks/useUiSettings';
 import { useNavCatalog } from '@/hooks/useNavCatalog';
-import { useHomePrefs, useUpdateHomePrefs } from '@/hooks/useHomePrefs';
+import { useInstalledAppsActions } from '@/hooks/useHomePrefs';
 import { useThemeStore, accentApplies, ACCENTS, THEMES, type Accent, type Theme } from '@/stores/themeStore';
 import { ACCENT_SWATCH } from '@/lib/themeSwatches';
 import { useTranslation } from 'react-i18next';
@@ -195,9 +195,9 @@ export function Sidebar() {
   // 기본값은 빈 리스트("+" 버튼만) 이고, 기존 계정은 백엔드 1회 이관으로 채워져 있다.
   // 설치 단위는 leaf(최하위) 페이지 하나하나 — installedApps 배열은 Sidebar/AppTopBar 가
   // 공유하므로, 여기서는 그중 platform/system 도메인(+뒤로가기)에 해당하는 것만 골라 그린다.
-  const { data: homePrefs } = useHomePrefs();
-  const updateHomePrefs = useUpdateHomePrefs();
-  const installedApps = useMemo(() => homePrefs?.installedApps ?? [], [homePrefs?.installedApps]);
+  const {
+    homePrefs, installedApps, toggle: toggleInstalledApp, move: moveInstalledApp, reset: resetInstalledApps,
+  } = useInstalledAppsActions();
   const sidebarInstalled = useMemo(
     () => installedApps.filter((id) => {
       const meta = installableAppById(id);
@@ -206,21 +206,6 @@ export function Sidebar() {
     [installedApps],
   );
   const [catalogOpen, setCatalogOpen] = useState(false);
-  const toggleInstalledApp = (id: string) => {
-    // 설정을 아직 못 받았거나(로딩·오류) 빈 [] 폴백 상태에서 토글하면 [id] 하나로 서버 목록
-    // 전체를 덮어쓴다 — 로드된 원본이 있을 때만 저장한다.
-    if (!homePrefs) return;
-    // 델타 연산 — 서버가 행 잠금 아래에서 합쳐 다른 기기·탭의 변경을 덮지 않는다.
-    updateHomePrefs.mutate(installedApps.includes(id) ? { installedAppsRemove: [id] } : { installedAppsAdd: [id] });
-  };
-  const moveInstalledApp = (id: string, before: string | null) => {
-    if (!homePrefs) return;
-    updateHomePrefs.mutate({ installedAppsMove: { id, before } });
-  };
-  const resetInstalledApps = () => {
-    if (!homePrefs) return;
-    updateHomePrefs.mutate({ installedAppsReset: true });
-  };
 
   const { open: agentChatOpen, toggle: toggleAgentChat } = useAgentChatStore();
 
