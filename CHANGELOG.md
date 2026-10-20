@@ -8,12 +8,32 @@
 
 ## [Unreleased]
 
-1.61.1 이후 main 에 병합된 변경 (다음 릴리스 후보).
+1.63.1 이후 main 에 병합된 변경 (다음 릴리스 후보).
 
 ### Added
 - **요청 ID 추적**: 모든 API 요청에 요청 ID 가 붙는다. 서버 오류(5xx)·응답 없음(타임아웃) 토스트에 "요청 ID" 가 보이고, "요청 ID 복사"·"원인 보기"(admin)로 바로 원인을 찾는다. 서버 로그 줄마다 `[req=ID]`, 감사 로그 details 에도 같은 ID 가 남는다.
 - **Settings ▸ 서버 오류**: 처리 안 된 예외·5xx 응답을 요청 ID·경로로 찾아 스택·응답한 파드·버전·같은 요청의 감사 기록을 본다(30일 보관). 처리 안 된 예외는 빈 500 대신 요청 ID 를 담은 사유로 응답한다. Backend: `GET /system-errors`, `system_error_logs` 테이블, 응답 헤더 `X-Request-ID`.
 - **Settings ▸ 시스템 진단**: "지금 어디가 문제인가" 를 한 화면에서 본다 — 살아 있는 backend 파드와 각 버전(섞이면 경고 — 롤링 배포 중·새 파드 기동 실패), 부팅 마이그레이션 실패 단계·미룬 DDL, Celery 워커·큐 적체, DB lock 대기(막는 pid)·오래 열린 트랜잭션·연결 사용률, 오래 대기 중인 점검 수행, 최근 서버 오류. 수집에 실패한 섹션은 사유와 함께 "수집 실패" 로만 보인다. Backend: `GET /system-diagnostics`, 파드 heartbeat(Redis `pep:backend-pod:*`).
+
+## [1.63.1] - 2026-10-20
+
+### Fixed
+- **Cilium BPF 조회·서비스 토폴로지 트래픽이 큰 conntrack 테이블을 통째로 올리던 문제**: 서비스 토폴로지의 트래픽 표시(Hubble 이 없을
+  때 conntrack 으로 대체)가 앞쪽 최대 수천 항목만 쓰면서 `bpf ct list global` 전체를 JSON 으로 받아 파싱했다(수십만 항목이면 수백 MB)
+  → 필요한 줄 수만 읽고 끊는다. `/cilium-trace` BPF 조회는 JSON 결과의 원본을 응답에 함께 싣던 것(메모리·전송량 두 배)을 빼고,
+  내보내기 버튼이 원본을 서버에서 흘려받는다(워커 메모리에 모으지 않음, 실행 로그 표시). Backend: `cilium_trace_service.bpf_ct_head`·
+  `bpf_raw_stream`, `POST /cilium/{id}/bpf-inspect/download`.
+
+## [1.63.0] - 2026-10-20
+
+### Added
+- **일일 자원 리포트 (`/daily-report`, 로그인 불필요)**: K8S 자원 관리의 네임스페이스 자원을 하루 단위로 정리한 공개 리포트 화면. 클러스터·날짜를 골라(전날/다음날/날짜 지정, 과거는 보관 일수 안에서만) 클러스터 합계와 **네임스페이스 비효율 랭킹 TOP 10**(CPU·메모리 사용률 낮은 순 / 유휴량 큰 순)을 본다. NS 별 당일 CPU·메모리 request·limit, 평균·최소·최대 사용량과 사용률을 표기하고 GPU 열은 자리만 잡아 뒀다(예정). **검색 필터**로 본인 업무 모듈을 네임스페이스·워크로드·파드 이름(부분 일치)으로 찾아 TOP 10 밖이어도 순위·수치를 확인한다. URL 에 선택이 담겨 링크로 공유되고, K8s 자원 관리 화면 헤더의 **일일 리포트** 링크로도 연다. 관리자는 같은 화면의 **설정**에서 공개 여부·보관/조회 일수(롤업 데이터 양)·랭킹 개수·최소 request 컷·공개 클러스터를 조절한다. Backend: 비인증 `GET /api/v1/public/daily-report/{clusters,report,search}`(테넌트 바인딩 없는 클러스터만) + `GET|PUT /daily-report/settings`(변경 admin), 효율화 샘플을 NS 일 1행으로 롤업하는 `k8s_ns_daily_reports` 테이블과 Celery Beat `daily-report-rollup`(00:20). Frontend: `App.tsx` 가 AuthGate 밖에서 공개 경로를 분기.
+- **외부 서비스 도메인·IP:Port (`/external-services`, 로그인 불필요)**: 개발자·고객 확인용으로 클러스터가 외부로 노출한 엔드포인트(Ingress host, LoadBalancer·ExternalIP·NodePort Service)를 도메인 · IP:Port · 유형 · 대상 경로와 함께 보여주는 공개 화면. 외부 IP 는 **마스터/워커 노드에서 `nslookup`**(SSH, 자격증명은 그 수집에만 쓰고 저장 안 함)으로 도메인을 역조회하고, 못 찾으면 backend PTR 로 보완한다. 유형 필터·검색·CSV 내보내기, URL 공유. 로그인한 운영자는 같은 화면에서 **지금 수집**을 돌리며 단계·로그를 실시간으로 본다(로그 보기 토글). 정기 수집(기본 매시)·노드 역조회 명령·제외 NS·공개 범위는 관리자 설정. Backend: 비인증 `GET /api/v1/public/external-services/{clusters,{cluster_id}}`(저장 스냅샷만) + SSE `POST /external-services/{id}/collect/stream` + `external_service_snapshots` 테이블 + Celery Beat `external-services-dispatcher`.
+
+## [1.62.0] - 2026-10-20
+
+### Changed
+- **클러스터 아이콘 재디자인**: 고정 색 밴드를 쌓고 K8s 휠 워터마크를 두르던 빌더 아이콘을 화면 테마를 그대로 따르는 무채색 타일로 바꿨다 — 업무명은 크게, 속성 · 지역은 그 아래 한 줄, 운영타입은 하단 얇은 색 바로만 표시한다. 테마·강조색을 바꾸면 아이콘도 함께 바뀌고, 아이콘이 없는 클러스터는 사이드바 레일 · 클러스터 관리 표 · 설정 클러스터 탭에서 이름 이니셜 타일로 그려 모양을 통일한다(툴팁에 자동 아이콘임을 표시). Frontend: `lib/clusterIconBuilder.ts`(테마 토큰 `readIconSurfaceTokens`), `useClusterIconSrc` `monogramFallback`, 레일 툴팁 토큰화.
 
 ## [1.61.1] - 2026-10-20
 

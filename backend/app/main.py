@@ -87,6 +87,10 @@ from app.routers import (
     k8s_resources_router,
     k8s_allocation_router,
     k8s_efficiency_router,
+    daily_report_router,
+    daily_report_public_router,
+    external_services_router,
+    external_services_public_router,
     k8s_helm_router,
     k8s_exec_router,
     k9s_ssh_router,
@@ -2509,7 +2513,7 @@ install_logging()  # 앱 로그 줄마다 [req=요청ID] — services/request_co
 app = FastAPI(
     title=settings.app_name,
     description="DevOps K8s Daily Monitoring Dashboard API",
-    version="1.61.1",
+    version="1.63.1",
     docs_url="/docs",
     redoc_url="/redoc",
     lifespan=lifespan,
@@ -2658,6 +2662,12 @@ app.include_router(k8s_resources_router, prefix="/api/v1", dependencies=_cluster
 # k8s-allocation (자원 관리) — 노드/NS/워크로드/파드 단위 request vs 사용량(slack) 가시화(읽기 전용).
 app.include_router(k8s_allocation_router, prefix="/api/v1", dependencies=_cluster_scoped)
 app.include_router(k8s_efficiency_router, prefix="/api/v1", dependencies=_cluster_scoped)
+# 일일 리포트 — 공개 조회(`/public/daily-report/*`)는 비인증(로그인 없는 공개 화면), 설정은 JWT.
+app.include_router(daily_report_public_router, prefix="/api/v1")
+app.include_router(daily_report_router, prefix="/api/v1", dependencies=_auth)
+# 외부 서비스(도메인·IP:Port) — 공개 조회(`/public/external-services/*`)는 비인증(저장 스냅샷만), 수집·설정은 JWT.
+app.include_router(external_services_public_router, prefix="/api/v1")
+app.include_router(external_services_router, prefix="/api/v1", dependencies=_auth)
 # cluster-trends — per-node 메트릭 추이(Prometheus range query, 노드 명시선택+상한).
 app.include_router(cluster_trends_router, prefix="/api/v1", dependencies=_cluster_scoped)
 # helm 릴리스 뷰어(읽기 전용).
@@ -2696,7 +2706,7 @@ app.include_router(tenants_router, prefix="/api/v1", dependencies=_auth)
 def root():
     return {
         "name": settings.app_name,
-        "version": "1.61.1",
+        "version": "1.63.1",
         "version": "1.8.2",
         "status": "running"
     }

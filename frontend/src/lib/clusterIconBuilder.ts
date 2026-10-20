@@ -2,14 +2,12 @@
 // 결과는 data:image/svg+xml;base64 URL 로, 기존 Cluster.icon 컬럼에 그대로 저장되고
 // resolveClusterIcon() 이 image 로 렌더한다 (백엔드 무변경).
 //
-// 시각 구성 (64 viewBox):
-//   운영타입은 색상으로만 구분되고(테두리 ring + 배경 bg + 밴드 명도 계통이 전부 운영레벨
-//   색 1개에서 파생), 그 자체로는 판독 가능한 텍스트 정보가 없다 — 그래서 아이콘 내부에
-//   운영타입 전용 밴드(2층)를 따로 할당하지 않는다. 확보된 공간은 실제로 값을 담는
-//   업무명 / 속성 밴드에 재배분하고, 지역은 입력이 있을 때만 세 번째 밴드로 추가한다.
-//     - 지역 있음: 업무명(26) / 속성(22) / 지역(16)
-//     - 지역 없음: 업무명(34) / 속성(30)
-//   ※ 우상단은 사이드바 레일의 status dot 오버레이 자리이므로 텍스트를 넣지 않는다.
+// 시각 구성 (64 viewBox) — 앱 셸과 같은 결의 무채색 타일:
+//   - 바탕/테두리/글자색은 활성 UI 테마 토큰(--secondary/--border/--foreground/
+//     --muted-foreground)을 렌더 시점에 읽어 쓴다 → 테마를 바꾸면 아이콘도 같이 바뀐다.
+//   - 업무명 = 큰 굵은 글씨 1줄, 속성 · 지역 = muted 작은 글씨 1줄.
+//   - 운영타입 색은 하단 얇은 바에만 쓴다(색 면을 쌓지 않음).
+//   ※ 우상단은 사이드바 레일의 status dot 오버레이 자리이므로 아무것도 그리지 않는다.
 
 import { parseClusterName } from './clusterName';
 import { deriveToneSet, isValidHex } from './colorTone';
@@ -26,7 +24,7 @@ export interface ClusterIconBuildOptions {
   colorToken: string;
   /** 지정되면 colorToken 프리셋 대신 이 hex 를 시드로 톤을 자동 산출한다(운영레벨 customHex). */
   customHex?: string | null;
-  /** k8s 휠 워터마크 표시 (기본 true) */
+  /** 구버전 레시피 호환용 — 레일 크기(30~40px)에서 얼룩으로만 보여 더 이상 그리지 않는다. */
   k8sWatermark?: boolean;
   /** 모양 — rounded-square(기본) 또는 원 */
   shape?: 'square' | 'circle';
@@ -70,18 +68,6 @@ function escapeXml(s: string): string {
     .replace(/'/g, '&apos;');
 }
 
-/** hex 색 → target 색으로 ratio(0~1) 만큼 섞기. 0=원본, 1=target. 밴드별 명도 단계를
- *  같은 계통 색에서 생성하는 데 쓴다. */
-function mixHex(hex: string, target: string, ratio: number): string {
-  const h = hex.replace('#', '');
-  const t = target.replace('#', '');
-  const hr = parseInt(h.slice(0, 2), 16), hg = parseInt(h.slice(2, 4), 16), hb = parseInt(h.slice(4, 6), 16);
-  const tr = parseInt(t.slice(0, 2), 16), tg = parseInt(t.slice(2, 4), 16), tb = parseInt(t.slice(4, 6), 16);
-  const mixCh = (a: number, b: number) => Math.round(a + (b - a) * ratio);
-  const toHex = (n: number) => n.toString(16).padStart(2, '0');
-  return `#${toHex(mixCh(hr, tr))}${toHex(mixCh(hg, tg))}${toHex(mixCh(hb, tb))}`;
-}
-
 /** 서비스명 → 업무명 자동 제안. 영문 단어 첫 글자 대문자 조합(최대 3자), 한글이면 앞 2자.
  *  표준 이름 규칙([업무명]-[운영타입]-[속성])을 따르면 첫 세그먼트를 우선 사용한다. */
 export function suggestInitials(name: string | null | undefined): string {
@@ -117,92 +103,93 @@ export function suggestAttribute(name: string | null | undefined): string {
   return parsed?.attr ? parsed.attr.slice(0, 5) : '';
 }
 
-/** k8s 7-spoke 휠 워터마크 — 중심 원 + 7방향 스포크 + 외곽 칠각형 링(단순화). */
-function k8sWheel(cx: number, cy: number, r: number, color: string, opacity: number): string {
-  const spokes: string[] = [];
-  for (let i = 0; i < 7; i++) {
-    const a = (Math.PI * 2 * i) / 7 - Math.PI / 2;
-    const x2 = cx + Math.cos(a) * r;
-    const y2 = cy + Math.sin(a) * r;
-    spokes.push(`<line x1="${cx}" y1="${cy}" x2="${x2.toFixed(1)}" y2="${y2.toFixed(1)}" stroke="${color}" stroke-width="2.4"/>`);
-  }
-  // 칠각형 외곽
-  const pts: string[] = [];
-  for (let i = 0; i < 7; i++) {
-    const a = (Math.PI * 2 * i) / 7 - Math.PI / 2;
-    pts.push(`${(cx + Math.cos(a) * r).toFixed(1)},${(cy + Math.sin(a) * r).toFixed(1)}`);
-  }
-  return `<g opacity="${opacity}">${spokes.join('')}<polygon points="${pts.join(' ')}" fill="none" stroke="${color}" stroke-width="2.4"/><circle cx="${cx}" cy="${cy}" r="${(r * 0.28).toFixed(1)}" fill="${color}"/></g>`;
+/** 아이콘 바탕에 쓰는 UI 테마 토큰(CSS 색 문자열). SVG 를 <img> data URL 로 그리므로
+ *  CSS 변수를 직접 참조할 수 없어, 렌더 시점의 계산값을 읽어 리터럴로 박는다. */
+export interface IconSurfaceTokens {
+  surface: string;
+  border: string;
+  fg: string;
+  muted: string;
 }
 
-/** 밴드 텍스트 폰트 크기 — 밴드 높이(bandH)에 맞춰 글자를 최대한 키우되 넘치지 않게 캡. */
-function bandFontSize(text: string, bandH: number): number {
-  const wide = hasWideChar(text);
+/** 라이트 테마 기본값 — document 가 없거나 토큰을 못 읽을 때의 폴백. */
+const FALLBACK_SURFACE: IconSurfaceTokens = {
+  surface: 'hsl(210 33% 95%)',
+  border: 'hsl(214 32% 91%)',
+  fg: 'hsl(222 47% 11%)',
+  muted: 'hsl(215 16% 47%)',
+};
+
+/** 현재 활성 테마의 토큰(--secondary/--border/--foreground/--muted-foreground)을 읽는다.
+ *  index.css 토큰은 `H S% L%` 형식이라 hsl() 로 감싼다. */
+export function readIconSurfaceTokens(): IconSurfaceTokens {
+  if (typeof document === 'undefined') return FALLBACK_SURFACE;
+  const cs = getComputedStyle(document.documentElement);
+  const read = (name: string, fallback: string) => {
+    const raw = cs.getPropertyValue(name).trim();
+    return raw ? `hsl(${raw})` : fallback;
+  };
+  return {
+    surface: read('--secondary', FALLBACK_SURFACE.surface),
+    border: read('--border', FALLBACK_SURFACE.border),
+    fg: read('--foreground', FALLBACK_SURFACE.fg),
+    muted: read('--muted-foreground', FALLBACK_SURFACE.muted),
+  };
+}
+
+/** 업무명(주 텍스트) 폰트 크기 — 글자 수가 늘수록 줄여 64 폭 안에 들어가게 한다. */
+function primaryFontSize(text: string): number {
   const len = Math.max(1, [...text].length);
-  const base = wide ? (len >= 3 ? 12 : 14) : (len >= 5 ? 11 : len >= 4 ? 12 : 14);
-  return Math.min(base, Math.round(bandH * 0.6));
+  if (hasWideChar(text)) return len >= 3 ? 16 : 21;
+  return len >= 5 ? 14 : len === 4 ? 17 : 21;
 }
 
-interface Band {
-  text: string;
-  fill: string;
-  dark: boolean;
-  h: number;
+/** 보조 줄(속성 · 지역) 폰트 크기. */
+function secondaryFontSize(text: string): number {
+  const len = [...text].length;
+  const wide = hasWideChar(text);
+  if (len >= (wide ? 6 : 9)) return 9;
+  return 11;
 }
 
-/** 옵션 조합으로 64×64 SVG 문자열 생성 — 업무명/속성(+지역, 옵션) 밴드를 위→아래로 쌓는다.
- *  운영타입은 밴드가 아니라 테두리(ring)/배경(bg)/밴드 명도로만 반영된다. */
-export function buildClusterIconSvg(opts: ClusterIconBuildOptions): string {
+/** 옵션 조합으로 64×64 SVG 문자열 생성.
+ *  바탕은 활성 테마의 secondary 면 + 1px border(무채색), 업무명은 foreground 굵은 글씨,
+ *  속성·지역은 muted 한 줄로 아래에 둔다. 운영타입 색은 하단 얇은 바 한 줄에만 쓴다 —
+ *  색 면을 쌓지 않아 레일에 여러 개가 나란히 있어도 시끄럽지 않다. */
+export function buildClusterIconSvg(opts: ClusterIconBuildOptions, tokens?: IconSurfaceTokens): string {
   const pal = paletteOf(opts.colorToken, opts.customHex);
-  const watermark = opts.k8sWatermark !== false;
+  const t = tokens ?? readIconSurfaceTokens();
   const circle = opts.shape === 'circle';
-  const region = opts.regionAbbr.trim();
-  const hasRegion = region.length > 0;
+  const work = opts.workName.trim().slice(0, 5);
+  const sub = [opts.attribute.trim().slice(0, 5), opts.regionAbbr.trim().slice(0, 5)]
+    .filter(Boolean)
+    .join(' · ');
 
-  // 운영타입 전용 밴드를 없애고 확보한 공간을 업무명/속성(+지역)에 재배분한다.
-  const bands: Band[] = hasRegion
-    ? [
-        { text: escapeXml(opts.workName.trim().slice(0, 5)), fill: mixHex(pal.band, '#ffffff', 0.70), dark: false, h: 26 },
-        { text: escapeXml(opts.attribute.trim().slice(0, 5)), fill: mixHex(pal.band, '#ffffff', 0.28), dark: true, h: 22 },
-        { text: escapeXml(region.slice(0, 5)), fill: mixHex(pal.band, '#ffffff', 0.50), dark: false, h: 16 },
-      ]
-    : [
-        { text: escapeXml(opts.workName.trim().slice(0, 5)), fill: mixHex(pal.band, '#ffffff', 0.68), dark: false, h: 34 },
-        { text: escapeXml(opts.attribute.trim().slice(0, 5)), fill: mixHex(pal.band, '#ffffff', 0.26), dark: true, h: 30 },
-      ];
-
-  // 배경 — 클립 없이 그려 테두리 링(stroke)이 온전히 보이게 한다. 운영타입 색은 여기(ring/bg)
-  // 와 밴드 명도 계통에만 반영되고 별도 공간을 차지하지 않는다.
-  const bgShape = circle
-    ? `<circle cx="32" cy="32" r="30" fill="${pal.bg}" stroke="${pal.ring}" stroke-width="3"/>`
-    : `<rect x="2" y="2" width="60" height="60" rx="14" fill="${pal.bg}" stroke="${pal.ring}" stroke-width="3"/>`;
-
-  // 밴드 — 배경 모양 안쪽(테두리보다 살짝 안쪽)에 클립.
   const clipId = circle ? 'cibc' : 'cibs';
-  const clipShape = circle
-    ? `<circle cx="32" cy="32" r="28.5"/>`
-    : `<rect x="3.5" y="3.5" width="57" height="57" rx="12.5"/>`;
+  const shapeAttrs = circle ? 'cx="32" cy="32" r="31"' : 'x="1" y="1" width="62" height="62" rx="12"';
+  const shapeTag = circle ? 'circle' : 'rect';
 
-  let y = 0;
-  const bandRects = bands.map((b) => {
-    const top = y;
-    y += b.h;
-    const textColor = b.dark ? '#ffffff' : pal.text;
-    const label = b.text
-      ? `<text x="32" y="${top + b.h / 2}" text-anchor="middle" dominant-baseline="central" ` +
-        `font-family="system-ui,-apple-system,'Apple SD Gothic Neo','Malgun Gothic',sans-serif" ` +
-        `font-size="${bandFontSize(b.text, b.h)}" font-weight="700" fill="${textColor}">${b.text}</text>`
-      : '';
-    return `<rect x="0" y="${top}" width="64" height="${b.h}" fill="${b.fill}"/>${label}`;
-  }).join('');
+  const font = `font-family="system-ui,-apple-system,'Apple SD Gothic Neo','Malgun Gothic',sans-serif"`;
+  const workY = sub ? 27 : 31;
+  const workText = work
+    ? `<text x="32" y="${workY}" text-anchor="middle" dominant-baseline="central" ${font} ` +
+      `font-size="${primaryFontSize(work)}" font-weight="650" letter-spacing="-0.2" fill="${t.fg}">${escapeXml(work)}</text>`
+    : '';
+  const subText = sub
+    ? `<text x="32" y="44" text-anchor="middle" dominant-baseline="central" ${font} ` +
+      `font-size="${secondaryFontSize(sub)}" font-weight="500" fill="${t.muted}">${escapeXml(sub)}</text>`
+    : '';
 
-  const wheel = watermark ? k8sWheel(32, 32, 24, pal.ring, 0.12) : '';
+  // 운영타입 바 — 하단 약 6px. 원형은 클립으로 자연스럽게 호 모양이 된다.
+  const levelBar = `<rect x="0" y="57" width="64" height="7" fill="${pal.ring}"/>`;
 
   return (
     `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">` +
-    `<defs><clipPath id="${clipId}">${clipShape}</clipPath></defs>` +
-    bgShape +
-    `<g clip-path="url(#${clipId})">${bandRects}${wheel}</g>` +
+    `<defs><clipPath id="${clipId}"><${shapeTag} ${shapeAttrs}/></clipPath></defs>` +
+    `<${shapeTag} ${shapeAttrs} fill="${t.surface}"/>` +
+    `<g clip-path="url(#${clipId})">${levelBar}</g>` +
+    `<${shapeTag} ${shapeAttrs} fill="none" stroke="${t.border}" stroke-width="1.5"/>` +
+    workText + subText +
     `</svg>`
   );
 }

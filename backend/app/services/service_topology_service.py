@@ -787,11 +787,12 @@ _IP_RE = re.compile(r"(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}):(\d+)")
 
 
 def _traffic_from_conntrack(kc_path, namespace, limit, pod_ip_index) -> Optional[dict]:
-    """cilium-dbg bpf ct list global 스냅샷에서 pod IP 쌍 → 워크로드 엣지 추출(best-effort)."""
-    from app.services.cilium_trace_service import bpf_inspect
+    """cilium-dbg bpf ct list global 텍스트 출력 앞부분에서 pod IP 쌍 → 워크로드 엣지 추출(best-effort)."""
+    from app.services.cilium_trace_service import bpf_ct_head
 
-    res = bpf_inspect(kc_path, kind="ct")
-    if res.get("error"):
+    # 앞쪽 항목만 쓰므로 그만큼만 읽고 끊는다 — 예전엔 테이블 전체(수십만 항목)를 JSON 으로 받아 파싱했다.
+    keys, err = bpf_ct_head(kc_path, max(limit, 100))
+    if err:
         return None
 
     agg: dict[str, dict] = {}
@@ -808,16 +809,7 @@ def _traffic_from_conntrack(kc_path, namespace, limit, pod_ip_index) -> Optional
         if ip_port_b[1]:
             entry["ports"].add(ip_port_b[1])
 
-    parsed = res.get("parsed")
-    keys: list[str] = []
-    if isinstance(parsed, dict):
-        keys = list(parsed.keys())
-    elif isinstance(parsed, list):
-        keys = [str(x) for x in parsed]
-    else:
-        keys = (res.get("raw") or "").splitlines()
-
-    for k in keys[: max(limit, 100)]:
+    for k in keys:
         matches = _IP_RE.findall(str(k))
         if len(matches) >= 2:
             a = (matches[0][0], int(matches[0][1]))
