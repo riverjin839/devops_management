@@ -2,13 +2,14 @@
 // 클러스터·날짜·랭킹 기준을 URL 쿼리(c, d, r)에 담아 링크로 공유할 수 있다.
 // 데이터는 비인증 공개 API(`/public/daily-report/*`) — 지난 날짜는 일 롤업, 오늘은 실시간 집계.
 import { useEffect, useMemo, useState } from 'react';
-import { Link, useSearchParams } from 'react-router-dom';
+import { useSearchParams } from 'react-router-dom';
 import { CalendarDays, ChevronLeft, ChevronRight, FileBarChart, RefreshCw, Search, Settings2, X } from 'lucide-react';
 import { EmptyState, ErrorState, LoadingState, PageHeader, PageShell } from '@/components/common';
 import { MacCard } from '@/components/ui/MacCard';
 import {
   DailyReportSettingsDialog, DailyReportTable, RANK_OPTIONS, cores, dateLabel, gi, pct, shiftDate,
 } from '@/components/daily-report';
+import { PublicPageLinks } from '@/components/public-pages';
 import { useDailyReport, useDailyReportClusters, useDailyReportSearch } from '@/hooks/useDailyReport';
 import { useAuthStore } from '@/stores/authStore';
 import { cn } from '@/lib/utils';
@@ -44,7 +45,6 @@ function Stat({ label, value, sub }: { label: string; value: string; sub?: strin
 
 export function DailyReportPage() {
   const [params, setParams] = useSearchParams();
-  const loggedIn = useAuthStore((s) => !!s.token && !!s.user);
   const isAdmin = useAuthStore((s) => !!s.token && s.user?.role === 'admin');
   const [settingsOpen, setSettingsOpen] = useState(false);
   const meta = useDailyReportClusters();
@@ -115,9 +115,7 @@ export function DailyReportPage() {
               <Settings2 className="w-4 h-4" /> 설정
             </button>
           )}
-          {loggedIn && (
-            <Link to="/" className="text-sm text-muted-foreground hover:text-foreground">포털로 이동</Link>
-          )}
+          <PublicPageLinks />
         </div>
       )}
     />

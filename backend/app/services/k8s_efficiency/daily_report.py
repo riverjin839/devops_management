@@ -363,15 +363,8 @@ def search_report(db: Session, cluster, day: date, q: str, rank_by: str = "cpu_r
 # ── 공개 대상 클러스터 ──────────────────────────────────────────────────────────
 def public_clusters(db: Session) -> list:
     """공개 대상 — 설정 allowlist 가 있으면 그것만, 없으면 테넌트 바인딩이 없는(전체 공유) 클러스터."""
-    from app.models import Cluster
-    from app.models.tenant import ClusterBinding
-    cfg = get_settings(db)
-    q = db.query(Cluster)
-    if cfg["public_cluster_ids"]:
-        allowed = set(cfg["public_cluster_ids"])
-        return sorted([c for c in q.all() if str(c.id) in allowed], key=lambda c: c.name)
-    bound = {cid for (cid,) in db.query(ClusterBinding.cluster_id).distinct().all()}
-    return sorted([c for c in q.all() if c.id not in bound], key=lambda c: c.name)
+    from app.services.public_pages import public_clusters as _pc
+    return _pc(db, get_settings(db)["public_cluster_ids"])
 
 
 # ── 롤업 태스크 본체 ─────────────────────────────────────────────────────────────

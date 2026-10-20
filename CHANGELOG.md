@@ -12,6 +12,7 @@
 
 ### Added
 - **일일 자원 리포트 (`/daily-report`, 로그인 불필요)**: K8S 자원 관리의 네임스페이스 자원을 하루 단위로 정리한 공개 리포트 화면. 클러스터·날짜를 골라(전날/다음날/날짜 지정, 과거는 보관 일수 안에서만) 클러스터 합계와 **네임스페이스 비효율 랭킹 TOP 10**(CPU·메모리 사용률 낮은 순 / 유휴량 큰 순)을 본다. NS 별 당일 CPU·메모리 request·limit, 평균·최소·최대 사용량과 사용률을 표기하고 GPU 열은 자리만 잡아 뒀다(예정). **검색 필터**로 본인 업무 모듈을 네임스페이스·워크로드·파드 이름(부분 일치)으로 찾아 TOP 10 밖이어도 순위·수치를 확인한다. URL 에 선택이 담겨 링크로 공유되고, K8s 자원 관리 화면 헤더의 **일일 리포트** 링크로도 연다. 관리자는 같은 화면의 **설정**에서 공개 여부·보관/조회 일수(롤업 데이터 양)·랭킹 개수·최소 request 컷·공개 클러스터를 조절한다. Backend: 비인증 `GET /api/v1/public/daily-report/{clusters,report,search}`(테넌트 바인딩 없는 클러스터만) + `GET|PUT /daily-report/settings`(변경 admin), 효율화 샘플을 NS 일 1행으로 롤업하는 `k8s_ns_daily_reports` 테이블과 Celery Beat `daily-report-rollup`(00:20). Frontend: `App.tsx` 가 AuthGate 밖에서 공개 경로를 분기.
+- **외부 서비스 도메인·IP:Port (`/external-services`, 로그인 불필요)**: 개발자·고객 확인용으로 클러스터가 외부로 노출한 엔드포인트(Ingress host, LoadBalancer·ExternalIP·NodePort Service)를 도메인 · IP:Port · 유형 · 대상 경로와 함께 보여주는 공개 화면. 외부 IP 는 **마스터/워커 노드에서 `nslookup`**(SSH, 자격증명은 그 수집에만 쓰고 저장 안 함)으로 도메인을 역조회하고, 못 찾으면 backend PTR 로 보완한다. 유형 필터·검색·CSV 내보내기, URL 공유. 로그인한 운영자는 같은 화면에서 **지금 수집**을 돌리며 단계·로그를 실시간으로 본다(로그 보기 토글). 정기 수집(기본 매시)·노드 역조회 명령·제외 NS·공개 범위는 관리자 설정. Backend: 비인증 `GET /api/v1/public/external-services/{clusters,{cluster_id}}`(저장 스냅샷만) + SSE `POST /external-services/{id}/collect/stream` + `external_service_snapshots` 테이블 + Celery Beat `external-services-dispatcher`.
 
 ## [1.61.1] - 2026-10-20
 

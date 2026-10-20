@@ -372,7 +372,7 @@ hover 시 flyout 자체가 라벨을 보여주므로 이름만 뜨는 중복 툴
 
 ### 일일 자원 리포트 (`/daily-report`) — 로그인 불필요(공개)
 
-- **파일**: `frontend/src/pages/DailyReportPage.tsx` + `frontend/src/components/daily-report/`(`DailyReportTable`(NS 비효율 랭킹 표), `DailyReportSettingsDialog`(admin 설정), `format.ts`) · `hooks/useDailyReport.ts`. 라우팅은 `App.tsx` 의 `PublicOrAuthed` 가 **AuthGate 바깥**에서 분기한다(사이드바·셸 없음, `PUBLIC_PATHS`).
+- **파일**: `frontend/src/pages/DailyReportPage.tsx` + `frontend/src/components/daily-report/`(`DailyReportTable`(NS 비효율 랭킹 표), `DailyReportSettingsDialog`(admin 설정), `format.ts`) · `hooks/useDailyReport.ts`. 라우팅은 `App.tsx` 의 `PublicOrAuthed` 가 **AuthGate 바깥**에서 분기한다(사이드바·셸 없음, `PUBLIC_ROUTES`). 헤더 우측 `PublicPageLinks` 로 외부 서비스 화면과 오간다.
 - **목적 / UX**: K8S 자원 관리의 NS 자원(request·limit·사용량)을 **하루 단위**로 정리해 로그인 없이 공유하는 리포트. 클러스터·날짜·랭킹 기준이 URL 쿼리(`c`·`d`·`r`)에 담겨 링크 그대로 공유된다. K8s 자원 관리 화면 헤더의 **일일 리포트** 링크(새 창)로도 연다.
 - **UI 구성**:
   - `PageHeader` + 클러스터 칩 행(공개 대상 클러스터만) + 날짜 이동(전날/날짜 입력/다음날/오늘, `min`=오늘−보관 일수, `max`=오늘) + 다시 불러오기.
@@ -386,6 +386,21 @@ hover 시 flyout 자체가 라벨을 보여주므로 이름만 뜨는 중복 툴
   - _(여기에 개선/수정 요청을 직접 적어주세요)_
   - **[2026-10-20] 일단위 리포트 신설** — 별도 페이지 + 해당 페이지만 로그인 없이 접근, K8S 자원 관리 리포트, 날짜 이동(과거 누적은 보관 일수로 조절), NS 비효율 랭킹 TOP10(NS별 당일 CPU·메모리·GPU(예정) request·limit, 당일 평균·최소·최대 사용량/사용률). 반영 완료.
   - **[2026-10-20] 본인 업무 모듈 단위 namespace·pod 검색 필터** — 반영 완료(검색 카드).
+
+### 외부 서비스 — 도메인·IP:Port (`/external-services`) — 로그인 불필요(공개)
+
+- **파일**: `frontend/src/pages/ExternalServicesPage.tsx` + `frontend/src/components/external-services/`(`ExternalServicesTable`, `CollectPanel`(지금 수집 + SSE 실행 로그), `ExternalServicesSettingsDialog`(admin), `format.ts`) + `components/public-pages/PublicPageLinks`(공개 화면 간 링크) · `hooks/useExternalServices.ts`. `App.tsx` `PUBLIC_ROUTES` 가 AuthGate 바깥에서 렌더.
+- **목적 / UX**: 개발자·고객 확인용으로 클러스터가 밖으로 노출한 **도메인 · IP:Port** 목록을 로그인 없이 보여준다. 클러스터·유형·검색어가 URL 쿼리(`c`·`k`·`q`)에 담겨 링크로 공유된다.
+- **UI 구성**:
+  - `PageHeader`(우측 `PublicPageLinks` — 일일 자원 리포트 ↔ 외부 서비스, 로그인 시 포털 링크) + 클러스터 칩 + 검색(도메인·IP·포트·NS·이름·경로) + 다시 불러오기.
+  - 목록 `MacCard` — 유형 칩(전체/Ingress/LoadBalancer/ExternalIP/NodePort, 건수) + CSV 내보내기. 표: 도메인(Ingress 는 `scheme://host` 새 창 링크, 아래 줄에 역조회 이름) · 주소(IP:Port + HTTP/HTTPS/TCP) · 유형 · NS/이름 · 대상(Ingress 경로 → 서비스:포트 / targetPort) · 도메인 출처(Ingress 선언 / LB 호스트명 / nslookup(노드) / PTR(backend)). 도메인 확인된 행이 먼저, 이름 미확인은 뒤.
+  - NodePort 가 있으면 "NodePort 접근 노드 주소" 접이식 목록.
+  - **로그인한 경우에만** `CollectPanel` — **지금 수집**(operator 이상 + 클러스터 operate, viewer 는 disabled+사유) → 역조회 방식(노드에서 nslookup(권장)/backend/안 함) + `MasterHostPicker` 노드·SSH 사용자/포트/비밀번호·개인키(저장 안 함) 다이얼로그 → SSE 실시간 로그 `RunLogPanel`(단계 칩 + "로그 보기" 토글, `useLogPref('external-services-collect')`). admin 은 **설정** 버튼.
+- **Backend**: `routers/external_services.py` — `public_router`(**비인증**, `GET /public/external-services/clusters` · `GET /public/external-services/{cluster_id}` — 저장 스냅샷만, K8s 직접 조회 없음) + `router`(JWT, `POST /external-services/{cluster_id}/collect/stream`(SSE, require_operator) · `GET|PUT /external-services/settings`(변경 admin)). 서비스 `services/external_services.py` — Service(LB ingress·externalIPs·NodePort)·Ingress(host×LB 주소×80/443) 추출, 외부 IP 역조회(SSH 로 노드에서 `ptr_command`(기본 `nslookup {ip} || host {ip} || getent hosts {ip}`) → 못 찾은 IP 는 backend `gethostbyaddr`), 결과를 `external_service_snapshots`(`ExternalServiceSnapshot`, 클러스터당 1행) `ptr_cache` 에 병합 — 노드에서 찾은 이름은 정기 수집이 덮지 않는다. Celery Beat `external-services-dispatcher`(매분, 설정 cron 기본 매시 평가 → `collect_external_services_one`, backend 역조회). 설정 AppSetting `external_services.settings`(공개 여부·공개 클러스터·정기 수집 cron·NodePort 포함·제외 NS·backend 역조회/타임아웃·노드 역조회 명령).
+- **노출 범위**: 일일 리포트와 같은 규칙(`services/public_pages.py` — 테넌트 바인딩 없는 클러스터 또는 allowlist). 응답에 수집자 이름·자격증명은 싣지 않는다.
+- **요청사항 (수정 요청)**:
+  - _(여기에 개선/수정 요청을 직접 적어주세요)_
+  - **[2026-10-20] 외부 서비스 도메인·IP:Port 공개 페이지 신설** — K8s 에서 외부로 노출한 IP·Port 를 수집하고, 외부 IP 를 마스터/워커에서 nslookup 해 도메인을 얻는 아이디어. 반영 완료.
 
 ### k9s 콘솔 (`/k9s`, `/k9s/:clusterId`)
 

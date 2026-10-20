@@ -5798,3 +5798,51 @@ export interface DailyReportSettings {
   excludeSystemNamespaces: boolean;
   publicClusterIds: string[];
 }
+
+// ── 외부 서비스 (공개 페이지 `/external-services`) ─────────────────────────────
+export type ExternalServiceKind = 'Ingress' | 'LoadBalancer' | 'ExternalIP' | 'NodePort';
+
+export interface ExternalServiceEntry {
+  kind: ExternalServiceKind;
+  namespace: string;
+  name: string;
+  /** 외부 IP(NodePort 는 null — 노드 주소 × port) */
+  ip: string | null;
+  /** LoadBalancer 가 IP 대신 주는 호스트명(클라우드 LB) */
+  hostname: string | null;
+  /** Ingress rule 에 선언된 도메인 */
+  host: string | null;
+  port: number;
+  protocol: string;
+  scheme: 'http' | 'https' | null;
+  portName: string | null;
+  target: string | null;
+  paths: string[];
+  serviceType: string | null;
+  /** IP → 도메인 역조회 결과(nslookup) */
+  ptrNames: string[];
+  ptrSource: 'ssh' | 'backend' | null;
+}
+
+export interface ExternalServicesView {
+  cluster: { id: string; name: string };
+  collectedAt: string | null;
+  collectedBy?: string;
+  resolver?: string | null;
+  summary: { byKind: Record<string, number>; total: number; ips: number; resolved: number } | null;
+  error: string | null;
+  entries: ExternalServiceEntry[];
+  nodeIps: { name: string; internalIp: string | null; externalIp: string | null }[];
+}
+
+export interface ExternalServicesSettings {
+  publicEnabled: boolean;
+  publicClusterIds: string[];
+  scheduleEnabled: boolean;
+  scheduleCron: string;
+  includeNodeport: boolean;
+  excludeNamespaces: string[];
+  backendPtr: boolean;
+  dnsTimeoutSec: number;
+  ptrCommand: string;
+}

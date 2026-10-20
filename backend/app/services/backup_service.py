@@ -73,6 +73,8 @@ LOG_TABLES: frozenset[str] = frozenset({
     "k8s_efficiency_runs",
     # 일일 리포트 NS 롤업 — 샘플에서 재계산 가능한 파생 테이블.
     "k8s_ns_daily_reports",
+    # 외부 서비스 스냅샷 — 재수집 가능한 파생 데이터.
+    "external_service_snapshots",
 })
 
 # 민감 컬럼을 마스킹할 때 쓰는 센티널. ``None`` 을 쓰면 "값이 원래 없었다"와

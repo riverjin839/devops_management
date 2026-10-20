@@ -2649,6 +2649,17 @@ export const dailyReportApi = {
     api.put<import('@/types').DailyReportSettings>('/daily-report/settings', body),
 };
 
+// ── 외부 서비스 — 조회는 비인증 공개 API(저장 스냅샷), 수집(SSE)·설정은 JWT ──────────────────
+export const externalServicesApi = {
+  clusters: () => api.get<{ clusters: { id: string; name: string }[] }>('/public/external-services/clusters'),
+  view: (clusterId: string) => api.get<import('@/types').ExternalServicesView>(`/public/external-services/${clusterId}`),
+  /** SSE 엔드포인트 경로 — `postSse` 로 호출(본문은 snake_case). */
+  collectStreamUrl: (clusterId: string) => `/api/v1/external-services/${clusterId}/collect/stream`,
+  settings: () => api.get<import('@/types').ExternalServicesSettings>('/external-services/settings'),
+  putSettings: (body: Partial<import('@/types').ExternalServicesSettings>) =>
+    api.put<import('@/types').ExternalServicesSettings>('/external-services/settings', body),
+};
+
 // ── K8S 자원 효율화 (히스토리/추천/정책/실행) ─────────────────────────────────
 export const k8sEfficiencyApi = {
   schedule: () => api.get<import('@/types').EffSchedule>('/k8s/efficiency/schedule'),

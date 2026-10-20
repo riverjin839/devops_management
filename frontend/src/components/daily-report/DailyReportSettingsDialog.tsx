@@ -77,9 +77,9 @@ export function DailyReportSettingsDialog({ open, onClose }: { open: boolean; on
           </DialogDescription>
         </DialogHeader>
         {!form ? (
-          <p className="text-sm text-muted-foreground py-6 text-center">불러오는 중…</p>
+          <p className="text-sm text-muted-foreground px-5 py-6 text-center">불러오는 중…</p>
         ) : (
-          <div className="space-y-3 max-h-[60vh] overflow-y-auto pr-1">
+          <div className="space-y-3 max-h-[60vh] overflow-y-auto px-5 pb-3">
             <Check checked={form.publicEnabled} onChange={(v) => set('publicEnabled', v)}
               label="공개 페이지 사용" help="끄면 /daily-report 와 공개 API 가 404 를 돌려준다." />
             <div className="grid grid-cols-2 gap-3">
