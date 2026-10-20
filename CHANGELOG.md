@@ -10,6 +10,10 @@
 
 1.61.1 이후 main 에 병합된 변경 (다음 릴리스 후보).
 
+### Added
+- **요청 ID 추적**: 모든 API 요청에 요청 ID 가 붙는다. 서버 오류(5xx)·응답 없음(타임아웃) 토스트에 "요청 ID" 가 보이고, "요청 ID 복사"·"원인 보기"(admin)로 바로 원인을 찾는다. 서버 로그 줄마다 `[req=ID]`, 감사 로그 details 에도 같은 ID 가 남는다.
+- **Settings ▸ 서버 오류**: 처리 안 된 예외·5xx 응답을 요청 ID·경로로 찾아 스택·응답한 파드·버전·같은 요청의 감사 기록을 본다(30일 보관). 처리 안 된 예외는 빈 500 대신 요청 ID 를 담은 사유로 응답한다. Backend: `GET /system-errors`, `system_error_logs` 테이블, 응답 헤더 `X-Request-ID`.
+
 ## [1.61.1] - 2026-10-20
 
 ### Fixed
@@ -22,10 +26,6 @@
   찍으면 그 요청의 경로·처리 함수·상태·RSS·소요 시간을 `memory-watch` 경고 로그로 남긴다. OOMKilled 는 앱이 로그를 남길 틈 없이
   죽으므로, 직전 경고를 `kubectl logs --previous` 로 보면 어떤 요청이 메모리를 키웠는지 좁힐 수 있다. 쿼리 문자열은 남기지 않는다.
   Backend: `services/memory_watch.py`(ASGI 미들웨어, `/proc/self/statm`), `MEM_WATCH_DELTA_MB`·`MEM_WATCH_RSS_MB`(0 = 끔).
-
-### Added
-- **요청 ID 추적**: 모든 API 요청에 요청 ID 가 붙는다. 서버 오류(5xx)·응답 없음(타임아웃) 토스트에 "요청 ID" 가 보이고, "요청 ID 복사"·"원인 보기"(admin)로 바로 원인을 찾는다. 서버 로그 줄마다 `[req=ID]`, 감사 로그 details 에도 같은 ID 가 남는다.
-- **Settings ▸ 서버 오류**: 처리 안 된 예외·5xx 응답을 요청 ID·경로로 찾아 스택·응답한 파드·버전·같은 요청의 감사 기록을 본다(30일 보관). 처리 안 된 예외는 빈 500 대신 요청 ID 를 담은 사유로 응답한다. Backend: `GET /system-errors`, `system_error_logs` 테이블, 응답 헤더 `X-Request-ID`.
 
 ## [1.60.1] - 2026-10-20
 
