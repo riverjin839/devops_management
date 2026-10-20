@@ -4,10 +4,11 @@ import { ArrowLeft, HelpCircle, Pencil, Trash2 } from 'lucide-react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { opsNotesApi } from '@/services/api';
 import { OpsNoteForm, OpsNoteReadView } from '@/components/ops-notes';
-import { useToast, EmptyState, PageShell } from '@/components/common';
+import { useToast, ConfirmDialog, EmptyState, ErrorState, LoadingState, PageShell } from '@/components/common';
 import { MacCard } from '@/components/ui/MacCard';
 import { formatApiError } from '@/lib/utils';
-import { useMemo } from 'react';
+import { useCanOperate } from '@/hooks/useCanOperate';
+import { useMemo, useState } from 'react';
 
 export function OpsNoteDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -16,9 +17,11 @@ export function OpsNoteDetailPage() {
   const qc = useQueryClient();
   const toast = useToast();
   const editMode = location.pathname.endsWith('/edit');
+  const { canOperate, withHint, ariaWithHint } = useCanOperate();
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
-
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, isError, error, refetch } = useQuery({
     queryKey: ['ops-notes'],
     queryFn: () => opsNotesApi.getAll().then((r) => r.data),
     staleTime: 1000 * 30,
@@ -29,7 +32,26 @@ export function OpsNoteDetailPage() {
     [data, id],
   );
 
-  if (!isLoading && !note) {
+  // 분기 순서: 로딩 → 조회 실패 → 없음(조회 성공 + 목록에 없을 때만, D-137).
+  if (isLoading) {
+    return (
+      <div className="app-min-h-screen bg-background">
+        <PageShell density="doc"><LoadingState /></PageShell>
+      </div>
+    );
+  }
+
+  if (isError && !note) {
+    return (
+      <div className="app-min-h-screen bg-background">
+        <PageShell density="doc">
+          <ErrorState error={error} title="Q&A 를 불러오지 못했습니다" onRetry={() => { void refetch(); }} />
+        </PageShell>
+      </div>
+    );
+  }
+
+  if (!note) {
     return (
       <div className="app-min-h-screen bg-background">
         <PageShell density="doc">
@@ -44,19 +66,19 @@ export function OpsNoteDetailPage() {
     );
   }
 
-  if (!note) {
-    return <div className="app-min-h-screen bg-background" />;
-  }
-
+  // 삭제는 ConfirmDialog(danger) 로 확인한다(D-142).
   const handleDelete = async () => {
-    if (!confirm(`"${note.title}" Q&A 를 삭제하시겠습니까?`)) return;
+    setDeleting(true);
     try {
       await opsNotesApi.delete(note.id);
       qc.invalidateQueries({ queryKey: ['ops-notes'] });
       toast.success('Q&A 삭제됨');
+      setConfirmOpen(false);
       navigate('/ops-notes');
     } catch (e) {
       toast.error('삭제 실패', formatApiError(e));
+    } finally {
+      setDeleting(false);
     }
   };
 
@@ -95,13 +117,19 @@ export function OpsNoteDetailPage() {
               <div className="ml-auto flex items-center gap-2">
                 <button
                   onClick={() => navigate(`/ops-notes/${note.id}/edit`)}
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium bg-secondary hover:bg-secondary/80 border border-border rounded-xl transition-colors"
+                  disabled={!canOperate}
+                  title={withHint('수정')}
+                  aria-label={canOperate ? undefined : ariaWithHint('수정')}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium bg-secondary hover:bg-secondary/80 border border-border rounded-xl transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   <Pencil className="w-3.5 h-3.5" aria-hidden="true" /> 수정
                 </button>
                 <button
-                  onClick={handleDelete}
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-status-critical hover:bg-status-critical/10 border border-border rounded-xl transition-colors"
+                  onClick={() => setConfirmOpen(true)}
+                  disabled={!canOperate}
+                  title={withHint('삭제')}
+                  aria-label={canOperate ? undefined : ariaWithHint('삭제')}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-status-critical hover:bg-status-critical/10 border border-border rounded-xl transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   <Trash2 className="w-3.5 h-3.5" aria-hidden="true" /> 삭제
                 </button>
@@ -112,6 +140,17 @@ export function OpsNoteDetailPage() {
           </>
         )}
       </PageShell>
+
+      <ConfirmDialog
+        open={confirmOpen}
+        title="Q&A 삭제"
+        description={`"${note.title}" Q&A 를 삭제합니다. 답변·히스토리도 함께 지워지며 되돌릴 수 없습니다.`}
+        confirmLabel="삭제"
+        danger
+        busy={deleting}
+        onConfirm={() => { void handleDelete(); }}
+        onCancel={() => setConfirmOpen(false)}
+      />
     </div>
   );
 }

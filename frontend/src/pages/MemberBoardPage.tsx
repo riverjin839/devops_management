@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { Users, User, Search, X, ClipboardList, ListTodo, Mail, Hash, ChevronDown, ChevronUp, Copy } from 'lucide-react';
 import { useAssignees } from '@/hooks/useAssignees';
 import { useWorkItems } from '@/hooks/useWorkItems';
-import { useToast, EmptyState, PageHeader, PageShell } from '@/components/common';
+import { useToast, EmptyState, ErrorState, LoadingState, PageHeader, PageShell } from '@/components/common';
 import { MacCard } from '@/components/ui/MacCard';
 import { useAuthStore } from '@/stores/authStore';
 import type { WorkItem, Assignee } from '@/types';
@@ -11,10 +11,10 @@ import type { WorkItem, Assignee } from '@/types';
 // ── 상태 스타일 ──────────────────────────────────────────────────────────────
 
 const KANBAN_STYLE: Record<string, { label: string; cls: string }> = {
-  backlog:     { label: 'Backlog',  cls: 'bg-chart-8/10 text-chart-8 border-chart-8/30' },
-  todo:        { label: 'To Do',    cls: 'bg-chart-1/10 text-chart-1 border-chart-1/30' },
-  in_progress: { label: 'WIP',      cls: 'bg-chart-3/10 text-chart-3 border-chart-3/30' },
-  review_test: { label: 'Review',   cls: 'bg-chart-4/10 text-chart-4 border-chart-4/30' },
+  backlog:     { label: 'Backlog',  cls: 'bg-chart-8/10 text-chart-8-text border-chart-8/30' },
+  todo:        { label: 'To Do',    cls: 'bg-chart-1/10 text-chart-1-text border-chart-1/30' },
+  in_progress: { label: 'WIP',      cls: 'bg-chart-3/10 text-chart-3-text border-chart-3/30' },
+  review_test: { label: 'Review',   cls: 'bg-chart-4/10 text-chart-4-text border-chart-4/30' },
   done:        { label: 'Done',     cls: 'bg-secondary text-muted-foreground border-border' },
 };
 
@@ -33,6 +33,33 @@ function formatDate(s?: string | null): string {
 
 function stripHtml(s: string): string {
   return s.replace(/<[^>]*>/g, '').trim();
+}
+
+/** 멤버 섹션에서 처음 보여줄 업무·이슈 개수 — 나머지는 "N개 더 보기"로 펼친다(D-140). */
+const PREVIEW_LIMIT = 10;
+
+/** 업무·이슈 행 — 키보드(Tab·Enter·Space)로 열 수 있게 `<li>` 안에 버튼을 둔다(D-140). */
+const ROW_BUTTON_CLS =
+  'w-full flex items-center gap-2 px-2 rounded text-left hover:bg-muted/40 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40';
+
+function MoreToggle({ total, expanded, onToggle, noun }: {
+  total: number; expanded: boolean; onToggle: () => void; noun: string;
+}) {
+  if (total <= PREVIEW_LIMIT) return null;
+  return (
+    <li className="pt-1 text-center">
+      <button
+        type="button"
+        onClick={onToggle}
+        aria-expanded={expanded}
+        className="inline-flex items-center gap-1 px-2 py-0.5 text-xs text-muted-foreground hover:text-foreground rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+      >
+        {expanded
+          ? <><ChevronUp className="w-3 h-3" aria-hidden="true" />접기</>
+          : <><ChevronDown className="w-3 h-3" aria-hidden="true" />{noun} {total - PREVIEW_LIMIT}개 더 보기</>}
+      </button>
+    </li>
+  );
 }
 
 // ── 기간(주) 범위 헬퍼 ────────────────────────────────────────────────────────
@@ -113,6 +140,10 @@ function MemberSection({ bucket, onTaskClick, onIssueClick }: {
   onIssueClick: (i: WorkItem) => void;
 }) {
   const [expanded, setExpanded] = useState(true);
+  const [allTasks, setAllTasks] = useState(false);
+  const [allIssues, setAllIssues] = useState(false);
+  const shownTasks = allTasks ? bucket.tasks : bucket.tasks.slice(0, PREVIEW_LIMIT);
+  const shownIssues = allIssues ? bucket.issues : bucket.issues.slice(0, PREVIEW_LIMIT);
 
   return (
     <MacCard
@@ -134,7 +165,7 @@ function MemberSection({ bucket, onTaskClick, onIssueClick }: {
       bodyPadding="p-0"
       actions={
         <>
-          <span className="text-sm px-2 py-0.5 rounded-full bg-chart-1/10 text-chart-1 border border-chart-1/30">
+          <span className="text-sm px-2 py-0.5 rounded-full bg-chart-1/10 text-chart-1-text border border-chart-1/30">
             작업 {bucket.tasks.length} (진행 {bucket.openTasks} / 완료 {bucket.doneTasks})
           </span>
           <span className="text-sm px-2 py-0.5 rounded-full bg-status-warning/10 text-status-warning border border-status-warning/30">
@@ -163,30 +194,28 @@ function MemberSection({ bucket, onTaskClick, onIssueClick }: {
               <EmptyState compact icon={ListTodo} title="할당된 작업이 없습니다." description="이 멤버를 담당자로 지정한 작업이 아직 없습니다." />
             ) : (
               <ul className="space-y-1">
-                {bucket.tasks.slice(0, 10).map((t) => {
+                {shownTasks.map((t) => {
                   const ks = KANBAN_STYLE[t.kanbanStatus] ?? KANBAN_STYLE.todo;
                   return (
-                    <li
-                      key={t.id}
-                      onClick={() => onTaskClick(t)}
-                      className="flex items-center gap-2 px-2 py-1 rounded hover:bg-muted/40 cursor-pointer group"
-                    >
-                      <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${PRIORITY_DOT[t.priority] ?? 'bg-chart-8'}`} />
-                      <span className={`text-xs px-1.5 py-0.5 rounded-full border flex-shrink-0 ${ks.cls}`}>{ks.label}</span>
-                      <span className="text-sm text-foreground truncate flex-1" title={stripHtml(t.content)}>
-                        {stripHtml(t.content) || t.category}
-                      </span>
-                      <span className="text-xs font-mono text-muted-foreground flex-shrink-0">
-                        {formatDate(t.startedAt)}
-                      </span>
+                    <li key={t.id}>
+                      <button
+                        type="button"
+                        onClick={() => onTaskClick(t)}
+                        className={`${ROW_BUTTON_CLS} py-1`}
+                      >
+                        <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${PRIORITY_DOT[t.priority] ?? 'bg-chart-8'}`} aria-hidden="true" />
+                        <span className={`text-xs px-1.5 py-0.5 rounded-full border flex-shrink-0 ${ks.cls}`}>{ks.label}</span>
+                        <span className="text-sm text-foreground truncate flex-1" title={stripHtml(t.content)}>
+                          {stripHtml(t.content) || t.category}
+                        </span>
+                        <span className="text-xs font-mono text-muted-foreground flex-shrink-0">
+                          {formatDate(t.startedAt)}
+                        </span>
+                      </button>
                     </li>
                   );
                 })}
-                {bucket.tasks.length > 10 && (
-                  <li className="text-xs text-muted-foreground text-center pt-1">
-                    + {bucket.tasks.length - 10}개 더…
-                  </li>
-                )}
+                <MoreToggle total={bucket.tasks.length} expanded={allTasks} onToggle={() => setAllTasks((v) => !v)} noun="작업" />
               </ul>
             )}
           </div>
@@ -201,32 +230,30 @@ function MemberSection({ bucket, onTaskClick, onIssueClick }: {
               <EmptyState compact icon={ClipboardList} title="할당된 이슈가 없습니다." description="이 멤버를 담당자로 지정한 이슈가 아직 없습니다." />
             ) : (
               <ul className="space-y-1">
-                {bucket.issues.slice(0, 10).map((i) => (
-                  <li
-                    key={i.id}
-                    onClick={() => onIssueClick(i)}
-                    className="flex items-center gap-2 px-2 py-1.5 rounded hover:bg-muted/40 cursor-pointer"
-                  >
-                    <span className={`text-xs px-1.5 py-0.5 rounded-full border flex-shrink-0 ${
-                      i.closedAt
-                        ? 'bg-secondary text-muted-foreground border-border'
-                        : 'bg-status-warning/10 text-status-warning border-status-warning/30'
-                    }`}>
-                      {i.closedAt ? '완료' : '미조치'}
-                    </span>
-                    <span className="text-sm text-foreground truncate flex-1" title={stripHtml(i.content)}>
-                      {i.category}: {stripHtml(i.content)}
-                    </span>
-                    <span className="text-xs font-mono text-muted-foreground flex-shrink-0">
-                      {formatDate(i.startedAt)}
-                    </span>
+                {shownIssues.map((i) => (
+                  <li key={i.id}>
+                    <button
+                      type="button"
+                      onClick={() => onIssueClick(i)}
+                      className={`${ROW_BUTTON_CLS} py-1.5`}
+                    >
+                      <span className={`text-xs px-1.5 py-0.5 rounded-full border flex-shrink-0 ${
+                        i.closedAt
+                          ? 'bg-secondary text-muted-foreground border-border'
+                          : 'bg-status-warning/10 text-status-warning border-status-warning/30'
+                      }`}>
+                        {i.closedAt ? '완료' : '미조치'}
+                      </span>
+                      <span className="text-sm text-foreground truncate flex-1" title={stripHtml(i.content)}>
+                        {i.category}: {stripHtml(i.content)}
+                      </span>
+                      <span className="text-xs font-mono text-muted-foreground flex-shrink-0">
+                        {formatDate(i.startedAt)}
+                      </span>
+                    </button>
                   </li>
                 ))}
-                {bucket.issues.length > 10 && (
-                  <li className="text-xs text-muted-foreground text-center pt-1">
-                    + {bucket.issues.length - 10}개 더…
-                  </li>
-                )}
+                <MoreToggle total={bucket.issues.length} expanded={allIssues} onToggle={() => setAllIssues((v) => !v)} noun="이슈" />
               </ul>
             )}
           </div>
@@ -270,8 +297,10 @@ type MemberFilter = 'all' | 'active' | 'withOpen';
 
 export function MemberBoardPage() {
   const navigate = useNavigate();
-  const { data: assignees = [] } = useAssignees();
-  const { data: workItemsData } = useWorkItems();
+  const assigneesQ = useAssignees();
+  const assignees = useMemo(() => assigneesQ.data ?? [], [assigneesQ.data]);
+  const workItemsQ = useWorkItems();
+  const workItemsData = workItemsQ.data;
   const toast = useToast();
   const me = useAuthStore((s) => s.user);
 
@@ -509,8 +538,26 @@ export function MemberBoardPage() {
           )}
         </div>
 
-        {/* 멤버 섹션 리스트 */}
-        {filtered.length === 0 ? (
+        {/* 담당자 명부만 실패하면 업무 목록은 그대로 보여주고, 사번·이메일이 빠졌다는 것만 알린다. */}
+        {assigneesQ.isError && !workItemsQ.isError && (
+          <ErrorState
+            compact
+            error={assigneesQ.error}
+            title="담당자 명부를 불러오지 못했습니다 — 사번·이메일·역할 없이 표시합니다"
+            onRetry={() => { void assigneesQ.refetch(); }}
+          />
+        )}
+
+        {/* 멤버 섹션 리스트 — 분기 순서: 로딩 → 조회 실패 → 빈 결과(D-140). 실패를 "업무 없음"으로 보이지 않게. */}
+        {workItemsQ.isLoading || assigneesQ.isLoading ? (
+          <LoadingState />
+        ) : workItemsQ.isError ? (
+          <ErrorState
+            error={workItemsQ.error}
+            title="업무 목록을 불러오지 못했습니다"
+            onRetry={() => { void workItemsQ.refetch(); }}
+          />
+        ) : filtered.length === 0 ? (
           <EmptyState
             icon={Users}
             title={scope === 'me' ? (me ? '내 담당 업무가 없습니다.' : '로그인하면 내 업무를 볼 수 있습니다.') : '조건에 맞는 멤버가 없습니다.'}

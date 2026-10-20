@@ -4,12 +4,19 @@ import {
   Rocket, Plus, Target, Pencil, Trash2, X, Loader2, CheckCircle2,
   ArrowRightLeft, CalendarDays, Users, Clock,
 } from 'lucide-react';
-import { ConfirmDialog, useToast, useModalA11y, PageHeader, PageShell, EmptyState, LoadingState } from '@/components/common';
+import { ConfirmDialog, useToast, useModalA11y, PageHeader, PageShell, EmptyState, ErrorState, LoadingState } from '@/components/common';
+import { useCanOperate } from '@/hooks/useCanOperate';
 import { formatApiError } from '@/lib/utils';
 import {
   useSprints, useCreateSprint, useUpdateSprint, useDeleteSprint, useCarryOverSprint,
 } from '@/hooks/useSprints';
-import type { Sprint, SprintStatus, SprintCreate } from '@/types';
+import type { Sprint, SprintStatus, SprintCreate, SprintUpdate } from '@/types';
+
+/**
+ * 수정 payload — 비운 선택 필드(목표·JIRA NO·Confluence)는 `null` 로 보내야 서버(`exclude_unset`)가
+ * 컬럼을 비운다(D-144). `types` 의 `SprintUpdate` 는 `null` 을 허용하지 않아 여기서만 넓힌다.
+ */
+type SprintPatch = { [K in keyof SprintCreate]?: SprintCreate[K] | null };
 
 // ── date helpers ──────────────────────────────────────────────────────────
 function todayStr(): string {
@@ -34,7 +41,7 @@ function fmtDate(s: string): string {
 
 const STATUS_META: Record<SprintStatus, { label: string; cls: string }> = {
   planning:  { label: '계획',   cls: 'bg-status-unknown/10 text-status-unknown border-status-unknown/30' },
-  active:    { label: '진행중', cls: 'bg-chart-1/10 text-chart-1 border-chart-1/30' },
+  active:    { label: '진행중', cls: 'bg-chart-1/10 text-chart-1-text border-chart-1/30' },
   completed: { label: '완료',   cls: 'bg-secondary text-muted-foreground border-border' },
 };
 
@@ -46,11 +53,12 @@ function SprintModal({
 }: {
   initial?: Sprint;
   onClose: () => void;
-  onSubmit: (data: SprintCreate) => void;
+  onSubmit: (data: SprintPatch) => void;
   busy: boolean;
 }) {
   const dialogRef = useModalA11y(true, onClose);
   const titleId = useId();
+  const { canOperate, withHint } = useCanOperate();
   const start = initial?.startDate ?? todayStr();
   const [form, setForm] = useState<FormState>({
     name: initial?.name ?? `스프린트 ${(() => { const d = new Date(); return `${d.getMonth() + 1}/${d.getDate()}`; })()}`,
@@ -62,7 +70,18 @@ function SprintModal({
     status: initial?.status ?? 'active',
   });
   const invalidRange = daysBetween(form.startDate, form.endDate) < 0;
-  const canSubmit = form.name.trim().length > 0 && !invalidRange && !busy;
+  const canSubmit = form.name.trim().length > 0 && !invalidRange && !busy && canOperate;
+  // 수정 모드에서 비운 선택 필드는 null(D-144) — 생성 모드는 생략.
+  const blank = initial ? null : undefined;
+  const submit = () => onSubmit({
+    name: form.name.trim(),
+    goal: form.goal.trim() || blank,
+    jiraNo: form.jiraNo.trim() || blank,
+    confluenceLink: form.confluenceLink.trim() || blank,
+    startDate: form.startDate,
+    endDate: form.endDate,
+    status: form.status,
+  });
 
   // 기간 프리셋 — 1~4주 빠른 설정. (종료일 포함이므로 N주 = 시작일 + 7N-1 일)
   const durationDays = daysBetween(form.startDate, form.endDate) + 1;
@@ -177,8 +196,9 @@ function SprintModal({
         <div className="flex items-center justify-end gap-2 px-5 py-3 border-t border-border">
           <button onClick={onClose} className="px-4 py-2 text-sm rounded-lg bg-secondary hover:bg-secondary/80 border border-border">취소</button>
           <button
-            onClick={() => onSubmit({ name: form.name.trim(), goal: form.goal.trim() || undefined, jiraNo: form.jiraNo.trim() || undefined, confluenceLink: form.confluenceLink.trim() || undefined, startDate: form.startDate, endDate: form.endDate, status: form.status })}
+            onClick={submit}
             disabled={!canSubmit}
+            title={withHint(initial ? '저장' : '생성')}
             className="px-4 py-2 text-sm rounded-lg bg-primary hover:bg-primary/90 text-primary-foreground inline-flex items-center gap-1.5 disabled:opacity-50"
           >
             {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />}
@@ -204,6 +224,7 @@ function CarryOverModal({
   const titleId = useId();
   const [toId, setToId] = useState(targets[0]?.id ?? '');
   const remaining = source.totalItems - source.doneItems;
+  const { canOperate, withHint } = useCanOperate();
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={onClose}>
       <div ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby={titleId} className="bg-card border border-border rounded-md w-full max-w-md shadow-xl" onClick={(e) => e.stopPropagation()}>
@@ -239,7 +260,8 @@ function CarryOverModal({
           <button onClick={onClose} className="px-4 py-2 text-sm rounded-lg bg-secondary hover:bg-secondary/80 border border-border">취소</button>
           <button
             onClick={() => onConfirm(toId)}
-            disabled={!toId || busy || remaining === 0}
+            disabled={!toId || busy || remaining === 0 || !canOperate}
+            title={withHint('이월')}
             className="px-4 py-2 text-sm rounded-lg bg-primary hover:bg-primary/90 text-primary-foreground inline-flex items-center gap-1.5 disabled:opacity-50"
           >
             {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <ArrowRightLeft className="w-4 h-4" />}이월
@@ -265,6 +287,8 @@ function SprintCard({
   const remaining = sprint.totalItems - sprint.doneItems;
   const left = daysBetween(todayStr(), sprint.endDate);
   const meta = STATUS_META[sprint.status];
+  // 쓰기는 operator 이상(서버 require_operator, 업무 항목과 같은 기준) — 숨기지 않고 비활성 + 사유(D-145).
+  const { canOperate, withHint, ariaWithHint } = useCanOperate();
   return (
     <div className="bg-card border border-border rounded-md p-3 flex flex-col gap-2">
       <div className="flex items-start justify-between gap-2">
@@ -283,8 +307,8 @@ function SprintCard({
           </p>
         </div>
         <div className="flex items-center gap-1 flex-shrink-0">
-          <button onClick={() => onEdit(sprint)} title="수정" aria-label="수정" className="p-1.5 rounded-lg hover:bg-secondary text-muted-foreground hover:text-foreground"><Pencil className="w-3.5 h-3.5" /></button>
-          <button onClick={() => onDelete(sprint)} title="삭제" aria-label="삭제" className="p-1.5 rounded-lg hover:bg-status-critical/10 text-muted-foreground hover:text-status-critical"><Trash2 className="w-3.5 h-3.5" /></button>
+          <button onClick={() => onEdit(sprint)} disabled={!canOperate} title={withHint('수정')} aria-label={ariaWithHint(`${sprint.name} 수정`)} className="p-1.5 rounded-lg hover:bg-secondary text-muted-foreground hover:text-foreground disabled:opacity-50 disabled:cursor-not-allowed"><Pencil className="w-3.5 h-3.5" /></button>
+          <button onClick={() => onDelete(sprint)} disabled={!canOperate} title={withHint('삭제')} aria-label={ariaWithHint(`${sprint.name} 삭제`)} className="p-1.5 rounded-lg hover:bg-status-critical/10 text-muted-foreground hover:text-status-critical disabled:opacity-50 disabled:cursor-not-allowed"><Trash2 className="w-3.5 h-3.5" /></button>
         </div>
       </div>
 
@@ -319,11 +343,11 @@ function SprintCard({
         {sprint.status !== 'completed' && (
           <>
             {remaining > 0 && (
-              <button onClick={() => onCarryOver(sprint)} className="text-sm px-2.5 py-1.5 rounded-lg bg-secondary hover:bg-secondary/80 border border-border text-muted-foreground hover:text-foreground transition-colors inline-flex items-center gap-1">
+              <button onClick={() => onCarryOver(sprint)} disabled={!canOperate} title={withHint('미완료 항목 이월')} className="text-sm px-2.5 py-1.5 rounded-lg bg-secondary hover:bg-secondary/80 border border-border text-muted-foreground hover:text-foreground transition-colors inline-flex items-center gap-1 disabled:opacity-50 disabled:cursor-not-allowed">
                 <ArrowRightLeft className="w-3 h-3" />이월
               </button>
             )}
-            <button onClick={() => onComplete(sprint)} className="ml-auto text-sm px-2.5 py-1.5 rounded-lg bg-secondary hover:bg-secondary/80 border border-border text-muted-foreground hover:text-foreground transition-colors inline-flex items-center gap-1">
+            <button onClick={() => onComplete(sprint)} disabled={!canOperate} title={withHint('스프린트 종료')} className="ml-auto text-sm px-2.5 py-1.5 rounded-lg bg-secondary hover:bg-secondary/80 border border-border text-muted-foreground hover:text-foreground transition-colors inline-flex items-center gap-1 disabled:opacity-50 disabled:cursor-not-allowed">
               <CheckCircle2 className="w-3 h-3" />종료
             </button>
           </>
@@ -337,8 +361,9 @@ function SprintCard({
 export function SprintsPage() {
   const navigate = useNavigate();
   const toast = useToast();
-  const { data, isLoading } = useSprints();
+  const { data, isLoading, isError, error, refetch } = useSprints();
   const sprints = useMemo(() => data?.data ?? [], [data]);
+  const { canOperate, hint: operateHint, withHint, ariaWithHint } = useCanOperate();
 
   const createSprint = useCreateSprint();
   const updateSprint = useUpdateSprint();
@@ -353,16 +378,19 @@ export function SprintsPage() {
   const planning = sprints.filter((s) => s.status === 'planning');
   const completed = sprints.filter((s) => s.status === 'completed');
 
-  const handleCreate = (payload: SprintCreate) => {
+  const handleCreate = (patch: SprintPatch) => {
+    // 생성 모드 모달은 null 을 만들지 않는다(빈 값은 생략) — 필수 필드도 모달이 채운다.
+    const payload = patch as SprintCreate;
     createSprint.mutate(payload, {
       onSuccess: () => { setModal(null); toast.success('스프린트 생성됨', payload.name); },
       onError: (err) => toast.error('생성 실패', formatApiError(err, '스프린트를 만들 수 없습니다.')),
     });
   };
-  const handleEdit = (payload: SprintCreate) => {
+  const handleEdit = (patch: SprintPatch) => {
     if (modal?.mode !== 'edit') return;
-    updateSprint.mutate({ id: modal.sprint.id, data: payload }, {
-      onSuccess: () => { setModal(null); toast.success('스프린트 수정됨', payload.name); },
+    // null 은 "비우기"(D-144) — api 시그니처가 null 을 모르는 타입이라 경계에서만 좁힌다.
+    updateSprint.mutate({ id: modal.sprint.id, data: patch as SprintUpdate }, {
+      onSuccess: () => { setModal(null); toast.success('스프린트 수정됨', patch.name ?? modal.sprint.name); },
       onError: (err) => toast.error('수정 실패', formatApiError(err, '스프린트를 수정할 수 없습니다.')),
     });
   };
@@ -423,7 +451,10 @@ export function SprintsPage() {
           actions={
             <button
               onClick={() => setModal({ mode: 'create' })}
-              className="px-4 py-2 text-sm font-medium bg-primary hover:bg-primary/90 text-primary-foreground rounded-lg transition-colors inline-flex items-center gap-1.5"
+              disabled={!canOperate}
+              title={withHint('새 스프린트')}
+              aria-label={ariaWithHint('새 스프린트')}
+              className="px-4 py-2 text-sm font-medium bg-primary hover:bg-primary/90 text-primary-foreground rounded-lg transition-colors inline-flex items-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <Plus className="w-4 h-4" />새 스프린트
             </button>
@@ -431,13 +462,18 @@ export function SprintsPage() {
         />
 
         {isLoading ? (
-          <LoadingState label="스프린트를 불러오는 중…" />
+          <LoadingState />
+        ) : isError ? (
+          // 조회 실패를 "아직 없음"으로 보여주면 빈 상태 CTA 를 따라 중복 생성한다(D-137).
+          <ErrorState error={error} title="스프린트를 불러오지 못했습니다" onRetry={() => { void refetch(); }} />
         ) : sprints.length === 0 ? (
           <EmptyState
             icon={Rocket}
             title="아직 스프린트가 없습니다."
-            description="1~4주 등 원하는 기간의 반복으로 팀의 업무를 묶어 추적해 보세요."
-            action={{ label: '첫 스프린트 만들기', onClick: () => setModal({ mode: 'create' }) }}
+            description={canOperate
+              ? '1~4주 등 원하는 기간의 반복으로 팀의 업무를 묶어 추적해 보세요.'
+              : `스프린트 생성은 ${operateHint ?? 'operator 이상 권한이 필요합니다'}.`}
+            action={canOperate ? { label: '첫 스프린트 만들기', onClick: () => setModal({ mode: 'create' }) } : undefined}
           />
         ) : (
           <div className="space-y-6">

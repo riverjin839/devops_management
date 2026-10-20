@@ -6,7 +6,7 @@ import {
   Sparkles, UploadCloud,
 } from 'lucide-react';
 import { MacCard } from '@/components/ui/MacCard';
-import { EmptyState, LoadingState, PageShell, RunLogPanel, useToast } from '@/components/common';
+import { EmptyState, ErrorState, LoadingState, PageShell, RunLogPanel, useToast } from '@/components/common';
 import { PageHeader } from '@/components/common/PageHeader';
 import {
   ConfluenceDocsSettingsDialog, ConfluenceExportDialog, ConfluenceImportModal, SyncStatusBadge,
@@ -35,7 +35,7 @@ const STATUS_CFG: Record<string, { label: string; cls: string }> = {
 export function DocumentsPage() {
   const navigate = useNavigate();
   const toast = useToast();
-  const { data, isLoading } = useWorkGuides();
+  const { data, isLoading, isError, error, refetch } = useWorkGuides();
   const pullMut = useConfluenceDocPull();
   const isAdmin = useAuthStore((s) => s.user?.role) === 'admin';
   const runLog = useRunLog();
@@ -97,6 +97,15 @@ export function DocumentsPage() {
       .filter((r): r is { item: GuideSearchItem; guide: WorkGuide } =>
         Boolean(r.guide) && localFiltered.has(r.item.id));
   }, [aiMode, aiData, guides, filtered]);
+
+  // 목록 상태 — 분기 순서는 로딩 → 조회 실패 → 빈 결과(D-137). 실패를 "문서가 없습니다"로 보이지 않게.
+  const aiActive = aiMode && Boolean(query.trim());
+  const listLoading = isLoading || (aiActive && aiSearch.isLoading);
+  const listError: { error: unknown; retry: () => void } | null = isError
+    ? { error, retry: () => { void refetch(); } }
+    : aiActive && aiSearch.isError
+      ? { error: aiSearch.error, retry: () => { void aiSearch.refetch(); } }
+      : null;
 
   const rows: Array<{ guide: WorkGuide; similarity?: number | null }> =
     aiMode && query.trim()
@@ -267,7 +276,7 @@ export function DocumentsPage() {
                     <td className="px-3 py-2.5">
                       <span className={`px-2 py-0.5 rounded-full text-[11px] font-medium ${
                         guide.confluencePageId || guide.source === 'confluence'
-                          ? 'bg-chart-1/15 text-chart-1' : 'bg-secondary text-muted-foreground'
+                          ? 'bg-chart-1/15 text-chart-1-text' : 'bg-secondary text-muted-foreground'
                       }`}>
                         {guide.confluencePageId || guide.source === 'confluence' ? 'Confluence' : 'PEP'}
                       </span>
@@ -317,16 +326,21 @@ export function DocumentsPage() {
               })}
             </tbody>
           </table>
-          {!isLoading && rows.length === 0 && (
+          {listLoading ? (
+            <LoadingState />
+          ) : listError ? (
+            <ErrorState
+              error={listError.error}
+              title={isError ? '문서 목록을 불러오지 못했습니다' : 'AI 검색에 실패했습니다'}
+              onRetry={listError.retry}
+            />
+          ) : rows.length === 0 && (
             <div className="py-10">
               <EmptyState
                 title={query.trim() ? '검색 결과가 없습니다' : '문서가 없습니다'}
                 description={query.trim() ? '다른 검색어나 필터를 시도해 보세요.' : '새 문서를 작성하거나 Confluence 에서 가져오세요.'}
               />
             </div>
-          )}
-          {isLoading && (
-            <LoadingState />
           )}
         </div>
       </MacCard>

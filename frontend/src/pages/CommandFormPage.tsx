@@ -2,11 +2,12 @@ import { useId, useMemo, useState } from 'react';
 import { PageHeader } from '@/components/common/PageHeader';
 import { useNavigate, useParams } from 'react-router-dom';
 
-import { ConfluenceUrlInput, useToast, PageShell, LoadingState, EmptyState } from '@/components/common';
+import { ConfluenceUrlInput, useToast, PageShell, LoadingState, EmptyState, ErrorState } from '@/components/common';
 import { MacCard } from '@/components/ui/MacCard';
 import {
-  useCommands, useCreateCommand, useUpdateCommand,
+  useCommands, useCreateCommand, useUpdateCommand, type CommandEntryPatch,
 } from '@/hooks/useCommands';
+import { useCanOperate } from '@/hooks/useCanOperate';
 import type { CommandEntry, CommandEntryCreate, CommandImportance } from '@/types';
 import { formatApiError } from '@/lib/utils';
 
@@ -21,7 +22,9 @@ export function CommandFormPage() {
   const editMode = !!id;
 
   // 수정 모드: 목록 fetch 결과에서 해당 id 의 entry 를 찾는다 (단건 fetch 엔드포인트 대신 캐시 재활용).
-  const { data: listData, isLoading: listLoading } = useCommands();
+  const {
+    data: listData, isLoading: listLoading, isError: listError, error: listErrorObj, refetch,
+  } = useCommands();
   const initial = useMemo<CommandEntry | undefined>(() => {
     if (!editMode) return undefined;
     return listData?.data.find((e) => e.id === id);
@@ -39,6 +42,9 @@ export function CommandFormPage() {
 
         {editMode && listLoading ? (
           <LoadingState />
+        ) : editMode && listError ? (
+          // 조회 실패를 "찾을 수 없음"으로 보여주지 않는다(D-137) — 없음은 조회 성공 + 목록에 없을 때만.
+          <ErrorState error={listErrorObj} title="명령어를 불러오지 못했습니다" onRetry={() => { void refetch(); }} />
         ) : editMode && !initial ? (
           <EmptyState
             title="명령어를 찾을 수 없습니다"
@@ -69,6 +75,7 @@ function CommandForm({ initial, onCancel, onSaved }: CommandFormProps) {
   const create = useCreateCommand();
   const update = useUpdateCommand();
   const toast = useToast();
+  const { canOperate, withHint, ariaWithHint } = useCanOperate();
 
   const [category, setCategory] = useState(initial?.category ?? '');
   const [command, setCommand] = useState(initial?.command ?? '');
@@ -90,22 +97,34 @@ function CommandForm({ initial, onCancel, onSaved }: CommandFormProps) {
       setError('command 는 필수입니다.');
       return;
     }
-    const payload: CommandEntryCreate = {
-      category: category.trim() || undefined,
-      command: command.trim(),
-      description: description.trim() || undefined,
-      caution: caution.trim() || undefined,
-      examples: examples.trim() || undefined,
-      tags: tags.trim() || undefined,
-      importance,
-      pinned,
-      confluenceUrl: confluenceUrl.trim() || undefined,
+    // 수정 모드에서 비운 선택 필드는 null — undefined 면 JSON 에서 빠져 서버가 옛 값을 유지한다(D-144).
+    const blank = initial ? null : undefined;
+    const opt = (v: string) => v.trim() || blank;
+    const fields = {
+      category: opt(category),
+      description: opt(description),
+      caution: opt(caution),
+      examples: opt(examples),
+      tags: opt(tags),
+      confluenceUrl: opt(confluenceUrl),
     };
     try {
       if (initial) {
-        await update.mutateAsync({ id: initial.id, data: payload });
+        const patch: CommandEntryPatch = { ...fields, command: command.trim(), importance, pinned };
+        await update.mutateAsync({ id: initial.id, data: patch });
         toast.success('수정됨', '명령어 정보가 업데이트되었습니다.');
       } else {
+        const payload: CommandEntryCreate = {
+          category: fields.category ?? undefined,
+          command: command.trim(),
+          description: fields.description ?? undefined,
+          caution: fields.caution ?? undefined,
+          examples: fields.examples ?? undefined,
+          tags: fields.tags ?? undefined,
+          importance,
+          pinned,
+          confluenceUrl: fields.confluenceUrl ?? undefined,
+        };
         await create.mutateAsync(payload);
         toast.success('명령어 추가됨');
       }
@@ -229,8 +248,10 @@ function CommandForm({ initial, onCancel, onSaved }: CommandFormProps) {
         <button
           type="button"
           onClick={submit}
-          disabled={pending}
-          className="px-3 py-1.5 text-sm rounded-xl bg-primary text-primary-foreground disabled:opacity-60"
+          disabled={pending || !canOperate}
+          title={withHint(initial ? '수정' : '등록')}
+          aria-label={canOperate ? undefined : ariaWithHint(initial ? '수정' : '등록')}
+          className="px-3 py-1.5 text-sm rounded-xl bg-primary text-primary-foreground disabled:opacity-60 disabled:cursor-not-allowed"
         >
           {pending ? '저장 중…' : (initial ? '수정' : '등록')}
         </button>

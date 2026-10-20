@@ -5,12 +5,14 @@ import {
 } from 'lucide-react';
 
 import { MacCard } from '@/components/ui/MacCard';
-import { ConfirmDialog, LoadingState, PageShell, useToast } from '@/components/common';
+import { ConfirmDialog, ErrorState, LoadingState, PageShell, useToast } from '@/components/common';
 import { PageHeader } from '@/components/common/PageHeader';
 import { CommandsTable } from '@/components/commands/CommandsTable';
 import {
-  useCommands, useCreateCommand, useDeleteCommand, useUpdateCommand,
+  useCommandCategories, useCommands, useCreateCommand, useDeleteCommand, useUpdateCommand,
 } from '@/hooks/useCommands';
+import { useCanOperate } from '@/hooks/useCanOperate';
+import { useDebouncedValue } from '@/hooks/useDebouncedValue';
 import type { CommandEntry, CommandImportance } from '@/types';
 import { formatApiError } from '@/lib/utils';
 
@@ -34,13 +36,21 @@ export function CommandsPage() {
   const [filterImportance, setFilterImportance] = useState<CommandImportance | ''>('');
   const [confirmDelete, setConfirmDelete] = useState<CommandEntry | null>(null);
 
-  const queryParams = useMemo(() => ({
-    q: search.trim() || undefined,
-    category: filterCategory || undefined,
-    importance: filterImportance || undefined,
-  }), [search, filterCategory, filterImportance]);
+  // 검색어는 디바운스 — 키 입력마다 요청·표 깜빡임이 생기지 않게(D-148). 이전 결과는 hook 의
+  // `placeholderData: keepPreviousData` 가 유지한다.
+  const debouncedSearch = useDebouncedValue(search.trim(), 300);
+  const queryParams = useMemo(() => {
+    const p = {
+      q: debouncedSearch || undefined,
+      category: filterCategory || undefined,
+      importance: filterImportance || undefined,
+    };
+    // 필터가 하나도 없으면 undefined — 카테고리 옵션용 전체 목록(useCommandCategories)과 캐시를 공유한다.
+    return p.q || p.category || p.importance ? p : undefined;
+  }, [debouncedSearch, filterCategory, filterImportance]);
 
-  const { data, isLoading } = useCommands(queryParams);
+  const { data, isLoading, isError, error, refetch, isFetching } = useCommands(queryParams);
+  const { canOperate, withHint, ariaWithHint } = useCanOperate();
   const del = useDeleteCommand();
   const updateInline = useUpdateCommand();
   const createInline = useCreateCommand();
@@ -50,14 +60,15 @@ export function CommandsPage() {
 
   const entries = useMemo(() => data?.data ?? [], [data]);
 
-  // 카테고리 목록은 등록된 항목들에서 동적으로 추출 — 필터 드롭다운에 사용.
-  const categories = useMemo(() => {
-    const set = new Set<string>();
-    for (const e of entries) {
-      if (e.category) set.add(e.category);
-    }
-    return Array.from(set).sort();
-  }, [entries]);
+  // 카테고리 옵션은 필터 없는 전체 목록에서 — 고른 카테고리가 드롭다운에서 나머지를 지우지 않게(D-148).
+  // 저장된 URL 등으로 목록에 없는 값이 선택돼 있어도 옵션에 남겨 둔다.
+  const allCategories = useCommandCategories();
+  const categories = useMemo(
+    () => (filterCategory && !allCategories.includes(filterCategory)
+      ? [...allCategories, filterCategory].sort()
+      : allCategories),
+    [allCategories, filterCategory],
+  );
 
   return (
     <PageShell density="hub" className="space-y-4">
@@ -76,7 +87,10 @@ export function CommandsPage() {
         actions={
           <button
             onClick={() => navigate('/commands/new')}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-semibold bg-primary text-primary-foreground rounded-xl hover:bg-primary/90"
+            disabled={!canOperate}
+            title={withHint('명령어 추가')}
+            aria-label={ariaWithHint('명령어 추가')}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-semibold bg-primary text-primary-foreground rounded-xl hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <Plus className="w-3.5 h-3.5" /> 명령어 추가
           </button>
@@ -118,14 +132,16 @@ export function CommandsPage() {
                 <option key={v} value={v}>{IMPORTANCE_META[v].label}</option>
               ))}
             </select>
-            <span className="text-xs text-muted-foreground tabular-nums ml-auto">
-              {entries.length}건
+            <span className="text-xs text-muted-foreground tabular-nums ml-auto" aria-live="polite">
+              {isFetching && !isLoading ? '검색 중…' : `${entries.length}건`}
             </span>
           </div>
         }
       >
         {isLoading ? (
           <LoadingState compact />
+        ) : isError ? (
+          <ErrorState error={error} title="명령어 목록을 불러오지 못했습니다" onRetry={() => { void refetch(); }} compact />
         ) : (
           <CommandsTable
             entries={entries}
