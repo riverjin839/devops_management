@@ -940,6 +940,7 @@ D-117~D-134)에서 원자는 지켜지는데 화면이 "AI 가 만든 템플릿"
   - **`historyClose: false` 로 끄는 경우**: 팝오버·메뉴(`useModalA11y` 를 트랩용으로만 쓰는 것)와, 고르면 닫고 곧바로 `navigate()` 하는 UI(커맨드 팔레트).
     - 현재 해당: `CommandPalette`, `ClusterManagePage` 도구 메뉴, `NodeSpecPage`·`PlatformStatusMatrix` 팝오버.
   - shadcn `ui/dialog` 의 `Dialog` 도 래퍼라서, `open` 을 넘기는 controlled 다이얼로그는 뒤로가기로 자동으로 닫힌다(`useModalHistory` → `actionsRef.close()` → `onOpenChange(false, …)`). 호출부의 `onOpenChange` 가드(`!busy` 등)가 Escape·X 와 똑같이 적용되고, 닫기를 거부하면 기록을 다시 push 한다. 호출부는 아무것도 추가하지 않는다(uncontrolled 는 대상 아님).
+  - **Escape 는 맨 위 모달만 닫는다.** 열린 순서는 `components/common/modalStack.ts` 가 쌓는다. `useModalA11y` 는 맨 위일 때만 Escape·Tab 을 처리하고, `ui/dialog` 래퍼도 열린 동안 층을 차지해 맨 위가 아니면 Base UI 의 Escape 닫기를 취소한다. 그래서 모달 안 `ConfirmDialog` 에서 Escape 1회 = 확인 창만, 2회 = 부모. 닫기를 거부하는(busy) 맨 위 모달도 Escape 를 부모로 흘리지 않는다. 자체 keydown 리스너로 Escape 를 처리하는 새 모달은 만들지 않는다(층에 안 잡혀 순서가 깨진다).
   - 포커스 트랩이 따로 있거나 자체 Escape 를 가진 포털 팝오버(예: `ClusterIconPicker`)는 `useModalA11y` 대신 `useModalHistory(open, onClose)` 만 쓴다(조건부 마운트면 `useModalHistory(true, onClose)`).
   - 기록 회수는 현재 hash 가 `#modal-` 일 때만 한다. 모달이 열린 채 다른 코드가 replace 로 그 기록을 실제 화면 상태로 바꾸면(예: Island 패널 추가의 `?panel=`) 지우지 않고 보존한다 — 모달을 닫으며 URL 을 바꾸려면 replace 로 바꾼다.
 - **목록 상태 — `hooks/useUrlParams.ts`.**
