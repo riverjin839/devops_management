@@ -67,10 +67,17 @@ class BpfInspectResponse(BaseModel):
     kind: str
     pod_name: str
     raw: str = ""
+    # JSON 으로 파싱되면 원본은 응답에서 뺀다(메모리·전송량 절반) — 원본은 /bpf-inspect/download 로 받는다.
+    raw_omitted: bool = False
+    raw_size: int = 0
     parsed: list[dict[str, Any]] | dict[str, Any] | None = None
     is_json: bool = False
     error: Optional[str] = None
     executed: Optional[str] = None
+
+
+class BpfDownloadRequest(BpfInspectRequest):
+    format: Literal["json", "text"] = Field(default="json", description="json = -o json 원본, text = 텍스트 출력")
 
 
 class CiliumExecRequest(BaseModel):

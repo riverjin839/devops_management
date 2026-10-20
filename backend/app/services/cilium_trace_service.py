@@ -20,6 +20,8 @@ import shlex
 import signal
 import socket
 import subprocess
+import tempfile
+import threading
 import time
 from dataclasses import dataclass, field
 from typing import Iterator, Optional
@@ -190,6 +192,34 @@ _BPF_COMMANDS: dict[str, list[str]] = {
 }
 
 
+def _bpf_target(
+    kubeconfig_path: str,
+    kind: str,
+    *,
+    pod_name: Optional[str],
+    namespace: str,
+    endpoint_id: Optional[str],
+) -> tuple[str, list[str], Optional[str]]:
+    """BPF 조회 대상 pod 과 cilium-dbg 서브커맨드. 반환: (pod, sub, 오류). 오류가 있으면 앞 둘은 비어 있다."""
+    target_pod = pod_name
+    if not target_pod:
+        agents, err = list_agents(kubeconfig_path, namespace=namespace)
+        if err:
+            return "", [], err
+        ready = next((a for a in agents if a.ready), None)
+        if not ready:
+            return "", [], "Ready 상태인 cilium agent pod 가 없습니다."
+        target_pod = ready.pod_name
+    if kind == "policy":
+        if not endpoint_id:
+            return target_pod, [], "policy 조회는 endpoint_id 가 필수입니다."
+        return target_pod, ["bpf", "policy", "get", str(endpoint_id)], None
+    sub = _BPF_COMMANDS.get(kind)
+    if not sub:
+        return target_pod, [], f"지원하지 않는 BPF kind: {kind}"
+    return target_pod, sub, None
+
+
 def bpf_inspect(
     kubeconfig_path: str,
     kind: str,
@@ -198,32 +228,17 @@ def bpf_inspect(
     namespace: str = "kube-system",
     endpoint_id: Optional[str] = None,
 ) -> dict:
-    """단발성 BPF map 조회. JSON 출력 시도 후 실패하면 raw 그대로 반환."""
-    # pod 자동 선택
-    target_pod = pod_name
-    if not target_pod:
-        agents, err = list_agents(kubeconfig_path, namespace=namespace)
-        if err:
-            return {"raw": "", "parsed": None, "is_json": False, "error": err, "pod_name": "", "executed": None}
-        ready = next((a for a in agents if a.ready), None)
-        if not ready:
-            return {"raw": "", "parsed": None, "is_json": False,
-                    "error": "Ready 상태인 cilium agent pod 가 없습니다.",
-                    "pod_name": "", "executed": None}
-        target_pod = ready.pod_name
+    """단발성 BPF map 조회. JSON 출력 시도 후 실패하면 raw 그대로 반환.
 
-    if kind == "policy":
-        if not endpoint_id:
-            return {"raw": "", "parsed": None, "is_json": False,
-                    "error": "policy 조회는 endpoint_id 가 필수입니다.",
-                    "pod_name": target_pod, "executed": None}
-        sub = ["bpf", "policy", "get", str(endpoint_id)]
-    else:
-        sub = _BPF_COMMANDS.get(kind)
-        if not sub:
-            return {"raw": "", "parsed": None, "is_json": False,
-                    "error": f"지원하지 않는 BPF kind: {kind}",
-                    "pod_name": target_pod, "executed": None}
+    JSON 으로 파싱되면 원본(raw)은 응답에 싣지 않는다(`raw_omitted`) — conntrack·NAT 처럼 수십만 항목인 맵은
+    원본 문자열과 파싱본을 함께 응답하면 워커 메모리·응답 크기가 두 배가 된다. 원본이 필요하면
+    `bpf_raw_stream` 다운로드로 받는다(메모리에 올리지 않고 흘려보냄).
+    """
+    target_pod, sub, terr = _bpf_target(kubeconfig_path, kind, pod_name=pod_name,
+                                        namespace=namespace, endpoint_id=endpoint_id)
+    if terr:
+        return {"raw": "", "parsed": None, "is_json": False, "error": terr,
+                "pod_name": target_pod, "executed": None}
 
     # JSON 출력 시도
     cmd_json = _kubectl_base(kubeconfig_path) + [
@@ -235,7 +250,9 @@ def bpf_inspect(
         try:
             parsed = json.loads(proc.stdout)
             return {
-                "raw": proc.stdout,
+                "raw": "",
+                "raw_omitted": True,
+                "raw_size": len(proc.stdout),
                 "parsed": parsed,
                 "is_json": True,
                 "error": None,
@@ -267,6 +284,108 @@ def bpf_inspect(
         "pod_name": target_pod,
         "executed": " ".join(shlex.quote(a) for a in cmd_text),
     }
+
+
+def bpf_raw_stream(
+    kubeconfig_path: str,
+    kind: str,
+    *,
+    as_json: bool,
+    pod_name: Optional[str] = None,
+    namespace: str = "kube-system",
+    endpoint_id: Optional[str] = None,
+    timeout: int = 120,
+) -> tuple[str, Optional[str], Optional[Iterator[bytes]], Optional[str]]:
+    """BPF 맵 원본을 **흘려보내는** 다운로드용 스트림. 반환: (pod, 실행 명령, 바이트 생성기, 오류).
+
+    출력을 메모리에 모으지 않고 64KB 씩 그대로 내보낸다 — 수십만 항목 conntrack 도 워커 메모리는 고정.
+    시간 초과(timeout 초)면 프로세스를 죽여 스트림을 끝낸다. 명령이 실패해 출력이 없으면 stderr 를 내보낸다.
+    """
+    target_pod, sub, terr = _bpf_target(kubeconfig_path, kind, pod_name=pod_name,
+                                        namespace=namespace, endpoint_id=endpoint_id)
+    if terr:
+        return target_pod, None, None, terr
+    cmd = _kubectl_base(kubeconfig_path) + [
+        "-n", namespace, "exec", target_pod, "--", "cilium-dbg", *sub,
+    ] + (["-o", "json"] if as_json else [])
+    executed = " ".join(shlex.quote(a) for a in cmd)
+
+    def _gen() -> Iterator[bytes]:
+        err_file = tempfile.TemporaryFile()
+        proc: Optional[subprocess.Popen] = None
+        timer: Optional[threading.Timer] = None
+        sent = 0
+        try:
+            proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=err_file, preexec_fn=os.setsid)
+            timer = threading.Timer(timeout, _kill_process_group, [proc])
+            timer.daemon = True
+            timer.start()
+            assert proc.stdout is not None
+            while True:
+                chunk = proc.stdout.read(64 * 1024)
+                if not chunk:
+                    break
+                sent += len(chunk)
+                yield chunk
+            proc.wait(timeout=5)
+            if sent == 0 and proc.returncode:
+                err_file.seek(0)
+                yield (b"[cilium-dbg failed] " + err_file.read(4000))
+        except FileNotFoundError as e:
+            yield f"[kubectl 바이너리가 없습니다] {e}".encode()
+        finally:
+            if timer is not None:
+                timer.cancel()
+            _kill_process_group(proc)
+            err_file.close()
+
+    return target_pod, executed, _gen(), None
+
+
+def bpf_ct_head(
+    kubeconfig_path: str,
+    max_lines: int,
+    *,
+    pod_name: Optional[str] = None,
+    namespace: str = "kube-system",
+    timeout: int = 20,
+) -> tuple[list[str], Optional[str]]:
+    """`cilium-dbg bpf ct list global` 텍스트 출력의 **앞 max_lines 줄만** 읽고 프로세스를 끊는다.
+
+    서비스 토폴로지의 conntrack 폴백은 앞쪽 수천 항목만 쓰는데, 예전엔 테이블 전체를 JSON 으로 받아
+    파싱했다(수십만 항목이면 수백 MB). 반환: (줄 목록, 오류)."""
+    target_pod, sub, terr = _bpf_target(kubeconfig_path, "ct", pod_name=pod_name,
+                                        namespace=namespace, endpoint_id=None)
+    if terr:
+        return [], terr
+    cmd = _kubectl_base(kubeconfig_path) + ["-n", namespace, "exec", target_pod, "--", "cilium-dbg", *sub]
+    lines: list[str] = []
+    proc: Optional[subprocess.Popen] = None
+    timer: Optional[threading.Timer] = None
+    try:
+        proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
+                                text=True, errors="replace", preexec_fn=os.setsid)
+        timer = threading.Timer(timeout, _kill_process_group, [proc])
+        timer.daemon = True
+        timer.start()
+        assert proc.stdout is not None
+        for line in proc.stdout:
+            line = line.strip()
+            if line:
+                lines.append(line)
+                if len(lines) >= max_lines:
+                    break
+    except FileNotFoundError as e:
+        return [], f"kubectl 바이너리가 없습니다: {e}"
+    except Exception as e:  # noqa: BLE001
+        return lines, f"conntrack 조회 실패: {str(e)[:200]}"
+    finally:
+        if timer is not None:
+            timer.cancel()
+        _kill_process_group(proc)
+    if not lines and proc is not None and proc.returncode not in (0, None, -15):
+        return [], f"cilium-dbg bpf ct list 실패 (exit {proc.returncode})"
+    return lines, None
 
 
 def exec_cilium_command(
