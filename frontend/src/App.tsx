@@ -71,6 +71,7 @@ import { KnowledgeHubPage } from '@/pages/KnowledgeHubPage';
 import { HomePage } from '@/pages/HomePage';
 import { IslandPage } from '@/pages/IslandPage';
 import { ChangePasswordPage } from '@/pages/ChangePasswordPage';
+import { OidcCallbackPage } from '@/pages/OidcCallbackPage';
 import { AgentChat } from '@/components/agent';
 import { Sidebar, PageStyleProvider } from '@/components/layout';
 import { ToastProvider } from '@/components/common';
@@ -277,6 +278,8 @@ function AppShell() {
               {/* 사용자 관리(로그인 계정)는 Settings ▸ 시스템 담당자 ▸ 로그인 계정 서브탭으로 통합됨 */}
               <Route path="/settings/users" element={<Navigate to="/settings?tab=assignee" replace />} />
               <Route path="/me/change-password" element={<ChangePasswordPage />} />
+              {/* SSO 콜백 — 미로그인 땐 LoginPage 가 그린다. 이미 로그인된 탭으로 돌아온 경우만 여기. */}
+              <Route path="/auth/callback" element={<OidcCallbackPage />} />
               <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>
       </PageStyleProvider>

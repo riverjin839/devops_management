@@ -93,6 +93,13 @@ SENSITIVE_COLUMNS: dict[str, list[str]] = {
     "llm_credentials": ["api_key"],
 }
 
+# JSON 컬럼 안의 민감 키 — 컬럼 전체가 아니라 그 키만 마스킹한다(설정 나머지는 백업돼야 한다).
+# import 시 센티널 키는 기존 행 값을 유지하고, 기존 행이 없으면 비운다.
+SENSITIVE_JSON_KEYS: dict[str, dict[str, list[str]]] = {
+    # 사내 SSO(OIDC) client secret 암호문 — AppSetting ``auth.oidc``.
+    "app_settings": {"value": ["client_secret_encrypted"]},
+}
+
 
 def _sort_key_for_table(t: Table) -> tuple[int, str]:
     """sorted_tables 보조 키 — FK depth + name. sorted_tables 가 기본이라 그대로 사용."""
@@ -152,13 +159,30 @@ def _mask_sensitive(table_name: str, row: dict, include_sensitive: bool) -> dict
     if include_sensitive:
         return row
     cols = SENSITIVE_COLUMNS.get(table_name, [])
-    if not cols:
+    json_keys = SENSITIVE_JSON_KEYS.get(table_name, {})
+    if not cols and not json_keys:
         return row
     out = dict(row)
     for c in cols:
         if c in out and out[c] is not None:
             out[c] = MASKED_SENTINEL
+    for c, keys in json_keys.items():
+        v = out.get(c)
+        if isinstance(v, dict) and any(v.get(k) is not None for k in keys):
+            out[c] = {k: (MASKED_SENTINEL if k in keys and val is not None else val) for k, val in v.items()}
     return out
+
+
+def _restore_masked_json(table_name: str, values: dict, existing: Any) -> dict:
+    """JSON 컬럼의 마스킹된 키를 기존 행 값(없으면 None)으로 되돌린다."""
+    for c, keys in SENSITIVE_JSON_KEYS.get(table_name, {}).items():
+        v = values.get(c)
+        if not isinstance(v, dict) or not any(v.get(k) == MASKED_SENTINEL for k in keys):
+            continue
+        prev = getattr(existing, c, None) if existing is not None else None
+        prev = prev if isinstance(prev, dict) else {}
+        values[c] = {k: (prev.get(k) if val == MASKED_SENTINEL and k in keys else val) for k, val in v.items()}
+    return values
 
 
 def _filter_tables(include_logs: bool) -> list[Table]:
@@ -687,7 +711,7 @@ def apply_import(
                 # 블록을 빠져나가면서 SAVEPOINT 만 롤백되고, 아래 except 가 잡는다.
                 with db.begin_nested():
                     if mode == "replace":
-                        db.execute(t.insert().values(**clean))
+                        db.execute(t.insert().values(**_restore_masked_json(t.name, clean, None)))
                         inserted += 1
                     else:  # merge — upsert by PK
                         where = None
@@ -695,6 +719,7 @@ def apply_import(
                             cond = t.c[k] == v
                             where = cond if where is None else where & cond
                         existing = db.execute(t.select().where(where)).first() if where is not None else None
+                        clean = _restore_masked_json(t.name, clean, existing)
                         if existing is None:
                             db.execute(t.insert().values(**clean))
                             inserted += 1
