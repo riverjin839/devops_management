@@ -1,11 +1,14 @@
 import { useEffect, useRef } from 'react';
 import { useModalHistory } from './useModalHistory';
+import { pushModalLayer } from './modalStack';
 
 /**
  * 모달/다이얼로그 공통 접근성 훅.
  *  - Escape 로 닫기
  *  - 포커스 트랩 (Tab/Shift+Tab 이 모달 밖으로 나가지 않음)
  *  - 열릴 때 초점 이동(모달 내부에 이미 포커스가 있으면 존중), 닫힐 때 트리거로 복원
+ *  - 모달이 겹쳐 열리면 맨 위 모달만 Escape·Tab 을 처리한다(`./modalStack`) — 확인 창의 Escape 가
+ *    부모 모달까지 닫지 않는다. 닫기를 거부하는(실행 중) 맨 위 모달도 Escape 를 아래로 흘리지 않는다.
  *  - 브라우저/폰 "뒤로가기"로 모달만 닫기 (기본 켬, D-029) — 팝오버·팔레트처럼 닫은 뒤 바로
  *    다른 화면으로 이동하는 UI 는 `historyClose: false` 로 끈다.
  *
@@ -42,6 +45,7 @@ export function useModalA11y(open: boolean, onClose: () => void, opts: Options =
   useEffect(() => {
     if (!open) return;
     const container = ref.current;
+    const layer = pushModalLayer();
     const prevFocus = document.activeElement as HTMLElement | null;
 
     const focusables = () =>
@@ -58,6 +62,8 @@ export function useModalA11y(open: boolean, onClose: () => void, opts: Options =
     }
 
     const handler = (e: KeyboardEvent) => {
+      // 위에 다른 모달이 떠 있으면 손대지 않는다 — Escape·Tab 은 그 모달 몫이다.
+      if (!layer.isTop()) return;
       if (e.key === 'Escape') {
         e.stopPropagation();
         onCloseRef.current();
@@ -84,6 +90,7 @@ export function useModalA11y(open: boolean, onClose: () => void, opts: Options =
     document.addEventListener('keydown', handler, true);
     return () => {
       document.removeEventListener('keydown', handler, true);
+      layer.release();
       if (prevFocus && typeof prevFocus.focus === 'function' && document.contains(prevFocus)) {
         prevFocus.focus();
       }
