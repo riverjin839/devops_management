@@ -405,8 +405,8 @@ export function ClusterIconPicker({
   );
 }
 
-/** "빌더" 탭 — 업무명/속성(+지역, 옵션) 가로 밴드 + k8s 워터마크를 조합해 SVG 아이콘 생성.
- *  운영타입은 별도 밴드 없이 테두리/배경 색으로만 반영된다.
+/** "빌더" 탭 — 업무명/속성(+지역, 옵션)을 테마 토큰 기반 무채색 타일에 얹어 SVG 아이콘 생성.
+ *  운영타입은 하단 얇은 색 바로만 반영된다.
  *  색상은 기본적으로 "테마 동기화"(뷰어의 활성 UI 테마가 배색 패턴과 일치하면 그 색, 아니면
  *  운영타입 색상) 이고, 배색 패턴을 직접 고르면 그 색이 테마와 무관하게 항상 우선한다.
  *  클러스터의 name/region/operationLevel(+기존 iconConfig)로 자동 프리필되고 모든 값은 편집 가능. */
@@ -418,7 +418,8 @@ function BuilderTab({ context, onApply }: { context: IconBuilderContext; onApply
   const [level, setLevel] = useState(existing?.level ?? context.operationLevel ?? '');
   const [attribute, setAttribute] = useState(() => existing?.attribute ?? suggestAttribute(context.name));
   const [regionAbbr, setRegionAbbr] = useState(() => existing?.regionAbbr ?? suggestRegionAbbr(context.region));
-  const [watermark, setWatermark] = useState(existing?.watermark ?? true);
+  // 워터마크는 더 이상 그리지 않는다 — 기존 레시피 값만 보존해 저장한다.
+  const watermark = existing?.watermark ?? false;
   const [shape, setShape] = useState<'square' | 'circle'>(existing?.shape ?? 'square');
   /** 배색 패턴에서 직접 고른 시드 색상 — 지정되면 "커스텀"(colorMode: 'custom')이 되어
    *  테마 동기화 대신 이 색을 항상 우선 사용한다. null 이면 "테마 동기화"(colorMode: 'theme'). */
@@ -430,8 +431,8 @@ function BuilderTab({ context, onApply }: { context: IconBuilderContext; onApply
   const previewConfig: ClusterIconConfig = { workName, attribute, regionAbbr, shape, watermark, level, colorMode, customHex: patternHex };
   const { colorToken, customHex } = resolveIconSeed(previewConfig, levels, activeTheme);
   const svg = useMemo(
-    () => buildClusterIconSvg({ workName, attribute, regionAbbr, colorToken, customHex, k8sWatermark: watermark, shape }),
-    [workName, attribute, regionAbbr, colorToken, customHex, watermark, shape],
+    () => buildClusterIconSvg({ workName, attribute, regionAbbr, colorToken, customHex, shape }),
+    [workName, attribute, regionAbbr, colorToken, customHex, shape],
   );
   const previewUrl = useMemo(() => svgToDataUrl(svg), [svg]);
   const themeSeedHex = themePatternSeedHex(activeTheme);
@@ -439,9 +440,8 @@ function BuilderTab({ context, onApply }: { context: IconBuilderContext; onApply
   return (
     <div className="space-y-3 px-1">
       <p className="text-xs text-muted-foreground">
-        업무명 / 속성(+지역, 선택 시) 밴드를 위→아래로 쌓은 아이콘을 생성합니다. 운영타입은
-        전용 밴드를 두지 않고 테두리·배경 색으로만 구분되며, 지역을 비우면 그 공간은
-        업무명/속성 밴드에 재할당됩니다. 사이드바 레일에서도 클러스터를 한눈에 구분할 수 있습니다.
+        업무명을 크게, 속성 · 지역을 그 아래 한 줄로 얹은 타일 아이콘을 만듭니다. 바탕과 글자색은
+        현재 화면 테마를 그대로 따르고, 운영타입은 하단의 얇은 색 바로만 구분합니다.
       </p>
 
       <p className="text-xs px-2 py-1.5 rounded-md bg-secondary/50 text-muted-foreground">
@@ -500,9 +500,9 @@ function BuilderTab({ context, onApply }: { context: IconBuilderContext; onApply
         />
       </label>
 
-      {/* 운영타입 — 아이콘 내부에 전용 밴드를 두지 않고 테두리/배경 색으로만 반영 */}
+      {/* 운영타입 — 아이콘 하단 얇은 색 바로만 반영 */}
       <label className="flex flex-col gap-1 text-xs">
-        <span className="text-muted-foreground">운영타입 (색상만 반영 — 테두리·배경, 전용 밴드 없음)</span>
+        <span className="text-muted-foreground">운영타입 (하단 색 바로 반영)</span>
         <select
           value={level}
           onChange={(e) => setLevel(e.target.value)}
@@ -520,7 +520,7 @@ function BuilderTab({ context, onApply }: { context: IconBuilderContext; onApply
           팔레트를 맞춰, 특정 테마를 쓸 때 그 테마 색으로 아이콘도 통일할 수 있게 한다. */}
       <div className="flex flex-col gap-1.5 text-xs">
         <div className="flex items-center justify-between">
-          <span className="text-muted-foreground">배색 패턴 (선택 — 고르면 운영타입 색상 대신 적용)</span>
+          <span className="text-muted-foreground">배색 패턴 (선택 — 고르면 하단 바에 운영타입 색상 대신 적용)</span>
           {patternHex && (
             <button
               type="button"
@@ -556,10 +556,6 @@ function BuilderTab({ context, onApply }: { context: IconBuilderContext; onApply
       </div>
 
       <div className="flex items-center gap-4 text-xs">
-        <label className="flex items-center gap-1.5 cursor-pointer">
-          <input type="checkbox" checked={watermark} onChange={(e) => setWatermark(e.target.checked)} className="accent-primary" />
-          k8s 휠 워터마크
-        </label>
         <div className="inline-flex rounded-md border border-border overflow-hidden">
           <button
             type="button"

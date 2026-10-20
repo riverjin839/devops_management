@@ -40,10 +40,9 @@ interface ClusterSidebarProps {
 }
 
 // 아이콘 레일 폭(useSidebarStore.clusterIconRailWidth, 드래그로 조절)에서 아이콘 크기를
-// 파생시킨다. 레일과 아이콘 사이 여백을 거의 없애기 위해 버튼은 레일 폭에서 고정
-// ICON_RAIL_PADDING 만 뺀 크기로 꽉 채우고, 내부 이미지/아이콘/도트는 기존 sm(40)/md(48)/
-// lg(56) 프리셋 비율(이미지≈0.71·아이콘=0.5·도트≈0.145·이모지≈0.44)을 그대로 유지해
-// 비율감을 보존한다.
+// 파생시킨다. 버튼은 레일 폭에서 고정 ICON_RAIL_PADDING 만 뺀 크기로 꽉 채우고, 빌더 타일
+// 이미지는 버튼의 0.82 로 키워 활성 배경이 얇은 테두리처럼만 보이게 한다(아이콘=0.5·
+// 도트≈0.145·이모지≈0.44 비율은 유지).
 const ICON_RAIL_PADDING = 6; // 레일 폭에서 버튼을 뺄 여백(좌우 합, 즉 한쪽당 3px)
 
 function iconSizeFor(railWidth: number) {
@@ -51,7 +50,7 @@ function iconSizeFor(railWidth: number) {
   return {
     rail: railWidth,
     btn,
-    image: Math.round(btn * 0.71),
+    image: Math.round(btn * 0.82),
     icon: Math.round(btn * 0.5),
     dot: Math.max(5, Math.round(btn * 0.145)),
     emojiFont: Math.round(btn * 0.44),
@@ -123,7 +122,7 @@ function ClusterRow({ cluster, active, sortMode, onSelect, multiSelect, checked 
         disabled={sortMode}
         className={`flex-1 flex items-center gap-2 ${sortMode ? 'pl-1' : 'pl-2'} pr-2 py-1.5 text-left min-w-0 disabled:cursor-default`}
       >
-        <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${STATUS_DOT[cluster.status] ?? 'bg-slate-400'}`} />
+        <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${STATUS_DOT[cluster.status] ?? 'bg-muted-foreground/40'}`} />
         <span className="flex-1 min-w-0">
           <span className="block text-sm font-medium truncate">{cluster.name}</span>
           {(cluster.region || cluster.operationLevel) && (
@@ -192,7 +191,7 @@ function IconRailButton({ label, dotClass, Icon, emojiText, imageSrc, active, on
           <span aria-hidden className="absolute left-0 top-1.5 -translate-x-[3px] w-1 h-7 bg-primary rounded-r" />
         )}
         {imageSrc
-          ? <img src={imageSrc} alt="" style={{ width: size.image, height: size.image }} className="rounded object-cover" />
+          ? <img src={imageSrc} alt="" style={{ width: size.image, height: size.image }} className="rounded-md object-cover" />
           : emojiText
             ? <span style={{ fontSize: size.emojiFont }} className="leading-none select-none" aria-hidden>{emojiText}</span>
             : Icon
@@ -210,7 +209,7 @@ function IconRailButton({ label, dotClass, Icon, emojiText, imageSrc, active, on
         <span
           role="tooltip"
           style={{ top: tooltipPos.top, left: tooltipPos.left, transform: 'translateY(-50%)' }}
-          className="fixed px-2 py-1 text-sm font-medium whitespace-nowrap bg-zinc-700 text-white rounded shadow-lg pointer-events-none z-[60]"
+          className="fixed px-2 py-1 text-sm font-medium whitespace-nowrap bg-foreground text-background rounded shadow-lg pointer-events-none z-[60]"
         >
           {label}
         </span>,
@@ -231,7 +230,8 @@ function ClusterRailIconButton({
   onClick: () => void;
   size: ReturnType<typeof iconSizeFor>;
 }) {
-  const resolved = useClusterIconSrc(cluster);
+  // 아이콘 미지정 클러스터도 이름 이니셜 타일로 그려 레일의 모양을 통일한다.
+  const resolved = useClusterIconSrc(cluster, { monogramFallback: true });
   const FallbackIcon = STATUS_ICON[cluster.status] ?? Server;
   const lucideIcon: React.ComponentType<{ className?: string; style?: React.CSSProperties }> =
     resolved?.kind === 'lucide' ? resolved.Component : FallbackIcon;
@@ -244,7 +244,7 @@ function ClusterRailIconButton({
       Icon={lucideIcon}
       emojiText={emojiText}
       imageSrc={imageSrc}
-      dotClass={STATUS_DOT[cluster.status] ?? 'bg-slate-400'}
+      dotClass={STATUS_DOT[cluster.status] ?? 'bg-muted-foreground/40'}
       active={active}
       onClick={onClick}
       size={size}
