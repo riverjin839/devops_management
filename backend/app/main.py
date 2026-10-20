@@ -17,6 +17,7 @@ from app.services.request_context import (
     HEADER as REQUEST_ID_HEADER, get_request_id, install_logging, new_request_id,
 )
 from app.services.request_id_middleware import RequestIdMiddleware
+from app.services.memory_watch import MemoryWatchMiddleware
 from app.database import engine, Base, SessionLocal
 from fastapi import Depends
 
@@ -2490,7 +2491,7 @@ install_logging()  # 앱 로그 줄마다 [req=요청ID] — services/request_co
 app = FastAPI(
     title=settings.app_name,
     description="DevOps K8s Daily Monitoring Dashboard API",
-    version="1.60.1",
+    version="1.61.1",
     docs_url="/docs",
     redoc_url="/redoc",
     lifespan=lifespan,
@@ -2551,6 +2552,9 @@ async def _unhandled_exception(request: Request, exc: Exception):
 # 각 핸들러가 "Content-Encoding: identity" 헤더를 직접 얹어 스스로 제외한다 —
 # gzip 이 SSE 를 건드리면 zlib 내부 버퍼링 때문에 실시간 tail 이 깨진다.
 app.add_middleware(GZipMiddleware, minimum_size=500)
+
+# 워커 메모리 진단 — 가장 바깥에 둬 스트리밍 응답의 본문 전송이 끝난 시점까지 잰다(services/memory_watch.py).
+app.add_middleware(MemoryWatchMiddleware, delta_mb=settings.mem_watch_delta_mb, rss_mb=settings.mem_watch_rss_mb)
 
 # Public routers (no auth) — login + liveness/readiness probes.
 app.include_router(auth_router, prefix="/api/v1")
@@ -2673,7 +2677,7 @@ app.include_router(tenants_router, prefix="/api/v1", dependencies=_auth)
 def root():
     return {
         "name": settings.app_name,
-        "version": "1.60.1",
+        "version": "1.61.1",
         "version": "1.8.2",
         "status": "running"
     }

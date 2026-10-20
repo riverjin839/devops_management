@@ -19,6 +19,8 @@
 | `DB_POOL_SIZE` | `10` | SQLAlchemy 엔진 풀 크기. backend/celery worker/beat 가 같은 engine 코드를 공유하므로, replica 합계 × (pool_size+max_overflow) 가 Postgres `max_connections` 를 넘지 않게 배포별로 오버라이드(worker/beat 는 k8s 매니페스트에서 더 작게 설정됨) |
 | `DB_MAX_OVERFLOW` | `20` | SQLAlchemy 엔진 풀의 추가 오버플로 커넥션 수 |
 | `WEB_CONCURRENCY` | `2` (backend 이미지) | backend uvicorn 워커 수 — `config.py` 가 아니라 uvicorn 이 직접 읽는다. 워커마다 앱 전체가 떠서 메모리(유휴 약 280MiB/워커)와 DB 풀이 배수로 늘어난다. 메모리 한도가 빠듯하면 배포 매니페스트(k8s base `backend` env, helm `backend.workers`)에서 줄인다 — 이미지 재빌드 불필요 |
+| `MEM_WATCH_DELTA_MB` | `100` | 워커 메모리 진단(`services/memory_watch.py`) — 한 요청 동안 워커 RSS 가 이 값(MiB) 이상 늘면 `memory-watch` 경고 로그(메서드·경로·엔드포인트·상태·RSS·소요·동시 처리 수, 쿼리 문자열 제외). OOMKilled 뒤 `kubectl logs --previous` 로 원인 요청을 찾는 용도. 0 = 끔 |
+| `MEM_WATCH_RSS_MB` | `450` | 동일 — RSS 가 이 값(MiB) 이상에서 워커의 새 최고치를 찍으면 경고(직전 경고보다 10MiB 이상 높을 때만). 컨테이너 한도 ÷ 워커 수보다 조금 낮게 둔다. 0 = 끔 |
 | `REDIS_URL` | `redis://localhost:6379/0` | Redis connection |
 | `CELERY_BROKER_URL` | `redis://localhost:6379/0` | Celery broker |
 | `CELERY_RESULT_BACKEND` | `redis://localhost:6379/0` | Celery result store |

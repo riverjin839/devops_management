@@ -27,7 +27,10 @@ export function ConfirmDialog({
   danger = false, onConfirm, onCancel, children, busy = false,
 }: ConfirmDialogProps) {
   const { t } = useTranslation();
-  const dialogRef = useModalA11y(open, onCancel);
+  // 확인 처리 중(busy)에는 Escape·뒤로가기·배경 클릭으로 닫지 않는다 — 맨 위 모달이 Escape 를 삼키므로
+  // 부모 모달로 새지도 않는다(modalStack). 취소·X 버튼은 명시적 조작이라 그대로 둔다.
+  const dismiss = () => { if (!busy) onCancel(); };
+  const dialogRef = useModalA11y(open, dismiss);
   const titleId = useId();
   const descId = useId();
 
@@ -67,7 +70,7 @@ export function ConfirmDialog({
     // 클릭 전파를 여기서 끊는다 — 다른 모달 안에 중첩될 때 확인창 안의 클릭(취소·확인·배경)이
     // 바깥 모달의 "배경 클릭 = 닫기" 핸들러까지 올라가 바깥 모달까지 함께 닫히던 문제(D-029 실측).
     <div className="fixed inset-0 z-[60] flex items-center justify-center" onClick={(e) => e.stopPropagation()}>
-      <div className="absolute inset-0 bg-black/60" onClick={onCancel} />
+      <div className="absolute inset-0 bg-black/60" onClick={dismiss} />
       <div
         ref={dialogRef}
         role="dialog"

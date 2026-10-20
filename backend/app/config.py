@@ -100,6 +100,12 @@ class Settings(BaseSettings):
     # (kubewatch_token / superpod_ingest_token 과 동일 정책).
     alert_ingest_token: str = ""
 
+    # 워커 메모리 진단(services/memory_watch.py) — OOMKilled 직전 어떤 요청이 메모리를 키웠는지 로그로 남긴다.
+    # 한 요청 동안 RSS 증가가 이 값(MiB) 이상이면 경고. 0 = 끔.
+    mem_watch_delta_mb: int = 100
+    # RSS 가 이 값(MiB) 이상에서 워커의 새 최고치를 찍으면 경고. 0 = 끔. 컨테이너 한도(1Gi)/워커 수 보다 조금 낮게.
+    mem_watch_rss_mb: int = 450
+
     # Prometheus / Grafana
     prometheus_url: str = "http://prometheus-k8s.monitoring.svc:9090"
     # Observability 대시보드의 Alertmanager 전역 기본값. 클러스터별 오버라이드는
