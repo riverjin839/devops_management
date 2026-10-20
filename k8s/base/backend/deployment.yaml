@@ -132,11 +132,21 @@ spec:
             limits:
               memory: "1Gi"
               cpu: "1000m"
+          # 부팅 마이그레이션(lifespan)이 끝나야 /health 가 열린다 — 큰 DB·lock 경합으로 1분을 넘기면
+          # liveness 가 파드를 죽여 CrashLoopBackOff 가 됐다(1.59). startupProbe 가 최대 5분을 기다리고,
+          # 통과한 뒤에야 liveness/readiness 가 시작된다.
+          startupProbe:
+            httpGet:
+              path: /health/live
+              port: 8000
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 60
           livenessProbe:
             httpGet:
-              path: /health
+              path: /health/live
               port: 8000
-            initialDelaySeconds: 30
+            initialDelaySeconds: 0
             periodSeconds: 10
             timeoutSeconds: 5
             failureThreshold: 3
@@ -144,7 +154,7 @@ spec:
             httpGet:
               path: /health
               port: 8000
-            initialDelaySeconds: 10
+            initialDelaySeconds: 0
             periodSeconds: 5
             timeoutSeconds: 3
             failureThreshold: 3

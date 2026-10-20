@@ -649,3 +649,112 @@ def test_collection_error_does_not_drive_cluster_status(db, world, deep_def, mon
     mine = [c for c in out["contributors"] if c.get("message") == "이전 정상"]
     assert mine and mine[0]["status"] == "healthy"
     assert out["status"] != "critical"
+
+
+# ── CR-11 실행 취소 · 응답 뒤 큐잉 (1.59 후속: "전체 실행 후 응답없음·취소 불가") ─────────────
+
+@pytest.fixture
+def fake_revoke(monkeypatch):
+    from app.celery_app import celery_app
+
+    calls: list[tuple[list[str], dict]] = []
+    monkeypatch.setattr(celery_app.control, "revoke", lambda ids, **kw: calls.append((list(ids), kw)))
+    return calls
+
+
+def test_queued_run_cancel_is_kept_and_worker_skips_it(db, world, fake_revoke):
+    run = svc.create_run(db, world["deep"], world["open"], trigger=CheckMatrixTrigger.manual_cell)
+    out = svc.cancel_runs(db, run_ids=[run.id], actor="tester")
+    assert out["cancelled"] == 1 and out["was_running"] == 0
+    assert fake_revoke and fake_revoke[0][0] == [str(run.id)]
+    db.refresh(run)
+    assert run.run_state == CheckMatrixRunState.cancelled
+    assert "사용자 취소" in (run.error or "")
+    # 워커가 뒤늦게 집어도 실행하지 않는다.
+    res = svc.execute_run(db, run.id)
+    assert res["run_state"] == "cancelled"
+    # 이미 끝난 수행은 다시 취소되지 않는다.
+    assert svc.cancel_runs(db, run_ids=[run.id])["cancelled"] == 0
+
+
+def test_late_worker_finish_does_not_overwrite_cancelled(db, world, fake_revoke):
+    """revoke 가 닿지 않아 실행이 끝까지 가도 결과가 cancelled 를 덮지 않는다(before_flush 가드)."""
+    run = svc.create_run(db, world["deep"], world["open"], trigger=CheckMatrixTrigger.manual_cell)
+    run.run_state = CheckMatrixRunState.running
+    run.started_at = datetime.utcnow()
+    db.commit()
+    other = SessionLocal()
+    try:
+        svc.cancel_runs(other, run_ids=[run.id], actor="tester")
+        assert fake_revoke[0][1].get("terminate") is True
+    finally:
+        other.close()
+    # 워커 세션은 아직 running 이라고 알고 있다 → 성공으로 마감 시도.
+    svc._finish_run(run, CheckMatrixRunState.success, message="done")
+    db.commit()
+    db.refresh(run)
+    assert run.run_state == CheckMatrixRunState.cancelled
+
+
+def test_progress_stops_a_cancelled_running_run(db, world, fake_revoke):
+    run = svc.create_run(db, world["deep"], world["open"], trigger=CheckMatrixTrigger.manual_cell)
+    run.run_state = CheckMatrixRunState.running
+    db.commit()
+    other = SessionLocal()
+    try:
+        svc.cancel_runs(other, run_ids=[run.id])
+    finally:
+        other.close()
+    with pytest.raises(svc.RunCancelled):
+        svc._progress(db, run, "다음 단계")
+
+
+def test_batch_cancel_endpoint(client_as, world, fake_queue, fake_revoke, db):
+    c = client_as(world["admin"])
+    res = c.post(f"/api/v1/check-matrix/items/{world['deep'].id}/run").json()
+    assert res["total"] >= 2
+    out = c.post(f"/api/v1/check-matrix/batches/{res['batch_id']}/cancel")
+    assert out.status_code == 200, out.text
+    assert out.json()["cancelled"] == res["total"]
+    states = {r.run_state for r in db.query(CheckMatrixRun).filter(
+        CheckMatrixRun.batch_id == uuid.UUID(res["batch_id"]))}
+    assert states == {CheckMatrixRunState.cancelled}
+    # 수행 단건 취소 — 이미 끝났으면 0.
+    one = c.post(f"/api/v1/check-matrix/runs/{res['run_ids'][0]}/cancel")
+    assert one.status_code == 200 and one.json()["cancelled"] == 0
+
+
+def test_batch_cancel_respects_tenant_operate(client_as, world, fake_queue, fake_revoke, db):
+    res = client_as(world["admin"]).post(f"/api/v1/check-matrix/items/{world['deep'].id}/run").json()
+    out = client_as(world["outsider"]).post(f"/api/v1/check-matrix/batches/{res['batch_id']}/cancel").json()
+    left = {str(r.cluster_id) for r in db.query(CheckMatrixRun).filter(
+        CheckMatrixRun.batch_id == uuid.UUID(res["batch_id"]),
+        CheckMatrixRun.run_state == CheckMatrixRunState.queued)}
+    assert str(world["bound"].id) in left  # 바인딩 클러스터 수행은 남는다
+    assert out["cancelled"] >= 1
+
+
+def test_run_endpoint_publishes_after_response_and_broker_failure_is_visible(
+    client_as, world, monkeypatch, db,
+):
+    """브로커가 죽어도 요청은 batch_id 를 바로 돌려주고, 나머지 수행은 재시도 없이 실패로 마감된다."""
+    from app import celery_app
+
+    calls: list[str] = []
+
+    class _Broken:
+        @staticmethod
+        def apply_async(args=None, **kw):
+            calls.append(kw.get("task_id"))
+            raise RuntimeError("broker unreachable")
+
+    monkeypatch.setattr(celery_app, "run_check_matrix_run_one", _Broken)
+    r = client_as(world["admin"]).post(f"/api/v1/check-matrix/items/{world['deep'].id}/run")
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert body["batch_id"] and body["total"] >= 2
+    assert len(calls) == 1  # 첫 실패 뒤로는 브로커를 두드리지 않는다
+    assert calls[0] in body["run_ids"]  # 태스크 id = 수행 id (취소 시 revoke 대상)
+    runs = db.query(CheckMatrixRun).filter(CheckMatrixRun.batch_id == uuid.UUID(body["batch_id"])).all()
+    assert runs and all(r.run_state == CheckMatrixRunState.failed for r in runs)
+    assert all("큐잉 실패" in (r.error or "") for r in runs)

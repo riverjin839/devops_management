@@ -24,7 +24,8 @@ from typing import Any, Iterable, Optional
 
 from sqlalchemy import asc, select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
-from sqlalchemy.orm import Session
+from sqlalchemy import event as _sa_event
+from sqlalchemy.orm import Session, defer
 
 from app.config import settings
 from app.models import (
@@ -1518,6 +1519,9 @@ def _progress(db: Session, run: CheckMatrixRun, text: str) -> None:
     "모든 실행에는 상세·실시간 로그" 원칙: 결과가 나오기 전에도 지금 무엇을 하는지(대상 해석,
     체커 실행, 판정)를 볼 수 있어야 한다. 로그 기록 실패가 실행을 막지는 않는다.
     """
+    # 실행 중 취소 — 다음 단계로 넘어가기 전에 멈춘다(워커 프로세스 중단이 안 됐을 때의 안전망).
+    if run.run_state == CheckMatrixRunState.running and _current_state(db, run.id) == CheckMatrixRunState.cancelled:
+        raise RunCancelled(str(run.id))
     try:
         details = dict(run.details or {})
         lines = list(details.get("_log") or [])
@@ -1565,6 +1569,7 @@ def _finish_run(
         CheckMatrixRunState.success: "완료",
         CheckMatrixRunState.failed: "실패",
         CheckMatrixRunState.skipped: "건너뜀",
+        CheckMatrixRunState.cancelled: "취소",
     }.get(state, state.value if hasattr(state, "value") else str(state))
     tail = f"{outcome}"
     if status is not None:
@@ -1598,10 +1603,18 @@ def execute_run(db: Session, run_id) -> dict[str, Any]:
     item = db.query(CheckMatrixItem).filter(CheckMatrixItem.id == run.item_id).first()
     cluster = db.query(Cluster).filter(Cluster.id == run.cluster_id).first()
 
+    if run.run_state == CheckMatrixRunState.cancelled:
+        return _run_to_dict(run)  # 집기 전에 취소됨
     run.run_state = CheckMatrixRunState.running
     run.started_at = datetime.utcnow()
     db.commit()
-    _progress(db, run, "실행 시작 — 워커가 수행을 집었습니다.")
+    if run.run_state == CheckMatrixRunState.cancelled:
+        return _run_to_dict(run)  # 집는 순간 취소됨(_keep_cancelled_runs 가 되돌림)
+    try:
+        _progress(db, run, "실행 시작 — 워커가 수행을 집었습니다.")
+    except RunCancelled:
+        db.rollback()
+        return _run_to_dict(db.query(CheckMatrixRun).filter(CheckMatrixRun.id == run_id).first() or run)
 
     if item is None or cluster is None:
         _finish_run(run, CheckMatrixRunState.failed, error="항목 또는 클러스터가 삭제되었습니다.")
@@ -1610,6 +1623,10 @@ def execute_run(db: Session, run_id) -> dict[str, Any]:
 
     try:
         _execute_into_run(db, run, item, cluster)
+    except RunCancelled:
+        db.rollback()
+        logger.info("check-matrix run cancelled run_id=%s", run_id)
+        run = db.query(CheckMatrixRun).filter(CheckMatrixRun.id == run_id).first()
     except Exception as e:  # noqa: BLE001
         db.rollback()
         # rollback 이 run 을 만료시키므로 다시 읽어 실패로 마감한다.
@@ -2006,12 +2023,17 @@ def start_batch(
     *,
     trigger: CheckMatrixTrigger,
     triggered_by: Optional[str] = None,
+    background: Any = None,
 ) -> dict[str, Any]:
     """여러 셀을 queued 로 만들고 Celery 로 fan-out 한다.
 
     큐잉만 하고 즉시 반환하므로 요청이 오래 물리지 않는다. 호출자는 batch_id 로
-    진행 상황(queued → running → success/failed)을 폴링한다. Celery 가 없거나
+    진행 상황(queued → running → success/failed/cancelled)을 폴링한다. Celery 가 없거나
     큐잉이 실패하면 해당 run 은 failed 로 마감돼 UI 에서 원인을 볼 수 있다.
+
+    ``background`` (FastAPI ``BackgroundTasks``)를 주면 브로커 publish 를 **응답을 보낸 뒤**로
+    미룬다 — 예전엔 셀마다 publish 를 요청 안에서 해, 브로커가 느리거나 죽어 있으면 클러스터 수 ×
+    재시도 시간만큼 요청이 물려 화면이 "응답없음" 이 되고 batch_id 를 못 받아 로그도 열 수 없었다.
 
     이미 실행 중/대기 중인 셀은 다시 큐잉하지 않는다(더블 클릭·연타·cron 과 수동 실행의
     겹침 방지) — 응답의 ``skipped`` / ``active_run_ids`` 로 알려준다.
@@ -2019,41 +2041,196 @@ def start_batch(
     batch_id = uuid.uuid4()
     active = _active_pairs(db, pairs)
     fresh = [(i, c) for i, c in pairs if (str(i.id), str(c.id)) not in active]
-    runs = [
-        create_run(db, item, cluster, trigger=trigger, triggered_by=triggered_by, batch_id=batch_id)
-        for item, cluster in fresh
-    ]
-    queued = 0
-    errors: list[str] = []
+    runs = _create_runs(db, fresh, trigger=trigger, triggered_by=triggered_by, batch_id=batch_id)
     limits = {str(i.id): _task_time_limit(db, i) for i, _ in fresh}
-    for run in runs:
-        try:
-            from app.celery_app import run_check_matrix_run_one
-            limit = limits.get(str(run.item_id))
-            opts = {"time_limit": limit, "soft_time_limit": limit - 30} if limit else {}
-            run_check_matrix_run_one.apply_async(args=[str(run.id)], **opts)
-            queued += 1
-        except Exception as e:  # noqa: BLE001
-            logger.exception("check-matrix batch queue failed run_id=%s", run.id)
-            _finish_run(
-                run, CheckMatrixRunState.failed,
-                error=f"실행 큐잉 실패 — Celery 워커/브로커 상태를 확인하세요: {str(e)[:200]}",
-            )
-            db.commit()
-            errors.append(str(e)[:150])
-    return {
+    plan = [(str(r.id), limits.get(str(r.item_id))) for r in runs]
+    out: dict[str, Any] = {
         "batch_id": str(batch_id),
         "total": len(runs),
-        "queued": queued,
+        "queued": len(runs),
         "skipped": len(pairs) - len(fresh),
-        "errors": errors,
+        "errors": [],
         "run_ids": [str(r.id) for r in runs],
         "active_run_ids": [str(r.id) for r in active.values()],
+    }
+    if background is not None and plan:
+        background.add_task(publish_runs, plan)
+        return out
+    queued, errors = publish_runs(plan, db=db)
+    out["queued"] = queued
+    out["errors"] = errors
+    return out
+
+
+def _create_runs(
+    db: Session,
+    pairs: list[tuple[CheckMatrixItem, Cluster]],
+    *,
+    trigger: CheckMatrixTrigger,
+    triggered_by: Optional[str],
+    batch_id: uuid.UUID,
+) -> list[CheckMatrixRun]:
+    """queued 수행 레코드를 한 트랜잭션으로 만든다 — 클러스터가 많아도 커밋 1회."""
+    now = datetime.utcnow()
+    runs: list[CheckMatrixRun] = []
+    for item, cluster in pairs:
+        run = CheckMatrixRun(
+            id=uuid.uuid4(), batch_id=batch_id, item_id=item.id, cluster_id=cluster.id,
+            trigger=trigger, triggered_by=triggered_by,
+            run_state=CheckMatrixRunState.queued, queued_at=now,
+            details={"_log": [_log_line(
+                f"대기열 등록 — «{item.name}» × «{cluster.name}»"
+                + (f" · 요청자 {triggered_by}" if triggered_by else "")
+                + f" · 트리거 {trigger.value}"
+            )]},
+        )
+        db.add(run)
+        runs.append(run)
+    if runs:
+        db.commit()
+    return runs
+
+
+def publish_runs(plan: list[tuple[str, Optional[int]]], *, db: Optional[Session] = None) -> tuple[int, list[str]]:
+    """queued 수행들을 Celery 로 보낸다. 브로커가 한 번 실패하면 나머지는 시도하지 않고 바로 실패로 마감한다.
+
+    태스크 id = 수행 id — 취소할 때 그대로 revoke 할 수 있다. 실패 사유는 수행 로그에 남아
+    화면(실행 로그 패널)에서 원인을 본다. ``db`` 가 없으면(응답 뒤 백그라운드) 자체 세션을 연다.
+    """
+    from app.celery_app import run_check_matrix_run_one
+
+    own = db is None
+    if own:
+        from app.database import SessionLocal
+        db = SessionLocal()
+    queued = 0
+    errors: list[str] = []
+    broker_error: Optional[str] = None
+    try:
+        for run_id, limit in plan:
+            if broker_error is None:
+                try:
+                    opts: dict[str, Any] = {"task_id": run_id}
+                    if limit:
+                        opts.update(time_limit=limit, soft_time_limit=limit - 30)
+                    run_check_matrix_run_one.apply_async(args=[run_id], **opts)
+                    queued += 1
+                    continue
+                except Exception as e:  # noqa: BLE001
+                    logger.exception("check-matrix batch queue failed run_id=%s", run_id)
+                    broker_error = str(e)[:200]
+            run = db.query(CheckMatrixRun).filter(CheckMatrixRun.id == run_id).first()
+            if run is None or run.run_state != CheckMatrixRunState.queued:
+                continue
+            _finish_run(
+                run, CheckMatrixRunState.failed,
+                error=f"실행 큐잉 실패 — Celery 워커/브로커 상태를 확인하세요: {broker_error}",
+            )
+            db.commit()
+            errors.append(broker_error)
+    finally:
+        if own:
+            db.close()
+    return queued, errors
+
+
+# ── 취소 ─────────────────────────────────────────────────────────────────────
+class RunCancelled(Exception):
+    """실행 중인 수행이 사용자 취소로 중단됐다 — execute_run 이 잡아 cancelled 를 유지한다."""
+
+
+@_sa_event.listens_for(Session, "before_flush")
+def _keep_cancelled_runs(session: Session, _ctx: Any, _instances: Any) -> None:
+    """취소된 수행을 워커가 뒤늦게 success/failed 로 덮지 않게 한다 — 중앙 가드.
+
+    실행 중 취소는 워커 프로세스 중단(revoke)과 단계 사이 확인(``_progress``)으로 멈추지만,
+    체커가 콜백 예외를 삼키거나 revoke 가 닿지 않으면 실행이 끝까지 가서 상태를 덮을 수 있다.
+    flush 직전에 DB 의 현재 상태가 cancelled 면 상태 변경만 되돌린다(로그 줄은 그대로 남는다).
+    """
+    from sqlalchemy import inspect as _sa_inspect
+    for obj in list(session.dirty):
+        if not isinstance(obj, CheckMatrixRun) or obj.run_state == CheckMatrixRunState.cancelled:
+            continue
+        if not _sa_inspect(obj).attrs.run_state.history.has_changes():
+            continue
+        try:
+            row = session.connection().execute(
+                select(CheckMatrixRun.run_state, CheckMatrixRun.error).where(CheckMatrixRun.id == obj.id)
+            ).first()
+        except Exception:  # noqa: BLE001
+            continue
+        if row is not None and row[0] == CheckMatrixRunState.cancelled:
+            obj.run_state = CheckMatrixRunState.cancelled
+            obj.status = None
+            obj.value = None
+            obj.error = row[1]
+
+
+def _current_state(db: Session, run_id) -> Optional[CheckMatrixRunState]:
+    try:
+        return (
+            db.query(CheckMatrixRun.run_state).filter(CheckMatrixRun.id == run_id)
+            .execution_options(populate_existing=True).scalar()
+        )
+    except Exception:  # noqa: BLE001
+        return None
+
+
+def cancel_runs(
+    db: Session,
+    *,
+    run_ids: Optional[Iterable[Any]] = None,
+    batch_id: Optional[Any] = None,
+    actor: Optional[str] = None,
+    hidden_cluster_ids: Optional[Iterable[Any]] = None,
+) -> dict[str, Any]:
+    """대기/실행 중인 수행을 취소한다 — 대기 중은 워커가 집지 않고, 실행 중은 워커 프로세스를 중단한다.
+
+    판정이 없는 중단이라 셀 값은 덮지 않는다(이전 결과 유지). 이미 끝난 수행은 건드리지 않는다.
+    """
+    q = db.query(CheckMatrixRun).filter(
+        CheckMatrixRun.run_state.in_([CheckMatrixRunState.queued, CheckMatrixRunState.running]),
+    )
+    if batch_id is not None:
+        q = q.filter(CheckMatrixRun.batch_id == batch_id)
+    if run_ids is not None:
+        q = q.filter(CheckMatrixRun.id.in_(list(run_ids)))
+    if hidden_cluster_ids:
+        q = q.filter(CheckMatrixRun.cluster_id.notin_(list(hidden_cluster_ids)))
+    rows = q.all()
+    reason = f"사용자 취소{f' — {actor}' if actor else ''}"
+    was_running: list[str] = []
+    for run in rows:
+        if run.run_state == CheckMatrixRunState.running:
+            was_running.append(str(run.id))
+        _finish_run(run, CheckMatrixRunState.cancelled, error=reason,
+                    details={k: v for k, v in (run.details or {}).items() if k != "_log"} or None)
+    if rows:
+        db.commit()
+    revoke_errors: list[str] = []
+    if rows:
+        try:
+            from app.celery_app import celery_app
+            # 대기 중은 워커가 받더라도 버리게, 실행 중은 프로세스를 끊는다(태스크 id = 수행 id).
+            waiting = [str(r.id) for r in rows if str(r.id) not in was_running]
+            if waiting:
+                celery_app.control.revoke(waiting)
+            if was_running:
+                celery_app.control.revoke(was_running, terminate=True, signal="SIGTERM")
+        except Exception as e:  # noqa: BLE001 — 브로커가 죽어도 DB 상태는 이미 취소다
+            revoke_errors.append(str(e)[:200])
+            logger.warning("check-matrix cancel revoke failed: %s", e)
+    return {
+        "cancelled": len(rows),
+        "was_running": len(was_running),
+        "run_ids": [str(r.id) for r in rows],
+        "revoke_errors": revoke_errors,
     }
 
 
 def queue_cell_now(
     db: Session, item: CheckMatrixItem, cluster: Cluster, *, triggered_by: Optional[str] = None,
+    background: Any = None,
 ) -> dict[str, Any]:
     """셀 1건 비동기 실행 — queued 수행 레코드를 즉시 돌려준다.
 
@@ -2062,7 +2239,7 @@ def queue_cell_now(
     """
     out = start_batch(
         db, [(item, cluster)],
-        trigger=CheckMatrixTrigger.manual_cell, triggered_by=triggered_by,
+        trigger=CheckMatrixTrigger.manual_cell, triggered_by=triggered_by, background=background,
     )
     run_id = (out["run_ids"] or out["active_run_ids"] or [None])[0]
     run = db.query(CheckMatrixRun).filter(CheckMatrixRun.id == run_id).first() if run_id else None
@@ -2076,19 +2253,19 @@ def queue_cell_now(
 
 
 def run_cluster_now(
-    db: Session, cluster: Cluster, *, triggered_by: Optional[str] = None,
+    db: Session, cluster: Cluster, *, triggered_by: Optional[str] = None, background: Any = None,
 ) -> dict[str, Any]:
     """클러스터(열) 단위 — 이 클러스터의 모든 자동 점검 항목을 일괄 수행."""
     items = _batch_targets_for_cluster(db, cluster)
     return start_batch(
         db, [(i, cluster) for i in items],
-        trigger=CheckMatrixTrigger.manual_cluster, triggered_by=triggered_by,
+        trigger=CheckMatrixTrigger.manual_cluster, triggered_by=triggered_by, background=background,
     )
 
 
 def run_item_now(
     db: Session, item: CheckMatrixItem, *, triggered_by: Optional[str] = None,
-    allowed_cluster_ids: Optional[Iterable[Any]] = None,
+    allowed_cluster_ids: Optional[Iterable[Any]] = None, background: Any = None,
 ) -> dict[str, Any]:
     """공통 점검 항목(행) 단위 — 이 사용자가 실행할 수 있는 클러스터에 같은 점검을 일괄 수행.
 
@@ -2101,7 +2278,7 @@ def run_item_now(
         clusters = [c for c in clusters if str(c.id) in allowed]
     out = start_batch(
         db, [(item, c) for c in clusters],
-        trigger=CheckMatrixTrigger.manual_item, triggered_by=triggered_by,
+        trigger=CheckMatrixTrigger.manual_item, triggered_by=triggered_by, background=background,
     )
     out["cluster_count"] = len(clusters)
     return out
@@ -2334,7 +2511,8 @@ def list_runs(
     limit = max(1, min(limit, 200))
     offset = max(0, offset)
     rows = (
-        q.order_by(CheckMatrixRun.queued_at.desc())
+        q.options(defer(CheckMatrixRun.details))  # 목록은 details 를 안 쓴다 — 명령 출력까지 든 JSONB
+        .order_by(CheckMatrixRun.queued_at.desc())
         .offset(offset)
         .limit(limit)
         .all()

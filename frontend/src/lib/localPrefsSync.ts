@@ -107,6 +107,11 @@ async function call(
     signal: opts.signal,
     keepalive: opts.keepalive,
   });
+  if (res.status === 404) {
+    // 엔드포인트가 없는 backend(1.58 미만)가 응답했다 — 롤링 배포 중이거나 새 backend 파드가 기동하지 못해
+    // 구버전 파드가 남아 있다는 뜻이다. 동기화는 건너뛰고 이 기기 설정으로 계속한다.
+    throw new Error('local-prefs 404 — 구버전 backend 가 응답함(배포 진행 중이거나 새 backend 파드 기동 실패)');
+  }
   if (!res.ok) throw new Error(`local-prefs ${method} ${res.status}`);
   return (await res.json()) as Remote;
 }

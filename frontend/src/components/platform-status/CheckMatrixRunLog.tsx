@@ -9,6 +9,7 @@ import { parseUTC } from '@/lib/utils';
 import type { CheckMatrixRun } from '@/types';
 import { CheckMatrixRunbookPanel } from './CheckMatrixRunbookPanel';
 import { RunStateBadge, TRIGGER_LABEL } from './CheckMatrixRunBadges';
+import { CancelRunsButton } from './CancelRunsButton';
 
 export { RunStateBadge } from './CheckMatrixRunBadges';
 
@@ -241,7 +242,7 @@ export function CheckMatrixRunDetailView({ runId }: { runId: string }) {
       </section>
 
       <section aria-live="polite">
-        <h3 className="text-xs font-semibold text-muted-foreground mb-2 inline-flex items-center gap-1.5">
+        <h3 className="text-xs font-semibold text-muted-foreground mb-2 flex items-center gap-1.5">
           실행 로그
           {live && (
             <span className="inline-flex items-center gap-1 normal-case tracking-normal font-normal text-status-info">
@@ -249,6 +250,7 @@ export function CheckMatrixRunDetailView({ runId }: { runId: string }) {
               {run.runState === 'queued' ? '대기 중 — 워커가 집으면 바로 시작합니다' : '실행 중 — 2초마다 갱신'}
             </span>
           )}
+          {live && <span className="ml-auto"><CancelRunsButton runId={run.id} clusterId={run.clusterId} /></span>}
         </h3>
         {logText ? (
           <LogViewer text={logText} maxHeight="max-h-72" />
