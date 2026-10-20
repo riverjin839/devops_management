@@ -1664,8 +1664,12 @@ export const topologyTraceApi = {
     api.post<import('@/types').HubbleFlowsResponse>('/topology-trace/hubble-flows', payload, { signal }),
   tcpdumpRun: (payload: import('@/types').TcpdumpCaptureRequest, signal?: AbortSignal) =>
     api.post<import('@/types').TcpdumpCaptureResponse>('/topology-trace/tcpdump', payload, { signal }),
-  tcpdumpInterfaces: (payload: import('@/types').TcpdumpInterfacesRequest, signal?: AbortSignal) =>
-    api.post<import('@/types').TcpdumpInterfacesResponse>('/topology-trace/tcpdump/interfaces', payload, { signal }),
+  // clusterId: 화면이 선택한 클러스터 — 서버가 host 소속 클러스터와 함께 테넌트 operate 판정에 쓴다(쿼리 파라미터).
+  tcpdumpInterfaces: (payload: import('@/types').TcpdumpInterfacesRequest, signal?: AbortSignal, clusterId?: string) =>
+    api.post<import('@/types').TcpdumpInterfacesResponse>('/topology-trace/tcpdump/interfaces', payload, {
+      signal,
+      params: clusterId ? { cluster_id: clusterId } : undefined,
+    }),
 };
 
 // Assignees API (담당자 관리)

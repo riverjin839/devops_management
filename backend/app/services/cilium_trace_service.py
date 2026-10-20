@@ -156,6 +156,8 @@ def detect_status(kubeconfig_path: str, namespace: str = "kube-system") -> dict:
             pass
 
     hubble_installed = False
+    # 확인 자체가 실패하면(RBAC 거부·타임아웃 등) "미설치"가 아니라 사유를 돌려준다 — 화면이 설치 안내와 구분한다.
+    hubble_error: Optional[str] = None
     try:
         relay_cmd = _kubectl_base(kubeconfig_path) + [
             "-n", namespace, "get", "svc", "hubble-relay",
@@ -163,12 +165,17 @@ def detect_status(kubeconfig_path: str, namespace: str = "kube-system") -> dict:
         ]
         relay_proc = subprocess.run(relay_cmd, capture_output=True, text=True, timeout=10)
         hubble_installed = relay_proc.returncode == 0 and bool((relay_proc.stdout or "").strip())
-    except Exception:
-        pass
+        if relay_proc.returncode != 0:
+            stderr = (relay_proc.stderr or "").strip()
+            if "NotFound" not in stderr and "not found" not in stderr.lower():
+                hubble_error = stderr[:300] or f"kubectl 종료 코드 {relay_proc.returncode}"
+    except Exception as exc:  # noqa: BLE001 — fail-safe
+        hubble_error = f"hubble-relay 확인 실패: {type(exc).__name__}"
 
     return {
         "cilium_installed": cilium_installed,
         "hubble_relay_installed": hubble_installed,
+        "hubble_relay_error": hubble_error,
         "agent_count": len(agents),
         "cilium_version": cilium_version,
         "namespace": namespace,

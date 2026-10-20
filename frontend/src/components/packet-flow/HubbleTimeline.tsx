@@ -4,7 +4,7 @@ import { topologyTraceApi } from '@/services/api';
 import { useAbortableMutation } from '@/hooks/useAbortableMutation';
 import { runLogged, type RunLog, type RunLogEntry } from '@/hooks/useRunLog';
 import type { HubbleFlow, HubbleFlowsResponse } from '@/types';
-import { DoubleScrollX, EmptyState } from '@/components/common';
+import { DoubleScrollX, EmptyState, ErrorState } from '@/components/common';
 import { MacCard } from '@/components/ui/MacCard';
 
 interface Props {
@@ -21,7 +21,8 @@ const VERDICT_CLS: Record<string, string> = {
   FORWARDED: 'bg-secondary text-muted-foreground border-border',
   DROPPED:   'bg-status-critical/10 text-status-critical border-status-critical/30',
   AUDIT:     'bg-status-warning/10 text-status-warning border-status-warning/30',
-  TRACED:    'bg-status-info/10 text-status-info border-status-info/30',
+  // 추적 표시는 상태가 아니다 — 중립색(§12.12-3)
+  TRACED:    'bg-secondary text-muted-foreground border-border',
 };
 
 function formatTime(iso?: string | null): string {
@@ -50,7 +51,7 @@ function summarizeFlows(res: HubbleFlowsResponse): RunLogEntry[] {
     if (fl.dropReason) byDrop.set(fl.dropReason, (byDrop.get(fl.dropReason) ?? 0) + 1);
   }
   const verdicts = Array.from(byVerdict.entries()).map(([k, n]) => `${k} ${n}`).join(' · ');
-  const out: RunLogEntry[] = [['info', `플로우 ${res.count}건${verdicts ? ` · ${verdicts}` : ''}`]];
+  const out: RunLogEntry[] = [['info', `흐름 ${res.count}건${verdicts ? ` · ${verdicts}` : ''}`]];
   if (res.executed) out.push(['info', `실행 명령 — ${res.executed}`]);
   const dropped = byVerdict.get('DROPPED') ?? 0;
   if (dropped) {
@@ -61,7 +62,7 @@ function summarizeFlows(res: HubbleFlowsResponse): RunLogEntry[] {
 }
 
 function FlowRow({ f }: { f: HubbleFlow }) {
-  const cls = VERDICT_CLS[f.verdict ?? ''] ?? 'bg-status-unknown/10 text-status-unknown border-status-unknown/30';
+  const cls = VERDICT_CLS[f.verdict ?? ''] ?? 'bg-secondary text-muted-foreground border-border';
   const port = f.l4?.destinationPort ? `:${f.l4.destinationPort}` : '';
   const proto = f.l4?.protocol ?? '';
   return (
@@ -129,7 +130,7 @@ export function HubbleTimeline({ clusterId, runLog, initialFromPod, initialToPod
       verdict && `verdict ${verdict}`,
     ].filter(Boolean).join(' · ') || '전체';
     const r = await runLogged(runLog, {
-      title: 'Hubble 플로우 조회',
+      title: 'Hubble 흐름 조회',
       first: `Hubble Relay 조회 요청 — ${cond} · 최근 ${sinceSeconds}초 · 최대 ${limit}건`,
       fn: () => runMut.mutateAsync(),
       summarize: summarizeFlows,
@@ -139,72 +140,82 @@ export function HubbleTimeline({ clusterId, runLog, initialFromPod, initialToPod
 
   return (
     <div className="space-y-3">
-      <MacCard title="플로우 조회 조건" bodyPadding="p-3" className="flex items-end gap-2 flex-wrap">
+      <MacCard title="흐름 조회 조건" bodyPadding="p-3" className="flex items-end gap-2 flex-wrap">
         <div className="flex-1 min-w-[180px]">
-          <label htmlFor={f('fromPod')} className="block text-xs text-muted-foreground mb-0.5">From Pod (ns/name)</label>
+          <label htmlFor={f('fromPod')} className="block text-xs text-muted-foreground mb-0.5">출발 파드 (ns/이름)</label>
           <input id={f('fromPod')} value={fromPod} onChange={(e) => setFromPod(e.target.value)}
             placeholder="default/client-pod"
-            className="w-full px-2 py-1 text-sm font-mono bg-background border border-border rounded" />
+            className="w-full px-2 py-1 text-sm font-mono bg-background border border-border rounded-xl" />
         </div>
         <div className="flex-1 min-w-[180px]">
-          <label htmlFor={f('toPod')} className="block text-xs text-muted-foreground mb-0.5">To Pod (ns/name)</label>
+          <label htmlFor={f('toPod')} className="block text-xs text-muted-foreground mb-0.5">목적 파드 (ns/이름)</label>
           <input id={f('toPod')} value={toPod} onChange={(e) => setToPod(e.target.value)}
             placeholder="default/backend"
-            className="w-full px-2 py-1 text-sm font-mono bg-background border border-border rounded" />
+            className="w-full px-2 py-1 text-sm font-mono bg-background border border-border rounded-xl" />
         </div>
         <div className="flex-1 min-w-[180px]">
-          <label htmlFor={f('toSvc')} className="block text-xs text-muted-foreground mb-0.5">To Service (ns/name)</label>
+          <label htmlFor={f('toSvc')} className="block text-xs text-muted-foreground mb-0.5">목적 서비스 (ns/이름)</label>
           <input id={f('toSvc')} value={toService} onChange={(e) => setToService(e.target.value)}
             placeholder="default/api"
-            className="w-full px-2 py-1 text-sm font-mono bg-background border border-border rounded" />
+            className="w-full px-2 py-1 text-sm font-mono bg-background border border-border rounded-xl" />
         </div>
         <div>
-          <label htmlFor={f('verdict')} className="block text-xs text-muted-foreground mb-0.5">Verdict</label>
+          <label htmlFor={f('verdict')} className="block text-xs text-muted-foreground mb-0.5">판정</label>
           <select id={f('verdict')} value={verdict} onChange={(e) => setVerdict(e.target.value)}
-            className="px-2 py-1 text-sm bg-background border border-border rounded">
-            <option value="">All</option>
+            className="px-2 py-1 text-sm bg-background border border-border rounded-xl">
+            <option value="">전체</option>
             <option value="FORWARDED">FORWARDED</option>
             <option value="DROPPED">DROPPED</option>
             <option value="AUDIT">AUDIT</option>
           </select>
         </div>
         <div>
-          <label htmlFor={f('since')} className="block text-xs text-muted-foreground mb-0.5">Since (s)</label>
+          <label htmlFor={f('since')} className="block text-xs text-muted-foreground mb-0.5">최근 (초)</label>
           <input id={f('since')} type="number" value={sinceSeconds} onChange={(e) => setSinceSeconds(Number(e.target.value) || 60)}
             min={1} max={3600}
-            className="w-20 px-2 py-1 text-sm bg-background border border-border rounded" />
+            className="w-20 px-2 py-1 text-sm bg-background border border-border rounded-xl" />
         </div>
         <div>
-          <label htmlFor={f('limit')} className="block text-xs text-muted-foreground mb-0.5">Limit</label>
+          <label htmlFor={f('limit')} className="block text-xs text-muted-foreground mb-0.5">최대 건수</label>
           <input id={f('limit')} type="number" value={limit} onChange={(e) => setLimit(Number(e.target.value) || 200)}
             min={1} max={5000}
-            className="w-20 px-2 py-1 text-sm bg-background border border-border rounded" />
+            className="w-20 px-2 py-1 text-sm bg-background border border-border rounded-xl" />
         </div>
         {runMut.isPending ? (
           <button
             onClick={runMut.abort}
-            className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-semibold bg-status-critical text-primary-foreground rounded-lg hover:bg-status-critical"
+            className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-semibold bg-destructive text-destructive-foreground rounded-xl hover:bg-destructive/90"
           >
-            <Square className="w-4 h-4 fill-current" />
+            <Square className="w-4 h-4 fill-current" aria-hidden />
             중지
           </button>
         ) : (
           <button
             onClick={() => void doQuery()}
             disabled={!canRun}
-            className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-semibold bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 disabled:opacity-50"
+            className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-semibold bg-primary text-primary-foreground rounded-xl hover:bg-primary/90 disabled:opacity-50"
           >
-            <Play className="w-4 h-4" />
-            플로우 조회
+            <Play className="w-4 h-4" aria-hidden />
+            흐름 조회
           </button>
         )}
       </MacCard>
 
+      {/* 요청 자체 실패(권한·테넌트·백엔드 장애) — 실행 로그에만 남기지 않고 결과 자리에 사유를 보인다(D-173) */}
+      {runMut.isError && !runMut.isPending && (
+        <ErrorState
+          compact
+          error={runMut.error}
+          title="Hubble 흐름을 조회하지 못했습니다"
+          onRetry={() => void doQuery()}
+        />
+      )}
+
       {resp?.error && (
-        <div className="px-3 py-2 rounded-lg bg-status-warning/10 border border-status-warning/30 text-status-warning text-sm flex items-start gap-2">
-          <AlertTriangle className="w-4 h-4 flex-shrink-0 mt-0.5" />
+        <div role="alert" className="px-3 py-2 rounded-md bg-status-critical/10 border border-status-critical/30 text-status-critical text-sm flex items-start gap-2">
+          <AlertTriangle className="w-4 h-4 flex-shrink-0 mt-0.5" aria-hidden />
           <div className="flex-1">
-            <p className="font-medium">Hubble Relay 조회 실패</p>
+            <p className="font-medium">Hubble Relay 조회에 실패했습니다</p>
             <p className="text-sm text-muted-foreground mt-0.5">{resp.error}</p>
             <p className="text-xs text-muted-foreground mt-1">
               • 클러스터에 <code className="font-mono">hubble-relay</code> 가 배포돼 있어야 합니다.
@@ -212,15 +223,15 @@ export function HubbleTimeline({ clusterId, runLog, initialFromPod, initialToPod
               • 백엔드 컨테이너에 kubectl + hubble CLI 가 설치돼 있어야 합니다.
             </p>
           </div>
-          <button onClick={() => void doQuery()} className="p-1 rounded hover:bg-secondary" title="재시도" aria-label="재시도">
-            <RefreshCw className="w-4 h-4" />
+          <button type="button" onClick={() => void doQuery()} className="p-1 rounded-xl hover:bg-secondary" title="다시 조회" aria-label="Hubble 흐름 다시 조회">
+            <RefreshCw className="w-4 h-4" aria-hidden />
           </button>
         </div>
       )}
 
       {resp && !resp.error && (
         <MacCard
-          title="Hubble 플로우"
+          title="Hubble 흐름"
           titleExtra={<span className="text-xs text-muted-foreground tabular-nums">{resp.count}건</span>}
           description={resp.executed ? (
             <span className="font-mono" title={resp.executed}>{resp.executed}</span>
@@ -231,18 +242,18 @@ export function HubbleTimeline({ clusterId, runLog, initialFromPod, initialToPod
             <table className="w-full text-sm">
               <thead className="bg-muted/30 text-left">
                 <tr>
-                  <th className="px-2 py-1.5 text-xs font-medium text-muted-foreground">Time</th>
-                  <th className="px-2 py-1.5 text-xs font-medium text-muted-foreground">Verdict</th>
-                  <th className="px-2 py-1.5 text-xs font-medium text-muted-foreground">Source</th>
-                  <th className="px-2 py-1.5 text-xs font-medium text-muted-foreground">Destination</th>
+                  <th className="px-2 py-1.5 text-xs font-medium text-muted-foreground">시각</th>
+                  <th className="px-2 py-1.5 text-xs font-medium text-muted-foreground">판정</th>
+                  <th className="px-2 py-1.5 text-xs font-medium text-muted-foreground">출발지</th>
+                  <th className="px-2 py-1.5 text-xs font-medium text-muted-foreground">목적지</th>
                   <th className="px-2 py-1.5 text-xs font-medium text-muted-foreground">L4</th>
-                  <th className="px-2 py-1.5 text-xs font-medium text-muted-foreground">Dir</th>
-                  <th className="px-2 py-1.5 text-xs font-medium text-muted-foreground">Summary / Drop Reason</th>
+                  <th className="px-2 py-1.5 text-xs font-medium text-muted-foreground">방향</th>
+                  <th className="px-2 py-1.5 text-xs font-medium text-muted-foreground">요약·드롭 사유</th>
                 </tr>
               </thead>
               <tbody>
                 {resp.flows.length === 0 ? (
-                  <tr><td colSpan={7} className="text-center py-6 text-muted-foreground">조건에 맞는 flow 가 없습니다.</td></tr>
+                  <tr><td colSpan={7} className="text-center py-6 text-muted-foreground">조건에 맞는 흐름이 없습니다.</td></tr>
                 ) : resp.flows.map((f, i) => <FlowRow key={i} f={f} />)}
               </tbody>
             </table>
@@ -250,11 +261,11 @@ export function HubbleTimeline({ clusterId, runLog, initialFromPod, initialToPod
         </MacCard>
       )}
 
-      {!resp && (
+      {!resp && !runMut.isError && (
         <EmptyState
           icon={Info}
-          title="아직 조회한 플로우가 없습니다"
-          description={'필터를 입력하고 "플로우 조회" 를 눌러 Hubble Relay 에서 최근 패킷 플로우를 가져오세요.'}
+          title="아직 조회한 흐름이 없습니다"
+          description={'조건을 입력하고 "흐름 조회"를 눌러 Hubble Relay 에서 최근 패킷 흐름을 가져오세요.'}
         />
       )}
     </div>

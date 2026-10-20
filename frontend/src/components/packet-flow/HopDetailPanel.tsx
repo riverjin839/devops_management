@@ -9,10 +9,16 @@ interface Props {
 }
 
 const VERDICT_META: Record<HopVerdict, { icon: typeof CheckCircle2; cls: string; label: string }> = {
-  allow: { icon: CheckCircle2, cls: 'bg-secondary text-muted-foreground border-border', label: 'allow' },
-  deny:  { icon: XCircle,      cls: 'bg-status-critical/10 text-status-critical border-status-critical/30',             label: 'deny'  },
-  warn:  { icon: AlertTriangle,cls: 'bg-status-warning/10 text-status-warning border-status-warning/30',       label: 'warn'  },
-  info:  { icon: Info,         cls: 'bg-status-unknown/10 text-status-unknown border-status-unknown/30',       label: 'info'  },
+  allow: { icon: CheckCircle2, cls: 'bg-secondary text-muted-foreground border-border', label: '허용' },
+  deny:  { icon: XCircle,      cls: 'bg-status-critical/10 text-status-critical border-status-critical/30', label: '차단' },
+  warn:  { icon: AlertTriangle,cls: 'bg-status-warning/10 text-status-warning border-status-warning/30',    label: '경고' },
+  // 정보는 상태가 아니다 — 중립색(§12.12-3)
+  info:  { icon: Info,         cls: 'bg-secondary text-muted-foreground border-border',                     label: '정보' },
+};
+
+const ENTITY_TEXT: Record<string, string> = {
+  external: '외부', dns: 'DNS', ingress_controller: 'Ingress 파드', ingress: 'Ingress',
+  service: '서비스', pod: '파드', node: '노드', switch: '스위치', error: '오류',
 };
 
 function PolicyItem({ p }: { p: HopPolicy }) {
@@ -36,11 +42,11 @@ export function HopDetailPanel({ hop, index, totalHops, onClose }: Props) {
   const Icon = meta.icon;
 
   return (
-    <div className="absolute top-3 right-3 w-96 max-h-[calc(100%-1.5rem)] bg-card border border-border rounded-md shadow-card overflow-hidden flex flex-col z-10">
+    <div role="region" aria-label={`홉 ${index + 1} 상세`} className="absolute top-3 right-3 w-96 max-h-[calc(100%-1.5rem)] bg-card border border-border rounded-md shadow-card overflow-hidden flex flex-col z-10">
       <header className="flex items-start gap-2 px-4 py-3 border-b border-border bg-muted/20">
         <div className="flex-1 min-w-0">
           <p className="text-xs text-muted-foreground">
-            홉 {index + 1} / {totalHops} · {hop.entityType}
+            홉 {index + 1} / {totalHops} · {ENTITY_TEXT[hop.entityType] ?? hop.entityType}
           </p>
           <p className="text-sm font-semibold truncate" title={hop.name}>{hop.name}</p>
           {hop.interface && (
@@ -50,11 +56,17 @@ export function HopDetailPanel({ hop, index, totalHops, onClose }: Props) {
           )}
         </div>
         <span className={`inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full border font-medium ${meta.cls}`}>
-          <Icon className="w-3 h-3" />
+          <Icon className="w-3 h-3" aria-hidden />
           {meta.label}
         </span>
-        <button onClick={onClose} className="p-1 rounded hover:bg-secondary text-muted-foreground">
-          <X className="w-4 h-4" />
+        <button
+          type="button"
+          onClick={onClose}
+          aria-label={`홉 ${index + 1} 상세 닫기`}
+          title="홉 상세 닫기"
+          className="p-1 rounded-xl hover:bg-secondary text-muted-foreground"
+        >
+          <X className="w-4 h-4" aria-hidden />
         </button>
       </header>
 
@@ -64,7 +76,7 @@ export function HopDetailPanel({ hop, index, totalHops, onClose }: Props) {
           <div className="flex gap-3 text-xs text-muted-foreground">
             {hop.latencyMs != null && <span className="inline-flex items-center gap-1"><Timer className="w-3 h-3" aria-hidden />{hop.latencyMs}ms</span>}
             {hop.errorCount != null && <span className={`inline-flex items-center gap-1 ${hop.errorCount > 0 ? 'text-status-warning' : ''}`}>
-              <AlertTriangle className="w-3 h-3" aria-hidden /> errors: {hop.errorCount}
+              <AlertTriangle className="w-3 h-3" aria-hidden /> 오류 {hop.errorCount}건
             </span>}
           </div>
         )}
@@ -72,7 +84,7 @@ export function HopDetailPanel({ hop, index, totalHops, onClose }: Props) {
         {/* notes */}
         {hop.notes.length > 0 && (
           <div>
-            <p className="text-xs text-muted-foreground mb-1">Notes</p>
+            <p className="text-xs text-muted-foreground mb-1">메모</p>
             <ul className="space-y-0.5">
               {hop.notes.map((n, i) => (
                 <li key={i} className="text-sm text-foreground">• {n}</li>
@@ -85,7 +97,7 @@ export function HopDetailPanel({ hop, index, totalHops, onClose }: Props) {
         {hop.policies.length > 0 && (
           <div>
             <p className="text-xs text-muted-foreground mb-1 flex items-center gap-1">
-              <ShieldAlert className="w-3 h-3" /> 적용 정책 ({hop.policies.length})
+              <ShieldAlert className="w-3 h-3" aria-hidden /> 적용 정책 ({hop.policies.length})
             </p>
             <div className="space-y-1.5">
               {hop.policies.map((p, i) => <PolicyItem key={i} p={p} />)}
@@ -97,7 +109,7 @@ export function HopDetailPanel({ hop, index, totalHops, onClose }: Props) {
         {hop.identity && (
           <div>
             <p className="text-xs text-muted-foreground mb-1 flex items-center gap-1">
-              <Tag className="w-3 h-3" /> Cilium Identity
+              <Tag className="w-3 h-3" aria-hidden /> Cilium Identity
             </p>
             <pre className="text-xs font-mono bg-background border border-border rounded p-2 overflow-auto max-h-32 whitespace-pre-wrap">
               {JSON.stringify(hop.identity, null, 2)}
@@ -109,7 +121,7 @@ export function HopDetailPanel({ hop, index, totalHops, onClose }: Props) {
         {hop.refs.length > 0 && (
           <div>
             <p className="text-xs text-muted-foreground mb-1 flex items-center gap-1">
-              <LinkIcon className="w-3 h-3" /> 연관 리소스
+              <LinkIcon className="w-3 h-3" aria-hidden /> 연관 리소스
             </p>
             <ul className="space-y-0.5">
               {hop.refs.map((r, i) => (
