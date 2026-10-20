@@ -1208,9 +1208,9 @@ def dispatch_weekly_report(self):
         from app.models.user_jira_credential import UserJiraCredential
         from app.routers.jira import (
             WEEKLY_SETTINGS_KEY, DEFAULT_WEEKLY_SETTINGS, _get_config,
-            _confluence_service_verified,
+            _publish_weekly_steps,
         )
-        from app.services import weekly_report_service
+        from app.schemas.jira import WeeklyPublishRequest
 
         row = db.query(AppSetting).filter(AppSetting.key == WEEKLY_SETTINGS_KEY).first()
         sch = dict(DEFAULT_WEEKLY_SETTINGS)
@@ -1250,25 +1250,25 @@ def dispatch_weekly_report(self):
         if not actor:
             return {"dispatched": False, "reason": "actor_missing"}
 
-        cfg = _get_config(db)
-        report = weekly_report_service.build_report(
-            db, project_filter=sch.get("project_filter", ""))
         space_key = (sch.get("space_key") or "").strip()
         if not space_key:
             return {"dispatched": False, "reason": "no_space_key"}
-        title = (sch.get("title_template") or "주간보고 {start} ~ {end}").format(
-            start=report["period_start"], end=report["period_end"])
-        body = weekly_report_service.render_storage_html(report)
 
+        # 수동 게시(동기·SSE)와 같은 본체 — 빌드·제목·세션·렌더·upsert 단계. 자동 게시는 감사 기록을
+        # 남기지 않던 기존 동작을 유지한다(audit=False).
+        cfg = _get_config(db)
         loop = asyncio.new_event_loop()
         try:
-            svc, res = loop.run_until_complete(_confluence_service_verified(db, actor, cfg))
-            if svc is None or res.get("status") != "ok":
-                return {"dispatched": False, "reason": "confluence_unavailable"}
-            out = loop.run_until_complete(svc.upsert_page(
-                space_key, title, body, parent_id=(sch.get("parent_page_id") or "")))
+            result, failed_step = loop.run_until_complete(_publish_weekly_steps(
+                db, actor, WeeklyPublishRequest(), cfg=cfg, settings=sch, audit=False))
         finally:
             loop.close()
+        if failed_step == "session":
+            return {"dispatched": False, "reason": "confluence_unavailable"}
+        if failed_step in ("build", "target", "render"):
+            # 빌드 예외·제목 템플릿 오류 — 예전에는 예외로 빠져 "error" 였다.
+            log.warning("weekly report dispatcher failed at %s: %s", failed_step, result.detail)
+            return {"dispatched": False, "reason": "error"}
 
         sch["last_run_at"] = datetime.now(_tz.utc).isoformat()
         if row:
@@ -1276,8 +1276,8 @@ def dispatch_weekly_report(self):
         else:
             db.add(AppSetting(key=WEEKLY_SETTINGS_KEY, value=sch))
         db.commit()
-        log.info("weekly report auto-publish: %s", out.get("status"))
-        return {"dispatched": True, "result": out.get("status"), "action": out.get("action")}
+        log.info("weekly report auto-publish: %s", result.status)
+        return {"dispatched": True, "result": result.status, "action": result.action or None}
     except Exception as exc:  # noqa: BLE001 - 디스패처는 절대 죽지 않는다
         log.warning("weekly report dispatcher failed: %s", exc)
         return {"dispatched": False, "reason": "error"}

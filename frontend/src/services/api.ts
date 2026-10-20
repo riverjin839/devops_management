@@ -1033,6 +1033,9 @@ export const jiraApi = {
     api.get<import('@/types').WeeklyReportSettings>('/jira/weekly-report/settings'),
   updateWeeklySettings: (data: import('@/types').WeeklyReportSettings) =>
     api.put<import('@/types').WeeklyReportSettings>('/jira/weekly-report/settings', data),
+  /** 주간보고 게시의 SSE 버전 — fetch+reader 로 소비(`streamLogged`). 단계 build·target·session·render·upsert·audit
+   *  를 흘리고 마지막 `result` 는 `weeklyPublish` 응답과 같은 본문이다. 본문은 snake_case(streamLogged 가 변환). */
+  weeklyPublishStreamUrl: () => '/api/v1/jira/weekly-report/publish/stream',
 };
 
 // ── ServiceNow ITSM 연동 (Jira 연동 업무 대상, 수동 등록) ───────────────────────

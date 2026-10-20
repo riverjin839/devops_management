@@ -44,6 +44,7 @@ from app.services.jira_sso_http import (
     sso_login_products,
 )
 from app.services.jira_sso_service import capture_sso_session
+from app.services.sse import Emit, log_evt, noop_emit, step_evt, stream_async_job
 from app.schemas.jira import (
     JiraConfig,
     JiraConfigUpdate,
@@ -784,27 +785,34 @@ def _user_confluence_cookie(db: Session, username: str) -> Optional[str]:
 
 
 async def _confluence_service_verified(
-    db: Session, actor: User, cfg: dict
+    db: Session, actor: User, cfg: dict, *, emit: Emit = noop_emit,
 ) -> tuple[Optional[ConfluenceService], dict]:
     """Confluence 세션으로 서비스 생성 + current_user 검증.
 
     세션이 없거나 만료됐으면 저장된 SSO 로그인 정보로 자동 (재)로그인해 확보한다
-    (Jira 세션도 함께 갱신됨). 반환 (svc, current_user 결과) — 확보 실패 시 (None, error)."""
+    (Jira 세션도 함께 갱신됨). 반환 (svc, current_user 결과) — 확보 실패 시 (None, error).
+    ``emit`` 을 넘기면(주간보고 게시 SSE) 어느 경로로 세션을 확인했는지 사람이 읽는 줄을 흘린다
+    — 쿠키·자격증명 값은 싣지 않는다. 기본값(noop)이면 기존 동작과 같다."""
     conf_url = (cfg.get("confluence_base_url") or "").strip()
     if not conf_url:
         return None, {"status": "error", "detail": "관리자가 Confluence URL 을 설정하지 않았습니다."}
     verify = bool(cfg.get("verify_tls", True))
     cookie = _user_confluence_cookie(db, actor.username)
     if cookie:
+        log_evt(emit, "info", "저장된 Confluence 세션으로 확인 중")
         svc = ConfluenceService(conf_url, cookie, auth_type="sso", verify=verify)
         res = await svc.current_user()
         if not res.get("auth_failed"):
             return svc, res
+        log_evt(emit, "warn", f"저장된 Confluence 세션이 만료됐습니다 — {res.get('detail', '')}")
+    else:
+        log_evt(emit, "info", "저장된 Confluence 세션 없음")
     # Confluence 전용 세션이 없으면 **Jira 자격으로 폴백**한다 — SiteMinder 류 SSO 는
     # SMSESSION 을 상위 도메인에 발급하므로 같은 쿠키로 Confluence 도 통하는 경우가 많다.
     # (수동으로 세션 쿠키만 등록한 사용자는 Confluence 쿠키가 아예 없다.)
     jira_token, jira_auth = _user_credential(db, actor.username)
     if jira_token and jira_auth in ("cookie", "sso"):
+        log_evt(emit, "info", "Jira SSO 세션으로 Confluence 접근 시도")
         svc = ConfluenceService(conf_url, jira_token, auth_type="sso", verify=verify)
         res = await svc.current_user()
         if res.get("status") == "ok":
@@ -814,12 +822,19 @@ async def _confluence_service_verified(
             if cred:
                 cred.confluence_cookie_encrypted = secret_box.encrypt(jira_token)
                 db.commit()
+            log_evt(emit, "info", "Jira SSO 세션으로 통과 — Confluence 세션으로 저장했습니다")
             return svc, res
+        log_evt(emit, "warn", f"Jira SSO 세션으로는 통과하지 못했습니다 — {res.get('detail', '')}")
+    log_evt(emit, "info", "저장된 SSO 로그인 정보로 자동 재로그인 시도")
     if await _sso_relogin(db, actor, cfg):
         cookie = _user_confluence_cookie(db, actor.username)
         if cookie:
+            log_evt(emit, "info", "자동 재로그인 성공 — 새 Confluence 세션으로 확인 중")
             svc = ConfluenceService(conf_url, cookie, auth_type="sso", verify=verify)
             return svc, await svc.current_user()
+        log_evt(emit, "warn", "자동 재로그인은 됐지만 Confluence 세션이 캡처되지 않았습니다")
+    else:
+        log_evt(emit, "warn", "자동 재로그인 불가 — 저장된 SSO 로그인 정보가 없거나 로그인에 실패했습니다")
     return None, {"status": "error",
                   "detail": "Confluence 세션이 없습니다 — 'SSO 자동 로그인'으로 세션을 캡처하세요."}
 
@@ -2186,6 +2201,188 @@ def weekly_report_preview(
     return WeeklyReport(**report)
 
 
+# ── 주간보고 게시 — 동기·SSE·Celery 자동 게시 공용 본체 ─────────────────────────
+# 단계(step name): build(보고서 빌드) → target(스페이스·부모·제목) → session(Confluence 세션 확인)
+# → render(본문 렌더) → upsert(기존 페이지 조회 → 생성/갱신) → audit(감사 기록).
+# 동기 엔드포인트는 emit=noop_emit 으로 같은 본체를 부른다(응답 동일). 쿠키·자격증명 값은 싣지 않는다.
+DEFAULT_WEEKLY_TITLE_TEMPLATE = DEFAULT_WEEKLY_SETTINGS["title_template"]
+
+
+def _weekly_title_template_error(template: str) -> Optional[str]:
+    """제목 템플릿을 시험 포맷해 오류 사유를 돌려준다(정상이면 None).
+
+    `str.format` 은 모르는 자리표시자(KeyError)·위치 자리표시자(IndexError)·짝 안 맞는 중괄호
+    (ValueError)에서 터지므로 게시 전에 걸러 422 / 구조화 오류로 바꾼다(빈 500 금지)."""
+    try:
+        template.format(start="2026-01-05", end="2026-01-09")
+    except KeyError as exc:
+        reason = f"알 수 없는 자리표시자 {{{exc.args[0] if exc.args else ''}}}"
+    except IndexError:
+        reason = "위치 자리표시자 {} 는 쓸 수 없습니다"
+    except (ValueError, AttributeError, TypeError) as exc:
+        reason = f"형식 오류 ({str(exc)[:120]})"
+    else:
+        return None
+    return f"제목 템플릿이 잘못되었습니다 — {reason}. {{start}}·{{end}} 만 쓸 수 있습니다 (주간보고 설정)."
+
+
+def _validate_weekly_publish(db: Session, payload: WeeklyPublishRequest, *, require_space: bool) -> None:
+    """게시 사전 검증 — 잘못된 요청은 실행(스트림)을 열기 전에 422 로 거절한다.
+
+    - 제목을 직접 입력하지 않았으면 설정의 제목 템플릿 자리표시자를 검사한다(동기·스트림 공통).
+    - ``require_space`` 면 스페이스 키 미지정도 422(스트림). 동기 경로는 기존처럼 status=error 결과."""
+    settings = _get_weekly_settings(db)
+    if require_space and not (payload.space_key or settings.get("space_key") or "").strip():
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                            detail="Confluence 스페이스 키를 지정하세요 (주간보고 설정).")
+    if not (payload.title or "").strip():
+        err = _weekly_title_template_error(settings.get("title_template") or DEFAULT_WEEKLY_TITLE_TEMPLATE)
+        if err:
+            raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=err)
+
+
+async def _publish_weekly_steps(
+    db: Session,
+    actor: User,
+    payload: WeeklyPublishRequest,
+    emit: Emit = noop_emit,
+    *,
+    cfg: Optional[dict] = None,
+    settings: Optional[dict] = None,
+    audit: bool = True,
+) -> tuple[WeeklyPublishResult, Optional[str]]:
+    """게시 본체 — (결과, 실패한 단계 이름 또는 None).
+
+    실패 단계는 step failed + error 줄을 남기고 status error/offline 결과를 돌려준다(예외를 올리지 않음).
+    Celery 디스패처는 실패 단계로 기존 사유 코드(confluence_unavailable 등)를 고른다."""
+    cfg = cfg if cfg is not None else _get_config(db)
+    settings = settings if settings is not None else _get_weekly_settings(db)
+
+    def fail(step: str, label: str, detail: str, st: str = "error") -> tuple[WeeklyPublishResult, str]:
+        log_evt(emit, "error", f"{label} 실패 — {detail}")
+        step_evt(emit, step, label, "failed")
+        return WeeklyPublishResult(status=st if st in ("error", "offline") else "error", detail=detail), step
+
+    # 1) 보고서 빌드
+    step_evt(emit, "build", "보고서 빌드", "running")
+    project_filter = payload.project_filter or settings.get("project_filter", "") or ""
+    log_evt(emit, "info",
+            f"보고서 빌드 — {payload.week_of + ' 가 속한 주' if payload.week_of else '이번 주'}"
+            f"{f' · 프로젝트 필터 {project_filter!r}' if project_filter else ''}")
+    try:
+        report = weekly_report_service.build_report(
+            db, anchor=_parse_week_of(payload.week_of),
+            project_filter=project_filter,
+            base_url=cfg.get("base_url", ""),
+        )
+    except Exception as exc:  # noqa: BLE001 - 빌드 실패도 구조화 결과로(빈 500 금지)
+        db.rollback()
+        logger.exception("weekly report build failed: %s", exc)
+        return fail("build", "보고서 빌드", f"보고서 빌드 실패: {str(exc)[:200]}")
+    summary = report.get("summary") or {}
+    log_evt(emit, "info",
+            f"기간 {report['period_start']} ~ {report['period_end']} · 전체 {summary.get('total', 0)}"
+            f" (진행 {summary.get('in_progress', 0)} · 완료 {summary.get('done', 0)}"
+            f" · 지연 {summary.get('delayed', 0)})")
+    log_evt(emit, "info",
+            f"진척 {len(report.get('progress') or [])}행 · 구분별 상세 {len(report.get('details') or [])}행"
+            f" · 담당자별 {len(report.get('owners') or [])}행")
+    if not summary.get("total"):
+        log_evt(emit, "warn", "해당 주에 집계된 업무가 없습니다 — 빈 표로 게시됩니다.")
+    step_evt(emit, "build", "보고서 빌드", "done")
+
+    # 2) 게시 대상 — 스페이스·부모·제목
+    step_evt(emit, "target", "게시 대상", "running")
+    space_key = (payload.space_key or settings.get("space_key") or "").strip()
+    if not space_key:
+        return fail("target", "게시 대상", "Confluence 스페이스 키를 지정하세요 (주간보고 설정).")
+    parent_id = (payload.parent_page_id or settings.get("parent_page_id") or "").strip()
+    custom_title = (payload.title or "").strip()
+    if custom_title:
+        title = custom_title
+    else:
+        template = settings.get("title_template") or DEFAULT_WEEKLY_TITLE_TEMPLATE
+        err = _weekly_title_template_error(template)
+        if err:
+            return fail("target", "게시 대상", err)
+        title = template.format(start=report["period_start"], end=report["period_end"])
+    log_evt(emit, "info",
+            f"스페이스 {space_key} · 상위 페이지 {parent_id or '(없음 — 스페이스 최상위)'}"
+            f" · 제목 \"{title}\" ({'직접 입력' if custom_title else '설정 템플릿'})")
+    step_evt(emit, "target", "게시 대상", "done")
+
+    # 3) Confluence 세션 확인 — 저장 세션 → Jira SSO 세션 폴백 → 저장된 로그인 정보로 재로그인
+    step_evt(emit, "session", "Confluence 세션 확인", "running")
+    conf_url = (cfg.get("confluence_base_url") or "").strip()
+    log_evt(emit, "info", f"Confluence {conf_url or '(URL 미설정)'} · 사용자 {actor.username}")
+    svc, res = await _confluence_service_verified(db, actor, cfg, emit=emit)
+    if svc is None or res.get("status") != "ok":
+        return fail("session", "Confluence 세션 확인", res.get("detail", "Confluence 세션 없음"))
+    who = res.get("display_name") or res.get("account") or ""
+    log_evt(emit, "info", f"세션 확인 완료{f' — {who}' if who else ''}")
+    step_evt(emit, "session", "Confluence 세션 확인", "done")
+
+    # 4) 본문 렌더 — 표 4개(전체 요약·진척률·구분별 상세·담당자별)
+    step_evt(emit, "render", "본문 렌더", "running")
+    try:
+        body = weekly_report_service.render_storage_html(report)
+    except Exception as exc:  # noqa: BLE001
+        logger.exception("weekly report render failed: %s", exc)
+        return fail("render", "본문 렌더", f"본문 렌더 실패: {str(exc)[:200]}")
+    log_evt(emit, "info",
+            f"표 4개 — 전체 요약 1행 · 진척률 {len(report.get('progress') or [])}행"
+            f" · 구분별 상세 {len(report.get('details') or [])}행 · 담당자별 {len(report.get('owners') or [])}행"
+            f" · 본문 {len(body.encode('utf-8')) / 1024:.1f} KB")
+    step_evt(emit, "render", "본문 렌더", "done")
+
+    # 5) 기존 페이지 조회 → 생성/갱신
+    step_evt(emit, "upsert", "페이지 게시", "running")
+    found = await svc.find_page(space_key, title)
+    if found.get("status") == "ok":
+        if found.get("found"):
+            ver = int(found.get("version") or 1)
+            log_evt(emit, "info", f"같은 제목의 기존 페이지 {found.get('id')} (v{ver}) — v{ver + 1} 로 갱신합니다")
+        else:
+            log_evt(emit, "info", "같은 제목의 페이지가 없습니다 — 새로 생성합니다")
+    else:
+        log_evt(emit, "warn", f"기존 페이지 조회 실패 — {found.get('detail', '')}")
+    out = await svc.upsert_page(space_key, title, body, parent_id=parent_id)
+    if out.get("status") != "ok":
+        return fail("upsert", "페이지 게시", out.get("detail", "Confluence 게시 실패"),
+                    st=out.get("status", "error"))
+    action = out.get("action", "")
+    log_evt(emit, "info",
+            f"페이지 {'생성' if action == 'created' else '갱신(새 버전)' if action == 'updated' else action or '처리'}"
+            f" 완료 · 페이지 {out.get('id') or '-'}")
+    if out.get("url"):
+        log_evt(emit, "info", f"페이지 URL — {out['url']}")
+    step_evt(emit, "upsert", "페이지 게시", "done")
+
+    # 6) 감사 기록 (Celery 자동 게시는 기존처럼 남기지 않는다)
+    if audit:
+        step_evt(emit, "audit", "감사 기록", "running")
+        audit_logger.record(
+            db, action="work_item.weekly_report_publish", actor=actor,
+            target_type="confluence_page", target_id=out.get("id"),
+            details={"space": space_key, "title": title, "action": action},
+        )
+        log_evt(emit, "info", "감사 로그 기록 — work_item.weekly_report_publish")
+        step_evt(emit, "audit", "감사 기록", "done")
+
+    return WeeklyPublishResult(
+        status="ok", detail=f"Confluence 에 {('생성' if action == 'created' else '갱신')}되었습니다.",
+        action=action, page_url=out.get("url"), page_id=out.get("id"),
+    ), None
+
+
+async def _publish_weekly(
+    db: Session, user: User, payload: WeeklyPublishRequest, emit: Emit = noop_emit,
+) -> WeeklyPublishResult:
+    """주간보고 게시 본체(동기·SSE 공용) — 결과만 돌려준다."""
+    result, _failed = await _publish_weekly_steps(db, user, payload, emit)
+    return result
+
+
 @router.post("/weekly-report/publish", response_model=WeeklyPublishResult)
 async def weekly_report_publish(
     payload: Optional[WeeklyPublishRequest] = None,
@@ -2194,43 +2391,32 @@ async def weekly_report_publish(
 ):
     """주간보고를 만들어 Confluence 에 게시한다(같은 제목이면 새 버전으로 갱신).
 
-    저장 위치(스페이스/부모/제목)는 요청에서 덮어쓸 수 있고, 미지정 시 설정값을 쓴다."""
+    저장 위치(스페이스/부모/제목)는 요청에서 덮어쓸 수 있고, 미지정 시 설정값을 쓴다.
+    제목 템플릿 자리표시자 오류는 422, 그 밖의 실패는 status error/offline 결과다."""
     payload = payload or WeeklyPublishRequest()
-    cfg = _get_config(db)
-    settings = _get_weekly_settings(db)
-    report = weekly_report_service.build_report(
-        db, anchor=_parse_week_of(payload.week_of),
-        project_filter=payload.project_filter or settings.get("project_filter", ""),
-        base_url=cfg.get("base_url", ""),
-    )
-    space_key = (payload.space_key or settings.get("space_key") or "").strip()
-    if not space_key:
-        return WeeklyPublishResult(status="error",
-                                   detail="Confluence 스페이스 키를 지정하세요 (주간보고 설정).")
-    title = (payload.title or "").strip() or (
-        settings.get("title_template") or "주간보고 {start} ~ {end}"
-    ).format(start=report["period_start"], end=report["period_end"])
+    _validate_weekly_publish(db, payload, require_space=False)
+    return await _publish_weekly(db, actor, payload, noop_emit)
 
-    svc, res = await _confluence_service_verified(db, actor, cfg)
-    if svc is None or res.get("status") != "ok":
-        return WeeklyPublishResult(status="error", detail=res.get("detail", "Confluence 세션 없음"))
-    body = weekly_report_service.render_storage_html(report)
-    out = await svc.upsert_page(
-        space_key, title, body,
-        parent_id=(payload.parent_page_id or settings.get("parent_page_id") or ""),
-    )
-    if out.get("status") != "ok":
-        return WeeklyPublishResult(status=out.get("status", "error"),
-                                   detail=out.get("detail", "Confluence 게시 실패"))
-    audit_logger.record(
-        db, action="work_item.weekly_report_publish", actor=actor,
-        target_type="confluence_page", target_id=out.get("id"),
-        details={"space": space_key, "title": title, "action": out.get("action")},
-    )
-    return WeeklyPublishResult(
-        status="ok", detail=f"Confluence 에 {('생성' if out.get('action') == 'created' else '갱신')}되었습니다.",
-        action=out.get("action", ""), page_url=out.get("url"), page_id=out.get("id"),
-    )
+
+@router.post("/weekly-report/publish/stream")
+async def weekly_report_publish_stream(
+    payload: Optional[WeeklyPublishRequest] = None,
+    db: Session = Depends(get_db),
+    actor: User = Depends(require_operator),
+):
+    """``weekly-report/publish`` 의 SSE 버전 — 단계(build·target·session·render·upsert·audit)를
+    실시간으로 흘리고 마지막에 동기 응답과 같은 본문을 ``result`` 로 보낸다.
+    스페이스 키 미지정·제목 템플릿 오류는 스트림을 열기 전에 422."""
+    payload = payload or WeeklyPublishRequest()
+    _validate_weekly_publish(db, payload, require_space=True)
+    actor_id = actor.id
+
+    async def job(sdb: Session, emit: Emit) -> WeeklyPublishResult:
+        # 요청 세션(get_db)은 스트리밍 전에 닫히므로 작업 세션에서 사용자를 다시 읽는다.
+        user = sdb.query(User).filter(User.id == actor_id).first() or actor
+        return await _publish_weekly(sdb, user, payload, emit)
+
+    return stream_async_job(job, name="weekly-report-publish")
 
 
 # ── 가져오기 (단방향, upsert by jira_issue_id) ──────────────────────────────────
