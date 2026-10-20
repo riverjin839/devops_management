@@ -19,6 +19,25 @@ export interface AuthUser {
 
 const TOKEN_KEY = 'k8s:auth:token';
 const USER_KEY = 'k8s:auth:user';
+// 비밀번호를 바꾼 탭 전용 세션(sessionStorage) — 같은 브라우저의 다른 탭까지 끊으려면 공유 토큰
+// (localStorage)을 지워야 하는데, 바꾼 탭 자신은 이어져야 한다. 그 탭만 자기 sessionStorage 에 새
+// 토큰을 들고, 다른 탭은 공유 토큰이 사라져 다시 로그인해야 한다(새로 고쳐도 되살아나지 않는다).
+// 다음 정상 로그인(setSession)에서 공유 저장소로 돌아간다.
+const TAB_TOKEN_KEY = 'k8s:auth:tab-token';
+const TAB_USER_KEY = 'k8s:auth:tab-user';
+/** 공유 토큰을 지운 사유 — 다른 탭이 로그인 화면에 왜 끊겼는지 보여주는 데 쓴다. */
+const LOGOUT_REASON_KEY = 'k8s:auth:logout-reason';
+
+function isTabScoped(): boolean {
+  try { return !!sessionStorage.getItem(TAB_TOKEN_KEY); } catch { return false; }
+}
+
+function clearTabScoped() {
+  try {
+    sessionStorage.removeItem(TAB_TOKEN_KEY);
+    sessionStorage.removeItem(TAB_USER_KEY);
+  } catch { /* ignore */ }
+}
 
 function normalizeUser(raw: Partial<AuthUser> & { role?: string }): AuthUser {
   // Backend legacy data might still emit role='user' — display it as 'viewer'.
@@ -36,7 +55,7 @@ function normalizeUser(raw: Partial<AuthUser> & { role?: string }): AuthUser {
 }
 
 function loadToken(): string | null {
-  try { return localStorage.getItem(TOKEN_KEY); } catch { return null; }
+  try { return sessionStorage.getItem(TAB_TOKEN_KEY) ?? localStorage.getItem(TOKEN_KEY); } catch { return null; }
 }
 
 /** 아직 만료 전인(exp 미래) 토큰인지 — exp 없는 토큰은 판단 불가라 유효로 본다. */
@@ -48,14 +67,14 @@ function isUnexpired(token: string | null): token is string {
 
 function loadUser(): AuthUser | null {
   try {
-    const raw = localStorage.getItem(USER_KEY);
+    const raw = sessionStorage.getItem(TAB_USER_KEY) ?? localStorage.getItem(USER_KEY);
     if (!raw) return null;
     return normalizeUser(JSON.parse(raw) as Partial<AuthUser>);
   } catch { return null; }
 }
 
 /** 세션이 끊긴 사유 — 로그인 화면이 "왜 다시 로그인해야 하는지" 를 보여주는 데 쓴다(D-079). */
-export type LogoutReason = 'expired' | 'manual';
+export type LogoutReason = 'expired' | 'manual' | 'password_changed';
 
 interface AuthState {
   token: string | null;
@@ -71,6 +90,11 @@ interface AuthState {
    * 이어지는 것이므로 `setSession` 과 달리 프로필 전환·새로 고침을 하지 않는다.
    */
   setToken: (token: string, user?: AuthUser) => void;
+  /**
+   * 비밀번호 변경 직후 — 새 토큰을 이 탭 전용으로 두고 공유 토큰을 지워 같은 브라우저의 다른 탭을
+   * 끊는다(다른 브라우저·기기의 옛 토큰은 서버가 거부한다). 다음 로그인에서 공유 저장소로 돌아간다.
+   */
+  scopeSessionToThisTab: (token: string, user: AuthUser) => void;
   clear: () => void;
   /** 토큰 만료/무효(401) 로 세션을 끊을 때 — 사유와 복귀 경로를 남기고 clear 한다. */
   markSessionExpired: (returnTo?: string | null) => void;
@@ -86,9 +110,11 @@ export const useAuthStore = create<AuthState>((set) => ({
     // 공용 PC — 직전에 다른 계정이 쓰던 브라우저면 그 사람의 로컬 개인 설정(테마·접힘 등)을
     // 보관하고 이 계정 것으로 바꿔 끼운다(lib/personalStorage.ts).
     const switched = activateProfile(u.id);
+    clearTabScoped();
     try {
       localStorage.setItem(TOKEN_KEY, token);
       localStorage.setItem(USER_KEY, JSON.stringify(u));
+      localStorage.removeItem(LOGOUT_REASON_KEY);
     } catch { /* ignore */ }
     if (switched) {
       // 모듈 로드 시점에 localStorage 를 읽어 둔 store(테마·사이드바 등)와 서버 캐시가 이전
@@ -108,21 +134,40 @@ export const useAuthStore = create<AuthState>((set) => ({
   },
   setUser: (user) => {
     const u = normalizeUser(user);
-    try { localStorage.setItem(USER_KEY, JSON.stringify(u)); } catch { /* ignore */ }
+    try {
+      if (isTabScoped()) sessionStorage.setItem(TAB_USER_KEY, JSON.stringify(u));
+      else localStorage.setItem(USER_KEY, JSON.stringify(u));
+    } catch { /* ignore */ }
     set({ user: u });
   },
   setToken: (token, user) => {
     const u = user ? normalizeUser(user) : undefined;
+    // 탭 전용 세션이면 재발급도 그 탭 안에만 둔다 — 공유 저장소에 쓰면 끊어 둔 다른 탭이 되살아난다.
+    const scoped = isTabScoped();
     try {
-      localStorage.setItem(TOKEN_KEY, token);
-      if (u) localStorage.setItem(USER_KEY, JSON.stringify(u));
+      const store = scoped ? sessionStorage : localStorage;
+      store.setItem(scoped ? TAB_TOKEN_KEY : TOKEN_KEY, token);
+      if (u) store.setItem(scoped ? TAB_USER_KEY : USER_KEY, JSON.stringify(u));
     } catch { /* ignore */ }
     set(u ? { token, user: u, logoutReason: null } : { token, logoutReason: null });
+  },
+  scopeSessionToThisTab: (token, user) => {
+    const u = normalizeUser(user);
+    try {
+      sessionStorage.setItem(TAB_TOKEN_KEY, token);
+      sessionStorage.setItem(TAB_USER_KEY, JSON.stringify(u));
+      // 사유를 먼저 남기고 공유 토큰을 지운다 — 다른 탭은 토큰 삭제 이벤트에서 이 사유를 읽는다.
+      localStorage.setItem(LOGOUT_REASON_KEY, 'password_changed');
+      localStorage.removeItem(TOKEN_KEY);
+      localStorage.removeItem(USER_KEY);
+    } catch { /* ignore */ }
+    set({ token, user: u, logoutReason: null });
   },
   clear: () => {
     // 로그아웃 직전 — 이 기기에서 바꾼 화면 설정을 아직 유효한 토큰으로 올려 둔다(keepalive, 기다리지 않음).
     void pushLocalPrefs(true);
     clearSessionSecrets();
+    clearTabScoped();
     try {
       localStorage.removeItem(TOKEN_KEY);
       localStorage.removeItem(USER_KEY);
@@ -149,6 +194,12 @@ export const useAuthStore = create<AuthState>((set) => ({
       return;
     }
     clearSessionSecrets();
+    // 탭 전용 세션이 만료됐으면 그 탭 것만 지운다(공유 저장소는 이미 비어 있거나 다른 로그인의 것).
+    if (isTabScoped()) {
+      clearTabScoped();
+      set({ token: null, user: null, logoutReason: 'expired', returnTo: returnTo ?? null });
+      return;
+    }
     try {
       localStorage.removeItem(TOKEN_KEY);
       localStorage.removeItem(USER_KEY);
@@ -170,21 +221,25 @@ export const useAuthStore = create<AuthState>((set) => ({
 if (typeof window !== 'undefined') {
   window.addEventListener('storage', (e) => {
     if (e.storageArea && e.storageArea !== window.localStorage) return;
+    // 비밀번호를 바꿔 탭 전용 세션이 된 탭은 공유 저장소의 변화(다른 탭 로그인·로그아웃)를 따르지 않는다.
+    if (isTabScoped()) return;
     const st = useAuthStore.getState();
     // e.key === null 은 localStorage.clear() — 토큰 키가 바뀐 것과 같게 다룬다.
     if (e.key === TOKEN_KEY || e.key === null) {
       const next = loadToken();
       if (next === st.token) return;
       if (!next) {
-        // 다른 탭이 로그아웃(수동 또는 만료). 이 탭의 sessionStorage 비밀값도 함께 비운다.
+        // 다른 탭이 로그아웃(수동·만료·비밀번호 변경). 이 탭의 sessionStorage 비밀값도 함께 비운다.
         clearSessionSecrets();
-        const expired = !isUnexpired(st.token);
+        let pwChanged = false;
+        try { pwChanged = localStorage.getItem(LOGOUT_REASON_KEY) === 'password_changed'; } catch { /* ignore */ }
+        const expired = !pwChanged && !isUnexpired(st.token);
         const here = `${window.location.pathname}${window.location.search}`;
         useAuthStore.setState({
           token: null,
           user: null,
-          logoutReason: expired ? 'expired' : 'manual',
-          returnTo: expired ? here : null,
+          logoutReason: pwChanged ? 'password_changed' : expired ? 'expired' : 'manual',
+          returnTo: pwChanged || expired ? here : null,
         });
         return;
       }
