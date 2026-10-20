@@ -139,7 +139,10 @@ jobs:
           git branch -D "${BRANCH}" 2>/dev/null || true
           git checkout -b "${BRANCH}"
           git add frontend/package.json backend/app/main.py CHANGELOG.md
-          git commit -m "chore(release): v${NEW_VERSION}"
+          # [skip ci]: 이 PR 은 만들자마자 아래에서 --admin 머지 + 브랜치 삭제된다. 그 사이 뜬 PR CI 는
+          # 이미 사라진 merge ref 를 못 찾아 job 0개로 "failure" 가 되어 릴리스마다 빨간 X 를 남겼다.
+          # 검증은 머지 커밋의 main push CI 가 그대로 한다(머지 커밋 메시지엔 [skip ci] 가 없다).
+          git commit -m "chore(release): v${NEW_VERSION} [skip ci]"
           git push -u origin "${BRANCH}"
 
           gh pr create \
