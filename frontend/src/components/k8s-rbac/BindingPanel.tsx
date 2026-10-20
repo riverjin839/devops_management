@@ -176,7 +176,7 @@ export function BindingPanel({
           type="button"
           onClick={() => setCreating(!creating)}
           disabled={!canOperate}
-          title={withHint('새 바인딩 추가 — 기존 SA 에 기존 Role/ClusterRole 을 묶는다')}
+          title={withHint('새 바인딩 추가 — 기존 SA 에 기존 Role/ClusterRole 을 묶습니다')}
           aria-label={ariaWithHint('새 바인딩 추가')}
           className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-primary text-primary-foreground text-xs font-medium disabled:opacity-50 disabled:cursor-not-allowed"
         >
@@ -307,8 +307,8 @@ export function BindingPanel({
           {kind === 'ClusterRoleBinding' && (
             <p className="text-[11.5px] leading-relaxed rounded-md border border-status-warning/30 bg-status-warning/10 text-status-warning px-3 py-2">
               nodes·namespaces·persistentvolumes 처럼 네임스페이스가 없는(클러스터 스코프) 리소스는
-              RoleBinding 으로는 권한이 발동하지 않는다 — 이 조합(ClusterRoleBinding)이 필요한 이유다.
-              선택한 롤에 해당 규칙이 이미 있는지 Role/ClusterRole 탭에서 먼저 확인한다.
+              RoleBinding 으로는 권한이 발동하지 않습니다 — 이 조합(ClusterRoleBinding)이 필요한 이유입니다.
+              선택한 롤에 해당 규칙이 이미 있는지 Role/ClusterRole 탭에서 먼저 확인하세요.
             </p>
           )}
         </div>
@@ -317,8 +317,8 @@ export function BindingPanel({
       {rows.length === 0 ? (
         <EmptyState
           icon={Link2}
-          title={isLoading ? '불러오는 중…' : '바인딩이 없다'}
-          description={isLoading ? undefined : '액세스 발급 탭에서 만들거나, 위 "바인딩 추가" 로 직접 만든다.'}
+          title={isLoading ? '불러오는 중…' : '바인딩이 없습니다'}
+          description={isLoading ? undefined : '액세스 발급 탭에서 만들거나, 위 "바인딩 추가" 로 직접 만들 수 있습니다.'}
           compact
         />
       ) : (
@@ -386,8 +386,8 @@ export function BindingPanel({
         </div>
       )}
       <p className="mt-2 text-xs text-muted-foreground">
-        같은 이름의 RoleBinding 이 네임스페이스마다 하나씩 있는 것은 정상이다 — 하나의 ClusterRole 을 나눠
-        쓰는 구조다.
+        같은 이름의 RoleBinding 이 네임스페이스마다 하나씩 있는 것은 정상입니다 — 하나의 ClusterRole 을 나눠
+        쓰는 구조입니다.
       </p>
 
       <ConfirmDialog
@@ -397,7 +397,7 @@ export function BindingPanel({
           pendingDelete
             ? `${pendingDelete.kind} ${pendingDelete.name} 을(를) 지우면 대상 ServiceAccount 가 ${
                 pendingDelete.namespace ?? '모든 네임스페이스'
-              } 에서 권한을 잃는다.`
+              } 에서 권한을 잃습니다.`
             : undefined
         }
         confirmLabel="삭제"

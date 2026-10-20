@@ -184,7 +184,7 @@ function MemberSection({ bucket, onTaskClick, onIssueClick }: {
                 })}
                 {bucket.tasks.length > 10 && (
                   <li className="text-xs text-muted-foreground text-center pt-1">
-                    + {bucket.tasks.length - 10}개 더...
+                    + {bucket.tasks.length - 10}개 더…
                   </li>
                 )}
               </ul>
@@ -224,7 +224,7 @@ function MemberSection({ bucket, onTaskClick, onIssueClick }: {
                 ))}
                 {bucket.issues.length > 10 && (
                   <li className="text-xs text-muted-foreground text-center pt-1">
-                    + {bucket.issues.length - 10}개 더...
+                    + {bucket.issues.length - 10}개 더…
                   </li>
                 )}
               </ul>

@@ -1,12 +1,12 @@
 import { useState, useMemo, useEffect } from 'react';
-import { Plus, Play, BookOpen, Download, ArrowUpDown, LayoutGrid, List } from 'lucide-react';
+import { Plus, Play, BookOpen, Download, ArrowUpDown, LayoutGrid, List, GripVertical } from 'lucide-react';
 import { DndContext, closestCenter, PointerSensor, useSensor, useSensors, type DragEndEvent } from '@dnd-kit/core';
 import { SortableContext, rectSortingStrategy, verticalListSortingStrategy, useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { PlaybookCard, PlaybookListRow, PlaybookLogDialog, AddPlaybookModal, RunCredsModal, playbookRunLines } from '@/components/playbooks';
 import type { PlaybookFormSubmit } from '@/components/playbooks/AddPlaybookModal';
 import type { PlaybookSshCreds } from '@/types';
-import { ClusterSidebar, EmptyState, Skeleton, PageShell, RunLogPanel } from '@/components/common';
+import { ClusterSidebar, EmptyState, Skeleton, PageShell, RunLogPanel, useToast } from '@/components/common';
 import { PageHeader } from '@/components/common/PageHeader';
 import { RoleGate } from '@/components/auth/RoleGate';
 import { usePlaybooks, useCreatePlaybook, useUpdatePlaybook, useDeletePlaybook, useRunPlaybook, useToggleDashboard } from '@/hooks/usePlaybook';
@@ -44,7 +44,7 @@ function SortableCardCell({ playbook, isRunning, onRun, onEdit, onDelete, onTogg
         title="드래그하여 순서 변경"
         aria-label="드래그하여 순서 변경"
       >
-        ⠿
+        <GripVertical className="w-3.5 h-3.5" aria-hidden="true" />
       </button>
       <PlaybookCard playbook={playbook} isRunning={isRunning} onRun={onRun} onEdit={onEdit} onDelete={onDelete} onToggleDashboard={onToggleDashboard} />
     </div>
@@ -99,6 +99,7 @@ export function PlaybooksPage() {
   const deletePlaybook = useDeletePlaybook();
   const runPlaybook = useRunPlaybook();
   const toggleDashboard = useToggleDashboard();
+  const toast = useToast();
   // 플레이북 실행 로그(D-135) — 단건 ▶ · 자격증명 모달 · Run All · 리포트 내보내기가 공유한다.
   const runLog = useRunLog();
   const [showRunLog, setShowRunLog] = useLogPref('playbooks-run');
@@ -147,8 +148,9 @@ export function PlaybooksPage() {
     return sorted;
   }, [dndPlaybooks, sortKey, sortDir]);
 
-  const handleCreate = (data: PlaybookFormSubmit) => {
-    createPlaybook.mutate({
+  // 모달이 결과를 기다린다(D-143) — Promise 를 그대로 돌려줘 실패 시 모달 안에 사유를 띄운다.
+  const handleCreate = (data: PlaybookFormSubmit) =>
+    createPlaybook.mutateAsync({
       name: data.name,
       description: data.description || undefined,
       playbookFileId: data.playbookFileId,
@@ -159,11 +161,10 @@ export function PlaybooksPage() {
       timeoutSeconds: data.timeoutSeconds,
       clusterId: data.clusterId,
     });
-  };
 
   const handleUpdate = (data: PlaybookFormSubmit) => {
-    if (!editPlaybook) return;
-    updatePlaybook.mutate({
+    if (!editPlaybook) return Promise.resolve();
+    return updatePlaybook.mutateAsync({
       id: editPlaybook.id,
       data: {
         name: data.name,
@@ -178,7 +179,20 @@ export function PlaybooksPage() {
         clusterId: data.clusterId,
       },
     });
-    setEditPlaybook(null);
+    // 성공 시 모달의 onClose(handleModalClose)가 editPlaybook 을 비운다.
+  };
+
+  const handleDelete = (pb: Playbook) => {
+    if (!confirm(`플레이북 "${pb.name}" 을(를) 삭제하시겠습니까?`)) return;
+    deletePlaybook.mutate(pb.id, {
+      onError: (e) => toast.error('플레이북 삭제 실패', formatApiError(e)),
+    });
+  };
+
+  const handleToggleDashboard = (pb: Playbook) => {
+    toggleDashboard.mutate(pb.id, {
+      onError: (e) => toast.error('대시보드 표시 변경 실패', formatApiError(e)),
+    });
   };
 
   const handleOpenEdit = (playbook: Playbook) => {
@@ -305,16 +319,16 @@ export function PlaybooksPage() {
               {statusCounts.total > 0 && (
                 <div className="flex items-center gap-2 ml-2">
                   <span className="text-sm px-2 py-0.5 rounded-full bg-secondary text-muted-foreground border border-border">
-                    {statusCounts.healthy} OK
+                    정상 {statusCounts.healthy}
                   </span>
                   {statusCounts.warning > 0 && (
                     <span className="text-sm px-2 py-0.5 rounded-full bg-status-warning/15 text-status-warning border border-status-warning/30">
-                      {statusCounts.warning} Changed
+                      변경 {statusCounts.warning}
                     </span>
                   )}
                   {statusCounts.critical > 0 && (
                     <span className="text-sm px-2 py-0.5 rounded-full bg-status-critical/15 text-status-critical border border-status-critical/30">
-                      {statusCounts.critical} Failed
+                      실패 {statusCounts.critical}
                     </span>
                   )}
                 </div>
@@ -335,12 +349,12 @@ export function PlaybooksPage() {
                   className={`px-2 py-1.5 text-sm rounded inline-flex items-center gap-1 transition-colors ${
                     viewMode === 'list' ? 'bg-primary/15 text-primary' : 'text-muted-foreground hover:text-foreground'
                   }`}
-                  title="리스트 보기"
-                  aria-label="리스트 보기"
+                  title="목록 보기"
+                  aria-label="목록 보기"
                   aria-pressed={viewMode === 'list'}
                 >
                   <List className="w-4 h-4" />
-                  <span className="hidden sm:inline">List</span>
+                  <span className="hidden sm:inline">목록</span>
                 </button>
                 <button
                   onClick={() => setViewMode('card')}
@@ -352,14 +366,15 @@ export function PlaybooksPage() {
                   aria-pressed={viewMode === 'card'}
                 >
                   <LayoutGrid className="w-4 h-4" />
-                  <span className="hidden sm:inline">Card</span>
+                  <span className="hidden sm:inline">카드</span>
                 </button>
               </div>
 
               {/* Sort Controls */}
               <div className="flex items-center gap-1.5">
-                <ArrowUpDown className="w-4 h-4 text-muted-foreground" />
+                <ArrowUpDown className="w-4 h-4 text-muted-foreground" aria-hidden="true" />
                 <select
+                  aria-label="정렬 기준"
                   value={sortKey}
                   onChange={(e) => setSortKey(e.target.value as PlaybookSortKey)}
                   className="px-2 py-1.5 text-sm bg-background border border-border rounded-lg"
@@ -385,7 +400,7 @@ export function PlaybooksPage() {
                     className="px-4 py-2 text-sm font-medium bg-secondary hover:bg-secondary/80 border border-border rounded-lg transition-colors flex items-center gap-2"
                   >
                     <Download className="w-4 h-4" />
-                    Export .md
+                    리포트 내보내기(.md)
                   </button>
                   <RoleGate allow={['admin', 'operator']}>
                     <button
@@ -393,7 +408,7 @@ export function PlaybooksPage() {
                       className="px-4 py-2 text-sm font-medium bg-primary hover:bg-primary/90 text-primary-foreground rounded-lg transition-colors flex items-center gap-2"
                     >
                       <Play className="w-4 h-4" />
-                      Run All
+                      전체 실행
                     </button>
                   </RoleGate>
                 </>
@@ -405,7 +420,7 @@ export function PlaybooksPage() {
                   className="px-4 py-2 text-sm font-medium bg-primary hover:bg-primary/90 text-primary-foreground rounded-lg transition-colors flex items-center gap-2"
                 >
                   <Plus className="w-4 h-4" />
-                  Register Playbook
+                  플레이북 등록
                 </button>
               </RoleGate>
             </div>
@@ -465,12 +480,8 @@ export function PlaybooksPage() {
                       clusterName={showClusterLabel ? clusterNameMap[playbook.clusterId] : undefined}
                       onRun={() => handleRunOne(playbook)}
                       onEdit={() => handleOpenEdit(playbook)}
-                      onDelete={() => {
-                        if (confirm(`Delete playbook "${playbook.name}"?`)) {
-                          deletePlaybook.mutate(playbook.id);
-                        }
-                      }}
-                      onToggleDashboard={() => toggleDashboard.mutate(playbook.id)}
+                      onDelete={() => handleDelete(playbook)}
+                      onToggleDashboard={() => handleToggleDashboard(playbook)}
                       onViewLog={() => setLogTarget(playbook)}
                     />
                   ))}
@@ -492,12 +503,8 @@ export function PlaybooksPage() {
                       isRunning={runningIds.has(playbook.id)}
                       onRun={() => handleRunOne(playbook)}
                       onEdit={() => handleOpenEdit(playbook)}
-                      onDelete={() => {
-                        if (confirm(`Delete playbook "${playbook.name}"?`)) {
-                          deletePlaybook.mutate(playbook.id);
-                        }
-                      }}
-                      onToggleDashboard={() => toggleDashboard.mutate(playbook.id)}
+                      onDelete={() => handleDelete(playbook)}
+                      onToggleDashboard={() => handleToggleDashboard(playbook)}
                     />
                   ))}
                 </div>

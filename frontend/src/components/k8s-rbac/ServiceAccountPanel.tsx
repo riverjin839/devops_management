@@ -192,8 +192,8 @@ export function ServiceAccountPanel({
         {rows.length === 0 ? (
           <EmptyState
             icon={KeyRound}
-            title={isLoading ? '불러오는 중…' : 'ServiceAccount 가 없다'}
-            description={isLoading ? undefined : '액세스 발급 탭에서 개발자용 SA 를 만들 수 있다.'}
+            title={isLoading ? '불러오는 중…' : 'ServiceAccount 가 없습니다'}
+            description={isLoading ? undefined : '액세스 발급 탭에서 개발자용 SA 를 만들 수 있습니다.'}
             compact
           />
         ) : (
@@ -282,7 +282,7 @@ export function ServiceAccountPanel({
           </div>
         )}
         <p className="mt-2 text-xs text-muted-foreground">
-          삭제는 ServiceAccount 만 지운다 — 롤과 바인딩은 각 탭에서 따로 정리한다.
+          삭제는 ServiceAccount 만 지웁니다 — 롤과 바인딩은 각 탭에서 따로 정리하세요.
         </p>
       </MacCard>
 
@@ -308,7 +308,7 @@ export function ServiceAccountPanel({
         title="ServiceAccount 를 삭제할까요?"
         description={
           pendingDelete
-            ? `${pendingDelete.namespace}/${pendingDelete.name} 을(를) 지우면 이 SA 토큰으로 접속 중인 개발자와 파드가 즉시 인증에 실패한다.`
+            ? `${pendingDelete.namespace}/${pendingDelete.name} 을(를) 지우면 이 SA 토큰으로 접속 중인 개발자와 파드가 즉시 인증에 실패합니다.`
             : undefined
         }
         confirmLabel="삭제"

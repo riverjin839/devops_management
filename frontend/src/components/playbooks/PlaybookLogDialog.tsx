@@ -1,7 +1,6 @@
-import { useEffect, useState } from 'react';
-import { X, Copy, Check, Terminal, AlertTriangle, XCircle, CheckCircle, History } from 'lucide-react';
+import { X, Terminal, AlertTriangle, XCircle, CheckCircle, History } from 'lucide-react';
 import type { Playbook } from '@/types';
-import { DoubleScrollX, useModalA11y } from '@/components/common';
+import { DoubleScrollX, LogViewer, useModalA11y } from '@/components/common';
 import { StatusBadge } from '@/components/common';
 import { parseUTC } from '@/lib/utils';
 import { usePlaybookRuns } from '@/hooks/usePlaybook';
@@ -28,21 +27,12 @@ interface FailedTask {
 }
 
 /** Playbook 실행 결과 상세 로그 — last_result 의 모든 필드 (요약, 호스트별 통계, 실패 task, raw stdout) 표시.
- *  ESC / 배경 클릭 / X 로 닫음. raw output 복사 기능 포함. */
+ *  ESC / 배경 클릭 / X 로 닫음. raw output 은 공용 LogViewer(테마·필터·복사·줄바꿈)로 표시. */
 export function PlaybookLogDialog({ playbook, onClose }: PlaybookLogDialogProps) {
-  const [copied, setCopied] = useState(false);
-
   // ESC 닫기 · 포커스 트랩 · 초점 복원 (공용 훅) — playbook 이 있으면 열림
   const dialogRef = useModalA11y(!!playbook, onClose);
   // D-066 — 이전 실행 이력(append-only). 다이얼로그가 열려 있을 때만 조회.
   const { data: runHistory } = usePlaybookRuns(playbook?.id, !!playbook);
-
-  useEffect(() => {
-    if (copied) {
-      const t = setTimeout(() => setCopied(false), 1500);
-      return () => clearTimeout(t);
-    }
-  }, [copied]);
 
   if (!playbook) return null;
 
@@ -58,16 +48,6 @@ export function PlaybookLogDialog({ playbook, onClose }: PlaybookLogDialogProps)
   const durationMs = result.duration_ms as number | undefined;
 
   const isSuccess = (returncode === 0) || (totals.failures === 0 && totals.unreachable === 0);
-
-  const handleCopyRaw = async () => {
-    if (!rawOutput) return;
-    try {
-      await navigator.clipboard.writeText(rawOutput);
-      setCopied(true);
-    } catch {
-      // 복사 실패 시 무시 — 환경에 따라 권한 없을 수 있음.
-    }
-  };
 
   return (
     <>
@@ -99,6 +79,7 @@ export function PlaybookLogDialog({ playbook, onClose }: PlaybookLogDialogProps)
           <button
             onClick={onClose}
             className="p-1.5 rounded-md hover:bg-secondary text-muted-foreground hover:text-foreground"
+            title="닫기"
             aria-label="닫기"
           >
             <X className="w-4 h-4" />
@@ -111,12 +92,12 @@ export function PlaybookLogDialog({ playbook, onClose }: PlaybookLogDialogProps)
           <section>
             <SectionTitle icon={isSuccess ? CheckCircle : XCircle} title="실행 요약" tone={isSuccess ? 'success' : 'error'} />
             <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2">
-              <SummaryCell label="Return Code" value={returncode ?? '—'} accent={returncode === 0 || returncode == null ? 'neutral' : 'error'} />
-              <SummaryCell label="OK"          value={totals.ok ?? 0}          accent="neutral" />
-              <SummaryCell label="Changed"     value={totals.changed ?? 0}     accent="warning" />
-              <SummaryCell label="Failures"    value={totals.failures ?? 0}    accent={(totals.failures ?? 0) > 0 ? 'error' : 'neutral'} />
-              <SummaryCell label="Unreachable" value={totals.unreachable ?? 0} accent={(totals.unreachable ?? 0) > 0 ? 'error' : 'neutral'} />
-              <SummaryCell label="Skipped"     value={totals.skipped ?? 0}     accent="neutral" />
+              <SummaryCell label="종료 코드" value={returncode ?? '—'} accent={returncode === 0 || returncode == null ? 'neutral' : 'error'} />
+              <SummaryCell label="정상"        value={totals.ok ?? 0}          accent="neutral" />
+              <SummaryCell label="변경"        value={totals.changed ?? 0}     accent="warning" />
+              <SummaryCell label="실패"        value={totals.failures ?? 0}    accent={(totals.failures ?? 0) > 0 ? 'error' : 'neutral'} />
+              <SummaryCell label="접속 불가" value={totals.unreachable ?? 0} accent={(totals.unreachable ?? 0) > 0 ? 'error' : 'neutral'} />
+              <SummaryCell label="건너뜀"      value={totals.skipped ?? 0}     accent="neutral" />
             </div>
             {message && (
               <p className="mt-3 text-sm text-muted-foreground bg-secondary/50 border border-border rounded-lg px-3 py-2">
@@ -133,12 +114,12 @@ export function PlaybookLogDialog({ playbook, onClose }: PlaybookLogDialogProps)
                 <table className="w-full text-sm">
                   <thead className="bg-secondary/50">
                     <tr>
-                      <th className="px-3 py-1.5 text-left font-medium">Host</th>
-                      <th className="px-3 py-1.5 text-right font-medium">OK</th>
-                      <th className="px-3 py-1.5 text-right font-medium">Changed</th>
-                      <th className="px-3 py-1.5 text-right font-medium">Failures</th>
-                      <th className="px-3 py-1.5 text-right font-medium">Unreachable</th>
-                      <th className="px-3 py-1.5 text-right font-medium">Skipped</th>
+                      <th className="px-3 py-1.5 text-left font-medium">호스트</th>
+                      <th className="px-3 py-1.5 text-right font-medium">정상</th>
+                      <th className="px-3 py-1.5 text-right font-medium">변경</th>
+                      <th className="px-3 py-1.5 text-right font-medium">실패</th>
+                      <th className="px-3 py-1.5 text-right font-medium">접속 불가</th>
+                      <th className="px-3 py-1.5 text-right font-medium">건너뜀</th>
                     </tr>
                   </thead>
                   <tbody className="font-mono">
@@ -161,7 +142,7 @@ export function PlaybookLogDialog({ playbook, onClose }: PlaybookLogDialogProps)
           {/* Failed tasks */}
           {failedTasks.length > 0 && (
             <section>
-              <SectionTitle icon={XCircle} title={`실패한 Task (${failedTasks.length})`} tone="error" />
+              <SectionTitle icon={XCircle} title={`실패한 태스크 (${failedTasks.length})`} tone="error" />
               <div className="space-y-2">
                 {failedTasks.map((t, i) => (
                   <FailedTaskCard key={i} task={t} variant="failed" />
@@ -173,7 +154,7 @@ export function PlaybookLogDialog({ playbook, onClose }: PlaybookLogDialogProps)
           {/* Unreachable */}
           {unreachableTasks.length > 0 && (
             <section>
-              <SectionTitle icon={AlertTriangle} title={`Unreachable (${unreachableTasks.length})`} tone="warning" />
+              <SectionTitle icon={AlertTriangle} title={`접속 불가 (${unreachableTasks.length})`} tone="warning" />
               <div className="space-y-2">
                 {unreachableTasks.map((t, i) => (
                   <FailedTaskCard key={i} task={t} variant="unreachable" />
@@ -226,23 +207,11 @@ export function PlaybookLogDialog({ playbook, onClose }: PlaybookLogDialogProps)
 
           {/* Raw output */}
           <section>
-            <div className="flex items-center justify-between mb-1.5">
-              <SectionTitle title="Raw Output (stdout / stderr · 최대 5000자)" inline />
-              <button
-                onClick={handleCopyRaw}
-                disabled={!rawOutput}
-                className="inline-flex items-center gap-1 px-2 py-1 text-xs rounded border border-border hover:bg-secondary disabled:opacity-40"
-              >
-                {copied ? <Check className="w-3 h-3 text-status-healthy" /> : <Copy className="w-3 h-3" />}
-                {copied ? '복사됨' : '복사'}
-              </button>
-            </div>
+            <SectionTitle title="원본 출력 (stdout / stderr · 최대 5000자)" />
             {rawOutput ? (
-              <pre className="text-xs font-mono bg-zinc-950 text-zinc-100 rounded-lg p-3 overflow-x-auto max-h-[40vh] whitespace-pre-wrap break-words">
-                {rawOutput}
-              </pre>
+              <LogViewer text={rawOutput} maxHeight="max-h-[40vh]" />
             ) : (
-              <p className="text-sm text-muted-foreground italic px-3 py-2 bg-secondary/30 rounded">raw output 없음 — 실행 기록이 없거나 너무 짧아 저장되지 않음</p>
+              <p className="text-sm text-muted-foreground italic px-3 py-2 bg-secondary/30 rounded">원본 출력 없음 — 실행 기록이 없거나 너무 짧아 저장되지 않았습니다.</p>
             )}
           </section>
         </div>
@@ -297,7 +266,7 @@ function FailedTaskCard({ task, variant }: { task: FailedTask; variant: 'failed'
   return (
     <div className={`border rounded-lg p-3 ${borderClass}`}>
       <div className="flex items-baseline gap-2 mb-1">
-        <span className="text-sm font-semibold">{task.task ?? '(unnamed task)'}</span>
+        <span className="text-sm font-semibold">{task.task ?? '(이름 없는 태스크)'}</span>
         {task.host && (
           <span className="text-xs font-mono text-muted-foreground">@ {task.host}</span>
         )}

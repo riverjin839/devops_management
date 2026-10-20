@@ -50,18 +50,21 @@ export function ScriptListPanel({
           <Plus className="w-3.5 h-3.5" /> 새 스크립트
         </button>
         <div className="relative">
-          <Search className="absolute left-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
+          <Search className="absolute left-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" aria-hidden="true" />
           <input
             value={search}
             onChange={(e) => onSearchChange(e.target.value)}
+            aria-label="스크립트 이름 검색"
             placeholder="이름 검색"
             className="w-full pl-7 pr-2 py-1.5 text-xs rounded-xl border border-border bg-card focus:outline-none focus:ring-2 focus:ring-ring"
           />
         </div>
-        <div className="flex flex-wrap gap-1">
+        <div role="group" aria-label="종류 필터" className="flex flex-wrap gap-1">
           {KIND_FILTERS.map((f) => (
             <button
               key={f.label}
+              type="button"
+              aria-pressed={kind === f.value}
               onClick={() => onKindChange(f.value)}
               className={`px-2 py-1 text-[11px] rounded-lg border transition-colors ${
                 kind === f.value

@@ -741,21 +741,23 @@ export function Dashboard() {
           setEditingPlaybook(null);
         }}
         onSubmit={(data) => {
-          if (!editingPlaybook) return;
-          updatePlaybook.mutate({
+          if (!editingPlaybook) return Promise.resolve();
+          // 모달이 결과를 기다린다(D-143) — 성공 시 모달 onClose 가 닫고, 실패 시 모달 안에 사유를 띄운다.
+          return updatePlaybook.mutateAsync({
             id: editingPlaybook.id,
             data: {
               name: data.name,
               description: data.description || undefined,
-              playbookPath: data.playbookPath,
-              inventoryPath: data.inventoryPath || undefined,
+              // 모드 전환 시 반대편 필드를 비워야 backend 에서 충돌 안 남(/playbooks 와 동일)
+              playbookFileId: data.playbookFileId ?? null,
+              inventoryId: data.inventoryId ?? null,
+              playbookPath: data.playbookPath ?? null,
+              inventoryPath: data.inventoryPath ?? null,
               tags: data.tags || undefined,
               timeoutSeconds: data.timeoutSeconds,
               clusterId: data.clusterId,
             },
           });
-          setShowPlaybookModal(false);
-          setEditingPlaybook(null);
         }}
         clusters={clusters}
         defaultClusterId={activeClusterId}

@@ -26,7 +26,8 @@ export interface PlaybookFormSubmit {
 interface AddPlaybookModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSubmit: (data: PlaybookFormSubmit) => void;
+  /** 저장 결과를 기다린다 — reject 되면 모달은 열린 채 오류를 보여 준다. */
+  onSubmit: (data: PlaybookFormSubmit) => Promise<unknown>;
   clusters: { id: string; name: string }[];
   defaultClusterId?: string;
   initialData?: Playbook | null;
@@ -309,6 +310,8 @@ export function AddPlaybookModal({
   const [showNewInv, setShowNewInv] = useState(false);
   const [editFileId, setEditFileId] = useState<string | null>(null);
   const [editInvId, setEditInvId] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
 
   const titleId = useId();
   const dialogRef = useModalA11y(isOpen, onClose);
@@ -344,6 +347,8 @@ export function AddPlaybookModal({
     setShowNewInv(false);
     setEditFileId(null);
     setEditInvId(null);
+    setSubmitting(false);
+    setSubmitError(null);
   }, [isOpen, initialData, defaultClusterId, clusters]);
 
   if (!isOpen) return null;
@@ -351,25 +356,37 @@ export function AddPlaybookModal({
   const timeoutNum = timeoutText.trim() === '' ? null : Number(timeoutText);
   const timeoutInvalid = timeoutNum !== null && (!Number.isInteger(timeoutNum) || timeoutNum < 10 || timeoutNum > 1800);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!name.trim() || !clusterId || timeoutInvalid) return;
+    if (submitting || !name.trim() || !clusterId || timeoutInvalid) return;
+    let payload: PlaybookFormSubmit;
     if (advanced) {
       if (!playbookPath.trim()) return;
-      onSubmit({
+      payload = {
         name, description, tags, clusterId, timeoutSeconds: timeoutNum,
         playbookPath: playbookPath.trim(),
         inventoryPath: inventoryPath.trim() || undefined,
-      });
+      };
     } else {
       if (!playbookFileId) return;
-      onSubmit({
+      payload = {
         name, description, tags, clusterId, timeoutSeconds: timeoutNum,
         playbookFileId,
         inventoryId: inventoryId || undefined,
-      });
+      };
     }
-    onClose();
+    // 저장 결과를 기다린다 — 실패(422/403/500)인데 모달이 닫혀 입력이 사라지면
+    // 운영자는 저장됐다고 믿게 된다(D-143). 실패 시 모달 안에 사유를 보여 준다.
+    setSubmitting(true);
+    setSubmitError(null);
+    try {
+      await onSubmit(payload);
+      onClose();
+    } catch (err) {
+      setSubmitError(formatApiError(err));
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   const canSubmit = name.trim() && clusterId && (
@@ -387,8 +404,8 @@ export function AddPlaybookModal({
         className="relative bg-card border border-border rounded-md shadow-xl w-full max-w-3xl max-h-[90vh] overflow-y-auto p-6"
       >
         <div className="flex items-center justify-between mb-4">
-          <h2 id={titleId} className="text-lg font-semibold">{initialData ? 'Edit Playbook' : 'Register Playbook'}</h2>
-          <button onClick={onClose} className="p-1 hover:bg-secondary rounded-md">
+          <h2 id={titleId} className="text-lg font-semibold">{initialData ? '플레이북 수정' : '플레이북 등록'}</h2>
+          <button onClick={onClose} title="닫기" aria-label="닫기" className="p-1 hover:bg-secondary rounded-md">
             <X className="w-5 h-5" />
           </button>
         </div>
@@ -396,7 +413,7 @@ export function AddPlaybookModal({
         <form onSubmit={handleSubmit} className="space-y-4">
           {/* Cluster */}
           <div>
-            <label htmlFor={clusterSelectId} className="block text-sm font-medium mb-1">Cluster</label>
+            <label htmlFor={clusterSelectId} className="block text-sm font-medium mb-1">클러스터</label>
             <select
               id={clusterSelectId}
               value={clusterId}
@@ -411,13 +428,13 @@ export function AddPlaybookModal({
 
           {/* Name */}
           <div>
-            <label htmlFor={nameId} className="block text-sm font-medium mb-1">Name</label>
+            <label htmlFor={nameId} className="block text-sm font-medium mb-1">이름</label>
             <input
               id={nameId}
               type="text"
               value={name}
               onChange={(e) => setName(e.target.value)}
-              placeholder="e.g. Check NTP Sync"
+              placeholder="예: NTP 동기화 점검"
               className={inputCls}
               required
             />
@@ -425,13 +442,13 @@ export function AddPlaybookModal({
 
           {/* Description */}
           <div>
-            <label htmlFor={descId} className="block text-sm font-medium mb-1">Description</label>
+            <label htmlFor={descId} className="block text-sm font-medium mb-1">설명</label>
             <input
               id={descId}
               type="text"
               value={description}
               onChange={(e) => setDescription(e.target.value)}
-              placeholder="Optional description"
+              placeholder="설명 (선택)"
               className={inputCls}
             />
           </div>
@@ -564,7 +581,7 @@ export function AddPlaybookModal({
             <>
               {/* Path 기반 (구 호환) */}
               <div>
-                <label htmlFor={playbookPathId} className="block text-sm font-medium mb-1">Playbook Path</label>
+                <label htmlFor={playbookPathId} className="block text-sm font-medium mb-1">플레이북 경로</label>
                 <input
                   id={playbookPathId}
                   type="text"
@@ -577,7 +594,7 @@ export function AddPlaybookModal({
                 <p className="text-sm text-muted-foreground mt-1">실행 호스트(master#1) 상의 절대 경로</p>
               </div>
               <div>
-                <label htmlFor={inventoryPathId} className="block text-sm font-medium mb-1">Inventory Path (optional)</label>
+                <label htmlFor={inventoryPathId} className="block text-sm font-medium mb-1">인벤토리 경로 (선택)</label>
                 <input
                   id={inventoryPathId}
                   type="text"
@@ -592,20 +609,20 @@ export function AddPlaybookModal({
 
           {/* Tags */}
           <div>
-            <label htmlFor={tagsId} className="block text-sm font-medium mb-1">Tags (optional)</label>
+            <label htmlFor={tagsId} className="block text-sm font-medium mb-1">태그 (선택)</label>
             <input
               id={tagsId}
               type="text"
               value={tags}
               onChange={(e) => setTags(e.target.value)}
-              placeholder="e.g. check,validate"
+              placeholder="예: check,validate"
               className={inputCls}
             />
           </div>
 
           {/* 실행 제한 시간 — 예전엔 30초 고정이라 실제 운영 플레이북 대부분이 timed out 으로 실패했다. */}
           <div>
-            <label htmlFor={timeoutId} className="block text-sm font-medium mb-1">실행 제한 시간 (초, optional)</label>
+            <label htmlFor={timeoutId} className="block text-sm font-medium mb-1">실행 제한 시간 (초, 선택)</label>
             <input
               id={timeoutId}
               type="number"
@@ -625,20 +642,27 @@ export function AddPlaybookModal({
             </p>
           </div>
 
+          {submitError && (
+            <p role="alert" className="text-sm text-status-critical">
+              {initialData ? '저장 실패' : '등록 실패'}: {submitError}
+            </p>
+          )}
+
           <div className="flex justify-end gap-3 pt-2">
             <button
               type="button"
               onClick={onClose}
               className="px-4 py-2 text-sm font-medium bg-secondary hover:bg-secondary/80 border border-border rounded-lg"
             >
-              Cancel
+              취소
             </button>
             <button
               type="submit"
-              disabled={!canSubmit}
-              className="px-4 py-2 text-sm font-medium bg-primary hover:bg-primary/90 text-primary-foreground rounded-lg disabled:opacity-50"
+              disabled={!canSubmit || submitting}
+              className="flex items-center gap-1.5 px-4 py-2 text-sm font-medium bg-primary hover:bg-primary/90 text-primary-foreground rounded-lg disabled:opacity-50"
             >
-              {initialData ? 'Save' : 'Register'}
+              {submitting && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+              {initialData ? '저장' : '등록'}
             </button>
           </div>
         </form>

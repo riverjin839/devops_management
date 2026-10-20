@@ -96,8 +96,7 @@ function QnaCard({ note, onOpen, onEdit, onDelete, onTogglePin }: QnaCardProps) 
       tabIndex={0}
       onClick={onOpen}
       onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onOpen(); } }}
-      className="group relative rounded-md border border-border overflow-hidden bg-card hover:border-muted-foreground/30 transition-colors flex flex-col cursor-pointer focus:outline-none focus:ring-2 focus:ring-primary/40"
-      style={{ minHeight: '230px' }}
+      className="group relative rounded-md border border-border overflow-hidden bg-card hover:border-muted-foreground/30 transition-colors flex flex-col cursor-pointer focus:outline-none focus:ring-2 focus:ring-primary/40 min-h-[230px]"
     >
       {/* 색상 띠 (좌측) */}
       <span className={`absolute left-0 top-0 bottom-0 w-1 ${tint.stripe}`} aria-hidden />
@@ -419,13 +418,14 @@ export function OpsNotesPage() {
         <div className="flex items-center gap-2 flex-wrap">
           <button
             onClick={() => setFilterService('')}
+            aria-pressed={!filterService}
             className={`flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-full border transition-colors ${
               !filterService
                 ? 'bg-primary text-primary-foreground border-primary'
                 : 'bg-background border-border text-muted-foreground hover:border-primary/50'
             }`}
           >
-            전체 <span className="opacity-70">({allNotes.length})</span>
+            전체 <span className="tabular-nums">({allNotes.length})</span>
           </button>
           {SERVICES.map((s) => {
             const count = countByService[s.value] ?? 0;
@@ -436,6 +436,7 @@ export function OpsNotesPage() {
               <button
                 key={s.value}
                 onClick={() => setFilterService(isActive ? '' : s.value)}
+                aria-pressed={isActive}
                 className={`flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-full border transition-colors ${
                   isActive
                     ? `${s.soft} border-transparent ring-1 ${s.ring}`
@@ -443,7 +444,7 @@ export function OpsNotesPage() {
                 }`}
               >
                 <Icon className="w-3.5 h-3.5" />{s.label}
-                <span className="opacity-70">({count})</span>
+                <span className="tabular-nums">({count})</span>
               </button>
             );
           })}

@@ -12,22 +12,22 @@ interface PlaybookCardProps {
 
 const statusConfig: Record<string, { color: string; bg: string; label: string }> = {
   // 상태 신호는 상태 pill 하나에만 — 카드 면·보더는 중립, 정상은 무채색(DESIGN_SYSTEM §12.12-3).
-  healthy: { color: 'text-muted-foreground', bg: 'border-border', label: 'OK' },
-  warning: { color: 'text-status-warning', bg: 'border-status-warning/40', label: 'Changed' },
-  critical: { color: 'text-status-critical', bg: 'border-status-critical/40', label: 'Failed' },
-  running: { color: 'text-status-info', bg: 'border-status-info/40', label: 'Running' },
-  unknown: { color: 'text-status-unknown', bg: 'border-border', label: 'Not Run' },
+  healthy: { color: 'text-muted-foreground', bg: 'border-border', label: '정상' },
+  warning: { color: 'text-status-warning', bg: 'border-status-warning/40', label: '변경' },
+  critical: { color: 'text-status-critical', bg: 'border-status-critical/40', label: '실패' },
+  running: { color: 'text-status-info', bg: 'border-status-info/40', label: '실행 중' },
+  unknown: { color: 'text-status-unknown', bg: 'border-border', label: '미실행' },
 };
 
 function formatTimeAgo(dateStr?: string): string {
-  if (!dateStr) return 'Never';
+  if (!dateStr) return '실행 기록 없음';
   const diff = Date.now() - new Date(dateStr).getTime();
   const mins = Math.floor(diff / 60000);
-  if (mins < 1) return 'Just now';
-  if (mins < 60) return `${mins}m ago`;
+  if (mins < 1) return '방금 전';
+  if (mins < 60) return `${mins}분 전`;
   const hours = Math.floor(mins / 60);
-  if (hours < 24) return `${hours}h ago`;
-  return `${Math.floor(hours / 24)}d ago`;
+  if (hours < 24) return `${hours}시간 전`;
+  return `${Math.floor(hours / 24)}일 전`;
 }
 
 export function PlaybookCard({ playbook, isRunning, onRun, onDelete, onEdit, onToggleDashboard }: PlaybookCardProps) {
@@ -50,7 +50,7 @@ export function PlaybookCard({ playbook, isRunning, onRun, onDelete, onEdit, onT
           {isRunning ? (
             <span className="flex items-center gap-1">
               <Loader2 className="w-3 h-3 animate-spin" />
-              Running
+              실행 중
             </span>
           ) : config.label}
         </span>
@@ -68,18 +68,18 @@ export function PlaybookCard({ playbook, isRunning, onRun, onDelete, onEdit, onT
         ) : playbook.playbookPath ? (
           <div className="truncate">{playbook.playbookPath}</div>
         ) : (
-          <div className="italic text-muted-foreground">(no playbook source)</div>
+          <div className="italic text-muted-foreground">(플레이북 출처 없음)</div>
         )}
       </div>
 
       {/* Stats (if available) */}
       {totals && (
         <div className="grid grid-cols-5 gap-1 mb-3">
-          <StatBadge label="OK" value={totals.ok} color="text-muted-foreground" />
-          <StatBadge label="Chg" value={totals.changed} color="text-status-warning" />
-          <StatBadge label="Fail" value={totals.failures} color="text-status-critical" />
-          <StatBadge label="Unr" value={totals.unreachable} color="text-status-warning" />
-          <StatBadge label="Skip" value={totals.skipped} color="text-status-unknown" />
+          <StatBadge label="정상" value={totals.ok} color="text-muted-foreground" />
+          <StatBadge label="변경" value={totals.changed} color="text-status-warning" />
+          <StatBadge label="실패" value={totals.failures} color="text-status-critical" />
+          <StatBadge label="접속 불가" value={totals.unreachable} color="text-status-warning" />
+          <StatBadge label="건너뜀" value={totals.skipped} color="text-status-unknown" />
         </div>
       )}
 
@@ -106,7 +106,9 @@ export function PlaybookCard({ playbook, isRunning, onRun, onDelete, onEdit, onT
                   ? 'bg-primary/15 text-primary'
                   : 'hover:bg-primary/10 text-muted-foreground'
               }`}
-              title={playbook.showOnDashboard ? 'Remove from Dashboard' : 'Add to Dashboard'}
+              title={playbook.showOnDashboard ? '대시보드에서 빼기' : '대시보드에 표시'}
+              aria-label={`${playbook.name} 대시보드 표시`}
+              aria-pressed={!!playbook.showOnDashboard}
             >
               <LayoutDashboard className="w-4 h-4" />
             </button>
@@ -115,7 +117,8 @@ export function PlaybookCard({ playbook, isRunning, onRun, onDelete, onEdit, onT
             onClick={onRun}
             disabled={isRunning}
             className="p-1.5 rounded-md hover:bg-primary/10 text-primary transition-colors disabled:opacity-50"
-            title="Run playbook"
+            title="플레이북 실행"
+            aria-label={`${playbook.name} 실행`}
           >
             {isRunning ? (
               <Loader2 className="w-4 h-4 animate-spin" />
@@ -127,7 +130,8 @@ export function PlaybookCard({ playbook, isRunning, onRun, onDelete, onEdit, onT
             onClick={onEdit}
             disabled={isRunning || !onEdit}
             className="p-1.5 rounded-md hover:bg-primary/10 text-primary transition-colors disabled:opacity-50"
-            title="Edit playbook"
+            title="플레이북 수정"
+            aria-label={`${playbook.name} 수정`}
           >
             <Pencil className="w-4 h-4" />
           </button>
@@ -135,7 +139,8 @@ export function PlaybookCard({ playbook, isRunning, onRun, onDelete, onEdit, onT
             onClick={onDelete}
             disabled={isRunning}
             className="p-1.5 rounded-md hover:bg-status-critical/10 text-status-critical transition-colors disabled:opacity-50"
-            title="Delete playbook"
+            title="플레이북 삭제"
+            aria-label={`${playbook.name} 삭제`}
           >
             <Trash2 className="w-4 h-4" />
           </button>

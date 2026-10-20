@@ -131,7 +131,7 @@ export function BatchJobRow({ job, cluster, selected, onClick, checkbox, checked
         </div>
         {!job.enabled && (
           <span
-            className="inline-flex items-center gap-1 mt-0.5 text-xs px-1.5 py-0.5 rounded border border-slate-400/40 bg-slate-400/10 text-slate-600 dark:text-slate-400 font-medium"
+            className="inline-flex items-center gap-1 mt-0.5 text-xs px-1.5 py-0.5 rounded border border-border bg-muted text-muted-foreground font-medium"
             title="비활성화 — 예약 실행과 즉시 실행 버튼 모두 막혀 있습니다"
           >
             <PowerOff className="w-2.5 h-2.5" /> 사용 안 함
@@ -200,7 +200,7 @@ export function BatchJobRow({ job, cluster, selected, onClick, checkbox, checked
                   {job.defaultHost && <p className="text-muted-foreground">호스트: {job.defaultHost}</p>}
                   <p className="text-muted-foreground">최근 실행: {formatShortDate(job.lastRunAt)} ({job.lastStatus})</p>
                   {!job.enabled ? (
-                    <p className="text-slate-500">
+                    <p className="text-muted-foreground">
                       비활성화된 잡입니다 — 행을 열어 "활성화"를 켜야 실행할 수 있습니다.
                     </p>
                   ) : !hasCreds && (

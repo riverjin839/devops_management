@@ -1,7 +1,6 @@
 import { useId, useMemo, useState } from 'react';
 import { PageHeader } from '@/components/common/PageHeader';
 import { useNavigate, useParams } from 'react-router-dom';
-import { ArrowLeft, Terminal } from 'lucide-react';
 
 import { ConfluenceUrlInput, useToast, PageShell, LoadingState, EmptyState } from '@/components/common';
 import { MacCard } from '@/components/ui/MacCard';
@@ -30,25 +29,11 @@ export function CommandFormPage() {
 
   return (
     <div className="app-min-h-screen bg-background">
-      <div className="sticky top-0 z-10 bg-background border-b border-border">
-        <div className="max-w-4xl mx-auto px-8 py-2.5 flex items-center gap-2">
-          <button
-            onClick={() => navigate('/commands')}
-            className="p-1.5 hover:bg-secondary rounded-lg transition-colors text-muted-foreground hover:text-foreground"
-            title="목록으로"
-            aria-label="목록으로"
-          >
-            <ArrowLeft className="w-4 h-4" />
-          </button>
-          <Terminal className="w-4 h-4 text-muted-foreground" />
-          <span className="text-sm text-muted-foreground">{editMode ? '명령어 수정' : '명령어 추가'}</span>
-        </div>
-      </div>
-
       <PageShell density="doc">
         <PageHeader
           title={editMode ? '명령어 수정' : '명령어 추가'}
           description="자주 쓰는 CLI 한 줄을 의미·주의사항·중요도와 함께 기록합니다."
+          back={{ to: '/commands', label: '목록으로' }}
           className="mb-8"
         />
 

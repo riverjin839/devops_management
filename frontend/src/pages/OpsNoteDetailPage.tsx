@@ -1,4 +1,4 @@
-import { useNavigate, useParams, useLocation } from 'react-router-dom';
+import { Link, useNavigate, useParams, useLocation } from 'react-router-dom';
 import { PageHeader } from '@/components/common/PageHeader';
 import { ArrowLeft, HelpCircle, Pencil, Trash2 } from 'lucide-react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
@@ -60,47 +60,20 @@ export function OpsNoteDetailPage() {
     }
   };
 
-  const pageTitle = editMode ? 'Q&A 수정' : 'Q&A 상세';
-
+  // D-149 ⑤: PageShell 밖에서 폭을 따로 잡던 sticky 바(`max-w-4xl mx-auto px-8`)와 h1 과 겹치던
+  // 바 라벨을 걷었다. 편집 모드는 PageHeader back 슬롯, 읽기 모드는 h1(제목)을 읽기 뷰가 그리므로
+  // 뒤로가기·수정·삭제만 PageShell 안 한 줄로 둔다.
   return (
     <div className="app-min-h-screen bg-background">
-      <div className="sticky top-0 z-10 bg-background border-b border-border">
-        <div className="max-w-4xl mx-auto px-8 py-2.5 flex items-center gap-2">
-          <button
-            onClick={() => navigate('/ops-notes')}
-            className="p-1.5 hover:bg-secondary rounded-lg transition-colors text-muted-foreground hover:text-foreground"
-            title="목록으로"
-            aria-label="목록으로"
-          >
-            <ArrowLeft className="w-4 h-4" />
-          </button>
-          <HelpCircle className="w-4 h-4 text-muted-foreground" />
-          <span className="text-sm text-muted-foreground">{pageTitle}</span>
-          <div className="ml-auto flex items-center gap-2">
-            {!editMode && (
-              <>
-                <button
-                  onClick={() => navigate(`/ops-notes/${note.id}/edit`)}
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium bg-secondary hover:bg-secondary/80 border border-border rounded-lg transition-colors"
-                >
-                  <Pencil className="w-3.5 h-3.5" /> 수정
-                </button>
-                <button
-                  onClick={handleDelete}
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-status-critical hover:bg-status-critical/10 border border-border rounded-lg transition-colors"
-                >
-                  <Trash2 className="w-3.5 h-3.5" /> 삭제
-                </button>
-              </>
-            )}
-          </div>
-        </div>
-      </div>
-
       <PageShell density="doc">
         {editMode ? (
           <>
-            <PageHeader title="Q&A 수정" description="필요한 항목을 수정한 뒤 폼 하단의 저장 버튼을 누르세요." className="mb-8" />
+            <PageHeader
+              title="Q&A 수정"
+              description="필요한 항목을 수정한 뒤 폼 하단의 저장 버튼을 누르세요."
+              back={{ to: `/ops-notes/${note.id}`, label: '상세로' }}
+              className="mb-8"
+            />
             <MacCard title="Q&A 정보" bodyPadding="p-8">
               <OpsNoteForm
                 initial={note}
@@ -110,8 +83,33 @@ export function OpsNoteDetailPage() {
             </MacCard>
           </>
         ) : (
-          // D-122: 읽기 뷰 하나만 감싸던 카드를 걷음 — doc 밀도에서 본문으로 바로 읽힌다.
-          <OpsNoteReadView note={note} />
+          <>
+            <nav aria-label="Q&A 상세 도구" className="flex items-center gap-2 mb-6">
+              <Link
+                to="/ops-notes"
+                className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground whitespace-nowrap"
+              >
+                <ArrowLeft className="w-4 h-4" aria-hidden="true" />
+                Q&amp;A 목록
+              </Link>
+              <div className="ml-auto flex items-center gap-2">
+                <button
+                  onClick={() => navigate(`/ops-notes/${note.id}/edit`)}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium bg-secondary hover:bg-secondary/80 border border-border rounded-xl transition-colors"
+                >
+                  <Pencil className="w-3.5 h-3.5" aria-hidden="true" /> 수정
+                </button>
+                <button
+                  onClick={handleDelete}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-status-critical hover:bg-status-critical/10 border border-border rounded-xl transition-colors"
+                >
+                  <Trash2 className="w-3.5 h-3.5" aria-hidden="true" /> 삭제
+                </button>
+              </div>
+            </nav>
+            {/* D-122: 읽기 뷰 하나만 감싸던 카드를 걷음 — doc 밀도에서 본문으로 바로 읽힌다. */}
+            <OpsNoteReadView note={note} />
+          </>
         )}
       </PageShell>
     </div>

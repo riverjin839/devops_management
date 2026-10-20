@@ -39,7 +39,12 @@ const DEFAULT_SORT: SortState = { key: 'lastRunAt', dir: 'desc' };
 /** Tailwind 의 `xl` (1280px) 미만 — 슬라이드오버 overlay 모드 트리거. */
 const OVERLAY_BREAKPOINT = '(max-width: 1279px)';
 
-export function BatchJobsPage() {
+interface BatchJobsPageProps {
+  /** 제목 heading 레벨 — 홈 배치잡 탭처럼 바깥에 이미 h1 이 있는 곳에 임베드할 때 2(§12.12-1). */
+  headingLevel?: 1 | 2;
+}
+
+export function BatchJobsPage({ headingLevel = 1 }: BatchJobsPageProps = {}) {
   const { data: clusters = [] } = useClusters();
   const allJobsQ = useBatchJobs();
   const typesQ = useBatchJobTypes();
@@ -274,7 +279,7 @@ export function BatchJobsPage() {
       <PageShell density="console" className="space-y-4">
         {/* Page Header */}
         <div className="flex items-center justify-between gap-3 flex-wrap">
-          <PageHeader icon={ListTree} title="배치잡" description={headerSubtitle} className="flex-1 min-w-0" />
+          <PageHeader icon={ListTree} title="배치잡" description={headerSubtitle} level={headingLevel} className="flex-1 min-w-0" />
           <button
             type="button"
             onClick={openCreateFromHeader}
@@ -452,10 +457,16 @@ export function BatchJobsPage() {
           description={`"${confirmDelete.name}" 잡과 모든 실행 이력을 삭제합니다. 계속할까요?`}
           confirmLabel="삭제"
           danger
+          busy={del.isPending}
           onConfirm={async () => {
-            await del.mutateAsync(confirmDelete.id);
-            if (selectedJob?.id === confirmDelete.id) setSelectedJob(null);
-            setConfirmDelete(null);
+            // ConfirmDialog 는 onConfirm 결과를 기다리지 않는다 — 실패를 여기서 잡아 토스트로 알린다(D-143).
+            try {
+              await del.mutateAsync(confirmDelete.id);
+              if (selectedJob?.id === confirmDelete.id) setSelectedJob(null);
+              setConfirmDelete(null);
+            } catch (e) {
+              toast.error('배치잡 삭제 실패', formatApiError(e));
+            }
           }}
           onCancel={() => setConfirmDelete(null)}
         />

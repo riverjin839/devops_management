@@ -16,22 +16,22 @@ interface PlaybookListRowProps {
 }
 
 const STATUS_CONFIG: Record<string, { dot: string; label: string; text: string }> = {
-  healthy: { dot: 'bg-muted-foreground/40', label: 'OK', text: 'text-muted-foreground' },
-  warning: { dot: 'bg-status-warning', label: 'Changed', text: 'text-status-warning' },
-  critical: { dot: 'bg-status-critical', label: 'Failed', text: 'text-status-critical' },
-  running: { dot: 'bg-status-info', label: 'Running', text: 'text-status-info' },
-  unknown: { dot: 'bg-status-unknown', label: 'Not Run', text: 'text-muted-foreground' },
+  healthy: { dot: 'bg-muted-foreground/40', label: '정상', text: 'text-muted-foreground' },
+  warning: { dot: 'bg-status-warning', label: '변경', text: 'text-status-warning' },
+  critical: { dot: 'bg-status-critical', label: '실패', text: 'text-status-critical' },
+  running: { dot: 'bg-status-info', label: '실행 중', text: 'text-status-info' },
+  unknown: { dot: 'bg-status-unknown', label: '미실행', text: 'text-muted-foreground' },
 };
 
 function formatTimeAgo(dateStr?: string): string {
-  if (!dateStr) return 'Never';
+  if (!dateStr) return '실행 기록 없음';
   const diff = Date.now() - new Date(dateStr).getTime();
   const mins = Math.floor(diff / 60000);
-  if (mins < 1) return 'Just now';
-  if (mins < 60) return `${mins}m ago`;
+  if (mins < 1) return '방금 전';
+  if (mins < 60) return `${mins}분 전`;
   const hours = Math.floor(mins / 60);
-  if (hours < 24) return `${hours}h ago`;
-  return `${Math.floor(hours / 24)}d ago`;
+  if (hours < 24) return `${hours}시간 전`;
+  return `${Math.floor(hours / 24)}일 전`;
 }
 
 export function PlaybookListRow({
@@ -43,7 +43,7 @@ export function PlaybookListRow({
   const effectiveStatus = isRunning ? 'running' : playbook.status;
   const cfg = STATUS_CONFIG[effectiveStatus] ?? STATUS_CONFIG.unknown;
   const totals = playbook.lastResult?.stats?.totals;
-  const fileLabel = playbook.playbookFileName || playbook.playbookPath || '(no source)';
+  const fileLabel = playbook.playbookFileName || playbook.playbookPath || '(출처 없음)';
 
   return (
     <div
@@ -59,7 +59,7 @@ export function PlaybookListRow({
         title="드래그하여 순서 변경"
         aria-label="드래그하여 순서 변경"
       >
-        <GripVertical className="w-3.5 h-3.5" />
+        <GripVertical className="w-3.5 h-3.5" aria-hidden="true" />
       </button>
 
       {/* Status dot + label */}
@@ -69,7 +69,7 @@ export function PlaybookListRow({
           {isRunning ? (
             <span className="inline-flex items-center gap-1">
               <Loader2 className="w-3 h-3 animate-spin" />
-              Running
+              실행 중
             </span>
           ) : cfg.label}
         </span>
@@ -97,14 +97,14 @@ export function PlaybookListRow({
       {/* Stats (compact) */}
       {totals ? (
         <div className="hidden md:flex items-center gap-2 text-xs flex-shrink-0 tabular-nums">
-          <Stat label="OK"   value={totals.ok}          color="text-muted-foreground" />
-          <Stat label="Chg"  value={totals.changed}     color="text-status-warning" />
-          <Stat label="Fail" value={totals.failures}    color="text-status-critical" />
-          <Stat label="Unr"  value={totals.unreachable} color="text-status-warning" />
-          <Stat label="Skip" value={totals.skipped}     color="text-status-unknown" />
+          <Stat label="정상"   value={totals.ok}          color="text-muted-foreground" />
+          <Stat label="변경"  value={totals.changed}     color="text-status-warning" />
+          <Stat label="실패" value={totals.failures}    color="text-status-critical" />
+          <Stat label="접속 불가"  value={totals.unreachable} color="text-status-warning" />
+          <Stat label="건너뜀" value={totals.skipped}     color="text-status-unknown" />
         </div>
       ) : (
-        <div className="hidden md:block text-xs text-muted-foreground italic flex-shrink-0">no stats</div>
+        <div className="hidden md:block text-xs text-muted-foreground italic flex-shrink-0">통계 없음</div>
       )}
 
       {/* Last run */}
@@ -120,7 +120,7 @@ export function PlaybookListRow({
           disabled={!playbook.lastResult}
           className="p-1.5 rounded-md text-muted-foreground hover:bg-secondary hover:text-foreground transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
           title={playbook.lastResult ? '실행 로그 보기' : '실행 기록 없음'}
-          aria-label="실행 로그 보기"
+          aria-label={`${playbook.name} 실행 로그 보기`}
         >
           <FileText className="w-4 h-4" />
         </button>
@@ -132,8 +132,9 @@ export function PlaybookListRow({
                 ? 'bg-primary/15 text-primary'
                 : 'hover:bg-primary/10 text-muted-foreground'
             }`}
-            title={playbook.showOnDashboard ? 'Remove from Dashboard' : 'Add to Dashboard'}
-            aria-label="대시보드 표시 토글"
+            title={playbook.showOnDashboard ? '대시보드에서 빼기' : '대시보드에 표시'}
+            aria-label={`${playbook.name} 대시보드 표시`}
+            aria-pressed={!!playbook.showOnDashboard}
           >
             <LayoutDashboard className="w-4 h-4" />
           </button>
@@ -142,8 +143,8 @@ export function PlaybookListRow({
           onClick={onRun}
           disabled={isRunning}
           className="p-1.5 rounded-md hover:bg-primary/10 text-primary transition-colors disabled:opacity-50"
-          title="Run playbook"
-          aria-label="실행"
+          title="플레이북 실행"
+          aria-label={`${playbook.name} 실행`}
         >
           {isRunning ? <Loader2 className="w-4 h-4 animate-spin" /> : <Play className="w-4 h-4" />}
         </button>
@@ -151,8 +152,8 @@ export function PlaybookListRow({
           onClick={onEdit}
           disabled={isRunning || !onEdit}
           className="p-1.5 rounded-md hover:bg-primary/10 text-primary transition-colors disabled:opacity-50"
-          title="Edit playbook"
-          aria-label="편집"
+          title="플레이북 수정"
+          aria-label={`${playbook.name} 수정`}
         >
           <Pencil className="w-4 h-4" />
         </button>
@@ -160,8 +161,8 @@ export function PlaybookListRow({
           onClick={onDelete}
           disabled={isRunning}
           className="p-1.5 rounded-md hover:bg-status-critical/10 text-status-critical transition-colors disabled:opacity-50"
-          title="Delete playbook"
-          aria-label="삭제"
+          title="플레이북 삭제"
+          aria-label={`${playbook.name} 삭제`}
         >
           <Trash2 className="w-4 h-4" />
         </button>

@@ -55,16 +55,17 @@ function sortJobs(jobs: BatchJob[], { key, dir }: SortState): BatchJob[] {
 }
 
 function SortHeader({
-  label, sortKey, current, onChange, width,
+  label, sortKey, current, onChange, widthClass = '',
 }: {
-  label: string; sortKey: SortKey; current: SortState; onChange: (s: SortState) => void; width?: string;
+  label: string; sortKey: SortKey; current: SortState; onChange: (s: SortState) => void;
+  /** 열 폭 Tailwind 클래스(리터럴로 넘긴다 — 예: `w-[100px]`). 인라인 style 금지(D-149). */
+  widthClass?: string;
 }) {
   const active = current.key === sortKey;
   const Icon = !active ? ArrowUpDown : current.dir === 'asc' ? ArrowUp : ArrowDown;
   return (
     <th
-      className="px-3 py-2 text-left text-xs font-semibold text-muted-foreground bg-secondary/40"
-      style={width ? { width } : undefined}
+      className={`px-3 py-2 text-left text-xs font-semibold text-muted-foreground bg-secondary/40 ${widthClass}`}
       aria-sort={active ? (current.dir === 'asc' ? 'ascending' : 'descending') : 'none'}
     >
       <button
@@ -110,7 +111,7 @@ export function BatchJobTable({
           <thead>
             <tr className="border-b border-border">
               {selectable && (
-                <th className="px-3 py-2 bg-secondary/40" style={{ width: '36px' }}>
+                <th className="w-9 px-3 py-2 bg-secondary/40">
                   <input
                     type="checkbox"
                     checked={allSelected}
@@ -120,21 +121,21 @@ export function BatchJobTable({
                   />
                 </th>
               )}
-              <SortHeader label="상태" sortKey="status" current={sort} onChange={onSortChange} width="100px" />
+              <SortHeader label="상태" sortKey="status" current={sort} onChange={onSortChange} widthClass="w-[100px]" />
               <SortHeader label="잡" sortKey="name" current={sort} onChange={onSortChange} />
               {clusterMap && (
-                <th className="px-3 py-2 text-left text-xs font-semibold text-muted-foreground bg-secondary/40" style={{ width: '110px' }}>
+                <th className="px-3 py-2 text-left text-xs font-semibold text-muted-foreground bg-secondary/40 w-[110px]">
                   클러스터
                 </th>
               )}
-              <th className="px-3 py-2 text-left text-xs font-semibold text-muted-foreground bg-secondary/40" style={{ width: '120px' }}>
+              <th className="px-3 py-2 text-left text-xs font-semibold text-muted-foreground bg-secondary/40 w-[120px]">
                 타입
               </th>
-              <th className="px-3 py-2 text-left text-xs font-semibold text-muted-foreground bg-secondary/40" style={{ width: '110px' }}>
+              <th className="px-3 py-2 text-left text-xs font-semibold text-muted-foreground bg-secondary/40 w-[110px]">
                 cron
               </th>
-              <SortHeader label="최근 실행" sortKey="lastRunAt" current={sort} onChange={onSortChange} width="120px" />
-              <th className="px-3 py-2 text-left text-xs font-semibold text-muted-foreground bg-secondary/40" style={{ width: '60px' }}>
+              <SortHeader label="최근 실행" sortKey="lastRunAt" current={sort} onChange={onSortChange} widthClass="w-[120px]" />
+              <th className="px-3 py-2 text-left text-xs font-semibold text-muted-foreground bg-secondary/40 w-[60px]">
                 실행
               </th>
             </tr>

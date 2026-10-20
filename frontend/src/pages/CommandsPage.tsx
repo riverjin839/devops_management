@@ -5,13 +5,14 @@ import {
 } from 'lucide-react';
 
 import { MacCard } from '@/components/ui/MacCard';
-import { ConfirmDialog, LoadingState, PageShell } from '@/components/common';
+import { ConfirmDialog, LoadingState, PageShell, useToast } from '@/components/common';
 import { PageHeader } from '@/components/common/PageHeader';
 import { CommandsTable } from '@/components/commands/CommandsTable';
 import {
   useCommands, useCreateCommand, useDeleteCommand, useUpdateCommand,
 } from '@/hooks/useCommands';
 import type { CommandEntry, CommandImportance } from '@/types';
+import { formatApiError } from '@/lib/utils';
 
 // ── 중요도 색상 매핑 ─────────────────────────────────────────────────────────
 // info=slate / low=sky / medium=amber / high=orange / critical=red.
@@ -43,6 +44,9 @@ export function CommandsPage() {
   const del = useDeleteCommand();
   const updateInline = useUpdateCommand();
   const createInline = useCreateCommand();
+  const toast = useToast();
+  // 인라인 수정·추가·고정 실패가 무음이면 저장됐다고 믿게 된다(D-143) — 실패는 토스트로 알린다.
+  const onInlineError = (title: string) => (e: unknown) => toast.error(title, formatApiError(e));
 
   const entries = useMemo(() => data?.data ?? [], [data]);
 
@@ -85,15 +89,17 @@ export function CommandsPage() {
         actions={
           <div className="flex items-center gap-2 flex-wrap w-full">
             <div className="relative flex-1 min-w-[220px]">
-              <Search className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
+              <Search className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
               <input
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
+                aria-label="명령어 검색"
                 placeholder="명령어 / 의미 / 주의사항 / 태그 검색"
                 className="w-full pl-8 pr-3 py-1.5 text-sm bg-background border border-border rounded-xl"
               />
             </div>
             <select
+              aria-label="카테고리 필터"
               value={filterCategory}
               onChange={(e) => setFilterCategory(e.target.value)}
               className="px-2 py-1.5 text-sm bg-background border border-border rounded-xl"
@@ -102,6 +108,7 @@ export function CommandsPage() {
               {categories.map((c) => <option key={c} value={c}>{c}</option>)}
             </select>
             <select
+              aria-label="중요도 필터"
               value={filterImportance}
               onChange={(e) => setFilterImportance(e.target.value as CommandImportance | '')}
               className="px-2 py-1.5 text-sm bg-background border border-border rounded-xl"
@@ -122,10 +129,13 @@ export function CommandsPage() {
         ) : (
           <CommandsTable
             entries={entries}
-            onUpdate={(id, data) => updateInline.mutate({ id, data })}
-            onCreate={(data) => createInline.mutate(data)}
+            onUpdate={(id, data) => updateInline.mutate({ id, data }, { onError: onInlineError('수정 실패') })}
+            onCreate={(data) => createInline.mutate(data, { onError: onInlineError('추가 실패') })}
             onDelete={(e) => setConfirmDelete(e)}
-            onTogglePin={(e) => updateInline.mutate({ id: e.id, data: { pinned: !e.pinned } })}
+            onTogglePin={(e) => updateInline.mutate(
+              { id: e.id, data: { pinned: !e.pinned } },
+              { onError: onInlineError(e.pinned ? '고정 해제 실패' : '고정 실패') },
+            )}
             onOpenForm={(e) => navigate(`/commands/${e.id}/edit`)}
           />
         )}
@@ -138,9 +148,15 @@ export function CommandsPage() {
           description={`"${confirmDelete.command.slice(0, 60)}${confirmDelete.command.length > 60 ? '…' : ''}" 항목을 삭제합니다. 계속할까요?`}
           confirmLabel="삭제"
           danger
+          busy={del.isPending}
           onConfirm={async () => {
-            await del.mutateAsync(confirmDelete.id);
-            setConfirmDelete(null);
+            // ConfirmDialog 는 onConfirm 결과를 기다리지 않는다 — 실패는 여기서 잡아 토스트로(D-143).
+            try {
+              await del.mutateAsync(confirmDelete.id);
+              setConfirmDelete(null);
+            } catch (e) {
+              toast.error('명령어 삭제 실패', formatApiError(e));
+            }
           }}
           onCancel={() => setConfirmDelete(null)}
         />

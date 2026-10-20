@@ -167,7 +167,7 @@ export function ProvisionWizard({ catalog, namespaces, running, onRun }: Provisi
   return (
     <div className="space-y-3">
       {/* 1. 프리셋 */}
-      <MacCard title="1 · 권한 프리셋" description="무엇을 할 수 있게 할 것인가 — 고른 뒤 아래 규칙 표에서 그대로 고친다">
+      <MacCard title="1 · 권한 프리셋" description="무엇을 할 수 있게 할 것인가 — 고른 뒤 아래 규칙 표에서 그대로 고칩니다">
         <div className="grid gap-2 [grid-template-columns:repeat(auto-fit,minmax(220px,1fr))]">
           {(catalog?.presets ?? []).map((p) => {
             const on = p.key === presetKey;
@@ -232,7 +232,7 @@ export function ProvisionWizard({ catalog, namespaces, running, onRun }: Provisi
 
         <div className="mt-3">
           <div className="text-xs text-muted-foreground font-medium mb-1.5">
-            추가 네임스페이스 <span className="font-normal">— 같은 권한을 함께 붙인다</span>
+            추가 네임스페이스 <span className="font-normal">— 같은 권한을 함께 붙입니다</span>
           </div>
           <div className="flex flex-wrap items-center gap-1.5">
             {primaryNs && (
@@ -394,8 +394,8 @@ export function ProvisionWizard({ catalog, namespaces, running, onRun }: Provisi
           <Toggle checked={dryRun} onChange={setDryRun} label="모의 실행 (변경 없음)" />
         </div>
         <p className="mt-3 text-[11.5px] leading-relaxed rounded-md border border-primary/30 bg-primary/5 text-primary px-3 py-2">
-          단기 토큰은 만료되면 개발자가 다시 받아야 한다. CI 처럼 사람이 갱신할 수 없는 곳에는 만료 없는
-          Secret 토큰을 쓰고, 회수는 그 Secret 을 지워서 한다.
+          단기 토큰은 만료되면 개발자가 다시 받아야 합니다. CI 처럼 사람이 갱신할 수 없는 곳에는 만료 없는
+          Secret 토큰을 쓰고, 회수는 그 Secret 을 지워서 합니다.
         </p>
       </MacCard>
 

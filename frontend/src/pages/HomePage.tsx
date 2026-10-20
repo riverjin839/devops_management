@@ -204,7 +204,8 @@ export function HomePage() {
               // island-embed 로 그 셸을 무력화하고 이 flex 컨테이너 안에서 자체 스크롤만 하게 한다
               // (Your Island 패널이 페이지 컴포넌트를 임베드할 때 쓰는 것과 같은 패턴).
               <div className="island-embed flex-1 min-h-0 overflow-auto">
-                <BatchJobsPage />
+                {/* 홈에 이미 sr-only h1 이 있어 임베드 제목은 h2 로(§12.12-1, D-149) */}
+                <BatchJobsPage headingLevel={2} />
               </div>
             )}
           </div>

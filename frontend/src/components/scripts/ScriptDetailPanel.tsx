@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useId, useState } from 'react';
 import { Save, Play, Loader2, RotateCcw, Trash2, Pencil } from 'lucide-react';
 import type { ScriptTestRunResponse } from '@/types';
 import { ConfirmDialog, RunLogPanel, useToast } from '@/components/common';
@@ -37,6 +37,7 @@ export function ScriptDetailPanel({ scriptId, onDeleted }: Props) {
   const testRun = useTestRunScript(scriptId);
 
   const [tab, setTab] = useState<Tab>('edit');
+  const tabIdBase = useId();
   const [draft, setDraft] = useState('');
   const [changelog, setChangelog] = useState('');
   const [deleteConfirm, setDeleteConfirm] = useState(false);
@@ -178,6 +179,8 @@ export function ScriptDetailPanel({ scriptId, onDeleted }: Props) {
               <input
                 value={nameDraft}
                 onChange={(e) => setNameDraft(e.target.value)}
+                aria-label="스크립트 이름"
+                placeholder="이름"
                 className="text-sm font-semibold px-2 py-1 rounded-lg border border-border bg-card w-full"
               />
             ) : (
@@ -217,11 +220,11 @@ export function ScriptDetailPanel({ scriptId, onDeleted }: Props) {
         {editingMeta && (
           <div className="mt-2 space-y-1.5">
             <input
-              value={descDraft} onChange={(e) => setDescDraft(e.target.value)} placeholder="설명"
+              value={descDraft} onChange={(e) => setDescDraft(e.target.value)} placeholder="설명" aria-label="스크립트 설명"
               className="w-full px-2 py-1 text-xs rounded-lg border border-border bg-card"
             />
             <input
-              value={tagsDraft} onChange={(e) => setTagsDraft(e.target.value)} placeholder="태그 (콤마 구분)"
+              value={tagsDraft} onChange={(e) => setTagsDraft(e.target.value)} placeholder="태그 (콤마 구분)" aria-label="스크립트 태그 (콤마 구분)"
               className="w-full px-2 py-1 text-xs rounded-lg border border-border bg-card"
             />
           </div>
@@ -231,10 +234,15 @@ export function ScriptDetailPanel({ scriptId, onDeleted }: Props) {
         )}
       </div>
 
-      <div className="flex-shrink-0 flex items-center gap-1 px-4 pt-2 border-b border-border">
+      <div role="tablist" aria-label="스크립트 상세" className="flex-shrink-0 flex items-center gap-1 px-4 pt-2 border-b border-border">
         {TABS.map((t) => (
           <button
             key={t.value}
+            type="button"
+            role="tab"
+            id={`${tabIdBase}-tab-${t.value}`}
+            aria-selected={tab === t.value}
+            aria-controls={`${tabIdBase}-panel`}
             onClick={() => setTab(t.value)}
             className={`px-3 py-1.5 text-xs font-medium rounded-t-lg border-b-2 transition-colors ${
               tab === t.value ? 'border-primary text-foreground' : 'border-transparent text-muted-foreground hover:text-foreground'
@@ -245,12 +253,18 @@ export function ScriptDetailPanel({ scriptId, onDeleted }: Props) {
         ))}
       </div>
 
-      <div className="flex-1 min-h-0 overflow-y-auto p-4">
+      <div
+        role="tabpanel"
+        id={`${tabIdBase}-panel`}
+        aria-labelledby={`${tabIdBase}-tab-${tab}`}
+        className="flex-1 min-h-0 overflow-y-auto p-4"
+      >
         {tab === 'edit' && (
           <div className="space-y-2">
             <textarea
               value={draft}
               onChange={(e) => setDraft(e.target.value)}
+              aria-label="스크립트 본문"
               rows={18}
               spellCheck={false}
               className="w-full px-3 py-2 text-xs font-mono rounded-xl border border-border bg-card focus:outline-none focus:ring-2 focus:ring-ring resize-y"
@@ -259,6 +273,7 @@ export function ScriptDetailPanel({ scriptId, onDeleted }: Props) {
               <input
                 value={changelog}
                 onChange={(e) => setChangelog(e.target.value)}
+                aria-label="변경 메모"
                 placeholder="변경 메모 (선택 — 예: 타임아웃 값 조정)"
                 className="flex-1 px-2.5 py-1.5 text-xs rounded-xl border border-border bg-card focus:outline-none focus:ring-2 focus:ring-ring"
               />

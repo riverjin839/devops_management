@@ -117,7 +117,7 @@ export function RolePanel({
       return; // clusterRoles 재조회 후 다음 렌더에서 다시 찾는다 — 아직 settled 아님
     }
     focusState.current.settled = true;
-    toast.warning('롤을 찾을 수 없다', `${focusRequest.name} — 삭제됐거나 목록에 없다`);
+    toast.warning('롤을 찾을 수 없습니다', `${focusRequest.name} — 삭제됐거나 목록에 없습니다`);
     // eslint-disable-next-line react-hooks/exhaustive-deps -- select/toast/onIncludeSystemChange 는 매 렌더 새 함수라 넣으면 무한 루프
   }, [focusRequest, all, includeSystem]);
 
@@ -197,7 +197,7 @@ export function RolePanel({
         </>}
       >
         {rows.length === 0 ? (
-          <EmptyState icon={Shield} title={isLoading ? '불러오는 중…' : '롤이 없다'} compact />
+          <EmptyState icon={Shield} title={isLoading ? '불러오는 중…' : '롤이 없습니다'} compact />
         ) : (
           <div className="overflow-x-auto border border-border rounded-md max-h-[520px] overflow-y-auto">
             <table className="w-full min-w-[460px] text-sm">
@@ -272,7 +272,7 @@ export function RolePanel({
           <EmptyState
             icon={Shield}
             title="왼쪽에서 롤을 고르세요"
-            description="고른 롤의 권한 규칙을 여기서 바로 고칠 수 있다."
+            description="고른 롤의 권한 규칙을 여기서 바로 고칠 수 있습니다."
             compact
           />
         ) : (
@@ -289,12 +289,12 @@ export function RolePanel({
               rules={draft}
               onChange={setDraft}
               disabled={!canOperate || selected.builtin}
-              disabledHint={selected.builtin ? '쿠버네티스 빌트인 롤은 수정할 수 없다' : hint}
+              disabledHint={selected.builtin ? '쿠버네티스 빌트인 롤은 수정할 수 없습니다' : hint}
             />
 
             {referencingBindings.length > 0 && (
               <p className="text-[11.5px] leading-relaxed rounded-md border border-primary/30 bg-primary/5 text-primary px-3 py-2">
-                저장하면 이 롤을 참조하는 바인딩 {referencingBindings.length}개의 권한이 즉시 바뀐다 — 영향
+                저장하면 이 롤을 참조하는 바인딩 {referencingBindings.length}개의 권한이 즉시 바뀝니다 — 영향
                 범위:{' '}
                 {Array.from(
                   new Set(referencingBindings.map((b) => b.namespace ?? '전체 네임스페이스')),
@@ -305,10 +305,10 @@ export function RolePanel({
 
             {needsClusterRoleBinding && (
               <p className="text-[11.5px] leading-relaxed rounded-md border border-status-warning/30 bg-status-warning/10 text-status-warning px-3 py-2">
-                nodes 같은 클러스터 스코프(네임스페이스 없는) 리소스가 규칙에 있다. 이 롤은{' '}
-                {referencingBindings.length === 0 ? '아직 어떤 바인딩에도 연결돼 있지 않다' : 'RoleBinding 으로만 연결돼 있다'}
-                — RoleBinding 으로는 이런 리소스에 권한이 발동하지 않는다. 저장 후 <b>Binding 탭</b>에서
-                ClusterRoleBinding 을 추가로 만들어야 실제로 동작한다.
+                nodes 같은 클러스터 스코프(네임스페이스 없는) 리소스가 규칙에 있습니다. 이 롤은{' '}
+                {referencingBindings.length === 0 ? '아직 어떤 바인딩에도 연결돼 있지 않습니다' : 'RoleBinding 으로만 연결돼 있습니다'}
+                — RoleBinding 으로는 이런 리소스에 권한이 발동하지 않습니다. 저장 후 <b>Binding 탭</b>에서
+                ClusterRoleBinding 을 추가로 만들어야 실제로 동작합니다.
               </p>
             )}
 
@@ -340,9 +340,9 @@ export function RolePanel({
                 disabled={!canOperate || selected.builtin || !dirty || upsert.isPending}
                 title={
                   selected.builtin
-                    ? '쿠버네티스 빌트인 롤은 수정할 수 없다'
+                    ? '쿠버네티스 빌트인 롤은 수정할 수 없습니다'
                     : !dirty
-                      ? '변경 사항이 없다'
+                      ? '변경 사항이 없습니다'
                       : withHint('저장')
                 }
                 aria-label={ariaWithHint('규칙 저장')}
@@ -360,7 +360,7 @@ export function RolePanel({
         title="롤을 삭제할까요?"
         description={
           pendingDelete
-            ? `${pendingDelete.name} 을(를) 지우면 이 롤을 참조하는 바인딩이 아무 권한도 주지 못하게 된다.`
+            ? `${pendingDelete.name} 을(를) 지우면 이 롤을 참조하는 바인딩이 아무 권한도 주지 못하게 됩니다.`
             : undefined
         }
         confirmLabel="삭제"

@@ -561,6 +561,7 @@ export function NodeSpecPage() {
                 <button
                   key={k}
                   onClick={() => setStatusFilter(k === 'total' ? '' : k as NodeSpecStatus)}
+                  aria-pressed={isActive}
                   className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full border text-xs transition-colors ${
                     isActive
                       ? 'bg-primary/10 border-primary/50 text-primary'
@@ -568,7 +569,7 @@ export function NodeSpecPage() {
                   }`}
                 >
                   {k !== 'total' && (
-                    <span className={`w-1.5 h-1.5 rounded-full inline-block ${dotCls}`} />
+                    <span className={`w-1.5 h-1.5 rounded-full inline-block ${dotCls}`} aria-hidden="true" />
                   )}
                   <span>{k === 'total' ? '전체' : STATUS_LABEL[k]}</span>
                   <span className="font-bold tabular-nums text-foreground">{stats[k] ?? 0}</span>
@@ -578,14 +579,15 @@ export function NodeSpecPage() {
 
             {/* 필터 (작게) — 검색 / 상태 / 역할 */}
             <div className="relative min-w-[180px]">
-              <Search className="absolute left-2 top-1/2 -translate-y-1/2 w-3 h-3 text-muted-foreground pointer-events-none" />
+              <Search className="absolute left-2 top-1/2 -translate-y-1/2 w-3 h-3 text-muted-foreground pointer-events-none" aria-hidden="true" />
               <input
                 value={search} onChange={(e) => setSearch(e.target.value)}
+                aria-label="서버 검색 (hostname / serial / IP / model)"
                 placeholder="hostname / serial / IP / model"
                 className="w-full pl-7 pr-2 py-1 text-sm bg-background border border-border rounded-lg focus:outline-none focus:ring-1 focus:ring-primary"
               />
             </div>
-            <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value as NodeSpecStatus | '')}
+            <select aria-label="상태 필터" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value as NodeSpecStatus | '')}
               className="px-1.5 py-1 text-sm bg-background border border-border rounded-lg focus:outline-none focus:ring-1 focus:ring-primary">
               <option value="">상태 전체</option>
               <option value="active">운영중</option>
@@ -593,7 +595,7 @@ export function NodeSpecPage() {
               <option value="maintenance">점검</option>
               <option value="decommission">폐기</option>
             </select>
-            <select value={roleFilter} onChange={(e) => setRoleFilter(e.target.value)}
+            <select aria-label="역할 필터" value={roleFilter} onChange={(e) => setRoleFilter(e.target.value)}
               className="px-1.5 py-1 text-sm bg-background border border-border rounded-lg focus:outline-none focus:ring-1 focus:ring-primary">
               <option value="">역할 전체</option>
               <option value="control-plane">control-plane</option>
@@ -639,7 +641,7 @@ export function NodeSpecPage() {
           <MacCard bodyPadding="p-0" rootClassName="overflow-hidden">
           <div ref={tableRef} tabIndex={-1}>
             <DoubleScrollX>
-              <table className="text-sm" style={{ tableLayout: 'fixed', width: 'max-content', minWidth: '100%' }}>
+              <table className="text-sm table-fixed w-max min-w-full">
                 <colgroup>
                   {GRID_COLS.map((k) => <col key={k} style={{ width: `${colW.getWidth(k)}px` }} />)}
                   <col style={{ width: `${colW.getWidth('actions')}px` }} />
@@ -791,7 +793,7 @@ export function NodeSpecPage() {
                           <button
                             type="button"
                             title="SSD 여부 (클릭 순환: 미설정 → O → X → 미설정)"
-                            aria-label={`SSD 여부: ${r.isSsd === true ? '예' : r.isSsd === false ? '아니오' : '미설정'} — 클릭하여 순환 변경`}
+                            aria-label={`${r.hostname} SSD 여부: ${r.isSsd === true ? '예' : r.isSsd === false ? '아니오' : '미설정'} — 클릭하여 순환 변경`}
                             aria-pressed={r.isSsd === true ? 'true' : r.isSsd === false ? 'false' : 'mixed'}
                             disabled={savingKeys.has(`${r.id}:isSsd`)}
                             onClick={() => {
@@ -818,7 +820,7 @@ export function NodeSpecPage() {
                         <button
                           type="button"
                           title="VM 여부 (클릭 순환: 미설정 → O → X → 미설정)"
-                          aria-label={`VM 여부: ${r.isVm === true ? '예' : r.isVm === false ? '아니오' : '미설정'} — 클릭하여 순환 변경`}
+                          aria-label={`${r.hostname} VM 여부: ${r.isVm === true ? '예' : r.isVm === false ? '아니오' : '미설정'} — 클릭하여 순환 변경`}
                           aria-pressed={r.isVm === true ? 'true' : r.isVm === false ? 'false' : 'mixed'}
                           disabled={savingKeys.has(`${r.id}:isVm`)}
                           onClick={() => {
@@ -852,11 +854,11 @@ export function NodeSpecPage() {
                       </GridCell>
                       <td className="px-2 py-2 align-top">
                         <div className="flex items-center gap-1">
-                          <button onClick={() => setEditTarget(r)} title="상세 수정 (모달)" aria-label="상세 수정 (모달)"
+                          <button onClick={() => setEditTarget(r)} title="상세 수정 (모달)" aria-label={`${r.hostname} 상세 수정`}
                             className="p-1 rounded hover:bg-secondary text-muted-foreground hover:text-foreground">
                             <Pencil className="w-3.5 h-3.5" />
                           </button>
-                          <button onClick={() => setConfirmDelete(r)} title="삭제" aria-label="삭제"
+                          <button onClick={() => setConfirmDelete(r)} title="삭제" aria-label={`${r.hostname} 삭제`}
                             className="p-1 rounded hover:bg-status-critical/10 text-muted-foreground hover:text-status-critical">
                             <Trash2 className="w-3.5 h-3.5" />
                           </button>
