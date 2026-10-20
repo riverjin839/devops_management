@@ -29,7 +29,7 @@
 | **협업/지식** | 업무 보드(칸반/표/캘린더), 스프린트, Jira 양방향 연동(Excel 가져오기·상태/내용 반영), 문서 관리 대시보드(Confluence 문서 가져오기/게시 + 동기화 상태 + AI 시맨틱 검색), 주간 타임라인, WBS, 워크플로우, 마인드맵, 온톨로지 그래프, 지식 허브(문서 에디터·도구 탭 통합), 기술 트렌드 다이제스트 |
 | **개인화** | Your Island — 자주 쓰는 화면을 개인 화면 하나에 모아 탭/좌측 레일로 전환(기존 페이지를 그대로 임베드), 아일랜드 여러 개 + 팀 공유·복제, 화면 언어 선택(한국어/English) |
 | **소통/알림** | 사용자 VOC 게시판, 인앱 알림, 릴리즈 노트 패널(CHANGELOG 자동 파싱), 👍 공감 |
-| **배포/운영** | kind / Helm / Kustomize / ArgoCD / Jenkins, 폐쇄망(airgap) 배포, JSON 백업·복원, 사용자 관리(RBAC: viewer/operator/admin), 사내 SSO(OIDC) 로그인 |
+| **배포/운영** | kind / Helm / Kustomize / ArgoCD / Jenkins, 폐쇄망(airgap) 배포, JSON 백업·복원, 사용자 관리(RBAC: viewer/operator/admin), 사내 SSO(OIDC)·디렉터리(LDAP/AD) 로그인 |
 
 ## 기술 스택
 

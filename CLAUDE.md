@@ -100,7 +100,7 @@ devops_management/
 ├── scripts/             # kind-setup.sh, deploy-airgap.sh, init-cluster.sh,
 │                        #   release/{bump_version,decide_bump,changelog_sections,check_changelog_sections}.py,
 │                        #   docs/check_docs_sync.py, report/(AI 개발 리포트 집계·HTML 빌드),
-│                        #   a11y/(axe 접근성 스캔)
+│                        #   a11y/(axe 접근성 스캔), ui/check_dialogs.py(모달 어댑터 검사 — CI)
 ├── ansible/playbooks/  argocd/  docker/ vagrant/ windows-docker/
 ├── docs/                # 인덱스는 docs/README.md (01-plan/ 02-design/ 03-analysis/
 │                        #   archive/ superpowers/ 하위 폴더 포함)
@@ -136,6 +136,7 @@ devops_management/
 cd frontend && npm run lint && npx tsc --noEmit && npm run build   # lint 는 --max-warnings 0
 cd backend  && pytest -v                                           # 실행 중인 PostgreSQL 필요
 python3 scripts/docs/check_docs_sync.py                            # 문서 동기화 검사
+python3 scripts/ui/check_dialogs.py                                # 모달 어댑터 검사(R-2)
 ```
 
 - 로컬 DB 를 따로 쓰려면 `DATABASE_URL=postgresql://postgres:postgres@localhost:5432/k8s_monitor_test pytest -v`.
@@ -295,7 +296,7 @@ offline/error dict 를 반환**하고 HTTP 500 을 올리지 않는다 (`agent_s
   (좌측 공백 0) — 행 전체에 좌측 패딩이나 `mx-auto` 를 주지 않는다.
 - **SSH/exec 콘솔은 콘솔 패턴 필수.** 좌(컨트롤)/우(결과) 한 로우, stdout/stderr 는
   `ExecOutputTabs`, 로그는 `LogViewer`(plain `<pre>` 금지), 최상단에서 `useTerminalEnvSync` 호출.
-  적용 화면: `/bulk-exec` `/mc-client` `/etcdctl` `/cilium-trace` `/kernel-params` `/isilon-nfs`
+  적용 화면: `/bulk-exec` `/mc` `/etcdctl` `/cilium-trace` `/kernel-params` `/isilon-nfs`
   (+ 신규 콘솔 전부). 세부 예외(`/isilon-nfs` 의 `ExecOutputTabs` 미적용 등)는 `DESIGN_SYSTEM.md` §12.6.
 - **접근성**: 아이콘 전용 버튼은 `title` + `aria-label` 병행. 셸 flyout 안의 항목은 `FlyoutLink`/`FlyoutAction`
   만 쓴다(`DESIGN_SYSTEM.md` §12.8 — plain 버튼은 키보드 내비에서 빠진다).
@@ -349,10 +350,10 @@ All shared interfaces live in `src/types/index.ts`. Keep backend response shapes
 확인하거나 해당 라우터 파일을 읽는다. 마운트 목록은 `backend/app/routers/__init__.py`.
 
 대부분의 라우터는 JWT 인증(`_auth` dependency)이 걸려 있고, **비인증 마운트 예외는
-`auth`, `auth_oidc`, `health`, `check_ingest`, `k8s_exec`, `k9s_ssh`, `node_ssh`, `k8s_events_ingest`,
+`auth`, `auth_oidc`, `auth_ldap`, `health`, `check_ingest`, `k8s_exec`, `k9s_ssh`, `node_ssh`, `k8s_events_ingest`,
 `observability_ingest`, `daily_report_public`, `external_services_public`** 다
 (`*_public` 은 로그인 없는 공개 화면 `/daily-report`·`/external-services` 용 읽기 전용 `/public/...` — 테넌트 바인딩 없는 클러스터만 노출, 판정 `services/public_pages.py`)
-(`auth_oidc` 는 SSO 진입·콜백·교환과 공개 설정만 비인증이고 `/auth/oidc/settings*` 는 엔드포인트에 `require_admin` 을 직접 건다)
+(`auth_oidc` 는 SSO 진입·콜백·교환과 공개 설정만 비인증이고 `/auth/oidc/settings*` 는 엔드포인트에 `require_admin` 을 직접 건다. `auth_ldap` 은 설정 엔드포인트뿐이며 전부 `require_admin` 을 직접 건다)
 (`k8s_exec`/`k9s_ssh`/`node_ssh` 는 WebSocket 이라 핸들러가 query token 을 직접 검증하고,
 `node_ssh` 의 REST `POST /node-ssh/test` 는 엔드포인트에 `require_operator` 를 직접 건다).
 앱 헬스 프로브만 `/api/v1` 접두사가 없다 — `GET /health` · `/health/live` · `/health/ready`(DB 확인).
@@ -361,7 +362,7 @@ All shared interfaces live in `src/types/index.ts`. Keep backend response shapes
 
 | 그룹 | 라우터 |
 |---|---|
-| 인증/사용자 | `auth`, `auth_oidc`, `audit_logs`, `system_errors`, `system_diagnostics`, `notifications`, `ui_settings`, `terminal_appearance`, `release_notes`, `backup`, `schema_health`, `island`, `home_prefs`, `tenants` |
+| 인증/사용자 | `auth`, `auth_oidc`, `auth_ldap`, `audit_logs`, `system_errors`, `system_diagnostics`, `notifications`, `ui_settings`, `terminal_appearance`, `release_notes`, `backup`, `schema_health`, `island`, `home_prefs`, `tenants` |
 | 모니터링/점검 | `clusters`, `core_bundle_router`, `check_matrix`, `check_results_router`(+ingest), `check_definitions_router`, `ops_check`, `history`, `metric_trend`, `cluster_trends`, `cluster_items`, `k8s_events`(+ingest), `observability`(+ingest), `promql`, `health` |
 | K8s 운영 | `k8s_resources`, `k8s_allocation`, `k8s_efficiency`(히스토리·추천·NS 정책·적용/롤백 run), `daily_report`(+public — 일일 리포트), `external_services`(+public — 외부 도메인·IP:Port), `k8s_rbac`(SA·Role·ClusterRole·Binding + kubeconfig 발급), `k8s_helm`, `k8s_exec`, `k9s_ssh`, `node_ssh`, `bulk_exec`, `saved_scripts`, `etcdctl`, `commands`, `mc_client`, `bottleneck`, `node_labels`, `node_images` |
 | 네트워크/토폴로지 | `cilium_trace`, `topology_trace`, `service_topology`, `architecture_docs` |
@@ -419,9 +420,10 @@ Makefile 타깃(`make k8s-dev`, `make docker-rebuild` 등)은 `make help` 로 �
 
 워크플로 정의는 `.github/workflows/` 가 원천이다. 작업 시 알아야 할 것만:
 
-- **CI (`ci.yml`, push/PR → `main`·`develop`)**: frontend lint → `tsc --noEmit` → build,
+- **CI (`ci.yml`, push/PR → `main`·`develop`)**: frontend lint → `tsc --noEmit` → 모달 어댑터 검사(`scripts/ui/check_dialogs.py`) → build,
   backend `pytest`(PostgreSQL·Redis 서비스 컨테이너 필요), 그리고 `docs-sync` job.
   머지 전 로컬 게이트는 §Development & Tests 와 동일하다 — **CI 에서 처음 확인하지 말 것.**
+- **A11y scan (`a11y.yml`, 수동 실행)**: Postgres·Redis·백엔드·vite 를 띄워 `scripts/a11y/axe_scan.py` 로 20 라우트 × 선택 테마를 axe(WCAG 2.1 A/AA) 검사하고 `--fail-on`(기본 serious) 이상이면 실패한다. 결과는 job summary + `a11y-report` 아티팩트. PR 게이트가 아니다.
 - **CD (`cd.yml`, push → `main`)**: GHCR 이미지 빌드 → `kustomize edit set image` 로 SHA 핀 →
   apply → rollout status. 배포는 **SHA 태그로만** 고정한다(`latest` 금지).
 - **AI 개발 리포트 (`ai-dev-report.yml`, 매월 1일 + 수동 실행)**: `scripts/report/` 로 git 이력을 다시 집계해

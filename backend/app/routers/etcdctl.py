@@ -10,10 +10,14 @@
 보안:
 - SSH 인증정보는 요청에만 존재, DB 저장 안 함
 - etcdctl 내부에서 신뢰된 CA/cert 만 사용 (TLS 자동)
+- 테넌트 판정은 경로 클러스터(``_cluster_scoped``)에 더해 접속 host 가 실제로 속한 클러스터의
+  operate 까지 본다(`/bulk-exec` 와 동일 — "호스트 직접 입력"으로 다른 테넌트 노드를 겨누는 우회 차단).
+- 감사는 실행 **후** 실제 결과(`status`·`exit_code`·`host`·`duration_ms`)로 남기고, 명령은
+  ``services/command_mask`` 로 비밀값(``--password``·``--user u:p``·``*_PASSWORD=``)을 가린 뒤 500자까지.
+  응답 ``executed_command`` 도 같은 마스킹을 거친다(D-170·D-176 ③).
 """
 import os
 import shlex
-import time
 from typing import Literal, Optional
 from uuid import UUID
 
@@ -29,6 +33,8 @@ from app.auth.deps import require_operator
 from app.services.kubeconfig import ensure_kubeconfig_file
 from app.services.ssh_runner import SSHTarget, run_bulk
 from app.services import audit_logger
+from app.services.cluster_access import cluster_ids_for_hosts, require_clusters_access
+from app.services.command_mask import audit_command, audit_error, mask_command
 from app.services.k8s_client_pool import get_api_client_for_path
 
 router = APIRouter(tags=["etcdctl"])
@@ -38,19 +44,19 @@ router = APIRouter(tags=["etcdctl"])
 
 PRESETS: dict[str, dict[str, str]] = {
     "endpoint-health": {
-        "label": "엔드포인트 Health",
+        "label": "엔드포인트 정상 여부",
         "args": "endpoint health --write-out=table",
     },
     "endpoint-status": {
-        "label": "엔드포인트 Status",
+        "label": "엔드포인트 상태",
         "args": "endpoint status --write-out=table",
     },
     "member-list": {
-        "label": "Member List",
+        "label": "멤버 목록",
         "args": "member list --write-out=table",
     },
     "alarm-list": {
-        "label": "Alarm List",
+        "label": "알람 목록",
         "args": "alarm list",
     },
     "db-size": {
@@ -58,22 +64,70 @@ PRESETS: dict[str, dict[str, str]] = {
         "args": "endpoint status --write-out=json",
     },
     "defrag": {
-        "label": "DB Defrag (주의: write lock)",
+        "label": "DB 조각 모음 (주의: 쓰기 잠금)",
         "args": "defrag --cluster",
     },
     "compact-rev": {
-        "label": "compact — 현재 revision",
+        "label": "압축 — 현재 리비전까지",
         "args": "compact $(etcdctl endpoint status --write-out=\"json\" | grep -oE '\"Revision\":[0-9]+' | head -1 | cut -d: -f2)",
     },
     "snapshot-save": {
-        "label": "Snapshot 저장 /tmp/etcd-snapshot-$(date +%s).db",
+        "label": "스냅샷 저장 (/tmp/etcd-snapshot-<시각>.db)",
         "args": "snapshot save /tmp/etcd-snapshot-$(date +%s).db",
     },
     "watch-key-range": {
-        "label": "get /registry (prefix, keys only, 처음 20개)",
+        "label": "/registry 키 조회 (접두사, 키만, 처음 20개)",
         "args": "get /registry/ --prefix --keys-only --limit=20",
     },
 }
+
+
+def _result_details(host: str, command: str, r, exc: BaseException | None = None) -> dict:
+    """실행 감사 details — 실제 결과 기준(D-170). 명령·오류는 마스킹 후 자른다.
+
+    ``r`` 이 없으면(실행 도중 예외) ``result="exception"`` + 마스킹한 예외 요약.
+    """
+    if r is None:
+        return {
+            "host": host,
+            "command": audit_command(command),
+            "result": "exception",
+            "exit_code": None,
+            "duration_ms": None,
+            "error": audit_error(exc) or "실행이 끝나기 전에 중단됨",
+        }
+    return {
+        "host": host,
+        "command": audit_command(command),
+        "result": r.status,
+        "exit_code": r.exit_code,
+        "duration_ms": r.duration_ms,
+        "error": audit_command(r.error, 200) or None,
+    }
+
+
+async def _run_audited(db: Session, request: Request, actor: User, *, action: str, cluster_id: UUID,
+                       host: str, bash_cmd: str, run):
+    """``run()``(SSH 실행 코루틴 팩토리)을 수행하고 **정확히 1행** 감사한다 — 예외로 끝나도 failure 로 남긴다."""
+    r = None
+    exc: BaseException | None = None
+    try:
+        r = (await run())[0]
+        return r
+    except BaseException as e:  # noqa: BLE001 — 취소(CancelledError)까지 감사 후 그대로 다시 올린다
+        exc = e
+        raise
+    finally:
+        audit_logger.record(
+            db,
+            action=action,
+            actor=actor,
+            status="success" if r is not None and r.status == "ok" else "failure",
+            target_type="cluster",
+            target_id=cluster_id,
+            details=_result_details(host, bash_cmd, r, exc),
+            request=request,
+        )
 
 
 # ── schemas ──────────────────────────────────────────────────────────────────
@@ -241,18 +295,10 @@ async def run_etcdctl(
     cluster = db.query(Cluster).filter(Cluster.id == cluster_id).first()
     if not cluster:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Cluster not found")
+    # 경로 클러스터는 _cluster_scoped 가 봤다 — host 가 실제로 속한 클러스터도 operate 필요(D-169 ③).
+    require_clusters_access(db, actor, [cluster_id, *cluster_ids_for_hosts(db, [payload.host])])
 
     bash_cmd = _build_etcdctl_command(payload)
-    audit_logger.record(
-        db,
-        action="etcdctl.run",
-        actor=actor,
-        status="success",
-        target_type="cluster",
-        target_id=cluster_id,
-        details={"args": payload.args[:200]},
-        request=request,
-    )
     # bash -c "..." 로 한 번에 실행. source 지원을 위해 bash 강제.
     remote_cmd = f"bash -lc {shlex.quote(bash_cmd)}"
 
@@ -260,21 +306,22 @@ async def run_etcdctl(
         host=payload.host, port=payload.port, username=payload.username,
         password=payload.password, private_key=payload.private_key,
     )
-    start = time.monotonic()
-    results = await run_bulk(
-        [target],
-        action="ssh",
-        command=remote_cmd,
-        mode="sequential",
-        connect_timeout=min(payload.timeout, 10),
-        exec_timeout=payload.timeout,
-        parallelism=1,
+    r = await _run_audited(
+        db, request, actor, action="etcdctl.run", cluster_id=cluster_id, host=payload.host, bash_cmd=bash_cmd,
+        run=lambda: run_bulk(
+            [target],
+            action="ssh",
+            command=remote_cmd,
+            mode="sequential",
+            connect_timeout=min(payload.timeout, 10),
+            exec_timeout=payload.timeout,
+            parallelism=1,
+        ),
     )
-    r = results[0]
     return EtcdCtlResponse(
         host=r.host, status=r.status, exit_code=r.exit_code,
         stdout=r.stdout, stderr=r.stderr, duration_ms=r.duration_ms,
-        error=r.error, executed_command=bash_cmd,
+        error=r.error, executed_command=mask_command(bash_cmd),
     )
 
 
@@ -282,8 +329,9 @@ async def run_etcdctl(
 async def get_etcd_logs(
     cluster_id: UUID,
     payload: EtcdLogsRequest,
+    request: Request,
     db: Session = Depends(get_db),
-    _: User = Depends(require_operator),
+    actor: User = Depends(require_operator),
 ):
     """master 노드에서 etcd 서비스 journalctl 로그를 가져온다."""
     if not payload.password and not payload.private_key:
@@ -294,6 +342,7 @@ async def get_etcd_logs(
     cluster = db.query(Cluster).filter(Cluster.id == cluster_id).first()
     if not cluster:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Cluster not found")
+    require_clusters_access(db, actor, [cluster_id, *cluster_ids_for_hosts(db, [payload.host])])
 
     # journalctl -u etcd.service -n <tail> --no-pager [--since "..."] [ | grep -i "..." ]
     cmd_parts = [f"journalctl -u {shlex.quote(payload.unit)} -n {int(payload.tail)} --no-pager"]
@@ -309,18 +358,20 @@ async def get_etcd_logs(
         host=payload.host, port=payload.port, username=payload.username,
         password=payload.password, private_key=payload.private_key,
     )
-    results = await run_bulk(
-        [target],
-        action="ssh",
-        command=remote_cmd,
-        mode="sequential",
-        connect_timeout=10,
-        exec_timeout=60,
-        parallelism=1,
+    r = await _run_audited(
+        db, request, actor, action="etcdctl.logs", cluster_id=cluster_id, host=payload.host, bash_cmd=bash_cmd,
+        run=lambda: run_bulk(
+            [target],
+            action="ssh",
+            command=remote_cmd,
+            mode="sequential",
+            connect_timeout=10,
+            exec_timeout=60,
+            parallelism=1,
+        ),
     )
-    r = results[0]
     return EtcdLogsResponse(
         host=r.host, status=r.status, exit_code=r.exit_code,
         stdout=r.stdout, stderr=r.stderr, duration_ms=r.duration_ms,
-        error=r.error, executed_command=bash_cmd,
+        error=r.error, executed_command=mask_command(bash_cmd),
     )

@@ -230,6 +230,40 @@ export const authApi = {
     authorizationEndpoint?: string; tokenEndpoint?: string; userinfoEndpoint?: string | null;
     algorithms?: string[]; pkceS256?: boolean; jwksKeys?: number;
   }>('/auth/oidc/settings/test', { issuer: issuer || null }),
+
+  // ── 사내 디렉터리(LDAP/AD) — R-7. 로그인은 /auth/login 그대로, 설정 원천은 AppSetting `auth.ldap`. ──
+  ldapSettings: () => api.get<{
+    enabled: boolean; serverUrls: string[]; startTls: boolean; tlsVerify: boolean; caCertPem: string;
+    timeoutSeconds: number; bindMode: 'direct' | 'search'; bindDnTemplate: string; serviceBindDn: string;
+    hasBindPassword: boolean; userSearchBase: string; userSearchFilter: string; displayNameAttribute: string;
+    emailAttribute: string; groupAttribute: string; allowedGroups: string[]; autoProvision: boolean;
+    defaultRole: 'viewer' | 'operator'; priority: 'local_first' | 'ldap_first'; protectLocalAdmins: boolean;
+    /** 백엔드 이미지에 ldap3 모듈이 있는지. */
+    moduleAvailable: boolean;
+  }>('/auth/ldap/settings'),
+  /** 보낸 키만 바뀐다. bindPassword 는 입력했을 때만 교체(암호화 저장), clearBindPassword 면 삭제. */
+  updateLdapSettings: (payload: Partial<{
+    enabled: boolean; serverUrls: string[]; startTls: boolean; tlsVerify: boolean; caCertPem: string;
+    timeoutSeconds: number; bindMode: 'direct' | 'search'; bindDnTemplate: string; serviceBindDn: string;
+    bindPassword: string; clearBindPassword: boolean; userSearchBase: string; userSearchFilter: string;
+    displayNameAttribute: string; emailAttribute: string; groupAttribute: string; allowedGroups: string[];
+    autoProvision: boolean; defaultRole: 'viewer' | 'operator'; priority: 'local_first' | 'ldap_first';
+    protectLocalAdmins: boolean;
+  }>) => api.put('/auth/ldap/settings', payload),
+  /** 연결 확인 — 서버 연결 → 서비스 바인드 → (선택) 사용자 검색(비밀번호 없이 검색만). 함께 보낸 설정 값은
+   *  저장하지 않고 저장된 설정 위에 얹어 확인한다. 실패도 200 + 단계별 결과. */
+  testLdapSettings: (payload: Partial<{
+    serverUrls: string[]; startTls: boolean; tlsVerify: boolean; caCertPem: string; timeoutSeconds: number;
+    bindMode: 'direct' | 'search'; bindDnTemplate: string; serviceBindDn: string; bindPassword: string;
+    clearBindPassword: boolean; userSearchBase: string; userSearchFilter: string; displayNameAttribute: string;
+    emailAttribute: string; groupAttribute: string; allowedGroups: string[]; testUsername: string;
+  }>) => api.post<{
+    ok: boolean;
+    steps: { name: string; ok: boolean; detail: string }[];
+    warnings?: string[];
+    server?: string;
+    user?: { dn: string; displayName?: string | null; email?: string | null; groups?: string[]; groupAllowed?: boolean };
+  }>('/auth/ldap/settings/test', payload),
 };
 
 // ── Audit logs API ────────────────────────────────────────────────────────
@@ -769,7 +803,7 @@ export const playbooksApi = {
     }),
   getById: (id: string) => api.get<ApiResponse<Playbook>>(`/playbooks/${id}`),
   create: (data: Partial<Playbook>) => api.post<ApiResponse<Playbook>>('/playbooks', data),
-  update: (id: string, data: Partial<Playbook>) =>
+  update: (id: string, data: import('@/types').PlaybookUpdatePayload) =>
     api.put<ApiResponse<Playbook>>(`/playbooks/${id}`, data),
   delete: (id: string) => api.delete(`/playbooks/${id}`),
   run: (id: string, creds?: PlaybookSshCreds) =>
@@ -1486,7 +1520,7 @@ export const commandsApi = {
   get: (id: string) => api.get<import('@/types').CommandEntry>(`/commands/${id}`),
   create: (data: import('@/types').CommandEntryCreate) =>
     api.post<import('@/types').CommandEntry>('/commands', data),
-  update: (id: string, data: Partial<import('@/types').CommandEntryCreate>) =>
+  update: (id: string, data: import('@/types').CommandEntryUpdate) =>
     api.put<import('@/types').CommandEntry>(`/commands/${id}`, data),
   delete: (id: string) => api.delete(`/commands/${id}`),
 };
@@ -1662,15 +1696,22 @@ export const topologyTraceApi = {
     api.post<import('@/types').TcpdumpCaptureResponse>('/topology-trace/tcpdump', payload, {
       signal, timeout: runTimeout((payload.durationSec ?? 10) + (payload.connectTimeout ?? 10)),
     }),
-  tcpdumpInterfaces: (payload: import('@/types').TcpdumpInterfacesRequest, signal?: AbortSignal) =>
-    api.post<import('@/types').TcpdumpInterfacesResponse>('/topology-trace/tcpdump/interfaces', payload, { signal }),
+  // clusterId: 화면이 선택한 클러스터 — 서버가 host 소속 클러스터와 함께 테넌트 operate 판정에 쓴다(쿼리 파라미터).
+  tcpdumpInterfaces: (payload: import('@/types').TcpdumpInterfacesRequest, signal?: AbortSignal, clusterId?: string) =>
+    api.post<import('@/types').TcpdumpInterfacesResponse>('/topology-trace/tcpdump/interfaces', payload, {
+      signal,
+      params: clusterId ? { cluster_id: clusterId } : undefined,
+    }),
 };
 
 // Assignees API (담당자 관리)
 export const assigneesApi = {
   getAll: () => api.get<{ data: import('@/types').Assignee[] }>('/ui-settings/assignees'),
   update: (assignees: import('@/types').Assignee[]) =>
-    api.put<{ data: import('@/types').Assignee[] }>('/ui-settings/assignees', { assignees }),
+    // accounts: 이번 저장으로 발급(created)·해제(revoked)된 로그인 계정의 사번 목록(D-156).
+    api.put<{ data: import('@/types').Assignee[]; accounts?: { created?: string[]; revoked?: string[] } }>(
+      '/ui-settings/assignees', { assignees },
+    ),
   // 본인 담당자 정보만 부분 수정 — admin 이 아닌 사용자(operator/viewer)도 호출 가능.
   updateMine: (patch: import('@/types').SelfAssigneePatch) =>
     api.put<{ data: import('@/types').Assignee[]; me: import('@/types').Assignee }>(

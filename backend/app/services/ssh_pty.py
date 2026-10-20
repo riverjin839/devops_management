@@ -16,8 +16,11 @@ SSH 웹 터미널 화면(k9s 콘솔 `routers/k9s_ssh.py`, 노드 SSH 터미널
 - 이후 프레임: {"type":"stdin","data":"..."} / {"type":"resize","cols":..,"rows":..}
 
 보안:
-- WS 에는 전역 `_auth` 가 적용되지 않으므로 핸들러가 `resolve_ws_user()` 로 직접
-  토큰을 검증하고, 역할이 admin/operator 일 때만 accept 한다(viewer 차단).
+- WS 에는 전역 `_auth` 가 적용되지 않으므로 핸들러가 `authenticate_ws()` 로 직접
+  토큰을 검증하고, 역할이 admin/operator 일 때만 세션을 연다(viewer 차단).
+  토큰 문제(없음·만료·무효·폐기·비활성 계정)는 4401, 역할 부족은 4402 로 **구분해** 닫는다(D-172).
+- 거부 close code 는 `deny_ws()` 로 **accept 후** 보낸다 — accept 전에 close 하면 ASGI 서버가
+  HTTP 403 으로 핸드셰이크를 거절해 브라우저는 코드 없이 1006 만 받는다.
 - SSH 인증정보는 세션에만 사용하고 DB 에 저장하지 않는다(bulk-exec/etcdctl 과 동일).
 - 세션은 `MAX_SESSION_SECONDS` 상한으로 강제 종료한다(좀비 세션 방지).
 """
@@ -36,6 +39,7 @@ from fastapi import WebSocket, WebSocketDisconnect
 
 from app.auth.security import decode_access_token, is_token_revoked
 from app.models.user import User
+from app.services.command_mask import mask_command
 from app.services.ssh_runner import SSHTarget, connect_client
 
 logger = logging.getLogger(__name__)
@@ -44,7 +48,8 @@ ALLOWED_ROLES = frozenset({"admin", "operator"})
 MAX_SESSION_SECONDS = 60 * 60  # 1시간 상한 — 좀비 세션 방지
 
 # WebSocket close code — 화면(K9sTerminal/SshTerminalWindow)이 사용자 안내 문구로 매핑한다.
-CLOSE_UNAUTHORIZED = 4401
+CLOSE_UNAUTHORIZED = 4401  # 토큰 없음·만료·무효·폐기·비활성 계정 전용 — "다시 로그인"
+CLOSE_FORBIDDEN_ROLE = 4402  # 역할 부족(viewer 등) — "operator 이상 권한 필요"
 CLOSE_DISABLED = 4403
 CLOSE_NOT_FOUND = 4404
 # 테넌트 바인딩상 이 클러스터에 실행 권한이 없음 (services/cluster_access.py).
@@ -61,25 +66,55 @@ def env_flag_enabled(name: str, default: bool = True) -> bool:
     return raw.strip().lower() not in ("false", "0", "no")
 
 
-def resolve_ws_user(token: str | None, db, allowed_roles=ALLOWED_ROLES) -> User | None:
-    """query param 토큰 → User. 실패/비활성/역할부족이면 None."""
+def authenticate_ws(token: str | None, db, allowed_roles=ALLOWED_ROLES) -> tuple[User | None, int | None]:
+    """query param 토큰 → (User, None) 또는 (None, close code).
+
+    - 토큰 없음·디코드 실패(만료·서명 불일치)·sub 없음·사용자 없음/비활성·폐기된 토큰 → 4401
+    - 토큰은 유효하지만 역할이 ``allowed_roles`` 밖 → 4402
+    """
     if not token:
-        return None
+        return None, CLOSE_UNAUTHORIZED
     payload = decode_access_token(token)
     if not payload:
-        return None
+        return None, CLOSE_UNAUTHORIZED
     username = payload.get("sub")
     if not username:
-        return None
+        return None, CLOSE_UNAUTHORIZED
     user = db.query(User).filter(User.username == username).first()
     if not user or not user.is_active:
-        return None
+        return None, CLOSE_UNAUTHORIZED
     if is_token_revoked(payload, getattr(user, "password_changed_at", None)):
-        return None  # 비밀번호 변경 이전 로그인 토큰 → 4401
+        return None, CLOSE_UNAUTHORIZED  # 비밀번호 변경 이전 로그인 토큰
     effective_role = "viewer" if user.role == "user" else user.role
     if effective_role not in allowed_roles:
-        return None
+        return None, CLOSE_FORBIDDEN_ROLE
+    return user, None
+
+
+def resolve_ws_user(token: str | None, db, allowed_roles=ALLOWED_ROLES) -> User | None:
+    """하위호환 래퍼 — 실패/비활성/역할부족이면 None. 사유 구분이 필요하면 ``authenticate_ws``."""
+    user, _ = authenticate_ws(token, db, allowed_roles)
     return user
+
+
+async def deny_ws(websocket: WebSocket, code: int, message: str | None = None) -> None:
+    """핸드셰이크 단계 거부 — accept 후 (선택) 안내 한 줄을 보내고 ``code`` 로 닫는다.
+
+    accept 전에 close 하면 브라우저는 HTTP 403(=close 1006)만 받아 사유 코드를 구분하지 못한다.
+    """
+    try:
+        await websocket.accept()
+    except Exception:  # noqa: BLE001 — 이미 accept 된 소켓
+        pass
+    if message:
+        try:
+            await websocket.send_text(f"\r\n[{message}]\r\n")
+        except Exception:  # noqa: BLE001
+            pass
+    try:
+        await websocket.close(code=code)
+    except Exception:  # noqa: BLE001
+        pass
 
 
 class PtyInitError(Exception):
@@ -176,6 +211,7 @@ async def bridge_pty(
     max_session_seconds: int = MAX_SESSION_SECONDS,
     target_meta: dict | None = None,
     on_open: Callable[[], None] | None = None,
+    on_fail: Callable[[str], None] | None = None,
 ) -> float | None:
     """SSH PTY 셸을 열고 WebSocket 과 양방향으로 브리지한다.
 
@@ -186,7 +222,8 @@ async def bridge_pty(
     - paramiko 채널은 동기/블로킹이므로 recv/send 는 executor 로 오프로드한다.
 
     반환: 세션이 열렸으면 지속 시간(초), SSH 연결에 실패했으면 None.
-    호출자는 이 값으로 close 감사 로그 기록 여부를 판단한다.
+    호출자는 이 값으로 close 감사 로그 기록 여부를 판단한다. SSH 연결 실패는 ``on_fail(사유)``
+    로 알린다(감사 ``*.ssh.open`` ``status="failure"`` 용, D-170).
     """
     loop = asyncio.get_event_loop()
     client = None
@@ -206,8 +243,14 @@ async def bridge_pty(
                 ),
             )
         except Exception as e:  # noqa: BLE001
+            reason = mask_command(str(e))[:200]
+            if on_fail is not None:
+                try:
+                    on_fail(reason)
+                except Exception:  # noqa: BLE001 — 감사 실패가 종료 처리를 막지 않게
+                    pass
             await websocket.send_text(
-                f"\r\n\x1b[31m[SSH 접속 실패] {str(e)[:200]}\x1b[0m\r\n")
+                f"\r\n\x1b[31m[SSH 접속 실패] {reason}\x1b[0m\r\n")
             await websocket.close(code=CLOSE_SSH_FAILED)
             return None
 

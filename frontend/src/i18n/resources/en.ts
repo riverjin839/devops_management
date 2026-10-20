@@ -198,6 +198,7 @@ export const en: TranslationResource = {
   },
   common: {
     action: {
+      save: 'Save',
       cancel: 'Cancel',
       run: 'Run',
       close: 'Close',
@@ -215,11 +216,41 @@ export const en: TranslationResource = {
       loadFailed: 'Could not load',
       forbiddenTitle: 'You do not have permission to view this screen',
       forbiddenHint: 'Ask your administrator for access.',
+      requestFailed: 'Request failed',
+      canceled: 'Canceled',
+    },
+    screenCatalog: {
+      searchPlaceholder: 'Search by screen name',
+      searchLabel: 'Search screens',
+      empty: 'No screens match.',
+      emptyHint: 'Change or clear the search term.',
+      ungrouped: 'Other',
     },
     requestId: {
+      label: 'Request ID',
       copy: 'Copy request ID',
       copied: 'Copied',
       openCause: 'View cause',
+    },
+  },
+  settings: {
+    defaultApps: {
+      title: 'Default Apps (Sidebar & Top Bar)',
+      intro:
+        'The sidebar and top bar layout for users who have never picked their own apps. Users who already picked apps are not affected; each of them can follow this layout with <b>Reset to Default</b> in the "Add app" window. The order you pick is the display order.',
+      sidebarSection: 'Sidebar · {{group}}',
+      topbarSection: 'Top bar · {{group}}',
+      revert: 'Revert',
+      save: 'Save',
+      saved: 'Organization default apps saved',
+      saveFailed: 'Save failed',
+    },
+    navMenu: {
+      title: 'Edit Menu Names',
+      intro: 'Change sidebar menu names and the app title. Only the names change, and they apply to every user. A name you change is shown exactly as entered, whatever the display language.',
+      appTitle: 'App title',
+      editTitle: 'Edit app title',
+      editItem: 'Rename {{label}}',
     },
   },
   apps: {

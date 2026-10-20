@@ -606,7 +606,7 @@ export function ClusterMetaFormPage() {
                     categorical chart 토큰을 쓴다 — 고정 팔레트는 테마 전환 시 톤이 어긋난다 (D-034) */}
                 <div className="rounded-md border border-chart-1/20 bg-chart-1/5 p-4 space-y-4">
                   <div>
-                    <p className="text-sm font-semibold text-chart-1">INTERNAL_IP — 수동 입력</p>
+                    <p className="text-sm font-semibold text-chart-1-text">INTERNAL_IP — 수동 입력</p>
                     <p className="text-xs text-muted-foreground mt-0.5">
                       자동수집(kubectl) nodeIps &gt; 수동 IP 리스트(정규식) &gt; fallback CIDR 순으로 표시됩니다.
                     </p>
@@ -652,7 +652,7 @@ export function ClusterMetaFormPage() {
                 </div>
 
                 <div className="rounded-md border border-chart-2/20 bg-chart-2/5 p-4">
-                  <p className="text-sm font-semibold text-chart-2 mb-3">Pod CIDR 대역</p>
+                  <p className="text-sm font-semibold text-chart-2-text mb-3">Pod CIDR 대역</p>
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                     <div><label htmlFor={f('podCidr')} className={lc}>Pod CIDR</label>
                       <input id={f('podCidr')} type="text" value={podCidr} onChange={(e) => setPodCidr(e.target.value)} aria-invalid={!!fieldErrors.podCidr} placeholder="10.244.0.0/16" className={ic + invalidCls('podCidr')} />
@@ -667,7 +667,7 @@ export function ClusterMetaFormPage() {
                 </div>
 
                 <div className="rounded-md border border-chart-3/20 bg-chart-3/5 p-4">
-                  <p className="text-sm font-semibold text-chart-3 mb-3">Service CIDR 대역</p>
+                  <p className="text-sm font-semibold text-chart-3-text mb-3">Service CIDR 대역</p>
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                     <div><label htmlFor={f('svcCidr')} className={lc}>Service CIDR</label>
                       <input id={f('svcCidr')} type="text" value={svcCidr} onChange={(e) => setSvcCidr(e.target.value)} aria-invalid={!!fieldErrors.svcCidr} placeholder="10.96.0.0/12" className={ic + invalidCls('svcCidr')} />
@@ -700,7 +700,7 @@ export function ClusterMetaFormPage() {
 
                 {/* Cluster Trends — per-cluster Prometheus 연동 (노드 메트릭 추이) */}
                 <div className="rounded-md border border-chart-4/20 bg-chart-4/5 p-4 space-y-3">
-                  <p className="text-sm font-semibold text-chart-4">메트릭 추이 (Prometheus)</p>
+                  <p className="text-sm font-semibold text-chart-4-text">메트릭 추이 (Prometheus)</p>
                   <label className="flex items-center gap-2 text-sm cursor-pointer">
                     <input type="checkbox" className="accent-primary" checked={prometheusEnabled}
                       onChange={(e) => setPrometheusEnabled(e.target.checked)} />

@@ -15,6 +15,8 @@ export interface AuthUser {
   isActive: boolean;
   mustChangePassword: boolean;
   createdAt: string;
+  /** 로그인 방식 — 'ldap'(사내 디렉터리)·'external'(SSO) 이면 PEP 에서 비밀번호를 바꿀 수 없다. */
+  authSource?: 'local' | 'ldap' | 'external' | null;
 }
 
 const TOKEN_KEY = 'k8s:auth:token';
@@ -51,6 +53,7 @@ function normalizeUser(raw: Partial<AuthUser> & { role?: string }): AuthUser {
     isActive: Boolean(raw.isActive ?? true),
     mustChangePassword: Boolean(raw.mustChangePassword ?? false),
     createdAt: String(raw.createdAt ?? ''),
+    authSource: raw.authSource ?? null,
   };
 }
 

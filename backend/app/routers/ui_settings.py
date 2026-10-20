@@ -38,6 +38,7 @@ from app.schemas.ui_settings import (
     OperationLevelsResponse,
     OperationLevelsUpdate,
     OperationLevelItem,
+    default_guarded,
 )
 
 router = APIRouter(prefix="/ui-settings", tags=["ui-settings"])
@@ -59,11 +60,11 @@ DEFAULT_WORK_ITEM_BOARD_SETTINGS = {
 _HEX_RE = re.compile(r"^#[0-9a-fA-F]{3,8}$")
 DEFAULT_OPERATION_LEVELS = {
     "levels": [
-        {"value": "production", "label": "운영 (Production)", "color": "red",    "icon": "🚀"},
-        {"value": "staging",    "label": "스테이징 (Staging)", "color": "amber",  "icon": "✨"},
-        {"value": "dev",        "label": "개발 (Dev)",         "color": "blue",   "icon": "💻"},
-        {"value": "test",       "label": "테스트 (Test)",      "color": "slate",  "icon": "🧪"},
-        {"value": "dr",         "label": "DR",                 "color": "purple", "icon": "🛡️"},
+        {"value": "production", "label": "운영 (Production)", "color": "red",    "icon": "🚀", "guarded": True},
+        {"value": "staging",    "label": "스테이징 (Staging)", "color": "amber",  "icon": "✨", "guarded": False},
+        {"value": "dev",        "label": "개발 (Dev)",         "color": "blue",   "icon": "💻", "guarded": False},
+        {"value": "test",       "label": "테스트 (Test)",      "color": "slate",  "icon": "🧪", "guarded": False},
+        {"value": "dr",         "label": "DR",                 "color": "purple", "icon": "🛡️", "guarded": True},
     ]
 }
 
@@ -245,16 +246,25 @@ def get_assignees(db: Session = Depends(get_db), user: User = Depends(get_curren
 @router.put("/assignees")
 def update_assignees(
     payload: dict,
+    request: Request,
     db: Session = Depends(get_db),
-    _: User = Depends(require_admin),
+    actor: User = Depends(require_admin),
 ):
     """담당자 명부를 upsert 한다 — 삭제는 하지 않는다(생성/수정 전용).
 
     행 삭제는 로그인 계정 삭제와 동일한 작업이므로(users 테이블이 명부 자체라서)
     감사 로그가 남고 본인 삭제를 막는 기존 `DELETE /auth/users/{id}` 로만 한다.
     각 항목은 `id`(기존 행 갱신) 가 있으면 update, 없으면 새 행을 만든다. 사번
-    (employeeId) 이 채워지면 로그인 계정을 자동 발급(초기 비번=사번, role=operator)하고,
-    사번이 비워지면 로그인 계정을 해제한다(정책: 사번 없는 담당자는 로그인 불가).
+    (employeeId) 이 채워지면 로그인 계정을 자동 발급(초기 비번=사번, role=operator)한다.
+
+    계정 해제 가드(D-156) — 화면은 한 행만 고쳐도 전체 목록을 보내므로, "사번 비움 = 해제" 는
+    **기존에 사번이 있던 행에서 이번 요청이 employeeId 키를 명시적으로 비웠을 때만** 적용한다.
+      - 원래 사번이 없던 계정(부트스트랩 admin·"관리자 계정 추가"·LDAP/SSO 계정)은 employeeId 가
+        null 로 되돌아와도 로그인 필드를 건드리지 않는다.
+      - employeeId 키가 아예 없는 항목은 사번·계정을 바꾸지 않는다.
+      - 요청자 본인 계정 해제, 활성 admin 로그인을 하나도 남기지 않는 해제는 400.
+      - 해제·발급은 감사 로그(`user.login.revoke` / `user.create`)에 남긴다.
+    응답 `accounts` 에 발급(created)·해제(revoked) 사번 목록을 담는다.
     """
     raw_list = payload.get("assignees", [])
     if not isinstance(raw_list, list):
@@ -279,6 +289,8 @@ def update_assignees(
             "id": raw.get("id"),
             "name": name,
             "employeeId": _s("employeeId", "employee_id"),
+            # 키 자체가 왔는지 — 없으면 사번을 "모름"으로 보고 기존 값을 유지한다.
+            "employeeIdGiven": "employeeId" in raw or "employee_id" in raw,
             "email": _s("email"),
             "ip": _s("ip"),
             "seatLocation": _s("seatLocation", "seat_location"),
@@ -311,6 +323,10 @@ def update_assignees(
         )
 
     accounts_created: list[str] = []
+    created_users: list[User] = []
+    # (user, 해제 전 username, 해제 전 사번) — 커밋 후 감사 로그용.
+    revoked: list[tuple[User, str | None, str]] = []
+    revoked_admin = False
     for a in cleaned:
         existing = db.query(User).filter(User.id == a["id"]).first() if a["id"] else None
         if existing is None and a["employeeId"]:
@@ -332,22 +348,48 @@ def update_assignees(
             existing.seat_location = a["seatLocation"]
             existing.primary_role = a["primaryRole"]
             existing.secondary_role = a["secondaryRole"]
+            if not a["employeeIdGiven"]:
+                # 사번 키가 없는 항목 — 사번·로그인 계정은 그대로 둔다.
+                continue
             if a["employeeId"] and not existing.username:
                 # 로그인 없던 담당자에게 사번이 새로 붙음 → 계정 자동 발급.
+                _ensure_username_free(db, a["employeeId"], existing.id)
                 existing.employee_id = a["employeeId"]
                 existing.username = a["employeeId"]
                 existing.hashed_password = hash_password(a["employeeId"])
                 existing.role = existing.role or ASSIGNEE_ACCOUNT_ROLE
                 accounts_created.append(a["employeeId"])
+                created_users.append(existing)
             elif a["employeeId"]:
-                existing.employee_id = a["employeeId"]
-                if existing.username != a["employeeId"]:
+                # 사번 기반으로 발급된 username(=기존 사번)만 새 사번으로 옮긴다. 사번과 무관한
+                # username(부트스트랩 admin 의 "admin" 등)은 사번을 붙여도 로그인 아이디를 유지한다.
+                if existing.username == existing.employee_id and existing.username != a["employeeId"]:
+                    _ensure_username_free(db, a["employeeId"], existing.id)
                     existing.username = a["employeeId"]  # 사번 변경 → username 도 함께 이동
-            else:
-                # 사번이 비워짐 → 로그인 계정 해제(정책: 사번 없는 담당자는 로그인 불가).
+                existing.employee_id = a["employeeId"]
+            elif existing.employee_id:
+                # 사번이 있던 행에서 이번 요청이 명시적으로 비움 → 로그인 계정 해제.
+                if existing.id == actor.id:
+                    raise HTTPException(
+                        status_code=status.HTTP_400_BAD_REQUEST,
+                        detail=f"본인 계정({existing.display_name or existing.username})의 사번은 비울 수 없습니다 "
+                               "— 로그인이 해제됩니다. 다른 관리자에게 요청하세요.",
+                    )
+                if existing.username != existing.employee_id:
+                    # 사번에서 파생되지 않은 로그인(부트스트랩 "admin"·LDAP·SSO 계정 등) — 사번만 떼고
+                    # 로그인은 그대로 둔다. 해제 대상은 사번으로 자동 발급된 계정뿐이다.
+                    existing.employee_id = None
+                    continue
+                revoked.append((existing, existing.username, existing.employee_id))
+                if existing.role == "admin":
+                    revoked_admin = True
                 existing.employee_id = None
                 existing.username = None
                 existing.hashed_password = None
+                # 역할을 남겨 두면 나중에 사번을 다시 붙일 때 예전 역할(admin 등)·초기 비밀번호(=사번)로
+                # 되살아난다 — 해제 시 기본 역할로 되돌린다.
+                existing.role = ASSIGNEE_ACCOUNT_ROLE
+            # else: 원래 사번이 없던 계정 — 로그인 필드는 건드리지 않는다.
         else:
             new_user = User(
                 display_name=a["name"], email=a["email"], ip=a["ip"],
@@ -355,18 +397,59 @@ def update_assignees(
                 secondary_role=a["secondaryRole"], employee_id=a["employeeId"],
             )
             if a["employeeId"]:
+                _ensure_username_free(db, a["employeeId"], None)
                 new_user.username = a["employeeId"]
                 new_user.hashed_password = hash_password(a["employeeId"])
                 new_user.role = ASSIGNEE_ACCOUNT_ROLE
                 accounts_created.append(a["employeeId"])
+                created_users.append(new_user)
             db.add(new_user)
 
+    if revoked_admin:
+        db.flush()
+        remaining_admins = db.query(User).filter(
+            User.role == "admin", User.is_active.is_(True), User.username.isnot(None),
+        ).count()
+        if remaining_admins == 0:
+            db.rollback()
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="로그인 가능한 관리자가 남지 않습니다 — 마지막 관리자 계정의 사번은 비울 수 없습니다.",
+            )
+
     db.commit()
+    for u in created_users:
+        audit_logger.record(
+            db, action="user.create", actor=actor, status="success",
+            target_type="user", target_id=u.id,
+            details={"username": u.username, "role": u.role, "source": "assignees"},
+            request=request,
+        )
+    for u, old_username, old_emp in revoked:
+        audit_logger.record(
+            db, action="user.login.revoke", actor=actor, status="success",
+            target_type="user", target_id=u.id,
+            details={"username": old_username, "employee_id": old_emp, "display_name": u.display_name,
+                     "role": u.role, "reason": "employee_id_cleared"},
+            request=request,
+        )
     rows = db.query(User).order_by(User.display_name).all()
     return {
         "data": [_assignee_out(u, include_account=True) for u in rows],
-        "accounts": {"created": accounts_created},
+        "accounts": {"created": accounts_created, "revoked": [emp for _, _, emp in revoked]},
     }
+
+
+def _ensure_username_free(db: Session, username: str, self_id: str | None) -> None:
+    """사번을 로그인 username 으로 쓰기 전에 다른 계정이 같은 username 을 쓰는지 확인(400)."""
+    q = db.query(User).filter(User.username == username)
+    if self_id is not None:
+        q = q.filter(User.id != self_id)
+    if q.first() is not None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"사번 {username} 은(는) 이미 다른 계정의 로그인 아이디로 사용 중입니다.",
+        )
 
 
 @router.put("/assignees/me")
@@ -624,12 +707,15 @@ def get_operation_levels(db: Session = Depends(get_db)):
         seen.add(v)
         icon_raw = it.get("icon")
         hex_raw = it.get("custom_hex")
+        guarded_raw = it.get("guarded")
         items.append(OperationLevelItem(
             value=v,
             label=str(it.get("label", v)),
             color=str(it.get("color", "slate")),
             icon=str(icon_raw) if isinstance(icon_raw, str) and icon_raw.strip() else None,
             custom_hex=str(hex_raw) if isinstance(hex_raw, str) and _HEX_RE.match(hex_raw) else None,
+            # 구버전 데이터(guarded 없음)는 value 로 판정 — production·dr 만 보호.
+            guarded=guarded_raw if isinstance(guarded_raw, bool) else default_guarded(v),
         ))
     if not items:
         items = [OperationLevelItem(**x) for x in DEFAULT_OPERATION_LEVELS["levels"]]
@@ -657,6 +743,7 @@ def update_operation_levels(
         cleaned.append({
             "value": v, "label": it.label.strip() or v, "color": it.color or "slate",
             "icon": icon, "custom_hex": custom_hex,
+            "guarded": it.guarded if it.guarded is not None else default_guarded(v),
         })
     setting.value = {"levels": cleaned}
     db.commit()

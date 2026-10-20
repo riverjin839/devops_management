@@ -9,6 +9,7 @@ import { FeatureAccessManager } from '@/components/settings/FeatureAccessManager
 import { ClusterViewerMaskSetting } from '@/components/settings/ClusterViewerMaskSetting';
 import { ClusterEndpointAllowlistSetting } from '@/components/settings/ClusterEndpointAllowlistSetting';
 import { OidcSettingsPanel } from '@/components/settings/OidcSettingsPanel';
+import { LdapSettingsPanel } from '@/components/settings/LdapSettingsPanel';
 import { JiraIntegrationPanel } from '@/components/settings/JiraIntegrationPanel';
 import { ServiceNowIntegrationPanel } from '@/components/settings/ServiceNowIntegrationPanel';
 import { OperationLevelsManager } from '@/components/settings/OperationLevelsManager';
@@ -1386,6 +1387,7 @@ export function SettingsPage() {
             <ClusterViewerMaskSetting />
             <ClusterEndpointAllowlistSetting />
             <OidcSettingsPanel />
+            <LdapSettingsPanel />
           </div>
         )}
         {activeTab === 'tenant' && <TenantManager />}

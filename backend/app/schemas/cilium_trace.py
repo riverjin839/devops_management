@@ -11,6 +11,8 @@ class CiliumStatusResponse(BaseModel):
     cluster_id: UUID
     cilium_installed: bool
     hubble_relay_installed: bool
+    # 확인 자체가 실패한 사유(RBAC 거부 등) — 있으면 미설치가 아니라 "확인 실패"로 본다.
+    hubble_relay_error: Optional[str] = None
     agent_count: int
     cilium_version: Optional[str] = None
     namespace: str = "kube-system"

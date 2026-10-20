@@ -55,7 +55,7 @@ const KIND_META: Record<HubKind, {
   command:  { label: '명령어',     Icon: Terminal,      accent: 'text-chart-6-text', chip: 'bg-chart-6/15 text-chart-6-text border-chart-6/30' },
   guide:    { label: '가이드',     Icon: BookMarked,    accent: 'text-chart-2-text', chip: 'bg-chart-2/15 text-chart-2-text border-chart-2/30' },
   item:     { label: '이슈',       Icon: AlertCircle,   accent: 'text-chart-5-text', chip: 'bg-chart-5/15 text-chart-5-text border-chart-5/30' },
-  workflow: { label: '워크플로우', Icon: GitFork,       accent: 'text-chart-4-text', chip: 'bg-chart-4/15 text-chart-4-text border-chart-4/30' },
+  workflow: { label: '워크플로', Icon: GitFork,       accent: 'text-chart-4-text', chip: 'bg-chart-4/15 text-chart-4-text border-chart-4/30' },
 };
 
 const STATUS_DOT_TONE: Record<NonNullable<HubItem['statusTone']>, string> = {
@@ -346,7 +346,7 @@ export function KnowledgeHubPage() {
             <PageHeader
               icon={Library}
               title="지식 허브"
-              description="업무 · 노트 · 명령어 · 가이드 · 이슈 · 워크플로우 + 분석 도구를 한 곳에서."
+              description="업무 · 노트 · 명령어 · 가이드 · 이슈 · 워크플로 + 분석 도구를 한 곳에서."
               className="flex-1 min-w-0"
             />
           </div>

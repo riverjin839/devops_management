@@ -105,6 +105,18 @@ def update_guide(guide_id: UUID, payload: WorkGuideUpdate, db: Session = Depends
     if "tenant_id" in payload.model_fields_set:
         scope.ensure_assignable(payload.tenant_id)
     update_data = payload.model_dump(exclude_unset=True)
+    new_parent = update_data.get("parent_id")
+    if new_parent is not None:
+        # 자기 자신·자기 자손을 상위로 두면 순환이 생겨 트리에서 사라지고 삭제(D-158)도 영영 막힌다.
+        cur, seen = new_parent, set()
+        while cur is not None and cur not in seen:
+            if cur == guide.id:
+                raise HTTPException(
+                    status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                    detail="자기 자신이나 하위 페이지를 상위 페이지로 지정할 수 없습니다.",
+                )
+            seen.add(cur)
+            cur = db.query(WorkGuide.parent_id).filter(WorkGuide.id == cur).scalar()
     for k, v in update_data.items():
         setattr(guide, k, v)
     # Confluence 연결 문서의 제목/본문이 바뀌면 "재게시 필요" 상태로 전이
@@ -123,5 +135,19 @@ def delete_guide(guide_id: UUID, db: Session = Depends(get_db),
     guide = db.query(WorkGuide).filter(WorkGuide.id == guide_id).first()
     if not guide or not scope.visible(guide.tenant_id):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Guide not found")
+    # D-158 — parent_id 는 FK 가 없어 부모만 지우면 하위 페이지(와 그 자손)가 트리에서 사라진다.
+    # 하위가 있으면 지우지 않고 409 로 사유를 돌려준다. 다른 테넌트의 하위도 고아가 되므로 범위와
+    # 상관없이 센다(개수만 알리고 제목은 노출하지 않는다).
+    child_count = db.query(WorkGuide).filter(
+        WorkGuide.parent_id == guide.id, WorkGuide.id != guide.id,
+    ).count()
+    if child_count:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=(
+                f"하위 페이지 {child_count}개가 있어 삭제할 수 없습니다. "
+                "하위 페이지를 다른 상위로 옮기거나 먼저 삭제하세요."
+            ),
+        )
     db.delete(guide)
     db.commit()

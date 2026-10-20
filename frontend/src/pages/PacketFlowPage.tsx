@@ -2,19 +2,20 @@ import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Route, Play, ArrowRight, Globe, Network, Share2, Server, Box,
-  AlertTriangle, Info, Square, Activity,
+  AlertTriangle, Info, Square, Activity, XCircle,
 } from 'lucide-react';
 import { useAbortableMutation } from '@/hooks/useAbortableMutation';
 import { useClusters } from '@/hooks/useCluster';
+import { useTerminalEnvSync } from '@/hooks/useTerminalEnvSync';
 import { useRunLog, runLogged, type RunLogEntry } from '@/hooks/useRunLog';
 import { useLogPref } from '@/hooks/useLogPref';
-import { ClusterSidebar, DebugLogPanel, SelectClusterEmptyState, EmptyState, PageShell, RunLogPanel } from '@/components/common';
+import { ClusterSidebar, DebugLogPanel, SelectClusterEmptyState, EmptyState, ErrorState, PageShell, RunLogPanel } from '@/components/common';
 import { PageHeader } from '@/components/common/PageHeader';
 import { MacCard } from '@/components/ui/MacCard';
 import { topologyTraceApi } from '@/services/api';
 import { formatApiError } from '@/lib/utils';
 import type {
-  PacketFlowResponseV2, TopologyTraceHopV2, PacketDirection,
+  Cluster, PacketFlowResponseV2, TopologyTraceHopV2, PacketDirection,
 } from '@/types';
 import { FlowGraph3D } from '@/components/packet-flow/FlowGraph3D';
 import { HopDetailPanel } from '@/components/packet-flow/HopDetailPanel';
@@ -24,16 +25,24 @@ import { TcpdumpPanel } from '@/components/packet-flow/TcpdumpPanel';
 type Tab = 'graph' | 'hubble' | 'tcpdump';
 
 const ENTITY_LABEL: Record<string, { icon: typeof Globe; label: string; color: string }> = {
-  external:           { icon: Globe,   label: 'External',  color: 'text-chart-1' },
-  dns:                { icon: Globe,   label: 'DNS',       color: 'text-chart-6' },
-  ingress_controller: { icon: Share2,  label: 'Ingress Pod', color: 'text-chart-4' },
-  ingress:            { icon: Route,   label: 'Ingress',   color: 'text-chart-5' },
-  service:            { icon: Share2,  label: 'Service',   color: 'text-chart-2' },
-  pod:                { icon: Box,     label: 'Pod',       color: 'text-chart-3' },
-  node:               { icon: Server,  label: 'Node',      color: 'text-chart-7' },
-  switch:             { icon: Network, label: 'Switch',    color: 'text-chart-8' },
-  error:              { icon: AlertTriangle, label: 'Error', color: 'text-status-critical' },
+  external:           { icon: Globe,   label: '외부',         color: 'text-chart-1-text' },
+  dns:                { icon: Globe,   label: 'DNS',          color: 'text-chart-6-text' },
+  ingress_controller: { icon: Share2,  label: 'Ingress 파드', color: 'text-chart-4-text' },
+  ingress:            { icon: Route,   label: 'Ingress',      color: 'text-chart-5-text' },
+  service:            { icon: Share2,  label: '서비스',       color: 'text-chart-2-text' },
+  pod:                { icon: Box,     label: '파드',         color: 'text-chart-3-text' },
+  node:               { icon: Server,  label: '노드',         color: 'text-chart-7-text' },
+  switch:             { icon: Network, label: '스위치',       color: 'text-chart-8-text' },
+  error:              { icon: AlertTriangle, label: '오류', color: 'text-status-critical' },
 };
+
+const VERDICT_TEXT: Record<string, string> = { deny: '차단', warn: '경고' };
+const EMPTY_CLUSTERS: Cluster[] = [];
+const TABS: { id: Tab; label: string }[] = [
+  { id: 'graph',   label: '경로 그래프' },
+  { id: 'hubble',  label: 'Hubble 흐름' },
+  { id: 'tcpdump', label: '원격 tcpdump' },
+];
 
 /** 추적 응답 → 실행 로그 요약: 홉 수·경로 한 줄 + deny/warn/error 홉의 첫 메모. */
 function summarizeTrace(res: PacketFlowResponseV2): RunLogEntry[] {
@@ -60,27 +69,39 @@ function HopBreadcrumb({
       {hops.map((h, i) => {
         const meta = ENTITY_LABEL[h.entityType] ?? ENTITY_LABEL.external;
         const Icon = meta.icon;
-        // allow(정상)는 기본 보더 — 상태색은 비정상(deny/warn)에만 (§12.12 #3)
+        // allow(정상)는 기본 보더 — 상태색은 비정상(deny/warn)에만 (§12.12 #3).
+        // 판정은 테두리색만으로 전달하지 않고 아이콘·스크린리더 문구를 함께 붙인다(D-178).
         const verdictCls =
           h.verdict === 'deny' ? 'border-status-critical/50'
           : h.verdict === 'warn' ? 'border-status-warning/50'
           : 'border-border';
+        const VerdictIcon = h.verdict === 'deny' ? XCircle : h.verdict === 'warn' ? AlertTriangle : null;
+        const verdictText = VERDICT_TEXT[h.verdict];
         const active = selectedIndex === i;
         return (
           <div key={i} className="flex items-center gap-1 flex-shrink-0">
             <button
+              type="button"
               onClick={() => onSelect(i)}
-              className={`flex items-center gap-1.5 px-2 py-1 rounded-lg border text-xs transition-colors ${
+              aria-pressed={active}
+              aria-label={`홉 ${i + 1} ${meta.label} ${h.name}${verdictText ? ` — ${verdictText}` : ''}`}
+              className={`flex items-center gap-1.5 px-2 py-1 rounded-xl border text-xs transition-colors ${
                 active ? 'bg-primary/10 text-primary border-primary/40' : `bg-card ${verdictCls} hover:bg-muted/30`
               }`}
-              title={h.name}
+              title={`${meta.label} · ${h.name}${verdictText ? ` · ${verdictText}` : ''}`}
             >
-              <Icon className={`w-3 h-3 ${meta.color}`} />
+              <Icon className={`w-3 h-3 ${meta.color}`} aria-hidden />
               <span className="font-medium">{i + 1}</span>
-              <span className="text-muted-foreground">·</span>
+              <span className="text-muted-foreground" aria-hidden>·</span>
               <span className="font-mono max-w-[120px] truncate">{h.name.split('/').pop()}</span>
+              {VerdictIcon && (
+                <VerdictIcon
+                  className={`w-3 h-3 ${h.verdict === 'deny' ? 'text-status-critical' : 'text-status-warning'}`}
+                  aria-hidden
+                />
+              )}
             </button>
-            {i < hops.length - 1 && <ArrowRight className="w-3 h-3 text-muted-foreground" />}
+            {i < hops.length - 1 && <ArrowRight className="w-3 h-3 text-muted-foreground" aria-hidden />}
           </div>
         );
       })}
@@ -89,11 +110,14 @@ function HopBreadcrumb({
 }
 
 export function PacketFlowPage() {
-  const { data: clusters = [] } = useClusters();
+  const clustersQ = useClusters();
+  const clusters = clustersQ.data ?? EMPTY_CLUSTERS;
   const [clusterId, setClusterId] = useState('');
   useEffect(() => {
     if (!clusterId && clusters.length > 0) setClusterId(clusters[0].id);
   }, [clusters, clusterId]);
+  // 선택 클러스터 운영등급 → 터미널 Appearance(개발/운영) 자동 적용 — tcpdump stderr LogViewer 등(§12.6, D-175 ②).
+  useTerminalEnvSync(clusters, clusterId || null);
 
   // Target 구성 — 방향 + source + destination
   const fid = useId();
@@ -121,6 +145,7 @@ export function PacketFlowPage() {
   }, [direction]);
 
   const [tab, setTab] = useState<Tab>('graph');
+  const tabRefs = useRef<(HTMLButtonElement | null)[]>([]);
   const [response, setResponse] = useState<PacketFlowResponseV2 | null>(null);
   const [selectedIdx, setSelectedIdx] = useState<number | null>(null);
 
@@ -171,7 +196,8 @@ export function PacketFlowPage() {
     });
     if (graphBoxRef.current) ro.observe(graphBoxRef.current);
     return () => ro.disconnect();
-  }, []);
+    // 그래프 상자는 추적 결과가 있고 그래프 탭일 때만 마운트되므로 그때 다시 관찰한다.
+  }, [response, tab]);
 
   const selectedHop = useMemo(() => {
     if (response && selectedIdx != null && selectedIdx >= 0 && selectedIdx < response.hops.length) {
@@ -253,15 +279,23 @@ export function PacketFlowPage() {
           />
 
           {/* Target 구성 바 */}
+          {clustersQ.isError && clusters.length === 0 ? (
+            <ErrorState
+              error={clustersQ.error}
+              title="클러스터 목록을 불러오지 못했습니다"
+              onRetry={() => { void clustersQ.refetch(); }}
+            />
+          ) : (<>
           <MacCard
             title="추적 대상"
             rootClassName="mb-4"
             className="space-y-3"
             actions={<>
-              <div className="flex items-center bg-secondary/60 rounded-lg p-[3px] gap-px">
+              <div role="group" aria-label="추적 방향" className="flex items-center bg-secondary/60 rounded-xl p-[3px] gap-px">
                 {(['north-south', 'east-west'] as PacketDirection[]).map((d) => (
-                  <button key={d} onClick={() => setDirection(d)}
-                    className={`px-3 py-1.5 text-sm font-medium rounded-md transition-colors ${
+                  <button key={d} type="button" onClick={() => setDirection(d)}
+                    aria-pressed={direction === d}
+                    className={`px-3 py-1.5 text-sm font-medium rounded-xl transition-colors ${
                       direction === d ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
                     }`}>
                     {d === 'north-south' ? '외부 → Pod (N-S)' : 'Pod ↔ Pod (E-W)'}
@@ -276,27 +310,27 @@ export function PacketFlowPage() {
                     onClick={handleGoBottleneck}
                     aria-label="이 pod-pair 의 병목 진단으로 이동"
                     title="병목 진단 페이지로 prefill 이동"
-                    className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium bg-secondary border border-border rounded-lg hover:bg-secondary/80"
+                    className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium bg-secondary border border-border rounded-xl hover:bg-secondary/80"
                   >
-                    <Activity className="w-3.5 h-3.5" />
+                    <Activity className="w-3.5 h-3.5" aria-hidden />
                     병목 진단
                   </button>
                 )}
                 {runMut.isPending ? (
                   <button
                     onClick={runMut.abort}
-                    className="flex items-center gap-1.5 px-4 py-1.5 text-sm font-semibold bg-status-critical text-primary-foreground rounded-lg hover:bg-status-critical"
+                    className="flex items-center gap-1.5 px-4 py-1.5 text-sm font-semibold bg-destructive text-destructive-foreground rounded-xl hover:bg-destructive/90"
                   >
-                    <Square className="w-4 h-4 fill-current" />
+                    <Square className="w-4 h-4 fill-current" aria-hidden />
                     중지
                   </button>
                 ) : (
                   <button
                     onClick={() => void doTrace()}
                     disabled={!canRun}
-                    className="flex items-center gap-1.5 px-4 py-1.5 text-sm font-semibold bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 disabled:opacity-50"
+                    className="flex items-center gap-1.5 px-4 py-1.5 text-sm font-semibold bg-primary text-primary-foreground rounded-xl hover:bg-primary/90 disabled:opacity-50"
                   >
-                    <Play className="w-4 h-4" />
+                    <Play className="w-4 h-4" aria-hidden />
                     추적
                   </button>
                 )}
@@ -306,31 +340,33 @@ export function PacketFlowPage() {
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               <div>
-                <label className="text-xs text-muted-foreground mb-1 block">
-                  {direction === 'north-south' ? 'Source (외부)' : 'Source Pod'}
+                <label htmlFor={f('source')} className="text-xs text-muted-foreground mb-1 block">
+                  {direction === 'north-south' ? '출발지 (외부)' : '출발 파드'}
                 </label>
                 <input
+                  id={f('source')}
                   type="text" value={source} onChange={(e) => setSource(e.target.value)}
                   placeholder={direction === 'north-south' ? 'internet 또는 203.0.113.5' : 'default/client-pod'}
-                  className="w-full px-3 py-1.5 text-sm font-mono bg-background border border-border rounded-lg focus:outline-none focus:ring-1 focus:ring-primary"
+                  className="w-full px-3 py-1.5 text-sm font-mono bg-background border border-border rounded-xl focus:outline-none focus:ring-1 focus:ring-primary"
                 />
               </div>
               <div>
-                <label className="text-xs text-muted-foreground mb-1 block">
-                  Destination {direction === 'north-south' ? '(Ingress-host / ns/service / ns/pod)' : '(ns/pod 또는 ns/service:port)'}
+                <label htmlFor={f('destination')} className="text-xs text-muted-foreground mb-1 block">
+                  목적지 {direction === 'north-south' ? '(Ingress 호스트 / ns/서비스 / ns/파드)' : '(ns/파드 또는 ns/서비스:포트)'}
                 </label>
                 <input
+                  id={f('destination')}
                   type="text" value={destination} onChange={(e) => setDestination(e.target.value)}
                   placeholder={direction === 'north-south' ? 'api.example.com 또는 default/api:80' : 'default/backend:8080'}
-                  className="w-full px-3 py-1.5 text-sm font-mono bg-background border border-border rounded-lg focus:outline-none focus:ring-1 focus:ring-primary"
+                  className="w-full px-3 py-1.5 text-sm font-mono bg-background border border-border rounded-xl focus:outline-none focus:ring-1 focus:ring-primary"
                 />
               </div>
             </div>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
               <div>
-                <label htmlFor={f('protocol')} className="text-xs text-muted-foreground mb-1 block">Protocol</label>
+                <label htmlFor={f('protocol')} className="text-xs text-muted-foreground mb-1 block">프로토콜</label>
                 <select id={f('protocol')} value={protocol} onChange={(e) => setProtocol(e.target.value as typeof protocol)}
-                  className="w-full px-3 py-1.5 text-sm bg-background border border-border rounded-lg focus:outline-none focus:ring-1 focus:ring-primary">
+                  className="w-full px-3 py-1.5 text-sm bg-background border border-border rounded-xl focus:outline-none focus:ring-1 focus:ring-primary">
                   <option value="http">http</option>
                   <option value="https">https</option>
                   <option value="grpc">grpc</option>
@@ -338,44 +374,54 @@ export function PacketFlowPage() {
                 </select>
               </div>
               <div>
-                <label htmlFor={f('port')} className="text-xs text-muted-foreground mb-1 block">Port (선택)</label>
+                <label htmlFor={f('port')} className="text-xs text-muted-foreground mb-1 block">포트 (선택)</label>
                 <input
                   id={f('port')}
                   type="number" value={port} onChange={(e) => setPort(e.target.value)}
                   placeholder="443"
-                  className="w-full px-3 py-1.5 text-sm font-mono bg-background border border-border rounded-lg focus:outline-none focus:ring-1 focus:ring-primary"
+                  className="w-full px-3 py-1.5 text-sm font-mono bg-background border border-border rounded-xl focus:outline-none focus:ring-1 focus:ring-primary"
                 />
               </div>
               {direction === 'north-south' && (
                 <div>
-                  <label htmlFor={f('path')} className="text-xs text-muted-foreground mb-1 block">Path</label>
+                  <label htmlFor={f('path')} className="text-xs text-muted-foreground mb-1 block">경로</label>
                   <input
                     id={f('path')}
                     type="text" value={path} onChange={(e) => setPath(e.target.value)}
                     placeholder="/"
-                    className="w-full px-3 py-1.5 text-sm font-mono bg-background border border-border rounded-lg focus:outline-none focus:ring-1 focus:ring-primary"
+                    className="w-full px-3 py-1.5 text-sm font-mono bg-background border border-border rounded-xl focus:outline-none focus:ring-1 focus:ring-primary"
                   />
                 </div>
               )}
             </div>
 
             {runError && (
-              <div className="px-3 py-2 text-sm rounded-lg bg-status-critical/10 text-status-critical border border-status-critical/30">
+              <div role="alert" className="px-3 py-2 text-sm rounded-md bg-status-critical/10 text-status-critical border border-status-critical/30">
                 {formatApiError(runError)}
               </div>
             )}
           </MacCard>
 
-          {/* 탭 */}
-          <div className="flex items-center gap-1 mb-3 border-b border-border">
-            {([
-              { id: 'graph',   label: '경로 그래프' },
-              { id: 'hubble',  label: 'Hubble 플로우' },
-              { id: 'tcpdump', label: '원격 tcpdump' },
-            ] as { id: Tab; label: string }[]).map((t) => (
+          {/* 탭 — WAI-ARIA tablist(←/→ 이동, D-178) */}
+          <div role="tablist" aria-label="패킷 흐름 분석 보기" className="flex items-center gap-1 mb-3 border-b border-border">
+            {TABS.map((t, ti) => (
               <button
                 key={t.id}
+                ref={(el) => { tabRefs.current[ti] = el; }}
+                type="button"
+                role="tab"
+                id={`${fid}-tab-${t.id}`}
+                aria-selected={tab === t.id}
+                aria-controls={`${fid}-tabpanel`}
+                tabIndex={tab === t.id ? 0 : -1}
                 onClick={() => setTab(t.id)}
+                onKeyDown={(e) => {
+                  if (e.key !== 'ArrowRight' && e.key !== 'ArrowLeft') return;
+                  e.preventDefault();
+                  const ni = (ti + (e.key === 'ArrowRight' ? 1 : TABS.length - 1)) % TABS.length;
+                  setTab(TABS[ni].id);
+                  tabRefs.current[ni]?.focus();
+                }}
                 className={`px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors ${
                   tab === t.id ? 'border-primary text-foreground' : 'border-transparent text-muted-foreground hover:text-foreground'
                 }`}
@@ -391,13 +437,14 @@ export function PacketFlowPage() {
           </div>
 
           {/* 탭 콘텐츠 */}
+          <div role="tabpanel" id={`${fid}-tabpanel`} aria-labelledby={`${fid}-tab-${tab}`}>
           {tab === 'graph' && (
             <>
               {!response ? (
                 <EmptyState
                   icon={Info}
                   title="아직 추적한 경로가 없습니다."
-                  description={'source/destination 을 입력하고 "추적" 을 누르면 경로를 그래프로 확인할 수 있습니다.'}
+                  description={'출발지·목적지를 입력하고 "추적"을 누르면 경로를 그래프로 확인할 수 있습니다.'}
                 />
               ) : (
                 <>
@@ -409,8 +456,7 @@ export function PacketFlowPage() {
                   >
                     <div
                       ref={graphBoxRef}
-                      className="relative overflow-hidden"
-                      style={{ height: 560 }}
+                      className="relative overflow-hidden h-[560px]"
                     >
                       <FlowGraph3D
                         hops={response.hops}
@@ -455,6 +501,8 @@ export function PacketFlowPage() {
               <SelectClusterEmptyState />
             )
           )}
+          </div>
+          </>)}
         </div>
       </PageShell>
     </div>

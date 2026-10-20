@@ -12,9 +12,12 @@ import {
 } from '@/services/api';
 import { useAbortableMutation } from '@/hooks/useAbortableMutation';
 import { useNodeImageList } from '@/hooks/useNodeImages';
-import { DoubleScrollX, RunLogPanel, useModalA11y } from '@/components/common';
+import {
+  ConfirmDialog, DoubleScrollX, EmptyState, ErrorState, ExecOutputTabs, LoadingState, RunLogPanel, useModalA11y,
+} from '@/components/common';
 import { useRunLog, runLogged, consoleRunLines, type RunLogEntry } from '@/hooks/useRunLog';
 import { useLogPref } from '@/hooks/useLogPref';
+import { useCanOperate } from '@/hooks/useCanOperate';
 import { pickPrimaryName } from './utils';
 import { formatApiError } from '@/lib/utils';
 
@@ -113,7 +116,13 @@ export function ImageDistributeDialog({
   const [execTimeout, setExecTimeout] = useState(600);
 
   const [result, setResult] = useState<NodeImageDistributeResponse | null>(null);
+  // 배포 실행은 별도 확인창을 거친다(정책 6) — 대상 노드·런타임을 한 번 더 보여 준다.
+  const [confirmOpen, setConfirmOpen] = useState(false);
   const runLog = useRunLog();
+  // 권한(§12.9) — 서버는 operator + 출처 클러스터(경로) operate 를 요구한다. 대상 클러스터가 다르면 그쪽 operate 도 본다.
+  const sourceAccess = useCanOperate(sourceClusterId);
+  const targetAccess = useCanOperate(targetClusterId);
+  const access = sourceAccess.canOperate ? targetAccess : sourceAccess;
   const [showLog, setShowLog] = useLogPref('node-images-distribute');
 
   const uid = useId();
@@ -172,6 +181,7 @@ export function ImageDistributeDialog({
   const dialogRef = useModalA11y(open, () => { if (!runMut.isPending) onClose(); });
 
   const handleRun = async () => {
+    setConfirmOpen(false);
     const via = runtime === 'crictl' ? 'crictl' : `${runtime} (ns ${namespace})`;
     await runLogged(runLog, {
       title: '이미지 배포',
@@ -188,8 +198,14 @@ export function ImageDistributeDialog({
   };
 
   const canRun =
+    access.canOperate &&
     selectedTargets.length > 0 &&
     (authMode === 'password' ? !!password : !!privateKey.trim());
+  const runTitle = !access.canOperate
+    ? access.withHint('배포 실행')
+    : selectedTargets.length === 0
+      ? '배포할 노드를 먼저 고르세요'
+      : canRun ? '확인 후 선택한 노드로 배포' : 'SSH 비밀번호 또는 개인키를 입력하세요';
 
   const selectMissingOnly = () =>
     setSelected(new Set(nodes.map((n) => n.name).filter((name) => !havingNodes.has(name))));
@@ -202,15 +218,15 @@ export function ImageDistributeDialog({
       <div className="relative bg-card border border-border rounded-md shadow-2xl w-full max-w-3xl mx-4 max-h-[92vh] overflow-hidden flex flex-col">
         {/* 헤더 */}
         <div className="flex items-center gap-3 px-5 py-4 border-b border-border bg-muted/30">
-          <div className="w-9 h-9 rounded-lg flex items-center justify-center bg-primary/10 text-primary">
-            <Send className="w-4 h-4" />
-          </div>
           <div className="flex-1 min-w-0">
-            <h2 id={f('title')} className="text-sm font-semibold">이미지 배포 (다른 노드로 prepull)</h2>
+            <h2 id={f('title')} className="text-sm font-semibold flex items-center gap-1.5">
+              <Send className="w-4 h-4 text-muted-foreground flex-shrink-0" aria-hidden />
+              이미지 배포 (다른 노드로 prepull)
+            </h2>
             <p className="text-xs text-muted-foreground mt-0.5 font-mono break-all">{image}</p>
           </div>
-          <button onClick={onClose} disabled={runMut.isPending}
-            className="p-1 rounded hover:bg-secondary text-muted-foreground disabled:opacity-40" aria-label="닫기">
+          <button type="button" onClick={onClose} disabled={runMut.isPending}
+            className="p-1 rounded-xl hover:bg-secondary text-muted-foreground disabled:opacity-40" title="닫기" aria-label="이미지 배포 닫기">
             <X className="w-4 h-4" />
           </button>
         </div>
@@ -285,24 +301,24 @@ export function ImageDistributeDialog({
           {/* SSH 자격증명 */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
             <div>
-              <label htmlFor={f('user')} className="text-xs text-muted-foreground mb-1 block">SSH User</label>
+              <label htmlFor={f('user')} className="text-xs text-muted-foreground mb-1 block">SSH 사용자</label>
               <input id={f('user')} value={username} onChange={(e) => setUsername(e.target.value)}
                 className="w-full px-2 py-1 text-sm font-mono bg-background border border-border rounded-lg focus:outline-none focus:ring-1 focus:ring-primary" />
             </div>
             <div>
-              <label htmlFor={f('port')} className="text-xs text-muted-foreground mb-1 block">Port</label>
+              <label htmlFor={f('port')} className="text-xs text-muted-foreground mb-1 block">포트</label>
               <input id={f('port')} type="number" min={1} max={65535} value={port}
                 onChange={(e) => setPort(Number(e.target.value) || 22)}
                 className="w-full px-2 py-1 text-sm font-mono bg-background border border-border rounded-lg focus:outline-none focus:ring-1 focus:ring-primary" />
             </div>
             <div>
-              <label htmlFor={f('par')} className="text-xs text-muted-foreground mb-1 block" title="동시 pull 세션 수">Parallelism</label>
+              <label htmlFor={f('par')} className="text-xs text-muted-foreground mb-1 block" title="동시 pull 세션 수">동시 실행 수</label>
               <input id={f('par')} type="number" min={1} max={50} value={parallelism}
                 onChange={(e) => setParallelism(Number(e.target.value) || 5)}
                 className="w-full px-2 py-1 text-sm font-mono bg-background border border-border rounded-lg focus:outline-none focus:ring-1 focus:ring-primary" />
             </div>
             <div>
-              <label htmlFor={f('exec')} className="text-xs text-muted-foreground mb-1 block" title="노드당 pull 최대 시간(초)">Timeout(s)</label>
+              <label htmlFor={f('exec')} className="text-xs text-muted-foreground mb-1 block" title="노드당 pull 최대 시간(초)">제한 시간(초)</label>
               <input id={f('exec')} type="number" min={10} max={3600} value={execTimeout}
                 onChange={(e) => setExecTimeout(Number(e.target.value) || 600)}
                 className="w-full px-2 py-1 text-sm font-mono bg-background border border-border rounded-lg focus:outline-none focus:ring-1 focus:ring-primary" />
@@ -311,9 +327,10 @@ export function ImageDistributeDialog({
 
           <div>
             <div className="flex items-center gap-2 mb-1">
-              <div className="flex items-center bg-secondary/60 rounded-lg p-[3px] gap-px">
+              <div className="flex items-center bg-secondary/60 rounded-lg p-[3px] gap-px" role="group" aria-label="SSH 인증 방식">
                 {(['password', 'key'] as const).map((m) => (
                   <button key={m} type="button" onClick={() => setAuthMode(m)}
+                    aria-pressed={authMode === m}
                     className={`px-2 py-0.5 text-xs font-medium rounded-md ${
                       authMode === m ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
                     }`}>
@@ -325,11 +342,12 @@ export function ImageDistributeDialog({
             </div>
             {authMode === 'password' ? (
               <input type="password" value={password} onChange={(e) => setPassword(e.target.value)}
+                aria-label="SSH 비밀번호" autoComplete="off"
                 placeholder="SSH 비밀번호"
                 className="w-full px-2 py-1 text-sm font-mono bg-background border border-border rounded-lg focus:outline-none focus:ring-1 focus:ring-primary" />
             ) : (
               <div>
-                <label htmlFor={f('pkey')} className="text-xs text-muted-foreground mb-1 flex items-center gap-1"><Key className="w-3 h-3" /> Private Key (PEM)</label>
+                <label htmlFor={f('pkey')} className="text-xs text-muted-foreground mb-1 flex items-center gap-1"><Key className="w-3 h-3" aria-hidden /> 개인키(PEM)</label>
                 <textarea id={f('pkey')} value={privateKey} onChange={(e) => setPrivateKey(e.target.value)}
                   placeholder="-----BEGIN OPENSSH PRIVATE KEY-----"
                   rows={3}
@@ -362,10 +380,17 @@ export function ImageDistributeDialog({
               </p>
             )}
             <div className="max-h-56 overflow-y-auto border border-border rounded-lg bg-background p-1">
-              {nodes.length === 0 ? (
-                <p className="text-center py-3 text-sm text-muted-foreground">
-                  {nodeQ.isLoading ? '노드 불러오는 중…' : nodeQ.isError ? '노드 조회 실패' : '노드 없음'}
-                </p>
+              {nodeQ.isLoading ? (
+                <LoadingState compact />
+              ) : nodeQ.isError ? (
+                <ErrorState
+                  compact
+                  error={nodeQ.error}
+                  title={`${targetClusterName} 노드를 불러오지 못했습니다`}
+                  onRetry={() => { void nodeQ.refetch(); }}
+                />
+              ) : nodes.length === 0 ? (
+                <EmptyState compact title="대상 클러스터에 노드가 없습니다" />
               ) : nodes.map((n) => {
                 const on = selected.has(n.name);
                 const has = havingNodes.has(n.name);
@@ -382,7 +407,7 @@ export function ImageDistributeDialog({
                     <span className="font-mono text-foreground truncate">{n.name}</span>
                     <span className="text-xs text-muted-foreground">{n.internalIp ?? ''}</span>
                     {!n.ready && <span className="text-xs px-1 rounded bg-status-critical/10 text-status-critical">NotReady</span>}
-                    {isMaster && <span className="text-xs px-1.5 py-0.5 rounded-full bg-primary/10 text-primary">master</span>}
+                    {isMaster && <span className="text-xs px-1.5 py-0.5 rounded-full bg-primary/10 text-primary">컨트롤 플레인</span>}
                     <span className="ml-auto">
                       {coverageComputing ? null : has ? (
                         <span className="text-xs px-1.5 py-0.5 rounded-full bg-secondary text-foreground">보유</span>
@@ -410,8 +435,13 @@ export function ImageDistributeDialog({
             <div className="border border-border rounded-xl overflow-hidden">
               <div className="flex items-center gap-2 px-3 py-2 bg-muted/30 border-b border-border flex-wrap">
                 <span className="text-sm font-semibold">배포 결과</span>
-                <span className="text-xs px-2 py-0.5 rounded-full bg-status-healthy/10 text-status-healthy border border-status-healthy/30">성공 {result.okCount}</span>
-                <span className="text-xs px-2 py-0.5 rounded-full bg-status-critical/10 text-status-critical border border-status-critical/30">실패 {result.errorCount}</span>
+                <span className="text-xs px-2 py-0.5 rounded-full bg-secondary text-muted-foreground border border-border">성공 {result.okCount}</span>
+                {/* 0 은 중립(§12.12-2) — 실패가 있을 때만 상태색. */}
+                <span className={`text-xs px-2 py-0.5 rounded-full border ${
+                  result.errorCount > 0
+                    ? 'bg-status-critical/10 text-status-critical border-status-critical/30'
+                    : 'bg-secondary text-muted-foreground border-border'
+                }`}>실패 {result.errorCount}</span>
                 <span className="text-xs text-muted-foreground">총 {result.totalDurationMs}ms</span>
               </div>
               <p className="px-3 py-1.5 text-xs text-muted-foreground bg-muted/10 border-b border-border">
@@ -445,24 +475,50 @@ export function ImageDistributeDialog({
             {selectedTargets.length}개 노드 → <span className="font-mono">{targetClusterName}</span>
           </p>
           <div className="flex gap-2">
-            <button onClick={onClose} disabled={runMut.isPending}
-              className="px-4 py-1.5 text-sm font-medium bg-secondary hover:bg-secondary/80 border border-border rounded-lg disabled:opacity-40">
+            <button type="button" onClick={onClose} disabled={runMut.isPending}
+              className="px-4 py-1.5 text-sm font-medium bg-secondary hover:bg-secondary/80 border border-border rounded-xl disabled:opacity-40">
               닫기
             </button>
             {runMut.isPending ? (
-              <button onClick={runMut.abort}
-                className="flex items-center gap-1.5 px-4 py-1.5 text-sm font-semibold bg-status-critical text-primary-foreground rounded-lg hover:bg-status-critical">
+              <button type="button" onClick={runMut.abort}
+                className="flex items-center gap-1.5 px-4 py-1.5 text-sm font-semibold bg-status-critical text-primary-foreground rounded-xl hover:bg-status-critical/90">
                 <Loader2 className="w-3 h-3 animate-spin" /> 중지
               </button>
             ) : (
-              <button onClick={() => { void handleRun(); }} disabled={!canRun}
-                className="flex items-center gap-1.5 px-4 py-1.5 text-sm font-semibold bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 disabled:opacity-50">
+              <button type="button" onClick={() => setConfirmOpen(true)} disabled={!canRun}
+                title={runTitle}
+                aria-label={access.ariaWithHint(`배포 실행 (${selectedTargets.length})`)}
+                className="flex items-center gap-1.5 px-4 py-1.5 text-sm font-semibold bg-primary text-primary-foreground rounded-xl hover:bg-primary/90 disabled:opacity-50">
                 <Play className="w-3 h-3" /> 배포 실행 ({selectedTargets.length})
               </button>
             )}
           </div>
         </div>
       </div>
+
+      <ConfirmDialog
+        open={confirmOpen}
+        title="이미지를 배포할까요?"
+        description="선택한 노드에 SSH 로 접속해 레지스트리에서 이미지를 pull 합니다. 노드 디스크와 레지스트리 대역폭을 씁니다."
+        confirmLabel={`배포 실행 (${selectedTargets.length})`}
+        onConfirm={() => { void handleRun(); }}
+        onCancel={() => setConfirmOpen(false)}
+      >
+        <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 mb-2">
+          <dt className="text-muted-foreground">이미지</dt>
+          <dd className="font-mono break-all">{image}</dd>
+          <dt className="text-muted-foreground">대상 클러스터</dt>
+          <dd className="font-medium">{targetClusterName}</dd>
+          <dt className="text-muted-foreground">런타임</dt>
+          <dd className="font-mono">{runtime === 'crictl' ? 'crictl' : `${runtime} (ns ${namespace})`}{useSudo ? ' · sudo' : ''}</dd>
+          <dt className="text-muted-foreground">노드</dt>
+          <dd>{selectedTargets.length}대 · 동시 {parallelism} · 노드당 {execTimeout}초</dd>
+        </dl>
+        <ul className="font-mono text-xs space-y-0.5 max-h-32 overflow-y-auto">
+          {selectedTargets.slice(0, 20).map((t) => <li key={t.name}>{t.name} ({t.host})</li>)}
+          {selectedTargets.length > 20 && <li className="text-muted-foreground">외 {selectedTargets.length - 20}대</li>}
+        </ul>
+      </ConfirmDialog>
     </div>
   );
 }
@@ -475,7 +531,8 @@ function ResultRow({ r }: { r: BulkExecResultItem }) {
     <>
       <tr className="border-t border-border align-top hover:bg-muted/10">
         <td className="px-2 py-1.5">
-          <button onClick={() => setOpen((v) => !v)} className="p-0.5 text-muted-foreground hover:text-foreground" aria-label={open ? '접기' : '펼치기'}>
+          <button type="button" onClick={() => setOpen((v) => !v)} className="p-0.5 rounded-md text-muted-foreground hover:text-foreground"
+            aria-expanded={open} aria-label={`${r.name || r.host} 출력 ${open ? '접기' : '펼치기'}`}>
             {open ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
           </button>
         </td>
@@ -498,14 +555,11 @@ function ResultRow({ r }: { r: BulkExecResultItem }) {
         <tr className="bg-muted/5">
           <td colSpan={4} className="px-4 py-2">
             {r.error && <p className="flex items-start gap-1 text-xs text-status-critical mb-1"><AlertTriangle className="w-3 h-3 mt-0.5 flex-shrink-0" aria-hidden /><span>{r.error}</span></p>}
-            {r.stdout && (
-              <pre className="font-mono text-xs bg-background border border-border rounded p-1.5 max-h-40 overflow-auto whitespace-pre-wrap break-all">{r.stdout}</pre>
-            )}
-            {r.stderr && (
-              <pre className="font-mono text-xs bg-status-critical/5 border border-status-critical/20 text-status-critical rounded p-1.5 mt-1 max-h-40 overflow-auto whitespace-pre-wrap break-all">{r.stderr}</pre>
-            )}
-            {!r.stdout && !r.stderr && !r.error && (
-              <p className="text-xs text-muted-foreground">(출력 없음)</p>
+            {/* 콘솔 패턴(§12.6-2·3) — stdout/stderr 는 탭 전환 + LogViewer(필터·복사·줄바꿈 툴바). */}
+            {(r.stdout || r.stderr) ? (
+              <ExecOutputTabs stdout={r.stdout ?? ''} stderr={r.stderr} maxHeight="max-h-40" />
+            ) : !r.error && (
+              <p className="text-xs text-muted-foreground">출력 없음</p>
             )}
           </td>
         </tr>

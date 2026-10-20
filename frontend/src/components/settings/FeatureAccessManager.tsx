@@ -99,7 +99,6 @@ export function FeatureAccessManager() {
         </p>
         <ScreenCatalogList
           filter={(path) => !SCREEN_ACCESS_EXCLUDED.has(path)}
-          searchPlaceholder="화면 이름으로 검색"
           maxHeight="50vh"
           renderTrailing={(path) => {
             const rule = ruleOf(path);

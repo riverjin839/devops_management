@@ -85,16 +85,14 @@ export function CsvExportModal({ open, clusterId, clusterName, components, onClo
       <div ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby={titleId}
         className="relative bg-card border border-border rounded-md shadow-2xl w-full max-w-xl mx-4">
         <div className="flex items-center gap-3 px-5 py-4 border-b border-border bg-muted/30">
-          <div className="w-9 h-9 rounded-lg flex items-center justify-center bg-primary/10 text-primary">
-            <FileSpreadsheet className="w-4 h-4" />
-          </div>
+          <FileSpreadsheet className="w-4 h-4 text-muted-foreground flex-shrink-0" aria-hidden="true" />
           <div className="flex-1">
             <h2 id={titleId} className="text-sm font-semibold">CSV 내보내기</h2>
             <p className="text-sm text-muted-foreground mt-0.5">
               현재 스냅샷을 CSV 한 파일로 다운로드. 한글 호환 UTF-8 BOM 포함.
             </p>
           </div>
-          <button onClick={onClose} disabled={exportMut.isPending}
+          <button onClick={onClose} disabled={exportMut.isPending} title="닫기" aria-label="닫기"
             className="p-1 rounded hover:bg-secondary text-muted-foreground disabled:opacity-40">
             <X className="w-4 h-4" />
           </button>

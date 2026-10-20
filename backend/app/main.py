@@ -72,6 +72,7 @@ from app.routers import (
     ansible_inventories_router,
     auth_router,
     auth_oidc_router,
+    auth_ldap_router,
     audit_logs_router,
     system_errors_router,
     system_diagnostics_router,
@@ -2517,7 +2518,7 @@ install_logging()  # 앱 로그 줄마다 [req=요청ID] — services/request_co
 app = FastAPI(
     title=settings.app_name,
     description="DevOps K8s Daily Monitoring Dashboard API",
-    version="1.64.0",
+    version="1.64.1",
     docs_url="/docs",
     redoc_url="/redoc",
     lifespan=lifespan,
@@ -2586,6 +2587,8 @@ app.add_middleware(MemoryWatchMiddleware, delta_mb=settings.mem_watch_delta_mb, 
 app.include_router(auth_router, prefix="/api/v1")
 # 사내 IdP SSO(OIDC) — 로그인 진입점이라 public. 설정 조회·수정·연결 확인은 엔드포인트가 require_admin.
 app.include_router(auth_oidc_router, prefix="/api/v1")
+# 사내 디렉터리(LDAP/AD) 설정 — 로그인은 /auth/login 이 처리하고, 이 라우터의 설정·연결 확인은 엔드포인트가 require_admin.
+app.include_router(auth_ldap_router, prefix="/api/v1")
 app.include_router(health_router, prefix="/api/v1")
 # Super pod ingest 는 bearer 토큰만 자체 검증 — JWT 의존성 없음.
 app.include_router(check_ingest_router, prefix="/api/v1")
@@ -2624,7 +2627,7 @@ app.include_router(mindmap_router, prefix="/api/v1", dependencies=_auth)
 app.include_router(management_server_router, prefix="/api/v1", dependencies=_auth)
 app.include_router(isilon_nfs_router, prefix="/api/v1", dependencies=_auth)
 app.include_router(infra_nodes_router, prefix="/api/v1", dependencies=_cluster_scoped)
-app.include_router(topology_trace_router, prefix="/api/v1", dependencies=_auth)
+app.include_router(topology_trace_router, prefix="/api/v1", dependencies=_cluster_scoped)  # 본문 cluster_id 는 엔드포인트가 read/operate 판정(D-169)
 app.include_router(ontology_router, prefix="/api/v1", dependencies=_cluster_scoped)
 app.include_router(analyze_router, prefix="/api/v1", dependencies=_cluster_scoped)
 app.include_router(trends_router, prefix="/api/v1", dependencies=_auth)
@@ -2710,7 +2713,7 @@ app.include_router(tenants_router, prefix="/api/v1", dependencies=_auth)
 def root():
     return {
         "name": settings.app_name,
-        "version": "1.64.0",
+        "version": "1.64.1",
         "version": "1.8.2",
         "status": "running"
     }

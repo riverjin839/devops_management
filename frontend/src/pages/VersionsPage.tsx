@@ -4,10 +4,12 @@ import { Link } from 'react-router-dom';
 import {
   GitCommit, RefreshCw, Square, Clock, Share2, X, ChevronDown, ChevronUp,
   Server, Cpu, Network, Settings2, HardDrive, Search, FileSpreadsheet, FileText,
-  AlertTriangle,
 } from 'lucide-react';
 import { useClusters } from '@/hooks/useCluster';
-import { ClusterSidebar, DebugLogPanel, useToast, EmptyState, LoadingState, SkeletonCard, DoubleScrollX, PageShell, RunLogPanel } from '@/components/common';
+import {
+  ClusterSidebar, DebugLogPanel, useToast, EmptyState, ErrorState, LoadingState, SkeletonCard, DoubleScrollX, PageShell, RunLogPanel,
+} from '@/components/common';
+import { useCanOperate } from '@/hooks/useCanOperate';
 import { MacCard } from '@/components/ui/MacCard';
 import { PageHeader } from '@/components/common/PageHeader';
 import { formatApiError, parseUTC } from '@/lib/utils';
@@ -687,7 +689,7 @@ function HistoryTimeline({
   component: string;
   onPickDiff: (from: ComponentSnapshot, to: ComponentSnapshot) => void;
 }) {
-  const { data, isLoading, isError, error } = useQuery({
+  const { data, isLoading, isError, error, refetch } = useQuery({
     queryKey: ['versions', 'history', clusterId, component],
     queryFn: () => versionsApi.history(clusterId, component).then((r) => r.data),
     staleTime: 30_000,
@@ -715,12 +717,7 @@ function HistoryTimeline({
 
   if (isLoading) return <LoadingState compact />;
   if (isError) {
-    return (
-      <p className="text-sm px-4 py-3">
-        <span className="text-status-critical">히스토리를 불러오지 못했습니다.</span>{' '}
-        <span className="text-xs text-muted-foreground">{formatApiError(error)}</span>
-      </p>
-    );
+    return <ErrorState error={error} title="히스토리를 불러오지 못했습니다" onRetry={() => void refetch()} compact />;
   }
   if (snapshots.length === 0) {
     return <EmptyState compact title="히스토리가 없습니다." description="수집을 실행할 때마다 스냅샷이 여기에 쌓입니다." />;
@@ -744,7 +741,9 @@ function HistoryTimeline({
                 className={`w-full text-left rounded-md px-3 py-2 transition-colors ${
                   picked ? 'bg-primary/10 border border-primary/30' : 'hover:bg-muted/40'
                 }`}
-                aria-label={s.version || '(version 없음)'}
+                // 같은 버전 스냅샷이 여럿일 수 있어 수집 시각까지 읽어 준다(D-166).
+                aria-pressed={picked}
+                aria-label={`${s.version || '(version 없음)'} · ${formatDateTime(s.collectedAt)} 스냅샷 비교 대상으로 선택`}
               >
                 <div className="flex items-center justify-between gap-2">
                   <span className="font-mono text-sm text-foreground">
@@ -773,7 +772,7 @@ function DiffPanel({
   to: ComponentSnapshot;
   onClose: () => void;
 }) {
-  const { data, isLoading, isError, error } = useQuery({
+  const { data, isLoading, isError, error, refetch } = useQuery({
     queryKey: ['versions', 'diff', clusterId, from.id, to.id],
     queryFn: () => versionsApi.diff(clusterId, from.id, to.id).then((r) => r.data),
   });
@@ -794,10 +793,7 @@ function DiffPanel({
       {isLoading ? (
         <LoadingState compact />
       ) : isError ? (
-        <p className="text-sm">
-          <span className="text-status-critical">diff 를 불러오지 못했습니다.</span>{' '}
-          <span className="text-xs text-muted-foreground">{formatApiError(error)}</span>
-        </p>
+        <ErrorState error={error} title="diff 를 불러오지 못했습니다" onRetry={() => void refetch()} compact />
       ) : data?.changes.length === 0 ? (
         <EmptyState compact title="변경 사항이 없습니다." description="선택한 두 스냅샷의 값이 같습니다." />
       ) : (
@@ -826,9 +822,13 @@ function DiffPanel({
 
 export function VersionsPage() {
   const queryClient = useQueryClient();
-  const { data: clusters = [] } = useClusters();
+  const {
+    data: clusters = [], isLoading: clustersLoading, isError: clustersError, error: clustersErrorObj, refetch: refetchClusters,
+  } = useClusters();
   const toast = useToast();
   const [clusterId, setClusterId] = useState<string>('');
+  // 수집(지금 수집·MinIO·SSH 수집 5종)은 서버가 operator 를 요구한다 — viewer·테넌트 비권한은 비활성 + 사유(§12.9, D-160).
+  const { canOperate, withHint, ariaWithHint } = useCanOperate(clusterId || null);
   const [etcdModalOpen, setEtcdModalOpen] = useState(false);
   const [certsModalOpen, setCertsModalOpen] = useState(false);
   const [kernelModalOpen, setKernelModalOpen] = useState(false);
@@ -878,7 +878,7 @@ export function VersionsPage() {
       queryClient.invalidateQueries({ queryKey: ['versions'] });
       const { changed, summary, warnings } = res.data;
       const tenants = summary.tenants?.length ?? 0;
-      const op = summary.operator ? '운영자 OK' : '운영자 X';
+      const op = summary.operator ? 'MinIO 오퍼레이터 감지' : 'MinIO 오퍼레이터 없음';
       const directpv = summary.directpv ? `DirectPV ${summary.directpv.totalDrives}드라이브` : 'DirectPV X';
       const desc = `${op} · 테넌트 ${tenants}개 · ${directpv}`;
       if (changed > 0) {
@@ -923,7 +923,7 @@ export function VersionsPage() {
         const { changed, summary, warnings } = res.data;
         const tenants = summary.tenants ?? [];
         const out: RunLogEntry[] = [
-          ['info', summary.operator ? '운영자(Operator) 감지' : '운영자(Operator) 없음'],
+          ['info', summary.operator ? 'MinIO 오퍼레이터 감지' : 'MinIO 오퍼레이터 없음'],
           ['info', `테넌트 ${tenants.length}개`],
           ['info', summary.directpv ? `DirectPV 드라이브 ${summary.directpv.totalDrives}개` : 'DirectPV 없음'],
         ];
@@ -1033,40 +1033,50 @@ export function VersionsPage() {
               </button>
               <button
                 onClick={() => setEtcdModalOpen(true)}
-                className="flex items-center gap-1.5 px-3 py-2 text-sm font-medium bg-secondary hover:bg-secondary/80 border border-border rounded-lg text-foreground transition-colors"
-                title="etcd (systemd) — SSH 로 수집. ps -ef 와 systemctl 양쪽에서 config 경로 추정."
+                disabled={!canOperate}
+                className="flex items-center gap-1.5 px-3 py-2 text-sm font-medium bg-secondary hover:bg-secondary/80 border border-border rounded-lg text-foreground transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                title={withHint('etcd (systemd) — SSH 로 수집. ps -ef 와 systemctl 양쪽에서 config 경로 추정.')}
+                aria-label={canOperate ? undefined : ariaWithHint('etcd (systemd) 수집')}
               >
                 <Database className="w-4 h-4" />
                 etcd (systemd)
               </button>
               <button
                 onClick={() => setCertsModalOpen(true)}
-                className="flex items-center gap-1.5 px-3 py-2 text-sm font-medium bg-secondary hover:bg-secondary/80 border border-border rounded-lg text-foreground transition-colors"
-                title="K8s 인증서 만료 — SSH 로 kubeadm certs check-expiration 수집 (Ops Checks 인증서 만료 점검의 snapshot 경로용)"
+                disabled={!canOperate}
+                className="flex items-center gap-1.5 px-3 py-2 text-sm font-medium bg-secondary hover:bg-secondary/80 border border-border rounded-lg text-foreground transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                title={withHint('K8s 인증서 만료 — SSH 로 kubeadm certs check-expiration 수집 (Ops Checks 인증서 만료 점검의 snapshot 경로용)')}
+                aria-label={canOperate ? undefined : ariaWithHint('K8s 인증서(kubeadm) 수집')}
               >
                 <ShieldCheck className="w-4 h-4" />
                 K8s 인증서(kubeadm)
               </button>
               <button
                 onClick={() => setKubeletModalOpen(true)}
-                className="flex items-center gap-1.5 px-3 py-2 text-sm font-medium bg-secondary hover:bg-secondary/80 border border-border rounded-lg text-foreground transition-colors"
-                title="kubelet 의 *실제 사용중* config 파일을 SSH 로 발견 (ps -eo args | grep kubelet → --config) + 내용 읽기"
+                disabled={!canOperate}
+                className="flex items-center gap-1.5 px-3 py-2 text-sm font-medium bg-secondary hover:bg-secondary/80 border border-border rounded-lg text-foreground transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                title={withHint('kubelet 의 *실제 사용중* config 파일을 SSH 로 발견 (ps -eo args | grep kubelet → --config) + 내용 읽기')}
+                aria-label={canOperate ? undefined : ariaWithHint('kubelet config 수집')}
               >
                 <FileText className="w-4 h-4" />
                 kubelet config
               </button>
               <button
                 onClick={() => setKernelModalOpen(true)}
-                className="flex items-center gap-1.5 px-3 py-2 text-sm font-medium bg-secondary hover:bg-secondary/80 border border-border rounded-lg text-foreground transition-colors"
-                title="노드별 sysctl 커널 파라미터 — SSH 로 수집 (값 변경시 히스토리 누적)"
+                disabled={!canOperate}
+                className="flex items-center gap-1.5 px-3 py-2 text-sm font-medium bg-secondary hover:bg-secondary/80 border border-border rounded-lg text-foreground transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                title={withHint('노드별 sysctl 커널 파라미터 — SSH 로 수집 (값 변경시 히스토리 누적)')}
+                aria-label={canOperate ? undefined : ariaWithHint('커널 파라미터 수집')}
               >
                 <Cpu className="w-4 h-4" />
                 커널 파라미터
               </button>
               <button
                 onClick={() => setNicsModalOpen(true)}
-                className="flex items-center gap-1.5 px-3 py-2 text-sm font-medium bg-secondary hover:bg-secondary/80 border border-border rounded-lg text-foreground transition-colors"
-                title="노드별 NIC / IP — SSH 로 수집 (bond0/bond1 + public/private 분류)"
+                disabled={!canOperate}
+                className="flex items-center gap-1.5 px-3 py-2 text-sm font-medium bg-secondary hover:bg-secondary/80 border border-border rounded-lg text-foreground transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                title={withHint('노드별 NIC / IP — SSH 로 수집 (bond0/bond1 + public/private 분류)')}
+                aria-label={canOperate ? undefined : ariaWithHint('노드 NIC 수집')}
               >
                 <Network className="w-4 h-4" />
                 노드 NIC
@@ -1083,8 +1093,10 @@ export function VersionsPage() {
               ) : (
                 <button
                   onClick={runCollectMinio}
-                  className="flex items-center gap-1.5 px-3 py-2 text-sm font-medium bg-secondary hover:bg-secondary/80 border border-border rounded-lg text-foreground transition-colors"
-                  title="MinIO Operator + Tenant + DirectPV 정보 수집 (pool/disk/parity)"
+                  disabled={!canOperate}
+                  className="flex items-center gap-1.5 px-3 py-2 text-sm font-medium bg-secondary hover:bg-secondary/80 border border-border rounded-lg text-foreground transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  title={withHint('MinIO Operator + Tenant + DirectPV 정보 수집 (pool/disk/parity)')}
+                  aria-label={ariaWithHint('MinIO 수집')}
                 >
                   <HardDrive className="w-4 h-4" />
                   MinIO
@@ -1101,7 +1113,10 @@ export function VersionsPage() {
               ) : (
                 <button
                   onClick={runCollect}
-                  className="flex items-center gap-1.5 px-4 py-2 text-sm font-medium bg-primary hover:bg-primary/90 text-primary-foreground rounded-lg transition-colors"
+                  disabled={!canOperate}
+                  className="flex items-center gap-1.5 px-4 py-2 text-sm font-medium bg-primary hover:bg-primary/90 text-primary-foreground rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  title={withHint('kubeconfig 로 K8s·Cilium 버전·컴포넌트 설정 지금 수집')}
+                  aria-label={ariaWithHint('지금 수집')}
                 >
                   <RefreshCw className="w-4 h-4" />
                   지금 수집
@@ -1111,9 +1126,14 @@ export function VersionsPage() {
           ) : undefined}
         />
 
-        {!clusterId && clusters.length === 0 && (
+        {/* 클러스터 목록 실패를 "클러스터 없음"으로 보이지 않는다(D-154) — 로딩 → 실패 → 빈 목록 순. */}
+        {clustersError ? (
+          <ErrorState error={clustersErrorObj} title="클러스터 목록을 불러오지 못했습니다" onRetry={() => void refetchClusters()} />
+        ) : clustersLoading && !clusterId ? (
+          <LoadingState />
+        ) : !clusterId && clusters.length === 0 ? (
           <EmptyState title="등록된 클러스터가 없습니다." description="클러스터 관리에서 등록하면 버전 수집 대상이 됩니다." />
-        )}
+        ) : null}
 
         {/* 선택된 클러스터 상세 */}
         {clusterId && (
@@ -1168,20 +1188,35 @@ export function VersionsPage() {
           </div>
         ) : currentError ? (
           /* 조회 실패를 "스냅샷 없음"으로 위장하지 않는다 — 빈 상태의 CTA(지금 수집)는
-             방금 실패한 백엔드에 실행을 권유하는 꼴이 된다. */
-          <EmptyState
-            icon={AlertTriangle}
+             방금 실패한 백엔드에 실행을 권유하는 꼴이 된다. 403 은 권한 안내(ErrorState). */
+          <ErrorState
+            error={currentErrorObj}
             title="스냅샷을 불러오지 못했습니다"
-            description={formatApiError(currentErrorObj)}
-            action={{ label: '다시 시도', onClick: () => { void refetchCurrent(); }, variant: 'secondary' }}
+            onRetry={() => { void refetchCurrent(); }}
           />
         ) : (current?.components.length ?? 0) === 0 ? (
           <EmptyState
             icon={Clock}
             title="아직 수집된 스냅샷이 없습니다"
             description="kubeconfig 에 연결해 현재 K8s 버전/설정을 스냅샷으로 저장합니다."
-            action={{ label: '지금 수집', onClick: () => collect.mutate() }}
-          />
+          >
+            {/* 헤더 "지금 수집"과 같은 경로(runCollect → 실행 로그·중지) — 첫 수집이 가장 오래 걸린다(D-164). */}
+            <button
+              onClick={collect.isPending ? collect.abort : runCollect}
+              disabled={!canOperate && !collect.isPending}
+              title={collect.isPending ? '수집 중지' : withHint('지금 수집')}
+              aria-label={collect.isPending ? '수집 중지' : ariaWithHint('지금 수집')}
+              className={`mt-4 flex items-center gap-1.5 px-3.5 py-1.5 text-sm font-semibold rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
+                collect.isPending
+                  ? 'bg-status-critical text-primary-foreground'
+                  : 'bg-primary text-primary-foreground hover:bg-primary/90'
+              }`}
+            >
+              {collect.isPending
+                ? <><Square className="w-4 h-4 fill-current" />중지</>
+                : <><RefreshCw className="w-4 h-4" />지금 수집</>}
+            </button>
+          </EmptyState>
         ) : nodeSearch.trim() && grouped.length === 0 ? (
           <EmptyState
             icon={Search}

@@ -136,3 +136,26 @@ def test_delete_removes_row_and_rejects_non_owner(db):
 
     delete_saved_script(str(script_id), db=db, user=owner)
     assert db.query(SavedScript).filter(SavedScript.id == script_id).first() is None
+
+
+def test_update_null_clears_description_and_rejects_required_null(db):
+    """D-162 — 수정에서 설명을 `null` 로 보내면 비워진다. 이름·언어·본문 `null` 은 422(검증 오류)."""
+    from pydantic import ValidationError
+
+    owner = _User(_uname())
+    created = create_saved_script(
+        SavedScriptCreate(name="설명 지우기", language="bash", content="echo 1", description="옛 설명"),
+        db, owner,
+    )
+
+    updated = update_saved_script(
+        str(created.id), SavedScriptUpdate.model_validate({"description": None}), db=db, user=owner,
+    )
+    assert updated.description is None
+    assert updated.name == "설명 지우기"  # 안 보낸 필드는 그대로
+
+    for field in ("name", "language", "content"):
+        with pytest.raises(ValidationError):
+            SavedScriptUpdate.model_validate({field: None})
+    # 키를 아예 안 보내면 검증 대상이 아니다(미전송 = 유지).
+    assert SavedScriptUpdate.model_validate({}).model_dump(exclude_unset=True) == {}

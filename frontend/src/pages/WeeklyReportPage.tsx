@@ -1,10 +1,12 @@
-import { useEffect, useId, useMemo, useRef, useState } from 'react';
+import { useEffect, useId, useMemo, useRef, useState, type ReactNode } from 'react';
 import {
   Loader2, FileText, Send, Save, RefreshCw, ExternalLink, ArrowUp, ArrowDown, Search, X,
 } from 'lucide-react';
 import { MacCard } from '@/components/ui/MacCard';
 import { JiraIssueChip } from '@/components/work-items';
-import { useToast, PageHeader, PageShell, EmptyState, RunLogPanel } from '@/components/common';
+import {
+  useToast, PageHeader, PageShell, EmptyState, ErrorState, LoadingState, RunLogPanel, ConfirmDialog,
+} from '@/components/common';
 import { formatApiError } from '@/lib/utils';
 import { useLogPref } from '@/hooks/useLogPref';
 import { runLogged, streamLogged, useRunLog, type RunLogEntry } from '@/hooks/useRunLog';
@@ -98,8 +100,14 @@ export function WeeklyReportPage() {
   useEffect(() => () => publishAbort.current?.abort(), []);
 
   const [report, setReport] = useState<WeeklyReport | null>(null);
+  // D-157: 현재 미리보기를 만든 주차 입력값. 주차 입력이 이 값과 다르면 미리보기는 무효(stale)다 —
+  // 표·기간은 이전 주인데 게시는 새 주로 나가던 문제를 막는다.
+  const [reportWeekOf, setReportWeekOf] = useState<string | null>(null);
+  // D-153: 미리보기 조회 실패 — 토스트만 띄우고 표를 "집계된 업무 없음" 으로 두지 않는다.
+  const [previewError, setPreviewError] = useState<unknown>(null);
   const [tab, setTab] = useState<TabId>('summary');
   const [weekOf, setWeekOf] = useState('');
+  const [confirmPublish, setConfirmPublish] = useState(false);
 
   // 필터바 — 날짜 외 조건들 (클라이언트 필터, 표 3종에 공통 적용)
   const filterId = useId();
@@ -111,7 +119,10 @@ export function WeeklyReportPage() {
   const [spaceKey, setSpaceKey] = useState('');
   const [parentPageId, setParentPageId] = useState('');
   const [title, setTitle] = useState('');
+  // 제목을 사용자가 직접 고쳤는지 — 고치지 않았으면 미리보기를 다시 만들 때 새 주차 제목을 따라간다.
+  const [titleDirty, setTitleDirty] = useState(false);
   const [form, setForm] = useState<WeeklyReportSettings | null>(null);
+  const formId = useId();
 
   useEffect(() => {
     if (settings) {
@@ -121,14 +132,24 @@ export function WeeklyReportPage() {
     }
   }, [settings]);
 
+  /** 미리보기 성공 반영 — 요청 당시의 주차 입력값을 함께 기록한다(응답 도착 전에 주차를 또 바꿨으면 stale). */
+  const applyPreview = (data: WeeklyReport, requestedWeekOf: string) => {
+    setReport(data);
+    setReportWeekOf(requestedWeekOf);
+    setPreviewError(null);
+    setPublished(null);
+    if (!titleDirty) setTitle(data.title);
+  };
+
   /** 미리보기 생성. 마운트 시 자동 로딩은 로그 없이, 사용자가 "다시 생성" 을 누른 경우만 실행 로그를 남긴다. */
   const loadPreview = async ({ logged = false }: { logged?: boolean } = {}) => {
+    const requestedWeekOf = weekOf;
     if (!logged) {
       try {
-        const { data } = await previewMut.mutateAsync({ weekOf: weekOf || undefined });
-        setReport(data);
-        setTitle((prev) => prev || data.title);
+        const { data } = await previewMut.mutateAsync({ weekOf: requestedWeekOf || undefined });
+        applyPreview(data, requestedWeekOf);
       } catch (err) {
+        setPreviewError(err);
         toast.error('주간보고 생성 실패', formatApiError(err));
       }
       return;
@@ -136,7 +157,7 @@ export function WeeklyReportPage() {
     const r = await runLogged(runLog, {
       title: '주간보고 생성',
       first: `주간보고 미리보기 생성 요청 — ${weekOf ? `${weekOf} 가 속한 주` : '이번 주'}`,
-      fn: () => previewMut.mutateAsync({ weekOf: weekOf || undefined }),
+      fn: () => previewMut.mutateAsync({ weekOf: requestedWeekOf || undefined }),
       summarize: ({ data }) => {
         const assignees = new Set(data.owners.map((o) => o.assignee).filter(Boolean));
         const components = new Set(data.details.map((d) => d.component).filter(Boolean));
@@ -151,12 +172,24 @@ export function WeeklyReportPage() {
       },
     });
     if (r.ok) {
-      setReport(r.data.data);
-      setTitle((prev) => prev || r.data.data.title);
+      applyPreview(r.data.data, requestedWeekOf);
     } else if (!r.aborted) {
+      setPreviewError(r.error);
       toast.error('주간보고 생성 실패', formatApiError(r.error));
     }
   };
+
+  /** 주차 변경 — 기존 미리보기·게시 결과는 다른 주의 것이므로 무효로 표시한다(다시 생성 전까지 게시 불가). */
+  const changeWeek = (value: string) => {
+    setWeekOf(value);
+    setPublished(null);
+    setConfirmPublish(false);
+  };
+
+  // 미리보기가 현재 주차 입력과 일치하는지. 불일치(=주차를 바꾼 뒤 아직 다시 생성 안 함)면 표·게시를 막는다.
+  const stale = report !== null && reportWeekOf !== weekOf;
+  // 게시될 제목 — 직접 입력이 비어 있으면 서버가 설정 템플릿으로 만드는 제목(= 미리보기 제목)과 같다.
+  const effectiveTitle = title.trim() || report?.title || '';
 
   useEffect(() => {
     void loadPreview();
@@ -231,6 +264,11 @@ export function WeeklyReportPage() {
   /** Confluence 게시 — 서버가 단계(빌드·대상·세션 확인·렌더·페이지 게시·감사 기록)를 SSE 로 흘린다.
    *  중지는 화면의 스트림만 끊는다(서버 작업은 끝까지 돌아 감사 기록 정합성을 지킨다). */
   const publish = async () => {
+    // D-157: 게시 주차는 화면에 보이는 미리보기의 주(periodStart)로 고정한다 — 주차 입력값·서버 시각이
+    // 아니라 사용자가 확인한 표와 같은 주가 나가야 한다.
+    if (!report || stale) return;
+    const weekAnchor = report.periodStart;
+    setConfirmPublish(false);
     setPublished(null);
     publishAbort.current?.abort();
     const ctrl = new AbortController();
@@ -240,11 +278,11 @@ export function WeeklyReportPage() {
     const parent = parentPageId.trim() || settings?.parentPageId || '';
     const r = await streamLogged<WeeklyPublishResult>(runLog, {
       title: '주간보고 Confluence 게시',
-      first: `주간보고 게시 요청 — ${weekOf ? `${weekOf} 가 속한 주` : '이번 주'} · 스페이스 ${space}`
-        + `${parent ? ` · 상위 ${parent}` : ''}${title.trim() ? ` · 제목 "${title.trim()}"` : ' · 제목 템플릿'}`,
+      first: `주간보고 게시 요청 — ${report.periodStart} ~ ${report.periodEnd} · 스페이스 ${space}`
+        + `${parent ? ` · 상위 ${parent}` : ''}${title.trim() ? ` · 제목 "${title.trim()}"` : ` · 제목 템플릿("${report.title}")`}`,
       url: jiraApi.weeklyPublishStreamUrl(),
       body: {
-        weekOf: weekOf || undefined,
+        weekOf: weekAnchor,
         spaceKey: spaceKey.trim() || undefined,
         parentPageId: parentPageId.trim() || undefined,
         title: title.trim() || undefined,
@@ -283,6 +321,28 @@ export function WeeklyReportPage() {
   };
 
   const busy = previewMut.isPending || publishing;
+  // 게시 버튼 비활성 사유 — 권한(withHint) 외에 미리보기 상태를 먼저 알린다.
+  const publishBlockedReason = !report
+    ? '미리보기를 먼저 생성하세요'
+    : stale
+      ? '주차를 바꿨습니다 — "다시 생성" 으로 새 주의 미리보기를 확인한 뒤 게시할 수 있습니다'
+      : null;
+  // D-153: 표 자리 — 로딩·실패·주차 변경(stale)을 "집계된 업무 없음" 빈 상태와 구분한다.
+  const regenerate = () => void loadPreview({ logged: true });
+  let previewBody: ReactNode = null;
+  if (previewMut.isPending) {
+    previewBody = <LoadingState label="주간보고 미리보기를 만드는 중…" />;
+  } else if (previewError != null && (!report || stale)) {
+    previewBody = <ErrorState error={previewError} title="주간보고 미리보기를 만들지 못했습니다" onRetry={regenerate} />;
+  } else if (report && stale) {
+    previewBody = (
+      <EmptyState icon={RefreshCw} title="주차가 바뀌었습니다 — 다시 생성하세요"
+        description={`아래 표는 ${report.periodStart} ~ ${report.periodEnd} 기준이었습니다. 선택한 주의 업무를 보려면 미리보기를 다시 생성하세요.`}
+        action={{ label: '다시 생성', onClick: regenerate }} />
+    );
+  } else if (!report) {
+    previewBody = <LoadingState label="주간보고 미리보기를 만드는 중…" />;
+  }
   const filterActive = !!(fComponent || fAssignee || fStatus || fSearch);
   const resetFilters = () => { setFComponent(''); setFAssignee(''); setFStatus(''); setFSearch(''); };
 
@@ -292,11 +352,13 @@ export function WeeklyReportPage() {
         icon={FileText}
         title="주간보고"
         titleExtra={report && (
-          <span className="text-sm text-muted-foreground">{report.periodStart} ~ {report.periodEnd}</span>
+          <span className="text-sm text-muted-foreground">
+            {report.periodStart} ~ {report.periodEnd}{stale && ' (이전 미리보기)'}
+          </span>
         )}
         actions={<>
           <input type="date" className={`${inputCls} w-auto`} value={weekOf}
-            onChange={(e) => setWeekOf(e.target.value)} title="해당 주(월~금) 선택" />
+            onChange={(e) => changeWeek(e.target.value)} title="해당 주(월~금) 선택" aria-label="보고 주차(그 날짜가 속한 월~금)" />
           <button onClick={() => void loadPreview({ logged: true })} disabled={busy}
             className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl border border-border bg-secondary text-sm hover:bg-secondary/80 disabled:opacity-50">
             {previewMut.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
@@ -363,7 +425,11 @@ export function WeeklyReportPage() {
         ))}
       </div>
 
-      {tab === 'summary' && (
+      {previewBody && tab !== 'publish' && (
+        <MacCard title="주간보고 미리보기">{previewBody}</MacCard>
+      )}
+
+      {!previewBody && tab === 'summary' && (
         <MacCard title="1. 전체 요약">
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
@@ -387,7 +453,7 @@ export function WeeklyReportPage() {
         </MacCard>
       )}
 
-      {tab === 'summary' && (
+      {!previewBody && tab === 'summary' && (
         // D-122: 간트 링크 행을 헤더 actions 로 올림
         <MacCard
           title="진척률"
@@ -446,7 +512,7 @@ export function WeeklyReportPage() {
         </MacCard>
       )}
 
-      {tab === 'detail' && (
+      {!previewBody && tab === 'detail' && (
         <MacCard title="2. 구분별 상세">
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
@@ -491,7 +557,7 @@ export function WeeklyReportPage() {
         </MacCard>
       )}
 
-      {tab === 'owner' && (
+      {!previewBody && tab === 'owner' && (
         <MacCard title="3. 담당자별 추진 업무">
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
@@ -526,28 +592,37 @@ export function WeeklyReportPage() {
           <MacCard title="Confluence 게시">
             <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
               <div>
-                <span className="block text-sm font-medium text-muted-foreground mb-1">스페이스 키</span>
-                <input className={inputCls} placeholder="TEAM" value={spaceKey}
+                <label htmlFor={`${formId}-space`} className="block text-sm font-medium text-muted-foreground mb-1">스페이스 키</label>
+                <input id={`${formId}-space`} className={inputCls} placeholder="TEAM" value={spaceKey}
                   onChange={(e) => setSpaceKey(e.target.value)} />
               </div>
               <div>
-                <span className="block text-sm font-medium text-muted-foreground mb-1">상위 페이지 ID (선택)</span>
-                <input className={inputCls} placeholder="123456" value={parentPageId}
+                <label htmlFor={`${formId}-parent`} className="block text-sm font-medium text-muted-foreground mb-1">상위 페이지 ID (선택)</label>
+                <input id={`${formId}-parent`} className={inputCls} placeholder="123456" value={parentPageId}
                   onChange={(e) => setParentPageId(e.target.value)} />
               </div>
               <div>
-                <span className="block text-sm font-medium text-muted-foreground mb-1">문서 제목</span>
-                <input className={inputCls} value={title} onChange={(e) => setTitle(e.target.value)} />
+                <label htmlFor={`${formId}-title`} className="block text-sm font-medium text-muted-foreground mb-1">문서 제목</label>
+                <input id={`${formId}-title`} className={inputCls} value={title}
+                  placeholder={report?.title || '설정의 제목 형식'}
+                  onChange={(e) => {
+                    setTitle(e.target.value);
+                    // 비우면 다시 미리보기 제목(주차 날짜)을 따라가게 한다.
+                    setTitleDirty(e.target.value.trim() !== '');
+                  }} />
               </div>
             </div>
             <p className="text-xs text-muted-foreground mt-2">
               같은 제목의 페이지가 있으면 <b>새 버전으로 갱신</b>되고, 없으면 생성됩니다.
               게시 문서는 <b>필터와 무관하게 해당 주 전체</b>를 담습니다.
+              {report && !stale && <> 게시 주차: <b>{report.periodStart} ~ {report.periodEnd}</b>.</>}
             </p>
             <div className="mt-3">
               <div className="flex flex-wrap items-center gap-2">
-                <button onClick={() => void publish()} disabled={busy || !canOperate}
-                  title={withHint('Confluence 에 게시')} aria-label={ariaWithHint('Confluence 에 게시')}
+                <button onClick={() => setConfirmPublish(true)} disabled={busy || !canOperate || !!publishBlockedReason}
+                  title={publishBlockedReason ? `Confluence 에 게시 — ${publishBlockedReason}` : withHint('Confluence 에 게시')}
+                  aria-label={publishBlockedReason ? `Confluence 에 게시 (${publishBlockedReason})` : ariaWithHint('Confluence 에 게시')}
+                  aria-describedby={publishBlockedReason ? `${formId}-blocked` : undefined}
                   className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 disabled:opacity-50">
                   {publishing ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
                   Confluence 에 게시
@@ -560,6 +635,11 @@ export function WeeklyReportPage() {
                   </button>
                 )}
               </div>
+              {publishBlockedReason && !publishing && (
+                <p id={`${formId}-blocked`} className="mt-2 text-sm text-muted-foreground">
+                  {publishBlockedReason}
+                </p>
+              )}
               {published && (
                 <p className="mt-2 text-sm text-muted-foreground">
                   {published.action === 'created' ? '새 페이지를 생성했습니다.' : '기존 페이지를 새 버전으로 갱신했습니다.'}
@@ -574,32 +654,62 @@ export function WeeklyReportPage() {
             </div>
           </MacCard>
 
+          <ConfirmDialog
+            open={confirmPublish && !!report && !stale}
+            title="주간보고를 Confluence 에 게시할까요?"
+            confirmLabel="게시"
+            busy={publishing}
+            onConfirm={() => void publish()}
+            onCancel={() => setConfirmPublish(false)}
+          >
+            {report && (
+              <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-sm">
+                <dt className="text-muted-foreground">주차</dt>
+                <dd className="text-foreground tabular-nums">{report.periodStart} ~ {report.periodEnd}</dd>
+                <dt className="text-muted-foreground">제목</dt>
+                <dd className="text-foreground break-all">
+                  {effectiveTitle}
+                  {titleDirty && <span className="text-muted-foreground"> (직접 입력)</span>}
+                </dd>
+                <dt className="text-muted-foreground">스페이스</dt>
+                <dd className="text-foreground">{spaceKey.trim() || settings?.spaceKey || '(설정값 없음)'}</dd>
+                <dt className="text-muted-foreground">상위 페이지</dt>
+                <dd className="text-foreground">{parentPageId.trim() || settings?.parentPageId || '(스페이스 최상위)'}</dd>
+              </dl>
+            )}
+            <p className="mt-2 text-xs text-muted-foreground">
+              같은 제목의 페이지가 이미 있으면 그 페이지가 이 주의 내용으로 새 버전 갱신됩니다.
+              {titleDirty && report && !effectiveTitle.includes(report.periodStart)
+                && ' 직접 입력한 제목에 이 주의 시작일이 없습니다 — 다른 주 문서를 덮어쓰지 않는지 확인하세요.'}
+            </p>
+          </ConfirmDialog>
+
           {isAdmin && form && (
             <MacCard title="자동 생성 설정 (관리자)">
               <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                 <div>
-                  <span className="block text-sm font-medium text-muted-foreground mb-1">기본 스페이스 키</span>
-                  <input className={inputCls} value={form.spaceKey}
+                  <label htmlFor={`${formId}-s-spaceKey`} className="block text-sm font-medium text-muted-foreground mb-1">기본 스페이스 키</label>
+                  <input id={`${formId}-s-spaceKey`} className={inputCls} value={form.spaceKey}
                     onChange={(e) => setForm({ ...form, spaceKey: e.target.value })} />
                 </div>
                 <div>
-                  <span className="block text-sm font-medium text-muted-foreground mb-1">기본 상위 페이지 ID</span>
-                  <input className={inputCls} value={form.parentPageId}
+                  <label htmlFor={`${formId}-s-parentPageId`} className="block text-sm font-medium text-muted-foreground mb-1">기본 상위 페이지 ID</label>
+                  <input id={`${formId}-s-parentPageId`} className={inputCls} value={form.parentPageId}
                     onChange={(e) => setForm({ ...form, parentPageId: e.target.value })} />
                 </div>
                 <div>
-                  <span className="block text-sm font-medium text-muted-foreground mb-1">Jira WBS 간트 링크</span>
-                  <input className={inputCls} placeholder="https://jira.../secure/GanttChart.jspa?..."
+                  <label htmlFor={`${formId}-s-ganttUrl`} className="block text-sm font-medium text-muted-foreground mb-1">Jira WBS 간트 링크</label>
+                  <input id={`${formId}-s-ganttUrl`} className={inputCls} placeholder="https://jira.../secure/GanttChart.jspa?..."
                     value={form.ganttUrl} onChange={(e) => setForm({ ...form, ganttUrl: e.target.value })} />
                 </div>
                 <div>
-                  <span className="block text-sm font-medium text-muted-foreground mb-1">제목 형식</span>
-                  <input className={inputCls} value={form.titleTemplate}
+                  <label htmlFor={`${formId}-s-titleTemplate`} className="block text-sm font-medium text-muted-foreground mb-1">제목 형식</label>
+                  <input id={`${formId}-s-titleTemplate`} className={inputCls} value={form.titleTemplate}
                     onChange={(e) => setForm({ ...form, titleTemplate: e.target.value })} />
                 </div>
                 <div>
-                  <span className="block text-sm font-medium text-muted-foreground mb-1">자동 생성 cron</span>
-                  <input className={inputCls} placeholder="0 17 * * 5" value={form.autoCron}
+                  <label htmlFor={`${formId}-s-autoCron`} className="block text-sm font-medium text-muted-foreground mb-1">자동 생성 cron</label>
+                  <input id={`${formId}-s-autoCron`} className={inputCls} placeholder="0 17 * * 5" value={form.autoCron}
                     onChange={(e) => setForm({ ...form, autoCron: e.target.value })} />
                 </div>
                 <div className="flex items-end">

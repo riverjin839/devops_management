@@ -323,7 +323,7 @@ export function ClusterTableRow({ cluster, onEdit, onDelete, deletingId, overlap
         {ipBuckets.bond0.groups.length > 0 ? (
           <div>
             {ipBuckets.bond0.groups.map((g, i) => (
-              <p key={i} className="text-sm font-mono text-chart-6 tabular-nums" title="모든 노드 bond0 IP /24 묶음">{g}</p>
+              <p key={i} className="text-sm font-mono text-chart-6-text tabular-nums" title="모든 노드 bond0 IP /24 묶음">{g}</p>
             ))}
             <p className="text-xs text-muted-foreground mt-0.5">{ipBuckets.bond0.ips.length}개 IP</p>
           </div>
@@ -337,7 +337,7 @@ export function ClusterTableRow({ cluster, onEdit, onDelete, deletingId, overlap
         {ipBuckets.bond1.groups.length > 0 ? (
           <div>
             {ipBuckets.bond1.groups.map((g, i) => (
-              <p key={i} className="text-sm font-mono text-chart-3 tabular-nums" title="모든 노드 bond1 IP /24 묶음">{g}</p>
+              <p key={i} className="text-sm font-mono text-chart-3-text tabular-nums" title="모든 노드 bond1 IP /24 묶음">{g}</p>
             ))}
             <p className="text-xs text-muted-foreground mt-0.5">{ipBuckets.bond1.ips.length}개 IP</p>
           </div>

@@ -5,7 +5,7 @@
 export const REQUEST_ID_HEADER = 'X-Request-ID';
 
 /** 오류 문구 안의 "요청 ID xxx" — 토스트가 이걸 찾아 복사·원인 보기 버튼을 붙인다. */
-export const REQUEST_ID_PATTERN = /요청 ID ([A-Za-z0-9._-]{8,64})/;
+export const REQUEST_ID_PATTERN = /(?:요청 ID|Request ID) ([A-Za-z0-9._-]{8,64})/;
 
 export function newRequestId(): string {
   // crypto.randomUUID 는 보안 컨텍스트(https/localhost) 전용이라 폐쇄망 http 접속에서 없다 — getRandomValues 는 어디서나 된다.

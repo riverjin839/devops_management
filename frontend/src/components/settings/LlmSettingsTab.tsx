@@ -5,6 +5,7 @@ import {
 } from 'lucide-react';
 import { MacCard } from '@/components/ui/MacCard';
 import { useToast, ConfirmDialog, LoadingState } from '@/components/common';
+import { useModalA11y } from '@/components/common/useModalA11y';
 import { llmApi } from '@/services/api';
 import { formatApiError } from '@/lib/utils';
 import {
@@ -67,6 +68,7 @@ export function LlmSettingsTab() {
   const [testing, setTesting] = useState<string | null>(null);
   const [testResult, setTestResult] = useState<{ profile: string; result: LlmTestResult } | null>(null);
   const [credModalOpen, setCredModalOpen] = useState(false);
+  const credModalRef = useModalA11y(credModalOpen, () => setCredModalOpen(false));
   const [credName, setCredName] = useState('');
   const [credKey, setCredKey] = useState('');
 
@@ -542,7 +544,7 @@ export function LlmSettingsTab() {
 
       {/* ── 자격증명 등록 모달 ── */}
       {credModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" role="dialog" aria-modal="true" aria-label="API 키 등록">
+        <div ref={credModalRef} className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" role="dialog" aria-modal="true" aria-label="API 키 등록">
           <div className="bg-card border border-border rounded-md shadow-lg w-full max-w-md p-5 space-y-4">
             <h3 className="text-sm font-semibold flex items-center gap-2"><KeyRound className="w-4 h-4" /> API 키 등록</h3>
             <div className="space-y-3">
@@ -895,6 +897,7 @@ function ProfileEditModal({
   onSave: (p: LlmProfile) => void;
 }) {
   const [form, setForm] = useState<LlmProfile>(profile);
+  const dialogRef = useModalA11y(true, onCancel);
   const [modelListOpen, setModelListOpen] = useState(false);
   const { data: models, isFetching: modelsLoading } = useLlmProfileModels(
     isNew ? '' : profile.name, modelListOpen,
@@ -905,7 +908,7 @@ function ProfileEditModal({
     : form.apiKeyRef.startsWith('env:') ? 'env' : 'none';
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" role="dialog" aria-modal="true" aria-label="LLM 프로필 편집">
+    <div ref={dialogRef} className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" role="dialog" aria-modal="true" aria-label="LLM 프로필 편집">
       <div className="bg-card border border-border rounded-md shadow-lg w-full max-w-lg p-5 space-y-4 max-h-[85vh] overflow-y-auto">
         <h3 className="text-sm font-semibold flex items-center gap-2">
           <Bot className="w-4 h-4" /> {isNew ? '프로필 추가' : `프로필 편집 — ${profile.name}`}

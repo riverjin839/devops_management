@@ -5,7 +5,7 @@
  * 키 규칙(DESIGN_SYSTEM.md §12 i18n):
  *  - 최상위는 영역 접두 — `nav.*`(메뉴·그룹), `shell.*`(사이드바·상단바·flyout), `home.*`(홈), `login.*`(로그인),
  *    `common.*`(공용 확인창·빈/로딩/오류 상태), `apps.*`(앱 추가 카탈로그), `palette.*`(커맨드 팔레트),
- *    `theme.*`(테마 갤러리 — 테마·강조색 이름은 `shell.theme.*`·`shell.accent.*`).
+ *    `theme.*`(테마 갤러리 — 테마·강조색 이름은 `shell.theme.*`·`shell.accent.*`), `settings.*`(Settings 화면).
  *  - 그 아래는 화면 요소 단위 camelCase 묶음(`shell.help.releaseNotes`). 문장 그대로를 키로 쓰지 않는다.
  *  - 변수는 `{{name}}` 보간. 문자열을 이어 붙여 문장을 만들지 않는다(어순이 언어마다 다르다).
  */
@@ -66,7 +66,7 @@ export const ko = {
       opsNotes: '운영 노트보드',
       wbs: 'WBS 작업흐름',
       mindmap: '마인드맵',
-      workflow: '워크플로우',
+      workflow: '워크플로',
       settings: '설정',
       jiraImport: 'Jira Excel 가져오기',
       weeklyReport: '주간보고',
@@ -208,6 +208,7 @@ export const ko = {
   /** 여러 화면이 함께 쓰는 공용 UI — ConfirmDialog·EmptyState 계열의 기본 문구. */
   common: {
     action: {
+      save: '저장',
       cancel: '취소',
       run: '실행',
       close: '닫기',
@@ -225,12 +226,45 @@ export const ko = {
       loadFailed: '불러오지 못했습니다',
       forbiddenTitle: '이 화면을 볼 권한이 없습니다',
       forbiddenHint: '관리자에게 권한을 요청하세요.',
+      /** `lib/utils.ts` `formatApiError` 의 기본 문구 — 호출부가 fallback 을 넘기면 그 값이 우선. */
+      requestFailed: '요청 실패',
+      canceled: '취소됨',
+    },
+    /** `common/ScreenCatalogList` — 아일랜드 화면 추가 피커·Settings 화면별 노출 관리가 함께 쓴다. */
+    screenCatalog: {
+      searchPlaceholder: '화면 이름으로 검색',
+      searchLabel: '화면 검색',
+      empty: '조건에 맞는 화면이 없습니다.',
+      emptyHint: '검색어를 바꾸거나 지워 보세요.',
+      ungrouped: '기타',
     },
     /** 오류 토스트의 요청 ID 동작(Toast — lib/requestId.ts). */
     requestId: {
+      label: '요청 ID',
       copy: '요청 ID 복사',
       copied: '복사됨',
       openCause: '원인 보기',
+    },
+  },
+  /** Settings ▸ 화면 UI 설정 — 조직 기본 앱 구성(`DefaultAppsManager`)·메뉴 이름 편집(`NavMenuManager`). */
+  settings: {
+    defaultApps: {
+      title: '기본 앱 구성 (사이드바·상단바)',
+      intro:
+        '앱을 직접 고른 적이 없는 사용자의 사이드바·상단바 구성입니다. 이미 직접 고른 사용자는 바뀌지 않으며, 각자 "앱 추가" 창의 <b>기본값으로 초기화</b>로 이 구성을 따를 수 있습니다. 고른 순서가 표시 순서입니다.',
+      sidebarSection: '사이드바 · {{group}}',
+      topbarSection: '상단바 · {{group}}',
+      revert: '되돌리기',
+      save: '저장',
+      saved: '조직 기본 앱 구성 저장됨',
+      saveFailed: '저장 실패',
+    },
+    navMenu: {
+      title: '메뉴 이름 편집',
+      intro: '사이드바 메뉴 이름과 앱 타이틀을 변경합니다. 이름만 바뀌며 모든 사용자에게 적용됩니다. 바꾼 이름은 화면 언어와 상관없이 입력한 그대로 보입니다.',
+      appTitle: '앱 타이틀',
+      editTitle: '앱 타이틀 편집',
+      editItem: '{{label}} 이름 편집',
     },
   },
   /** "앱 추가" 카탈로그(AddAppDialog·InstalledAppOrder) — leaf 화면 라벨은 `nav.page.*`, 그룹은 `nav.group.*`. */

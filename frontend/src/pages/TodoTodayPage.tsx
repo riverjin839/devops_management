@@ -12,10 +12,12 @@ import { useCurrentSprint, useCreateSprint } from '@/hooks/useSprints';
 import { useCanOperate } from '@/hooks/useCanOperate';
 import { useToday } from '@/hooks/useToday';
 import { useAuthStore } from '@/stores/authStore';
-import { ViewModeBar, useToast, PageHeader, PageShell, EmptyState, LoadingState } from '@/components/common';
+import {
+  ViewModeBar, useToast, PageHeader, PageShell, EmptyState, LoadingState, ErrorState,
+} from '@/components/common';
 import { MacCard } from '@/components/ui/MacCard';
 import { stripHtml, formatApiError } from '@/lib/utils';
-import { isAssignedTo, itemDateKey } from '@/lib/workItems';
+import { isAssignedTo, isMyDueTodo, itemDateKey } from '@/lib/workItems';
 import type { WorkItem, KanbanStatus } from '@/types';
 
 // ── helpers ─────────────────────────────────────────────────────────────────
@@ -30,7 +32,7 @@ function dateOf(t: WorkItem): string {
 }
 function fmtDue(t: WorkItem): string {
   const s = t.startedAt;
-  if (!s) return '-';
+  if (!s) return '일정 미정';
   const d = new Date(s.endsWith('Z') ? s : s + 'Z');
   if (isNaN(d.getTime())) return s.slice(0, 16);
   const md = `${d.getMonth() + 1}/${d.getDate()}`;
@@ -64,9 +66,22 @@ function displayTitle(t: WorkItem): string {
   return t.title?.trim() || stripHtml(t.content) || t.category || '(제목 없음)';
 }
 
+// 우선순위는 상태가 아니라 범주 — 상태 토큰(status-*) 대신 --chart-* (§12.12-4).
 const PRIORITY_DOT: Record<string, string> = {
-  high: 'bg-status-critical', medium: 'bg-chart-1', low: 'bg-chart-8',
+  high: 'bg-chart-5', medium: 'bg-chart-1', low: 'bg-chart-8',
 };
+const PRIORITY_LABEL: Record<string, string> = { high: '높음', medium: '보통', low: '낮음' };
+
+/** 우선순위 점 — 색만으로 전달하지 않도록 스크린리더 텍스트·title 을 함께 둔다(D-166). */
+function PriorityDot({ priority, className = 'w-1.5 h-1.5' }: { priority: string; className?: string }) {
+  const label = `우선순위 ${PRIORITY_LABEL[priority] ?? PRIORITY_LABEL.medium}`;
+  return (
+    <span className="inline-flex flex-shrink-0" title={label}>
+      <span className={`${className} rounded-full ${PRIORITY_DOT[priority] ?? PRIORITY_DOT.medium}`} aria-hidden />
+      <span className="sr-only">{label}</span>
+    </span>
+  );
+}
 const STATUS_META: Record<KanbanStatus, { label: string; cls: string }> = {
   backlog:     { label: '백로그',     cls: 'bg-chart-8/10 text-chart-8-text border-chart-8/30' },
   todo:        { label: '할일',       cls: 'bg-chart-1/10 text-chart-1-text border-chart-1/30' },
@@ -107,14 +122,17 @@ interface ItemProps {
 
 function CompleteBtn({ item, busy, onToggleDone }: Omit<ItemProps, 'onOpen'>) {
   const done = item.kanbanStatus === 'done';
+  // 상태 변경은 operator 이상(routers/work_items.py) — viewer 는 비활성 + 사유(§12.9).
+  const { canOperate, withHint, ariaWithHint } = useCanOperate();
+  const label = `${displayTitle(item)} ${done ? '완료 취소' : '완료 처리'}`;
   return (
     <button
       type="button"
-      disabled={busy}
+      disabled={busy || !canOperate}
       onClick={(e) => { e.stopPropagation(); onToggleDone(item); }}
-      title={done ? '완료 취소' : '완료 처리'}
-      aria-label={done ? '완료 취소' : '완료 처리'}
-      className={`flex-shrink-0 rounded-full transition-colors disabled:opacity-50 ${done ? 'text-muted-foreground' : 'text-muted-foreground/40 hover:text-primary'}`}
+      title={withHint(done ? '완료 취소' : '완료 처리')}
+      aria-label={ariaWithHint(label)}
+      className={`relative z-10 flex-shrink-0 rounded-full transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${done ? 'text-muted-foreground' : 'text-muted-foreground/40 hover:text-primary'}`}
     >
       {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : done ? <CheckCircle2 className="w-4 h-4" /> : <Circle className="w-4 h-4" />}
     </button>
@@ -125,16 +143,17 @@ function ItemCard({ item, busy, onToggleDone, onOpen }: ItemProps) {
   const cl = clusterLabel(item);
   const done = item.kanbanStatus === 'done';
   return (
-    <div
-      onClick={() => onOpen(item)}
-      className="group cursor-pointer rounded-md border border-border bg-card hover:border-primary/30 p-2 transition-colors"
-    >
+    // D-165: 카드 전체 <div onClick> 대신 제목 버튼이 카드 면적을 덮는다(stretched button) — 키보드로 열 수 있다.
+    <div className="group relative rounded-md border border-border bg-card hover:border-primary/30 focus-within:border-primary/40 p-2 transition-colors">
       <div className="flex items-start gap-2">
         <CompleteBtn item={item} busy={busy} onToggleDone={onToggleDone} />
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-1.5 mb-1">
-            <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${PRIORITY_DOT[item.priority] ?? PRIORITY_DOT.medium}`} />
-            <span className={`text-sm font-medium truncate ${done ? 'line-through text-muted-foreground' : ''}`}>{displayTitle(item)}</span>
+            <PriorityDot priority={item.priority} />
+            <button type="button" onClick={() => onOpen(item)} title={`${displayTitle(item)} 상세 열기`}
+              className={`min-w-0 text-left text-sm font-medium truncate focus-visible:outline-none after:absolute after:inset-0 after:rounded-md focus-visible:after:ring-2 focus-visible:after:ring-primary/50 ${done ? 'line-through text-muted-foreground' : ''}`}>
+              {displayTitle(item)}
+            </button>
           </div>
           <div className="flex items-center gap-1.5 flex-wrap text-xs text-muted-foreground">
             <span className={`px-1.5 py-0.5 rounded border ${STATUS_META[item.kanbanStatus]?.cls ?? STATUS_META.todo.cls}`}>
@@ -155,13 +174,13 @@ function ItemRow({ item, busy, onToggleDone, onOpen }: ItemProps) {
   const cl = clusterLabel(item);
   const done = item.kanbanStatus === 'done';
   return (
-    <div
-      onClick={() => onOpen(item)}
-      className="group cursor-pointer flex items-center gap-2 px-3 py-1 rounded-lg hover:bg-secondary/50 transition-colors text-sm"
-    >
+    <div className="group relative flex items-center gap-2 px-3 py-1 rounded-lg hover:bg-secondary/50 transition-colors text-sm">
       <CompleteBtn item={item} busy={busy} onToggleDone={onToggleDone} />
-      <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${PRIORITY_DOT[item.priority] ?? PRIORITY_DOT.medium}`} />
-      <span className={`flex-1 min-w-0 truncate ${done ? 'line-through text-muted-foreground' : ''}`}>{displayTitle(item)}</span>
+      <PriorityDot priority={item.priority} />
+      <button type="button" onClick={() => onOpen(item)} title={`${displayTitle(item)} 상세 열기`}
+        className={`flex-1 min-w-0 truncate text-left focus-visible:outline-none after:absolute after:inset-0 after:rounded-lg focus-visible:after:ring-2 focus-visible:after:ring-primary/50 ${done ? 'line-through text-muted-foreground' : ''}`}>
+        {displayTitle(item)}
+      </button>
       <span className={`hidden sm:inline px-1.5 py-0.5 rounded border text-xs flex-shrink-0 ${STATUS_META[item.kanbanStatus]?.cls ?? STATUS_META.todo.cls}`}>
         {STATUS_META[item.kanbanStatus]?.label ?? '할일'}
       </span>
@@ -229,17 +248,20 @@ export function TodoTodayPage() {
   const [scheduleDate, setScheduleDate] = useState<string>(todayStr());
   const [busyId, setBusyId] = useState<string | null>(null);
 
-  const { data: currentSprint } = useCurrentSprint();
+  const sprintQuery = useCurrentSprint();
+  const currentSprint = sprintQuery.data;
   const createSprint = useCreateSprint();
-  // 스프린트 생성은 operator 이상(routers/sprint.py) — viewer 에게는 비활성 + 사유(§12.9).
-  const { canOperate: canCreateSprint, withHint: sprintHint } = useCanOperate();
+  // 스프린트 생성·업무 추가·스프린트 배정·완료 토글은 operator 이상(routers/sprint.py·work_items.py)
+  // — viewer 에게는 비활성 + 사유(§12.9).
+  const { canOperate, withHint, ariaWithHint } = useCanOperate();
   const updateItem = useUpdateWorkItem();
 
-  const { data, isLoading, isError, refetch, isFetching } = useWorkItems(
+  const { data, isLoading, isError, error, refetch, isFetching } = useWorkItems(
     myName ? { assignee: myName } : undefined,
   );
   // 공통업무(파트 회의 등) — 담당자가 아니어도 모두의 일정에 포함.
-  const { data: allAttendData } = useWorkItems({ allAttendees: true });
+  const allAttendQuery = useWorkItems({ allAttendees: true });
+  const allAttendData = allAttendQuery.data;
   const patchStatus = usePatchWorkItemStatus();
 
   // 정확히 "내" 업무만 (담당자 정/부/legacy 중 내 이름) + 공통업무 항목.
@@ -265,8 +287,14 @@ export function TodoTodayPage() {
   const buckets = useMemo(() => {
     const open = mine.filter((t) => t.kanbanStatus !== 'done');
     const sortByDue = (a: WorkItem, b: WorkItem) => (a.startedAt ?? '').localeCompare(b.startedAt ?? '');
-    const overdue = open.filter((t) => dateOf(t) && dateOf(t) < today).sort(sortByDue);
-    const todayList = open.filter((t) => dateOf(t) === today).sort(sortByDue);
+    // D-163①: 지연+오늘은 홈 KPI 와 같은 정의(isMyDueTodo — 시작일이 오늘 이하 또는 미지정)를 쓴다.
+    // 예전엔 시작일 없는 미완료 업무가 어느 구역에도 들지 않아 화면·통계에서 사라졌다. 일정 미정은 오늘 구역 끝에 둔다.
+    const due = open.filter((t) => isMyDueTodo(t, myName, today));
+    const overdue = due.filter((t) => dateOf(t) && dateOf(t) < today).sort(sortByDue);
+    const todayList = [
+      ...due.filter((t) => dateOf(t) === today).sort(sortByDue),
+      ...due.filter((t) => !dateOf(t)),
+    ];
     const upcoming = open.filter((t) => dateOf(t) > today).sort(sortByDue);
     const doneRecent = mine
       .filter((t) => t.kanbanStatus === 'done')
@@ -274,7 +302,7 @@ export function TodoTodayPage() {
       .slice(0, 12);
     const inProgress = open.filter((t) => t.kanbanStatus === 'in_progress').length;
     return { overdue, todayList, upcoming, doneRecent, inProgress };
-  }, [mine, today]);
+  }, [mine, today, myName]);
 
   // 스프린트 뷰 — 내 항목을 현재 스프린트 커밋 / 후보(미배정·미완료)로 분리.
   const sprint = useMemo(() => {
@@ -339,6 +367,8 @@ export function TodoTodayPage() {
     { label: '예정', value: buckets.upcoming.length },
   ];
   const totalOpen = buckets.overdue.length + buckets.todayList.length + buckets.upcoming.length;
+  // D-153: 로딩·실패 중에는 0 타일을 보이지 않는다(장애를 "할일 0"으로 읽게 된다).
+  const bodyReady = !!myName && !isLoading && !isError;
 
   return (
     <PageShell density="hub" className="flex flex-col gap-5 app-min-h-screen">
@@ -367,12 +397,15 @@ export function TodoTodayPage() {
           </Link>
           <button
             onClick={() => navigate('/tasks-mgmt/new')}
-            className="flex items-center gap-1.5 px-3 py-2 text-sm bg-primary hover:bg-primary/90 text-primary-foreground rounded-lg transition-colors"
+            disabled={!canOperate}
+            title={withHint('업무 추가')}
+            aria-label={ariaWithHint('업무 추가')}
+            className="flex items-center gap-1.5 px-3 py-2 text-sm bg-primary hover:bg-primary/90 text-primary-foreground rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <Plus className="w-4 h-4" /> 업무 추가
           </button>
           <button
-            onClick={() => refetch()}
+            onClick={() => { void refetch(); void allAttendQuery.refetch(); void sprintQuery.refetch(); }}
             disabled={isFetching}
             className="p-2 rounded-lg bg-secondary hover:bg-secondary/80 border border-border text-muted-foreground hover:text-foreground transition-colors disabled:opacity-50"
             title="새로고침"
@@ -383,12 +416,20 @@ export function TodoTodayPage() {
         </>}
       />
 
-      {/* 요약 통계 */}
-      <StatTileRow>
-        {stats.map((s) => (
-          <StatTile key={s.label} label={s.label} value={s.value} tone={s.tone} />
-        ))}
-      </StatTileRow>
+      {/* 요약 통계 — 본문 조회가 끝난 뒤에만 */}
+      {bodyReady && (
+        <StatTileRow>
+          {stats.map((s) => (
+            <StatTile key={s.label} label={s.label} value={s.value} tone={s.tone} />
+          ))}
+        </StatTileRow>
+      )}
+
+      {/* 공통업무(파트 회의 등) 조회 실패 — 무음이면 일정이 빠진 줄 모른다 */}
+      {bodyReady && allAttendQuery.isError && (
+        <ErrorState compact error={allAttendQuery.error} title="공통업무를 불러오지 못했습니다 — 아래 목록에서 빠져 있습니다"
+          onRetry={() => void allAttendQuery.refetch()} />
+      )}
 
       {/* 본문 */}
       {!myName ? (
@@ -400,13 +441,14 @@ export function TodoTodayPage() {
       ) : isLoading ? (
         <LoadingState label="할일을 불러오는 중…" />
       ) : isError ? (
-        <div className="flex flex-col items-center justify-center py-20 gap-3 text-status-critical">
-          <AlertTriangle className="w-8 h-8" />
-          <p className="text-sm">데이터를 불러오는 중 오류가 발생했습니다.</p>
-          <button onClick={() => refetch()} className="px-4 py-2 text-sm text-foreground bg-secondary hover:bg-secondary/80 border border-border rounded-lg">다시 시도</button>
-        </div>
+        <ErrorState error={error} title="할일을 불러오지 못했습니다" onRetry={() => void refetch()} />
       ) : view === 'sprint' ? (
-        !currentSprint ? (
+        sprintQuery.isLoading ? (
+          <LoadingState label="스프린트를 불러오는 중…" />
+        ) : sprintQuery.isError ? (
+          // D-153: 조회 실패를 "진행 중인 스프린트 없음"으로 보여 주면 중복 스프린트를 만들게 된다.
+          <ErrorState error={sprintQuery.error} title="현재 스프린트를 불러오지 못했습니다" onRetry={() => void sprintQuery.refetch()} />
+        ) : !currentSprint ? (
           <EmptyState
             icon={Rocket}
             title="진행 중인 스프린트가 없습니다."
@@ -415,8 +457,9 @@ export function TodoTodayPage() {
             <div className="flex items-center gap-2 mt-4">
               <button
                 onClick={onStartSprint}
-                disabled={createSprint.isPending || !canCreateSprint}
-                title={sprintHint('2주 스프린트 시작')}
+                disabled={createSprint.isPending || !canOperate}
+                title={withHint('2주 스프린트 시작')}
+                aria-label={ariaWithHint('2주 스프린트 시작')}
                 className="flex items-center gap-1.5 px-4 py-2 text-sm bg-primary hover:bg-primary/90 text-primary-foreground rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {createSprint.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
@@ -493,14 +536,17 @@ export function TodoTodayPage() {
                         const cl = clusterLabel(t);
                         return (
                           <div key={t.id} className="group flex items-center gap-2 px-2 py-1 text-sm">
-                            <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${PRIORITY_DOT[t.priority] ?? PRIORITY_DOT.medium}`} />
-                            <button onClick={() => onOpen(t)} className="flex-1 min-w-0 truncate text-left hover:text-primary transition-colors">{displayTitle(t)}</button>
+                            <PriorityDot priority={t.priority} />
+                            <button type="button" onClick={() => onOpen(t)} className="flex-1 min-w-0 truncate text-left hover:text-primary transition-colors">{displayTitle(t)}</button>
                             {cl && <span className="hidden md:inline text-xs text-muted-foreground flex-shrink-0 max-w-[120px] truncate">{cl}</span>}
                             <span className="text-xs text-muted-foreground font-mono flex-shrink-0 w-16 text-right">{fmtDue(t)}</span>
                             <button
+                              type="button"
                               onClick={() => onAddToSprint(t, currentSprint.id)}
-                              disabled={busyId === t.id}
-                              className="flex-shrink-0 flex items-center gap-1 px-2 py-1 text-xs rounded-lg bg-primary/10 text-primary hover:bg-primary/20 transition-colors disabled:opacity-50"
+                              disabled={busyId === t.id || !canOperate}
+                              title={withHint('스프린트에 추가')}
+                              aria-label={ariaWithHint(`${displayTitle(t)} 스프린트에 추가`)}
+                              className="flex-shrink-0 flex items-center gap-1 px-2 py-1 text-xs rounded-lg bg-primary/10 text-primary hover:bg-primary/20 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                             >
                               {busyId === t.id ? <Loader2 className="w-3 h-3 animate-spin" /> : <Plus className="w-3 h-3" />}추가
                             </button>
@@ -557,13 +603,20 @@ export function TodoTodayPage() {
                     return (
                       <tr key={t.id} onClick={() => onOpen(t)} className="cursor-pointer hover:bg-secondary/40 transition-colors">
                         <td className="px-3 py-2 font-mono text-sm text-muted-foreground whitespace-nowrap">{timeLabel(t)}</td>
-                        <td className="px-3 py-2"><span className={`font-medium ${done ? 'line-through text-muted-foreground' : ''}`}>{displayTitle(t)}</span></td>
+                        <td className="px-3 py-2">
+                          {/* D-165: 행 클릭은 마우스 편의 — 키보드는 제목 버튼으로 연다. */}
+                          <button type="button" onClick={(e) => { e.stopPropagation(); onOpen(t); }}
+                            title={`${displayTitle(t)} 상세 열기`}
+                            className={`text-left font-medium hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 rounded ${done ? 'line-through text-muted-foreground' : ''}`}>
+                            {displayTitle(t)}
+                          </button>
+                        </td>
                         <td className="px-3 py-2">
                           <span className={`text-xs px-1.5 py-0.5 rounded border ${STATUS_META[t.kanbanStatus]?.cls ?? STATUS_META.todo.cls}`}>
                             {STATUS_META[t.kanbanStatus]?.label ?? '할일'}
                           </span>
                         </td>
-                        <td className="px-2 py-2 text-center" aria-label={`우선순위 ${t.priority}`}><span className={`inline-block w-2 h-2 rounded-full ${PRIORITY_DOT[t.priority] ?? PRIORITY_DOT.medium}`} /></td>
+                        <td className="px-2 py-2 text-center"><PriorityDot priority={t.priority} className="w-2 h-2" /></td>
                         <td className="px-3 py-2 text-sm text-muted-foreground truncate max-w-[140px]">{cl ?? '—'}</td>
                         <td className="px-2 py-2" onClick={(e) => e.stopPropagation()}>
                           <CompleteBtn item={t} busy={busyId === t.id} onToggleDone={onToggleDone} />
@@ -581,7 +634,7 @@ export function TodoTodayPage() {
           icon={CheckCircle2}
           title="처리할 할일이 없습니다."
           description="담당으로 지정된 미완료 업무가 없습니다. 새 업무를 추가해 보세요."
-          action={{ label: '업무 추가', onClick: () => navigate('/tasks-mgmt/new') }}
+          action={canOperate ? { label: '업무 추가', onClick: () => navigate('/tasks-mgmt/new') } : undefined}
         />
       ) : (
         <div className="flex flex-col gap-3">

@@ -5,10 +5,10 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { ConfluenceUrlInput, useToast, PageShell, LoadingState, EmptyState, ErrorState } from '@/components/common';
 import { MacCard } from '@/components/ui/MacCard';
 import {
-  useCommands, useCreateCommand, useUpdateCommand, type CommandEntryPatch,
+  useCommands, useCreateCommand, useUpdateCommand,
 } from '@/hooks/useCommands';
 import { useCanOperate } from '@/hooks/useCanOperate';
-import type { CommandEntry, CommandEntryCreate, CommandImportance } from '@/types';
+import type { CommandEntry, CommandEntryCreate, CommandEntryUpdate, CommandImportance } from '@/types';
 import { formatApiError } from '@/lib/utils';
 
 const IMPORTANCE_OPTIONS: CommandImportance[] = ['info', 'low', 'medium', 'high', 'critical'];
@@ -110,7 +110,7 @@ function CommandForm({ initial, onCancel, onSaved }: CommandFormProps) {
     };
     try {
       if (initial) {
-        const patch: CommandEntryPatch = { ...fields, command: command.trim(), importance, pinned };
+        const patch: CommandEntryUpdate = { ...fields, command: command.trim(), importance, pinned };
         await update.mutateAsync({ id: initial.id, data: patch });
         toast.success('수정됨', '명령어 정보가 업데이트되었습니다.');
       } else {

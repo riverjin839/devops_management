@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Code2, History, ScrollText, Settings2, Loader2, Search } from 'lucide-react';
 import { llmApi } from '@/services/api';
+import { useModalA11y } from '@/components/common/useModalA11y';
 import type { AgentInfoRequest, RagCitation } from '@/types';
 
 const KIND_META: Record<AgentInfoRequest['kind'], { label: string; icon: typeof Code2 }> = {
@@ -64,10 +65,11 @@ function PasteModal({
   onProvide: (text: string) => void;
 }) {
   const [text, setText] = useState('');
+  const dialogRef = useModalA11y(true, onClose);
   const meta = KIND_META[request.kind];
   const label = request.kind === 'github_code' ? '관련 코드' : request.kind === 'logs' ? '로그' : '설정 값';
   return (
-    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40" role="dialog" aria-modal="true" aria-label={meta.label}>
+    <div ref={dialogRef} className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40" role="dialog" aria-modal="true" aria-label={meta.label}>
       <div className="bg-card border border-border rounded-md shadow-lg w-full max-w-lg p-5 space-y-3">
         <h3 className="text-sm font-semibold">{meta.label}</h3>
         <p className="text-xs text-muted-foreground whitespace-pre-wrap">요청 사유: {request.detail || '(설명 없음)'}</p>
@@ -105,6 +107,7 @@ function HistorySearchModal({
   onProvide: (text: string) => void;
 }) {
   const [q, setQ] = useState('');
+  const dialogRef = useModalA11y(true, onClose);
   const [results, setResults] = useState<RagCitation[]>([]);
   const [loading, setLoading] = useState(false);
 
@@ -122,7 +125,7 @@ function HistorySearchModal({
   };
 
   return (
-    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40" role="dialog" aria-modal="true" aria-label="트러블슈팅 이력 첨부">
+    <div ref={dialogRef} className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40" role="dialog" aria-modal="true" aria-label="트러블슈팅 이력 첨부">
       <div className="bg-card border border-border rounded-md shadow-lg w-full max-w-lg p-5 space-y-3 max-h-[80vh] overflow-y-auto">
         <h3 className="text-sm font-semibold">트러블슈팅 이력 첨부</h3>
         <p className="text-xs text-muted-foreground whitespace-pre-wrap">요청 사유: {request.detail || '(설명 없음)'}</p>

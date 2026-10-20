@@ -13,10 +13,10 @@ import {
 import type { Sprint, SprintStatus, SprintCreate, SprintUpdate } from '@/types';
 
 /**
- * 수정 payload — 비운 선택 필드(목표·JIRA NO·Confluence)는 `null` 로 보내야 서버(`exclude_unset`)가
- * 컬럼을 비운다(D-144). `types` 의 `SprintUpdate` 는 `null` 을 허용하지 않아 여기서만 넓힌다.
+ * 모달 제출 값 — 수정 payload(`SprintUpdate`, 비운 선택 필드는 `null` — D-144)에 생성 필수 필드를 확정한 모양.
+ * 생성 모드는 `null` 을 만들지 않는다(빈 값은 생략).
  */
-type SprintPatch = { [K in keyof SprintCreate]?: SprintCreate[K] | null };
+type SprintFormSubmit = SprintUpdate & Pick<SprintCreate, 'name' | 'startDate' | 'endDate'>;
 
 // ── date helpers ──────────────────────────────────────────────────────────
 function todayStr(): string {
@@ -53,7 +53,7 @@ function SprintModal({
 }: {
   initial?: Sprint;
   onClose: () => void;
-  onSubmit: (data: SprintPatch) => void;
+  onSubmit: (data: SprintFormSubmit) => void;
   busy: boolean;
 }) {
   const dialogRef = useModalA11y(true, onClose);
@@ -378,18 +378,23 @@ export function SprintsPage() {
   const planning = sprints.filter((s) => s.status === 'planning');
   const completed = sprints.filter((s) => s.status === 'completed');
 
-  const handleCreate = (patch: SprintPatch) => {
-    // 생성 모드 모달은 null 을 만들지 않는다(빈 값은 생략) — 필수 필드도 모달이 채운다.
-    const payload = patch as SprintCreate;
+  const handleCreate = (patch: SprintFormSubmit) => {
+    // 생성 모드 모달은 null 을 만들지 않는다(빈 값은 생략) — `?? undefined` 는 타입만 좁힌다.
+    const payload: SprintCreate = {
+      ...patch,
+      goal: patch.goal ?? undefined,
+      jiraNo: patch.jiraNo ?? undefined,
+      confluenceLink: patch.confluenceLink ?? undefined,
+    };
     createSprint.mutate(payload, {
       onSuccess: () => { setModal(null); toast.success('스프린트 생성됨', payload.name); },
       onError: (err) => toast.error('생성 실패', formatApiError(err, '스프린트를 만들 수 없습니다.')),
     });
   };
-  const handleEdit = (patch: SprintPatch) => {
+  const handleEdit = (patch: SprintFormSubmit) => {
     if (modal?.mode !== 'edit') return;
-    // null 은 "비우기"(D-144) — api 시그니처가 null 을 모르는 타입이라 경계에서만 좁힌다.
-    updateSprint.mutate({ id: modal.sprint.id, data: patch as SprintUpdate }, {
+    // null 은 "비우기"(D-144).
+    updateSprint.mutate({ id: modal.sprint.id, data: patch }, {
       onSuccess: () => { setModal(null); toast.success('스프린트 수정됨', patch.name ?? modal.sprint.name); },
       onError: (err) => toast.error('수정 실패', formatApiError(err, '스프린트를 수정할 수 없습니다.')),
     });

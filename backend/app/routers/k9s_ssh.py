@@ -9,11 +9,16 @@
 
 보안:
 - WS 는 전역 `_auth` 가 적용되지 않으므로 핸들러 내부에서 직접 토큰을 검증하고,
-  역할이 admin/operator 일 때만 accept 한다(viewer 차단). k8s_exec 와 동일 정책.
-- 세션 open/close 를 감사 로그(`k9s.ssh.open` / `k9s.ssh.close`) 에 남긴다.
+  역할이 admin/operator 일 때만 세션을 연다(viewer 차단 — 토큰 문제 4401, 역할 부족 4402).
+- 테넌트 판정은 경로 클러스터 **와** init 프레임 host 가 실제로 속한 클러스터 전부의 operate 를
+  본다(`node_ssh.py` 와 동일 — 다른 테넌트 control-plane 으로 붙는 우회 차단, D-169 ④).
+- 세션 open/close 를 감사 로그(`k9s.ssh.open` / `k9s.ssh.close`) 에 남긴다. 테넌트 거부·SSH 접속
+  실패는 `k9s.ssh.open` ``status="failure"`` 로 남는다(D-170).
 - SSH 인증정보는 이 세션에만 사용되고 DB 에 저장하지 않는다(etcdctl/bulk-exec 와 동일).
 - `PEP_K9S_SSH_ENABLED=false` 로 전역 비활성화 가능.
 - 실행 명령은 서버가 검증된 조각으로만 조립한다(namespace 정규식·readonly bool).
+- 보호(guarded) 운영레벨 클러스터는 admin 이 아니면 init 의 readonly 값과 무관하게 `--readonly` 를
+  강제한다(`k9s_effective_readonly`) — 화면 토글은 보조일 뿐 서버가 원천이다.
 """
 from __future__ import annotations
 
@@ -23,23 +28,28 @@ import shlex
 from uuid import UUID
 
 from fastapi import APIRouter, WebSocket
+from sqlalchemy.orm import Session
 
 from app.database import SessionLocal
 from app.models import Cluster
+from app.models.app_setting import AppSetting
 from app.models.user import User
+from app.routers.ui_settings import DEFAULT_OPERATION_LEVELS, OPERATION_LEVELS_KEY
+from app.schemas.ui_settings import default_guarded
 from app.services import audit_logger
-from app.services.cluster_access import has_cluster_access
+from app.services.cluster_access import cluster_ids_for_host, has_cluster_access
 from app.services.ssh_pty import (
     CLOSE_CLUSTER_FORBIDDEN,
     CLOSE_DISABLED,
     CLOSE_NOT_FOUND,
     CLOSE_UNAUTHORIZED,
     PtyInitError,
+    authenticate_ws,
     bridge_pty,
+    deny_ws,
     env_flag_enabled,
     receive_init,
     reject_init,
-    resolve_ws_user,
 )
 
 logger = logging.getLogger(__name__)
@@ -51,6 +61,39 @@ _NS_RE = re.compile(r"^[a-z0-9][a-z0-9.-]{0,62}$")  # k8s 네임스페이스 형
 
 def _k9s_enabled() -> bool:
     return env_flag_enabled("PEP_K9S_SSH_ENABLED", default=True)
+
+
+def is_operation_level_guarded(db: Session, level: str | None) -> bool:
+    """운영레벨 ``level`` 이 보호(guarded) 레벨인지 — `GET /ui-settings/operation-levels` 와 같은 해석.
+
+    저장된 레벨 목록(AppSetting ``operation_levels``)에서 value 가 같은 항목의 ``guarded`` 를 쓰고,
+    값이 없거나(구버전 데이터)·목록에 없는 레벨·저장값이 비었으면 ``default_guarded``(production·dr)로
+    본다. 읽기 전용 — 설정 행을 만들지 않는다. 빈 레벨은 보호 아님.
+    """
+    v = (level or "").strip()
+    if not v:
+        return False
+    try:
+        setting = db.query(AppSetting).filter(AppSetting.key == OPERATION_LEVELS_KEY).first()
+    except Exception:  # noqa: BLE001 — 조회 실패 시 기본 규칙으로 판정
+        db.rollback()
+        return default_guarded(v)
+    raw = (setting.value or {}).get("levels", []) if setting is not None else []
+    stored = [it for it in raw if isinstance(it, dict) and str(it.get("value", "")).strip()]
+    if not stored:
+        stored = DEFAULT_OPERATION_LEVELS["levels"]
+    for it in stored:
+        if str(it.get("value", "")).strip() == v:
+            g = it.get("guarded")
+            return g if isinstance(g, bool) else default_guarded(v)
+    return default_guarded(v)
+
+
+def k9s_effective_readonly(requested: bool, user: User, guarded: bool) -> bool:
+    """보호 레벨 클러스터는 admin 이 아니면 ``--readonly`` 를 서버가 강제한다(정책 3 — 화면 토글만으로 끄지 못함)."""
+    if guarded and getattr(user, "role", None) != "admin":
+        return True
+    return bool(requested)
 
 
 def _build_k9s_command(namespace: str | None, readonly: bool, extra: str | None) -> str:
@@ -99,18 +142,23 @@ async def k9s_terminal(websocket: WebSocket, cluster_id: UUID, token: str | None
     host_label = ""
     try:
         if not _k9s_enabled():
-            await websocket.close(code=CLOSE_DISABLED)
+            await deny_ws(websocket, CLOSE_DISABLED)
             return
-        user = resolve_ws_user(token, db)
+        user, deny_code = authenticate_ws(token, db)
         if user is None:
-            await websocket.close(code=CLOSE_UNAUTHORIZED)
+            await deny_ws(websocket, deny_code or CLOSE_UNAUTHORIZED)
             return
         cluster = db.query(Cluster).filter(Cluster.id == cluster_id).first()
         if cluster is None:
-            await websocket.close(code=CLOSE_NOT_FOUND)
+            await deny_ws(websocket, CLOSE_NOT_FOUND)
             return
         if not has_cluster_access(db, user, cluster_id, "operate"):
-            await websocket.close(code=CLOSE_CLUSTER_FORBIDDEN)
+            audit_logger.record(
+                db, action="k9s.ssh.open", actor=user, status="failure",
+                target_type="cluster", target_id=str(cluster_id),
+                details={"cluster": cluster.name, "reason": "tenant_forbidden"},
+            )
+            await deny_ws(websocket, CLOSE_CLUSTER_FORBIDDEN)
             return
 
         await websocket.accept()
@@ -123,15 +171,42 @@ async def k9s_terminal(websocket: WebSocket, cluster_id: UUID, token: str | None
 
         host_label = init.label
         namespace = init.raw.get("namespace") or None
-        readonly = bool(init.raw.get("readonly") or False)
+        requested_readonly = bool(init.raw.get("readonly") or False)
+        guarded = is_operation_level_guarded(db, cluster.operation_level)
+        readonly = k9s_effective_readonly(requested_readonly, user, guarded)
         run_cmd = _build_k9s_command(namespace, readonly, init.raw.get("extraFlags"))
+        base_details = {"cluster": cluster.name, "host": host_label,
+                        "namespace": namespace, "readonly": readonly}
+        if readonly and not requested_readonly:
+            base_details["readonly_forced"] = "guarded_level"
+
+        # init host 가 실제로 속한 클러스터까지 operate 판정(D-169 ④) — 경로 클러스터만 보면
+        # 바인딩 없는 경로로 다른 테넌트 control-plane 에 붙어 그 서버의 kubeconfig 로 k9s 가 뜬다.
+        foreign = [cid for cid in cluster_ids_for_host(db, init.host)
+                   if not has_cluster_access(db, user, cid, "operate")]
+        if foreign:
+            audit_logger.record(
+                db, action="k9s.ssh.open", actor=user, status="failure",
+                target_type="cluster", target_id=str(cluster_id),
+                details={**base_details, "reason": "tenant_forbidden",
+                         "forbidden_cluster_ids": [str(c) for c in foreign]},
+            )
+            await reject_init(websocket, "이 호스트가 속한 클러스터에 대한 실행 권한이 없습니다 (테넌트 바인딩)",
+                              code=CLOSE_CLUSTER_FORBIDDEN)
+            return
 
         def _log_open() -> None:
             audit_logger.record(
                 db, action="k9s.ssh.open", actor=user, status="success",
                 target_type="cluster", target_id=str(cluster_id),
-                details={"cluster": cluster.name, "host": host_label,
-                         "namespace": namespace, "readonly": readonly},
+                details=base_details,
+            )
+
+        def _log_fail(reason: str) -> None:
+            audit_logger.record(
+                db, action="k9s.ssh.open", actor=user, status="failure",
+                target_type="cluster", target_id=str(cluster_id),
+                details={**base_details, "reason": "ssh_failed", "error": reason},
             )
 
         duration = await bridge_pty(
@@ -143,6 +218,7 @@ async def k9s_terminal(websocket: WebSocket, cluster_id: UUID, token: str | None
                 "cluster_name": cluster.name,
             },
             on_open=_log_open,
+            on_fail=_log_fail,
         )
     finally:
         if user is not None and duration is not None:

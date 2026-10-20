@@ -6,14 +6,18 @@ import {
   ZoomIn, ZoomOut, Maximize2, LayoutGrid, Link2, ExternalLink,
 } from 'lucide-react';
 import { workflowsApi } from '@/services/api';
-import { useToast, PageHeader, EmptyState, LoadingState } from '@/components/common';
+import {
+  useToast, PageHeader, EmptyState, LoadingState, ErrorState, ConfirmDialog,
+} from '@/components/common';
+import { formatApiError } from '@/lib/utils';
+import { useCanOperate } from '@/hooks/useCanOperate';
 import { useClusters } from '@/hooks/useCluster';
 import { useWorkItems } from '@/hooks/useWorkItems';
 import { usePlaybooks } from '@/hooks/usePlaybook';
 import { useWorkGuides } from '@/hooks/useWorkGuide';
 import { useMetricCards } from '@/hooks/useMetricCards';
 import type {
-  WorkflowStep, WorkflowEdge,
+  Workflow, WorkflowStep, WorkflowEdge,
   WorkflowStepType, WorkflowStepStatus,
   WorkflowStepUpdate, WorkflowUpdate,
 } from '@/types';
@@ -176,6 +180,11 @@ export function WorkflowBoardPage() {
   const [typeMenuStep, setTypeMenuStep] = useState<string | null>(null);
   const [statusMenuStep, setStatusMenuStep] = useState<string | null>(null);
 
+  // delete confirm (D-161)
+  const [wfDeleteTarget, setWfDeleteTarget] = useState<Workflow | null>(null);
+  const [stepDeleteTarget, setStepDeleteTarget] = useState<WorkflowStep | null>(null);
+  const [savingStep, setSavingStep] = useState(false);
+
   // zoom
   const [zoom, setZoom] = useState(1.0);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -183,7 +192,9 @@ export function WorkflowBoardPage() {
   // ── data ─────────────────────────────────────────────────────────────────────
   const queryClient = useQueryClient();
   const toast = useToast();
-  const { data, isLoading } = useQuery({
+  // 쓰기 9개 전부 서버가 operator 이상을 요구한다 — viewer 는 캔버스를 읽기 전용으로 본다(D-160).
+  const { canOperate, hint: operateHint, withHint, ariaWithHint } = useCanOperate();
+  const { data, isLoading, isError, error, refetch } = useQuery({
     queryKey: ['workflows'],
     queryFn: () => workflowsApi.getAll().then((r) => r.data),
     staleTime: 1000 * 10,
@@ -191,7 +202,7 @@ export function WorkflowBoardPage() {
   const workflows = data?.data ?? [];
   const selectedWf = workflows.find((w) => w.id === selectedId) ?? null;
 
-  // 선택된 워크플로우의 상태별 카운트 (헤더 진행률 시각화용)
+  // 선택된 워크플로의 상태별 카운트 (헤더 진행률 시각화용)
   const statusCounts = useMemo(() => {
     const init: Record<WorkflowStepStatus, number> = {
       'todo': 0, 'in-progress': 0, 'blocked': 0, 'done': 0, 'skipped': 0,
@@ -222,6 +233,12 @@ export function WorkflowBoardPage() {
   }, [zoom]);
 
   // ── mutations ─────────────────────────────────────────────────────────────────
+  // 쓰기 실패는 화면별로 사유를 알린다(D-159) — 전역 onError 는 두지 않는다.
+  const failToast = useCallback(
+    (title: string) => (err: unknown) => toast.error(title, formatApiError(err)),
+    [toast],
+  );
+
   const createWorkflow = useMutation({
     mutationFn: ({ title, confluenceUrl }: { title: string; confluenceUrl?: string }) =>
       workflowsApi.create({ title, confluenceUrl }),
@@ -232,16 +249,24 @@ export function WorkflowBoardPage() {
       setNewWfTitle('');
       setNewWfConfluence('');
     },
+    onError: failToast('워크플로 생성 실패'),
   });
 
   const updateWorkflow = useMutation({
     mutationFn: ({ id, d }: { id: string; d: WorkflowUpdate }) => workflowsApi.update(id, d),
-    onSuccess: () => { invalidate(); setEditingWfId(null); setEditingHeaderTitle(false); },
+    onSuccess: () => {
+      invalidate();
+      setEditingWfId(null);
+      setEditingHeaderTitle(false);
+      setEditingHeaderConfluence(false);
+    },
+    onError: failToast('워크플로 저장 실패'),
   });
 
   const deleteWorkflow = useMutation({
     mutationFn: (id: string) => workflowsApi.delete(id),
     onSuccess: (_, id) => { invalidate(); if (selectedId === id) setSelectedId(null); },
+    onError: failToast('워크플로 삭제 실패'),
   });
 
   const addStep = useMutation({
@@ -253,31 +278,67 @@ export function WorkflowBoardPage() {
         orderIndex: count,
       }),
     onSuccess: invalidate,
+    onError: failToast('단계 추가 실패'),
   });
 
   const updateStep = useMutation({
     mutationFn: ({ wfId, stepId, stepData }: { wfId: string; stepId: string; stepData: WorkflowStepUpdate }) =>
       workflowsApi.updateStep(wfId, stepId, stepData),
     onSuccess: invalidate,
+    onError: failToast('단계 저장 실패'),
   });
 
   const deleteStep = useMutation({
     mutationFn: ({ wfId, stepId }: { wfId: string; stepId: string }) =>
       workflowsApi.deleteStep(wfId, stepId),
     onSuccess: () => { invalidate(); setEditingStep(null); },
+    onError: failToast('단계 삭제 실패'),
   });
 
   const createEdge = useMutation({
     mutationFn: ({ wfId, sourceStepId, targetStepId }: { wfId: string; sourceStepId: string; targetStepId: string }) =>
       workflowsApi.createEdge(wfId, { sourceStepId, targetStepId }),
     onSuccess: invalidate,
+    onError: failToast('연결 생성 실패'),
   });
 
   const deleteEdge = useMutation({
     mutationFn: ({ wfId, edgeId }: { wfId: string; edgeId: string }) =>
       workflowsApi.deleteEdge(wfId, edgeId),
     onSuccess: invalidate,
+    onError: failToast('연결 삭제 실패'),
   });
+
+  /** 로컬로 먼저 옮긴 카드 위치를 버리고 서버 값으로 되돌린다(저장 실패 시). */
+  const dropLocalPos = useCallback((ids: string[]) => {
+    setLocalPos((prev) => {
+      const next = { ...prev };
+      for (const id of ids) delete next[id];
+      return next;
+    });
+  }, []);
+
+  const confirmDeleteWorkflow = async () => {
+    if (!wfDeleteTarget) return;
+    try {
+      await deleteWorkflow.mutateAsync(wfDeleteTarget.id);
+    } catch {
+      // onError 토스트가 사유를 알린다.
+    } finally {
+      setWfDeleteTarget(null);
+    }
+  };
+
+  const confirmDeleteStep = async () => {
+    if (!stepDeleteTarget || !selectedWf) return;
+    try {
+      await deleteStep.mutateAsync({ wfId: selectedWf.id, stepId: stepDeleteTarget.id });
+    } catch {
+      // onError 토스트가 사유를 알린다.
+    } finally {
+      setStepDeleteTarget(null);
+    }
+  };
 
   // ── zoom: ctrl+wheel ──────────────────────────────────────────────────────────
   useEffect(() => {
@@ -310,7 +371,7 @@ export function WorkflowBoardPage() {
   const getPos = (step: WorkflowStep) => localPos[step.id] ?? { x: step.posX, y: step.posY };
 
   const handleAutoLayout = async () => {
-    if (!selectedWf) return;
+    if (!selectedWf || !canOperate) return;
     const positions = computeAutoLayout(selectedWf.steps, selectedWf.edges);
     // 1. 로컬 위치 즉시 반영 — 사용자가 변화를 바로 보게.
     setLocalPos((prev) => ({ ...prev, ...positions }));
@@ -328,12 +389,15 @@ export function WorkflowBoardPage() {
       invalidate();
       toast.success('자동 배치됨', `${targets.length}개 단계 위치 갱신`);
     } catch (e) {
-      toast.error('자동 배치 실패', e instanceof Error ? e.message : String(e));
+      // 일부만 저장됐을 수 있다 — 로컬 위치를 버리고 서버에 실제 저장된 위치를 다시 읽는다.
+      dropLocalPos(targets.map((t) => t.s.id));
+      invalidate();
+      toast.error('자동 배치 실패', formatApiError(e));
     }
   };
 
   const handleCardPointerDown = (e: React.PointerEvent<HTMLDivElement>, step: WorkflowStep) => {
-    if (pendingEdge) return;
+    if (pendingEdge || !canOperate) return;
     if ((e.target as HTMLElement).closest('[data-no-drag]')) return;
     e.preventDefault();
     e.currentTarget.setPointerCapture(e.pointerId);
@@ -355,7 +419,11 @@ export function WorkflowBoardPage() {
     if (!dragging || dragging.stepId !== step.id) return;
     const pos = localPos[step.id];
     if (pos && selectedWf) {
-      updateStep.mutate({ wfId: selectedWf.id, stepId: step.id, stepData: { posX: pos.x, posY: pos.y } });
+      updateStep.mutate(
+        { wfId: selectedWf.id, stepId: step.id, stepData: { posX: pos.x, posY: pos.y } },
+        // 저장 실패 시 카드가 옮겨진 채 남지 않도록 원위치(D-159).
+        { onError: () => dropLocalPos([step.id]) },
+      );
     }
     setDragging(null);
   };
@@ -364,6 +432,7 @@ export function WorkflowBoardPage() {
   const handlePortPointerDown = (e: React.PointerEvent<HTMLDivElement>, step: WorkflowStep) => {
     e.stopPropagation();
     e.preventDefault();
+    if (!canOperate) return;
     e.currentTarget.setPointerCapture(e.pointerId);
     const { x, y } = canvasCoords(e.clientX, e.clientY);
     const pos = getPos(step);
@@ -397,7 +466,7 @@ export function WorkflowBoardPage() {
   };
 
   const startEditStep = (step: WorkflowStep) => {
-    if (pendingEdge) return;
+    if (pendingEdge || !canOperate) return;
     setEditingStep(step.id);
     setStepTitle(step.title);
     setStepDesc(step.description ?? '');
@@ -405,19 +474,28 @@ export function WorkflowBoardPage() {
     setStepRefId(step.referenceId ?? '');
   };
 
-  const saveEditStep = () => {
-    if (!editingStep || !selectedWf) return;
-    updateStep.mutate({
-      wfId: selectedWf.id,
-      stepId: editingStep,
-      stepData: {
-        title: stepTitle.trim() || '단계',
-        description: stepDesc || undefined,
-        referenceType: stepRefType || undefined,
-        referenceId: stepRefType && stepRefId.trim() ? stepRefId.trim() : undefined,
-      },
-    });
-    setEditingStep(null);
+  const saveEditStep = async () => {
+    if (!editingStep || !selectedWf || savingStep) return;
+    setSavingStep(true);
+    try {
+      await updateStep.mutateAsync({
+        wfId: selectedWf.id,
+        stepId: editingStep,
+        stepData: {
+          title: stepTitle.trim() || '단계',
+          // 비운 값은 null — undefined 면 JSON 에서 빠져 옛 설명·참조가 남는다(D-162).
+          description: stepDesc.trim() || null,
+          referenceType: stepRefType || null,
+          referenceId: stepRefType && stepRefId.trim() ? stepRefId.trim() : null,
+        },
+      });
+      // 저장이 끝난 뒤에만 편집기를 닫는다 — 실패하면 입력이 남아 다시 저장할 수 있다.
+      setEditingStep(null);
+    } catch {
+      // onError 토스트가 사유를 알린다.
+    } finally {
+      setSavingStep(false);
+    }
   };
 
   // ── render ────────────────────────────────────────────────────────────────────
@@ -426,14 +504,17 @@ export function WorkflowBoardPage() {
       <PageHeader
         className="px-5 py-3 border-b border-border flex-shrink-0"
         icon={GitFork}
-        title="워크플로우"
+        title="워크플로"
         description="업무 흐름을 단계와 연결로 기획하고 진행 상태를 추적합니다."
         actions={
           <button
             onClick={() => setShowCreateWf(true)}
-            className="px-3 py-1.5 text-sm font-medium bg-primary hover:bg-primary/90 text-primary-foreground rounded-lg transition-colors inline-flex items-center gap-1.5"
+            disabled={!canOperate}
+            title={withHint('새 워크플로')}
+            aria-label={ariaWithHint('새 워크플로')}
+            className="px-3 py-1.5 text-sm font-medium bg-primary hover:bg-primary/90 text-primary-foreground rounded-lg transition-colors inline-flex items-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            <Plus className="w-4 h-4" /> 새 워크플로우
+            <Plus className="w-4 h-4" aria-hidden /> 새 워크플로
           </button>
         }
       />
@@ -441,7 +522,7 @@ export function WorkflowBoardPage() {
       {/* ── Left sidebar ── */}
       <aside className="w-64 flex-shrink-0 border-r border-border flex flex-col bg-card">
 
-        {showCreateWf && (
+        {showCreateWf && canOperate && (
           <div className="px-3 py-3 border-b border-border bg-secondary/30 space-y-2">
             <input
               type="text"
@@ -456,7 +537,8 @@ export function WorkflowBoardPage() {
                 }
                 if (e.key === 'Escape') { setShowCreateWf(false); setNewWfTitle(''); setNewWfConfluence(''); }
               }}
-              placeholder="워크플로우 이름"
+              placeholder="워크플로 이름"
+              aria-label="워크플로 이름"
               className="w-full px-2 py-1.5 text-sm bg-background border border-border rounded focus:outline-none focus:border-primary"
               autoFocus
             />
@@ -465,6 +547,7 @@ export function WorkflowBoardPage() {
               value={newWfConfluence}
               onChange={(e) => setNewWfConfluence(e.target.value)}
               placeholder="Confluence URL (선택)"
+              aria-label="Confluence URL (선택)"
               className="w-full px-2 py-1.5 text-sm bg-background border border-border rounded focus:outline-none focus:border-primary"
             />
             <div className="flex gap-2">
@@ -473,7 +556,7 @@ export function WorkflowBoardPage() {
                   title: newWfTitle.trim(),
                   confluenceUrl: newWfConfluence.trim() || undefined,
                 })}
-                disabled={!newWfTitle.trim()}
+                disabled={!newWfTitle.trim() || createWorkflow.isPending}
                 className="flex-1 px-2 py-1 text-sm bg-primary text-primary-foreground rounded hover:bg-primary/90 disabled:opacity-50"
               >
                 생성
@@ -490,16 +573,19 @@ export function WorkflowBoardPage() {
 
         <div className="flex-1 overflow-y-auto py-2">
           {isLoading ? (
-            <LoadingState compact label="워크플로우를 불러오는 중…" />
+            <LoadingState compact label="워크플로를 불러오는 중…" />
+          ) : isError ? (
+            <ErrorState compact error={error} title="워크플로 목록을 불러오지 못했습니다." onRetry={() => { void refetch(); }} />
           ) : workflows.length === 0 ? (
             <EmptyState
               compact
               icon={GitFork}
-              title="워크플로우가 없습니다."
-              description="첫 워크플로우를 만들어 단계를 구성해 보세요."
-              action={{ label: '새로 만들기', onClick: () => setShowCreateWf(true) }}
+              title="워크플로가 없습니다."
+              description={canOperate ? '첫 워크플로를 만들어 단계를 구성해 보세요.' : `워크플로를 만들려면 ${operateHint}.`}
+              action={canOperate ? { label: '새로 만들기', onClick: () => setShowCreateWf(true) } : undefined}
             />
           ) : (
+            <ul aria-label="워크플로 목록">{
             workflows.map((wf) => {
               const doneCount = wf.steps.filter((s) => s.completed).length;
               const total = wf.steps.length;
@@ -507,7 +593,7 @@ export function WorkflowBoardPage() {
               const isRenamingThis = editingWfId === wf.id;
 
               return (
-                <div key={wf.id} className={`group relative ${isSelected ? 'bg-primary/10' : 'hover:bg-secondary'}`}>
+                <li key={wf.id} className={`group relative ${isSelected ? 'bg-primary/10' : 'hover:bg-secondary'}`}>
                   {isRenamingThis ? (
                     <div className="px-3 py-2 flex items-center gap-1.5">
                       <input
@@ -519,13 +605,15 @@ export function WorkflowBoardPage() {
                           if (e.key === 'Escape') setEditingWfId(null);
                         }}
                         className="flex-1 min-w-0 px-2 py-1 text-sm bg-background border border-primary rounded focus:outline-none"
+                        aria-label="워크플로 이름"
                         autoFocus
                         onClick={(e) => e.stopPropagation()}
                       />
                       <button
                         onClick={() => wfEditTitle.trim() && updateWorkflow.mutate({ id: wf.id, d: { title: wfEditTitle.trim() } })}
+                        disabled={updateWorkflow.isPending}
                         aria-label="제목 저장"
-                        className="p-1 rounded text-primary hover:bg-primary/10"
+                        className="p-1 rounded text-primary hover:bg-primary/10 disabled:opacity-50"
                       >
                         <Check className="w-3.5 h-3.5" />
                       </button>
@@ -534,46 +622,53 @@ export function WorkflowBoardPage() {
                       </button>
                     </div>
                   ) : (
-                    <div
-                      className="flex items-center gap-2 px-3 py-2.5 cursor-pointer"
-                      onClick={() => setSelectedId(wf.id)}
-                    >
-                      <ChevronRight
-                        className={`w-3 h-3 flex-shrink-0 transition-transform ${isSelected ? 'rotate-90 text-primary' : 'text-muted-foreground'}`}
-                      />
-                      <div className="flex-1 min-w-0">
-                        <p className={`text-sm font-medium truncate ${isSelected ? 'text-primary' : ''}`}>{wf.title}</p>
-                        <p className="text-sm text-muted-foreground">{total}단계 · {doneCount}/{total} 완료</p>
-                        {total > 0 && (
-                          <div className="mt-1 h-1 bg-secondary rounded-full overflow-hidden">
-                            <div className="h-full bg-primary rounded-full transition-[width]" style={{ width: `${(doneCount / total) * 100}%` }} />
-                          </div>
-                        )}
-                      </div>
-                      <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <div className="flex items-center gap-2 px-3 py-2.5">
+                      {/* D-165 — 항목 본문을 <button> 으로: 키보드로 워크플로를 열 수 있다. */}
+                      <button
+                        type="button"
+                        onClick={() => setSelectedId(wf.id)}
+                        aria-current={isSelected ? 'true' : undefined}
+                        className="flex-1 min-w-0 flex items-start gap-2 text-left rounded"
+                      >
+                        <ChevronRight
+                          aria-hidden
+                          className={`w-3 h-3 mt-1 flex-shrink-0 transition-transform ${isSelected ? 'rotate-90 text-primary' : 'text-muted-foreground'}`}
+                        />
+                        <div className="flex-1 min-w-0">
+                          <p className={`text-sm font-medium truncate ${isSelected ? 'text-primary' : ''}`}>{wf.title}</p>
+                          <p className="text-sm text-muted-foreground">{total}단계 · {doneCount}/{total} 완료</p>
+                          {total > 0 && (
+                            <div className="mt-1 h-1 bg-secondary rounded-full overflow-hidden">
+                              <div className="h-full bg-primary rounded-full transition-[width]" style={{ width: `${(doneCount / total) * 100}%` }} />
+                            </div>
+                          )}
+                        </div>
+                      </button>
+                      <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity">
                         <button
                           onClick={(e) => { e.stopPropagation(); setEditingWfId(wf.id); setWfEditTitle(wf.title); }}
-                          aria-label="이름 변경"
-                          className="p-1 rounded hover:bg-secondary hover:text-foreground text-muted-foreground"
+                          disabled={!canOperate}
+                          title={withHint('이름 변경')}
+                          aria-label={ariaWithHint(`${wf.title} 이름 변경`)}
+                          className="p-1 rounded hover:bg-secondary hover:text-foreground text-muted-foreground disabled:opacity-40 disabled:cursor-not-allowed"
                         >
                           <Pencil className="w-3 h-3" />
                         </button>
                         <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            if (confirm(`"${wf.title}" 워크플로우를 삭제할까요?`)) deleteWorkflow.mutate(wf.id);
-                          }}
-                          aria-label="워크플로우 삭제"
-                          className="p-1 rounded hover:bg-status-critical/20 hover:text-status-critical text-muted-foreground"
+                          onClick={(e) => { e.stopPropagation(); setWfDeleteTarget(wf); }}
+                          disabled={!canOperate}
+                          title={withHint('워크플로 삭제')}
+                          aria-label={ariaWithHint(`${wf.title} 워크플로 삭제`)}
+                          className="p-1 rounded hover:bg-status-critical/20 hover:text-status-critical text-muted-foreground disabled:opacity-40 disabled:cursor-not-allowed"
                         >
                           <Trash2 className="w-3 h-3" />
                         </button>
                       </div>
                     </div>
                   )}
-                </div>
+                </li>
               );
-            })
+            })}</ul>
           )}
         </div>
       </aside>
@@ -584,9 +679,13 @@ export function WorkflowBoardPage() {
           <div className="flex-1 flex items-center justify-center">
             <EmptyState
               icon={GitFork}
-              title="선택된 워크플로우가 없습니다."
-              description="왼쪽 목록에서 워크플로우를 고르거나 새로 만들어 보세요."
-              action={{ label: '새 워크플로우 만들기', onClick: () => setShowCreateWf(true) }}
+              title="선택된 워크플로가 없습니다."
+              description={canOperate
+                ? '왼쪽 목록에서 워크플로를 고르거나 새로 만들어 보세요.'
+                : '왼쪽 목록에서 워크플로를 고르세요.'}
+              action={canOperate && !isLoading && !isError
+                ? { label: '새 워크플로 만들기', onClick: () => setShowCreateWf(true) }
+                : undefined}
             />
           </div>
         ) : (
@@ -605,6 +704,7 @@ export function WorkflowBoardPage() {
                         if (e.key === 'Escape') setEditingHeaderTitle(false);
                       }}
                       className="text-base font-semibold bg-background border border-primary rounded px-2 py-0.5 focus:outline-none min-w-0 w-56"
+                      aria-label="워크플로 이름"
                       autoFocus
                     />
                     <button
@@ -618,16 +718,19 @@ export function WorkflowBoardPage() {
                       <X className="w-3.5 h-3.5" />
                     </button>
                   </>
-                ) : (
+                ) : canOperate ? (
                   <button
                     className="flex items-center gap-1.5 group/title min-w-0"
                     onClick={() => { setHeaderTitleDraft(selectedWf.title); setEditingHeaderTitle(true); }}
+                    title="이름 변경"
                   >
                     <h2 className="text-base font-semibold truncate group-hover/title:text-primary transition-colors">
                       {selectedWf.title}
                     </h2>
-                    <Pencil className="w-3 h-3 text-muted-foreground/40 group-hover/title:text-primary transition-colors flex-shrink-0" />
+                    <Pencil className="w-3 h-3 text-muted-foreground/40 group-hover/title:text-primary transition-colors flex-shrink-0" aria-hidden />
                   </button>
+                ) : (
+                  <h2 className="text-base font-semibold truncate min-w-0">{selectedWf.title}</h2>
                 )}
 
                 {/* Confluence 링크 — 설정되어 있으면 열기 + 연필 아이콘으로 인라인 편집, 없으면 + Confluence */}
@@ -639,15 +742,16 @@ export function WorkflowBoardPage() {
                       onChange={(e) => setHeaderConfluenceDraft(e.target.value)}
                       onKeyDown={(e) => {
                         if (e.key === 'Enter') {
+                          // 비우면 null — 링크 해제(D-162). 저장 성공 시 onSuccess 가 편집기를 닫는다.
                           updateWorkflow.mutate({
                             id: selectedWf.id,
-                            d: { confluenceUrl: headerConfluenceDraft.trim() || undefined },
+                            d: { confluenceUrl: headerConfluenceDraft.trim() || null },
                           });
-                          setEditingHeaderConfluence(false);
                         }
                         if (e.key === 'Escape') setEditingHeaderConfluence(false);
                       }}
                       placeholder="Confluence URL"
+                      aria-label="Confluence URL"
                       className="text-xs bg-background border border-primary rounded px-2 py-0.5 focus:outline-none w-64"
                       autoFocus
                     />
@@ -655,12 +759,12 @@ export function WorkflowBoardPage() {
                       onClick={() => {
                         updateWorkflow.mutate({
                           id: selectedWf.id,
-                          d: { confluenceUrl: headerConfluenceDraft.trim() || undefined },
+                          d: { confluenceUrl: headerConfluenceDraft.trim() || null },
                         });
-                        setEditingHeaderConfluence(false);
                       }}
+                      disabled={updateWorkflow.isPending}
                       aria-label="Confluence 링크 저장"
-                      className="p-1 rounded text-primary hover:bg-primary/10"
+                      className="p-1 rounded text-primary hover:bg-primary/10 disabled:opacity-50"
                     >
                       <Check className="w-3 h-3" />
                     </button>
@@ -681,21 +785,24 @@ export function WorkflowBoardPage() {
                     </a>
                     <button
                       onClick={() => { setHeaderConfluenceDraft(selectedWf.confluenceUrl ?? ''); setEditingHeaderConfluence(true); }}
-                      className="p-0.5 rounded text-muted-foreground hover:text-primary hover:bg-secondary"
-                      title="Confluence 링크 수정"
-                      aria-label="Confluence 링크 수정"
+                      disabled={!canOperate}
+                      className="p-0.5 rounded text-muted-foreground hover:text-primary hover:bg-secondary disabled:opacity-40 disabled:cursor-not-allowed"
+                      title={withHint('Confluence 링크 수정')}
+                      aria-label={ariaWithHint('Confluence 링크 수정')}
                     >
                       <Pencil className="w-3 h-3" />
                     </button>
                   </div>
-                ) : (
+                ) : canOperate ? (
                   <button
                     onClick={() => { setHeaderConfluenceDraft(''); setEditingHeaderConfluence(true); }}
                     className="text-xs px-1.5 py-0.5 rounded-full border border-dashed border-border text-muted-foreground hover:text-primary hover:border-primary/40 transition-colors inline-flex items-center gap-1"
+                    title="Confluence 링크 추가"
+                    aria-label="Confluence 링크 추가"
                   >
-                    <Link2 className="w-3 h-3" /> Confluence
+                    <Link2 className="w-3 h-3" aria-hidden /> Confluence
                   </button>
-                )}
+                ) : null}
                 {/* 진행률 바 + 상태별 카운트 — 기획 게시판이라 진행 추적이 핵심 */}
                 <div className="flex items-center gap-2 min-w-0">
                   <div className="flex h-1.5 w-32 rounded-full overflow-hidden bg-secondary/60">
@@ -723,6 +830,11 @@ export function WorkflowBoardPage() {
                     <span className="text-muted-foreground">· 연결 {selectedWf.edges.length}</span>
                   </div>
                 </div>
+                {!canOperate && (
+                  <span className="text-xs text-muted-foreground whitespace-nowrap" title={operateHint}>
+                    읽기 전용 — 편집 권한 필요({operateHint})
+                  </span>
+                )}
                 {pendingEdge && (
                   <span className="text-sm px-2.5 py-1 bg-primary/10 text-primary border border-primary/30 rounded-full animate-pulse">
                     연결할 대상 포트에 드롭하세요 · Esc 취소
@@ -754,13 +866,19 @@ export function WorkflowBoardPage() {
                   </button>
                 </div>
                 <button onClick={handleAutoLayout}
-                  className="px-2.5 py-1.5 text-sm font-medium rounded-lg border border-border bg-background hover:bg-secondary text-foreground flex items-center gap-1.5 transition-colors">
+                  disabled={!canOperate}
+                  title={withHint('자동 배치')}
+                  aria-label={ariaWithHint('자동 배치')}
+                  className="px-2.5 py-1.5 text-sm font-medium rounded-lg border border-border bg-background hover:bg-secondary text-foreground flex items-center gap-1.5 transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
                   <LayoutGrid className="w-3.5 h-3.5" />
                   자동 배치
                 </button>
                 <button
                   onClick={() => addStep.mutate({ wfId: selectedWf.id, count: selectedWf.steps.length })}
-                  className="px-2.5 py-1.5 text-sm font-medium bg-primary hover:bg-primary/90 text-primary-foreground rounded-lg transition-colors flex items-center gap-1.5"
+                  disabled={!canOperate || addStep.isPending}
+                  title={withHint('단계 추가')}
+                  aria-label={ariaWithHint('단계 추가')}
+                  className="px-2.5 py-1.5 text-sm font-medium bg-primary hover:bg-primary/90 text-primary-foreground rounded-lg transition-colors flex items-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   <Plus className="w-3.5 h-3.5" />
                   단계 추가
@@ -864,6 +982,7 @@ export function WorkflowBoardPage() {
                             style={{ pointerEvents: 'none' }}
                           />
                           {/* hover 시에만 보이는 중간 X 버튼 — 클릭 한 번 더 필요해 실수 방지 */}
+                          {canOperate && (
                           <g
                             className="opacity-0 group-hover/edge:opacity-100 transition-opacity"
                             style={{ cursor: 'pointer' }}
@@ -876,6 +995,7 @@ export function WorkflowBoardPage() {
                             <line x1={mx - 3.5} y1={my - 3.5} x2={mx + 3.5} y2={my + 3.5} stroke="currentColor" className="text-status-critical" strokeWidth={1.8} strokeLinecap="round" />
                             <line x1={mx + 3.5} y1={my - 3.5} x2={mx - 3.5} y2={my + 3.5} stroke="currentColor" className="text-status-critical" strokeWidth={1.8} strokeLinecap="round" />
                           </g>
+                          )}
                         </g>
                       );
                     })}
@@ -928,7 +1048,11 @@ export function WorkflowBoardPage() {
                             <div className="relative" onClick={(e) => e.stopPropagation()}>
                               <button
                                 onClick={() => { setTypeMenuStep(typeMenuStep === step.id ? null : step.id); setStatusMenuStep(null); }}
-                                className={`flex items-center gap-1 px-1.5 py-0.5 rounded text-sm font-medium ${typeCfg.header} hover:brightness-110`}
+                                disabled={!canOperate}
+                                title={withHint('단계 유형 변경')}
+                                aria-label={ariaWithHint(`단계 유형: ${typeCfg.label}`)}
+                                aria-expanded={typeMenuStep === step.id}
+                                className={`flex items-center gap-1 px-1.5 py-0.5 rounded text-sm font-medium ${typeCfg.header} hover:brightness-110 disabled:cursor-default disabled:hover:brightness-100`}
                               >
                                 <span className={`w-1.5 h-1.5 rounded-full ${typeCfg.dot} flex-shrink-0`} />
                                 {typeCfg.icon}
@@ -954,7 +1078,11 @@ export function WorkflowBoardPage() {
                             <div className="relative" onClick={(e) => e.stopPropagation()}>
                               <button
                                 onClick={() => { setStatusMenuStep(statusMenuStep === step.id ? null : step.id); setTypeMenuStep(null); }}
-                                className={`flex items-center gap-1 px-1.5 py-0.5 rounded text-sm font-medium ${statusCfg.cls}`}
+                                disabled={!canOperate}
+                                title={withHint('단계 상태 변경')}
+                                aria-label={ariaWithHint(`단계 상태: ${statusCfg.label}`)}
+                                aria-expanded={statusMenuStep === step.id}
+                                className={`flex items-center gap-1 px-1.5 py-0.5 rounded text-sm font-medium disabled:cursor-default ${statusCfg.cls}`}
                               >
                                 {statusCfg.label}
                               </button>
@@ -976,9 +1104,11 @@ export function WorkflowBoardPage() {
                           <div className="flex items-center gap-1" data-no-drag>
                             <span className="text-sm text-muted-foreground font-mono">#{selectedWf.steps.indexOf(step) + 1}</span>
                             <button
-                              onClick={(e) => { e.stopPropagation(); if (confirm('이 단계를 삭제할까요?')) deleteStep.mutate({ wfId: selectedWf.id, stepId: step.id }); }}
-                              aria-label="단계 삭제"
-                              className="p-0.5 rounded text-muted-foreground/30 hover:text-status-critical hover:bg-status-critical/10 transition-colors"
+                              onClick={(e) => { e.stopPropagation(); setStepDeleteTarget(step); }}
+                              disabled={!canOperate}
+                              title={withHint('단계 삭제')}
+                              aria-label={ariaWithHint(`${step.title} 단계 삭제`)}
+                              className="p-0.5 rounded text-muted-foreground hover:text-status-critical hover:bg-status-critical/10 transition-colors disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-transparent disabled:hover:text-muted-foreground"
                             >
                               <Trash2 className="w-3 h-3" />
                             </button>
@@ -990,8 +1120,11 @@ export function WorkflowBoardPage() {
                           <div className="flex items-start gap-2 mb-1.5">
                             <button
                               onClick={(e) => { e.stopPropagation(); if (selectedWf) updateStep.mutate({ wfId: selectedWf.id, stepId: step.id, stepData: { completed: !step.completed } }); }}
-                              aria-label={step.completed ? '완료 해제' : '완료로 표시'}
-                              className={`flex-shrink-0 w-[18px] h-[18px] rounded border-2 flex items-center justify-center transition-colors mt-0.5 ${step.completed ? 'bg-muted-foreground border-muted-foreground text-background' : 'border-border hover:border-primary'}`}
+                              disabled={!canOperate}
+                              aria-pressed={step.completed}
+                              title={withHint(step.completed ? '완료 해제' : '완료로 표시')}
+                              aria-label={ariaWithHint(`${step.title} ${step.completed ? '완료 해제' : '완료로 표시'}`)}
+                              className={`flex-shrink-0 w-[18px] h-[18px] rounded border-2 flex items-center justify-center transition-colors mt-0.5 disabled:cursor-not-allowed ${step.completed ? 'bg-muted-foreground border-muted-foreground text-background' : 'border-border hover:border-primary'}`}
                             >
                               {step.completed && <Check className="w-2.5 h-2.5" />}
                             </button>
@@ -1000,16 +1133,23 @@ export function WorkflowBoardPage() {
                                 type="text"
                                 value={stepTitle}
                                 onChange={(e) => setStepTitle(e.target.value)}
-                                onKeyDown={(e) => { if (e.key === 'Enter') saveEditStep(); if (e.key === 'Escape') setEditingStep(null); }}
+                                onKeyDown={(e) => { if (e.key === 'Enter') void saveEditStep(); if (e.key === 'Escape') setEditingStep(null); }}
                                 onClick={(e) => e.stopPropagation()}
+                                aria-label="단계 제목"
                                 className="flex-1 text-sm font-medium bg-background border border-primary rounded px-1.5 py-0.5 focus:outline-none"
                                 autoFocus
                               />
-                            ) : (
-                              <span
-                                className={`flex-1 text-sm font-medium leading-tight cursor-text hover:text-primary ${step.completed ? 'line-through text-muted-foreground' : ''}`}
+                            ) : canOperate ? (
+                              <button
+                                type="button"
+                                className={`flex-1 text-left text-sm font-medium leading-tight cursor-text hover:text-primary rounded ${step.completed ? 'line-through text-muted-foreground' : ''}`}
                                 onClick={(e) => { e.stopPropagation(); startEditStep(step); }}
+                                title="단계 편집"
                               >
+                                {step.title}
+                              </button>
+                            ) : (
+                              <span className={`flex-1 text-sm font-medium leading-tight ${step.completed ? 'line-through text-muted-foreground' : ''}`}>
                                 {step.title}
                               </span>
                             )}
@@ -1022,7 +1162,8 @@ export function WorkflowBoardPage() {
                                 onChange={(e) => setStepDesc(e.target.value)}
                                 onClick={(e) => e.stopPropagation()}
                                 onKeyDown={(e) => { if (e.key === 'Escape') setEditingStep(null); }}
-                                placeholder="상세 내용 입력..."
+                                placeholder="상세 내용 입력…"
+                                aria-label="단계 상세 내용"
                                 rows={2}
                                 className="w-full text-sm bg-background border border-border rounded px-2 py-1 focus:outline-none focus:border-primary resize-none"
                               />
@@ -1030,6 +1171,7 @@ export function WorkflowBoardPage() {
                               <div className="mt-1.5 space-y-1" onClick={(e) => e.stopPropagation()}>
                                 <select
                                   value={stepRefType}
+                                  aria-label="연계 항목 유형"
                                   onChange={(e) => { setStepRefType(e.target.value); setStepRefId(''); }}
                                   className="w-full text-xs bg-background border border-border rounded px-2 py-1 focus:outline-none focus:border-primary text-muted-foreground"
                                 >
@@ -1047,9 +1189,10 @@ export function WorkflowBoardPage() {
                                 )}
                               </div>
                               <div className="flex gap-1 mt-1.5">
-                                <button onClick={(e) => { e.stopPropagation(); saveEditStep(); }}
-                                  className="flex-1 py-1 text-sm bg-primary text-primary-foreground rounded hover:bg-primary/90 transition-colors">
-                                  저장
+                                <button onClick={(e) => { e.stopPropagation(); void saveEditStep(); }}
+                                  disabled={savingStep}
+                                  className="flex-1 py-1 text-sm bg-primary text-primary-foreground rounded hover:bg-primary/90 transition-colors disabled:opacity-60">
+                                  {savingStep ? '저장 중…' : '저장'}
                                 </button>
                                 <button onClick={(e) => { e.stopPropagation(); setEditingStep(null); }}
                                   aria-label="편집 취소"
@@ -1060,17 +1203,17 @@ export function WorkflowBoardPage() {
                             </div>
                           ) : step.description ? (
                             <p
-                              className="text-sm text-muted-foreground leading-relaxed line-clamp-2 cursor-text hover:text-foreground/80"
+                              className={`text-sm text-muted-foreground leading-relaxed line-clamp-2 ${canOperate ? 'cursor-text hover:text-foreground/80' : ''}`}
                               onClick={(e) => { e.stopPropagation(); startEditStep(step); }}
                             >
                               {step.description}
                             </p>
-                          ) : (
-                            <p className="text-sm text-muted-foreground/30 italic cursor-text"
+                          ) : canOperate ? (
+                            <p className="text-sm text-muted-foreground italic cursor-text"
                               onClick={(e) => { e.stopPropagation(); startEditStep(step); }}>
-                              내용 입력...
+                              내용 입력…
                             </p>
-                          )}
+                          ) : null}
                           {/* 연계 항목 배지 (편집 모드 아닐 때) */}
                           {!isEditing && step.referenceType && (
                             <div className="mt-1.5 pt-1.5 border-t border-border/50 flex items-center gap-1">
@@ -1085,11 +1228,12 @@ export function WorkflowBoardPage() {
                         {/* Right port drag handle */}
                         <div
                           data-no-drag
+                          aria-hidden
                           style={{
                             position: 'absolute', right: -8, top: '50%',
                             transform: 'translateY(-50%)',
                             width: 16, height: 24,
-                            cursor: 'crosshair', zIndex: 10,
+                            cursor: canOperate ? 'crosshair' : 'default', zIndex: 10,
                           }}
                           onPointerDown={(e) => handlePortPointerDown(e, step)}
                           onPointerMove={(e) => handlePortPointerMove(e)}
@@ -1101,20 +1245,49 @@ export function WorkflowBoardPage() {
 
                   {selectedWf.steps.length === 0 && (
                     <div className="absolute inset-0 flex items-center justify-center" style={{ pointerEvents: 'none' }}>
-                      <p className="text-muted-foreground/30 text-sm">"단계 추가" 버튼으로 워크플로우를 구성하세요</p>
+                      <p className="text-muted-foreground text-sm">
+                        {canOperate ? '"단계 추가" 버튼으로 워크플로를 구성하세요.' : '아직 단계가 없습니다.'}
+                      </p>
                     </div>
                   )}
                 </div>
               </div>
             </div>
 
-            <div className="absolute bottom-4 right-4 text-sm text-muted-foreground/40 pointer-events-none">
-              Ctrl + 스크롤로 줌 · 우측 포트 드래그로 연결
+            <div className="absolute bottom-4 right-4 text-sm text-muted-foreground pointer-events-none">
+              {canOperate ? 'Ctrl + 스크롤로 줌 · 우측 포트 드래그로 연결' : 'Ctrl + 스크롤로 줌'}
             </div>
           </>
         )}
       </main>
       </div>
+
+      <ConfirmDialog
+        open={wfDeleteTarget !== null}
+        danger
+        busy={deleteWorkflow.isPending}
+        title="워크플로 삭제"
+        confirmLabel="삭제"
+        description={wfDeleteTarget
+          ? `「${wfDeleteTarget.title}」 워크플로를 삭제합니다. 단계 ${wfDeleteTarget.steps.length}개와 연결 ${wfDeleteTarget.edges.length}개가 함께 삭제되며 되돌릴 수 없습니다.`
+          : undefined}
+        onConfirm={() => { void confirmDeleteWorkflow(); }}
+        onCancel={() => setWfDeleteTarget(null)}
+      />
+      <ConfirmDialog
+        open={stepDeleteTarget !== null}
+        danger
+        busy={deleteStep.isPending}
+        title="단계 삭제"
+        confirmLabel="삭제"
+        description={stepDeleteTarget
+          ? `「${stepDeleteTarget.title}」 단계를 삭제합니다. 이 단계에 이어진 연결 ${
+            selectedWf?.edges.filter((e) => e.sourceStepId === stepDeleteTarget.id || e.targetStepId === stepDeleteTarget.id).length ?? 0
+          }개도 함께 삭제되며 되돌릴 수 없습니다.`
+          : undefined}
+        onConfirm={() => { void confirmDeleteStep(); }}
+        onCancel={() => setStepDeleteTarget(null)}
+      />
     </div>
   );
 }
@@ -1161,6 +1334,7 @@ function ReferenceSelect({ type, value, onChange }: ReferenceSelectProps) {
   return (
     <select
       value={value}
+      aria-label="연계 항목"
       onChange={(e) => onChange(e.target.value)}
       className="w-full text-xs bg-background border border-border rounded px-2 py-1 focus:outline-none focus:border-primary"
     >

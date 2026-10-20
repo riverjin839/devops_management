@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { useLayoutEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Link } from 'react-router-dom';
 import {
@@ -10,6 +10,7 @@ import { useToday } from '@/hooks/useToday';
 import { stripHtml } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { EmptyState } from '@/components/common/EmptyState';
+import { useModalA11y } from '@/components/common/useModalA11y';
 import { WorkItem, KanbanStatus } from '@/types';
 import { QuickAddTaskModal } from './QuickAddTaskModal';
 import { WORK_ITEM_TYPE_CONFIG } from '@/components/work-items/workItemKanbanUtils';
@@ -226,7 +227,7 @@ export function WorkCalendar({ selectedClusterId }: WorkCalendarProps) {
               <div
                 key={w}
                 className={`text-center py-1.5 font-semibold ${
-                  i === 0 ? 'text-chart-5' : i === 6 ? 'text-chart-6' : ''
+                  i === 0 ? 'text-chart-5-text' : i === 6 ? 'text-chart-6-text' : ''
                 }`}
               >
                 {w}
@@ -263,9 +264,9 @@ export function WorkCalendar({ selectedClusterId }: WorkCalendarProps) {
               const dayNumberClr = isToday
                 ? 'text-primary'
                 : dow === 0
-                ? 'text-chart-5'
+                ? 'text-chart-5-text'
                 : dow === 6
-                ? 'text-chart-6'
+                ? 'text-chart-6-text'
                 : 'text-foreground/85';
 
               return (
@@ -414,7 +415,8 @@ interface DayDetailPopoverProps {
 }
 
 function DayDetailPopover({ anchorRect, label, bucket, onClose, onQuickAdd }: DayDetailPopoverProps) {
-  const ref = useRef<HTMLDivElement | null>(null);
+  // 공용 모달 훅 — Escape·포커스 트랩·겹친 모달 순서. 팝오버라 뒤로가기 닫기는 끈다.
+  const ref = useModalA11y(true, onClose, { historyClose: false });
   const [pos, setPos] = useState<{ top: number; left: number }>({
     top: anchorRect.bottom + 6,
     left: anchorRect.left,
@@ -438,16 +440,8 @@ function DayDetailPopover({ anchorRect, label, bucket, onClose, onQuickAdd }: Da
       top = Math.max(margin, anchorRect.top - popH - 6);
     }
     setPos({ top, left });
-  }, [anchorRect]);
+  }, [anchorRect, ref]);
 
-  // ESC 로 닫기
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose();
-    };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [onClose]);
 
   const total = bucket.scheduled.length + bucket.completed.length + bucket.issues.length;
 

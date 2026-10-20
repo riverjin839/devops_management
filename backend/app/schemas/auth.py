@@ -27,6 +27,10 @@ class UserOut(BaseModel):
     must_change_password: bool = False
     editor_white_bg: bool = False
     created_at: datetime
+    # 로그인 방식 — 'local'(PEP 비밀번호) | 'ldap'(마지막 로그인이 사내 디렉터리) | 'external'(로컬
+    # 비밀번호 없는 SSO 계정). /auth/login·/auth/me·/auth/refresh 만 채우고 목록 응답 등은 None.
+    # 'local' 이 아니면 본인 비밀번호 변경이 막힌다(사내 디렉터리·IdP 에서 변경).
+    auth_source: str | None = None
 
     class Config:
         from_attributes = True

@@ -4,6 +4,7 @@ import type { OperationLevelItem } from '@/types';
 import {
   COLOR_OPTIONS,
   EMOJI_OPTIONS,
+  defaultGuarded,
   levelBadgeClass,
   levelIcon,
   useOperationLevels,
@@ -166,7 +167,7 @@ export function OperationLevelsManager() {
   };
 
   const add = () => {
-    setDraft((d) => [...d, { value: '', label: '', color: 'slate', icon: undefined }]);
+    setDraft((d) => [...d, { value: '', label: '', color: 'slate', icon: undefined, guarded: false }]);
     setDirty(true);
   };
 
@@ -194,6 +195,8 @@ export function OperationLevelsManager() {
       cleaned.push({
         value, label, color: l.color || 'slate', icon: l.icon || undefined,
         customHex: isValidHex(l.customHex) ? l.customHex : undefined,
+        // 미지정(구버전 항목)이면 서버와 같은 기본 규칙(production·dr)으로 채워 저장한다.
+        guarded: typeof l.guarded === 'boolean' ? l.guarded : defaultGuarded(value),
       });
     }
     try {
@@ -221,6 +224,8 @@ export function OperationLevelsManager() {
         <strong> label</strong> 은 화면 표시 이름, <strong>이모지</strong>는 클러스터 카드 앞에
         표시됩니다(자동 = 운영레벨 이름으로 추론). <Sparkles className="w-3 h-3 inline -mt-0.5" /> 아이콘을
         누르면 큐레이션 배색 패턴(Burnt Sienna 등)에서 커스텀 색을 바로 고를 수 있습니다.
+        <strong> 보호</strong>로 표시한 레벨의 클러스터는 k9s·노드 SSH 터미널에 접속하기 전에 대상·계정을
+        한 번 더 확인하고, k9s 는 읽기 전용(<code className="font-mono">--readonly</code>)이 기본으로 켜집니다.
       </p>
 
       <div className="border border-border rounded-xl overflow-hidden">
@@ -232,13 +237,14 @@ export function OperationLevelsManager() {
               <th className="px-2 py-1.5">value (식별자)</th>
               <th className="px-2 py-1.5">색상</th>
               <th className="px-2 py-1.5 w-24">이모지</th>
+              <th className="px-2 py-1.5 w-20">보호</th>
               <th className="px-2 py-1.5">미리보기</th>
               <th className="px-2 py-1.5 w-10"><span className="sr-only">작업</span></th>
             </tr>
           </thead>
           <tbody>
             {isLoading && (
-              <tr><td colSpan={7} className="text-center py-6 text-sm text-muted-foreground">
+              <tr><td colSpan={8} className="text-center py-6 text-sm text-muted-foreground">
                 <Loader2 className="w-3 h-3 inline animate-spin mr-1" /> 불러오는 중…
               </td></tr>
             )}
@@ -315,6 +321,21 @@ export function OperationLevelsManager() {
                   />
                 </td>
                 <td className="px-2 py-1">
+                  <label
+                    className="inline-flex items-center gap-1.5 py-1 text-xs text-muted-foreground cursor-pointer"
+                    title="보호(접속 전 확인·k9s 읽기 전용 기본)"
+                  >
+                    <input
+                      type="checkbox"
+                      checked={typeof l.guarded === 'boolean' ? l.guarded : defaultGuarded(l.value)}
+                      onChange={(e) => update(idx, { guarded: e.target.checked })}
+                      aria-label={`${l.label || l.value || '새 항목'} — 보호(접속 전 확인·k9s 읽기 전용 기본)`}
+                      className="w-4 h-4 accent-primary"
+                    />
+                    보호
+                  </label>
+                </td>
+                <td className="px-2 py-1">
                   <span
                     className={`inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full border ${levelBadgeClass(l.color)}`}
                     style={isValidHex(l.customHex) ? (() => {
@@ -338,7 +359,7 @@ export function OperationLevelsManager() {
               </tr>
             ))}
             {!isLoading && draft.length === 0 && (
-              <tr><td colSpan={7} className="text-center py-6 text-sm text-muted-foreground">
+              <tr><td colSpan={8} className="text-center py-6 text-sm text-muted-foreground">
                 운영레벨이 비어있습니다. "항목 추가" 로 시작하세요.
               </td></tr>
             )}
