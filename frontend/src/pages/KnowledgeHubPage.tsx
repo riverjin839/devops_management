@@ -50,12 +50,12 @@ const KIND_META: Record<HubKind, {
   accent: string;
   chip: string;
 }> = {
-  task:     { label: '업무',       Icon: ListTodo,      accent: 'text-chart-1', chip: 'bg-chart-1/15 text-chart-1 border-chart-1/30' },
-  note:     { label: '노트',       Icon: StickyNote,    accent: 'text-chart-3', chip: 'bg-chart-3/15 text-chart-3 border-chart-3/30' },
-  command:  { label: '명령어',     Icon: Terminal,      accent: 'text-chart-6', chip: 'bg-chart-6/15 text-chart-6 border-chart-6/30' },
-  guide:    { label: '가이드',     Icon: BookMarked,    accent: 'text-chart-2', chip: 'bg-chart-2/15 text-chart-2 border-chart-2/30' },
-  item:     { label: '이슈',       Icon: AlertCircle,   accent: 'text-chart-5', chip: 'bg-chart-5/15 text-chart-5 border-chart-5/30' },
-  workflow: { label: '워크플로우', Icon: GitFork,       accent: 'text-chart-4', chip: 'bg-chart-4/15 text-chart-4 border-chart-4/30' },
+  task:     { label: '업무',       Icon: ListTodo,      accent: 'text-chart-1-text', chip: 'bg-chart-1/15 text-chart-1-text border-chart-1/30' },
+  note:     { label: '노트',       Icon: StickyNote,    accent: 'text-chart-3-text', chip: 'bg-chart-3/15 text-chart-3-text border-chart-3/30' },
+  command:  { label: '명령어',     Icon: Terminal,      accent: 'text-chart-6-text', chip: 'bg-chart-6/15 text-chart-6-text border-chart-6/30' },
+  guide:    { label: '가이드',     Icon: BookMarked,    accent: 'text-chart-2-text', chip: 'bg-chart-2/15 text-chart-2-text border-chart-2/30' },
+  item:     { label: '이슈',       Icon: AlertCircle,   accent: 'text-chart-5-text', chip: 'bg-chart-5/15 text-chart-5-text border-chart-5/30' },
+  workflow: { label: '워크플로우', Icon: GitFork,       accent: 'text-chart-4-text', chip: 'bg-chart-4/15 text-chart-4-text border-chart-4/30' },
 };
 
 const STATUS_DOT_TONE: Record<NonNullable<HubItem['statusTone']>, string> = {

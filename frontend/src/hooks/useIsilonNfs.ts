@@ -23,13 +23,14 @@ export function useIsilonServers() {
   });
 }
 
-export function useIsilonCommands(serverId?: string) {
+export function useIsilonCommands(serverId?: string, enabled = true) {
   return useQuery({
     queryKey: isilonKeys.commands(serverId),
     queryFn: async () => {
       const { data } = await isilonNfsApi.commands.getAll(serverId);
       return data ?? [];
     },
+    enabled,
   });
 }
 
@@ -71,7 +72,11 @@ export function useDeleteIsilonServer() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (id: string) => isilonNfsApi.servers.delete(id),
-    onSuccess: () => qc.invalidateQueries({ queryKey: isilonKeys.servers }),
+    onSuccess: () => {
+      // 서버 전용 명령은 FK ON DELETE CASCADE 로 함께 지워진다 — 명령 캐시도 비운다.
+      qc.invalidateQueries({ queryKey: isilonKeys.servers });
+      qc.invalidateQueries({ queryKey: ['isilonCommands'] });
+    },
   });
 }
 

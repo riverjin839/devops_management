@@ -94,17 +94,17 @@ export const KIND_BY_KEY: Record<string, KindDef> = Object.fromEntries(
 // 컬러 → tailwind 클래스 (StatusBadge 와 같은 매핑이지만 가벼운 버전)
 // 키(이름)는 저장값 호환을 위해 유지하고, 장식 팔레트 키는 chart-N 토큰으로 그린다(D-120). purple·violet 은 chart-4 로 수렴.
 const COLOR_BG: Record<string, string> = {
-  sky:     'bg-chart-6/10 text-chart-6 border-chart-6/30',
-  amber:   'bg-chart-3/10 text-chart-3 border-chart-3/30',
-  blue:    'bg-chart-1/10 text-chart-1 border-chart-1/30',
-  orange:  'bg-chart-7/10 text-chart-7 border-chart-7/30',
-  purple:  'bg-chart-4/10 text-chart-4 border-chart-4/30',
-  red:     'bg-chart-5/10 text-chart-5 border-chart-5/30',
-  cyan:    'bg-chart-6/10 text-chart-6 border-chart-6/30',
-  emerald: 'bg-chart-2/10 text-chart-2 border-chart-2/30',
-  pink:    'bg-chart-5/10 text-chart-5 border-chart-5/30',
-  violet:  'bg-chart-4/10 text-chart-4 border-chart-4/30',
-  slate:   'bg-chart-8/10 text-chart-8 border-chart-8/30',
+  sky:     'bg-chart-6/10 text-chart-6-text border-chart-6/30',
+  amber:   'bg-chart-3/10 text-chart-3-text border-chart-3/30',
+  blue:    'bg-chart-1/10 text-chart-1-text border-chart-1/30',
+  orange:  'bg-chart-7/10 text-chart-7-text border-chart-7/30',
+  purple:  'bg-chart-4/10 text-chart-4-text border-chart-4/30',
+  red:     'bg-chart-5/10 text-chart-5-text border-chart-5/30',
+  cyan:    'bg-chart-6/10 text-chart-6-text border-chart-6/30',
+  emerald: 'bg-chart-2/10 text-chart-2-text border-chart-2/30',
+  pink:    'bg-chart-5/10 text-chart-5-text border-chart-5/30',
+  violet:  'bg-chart-4/10 text-chart-4-text border-chart-4/30',
+  slate:   'bg-chart-8/10 text-chart-8-text border-chart-8/30',
 };
 
 export function colorBadgeClass(color: string): string {

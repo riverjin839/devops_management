@@ -64,13 +64,13 @@ function clamp(v: number, lo: number, hi: number): number {
 
 // 담당자 구분용 categorical 색 — 의미(성공/실패)가 아닌 '사람 구분'이므로 chart-N 토큰(D-005).
 const ASSIGNEE_PALETTE = [
-  'bg-chart-1/20 text-chart-1',
-  'bg-chart-2/20 text-chart-2',
-  'bg-chart-3/20 text-chart-3',
-  'bg-chart-4/20 text-chart-4',
-  'bg-chart-5/20 text-chart-5',
-  'bg-chart-6/20 text-chart-6',
-  'bg-chart-7/20 text-chart-7',
+  'bg-chart-1/20 text-chart-1-text',
+  'bg-chart-2/20 text-chart-2-text',
+  'bg-chart-3/20 text-chart-3-text',
+  'bg-chart-4/20 text-chart-4-text',
+  'bg-chart-5/20 text-chart-5-text',
+  'bg-chart-6/20 text-chart-6-text',
+  'bg-chart-7/20 text-chart-7-text',
 ];
 function assigneeColor(name: string): string {
   let h = 0;

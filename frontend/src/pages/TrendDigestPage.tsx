@@ -11,10 +11,10 @@ import { parseUTC } from '@/lib/utils';
 
 // ── 카테고리 색상 ────────────────────────────────────────────────
 const CATEGORY_COLORS: Record<string, string> = {
-  k8s:    'bg-chart-1/15 text-chart-1',
-  cilium: 'bg-chart-7/15 text-chart-7',
-  linux:  'bg-chart-3/15 text-chart-3',
-  cncf:   'bg-chart-2/15 text-chart-2',
+  k8s:    'bg-chart-1/15 text-chart-1-text',
+  cilium: 'bg-chart-7/15 text-chart-7-text',
+  linux:  'bg-chart-3/15 text-chart-3-text',
+  cncf:   'bg-chart-2/15 text-chart-2-text',
 };
 
 const CATEGORY_LABEL: Record<string, string> = {

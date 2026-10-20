@@ -4,7 +4,8 @@ import { PageHeader } from '@/components/common/PageHeader';
 import { ListTree, Plus, Play, Server, X } from 'lucide-react';
 
 import { MacCard } from '@/components/ui/MacCard';
-import { ClusterSidebar, ConfirmDialog, EmptyState, LoadingState, PageShell, RunLogPanel, useToast } from '@/components/common';
+import { ClusterSidebar, ConfirmDialog, EmptyState, ErrorState, LoadingState, PageShell, RunLogPanel, useToast } from '@/components/common';
+import { useCanOperate } from '@/hooks/useCanOperate';
 import { useRunLog, runLogged, pollIntoRunLog, type RunLogEntry, type RunLogLevel } from '@/hooks/useRunLog';
 import { useLogPref } from '@/hooks/useLogPref';
 import { useClusters } from '@/hooks/useCluster';
@@ -45,7 +46,8 @@ interface BatchJobsPageProps {
 }
 
 export function BatchJobsPage({ headingLevel = 1 }: BatchJobsPageProps = {}) {
-  const { data: clusters = [] } = useClusters();
+  const clustersQ = useClusters();
+  const clusters = clustersQ.data ?? [];
   const allJobsQ = useBatchJobs();
   const typesQ = useBatchJobTypes();
   const del = useDeleteBatchJob();
@@ -60,7 +62,10 @@ export function BatchJobsPage({ headingLevel = 1 }: BatchJobsPageProps = {}) {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [bulkRunning, setBulkRunning] = useState(false);
   const [collapsedClusterIds, setCollapsedClusterIds] = useState<Set<string>>(new Set());
+  const [bulkConfirm, setBulkConfirm] = useState(false);
   const toast = useToast();
+  // §12.9 — 새 잡·일괄 실행·삭제는 operator 이상(D-145). 행 ▶·슬라이드오버는 클러스터별로 판정한다.
+  const { canOperate, withHint, ariaWithHint } = useCanOperate();
 
   const allJobs = allJobsQ.data ?? [];
   const types = typesQ.data ?? [];
@@ -139,6 +144,7 @@ export function BatchJobsPage({ headingLevel = 1 }: BatchJobsPageProps = {}) {
       keepOpen: true,
     });
     setBulkRunning(false);
+    setBulkConfirm(false);
     if (!r.ok) {
       if (!r.aborted) toast.error('일괄 실행 실패', formatApiError(r.error));
       return;
@@ -254,6 +260,21 @@ export function BatchJobsPage({ headingLevel = 1 }: BatchJobsPageProps = {}) {
 
   const canCreate = clusters.length > 0 && types.length > 0;
   const showFilters = !allJobsQ.isLoading && canCreate;
+  // 조회 실패를 빈 상태("클러스터 없음"·"잡 타입 없음"·"잡 없음")로 보여주지 않는다(D-137).
+  // 캐시가 있는 상태의 백그라운드 재조회 실패는 목록을 유지한다.
+  const loadError =
+    (clustersQ.isError && !clustersQ.data && { error: clustersQ.error, what: '클러스터 목록', retry: clustersQ.refetch })
+    || (typesQ.isError && !typesQ.data && { error: typesQ.error, what: '잡 타입 목록', retry: typesQ.refetch })
+    || (allJobsQ.isError && !allJobsQ.data && { error: allJobsQ.error, what: '배치 잡 목록', retry: allJobsQ.refetch })
+    || null;
+
+  // 일괄 실행 확인 문구 — 선택 잡을 클러스터별로 묶어 보여준다(D-141).
+  const selectedJobs = allJobs.filter((j) => selectedIds.has(j.id));
+  const selectedByCluster = (() => {
+    const m = new Map<string, BatchJob[]>();
+    for (const j of selectedJobs) m.set(j.clusterId, [...(m.get(j.clusterId) ?? []), j]);
+    return [...m.entries()].map(([id, jobs]) => ({ id, name: clusters.find((c) => c.id === id)?.name ?? id, jobs }));
+  })();
 
   // "+ 새 잡" 헤더 버튼: 단일 모드면 그 cluster 로 prefilled, 전체 모드면 빈 wizard.
   const openCreateFromHeader = () => {
@@ -283,15 +304,16 @@ export function BatchJobsPage({ headingLevel = 1 }: BatchJobsPageProps = {}) {
           <button
             type="button"
             onClick={openCreateFromHeader}
-            disabled={!canCreate}
-            className="px-3.5 py-1.5 text-sm font-semibold bg-primary hover:bg-primary/90 text-primary-foreground rounded-xl shadow-card flex items-center gap-1.5 disabled:opacity-50"
-            title={
+            disabled={!canCreate || !canOperate}
+            className="px-3.5 py-1.5 text-sm font-semibold bg-primary hover:bg-primary/90 text-primary-foreground rounded-xl shadow-card flex items-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed"
+            title={withHint(
               clusters.length === 0
                 ? '먼저 클러스터를 등록하세요'
                 : types.length === 0
                   ? '사용 가능한 잡 타입이 없습니다'
-                  : '새 배치 잡 등록'
-            }
+                  : '새 배치 잡 등록',
+            )}
+            aria-label={ariaWithHint('새 잡')}
           >
             <Plus className="w-3.5 h-3.5" />
             새 잡{selectedCluster ? ` (${selectedCluster.name})` : ''}
@@ -316,8 +338,14 @@ export function BatchJobsPage({ headingLevel = 1 }: BatchJobsPageProps = {}) {
                 />
               ) : undefined}
             >
-              {allJobsQ.isLoading ? (
+              {allJobsQ.isLoading || clustersQ.isLoading || typesQ.isLoading ? (
                 <LoadingState />
+              ) : loadError ? (
+                <ErrorState
+                  error={loadError.error}
+                  title={`${loadError.what}을 불러오지 못했습니다`}
+                  onRetry={() => void loadError.retry()}
+                />
               ) : clusters.length === 0 ? (
                 <EmptyState
                   icon={Server}
@@ -337,9 +365,11 @@ export function BatchJobsPage({ headingLevel = 1 }: BatchJobsPageProps = {}) {
                       <span className="text-xs text-muted-foreground">— 선택한 잡을 백그라운드로 일괄 실행 (SSH 잡은 저장된 자격증명 필요)</span>
                       <button
                         type="button"
-                        onClick={runBulk}
-                        disabled={bulkRunning}
-                        className="ml-auto inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium bg-primary hover:bg-primary/90 text-primary-foreground rounded-lg transition-colors disabled:opacity-50"
+                        onClick={() => setBulkConfirm(true)}
+                        disabled={bulkRunning || !canOperate}
+                        title={withHint('선택한 잡 일괄 실행')}
+                        aria-label={ariaWithHint(`선택 ${selectedIds.size}개 실행`)}
+                        className="ml-auto inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium bg-primary hover:bg-primary/90 text-primary-foreground rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                       >
                         <Play className="w-3.5 h-3.5" /> {bulkRunning ? '실행 중…' : `선택 ${selectedIds.size}개 실행`}
                       </button>
@@ -448,6 +478,29 @@ export function BatchJobsPage({ headingLevel = 1 }: BatchJobsPageProps = {}) {
           onCreated={(job) => setSelectedJob(job)}
         />
       )}
+
+      {/* 일괄 실행 확인(D-141) — 큐잉 요청이 끝날 때까지 busy, 이후 실행 로그 패널이 진행을 보여준다 */}
+      <ConfirmDialog
+        open={bulkConfirm}
+        title="배치 잡 일괄 실행"
+        description={`선택한 잡 ${selectedJobs.length}개를 ${selectedByCluster.length}개 클러스터에서 백그라운드로 실행합니다. SSH 잡은 저장된 자격증명으로 접속하고, 자격증명이 없거나 비활성화된 잡은 서버가 스킵합니다.`}
+        confirmLabel={`${selectedJobs.length}개 실행`}
+        danger
+        busy={bulkRunning}
+        onConfirm={() => void runBulk()}
+        onCancel={() => setBulkConfirm(false)}
+      >
+        <ul className="max-h-48 overflow-y-auto space-y-1.5 text-sm">
+          {selectedByCluster.map((g) => (
+            <li key={g.id}>
+              <p className="font-semibold">{g.name} <span className="font-normal text-muted-foreground tabular-nums">· {g.jobs.length}개</span></p>
+              <p className="text-muted-foreground truncate">
+                {g.jobs.map((j) => `${j.name}${j.requiresSsh === false ? ' (kubeconfig)' : j.defaultHost ? ` (${j.defaultHost})` : ''}`).join(', ')}
+              </p>
+            </li>
+          ))}
+        </ul>
+      </ConfirmDialog>
 
       {/* 삭제 확인 */}
       {confirmDelete && (

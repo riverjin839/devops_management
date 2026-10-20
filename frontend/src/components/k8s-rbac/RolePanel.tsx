@@ -1,7 +1,7 @@
 /** Role / ClusterRole 목록 + 규칙 편집. 빌트인(system:*, cluster-admin …)은 읽기 전용이다. */
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Save, Search, Shield, Trash2, Undo2 } from 'lucide-react';
-import { ConfirmDialog, EmptyState, useToastSafe } from '@/components/common';
+import { ConfirmDialog, EmptyState, ErrorState, LoadingState, useToastSafe } from '@/components/common';
 import { MacCard } from '@/components/ui/MacCard';
 import { useCanOperate } from '@/hooks/useCanOperate';
 import { useDeleteRole, useUpsertRole } from '@/hooks/useK8sRbac';
@@ -28,6 +28,9 @@ interface Props {
   includeSystem: boolean;
   onIncludeSystemChange: (v: boolean) => void;
   isLoading: boolean;
+  /** Role/ClusterRole 조회 실패 — 있으면 "롤이 없습니다" 대신 오류를 보인다(D-139). */
+  error?: unknown;
+  onRetry?: () => void;
   /** 다른 탭(ServiceAccount)에서 "이 롤 보기" 를 눌렀을 때 전달되는 대상. */
   focusRequest?: RbacRoleFocusRequest | null;
 }
@@ -44,6 +47,8 @@ export function RolePanel({
   includeSystem,
   onIncludeSystemChange,
   isLoading,
+  error,
+  onRetry,
   focusRequest,
 }: Props) {
   const { canOperate, hint, withHint, ariaWithHint } = useCanOperate(clusterId);
@@ -196,8 +201,12 @@ export function RolePanel({
           </button>
         </>}
       >
-        {rows.length === 0 ? (
-          <EmptyState icon={Shield} title={isLoading ? '불러오는 중…' : '롤이 없습니다'} compact />
+        {isLoading ? (
+          <LoadingState compact />
+        ) : error ? (
+          <ErrorState compact error={error} title="롤 목록을 불러오지 못했습니다" onRetry={onRetry} />
+        ) : rows.length === 0 ? (
+          <EmptyState icon={Shield} title="롤이 없습니다" compact />
         ) : (
           <div className="overflow-x-auto border border-border rounded-md max-h-[520px] overflow-y-auto">
             <table className="w-full min-w-[460px] text-sm">

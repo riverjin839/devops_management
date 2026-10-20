@@ -9,6 +9,8 @@ import { ConfirmDialog, useToast } from '@/components/common';
 import { formatApiError } from '@/lib/utils';
 import { useRunBatchJob, useStopBatchJob } from '@/hooks/useBatchJobs';
 import { runLogged, type RunLog } from '@/hooks/useRunLog';
+import { useCanOperate } from '@/hooks/useCanOperate';
+import { useClusterStore } from '@/stores/clusterStore';
 import { batchJobRunLines } from './runLogLines';
 import { StatusPill } from './StatusPill';
 import { CronBadge } from './CronBadge';
@@ -65,12 +67,18 @@ export function BatchJobRow({ job, cluster, selected, onClick, checkbox, checked
   const runMut = useRunBatchJob();
   const stopMut = useStopBatchJob();
   const [confirmStop, setConfirmStop] = useState(false);
+  const [confirmRun, setConfirmRun] = useState(false);
+  // §12.9 — 즉시 실행·중지는 operator 이상 + 이 클러스터 operate 바인딩(D-145).
+  const { canOperate, hint, ariaWithHint } = useCanOperate(job.clusterId);
+  const clusterName = useClusterStore((st) => st.clusters.find((c) => c.id === job.clusterId)?.name) ?? cluster?.name ?? job.clusterId;
+  const runTarget = job.requiresSsh === false
+    ? 'kubeconfig(클러스터 스코프)'
+    : `${job.defaultHost || '기본 호스트'} · 저장된 자격증명`;
 
-  const quickRun = async (e: React.MouseEvent) => {
-    e.stopPropagation();
-    const target = job.requiresSsh === false
-      ? 'kubeconfig(클러스터 스코프)'
-      : `${job.defaultHost || '기본 호스트'} · 저장된 자격증명`;
+  // ▶ 는 바로 실행하지 않고 확인을 받는다(D-141) — 대상 클러스터·호스트·자격증명 출처를 보여준다.
+  const quickRun = async () => {
+    setConfirmRun(false);
+    const target = runTarget;
     const r = await runLogged(runLog, {
       title: '배치잡 즉시 실행',
       first: `${job.name}${cluster ? ` (${cluster.name})` : ''} — ${target} 대상 실행 요청`,
@@ -170,8 +178,8 @@ export function BatchJobRow({ job, cluster, selected, onClick, checkbox, checked
               <TooltipTrigger
                 type="button"
                 onClick={() => setConfirmStop(true)}
-                disabled={stopMut.isPending}
-                aria-label={`${job.name} 중지`}
+                disabled={stopMut.isPending || !canOperate}
+                aria-label={ariaWithHint(`${job.name} 중지`)}
                 className="inline-flex items-center justify-center w-6 h-6 rounded-md border border-status-critical/30 bg-status-critical/10 text-status-critical hover:bg-status-critical/20 disabled:opacity-50"
               >
                 <Square className="w-3 h-3" fill="currentColor" />
@@ -184,9 +192,9 @@ export function BatchJobRow({ job, cluster, selected, onClick, checkbox, checked
             <Tooltip>
               <TooltipTrigger
                 type="button"
-                onClick={canQuickRun ? quickRun : undefined}
-                disabled={!canQuickRun || runMut.isPending}
-                aria-label={`${job.name} 즉시 실행`}
+                onClick={canQuickRun && canOperate ? () => setConfirmRun(true) : undefined}
+                disabled={!canQuickRun || !canOperate || runMut.isPending}
+                aria-label={ariaWithHint(`${job.name} 즉시 실행`)}
                 className="inline-flex items-center justify-center w-6 h-6 rounded-md border border-border bg-secondary hover:bg-primary/10 hover:text-primary hover:border-primary/40 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
               >
                 <Play className="w-3 h-3" />
@@ -199,7 +207,9 @@ export function BatchJobRow({ job, cluster, selected, onClick, checkbox, checked
                   </p>
                   {job.defaultHost && <p className="text-muted-foreground">호스트: {job.defaultHost}</p>}
                   <p className="text-muted-foreground">최근 실행: {formatShortDate(job.lastRunAt)} ({job.lastStatus})</p>
-                  {!job.enabled ? (
+                  {hint ? (
+                    <p className="text-status-warning">{hint}</p>
+                  ) : !job.enabled ? (
                     <p className="text-muted-foreground">
                       비활성화된 잡입니다 — 행을 열어 "활성화"를 켜야 실행할 수 있습니다.
                     </p>
@@ -224,8 +234,22 @@ export function BatchJobRow({ job, cluster, selected, onClick, checkbox, checked
         description={`"${job.name}" 실행 중인 작업을 지금 강제 중지할까요? 원격 프로세스가 중간에 종료돼 부분 작업 상태가 남을 수 있습니다.`}
         confirmLabel="중지"
         danger
+        busy={stopMut.isPending}
         onConfirm={doStop}
         onCancel={() => setConfirmStop(false)}
+      />,
+      document.body,
+    )}
+    {confirmRun && createPortal(
+      <ConfirmDialog
+        open
+        title="배치 잡 즉시 실행"
+        description={`"${job.name}" 을(를) ${clusterName} 클러스터에서 지금 실행합니다. 대상: ${runTarget}. 실행 로그는 표 위 패널에 남습니다.`}
+        confirmLabel="실행"
+        danger
+        busy={runMut.isPending}
+        onConfirm={() => void quickRun()}
+        onCancel={() => setConfirmRun(false)}
       />,
       document.body,
     )}

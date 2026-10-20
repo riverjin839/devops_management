@@ -245,10 +245,10 @@ export function ClusterCard({ cluster, onEdit, onDelete, deletingId, overlapGrou
               <BondIpRow cluster={cluster} bond="bond1" />
             </div>
             <CidrRow label="Pod CIDR" cidr={cluster.podCidr} first={cluster.podFirstHost} last={cluster.podLastHost}
-              color={{ bg: 'bg-chart-2/5', border: 'border-chart-2/20', text: 'text-chart-2', label: 'text-chart-2' }}
+              color={{ bg: 'bg-chart-2/5', border: 'border-chart-2/20', text: 'text-chart-2-text', label: 'text-chart-2-text' }}
               overlapColor={cluster.podCidr ? overlapColor : null} />
             <CidrRow label="Service CIDR" cidr={cluster.svcCidr} first={cluster.svcFirstHost} last={cluster.svcLastHost}
-              color={{ bg: 'bg-chart-4/5', border: 'border-chart-4/20', text: 'text-chart-4', label: 'text-chart-4' }}
+              color={{ bg: 'bg-chart-4/5', border: 'border-chart-4/20', text: 'text-chart-4-text', label: 'text-chart-4-text' }}
               overlapColor={cluster.svcCidr ? overlapColor : null} />
             {cluster.ciliumConfig && (
               <div className="mt-1 pt-2 border-t border-border/40">

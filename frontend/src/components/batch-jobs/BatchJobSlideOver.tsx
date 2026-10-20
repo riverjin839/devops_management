@@ -5,6 +5,7 @@ import type { BatchJob } from '@/services/api';
 import { MacCard } from '@/components/ui/MacCard';
 import { ConfirmDialog, useModalA11y, useToast } from '@/components/common';
 import { formatApiError } from '@/lib/utils';
+import { useCanOperate } from '@/hooks/useCanOperate';
 import { useBatchJobRuns, useBatchJobTypes, useStopBatchJob } from '@/hooks/useBatchJobs';
 import { RunForm } from './BatchJobSlideOver.RunForm';
 import { RunHistory } from './BatchJobSlideOver.RunHistory';
@@ -30,6 +31,9 @@ export function BatchJobSlideOver({ job, onClose, onDelete, overlayMode = false 
   const stopMut = useStopBatchJob();
   const toast = useToast();
   const isRunning = job.lastStatus === 'running';
+  // §12.9 — 실행·중지·편집·자격증명·삭제는 operator 이상 + 이 클러스터 operate 바인딩(D-145).
+  // 폼을 여는 토글을 막으면 폼 안의 저장·실행·연결 테스트 버튼도 함께 막힌다.
+  const { canOperate, withHint, ariaWithHint } = useCanOperate(job.clusterId);
   // 잡 타입의 정적 단계 계획 — 실행 전에도 로그 카드에 타임라인을 그린다.
   const stepPlan = (typesQ.data ?? []).find((t) => t.jobType === job.jobType)?.stepPlan;
 
@@ -79,8 +83,10 @@ export function BatchJobSlideOver({ job, onClose, onDelete, overlayMode = false 
           <button
             type="button"
             onClick={() => setConfirmStop(true)}
-            disabled={stopMut.isPending}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-semibold bg-status-critical hover:bg-status-critical/90 text-primary-foreground rounded-xl shadow-card disabled:opacity-60"
+            disabled={stopMut.isPending || !canOperate}
+            title={withHint('실행 중인 작업 강제 중지')}
+            aria-label={ariaWithHint('지금 중지')}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-semibold bg-status-critical hover:bg-status-critical/90 text-primary-foreground rounded-xl shadow-card disabled:opacity-60 disabled:cursor-not-allowed"
           >
             <Square className="w-3.5 h-3.5" fill="currentColor" />
             지금 중지
@@ -89,7 +95,10 @@ export function BatchJobSlideOver({ job, onClose, onDelete, overlayMode = false 
           <button
             type="button"
             onClick={() => setRunFormOpen((v) => !v)}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-semibold bg-primary hover:bg-primary/90 text-primary-foreground rounded-xl shadow-card"
+            disabled={!canOperate}
+            title={withHint(runFormOpen ? '실행 폼 닫기' : '실행 폼 열기')}
+            aria-label={ariaWithHint(runFormOpen ? '실행 닫기' : '지금 실행')}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-semibold bg-primary hover:bg-primary/90 text-primary-foreground rounded-xl shadow-card disabled:opacity-50 disabled:cursor-not-allowed"
             aria-expanded={runFormOpen}
           >
             <Play className="w-3.5 h-3.5" />
@@ -99,7 +108,10 @@ export function BatchJobSlideOver({ job, onClose, onDelete, overlayMode = false 
         <button
           type="button"
           onClick={() => setEditOpen((v) => !v)}
-          className="inline-flex items-center gap-1.5 px-2.5 py-1.5 text-sm bg-secondary hover:bg-primary/10 hover:text-primary border border-border rounded-xl"
+          disabled={!canOperate}
+          title={withHint('잡 설정 편집')}
+          aria-label={ariaWithHint('편집')}
+          className="inline-flex items-center gap-1.5 px-2.5 py-1.5 text-sm bg-secondary hover:bg-primary/10 hover:text-primary border border-border rounded-xl disabled:opacity-50 disabled:cursor-not-allowed"
           aria-expanded={editOpen}
         >
           <Pencil className="w-3.5 h-3.5" />
@@ -109,7 +121,10 @@ export function BatchJobSlideOver({ job, onClose, onDelete, overlayMode = false 
           <button
             type="button"
             onClick={() => setCredsOpen((v) => !v)}
-            className="inline-flex items-center gap-1.5 px-2.5 py-1.5 text-sm bg-secondary hover:bg-primary/10 hover:text-primary border border-border rounded-xl"
+            disabled={!canOperate}
+            title={withHint('저장된 자격증명 편집')}
+            aria-label={ariaWithHint('자격증명')}
+            className="inline-flex items-center gap-1.5 px-2.5 py-1.5 text-sm bg-secondary hover:bg-primary/10 hover:text-primary border border-border rounded-xl disabled:opacity-50 disabled:cursor-not-allowed"
             aria-expanded={credsOpen}
           >
             <KeyRound className="w-3.5 h-3.5" />
@@ -122,7 +137,10 @@ export function BatchJobSlideOver({ job, onClose, onDelete, overlayMode = false 
         <button
           type="button"
           onClick={() => onDelete(job)}
-          className="inline-flex items-center gap-1.5 px-2.5 py-1.5 text-sm bg-secondary hover:bg-status-critical/10 hover:text-status-critical border border-border rounded-xl"
+          disabled={!canOperate}
+          title={withHint('잡과 실행 이력 삭제')}
+          aria-label={ariaWithHint('삭제')}
+          className="inline-flex items-center gap-1.5 px-2.5 py-1.5 text-sm bg-secondary hover:bg-status-critical/10 hover:text-status-critical border border-border rounded-xl disabled:opacity-50 disabled:cursor-not-allowed"
         >
           <Trash2 className="w-3.5 h-3.5" />
           삭제
@@ -130,21 +148,21 @@ export function BatchJobSlideOver({ job, onClose, onDelete, overlayMode = false 
       </div>
 
       {/* 실행 폼 — expandable */}
-      {runFormOpen && (
+      {runFormOpen && canOperate && (
         <div className="mb-4 pb-4 border-b border-border">
           <RunForm key={job.id} job={job} />
         </div>
       )}
 
       {/* 잡 메타데이터 / params / cron 편집 — expandable */}
-      {editOpen && (
+      {editOpen && canOperate && (
         <div className="mb-4 pb-4 border-b border-border">
           <EditForm key={job.id} job={job} />
         </div>
       )}
 
       {/* 저장된 자격증명 편집 — expandable */}
-      {credsOpen && (
+      {credsOpen && canOperate && (
         <div className="mb-4 pb-4 border-b border-border">
           <SavedCreds key={job.id} job={job} />
         </div>
@@ -180,6 +198,7 @@ export function BatchJobSlideOver({ job, onClose, onDelete, overlayMode = false 
       description={`"${job.name}" 실행 중인 작업을 지금 강제 중지할까요? 원격 프로세스가 중간에 종료돼 부분 작업 상태가 남을 수 있습니다.`}
       confirmLabel="중지"
       danger
+      busy={stopMut.isPending}
       onConfirm={doStop}
       onCancel={() => setConfirmStop(false)}
     />

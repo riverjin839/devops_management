@@ -115,7 +115,7 @@ function ClusterOverviewGrid({ clusters, addons, onSelectCluster }: ClusterOverv
 
             {/* Check counts — 미연결이면 stale 값 대신 안내 */}
             {cluster.status === 'pending' ? (
-              <p className="text-sm text-status-unknown/80 italic">연결 불가로 점검 데이터 없음</p>
+              <p className="text-sm text-status-unknown italic">연결 불가로 점검 데이터 없음</p>
             ) : total > 0 ? (
               <div className="space-y-1.5">
                 <div className="flex justify-between text-sm">
@@ -204,6 +204,8 @@ export function Dashboard() {
   const [showPlaybookModal, setShowPlaybookModal] = useState(false);
   const [editingPlaybook, setEditingPlaybook] = useState<Playbook | null>(null);
   const [credsTarget, setCredsTarget] = useState<Playbook | null>(null);
+  // 세션 자격증명으로 바로 나가던 플레이북 ▶ 의 실행 전 확인(D-141).
+  const [playbookRunConfirm, setPlaybookRunConfirm] = useState<{ pb: Playbook; creds: PlaybookSshCreds } | null>(null);
   const [showKubeconfig, setShowKubeconfig] = useState(false);
   const [editingMetricCard, setEditingMetricCard] = useState<MetricCard | null>(null);
   const [showItemModal, setShowItemModal] = useState(false);
@@ -652,7 +654,7 @@ export function Dashboard() {
                         if (raw) cached = JSON.parse(raw);
                       } catch { /* ignore */ }
                       if (cached && (cached.ssh_username || cached.ssh_password || cached.ssh_private_key)) {
-                        runPlaybookLogged(playbook, cached);
+                        setPlaybookRunConfirm({ pb: playbook, creds: cached });
                       } else {
                         setCredsTarget(playbook);
                       }
@@ -747,13 +749,14 @@ export function Dashboard() {
             id: editingPlaybook.id,
             data: {
               name: data.name,
-              description: data.description || undefined,
+              // 지운 값은 null 로 보내 서버가 컬럼을 비우게 한다(D-144).
+              description: data.description.trim() || null,
               // 모드 전환 시 반대편 필드를 비워야 backend 에서 충돌 안 남(/playbooks 와 동일)
               playbookFileId: data.playbookFileId ?? null,
               inventoryId: data.inventoryId ?? null,
               playbookPath: data.playbookPath ?? null,
               inventoryPath: data.inventoryPath ?? null,
-              tags: data.tags || undefined,
+              tags: data.tags.trim() || null,
               timeoutSeconds: data.timeoutSeconds,
               clusterId: data.clusterId,
             },
@@ -762,6 +765,24 @@ export function Dashboard() {
         clusters={clusters}
         defaultClusterId={activeClusterId}
         initialData={editingPlaybook}
+      />
+
+      <ConfirmDialog
+        open={!!playbookRunConfirm}
+        title="플레이북 실행"
+        description={playbookRunConfirm
+          ? `"${playbookRunConfirm.pb.name}" 을(를) ${clusters.find((c) => c.id === playbookRunConfirm.pb.clusterId)?.name ?? playbookRunConfirm.pb.clusterId} 클러스터 대상으로 실행합니다. 인벤토리(${playbookRunConfirm.pb.inventoryName || playbookRunConfirm.pb.inventoryPath || '기본 인벤토리'})의 호스트에 세션에 저장된 SSH 자격증명${playbookRunConfirm.creds.ssh_username ? `(${playbookRunConfirm.creds.ssh_username})` : ''}으로 ansible-playbook 이 바로 실행됩니다.`
+          : undefined}
+        confirmLabel="실행"
+        danger
+        busy={!!playbookRunConfirm && runningIds.has(playbookRunConfirm.pb.id)}
+        onConfirm={() => {
+          if (!playbookRunConfirm) return;
+          const { pb, creds } = playbookRunConfirm;
+          setPlaybookRunConfirm(null);
+          runPlaybookLogged(pb, creds);
+        }}
+        onCancel={() => setPlaybookRunConfirm(null)}
       />
 
       <RunCredsModal

@@ -2492,6 +2492,8 @@ export interface ExecutableScript {
   currentVersionId?: string | null;
   currentVersion?: ExecutableScriptVersion | null;
   usedByCount: number;
+  /** 참조 배치잡 목록(D-146) — 저장·롤백 확인 문구와 "어디서 쓰이나" 표. 구버전 백엔드는 없을 수 있다. */
+  usedBy?: ScriptUsageRef[];
   createdBy?: string | null;
   createdAt: string;
   updatedAt: string;
@@ -2509,8 +2511,21 @@ export interface ExecutableScriptCreate {
 
 export interface ExecutableScriptUpdate {
   name?: string;
-  description?: string;
+  /** null = 설명 비우기(D-144). 생략하면 기존 값 유지. */
+  description?: string | null;
   tags?: string[];
+}
+
+/** 스크립트를 참조하는 배치잡 1건(D-146). `pinned=false` 면 "항상 최신" — 저장·롤백이 다음 실행부터 반영된다. */
+export interface ScriptUsageRef {
+  jobId: string;
+  name: string;
+  clusterId: string;
+  clusterName?: string | null;
+  pinned: boolean;
+  pinnedVersion?: number | null;
+  enabled: boolean;
+  cron?: string | null;
 }
 
 export interface ExecutableScriptVersionCreate {

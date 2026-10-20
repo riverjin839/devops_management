@@ -1,7 +1,7 @@
 import { useEffect, useId, useState } from 'react';
-import { Save, Play, Loader2, RotateCcw, Trash2, Pencil } from 'lucide-react';
-import type { ScriptTestRunResponse } from '@/types';
-import { ConfirmDialog, RunLogPanel, useToast } from '@/components/common';
+import { Save, Play, Loader2, RotateCcw, Trash2, Pencil, FileQuestion } from 'lucide-react';
+import type { ExecutableScriptVersion, ScriptTestRunResponse, ScriptUsageRef } from '@/types';
+import { ConfirmDialog, EmptyState, ErrorState, LoadingState, RunLogPanel, useToast } from '@/components/common';
 import { useRunLog, runLogged, type RunLogEntry } from '@/hooks/useRunLog';
 import { useLogPref } from '@/hooks/useLogPref';
 import { CommandTraceList } from '@/components/common/CommandTraceList';
@@ -9,7 +9,7 @@ import { ExecutionStepsTimeline } from '@/components/daily-check/ExecutionStepsT
 import { formatApiError } from '@/lib/utils';
 import {
   useScript, useScriptVersions, useCreateScriptVersion, useSetCurrentScriptVersion,
-  useUpdateScript, useDeleteScript, useTestRunScript,
+  useUpdateScript, useDeleteScript, useTestRunScript, useCanEditScripts,
 } from '@/hooks/useScripts';
 import { ScriptKindBadge } from './ScriptListPanel';
 
@@ -23,12 +23,20 @@ const TABS: { value: Tab; label: string }[] = [
 
 interface Props {
   scriptId: string;
+  /** 삭제 성공 또는 "찾을 수 없음"에서 "목록으로" — 선택 해제. */
   onDeleted: () => void;
+  /** 본문 편집본이 저장되지 않았는지 — 상위가 다른 스크립트로 옮기기 전에 확인한다(D-146). */
+  onDirtyChange?: (dirty: boolean) => void;
 }
 
-export function ScriptDetailPanel({ scriptId, onDeleted }: Props) {
+/** Python 은 테스트 실행 미지원(서버 501) — 버튼 비활성 사유(D-146). */
+const PYTHON_TEST_RUN_HINT = 'Python 스크립트 테스트 실행은 아직 지원하지 않습니다 (서버 미구현)';
+
+export function ScriptDetailPanel({ scriptId, onDeleted, onDirtyChange }: Props) {
   const toast = useToast();
-  const { data: script, isLoading } = useScript(scriptId);
+  const { data: script, isLoading, isError, error, refetch } = useScript(scriptId);
+  // §12.9 — 저장·롤백·삭제·테스트 실행은 operator 이상(관리자 전용 설정 시 admin). 숨기지 않고 비활성+사유(D-145).
+  const { canEdit, withHint, ariaWithHint } = useCanEditScripts();
   const { data: versions } = useScriptVersions(scriptId);
   const createVersion = useCreateScriptVersion(scriptId);
   const setCurrentVersion = useSetCurrentScriptVersion(scriptId);
@@ -45,6 +53,9 @@ export function ScriptDetailPanel({ scriptId, onDeleted }: Props) {
   const [nameDraft, setNameDraft] = useState('');
   const [descDraft, setDescDraft] = useState('');
   const [tagsDraft, setTagsDraft] = useState('');
+  // 저장·롤백 즉시 반영 경고(D-146) — "항상 최신" 참조 잡이 다음 실행부터 새 버전을 쓴다.
+  const [saveConfirm, setSaveConfirm] = useState(false);
+  const [rollbackTarget, setRollbackTarget] = useState<ExecutableScriptVersion | null>(null);
 
   // 스크립트를 바꾸거나(선택 변경) 버전이 바뀌면(롤백) 편집 초안을 현재 버전 내용으로 리셋.
   useEffect(() => {
@@ -69,13 +80,50 @@ export function ScriptDetailPanel({ scriptId, onDeleted }: Props) {
     clearRunLog();
   }, [scriptId, clearRunLog]);
 
-  if (isLoading || !script) {
-    return <div className="p-4 text-xs text-muted-foreground">불러오는 중…</div>;
+  const dirty = !!script?.currentVersion && draft !== script.currentVersion.content;
+  useEffect(() => {
+    onDirtyChange?.(dirty);
+  }, [dirty, onDirtyChange]);
+
+  // 로딩·실패·없음을 분리한다(D-138) — 예전엔 `isLoading || !script` 하나라 실패·삭제된 스크립트에서
+  // "불러오는 중…" 이 끝나지 않았다.
+  if (isLoading) return <LoadingState compact />;
+  const errStatus = (error as { response?: { status?: number } } | null)?.response?.status;
+  if ((isError && errStatus === 404) || (!isError && !script)) {
+    return (
+      <div className="h-full flex items-center justify-center">
+        <EmptyState
+          icon={FileQuestion}
+          title="스크립트를 찾을 수 없습니다"
+          description="다른 사용자가 삭제했거나 주소가 잘못됐을 수 있습니다."
+          action={{ label: '목록으로', onClick: onDeleted, variant: 'secondary' }}
+        />
+      </div>
+    );
+  }
+  if (isError || !script) {
+    return (
+      <div className="h-full flex items-center justify-center">
+        <ErrorState error={error} title="스크립트를 불러오지 못했습니다" onRetry={() => void refetch()} />
+      </div>
+    );
   }
 
-  const dirty = draft !== (script.currentVersion?.content ?? '');
+  // 참조 잡 — "항상 최신"(고정 안 함)만 저장·롤백의 영향을 받는다.
+  const usedBy = script.usedBy ?? [];
+  const latestRefs = usedBy.filter((u) => !u.pinned);
+  const pinnedRefs = usedBy.filter((u) => u.pinned);
+  const nextVersion = Math.max(0, ...(versions ?? []).map((v) => v.version), script.currentVersion?.version ?? 0) + 1;
+  const isPython = script.kind === 'python';
+
+  // 참조 잡이 있으면 먼저 확인(D-146) — "저장"은 초안 저장이 아니라 새 버전 배포다.
+  const requestSaveVersion = () => {
+    if (script.usedByCount > 0) setSaveConfirm(true);
+    else void handleSaveVersion();
+  };
 
   const handleSaveVersion = async () => {
+    setSaveConfirm(false);
     try {
       await createVersion.mutateAsync({ content: draft, changelog: changelog.trim() || undefined });
       toast.success('새 버전 저장됨');
@@ -84,7 +132,13 @@ export function ScriptDetailPanel({ scriptId, onDeleted }: Props) {
     }
   };
 
+  const requestRollback = (v: ExecutableScriptVersion) => {
+    if (script.usedByCount > 0) setRollbackTarget(v);
+    else void handleRollback(v.id);
+  };
+
   const handleRollback = async (versionId: string) => {
+    setRollbackTarget(null);
     try {
       await setCurrentVersion.mutateAsync(versionId);
       toast.success('해당 버전으로 되돌렸습니다.');
@@ -105,7 +159,8 @@ export function ScriptDetailPanel({ scriptId, onDeleted }: Props) {
     try {
       await updateScript.mutateAsync({
         name: nameDraft.trim(),
-        description: descDraft.trim() || undefined,
+        // 지운 설명은 null 로 보내 서버가 비우게 한다(D-144) — undefined 는 "변경 없음".
+        description: descDraft.trim() || null,
         tags: tagsDraft.split(',').map((t) => t.trim()).filter(Boolean),
       });
       setEditingMeta(false);
@@ -202,16 +257,36 @@ export function ScriptDetailPanel({ scriptId, onDeleted }: Props) {
           <div className="flex items-center gap-1.5 flex-shrink-0">
             {editingMeta ? (
               <>
-                <button onClick={saveMeta} className="px-2 py-1 text-xs font-medium bg-primary text-primary-foreground rounded-lg hover:bg-primary/90">저장</button>
+                <button
+                  onClick={saveMeta}
+                  disabled={!canEdit || updateScript.isPending || !nameDraft.trim()}
+                  title={withHint(nameDraft.trim() ? '이름/설명/태그 저장' : '이름은 비울 수 없습니다')}
+                  aria-label={ariaWithHint('저장')}
+                  className="px-2 py-1 text-xs font-medium bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  저장
+                </button>
                 <button onClick={() => setEditingMeta(false)} className="px-2 py-1 text-xs border border-border rounded-lg hover:bg-secondary">취소</button>
               </>
             ) : (
-              <button onClick={startEditMeta} title="이름/설명/태그 수정" aria-label="이름/설명/태그 수정" className="p-1.5 rounded-lg hover:bg-secondary">
+              <button
+                onClick={startEditMeta}
+                disabled={!canEdit}
+                title={withHint('이름/설명/태그 수정')}
+                aria-label={ariaWithHint('이름/설명/태그 수정')}
+                className="p-1.5 rounded-lg hover:bg-secondary disabled:opacity-50 disabled:cursor-not-allowed"
+              >
                 <Pencil className="w-3.5 h-3.5" />
               </button>
             )}
             {!script.isSystem && (
-              <button onClick={() => setDeleteConfirm(true)} title="삭제" aria-label="삭제" className="p-1.5 rounded-lg hover:bg-secondary text-status-critical">
+              <button
+                onClick={() => setDeleteConfirm(true)}
+                disabled={!canEdit}
+                title={withHint(script.usedByCount > 0 ? `참조 배치잡 ${script.usedByCount}건이 있어 삭제가 거부됩니다` : '삭제')}
+                aria-label={ariaWithHint('삭제')}
+                className="p-1.5 rounded-lg hover:bg-secondary text-status-critical disabled:opacity-50 disabled:cursor-not-allowed"
+              >
                 <Trash2 className="w-3.5 h-3.5" />
               </button>
             )}
@@ -278,10 +353,15 @@ export function ScriptDetailPanel({ scriptId, onDeleted }: Props) {
                 className="flex-1 px-2.5 py-1.5 text-xs rounded-xl border border-border bg-card focus:outline-none focus:ring-2 focus:ring-ring"
               />
               <button
-                onClick={handleSaveVersion}
-                disabled={!dirty || createVersion.isPending}
-                title={dirty ? '새 버전으로 저장' : '변경사항이 없습니다'}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-primary text-primary-foreground rounded-xl hover:bg-primary/90 disabled:opacity-50"
+                onClick={requestSaveVersion}
+                disabled={!canEdit || !dirty || createVersion.isPending}
+                title={withHint(dirty
+                  ? (latestRefs.length > 0
+                    ? `새 버전으로 저장 — 항상 최신 참조 배치잡 ${latestRefs.length}건이 다음 실행부터 이 버전을 씁니다`
+                    : '새 버전으로 저장')
+                  : '변경사항이 없습니다')}
+                aria-label={ariaWithHint('저장 (새 버전)')}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-primary text-primary-foreground rounded-xl hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {createVersion.isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
                 저장 (새 버전)
@@ -318,10 +398,11 @@ export function ScriptDetailPanel({ scriptId, onDeleted }: Props) {
                   <span className="text-[11px] px-1.5 py-0.5 rounded bg-primary/15 text-primary flex-shrink-0">현재</span>
                 ) : (
                   <button
-                    onClick={() => handleRollback(v.id)}
-                    disabled={setCurrentVersion.isPending}
-                    title="이 버전으로 롤백"
-                    className="inline-flex items-center gap-1 px-2 py-1 text-[11px] rounded-lg border border-border hover:bg-secondary flex-shrink-0 disabled:opacity-50"
+                    onClick={() => requestRollback(v)}
+                    disabled={!canEdit || setCurrentVersion.isPending}
+                    title={withHint('이 버전으로 롤백')}
+                    aria-label={ariaWithHint(`v${v.version} 으로 롤백`)}
+                    className="inline-flex items-center gap-1 px-2 py-1 text-[11px] rounded-lg border border-border hover:bg-secondary flex-shrink-0 disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     <RotateCcw className="w-3 h-3" /> 롤백
                   </button>
@@ -333,10 +414,9 @@ export function ScriptDetailPanel({ scriptId, onDeleted }: Props) {
 
         {tab === 'test-run' && (
           <div className="space-y-3">
-            {script.kind === 'python' && (
+            {isPython && (
               <div className="px-3 py-2 rounded-xl border border-status-warning/40 bg-status-warning-soft text-xs text-status-warning">
-                Python 스크립트 테스트 실행은 아직 지원하지 않습니다 — 대상 클러스터의 일회용 K8s Job
-                실행기가 Phase 2 에 구현될 예정입니다.
+                Python 스크립트는 화면에서 테스트 실행을 아직 지원하지 않습니다(서버 미구현) — 실행 버튼이 비활성입니다.
               </div>
             )}
             <div className="grid grid-cols-2 gap-2">
@@ -393,8 +473,10 @@ export function ScriptDetailPanel({ scriptId, onDeleted }: Props) {
             <p className="text-[11px] text-muted-foreground">자격증명은 저장되지 않습니다 — 이번 테스트 실행 요청에만 사용됩니다.</p>
             <button
               onClick={handleTestRun}
-              disabled={testRun.isPending}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-primary text-primary-foreground rounded-xl hover:bg-primary/90 disabled:opacity-50"
+              disabled={!canEdit || isPython || testRun.isPending}
+              title={withHint(isPython ? PYTHON_TEST_RUN_HINT : '현재 편집 중인 내용으로 테스트 실행')}
+              aria-label={ariaWithHint(isPython ? `테스트 실행 — ${PYTHON_TEST_RUN_HINT}` : '테스트 실행')}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-primary text-primary-foreground rounded-xl hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {testRun.isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Play className="w-3.5 h-3.5" />}
               테스트 실행 (현재 편집 중인 내용 기준)
@@ -411,13 +493,80 @@ export function ScriptDetailPanel({ scriptId, onDeleted }: Props) {
         )}
 
         {tab === 'usage' && (
-          <div className="text-xs text-muted-foreground">
-            {script.usedByCount > 0
-              ? `이 스크립트를 참조하는 Batch Job/점검 항목 ${script.usedByCount}건이 있습니다.`
-              : '아직 이 스크립트를 참조하는 Batch Job/점검 항목이 없습니다 — Batch Job 연결은 Phase 2 에서 지원될 예정입니다.'}
-          </div>
+          script.usedByCount === 0 ? (
+            <EmptyState
+              compact
+              title="참조하는 배치잡이 없습니다"
+              description="배치잡의 실행 방식을 '스크립트'로 고르면 이 스크립트를 연결할 수 있습니다."
+            />
+          ) : (
+            <div className="space-y-2">
+              <p className="text-xs text-muted-foreground">
+                배치잡 {script.usedByCount}건이 참조합니다. "항상 최신" 참조는 저장·롤백하면 다음 실행부터 바뀐 버전을 씁니다.
+              </p>
+              {usedBy.length > 0 && (
+                <table className="w-full text-xs">
+                  <thead>
+                    <tr className="text-left text-muted-foreground border-b border-border">
+                      <th className="py-1.5 pr-2 font-medium">배치잡</th>
+                      <th className="py-1.5 pr-2 font-medium">클러스터</th>
+                      <th className="py-1.5 pr-2 font-medium">참조 버전</th>
+                      <th className="py-1.5 pr-2 font-medium">스케줄</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {usedBy.map((u) => (
+                      <tr key={u.jobId} className="border-b border-border/50">
+                        <td className="py-1.5 pr-2 font-medium">
+                          {u.name}
+                          {!u.enabled && <span className="ml-1 text-muted-foreground">(사용 안 함)</span>}
+                        </td>
+                        <td className="py-1.5 pr-2 text-muted-foreground">{u.clusterName ?? u.clusterId}</td>
+                        <td className="py-1.5 pr-2">
+                          {u.pinned
+                            ? <span className="text-muted-foreground">v{u.pinnedVersion ?? '?'} 고정</span>
+                            : <span className="font-medium text-status-warning">항상 최신</span>}
+                        </td>
+                        <td className="py-1.5 pr-2 font-mono text-muted-foreground">{u.cron || '수동 실행'}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </div>
+          )
         )}
       </div>
+
+      <ConfirmDialog
+        open={saveConfirm}
+        title="새 버전 저장 — 배치잡에 바로 반영됩니다"
+        description={latestRefs.length > 0
+          ? `이 스크립트를 항상 최신으로 참조하는 배치잡 ${latestRefs.length}건이 다음 실행부터 v${nextVersion} 을 씁니다. 예약(cron) 잡은 다음 주기에 이 코드를 실서버에서 실행합니다.`
+          : `참조 배치잡 ${script.usedByCount}건은 모두 특정 버전에 고정돼 있어 v${nextVersion} 저장의 영향을 받지 않습니다.`}
+        confirmLabel={`v${nextVersion} 저장`}
+        danger={latestRefs.length > 0}
+        busy={createVersion.isPending}
+        onConfirm={() => void handleSaveVersion()}
+        onCancel={() => setSaveConfirm(false)}
+      >
+        <UsageRefList latest={latestRefs} pinned={pinnedRefs} />
+      </ConfirmDialog>
+
+      <ConfirmDialog
+        open={!!rollbackTarget}
+        title={`v${rollbackTarget?.version ?? ''} 으로 롤백 — 배치잡에 바로 반영됩니다`}
+        description={latestRefs.length > 0
+          ? `이 스크립트를 항상 최신으로 참조하는 배치잡 ${latestRefs.length}건이 다음 실행부터 v${rollbackTarget?.version ?? ''} 을 씁니다.`
+          : `참조 배치잡 ${script.usedByCount}건은 모두 특정 버전에 고정돼 있어 롤백의 영향을 받지 않습니다.`}
+        confirmLabel="롤백"
+        danger={latestRefs.length > 0}
+        busy={setCurrentVersion.isPending}
+        onConfirm={() => { if (rollbackTarget) void handleRollback(rollbackTarget.id); }}
+        onCancel={() => setRollbackTarget(null)}
+      >
+        <UsageRefList latest={latestRefs} pinned={pinnedRefs} />
+      </ConfirmDialog>
 
       {deleteConfirm && (
         <ConfirmDialog
@@ -426,9 +575,41 @@ export function ScriptDetailPanel({ scriptId, onDeleted }: Props) {
           description={`"${script.name}" 스크립트를 삭제할까요? 모든 버전 이력이 함께 삭제되며 되돌릴 수 없습니다.`}
           danger
           confirmLabel="삭제"
+          busy={deleteScript.isPending}
           onConfirm={handleDelete}
           onCancel={() => setDeleteConfirm(false)}
         />
+      )}
+    </div>
+  );
+}
+
+/** 저장·롤백 확인 다이얼로그의 참조 잡 목록 — 영향받는(항상 최신) 잡을 먼저, 고정 잡은 뒤에. */
+function UsageRefList({ latest, pinned }: { latest: ScriptUsageRef[]; pinned: ScriptUsageRef[] }) {
+  if (latest.length === 0 && pinned.length === 0) return null;
+  return (
+    <div className="space-y-1.5 text-sm max-h-48 overflow-y-auto">
+      {latest.length > 0 && (
+        <div>
+          <p className="font-semibold">영향받는 잡 (항상 최신)</p>
+          <ul className="list-disc pl-5">
+            {latest.map((u) => (
+              <li key={u.jobId}>
+                {u.name} <span className="text-muted-foreground">· {u.clusterName ?? u.clusterId}{u.cron ? ` · ${u.cron}` : ' · 수동'}{u.enabled ? '' : ' · 사용 안 함'}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+      {pinned.length > 0 && (
+        <div>
+          <p className="text-muted-foreground">영향 없음 (버전 고정)</p>
+          <ul className="list-disc pl-5 text-muted-foreground">
+            {pinned.map((u) => (
+              <li key={u.jobId}>{u.name} · v{u.pinnedVersion ?? '?'}</li>
+            ))}
+          </ul>
+        </div>
       )}
     </div>
   );

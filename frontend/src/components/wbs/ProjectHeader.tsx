@@ -16,12 +16,12 @@ const COLOR_MAP: Record<string, string> = {
 };
 
 const BADGE_MAP: Record<string, string> = {
-  blue:    'bg-chart-1/15 text-chart-1',
-  emerald: 'bg-chart-2/15 text-chart-2',
-  amber:   'bg-chart-3/15 text-chart-3',
-  violet:  'bg-chart-4/15 text-chart-4',
-  rose:    'bg-chart-5/15 text-chart-5',
-  slate:   'bg-chart-8/15 text-chart-8',
+  blue:    'bg-chart-1/15 text-chart-1-text',
+  emerald: 'bg-chart-2/15 text-chart-2-text',
+  amber:   'bg-chart-3/15 text-chart-3-text',
+  violet:  'bg-chart-4/15 text-chart-4-text',
+  rose:    'bg-chart-5/15 text-chart-5-text',
+  slate:   'bg-chart-8/15 text-chart-8-text',
 };
 
 const DOT_MAP: Record<string, string> = {

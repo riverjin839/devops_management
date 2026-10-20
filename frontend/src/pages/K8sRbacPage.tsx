@@ -31,7 +31,13 @@ import {
   useRbacRoles,
   useRbacServiceAccounts,
 } from '@/hooks/useK8sRbac';
-import type { RbacBindingSummary } from '@/types';
+import type { RbacBinding, RbacBindingSummary, RbacNamespace, RbacRole, RbacServiceAccount } from '@/types';
+
+// 쿼리 data 가 없을 때의 안정된 빈 배열 — 렌더마다 새 [] 를 만들면 하위 useMemo 가 매번 다시 돈다.
+const EMPTY_LIST_NS: RbacNamespace[] = [];
+const EMPTY_LIST_SA: RbacServiceAccount[] = [];
+const EMPTY_LIST_ROLE: RbacRole[] = [];
+const EMPTY_LIST_BINDING: RbacBinding[] = [];
 
 type TabKey = 'wizard' | 'sa' | 'roles' | 'bindings' | 'review';
 
@@ -62,15 +68,19 @@ export function K8sRbacPage() {
   const cluster = useMemo(() => clusters.find((c) => c.id === clusterId), [clusters, clusterId]);
 
   const { data: catalog } = useRbacPresets(clusterId);
-  const { data: namespaces = [] } = useRbacNamespaces(clusterId);
-  const { data: serviceAccounts = [], isLoading: saLoading } = useRbacServiceAccounts(clusterId);
-  const { data: roles = [], isLoading: rolesLoading } = useRbacRoles(clusterId);
-  const { data: clusterRoles = [] } = useRbacClusterRoles(clusterId, includeSystem);
-  const { data: bindings = [], isLoading: bindingsLoading } = useRbacBindings(
-    clusterId,
-    undefined,
-    includeSystem,
-  );
+  // 조회 실패(kubeconfig 오류·API 미도달·RBAC 403)를 "없다" 로 보이지 않도록 isError/error 를
+  // 패널까지 넘긴다(D-139) — "SA 가 없다" 오판은 중복 발급·권한 과다 부여로 이어진다.
+  const nsQ = useRbacNamespaces(clusterId);
+  const saQ = useRbacServiceAccounts(clusterId);
+  const rolesQ = useRbacRoles(clusterId);
+  const clusterRolesQ = useRbacClusterRoles(clusterId, includeSystem);
+  const bindingsQ = useRbacBindings(clusterId, undefined, includeSystem);
+  const namespaces = nsQ.data ?? EMPTY_LIST_NS;
+  const serviceAccounts = saQ.data ?? EMPTY_LIST_SA;
+  const roles = rolesQ.data ?? EMPTY_LIST_ROLE;
+  const clusterRoles = clusterRolesQ.data ?? EMPTY_LIST_ROLE;
+  const bindings = bindingsQ.data ?? EMPTY_LIST_BINDING;
+  const rolesError = rolesQ.isError ? rolesQ.error : clusterRolesQ.isError ? clusterRolesQ.error : null;
 
   const stream = useProvisionStream(clusterId);
 
@@ -164,6 +174,9 @@ export function K8sRbacPage() {
               <ProvisionWizard
                 catalog={catalog}
                 namespaces={namespaces}
+                namespacesLoading={nsQ.isLoading}
+                namespacesError={nsQ.isError ? nsQ.error : null}
+                onRetryNamespaces={() => { void nsQ.refetch(); }}
                 running={stream.running}
                 onRun={stream.start}
               />
@@ -176,7 +189,9 @@ export function K8sRbacPage() {
               clusterId={clusterId}
               serviceAccounts={serviceAccounts}
               namespaces={namespaces}
-              isLoading={saLoading}
+              isLoading={saQ.isLoading}
+              error={saQ.isError ? saQ.error : null}
+              onRetry={() => { void saQ.refetch(); }}
               onSelectRole={handleSelectRole}
             />
           ) : tab === 'roles' ? (
@@ -187,7 +202,9 @@ export function K8sRbacPage() {
               bindings={bindings}
               includeSystem={includeSystem}
               onIncludeSystemChange={setIncludeSystem}
-              isLoading={rolesLoading}
+              isLoading={rolesQ.isLoading || clusterRolesQ.isLoading}
+              error={rolesError}
+              onRetry={() => { void rolesQ.refetch(); void clusterRolesQ.refetch(); }}
               focusRequest={roleFocus}
             />
           ) : tab === 'bindings' ? (
@@ -200,7 +217,9 @@ export function K8sRbacPage() {
               namespaces={namespaces}
               includeSystem={includeSystem}
               onIncludeSystemChange={setIncludeSystem}
-              isLoading={bindingsLoading}
+              isLoading={bindingsQ.isLoading}
+              error={bindingsQ.isError ? bindingsQ.error : null}
+              onRetry={() => { void bindingsQ.refetch(); }}
             />
           ) : (
             <AccessReviewPanel

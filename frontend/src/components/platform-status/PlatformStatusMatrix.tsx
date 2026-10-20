@@ -5,7 +5,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import {
   Plus, Settings, Pencil, Trash2, GripVertical, Clock, Lock, HelpCircle,
   Play, ScrollText, Loader2, AlertTriangle, XCircle, CheckCircle2, Server, PauseCircle,
-  SlidersHorizontal, ChevronRight, SkipForward, EyeOff, RefreshCw,
+  SlidersHorizontal, ChevronRight, SkipForward, EyeOff, RefreshCw, History,
 } from 'lucide-react';
 import { MacCard } from '@/components/ui/MacCard';
 import { StatusDot, ConfirmDialog, useToast, Skeleton, EmptyState, ResizeGrip } from '@/components/common';
@@ -125,8 +125,10 @@ function CellButton({
       <button
         onClick={onClick}
         style={{ minHeight: minH }}
+        // 오래된 결과는 흐리게(opacity) 하지 않는다 — 글자 대비가 1.95:1 로 떨어졌다(D-152).
+        // 대신 점선 테두리 + 시계 아이콘으로 표시하고, 값·상태 글자는 그대로 읽히게 둔다.
         className={`w-full h-full flex items-center justify-center gap-1.5 px-2 rounded-md hover:bg-muted transition-colors ${
-          view.stale ? 'opacity-50' : ''
+          view.stale ? 'border border-dashed border-muted-foreground/70' : ''
         } ${active ? 'ring-1 ring-inset ring-status-info/60' : ''}`}
         title={cellTitle(item, cell, view, active)}
         aria-label={`${item.name} 셀 — ${cellTitle(item, cell, view, active).replace(/\n/g, '. ')}`}
@@ -143,6 +145,7 @@ function CellButton({
             <span className="text-xs font-medium tabular-nums">
               {cell!.value != null ? `${cell!.value}${item.unit ?? ''}` : STATUS_LABEL[cell!.status!]}
             </span>
+            {view.stale && <History className="w-3 h-3 flex-shrink-0 text-muted-foreground" aria-hidden="true" />}
           </>
         )}
       </button>
@@ -173,6 +176,15 @@ function CellButton({
 }
 
 // ── 범례 ────────────────────────────────────────────────────────────────────
+/** "오래된 결과" 표본 — 셀과 같은 신호(점선 테두리 + 시계 아이콘). 투명도는 쓰지 않는다(D-152). */
+function StaleSample() {
+  return (
+    <span className="inline-flex items-center gap-0.5 px-1 rounded-md border border-dashed border-muted-foreground/70 font-medium text-foreground">
+      정상<History className="w-3 h-3 text-muted-foreground" aria-hidden="true" />
+    </span>
+  );
+}
+
 // 셀·배지 기호의 뜻이 툴팁이나 도움말을 열어야만 보이던 것을 화면 안에 한 줄로 상시 노출한다.
 function MatrixLegend({ onHide }: { onHide: () => void }) {
   const item = (node: React.ReactNode, label: string) => (
@@ -187,7 +199,7 @@ function MatrixLegend({ onHide }: { onHide: () => void }) {
       {item(<StatusDot variant="pending" />, '대기(판정 보류)')}
       {item(<span className="font-medium">—</span>, '아직 결과 없음')}
       {item(<Loader2 className="w-3 h-3 text-status-info" aria-hidden="true" />, '실행 중')}
-      {item(<span className="opacity-50 font-medium">정상</span>, '오래된 결과')}
+      {item(<StaleSample />, '오래된 결과')}
       {item(<XCircle className="w-2.5 h-2.5 text-status-critical" aria-hidden="true" />, '최근 실행 실패')}
       {item(<Lock className="w-3 h-3" aria-hidden="true" />, '핵심 항목(삭제 불가)')}
       <span className="hidden xl:inline">· 셀을 누르면 상세·실행 기록, 항목 이름을 누르면 항목 상세로 이동</span>
@@ -541,14 +553,15 @@ function MatrixListView({
                             onClick={() => onOpenCell(item, cluster)}
                             title={cellTitle(item, cell, view, active)}
                             className={`inline-flex items-center gap-1 px-2 py-1 rounded-xl border text-xs transition-colors hover:bg-muted ${
-                              view.stale ? 'opacity-50' : ''
-                            } ${view.lastRunProblem === 'failed' ? 'border-status-critical/50' : 'border-border'}`}
+                              view.stale ? 'border-dashed' : ''
+                            } ${view.lastRunProblem === 'failed' ? 'border-status-critical/50' : view.stale ? 'border-muted-foreground/70' : 'border-border'}`}
                           >
                             {active
                               ? <Loader2 className="w-3 h-3 animate-spin text-status-info" aria-hidden="true" />
                               : !view.empty && <StatusDot variant={cell!.status!} />}
                             <span className="text-muted-foreground">{cluster.name}</span>
                             <span className="font-medium tabular-nums">{label}</span>
+                            {view.stale && !active && <History className="w-3 h-3 text-muted-foreground" aria-label="오래된 결과" />}
                             {view.lastRunProblem === 'failed' && !active && (
                               <XCircle className="w-3 h-3 text-status-critical" aria-label="최근 실행 실패" />
                             )}

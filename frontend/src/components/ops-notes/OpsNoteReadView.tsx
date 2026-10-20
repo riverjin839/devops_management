@@ -7,13 +7,13 @@ import { formatRelativeTime } from '@/lib/utils';
 
 // 서비스 배지 — OpsNotesPage 의 서비스 메타와 같은 lucide 아이콘·chart 토큰(D-126/§12.12-7).
 const SERVICES: { value: string; label: string; Icon: ComponentType<{ className?: string }>; soft: string }[] = [
-  { value: 'k8s',      label: 'Kubernetes', Icon: Ship,      soft: 'bg-chart-1/15 text-chart-1' },
-  { value: 'keycloak', label: 'Keycloak',   Icon: KeyRound,  soft: 'bg-chart-7/15 text-chart-7' },
-  { value: 'cilium',   label: 'Cilium',     Icon: Bug,       soft: 'bg-chart-3/15 text-chart-3' },
-  { value: 'jenkins',  label: 'Jenkins',    Icon: Hammer,    soft: 'bg-chart-6/15 text-chart-6' },
-  { value: 'argocd',   label: 'ArgoCD',     Icon: RefreshCw, soft: 'bg-chart-4/15 text-chart-4' },
-  { value: 'nexus',    label: 'Nexus',      Icon: Package,   soft: 'bg-chart-2/15 text-chart-2' },
-  { value: 'etc',      label: '기타',        Icon: Layers,    soft: 'bg-chart-8/15 text-chart-8' },
+  { value: 'k8s',      label: 'Kubernetes', Icon: Ship,      soft: 'bg-chart-1/15 text-chart-1-text' },
+  { value: 'keycloak', label: 'Keycloak',   Icon: KeyRound,  soft: 'bg-chart-7/15 text-chart-7-text' },
+  { value: 'cilium',   label: 'Cilium',     Icon: Bug,       soft: 'bg-chart-3/15 text-chart-3-text' },
+  { value: 'jenkins',  label: 'Jenkins',    Icon: Hammer,    soft: 'bg-chart-6/15 text-chart-6-text' },
+  { value: 'argocd',   label: 'ArgoCD',     Icon: RefreshCw, soft: 'bg-chart-4/15 text-chart-4-text' },
+  { value: 'nexus',    label: 'Nexus',      Icon: Package,   soft: 'bg-chart-2/15 text-chart-2-text' },
+  { value: 'etc',      label: '기타',        Icon: Layers,    soft: 'bg-chart-8/15 text-chart-8-text' },
 ];
 const SERVICE_MAP = Object.fromEntries(SERVICES.map((s) => [s.value, s]));
 

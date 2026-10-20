@@ -9,7 +9,7 @@
  */
 import { useMemo, useState } from 'react';
 import { Link2, Plus, Search, Trash2 } from 'lucide-react';
-import { ConfirmDialog, EmptyState, useToastSafe } from '@/components/common';
+import { ConfirmDialog, EmptyState, ErrorState, LoadingState, useToastSafe } from '@/components/common';
 import { MacCard } from '@/components/ui/MacCard';
 import { useCanOperate } from '@/hooks/useCanOperate';
 import { useCreateBinding, useDeleteBinding } from '@/hooks/useK8sRbac';
@@ -27,6 +27,9 @@ interface Props {
   includeSystem: boolean;
   onIncludeSystemChange: (v: boolean) => void;
   isLoading: boolean;
+  /** 바인딩 조회 실패 — 있으면 "바인딩이 없습니다" 대신 오류를 보인다(D-139). */
+  error?: unknown;
+  onRetry?: () => void;
 }
 
 type BindingKind = 'RoleBinding' | 'ClusterRoleBinding';
@@ -45,6 +48,8 @@ export function BindingPanel({
   includeSystem,
   onIncludeSystemChange,
   isLoading,
+  error,
+  onRetry,
 }: Props) {
   const { canOperate, withHint, ariaWithHint } = useCanOperate(clusterId);
   const toast = useToastSafe();
@@ -314,11 +319,15 @@ export function BindingPanel({
         </div>
       )}
 
-      {rows.length === 0 ? (
+      {isLoading ? (
+        <LoadingState compact />
+      ) : error ? (
+        <ErrorState compact error={error} title="바인딩 목록을 불러오지 못했습니다" onRetry={onRetry} />
+      ) : rows.length === 0 ? (
         <EmptyState
           icon={Link2}
-          title={isLoading ? '불러오는 중…' : '바인딩이 없습니다'}
-          description={isLoading ? undefined : '액세스 발급 탭에서 만들거나, 위 "바인딩 추가" 로 직접 만들 수 있습니다.'}
+          title="바인딩이 없습니다"
+          description='액세스 발급 탭에서 만들거나, 위 "바인딩 추가" 로 직접 만들 수 있습니다.'
           compact
         />
       ) : (

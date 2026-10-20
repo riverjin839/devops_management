@@ -5,7 +5,8 @@
  * 주 네임스페이스와 추가 네임스페이스를 함께 받아 한 번에 붙인다.
  */
 import { useEffect, useMemo, useState } from 'react';
-import { Play, Plus, X } from 'lucide-react';
+import { AlertTriangle, Play, Plus, X } from 'lucide-react';
+import { formatApiError } from '@/lib/utils';
 import { MacCard } from '@/components/ui/MacCard';
 import { useCanOperate } from '@/hooks/useCanOperate';
 import type {
@@ -21,9 +22,15 @@ import { RuleEditor } from './RuleEditor';
 interface ProvisionWizardProps {
   catalog: RbacPresetCatalog | undefined;
   namespaces: RbacNamespace[];
+  /** 네임스페이스 조회 상태 — 실패면 상단 배너 + 발급 버튼 비활성(사유)(D-139). */
+  namespacesLoading?: boolean;
+  namespacesError?: unknown;
+  onRetryNamespaces?: () => void;
   running: boolean;
   onRun: (req: RbacProvisionRequest) => void;
 }
+
+const NS_ERROR_PROBLEM = '네임스페이스 목록을 불러오지 못했습니다 — 다시 시도한 뒤 발급하세요.';
 
 const TTL_OPTIONS = [
   { label: '1일', value: 24 * 3600 },
@@ -72,7 +79,9 @@ function Toggle({
   );
 }
 
-export function ProvisionWizard({ catalog, namespaces, running, onRun }: ProvisionWizardProps) {
+export function ProvisionWizard({
+  catalog, namespaces, namespacesLoading = false, namespacesError, onRetryNamespaces, running, onRun,
+}: ProvisionWizardProps) {
   const { canOperate, hint, withHint } = useCanOperate();
 
   const [presetKey, setPresetKey] = useState<string>('dev-deploy');
@@ -126,13 +135,14 @@ export function ProvisionWizard({ catalog, namespaces, running, onRun }: Provisi
 
   const problems = useMemo(() => {
     const out: string[] = [];
+    if (namespacesError) out.push(NS_ERROR_PROBLEM);
     if (!saName.trim()) out.push('ServiceAccount 이름을 입력하세요.');
     if (!primaryNs) out.push('주 네임스페이스를 고르세요.');
     if (rules.length === 0) out.push('권한 규칙이 최소 한 줄은 있어야 합니다.');
     if (rules.some((r) => r.verbs.length === 0)) out.push('동작(verb)이 비어 있는 규칙이 있습니다.');
     if (rules.some((r) => r.resources.length === 0)) out.push('리소스가 비어 있는 규칙이 있습니다.');
     return out;
-  }, [saName, primaryNs, rules]);
+  }, [saName, primaryNs, rules, namespacesError]);
 
   const objectSummary = useMemo(() => {
     if (bindingMode === 'clusterrole-clusterrolebinding') return 'SA 1 · ClusterRole 1 · ClusterRoleBinding 1';
@@ -200,6 +210,24 @@ export function ProvisionWizard({ catalog, namespaces, running, onRun }: Provisi
 
       {/* 2. 대상 */}
       <MacCard title="2 · 대상" description="누구에게, 어느 네임스페이스에">
+        {namespacesError ? (
+          <div role="alert" className="mb-3 flex items-start gap-2 rounded-md border border-status-critical/30 bg-status-critical/10 px-3 py-2 text-xs text-status-critical">
+            <AlertTriangle className="w-3.5 h-3.5 mt-0.5 shrink-0" aria-hidden="true" />
+            <div className="min-w-0 flex-1">
+              <p className="font-medium">네임스페이스 목록을 불러오지 못했습니다 — 발급을 막아 두었습니다</p>
+              <p className="mt-0.5 break-words">{formatApiError(namespacesError)}</p>
+            </div>
+            {onRetryNamespaces && (
+              <button
+                type="button"
+                onClick={onRetryNamespaces}
+                className="shrink-0 px-2 py-1 rounded-xl border border-border bg-card text-foreground hover:bg-secondary"
+              >
+                다시 시도
+              </button>
+            )}
+          </div>
+        ) : null}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <label className="flex flex-col gap-1.5 text-xs text-muted-foreground font-medium">
             ServiceAccount 이름
@@ -220,7 +248,11 @@ export function ProvisionWizard({ catalog, namespaces, running, onRun }: Provisi
               onChange={(e) => setPrimaryNs(e.target.value)}
               className={`${inputCls} font-mono`}
             >
-              {namespaces.length === 0 && <option value="">네임스페이스를 불러오는 중…</option>}
+              {namespaces.length === 0 && (
+                <option value="">
+                  {namespacesError ? '네임스페이스 조회 실패' : namespacesLoading ? '불러오는 중…' : '네임스페이스가 없습니다'}
+                </option>
+              )}
               {namespaces.map((ns) => (
                 <option key={ns.name} value={ns.name}>
                   {ns.name}

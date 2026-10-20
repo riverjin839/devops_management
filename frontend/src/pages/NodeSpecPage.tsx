@@ -3,12 +3,13 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   ClipboardCheck, Plus, Search, RefreshCw, Download, Upload, Trash2, Pencil,
   Server, Cpu, HardDrive, MapPin, Square, Copy, ClipboardPaste, FileDown, Terminal,
-  AlertTriangle, ChevronDown, ChevronUp,
+  ChevronDown, ChevronUp,
 } from 'lucide-react';
 import { useClusters } from '@/hooks/useCluster';
 import {
   ClusterSidebar, DebugLogPanel, ConfirmDialog, GridCell, InlineTextCell, useToast,
-  SkeletonTable, EmptyState, ResizeGrip, DoubleScrollX, useModalA11y, PageHeader, PageShell, RunLogPanel } from '@/components/common';
+  SkeletonTable, EmptyState, ErrorState, ResizeGrip, DoubleScrollX, useModalA11y, PageHeader, PageShell, RunLogPanel } from '@/components/common';
+import { useCanOperate } from '@/hooks/useCanOperate';
 import { useRunLog, runLogged, type RunLogEntry } from '@/hooks/useRunLog';
 import { useLogPref } from '@/hooks/useLogPref';
 import { useUrlParams, pickParam } from '@/hooks/useUrlParams';
@@ -174,6 +175,20 @@ function downloadCsvTemplate() {
   URL.revokeObjectURL(url);
 }
 
+/** 인라인 편집 셀 — 권한이 없으면 더블클릭 편집 대신 읽기 전용 텍스트 + 사유(§12.9, D-145). */
+function EditableText({
+  canEdit, hint, value, placeholder, onSave,
+}: {
+  canEdit: boolean;
+  hint: string | undefined;
+  value: string;
+  placeholder: string;
+  onSave: (v: string | null) => Promise<void> | void;
+}) {
+  if (canEdit) return <InlineTextCell value={value} placeholder={placeholder} onSave={onSave} />;
+  return <span className="px-0.5" title={hint}>{value || '-'}</span>;
+}
+
 export function NodeSpecPage() {
   const { data: clusters = [] } = useClusters();
   const qc = useQueryClient();
@@ -189,6 +204,10 @@ export function NodeSpecPage() {
   const setRoleFilter = (v: string) => setUrlParams({ role: v });
   const search = urlParams.q;
   const setSearch = (v: string) => setUrlParams({ q: v });
+  // 쓰기(추가·인라인 편집·SSD/VM 토글·CSV/붙여넣기 적용·삭제)는 operator 이상(§12.9).
+  // 클러스터 임포트·Host Facts 는 선택 클러스터 대상 실행이라 테넌트 operate 판정까지 본다.
+  const { canOperate, hint: opHint, withHint, ariaWithHint } = useCanOperate();
+  const clusterOp = useCanOperate(clusterId);
 
   const [editTarget, setEditTarget] = useState<NodeServerSpec | null>(null);
   const [creating, setCreating] = useState(false);
@@ -311,13 +330,14 @@ export function NodeSpecPage() {
       if (!inTable) return;
       const txt = e.clipboardData?.getData('text/plain') ?? '';
       if (!txt.trim() || (!txt.includes('\t') && !txt.includes(','))) return;
+      if (!canOperate) return; // 붙여넣기 적용은 operator 이상 — viewer 는 모달을 열지 않는다.
       e.preventDefault();
       setPasteInitialText(txt);
       setPasteOpen(true);
     };
     window.addEventListener('paste', handler);
     return () => window.removeEventListener('paste', handler);
-  }, []);
+  }, [canOperate]);
 
   // 인라인 셀 편집 저장
   // SSD/VM 순환 토글처럼 클릭이 겹칠 수 있는 필드는 저장 중 재클릭을 막는다 —
@@ -394,8 +414,10 @@ export function NodeSpecPage() {
     });
   };
 
+  const [deleting, setDeleting] = useState(false);
   const handleDelete = async () => {
     if (!confirmDelete) return;
+    setDeleting(true);
     try {
       const hostname = confirmDelete.hostname;
       await nodeSpecsApi.delete(confirmDelete.id);
@@ -404,6 +426,8 @@ export function NodeSpecPage() {
       toast.success('서버스펙 삭제됨', hostname);
     } catch (e) {
       toast.error('삭제 실패', formatApiError(e));
+    } finally {
+      setDeleting(false);
     }
   };
 
@@ -521,15 +545,17 @@ export function NodeSpecPage() {
                 { icon: FileDown, label: '템플릿 다운로드', onClick: downloadCsvTemplate, title: '현재 테이블 컬럼 기준 빈 템플릿 다운로드' },
               ]} />
               <HeaderMenu label="가져오기" icon={Upload} items={[
-                { icon: Upload, label: 'CSV 업로드', onClick: () => setCsvOpen(true) },
-                { icon: ClipboardPaste, label: '엑셀 붙여넣기', onClick: () => setPasteOpen(true), title: '엑셀/구글시트에서 복사한 블록 붙여넣기' },
+                { icon: Upload, label: 'CSV 업로드', onClick: () => setCsvOpen(true), disabled: !canOperate, title: withHint('CSV 파일로 일괄 등록·갱신') },
+                { icon: ClipboardPaste, label: '엑셀 붙여넣기', onClick: () => setPasteOpen(true), disabled: !canOperate, title: withHint('엑셀/구글시트에서 복사한 블록 붙여넣기') },
                 ...(clusterId ? [{
                   icon: Terminal, label: 'Host Facts 수집 (SSH)',
                   onClick: () => { setSelectedHosts(clusterNodeCandidates); hostFactsLog.clear(); setHostFactsOpen(true); },
+                  disabled: !clusterOp.canOperate, title: clusterOp.withHint('SSH 로 bond/disk/vm 정보 수집'),
                 }] : []),
                 ...(clusterId ? [{
                   icon: RefreshCw, label: '클러스터 임포트 (kubeconfig)',
-                  onClick: () => setConfirmImport(true), disabled: importMut.isPending,
+                  onClick: () => setConfirmImport(true), disabled: !clusterOp.canOperate || importMut.isPending,
+                  title: clusterOp.withHint('kubeconfig 로 노드 메타데이터 임포트'),
                 }] : []),
               ]} />
               {clusterId && importMut.isPending && (
@@ -538,9 +564,10 @@ export function NodeSpecPage() {
                   <Square className="w-3 h-3 fill-current" /> 중지
                 </button>
               )}
-              <button onClick={() => setCreating(true)}
-                className="px-3 py-1 text-sm font-semibold bg-primary hover:bg-primary/90 text-primary-foreground rounded-lg flex items-center gap-1.5">
-                <Plus className="w-3.5 h-3.5" /> 노드 추가
+              <button onClick={() => setCreating(true)} disabled={!canOperate}
+                title={withHint('노드 추가')} aria-label={ariaWithHint('노드 추가')}
+                className="px-3 py-1 text-sm font-semibold bg-primary hover:bg-primary/90 text-primary-foreground rounded-xl flex items-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed">
+                <Plus className="w-3.5 h-3.5" aria-hidden="true" /> 노드 추가
               </button>
             </>}
           />
@@ -670,11 +697,10 @@ export function NodeSpecPage() {
                       오해한다 — 실패와 빈 상태를 반드시 구분해서 보여준다. */}
                   {!listQ.isLoading && listQ.isError && (
                     <tr><td colSpan={GRID_COLS.length + 1} className="p-0">
-                      <EmptyState
-                        icon={AlertTriangle}
+                      <ErrorState
+                        error={listQ.error}
                         title="목록을 불러오지 못했습니다"
-                        description={formatApiError(listQ.error)}
-                        action={{ label: '다시 시도', onClick: () => listQ.refetch() }}
+                        onRetry={() => { void listQ.refetch(); }}
                       />
                     </td></tr>
                   )}
@@ -683,9 +709,11 @@ export function NodeSpecPage() {
                       <EmptyState
                         icon={ClipboardCheck}
                         title="등록된 서버가 없습니다"
-                        description="kubeconfig 가 등록된 클러스터라면 '클러스터 임포트' 로 자동 생성 가능합니다."
-                        action={{ label: '노드 추가', onClick: () => setCreating(true) }}
-                        secondaryAction={clusterId ? { label: '클러스터 임포트', onClick: () => setConfirmImport(true) } : undefined}
+                        description={canOperate
+                          ? "kubeconfig 가 등록된 클러스터라면 '클러스터 임포트' 로 자동 생성 가능합니다."
+                          : '노드 등록·임포트는 operator 이상 권한이 필요합니다.'}
+                        action={canOperate ? { label: '노드 추가', onClick: () => setCreating(true) } : undefined}
+                        secondaryAction={clusterId && clusterOp.canOperate ? { label: '클러스터 임포트', onClick: () => setConfirmImport(true) } : undefined}
                       />
                     </td></tr>
                   )}
@@ -711,7 +739,7 @@ export function NodeSpecPage() {
                         className="px-2 py-2 align-top font-mono text-xs">
                         {r.bond0Ip ? (
                           <p className="text-foreground" title="ip addr → bond0 의 IP">
-                            <InlineTextCell value={r.bond0Ip} placeholder="bond0 IP"
+                            <EditableText canEdit={canOperate} hint={opHint} value={r.bond0Ip} placeholder="bond0 IP"
                               onSave={(v) => saveField(r.id, { bond0Ip: v })} />
                           </p>
                         ) : (
@@ -725,7 +753,7 @@ export function NodeSpecPage() {
                         className="px-2 py-2 align-top font-mono text-xs">
                         {r.bond1Ip ? (
                           <p className="text-foreground" title="ip addr → bond1 의 IP">
-                            <InlineTextCell value={r.bond1Ip} placeholder="bond1 IP"
+                            <EditableText canEdit={canOperate} hint={opHint} value={r.bond1Ip} placeholder="bond1 IP"
                               onSave={(v) => saveField(r.id, { bond1Ip: v })} />
                           </p>
                         ) : (
@@ -778,7 +806,7 @@ export function NodeSpecPage() {
                         className="px-2 py-2 align-top text-sm font-mono max-w-[160px]">
                         <p className="truncate font-semibold" title={r.osImage ?? ''}>
                           {shortOs(r.osImage ?? '') || (
-                            <InlineTextCell value="" placeholder="OS" onSave={(v) => saveField(r.id, { osImage: v })} />
+                            <EditableText canEdit={canOperate} hint={opHint} value="" placeholder="OS" onSave={(v) => saveField(r.id, { osImage: v })} />
                           )}
                         </p>
                         {r.kernelVersion && (
@@ -792,10 +820,10 @@ export function NodeSpecPage() {
                         <div className="flex flex-col items-center gap-0.5 text-sm font-mono">
                           <button
                             type="button"
-                            title="SSD 여부 (클릭 순환: 미설정 → O → X → 미설정)"
-                            aria-label={`${r.hostname} SSD 여부: ${r.isSsd === true ? '예' : r.isSsd === false ? '아니오' : '미설정'} — 클릭하여 순환 변경`}
+                            title={withHint('SSD 여부 (클릭 순환: 미설정 → O → X → 미설정)')}
+                            aria-label={ariaWithHint(`${r.hostname} SSD 여부: ${r.isSsd === true ? '예' : r.isSsd === false ? '아니오' : '미설정'} — 클릭하여 순환 변경`)}
                             aria-pressed={r.isSsd === true ? 'true' : r.isSsd === false ? 'false' : 'mixed'}
-                            disabled={savingKeys.has(`${r.id}:isSsd`)}
+                            disabled={!canOperate || savingKeys.has(`${r.id}:isSsd`)}
                             onClick={() => {
                               const next = r.isSsd === true ? false : r.isSsd === false ? null : true;
                               saveField(r.id, { isSsd: next });
@@ -819,10 +847,10 @@ export function NodeSpecPage() {
                         className="px-2 py-2 align-top text-center">
                         <button
                           type="button"
-                          title="VM 여부 (클릭 순환: 미설정 → O → X → 미설정)"
-                          aria-label={`${r.hostname} VM 여부: ${r.isVm === true ? '예' : r.isVm === false ? '아니오' : '미설정'} — 클릭하여 순환 변경`}
+                          title={withHint('VM 여부 (클릭 순환: 미설정 → O → X → 미설정)')}
+                          aria-label={ariaWithHint(`${r.hostname} VM 여부: ${r.isVm === true ? '예' : r.isVm === false ? '아니오' : '미설정'} — 클릭하여 순환 변경`)}
                           aria-pressed={r.isVm === true ? 'true' : r.isVm === false ? 'false' : 'mixed'}
-                          disabled={savingKeys.has(`${r.id}:isVm`)}
+                          disabled={!canOperate || savingKeys.has(`${r.id}:isVm`)}
                           onClick={() => {
                             const next = r.isVm === true ? false : r.isVm === false ? null : true;
                             saveField(r.id, { isVm: next });
@@ -839,7 +867,7 @@ export function NodeSpecPage() {
                       <GridCell row={r.id} col="currentUsage" selection={selection}
                         className="px-2 py-2 align-top text-sm max-w-[160px]">
                         <p className="font-medium truncate" title={r.currentUsage ?? ''}>
-                          <InlineTextCell value={r.currentUsage ?? ''} placeholder="NEW K8S MASTER"
+                          <EditableText canEdit={canOperate} hint={opHint} value={r.currentUsage ?? ''} placeholder="NEW K8S MASTER"
                             onSave={(v) => saveField(r.id, { currentUsage: v })} />
                         </p>
                       </GridCell>
@@ -854,13 +882,15 @@ export function NodeSpecPage() {
                       </GridCell>
                       <td className="px-2 py-2 align-top">
                         <div className="flex items-center gap-1">
-                          <button onClick={() => setEditTarget(r)} title="상세 수정 (모달)" aria-label={`${r.hostname} 상세 수정`}
-                            className="p-1 rounded hover:bg-secondary text-muted-foreground hover:text-foreground">
-                            <Pencil className="w-3.5 h-3.5" />
+                          <button onClick={() => setEditTarget(r)} disabled={!canOperate}
+                            title={withHint('상세 수정 (모달)')} aria-label={ariaWithHint(`${r.hostname} 상세 수정`)}
+                            className="p-1 rounded hover:bg-secondary text-muted-foreground hover:text-foreground disabled:opacity-50 disabled:cursor-not-allowed">
+                            <Pencil className="w-3.5 h-3.5" aria-hidden="true" />
                           </button>
-                          <button onClick={() => setConfirmDelete(r)} title="삭제" aria-label={`${r.hostname} 삭제`}
-                            className="p-1 rounded hover:bg-status-critical/10 text-muted-foreground hover:text-status-critical">
-                            <Trash2 className="w-3.5 h-3.5" />
+                          <button onClick={() => setConfirmDelete(r)} disabled={!canOperate}
+                            title={withHint('삭제')} aria-label={ariaWithHint(`${r.hostname} 삭제`)}
+                            className="p-1 rounded hover:bg-status-critical/10 text-muted-foreground hover:text-status-critical disabled:opacity-50 disabled:cursor-not-allowed">
+                            <Trash2 className="w-3.5 h-3.5" aria-hidden="true" />
                           </button>
                         </div>
                       </td>
@@ -914,6 +944,7 @@ export function NodeSpecPage() {
         description={`"${confirmDelete?.hostname}" 자산 정보를 삭제합니다. 이 작업은 되돌릴 수 없습니다.`}
         confirmLabel="삭제"
         danger
+        busy={deleting}
         onCancel={() => setConfirmDelete(null)}
         onConfirm={handleDelete}
       />
@@ -984,7 +1015,9 @@ export function NodeSpecPage() {
               <button onClick={closeHostFacts} disabled={collectingFacts} className="px-3 py-1.5 text-sm rounded-lg border border-border bg-secondary hover:bg-secondary/80">
                 {hostFactsLog.lines.length > 0 ? '닫기' : '취소'}
               </button>
-              <button onClick={() => setConfirmHostFacts(true)} disabled={collectingFacts} className="px-3 py-1.5 text-sm rounded-lg bg-primary text-primary-foreground hover:bg-primary/90">
+              <button onClick={() => setConfirmHostFacts(true)} disabled={!clusterOp.canOperate || collectingFacts}
+                title={clusterOp.withHint('선택한 호스트에 SSH 로 접속해 수집')} aria-label={clusterOp.ariaWithHint('수집 실행')}
+                className="px-3 py-1.5 text-sm rounded-xl bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed">
                 {collectingFacts ? '수집 중…' : '수집 실행'}
               </button>
             </div>

@@ -176,7 +176,8 @@ function StatusOverlay({
         <WifiOff className="w-3.5 h-3.5 flex-shrink-0 mt-0.5" />
         <div className="space-y-0.5">
           <p className="font-medium">Prometheus offline</p>
-          {result.error && <p className="text-xs text-status-warning/80">{result.error}</p>}
+          {/* 경고색 투명도(/80)는 대비 3.63:1 — 글자 전용 토큰 그대로(4.5:1 보장, D-152) */}
+          {result.error && <p className="text-xs text-status-warning break-words">{result.error}</p>}
           {onRefresh && (
             <button
               onClick={(e) => { e.stopPropagation(); onRefresh(); }}
@@ -196,7 +197,7 @@ function StatusOverlay({
         <AlertTriangle className="w-3.5 h-3.5 flex-shrink-0 mt-0.5" />
         <div className="space-y-0.5 min-w-0 flex-1">
           <p className="font-medium break-words">{result.error || 'Query error'}</p>
-          {hint && <p className="text-xs text-status-critical/80">{hint}</p>}
+          {hint && <p className="text-xs text-status-critical">{hint}</p>}
           {promql && (
             <code className="block text-xs font-mono text-muted-foreground break-all max-h-12 overflow-hidden">
               {promql}
@@ -206,7 +207,7 @@ function StatusOverlay({
             {onRefresh && (
               <button
                 onClick={(e) => { e.stopPropagation(); onRefresh(); }}
-                className="text-xs text-status-critical/80 hover:text-status-critical inline-flex items-center gap-0.5"
+                className="text-xs text-status-critical hover:underline inline-flex items-center gap-0.5"
               >
                 <RefreshCw className="w-2.5 h-2.5" /> 재시도
               </button>

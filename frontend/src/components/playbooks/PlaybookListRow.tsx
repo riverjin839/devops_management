@@ -2,6 +2,7 @@ import { Play, Trash2, Clock, Loader2, LayoutDashboard, Pencil, FileText, GripVe
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import type { Playbook } from '@/types';
+import { useCanOperate } from '@/hooks/useCanOperate';
 
 interface PlaybookListRowProps {
   playbook: Playbook;
@@ -37,6 +38,8 @@ function formatTimeAgo(dateStr?: string): string {
 export function PlaybookListRow({
   playbook, isRunning, onRun, onDelete, onEdit, onToggleDashboard, onViewLog, clusterName,
 }: PlaybookListRowProps) {
+  // §12.9 — 실행·수정·삭제·대시보드 토글은 operator 이상 + 클러스터 operate 바인딩. 숨기지 않고 비활성+사유.
+  const { canOperate, withHint, ariaWithHint } = useCanOperate(playbook.clusterId);
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: playbook.id });
   const style = { transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.5 : 1 };
 
@@ -127,13 +130,14 @@ export function PlaybookListRow({
         {onToggleDashboard && (
           <button
             onClick={onToggleDashboard}
-            className={`p-1.5 rounded-md transition-colors ${
+            disabled={!canOperate}
+            className={`p-1.5 rounded-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
               playbook.showOnDashboard
                 ? 'bg-primary/15 text-primary'
                 : 'hover:bg-primary/10 text-muted-foreground'
             }`}
-            title={playbook.showOnDashboard ? '대시보드에서 빼기' : '대시보드에 표시'}
-            aria-label={`${playbook.name} 대시보드 표시`}
+            title={withHint(playbook.showOnDashboard ? '대시보드에서 빼기' : '대시보드에 표시')}
+            aria-label={ariaWithHint(`${playbook.name} 대시보드 표시`)}
             aria-pressed={!!playbook.showOnDashboard}
           >
             <LayoutDashboard className="w-4 h-4" />
@@ -141,28 +145,28 @@ export function PlaybookListRow({
         )}
         <button
           onClick={onRun}
-          disabled={isRunning}
-          className="p-1.5 rounded-md hover:bg-primary/10 text-primary transition-colors disabled:opacity-50"
-          title="플레이북 실행"
-          aria-label={`${playbook.name} 실행`}
+          disabled={isRunning || !canOperate}
+          className="p-1.5 rounded-md hover:bg-primary/10 text-primary transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          title={withHint('플레이북 실행')}
+          aria-label={ariaWithHint(`${playbook.name} 실행`)}
         >
           {isRunning ? <Loader2 className="w-4 h-4 animate-spin" /> : <Play className="w-4 h-4" />}
         </button>
         <button
           onClick={onEdit}
-          disabled={isRunning || !onEdit}
-          className="p-1.5 rounded-md hover:bg-primary/10 text-primary transition-colors disabled:opacity-50"
-          title="플레이북 수정"
-          aria-label={`${playbook.name} 수정`}
+          disabled={isRunning || !onEdit || !canOperate}
+          className="p-1.5 rounded-md hover:bg-primary/10 text-primary transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          title={withHint('플레이북 수정')}
+          aria-label={ariaWithHint(`${playbook.name} 수정`)}
         >
           <Pencil className="w-4 h-4" />
         </button>
         <button
           onClick={onDelete}
-          disabled={isRunning}
-          className="p-1.5 rounded-md hover:bg-status-critical/10 text-status-critical transition-colors disabled:opacity-50"
-          title="플레이북 삭제"
-          aria-label={`${playbook.name} 삭제`}
+          disabled={isRunning || !canOperate}
+          className="p-1.5 rounded-md hover:bg-status-critical/10 text-status-critical transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          title={withHint('플레이북 삭제')}
+          aria-label={ariaWithHint(`${playbook.name} 삭제`)}
         >
           <Trash2 className="w-4 h-4" />
         </button>

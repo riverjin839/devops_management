@@ -9,11 +9,11 @@ import type { OverlapColor } from './constants';
 export type IpGroupAccent = 'sky' | 'cyan' | 'amber' | 'emerald' | 'violet';
 
 const ACCENT: Record<IpGroupAccent, { surface: string; label: string }> = {
-  sky:     { surface: 'bg-chart-1/5 border-chart-1/20', label: 'text-chart-1' },
-  cyan:    { surface: 'bg-chart-6/5 border-chart-6/20', label: 'text-chart-6' },
-  amber:   { surface: 'bg-chart-3/5 border-chart-3/20', label: 'text-chart-3' },
-  emerald: { surface: 'bg-chart-2/5 border-chart-2/20', label: 'text-chart-2' },
-  violet:  { surface: 'bg-chart-4/5 border-chart-4/20', label: 'text-chart-4' },
+  sky:     { surface: 'bg-chart-1/5 border-chart-1/20', label: 'text-chart-1-text' },
+  cyan:    { surface: 'bg-chart-6/5 border-chart-6/20', label: 'text-chart-6-text' },
+  amber:   { surface: 'bg-chart-3/5 border-chart-3/20', label: 'text-chart-3-text' },
+  emerald: { surface: 'bg-chart-2/5 border-chart-2/20', label: 'text-chart-2-text' },
+  violet:  { surface: 'bg-chart-4/5 border-chart-4/20', label: 'text-chart-4-text' },
 };
 
 interface IpGroupRowProps {

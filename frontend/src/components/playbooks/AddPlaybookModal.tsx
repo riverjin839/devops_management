@@ -7,6 +7,7 @@ import {
 } from '@/hooks/useAnsibleAssets';
 import { formatApiError } from '@/lib/utils';
 import { useModalA11y } from '@/components/common/useModalA11y';
+import { ConfirmDialog } from '@/components/common/ConfirmDialog';
 
 export interface PlaybookFormSubmit {
   name: string;
@@ -165,6 +166,7 @@ function EditPlaybookFileForm({
   const [description, setDescription] = useState(file?.description ?? '');
   const [content, setContent] = useState(file?.content ?? '');
   const [error, setError] = useState<string | null>(null);
+  const [confirmDelete, setConfirmDelete] = useState(false);
 
   useEffect(() => {
     if (!file) return;
@@ -182,9 +184,12 @@ function EditPlaybookFileForm({
       { onSuccess: () => onClose(), onError: (e) => setError(formatApiError(e)) },
     );
   };
+  // D-142 — native confirm() 대신 ConfirmDialog(danger). 결과를 기다려 실패 사유는 폼 안에 남긴다.
   const handleDelete = () => {
-    if (!confirm(`"${file.name}" 파일을 삭제하시겠습니까? 이 파일을 참조하는 Playbook 이 있다면 실패합니다.`)) return;
-    remove.mutate(fileId, { onSuccess: () => onClose(), onError: (e) => setError(formatApiError(e)) });
+    remove.mutate(fileId, {
+      onSuccess: () => { setConfirmDelete(false); onClose(); },
+      onError: (e) => { setConfirmDelete(false); setError(formatApiError(e)); },
+    });
   };
 
   return (
@@ -199,8 +204,8 @@ function EditPlaybookFileForm({
         spellCheck={false} className={`${inputCls} font-mono text-sm resize-y`} />
       {error && <p className="text-sm text-status-critical">{error}</p>}
       <div className="flex justify-between gap-2">
-        <button onClick={handleDelete}
-          className="flex items-center gap-1 px-3 py-1 text-sm bg-status-critical/10 text-status-critical border border-status-critical/30 rounded">
+        <button onClick={() => setConfirmDelete(true)} disabled={remove.isPending}
+          className="flex items-center gap-1 px-3 py-1 text-sm bg-status-critical/10 text-status-critical border border-status-critical/30 rounded disabled:opacity-50">
           <Trash2 className="w-3 h-3" /> 삭제
         </button>
         <div className="flex gap-2">
@@ -211,6 +216,16 @@ function EditPlaybookFileForm({
           </button>
         </div>
       </div>
+      <ConfirmDialog
+        open={confirmDelete}
+        title="플레이북 파일 삭제"
+        description={`"${file.name}" 파일을 삭제합니다. 이 파일을 참조하는 플레이북이 있으면 삭제가 거부됩니다.`}
+        confirmLabel="삭제"
+        danger
+        busy={remove.isPending}
+        onConfirm={handleDelete}
+        onCancel={() => setConfirmDelete(false)}
+      />
     </div>
   );
 }
@@ -228,6 +243,7 @@ function EditInventoryForm({
   const [content, setContent] = useState(inv?.content ?? '');
   const [isDefault, setIsDefault] = useState(inv?.isDefault ?? false);
   const [error, setError] = useState<string | null>(null);
+  const [confirmDelete, setConfirmDelete] = useState(false);
 
   useEffect(() => {
     if (!inv) return;
@@ -246,9 +262,12 @@ function EditInventoryForm({
       { onSuccess: () => onClose(), onError: (e) => setError(formatApiError(e)) },
     );
   };
+  // D-142 — native confirm() 대신 ConfirmDialog(danger). 결과를 기다려 실패 사유는 폼 안에 남긴다.
   const handleDelete = () => {
-    if (!confirm(`"${inv.name}" inventory 를 삭제하시겠습니까?`)) return;
-    remove.mutate(inventoryId, { onSuccess: () => onClose(), onError: (e) => setError(formatApiError(e)) });
+    remove.mutate(inventoryId, {
+      onSuccess: () => { setConfirmDelete(false); onClose(); },
+      onError: (e) => { setConfirmDelete(false); setError(formatApiError(e)); },
+    });
   };
 
   return (
@@ -267,8 +286,8 @@ function EditInventoryForm({
       </label>
       {error && <p className="text-sm text-status-critical">{error}</p>}
       <div className="flex justify-between gap-2">
-        <button onClick={handleDelete}
-          className="flex items-center gap-1 px-3 py-1 text-sm bg-status-critical/10 text-status-critical border border-status-critical/30 rounded">
+        <button onClick={() => setConfirmDelete(true)} disabled={remove.isPending}
+          className="flex items-center gap-1 px-3 py-1 text-sm bg-status-critical/10 text-status-critical border border-status-critical/30 rounded disabled:opacity-50">
           <Trash2 className="w-3 h-3" /> 삭제
         </button>
         <div className="flex gap-2">
@@ -279,6 +298,16 @@ function EditInventoryForm({
           </button>
         </div>
       </div>
+      <ConfirmDialog
+        open={confirmDelete}
+        title="인벤토리 삭제"
+        description={`"${inv.name}" 인벤토리를 삭제합니다. 이 인벤토리를 쓰는 플레이북이 있으면 삭제가 거부될 수 있습니다.`}
+        confirmLabel="삭제"
+        danger
+        busy={remove.isPending}
+        onConfirm={handleDelete}
+        onCancel={() => setConfirmDelete(false)}
+      />
     </div>
   );
 }
