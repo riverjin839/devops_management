@@ -42,6 +42,10 @@ router = APIRouter(prefix="/k8s", tags=["k8s-resources"])
 
 _LIST_LIMIT = 1000  # 대형 클러스터 보호 — 한 종류당 상한(초과 시 truncated 표시)
 _LIST_TIMEOUT = (3.05, float(os.getenv("K8S_LIST_READ_TIMEOUT", "20")))  # 목록 LIST (connect, read)
+# 객체 하나가 클 수 있는 종류(Helm 릴리스 Secret 은 개당 최대 ~1MiB) — 1000개를 한 응답으로 받으면 원본+파싱본이
+# 수백 MB 가 된다. 작은 페이지로 나눠 받아 행만 남기고 버린다(행 수 상한은 _LIST_LIMIT 그대로).
+_HEAVY_KINDS = frozenset({"secrets", "configmaps"})
+_HEAVY_PAGE = int(os.getenv("K8S_LIST_HEAVY_PAGE", "100"))
 
 # 파드 페이지 크기 하한(너무 잘게 쪼개 요청 수가 폭증하는 것 방지). 상한은 _LIST_LIMIT.
 _POD_PAGE_MIN = 50
@@ -657,7 +661,23 @@ def list_resources(
     group = cache_group(client, cluster_id)
     ns = namespace if (namespace and "list_ns" in spec) else None
 
+    def _load_paged() -> dict:
+        fn, args = (spec["list_ns"], (api, ns)) if ns else (spec["list_all"], (api,))
+        rows: list = []
+        cont: Optional[str] = None
+        while True:
+            kw: dict = {"limit": _HEAVY_PAGE}
+            if cont:
+                kw["_continue"] = cont
+            page = raw_call(fn, *args, timeout=_LIST_TIMEOUT, **kw)
+            rows.extend(_build_rows(kind, page.items))
+            cont = page.metadata._continue if page.metadata else None
+            if not cont or len(rows) >= _LIST_LIMIT:
+                return {"rows": rows[:_LIST_LIMIT], "truncated": bool(cont) or len(rows) > _LIST_LIMIT}
+
     def _load() -> dict:
+        if kind in _HEAVY_KINDS:
+            return _load_paged()
         if ns:
             result = raw_call(spec["list_ns"], api, ns, timeout=_LIST_TIMEOUT)
         elif kind in _WATCH_CACHE_KINDS:

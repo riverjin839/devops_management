@@ -210,6 +210,20 @@ def effective_commands(db, server: IsilonServer) -> list[IsilonCommand]:
 
 
 # ── TTL 캐시 ──────────────────────────────────────────────────────────────────
+def _read_head(stream: Any, max_chars: int) -> str:
+    """원격 출력의 **앞 max_chars 글자만** 남긴다. 나머지는 읽어서 버린다(원격이 쓰기에서 막히지 않게) —
+    예전엔 전부 읽은 뒤 잘라 큰 출력이 워커 메모리에 통째로 올라갔다."""
+    keep = max_chars * 4  # UTF-8 최대 4바이트/글자
+    buf = bytearray()
+    while True:
+        chunk = stream.read(64 * 1024)
+        if not chunk:
+            break
+        if len(buf) < keep:
+            buf += chunk[: keep - len(buf)]
+    return bytes(buf).decode("utf-8", errors="replace")[:max_chars]
+
+
 _CACHE: dict[str, tuple[float, dict[str, Any]]] = {}
 _CACHE_LOCK = threading.Lock()
 
@@ -224,12 +238,17 @@ def _cache_get(server_id: str, ttl: float) -> Optional[dict[str, Any]]:
             cached = dict(snap)
             cached["from_cache"] = True
             return cached
+        _CACHE.pop(server_id, None)  # 만료 — 큰 스냅샷을 들고 있지 않는다
         return None
 
 
 def _cache_put(server_id: str, snap: dict[str, Any]) -> None:
     with _CACHE_LOCK:
-        _CACHE[server_id] = (time.monotonic(), snap)
+        now = time.monotonic()
+        # 다른 서버의 만료 스냅샷도 함께 정리 — 한 번 조회하고 다시 안 보는 서버 값이 계속 남지 않게.
+        for k in [k for k, (ts, _) in _CACHE.items() if now - ts > DEFAULT_CACHE_TTL_SECONDS]:
+            _CACHE.pop(k, None)
+        _CACHE[server_id] = (now, snap)
 
 
 def clear_cache(server_id: Optional[str] = None) -> None:
@@ -263,8 +282,8 @@ def _run_one(client: "paramiko.SSHClient", cmd: IsilonCommand) -> dict[str, Any]
         # 안전장치: 저장 이후 손상/우회된 명령도 실행 직전 재검증.
         validate_isi_command(cmd.command)
         _stdin, stdout, stderr = client.exec_command(cmd.command, timeout=timeout, get_pty=False)
-        out = stdout.read().decode("utf-8", errors="replace")[:MAX_STDOUT_CHARS]
-        err = stderr.read().decode("utf-8", errors="replace")[:4000]
+        out = _read_head(stdout, MAX_STDOUT_CHARS)
+        err = _read_head(stderr, 4000)
         rc = stdout.channel.recv_exit_status()
         result["exit_code"] = rc
         result["raw"] = out

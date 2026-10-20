@@ -108,11 +108,19 @@ class SWRCache:
             self._inflight.pop(key, None)
             # 조회 도중 쓰기(bump)가 있었으면 이전 세대 결과는 저장하지 않는다.
             if self._epoch_unchanged(str(key[0]), epoch):
+                self._purge_expired_locked(time.monotonic())
                 if key not in self._entries and len(self._entries) >= self.max_entries:
                     oldest = min(self._entries, key=lambda k: self._entries[k].at)
                     self._entries.pop(oldest, None)
                 self._entries[key] = _Entry(value, time.monotonic(), epoch)
         fut.set_result(value)
+
+    def _purge_expired_locked(self, now: float) -> None:
+        """stale 한도를 넘긴 항목은 다시 쓰이지 않는다(get 이 동기 재조회) — 저장할 때마다 지운다.
+        상한(max_entries)에 닿을 때만 지우면 클러스터 전체 Pod 목록 같은 만료 값이 최대 상한 개수까지
+        워커 메모리에 남는다. 항목 수 ≤ 상한이라 매번 훑어도 싸다."""
+        for k in [k for k, e in self._entries.items() if now - e.at > self.stale]:
+            self._entries.pop(k, None)
 
     def _epoch_unchanged(self, group: str, epoch: Any) -> bool:
         # 로컬 세대만 비교(락 안에서 Redis 왕복 회피). 원격 bump 는 다음 get 에서 걸러진다.

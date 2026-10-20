@@ -4,6 +4,7 @@ mc 클라이언트처럼 등록된 명령 중 선택한 키만 실행하는 온�
 ``ssh_runner._build_client`` 를 모킹해 필터링/응답 매핑만 검증한다
 (``test_bulk_exec_fetch_file.py`` 의 모킹 패턴과 동일).
 """
+import io
 from unittest.mock import MagicMock
 
 from app.models.isilon_server import IsilonCommand, IsilonServer
@@ -82,10 +83,10 @@ def test_success_runs_only_selected_commands_in_order(monkeypatch):
 
     def _exec_command(command, timeout=None, get_pty=False):
         stdout = MagicMock()
-        stdout.read.return_value = f"ok:{command}".encode()
+        stdout.read.side_effect = io.BytesIO(f"ok:{command}".encode()).read  # 끝나면 b"" (paramiko 와 같음)
         stdout.channel.recv_exit_status.return_value = 0
         stderr = MagicMock()
-        stderr.read.return_value = b""
+        stderr.read.side_effect = io.BytesIO(b"").read
         return MagicMock(), stdout, stderr
 
     fake_client.exec_command.side_effect = _exec_command

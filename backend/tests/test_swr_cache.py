@@ -152,3 +152,15 @@ def test_uuid_and_str_group_are_same():
     c.get((cid, "k"), load)
     c.bump(str(cid))
     assert c.get((cid, "k"), load)[0] == "v2"
+
+
+def test_expired_entries_are_dropped_on_next_store(monkeypatch):
+    # stale 를 넘긴 항목은 다시 쓰이지 않는데, 상한에 닿을 때만 지우면 큰 목록이 워커 메모리에 남는다.
+    t = {"now": 1000.0}
+    monkeypatch.setattr(time, "monotonic", lambda: t["now"])
+    c = SWRCache(fresh=5, stale=30, max_entries=256)
+    c.get(("c1", "pods", "ns-a"), lambda: ["big"] * 1000)
+    c.get(("c1", "pods", "ns-b"), lambda: ["big"] * 1000)
+    t["now"] += 31
+    c.get(("c1", "pods", "ns-c"), lambda: [1])
+    assert set(c._entries) == {("c1", "pods", "ns-c")}
