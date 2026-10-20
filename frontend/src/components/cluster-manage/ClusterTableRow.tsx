@@ -111,7 +111,9 @@ export function ClusterTableRow({ cluster, onEdit, onDelete, deletingId, overlap
     );
   };
 
-  const resolvedIcon = useClusterIconSrc(cluster);
+  // 아이콘 미지정 클러스터도 사이드바 레일과 같은 이름 이니셜 타일로 그린다.
+  const resolvedIcon = useClusterIconSrc(cluster, { monogramFallback: true });
+  const iconIsAuto = !cluster.icon && !cluster.iconConfig;
   const FallbackIcon = Server;
   const st = STATUS_STYLE[cluster.status] ?? STATUS_STYLE.pending;
   const { data: opsLevels } = useOperationLevels();
@@ -153,11 +155,13 @@ export function ClusterTableRow({ cluster, onEdit, onDelete, deletingId, overlap
           <span
             ref={iconAnchorRef}
             className="flex items-center justify-center w-6 h-6 rounded-md text-muted-foreground flex-shrink-0"
-            title="아이콘 변경: 시스템 → 설정 → 클러스터 탭에서"
+            title={iconIsAuto
+              ? '이름 이니셜 자동 아이콘 — 지정은 시스템 → 설정 → 클러스터 탭에서'
+              : '아이콘 변경: 시스템 → 설정 → 클러스터 탭에서'}
             aria-hidden
           >
             {resolvedIcon?.kind === 'image'
-              ? <img src={resolvedIcon.value} alt="" className="w-5 h-5 rounded object-cover" />
+              ? <img src={resolvedIcon.value} alt="" className="w-6 h-6 rounded-md object-cover" />
               : resolvedIcon?.kind === 'text'
                 ? <span className="text-base leading-none">{resolvedIcon.value}</span>
                 : resolvedIcon?.kind === 'lucide'
