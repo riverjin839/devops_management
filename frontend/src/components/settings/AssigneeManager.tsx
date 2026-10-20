@@ -446,14 +446,14 @@ export function AssigneeManager() {
                   <td className="px-4 py-2.5">
                     {isEditing ? cellInput('primaryRole', 'Backend Engineer') : (
                       a.primaryRole
-                        ? <span className="text-sm px-2 py-0.5 rounded-full bg-chart-1/10 text-chart-1 border border-chart-1/20">{a.primaryRole}</span>
+                        ? <span className="text-sm px-2 py-0.5 rounded-full bg-chart-1/10 text-chart-1-text border border-chart-1/20">{a.primaryRole}</span>
                         : <span className="text-muted-foreground">—</span>
                     )}
                   </td>
                   <td className="px-4 py-2.5">
                     {isEditing ? cellInput('secondaryRole', 'DevOps') : (
                       a.secondaryRole
-                        ? <span className="text-sm px-2 py-0.5 rounded-full bg-chart-3/10 text-chart-3 border border-chart-3/20">{a.secondaryRole}</span>
+                        ? <span className="text-sm px-2 py-0.5 rounded-full bg-chart-3/10 text-chart-3-text border border-chart-3/20">{a.secondaryRole}</span>
                         : <span className="text-muted-foreground">—</span>
                     )}
                   </td>

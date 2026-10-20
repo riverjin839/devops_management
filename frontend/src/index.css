@@ -25,7 +25,7 @@
     --secondary: 210 33% 95%;         /* #E8ECF1 — secondary surface */
     --secondary-foreground: 222 47% 11%;
     --muted: 210 33% 96%;
-    --muted-foreground: 215 16% 47%;  /* #64748B slate-500 */
+    --muted-foreground: 215 16% 43%;  /* #5D6B80 — slate-500 보다 진하게: secondary 위 4.84:1 · background 위 5.21:1 (WCAG AA) */
     --accent: 200 80% 95%;
     --accent-foreground: 222 47% 11%;
     --destructive: 0 73% 50%;         /* #DC2626 red-600 */
@@ -77,6 +77,16 @@
     --chart-6: 192 70% 45%;   /* cyan */
     --chart-7: 24 80% 52%;    /* orange */
     --chart-8: 215 15% 50%;   /* slate */
+    /* 글자 전용 파생(D-152) — 배지 `bg-chart-N/15 text-chart-N-text` 의 글자색. 면·선은 위 --chart-N 그대로.
+       card·background·secondary·muted 및 그 위 15% 배지 면에서 모두 4.5:1 이상(명도만 조정, 색상·채도 유지). */
+    --chart-1-text: 217 70% 42%;
+    --chart-2-text: 168 60% 27%;
+    --chart-3-text: 38 85% 29%;
+    --chart-4-text: 262 65% 52%;
+    --chart-5-text: 340 65% 41%;
+    --chart-6-text: 192 70% 29%;
+    --chart-7-text: 24 80% 34%;
+    --chart-8-text: 215 15% 39%;
 
     /* ── Surface Container 5단계 (DESIGN_SYSTEM §2.1 확장, M3 개념 차용) ──
        그림자 대신 톤 차이로 깊이감을 준다(--card-shadow: none 철학과 일치).
@@ -166,6 +176,15 @@
     --chart-6: 192 75% 58%;   /* cyan */
     --chart-7: 24 85% 60%;    /* orange */
     --chart-8: 215 15% 62%;   /* slate */
+    /* 글자 전용 파생(D-152) — 규칙은 :root 주석 참고 */
+    --chart-1-text: 217 80% 69%;
+    --chart-2-text: 168 55% 55%;
+    --chart-3-text: 40 90% 60%;
+    --chart-4-text: 262 75% 74%;
+    --chart-5-text: 340 70% 70%;
+    --chart-6-text: 192 75% 58%;
+    --chart-7-text: 24 85% 60%;
+    --chart-8-text: 215 15% 65%;
 
     /* Dark: 어두운 배경 위에서는 밝을수록 더 "떠 있는"(elevated) 톤 — lowest 는 background 와 동일. */
     --surface-container-lowest:  220 18% 7%;
@@ -200,7 +219,7 @@
     --secondary: 210 33% 95%;
     --secondary-foreground: 222 47% 11%;
     --muted: 210 33% 96%;
-    --muted-foreground: 215 16% 47%;
+    --muted-foreground: 215 16% 43%;
     --accent: 200 80% 95%;
     --accent-foreground: 222 47% 11%;
     --destructive: 0 73% 50%;
@@ -292,6 +311,15 @@
     --chart-6: 192 65% 42%;   /* cyan */
     --chart-7: 24 75% 50%;    /* orange */
     --chart-8: 150 8% 45%;    /* green-gray slate */
+    /* 글자 전용 파생(D-152) — 규칙은 :root 주석 참고 */
+    --chart-1-text: 217 60% 43%;
+    --chart-2-text: 150 45% 29%;
+    --chart-3-text: 38 85% 29%;
+    --chart-4-text: 262 55% 52%;
+    --chart-5-text: 340 55% 43%;
+    --chart-6-text: 192 65% 30%;
+    --chart-7-text: 24 75% 35%;
+    --chart-8-text: 150 8% 37%;
 
     /* Surface Container — 크림 스케일 (lowest=white → highest=deep cream) */
     --surface-container-lowest:  0 0% 100%;
@@ -420,6 +448,15 @@
     --chart-6: 175 30% 55%;   /* 탁한 틸 */
     --chart-7: 24 80% 60%;    /* 주황 */
     --chart-8: 20 8% 50%;     /* 회갈 */
+    /* 글자 전용 파생(D-152) — 규칙은 :root 주석 참고 */
+    --chart-1-text: 45 96% 52%;
+    --chart-2-text: 1 63% 78%;
+    --chart-3-text: 28 20% 70%;
+    --chart-4-text: 40 40% 80%;
+    --chart-5-text: 12 45% 71%;
+    --chart-6-text: 175 30% 63%;
+    --chart-7-text: 24 80% 69%;
+    --chart-8-text: 20 8% 68%;
 
     --surface-container-lowest:  8 14% 11%;
     --surface-container-low:     10 14% 13%;
@@ -489,6 +526,15 @@
     --chart-6: 24 80% 50%;    /* 주황 */
     --chart-7: 10 25% 25%;    /* 움버 */
     --chart-8: 20 8% 55%;     /* 회갈 */
+    /* 글자 전용 파생(D-152) — 규칙은 :root 주석 참고 */
+    --chart-1-text: 40 90% 26%;
+    --chart-2-text: 1 55% 42%;
+    --chart-3-text: 12 45% 35%;
+    --chart-4-text: 26 15% 36%;
+    --chart-5-text: 175 40% 28%;
+    --chart-6-text: 24 80% 32%;
+    --chart-7-text: 10 25% 25%;
+    --chart-8-text: 20 8% 37%;
 
     --surface-container-lowest:  40 33% 99%;
     --surface-container-low:     40 28% 97%;
@@ -563,6 +609,15 @@
     --chart-6: 350 55% 42%;   /* 크림슨 */
     --chart-7: 26 42% 42%;    /* 시에나 */
     --chart-8: 205 40% 65%;   /* 파우더 블루 */
+    /* 글자 전용 파생(D-152) — 규칙은 :root 주석 참고 */
+    --chart-1-text: 216 32% 38%;
+    --chart-2-text: 352 50% 44%;
+    --chart-3-text: 110 22% 32%;
+    --chart-4-text: 46 70% 27%;
+    --chart-5-text: 275 22% 42%;
+    --chart-6-text: 350 55% 40%;
+    --chart-7-text: 26 42% 34%;
+    --chart-8-text: 205 40% 37%;
 
     --surface-container-lowest:  40 40% 98%;
     --surface-container-low:     42 34% 96%;
@@ -637,6 +692,15 @@
     --chart-6: 33 22% 66%;
     --chart-7: 190 40% 55%;
     --chart-8: 36 8% 55%;
+    /* 글자 전용 파생(D-152) — 규칙은 :root 주석 참고 */
+    --chart-1-text: 219 77% 72%;
+    --chart-2-text: 151 40% 55%;
+    --chart-3-text: 31 70% 60%;
+    --chart-4-text: 350 55% 70%;
+    --chart-5-text: 300 20% 69%;
+    --chart-6-text: 33 22% 66%;
+    --chart-7-text: 190 40% 59%;
+    --chart-8-text: 36 8% 64%;
 
     --surface-container-lowest: 230 14% 8%;
     --surface-container-low: 220 12% 10%;
@@ -709,6 +773,15 @@
     --chart-6: 8 45% 50%;
     --chart-7: 160 20% 65%;
     --chart-8: 30 8% 55%;
+    /* 글자 전용 파생(D-152) — 규칙은 :root 주석 참고 */
+    --chart-1-text: 228 16% 37%;
+    --chart-2-text: 160 30% 29%;
+    --chart-3-text: 31 35% 32%;
+    --chart-4-text: 25 38% 32%;
+    --chart-5-text: 205 30% 34%;
+    --chart-6-text: 8 45% 37%;
+    --chart-7-text: 160 20% 32%;
+    --chart-8-text: 30 8% 34%;
 
     --surface-container-lowest: 38 22% 96%;
     --surface-container-low: 37 18% 93.5%;
@@ -782,6 +855,15 @@
     --chart-6: 150 30% 45%;
     --chart-7: 0 50% 55%;
     --chart-8: 30 3% 75%;
+    /* 글자 전용 파생(D-152) — 규칙은 :root 주석 참고 */
+    --chart-1-text: 211 45% 33%;
+    --chart-2-text: 220 16% 14%;
+    --chart-3-text: 36 26% 31%;
+    --chart-4-text: 30 2% 32%;
+    --chart-5-text: 211 50% 31%;
+    --chart-6-text: 150 30% 27%;
+    --chart-7-text: 0 50% 36%;
+    --chart-8-text: 30 3% 34%;
 
     --surface-container-lowest: 0 0% 98%;
     --surface-container-low: 30 2% 95%;
@@ -855,6 +937,15 @@
     --chart-6: 8 52% 42%;
     --chart-7: 100 28% 40%;
     --chart-8: 212 8% 60%;
+    /* 글자 전용 파생(D-152) — 규칙은 :root 주석 참고 */
+    --chart-1-text: 210 38% 35%;
+    --chart-2-text: 8 45% 40%;
+    --chart-3-text: 110 18% 32%;
+    --chart-4-text: 30 25% 35%;
+    --chart-5-text: 205 45% 36%;
+    --chart-6-text: 8 52% 36%;
+    --chart-7-text: 100 28% 29%;
+    --chart-8-text: 212 8% 36%;
 
     --surface-container-lowest: 200 20% 97%;
     --surface-container-low: 205 16% 95%;
@@ -929,6 +1020,15 @@
     --chart-6: 210 50% 60%;
     --chart-7: 165 20% 22%;
     --chart-8: 170 5% 58%;
+    /* 글자 전용 파생(D-152) — 규칙은 :root 주석 참고 */
+    --chart-1-text: 203 55% 31%;
+    --chart-2-text: 44 70% 26%;
+    --chart-3-text: 348 58% 38%;
+    --chart-4-text: 35 22% 33%;
+    --chart-5-text: 85 28% 28%;
+    --chart-6-text: 210 50% 36%;
+    --chart-7-text: 165 20% 22%;
+    --chart-8-text: 170 5% 34%;
 
     --surface-container-lowest: 165 14% 97%;
     --surface-container-low: 168 12% 94%;
@@ -1003,6 +1103,15 @@
     --chart-6: 140 22% 42%;
     --chart-7: 210 18% 46%;
     --chart-8: 5 45% 50%;
+    /* 글자 전용 파생(D-152) — 규칙은 :root 주석 참고 */
+    --chart-1-text: 30 38% 29%;
+    --chart-2-text: 30 5% 15%;
+    --chart-3-text: 33 30% 32%;
+    --chart-4-text: 210 8% 33%;
+    --chart-5-text: 36 6% 34%;
+    --chart-6-text: 140 22% 29%;
+    --chart-7-text: 210 18% 33%;
+    --chart-8-text: 5 45% 36%;
 
     --surface-container-lowest: 40 12% 97%;
     --surface-container-low: 39 10% 94%;
@@ -1077,6 +1186,15 @@
     --chart-6: 214 30% 20%;
     --chart-7: 208 40% 66%;
     --chart-8: 15 30% 48%;
+    /* 글자 전용 파생(D-152) — 규칙은 :root 주석 참고 */
+    --chart-1-text: 208 42% 34%;
+    --chart-2-text: 18 55% 36%;
+    --chart-3-text: 5 45% 34%;
+    --chart-4-text: 150 25% 31%;
+    --chart-5-text: 210 6% 35%;
+    --chart-6-text: 214 30% 20%;
+    --chart-7-text: 208 40% 36%;
+    --chart-8-text: 15 30% 35%;
 
     --surface-container-lowest: 150 20% 97%;
     --surface-container-low: 150 18% 94%;
@@ -1152,6 +1270,15 @@
     --chart-6: 40 20% 88%;
     --chart-7: 160 30% 38%;
     --chart-8: 150 6% 58%;
+    /* 글자 전용 파생(D-152) — 규칙은 :root 주석 참고 */
+    --chart-1-text: 228 50% 78%;
+    --chart-2-text: 5 72% 76%;
+    --chart-3-text: 150 40% 65%;
+    --chart-4-text: 35 45% 69%;
+    --chart-5-text: 350 35% 72%;
+    --chart-6-text: 40 20% 88%;
+    --chart-7-text: 160 30% 62%;
+    --chart-8-text: 150 6% 71%;
 
     --surface-container-lowest: 155 26% 11%;
     --surface-container-low: 155 24% 13%;
@@ -1226,6 +1353,15 @@
     --chart-6: 172 35% 38%;
     --chart-7: 20 15% 12%;
     --chart-8: 40 8% 70%;
+    /* 글자 전용 파생(D-152) — 규칙은 :root 주석 참고 */
+    --chart-1-text: 272 32% 40%;
+    --chart-2-text: 45 75% 25%;
+    --chart-3-text: 15 35% 30%;
+    --chart-4-text: 10 68% 36%;
+    --chart-5-text: 215 15% 36%;
+    --chart-6-text: 172 35% 27%;
+    --chart-7-text: 20 15% 12%;
+    --chart-8-text: 40 8% 35%;
 
     --surface-container-lowest: 40 15% 97%;
     --surface-container-low: 40 12% 94%;

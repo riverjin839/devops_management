@@ -44,7 +44,7 @@ const STEP_TYPE_KEYS = Object.keys(STEP_TYPE) as WorkflowStepType[];
 type StepStatusCfg = { label: string; cls: string; barCls: string };
 const STEP_STATUS: Record<WorkflowStepStatus, StepStatusCfg> = {
   'todo':        { label: '할일',     cls: 'bg-status-unknown/15 text-status-unknown',     barCls: 'bg-muted-foreground/40' },
-  'in-progress': { label: '진행 중',  cls: 'bg-chart-3/15 text-chart-3', barCls: 'bg-chart-3' },
+  'in-progress': { label: '진행 중',  cls: 'bg-chart-3/15 text-chart-3-text', barCls: 'bg-chart-3' },
   'blocked':     { label: '막힘',     cls: 'bg-status-warning/15 text-status-warning',   barCls: 'bg-status-warning' },
   'done':        { label: '완료',     cls: 'bg-secondary text-muted-foreground', barCls: 'bg-muted-foreground/60' },
   'skipped':     { label: '제외',     cls: 'bg-status-unknown/10 text-status-unknown opacity-60', barCls: 'bg-muted-foreground/20' },

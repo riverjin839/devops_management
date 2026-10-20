@@ -1,15 +1,19 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { ChevronDown, Star, Sun, Search, Menu, Plus, Palmtree } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import { useNavCatalog } from '@/hooks/useNavCatalog';
 import { useAuthStore } from '@/stores/authStore';
 import { useFavorites } from '@/hooks/useFavorites';
-import { useHomePrefs, useUpdateHomePrefs } from '@/hooks/useHomePrefs';
+import { useInstalledAppsActions } from '@/hooks/useHomePrefs';
 import { useIslands } from '@/hooks/useIslands';
 import { useIslandStore } from '@/stores/islandStore';
 import { useCommandPaletteStore } from '@/stores/commandPaletteStore';
 import { useToday } from '@/hooks/useToday';
-import { cn, fmtKoreanDate } from '@/lib/utils';
+import { cn } from '@/lib/utils';
+import { useNavLabel } from '@/i18n/useNavLabel';
+import { useLocale } from '@/i18n/useLocale';
+import { fmtShellDate } from '@/i18n/format';
 import { resolveClusterIcon } from '@/lib/clusterIcons';
 import { FlyoutShell, FlyoutLink, FlyoutAction } from './NavFlyout';
 import { FavoritesFlyoutBody } from './FavoritesFlyoutBody';
@@ -42,32 +46,21 @@ export function AppTopBar() {
   const user = useAuthStore((s) => s.user);
   const myName = user?.displayName?.trim() || user?.username || null;
   useToday(); // 자정 넘기면 날짜 표기가 갱신되도록 리렌더만 구독(반환값은 안 씀)
-  const { navMap, getLabel, featureAllowed } = useNavCatalog();
+  const { t } = useTranslation();
+  const { locale } = useLocale();
+  // 표시 라벨 — 관리자 커스텀 라벨 우선, 없으면 현재 로케일 번역(R-6).
+  const getLabel = useNavLabel();
+  const { navMap, featureAllowed } = useNavCatalog();
   const { isPinned, togglePin } = useFavorites();
 
-  const { data: homePrefs } = useHomePrefs();
-  const updateHomePrefs = useUpdateHomePrefs();
-  const installedApps = useMemo(() => homePrefs?.installedApps ?? [], [homePrefs?.installedApps]);
+  const {
+    homePrefs, installedApps, toggle: toggleInstalledApp, move: moveInstalledApp, reset: resetInstalledApps,
+  } = useInstalledAppsActions();
   const topbarInstalled = useMemo(
     () => installedApps.filter((id) => installableAppById(id)?.domain === 'work'),
     [installedApps],
   );
   const [catalogOpen, setCatalogOpen] = useState(false);
-  const toggleInstalledApp = (id: string) => {
-    // 설정을 아직 못 받았거나(로딩·오류) 빈 [] 폴백 상태에서 토글하면 [id] 하나로 서버 목록
-    // 전체를 덮어쓴다 — 로드된 원본이 있을 때만 저장한다.
-    if (!homePrefs) return;
-    // 델타 연산 — 서버가 행 잠금 아래에서 합쳐 다른 기기·탭의 변경을 덮지 않는다.
-    updateHomePrefs.mutate(installedApps.includes(id) ? { installedAppsRemove: [id] } : { installedAppsAdd: [id] });
-  };
-  const moveInstalledApp = (id: string, before: string | null) => {
-    if (!homePrefs) return;
-    updateHomePrefs.mutate({ installedAppsMove: { id, before } });
-  };
-  const resetInstalledApps = () => {
-    if (!homePrefs) return;
-    updateHomePrefs.mutate({ installedAppsReset: true });
-  };
   const catalogSections = useMemo(
     () => filterSectionsByAccess(topbarAppSections(), featureAllowed),
     [featureAllowed],
@@ -152,7 +145,7 @@ export function AppTopBar() {
     navigate(target ? `/island/${target}` : '/island');
   };
 
-  const dateStr = fmtKoreanDate(new Date());
+  const dateStr = fmtShellDate(new Date(), locale);
 
   /** leaf 링크 하나를 가로 pill 버튼으로 그린다 — 설치 단위 자체가 최하위 메뉴라 드롭다운이 없다. */
   const renderLeafButton = (path: string, key: string) => {
@@ -183,8 +176,8 @@ export function AppTopBar() {
           type="button"
           aria-haspopup="menu"
           aria-expanded={isOpen}
-          title="즐겨찾기"
-          aria-label="즐겨찾기"
+          title={t('shell.favorites')}
+          aria-label={t('shell.favorites')}
           onMouseEnter={(e) => {
             const rect = e.currentTarget.getBoundingClientRect();
             scheduleFlyoutOpen(() => { setFavoritesOpen(true); setFavoritesAnchor(rect); });
@@ -204,7 +197,7 @@ export function AppTopBar() {
           )}
         >
           <Star className="w-4 h-4 flex-shrink-0" />
-          즐겨찾기
+          {t('shell.favorites')}
         </button>
       );
     }
@@ -216,8 +209,8 @@ export function AppTopBar() {
           type="button"
           aria-haspopup={islandHasFlyout ? 'menu' : undefined}
           aria-expanded={islandHasFlyout ? isOpen : undefined}
-          title="나의 아일랜드"
-          aria-label="나의 아일랜드"
+          title={t('nav.page.island')}
+          aria-label={t('nav.page.island')}
           onMouseEnter={!islandHasFlyout ? undefined : (e) => {
             const rect = e.currentTarget.getBoundingClientRect();
             scheduleFlyoutOpen(() => setIslandFlyoutAnchor(rect));
@@ -232,7 +225,7 @@ export function AppTopBar() {
           )}
         >
           <Palmtree className="w-4 h-4 flex-shrink-0" />
-          나의 아일랜드
+          {t('nav.page.island')}
         </button>
       );
     }
@@ -244,7 +237,7 @@ export function AppTopBar() {
       {/* 사용자 / 날짜 */}
       <div className="relative z-10 flex items-center gap-2 min-w-0 flex-shrink-0">
         <Sun className="w-4 h-4 text-primary flex-shrink-0" />
-        {myName && <span className="text-sm font-bold leading-none whitespace-nowrap">{myName}님</span>}
+        {myName && <span className="text-sm font-bold leading-none whitespace-nowrap">{t('shell.topbar.greeting', { name: myName })}</span>}
         <span className="text-xs text-muted-foreground tabular-nums hidden sm:inline">{dateStr}</span>
       </div>
 
@@ -252,12 +245,12 @@ export function AppTopBar() {
           relative z-10 로 아래 click-outside 오버레이(z-0)보다 위에 둔다 — 안 그러면 버튼이
           포지션 없는 요소라 오버레이가 항상 위에 그려져, hover 로 연 flyout 이 열리자마자
           오버레이에 가려 mouseleave 로 판정돼 바로 닫혀버린다. */}
-      <nav aria-label="업무" className="relative z-10 hidden lg:flex items-center gap-1 min-w-0 overflow-x-auto">
+      <nav aria-label={t('shell.topbar.workNav')} className="relative z-10 hidden lg:flex items-center gap-1 min-w-0 overflow-x-auto">
         {renderInstalled()}
         <button
           type="button"
-          title="상단바에 앱 추가"
-          aria-label="상단바에 앱 추가"
+          title={t('shell.topbar.catalog.title')}
+          aria-label={t('shell.topbar.catalog.title')}
           onClick={() => setCatalogOpen(true)}
           className="flex items-center justify-center w-8 h-8 rounded-lg text-muted-foreground hover:bg-secondary hover:text-foreground transition-colors flex-shrink-0"
         >
@@ -271,8 +264,8 @@ export function AppTopBar() {
           type="button"
           aria-haspopup="menu"
           aria-expanded={moreOpen}
-          title="업무 메뉴"
-          aria-label="업무 메뉴"
+          title={t('shell.topbar.workMenu')}
+          aria-label={t('shell.topbar.workMenu')}
           onMouseEnter={(e) => {
             const rect = e.currentTarget.getBoundingClientRect();
             scheduleFlyoutOpen(() => { setMoreOpen(true); setMoreAnchor(rect); });
@@ -293,13 +286,13 @@ export function AppTopBar() {
           )}
         >
           <Menu className="w-4 h-4 flex-shrink-0" />
-          메뉴
+          {t('shell.topbar.menu')}
           <ChevronDown className="w-3.5 h-3.5 flex-shrink-0" />
         </button>
         <button
           type="button"
-          title="상단바에 앱 추가"
-          aria-label="상단바에 앱 추가"
+          title={t('shell.topbar.catalog.title')}
+          aria-label={t('shell.topbar.catalog.title')}
           onClick={() => setCatalogOpen(true)}
           className="flex items-center justify-center w-8 h-8 rounded-lg text-muted-foreground hover:bg-secondary hover:text-foreground transition-colors flex-shrink-0"
         >
@@ -312,8 +305,8 @@ export function AppTopBar() {
         <button
           type="button"
           onClick={() => openPalette(true)}
-          title="화면 검색 (Ctrl/⌘+K)"
-          aria-label="화면 검색 (Ctrl/⌘+K)"
+          title={t('shell.topbar.searchHint')}
+          aria-label={t('shell.topbar.searchHint')}
           aria-keyshortcuts="Control+K Meta+K"
           className={cn(
             'flex items-center gap-2 h-8 rounded-lg border border-border text-muted-foreground hover:bg-secondary hover:text-foreground transition-colors',
@@ -321,7 +314,7 @@ export function AppTopBar() {
           )}
         >
           <Search className="w-4 h-4 flex-shrink-0" />
-          <span className="hidden md:inline text-xs flex-1 text-left">화면 검색</span>
+          <span className="hidden md:inline text-xs flex-1 text-left">{t('shell.topbar.search')}</span>
           <kbd className="hidden md:inline text-[11px] font-mono border border-border rounded px-1">⌘K</kbd>
         </button>
         <div className="flex items-center rounded-lg border border-border bg-card overflow-hidden">
@@ -333,7 +326,7 @@ export function AppTopBar() {
         <>
           <div className="fixed inset-0 z-0" onClick={() => setMoreOpen(false)} aria-hidden />
           <FlyoutShell
-            title="업무 메뉴"
+            title={t('shell.topbar.workMenu')}
             anchorRect={moreAnchor}
             placement="bottom"
             {...focusProps}
@@ -344,7 +337,7 @@ export function AppTopBar() {
             <div className="space-y-1 pb-2">
               {topbarInstalled.length === 0 && (
                 <div className="px-3 py-4 text-xs text-muted-foreground text-center leading-relaxed">
-                  설치된 앱이 없습니다.
+                  {t('shell.topbar.noApps')}
                 </div>
               )}
               {topbarInstalled.map((appId) => {
@@ -352,7 +345,7 @@ export function AppTopBar() {
                   return (
                     <FlyoutAction
                       key="favorites"
-                      label="즐겨찾기"
+                      label={t('shell.favorites')}
                       Icon={Star}
                       onSelect={() => { setMoreOpen(false); setFavoritesAnchor(moreAnchor); setFavoritesOpen(true); }}
                     />
@@ -364,7 +357,7 @@ export function AppTopBar() {
                     <FlyoutLink
                       key="island"
                       to={target ? `/island/${target}` : '/island'}
-                      label="나의 아일랜드"
+                      label={t('nav.page.island')}
                       Icon={Palmtree}
                       active={location.pathname.startsWith('/island')}
                       onSelect={() => setMoreOpen(false)}
@@ -397,7 +390,7 @@ export function AppTopBar() {
         <>
           <div className="fixed inset-0 z-0" onClick={() => setFavoritesOpen(false)} aria-hidden />
           <FlyoutShell
-            title="즐겨찾기"
+            title={t('shell.favorites')}
             anchorRect={favoritesAnchor}
             placement="bottom"
             {...focusProps}
@@ -414,7 +407,7 @@ export function AppTopBar() {
         <>
           <div className="fixed inset-0 z-0" onClick={() => setIslandFlyoutAnchor(null)} aria-hidden />
           <FlyoutShell
-            title="Your Island"
+            title={t('nav.page.island')}
             anchorRect={islandFlyoutAnchor}
             placement="bottom"
             {...focusProps}
@@ -437,13 +430,13 @@ export function AppTopBar() {
                 <>
                   <div className="mx-2 my-1 border-t border-border" />
                   <p className="px-2.5 pb-0.5 text-xs font-medium text-muted-foreground">
-                    팀 공유
+                    {t('shell.topbar.teamShared')}
                   </p>
                   {sharedIslands.map((isl) => (
                     <FlyoutLink
                       key={isl.id}
                       to={`/island/${isl.id}`}
-                      label={`${isl.name} · ${isl.ownerName || '공유'}`}
+                      label={`${isl.name} · ${isl.ownerName || t('shell.topbar.sharedFallback')}`}
                       Icon={islandFlyoutIcon(isl.icon)}
                       active={location.pathname === `/island/${isl.id}`}
                       onSelect={() => setIslandFlyoutAnchor(null)}
@@ -460,8 +453,8 @@ export function AppTopBar() {
       <AddAppDialog
         open={catalogOpen}
         onClose={() => setCatalogOpen(false)}
-        title="상단바에 앱 추가"
-        description="이름 옆에 필요한 업무 화면만 골라 추가한다."
+        title={t('shell.topbar.catalog.title')}
+        description={t('shell.topbar.catalog.description')}
         sections={catalogSections}
         installedApps={installedApps}
         onToggle={toggleInstalledApp}

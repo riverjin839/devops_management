@@ -5,6 +5,17 @@ import { opsNotesApi } from '@/services/api';
 import type { OpsNote, OpsNoteCreate, OpsNoteColor, OpsNoteUpdate } from '@/types';
 import { ConfluenceUrlInput, TenantScopeSelect } from '@/components/common';
 import { RichTextEditor } from '@/components/editor';
+import { useCanOperate } from '@/hooks/useCanOperate';
+import { formatApiError } from '@/lib/utils';
+
+/**
+ * 수정 payload — 비운 선택 필드는 `null` 로 보내야 서버(`exclude_unset`)가 컬럼을 비운다(D-144).
+ * `types` 의 `OpsNoteUpdate` 는 `null` 을 허용하지 않아 여기서만 넓힌다.
+ */
+export type OpsNotePatch = { [K in keyof OpsNoteCreate]?: OpsNoteCreate[K] | null };
+
+/** 빈 문단(`<p></p>`·`<p><br></p>`·`&nbsp;`)만으로 된 리치 텍스트. */
+const EMPTY_RICH_RE = /^\s*(<p>(\s|&nbsp;|<br\s*\/?>)*<\/p>\s*)*$/i;
 
 const SERVICES: { value: string; label: string; Icon: ComponentType<{ className?: string }> }[] = [
   { value: 'k8s',      label: 'Kubernetes', Icon: Ship },
@@ -34,6 +45,7 @@ interface OpsNoteFormProps {
 export function OpsNoteForm({ initial, defaultService, onCancel, onSaved }: OpsNoteFormProps) {
   const qc = useQueryClient();
   const isEdit = Boolean(initial);
+  const { canOperate, withHint, ariaWithHint } = useCanOperate();
 
   const [service, setService]         = useState(initial?.service ?? defaultService ?? 'k8s');
   const [title, setTitle]             = useState(initial?.title ?? '');
@@ -56,31 +68,47 @@ export function OpsNoteForm({ initial, defaultService, onCancel, onSaved }: OpsN
     if (!title.trim()) { setError('질문 제목은 필수입니다.'); return; }
     setSaving(true); setError('');
     try {
-      const payload: OpsNoteCreate = {
-        service,
-        title: title.trim(),
-        content: content.trim() || undefined,
-        backContent: backContent.trim() || undefined,
-        color,
-        author: author.trim() || undefined,
-        pinned,
-        confluenceUrl: confluenceUrl.trim() || undefined,
-        dlUrl: dlUrl.trim() || undefined,
-        tenantId,
-      };
+      // 리치 에디터는 비워도 `<p></p>` 를 남긴다 — 빈 문단뿐이면 빈 값으로 본다(이미지·표만 있는 본문은 유지).
+      const richOrEmpty = (html: string) => (EMPTY_RICH_RE.test(html) ? '' : html.trim());
       let savedId: string | undefined;
       if (isEdit && initial) {
-        await opsNotesApi.update(initial.id, payload as OpsNoteUpdate);
+        // 수정 모드에서 비운 필드는 null — undefined 면 JSON 에서 빠져 옛 값이 남는다(D-144).
+        const patch: OpsNotePatch = {
+          service,
+          title: title.trim(),
+          content: richOrEmpty(content) || null,
+          backContent: richOrEmpty(backContent) || null,
+          color,
+          author: author.trim() || null,
+          pinned,
+          confluenceUrl: confluenceUrl.trim() || null,
+          dlUrl: dlUrl.trim() || null,
+          tenantId,
+        };
+        // null 은 "비우기" — api 시그니처가 null 을 모르는 타입이라 경계에서만 좁힌다.
+        await opsNotesApi.update(initial.id, patch as OpsNoteUpdate);
         savedId = initial.id;
       } else {
+        const payload: OpsNoteCreate = {
+          service,
+          title: title.trim(),
+          content: richOrEmpty(content) || undefined,
+          backContent: richOrEmpty(backContent) || undefined,
+          color,
+          author: author.trim() || undefined,
+          pinned,
+          confluenceUrl: confluenceUrl.trim() || undefined,
+          dlUrl: dlUrl.trim() || undefined,
+          tenantId,
+        };
         const res = await opsNotesApi.create(payload);
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         savedId = (res.data as any)?.id ?? (res.data as any)?.data?.id;
       }
       qc.invalidateQueries({ queryKey: ['ops-notes'] });
       onSaved(savedId);
-    } catch {
-      setError('저장에 실패했습니다.');
+    } catch (err) {
+      setError(formatApiError(err, '저장에 실패했습니다.'));
     } finally {
       setSaving(false);
     }
@@ -237,8 +265,10 @@ export function OpsNoteForm({ initial, defaultService, onCancel, onSaved }: OpsN
           </button>
           <button
             type="submit"
-            disabled={saving}
-            className="px-4 py-2 text-sm font-semibold bg-primary hover:bg-primary/90 text-primary-foreground rounded-xl transition-colors disabled:opacity-60"
+            disabled={saving || !canOperate}
+            title={withHint(isEdit ? '저장' : '등록')}
+            aria-label={canOperate ? undefined : ariaWithHint(isEdit ? '저장' : '등록')}
+            className="px-4 py-2 text-sm font-semibold bg-primary hover:bg-primary/90 text-primary-foreground rounded-xl transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
           >
             {saving ? '저장 중…' : isEdit ? '저장' : '등록'}
           </button>

@@ -1,12 +1,15 @@
 import { useCallback, useEffect, useId, useRef } from 'react';
 import { AlertTriangle, X } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import { useModalA11y } from './useModalA11y';
 
 interface ConfirmDialogProps {
   open: boolean;
   title: string;
   description?: string;
+  /** 기본 `common.action.run`("실행"). */
   confirmLabel?: string;
+  /** 기본 `common.action.cancel`("취소"). */
   cancelLabel?: string;
   danger?: boolean;
   onConfirm: () => void;
@@ -20,9 +23,10 @@ interface ConfirmDialogProps {
  *  Enter = 확인 / Escape = 취소. 포커스 트랩·복원은 useModalA11y 가 담당.
  */
 export function ConfirmDialog({
-  open, title, description, confirmLabel = '실행', cancelLabel = '취소',
+  open, title, description, confirmLabel, cancelLabel,
   danger = false, onConfirm, onCancel, children, busy = false,
 }: ConfirmDialogProps) {
+  const { t } = useTranslation();
   const dialogRef = useModalA11y(open, onCancel);
   const titleId = useId();
   const descId = useId();
@@ -45,8 +49,8 @@ export function ConfirmDialog({
     if (!open) return;
     const handler = (e: KeyboardEvent) => {
       if (e.key !== 'Enter' || e.isComposing) return;
-      const t = e.target as HTMLElement | null;
-      if (t && (t.tagName === 'BUTTON' || t.tagName === 'TEXTAREA' || t.tagName === 'A')) return;
+      const target = e.target as HTMLElement | null;
+      if (target && (target.tagName === 'BUTTON' || target.tagName === 'TEXTAREA' || target.tagName === 'A')) return;
       e.preventDefault();
       fire();
     };
@@ -86,7 +90,7 @@ export function ConfirmDialog({
           </div>
           <button
             onClick={onCancel}
-            aria-label="닫기"
+            aria-label={t('common.action.close')}
             className="p-1 rounded hover:bg-secondary text-muted-foreground flex-shrink-0"
           >
             <X className="w-4 h-4" />
@@ -98,7 +102,7 @@ export function ConfirmDialog({
             onClick={onCancel}
             className="px-4 py-1.5 text-sm font-medium bg-secondary hover:bg-secondary/80 border border-border rounded-xl"
           >
-            {cancelLabel}
+            {cancelLabel ?? t('common.action.cancel')}
           </button>
           <button
             onClick={fire}
@@ -111,7 +115,7 @@ export function ConfirmDialog({
                 : 'bg-primary hover:bg-primary/90'
             }`}
           >
-            {busy ? '처리 중…' : confirmLabel}
+            {busy ? t('common.status.processing') : (confirmLabel ?? t('common.action.run'))}
           </button>
         </div>
       </div>

@@ -5,9 +5,9 @@ import { mcApi, type McPreset } from '@/services/api';
 import type { McEffectivePreset, McPresetSource } from '@/types';
 
 const SOURCE_BADGE: Record<McPresetSource, { label: string; cls: string }> = {
-  builtin:  { label: '기본',  cls: 'bg-chart-8/10 text-chart-8 border-chart-8/30' },
-  shared:   { label: '공용',  cls: 'bg-chart-1/10 text-chart-1 border-chart-1/30' },
-  personal: { label: '개인',  cls: 'bg-chart-2/10 text-chart-2 border-chart-2/30' },
+  builtin:  { label: '기본',  cls: 'bg-chart-8/10 text-chart-8-text border-chart-8/30' },
+  shared:   { label: '공용',  cls: 'bg-chart-1/10 text-chart-1-text border-chart-1/30' },
+  personal: { label: '개인',  cls: 'bg-chart-2/10 text-chart-2-text border-chart-2/30' },
 };
 
 interface EditRow {

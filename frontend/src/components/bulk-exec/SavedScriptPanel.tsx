@@ -17,8 +17,8 @@ interface SavedScriptPanelProps {
 }
 
 const LANGUAGE_BADGE: Record<ScriptLanguage, string> = {
-  bash: 'bg-chart-2/15 text-chart-2 border-chart-2/30',
-  python: 'bg-chart-1/15 text-chart-1 border-chart-1/30',
+  bash: 'bg-chart-2/15 text-chart-2-text border-chart-2/30',
+  python: 'bg-chart-1/15 text-chart-1-text border-chart-1/30',
 };
 
 /** 사용자별 저장 스크립트(bash/python) — DB 백엔드, 이름 붙여 저장·수정·재사용.

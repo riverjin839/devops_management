@@ -2,7 +2,7 @@
 // 수행 로그 상태/트리거 배지 — CheckMatrixRunLog.tsx 와 CheckMatrixRunbookPanel.tsx 양쪽에서
 // 쓰는데, 두 파일이 서로를 import 하므로(RunLog → RunbookPanel: 과거 스냅샷 렌더 /
 // RunbookPanel → RunLog: 최근 수행 상태 배지) 순환 참조를 피하려 배지만 별도 파일로 뺀다.
-import { Check, X, Loader2, Clock, SkipForward } from 'lucide-react';
+import { Check, X, Loader2, Clock, SkipForward, Ban } from 'lucide-react';
 import type { CheckMatrixRunState, CheckMatrixTrigger } from '@/types';
 
 export const STATE_META: Record<CheckMatrixRunState, { label: string; cls: string; icon: typeof Check }> = {
@@ -11,6 +11,7 @@ export const STATE_META: Record<CheckMatrixRunState, { label: string; cls: strin
   success: { label: '완료', cls: 'text-muted-foreground border-border', icon: Check },
   failed: { label: '실패', cls: 'text-status-critical border-status-critical/50', icon: X },
   skipped: { label: '건너뜀', cls: 'text-muted-foreground border-border', icon: SkipForward },
+  cancelled: { label: '취소됨', cls: 'text-muted-foreground border-border', icon: Ban },
 };
 
 export const TRIGGER_LABEL: Record<CheckMatrixTrigger, string> = {

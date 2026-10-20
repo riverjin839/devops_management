@@ -58,6 +58,7 @@ class CheckMatrixRunState(str, enum.Enum):
     success = "success"
     failed = "failed"
     skipped = "skipped"  # 이 클러스터에 실행 대상(정의/애드온)이 없어 수행하지 않음
+    cancelled = "cancelled"  # 사용자가 대기/실행 중에 취소함 — 판정 없음(셀 값을 덮지 않는다)
 
 
 class CheckMatrixItem(Base):

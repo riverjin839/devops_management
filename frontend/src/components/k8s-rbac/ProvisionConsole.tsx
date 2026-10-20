@@ -107,7 +107,7 @@ export function ProvisionConsole({ stream, showLogs }: ProvisionConsoleProps) {
             <button
               type="button"
               onClick={abort}
-              title="실행 중단 (이미 만들어진 오브젝트는 남는다)"
+              title="실행 중단 (이미 만들어진 오브젝트는 남습니다)"
               aria-label="실행 중단"
               className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-xl border border-border text-xs hover:border-destructive hover:text-destructive"
             >
@@ -129,8 +129,8 @@ export function ProvisionConsole({ stream, showLogs }: ProvisionConsoleProps) {
             <LogViewer text={logText || '로그 대기 중…'} maxHeight="max-h-80" />
           ) : (
             <div className="text-xs text-muted-foreground border border-dashed border-border rounded-md px-3 py-2.5">
-              로그 {logs.length}줄을 수집했다 — 상단의 <span className="text-foreground">로그 보기</span> 를 켜면
-              전체가 펼쳐진다.
+              로그 {logs.length}줄을 수집했습니다 — 상단의 <span className="text-foreground">로그 보기</span> 를 켜면
+              전체가 펼쳐집니다.
               {logs.length > 0 && (
                 <span className="block mt-1 font-mono text-[11px] text-foreground truncate">
                   {logs[logs.length - 1].message}
@@ -231,8 +231,8 @@ export function ProvisionConsole({ stream, showLogs }: ProvisionConsoleProps) {
                   </button>
                 </div>
                 <div className="text-[11.5px] rounded-md border border-status-warning/30 bg-status-warning/10 text-status-warning px-3 py-2">
-                  토큰은 이 화면에서만 볼 수 있다. 창을 닫으면 다시 발급해야 한다 — 감사 로그에는 발급
-                  사실만 남고 토큰 값은 남지 않는다.
+                  토큰은 이 화면에서만 볼 수 있습니다. 창을 닫으면 다시 발급해야 합니다 — 감사 로그에는 발급
+                  사실만 남고 토큰 값은 남지 않습니다.
                 </div>
               </>
             )}

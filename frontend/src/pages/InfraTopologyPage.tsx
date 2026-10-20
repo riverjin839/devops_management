@@ -34,10 +34,10 @@ import type {
 // ── Role 메타 ────────────────────────────────────────────────────────────────
 const ROLE_META: Record<InfraNodeRole, { label: string; color: string; bg: string; dot: string }> = {
   // 역할은 상태가 아니라 종류 구분이라 status-* 가 아니라 chart-* 카테고리 색을 쓴다 (D-120).
-  master:  { label: 'Master',  color: 'text-chart-1', bg: 'bg-chart-1/15 border-chart-1/30', dot: 'bg-chart-1' },
-  worker:  { label: 'Worker',  color: 'text-chart-2', bg: 'bg-chart-2/15 border-chart-2/30', dot: 'bg-chart-2' },
-  storage: { label: 'Storage', color: 'text-chart-3', bg: 'bg-chart-3/15 border-chart-3/30', dot: 'bg-chart-3' },
-  infra:   { label: 'Infra',   color: 'text-chart-4', bg: 'bg-chart-4/15 border-chart-4/30', dot: 'bg-chart-4' },
+  master:  { label: 'Master',  color: 'text-chart-1-text', bg: 'bg-chart-1/15 border-chart-1/30', dot: 'bg-chart-1' },
+  worker:  { label: 'Worker',  color: 'text-chart-2-text', bg: 'bg-chart-2/15 border-chart-2/30', dot: 'bg-chart-2' },
+  storage: { label: 'Storage', color: 'text-chart-3-text', bg: 'bg-chart-3/15 border-chart-3/30', dot: 'bg-chart-3' },
+  infra:   { label: 'Infra',   color: 'text-chart-4-text', bg: 'bg-chart-4/15 border-chart-4/30', dot: 'bg-chart-4' },
 };
 
 const ROLES: InfraNodeRole[] = ['master', 'worker', 'storage', 'infra'];

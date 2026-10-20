@@ -6,7 +6,7 @@ from datetime import datetime
 from typing import Annotated, Any, Optional
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, Request
 from pydantic import BaseModel, Field, StringConstraints
 from sqlalchemy.orm import Session
 
@@ -16,6 +16,7 @@ from app.services.cluster_access import ClusterScope, has_cluster_access, requir
 from app.database import get_db
 from app.models import (
     CheckMatrixItem,
+    CheckMatrixRun,
     CheckMatrixSchedule,
     CheckMatrixSourceType,
     Cluster,
@@ -792,6 +793,7 @@ def run_cell(
     item_id: UUID,
     cluster_id: UUID,
     request: Request,
+    background: BackgroundTasks,
     db: Session = Depends(get_db),
     user: User = Depends(require_operator),
 ):
@@ -814,7 +816,7 @@ def run_cell(
             detail="수동 입력 항목은 실행할 수 없습니다 — 셀 상세의 '값 입력'을 사용하세요.",
         )
     try:
-        out = svc.queue_cell_now(db, item, cluster, triggered_by=_actor(user))
+        out = svc.queue_cell_now(db, item, cluster, triggered_by=_actor(user), background=background)
     except RuntimeError as e:
         raise HTTPException(status_code=500, detail=str(e))
     _audit(db, user, "run.cell", target_id=item_id, request=request, details={
@@ -827,6 +829,7 @@ def run_cell(
 def run_cluster(
     cluster_id: UUID,
     request: Request,
+    background: BackgroundTasks,
     db: Session = Depends(get_db),
     user: User = Depends(require_operator),
 ):
@@ -834,7 +837,7 @@ def run_cluster(
     cluster = db.query(Cluster).filter(Cluster.id == cluster_id).first()
     if cluster is None:
         raise HTTPException(status_code=404, detail="클러스터를 찾을 수 없습니다.")
-    out = svc.run_cluster_now(db, cluster, triggered_by=_actor(user))
+    out = svc.run_cluster_now(db, cluster, triggered_by=_actor(user), background=background)
     _audit(db, user, "run.cluster", target_type="cluster", target_id=cluster_id, request=request,
            details={"batch_id": out["batch_id"], "total": out["total"], "skipped": out.get("skipped")})
     return out
@@ -844,6 +847,7 @@ def run_cluster(
 def run_item(
     item_id: UUID,
     request: Request,
+    background: BackgroundTasks,
     db: Session = Depends(get_db),
     user: User = Depends(require_operator),
 ):
@@ -863,7 +867,7 @@ def run_item(
     if not item.enabled:
         raise HTTPException(status_code=400, detail="비활성화된 항목입니다 — 항목 수정에서 다시 켜야 실행할 수 있습니다.")
     allowed = [c.id for c in db.query(Cluster.id).all() if has_cluster_access(db, user, c.id, "operate")]
-    out = svc.run_item_now(db, item, triggered_by=_actor(user), allowed_cluster_ids=allowed)
+    out = svc.run_item_now(db, item, triggered_by=_actor(user), allowed_cluster_ids=allowed, background=background)
     _audit(db, user, "run.item", target_id=item_id, request=request,
            details={"batch_id": out["batch_id"], "total": out["total"], "skipped": out.get("skipped")})
     return out
@@ -910,6 +914,44 @@ def get_run(
     out = svc.get_run(db, run_id)
     if out is None or not scope.visible(out.get("cluster_id")):
         raise HTTPException(status_code=404, detail="실행 로그를 찾을 수 없습니다.")
+    return out
+
+
+@router.post("/runs/{run_id}/cancel")
+def cancel_run(
+    run_id: UUID,
+    request: Request,
+    db: Session = Depends(get_db),
+    user: User = Depends(require_operator),
+    scope: ClusterScope = Depends(get_cluster_scope),
+):
+    """대기/실행 중인 수행 1건 취소. 이미 끝난 수행이면 ``cancelled=0`` 으로 돌려준다."""
+    run = svc.get_run(db, run_id)
+    if run is None or not scope.visible(run.get("cluster_id")):
+        raise HTTPException(status_code=404, detail="실행 로그를 찾을 수 없습니다.")
+    require_cluster_access(db, user, UUID(run["cluster_id"]), "operate")
+    out = svc.cancel_runs(db, run_ids=[run_id], actor=_actor(user))
+    _audit(db, user, "run.cancel", target_type="check_matrix_run", target_id=run_id, request=request, details=out)
+    return out
+
+
+@router.post("/batches/{batch_id}/cancel")
+def cancel_batch(
+    batch_id: UUID,
+    request: Request,
+    db: Session = Depends(get_db),
+    user: User = Depends(require_operator),
+    scope: ClusterScope = Depends(get_cluster_scope),
+):
+    """일괄 실행(행·열) 중 아직 끝나지 않은 수행을 모두 취소 — 실행 권한이 있는 클러스터 것만."""
+    hidden = set(scope.hidden or [])
+    cluster_ids = {
+        r[0] for r in db.query(CheckMatrixRun.cluster_id).filter(CheckMatrixRun.batch_id == batch_id).distinct()
+    }
+    hidden |= {cid for cid in cluster_ids if not has_cluster_access(db, user, cid, "operate")}
+    out = svc.cancel_runs(db, batch_id=batch_id, actor=_actor(user), hidden_cluster_ids=hidden)
+    _audit(db, user, "batch.cancel", target_type="check_matrix_batch", target_id=batch_id, request=request,
+           details={k: v for k, v in out.items() if k != "run_ids"})
     return out
 
 

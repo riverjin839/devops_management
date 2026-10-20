@@ -85,7 +85,7 @@ export function WorkItemReadView({ item, onEdit }: WorkItemReadViewProps) {
           <span className={`px-2 py-0.5 rounded-full ${typeCfg.cls}`}>{typeCfg.label}</span>
         )}
         {item.allAttendees && (
-          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-chart-4/10 text-chart-4 border border-chart-4/30 font-medium">
+          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-chart-4/10 text-chart-4-text border border-chart-4/30 font-medium">
             <Users className="w-3 h-3" aria-hidden />공통업무
           </span>
         )}

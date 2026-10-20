@@ -46,17 +46,26 @@ backend:
     limits:
       memory: "1Gi"
       cpu: "1000m"
+  # 부팅 마이그레이션이 끝나야 /health 가 열린다 — startupProbe 가 최대 5분을 기다린 뒤에야
+  # liveness/readiness 가 시작된다(1분 넘는 부팅이 liveness 에 죽어 CrashLoopBackOff 되던 1.59 장애).
+  startupProbe:
+    httpGet:
+      path: /health/live
+      port: 8000
+    periodSeconds: 5
+    timeoutSeconds: 3
+    failureThreshold: 60
   livenessProbe:
     httpGet:
-      path: /health
+      path: /health/live
       port: 8000
-    initialDelaySeconds: 30
     periodSeconds: 10
+    timeoutSeconds: 5
+    failureThreshold: 3
   readinessProbe:
     httpGet:
       path: /health
       port: 8000
-    initialDelaySeconds: 10
     periodSeconds: 5
 
 # ============================================

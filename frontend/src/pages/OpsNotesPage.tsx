@@ -11,11 +11,13 @@ import {
 import { RichContent } from '@/components/editor';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { opsNotesApi } from '@/services/api';
-import type { OpsNote, OpsNoteColor } from '@/types';
-import { EmptyState, PageShell, Skeleton, useToast, ViewModeBar } from '@/components/common';
+import type { OpsNote, OpsNoteColor, OpsNoteUpdate } from '@/types';
+import { ConfirmDialog, EmptyState, ErrorState, PageShell, Skeleton, useToast, ViewModeBar } from '@/components/common';
 import { formatApiError, formatRelativeTime } from '@/lib/utils';
 import { MacCard } from '@/components/ui/MacCard';
 import { OpsNoteTable, type OpsNoteSortKey } from '@/components/ops-notes/OpsNoteTable';
+import type { OpsNotePatch } from '@/components/ops-notes/OpsNoteForm';
+import { useCanOperate } from '@/hooks/useCanOperate';
 
 // ── 서비스 목록 ───────────────────────────────────────────────────────────────
 type ServiceMeta = {
@@ -28,13 +30,13 @@ type ServiceMeta = {
 };
 
 const SERVICES: ServiceMeta[] = [
-  { value: 'k8s',      label: 'Kubernetes', Icon: Ship,      accent: 'bg-chart-1', ring: 'ring-chart-1/30', soft: 'bg-chart-1/15 text-chart-1' },
-  { value: 'keycloak', label: 'Keycloak',   Icon: KeyRound,  accent: 'bg-chart-7', ring: 'ring-chart-7/30', soft: 'bg-chart-7/15 text-chart-7' },
-  { value: 'cilium',   label: 'Cilium',     Icon: Bug,       accent: 'bg-chart-3', ring: 'ring-chart-3/30', soft: 'bg-chart-3/15 text-chart-3' },
-  { value: 'jenkins',  label: 'Jenkins',    Icon: Hammer,    accent: 'bg-chart-6', ring: 'ring-chart-6/30', soft: 'bg-chart-6/15 text-chart-6' },
-  { value: 'argocd',   label: 'ArgoCD',     Icon: RefreshCw, accent: 'bg-chart-4', ring: 'ring-chart-4/30', soft: 'bg-chart-4/15 text-chart-4' },
-  { value: 'nexus',    label: 'Nexus',      Icon: Package,   accent: 'bg-chart-2', ring: 'ring-chart-2/30', soft: 'bg-chart-2/15 text-chart-2' },
-  { value: 'etc',      label: '기타',        Icon: Layers,    accent: 'bg-chart-8', ring: 'ring-chart-8/30', soft: 'bg-chart-8/15 text-chart-8' },
+  { value: 'k8s',      label: 'Kubernetes', Icon: Ship,      accent: 'bg-chart-1', ring: 'ring-chart-1/30', soft: 'bg-chart-1/15 text-chart-1-text' },
+  { value: 'keycloak', label: 'Keycloak',   Icon: KeyRound,  accent: 'bg-chart-7', ring: 'ring-chart-7/30', soft: 'bg-chart-7/15 text-chart-7-text' },
+  { value: 'cilium',   label: 'Cilium',     Icon: Bug,       accent: 'bg-chart-3', ring: 'ring-chart-3/30', soft: 'bg-chart-3/15 text-chart-3-text' },
+  { value: 'jenkins',  label: 'Jenkins',    Icon: Hammer,    accent: 'bg-chart-6', ring: 'ring-chart-6/30', soft: 'bg-chart-6/15 text-chart-6-text' },
+  { value: 'argocd',   label: 'ArgoCD',     Icon: RefreshCw, accent: 'bg-chart-4', ring: 'ring-chart-4/30', soft: 'bg-chart-4/15 text-chart-4-text' },
+  { value: 'nexus',    label: 'Nexus',      Icon: Package,   accent: 'bg-chart-2', ring: 'ring-chart-2/30', soft: 'bg-chart-2/15 text-chart-2-text' },
+  { value: 'etc',      label: '기타',        Icon: Layers,    accent: 'bg-chart-8', ring: 'ring-chart-8/30', soft: 'bg-chart-8/15 text-chart-8-text' },
 ];
 const SERVICE_MAP = Object.fromEntries(SERVICES.map((s) => [s.value, s]));
 
@@ -48,14 +50,17 @@ const CARD_TINT: Record<OpsNoteColor, { stripe: string }> = {
 };
 
 // ── 빈 상태 (리스트·카드 공용) ─────────────────────────────────────────────────
-function QnaEmptyState({ hasAny, search, onCreate }: { hasAny: boolean; search: string; onCreate: () => void }) {
+function QnaEmptyState({ hasAny, search, onCreate, canCreate, createHint }: {
+  hasAny: boolean; search: string; onCreate: () => void; canCreate: boolean; createHint?: string;
+}) {
   if (!hasAny) {
+    // 작성 권한이 없으면 CTA 대신 사유를 보여준다(§12.9 — 눌러 보고서야 403 을 만나지 않게).
     return (
       <EmptyState
         icon={FileQuestion}
         title="아직 등록된 Q&A 가 없습니다."
-        description="운영 중 만난 질문과 해결책을 첫 Q&A 로 남기세요."
-        action={{ label: '첫 Q&A 만들기', onClick: onCreate }}
+        description={canCreate ? '운영 중 만난 질문과 해결책을 첫 Q&A 로 남기세요.' : `Q&A 작성은 ${createHint ?? 'operator 이상 권한이 필요합니다'}.`}
+        action={canCreate ? { label: '첫 Q&A 만들기', onClick: onCreate } : undefined}
       />
     );
   }
@@ -80,6 +85,8 @@ interface QnaCardProps {
 type CardTab = 'answer' | 'history';
 
 function QnaCard({ note, onOpen, onEdit, onDelete, onTogglePin }: QnaCardProps) {
+  // 쓰기는 operator 이상(서버 require_operator) — 숨기지 않고 비활성 + 사유(D-145).
+  const { canOperate, withHint, ariaWithHint } = useCanOperate();
   const svc = SERVICE_MAP[note.service];
   const SvcIcon = svc?.Icon;
   const tint = CARD_TINT[note.color] ?? CARD_TINT.yellow;
@@ -96,8 +103,7 @@ function QnaCard({ note, onOpen, onEdit, onDelete, onTogglePin }: QnaCardProps) 
       tabIndex={0}
       onClick={onOpen}
       onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onOpen(); } }}
-      className="group relative rounded-md border border-border overflow-hidden bg-card hover:border-muted-foreground/30 transition-colors flex flex-col cursor-pointer focus:outline-none focus:ring-2 focus:ring-primary/40"
-      style={{ minHeight: '230px' }}
+      className="group relative rounded-md border border-border overflow-hidden bg-card hover:border-muted-foreground/30 transition-colors flex flex-col cursor-pointer focus:outline-none focus:ring-2 focus:ring-primary/40 min-h-[230px]"
     >
       {/* 색상 띠 (좌측) */}
       <span className={`absolute left-0 top-0 bottom-0 w-1 ${tint.stripe}`} aria-hidden />
@@ -118,25 +124,28 @@ function QnaCard({ note, onOpen, onEdit, onDelete, onTogglePin }: QnaCardProps) 
         <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
           <button
             onClick={(e) => { stop(e); onTogglePin(); }}
-            className="p-1 rounded-md hover:bg-secondary text-muted-foreground hover:text-primary transition-colors"
-            title={note.pinned ? '고정 해제' : '상단 고정'}
-            aria-label={note.pinned ? '고정 해제' : '상단 고정'}
+            disabled={!canOperate}
+            className="p-1 rounded-md hover:bg-secondary text-muted-foreground hover:text-primary transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            title={withHint(note.pinned ? '고정 해제' : '상단 고정')}
+            aria-label={ariaWithHint(note.pinned ? '고정 해제' : '상단 고정')}
           >
             {note.pinned ? <PinOff className="w-3.5 h-3.5" /> : <Pin className="w-3.5 h-3.5" />}
           </button>
           <button
             onClick={(e) => { stop(e); onEdit(); }}
-            className="p-1 rounded-md hover:bg-secondary text-muted-foreground hover:text-primary transition-colors"
-            title="수정"
-            aria-label="수정"
+            disabled={!canOperate}
+            className="p-1 rounded-md hover:bg-secondary text-muted-foreground hover:text-primary transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            title={withHint('수정')}
+            aria-label={ariaWithHint('수정')}
           >
             <Pencil className="w-3.5 h-3.5" />
           </button>
           <button
             onClick={(e) => { stop(e); onDelete(); }}
-            className="p-1 rounded-md hover:bg-secondary text-muted-foreground hover:text-status-critical transition-colors"
-            title="삭제"
-            aria-label="삭제"
+            disabled={!canOperate}
+            className="p-1 rounded-md hover:bg-secondary text-muted-foreground hover:text-status-critical transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            title={withHint('삭제')}
+            aria-label={ariaWithHint('삭제')}
           >
             <Trash2 className="w-3.5 h-3.5" />
           </button>
@@ -253,6 +262,8 @@ export function OpsNotesPage() {
   const navigate = useNavigate();
 
   const [deletingId, setDeletingId]       = useState<string | null>(null);
+  const [pendingDelete, setPendingDelete] = useState<OpsNote | null>(null);
+  const { canOperate, hint: operateHint, withHint, ariaWithHint } = useCanOperate();
 
   // 서비스 필터·검색어·보기 모드·정렬은 URL 쿼리에 둔다(D-029). 지식 허브(/docs) 의 Q&A 탭으로
   // 임베드될 때는 허브 자신의 q/sort/dir 와 충돌하지 않게 로컬 state 로 동작한다.
@@ -280,7 +291,7 @@ export function OpsNotesPage() {
     else setUrlParams({ sort: key, dir: key === 'updatedAt' ? 'desc' : 'asc' });
   };
 
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, isError, error, refetch } = useQuery({
     queryKey: ['ops-notes'],
     queryFn: () => opsNotesApi.getAll().then((r) => r.data),
     staleTime: 1000 * 30,
@@ -321,13 +332,17 @@ export function OpsNotesPage() {
     });
   }, [filtered, sortKey, sortDir]);
 
-  const handleDelete = async (note: OpsNote) => {
-    if (!confirm(`"${note.title}" Q&A 를 삭제하시겠습니까?`)) return;
+  // 삭제는 ConfirmDialog(danger) 로 확인한다(D-142 — native confirm() 은 테마·포커스 복원·뒤로가기 닫기가 안 된다).
+  const handleDelete = (note: OpsNote) => setPendingDelete(note);
+  const confirmDelete = async () => {
+    const note = pendingDelete;
+    if (!note) return;
     setDeletingId(note.id);
     try {
       await opsNotesApi.delete(note.id);
       qc.invalidateQueries({ queryKey: ['ops-notes'] });
       toast.success('Q&A 삭제됨');
+      setPendingDelete(null);
     } catch (e) {
       toast.error('삭제 실패', formatApiError(e));
     } finally {
@@ -345,9 +360,10 @@ export function OpsNotesPage() {
   };
 
   /** 인라인 셀 편집 — 테이블 모드에서 service / title / author 즉시 저장. */
-  const handleInlineUpdate = async (id: string, data: Parameters<typeof opsNotesApi.update>[1]) => {
+  const handleInlineUpdate = async (id: string, data: OpsNotePatch) => {
     try {
-      await opsNotesApi.update(id, data);
+      // null 은 "비우기"(D-144) — api 시그니처가 null 을 모르는 타입이라 경계에서만 좁힌다.
+      await opsNotesApi.update(id, data as OpsNoteUpdate);
       qc.invalidateQueries({ queryKey: ['ops-notes'] });
     } catch (e) {
       toast.error('수정 실패', formatApiError(e));
@@ -399,7 +415,10 @@ export function OpsNotesPage() {
               />
               <button
                 onClick={() => navigate(newNoteHref)}
-                className="flex items-center gap-1.5 px-3.5 py-2 text-sm font-semibold bg-primary hover:bg-primary/90 text-primary-foreground rounded-xl transition-colors shadow-card"
+                disabled={!canOperate}
+                title={withHint('새 Q&A 작성')}
+                aria-label={ariaWithHint('새 Q&A 작성')}
+                className="flex items-center gap-1.5 px-3.5 py-2 text-sm font-semibold bg-primary hover:bg-primary/90 text-primary-foreground rounded-xl transition-colors shadow-card disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 <Plus className="w-4 h-4" /> 새 Q&amp;A
               </button>
@@ -419,13 +438,14 @@ export function OpsNotesPage() {
         <div className="flex items-center gap-2 flex-wrap">
           <button
             onClick={() => setFilterService('')}
+            aria-pressed={!filterService}
             className={`flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-full border transition-colors ${
               !filterService
                 ? 'bg-primary text-primary-foreground border-primary'
                 : 'bg-background border-border text-muted-foreground hover:border-primary/50'
             }`}
           >
-            전체 <span className="opacity-70">({allNotes.length})</span>
+            전체 <span className="tabular-nums">({allNotes.length})</span>
           </button>
           {SERVICES.map((s) => {
             const count = countByService[s.value] ?? 0;
@@ -436,6 +456,7 @@ export function OpsNotesPage() {
               <button
                 key={s.value}
                 onClick={() => setFilterService(isActive ? '' : s.value)}
+                aria-pressed={isActive}
                 className={`flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-full border transition-colors ${
                   isActive
                     ? `${s.soft} border-transparent ring-1 ${s.ring}`
@@ -443,7 +464,7 @@ export function OpsNotesPage() {
                 }`}
               >
                 <Icon className="w-3.5 h-3.5" />{s.label}
-                <span className="opacity-70">({count})</span>
+                <span className="tabular-nums">({count})</span>
               </button>
             );
           })}
@@ -481,11 +502,15 @@ export function OpsNotesPage() {
                   <Skeleton key={i} className="block w-full h-12 rounded" />
                 ))}
               </div>
+            ) : isError ? (
+              <ErrorState error={error} title="Q&A 목록을 불러오지 못했습니다" onRetry={() => { void refetch(); }} />
             ) : tableNotes.length === 0 ? (
               <QnaEmptyState
                 hasAny={allNotes.length > 0}
                 search={search}
                 onCreate={() => navigate('/ops-notes/new')}
+                canCreate={canOperate}
+                createHint={operateHint}
               />
             ) : (
               <OpsNoteTable
@@ -541,11 +566,15 @@ export function OpsNotesPage() {
                     <Skeleton key={i} className="block w-full h-56 rounded-md" />
                   ))}
                 </div>
+              ) : isError ? (
+                <ErrorState error={error} title="Q&A 목록을 불러오지 못했습니다" onRetry={() => { void refetch(); }} />
               ) : regularNotes.length === 0 ? (
                 <QnaEmptyState
                   hasAny={allNotes.length > 0}
                   search={search}
                   onCreate={() => navigate('/ops-notes/new')}
+                  canCreate={canOperate}
+                  createHint={operateHint}
                 />
               ) : (
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
@@ -566,6 +595,17 @@ export function OpsNotesPage() {
           </>
         )}
       </PageShell>
+
+      <ConfirmDialog
+        open={pendingDelete !== null}
+        title="Q&A 삭제"
+        description={pendingDelete ? `"${pendingDelete.title}" Q&A 를 삭제합니다. 답변·히스토리도 함께 지워지며 되돌릴 수 없습니다.` : ''}
+        confirmLabel="삭제"
+        danger
+        busy={deletingId !== null}
+        onConfirm={() => { void confirmDelete(); }}
+        onCancel={() => setPendingDelete(null)}
+      />
     </div>
   );
 }

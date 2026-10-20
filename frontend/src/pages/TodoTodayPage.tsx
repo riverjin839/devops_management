@@ -9,6 +9,7 @@ import {
 } from 'lucide-react';
 import { useWorkItems, usePatchWorkItemStatus, useUpdateWorkItem } from '@/hooks/useWorkItems';
 import { useCurrentSprint, useCreateSprint } from '@/hooks/useSprints';
+import { useCanOperate } from '@/hooks/useCanOperate';
 import { useToday } from '@/hooks/useToday';
 import { useAuthStore } from '@/stores/authStore';
 import { ViewModeBar, useToast, PageHeader, PageShell, EmptyState, LoadingState } from '@/components/common';
@@ -67,10 +68,10 @@ const PRIORITY_DOT: Record<string, string> = {
   high: 'bg-status-critical', medium: 'bg-chart-1', low: 'bg-chart-8',
 };
 const STATUS_META: Record<KanbanStatus, { label: string; cls: string }> = {
-  backlog:     { label: '백로그',     cls: 'bg-chart-8/10 text-chart-8 border-chart-8/30' },
-  todo:        { label: '할일',       cls: 'bg-chart-1/10 text-chart-1 border-chart-1/30' },
-  in_progress: { label: '진행중',     cls: 'bg-chart-3/10 text-chart-3 border-chart-3/30' },
-  review_test: { label: '검토/테스트', cls: 'bg-chart-4/10 text-chart-4 border-chart-4/30' },
+  backlog:     { label: '백로그',     cls: 'bg-chart-8/10 text-chart-8-text border-chart-8/30' },
+  todo:        { label: '할일',       cls: 'bg-chart-1/10 text-chart-1-text border-chart-1/30' },
+  in_progress: { label: '진행중',     cls: 'bg-chart-3/10 text-chart-3-text border-chart-3/30' },
+  review_test: { label: '검토/테스트', cls: 'bg-chart-4/10 text-chart-4-text border-chart-4/30' },
   done:        { label: '완료',       cls: 'bg-secondary text-muted-foreground border-border' },
 };
 
@@ -230,6 +231,8 @@ export function TodoTodayPage() {
 
   const { data: currentSprint } = useCurrentSprint();
   const createSprint = useCreateSprint();
+  // 스프린트 생성은 operator 이상(routers/sprint.py) — viewer 에게는 비활성 + 사유(§12.9).
+  const { canOperate: canCreateSprint, withHint: sprintHint } = useCanOperate();
   const updateItem = useUpdateWorkItem();
 
   const { data, isLoading, isError, refetch, isFetching } = useWorkItems(
@@ -412,8 +415,9 @@ export function TodoTodayPage() {
             <div className="flex items-center gap-2 mt-4">
               <button
                 onClick={onStartSprint}
-                disabled={createSprint.isPending}
-                className="flex items-center gap-1.5 px-4 py-2 text-sm bg-primary hover:bg-primary/90 text-primary-foreground rounded-lg transition-colors disabled:opacity-50"
+                disabled={createSprint.isPending || !canCreateSprint}
+                title={sprintHint('2주 스프린트 시작')}
+                className="flex items-center gap-1.5 px-4 py-2 text-sm bg-primary hover:bg-primary/90 text-primary-foreground rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {createSprint.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
                 2주 스프린트 시작

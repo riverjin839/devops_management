@@ -1,14 +1,14 @@
 import { useState, useMemo, useEffect } from 'react';
-import { Plus, Play, BookOpen, Download, ArrowUpDown, LayoutGrid, List } from 'lucide-react';
+import { Plus, Play, BookOpen, Download, ArrowUpDown, LayoutGrid, List, GripVertical } from 'lucide-react';
 import { DndContext, closestCenter, PointerSensor, useSensor, useSensors, type DragEndEvent } from '@dnd-kit/core';
 import { SortableContext, rectSortingStrategy, verticalListSortingStrategy, useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { PlaybookCard, PlaybookListRow, PlaybookLogDialog, AddPlaybookModal, RunCredsModal, playbookRunLines } from '@/components/playbooks';
 import type { PlaybookFormSubmit } from '@/components/playbooks/AddPlaybookModal';
 import type { PlaybookSshCreds } from '@/types';
-import { ClusterSidebar, EmptyState, Skeleton, PageShell, RunLogPanel } from '@/components/common';
+import { ClusterSidebar, ConfirmDialog, EmptyState, ErrorState, Skeleton, PageShell, RunLogPanel } from '@/components/common';
 import { PageHeader } from '@/components/common/PageHeader';
-import { RoleGate } from '@/components/auth/RoleGate';
+import { useCanOperate } from '@/hooks/useCanOperate';
 import { usePlaybooks, useCreatePlaybook, useUpdatePlaybook, useDeletePlaybook, useRunPlaybook, useToggleDashboard } from '@/hooks/usePlaybook';
 import { playbooksApi } from '@/services/api';
 import { usePlaybookStore } from '@/stores/playbookStore';
@@ -44,7 +44,7 @@ function SortableCardCell({ playbook, isRunning, onRun, onEdit, onDelete, onTogg
         title="드래그하여 순서 변경"
         aria-label="드래그하여 순서 변경"
       >
-        ⠿
+        <GripVertical className="w-3.5 h-3.5" aria-hidden="true" />
       </button>
       <PlaybookCard playbook={playbook} isRunning={isRunning} onRun={onRun} onEdit={onEdit} onDelete={onDelete} onToggleDashboard={onToggleDashboard} />
     </div>
@@ -91,7 +91,10 @@ export function PlaybooksPage() {
   useClusters(); // fetch
 
   // 항상 전체 fetch — 클라이언트 측에서 selectedClusterIds 로 필터.
-  const { isLoading } = usePlaybooks(undefined);
+  const playbooksQ = usePlaybooks(undefined);
+  const { isLoading } = playbooksQ;
+  // 조회 실패를 빈 상태로 보여주지 않는다(D-137) — 캐시가 없을 때만 오류 자리표시(백그라운드 재조회 실패는 목록 유지).
+  const loadFailed = playbooksQ.isError && !playbooksQ.data;
   const { playbooks, runningIds } = usePlaybookStore();
 
   const createPlaybook = useCreatePlaybook();
@@ -99,6 +102,12 @@ export function PlaybooksPage() {
   const deletePlaybook = useDeletePlaybook();
   const runPlaybook = useRunPlaybook();
   const toggleDashboard = useToggleDashboard();
+  // §12.9 — 등록·전체 실행은 operator 이상. 숨기지 않고 비활성+사유(D-145). 행·카드 버튼은 컴포넌트가 클러스터별로 판정.
+  const { canOperate, withHint, ariaWithHint } = useCanOperate();
+  // 실행·삭제 확인(D-141·D-142) — 무엇을 어디에 실행/삭제하는지 보여준 뒤 진행한다.
+  const [runConfirm, setRunConfirm] = useState<{ pb: Playbook; creds: PlaybookSshCreds } | null>(null);
+  const [runAllConfirm, setRunAllConfirm] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<Playbook | null>(null);
   // 플레이북 실행 로그(D-135) — 단건 ▶ · 자격증명 모달 · Run All · 리포트 내보내기가 공유한다.
   const runLog = useRunLog();
   const [showRunLog, setShowRunLog] = useLogPref('playbooks-run');
@@ -147,39 +156,54 @@ export function PlaybooksPage() {
     return sorted;
   }, [dndPlaybooks, sortKey, sortDir]);
 
-  const handleCreate = (data: PlaybookFormSubmit) => {
-    createPlaybook.mutate({
+  // 모달이 결과를 기다린다(D-143) — Promise 를 그대로 돌려줘 실패 시 모달 안에 사유를 띄운다.
+  const handleCreate = (data: PlaybookFormSubmit) =>
+    createPlaybook.mutateAsync({
       name: data.name,
-      description: data.description || undefined,
+      description: data.description.trim() || undefined,
       playbookFileId: data.playbookFileId,
       inventoryId: data.inventoryId,
       playbookPath: data.playbookPath,
       inventoryPath: data.inventoryPath,
-      tags: data.tags || undefined,
+      tags: data.tags.trim() || undefined,
       timeoutSeconds: data.timeoutSeconds,
       clusterId: data.clusterId,
     });
-  };
 
   const handleUpdate = (data: PlaybookFormSubmit) => {
-    if (!editPlaybook) return;
-    updatePlaybook.mutate({
+    if (!editPlaybook) return Promise.resolve();
+    return updatePlaybook.mutateAsync({
       id: editPlaybook.id,
       data: {
         name: data.name,
-        description: data.description || undefined,
+        // 지운 값은 null 로 보내 서버가 컬럼을 비우게 한다(D-144) — undefined 는 "변경 없음".
+        description: data.description.trim() || null,
         // 모드 전환 시 반대편 필드를 비워줘야 backend 에서 충돌 안 남
         playbookFileId: data.playbookFileId ?? null,
         inventoryId: data.inventoryId ?? null,
         playbookPath: data.playbookPath ?? null,
         inventoryPath: data.inventoryPath ?? null,
-        tags: data.tags || undefined,
+        tags: data.tags.trim() || null,
         timeoutSeconds: data.timeoutSeconds,
         clusterId: data.clusterId,
       },
     });
-    setEditPlaybook(null);
+    // 성공 시 모달의 onClose(handleModalClose)가 editPlaybook 을 비운다.
   };
+
+  const handleDelete = (pb: Playbook) => setDeleteTarget(pb);
+
+  // 실패 토스트는 useDeletePlaybook 의 onError 가 띄운다(D-143) — 여기선 다이얼로그만 정리한다.
+  const confirmDelete = async () => {
+    if (!deleteTarget) return;
+    try {
+      await deletePlaybook.mutateAsync(deleteTarget.id);
+    } catch { /* hook onError 토스트 */ }
+    setDeleteTarget(null);
+  };
+
+  // 실패 토스트는 useToggleDashboard 의 onError 가 띄운다(D-143).
+  const handleToggleDashboard = (pb: Playbook) => toggleDashboard.mutate(pb.id);
 
   const handleOpenEdit = (playbook: Playbook) => {
     setEditPlaybook(playbook);
@@ -199,16 +223,26 @@ export function PlaybooksPage() {
     summarize: ({ data }) => playbookRunLines(data),
   });
 
-  // 카드의 ▶ 버튼 클릭 — 세션에 저장된 자격증명이 있으면 그대로 실행, 없으면 모달.
+  // 카드의 ▶ 버튼 클릭 — 세션에 저장된 자격증명이 있으면 확인 다이얼로그(D-141) 후 실행, 없으면 자격증명 모달
+  // (모달 자체가 대상·자격증명을 확인하는 단계다).
   const handleRunOne = (pb: Playbook) => {
     if (runningIds.has(pb.id)) return;
     const cached = readSessionCreds();
     if (cached) {
-      void runOneLogged(pb, cached);
+      setRunConfirm({ pb, creds: cached });
     } else {
       setCredsTarget(pb);
     }
   };
+
+  // Run All 확인 문구용 — 대상(실행 중 제외)과 클러스터별 건수.
+  const runAllTargets = filteredPlaybooks.filter((p) => !runningIds.has(p.id));
+  const runAllByCluster = (() => {
+    const m = new Map<string, number>();
+    for (const p of runAllTargets) m.set(p.clusterId, (m.get(p.clusterId) ?? 0) + 1);
+    return [...m.entries()].map(([id, n]) => ({ id, name: clusterNameMap[id] ?? id, n }));
+  })();
+  const runAllCreds = runAllConfirm ? readSessionCreds() : null;
 
   // Run All — 표시 중인 플레이북을 병렬 실행. 한 개 실패가 나머지를 막지 않는다(allSettled).
   const handleRunAll = async () => {
@@ -305,16 +339,16 @@ export function PlaybooksPage() {
               {statusCounts.total > 0 && (
                 <div className="flex items-center gap-2 ml-2">
                   <span className="text-sm px-2 py-0.5 rounded-full bg-secondary text-muted-foreground border border-border">
-                    {statusCounts.healthy} OK
+                    정상 {statusCounts.healthy}
                   </span>
                   {statusCounts.warning > 0 && (
                     <span className="text-sm px-2 py-0.5 rounded-full bg-status-warning/15 text-status-warning border border-status-warning/30">
-                      {statusCounts.warning} Changed
+                      변경 {statusCounts.warning}
                     </span>
                   )}
                   {statusCounts.critical > 0 && (
                     <span className="text-sm px-2 py-0.5 rounded-full bg-status-critical/15 text-status-critical border border-status-critical/30">
-                      {statusCounts.critical} Failed
+                      실패 {statusCounts.critical}
                     </span>
                   )}
                 </div>
@@ -333,33 +367,34 @@ export function PlaybooksPage() {
                 <button
                   onClick={() => setViewMode('list')}
                   className={`px-2 py-1.5 text-sm rounded inline-flex items-center gap-1 transition-colors ${
-                    viewMode === 'list' ? 'bg-primary/15 text-primary' : 'text-muted-foreground hover:text-foreground'
+                    viewMode === 'list' ? 'bg-secondary text-foreground font-medium' : 'text-muted-foreground hover:text-foreground'
                   }`}
-                  title="리스트 보기"
-                  aria-label="리스트 보기"
+                  title="목록 보기"
+                  aria-label="목록 보기"
                   aria-pressed={viewMode === 'list'}
                 >
                   <List className="w-4 h-4" />
-                  <span className="hidden sm:inline">List</span>
+                  <span className="hidden sm:inline">목록</span>
                 </button>
                 <button
                   onClick={() => setViewMode('card')}
                   className={`px-2 py-1.5 text-sm rounded inline-flex items-center gap-1 transition-colors ${
-                    viewMode === 'card' ? 'bg-primary/15 text-primary' : 'text-muted-foreground hover:text-foreground'
+                    viewMode === 'card' ? 'bg-secondary text-foreground font-medium' : 'text-muted-foreground hover:text-foreground'
                   }`}
                   title="카드 보기"
                   aria-label="카드 보기"
                   aria-pressed={viewMode === 'card'}
                 >
                   <LayoutGrid className="w-4 h-4" />
-                  <span className="hidden sm:inline">Card</span>
+                  <span className="hidden sm:inline">카드</span>
                 </button>
               </div>
 
               {/* Sort Controls */}
               <div className="flex items-center gap-1.5">
-                <ArrowUpDown className="w-4 h-4 text-muted-foreground" />
+                <ArrowUpDown className="w-4 h-4 text-muted-foreground" aria-hidden="true" />
                 <select
+                  aria-label="정렬 기준"
                   value={sortKey}
                   onChange={(e) => setSortKey(e.target.value as PlaybookSortKey)}
                   className="px-2 py-1.5 text-sm bg-background border border-border rounded-lg"
@@ -385,29 +420,31 @@ export function PlaybooksPage() {
                     className="px-4 py-2 text-sm font-medium bg-secondary hover:bg-secondary/80 border border-border rounded-lg transition-colors flex items-center gap-2"
                   >
                     <Download className="w-4 h-4" />
-                    Export .md
+                    리포트 내보내기(.md)
                   </button>
-                  <RoleGate allow={['admin', 'operator']}>
-                    <button
-                      onClick={handleRunAll}
-                      className="px-4 py-2 text-sm font-medium bg-primary hover:bg-primary/90 text-primary-foreground rounded-lg transition-colors flex items-center gap-2"
-                    >
-                      <Play className="w-4 h-4" />
-                      Run All
-                    </button>
-                  </RoleGate>
+                  <button
+                    onClick={() => setRunAllConfirm(true)}
+                    disabled={!canOperate || runAllTargets.length === 0}
+                    title={withHint(runAllTargets.length === 0 ? '모든 플레이북이 이미 실행 중입니다' : '표시 중인 플레이북 전체 실행')}
+                    aria-label={ariaWithHint('전체 실행')}
+                    className="px-4 py-2 text-sm font-medium bg-primary hover:bg-primary/90 text-primary-foreground rounded-lg transition-colors flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    <Play className="w-4 h-4" />
+                    전체 실행
+                  </button>
                 </>
               )}
 
-              <RoleGate allow={['admin', 'operator']}>
-                <button
-                  onClick={() => { setEditPlaybook(null); setShowAdd(true); }}
-                  className="px-4 py-2 text-sm font-medium bg-primary hover:bg-primary/90 text-primary-foreground rounded-lg transition-colors flex items-center gap-2"
-                >
-                  <Plus className="w-4 h-4" />
-                  Register Playbook
-                </button>
-              </RoleGate>
+              <button
+                onClick={() => { setEditPlaybook(null); setShowAdd(true); }}
+                disabled={!canOperate}
+                title={withHint('플레이북 등록')}
+                aria-label={ariaWithHint('플레이북 등록')}
+                className="px-4 py-2 text-sm font-medium bg-primary hover:bg-primary/90 text-primary-foreground rounded-lg transition-colors flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <Plus className="w-4 h-4" />
+                플레이북 등록
+              </button>
             </div>
             }
           />
@@ -433,13 +470,16 @@ export function PlaybooksPage() {
                 ))}
               </div>
             )
+          ) : loadFailed ? (
+            <ErrorState error={playbooksQ.error} title="플레이북 목록을 불러오지 못했습니다" onRetry={() => void playbooksQ.refetch()} />
           ) : filteredPlaybooks.length === 0 ? (
             <EmptyState
               icon={BookOpen}
               title={selectedClusterIds.length === 0 ? '등록된 플레이북이 없습니다.' : '선택한 클러스터에 등록된 플레이북이 없습니다.'}
               description="Ansible 플레이북을 등록하면 클러스터별로 실행하고 결과를 남길 수 있습니다."
             >
-              <RoleGate allow={['admin', 'operator']}>
+              {/* §12.9 예외 — 빈 상태의 단독 주 액션은 viewer 에게 생략(헤더의 비활성 버튼이 사유를 보여준다). */}
+              {canOperate && (
                 <button
                   type="button"
                   onClick={() => { setEditPlaybook(null); setShowAdd(true); }}
@@ -447,7 +487,7 @@ export function PlaybooksPage() {
                 >
                   플레이북 등록
                 </button>
-              </RoleGate>
+              )}
             </EmptyState>
           ) : viewMode === 'list' ? (
             <DndContext
@@ -465,12 +505,8 @@ export function PlaybooksPage() {
                       clusterName={showClusterLabel ? clusterNameMap[playbook.clusterId] : undefined}
                       onRun={() => handleRunOne(playbook)}
                       onEdit={() => handleOpenEdit(playbook)}
-                      onDelete={() => {
-                        if (confirm(`Delete playbook "${playbook.name}"?`)) {
-                          deletePlaybook.mutate(playbook.id);
-                        }
-                      }}
-                      onToggleDashboard={() => toggleDashboard.mutate(playbook.id)}
+                      onDelete={() => handleDelete(playbook)}
+                      onToggleDashboard={() => handleToggleDashboard(playbook)}
                       onViewLog={() => setLogTarget(playbook)}
                     />
                   ))}
@@ -492,12 +528,8 @@ export function PlaybooksPage() {
                       isRunning={runningIds.has(playbook.id)}
                       onRun={() => handleRunOne(playbook)}
                       onEdit={() => handleOpenEdit(playbook)}
-                      onDelete={() => {
-                        if (confirm(`Delete playbook "${playbook.name}"?`)) {
-                          deletePlaybook.mutate(playbook.id);
-                        }
-                      }}
-                      onToggleDashboard={() => toggleDashboard.mutate(playbook.id)}
+                      onDelete={() => handleDelete(playbook)}
+                      onToggleDashboard={() => handleToggleDashboard(playbook)}
                     />
                   ))}
                 </div>
@@ -533,6 +565,84 @@ export function PlaybooksPage() {
 
       {/* 실행 로그 상세 다이얼로그 */}
       <PlaybookLogDialog playbook={logTarget} onClose={() => setLogTarget(null)} />
+
+      {/* 단건 실행 확인(D-141) — 세션 자격증명으로 모달 없이 바로 나가던 경로 */}
+      <ConfirmDialog
+        open={!!runConfirm}
+        title="플레이북 실행"
+        description={runConfirm
+          ? `"${runConfirm.pb.name}" 을(를) ${clusterNameMap[runConfirm.pb.clusterId] ?? runConfirm.pb.clusterId} 클러스터 대상으로 실행합니다. 인벤토리의 호스트에 ansible-playbook 이 바로 실행됩니다.`
+          : undefined}
+        confirmLabel="실행"
+        danger
+        busy={!!runConfirm && runningIds.has(runConfirm.pb.id)}
+        onConfirm={() => {
+          if (!runConfirm) return;
+          const { pb, creds } = runConfirm;
+          setRunConfirm(null);
+          void runOneLogged(pb, creds);
+        }}
+        onCancel={() => setRunConfirm(null)}
+      >
+        {runConfirm && (
+          <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-sm">
+            <dt className="text-muted-foreground">인벤토리</dt>
+            <dd className="font-mono truncate">{runConfirm.pb.inventoryName || runConfirm.pb.inventoryPath || '기본 인벤토리'}</dd>
+            <dt className="text-muted-foreground">플레이북</dt>
+            <dd className="font-mono truncate">{runConfirm.pb.playbookFileName || runConfirm.pb.playbookPath || '—'}</dd>
+            <dt className="text-muted-foreground">자격증명</dt>
+            <dd>세션에 저장된 SSH 자격증명{runConfirm.creds.ssh_username ? ` (${runConfirm.creds.ssh_username})` : ''}</dd>
+          </dl>
+        )}
+      </ConfirmDialog>
+
+      {/* 전체 실행 확인(D-141) — 클러스터 미선택 = 전체 클러스터라 범위를 강조한다 */}
+      <ConfirmDialog
+        open={runAllConfirm}
+        title="플레이북 전체 실행"
+        description={`표시 중인 플레이북 ${runAllTargets.length}개를 ${
+          selectedClusterIds.length === 0 ? `전체 ${runAllByCluster.length}개 클러스터` : `${runAllByCluster.length}개 클러스터`
+        }에서 병렬로 실행합니다. 각 인벤토리의 호스트에 ansible-playbook 이 바로 실행됩니다.`}
+        confirmLabel={`${runAllTargets.length}개 실행`}
+        danger
+        busy={runAllTargets.length === 0}
+        onConfirm={() => {
+          setRunAllConfirm(false);
+          void handleRunAll();
+        }}
+        onCancel={() => setRunAllConfirm(false)}
+      >
+        <div className="space-y-2 text-sm">
+          {selectedClusterIds.length === 0 && (
+            <p className="font-semibold text-status-warning">클러스터를 고르지 않아 전체 클러스터가 대상입니다.</p>
+          )}
+          <ul className="max-h-40 overflow-y-auto space-y-0.5">
+            {runAllByCluster.map((c) => (
+              <li key={c.id} className="flex justify-between gap-3">
+                <span className="truncate">{c.name}</span>
+                <span className="tabular-nums text-muted-foreground">{c.n}개</span>
+              </li>
+            ))}
+          </ul>
+          <p className="text-muted-foreground">
+            자격증명: {runAllCreds ? `세션에 저장된 SSH 자격증명${runAllCreds.ssh_username ? ` (${runAllCreds.ssh_username})` : ''}` : '세션 자격증명 없음 — 인벤토리/서버 기본값 사용'}
+          </p>
+        </div>
+      </ConfirmDialog>
+
+      {/* 삭제 확인(D-142) — native confirm() 대체 */}
+      <ConfirmDialog
+        open={!!deleteTarget}
+        title="플레이북 삭제"
+        description={deleteTarget
+          ? `"${deleteTarget.name}" 플레이북을 삭제합니다. 실행 이력(playbook_runs)도 함께 삭제되며 되돌릴 수 없습니다.`
+          : undefined}
+        confirmLabel="삭제"
+        danger
+        busy={deletePlaybook.isPending}
+        onConfirm={() => void confirmDelete()}
+        onCancel={() => setDeleteTarget(null)}
+      />
     </div>
   );
 }

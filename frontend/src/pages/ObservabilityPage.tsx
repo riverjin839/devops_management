@@ -172,7 +172,7 @@ export function ObservabilityPage() {
                       }`}
                     >
                       {mod.label}
-                      <span className="ml-1.5 text-xs opacity-70">
+                      <span className="ml-1.5 text-xs tabular-nums">
                         {planned ? '준비중' : mod.metricCount}
                       </span>
                     </button>

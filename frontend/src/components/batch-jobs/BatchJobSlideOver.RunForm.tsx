@@ -120,7 +120,7 @@ export function RunForm({ job }: RunFormProps) {
   return (
     <div className="space-y-3">
       {!job.enabled && (
-        <div className="flex items-center gap-1.5 text-xs text-slate-600 dark:text-slate-400 bg-slate-400/10 border border-slate-400/30 rounded-lg px-2.5 py-2">
+        <div className="flex items-center gap-1.5 text-xs text-muted-foreground bg-muted border border-border rounded-lg px-2.5 py-2">
           <PowerOff className="w-3.5 h-3.5 flex-shrink-0" />
           이 잡은 비활성화되어 있습니다 — "편집" 버튼에서 활성화해야 실행할 수 있습니다
           (연결 테스트는 계속 사용할 수 있습니다).

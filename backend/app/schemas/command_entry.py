@@ -1,6 +1,6 @@
 from datetime import datetime
 from typing import Literal, Optional
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 
 Importance = Literal["info", "low", "medium", "high", "critical"]
@@ -36,6 +36,15 @@ class CommandEntryUpdate(BaseModel):
     sort_order: Optional[int] = None
     author: Optional[str] = Field(default=None, max_length=100)
     confluence_url: Optional[str] = Field(default=None, max_length=2048)
+
+    # D-144 — 부분 수정(exclude_unset)에서 `null` 은 "값 비우기"다. 카테고리·의미·주의사항·예시·태그·
+    # Confluence 는 null 로 비우고, NOT NULL 컬럼에 null 이 오면 500 대신 422 로 거부한다.
+    @field_validator("command", "importance", "pinned", "sort_order")
+    @classmethod
+    def _reject_null(cls, v, info):
+        if v is None:
+            raise ValueError(f"{info.field_name} 은(는) 비울 수 없습니다")
+        return v
 
 
 class CommandEntryResponse(CommandEntryBase):

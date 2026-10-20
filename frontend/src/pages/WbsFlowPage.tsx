@@ -52,16 +52,16 @@ const PRIORITY_COLOR: Record<string, string> = {
   low:    'bg-secondary text-muted-foreground border-border',
 };
 const MODULE_COLOR: Record<string, string> = {
-  k8s:        'bg-chart-1/15 text-chart-1',
-  keycloak:   'bg-chart-4/15 text-chart-4',
-  nexus:      'bg-chart-7/15 text-chart-7',
-  cilium:     'bg-chart-6/15 text-chart-6',
-  argocd:     'bg-chart-2/15 text-chart-2',
-  jenkins:    'bg-chart-5/15 text-chart-5',
-  backend:    'bg-chart-3/15 text-chart-3',
-  frontend:   'bg-chart-5/15 text-chart-5',
-  monitoring: 'bg-chart-2/15 text-chart-2',
-  infra:      'bg-chart-8/15 text-chart-8',
+  k8s:        'bg-chart-1/15 text-chart-1-text',
+  keycloak:   'bg-chart-4/15 text-chart-4-text',
+  nexus:      'bg-chart-7/15 text-chart-7-text',
+  cilium:     'bg-chart-6/15 text-chart-6-text',
+  argocd:     'bg-chart-2/15 text-chart-2-text',
+  jenkins:    'bg-chart-5/15 text-chart-5-text',
+  backend:    'bg-chart-3/15 text-chart-3-text',
+  frontend:   'bg-chart-5/15 text-chart-5-text',
+  monitoring: 'bg-chart-2/15 text-chart-2-text',
+  infra:      'bg-chart-8/15 text-chart-8-text',
 };
 
 // ── types ─────────────────────────────────────────────────────────────────────
@@ -156,7 +156,7 @@ function DetailModal({ item, onClose }: { item: DayItem; onClose: () => void }) 
   const isIssue = item.type === 'issue';
   const title = (
     <div className="flex items-center gap-2 flex-wrap min-w-0">
-      <span className={`text-xs px-2 py-0.5 rounded-full font-semibold flex-shrink-0 ${isIssue ? 'bg-chart-7/15 text-chart-7' : 'bg-chart-1/15 text-chart-1'}`}>
+      <span className={`text-xs px-2 py-0.5 rounded-full font-semibold flex-shrink-0 ${isIssue ? 'bg-chart-7/15 text-chart-7-text' : 'bg-chart-1/15 text-chart-1-text'}`}>
         {isIssue ? '이슈' : '작업'}
       </span>
       {item.module && (
@@ -255,7 +255,7 @@ function ProgressBar({ value }: { value: number }) {
 
 const CHIP_COLOR: Record<string, string> = {
   emerald: 'bg-secondary text-muted-foreground',
-  sky:     'bg-chart-3/15 text-chart-3',
+  sky:     'bg-chart-3/15 text-chart-3-text',
   slate:   'bg-status-unknown/15 text-status-unknown',
   red:     'bg-status-critical/15 text-status-critical',
 };

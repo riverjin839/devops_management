@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
-  HardDrive, Plus, Pencil, ServerCog, AlertTriangle, Settings2,
+  HardDrive, Plus, Pencil, ServerCog, AlertTriangle, Settings2, PlayCircle, Inbox,
 } from 'lucide-react';
 import { MacCard } from '@/components/ui/MacCard';
-import { StatusBadge, StatusDot, statusToVariant, EmptyState, LoadingState, LogViewer, PageShell, RunLogPanel } from '@/components/common';
+import { StatusBadge, StatusDot, statusToVariant, EmptyState, ErrorState, LoadingState, LogViewer, PageShell, RunLogPanel } from '@/components/common';
+import { useCanOperate } from '@/hooks/useCanOperate';
 import { useRunLog, runLogged, type RunLogEntry } from '@/hooks/useRunLog';
 import { useLogPref } from '@/hooks/useLogPref';
 import { PageHeader } from '@/components/common/PageHeader';
@@ -12,11 +13,17 @@ import { useIsilonServers, useRunIsilonCommands } from '@/hooks/useIsilonNfs';
 import { useClusters } from '@/hooks/useCluster';
 import { useTerminalEnvSync } from '@/hooks/useTerminalEnvSync';
 import type {
-  IsilonServer, IsilonCommandResult, IsilonRunResponse, IsilonK8sNfsPv,
+  IsilonServer, IsilonCommandResult, IsilonRunResponse as IsilonRunResponseBase, IsilonK8sNfsPv,
 } from '@/types';
 
+/** 실행 응답 + K8s PV 조회 오류(D-147, 백엔드 `k8s_nfs_pvs_error`). 성공이면 null. */
+type IsilonRunResponse = IsilonRunResponseBase & { k8sNfsPvsError?: string | null };
+
 export function IsilonNfsPage() {
-  const { data: servers = [], isLoading: loadingServers } = useIsilonServers();
+  const {
+    data: servers = [], isLoading: loadingServers, isError: serversError, error: serversErr, refetch: refetchServers,
+  } = useIsilonServers();
+  const { canOperate, withHint, ariaWithHint } = useCanOperate();
   const [selectedId, setSelectedId] = useState<string | undefined>(undefined);
   const [serverModal, setServerModal] = useState<{ open: boolean; edit?: IsilonServer | null }>({ open: false });
   const [cmdOpen, setCmdOpen] = useState(false);
@@ -31,12 +38,14 @@ export function IsilonNfsPage() {
   const { data: clusters = [] } = useClusters();
   useTerminalEnvSync(clusters, null);
 
-  // 서버 목록 로드 시 기본 선택
+  // 서버 목록 로드 시 기본 선택 — 선택한 서버가 목록에서 사라지면(삭제 등) 기본 서버로 다시 고른다.
+  // 조회 실패 중에는 servers 가 빈 기본값이라 선택을 건드리지 않는다.
   useEffect(() => {
-    if (!selectedId && servers.length > 0) {
-      setSelectedId(servers.find((s) => s.isDefault)?.id ?? servers[0].id);
-    }
-  }, [servers, selectedId]);
+    if (loadingServers || serversError) return;
+    if (selectedId && servers.some((s) => s.id === selectedId)) return;
+    const next = servers.find((s) => s.isDefault)?.id ?? servers[0]?.id;
+    if (next !== selectedId) setSelectedId(next);
+  }, [servers, selectedId, loadingServers, serversError]);
 
   // 서버를 바꾸면 이전 서버의 선택/결과를 들고 있지 않는다.
   useEffect(() => {
@@ -57,13 +66,13 @@ export function IsilonNfsPage() {
   };
 
   const handleRun = async () => {
-    if (!selectedId || selectedKeys.size === 0) return;
+    if (!canOperate || !selectedId || selectedKeys.size === 0) return;
     const keys = [...selectedKeys];
     const target = selected ? `${selected.name} (${selected.username}@${selected.host}:${selected.port})` : selectedId;
     const r = await runLogged(runLog, {
       title: 'Isilon 명령 실행',
       first: `${target} — 명령 ${keys.length}개 실행 요청: ${keys.join(', ')}`,
-      fn: () => runMut.mutateAsync({ serverId: selectedId, keys }),
+      fn: (): Promise<IsilonRunResponse> => runMut.mutateAsync({ serverId: selectedId, keys }),
       summarize: isilonRunLines,
     });
     if (r.ok) setRunResult(r.data);
@@ -78,6 +87,8 @@ export function IsilonNfsPage() {
             <div className="space-y-1">
               {loadingServers ? (
                 <LoadingState compact />
+              ) : serversError ? (
+                <ErrorState compact error={serversErr} title="서버 목록 조회 실패" onRetry={() => { void refetchServers(); }} />
               ) : servers.length === 0 ? (
                 <EmptyState compact icon={ServerCog} title="등록된 서버가 없습니다." description="아래 서버 추가로 등록하세요." />
               ) : servers.map((s) => (
@@ -97,8 +108,10 @@ export function IsilonNfsPage() {
             </div>
             <div className="border-t border-border mt-2 pt-2">
               <button onClick={() => setServerModal({ open: true, edit: null })}
-                className="w-full inline-flex items-center gap-1.5 text-xs px-2 py-1.5 rounded-xl border border-border hover:bg-muted">
-                <Plus className="w-3.5 h-3.5" /> 서버 추가
+                disabled={!canOperate}
+                title={withHint('서버 추가')} aria-label={ariaWithHint('서버 추가')}
+                className="w-full inline-flex items-center gap-1.5 text-xs px-2 py-1.5 rounded-xl border border-border hover:bg-muted disabled:opacity-50 disabled:cursor-not-allowed">
+                <Plus className="w-3.5 h-3.5" aria-hidden="true" /> 서버 추가
               </button>
             </div>
           </MacCard>
@@ -112,12 +125,19 @@ export function IsilonNfsPage() {
             description="K8s 가 쓰는 NFS 를 NAS 서버 쪽에서 점검 · 읽기전용/무부하 · 선택한 명령만 실행"
           />
 
-          {!loadingServers && servers.length === 0 ? (
+          {loadingServers ? (
+            <LoadingState />
+          ) : serversError ? (
+            // 조회 실패를 "서버를 먼저 등록하세요" 로 보이면 중복 등록으로 이어진다(D-137).
+            <ErrorState error={serversErr} title="Isilon 서버 목록을 불러오지 못했습니다" onRetry={() => { void refetchServers(); }} />
+          ) : servers.length === 0 ? (
             <EmptyState
               icon={ServerCog}
               title="Isilon 서버를 먼저 등록하세요"
-              description="SSH 접속 대상(host/계정/비밀번호)을 등록하면 isi 명령으로 NFS 현황을 수집합니다."
-              action={{ label: '서버 추가', onClick: () => setServerModal({ open: true, edit: null }) }}
+              description={canOperate
+                ? 'SSH 접속 대상(host/계정/비밀번호)을 등록하면 isi 명령으로 NFS 현황을 수집합니다.'
+                : 'SSH 접속 대상 등록은 operator 이상 권한이 필요합니다. 관리자에게 등록을 요청하세요.'}
+              action={canOperate ? { label: '서버 추가', onClick: () => setServerModal({ open: true, edit: null }) } : undefined}
             />
           ) : selected ? (
             <>
@@ -128,7 +148,9 @@ export function IsilonNfsPage() {
                     <div className="flex items-center gap-2">
                       <h2 className="text-sm font-semibold">{selected.name}</h2>
                       <button onClick={() => setServerModal({ open: true, edit: selected })}
-                        className="text-muted-foreground hover:text-foreground" title="서버 편집" aria-label="서버 편집">
+                        disabled={!canOperate}
+                        className="text-muted-foreground hover:text-foreground disabled:opacity-50 disabled:cursor-not-allowed"
+                        title={withHint('서버 편집')} aria-label={ariaWithHint('서버 편집')}>
                         <Pencil className="w-3.5 h-3.5" aria-hidden />
                       </button>
                     </div>
@@ -168,7 +190,9 @@ export function IsilonNfsPage() {
                   actions={
                     <button
                       onClick={() => setCmdOpen(true)}
-                      className="inline-flex items-center gap-1 text-xs px-2 py-1 rounded-lg border border-border hover:bg-muted"
+                      // viewer 도 명령 정의는 볼 수 있게 연다 — 안의 추가·저장·삭제가 비활성+사유(§12.9).
+                      title={canOperate ? 'isi 명령 등록·수정·비활성' : 'isi 명령 보기 (등록·수정은 operator 이상)'}
+                      className="inline-flex items-center gap-1 text-xs px-2 py-1 rounded-xl border border-border hover:bg-muted"
                     >
                       <Settings2 className="w-3.5 h-3.5" aria-hidden /> 명령 관리
                     </button>
@@ -218,7 +242,8 @@ function isilonRunLines(res: IsilonRunResponse): RunLogEntry[] {
     out.push([r.ok ? 'info' : 'error', parts.join(' · ')]);
   }
   if (res.skippedKeys && res.skippedKeys.length > 0) out.push(['warn', `등록/활성화되지 않아 건너뜀: ${res.skippedKeys.join(', ')}`]);
-  if (res.k8sNfsPvs) out.push(['info', `K8s NFS PV ${res.k8sNfsPvs.length}개 조회`]);
+  if (res.k8sNfsPvsError) out.push(['warn', res.k8sNfsPvsError]);
+  else if (res.k8sNfsPvs) out.push(['info', `K8s NFS PV ${res.k8sNfsPvs.length}개 조회`]);
   const failed = results.filter((r) => !r.ok).length;
   out.push([failed ? 'warn' : 'info', `명령 ${results.length} · 성공 ${results.length - failed} · 실패 ${failed}`]);
   return out;
@@ -227,9 +252,10 @@ function isilonRunLines(res: IsilonRunResponse): RunLogEntry[] {
 function ConnBadge({ runResult, running }: { runResult: IsilonRunResponse | null; running: boolean }) {
   if (running) return <StatusBadge variant="loading" label="실행 중" />;
   if (!runResult) return <StatusBadge variant="neutral" label="미실행" />;
+  // 접속 실패는 "아직 안 붙어 봄"(pending 회색)이 아니라 오류다(D-147).
   return runResult.connectionOk
     ? <StatusBadge variant="healthy" label="접속됨" />
-    : <StatusBadge variant="pending" label="접속 불가" />;
+    : <StatusBadge variant="critical" label="접속 실패" />;
 }
 
 function extractExportPaths(results?: IsilonCommandResult[]): string[] {
@@ -262,11 +288,36 @@ function pathServed(pvPath: string, exportPaths: string[]): boolean {
 function K8sNfsTable({ runResult }: { runResult: IsilonRunResponse | null }) {
   const pvs: IsilonK8sNfsPv[] = runResult?.k8sNfsPvs ?? [];
   const exportPaths = useMemo(() => extractExportPaths(runResult?.results), [runResult]);
+  // 빈 상태 3분기(D-147) — 미실행 / K8s 조회 실패 / NFS PV 없음 을 한 문장에 섞지 않는다.
+  if (!runResult) {
+    return (
+      <EmptyState
+        compact
+        icon={PlayCircle}
+        title="아직 실행 전입니다"
+        description="아래에서 명령을 하나 이상 실행하면 관리 클러스터의 NFS PV 목록을 함께 조회합니다."
+      />
+    );
+  }
+  if (runResult.k8sNfsPvsError) {
+    return (
+      <div role="alert" className="flex items-start gap-2 text-sm text-status-critical">
+        <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0" aria-hidden="true" />
+        <div className="min-w-0">
+          <p className="font-medium">K8s PV 조회 실패 — PV ↔ export 매칭을 할 수 없습니다</p>
+          <p className="text-xs mt-0.5 break-words">{runResult.k8sNfsPvsError}</p>
+        </div>
+      </div>
+    );
+  }
   if (pvs.length === 0) {
     return (
-      <p className="text-sm text-muted-foreground">
-        NFS 백엔드(spec.nfs)를 쓰는 K8s PV 가 없거나 K8s 조회가 불가합니다. (명령을 하나 이상 실행하면 함께 채워집니다.)
-      </p>
+      <EmptyState
+        compact
+        icon={Inbox}
+        title="NFS PV 가 없습니다"
+        description="관리 클러스터에 NFS 백엔드(spec.nfs)를 쓰는 PersistentVolume 이 없습니다."
+      />
     );
   }
   return (

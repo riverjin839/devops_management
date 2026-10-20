@@ -1,8 +1,10 @@
 import { useRef, useState, type ComponentType } from 'react';
 import { Pencil, Trash2, Pin, PinOff, ExternalLink, ChevronUp, ChevronDown, ArrowUpDown } from 'lucide-react';
-import type { OpsNote, OpsNoteUpdate } from '@/types';
+import type { OpsNote } from '@/types';
 import { formatRelativeTime, stripHtml } from '@/lib/utils';
 import { DoubleScrollX } from '@/components/common';
+import { useCanOperate } from '@/hooks/useCanOperate';
+import type { OpsNotePatch } from './OpsNoteForm';
 
 export type OpsNoteSortKey = 'title' | 'service' | 'author' | 'updatedAt';
 
@@ -24,7 +26,7 @@ interface OpsNoteTableProps {
   onEdit: (n: OpsNote) => void;
   onDelete: (n: OpsNote) => void;
   onTogglePin: (n: OpsNote) => void;
-  onUpdate: (id: string, data: OpsNoteUpdate) => void;
+  onUpdate: (id: string, data: OpsNotePatch) => void;
   deletingId: string | null;
 }
 
@@ -76,14 +78,17 @@ function OpsNoteRow({
   onEdit: (n: OpsNote) => void;
   onDelete: (n: OpsNote) => void;
   onTogglePin: (n: OpsNote) => void;
-  onUpdate: (id: string, data: OpsNoteUpdate) => void;
+  onUpdate: (id: string, data: OpsNotePatch) => void;
   deleting: boolean;
 }) {
-  const [editing, setEditing] = useState<CellKey | null>(null);
+  const [editing, setEditingRaw] = useState<CellKey | null>(null);
+  // 쓰기는 operator 이상(서버 require_operator) — viewer 는 인라인 편집에 들어가지 않고 사유를 본다(D-145).
+  const { canOperate, withHint, ariaWithHint } = useCanOperate();
+  const setEditing = (k: CellKey | null) => { if (k === null || canOperate) setEditingRaw(k); };
   const svc = serviceMap[note.service];
   const answerText = stripHtml(note.content);
   const hasBack = !!note.backContent?.trim();
-  const save = (patch: OpsNoteUpdate) => { onUpdate(note.id, patch); setEditing(null); };
+  const save = (patch: OpsNotePatch) => { onUpdate(note.id, patch); setEditing(null); };
 
   return (
     <tr
@@ -101,7 +106,7 @@ function OpsNoteRow({
       {/* Service — click-to-edit select */}
       <td
         className="px-4 py-3"
-        onClick={(e) => { e.stopPropagation(); setEditing('service'); }}
+        onClick={(e) => { e.stopPropagation(); if (canOperate) setEditing('service'); else onOpen(note); }}
       >
         {editing === 'service' ? (
           <select
@@ -118,7 +123,7 @@ function OpsNoteRow({
         ) : svc ? (
           <span
             className={`inline-flex items-center gap-1 text-xs font-semibold px-2 py-0.5 rounded-md cursor-pointer ${svc.soft}`}
-            title="클릭하여 서비스 변경"
+            title={canOperate ? '클릭하여 서비스 변경' : '클릭하여 상세 보기'}
           >
             <svc.Icon className="w-3 h-3" />{svc.label}
           </span>
@@ -129,7 +134,12 @@ function OpsNoteRow({
       {/* Title — click-to-edit */}
       <td
         className="px-4 py-3 max-w-md"
-        onClick={(e) => { if (editing !== 'title') { e.stopPropagation(); setEditing('title'); } }}
+        onClick={(e) => {
+          if (editing === 'title') return;
+          e.stopPropagation();
+          // viewer 는 인라인 편집 대신 상세로 연다.
+          if (canOperate) setEditing('title'); else onOpen(note);
+        }}
       >
         {editing === 'title' ? (
           <InlineText
@@ -167,15 +177,17 @@ function OpsNoteRow({
         {editing === 'author' ? (
           <InlineText
             initial={note.author ?? ''}
-            onSave={(v) => save({ author: v || undefined })}
+            onSave={(v) => save({ author: v || null })}
             onCancel={() => setEditing(null)}
             placeholder="작성자"
             className="text-sm"
           />
         ) : note.author ? (
           <span className="cursor-pointer hover:text-foreground transition-colors">{note.author}</span>
-        ) : (
+        ) : canOperate ? (
           <span className="text-muted-foreground italic cursor-pointer hover:text-primary transition-colors">+ 작성자</span>
+        ) : (
+          <span className="text-muted-foreground/40">—</span>
         )}
       </td>
       <td
@@ -210,22 +222,28 @@ function OpsNoteRow({
           )}
           <button
             onClick={() => onTogglePin(note)}
-            className="p-1.5 hover:bg-secondary rounded-md text-muted-foreground hover:text-primary transition-colors"
-            title={note.pinned ? '고정 해제' : '상단 고정'}
+            disabled={!canOperate}
+            className="p-1.5 hover:bg-secondary rounded-md text-muted-foreground hover:text-primary transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            title={withHint(note.pinned ? '고정 해제' : '상단 고정')}
+            aria-label={ariaWithHint(note.pinned ? '고정 해제' : '상단 고정')}
           >
             {note.pinned ? <PinOff className="w-3.5 h-3.5" /> : <Pin className="w-3.5 h-3.5" />}
           </button>
           <button
             onClick={() => onEdit(note)}
-            className="p-1.5 hover:bg-secondary rounded-md text-muted-foreground hover:text-foreground transition-colors"
-            title="전체 폼으로 수정"
+            disabled={!canOperate}
+            className="p-1.5 hover:bg-secondary rounded-md text-muted-foreground hover:text-foreground transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            title={withHint('전체 폼으로 수정')}
+            aria-label={ariaWithHint('전체 폼으로 수정')}
           >
             <Pencil className="w-3.5 h-3.5" />
           </button>
           <button
             onClick={() => onDelete(note)}
-            className="p-1.5 hover:bg-status-critical/10 rounded-md text-muted-foreground hover:text-status-critical transition-colors"
-            title="삭제"
+            disabled={!canOperate}
+            className="p-1.5 hover:bg-status-critical/10 rounded-md text-muted-foreground hover:text-status-critical transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            title={withHint('삭제')}
+            aria-label={ariaWithHint(`${note.title} 삭제`)}
           >
             <Trash2 className="w-3.5 h-3.5" />
           </button>

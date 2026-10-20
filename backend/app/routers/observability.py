@@ -27,7 +27,7 @@ from uuid import UUID
 
 import asyncio
 from fastapi import APIRouter, Body, Depends, Header, HTTPException, Query
-from sqlalchemy import desc, or_
+from sqlalchemy import and_, case, desc, func, or_
 from sqlalchemy.orm import Session
 
 from app.auth.deps import get_cluster_scope, get_current_user, require_operator
@@ -793,15 +793,22 @@ def alert_stats(
         AlertEvent.received_at >= since)
     if cluster_id:
         query = query.filter(AlertEvent.cluster_id == cluster_id)
-    rows = query.all()
+    # 행을 올리지 않고 DB 에서 센다 — 예전엔 최대 30일치 AlertEvent 를 raw/labels JSONB 째 읽어 파이썬에서 셌다.
+    def _n(cond):
+        return func.count(case((cond, 1)))
+
+    total, firing, resolved, critical, warning, info, unacked = query.with_entities(
+        func.count(),
+        _n(AlertEvent.status == "firing"),
+        _n(AlertEvent.status == "resolved"),
+        _n(AlertEvent.severity == "critical"),
+        _n(AlertEvent.severity == "warning"),
+        _n(AlertEvent.severity == "info"),
+        _n(and_(AlertEvent.acked.is_(False), AlertEvent.status == "firing")),
+    ).one()
     return AlertStatsResponse(
-        firing=sum(1 for r in rows if r.status == "firing"),
-        resolved=sum(1 for r in rows if r.status == "resolved"),
-        critical=sum(1 for r in rows if r.severity == "critical"),
-        warning=sum(1 for r in rows if r.severity == "warning"),
-        info=sum(1 for r in rows if r.severity == "info"),
-        unacked=sum(1 for r in rows if not r.acked and r.status == "firing"),
-        total=len(rows),
+        firing=firing, resolved=resolved, critical=critical, warning=warning, info=info,
+        unacked=unacked, total=total,
     )
 
 
@@ -850,12 +857,18 @@ def ack_all_alerts(
     ).filter(AlertEvent.acked.is_(False))
     who = actor.display_name or actor.username
     now = datetime.utcnow()
+    # 1000건씩 id 만 골라 묶음 UPDATE 를 반복한다 — 알람 폭주 때도 전체 행(raw JSONB 포함)이나 전체 id 목록을
+    # 메모리에 올리지 않는다. 갱신된 행은 `acked = false` 조건에서 빠지므로 다음 묶음이 자연히 이어진다.
     count = 0
-    for event in query.all():
-        event.acked = True
-        event.ack_by = who
-        event.ack_at = now
-        count += 1
+    while True:
+        ids = [r[0] for r in query.with_entities(AlertEvent.id).limit(1000).all()]
+        if not ids:
+            break
+        db.query(AlertEvent).filter(AlertEvent.id.in_(ids)).update(
+            {AlertEvent.acked: True, AlertEvent.ack_by: who, AlertEvent.ack_at: now},
+            synchronize_session=False,
+        )
+        count += len(ids)
     db.commit()
     return {"acked": count}
 
@@ -1161,8 +1174,10 @@ def ingest_snapshot(
 
     # 같은 (클러스터, 모듈, 종류) 의 오래된 스냅샷은 최근 5건만 남긴다 — 무한 증가 방지.
     try:
-        stale = (
-            db.query(ObservabilitySnapshot)
+        db.flush()  # 방금 받은 스냅샷도 세도록(안 하면 6건이 남았다)
+        # id 만 골라 지운다 — 스냅샷 payload(JSONB)를 지우려고 다시 읽지 않는다.
+        stale_ids = (
+            db.query(ObservabilitySnapshot.id)
             .filter(
                 ObservabilitySnapshot.cluster_id == cluster_id,
                 ObservabilitySnapshot.module_key == snapshot.module_key,
@@ -1172,8 +1187,10 @@ def ingest_snapshot(
             .offset(5)
             .all()
         )
-        for row in stale:
-            db.delete(row)
+        if stale_ids:
+            db.query(ObservabilitySnapshot).filter(
+                ObservabilitySnapshot.id.in_([r[0] for r in stale_ids])
+            ).delete(synchronize_session=False)
     except Exception as exc:  # noqa: BLE001
         logger.warning("snapshot ingest: 오래된 스냅샷 정리 실패 — 무시 (%s)", exc)
 

@@ -3,14 +3,18 @@ import { createPortal } from 'react-dom';
 import { useLocation, useNavigate } from 'react-router-dom';
 import {
   Plus, Leaf, Contrast, Brush, Paintbrush, Frame, Newspaper, Shapes, Diamond, Shell, AppWindow, CircleUserRound, Drama, Music, Guitar,
-  Moon, Sun, Monitor, LogOut, User,
+  Moon, Sun, Monitor, LogOut, User, Languages,
   KeyRound, Home, MessageSquare, Bot, HelpCircle, Search, ScrollText, Bug, UserCog, Palette, Download, Upload,
 } from 'lucide-react';
 import { useUiSettings } from '@/hooks/useUiSettings';
 import { useNavCatalog } from '@/hooks/useNavCatalog';
-import { useHomePrefs, useUpdateHomePrefs } from '@/hooks/useHomePrefs';
+import { useInstalledAppsActions } from '@/hooks/useHomePrefs';
 import { useThemeStore, accentApplies, ACCENTS, THEMES, type Accent, type Theme } from '@/stores/themeStore';
-import { ACCENT_SWATCH, ACCENT_LABEL } from '@/lib/themeSwatches';
+import { ACCENT_SWATCH } from '@/lib/themeSwatches';
+import { useTranslation } from 'react-i18next';
+import { LOCALES, LOCALE_NATIVE_NAME } from '@/i18n';
+import { useLocale, useLocaleSync } from '@/i18n/useLocale';
+import { useNavLabel } from '@/i18n/useNavLabel';
 import { NAV_WIDTH } from '@/stores/sidebarStore';
 import { useAuthStore } from '@/stores/authStore';
 import { useAgentChatStore } from '@/stores/agentChatStore';
@@ -48,25 +52,6 @@ const THEME_ICON: Record<Theme, ComponentType<{ className?: string }>> = {
   'picasso-violin': Music,
   'gris-guitar': Guitar,
   system: Monitor,
-};
-const THEME_LABEL: Record<Theme, string> = {
-  light: '라이트 (기본)',
-  dark: '다크',
-  comfort: '컴포트',
-  'high-contrast': '고대비',
-  umber: '움버',
-  'umber-light': '움버 라이트',
-  plaster: '플래스터',
-  journal: '아침 식사',
-  relief: '릴리프',
-  harlequin: '할리퀸과 목걸이를 한 여인',
-  ozenfant: '오장팡 자개',
-  whanki: '김환기 창',
-  'picasso-girl': '피카소 소녀의 머리',
-  'picasso-portrait': '피카소 소녀의 초상',
-  'picasso-violin': '피카소 바이올린',
-  'gris-guitar': '후안 그리스 기타',
-  system: '시스템',
 };
 // 강조색 스와치 아이콘 — 팩토리로 한 번만 만들어 매 렌더마다 컴포넌트 정체성이 바뀌지 않게 한다.
 function makeAccentSwatchIcon(accent: Accent): ComponentType<{ className?: string }> {
@@ -189,6 +174,10 @@ function RailIconButton({ label, Icon, active, highlighted, onClick, suppressToo
 // ── Main ────────────────────────────────────────────────────────────────────
 
 export function Sidebar() {
+  const { t } = useTranslation();
+  // R-6 — 서버 home_prefs.locale → 화면(로그인 셸에서 한 번). 언어 선택은 사용자 메뉴.
+  useLocaleSync();
+  const { locale, changeLocale } = useLocale();
   const { theme, setTheme, accent, setAccent } = useThemeStore();
   const location = useLocation();
   const navigate = useNavigate();
@@ -198,15 +187,17 @@ export function Sidebar() {
   const logout = useAuthStore((s) => s.clear);
   const isAdmin = currentUser?.role === 'admin';
   // 동적 navMap / 라벨 오버라이드 / 기능별 접근 제어 — 설치된 leaf 아이콘 렌더에 사용.
-  const { navMap, getLabel, featureAllowed } = useNavCatalog();
+  const { navMap, featureAllowed } = useNavCatalog();
+  // 표시 라벨 — 관리자 커스텀 라벨 우선, 없으면 현재 로케일 번역(R-6).
+  const getLabel = useNavLabel();
 
   // 사이드바 "SaaS 앱" 개편 — 레일에는 사용자가 설치(opt-in)한 것만 순서대로 보인다.
   // 기본값은 빈 리스트("+" 버튼만) 이고, 기존 계정은 백엔드 1회 이관으로 채워져 있다.
   // 설치 단위는 leaf(최하위) 페이지 하나하나 — installedApps 배열은 Sidebar/AppTopBar 가
   // 공유하므로, 여기서는 그중 platform/system 도메인(+뒤로가기)에 해당하는 것만 골라 그린다.
-  const { data: homePrefs } = useHomePrefs();
-  const updateHomePrefs = useUpdateHomePrefs();
-  const installedApps = useMemo(() => homePrefs?.installedApps ?? [], [homePrefs?.installedApps]);
+  const {
+    homePrefs, installedApps, toggle: toggleInstalledApp, move: moveInstalledApp, reset: resetInstalledApps,
+  } = useInstalledAppsActions();
   const sidebarInstalled = useMemo(
     () => installedApps.filter((id) => {
       const meta = installableAppById(id);
@@ -215,21 +206,6 @@ export function Sidebar() {
     [installedApps],
   );
   const [catalogOpen, setCatalogOpen] = useState(false);
-  const toggleInstalledApp = (id: string) => {
-    // 설정을 아직 못 받았거나(로딩·오류) 빈 [] 폴백 상태에서 토글하면 [id] 하나로 서버 목록
-    // 전체를 덮어쓴다 — 로드된 원본이 있을 때만 저장한다.
-    if (!homePrefs) return;
-    // 델타 연산 — 서버가 행 잠금 아래에서 합쳐 다른 기기·탭의 변경을 덮지 않는다.
-    updateHomePrefs.mutate(installedApps.includes(id) ? { installedAppsRemove: [id] } : { installedAppsAdd: [id] });
-  };
-  const moveInstalledApp = (id: string, before: string | null) => {
-    if (!homePrefs) return;
-    updateHomePrefs.mutate({ installedAppsMove: { id, before } });
-  };
-  const resetInstalledApps = () => {
-    if (!homePrefs) return;
-    updateHomePrefs.mutate({ installedAppsReset: true });
-  };
 
   const { open: agentChatOpen, toggle: toggleAgentChat } = useAgentChatStore();
 
@@ -369,8 +345,8 @@ export function Sidebar() {
           <button
             type="button"
             onClick={handleHomeClick}
-            title="홈으로"
-            aria-label="홈으로"
+            title={t('shell.homeButton')}
+            aria-label={t('shell.homeButton')}
             className={`w-9 h-9 bg-primary rounded-md flex items-center justify-center text-primary-foreground transition-colors hover:bg-primary/90 ${
               location.pathname === '/' ? 'ring-2 ring-primary/50' : ''
             }`}
@@ -383,14 +359,14 @@ export function Sidebar() {
             링크로 보인다(그룹 flyout 없음 — 설치 단위 자체가 이미 최하위 메뉴). 기본은
             빈 레일 + "+" 버튼(맨 아래) 뿐이다 — 뒤로가기도 설치 대상, 홈은 유일한 예외로
             위 로고가 항상 대신한다. */}
-        <nav className="flex-1 py-2 overflow-y-auto" aria-label="메인 네비게이션">
+        <nav className="flex-1 py-2 overflow-y-auto" aria-label={t('shell.mainNav')}>
           <div className="flex flex-col items-center gap-1">
             {sidebarInstalled.map((appId) => {
               if (appId === 'back') {
                 if (location.pathname === '/') return null;
                 const backApp = installableAppById('back')!;
                 return (
-                  <RailIconButton key="back" label={backApp.label} Icon={backApp.icon} onClick={handleBack} />
+                  <RailIconButton key="back" label={t('shell.back')} Icon={backApp.icon} onClick={handleBack} />
                 );
               }
               const meta = installableAppById(appId);
@@ -407,7 +383,7 @@ export function Sidebar() {
                 />
               );
             })}
-            <RailIconButton label="사이드바에 앱 추가" Icon={Plus} onClick={() => setCatalogOpen(true)} />
+            <RailIconButton label={t('shell.sidebarCatalog.title')} Icon={Plus} onClick={() => setCatalogOpen(true)} />
           </div>
         </nav>
 
@@ -417,7 +393,7 @@ export function Sidebar() {
               접근 제어(기능 접근)가 꺼진 사용자에게는 아이콘 자체를 숨긴다. */}
           {currentUser && featureAllowed(AGENT_CHAT_FEATURE_KEY) && (
             <RailIconButton
-              label="AI 어시스턴트"
+              label={t('shell.aiAssistant')}
               Icon={Bot}
               highlighted={agentChatOpen}
               suppressTooltip={agentChatOpen}
@@ -426,7 +402,7 @@ export function Sidebar() {
           )}
           {currentUser && (
             <RailIconButton
-              label="도움말·지원"
+              label={t('shell.help.title')}
               Icon={HelpCircle}
               highlighted={!!helpFlyoutAnchor}
               suppressTooltip={!!helpFlyoutAnchor}
@@ -468,7 +444,7 @@ export function Sidebar() {
         <>
           <div className="fixed inset-0 z-30" onClick={() => setHelpFlyoutAnchor(null)} aria-hidden />
           <FlyoutShell
-            title="도움말·지원"
+            title={t('shell.help.title')}
             anchorRect={helpFlyoutAnchor}
             {...focusProps}
             onClose={() => setHelpFlyoutAnchor(null)}
@@ -477,27 +453,27 @@ export function Sidebar() {
           >
             <div className="space-y-1 pb-2">
               <FlyoutAction
-                label="화면 검색"
+                label={t('shell.help.searchScreens')}
                 Icon={Search}
                 trailing={<kbd className="text-[11px] font-mono text-muted-foreground border border-border rounded px-1">⌘K</kbd>}
                 onSelect={() => { setHelpFlyoutAnchor(null); openPalette(true); }}
               />
               <div className="mx-2 my-1 border-t border-border" />
               <FlyoutAction
-                label="사용자 VOC 게시판"
+                label={t('shell.help.voc')}
                 Icon={MessageSquare}
                 onSelect={() => { setHelpFlyoutAnchor(null); setFeedbackTab('voc'); setFeedbackOpen(true); }}
               />
               <FlyoutAction
-                label="릴리즈 노트"
+                label={t('shell.help.releaseNotes')}
                 Icon={ScrollText}
                 onSelect={() => { setHelpFlyoutAnchor(null); setFeedbackTab('release-notes'); setFeedbackOpen(true); }}
               />
               {isAdmin && (
                 <FlyoutAction
-                  label="버그 픽스 로그"
+                  label={t('shell.help.bugFixLog')}
                   Icon={Bug}
-                  title="admin 전용 — 개발팀 내부 산출물"
+                  title={t('shell.help.bugFixLogHint')}
                   onSelect={() => { setHelpFlyoutAnchor(null); setFeedbackTab('bug-fix-log'); setFeedbackOpen(true); }}
                 />
               )}
@@ -520,51 +496,60 @@ export function Sidebar() {
           >
             <div className="space-y-1 pb-2">
               <FlyoutAction
-                label="내 정보 · 담당 설정"
+                label={t('shell.user.profile')}
                 Icon={UserCog}
                 onSelect={() => { setUserFlyoutAnchor(null); setSelfPaneOpen(true); }}
               />
               <FlyoutLink
                 to="/me/change-password"
-                label="비밀번호 변경"
+                label={t('shell.user.changePassword')}
                 Icon={KeyRound}
                 active={location.pathname === '/me/change-password'}
                 onSelect={() => setUserFlyoutAnchor(null)}
               />
               <FlyoutAction
-                label="개인 설정 내보내기"
+                label={t('shell.user.exportSettings')}
                 Icon={Download}
-                title="홈·사이드바·즐겨찾기·터미널 색상·테마 등 내 설정을 파일로 받는다(비밀번호 제외)"
+                title={t('shell.user.exportSettingsHint')}
                 onSelect={() => { setUserFlyoutAnchor(null); settingsTransfer.startExport(); }}
               />
               <FlyoutAction
-                label="개인 설정 가져오기"
+                label={t('shell.user.importSettings')}
                 Icon={Upload}
-                title="내보낸 파일로 내 설정을 바꾼다 — 새 환경·새 PC 로 옮길 때"
+                title={t('shell.user.importSettingsHint')}
                 onSelect={() => { setUserFlyoutAnchor(null); settingsTransfer.startImport(); }}
               />
               <div className="mx-2 my-1 border-t border-border" />
               <p className="px-2.5 pt-1.5 pb-0.5 text-xs font-medium text-muted-foreground flex items-center gap-1">
-                <Palette className="w-3 h-3" aria-hidden="true" /> 테마
+                <Palette className="w-3 h-3" aria-hidden="true" /> {t('shell.user.theme')}
               </p>
-              {THEMES.map((t) => (
-                <FlyoutAction key={t} label={THEME_LABEL[t]} Icon={THEME_ICON[t]} checked={theme === t} onSelect={() => setTheme(t)} />
+              {THEMES.map((th) => (
+                <FlyoutAction key={th} label={t(`shell.theme.${th}`)} Icon={THEME_ICON[th]} checked={theme === th} onSelect={() => setTheme(th)} />
               ))}
-              <p className="px-2.5 pt-1.5 pb-0.5 text-[11px] text-muted-foreground">강조색</p>
+              <p className="px-2.5 pt-1.5 pb-0.5 text-[11px] text-muted-foreground">{t('shell.user.accent')}</p>
               {ACCENTS.map((a) => (
                 <FlyoutAction
                   key={a}
-                  label={ACCENT_LABEL[a]}
+                  label={t(`shell.accent.${a}`)}
                   Icon={ACCENT_SWATCH_ICON[a]}
                   checked={accent === a}
                   disabled={!accentApplies(theme)}
-                  title={accentApplies(theme) ? undefined : '그림 테마(움버·플래스터·아침 식사·릴리프·할리퀸과 목걸이를 한 여인·오장팡 자개·김환기 창·피카소·후안 그리스)와 컴포트·고대비 바탕은 자체 색을 써서 강조색을 바꿀 수 없다'}
+                  title={accentApplies(theme) ? undefined : t('shell.user.accentDisabledHint')}
                   onSelect={() => setAccent(a)}
                 />
               ))}
               <div className="mx-2 my-1 border-t border-border" />
+              {/* R-6 — 표시 언어. 선택 즉시 화면에 반영되고 서버(home_prefs.locale)에 저장돼 다른 기기에서도 따라온다.
+                  항목 이름은 각 언어의 자기 이름(한국어/English)이라 번역하지 않는다. */}
+              <p className="px-2.5 pt-1.5 pb-0.5 text-xs font-medium text-muted-foreground flex items-center gap-1">
+                <Languages className="w-3 h-3" aria-hidden="true" /> {t('shell.user.language')}
+              </p>
+              {LOCALES.map((l) => (
+                <FlyoutAction key={l} label={LOCALE_NATIVE_NAME[l]} Icon={Languages} checked={locale === l} onSelect={() => changeLocale(l)} />
+              ))}
+              <div className="mx-2 my-1 border-t border-border" />
               <FlyoutAction
-                label="로그아웃"
+                label={t('shell.user.logout')}
                 Icon={LogOut}
                 tone="danger"
                 onSelect={() => { setUserFlyoutAnchor(null); setLogoutConfirmOpen(true); }}
@@ -580,9 +565,9 @@ export function Sidebar() {
       {/* 로그아웃 확인 — 1클릭 즉시 로그아웃이던 것을 확인 다이얼로그로(작성 중인 폼 보호). */}
       <ConfirmDialog
         open={logoutConfirmOpen}
-        title="로그아웃"
-        description="작성 중인 내용은 저장되지 않습니다. 로그아웃할까요?"
-        confirmLabel="로그아웃"
+        title={t('shell.logout.title')}
+        description={t('shell.logout.description')}
+        confirmLabel={t('shell.logout.confirm')}
         danger
         onConfirm={() => { setLogoutConfirmOpen(false); logout(); }}
         onCancel={() => setLogoutConfirmOpen(false)}
@@ -592,8 +577,8 @@ export function Sidebar() {
       <AddAppDialog
         open={catalogOpen}
         onClose={() => setCatalogOpen(false)}
-        title="사이드바에 앱 추가"
-        description="필요한 화면만 골라 레일에 추가한다."
+        title={t('shell.sidebarCatalog.title')}
+        description={t('shell.sidebarCatalog.description')}
         sections={catalogSections}
         installedApps={installedApps}
         onToggle={toggleInstalledApp}

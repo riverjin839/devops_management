@@ -1,6 +1,9 @@
-import type { ComponentType } from 'react';
+import { useCallback, useMemo, type ComponentType } from 'react';
+import { useTranslation } from 'react-i18next';
 import { ArrowLeft, Star, Palmtree } from 'lucide-react';
 import { GROUPS, NAV_MAP, type GroupId } from './navConfig';
+import { useNavLabel } from '@/i18n/useNavLabel';
+import type { NavGroupDescKey } from '@/i18n/resources/ko';
 
 /**
  * 사이드바(레일)/상단바(이름 옆)에 "설치"할 수 있는 앱 카탈로그 — leaf(최하위 메뉴) 단위 opt-in.
@@ -13,6 +16,10 @@ import { GROUPS, NAV_MAP, type GroupId } from './navConfig';
  * `domain` 이 배치를 결정한다: `platform`/`system` → Sidebar 레일, `work` → AppTopBar(이름 옆).
  * 즐겨찾기·Your Island·뒤로가기는 leaf 페이지가 아닌 개인 기능이라 `personal` 특수 항목으로
  * 별도 취급하고, 도메인만 부여해 같은 opt-in 목록(`installedApps`)에 함께 담는다.
+ *
+ * R-6 i18n — `label`/`groupLabel`/섹션 `label`·`description` 은 한국어 기본값으로 남긴다(Settings
+ * 기본 앱 구성 등 비셸 화면이 그대로 쓴다). 화면에 그릴 때는 `useInstallableAppText()` 로 로케일·관리자
+ * 커스텀 라벨을 반영한다.
  */
 export type SpecialAppId = 'back' | 'favorites' | 'island';
 export type InstallableAppId = string; // leaf path 또는 SpecialAppId
@@ -27,6 +34,10 @@ export interface InstallableApp {
   groupLabel: string;
   domain: 'platform' | 'system' | 'work';
   adminOnly?: boolean;
+}
+
+function isSpecialAppId(id: string): id is SpecialAppId {
+  return id === 'back' || id === 'favorites' || id === 'island';
 }
 
 const SPECIAL_APPS: Record<SpecialAppId, InstallableApp> = {
@@ -72,10 +83,14 @@ export function installableAppById(id: string): InstallableApp | undefined {
 }
 
 export interface InstallableAppSection {
+  /** 그룹 id(번역 키 `nav.group.*` 와 같다) 또는 개인 섹션. */
+  sectionId: GroupId | 'personal';
   label: string;
   apps: InstallableApp[];
   /** GROUPS.description — 섹션 제목 아래 한 줄 설명. */
   description?: string;
+  /** GROUPS.descriptionKey — `nav.groupDesc.*` 번역 키. */
+  descriptionKey?: NavGroupDescKey;
   /** GROUPS.tone — `danger` 는 명령을 보내는 화면 묶음(경고 톤으로 구분). */
   tone?: 'danger';
 }
@@ -83,15 +98,17 @@ export interface InstallableAppSection {
 function sectionsForDomain(domain: 'platform' | 'system' | 'work', personal: InstallableApp[], isAdmin: boolean): InstallableAppSection[] {
   const groupSections = GROUPS
     .filter((g) => g.domain === domain || (domain === 'platform' && g.domain === 'system'))
-    .map((g) => ({
+    .map((g): InstallableAppSection => ({
+      sectionId: g.id,
       label: g.label,
       description: g.description,
+      descriptionKey: g.descriptionKey,
       tone: g.tone,
       apps: LEAF_APPS.filter((a) => a.groupId === g.id && (!a.adminOnly || isAdmin)),
     }))
     .filter((s) => s.apps.length > 0);
   const personalApps = personal.filter((a) => !a.adminOnly || isAdmin);
-  return personalApps.length > 0 ? [...groupSections, { label: '개인', apps: personalApps }] : groupSections;
+  return personalApps.length > 0 ? [...groupSections, { sectionId: 'personal', label: '개인', apps: personalApps }] : groupSections;
 }
 
 /** Sidebar 레일 카탈로그 — platform + system 도메인 leaf + 뒤로가기. */
@@ -116,4 +133,35 @@ export function filterSectionsByAccess(
   return sections
     .map((s) => ({ ...s, apps: s.apps.filter((a) => allowed(a.id)) }))
     .filter((s) => s.apps.length > 0);
+}
+
+/**
+ * 카탈로그 표시 문구(로케일 반영). leaf 화면 라벨은 `useNavLabel()` — 관리자 커스텀 라벨이 우선이고,
+ * 특수 항목(뒤로가기·즐겨찾기·아일랜드)과 개인 섹션은 `apps.*`, 그룹 섹션은 `nav.group.*`/`nav.groupDesc.*`.
+ */
+export function useInstallableAppText() {
+  const { t } = useTranslation();
+  const navLabel = useNavLabel();
+  const appLabel = useCallback(
+    (app: InstallableApp) => (isSpecialAppId(app.id) ? t(`apps.special.${app.id}.label`) : navLabel(app.id)),
+    [t, navLabel],
+  );
+  const appDescription = useCallback(
+    (app: InstallableApp) => (isSpecialAppId(app.id) ? t(`apps.special.${app.id}.description`) : app.description),
+    [t],
+  );
+  const sectionLabel = useCallback(
+    (section: InstallableAppSection) =>
+      section.sectionId === 'personal' ? t('apps.personalSection') : t(`nav.group.${section.sectionId}`),
+    [t],
+  );
+  const sectionDescription = useCallback(
+    (section: InstallableAppSection) =>
+      section.descriptionKey ? t(`nav.groupDesc.${section.descriptionKey}`) : section.description,
+    [t],
+  );
+  return useMemo(
+    () => ({ appLabel, appDescription, sectionLabel, sectionDescription }),
+    [appLabel, appDescription, sectionLabel, sectionDescription],
+  );
 }

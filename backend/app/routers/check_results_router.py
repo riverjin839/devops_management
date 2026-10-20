@@ -7,7 +7,7 @@ from datetime import datetime, timedelta
 from typing import Any, Optional
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Header, HTTPException
+from fastapi import APIRouter, Depends, Header, HTTPException, Query
 from pydantic import BaseModel, Field
 from sqlalchemy import desc
 from sqlalchemy.orm import Session
@@ -266,8 +266,9 @@ async def regenerate_review(daily_check_log_id: UUID, db: Session = Depends(get_
 
 
 @router.get("/trend/{cluster_id}")
-def get_trend(cluster_id: UUID, days: int = 7, db: Session = Depends(get_db)):
-    """클러스터의 최근 N일간 daily check + deep result 분포."""
+def get_trend(cluster_id: UUID, days: int = Query(default=7, ge=1, le=90), db: Session = Depends(get_db)):
+    """클러스터의 최근 N일간 daily check + deep result 분포. 기간은 최대 90일 — 점검 행(AI 리뷰·메시지 포함)을
+    통째로 읽으므로 상한이 없으면 큰 값 하나로 워커 메모리를 키울 수 있다."""
     cutoff = datetime.utcnow() - timedelta(days=days)
     logs = (
         db.query(DailyCheckLog)

@@ -166,6 +166,37 @@ def test_file_source_merge_apply_inserts_and_updates(db, keys):
     assert db.get(AppSetting, uuid.UUID(new_id)).value == {"i": "new"}
 
 
+def test_json_secret_key_masked_and_preserved_on_merge(db, keys):
+    """AppSetting 안의 OIDC client secret 은 기본 export 에서 그 키만 가리고, merge 시 기존 값을 지킨다."""
+    from app.models.app_setting import AppSetting
+
+    k0 = next(iter(keys))
+    row = db.get(AppSetting, uuid.UUID(keys[k0]))
+    row.value = {"issuer": "https://idp", "client_secret_encrypted": "CIPHER"}
+    db.commit()
+
+    env = json.loads(b"".join(backup_service.iter_export_json(db)))
+    exported = next(r for r in env["tables"]["app_settings"] if r["key"] == k0)
+    assert exported["value"] == {"issuer": "https://idp", "client_secret_encrypted": backup_service.MASKED_SENTINEL}
+    assert "CIPHER" not in json.dumps(env)
+
+    exported["value"]["issuer"] = "https://idp2"
+    doc = {"version": "1.0", "tables": {"app_settings": [exported]}}
+    res = backup_service.apply_import(db, backup_service.open_backup_file(_f(doc)), mode="merge")
+    assert res["errors"] == []
+    db.expire_all()
+    assert db.get(AppSetting, uuid.UUID(keys[k0])).value == {"issuer": "https://idp2", "client_secret_encrypted": "CIPHER"}
+
+    # 원본 행이 없는 곳에 들어가면 비운다 — 센티널이 secret 으로 저장되면 안 된다.
+    new_id = str(uuid.uuid4())
+    doc = {"version": "1.0", "tables": {"app_settings": [
+        {"id": new_id, "key": f"import-stream-{uuid.uuid4().hex[:8]}-oidc", "value": exported["value"]},
+    ]}}
+    backup_service.apply_import(db, backup_service.open_backup_file(_f(doc)), mode="merge")
+    db.expire_all()
+    assert db.get(AppSetting, uuid.UUID(new_id)).value["client_secret_encrypted"] is None
+
+
 def test_apply_caps_row_errors(db, monkeypatch):
     monkeypatch.setattr(backup_service, "IMPORT_ERRORS_LIMIT", 5)
     doc = {"version": "1.0", "tables": {"app_settings": [{"value": {"i": i}} for i in range(12)]}}  # PK 없음

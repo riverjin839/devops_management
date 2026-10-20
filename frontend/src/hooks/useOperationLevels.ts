@@ -67,18 +67,18 @@ export function useUpdateOperationLevels() {
 // 키(이름)는 DB 저장값 호환을 위해 유지하고, 장식 팔레트 키는 카테고리 토큰 chart-N 으로 그린다(D-120).
 // 상태 토큰(status-*)은 쓰지 않는다(D-119) — 색 이름에 가장 가까운 chart-N. purple·violet 은 chart-4, amber·yellow 는 chart-3 으로 수렴한다.
 const COLOR_BADGE: Record<string, string> = {
-  red:     'bg-chart-5/15 text-chart-5 border-chart-5/30',
-  amber:   'bg-chart-3/15 text-chart-3 border-chart-3/30',
-  emerald: 'bg-chart-2/15 text-chart-2 border-chart-2/30',
-  sky:     'bg-chart-6/15 text-chart-6 border-chart-6/30',
-  blue:    'bg-chart-1/15 text-chart-1 border-chart-1/30',
-  purple:  'bg-chart-4/15 text-chart-4 border-chart-4/30',
-  pink:    'bg-chart-5/15 text-chart-5 border-chart-5/30',
-  yellow:  'bg-chart-3/15 text-chart-3 border-chart-3/30',
-  cyan:    'bg-chart-6/15 text-chart-6 border-chart-6/30',
-  violet:  'bg-chart-4/15 text-chart-4 border-chart-4/30',
-  orange:  'bg-chart-7/15 text-chart-7 border-chart-7/30',
-  slate:   'bg-chart-8/15 text-chart-8 border-chart-8/30',
+  red:     'bg-chart-5/15 text-chart-5-text border-chart-5/30',
+  amber:   'bg-chart-3/15 text-chart-3-text border-chart-3/30',
+  emerald: 'bg-chart-2/15 text-chart-2-text border-chart-2/30',
+  sky:     'bg-chart-6/15 text-chart-6-text border-chart-6/30',
+  blue:    'bg-chart-1/15 text-chart-1-text border-chart-1/30',
+  purple:  'bg-chart-4/15 text-chart-4-text border-chart-4/30',
+  pink:    'bg-chart-5/15 text-chart-5-text border-chart-5/30',
+  yellow:  'bg-chart-3/15 text-chart-3-text border-chart-3/30',
+  cyan:    'bg-chart-6/15 text-chart-6-text border-chart-6/30',
+  violet:  'bg-chart-4/15 text-chart-4-text border-chart-4/30',
+  orange:  'bg-chart-7/15 text-chart-7-text border-chart-7/30',
+  slate:   'bg-chart-8/15 text-chart-8-text border-chart-8/30',
   muted:   'bg-muted          text-muted-foreground border-border',
 };
 

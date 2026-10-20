@@ -1,14 +1,8 @@
 import { Check, Monitor } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import { MacCard } from '@/components/ui/MacCard';
 import { useThemeStore, accentApplies, ACCENTS, THEMES, type Theme } from '@/stores/themeStore';
-import { THEME_SWATCH, ACCENT_SWATCH, ACCENT_LABEL } from '@/lib/themeSwatches';
-
-const THEME_LABEL: Record<Theme, string> = {
-  light: '라이트 (기본)', dark: '다크', comfort: '컴포트', 'high-contrast': '고대비',
-  umber: '움버', 'umber-light': '움버 라이트', plaster: '플래스터',
-  journal: '아침 식사', relief: '릴리프', harlequin: '할리퀸과 목걸이를 한 여인', ozenfant: '오장팡 자개', whanki: '김환기 창',
-  'picasso-girl': '피카소 소녀의 머리', 'picasso-portrait': '피카소 소녀의 초상', 'picasso-violin': '피카소 바이올린', 'gris-guitar': '후안 그리스 기타', system: '시스템',
-};
+import { THEME_SWATCH, ACCENT_SWATCH } from '@/lib/themeSwatches';
 
 /** 테마 하나의 미리보기 카드 — 실제 전환 없이 배경/카드/버튼 색을 그대로 보여준다. */
 function PreviewChip({ theme }: { theme: Theme }) {
@@ -34,6 +28,7 @@ function PreviewChip({ theme }: { theme: Theme }) {
 
 /** D-072 / P2 — 바탕 테마(4+시스템)와 강조색(6)을 한 화면에서 비교하고 고르는 갤러리. */
 export function ThemeGallery() {
+  const { t } = useTranslation();
   const theme = useThemeStore((s) => s.theme);
   const setTheme = useThemeStore((s) => s.setTheme);
   const accent = useThemeStore((s) => s.accent);
@@ -41,28 +36,29 @@ export function ThemeGallery() {
   const accentOn = accentApplies(theme);
 
   return (
-    <MacCard title="테마 갤러리" bodyPadding="p-4">
+    <MacCard title={t('theme.gallery.title')} bodyPadding="p-4">
       <p className="text-xs text-muted-foreground mb-3">
-        미리보기를 클릭하면 바로 적용된다 — 사이드바 사용자 메뉴의 테마·강조색 목록과 같은 선택을 공유한다.
+        {t('theme.gallery.intro')}
       </p>
-      <p className="text-xs font-medium text-muted-foreground mb-1.5">바탕</p>
+      <p className="text-xs font-medium text-muted-foreground mb-1.5">{t('theme.gallery.background')}</p>
       <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3">
-        {THEMES.map((t) => {
-          const active = theme === t;
+        {THEMES.map((th) => {
+          const active = theme === th;
+          const name = t(`shell.theme.${th}`);
           return (
             <button
-              key={t}
+              key={th}
               type="button"
-              onClick={() => setTheme(t)}
+              onClick={() => setTheme(th)}
               aria-pressed={active}
-              title={`${THEME_LABEL[t]} 테마로 변경`}
+              title={t('theme.switchTo', { name })}
               className={`relative rounded-lg border p-1.5 text-left transition-colors ${
                 active ? 'border-primary ring-1 ring-primary' : 'border-border hover:border-primary/50'
               }`}
             >
-              <PreviewChip theme={t} />
+              <PreviewChip theme={th} />
               <div className="flex items-center justify-between mt-1.5">
-                <span className="text-xs font-medium truncate">{THEME_LABEL[t]}</span>
+                <span className="text-xs font-medium truncate">{name}</span>
                 {active && <Check className="w-3.5 h-3.5 text-primary flex-shrink-0" aria-hidden="true" />}
               </div>
             </button>
@@ -70,13 +66,14 @@ export function ThemeGallery() {
         })}
       </div>
 
-      <p className="text-xs font-medium text-muted-foreground mt-4 mb-1.5">강조색</p>
+      <p className="text-xs font-medium text-muted-foreground mt-4 mb-1.5">{t('shell.user.accent')}</p>
       <p className="text-xs text-muted-foreground mb-2">
-        버튼·링크·선택 탭·활성 메뉴에만 쓰인다. 라이트·다크(시스템 포함) 바탕에 적용되고, 컴포트·고대비와 그림 테마(움버·플래스터·아침 식사·릴리프·할리퀸과 목걸이를 한 여인·오장팡 자개·김환기 창·피카소·후안 그리스)는 자체 색을 쓴다.
+        {t('theme.gallery.accentIntro')}
       </p>
-      <div className="flex flex-wrap gap-3" role="radiogroup" aria-label="강조색">
+      <div className="flex flex-wrap gap-3" role="radiogroup" aria-label={t('shell.user.accent')}>
         {ACCENTS.map((a) => {
           const active = accent === a;
+          const name = t(`shell.accent.${a}`);
           return (
             <button
               key={a}
@@ -85,7 +82,7 @@ export function ThemeGallery() {
               aria-checked={active}
               disabled={!accentOn}
               onClick={() => setAccent(a)}
-              title={accentOn ? `강조색 ${ACCENT_LABEL[a]}` : '그림 테마(움버·플래스터·아침 식사·릴리프·할리퀸과 목걸이를 한 여인·오장팡 자개·김환기 창·피카소·후안 그리스)와 컴포트·고대비 바탕은 자체 색을 써서 강조색을 바꿀 수 없다'}
+              title={accentOn ? t('theme.accentOption', { name }) : t('shell.user.accentDisabledHint')}
               className="flex flex-col items-center gap-1 rounded-xl p-1 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <span
@@ -93,7 +90,7 @@ export function ThemeGallery() {
                 style={{ backgroundColor: `hsl(${ACCENT_SWATCH[a]})` }}
                 aria-hidden="true"
               />
-              <span className={`text-xs ${active ? 'font-semibold text-foreground' : 'text-muted-foreground'}`}>{ACCENT_LABEL[a]}</span>
+              <span className={`text-xs ${active ? 'font-semibold text-foreground' : 'text-muted-foreground'}`}>{name}</span>
             </button>
           );
         })}

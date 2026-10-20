@@ -236,7 +236,7 @@ export function ClusterTableRow({ cluster, onEdit, onDelete, deletingId, overlap
       <td className="px-3 py-2.5 overflow-hidden">
         {cluster.bgpEnabled ? (
           <div>
-            <span className="text-xs px-1.5 py-0.5 rounded bg-chart-6/15 text-chart-6 border border-chart-6/30">BGP</span>
+            <span className="text-xs px-1.5 py-0.5 rounded bg-chart-6/15 text-chart-6-text border border-chart-6/30">BGP</span>
             {cluster.asNumber && <p className="text-xs font-mono text-muted-foreground mt-0.5">AS{cluster.asNumber}</p>}
           </div>
         ) : <span className="text-muted-foreground text-sm">-</span>}
@@ -409,7 +409,7 @@ export function ClusterTableRow({ cluster, onEdit, onDelete, deletingId, overlap
       <td className="px-3 py-2.5 overflow-hidden">
         <div className="flex flex-col gap-1">
           {cluster.k8sVersion ? (
-            <span className="text-xs font-mono px-1.5 py-0.5 rounded-full bg-chart-1/10 text-chart-1 border border-chart-1/20 w-fit">
+            <span className="text-xs font-mono px-1.5 py-0.5 rounded-full bg-chart-1/10 text-chart-1-text border border-chart-1/20 w-fit">
               k8s {cluster.k8sVersion}
             </span>
           ) : (
@@ -424,7 +424,7 @@ export function ClusterTableRow({ cluster, onEdit, onDelete, deletingId, overlap
             aria-label={`${cluster.name} Cilium 설정 보기`}
             className={`text-xs font-mono px-1.5 py-0.5 rounded-full border w-fit transition-colors ${
               cluster.ciliumVersion
-                ? 'bg-chart-6/10 text-chart-6 border-chart-6/30 hover:bg-chart-6/20'
+                ? 'bg-chart-6/10 text-chart-6-text border-chart-6/30 hover:bg-chart-6/20'
                 : 'bg-secondary text-muted-foreground border-border hover:bg-secondary/80 hover:text-foreground'
             }`}
           >
@@ -504,7 +504,7 @@ export function ClusterTableRow({ cluster, onEdit, onDelete, deletingId, overlap
                                     className={`text-xs px-1 rounded inline-flex items-center gap-0.5 ${
                                       isPub
                                         ? 'bg-status-warning/10 text-status-warning'
-                                        : 'bg-chart-1/10 text-chart-1'
+                                        : 'bg-chart-1/10 text-chart-1-text'
                                     }`}
                                     title={isPub ? 'public' : sc}>
                                     {isPub ? <Globe className="w-2.5 h-2.5" /> : <Lock className="w-2.5 h-2.5" />}

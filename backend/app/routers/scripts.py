@@ -18,6 +18,7 @@ from app.auth.deps import require_admin, require_operator
 from app.database import get_db
 from app.models.app_setting import AppSetting
 from app.models.batch_job import BatchJob
+from app.models.cluster import Cluster
 from app.models.executable_script import ExecutableScript, ExecutableScriptVersion, SCRIPT_KINDS
 from app.models.user import User
 from app.schemas.executable_script import (
@@ -29,6 +30,7 @@ from app.schemas.executable_script import (
     ExecutableScriptVersionResponse,
     ScriptTestRunRequest,
     ScriptTestRunResponse,
+    ScriptUsageRef,
 )
 from app.services import audit_logger
 from app.services.script_test_run import ScriptTestRunError, run_ansible_test, run_shell_test
@@ -70,16 +72,38 @@ def _used_by_count(db: Session, script_id: UUID) -> int:
     return db.query(BatchJob).filter(BatchJob.script_id == script_id).count()
 
 
+def _used_by(db: Session, script_id: UUID) -> list[ScriptUsageRef]:
+    """참조 배치잡 목록 — 이름·클러스터·고정 버전(D-146). 한 번의 조인 쿼리로 가져온다."""
+    rows = (
+        db.query(BatchJob, Cluster.name, ExecutableScriptVersion.version)
+        .outerjoin(Cluster, Cluster.id == BatchJob.cluster_id)
+        .outerjoin(ExecutableScriptVersion, ExecutableScriptVersion.id == BatchJob.script_version_id)
+        .filter(BatchJob.script_id == script_id)
+        .order_by(BatchJob.name)
+        .all()
+    )
+    return [
+        ScriptUsageRef(
+            job_id=job.id, name=job.name, cluster_id=job.cluster_id, cluster_name=cluster_name,
+            pinned=job.script_version_id is not None, pinned_version=pinned_version,
+            enabled=bool(job.enabled), cron=job.cron,
+        )
+        for job, cluster_name, pinned_version in rows
+    ]
+
+
 def _script_response(db: Session, script: ExecutableScript) -> ExecutableScriptResponse:
     current_version = None
     if script.current_version is not None:
         current_version = ExecutableScriptVersionResponse.model_validate(script.current_version)
+    used_by = _used_by(db, script.id)
     return ExecutableScriptResponse(
         id=script.id, name=script.name, description=script.description, kind=script.kind,
         tags=script.tags, is_system=script.is_system, current_version_id=script.current_version_id,
         created_by=script.created_by, created_at=script.created_at, updated_at=script.updated_at,
         current_version=current_version,
-        used_by_count=_used_by_count(db, script.id),
+        used_by_count=len(used_by),
+        used_by=used_by,
     )
 
 
@@ -187,7 +211,13 @@ def update_script(
     actor: User = Depends(require_script_access),
 ):
     script = _get_script(db, script_id)
-    for key, value in payload.model_dump(exclude_unset=True).items():
+    data = payload.model_dump(exclude_unset=True)
+    if "name" in data and data["name"] is None:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="이름은 비울 수 없습니다.")
+    # D-144 — 설명·태그는 null(또는 빈 값)을 보내면 비운다. 안 보낸 필드는 그대로 둔다.
+    if "description" in data and isinstance(data["description"], str) and not data["description"].strip():
+        data["description"] = None
+    for key, value in data.items():
         setattr(script, key, value)
     db.commit()
     db.refresh(script)

@@ -5,13 +5,16 @@ import {
 } from 'lucide-react';
 
 import { MacCard } from '@/components/ui/MacCard';
-import { ConfirmDialog, LoadingState, PageShell } from '@/components/common';
+import { ConfirmDialog, ErrorState, LoadingState, PageShell, useToast } from '@/components/common';
 import { PageHeader } from '@/components/common/PageHeader';
 import { CommandsTable } from '@/components/commands/CommandsTable';
 import {
-  useCommands, useCreateCommand, useDeleteCommand, useUpdateCommand,
+  useCommandCategories, useCommands, useCreateCommand, useDeleteCommand, useUpdateCommand,
 } from '@/hooks/useCommands';
+import { useCanOperate } from '@/hooks/useCanOperate';
+import { useDebouncedValue } from '@/hooks/useDebouncedValue';
 import type { CommandEntry, CommandImportance } from '@/types';
+import { formatApiError } from '@/lib/utils';
 
 // ── 중요도 색상 매핑 ─────────────────────────────────────────────────────────
 // info=slate / low=sky / medium=amber / high=orange / critical=red.
@@ -33,27 +36,39 @@ export function CommandsPage() {
   const [filterImportance, setFilterImportance] = useState<CommandImportance | ''>('');
   const [confirmDelete, setConfirmDelete] = useState<CommandEntry | null>(null);
 
-  const queryParams = useMemo(() => ({
-    q: search.trim() || undefined,
-    category: filterCategory || undefined,
-    importance: filterImportance || undefined,
-  }), [search, filterCategory, filterImportance]);
+  // 검색어는 디바운스 — 키 입력마다 요청·표 깜빡임이 생기지 않게(D-148). 이전 결과는 hook 의
+  // `placeholderData: keepPreviousData` 가 유지한다.
+  const debouncedSearch = useDebouncedValue(search.trim(), 300);
+  const queryParams = useMemo(() => {
+    const p = {
+      q: debouncedSearch || undefined,
+      category: filterCategory || undefined,
+      importance: filterImportance || undefined,
+    };
+    // 필터가 하나도 없으면 undefined — 카테고리 옵션용 전체 목록(useCommandCategories)과 캐시를 공유한다.
+    return p.q || p.category || p.importance ? p : undefined;
+  }, [debouncedSearch, filterCategory, filterImportance]);
 
-  const { data, isLoading } = useCommands(queryParams);
+  const { data, isLoading, isError, error, refetch, isFetching } = useCommands(queryParams);
+  const { canOperate, withHint, ariaWithHint } = useCanOperate();
   const del = useDeleteCommand();
   const updateInline = useUpdateCommand();
   const createInline = useCreateCommand();
+  const toast = useToast();
+  // 인라인 수정·추가·고정 실패가 무음이면 저장됐다고 믿게 된다(D-143) — 실패는 토스트로 알린다.
+  const onInlineError = (title: string) => (e: unknown) => toast.error(title, formatApiError(e));
 
   const entries = useMemo(() => data?.data ?? [], [data]);
 
-  // 카테고리 목록은 등록된 항목들에서 동적으로 추출 — 필터 드롭다운에 사용.
-  const categories = useMemo(() => {
-    const set = new Set<string>();
-    for (const e of entries) {
-      if (e.category) set.add(e.category);
-    }
-    return Array.from(set).sort();
-  }, [entries]);
+  // 카테고리 옵션은 필터 없는 전체 목록에서 — 고른 카테고리가 드롭다운에서 나머지를 지우지 않게(D-148).
+  // 저장된 URL 등으로 목록에 없는 값이 선택돼 있어도 옵션에 남겨 둔다.
+  const allCategories = useCommandCategories();
+  const categories = useMemo(
+    () => (filterCategory && !allCategories.includes(filterCategory)
+      ? [...allCategories, filterCategory].sort()
+      : allCategories),
+    [allCategories, filterCategory],
+  );
 
   return (
     <PageShell density="hub" className="space-y-4">
@@ -72,7 +87,10 @@ export function CommandsPage() {
         actions={
           <button
             onClick={() => navigate('/commands/new')}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-semibold bg-primary text-primary-foreground rounded-xl hover:bg-primary/90"
+            disabled={!canOperate}
+            title={withHint('명령어 추가')}
+            aria-label={ariaWithHint('명령어 추가')}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-semibold bg-primary text-primary-foreground rounded-xl hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <Plus className="w-3.5 h-3.5" /> 명령어 추가
           </button>
@@ -85,15 +103,17 @@ export function CommandsPage() {
         actions={
           <div className="flex items-center gap-2 flex-wrap w-full">
             <div className="relative flex-1 min-w-[220px]">
-              <Search className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
+              <Search className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
               <input
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
+                aria-label="명령어 검색"
                 placeholder="명령어 / 의미 / 주의사항 / 태그 검색"
                 className="w-full pl-8 pr-3 py-1.5 text-sm bg-background border border-border rounded-xl"
               />
             </div>
             <select
+              aria-label="카테고리 필터"
               value={filterCategory}
               onChange={(e) => setFilterCategory(e.target.value)}
               className="px-2 py-1.5 text-sm bg-background border border-border rounded-xl"
@@ -102,6 +122,7 @@ export function CommandsPage() {
               {categories.map((c) => <option key={c} value={c}>{c}</option>)}
             </select>
             <select
+              aria-label="중요도 필터"
               value={filterImportance}
               onChange={(e) => setFilterImportance(e.target.value as CommandImportance | '')}
               className="px-2 py-1.5 text-sm bg-background border border-border rounded-xl"
@@ -111,21 +132,26 @@ export function CommandsPage() {
                 <option key={v} value={v}>{IMPORTANCE_META[v].label}</option>
               ))}
             </select>
-            <span className="text-xs text-muted-foreground tabular-nums ml-auto">
-              {entries.length}건
+            <span className="text-xs text-muted-foreground tabular-nums ml-auto" aria-live="polite">
+              {isFetching && !isLoading ? '검색 중…' : `${entries.length}건`}
             </span>
           </div>
         }
       >
         {isLoading ? (
           <LoadingState compact />
+        ) : isError ? (
+          <ErrorState error={error} title="명령어 목록을 불러오지 못했습니다" onRetry={() => { void refetch(); }} compact />
         ) : (
           <CommandsTable
             entries={entries}
-            onUpdate={(id, data) => updateInline.mutate({ id, data })}
-            onCreate={(data) => createInline.mutate(data)}
+            onUpdate={(id, data) => updateInline.mutate({ id, data }, { onError: onInlineError('수정 실패') })}
+            onCreate={(data) => createInline.mutate(data, { onError: onInlineError('추가 실패') })}
             onDelete={(e) => setConfirmDelete(e)}
-            onTogglePin={(e) => updateInline.mutate({ id: e.id, data: { pinned: !e.pinned } })}
+            onTogglePin={(e) => updateInline.mutate(
+              { id: e.id, data: { pinned: !e.pinned } },
+              { onError: onInlineError(e.pinned ? '고정 해제 실패' : '고정 실패') },
+            )}
             onOpenForm={(e) => navigate(`/commands/${e.id}/edit`)}
           />
         )}
@@ -138,9 +164,15 @@ export function CommandsPage() {
           description={`"${confirmDelete.command.slice(0, 60)}${confirmDelete.command.length > 60 ? '…' : ''}" 항목을 삭제합니다. 계속할까요?`}
           confirmLabel="삭제"
           danger
+          busy={del.isPending}
           onConfirm={async () => {
-            await del.mutateAsync(confirmDelete.id);
-            setConfirmDelete(null);
+            // ConfirmDialog 는 onConfirm 결과를 기다리지 않는다 — 실패는 여기서 잡아 토스트로(D-143).
+            try {
+              await del.mutateAsync(confirmDelete.id);
+              setConfirmDelete(null);
+            } catch (e) {
+              toast.error('명령어 삭제 실패', formatApiError(e));
+            }
           }}
           onCancel={() => setConfirmDelete(null)}
         />

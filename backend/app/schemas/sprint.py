@@ -2,7 +2,7 @@ from datetime import date, datetime
 from typing import Optional
 from uuid import UUID
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 SprintStatus = str  # planning / active / completed
 
@@ -29,6 +29,15 @@ class SprintUpdate(BaseModel):
     start_date: Optional[date] = None
     end_date: Optional[date] = None
     status: Optional[SprintStatus] = None
+
+    # D-144 — 부분 수정(exclude_unset)에서 `null` 은 "값 비우기"다. 목표·JIRA NO·Confluence 는 null 로
+    # 비우고, NOT NULL 컬럼(이름·기간·상태)에 null 이 오면 500 대신 422 로 거부한다.
+    @field_validator("name", "start_date", "end_date", "status")
+    @classmethod
+    def _reject_null(cls, v, info):
+        if v is None:
+            raise ValueError(f"{info.field_name} 은(는) 비울 수 없습니다")
+        return v
 
 
 class SprintResponse(SprintBase):

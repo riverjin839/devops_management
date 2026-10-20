@@ -1,5 +1,6 @@
 import { Loader2, Play, Settings2, ListChecks } from 'lucide-react';
-import { EmptyState, LoadingState } from '@/components/common';
+import { EmptyState, ErrorState, LoadingState } from '@/components/common';
+import { useCanOperate } from '@/hooks/useCanOperate';
 import type { IsilonCommand } from '@/types';
 import { useIsilonCommands } from '@/hooks/useIsilonNfs';
 import { ISILON_SECTION_LABEL } from './sectionLabels';
@@ -37,8 +38,9 @@ function mergeEffective(commands: IsilonCommand[]): IsilonCommand[] {
 export function IsilonCommandSelector({
   serverId, selectedKeys, onToggle, onSelectAll, onClear, onRun, onManage, running,
 }: Props) {
-  const { data: commands = [], isLoading } = useIsilonCommands(serverId);
+  const { data: commands = [], isLoading, isError, error, refetch } = useIsilonCommands(serverId);
   const effective = mergeEffective(commands);
+  const { canOperate, withHint, ariaWithHint } = useCanOperate();
 
   return (
     <div className="space-y-3">
@@ -56,6 +58,8 @@ export function IsilonCommandSelector({
 
       {isLoading ? (
         <LoadingState compact />
+      ) : isError ? (
+        <ErrorState compact error={error} title="명령 목록을 불러오지 못했습니다" onRetry={() => { void refetch(); }} />
       ) : effective.length === 0 ? (
         <EmptyState
           compact
@@ -106,10 +110,12 @@ export function IsilonCommandSelector({
       <div className="flex justify-end pt-2 border-t border-border">
         <button
           onClick={onRun}
-          disabled={selectedKeys.size === 0 || running}
-          className="flex items-center gap-2 px-5 py-2.5 text-sm font-semibold bg-primary hover:bg-primary/90 text-primary-foreground rounded-lg transition-colors disabled:opacity-50"
+          disabled={!canOperate || selectedKeys.size === 0 || running}
+          title={withHint('선택한 명령 실행')}
+          aria-label={ariaWithHint(`선택 실행 (${selectedKeys.size})`)}
+          className="flex items-center gap-2 px-5 py-2.5 text-sm font-semibold bg-primary hover:bg-primary/90 text-primary-foreground rounded-xl transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
         >
-          {running ? <Loader2 className="w-4 h-4 animate-spin" /> : <Play className="w-4 h-4" />}
+          {running ? <Loader2 className="w-4 h-4 animate-spin" aria-hidden="true" /> : <Play className="w-4 h-4" aria-hidden="true" />}
           선택 실행 ({selectedKeys.size})
         </button>
       </div>

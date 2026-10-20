@@ -1,5 +1,5 @@
 import axios, { type InternalAxiosRequestConfig } from 'axios';
-import { Cluster, Addon, CheckLog, SummaryStats, ApiResponse, PaginatedResponse, Playbook, PlaybookRunResult, PlaybookSshCreds, AgentChatRequest, AgentChatResponse, AgentHealthResponse, MetricCard, MetricQueryResult, MetricSparklineResult, ClusterItem, WorkItem, WorkItemType, WorkItemListResponse, WorkItemCreate, WorkItemUpdate, WorkItemStatusResponse, KanbanStatus, UiSettings, ClusterLinksPayload, WorkGuide, WorkGuideCreate, WorkGuideUpdate, WorkGuideListResponse, OpsNote, OpsNoteCreate, OpsNoteUpdate, OpsNoteListResponse, MindMap, MindMapListItem, MindMapCreate, MindMapUpdate, MindMapNode, MindMapNodeCreate, MindMapNodeUpdate, ManagementServer, ManagementServerCreate, ManagementServerUpdate, ManagementServerListResponse, TopologyTraceRequest, TopologyTraceResponse, TrendDigest, TrendItem, TrendSource, ClusterTrendsResponse, ReleaseNotesResponse, CheckMatrixItem, CheckMatrixItemInput, CheckMatrixGrid, CheckMatrixHistory, CheckMatrixSettings, CheckMatrixRunbook, CheckMatrixRun, CheckMatrixRunDetail, CheckMatrixRunList, CheckMatrixBatchResult, CheckMatrixSourceConfigEntry, CheckMatrixCatalog, CheckMatrixItemPreviewInput, CheckMatrixItemPreviewResult, CheckMatrixItemSourceConfig, CheckMatrixItemDetail, ClusterStatusBreakdown, SchemaHealthReport, SchemaRepairResult, LlmSettings, LlmHealthEntry, LlmTestResult, LlmCredentialSummary, LlmUsageBucket, Tenant, TenantBrief, ClusterAccessLevel, HealthCheckRunResult, AddonCheckRunResult } from '@/types';
+import { Cluster, Addon, CheckLog, SummaryStats, ApiResponse, PaginatedResponse, Playbook, PlaybookRunResult, PlaybookSshCreds, AgentChatRequest, AgentChatResponse, AgentHealthResponse, MetricCard, MetricQueryResult, MetricSparklineResult, ClusterItem, WorkItem, WorkItemType, WorkItemListResponse, WorkItemCreate, WorkItemUpdate, WorkItemStatusResponse, KanbanStatus, UiSettings, ClusterLinksPayload, WorkGuide, WorkGuideCreate, WorkGuideUpdate, WorkGuideListResponse, OpsNote, OpsNoteCreate, OpsNoteUpdate, OpsNoteListResponse, MindMap, MindMapListItem, MindMapCreate, MindMapUpdate, MindMapNode, MindMapNodeCreate, MindMapNodeUpdate, ManagementServer, ManagementServerCreate, ManagementServerUpdate, ManagementServerListResponse, TopologyTraceRequest, TopologyTraceResponse, TrendDigest, TrendItem, TrendSource, ClusterTrendsResponse, ReleaseNotesResponse, CheckMatrixItem, CheckMatrixItemInput, CheckMatrixGrid, CheckMatrixHistory, CheckMatrixSettings, CheckMatrixRunbook, CheckMatrixRun, CheckMatrixRunDetail, CheckMatrixRunList, CheckMatrixBatchResult, CheckMatrixCancelResult, CheckMatrixSourceConfigEntry, CheckMatrixCatalog, CheckMatrixItemPreviewInput, CheckMatrixItemPreviewResult, CheckMatrixItemSourceConfig, CheckMatrixItemDetail, ClusterStatusBreakdown, SchemaHealthReport, SchemaRepairResult, LlmSettings, LlmHealthEntry, LlmTestResult, LlmCredentialSummary, LlmUsageBucket, Tenant, TenantBrief, ClusterAccessLevel, HealthCheckRunResult, AddonCheckRunResult } from '@/types';
 import { isDebugEnabled, useDebugStore } from '@/stores/debugStore';
 import { getAuthToken, expireAuthSession, type AuthUser } from '@/stores/authStore';
 
@@ -191,6 +191,36 @@ export const authApi = {
     api.put<AuthUser>(`/auth/users/${id}/role`, { role }),
   resetPassword: (id: string, newPassword: string) =>
     api.post<AuthUser>(`/auth/users/${id}/password`, { newPassword }),
+
+  // ── 사내 IdP SSO(OIDC) — R-7. 설정 원천은 AppSetting `auth.oidc`(Settings ▸ 접근 제어). ──
+  /** 로그인 화면 버튼 노출 여부(public) — enabled·displayName 만. */
+  oidcConfig: () => api.get<{ enabled: boolean; displayName: string }>('/auth/oidc/config'),
+  /** SSO 시작 주소 — axios 호출이 아니라 브라우저가 이동한다(서버가 IdP 로 302). */
+  oidcLoginUrl: (returnTo?: string | null) =>
+    `${api.defaults.baseURL ?? '/api/v1'}/auth/oidc/login${returnTo ? `?return_to=${encodeURIComponent(returnTo)}` : ''}`,
+  /** 콜백 handoff code(1회용·60초) → 세션 토큰 + 로그인 시 보낸 복귀 경로. */
+  oidcExchange: (code: string) =>
+    api.post<LoginResponse & { returnTo: string }>('/auth/oidc/exchange', { code }),
+  oidcSettings: () => api.get<{
+    enabled: boolean; displayName: string; issuer: string; clientId: string; hasSecret: boolean;
+    scopes: string; usernameClaim: string; displayNameClaim: string; emailClaim: string;
+    autoProvision: boolean; defaultRole: 'viewer' | 'operator'; allowedDomains: string[];
+    requireEmailVerified: boolean; publicBaseUrl: string; redirectUri: string;
+  }>('/auth/oidc/settings'),
+  /** 보낸 키만 바뀐다. clientSecret 은 입력했을 때만 교체, clearClientSecret 이면 삭제. */
+  updateOidcSettings: (payload: Partial<{
+    enabled: boolean; displayName: string; issuer: string; clientId: string; clientSecret: string;
+    clearClientSecret: boolean; scopes: string; usernameClaim: string; displayNameClaim: string;
+    emailClaim: string; autoProvision: boolean; defaultRole: 'viewer' | 'operator';
+    allowedDomains: string[]; requireEmailVerified: boolean; publicBaseUrl: string;
+  }>) => api.put('/auth/oidc/settings', payload),
+  /** 연결 확인 — discovery·JWKS 를 실제로 받아 본다(issuer 를 비우면 저장된 값). */
+  testOidcSettings: (issuer?: string) => api.post<{
+    ok: boolean;
+    steps: { name: string; ok: boolean; detail: string }[];
+    authorizationEndpoint?: string; tokenEndpoint?: string; userinfoEndpoint?: string | null;
+    algorithms?: string[]; pkceS256?: boolean; jwksKeys?: number;
+  }>('/auth/oidc/settings/test', { issuer: issuer || null }),
 };
 
 // ── Audit logs API ────────────────────────────────────────────────────────
@@ -2345,6 +2375,9 @@ export const checkMatrixApi = {
     },
   }),
   getRun: (runId: string) => api.get<CheckMatrixRunDetail>(`/check-matrix/runs/${runId}`),
+  // 대기/실행 중 취소 — 대기 중은 워커가 집지 않고, 실행 중은 워커 프로세스를 끊는다.
+  cancelRun: (runId: string) => api.post<CheckMatrixCancelResult>(`/check-matrix/runs/${runId}/cancel`),
+  cancelBatch: (batchId: string) => api.post<CheckMatrixCancelResult>(`/check-matrix/batches/${batchId}/cancel`),
 };
 
 export const notificationsApi = {

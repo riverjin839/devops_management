@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { SidePane, StatusDot } from '@/components/common';
 import {
   Plus, Pencil, Trash2, Lock, Clock, Settings, GripVertical, Play, ScrollText, Loader2,
-  AlertTriangle, XCircle, SlidersHorizontal, PauseCircle,
+  AlertTriangle, XCircle, SlidersHorizontal, PauseCircle, History,
 } from 'lucide-react';
 
 interface Props {
@@ -107,7 +107,11 @@ export function CheckMatrixHelpPanel({ open, onClose }: Props) {
                 <Row icon={<StatusDot variant="pending" />}>대기 — 판정 보류(연결 안 됨 등)</Row>
                 <Row icon={<span className="text-xs w-3 text-center">—</span>}>아직 결과 없음. 마우스를 올리면 이유(주기 대기·수동 미입력 등)가 나옵니다</Row>
                 <Row icon={<Loader2 className="w-3 h-3 text-status-info" />}>지금 실행 중이거나 대기열에 있음</Row>
-                <Row icon={<span className="opacity-50 text-xs font-medium">정상</span>}>흐린 셀 = <b>오래된 결과</b> — 주기의 2배(주기가 없으면 7일)를 넘겼습니다</Row>
+                <Row icon={
+                  <span className="inline-flex items-center gap-0.5 px-1 rounded-md border border-dashed border-muted-foreground/70 text-xs font-medium">
+                    정상<History className="w-3 h-3 text-muted-foreground" aria-hidden="true" />
+                  </span>
+                }>점선 테두리 + 시계 = <b>오래된 결과</b> — 주기의 2배(주기가 없으면 7일)를 넘겼습니다</Row>
                 <Row icon={<XCircle className="w-2.5 h-2.5 text-status-critical" />}>셀 왼쪽 아래 표식 = <b>최근 실행이 실패</b>해 값이 갱신되지 않았습니다(값은 그 전 결과)</Row>
               </ul>
               <p className="text-xs text-muted-foreground">셀의 <b>숫자</b>는 점검의 대표값입니다 — 인증서는 잔여일, 프로브는 실패율(%),
