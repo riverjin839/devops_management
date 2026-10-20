@@ -8,7 +8,12 @@
 
 ## [Unreleased]
 
-1.61.0 이후 main 에 병합된 변경 (다음 릴리스 후보).
+1.61.1 이후 main 에 병합된 변경 (다음 릴리스 후보).
+
+## [1.61.1] - 2026-10-20
+
+### Fixed
+- **겹친 모달에서 Escape 가 부모 모달까지 닫던 문제**: 플레이북 등록 모달의 파일·인벤토리 삭제 확인, Jira 연결 관리의 업무 삭제 확인처럼 모달 위에 확인 창이 떠 있을 때 Escape 1회는 맨 위 창만 닫고, 2회째에 부모를 닫는다. 확인 처리 중(busy)인 확인 창은 Escape·배경 클릭으로 닫히지 않고 부모로도 넘기지 않는다. Frontend: 열린 모달 순서를 `common/modalStack.ts` 에 쌓아 `useModalA11y` 는 맨 위일 때만 Escape·Tab 을 처리하고, `ui/dialog` 래퍼는 층을 차지하면서 맨 위가 아니면 Base UI 의 Escape 닫기를 취소한다.
 
 ## [1.61.0] - 2026-10-20
 
@@ -17,9 +22,6 @@
   찍으면 그 요청의 경로·처리 함수·상태·RSS·소요 시간을 `memory-watch` 경고 로그로 남긴다. OOMKilled 는 앱이 로그를 남길 틈 없이
   죽으므로, 직전 경고를 `kubectl logs --previous` 로 보면 어떤 요청이 메모리를 키웠는지 좁힐 수 있다. 쿼리 문자열은 남기지 않는다.
   Backend: `services/memory_watch.py`(ASGI 미들웨어, `/proc/self/statm`), `MEM_WATCH_DELTA_MB`·`MEM_WATCH_RSS_MB`(0 = 끔).
-
-### Fixed
-- **겹친 모달에서 Escape 가 부모 모달까지 닫던 문제**: 플레이북 등록 모달의 파일·인벤토리 삭제 확인, Jira 연결 관리의 업무 삭제 확인처럼 모달 위에 확인 창이 떠 있을 때 Escape 1회는 맨 위 창만 닫고, 2회째에 부모를 닫는다. 확인 처리 중(busy)인 확인 창은 Escape·배경 클릭으로 닫히지 않고 부모로도 넘기지 않는다. Frontend: 열린 모달 순서를 `common/modalStack.ts` 에 쌓아 `useModalA11y` 는 맨 위일 때만 Escape·Tab 을 처리하고, `ui/dialog` 래퍼는 층을 차지하면서 맨 위가 아니면 Base UI 의 Escape 닫기를 취소한다.
 
 ## [1.60.1] - 2026-10-20
 
