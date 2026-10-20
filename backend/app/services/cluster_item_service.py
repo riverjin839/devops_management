@@ -73,24 +73,37 @@ def _collect_node_count(item: ClusterItem, db: Session) -> ItemResult:
 
 
 def _collect_workload_count(item: ClusterItem, db: Session) -> ItemResult:
+    """Pod 수·상태 집계. 웹 워커에서 바로 도는 경로라(`POST /cluster-items/{id}/run`) 전체 Pod 를 typed 모델로
+    한 번에 받지 않고, 페이지 단위로 원본 JSON 을 읽으며 센다(`k8s_paging.iter_all` raw) — 수만 Pod 클러스터에서
+    수백 MB 를 잡던 경로."""
+    from app.services.k8s_paging import iter_all
+
     core, _ = _k8s(item.cluster)
-    ns = core.list_namespace(timeout_seconds=_TIMEOUT)
-    ns_count = len(ns.items)
-    pods = core.list_pod_for_all_namespaces(timeout_seconds=_TIMEOUT)
-    pod_count = len(pods.items)
-    running = sum(1 for p in pods.items if p.status and p.status.phase == "Running")
-    pending = sum(1 for p in pods.items if p.status and p.status.phase == "Pending")
-    failed = sum(1 for p in pods.items if p.status and p.status.phase == "Failed")
+    ns_count = sum(1 for _ in iter_all(core.list_namespace, raw=True))
+    truncated: list = []
+    pod_count = running = pending = failed = 0
+    for p in iter_all(core.list_pod_for_all_namespaces, raw=True, report=truncated):
+        pod_count += 1
+        phase = p.status.phase if p.status else None
+        if phase == "Running":
+            running += 1
+        elif phase == "Pending":
+            pending += 1
+        elif phase == "Failed":
+            failed += 1
+    detail = {
+        "pods": pod_count,
+        "namespaces": ns_count,
+        "running": running,
+        "pending": pending,
+        "failed": failed,
+    }
+    if truncated:
+        detail["partial"] = True  # 시간 초과·상한으로 끝까지 세지 못함
     return ItemResult(
         value=float(pod_count),
-        status="warning" if (pending or failed) else "healthy",
-        detail={
-            "pods": pod_count,
-            "namespaces": ns_count,
-            "running": running,
-            "pending": pending,
-            "failed": failed,
-        },
+        status="warning" if (pending or failed or truncated) else "healthy",
+        detail=detail,
     )
 
 

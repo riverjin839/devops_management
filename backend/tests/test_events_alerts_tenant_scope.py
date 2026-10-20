@@ -219,3 +219,15 @@ def test_ack_all_respects_tenant_scope_and_screen_filters(client_as, world, db):
     assert acked[other_name.id] is False            # 검색어 밖
     assert acked[bound_alert.id] is False           # 보이지 않는 클러스터
     assert r.json()["acked"] == 1
+
+
+def test_alert_stats_counts_in_db(client_as, world, db):
+    """통계는 DB 에서 센다(행 전체를 올리지 않는다) — 상태·심각도·미확인 수가 맞아야 한다."""
+    bound, tag = world["bound"], world["tag"]
+    _alert(db, bound.id, tag, severity="critical", status="firing")
+    _alert(db, bound.id, tag, severity="warning", status="firing", acked=True)
+    _alert(db, bound.id, tag, severity="info", status="resolved")
+    r = client_as(world["op_member"]).get(f"/api/v1/observability/alerts/stats?cluster_id={bound.id}")
+    assert r.status_code == 200, r.text
+    assert r.json() == {"firing": 2, "resolved": 1, "critical": 1, "warning": 1, "info": 1,
+                        "unacked": 1, "total": 3}

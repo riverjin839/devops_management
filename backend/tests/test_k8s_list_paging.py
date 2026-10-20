@@ -147,3 +147,27 @@ def test_dispatch_jitter_env(monkeypatch):
     assert ca._dispatch_jitter() == 0.0
     monkeypatch.setenv("K8S_DISPATCH_JITTER_SECONDS", "5")
     assert all(0 <= ca._dispatch_jitter() <= 5 for _ in range(50))
+
+
+def test_secrets_are_listed_in_small_pages(monkeypatch):
+    """Secret/ConfigMap 은 개당 클 수 있어(Helm 릴리스) 작은 페이지로 나눠 받고 행만 남긴다 — 행 수 상한은 그대로."""
+    seen = []
+    secrets = [{"metadata": {"name": f"s{i:04d}", "namespace": "ns", "creationTimestamp": "2024-01-01T00:00:00Z"},
+                "type": "Opaque", "data": {"k": "v"}} for i in range(1050)]
+
+    def list_all(_a, **kw):
+        seen.append(kw)
+        start = int(kw.get("_continue") or 0)
+        nxt = start + kw["limit"]
+        meta = {"continue": str(nxt)} if nxt < len(secrets) else {}
+        return _Resp({"metadata": meta, "items": secrets[start:nxt]})
+
+    monkeypatch.setattr(kr, "KIND_MAP", {"secrets": {"api": lambda c: c, "list_all": list_all,
+                                                     "summary": lambda o: ""}})
+    monkeypatch.setattr(kr, "_list_cache", SWRCache(fresh=30, stale=60))
+    monkeypatch.setattr(kr, "_require_cluster", lambda cid, db: SimpleNamespace(id=cid))
+    monkeypatch.setattr(kr, "_api_client", lambda cluster: object())
+    res = kr.list_resources(uuid.uuid4(), "secrets", db=None)
+    assert all(kw["limit"] == kr._HEAVY_PAGE for kw in seen)
+    assert len(seen) == kr._LIST_LIMIT // kr._HEAVY_PAGE
+    assert res.count == kr._LIST_LIMIT and res.truncated is True
