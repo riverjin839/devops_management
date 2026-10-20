@@ -28,8 +28,9 @@ data:
             proxy_set_header X-Forwarded-Proto $scheme;
             proxy_cache_bypass $http_upgrade;
             proxy_connect_timeout 60s;
-            proxy_send_timeout 60s;
-            proxy_read_timeout 60s;
+            # 동기 실행(일괄 SSH·플레이북·이미지 배포·백업 복구 등)이 60s 에 504 로 끊기지 않게 — 앱 실행 한도(최대 60분)까지.
+            proxy_send_timeout 3600s;
+            proxy_read_timeout 3600s;
         }
 
         location /health {

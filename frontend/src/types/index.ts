@@ -3920,7 +3920,7 @@ export interface OpsCheckRunItem {
   checkType?: string | null;
   name?: string | null;
   /** 실행 진행 상태 */
-  status: 'queued' | 'running' | 'done' | 'error';
+  status: 'queued' | 'running' | 'done' | 'error' | 'cancelled';
   /** 점검 판정 결과 */
   resultStatus?: 'healthy' | 'warning' | 'critical' | 'pending' | null;
   message?: string | null;

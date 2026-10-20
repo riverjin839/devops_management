@@ -55,6 +55,12 @@ function convertKeysToSnake(obj: unknown): unknown {
   return obj;
 }
 
+// 동기 실행(요청 안에서 끝까지 도는 SSH·kubectl·ansible·체커)은 기본 30초 timeout 에 잘린다 — 서버 한도에 맞춘다.
+// 프록시(nginx /api·ingress) read timeout 도 3600초라 이 값까지는 끊기지 않는다.
+const SYNC_RUN_TIMEOUT = 5 * 60_000;
+/** 서버 쪽 실행 한도(초) + 접속·응답 여유 — 서버가 먼저 끝내고 사유를 돌려주게 클라이언트를 조금 더 길게 둔다. */
+const runTimeout = (serverSeconds: number, marginSeconds = 30) => (serverSeconds + marginSeconds) * 1000;
+
 const api = axios.create({
   baseURL: '/api/v1',
   timeout: 30000,
@@ -322,6 +328,7 @@ export const clustersApi = {
     }>(`/clusters/${id}/auto-update`, undefined, {
       params: opts?.dryRun ? { dry_run: 'true' } : undefined,
       signal: opts?.signal,
+      timeout: SYNC_RUN_TIMEOUT,
     }),
   getCiliumConfig: (id: string) =>
     api.get<{ live: string | null; stored: string | null; /** live | stored | none | masked(viewer 숨김 정책) */ source: string; error: string | null }>(`/clusters/${id}/cilium-config`),
@@ -445,7 +452,7 @@ export interface VersionGraphEdge {
 export const versionsApi = {
   collect: (clusterId: string, signal?: AbortSignal) =>
     api.post<{ clusterId: string; changed: number; errors: string[]; collectedAt: string }>(
-      `/clusters/${clusterId}/collect-versions`, undefined, { signal },
+      `/clusters/${clusterId}/collect-versions`, undefined, { signal, timeout: SYNC_RUN_TIMEOUT },
     ),
   collectEtcdctlConfig: (
     clusterId: string,
@@ -687,7 +694,7 @@ export const mcApi = {
   presets: (clusterId: string) =>
     api.get<{ presets: import('@/types').McEffectivePreset[] }>(`/clusters/${clusterId}/mc/presets`),
   run: (clusterId: string, payload: McRunRequest, signal?: AbortSignal) =>
-    api.post<EtcdCtlRunResponse>(`/clusters/${clusterId}/mc/run`, payload, { signal }),
+    api.post<EtcdCtlRunResponse>(`/clusters/${clusterId}/mc/run`, payload, { signal, timeout: runTimeout(payload.timeout || 60) }),
   getPersonalPresets: () =>
     api.get<import('@/types').McPersonalPresets>('/mc/presets/personal'),
   savePersonalPresets: (payload: import('@/types').McPersonalPresets) =>
@@ -718,16 +725,17 @@ export const etcdctlApi = {
       `/clusters/${clusterId}/etcdctl/master-candidates`,
     ),
   run: (clusterId: string, payload: EtcdCtlRunRequest, signal?: AbortSignal) =>
-    api.post<EtcdCtlRunResponse>(`/clusters/${clusterId}/etcdctl/run`, payload, { signal }),
+    api.post<EtcdCtlRunResponse>(`/clusters/${clusterId}/etcdctl/run`, payload, { signal, timeout: runTimeout(payload.timeout || 30) }),
   logs: (clusterId: string, payload: EtcdLogsRequest, signal?: AbortSignal) =>
-    api.post<EtcdCtlRunResponse>(`/clusters/${clusterId}/etcdctl/logs`, payload, { signal }),
+    api.post<EtcdCtlRunResponse>(`/clusters/${clusterId}/etcdctl/logs`, payload, { signal, timeout: runTimeout(60) }),
 };
 
 // Health API
 export const healthApi = {
-  runCheck: (clusterId: string) => api.post<HealthCheckRunResult>(`/health/check/${clusterId}`),
+  runCheck: (clusterId: string) =>
+    api.post<HealthCheckRunResult>(`/health/check/${clusterId}`, undefined, { timeout: SYNC_RUN_TIMEOUT }),
   runAddonCheck: (clusterId: string, addonId: string) =>
-    api.post<AddonCheckRunResult>(`/health/check/${clusterId}/addons/${addonId}`),
+    api.post<AddonCheckRunResult>(`/health/check/${clusterId}/addons/${addonId}`, undefined, { timeout: 2 * 60_000 }),
   getStatus: (clusterId: string) => api.get<ApiResponse<Cluster>>(`/health/status/${clusterId}`),
   getAddons: (clusterId: string) => api.get<ApiResponse<Addon[]>>(`/health/addons/${clusterId}`),
   getSummary: () => api.get<ApiResponse<SummaryStats>>('/health/summary'),
@@ -765,7 +773,8 @@ export const playbooksApi = {
     api.put<ApiResponse<Playbook>>(`/playbooks/${id}`, data),
   delete: (id: string) => api.delete(`/playbooks/${id}`),
   run: (id: string, creds?: PlaybookSshCreds) =>
-    api.post<PlaybookRunResult>(`/playbooks/${id}/run`, creds ?? {}),
+    // 플레이북 timeout_seconds 는 최대 1800초 — ansible 이 끝나기 전에 화면이 먼저 끊기지 않게.
+    api.post<PlaybookRunResult>(`/playbooks/${id}/run`, creds ?? {}, { timeout: runTimeout(1800, 60) }),
   // D-066 — append-only 실행 이력(최신 lastResult 덮어쓰기와 별개로 전부 보존).
   getRuns: (id: string, limit = 50) =>
     api.get<ApiResponse<import('@/types').PlaybookRunHistoryEntry[]>>(`/playbooks/${id}/runs`, {
@@ -1008,7 +1017,7 @@ export const jiraApi = {
   confluenceLink: (data: import('@/types').ConfluenceLinkRequest) =>
     api.post<import('@/types').WorkItem>('/jira/confluence/link', data),
   confluenceSync: (itemId: string) =>
-    api.post<import('@/types').ConfluenceSyncResult>(`/jira/confluence/sync/${itemId}`),
+    api.post<import('@/types').ConfluenceSyncResult>(`/jira/confluence/sync/${itemId}`, undefined, { timeout: 2 * 60_000 }),
   // 상위 페이지 ID 입력칸 hover 툴팁용 — 페이지 ID → 제목 단건 조회.
   confluencePageInfo: (pageId: string) =>
     api.get<import('@/types').ConfluencePageInfo>('/jira/confluence/page-info', {
@@ -1028,7 +1037,7 @@ export const jiraApi = {
   // K8s/컨테이너 배포용 로컬 SSO 도우미 스크립트 다운로드 (본인 PC 에서 실행).
   downloadSsoHelper: () => api.get<Blob>('/jira/sso/helper', { responseType: 'blob' }),
   import: (data: import('@/types').JiraImportRequest) =>
-    api.post<import('@/types').JiraImportResult>('/jira/import', data),
+    api.post<import('@/types').JiraImportResult>('/jira/import', data, { timeout: SYNC_RUN_TIMEOUT }),
   importExcel: (file: File) => {
     const fd = new FormData();
     fd.append('file', file);
@@ -1046,7 +1055,7 @@ export const jiraApi = {
       timeout: 2 * 60_000,
     }),
   push: (itemId: string, data: import('@/types').JiraPushRequest) =>
-    api.post<import('@/types').JiraPushResult>(`/jira/push/${itemId}`, data),
+    api.post<import('@/types').JiraPushResult>(`/jira/push/${itemId}`, data, { timeout: 2 * 60_000 }),
   provisionDefaults: (workItemId?: string) =>
     api.get<import('@/types').ProvisionDefaults>('/jira/provision/defaults', {
       params: workItemId ? { work_item_id: workItemId } : undefined,
@@ -1097,7 +1106,7 @@ export const serviceNowApi = {
     api.put<import('@/types').ServiceNowConfig>('/servicenow/config', data),
   test: () => api.post<import('@/types').ServiceNowTestResult>('/servicenow/test'),
   register: (itemId: string) =>
-    api.post<import('@/types').ServiceNowRegisterResult>(`/servicenow/register/${itemId}`),
+    api.post<import('@/types').ServiceNowRegisterResult>(`/servicenow/register/${itemId}`, undefined, { timeout: 2 * 60_000 }),
 };
 
 // Today work items summary — task + issue 모두 대상 (백엔드 동일).
@@ -1572,7 +1581,7 @@ export const isilonNfsApi = {
     }),
   /** mc 클라이언트 패턴 — 등록된 명령 중 선택한 키만 온디맨드 실행(캐시 미사용). */
   runCommands: (serverId: string, keys: string[]) =>
-    api.post<import('@/types').IsilonRunResponse>(`/isilon-nfs/servers/${serverId}/run`, { keys }),
+    api.post<import('@/types').IsilonRunResponse>(`/isilon-nfs/servers/${serverId}/run`, { keys }, { timeout: SYNC_RUN_TIMEOUT }),
 };
 
 // Infra Nodes API (물리 서버 노드)
@@ -1618,7 +1627,7 @@ export const nodeSpecsApi = {
     payload: import('@/types').NodeSpecImportRequest = {},
     signal?: AbortSignal,
   ) =>
-    api.post<import('@/types').NodeSpecImportResult>(`/node-specs/import/${clusterId}`, payload, { signal }),
+    api.post<import('@/types').NodeSpecImportResult>(`/node-specs/import/${clusterId}`, payload, { signal, timeout: SYNC_RUN_TIMEOUT }),
   collectHostFacts: (
     clusterId: string,
     payload: import('@/types').NodeSpecHostFactsCollectRequest,
@@ -1649,7 +1658,10 @@ export const topologyTraceApi = {
   hubbleFlows: (payload: import('@/types').HubbleFlowsRequest, signal?: AbortSignal) =>
     api.post<import('@/types').HubbleFlowsResponse>('/topology-trace/hubble-flows', payload, { signal }),
   tcpdumpRun: (payload: import('@/types').TcpdumpCaptureRequest, signal?: AbortSignal) =>
-    api.post<import('@/types').TcpdumpCaptureResponse>('/topology-trace/tcpdump', payload, { signal }),
+    // 캡처 시간(최대 120초) + 접속 timeout 동안 응답이 없다 — 그보다 길게.
+    api.post<import('@/types').TcpdumpCaptureResponse>('/topology-trace/tcpdump', payload, {
+      signal, timeout: runTimeout((payload.durationSec ?? 10) + (payload.connectTimeout ?? 10)),
+    }),
   tcpdumpInterfaces: (payload: import('@/types').TcpdumpInterfacesRequest, signal?: AbortSignal) =>
     api.post<import('@/types').TcpdumpInterfacesResponse>('/topology-trace/tcpdump/interfaces', payload, { signal }),
 };
@@ -1889,6 +1901,7 @@ export const k8sEventsApi = {
 export const trendsApi = {
   triggerCollect: (targetDate?: string, lookbackDays?: number) =>
     api.post<TrendDigest>('/trends/collect', undefined, {
+      timeout: 10 * 60_000, // 전 소스(GitHub/RSS)를 다 모은 뒤 응답한다
       params: {
         ...(targetDate ? { target_date: targetDate } : {}),
         ...(lookbackDays ? { lookback_days: lookbackDays } : {}),
@@ -1944,7 +1957,7 @@ export const lakeServicesApi = {
   update: (id: string, data: _LakeServiceUpdate) =>
     api.put<_LakeService>(`/lake-services/${id}`, data),
   remove: (id: string) => api.delete(`/lake-services/${id}`),
-  runCheck: (id: string) => api.post<_LakeServiceCheck>(`/lake-services/${id}/check`),
+  runCheck: (id: string) => api.post<_LakeServiceCheck>(`/lake-services/${id}/check`, undefined, { timeout: 2 * 60_000 }),
 };
 
 // LAKE service type 카탈로그 (lake-service-type-management PDCA)
@@ -2258,7 +2271,7 @@ export const dailyCheckApi = {
   listLogs: (clusterId: string, params?: { limit?: number; offset?: number }) =>
     api.get<DailyCheckLogLite[]>(`/daily-check/results/${clusterId}`, { params }),
   runNow: (clusterId: string) =>
-    api.post<DailyCheckLogLite>(`/daily-check/run/${clusterId}`),
+    api.post<DailyCheckLogLite>(`/daily-check/run/${clusterId}`, undefined, { timeout: SYNC_RUN_TIMEOUT }),
   getSummary: () => api.get('/daily-check/summary'),
 };
 
@@ -2306,16 +2319,16 @@ export const deepCheckDefinitionsApi = {
     api.post<DeepCheckTestResult>(
       `/deep-check/definitions/${id}/test`,
       undefined,
-      { params: clusterId ? { cluster_id: clusterId } : undefined },
+      { params: clusterId ? { cluster_id: clusterId } : undefined, timeout: SYNC_RUN_TIMEOUT },
     ),
   run: (id: string, clusterId?: string) =>
     api.post<DeepCheckTestResult>(
       `/deep-check/definitions/${id}/run`,
       undefined,
-      { params: clusterId ? { cluster_id: clusterId } : undefined },
+      { params: clusterId ? { cluster_id: clusterId } : undefined, timeout: SYNC_RUN_TIMEOUT },
     ),
   preview: (data: DeepCheckPreviewInput) =>
-    api.post<DeepCheckTestResult>('/deep-check/definitions/preview', data),
+    api.post<DeepCheckTestResult>('/deep-check/definitions/preview', data, { timeout: SYNC_RUN_TIMEOUT }),
   results: (id: string, params?: { limit?: number; offset?: number; status?: string }) =>
     api.get<DeepCheckDefinitionResults>(`/deep-check/definitions/${id}/results`, { params }),
 };
@@ -2524,6 +2537,8 @@ export const opsCheckApi = {
   listRuns: (clusterId?: string, limit = 20) =>
     api.get<OpsCheckRun[]>('/ops-checks/runs', { params: { cluster_id: clusterId, limit } }),
   getRun: (runId: string) => api.get<OpsCheckRun>(`/ops-checks/runs/${runId}`),
+  // 아직 안 돈 항목은 건너뛰고, 실행 중인 항목이 끝나면 멈춘다.
+  cancelRun: (runId: string) => api.post<OpsCheckRun>(`/ops-checks/runs/${runId}/cancel`),
   getRunItems: (runId: string) =>
     api.get<OpsCheckRunItem[]>(`/ops-checks/runs/${runId}/items`),
   itemHistory: (source: string, itemRefId: string, limit = 20) =>

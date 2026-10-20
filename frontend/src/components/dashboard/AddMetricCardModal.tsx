@@ -232,9 +232,10 @@ export function AddMetricCardModal({ isOpen, onClose, editingCard }: AddMetricCa
         setTestStatus('error');
         setTestResult(String(d.error || 'Query failed'));
       }
-    } catch {
+    } catch (err) {
+      // 서버가 준 사유(권한·검증·요청 ID)를 버리지 않는다 — 예전엔 무조건 "Prometheus 도달 실패" 로만 보였다.
       setTestStatus('error');
-      setTestResult('Failed to reach Prometheus');
+      setTestResult(formatApiError(err, 'Prometheus 에 질의하지 못했습니다'));
     }
   };
 

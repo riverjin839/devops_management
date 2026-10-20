@@ -4,7 +4,9 @@ import { useClusters } from '@/hooks/useCluster';
 import { useClustersNodes, usePatchNodeLabels, NodeRow } from '@/hooks/useNodeLabels';
 import { NodeLabelEditorModal, NodeLabelsTable } from '@/components/node-labels';
 import { matchesSearch, buildLabelEntries, filterLabelEntries } from '@/components/node-labels/nodeLabelsShared';
-import { ClusterSidebar, ExportMenu, EmptyState, LoadingState, PageShell } from '@/components/common';
+import { ClusterSidebar, ExportMenu, EmptyState, LoadingState, PageShell, RunLogPanel } from '@/components/common';
+import { useRunLog, runLogged } from '@/hooks/useRunLog';
+import { useLogPref } from '@/hooks/useLogPref';
 import { PageHeader } from '@/components/common/PageHeader';
 import { buildCsv, downloadCsv } from '@/lib/csv';
 import { formatApiError } from '@/lib/utils';
@@ -43,6 +45,8 @@ export function NodeLabelsPage() {
     { autoRefresh },
   );
   const patchNodeLabels = usePatchNodeLabels();
+  const runLog = useRunLog();
+  const [showRunLog, setShowRunLog] = useLogPref('node-labels-apply');
 
   const showCluster = targetClusters.length > 1;
 
@@ -101,6 +105,10 @@ export function NodeLabelsPage() {
             </span>
           }
         />
+
+        <div className="mb-4 empty:hidden">
+          <RunLogPanel run={runLog} show={showRunLog} onShowChange={setShowRunLog} maxHeight="max-h-56" />
+        </div>
 
         {/* Toolbar: search + view mode */}
         <div className="flex items-center gap-3 mb-4">
@@ -227,10 +235,16 @@ export function NodeLabelsPage() {
         onClose={() => setSelectedNode(null)}
         onApply={(payload) => {
           if (!selectedNode) return;
-          patchNodeLabels.mutate({
-            clusterId: selectedNode.clusterId,
-            nodeName: selectedNode.name,
-            payload,
+          const node = selectedNode;
+          const adds = Object.entries(payload.add).map(([k, v]) => (v ? `${k}=${v}` : k));
+          // 예전엔 mutate 만 하고 결과·실패를 보여 주지 않아, 권한·검증 오류가 나도 조용히 묻혔다.
+          void runLogged(runLog, {
+            title: '노드 라벨 적용',
+            first: `${node.clusterName} · 노드 ${node.name} 라벨 변경 요청`
+              + ` — 추가/변경 ${adds.length}건${adds.length ? ` (${adds.join(', ')})` : ''}`
+              + ` · 삭제 ${payload.remove.length}건${payload.remove.length ? ` (${payload.remove.join(', ')})` : ''}`,
+            fn: () => patchNodeLabels.mutateAsync({ clusterId: node.clusterId, nodeName: node.name, payload }),
+            summarize: () => [['info', `${node.name} 라벨 반영 완료 — 목록을 다시 불러온다`]],
           });
         }}
       />

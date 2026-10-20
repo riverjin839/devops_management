@@ -11,7 +11,7 @@ from datetime import datetime
 from typing import Any, Optional
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 from pydantic import BaseModel
 from sqlalchemy import desc
 from sqlalchemy.orm import Session
@@ -19,6 +19,7 @@ from sqlalchemy.orm import Session
 from app.auth.deps import require_operator
 from app.database import get_db
 from app.models import OpsCheckRun, OpsCheckRunItem, User
+from app.services.cluster_access import require_cluster_access
 from app.services.ops_check_service import OpsCheckService
 
 logger = logging.getLogger(__name__)
@@ -119,6 +120,7 @@ def get_catalog(cluster_id: UUID, db: Session = Depends(get_db)):
 @router.post("/run", response_model=RunOut)
 def start_run(
     body: RunRequest,
+    background: BackgroundTasks,
     db: Session = Depends(get_db),
     user: User = Depends(require_operator),
 ):
@@ -137,19 +139,42 @@ def start_run(
         logger.exception("ops-check run 생성 실패: %s", e)
         raise HTTPException(status_code=500, detail=f"실행 생성 실패: {str(e)[:300]}")
 
-    # 백그라운드(Celery) enqueue — broker/worker 부재 시 동기 폴백.
+    # 백그라운드(Celery) enqueue — broker/worker 부재 시 응답을 보낸 뒤 이 프로세스에서 실행한다.
+    # 예전엔 요청 안에서 동기로 전부 돌려, 브로커 장애 때 점검 수만큼 요청이 물려 화면이 "응답없음" 이 됐다.
     try:
         from app.celery_app import run_ops_check_batch
         run_ops_check_batch.delay(str(run.id))
     except Exception as e:  # noqa: BLE001
-        logger.warning("ops-check: Celery enqueue 실패 → 동기 실행 폴백 (%s)", e)
-        try:
-            svc.execute_run(run.id)
-            db.refresh(run)
-        except Exception as e2:  # noqa: BLE001
-            logger.exception("ops-check 동기 실행 폴백도 실패: %s", e2)
-            raise HTTPException(status_code=500, detail=f"실행 실패: {str(e2)[:300]}")
+        logger.warning("ops-check: Celery enqueue 실패 → 응답 뒤 백그라운드 실행 (%s)", e)
+        background.add_task(_execute_run_in_background, str(run.id))
     return run
+
+
+def _execute_run_in_background(run_id: str) -> None:
+    from app.database import SessionLocal
+
+    db = SessionLocal()
+    try:
+        OpsCheckService(db).execute_run(run_id)
+    except Exception as e:  # noqa: BLE001 — 결과는 항목 status/message 로 남는다
+        logger.exception("ops-check 백그라운드 실행 실패 run=%s: %s", run_id, e)
+    finally:
+        db.close()
+
+
+@router.post("/runs/{run_id}/cancel", response_model=RunOut)
+def cancel_run(
+    run_id: UUID,
+    db: Session = Depends(get_db),
+    user: User = Depends(require_operator),
+):
+    """대기·실행 중인 묶음 취소 — 아직 안 돈 항목은 건너뛰고, 실행 중인 항목이 끝나면 멈춘다."""
+    run = db.query(OpsCheckRun).filter(OpsCheckRun.id == run_id).first()
+    if run is None:
+        raise HTTPException(status_code=404, detail="실행 기록을 찾을 수 없습니다.")
+    require_cluster_access(db, user, run.cluster_id, "operate")
+    out = OpsCheckService(db).cancel_run(run_id, actor=getattr(user, "username", None))
+    return out
 
 
 @router.get("/runs", response_model=list[RunOut])

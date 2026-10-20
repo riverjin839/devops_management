@@ -37,14 +37,14 @@ export function useDeleteInfraNode() {
 }
 
 /** SSE 실행 — `log`·`step` 은 onEvent 로 흘리고, `result` 는 camelCase 로 바꿔 반환, `error` 는 throw. */
-async function runInfraStream<T>(url: string, onEvent?: (evt: SseEvent) => void): Promise<T> {
+async function runInfraStream<T>(url: string, onEvent?: (evt: SseEvent) => void, signal?: AbortSignal): Promise<T> {
   // 콜백 안에서 채우므로 객체로 둔다(let 은 TS 가 null 로 좁혀 버린다).
   const out: { result: T | null; error: string | null } = { result: null, error: null };
   await postSse(url, undefined, (evt) => {
     if (evt.type === 'result') out.result = camelizeKeys<T>(evt.result);
     else if (evt.type === 'error') out.error = String(evt.message ?? '실행 실패');
     else onEvent?.(evt);
-  }, undefined, infraNodeStream.headers);
+  }, signal, infraNodeStream.headers);
   if (out.error) throw new Error(out.error);
   if (!out.result) throw new Error('결과 없이 스트림이 끝났습니다.');
   return out.result;
@@ -54,8 +54,8 @@ async function runInfraStream<T>(url: string, onEvent?: (evt: SseEvent) => void)
 export function useSyncInfraNodes() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: ({ clusterId, onEvent }: { clusterId: string; onEvent?: (evt: SseEvent) => void }) =>
-      runInfraStream<InfraSyncResult>(infraNodeStream.syncUrl(clusterId), onEvent),
+    mutationFn: ({ clusterId, onEvent, signal }: { clusterId: string; onEvent?: (evt: SseEvent) => void; signal?: AbortSignal }) =>
+      runInfraStream<InfraSyncResult>(infraNodeStream.syncUrl(clusterId), onEvent, signal),
     // 실패해도 일부 노드는 반영됐을 수 있다 — 성공·실패 모두 목록을 다시 읽는다.
     onSettled: () => qc.invalidateQueries({ queryKey: ['infra-nodes'] }),
   });

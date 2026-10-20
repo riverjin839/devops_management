@@ -2,7 +2,7 @@ import { useId, useMemo, useRef, useState } from 'react';
 import { PageHeader } from '@/components/common/PageHeader';
 import {
   Network, Plus, RefreshCw, Server, Cpu, Database, HardDrive,
-  Trash2, Pencil, X, ChevronDown, AlertTriangle, Loader2, Tag, Activity, ShieldCheck,
+  Trash2, Pencil, X, ChevronDown, AlertTriangle, Loader2, Tag, Activity, ShieldCheck, Square,
 } from 'lucide-react';
 import { useClusters } from '@/hooks/useCluster';
 import { useCanOperate } from '@/hooks/useCanOperate';
@@ -526,6 +526,8 @@ export function InfraTopologyPage() {
   // D-089 — 실행 버튼(K8s 동기화·노드 검증·Trace)마다 단계·결과를 시각과 함께 남기고, 펼쳐 볼지는 "로그 보기" 로 정한다.
   const runLog = useRunLog();
   const [showLog, setShowLog] = useLogPref('infra-topology');
+  // K8s 동기화 중지 — 화면이 스트림 구독을 끊는다(이미 반영된 노드는 남는다).
+  const syncAbortRef = useRef<AbortController | null>(null);
 
   async function handleVerify(n: InfraNode) {
     setVerifyResult(null);
@@ -626,12 +628,16 @@ export function InfraTopologyPage() {
     setSyncResult(null);
     const t0 = performance.now();
     const run = runLog.begin('K8s 동기화', `${activeCluster?.name ?? requestedFor} — kubectl get nodes 로 노드 정보 수집 요청`);
+    syncAbortRef.current?.abort();
+    const ac = new AbortController();
+    syncAbortRef.current = ac;
     try {
       // kubeconfig 확인 → kubectl(재시도) → 노드별 반영 → 신규 노드 검증을 서버가 실시간으로 흘린다(D-089).
       // 그사이 클러스터를 바꿨다면 다른 클러스터 로그를 섞지 않는다(D-094).
       const res = await syncNodes.mutateAsync({
         clusterId: requestedFor,
         onEvent: (evt) => { if (activeClusterRef.current === requestedFor) applyRunEvent(run, evt); },
+        signal: ac.signal,
       });
       if (activeClusterRef.current !== requestedFor) return;
       // 생성/갱신/실패 요약 — 신규 노드가 0개여도 "동기화가 됐다"는 피드백을 남긴다(D-088)
@@ -642,11 +648,16 @@ export function InfraTopologyPage() {
       if (res.verifiedTruncated) run.log('warn', '신규 노드가 많아 일부만 자동 검증했다 — 나머지는 노드 카드의 검증 버튼으로 실행');
     } catch (e) {
       if (activeClusterRef.current !== requestedFor) return;
+      if (ac.signal.aborted) {
+        run.log('warn', `사용자 중지 · ${elapsed(t0)} — 이미 반영된 노드는 목록에 남는다`);
+        return;
+      }
       const msg = extractError(e);
       setSyncError(msg);
       run.log('error', `동기화 실패 · ${elapsed(t0)} — ${msg}`);
     } finally {
       run.end();
+      if (syncAbortRef.current === ac) syncAbortRef.current = null;
     }
   }
 
@@ -741,7 +752,20 @@ export function InfraTopologyPage() {
         />
 
         <div className="mb-4 empty:mb-0">
-          <RunLogPanel run={runLog} show={showLog} onShowChange={setShowLog} />
+          <RunLogPanel
+            run={runLog}
+            show={showLog}
+            onShowChange={setShowLog}
+            actions={syncNodes.isPending ? (
+              <button
+                type="button"
+                onClick={() => syncAbortRef.current?.abort()}
+                className="text-xs inline-flex items-center gap-1 px-2 py-1 rounded-xl border border-border bg-background hover:bg-secondary"
+              >
+                <Square className="w-3.5 h-3.5" aria-hidden="true" /> 동기화 중지
+              </button>
+            ) : null}
+          />
         </div>
 
         {clustersLoading ? (

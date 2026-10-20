@@ -556,7 +556,7 @@ hover 시 flyout 자체가 라벨을 보여주므로 이름만 뜨는 중복 툴
 - **UI 구성**:
   - `ClusterSidebar` — `iconOnly` + 단일 선택(`selectedId`/`onSelect`), `allowAll` 없음(반드시 특정 클러스터 URL로 리다이렉트).
   - MacCard "점검 항목" — 카테고리 필터 pill 바 + 검색창 + 전체선택 체크박스 + 선택 실행 버튼 + 카탈로그 테이블(이름/분류/실행기술(`ExecTechBadge`, D-062)/상태/작업).
-  - MacCard "실행 진행" — 활성 run 이 있을 때만 표시, 항목별 상태(대기/실행중/완료/실패)와 총계(정상/경고/위험/실패) 라이브 업데이트.
+  - MacCard "실행 진행" — 활성 run 이 있을 때만 표시, 항목별 상태(대기/실행중/완료/실패/취소)와 총계(정상/경고/위험/실패) 라이브 업데이트. 헤더에 「로그 보기」(`useLogPref('ops-check-run')` — 항목별 시각·판정·사유를 시간순 `LogViewer` 로, 2초 폴링)·실행 중 「취소」(`POST /api/v1/ops-checks/runs/{id}/cancel` — 남은 항목 건너뜀, 실행 중 항목은 끝까지).
   - 항목 상세 모달 — `LogViewer` 로 `details` JSON 렌더.
   - 헤더에 `/daily-check/review/:clusterId`, `/daily-check/settings` 로의 바로가기 링크.
 - **Frontend**: `useClusters`(cluster 목록), `useOpsCheckCatalog(clusterId)`, `useStartOpsRun()`, `useOpsRun(activeRunId)`(2초 폴링, 완료 시 정지), `useOpsRunItems(runId, isRunning)`(실행 중일 때만 2초 폴링). 로컬 state: `selected`(Set), `category`, `search`, `activeRunId`, `detail`. api.ts: `opsCheckApi.catalog`, `opsCheckApi.run`, `opsCheckApi.getRun`, `opsCheckApi.getRunItems`.

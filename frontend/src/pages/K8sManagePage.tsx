@@ -253,11 +253,14 @@ export function K8sManagePage() {
   const doDrain = (name: string) => setPending({ type: 'drain', name });
   // cordon/uncordon 은 되돌릴 수 있는 토글이라 즉시 실행(확인 불필요)
   const doCordon = async (name: string, unschedulable: boolean) => {
-    try {
-      await k8sResourcesApi.cordon(clusterId, name, unschedulable);
-      flash('ok', `${name} ${unschedulable ? 'cordon' : 'uncordon'} 완료`);
-      reloadList();
-    } catch (e) { flash('err', errMsg(e)); }
+    const action = unschedulable ? 'cordon' : 'uncordon';
+    const r = await runLogged(runLog, {
+      title: unschedulable ? 'Node Cordon' : 'Node Uncordon',
+      first: `${cluster?.name ?? clusterId} · 노드 ${name} ${action} 요청 — spec.unschedulable=${unschedulable}`,
+      fn: () => k8sResourcesApi.cordon(clusterId, name, unschedulable),
+      summarize: () => [['info', `${name} ${action} 완료 — ${unschedulable ? '새 파드가 이 노드에 스케줄되지 않는다' : '다시 스케줄 대상이 된다'}`]],
+    });
+    if (r.ok) { flash('ok', `${name} ${action} 완료`); reloadList(); } else if (!r.aborted) flash('err', errMsg(r.error));
   };
   // 확인 후 실제 실행
   const executePending = async () => {
@@ -309,23 +312,31 @@ export function K8sManagePage() {
       } else if (!r.aborted) flash('err', errMsg(r.error));
       return;
     }
-    try {
-      if (p.type === 'delete') {
-        await k8sResourcesApi.remove(clusterId, p.kind, p.ns, p.name);
-        flash('ok', `${p.name} 삭제됨`);
-      }
-      reloadList();
-    } catch (e) { flash('err', errMsg(e)); }
+    if (p.type === 'delete') {
+      const r = await runLogged(runLog, {
+        title: '리소스 삭제',
+        first: `${clusterLabel} · ${p.kind}/${p.ns}/${p.name} 삭제 요청`,
+        fn: () => k8sResourcesApi.remove(clusterId, p.kind, p.ns, p.name),
+        summarize: () => [['info', `${p.name} 삭제 요청 완료 — 종료 처리는 컨트롤러가 이어서 한다`]],
+      });
+      if (r.ok) { flash('ok', `${p.name} 삭제됨`); reloadList(); } else if (!r.aborted) flash('err', errMsg(r.error));
+    }
   };
   const doApply = async () => {
     if (!detail || detail.kind !== 'k8s' || !detail.resourceKind) return;
-    try {
-      await k8sResourcesApi.apply(clusterId, detail.resourceKind, detail.namespace, detail.name, draft);
+    const target = `${detail.resourceKind}/${detail.namespace ?? '-'}/${detail.name}`;
+    const r = await runLogged(runLog, {
+      title: 'YAML 적용',
+      first: `${cluster?.name ?? clusterId} · ${target} YAML 적용 요청 (${draft.split('\n').length}줄)`,
+      fn: () => k8sResourcesApi.apply(clusterId, detail.resourceKind!, detail.namespace, detail.name, draft),
+      summarize: () => [['info', `${detail.name} 적용 완료 — 서버가 받아들인 스펙으로 갱신됨`]],
+    });
+    if (r.ok) {
       flash('ok', `${detail.name} 적용됨`);
       setEditing(false);
       reloadList();
       queryClient.invalidateQueries({ queryKey: ['k8s-mng-yaml'] });
-    } catch (e) { flash('err', errMsg(e)); }
+    } else if (!r.aborted) flash('err', errMsg(r.error));
   };
 
   const closeDetail = () => { setDetail(null); setEditing(false); setDraft(''); };

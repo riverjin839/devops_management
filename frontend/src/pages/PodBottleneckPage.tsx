@@ -2,7 +2,7 @@ import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { PageHeader } from '@/components/common/PageHeader';
 import { useQueryClient } from '@tanstack/react-query';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { Activity, Play, AlertCircle, ListTree, Loader2, ExternalLink } from 'lucide-react';
+import { Activity, Play, AlertCircle, ListTree, Loader2, ExternalLink, Square } from 'lucide-react';
 import { ClusterSidebar, EmptyState, NamespaceSingleSelect, PodSingleSelect, RunLogPanel, SelectClusterEmptyState, Skeleton, PageShell } from '@/components/common';
 import { MacCard } from '@/components/ui/MacCard';
 import { useClusters } from '@/hooks/useCluster';
@@ -119,6 +119,7 @@ export function PodBottleneckPage() {
       );
     } catch (e) {
       if (!ac.signal.aborted) out.error = e instanceof Error ? e.message : String(e);
+      else run.log('warn', '사용자 중지 — 진단 스트림을 끊었다');
     } finally {
       run.end();
       abortRef.current = null;
@@ -218,7 +219,15 @@ export function PodBottleneckPage() {
                 run={runLog}
                 show={showLog}
                 onShowChange={setShowLog}
-                actions={lastRunId && !running ? (
+                actions={running ? (
+                  <button
+                    type="button"
+                    onClick={() => abortRef.current?.abort()}
+                    className="text-xs inline-flex items-center gap-1 px-2 py-1 rounded-xl border border-border bg-background hover:bg-secondary"
+                  >
+                    <Square className="w-3.5 h-3.5" aria-hidden="true" /> 중지
+                  </button>
+                ) : lastRunId ? (
                   <button
                     type="button"
                     onClick={() => navigate(`/pod-bottleneck/${lastRunId}`)}
