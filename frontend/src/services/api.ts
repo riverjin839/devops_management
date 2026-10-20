@@ -205,14 +205,14 @@ export const authApi = {
     enabled: boolean; displayName: string; issuer: string; clientId: string; hasSecret: boolean;
     scopes: string; usernameClaim: string; displayNameClaim: string; emailClaim: string;
     autoProvision: boolean; defaultRole: 'viewer' | 'operator'; allowedDomains: string[];
-    publicBaseUrl: string; redirectUri: string;
+    requireEmailVerified: boolean; publicBaseUrl: string; redirectUri: string;
   }>('/auth/oidc/settings'),
   /** 보낸 키만 바뀐다. clientSecret 은 입력했을 때만 교체, clearClientSecret 이면 삭제. */
   updateOidcSettings: (payload: Partial<{
     enabled: boolean; displayName: string; issuer: string; clientId: string; clientSecret: string;
     clearClientSecret: boolean; scopes: string; usernameClaim: string; displayNameClaim: string;
     emailClaim: string; autoProvision: boolean; defaultRole: 'viewer' | 'operator';
-    allowedDomains: string[]; publicBaseUrl: string;
+    allowedDomains: string[]; requireEmailVerified: boolean; publicBaseUrl: string;
   }>) => api.put('/auth/oidc/settings', payload),
   /** 연결 확인 — discovery·JWKS 를 실제로 받아 본다(issuer 를 비우면 저장된 값). */
   testOidcSettings: (issuer?: string) => api.post<{

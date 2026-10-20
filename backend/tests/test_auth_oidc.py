@@ -361,6 +361,42 @@ def test_domain_not_allowed(client, idp, oidc_cfg, db, cleanup_users):
     assert _callback(client, q["state"]) == {"error": "domain_not_allowed"}
 
 
+@pytest.mark.parametrize("verified,expected", [
+    (True, None),
+    ("true", None),
+    (False, "email_unverified"),
+    (None, "email_unverified"),  # claim 없음 — userinfo 에도 없으면 거부
+])
+def test_domain_allowlist_requires_verified_email(client, idp, oidc_cfg, db, cleanup_users, verified, expected):
+    """허용 도메인 정책은 IdP 가 검증한 이메일에만 적용된다 — 사용자가 고친 이메일로 우회 불가."""
+    oidc_cfg(allowed_domains=["corp.example"])
+    cleanup_users.append(_make_user(db, idp.username).username)
+    if verified is not None:
+        idp.claims_override = {"email_verified": verified}
+    q = _start(client, idp)
+    out = _callback(client, q["state"])
+    if expected:
+        assert out == {"error": expected}
+    else:
+        assert "code" in out and "error" not in out
+
+
+def test_email_verified_from_userinfo(client, idp, oidc_cfg, db, cleanup_users):
+    oidc_cfg(allowed_domains=["corp.example"])
+    cleanup_users.append(_make_user(db, idp.username).username)
+    idp.userinfo = {"email_verified": True}
+    q = _start(client, idp)
+    assert "code" in _callback(client, q["state"])
+
+
+def test_email_verified_requirement_can_be_disabled(client, idp, oidc_cfg, db, cleanup_users):
+    """email_verified 를 내지 않는 IdP(설정에서 끔) — 도메인만 본다."""
+    oidc_cfg(allowed_domains=["corp.example"], require_email_verified=False)
+    cleanup_users.append(_make_user(db, idp.username).username)
+    q = _start(client, idp)
+    assert "code" in _callback(client, q["state"])
+
+
 def test_token_endpoint_failure_is_structured(client, idp, oidc_cfg, db, cleanup_users):
     cleanup_users.append(_make_user(db, idp.username).username)
     q = _start(client, idp)

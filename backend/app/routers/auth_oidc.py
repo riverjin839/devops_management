@@ -64,6 +64,7 @@ class OidcSettingsOut(BaseModel):
     auto_provision: bool
     default_role: str
     allowed_domains: list[str]
+    require_email_verified: bool = True
     public_base_url: str
     # IdP 에 등록할 redirect URI — 공개 주소(설정) 또는 이 요청 기준으로 계산.
     redirect_uri: str
@@ -83,6 +84,7 @@ class OidcSettingsUpdate(BaseModel):
     auto_provision: bool | None = None
     default_role: str | None = None
     allowed_domains: list[str] | None = None
+    require_email_verified: bool | None = None
     public_base_url: str | None = Field(None, max_length=512)
 
 
@@ -245,6 +247,8 @@ def callback(
         return _fail(request, db, cfg, exc)
 
     needed = [cfg.get("username_claim"), cfg.get("display_name_claim"), cfg.get("email_claim")]
+    if oidc.needs_verified_email(cfg):
+        needed.append("email_verified")
     if any(n and n not in claims for n in needed):
         extra = oidc.fetch_userinfo(meta, tokens.get("access_token"), str(claims.get("sub")))
         claims = {**extra, **claims}
@@ -259,6 +263,11 @@ def callback(
     if not oidc.domain_allowed(cfg, email):
         login_rate_limiter.record_failure(ip, username)
         return _fail(request, db, cfg, OidcError("domain_not_allowed", "허용 도메인 밖의 이메일"), username=username)
+    if oidc.needs_verified_email(cfg) and not oidc.email_verified(claims):
+        login_rate_limiter.record_failure(ip, username)
+        return _fail(request, db, cfg, OidcError(
+            "email_unverified", "허용 도메인 정책이 켜져 있는데 IdP 가 email_verified=true 를 주지 않음",
+        ), username=username)
 
     user = db.query(User).filter(User.username == username).first()
     created = False

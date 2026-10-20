@@ -23,6 +23,7 @@ const SSO_ERROR_KEYS: Record<string, keyof TranslationResource['login']['ssoErro
   id_token_invalid: 'idTokenInvalid',
   claim_missing: 'claimMissing',
   domain_not_allowed: 'domainNotAllowed',
+  email_unverified: 'emailUnverified',
   user_not_found: 'userNotFound',
   user_inactive: 'userInactive',
   provision_failed: 'provisionFailed',

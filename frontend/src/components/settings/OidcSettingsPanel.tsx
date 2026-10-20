@@ -25,6 +25,7 @@ interface Draft {
   autoProvision: boolean;
   defaultRole: 'viewer' | 'operator';
   allowedDomains: string;
+  requireEmailVerified: boolean;
   publicBaseUrl: string;
 }
 
@@ -43,6 +44,7 @@ function toDraft(s: OidcSettings): Draft {
     autoProvision: s.autoProvision,
     defaultRole: s.defaultRole,
     allowedDomains: s.allowedDomains.join('\n'),
+    requireEmailVerified: s.requireEmailVerified ?? true,
     publicBaseUrl: s.publicBaseUrl,
   };
 }
@@ -87,6 +89,7 @@ export function OidcSettingsPanel() {
       autoProvision: d.autoProvision,
       defaultRole: d.defaultRole,
       allowedDomains: d.allowedDomains.split(/[\n,]/).map((v) => v.trim()).filter(Boolean),
+      requireEmailVerified: d.requireEmailVerified,
       publicBaseUrl: d.publicBaseUrl,
     }),
     onSuccess: () => {
@@ -279,6 +282,16 @@ export function OidcSettingsPanel() {
                 onChange={(e) => set('allowedDomains', e.target.value)} placeholder={'corp.example\nsub.corp.example'}
                 className={`${inputCls} font-mono`} />
               <p className="mt-1 text-[11px] text-muted-foreground">한 줄에 하나. 비우면 제한 없음(하위 도메인 포함)</p>
+              <label className="mt-2 flex items-start gap-2 text-xs">
+                <input type="checkbox" className="mt-0.5" checked={draft.requireEmailVerified}
+                  onChange={(e) => set('requireEmailVerified', e.target.checked)} />
+                <span>
+                  IdP 가 검증한 이메일만 허용 (<code className="font-mono">email_verified=true</code>)
+                  <span className="block text-[11px] text-muted-foreground">
+                    도메인 제한이 있을 때 적용. 사용자가 이메일을 직접 고칠 수 있는 IdP 에서 정책 우회를 막는다. email_verified 를 내지 않는 IdP 만 끈다
+                  </span>
+                </span>
+              </label>
             </div>
           </div>
 

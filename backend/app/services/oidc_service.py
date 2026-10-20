@@ -63,6 +63,9 @@ DEFAULTS: dict[str, Any] = {
     "auto_provision": False,
     "default_role": "viewer",
     "allowed_domains": [],
+    # 허용 도메인이 있을 때 IdP 가 이메일을 검증했다고(``email_verified: true``) 밝혀야 들인다 — 사용자가
+    # 직접 고칠 수 있는 이메일로 도메인 정책을 우회하지 못하게. email_verified 를 내지 않는 IdP 만 끈다.
+    "require_email_verified": True,
     "public_base_url": "",
 }
 
@@ -78,6 +81,7 @@ ERROR_CODES = (
     "nonce_mismatch",
     "claim_missing",
     "domain_not_allowed",
+    "email_unverified",
     "user_not_found",
     "user_inactive",
     "provision_failed",
@@ -196,6 +200,8 @@ def save_config(db: Session, patch: dict[str, Any]) -> tuple[dict[str, Any], lis
         _set("default_role", role)
     if patch.get("allowed_domains") is not None:
         _set("allowed_domains", _normalize_domains(patch["allowed_domains"]))
+    if "require_email_verified" in patch and patch["require_email_verified"] is not None:
+        _set("require_email_verified", bool(patch["require_email_verified"]))
 
     if patch.get("clear_client_secret"):
         if cfg.get("client_secret_encrypted"):
@@ -551,6 +557,17 @@ def domain_allowed(cfg: dict[str, Any], email: str | None) -> bool:
         return False
     dom = email.rsplit("@", 1)[1].lower()
     return any(dom == d or dom.endswith(f".{d}") for d in domains)
+
+
+def needs_verified_email(cfg: dict[str, Any]) -> bool:
+    """허용 도메인 정책이 켜져 있고 검증된 이메일을 요구하는 설정인가."""
+    return bool(_normalize_domains(cfg.get("allowed_domains"))) and cfg.get("require_email_verified", True) is not False
+
+
+def email_verified(claims: dict[str, Any]) -> bool:
+    """``email_verified`` 가 참일 때만 True — 없거나 거짓이면 False(일부 IdP 는 문자열 "true" 로 준다)."""
+    v = claims.get("email_verified")
+    return v is True or (isinstance(v, str) and v.strip().lower() == "true")
 
 
 # ── 연결 확인 (Settings "연결 확인") ─────────────────────────────────────────

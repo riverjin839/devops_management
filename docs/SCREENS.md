@@ -215,7 +215,7 @@ hover 시 flyout 자체가 라벨을 보여주므로 이름만 뜨는 중복 툴
 - **목적 / UX**: 사내 IdP 로그인 후 서버(`/api/v1/auth/oidc/callback`)가 1회용 handoff code(60초)를 붙여 보내는 착지 화면. 스피너만 보이고 곧바로 세션을 시작해 로그인 전에 보던 화면(`return_to`, 내부 경로만)으로 이동한다. 실패하면 `/login?error=exchange_failed` 로 간다.
 - **Frontend**: `authApi.oidcExchange(code)` → `setSession` → `navigate(returnTo)`. 개발 모드 이중 실행에서 code 를 두 번 쓰지 않도록 요청을 모듈 단위로 공유한다. 세션 토큰은 URL 에 실리지 않는다.
 - **Backend**: `backend/app/routers/auth_oidc.py` — `/login`(state·nonce·PKCE 저장 10분 + 브라우저 바인딩 HttpOnly 쿠키 `pep_oidc_bind`) → IdP → `/callback`(code 교환, id_token RS*/ES* 서명·`iss`/`aud`/`azp`/`exp`/`nonce` 검증, 필요 시 userinfo, 허용 도메인·계정 매핑·자동 생성, 감사 `login.success` `method: oidc`) → `/exchange`. 설정은 AppSetting `auth.oidc`(`services/oidc_service.py`).
-- **운영자 설정**: Settings ▸ 접근 제어 ▸ "사내 SSO 로그인 (OIDC)" 카드(`components/settings/OidcSettingsPanel.tsx`, admin) — Issuer·Client ID/Secret(암호화 저장, 조회 시 `has_secret` 만)·공개 주소·claim 매핑·자동 생성 역할(viewer/operator)·허용 도메인·표시 여부. 표시되는 Redirect URI 를 IdP 에 등록하고 "연결 확인"(discovery·JWKS 조회, 실행 로그)으로 검증한다.
+- **운영자 설정**: Settings ▸ 접근 제어 ▸ "사내 SSO 로그인 (OIDC)" 카드(`components/settings/OidcSettingsPanel.tsx`, admin) — Issuer·Client ID/Secret(암호화 저장, 조회 시 `has_secret` 만)·공개 주소·claim 매핑·자동 생성 역할(viewer/operator)·허용 도메인(+ IdP 검증 이메일만 허용 `require_email_verified`, 기본 켬 — 허용 도메인이 있으면 `email_verified=true` 가 없을 때 `email_unverified` 로 거부)·표시 여부. 표시되는 Redirect URI 를 IdP 에 등록하고 "연결 확인"(discovery·JWKS 조회, 실행 로그)으로 검증한다.
 - **요청사항 (수정 요청)**:
   - _(여기에 개선/수정 요청을 직접 적어주세요)_
 

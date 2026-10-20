@@ -141,7 +141,7 @@ def login(api: str, username: str, password: str) -> tuple[str, dict]:
     return d["access_token"], user
 
 
-def set_server_theme(api: str, token: str, theme: str) -> bool:
+def set_server_theme(api: str, token: str, theme: str | None) -> bool:
     try:
         api_call(api, "PUT", "/me/home-prefs", token, {"theme": theme})
         return True
@@ -150,11 +150,15 @@ def set_server_theme(api: str, token: str, theme: str) -> bool:
         return False
 
 
-def get_server_theme(api: str, token: str) -> str | None:
+_UNKNOWN = object()  # 조회 실패 — 원래 값을 모르므로 복원하지 않는다
+
+
+def get_server_theme(api: str, token: str) -> object:
+    """서버 테마. 저장된 적 없으면 None(복원 시 None 으로 되돌린다), 조회 실패면 ``_UNKNOWN``."""
     try:
         return (api_call(api, "GET", "/me/home-prefs", token) or {}).get("theme")
     except Exception:  # noqa: BLE001
-        return None
+        return _UNKNOWN
 
 
 def init_script(theme: str, token: str | None, user: dict | None) -> str:
@@ -434,8 +438,9 @@ def main() -> int:
         log(f"[axe_scan] 실행 실패: {e}")
         return 2
     finally:
-        if original_theme:
-            set_server_theme(args.api_url, token, original_theme)
+        # 원래 비어 있던 사용자도 비운 상태로 되돌린다 — 그러지 않으면 마지막 측정 테마가 남는다.
+        if original_theme is not _UNKNOWN:
+            set_server_theme(args.api_url, token, original_theme)  # type: ignore[arg-type]
 
     (out_dir / "summary.json").write_text(json.dumps(summary, ensure_ascii=False, indent=1, default=list), encoding="utf-8")
     (out_dir / "summary.md").write_text(render_md(summary), encoding="utf-8")

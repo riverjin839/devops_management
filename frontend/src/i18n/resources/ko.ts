@@ -310,6 +310,7 @@ export const ko = {
       idTokenInvalid: '사내 인증 서버의 응답을 검증하지 못했습니다. 관리자에게 문의하세요.',
       claimMissing: '사내 계정 정보에 사용자명이 없습니다. 관리자에게 문의하세요.',
       domainNotAllowed: '허용되지 않은 조직(이메일 도메인)의 계정입니다.',
+      emailUnverified: '사내 인증 서버가 이메일 인증을 확인해 주지 않았습니다. 관리자에게 문의하세요.',
       userNotFound: 'PEP 에 등록되지 않은 계정입니다. 관리자에게 계정 등록을 요청하세요.',
       userInactive: '비활성화된 계정입니다. 관리자에게 문의하세요.',
       provisionFailed: '계정을 자동으로 만들지 못했습니다. 관리자에게 문의하세요.',

@@ -294,6 +294,7 @@ export const en: TranslationResource = {
       idTokenInvalid: 'Could not verify the response from the company sign-in server. Contact your administrator.',
       claimMissing: 'Your company account has no username. Contact your administrator.',
       domainNotAllowed: 'Accounts from this organization (email domain) are not allowed.',
+      emailUnverified: 'The company sign-in server did not confirm your email as verified. Contact your administrator.',
       userNotFound: 'This account is not registered in PEP. Ask your administrator to add it.',
       userInactive: 'This account is deactivated. Contact your administrator.',
       provisionFailed: 'Could not create your account automatically. Contact your administrator.',
