@@ -156,6 +156,29 @@ def test_connection(tgt: SSHTarget, connect_timeout: int = 8) -> SSHResult:
                 pass
 
 
+_READ_CHUNK = 64 * 1024
+_UNBOUNDED_MAX_CHARS = 16 * 1024 * 1024  # max_stdout_chars<=0(무제한)도 워커 메모리 보호용 상한
+
+
+def _read_tail(stream: Any, max_chars: int) -> str:
+    """원격 출력을 조금씩 읽으며 **마지막 max_chars 글자만** 남긴다.
+
+    예전엔 전부 읽은 뒤 잘라, `journalctl`·로그 `cat` 같은 큰 출력이 호스트 수 × 병렬도만큼 워커 메모리에
+    통째로 올라갔다. 끝까지 읽기는 한다(원격이 쓰기에서 막히지 않게) — 버퍼만 상한(UTF-8 최대 4바이트/글자)
+    안에서 유지한다."""
+    limit = max_chars if max_chars > 0 else _UNBOUNDED_MAX_CHARS
+    keep = limit * 4
+    buf = bytearray()
+    while True:
+        chunk = stream.read(_READ_CHUNK)
+        if not chunk:
+            break
+        buf += chunk
+        if len(buf) > keep + _READ_CHUNK:
+            del buf[: len(buf) - keep]
+    return bytes(buf).decode("utf-8", errors="replace")[-limit:]
+
+
 def _exec_ssh(
     tgt: SSHTarget, command: str, connect_timeout: int, exec_timeout: int,
     max_stdout_chars: int = 8000,
@@ -179,8 +202,8 @@ def _exec_ssh(
             cancel_token.attach(client)
         stdin, stdout, stderr = client.exec_command(command, timeout=exec_timeout, get_pty=False)
         # 출력 읽기
-        out = stdout.read().decode("utf-8", errors="replace")
-        err = stderr.read().decode("utf-8", errors="replace")
+        out = _read_tail(stdout, max_stdout_chars)
+        err = _read_tail(stderr, 4000)
         rc = stdout.channel.recv_exit_status()
         elapsed = int((time.monotonic() - start) * 1000)
         # tail 만 보존 (앞쪽 잘리면 JSON 같은 구조화 출력은 깨지지만, 일반 로그는 마지막
@@ -189,7 +212,7 @@ def _exec_ssh(
             host=tgt.host,
             status="ok" if rc == 0 else "error",
             exit_code=rc,
-            stdout=out[-max_stdout_chars:] if max_stdout_chars > 0 else out,
+            stdout=out,
             stderr=err[-4000:],
             duration_ms=elapsed,
             error=None if rc == 0 else f"exit {rc}",
