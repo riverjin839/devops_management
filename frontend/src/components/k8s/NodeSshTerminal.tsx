@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useCallback } from 'react';
 import { getAuthToken } from '@/stores/authStore';
 import { k8sStreamUrls } from '@/services/api';
 import { SshTerminalWindow } from './SshTerminalWindow';
@@ -39,7 +39,8 @@ const CLOSE_NOTES: Record<number, string> = {
  * 직후 한 줄 입력으로만 사용).
  */
 export function NodeSshTerminal({ params, onClose, onPopOut, fill }: NodeSshTerminalProps) {
-  const url = useMemo(
+  // 토큰은 (재)연결 시점에 읽는다 — 세션이 재발급돼도 재연결 버튼이 새 토큰을 쓴다.
+  const url = useCallback(
     () => k8sStreamUrls.nodeSsh(getAuthToken(), params.clusterId),
     [params.clusterId],
   );

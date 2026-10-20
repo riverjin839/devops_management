@@ -1091,6 +1091,7 @@ def _run_migrations():
     if "users" in inspector.get_table_names():
         _safe_add_column("users", "must_change_password", "BOOLEAN NOT NULL DEFAULT FALSE")
         _safe_add_column("users", "editor_white_bg", "BOOLEAN DEFAULT FALSE")
+        _safe_add_column("users", "password_changed_at", "TIMESTAMP")
         # 레거시: 'user' role 을 'viewer' 로 일회성 변환. 신규 코드는 'viewer/operator/admin' 만 사용.
         _safe_exec(
             "UPDATE users SET role='viewer' WHERE role='user'",

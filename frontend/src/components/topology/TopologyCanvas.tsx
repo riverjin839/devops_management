@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Maximize2, ZoomIn, ZoomOut } from 'lucide-react';
 import type { TopoNode, TopoEdge, TopologyTrafficEdge } from '@/types';
 import {
-  computeLayout, edgeStyleToken, kindAccent, statusColor, statusGlyph, usageRatio,
+  computeLayout, edgeStyleToken, useTopologyColors, statusColor, statusGlyph, usageRatio,
   KIND_ABBR, NODE_W, NODE_H, type LayoutPos,
 } from './topologyShared';
 import { usePrefersReducedMotion } from '@/hooks/usePrefersReducedMotion';
@@ -42,6 +42,7 @@ export function TopologyCanvas({
   // ref 만으로는 재렌더가 없어 grabbing 커서가 바뀌지 않았다(D-097) — 커서용 상태를 따로 둔다.
   const [isPanning, setIsPanning] = useState(false);
   const reducedMotion = usePrefersReducedMotion();
+  const topoColors = useTopologyColors();
 
   const baseLayout = useMemo(() => computeLayout(graph.nodes, graph.edges), [graph]);
   const layout = useMemo(() => ({ ...baseLayout.pos, ...override }), [baseLayout, override]);
@@ -216,7 +217,7 @@ export function TopologyCanvas({
         {graph.nodes.map((n) => {
           const p = layout[n.id];
           if (!p) return null;
-          const accent = kindAccent(n.kind);
+          const accent = topoColors.kind(n.kind);
           const isSel = selectedId === n.id;
           const isLinkSrc = linkSourceId === n.id;
           const cpuR = usageRatio(n.metrics.cpu.usage, n.metrics.cpu.request, n.metrics.cpu.limit);

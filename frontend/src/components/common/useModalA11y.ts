@@ -1,8 +1,5 @@
-import { useEffect, useId, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { MODAL_HASH_PREFIX, openModalEntry, stripStaleModalHash } from './modalHistory';
-
-stripStaleModalHash();
+import { useEffect, useRef } from 'react';
+import { useModalHistory } from './useModalHistory';
 
 /**
  * 모달/다이얼로그 공통 접근성 훅.
@@ -19,10 +16,11 @@ stripStaleModalHash();
  *   const ref = useModalA11y(open, onClose);
  *   <div ref={ref} role="dialog" aria-modal="true" aria-labelledby="...">…</div>
  *
- * 뒤로가기 동작(`./modalHistory`): 열릴 때 hash(`#modal-<id>`) 기록을 push → 뒤로가기로 그 기록이
- * 사라지면 onClose. X·Escape·저장 등으로 닫으면 남은 기록을 회수한다. 판정은 router 의
- * `history.state.idx` 로 하고 history 조작은 큐로 직렬화해, 중첩·연속 모달과 열린 채 URL 필터를
- * 바꾸는 경우에도 기록이 꼬이지 않는다. 실행 중이라 닫기를 무시하는 모달은 기록을 다시 push 한다.
+ * 뒤로가기 동작은 `useModalHistory`(`./modalHistory`)가 맡는다: 열릴 때 hash(`#modal-<id>`) 기록을
+ * push → 뒤로가기로 그 기록이 사라지면 onClose. X·Escape·저장 등으로 닫으면 남은 기록을 회수한다.
+ * 판정은 router 의 `history.state.idx` 로 하고 history 조작은 큐로 직렬화해, 중첩·연속 모달과 열린 채
+ * URL 필터를 바꾸는 경우에도 기록이 꼬이지 않는다. 실행 중이라 닫기를 무시하는 모달은 기록을 다시
+ * push 한다. 포커스 트랩이 따로 있는 UI(Base UI `Dialog` 래퍼 등)는 `useModalHistory` 만 직접 쓴다.
  */
 const FOCUSABLE =
   'a[href],button:not([disabled]),textarea:not([disabled]),input:not([disabled]),select:not([disabled]),[tabindex]:not([tabindex="-1"])';
@@ -92,22 +90,8 @@ export function useModalA11y(open: boolean, onClose: () => void, opts: Options =
     };
   }, [open]);
 
-  // ── 뒤로가기로 닫기 — 기록 관리는 modalHistory 가 맡는다 ─────────────────────
-  const rawId = useId();
-  const myHash = `${MODAL_HASH_PREFIX}${rawId.replace(/[^a-zA-Z0-9]/g, '')}`;
-  const navigate = useNavigate();
-  const navigateRef = useRef(navigate);
-  navigateRef.current = navigate;
-  const openRef = useRef(open);
-  openRef.current = open;
-
-  useEffect(() => {
-    if (!open || !historyClose) return;
-    return openModalEntry(
-      () => navigateRef.current({ hash: myHash, search: window.location.search }, { replace: false }),
-      { close: () => onCloseRef.current(), stillOpen: () => openRef.current },
-    );
-  }, [open, historyClose, myHash]);
+  // ── 뒤로가기로 닫기 — useModalHistory(기록 관리는 modalHistory) ──────────────
+  useModalHistory(open, onClose, historyClose);
 
   return ref;
 }

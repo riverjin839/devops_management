@@ -25,6 +25,29 @@ const WIDTH_MSG = '페이지 폭은 PageShell density(console|hub|doc)로만 정
    placeholder: 변형은 입력 안내 글자라 예외. esquery 정규식은 '/' 를 못 쓰므로 슬래시 자리는 '.' 로 매칭. */
 const TYPO_RE = String.raw`/((?<!placeholder:)(?<![\w-])text-muted-foreground.[5-9]\d(?!\d))|text-\[(8|9|10)px\]/`;
 const TYPO_MSG = '보조 글자는 text-muted-foreground(투명도 없이), 최소 글자는 text-[11px] — 흐리게 하거나 더 작게 하지 않는다 (DESIGN_SYSTEM §12 타이포)';
+/* raw hex 금지 (R-1, DESIGN_SYSTEM §12.12-7) — 색은 Tailwind 토큰 클래스, SVG/DOM 은 hsl(var(--x)),
+   캔버스·WebGL·var() 를 못 푸는 export 는 lib/chartTokens.ts cssVarColor(+useThemeColorKey) 를 쓴다.
+   문자열 전체가 hex 인 리터럴만 잡는다 — 템플릿 리터럴 속 hex 는 grep 으로 0 을 확인한다.
+   허용 예외는 아래 HEX_ALLOWED_FILES(사용자 데이터·컬러 피커 기본값·export 흰 배경·외부 브랜드색·xterm 팔레트)뿐. */
+const HEX_RE = String.raw`/^#[0-9a-fA-F]{3,8}$/`;
+const HEX_MSG = 'raw hex 금지 — 토큰/cssVarColor 사용(DESIGN_SYSTEM §12.12-7)';
+const HEX_RESTRICTED = [{ selector: `Literal[value=${HEX_RE}]`, message: HEX_MSG }];
+const HEX_ALLOWED_FILES = [
+  'src/lib/terminalThemes.ts', // xterm 팔레트·내장 템플릿(사용자 편집 가능한 hex 데이터)
+  'src/lib/clusterIconBuilder.ts', // 클러스터 아이콘 SVG 생성(내보내는 이미지 자체)
+  'src/lib/colorPatterns.ts', // 사용자 선택 패턴 색(저장 데이터)
+  'src/lib/brandIcons.ts', // 외부 브랜드 고유색
+  'src/lib/exportView.ts', // 이미지 export 흰 배경 폴백
+  'src/components/serviceArch/exportDiagram.ts', // 다이어그램 export 흰 배경
+  'src/components/editor/RichTextEditor.tsx', // 문서 배경 프리셋(저장 데이터)·컬러 input 기본값
+  'src/stores/homeStore.ts', // 주간 막대 글자색 기본값(<input type=color> 는 hex 만 받는다)
+  'src/components/settings/PageStyleManager.tsx', // 컬러 피커 기본값
+  'src/components/settings/OperationLevelsManager.tsx', // 컬러 피커 기본값
+  'src/components/settings/TerminalAppearanceSettings.tsx', // 터미널 팔레트 피커 기본값
+  'src/components/work-items/WorkItemForm.tsx', // 에디터 기본 배경(저장 데이터)
+  'src/pages/MindMapPage.tsx', // NODE_COLORS 피커(사용자 저장 색)·export 흰 배경·컬러 input 기본값
+];
+
 const STATUS_PALETTE_MSG = '상태색은 status 토큰을 쓴다 — text-status-healthy|warning|critical|info, bg-status-*/10, border-status-*/30 (DESIGN_SYSTEM §2.4)';
 
 const BASE_RESTRICTED = [
@@ -88,10 +111,12 @@ module.exports = {
        프리셋엔 없지만 W4 접근성 패스에서 전수 검사 후 위반 54건을 모두 고쳤다(2026-07).
        회귀 방지를 위해 명시적으로 켜둔다. */
     'jsx-a11y/control-has-associated-label': 'warn',
-    'no-restricted-syntax': ['error', ...BASE_RESTRICTED, ...DECO_RESTRICTED, ...FX_RESTRICTED, ...WIDTH_RESTRICTED],
+    'no-restricted-syntax': ['error', ...BASE_RESTRICTED, ...DECO_RESTRICTED, ...FX_RESTRICTED, ...WIDTH_RESTRICTED, ...HEX_RESTRICTED],
   },
   overrides: [
     /* PageShell 은 허브 폭(max-w-[1600px])을 정의하는 유일한 곳. */
-    { files: ['src/components/common/PageShell.tsx'], rules: { 'no-restricted-syntax': ['error', ...BASE_RESTRICTED, ...DECO_RESTRICTED, ...FX_RESTRICTED] } },
+    { files: ['src/components/common/PageShell.tsx'], rules: { 'no-restricted-syntax': ['error', ...BASE_RESTRICTED, ...DECO_RESTRICTED, ...FX_RESTRICTED, ...HEX_RESTRICTED] } },
+    /* raw hex 허용 예외 — HEX 규칙만 빼고 나머지 금지 규칙은 그대로 건다. */
+    { files: HEX_ALLOWED_FILES, rules: { 'no-restricted-syntax': ['error', ...BASE_RESTRICTED, ...DECO_RESTRICTED, ...FX_RESTRICTED, ...WIDTH_RESTRICTED] } },
   ],
 };

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Loader2, FileText, Send, Save, RefreshCw, ExternalLink, ArrowUp, ArrowDown, Search, X,
 } from 'lucide-react';
@@ -7,11 +7,12 @@ import { JiraIssueChip } from '@/components/work-items';
 import { useToast, PageHeader, PageShell, EmptyState, RunLogPanel } from '@/components/common';
 import { formatApiError } from '@/lib/utils';
 import { useLogPref } from '@/hooks/useLogPref';
-import { runLogged, useRunLog, type RunLogEntry } from '@/hooks/useRunLog';
+import { runLogged, streamLogged, useRunLog, type RunLogEntry } from '@/hooks/useRunLog';
+import { useCanOperate } from '@/hooks/useCanOperate';
+import { jiraApi } from '@/services/api';
 import { useAuthStore } from '@/stores/authStore';
 import {
-  useWeeklyReportPreview, useWeeklyReportPublish,
-  useWeeklyReportSettings, useUpdateWeeklyReportSettings,
+  useWeeklyReportPreview, useWeeklyReportSettings, useUpdateWeeklyReportSettings,
 } from '@/hooks/useJira';
 import type {
   WeeklyPublishResult, WeeklyReport, WeeklyReportSettings, WeeklyDetailRow, WeeklyOwnerRow, WeeklyProgressRow,
@@ -85,12 +86,16 @@ export function WeeklyReportPage() {
   const toast = useToast();
   const isAdmin = useAuthStore((s) => s.user?.role === 'admin');
   const previewMut = useWeeklyReportPreview();
-  const publishMut = useWeeklyReportPublish();
+  const { canOperate, withHint, ariaWithHint } = useCanOperate();
   const { data: settings } = useWeeklyReportSettings();
   const updateSettings = useUpdateWeeklyReportSettings();
   const runLog = useRunLog();
   const [showLog, setShowLog] = useLogPref('weekly-report');
   const [published, setPublished] = useState<WeeklyPublishResult | null>(null);
+  // 게시는 SSE 스트림 — 진행 여부·중지(AbortController)를 화면이 직접 든다.
+  const [publishing, setPublishing] = useState(false);
+  const publishAbort = useRef<AbortController | null>(null);
+  useEffect(() => () => publishAbort.current?.abort(), []);
 
   const [report, setReport] = useState<WeeklyReport | null>(null);
   const [tab, setTab] = useState<TabId>('summary');
@@ -222,44 +227,48 @@ export function WeeklyReportPage() {
   const progressSort = useSort<WeeklyProgressRow & Record<string, unknown>>(
     progressRows as (WeeklyProgressRow & Record<string, unknown>)[], 'category');
 
+  /** Confluence 게시 — 서버가 단계(빌드·대상·세션 확인·렌더·페이지 게시·감사 기록)를 SSE 로 흘린다.
+   *  중지는 화면의 스트림만 끊는다(서버 작업은 끝까지 돌아 감사 기록 정합성을 지킨다). */
   const publish = async () => {
     setPublished(null);
+    publishAbort.current?.abort();
+    const ctrl = new AbortController();
+    publishAbort.current = ctrl;
+    setPublishing(true);
     const space = spaceKey.trim() || settings?.spaceKey || '(설정값)';
     const parent = parentPageId.trim() || settings?.parentPageId || '';
-    const r = await runLogged(runLog, {
+    const r = await streamLogged<WeeklyPublishResult>(runLog, {
       title: '주간보고 Confluence 게시',
       first: `주간보고 게시 요청 — ${weekOf ? `${weekOf} 가 속한 주` : '이번 주'} · 스페이스 ${space}`
         + `${parent ? ` · 상위 ${parent}` : ''}${title.trim() ? ` · 제목 "${title.trim()}"` : ' · 제목 템플릿'}`,
-      fn: () => publishMut.mutateAsync({
+      url: jiraApi.weeklyPublishStreamUrl(),
+      body: {
         weekOf: weekOf || undefined,
         spaceKey: spaceKey.trim() || undefined,
         parentPageId: parentPageId.trim() || undefined,
         title: title.trim() || undefined,
-      }),
-      summarize: ({ data }) => {
-        if (data.status !== 'ok') {
-          const label = data.status === 'offline' ? '연결 실패' : `상태 ${data.status}`;
-          return [['error', `게시 실패 · ${label}${data.detail ? ` — ${data.detail}` : ''}`]];
-        }
-        const out: RunLogEntry[] = [
-          ['info', '보고서 빌드 완료(해당 주 전체, 필터 무관)'],
-          ['info', 'Confluence 세션 확인 완료'],
-          ['info', `페이지 ${data.action === 'created' ? '생성' : data.action === 'updated' ? '갱신(새 버전)' : data.action || '처리'} 완료`
-            + `${data.pageId ? ` · 페이지 ${data.pageId}` : ''}`],
-        ];
-        if (data.pageUrl) out.push(['info', `페이지 URL — ${data.pageUrl}`]);
-        return out;
       },
+      signal: ctrl.signal,
     });
+    if (publishAbort.current === ctrl) {
+      publishAbort.current = null;
+      setPublishing(false);
+    }
     if (!r.ok) {
       if (!r.aborted) toast.error('게시 실패', formatApiError(r.error));
       return;
     }
-    const { data } = r.data;
+    const data = r.data;
     if (data.status === 'ok') {
       setPublished(data);
       toast.success('Confluence 게시됨', data.detail);
-    } else toast.error('게시 실패', data.detail);
+    } else toast.error(data.status === 'offline' ? '게시 실패 · 연결 실패' : '게시 실패', data.detail);
+  };
+
+  const stopPublish = () => {
+    publishAbort.current?.abort();
+    publishAbort.current = null;
+    setPublishing(false);
   };
 
   const saveSettings = async () => {
@@ -272,7 +281,7 @@ export function WeeklyReportPage() {
     }
   };
 
-  const busy = previewMut.isPending || publishMut.isPending;
+  const busy = previewMut.isPending || publishing;
   const filterActive = !!(fComponent || fAssignee || fStatus || fSearch);
   const resetFilters = () => { setFComponent(''); setFAssignee(''); setFStatus(''); setFSearch(''); };
 
@@ -535,11 +544,21 @@ export function WeeklyReportPage() {
               게시 문서는 <b>필터와 무관하게 해당 주 전체</b>를 담습니다.
             </p>
             <div className="mt-3">
-              <button onClick={() => void publish()} disabled={busy}
-                className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 disabled:opacity-50">
-                {publishMut.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
-                Confluence 에 게시
-              </button>
+              <div className="flex flex-wrap items-center gap-2">
+                <button onClick={() => void publish()} disabled={busy || !canOperate}
+                  title={withHint('Confluence 에 게시')} aria-label={ariaWithHint('Confluence 에 게시')}
+                  className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 disabled:opacity-50">
+                  {publishing ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+                  Confluence 에 게시
+                </button>
+                {publishing && (
+                  <button type="button" onClick={stopPublish}
+                    title="게시 진행 표시 중지 (서버 작업은 끝까지 진행됩니다)" aria-label="게시 중지"
+                    className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl border border-border bg-secondary text-sm hover:bg-secondary/80">
+                    <X className="w-4 h-4" /> 중지
+                  </button>
+                )}
+              </div>
               {published && (
                 <p className="mt-2 text-sm text-muted-foreground">
                   {published.action === 'created' ? '새 페이지를 생성했습니다.' : '기존 페이지를 새 버전으로 갱신했습니다.'}

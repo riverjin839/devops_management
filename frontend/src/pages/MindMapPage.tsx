@@ -30,6 +30,7 @@ import {
 } from '@/hooks/useMindMap';
 import type { MindMap, MindMapNode } from '@/types';
 import { EmptyState, Skeleton, TenantScopeSelect, useModalA11y } from '@/components/common';
+import { cssVarColor, useThemeColorKey } from '@/lib/chartTokens';
 
 // ── Constants ───────────────────────────────────────────────────────────────
 const NODE_COLORS = [
@@ -56,7 +57,26 @@ const NODE_COLORS = [
   { label: 'Fuchsia', value: '#d946ef' },
 ];
 
-const BRANCH_COLORS = ['#6366f1', '#8b5cf6', '#06b6d4', '#10b981', '#f59e0b', '#f97316', '#ec4899', '#ef4444'];
+// 가지·기본 노드 색은 테마 토큰(R-1). SVG/PNG 내보내기가 var() 를 풀지 못하므로 캔버스에서
+// cssVarColor 리터럴로 바꿔 쓰고, 테마가 바뀌면 다시 읽는다. 사용자가 고른 node.color(hex)는 데이터라 그대로 둔다.
+const BRANCH_TOKENS = ['--chart-1', '--chart-4', '--chart-6', '--chart-2', '--chart-3', '--chart-7', '--chart-5', '--chart-8'];
+
+interface MindMapPalette {
+  root: string;
+  node: string;
+  branch: string[];
+  badgeText: string;
+}
+
+function mindMapPalette(): MindMapPalette {
+  return {
+    root: cssVarColor('--primary'),
+    // 내보내기 배경(흰색)과 다크 테마 화면 양쪽에서 읽히는 중간 명도 — foreground 는 다크에서 흰 배경에 묻힌다.
+    node: cssVarColor('--muted-foreground'),
+    branch: BRANCH_TOKENS.map((t) => cssVarColor(t)),
+    badgeText: cssVarColor('--background'),
+  };
+}
 
 const NODE_W_ROOT = 130;
 const NODE_H_ROOT = 44;
@@ -128,9 +148,9 @@ function nodeDimensions(node: MindMapNode, isRoot: boolean) {
   return { w: baseW * scale, h: baseH * scale };
 }
 
-function nodeColor(node: MindMapNode, isRoot: boolean) {
+function nodeColor(node: MindMapNode, isRoot: boolean, palette: MindMapPalette) {
   if (node.color) return node.color;
-  return isRoot ? '#6366f1' : '#374151';
+  return isRoot ? palette.root : palette.node;
 }
 
 function rgbaFromHex(hex: string, alpha: number) {
@@ -140,6 +160,13 @@ function rgbaFromHex(hex: string, alpha: number) {
   const g = parseInt(full.slice(2, 4), 16);
   const b = parseInt(full.slice(4, 6), 16);
   return `rgba(${r},${g},${b},${alpha})`;
+}
+
+/** 사용자 hex(node.color)와 토큰 리터럴(cssVarColor 의 `hsl(h, s, l)`)을 모두 받아 투명도를 입힌다. */
+function withAlpha(color: string, alpha: number) {
+  if (color.startsWith('#')) return rgbaFromHex(color, alpha);
+  const m = /^hsl\(([^)]*)\)$/.exec(color);
+  return m ? `hsla(${m[1]}, ${alpha})` : color;
 }
 
 function getNodeShapePath(shape: NodeShape, w: number, h: number): string {
@@ -308,21 +335,21 @@ function orgChartLayout(nodes: MindMapNode[], cx = 600, cy = 120): PosMap {
   return treeLayout(nodes, cx, cy);
 }
 
-function getBranchColor(nodeId: string, nodes: MindMapNode[]) {
+function getBranchColor(nodeId: string, nodes: MindMapNode[], palette: MindMapPalette) {
   const { byId, children } = buildNodeTree(nodes);
   const roots = (children.get(null) ?? []).sort((a, b) => a.sortOrder - b.sortOrder);
   const root = roots[0];
-  if (!root) return '#6366f1';
+  if (!root) return palette.root;
 
   const rootKids = (children.get(root.id) ?? []).sort((a, b) => a.sortOrder - b.sortOrder);
-  const branchIndex = new globalThis.Map(rootKids.map((kid, idx) => [kid.id, idx % BRANCH_COLORS.length]));
+  const branchIndex = new globalThis.Map(rootKids.map((kid, idx) => [kid.id, idx % palette.branch.length]));
 
   let cur = byId.get(nodeId);
   while (cur && cur.parentId) {
-    if (cur.parentId === root.id) return BRANCH_COLORS[branchIndex.get(cur.id) ?? 0];
+    if (cur.parentId === root.id) return palette.branch[branchIndex.get(cur.id) ?? 0];
     cur = byId.get(cur.parentId);
   }
-  return '#6366f1';
+  return palette.root;
 }
 
 // ── Node Editor ──────────────────────────────────────────────────────────────
@@ -402,10 +429,10 @@ function NodeEditor({ initial, onSave, onClose, title }: NodeEditorProps) {
                   type="button"
                   onClick={() => setColor(c.value)}
                   aria-label={c.label}
-                  className={`w-5 h-5 rounded-full border-2 transition-colors ${
+                  className={`w-5 h-5 rounded-full border-2 transition-colors ${c.value ? '' : 'bg-muted-foreground'} ${
                     color === c.value ? 'border-foreground' : 'border-transparent opacity-75 hover:opacity-100'
                   }`}
-                  style={{ backgroundColor: c.value || '#9ca3af' }}
+                  style={c.value ? { backgroundColor: c.value } : undefined}
                   title={c.label}
                 />
               ))}
@@ -429,7 +456,7 @@ function NodeEditor({ initial, onSave, onClose, title }: NodeEditorProps) {
                 >
                   <svg width="42" height="24" viewBox="0 0 42 24">
                     <g transform="translate(1,1)">
-                      {renderNodeShape(s.value, 40, 22, 'rgba(99,102,241,0.15)', '#6366f1', 1.2)}
+                      {renderNodeShape(s.value, 40, 22, 'hsl(var(--primary) / 0.15)', 'hsl(var(--primary))', 1.2)}
                     </g>
                   </svg>
                   <span>{s.label}</span>
@@ -525,6 +552,8 @@ function MindMapCanvas({
 
   const nodes = mindmap.nodes;
   const { byId, children: childMap } = useMemo(() => buildNodeTree(nodes), [nodes]);
+  const themeKey = useThemeColorKey();
+  const palette = useMemo(() => { void themeKey; return mindMapPalette(); }, [themeKey]);
 
   const getLayout = useCallback((targetNodes: MindMapNode[]) => {
     if (layoutMode === 'tree') return treeLayout(targetNodes, 600, 120);
@@ -857,13 +886,13 @@ function MindMapCanvas({
               y2 = to.y - cDims.h / 2;
             }
 
-            const branchColor = getBranchColor(node.id, nodes);
+            const branchColor = getBranchColor(node.id, nodes, palette);
             return (
               <path
                 key={`edge-${node.id}`}
                 d={getEdgePath(x1, y1, x2, y2)}
                 fill="none"
-                stroke={rgbaFromHex(branchColor, 0.5)}
+                stroke={withAlpha(branchColor, 0.5)}
                 strokeWidth={1.6}
                 strokeLinecap="round"
                 strokeLinejoin="round"
@@ -875,7 +904,7 @@ function MindMapCanvas({
             const pos = getPos(node.id);
             const isRoot = rootIds.has(node.id);
             const isSelected = selectedNodeId === node.id;
-            const color = nodeColor(node, isRoot);
+            const color = nodeColor(node, isRoot, palette);
             const kids = childMap.get(node.id) ?? [];
             const extra = getNodeExtra(node);
             const { w: nodeW, h: nodeH } = nodeDimensions(node, isRoot);
@@ -893,7 +922,7 @@ function MindMapCanvas({
                   shape,
                   nodeW,
                   nodeH,
-                  rgbaFromHex(color, 0.15),
+                  withAlpha(color, 0.15),
                   color,
                   isSelected ? 2.5 : 1.5,
                   strokeDasharray,
@@ -916,7 +945,7 @@ function MindMapCanvas({
                   <g transform={`translate(${nodeW - 14}, -6)`}>
                     <circle r="8" fill={color} fillOpacity={0.8} />
                     <text x="0" y="0" textAnchor="middle" dominantBaseline="middle"
-                      fontSize="8" fill="white" fontWeight="600" style={{ pointerEvents: 'none', userSelect: 'none' }}>
+                      fontSize="8" fill={palette.badgeText} fontWeight="600" style={{ pointerEvents: 'none', userSelect: 'none' }}>
                       {kids.length}
                     </text>
                   </g>

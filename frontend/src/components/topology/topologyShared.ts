@@ -1,4 +1,6 @@
+import { useMemo } from 'react';
 import type { TopoNode, TopoEdge } from '@/types';
+import { cssVarColor, useThemeColorKey } from '@/lib/chartTokens';
 
 // ── kind → 컬럼 랭크 (좌→우 계층) ────────────────────────────────────────────
 export function kindRank(kind: string): number {
@@ -26,15 +28,31 @@ export const KIND_ABBR: Record<string, string> = {
   ConfigMap: 'CM', Secret: 'SEC', PersistentVolumeClaim: 'PVC', External: 'EXT', Namespace: 'NS',
 };
 
-export const KIND_ACCENT: Record<string, string> = {
-  Ingress: '#8b5cf6', Service: '#0ea5e9', Deployment: '#10b981', StatefulSet: '#14b8a6',
-  DaemonSet: '#22c55e', Job: '#eab308', CronJob: '#f59e0b', Pod: '#64748b',
-  ConfigMap: '#6366f1', Secret: '#ec4899', PersistentVolumeClaim: '#06b6d4', External: '#94a3b8',
-  Namespace: '#7c3aed',
+/** 종류 구분 색 = `--chart-1..8` 토큰(+같은 계열 안 명도 차) — raw hex 금지(DESIGN_SYSTEM §12.12-7, R-1).
+ *  워크로드 3종·Job 2종·Ingress/Namespace 는 같은 계열에서 lighten 으로 가른다. */
+export interface ColorToken { token: string; lighten?: number }
+export const KIND_TOKEN: Record<string, ColorToken> = {
+  Ingress: { token: '--chart-4' },
+  Service: { token: '--chart-1' },
+  Deployment: { token: '--chart-2' },
+  StatefulSet: { token: '--chart-2', lighten: 12 },
+  DaemonSet: { token: '--chart-2', lighten: -10 },
+  Job: { token: '--chart-3' },
+  CronJob: { token: '--chart-3', lighten: 12 },
+  Pod: { token: '--chart-8' },
+  ConfigMap: { token: '--chart-8', lighten: 14 },
+  Secret: { token: '--chart-5' },
+  PersistentVolumeClaim: { token: '--chart-6' },
+  External: { token: '--muted-foreground' },
+  Namespace: { token: '--chart-4', lighten: -10 },
 };
+const KIND_FALLBACK: ColorToken = { token: '--chart-8' };
 
-export function kindAccent(kind: string): string {
-  return KIND_ACCENT[kind] ?? '#64748b';
+/** kind 색을 현재 테마 값의 리터럴(`hsl(...)`)로 — three.js·export 처럼 var() 를 못 읽는 곳에서도 쓴다.
+ *  호출 시점의 테마 값이므로 컴포넌트에서는 `useTopologyColors()`(테마 전환 시 재계산)를 쓴다. */
+export function kindAccentColor(kind: string, alpha?: number): string {
+  const t = KIND_TOKEN[kind] ?? KIND_FALLBACK;
+  return cssVarColor(t.token, { lighten: t.lighten, alpha });
 }
 
 // ── status → 색 ──────────────────────────────────────────────────────────────
@@ -59,36 +77,54 @@ export function statusGlyph(status: string): string {
 }
 
 // ── edge type → 시각 스타일 ──────────────────────────────────────────────────
-export interface EdgeStyle { stroke: string; dash?: string; width: number; animated?: boolean; }
-export function edgeStyle(type: string, dropped = false): EdgeStyle {
+/** 선 패턴 + 색 토큰. 렌더러별 색 문자열은 edgeStyleToken(SVG/DOM) · useTopologyColors().edge(three.js) 로 만든다. */
+export interface EdgeSpec { token: string; dash?: string; width: number; animated?: boolean; }
+export function edgeStyle(type: string, dropped = false): EdgeSpec {
   switch (type) {
-    case 'routes':      return { stroke: '#0ea5e9', width: 1.5 };
-    case 'exposes':     return { stroke: '#8b5cf6', width: 1.5 };
-    case 'owns':        return { stroke: '#cbd5e1', width: 1, dash: '2 3' };
-    case 'uses_config': return { stroke: '#6366f1', width: 1.2, dash: '4 3' };
-    case 'uses_secret': return { stroke: '#ec4899', width: 1.2, dash: '4 3' };
-    case 'mounts_pvc':  return { stroke: '#06b6d4', width: 1.2, dash: '4 3' };
-    case 'manual':      return { stroke: '#f97316', width: 1.8, dash: '1 4' };
-    case 'traffic':     return { stroke: dropped ? '#ef4444' : '#f59e0b', width: 2, dash: '6 4', animated: true };
-    default:            return { stroke: '#94a3b8', width: 1.2 };
+    case 'routes':      return { token: '--chart-1', width: 1.5 };
+    case 'exposes':     return { token: '--chart-4', width: 1.5 };
+    case 'owns':        return { token: '--muted-foreground', width: 1, dash: '2 3' };
+    case 'uses_config': return { token: '--chart-8', width: 1.2, dash: '4 3' };
+    case 'uses_secret': return { token: '--chart-5', width: 1.2, dash: '4 3' };
+    case 'mounts_pvc':  return { token: '--chart-6', width: 1.2, dash: '4 3' };
+    case 'manual':      return { token: '--chart-7', width: 1.8, dash: '1 4' };
+    case 'traffic':     return { token: dropped ? '--status-critical' : '--status-warning', width: 2, dash: '6 4', animated: true };
+    default:            return { token: '--muted-foreground', width: 1.2 };
   }
 }
 
-/** SVG/DOM 용 엣지 스타일 — 선 패턴(dash)은 edgeStyle 과 같고 색만 테마 토큰(D-097).
- *  edgeStyle(hex)은 three.js(Topology3D)·아키텍처 문서 캔버스가 계속 쓴다(캔버스 hex 허용 예외). */
+export interface EdgeStyle { stroke: string; dash?: string; width: number; animated?: boolean; }
+/** SVG/DOM 용 엣지 스타일 — `hsl(var(--token))`(D-097). export 는 resolveCssVars 가 var() 를 풀어 준다. */
 export function edgeStyleToken(type: string, dropped = false): EdgeStyle {
-  const base = edgeStyle(type, dropped);
-  const token: Record<string, string> = {
-    routes: 'hsl(var(--chart-1))',
-    exposes: 'hsl(var(--chart-4))',
-    owns: 'hsl(var(--muted-foreground))',
-    uses_config: 'hsl(var(--chart-8))',
-    uses_secret: 'hsl(var(--chart-5))',
-    mounts_pvc: 'hsl(var(--chart-6))',
-    manual: 'hsl(var(--chart-7))',
-    traffic: dropped ? 'hsl(var(--status-critical))' : 'hsl(var(--status-warning))',
-  };
-  return { ...base, stroke: token[type] ?? 'hsl(var(--muted-foreground))' };
+  const { token, ...rest } = edgeStyle(type, dropped);
+  return { ...rest, stroke: `hsl(var(${token}))` };
+}
+
+const EDGE_TYPES = ['routes', 'exposes', 'owns', 'uses_config', 'uses_secret', 'mounts_pvc', 'manual', 'traffic'];
+
+/** 토폴로지 색 팔레트(현재 테마의 리터럴 색) — 테마·강조색이 바뀌면 다시 계산된다.
+ *  WebGL(three.js)과 var() 를 못 읽는 export 경로 모두 이 값을 쓴다. */
+export function useTopologyColors() {
+  const themeKey = useThemeColorKey();
+  return useMemo(() => {
+    void themeKey;
+    const kindMap: Record<string, string> = Object.fromEntries(
+      Object.keys(KIND_TOKEN).map((k) => [k, kindAccentColor(k)]),
+    );
+    const kindFallback = kindAccentColor('');
+    const edgeMap: Record<string, string> = Object.fromEntries(
+      EDGE_TYPES.map((t) => [t, cssVarColor(edgeStyle(t).token)]),
+    );
+    const droppedColor = cssVarColor(edgeStyle('traffic', true).token);
+    const edgeFallback = cssVarColor(edgeStyle('').token);
+    return {
+      themeKey,
+      background: cssVarColor('--background'),
+      kind: (kind: string): string => kindMap[kind] ?? kindFallback,
+      edge: (type: string, dropped = false): string =>
+        (type === 'traffic' && dropped ? droppedColor : edgeMap[type] ?? edgeFallback),
+    };
+  }, [themeKey]);
 }
 
 export const EDGE_TYPE_LABEL: Record<string, string> = {

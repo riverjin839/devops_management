@@ -3,8 +3,24 @@ import { Dialog as BaseDialog } from '@base-ui/react/dialog';
 import { X } from 'lucide-react';
 
 import { cn } from '@/lib/utils';
+import { useModalHistory } from '@/components/common/useModalHistory';
 
-const Dialog = BaseDialog.Root;
+/**
+ * Base UI `Dialog.Root` 래퍼 — controlled(`open` prop 이 있는) 다이얼로그를 브라우저/폰 "뒤로가기"로
+ * 닫는다(D-029, `useModalHistory`).
+ *
+ * 뒤로가기로 기록이 사라지면 `actionsRef.close()` 를 부른다. Base UI 1.6 의 close 는
+ * `store.setOpen(false, createChangeEventDetails('imperative-action'))` → `onOpenChange(false, details)`
+ * 경로를 타므로 Escape·바깥 클릭·X 와 똑같이 호출부의 `onOpenChange` 가드(`!busy` 등)가 적용된다.
+ * 호출부가 닫기를 거부해 `open` 이 그대로면 modalHistory 가 기록을 다시 push 한다.
+ * uncontrolled(`open` 미지정) 다이얼로그는 기록을 쓰지 않는다. 호출부가 `actionsRef` 를 넘기면 그것을 쓴다.
+ */
+function Dialog<Payload = unknown>({ actionsRef, ...props }: BaseDialog.Root.Props<Payload>) {
+  const innerActionsRef = React.useRef<BaseDialog.Root.Actions | null>(null);
+  const actions = actionsRef ?? innerActionsRef;
+  useModalHistory(!!props.open, () => actions.current?.close(), props.open !== undefined);
+  return <BaseDialog.Root {...props} actionsRef={actions} />;
+}
 const DialogTrigger = BaseDialog.Trigger;
 const DialogClose = BaseDialog.Close;
 const DialogPortal = BaseDialog.Portal;

@@ -319,7 +319,7 @@ ui-ux-pro-max `landing.csv` 검색 결과:
 | 카드 컨테이너 | `Card` | 기존 `MacCard` → `Card` 어댑터로 통합. traffic-light 점 장식은 P3 에서 삭제 |
 | 버튼 | `Button` | variants: `default` / `secondary` / `ghost` / `destructive` × `sm` / `default` / `lg` |
 | 상태 라벨 | `Badge` | 색 dot + 텍스트 동시 표기 (a11y: 색만으로 의미 전달 금지) |
-| 모달 | `Dialog`, `Sheet` (모바일 사이드바) | 현재 자체 모달 교체 — 단 뒤로가기로 닫기(§12.13)를 먼저 붙인다 |
+| 모달 | `Dialog`, `Sheet` (모바일 사이드바) | 현재 자체 모달 교체 — `ui/dialog` 래퍼가 뒤로가기로 닫기(§12.13)를 지원한다 |
 | 툴팁 | `Tooltip` (Radix) | 현재 `PortalTooltip` 교체 — 키보드 트리거 자동 |
 | 탭 | `Tabs` | Dashboard Overview / Operations / History 분리에 사용 |
 | 액션 메뉴 | `DropdownMenu` | Top bar "+ Add" / "More" 메뉴 |
@@ -390,7 +390,7 @@ ui-ux-pro-max Pre-Delivery Checklist에서 추출.
 
 | 스프린트 | 작업 | DoD |
 |---|---|---|
-| **W1** | 토큰 정합 — `index.css` rewrite + `tailwind.config.js` `status.*` 추가 + raw HEX 사용처 grep 후 전수 치환 | `grep -rE "#[0-9a-fA-F]{6}" frontend/src` 결과가 **토큰 정의부 + 화이트리스트 외 0건**. 화이트리스트 = three.js/canvas/recharts 파일(`FlowGraph3D`, `Topology*`, `*Chart*`, `*Timeline`, `KanbanSummaryCharts`) 및 컬러픽커 기본값 prop(`defaultBg="#..."`) — 이들은 CSS class 를 못 쓰므로 hex 불가피. 외부 서비스 고유색(Jira `#0052CC` 등)은 `brand.*` 토큰 경유. |
+| **W1** | 토큰 정합 — `index.css` rewrite + `tailwind.config.js` `status.*` 추가 + raw HEX 사용처 grep 후 전수 치환 | `grep -rEo "#[0-9a-fA-F]{3,8}\b" frontend/src` 결과가 **토큰 정의부 + 화이트리스트 외 0건** — **2026-10-20 달성(R-1)**. 화이트리스트는 DESIGN.md §1.3 "raw hex 화이트리스트" 행(사용자 저장 색·컬러피커 기본값·xterm/ANSI·data URL SVG·로고 path·내보낸 파일 배경)뿐이고, `.eslintrc.cjs` `no-restricted-syntax`(hex Literal)가 그 밖을 막는다(템플릿 리터럴은 grep 으로 확인). three.js/canvas 렌더러는 `cssVarColor` 를 쓴다(§12.12-7). 외부 서비스 고유색(Jira `#0052CC` 등)은 `brand.*` 토큰 경유. |
 | **W2** | shadcn/ui 도입(MCP 경유) — `Button`, `Card`, `Badge`, `Tooltip`, `Dialog` 5종부터. 기존 자체 컴포넌트 어댑터 추가 | 새 컴포넌트는 shadcn 사용, 기존은 점진 마이그레이션 |
 | **W3** | ✅ Health Hero PoC — 12-col Bento(`HealthHero`) + Bullet Chart(`ui/BulletChart`) 구현 + Dashboard 상단 교체(`SummaryStats` 삭제) | Bullet Chart `role="img"` + `aria-label` 로 AAA 패턴 적용. Lighthouse 정량 측정은 미실시(환경 제약) — W4 진행 시 함께 측정 권장 |
 | **W4** | ✅ 접근성 패스 — `eslint-plugin-jsx-a11y` (기존 도입돼있던 것 확인) + `jsx-a11y/control-has-associated-label` 신규 활성화 + 전수 스캔 위반 54건 수정 + skip link + 신규 차트 sr-only 데이터 표 | `npx eslint . --rule '{"jsx-a11y/control-has-associated-label":"warn"}'` 전체 스캔 0건, `npm run lint` 그대로 통과(회귀 방지 위해 룰 상시 활성화) |
@@ -896,7 +896,7 @@ D-117~D-134)에서 원자는 지켜지는데 화면이 "AI 가 만든 템플릿"
 | 4 | **카드는 섹션 1단, `rounded-md` 만** | 단일 요소(문단·EmptyState·탭 줄·헤더) 래핑, 카드 안 카드, `bg-card` + `rounded-xl/2xl/lg`, hover-lift(`hover:-translate-y`·`hover:scale`), `shadow-lg/xl/2xl`, 비모달 `backdrop-blur`, `bg-gradient-*`, `transition-all`, 비로딩 `animate-pulse/ping` | 구분선·여백·정렬로 먼저 해결. 카드가 필요하면 `MacCard`(헤더는 §12.3 슬롯 `icon`·`description`·`titleExtra`·`actions`). 섹션을 `bg-card border rounded-md` div 로 직접 조합하지 않는다(목록 아이템 타일은 예외). 그림자는 `shadow-card` 만. 로고는 단색 |
 | 5 | **페이지 루트는 밀도 클래스 3종 중 하나** | 그 외 `max-w-*`, 콘솔 페이지의 `mx-auto`, 루트 패딩 임의값 | 공용 **`PageShell density="console"｜"hub"｜"doc"`**(`components/common/PageShell.tsx`, D-123)로 본문 컨테이너를 감싼다. **콘솔**(exec·표·매트릭스, ClusterSidebar 가 있는 per-cluster 화면 전부): `py-3 pr-3`, 폭 제한 없음(사이드바 없으면 `sidebar={false}` → `pl-3`), 표 `text-xs`, 빈 상태 `py-10` · **허브/목록**: `px-6 py-5`, `max-w-[1600px]` 좌정렬 · **문서**(단일 칼럼 폼·읽기): `max-w-4xl mx-auto px-8 py-8`, 빈 상태 `py-16`. **예외**(셸 미사용): 전체 높이 캔버스(Home·Ontology·VersionGraph·WorkflowBoard·MindMap·Island), Login·ChangePassword·K9sPopup·NodeSshPopup. `max-w-[NNNNpx]` 는 `.eslintrc.cjs` `WIDTH_RE` 가 PageShell 밖에서 막는다 |
 | 6 | **빈·로딩·에러 상태는 공용만** | 인라인 빈 상태 div/p, 로컬 `EmptyState` 재정의, 이모지·영어 문구, "~가 없습니다" 만 있는 문구, 로딩 문구 변형("로딩", "불러오는 중...") , 에러에 `text-destructive` | `common/EmptyState` 단일 — "클러스터를 선택하세요" 는 프리셋 `SelectClusterEmptyState`, 로딩은 `LoadingState`(둘 다 `components/common/EmptyState.tsx`). 권한 게이트 버튼은 `children` 으로. 문구 = 왜 비었나 + 다음 행동(`ClusterManagePage:866` 참고). 로딩 "불러오는 중…"(`…` 1글자) 또는 `Skeleton`. 에러 `text-status-critical`(`text-destructive` 는 파괴 액션 버튼 전용) |
-| 7 | **카테고리·종류 구분 색은 `--chart-1..8` 토큰만** | Tailwind 색상명(blue·orange·purple·violet·indigo·cyan·pink·fuchsia·teal) — 장식 용도 포함, hex 기본색, 유색 배경 위 `text-white` 칩 | `--chart-*` 토큰(`text-[hsl(var(--chart-3))]` 아닌 유틸 클래스). slate/zinc 는 콘솔(터미널) 배경에만. `.eslintrc.cjs` 의 `DECO_PALETTE_RE` 가 **예외 없이** 막는다(D-120, 2026-10-15 allowlist 0). 클래스를 못 쓰는 렌더러(three.js·canvas·SVG 문자열)는 `lib/chartTokens.ts` `cssVarColor(token, {alpha, lighten})` 로 CSS 변수를 읽고, 색 memo 의존성에 `useThemeColorKey()` 를 넣어 테마 전환 시 다시 칠한다(hex 금지). 토큰보다 종류가 많으면 같은 계열의 `lighten` 변형으로 구분한다. 브랜드 글자는 `text-brand-jira`(= `--brand-jira-text`, 다크 계열 테마에서 밝은 값) — `dark:` 우회를 붙이지 않는다. **예외**: 사용자가 골라 저장한 색(MindMap 노드 색 등)은 데이터라 토큰 대상이 아니다 |
+| 7 | **카테고리·종류 구분 색은 `--chart-1..8` 토큰만** | Tailwind 색상명(blue·orange·purple·violet·indigo·cyan·pink·fuchsia·teal) — 장식 용도 포함, hex 기본색, 유색 배경 위 `text-white` 칩 | `--chart-*` 토큰(`text-[hsl(var(--chart-3))]` 아닌 유틸 클래스). slate/zinc 는 콘솔(터미널) 배경에만. `.eslintrc.cjs` 의 `DECO_PALETTE_RE` 가 **예외 없이** 막는다(D-120, 2026-10-15 allowlist 0). 클래스를 못 쓰는 렌더러(three.js·canvas·SVG 문자열)는 `lib/chartTokens.ts` `cssVarColor(token, {alpha, lighten})` 로 CSS 변수를 읽고, 색 memo 의존성에 `useThemeColorKey()` 를 넣어 테마 전환 시 다시 칠한다(hex 금지 — `.eslintrc.cjs` 가 hex Literal 을 막고, 허용은 DESIGN.md §1.3 화이트리스트 파일만). DOM 에 그리는 SVG(`ArchDocCanvas`·`TopologyCanvas`)는 `hsl(var(--x))` 를 그대로 써도 된다(export 의 `resolveCssVars` 가 해석). 토큰보다 종류가 많으면 같은 계열의 `lighten` 변형으로 구분한다. 브랜드 글자는 `text-brand-jira`(= `--brand-jira-text`, 다크 계열 테마에서 밝은 값) — `dark:` 우회를 붙이지 않는다. **예외**: 사용자가 골라 저장한 색(MindMap 노드 색 등)은 데이터라 토큰 대상이 아니다 |
 | 8 | **uppercase 아이브로우 금지(예외 없음)** | 페이지 본문·h1·버튼·탭·폼 라벨의 `uppercase tracking-wider`, 전부 대문자 제목("CIDR INPUT") | 라벨은 `text-xs text-muted-foreground`(대소문자 그대로). 상태 배지는 `common/StatusBadge` 한국어 1종 |
 | 9 | **아이콘은 lucide 만** | 이모지를 상태(🟢🟡🔴)·카테고리·아이콘·장식(🎉💡☸)으로, ⚠/✓/✗ 문자 접두, 모든 아이콘 `text-primary` 틴트 | lucide + 상태 토큰. `text-primary` 틴트는 클릭 가능한 액션에만. 사용자 데이터로 저장된 클러스터 아이콘(`clusterIcons`)의 예외 여부는 D-126 에서 판정 |
 | 10 | **타이포 위계 4단** | 페이지 내 `text-2xl` 이상(Health Hero 외), h1 크기 변형, 숫자 `font-mono`, `text-[11px]` 를 표 밖에 | h1 `text-xl font-semibold` · 카드 제목 MacCard 내장 · 본문 `text-sm` · 보조 `text-xs`. 숫자는 `tabular-nums`(`font-mono` 는 식별자·코드·로그만). `text-[11px]` 는 표 셀만. 글꼴은 시스템 스택만 — 웹폰트 CDN 금지(§3, D-131) |
@@ -939,7 +939,9 @@ D-117~D-134)에서 원자는 지켜지는데 화면이 "AI 가 만든 템플릿"
   - 닫자마자 다른 화면으로 이동해 남은 모달 기록은 뒤로·앞으로 이동할 때 자동으로 건너뛴다.
   - **`historyClose: false` 로 끄는 경우**: 팝오버·메뉴(`useModalA11y` 를 트랩용으로만 쓰는 것)와, 고르면 닫고 곧바로 `navigate()` 하는 UI(커맨드 팔레트).
     - 현재 해당: `CommandPalette`, `ClusterManagePage` 도구 메뉴, `NodeSpecPage`·`PlatformStatusMatrix` 팝오버.
-  - shadcn `ui/dialog.tsx`(Base UI 래퍼)는 아직 이 동작이 없다. 자체 모달을 `Dialog` 로 옮길 때는 같은 기록 관리를 붙인 뒤에 옮긴다.
+  - shadcn `ui/dialog` 의 `Dialog` 도 래퍼라서, `open` 을 넘기는 controlled 다이얼로그는 뒤로가기로 자동으로 닫힌다(`useModalHistory` → `actionsRef.close()` → `onOpenChange(false, …)`). 호출부의 `onOpenChange` 가드(`!busy` 등)가 Escape·X 와 똑같이 적용되고, 닫기를 거부하면 기록을 다시 push 한다. 호출부는 아무것도 추가하지 않는다(uncontrolled 는 대상 아님).
+  - 포커스 트랩이 따로 있거나 자체 Escape 를 가진 포털 팝오버(예: `ClusterIconPicker`)는 `useModalA11y` 대신 `useModalHistory(open, onClose)` 만 쓴다(조건부 마운트면 `useModalHistory(true, onClose)`).
+  - 기록 회수는 현재 hash 가 `#modal-` 일 때만 한다. 모달이 열린 채 다른 코드가 replace 로 그 기록을 실제 화면 상태로 바꾸면(예: Island 패널 추가의 `?panel=`) 지우지 않고 보존한다 — 모달을 닫으며 URL 을 바꾸려면 replace 로 바꾼다.
 - **목록 상태 — `hooks/useUrlParams.ts`.**
   - 사용: `const [p, set] = useUrlParams({ tab: 'all', q: '' })` → `set({ q: 'x' })`.
   - 값 하나만 쓸 때는 `useUrlParam(key, default)`, 허용 값으로 좁힐 때는 `pickParam(value, allowed, fallback)` 를 쓴다.

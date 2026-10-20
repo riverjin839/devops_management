@@ -15,8 +15,11 @@ export interface SshTerminalWindowProps {
   labelClassName?: string;
   /** 헤더 부제 — 보통 `user@host:port` + 옵션 요약. */
   subtitle: string;
-  /** 접속할 WebSocket URL (인증 토큰 포함). 바뀌면 재연결한다. */
-  url: string;
+  /**
+   * 접속할 WebSocket URL (인증 토큰 포함). 바뀌면 재연결한다. 함수면 (재)연결할 때마다 호출해
+   * 그 시점의 토큰으로 URL 을 만든다 — 세션 재발급(R-7) 뒤 재연결이 옛 토큰으로 4401 나지 않게.
+   */
+  url: string | (() => string);
   /**
    * `onopen` 직후 1회 전송할 init 프레임의 화면별 필드.
    * `type`/`cols`/`rows` 는 이 컴포넌트가 채우므로 넣지 않는다.
@@ -32,7 +35,7 @@ export interface SshTerminalWindowProps {
 }
 
 const DEFAULT_CLOSE_NOTES: Record<number, string> = {
-  4401: '[인증 실패 — operator 권한이 필요합니다]',
+  4401: '[세션이 만료됐거나 operator 권한이 없습니다]',
   4403: '[이 터미널 기능이 비활성화되어 있습니다]',
   4404: '[대상을 찾을 수 없습니다]',
   4413: '[이 클러스터에 실행 권한이 없습니다 — 테넌트 바인딩 확인]',
@@ -89,7 +92,7 @@ export function SshTerminalWindow({
     if (!term) return;
     term.reset();
     setStatus('connecting');
-    const ws = new WebSocket(url);
+    const ws = new WebSocket(typeof url === 'function' ? url() : url);
     wsRef.current = ws;
     ws.onopen = () => {
       setStatus('open');

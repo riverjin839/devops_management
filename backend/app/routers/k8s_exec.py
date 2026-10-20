@@ -25,7 +25,7 @@ from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 from kubernetes import client as k8s_client, config as k8s_config
 from kubernetes.stream import stream as k8s_stream
 
-from app.auth.security import decode_access_token
+from app.auth.security import decode_access_token, is_token_revoked
 from app.database import SessionLocal
 from app.models import Cluster
 from app.models.user import User
@@ -58,6 +58,8 @@ def _resolve_user(token: str | None, db) -> User | None:
     user = db.query(User).filter(User.username == username).first()
     if not user or not user.is_active:
         return None
+    if is_token_revoked(payload, getattr(user, "password_changed_at", None)):
+        return None  # 비밀번호 변경 이전 로그인 토큰 → 4401
     effective_role = "viewer" if user.role == "user" else user.role
     if effective_role not in _ALLOWED_ROLES:
         return None

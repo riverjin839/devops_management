@@ -12,7 +12,8 @@ const SCHEDULE_BG_KEY = 'pep:scheduleBg';
 const WEEKLY_BAR_OPACITY_KEY = 'pep:weeklyBarOpacity';
 const WEEKLY_BAR_TEXT_COLOR_KEY = 'pep:weeklyBarTextColor';
 const DEFAULT_WEEKLY_BAR_OPACITY = 100;
-const DEFAULT_WEEKLY_BAR_TEXT_COLOR = '#ffffff';
+/** 주간 스윔레인 막대 글자색 기본값 — <input type="color"> 가 hex 만 받으므로 hex 로 둔다(raw hex 허용 예외). */
+export const DEFAULT_WEEKLY_BAR_TEXT_COLOR = '#ffffff';
 
 function loadHomeTab(): HomeTab {
   try {

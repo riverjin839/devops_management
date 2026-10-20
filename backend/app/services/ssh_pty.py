@@ -34,7 +34,7 @@ from typing import Callable, Optional
 
 from fastapi import WebSocket, WebSocketDisconnect
 
-from app.auth.security import decode_access_token
+from app.auth.security import decode_access_token, is_token_revoked
 from app.models.user import User
 from app.services.ssh_runner import SSHTarget, connect_client
 
@@ -74,6 +74,8 @@ def resolve_ws_user(token: str | None, db, allowed_roles=ALLOWED_ROLES) -> User 
     user = db.query(User).filter(User.username == username).first()
     if not user or not user.is_active:
         return None
+    if is_token_revoked(payload, getattr(user, "password_changed_at", None)):
+        return None  # 비밀번호 변경 이전 로그인 토큰 → 4401
     effective_role = "viewer" if user.role == "user" else user.role
     if effective_role not in allowed_roles:
         return None

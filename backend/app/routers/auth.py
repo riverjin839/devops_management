@@ -1,12 +1,22 @@
-"""Authentication endpoints — /auth/login, /auth/me, admin user management."""
+"""Authentication endpoints — /auth/login, /auth/refresh, /auth/me, admin user management."""
+import time
+
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.models.user import User
 from app.models.user_setting import UserSetting
-from app.auth.security import hash_password, verify_password, create_access_token
-from app.auth.deps import get_current_user, require_admin
+from app.auth.security import (
+    create_access_token,
+    decode_access_token,
+    hash_password,
+    session_max_seconds,
+    token_auth_time,
+    utcnow_naive,
+    verify_password,
+)
+from app.auth.deps import get_current_user, oauth2_scheme, require_admin
 from app.schemas.auth import (
     LoginRequest,
     TokenResponse,
@@ -16,6 +26,7 @@ from app.schemas.auth import (
     UpdatePreferencesRequest,
     UpdateUserRoleRequest,
     SelfPasswordChangeRequest,
+    PasswordChangeResponse,
 )
 from app.services import audit_logger
 from app.services import login_rate_limiter
@@ -79,7 +90,33 @@ def me(user: User = Depends(get_current_user)):
     return UserOut.model_validate(user)
 
 
-@router.post("/me/password", response_model=UserOut)
+@router.post("/refresh", response_model=TokenResponse)
+def refresh_token(
+    token: str = Depends(oauth2_scheme),
+    user: User = Depends(get_current_user),
+):
+    """유효한(만료 전) 토큰을 새 토큰으로 재발급한다 — 슬라이딩 세션.
+
+    auth 라우터는 public 마운트라 인증을 엔드포인트 의존성(``get_current_user``)으로 직접 건다
+    — 만료·서명 오류·비활성 사용자·비밀번호 변경 이전 토큰은 거기서 401 이다. 재발급 토큰은
+    원래 로그인 시각(``auth_time``)을 유지하고 만료를 ``min(지금 + TTL, auth_time + 상한)`` 으로
+    잡으므로, 로그인 후 ``SESSION_MAX_HOURS`` 가 지나면 더는 늘지 않고 401 로 재로그인을 요구한다.
+    role 은 DB 의 현재 값으로 다시 싣는다. 몇 시간마다 반복되는 호출이라 감사 로그는 남기지 않는다.
+    """
+    payload = decode_access_token(token) or {}
+    now = int(time.time())
+    auth_time = token_auth_time(payload, now=now)
+    if auth_time is None or now >= auth_time + session_max_seconds():
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="세션 최대 유지 시간이 지났습니다. 다시 로그인하세요.",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    new_token = create_access_token(subject=user.username, role=user.role, auth_time=auth_time)
+    return TokenResponse(access_token=new_token, user=UserOut.model_validate(user))
+
+
+@router.post("/me/password", response_model=PasswordChangeResponse)
 def change_my_password(
     payload: SelfPasswordChangeRequest,
     request: Request,
@@ -108,6 +145,8 @@ def change_my_password(
         )
     user.hashed_password = hash_password(payload.new_password)
     user.must_change_password = False
+    # 이 시각 이전에 로그인한 토큰(다른 브라우저·탭의 세션, 그리고 이 요청의 토큰)은 무효가 된다.
+    user.password_changed_at = utcnow_naive()
     db.commit()
     db.refresh(user)
     audit_logger.record(
@@ -121,14 +160,18 @@ def change_my_password(
     )
     # refresh 후 트랜잭션/세션 이슈로 must_change_password 가 다시 True 로 비치는
     # 일이 없도록 응답을 명시적으로 구성한다 — 프론트엔드 강제 변경 화면을 확실히 해제.
-    return UserOut(
+    # 이 요청에 쓴 토큰도 방금 무효가 됐으므로, 현재 비밀번호를 확인한 이 시점을 새 로그인으로
+    # 보고 토큰을 다시 발급해 함께 돌려준다 — 프론트가 받아 끼우면 본인 세션은 끊기지 않는다.
+    return PasswordChangeResponse(
         id=user.id,
         username=user.username,
         role=user.role,
         display_name=user.display_name,
         is_active=user.is_active,
         must_change_password=False,
+        editor_white_bg=bool(user.editor_white_bg),
         created_at=user.created_at,
+        access_token=create_access_token(subject=user.username, role=user.role),
     )
 
 
@@ -264,6 +307,8 @@ def admin_reset_password(
     if not user:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="사용자를 찾을 수 없습니다.")
     user.hashed_password = hash_password(payload.new_password)
+    # 재설정 이전에 로그인한 그 사용자의 세션(토큰)을 모두 끊는다.
+    user.password_changed_at = utcnow_naive()
     db.commit()
     db.refresh(user)
     audit_logger.record(

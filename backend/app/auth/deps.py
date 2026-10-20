@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.models.user import User
-from app.auth.security import decode_access_token
+from app.auth.security import decode_access_token, is_token_revoked
 
 
 # tokenUrl is the relative path of the login endpoint — used by Swagger UI
@@ -33,6 +33,9 @@ def get_current_user(
         raise cred_exc
     user = db.query(User).filter(User.username == username).first()
     if not user or not user.is_active:
+        raise cred_exc
+    # 비밀번호 변경(본인·관리자 재설정) 이전에 로그인한 토큰은 무효 — 다른 세션을 끊는다.
+    if is_token_revoked(payload, getattr(user, "password_changed_at", None)):
         raise cred_exc
     return user
 

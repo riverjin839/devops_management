@@ -32,6 +32,13 @@ class UserOut(BaseModel):
         from_attributes = True
 
 
+class PasswordChangeResponse(UserOut):
+    """본인 비밀번호 변경 응답 — 기존 토큰이 무효가 되므로 새로 발급한 토큰을 함께 싣는다."""
+
+    access_token: str | None = None
+    token_type: str = "bearer"
+
+
 class UpdatePreferencesRequest(BaseModel):
     editor_white_bg: bool
 

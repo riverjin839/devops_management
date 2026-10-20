@@ -1,6 +1,6 @@
 import { useId, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { Loader2, LogIn, Clock, ShipWheel } from 'lucide-react';
+import { Loader2, LogIn, Clock, KeyRound, ShipWheel } from 'lucide-react';
 import { authApi } from '@/services/api';
 import { useAuthStore, consumeReturnTo } from '@/stores/authStore';
 
@@ -62,6 +62,18 @@ export function LoginPage() {
             <Clock className="w-3.5 h-3.5 mt-0.5 flex-shrink-0 text-muted-foreground" aria-hidden="true" />
             <span>
               세션이 만료되어 로그아웃되었습니다. 다시 로그인하면
+              {returnTo ? ' 보던 화면으로 돌아갑니다.' : ' 계속 이용할 수 있습니다.'}
+            </span>
+          </div>
+        )}
+        {logoutReason === 'password_changed' && (
+          <div
+            role="status"
+            className="mb-4 flex items-start gap-2 rounded-md border border-border bg-secondary/60 px-3 py-2 text-xs text-foreground"
+          >
+            <KeyRound className="w-3.5 h-3.5 mt-0.5 flex-shrink-0 text-muted-foreground" aria-hidden="true" />
+            <span>
+              다른 탭에서 비밀번호가 변경되어 로그아웃되었습니다. 새 비밀번호로 다시 로그인하면
               {returnTo ? ' 보던 화면으로 돌아갑니다.' : ' 계속 이용할 수 있습니다.'}
             </span>
           </div>

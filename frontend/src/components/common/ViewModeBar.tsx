@@ -229,7 +229,6 @@ export function ViewModeBar({
             <div
               ref={panelRef}
               className="absolute right-0 top-full mt-1.5 z-50 w-56 bg-card border border-border/50 rounded-md shadow-2xl overflow-hidden"
-              style={{ boxShadow: '0 8px 32px rgba(0,0,0,0.35), 0 1px 0 rgba(255,255,255,0.05)' }}
             >
               {/* header */}
               <div className="px-3 py-2 border-b border-border/25 flex items-center justify-between">

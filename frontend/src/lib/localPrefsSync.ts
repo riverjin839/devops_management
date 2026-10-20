@@ -22,6 +22,8 @@ import { isPersonalKey, snapshotPersonal } from './personalStorage';
 const API = '/api/v1/me/local-prefs';
 const TOKEN_KEY = 'k8s:auth:token';
 const USER_KEY = 'k8s:auth:user';
+const TAB_TOKEN_KEY = 'k8s:auth:tab-token';
+const TAB_USER_KEY = 'k8s:auth:tab-user';
 const OWNER_KEY = 'pep:profile-owner';
 const BASE_PREFIX = 'pep-sync:'; // 기기 값(사용자별 기준본) — 개인 키 접두사가 아니라 프로필 전환 대상이 아니다
 const PUSH_INTERVAL_MS = 15_000;
@@ -43,8 +45,9 @@ interface Base { rev: number; values: Values; skip: string[] }
 
 function readAuth(): { token: string; userId: string } | null {
   try {
-    const token = localStorage.getItem(TOKEN_KEY);
-    const user = JSON.parse(localStorage.getItem(USER_KEY) ?? 'null') as { id?: unknown } | null;
+    // 비밀번호를 바꾼 탭은 토큰을 탭 전용(sessionStorage)으로 든다(stores/authStore.ts) — 그쪽을 먼저 본다.
+    const token = sessionStorage.getItem(TAB_TOKEN_KEY) ?? localStorage.getItem(TOKEN_KEY);
+    const user = JSON.parse(sessionStorage.getItem(TAB_USER_KEY) ?? localStorage.getItem(USER_KEY) ?? 'null') as { id?: unknown } | null;
     const userId = user && user.id != null ? String(user.id) : '';
     if (!token || !userId) return null;
     // 지금 깔린 로컬 설정이 다른 계정 것이면(프로필 전환 전) 건드리지 않는다.

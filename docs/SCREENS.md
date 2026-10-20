@@ -1523,13 +1523,14 @@ hover 시 flyout 자체가 라벨을 보여주므로 이름만 뜨는 중복 툴
   - `자동 생성 설정` 카드(admin 전용): 기본 스페이스/상위 페이지/제목 형식(`{start}`·`{end}` 치환)/cron/사용 여부.
   - ClusterSidebar 미사용(클러스터 단위 화면 아님).
 - **Frontend**: `useWeeklyReportPreview()` / `useWeeklyReportPublish()` / `useWeeklyReportSettings()` / `useUpdateWeeklyReportSettings()` (`hooks/useJira.ts`) · 표 상태는 로컬 `useState`.
-- **Backend**: `POST /api/v1/jira/weekly-report/preview` · `POST /api/v1/jira/weekly-report/publish` · `GET/PUT /api/v1/jira/weekly-report/settings` (`routers/jira.py`) — 집계는 `services/weekly_report_service.py`(`build_report()` 순수 집계 + `render_storage_html()` Confluence storage format), 게시는 `services/confluence_service.py` `upsert_page()`(제목 일치 시 버전 up, 없으면 생성). 자동 생성은 Celery `dispatch_weekly_report`(매분 cron 평가, Confluence 세션이 저장된 사용자 권한으로 게시).
+- **Backend**: `POST /api/v1/jira/weekly-report/preview` · `POST /api/v1/jira/weekly-report/publish` · `POST /api/v1/jira/weekly-report/publish/stream`(SSE — 단계 `build`·`target`·`session`·`render`·`upsert`·`audit`, 마지막 `result` 는 동기 응답과 같은 본문, 스페이스 미지정·제목 형식 오류는 스트림 전 422) · `GET/PUT /api/v1/jira/weekly-report/settings` (`routers/jira.py`) — 집계는 `services/weekly_report_service.py`(`build_report()` 순수 집계 + `render_storage_html()` Confluence storage format), 게시는 `services/confluence_service.py` `upsert_page()`(제목 일치 시 버전 up, 없으면 생성). 자동 생성은 Celery `dispatch_weekly_report`(매분 cron 평가, Confluence 세션이 저장된 사용자 권한으로 게시).
 - **핵심 기능**:
   - 월~금 기간 자동 산출(주차 선택 가능), 주와 겹치는 업무 집계(미완료 + 해당 주 완료분)
   - 상태 판정: 완료 우선 → 기한 초과 시 지연 → 나머지 진행
   - 3개 표를 화면과 Confluence 문서에 동일 구성으로 렌더(HTML 이스케이프로 주입 방지)
   - 같은 제목 페이지 갱신 / 신규 생성 자동 판별, 저장 위치 매 게시마다 변경 가능
   - cron 기반 자동 생성·게시(기본 금 17:00)
+- **게시 실행 로그(2026-10-20)**: "Confluence 에 게시"는 `streamLogged`(`jiraApi.weeklyPublishStreamUrl`)로 서버 단계 칩·로그를 `RunLogPanel` 에 실시간으로 쌓고 "중지"로 끊을 수 있다. 버튼은 `useCanOperate` 로 viewer 에게 사유와 함께 비활성.
 - **요청사항 (수정 요청)**:
   - _(여기에 개선/수정 요청을 직접 적어주세요)_
 

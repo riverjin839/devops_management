@@ -6,11 +6,12 @@ import { useId, useState } from 'react';
 import { Loader2, KeyRound } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { authApi } from '@/services/api';
-import { useAuthStore } from '@/stores/authStore';
+import { useAuthStore, type AuthUser } from '@/stores/authStore';
 
 export function ChangePasswordPage() {
   const user = useAuthStore((s) => s.user);
   const setUser = useAuthStore((s) => s.setUser);
+  const scopeSessionToThisTab = useAuthStore((s) => s.scopeSessionToThisTab);
   const navigate = useNavigate();
 
   const [currentPassword, setCurrentPassword] = useState('');
@@ -45,7 +46,12 @@ export function ChangePasswordPage() {
     setSubmitting(true);
     try {
       const res = await authApi.changeMyPassword(currentPassword, newPassword);
-      setUser({ ...res.data, mustChangePassword: false });
+      // 비밀번호를 바꾸면 그 이전에 로그인한 토큰(이 탭 것 포함)이 모두 무효가 된다 — 응답에 실린
+      // 새 토큰을 이 탭 전용으로 끼워 이 세션만 이어 간다(R-7). 같은 브라우저의 다른 탭은 공유 토큰이
+      // 지워져 다시 로그인해야 한다. 구버전 백엔드면 accessToken 이 없다.
+      const { accessToken, ...nextUser } = res.data as AuthUser & { accessToken?: string | null };
+      if (accessToken) scopeSessionToThisTab(accessToken, { ...nextUser, mustChangePassword: false });
+      setUser({ ...nextUser, mustChangePassword: false });
       setSuccess('비밀번호가 변경되었습니다.');
       setCurrentPassword('');
       setNewPassword('');

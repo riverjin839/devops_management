@@ -31,7 +31,11 @@ class Settings(BaseSettings):
     # Security / Auth
     secret_key: str = "your-secret-key-change-in-production"
     algorithm: str = "HS256"
-    access_token_expire_minutes: int = 60 * 24  # 24 hours
+    # 액세스 토큰 1개의 수명(분) = 유휴 타임아웃. 화면을 쓰는 동안은 프론트가 만료 전에
+    # POST /auth/refresh 로 조용히 재발급하고, 이 시간 동안 활동이 없으면 세션이 끝난다.
+    access_token_expire_minutes: int = 120
+    # 로그인 1회로 재발급을 이어 갈 수 있는 절대 상한(시간). 넘으면 refresh 가 401 → 재로그인.
+    session_max_hours: int = 24
     # Bootstrap: created on startup if no users exist. Skip if already present.
     initial_admin_username: str = "admin"
     initial_admin_password: str = "admin"

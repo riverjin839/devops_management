@@ -26,7 +26,7 @@ const SYNC_BASE_PREFIX = 'pep-sync:'; // lib/localPrefsSync.ts 의 사용자별 
 const PROFILE_TTL_DAYS = 90;
 const PROFILE_MAX_KEEP = 5;
 const PERSONAL_PREFIXES = ['k8s:', 'pep:', 'pep.', 'cluster-links-'];
-const DEVICE_KEYS = new Set(['k8s:auth:token', 'k8s:auth:user', 'k8s:theme-migrated-light-default', OWNER_KEY]);
+const DEVICE_KEYS = new Set(['k8s:auth:token', 'k8s:auth:user', 'k8s:auth:logout-reason', 'k8s:theme-migrated-light-default', OWNER_KEY]);
 const DEVICE_PATTERN = /width/i; // 사이드바·패널·컬럼 폭 — 기기(화면) 설정
 
 /** 로그아웃 때 같이 지울 탭 단위 비밀 — 다음 사람이 이전 사람의 SSH 자격증명으로 실행하지 못하게. */
