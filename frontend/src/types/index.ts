@@ -5822,6 +5822,24 @@ export interface ExternalServiceEntry {
   /** IP → 도메인 역조회 결과(nslookup) */
   ptrNames: string[];
   ptrSource: 'ssh' | 'backend' | null;
+  /** 도메인 정방향 검증 — 도메인의 A 레코드가 이 엔드포인트 IP 를 가리키는지. null = 검증 안 함 */
+  fwd: {
+    domain: string;
+    status: 'match' | 'mismatch' | 'nxdomain';
+    ips: string[];
+    source: 'node' | 'backend' | null;
+    checkedAt: string | null;
+  } | null;
+  /** 응답 확인 — TCP 연결 또는 (Ingress) Host 헤더를 실은 HTTP 요청. null = 확인 안 함 */
+  probe: {
+    reachable: boolean;
+    method: 'tcp' | 'http';
+    httpStatus: number | null;
+    latencyMs: number | null;
+    error: string | null;
+    source: 'node' | 'backend' | null;
+    checkedAt: string | null;
+  } | null;
 }
 
 export interface ExternalServicesView {
@@ -5829,7 +5847,7 @@ export interface ExternalServicesView {
   collectedAt: string | null;
   collectedBy?: string;
   resolver?: string | null;
-  summary: { byKind: Record<string, number>; total: number; ips: number; resolved: number } | null;
+  summary: { byKind: Record<string, number>; total: number; ips: number; resolved: number; issues?: number } | null;
   error: string | null;
   entries: ExternalServiceEntry[];
   nodeIps: { name: string; internalIp: string | null; externalIp: string | null }[];
@@ -5845,4 +5863,13 @@ export interface ExternalServicesSettings {
   backendPtr: boolean;
   dnsTimeoutSec: number;
   ptrCommand: string;
+  checkSource: 'auto' | 'node' | 'backend';
+  forwardCheck: boolean;
+  fwdCommand: string;
+  probeEnabled: boolean;
+  probeHttp: boolean;
+  probeTimeoutSec: number;
+  probeMax: number;
+  probeTcpCommand: string;
+  probeHttpCommand: string;
 }

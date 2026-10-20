@@ -1448,6 +1448,10 @@ def _run_migrations():
         _safe_create_index("ix_k8s_ns_samples_at", "k8s_ns_samples", "(sampled_at)")
         _safe_create_index("ix_k8s_wl_samples_at", "k8s_workload_samples", "(sampled_at)")
         _safe_create_index("ix_k8s_eff_runs_queued", "k8s_efficiency_runs", "(queued_at)")
+    # 외부 서비스 스냅샷 — 정방향 검증(fwd_cache)·응답 확인(probe_results) 결과 컬럼(1.63 이후 추가).
+    if "external_service_snapshots" in inspector.get_table_names():
+        _safe_add_column("external_service_snapshots", "fwd_cache", "JSONB")
+        _safe_add_column("external_service_snapshots", "probe_results", "JSONB")
 
 
 def _sync_missing_model_columns() -> None:
