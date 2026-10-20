@@ -22,6 +22,7 @@ from app.database import get_db
 from app.models import Cluster
 from app.models.user import User
 from app.schemas.cilium_trace import (
+    BpfDownloadRequest,
     BpfInspectRequest,
     BpfInspectResponse,
     CiliumAgent,
@@ -35,6 +36,7 @@ from app.services.cilium_trace_service import (
     HubbleStreamOptions,
     MonitorOptions,
     bpf_inspect,
+    bpf_raw_stream,
     detect_status,
     exec_cilium_command,
     hubble_stream,
@@ -113,6 +115,36 @@ def cilium_bpf_inspect(
         kind=payload.kind,
         **result,
     )
+
+
+@router.post("/{cluster_id}/bpf-inspect/download")
+def cilium_bpf_download(
+    cluster_id: UUID,
+    payload: BpfDownloadRequest,
+    db: Session = Depends(get_db),
+):
+    """BPF 맵 원본을 파일로 **흘려보낸다** — 조회 응답(`bpf-inspect`)은 JSON 이면 원본을 싣지 않으므로 원본이
+    필요할 때 이걸 쓴다. 출력을 워커 메모리에 모으지 않는다(`bpf_raw_stream`)."""
+    if payload.cluster_id != cluster_id:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="path cluster_id 와 body cluster_id 가 일치하지 않습니다.",
+        )
+    _, kc = _get_cluster_kubeconfig(cluster_id, db)
+    pod, executed, stream, err = bpf_raw_stream(
+        kc, payload.kind, as_json=payload.format == "json", pod_name=payload.pod_name,
+        namespace=payload.namespace, endpoint_id=payload.endpoint_id,
+    )
+    if err or stream is None:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=err or "실행할 수 없습니다.")
+    ext, media = ("json", "application/json") if payload.format == "json" else ("txt", "text/plain; charset=utf-8")
+    filename = f"cilium-bpf-{payload.kind}-{pod}.{ext}"
+    return StreamingResponse(stream, media_type=media, headers={
+        "Content-Disposition": f'attachment; filename="{filename}"',
+        "X-Bpf-Pod": pod,
+        # gzip 미들웨어가 스트림을 버퍼링하지 않도록(다운로드 진행이 바로 보이게)
+        "Content-Encoding": "identity",
+    })
 
 
 # ── Ad-hoc cilium-dbg 실행 (operator + 감사) ─────────────────────────────────

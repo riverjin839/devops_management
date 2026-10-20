@@ -71,6 +71,9 @@ interface BpfInspectResponse {
   kind: string;
   podName: string;
   raw: string;
+  /** JSON 으로 파싱되면 서버가 원본을 싣지 않는다 — 원본은 download 로 받는다. */
+  rawOmitted?: boolean;
+  rawSize?: number;
   parsed?: Record<string, unknown>[] | Record<string, unknown> | null;
   isJson: boolean;
   error?: string | null;
@@ -104,6 +107,16 @@ const ciliumApi = {
       namespace: body.namespace ?? 'kube-system',
       endpoint_id: body.endpointId,
     }).then((r) => r.data),
+  // BPF 맵 원본 파일 — 서버가 흘려보낸다(조회 응답에는 JSON 원본이 실리지 않음).
+  bpfDownload: (clusterId: string, body: { kind: BpfKind; podName?: string; endpointId?: string; format: 'json' | 'text' }) =>
+    api.post<Blob>(`/cilium/${clusterId}/bpf-inspect/download`, {
+      cluster_id: clusterId,
+      kind: body.kind,
+      pod_name: body.podName,
+      namespace: 'kube-system',
+      endpoint_id: body.endpointId,
+      format: body.format,
+    }, { responseType: 'blob', timeout: 5 * 60_000 }).then((r) => r.data),
   execCommand: (clusterId: string, body: { podName?: string; namespace?: string; commandArgs: string; timeout?: number }) =>
     api.post<CiliumExecResponse>(`/cilium/${clusterId}/exec-command`, {
       pod_name: body.podName,
@@ -418,8 +431,9 @@ function BpfInspectorTab({ clusterId, agents }: { clusterId: string; agents: Cil
       }),
       summarize: (res) => {
         const rows = res.isJson && Array.isArray(res.parsed) ? `${res.parsed.length}행(JSON)` : `${res.raw ? res.raw.split('\n').filter((l) => l.trim()).length : 0}줄(텍스트)`;
+        const omitted = res.rawOmitted ? ` · 원본 ${Math.round((res.rawSize ?? 0) / 1024).toLocaleString()}KB 는 내보내기로 받음` : '';
         return [
-          ['info', `${res.podName} · ${res.kind} · 결과 ${rows}${res.executed ? ` · ${res.executed}` : ''}`],
+          ['info', `${res.podName} · ${res.kind} · 결과 ${rows}${omitted}${res.executed ? ` · ${res.executed}` : ''}`],
           ...(res.error ? [['error', `오류 — ${res.error}`] as ['error', string]] : []),
         ];
       },
@@ -434,16 +448,39 @@ function BpfInspectorTab({ clusterId, agents }: { clusterId: string; agents: Cil
     // eslint-disable-next-line react-hooks/exhaustive-deps -- runLog 함수들은 안정적, agentDesc 는 agents 로 결정
   }, [clusterId, kind, podName, endpointId, agents]);
 
-  const downloadRaw = () => {
-    if (!data?.raw) return;
-    const blob = new Blob([data.raw], { type: 'text/plain' });
+  const saveBlob = (blob: Blob, name: string) => {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `cilium-bpf-${kind}-${Date.now()}.txt`;
+    a.download = name;
     a.click();
     URL.revokeObjectURL(url);
   };
+
+  const downloadRaw = useCallback(async () => {
+    if (!data || !clusterId) return;
+    // 텍스트 결과는 이미 받은 원본을 그대로 저장한다.
+    if (!data.rawOmitted) {
+      if (data.raw) saveBlob(new Blob([data.raw], { type: 'text/plain' }), `cilium-bpf-${data.kind}-${Date.now()}.txt`);
+      return;
+    }
+    // JSON 결과는 서버가 원본을 흘려보내 준다(조회 응답에는 원본을 싣지 않아 워커 메모리를 아낀다).
+    const kb = Math.round((data.rawSize ?? 0) / 1024);
+    const r = await runLogged(runLog, {
+      title: `BPF 원본 내보내기 · ${data.kind}`,
+      first: `${agentDesc(data.podName)} 에서 원본 JSON(약 ${kb.toLocaleString()}KB) 다운로드 요청 — 서버가 흘려보냄`,
+      fn: () => ciliumApi.bpfDownload(clusterId, {
+        kind: data.kind as BpfKind,
+        podName: data.podName || undefined,
+        endpointId: data.kind === 'policy' ? (endpointId || undefined) : undefined,
+        format: 'json',
+      }),
+      summarize: (blob) => [['info', `받은 크기 ${Math.round(blob.size / 1024).toLocaleString()}KB — 파일로 저장`]],
+    });
+    if (r.ok) saveBlob(r.data, `cilium-bpf-${data.kind}-${Date.now()}.json`);
+    else if (!r.aborted) setError(formatApiError(r.error));
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- runLog 함수들은 안정적, agentDesc 는 agents 로 결정
+  }, [data, clusterId, endpointId, agents]);
 
   return (
     // MC 클라이언트와 동일한 좌(컨트롤)/우(결과) 배치 — 결과 카드는 실행 전에도 같은
@@ -500,7 +537,7 @@ function BpfInspectorTab({ clusterId, agents }: { clusterId: string; agents: Cil
             <Play className="w-3.5 h-3.5" />
             {loading ? '조회 중…' : '조회'}
           </button>
-          {data?.raw && (
+          {(data?.raw || data?.rawOmitted) && (
             <button
               onClick={downloadRaw}
               className="px-3 py-1.5 text-sm font-medium bg-secondary hover:bg-secondary/80 border border-border rounded-xl transition-colors flex items-center gap-1.5"
@@ -596,9 +633,13 @@ function BpfInspectorTab({ clusterId, agents }: { clusterId: string; agents: Cil
         {data && data.isJson && Array.isArray(data.parsed) && (
           <BpfJsonTable rows={data.parsed} />
         )}
-        {data && (!data.isJson || !Array.isArray(data.parsed)) && data.raw && (
+        {data && (!data.isJson || !Array.isArray(data.parsed)) && (data.raw || data.parsed) && (
           <div className="p-3">
-            <LogViewer text={data.raw} maxHeight="max-h-[60vh] lg:max-h-[calc(100vh-340px)]" />
+            {/* 객체 형태 JSON 은 서버가 원본을 빼고 보내므로 파싱본을 펼쳐 보여 준다. */}
+            <LogViewer
+              text={data.raw || JSON.stringify(data.parsed, null, 2)}
+              maxHeight="max-h-[60vh] lg:max-h-[calc(100vh-340px)]"
+            />
           </div>
         )}
       </MacCard>
