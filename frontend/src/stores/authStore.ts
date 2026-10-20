@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { activateProfile, clearSessionSecrets } from '@/lib/personalStorage';
+import { pushLocalPrefs, syncLocalPrefs } from '@/lib/localPrefsSync';
 
 // API response interceptor converts snake_case → camelCase, so we model the
 // shape the React tree actually receives.
@@ -85,6 +86,9 @@ export const useAuthStore = create<AuthState>((set) => ({
     // returnTo 는 LoginPage 가 로그인 직후 읽어 복귀에 쓰고 나서 직접 지운다 — 여기서
     // 같이 지우면 setSession 이 먼저 돌아 복귀 경로를 잃는다.
     set({ token, user: u, logoutReason: null });
+    // 다른 기기에서 바꾼 화면 설정을 가져왔으면 새로 고쳐 store 들이 다시 읽게 한다(lib/localPrefsSync.ts).
+    // 로그인 직후라 잃을 화면 상태가 없다 — LoginPage 가 옮겨 둔 복귀 경로에서 다시 뜬다.
+    void syncLocalPrefs().then((applied) => { if (applied) window.location.reload(); });
     // 홈 탭(work/platform) 선호는 localStorage 에 영속되므로 로그인마다 리셋하지
     // 않는다(D-056 — 예전엔 매번 강제로 'work' 로 되돌렸다). 서버 저장 기본 탭은
     // useHomePrefs() 가 로드된 뒤 반영한다.
@@ -95,6 +99,8 @@ export const useAuthStore = create<AuthState>((set) => ({
     set({ user: u });
   },
   clear: () => {
+    // 로그아웃 직전 — 이 기기에서 바꾼 화면 설정을 아직 유효한 토큰으로 올려 둔다(keepalive, 기다리지 않음).
+    void pushLocalPrefs(true);
     clearSessionSecrets();
     try {
       localStorage.removeItem(TOKEN_KEY);
