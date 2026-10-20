@@ -17,24 +17,18 @@ interface UseK8sEventsParams {
 }
 
 /**
- * 이벤트 목록 — offset 페이지를 "더 보기"로 이어 붙인다(D-111: 예전엔 200건 고정이라 그 뒤는 열람 불가).
+ * 이벤트 목록 — 키셋 커서 페이지를 "더 보기"로 이어 붙인다(D-111: 예전엔 200건 고정이라 그 뒤는 열람 불가).
+ * 직전 페이지 마지막 행 기준 커서로 읽으므로 페이지 사이 이벤트가 정리·삭제돼도 뒤쪽 행을 건너뛰지 않는다.
  * 키는 'k8s-events' 접두사를 유지해 삭제·분석 트리거 후 무효화가 그대로 걸린다.
- * `hasMore` 가 없는 구버전 응답이면 `offset + data.length < total` 로 판정한다.
  */
 export function useK8sEventsPaged(params: Omit<UseK8sEventsParams, 'limit' | 'offset'> & { pageSize?: number }) {
   const { pageSize = 100, ...filters } = params;
   return useInfiniteQuery({
     queryKey: k8sEventKeys.paged({ ...filters, pageSize }),
-    initialPageParam: 0,
-    queryFn: async ({ pageParam }) => {
-      const { data } = await k8sEventsApi.list({ ...filters, limit: pageSize, offset: pageParam });
-      return { ...data, offset: pageParam };
-    },
-    getNextPageParam: (last) => {
-      const next = last.offset + last.data.length;
-      const more = last.hasMore ?? next < last.total;
-      return more && last.data.length > 0 ? next : undefined;
-    },
+    initialPageParam: null as string | null,
+    queryFn: async ({ pageParam }) =>
+      (await k8sEventsApi.list({ ...filters, limit: pageSize, cursor: pageParam ?? undefined })).data,
+    getNextPageParam: (last) => (last.hasMore && last.nextCursor ? last.nextCursor : undefined),
     refetchInterval: 30_000,
   });
 }

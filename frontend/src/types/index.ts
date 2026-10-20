@@ -245,6 +245,8 @@ export interface K8sEventListResponse {
   total: number;
   /** 이 페이지 뒤에 더 있는지(offset 페이지네이션, D-111). */
   hasMore?: boolean;
+  /** 다음 페이지 키셋 커서 — 페이지 사이 행이 빠져도 누락 없이 이어 읽는다. */
+  nextCursor?: string | null;
 }
 
 /** GET /events/stats — 심각도 필터와 무관한 클러스터 범위 집계(D-111). */
@@ -5236,6 +5238,8 @@ export interface AlertEventListResponse {
   total: number;
   /** 이 페이지 뒤에 더 있는지(offset 페이지네이션, D-111). */
   hasMore?: boolean;
+  /** 다음 페이지 키셋 커서 — 페이지 사이 행이 빠져도 누락 없이 이어 읽는다. */
+  nextCursor?: string | null;
 }
 
 export interface AlertStats {

@@ -423,7 +423,7 @@ hover 시 flyout 자체가 라벨을 보여주므로 이름만 뜨는 중복 툴
   - 이벤트 테이블(시각/심각도/Kind/이름/네임스페이스/Reason/메시지) — 이름 셀 버튼(키보드·`aria-expanded`)이나 행 클릭으로 raw JSON(`LogViewer`) 펼침, 행별 삭제 버튼. 목록 아래 "N / 총 M건" + **더 보기**(100건 단위, D-111).
   - 조회 실패는 "이벤트 없음" 대신 오류+다시 시도, 30초 갱신만 실패하면 목록 위 경고 한 줄(D-104).
 - **Frontend**: `useK8sEventsPaged({clusterId, severity})`(`useInfiniteQuery`, 30초 `refetchInterval`), `useK8sEventStats(clusterId)`, `useDeleteK8sEvent`(`hooks/useK8sEvents.ts`). `useClusters`. api.ts: `k8sEventsApi.{list,stats,delete}`.
-- **Backend**: `GET /api/v1/events/` (`response_model=K8sEventListResponse`, `has_more`), `GET /api/v1/events/stats`(심각도별 건수, `/{id}` 보다 먼저 선언), `DELETE /api/v1/events/{id}`(operator + 클러스터 operate, 안 보이는 이벤트는 404 — D-102) — 라우터 `backend/app/routers/k8s_events.py`(조회용 `router`, prefix `/events`; 별도 `ingest_router`가 kubewatch 웹훅 수신 담당, `/api/v1` 최상위 마운트로 인증 미들웨어 제외). 모델: `models/k8s_event.py`(`K8sEvent` — `event_type`, `resource_kind`, `resource_name`, `namespace`, `reason`, `message`, `severity`, `raw` JSONB, `received_at`).
+- **Backend**: `GET /api/v1/events/` (`response_model=K8sEventListResponse`, `has_more`·`next_cursor` — "더 보기"는 키셋 `cursor`, `services/list_cursor.py`), `GET /api/v1/events/stats`(심각도별 건수, `/{id}` 보다 먼저 선언), `DELETE /api/v1/events/{id}`(operator + 클러스터 operate, 안 보이는 이벤트는 404 — D-102) — 라우터 `backend/app/routers/k8s_events.py`(조회용 `router`, prefix `/events`; 별도 `ingest_router`가 kubewatch 웹훅 수신 담당, `/api/v1` 최상위 마운트로 인증 미들웨어 제외). 모델: `models/k8s_event.py`(`K8sEvent` — `event_type`, `resource_kind`, `resource_name`, `namespace`, `reason`, `message`, `severity`, `raw` JSONB, `received_at`).
 - **핵심 기능**:
   - 클러스터별/전체 이벤트 조회, 심각도 필터.
   - 30초 주기 자동 새로고침 + 수동 새로고침.

@@ -270,8 +270,10 @@ def test_default_not_degraded(client):
 
 @pytest.mark.parametrize("raw, expected", [
     (0.7, 0.7), (1, 1.0), (85, 0.85), ("85%", 0.85), (250, 1.0), (-0.3, 0.0), (float("nan"), 0.0),
-    # 1~10 척도·분수·단어 — 예전엔 8 이 8% 로, "high" 가 0 으로 읽혔다.
-    (8, 0.8), ("7.5", 0.75), (10, 1.0), (40, 0.4), ("8/10", 0.8), ("3/0", 0.5),
+    # 1 초과 맨 숫자는 퍼센트로 낮게 읽는다(5 → 5%, 50% 로 부풀리지 않는다). 10점 척도는 분수로만.
+    (8, 0.08), (5, 0.05), ("7.5", 0.075), (10, 0.1), (40, 0.4), ("8/10", 0.8), ("3/0", 0.5),
+    # NaN·inf 는 최고 신뢰도로 올리지 않는다, bool 은 숫자로 보지 않는다.
+    ("nan%", 0.0), ("nan/1", 0.0), (float("inf"), 0.0), ("inf", 0.0), ("1/inf", 0.5), (True, 0.5),
     ("High", 0.8), ("very low", 0.1), ("0.9", 0.9),
     # 해석 불가는 중립값 — 0.0 은 degraded 표식과 겹친다.
     ("abc", 0.5), (None, 0.5), ("x/10", 0.5),
@@ -414,6 +416,19 @@ def test_pick_container_failing_init_wins():
     assert analyze._pick_container(pod, prefer_failing=True) == "migrate"
     # 셀렉터 기본값(containers 엔드포인트)은 실패 우선을 쓰지 않는다
     assert analyze._pick_container(pod, prefer_failing=False) == "app"
+
+
+def test_pick_container_skips_completed_init_with_restarts():
+    # 재시작 끝에 정상 완료한 init 은 분석 대상이 아니다(_pod_issue 와 같은 규칙)
+    pod = _pod(["app"], inits=["wait-db"],
+               statuses=[_cs("app", running=True)],
+               init_statuses=[_cs("wait-db", terminated="Completed", exit_code=0, restarts=3)])
+    assert analyze._pick_container(pod, prefer_failing=True) == "app"
+    # 일반 컨테이너가 재시작 중이면 그쪽을 고른다
+    pod2 = _pod(["app"], inits=["wait-db"],
+                statuses=[_cs("app", running=True, restarts=2)],
+                init_statuses=[_cs("wait-db", terminated="Completed", exit_code=0, restarts=5)])
+    assert analyze._pick_container(pod2, prefer_failing=True) == "app"
 
 
 def test_pick_container_falls_back_to_first():

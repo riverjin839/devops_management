@@ -145,6 +145,68 @@ def test_alert_list_has_more(client, world):
     assert len(last["data"]) == 2 and last["has_more"] is False
 
 
+# ── 키셋 커서 "더 보기" — 페이지 사이 행이 빠져도 누락 없음 ─────────────────
+
+def _walk(client, url, params):
+    ids, cursor, guard = [], None, 0
+    while True:
+        q = {**params, **({"cursor": cursor} if cursor else {})}
+        body = client.get(url, params=q).json()
+        ids += [r["id"] for r in body["data"]]
+        cursor = body.get("next_cursor")
+        assert (cursor is not None) == body["has_more"]
+        guard += 1
+        if not cursor or guard > 20:
+            return ids
+
+
+def test_event_cursor_pages_cover_all_rows(client, world):
+    ids = _walk(client, "/api/v1/events/", {"cluster_id": str(world["open"].id), "limit": 4})
+    assert len(ids) == 9 and len(set(ids)) == 9
+
+
+def test_event_cursor_does_not_skip_when_rows_leave(client, world, db):
+    p = {"cluster_id": str(world["open"].id), "limit": 4}
+    first = client.get("/api/v1/events/", params=p).json()
+    # 1페이지를 본 뒤 그 페이지의 행 2개가 사라진다(정리·삭제) — offset 4 였다면 2개를 건너뛴다
+    gone = [first["data"][0]["id"], first["data"][1]["id"]]
+    db.query(K8sEvent).filter(K8sEvent.id.in_([uuid.UUID(g) for g in gone])).delete(synchronize_session=False)
+    db.commit()
+    rest = _walk(client, "/api/v1/events/", {**p, "cursor": first["next_cursor"]}) if first["next_cursor"] else []
+    seen = [e["id"] for e in first["data"]] + rest
+    assert len(set(seen)) == 9  # 처음 9건이 모두 한 번씩 보인다(삭제된 2건은 1페이지에서 이미 봤다)
+    offset_page = client.get("/api/v1/events/", params={**p, "offset": 4}).json()["data"]
+    assert len({e["id"] for e in first["data"]} | {e["id"] for e in offset_page}) < 8  # offset 방식은 누락
+
+
+def test_alert_cursor_does_not_skip_when_rows_resolve(client, world, db):
+    p = {"cluster_id": str(world["open"].id), "status": "firing", "limit": 2}
+    first = client.get("/api/v1/observability/alerts", params=p).json()
+    assert first["total"] == 5 and first["next_cursor"]
+    db.query(AlertEvent).filter(AlertEvent.id == uuid.UUID(first["data"][0]["id"])).update(
+        {"status": "resolved"}, synchronize_session=False)
+    db.commit()
+    rest = _walk(client, "/api/v1/observability/alerts", {**p, "cursor": first["next_cursor"]})
+    assert len(set([a["id"] for a in first["data"]] + rest)) == 5
+
+
+def test_cursor_same_timestamp_boundary(client, world, db):
+    # 같은 received_at 행이 페이지 경계에 걸려도 겹치거나 빠지지 않는다(id 보조키)
+    ts = datetime.utcnow() + timedelta(hours=1)
+    for i in range(5):
+        db.add(K8sEvent(cluster_id=world["open"].id, event_type="ADDED", resource_kind="Pod",
+                        resource_name=f"same-{i}", severity="info", received_at=ts))
+    db.commit()
+    ids = _walk(client, "/api/v1/events/", {"cluster_id": str(world["open"].id), "limit": 3})
+    assert len(ids) == 14 and len(set(ids)) == 14
+
+
+@pytest.mark.parametrize("bad", ["nope", "2026-10-18T00:00:00|not-a-uuid", "|"])
+def test_invalid_cursor_is_422(client, world, bad):
+    assert client.get("/api/v1/events/", params={"cursor": bad}).status_code == 422
+    assert client.get("/api/v1/observability/alerts", params={"cursor": bad}).status_code == 422
+
+
 # ── 해소 수신은 occurrences 를 올리지 않는다 ─────────────────────────────────
 
 def test_resolved_receipt_does_not_increment_occurrences(db, world):

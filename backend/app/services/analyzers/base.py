@@ -40,28 +40,39 @@ _CONFIDENCE_WORDS = {
 _CONFIDENCE_UNKNOWN = 0.5
 
 
+def _unit(x: float) -> float:
+    """0~1 로 자른다. NaN·±inf 는 0.0 — 해석 불가 값을 최고 신뢰도로 올리지 않는다."""
+    if not math.isfinite(x):
+        return 0.0
+    return max(0.0, min(1.0, x))
+
+
 def clamp_confidence(value: Any) -> float:
     """confidence 를 0.0~1.0 으로 강제한다.
 
     프롬프트는 0.0~1.0 을 요구하지만 LLM 이 다른 척도로 답하는 경우를 받아 준다:
-    ``1 < x <= 10`` 은 1~10 척도(/10), ``10 < x <= 100`` 은 퍼센트(/100),
-    ``"85%"`` 는 퍼센트, ``"8/10"`` 은 분수, ``"high"`` 같은 단어는 고정값으로 바꾼다.
-    해석 불가(None·알 수 없는 문자열)는 중립값 0.5, NaN·음수는 0.0.
+    1 보다 큰 숫자는 퍼센트(/100), ``"85%"`` 는 퍼센트, ``"8/10"`` 은 분수, ``"high"`` 같은
+    단어는 고정값으로 바꾼다. 1~10 의 맨 숫자는 10점 척도인지 퍼센트인지 모호하므로 **낮게 읽는
+    쪽(퍼센트)** 을 택한다 — 5%를 50%로 부풀려 신뢰도를 과대 표시하지 않기 위해서다.
+    10점 척도는 ``"8/10"`` 처럼 분모가 있을 때만 인정한다.
+    해석 불가(None·bool·알 수 없는 문자열)는 중립값 0.5, NaN·±inf·음수는 0.0.
     """
     x: float
+    if isinstance(value, bool):
+        return _CONFIDENCE_UNKNOWN
     if isinstance(value, str):
         text = value.strip().lower()
         if text in _CONFIDENCE_WORDS:
             return _CONFIDENCE_WORDS[text]
         try:
             if text.endswith("%"):
-                return max(0.0, min(1.0, float(text[:-1]) / 100.0))
+                return _unit(float(text[:-1]) / 100.0)
             if "/" in text:
                 num, _, den = text.partition("/")
                 d = float(den)
-                if d <= 0:
+                if not math.isfinite(d) or d <= 0:
                     return _CONFIDENCE_UNKNOWN
-                return max(0.0, min(1.0, float(num) / d))
+                return _unit(float(num) / d)
             x = float(text)
         except ValueError:
             return _CONFIDENCE_UNKNOWN
@@ -70,13 +81,9 @@ def clamp_confidence(value: Any) -> float:
             x = float(value)
         except (TypeError, ValueError):
             return _CONFIDENCE_UNKNOWN
-    if math.isnan(x):
-        return 0.0
-    if 1.0 < x <= 10.0:
-        x = x / 10.0
-    elif 10.0 < x <= 100.0:
+    if math.isfinite(x) and x > 1.0:
         x = x / 100.0
-    return max(0.0, min(1.0, x))
+    return _unit(x)
 
 
 def _str_list(value: Any) -> list[str]:

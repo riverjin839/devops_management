@@ -229,3 +229,29 @@ def test_task_runs_analyzer_in_cluster_owner_tenant_context(db, monkeypatch):
         db.query(Tenant).filter(Tenant.id == tenant.id).delete(synchronize_session=False)
         db.query(Cluster).filter(Cluster.id == cluster.id).delete(synchronize_session=False)
         db.commit()
+
+
+def test_task_owner_tenant_db_error_rolls_back_and_still_saves(db, monkeypatch):
+    """소유 테넌트 조회가 SQL 오류로 실패해도 세션을 되돌리고 전역 설정으로 분석·저장한다.
+
+    rollback 이 없으면 aborted 트랜잭션 때문에 결과 commit 이 실패해 분석 행이 running 에 고착된다.
+    """
+    from sqlalchemy import text
+
+    import app.services.tenant_concurrency as tc
+
+    def _broken_owner_tenant(dbb, cluster_id):
+        dbb.execute(text("SELECT * FROM no_such_table_for_test"))  # 세션을 aborted 상태로 만든다
+
+    monkeypatch.setattr(tc, "owner_tenant", _broken_owner_tenant)
+    monkeypatch.setattr(factory_module, "get_analyzer", lambda dbb=None: _FakeAnalyzer())
+    event = _make_alert(db)
+
+    result = run_auto_incident_analysis(str(event.id), rule_id="r1")
+    assert result["status"] == "done"
+
+    db.expire_all()
+    row = db.query(IncidentAnalysis).filter(IncidentAnalysis.alert_event_id == event.id).first()
+    assert row is not None and row.status == "done"
+    fresh = db.query(AlertEvent).filter(AlertEvent.id == event.id).first()
+    assert fresh.analysis_status == "done"

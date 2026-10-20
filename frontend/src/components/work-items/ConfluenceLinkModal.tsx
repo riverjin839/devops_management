@@ -102,24 +102,24 @@ export function ConfluenceLinkModal({ open, onClose }: ConfluenceLinkModalProps)
     await runLogged(runLog, {
       title: 'Confluence 가져오기',
       first: `선택한 문서 ${targets.length}건을 업무로 가져오기 시작`,
-      fn: async () => {
+      fn: async (run) => {
         for (const t of targets) {
-          runLog.setStep(t.id, t.title, 'running');
+          run.setStep(t.id, t.title, 'running');
           try {
             const { data } = await linkMut.mutateAsync({ pageId: t.id, title: t.title, url: t.url });
             if (data?.id) {
               imported += 1;
-              runLog.setStep(t.id, '', 'done');
-              runLog.log('info', `${t.title} · 업무 생성 완료${data.title ? ` — ${data.title}` : ''}`);
+              run.setStep(t.id, '', 'done');
+              run.log('info', `${t.title} · 업무 생성 완료${data.title ? ` — ${data.title}` : ''}`);
             } else {
               failed.push(t.title);
-              runLog.setStep(t.id, '', 'failed');
-              runLog.log('error', `${t.title} · 업무 생성 실패 — 응답에 업무 ID 없음`);
+              run.setStep(t.id, '', 'failed');
+              run.log('error', `${t.title} · 업무 생성 실패 — 응답에 업무 ID 없음`);
             }
           } catch (err) {
             failed.push(`${t.title}: ${formatApiError(err)}`);
-            runLog.setStep(t.id, '', 'failed');
-            runLog.log('error', `${t.title} · 업무 생성 실패 — ${formatApiError(err)}`);
+            run.setStep(t.id, '', 'failed');
+            run.log('error', `${t.title} · 업무 생성 실패 — ${formatApiError(err)}`);
           }
         }
       },
