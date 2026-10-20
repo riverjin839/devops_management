@@ -12,7 +12,9 @@ from fastapi.responses import ORJSONResponse
 from sqlalchemy import event, text, inspect, func
 
 from app.config import settings
-from app.services import system_error_logger
+import time as _time_mod
+
+from app.services import boot_state, pod_heartbeat, system_error_logger
 from app.services.request_context import (
     HEADER as REQUEST_ID_HEADER, get_request_id, install_logging, new_request_id,
 )
@@ -72,6 +74,7 @@ from app.routers import (
     auth_oidc_router,
     audit_logs_router,
     system_errors_router,
+    system_diagnostics_router,
     check_results_router,
     check_ingest_router,
     check_definitions_router,
@@ -2388,9 +2391,14 @@ async def lifespan(app: FastAPI):
     # §config.py sync_threadpool_size 주석 참고.
     current_default_thread_limiter().total_tokens = settings.sync_threadpool_size
 
+    boot_state.begin()
+    boot_state.pending_ddl_provider = lambda: list(_pending_ddl)
+    _t = _time_mod.monotonic()
     try:
         _ensure_pgvector_extension()
+        boot_state.record_step("pgvector", _t)
     except Exception as e:  # noqa: BLE001
+        boot_state.record_step("pgvector", _t, e)
         _startup_log.exception("pgvector extension step failed — continuing: %s", e)
 
     # 멀티 replica(backend HPA, celery worker/beat 이미지 공용) 가 동시에 부팅하며
@@ -2416,12 +2424,14 @@ async def lifespan(app: FastAPI):
             if _locked or _time.monotonic() >= _deadline:
                 break
             _time.sleep(2)
+        boot_state.set_advisory_lock("acquired" if _locked else "timeout")
         if not _locked:
             _startup_log.warning(
                 "startup migration lock 을 %ss 안에 못 잡음 — 다른 replica 가 마이그레이션 중, 락 없이 진행",
                 settings.migration_advisory_wait_seconds,
             )
     except Exception as e:  # noqa: BLE001
+        boot_state.set_advisory_lock("failed")
         _startup_log.warning("startup migration lock 획득 실패(%s) — 락 없이 진행", e)
         if _lock_conn is not None:
             try:
@@ -2432,7 +2442,9 @@ async def lifespan(app: FastAPI):
 
     _migration_phase["active"] = True
     try:
+        _t = _time_mod.monotonic()
         _create_all_with_retry()
+        boot_state.record_step("create_all", _t, None if "create_all" not in _pending_ddl else RuntimeError("lock 경합으로 미룸"))
         for step_name, step in [
             ("migrations", _run_migrations),
             ("sync_missing_model_columns", _sync_missing_model_columns),
@@ -2458,9 +2470,12 @@ async def lifespan(app: FastAPI):
             ("seed_initial_admin", _seed_initial_admin),
             ("migrate_assignee_roster_to_users", _migrate_assignee_roster_to_users),
         ]:
+            _t = _time_mod.monotonic()
             try:
                 step()
+                boot_state.record_step(step_name, _t)
             except Exception as e:  # noqa: BLE001
+                boot_state.record_step(step_name, _t, e)
                 _startup_log.exception("startup step '%s' failed — continuing: %s", step_name, e)
     finally:
         _migration_phase["active"] = False
@@ -2479,6 +2494,9 @@ async def lifespan(app: FastAPI):
             len(_pending_ddl), ", ".join(_pending_ddl),
         )
         threading.Thread(target=_retry_pending_ddl_forever, name="pending-ddl", daemon=True).start()
+    boot_state.finish()
+    # 이 파드의 버전·부팅 결과·메모리를 Redis 에 주기적으로 알린다 — 시스템 진단이 전 파드를 한눈에 본다.
+    pod_heartbeat.start(app.version)
     yield
     # Shutdown: 필요한 정리 작업
 
@@ -2624,6 +2642,7 @@ app.include_router(check_definitions_router, prefix="/api/v1", dependencies=_aut
 app.include_router(notifications_router, prefix="/api/v1", dependencies=_auth)
 app.include_router(audit_logs_router, prefix="/api/v1", dependencies=_auth)
 app.include_router(system_errors_router, prefix="/api/v1", dependencies=_auth)
+app.include_router(system_diagnostics_router, prefix="/api/v1", dependencies=_auth)
 # lake-service-monitoring (신규 PDCA) — LAKE OSS 서비스 모니터링.
 app.include_router(lake_services_router, prefix="/api/v1", dependencies=_auth)
 # pod-bottleneck-analyzer (신규 PDCA) — pod-to-pod 병목 진단 (4-Probe Strategy).
