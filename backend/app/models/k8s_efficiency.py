@@ -7,6 +7,8 @@
 - K8sNamespacePolicy: NS 별 자동화 opt-in(자동 right-size / ResourceQuota 탄력 / CR 어댑터).
 - K8sEfficiencyRun: 수집·적용·롤백·쿼터 조정 실행 로그(steps + log_lines 를 단계마다 커밋해
   프론트가 폴링으로 실시간 표시).
+- K8sNsDailyReport: 일일 리포트용 NS 일 단위 롤업(샘플 → 하루 1행). 공개 일일 리포트 화면이
+  과거 날짜를 원본 샘플 대신 이 테이블에서 읽는다. 보관 일수는 AppSetting `daily_report.settings`.
 """
 from __future__ import annotations
 
@@ -14,7 +16,7 @@ import uuid
 from datetime import datetime
 
 from sqlalchemy import (
-    BigInteger, Boolean, Column, DateTime, ForeignKey, Index, Integer, String, Text,
+    BigInteger, Boolean, Column, Date, DateTime, Float, ForeignKey, Index, Integer, String, Text,
     UniqueConstraint,
 )
 from sqlalchemy.dialects.postgresql import JSONB, UUID
@@ -182,4 +184,47 @@ class K8sEfficiencyRun(Base):
     __table_args__ = (
         Index("ix_k8s_eff_runs_cluster_queued", "cluster_id", "queued_at"),
         Index("ix_k8s_eff_runs_queued", "queued_at"),
+    )
+
+
+class K8sNsDailyReport(Base):
+    """NS 일 단위 롤업 — (cluster, report_date, namespace) 당 1행.
+
+    request/limit 은 당일 샘플 평균, 사용량은 평균/최소/최대, 사용률(use/request)도 샘플별
+    비율의 평균/최소/최대. GPU 는 수집 경로가 아직 없어 nullable 로 자리만 잡아 둔다(예정).
+    """
+    __tablename__ = "k8s_ns_daily_reports"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    cluster_id = Column(UUID(as_uuid=True), ForeignKey("clusters.id", ondelete="CASCADE"), nullable=False, index=True)
+    report_date = Column(Date, nullable=False)
+    namespace = Column(String(253), nullable=False)
+    samples = Column(Integer, nullable=False, default=0)
+    usage_samples = Column(Integer, nullable=False, default=0)
+    pod_avg = Column(Float, nullable=True)
+    cpu_req_m = Column(BigInteger, nullable=False, default=0)
+    cpu_lim_m = Column(BigInteger, nullable=False, default=0)
+    mem_req_b = Column(BigInteger, nullable=False, default=0)
+    mem_lim_b = Column(BigInteger, nullable=False, default=0)
+    cpu_use_avg_m = Column(BigInteger, nullable=True)
+    cpu_use_min_m = Column(BigInteger, nullable=True)
+    cpu_use_max_m = Column(BigInteger, nullable=True)
+    mem_use_avg_b = Column(BigInteger, nullable=True)
+    mem_use_min_b = Column(BigInteger, nullable=True)
+    mem_use_max_b = Column(BigInteger, nullable=True)
+    cpu_rate_avg = Column(Float, nullable=True)     # use/request (0.0~)
+    cpu_rate_min = Column(Float, nullable=True)
+    cpu_rate_max = Column(Float, nullable=True)
+    mem_rate_avg = Column(Float, nullable=True)
+    mem_rate_min = Column(Float, nullable=True)
+    mem_rate_max = Column(Float, nullable=True)
+    gpu_req = Column(Float, nullable=True)          # 예정 — GPU request/limit 수집 경로 추가 시 채운다
+    gpu_lim = Column(Float, nullable=True)
+    computed_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+
+    cluster = relationship("Cluster", backref=backref("k8s_ns_daily_reports", passive_deletes=True))
+
+    __table_args__ = (
+        UniqueConstraint("cluster_id", "report_date", "namespace", name="uq_k8s_ns_daily_report"),
+        Index("ix_k8s_ns_daily_reports_date", "report_date"),
     )

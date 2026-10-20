@@ -119,6 +119,18 @@ celery_app.conf.beat_schedule = {
         "task": "app.celery_app.dispatch_k8s_alloc_rolling",
         "schedule": crontab(minute="*"),
     },
+    # 일일 리포트 NS 롤업 — 전날(+재보정용 그 전날) 샘플을 NS 일 단위로 롤업하고
+    # 보관 일수(AppSetting `daily_report.settings.retention_days`) 밖 롤업을 정리. 00:20 KST.
+    "daily-report-rollup": {
+        "task": "app.celery_app.run_daily_report_rollup",
+        "schedule": crontab(hour=0, minute=20),
+    },
+    # 외부 서비스(도메인·IP:Port) 정기 수집 — AppSetting `external_services.settings.schedule_cron`
+    # (기본 매시)을 매분 평가해 due 한 클러스터만 수집(역조회는 backend PTR + 기존 SSH 캐시 유지).
+    "external-services-dispatcher": {
+        "task": "app.celery_app.dispatch_external_services_collect",
+        "schedule": crontab(minute="*"),
+    },
 }
 
 
@@ -1097,6 +1109,93 @@ def run_log_tables_purge(self):
         return log_retention_service.purge_all(db)
     except Exception as e:  # noqa: BLE001
         logging.getLogger(__name__).exception("run_log_tables_purge failed: %s", e)
+        return {"error": str(e)[:200]}
+    finally:
+        db.close()
+
+
+@celery_app.task(bind=True, name="app.celery_app.run_daily_report_rollup", time_limit=900, ignore_result=True)
+def run_daily_report_rollup(self, days: int = 2):
+    """일일 리포트 NS 롤업 — 어제부터 `days` 일치(늦게 도착한 샘플 보정) 재계산 + 보관기간 밖 정리."""
+    import logging
+    from app.database import SessionLocal
+    from app.services.k8s_efficiency import daily_report
+
+    db = SessionLocal()
+    try:
+        return daily_report.rollup_recent(db, days=days)
+    except Exception as e:  # noqa: BLE001
+        logging.getLogger(__name__).exception("run_daily_report_rollup failed: %s", e)
+        return {"error": str(e)[:200]}
+    finally:
+        db.close()
+
+
+@celery_app.task(bind=True, name="app.celery_app.dispatch_external_services_collect", ignore_result=True)
+def dispatch_external_services_collect(self):
+    """외부 서비스 정기 수집 디스패처 — 설정 cron 을 클러스터별 마지막 수집 시각 기준으로 평가해 팬아웃."""
+    import logging
+    from datetime import datetime, timedelta, timezone as _tz
+    from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
+
+    from app.config import settings
+    from app.database import SessionLocal
+    from app.models import Cluster
+    from app.models.external_service import ExternalServiceSnapshot
+    from app.services import external_services as es
+
+    try:
+        from croniter import croniter
+    except ImportError:
+        return {"dispatched": [], "reason": "croniter_missing"}
+    try:
+        tz = ZoneInfo(settings.batch_jobs_timezone)
+    except (ZoneInfoNotFoundError, ValueError, OSError):
+        tz = ZoneInfo("Asia/Seoul")
+
+    db = SessionLocal()
+    fired: list[str] = []
+    try:
+        cfg = es.get_settings(db)
+        cron_expr = cfg["schedule_cron"]
+        if not cfg["schedule_enabled"] or not croniter.is_valid(cron_expr):
+            return {"dispatched": [], "reason": "disabled"}
+        now_naive = datetime.now(_tz.utc).astimezone(tz).replace(tzinfo=None)
+        last_by = {s.cluster_id: s.collected_at for s in db.query(ExternalServiceSnapshot).all()}
+        for cluster in db.query(Cluster).all():
+            last = last_by.get(cluster.id)
+            anchor = (last.replace(tzinfo=_tz.utc).astimezone(tz).replace(tzinfo=None) if last
+                      else now_naive - timedelta(days=1))
+            if croniter(cron_expr, anchor).get_next(datetime) > now_naive:
+                continue
+            collect_external_services_one.apply_async(args=[str(cluster.id)], countdown=_dispatch_jitter())
+            fired.append(cluster.name)
+        return {"dispatched": fired}
+    except Exception as e:  # noqa: BLE001
+        logging.getLogger(__name__).exception("dispatch_external_services_collect failed: %s", e)
+        return {"error": str(e)[:200]}
+    finally:
+        db.close()
+
+
+@celery_app.task(bind=True, name="app.celery_app.collect_external_services_one", time_limit=600,
+                 soft_time_limit=540, ignore_result=True)
+def collect_external_services_one(self, cluster_id: str):
+    """단일 클러스터 외부 서비스 정기 수집(자격증명 없음 — backend PTR 역조회)."""
+    import logging
+    from app.database import SessionLocal
+    from app.models import Cluster
+    from app.services import external_services as es
+
+    db = SessionLocal()
+    try:
+        cluster = db.query(Cluster).filter(Cluster.id == cluster_id).first()
+        if cluster is None:
+            return {"error": "cluster not found"}
+        return es.collect(db, cluster, resolver="backend", actor="schedule")
+    except Exception as e:  # noqa: BLE001
+        db.rollback()
+        logging.getLogger(__name__).exception("collect_external_services_one failed %s: %s", cluster_id, e)
         return {"error": str(e)[:200]}
     finally:
         db.close()

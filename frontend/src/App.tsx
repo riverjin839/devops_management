@@ -72,6 +72,8 @@ import { HomePage } from '@/pages/HomePage';
 import { IslandPage } from '@/pages/IslandPage';
 import { ChangePasswordPage } from '@/pages/ChangePasswordPage';
 import { OidcCallbackPage } from '@/pages/OidcCallbackPage';
+import { DailyReportPage } from '@/pages/DailyReportPage';
+import { ExternalServicesPage } from '@/pages/ExternalServicesPage';
 import { AgentChat } from '@/components/agent';
 import { Sidebar, PageStyleProvider } from '@/components/layout';
 import { ToastProvider } from '@/components/common';
@@ -302,14 +304,30 @@ function AuthedRoot() {
   );
 }
 
+/** 로그인 없이 여는 공개 화면 — AuthGate 바깥에서 분기한다(사이드바·셸 없음).
+ *  데이터도 비인증 공개 API(`/public/...`)만 쓴다. 화면 간 링크는 `components/public-pages`. */
+const PUBLIC_ROUTES: Record<string, () => JSX.Element> = {
+  '/daily-report': DailyReportPage,
+  '/external-services': ExternalServicesPage,
+};
+
+function PublicOrAuthed() {
+  const location = useLocation();
+  const PublicPage = PUBLIC_ROUTES[location.pathname];
+  if (PublicPage) return <PublicPage />;
+  return (
+    <AuthGate>
+      <AuthedRoot />
+    </AuthGate>
+  );
+}
+
 function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <ToastProvider>
         <BrowserRouter>
-          <AuthGate>
-            <AuthedRoot />
-          </AuthGate>
+          <PublicOrAuthed />
         </BrowserRouter>
       </ToastProvider>
     </QueryClientProvider>
