@@ -100,7 +100,7 @@ devops_management/
 ├── scripts/             # kind-setup.sh, deploy-airgap.sh, init-cluster.sh,
 │                        #   release/{bump_version,decide_bump,changelog_sections,check_changelog_sections}.py,
 │                        #   docs/check_docs_sync.py, report/(AI 개발 리포트 집계·HTML 빌드),
-│                        #   a11y/(axe 접근성 스캔)
+│                        #   a11y/(axe 접근성 스캔), ui/check_dialogs.py(모달 어댑터 검사 — CI)
 ├── ansible/playbooks/  argocd/  docker/ vagrant/ windows-docker/
 ├── docs/                # 인덱스는 docs/README.md (01-plan/ 02-design/ 03-analysis/
 │                        #   archive/ superpowers/ 하위 폴더 포함)
@@ -136,6 +136,7 @@ devops_management/
 cd frontend && npm run lint && npx tsc --noEmit && npm run build   # lint 는 --max-warnings 0
 cd backend  && pytest -v                                           # 실행 중인 PostgreSQL 필요
 python3 scripts/docs/check_docs_sync.py                            # 문서 동기화 검사
+python3 scripts/ui/check_dialogs.py                                # 모달 어댑터 검사(R-2)
 ```
 
 - 로컬 DB 를 따로 쓰려면 `DATABASE_URL=postgresql://postgres:postgres@localhost:5432/k8s_monitor_test pytest -v`.
@@ -419,9 +420,10 @@ Makefile 타깃(`make k8s-dev`, `make docker-rebuild` 등)은 `make help` 로 �
 
 워크플로 정의는 `.github/workflows/` 가 원천이다. 작업 시 알아야 할 것만:
 
-- **CI (`ci.yml`, push/PR → `main`·`develop`)**: frontend lint → `tsc --noEmit` → build,
+- **CI (`ci.yml`, push/PR → `main`·`develop`)**: frontend lint → `tsc --noEmit` → 모달 어댑터 검사(`scripts/ui/check_dialogs.py`) → build,
   backend `pytest`(PostgreSQL·Redis 서비스 컨테이너 필요), 그리고 `docs-sync` job.
   머지 전 로컬 게이트는 §Development & Tests 와 동일하다 — **CI 에서 처음 확인하지 말 것.**
+- **A11y scan (`a11y.yml`, 수동 실행)**: Postgres·Redis·백엔드·vite 를 띄워 `scripts/a11y/axe_scan.py` 로 20 라우트 × 선택 테마를 axe(WCAG 2.1 A/AA) 검사하고 `--fail-on`(기본 serious) 이상이면 실패한다. 결과는 job summary + `a11y-report` 아티팩트. PR 게이트가 아니다.
 - **CD (`cd.yml`, push → `main`)**: GHCR 이미지 빌드 → `kustomize edit set image` 로 SHA 핀 →
   apply → rollout status. 배포는 **SHA 태그로만** 고정한다(`latest` 금지).
 - **AI 개발 리포트 (`ai-dev-report.yml`, 매월 1일 + 수동 실행)**: `scripts/report/` 로 git 이력을 다시 집계해

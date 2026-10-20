@@ -1,0 +1,113 @@
+name: A11y scan
+
+# R-3 접근성 상시화 — axe-core(WCAG 2.1 A/AA) 스캔을 실제 앱(백엔드 + vite)을 띄워 돌린다.
+# PR 마다 돌리기엔 무거워(서비스 기동 + 라우트 × 테마) 수동 실행만 둔다. 결과는 아티팩트(summary.md·json).
+# 로컬 실행 방법·옵션은 scripts/a11y/axe_scan.py docstring.
+on:
+  workflow_dispatch:
+    inputs:
+      themes:
+        description: '쉼표 구분 테마 (전체 16종: light,dark,comfort,high-contrast,umber,umber-light,plaster,journal,relief,harlequin,ozenfant,whanki,picasso-girl,picasso-portrait,picasso-violin,gris-guitar)'
+        default: 'light,dark'
+        required: true
+      fail_on:
+        description: '이 영향도 이상 위반이 있으면 실패 (none|minor|moderate|serious|critical)'
+        default: 'serious'
+        required: true
+
+permissions:
+  contents: read
+
+jobs:
+  axe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+
+    services:
+      postgres:
+        # pgvector 가 있어야 embedding 컬럼 테이블이 생성된다(ci.yml backend job 과 동일).
+        image: pgvector/pgvector:pg15
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: k8s_monitor_a11y
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+      redis:
+        image: redis:7
+        ports:
+          - 6379:6379
+
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/k8s_monitor_a11y
+      REDIS_URL: redis://localhost:6379/0
+      # 스캔 전용 일회성 키 — 이 job 의 컨테이너 안에서만 쓰인다.
+      SECRET_KEY: a11y-scan-only-secret-key-not-for-deploy
+      ANALYZER_BACKEND: rule_based
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install backend + scanner deps
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r backend/requirements.txt
+          pip install "playwright==1.44.0"
+          python -m playwright install --with-deps chromium
+
+      - name: Install frontend deps
+        working-directory: frontend
+        run: npm ci
+
+      - name: Start backend
+        working-directory: backend
+        run: |
+          nohup uvicorn app.main:app --host 127.0.0.1 --port 8000 > /tmp/backend.log 2>&1 &
+          for i in $(seq 1 60); do curl -sf http://127.0.0.1:8000/health/ready && break; sleep 2; done
+          curl -sf http://127.0.0.1:8000/health/ready || (cat /tmp/backend.log; exit 1)
+
+      - name: Start frontend (vite dev, /api → :8000 proxy)
+        working-directory: frontend
+        run: |
+          nohup npx vite --port 5173 --strictPort > /tmp/vite.log 2>&1 &
+          for i in $(seq 1 60); do curl -sf http://127.0.0.1:5173 >/dev/null && break; sleep 2; done
+          curl -sf http://127.0.0.1:5173 >/dev/null || (cat /tmp/vite.log; exit 1)
+
+      - name: axe scan
+        env:
+          THEMES: ${{ inputs.themes }}
+          FAIL_ON: ${{ inputs.fail_on }}
+        run: |
+          python scripts/a11y/axe_scan.py --out a11y-report --themes "$THEMES" --fail-on "$FAIL_ON"
+
+      - name: Job summary
+        if: always()
+        run: |
+          if [ -f a11y-report/summary.md ]; then cat a11y-report/summary.md >> "$GITHUB_STEP_SUMMARY"; fi
+
+      - name: Upload report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: a11y-report
+          path: |
+            a11y-report/
+            /tmp/backend.log
+            /tmp/vite.log
+          if-no-files-found: warn
