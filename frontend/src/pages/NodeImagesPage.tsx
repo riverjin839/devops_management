@@ -1,27 +1,28 @@
 import { useMemo, useRef, useState } from 'react';
-import { Boxes, Search, AlertTriangle, LayoutList, LayoutGrid, Layers } from 'lucide-react';
+import { Boxes, Search, LayoutList, LayoutGrid, Layers } from 'lucide-react';
 import { useClusters } from '@/hooks/useCluster';
 import { useNodeImageList } from '@/hooks/useNodeImages';
 import { NodeImagesTable, NodeLabelGroupView, ImageCentricView, NodeImagesCsvExportMenu, ImageDistributeDialog } from '@/components/node-images';
-import { ClusterSidebar, SnapshotProgressCard, ExportMenu, SelectClusterEmptyState, LoadingState, EmptyState, PageShell } from '@/components/common';
+import { ClusterSidebar, SnapshotProgressCard, ExportMenu, SelectClusterEmptyState, LoadingState, ErrorState, PageShell } from '@/components/common';
 import { PageHeader } from '@/components/common/PageHeader';
 import { StatTile, StatTileRow } from '@/components/common/StatTile';
-import { formatApiError } from '@/lib/utils';
-
-function extractErrorMessage(error: unknown): string {
-  return formatApiError(error, '알 수 없는 오류가 발생했습니다.');
-}
 
 type ViewMode = 'node-table' | 'label-group' | 'image-centric';
 
 const TABS: { id: ViewMode; label: string; icon: typeof LayoutList; tip: string }[] = [
-  { id: 'node-table',    label: '노드별 (Table)',  icon: LayoutList,  tip: '노드 단위 표 — 펼치면 그 노드의 이미지 목록' },
-  { id: 'label-group',   label: '라벨 그룹 (Card)', icon: LayoutGrid,  tip: '노드를 라벨/role 기준으로 묶어 카드로 표시' },
+  { id: 'node-table',    label: '노드별 표',       icon: LayoutList,  tip: '노드 단위 표 — 펼치면 그 노드의 이미지 목록' },
+  { id: 'label-group',   label: '라벨 그룹', icon: LayoutGrid,  tip: '노드를 라벨/role 기준으로 묶어 카드로 표시' },
   { id: 'image-centric', label: '이미지별',         icon: Layers,      tip: '이미지 기준 집계 — 어떤 이미지가 어느 노드에 적재됐는지' },
 ];
 
 export function NodeImagesPage() {
-  const { data: clusters = [], isLoading: clustersLoading } = useClusters();
+  const {
+    data: clusters = [],
+    isLoading: clustersLoading,
+    isError: clustersError,
+    error: clustersErrorObj,
+    refetch: refetchClusters,
+  } = useClusters();
 
   const [selectedClusterId, setSelectedClusterId] = useState<string>('');
   const [searchQuery, setSearchQuery] = useState('');
@@ -35,6 +36,7 @@ export function NodeImagesPage() {
     isLoading: nodesLoading,
     isError: nodesError,
     error: nodesErrorDetail,
+    refetch: refetchNodes,
   } = useNodeImageList(activeClusterId);
   const nodes = useMemo(() => result?.nodes ?? [], [result]);
   // 백그라운드 집계 중이고 아직 보여줄 데이터가 없으면 진행률 화면을 띄운다.
@@ -77,7 +79,7 @@ export function NodeImagesPage() {
             className="mb-6"
             icon={Boxes}
             title="K8s 노드 이미지"
-            titleExtra={activeClusterName !== '-' ? (
+            titleExtra={activeClusterId ? (
               <span className="text-sm text-muted-foreground">
                 — <span className="font-medium text-foreground">{activeClusterName}</span>
               </span>
@@ -106,7 +108,8 @@ export function NodeImagesPage() {
                 type="text"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="노드명 또는 이미지명 검색..."
+                placeholder="노드명 또는 이미지명 검색…"
+                aria-label="노드명·이미지명 검색"
                 className="w-full pl-9 pr-3 py-2 bg-card border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
               />
             </div>
@@ -121,6 +124,7 @@ export function NodeImagesPage() {
                     type="button"
                     onClick={() => setView(t.id)}
                     title={t.tip}
+                    aria-pressed={active}
                     className={`flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-md transition-colors ${
                       active ? 'bg-primary/10 text-primary' : 'text-muted-foreground hover:text-foreground'
                     }`}
@@ -140,6 +144,8 @@ export function NodeImagesPage() {
 
           {isLoading ? (
             <LoadingState />
+          ) : clustersError ? (
+            <ErrorState error={clustersErrorObj} title="클러스터 목록을 불러오지 못했습니다" onRetry={() => { void refetchClusters(); }} />
           ) : computing ? (
             <SnapshotProgressCard
               processed={result?.processed ?? 0}
@@ -151,10 +157,10 @@ export function NodeImagesPage() {
           ) : !activeClusterId ? (
             <SelectClusterEmptyState />
           ) : nodesError ? (
-            <EmptyState
-              icon={AlertTriangle}
-              title="노드 이미지 정보를 불러올 수 없습니다."
-              description={`${extractErrorMessage(nodesErrorDetail)} — 클러스터의 kubeconfig 경로와 API Endpoint 설정을 확인하세요.`}
+            <ErrorState
+              error={nodesErrorDetail}
+              title="노드 이미지 정보를 불러오지 못했습니다 — 클러스터의 kubeconfig·API 엔드포인트를 확인하세요"
+              onRetry={() => { void refetchNodes(); }}
             />
           ) : view === 'node-table' ? (
             <NodeImagesTable nodes={nodes} searchQuery={searchQuery} onDistribute={setDistributeImage} />
@@ -180,7 +186,7 @@ export function NodeImagesPage() {
 }
 
 function formatTotalSize(n: number): string {
-  if (!n || n <= 0) return '-';
+  if (!n || n <= 0) return '—';
   const units = ['B', 'KB', 'MB', 'GB', 'TB'];
   let i = 0;
   let v = n;

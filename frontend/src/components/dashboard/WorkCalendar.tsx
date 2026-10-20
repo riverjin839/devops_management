@@ -226,7 +226,7 @@ export function WorkCalendar({ selectedClusterId }: WorkCalendarProps) {
               <div
                 key={w}
                 className={`text-center py-1.5 font-semibold ${
-                  i === 0 ? 'text-chart-5' : i === 6 ? 'text-chart-6' : ''
+                  i === 0 ? 'text-chart-5-text' : i === 6 ? 'text-chart-6-text' : ''
                 }`}
               >
                 {w}
@@ -263,9 +263,9 @@ export function WorkCalendar({ selectedClusterId }: WorkCalendarProps) {
               const dayNumberClr = isToday
                 ? 'text-primary'
                 : dow === 0
-                ? 'text-chart-5'
+                ? 'text-chart-5-text'
                 : dow === 6
-                ? 'text-chart-6'
+                ? 'text-chart-6-text'
                 : 'text-foreground/85';
 
               return (

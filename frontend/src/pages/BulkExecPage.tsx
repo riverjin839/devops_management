@@ -9,7 +9,8 @@ import { useClusters } from '@/hooks/useCluster';
 import { useTerminalEnvSync } from '@/hooks/useTerminalEnvSync';
 import { useRunLog, runLogged, consoleRunLines, type RunLogEntry } from '@/hooks/useRunLog';
 import { useLogPref } from '@/hooks/useLogPref';
-import { ConfirmDialog, ExecOutputTabs, ClusterSidebar, CommandTraceList, DebugLogPanel, Skeleton, EmptyState, SelectClusterEmptyState, ResizeGrip, DoubleScrollX, PageShell, RunLogPanel } from '@/components/common';
+import { ConfirmDialog, ExecOutputTabs, ClusterSidebar, CommandTraceList, DebugLogPanel, Skeleton, EmptyState, ErrorState, SelectClusterEmptyState, ResizeGrip, DoubleScrollX, PageShell, RunLogPanel } from '@/components/common';
+import { CLUSTER_OPERATE_REQUIRED_HINT, useCanOperate, useMyClusterAccess } from '@/hooks/useCanOperate';
 import { MacCard } from '@/components/ui/MacCard';
 import { PageHeader } from '@/components/common/PageHeader';
 import { ExecutionStepsTimeline } from '@/components/daily-check';
@@ -144,14 +145,15 @@ function copyToClipboard(text: string): Promise<boolean> {
 /** 클러스터 단위로 묶어 노드를 보여주는 collapsible 섹션.
  *  여러 클러스터를 한 화면에서 다룰 때 시각적 구분을 준다. */
 function ClusterNodeGroup({
-  clusterName, nodes, isLoading, isError, errorMsg, onRefetch,
+  clusterName, nodes, isLoading, isError, error, onRefetch,
   selectedCount, isNodeChecked, onToggleNode, onToggleAll,
 }: {
   clusterName: string;
   nodes: NodeSummary[];
   isLoading: boolean;
   isError: boolean;
-  errorMsg?: string;
+  /** 조회 실패 원인 — ErrorState 가 서버 사유(formatApiError)·403 권한 안내로 바꿔 보여 준다. */
+  error?: unknown;
   onRefetch: () => void;
   selectedCount: number;
   isNodeChecked: (name: string) => boolean;
@@ -165,9 +167,11 @@ function ClusterNodeGroup({
     <div className="border-b border-border last:border-b-0">
       <header className="flex items-center gap-2 px-3 py-2 bg-muted/20 sticky top-0 z-[1]">
         <button
+          type="button"
           onClick={() => setOpen((v) => !v)}
-          className="p-0.5 text-muted-foreground hover:text-foreground"
-          aria-label={open ? '접기' : '펼치기'}
+          className="p-0.5 rounded-md text-muted-foreground hover:text-foreground"
+          aria-expanded={open}
+          aria-label={`${clusterName} 노드 ${open ? '접기' : '펼치기'}`}
         >
           {open ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
         </button>
@@ -177,8 +181,10 @@ function ClusterNodeGroup({
           {selectedCount}/{total}
         </span>
         <button
+          type="button"
           onClick={onToggleAll}
           disabled={total === 0}
+          aria-label={`${clusterName} 노드 ${allSelected ? '모두 해제' : '모두 선택'}`}
           className="text-xs text-primary hover:text-primary/80 disabled:opacity-40"
         >
           {allSelected ? '해제' : '모두'}
@@ -197,13 +203,7 @@ function ClusterNodeGroup({
               ))}
             </div>
           ) : isError ? (
-            <div className="px-3 py-2">
-              <p className="text-xs text-status-critical mb-1">노드 조회 실패: {errorMsg ?? '연결 오류'}</p>
-              <button
-                onClick={onRefetch}
-                className="text-xs text-primary hover:text-primary/80 underline"
-              >다시 시도</button>
-            </div>
+            <ErrorState compact error={error} title={`${clusterName} 노드를 불러오지 못했습니다`} onRetry={onRefetch} />
           ) : total === 0 ? (
             <EmptyState compact title="노드가 없습니다." description="이 클러스터에서 조회된 노드가 없습니다. 새로고침해 보세요." />
           ) : (
@@ -265,9 +265,11 @@ function ResultRow({ result, globalFilter }: { result: BulkExecResultItem; globa
       <tr className="border-b border-border hover:bg-muted/20 transition-colors">
         <td className="px-3 py-2 w-7">
           <button
+            type="button"
             onClick={() => setExpanded((v) => !v)}
-            className="p-0.5 text-muted-foreground hover:text-foreground"
-            aria-label={expanded ? '접기' : '펼치기'}
+            className="p-0.5 rounded-md text-muted-foreground hover:text-foreground"
+            aria-expanded={expanded}
+            aria-label={`${primary} 출력 ${expanded ? '접기' : '펼치기'}`}
           >
             {expanded ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
           </button>
@@ -288,7 +290,7 @@ function ResultRow({ result, globalFilter }: { result: BulkExecResultItem; globa
           </span>
         </td>
         <td className="px-3 py-2 text-sm font-mono text-muted-foreground">
-          {result.exitCode === null || result.exitCode === undefined ? '-' : result.exitCode}
+          {result.exitCode === null || result.exitCode === undefined ? '—' : result.exitCode}
         </td>
         <td className="px-3 py-2 text-sm font-mono text-muted-foreground">{result.durationMs}ms</td>
         <td className="px-3 py-2 text-sm text-muted-foreground max-w-[320px] truncate" title={result.error ?? ''}>
@@ -442,7 +444,12 @@ const splitKey = (k: string): { clusterId: string; nodeName: string } => {
 };
 
 export function BulkExecPage() {
-  const { data: clusters = [] } = useClusters();
+  const {
+    data: clusters = [],
+    isError: clustersError,
+    error: clustersErrorObj,
+    refetch: refetchClusters,
+  } = useClusters();
   // 다중 클러스터 선택 — 사이드바에서 체크박스로 고른다
   const [clusterIds, setClusterIds] = useState<string[]>([]);
   const detailColW = useColumnWidths('bulk-exec-detail-table', {
@@ -679,7 +686,7 @@ export function BulkExecPage() {
       : `파일 업로드 ${scpRemotePath} (${new Blob([scpContent]).size} bytes)`;
     const r = await runLogged(runLog, {
       title: action === 'ssh' ? '노드 일괄 SSH 실행' : '노드 일괄 SCP 업로드',
-      first: `${clusterIds.length}개 클러스터 · ${n}개 노드 — ${what} · SSH ${username} 포트 ${port} · ${mode === 'parallel' ? `병렬 ${parallelism}` : '순차'} · chunk ${chunkSize} · timeout ${connectTimeout}/${execTimeout}s 요청`,
+      first: `${clusterIds.length}개 클러스터 · ${n}개 노드 — ${what} · SSH ${username} 포트 ${port} · ${mode === 'parallel' ? `병렬 ${parallelism}` : '순차'} · 묶음 ${chunkSize} · 제한 시간 연결 ${connectTimeout}s/실행 ${execTimeout}s 요청`,
       fn: () => runMutation.mutateAsync(),
       summarize: (res) => consoleRunLines(res.results.map((x) => {
         const label = x.name && x.name !== x.host ? `${x.name}(${x.host})` : x.host;
@@ -714,7 +721,31 @@ export function BulkExecPage() {
     if (!r.ok && r.aborted) setFetchError(null);
   };
 
+  // 권한(§12.9) — 서버는 operator + 대상 노드가 속한 클러스터마다 테넌트 operate 를 요구한다.
+  // 역할은 공통, 바인딩은 클러스터마다 달라 선택 클러스터 중 operate 불가인 것의 이름을 사유에 붙인다.
+  const roleAccess = useCanOperate();
+  const clusterAccess = useMyClusterAccess(roleAccess.canOperate && roleAccess.role !== 'admin');
+  const blockedClusterNames = (ids: string[]) => ids
+    .filter((cid) => {
+      const level = clusterAccess.data?.[cid];
+      return level !== undefined && level !== 'operate';
+    })
+    .map((cid) => clusterMetaById.get(cid)?.name ?? cid);
+  const runTargetClusterIds = selectedHosts.length > 0
+    ? Array.from(new Set(selectedHosts.map((t) => t.clusterId)))
+    : clusterIds;
+  const runBlocked = blockedClusterNames(runTargetClusterIds);
+  const runDeniedHint = !roleAccess.canOperate
+    ? roleAccess.hint
+    : runBlocked.length > 0 ? `${CLUSTER_OPERATE_REQUIRED_HINT}: ${runBlocked.join(', ')}` : undefined;
+  const fetchSourceClusterId = fetchSourceKey ? splitKey(fetchSourceKey).clusterId : '';
+  const fetchBlocked = fetchSourceClusterId ? blockedClusterNames([fetchSourceClusterId]) : [];
+  const fetchDeniedHint = !roleAccess.canOperate
+    ? roleAccess.hint
+    : fetchBlocked.length > 0 ? `${CLUSTER_OPERATE_REQUIRED_HINT}: ${fetchBlocked.join(', ')}` : undefined;
+
   const canRun =
+    !runDeniedHint &&
     clusterIds.length > 0 &&
     selectedHosts.length > 0 &&
     (authMode === 'password' ? !!password : !!privateKey.trim()) &&
@@ -750,7 +781,7 @@ export function BulkExecPage() {
           icon={Terminal}
           title="노드 일괄 실행 (SSH / SCP)"
           titleExtra={clusterIds.length > 0 ? (
-            <span className="text-sm px-2 py-0.5 rounded-full bg-status-unknown/15 text-status-unknown border border-status-unknown/30">
+            <span className="text-sm px-2 py-0.5 rounded-full bg-secondary text-muted-foreground border border-border">
               클러스터 {clusterIds.length} · 노드 {selected.size} / {totalNodesShown}
             </span>
           ) : undefined}
@@ -786,7 +817,9 @@ export function BulkExecPage() {
             }
           >
             <div className="max-h-[calc(100vh-160px)] overflow-y-auto">
-              {clusterIds.length === 0 ? (
+              {clustersError ? (
+                <ErrorState compact error={clustersErrorObj} title="클러스터 목록을 불러오지 못했습니다" onRetry={() => { void refetchClusters(); }} />
+              ) : clusterIds.length === 0 ? (
                 <SelectClusterEmptyState compact description="왼쪽 사이드바에서 한 개 이상의 클러스터를 체크하세요." />
               ) : (
                 clusterSections.map((sec) => {
@@ -799,7 +832,7 @@ export function BulkExecPage() {
                       nodes={sec.nodes}
                       isLoading={sec.query?.isLoading ?? false}
                       isError={sec.query?.isError ?? false}
-                      errorMsg={(sec.query?.error as Error | undefined)?.message}
+                      error={sec.query?.error}
                       onRefetch={() => sec.query?.refetch()}
                       selectedCount={selectedHere}
                       isNodeChecked={(name) => selected.has(makeKey(sec.clusterId, name))}
@@ -820,7 +853,9 @@ export function BulkExecPage() {
                 {(['ssh', 'scp'] as const).map((a) => (
                   <button
                     key={a}
+                    type="button"
                     onClick={() => setAction(a)}
+                    aria-pressed={action === a}
                     className={`px-3 py-1.5 text-sm font-medium rounded-md transition-colors ${
                       action === a
                         ? 'bg-background text-foreground shadow-sm'
@@ -835,14 +870,16 @@ export function BulkExecPage() {
                 {(['parallel', 'sequential'] as const).map((m) => (
                   <button
                     key={m}
+                    type="button"
                     onClick={() => setMode(m)}
+                    aria-pressed={mode === m}
                     className={`px-3 py-1.5 text-sm font-medium rounded-md transition-colors ${
                       mode === m
                         ? 'bg-background text-foreground shadow-sm'
                         : 'text-muted-foreground hover:text-foreground'
                     }`}
                   >
-                    {m === 'parallel' ? <><Zap className="w-3 h-3 inline mr-1" />병렬</> : '순차'}
+                    {m === 'parallel' ? <><Zap className="w-3 h-3 inline mr-1" aria-hidden />병렬</> : '순차'}
                   </button>
                 ))}
               </div>
@@ -884,19 +921,21 @@ export function BulkExecPage() {
                 />
               </div>
               <div>
-                <p className="block text-sm text-muted-foreground mb-1">인증 방식</p>
-                <div className="flex items-center bg-secondary/60 rounded-lg p-[3px] gap-px">
+                <p id={f('authMode')} className="block text-sm text-muted-foreground mb-1">인증 방식</p>
+                <div className="flex items-center bg-secondary/60 rounded-lg p-[3px] gap-px" role="group" aria-labelledby={f('authMode')}>
                   {(['password', 'key'] as const).map((m) => (
                     <button
                       key={m}
+                      type="button"
                       onClick={() => setAuthMode(m)}
+                      aria-pressed={authMode === m}
                       className={`flex-1 px-2 py-1.5 text-sm font-medium rounded-md transition-colors ${
                         authMode === m
                           ? 'bg-background text-foreground shadow-sm'
                           : 'text-muted-foreground hover:text-foreground'
                       }`}
                     >
-                      {m === 'password' ? '비밀번호' : 'Private Key'}
+                      {m === 'password' ? '비밀번호' : '개인키'}
                     </button>
                   ))}
                 </div>
@@ -918,13 +957,13 @@ export function BulkExecPage() {
             ) : (
               <div>
                 <label htmlFor={f('pkey')} className="text-sm text-muted-foreground mb-1 flex items-center gap-1">
-                  <Key className="w-3 h-3" /> Private Key (PEM)
+                  <Key className="w-3 h-3" aria-hidden /> 개인키(PEM)
                 </label>
                 <textarea
                   id={f('pkey')}
                   value={privateKey}
                   onChange={(e) => setPrivateKey(e.target.value)}
-                  placeholder="-----BEGIN OPENSSH PRIVATE KEY----- ..."
+                  placeholder="-----BEGIN OPENSSH PRIVATE KEY----- …"
                   rows={4}
                   className="w-full px-3 py-2 bg-background border border-border rounded-lg text-xs font-mono focus:outline-none focus:ring-1 focus:ring-primary resize-none"
                 />
@@ -945,6 +984,7 @@ export function BulkExecPage() {
                         key={l}
                         type="button"
                         onClick={() => setLanguage(l)}
+                        aria-pressed={language === l}
                         className={`px-2 py-1 text-xs font-medium rounded-md transition-colors ${
                           language === l
                             ? 'bg-background text-foreground shadow-sm'
@@ -1059,7 +1099,9 @@ export function BulkExecPage() {
                         <button
                           type="button"
                           onClick={() => void doFetchFile()}
-                          disabled={fetchFileMutation.isPending || !fetchSourceKey || !fetchRemotePath.trim()}
+                          disabled={!!fetchDeniedHint || fetchFileMutation.isPending || !fetchSourceKey || !fetchRemotePath.trim()}
+                          title={fetchDeniedHint ?? '원본 노드의 텍스트 파일을 업로드 내용으로 불러오기'}
+                          aria-label={fetchDeniedHint ? `불러오기 — ${fetchDeniedHint}` : '불러오기'}
                           className="flex items-center gap-1 px-2.5 py-1 text-xs font-medium rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-40 disabled:cursor-not-allowed flex-shrink-0"
                         >
                           {fetchFileMutation.isPending ? <Loader2 className="w-3 h-3 animate-spin" /> : <FolderInput className="w-3 h-3" />}
@@ -1094,8 +1136,8 @@ export function BulkExecPage() {
 
             {/* 타임아웃 */}
             <div className="flex items-center gap-3 gap-y-2 flex-wrap text-sm text-muted-foreground">
-              <label className="flex items-center gap-1.5">
-                connect timeout
+              <label className="flex items-center gap-1.5" title="노드별 SSH 접속 최대 대기 시간(초)">
+                연결 제한 시간
                 <input
                   type="number"
                   min={1}
@@ -1105,8 +1147,8 @@ export function BulkExecPage() {
                   className="w-14 px-2 py-1 bg-background border border-border rounded text-sm"
                 />s
               </label>
-              <label className="flex items-center gap-1.5">
-                exec timeout
+              <label className="flex items-center gap-1.5" title="노드별 명령 실행 최대 시간(초)">
+                실행 제한 시간
                 <input
                   type="number"
                   min={1}
@@ -1117,8 +1159,8 @@ export function BulkExecPage() {
                 />s
               </label>
               <span className="text-border">·</span>
-              <label className="flex items-center gap-1.5" title="한 청크에서 병렬 실행할 호스트 수. 청크 완료 후 휴지 → 다음 청크.">
-                chunk
+              <label className="flex items-center gap-1.5" title="한 묶음에서 병렬 실행할 호스트 수. 묶음이 끝나면 잠시 쉬고 다음 묶음.">
+                묶음 크기
                 <input
                   type="number"
                   min={1}
@@ -1128,8 +1170,8 @@ export function BulkExecPage() {
                   className="w-14 px-2 py-1 bg-background border border-border rounded text-sm"
                 />개
               </label>
-              <label className="flex items-center gap-1.5" title="청크 사이 휴지 시간 (ms). 베스천/게이트웨이 burst 부하 완화.">
-                pause
+              <label className="flex items-center gap-1.5" title="묶음 사이 대기 시간(ms). 베스천/게이트웨이 순간 부하 완화.">
+                묶음 간 대기
                 <input
                   type="number"
                   min={0}
@@ -1147,7 +1189,7 @@ export function BulkExecPage() {
               <div className="px-3 py-2 text-xs rounded-lg bg-status-warning/10 border border-status-warning/30 text-status-warning flex items-start gap-2">
                 <Clock className="w-3 h-3 mt-0.5 flex-shrink-0" />
                 <div>
-                  선택 {selected.size}개 호스트 · parallelism {parallelism} / chunk {chunkSize}개 ·
+                  선택 {selected.size}개 호스트 · 동시성 {parallelism} / 묶음 {chunkSize}개 ·
                   예상 소요 시간 <strong className="font-mono">최소 {Math.ceil(selected.size / chunkSize) * Math.ceil(execTimeout / 10)}초 ~ 최대 {Math.ceil(selected.size / chunkSize) * (execTimeout + connectTimeout)}초</strong>.
                   실행 중 버튼이 "중지"로 바뀌며 언제든 취소 가능.
                 </div>
@@ -1167,17 +1209,21 @@ export function BulkExecPage() {
               </p>
               {runMutation.isPending ? (
                 <button
+                  type="button"
                   onClick={runMutation.abort}
-                  className="flex items-center gap-2 px-5 py-2.5 text-sm font-semibold bg-status-critical hover:bg-status-critical text-primary-foreground rounded-lg transition-colors"
+                  className="flex items-center gap-2 px-5 py-2.5 text-sm font-semibold bg-status-critical hover:bg-status-critical/90 text-primary-foreground rounded-xl transition-colors"
                 >
                   <Square className="w-4 h-4 fill-current" />
                   중지
                 </button>
               ) : (
                 <button
+                  type="button"
                   onClick={() => setConfirmOpen(true)}
                   disabled={!canRun}
-                  className="flex items-center gap-2 px-5 py-2.5 text-sm font-semibold bg-primary hover:bg-primary/90 text-primary-foreground rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  title={runDeniedHint ?? (canRun ? '확인 후 선택한 노드에 실행' : '노드·인증 정보·명령(또는 원격 경로)을 입력하세요')}
+                  aria-label={runDeniedHint ? `실행 (${selected.size} 노드) — ${runDeniedHint}` : `실행 (${selected.size} 노드)`}
+                  className="flex items-center gap-2 px-5 py-2.5 text-sm font-semibold bg-primary hover:bg-primary/90 text-primary-foreground rounded-xl transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   <Play className="w-4 h-4" />
                   실행 ({selected.size} 노드)
@@ -1207,10 +1253,15 @@ export function BulkExecPage() {
             className="flex-1 min-h-0 flex flex-col"
             titleExtra={
               <span className="flex flex-wrap items-center gap-2">
-                <span className="text-xs px-2 py-0.5 rounded-full bg-status-healthy/10 text-status-healthy border border-status-healthy/30">
+                <span className="text-xs px-2 py-0.5 rounded-full bg-secondary text-muted-foreground border border-border">
                   성공 {runResponse.okCount}
                 </span>
-                <span className="text-xs px-2 py-0.5 rounded-full bg-status-critical/10 text-status-critical border border-status-critical/30">
+                {/* 0 은 중립(§12.12-2) — 실패가 있을 때만 상태색. */}
+                <span className={`text-xs px-2 py-0.5 rounded-full border ${
+                  runResponse.errorCount > 0
+                    ? 'bg-status-critical/10 text-status-critical border-status-critical/30'
+                    : 'bg-secondary text-muted-foreground border-border'
+                }`}>
                   실패 {runResponse.errorCount}
                 </span>
                 <span className="text-xs text-muted-foreground whitespace-nowrap tabular-nums">
@@ -1221,14 +1272,16 @@ export function BulkExecPage() {
             actions={<>
                 {/* 뷰 모드 토글 */}
                 <div className="flex items-center bg-secondary/60 rounded-md p-[2px] gap-px">
-                  <button onClick={() => setResultView('summary')}
+                  <button type="button" onClick={() => setResultView('summary')}
+                    aria-pressed={resultView === 'summary'}
                     className={`flex items-center gap-1 px-2 py-1 text-xs font-medium rounded transition-colors ${
                       resultView === 'summary' ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
                     }`}
                     title="모든 노드 한 줄 요약">
                     <LayoutList className="w-3 h-3" /> 요약
                   </button>
-                  <button onClick={() => setResultView('detail')}
+                  <button type="button" onClick={() => setResultView('detail')}
+                    aria-pressed={resultView === 'detail'}
                     className={`flex items-center gap-1 px-2 py-1 text-xs font-medium rounded transition-colors ${
                       resultView === 'detail' ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
                     }`}
@@ -1243,6 +1296,7 @@ export function BulkExecPage() {
                     value={globalFilter}
                     onChange={(e) => setGlobalFilter(e.target.value)}
                     placeholder="공통 필터…"
+                    aria-label="실행 결과 공통 필터"
                     className="pl-2 pr-6 py-1 text-sm bg-background border border-border rounded-md focus:outline-none focus:ring-1 focus:ring-primary w-36"
                   />
                   {globalFilter && (
@@ -1354,9 +1408,12 @@ export function BulkExecPage() {
       <ConfirmDialog
         open={confirmOpen}
         title={action === 'ssh' ? '노드 일괄 SSH 실행 확인' : '노드 일괄 SCP 업로드 확인'}
-        description={`이 작업은 ${clusterIds.length}개 클러스터의 ${selectedHosts.length}개 노드에 ${mode === 'parallel' ? '병렬' : '순차'}로 실행됩니다.`}
-        confirmLabel={action === 'ssh' ? '실행' : '업로드'}
-        danger={action === 'ssh'}
+        description={action === 'ssh'
+          ? `이 작업은 ${clusterIds.length}개 클러스터의 ${selectedHosts.length}개 노드에 ${mode === 'parallel' ? '병렬' : '순차'}로 실행됩니다.`
+          : `${selectedHosts.length}개 노드의 ${scpRemotePath} 에 업로드합니다. 같은 경로에 파일이 있으면 덮어씁니다.`}
+        confirmLabel={action === 'ssh' ? '실행' : '덮어쓰기 업로드'}
+        // SCP 도 원격 파일을 덮어쓰므로 SSH 와 같은 danger 톤(D-161).
+        danger
         onCancel={() => setConfirmOpen(false)}
         onConfirm={() => { setConfirmOpen(false); void doRun(); }}
       >
@@ -1369,7 +1426,7 @@ export function BulkExecPage() {
               <span className="text-foreground">(선택된 {selectedHosts.length}개 host, {clusterIds.length}개 클러스터)</span>
               <span className="text-muted-foreground">:{port}</span>
               <span className="ml-2 text-xs px-1.5 py-0.5 rounded border border-border bg-secondary">
-                {authMode === 'password' ? '비밀번호' : 'Private Key'}
+                {authMode === 'password' ? '비밀번호' : '개인키'}
               </span>
             </p>
           </div>
@@ -1385,10 +1442,10 @@ export function BulkExecPage() {
             </div>
           ) : (
             <div>
-              <p className="text-xs font-medium text-muted-foreground mb-1">업로드 대상</p>
-              <p className="font-mono">{scpRemotePath}</p>
+              <p className="text-xs font-medium text-muted-foreground mb-1">업로드 대상(덮어쓰기)</p>
+              <p className="font-mono font-semibold text-status-critical break-all">{scpRemotePath}</p>
               <p className="text-xs text-muted-foreground mt-0.5">
-                크기: {new Blob([scpContent]).size} bytes
+                크기: {new Blob([scpContent]).size} bytes · 기존 파일은 백업 없이 교체됩니다.
               </p>
             </div>
           )}
@@ -1413,7 +1470,7 @@ export function BulkExecPage() {
                     </div>
                   ))}
                   {items.length > 8 && (
-                    <div className="pl-2 text-muted-foreground">+ {items.length - 8}개 더…</div>
+                    <div className="pl-2 text-muted-foreground">외 {items.length - 8}개</div>
                   )}
                 </div>
               ))}

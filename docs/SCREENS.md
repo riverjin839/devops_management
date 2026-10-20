@@ -231,6 +231,7 @@ hover 시 flyout 자체가 라벨을 보여주므로 이름만 뜨는 중복 툴
   - 현재/신규/확인 3중 검증 후 비밀번호 변경.
   - 변경 성공 시 `mustChangePassword: false`로 로컬 `AuthUser` 갱신(`setUser`) → 강제 변경 플로우 해제.
   - 실패 시(현재 비밀번호 불일치, 신규=기존과 동일 등) 서버 `detail` 메시지를 그대로 노출.
+- **디렉터리·SSO 계정(R-7)**: `/auth/me` 의 `auth_source` 가 `ldap` 이면 "사내 디렉터리에서 변경", `external`(로컬 비밀번호 없는 SSO 계정)이면 "사내 IdP 에서 변경" 안내만 보여주고 폼을 그리지 않는다. 서버 `POST /auth/me/password` 도 400(`directory_account`/`no_local_password`).
 - **요청사항 (수정 요청)**:
   - _(여기에 개선/수정 요청을 직접 적어주세요)_
 
@@ -256,6 +257,7 @@ hover 시 flyout 자체가 라벨을 보여주므로 이름만 뜨는 중복 툴
   - `접근 제어` 탭 하단 `ClusterViewerMaskSetting`(MacCard "클러스터 네트워크 정보 (viewer)"): 켜면 viewer(및 admin·operator 외 역할)의 `/clusters` 목록·상세 응답에서 IP·CIDR·bond IP/MAC·호스트명·AS 번호·API 엔드포인트·Prometheus/Alertmanager 주소·`node_ips`·`kubeconfig_path`·`cilium_config` 를 비우고 `network_masked=true` 를 붙이며, `GET /clusters/{id}/cilium-config` 는 kubectl 없이 `source: "masked"` 를 준다. 기본 off. `GET/PUT /api/v1/ui-settings/cluster-viewer-mask`(PUT admin 전용, 값이 바뀌면 감사 `settings.cluster_viewer_mask.update`) — 판정 `backend/app/services/cluster_network_mask.py`. 다른 화면(인프라 노드·토폴로지)의 IP 는 "화면별 노출"로 막는다.
   - `접근 제어` 탭 하단 `ClusterEndpointAllowlistSetting`(MacCard "클러스터 API 엔드포인트 허용 대역"): 한 줄에 하나씩 CIDR 또는 호스트명(`*.k8s.local` 와일드카드). 비어 있으면 제한 없음(기본). 채우면 클러스터 생성(연결 검증 생략 시에도)·`api_endpoint` 변경, 그리고 kubeconfig 등록·교체·경로 변경 시 kubeconfig 의 `server` 가 대역 밖이면 422 로 거절되고, 연결 검증(`/verify`·`/verify/stream`)은 그 주소로 요청을 보내지 않는다(api_endpoint 가 밖이면 api_server 실패 + 나머지 건너뜀, kubeconfig server 만 밖이면 인증 단계만 건너뜀). 호스트명 엔드포인트는 **호스트명 항목으로만** 허용되고 DNS 로 풀어 CIDR 과 비교하지 않는다(DNS rebinding 우회 방지). `GET/PUT /api/v1/ui-settings/cluster-endpoint-allowlist`(PUT admin, 잘못된 항목 422, 변경 시 감사 `settings.cluster_endpoint_allowlist.update`) — 판정 `backend/app/services/cluster_endpoint_policy.py`.
   - `접근 제어` 탭 하단 `OidcSettingsPanel`(MacCard "사내 SSO 로그인 (OIDC)", R-7): 사내 IdP 로그인 설정 — AppSetting `auth.oidc`. 상세는 [SSO 로그인 콜백](#sso-로그인-콜백-authcallback) 절. `GET/PUT /api/v1/auth/oidc/settings`·`POST /settings/test`(admin, "연결 확인"은 `runLogged` 실행 로그).
+  - `접근 제어` 탭 하단 `LdapSettingsPanel`(MacCard "사내 디렉터리 로그인 (LDAP/AD)", R-7): AppSetting `auth.ldap` — 서버 URL(여러 개 순서대로)·StartTLS·인증서 검증·사설 CA PEM·타임아웃, 바인드 방식(직접 바인드 템플릿 `{username}@도메인` / 서비스 계정 검색 후 재바인드), 표시 이름·이메일·그룹 속성, 허용 그룹, 자동 생성(viewer/operator), 우선순위(`local_first`/`ldap_first`), 로컬 admin 보호(기본 켬). "연결 확인"은 저장 전 입력값으로 연결 → 서비스 바인드 → (테스트 사용자명) 검색을 `runLogged` 실행 로그로 보여준다. `GET/PUT /api/v1/auth/ldap/settings`·`POST /settings/test`(admin). 로그인은 기존 `/auth/login` 하나 — 디렉터리 미도달·모듈 없음만 있으면 503(비밀번호 오류와 구분).
   - 나머지 탭은 각각 전용 매니저 컴포넌트를 그대로 렌더(운영레벨/서비스/LAKE타입/시스템 담당자/Jira/백업/감사로그).
   - `테넌트` 탭(`TenantManager`, 멀티테넌시 1단계): 좌측 테넌트 목록(추가) + 우측 정보(이름/설명·삭제) · 멤버(operator/viewer 체크) · 클러스터 바인딩(클러스터별 `바인딩 없음`/`read`/`operate`) 카드, 카드별 저장. 바인딩이 있는 클러스터는 바인딩된 테넌트 멤버에게만 보이고(클러스터 목록·사이드바·대시보드·점검 매트릭스·이력·이벤트·알람에서 제외, 조회 API 403), 실행·변경은 `operate` 멤버만 가능 — 서버 판정 `services/cluster_access.py`, API `GET/POST/PUT/DELETE /api/v1/tenants`, `PUT /tenants/{id}/members`·`/bindings`, `GET /tenants/my-cluster-access`(`routers/tenants.py`, 관리 API 는 admin 전용·감사 로그 `tenant.*`). 상세 하단 **LLM 라우팅 (테넌트 전용)** 카드(`TenantLlmRoutingCard`, 멀티테넌시 4단계): 용도별 primary/fallback 프로필(임베딩 제외)을 지정하면 이 테넌트 멤버의 Agent 채팅이 전역 라우팅 대신 그 프로필을 쓴다(`PUT /tenants/{id}/llm-routing`, 판정 `services/llm/service.py` `effective_route`). 테넌트 목록 항목에 최근 24h LLM 호출 수(`GET /tenants/llm-usage`)가 붙는다. 정보 카드의 **동시 실행 상한**(멀티테넌시 5단계, `tenants.max_concurrent_runs`, 비우면 제한 없음)을 지정하면 이 테넌트 소유 클러스터(operate 바인딩 우선)에 대한 배치잡·운영 점검·점검 매트릭스 일괄 수행·심층 점검·효율화 적용이 그 수만큼만 동시에 돌고, 나머지는 15초 간격 재시도로 대기한다(`services/tenant_concurrency.py`). 상세의 **실행 슬롯** 카드(`TenantRunSlotsCard`, `GET /tenants/run-slots` 5초 폴링)에 실행 중·대기 중 목록이, 목록 항목에 `실행 n/상한 (대기 m)` 이 붙는다.
   - 테넌트는 업무·지식 데이터의 **공유 범위** 단위이기도 하다(멀티테넌시 3단계): 업무 항목·프로젝트·업무 가이드·운영 노트·마인드맵 폼의 `TenantScopeSelect`(선택지 `GET /tenants/mine`)로 테넌트를 고르면 그 멤버·admin 만 본다(`services/tenant_scope.py`). 데이터가 남은 테넌트는 삭제 시 409 로 테이블별 건수를 알려준다.
@@ -762,6 +764,7 @@ hover 시 flyout 자체가 라벨을 보여주므로 이름만 뜨는 중복 툴
   - 라벨 add/remove patch (`NodeLabelEditorModal`)
   - 현재 뷰·검색 결과 CSV 내보내기, 화면 캡처 내보내기
   - 60초 자동 새로고침 토글
+- **권한·감사(2026-10-20, D-155)**: 라벨 변경 `PATCH /clusters/{id}/nodes/{node}/labels` 는 operator 이상(viewer 403) + 감사 `node.labels.patch`(노드·추가·삭제 키, 실패 사유). 편집 버튼은 행 단위 `useCanOperate(clusterId)`, 적용 전 `ConfirmDialog` danger(`+키=값`/`-키`), 실행 로그(`useLogPref('node-labels')`). 클러스터·노드 조회 실패는 `ErrorState`.
 - **요청사항 (수정 요청)**:
   - _(여기에 개선/수정 요청을 직접 적어주세요)_
 
@@ -814,6 +817,7 @@ hover 시 flyout 자체가 라벨을 보여주므로 이름만 뜨는 중복 툴
   6. **SSH 자격증명** — `비밀번호` 또는 `개인키(PEM)` 입력. **요청에만 사용되고 저장되지 않는다**(operator 이상 권한 필요, 감사 로그에 `node_image.distribute` 기록).
   7. **배포 실행** — 선택 노드에 병렬로 pull 실행. 완료 후 노드별 결과 표(상태·exit code·소요시간)가 뜨고, 행을 펼치면 stdout/stderr 전체를 확인할 수 있다. 실행 중 **중지**로 취소 가능.
   - ⚠️ 대상 노드가 이미지 **레지스트리에 도달 가능**해야 pull 이 성공한다(레지스트리 재-pull 방식 — 대용량 tar 전송 없음). 폐쇄망에서 레지스트리 접근이 없는 노드는 별도 방식이 필요하다.
+- **12차 감사(2026-10-20)**: 이미지 배포는 실행 전 별도 `ConfirmDialog`(이미지·대상 클러스터·런타임·노드), 노드별 결과는 `ExecOutputTabs`, 출처·대상 클러스터 모두 `useCanOperate`. 클러스터·노드 조회 실패는 `ErrorState`, 행 펼침 버튼(`aria-expanded`), master → "컨트롤 플레인".
 - **요청사항 (수정 요청)**:
   - _(여기에 개선/수정 요청을 직접 적어주세요)_
 
@@ -838,6 +842,7 @@ hover 시 flyout 자체가 라벨을 보여주므로 이름만 뜨는 중복 툴
   - kubeadm 인증서 스냅샷(`kubeadm_certs:{host}`)은 Ops Checks의 `cert_expiry` 점검이 `source=snapshot`(또는 auto 폴백)일 때 읽는다 — kube-apiserver 파드가 distroless 라 kubectl exec 로는 확인 불가한 환경 대응
   - 컴포넌트별 히스토리 타임라인 + 2-스냅샷 diff 뷰
   - CSV 내보내기(디테일 레벨 선택), 3D 관계 그래프로 이동
+- **12차 감사(2026-10-20)**: 클러스터 목록·히스토리·diff·현재값 조회 실패는 `ErrorState`. 수집 7버튼과 빈 상태 "지금 수집"은 `useCanOperate(clusterId)` 비활성 + 사유, 빈 상태 수집도 `runCollect`(실행 로그·중지). 수집 모달 라벨 한국어화(SSH 사용자·포트·systemd 유닛·동시 실행 수)·접근성 라벨, 헤더 아이콘 타일 제거.
 - **요청사항 (수정 요청)**:
   - _(여기에 개선/수정 요청을 직접 적어주세요)_
 
@@ -875,6 +880,7 @@ hover 시 flyout 자체가 라벨을 보여주므로 이름만 뜨는 중복 툴
   - 결과 요약/상세 뷰, 공통 필터, CSV/TXT/클립보드 내보내기
   - **사용자별 저장 스크립트**(`SavedScriptPanel`+`SavedScriptEditorModal`, DB 백엔드): bash/python 스크립트를 이름·설명과 함께 저장·수정·삭제·재사용. python 은 서버가 원격 `python3` 로 감싸 실행(스크립트 본문은 그대로 노출, 인증정보는 저장하지 않음)
   - **SCP 업로드 내용 — 다른 노드에서 불러오기**: 로컬 파일 선택과 나란히, 현재 화면에 로드된 임의 노드 하나를 골라 원격 경로의 텍스트 파일 내용을 그대로 가져와 업로드 입력창을 채운다(가져온 뒤 수정 후 다른 노드들에 재배포 가능). 업로드 대상(targets) 인증 정보를 그대로 재사용, 별도 저장 없음. 옆의 **"로컬에 저장"** 버튼으로 현재 업로드 내용(어디서 채웠든)을 브라우저 다운로드로 내 컴퓨터에 파일로 저장 가능(파일명은 원격 경로의 마지막 세그먼트 재사용, BOM 없이 저장해 셔뱅 등 스크립트 실행에 영향 없음)
+- **12차 감사(2026-10-20)**: 실행 버튼은 선택 노드의 클러스터 operate 권한을 확인해 불가 클러스터 이름을 사유로 표시. SCP 업로드 확인은 danger(원격 경로·덮어쓰기 경고). 저장 스크립트 삭제는 `ConfirmDialog`, 저장·수정·삭제 실패 토스트, 설명 비우기(`null`). 클러스터·노드 조회 실패는 `ErrorState`. 콘솔 패턴(§12.6) 유지.
 - **요청사항 (수정 요청)**:
   - _(여기에 개선/수정 요청을 직접 적어주세요)_
 
@@ -1480,6 +1486,7 @@ hover 시 flyout 자체가 라벨을 보여주므로 이름만 뜨는 중복 툴
   - 완료 토글(원클릭 상태 변경), 스프린트에 추가/후보 관리
   - 일정 뷰에서 날짜별 시간표(하루 단위) 탐색
   - 진행 스프린트 없을 때 원클릭 2주 스프린트 생성
+- **12차 감사(2026-10-20)**: 지연·오늘 구역은 홈 KPI 와 같은 `isMyDueTodo` 기준(일정 없는 미완료는 오늘 끝에 "일정 미정"). 조회·현재 스프린트·공통업무 실패는 `ErrorState`, 스프린트 시작은 조회 성공 + 스프린트 없음일 때만. 완료 토글·스프린트 추가·업무 추가는 viewer 비활성 + 사유. 카드·행은 제목 버튼으로 키보드 조작.
 - **요청사항 (수정 요청)**:
   - _(여기에 개선/수정 요청을 직접 적어주세요)_
 
@@ -1522,7 +1529,7 @@ hover 시 flyout 자체가 라벨을 보여주므로 이름만 뜨는 중복 툴
 - **요청사항 (수정 요청)**:
   - _(여기에 개선/수정 요청을 직접 적어주세요)_
 
-### 워크플로우 보드 (`/workflow`)
+### 워크플로 보드 (`/workflow`)
 
 - **파일**: `frontend/src/pages/WorkflowBoardPage.tsx` (단일 대형 파일, 1160줄 — 별도 하위 컴포넌트 분리 없이 캔버스/카드/사이드패널을 인라인으로 구현)
 - **목적 / UX**: 운영 프로세스(장애 대응, 배포 절차 등)를 트리거→액션→조건→대기→알림 단계로 이루어진 노드-엣지 다이어그램으로 시각 설계하는 "기획용" 워크플로우 보드. 실행 엔진이 아니라 절차를 문서화·추적(할일/진행중/막힘/완료/제외 상태)하는 용도.
@@ -1538,6 +1545,7 @@ hover 시 flyout 자체가 라벨을 보여주므로 이름만 뜨는 중복 툴
   - 레거시 상태값(idle/running/success/failed) → 신규 어휘(todo/in-progress/blocked/done/skipped) 자동 정규화(`normalizeStatus`)
   - 단계에 클러스터/플레이북/이슈/작업/작업가이드/메트릭카드 참조 연결
   - 줌/팬 가능한 대형 캔버스(3200×2000)
+- **12차 감사(2026-10-20)**: 화면 용어는 "워크플로". viewer 는 읽기 전용(`useCanOperate` — 쓰기 버튼 비활성 + 사유, 드래그·연결·인라인 편집 차단, 툴바 안내). 쓰기 8종 실패는 토스트, 카드 위치 저장 실패 시 서버 위치로 원복. 워크플로·단계 삭제는 `ConfirmDialog`(함께 지워지는 단계·연결 수). 비운 값은 `null`, 단계 설명은 HTML 을 벗겨 120자.
 - **요청사항 (수정 요청)**:
   - _(여기에 개선/수정 요청을 직접 적어주세요)_
 
@@ -1558,6 +1566,7 @@ hover 시 flyout 자체가 라벨을 보여주므로 이름만 뜨는 중복 툴
   - 부모-자식(하위 업무) 계층을 간트 행에 들여쓰기로 표현
   - 작업 진행률·이슈 해결률 자동 집계 요약바
   - 셀 클릭 시 사이드패널로 작업/이슈 상세(시작일/완료일/상태) 확인
+- **12차 감사(2026-10-20)**: 날짜는 `toLocalDateKey`(KST) 기준, 간트 막대는 `<button>`. 프로젝트 조회·업무 조회 실패를 빈 상태와 구분. 프로젝트 삭제는 `ConfirmDialog`(미분류로 옮겨지는 항목 수) + 실패 토스트, 수정 시 비운 설명·목표·기간은 `null`(필수 `null` 422), 종료일 < 시작일 저장 차단. "TODAY" → "오늘", 우선순위 색은 `chart-*`.
 - **요청사항 (수정 요청)**:
   - _(여기에 개선/수정 요청을 직접 적어주세요)_
 
@@ -1582,6 +1591,7 @@ hover 시 flyout 자체가 라벨을 보여주므로 이름만 뜨는 중복 툴
   - 같은 제목 페이지 갱신 / 신규 생성 자동 판별, 저장 위치 매 게시마다 변경 가능
   - cron 기반 자동 생성·게시(기본 금 17:00)
 - **게시 실행 로그(2026-10-20)**: "Confluence 에 게시"는 `streamLogged`(`jiraApi.weeklyPublishStreamUrl`)로 서버 단계 칩·로그를 `RunLogPanel` 에 실시간으로 쌓고 "중지"로 끊을 수 있다. 버튼은 `useCanOperate` 로 viewer 에게 사유와 함께 비활성.
+- **주차 정합(2026-10-20, D-157)**: 주차를 바꾸면 미리보기를 무효로 하고(표 자리 "다시 생성" 안내) 다시 생성할 때까지 게시 버튼을 비활성 + 사유로 둔다. 게시 전 `ConfirmDialog` 에 주차·제목·스페이스·상위 페이지, 직접 입력한 제목에 주 시작일이 없으면 덮어쓰기 경고. 게시 요청은 미리보기 `periodStart` 로 고정, 제목은 직접 고치기 전까지 미리보기 주차를 따른다. 서버는 형식이 틀린 `week_of` 를 422.
 - **요청사항 (수정 요청)**:
   - _(여기에 개선/수정 요청을 직접 적어주세요)_
 
@@ -1807,6 +1817,7 @@ hover 시 flyout 자체가 라벨을 보여주므로 이름만 뜨는 중복 툴
   - draft/active/archived 상태 배지
   - 가이드를 기존 워크플로의 액션 스텝으로 연결(`referenceType='work_guide'`)
   - 제목/본문 저장 시 백그라운드로 임베딩 재계산 큐잉(유사 가이드 추천 등에 사용될 것으로 추정)
+- **12차 감사(2026-10-20)**: 하위 페이지가 있는 가이드는 삭제할 수 없다 — `DELETE /work-guides/{id}` 409(하위 N개 사유), 화면은 삭제 버튼 비활성 + 사유, 삭제는 `ConfirmDialog` danger. 부모가 목록에 없는 페이지는 루트로 표시. 수정 시 비운 본문·카테고리·태그·작성자·Confluence 는 `null` 로 비워진다(필수 필드 `null` 은 422). 트리·목록은 버튼(`aria-expanded`)으로 키보드 조작, 조회 실패는 `ErrorState`.
 - **요청사항 (수정 요청)**:
   - _(여기에 개선/수정 요청을 직접 적어주세요)_
 

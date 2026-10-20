@@ -11,7 +11,8 @@ interface SavedScriptEditorModalProps {
   initialContent?: string;
   initialLanguage?: ScriptLanguage;
   onCancel: () => void;
-  onSave: (data: { name: string; language: ScriptLanguage; content: string; description?: string }) => void;
+  /** 수정 모드에서 지운 설명은 `null`(비우기), 새로 만들기에서 빈 설명은 생략(`undefined`). */
+  onSave: (data: { name: string; language: ScriptLanguage; content: string; description?: string | null }) => void;
   saving?: boolean;
 }
 
@@ -47,7 +48,9 @@ export function SavedScriptEditorModal({
 
   const submit = () => {
     if (!canSave || saving) return;
-    onSave({ name: name.trim(), language, content, description: description.trim() || undefined });
+    // D-162 — 수정 모드에서 설명을 지우면 null 로 보내 서버가 컬럼을 비운다(생략하면 옛 값이 남는다).
+    const desc = description.trim() || (script ? null : undefined);
+    onSave({ name: name.trim(), language, content, description: desc });
   };
 
   return (
@@ -70,9 +73,11 @@ export function SavedScriptEditorModal({
             </p>
           </div>
           <button
+            type="button"
             onClick={onCancel}
-            aria-label="닫기"
-            className="p-1 rounded hover:bg-secondary text-muted-foreground flex-shrink-0"
+            title="닫기"
+            aria-label="스크립트 편집 닫기"
+            className="p-1 rounded-xl hover:bg-secondary text-muted-foreground flex-shrink-0"
           >
             <X className="w-4 h-4" />
           </button>
@@ -92,13 +97,14 @@ export function SavedScriptEditorModal({
               />
             </div>
             <div>
-              <p className="block text-sm text-muted-foreground mb-1">언어</p>
-              <div className="flex items-center bg-secondary/60 rounded-lg p-[3px] gap-px">
+              <p id={`${nameId}-lang`} className="block text-sm text-muted-foreground mb-1">언어</p>
+              <div className="flex items-center bg-secondary/60 rounded-lg p-[3px] gap-px" role="group" aria-labelledby={`${nameId}-lang`}>
                 {(['bash', 'python'] as const).map((l) => (
                   <button
                     key={l}
                     type="button"
                     onClick={() => setLanguage(l)}
+                    aria-pressed={language === l}
                     className={`flex-1 px-2 py-1.5 text-sm font-medium rounded-md transition-colors ${
                       language === l
                         ? 'bg-background text-foreground shadow-sm'

@@ -105,8 +105,8 @@ function StatusIcon({ status, type }: { status: string; type: 'task' | 'issue' }
   }
   const icons: Record<string, JSX.Element> = {
     done:        <CheckCircle2 className="w-3 h-3 text-muted-foreground flex-shrink-0" />,
-    in_progress: <Clock className="w-3 h-3 text-chart-3 flex-shrink-0" />,
-    review_test: <Clock className="w-3 h-3 text-chart-4 flex-shrink-0" />,
+    in_progress: <Clock className="w-3 h-3 text-chart-3-text flex-shrink-0" />,
+    review_test: <Clock className="w-3 h-3 text-chart-4-text flex-shrink-0" />,
     todo:        <Circle className="w-3 h-3 text-muted-foreground flex-shrink-0" />,
     backlog:     <Circle className="w-3 h-3 text-muted-foreground flex-shrink-0" />,
   };
@@ -436,7 +436,7 @@ function PersonalGanttView({
                             title={`${taskTitle} · ${ds}`} aria-label={`${taskTitle} 상세 (${ds})`}
                             className={`w-[calc(100%-4px)] mx-0.5 rounded border h-[22px] ${cellColor} flex items-center justify-center gap-0.5 hover:brightness-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50`}>
                             {t.kanbanStatus === 'done' && <CheckCircle2 className="w-2.5 h-2.5 text-muted-foreground" />}
-                            {t.kanbanStatus === 'in_progress' && <Clock className="w-2.5 h-2.5 text-chart-3" />}
+                            {t.kanbanStatus === 'in_progress' && <Clock className="w-2.5 h-2.5 text-chart-3-text" />}
                           </button>
                         )}
                       </td>
@@ -474,7 +474,7 @@ function PersonalGanttView({
                           <button type="button" onClick={() => onItemClick(dayItem)}
                             title={`${issueTitle} · ${colDs}`} aria-label={`이슈 ${issueTitle} 상세 (${colDs})`}
                             className={`w-[calc(100%-4px)] mx-0.5 rounded border h-[22px] ${iss.closedAt ? 'bg-muted-foreground/20 border-muted-foreground/30' : 'bg-chart-7/30 border-chart-7/50'} flex items-center justify-center focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50`}>
-                            <AlertCircle className={`w-2.5 h-2.5 ${iss.closedAt ? 'text-muted-foreground' : 'text-chart-7'}`} />
+                            <AlertCircle className={`w-2.5 h-2.5 ${iss.closedAt ? 'text-muted-foreground' : 'text-chart-7-text'}`} />
                           </button>
                         )}
                       </td>
@@ -1016,7 +1016,7 @@ export function WbsFlowPage() {
           <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-sm bg-chart-1/30 inline-block" /> 작업</span>
           <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-sm bg-chart-7/30 inline-block" /> 이슈</span>
           <span className="flex items-center gap-1"><CheckCircle2 className="w-3 h-3 text-muted-foreground" /> 완료/해결</span>
-          <span className="flex items-center gap-1"><Clock className="w-3 h-3 text-chart-3" /> 진행중</span>
+          <span className="flex items-center gap-1"><Clock className="w-3 h-3 text-chart-3-text" /> 진행중</span>
           <span className="flex items-center gap-1"><AlertCircle className="w-3 h-3 text-status-critical" /> 미해결</span>
           <span className="ml-auto text-xs">클릭 시 상세 정보</span>
         </div>

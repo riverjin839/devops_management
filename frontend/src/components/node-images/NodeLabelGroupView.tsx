@@ -124,7 +124,7 @@ export function NodeLabelGroupView({ nodes, searchQuery }: Props) {
       </div>
 
       {/* 그룹 카드 그리드 */}
-      <div className="grid gap-4" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(340px, 1fr))' }}>
+      <div className="grid gap-4 grid-cols-[repeat(auto-fill,minmax(340px,1fr))]">
         {groups.map((g) => (
           <div key={g.value} className="bg-card border border-border rounded-md overflow-hidden flex flex-col">
             {/* 카드 헤더 */}

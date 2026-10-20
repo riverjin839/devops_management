@@ -24,19 +24,19 @@ export interface StatusColorEntry {
 // 끝난 일(done)은 무채색으로 가라앉힌다 (DESIGN_SYSTEM §12.12-3·7, D-119).
 export const STATUS_COLOR: Record<KanbanStatus, StatusColorEntry> = {
   backlog: {
-    cssVar: '--chart-8', bgClass: 'bg-chart-8', textClass: 'text-chart-8',
+    cssVar: '--chart-8', bgClass: 'bg-chart-8', textClass: 'text-chart-8-text',
     tintClass: 'bg-chart-8/10', ringClass: 'ring-chart-8/30', label: 'Backlog',
   },
   todo: {
-    cssVar: '--chart-1', bgClass: 'bg-chart-1', textClass: 'text-chart-1',
+    cssVar: '--chart-1', bgClass: 'bg-chart-1', textClass: 'text-chart-1-text',
     tintClass: 'bg-chart-1/10', ringClass: 'ring-chart-1/30', label: 'Todo',
   },
   in_progress: {
-    cssVar: '--chart-3', bgClass: 'bg-chart-3', textClass: 'text-chart-3',
+    cssVar: '--chart-3', bgClass: 'bg-chart-3', textClass: 'text-chart-3-text',
     tintClass: 'bg-chart-3/10', ringClass: 'ring-chart-3/30', label: '진행중',
   },
   review_test: {
-    cssVar: '--chart-4', bgClass: 'bg-chart-4', textClass: 'text-chart-4',
+    cssVar: '--chart-4', bgClass: 'bg-chart-4', textClass: 'text-chart-4-text',
     tintClass: 'bg-chart-4/10', ringClass: 'ring-chart-4/30', label: '검토',
   },
   done: {

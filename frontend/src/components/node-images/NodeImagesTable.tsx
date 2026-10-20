@@ -52,11 +52,11 @@ export function NodeImagesTable({ nodes, searchQuery, onDistribute }: Props) {
             <th className="text-left px-4 py-3 font-medium text-muted-foreground w-8">
               <span className="sr-only">펼치기</span>
             </th>
-            <th className="text-left px-4 py-3 font-medium text-muted-foreground w-64">Node</th>
-            <th className="text-left px-4 py-3 font-medium text-muted-foreground w-32">Role</th>
-            <th className="text-left px-4 py-3 font-medium text-muted-foreground w-24">Status</th>
-            <th className="text-right px-4 py-3 font-medium text-muted-foreground w-24">Images</th>
-            <th className="text-right px-4 py-3 font-medium text-muted-foreground w-32">Total Size</th>
+            <th className="text-left px-4 py-3 font-medium text-muted-foreground w-64">노드</th>
+            <th className="text-left px-4 py-3 font-medium text-muted-foreground w-32">역할</th>
+            <th className="text-left px-4 py-3 font-medium text-muted-foreground w-24">상태</th>
+            <th className="text-right px-4 py-3 font-medium text-muted-foreground w-24">이미지 수</th>
+            <th className="text-right px-4 py-3 font-medium text-muted-foreground w-32">총 용량</th>
           </tr>
         </thead>
         <tbody>
@@ -97,16 +97,22 @@ function RowGroup({
 }) {
   return (
     <>
+      {/* 행 클릭은 마우스 편의 — 키보드·스크린리더는 첫 칸의 펼침 버튼(aria-expanded)으로 연다(D-165). */}
       <tr
         className="border-t border-border hover:bg-muted/10 cursor-pointer"
         onClick={onToggle}
       >
         <td className="px-4 py-3 align-middle">
-          {isOpen ? (
-            <ChevronDown className="w-4 h-4 text-muted-foreground" />
-          ) : (
-            <ChevronRight className="w-4 h-4 text-muted-foreground" />
-          )}
+          <button
+            type="button"
+            onClick={(e) => { e.stopPropagation(); onToggle(); }}
+            aria-expanded={isOpen}
+            aria-label={`${node.node} 이미지 ${isOpen ? '접기' : '펼치기'}`}
+            title={isOpen ? '이미지 목록 접기' : '이미지 목록 펼치기'}
+            className="p-0.5 rounded-md text-muted-foreground hover:bg-secondary hover:text-foreground"
+          >
+            {isOpen ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
+          </button>
         </td>
         <td className="px-4 py-3 align-middle font-mono text-sm">{node.node}</td>
         <td className="px-4 py-3 align-middle">
@@ -144,8 +150,8 @@ function ImageList({ images, onDistribute }: { images: NodeImagesInfo['images'];
       <table className="w-full text-sm">
         <thead>
           <tr className="text-muted-foreground">
-            <th className="text-left py-1.5 font-medium">Image</th>
-            <th className="text-right py-1.5 font-medium w-32">Size</th>
+            <th className="text-left py-1.5 font-medium">이미지</th>
+            <th className="text-right py-1.5 font-medium w-32">크기</th>
             {onDistribute && <th className="text-right py-1.5 font-medium w-24">배포</th>}
           </tr>
         </thead>
