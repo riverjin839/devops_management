@@ -5,6 +5,7 @@ import { useToast } from '@/components/common/Toast';
 import { CitationList } from '@/components/common/CitationList';
 import { RunLogPanel } from '@/components/common/RunLogPanel';
 import { formatApiError } from '@/lib/utils';
+import { degradedHeadline } from '@/lib/analysisDegraded';
 import { useRunLog, runLogged, pollIntoRunLog, type RunLogEntry } from '@/hooks/useRunLog';
 import { useLogPref } from '@/hooks/useLogPref';
 import type { AlertIncidentAnalysis } from '@/types';
@@ -209,7 +210,7 @@ export function IncidentAnalysisPanel({
         <p className="flex items-start gap-1 text-xs text-status-warning">
           <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden />
           <span>
-            분석기가 정상 결과를 내지 못했습니다(신뢰도 0%). 아래 내용은 자동 안내문이며 원인 분석이 아닙니다 —
+            {degradedHeadline(null)}. 아래 내용은 자동 안내문이며 원인 분석이 아닙니다 —
             설정 → AI/LLM 에서 연결 상태를 확인하세요.
           </span>
         </p>

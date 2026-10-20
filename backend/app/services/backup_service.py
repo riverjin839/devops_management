@@ -26,13 +26,14 @@ import uuid
 from datetime import date, datetime, time, timezone
 from decimal import Decimal
 from enum import Enum
-from typing import Any, Optional
+from typing import IO, Any, Iterator, Optional
 
-from sqlalchemy import Table, inspect, text
+from sqlalchemy import Table, inspect, select, text
 from sqlalchemy.engine import Engine
 from sqlalchemy.orm import Session
 
 from app.database import Base
+from app.services.backup_reader import BackupIndex, index_backup, iter_table_rows
 
 _log = logging.getLogger("k8s_monitor.backup")
 
@@ -370,45 +371,147 @@ def _row_pk_values(table: Table, row: dict) -> tuple:
     )
 
 
-def compute_diff(db: Session, envelope: dict, *, include_logs: bool) -> dict:
+class BackupSource:
+    """가져오기 입력 — 테이블별 행을 하나씩 내준다. 파일 전체를 객체로 만들지 않기 위한 추상화.
+
+    - ``EnvelopeSource``: 이미 메모리에 있는 dict(테스트·소규모).
+    - ``FileBackupSource``: 디스크 임시 파일 + ``backup_reader.index_backup`` 위치 색인(라우터 경로).
+
+    레거시 ``issues``/``tasks`` 행은 ``rows("work_items")`` 가 work_items 모양으로 바꿔 이어서 내준다.
+    """
+
+    meta: dict
+
+    def _raw_rows(self, name: str) -> Iterator[Any]:  # pragma: no cover — 하위 클래스 구현
+        raise NotImplementedError
+
+    def rows(self, name: str) -> Iterator[dict]:
+        for r in self._raw_rows(name):
+            if isinstance(r, dict):
+                yield r
+        if name == "work_items":
+            for r in self._raw_rows("issues"):
+                if isinstance(r, dict):
+                    yield _legacy_issue_to_work_item(r)
+            for r in self._raw_rows("tasks"):
+                if isinstance(r, dict):
+                    yield _legacy_task_to_work_item(r)
+
+
+class EnvelopeSource(BackupSource):
+    def __init__(self, envelope: dict):
+        self.meta = {k: v for k, v in envelope.items() if k != "tables"}
+        tables = envelope.get("tables")
+        self._tables = tables if isinstance(tables, dict) else {}
+
+    def _raw_rows(self, name: str) -> Iterator[Any]:
+        yield from self._tables.get(name) or []
+
+
+class FileBackupSource(BackupSource):
+    def __init__(self, fobj: IO[bytes], index: BackupIndex):
+        self.meta = index.meta
+        self._f = fobj
+        self._index = index
+
+    def _raw_rows(self, name: str) -> Iterator[Any]:
+        span = self._index.tables.get(name)
+        if span is not None and span.count:
+            yield from iter_table_rows(self._f, span)
+
+
+def open_backup_file(fobj: IO[bytes]) -> FileBackupSource:
+    """업로드 임시 파일을 검증·색인한다(형식 오류는 ``ValueError``). 파일 내용을 메모리에 올리지 않는다."""
+    return FileBackupSource(fobj, index_backup(fobj))
+
+
+def _as_source(src: BackupSource | dict) -> BackupSource:
+    return src if isinstance(src, BackupSource) else EnvelopeSource(src)
+
+
+def _safe_select_pks(db: Session, t: Table) -> tuple[set[tuple], str | None]:
+    """기존 PK 집합만 서버측 커서로 읽는다 — 예전엔 미리보기가 테이블 전체 행(모든 컬럼)을 올렸다."""
+    pk_cols = list(t.primary_key.columns)
+    out: set[tuple] = set()
+    if not pk_cols:
+        return out, None
+    try:
+        result = db.execute(
+            select(*pk_cols).execution_options(stream_results=True, yield_per=EXPORT_YIELD_PER)
+        )
+        for r in result:
+            out.add(tuple(r))
+        return out, None
+    except Exception as e:  # noqa: BLE001
+        try:
+            db.rollback()
+        except Exception:
+            pass
+        msg = f"{type(e).__name__}: {str(e)[:300]}"
+        _log.warning("backup: SELECT pk %s failed — %s", t.name, msg)
+        return set(), msg
+
+
+class _ErrorLog(list):
+    """행 단위 오류 기록 — 수만 행이 실패해도 응답이 폭주하지 않게 앞쪽 ``limit`` 건만 남기고 개수만 센다."""
+
+    def __init__(self, limit: int):
+        super().__init__()
+        self._limit = limit
+        self.dropped = 0
+
+    def add(self, msg: str) -> None:
+        if len(self) < self._limit:
+            self.append(msg)
+        else:
+            self.dropped += 1
+
+    def finish(self) -> list[str]:
+        out = list(self)
+        if self.dropped:
+            out.append(f"… 외 {self.dropped}건 생략 (앞쪽 {self._limit}건만 표시)")
+        return out
+
+
+IMPORT_ERRORS_LIMIT = 500
+
+
+def compute_diff(db: Session, source: BackupSource | dict, *, include_logs: bool) -> dict:
     """import 없이 diff 만 계산 — UI 미리보기용. **per-table fault-tolerant** —
     한 테이블 SELECT 실패는 해당 테이블만 0/0 으로 표시, 다른 테이블 진행.
+
+    백업 행은 하나씩 흘려 읽고 PK 만 모은다(행 전체를 쌓지 않는다).
     """
+    src = _as_source(source)
     tables = _filter_tables(include_logs)
-    table_by_name = {t.name: t for t in tables}
-    incoming_tables = envelope.get("tables", {})
     report: list[dict] = []
     errors: list[str] = []
     total_in = 0
     total_ex = 0
 
-    for t_name, t in table_by_name.items():
-        rows_in = incoming_tables.get(t_name, [])
-        total_in += len(rows_in)
-
-        rows, err = _safe_select_rows(db, t)
-        existing_pks: set[tuple] = set()
+    for t in tables:
+        existing_pks, err = _safe_select_pks(db, t)
         if err is not None:
-            errors.append(f"{t_name}: {err}")
-        else:
-            for r in rows or []:
-                existing_pks.add(tuple(r[pk.name] for pk in t.primary_key.columns))
+            errors.append(f"{t.name}: {err}")
         total_ex += len(existing_pks)
 
         in_pks: set[tuple] = set()
+        incoming = 0
         inserts = 0
-        for r in rows_in:
+        for r in src.rows(t.name):
+            incoming += 1
             pk = _row_pk_values(t, r)
             in_pks.add(pk)
             if pk not in existing_pks:
                 inserts += 1
-        updates = len([pk for pk in in_pks if pk in existing_pks])
+        total_in += incoming
+        updates = len(in_pks & existing_pks)
         unchanged = 0   # 세부 비교까지 하면 비쌈 — updates 에 포함
         delete_candidates = len(existing_pks - in_pks)
 
         report.append({
-            "name": t_name,
-            "incoming": len(rows_in),
+            "name": t.name,
+            "incoming": incoming,
             "existing": len(existing_pks),
             "insert_count": inserts,
             "update_count": updates,
@@ -417,9 +520,9 @@ def compute_diff(db: Session, envelope: dict, *, include_logs: bool) -> dict:
         })
 
     return {
-        "version": envelope.get("version"),
-        "created_at": envelope.get("created_at"),
-        "backup_options": envelope.get("options", {}),
+        "version": src.meta.get("version"),
+        "created_at": src.meta.get("created_at"),
+        "backup_options": src.meta.get("options", {}),
         "total_incoming": total_in,
         "total_existing": total_ex,
         "tables": report,
@@ -428,102 +531,81 @@ def compute_diff(db: Session, envelope: dict, *, include_logs: bool) -> dict:
     }
 
 
-def _legacy_remap_work_items(envelope: dict) -> None:
-    """레거시 백업 호환 — `issues` / `tasks` 테이블 행을 `work_items` 로 변환해 합친다.
+# 레거시 백업 호환 — 통합 이전(`issues` / `tasks` 테이블) 시점의 백업 행을 `work_items` 행으로 바꾼다.
+# 매핑 규칙은 main.py 의 backfill SQL 과 동일:
+# - issues: type='issue', issue_area→category, issue_content→content,
+#   action_content→resolution, occurred_at→started_at, resolved_at→closed_at,
+#   kanban_status='done' if resolved_at else 'todo', priority='medium' 기본.
+# - tasks: type='task', task_category→category, task_content→content,
+#   result_content→resolution, scheduled_at→started_at, completed_at→closed_at,
+#   issue_id→related_work_item_id.
 
-    Issue / Task 모델을 WorkItem 으로 통합한 이후의 환경에서, 통합 이전 시점에
-    생성된 백업 파일도 그대로 import 할 수 있도록 envelope 를 in-place 로 수정한다.
+def _legacy_issue_to_work_item(row: dict) -> dict:
+    resolved = row.get("resolved_at")
+    return {
+        "id": row.get("id"),
+        "type": "issue",
+        "assignee": row.get("assignee"),
+        "primary_assignee": row.get("primary_assignee") or row.get("assignee"),
+        "secondary_assignee": row.get("secondary_assignee"),
+        "cluster_id": row.get("cluster_id"),
+        "cluster_name": row.get("cluster_name"),
+        "category": row.get("issue_area"),
+        "content": row.get("issue_content"),
+        "resolution": row.get("action_content"),
+        "detail_content": row.get("detail_content"),
+        "started_at": row.get("occurred_at"),
+        "closed_at": resolved,
+        "remarks": row.get("remarks"),
+        "service": row.get("service"),
+        "confluence_url": row.get("confluence_url"),
+        "priority": "medium",
+        "kanban_status": "done" if resolved else "todo",
+        "module": None,
+        "type_label": None,
+        "effort_hours": None,
+        "done_condition": None,
+        "parent_id": None,
+        "related_work_item_id": None,
+        "created_at": row.get("created_at"),
+        "updated_at": row.get("updated_at"),
+    }
 
-    매핑 규칙은 main.py 의 backfill SQL 과 동일:
-    - issues: type='issue', issue_area→category, issue_content→content,
-      action_content→resolution, occurred_at→started_at, resolved_at→closed_at,
-      kanban_status='done' if resolved_at else 'todo', priority='medium' 기본.
-    - tasks: type='task', task_category→category, task_content→content,
-      result_content→resolution, scheduled_at→started_at, completed_at→closed_at,
-      issue_id→related_work_item_id.
-    """
-    tables = envelope.get("tables")
-    if not isinstance(tables, dict):
-        return
 
-    legacy_issues = tables.pop("issues", None) or []
-    legacy_tasks = tables.pop("tasks", None) or []
-    if not legacy_issues and not legacy_tasks:
-        return
-
-    merged: list[dict] = list(tables.get("work_items", []) or [])
-
-    for row in legacy_issues:
-        if not isinstance(row, dict):
-            continue
-        resolved = row.get("resolved_at")
-        merged.append({
-            "id": row.get("id"),
-            "type": "issue",
-            "assignee": row.get("assignee"),
-            "primary_assignee": row.get("primary_assignee") or row.get("assignee"),
-            "secondary_assignee": row.get("secondary_assignee"),
-            "cluster_id": row.get("cluster_id"),
-            "cluster_name": row.get("cluster_name"),
-            "category": row.get("issue_area"),
-            "content": row.get("issue_content"),
-            "resolution": row.get("action_content"),
-            "detail_content": row.get("detail_content"),
-            "started_at": row.get("occurred_at"),
-            "closed_at": resolved,
-            "remarks": row.get("remarks"),
-            "service": row.get("service"),
-            "confluence_url": row.get("confluence_url"),
-            "priority": "medium",
-            "kanban_status": "done" if resolved else "todo",
-            "module": None,
-            "type_label": None,
-            "effort_hours": None,
-            "done_condition": None,
-            "parent_id": None,
-            "related_work_item_id": None,
-            "created_at": row.get("created_at"),
-            "updated_at": row.get("updated_at"),
-        })
-
-    for row in legacy_tasks:
-        if not isinstance(row, dict):
-            continue
-        merged.append({
-            "id": row.get("id"),
-            "type": "task",
-            "assignee": row.get("assignee"),
-            "primary_assignee": row.get("primary_assignee") or row.get("assignee"),
-            "secondary_assignee": row.get("secondary_assignee"),
-            "cluster_id": row.get("cluster_id"),
-            "cluster_name": row.get("cluster_name"),
-            "category": row.get("task_category"),
-            "content": row.get("task_content"),
-            "resolution": row.get("result_content"),
-            "detail_content": None,
-            "started_at": row.get("scheduled_at"),
-            "closed_at": row.get("completed_at"),
-            "remarks": row.get("remarks"),
-            "service": row.get("service"),
-            "confluence_url": row.get("confluence_url"),
-            "priority": row.get("priority") or "medium",
-            "kanban_status": row.get("kanban_status") or "todo",
-            "module": row.get("module"),
-            "type_label": row.get("type_label"),
-            "effort_hours": row.get("effort_hours"),
-            "done_condition": row.get("done_condition"),
-            "parent_id": row.get("parent_id"),
-            "related_work_item_id": row.get("issue_id"),
-            "created_at": row.get("created_at"),
-            "updated_at": row.get("updated_at"),
-        })
-
-    tables["work_items"] = merged
+def _legacy_task_to_work_item(row: dict) -> dict:
+    return {
+        "id": row.get("id"),
+        "type": "task",
+        "assignee": row.get("assignee"),
+        "primary_assignee": row.get("primary_assignee") or row.get("assignee"),
+        "secondary_assignee": row.get("secondary_assignee"),
+        "cluster_id": row.get("cluster_id"),
+        "cluster_name": row.get("cluster_name"),
+        "category": row.get("task_category"),
+        "content": row.get("task_content"),
+        "resolution": row.get("result_content"),
+        "detail_content": None,
+        "started_at": row.get("scheduled_at"),
+        "closed_at": row.get("completed_at"),
+        "remarks": row.get("remarks"),
+        "service": row.get("service"),
+        "confluence_url": row.get("confluence_url"),
+        "priority": row.get("priority") or "medium",
+        "kanban_status": row.get("kanban_status") or "todo",
+        "module": row.get("module"),
+        "type_label": row.get("type_label"),
+        "effort_hours": row.get("effort_hours"),
+        "done_condition": row.get("done_condition"),
+        "parent_id": row.get("parent_id"),
+        "related_work_item_id": row.get("issue_id"),
+        "created_at": row.get("created_at"),
+        "updated_at": row.get("updated_at"),
+    }
 
 
 def apply_import(
     db: Session,
-    envelope: dict,
+    source: BackupSource | dict,
     *,
     mode: str = "merge",          # "merge" | "replace"
     include_logs: bool = False,
@@ -535,27 +617,27 @@ def apply_import(
     - replace: 대상 테이블 전체 DELETE 후 INSERT (FK 때문에 역순 삭제).
     - dry_run: DB 변경 없이 compute_diff 만 반환.
 
+    ``source`` 는 ``open_backup_file()`` 결과(디스크 파일에서 행을 흘려 읽음) 또는 dict envelope.
+    레거시 issues/tasks 행은 source 가 work_items 로 바꿔 내준다.
+
     행/테이블 단위로 개별 SAVEPOINT(``db.begin_nested()``) 를 열어 처리한다 — 한
     행(예: FK 누락, 마스킹된 PK 등)이 실패해도 그 SAVEPOINT 만 롤백되고 이미
     처리된 다른 행/테이블은 유지된다. 응답의 inserted/updated/deleted 는 실제로
-    커밋되는 카운트와 항상 일치한다.
+    커밋되는 카운트와 항상 일치한다. 행 오류는 앞쪽 ``IMPORT_ERRORS_LIMIT`` 건만 응답에 싣는다.
     """
     if mode not in ("merge", "replace"):
         raise ValueError(f"unknown mode: {mode}")
 
-    # 레거시 issues/tasks → work_items 통합 (in-place envelope 수정)
-    _legacy_remap_work_items(envelope)
-
-    diff = compute_diff(db, envelope, include_logs=include_logs)
+    src = _as_source(source)
+    diff = compute_diff(db, src, include_logs=include_logs)
     if dry_run:
         return {"dry_run": True, "mode": mode, "diff": diff}
 
     tables = _filter_tables(include_logs)
-    incoming = envelope.get("tables", {})
     inserted = 0
     updated = 0
     deleted = 0
-    errors: list[str] = []
+    errors = _ErrorLog(IMPORT_ERRORS_LIMIT)
 
     engine: Engine = db.get_bind()
     insp = inspect(engine)
@@ -569,17 +651,13 @@ def apply_import(
                     res = db.execute(t.delete())
                     deleted += res.rowcount or 0
             except Exception as e:
-                errors.append(f"{t.name} DELETE 실패 ({type(e).__name__}): {str(e)[:120]}")
+                errors.add(f"{t.name} DELETE 실패 ({type(e).__name__}): {str(e)[:120]}")
 
     for t in tables:
-        rows = incoming.get(t.name, [])
-        if not rows:
-            continue
-
         col_types = {c.name: str(c.type) for c in t.columns}
         col_names = set(col_types.keys())
 
-        for row in rows:
+        for row in src.rows(t.name):
             # 현재 스키마에 없는 컬럼 키는 무시(버전 차이 대응). MASKED_SENTINEL 값은
             # export 시 마스킹된 민감 컬럼이므로 갱신 대상에서 아예 제외한다 —
             # 그래야 merge import 시 기존 kubeconfig/비밀번호/토큰이 보존된다
@@ -600,7 +678,7 @@ def apply_import(
             pk_vals = {k: clean.get(k) for k in pk_cols}
             if any(v is None for v in pk_vals.values()):
                 # PK 자체가 없거나(구버전 백업) 마스킹돼 upsert 불가 — 스킵.
-                errors.append(f"{t.name} row skipped: PK missing ({pk_vals})")
+                errors.add(f"{t.name} row skipped: PK missing ({pk_vals})")
                 continue
 
             try:
@@ -626,7 +704,7 @@ def apply_import(
                                 db.execute(t.update().where(where).values(**non_pk))
                                 updated += 1
             except Exception as e:
-                errors.append(
+                errors.add(
                     f"{t.name} row {pk_vals}: {type(e).__name__}: {str(e)[:120]}"
                 )
 
@@ -657,7 +735,7 @@ def apply_import(
         "inserted": inserted,
         "updated": updated,
         "deleted": deleted,
-        "errors": errors,
+        "errors": errors.finish(),
         "diff": diff,
     }
 

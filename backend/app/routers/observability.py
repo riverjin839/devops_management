@@ -31,6 +31,7 @@ from sqlalchemy import desc, or_
 from sqlalchemy.orm import Session
 
 from app.auth.deps import get_cluster_scope, get_current_user, require_operator
+from app.services.list_cursor import apply_cursor, page_with_cursor
 from app.services.cluster_access import ClusterScope, require_cluster_access
 from app.config import settings
 from app.database import get_db
@@ -734,6 +735,8 @@ class AlertEventPageResponse(AlertEventListResponse):
     """
 
     has_more: bool = False
+    # 다음 페이지 키셋 커서 — "더 보기" 는 offset 대신 이 값을 ``cursor`` 로 넘긴다(행 누락 방지).
+    next_cursor: Optional[str] = None
 
 
 @router.get("/alerts", response_model=AlertEventPageResponse)
@@ -748,6 +751,7 @@ def list_alerts(
     to: Optional[datetime] = Query(default=None),
     limit: int = Query(default=100, le=500),
     offset: int = Query(default=0, ge=0),
+    cursor: Optional[str] = Query(default=None, description="이전 페이지 next_cursor — 주면 offset 무시"),
     db: Session = Depends(get_db),
     scope: ClusterScope = Depends(get_cluster_scope),
 ) -> AlertEventPageResponse:
@@ -766,10 +770,15 @@ def list_alerts(
 
     total = query.count()
     # id 보조 정렬 — 같은 시각 행의 순서를 고정해 "더 보기" 경계가 흔들리지 않게(D-111).
-    rows = query.order_by(desc(AlertEvent.received_at), desc(AlertEvent.id)).offset(offset).limit(limit).all()
+    ordered = query.order_by(desc(AlertEvent.received_at), desc(AlertEvent.id))
+    if cursor:
+        rows, has_more, next_cursor = page_with_cursor(
+            apply_cursor(ordered, AlertEvent.received_at, AlertEvent.id, cursor), limit)
+    else:
+        rows, has_more, next_cursor = page_with_cursor(ordered.offset(offset), limit)
     names = _cluster_names(db)
     data = [_alert_out(r, names) for r in rows]
-    return AlertEventPageResponse(data=data, total=total, has_more=offset + len(data) < total)
+    return AlertEventPageResponse(data=data, total=total, has_more=has_more, next_cursor=next_cursor)
 
 
 @router.get("/alerts/stats", response_model=AlertStatsResponse)

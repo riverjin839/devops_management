@@ -14,6 +14,7 @@ from sqlalchemy import desc, func
 from sqlalchemy.orm import Session
 
 from app.auth.deps import get_cluster_scope, require_operator
+from app.services.list_cursor import apply_cursor, page_with_cursor
 from app.services.cluster_access import ClusterScope, require_cluster_access
 from app.config import settings
 from app.database import get_db
@@ -58,6 +59,8 @@ class K8sEventListResponse(BaseModel):
     total: int
     # 이 페이지 뒤에 더 있는지 — offset + len(data) < total (D-111 "더 보기")
     has_more: bool = False
+    # 다음 페이지 키셋 커서 — "더 보기" 는 offset 대신 이 값을 ``cursor`` 로 넘긴다(행 누락 방지).
+    next_cursor: Optional[str] = None
 
 
 class K8sEventSeverityCounts(BaseModel):
@@ -200,6 +203,7 @@ def list_k8s_events(
     resource_kind: Optional[str] = None,
     limit: int = Query(default=100, ge=1, le=500),
     offset: int = Query(default=0, ge=0),
+    cursor: Optional[str] = Query(default=None, description="이전 페이지 next_cursor — 주면 offset 무시"),
     db: Session = Depends(get_db),
     scope: ClusterScope = Depends(get_cluster_scope),
 ) -> K8sEventListResponse:
@@ -212,8 +216,12 @@ def list_k8s_events(
     if resource_kind:
         q = q.filter(K8sEvent.resource_kind == resource_kind)
     total = q.count()
-    events = q.offset(offset).limit(limit).all()
-    return K8sEventListResponse(data=events, total=total, has_more=offset + len(events) < total)
+    if cursor:
+        events, has_more, next_cursor = page_with_cursor(
+            apply_cursor(q, K8sEvent.received_at, K8sEvent.id, cursor), limit)
+    else:
+        events, has_more, next_cursor = page_with_cursor(q.offset(offset), limit)
+    return K8sEventListResponse(data=events, total=total, has_more=has_more, next_cursor=next_cursor)
 
 
 # ⚠ `/{event_id}` 보다 먼저 선언해야 한다 — 뒤에 두면 "stats" 가 UUID 파싱 422 로 빠진다.

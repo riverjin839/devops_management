@@ -19,8 +19,10 @@ export interface CollectResponseLike<H extends CollectHostLike> {
   errors: string[];
 }
 
-/** 부가 정보 줄을 호스트마다 남기는 상한 — 서버 단계 칩 상한(30대)과 맞춘다. */
+/** 호스트마다 한 줄씩 남기는 상한 — 서버 단계 칩 상한(30대)과 맞춘다. 넘으면 요약 한 줄로 대신한다. */
 const DETAIL_MAX_HOSTS = 30;
+/** 상한을 넘을 때 요약 줄에 이름을 붙여 보여줄 저장 호스트 수. */
+const STORED_NAMES_MAX = 20;
 
 /** 실행 시작 줄 — "<클러스터> — <대상> · 노드 N대 수집 요청 (sudo)" */
 export function collectFirstLine(clusterName: string | undefined, hostCount: number, what: string, useSudo: boolean): string {
@@ -30,7 +32,9 @@ export function collectFirstLine(clusterName: string | undefined, hostCount: num
 
 /**
  * 스트림 결과(`result`) → 서버 줄에 없는 내용만 실행 로그 줄로.
- * - `detail(h)` 가 있으면 정상 호스트의 부가 정보 한 줄(호스트 30대 이하일 때만, "host · 부가 정보 · 저장됨/변경 없음").
+ * - 정상 호스트마다 "host · (부가 정보) · 저장됨/변경 없음" 한 줄(호스트 30대 이하). 저장 여부는 서버 줄에
+ *   없으므로 `detail` 이 없어도 남긴다.
+ * - 30대를 넘으면 "저장됨 N대 · 변경 없음 M대 — 저장: h1, h2 … 외 K대" 요약 한 줄.
  * - 백엔드 `errors` 중 실패 호스트 줄("<host>: …")로 이미 나온 것을 뺀 나머지는 warn 줄.
  */
 export function summarizeCollectStream<H extends CollectHostLike>(
@@ -41,14 +45,22 @@ export function summarizeCollectStream<H extends CollectHostLike>(
   const failedHosts = res.hosts
     .filter((h) => !!h.error || (h.status !== undefined && h.status !== 'ok'))
     .map((h) => h.host);
-  if (detail && res.hosts.length <= DETAIL_MAX_HOSTS) {
-    for (const h of res.hosts) {
-      if (failedHosts.includes(h.host)) continue;
-      const extra = detail(h);
-      if (!extra) continue;
-      const parts = [h.host, extra];
+  const okHosts = res.hosts.filter((h) => !failedHosts.includes(h.host));
+  if (res.hosts.length <= DETAIL_MAX_HOSTS) {
+    for (const h of okHosts) {
+      const extra = detail?.(h);
+      const parts = [h.host];
+      if (extra) parts.push(extra);
       if (h.stored !== undefined) parts.push(h.stored ? '저장됨' : '변경 없음');
-      out.push(['info', parts.join(' · ')]);
+      if (parts.length > 1) out.push(['info', parts.join(' · ')]);
+    }
+  } else {
+    const stored = okHosts.filter((h) => h.stored === true).map((h) => h.host);
+    const unchanged = okHosts.filter((h) => h.stored === false).length;
+    if (stored.length || unchanged) {
+      const names = stored.slice(0, STORED_NAMES_MAX).join(', ');
+      const rest = stored.length > STORED_NAMES_MAX ? ` 외 ${stored.length - STORED_NAMES_MAX}대` : '';
+      out.push(['info', `저장됨 ${stored.length}대 · 변경 없음 ${unchanged}대${stored.length ? ` — 저장: ${names}${rest}` : ''}`]);
     }
   }
   for (const e of res.errors) {
