@@ -8,6 +8,12 @@
 //    다음 모달이 push 하면 그 기록이 대신 지워져 새 모달이 즉시 닫히던 문제가 있었다.
 //  - 회수는 "현재 기록이 내 기록 또는 그 위의 닫힌 모달 기록이고, 화면(pathname)이 그대로"일 때만 한다.
 //    닫자마자 다른 화면으로 이동했다면 회수하지 않고, 남은 기록은 고아 건너뛰기가 처리한다.
+//  - 회수는 현재 기록의 hash 가 여전히 `#modal-` 일 때만 한다. 모달이 열린 채 다른 코드가 replace 로 그
+//    기록을 실제 화면 상태로 바꿨으면(예: IslandPage 패널 추가 — 피커를 닫으면서 `setSearchParams(
+//    {panel}, {replace:true})` 로 `#modal-` 기록이 `?panel=x` 로 바뀐다) 그 기록은 이제 모달 기록이 아니라
+//    사용자가 머문 화면이므로 지우지 않고 보존한다. 위에 다른 모달이 push 돼 지금은 hash 를 볼 수 없는
+//    기록(회수 미룸)도 같은 원칙 — push 직전에 바뀌었는지 표시(`replaced`)해 두고 회수에서 뺀다.
+//    (`useUrlParams` 는 hash 를 보존하므로 모달이 열린 채 필터를 바꾸는 경우엔 해당하지 않는다.)
 //  - 고아 기록: 뒤로/앞으로 이동해 도착한 기록이 모달 hash 인데 그 기록을 가진 열린 모달이 없으면
 //    같은 방향으로 한 칸 더 이동한다(예: 모달을 닫고 바로 이동한 화면에서 뒤로가기).
 
@@ -23,11 +29,19 @@ interface Entry {
   /** close 뒤에도 열려 있으면(실행 중이라 닫기를 막는 모달) 기록을 다시 push 한다. */
   stillOpen: () => boolean;
   repush: () => void;
+  /** 이 기록이 현재일 때 다른 코드가 replace 로 hash 를 지웠다 — 회수하지 않고 보존한다. */
+  replaced?: boolean;
+}
+
+interface DeferredEntry {
+  idx: number;
+  path: string;
+  replaced?: boolean;
 }
 
 const entries = new Map<symbol, Entry>();
 /** 닫혔지만 위에 열린 모달이 남아 있어 회수를 미룬 기록 — 그 모달이 닫힐 때 함께 회수한다. */
-const deferred: { idx: number; path: string }[] = [];
+const deferred: DeferredEntry[] = [];
 let queue: Promise<void> = Promise.resolve();
 let selfPops = 0;
 let lastIdx = 0;
@@ -36,6 +50,21 @@ let installed = false;
 export function currentIdx(): number {
   const s = window.history.state as { idx?: unknown } | null;
   return typeof s?.idx === 'number' ? s.idx : 0;
+}
+
+function isModalHash(): boolean {
+  return window.location.hash.startsWith(MODAL_HASH_PREFIX);
+}
+
+/**
+ * 현재 기록의 hash 가 모달 hash 가 아니면, 그 기록을 가진 모달(열림·회수 미룸)을 `replaced` 로 표시한다.
+ * replace 는 현재 기록만 바꿀 수 있으므로, 기록이 덮이기 직전(push)과 회수 시점에 확인하면 충분하다.
+ */
+function markReplacedAtCurrent(): void {
+  if (isModalHash()) return;
+  const idx = currentIdx();
+  for (const e of entries.values()) if (e.idx === idx) e.replaced = true;
+  for (const d of deferred) if (d.idx === idx) d.replaced = true;
 }
 
 function enqueue(op: () => void | Promise<void>): void {
@@ -105,6 +134,7 @@ export function openModalEntry(
 
   const doPush = () => enqueue(() => {
     if (released) return;
+    markReplacedAtCurrent(); // 덮기 전에 — 이후로는 이 기록의 hash 를 볼 수 없다
     push();
     const idx = currentIdx();
     lastIdx = idx;
@@ -120,17 +150,26 @@ export function openModalEntry(
     enqueue(async () => {
       const cur = currentIdx();
       if (window.location.pathname !== e.path || cur < e.idx) return;
+      markReplacedAtCurrent();
+      // 내 기록이 replace 로 실제 화면 상태가 됐다 — 보존한다(회수도, 회수 미룸도 하지 않음).
+      if (e.replaced) return;
       // 내 기록 위에 열린 모달 기록이 있으면 지금은 건드리지 않는다(그 모달이 닫힐 때 함께 회수).
       if ([...entries.values()].some((o) => o.idx > e.idx && o.idx <= cur)) {
         deferred.push({ idx: e.idx, path: e.path });
         return;
       }
+      // 현재 기록이 모달 기록이 아니면(다른 코드가 replace 로 바꿨거나 그 위에 일반 화면 기록이 쌓였다)
+      // 회수하지 않는다 — go(-n) 이 사용자가 머문 화면 기록까지 지워 버린다.
+      if (!isModalHash()) return;
       // 바로 아래에 회수를 미뤄 둔 기록이 이어져 있으면 한 번에 회수한다.
+      // replace 로 바뀐 기록에서 멈추고 그 기록(과 그 아래)은 보존한다.
       let low = e.idx;
       for (let i = deferred.findIndex((d) => d.idx === low - 1 && d.path === e.path); i >= 0;
         i = deferred.findIndex((d) => d.idx === low - 1 && d.path === e.path)) {
-        low -= 1;
+        const d = deferred[i];
         deferred.splice(i, 1);
+        if (d.replaced) break;
+        low -= 1;
       }
       await selfGo(-(cur - low + 1));
     });

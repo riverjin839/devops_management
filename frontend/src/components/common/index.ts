@@ -5,6 +5,7 @@ export { ConfirmDialog } from './ConfirmDialog';
 export { CitationList } from './CitationList';
 export { IncidentAnalysisPanel } from './IncidentAnalysisPanel';
 export { useModalA11y } from './useModalA11y';
+export { useModalHistory } from './useModalHistory';
 export { LogViewer } from './LogViewer';
 export { RunLogPanel } from './RunLogPanel';
 export { ExecOutputTabs } from './ExecOutputTabs';

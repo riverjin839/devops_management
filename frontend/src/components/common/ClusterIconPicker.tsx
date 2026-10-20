@@ -15,6 +15,7 @@ import { COLOR_PATTERNS } from '@/lib/colorPatterns';
 import { resolveIconSeed, themePatternSeedHex } from '@/lib/clusterIconTheme';
 import { useThemeStore } from '@/stores/themeStore';
 import type { ClusterIconConfig } from '@/types';
+import { useModalHistory } from './useModalHistory';
 
 /** 빌더 탭에 프리필할 클러스터 속성 — 전달되면 "빌더" 탭이 노출된다. */
 export interface IconBuilderContext {
@@ -101,6 +102,10 @@ export function ClusterIconPicker({
   const [uploadError, setUploadError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
+
+  // 뒤로가기로 picker 만 닫기 — 조건부 마운트라 마운트 = 열림. PanelEditDialog 등 다이얼로그 안에
+  // 중첩되면 picker 기록이 위에 쌓여 뒤로가기가 picker 부터 닫는다.
+  useModalHistory(true, onClose);
 
   // ESC 로 닫기
   useEffect(() => {
