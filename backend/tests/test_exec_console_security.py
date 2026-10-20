@@ -298,6 +298,177 @@ def test_tcpdump_capture_audited_as_host_target(client_as, world, monkeypatch, d
     assert rows[0].target_type == "host" and rows[0].target_id == OUTSIDE_HOST
 
 
+# ── 실행 도중 예외 — 감사 정확히 1행(failure + 마스킹한 예외 요약) ───────────
+
+def _raising_run_bulk(msg="boom --password=leak-pw"):
+    async def _run(targets, **kw):
+        raise RuntimeError(msg)
+    return _run
+
+
+def _assert_one_failure(db, user, action):
+    rows = _audits(db, user, action)
+    assert len(rows) == 1, [r.status for r in rows]
+    row = rows[0]
+    assert row.status == "failure" and row.details["result"] == "exception"
+    assert "RuntimeError" in row.details["error"] and "leak-pw" not in json.dumps(row.details)
+    return row
+
+
+def test_etcdctl_exception_mid_run_audited_once(client_as, world, monkeypatch, db):
+    import app.routers.etcdctl as mod
+    monkeypatch.setattr(mod, "run_bulk", _raising_run_bulk())
+    c = client_as(world["op_member"])
+    with pytest.raises(RuntimeError):
+        c.post(f"/api/v1/clusters/{world['open'].id}/etcdctl/run",
+               json={"host": OPEN_HOST, "args": "--password=etcd-pw member list", **SSH_CRED})
+    row = _assert_one_failure(db, world["op_member"], "etcdctl.run")
+    assert "etcd-pw" not in row.details["command"] and row.details["host"] == OPEN_HOST
+    with pytest.raises(RuntimeError):
+        c.post(f"/api/v1/clusters/{world['open'].id}/etcdctl/logs", json={"host": OPEN_HOST, **SSH_CRED})
+    _assert_one_failure(db, world["op_member"], "etcdctl.logs")
+
+
+def test_mc_exception_mid_run_audited_once(client_as, world, monkeypatch, db):
+    import app.routers.mc_client as mod
+    monkeypatch.setattr(mod, "run_bulk", _raising_run_bulk())
+    with pytest.raises(RuntimeError):
+        client_as(world["op_member"]).post(
+            f"/api/v1/clusters/{world['open'].id}/mc/run",
+            json={"host": OPEN_HOST, "args": "alias set x http://h:9000 AKX SKX", **SSH_CRED})
+    row = _assert_one_failure(db, world["op_member"], "mc.run")
+    assert "SKX" not in row.details["command"]
+
+
+def test_bulk_exec_exception_mid_run_audited_once(client_as, world, monkeypatch, db):
+    import app.routers.bulk_exec as mod
+    monkeypatch.setattr(mod, "run_bulk", _raising_run_bulk())
+    with pytest.raises(RuntimeError):
+        client_as(world["op_outsider"]).post("/api/v1/bulk-exec/run", json={
+            "action": "ssh", "command": "export API_KEY=abc123 && uptime",
+            "targets": [{"host": OUTSIDE_HOST}], **SSH_CRED})
+    rows = _audits(db, world["op_outsider"], "bulk_exec.run")
+    assert len(rows) == 1 and rows[0].status == "failure"
+    d = rows[0].details
+    assert d["ok_count"] == 0 and "RuntimeError" in d["error"]
+    assert "leak-pw" not in json.dumps(d) and "abc123" not in json.dumps(d)
+
+
+def test_bulk_exec_fetch_file_exception_audited_once(client_as, world, monkeypatch, db):
+    import app.routers.bulk_exec as mod
+
+    def _boom(*a, **k):
+        raise RuntimeError("boom --password=leak-pw")
+    monkeypatch.setattr(mod, "fetch_remote_file", _boom)
+    with pytest.raises(RuntimeError):
+        client_as(world["op_outsider"]).post("/api/v1/bulk-exec/fetch-file", json={
+            "host": OUTSIDE_HOST, "remote_path": "/etc/hosts", **SSH_CRED})
+    _assert_one_failure(db, world["op_outsider"], "bulk_exec.fetch_file")
+
+
+def test_tcpdump_exception_mid_run_audited_once(client_as, world, monkeypatch, db):
+    import app.routers.topology_trace as mod
+
+    def _boom(*a, **k):
+        raise RuntimeError("boom --password=leak-pw")
+    monkeypatch.setattr(mod, "tcpdump_capture", _boom)
+    monkeypatch.setattr(mod, "list_remote_interfaces", _boom)
+    c = client_as(world["op_outsider"])
+    with pytest.raises(RuntimeError):
+        c.post("/api/v1/topology-trace/tcpdump", json={"host": OUTSIDE_HOST, "interface": "eth0", **SSH_CRED})
+    row = _assert_one_failure(db, world["op_outsider"], "tcpdump.capture")
+    assert row.target_type == "host" and row.target_id == OUTSIDE_HOST
+    with pytest.raises(RuntimeError):
+        c.post("/api/v1/topology-trace/tcpdump/interfaces", json={"host": OUTSIDE_HOST, **SSH_CRED})
+    rows = _audits(db, world["op_outsider"], "tcpdump.interfaces")
+    assert len(rows) == 1 and rows[0].status == "failure" and "RuntimeError" in rows[0].details["error"]
+    assert "leak-pw" not in json.dumps(rows[0].details)
+
+
+# ── host → cluster 매칭 정규화(우회 표기) ────────────────────────────────────
+
+def _bound_variants(ip: str) -> list[str]:
+    import ipaddress
+    a, b, c, d = (int(x) for x in ip.split("."))
+    return [
+        str(int(ipaddress.IPv4Address(ip))),        # 정수
+        f"{a}.{b}.{c * 256 + d}",                     # 축약(a.b.c16)
+        f"{a}.{(b << 16) | (c << 8) | d}",            # 축약(a.b24)
+        f"0{a:o}.0{b:o}.0{c:o}.0{d:o}",               # 8진
+        f"0x{a:02x}.0x{b:02x}.0x{c:02x}.0x{d:02x}",   # 16진
+        f"::ffff:{ip}",                               # IPv4-mapped
+        f"[::FFFF:{ip}]",
+        f" {ip} ",
+    ]
+
+
+def test_norm_ip_legacy_and_mapped_forms():
+    from app.services.cluster_access import _norm_ip
+    for v in _bound_variants("10.0.0.11"):
+        assert _norm_ip(v) == "10.0.0.11", v
+    assert _norm_ip("fe80::1%eth0") == "fe80::1"
+    for v in ("node1", "node1.", "10.0.0.11 x", "", "999999999999"):
+        assert _norm_ip(v) is None, v
+
+
+def test_host_variants_match_bound_cluster(world, db):
+    from app.services.cluster_access import cluster_ids_for_host
+    for v in [BOUND_HOST, *_bound_variants(BOUND_HOST)]:
+        assert world["bound"].id in cluster_ids_for_host(db, v), v
+    assert cluster_ids_for_host(db, OUTSIDE_HOST) == set()
+
+
+def test_host_variant_bypass_is_403(client_as, world, monkeypatch):
+    import app.routers.etcdctl as mod
+    fake = _fake_run_bulk()
+    monkeypatch.setattr(mod, "run_bulk", fake)
+    c = client_as(world["op_outsider"])
+    for v in _bound_variants(BOUND_HOST):
+        r = c.post(f"/api/v1/clusters/{world['open'].id}/etcdctl/run",
+                   json={"host": v, "args": "endpoint health", **SSH_CRED})
+        assert r.status_code == 403, (v, r.status_code)
+    assert fake.calls == []
+
+
+def test_infra_hostname_case_and_trailing_dot(world, db):
+    from app.models.infra_node import InfraNode
+    from app.services.cluster_access import cluster_ids_for_host
+    name = f"xnode-{uuid.uuid4().hex[:6]}.example"
+    node = InfraNode(cluster_id=world["bound"].id, hostname=name, role="worker")
+    db.add(node)
+    db.commit()
+    try:
+        for v in (name, name.upper(), name + ".", f" {name.upper()}. "):
+            assert world["bound"].id in cluster_ids_for_host(db, v), v
+    finally:
+        db.delete(node)
+        db.commit()
+
+
+def test_dns_resolved_name_matches_and_failure_falls_back(world, db, monkeypatch):
+    import socket
+    import time
+
+    import app.services.cluster_access as ca
+
+    def _fake(host):
+        if host == "bound-alias.test":
+            return {BOUND_HOST}
+        if host == "slow.test":
+            time.sleep(0.5)
+            return {BOUND_HOST}
+        raise socket.gaierror("no such host")
+    monkeypatch.setattr(ca, "_getaddrinfo_ips", _fake)
+    monkeypatch.setattr(ca, "_RESOLVE_TIMEOUT_SEC", 0.1)
+    ids, ips = ca.resolve_hosts_scope(db, ["bound-alias.test", "missing.test", "::ffff:" + OPEN_HOST])
+    assert world["bound"].id in ids and world["open"].id in ids
+    assert ips["bound-alias.test"] == [BOUND_HOST]
+    assert ips["missing.test"] == [] and ips["::ffff:" + OPEN_HOST] == [OPEN_HOST]
+    # 해석 실패·시간 초과는 리터럴 비교만(예외 없이) — 이전 동작 수준
+    assert ca.cluster_ids_for_host(db, "missing.test") == set()
+    assert ca.cluster_ids_for_host(db, "slow.test") == set()
+
+
 # ── 정책 2: cilium-dbg 읽기 전용 allowlist ───────────────────────────────────
 
 @pytest.fixture

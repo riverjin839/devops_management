@@ -9,7 +9,12 @@
 """
 from __future__ import annotations
 
+import ipaddress
 import json
+import re
+import socket
+from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import wait as futures_wait
 from typing import Iterable
 from uuid import UUID
 
@@ -79,31 +84,174 @@ def require_clusters_access(db: Session, user: User, cluster_ids: Iterable[UUID 
         require_cluster_access(db, user, cid, level)
 
 
-def cluster_ids_for_hosts(db: Session, hosts: Iterable[str]) -> set[UUID]:
-    """호스트(IP/호스트명)들이 속한 클러스터 — 노드 SSH·일괄 실행처럼 host 로 접속하는 경로의 범위 판정용.
+# ── host → cluster 매칭 정규화 ───────────────────────────────────────────────
+#
+# 같은 노드에 닿는 표기가 여러 가지라 문자열 그대로 비교하면 우회된다:
+#   ``167772171`` · ``10.11`` · ``012.0.0.11`` · ``0x0a.0.0.11``(전부 getaddrinfo/inet_aton 이 10.0.0.11 로 해석),
+#   ``::ffff:10.0.0.11``(IPv4-mapped), ``NODE1`` · ``node1.``(대소문자·FQDN 끝 점).
+# 그래서 입력·저장값을 같은 방식으로 정규화하고, IP 가 아닌 이름은 실제 접속과 같은 resolver
+# (``socket.getaddrinfo``)로 풀어 나온 IP 까지 비교한다. 해석이 실패·지연되면 리터럴 비교만 한다
+# (이전 동작과 같은 수준 — 더 열리지 않는다).
 
-    ``clusters.node_ips``(수집된 InternalIP JSON 배열)와 ``infra_nodes``(ip_address/hostname)를 본다.
-    어느 클러스터에도 매칭되지 않는 호스트(관리 서버 등)는 클러스터 범위 밖이라 결과에 없다.
-    바인딩이 하나도 없으면(격리 미사용) 조회 없이 빈 집합 — 판정 결과가 같으므로 비용만 아낀다.
+_RESOLVE_TIMEOUT_SEC = 2.0  # 한 번의 판정에서 DNS 를 기다리는 전체 상한
+_resolver_pool = ThreadPoolExecutor(max_workers=16, thread_name_prefix="host-resolve")
+
+
+# inet_aton 이 받는 레거시 IPv4 표기 — 10진/8진(0 접두)/16진(0x) 성분 1~4개.
+_LEGACY_V4 = re.compile(r"(?:0x[0-9a-f]+|[0-9]+)(?:\.(?:0x[0-9a-f]+|[0-9]+)){0,3}")
+
+
+def _norm_literal(value: object) -> str:
+    """공백 제거 → 소문자 → 끝 ``.`` 제거, IPv6 대괄호 제거."""
+    s = str(value or "").strip().lower().rstrip(".")
+    if s.startswith("[") and s.endswith("]"):
+        s = s[1:-1]
+    return s
+
+
+def _norm_ip(value: object) -> str | None:
+    """IP 표기면 정규 문자열(IPv4-mapped 는 IPv4 로 풀고 IPv6 zone 은 버린다), 아니면 None.
+
+    ``ipaddress`` 가 거부하는 레거시 IPv4 표기(정수·축약·8진·16진)는 ``socket.inet_aton`` 으로 해석한다
+    — 실제 SSH 접속(getaddrinfo)이 같은 규칙으로 해석하므로 판정도 맞춘다. 네트워크 조회는 없다.
     """
-    wanted = {h.strip() for h in hosts if h and h.strip()}
-    if not wanted or db.query(ClusterBinding.id).first() is None:
-        return set()
+    s = _norm_literal(value)
+    if not s:
+        return None
+    try:
+        addr = ipaddress.ip_address(s.split("%", 1)[0])
+    except ValueError:
+        if not _LEGACY_V4.fullmatch(s):
+            return None
+        try:
+            addr = ipaddress.IPv4Address(socket.inet_aton(s))
+        except (OSError, ValueError):
+            return None
+    if isinstance(addr, ipaddress.IPv6Address) and addr.ipv4_mapped is not None:
+        addr = addr.ipv4_mapped
+    return str(addr)
+
+
+def _getaddrinfo_ips(host: str) -> set[str]:
+    out: set[str] = set()
+    for info in socket.getaddrinfo(host, None):
+        ip = _norm_ip(info[4][0])
+        if ip:
+            out.add(ip)
+    return out
+
+
+def _resolve_names(names: Iterable[str], timeout: float | None = None) -> dict[str, set[str]]:
+    """이름 → 해석된 IP 집합. 실패·시간 초과한 이름은 결과에 없다(fail-safe — 예외를 올리지 않는다).
+
+    getaddrinfo 는 취소할 수 없으므로 공용 스레드 풀에 넘기고 전체 ``timeout`` 까지만 기다린다
+    (``socket.setdefaulttimeout`` 은 프로세스 전역이라 쓰지 않는다).
+    """
+    todo = set(names)
+    if not todo:
+        return {}
+    if timeout is None:
+        timeout = _RESOLVE_TIMEOUT_SEC
+    try:
+        futures = {_resolver_pool.submit(_getaddrinfo_ips, n): n for n in todo}
+    except RuntimeError:  # 인터프리터 종료 중 등
+        return {}
+    done, not_done = futures_wait(futures, timeout=timeout)
+    for fut in not_done:
+        fut.cancel()  # 아직 시작 안 한 조회는 버린다 — 풀 적체 방지(이미 도는 조회는 취소 불가)
+    out: dict[str, set[str]] = {}
+    for fut in done:
+        try:
+            ips = fut.result()
+        except Exception:  # noqa: BLE001 — gaierror·UnicodeError 등 무엇이든 리터럴 비교로 폴백
+            continue
+        if ips:
+            out[futures[fut]] = ips
+    return out
+
+
+def resolve_host_keys(hosts: Iterable[str | None]) -> dict[str, set[str]]:
+    """입력 host(원문, strip 한 값) → 매칭 키 집합(정규화 리터럴 + 정규화 IP + DNS 로 푼 IP)."""
+    keys: dict[str, set[str]] = {}
+    names: set[str] = set()
+    for h in hosts:
+        raw = (h or "").strip()
+        if not raw:
+            continue
+        lit = _norm_literal(raw)
+        ks = {lit}
+        ip = _norm_ip(raw)
+        if ip:
+            ks.add(ip)
+        else:
+            names.add(raw)
+        keys[raw] = ks
+    # 실제 접속과 같은 이름으로 푼다 — ``node1.``(절대 이름)과 ``node1``(search 도메인 적용)은 다를 수 있다.
+    resolved = _resolve_names(names)
+    for raw in names:
+        keys[raw] |= resolved.get(raw, set())
+    return keys
+
+
+def resolve_hosts_scope(db: Session, hosts: Iterable[str | None]) -> tuple[set[UUID], dict[str, list[str]]]:
+    """host 들의 (소속 클러스터 집합, host → 해석된 IP 목록).
+
+    - 클러스터 매칭: ``clusters.node_ips``(정규화) · ``infra_nodes.ip_address``(정규화) ·
+      ``infra_nodes.hostname``(소문자·끝 점 제거)을, 입력의 정규화 리터럴·IP·DNS 해석 IP 전부와 비교한 합집합.
+    - IP 목록: 판정에 쓴 IP(리터럴 IP 또는 DNS 결과). 호출부가 이 IP 로 접속하면 판정과 접속 사이의
+      DNS 재해석(rebinding)도 막을 수 있다. 해석 실패한 이름은 빈 목록.
+    - 바인딩이 하나도 없으면(격리 미사용) 클러스터 조회·DNS 를 건너뛰고 ``(빈 집합, IP 리터럴만)``.
+    """
+    host_list = [h for h in hosts if h and str(h).strip()]
+    if not host_list:
+        return set(), {}
+    if db.query(ClusterBinding.id).first() is None:
+        lits = {str(h).strip(): ([ip] if (ip := _norm_ip(h)) else []) for h in host_list}
+        return set(), lits
+
+    keys_by_host = resolve_host_keys(host_list)
+    wanted: set[str] = set().union(*keys_by_host.values()) if keys_by_host else set()
+    ips_by_host = {
+        raw: sorted(k for k in ks if _norm_ip(k) == k) for raw, ks in keys_by_host.items()
+    }
     out: set[UUID] = set()
+    if not wanted:
+        return out, ips_by_host
+
+    def _keys(value: object) -> set[str]:
+        lit = _norm_literal(value)
+        if not lit:
+            return set()
+        ip = _norm_ip(value)
+        return {lit, ip} if ip else {lit}
+
     for cid, raw in db.query(Cluster.id, Cluster.node_ips).filter(Cluster.node_ips.isnot(None)).all():
         try:
             ips = json.loads(raw) if raw else []
         except (TypeError, ValueError):
             continue
-        if isinstance(ips, list) and wanted & {str(ip).strip() for ip in ips}:
+        if not isinstance(ips, list):
+            continue
+        if any(wanted & _keys(ip) for ip in ips):
             out.add(cid)
-    rows = (
-        db.query(InfraNode.cluster_id)
-        .filter(InfraNode.ip_address.in_(wanted) | InfraNode.hostname.in_(wanted))
-        .all()
-    )
-    out.update(r.cluster_id for r in rows)
-    return out
+    for cid, ip_addr, hostname in db.query(InfraNode.cluster_id, InfraNode.ip_address, InfraNode.hostname).all():
+        if cid is None or cid in out:
+            continue
+        if wanted & (_keys(ip_addr) | _keys(hostname)):
+            out.add(cid)
+    return out, ips_by_host
+
+
+def cluster_ids_for_hosts(db: Session, hosts: Iterable[str]) -> set[UUID]:
+    """호스트(IP/호스트명)들이 속한 클러스터 — 노드 SSH·일괄 실행처럼 host 로 접속하는 경로의 범위 판정용.
+
+    ``clusters.node_ips``(수집된 InternalIP JSON 배열)와 ``infra_nodes``(ip_address/hostname)를 본다.
+    입력·저장값은 정규화해 비교하고(대소문자·끝 점·IPv4-mapped·레거시 IPv4 표기), 이름은 DNS 로 풀어
+    나온 IP 까지 본다 — 상세는 :func:`resolve_hosts_scope`.
+    어느 클러스터에도 매칭되지 않는 호스트(관리 서버 등)는 클러스터 범위 밖이라 결과에 없다.
+    바인딩이 하나도 없으면(격리 미사용) 조회 없이 빈 집합 — 판정 결과가 같으므로 비용만 아낀다.
+    """
+    return resolve_hosts_scope(db, hosts)[0]
 
 
 def cluster_ids_for_host(db: Session, host: str) -> set[UUID]:

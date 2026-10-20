@@ -17,6 +17,8 @@
 - SSH 인증정보는 이 세션에만 사용되고 DB 에 저장하지 않는다(etcdctl/bulk-exec 와 동일).
 - `PEP_K9S_SSH_ENABLED=false` 로 전역 비활성화 가능.
 - 실행 명령은 서버가 검증된 조각으로만 조립한다(namespace 정규식·readonly bool).
+- 보호(guarded) 운영레벨 클러스터는 admin 이 아니면 init 의 readonly 값과 무관하게 `--readonly` 를
+  강제한다(`k9s_effective_readonly`) — 화면 토글은 보조일 뿐 서버가 원천이다.
 """
 from __future__ import annotations
 
@@ -26,10 +28,14 @@ import shlex
 from uuid import UUID
 
 from fastapi import APIRouter, WebSocket
+from sqlalchemy.orm import Session
 
 from app.database import SessionLocal
 from app.models import Cluster
+from app.models.app_setting import AppSetting
 from app.models.user import User
+from app.routers.ui_settings import DEFAULT_OPERATION_LEVELS, OPERATION_LEVELS_KEY
+from app.schemas.ui_settings import default_guarded
 from app.services import audit_logger
 from app.services.cluster_access import cluster_ids_for_host, has_cluster_access
 from app.services.ssh_pty import (
@@ -55,6 +61,39 @@ _NS_RE = re.compile(r"^[a-z0-9][a-z0-9.-]{0,62}$")  # k8s 네임스페이스 형
 
 def _k9s_enabled() -> bool:
     return env_flag_enabled("PEP_K9S_SSH_ENABLED", default=True)
+
+
+def is_operation_level_guarded(db: Session, level: str | None) -> bool:
+    """운영레벨 ``level`` 이 보호(guarded) 레벨인지 — `GET /ui-settings/operation-levels` 와 같은 해석.
+
+    저장된 레벨 목록(AppSetting ``operation_levels``)에서 value 가 같은 항목의 ``guarded`` 를 쓰고,
+    값이 없거나(구버전 데이터)·목록에 없는 레벨·저장값이 비었으면 ``default_guarded``(production·dr)로
+    본다. 읽기 전용 — 설정 행을 만들지 않는다. 빈 레벨은 보호 아님.
+    """
+    v = (level or "").strip()
+    if not v:
+        return False
+    try:
+        setting = db.query(AppSetting).filter(AppSetting.key == OPERATION_LEVELS_KEY).first()
+    except Exception:  # noqa: BLE001 — 조회 실패 시 기본 규칙으로 판정
+        db.rollback()
+        return default_guarded(v)
+    raw = (setting.value or {}).get("levels", []) if setting is not None else []
+    stored = [it for it in raw if isinstance(it, dict) and str(it.get("value", "")).strip()]
+    if not stored:
+        stored = DEFAULT_OPERATION_LEVELS["levels"]
+    for it in stored:
+        if str(it.get("value", "")).strip() == v:
+            g = it.get("guarded")
+            return g if isinstance(g, bool) else default_guarded(v)
+    return default_guarded(v)
+
+
+def k9s_effective_readonly(requested: bool, user: User, guarded: bool) -> bool:
+    """보호 레벨 클러스터는 admin 이 아니면 ``--readonly`` 를 서버가 강제한다(정책 3 — 화면 토글만으로 끄지 못함)."""
+    if guarded and getattr(user, "role", None) != "admin":
+        return True
+    return bool(requested)
 
 
 def _build_k9s_command(namespace: str | None, readonly: bool, extra: str | None) -> str:
@@ -132,10 +171,14 @@ async def k9s_terminal(websocket: WebSocket, cluster_id: UUID, token: str | None
 
         host_label = init.label
         namespace = init.raw.get("namespace") or None
-        readonly = bool(init.raw.get("readonly") or False)
+        requested_readonly = bool(init.raw.get("readonly") or False)
+        guarded = is_operation_level_guarded(db, cluster.operation_level)
+        readonly = k9s_effective_readonly(requested_readonly, user, guarded)
         run_cmd = _build_k9s_command(namespace, readonly, init.raw.get("extraFlags"))
         base_details = {"cluster": cluster.name, "host": host_label,
                         "namespace": namespace, "readonly": readonly}
+        if readonly and not requested_readonly:
+            base_details["readonly_forced"] = "guarded_level"
 
         # init host 가 실제로 속한 클러스터까지 operate 판정(D-169 ④) — 경로 클러스터만 보면
         # 바인딩 없는 경로로 다른 테넌트 control-plane 에 붙어 그 서버의 kubeconfig 로 k9s 가 뜬다.

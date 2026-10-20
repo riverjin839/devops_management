@@ -31,7 +31,7 @@ from app.models.user import User
 from app.auth.deps import get_current_user, require_admin, require_operator
 from app.services import audit_logger
 from app.services.cluster_access import cluster_ids_for_hosts, require_clusters_access
-from app.services.command_mask import audit_command, mask_command
+from app.services.command_mask import audit_command, audit_error, mask_command
 from app.services.ssh_runner import SSHTarget, run_bulk
 from app.services.user_settings import get_user_setting, set_user_setting
 
@@ -281,30 +281,39 @@ async def run_mc(
         host=payload.host, port=payload.port, username=payload.username,
         password=payload.password, private_key=payload.private_key,
     )
-    results = await run_bulk(
-        [target],
-        action="ssh",
-        command=remote_cmd,
-        mode="sequential",
-        connect_timeout=min(payload.timeout, 10),
-        exec_timeout=payload.timeout,
-        parallelism=1,
-    )
-    r = results[0]
-    audit_logger.record(
-        db, action="mc.run", actor=actor,
-        status="success" if r.status == "ok" else "failure",
-        target_type="cluster", target_id=cluster_id,
-        details={
-            "host": payload.host,
-            "command": audit_command(bash_cmd),
-            "result": r.status,
-            "exit_code": r.exit_code,
-            "duration_ms": r.duration_ms,
-            "error": audit_command(r.error, 200) or None,
-        },
-        request=request,
-    )
+    # 감사는 try/finally 로 정확히 1행 — 실행 도중 예외도 failure(마스킹한 예외 요약)로 남긴다.
+    r = None
+    exc: BaseException | None = None
+    try:
+        results = await run_bulk(
+            [target],
+            action="ssh",
+            command=remote_cmd,
+            mode="sequential",
+            connect_timeout=min(payload.timeout, 10),
+            exec_timeout=payload.timeout,
+            parallelism=1,
+        )
+        r = results[0]
+    except BaseException as e:  # noqa: BLE001 — 취소까지 감사 후 그대로 다시 올린다
+        exc = e
+        raise
+    finally:
+        audit_logger.record(
+            db, action="mc.run", actor=actor,
+            status="success" if r is not None and r.status == "ok" else "failure",
+            target_type="cluster", target_id=cluster_id,
+            details={
+                "host": payload.host,
+                "command": audit_command(bash_cmd),
+                "result": r.status if r is not None else "exception",
+                "exit_code": r.exit_code if r is not None else None,
+                "duration_ms": r.duration_ms if r is not None else None,
+                "error": (audit_command(r.error, 200) or None) if r is not None
+                else (audit_error(exc) or "실행이 끝나기 전에 중단됨"),
+            },
+            request=request,
+        )
     return McResponse(
         host=r.host, status=r.status, exit_code=r.exit_code,
         stdout=r.stdout, stderr=r.stderr, duration_ms=r.duration_ms,

@@ -397,8 +397,19 @@ def bpf_ct_head(
 
 # ── cilium-dbg 읽기 전용 allowlist (정책 2) ─────────────────────────────────
 # 직접 명령(ad-hoc)은 이 목록에 맞는 **조회** 하위 명령만 operator 에게 허용하고, 목록 밖(변경·삭제·
-# flush·config 쓰기·shell 등)은 admin 만 실행한다. 판정은 플래그(``-``로 시작)를 건너뛴 위치 인자의
-# 앞부분이 아래 패턴과 맞는지로 본다. ``*`` 는 아무 토큰 하나(예: ``bpf <map> list``).
+# flush·config 쓰기·shell 등)은 admin 만 실행한다. ``*`` 는 아무 토큰 하나(예: ``bpf <map> list``).
+#
+# 판정 규칙(프론트 ``frontend/src/lib/ciliumCommand.ts`` 와 동일 — 한쪽만 고치지 않는다):
+#  1. 앞의 ``cilium-dbg``/``cilium`` 접두는 뗀다. 파싱 불가·빈 명령은 목록 밖.
+#  2. 다른 agent 로 붙거나 설정 파일을 바꾸는 ``--config``·``-H``·``--host``(``=값``·붙여 쓴 꼴 포함)는
+#     어디에 있든 목록 밖.
+#  3. 명령은 하위 명령 단어로 **시작**해야 한다 — 인자 앞부분 ``parts[:len(rule)]`` 가 규칙과 정확히
+#     같아야 하고(앞쪽 플래그 불가: cobra 는 플래그를 건너뛰고 하위 명령을 찾으므로 ``--x status
+#     endpoint delete`` 꼴 우회를 막는다), ``*`` 자리도 ``-`` 로 시작하면 안 된다.
+#  4. 규칙 뒤에는 위치 인자(``-`` 로 시작하지 않는 토큰)와 아래 읽기 전용 플래그만 허용한다.
+#     ``-h``/``--help`` 는 이미 허용된 명령 뒤에서만 허용(목록 밖 명령 + ``-h`` 는 목록 밖).
+#  5. ``config`` 는 위치 인자 없이 조회만 — ``config Key=Value`` 는 설정 변경.
+#  6. ``debuginfo`` 의 ``-f``/``--file``/``--file-per-command`` 는 agent 에 파일을 쓰므로 목록 밖.
 CILIUM_READONLY_COMMANDS: tuple[tuple[str, ...], ...] = (
     ("status",),
     ("version",),
@@ -424,8 +435,18 @@ CILIUM_READONLY_COMMANDS: tuple[tuple[str, ...], ...] = (
     ("help",),
 )
 
-# 값을 받는 출력 플래그 — 값이 위치 인자로 오인되지 않도록 건너뛴다.
-_CILIUM_VALUE_FLAGS = frozenset({"-o", "--output"})
+# 규칙 뒤에 올 수 있는 값 받는 플래그 — 다음 토큰을 값으로 소비한다(``--output=json`` 꼴도 허용).
+_CILIUM_VALUE_FLAGS = frozenset({"-o", "--output", "-n"})
+# 규칙 뒤에 올 수 있는 값 없는 읽기 전용 플래그(``status`` 의 ``--all-*`` 조회 플래그 포함).
+_CILIUM_BOOL_FLAGS = frozenset({
+    "-v", "--verbose", "-h", "--help",
+    "--all-addresses", "--all-clusters", "--all-controllers", "--all-health",
+    "--all-nodes", "--all-redirects",
+})
+# 어디에 있든 목록 밖 — agent 접속 대상(-H/--host)·설정 파일(--config) 전환.
+_CILIUM_DENY_LONG = ("--config", "--host")
+# debuginfo 의 파일 쓰기 플래그.
+_CILIUM_DEBUGINFO_FILE_LONG = ("--file", "--file-per-command")
 
 
 def cilium_readonly_command_labels() -> list[str]:
@@ -433,19 +454,55 @@ def cilium_readonly_command_labels() -> list[str]:
     return [" ".join("<맵>" if t == "*" else t for t in rule) for rule in CILIUM_READONLY_COMMANDS]
 
 
-def _cilium_positional(parts: list[str]) -> list[str]:
-    out: list[str] = []
-    skip = False
-    for tok in parts:
-        if skip:
-            skip = False
+def _long_flag_is(tok: str, names: tuple[str, ...]) -> bool:
+    return any(tok == n or tok.startswith(n + "=") for n in names)
+
+
+def _cilium_denied_token(tok: str) -> bool:
+    """``--config``·``--host``(=값)·``-H``(붙여 쓴 값 포함)."""
+    return _long_flag_is(tok, _CILIUM_DENY_LONG) or (tok.startswith("-H") and not tok.startswith("--"))
+
+
+def _cilium_debuginfo_writes_file(tok: str) -> bool:
+    return _long_flag_is(tok, _CILIUM_DEBUGINFO_FILE_LONG) or (tok.startswith("-f") and not tok.startswith("--"))
+
+
+def _cilium_rule_matches(rule: tuple[str, ...], parts: list[str]) -> bool:
+    if len(parts) < len(rule):
+        return False
+    for r, p in zip(rule, parts):
+        if p.startswith("-"):
+            return False
+        if r != "*" and r != p:
+            return False
+    return True
+
+
+def _cilium_tail_is_readonly(rule: tuple[str, ...], tail: list[str]) -> bool:
+    """규칙 뒤 토큰: 위치 인자 + 읽기 전용 플래그만."""
+    i = 0
+    while i < len(tail):
+        tok = tail[i]
+        if not tok.startswith("-"):
+            if rule == ("config",):
+                return False  # ``config Key=Value`` = 설정 변경
+            i += 1
             continue
-        if tok.startswith("-"):
-            if tok in _CILIUM_VALUE_FLAGS:
-                skip = True
+        if rule == ("debuginfo",) and _cilium_debuginfo_writes_file(tok):
+            return False
+        if tok in _CILIUM_BOOL_FLAGS:
+            i += 1
             continue
-        out.append(tok)
-    return out
+        if tok in _CILIUM_VALUE_FLAGS:
+            if i + 1 >= len(tail) or tail[i + 1].startswith("-"):
+                return False  # 값 누락 — 다음 플래그를 값으로 삼켜 판정을 흐리지 않는다
+            i += 2
+            continue
+        if tok.startswith("--output="):
+            i += 1
+            continue
+        return False
+    return True
 
 
 def _split_cilium_args(command_args: str) -> list[str]:
@@ -463,18 +520,11 @@ def is_cilium_readonly_command(command_args: str) -> bool:
         return False
     if not parts:
         return False
-    if any(t in ("-h", "--help") for t in parts):
-        return True  # 도움말은 어떤 하위 명령이든 실행하지 않는다
-    pos = _cilium_positional(parts)
-    if not pos:
+    if any(_cilium_denied_token(t) for t in parts):
         return False
     for rule in CILIUM_READONLY_COMMANDS:
-        if len(pos) < len(rule):
-            continue
-        if all(r == "*" or r == p for r, p in zip(rule, pos)):
-            if rule == ("config",) and len(pos) > 1:
-                return False  # ``config Key=Value`` = 설정 변경
-            return True
+        if _cilium_rule_matches(rule, parts):
+            return _cilium_tail_is_readonly(rule, parts[len(rule):])
     return False
 
 

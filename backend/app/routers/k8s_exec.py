@@ -31,6 +31,7 @@ from app.models import Cluster
 from app.models.user import User
 from app.services import audit_logger
 from app.services.cluster_access import has_cluster_access
+from app.services.command_mask import audit_command
 from app.services.kubeconfig import ensure_kubeconfig_file
 from app.services.ssh_pty import (
     CLOSE_CLUSTER_FORBIDDEN,
@@ -115,7 +116,8 @@ async def pod_exec(
                 db, action="k8s.exec.open", actor=user, status="failure",
                 target_type="k8s.pod", target_id=f"{namespace}/{pod}",
                 details={"cluster_id": str(cluster_id), "cluster": cluster.name,
-                         "container": container, "command": cmd_list, "error": str(e)[:200]},
+                         "container": container, "command": audit_command(" ".join(cmd_list)),
+                         "error": audit_command(str(e), 200)},
             )
             await websocket.send_text(f"\r\n[exec 시작 실패] {str(e)[:200]}\r\n")
             await websocket.close(code=1011)
@@ -125,7 +127,7 @@ async def pod_exec(
             db, action="k8s.exec.open", actor=user, status="success",
             target_type="k8s.pod", target_id=f"{namespace}/{pod}",
             details={"cluster_id": str(cluster_id), "cluster": cluster.name,
-                     "container": container, "command": cmd_list},
+                     "container": container, "command": audit_command(" ".join(cmd_list))},
         )
         started = time.time()
         loop = asyncio.get_event_loop()

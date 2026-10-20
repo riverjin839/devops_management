@@ -34,7 +34,7 @@ from app.services.kubeconfig import ensure_kubeconfig_file
 from app.services.ssh_runner import SSHTarget, run_bulk
 from app.services import audit_logger
 from app.services.cluster_access import cluster_ids_for_hosts, require_clusters_access
-from app.services.command_mask import audit_command, mask_command
+from app.services.command_mask import audit_command, audit_error, mask_command
 from app.services.k8s_client_pool import get_api_client_for_path
 
 router = APIRouter(tags=["etcdctl"])
@@ -82,8 +82,20 @@ PRESETS: dict[str, dict[str, str]] = {
 }
 
 
-def _result_details(host: str, command: str, r) -> dict:
-    """실행 감사 details — 실제 결과 기준(D-170). 명령·오류는 마스킹 후 자른다."""
+def _result_details(host: str, command: str, r, exc: BaseException | None = None) -> dict:
+    """실행 감사 details — 실제 결과 기준(D-170). 명령·오류는 마스킹 후 자른다.
+
+    ``r`` 이 없으면(실행 도중 예외) ``result="exception"`` + 마스킹한 예외 요약.
+    """
+    if r is None:
+        return {
+            "host": host,
+            "command": audit_command(command),
+            "result": "exception",
+            "exit_code": None,
+            "duration_ms": None,
+            "error": audit_error(exc) or "실행이 끝나기 전에 중단됨",
+        }
     return {
         "host": host,
         "command": audit_command(command),
@@ -92,6 +104,30 @@ def _result_details(host: str, command: str, r) -> dict:
         "duration_ms": r.duration_ms,
         "error": audit_command(r.error, 200) or None,
     }
+
+
+async def _run_audited(db: Session, request: Request, actor: User, *, action: str, cluster_id: UUID,
+                       host: str, bash_cmd: str, run):
+    """``run()``(SSH 실행 코루틴 팩토리)을 수행하고 **정확히 1행** 감사한다 — 예외로 끝나도 failure 로 남긴다."""
+    r = None
+    exc: BaseException | None = None
+    try:
+        r = (await run())[0]
+        return r
+    except BaseException as e:  # noqa: BLE001 — 취소(CancelledError)까지 감사 후 그대로 다시 올린다
+        exc = e
+        raise
+    finally:
+        audit_logger.record(
+            db,
+            action=action,
+            actor=actor,
+            status="success" if r is not None and r.status == "ok" else "failure",
+            target_type="cluster",
+            target_id=cluster_id,
+            details=_result_details(host, bash_cmd, r, exc),
+            request=request,
+        )
 
 
 # ── schemas ──────────────────────────────────────────────────────────────────
@@ -270,25 +306,17 @@ async def run_etcdctl(
         host=payload.host, port=payload.port, username=payload.username,
         password=payload.password, private_key=payload.private_key,
     )
-    results = await run_bulk(
-        [target],
-        action="ssh",
-        command=remote_cmd,
-        mode="sequential",
-        connect_timeout=min(payload.timeout, 10),
-        exec_timeout=payload.timeout,
-        parallelism=1,
-    )
-    r = results[0]
-    audit_logger.record(
-        db,
-        action="etcdctl.run",
-        actor=actor,
-        status="success" if r.status == "ok" else "failure",
-        target_type="cluster",
-        target_id=cluster_id,
-        details=_result_details(payload.host, bash_cmd, r),
-        request=request,
+    r = await _run_audited(
+        db, request, actor, action="etcdctl.run", cluster_id=cluster_id, host=payload.host, bash_cmd=bash_cmd,
+        run=lambda: run_bulk(
+            [target],
+            action="ssh",
+            command=remote_cmd,
+            mode="sequential",
+            connect_timeout=min(payload.timeout, 10),
+            exec_timeout=payload.timeout,
+            parallelism=1,
+        ),
     )
     return EtcdCtlResponse(
         host=r.host, status=r.status, exit_code=r.exit_code,
@@ -330,25 +358,17 @@ async def get_etcd_logs(
         host=payload.host, port=payload.port, username=payload.username,
         password=payload.password, private_key=payload.private_key,
     )
-    results = await run_bulk(
-        [target],
-        action="ssh",
-        command=remote_cmd,
-        mode="sequential",
-        connect_timeout=10,
-        exec_timeout=60,
-        parallelism=1,
-    )
-    r = results[0]
-    audit_logger.record(
-        db,
-        action="etcdctl.logs",
-        actor=actor,
-        status="success" if r.status == "ok" else "failure",
-        target_type="cluster",
-        target_id=cluster_id,
-        details=_result_details(payload.host, bash_cmd, r),
-        request=request,
+    r = await _run_audited(
+        db, request, actor, action="etcdctl.logs", cluster_id=cluster_id, host=payload.host, bash_cmd=bash_cmd,
+        run=lambda: run_bulk(
+            [target],
+            action="ssh",
+            command=remote_cmd,
+            mode="sequential",
+            connect_timeout=10,
+            exec_timeout=60,
+            parallelism=1,
+        ),
     )
     return EtcdLogsResponse(
         host=r.host, status=r.status, exit_code=r.exit_code,

@@ -36,7 +36,7 @@ from app.services.cluster_access import (
     require_cluster_access,
     require_clusters_access,
 )
-from app.services.command_mask import audit_command
+from app.services.command_mask import audit_command, audit_error
 from app.services.hubble_client import HubbleFilter, fetch_flows
 from app.services.kubeconfig import ensure_kubeconfig_file
 from app.services.ssh_runner import SSHTarget
@@ -230,31 +230,52 @@ def tcpdump_run(
         host=payload.host, port=payload.port, username=payload.username,
         password=payload.password, private_key=payload.private_key,
     )
-    result = tcpdump_capture(
-        target,
-        interface=payload.interface,
-        bpf_filter=payload.bpf_filter,
-        duration_sec=payload.duration_sec,
-        packet_count=payload.packet_count,
-        use_sudo=payload.use_sudo,
-        connect_timeout=payload.connect_timeout,
-    )
-    audit_logger.record(
-        db, action="tcpdump.capture", actor=actor,
-        status="success" if result.status == "ok" else "failure",
-        target_type=target_type, target_id=target_id,
-        details={
-            "host": payload.host,
-            "interface": payload.interface,
-            "command": audit_command(result.executed),
-            "result": result.status,
-            "exit_code": result.exit_code,
-            "duration_ms": result.duration_ms,
-            "packets": len(result.packets),
-            "error": audit_command(result.error, 200) or None,
-        },
-        request=request,
-    )
+    # 감사는 try/finally 로 정확히 1행 — 캡처 도중 예외도 failure(마스킹한 예외 요약)로 남긴다.
+    result = None
+    exc: BaseException | None = None
+    try:
+        result = tcpdump_capture(
+            target,
+            interface=payload.interface,
+            bpf_filter=payload.bpf_filter,
+            duration_sec=payload.duration_sec,
+            packet_count=payload.packet_count,
+            use_sudo=payload.use_sudo,
+            connect_timeout=payload.connect_timeout,
+        )
+    except BaseException as e:  # noqa: BLE001 — 감사 후 그대로 다시 올린다
+        exc = e
+        raise
+    finally:
+        if result is not None:
+            details = {
+                "host": payload.host,
+                "interface": payload.interface,
+                "command": audit_command(result.executed),
+                "result": result.status,
+                "exit_code": result.exit_code,
+                "duration_ms": result.duration_ms,
+                "packets": len(result.packets),
+                "error": audit_command(result.error, 200) or None,
+            }
+        else:
+            details = {
+                "host": payload.host,
+                "interface": payload.interface,
+                "command": None,
+                "result": "exception",
+                "exit_code": None,
+                "duration_ms": None,
+                "packets": 0,
+                "error": audit_error(exc) or "실행이 끝나기 전에 중단됨",
+            }
+        audit_logger.record(
+            db, action="tcpdump.capture", actor=actor,
+            status="success" if result is not None and result.status == "ok" else "failure",
+            target_type=target_type, target_id=target_id,
+            details=details,
+            request=request,
+        )
     return TcpdumpCaptureResponse(**result.to_dict())
 
 
@@ -277,13 +298,23 @@ def tcpdump_interfaces(
         host=payload.host, port=payload.port, username=payload.username,
         password=payload.password, private_key=payload.private_key,
     )
-    ifaces = list_remote_interfaces(target, connect_timeout=payload.connect_timeout)
-    audit_logger.record(
-        db, action="tcpdump.interfaces", actor=actor,
-        # list_remote_interfaces 는 실패를 빈 목록으로 돌려준다 — 빈 목록 = 실패로 본다.
-        status="success" if ifaces else "failure",
-        target_type=target_type, target_id=target_id,
-        details={"host": payload.host, "command": "ip -o link show", "count": len(ifaces)},
-        request=request,
-    )
+    ifaces: list | None = None
+    exc: BaseException | None = None
+    try:
+        ifaces = list_remote_interfaces(target, connect_timeout=payload.connect_timeout)
+    except BaseException as e:  # noqa: BLE001 — 감사 후 그대로 다시 올린다(정확히 1행)
+        exc = e
+        raise
+    finally:
+        details = {"host": payload.host, "command": "ip -o link show", "count": len(ifaces or [])}
+        if exc is not None:
+            details["error"] = audit_error(exc)
+        audit_logger.record(
+            db, action="tcpdump.interfaces", actor=actor,
+            # list_remote_interfaces 는 실패를 빈 목록으로 돌려준다 — 빈 목록 = 실패로 본다.
+            status="success" if ifaces else "failure",
+            target_type=target_type, target_id=target_id,
+            details=details,
+            request=request,
+        )
     return TcpdumpInterfacesResponse(host=payload.host, interfaces=ifaces)
