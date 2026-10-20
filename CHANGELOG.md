@@ -10,6 +10,13 @@
 
 1.62.0 이후 main 에 병합된 변경 (다음 릴리스 후보).
 
+### Fixed
+- **Cilium BPF 조회·서비스 토폴로지 트래픽이 큰 conntrack 테이블을 통째로 올리던 문제**: 서비스 토폴로지의 트래픽 표시(Hubble 이 없을
+  때 conntrack 으로 대체)가 앞쪽 최대 수천 항목만 쓰면서 `bpf ct list global` 전체를 JSON 으로 받아 파싱했다(수십만 항목이면 수백 MB)
+  → 필요한 줄 수만 읽고 끊는다. `/cilium-trace` BPF 조회는 JSON 결과의 원본을 응답에 함께 싣던 것(메모리·전송량 두 배)을 빼고,
+  내보내기 버튼이 원본을 서버에서 흘려받는다(워커 메모리에 모으지 않음, 실행 로그 표시). Backend: `cilium_trace_service.bpf_ct_head`·
+  `bpf_raw_stream`, `POST /cilium/{id}/bpf-inspect/download`.
+
 ## [1.62.0] - 2026-10-20
 
 ### Changed
@@ -27,13 +34,6 @@
   찍으면 그 요청의 경로·처리 함수·상태·RSS·소요 시간을 `memory-watch` 경고 로그로 남긴다. OOMKilled 는 앱이 로그를 남길 틈 없이
   죽으므로, 직전 경고를 `kubectl logs --previous` 로 보면 어떤 요청이 메모리를 키웠는지 좁힐 수 있다. 쿼리 문자열은 남기지 않는다.
   Backend: `services/memory_watch.py`(ASGI 미들웨어, `/proc/self/statm`), `MEM_WATCH_DELTA_MB`·`MEM_WATCH_RSS_MB`(0 = 끔).
-
-### Fixed
-- **Cilium BPF 조회·서비스 토폴로지 트래픽이 큰 conntrack 테이블을 통째로 올리던 문제**: 서비스 토폴로지의 트래픽 표시(Hubble 이 없을
-  때 conntrack 으로 대체)가 앞쪽 최대 수천 항목만 쓰면서 `bpf ct list global` 전체를 JSON 으로 받아 파싱했다(수십만 항목이면 수백 MB)
-  → 필요한 줄 수만 읽고 끊는다. `/cilium-trace` BPF 조회는 JSON 결과의 원본을 응답에 함께 싣던 것(메모리·전송량 두 배)을 빼고,
-  내보내기 버튼이 원본을 서버에서 흘려받는다(워커 메모리에 모으지 않음, 실행 로그 표시). Backend: `cilium_trace_service.bpf_ct_head`·
-  `bpf_raw_stream`, `POST /cilium/{id}/bpf-inspect/download`.
 
 ## [1.60.1] - 2026-10-20
 
@@ -73,6 +73,7 @@
   알람 통계·전체 확인이 최대 30일치 알람 행을 원본 payload 째 읽던 것 → DB 집계·id 묶음 UPDATE.
   SSH 명령 출력(일괄 실행·Isilon)을 전부 읽고 나서 자르던 것 → 읽으면서 필요한 끝/앞부분만 유지.
   점검 추세 조회 기간 상한(90일), 관측 스냅샷 정리를 id 로 삭제(최근 5건 유지가 6건이던 것도 수정), Isilon 캐시 만료 항목 정리.
+
 
 ## [1.59.0] - 2026-10-20
 
@@ -234,6 +235,7 @@
 - **표기 통일**: 성공 알림 제목을 "~됨" 으로(87곳), 빈 값을 "—" 로(140곳), 생성 버튼을 "업무 추가"·"명령어 추가"·"노드 추가" 로,
   문장 속 "Pod" 를 "파드" 로 맞췄다. (D-127)
 
+
 ## [1.53.1] - 2026-10-13
 
 ### Changed
@@ -358,6 +360,7 @@
 - **사용자 삭제 후 개인 설정이 남던 문제**: 계정 삭제 시 `user_settings` 행도 함께 지운다(같은 id 재사용 시 설정 상속 방지).
   부팅 이관이 개인 설치 목록을 바꾸면 감사 로그(`home_prefs.layout_migrate`)에 추가/제거 항목을 남긴다.
   Jenkins 백엔드 테스트는 `TEST_DATABASE_URL`(테스트 전용 DB)이 있어야만 돌고 실패하면 파이프라인을 멈춘다.
+
 
 ## [1.48.0] - 2026-10-12
 
