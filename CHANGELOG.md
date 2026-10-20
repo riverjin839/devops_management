@@ -10,6 +10,12 @@
 
 1.60.1 이후 main 에 병합된 변경 (다음 릴리스 후보).
 
+### Added
+- **backend 워커 메모리 진단 로그**: 한 요청이 워커 메모리(RSS)를 크게 늘리거나(기본 100MiB 이상) 450MiB 이상에서 새 최고치를
+  찍으면 그 요청의 경로·처리 함수·상태·RSS·소요 시간을 `memory-watch` 경고 로그로 남긴다. OOMKilled 는 앱이 로그를 남길 틈 없이
+  죽으므로, 직전 경고를 `kubectl logs --previous` 로 보면 어떤 요청이 메모리를 키웠는지 좁힐 수 있다. 쿼리 문자열은 남기지 않는다.
+  Backend: `services/memory_watch.py`(ASGI 미들웨어, `/proc/self/statm`), `MEM_WATCH_DELTA_MB`·`MEM_WATCH_RSS_MB`(0 = 끔).
+
 ## [1.60.1] - 2026-10-20
 
 ### Added
