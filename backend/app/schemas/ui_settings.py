@@ -78,12 +78,24 @@ class OperationLevelItem(BaseModel):
     - icon: 클러스터 카드/행에 표시될 이모지 1자. 비어있으면 운영레벨별 기본값 사용.
     - custom_hex: 프리셋 13색 대신 임의의 hex(#RRGGBB) 를 시드로 bg/ring/band/text 톤을
       자동 산출할 때 지정. 비어있으면 color 프리셋을 그대로 사용.
+    - guarded: 보호 레벨 — 이 레벨 클러스터의 PTY 콘솔(k9s·노드 SSH)은 접속 전 확인을 받고
+      k9s 는 읽기 전용(--readonly)이 기본이다. 요청에서 생략(None)하면 value 가
+      production·dr 일 때 true 로 해석한다(`default_guarded`). 응답은 항상 bool 이다.
     """
     value: str = Field(..., min_length=1, max_length=64)
     label: str = Field(..., min_length=1, max_length=64)
     color: str = Field(default="slate", max_length=32)
     icon: str | None = Field(default=None, max_length=8)
     custom_hex: str | None = Field(default=None, max_length=9, pattern=r"^#[0-9a-fA-F]{3,8}$")
+    guarded: bool | None = Field(default=None)
+
+
+# 보호(guarded) 기본값 — 저장된 항목에 guarded 가 없을 때(구버전 데이터) 이 value 만 보호로 본다.
+GUARDED_DEFAULT_VALUES = frozenset({"production", "dr"})
+
+
+def default_guarded(value: str) -> bool:
+    return (value or "").strip().lower() in GUARDED_DEFAULT_VALUES
 
 
 class OperationLevelsResponse(BaseModel):

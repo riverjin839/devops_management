@@ -391,7 +391,7 @@ ui-ux-pro-max Pre-Delivery Checklist에서 추출.
 | 스프린트 | 작업 | DoD |
 |---|---|---|
 | **W1** | 토큰 정합 — `index.css` rewrite + `tailwind.config.js` `status.*` 추가 + raw HEX 사용처 grep 후 전수 치환 | `grep -rEo "#[0-9a-fA-F]{3,8}\b" frontend/src` 결과가 **토큰 정의부 + 화이트리스트 외 0건** — **2026-10-20 달성(R-1)**. 화이트리스트는 DESIGN.md §1.3 "raw hex 화이트리스트" 행(사용자 저장 색·컬러피커 기본값·xterm/ANSI·data URL SVG·로고 path·내보낸 파일 배경)뿐이고, `.eslintrc.cjs` `no-restricted-syntax`(hex Literal)가 그 밖을 막는다(템플릿 리터럴은 grep 으로 확인). three.js/canvas 렌더러는 `cssVarColor` 를 쓴다(§12.12-7). 외부 서비스 고유색(Jira `#0052CC` 등)은 `brand.*` 토큰 경유. |
-| **W2** | shadcn/ui 도입(MCP 경유) — `Button`, `Card`, `Badge`, `Tooltip`, `Dialog` 5종부터. 기존 자체 컴포넌트 어댑터 추가 | 새 컴포넌트는 shadcn 사용, 기존은 점진 마이그레이션 |
+| **W2** | ✅ shadcn/ui 도입(MCP 경유) — `Button`, `Card`, `Badge`, `Tooltip`, `Dialog` 5종 + 기존 자체 컴포넌트 어댑터 | **2026-10-20 종료(R-2)** — 종료 기준: ① 5종 설치(MCP) ② 어댑터: 카드 = `MacCard`(shadcn `Card` 래퍼, 페이지 카드 100% — D-004·D-121), 모달 = `ui/dialog`(Base UI 래퍼 + 뒤로가기) 또는 자체 마크업이면 `useModalA11y`(Escape·포커스 트랩·겹친 모달·뒤로가기), 확인 = `ConfirmDialog`(native `confirm()` 0) ③ **모든 모달(`aria-modal`)이 어댑터를 쓴다 — `scripts/ui/check_dialogs.py` 가 CI frontend job 에서 강제**(도입 시 위반 3파일 수정 후 0). 자체 오버레이를 shadcn 컴포넌트로 다시 쓰는 일은 기능 변경 없이 하지 않는다(동작이 같고 회귀 위험만 있다) — 화면을 고칠 때 새 모달은 `ui/dialog` 로 만든다. |
 | **W3** | ✅ Health Hero PoC — 12-col Bento(`HealthHero`) + Bullet Chart(`ui/BulletChart`) 구현 + Dashboard 상단 교체(`SummaryStats` 삭제) | Bullet Chart `role="img"` + `aria-label` 로 AAA 패턴 적용. Lighthouse 정량 측정은 미실시(환경 제약) — W4 진행 시 함께 측정 권장 |
 | **W4** | ✅ 접근성 패스 — `eslint-plugin-jsx-a11y` (기존 도입돼있던 것 확인) + `jsx-a11y/control-has-associated-label` 신규 활성화 + 전수 스캔 위반 54건 수정 + skip link + 신규 차트 sr-only 데이터 표 | `npx eslint . --rule '{"jsx-a11y/control-has-associated-label":"warn"}'` 전체 스캔 0건, `npm run lint` 그대로 통과(회귀 방지 위해 룰 상시 활성화) |
 | **W5+** | ✅ 차트 교체 — Sparkline(`ui/Sparkline`, MetricCard 하단) + Recent Check History → Heat Map(`CheckHistoryHeatmap`, cluster×time, hover 시 Tooltip) | Heat Map 셀은 `aria-label="cluster=… time=… status=…"` + 실제 `<button>`(키보드 포커스 가능). sr-only 데이터 표는 별도로 추가하지 않음 — 후속 W4 에서 검토 |
@@ -616,7 +616,7 @@ MacCard `title` 아래 또 그린 툴바 행(이중 헤더), 같은 모양의 �
 원격 명령을 실행하고 로그(stdout/stderr)를 보여주는 화면은 모두 **같은 패턴**을 따른다.
 "콘솔 패턴 반영해줘" 류 요청이 오면 아래 목록의 화면 전부에 일괄 적용한다.
 
-**적용 화면**: 노드 일괄 실행 `/bulk-exec` · mc 클라이언트 `/mc-client` · etcdctl `/etcdctl` ·
+**적용 화면**: 노드 일괄 실행 `/bulk-exec` · mc 클라이언트 `/mc` · etcdctl `/etcdctl` ·
 Cilium BPF Trace `/cilium-trace` · 커널 파라미터 `/kernel-params` · NFS 모니터링(Isilon) `/isilon-nfs`
 (+ 신규 SSH/exec 콘솔은 전부 이 패턴으로 시작)
 
@@ -925,6 +925,8 @@ D-117~D-134)에서 원자는 지켜지는데 화면이 "AI 가 만든 템플릿"
 ---
 
 ### 12.13 뒤로가기와 화면 상태 — 모달 기록 · URL 쿼리 (D-029)
+
+> **모달은 공용 어댑터로만(R-2).** 새 모달은 `components/ui/dialog` 를 우선 쓰고, 자체 마크업이 필요하면 `useModalA11y(open, onClose)` 의 ref 를 `role="dialog" aria-modal="true"` 컨테이너에 연결한다. 팝오버(`aria-modal` 없음)는 대상이 아니다. CI 의 `scripts/ui/check_dialogs.py` 가 어댑터 없는 `aria-modal` 을 막는다.
 
 브라우저·폰의 뒤로가기는 "직전 화면 상태"로 돌아가야 한다. 모달을 열었으면 뒤로가기는 그 모달만 닫는다.
 목록 화면의 탭·필터·검색어는 새로고침·링크 공유·상세에서 돌아왔을 때 그대로 남는다.

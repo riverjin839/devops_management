@@ -539,6 +539,21 @@ def update_cluster(
 
     update_data = cluster_data.model_dump(exclude_unset=True)
 
+    # 보호(guarded) 운영레벨에서 빼거나 넣는 변경은 admin 만 — operator 가 레벨을 바꿔 보호(k9s
+    # --readonly 강제·PTY 접속 확인)를 스스로 해제하지 못하게 한다.
+    if "operation_level" in update_data and actor.role != "admin":
+        from app.routers.k9s_ssh import is_operation_level_guarded
+
+        old_level = (cluster.operation_level or "").strip()
+        new_level = (update_data.get("operation_level") or "").strip()
+        if new_level != old_level and (
+            is_operation_level_guarded(db, old_level) or is_operation_level_guarded(db, new_level)
+        ):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="보호 운영레벨로 바꾸거나 보호 운영레벨에서 해제하는 변경은 admin 만 할 수 있습니다.",
+            )
+
     # 이름 변경 시: 유일성 검사 + work_item 의 비정규화 cluster_name/cluster_names 동기화.
     old_name = cluster.name
     new_name = update_data.get("name")

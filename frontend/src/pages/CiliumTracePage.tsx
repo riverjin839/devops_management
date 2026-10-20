@@ -1,18 +1,18 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { StatTile, StatTileRow } from '@/components/common/StatTile';
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
 import { PageHeader } from '@/components/common/PageHeader';
 import { createPortal } from 'react-dom';
 import {
   Activity,
   AlertTriangle,
-  Boxes,
   CheckCircle2,
   ChevronDown,
   Database,
   Download,
   Filter,
+  Info,
   Pause,
   Play,
+  Radio,
   RefreshCw,
   Save,
   Server,
@@ -24,12 +24,13 @@ import { useQuery } from '@tanstack/react-query';
 import { useClusters } from '@/hooks/useCluster';
 import { useTerminalEnvSync } from '@/hooks/useTerminalEnvSync';
 import { useClusterStore } from '@/stores/clusterStore';
-import { ClusterSidebar, LogViewer, SearchableSelect, EmptyState, SelectClusterEmptyState, LoadingState, Skeleton, PageShell, RunLogPanel } from '@/components/common';
+import { ClusterSidebar, ConfirmDialog, LogViewer, SearchableSelect, EmptyState, ErrorState, SelectClusterEmptyState, LoadingState, Skeleton, PageShell, RunLogPanel } from '@/components/common';
 import { useRunLog, runLogged, consoleRunLines } from '@/hooks/useRunLog';
 import { useLogPref } from '@/hooks/useLogPref';
 import { formatApiError } from '@/lib/utils';
 import { MacCard } from '@/components/ui/MacCard';
-import { RoleGate } from '@/components/auth/RoleGate';
+import { useCanOperate } from '@/hooks/useCanOperate';
+import { classifyCiliumCommand, ciliumRulesFromLabels, CILIUM_READONLY_LABELS } from '@/lib/ciliumCommand';
 import { getAuthToken } from '@/stores/authStore';
 import api from '@/services/api';
 import { useCommands, useCreateCommand } from '@/hooks/useCommands';
@@ -40,6 +41,8 @@ interface CiliumStatus {
   clusterId: string;
   ciliumInstalled: boolean;
   hubbleRelayInstalled: boolean;
+  /** hubble-relay 확인 자체가 실패한 사유(RBAC 거부 등) — 있으면 "미설치"로 보지 않는다. */
+  hubbleRelayError?: string | null;
   agentCount: number;
   ciliumVersion?: string | null;
   namespace: string;
@@ -60,7 +63,7 @@ interface CiliumAgentsResponse {
 
 /** SearchableSelect 옵션 라벨 — podName + node 로 호스트 번호 검색이 되게. */
 function agentLabel(a: CiliumAgent): string {
-  return `${a.podName}${a.nodeName ? ` · ${a.nodeName}` : ''}${a.ready ? '' : ' (NotReady)'}`;
+  return `${a.podName}${a.nodeName ? ` · ${a.nodeName}` : ''}${a.ready ? '' : ' (준비 안 됨)'}`;
 }
 type BpfKind =
   | 'endpoint' | 'lb' | 'nat' | 'ct' | 'tunnel'
@@ -117,6 +120,9 @@ const ciliumApi = {
       endpoint_id: body.endpointId,
       format: body.format,
     }, { responseType: 'blob', timeout: 5 * 60_000 }).then((r) => r.data),
+  // 직접 명령 읽기 전용 허용 목록(서버 원천) — 목록 밖은 admin 만 실행(정책 2).
+  execAllowlist: (clusterId: string) =>
+    api.get<{ clusterId: string; commands: string[]; adminOnlyOutside: boolean }>(`/cilium/${clusterId}/exec-command/allowlist`).then((r) => r.data),
   execCommand: (clusterId: string, body: { podName?: string; namespace?: string; commandArgs: string; timeout?: number }) =>
     api.post<CiliumExecResponse>(`/cilium/${clusterId}/exec-command`, {
       pod_name: body.podName,
@@ -142,10 +148,16 @@ interface SseStreamHandle {
   abort: () => void;
 }
 
+/**
+ * 서버가 스트림을 닫으면(agent 파드 재시작·`kubectl exec` 종료·프록시 타임아웃) `onDone` 을 부른다 —
+ * 예전엔 종료 콜백이 없어 화면이 멈춘 스트림을 "실행 중"으로 보여줬다(D-174 ②).
+ * 사용자가 `abort()` 로 끊은 경우에는 어떤 콜백도 부르지 않는다.
+ */
 function startSseStream(
   url: string,
   onLine: (line: string) => void,
   onError: (err: string) => void,
+  onDone: () => void,
 ): SseStreamHandle {
   const ac = new AbortController();
   const token = getAuthToken();
@@ -155,7 +167,13 @@ function startSseStream(
   })
     .then(async (resp) => {
       if (!resp.ok) {
-        onError(`서버 오류 ${resp.status}`);
+        // 거절 사유(403 권한·테넌트, 404 클러스터 등)를 서버 detail 그대로 보여준다.
+        let detail = '';
+        try {
+          const body = await resp.json();
+          if (typeof body?.detail === 'string') detail = body.detail;
+        } catch { /* 본문이 JSON 이 아니면 상태 코드만 */ }
+        onError(`서버 오류 ${resp.status}${detail ? ` — ${detail}` : ''}`);
         return;
       }
       if (!resp.body) {
@@ -181,6 +199,7 @@ function startSseStream(
           }
         }
       }
+      if (!ac.signal.aborted) onDone();
     })
     .catch((e) => {
       if (ac.signal.aborted) return;
@@ -193,8 +212,14 @@ function startSseStream(
 
 type TabId = 'bpf' | 'monitor' | 'hubble';
 
+const TABS: { id: TabId; label: string; icon: typeof Database }[] = [
+  { id: 'bpf',     label: 'BPF 맵 조회',  icon: Database },
+  { id: 'monitor', label: 'Cilium 모니터', icon: Activity },
+  { id: 'hubble',  label: 'Hubble 흐름',  icon: Waves },
+];
+
 export function CiliumTracePage() {
-  useClusters();
+  const clustersQ = useClusters();
   const { clusters } = useClusterStore();
   const [selectedClusterId, setSelectedClusterId] = useState<string | null>(null);
   useEffect(() => {
@@ -206,20 +231,40 @@ export function CiliumTracePage() {
 
   const cid = selectedClusterId ?? '';
 
-  const { data: status, isLoading: statusLoading, refetch: refetchStatus } = useQuery({
+  const statusQ = useQuery({
     queryKey: ['cilium', 'status', cid],
     queryFn: () => ciliumApi.status(cid),
     enabled: !!cid,
     staleTime: 30_000,
   });
-  const { data: agentsResp } = useQuery({
+  const { data: status, isLoading: statusLoading, refetch: refetchStatus } = statusQ;
+  const agentsQ = useQuery({
     queryKey: ['cilium', 'agents', cid],
     queryFn: () => ciliumApi.agents(cid),
     enabled: !!cid,
     staleTime: 30_000,
   });
 
-  const agents = agentsResp?.agents ?? [];
+  const agents = agentsQ.data?.agents ?? [];
+  // 에이전트 목록 실패(요청 실패 또는 서버가 돌려준 error)는 "agent 없음"이 아니라 사유로 보여준다(D-173).
+  const agentsError: unknown = agentsQ.isError
+    ? agentsQ.error
+    : agentsQ.data?.error ? new Error(agentsQ.data.error) : null;
+  const agentsState: AgentsState = {
+    agents,
+    error: agentsError,
+    retry: () => { void agentsQ.refetch(); },
+  };
+
+  const tabRefs = useRef<Record<TabId, HTMLButtonElement | null>>({ bpf: null, monitor: null, hubble: null });
+  const onTabKey = (e: React.KeyboardEvent) => {
+    if (e.key !== 'ArrowRight' && e.key !== 'ArrowLeft') return;
+    e.preventDefault();
+    const i = TABS.findIndex((t) => t.id === tab);
+    const next = TABS[(i + (e.key === 'ArrowRight' ? 1 : TABS.length - 1)) % TABS.length].id;
+    setTab(next);
+    tabRefs.current[next]?.focus();
+  };
 
   return (
     <div className="app-min-h-screen bg-background flex">
@@ -235,7 +280,7 @@ export function CiliumTracePage() {
         <PageHeader
           icon={Waves}
           title="Cilium BPF 추적"
-          description="BPF 맵 인스펙터 · cilium monitor · Hubble flow"
+          description="BPF 맵 조회 · Cilium 모니터 · Hubble 흐름"
           actions={
             <button
               onClick={() => refetchStatus()}
@@ -249,38 +294,70 @@ export function CiliumTracePage() {
         />
 
         {/* Status strip */}
-        <StatusStrip status={status} loading={statusLoading} agentCount={agents.length} />
+        {cid && (
+          <StatusStrip
+            status={status}
+            loading={statusLoading}
+            error={statusQ.isError ? statusQ.error : null}
+            onRetry={() => { void refetchStatus(); }}
+            agentCount={agents.length}
+          />
+        )}
 
         {/* Tabs */}
-        <div className="flex items-center gap-0.5 bg-secondary rounded-xl p-0.5 w-fit">
-          {([
-            { id: 'bpf' as const,     label: 'BPF Inspector', icon: <Database className="w-3.5 h-3.5" /> },
-            { id: 'monitor' as const, label: 'Cilium Monitor', icon: <Activity className="w-3.5 h-3.5" /> },
-            { id: 'hubble' as const,  label: 'Hubble Flows',   icon: <Waves className="w-3.5 h-3.5" /> },
-          ]).map((t) => (
-            <button
-              key={t.id}
-              onClick={() => setTab(t.id)}
-              className={`px-3.5 py-1.5 text-sm font-medium rounded-lg flex items-center gap-1.5 transition-colors ${
-                tab === t.id ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
-              }`}
-            >
-              {t.icon}
-              {t.label}
-            </button>
-          ))}
+        <div role="tablist" aria-label="Cilium 추적 도구" className="flex items-center gap-0.5 bg-secondary rounded-xl p-0.5 w-fit">
+          {TABS.map((t) => {
+            const Icon = t.icon;
+            const selected = tab === t.id;
+            return (
+              <button
+                key={t.id}
+                ref={(el) => { tabRefs.current[t.id] = el; }}
+                type="button"
+                role="tab"
+                id={`cilium-tab-${t.id}`}
+                aria-selected={selected}
+                aria-controls="cilium-tabpanel"
+                tabIndex={selected ? 0 : -1}
+                onClick={() => setTab(t.id)}
+                onKeyDown={onTabKey}
+                className={`px-3.5 py-1.5 text-sm font-medium rounded-xl flex items-center gap-1.5 transition-colors ${
+                  selected ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
+                }`}
+              >
+                <Icon className="w-3.5 h-3.5" aria-hidden />
+                {t.label}
+              </button>
+            );
+          })}
         </div>
 
-        {/* Tab body */}
-        {!cid ? (
-          <SelectClusterEmptyState />
-        ) : tab === 'bpf' ? (
-          <BpfInspectorTab clusterId={cid} agents={agents} />
-        ) : tab === 'monitor' ? (
-          <MonitorTab clusterId={cid} agents={agents} />
-        ) : (
-          <HubbleTab clusterId={cid} hubbleInstalled={status?.hubbleRelayInstalled ?? false} />
-        )}
+        {/* Tab body — 클러스터를 바꾸면 key 로 탭 상태를 새로 만든다: 이전 클러스터의 에이전트 파드·
+            스트림이 새 클러스터 경로로 이어지지 않게(스트림은 언마운트 정리에서 끊긴다). */}
+        <div role="tabpanel" id="cilium-tabpanel" aria-labelledby={`cilium-tab-${tab}`}>
+          {clustersQ.isError && clusters.length === 0 ? (
+            <ErrorState
+              error={clustersQ.error}
+              title="클러스터 목록을 불러오지 못했습니다"
+              onRetry={() => { void clustersQ.refetch(); }}
+            />
+          ) : !cid ? (
+            <SelectClusterEmptyState />
+          ) : tab === 'bpf' ? (
+            <BpfInspectorTab key={cid} clusterId={cid} agentsState={agentsState} />
+          ) : tab === 'monitor' ? (
+            <MonitorTab key={cid} clusterId={cid} agentsState={agentsState} />
+          ) : (
+            <HubbleTab
+              key={cid}
+              clusterId={cid}
+              statusLoading={statusLoading}
+              statusError={statusQ.isError ? statusQ.error : status?.error ? new Error(status.error) : null}
+              onRetryStatus={() => { void refetchStatus(); }}
+              hubbleInstalled={status?.hubbleRelayError ? undefined : status?.hubbleRelayInstalled}
+            />
+          )}
+        </div>
       </PageShell>
     </div>
   );
@@ -288,60 +365,93 @@ export function CiliumTracePage() {
 
 // ── Status strip ────────────────────────────────────────────────────────────
 
-interface StatusStripProps { status?: CiliumStatus; loading: boolean; agentCount: number }
+interface StatusStripProps {
+  status?: CiliumStatus;
+  loading: boolean;
+  error: unknown;
+  onRetry: () => void;
+  agentCount: number;
+}
 
-function StatusStrip({ status, loading, agentCount }: StatusStripProps) {
+/**
+ * 상태 줄 — 콘솔 화면이라 KPI 타일 행이 아니라 한 줄 정의 목록(§12.12-2, D-179 ④).
+ * 정상 값은 중립색, 미설치·미가용만 `status-warning`. 조회 실패는 줄을 숨기지 않고 사유를 보여준다(D-173).
+ */
+function StatusStrip({ status, loading, error, onRetry, agentCount }: StatusStripProps) {
   if (loading) {
-    return <Skeleton className="block w-full h-20 rounded-md" />;
+    return <Skeleton className="block w-full h-6 rounded-md" />;
   }
-  if (!status) {
-    return null;
+  if (error) {
+    return <ErrorState compact error={error} title="Cilium 상태를 불러오지 못했습니다" onRetry={onRetry} />;
   }
+  if (!status) return null;
   if (status.error) {
     return (
-      <div className="rounded-md border border-status-warning/40 bg-status-warning/10 px-4 py-3 flex items-start gap-2">
-        <AlertTriangle className="w-4 h-4 text-status-warning flex-shrink-0 mt-0.5" />
-        <div>
-          <p className="text-sm font-semibold">상태 점검 중 문제가 발생했습니다.</p>
-          <p className="text-sm text-muted-foreground">{status.error}</p>
-        </div>
-      </div>
+      <ErrorState
+        compact
+        error={new Error(status.error)}
+        title="Cilium 상태 점검 중 문제가 발생했습니다"
+        onRetry={onRetry}
+      />
     );
   }
+  const warn = 'text-status-warning';
+  const items: { label: string; value: string; hint?: string; bad?: boolean }[] = [
+    {
+      label: 'Cilium',
+      value: status.ciliumInstalled ? '설치됨' : '미설치',
+      hint: status.ciliumVersion ?? undefined,
+      bad: !status.ciliumInstalled,
+    },
+    { label: '에이전트 파드', value: String(agentCount), hint: status.namespace },
+    {
+      label: 'Hubble Relay',
+      value: status.hubbleRelayError ? '확인 실패' : status.hubbleRelayInstalled ? '활성' : '없음 (설치 필요)',
+      hint: status.hubbleRelayError ? status.hubbleRelayError : status.hubbleRelayInstalled ? 'svc/hubble-relay' : undefined,
+      bad: !status.hubbleRelayInstalled,
+    },
+    {
+      label: '추적 가용성',
+      value: status.ciliumInstalled ? (status.hubbleRelayInstalled ? 'BPF + Hubble' : 'BPF 만') : '미가용',
+      bad: !status.ciliumInstalled,
+    },
+  ];
   return (
-    <StatTileRow>
-      <StatTile
-        icon={Boxes}
-        label="Cilium"
-        value={status.ciliumInstalled ? '설치됨' : '미설치'}
-        tone={status.ciliumInstalled ? undefined : 'warning'}
-        hint={status.ciliumVersion ?? undefined}
-      />
-      <StatTile icon={Server} label="Agent 파드" value={agentCount} hint={status.namespace} />
-      <StatTile
-        icon={Waves}
-        label="Hubble Relay"
-        value={status.hubbleRelayInstalled ? '활성' : '없음'}
-        tone={status.hubbleRelayInstalled ? undefined : 'warning'}
-        hint={status.hubbleRelayInstalled ? 'svc/hubble-relay' : '설치 필요'}
-      />
-      <StatTile
-        icon={Activity}
-        label="Trace 가용성"
-        value={
-          status.ciliumInstalled
-            ? (status.hubbleRelayInstalled ? 'BPF + Hubble' : 'BPF only')
-            : '미가용'
-        }
-        tone={status.ciliumInstalled ? undefined : 'warning'}
-      />
-    </StatTileRow>
+    <dl className="flex flex-wrap items-baseline gap-x-6 gap-y-1 text-sm">
+      {items.map((it) => (
+        <div key={it.label} className="flex items-baseline gap-1.5 min-w-0">
+          <dt className="text-muted-foreground">{it.label}</dt>
+          <dd className={`font-medium ${it.bad ? warn : 'text-foreground'}`}>
+            {it.value}
+            {it.hint && <span className="ml-1 text-xs font-normal text-muted-foreground font-mono">{it.hint}</span>}
+          </dd>
+        </div>
+      ))}
+    </dl>
   );
 }
 
 // ── Tab 1: BPF Inspector ────────────────────────────────────────────────────
 
-function BpfInspectorTab({ clusterId, agents }: { clusterId: string; agents: CiliumAgent[] }) {
+interface AgentsState {
+  agents: CiliumAgent[];
+  /** 목록 조회 실패 또는 서버가 돌려준 error — null 이면 정상. */
+  error: unknown;
+  retry: () => void;
+}
+
+/** 에이전트 선택 아래 실패 사유 — select 는 비워 두고 "agent 없음"으로 오인하지 않게 한다(D-173). */
+function AgentsError({ state }: { state: AgentsState }) {
+  if (!state.error) return null;
+  return (
+    <ErrorState compact error={state.error} title="에이전트 파드 목록을 불러오지 못했습니다" onRetry={state.retry} />
+  );
+}
+
+const inputCls = 'text-sm bg-background border border-border rounded-xl px-2.5 py-1.5 focus:outline-none focus:ring-2 focus:ring-primary/40 disabled:opacity-60';
+
+function BpfInspectorTab({ clusterId, agentsState }: { clusterId: string; agentsState: AgentsState }) {
+  const agents = agentsState.agents;
   const readyAgents = agents.filter((a) => a.ready);
   const [kind, setKind] = useState<BpfKind>('endpoint');
   const [podName, setPodName] = useState<string>('');
@@ -350,11 +460,28 @@ function BpfInspectorTab({ clusterId, agents }: { clusterId: string; agents: Cil
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // 직접 명령은 operate 권한(서버 require_operator) — viewer 에게 카드는 보이고 입력·실행만 비활성(§12.9, D-172).
+  // 읽기 전용 allowlist 밖 명령은 서버가 admin 만 허용한다(D-171 ④) — 화면도 같은 판정으로 안내·확인한다.
+  const { canOperate, role, withHint, ariaWithHint } = useCanOperate(clusterId);
+  const isAdmin = role === 'admin';
+
   // ad-hoc 직접 명령 + 프리셋
   const [adhoc, setAdhoc] = useState('');
   const [adhocOut, setAdhocOut] = useState<string | null>(null);
   const [adhocErr, setAdhocErr] = useState<string | null>(null);
+  const [adhocRan, setAdhocRan] = useState<{ cmd: string; pod: string } | null>(null);
   const [adhocBusy, setAdhocBusy] = useState(false);
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  // 판정 규칙은 서버 allowlist 응답을 우선 쓰고, 실패·로딩 중에는 같은 내용의 로컬 목록으로 폴백한다.
+  const allowlistQ = useQuery({
+    queryKey: ['cilium', 'exec-allowlist', clusterId],
+    queryFn: () => ciliumApi.execAllowlist(clusterId),
+    enabled: !!clusterId,
+    staleTime: 10 * 60_000,
+  });
+  const allowLabels = allowlistQ.data?.commands?.length ? allowlistQ.data.commands : CILIUM_READONLY_LABELS;
+  const rules = useMemo(() => ciliumRulesFromLabels(allowlistQ.data?.commands), [allowlistQ.data]);
+  const verdict = useMemo(() => classifyCiliumCommand(adhoc, rules), [adhoc, rules]);
   const { data: presetsResp } = useCommands({ category: 'cilium' });
   const createCmd = useCreateCommand();
   const presets = presetsResp?.data ?? [];
@@ -364,20 +491,21 @@ function BpfInspectorTab({ clusterId, agents }: { clusterId: string; agents: Cil
   const [showLog, setShowLog] = useLogPref('cilium-bpf');
   const agentDesc = (name: string) => {
     const a = agents.find((x) => x.podName === name);
-    return a ? agentLabel(a) : (name || '기본 agent');
+    return a ? agentLabel(a) : (name || '기본 에이전트');
   };
 
   const runAdhoc = useCallback(async () => {
-    if (!clusterId || !adhoc.trim()) return;
+    const v = classifyCiliumCommand(adhoc, rules);
+    if (!clusterId || !v.args) return;
     setAdhocBusy(true); setAdhocErr(null); setAdhocOut(null);
-    const cmd = adhoc.trim();
+    setAdhocRan({ cmd: v.args, pod: podName });
     const r = await runLogged(runLog, {
       title: 'cilium-dbg 직접 명령',
-      first: `${agentDesc(podName)} 에서 cilium-dbg ${cmd} 실행 요청`,
-      fn: () => ciliumApi.execCommand(clusterId, { commandArgs: cmd, podName: podName || undefined }),
+      first: `${agentDesc(podName)} 에서 cilium-dbg ${v.args} 실행 요청${v.readOnly ? ' (조회 명령)' : ` — ${v.reason ?? '목록 밖 명령'} · admin 확인 후 실행`}`,
+      fn: () => ciliumApi.execCommand(clusterId, { commandArgs: v.args, podName: podName || undefined }),
       summarize: (res) => [
         ...consoleRunLines({ host: res.podName, exitCode: res.exitCode, durationMs: res.durationMs, error: res.error }),
-        ['info', `출력 ${res.raw ? res.raw.split('\n').filter((l) => l.trim()).length : 0}줄 — 본문은 아래 출력`],
+        ['info', `출력 ${res.raw ? res.raw.split('\n').filter((l) => l.trim()).length : 0}줄 — 본문은 우측 결과 카드`],
       ],
     });
     if (r.ok) {
@@ -388,7 +516,21 @@ function BpfInspectorTab({ clusterId, agents }: { clusterId: string; agents: Cil
     }
     setAdhocBusy(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps -- runLog 함수들은 안정적, agentDesc 는 agents 로 결정
-  }, [clusterId, adhoc, podName, agents]);
+  }, [clusterId, adhoc, podName, agents, rules]);
+
+  // 실행 버튼·Enter 공통 진입 — 조회 명령은 바로, 목록 밖 명령은 danger 확인창(Enter 는 확인창 열기).
+  const adhocBlockedReason = !canOperate
+    ? withHint('')
+    : !verdict.args
+      ? '실행할 명령을 입력하세요'
+      : !verdict.readOnly && !isAdmin
+        ? `읽기 전용 목록 밖 명령은 admin 만 실행할 수 있습니다 (${verdict.reason ?? verdict.subcommand})`
+        : undefined;
+  const requestRun = () => {
+    if (adhocBusy || adhocBlockedReason) return;
+    if (verdict.readOnly) void runAdhoc();
+    else setConfirmOpen(true);
+  };
 
   const savePreset = useCallback(async () => {
     const cmd = adhoc.trim();
@@ -407,7 +549,7 @@ function BpfInspectorTab({ clusterId, agents }: { clusterId: string; agents: Cil
         importance: 'medium',
         tags: 'cilium,bpf',
       }),
-      summarize: () => [['info', '프리셋 저장 완료 — 저장된 프리셋 목록에서 고를 수 있음']],
+      summarize: () => [['info', '프리셋 저장 완료 — 저장된 프리셋 목록에서 고를 수 있습니다']],
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps -- runLog 함수들은 안정적
   }, [adhoc, createCmd]);
@@ -482,6 +624,11 @@ function BpfInspectorTab({ clusterId, agents }: { clusterId: string; agents: Cil
     // eslint-disable-next-line react-hooks/exhaustive-deps -- runLog 함수들은 안정적, agentDesc 는 agents 로 결정
   }, [data, clusterId, endpointId, agents]);
 
+  const runTitle = adhocBlockedReason ?? (verdict.readOnly ? '조회 명령 실행' : '실행 전 확인창이 열립니다');
+  const runAria = !canOperate
+    ? ariaWithHint('직접 명령 실행')
+    : adhocBlockedReason ? `직접 명령 실행 — ${adhocBlockedReason}` : '직접 명령 실행';
+
   return (
     // MC 클라이언트와 동일한 좌(컨트롤)/우(결과) 배치 — 결과 카드는 실행 전에도 같은
     // 자리(우측)에 플레이스홀더로 고정되어 결과가 나와도 레이아웃이 흔들리지 않는다.
@@ -493,13 +640,15 @@ function BpfInspectorTab({ clusterId, agents }: { clusterId: string; agents: Cil
         description={BPF_KINDS.find((k) => k.id === kind)?.desc}
         bodyPadding="p-3"
       >
+        <div className="space-y-2">
         <div className="flex items-center gap-2 flex-wrap">
           <div className="flex items-center gap-1.5">
-            <Database className="w-3.5 h-3.5 text-muted-foreground" />
+            <Database className="w-3.5 h-3.5 text-muted-foreground" aria-hidden />
             <select
               value={kind}
               onChange={(e) => setKind(e.target.value as BpfKind)}
-              className="text-sm bg-background border border-border rounded-xl px-2.5 py-1.5 focus:outline-none focus:ring-2 focus:ring-primary/40"
+              aria-label="조회할 BPF 맵"
+              className={inputCls}
             >
               {BPF_KINDS.map((k) => (
                 <option key={k.id} value={k.id}>{k.label}</option>
@@ -507,15 +656,15 @@ function BpfInspectorTab({ clusterId, agents }: { clusterId: string; agents: Cil
             </select>
           </div>
           <div className="flex items-center gap-1.5">
-            <Server className="w-3.5 h-3.5 text-muted-foreground" />
+            <Server className="w-3.5 h-3.5 text-muted-foreground" aria-hidden />
             <SearchableSelect
               value={podName}
               onChange={setPodName}
               options={agents}
               getKey={(a) => a.podName}
               getLabel={agentLabel}
-              placeholder="agent pod 검색 (호스트 번호 등)"
-              emptyText="agent 없음"
+              placeholder="에이전트 파드 검색 (호스트 번호 등)"
+              emptyText={agentsState.error ? '목록을 불러오지 못했습니다' : '에이전트 파드가 없습니다'}
               clearable={false}
               menuPortal
               className="w-[280px]"
@@ -526,7 +675,8 @@ function BpfInspectorTab({ clusterId, agents }: { clusterId: string; agents: Cil
               value={endpointId}
               onChange={(e) => setEndpointId(e.target.value)}
               placeholder="endpoint ID"
-              className="text-sm bg-background border border-border rounded-xl px-2.5 py-1.5 focus:outline-none focus:ring-2 focus:ring-primary/40 w-32"
+              aria-label="정책을 조회할 endpoint ID"
+              className={`${inputCls} w-32`}
             />
           )}
           <button
@@ -546,63 +696,91 @@ function BpfInspectorTab({ clusterId, agents }: { clusterId: string; agents: Cil
             </button>
           )}
         </div>
+        <AgentsError state={agentsState} />
+        </div>
       </MacCard>
 
-      {/* 직접 명령(ad-hoc) — 목록에 없는 cilium-dbg 명령 실행 + 프리셋 저장 */}
-      <RoleGate allow={['admin', 'operator']}>
-        <MacCard title="직접 명령 (cilium-dbg)" bodyPadding="p-3">
-          <div className="space-y-2">
-            <div className="flex items-center gap-2 flex-wrap">
-              {presets.length > 0 && (
-                <select
-                  value=""
-                  onChange={(e) => { if (e.target.value) setAdhoc(e.target.value); }}
-                  className="text-sm bg-background border border-border rounded-xl px-2.5 py-1.5 focus:outline-none focus:ring-2 focus:ring-primary/40 max-w-[280px]"
-                >
-                  <option value="">저장된 프리셋…</option>
-                  {presets.map((p) => (
-                    <option key={p.id} value={(p.command || '').replace(/^cilium-dbg\s+/, '')}>
-                      {p.description || p.command}
-                    </option>
-                  ))}
-                </select>
-              )}
-              <span className="text-sm font-mono text-muted-foreground">cilium-dbg</span>
-              <input
-                value={adhoc}
-                onChange={(e) => setAdhoc(e.target.value)}
-                onKeyDown={(e) => { if (e.key === 'Enter') runAdhoc(); }}
-                placeholder="예: ipam status  ·  bpf endpoint list  ·  status --verbose"
-                className="flex-1 min-w-[220px] text-sm font-mono bg-background border border-border rounded-xl px-2.5 py-1.5 focus:outline-none focus:ring-2 focus:ring-primary/40"
-              />
-              <button
-                onClick={runAdhoc}
-                disabled={adhocBusy || !adhoc.trim()}
-                className="px-3.5 py-1.5 text-sm font-semibold bg-primary hover:bg-primary/90 text-primary-foreground rounded-xl flex items-center gap-1.5 disabled:opacity-50 shadow-card"
+      {/* 직접 명령(ad-hoc) — 목록에 없는 cilium-dbg 명령 실행 + 프리셋 저장.
+          viewer 에게도 렌더하고 입력·실행만 비활성(§12.9 "숨기지 않고 비활성", D-172). */}
+      <MacCard title="직접 명령 (cilium-dbg)" bodyPadding="p-3">
+        <div className="space-y-2">
+          <div className="flex items-center gap-2 flex-wrap">
+            {presets.length > 0 && (
+              <select
+                value=""
+                onChange={(e) => { if (e.target.value) setAdhoc(e.target.value); }}
+                disabled={!canOperate}
+                aria-label="저장된 cilium-dbg 프리셋"
+                title={withHint('저장된 프리셋을 입력란에 채웁니다')}
+                className={`${inputCls} max-w-[280px]`}
               >
-                <Play className="w-3.5 h-3.5" />{adhocBusy ? '실행 중…' : '실행'}
-              </button>
-              <button
-                onClick={savePreset}
-                disabled={!adhoc.trim()}
-                className="px-3 py-1.5 text-sm font-medium bg-secondary hover:bg-secondary/80 border border-border rounded-xl flex items-center gap-1.5 disabled:opacity-50"
-                title="현재 명령을 프리셋으로 저장(주요 명령어 · category=cilium)"
-              >
-                <Save className="w-3.5 h-3.5" /> 프리셋 저장
-              </button>
-            </div>
-            <p className="text-xs text-muted-foreground">
-              선택한 agent pod 에서 <code>cilium-dbg &lt;입력&gt;</code> 실행(operator). 임의 바이너리 불가, 실행은 감사 로그에 기록됩니다.
-            </p>
-            {adhocErr && (
-              <div className="px-3 py-2 rounded-lg bg-status-warning/10 text-sm text-status-warning break-all">{adhocErr}</div>
+                <option value="">저장된 프리셋…</option>
+                {presets.map((p) => (
+                  <option key={p.id} value={(p.command || '').replace(/^cilium-dbg\s+/, '')}>
+                    {p.description || p.command}
+                  </option>
+                ))}
+              </select>
             )}
-            {adhocOut != null && (
-              <LogViewer text={adhocOut} maxHeight="max-h-[40vh]" />
-            )}
+            <span className="text-sm font-mono text-muted-foreground" aria-hidden>cilium-dbg</span>
+            <input
+              value={adhoc}
+              onChange={(e) => setAdhoc(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key !== 'Enter' || e.nativeEvent.isComposing) return;
+                e.preventDefault();
+                requestRun();
+              }}
+              disabled={!canOperate}
+              placeholder="예: status --verbose  ·  bpf endpoint list  ·  endpoint list -o json"
+              aria-label={ariaWithHint('cilium-dbg 하위 명령')}
+              aria-describedby="cilium-adhoc-help"
+              title={withHint('cilium-dbg 뒤에 붙일 하위 명령')}
+              className={`flex-1 min-w-[220px] font-mono ${inputCls}`}
+            />
+            <button
+              onClick={requestRun}
+              disabled={adhocBusy || !!adhocBlockedReason}
+              title={runTitle}
+              aria-label={runAria}
+              className={`px-3.5 py-1.5 text-sm font-semibold rounded-xl flex items-center gap-1.5 disabled:opacity-50 shadow-card ${
+                verdict.args && !verdict.readOnly
+                  ? 'bg-destructive text-destructive-foreground hover:bg-destructive/90'
+                  : 'bg-primary hover:bg-primary/90 text-primary-foreground'
+              }`}
+            >
+              <Play className="w-3.5 h-3.5" aria-hidden />{adhocBusy ? '실행 중…' : '실행'}
+            </button>
+            <button
+              onClick={savePreset}
+              disabled={!adhoc.trim() || !canOperate}
+              className="px-3 py-1.5 text-sm font-medium bg-secondary hover:bg-secondary/80 border border-border rounded-xl flex items-center gap-1.5 disabled:opacity-50"
+              title={withHint('현재 명령을 프리셋으로 저장(주요 명령어 · category=cilium)')}
+              aria-label={ariaWithHint('프리셋 저장')}
+            >
+              <Save className="w-3.5 h-3.5" aria-hidden /> 프리셋 저장
+            </button>
           </div>
-        </MacCard>
-      </RoleGate>
+          {verdict.args && !verdict.readOnly && (
+            <p className="text-xs text-status-warning flex items-start gap-1.5" role="status">
+              <AlertTriangle className="w-3.5 h-3.5 flex-shrink-0 mt-px" aria-hidden />
+              <span>
+                {verdict.reason ?? '읽기 전용 목록 밖 명령'} — {isAdmin
+                  ? '실행 전 확인창을 거칩니다.'
+                  : 'admin 만 실행할 수 있습니다. 조회 명령으로 바꾸거나 admin 에게 요청하세요.'}
+              </span>
+            </p>
+          )}
+          <p id="cilium-adhoc-help" className="text-xs text-muted-foreground">
+            선택한 에이전트 파드에서 <code>cilium-dbg &lt;입력&gt;</code> 을 실행합니다(operator 이상). 읽기 전용 허용 목록의 조회 명령은 바로 실행되고,
+            그 밖의 명령은 admin 만 확인창을 거쳐 실행할 수 있습니다. 임의 바이너리는 실행할 수 없고, 실행은 감사 로그에 기록됩니다.
+          </p>
+          <details className="text-xs text-muted-foreground">
+            <summary className="cursor-pointer select-none hover:text-foreground">읽기 전용 허용 목록 ({allowLabels.length}개)</summary>
+            <p className="mt-1 font-mono leading-relaxed break-words">{allowLabels.join(' · ')}</p>
+          </details>
+        </div>
+      </MacCard>
       </div>
 
       {/* Result — 우측 고정 (실행 전엔 플레이스홀더), 위에 실행 수명주기 로그 */}
@@ -614,13 +792,45 @@ function BpfInspectorTab({ clusterId, agents }: { clusterId: string; agents: Cil
         bodyPadding="p-0"
         className="overflow-hidden"
       >
+        {/* 직접 명령 결과 — 좌측 컨트롤 아래가 아니라 우측 결과 카드 안 섹션(§12.6, D-175 ②) */}
+        {adhocRan && (adhocBusy || adhocOut != null || adhocErr) && (
+          <section aria-label="직접 명령 결과" className="border-b border-border">
+            <div className="px-4 py-2 flex items-center gap-2 text-xs text-muted-foreground">
+              <span className="font-medium text-foreground">직접 명령</span>
+              <code className="font-mono truncate" title={`cilium-dbg ${adhocRan.cmd}`}>cilium-dbg {adhocRan.cmd}</code>
+              {adhocRan.pod && <span className="truncate">· {adhocRan.pod}</span>}
+              <button
+                type="button"
+                onClick={() => { setAdhocRan(null); setAdhocOut(null); setAdhocErr(null); }}
+                disabled={adhocBusy}
+                aria-label="직접 명령 결과 닫기"
+                title="직접 명령 결과 닫기"
+                className="ml-auto p-1 rounded-xl hover:bg-secondary disabled:opacity-50"
+              >
+                <X className="w-3.5 h-3.5" aria-hidden />
+              </button>
+            </div>
+            {adhocErr && (
+              <div className="px-4 py-2 bg-status-critical/10 text-sm text-status-critical flex items-start gap-2" role="alert">
+                <AlertTriangle className="w-3.5 h-3.5 flex-shrink-0 mt-0.5" aria-hidden />
+                <span className="break-all">{adhocErr}</span>
+              </div>
+            )}
+            {adhocBusy && <LoadingState compact label="cilium-dbg 실행 중…" />}
+            {adhocOut != null && (
+              <div className="p-3">
+                <LogViewer text={adhocOut} maxHeight="max-h-[40vh]" />
+              </div>
+            )}
+          </section>
+        )}
         {error && (
-          <div className="px-4 py-3 border-b border-border bg-status-warning/10 text-sm text-status-warning flex items-center gap-2">
-            <AlertTriangle className="w-3.5 h-3.5 flex-shrink-0" />
+          <div className="px-4 py-3 border-b border-border bg-status-critical/10 text-sm text-status-critical flex items-center gap-2" role="alert">
+            <AlertTriangle className="w-3.5 h-3.5 flex-shrink-0" aria-hidden />
             <span className="break-all">{error}</span>
           </div>
         )}
-        {!data && !loading && (
+        {!data && !loading && !adhocRan && (
           <EmptyState
             icon={Database}
             title="조회한 BPF 맵이 없습니다."
@@ -644,6 +854,23 @@ function BpfInspectorTab({ clusterId, agents }: { clusterId: string; agents: Cil
         )}
       </MacCard>
       </div>
+
+      <ConfirmDialog
+        open={confirmOpen}
+        danger
+        title="쓰기·삭제 가능 cilium-dbg 명령 실행"
+        description="읽기 전용 목록 밖 명령입니다. CNI 상태를 바꾸거나 되돌릴 수 없을 수 있습니다."
+        confirmLabel="실행"
+        busy={adhocBusy}
+        onCancel={() => setConfirmOpen(false)}
+        onConfirm={() => { setConfirmOpen(false); void runAdhoc(); }}
+      >
+        <dl className="space-y-1 text-sm">
+          <div className="flex gap-2"><dt className="text-muted-foreground w-20 flex-shrink-0">대상 파드</dt><dd className="font-mono break-all">{agentDesc(podName)}</dd></div>
+          <div className="flex gap-2"><dt className="text-muted-foreground w-20 flex-shrink-0">명령</dt><dd className="font-mono break-all">cilium-dbg {verdict.args}</dd></div>
+          <div className="flex gap-2"><dt className="text-muted-foreground w-20 flex-shrink-0">사유</dt><dd className="text-status-critical">{verdict.reason ?? '읽기 전용 목록 밖 명령'}</dd></div>
+        </dl>
+      </ConfirmDialog>
     </div>
   );
 }
@@ -705,80 +932,154 @@ interface MonitorEvent {
   parsed?: Record<string, unknown>;
 }
 
-function MonitorTab({ clusterId, agents }: { clusterId: string; agents: CiliumAgent[] }) {
+/** 서버가 스트림을 닫았을 때 목록 끝에 붙는 안내 줄(D-174 ②). */
+const STREAM_ENDED_NOTE = '스트림이 종료됐습니다(서버) — 다시 시작하세요';
+
+/**
+ * Monitor·Hubble 공용 SSE 스트림 상태 — 80ms 묶음 반영(화면 폭주 방지) + 일시정지 + 서버 종료 감지.
+ *
+ * D-174 ① 일시정지는 `pausedRef` 로 읽는다 — 예전엔 flush 타이머가 `start()` 시점의 `paused`(=false)를
+ * 클로저로 잡아 눌러도 화면이 계속 흘렀다. 일시정지 중 들어온 이벤트는 버퍼(상한 `cap`)에 모였다가
+ * 재개 시 반영된다. D-174 ② 서버 종료·오류·사용자 중단 모두 같은 `finish()` 로 타이머를 정리하고
+ * "실행 중" 상태를 해제한다.
+ */
+function useBufferedSseStream<T>(cap: number, makeNote: (text: string) => T) {
+  const [events, setEvents] = useState<T[]>([]);
+  const [running, setRunning] = useState(false);
+  const [paused, setPausedState] = useState(false);
+  const [ended, setEnded] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+  const pausedRef = useRef(false);
+  const handleRef = useRef<SseStreamHandle | null>(null);
+  const buffer = useRef<T[]>([]);
+  const timer = useRef<number | null>(null);
+  const gen = useRef(0);
+
+  const setPaused = (v: boolean) => { pausedRef.current = v; setPausedState(v); };
+  const clearTimer = () => {
+    if (timer.current != null) window.clearInterval(timer.current);
+    timer.current = null;
+  };
+  const flush = (force: boolean) => {
+    if ((!force && pausedRef.current) || buffer.current.length === 0) return;
+    const chunk = buffer.current;
+    buffer.current = [];
+    setEvents((prev) => {
+      const next = [...prev, ...chunk];
+      return next.length > cap ? next.slice(next.length - cap) : next;
+    });
+  };
+  const finish = () => {
+    clearTimer();
+    handleRef.current = null;
+    setRunning(false);
+    setPaused(false);
+  };
+
+  // 화면 이탈 시 스트림·타이머 정리
+  useEffect(() => () => {
+    gen.current += 1;
+    handleRef.current?.abort();
+    if (timer.current != null) window.clearInterval(timer.current);
+  }, []);
+
+  const start = (url: string, toEvent: (line: string) => T) => {
+    handleRef.current?.abort();
+    clearTimer();
+    const my = ++gen.current;
+    buffer.current = [];
+    setEvents([]);
+    setErr(null);
+    setEnded(false);
+    setRunning(true);
+    setPaused(false);
+    handleRef.current = startSseStream(
+      url,
+      (line) => {
+        if (my !== gen.current) return;
+        buffer.current.push(toEvent(line));
+        if (buffer.current.length > cap) buffer.current.splice(0, buffer.current.length - cap);
+      },
+      (e) => {
+        if (my !== gen.current) return;
+        flush(true);
+        finish();
+        setErr(e);
+      },
+      () => {
+        if (my !== gen.current) return;
+        buffer.current.push(makeNote(STREAM_ENDED_NOTE));
+        flush(true);
+        finish();
+        setEnded(true);
+      },
+    );
+    timer.current = window.setInterval(() => flush(false), 80);
+  };
+
+  const stop = () => {
+    gen.current += 1;
+    handleRef.current?.abort();
+    flush(true);
+    finish();
+  };
+
+  const clear = () => { setEvents([]); buffer.current = []; };
+  const togglePause = () => setPaused(!pausedRef.current);
+
+  return { events, running, paused, ended, err, start, stop, clear, togglePause };
+}
+
+/** 스트림 카드 제목 옆 상태 — 실행 중도 중립색 아이콘(§12.12-3, D-179 ③). */
+function StreamIndicator({ running, paused, ended, count }: { running: boolean; paused: boolean; ended: boolean; count: number }) {
+  const label = running ? (paused ? '일시정지' : '수신 중') : ended ? '서버 종료' : '중지됨';
+  return (
+    <span className="text-xs text-muted-foreground tabular-nums inline-flex items-center gap-1" aria-live="polite">
+      {running && !paused ? <Radio className="w-3 h-3" aria-hidden /> : running ? <Pause className="w-3 h-3" aria-hidden /> : null}
+      {label} · {count}건
+    </span>
+  );
+}
+
+function StreamError({ err }: { err: string | null }) {
+  if (!err) return null;
+  return (
+    <p role="alert" className="text-sm text-status-critical flex items-start gap-2 break-all">
+      <AlertTriangle className="w-3.5 h-3.5 flex-shrink-0 mt-0.5" aria-hidden /> {err}
+    </p>
+  );
+}
+
+function MonitorTab({ clusterId, agentsState }: { clusterId: string; agentsState: AgentsState }) {
+  const agents = agentsState.agents;
   const readyAgents = agents.filter((a) => a.ready);
   const [podName, setPodName] = useState<string>('');
   const [types, setTypes] = useState<Set<MonitorType>>(new Set(['drop', 'trace']));
   const [relatedTo, setRelatedTo] = useState<string>('');
-  const [events, setEvents] = useState<MonitorEvent[]>([]);
-  const [running, setRunning] = useState(false);
-  const [err, setErr] = useState<string | null>(null);
-  const [paused, setPaused] = useState(false);
+  const [startErr, setStartErr] = useState<string | null>(null);
   const [filterText, setFilterText] = useState('');
-  const handleRef = useRef<SseStreamHandle | null>(null);
-  const eventBuffer = useRef<MonitorEvent[]>([]);
-  const flushTimer = useRef<number | null>(null);
+  const stream = useBufferedSseStream<MonitorEvent>(1000, (text) => ({ ts: Date.now(), raw: text, kind: 'meta' }));
+  const { events, running, paused, ended } = stream;
 
   useEffect(() => {
     if (!podName && readyAgents.length > 0) setPodName(readyAgents[0].podName);
   }, [readyAgents, podName]);
 
-  // 모든 stream 종료
-  useEffect(() => {
-    return () => {
-      handleRef.current?.abort();
-      if (flushTimer.current) window.clearInterval(flushTimer.current);
-    };
-  }, []);
-
   const start = () => {
-    if (!podName) { setErr('agent pod 가 필요합니다.'); return; }
-    handleRef.current?.abort();
-    setEvents([]);
-    setErr(null);
-    setRunning(true);
-    setPaused(false);
-
+    if (!podName) { setStartErr('에이전트 파드를 선택하세요.'); return; }
+    setStartErr(null);
     const params = new URLSearchParams({
       pod_name: podName,
       ...(types.size > 0 ? { types: Array.from(types).join(',') } : {}),
       ...(relatedTo ? { related_to: relatedTo } : {}),
     });
-    const url = `/api/v1/cilium/${clusterId}/monitor/stream?${params.toString()}`;
-
-    handleRef.current = startSseStream(
-      url,
-      (line) => {
-        let parsed: Record<string, unknown> | undefined;
-        try { parsed = JSON.parse(line); } catch { /* keep raw */ }
-        const kind = (parsed && typeof parsed.kind === 'string') ? (parsed.kind as string) : undefined;
-        eventBuffer.current.push({ ts: Date.now(), raw: line, kind, parsed });
-      },
-      (e) => {
-        setErr(e);
-        setRunning(false);
-      },
-    );
-
-    // 60ms throttled flush — UI 가 폭주 안 하도록
-    if (flushTimer.current) window.clearInterval(flushTimer.current);
-    flushTimer.current = window.setInterval(() => {
-      if (paused || eventBuffer.current.length === 0) return;
-      setEvents((prev) => {
-        const next = [...prev, ...eventBuffer.current];
-        eventBuffer.current = [];
-        return next.length > 1000 ? next.slice(next.length - 1000) : next;
-      });
-    }, 80);
+    stream.start(`/api/v1/cilium/${clusterId}/monitor/stream?${params.toString()}`, (line) => {
+      let parsed: Record<string, unknown> | undefined;
+      try { parsed = JSON.parse(line); } catch { /* keep raw */ }
+      const kind = (parsed && typeof parsed.kind === 'string') ? (parsed.kind as string) : undefined;
+      return { ts: Date.now(), raw: line, kind, parsed };
+    });
   };
-
-  const stop = () => {
-    handleRef.current?.abort();
-    handleRef.current = null;
-    setRunning(false);
-  };
-
-  const clear = () => { setEvents([]); eventBuffer.current = []; };
 
   const filtered = useMemo(() => {
     if (!filterText.trim()) return events;
@@ -793,24 +1094,21 @@ function MonitorTab({ clusterId, agents }: { clusterId: string; agents: CiliumAg
       <div className="lg:col-span-4 min-w-0 space-y-4">
       <MacCard
         title="모니터 스트림"
-        titleExtra={
-          <span className="text-xs text-muted-foreground tabular-nums">
-            <span className={running ? 'text-status-healthy' : ''}>●</span> {events.length}건
-          </span>
-        }
+        titleExtra={<StreamIndicator running={running} paused={paused} ended={ended} count={events.length} />}
         bodyPadding="p-3"
       >
+        <div className="space-y-2">
         <div className="flex items-center gap-2 flex-wrap">
           <div className="flex items-center gap-1.5">
-            <Server className="w-3.5 h-3.5 text-muted-foreground" />
+            <Server className="w-3.5 h-3.5 text-muted-foreground" aria-hidden />
             <SearchableSelect
               value={podName}
               onChange={setPodName}
               options={agents}
               getKey={(a) => a.podName}
               getLabel={agentLabel}
-              placeholder="agent pod 검색 (호스트 번호 등)"
-              emptyText="agent 없음"
+              placeholder="에이전트 파드 검색 (호스트 번호 등)"
+              emptyText={agentsState.error ? '목록을 불러오지 못했습니다' : '에이전트 파드가 없습니다'}
               clearable={false}
               disabled={running}
               menuPortal
@@ -822,47 +1120,46 @@ function MonitorTab({ clusterId, agents }: { clusterId: string; agents: CiliumAg
             value={relatedTo}
             onChange={(e) => setRelatedTo(e.target.value)}
             disabled={running}
-            placeholder="related-to (endpoint id)"
-            className="text-sm bg-background border border-border rounded-xl px-2.5 py-1.5 w-44 focus:outline-none focus:ring-2 focus:ring-primary/40 disabled:opacity-60"
+            placeholder="related-to (endpoint ID)"
+            aria-label="related-to — 이 endpoint ID 와 관련된 이벤트만"
+            className={`${inputCls} w-44`}
           />
           {!running ? (
             <button
               onClick={start}
               className="px-3.5 py-1.5 text-sm font-semibold bg-primary hover:bg-primary/90 text-primary-foreground rounded-xl transition-colors flex items-center gap-1.5 shadow-card"
             >
-              <Play className="w-3.5 h-3.5" /> 시작
+              <Play className="w-3.5 h-3.5" aria-hidden /> 시작
             </button>
           ) : (
             <button
-              onClick={stop}
-              className="px-3.5 py-1.5 text-sm font-semibold bg-status-critical hover:bg-status-critical text-primary-foreground rounded-xl transition-colors flex items-center gap-1.5"
+              onClick={stream.stop}
+              className="px-3.5 py-1.5 text-sm font-semibold bg-destructive text-destructive-foreground hover:bg-destructive/90 rounded-xl transition-colors flex items-center gap-1.5"
             >
-              <X className="w-3.5 h-3.5" /> 중단
+              <X className="w-3.5 h-3.5" aria-hidden /> 중단
             </button>
           )}
           <button
-            onClick={() => setPaused((p) => !p)}
+            onClick={stream.togglePause}
             disabled={!running}
+            aria-pressed={paused}
             className="px-3 py-1.5 text-sm font-medium bg-secondary hover:bg-secondary/80 border border-border rounded-xl transition-colors flex items-center gap-1.5 disabled:opacity-50"
           >
-            {paused ? <Play className="w-3.5 h-3.5" /> : <Pause className="w-3.5 h-3.5" />}
+            {paused ? <Play className="w-3.5 h-3.5" aria-hidden /> : <Pause className="w-3.5 h-3.5" aria-hidden />}
             {paused ? '재개' : '일시정지'}
           </button>
           <button
-            onClick={clear}
+            onClick={stream.clear}
             disabled={events.length === 0}
             className="px-3 py-1.5 text-sm font-medium bg-secondary hover:bg-secondary/80 border border-border rounded-xl transition-colors flex items-center gap-1.5 disabled:opacity-50"
           >
-            <Trash2 className="w-3.5 h-3.5" /> 비우기
+            <Trash2 className="w-3.5 h-3.5" aria-hidden /> 비우기
           </button>
         </div>
-      </MacCard>
-
-      {err && (
-        <div className="rounded-md border border-status-warning/40 bg-status-warning/10 px-3 py-2 text-sm text-status-warning flex items-center gap-2">
-          <AlertTriangle className="w-3.5 h-3.5" /> {err}
+        <AgentsError state={agentsState} />
+        <StreamError err={startErr ?? stream.err} />
         </div>
-      )}
+      </MacCard>
       </div>
 
       <MacCard
@@ -878,7 +1175,7 @@ function MonitorTab({ clusterId, agents }: { clusterId: string; agents: CiliumAg
               onChange={(e) => setFilterText(e.target.value)}
               placeholder="텍스트로 필터링…"
               aria-label="이벤트 텍스트 필터"
-              className="w-56 text-sm bg-background border border-border rounded-lg px-2.5 py-1.5 focus:outline-none focus:ring-2 focus:ring-primary/40"
+              className="w-56 text-sm bg-background border border-border rounded-xl px-2.5 py-1.5 focus:outline-none focus:ring-2 focus:ring-primary/40"
             />
           </div>
         }
@@ -894,7 +1191,8 @@ function TypeFilter({ types, setTypes, disabled }: { types: Set<MonitorType>; se
   const [pos, setPos] = useState<{ top: number; left: number } | null>(null);
   const buttonRef = useRef<HTMLButtonElement | null>(null);
   const popRef = useRef<HTMLDivElement | null>(null);
-  const label = types.size === 0 ? '모든 type' : Array.from(types).join(', ');
+  const label = types.size === 0 ? '모든 유형' : Array.from(types).join(', ');
+  const popId = useId();
 
   // 드롭다운 열릴 때 버튼 위치 측정 — 부모 MacCard 의 overflow:hidden 회피용 portal.
   useEffect(() => {
@@ -914,7 +1212,7 @@ function TypeFilter({ types, setTypes, disabled }: { types: Set<MonitorType>; se
     };
   }, [open]);
 
-  // 외부 클릭 시 닫기
+  // 외부 클릭·Esc 로 닫기 — Esc 는 버튼으로 포커스를 돌려 키보드 사용자가 길을 잃지 않게 한다(D-178).
   useEffect(() => {
     if (!open) return;
     const onDown = (e: MouseEvent) => {
@@ -923,8 +1221,18 @@ function TypeFilter({ types, setTypes, disabled }: { types: Set<MonitorType>; se
       if (popRef.current?.contains(t)) return;
       setOpen(false);
     };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape') return;
+      e.stopPropagation();
+      setOpen(false);
+      buttonRef.current?.focus();
+    };
     window.addEventListener('mousedown', onDown);
-    return () => window.removeEventListener('mousedown', onDown);
+    window.addEventListener('keydown', onKey);
+    return () => {
+      window.removeEventListener('mousedown', onDown);
+      window.removeEventListener('keydown', onKey);
+    };
   }, [open]);
 
   return (
@@ -934,20 +1242,27 @@ function TypeFilter({ types, setTypes, disabled }: { types: Set<MonitorType>; se
         type="button"
         onClick={() => setOpen((o) => !o)}
         disabled={disabled}
+        aria-haspopup="true"
+        aria-expanded={open}
+        aria-controls={open ? popId : undefined}
+        aria-label={`이벤트 유형 필터 — ${label}`}
         className="text-sm bg-background border border-border rounded-xl px-2.5 py-1.5 focus:outline-none focus:ring-2 focus:ring-primary/40 disabled:opacity-60 flex items-center gap-1.5 max-w-[260px]"
       >
-        <Filter className="w-3.5 h-3.5 text-muted-foreground" />
+        <Filter className="w-3.5 h-3.5 text-muted-foreground" aria-hidden />
         <span className="truncate">{label}</span>
-        <ChevronDown className="w-3 h-3 text-muted-foreground" />
+        <ChevronDown className="w-3 h-3 text-muted-foreground" aria-hidden />
       </button>
       {open && pos && createPortal(
         <div
           ref={popRef}
+          id={popId}
+          role="group"
+          aria-label="이벤트 유형"
           style={{ top: pos.top, left: pos.left }}
           className="fixed z-50 w-56 bg-card border border-border rounded-md shadow-card p-2 space-y-1"
         >
           {MONITOR_TYPES.map((t) => (
-            <label key={t} className="flex items-center gap-2 text-sm px-2 py-1 rounded hover:bg-secondary cursor-pointer">
+            <label key={t} className="flex items-center gap-2 text-sm px-2 py-1 rounded-md hover:bg-secondary cursor-pointer">
               <input
                 type="checkbox"
                 className="accent-primary"
@@ -1033,13 +1348,25 @@ interface HubbleFlowEvent {
   ts: number;
   raw: string;
   parsed?: Record<string, unknown>;
+  /** 스트림 안내 줄(서버 종료 등) — flow 가 아니다. */
+  note?: string;
 }
 
 // Hubble flow 필터 자동완성용 정적 enum.
 const HUBBLE_PROTOCOLS = ['tcp', 'udp', 'http', 'dns', 'icmp', 'sctp', 'kafka', 'grpc'] as const;
 const HUBBLE_VERDICTS = ['FORWARDED', 'DROPPED', 'AUDIT', 'ERROR', 'REDIRECTED', 'TRACED'] as const;
 
-function HubbleTab({ clusterId, hubbleInstalled }: { clusterId: string; hubbleInstalled: boolean }) {
+interface HubbleTabProps {
+  clusterId: string;
+  statusLoading: boolean;
+  /** 상태 조회 실패(요청 실패 또는 서버 error) — 미설치로 오인하지 않도록 따로 받는다(D-173). */
+  statusError: unknown;
+  onRetryStatus: () => void;
+  /** 상태 조회 성공 시에만 boolean. */
+  hubbleInstalled?: boolean;
+}
+
+function HubbleTab({ clusterId, statusLoading, statusError, onRetryStatus, hubbleInstalled }: HubbleTabProps) {
   const [filters, setFilters] = useState({
     fromPod: '',
     toPod: '',
@@ -1048,13 +1375,8 @@ function HubbleTab({ clusterId, hubbleInstalled }: { clusterId: string; hubbleIn
     protocol: '',
     verdict: '',
   });
-  const [events, setEvents] = useState<HubbleFlowEvent[]>([]);
-  const [running, setRunning] = useState(false);
-  const [paused, setPaused] = useState(false);
-  const [err, setErr] = useState<string | null>(null);
-  const handleRef = useRef<SseStreamHandle | null>(null);
-  const buffer = useRef<HubbleFlowEvent[]>([]);
-  const flushTimer = useRef<number | null>(null);
+  const stream = useBufferedSseStream<HubbleFlowEvent>(1500, (text) => ({ ts: Date.now(), raw: text, note: text }));
+  const { events, running, paused, ended } = stream;
 
   // 클러스터 namespace 목록 — datalist 소스.
   const { data: nsData } = useAnalyzeNamespaces(clusterId);
@@ -1065,13 +1387,6 @@ function HubbleTab({ clusterId, hubbleInstalled }: { clusterId: string; hubbleIn
   // 실시간 flow 이벤트에서 관측된 namespace/pod 누적 — autocomplete 보조.
   const [seenNs, setSeenNs] = useState<Set<string>>(new Set());
   const [seenPods, setSeenPods] = useState<Set<string>>(new Set());
-
-  useEffect(() => {
-    return () => {
-      handleRef.current?.abort();
-      if (flushTimer.current) window.clearInterval(flushTimer.current);
-    };
-  }, []);
 
   // 들어오는 events 마다 flow.source/destination 의 namespace, pod_name 추출.
   useEffect(() => {
@@ -1128,12 +1443,6 @@ function HubbleTab({ clusterId, hubbleInstalled }: { clusterId: string; hubbleIn
   }, [toPodsData, seenPods, filters.toNamespace]);
 
   const start = () => {
-    handleRef.current?.abort();
-    setEvents([]);
-    setErr(null);
-    setRunning(true);
-    setPaused(false);
-
     const params = new URLSearchParams();
     if (filters.fromPod)       params.set('from_pod', filters.fromPod);
     if (filters.toPod)         params.set('to_pod', filters.toPod);
@@ -1142,35 +1451,17 @@ function HubbleTab({ clusterId, hubbleInstalled }: { clusterId: string; hubbleIn
     if (filters.protocol)      params.set('protocol', filters.protocol);
     if (filters.verdict)       params.set('verdict', filters.verdict);
 
-    const url = `/api/v1/cilium/${clusterId}/hubble/stream?${params.toString()}`;
-
-    handleRef.current = startSseStream(
-      url,
-      (line) => {
-        let parsed: Record<string, unknown> | undefined;
-        try { parsed = JSON.parse(line); } catch { /* raw */ }
-        buffer.current.push({ ts: Date.now(), raw: line, parsed });
-      },
-      (e) => { setErr(e); setRunning(false); },
-    );
-
-    if (flushTimer.current) window.clearInterval(flushTimer.current);
-    flushTimer.current = window.setInterval(() => {
-      if (paused || buffer.current.length === 0) return;
-      setEvents((prev) => {
-        const next = [...prev, ...buffer.current];
-        buffer.current = [];
-        return next.length > 1500 ? next.slice(next.length - 1500) : next;
-      });
-    }, 80);
+    stream.start(`/api/v1/cilium/${clusterId}/hubble/stream?${params.toString()}`, (line) => {
+      let parsed: Record<string, unknown> | undefined;
+      try { parsed = JSON.parse(line); } catch { /* raw */ }
+      return { ts: Date.now(), raw: line, parsed };
+    });
   };
-
-  const stop = () => { handleRef.current?.abort(); handleRef.current = null; setRunning(false); };
-  const clear = () => { setEvents([]); buffer.current = []; };
 
   const verdictCounts = useMemo(() => {
     const c = { FORWARDED: 0, DROPPED: 0, AUDIT: 0, OTHER: 0 };
     for (const e of events) {
+      if (e.note) continue;
       const v = (e.parsed as Record<string, unknown> | undefined)?.flow as Record<string, unknown> | undefined;
       const verdict = String((v ?? e.parsed ?? {})?.verdict ?? '');
       if (verdict in c) c[verdict as keyof typeof c]++;
@@ -1178,73 +1469,64 @@ function HubbleTab({ clusterId, hubbleInstalled }: { clusterId: string; hubbleIn
     }
     return c;
   }, [events]);
+  const flowCount = events.filter((e) => !e.note).length;
 
-  if (!hubbleInstalled) {
+  // 분기 순서: 상태 로딩 → 상태 조회 실패(ErrorState) → 조회 성공 + 미설치일 때만 설치 안내(D-173).
+  if (statusLoading) {
+    return <LoadingState label="Hubble Relay 상태 확인 중…" />;
+  }
+  if (statusError) {
+    return (
+      <ErrorState
+        error={statusError}
+        title="Hubble Relay 상태를 확인하지 못했습니다"
+        onRetry={onRetryStatus}
+      />
+    );
+  }
+  if (hubbleInstalled === false) {
     return (
       <EmptyState
-        icon={AlertTriangle}
+        icon={Info}
         title="Hubble Relay 가 설치되어 있지 않습니다."
-        description="아래 명령 또는 helm 으로 hubble-relay 를 배포하면 flow 를 볼 수 있습니다."
+        description="상태 조회 결과 hubble-relay 서비스가 없습니다. 아래 명령 또는 helm 으로 hubble-relay 를 배포하면 흐름을 볼 수 있습니다."
       >
-        <code className="mt-3 px-1.5 py-0.5 rounded bg-secondary text-sm">cilium hubble enable --ui</code>
+        <code className="mt-3 px-1.5 py-0.5 rounded-md bg-secondary text-sm">cilium hubble enable --ui</code>
       </EmptyState>
     );
   }
+
+  const filterInputs: { key: keyof typeof filters; placeholder: string; label: string; list: string }[] = [
+    { key: 'fromNamespace', placeholder: 'from-namespace', label: '출발 네임스페이스', list: 'hubble-ns-list' },
+    { key: 'fromPod', placeholder: 'from-pod (ns/name)', label: '출발 파드 (ns/이름)', list: 'hubble-from-pod-list' },
+    { key: 'protocol', placeholder: 'protocol (tcp/udp/http/dns)', label: '프로토콜', list: 'hubble-protocol-list' },
+    { key: 'toNamespace', placeholder: 'to-namespace', label: '목적 네임스페이스', list: 'hubble-ns-list' },
+    { key: 'toPod', placeholder: 'to-pod (ns/name)', label: '목적 파드 (ns/이름)', list: 'hubble-to-pod-list' },
+    { key: 'verdict', placeholder: 'verdict (FORWARDED/DROPPED)', label: '판정 (verdict)', list: 'hubble-verdict-list' },
+  ];
 
   return (
     // 좌(필터/컨트롤)/우(flow 로그) 고정 배치 — MC 클라이언트 콘솔과 동일 패턴.
     <div className="grid grid-cols-1 lg:grid-cols-10 gap-4 items-start">
       <div className="lg:col-span-4 min-w-0 space-y-4">
-      <MacCard title="Hubble 필터" bodyPadding="p-3">
+      <MacCard
+        title="Hubble 필터"
+        titleExtra={<StreamIndicator running={running} paused={paused} ended={ended} count={flowCount} />}
+        bodyPadding="p-3"
+      >
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-1 xl:grid-cols-2 gap-2 mb-2">
-          <input
-            value={filters.fromNamespace}
-            onChange={(e) => setFilters((s) => ({ ...s, fromNamespace: e.target.value }))}
-            disabled={running}
-            placeholder="from-namespace"
-            list="hubble-ns-list"
-            className="text-sm bg-background border border-border rounded-xl px-2.5 py-1.5 focus:outline-none focus:ring-2 focus:ring-primary/40 disabled:opacity-60"
-          />
-          <input
-            value={filters.fromPod}
-            onChange={(e) => setFilters((s) => ({ ...s, fromPod: e.target.value }))}
-            disabled={running}
-            placeholder="from-pod (ns/name)"
-            list="hubble-from-pod-list"
-            className="text-sm bg-background border border-border rounded-xl px-2.5 py-1.5 focus:outline-none focus:ring-2 focus:ring-primary/40 disabled:opacity-60"
-          />
-          <input
-            value={filters.protocol}
-            onChange={(e) => setFilters((s) => ({ ...s, protocol: e.target.value }))}
-            disabled={running}
-            placeholder="protocol (tcp/udp/http/dns)"
-            list="hubble-protocol-list"
-            className="text-sm bg-background border border-border rounded-xl px-2.5 py-1.5 focus:outline-none focus:ring-2 focus:ring-primary/40 disabled:opacity-60"
-          />
-          <input
-            value={filters.toNamespace}
-            onChange={(e) => setFilters((s) => ({ ...s, toNamespace: e.target.value }))}
-            disabled={running}
-            placeholder="to-namespace"
-            list="hubble-ns-list"
-            className="text-sm bg-background border border-border rounded-xl px-2.5 py-1.5 focus:outline-none focus:ring-2 focus:ring-primary/40 disabled:opacity-60"
-          />
-          <input
-            value={filters.toPod}
-            onChange={(e) => setFilters((s) => ({ ...s, toPod: e.target.value }))}
-            disabled={running}
-            placeholder="to-pod (ns/name)"
-            list="hubble-to-pod-list"
-            className="text-sm bg-background border border-border rounded-xl px-2.5 py-1.5 focus:outline-none focus:ring-2 focus:ring-primary/40 disabled:opacity-60"
-          />
-          <input
-            value={filters.verdict}
-            onChange={(e) => setFilters((s) => ({ ...s, verdict: e.target.value }))}
-            disabled={running}
-            placeholder="verdict (FORWARDED/DROPPED)"
-            list="hubble-verdict-list"
-            className="text-sm bg-background border border-border rounded-xl px-2.5 py-1.5 focus:outline-none focus:ring-2 focus:ring-primary/40 disabled:opacity-60"
-          />
+          {filterInputs.map((fi) => (
+            <input
+              key={fi.key}
+              value={filters[fi.key]}
+              onChange={(e) => setFilters((s) => ({ ...s, [fi.key]: e.target.value }))}
+              disabled={running}
+              placeholder={fi.placeholder}
+              aria-label={fi.label}
+              list={fi.list}
+              className={inputCls}
+            />
+          ))}
         </div>
 
         {/* 자동완성 데이터 — namespace / pod 는 API + 관측, protocol / verdict 는 정적 enum */}
@@ -1269,51 +1551,48 @@ function HubbleTab({ clusterId, hubbleInstalled }: { clusterId: string; hubbleIn
               onClick={start}
               className="px-3.5 py-1.5 text-sm font-semibold bg-primary hover:bg-primary/90 text-primary-foreground rounded-xl transition-colors flex items-center gap-1.5 shadow-card"
             >
-              <Play className="w-3.5 h-3.5" /> 스트림 시작
+              <Play className="w-3.5 h-3.5" aria-hidden /> 스트림 시작
             </button>
           ) : (
             <button
-              onClick={stop}
-              className="px-3.5 py-1.5 text-sm font-semibold bg-status-critical hover:bg-status-critical text-primary-foreground rounded-xl transition-colors flex items-center gap-1.5"
+              onClick={stream.stop}
+              className="px-3.5 py-1.5 text-sm font-semibold bg-destructive text-destructive-foreground hover:bg-destructive/90 rounded-xl transition-colors flex items-center gap-1.5"
             >
-              <X className="w-3.5 h-3.5" /> 중단
+              <X className="w-3.5 h-3.5" aria-hidden /> 중단
             </button>
           )}
           <button
-            onClick={() => setPaused((p) => !p)}
+            onClick={stream.togglePause}
             disabled={!running}
+            aria-pressed={paused}
             className="px-3 py-1.5 text-sm font-medium bg-secondary hover:bg-secondary/80 border border-border rounded-xl transition-colors flex items-center gap-1.5 disabled:opacity-50"
           >
-            {paused ? <Play className="w-3.5 h-3.5" /> : <Pause className="w-3.5 h-3.5" />}
+            {paused ? <Play className="w-3.5 h-3.5" aria-hidden /> : <Pause className="w-3.5 h-3.5" aria-hidden />}
             {paused ? '재개' : '일시정지'}
           </button>
           <button
-            onClick={clear}
+            onClick={stream.clear}
             disabled={events.length === 0}
             className="px-3 py-1.5 text-sm font-medium bg-secondary hover:bg-secondary/80 border border-border rounded-xl transition-colors flex items-center gap-1.5 disabled:opacity-50"
           >
-            <Trash2 className="w-3.5 h-3.5" /> 비우기
+            <Trash2 className="w-3.5 h-3.5" aria-hidden /> 비우기
           </button>
           <div className="ml-auto flex items-center gap-3 text-xs text-muted-foreground">
             <span className="inline-flex items-center gap-1 text-muted-foreground" title="FORWARDED">
-              <CheckCircle2 className="w-3 h-3" /> {verdictCounts.FORWARDED}
+              <CheckCircle2 className="w-3 h-3" aria-hidden /> <span className="sr-only">FORWARDED</span>{verdictCounts.FORWARDED}
             </span>
             <span className={`inline-flex items-center gap-1 ${verdictCounts.DROPPED > 0 ? 'text-status-critical' : 'text-muted-foreground'}`} title="DROPPED">
-              <X className="w-3 h-3" /> {verdictCounts.DROPPED}
+              <X className="w-3 h-3" aria-hidden /> <span className="sr-only">DROPPED</span>{verdictCounts.DROPPED}
             </span>
-            <span>전체 {events.length}</span>
           </div>
         </div>
-      </MacCard>
-
-      {err && (
-        <div className="rounded-md border border-status-warning/40 bg-status-warning/10 px-3 py-2 text-sm text-status-warning flex items-center gap-2">
-          <AlertTriangle className="w-3.5 h-3.5" /> {err}
+        <div className="mt-2">
+          <StreamError err={stream.err} />
         </div>
-      )}
+      </MacCard>
       </div>
 
-      <MacCard title="Hubble 플로우" rootClassName="lg:col-span-6 min-w-0" bodyPadding="p-0" className="overflow-hidden">
+      <MacCard title="Hubble 흐름" rootClassName="lg:col-span-6 min-w-0" bodyPadding="p-0" className="overflow-hidden">
         <FlowList events={events} />
       </MacCard>
     </div>
@@ -1327,12 +1606,21 @@ function FlowList({ events }: { events: HubbleFlowEvent[] }) {
   }, [events.length]);
   if (events.length === 0) {
     return (
-      <EmptyState title="flow 가 아직 없습니다." description="시작 버튼을 눌러 hubble observe --follow 를 시작하세요." />
+      <EmptyState title="흐름이 아직 없습니다." description="스트림 시작을 눌러 hubble observe --follow 를 시작하세요." />
     );
   }
   return (
     <div ref={ref} className="overflow-auto max-h-[60vh] lg:max-h-[calc(100vh-360px)] divide-y divide-border/40">
       {events.map((e, i) => {
+        if (e.note) {
+          return (
+            <div key={i} className="px-3 py-1.5 text-xs text-muted-foreground flex items-center gap-2">
+              <span className="font-mono tabular-nums">{new Date(e.ts).toLocaleTimeString()}</span>
+              <Info className="w-3 h-3" aria-hidden />
+              <span>{e.note}</span>
+            </div>
+          );
+        }
         const flow = ((e.parsed?.flow as Record<string, unknown>) ?? e.parsed ?? {}) as Record<string, unknown>;
         const verdict = String(flow.verdict ?? '');
         const verdictClr =
@@ -1353,7 +1641,7 @@ function FlowList({ events }: { events: HubbleFlowEvent[] }) {
                 <span className="text-status-critical">[{String(dropReason)}]</span>
               ) : null}
               <span className="text-foreground">{srcLabel}</span>
-              <span className="text-muted-foreground">→</span>
+              <span className="text-muted-foreground" aria-hidden>→</span>
               <span className="text-foreground">{dstLabel}</span>
             </div>
             {summary && <div className="text-muted-foreground truncate pl-1">{summary}</div>}

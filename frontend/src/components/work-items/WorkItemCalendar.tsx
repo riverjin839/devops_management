@@ -1,5 +1,6 @@
-import { useEffect, useState, useRef } from 'react';
+import { useState, useRef } from 'react';
 import { ChevronLeft, ChevronRight, Plus, X } from 'lucide-react';
+import { useModalA11y } from '@/components/common/useModalA11y';
 import { WorkItem } from '@/types';
 import { WorkItemForm } from './WorkItemForm';
 import { useQueryClient } from '@tanstack/react-query';
@@ -381,13 +382,8 @@ interface CalendarRegisterPanelProps {
 }
 
 function CalendarRegisterPanel({ date, onClose, onSaved }: CalendarRegisterPanelProps) {
-  const panelRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [onClose]);
+  // 공용 모달 훅 — Escape·포커스 트랩·겹친 모달 순서·뒤로가기 닫기(R-2 어댑터 기준).
+  const panelRef = useModalA11y(true, onClose);
 
   const d = new Date(date + 'T00:00:00');
   const DAY = ['일', '월', '화', '수', '목', '금', '토'];
@@ -399,6 +395,7 @@ function CalendarRegisterPanel({ date, onClose, onSaved }: CalendarRegisterPanel
       <div
         ref={panelRef}
         role="dialog"
+        aria-modal="true"
         aria-label={`${dateLabel} 업무 추가`}
         className="fixed right-0 top-0 bottom-0 z-50 w-full max-w-[520px] bg-card border-l border-border shadow-2xl flex flex-col overflow-hidden"
       >

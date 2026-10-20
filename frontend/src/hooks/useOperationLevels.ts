@@ -9,12 +9,29 @@ export const opsLevelsKeys = {
 };
 
 const FALLBACK: OperationLevelItem[] = [
-  { value: 'production', label: '운영 (Production)', color: 'red',    icon: '🚀' },
-  { value: 'staging',    label: '스테이징 (Staging)', color: 'amber',  icon: '✨' },
-  { value: 'dev',        label: '개발 (Dev)',         color: 'blue',   icon: '💻' },
-  { value: 'test',       label: '테스트 (Test)',      color: 'slate',  icon: '🧪' },
-  { value: 'dr',         label: 'DR',                 color: 'purple', icon: '🛡️' },
+  { value: 'production', label: '운영 (Production)', color: 'red',    icon: '🚀', guarded: true },
+  { value: 'staging',    label: '스테이징 (Staging)', color: 'amber',  icon: '✨', guarded: false },
+  { value: 'dev',        label: '개발 (Dev)',         color: 'blue',   icon: '💻', guarded: false },
+  { value: 'test',       label: '테스트 (Test)',      color: 'slate',  icon: '🧪', guarded: false },
+  { value: 'dr',         label: 'DR',                 color: 'purple', icon: '🛡️', guarded: true },
 ];
+
+/** `guarded` 가 없는 항목(구버전 데이터)의 기본 판정 — 서버 `default_guarded` 와 같은 규칙. */
+const GUARDED_DEFAULT_VALUES = new Set(['production', 'dr']);
+
+export function defaultGuarded(value: string | null | undefined): boolean {
+  return GUARDED_DEFAULT_VALUES.has((value ?? '').trim().toLowerCase());
+}
+
+/**
+ * 운영레벨 value → 보호 레벨 여부(정책 3·4). 보호 레벨 클러스터의 PTY 콘솔(k9s·노드 SSH)은
+ * 접속 전 확인을 받고 k9s 는 읽기 전용이 기본이다. 목록에 없는 value 도 같은 기본 규칙을 쓴다.
+ */
+export function isGuardedLevel(levels: OperationLevelItem[] | undefined, value: string | null | undefined): boolean {
+  if (!value) return false;
+  const hit = levels?.find((l) => l.value === value);
+  return typeof hit?.guarded === 'boolean' ? hit.guarded : defaultGuarded(value);
+}
 
 /** 사용자가 운영레벨 별로 고를 수 있는 10개의 이모지. */
 export const EMOJI_OPTIONS: ReadonlyArray<{ emoji: string; description: string }> = [

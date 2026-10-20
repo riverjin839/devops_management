@@ -16,6 +16,12 @@ UI-First: 접속 후 실행할 명령(`initialCommand`)·셸 종류·터미널 �
 않는다 — 다만 무엇이 실행됐는지 감사 로그에 남긴다.
 
 `PEP_NODE_SSH_ENABLED=false` 로 전역 비활성화 가능.
+
+권한·감사(D-169·D-170·D-172):
+- `/test` 와 WS 모두 host 가 실제로 속한 클러스터(+화면이 넘긴 cluster_id)의 operate 를 본다.
+  어느 클러스터에도 속하지 않는 host(관리 서버 등)는 허용하고 감사 `target_type=host` 로 남긴다(정책 5).
+- WS 토큰 문제는 4401, 역할 부족은 4402, 테넌트 거부는 4413.
+- 테넌트 거부·SSH 접속 실패는 `node.ssh.open` ``status="failure"``. `initialCommand` 는 마스킹 후 500자.
 """
 from __future__ import annotations
 
@@ -23,7 +29,7 @@ import logging
 from typing import Literal, Optional
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, WebSocket
+from fastapi import APIRouter, Depends, Request, WebSocket
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
@@ -32,17 +38,23 @@ from app.database import SessionLocal, get_db
 from app.models import Cluster
 from app.models.user import User
 from app.services import audit_logger
-from app.services.cluster_access import cluster_ids_for_host, has_cluster_access
+from app.services.cluster_access import (
+    cluster_ids_for_host,
+    has_cluster_access,
+    require_clusters_access,
+)
+from app.services.command_mask import audit_command
 from app.services.ssh_pty import (
     CLOSE_CLUSTER_FORBIDDEN,
     CLOSE_DISABLED,
     CLOSE_UNAUTHORIZED,
     PtyInitError,
+    authenticate_ws,
     bridge_pty,
+    deny_ws,
     env_flag_enabled,
     receive_init,
     reject_init,
-    resolve_ws_user,
 )
 from app.services.ssh_runner import SSHTarget, test_connection
 
@@ -80,22 +92,38 @@ class NodeSshTestResponse(BaseModel):
 @router.post("/test", response_model=NodeSshTestResponse)
 def test_node_ssh(
     body: NodeSshTestRequest,
+    request: Request,
+    db: Session = Depends(get_db),
     current_user: User = Depends(require_operator),
 ) -> NodeSshTestResponse:
     """터미널을 열기 전에 host/자격증명만 확인한다(명령 실행 없음).
 
     이 라우터는 WebSocket 때문에 전역 `_auth` 없이 마운트되므로 인증 의존성을
-    엔드포인트에 직접 건다.
+    엔드포인트에 직접 건다. host 가 속한 클러스터의 operate 를 보고(D-169 ⑤ — 다른 테넌트 노드에
+    자격증명을 대입해 보는 경로 차단), 결과를 감사(`node.ssh.test`)에 남긴다.
     """
+    host = body.host.strip()
+    scoped = cluster_ids_for_host(db, host)
+    require_clusters_access(db, current_user, scoped)
     result = test_connection(
         SSHTarget(
-            host=body.host.strip(),
+            host=host,
             port=body.port,
             username=body.username.strip(),
             password=body.password or None,
             private_key=body.private_key or None,
         ),
         connect_timeout=body.connect_timeout,
+    )
+    audit_logger.record(
+        db, action="node.ssh.test", actor=current_user,
+        status="success" if result.status == "ok" else "failure",
+        target_type="host", target_id=host,
+        details={"host": f"{body.username.strip()}@{host}:{body.port}", "result": result.status,
+                 "duration_ms": result.duration_ms,
+                 "error": audit_command(result.error, 200) or None,
+                 "cluster_ids": [str(c) for c in scoped] or None},
+        request=request,
     )
     return NodeSshTestResponse(
         host=result.host,
@@ -127,11 +155,11 @@ async def node_ssh_terminal(
     node_name = ""
     try:
         if not _node_ssh_enabled():
-            await websocket.close(code=CLOSE_DISABLED)
+            await deny_ws(websocket, CLOSE_DISABLED)
             return
-        user = resolve_ws_user(token, db)
+        user, deny_code = authenticate_ws(token, db)
         if user is None:
-            await websocket.close(code=CLOSE_UNAUTHORIZED)
+            await deny_ws(websocket, deny_code or CLOSE_UNAUTHORIZED)
             return
 
         cluster_uuid: UUID | None = None
@@ -157,29 +185,45 @@ async def node_ssh_terminal(
         scoped = cluster_ids_for_host(db, init.host)
         if cluster_uuid is not None:
             scoped.add(cluster_uuid)
-        if any(not has_cluster_access(db, user, cid, "operate") for cid in scoped):
-            await reject_init(websocket, "이 노드가 속한 클러스터에 대한 실행 권한이 없습니다 (테넌트 바인딩)",
-                              code=CLOSE_CLUSTER_FORBIDDEN)
-            return
-
         label = init.label
         node_name = str(init.raw.get("nodeName") or "").strip()[:128]
         initial_command = str(init.raw.get("initialCommand") or "").strip()
         term = str(init.raw.get("term") or _DEFAULT_TERM)
         if term not in _ALLOWED_TERMS:
             term = _DEFAULT_TERM
+        base_details = {
+            "cluster": cluster_name,
+            "host": label,
+            "node": node_name or None,
+            "initial_command": audit_command(initial_command) or None,
+        }
+        # 클러스터 밖 host(관리 서버 등)는 허용하되 감사 대상은 host 로 남긴다(정책 5).
+        audit_target = ("cluster", str(cluster_uuid)) if cluster_uuid else ("host", init.host)
+
+        forbidden = [cid for cid in scoped if not has_cluster_access(db, user, cid, "operate")]
+        if forbidden:
+            audit_logger.record(
+                db, action="node.ssh.open", actor=user, status="failure",
+                target_type=audit_target[0], target_id=audit_target[1],
+                details={**base_details, "reason": "tenant_forbidden",
+                         "forbidden_cluster_ids": [str(c) for c in forbidden]},
+            )
+            await reject_init(websocket, "이 노드가 속한 클러스터에 대한 실행 권한이 없습니다 (테넌트 바인딩)",
+                              code=CLOSE_CLUSTER_FORBIDDEN)
+            return
 
         def _log_open() -> None:
             audit_logger.record(
                 db, action="node.ssh.open", actor=user, status="success",
-                target_type="cluster" if cluster_uuid else "host",
-                target_id=str(cluster_uuid) if cluster_uuid else init.host,
-                details={
-                    "cluster": cluster_name,
-                    "host": label,
-                    "node": node_name or None,
-                    "initial_command": initial_command or None,
-                },
+                target_type=audit_target[0], target_id=audit_target[1],
+                details=base_details,
+            )
+
+        def _log_fail(reason: str) -> None:
+            audit_logger.record(
+                db, action="node.ssh.open", actor=user, status="failure",
+                target_type=audit_target[0], target_id=audit_target[1],
+                details={**base_details, "reason": "ssh_failed", "error": reason},
             )
 
         duration = await bridge_pty(
@@ -193,6 +237,7 @@ async def node_ssh_terminal(
                 "cluster_name": cluster_name,
             },
             on_open=_log_open,
+            on_fail=_log_fail,
         )
     finally:
         if user is not None and duration is not None:

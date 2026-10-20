@@ -22,6 +22,7 @@ from app.services.script_wrap import wrap_script_for_language
 from app.services.ssh_runner import SSHTarget, fetch_remote_file, run_bulk
 from app.services import audit_logger
 from app.services.cluster_access import cluster_ids_for_hosts, require_clusters_access
+from app.services.command_mask import audit_command, audit_error, audit_hosts
 from app.services.k8s_client_pool import get_api_client_for_path
 
 router = APIRouter(tags=["bulk-exec"])
@@ -124,19 +125,6 @@ async def bulk_exec_run(
         *(t.cluster_id for t in targets),
         *cluster_ids_for_hosts(db, (t.host for t in targets)),
     ])
-    audit_logger.record(
-        db,
-        action="bulk_exec.run",
-        actor=actor,
-        status="success",
-        target_type="bulk_exec",
-        details={
-            "action": payload.action,
-            "target_count": len(payload.targets or []),
-            "language": payload.language,
-        },
-        request=request,
-    )
     if payload.action == "ssh" and not (payload.command and payload.command.strip()):
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
                             detail="command 는 필수입니다 (ssh 모드).")
@@ -168,25 +156,57 @@ async def bulk_exec_run(
     if payload.action == "ssh" and payload.language == "python" and command:
         command = wrap_script_for_language(command, "python")
 
+    # 감사는 실행 **후** 실제 결과로(D-170) — 명령은 마스킹 후 500자, 호스트는 앞 20개(정책 7).
+    # try/finally 로 정확히 1행: 실행 도중 예외(취소 포함)도 failure + 마스킹한 예외 요약으로 남긴다.
     start = time.monotonic()
-    results = await run_bulk(
-        targets,
-        action=payload.action,
-        command=command,
-        scp_content=(payload.scp_content.encode("utf-8") if payload.scp_content is not None else None),
-        scp_remote_path=payload.scp_remote_path,
-        mode=payload.mode,
-        connect_timeout=payload.connect_timeout,
-        exec_timeout=payload.exec_timeout,
-        parallelism=payload.parallelism,
-        chunk_size=payload.chunk_size,
-        chunk_pause_ms=payload.chunk_pause_ms,
-    )
-    total_elapsed = int((time.monotonic() - start) * 1000)
+    results = None
+    exc: BaseException | None = None
+    try:
+        results = await run_bulk(
+            targets,
+            action=payload.action,
+            command=command,
+            scp_content=(payload.scp_content.encode("utf-8") if payload.scp_content is not None else None),
+            scp_remote_path=payload.scp_remote_path,
+            mode=payload.mode,
+            connect_timeout=payload.connect_timeout,
+            exec_timeout=payload.exec_timeout,
+            parallelism=payload.parallelism,
+            chunk_size=payload.chunk_size,
+            chunk_pause_ms=payload.chunk_pause_ms,
+        )
+    except BaseException as e:  # noqa: BLE001 — 감사 후 그대로 다시 올린다
+        exc = e
+        raise
+    finally:
+        total_elapsed = int((time.monotonic() - start) * 1000)
+        done = results or []
+        ok = sum(1 for r in done if r.status == "ok")
+        err = len(done) - ok
+        audit_logger.record(
+            db,
+            action="bulk_exec.run",
+            actor=actor,
+            status="success" if results and err == 0 else "failure",
+            target_type="bulk_exec",
+            details={
+                "action": payload.action,
+                "mode": payload.mode,
+                "language": payload.language,
+                "target_count": len(payload.targets or []),
+                "hosts": audit_hosts(t.host for t in (payload.targets or [])),
+                "command": audit_command(payload.command) if payload.action == "ssh" else None,
+                "scp_remote_path": payload.scp_remote_path if payload.action == "scp" else None,
+                "ok_count": ok,
+                "error_count": err,
+                "failed_hosts": audit_hosts(r.host for r in done if r.status != "ok"),
+                "duration_ms": total_elapsed,
+                "error": audit_error(exc) if results is None else None,
+            },
+            request=request,
+        )
 
     items = [BulkExecResultItem(**r.to_dict()) for r in results]
-    ok = sum(1 for r in results if r.status == "ok")
-    err = len(results) - ok
 
     return BulkExecResponse(
         action=payload.action,
@@ -215,15 +235,6 @@ async def bulk_exec_fetch_file(
     저장되지 않는다(bulk_exec_run 과 동일 원칙).
     """
     require_clusters_access(db, actor, cluster_ids_for_hosts(db, [payload.host]))
-    audit_logger.record(
-        db,
-        action="bulk_exec.fetch_file",
-        actor=actor,
-        status="success",
-        target_type="bulk_exec",
-        details={"host": payload.host, "remote_path": payload.remote_path},
-        request=request,
-    )
     if not payload.password and not payload.private_key:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
                             detail="password 또는 private_key 중 하나는 필수입니다.")
@@ -232,9 +243,29 @@ async def bulk_exec_fetch_file(
         host=payload.host, port=payload.port, username=payload.username,
         password=payload.password, private_key=payload.private_key,
     )
-    fetched = await asyncio.to_thread(
-        fetch_remote_file, target, payload.remote_path, payload.connect_timeout,
-    )
+    fetched = None
+    exc: BaseException | None = None
+    try:
+        fetched = await asyncio.to_thread(
+            fetch_remote_file, target, payload.remote_path, payload.connect_timeout,
+        )
+    except BaseException as e:  # noqa: BLE001 — 감사 후 그대로 다시 올린다(정확히 1행)
+        exc = e
+        raise
+    finally:
+        res = fetched.result if fetched is not None else None
+        audit_logger.record(
+            db,
+            action="bulk_exec.fetch_file",
+            actor=actor,
+            status="success" if res is not None and res.status == "ok" else "failure",
+            target_type="bulk_exec",
+            details={"host": payload.host, "remote_path": payload.remote_path,
+                     "result": res.status if res is not None else "exception",
+                     "error": (audit_command(res.error, 200) or None) if res is not None
+                     else (audit_error(exc) or "실행이 끝나기 전에 중단됨")},
+            request=request,
+        )
     result = fetched.result
     return FetchFileResponse(
         host=result.host,

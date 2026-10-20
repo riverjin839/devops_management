@@ -80,6 +80,10 @@ jobs:
       - name: Type check
         run: npx tsc --noEmit
 
+      # R-2 — 모달(aria-modal)은 공용 어댑터(ui/dialog · useModalA11y · useModalHistory)로만 만든다.
+      - name: Dialog adapter check
+        run: python3 ../scripts/ui/check_dialogs.py
+
       - name: Build
         run: npm run build
 

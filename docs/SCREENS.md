@@ -259,6 +259,7 @@ hover 시 flyout 자체가 라벨을 보여주므로 이름만 뜨는 중복 툴
   - `접근 제어` 탭 하단 `OidcSettingsPanel`(MacCard "사내 SSO 로그인 (OIDC)", R-7): 사내 IdP 로그인 설정 — AppSetting `auth.oidc`. 상세는 [SSO 로그인 콜백](#sso-로그인-콜백-authcallback) 절. `GET/PUT /api/v1/auth/oidc/settings`·`POST /settings/test`(admin, "연결 확인"은 `runLogged` 실행 로그).
   - `접근 제어` 탭 하단 `LdapSettingsPanel`(MacCard "사내 디렉터리 로그인 (LDAP/AD)", R-7): AppSetting `auth.ldap` — 서버 URL(여러 개 순서대로)·StartTLS·인증서 검증·사설 CA PEM·타임아웃, 바인드 방식(직접 바인드 템플릿 `{username}@도메인` / 서비스 계정 검색 후 재바인드), 표시 이름·이메일·그룹 속성, 허용 그룹, 자동 생성(viewer/operator), 우선순위(`local_first`/`ldap_first`), 로컬 admin 보호(기본 켬). "연결 확인"은 저장 전 입력값으로 연결 → 서비스 바인드 → (테스트 사용자명) 검색을 `runLogged` 실행 로그로 보여준다. 서버·TLS·서비스 계정 DN 을 바꿔 확인할 때는 저장된 비밀번호를 쓰지 않으므로 비밀번호를 다시 입력해야 한다(감사 `settings.ldap.test`). `GET/PUT /api/v1/auth/ldap/settings`·`POST /settings/test`(admin). 로그인은 기존 `/auth/login` 하나 — 디렉터리 미도달·모듈 없음만 있으면 503(비밀번호 오류와 구분).
   - 나머지 탭은 각각 전용 매니저 컴포넌트를 그대로 렌더(운영레벨/서비스/LAKE타입/시스템 담당자/Jira/백업/감사로그).
+  - `운영레벨` 탭(`OperationLevelsManager`): 레벨마다 **보호** 체크(`guarded` — 기본 production·dr). 보호 레벨 클러스터의 k9s·노드 SSH 는 연결 전 확인 창, k9s 는 읽기 전용 기본. `GET/PUT /api/v1/ui-settings/operation-levels` 응답은 항상 bool(값이 없으면 value 가 production·dr 이면 true).
   - `테넌트` 탭(`TenantManager`, 멀티테넌시 1단계): 좌측 테넌트 목록(추가) + 우측 정보(이름/설명·삭제) · 멤버(operator/viewer 체크) · 클러스터 바인딩(클러스터별 `바인딩 없음`/`read`/`operate`) 카드, 카드별 저장. 바인딩이 있는 클러스터는 바인딩된 테넌트 멤버에게만 보이고(클러스터 목록·사이드바·대시보드·점검 매트릭스·이력·이벤트·알람에서 제외, 조회 API 403), 실행·변경은 `operate` 멤버만 가능 — 서버 판정 `services/cluster_access.py`, API `GET/POST/PUT/DELETE /api/v1/tenants`, `PUT /tenants/{id}/members`·`/bindings`, `GET /tenants/my-cluster-access`(`routers/tenants.py`, 관리 API 는 admin 전용·감사 로그 `tenant.*`). 상세 하단 **LLM 라우팅 (테넌트 전용)** 카드(`TenantLlmRoutingCard`, 멀티테넌시 4단계): 용도별 primary/fallback 프로필(임베딩 제외)을 지정하면 이 테넌트 멤버의 Agent 채팅이 전역 라우팅 대신 그 프로필을 쓴다(`PUT /tenants/{id}/llm-routing`, 판정 `services/llm/service.py` `effective_route`). 테넌트 목록 항목에 최근 24h LLM 호출 수(`GET /tenants/llm-usage`)가 붙는다. 정보 카드의 **동시 실행 상한**(멀티테넌시 5단계, `tenants.max_concurrent_runs`, 비우면 제한 없음)을 지정하면 이 테넌트 소유 클러스터(operate 바인딩 우선)에 대한 배치잡·운영 점검·점검 매트릭스 일괄 수행·심층 점검·효율화 적용이 그 수만큼만 동시에 돌고, 나머지는 15초 간격 재시도로 대기한다(`services/tenant_concurrency.py`). 상세의 **실행 슬롯** 카드(`TenantRunSlotsCard`, `GET /tenants/run-slots` 5초 폴링)에 실행 중·대기 중 목록이, 목록 항목에 `실행 n/상한 (대기 m)` 이 붙는다.
   - 테넌트는 업무·지식 데이터의 **공유 범위** 단위이기도 하다(멀티테넌시 3단계): 업무 항목·프로젝트·업무 가이드·운영 노트·마인드맵 폼의 `TenantScopeSelect`(선택지 `GET /tenants/mine`)로 테넌트를 고르면 그 멤버·admin 만 본다(`services/tenant_scope.py`). 데이터가 남은 테넌트는 삭제 시 409 로 테이블별 건수를 알려준다.
   - `감사 로그` 탭(`AuditLogManager`): 액션·사용자·상태 필터 + 테넌트가 있으면 **테넌트** 필터(전체/귀속 없음/테넌트별)와 테넌트 열(멀티테넌시 5단계 — `audit_logs.tenant_id`/`tenant_name`, 대상 테넌트 → 클러스터 바인딩 → 행위자 단일 소속 순으로 `services/audit_logger.py` 가 추정, 이름은 기록 시점 스냅샷). API `GET /api/v1/audit-logs?tenant_id=<id|none>`.
@@ -419,6 +420,7 @@ hover 시 flyout 자체가 라벨을 보여주므로 이름만 뜨는 중복 툴
   - control-plane 서버 내장 k9s 를 웹에서 실시간 조작(풀스크린 TUI, tty+resize).
   - master 노드 후보 자동 조회 + 수동 host override, 비밀번호/Private Key 인증.
   - 네임스페이스 지정·읽기 전용(`--readonly`) 옵션, 1시간 세션 상한.
+- **13차 감사(2026-10-20)**: 보호 운영레벨 클러스터는 `--readonly` 가 기본으로 켜지고 끌 때 danger 확인. 열린 세션을 끊거나 클러스터를 바꿀 때 확인, 새로고침·탭 닫기 `beforeunload`, 1시간 상한 남은 시간 표시 + 5분 전 경고(연장 없음). 새 창 handoff 는 저장소 없는 `postMessage` 왕복(실패 시 "다시 열기"). 연결 거부 안내: 4401 세션 만료 / 4402 권한 없음 / 4413 테넌트. **보호 운영레벨**(Settings ▸ 운영레벨 "보호", 기본 운영·DR) 클러스터는 연결 전 확인 창(대상·계정·인증·읽기 전용 여부). 최상단 `useTerminalEnvSync`(팝업 포함).
 - **요청사항 (수정 요청)**:
   - _(여기에 개선/수정 요청을 직접 적어주세요)_
 
@@ -437,6 +439,7 @@ hover 시 flyout 자체가 라벨을 보여주므로 이름만 뜨는 중복 툴
   - 노드 리스트에서 클릭 한 번으로 개별 노드 로그인 셸 접속(비밀번호/Private Key).
   - 터미널을 열기 전 연결/자격증명만 확인하는 **연결 테스트**(ok/인증 실패/연결 실패/타임아웃 배지).
   - 접속 후 실행 명령(예: `sudo -i`, `journalctl -u kubelet -f`) 지정, 별도 브라우저 창으로 빼기, 1시간 세션 상한.
+- **13차 감사(2026-10-20)**: 열린 세션을 끊거나 클러스터를 바꿀 때 확인, 새로고침·탭 닫기 `beforeunload`, 1시간 상한 남은 시간 표시 + 5분 전 경고(연장 없음). 새 창 handoff 는 저장소 없는 `postMessage` 왕복(실패 시 "다시 열기"). 연결 거부 안내: 4401 세션 만료 / 4402 권한 없음 / 4413 테넌트. **보호 운영레벨**(Settings ▸ 운영레벨 "보호", 기본 운영·DR) 클러스터는 연결 전 확인 창(대상·계정·인증·읽기 전용 여부). 대상·계정·인증 정보를 바꾸면 이전 연결 테스트 결과를 지운다.
 - **요청사항 (수정 요청)**:
   - _(여기에 개선/수정 요청을 직접 적어주세요)_
 
@@ -902,6 +905,7 @@ hover 시 flyout 자체가 라벨을 보여주므로 이름만 뜨는 중복 툴
   - 프리셋 명령(endpoint health 등) + 저장된 명령(`SavedCommands`)
   - 위험 명령(defrag/compact/snapshot/member add·remove 등) 실행 전 위험 경고 확인
   - etcd systemd 서비스 로그(journalctl) 조회 + grep 필터
+- **13차 감사(2026-10-20)**: 읽기 전용 allowlist(`lib/dangerCommand.ts` — get·endpoint health/status/hashkv·member/alarm/user/role/lease 조회·version·auth status) 밖 명령(`del`·`put`·`defrag`·`check perf` 등)은 danger 확인(사유·마스킹된 명령). 클러스터를 바꾸면 입력한 host·비밀번호·키를 비운다. 프리셋 라벨 한국어. 실행 감사는 실행 후 실제 결과(성공·실패·종료 코드·호스트)로 남고 명령의 비밀번호·키는 `****` 로 가려진다(`services/command_mask.py`). 접속 host 가 속한 클러스터의 테넌트 operate 권한까지 확인한다. 실행 버튼은 `useCanOperate(clusterId)` 비활성 + 사유.
 - **요청사항 (수정 요청)**:
   - _(여기에 개선/수정 요청을 직접 적어주세요)_
 
@@ -1040,6 +1044,7 @@ hover 시 flyout 자체가 라벨을 보여주므로 이름만 뜨는 중복 툴
   - 병렬/순차 실행 모드, 노드별 독립 결과(ok/error/timeout/auth_error/connect_error) 상태 배지.
   - 실행 응답 크기에 따라 타임아웃을 프론트에서 동적으로 추정(`bulkExecApi.run` 내부 로직).
   - 결과 카드 전역 텍스트 필터 + stdout/stderr 개별 `LogViewer`.
+- **13차 감사(2026-10-20)**: 콘솔 패턴(§12.6) — 좌 4열 노드·명령 / 우 6열 `RunLogPanel` + 노드별 `ExecOutputTabs`. 프리셋만 "읽기 전용", 직접 입력은 셸 allowlist(파이프 각 구간 판정, `sysctl -w`·`modprobe -r`·`$(` 등은 위험)로 판정해 입력란 아래에 표시하고 위험이면 danger 확인. 실행 감사는 실행 후 실제 결과(성공·실패·종료 코드·호스트)로 남고 명령의 비밀번호·키는 `****` 로 가려진다(`services/command_mask.py`). 접속 host 가 속한 클러스터의 테넌트 operate 권한까지 확인한다. 실행 버튼은 `useCanOperate(clusterId)` 비활성 + 사유.
 - **요청사항 (수정 요청)**:
   - _(여기에 개선/수정 요청을 직접 적어주세요)_
 
@@ -1084,6 +1089,7 @@ hover 시 flyout 자체가 라벨을 보여주므로 이름만 뜨는 중복 툴
   - `cilium-dbg` ad-hoc 명령 실행(operator 권한 제한, 감사 로그 기록 명시) + 프리셋 저장.
   - `cilium monitor` 실시간 스트림(type 필터: drop/trace/capture/debug/recorder/agent/l7), 80ms throttle 버퍼링.
   - Hubble flow 실시간 관측(FORWARDED/DROPPED/AUDIT verdict 카운트, drop reason 표시).
+- **13차 감사(2026-10-20)**: cilium-dbg 직접 명령은 서버 읽기 전용 allowlist(`GET /cilium/{id}/exec-command/allowlist`, 실패 시 로컬 `lib/ciliumCommand.ts`) 밖이면 danger 확인 + admin 만 실행(서버 403). Enter 는 즉시 실행 대신 확인. 직접 명령 카드는 `RoleGate` 숨김 → 비활성 + 사유. 모니터·Hubble 일시정지 동작, 서버가 스트림을 닫으면 "실행 중" 해제. Hubble 상태 조회 실패·hubble-relay 확인 실패(`hubble_relay_error` — RBAC 거부 등)는 "미설치"가 아니라 오류/"확인 실패"로 표시.
 - **요청사항 (수정 요청)**:
   - _(여기에 개선/수정 요청을 직접 적어주세요)_
 
@@ -1159,6 +1165,7 @@ hover 시 flyout 자체가 라벨을 보여주므로 이름만 뜨는 중복 툴
   - hop별 verdict(allow/deny/warn) 색상 구분, latency+errorCount 기반 병목 홉 자동 계산.
   - source/destination 패턴에서 Hubble 필터를 자동 프리필.
   - pod-bottleneck-analyzer 페이지로의 컨텍스트 전달(cross-link, query param prefill).
+- **13차 감사(2026-10-20)**: 경로 추적·Hubble 조회는 viewer 허용(서버 본문 `cluster_id` read 판정), tcpdump 캡처·인터페이스 조회는 operator + host 소속 클러스터 operate(`?cluster_id=`). 최상단 `useTerminalEnvSync`, 조회 실패 `ErrorState`, 탭 키보드 조작·라벨 한국어.
 - **요청사항 (수정 요청)**:
   - _(여기에 개선/수정 요청을 직접 적어주세요)_
 
@@ -1216,6 +1223,7 @@ hover 시 flyout 자체가 라벨을 보여주므로 이름만 뜨는 중복 툴
   - 개인/공유 프리셋 관리(`McPresetManager`) + `{alias}` 자동 치환.
   - 위험 명령(rm/mirror/policy/admin service 등) 정규식 기반 사전 경고 및 `danger` 확인 다이얼로그.
   - 클러스터 운영등급에 연동된 터미널 외관 자동 전환.
+- **13차 감사(2026-10-20)**: 조회 allowlist(ls·stat·cat·du·tree·diff·admin info 등) 밖(`rm`·`mv`·`anonymous set`·`admin update` 등)은 danger 확인. 명령·결과·저장 명령의 access/secret key 마스킹, 비밀값 든 명령은 저장 차단. 개인·공유 프리셋 저장 실패 토스트. 실행 감사는 실행 후 실제 결과(성공·실패·종료 코드·호스트)로 남고 명령의 비밀번호·키는 `****` 로 가려진다(`services/command_mask.py`). 접속 host 가 속한 클러스터의 테넌트 operate 권한까지 확인한다. 실행 버튼은 `useCanOperate(clusterId)` 비활성 + 사유.
 - **요청사항 (수정 요청)**:
   - _(여기에 개선/수정 요청을 직접 적어주세요)_
 

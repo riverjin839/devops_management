@@ -156,6 +156,8 @@ def detect_status(kubeconfig_path: str, namespace: str = "kube-system") -> dict:
             pass
 
     hubble_installed = False
+    # 확인 자체가 실패하면(RBAC 거부·타임아웃 등) "미설치"가 아니라 사유를 돌려준다 — 화면이 설치 안내와 구분한다.
+    hubble_error: Optional[str] = None
     try:
         relay_cmd = _kubectl_base(kubeconfig_path) + [
             "-n", namespace, "get", "svc", "hubble-relay",
@@ -163,12 +165,17 @@ def detect_status(kubeconfig_path: str, namespace: str = "kube-system") -> dict:
         ]
         relay_proc = subprocess.run(relay_cmd, capture_output=True, text=True, timeout=10)
         hubble_installed = relay_proc.returncode == 0 and bool((relay_proc.stdout or "").strip())
-    except Exception:
-        pass
+        if relay_proc.returncode != 0:
+            stderr = (relay_proc.stderr or "").strip()
+            if "NotFound" not in stderr and "not found" not in stderr.lower():
+                hubble_error = stderr[:300] or f"kubectl 종료 코드 {relay_proc.returncode}"
+    except Exception as exc:  # noqa: BLE001 — fail-safe
+        hubble_error = f"hubble-relay 확인 실패: {type(exc).__name__}"
 
     return {
         "cilium_installed": cilium_installed,
         "hubble_relay_installed": hubble_installed,
+        "hubble_relay_error": hubble_error,
         "agent_count": len(agents),
         "cilium_version": cilium_version,
         "namespace": namespace,
@@ -388,6 +395,139 @@ def bpf_ct_head(
     return lines, None
 
 
+# ── cilium-dbg 읽기 전용 allowlist (정책 2) ─────────────────────────────────
+# 직접 명령(ad-hoc)은 이 목록에 맞는 **조회** 하위 명령만 operator 에게 허용하고, 목록 밖(변경·삭제·
+# flush·config 쓰기·shell 등)은 admin 만 실행한다. ``*`` 는 아무 토큰 하나(예: ``bpf <map> list``).
+#
+# 판정 규칙(프론트 ``frontend/src/lib/ciliumCommand.ts`` 와 동일 — 한쪽만 고치지 않는다):
+#  1. 앞의 ``cilium-dbg``/``cilium`` 접두는 뗀다. 파싱 불가·빈 명령은 목록 밖.
+#  2. 다른 agent 로 붙거나 설정 파일을 바꾸는 ``--config``·``-H``·``--host``(``=값``·붙여 쓴 꼴 포함)는
+#     어디에 있든 목록 밖.
+#  3. 명령은 하위 명령 단어로 **시작**해야 한다 — 인자 앞부분 ``parts[:len(rule)]`` 가 규칙과 정확히
+#     같아야 하고(앞쪽 플래그 불가: cobra 는 플래그를 건너뛰고 하위 명령을 찾으므로 ``--x status
+#     endpoint delete`` 꼴 우회를 막는다), ``*`` 자리도 ``-`` 로 시작하면 안 된다.
+#  4. 규칙 뒤에는 위치 인자(``-`` 로 시작하지 않는 토큰)와 아래 읽기 전용 플래그만 허용한다.
+#     ``-h``/``--help`` 는 이미 허용된 명령 뒤에서만 허용(목록 밖 명령 + ``-h`` 는 목록 밖).
+#  5. ``config`` 는 위치 인자 없이 조회만 — ``config Key=Value`` 는 설정 변경.
+#  6. ``debuginfo`` 의 ``-f``/``--file``/``--file-per-command`` 는 agent 에 파일을 쓰므로 목록 밖.
+CILIUM_READONLY_COMMANDS: tuple[tuple[str, ...], ...] = (
+    ("status",),
+    ("version",),
+    ("debuginfo",),
+    ("config",),  # 인자 없이 조회만 — ``config Key=Value`` 쓰기는 아래에서 따로 막는다
+    ("endpoint", "list"), ("endpoint", "get"), ("endpoint", "log"), ("endpoint", "health"),
+    ("identity", "list"), ("identity", "get"),
+    ("service", "list"), ("service", "get"),
+    ("policy", "get"), ("policy", "selectors"),
+    ("ip", "list"), ("ip", "get"),
+    ("node", "list"), ("nodeid", "list"),
+    ("map", "list"), ("map", "get"),
+    ("metrics", "list"),
+    ("fqdn", "cache", "list"),
+    ("lrp", "list"),
+    ("encrypt", "status"),
+    ("kvstore", "get"),
+    ("bgp", "peers"), ("bgp", "routes"), ("bgp", "route-policies"),
+    ("prefilter", "list"),
+    ("recorder", "list"),
+    ("cgroups", "list"),
+    ("bpf", "*", "list"), ("bpf", "*", "get"), ("bpf", "fs", "show"),
+    ("help",),
+)
+
+# 규칙 뒤에 올 수 있는 값 받는 플래그 — 다음 토큰을 값으로 소비한다(``--output=json`` 꼴도 허용).
+_CILIUM_VALUE_FLAGS = frozenset({"-o", "--output", "-n"})
+# 규칙 뒤에 올 수 있는 값 없는 읽기 전용 플래그(``status`` 의 ``--all-*`` 조회 플래그 포함).
+_CILIUM_BOOL_FLAGS = frozenset({
+    "-v", "--verbose", "-h", "--help",
+    "--all-addresses", "--all-clusters", "--all-controllers", "--all-health",
+    "--all-nodes", "--all-redirects",
+})
+# 어디에 있든 목록 밖 — agent 접속 대상(-H/--host)·설정 파일(--config) 전환.
+_CILIUM_DENY_LONG = ("--config", "--host")
+# debuginfo 의 파일 쓰기 플래그.
+_CILIUM_DEBUGINFO_FILE_LONG = ("--file", "--file-per-command")
+
+
+def cilium_readonly_command_labels() -> list[str]:
+    """화면 안내용 — ``bpf <맵> list`` 같은 사람이 읽는 형태."""
+    return [" ".join("<맵>" if t == "*" else t for t in rule) for rule in CILIUM_READONLY_COMMANDS]
+
+
+def _long_flag_is(tok: str, names: tuple[str, ...]) -> bool:
+    return any(tok == n or tok.startswith(n + "=") for n in names)
+
+
+def _cilium_denied_token(tok: str) -> bool:
+    """``--config``·``--host``(=값)·``-H``(붙여 쓴 값 포함)."""
+    return _long_flag_is(tok, _CILIUM_DENY_LONG) or (tok.startswith("-H") and not tok.startswith("--"))
+
+
+def _cilium_debuginfo_writes_file(tok: str) -> bool:
+    return _long_flag_is(tok, _CILIUM_DEBUGINFO_FILE_LONG) or (tok.startswith("-f") and not tok.startswith("--"))
+
+
+def _cilium_rule_matches(rule: tuple[str, ...], parts: list[str]) -> bool:
+    if len(parts) < len(rule):
+        return False
+    for r, p in zip(rule, parts):
+        if p.startswith("-"):
+            return False
+        if r != "*" and r != p:
+            return False
+    return True
+
+
+def _cilium_tail_is_readonly(rule: tuple[str, ...], tail: list[str]) -> bool:
+    """규칙 뒤 토큰: 위치 인자 + 읽기 전용 플래그만."""
+    i = 0
+    while i < len(tail):
+        tok = tail[i]
+        if not tok.startswith("-"):
+            if rule == ("config",):
+                return False  # ``config Key=Value`` = 설정 변경
+            i += 1
+            continue
+        if rule == ("debuginfo",) and _cilium_debuginfo_writes_file(tok):
+            return False
+        if tok in _CILIUM_BOOL_FLAGS:
+            i += 1
+            continue
+        if tok in _CILIUM_VALUE_FLAGS:
+            if i + 1 >= len(tail) or tail[i + 1].startswith("-"):
+                return False  # 값 누락 — 다음 플래그를 값으로 삼켜 판정을 흐리지 않는다
+            i += 2
+            continue
+        if tok.startswith("--output="):
+            i += 1
+            continue
+        return False
+    return True
+
+
+def _split_cilium_args(command_args: str) -> list[str]:
+    parts = shlex.split((command_args or "").strip())
+    if parts and parts[0] in ("cilium-dbg", "cilium"):
+        parts = parts[1:]
+    return parts
+
+
+def is_cilium_readonly_command(command_args: str) -> bool:
+    """``cilium-dbg`` 뒤 인자가 읽기 전용 allowlist 에 드는지. 파싱 불가·빈 명령은 False."""
+    try:
+        parts = _split_cilium_args(command_args)
+    except ValueError:
+        return False
+    if not parts:
+        return False
+    if any(_cilium_denied_token(t) for t in parts):
+        return False
+    for rule in CILIUM_READONLY_COMMANDS:
+        if _cilium_rule_matches(rule, parts):
+            return _cilium_tail_is_readonly(rule, parts[len(rule):])
+    return False
+
+
 def exec_cilium_command(
     kubeconfig_path: str,
     *,
@@ -395,10 +535,12 @@ def exec_cilium_command(
     namespace: str = "kube-system",
     command_args: str = "",
     timeout: int = 30,
+    allow_any: bool = False,
 ) -> dict:
-    """선택 pod 에서 임의 ``cilium-dbg <args>`` 실행(ad-hoc).
+    """선택 pod 에서 ``cilium-dbg <args>`` 실행(ad-hoc).
 
     shell=False + ``cilium-dbg`` 고정 prefix → 임의 바이너리 실행 불가(주입 방지). JSON 파싱 없이 raw 반환.
+    ``allow_any=False``(기본)면 읽기 전용 allowlist 밖 명령을 실행하지 않는다 — 라우터가 admin 일 때만 True.
     """
     raw_args = (command_args or "").strip()
     if not raw_args:
@@ -412,8 +554,12 @@ def exec_cilium_command(
     if parts and parts[0] in ("cilium-dbg", "cilium"):
         parts = parts[1:]  # 사용자가 prefix 를 붙였으면 제거(우리가 고정 추가)
     if not parts:
-        return {"raw": "", "error": "cilium-dbg 뒤에 실행할 하위 명령이 필요합니다 (예: ipam status).",
+        return {"raw": "", "error": "cilium-dbg 뒤에 실행할 하위 명령이 필요합니다 (예: status).",
                 "exit_code": None, "executed": None, "pod_name": pod_name or "", "duration_ms": 0}
+    if not allow_any and not is_cilium_readonly_command(raw_args):
+        return {"raw": "", "error": "읽기 전용 허용 목록 밖의 cilium-dbg 명령입니다 (admin 만 실행 가능).",
+                "exit_code": None, "executed": None, "pod_name": pod_name or "", "duration_ms": 0,
+                "forbidden": True}
 
     target_pod = pod_name
     if not target_pod:

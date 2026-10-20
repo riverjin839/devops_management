@@ -7,9 +7,11 @@ import {
 import { bulkExecApi, topologyTraceApi } from '@/services/api';
 import type { NodeSummary } from '@/services/api';
 import type { TcpdumpCaptureResponse, TcpdumpPacketRow } from '@/types';
-import { ConfirmDialog, LogViewer, DoubleScrollX, EmptyState } from '@/components/common';
+import { ConfirmDialog, LogViewer, DoubleScrollX, EmptyState, ErrorState } from '@/components/common';
 import { MacCard } from '@/components/ui/MacCard';
 import { useAbortableMutation } from '@/hooks/useAbortableMutation';
+import { useCanOperate } from '@/hooks/useCanOperate';
+import { formatApiError } from '@/lib/utils';
 import { runLogged, consoleRunLines, type RunLog } from '@/hooks/useRunLog';
 
 interface Props {
@@ -29,21 +31,21 @@ const BPF_PRESETS: { id: string; label: string; value: string }[] = [
   { id: 'arp',    label: 'ARP',        value: 'arp' },
 ];
 
-const STATUS_CLS: Record<string, string> = {
-  ok:            'bg-secondary text-muted-foreground border-border',
-  error:         'bg-status-critical/10 text-status-critical border-status-critical/30',
-  timeout:       'bg-status-warning/10 text-status-warning border-status-warning/30',
-  auth_error:    'bg-status-critical/10 text-status-critical border-status-critical/30',
-  connect_error: 'bg-status-critical/10 text-status-critical border-status-critical/30',
+const STATUS_META: Record<string, { cls: string; label: string }> = {
+  ok:            { cls: 'bg-secondary text-muted-foreground border-border', label: '성공' },
+  error:         { cls: 'bg-status-critical/10 text-status-critical border-status-critical/30', label: '오류' },
+  timeout:       { cls: 'bg-status-warning/10 text-status-warning border-status-warning/30', label: '시간 초과' },
+  auth_error:    { cls: 'bg-status-critical/10 text-status-critical border-status-critical/30', label: '인증 실패' },
+  connect_error: { cls: 'bg-status-critical/10 text-status-critical border-status-critical/30', label: '연결 실패' },
 };
 
 function StatusBadge({ status }: { status: string }) {
-  const cls = STATUS_CLS[status] ?? 'bg-status-unknown/10 text-status-unknown border-status-unknown/30';
+  const meta = STATUS_META[status] ?? { cls: 'bg-secondary text-muted-foreground border-border', label: status };
   const Icon = status === 'ok' ? CheckCircle2 : XCircle;
   return (
-    <span className={`inline-flex items-center gap-1 text-xs px-1.5 py-0.5 rounded-full border ${cls}`}>
-      <Icon className="w-3 h-3" />
-      {status}
+    <span className={`inline-flex items-center gap-1 text-xs px-1.5 py-0.5 rounded-full border ${meta.cls}`} title={status}>
+      <Icon className="w-3 h-3" aria-hidden />
+      {meta.label}
     </span>
   );
 }
@@ -51,9 +53,11 @@ function StatusBadge({ status }: { status: string }) {
 function PacketTable({ rows }: { rows: TcpdumpPacketRow[] }) {
   if (rows.length === 0) {
     return (
-      <div className="text-center py-6 text-sm text-muted-foreground">
-        캡처된 패킷이 없습니다. (BPF 필터 / duration 을 조정해 보세요)
-      </div>
+      <EmptyState
+        compact
+        title="캡처된 패킷이 없습니다."
+        description="BPF 필터를 넓히거나 캡처 시간을 늘려 다시 실행해 보세요."
+      />
     );
   }
   return (
@@ -61,13 +65,13 @@ function PacketTable({ rows }: { rows: TcpdumpPacketRow[] }) {
       <table className="w-full text-sm">
         <thead className="bg-muted/30 text-left sticky top-0">
           <tr>
-            <th className="px-2 py-1.5 text-xs font-medium text-muted-foreground">Time</th>
-            <th className="px-2 py-1.5 text-xs font-medium text-muted-foreground">Proto</th>
-            <th className="px-2 py-1.5 text-xs font-medium text-muted-foreground">Source</th>
-            <th className="px-2 py-1.5 text-xs font-medium text-muted-foreground">Destination</th>
-            <th className="px-2 py-1.5 text-xs font-medium text-muted-foreground">Flags</th>
-            <th className="px-2 py-1.5 text-xs font-medium text-muted-foreground">Len</th>
-            <th className="px-2 py-1.5 text-xs font-medium text-muted-foreground">Summary</th>
+            <th className="px-2 py-1.5 text-xs font-medium text-muted-foreground">시각</th>
+            <th className="px-2 py-1.5 text-xs font-medium text-muted-foreground">프로토콜</th>
+            <th className="px-2 py-1.5 text-xs font-medium text-muted-foreground">출발지</th>
+            <th className="px-2 py-1.5 text-xs font-medium text-muted-foreground">목적지</th>
+            <th className="px-2 py-1.5 text-xs font-medium text-muted-foreground">플래그</th>
+            <th className="px-2 py-1.5 text-xs font-medium text-muted-foreground">길이</th>
+            <th className="px-2 py-1.5 text-xs font-medium text-muted-foreground">요약</th>
           </tr>
         </thead>
         <tbody>
@@ -99,6 +103,10 @@ function PacketTable({ rows }: { rows: TcpdumpPacketRow[] }) {
 }
 
 export function TcpdumpPanel({ clusterId, runLog }: Props) {
+  // tcpdump 실행·인터페이스 조회는 operate 권한(서버 require_operator, 13차 정책 6) — viewer 에게는
+  // 숨기지 않고 비활성 + 사유(§12.9, D-172). 패킷 경로 추적·Hubble 조회는 viewer 도 쓸 수 있다.
+  const { canOperate, withHint, ariaWithHint } = useCanOperate(clusterId);
+
   // ── 노드 목록 ────────────────────────────────────────────────────────────
   const nodeQ = useQuery({
     queryKey: ['tcpdump-nodes', clusterId],
@@ -143,14 +151,15 @@ export function TcpdumpPanel({ clusterId, runLog }: Props) {
       : { privateKey };
   }, [authMode, password, privateKey]);
 
-  const canRun = !!host && !!iface.trim() && (authMode === 'password' ? !!password : !!privateKey);
+  const hasCred = authMode === 'password' ? !!password : !!privateKey;
+  const canRun = canOperate && !!host && !!iface.trim() && hasCred;
 
   // ── 인터페이스 조회 ──────────────────────────────────────────────────────
   const ifaceMut = useMutation({
     mutationFn: async () => {
       const r = await topologyTraceApi.tcpdumpInterfaces({
         host, port, username, ...authPayload,
-      });
+      }, undefined, clusterId || undefined);
       return r.data.interfaces;
     },
   });
@@ -224,25 +233,36 @@ export function TcpdumpPanel({ clusterId, runLog }: Props) {
         {/* SSH 자격증명 + 노드 선택 */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
           <div>
-            <label htmlFor={f('node')} className="text-xs text-muted-foreground mb-1 block flex items-center gap-1">
-              <Server className="w-3 h-3" /> 대상 노드
+            <label htmlFor={f('node')} className="text-xs text-muted-foreground mb-1 flex items-center gap-1">
+              <Server className="w-3 h-3" aria-hidden /> 대상 노드
             </label>
             <div className="flex gap-2">
               <select id={f('node')} value={selectedNode}
                 onChange={(e) => { setSelectedNode(e.target.value); setIfaceOptions([]); }}
-                className="flex-1 px-2 py-1 text-sm bg-background border border-border rounded-lg">
-                <option value="">{nodeQ.isLoading ? '노드 불러오는 중…' : '노드를 선택하세요'}</option>
+                className="flex-1 px-2 py-1 text-sm bg-background border border-border rounded-xl">
+                <option value="">
+                  {nodeQ.isLoading ? '노드 불러오는 중…'
+                    : nodeQ.isError ? '노드 목록을 불러오지 못했습니다'
+                    : nodes.length === 0 ? '노드가 없습니다'
+                    : '노드를 선택하세요'}
+                </option>
                 {nodes.map((n) => (
                   <option key={n.name} value={n.name}>
                     {n.name} {n.internalIp ? `(${n.internalIp})` : ''}
                   </option>
                 ))}
               </select>
-              <button onClick={() => nodeQ.refetch()} className="p-1.5 rounded-lg bg-secondary hover:bg-secondary/80"
-                title="노드 목록 새로고침">
-                <RefreshCw className={`w-4 h-4 ${nodeQ.isFetching ? 'animate-spin' : ''}`} />
+              <button type="button" onClick={() => nodeQ.refetch()} className="p-1.5 rounded-xl bg-secondary hover:bg-secondary/80"
+                title="노드 목록 새로고침" aria-label="대상 노드 목록 새로고침">
+                <RefreshCw className={`w-4 h-4 ${nodeQ.isFetching ? 'animate-spin' : ''}`} aria-hidden />
               </button>
             </div>
+            {/* 노드 목록 실패를 "노드를 선택하세요"로 보여주지 않는다(D-173) */}
+            {nodeQ.isError && (
+              <div className="mt-1">
+                <ErrorState compact error={nodeQ.error} title="노드 목록을 불러오지 못했습니다" onRetry={() => { void nodeQ.refetch(); }} />
+              </div>
+            )}
             {host && (
               <p className="text-xs text-muted-foreground mt-1 font-mono">SSH → {username}@{host}:{port}</p>
             )}
@@ -250,25 +270,26 @@ export function TcpdumpPanel({ clusterId, runLog }: Props) {
 
           <div className="grid grid-cols-2 gap-2">
             <div>
-              <label htmlFor={f('user')} className="text-xs text-muted-foreground mb-1 block">SSH User</label>
+              <label htmlFor={f('user')} className="text-xs text-muted-foreground mb-1 block">SSH 사용자</label>
               <input id={f('user')} value={username} onChange={(e) => setUsername(e.target.value)}
-                className="w-full px-2 py-1 text-sm font-mono bg-background border border-border rounded-lg" />
+                className="w-full px-2 py-1 text-sm font-mono bg-background border border-border rounded-xl" />
             </div>
             <div>
-              <label htmlFor={f('port')} className="text-xs text-muted-foreground mb-1 block">SSH Port</label>
+              <label htmlFor={f('port')} className="text-xs text-muted-foreground mb-1 block">SSH 포트</label>
               <input id={f('port')} type="number" value={port} onChange={(e) => setPort(Number(e.target.value) || 22)}
                 min={1} max={65535}
-                className="w-full px-2 py-1 text-sm font-mono bg-background border border-border rounded-lg" />
+                className="w-full px-2 py-1 text-sm font-mono bg-background border border-border rounded-xl" />
             </div>
           </div>
         </div>
 
         <div>
           <div className="flex items-center gap-2 mb-1">
-            <div className="flex items-center bg-secondary/60 rounded-lg p-[3px] gap-px">
+            <div role="group" aria-label="SSH 인증 방식" className="flex items-center bg-secondary/60 rounded-xl p-[3px] gap-px">
               {(['password', 'key'] as const).map((m) => (
-                <button key={m} onClick={() => setAuthMode(m)}
-                  className={`px-2 py-0.5 text-xs font-medium rounded-md ${
+                <button key={m} type="button" onClick={() => setAuthMode(m)}
+                  aria-pressed={authMode === m}
+                  className={`px-2 py-0.5 text-xs font-medium rounded-xl ${
                     authMode === m ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
                   }`}>
                   {m === 'password' ? '비밀번호' : '개인키'}
@@ -280,49 +301,53 @@ export function TcpdumpPanel({ clusterId, runLog }: Props) {
           {authMode === 'password' ? (
             <input type="password" value={password} onChange={(e) => setPassword(e.target.value)}
               placeholder="SSH 비밀번호"
-              className="w-full px-2 py-1 text-sm font-mono bg-background border border-border rounded-lg" />
+              aria-label="SSH 비밀번호"
+              autoComplete="off"
+              className="w-full px-2 py-1 text-sm font-mono bg-background border border-border rounded-xl" />
           ) : (
             <textarea value={privateKey} onChange={(e) => setPrivateKey(e.target.value)}
               placeholder="-----BEGIN OPENSSH PRIVATE KEY-----"
+              aria-label="SSH 개인키 (PEM)"
+              spellCheck={false}
               rows={3}
-              className="w-full px-2 py-1 text-sm font-mono bg-background border border-border rounded-lg" />
+              className="w-full px-2 py-1 text-sm font-mono bg-background border border-border rounded-xl" />
           )}
         </div>
 
         {/* 인터페이스 + 캡처 옵션 */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
           <div>
-            <label htmlFor={f('iface')} className="text-xs text-muted-foreground mb-1 block">Interface</label>
+            <label htmlFor={f('iface')} className="text-xs text-muted-foreground mb-1 block">인터페이스</label>
             <div className="flex gap-1">
               {ifaceOptions.length > 0 ? (
                 <select id={f('iface')} value={iface} onChange={(e) => setIface(e.target.value)}
-                  className="flex-1 px-2 py-1 text-sm font-mono bg-background border border-border rounded-lg">
+                  className="flex-1 px-2 py-1 text-sm font-mono bg-background border border-border rounded-xl">
                   {ifaceOptions.map((x) => <option key={x} value={x}>{x}</option>)}
                 </select>
               ) : (
                 <input id={f('iface')} value={iface} onChange={(e) => setIface(e.target.value)}
                   placeholder="bond0"
-                  className="flex-1 px-2 py-1 text-sm font-mono bg-background border border-border rounded-lg" />
+                  className="flex-1 px-2 py-1 text-sm font-mono bg-background border border-border rounded-xl" />
               )}
-              <button onClick={() => void doIfaceQuery()}
-                disabled={!host || (authMode === 'password' ? !password : !privateKey) || ifaceMut.isPending}
-                className="p-1.5 rounded-lg bg-secondary hover:bg-secondary/80 disabled:opacity-50"
-                title="원격에서 인터페이스 조회" aria-label="원격에서 인터페이스 조회">
-                <RefreshCw className={`w-4 h-4 ${ifaceMut.isPending ? 'animate-spin' : ''}`} />
+              <button type="button" onClick={() => void doIfaceQuery()}
+                disabled={!canOperate || !host || !hasCred || ifaceMut.isPending}
+                className="p-1.5 rounded-xl bg-secondary hover:bg-secondary/80 disabled:opacity-50"
+                title={withHint('원격에서 인터페이스 조회')} aria-label={ariaWithHint('원격에서 인터페이스 조회')}>
+                <RefreshCw className={`w-4 h-4 ${ifaceMut.isPending ? 'animate-spin' : ''}`} aria-hidden />
               </button>
             </div>
           </div>
           <div>
-            <label htmlFor={f('duration')} className="text-xs text-muted-foreground mb-1 block">Duration (s)</label>
+            <label htmlFor={f('duration')} className="text-xs text-muted-foreground mb-1 block">캡처 시간(초)</label>
             <input id={f('duration')} type="number" value={duration} min={1} max={120}
               onChange={(e) => setDuration(Number(e.target.value) || 10)}
-              className="w-full px-2 py-1 text-sm font-mono bg-background border border-border rounded-lg" />
+              className="w-full px-2 py-1 text-sm font-mono bg-background border border-border rounded-xl" />
           </div>
           <div>
-            <label htmlFor={f('count')} className="text-xs text-muted-foreground mb-1 block">Packet count</label>
+            <label htmlFor={f('count')} className="text-xs text-muted-foreground mb-1 block">최대 패킷 수</label>
             <input id={f('count')} type="number" value={count} min={1} max={5000}
               onChange={(e) => setCount(Number(e.target.value) || 200)}
-              className="w-full px-2 py-1 text-sm font-mono bg-background border border-border rounded-lg" />
+              className="w-full px-2 py-1 text-sm font-mono bg-background border border-border rounded-xl" />
           </div>
           <div className="flex items-end">
             <label className="flex items-center gap-1.5 text-sm text-foreground/80">
@@ -337,8 +362,9 @@ export function TcpdumpPanel({ clusterId, runLog }: Props) {
           <p className="text-xs text-muted-foreground mb-1 block">BPF 필터 프리셋</p>
           <div className="flex flex-wrap gap-1 mb-1">
             {BPF_PRESETS.map((p) => (
-              <button key={p.id} onClick={() => setPreset(p.id)}
-                className={`px-2 py-0.5 text-xs rounded-md border transition-colors ${
+              <button key={p.id} type="button" onClick={() => setPreset(p.id)}
+                aria-pressed={preset === p.id}
+                className={`px-2 py-0.5 text-xs rounded-xl border transition-colors ${
                   preset === p.id ? 'bg-primary/10 text-primary border-primary/40' : 'bg-card border-border text-muted-foreground hover:text-foreground'
                 }`}>
                 {p.label}
@@ -347,30 +373,33 @@ export function TcpdumpPanel({ clusterId, runLog }: Props) {
           </div>
           <input value={bpf} onChange={(e) => { setBpf(e.target.value); setPreset('custom'); }}
             placeholder="예: host 10.0.0.5 and tcp port 443"
-            className="w-full px-2 py-1 text-sm font-mono bg-background border border-border rounded-lg" />
+            aria-label="BPF 필터"
+            className="w-full px-2 py-1 text-sm font-mono bg-background border border-border rounded-xl" />
         </div>
 
         <div className="flex items-center justify-end gap-2">
           {runError && (
-            <div className="flex-1 px-3 py-1.5 text-sm rounded-lg bg-status-critical/10 text-status-critical border border-status-critical/30">
-              {runError.response?.data?.detail ?? runError.message}
+            <div role="alert" className="flex-1 px-3 py-1.5 text-sm rounded-md bg-status-critical/10 text-status-critical border border-status-critical/30">
+              {formatApiError(runError)}
             </div>
           )}
           {runMut.isPending ? (
             <button
               onClick={runMut.abort}
-              className="flex items-center gap-1.5 px-4 py-1.5 text-sm font-semibold bg-status-critical text-primary-foreground rounded-lg hover:bg-status-critical"
+              className="flex items-center gap-1.5 px-4 py-1.5 text-sm font-semibold bg-destructive text-destructive-foreground rounded-xl hover:bg-destructive/90"
             >
-              <Square className="w-4 h-4 fill-current" />
+              <Square className="w-4 h-4 fill-current" aria-hidden />
               중지
             </button>
           ) : (
             <button
               onClick={() => setConfirmOpen(true)}
               disabled={!canRun}
-              className="flex items-center gap-1.5 px-4 py-1.5 text-sm font-semibold bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 disabled:opacity-50"
+              title={withHint('원격 tcpdump 캡처 실행 — 실행 전 확인창이 열립니다')}
+              aria-label={ariaWithHint('캡처 실행')}
+              className="flex items-center gap-1.5 px-4 py-1.5 text-sm font-semibold bg-primary text-primary-foreground rounded-xl hover:bg-primary/90 disabled:opacity-50"
             >
-              <Play className="w-4 h-4" />
+              <Play className="w-4 h-4" aria-hidden />
               캡처 실행
             </button>
           )}
@@ -386,29 +415,30 @@ export function TcpdumpPanel({ clusterId, runLog }: Props) {
             <span className="flex items-center gap-2 flex-wrap min-w-0">
               <StatusBadge status={result.status} />
               <span className="text-sm font-mono">{result.host}</span>
-              <span className="text-sm text-muted-foreground tabular-nums">· {result.packets.length} packets · {result.durationMs}ms</span>
+              <span className="text-sm text-muted-foreground tabular-nums">· 패킷 {result.packets.length}개 · {result.durationMs}ms</span>
               {result.exitCode != null && (
                 <span className="text-xs text-muted-foreground font-mono">exit {result.exitCode}</span>
               )}
             </span>
           }
           actions={
-            <button onClick={downloadRaw} disabled={!result.raw}
-              className="flex items-center gap-1 px-2 py-1 text-xs rounded bg-secondary hover:bg-secondary/80 disabled:opacity-50">
-              <Download className="w-3 h-3" /> raw
+            <button type="button" onClick={downloadRaw} disabled={!result.raw}
+              title="tcpdump 원본 출력을 텍스트 파일로 저장"
+              className="flex items-center gap-1 px-2 py-1 text-xs rounded-xl bg-secondary hover:bg-secondary/80 disabled:opacity-50">
+              <Download className="w-3 h-3" aria-hidden /> 원본 저장
             </button>
           }
         >
 
           {result.error && (
-            <div className="px-3 py-2 flex items-start gap-2 bg-status-critical/5 border-b border-border">
-              <AlertTriangle className="w-4 h-4 text-status-critical flex-shrink-0 mt-0.5" />
+            <div role="alert" className="px-3 py-2 flex items-start gap-2 bg-status-critical/5 border-b border-border">
+              <AlertTriangle className="w-4 h-4 text-status-critical flex-shrink-0 mt-0.5" aria-hidden />
               <p className="text-sm text-status-critical">{result.error}</p>
             </div>
           )}
 
           <div className="px-3 py-2 text-xs text-muted-foreground font-mono border-b border-border flex items-center gap-1">
-            <Terminal className="w-3 h-3" />
+            <Terminal className="w-3 h-3" aria-hidden />
             <span className="truncate" title={result.executed}>{result.executed}</span>
           </div>
 
@@ -418,7 +448,7 @@ export function TcpdumpPanel({ clusterId, runLog }: Props) {
 
           {result.stderr && (
             <div className="border-t border-border p-2 bg-muted/20">
-              <p className="text-xs text-muted-foreground mb-1">stderr</p>
+              <p className="text-xs text-muted-foreground mb-1">표준 오류(stderr)</p>
               <LogViewer text={result.stderr} maxHeight="max-h-40" asError hideToolbar />
             </div>
           )}
@@ -436,18 +466,26 @@ export function TcpdumpPanel({ clusterId, runLog }: Props) {
       <ConfirmDialog
         open={confirmOpen}
         title="원격 tcpdump 실행"
-        description={`${host || '(host)'} 에 SSH 로 접속해 tcpdump 를 수행합니다. (읽기 전용)`}
+        description={`${host || '(호스트 없음)'} 에 SSH 로 접속해 tcpdump 로 패킷을 캡처합니다. 노드 설정은 바꾸지 않습니다.`}
         confirmLabel="실행"
+        busy={runMut.isPending}
         onCancel={() => setConfirmOpen(false)}
         onConfirm={() => { setConfirmOpen(false); void doCapture(); }}
       >
-        <div className="space-y-1 font-mono text-xs text-muted-foreground">
-          <div>host    : {host} ({username}@{port})</div>
-          <div>iface   : {iface}</div>
-          <div>filter  : {bpf || '(none)'}</div>
-          <div>duration: {duration}s · count: {count}</div>
-          <div>sudo    : {useSudo ? 'yes' : 'no'}</div>
-        </div>
+        <dl className="space-y-1 text-xs">
+          {([
+            ['대상', `${selectedNode ? `${selectedNode} · ` : ''}${username}@${host}:${port}`],
+            ['인터페이스', iface],
+            ['BPF 필터', bpf || '(없음 — 전체)'],
+            ['캡처', `${duration}초 · 최대 ${count}패킷`],
+            ['sudo', useSudo ? '사용' : '미사용'],
+          ] as const).map(([k, v]) => (
+            <div key={k} className="flex gap-2">
+              <dt className="w-20 flex-shrink-0 text-muted-foreground">{k}</dt>
+              <dd className="font-mono break-all">{v}</dd>
+            </div>
+          ))}
+        </dl>
       </ConfirmDialog>
     </div>
   );
