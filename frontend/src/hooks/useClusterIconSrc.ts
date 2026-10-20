@@ -5,8 +5,8 @@
 // customHex 가 운영타입 바 색으로 항상 우선한다. iconConfig 가 없으면(lucide/emoji/업로드/구버전
 // 아이콘) 기존처럼 icon 문자열을 그대로 정적으로 해석한다.
 //
-// monogramFallback: 아이콘이 전혀 없는 클러스터를 이름 이니셜 타일로 그린다(사이드바 레일용).
-// 관리 화면처럼 "아이콘 미지정" 상태를 보여줘야 하는 곳은 끈 채로 쓴다.
+// monogramFallback: 아이콘이 전혀 없는 클러스터를 이름 이니셜 타일로 그린다
+// (사이드바 레일 · /cluster-manage 표 · 설정 클러스터 탭). 미지정 여부는 호출부가 툴팁으로 알린다.
 
 import { useMemo } from 'react';
 import type { Cluster } from '@/types';

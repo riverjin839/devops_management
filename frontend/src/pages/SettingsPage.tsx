@@ -364,13 +364,15 @@ function ServerStatusBadge({ status }: { status: string }) {
 /** 클러스터 목록 행의 아이콘 버튼 — `useClusterIconSrc` 훅을 써야 해서(테마 동기화)
  *  `clusters.map()` 콜백 안에서 직접 훅을 호출할 수 없어 별도 컴포넌트로 분리했다. */
 function ClusterIconButton({ cluster, onClick }: { cluster: Cluster; onClick: (e: React.MouseEvent<HTMLButtonElement>) => void }) {
-  const resolved = useClusterIconSrc(cluster);
+  // 아이콘 미지정이면 이름 이니셜 타일을 보여준다(사이드바 레일과 동일).
+  const resolved = useClusterIconSrc(cluster, { monogramFallback: true });
+  const iconIsAuto = !cluster.icon && !cluster.iconConfig;
   return (
     <button
       type="button"
       onClick={onClick}
       className="flex items-center justify-center w-10 h-10 rounded-lg border border-border bg-card hover:bg-secondary hover:border-primary/40 transition-colors flex-shrink-0"
-      title={cluster.icon ? '아이콘 변경' : '아이콘 설정 (lucide / 이모지 / 이미지 업로드)'}
+      title={iconIsAuto ? '이름 이니셜 자동 아이콘 — 클릭해 아이콘 설정 (빌더 / lucide / 이모지 / 이미지 업로드)' : '아이콘 변경'}
       aria-label="클러스터 아이콘 설정"
     >
       {resolved?.kind === 'image' ? (
