@@ -2,7 +2,7 @@ import { forwardRef, useCallback, useEffect, useMemo, useRef, useState } from 'r
 import { StickyNote } from 'lucide-react';
 import type { TopoNode, TopoEdge } from '@/types';
 import {
-  computeLayout, edgeStyle, kindAccent, statusColor,
+  computeLayout, edgeStyleToken, useTopologyColors, statusColor,
   KIND_ABBR, NODE_W, NODE_H, type LayoutPos,
 } from '@/components/topology/topologyShared';
 
@@ -49,7 +49,8 @@ interface Props {
 const MANUAL_KIND_ABBR: Record<string, string> = {
   database: 'DB', queue: 'MQ', api: 'API', external: 'EXT', user: 'USR', custom: 'ETC',
 };
-const MANUAL_ACCENT = '#f97316';
+/** 수동 노드·플로우 순번·링크 시작점 강조색 — 토큰(R-1). export 는 resolveCssVars 가 var() 를 푼다. */
+const MANUAL_ACCENT = 'hsl(var(--chart-7))';
 
 /** SVG ref 를 export(PNG/SVG)용으로 부모에 노출한다. */
 export const ArchDocCanvas = forwardRef<SVGSVGElement, Props>(function ArchDocCanvas(
@@ -65,6 +66,7 @@ export const ArchDocCanvas = forwardRef<SVGSVGElement, Props>(function ArchDocCa
   } | null>(null);
   const [override, setOverride] = useState<Record<string, LayoutPos>>({});
   const panning = useRef<{ x: number; y: number; vx: number; vy: number } | null>(null);
+  const topoColors = useTopologyColors();
 
   // 자동 레이아웃은 topologyShared.computeLayout 재사용 — manual kind 는 External 랭크로.
   const baseLayout = useMemo(() => {
@@ -169,7 +171,7 @@ export const ArchDocCanvas = forwardRef<SVGSVGElement, Props>(function ArchDocCa
     >
       <defs>
         <marker id="arch-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
-          <path d="M 0 0 L 10 5 L 0 10 z" fill="#94a3b8" />
+          <path d="M 0 0 L 10 5 L 0 10 z" fill="hsl(var(--muted-foreground))" />
         </marker>
       </defs>
       <g transform={`translate(${view.x},${view.y}) scale(${view.k})`}>
@@ -179,7 +181,7 @@ export const ArchDocCanvas = forwardRef<SVGSVGElement, Props>(function ArchDocCa
           const b = center(e.target);
           if (!a || !b) return null;
           const isTraffic = e.type === 'traffic';
-          const st = edgeStyle(e.type, e.dropped);
+          const st = edgeStyleToken(e.type, e.dropped);
           const active = selectedId && (e.source === selectedId || e.target === selectedId);
           const width = isTraffic
             ? 1.5 + ((e.flowCount ?? 0) / maxFlow) * 4
@@ -215,9 +217,9 @@ export const ArchDocCanvas = forwardRef<SVGSVGElement, Props>(function ArchDocCa
               {/* 플로우 순번 뱃지 */}
               {e.step != null && (
                 <g className="pointer-events-none">
-                  <circle cx={mid.x} cy={mid.y + 10} r={9} fill="#f97316" />
+                  <circle cx={mid.x} cy={mid.y + 10} r={9} fill={MANUAL_ACCENT} />
                   <text x={mid.x} y={mid.y + 13.5} fontSize={10} fontWeight={700}
-                    fill="#ffffff" textAnchor="middle">
+                    fill="hsl(var(--background))" textAnchor="middle">
                     {e.step}
                   </text>
                 </g>
@@ -230,7 +232,7 @@ export const ArchDocCanvas = forwardRef<SVGSVGElement, Props>(function ArchDocCa
         {nodes.map((n) => {
           const p = layout[n.id];
           if (!p) return null;
-          const accent = n.manual ? MANUAL_ACCENT : kindAccent(n.kind);
+          const accent = n.manual ? MANUAL_ACCENT : topoColors.kind(n.kind);
           const isSel = selectedId === n.id;
           const isLinkSrc = linkSourceId === n.id;
           const abbr = n.manual
@@ -247,7 +249,7 @@ export const ArchDocCanvas = forwardRef<SVGSVGElement, Props>(function ArchDocCa
               <rect
                 width={NODE_W} height={NODE_H} rx={10}
                 fill="hsl(var(--card))"
-                stroke={isLinkSrc ? '#f97316' : isSel ? 'hsl(var(--primary))' : accent}
+                stroke={isLinkSrc ? MANUAL_ACCENT : isSel ? 'hsl(var(--primary))' : accent}
                 strokeWidth={isSel || isLinkSrc ? 2.5 : 1.2}
                 strokeDasharray={n.stale ? '4 3' : n.manual ? '6 3' : undefined}
                 opacity={n.stale ? 0.55 : 1}
@@ -259,7 +261,7 @@ export const ArchDocCanvas = forwardRef<SVGSVGElement, Props>(function ArchDocCa
                 {n.name.length > 18 ? `${n.name.slice(0, 17)}…` : n.name}
               </text>
               {n.stale && (
-                <text x={12} y={45} fontSize={8} fill="#f59e0b">현행화 시점에 미존재 (stale)</text>
+                <text x={12} y={45} fontSize={8} fill="hsl(var(--status-warning))">현행화 시점에 미존재 (stale)</text>
               )}
               {!n.stale && n.detail && (
                 <text x={12} y={45} fontSize={8} fill="hsl(var(--muted-foreground))">

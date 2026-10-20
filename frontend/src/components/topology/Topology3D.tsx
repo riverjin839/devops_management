@@ -1,8 +1,8 @@
-import { useId, useMemo, useRef } from 'react';
+import { useCallback, useId, useMemo, useRef } from 'react';
 import { Maximize2, Table2 } from 'lucide-react';
 import ForceGraph3D, { type ForceGraph3DInstance, type NodeObject, type LinkObject } from 'react-force-graph-3d';
 import type { TopoNode, TopoEdge, TopologyTrafficEdge } from '@/types';
-import { kindAccent, edgeStyle, KIND_ABBR } from './topologyShared';
+import { useTopologyColors, KIND_ABBR } from './topologyShared';
 import { usePrefersReducedMotion } from '@/hooks/usePrefersReducedMotion';
 
 interface Props {
@@ -58,7 +58,14 @@ export function Topology3D({ graph, trafficEdges = [], showTraffic, width, heigh
 
   // OS "동작 줄이기" 설정이면 트래픽 파티클(무한 애니메이션)을 끈다(D-096).
   const reducedMotion = usePrefersReducedMotion();
-  const linkColor = (l: LinkObject) => edgeStyle((l as G3Link).type, (l as G3Link).dropped).stroke;
+  // three.js 는 var() 를 못 읽는다 — 현재 테마의 리터럴 색(useTopologyColors)을 쓰고, 테마가 바뀌면
+  // 접근자 함수가 새로 만들어져 노드·링크가 다시 칠해진다(R-1).
+  const colors = useTopologyColors();
+  const linkColor = useCallback(
+    (l: LinkObject) => colors.edge((l as G3Link).type, (l as G3Link).dropped),
+    [colors],
+  );
+  const nodeColor = useCallback((n: NodeObject) => colors.kind((n as G3Node).kind), [colors]);
 
   // WebGL 캔버스는 보조기기에 내용이 없다 — 요약·조작법을 그룹 라벨로 주고, 같은 정보를 담은 표 보기로 가는
   // 버튼과 "화면 맞춤"을 실제 <button> 으로 둔다(D-092 잔여).
@@ -90,10 +97,10 @@ export function Topology3D({ graph, trafficEdges = [], showTraffic, width, heigh
       graphData={data}
       width={width}
       height={height}
-      backgroundColor="#0b0b0f"
+      backgroundColor={colors.background}
       nodeId="id"
       nodeLabel={(n: NodeObject) => (n as G3Node).name}
-      nodeColor={(n: NodeObject) => kindAccent((n as G3Node).kind)}
+      nodeColor={nodeColor}
       nodeVal={(n: NodeObject) => Math.max(1.5, (n as G3Node).degree)}
       linkSource="source"
       linkTarget="target"

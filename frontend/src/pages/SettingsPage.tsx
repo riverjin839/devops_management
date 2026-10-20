@@ -31,7 +31,7 @@ import { AddClusterModal, KubeconfigEditModal } from '@/components/dashboard';
 import { Cluster, ManagementServer, ManagementServerCreate, ServiceDomain } from '@/types';
 import { formatDateTime, formatApiError, cn } from '@/lib/utils';
 import { StatusDot, statusToVariant } from '@/components/common/StatusBadge';
-import { useHomeStore } from '@/stores/homeStore';
+import { useHomeStore, DEFAULT_WEEKLY_BAR_TEXT_COLOR } from '@/stores/homeStore';
 import { useHomePrefs, useUpdateHomePrefs } from '@/hooks/useHomePrefs';
 import { useToast, ClusterIconPicker, useModalA11y, EmptyState, PageHeader, PageShell, RunLogPanel, ConfirmDialog } from '@/components/common';
 import { verifyClusterLogged } from '@/components/cluster-manage';
@@ -844,8 +844,9 @@ export function SettingsPage() {
             </div>
             <div className="flex items-center rounded-lg border border-border overflow-hidden text-sm">
               {([
-                { key: 'white' as const, label: '흰색', swatch: '#ffffff' },
-                { key: 'cream' as const, label: '크림', swatch: '#FBF7EE' },
+                // 견본도 실제 패널과 같은 클래스로 칠한다 — 그 클래스가 subtree 의 --card 를 덮어쓴다(index.css).
+                { key: 'white' as const, label: '흰색', swatch: 'schedule-bg-white' },
+                { key: 'cream' as const, label: '크림', swatch: 'schedule-bg-cream' },
               ]).map(({ key, label, swatch }) => (
                 <button
                   key={key}
@@ -856,7 +857,7 @@ export function SettingsPage() {
                     scheduleBg === key ? 'bg-primary text-primary-foreground' : 'hover:bg-secondary text-muted-foreground'
                   }`}
                 >
-                  <span className="w-3 h-3 rounded-full border border-border/70" style={{ backgroundColor: swatch }} />
+                  <span className={`w-3 h-3 rounded-full border border-border/70 bg-card ${swatch}`} />
                   {label}
                 </button>
               ))}
@@ -898,7 +899,7 @@ export function SettingsPage() {
               <span className="text-xs text-muted-foreground font-mono">{weeklyBarTextColor}</span>
               <button
                 type="button"
-                onClick={() => setWeeklyBarTextColor('#ffffff')}
+                onClick={() => setWeeklyBarTextColor(DEFAULT_WEEKLY_BAR_TEXT_COLOR)}
                 className="text-xs text-primary hover:underline"
               >
                 기본값
