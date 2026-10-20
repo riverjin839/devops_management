@@ -1458,6 +1458,10 @@ def _run_migrations():
         _safe_create_index("ix_k8s_ns_samples_at", "k8s_ns_samples", "(sampled_at)")
         _safe_create_index("ix_k8s_wl_samples_at", "k8s_workload_samples", "(sampled_at)")
         _safe_create_index("ix_k8s_eff_runs_queued", "k8s_efficiency_runs", "(queued_at)")
+    # 외부 서비스 스냅샷 — 정방향 검증(fwd_cache)·응답 확인(probe_results) 결과 컬럼(1.63 이후 추가).
+    if "external_service_snapshots" in inspector.get_table_names():
+        _safe_add_column("external_service_snapshots", "fwd_cache", "JSONB")
+        _safe_add_column("external_service_snapshots", "probe_results", "JSONB")
 
 
 def _sync_missing_model_columns() -> None:
@@ -2513,7 +2517,7 @@ install_logging()  # 앱 로그 줄마다 [req=요청ID] — services/request_co
 app = FastAPI(
     title=settings.app_name,
     description="DevOps K8s Daily Monitoring Dashboard API",
-    version="1.63.1",
+    version="1.64.0",
     docs_url="/docs",
     redoc_url="/redoc",
     lifespan=lifespan,
@@ -2706,7 +2710,7 @@ app.include_router(tenants_router, prefix="/api/v1", dependencies=_auth)
 def root():
     return {
         "name": settings.app_name,
-        "version": "1.63.1",
+        "version": "1.64.0",
         "version": "1.8.2",
         "status": "running"
     }

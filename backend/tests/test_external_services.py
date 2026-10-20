@@ -202,3 +202,145 @@ def test_collect_stream_requires_operator_and_ssh_creds(db, cluster):
         assert r.status_code == 422
     finally:
         app.dependency_overrides.pop(get_current_user, None)
+
+
+# ── 정방향 검증 · 응답 확인 ─────────────────────────────────────────────────────
+from app.services import external_checks as chk  # noqa: E402
+
+
+def test_parse_forward_output_getent_and_nslookup():
+    getent = "10.0.0.7      STREAM shop.example.com\n10.0.0.7      DGRAM\n10.0.0.8      STREAM\n"
+    assert chk.parse_forward_output(getent) == ["10.0.0.7", "10.0.0.8"]
+    ns = "Server:\t\t10.96.0.10\nAddress:\t10.96.0.10#53\n\nName:\tshop.example.com\nAddress: 10.0.0.9\n"
+    assert chk.parse_forward_output(ns) == ["10.0.0.9"]
+    assert chk.parse_forward_output("** server can't find x: NXDOMAIN") == []
+
+
+def test_forward_status_and_domains():
+    assert chk.forward_status("1.1.1.1", {"ips": ["1.1.1.1", "2.2.2.2"]}) == "match"
+    assert chk.forward_status("1.1.1.1", {"ips": ["9.9.9.9"]}) == "mismatch"
+    assert chk.forward_status("1.1.1.1", {"ips": []}) == "nxdomain"
+    assert chk.forward_status(None, {"ips": ["1.1.1.1"]}) is None
+    entries = [{"host": "a.example.com", "ip": "1.1.1.1"}, {"host": "*.wild.com", "ip": "1.1.1.1"},
+               {"host": None, "ip": "2.2.2.2"}, {"host": "bad;rm -rf", "ip": None}]
+    assert chk.forward_domains(entries, {"2.2.2.2": {"names": ["b.corp."]}}) == ["a.example.com", "b.corp"]
+
+
+def test_probe_targets_dedupe_http_and_nodeport():
+    entries = [
+        {"kind": "Ingress", "ip": "10.0.0.7", "port": 443, "scheme": "https", "host": "a.example.com"},
+        {"kind": "Ingress", "ip": "10.0.0.7", "port": 443, "scheme": "https", "host": "a.example.com"},
+        {"kind": "LoadBalancer", "ip": "10.0.0.5", "port": 8080, "scheme": None, "host": None},
+        {"kind": "NodePort", "ip": None, "port": 30080, "scheme": None, "host": None},
+    ]
+    nodes = [{"name": "w1", "internal_ip": "172.16.0.1", "external_ip": None}]
+    keys = [chk.probe_key(t) for t in chk.probe_targets(entries, nodes, True, 100)]
+    assert keys == ["https|a.example.com|10.0.0.7|443", "tcp||10.0.0.5|8080", "tcp||172.16.0.1|30080"]
+    assert [chk.probe_key(t) for t in chk.probe_targets(entries, nodes, False, 1)] == ["tcp||10.0.0.7|443"]
+
+
+def test_probe_backend_tcp_http_and_closed():
+    import threading
+    from http.server import BaseHTTPRequestHandler, HTTPServer
+
+    seen_host = {}
+
+    class H(BaseHTTPRequestHandler):
+        def do_GET(self):  # noqa: N802
+            seen_host["v"] = self.headers.get("Host")
+            self.send_response(204)
+            self.end_headers()
+
+        def log_message(self, *a):  # noqa: D401
+            pass
+
+    srv = HTTPServer(("127.0.0.1", 0), H)
+    port = srv.server_address[1]
+    threading.Thread(target=srv.serve_forever, daemon=True).start()
+    closed = socket_free_port()
+    try:
+        res = chk.probe_backend([
+            {"ip": "127.0.0.1", "port": port, "scheme": None, "host": None},
+            {"ip": "127.0.0.1", "port": port, "scheme": "http", "host": "app.example.com"},
+            {"ip": "127.0.0.1", "port": closed, "scheme": None, "host": None},
+        ], 2, lambda *_: None)
+    finally:
+        srv.shutdown()
+    assert res[f"tcp||127.0.0.1|{port}"]["reachable"] is True
+    http_r = res[f"http|app.example.com|127.0.0.1|{port}"]
+    assert http_r["reachable"] and http_r["http_status"] == 204 and seen_host["v"] == "app.example.com"
+    assert res[f"tcp||127.0.0.1|{closed}"] == {**res[f"tcp||127.0.0.1|{closed}"], "reachable": False}
+
+
+def socket_free_port() -> int:
+    import socket
+    s = socket.socket()
+    s.bind(("127.0.0.1", 0))
+    p = s.getsockname()[1]
+    s.close()
+    return p
+
+
+def test_probe_script_and_parse():
+    script = chk.build_probe_script(
+        [{"ip": "10.0.0.7", "port": 443, "scheme": "https", "host": "a.example.com"},
+         {"ip": "10.0.0.5", "port": 80, "scheme": None, "host": None},
+         {"ip": "10.0.0.5", "port": 80, "scheme": "http", "host": "x;reboot"}],
+        chk.DEFAULT_PROBE_TCP_COMMAND, chk.DEFAULT_PROBE_HTTP_COMMAND, 3)
+    assert "--resolve a.example.com:443:10.0.0.7 https://a.example.com:443/" in script
+    assert "%{http_code}" in script and "/dev/tcp/10.0.0.5/80" in script and "reboot" not in script
+    t_http = {"ip": "10.0.0.7", "port": 443, "scheme": "https", "host": "a.example.com"}
+    assert chk.parse_probe_block(t_http, "200\n@@RC 0 31")["http_status"] == 200
+    assert chk.parse_probe_block(t_http, "000\n@@RC 28 3001")["error"] == "시간 초과"
+    t_tcp = {"ip": "10.0.0.5", "port": 80, "scheme": None, "host": None}
+    assert chk.parse_probe_block(t_tcp, "@@RC 0 4")["reachable"] is True
+    assert chk.parse_probe_block(t_tcp, "@@RC 124 3000")["error"] == "시간 초과"
+
+
+def test_template_ok():
+    assert es.template_ok(chk.DEFAULT_PROBE_HTTP_COMMAND)
+    assert es.template_ok("dig +short {domain}")
+    assert not es.template_ok("curl {url}")
+    assert not es.template_ok("awk '{print $1}' {ip}")
+
+
+def test_collect_forward_and_probe_view(db, cluster, settings_reset, fake_k8s, monkeypatch):
+    es.set_settings(db, {"exclude_namespaces": ["kube-system"]})
+    monkeypatch.setattr(es, "resolve_backend", lambda ips, timeout, emit: {ip: [] for ip in ips})
+    monkeypatch.setattr(chk, "resolve_forward_backend",
+                        lambda doms, timeout, emit: {d: {"ips": ["10.9.9.9"], "error": None} for d in doms})
+    monkeypatch.setattr(chk, "probe_backend", lambda targets, timeout, emit: {
+        chk.probe_key(t): {"reachable": t["ip"] != "10.0.0.5", "method": "http" if t.get("scheme") else "tcp",
+                           "http_status": 200 if t.get("scheme") else None, "latency_ms": 5,
+                           "error": None if t["ip"] != "10.0.0.5" else "시간 초과"} for t in targets})
+    logs = []
+    res = es.collect(db, cluster, resolver="backend", emit=lambda lvl, msg: logs.append((lvl, msg)))
+    assert res["ok"]
+    assert any("불일치" in m for _, m in logs) and any("응답 없음 1" in m for _, m in logs)
+    view = es.public_view(db, cluster)
+    by_ip = {e["ip"]: e for e in view["entries"]}
+    assert by_ip["10.0.0.7"]["fwd"]["status"] == "mismatch" and by_ip["10.0.0.7"]["fwd"]["ips"] == ["10.9.9.9"]
+    assert by_ip["10.0.0.7"]["probe"]["http_status"] == 200
+    assert by_ip["10.0.0.5"]["probe"]["reachable"] is False and by_ip["10.0.0.5"]["fwd"] is None
+    assert view["summary"]["issues"] == 2
+
+    # 이번 수집에서만 점검 끄기 — 이전 결과는 유지
+    es.collect(db, cluster, resolver="none", forward_check=False, probe=False)
+    assert es.public_view(db, cluster)["summary"]["issues"] == 2
+
+
+def test_settings_rejects_bad_templates(db, settings_reset):
+    from fastapi.testclient import TestClient
+    from app.main import app
+    from app.auth.deps import get_current_user
+    app.dependency_overrides[get_current_user] = lambda: NS(id=uuid.uuid4(), username="a", role="admin")
+    try:
+        client = TestClient(app)
+        assert client.put("/api/v1/external-services/settings", json={"fwd_command": "nslookup"}).status_code == 422
+        assert client.put("/api/v1/external-services/settings",
+                          json={"probe_http_command": "curl {url}"}).status_code == 422
+        r = client.put("/api/v1/external-services/settings",
+                       json={"fwd_command": "dig +short {domain}", "check_source": "node", "probe_timeout_sec": 99})
+        assert r.status_code == 200 and r.json()["probe_timeout_sec"] == 15 and r.json()["check_source"] == "node"
+    finally:
+        app.dependency_overrides.pop(get_current_user, None)

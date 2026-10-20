@@ -28,6 +28,10 @@ from typing import Any, Callable, Optional
 from sqlalchemy.orm import Session
 
 from app.models.external_service import ExternalServiceSnapshot
+from app.services import external_checks as chk
+from app.services.external_checks import (
+    DEFAULT_FWD_COMMAND, DEFAULT_PROBE_HTTP_COMMAND, DEFAULT_PROBE_TCP_COMMAND,
+)
 
 log = logging.getLogger(__name__)
 
@@ -51,6 +55,19 @@ DEFAULTS: dict[str, Any] = {
     "dns_timeout_sec": 2,
     # SSH 역조회 명령 — `{ip}` 가 대상 IP 로 바뀐다. 이름 파싱은 nslookup/host/getent 출력을 모두 인식한다.
     "ptr_command": DEFAULT_PTR_COMMAND,
+    # 점검 실행 위치: auto(SSH 자격증명을 준 수동 수집이면 그 노드, 아니면 backend) | node | backend.
+    # node 는 SSH 자격증명이 있는 수동 수집에서만 가능 — 없으면 backend 로 폴백한다.
+    "check_source": "auto",
+    # 도메인 정방향 검증 — Ingress host·역조회 이름을 다시 A 레코드로 조회해 엔드포인트 IP 와 비교.
+    "forward_check": True,
+    "fwd_command": DEFAULT_FWD_COMMAND,
+    # 엔드포인트 응답 확인 — TCP 연결, Ingress(host 선언)는 Host 헤더를 실은 HTTP 요청.
+    "probe_enabled": True,
+    "probe_http": True,
+    "probe_timeout_sec": 3,
+    "probe_max": 300,
+    "probe_tcp_command": DEFAULT_PROBE_TCP_COMMAND,
+    "probe_http_command": DEFAULT_PROBE_HTTP_COMMAND,
 }
 
 Emit = Callable[[str, str], None]          # (level, message)
@@ -68,12 +85,19 @@ def normalize(values: dict[str, Any]) -> dict[str, Any]:
     for k, v in (values or {}).items():
         if k in DEFAULTS and v is not None:
             out[k] = v
-    for k in ("public_enabled", "schedule_enabled", "include_nodeport", "backend_ptr"):
+    for k in ("public_enabled", "schedule_enabled", "include_nodeport", "backend_ptr", "forward_check",
+              "probe_enabled", "probe_http"):
         out[k] = bool(out[k])
-    try:
-        out["dns_timeout_sec"] = max(1, min(10, int(out["dns_timeout_sec"])))
-    except (TypeError, ValueError):
-        out["dns_timeout_sec"] = DEFAULTS["dns_timeout_sec"]
+    for k, lo, hi in (("dns_timeout_sec", 1, 10), ("probe_timeout_sec", 1, 15), ("probe_max", 1, 2000)):
+        try:
+            out[k] = max(lo, min(hi, int(out[k])))
+        except (TypeError, ValueError):
+            out[k] = DEFAULTS[k]
+    if out["check_source"] not in ("auto", "node", "backend"):
+        out["check_source"] = "auto"
+    for k, ph in (("fwd_command", "{domain}"), ("probe_tcp_command", "{ip}"), ("probe_http_command", "{host}")):
+        v = str(out[k] or "").strip()
+        out[k] = v if ph in v and template_ok(v) else DEFAULTS[k]
     for k in ("public_cluster_ids", "exclude_namespaces"):
         v = out.get(k)
         out[k] = [str(i).strip() for i in v if str(i).strip()] if isinstance(v, list) else []
@@ -81,6 +105,15 @@ def normalize(values: dict[str, Any]) -> dict[str, Any]:
     cmd = str(out["ptr_command"] or "").strip()
     out["ptr_command"] = cmd if "{ip}" in cmd else DEFAULT_PTR_COMMAND
     return out
+
+
+def template_ok(t: str) -> bool:
+    """명령 템플릿이 허용된 자리표시만 쓰는지(`{{`/`}}` 은 리터럴 중괄호)."""
+    try:
+        t.format(domain="d", ip="1.1.1.1", port=1, host="h", scheme="http", timeout=1)
+        return True
+    except (KeyError, IndexError, ValueError):
+        return False
 
 
 def get_settings(db: Session) -> dict[str, Any]:
@@ -313,7 +346,8 @@ def _snapshot(db: Session, cluster_id) -> Optional[ExternalServiceSnapshot]:
 
 
 def collect(db: Session, cluster, *, resolver: str = "backend", ssh_target=None, actor: str = "schedule",
-            emit: Optional[Emit] = None, step: Optional[StepEmit] = None) -> dict[str, Any]:
+            emit: Optional[Emit] = None, step: Optional[StepEmit] = None,
+            forward_check: Optional[bool] = None, probe: Optional[bool] = None) -> dict[str, Any]:
     """동기 수집(Celery·SSE 실행기에서 부른다). 결과 요약을 돌려주고 스냅샷을 저장한다."""
     from kubernetes import client as k8s_client
     from app.services.k8s_client_pool import get_api_client
@@ -402,9 +436,71 @@ def collect(db: Session, cluster, *, resolver: str = "backend", ssh_target=None,
     elif not ips:
         emit("info", "역조회할 외부 IP 없음")
 
+    ptr_cache = {ip: v for ip, v in cache.items() if ip in set(ips)}
+    use_node = ssh_target is not None and cfg["check_source"] in ("auto", "node")
+    if cfg["check_source"] == "node" and ssh_target is None:
+        emit("warn", "점검 위치가 node 지만 SSH 자격증명이 없어 backend 에서 점검한다")
+    where = f"노드 {ssh_target.host}" if use_node else "backend"
+    now = datetime.utcnow().isoformat()
+
+    fwd_cache = dict(snap.fwd_cache or {})
+    do_fwd = cfg["forward_check"] if forward_check is None else forward_check
+    domains = chk.forward_domains(entries, ptr_cache)
+    if do_fwd and domains:
+        step("fwd", "도메인 정방향 검증", "running")
+        try:
+            res = (chk.resolve_forward_ssh(domains, ssh_target, cfg["fwd_command"], emit) if use_node
+                   else chk.resolve_forward_backend(domains, cfg["dns_timeout_sec"], emit))
+        except Exception as e:  # noqa: BLE001
+            res = {}
+            emit("error", f"정방향 검증 실패: {str(e)[:300]}")
+        for d, r in res.items():
+            fwd_cache[d] = {**r, "source": "node" if use_node else "backend", "checked_at": now}
+        ip_domains = [(e.get("ip"), e.get("host") or next(iter((ptr_cache.get(e.get("ip") or "") or {}).get("names") or []), None))
+                      for e in entries if e.get("ip")]
+        stat = {"match": 0, "mismatch": 0, "nxdomain": 0}
+        for ip, d in {(ip, (d or "").rstrip(".")) for ip, d in ip_domains if d}:
+            st = chk.forward_status(ip, fwd_cache.get(d))
+            if st in stat:
+                stat[st] += 1
+                if st != "match":
+                    got = ", ".join((fwd_cache.get(d) or {}).get("ips") or []) or "없음"
+                    emit("warn", f"  {d} → {got} (엔드포인트 {ip}) — {'불일치' if st == 'mismatch' else '조회 안 됨'}")
+        emit("info" if not (stat["mismatch"] or stat["nxdomain"]) else "warn",
+             f"정방향 검증({where}) 도메인 {len(res)}개 — 일치 {stat['match']} · 불일치 {stat['mismatch']} · 조회 안 됨 {stat['nxdomain']}")
+        step("fwd", "도메인 정방향 검증", "done")
+    fwd_cache = {d: v for d, v in fwd_cache.items() if d in set(domains)}
+
+    probe_results = dict(snap.probe_results or {})
+    do_probe = cfg["probe_enabled"] if probe is None else probe
+    targets = chk.probe_targets(entries, nodes, cfg["probe_http"], cfg["probe_max"]) if do_probe else []
+    if targets:
+        step("probe", "응답 확인", "running")
+        t_out = cfg["probe_timeout_sec"]
+        try:
+            res = (chk.probe_ssh(targets, ssh_target, cfg["probe_tcp_command"], cfg["probe_http_command"], t_out, emit)
+                   if use_node else chk.probe_backend(targets, t_out, emit))
+        except Exception as e:  # noqa: BLE001
+            res = {}
+            emit("error", f"응답 확인 실패: {str(e)[:300]}")
+        for k, r in res.items():
+            probe_results[k] = {**r, "source": "node" if use_node else "backend", "checked_at": now}
+        bad = [(k, r) for k, r in res.items() if not r.get("reachable")]
+        for k, r in bad[:30]:
+            _, host, ip, port = k.split("|", 3)
+            emit("warn", f"  {host or ip}:{port} ({ip}) — {chk.probe_label(r)}")
+        if len(bad) > 30:
+            emit("warn", f"  … 응답 없음 {len(bad) - 30}건 더")
+        emit("info" if not bad else "warn", f"응답 확인({where}) {len(res)}건 — 응답 {len(res) - len(bad)} · 응답 없음 {len(bad)}")
+        step("probe", "응답 확인", "done")
+    keep = {chk.probe_key(t) for t in chk.probe_targets(entries, nodes, cfg["probe_http"], 10 ** 6)}
+    probe_results = {k: v for k, v in probe_results.items() if k in keep}
+
     snap.entries = entries
     snap.node_ips = nodes
-    snap.ptr_cache = {ip: v for ip, v in cache.items() if ip in set(ips)}
+    snap.ptr_cache = ptr_cache
+    snap.fwd_cache = fwd_cache
+    snap.probe_results = probe_results
     snap.summary = {"by_kind": by_kind, "total": len(entries), "ips": len(ips),
                     "resolved": sum(1 for ip in ips if (cache.get(ip) or {}).get("names"))}
     snap.resolver = used
@@ -423,16 +519,38 @@ def public_view(db: Session, cluster) -> dict[str, Any]:
         return {"cluster": {"id": str(cluster.id), "name": cluster.name}, "collected_at": None, "entries": [],
                 "node_ips": [], "summary": None, "error": None}
     cache = snap.ptr_cache or {}
+    fwd = snap.fwd_cache or {}
+    probes = snap.probe_results or {}
+    nodes = snap.node_ips or []
     entries = []
+    issues = 0
     for e in snap.entries or []:
         ptr = cache.get(e.get("ip") or "") or {}
-        entries.append({**e, "ptr_names": ptr.get("names") or [], "ptr_source": ptr.get("source")})
+        names = ptr.get("names") or []
+        dom = (e.get("host") or (names[0] if names else None) or "").rstrip(".") or None
+        rec = fwd.get(dom) if dom else None
+        fst = chk.forward_status(e.get("ip"), rec)
+        pr = None
+        tgt = chk.probe_targets([e], nodes, True, 1) + chk.probe_targets([e], nodes, False, 1)
+        for t in tgt:
+            if chk.probe_key(t) in probes:
+                pr = probes[chk.probe_key(t)]
+                break
+        if fst in ("mismatch", "nxdomain") or (pr is not None and not pr.get("reachable")):
+            issues += 1
+        entries.append({
+            **e, "ptr_names": names, "ptr_source": ptr.get("source"),
+            "fwd": None if fst is None else {"domain": dom, "status": fst, "ips": rec.get("ips") or [],
+                                             "source": rec.get("source"), "checked_at": rec.get("checked_at")},
+            "probe": None if pr is None else {k: pr.get(k) for k in (
+                "reachable", "method", "http_status", "latency_ms", "error", "source", "checked_at")},
+        })
     return {
         "cluster": {"id": str(cluster.id), "name": cluster.name},
         "collected_at": snap.collected_at.isoformat() if snap.collected_at else None,
         "collected_by": "정기 수집" if snap.collected_by == "schedule" else "수동 수집",
         "resolver": snap.resolver,
-        "summary": snap.summary,
+        "summary": {**(snap.summary or {}), "issues": issues},
         "error": snap.error,
         "entries": entries,
         "node_ips": snap.node_ips or [],

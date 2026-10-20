@@ -6,6 +6,9 @@
 - entries: [{kind, namespace, name, ip, hostname, port, protocol, ...}] — 수집기 산출물.
 - ptr_cache: {ip: {names: [...], source: ssh|backend, host, resolved_at}} — IP → 도메인 역조회 결과.
   수집마다 덮지 않고 병합한다(SSH 로 한 번 찾은 이름이 다음 정기 수집(SSH 없음)에서도 남게).
+- fwd_cache: {domain: {ips, source, error, checked_at}} — 도메인 정방향(A 레코드) 검증 결과.
+- probe_results: {"scheme|host|ip|port": {reachable, method, http_status, latency_ms, error, source, checked_at}}
+  — 엔드포인트 응답 확인 결과.
 - 자격증명은 저장하지 않는다(SSH 역조회는 요청 시에만 쓰고 버린다).
 """
 from __future__ import annotations
@@ -29,6 +32,8 @@ class ExternalServiceSnapshot(Base):
     entries = Column(JSONB, nullable=False, default=list)
     node_ips = Column(JSONB, nullable=True)          # NodePort 접근용 노드 주소 [{name, internal_ip, external_ip}]
     ptr_cache = Column(JSONB, nullable=False, default=dict)
+    fwd_cache = Column(JSONB, nullable=True)
+    probe_results = Column(JSONB, nullable=True)
     summary = Column(JSONB, nullable=True)
     resolver = Column(String(16), nullable=True)     # 마지막 수집의 역조회 방식: ssh | backend | none
     collected_by = Column(String(64), nullable=True)  # 사용자명 | schedule

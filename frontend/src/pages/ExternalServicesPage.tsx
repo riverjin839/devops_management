@@ -7,7 +7,7 @@ import { useSearchParams } from 'react-router-dom';
 import { Download, Globe, RefreshCw, Search, X } from 'lucide-react';
 import { EmptyState, ErrorState, LoadingState, PageHeader, PageShell } from '@/components/common';
 import { MacCard } from '@/components/ui/MacCard';
-import { CollectPanel, ExternalServicesTable, KIND_OPTIONS, domainOf, matches, toCsv } from '@/components/external-services';
+import { CollectPanel, ExternalServicesTable, KIND_OPTIONS, domainOf, hasIssue, matches, toCsv } from '@/components/external-services';
 import { PublicPageLinks } from '@/components/public-pages';
 import { useExternalServiceClusters, useExternalServices } from '@/hooks/useExternalServices';
 import { useAuthStore } from '@/stores/authStore';
@@ -30,6 +30,8 @@ export function ExternalServicesPage() {
   const clusterId = params.get('c') && clusters.some((c) => c.id === params.get('c'))
     ? (params.get('c') as string) : (clusters[0]?.id ?? '');
   const kind = isKind(params.get('k')) ? (params.get('k') as ExternalServiceKind) : null;
+  // 정방향 불일치·조회 안 됨·응답 없음만 보기(URL `i=1`).
+  const issuesOnly = params.get('i') === '1';
   const q = params.get('q') ?? '';
   const [qInput, setQInput] = useState(q);
 
@@ -64,17 +66,20 @@ export function ExternalServicesPage() {
   const entries = useMemo(() => data?.entries ?? [], [data]);
   const counts = useMemo(() => {
     const m: Record<string, number> = {};
-    for (const e of entries) m[e.kind] = (m[e.kind] ?? 0) + 1;
+    for (const e of entries) {
+      m[e.kind] = (m[e.kind] ?? 0) + 1;
+      if (hasIssue(e)) m.issues = (m.issues ?? 0) + 1;
+    }
     return m;
   }, [entries]);
   const rows = useMemo(
     // 도메인이 확인된 행을 먼저(도메인 순), 이름 미확인은 뒤로(주소 순).
-    () => entries.filter((e) => (!kind || e.kind === kind) && matches(e, q))
+    () => entries.filter((e) => (!kind || e.kind === kind) && (!issuesOnly || hasIssue(e)) && matches(e, q))
       .map((e) => ({ e, d: domainOf(e).primary }))
       .sort((x, y) => (x.d ? 0 : 1) - (y.d ? 0 : 1)
         || (x.d ?? x.e.ip ?? '').localeCompare(y.d ?? y.e.ip ?? '') || x.e.port - y.e.port)
       .map(({ e }) => e),
-    [entries, kind, q],
+    [entries, kind, issuesOnly, q],
   );
   const nodeHint = data?.nodeIps.length
     ? `노드 주소: ${data.nodeIps.map((n) => n.externalIp || n.internalIp).filter(Boolean).join(', ')}` : undefined;
@@ -175,6 +180,13 @@ export function ExternalServicesPage() {
                         {o.label} {counts[o.value] ?? 0}
                       </button>
                     ))}
+                    <button type="button" aria-pressed={issuesOnly}
+                      title="도메인 정방향 불일치·조회 안 됨, 또는 응답 없음인 엔드포인트만"
+                      className={cn(CHIP, 'text-xs px-2.5', issuesOnly ? CHIP_ON : CHIP_OFF,
+                        !issuesOnly && (counts.issues ?? 0) > 0 && 'text-status-warning')}
+                      onClick={() => update({ i: issuesOnly ? '' : '1' })}>
+                      문제 있음 {counts.issues ?? 0}
+                    </button>
                     <button type="button" className={cn(BTN, 'text-xs px-2.5 py-1')} onClick={downloadCsv} disabled={rows.length === 0}>
                       <Download className="w-3.5 h-3.5" /> CSV
                     </button>
