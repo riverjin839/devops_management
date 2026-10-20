@@ -44,3 +44,16 @@ def test_truncated_listing_is_marked_partial(monkeypatch):
     core = _Core([([_pod("Running")], "c1")], fail_on_second=True)
     r = _run(monkeypatch, core)
     assert r.detail["pods"] == 1 and r.detail["partial"] is True and r.status == "warning"
+
+
+def test_truncated_namespace_listing_is_marked_partial(monkeypatch):
+    core = _Core([([_pod("Running")], None)])
+
+    def ns_pages(**kw):
+        if kw.get("_continue"):
+            raise TimeoutError("read timed out")
+        return NS(items=[NS()], metadata=NS(_continue="n1"))
+
+    core.list_namespace = ns_pages
+    r = _run(monkeypatch, core)
+    assert r.detail["namespaces"] == 1 and r.detail["partial"] is True and r.status == "warning"

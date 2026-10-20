@@ -79,8 +79,8 @@ def _collect_workload_count(item: ClusterItem, db: Session) -> ItemResult:
     from app.services.k8s_paging import iter_all
 
     core, _ = _k8s(item.cluster)
-    ns_count = sum(1 for _ in iter_all(core.list_namespace, raw=True))
-    truncated: list = []
+    truncated: list = []  # 네임스페이스·Pod 어느 쪽이든 끝까지 못 세면 partial
+    ns_count = sum(1 for _ in iter_all(core.list_namespace, raw=True, report=truncated))
     pod_count = running = pending = failed = 0
     for p in iter_all(core.list_pod_for_all_namespaces, raw=True, report=truncated):
         pod_count += 1

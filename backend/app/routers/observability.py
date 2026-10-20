@@ -857,15 +857,20 @@ def ack_all_alerts(
     ).filter(AlertEvent.acked.is_(False))
     who = actor.display_name or actor.username
     now = datetime.utcnow()
-    # 대상 id 만 읽고 묶음 UPDATE — 알람 폭주 때 전체 행(raw JSONB 포함)을 올리지 않는다.
-    ids = [r[0] for r in query.with_entities(AlertEvent.id).all()]
-    for i in range(0, len(ids), 1000):
-        db.query(AlertEvent).filter(AlertEvent.id.in_(ids[i:i + 1000])).update(
+    # 1000건씩 id 만 골라 묶음 UPDATE 를 반복한다 — 알람 폭주 때도 전체 행(raw JSONB 포함)이나 전체 id 목록을
+    # 메모리에 올리지 않는다. 갱신된 행은 `acked = false` 조건에서 빠지므로 다음 묶음이 자연히 이어진다.
+    count = 0
+    while True:
+        ids = [r[0] for r in query.with_entities(AlertEvent.id).limit(1000).all()]
+        if not ids:
+            break
+        db.query(AlertEvent).filter(AlertEvent.id.in_(ids)).update(
             {AlertEvent.acked: True, AlertEvent.ack_by: who, AlertEvent.ack_at: now},
             synchronize_session=False,
         )
+        count += len(ids)
     db.commit()
-    return {"acked": len(ids)}
+    return {"acked": count}
 
 
 @router.get("/alerts/{alert_id}/analysis")
