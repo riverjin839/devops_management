@@ -1,13 +1,14 @@
-import { useEffect, useId, useState } from 'react';
+import { useEffect, useId, useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import {
   HardDrive, Play, Square, CheckCircle, XCircle, AlertTriangle, Key, ShieldAlert, Wifi, Clock, Terminal,
 } from 'lucide-react';
 import { useClusters } from '@/hooks/useCluster';
+import { useCanOperate } from '@/hooks/useCanOperate';
 import { useAbortableMutation } from '@/hooks/useAbortableMutation';
 import { useRunLog, runLogged, consoleRunLines, type RunLogEntry } from '@/hooks/useRunLog';
 import { useLogPref } from '@/hooks/useLogPref';
-import { ConfirmDialog, ExecOutputTabs, ClusterSidebar, SavedCommands, EmptyState, PageShell, RunLogPanel } from '@/components/common';
+import { ConfirmDialog, ExecOutputTabs, ClusterSidebar, SavedCommands, EmptyState, ErrorState, PageShell, RunLogPanel, useToast } from '@/components/common';
 import { PageHeader } from '@/components/common/PageHeader';
 import { MacCard } from '@/components/ui/MacCard';
 import { McPresetManager } from '@/components/mc/McPresetManager';
@@ -15,18 +16,21 @@ import { mcApi, bulkExecApi, type EtcdCtlRunResponse, type NodeSummary } from '@
 import { useAuthStore } from '@/stores/authStore';
 import { useTerminalEnvSync } from '@/hooks/useTerminalEnvSync';
 import { formatApiError } from '@/lib/utils';
+import { maskCommand } from '@/lib/commandMask';
+import { judgeCommand } from '@/lib/dangerCommand';
 
 const STATUS_META: Record<EtcdCtlRunResponse['status'], { label: string; cls: string; icon: React.ComponentType<{ className?: string }> }> = {
   ok:            { label: '정상',     cls: 'bg-status-healthy/10 text-status-healthy border-status-healthy/30',  icon: CheckCircle },
-  error:         { label: '에러',     cls: 'bg-status-critical/10 text-status-critical border-status-critical/30',              icon: XCircle },
+  error:         { label: '오류',     cls: 'bg-status-critical/10 text-status-critical border-status-critical/30',              icon: XCircle },
   timeout:       { label: '타임아웃', cls: 'bg-status-warning/10 text-status-warning border-status-warning/30',        icon: Clock },
   auth_error:    { label: '인증 실패', cls: 'bg-status-warning/10 text-status-warning border-status-warning/30',    icon: ShieldAlert },
   connect_error: { label: '연결 실패', cls: 'bg-status-unknown/10 text-status-unknown border-status-unknown/30',       icon: Wifi },
 };
 
-// 실행 로그에 남길 명령 요약 — `mc alias set <name> <url> <access> <secret>` 의 키는 가린다.
-function maskMcArgs(a: string): string {
-  return a.replace(/(\balias\s+set\s+\S+\s+\S+)([\s\S]*)$/i, (_m, head: string, rest: string) => (rest.trim() ? `${head} ****` : head));
+/** 실패 토스트 — 서버 403(역할·테넌트 권한 부족)은 사유를 그대로 보여 준다(D-172). 실행 로그에는 runLogged 가 error 줄을 남긴다. */
+function toastFailure(toast: ReturnType<typeof useToast>, title: string, error: unknown) {
+  const status = (error as { response?: { status?: number } } | null)?.response?.status;
+  toast.error(status === 403 ? `${title} — 권한이 없습니다` : `${title} 실패`, formatApiError(error));
 }
 
 function outputLines(res: EtcdCtlRunResponse): RunLogEntry[] {
@@ -79,8 +83,8 @@ function ResultPanel({ result }: { result: EtcdCtlRunResponse | null }) {
     >
       <div>
         <p className="text-xs font-medium text-muted-foreground mb-1">실행된 명령</p>
-        <pre className="text-xs font-mono bg-background border border-border rounded p-2 overflow-auto whitespace-pre-wrap break-all text-foreground/80">
-          {result.executedCommand || '(not provided)'}
+        <pre className="text-xs font-mono bg-background border border-border rounded-md p-2 overflow-auto whitespace-pre-wrap break-all text-foreground/80">
+          {maskCommand(result.executedCommand) || '(서버가 실행 명령을 돌려주지 않았습니다)'}
         </pre>
       </div>
       <ExecOutputTabs stdout={result.stdout} stderr={result.stderr} maxHeight="max-h-[440px]" />
@@ -89,8 +93,11 @@ function ResultPanel({ result }: { result: EtcdCtlRunResponse | null }) {
 }
 
 export function McClientPage() {
-  const { data: clusters = [] } = useClusters();
+  const clustersQ = useClusters();
+  const { data: clusters = [] } = clustersQ;
   const [clusterId, setClusterId] = useState('');
+  const toast = useToast();
+  const { canOperate, withHint, ariaWithHint } = useCanOperate(clusterId || null);
   useEffect(() => {
     if (!clusterId && clusters.length > 0) setClusterId(clusters[0].id);
   }, [clusters, clusterId]);
@@ -155,7 +162,7 @@ export function McClientPage() {
   const runLog = useRunLog();
   const [showLog, setShowLog] = useLogPref('mc-client-run');
   const doRun = async () => {
-    const cmd = `${mcPath} ${maskMcArgs(args.replace(/\{alias\}/g, alias))}`;
+    const cmd = maskCommand(`${mcPath} ${args.replace(/\{alias\}/g, alias)}`);
     const r = await runLogged(runLog, {
       title: 'mc 실행',
       first: `${username}@${effectiveHost}:${port} 에 SSH 접속 후 실행 요청 — ${cmd} (timeout ${timeout}s)`,
@@ -163,6 +170,7 @@ export function McClientPage() {
       summarize: (res) => [...consoleRunLines(res), ...outputLines(res)],
     });
     if (r.ok) setResult(r.data);
+    else if (!r.aborted) toastFailure(toast, 'mc 실행', r.error);
   };
 
   const canRun = !!clusterId && !!effectiveHost && !!args.trim()
@@ -170,9 +178,10 @@ export function McClientPage() {
 
   const runError = runMut.error as { response?: { data?: { detail?: string } }; message?: string } | null;
 
-  // args 에 위험 키워드 있으면 danger=true (rm, admin service stop/restart, config reset 등)
-  const dangerKeywords = /\b(rm|rb|mirror|admin\s+service\s+(stop|restart|unfreeze|freeze)|admin\s+config\s+reset|policy\s+set|admin\s+user\s+remove|admin\s+user\s+disable|admin\s+heal\s+(?!--dry-run))\b/i;
-  const isDanger = dangerKeywords.test(args);
+  // D-171 — 조회 allowlist(ls·stat·du·admin info·admin * list/info/status 등) 밖 명령은 전부 danger 확인.
+  const resolvedArgs = args.replace(/\{alias\}/g, alias);
+  const verdict = useMemo(() => judgeCommand(resolvedArgs, 'mc'), [resolvedArgs]);
+  const isDanger = !verdict.readOnly;
 
   return (
     <div className="app-min-h-screen bg-background">
@@ -185,19 +194,22 @@ export function McClientPage() {
             icon={HardDrive}
             title="mc 클라이언트 콘솔"
             titleExtra={effectiveHost ? (
-              <span className="text-sm px-2 py-0.5 rounded-full bg-status-unknown/15 text-status-unknown border border-status-unknown/30 font-mono">
+              <span className="text-sm px-2 py-0.5 rounded-full bg-secondary text-muted-foreground border border-border font-mono">
                 → {effectiveHost}
               </span>
             ) : undefined}
           />
 
           <p className="mb-5 text-sm text-muted-foreground leading-relaxed">
-            MinIO <code className="font-mono text-foreground">mc</code> 가 설치된 호스트에 SSH 로 접속해 명령 실행.
-            alias 는 미리 <code className="font-mono text-foreground">mc alias set</code> 으로 구성돼 있어야 합니다 (기본값: <code className="font-mono text-foreground">local</code>). 프리셋의 <code className="font-mono text-foreground">{'{alias}'}</code> 는 아래 alias 값으로 치환됩니다.
+            MinIO <code className="font-mono text-foreground">mc</code> 가 설치된 호스트에 SSH 로 접속해 명령을 실행합니다.
+            조회 명령(ls·stat·du·admin info 등) 밖의 명령은 위험 확인을 거칩니다. alias 는 미리 <code className="font-mono text-foreground">mc alias set</code> 으로 구성돼 있어야 합니다 (기본값: <code className="font-mono text-foreground">local</code>). 프리셋의 <code className="font-mono text-foreground">{'{alias}'}</code> 는 아래 alias 값으로 치환됩니다.
           </p>
 
           {/* 타겟 2 : 프리셋 3 : 결과 5 비율 (10 컬럼 그리드) — 결과는 항상 같은 자리(우측)에 고정,
               내부에서만 세로 스크롤(가로 스크롤 없음)되어 카드들이 한 화면 폭 안에 들어온다. */}
+          {clustersQ.isError ? (
+            <ErrorState error={clustersQ.error} title="클러스터 목록을 불러오지 못했습니다" onRetry={() => { void clustersQ.refetch(); }} />
+          ) : (
           <div className="grid grid-cols-1 lg:grid-cols-10 gap-5 items-start">
             {/* 좌: 타겟 + 인증 */}
             <MacCard title="타겟" rootClassName="lg:col-span-2 min-w-0" bodyPadding="p-5" className="space-y-4">
@@ -208,25 +220,32 @@ export function McClientPage() {
                   value={selectedNodeName}
                   onChange={(e) => { setSelectedNodeName(e.target.value); setCustomHost(''); }}
                   disabled={!nodesQ.data?.nodes?.length}
-                  className="w-full px-3 py-2 text-sm bg-background border border-border rounded-lg focus:outline-none focus:ring-1 focus:ring-primary disabled:opacity-50"
+                  className="w-full px-3 py-2 text-sm bg-background border border-border rounded-xl focus:outline-none focus:ring-1 focus:ring-primary disabled:opacity-50"
                 >
                   {(nodesQ.data?.nodes ?? []).map((n: NodeSummary) => (
                     <option key={n.name} value={n.name}>
                       {n.name}{n.internalIp ? ` (${n.internalIp})` : ''}
                     </option>
                   ))}
+                  {nodesQ.isLoading && <option value="">불러오는 중…</option>}
+                  {nodesQ.data && nodesQ.data.nodes.length === 0 && <option value="">— 노드 없음 —</option>}
                 </select>
+                {nodesQ.isError && (
+                  <div className="mt-2">
+                    <ErrorState compact error={nodesQ.error} title="노드 목록을 불러오지 못했습니다" onRetry={() => { void nodesQ.refetch(); }} />
+                  </div>
+                )}
               </div>
 
               <div>
-                <label htmlFor={f('host')} className="block text-sm text-muted-foreground mb-1">수동 host override</label>
+                <label htmlFor={f('host')} className="block text-sm text-muted-foreground mb-1">호스트 직접 입력 <span className="text-xs opacity-60">(비우면 위 노드 사용)</span></label>
                 <input
                   id={f('host')}
                   type="text"
                   value={customHost}
                   onChange={(e) => setCustomHost(e.target.value)}
                   placeholder="예: 10.0.0.42"
-                  className="w-full px-3 py-2 text-sm font-mono bg-background border border-border rounded-lg focus:outline-none focus:ring-1 focus:ring-primary"
+                  className="w-full px-3 py-2 text-sm font-mono bg-background border border-border rounded-xl focus:outline-none focus:ring-1 focus:ring-primary"
                 />
               </div>
 
@@ -234,38 +253,39 @@ export function McClientPage() {
                 <div>
                   <label htmlFor={f('user')} className="block text-sm text-muted-foreground mb-1">사용자</label>
                   <input id={f('user')} type="text" value={username} onChange={(e) => setUsername(e.target.value)}
-                    className="w-full px-3 py-2 text-sm bg-background border border-border rounded-lg focus:outline-none focus:ring-1 focus:ring-primary" />
+                    className="w-full px-3 py-2 text-sm bg-background border border-border rounded-xl focus:outline-none focus:ring-1 focus:ring-primary" />
                 </div>
                 <div>
                   <label htmlFor={f('port')} className="block text-sm text-muted-foreground mb-1">포트</label>
                   <input id={f('port')} type="number" value={port} onChange={(e) => setPort(Number(e.target.value) || 22)}
-                    className="w-full px-3 py-2 text-sm bg-background border border-border rounded-lg focus:outline-none focus:ring-1 focus:ring-primary" />
+                    className="w-full px-3 py-2 text-sm bg-background border border-border rounded-xl focus:outline-none focus:ring-1 focus:ring-primary" />
                 </div>
               </div>
 
               <div>
-                <p className="block text-sm text-muted-foreground mb-1">인증</p>
-                <div className="flex items-center bg-secondary/60 rounded-lg p-[3px] gap-px">
+                <p id={f('authLabel')} className="block text-sm text-muted-foreground mb-1">인증</p>
+                <div role="group" aria-labelledby={f('authLabel')} className="flex items-center bg-secondary/60 rounded-xl p-[3px] gap-px">
                   {(['password', 'key'] as const).map((m) => (
-                    <button key={m} onClick={() => setAuthMode(m)}
+                    <button key={m} type="button" aria-pressed={authMode === m} onClick={() => setAuthMode(m)}
                       className={`flex-1 px-2 py-1.5 text-sm font-medium rounded-md transition-colors ${
                         authMode === m ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
                       }`}>
-                      {m === 'password' ? '비밀번호' : 'Private Key'}
+                      {m === 'password' ? '비밀번호' : '개인키'}
                     </button>
                   ))}
                 </div>
               </div>
               {authMode === 'password' ? (
                 <input type="password" value={password} onChange={(e) => setPassword(e.target.value)}
+                  aria-label="SSH 비밀번호" autoComplete="off"
                   placeholder="SSH 비밀번호"
-                  className="w-full px-3 py-2 text-sm bg-background border border-border rounded-lg focus:outline-none focus:ring-1 focus:ring-primary" />
+                  className="w-full px-3 py-2 text-sm bg-background border border-border rounded-xl focus:outline-none focus:ring-1 focus:ring-primary" />
               ) : (
                 <div>
-                  <label htmlFor={f('pkey')} className="text-sm text-muted-foreground mb-1 flex items-center gap-1"><Key className="w-3 h-3" /> Private Key (PEM)</label>
+                  <label htmlFor={f('pkey')} className="text-sm text-muted-foreground mb-1 flex items-center gap-1"><Key className="w-3 h-3" aria-hidden="true" /> 개인키(PEM)</label>
                   <textarea id={f('pkey')} value={privateKey} onChange={(e) => setPrivateKey(e.target.value)} rows={4}
                     placeholder="-----BEGIN OPENSSH PRIVATE KEY-----"
-                    className="w-full px-3 py-2 text-xs font-mono bg-background border border-border rounded-lg focus:outline-none focus:ring-1 focus:ring-primary resize-none" />
+                    className="w-full px-3 py-2 text-xs font-mono bg-background border border-border rounded-xl focus:outline-none focus:ring-1 focus:ring-primary resize-none" />
                 </div>
               )}
             </MacCard>
@@ -279,13 +299,13 @@ export function McClientPage() {
                   <label htmlFor={f('alias')} className="block text-sm text-muted-foreground mb-1">alias 이름</label>
                   <input id={f('alias')} type="text" value={alias} onChange={(e) => setAlias(e.target.value)}
                     placeholder="local"
-                    className="w-full px-3 py-2 text-sm font-mono bg-background border border-border rounded-lg focus:outline-none focus:ring-1 focus:ring-primary" />
+                    className="w-full px-3 py-2 text-sm font-mono bg-background border border-border rounded-xl focus:outline-none focus:ring-1 focus:ring-primary" />
                 </div>
                 <div className="md:col-span-2">
                   <label htmlFor={f('mcPath')} className="block text-sm text-muted-foreground mb-1">mc 경로</label>
                   <input id={f('mcPath')} type="text" value={mcPath} onChange={(e) => setMcPath(e.target.value)}
                     placeholder="mc"
-                    className="w-full px-3 py-2 text-sm font-mono bg-background border border-border rounded-lg focus:outline-none focus:ring-1 focus:ring-primary" />
+                    className="w-full px-3 py-2 text-sm font-mono bg-background border border-border rounded-xl focus:outline-none focus:ring-1 focus:ring-primary" />
                 </div>
               </div>
 
@@ -295,7 +315,7 @@ export function McClientPage() {
                   <span className="ml-1 text-xs opacity-60">{'{alias}'} 는 위 alias 값으로 치환</span>
                 </label>
                 <textarea id={f('args')} value={args} onChange={(e) => setArgs(e.target.value)} rows={3}
-                  className="w-full px-3 py-2 text-[12px] font-mono bg-background border border-border rounded-lg focus:outline-none focus:ring-1 focus:ring-primary resize-none" />
+                  className="w-full px-3 py-2 text-xs font-mono bg-background border border-border rounded-xl focus:outline-none focus:ring-1 focus:ring-primary resize-none" />
                 <SavedCommands
                   className="mt-2"
                   storageKey="k8s:saved-cmd:mc"
@@ -305,14 +325,14 @@ export function McClientPage() {
               </div>
 
               <div>
-                <label htmlFor={f('timeout')} className="block text-sm text-muted-foreground mb-1">timeout (s)</label>
+                <label htmlFor={f('timeout')} className="block text-sm text-muted-foreground mb-1">제한 시간(초)</label>
                 <input id={f('timeout')} type="number" value={timeout} onChange={(e) => setTimeoutSec(Number(e.target.value) || 60)}
                   min={1} max={600}
-                  className="w-32 px-3 py-2 text-sm bg-background border border-border rounded-lg focus:outline-none focus:ring-1 focus:ring-primary" />
+                  className="w-32 px-3 py-2 text-sm bg-background border border-border rounded-xl focus:outline-none focus:ring-1 focus:ring-primary" />
               </div>
 
               {runError && (
-                <div className="px-3 py-2 text-sm rounded-lg bg-status-critical/10 text-status-critical border border-status-critical/30">
+                <div role="alert" className="px-3 py-2 text-sm rounded-md bg-status-critical/10 text-status-critical border border-status-critical/30">
                   {formatApiError(runError)}
                 </div>
               )}
@@ -321,7 +341,7 @@ export function McClientPage() {
                 {runMut.isPending ? (
                   <button
                     onClick={runMut.abort}
-                    className="flex items-center gap-2 px-5 py-2.5 text-sm font-semibold bg-status-critical hover:bg-status-critical text-primary-foreground rounded-lg transition-colors"
+                    className="flex items-center gap-2 px-5 py-2.5 text-sm font-semibold bg-secondary hover:bg-secondary/80 text-foreground border border-border rounded-xl transition-colors"
                   >
                     <Square className="w-4 h-4 fill-current" />
                     중지
@@ -329,8 +349,10 @@ export function McClientPage() {
                 ) : (
                   <button
                     onClick={() => setConfirmOpen(true)}
-                    disabled={!canRun}
-                    className="flex items-center gap-2 px-5 py-2.5 text-sm font-semibold bg-primary hover:bg-primary/90 text-primary-foreground rounded-lg transition-colors disabled:opacity-50"
+                    disabled={!canOperate || !canRun}
+                    title={withHint('mc 실행')}
+                    aria-label={ariaWithHint('mc 실행')}
+                    className="flex items-center gap-2 px-5 py-2.5 text-sm font-semibold bg-primary hover:bg-primary/90 text-primary-foreground rounded-xl transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     <Play className="w-4 h-4" />
                     mc 실행
@@ -345,13 +367,16 @@ export function McClientPage() {
               <ResultPanel result={result} />
             </div>
           </div>
+          )}
         </div>
       </PageShell>
 
       <ConfirmDialog
         open={confirmOpen}
         title="mc 명령 실행 확인"
-        description={`${effectiveHost} 에 SSH 접속 후 mc 명령을 실행합니다.`}
+        description={isDanger
+          ? `${effectiveHost} 에 SSH 접속 후 mc 명령을 실행합니다. 조회 명령이 아니므로 버킷·객체·서버 설정을 되돌릴 수 없게 바꿀 수 있습니다.`
+          : `${effectiveHost} 에 SSH 접속 후 mc 조회 명령(${verdict.subcommand})을 실행합니다.`}
         confirmLabel="mc 실행"
         danger={isDanger}
         onCancel={() => setConfirmOpen(false)}
@@ -369,15 +394,15 @@ export function McClientPage() {
           </div>
           <div>
             <p className="text-xs font-medium text-muted-foreground mb-1">실행</p>
-            <pre className="text-xs font-mono bg-background border border-border rounded p-2 max-h-32 overflow-auto whitespace-pre-wrap break-all">
-              {mcPath} {args.replace(/\{alias\}/g, alias)}
+            <pre className="text-xs font-mono bg-background border border-border rounded-md p-2 max-h-32 overflow-auto whitespace-pre-wrap break-all">
+              {maskCommand(`${mcPath} ${resolvedArgs}`)}
             </pre>
           </div>
-          {isDanger && (
-            <div className="text-sm text-status-critical border border-status-critical/30 bg-status-critical/5 rounded p-2 flex items-start gap-1.5">
+          {verdict.reason && (
+            <p className="text-sm text-status-critical flex items-start gap-1.5">
               <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0" aria-hidden="true" />
-              <span>쓰기 성격 명령(rm/mirror/admin service restart/policy set 등)이 감지되었습니다. 정말 진행하시겠습니까?</span>
-            </div>
+              <span>{verdict.reason}</span>
+            </p>
           )}
         </div>
       </ConfirmDialog>

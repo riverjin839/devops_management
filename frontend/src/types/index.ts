@@ -1304,6 +1304,9 @@ export interface OperationLevelItem {
   icon?: string;
   /** 프리셋 13색 대신 임의의 hex(#RRGGBB) 를 시드로 bg/ring/band/text 톤을 자동 산출할 때 지정. */
   customHex?: string | null;
+  /** 보호 레벨 — PTY 콘솔(k9s·노드 SSH) 접속 전 확인 + k9s 읽기 전용 기본.
+   *  서버 응답은 항상 bool. 생략하면 value 가 production·dr 일 때 true 로 해석한다. */
+  guarded?: boolean;
 }
 
 // Workflow Board — 큰 작업을 단계별로 시각화하는 기획 게시판.

@@ -22,6 +22,7 @@ from app.services.script_wrap import wrap_script_for_language
 from app.services.ssh_runner import SSHTarget, fetch_remote_file, run_bulk
 from app.services import audit_logger
 from app.services.cluster_access import cluster_ids_for_hosts, require_clusters_access
+from app.services.command_mask import audit_command, audit_hosts
 from app.services.k8s_client_pool import get_api_client_for_path
 
 router = APIRouter(tags=["bulk-exec"])
@@ -124,19 +125,6 @@ async def bulk_exec_run(
         *(t.cluster_id for t in targets),
         *cluster_ids_for_hosts(db, (t.host for t in targets)),
     ])
-    audit_logger.record(
-        db,
-        action="bulk_exec.run",
-        actor=actor,
-        status="success",
-        target_type="bulk_exec",
-        details={
-            "action": payload.action,
-            "target_count": len(payload.targets or []),
-            "language": payload.language,
-        },
-        request=request,
-    )
     if payload.action == "ssh" and not (payload.command and payload.command.strip()):
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
                             detail="command 는 필수입니다 (ssh 모드).")
@@ -188,6 +176,29 @@ async def bulk_exec_run(
     ok = sum(1 for r in results if r.status == "ok")
     err = len(results) - ok
 
+    # 감사는 실행 **후** 실제 결과로(D-170) — 명령은 마스킹 후 500자, 호스트는 앞 20개(정책 7).
+    audit_logger.record(
+        db,
+        action="bulk_exec.run",
+        actor=actor,
+        status="success" if results and err == 0 else "failure",
+        target_type="bulk_exec",
+        details={
+            "action": payload.action,
+            "mode": payload.mode,
+            "language": payload.language,
+            "target_count": len(payload.targets or []),
+            "hosts": audit_hosts(t.host for t in (payload.targets or [])),
+            "command": audit_command(payload.command) if payload.action == "ssh" else None,
+            "scp_remote_path": payload.scp_remote_path if payload.action == "scp" else None,
+            "ok_count": ok,
+            "error_count": err,
+            "failed_hosts": audit_hosts(r.host for r in results if r.status != "ok"),
+            "duration_ms": total_elapsed,
+        },
+        request=request,
+    )
+
     return BulkExecResponse(
         action=payload.action,
         mode=payload.mode,
@@ -215,15 +226,6 @@ async def bulk_exec_fetch_file(
     저장되지 않는다(bulk_exec_run 과 동일 원칙).
     """
     require_clusters_access(db, actor, cluster_ids_for_hosts(db, [payload.host]))
-    audit_logger.record(
-        db,
-        action="bulk_exec.fetch_file",
-        actor=actor,
-        status="success",
-        target_type="bulk_exec",
-        details={"host": payload.host, "remote_path": payload.remote_path},
-        request=request,
-    )
     if not payload.password and not payload.private_key:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
                             detail="password 또는 private_key 중 하나는 필수입니다.")
@@ -236,6 +238,16 @@ async def bulk_exec_fetch_file(
         fetch_remote_file, target, payload.remote_path, payload.connect_timeout,
     )
     result = fetched.result
+    audit_logger.record(
+        db,
+        action="bulk_exec.fetch_file",
+        actor=actor,
+        status="success" if result.status == "ok" else "failure",
+        target_type="bulk_exec",
+        details={"host": payload.host, "remote_path": payload.remote_path,
+                 "result": result.status, "error": audit_command(result.error, 200) or None},
+        request=request,
+    )
     return FetchFileResponse(
         host=result.host,
         status=result.status,

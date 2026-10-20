@@ -1,7 +1,7 @@
 import { useCallback } from 'react';
 import { getAuthToken } from '@/stores/authStore';
 import { k8sStreamUrls } from '@/services/api';
-import { SshTerminalWindow } from './SshTerminalWindow';
+import { SshTerminalWindow, type SshTerminalStatus } from './SshTerminalWindow';
 
 export interface NodeSshConnectParams {
   /** 표시용 노드 이름 (감사 로그에도 함께 남는다). 수동 host 입력이면 비어 있다. */
@@ -25,6 +25,8 @@ interface NodeSshTerminalProps {
   onPopOut?: () => void;
   /** 뷰포트 전체를 채운다 (팝업 창 전용). */
   fill?: boolean;
+  /** 연결 상태 변화 — 페이지가 열린 세션의 클러스터 전환 확인에 쓴다. */
+  onStatusChange?: (status: SshTerminalStatus) => void;
 }
 
 const CLOSE_NOTES: Record<number, string> = {
@@ -38,7 +40,7 @@ const CLOSE_NOTES: Record<number, string> = {
  * 실행할 명령을 강제하지 않는다는 점만 다르다(운영자가 지정한 `initialCommand` 는 접속
  * 직후 한 줄 입력으로만 사용).
  */
-export function NodeSshTerminal({ params, onClose, onPopOut, fill }: NodeSshTerminalProps) {
+export function NodeSshTerminal({ params, onClose, onPopOut, fill, onStatusChange }: NodeSshTerminalProps) {
   // 토큰은 (재)연결 시점에 읽는다 — 세션이 재발급돼도 재연결 버튼이 새 토큰을 쓴다.
   const url = useCallback(
     () => k8sStreamUrls.nodeSsh(getAuthToken(), params.clusterId),
@@ -60,12 +62,14 @@ export function NodeSshTerminal({ params, onClose, onPopOut, fill }: NodeSshTerm
     <SshTerminalWindow
       label="ssh"
       subtitle={subtitle}
+      target={`${params.username}@${params.host}:${params.port}`}
       url={url}
       init={init}
       closeNotes={CLOSE_NOTES}
       onClose={onClose}
       onPopOut={onPopOut}
       fill={fill}
+      onStatusChange={onStatusChange}
     />
   );
 }

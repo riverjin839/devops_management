@@ -7,7 +7,8 @@ Lens 의 Pod Shell 에 대응. 브라우저 ↔ FastAPI WebSocket ↔ kubernetes
 보안:
 - WS 는 전역 `_auth`(Authorization 헤더) 가 적용되지 않으므로 **핸들러 내부에서 직접**
   토큰을 검증한다. 토큰은 query param 으로 전달받아 `decode_access_token` 으로 확인하고,
-  역할이 admin/operator 일 때만 accept 한다(viewer 차단).
+  역할이 admin/operator 일 때만 세션을 연다(viewer 차단). 판정은 `ssh_pty.authenticate_ws` 공용 —
+  토큰 문제 4401, 역할 부족 4402, 테넌트 거부 4413(D-172). 거부 코드는 accept 후 보낸다(`deny_ws`).
 - 세션 open/close 를 감사 로그(`k8s.exec.open` / `k8s.exec.close`) 에 남긴다.
 - `PEP_K8S_EXEC_ENABLED=false` 로 전역 비활성화 가능.
 - 실제 exec 권한은 kubeconfig 의 `pods/exec` RBAC 가 최종 결정.
@@ -25,13 +26,20 @@ from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 from kubernetes import client as k8s_client, config as k8s_config
 from kubernetes.stream import stream as k8s_stream
 
-from app.auth.security import decode_access_token, is_token_revoked
 from app.database import SessionLocal
 from app.models import Cluster
 from app.models.user import User
 from app.services import audit_logger
 from app.services.cluster_access import has_cluster_access
 from app.services.kubeconfig import ensure_kubeconfig_file
+from app.services.ssh_pty import (
+    CLOSE_CLUSTER_FORBIDDEN,
+    CLOSE_DISABLED,
+    CLOSE_NOT_FOUND,
+    CLOSE_UNAUTHORIZED,
+    authenticate_ws,
+    deny_ws,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -46,23 +54,8 @@ def _exec_enabled() -> bool:
 
 
 def _resolve_user(token: str | None, db) -> User | None:
-    """query param 토큰 → User. 실패/비활성/역할부족이면 None."""
-    if not token:
-        return None
-    payload = decode_access_token(token)
-    if not payload:
-        return None
-    username = payload.get("sub")
-    if not username:
-        return None
-    user = db.query(User).filter(User.username == username).first()
-    if not user or not user.is_active:
-        return None
-    if is_token_revoked(payload, getattr(user, "password_changed_at", None)):
-        return None  # 비밀번호 변경 이전 로그인 토큰 → 4401
-    effective_role = "viewer" if user.role == "user" else user.role
-    if effective_role not in _ALLOWED_ROLES:
-        return None
+    """query param 토큰 → User. 실패/비활성/역할부족이면 None(하위호환 — 사유는 ``authenticate_ws``)."""
+    user, _ = authenticate_ws(token, db, _ALLOWED_ROLES)
     return user
 
 
@@ -79,22 +72,23 @@ async def pod_exec(
     db = SessionLocal()
     try:
         if not _exec_enabled():
-            await websocket.close(code=4403)
+            await deny_ws(websocket, CLOSE_DISABLED)
             return
-        user = _resolve_user(token, db)
+        user, deny_code = authenticate_ws(token, db, _ALLOWED_ROLES)
         if user is None:
-            await websocket.close(code=4401)  # unauthorized
+            # 4401 = 토큰 없음·만료·무효, 4402 = 역할 부족(viewer)
+            await deny_ws(websocket, deny_code or CLOSE_UNAUTHORIZED)
             return
         cluster = db.query(Cluster).filter(Cluster.id == cluster_id).first()
         if cluster is None:
-            await websocket.close(code=4404)
+            await deny_ws(websocket, CLOSE_NOT_FOUND)
             return
         if not has_cluster_access(db, user, cluster_id, "operate"):
-            await websocket.close(code=4413)  # 테넌트 바인딩상 실행 권한 없음
+            await deny_ws(websocket, CLOSE_CLUSTER_FORBIDDEN)  # 테넌트 바인딩상 실행 권한 없음
             return
         kc = ensure_kubeconfig_file(cluster)
         if not kc or not os.path.exists(kc):
-            await websocket.close(code=4422)
+            await deny_ws(websocket, 4422)
             return
 
         await websocket.accept()
@@ -117,6 +111,12 @@ async def pod_exec(
                 _preload_content=False,
             )
         except Exception as e:  # noqa: BLE001
+            audit_logger.record(
+                db, action="k8s.exec.open", actor=user, status="failure",
+                target_type="k8s.pod", target_id=f"{namespace}/{pod}",
+                details={"cluster_id": str(cluster_id), "cluster": cluster.name,
+                         "container": container, "command": cmd_list, "error": str(e)[:200]},
+            )
             await websocket.send_text(f"\r\n[exec 시작 실패] {str(e)[:200]}\r\n")
             await websocket.close(code=1011)
             return

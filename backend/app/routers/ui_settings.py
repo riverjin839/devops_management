@@ -38,6 +38,7 @@ from app.schemas.ui_settings import (
     OperationLevelsResponse,
     OperationLevelsUpdate,
     OperationLevelItem,
+    default_guarded,
 )
 
 router = APIRouter(prefix="/ui-settings", tags=["ui-settings"])
@@ -59,11 +60,11 @@ DEFAULT_WORK_ITEM_BOARD_SETTINGS = {
 _HEX_RE = re.compile(r"^#[0-9a-fA-F]{3,8}$")
 DEFAULT_OPERATION_LEVELS = {
     "levels": [
-        {"value": "production", "label": "운영 (Production)", "color": "red",    "icon": "🚀"},
-        {"value": "staging",    "label": "스테이징 (Staging)", "color": "amber",  "icon": "✨"},
-        {"value": "dev",        "label": "개발 (Dev)",         "color": "blue",   "icon": "💻"},
-        {"value": "test",       "label": "테스트 (Test)",      "color": "slate",  "icon": "🧪"},
-        {"value": "dr",         "label": "DR",                 "color": "purple", "icon": "🛡️"},
+        {"value": "production", "label": "운영 (Production)", "color": "red",    "icon": "🚀", "guarded": True},
+        {"value": "staging",    "label": "스테이징 (Staging)", "color": "amber",  "icon": "✨", "guarded": False},
+        {"value": "dev",        "label": "개발 (Dev)",         "color": "blue",   "icon": "💻", "guarded": False},
+        {"value": "test",       "label": "테스트 (Test)",      "color": "slate",  "icon": "🧪", "guarded": False},
+        {"value": "dr",         "label": "DR",                 "color": "purple", "icon": "🛡️", "guarded": True},
     ]
 }
 
@@ -706,12 +707,15 @@ def get_operation_levels(db: Session = Depends(get_db)):
         seen.add(v)
         icon_raw = it.get("icon")
         hex_raw = it.get("custom_hex")
+        guarded_raw = it.get("guarded")
         items.append(OperationLevelItem(
             value=v,
             label=str(it.get("label", v)),
             color=str(it.get("color", "slate")),
             icon=str(icon_raw) if isinstance(icon_raw, str) and icon_raw.strip() else None,
             custom_hex=str(hex_raw) if isinstance(hex_raw, str) and _HEX_RE.match(hex_raw) else None,
+            # 구버전 데이터(guarded 없음)는 value 로 판정 — production·dr 만 보호.
+            guarded=guarded_raw if isinstance(guarded_raw, bool) else default_guarded(v),
         ))
     if not items:
         items = [OperationLevelItem(**x) for x in DEFAULT_OPERATION_LEVELS["levels"]]
@@ -739,6 +743,7 @@ def update_operation_levels(
         cleaned.append({
             "value": v, "label": it.label.strip() or v, "color": it.color or "slate",
             "icon": icon, "custom_hex": custom_hex,
+            "guarded": it.guarded if it.guarded is not None else default_guarded(v),
         })
     setting.value = {"levels": cleaned}
     db.commit()

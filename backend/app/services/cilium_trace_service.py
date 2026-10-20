@@ -388,6 +388,89 @@ def bpf_ct_head(
     return lines, None
 
 
+# ── cilium-dbg 읽기 전용 allowlist (정책 2) ─────────────────────────────────
+# 직접 명령(ad-hoc)은 이 목록에 맞는 **조회** 하위 명령만 operator 에게 허용하고, 목록 밖(변경·삭제·
+# flush·config 쓰기·shell 등)은 admin 만 실행한다. 판정은 플래그(``-``로 시작)를 건너뛴 위치 인자의
+# 앞부분이 아래 패턴과 맞는지로 본다. ``*`` 는 아무 토큰 하나(예: ``bpf <map> list``).
+CILIUM_READONLY_COMMANDS: tuple[tuple[str, ...], ...] = (
+    ("status",),
+    ("version",),
+    ("debuginfo",),
+    ("config",),  # 인자 없이 조회만 — ``config Key=Value`` 쓰기는 아래에서 따로 막는다
+    ("endpoint", "list"), ("endpoint", "get"), ("endpoint", "log"), ("endpoint", "health"),
+    ("identity", "list"), ("identity", "get"),
+    ("service", "list"), ("service", "get"),
+    ("policy", "get"), ("policy", "selectors"),
+    ("ip", "list"), ("ip", "get"),
+    ("node", "list"), ("nodeid", "list"),
+    ("map", "list"), ("map", "get"),
+    ("metrics", "list"),
+    ("fqdn", "cache", "list"),
+    ("lrp", "list"),
+    ("encrypt", "status"),
+    ("kvstore", "get"),
+    ("bgp", "peers"), ("bgp", "routes"), ("bgp", "route-policies"),
+    ("prefilter", "list"),
+    ("recorder", "list"),
+    ("cgroups", "list"),
+    ("bpf", "*", "list"), ("bpf", "*", "get"), ("bpf", "fs", "show"),
+    ("help",),
+)
+
+# 값을 받는 출력 플래그 — 값이 위치 인자로 오인되지 않도록 건너뛴다.
+_CILIUM_VALUE_FLAGS = frozenset({"-o", "--output"})
+
+
+def cilium_readonly_command_labels() -> list[str]:
+    """화면 안내용 — ``bpf <맵> list`` 같은 사람이 읽는 형태."""
+    return [" ".join("<맵>" if t == "*" else t for t in rule) for rule in CILIUM_READONLY_COMMANDS]
+
+
+def _cilium_positional(parts: list[str]) -> list[str]:
+    out: list[str] = []
+    skip = False
+    for tok in parts:
+        if skip:
+            skip = False
+            continue
+        if tok.startswith("-"):
+            if tok in _CILIUM_VALUE_FLAGS:
+                skip = True
+            continue
+        out.append(tok)
+    return out
+
+
+def _split_cilium_args(command_args: str) -> list[str]:
+    parts = shlex.split((command_args or "").strip())
+    if parts and parts[0] in ("cilium-dbg", "cilium"):
+        parts = parts[1:]
+    return parts
+
+
+def is_cilium_readonly_command(command_args: str) -> bool:
+    """``cilium-dbg`` 뒤 인자가 읽기 전용 allowlist 에 드는지. 파싱 불가·빈 명령은 False."""
+    try:
+        parts = _split_cilium_args(command_args)
+    except ValueError:
+        return False
+    if not parts:
+        return False
+    if any(t in ("-h", "--help") for t in parts):
+        return True  # 도움말은 어떤 하위 명령이든 실행하지 않는다
+    pos = _cilium_positional(parts)
+    if not pos:
+        return False
+    for rule in CILIUM_READONLY_COMMANDS:
+        if len(pos) < len(rule):
+            continue
+        if all(r == "*" or r == p for r, p in zip(rule, pos)):
+            if rule == ("config",) and len(pos) > 1:
+                return False  # ``config Key=Value`` = 설정 변경
+            return True
+    return False
+
+
 def exec_cilium_command(
     kubeconfig_path: str,
     *,
@@ -395,10 +478,12 @@ def exec_cilium_command(
     namespace: str = "kube-system",
     command_args: str = "",
     timeout: int = 30,
+    allow_any: bool = False,
 ) -> dict:
-    """선택 pod 에서 임의 ``cilium-dbg <args>`` 실행(ad-hoc).
+    """선택 pod 에서 ``cilium-dbg <args>`` 실행(ad-hoc).
 
     shell=False + ``cilium-dbg`` 고정 prefix → 임의 바이너리 실행 불가(주입 방지). JSON 파싱 없이 raw 반환.
+    ``allow_any=False``(기본)면 읽기 전용 allowlist 밖 명령을 실행하지 않는다 — 라우터가 admin 일 때만 True.
     """
     raw_args = (command_args or "").strip()
     if not raw_args:
@@ -412,8 +497,12 @@ def exec_cilium_command(
     if parts and parts[0] in ("cilium-dbg", "cilium"):
         parts = parts[1:]  # 사용자가 prefix 를 붙였으면 제거(우리가 고정 추가)
     if not parts:
-        return {"raw": "", "error": "cilium-dbg 뒤에 실행할 하위 명령이 필요합니다 (예: ipam status).",
+        return {"raw": "", "error": "cilium-dbg 뒤에 실행할 하위 명령이 필요합니다 (예: status).",
                 "exit_code": None, "executed": None, "pod_name": pod_name or "", "duration_ms": 0}
+    if not allow_any and not is_cilium_readonly_command(raw_args):
+        return {"raw": "", "error": "읽기 전용 허용 목록 밖의 cilium-dbg 명령입니다 (admin 만 실행 가능).",
+                "exit_code": None, "executed": None, "pod_name": pod_name or "", "duration_ms": 0,
+                "forbidden": True}
 
     target_pod = pod_name
     if not target_pod:

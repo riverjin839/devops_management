@@ -9,13 +9,18 @@ etcdctl 과 비슷한 패턴: 특정 호스트에 SSH 로 접속 후 mc 명령 �
   2. shared   — admin 이 배포한 공용 프리셋 (app_settings 의 ``mc_presets_shared``).
   3. personal — 사용자 개인 커스텀/오버라이드/숨김 (user_settings 의 ``mc_presets``).
 개인 설정이 공용·기본을 덮어쓰며, hidden 으로 기본/공용 프리셋을 개인적으로 숨길 수 있다.
+
+권한·감사(D-169·D-170·D-176 ③):
+- 실행은 경로 클러스터(``_cluster_scoped``)에 더해 접속 host 가 속한 클러스터의 operate 를 본다.
+- 실행(`mc.run`)·공용 프리셋 배포(`mc.presets.shared.update`)를 감사에 남긴다. 실행 감사는 실행 **후**
+  실제 결과로, 명령은 ``services/command_mask`` 로 ``alias set`` 키·``MC_HOST_*`` 등을 가린 뒤 500자까지.
+- 응답 ``executed_command`` 도 같은 마스킹을 거친다.
 """
 import shlex
-import time
 from typing import Literal, Optional
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
@@ -24,6 +29,9 @@ from app.models import Cluster
 from app.models.app_setting import AppSetting
 from app.models.user import User
 from app.auth.deps import get_current_user, require_admin, require_operator
+from app.services import audit_logger
+from app.services.cluster_access import cluster_ids_for_hosts, require_clusters_access
+from app.services.command_mask import audit_command, mask_command
 from app.services.ssh_runner import SSHTarget, run_bulk
 from app.services.user_settings import get_user_setting, set_user_setting
 
@@ -33,13 +41,13 @@ router = APIRouter(tags=["mc"])
 # ── 프리셋 ───────────────────────────────────────────────────────────────────
 
 BUILTIN_PRESETS: dict[str, dict[str, str]] = {
-    "alias-list":    {"label": "alias 목록",            "args": "alias list"},
-    "admin-info":    {"label": "admin info (서버 상태)", "args": "admin info {alias}"},
+    "alias-list":    {"label": "별칭(alias) 목록",       "args": "alias list"},
+    "admin-info":    {"label": "서버 상태 (admin info)",  "args": "admin info {alias}"},
     "ls":            {"label": "버킷 목록 (ls)",         "args": "ls {alias}"},
     "du":            {"label": "용량 (du)",              "args": "du {alias} --depth 1"},
     "admin-user-list": {"label": "사용자 목록",          "args": "admin user list {alias}"},
     "admin-policy-list": {"label": "정책 목록",          "args": "admin policy list {alias}"},
-    "admin-heal-status": {"label": "Heal 상태",          "args": "admin heal {alias} --dry-run --recursive"},
+    "admin-heal-status": {"label": "복구(heal) 상태",     "args": "admin heal {alias} --dry-run --recursive"},
     "admin-service-status": {"label": "서비스 상태",     "args": "admin service status {alias}"},
     "admin-config-history": {"label": "설정 이력",       "args": "admin config history {alias} --limit 10"},
     "version":       {"label": "mc 버전 확인",           "args": "--version"},
@@ -196,8 +204,8 @@ def get_shared_presets(db: Session = Depends(get_db),
 
 
 @router.put("/mc/presets/shared")
-def update_shared_presets(payload: SharedPresetsPayload, db: Session = Depends(get_db),
-                          _: User = Depends(require_admin)):
+def update_shared_presets(payload: SharedPresetsPayload, request: Request, db: Session = Depends(get_db),
+                          actor: User = Depends(require_admin)):
     """공용 프리셋 배포 — admin 전용. 사용자에게 'shared' 출처로 보인다."""
     # key 중복 제거(먼저 들어온 항목 우선)
     seen: set[str] = set()
@@ -214,6 +222,16 @@ def update_shared_presets(payload: SharedPresetsPayload, db: Session = Depends(g
     else:
         row.value = {"presets": cleaned}
     db.commit()
+    audit_logger.record(
+        db, action="mc.presets.shared.update", actor=actor, status="success",
+        target_type="app_setting", target_id=SHARED_KEY,
+        details={
+            "count": len(cleaned),
+            # 공용 프리셋은 모든 사용자에게 배포되므로 무엇이 들어갔는지 남긴다(마스킹·자름).
+            "presets": [{"key": p["key"], "args": audit_command(p["args"], 200)} for p in cleaned[:20]],
+        },
+        request=request,
+    )
     return {"presets": cleaned}
 
 
@@ -235,8 +253,9 @@ def _build_mc_command(req: McRequest) -> str:
 async def run_mc(
     cluster_id: UUID,
     payload: McRequest,
+    request: Request,
     db: Session = Depends(get_db),
-    _: User = Depends(require_operator),
+    actor: User = Depends(require_operator),
 ):
     """SSH 접속 후 mc 명령 실행."""
     if not payload.password and not payload.private_key:
@@ -252,6 +271,8 @@ async def run_mc(
     cluster = db.query(Cluster).filter(Cluster.id == cluster_id).first()
     if not cluster:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Cluster not found")
+    # 경로 클러스터는 _cluster_scoped 가 봤다 — host 가 실제로 속한 클러스터도 operate 필요(D-169 ③).
+    require_clusters_access(db, actor, [cluster_id, *cluster_ids_for_hosts(db, [payload.host])])
 
     bash_cmd = _build_mc_command(payload)
     remote_cmd = f"bash -lc {shlex.quote(bash_cmd)}"
@@ -260,7 +281,6 @@ async def run_mc(
         host=payload.host, port=payload.port, username=payload.username,
         password=payload.password, private_key=payload.private_key,
     )
-    start = time.monotonic()
     results = await run_bulk(
         [target],
         action="ssh",
@@ -271,9 +291,22 @@ async def run_mc(
         parallelism=1,
     )
     r = results[0]
-    _ = start
+    audit_logger.record(
+        db, action="mc.run", actor=actor,
+        status="success" if r.status == "ok" else "failure",
+        target_type="cluster", target_id=cluster_id,
+        details={
+            "host": payload.host,
+            "command": audit_command(bash_cmd),
+            "result": r.status,
+            "exit_code": r.exit_code,
+            "duration_ms": r.duration_ms,
+            "error": audit_command(r.error, 200) or None,
+        },
+        request=request,
+    )
     return McResponse(
         host=r.host, status=r.status, exit_code=r.exit_code,
         stdout=r.stdout, stderr=r.stderr, duration_ms=r.duration_ms,
-        error=r.error, executed_command=bash_cmd,
+        error=r.error, executed_command=mask_command(bash_cmd),
     )
