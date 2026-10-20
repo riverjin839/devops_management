@@ -11,6 +11,7 @@ from fastapi.responses import ORJSONResponse
 from sqlalchemy import event, text, inspect, func
 
 from app.config import settings
+from app.services.memory_watch import MemoryWatchMiddleware
 from app.database import engine, Base, SessionLocal
 from fastapi import Depends
 
@@ -2513,6 +2514,9 @@ app.add_middleware(
 # 각 핸들러가 "Content-Encoding: identity" 헤더를 직접 얹어 스스로 제외한다 —
 # gzip 이 SSE 를 건드리면 zlib 내부 버퍼링 때문에 실시간 tail 이 깨진다.
 app.add_middleware(GZipMiddleware, minimum_size=500)
+
+# 워커 메모리 진단 — 가장 바깥에 둬 스트리밍 응답의 본문 전송이 끝난 시점까지 잰다(services/memory_watch.py).
+app.add_middleware(MemoryWatchMiddleware, delta_mb=settings.mem_watch_delta_mb, rss_mb=settings.mem_watch_rss_mb)
 
 # Public routers (no auth) — login + liveness/readiness probes.
 app.include_router(auth_router, prefix="/api/v1")
