@@ -30,6 +30,9 @@ class User(Base):
     display_name = Column(String(128), nullable=True)
     is_active = Column(Boolean, nullable=False, default=True)
     must_change_password = Column(Boolean, nullable=False, default=False)
+    # 마지막 비밀번호 변경 시각(본인 변경·관리자 재설정, naive UTC). 이보다 먼저 로그인한
+    # 토큰(auth_time < 이 값)은 거부된다 — 비밀번호를 바꾸면 다른 세션이 모두 끊긴다.
+    password_changed_at = Column(DateTime, nullable=True)
     editor_white_bg = Column(Boolean, nullable=True, default=False)
 
     # ── 담당자 명부 필드 (구 app_settings.assignees JSON) ──────────────────────

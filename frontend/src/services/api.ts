@@ -179,6 +179,8 @@ export const authApi = {
   login: (username: string, password: string) =>
     api.post<LoginResponse>('/auth/login', { username, password }),
   me: () => api.get<AuthUser>('/auth/me'),
+  /** 슬라이딩 재발급 — 만료 전 토큰을 새 토큰으로(로그인 시각 유지, SESSION_MAX_HOURS 넘으면 401). */
+  refresh: () => api.post<LoginResponse>('/auth/refresh'),
   changeMyPassword: (currentPassword: string, newPassword: string) =>
     api.post<AuthUser>('/auth/me/password', { currentPassword, newPassword }),
   listUsers: () => api.get<AuthUser[]>('/auth/users'),

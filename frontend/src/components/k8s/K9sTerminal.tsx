@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useCallback } from 'react';
 import { getAuthToken } from '@/stores/authStore';
 import { k8sStreamUrls } from '@/services/api';
 import { SshTerminalWindow } from './SshTerminalWindow';
@@ -25,6 +25,7 @@ interface K9sTerminalProps {
 }
 
 const CLOSE_NOTES: Record<number, string> = {
+  4401: '[세션이 만료됐거나 operator 권한이 없습니다]',
   4403: '[k9s SSH 기능이 비활성화되어 있습니다]',
   4404: '[클러스터를 찾을 수 없습니다]',
   4413: '[이 클러스터에 실행 권한이 없습니다 — 테넌트 바인딩 확인]',
@@ -38,7 +39,8 @@ const CLOSE_NOTES: Record<number, string> = {
  * k9s 풀스크린 UI 가 그대로 동작한다.
  */
 export function K9sTerminal({ clusterId, params, onClose, onPopOut, fill }: K9sTerminalProps) {
-  const url = useMemo(() => k8sStreamUrls.k9s(clusterId, getAuthToken()), [clusterId]);
+  // 토큰은 (재)연결 시점에 읽는다 — 세션이 재발급돼도 재연결 버튼이 새 토큰을 쓴다.
+  const url = useCallback(() => k8sStreamUrls.k9s(clusterId, getAuthToken()), [clusterId]);
   const init = {
     host: params.host,
     port: params.port,
