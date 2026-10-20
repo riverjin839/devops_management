@@ -8,7 +8,9 @@
 
 ## [Unreleased]
 
-1.63.1 이후 main 에 병합된 변경 (다음 릴리스 후보).
+1.64.0 이후 main 에 병합된 변경 (다음 릴리스 후보).
+
+## [1.64.0] - 2026-10-20
 
 ### Added
 - **외부 서비스 — 도메인 정방향 검증 · 응답 확인**: 외부 서비스 화면(`/external-services`)에 두 열을 더했다. **정방향 검증**은 Ingress 도메인과 역조회로 찾은 이름을 다시 A 레코드로 조회해 엔드포인트 IP 와 비교한다(일치 / 불일치 → 실제 IP / 조회 안 됨). **응답**은 IP:Port 에 TCP 연결하고, Ingress 는 Host 헤더를 실은 HTTP 요청으로 상태코드·지연시간을 잰다. 유형 칩 옆 **문제 있음** 필터로 불일치·응답 없음만 모아 본다(CSV 에도 포함). 수집 다이얼로그에서 이번 수집의 점검을 고르고, SSH 노드를 주면 노드(사내 DNS·내부망 기준)에서, 아니면 backend 에서 돈다. 실행 위치·명령 템플릿·타임아웃·최대 건수는 관리자 설정. Backend: `services/external_checks.py` + `external_service_snapshots.fwd_cache`/`probe_results` 컬럼(`_safe_add_column` 보강).
