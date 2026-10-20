@@ -4,6 +4,7 @@ import { X } from 'lucide-react';
 
 import { cn } from '@/lib/utils';
 import { useModalHistory } from '@/components/common/useModalHistory';
+import { useModalLayer } from '@/components/common/modalStack';
 
 /**
  * Base UI `Dialog.Root` 래퍼 — controlled(`open` prop 이 있는) 다이얼로그를 브라우저/폰 "뒤로가기"로
@@ -14,12 +15,27 @@ import { useModalHistory } from '@/components/common/useModalHistory';
  * 경로를 타므로 Escape·바깥 클릭·X 와 똑같이 호출부의 `onOpenChange` 가드(`!busy` 등)가 적용된다.
  * 호출부가 닫기를 거부해 `open` 이 그대로면 modalHistory 가 기록을 다시 push 한다.
  * uncontrolled(`open` 미지정) 다이얼로그는 기록을 쓰지 않는다. 호출부가 `actionsRef` 를 넘기면 그것을 쓴다.
+ *
+ * 열려 있는 동안 모달 층(`modalStack`)도 하나 차지한다 — Escape 는 맨 위 모달만 닫는다.
+ *  - `useModalA11y` 모달 위에 이 다이얼로그가 뜨면 아래 모달이 Escape 를 가로채지 않고 Base UI 가 처리한다.
+ *  - 이 다이얼로그 위에 `ConfirmDialog` 등이 떠 있으면 Base UI 의 Escape 닫기를 취소한다(위 모달만 닫힘).
  */
-function Dialog<Payload = unknown>({ actionsRef, ...props }: BaseDialog.Root.Props<Payload>) {
+function Dialog<Payload = unknown>({ actionsRef, onOpenChange, ...props }: BaseDialog.Root.Props<Payload>) {
   const innerActionsRef = React.useRef<BaseDialog.Root.Actions | null>(null);
   const actions = actionsRef ?? innerActionsRef;
   useModalHistory(!!props.open, () => actions.current?.close(), props.open !== undefined);
-  return <BaseDialog.Root {...props} actionsRef={actions} />;
+  const isTop = useModalLayer(!!props.open);
+  const handleOpenChange = React.useCallback<NonNullable<BaseDialog.Root.Props<Payload>['onOpenChange']>>(
+    (next, details) => {
+      if (!next && details.reason === 'escape-key' && !isTop()) {
+        details.cancel();
+        return;
+      }
+      onOpenChange?.(next, details);
+    },
+    [onOpenChange, isTop],
+  );
+  return <BaseDialog.Root {...props} onOpenChange={handleOpenChange} actionsRef={actions} />;
 }
 const DialogTrigger = BaseDialog.Trigger;
 const DialogClose = BaseDialog.Close;
