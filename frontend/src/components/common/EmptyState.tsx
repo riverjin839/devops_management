@@ -1,5 +1,7 @@
 import { type ComponentType, type ReactNode } from 'react';
-import { Inbox, Loader2, Server } from 'lucide-react';
+import { AlertTriangle, Inbox, Loader2, Lock, Server } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
+import { formatApiError } from '@/lib/utils';
 
 interface EmptyStateProps {
   icon?: ComponentType<{ className?: string }>;
@@ -79,14 +81,23 @@ export function EmptyState({
 
 /** "클러스터를 선택하세요" 단일 변형 — 13개 화면이 5가지 방식으로 그리던 것을 여기로 모은다(D-124). */
 export function SelectClusterEmptyState({
-  description = '왼쪽 사이드바에서 클러스터를 고르면 이 화면의 내용이 표시됩니다.',
+  description,
   compact = false,
 }: { description?: string; compact?: boolean }) {
-  return <EmptyState icon={Server} title="클러스터를 선택하세요" description={description} compact={compact} />;
+  const { t } = useTranslation();
+  return (
+    <EmptyState
+      icon={Server}
+      title={t('common.selectCluster.title')}
+      description={description ?? t('common.selectCluster.description')}
+      compact={compact}
+    />
+  );
 }
 
-/** 로딩 자리표시 — 문구는 "불러오는 중…" 하나만 쓴다(§12.12-6). 골격이 필요하면 `Skeleton` 을 우선한다. */
-export function LoadingState({ label = '불러오는 중…', compact = false }: { label?: string; compact?: boolean }) {
+/** 로딩 자리표시 — 문구는 "불러오는 중…"(`common.status.loading`) 하나만 쓴다(§12.12-6). 골격이 필요하면 `Skeleton` 을 우선한다. */
+export function LoadingState({ label, compact = false }: { label?: string; compact?: boolean }) {
+  const { t } = useTranslation();
   return (
     <div
       role="status"
@@ -95,7 +106,44 @@ export function LoadingState({ label = '불러오는 중…', compact = false }:
       className={`flex items-center justify-center gap-2 text-sm text-muted-foreground ${compact ? 'py-6' : 'py-12'}`}
     >
       <Loader2 className="w-4 h-4 animate-spin" aria-hidden="true" />
-      {label}
+      {label ?? t('common.status.loading')}
+    </div>
+  );
+}
+
+/**
+ * 조회 실패 자리표시(D-137) — 실패를 빈 상태("아직 아무것도 없다")로 보여주지 않는다.
+ * 403 이면 권한 안내, 그 외는 서버 사유 + "다시 시도". 빈 상태와 같은 자리·크기를 쓴다.
+ */
+export function ErrorState({
+  error,
+  title,
+  onRetry,
+  compact = false,
+}: { error: unknown; title?: string; onRetry?: () => void; compact?: boolean }) {
+  const { t } = useTranslation();
+  const status = (error as { response?: { status?: number } } | null)?.response?.status;
+  if (status === 403) {
+    return (
+      <div role="alert">
+        <EmptyState
+          icon={Lock}
+          title={t('common.error.forbiddenTitle')}
+          description={formatApiError(error, t('common.error.forbiddenHint'))}
+          compact={compact}
+        />
+      </div>
+    );
+  }
+  return (
+    <div role="alert">
+      <EmptyState
+        icon={AlertTriangle}
+        title={title ?? t('common.error.loadFailed')}
+        description={formatApiError(error)}
+        action={onRetry ? { label: t('common.action.retry'), onClick: onRetry, variant: 'secondary' } : undefined}
+        compact={compact}
+      />
     </div>
   );
 }

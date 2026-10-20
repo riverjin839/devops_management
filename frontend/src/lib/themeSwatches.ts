@@ -35,6 +35,4 @@ export const ACCENT_SWATCH: Record<Accent, string> = {
   violet: '265 60% 56%',
 };
 
-export const ACCENT_LABEL: Record<Accent, string> = {
-  blue: '블루', teal: '틸', green: '그린', amber: '앰버', coral: '코랄', violet: '바이올렛',
-};
+// 강조색·테마 이름은 i18n 키 `shell.accent.<id>` / `shell.theme.<id>` 로 옮겼다(R-6) — `t(\`shell.accent.${a}\`)`.

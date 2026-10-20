@@ -1,6 +1,7 @@
-import { useEffect, useMemo, useRef, useState, type ComponentType } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type ComponentType } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
+import { useTranslation } from 'react-i18next';
 import { Search, Server, Clock, CornerDownLeft, LayoutGrid } from 'lucide-react';
 import { useCommandPaletteStore } from '@/stores/commandPaletteStore';
 import { useRecentPathsStore } from '@/stores/recentPathsStore';
@@ -17,7 +18,10 @@ interface PaletteItem {
   label: string;
   /** 보조 텍스트 — 화면은 소속 그룹, 클러스터는 종합 상태. */
   hint?: string;
-  section: '최근 방문' | '화면' | '클러스터';
+  /** 검색에만 쓰는 추가 문자열 — 화면의 한국어 기본 라벨(영어 화면에서도 한국어 이름으로 찾게). */
+  keywords?: string;
+  /** 섹션 헤더는 `palette.section.*`. */
+  section: 'recent' | 'screen' | 'cluster';
   to: string;
   Icon: ComponentType<{ className?: string }>;
   iconColor?: string;
@@ -43,8 +47,8 @@ function score(q: string, ...fields: Array<string | undefined>): number {
  * D-073 — 커맨드 팔레트(Ctrl/⌘+K). 화면 이름은 아는데 어느 그룹 flyout 에 있는지 모르는
  * 사용자가 8개 flyout 을 차례로 열어보던 것을 검색 한 번으로 줄인다.
  *
- * - 화면: `useNavCatalog()` 의 라벨 오버라이드·`featureAllowed` 를 그대로 써서 사이드바에
- *   보이는 것과 같은 이름·같은 권한 범위만 나온다.
+ * - 화면: `useNavCatalog()` 의 라벨(관리자 오버라이드 → 로케일 번역)·`featureAllowed` 를 그대로 써서
+ *   사이드바에 보이는 것과 같은 이름·같은 권한 범위만 나온다. 한국어 기본 라벨로도 찾을 수 있다.
  * - 클러스터: 이름으로 `/clusters/:id` 로 점프. 팔레트가 열렸을 때만 조회(전역 폴링 없음).
  * - 최근 방문: `recentPathsStore`(기기 로컬) — 검색어가 비어 있을 때 맨 위.
  * - 키보드: ↑↓ 이동, Enter 이동, Esc 닫기. 포커스 트랩·복원은 `useModalA11y`.
@@ -57,7 +61,13 @@ export function CommandPalette() {
   // 고르면 닫고 바로 다른 화면으로 이동하므로 뒤로가기 기록을 남기지 않는다.
   const dialogRef = useModalA11y(open, close, { historyClose: false });
 
+  const { t, i18n } = useTranslation();
+  const collator = i18n.resolvedLanguage ?? i18n.language;
   const { navMap, getLabel, featureAllowed } = useNavCatalog();
+  const groupHint = useCallback((p: string) => {
+    const g = groupLabelForPath(p);
+    return g ? t(`nav.group.${g.labelKey}`) : undefined;
+  }, [t]);
   const recentPaths = useRecentPathsStore((s) => s.paths);
   const { data: clusters } = useQuery({
     queryKey: ['command-palette', 'clusters'],
@@ -81,24 +91,27 @@ export function CommandPalette() {
       .map((p) => ({
         key: `screen:${p}`,
         label: getLabel(p),
-        hint: groupLabelForPath(p)?.label ?? (p === '/' ? '홈' : '기타'),
-        section: '화면' as const,
+        hint: groupHint(p) ?? (p === '/' ? t('nav.page.home') : t('palette.otherGroup')),
+        keywords: navMap[p].defaultLabel,
+        section: 'screen' as const,
         to: p,
         Icon: navMap[p].icon,
         iconColor: navMap[p].iconColor,
       }))
-  ), [navMap, getLabel, featureAllowed]);
+  ), [navMap, getLabel, featureAllowed, groupHint, t]);
 
   const clusterItems = useMemo<PaletteItem[]>(() => (
     (clusters ?? []).map((c: Cluster) => ({
       key: `cluster:${c.id}`,
       label: c.name,
-      hint: c.status === 'critical' ? '위험' : c.status === 'warning' ? '경고' : c.status === 'healthy' ? '정상' : '미판정',
-      section: '클러스터' as const,
+      hint: t(`palette.clusterStatus.${
+        c.status === 'critical' || c.status === 'warning' || c.status === 'healthy' ? c.status : 'unknown'
+      }`),
+      section: 'cluster' as const,
       to: `/clusters/${c.id}`,
       Icon: Server,
     }))
-  ), [clusters]);
+  ), [clusters, t]);
 
   const results = useMemo<PaletteItem[]>(() => {
     const q = query.trim().toLowerCase();
@@ -109,25 +122,25 @@ export function CommandPalette() {
         .map<PaletteItem>((p) => ({
           key: `recent:${p}`,
           label: getLabel(p),
-          hint: groupLabelForPath(p)?.label ?? undefined,
-          section: '최근 방문',
+          hint: groupHint(p),
+          section: 'recent',
           to: p,
           Icon: Clock,
         }));
       const recentSet = new Set(recentPaths);
       const screens = [...screenItems]
         .filter((s) => !recentSet.has(s.to))
-        .sort((a, b) => (a.hint ?? '').localeCompare(b.hint ?? '', 'ko') || a.label.localeCompare(b.label, 'ko'));
+        .sort((a, b) => (a.hint ?? '').localeCompare(b.hint ?? '', collator) || a.label.localeCompare(b.label, collator));
       return [...recent, ...screens, ...clusterItems.slice(0, MAX_PER_SECTION)];
     }
     const rank = (items: PaletteItem[]) => items
-      .map((it) => ({ it, s: score(q, it.label, it.to, it.hint) }))
+      .map((it) => ({ it, s: score(q, it.label, it.to, it.hint, it.keywords) }))
       .filter((x) => x.s > 0)
-      .sort((a, b) => b.s - a.s || a.it.label.localeCompare(b.it.label, 'ko'))
+      .sort((a, b) => b.s - a.s || a.it.label.localeCompare(b.it.label, collator))
       .slice(0, MAX_PER_SECTION)
       .map((x) => x.it);
     return [...rank(screenItems), ...rank(clusterItems)];
-  }, [query, recentPaths, navMap, featureAllowed, getLabel, screenItems, clusterItems]);
+  }, [query, recentPaths, navMap, featureAllowed, getLabel, groupHint, collator, screenItems, clusterItems]);
 
   useEffect(() => { setCursor(0); }, [query, results.length]);
 
@@ -163,7 +176,7 @@ export function CommandPalette() {
         ref={dialogRef}
         role="dialog"
         aria-modal="true"
-        aria-label="화면 검색"
+        aria-label={t('palette.dialogLabel')}
         onKeyDown={onKeyDown}
         className="relative w-full max-w-xl bg-card text-card-foreground border border-border rounded-md shadow-card overflow-hidden flex flex-col max-h-[70vh]"
       >
@@ -174,8 +187,8 @@ export function CommandPalette() {
             type="text"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="화면 이름, 경로, 클러스터 이름으로 검색…"
-            aria-label="화면 검색"
+            placeholder={t('palette.placeholder')}
+            aria-label={t('palette.dialogLabel')}
             aria-controls="command-palette-results"
             aria-activedescendant={results[cursor] ? `cp-${results[cursor].key}` : undefined}
             autoComplete="off"
@@ -185,9 +198,9 @@ export function CommandPalette() {
           <kbd className="hidden sm:inline text-[11px] font-mono text-muted-foreground border border-border rounded px-1.5 py-0.5">Esc</kbd>
         </div>
 
-        <div ref={listRef} id="command-palette-results" role="listbox" aria-label="검색 결과" className="flex-1 min-h-0 overflow-y-auto py-1">
+        <div ref={listRef} id="command-palette-results" role="listbox" aria-label={t('palette.resultsLabel')} className="flex-1 min-h-0 overflow-y-auto py-1">
           {results.length === 0 ? (
-            <EmptyState compact icon={Search} title={`"${query}" 에 맞는 화면이나 클러스터가 없습니다.`} description="화면 이름의 일부나 클러스터 이름으로 다시 검색해 보세요." />
+            <EmptyState compact icon={Search} title={t('palette.noResults', { query })} description={t('palette.noResultsHint')} />
           ) : results.map((it, idx) => {
             const header = it.section !== lastSection ? it.section : null;
             lastSection = it.section;
@@ -195,7 +208,7 @@ export function CommandPalette() {
             return (
               <div key={it.key}>
                 {header && (
-                  <p className="px-4 pt-2 pb-1 text-xs font-medium text-muted-foreground">{header}</p>
+                  <p className="px-4 pt-2 pb-1 text-xs font-medium text-muted-foreground">{t(`palette.section.${header}`)}</p>
                 )}
                 <button
                   type="button"
@@ -221,10 +234,10 @@ export function CommandPalette() {
         </div>
 
         <div className="flex items-center gap-3 px-4 py-2 border-t border-border bg-muted/40 text-[11px] text-muted-foreground">
-          <span className="flex items-center gap-1"><LayoutGrid className="w-3 h-3" aria-hidden="true" /> 화면 {screenItems.length}개</span>
+          <span className="flex items-center gap-1"><LayoutGrid className="w-3 h-3" aria-hidden="true" /> {t('palette.screenCount', { count: screenItems.length })}</span>
           <span className="ml-auto flex items-center gap-2">
-            <kbd className="font-mono border border-border rounded px-1">↑↓</kbd> 이동
-            <kbd className="font-mono border border-border rounded px-1">Enter</kbd> 열기
+            <kbd className="font-mono border border-border rounded px-1">↑↓</kbd> {t('palette.move')}
+            <kbd className="font-mono border border-border rounded px-1">Enter</kbd> {t('palette.open')}
           </span>
         </div>
       </div>

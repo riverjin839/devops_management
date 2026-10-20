@@ -10,7 +10,7 @@ import { useUiSettings } from '@/hooks/useUiSettings';
  * 커스텀 라벨이 한국어 기본값과 글자까지 같으면(기본값을 그대로 저장한 경우) 오버라이드로 보지 않는다 —
  * 그래야 영어 화면에서 한국어로 고정되지 않는다.
  *
- * `useNavCatalog().getLabel` 은 아직 한국어 기본 라벨을 돌려준다(아일랜드 피커·Settings 등 비셸 화면용).
+ * `useNavCatalog().getLabel` 도 이 훅을 그대로 쓴다(아일랜드 피커·커맨드 팔레트·탭 제목 등 같은 라벨).
  */
 export function useNavLabel(): (path: string) => string {
   const { t } = useTranslation();

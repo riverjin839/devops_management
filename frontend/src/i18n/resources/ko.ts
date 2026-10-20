@@ -3,7 +3,9 @@
  * (`TranslationResource` 타입이 강제 — en 에 키가 빠지거나 남으면 tsc 가 실패한다).
  *
  * 키 규칙(DESIGN_SYSTEM.md §12 i18n):
- *  - 최상위는 영역 접두 — `nav.*`(메뉴·그룹), `shell.*`(사이드바·상단바·flyout), `home.*`(홈), `login.*`(로그인).
+ *  - 최상위는 영역 접두 — `nav.*`(메뉴·그룹), `shell.*`(사이드바·상단바·flyout), `home.*`(홈), `login.*`(로그인),
+ *    `common.*`(공용 확인창·빈/로딩/오류 상태), `apps.*`(앱 추가 카탈로그), `palette.*`(커맨드 팔레트),
+ *    `theme.*`(테마 갤러리 — 테마·강조색 이름은 `shell.theme.*`·`shell.accent.*`).
  *  - 그 아래는 화면 요소 단위 camelCase 묶음(`shell.help.releaseNotes`). 문장 그대로를 키로 쓰지 않는다.
  *  - 변수는 `{{name}}` 보간. 문자열을 이어 붙여 문장을 만들지 않는다(어순이 언어마다 다르다).
  */
@@ -202,6 +204,84 @@ export const ko = {
       month: '월간',
       member: '담당자',
     },
+  },
+  /** 여러 화면이 함께 쓰는 공용 UI — ConfirmDialog·EmptyState 계열의 기본 문구. */
+  common: {
+    action: {
+      cancel: '취소',
+      run: '실행',
+      close: '닫기',
+      retry: '다시 시도',
+    },
+    status: {
+      loading: '불러오는 중…',
+      processing: '처리 중…',
+    },
+    selectCluster: {
+      title: '클러스터를 선택하세요',
+      description: '왼쪽 사이드바에서 클러스터를 고르면 이 화면의 내용이 표시됩니다.',
+    },
+    error: {
+      loadFailed: '불러오지 못했습니다',
+      forbiddenTitle: '이 화면을 볼 권한이 없습니다',
+      forbiddenHint: '관리자에게 권한을 요청하세요.',
+    },
+  },
+  /** "앱 추가" 카탈로그(AddAppDialog·InstalledAppOrder) — leaf 화면 라벨은 `nav.page.*`, 그룹은 `nav.group.*`. */
+  apps: {
+    personalSection: '개인',
+    /** installableApps.ts 의 SpecialAppId. */
+    special: {
+      back: { label: '뒤로가기', description: '이전 화면으로 돌아가는 버튼' },
+      favorites: { label: '즐겨찾기', description: '자주 쓰는 화면을 별표로 모아본다' },
+      island: { label: '나의 아일랜드', description: '내가 꾸민 커스텀 화면' },
+    },
+    order: {
+      title: '표시 순서',
+      dragHint: '끌어서 순서 변경',
+      dragLabel: '{{label}} 순서 변경 — 끌어서 옮기거나, 스페이스 후 화살표 키',
+    },
+    accessNote:
+      '설치는 내 메뉴에 보일지만 정합니다. 화면을 열 수 있는 권한은 관리자가 설정 → 접근 제어에서 정하며, 막힌 화면은 이 목록에 나오지 않습니다.',
+    customizedNote: '직접 고른 구성이다. 초기화하면 사이드바·상단바 모두 조직 기본 구성으로 돌아간다.',
+    defaultNote: '조직 기본 구성을 따르는 중이다. 앱을 추가·제거하면 내 구성으로 고정된다.',
+    reset: '기본값으로 초기화',
+    resetConfirm: '한 번 더 눌러 초기화',
+  },
+  /** 커맨드 팔레트(Ctrl/⌘+K). */
+  palette: {
+    dialogLabel: '화면 검색',
+    placeholder: '화면 이름, 경로, 클러스터 이름으로 검색…',
+    resultsLabel: '검색 결과',
+    section: {
+      recent: '최근 방문',
+      screen: '화면',
+      cluster: '클러스터',
+    },
+    otherGroup: '기타',
+    clusterStatus: {
+      critical: '위험',
+      warning: '경고',
+      healthy: '정상',
+      unknown: '미판정',
+    },
+    noResults: '"{{query}}" 에 맞는 화면이나 클러스터가 없습니다.',
+    noResultsHint: '화면 이름의 일부나 클러스터 이름으로 다시 검색해 보세요.',
+    screenCount: '화면 {{count}}개',
+    move: '이동',
+    open: '열기',
+  },
+  /** Settings ▸ 테마 갤러리 — 테마·강조색 이름 자체는 `shell.theme.*`·`shell.accent.*` 를 쓴다. */
+  theme: {
+    gallery: {
+      title: '테마 갤러리',
+      intro: '미리보기를 클릭하면 바로 적용된다 — 사이드바 사용자 메뉴의 테마·강조색 목록과 같은 선택을 공유한다.',
+      background: '바탕',
+      accentIntro:
+        '버튼·링크·선택 탭·활성 메뉴에만 쓰인다. 라이트·다크(시스템 포함) 바탕에 적용되고, 컴포트·고대비와 그림 테마(움버·플래스터·아침 식사·릴리프·할리퀸과 목걸이를 한 여인·오장팡 자개·김환기 창·피카소·후안 그리스)는 자체 색을 쓴다.',
+    },
+    switchTo: '{{name}} 테마로 변경',
+    accentOption: '강조색 {{name}}',
   },
   /** 로그인 화면 — 키만 먼저 둔다(LoginPage 적용은 R-6 다음 트랜치). */
   login: {

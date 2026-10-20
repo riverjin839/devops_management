@@ -956,10 +956,10 @@ D-117~D-134)에서 원자는 지켜지는데 화면이 "AI 가 만든 템플릿"
 
 ### 12.14 화면 문자열 다국어 — `react-i18next` (R-6)
 
-셸(사이드바·상단바·flyout)·홈·로그인은 한국어/영어를 고를 수 있다. 셸 밖 화면은 아직 한국어 고정이며 단계적으로 옮긴다.
+셸(사이드바·상단바·flyout)·홈·로그인과 셸 주변 공용 UI(앱 추가 다이얼로그·커맨드 팔레트·`ConfirmDialog` 기본 버튼·`LoadingState`/`ErrorState`/`SelectClusterEmptyState` 기본 문구·테마 갤러리)는 한국어/영어를 고를 수 있다. 셸 밖 화면 본문은 아직 한국어 고정이며 단계적으로 옮긴다. 메뉴 이름은 사이드바·팔레트·아일랜드 피커·탭 제목이 모두 `useNavCatalog().getLabel` → `useNavLabel` 한 경로를 쓴다.
 
 1. **리소스는 TS 파일 두 개.** `src/i18n/resources/ko.ts` 가 원천이고 `en.ts` 는 키가 정확히 같아야 한다(어긋나면 tsc 실패). JSON 리소스는 쓰지 않는다.
-2. **키 구조.** 최상위는 영역 접두사(`nav.*`·`shell.*`·`home.*`·`login.*`, 새 화면은 자기 접두사). 그 아래는 화면 요소 단위 camelCase(`shell.help.releaseNotes`). 문장 그대로를 키로 쓰지 않는다.
+2. **키 구조.** 최상위는 영역 접두사(`nav.*`·`shell.*`·`home.*`·`login.*`·공용 UI `common.*`·앱 카탈로그 `apps.*`·커맨드 팔레트 `palette.*`·테마 갤러리 `theme.*`, 새 화면은 자기 접두사). 그 아래는 화면 요소 단위 camelCase(`shell.help.releaseNotes`). 문장 그대로를 키로 쓰지 않는다.
 3. **보간만 쓴다.** 변수는 `{{name}}`. 조각을 이어 붙여 문장을 만들지 않는다(어순이 언어마다 다르다).
 4. **사용법.** `const { t } = useTranslation()` 후 `t('key')`(컴파일 타임 검사). 동적 키는 union 타입 위의 템플릿 리터럴(`` t(`shell.theme.${theme}`) ``).
 5. **문자열 추가 순서.** `ko.ts` 에 키 → `en.ts` 에 같은 키(빠지면 tsc 가 잡는다) → 컴포넌트에서 `t()`.

@@ -38,7 +38,9 @@ export class ErrorBoundary extends React.Component<
             <p className="text-sm text-muted-foreground mb-4">
               다시 시도하거나 페이지를 새로고침하세요. 문제가 계속되면 아래 오류 내용을 관리자에게 전달하세요.
             </p>
-            <pre className="bg-secondary border border-border rounded-md p-4 text-xs font-mono text-foreground overflow-auto max-h-80 whitespace-pre-wrap break-words">
+            {/* 스크롤되는 오류 상세는 키보드로도 스크롤할 수 있어야 한다(axe scrollable-region-focusable). */}
+            {/* eslint-disable-next-line jsx-a11y/no-noninteractive-tabindex */}
+            <pre tabIndex={0} aria-label="오류 상세" className="bg-secondary border border-border rounded-md p-4 text-xs font-mono text-foreground overflow-auto max-h-80 whitespace-pre-wrap break-words">
               {this.state.error?.message}
               {'\n\n'}
               {this.state.error?.stack}

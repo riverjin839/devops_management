@@ -123,7 +123,7 @@ function ClusterRow({ cluster, active, sortMode, onSelect, multiSelect, checked 
         disabled={sortMode}
         className={`flex-1 flex items-center gap-2 ${sortMode ? 'pl-1' : 'pl-2'} pr-2 py-1.5 text-left min-w-0 disabled:cursor-default`}
       >
-        <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${STATUS_DOT[cluster.status] ?? 'bg-slate-400'}`} />
+        <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${STATUS_DOT[cluster.status] ?? 'bg-status-unknown'}`} />
         <span className="flex-1 min-w-0">
           <span className="block text-sm font-medium truncate">{cluster.name}</span>
           {(cluster.region || cluster.operationLevel) && (
@@ -244,7 +244,7 @@ function ClusterRailIconButton({
       Icon={lucideIcon}
       emojiText={emojiText}
       imageSrc={imageSrc}
-      dotClass={STATUS_DOT[cluster.status] ?? 'bg-slate-400'}
+      dotClass={STATUS_DOT[cluster.status] ?? 'bg-status-unknown'}
       active={active}
       onClick={onClick}
       size={size}

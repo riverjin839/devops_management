@@ -196,6 +196,79 @@ export const en: TranslationResource = {
       member: 'By Assignee',
     },
   },
+  common: {
+    action: {
+      cancel: 'Cancel',
+      run: 'Run',
+      close: 'Close',
+      retry: 'Try Again',
+    },
+    status: {
+      loading: 'Loading…',
+      processing: 'Processing…',
+    },
+    selectCluster: {
+      title: 'Select a cluster',
+      description: 'Pick a cluster in the left sidebar to see this screen.',
+    },
+    error: {
+      loadFailed: 'Could not load',
+      forbiddenTitle: 'You do not have permission to view this screen',
+      forbiddenHint: 'Ask your administrator for access.',
+    },
+  },
+  apps: {
+    personalSection: 'Personal',
+    special: {
+      back: { label: 'Back', description: 'A button that returns to the previous screen' },
+      favorites: { label: 'Favorites', description: 'Collect the screens you use most with a star' },
+      island: { label: 'My Island', description: 'Your own custom screen' },
+    },
+    order: {
+      title: 'Display Order',
+      dragHint: 'Drag to reorder',
+      dragLabel: 'Reorder {{label}} — drag it, or press Space and then the arrow keys',
+    },
+    accessNote:
+      'Installing only decides what shows in your menu. Your administrator controls which screens you can open in Settings → Access Control, and blocked screens do not appear in this list.',
+    customizedNote: 'You picked this layout yourself. Resetting returns both the sidebar and the top bar to the organization default.',
+    defaultNote: 'Following the organization default. Adding or removing an app makes this layout your own.',
+    reset: 'Reset to Default',
+    resetConfirm: 'Click again to reset',
+  },
+  palette: {
+    dialogLabel: 'Search screens',
+    placeholder: 'Search by screen name, path, or cluster name…',
+    resultsLabel: 'Search results',
+    section: {
+      recent: 'Recently Visited',
+      screen: 'Screens',
+      cluster: 'Clusters',
+    },
+    otherGroup: 'Other',
+    clusterStatus: {
+      critical: 'Critical',
+      warning: 'Warning',
+      healthy: 'Healthy',
+      unknown: 'Unknown',
+    },
+    noResults: 'No screens or clusters match "{{query}}".',
+    noResultsHint: 'Try part of a screen name or a cluster name.',
+    screenCount: '{{count}} screens',
+    move: 'Navigate',
+    open: 'Open',
+  },
+  theme: {
+    gallery: {
+      title: 'Theme Gallery',
+      intro: 'Click a preview to apply it right away — it shares the same selection as the theme and accent lists in the sidebar user menu.',
+      background: 'Background',
+      accentIntro:
+        'Used only for buttons, links, selected tabs, and the active menu. Applies to the Light and Dark backgrounds (including System); Comfort, High Contrast, and the painting themes (Umber, Plaster, Breakfast, Relief, Harlequin, Ozenfant, Kim Whanki, Picasso, Juan Gris) use their own colors.',
+    },
+    switchTo: 'Switch to the {{name}} theme',
+    accentOption: 'Accent color {{name}}',
+  },
   login: {
     subtitle: 'Platform Engineering Portal',
     sessionExpiredReturn: 'Your session expired and you were logged out. Log in again to return to the screen you were on.',
