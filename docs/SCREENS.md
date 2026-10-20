@@ -370,6 +370,23 @@ hover 시 flyout 자체가 라벨을 보여주므로 이름만 뜨는 중복 툴
   - **[2026-09-28] 대형 클러스터(376노드·3만 Pod)에서 "자원 집계 중 · 0 Pod 처리됨"에 멈춤** — 요청: 작은 클러스터는 정상인데 가장 큰 클러스터만 집계가 끝나지 않는다. NS 등 단위로 쪼개 누적 연산하면 규모와 무관하게 준실시간이 되지 않나. → 검토 결과 이미 페이지(500 Pod) 단위 누적 구조였고, 병목은 ① Pod 마다 kubernetes 모델 역직렬화(3만 Pod 약 150초 CPU) ② 집계 파드가 죽으면 30분간 인계 불가. **P0 반영**: 원본 JSON 순회(약 70배, `K8S_ALLOC_RAW_LIST`) + heartbeat 인계(`K8S_ALLOC_HEARTBEAT_TIMEOUT`) + 진행 카드 단계 표시. **P1 반영(2026-09-29)**: NS 단위 수집 — NS 단위 metrics 로 대형 클러스터 실사용량, NS 실패 격리(`failed_namespaces` 페이지 안내), 완료 NS Redis 저장 → 인계 시 이어하기, 진행 `ns:<완료>/<전체>`. **P2 반영(2026-09-30)**: Celery NS 롤링 갱신(`K8S_ALLOC_ROLLING`, 기본 viewed) — 오래된 NS 부터 매분 예산(40초)만큼 재수집, 전 NS 가 모이면 개요 스냅샷 게시, 화면은 1분마다 비강제 재조회 + "가장 오래된 NS 데이터 n분 전" 표시, 새로고침은 5분 내 NS 재사용.
   - 잔여: 실 클러스터 확인 — ① metrics-server 없는 클러스터에서 "사용량 미가용" 폴백 ② NS 수십 개 노드에서 상세 응답 시간(병렬 8 workers 기준).
 
+### 일일 자원 리포트 (`/daily-report`) — 로그인 불필요(공개)
+
+- **파일**: `frontend/src/pages/DailyReportPage.tsx` + `frontend/src/components/daily-report/`(`DailyReportTable`(NS 비효율 랭킹 표), `DailyReportSettingsDialog`(admin 설정), `format.ts`) · `hooks/useDailyReport.ts`. 라우팅은 `App.tsx` 의 `PublicOrAuthed` 가 **AuthGate 바깥**에서 분기한다(사이드바·셸 없음, `PUBLIC_PATHS`).
+- **목적 / UX**: K8S 자원 관리의 NS 자원(request·limit·사용량)을 **하루 단위**로 정리해 로그인 없이 공유하는 리포트. 클러스터·날짜·랭킹 기준이 URL 쿼리(`c`·`d`·`r`)에 담겨 링크 그대로 공유된다. K8s 자원 관리 화면 헤더의 **일일 리포트** 링크(새 창)로도 연다.
+- **UI 구성**:
+  - `PageHeader` + 클러스터 칩 행(공개 대상 클러스터만) + 날짜 이동(전날/날짜 입력/다음날/오늘, `min`=오늘−보관 일수, `max`=오늘) + 다시 불러오기.
+  - 요약 `MacCard` — NS 수·평균 파드·CPU/메모리 request·limit·평균 사용(사용률). 오늘은 "실시간 집계(진행 중)", 지난 날짜는 "일 단위 롤업".
+  - **네임스페이스 비효율 TOP N** `MacCard` — 랭킹 기준 칩(CPU 사용률·메모리 사용률 = 사용량÷request 낮은 순 / CPU 유휴량·메모리 유휴량 = request−평균 사용 큰 순). 표: 순위·NS·평균 파드 · CPU·메모리 각각 Request/Limit/평균·최소·최대 사용/평균 사용률/사용률 범위/유휴량 · **GPU Request/Limit(예정 — 항상 "—")**. 사용률 30% 미만은 `status-warning` 강조.
+  - **검색(본인 업무 모듈 찾기)** — 네임스페이스·워크로드·파드 이름 부분 일치(2자 이상, URL `q`). TOP N 밖 NS 까지 당일 전체에서 찾고, 결과 표에 현재 랭킹 기준 순위(대상 아니면 "—")와 걸린 워크로드/파드 이름을 NS 아래 표시. 파드 매치는 `k8s_workload_samples`(보존 8일) 기준이라 그보다 오래된 날짜는 NS 이름으로만 찾힌다.
+  - admin 으로 로그인한 상태면 헤더에 **설정** 버튼 → `DailyReportSettingsDialog`(공개 여부·보관/조회 일수·랭킹 개수·최소 request 컷·시스템 NS 제외·공개 클러스터 allowlist).
+- **Backend**: `routers/daily_report.py` — `public_router`(**비인증**, `GET /public/daily-report/clusters` · `GET /public/daily-report/report?cluster_id&date&rank_by` · `GET /public/daily-report/search?cluster_id&date&q&rank_by`) + `router`(JWT, `GET|PUT /daily-report/settings`, 변경은 require_admin+감사). 서비스 `services/k8s_efficiency/daily_report.py` — `k8s_ns_samples` 를 현지 자정 경계(`BATCH_JOBS_TIMEZONE`)로 묶어 `k8s_ns_daily_reports`(`K8sNsDailyReport`)에 NS 일 1행 롤업. 오늘은 저장 없이 실시간 집계, 지난 날짜는 롤업(없으면 조회 시 계산·저장). Celery Beat `daily-report-rollup`(00:20, 어제·그제 재계산 + 보관 일수 밖 롤업 삭제). 설정은 AppSetting `daily_report.settings`.
+- **노출 범위**: 공개 API 는 테넌트 바인딩이 없는 클러스터(또는 설정 allowlist)만, 응답은 클러스터 id/이름과 NS 자원 수치뿐(엔드포인트·자격증명 없음). `public_enabled=false` 면 404.
+- **요청사항 (수정 요청)**:
+  - _(여기에 개선/수정 요청을 직접 적어주세요)_
+  - **[2026-10-20] 일단위 리포트 신설** — 별도 페이지 + 해당 페이지만 로그인 없이 접근, K8S 자원 관리 리포트, 날짜 이동(과거 누적은 보관 일수로 조절), NS 비효율 랭킹 TOP10(NS별 당일 CPU·메모리·GPU(예정) request·limit, 당일 평균·최소·최대 사용량/사용률). 반영 완료.
+  - **[2026-10-20] 본인 업무 모듈 단위 namespace·pod 검색 필터** — 반영 완료(검색 카드).
+
 ### k9s 콘솔 (`/k9s`, `/k9s/:clusterId`)
 
 - **파일**: `frontend/src/pages/K9sPage.tsx` + `frontend/src/components/k8s/K9sTerminal.tsx`(xterm.js 터미널) + `components/common/{ClusterSidebar,EmptyState}`, `components/ui/MacCard`.

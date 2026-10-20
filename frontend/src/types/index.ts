@@ -5708,3 +5708,93 @@ export interface ClusterViewerMaskSetting {
 export interface ClusterEndpointAllowlist {
   entries: string[];
 }
+
+// ── 일일 리포트 (공개 페이지 `/daily-report`) ──────────────────────────────────
+export type DailyReportRankBy = 'cpu_rate' | 'mem_rate' | 'cpu_slack' | 'mem_slack';
+
+export interface DailyReportClusters {
+  clusters: { id: string; name: string }[];
+  today: string;
+  minDate: string;
+  retentionDays: number;
+  topN: number;
+  timezone: string;
+}
+
+/** 자원 하나(CPU=millicores, MEM=bytes)의 당일 집계. rate* 는 사용량/request 비율(0~). */
+export interface DailyReportResource {
+  req: number;
+  lim: number;
+  useAvg: number | null;
+  useMin: number | null;
+  useMax: number | null;
+  rateAvg: number | null;
+  rateMin: number | null;
+  rateMax: number | null;
+  slack: number | null;
+}
+
+export interface DailyReportItem {
+  rank: number;
+  namespace: string;
+  samples: number;
+  usageSamples: number;
+  pods: number | null;
+  cpu: DailyReportResource;
+  mem: DailyReportResource;
+  /** 예정 — GPU 수집 경로가 붙기 전까지 항상 null */
+  gpu: { req: number | null; lim: number | null };
+}
+
+export interface DailyReport {
+  cluster: { id: string; name: string };
+  date: string;
+  timezone: string;
+  isToday: boolean;
+  source: 'live' | 'rollup' | 'backfill' | 'none';
+  computedAt: string | null;
+  minDate: string;
+  maxDate: string;
+  rankBy: DailyReportRankBy;
+  topN: number;
+  rankedTotal: number;
+  noUsageNamespaces: number;
+  thresholds: { minCpuReqM: number; minMemReqB: number; excludeSystemNamespaces: boolean };
+  summary: {
+    namespaces: number;
+    pods: number;
+    samples: number;
+    cpu: { req: number; lim: number; useAvg: number | null; rateAvg: number | null };
+    mem: { req: number; lim: number; useAvg: number | null; rateAvg: number | null };
+  };
+  items: DailyReportItem[];
+}
+
+/** 검색 결과 행 — rank 는 비효율 랭킹 순위(랭킹 대상 아니면 null), match 는 무엇이 걸렸는지. */
+export interface DailyReportSearchItem extends Omit<DailyReportItem, 'rank'> {
+  rank: number | null;
+  match: {
+    namespace: boolean;
+    workloadMatches: number;
+    workloads: { kind: string; name: string; pods: string[]; podMatches: number }[];
+  };
+}
+
+export interface DailyReportSearch {
+  q: string;
+  date: string;
+  rankBy: DailyReportRankBy;
+  source: DailyReport['source'];
+  total: number;
+  items: DailyReportSearchItem[];
+}
+
+export interface DailyReportSettings {
+  publicEnabled: boolean;
+  retentionDays: number;
+  topN: number;
+  minCpuReqM: number;
+  minMemReqB: number;
+  excludeSystemNamespaces: boolean;
+  publicClusterIds: string[];
+}

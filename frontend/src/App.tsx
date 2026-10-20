@@ -72,6 +72,7 @@ import { HomePage } from '@/pages/HomePage';
 import { IslandPage } from '@/pages/IslandPage';
 import { ChangePasswordPage } from '@/pages/ChangePasswordPage';
 import { OidcCallbackPage } from '@/pages/OidcCallbackPage';
+import { DailyReportPage } from '@/pages/DailyReportPage';
 import { AgentChat } from '@/components/agent';
 import { Sidebar, PageStyleProvider } from '@/components/layout';
 import { ToastProvider } from '@/components/common';
@@ -302,14 +303,26 @@ function AuthedRoot() {
   );
 }
 
+/** 로그인 없이 여는 공개 화면 — AuthGate 바깥에서 분기한다(사이드바·셸 없음).
+ *  현재는 일일 리포트(`/daily-report`) 하나. 데이터도 비인증 공개 API(`/public/...`)만 쓴다. */
+const PUBLIC_PATHS = ['/daily-report'];
+
+function PublicOrAuthed() {
+  const location = useLocation();
+  if (PUBLIC_PATHS.includes(location.pathname)) return <DailyReportPage />;
+  return (
+    <AuthGate>
+      <AuthedRoot />
+    </AuthGate>
+  );
+}
+
 function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <ToastProvider>
         <BrowserRouter>
-          <AuthGate>
-            <AuthedRoot />
-          </AuthGate>
+          <PublicOrAuthed />
         </BrowserRouter>
       </ToastProvider>
     </QueryClientProvider>

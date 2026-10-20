@@ -119,6 +119,12 @@ celery_app.conf.beat_schedule = {
         "task": "app.celery_app.dispatch_k8s_alloc_rolling",
         "schedule": crontab(minute="*"),
     },
+    # 일일 리포트 NS 롤업 — 전날(+재보정용 그 전날) 샘플을 NS 일 단위로 롤업하고
+    # 보관 일수(AppSetting `daily_report.settings.retention_days`) 밖 롤업을 정리. 00:20 KST.
+    "daily-report-rollup": {
+        "task": "app.celery_app.run_daily_report_rollup",
+        "schedule": crontab(hour=0, minute=20),
+    },
 }
 
 
@@ -1097,6 +1103,23 @@ def run_log_tables_purge(self):
         return log_retention_service.purge_all(db)
     except Exception as e:  # noqa: BLE001
         logging.getLogger(__name__).exception("run_log_tables_purge failed: %s", e)
+        return {"error": str(e)[:200]}
+    finally:
+        db.close()
+
+
+@celery_app.task(bind=True, name="app.celery_app.run_daily_report_rollup", time_limit=900, ignore_result=True)
+def run_daily_report_rollup(self, days: int = 2):
+    """일일 리포트 NS 롤업 — 어제부터 `days` 일치(늦게 도착한 샘플 보정) 재계산 + 보관기간 밖 정리."""
+    import logging
+    from app.database import SessionLocal
+    from app.services.k8s_efficiency import daily_report
+
+    db = SessionLocal()
+    try:
+        return daily_report.rollup_recent(db, days=days)
+    except Exception as e:  # noqa: BLE001
+        logging.getLogger(__name__).exception("run_daily_report_rollup failed: %s", e)
         return {"error": str(e)[:200]}
     finally:
         db.close()

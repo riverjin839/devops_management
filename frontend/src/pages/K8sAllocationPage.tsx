@@ -3,7 +3,7 @@ import { PageHeader } from '@/components/common/PageHeader';
 import type { ReactNode } from 'react';
 import { useClusterRouteParam } from '@/hooks/useClusterRouteParam';
 import {
-  Gauge, RefreshCw, AlertTriangle, Server, Layers, BarChart3, Sparkles,
+  Gauge, RefreshCw, AlertTriangle, Server, Layers, BarChart3, Sparkles, FileBarChart,
 } from 'lucide-react';
 import { ClusterSidebar } from '@/components/common/ClusterSidebar';
 import { SnapshotProgressBar, ExportMenu, SelectClusterEmptyState, PageShell } from '@/components/common';
@@ -98,6 +98,15 @@ export function K8sAllocationPage() {
 
             {clusterId && (
               <div className="ml-auto flex items-center gap-2" data-export-ignore>
+                <a
+                  href={`/daily-report?c=${clusterId}`}
+                  target="_blank"
+                  rel="noreferrer"
+                  title="로그인 없이 볼 수 있는 일일 리포트(새 창)"
+                  className="text-sm text-muted-foreground hover:text-foreground inline-flex items-center gap-1 px-2 py-1 rounded-lg border border-border bg-card"
+                >
+                  <FileBarChart className="w-3.5 h-3.5" /> 일일 리포트
+                </a>
                 <ExportMenu targetRef={contentRef} filenameBase={`k8s-alloc-${csvCluster(clusterName)}`} />
                 <button
                   type="button"
