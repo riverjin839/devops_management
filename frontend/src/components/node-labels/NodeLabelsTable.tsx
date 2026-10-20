@@ -5,9 +5,16 @@ import { MacCard } from '@/components/ui/MacCard';
 import { NodeRow } from '@/hooks/useNodeLabels';
 import { matchesSearch, buildLabelEntries, filterLabelEntries, type LabelEntry } from './nodeLabelsShared';
 
+/** 행별 편집 권한 — 클러스터마다 테넌트 바인딩이 달라 노드 행 단위로 판정한다(§12.9). */
+export type NodeEditAccess = (node: NodeRow) => { ok: boolean; hint?: string };
+
+// 검색 일치 강조 — 상태 토큰(status-*)이 아니라 카테고리 색(D-167 ④).
+const HIGHLIGHT_CLS = 'bg-chart-3/15 border-chart-3/40 text-chart-3-text';
+
 interface Props {
   nodes: NodeRow[];
   onEdit: (node: NodeRow) => void;
+  canEdit?: NodeEditAccess;
   searchQuery: string;
   viewMode: 'node' | 'label';
   /** 여러 클러스터 취합 시 클러스터 컬럼/태그를 노출. */
@@ -18,11 +25,13 @@ interface Props {
 function NodeView({
   nodes,
   onEdit,
+  canEdit,
   searchQuery,
   showCluster,
 }: {
   nodes: NodeRow[];
   onEdit: (node: NodeRow) => void;
+  canEdit?: NodeEditAccess;
   searchQuery: string;
   showCluster: boolean;
 }) {
@@ -46,18 +55,19 @@ function NodeView({
       <table className="w-full text-sm">
         <thead className="bg-muted/20">
           <tr>
-            {showCluster && <th className="text-left px-4 py-3 font-medium text-muted-foreground w-40">Cluster</th>}
-            <th className="text-left px-4 py-3 font-medium text-muted-foreground w-48">Node</th>
-            <th className="text-left px-4 py-3 font-medium text-muted-foreground w-32">Role</th>
-            <th className="text-left px-4 py-3 font-medium text-muted-foreground w-24">Status</th>
-            <th className="text-left px-4 py-3 font-medium text-muted-foreground">Labels</th>
-            <th className="text-left px-4 py-3 font-medium text-muted-foreground w-20">Action</th>
+            {showCluster && <th className="text-left px-4 py-3 font-medium text-muted-foreground w-40">클러스터</th>}
+            <th className="text-left px-4 py-3 font-medium text-muted-foreground w-48">노드</th>
+            <th className="text-left px-4 py-3 font-medium text-muted-foreground w-32">역할</th>
+            <th className="text-left px-4 py-3 font-medium text-muted-foreground w-24">상태</th>
+            <th className="text-left px-4 py-3 font-medium text-muted-foreground">라벨</th>
+            <th className="text-left px-4 py-3 font-medium text-muted-foreground w-20">작업</th>
           </tr>
         </thead>
         <tbody>
           {filtered.map((node) => {
             // 원칙: 모든 라벨을 누락 없이 표시한다 (자르거나 "+N more" 로 숨기지 않음).
             const labelEntries = Object.entries(node.labels ?? {});
+            const access = canEdit?.(node) ?? { ok: true };
             return (
               <tr key={`${node.clusterId}/${node.name}`} className="border-t border-border align-top hover:bg-muted/10 transition-colors">
                 {showCluster && (
@@ -97,9 +107,7 @@ function NodeView({
                         <span
                           key={k}
                           className={`px-2 py-0.5 text-sm rounded border font-mono ${
-                            isHighlighted
-                              ? 'bg-status-warning/15 border-status-warning/40 text-status-warning'
-                              : 'bg-secondary border-border text-muted-foreground'
+                            isHighlighted ? HIGHLIGHT_CLS : 'bg-secondary border-border text-muted-foreground'
                           }`}
                         >
                           {tag}
@@ -110,10 +118,14 @@ function NodeView({
                 </td>
                 <td className="px-4 py-3">
                   <button
+                    type="button"
                     onClick={() => onEdit(node)}
-                    className="px-2 py-1 rounded bg-primary/10 text-primary border border-primary/20 inline-flex items-center gap-1 text-sm hover:bg-primary/20 transition-colors"
+                    disabled={!access.ok}
+                    title={access.ok ? `${node.name} 라벨 편집` : access.hint}
+                    aria-label={access.ok ? `${node.name} 라벨 편집` : `${node.name} 라벨 편집 — ${access.hint ?? ''}`}
+                    className="px-2 py-1 rounded-xl bg-primary/10 text-primary border border-primary/20 inline-flex items-center gap-1 text-sm hover:bg-primary/20 transition-colors disabled:opacity-50 disabled:hover:bg-primary/10"
                   >
-                    <Pencil className="w-3 h-3" /> Edit
+                    <Pencil className="w-3 h-3" /> 편집
                   </button>
                 </td>
               </tr>
@@ -154,8 +166,8 @@ function LabelView({
         <thead className="bg-muted/20">
           <tr>
             <th className="text-left px-4 py-3 font-medium text-muted-foreground w-12">#</th>
-            <th className="text-left px-4 py-3 font-medium text-muted-foreground">Label (key=value)</th>
-            <th className="text-left px-4 py-3 font-medium text-muted-foreground w-16">Nodes</th>
+            <th className="text-left px-4 py-3 font-medium text-muted-foreground">라벨(키=값)</th>
+            <th className="text-left px-4 py-3 font-medium text-muted-foreground w-16">노드 수</th>
             <th className="text-left px-4 py-3 font-medium text-muted-foreground">적용된 노드</th>
           </tr>
         </thead>
@@ -172,7 +184,7 @@ function LabelView({
                   <span
                     className={`px-2 py-0.5 text-sm rounded border font-mono ${
                       isHighlighted
-                        ? 'bg-status-warning/15 border-status-warning/40 text-status-warning'
+                        ? HIGHLIGHT_CLS
                         : isSystem
                         ? 'bg-secondary border-border text-muted-foreground'
                         : 'bg-primary/10 border-primary/20 text-primary'
@@ -197,9 +209,7 @@ function LabelView({
                         <span
                           key={`${ref.clusterId}/${ref.name}`}
                           className={`px-2 py-0.5 text-sm rounded border font-mono ${
-                            hit
-                              ? 'bg-status-warning/15 border-status-warning/40 text-status-warning'
-                              : 'bg-secondary border-border text-foreground'
+                            hit ? HIGHLIGHT_CLS : 'bg-secondary border-border text-foreground'
                           }`}
                         >
                           {display}
@@ -218,9 +228,9 @@ function LabelView({
 }
 
 // ── Main export ───────────────────────────────────────────
-export function NodeLabelsTable({ nodes, onEdit, searchQuery, viewMode, showCluster = false }: Props) {
+export function NodeLabelsTable({ nodes, onEdit, canEdit, searchQuery, viewMode, showCluster = false }: Props) {
   if (viewMode === 'label') {
     return <LabelView nodes={nodes} searchQuery={searchQuery} showCluster={showCluster} />;
   }
-  return <NodeView nodes={nodes} onEdit={onEdit} searchQuery={searchQuery} showCluster={showCluster} />;
+  return <NodeView nodes={nodes} onEdit={onEdit} canEdit={canEdit} searchQuery={searchQuery} showCluster={showCluster} />;
 }

@@ -16,7 +16,6 @@ import { ConfirmDialog, EmptyState, ErrorState, PageShell, Skeleton, useToast, V
 import { formatApiError, formatRelativeTime } from '@/lib/utils';
 import { MacCard } from '@/components/ui/MacCard';
 import { OpsNoteTable, type OpsNoteSortKey } from '@/components/ops-notes/OpsNoteTable';
-import type { OpsNotePatch } from '@/components/ops-notes/OpsNoteForm';
 import { useCanOperate } from '@/hooks/useCanOperate';
 
 // ── 서비스 목록 ───────────────────────────────────────────────────────────────
@@ -360,10 +359,10 @@ export function OpsNotesPage() {
   };
 
   /** 인라인 셀 편집 — 테이블 모드에서 service / title / author 즉시 저장. */
-  const handleInlineUpdate = async (id: string, data: OpsNotePatch) => {
+  const handleInlineUpdate = async (id: string, data: OpsNoteUpdate) => {
     try {
-      // null 은 "비우기"(D-144) — api 시그니처가 null 을 모르는 타입이라 경계에서만 좁힌다.
-      await opsNotesApi.update(id, data as OpsNoteUpdate);
+      // null 은 "비우기"(D-144).
+      await opsNotesApi.update(id, data);
       qc.invalidateQueries({ queryKey: ['ops-notes'] });
     } catch (e) {
       toast.error('수정 실패', formatApiError(e));

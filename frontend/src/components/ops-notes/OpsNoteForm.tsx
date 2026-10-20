@@ -8,12 +8,6 @@ import { RichTextEditor } from '@/components/editor';
 import { useCanOperate } from '@/hooks/useCanOperate';
 import { formatApiError } from '@/lib/utils';
 
-/**
- * 수정 payload — 비운 선택 필드는 `null` 로 보내야 서버(`exclude_unset`)가 컬럼을 비운다(D-144).
- * `types` 의 `OpsNoteUpdate` 는 `null` 을 허용하지 않아 여기서만 넓힌다.
- */
-export type OpsNotePatch = { [K in keyof OpsNoteCreate]?: OpsNoteCreate[K] | null };
-
 /** 빈 문단(`<p></p>`·`<p><br></p>`·`&nbsp;`)만으로 된 리치 텍스트. */
 const EMPTY_RICH_RE = /^\s*(<p>(\s|&nbsp;|<br\s*\/?>)*<\/p>\s*)*$/i;
 
@@ -73,7 +67,7 @@ export function OpsNoteForm({ initial, defaultService, onCancel, onSaved }: OpsN
       let savedId: string | undefined;
       if (isEdit && initial) {
         // 수정 모드에서 비운 필드는 null — undefined 면 JSON 에서 빠져 옛 값이 남는다(D-144).
-        const patch: OpsNotePatch = {
+        const patch: OpsNoteUpdate = {
           service,
           title: title.trim(),
           content: richOrEmpty(content) || null,
@@ -85,8 +79,7 @@ export function OpsNoteForm({ initial, defaultService, onCancel, onSaved }: OpsN
           dlUrl: dlUrl.trim() || null,
           tenantId,
         };
-        // null 은 "비우기" — api 시그니처가 null 을 모르는 타입이라 경계에서만 좁힌다.
-        await opsNotesApi.update(initial.id, patch as OpsNoteUpdate);
+        await opsNotesApi.update(initial.id, patch);
         savedId = initial.id;
       } else {
         const payload: OpsNoteCreate = {

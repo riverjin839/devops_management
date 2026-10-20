@@ -2163,6 +2163,14 @@ def _parse_week_of(value: Optional[str]):
         return None
 
 
+def _require_valid_week_of(value: Optional[str]) -> None:
+    """주차 인자 검증 — 형식이 틀린 week_of 를 조용히 '이번 주' 로 바꾸면 화면에서 고른 주와
+    다른 주가 집계·게시된다(D-157). 비어 있으면 이번 주, 값이 있는데 YYYY-MM-DD 가 아니면 422."""
+    if value and value.strip() and _parse_week_of(value) is None:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                            detail=f"주차 날짜 형식이 잘못되었습니다 ({value[:20]!r}) — YYYY-MM-DD 로 지정하세요.")
+
+
 @router.get("/weekly-report/settings", response_model=WeeklyReportSettings)
 def get_weekly_settings(db: Session = Depends(get_db), _: User = Depends(get_current_user)):
     return WeeklyReportSettings(**_get_weekly_settings(db))
@@ -2192,6 +2200,7 @@ def weekly_report_preview(
 ):
     """주간보고 미리보기 — 게시하지 않고 표 데이터만 만든다."""
     payload = payload or WeeklyReportRequest()
+    _require_valid_week_of(payload.week_of)
     settings = _get_weekly_settings(db)
     report = weekly_report_service.build_report(
         db, anchor=_parse_week_of(payload.week_of),
@@ -2231,6 +2240,7 @@ def _validate_weekly_publish(db: Session, payload: WeeklyPublishRequest, *, requ
 
     - 제목을 직접 입력하지 않았으면 설정의 제목 템플릿 자리표시자를 검사한다(동기·스트림 공통).
     - ``require_space`` 면 스페이스 키 미지정도 422(스트림). 동기 경로는 기존처럼 status=error 결과."""
+    _require_valid_week_of(payload.week_of)
     settings = _get_weekly_settings(db)
     if require_space and not (payload.space_key or settings.get("space_key") or "").strip():
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,

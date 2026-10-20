@@ -2,11 +2,10 @@ import { useEffect, useRef, useState } from 'react';
 import {
   Check, X, Plus, Pencil, Trash2, Pin, PinOff, ExternalLink, AlertTriangle, Copy,
 } from 'lucide-react';
-import type { CommandEntry, CommandEntryCreate, CommandImportance } from '@/types';
+import type { CommandEntry, CommandEntryCreate, CommandEntryUpdate, CommandImportance } from '@/types';
 import { IMPORTANCE_OPTIONS, IMPORTANCE_META } from './constants';
 import { DoubleScrollX } from '@/components/common';
 import { useCanOperate } from '@/hooks/useCanOperate';
-import type { CommandEntryPatch } from '@/hooks/useCommands';
 
 function ImportanceBadge({ value, onClick, title }: { value: CommandImportance; onClick?: () => void; title?: string }) {
   const meta = IMPORTANCE_META[value] ?? IMPORTANCE_META.medium;
@@ -133,7 +132,7 @@ type Editing = null | 'importance' | 'category' | 'command' | 'description' | 'c
 
 interface CommandRowProps {
   entry: CommandEntry;
-  onUpdate: (patch: CommandEntryPatch) => void;
+  onUpdate: (patch: CommandEntryUpdate) => void;
   onDelete: () => void;
   onTogglePin: () => void;
   onOpenForm: () => void;
@@ -534,7 +533,7 @@ function AddCommandRow({ onCreate }: { onCreate: (data: CommandEntryCreate) => v
 
 interface CommandsTableProps {
   entries: CommandEntry[];
-  onUpdate: (id: string, data: CommandEntryPatch) => void;
+  onUpdate: (id: string, data: CommandEntryUpdate) => void;
   onCreate: (data: CommandEntryCreate) => void;
   onDelete: (entry: CommandEntry) => void;
   onTogglePin: (entry: CommandEntry) => void;

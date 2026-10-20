@@ -87,6 +87,11 @@ def record_failure(ip: str, username: str) -> None:
     _incr_and_check(f"login_fail:acct:{username.lower()}", ACCOUNT_MAX_FAILURES, ACCOUNT_WINDOW_SECONDS)
 
 
+def record_ip_failure(ip: str) -> None:
+    """IP 카운터만 올린다 — 자격증명을 확인하지 못한 실패(디렉터리 장애)는 계정 잠금 사유가 아니다."""
+    _incr_and_check(f"login_fail:ip:{ip}", IP_MAX_FAILURES, IP_WINDOW_SECONDS)
+
+
 def record_success(ip: str, username: str) -> None:
     """로그인 성공 시 해당 계정의 실패 카운터를 초기화 — 정상 사용자가 창이 끝날
     때까지 불필요하게 대기하지 않도록. IP 카운터는 다른 계정 대상 공격 이력일 수

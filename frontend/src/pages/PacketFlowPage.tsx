@@ -24,14 +24,14 @@ import { TcpdumpPanel } from '@/components/packet-flow/TcpdumpPanel';
 type Tab = 'graph' | 'hubble' | 'tcpdump';
 
 const ENTITY_LABEL: Record<string, { icon: typeof Globe; label: string; color: string }> = {
-  external:           { icon: Globe,   label: 'External',  color: 'text-chart-1' },
-  dns:                { icon: Globe,   label: 'DNS',       color: 'text-chart-6' },
-  ingress_controller: { icon: Share2,  label: 'Ingress Pod', color: 'text-chart-4' },
-  ingress:            { icon: Route,   label: 'Ingress',   color: 'text-chart-5' },
-  service:            { icon: Share2,  label: 'Service',   color: 'text-chart-2' },
-  pod:                { icon: Box,     label: 'Pod',       color: 'text-chart-3' },
-  node:               { icon: Server,  label: 'Node',      color: 'text-chart-7' },
-  switch:             { icon: Network, label: 'Switch',    color: 'text-chart-8' },
+  external:           { icon: Globe,   label: 'External',  color: 'text-chart-1-text' },
+  dns:                { icon: Globe,   label: 'DNS',       color: 'text-chart-6-text' },
+  ingress_controller: { icon: Share2,  label: 'Ingress Pod', color: 'text-chart-4-text' },
+  ingress:            { icon: Route,   label: 'Ingress',   color: 'text-chart-5-text' },
+  service:            { icon: Share2,  label: 'Service',   color: 'text-chart-2-text' },
+  pod:                { icon: Box,     label: 'Pod',       color: 'text-chart-3-text' },
+  node:               { icon: Server,  label: 'Node',      color: 'text-chart-7-text' },
+  switch:             { icon: Network, label: 'Switch',    color: 'text-chart-8-text' },
   error:              { icon: AlertTriangle, label: 'Error', color: 'text-status-critical' },
 };
 

@@ -1,9 +1,12 @@
 import { useMemo, useState, type ReactNode } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Search } from 'lucide-react';
 import { useNavCatalog, groupLabelForPath } from '@/hooks/useNavCatalog';
+import type { NavGroupKey } from '@/i18n/resources/ko';
 import { EmptyState } from './EmptyState';
 
-const UNGROUPED_LABEL = '기타';
+/** 그룹 버킷 키 — `nav.group.*` 번역 키, 어느 그룹에도 없는 경로(동적 서비스 등)는 `ungrouped`. */
+type GroupBucket = NavGroupKey | 'ungrouped';
 
 export interface ScreenCatalogRowProps {
   path: string;
@@ -38,27 +41,29 @@ export function ScreenCatalogList({
   filter, onSelect, renderTrailing, isRowDisabled, searchPlaceholder, emptyText, maxHeight,
   autoFocusSearch,
 }: ScreenCatalogListProps) {
+  const { t } = useTranslation();
   const { navMap, getLabel, featureAllowed } = useNavCatalog();
   const [query, setQuery] = useState('');
 
   const grouped = useMemo(() => {
     const q = query.trim().toLowerCase();
-    const buckets = new Map<string, ScreenCatalogRowProps[]>();
+    const buckets = new Map<GroupBucket, ScreenCatalogRowProps[]>();
     for (const path of Object.keys(navMap)) {
       if (filter && !filter(path)) continue;
       if (!featureAllowed(path)) continue;
       const label = getLabel(path);
       if (q && !label.toLowerCase().includes(q) && !path.toLowerCase().includes(q)) continue;
-      const groupLabel = groupLabelForPath(path)?.label ?? UNGROUPED_LABEL;
-      const list = buckets.get(groupLabel) ?? [];
+      const bucket: GroupBucket = groupLabelForPath(path)?.labelKey ?? 'ungrouped';
+      const list = buckets.get(bucket) ?? [];
       list.push({ path, label });
-      buckets.set(groupLabel, list);
+      buckets.set(bucket, list);
     }
-    return [...buckets.entries()].map(([label, items]) => ({
-      label,
+    return [...buckets.entries()].map(([bucket, items]) => ({
+      bucket,
+      label: bucket === 'ungrouped' ? t('common.screenCatalog.ungrouped') : t(`nav.group.${bucket}`),
       items: items.sort((a, b) => a.label.localeCompare(b.label, 'ko')),
     }));
-  }, [navMap, getLabel, featureAllowed, filter, query]);
+  }, [navMap, getLabel, featureAllowed, filter, query, t]);
 
   return (
     <div className="space-y-3">
@@ -68,8 +73,8 @@ export function ScreenCatalogList({
           type="text"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          placeholder={searchPlaceholder ?? '화면 이름으로 검색'}
-          aria-label="화면 검색"
+          placeholder={searchPlaceholder ?? t('common.screenCatalog.searchPlaceholder')}
+          aria-label={t('common.screenCatalog.searchLabel')}
           autoFocus={autoFocusSearch}
           className="w-full pl-9 pr-3 py-2 text-sm bg-background border border-border rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/40"
         />
@@ -77,11 +82,11 @@ export function ScreenCatalogList({
 
       <div className="overflow-y-auto space-y-4 pr-1" style={{ maxHeight: maxHeight ?? '55vh' }}>
         {grouped.length === 0 && (
-          <EmptyState compact icon={Search} title={emptyText ?? '조건에 맞는 화면이 없습니다.'}
-            description={emptyText ? undefined : '검색어를 바꾸거나 지워 보세요.'} />
+          <EmptyState compact icon={Search} title={emptyText ?? t('common.screenCatalog.empty')}
+            description={emptyText ? undefined : t('common.screenCatalog.emptyHint')} />
         )}
         {grouped.map((group) => (
-          <div key={group.label}>
+          <div key={group.bucket}>
             <p className="mb-1.5 text-xs font-medium text-muted-foreground">
               {group.label}
             </p>

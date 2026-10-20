@@ -133,9 +133,7 @@ export function KernelParamsCollectModal({ open, clusterId, clusterName, onClose
       <div ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby={titleId}
         className="relative bg-card border border-border rounded-md shadow-2xl w-full max-w-3xl mx-4 max-h-[90vh] overflow-hidden flex flex-col">
         <div className="flex items-center gap-3 px-5 py-4 border-b border-border bg-muted/30">
-          <div className="w-9 h-9 rounded-lg flex items-center justify-center bg-primary/10 text-primary">
-            <Cpu className="w-4 h-4" />
-          </div>
+          <Cpu className="w-4 h-4 text-muted-foreground flex-shrink-0" aria-hidden="true" />
           <div className="flex-1">
             <h2 id={titleId} className="text-sm font-semibold">커널 파라미터 수집</h2>
             <p className="text-sm text-muted-foreground mt-0.5">
@@ -143,7 +141,7 @@ export function KernelParamsCollectModal({ open, clusterId, clusterName, onClose
               값 변경시에만 히스토리 누적.
             </p>
           </div>
-          <button onClick={onClose} disabled={collectMut.isPending}
+          <button onClick={onClose} disabled={collectMut.isPending} title="닫기" aria-label="닫기"
             className="p-1 rounded hover:bg-secondary text-muted-foreground disabled:opacity-40">
             <X className="w-4 h-4" />
           </button>
@@ -153,12 +151,12 @@ export function KernelParamsCollectModal({ open, clusterId, clusterName, onClose
           {/* SSH 자격증명 */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
             <div>
-              <label htmlFor={usernameId} className="text-xs text-muted-foreground mb-1 block">SSH User</label>
+              <label htmlFor={usernameId} className="text-xs text-muted-foreground mb-1 block">SSH 사용자</label>
               <input id={usernameId} value={username} onChange={(e) => setUsername(e.target.value)}
                 className="w-full px-2 py-1 text-sm font-mono bg-background border border-border rounded-lg focus:outline-none focus:ring-1 focus:ring-primary" />
             </div>
             <div>
-              <label htmlFor={portId} className="text-xs text-muted-foreground mb-1 block">SSH Port</label>
+              <label htmlFor={portId} className="text-xs text-muted-foreground mb-1 block">SSH 포트</label>
               <input id={portId} type="number" value={port} onChange={(e) => setPort(Number(e.target.value) || 22)}
                 min={1} max={65535}
                 className="w-full px-2 py-1 text-sm font-mono bg-background border border-border rounded-lg focus:outline-none focus:ring-1 focus:ring-primary" />
@@ -166,7 +164,7 @@ export function KernelParamsCollectModal({ open, clusterId, clusterName, onClose
             <div>
               <label htmlFor={parallelismId} className="text-xs text-muted-foreground mb-1 block"
                 title="동시에 SSH 세션 몇 개 열지 상한. 300 노드 이상이면 10~20 권장.">
-                Parallelism
+                동시 실행 수
               </label>
               <input id={parallelismId} type="number" value={parallelism}
                 onChange={(e) => setParallelism(Number(e.target.value) || 10)}
@@ -185,7 +183,7 @@ export function KernelParamsCollectModal({ open, clusterId, clusterName, onClose
             <div className="flex items-center gap-2 mb-1">
               <div className="flex items-center bg-secondary/60 rounded-lg p-[3px] gap-px">
                 {(['password', 'key'] as const).map((m) => (
-                  <button key={m} onClick={() => setAuthMode(m)}
+                  <button key={m} onClick={() => setAuthMode(m)} aria-pressed={authMode === m}
                     className={`px-2 py-0.5 text-xs font-medium rounded-md ${
                       authMode === m ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
                     }`}>

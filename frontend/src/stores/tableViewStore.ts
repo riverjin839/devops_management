@@ -47,8 +47,8 @@ export const TS = {
   },
   headerText: {
     default: 'text-foreground',
-    blue:    'text-chart-1',
-    indigo:  'text-chart-4',
+    blue:    'text-chart-1-text',
+    indigo:  'text-chart-4-text',
     emerald: 'text-status-healthy',
   },
 } as const;

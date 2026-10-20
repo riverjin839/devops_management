@@ -3,6 +3,7 @@
  * 라우트: `/me/change-password`
  */
 import { useId, useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { Loader2, KeyRound } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { authApi } from '@/services/api';
@@ -23,6 +24,15 @@ export function ChangePasswordPage() {
 
   const fid = useId();
   const f = (k: string) => `${fid}-${k}`;
+
+  // 로그인 방식은 저장된 사용자 정보보다 서버 값을 우선한다 — 다른 탭에서 LDAP 로 다시 로그인했을 수 있다.
+  const { data: me } = useQuery({
+    queryKey: ['auth', 'me'],
+    queryFn: async () => (await authApi.me()).data,
+    staleTime: 30_000,
+  });
+  const authSource = me?.authSource ?? user?.authSource ?? null;
+  const directoryAccount = authSource === 'ldap' || authSource === 'external';
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -82,6 +92,27 @@ export function ChangePasswordPage() {
           </div>
         </div>
 
+        {directoryAccount ? (
+          <div className="space-y-4">
+            <div role="status" className="space-y-1 rounded-md border border-border bg-secondary px-3 py-2 text-sm">
+              <p className="font-medium">
+                {authSource === 'ldap' ? '사내 디렉터리(LDAP) 계정입니다.' : 'SSO 계정입니다.'}
+              </p>
+              <p className="text-muted-foreground">
+                {authSource === 'ldap'
+                  ? '이 계정은 사내 디렉터리 비밀번호로 로그인합니다. 비밀번호는 PEP 가 아니라 사내 디렉터리(사내 계정 관리 화면 등)에서 변경하세요.'
+                  : '이 계정에는 PEP 비밀번호가 없습니다. 비밀번호는 사내 IdP 에서 변경하세요.'}
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => navigate(-1)}
+              className="w-full px-3 py-2 text-sm bg-secondary border border-border rounded-xl hover:bg-muted"
+            >
+              돌아가기
+            </button>
+          </div>
+        ) : (
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
             <label htmlFor={f('current')} className="block text-sm font-medium mb-1">현재 비밀번호</label>
@@ -147,6 +178,7 @@ export function ChangePasswordPage() {
             </button>
           </div>
         </form>
+        )}
       </div>
     </div>
   );

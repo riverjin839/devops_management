@@ -2,11 +2,13 @@ import { useId, useMemo, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import {
   UserCheck, UserPlus, Check, X as XIcon, Trash2, Download, ClipboardCopy,
-  KeyRound, Loader2, ShieldPlus,
+  KeyRound, Loader2, ShieldPlus, Pencil,
 } from 'lucide-react';
 import { useAssignees, useUpdateAssignees } from '@/hooks/useAssignees';
 import { MacCard } from '@/components/ui/MacCard';
-import { useToast, ResizeGrip, DoubleScrollX, ConfirmDialog, useModalA11y } from '@/components/common';
+import {
+  useToast, ResizeGrip, DoubleScrollX, ConfirmDialog, useModalA11y, EmptyState, ErrorState, LoadingState,
+} from '@/components/common';
 import { useColumnWidths } from '@/hooks/useColumnWidths';
 import { authApi, type UserRoleApi } from '@/services/api';
 import { useAuthStore } from '@/stores/authStore';
@@ -24,10 +26,31 @@ const ASSIGNEE_COLUMNS: { key: keyof Assignee; label: string }[] = [
 ];
 
 const ACCOUNT_ROLES: { value: UserRoleApi; label: string; desc: string }[] = [
-  { value: 'viewer', label: 'Viewer', desc: '조회 전용' },
-  { value: 'operator', label: 'Operator', desc: '쓰기/실행' },
-  { value: 'admin', label: 'Admin', desc: '전체 권한 + 계정 관리' },
+  { value: 'viewer', label: '조회(viewer)', desc: '조회 전용' },
+  { value: 'operator', label: '운영(operator)', desc: '쓰기·실행' },
+  { value: 'admin', label: '관리자(admin)', desc: '전체 권한·계정 관리' },
 ];
+
+const roleLabel = (role: UserRoleApi | undefined) =>
+  ACCOUNT_ROLES.find((r) => r.value === role)?.label ?? role ?? '—';
+
+// 역할 변경 확인창의 영향 문구 — 승격·강등이 즉시 효력을 가지므로 무엇이 바뀌는지 적는다(D-161).
+function roleChangeImpact(from: UserRoleApi | undefined, to: UserRoleApi): string {
+  if (to === 'admin') return '계정 관리 권한(계정 추가·삭제·역할 변경·비밀번호 재설정)과 전체 설정 권한이 포함됩니다.';
+  if (from === 'admin') return '관리자 권한(계정 관리·전체 설정)이 즉시 회수됩니다.';
+  if (to === 'viewer') return '쓰기·실행 권한이 즉시 회수되고 조회만 가능해집니다.';
+  return '쓰기·실행 권한이 부여됩니다.';
+}
+
+// PUT /ui-settings/assignees 응답의 계정 발급·해제 건수를 토스트 문구로(D-156).
+function accountSummary(accounts?: { created?: string[]; revoked?: string[] }): string | undefined {
+  const created = accounts?.created?.length ?? 0;
+  const revoked = accounts?.revoked?.length ?? 0;
+  const parts: string[] = [];
+  if (created) parts.push(`로그인 계정 발급 ${created}건`);
+  if (revoked) parts.push(`로그인 해제 ${revoked}건`);
+  return parts.length ? parts.join(' · ') : undefined;
+}
 
 // CSV 필드 이스케이프 — 콤마/따옴표/개행이 있으면 큰따옴표로 감싸고 내부 따옴표는 두 배로.
 function csvEscape(value: string): string {
@@ -143,6 +166,7 @@ function ResetPasswordModal({ target, onClose }: { target: Assignee | null; onCl
   const [error, setError] = useState<string | null>(null);
   const dialogRef = useModalA11y(!!target, onClose);
   const titleId = useId();
+  const inputId = useId();
 
   if (!target) return null;
 
@@ -167,8 +191,8 @@ function ResetPasswordModal({ target, onClose }: { target: Assignee | null; onCl
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
       <div ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby={titleId} className="w-full max-w-sm bg-card border border-border rounded-md p-5 shadow-card">
         <h3 id={titleId} className="text-base font-bold mb-2">{target.username} 비밀번호 재설정</h3>
-        <p className="text-sm text-muted-foreground mb-3">새 비밀번호를 입력하세요. 변경 즉시 적용됩니다.</p>
-        <input type="password" autoComplete="new-password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)}
+        <label htmlFor={inputId} className="block text-sm text-muted-foreground mb-3">새 비밀번호(4자 이상) — 변경 즉시 적용됩니다.</label>
+        <input id={inputId} type="password" autoComplete="new-password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)}
           minLength={4} className="w-full px-3 py-2 bg-background border border-border rounded-xl text-sm" />
         {error && <p role="alert" className="text-sm text-status-critical mt-2">{error}</p>}
         <div className="flex justify-end gap-2 mt-4">
@@ -190,7 +214,7 @@ function ResetPasswordModal({ target, onClose }: { target: Assignee | null; onCl
 // 나뉘어 있었다 — 명부를 고쳐도 이미 만든 로그인 계정에 반영이 안 되는 문제가 있었다. 지금은
 // users 테이블 자체가 명부라 이 표 하나가 두 화면 몫을 다 한다.
 export function AssigneeManager() {
-  const { data: assignees = [] } = useAssignees();
+  const { data: assignees = [], isLoading, isError, error, refetch } = useAssignees();
   const updateAssignees = useUpdateAssignees();
   const toast = useToast();
   const qc = useQueryClient();
@@ -214,30 +238,57 @@ export function AssigneeManager() {
   const [resetTarget, setResetTarget] = useState<Assignee | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<Assignee | null>(null);
   const [roleUpdatingId, setRoleUpdatingId] = useState<string | null>(null);
+  // 역할 변경은 select 값을 바로 반영하지 않고 확인창을 거친다 — 취소하면 select 는 서버 값 그대로(D-161).
+  const [roleConfirm, setRoleConfirm] = useState<{ target: Assignee; role: UserRoleApi } | null>(null);
+  // 사번이 있던 행의 사번을 비우는 저장은 로그인 해제라 확인을 받는다(D-156).
+  const [revokeConfirmIdx, setRevokeConfirmIdx] = useState<number | null>(null);
   const [deleting, setDeleting] = useState(false);
+  // 조회가 끝나기 전·실패 시에는 명부 저장(전체 목록 PUT)을 막는다 — 빈 목록 기준 저장 방지.
+  const rosterReady = !isLoading && !isError;
 
   const assigneeColW = useColumnWidths('settings-assignee-table', {
     defaults: { empId: 100, name: 140, email: 220, ip: 150, seatLocation: 130, primaryRole: 180, secondaryRole: 180, account: 150, actions: 130 },
     min: 60, max: 600,
   });
 
-  const handleSaveAssignee = (idx: number) => {
-    if (!editForm.name.trim()) return;
+  const saveAssignee = (idx: number) => {
     const updated = assignees.map((a, i) => (i === idx ? { ...a, ...editForm, name: editForm.name.trim() } : a));
     updateAssignees.mutate(updated, {
-      onSuccess: () => { setEditingIdx(null); toast.success('담당자 저장됨'); },
-      onError: showAssigneeError,
+      onSuccess: (res) => {
+        setEditingIdx(null);
+        setRevokeConfirmIdx(null);
+        toast.success('담당자 저장됨', accountSummary(res.data.accounts));
+      },
+      onError: (err) => { setRevokeConfirmIdx(null); showAssigneeError(err); },
     });
   };
 
+  const handleSaveAssignee = (idx: number) => {
+    if (!editForm.name.trim() || !rosterReady || updateAssignees.isPending) return;
+    const original = assignees[idx];
+    const clearsEmployeeId = !!original?.employeeId?.trim() && !editForm.employeeId?.trim();
+    if (clearsEmployeeId) {
+      if (original?.id && original.id === me?.id) {
+        toast.error('담당자 저장 실패', '본인 계정의 사번은 비울 수 없습니다 — 로그인이 해제됩니다.');
+        return;
+      }
+      setRevokeConfirmIdx(idx);
+      return;
+    }
+    saveAssignee(idx);
+  };
+
   const handleAddAssignee = () => {
-    if (!addForm.name.trim()) return;
+    if (!addForm.name.trim() || !rosterReady || updateAssignees.isPending) return;
     if (assignees.some(a => (a.name || '').trim().toLowerCase() === addForm.name.trim().toLowerCase())) {
       toast.error('중복된 담당자', `"${addForm.name.trim()}" 이름이 이미 있습니다. 담당자 이름과 사번은 고유해야 합니다.`);
       return;
     }
     updateAssignees.mutate([...assignees, { ...addForm, name: addForm.name.trim() }], {
-      onSuccess: () => { setAddForm({ name: '' }); setShowAddRow(false); toast.success('담당자 추가됨'); },
+      onSuccess: (res) => {
+        setAddForm({ name: '' }); setShowAddRow(false);
+        toast.success('담당자 추가됨', accountSummary(res.data.accounts));
+      },
       onError: showAssigneeError,
     });
   };
@@ -258,17 +309,19 @@ export function AssigneeManager() {
     }
   };
 
-  const handleRoleChange = async (a: Assignee, role: UserRoleApi) => {
-    if (!a.id) return;
-    setRoleUpdatingId(a.id);
+  const handleRoleChangeConfirmed = async () => {
+    if (!roleConfirm?.target.id || roleUpdatingId) return;
+    const { target, role } = roleConfirm;
+    setRoleUpdatingId(target.id ?? null);
     try {
-      await authApi.updateUserRole(a.id, role);
-      toast.success('역할이 변경됨');
+      await authApi.updateUserRole(target.id as string, role);
+      toast.success('역할이 변경됨', `${target.name}: ${roleLabel(target.accountRole)} → ${roleLabel(role)}`);
       qc.invalidateQueries({ queryKey: ['assignees'] });
     } catch (err) {
       toast.error('역할 변경 실패', formatApiError(err) ?? undefined);
     } finally {
       setRoleUpdatingId(null);
+      setRoleConfirm(null);
     }
   };
 
@@ -306,7 +359,7 @@ export function AssigneeManager() {
       bodyPadding="p-0"
       title="담당자 관리"
       icon={UserCheck}
-      description="작업/이슈 등록 시 자동완성 · 행 클릭으로 바로 수정 · 로그인 계정 겸용"
+      description="작업/이슈 등록 시 자동완성 · 행의 수정 버튼(또는 행 클릭)으로 수정 · 로그인 계정 겸용"
       actions={
         <>
           <button
@@ -337,7 +390,9 @@ export function AssigneeManager() {
           </button>
           <button
             onClick={() => { setShowAddRow(true); setEditingIdx(null); setAddForm({ name: '' }); }}
-            className="px-3 py-1.5 text-sm font-medium bg-primary hover:bg-primary/90 text-primary-foreground rounded-lg transition-colors flex items-center gap-2"
+            disabled={!rosterReady}
+            title={rosterReady ? undefined : '담당자 목록을 불러온 뒤에 추가할 수 있습니다'}
+            className="px-3 py-1.5 text-sm font-medium bg-primary hover:bg-primary/90 text-primary-foreground rounded-lg transition-colors flex items-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed"
           >
             <UserPlus className="w-4 h-4" />
             담당자 추가
@@ -348,8 +403,9 @@ export function AssigneeManager() {
 
       <div className="px-6 py-3 border-b border-border bg-primary/5 text-sm text-muted-foreground leading-relaxed">
         사번을 입력해 담당자를 등록하면 <b className="text-foreground font-medium">자동으로 로그인 계정</b>이 생성됩니다 —
-        아이디와 초기 비밀번호는 모두 <b className="text-foreground font-medium">사번</b>, 권한은 <b className="text-foreground font-medium">OPERATOR</b>입니다.
-        사번을 지우면 로그인 계정도 함께 해제됩니다. 로그인 후 사용자 메뉴에서 비밀번호를 변경하세요.
+        아이디와 초기 비밀번호는 모두 <b className="text-foreground font-medium">사번</b>, 권한은 <b className="text-foreground font-medium">운영(operator)</b>입니다.
+        사번이 있던 담당자의 사번을 지우면 확인 후 로그인 계정이 해제됩니다(사번 없이 만든 관리자 계정은 영향 없음).
+        로그인 후 사용자 메뉴에서 비밀번호를 변경하세요.
       </div>
 
       <DoubleScrollX>
@@ -394,9 +450,11 @@ export function AssigneeManager() {
             {sortedAssignees.map((a, idx) => {
               const isEditing = editingIdx === idx;
               const isSelf = !!a.id && a.id === me?.id;
+              const rowName = a.name || '이름 없는 담당자';
               const cellInput = (field: keyof Assignee, placeholder: string, required?: boolean) => (
                 <input
                   type="text"
+                  aria-label={`${ASSIGNEE_COLUMNS.find((c) => c.key === field)?.label ?? field} (${rowName})`}
                   value={(editForm[field] as string) ?? ''}
                   onChange={(e) => setEditForm((f) => ({ ...f, [field]: e.target.value }))}
                   onKeyDown={(e) => { if (e.key === 'Enter') handleSaveAssignee(idx); if (e.key === 'Escape') setEditingIdx(null); }}
@@ -409,6 +467,7 @@ export function AssigneeManager() {
               return (
                 <tr
                   key={a.id ?? idx}
+                  // 마우스 사용자용 빠른 진입 — 키보드는 행 끝의 "수정" 버튼으로 같은 동작(D-165).
                   onClick={() => !isEditing && startEdit(idx)}
                   className={`transition-colors ${isEditing ? 'bg-primary/5' : 'hover:bg-muted/30 cursor-pointer'}`}
                 >
@@ -463,8 +522,13 @@ export function AssigneeManager() {
                         <span className="font-mono text-sm text-muted-foreground truncate" title={a.username}>{a.username}</span>
                         <select
                           value={a.accountRole ?? 'viewer'}
-                          onChange={(e) => handleRoleChange(a, e.target.value as UserRoleApi)}
+                          onChange={(e) => {
+                            const next = e.target.value as UserRoleApi;
+                            if (next !== (a.accountRole ?? 'viewer')) setRoleConfirm({ target: a, role: next });
+                          }}
                           disabled={isSelf || roleUpdatingId === a.id}
+                          aria-label={`${rowName} 계정 역할`}
+                          title={isSelf ? '자기 자신의 역할은 변경할 수 없습니다' : undefined}
                           className="px-1.5 py-0.5 bg-background border border-border rounded-md text-sm disabled:opacity-50"
                         >
                           {ACCOUNT_ROLES.map((r) => <option key={r.value} value={r.value}>{r.label}</option>)}
@@ -477,25 +541,32 @@ export function AssigneeManager() {
                   <td className="px-3 py-2.5">
                     {isEditing ? (
                       <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
-                        <button onClick={() => handleSaveAssignee(idx)} disabled={!editForm.name.trim()} title="저장"
+                        <button onClick={() => handleSaveAssignee(idx)} disabled={!editForm.name.trim() || updateAssignees.isPending}
+                          title="저장" aria-label={`${rowName} 저장`}
                           className="p-1.5 rounded bg-primary/10 hover:bg-primary/20 text-primary transition-colors disabled:opacity-40">
                           <Check className="w-3.5 h-3.5" />
                         </button>
-                        <button onClick={() => setEditingIdx(null)} title="취소"
+                        <button onClick={() => setEditingIdx(null)} title="편집 취소" aria-label={`${rowName} 편집 취소`}
                           className="p-1.5 rounded hover:bg-secondary text-muted-foreground transition-colors">
                           <XIcon className="w-3.5 h-3.5" />
                         </button>
                       </div>
                     ) : (
                       <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
+                        <button onClick={() => startEdit(idx)} disabled={!rosterReady}
+                          title="수정" aria-label={`${rowName} 수정`}
+                          className="p-1.5 rounded hover:bg-secondary text-muted-foreground transition-colors disabled:opacity-40">
+                          <Pencil className="w-3.5 h-3.5" />
+                        </button>
                         {a.hasLogin && (
-                          <button onClick={() => setResetTarget(a)} title="비밀번호 재설정"
+                          <button onClick={() => setResetTarget(a)} title="비밀번호 재설정" aria-label={`${rowName} 비밀번호 재설정`}
                             className="p-1.5 rounded hover:bg-secondary text-muted-foreground transition-colors">
                             <KeyRound className="w-3.5 h-3.5" />
                           </button>
                         )}
                         <button onClick={() => setDeleteTarget(a)} disabled={isSelf || !a.id}
                           title={isSelf ? '자기 자신은 삭제할 수 없습니다' : '삭제'}
+                          aria-label={isSelf ? `${rowName} 삭제 — 자기 자신은 삭제할 수 없습니다` : `${rowName} 삭제`}
                           className="p-1.5 rounded hover:bg-status-critical/10 text-muted-foreground hover:text-status-critical transition-colors disabled:opacity-40 disabled:cursor-not-allowed">
                           <Trash2 className="w-3.5 h-3.5" />
                         </button>
@@ -555,13 +626,27 @@ export function AssigneeManager() {
               </tr>
             )}
 
-            {assignees.length === 0 && !showAddRow && (
+            {/* 분기 순서: 로딩 → 실패(ErrorState) → 빈 목록 — 실패를 "담당자 없음"으로 보이지 않는다(D-153). */}
+            {isLoading ? (
+              <tr><td colSpan={9}><LoadingState compact /></td></tr>
+            ) : isError ? (
               <tr>
-                <td colSpan={9} className="text-center py-10 text-muted-foreground text-sm">
-                  등록된 담당자가 없습니다. "담당자 추가" 버튼을 클릭하세요.
+                <td colSpan={9}>
+                  <ErrorState error={error} title="담당자 목록을 불러오지 못했습니다" onRetry={() => void refetch()} compact />
                 </td>
               </tr>
-            )}
+            ) : assignees.length === 0 && !showAddRow ? (
+              <tr>
+                <td colSpan={9}>
+                  <EmptyState
+                    icon={UserCheck}
+                    title="등록된 담당자가 없습니다"
+                    description="담당자 추가 버튼으로 첫 담당자를 등록하세요."
+                    compact
+                  />
+                </td>
+              </tr>
+            ) : null}
           </tbody>
         </table>
       </DoubleScrollX>
@@ -576,6 +661,31 @@ export function AssigneeManager() {
         danger
         onConfirm={handleDeleteConfirmed}
         onCancel={() => setDeleteTarget(null)}
+        busy={deleting}
+      />
+      <ConfirmDialog
+        open={!!roleConfirm}
+        title="계정 역할 변경"
+        description={roleConfirm
+          ? `"${roleConfirm.target.name}"(${roleConfirm.target.username ?? '—'})의 역할을 ${roleLabel(roleConfirm.target.accountRole)}에서 ${roleLabel(roleConfirm.role)}(으)로 바꿉니다. ${roleChangeImpact(roleConfirm.target.accountRole, roleConfirm.role)}`
+          : ''}
+        confirmLabel="역할 변경"
+        danger={roleConfirm?.role === 'admin' || roleConfirm?.target.accountRole === 'admin'}
+        busy={!!roleUpdatingId}
+        onConfirm={handleRoleChangeConfirmed}
+        onCancel={() => setRoleConfirm(null)}
+      />
+      <ConfirmDialog
+        open={revokeConfirmIdx !== null}
+        title="로그인 계정 해제"
+        description={revokeConfirmIdx !== null
+          ? `"${assignees[revokeConfirmIdx]?.name ?? ''}"의 사번(${assignees[revokeConfirmIdx]?.employeeId ?? ''})을 비우면 로그인 계정(${assignees[revokeConfirmIdx]?.username ?? '—'})이 해제되어 다음 로그인부터 접속할 수 없습니다. 다시 사번을 입력하면 초기 비밀번호(사번)로 새로 발급됩니다.`
+          : ''}
+        confirmLabel="해제하고 저장"
+        danger
+        busy={updateAssignees.isPending}
+        onConfirm={() => { if (revokeConfirmIdx !== null) saveAssignee(revokeConfirmIdx); }}
+        onCancel={() => setRevokeConfirmIdx(null)}
       />
     </MacCard>
   );

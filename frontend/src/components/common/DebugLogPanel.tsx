@@ -9,8 +9,8 @@ interface Props {
 }
 
 const KIND_CLS: Record<string, string> = {
-  request:  'text-chart-1',
-  response: 'text-chart-2',
+  request:  'text-chart-1-text',
+  response: 'text-chart-2-text',
   error:    'text-status-critical',
   info:     'text-muted-foreground',
 };

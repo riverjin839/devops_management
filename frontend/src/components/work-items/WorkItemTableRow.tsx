@@ -18,8 +18,8 @@ const KS_DOT: Record<string, string> = {
   review_test: 'bg-chart-4', done: 'bg-muted-foreground/40',
 };
 const KS_TEXT: Record<string, string> = {
-  backlog: 'text-chart-8', todo: 'text-chart-1', in_progress: 'text-chart-3',
-  review_test: 'text-chart-4', done: 'text-muted-foreground',
+  backlog: 'text-chart-8-text', todo: 'text-chart-1-text', in_progress: 'text-chart-3-text',
+  review_test: 'text-chart-4-text', done: 'text-muted-foreground',
 };
 const KS_LABEL: Record<string, string> = {
   backlog: 'Backlog', todo: 'To Do', in_progress: 'In Progress',
@@ -39,7 +39,7 @@ const JIRA_CAT_DOT: Record<string, string> = {
   new: 'bg-chart-1', indeterminate: 'bg-chart-3', done: 'bg-muted-foreground/40',
 };
 const JIRA_CAT_TEXT: Record<string, string> = {
-  new: 'text-chart-1', indeterminate: 'text-chart-3', done: 'text-muted-foreground',
+  new: 'text-chart-1-text', indeterminate: 'text-chart-3-text', done: 'text-muted-foreground',
 };
 
 /** Jira 이슈 종류 배지 색 — Epic/Sub-task 를 눈으로 바로 구분할 수 있게. */

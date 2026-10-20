@@ -1,6 +1,10 @@
 import { type ClassValue, clsx } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 import { Status } from '@/types';
+// R-6 i18n — formatApiError 기본 문구용. hook 이 아니라 인스턴스의 t 를 직접 쓴다.
+// 순환 없음: i18n/index → resources(ko/en) 만 불러오고 lib/utils 를 되부르지 않는다. 초기화 시점도 안전 —
+// main.tsx 는 boot 동기화 뒤 `import('./i18n')` 을 먼저 끝내고 App(→ 이 모듈)을 불러온다.
+import i18n from '@/i18n';
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
@@ -172,7 +176,9 @@ export function formatRelativeTime(dateString: string): string {
  * 돌아옴. JSX 에 객체를 그대로 넣으면 React error #31 발생 → 이 함수를 통해
  * 안전하게 문자열화.
  */
-export function formatApiError(err: unknown, fallback = '요청 실패'): string {
+export function formatApiError(err: unknown, fallbackArg?: string): string {
+  // 호출부가 넘긴 fallback 이 우선, 없으면 현재 로케일의 기본 문구.
+  const fallback = fallbackArg ?? i18n.t('common.error.requestFailed');
   if (!err) return fallback;
   const e = err as {
     response?: { data?: { detail?: unknown; message?: unknown } };
@@ -182,7 +188,7 @@ export function formatApiError(err: unknown, fallback = '요청 실패'): string
   };
   // axios CanceledError (사용자 취소)
   if (e.name === 'CanceledError' || e.code === 'ERR_CANCELED' || e.name === 'AbortError') {
-    return '취소됨';
+    return i18n.t('common.error.canceled');
   }
   const detail = e?.response?.data?.detail;
   if (typeof detail === 'string') return detail;
