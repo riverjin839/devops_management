@@ -56,6 +56,9 @@ spec:
               value: "1"
             - name: OLLAMA_HOST
               value: "0.0.0.0"
+            # 모델을 메모리에 상주 — CPU 노드의 콜드 로딩(수십 초~수 분)이 챗봇 타임아웃으로 번지지 않게.
+            - name: OLLAMA_KEEP_ALIVE
+              value: "24h"
           resources:
             requests:
               cpu: "2"

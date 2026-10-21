@@ -22,4 +22,4 @@ data:
   # Ollama (AI Agent)
   # Air-gap: override OLLAMA_MODEL in your overlay's configMapGenerator to match the baked-in model
   OLLAMA_URL: "http://ollama:11434"
-  OLLAMA_MODEL: "llama3"
+  OLLAMA_MODEL: "qwen2.5-coder:7b"

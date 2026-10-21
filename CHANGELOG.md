@@ -8,7 +8,17 @@
 
 ## [Unreleased]
 
-1.67.0 이후 main 에 병합된 변경 (다음 릴리스 후보).
+1.68.0 이후 main 에 병합된 변경 (다음 릴리스 후보).
+
+## [1.68.0] - 2026-10-21
+
+### Added
+- **AI/LLM 연결 진단 실행**: Settings → AI/LLM 프로필 행의 **연결 진단 실행** 버튼이 설정 원천(DB 저장값이 env 를 덮는지) → DNS → 포트 → Ollama 서버 → 모델 확인(이름 해석) → 모델 정보(크기·양자화·num_ctx) → 응답 테스트(로딩 시간·tok/s) 7단계를 실시간 실행 로그로 보여주고, 막힌 단계마다 조치 힌트를 남긴다. 자동 해석된 실제 모델명은 버튼 한 번으로 프로필에 저장한다. Backend: `POST /api/v1/llm/diagnose`(SSE, `services/llm/diagnostics.py`).
+- **K8s 운영 전용 모델 `pep-k8s-ops`**: Ollama 이미지가 `qwen2.5-coder:7b` 와 함께 운영용 파라미터(temperature 0.2·num_ctx 8192·num_predict 1024)와 K8s 운영 시스템 프롬프트를 고정한 파생 모델을 굽는다(`docker/ollama-qwen2.5-coder/Modelfile.k8s-ops`). CPU 자원이 없는 클러스터는 새 opt-in 컴포넌트 `k8s/components/no-ollama` 로 Ollama 를 빼고 사내 LLM 프로필로 라우팅한다. 설정·트러블슈팅 가이드는 `docs/LLM_CHATBOT_SETUP.md`.
+
+### Fixed
+- **Ollama 챗봇이 "온라인" 인데 응답하지 않던 문제**: 프로필 모델명이 서버 모델과 태그가 다르면(`qwen2.5-coder` ↔ `qwen2.5-coder:7b`, 이미지 태그 `:5b` 등) `/api/generate` 가 404 인데 health 는 이름 앞부분만 비교해 정상으로 표시했다. 이제 404 시 서버 모델 목록에서 실제 이름을 찾아 1회 재시도하고(결과 기억), health 는 호출할 수 있는 이름이 없으면 "모델 미준비", 자동 해석 중이면 "자동 해석" 으로 표시한다.
+- **kustomize base 배포에서 backend 파드가 뜨지 않을 수 있던 문제**: base `configMapGenerator` 에 `OLLAMA_MODEL` 키가 없어 backend·llm 워커의 configMapKeyRef 가 풀리지 않았다. base 이미지와 같은 `qwen2.5-coder:7b` 를 넣고, Ollama 에 `OLLAMA_KEEP_ALIVE=24h` 를 줘 CPU 콜드 로딩이 챗봇 타임아웃으로 번지지 않게 했다.
 
 ### Fixed
 - **플레이북 화면 정리(`/playbooks`)**: 드래그로 바꾼 순서가 정렬에 덮이고 새로고침하면 사라지던 문제 — 정렬에 "사용자 지정 순서"를 더했고, 다른 정렬 중에 드래그하면 보이는 순서를 저장한 뒤 사용자 지정 순서로 바뀐다. 카드 보기에도 실행 로그 버튼·클러스터 이름이 보인다. 전체 실행은 실행 권한이 없는 클러스터(테넌트 바인딩)의 플레이북을 빼고 보내고 확인 창에 제외 건수를 적는다. 대상이 0개가 되면 확인 창이 "처리 중"에 굳지 않고 닫힌다. SSH 자격증명 "이 세션 동안 기억하기"는 기본 꺼짐(켜면 비밀번호·키가 sessionStorage 에 남는다, 끄고 실행하면 지운다). 카드는 MacCard, 버튼·입력은 `rounded-xl`, 정렬 방향은 아이콘, 리포트 파일명은 `playbook-report-<날짜>.md`. Frontend: `useLocalOrder` 가 첫 로딩(빈 목록) 때 저장된 순서를 지우지 않고 `setOrder` 를 제공한다.

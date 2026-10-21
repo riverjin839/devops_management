@@ -877,6 +877,8 @@ export const llmApi = {
     api.get<{ data: string[] }>(`/llm/profiles/${encodeURIComponent(name)}/models`, { timeout: 10000 }),
   testProfile: (profile: string, prompt?: string) =>
     api.post<LlmTestResult>('/llm/test', { profile, ...(prompt ? { prompt } : {}) }, { timeout: 120000 }),
+  /** 계층별 연결 진단(SSE: log·step·result) — `streamLogged` 로 소비. 본문 `{ profile }`. */
+  diagnoseStreamUrl: () => '/api/v1/llm/diagnose',
   usage: () =>
     api.get<{ data: LlmUsageBucket[] }>('/llm/usage'),
   listCredentials: () =>

@@ -270,6 +270,8 @@ ollama:
   model: "qwen2.5-coder:7b"
   url: "http://ollama:11434"
   numParallel: 2
+  # 모델 메모리 상주 시간 — CPU 노드 콜드 로딩이 챗봇 타임아웃으로 번지지 않게 길게 둔다.
+  keepAlive: "24h"
   image:
     repository: ghcr.io/riverjin839/devops_management/ollama-qwen2.5-coder
     tag: "7b"

@@ -1,13 +1,15 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
   Bot, Plus, Trash2, Pencil, Loader2, PlugZap, KeyRound, RefreshCw,
-  AlertTriangle, Activity, Radar,
+  AlertTriangle, Activity, Radar, Stethoscope,
 } from 'lucide-react';
 import { MacCard } from '@/components/ui/MacCard';
-import { useToast, ConfirmDialog, LoadingState } from '@/components/common';
+import { useToast, ConfirmDialog, LoadingState, RunLogPanel } from '@/components/common';
 import { useModalA11y } from '@/components/common/useModalA11y';
 import { llmApi } from '@/services/api';
 import { formatApiError } from '@/lib/utils';
+import { useRunLog, streamLogged, type RunLogEntry } from '@/hooks/useRunLog';
+import { useLogPref } from '@/hooks/useLogPref';
 import {
   useLlmSettings, useUpdateLlmSettings, useLlmHealth, useLlmUsage,
   useLlmCredentials, useCreateLlmCredential, useDeleteLlmCredential,
@@ -15,7 +17,8 @@ import {
 } from '@/hooks/useLlmSettings';
 import { useClusters } from '@/hooks/useCluster';
 import type {
-  LlmAnalysisScope, LlmAnalysisScopeRule, LlmProfile, LlmSettings, LlmTestResult,
+  LlmAnalysisScope, LlmAnalysisScopeRule, LlmDiagnoseResult, LlmHealthEntry, LlmProfile, LlmSettings,
+  LlmTestResult,
 } from '@/types';
 
 // axios 인터셉터가 응답 키를 camelCase 로 변환하므로 purpose 키도 camelCase 로 다룬다
@@ -67,6 +70,9 @@ export function LlmSettingsTab() {
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
   const [testing, setTesting] = useState<string | null>(null);
   const [testResult, setTestResult] = useState<{ profile: string; result: LlmTestResult } | null>(null);
+  const diagLog = useRunLog();
+  const [showDiagLog, setShowDiagLog] = useLogPref('llm-diagnose');
+  const [diagResult, setDiagResult] = useState<LlmDiagnoseResult | null>(null);
   const [credModalOpen, setCredModalOpen] = useState(false);
   const credModalRef = useModalA11y(credModalOpen, () => setCredModalOpen(false));
   const [credName, setCredName] = useState('');
@@ -79,7 +85,7 @@ export function LlmSettingsTab() {
   }, [settingsResp, draft]);
 
   const healthByProfile = useMemo(() => {
-    const map: Record<string, { status: string; detail: string; latencyMs: number }> = {};
+    const map: Record<string, LlmHealthEntry> = {};
     (health ?? []).forEach((h) => { map[h.profile] = h; });
     return map;
   }, [health]);
@@ -202,6 +208,40 @@ export function LlmSettingsTab() {
     }
   };
 
+  // 계층별 연결 진단 — 설정 원천 → DNS → TCP → 서버 → 모델 → 생성. 단계·조치 힌트는 서버가 흘린다.
+  const runDiagnose = async (name: string) => {
+    setDiagResult(null);
+    const res = await streamLogged<LlmDiagnoseResult>(diagLog, {
+      title: `${name} 연결 진단`,
+      first: `${name} 프로필 연결 진단 시작`,
+      url: llmApi.diagnoseStreamUrl(),
+      body: { profile: name },
+      summarize: (r): RunLogEntry[] => {
+        const fails = r.checks.filter((c) => c.status === 'fail').length;
+        const warns = r.checks.filter((c) => c.status === 'warn').length;
+        return [[fails ? 'error' : warns ? 'warn' : 'info', `단계 ${r.checks.length} · 실패 ${fails} · 확인 필요 ${warns}`]];
+      },
+    });
+    if (res.ok) {
+      setDiagResult(res.data);
+      if (res.data.ok) toast.success('진단 완료', `${name}: 챗봇이 응답할 수 있습니다.`);
+      else toast.error('진단 실패', `${name}: 실행 로그에서 막힌 단계를 확인하세요.`);
+    } else if (!res.aborted) {
+      toast.error('진단 실행 실패', formatApiError(res.error));
+    }
+  };
+
+  // 진단이 찾아낸 실제 모델명으로 프로필을 고친다(자동 해석 재시도 없이 바로 호출되게).
+  const applyResolvedModel = () => {
+    if (!diagResult?.resolvedModel) return;
+    const target = diagResult.resolvedModel;
+    void save({
+      ...draft,
+      profiles: draft.profiles.map((p) => (p.name === diagResult.profile ? { ...p, model: target } : p)),
+    });
+    setDiagResult({ ...diagResult, model: target });
+  };
+
   const setRoute = (purpose: string, field: 'primary' | 'fallback', value: string) => {
     const cur = draft.routing[purpose] ?? { primary: draft.profiles[0]?.name ?? '', fallback: null };
     const nextRoute = { ...cur, [field]: field === 'fallback' && value === '' ? null : value };
@@ -219,6 +259,13 @@ export function LlmSettingsTab() {
     }
     if (h.status === 'online' && h.detail) {
       return <span className="px-2 py-0.5 text-xs rounded-full bg-status-warning/15 text-status-warning" title={h.detail}>모델 미준비</span>;
+    }
+    if (h.status === 'online' && h.resolvedModel) {
+      return (
+        <span className="px-2 py-0.5 text-xs rounded-full bg-secondary text-muted-foreground" title={h.hint}>
+          온라인 · {h.resolvedModel} 로 자동 해석
+        </span>
+      );
     }
     if (h.status === 'online') {
       return <span className="px-2 py-0.5 text-xs rounded-full bg-secondary text-muted-foreground">온라인 · {h.latencyMs}ms</span>;
@@ -274,6 +321,18 @@ export function LlmSettingsTab() {
               </button>
               <button
                 type="button"
+                onClick={() => void runDiagnose(p.name)}
+                disabled={diagLog.running}
+                title="연결 진단 실행 — DNS·포트·모델·응답을 단계별로 확인"
+                aria-label={`${p.name} 연결 진단 실행`}
+                className="p-1.5 rounded-xl hover:bg-secondary text-muted-foreground hover:text-foreground disabled:opacity-50"
+              >
+                {diagLog.running && diagLog.title === `${p.name} 연결 진단`
+                  ? <Loader2 className="w-4 h-4 animate-spin" />
+                  : <Stethoscope className="w-4 h-4" />}
+              </button>
+              <button
+                type="button"
                 onClick={() => { setEditing({ ...p }); setEditingOriginalName(p.name); }}
                 title="편집"
                 aria-label={`${p.name} 편집`}
@@ -305,6 +364,28 @@ export function LlmSettingsTab() {
                 실패: {testResult.result.error ?? testResult.result.status}
               </span>
             )}
+          </div>
+        )}
+        {(diagLog.running || diagLog.lines.length > 0) && (
+          <div className="px-4 py-3 border-t border-border">
+            <RunLogPanel
+              run={diagLog}
+              show={showDiagLog}
+              onShowChange={setShowDiagLog}
+              actions={
+                diagResult?.resolvedModel && diagResult.resolvedModel !== diagResult.model ? (
+                  <button
+                    type="button"
+                    onClick={applyResolvedModel}
+                    disabled={updateMut.isPending}
+                    title={`프로필 모델명을 '${diagResult.resolvedModel}' 로 저장`}
+                    className="text-xs px-2 py-1 rounded-xl border border-border bg-background hover:bg-secondary disabled:opacity-50"
+                  >
+                    모델명을 {diagResult.resolvedModel} 로 저장
+                  </button>
+                ) : undefined
+              }
+            />
           </div>
         )}
       </MacCard>
