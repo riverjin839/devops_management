@@ -98,7 +98,7 @@ devops_management/
 ├── k8s/                 # Kustomize base + overlays(dev/prod/kind/airgap) + superpod/(CronJob)
 ├── helm/k8s-daily-monitor/   # values / -dev / -prod / -airgap
 ├── scripts/             # kind-setup.sh, deploy-airgap.sh, init-cluster.sh,
-│                        #   release/{bump_version,decide_bump,changelog_sections,check_changelog_sections}.py,
+│                        #   release/{bump_version,decide_bump,changelog_sections,check_changelog_sections,check_versions}.py,
 │                        #   docs/check_docs_sync.py, report/(AI 개발 리포트 집계·HTML 빌드),
 │                        #   a11y/(axe 접근성 스캔), ui/check_dialogs.py(모달 어댑터 검사 — CI)
 ├── ansible/playbooks/  argocd/  docker/ vagrant/ windows-docker/
@@ -455,6 +455,9 @@ Makefile 타깃(`make k8s-dev`, `make docker-rebuild` 등)은 `make help` 로 �
   (`scripts/release/check_changelog_sections.py`), CI 이후 릴리스가 끼어든 경우는 auto-release 가
   끼어든 항목을 `[Unreleased]` 로 되돌린다. 의도적 위치 정리 PR 만 제목에 `[changelog-fix]`.
   상세는 `docs/branch-tag-strategy.md` "이미 릴리스된 섹션 보호".
+- **머지에 실패해 남은 `chore(release)` PR 은 충돌 해결로 머지하지 않는다.** auto-release 는 한 줄로
+  돌고(`concurrency`) 실패한 릴리스 PR 을 스스로 닫는다. 버전 3곳·CHANGELOG 최신 섹션 일치는 CI 가
+  `scripts/release/check_versions.py` 로 검사한다(1.64.2 충돌 머지로 `main.py` 버전 줄 중복 → backend 기동 불가 이력).
 
 ### 사이드바 "릴리즈 노트" 패널
 
