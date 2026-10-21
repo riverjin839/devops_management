@@ -22,6 +22,10 @@ jobs:
       - name: Release script tests
         run: python3 -m unittest discover -s scripts/release -p 'test_*.py' -v
 
+      # 버전 3곳 + CHANGELOG 최신 섹션 일치 — 충돌 해결로 버전 줄이 중복되는 것을 막는다(release PR 포함).
+      - name: Version strings consistent
+        run: python3 scripts/release/check_versions.py
+
       # 이미 릴리스된 CHANGELOG 섹션 보호 — 브랜치 생성 후 auto-release 가 끼어들면 [Unreleased]
       # 에 넣은 항목이 git 머지로 새 버전 섹션 안에 들어간다(checkout 은 PR→base 머지 결과).
       # 의도적 위치 정리는 PR 제목에 [changelog-fix]. 로직: scripts/release/changelog_sections.py
