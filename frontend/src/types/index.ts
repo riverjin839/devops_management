@@ -5991,6 +5991,19 @@ export interface ExternalServiceEntry {
     source: 'node' | 'backend' | null;
     checkedAt: string | null;
   } | null;
+  /** TLS 인증서 — https Ingress 와 TLS 포트의 엔드포인트. daysLeft 는 조회 시점 기준. null = 대상 아님/확인 안 함 */
+  tls: {
+    level: 'ok' | 'warning' | 'critical' | 'expired' | 'error';
+    notAfter: string | null;
+    daysLeft: number | null;
+    subjectCn: string | null;
+    issuerCn: string | null;
+    san: string[];
+    hostMatch: boolean | null;
+    error: string | null;
+    source: 'node' | 'backend' | null;
+    checkedAt: string | null;
+  } | null;
 }
 
 export interface ExternalServicesView {
@@ -5998,7 +6011,8 @@ export interface ExternalServicesView {
   collectedAt: string | null;
   collectedBy?: string;
   resolver?: string | null;
-  summary: { byKind: Record<string, number>; total: number; ips: number; resolved: number; issues?: number } | null;
+  summary: { byKind: Record<string, number>; total: number; ips: number; resolved: number; issues?: number; tlsExpiring?: number } | null;
+  tlsThresholds?: { warnDays: number; criticalDays: number };
   error: string | null;
   entries: ExternalServiceEntry[];
   nodeIps: { name: string; internalIp: string | null; externalIp: string | null }[];
@@ -6023,4 +6037,9 @@ export interface ExternalServicesSettings {
   probeMax: number;
   probeTcpCommand: string;
   probeHttpCommand: string;
+  tlsCheck: boolean;
+  tlsPorts: number[];
+  tlsWarnDays: number;
+  tlsCriticalDays: number;
+  tlsCommand: string;
 }

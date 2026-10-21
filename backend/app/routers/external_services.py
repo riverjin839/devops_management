@@ -68,6 +68,7 @@ class CollectBody(BaseModel):
     # 이번 수집에서만 설정값을 덮는다(None 이면 설정 `forward_check` / `probe_enabled`).
     forward_check: Optional[bool] = None
     probe: Optional[bool] = None
+    tls_check: Optional[bool] = None
 
 
 @router.post("/{cluster_id}/collect/stream")
@@ -98,7 +99,7 @@ async def collect_stream(cluster_id: UUID, payload: CollectBody, request: Reques
         loop = asyncio.get_running_loop()
         return await loop.run_in_executor(None, lambda: _es.collect(
             sdb, c, resolver=payload.resolver, ssh_target=target, actor=username,
-            forward_check=payload.forward_check, probe=payload.probe,
+            forward_check=payload.forward_check, probe=payload.probe, tls_check=payload.tls_check,
             emit=lambda lvl, msg: log_evt(emit, lvl, msg),
             step=lambda name, label, st: step_evt(emit, name, label, st),
         ))
@@ -125,6 +126,11 @@ class SettingsBody(BaseModel):
     probe_max: Optional[int] = None
     probe_tcp_command: Optional[str] = None
     probe_http_command: Optional[str] = None
+    tls_check: Optional[bool] = None
+    tls_ports: Optional[list[int]] = None
+    tls_warn_days: Optional[int] = None
+    tls_critical_days: Optional[int] = None
+    tls_command: Optional[str] = None
 
 
 @router.get("/settings")
@@ -145,11 +151,12 @@ def put_settings(payload: SettingsBody, request: Request, db: Session = Depends(
             pass
     if "ptr_command" in values and "{ip}" not in values["ptr_command"]:
         raise HTTPException(status_code=422, detail="ptr_command 에는 {ip} 자리표시가 있어야 합니다")
-    for key, ph in (("fwd_command", "{domain}"), ("probe_tcp_command", "{ip}"), ("probe_http_command", "{host}")):
+    for key, ph in (("fwd_command", "{domain}"), ("probe_tcp_command", "{ip}"), ("probe_http_command", "{host}"),
+                    ("tls_command", "{ip}")):
         if key in values and (ph not in values[key] or not _es.template_ok(values[key])):
             raise HTTPException(status_code=422, detail=(
                 f"{key} 에는 {ph} 자리표시가 있어야 하고, 쓸 수 있는 자리표시는 "
-                "{domain}·{ip}·{port}·{host}·{scheme}·{timeout} 뿐입니다(리터럴 중괄호는 {{ }})"))
+                "{domain}·{ip}·{port}·{host}·{scheme}·{timeout}·{sni} 뿐입니다(리터럴 중괄호는 {{ }})"))
     val = _es.set_settings(db, values)
     audit_logger.record(db, action="external_services.settings.update", actor=actor, status="success",
                         target_type="external_services", target_id="settings", details=values, request=request)

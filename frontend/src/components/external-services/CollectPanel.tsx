@@ -38,6 +38,7 @@ export function CollectPanel({ clusterId, clusterName }: { clusterId: string; cl
   const [resolver, setResolver] = useState<Resolver>('ssh');
   const [forwardCheck, setForwardCheck] = useState(true);
   const [probe, setProbe] = useState(true);
+  const [tlsCheck, setTlsCheck] = useState(true);
   const [host, setHost] = useState({ selectedName: '', customHost: '', effectiveHost: '' });
   const [port, setPort] = useState(22);
   const [username, setUsername] = useState('root');
@@ -63,6 +64,7 @@ export function CollectPanel({ clusterId, clusterName }: { clusterId: string; cl
           resolver,
           forward_check: forwardCheck,
           probe,
+          tls_check: tlsCheck,
           ssh: resolver === 'ssh' ? {
             host: host.effectiveHost, port, username,
             password: authMode === 'password' ? secret : null,
@@ -154,6 +156,13 @@ export function CollectPanel({ clusterId, clusterName }: { clusterId: string; cl
                 <span>
                   응답 확인
                   <span className="block text-[11px] text-muted-foreground leading-snug">IP:Port 에 TCP 연결, Ingress 는 Host 헤더를 실은 HTTP 요청으로 상태코드·지연시간을 잰다.</span>
+                </span>
+              </label>
+              <label className="flex items-start gap-2 text-sm">
+                <input type="checkbox" className="accent-primary mt-1" checked={tlsCheck} onChange={(e) => setTlsCheck(e.target.checked)} />
+                <span>
+                  TLS 인증서 만료일
+                  <span className="block text-[11px] text-muted-foreground leading-snug">https Ingress 와 TLS 포트(설정)의 인증서를 받아 만료일·호스트 일치를 본다.</span>
                 </span>
               </label>
             </fieldset>

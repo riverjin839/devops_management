@@ -1,7 +1,7 @@
-// 외부 서비스 목록 표 — 도메인 / 주소(IP:Port) / 유형 / 네임스페이스·이름 / 대상 / 도메인 출처 / 정방향 검증 / 응답.
+// 외부 서비스 목록 표 — 도메인 / 주소(IP:Port) / 유형 / 네임스페이스·이름 / 대상 / 도메인 출처 / 정방향 검증 / 응답 / 인증서.
 import { ExternalLink } from 'lucide-react';
 import type { ExternalServiceEntry } from '@/types';
-import { addressOf, domainOf, fwdView, probeView } from './format';
+import { addressOf, domainOf, fwdView, probeView, tlsView } from './format';
 
 const TH = 'px-3 py-2 text-left font-medium text-muted-foreground whitespace-nowrap';
 const TD = 'px-3 py-2 align-top';
@@ -28,6 +28,7 @@ export function ExternalServicesTable({ rows, nodeHint }: { rows: ExternalServic
             <th className={TH}>도메인 출처</th>
             <th className={TH} title="도메인의 A 레코드가 이 엔드포인트 IP 를 가리키는지">정방향 검증</th>
             <th className={TH} title="TCP 연결 또는 Ingress 는 Host 헤더를 실은 HTTP 요청">응답</th>
+            <th className={TH} title="TLS 인증서 만료까지 남은 일수(만료일) — 셀에 마우스를 올리면 주체·발급자·SAN">인증서</th>
           </tr>
         </thead>
         <tbody>
@@ -73,6 +74,7 @@ export function ExternalServicesTable({ rows, nodeHint }: { rows: ExternalServic
                 <td className={`${TD} text-xs text-muted-foreground whitespace-nowrap`}>{d.source ?? '—'}</td>
                 <Status v={fwdView(e)} />
                 <Status v={probeView(e)} />
+                <Status v={tlsView(e)} />
               </tr>
             );
           })}

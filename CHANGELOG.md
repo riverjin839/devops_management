@@ -11,6 +11,7 @@
 1.64.1 이후 main 에 병합된 변경 (다음 릴리스 후보).
 
 ### Added
+- **외부 서비스 — TLS 인증서 만료일**: 외부 서비스 화면(`/external-services`)에 **인증서** 열을 더했다. https Ingress(SNI = 선언 도메인)와 TLS 포트(기본 443·8443)의 LoadBalancer·ExternalIP·NodePort 인증서를 받아 `D-23 (2026-11-13)` 처럼 만료까지 남은 일수를 보여주고, 경고(기본 30일)·위험(기본 7일)·만료·호스트 불일치(인증서 SAN 이 도메인과 안 맞음)만 색으로 표시한다. 셀에 마우스를 올리면 주체·발급자·SAN, **문제 있음** 필터와 CSV 에도 포함된다. 남은 일수는 조회 시점 기준으로 다시 계산한다. 수집 다이얼로그에서 이번 수집의 확인 여부를 고르고, SSH 노드를 주면 노드에서 `openssl s_client` 로, 아니면 backend 에서 확인한다. TLS 포트·경고/위험 일수·노드 명령은 관리자 설정. Backend: `services/external_tls.py` + `external_service_snapshots.tls_results` 컬럼(`_safe_add_column` 보강).
 - **요청 ID 추적**: 모든 API 요청에 요청 ID 가 붙는다. 서버 오류(5xx)·응답 없음(타임아웃) 토스트에 "요청 ID" 가 보이고, "요청 ID 복사"·"원인 보기"(admin)로 바로 원인을 찾는다. 서버 로그 줄마다 `[req=ID]`, 감사 로그 details 에도 같은 ID 가 남는다.
 - **Settings ▸ 서버 오류**: 처리 안 된 예외·5xx 응답을 요청 ID·경로로 찾아 스택·응답한 파드·버전·같은 요청의 감사 기록을 본다(30일 보관). 처리 안 된 예외는 빈 500 대신 요청 ID 를 담은 사유로 응답한다. Backend: `GET /system-errors`, `system_error_logs` 테이블, 응답 헤더 `X-Request-ID`.
 - **Settings ▸ 시스템 진단**: "지금 어디가 문제인가" 를 한 화면에서 본다 — 살아 있는 backend 파드와 각 버전(섞이면 경고 — 롤링 배포 중·새 파드 기동 실패), 부팅 마이그레이션 실패 단계·미룬 DDL, Celery 워커·큐 적체, DB lock 대기(막는 pid)·오래 열린 트랜잭션·연결 사용률, 오래 대기 중인 점검 수행, 최근 서버 오류. 수집에 실패한 섹션은 사유와 함께 "수집 실패" 로만 보인다. Backend: `GET /system-diagnostics`, 파드 heartbeat(Redis `pep:backend-pod:*`).

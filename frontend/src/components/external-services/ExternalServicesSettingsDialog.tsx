@@ -42,11 +42,13 @@ export function ExternalServicesSettingsDialog({ open, onClose }: { open: boolea
   const save = useSaveExternalServicesSettings();
   const [form, setForm] = useState<ExternalServicesSettings | null>(null);
   const [excludeText, setExcludeText] = useState('');
+  const [tlsPortsText, setTlsPortsText] = useState('');
 
   useEffect(() => {
     if (open && data) {
       setForm(data);
       setExcludeText(data.excludeNamespaces.join(', '));
+      setTlsPortsText(data.tlsPorts.join(', '));
     }
   }, [open, data]);
 
@@ -59,6 +61,7 @@ export function ExternalServicesSettingsDialog({ open, onClose }: { open: boolea
       await save.mutateAsync({
         ...form,
         excludeNamespaces: excludeText.split(/[\s,]+/).map((s) => s.trim()).filter(Boolean),
+        tlsPorts: tlsPortsText.split(/[\s,]+/).map((s) => Number(s)).filter((n) => Number.isInteger(n) && n > 0 && n < 65536),
       });
       toast.success('외부 서비스 설정 저장됨');
       onClose();
@@ -136,6 +139,24 @@ export function ExternalServicesSettingsDialog({ open, onClose }: { open: boolea
             </Field>
             <Field label="노드 HTTP 확인 명령" help="{scheme}·{host}·{ip}·{port}·{timeout}. 마지막 줄의 3자리 숫자를 상태코드로 읽는다. 리터럴 중괄호는 {{ }}.">
               <input className={`${INPUT} font-mono`} value={form.probeHttpCommand} onChange={(e) => set('probeHttpCommand', e.target.value)} />
+            </Field>
+            <Check checked={form.tlsCheck} onChange={(v) => set('tlsCheck', v)}
+              label="TLS 인증서 만료일 확인" help="https Ingress(SNI = 선언 도메인)와 아래 포트의 LB·ExternalIP·NodePort 인증서. 체인 신뢰는 보지 않는다." />
+            <div className="grid grid-cols-3 gap-3">
+              <Field label="TLS 포트" help="쉼표 구분. Ingress 외 엔드포인트 중 이 포트만 확인.">
+                <input className={`${INPUT} font-mono`} value={tlsPortsText} onChange={(e) => setTlsPortsText(e.target.value)} placeholder="443, 8443" />
+              </Field>
+              <Field label="경고(일)" help="남은 일수가 이 이하면 경고.">
+                <input type="number" min={1} max={365} className={INPUT} value={form.tlsWarnDays}
+                  onChange={(e) => set('tlsWarnDays', Number(e.target.value))} />
+              </Field>
+              <Field label="위험(일)" help="이 이하면 위험(경고 이하로 맞춰진다).">
+                <input type="number" min={0} max={365} className={INPUT} value={form.tlsCriticalDays}
+                  onChange={(e) => set('tlsCriticalDays', Number(e.target.value))} />
+              </Field>
+            </div>
+            <Field label="노드 인증서 확인 명령" help="{ip}·{port}·{timeout}·{sni}(-servername 도메인, 없으면 빈 값)·{host}. openssl x509 -enddate/-subject/-issuer/-text 출력을 읽는다.">
+              <input className={`${INPUT} font-mono`} value={form.tlsCommand} onChange={(e) => set('tlsCommand', e.target.value)} />
             </Field>
             <Field label="공개 클러스터"
               help="아무것도 고르지 않으면 테넌트에 묶이지 않은 클러스터 전체가 공개된다. 고르면 고른 것만 공개된다.">

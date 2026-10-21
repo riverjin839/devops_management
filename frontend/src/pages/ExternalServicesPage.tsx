@@ -30,7 +30,7 @@ export function ExternalServicesPage() {
   const clusterId = params.get('c') && clusters.some((c) => c.id === params.get('c'))
     ? (params.get('c') as string) : (clusters[0]?.id ?? '');
   const kind = isKind(params.get('k')) ? (params.get('k') as ExternalServiceKind) : null;
-  // 정방향 불일치·조회 안 됨·응답 없음만 보기(URL `i=1`).
+  // 정방향 불일치·조회 안 됨·응답 없음·인증서 임박/만료/호스트 불일치만 보기(URL `i=1`).
   const issuesOnly = params.get('i') === '1';
   const q = params.get('q') ?? '';
   const [qInput, setQInput] = useState(q);
@@ -181,7 +181,7 @@ export function ExternalServicesPage() {
                       </button>
                     ))}
                     <button type="button" aria-pressed={issuesOnly}
-                      title="도메인 정방향 불일치·조회 안 됨, 또는 응답 없음인 엔드포인트만"
+                      title="도메인 정방향 불일치·조회 안 됨, 응답 없음, 인증서 만료 임박·만료·호스트 불일치인 엔드포인트만"
                       className={cn(CHIP, 'text-xs px-2.5', issuesOnly ? CHIP_ON : CHIP_OFF,
                         !issuesOnly && (counts.issues ?? 0) > 0 && 'text-status-warning')}
                       onClick={() => update({ i: issuesOnly ? '' : '1' })}>
