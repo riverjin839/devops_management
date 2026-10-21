@@ -11,9 +11,13 @@ selected cluster instead of forcing the user to paste pod info manually.
 import fnmatch
 import json
 import logging
+import math
 import os
+import queue
+import re
 import threading
 import time
+import weakref
 from datetime import datetime
 from typing import Literal, Optional
 from uuid import UUID
@@ -23,6 +27,7 @@ from fastapi.responses import PlainTextResponse, StreamingResponse
 from kubernetes import client as k8s_client, watch as k8s_watch
 from kubernetes.client.exceptions import ApiException
 from pydantic import BaseModel, Field
+from urllib3.exceptions import ProtocolError, ReadTimeoutError
 from sqlalchemy.orm import Session
 
 from app.auth.deps import get_current_user
@@ -47,11 +52,65 @@ from app.services.k8s_client_pool import get_api_client_for_path
 
 logger = logging.getLogger(__name__)
 
-# kubernetes SDK 는 blocking urllib3 라 SSE 스트림 하나가 anyio 스레드풀 슬롯 하나를
-# 스트림 수명 내내 점유한다(follow=True 는 원래 무제한). 이 세마포어가 프로세스당
-# 동시 로그/이벤트 스트림 수를 제한해, 스트림이 나머지 529개 엔드포인트의 스레드풀
-# 슬롯을 다 먹어치우는 것을 막는다 — 초과 요청은 대기시키지 않고 즉시 429.
-_stream_semaphore = threading.BoundedSemaphore(settings.log_stream_max_concurrent)
+# ── 로그/이벤트 SSE 스트림 동시 한도 (D-182) ─────────────────────────────
+# kubernetes SDK 는 blocking urllib3 라 스트림 하나가 K8s 연결 하나와 스레드 하나를 쓴다.
+# 사용자당 3 + 프로세스 전체 `log_stream_max_concurrent`(기본 20) 로 묶는다 — 한 사람이
+# 스트림을 여러 번 열어 다른 운영자 전원이 429 를 받는 일을 막는다. 초과는 대기 없이 즉시 429.
+# 슬롯 반환은 generator `finally` + 시작 전 끊김(generator 미시작 GC)의 `weakref.finalize`
+# 두 경로로 보장하고, 반환은 멱등이다. (프로세스 단위 한도 — replica·worker 마다 따로 센다.)
+_LOG_STREAM_PER_USER = 3
+
+
+class _StreamSlot:
+    """한도 슬롯 1개. `release()` 는 몇 번 불려도 한 번만 반환한다."""
+
+    __slots__ = ("_limiter", "_user_key", "_released", "_lock", "__weakref__")
+
+    def __init__(self, limiter: "_StreamLimiter", user_key: str):
+        self._limiter = limiter
+        self._user_key = user_key
+        self._released = False
+        self._lock = threading.Lock()
+
+    def release(self) -> None:
+        with self._lock:
+            if self._released:
+                return
+            self._released = True
+        self._limiter._release(self._user_key)
+
+
+class _StreamLimiter:
+    def __init__(self, per_user: int, total: int):
+        self.per_user = max(1, int(per_user))
+        self.total = max(1, int(total))
+        self._lock = threading.Lock()
+        self._count = 0
+        self._by_user: dict[str, int] = {}
+
+    def try_acquire(self, user_key: str) -> Optional[_StreamSlot]:
+        with self._lock:
+            if self._count >= self.total or self._by_user.get(user_key, 0) >= self.per_user:
+                return None
+            self._count += 1
+            self._by_user[user_key] = self._by_user.get(user_key, 0) + 1
+        return _StreamSlot(self, user_key)
+
+    def _release(self, user_key: str) -> None:
+        with self._lock:
+            self._count = max(0, self._count - 1)
+            left = self._by_user.get(user_key, 0) - 1
+            if left > 0:
+                self._by_user[user_key] = left
+            else:
+                self._by_user.pop(user_key, None)
+
+    def in_use(self, user_key: Optional[str] = None) -> int:
+        with self._lock:
+            return self._count if user_key is None else self._by_user.get(user_key, 0)
+
+
+_stream_limiter = _StreamLimiter(_LOG_STREAM_PER_USER, settings.log_stream_max_concurrent)
 
 _K8S_TIMEOUT = 15
 # 큰 클러스터(수천 namespace · 수만 pod) 대비 — 무거운 list 호출은 별도 타임아웃.
@@ -578,6 +637,344 @@ class IncidentContextFetchResponse(BaseModel):
     container: Optional[str] = None
 
 
+# ── SSE 스트림 공용 (D-182·D-187) ─────────────────────────────────────
+# 계약(프론트 PodLogStream·이벤트 탭이 이 형식에 맞춰 구현됨):
+#   - 로그/이벤트 1건: `data: <line>\n\n`
+#   - 종료:  `event: end\ndata: {"reason": "eof"|"max_duration"|"truncated", "bytes": N}\n\n` 후 닫음
+#   - 오류:  `event: error\ndata: {"message": "<한국어>"}\n\n` 후 닫음
+#   - 하트비트: 데이터가 없으면 ≤15초마다 `: ping\n\n`(SSE 주석 — 화면은 무시). 쓰기가 일어나야
+#     서버가 끊긴 클라이언트를 알아채므로 슬롯이 바로 반환된다.
+# 구조: K8s 읽기는 데몬 리더 스레드가 하고 큐로 넘긴다. 응답 generator 는 큐를 하트비트 주기로
+# 기다리므로 조용한 파드에서도 최대 시간·연결 해제를 벽시계로 확인한다. K8s 읽기 자체는
+# 읽기 타임아웃(30초)으로 깨어나 마지막 수신 시점 기준 `since_seconds` 로 이어 읽는다
+# (timestamps=true 고정 → 겹친 줄은 타임스탬프로 걸러 공백·중복 없음).
+_LOG_STREAM_HEARTBEAT_SECONDS = 15.0
+_LOG_STREAM_REQUEST_TIMEOUT = (10, 30)  # (connect, read) 초
+_LOG_STREAM_MAX_BYTES = 10_000_000  # 스트림 1개가 보내는 로그 본문 상한 → 넘으면 end(truncated)
+_LOG_STREAM_RESUME_MARGIN_SECONDS = 5  # 이어 읽기 창 여유(겹침은 타임스탬프로 제거)
+_LOG_STREAM_MAX_RECONNECTS = 3  # 데이터 없이 연속 끊김(타임아웃 제외) 허용 횟수
+_LOG_STREAM_QUEUE_MAX = 2000
+_LOG_STREAM_DRAIN_BATCH = 500
+
+_SSE_HEADERS = {
+    "Cache-Control": "no-cache",
+    # nginx 의 기본 proxy_buffering 을 이 응답에 한해 끔 — 없으면 nginx 가
+    # 응답을 다 모을 때까지 버퍼링해 로그 스트림 실시간성이 사라진다.
+    "X-Accel-Buffering": "no",
+    "Connection": "keep-alive",
+    # GZipMiddleware 는 이 헤더가 있으면 압축을 건너뛴다 — SSE 를 gzip 하면
+    # zlib 내부 버퍼링 때문에 위 X-Accel-Buffering:no 의 실시간성이 깨진다.
+    "Content-Encoding": "identity",
+}
+
+# kubelet 이 붙이는 RFC3339Nano 타임스탬프 (timestamps=true).
+_LOG_TS_RE = re.compile(r"^(\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d)(?:\.(\d{1,9}))?Z$")
+
+
+def _stream_limit_detail() -> str:
+    return (
+        f"동시 로그 스트림 한도(사용자당 {_stream_limiter.per_user}·전체 {_stream_limiter.total})를 "
+        "넘었습니다. 다른 스트림을 닫고 다시 시도하세요."
+    )
+
+
+def _acquire_stream_slot(user: User) -> _StreamSlot:
+    slot = _stream_limiter.try_acquire(str(getattr(user, "id", None) or getattr(user, "username", "")))
+    if slot is None:
+        raise HTTPException(status_code=429, detail=_stream_limit_detail())
+    return slot
+
+
+def _sse_event(event: str, payload: dict) -> str:
+    return f"event: {event}\ndata: {json.dumps(payload, ensure_ascii=False)}\n\n"
+
+
+def _sse_data(text: str) -> str:
+    # SSE data 필드는 줄바꿈을 담을 수 없다 — 한 줄 = 한 이벤트.
+    return f"data: {text.replace(chr(13), '').replace(chr(10), ' ')}\n\n"
+
+
+def _is_read_timeout(exc: BaseException) -> bool:
+    seen = 0
+    cur: Optional[BaseException] = exc
+    while cur is not None and seen < 6:
+        if isinstance(cur, (ReadTimeoutError, TimeoutError)):
+            return True
+        if "read timed out" in str(cur).lower():
+            return True
+        cur = cur.__cause__ or cur.__context__
+        seen += 1
+    return False
+
+
+def _is_conn_broken(exc: BaseException) -> bool:
+    return isinstance(exc, (ProtocolError, ConnectionError))
+
+
+def _stream_error_message(exc: BaseException, what: str) -> str:
+    if isinstance(exc, ApiException):
+        msg = ""
+        try:
+            body = json.loads(exc.body or "{}")
+            msg = str(body.get("message") or "")
+        except Exception:  # noqa: BLE001
+            msg = ""
+        return f"{what} 실패 (HTTP {exc.status}): {(msg or exc.reason or '').strip()[:200]}"
+    if _is_read_timeout(exc):
+        return f"{what} 실패: K8s API 응답이 없습니다(읽기 타임아웃)."
+    return f"{what} 실패: {str(exc)[:200] or type(exc).__name__}"
+
+
+def _log_ts_key(line: str) -> tuple[Optional[tuple[str, int]], str]:
+    """`<RFC3339Nano> <본문>` → ((초 단위 시각, 나노초), 본문). 타임스탬프가 없으면 (None, line)."""
+    ts, _sep, rest = line.partition(" ")
+    m = _LOG_TS_RE.match(ts)
+    if not m:
+        return None, line
+    nanos = int((m.group(2) or "0").ljust(9, "0"))
+    return (m.group(1), nanos), rest
+
+
+def _shutdown_resp(resp) -> None:
+    """다른 스레드에서 막혀 있는 urllib3 응답 읽기를 깨운다 (urllib3 ≥2.3 `shutdown`)."""
+    if resp is None:
+        return
+    try:
+        shutdown = getattr(resp, "shutdown", None)
+        if callable(shutdown):
+            shutdown()
+    except Exception:  # noqa: BLE001
+        pass
+
+
+def _close_resp(resp) -> None:
+    if resp is None:
+        return
+    for fn in ("close", "release_conn"):
+        try:
+            getattr(resp, fn)()
+        except Exception:  # noqa: BLE001
+            pass
+
+
+class _StreamChannel:
+    """리더 스레드 → 응답 generator 큐. `put` 은 소비자가 떠나면(stop) 포기한다."""
+
+    def __init__(self) -> None:
+        self.q: "queue.Queue[tuple[str, str]]" = queue.Queue(maxsize=_LOG_STREAM_QUEUE_MAX)
+        self.stop = threading.Event()
+        self.resp = None  # 현재 읽는 urllib3 응답 (끊을 때 shutdown)
+        self.watch = None  # 현재 Watch (끊을 때 stop)
+
+    def put(self, kind: str, value: str) -> bool:
+        while not self.stop.is_set():
+            try:
+                self.q.put((kind, value), timeout=1.0)
+                return True
+            except queue.Full:
+                continue
+        return False
+
+    def close(self) -> None:
+        self.stop.set()
+        _shutdown_resp(self.resp)
+        w = self.watch
+        if w is not None:
+            try:
+                w.stop()
+            except Exception:  # noqa: BLE001
+                pass
+
+
+class _SlotStream:
+    """SSE generator 래퍼 — `close()` 가 (한 번도 시작 안 된 generator 여도) 슬롯을 반환한다.
+
+    시작 전 generator 의 `close()` 는 본문 `finally` 를 돌리지 않으므로 여기서 직접 반환하고,
+    아무도 닫지 않고 버려지면 `weakref.finalize` 가 반환한다(응답 시작 전 클라이언트 끊김).
+    """
+
+    def __init__(self, gen, slot: _StreamSlot):
+        self._gen = gen
+        self._slot = slot
+        weakref.finalize(self, slot.release)
+
+    def __iter__(self):
+        return self
+
+    def __next__(self) -> str:
+        return next(self._gen)
+
+    def close(self) -> None:
+        try:
+            self._gen.close()
+        finally:
+            self._slot.release()
+
+
+def _sse_stream(reader, slot: _StreamSlot, *, max_bytes: Optional[int], what: str, thread_name: str):
+    """리더(`reader(channel)`)를 데몬 스레드로 돌리고 큐를 SSE 로 내보내는 iterator.
+
+    종료·오류 이벤트는 리더를 멈추고 슬롯을 반환한 **뒤** 마지막으로 내보낸다. 클라이언트가
+    끊어 generator 가 닫히면 `finally` 가 같은 정리를 한다.
+    """
+
+    def _run(ch: _StreamChannel) -> None:
+        try:
+            reader(ch)
+        except Exception as e:  # noqa: BLE001
+            if not ch.stop.is_set():
+                logger.info("%s stream reader error: %s", what, e)
+                ch.put("error", _stream_error_message(e, what))
+
+    def _pump(ch: _StreamChannel):
+        """로그·하트비트를 yield 하고, 끝나면 마지막(종료/오류) 청크를 return 한다."""
+        sent = 0
+        deadline = time.monotonic() + max(1, int(settings.log_stream_max_duration_seconds))
+        while True:
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                return _sse_event("end", {"reason": "max_duration", "bytes": sent})
+            try:
+                first = ch.q.get(timeout=min(_LOG_STREAM_HEARTBEAT_SECONDS, remaining))
+            except queue.Empty:
+                if deadline - time.monotonic() > 0:
+                    yield ": ping\n\n"
+                continue
+            items = [first]
+            while len(items) < _LOG_STREAM_DRAIN_BATCH:
+                try:
+                    items.append(ch.q.get_nowait())
+                except queue.Empty:
+                    break
+            parts: list[str] = []
+            for kind, value in items:
+                if kind == "line":
+                    size = len(value.encode("utf-8", errors="replace"))
+                    if max_bytes is not None and sent + size > max_bytes:
+                        parts.append(_sse_event("end", {"reason": "truncated", "bytes": sent}))
+                        return "".join(parts)
+                    sent += size
+                    parts.append(_sse_data(value))
+                elif kind == "end":
+                    parts.append(_sse_event("end", {"reason": value, "bytes": sent}))
+                    return "".join(parts)
+                else:
+                    parts.append(_sse_event("error", {"message": value}))
+                    return "".join(parts)
+            if parts:
+                yield "".join(parts)
+
+    def _gen():
+        ch = _StreamChannel()
+        try:
+            threading.Thread(target=_run, args=(ch,), name=thread_name, daemon=True).start()
+            final = yield from _pump(ch)
+        finally:
+            ch.close()
+            slot.release()
+        if final:
+            yield final
+
+    return _SlotStream(_gen(), slot)
+
+
+def _pod_log_reader(
+    v1: k8s_client.CoreV1Api,
+    *,
+    pod_name: str,
+    namespace: str,
+    container: Optional[str],
+    follow: bool,
+    previous: bool,
+    timestamps: bool,
+    tail_lines: int,
+    since_seconds: Optional[int],
+):
+    """파드 로그 리더 — 읽기 타임아웃이면 마지막 수신 시점 기준으로 이어 읽는다."""
+
+    def _reader(ch: _StreamChannel) -> None:
+        last_key: Optional[tuple[str, int]] = None
+        seen_at_last: set[str] = set()
+        last_rx: Optional[float] = None
+        connected_at = time.monotonic()
+        first = True
+        broken = 0
+        while not ch.stop.is_set():
+            kwargs: dict = dict(
+                name=pod_name,
+                namespace=namespace,
+                container=container or None,
+                follow=follow,
+                previous=previous,
+                # 이어 읽기 중복 제거에 필요해 항상 받고, 사용자가 끄면 본문만 보낸다.
+                timestamps=True,
+                _preload_content=False,
+                _request_timeout=_LOG_STREAM_REQUEST_TIMEOUT,
+            )
+            if first:
+                kwargs["tail_lines"] = max(1, min(tail_lines, 5000))
+                if since_seconds is not None and since_seconds > 0:
+                    kwargs["since_seconds"] = since_seconds
+            else:
+                ref = last_rx if last_rx is not None else connected_at
+                kwargs["since_seconds"] = max(
+                    1, int(math.ceil(time.monotonic() - ref)) + _LOG_STREAM_RESUME_MARGIN_SECONDS,
+                )
+            resumed = not first
+            first = False
+            connected_at = time.monotonic()
+            resp = v1.read_namespaced_pod_log(**kwargs)
+            ch.resp = resp
+            buf = b""
+            try:
+                try:
+                    for chunk in resp.stream(amt=None, decode_content=True):
+                        if ch.stop.is_set():
+                            return
+                        if not chunk:
+                            continue
+                        buf += chunk if isinstance(chunk, (bytes, bytearray)) else str(chunk).encode("utf-8")
+                        *complete, buf = buf.split(b"\n")
+                        for raw in complete:
+                            line = raw.decode("utf-8", errors="replace").rstrip("\r")
+                            key, body = _log_ts_key(line)
+                            if resumed and key is not None and last_key is not None:
+                                if key < last_key or (key == last_key and line in seen_at_last):
+                                    continue
+                            if key is not None:
+                                if key != last_key:
+                                    last_key = key
+                                    seen_at_last = set()
+                                if len(seen_at_last) < 1000:
+                                    seen_at_last.add(line)
+                            last_rx = time.monotonic()
+                            broken = 0
+                            if not ch.put("line", line if (timestamps or key is None) else body):
+                                return
+                except Exception as e:  # noqa: BLE001
+                    if ch.stop.is_set():
+                        return
+                    if follow and _is_read_timeout(e):
+                        continue  # 조용한 파드 — 이어 읽기 (미완성 줄은 다시 받는다)
+                    if follow and _is_conn_broken(e) and broken < _LOG_STREAM_MAX_RECONNECTS:
+                        broken += 1
+                        ch.stop.wait(1.0)
+                        continue
+                    raise
+                if buf:
+                    line = buf.decode("utf-8", errors="replace").rstrip("\r")
+                    key, body = _log_ts_key(line)
+                    if not (resumed and key is not None and last_key is not None and key <= last_key and line in seen_at_last):
+                        ch.put("line", line if (timestamps or key is None) else body)
+                ch.put("end", "eof")
+                return
+            finally:
+                ch.resp = None
+                _close_resp(resp)
+
+    return _reader
+
+
 @router.get("/clusters/{cluster_id}/namespaces/{namespace}/pods/{pod_name}/logs/stream")
 def stream_pod_logs(
     cluster_id: UUID,
@@ -590,75 +987,37 @@ def stream_pod_logs(
     timestamps: bool = False,
     since_seconds: Optional[int] = None,
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     """파드 로그 SSE 스트림 (읽기전용). follow=True 면 실시간 tail.
 
     OpenLens 류의 follow 로그 뷰어용. 인증된 fetch 로 ``text/event-stream`` 소비.
     멀티컨테이너 파드는 ``container`` 미지정 시 에러 → 컨테이너명을 지정한다.
     ``timestamps=True`` 면 각 줄 앞에 RFC3339 타임스탬프가 붙는다(표시 토글은 프론트).
+    종료·오류·하트비트 형식은 위 SSE 계약 주석 참고. 동시 한도 초과는 429(JSON ``detail``).
     """
     cluster = _require_cluster(cluster_id, db)
     v1 = _get_core_v1(cluster)
-
-    if not _stream_semaphore.acquire(blocking=False):
-        raise HTTPException(
-            status_code=429,
-            detail=f"동시 로그/이벤트 스트림 한도({settings.log_stream_max_concurrent})를 초과했습니다. "
-                    "다른 탭의 로그 뷰어를 닫고 다시 시도하세요.",
+    slot = _acquire_stream_slot(current_user)
+    try:
+        reader = _pod_log_reader(
+            v1,
+            pod_name=pod_name,
+            namespace=namespace,
+            container=container,
+            follow=follow,
+            previous=previous,
+            timestamps=timestamps,
+            tail_lines=tail_lines,
+            since_seconds=since_seconds,
         )
-
-    def _gen():
-        resp = None
-        deadline = time.monotonic() + settings.log_stream_max_duration_seconds
-        try:
-            kwargs = dict(
-                name=pod_name,
-                namespace=namespace,
-                container=container or None,
-                follow=follow,
-                tail_lines=max(1, min(tail_lines, 5000)),
-                previous=previous,
-                timestamps=timestamps,
-                _preload_content=False,
-            )
-            if since_seconds is not None and since_seconds > 0:
-                kwargs["since_seconds"] = since_seconds
-            resp = v1.read_namespaced_pod_log(**kwargs)
-            for chunk in resp.stream(amt=None, decode_content=True):
-                text = (
-                    chunk.decode("utf-8", errors="replace")
-                    if isinstance(chunk, (bytes, bytearray))
-                    else str(chunk)
-                )
-                for line in text.splitlines():
-                    yield f"data: {line}\n\n"
-                if follow and time.monotonic() > deadline:
-                    yield "data: [stream ended] 최대 스트림 시간 초과 — 새로고침 시 이어서 tail 됩니다\n\n"
-                    break
-        except Exception as e:  # noqa: BLE001
-            yield f"data: [stream error] {str(e)[:200]}\n\n"
-        finally:
-            try:
-                if resp is not None:
-                    resp.release_conn()
-            except Exception:  # noqa: BLE001
-                pass
-            _stream_semaphore.release()
-
-    return StreamingResponse(
-        _gen(),
-        media_type="text/event-stream",
-        headers={
-            "Cache-Control": "no-cache",
-            # nginx 의 기본 proxy_buffering 을 이 응답에 한해 끔 — 없으면 nginx 가
-            # 응답을 다 모을 때까지 버퍼링해 로그 스트림 실시간성이 사라진다.
-            "X-Accel-Buffering": "no",
-            "Connection": "keep-alive",
-            # GZipMiddleware 는 이 헤더가 있으면 압축을 건너뛴다 — SSE 를 gzip 하면
-            # zlib 내부 버퍼링 때문에 위 X-Accel-Buffering:no 의 실시간성이 깨진다.
-            "Content-Encoding": "identity",
-        },
-    )
+        gen = _sse_stream(
+            reader, slot, max_bytes=_LOG_STREAM_MAX_BYTES, what="로그 조회", thread_name="pod-log-stream",
+        )
+    except Exception:
+        slot.release()
+        raise
+    return StreamingResponse(gen, media_type="text/event-stream", headers=dict(_SSE_HEADERS))
 
 
 class PodContainerInfo(BaseModel):
@@ -718,7 +1077,10 @@ def download_pod_logs(
     tail_lines: Optional[int] = None,
     db: Session = Depends(get_db),
 ):
-    """파드 로그 전체 다운로드 (non-follow, 최대 10MB)."""
+    """파드 로그 전체 다운로드 (non-follow, 최대 10MB).
+
+    10MB 상한에 걸려 잘렸으면 응답 헤더 ``X-Log-Truncated: 1`` (D-187 ⑦ — 화면이 토스트로 알림).
+    """
     cluster = _require_cluster(cluster_id, db)
     v1 = _get_core_v1(cluster)
     try:
@@ -727,7 +1089,7 @@ def download_pod_logs(
             namespace=namespace,
             container=container or None,
             previous=previous,
-            limit_bytes=10_000_000,
+            limit_bytes=_LOG_STREAM_MAX_BYTES,
             _request_timeout=60,
         )
         if tail_lines is not None and tail_lines > 0:
@@ -736,10 +1098,16 @@ def download_pod_logs(
     except Exception as e:  # noqa: BLE001
         raise HTTPException(status_code=502, detail=f"로그 조회 실패: {str(e)[:200]}") from e
     filename = f"{pod_name}_{container or 'default'}{'.previous' if previous else ''}.log"
-    return PlainTextResponse(
-        text or "",
-        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
-    )
+    body = text or ""
+    headers = {
+        "Content-Disposition": f'attachment; filename="{filename}"',
+        # 교차 출처(개발 서버 등)에서도 fetch 가 헤더를 읽을 수 있게 노출.
+        "Access-Control-Expose-Headers": "Content-Disposition, X-Log-Truncated",
+    }
+    # kubelet 은 limit_bytes 에서 줄 중간이라도 자른다 — 상한에 닿았으면 잘린 것으로 본다.
+    if len(body.encode("utf-8", errors="replace")) >= _LOG_STREAM_MAX_BYTES:
+        headers["X-Log-Truncated"] = "1"
+    return PlainTextResponse(body, headers=headers)
 
 
 @router.get("/clusters/{cluster_id}/events/stream")
@@ -747,22 +1115,18 @@ def stream_cluster_events(
     cluster_id: UUID,
     namespace: Optional[str] = None,
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     """클러스터 이벤트 SSE 스트림 (읽기전용, Lens 의 Events 탭).
 
-    초기 스냅샷을 보낸 뒤 watch 로 신규 이벤트를 실시간 push 한다. 각 라인은
-    JSON 1건. 멀티유저 안정성을 위해 ``timeout_seconds`` 로 watch 수명을 제한하고,
-    클라이언트가 끊으면 generator 가 정리된다.
+    초기 스냅샷을 보낸 뒤 watch 로 신규 이벤트를 실시간 push 한다. 각 ``data:`` 는
+    JSON 1건. 종료·오류·하트비트·동시 한도는 파드 로그 스트림과 같은 SSE 계약이다 —
+    watch 는 읽기 타임아웃(30초)·서버 타임아웃마다 마지막 resourceVersion 으로 이어 붙고,
+    최대 시간(`log_stream_max_duration_seconds`)이 지나면 ``event: end`` (max_duration).
     """
     cluster = _require_cluster(cluster_id, db)
     v1 = _get_core_v1(cluster)
-
-    if not _stream_semaphore.acquire(blocking=False):
-        raise HTTPException(
-            status_code=429,
-            detail=f"동시 로그/이벤트 스트림 한도({settings.log_stream_max_concurrent})를 초과했습니다. "
-                    "다른 탭의 로그 뷰어를 닫고 다시 시도하세요.",
-        )
+    slot = _acquire_stream_slot(current_user)
 
     def _evt_payload(ev_type: str, obj) -> str:
         io = getattr(obj, "involved_object", None)
@@ -791,37 +1155,65 @@ def stream_cluster_events(
         }
         return json.dumps(payload, ensure_ascii=False)
 
-    def _gen():
-        w = k8s_watch.Watch()
-        try:
-            if namespace:
-                stream = w.stream(v1.list_namespaced_event, namespace, timeout_seconds=600)
-            else:
-                stream = w.stream(v1.list_event_for_all_namespaces, timeout_seconds=600)
-            for ev in stream:
-                try:
-                    yield f"data: {_evt_payload(ev.get('type', '?'), ev['object'])}\n\n"
-                except Exception:  # noqa: BLE001
-                    continue
-        except Exception as e:  # noqa: BLE001
-            yield f"data: {json.dumps({'error': str(e)[:200]})}\n\n"
-        finally:
+    def _reader(ch: _StreamChannel) -> None:
+        rv: Optional[str] = None
+        broken = 0
+        while not ch.stop.is_set():
+            w = k8s_watch.Watch()
+            ch.watch = w
+            kwargs: dict = dict(timeout_seconds=300, _request_timeout=_LOG_STREAM_REQUEST_TIMEOUT)
+            if rv:
+                kwargs["resource_version"] = rv
+            started = time.monotonic()
+            got = 0
             try:
-                w.stop()
-            except Exception:  # noqa: BLE001
-                pass
-            _stream_semaphore.release()
+                if namespace:
+                    stream = w.stream(v1.list_namespaced_event, namespace, **kwargs)
+                else:
+                    stream = w.stream(v1.list_event_for_all_namespaces, **kwargs)
+                for ev in stream:
+                    if ch.stop.is_set():
+                        return
+                    try:
+                        payload = _evt_payload(ev.get("type", "?"), ev["object"])
+                    except Exception:  # noqa: BLE001
+                        continue
+                    got += 1
+                    broken = 0
+                    if not ch.put("line", payload):
+                        return
+            except ApiException as e:
+                if ch.stop.is_set():
+                    return
+                if e.status == 410:  # resourceVersion 만료 — 처음부터 다시 watch
+                    rv = None
+                    continue
+                raise
+            except Exception as e:  # noqa: BLE001
+                if ch.stop.is_set():
+                    return
+                if _is_read_timeout(e):
+                    rv = w.resource_version or rv
+                    continue
+                if _is_conn_broken(e) and broken < _LOG_STREAM_MAX_RECONNECTS:
+                    broken += 1
+                    rv = w.resource_version or rv
+                    ch.stop.wait(1.0)
+                    continue
+                raise
+            finally:
+                ch.watch = None
+            # 서버 쪽 timeout_seconds 로 watch 가 정상 종료 — 이어 붙인다(빈 응답 반복이면 숨 고르기).
+            rv = w.resource_version or rv
+            if got == 0 and time.monotonic() - started < 1.0:
+                ch.stop.wait(1.0)
 
-    return StreamingResponse(
-        _gen(),
-        media_type="text/event-stream",
-        headers={
-            "Cache-Control": "no-cache",
-            "X-Accel-Buffering": "no",
-            "Connection": "keep-alive",
-            "Content-Encoding": "identity",
-        },
-    )
+    try:
+        gen = _sse_stream(_reader, slot, max_bytes=None, what="이벤트 조회", thread_name="event-stream")
+    except Exception:
+        slot.release()
+        raise
+    return StreamingResponse(gen, media_type="text/event-stream", headers=dict(_SSE_HEADERS))
 
 
 @router.get(

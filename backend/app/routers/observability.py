@@ -26,11 +26,12 @@ from typing import Any, Optional
 from uuid import UUID
 
 import asyncio
-from fastapi import APIRouter, Body, Depends, Header, HTTPException, Query
+from fastapi import APIRouter, Body, Depends, Header, HTTPException, Query, Request
 from sqlalchemy import and_, case, desc, func, or_
 from sqlalchemy.orm import Session
 
-from app.auth.deps import get_cluster_scope, get_current_user, require_operator
+from app.auth.deps import get_cluster_scope, get_current_user, require_admin, require_operator
+from app.services import audit_logger
 from app.services.list_cursor import apply_cursor, page_with_cursor
 from app.services.cluster_access import ClusterScope, require_cluster_access
 from app.config import settings
@@ -54,17 +55,30 @@ from app.schemas.observability import (
     AlertSettingsOut,
     AlertSettingsUpdate,
     AlertStatsResponse,
+    MetricPreviewInput,
+    MetricPreviewOut,
+    MetricPreviewSample,
     MetricValueOut,
     MetricValuesResponse,
     ObservabilityMetricInput,
     ObservabilityMetricOut,
     ObservabilityMetricUpdate,
+    ObservabilityModuleInput,
     ObservabilityModuleOut,
+    ObservabilityModuleUpdate,
+    ObservabilitySettingsOut,
+    ObservabilitySettingsUpdate,
     PromRuleOut,
     PromTargetOut,
     PromViewResponse,
     SnapshotIngestInput,
+    SourceError,
     to_kv,
+)
+from app.services.observability.view_settings import (
+    get_observability_settings,
+    set_observability_settings,
+    snapshot_freshness,
 )
 from app.services.alertmanager_service import AlertmanagerService, alertmanager_service
 from app.services.observability.alert_ingest import parse_alert_payload
@@ -100,6 +114,52 @@ def _get_cluster(db: Session, cluster_id: Optional[UUID]) -> Optional[Cluster]:
     return cluster
 
 
+_NO_CLUSTER_DETAIL = (
+    "클러스터를 선택하세요. 클러스터를 지정하지 않은 전역 Prometheus·Alertmanager 조회는 "
+    "관리자만 할 수 있습니다."
+)
+
+
+def _visible_cluster(db: Session, actor: User, cluster_id: Optional[UUID]) -> Optional[Cluster]:
+    """관측 조회 공용 판정(D-181) — **캐시 조회보다 먼저** 부른다.
+
+    - ``cluster_id`` 가 있으면 테넌트 read 권한(``require_cluster_access``) → 403, 이어서 존재 확인 → 404.
+      판정을 존재 확인보다 앞에 둬서 바인딩된 클러스터의 존재 여부를 흘리지 않는다.
+    - ``cluster_id`` 가 없으면 전역 ``PROMETHEUS_URL``·``ALERTMANAGER_URL`` 을 조회하게 되므로 admin 만 허용,
+      그 외는 422(정책 결정 ① — 전역 Prometheus 가 특정 테넌트 클러스터의 것일 수 있다).
+    """
+    if cluster_id is None:
+        if getattr(actor, "role", None) != "admin":
+            raise HTTPException(status_code=422, detail=_NO_CLUSTER_DETAIL)
+        return None
+    require_cluster_access(db, actor, cluster_id, "read")
+    return _get_cluster(db, cluster_id)
+
+
+def _snapshot_meta(db: Session, collected_at: Optional[datetime]) -> dict[str, Any]:
+    """push 스냅샷 신선도 필드(D-183) — 기준은 AppSetting ``observability.settings.stale_minutes``."""
+    stale_minutes = get_observability_settings(db)["stale_minutes"]
+    stale, age = snapshot_freshness(collected_at, stale_minutes)
+    return {"stale": stale, "snapshot_age_sec": age}
+
+
+def _missing_snapshot_error(what: str) -> list[SourceError]:
+    return [SourceError(
+        source="push",
+        message=f"push 모드인데 {what} 스냅샷이 아직 수신되지 않았습니다. in-cluster 수집기 설정을 확인하세요.",
+    )]
+
+
+def _prom_error(result: dict) -> str:
+    raw = result.get("error") or result.get("detail") or "알 수 없는 오류"
+    return f"Prometheus 조회 실패: {raw}"
+
+
+def _am_error(result: dict) -> str:
+    raw = result.get("error") or result.get("detail") or "알 수 없는 오류"
+    return f"Alertmanager 조회 실패: {raw}"
+
+
 def _prom_for(cluster: Optional[Cluster]) -> Optional[PrometheusService]:
     """클러스터별 Prometheus 인스턴스. 비활성/미설정이면 None (= offline 응답).
 
@@ -132,8 +192,8 @@ def _offline_detail(cluster: Optional[Cluster]) -> str:
     if cluster is None:
         return "클러스터를 선택하세요."
     return (
-        f"'{cluster.name}' 클러스터의 Observability 연동이 꺼져 있습니다. "
-        "클러스터 관리 → 정보 수정에서 Observability 사용을 켜고 Prometheus/Alertmanager "
+        f"'{cluster.name}' 클러스터의 관측 연동이 꺼져 있습니다. "
+        "클러스터 관리 → 정보 수정의 관측 연동 항목에서 사용을 켜고 Prometheus·Alertmanager "
         "주소와 수집 모드를 설정하세요."
     )
 
@@ -211,38 +271,137 @@ def _pick_representative(result: dict, invert: bool) -> tuple[Optional[float], d
 
 # ── 모듈 / 지표 카탈로그 ─────────────────────────────────────────────────────
 
-@router.get("/modules", response_model=list[ObservabilityModuleOut])
-def list_modules(db: Session = Depends(get_db)) -> list[ObservabilityModuleOut]:
-    """관측 모듈 목록. 지표가 1개 이상 등록된 모듈은 status 를 active 로 계산해 돌려준다."""
-    modules = (
-        db.query(ObservabilityModule)
-        .filter(ObservabilityModule.enabled.is_(True))
-        .order_by(ObservabilityModule.sort_order, ObservabilityModule.key)
-        .all()
+def _audit_catalog(
+    db: Session, request: Request, actor: User, *, action: str, target_type: str,
+    target_id: Any, name: str, key: str, extra: Optional[dict[str, Any]] = None,
+) -> None:
+    """카탈로그 변경 감사(D-186). details 는 이름·식별자(+변경 필드 **이름**)만 — 값·질의 결과는 남기지 않는다."""
+    details: dict[str, Any] = {"id": str(target_id), "name": name, "key": key}
+    if extra:
+        details.update(extra)
+    audit_logger.record(
+        db, action=action, actor=actor, target_type=target_type, target_id=target_id,
+        details=details, request=request,
     )
+
+
+def _module_out(mod: ObservabilityModule, count: int) -> ObservabilityModuleOut:
+    return ObservabilityModuleOut(
+        id=mod.id, key=mod.key, label=mod.label, description=mod.description,
+        icon=mod.icon,
+        # 지표가 생기면 자동으로 활성 — 운영자가 지표만 추가하면 탭이 열린다.
+        status="active" if count > 0 else (mod.status or "planned"),
+        enabled=mod.enabled, sort_order=mod.sort_order, metric_count=count,
+    )
+
+
+def _enabled_metric_count(db: Session, module_key: str) -> int:
+    return (
+        db.query(func.count(ObservabilityMetric.id))
+        .filter(ObservabilityMetric.module_key == module_key, ObservabilityMetric.enabled.is_(True))
+        .scalar()
+        or 0
+    )
+
+
+@router.get("/modules", response_model=list[ObservabilityModuleOut])
+def list_modules(
+    include_disabled: bool = Query(
+        default=False, description="true 면 사용 안 함(enabled=false) 모듈도 포함 — 다시 켜기용"),
+    db: Session = Depends(get_db),
+) -> list[ObservabilityModuleOut]:
+    """관측 모듈 목록. 지표가 1개 이상 등록된 모듈은 status 를 active 로 계산해 돌려준다."""
+    q = db.query(ObservabilityModule)
+    if not include_disabled:
+        q = q.filter(ObservabilityModule.enabled.is_(True))
+    modules = q.order_by(ObservabilityModule.sort_order, ObservabilityModule.key).all()
     counts: dict[str, int] = {}
     for metric in db.query(ObservabilityMetric.module_key).filter(
         ObservabilityMetric.enabled.is_(True)
     ):
         counts[metric.module_key] = counts.get(metric.module_key, 0) + 1
+    return [_module_out(mod, counts.get(mod.key, 0)) for mod in modules]
 
-    out: list[ObservabilityModuleOut] = []
-    for mod in modules:
-        count = counts.get(mod.key, 0)
-        out.append(ObservabilityModuleOut(
-            id=mod.id, key=mod.key, label=mod.label, description=mod.description,
-            icon=mod.icon,
-            # 지표가 생기면 자동으로 활성 — 운영자가 지표만 추가하면 탭이 열린다.
-            status="active" if count > 0 else (mod.status or "planned"),
-            enabled=mod.enabled, sort_order=mod.sort_order, metric_count=count,
-        ))
-    return out
+
+@router.post("/modules", response_model=ObservabilityModuleOut, status_code=201)
+def create_module(
+    body: ObservabilityModuleInput,
+    request: Request,
+    db: Session = Depends(get_db),
+    actor: User = Depends(require_operator),
+) -> ObservabilityModuleOut:
+    """모듈 추가 — 전역 카탈로그 행이라 테넌트 판정 없이 operator 이상."""
+    if db.query(ObservabilityModule.id).filter(ObservabilityModule.key == body.key).first():
+        raise HTTPException(status_code=409, detail="이미 있는 모듈 키입니다.")
+    mod = ObservabilityModule(**body.model_dump())
+    db.add(mod)
+    db.commit()
+    db.refresh(mod)
+    _audit_catalog(db, request, actor, action="observability.module.create",
+                   target_type="observability_module", target_id=mod.id, name=mod.label, key=mod.key)
+    return _module_out(mod, _enabled_metric_count(db, mod.key))
+
+
+@router.put("/modules/{module_id}", response_model=ObservabilityModuleOut)
+def update_module(
+    module_id: UUID,
+    body: ObservabilityModuleUpdate,
+    request: Request,
+    db: Session = Depends(get_db),
+    actor: User = Depends(require_operator),
+) -> ObservabilityModuleOut:
+    """모듈 수정 — ``enabled`` 를 다시 켜는 경로이기도 하다(D-186 ②). 키는 지표가 참조하므로 바꾸지 않는다."""
+    mod = db.query(ObservabilityModule).filter(ObservabilityModule.id == module_id).first()
+    if not mod:
+        raise HTTPException(status_code=404, detail="모듈을 찾을 수 없습니다.")
+    changed: list[str] = []
+    for field, value in body.model_dump(exclude_unset=True).items():
+        if value is not None and getattr(mod, field) != value:
+            setattr(mod, field, value)
+            changed.append(field)
+    db.commit()
+    db.refresh(mod)
+    _invalidate_values_cache()
+    _audit_catalog(db, request, actor, action="observability.module.update",
+                   target_type="observability_module", target_id=mod.id, name=mod.label, key=mod.key,
+                   extra={"fields": changed})
+    return _module_out(mod, _enabled_metric_count(db, mod.key))
+
+
+@router.delete("/modules/{module_id}", status_code=204)
+def delete_module(
+    module_id: UUID,
+    request: Request,
+    db: Session = Depends(get_db),
+    actor: User = Depends(require_operator),
+):
+    """모듈 삭제 — 지표가 남아 있으면 409(지표가 고아가 되지 않게). 숨기기만 하려면 사용 안 함으로 둔다."""
+    mod = db.query(ObservabilityModule).filter(ObservabilityModule.id == module_id).first()
+    if not mod:
+        raise HTTPException(status_code=404, detail="모듈을 찾을 수 없습니다.")
+    remaining = (
+        db.query(func.count(ObservabilityMetric.id))
+        .filter(ObservabilityMetric.module_key == mod.key)
+        .scalar()
+        or 0
+    )
+    if remaining:
+        raise HTTPException(
+            status_code=409,
+            detail=f"지표 {remaining}개가 남아 있는 모듈은 삭제할 수 없습니다. 지표를 먼저 삭제하거나 모듈을 사용 안 함으로 두세요.",
+        )
+    mod_id, label, key = mod.id, mod.label, mod.key
+    db.delete(mod)
+    db.commit()
+    _invalidate_values_cache()
+    _audit_catalog(db, request, actor, action="observability.module.delete",
+                   target_type="observability_module", target_id=mod_id, name=label, key=key)
 
 
 @router.get("/metrics", response_model=list[ObservabilityMetricOut])
 def list_metrics(
     module: Optional[str] = Query(default=None),
-    include_disabled: bool = Query(default=True),
+    include_disabled: bool = Query(default=True, description="false 면 사용 중인 지표만"),
     db: Session = Depends(get_db),
 ) -> list[ObservabilityMetric]:
     q = db.query(ObservabilityMetric)
@@ -256,8 +415,9 @@ def list_metrics(
 @router.post("/metrics", response_model=ObservabilityMetricOut, status_code=201)
 def create_metric(
     body: ObservabilityMetricInput,
+    request: Request,
     db: Session = Depends(get_db),
-    _: User = Depends(require_operator),
+    actor: User = Depends(require_operator),
 ) -> ObservabilityMetric:
     exists = (
         db.query(ObservabilityMetric)
@@ -274,6 +434,9 @@ def create_metric(
     db.commit()
     db.refresh(metric)
     _invalidate_values_cache()
+    _audit_catalog(db, request, actor, action="observability.metric.create",
+                   target_type="observability_metric", target_id=metric.id, name=metric.label,
+                   key=metric.key, extra={"module_key": metric.module_key})
     return metric
 
 
@@ -281,33 +444,174 @@ def create_metric(
 def update_metric(
     metric_id: UUID,
     body: ObservabilityMetricUpdate,
+    request: Request,
     db: Session = Depends(get_db),
-    _: User = Depends(require_operator),
+    actor: User = Depends(require_operator),
 ) -> ObservabilityMetric:
     metric = db.query(ObservabilityMetric).filter(ObservabilityMetric.id == metric_id).first()
     if not metric:
         raise HTTPException(status_code=404, detail="지표를 찾을 수 없습니다.")
+    changed: list[str] = []
     for field, value in body.model_dump(exclude_unset=True).items():
-        if value is not None:
+        if value is not None and getattr(metric, field) != value:
             setattr(metric, field, value)
+            changed.append(field)
     db.commit()
     db.refresh(metric)
     _invalidate_values_cache()
+    _audit_catalog(db, request, actor, action="observability.metric.update",
+                   target_type="observability_metric", target_id=metric.id, name=metric.label,
+                   key=metric.key, extra={"module_key": metric.module_key, "fields": changed})
     return metric
 
 
 @router.delete("/metrics/{metric_id}", status_code=204)
 def delete_metric(
     metric_id: UUID,
+    request: Request,
     db: Session = Depends(get_db),
-    _: User = Depends(require_operator),
+    actor: User = Depends(require_operator),
 ):
     metric = db.query(ObservabilityMetric).filter(ObservabilityMetric.id == metric_id).first()
     if not metric:
         raise HTTPException(status_code=404, detail="지표를 찾을 수 없습니다.")
+    mid, label, key, module_key = metric.id, metric.label, metric.key, metric.module_key
     db.delete(metric)
     db.commit()
     _invalidate_values_cache()
+    _audit_catalog(db, request, actor, action="observability.metric.delete",
+                   target_type="observability_metric", target_id=mid, name=label, key=key,
+                   extra={"module_key": module_key})
+
+
+# ── 화면 설정 (D-183) ────────────────────────────────────────────────────────
+
+@router.get("/settings", response_model=ObservabilitySettingsOut)
+def read_observability_settings(db: Session = Depends(get_db)) -> ObservabilitySettingsOut:
+    """관측 화면 설정 — 로그인한 누구나 읽는다(스냅샷 "오래됨" 표시 기준)."""
+    return ObservabilitySettingsOut(**get_observability_settings(db))
+
+
+@router.put("/settings", response_model=ObservabilitySettingsOut)
+def write_observability_settings(
+    body: ObservabilitySettingsUpdate,
+    request: Request,
+    db: Session = Depends(get_db),
+    actor: User = Depends(require_admin),
+) -> ObservabilitySettingsOut:
+    """관측 화면 설정 저장 — 관리자 전용. ``stale_minutes`` 는 1~1440."""
+    saved = set_observability_settings(db, body.model_dump())
+    _invalidate_values_cache()
+    audit_logger.record(
+        db, action="observability.settings.update", actor=actor, target_type="app_setting",
+        target_id="observability.settings", details={"stale_minutes": saved["stale_minutes"]},
+        request=request,
+    )
+    return ObservabilitySettingsOut(**saved)
+
+
+# ── 지표 미리 조회 (D-186) ───────────────────────────────────────────────────
+
+_PREVIEW_TIMEOUT_SEC = 10.0
+_PREVIEW_MAX_SAMPLES = 20
+
+
+def _preview_samples(result_type: str, result: Any) -> tuple[list[MetricPreviewSample], int]:
+    """Prometheus /api/v1/query ``data`` → (앞 20개 샘플, 전체 시리즈 수)."""
+
+    def _num(raw: Any) -> Optional[float]:
+        try:
+            f = float(raw)
+        except (TypeError, ValueError):
+            return None
+        return None if f != f or f in (float("inf"), float("-inf")) else round(f, 6)
+
+    if result_type == "scalar" and isinstance(result, list) and len(result) == 2:
+        return [MetricPreviewSample(labels=[], value=_num(result[1]))], 1
+    if result_type == "string":
+        return [MetricPreviewSample(labels=to_kv({"value": str(result[1]) if isinstance(result, list) and len(result) == 2 else ""}))], 1
+    rows = result if isinstance(result, list) else []
+    samples: list[MetricPreviewSample] = []
+    for item in rows[:_PREVIEW_MAX_SAMPLES]:
+        if not isinstance(item, dict):
+            continue
+        labels = {str(k): "" if v is None else str(v) for k, v in (item.get("metric") or {}).items()}
+        if result_type == "matrix":
+            values = item.get("values") or []
+            pair = values[-1] if values else None
+        else:
+            pair = item.get("value")
+        value = _num(pair[1]) if isinstance(pair, (list, tuple)) and len(pair) == 2 else None
+        samples.append(MetricPreviewSample(labels=to_kv(labels), value=value))
+    return samples, len(rows)
+
+
+async def _run_preview(prom: PrometheusService, query: str) -> dict[str, Any]:
+    """공유 httpx 클라이언트로 instant query 1회. 예외는 호출부가 잡는다."""
+    client = prom._get_client()  # noqa: SLF001 — 같은 프로세스의 공유 커넥션 풀 재사용
+    resp = await client.get(
+        f"{prom.base_url}/api/v1/query",
+        params={"query": query, "timeout": f"{int(_PREVIEW_TIMEOUT_SEC)}s"},
+        timeout=_PREVIEW_TIMEOUT_SEC,
+    )
+    try:
+        body = resp.json()
+    except ValueError:
+        body = None
+    if not isinstance(body, dict):
+        return {"ok": False, "error": f"Prometheus 응답을 해석할 수 없습니다 (HTTP {resp.status_code})."}
+    if body.get("status") != "success":
+        # 400 bad_data(문법 오류) 도 여기로 온다 — Prometheus 의 오류 문구를 그대로 보여준다.
+        err = body.get("error") or f"HTTP {resp.status_code}"
+        return {"ok": False, "error": f"PromQL 오류: {err}"}
+    data = body.get("data") or {}
+    rtype = str(data.get("resultType") or "") or None
+    samples, total = _preview_samples(rtype or "", data.get("result"))
+    return {"ok": True, "result_type": rtype, "samples": samples, "series_count": total}
+
+
+@router.post("/metrics/preview", response_model=MetricPreviewOut)
+async def preview_metric(
+    body: MetricPreviewInput,
+    db: Session = Depends(get_db),
+    actor: User = Depends(require_operator),
+) -> MetricPreviewOut:
+    """저장 전 PromQL 미리 조회 — operator 이상 + 클러스터 read 권한.
+
+    Fail-safe: 클러스터 판정(403·404) 외에는 어떤 실패도 500 이 아니라 ``ok=false`` + ``error`` 로 응답한다.
+    결과는 최대 20개 시리즈만 돌려주고 감사 기록에도 남기지 않는다.
+    """
+    cluster = _visible_cluster(db, actor, body.cluster_id)
+    started = time.monotonic()
+
+    def _elapsed() -> int:
+        return int((time.monotonic() - started) * 1000)
+
+    try:
+        if _mode(cluster) == "push":
+            return MetricPreviewOut(
+                ok=False, duration_ms=_elapsed(),
+                error="push 모드 클러스터는 PEP 가 Prometheus 에 직접 질의하지 않아 미리 조회할 수 없습니다. "
+                      "저장 후 수집기가 보낸 스냅샷에서 값을 확인하세요.")
+        prom = _prom_for(cluster)
+        if prom is None:
+            return MetricPreviewOut(ok=False, duration_ms=_elapsed(), error=_offline_detail(cluster))
+        out = await asyncio.wait_for(_run_preview(prom, body.query), timeout=_PREVIEW_TIMEOUT_SEC)
+        return MetricPreviewOut(duration_ms=_elapsed(), **out)
+    except asyncio.TimeoutError:
+        return MetricPreviewOut(
+            ok=False, duration_ms=_elapsed(),
+            error=f"Prometheus 응답이 {int(_PREVIEW_TIMEOUT_SEC)}초 안에 오지 않았습니다.")
+    except Exception as exc:  # noqa: BLE001 — fail-safe: 미리 조회는 절대 500 을 내지 않는다
+        logger.warning("observability preview 실패 (cluster=%s): %s", body.cluster_id, exc)
+        name = type(exc).__name__
+        if "Connect" in name:
+            msg = "Prometheus 에 연결할 수 없습니다."
+        elif "Timeout" in name:
+            msg = f"Prometheus 응답이 {int(_PREVIEW_TIMEOUT_SEC)}초 안에 오지 않았습니다."
+        else:
+            msg = f"미리 조회 실패: {exc}" if str(exc) else f"미리 조회 실패: {name}"
+        return MetricPreviewOut(ok=False, duration_ms=_elapsed(), error=msg)
 
 
 # ── 지표 현재값 ──────────────────────────────────────────────────────────────
@@ -358,15 +662,22 @@ async def metric_values(
     module: str = Query(default="kube-prometheus-stack"),
     cluster_id: Optional[UUID] = Query(default=None),
     db: Session = Depends(get_db),
+    actor: User = Depends(get_current_user),
 ) -> MetricValuesResponse:
     """모듈의 활성 지표를 한 번에 조회한다 (pull=live 병렬 질의 / push=최신 스냅샷)."""
+    # D-181: 테넌트 판정은 캐시보다 먼저 — 캐시 히트가 판정을 우회하지 않게.
+    cluster = _visible_cluster(db, actor, cluster_id)
+
     cache_key = f"{module}:{cluster_id}"
     now = time.monotonic()
     cached = _values_cache.get(cache_key)
     if cached and now - cached[0] < _VALUES_CACHE_TTL:
-        return cached[1]
+        response = cached[1]
+        if response.source == "snapshot":
+            # 캐시된 스냅샷도 나이는 지금 기준으로 다시 잰다.
+            return response.model_copy(update=_snapshot_meta(db, response.collected_at))
+        return response
 
-    cluster = _get_cluster(db, cluster_id)
     metrics = (
         db.query(ObservabilityMetric)
         .filter(
@@ -380,7 +691,7 @@ async def metric_values(
     if not metrics:
         return MetricValuesResponse(
             module=module, cluster_id=cluster_id, source="offline",
-            detail="이 모듈에 등록된 지표가 없습니다. '지표 편집'에서 추가하세요.",
+            detail="이 모듈에 등록된 지표가 없습니다. '지표 추가'로 지표를 등록하세요.",
         )
 
     if _mode(cluster) == "push":
@@ -390,11 +701,13 @@ async def metric_values(
                 module=module, cluster_id=cluster_id, source="offline",
                 detail="push 모드인데 아직 수신된 스냅샷이 없습니다. in-cluster 수집기 설정을 확인하세요.",
                 data=[_metric_row(m, status="offline", error="스냅샷 없음") for m in metrics],
+                errors=_missing_snapshot_error("지표"),
             )
         response = MetricValuesResponse(
             module=module, cluster_id=cluster_id, source="snapshot",
             collected_at=snap.collected_at,
             data=_values_from_snapshot(metrics, snap.payload),
+            **_snapshot_meta(db, snap.collected_at),
         )
         _values_cache[cache_key] = (now, response)
         return response
@@ -404,7 +717,7 @@ async def metric_values(
         return MetricValuesResponse(
             module=module, cluster_id=cluster_id, source="offline",
             detail=_offline_detail(cluster),
-            data=[_metric_row(m, status="offline", error="Observability 미사용") for m in metrics],
+            data=[_metric_row(m, status="offline", error="관측 연동 꺼짐") for m in metrics],
         )
 
     raw_results = await asyncio.gather(*(prom.query(m.promql) for m in metrics))
@@ -425,12 +738,27 @@ async def metric_values(
             status="ok",
         ))
 
+    errors: list[SourceError] = []
+    failed = [r for r in raw_results if r.get("status") != "ok"]
+    if failed and len(failed) == len(raw_results):
+        # 전 지표가 실패 = Prometheus 자체 장애로 본다(행별 오류는 data[].error 에 그대로 있다).
+        errors.append(SourceError(source="prometheus", message=_prom_error(failed[0])))
     response = MetricValuesResponse(
         module=module, cluster_id=cluster_id, source="live",
-        collected_at=datetime.utcnow(), data=rows,
+        collected_at=datetime.utcnow(), data=rows, errors=errors,
     )
     _values_cache[cache_key] = (now, response)
     return response
+
+
+# 경로 파라미터 라우트는 `/metrics/values` 뒤에 둔다 — 앞에 두면 "values" 가 UUID 검증에 걸려 422 가 된다.
+@router.get("/metrics/{metric_id}", response_model=ObservabilityMetricOut)
+def get_metric(metric_id: UUID, db: Session = Depends(get_db)) -> ObservabilityMetric:
+    """지표 1건 — 편집 모달이 목록 쿼리를 기다리지 않고 직접 불러오는 용도(D-186 ④)."""
+    metric = db.query(ObservabilityMetric).filter(ObservabilityMetric.id == metric_id).first()
+    if not metric:
+        raise HTTPException(status_code=404, detail="지표를 찾을 수 없습니다.")
+    return metric
 
 
 # ── Prometheus 규칙 / 타겟 / 발화중 알람 ─────────────────────────────────────
@@ -542,18 +870,21 @@ async def prometheus_rules(
     state: Optional[str] = Query(default=None, description="firing | pending | inactive | all"),
     q: Optional[str] = Query(default=None),
     db: Session = Depends(get_db),
+    actor: User = Depends(get_current_user),
 ) -> PromViewResponse:
-    cluster = _get_cluster(db, cluster_id)
+    cluster = _visible_cluster(db, actor, cluster_id)
 
     if _mode(cluster) == "push":
         snap = _latest_snapshot(db, cluster_id, "kube-prometheus-stack", "rules")
         if snap is None:
             return PromViewResponse(
                 cluster_id=cluster_id, source="offline",
-                detail="push 모드인데 규칙 스냅샷이 아직 없습니다.")
+                detail="push 모드인데 규칙 스냅샷이 아직 없습니다.",
+                errors=_missing_snapshot_error("규칙"))
         return PromViewResponse(
             cluster_id=cluster_id, source="snapshot", collected_at=snap.collected_at,
-            rules=_rules_from_payload(snap.payload, state, q))
+            rules=_rules_from_payload(snap.payload, state, q),
+            **_snapshot_meta(db, snap.collected_at))
 
     prom = _prom_for(cluster)
     if prom is None:
@@ -561,7 +892,10 @@ async def prometheus_rules(
 
     result = await prom.rules()
     if result.get("status") != "ok":
-        return PromViewResponse(cluster_id=cluster_id, source="offline", detail=result.get("error"))
+        message = _prom_error(result)
+        return PromViewResponse(
+            cluster_id=cluster_id, source="offline", detail=message,
+            errors=[SourceError(source="prometheus", message=message)])
     return PromViewResponse(
         cluster_id=cluster_id, source="live", collected_at=datetime.utcnow(),
         rules=_rules_from_payload(result.get("data"), state, q))
@@ -572,18 +906,21 @@ async def prometheus_targets(
     cluster_id: Optional[UUID] = Query(default=None),
     health: Optional[str] = Query(default=None, description="up | down | unknown | all"),
     db: Session = Depends(get_db),
+    actor: User = Depends(get_current_user),
 ) -> PromViewResponse:
-    cluster = _get_cluster(db, cluster_id)
+    cluster = _visible_cluster(db, actor, cluster_id)
 
     if _mode(cluster) == "push":
         snap = _latest_snapshot(db, cluster_id, "kube-prometheus-stack", "targets")
         if snap is None:
             return PromViewResponse(
                 cluster_id=cluster_id, source="offline",
-                detail="push 모드인데 타겟 스냅샷이 아직 없습니다.")
+                detail="push 모드인데 스크레이프 대상 스냅샷이 아직 없습니다.",
+                errors=_missing_snapshot_error("스크레이프 대상"))
         return PromViewResponse(
             cluster_id=cluster_id, source="snapshot", collected_at=snap.collected_at,
-            targets=_targets_from_payload(snap.payload, health))
+            targets=_targets_from_payload(snap.payload, health),
+            **_snapshot_meta(db, snap.collected_at))
 
     prom = _prom_for(cluster)
     if prom is None:
@@ -591,7 +928,10 @@ async def prometheus_targets(
 
     result = await prom.targets(state="active")
     if result.get("status") != "ok":
-        return PromViewResponse(cluster_id=cluster_id, source="offline", detail=result.get("error"))
+        message = _prom_error(result)
+        return PromViewResponse(
+            cluster_id=cluster_id, source="offline", detail=message,
+            errors=[SourceError(source="prometheus", message=message)])
     return PromViewResponse(
         cluster_id=cluster_id, source="live", collected_at=datetime.utcnow(),
         targets=_targets_from_payload(result.get("data"), health))
@@ -601,23 +941,31 @@ async def prometheus_targets(
 async def prometheus_active_alerts(
     cluster_id: Optional[UUID] = Query(default=None),
     db: Session = Depends(get_db),
+    actor: User = Depends(get_current_user),
 ) -> PromViewResponse:
-    """Prometheus 의 발화/대기 알람 + Alertmanager 보유 알람을 합쳐서 보여준다."""
-    cluster = _get_cluster(db, cluster_id)
+    """Prometheus 의 발화/대기 알람 + Alertmanager 보유 알람을 합쳐서 보여준다.
+
+    한쪽 실패를 버리지 않는다(D-183) — 실패 출처는 ``errors`` 에 남고,
+    Prometheus 실패 + Alertmanager 성공이면 ``source="partial"``, Alertmanager 만 실패하면
+    ``source="live"`` + ``detail`` 안내. 둘 다 실패해야 ``offline``.
+    """
+    cluster = _visible_cluster(db, actor, cluster_id)
 
     if _mode(cluster) == "push":
         snap = _latest_snapshot(db, cluster_id, "kube-prometheus-stack", "alerts")
         if snap is None:
             return PromViewResponse(
                 cluster_id=cluster_id, source="offline",
-                detail="push 모드인데 알람 스냅샷이 아직 없습니다.")
+                detail="push 모드인데 알람 스냅샷이 아직 없습니다.",
+                errors=_missing_snapshot_error("알람"))
         payload = snap.payload
         alerts = (
             _alerts_from_prometheus(payload) if isinstance(payload, dict)
             else _alerts_from_alertmanager(payload)
         )
         return PromViewResponse(
-            cluster_id=cluster_id, source="snapshot", collected_at=snap.collected_at, alerts=alerts)
+            cluster_id=cluster_id, source="snapshot", collected_at=snap.collected_at, alerts=alerts,
+            **_snapshot_meta(db, snap.collected_at))
 
     prom = _prom_for(cluster)
     if prom is None:
@@ -625,34 +973,55 @@ async def prometheus_active_alerts(
 
     am = _alertmanager_for(cluster)
     prom_result, am_result = await asyncio.gather(
-        prom.active_alerts(),
-        am.alerts() if am else _noop_result(),
+        _safe_call(prom.active_alerts()),
+        _safe_call(am.alerts()) if am else _noop_result(),
     )
+    prom_ok = prom_result.get("status") == "ok"
+    am_ok = am_result.get("status") == "ok"
 
     alerts: list[ActiveAlertOut] = []
-    detail: Optional[str] = None
-    if prom_result.get("status") == "ok":
+    errors: list[SourceError] = []
+    if prom_ok:
         alerts.extend(_alerts_from_prometheus(prom_result.get("data")))
     else:
-        detail = prom_result.get("error")
+        errors.append(SourceError(source="prometheus", message=_prom_error(prom_result)))
 
-    if am_result.get("status") == "ok":
+    if am_ok:
         # Prometheus 에 이미 있는 알람은 (alertname, namespace, resource) 로 중복 제거.
         seen = {(a.alertname, a.namespace, a.resource) for a in alerts}
         for extra in _alerts_from_alertmanager(am_result.get("data")):
             if (extra.alertname, extra.namespace, extra.resource) not in seen:
                 alerts.append(extra)
+    else:
+        errors.append(SourceError(source="alertmanager", message=_am_error(am_result)))
 
-    if not alerts and detail:
-        return PromViewResponse(cluster_id=cluster_id, source="offline", detail=detail)
+    if not prom_ok and not am_ok:
+        return PromViewResponse(
+            cluster_id=cluster_id, source="offline",
+            detail=f"{errors[0].message} / {errors[1].message}", errors=errors)
+    if not prom_ok:
+        return PromViewResponse(
+            cluster_id=cluster_id, source="partial", collected_at=datetime.utcnow(), alerts=alerts,
+            detail="Prometheus 조회 실패 — Alertmanager 알람만 표시합니다.", errors=errors)
+    detail = None if am_ok else "Alertmanager 조회 실패 — Prometheus 알람만 표시합니다."
     return PromViewResponse(
         cluster_id=cluster_id, source="live", collected_at=datetime.utcnow(),
-        alerts=alerts, detail=detail)
+        alerts=alerts, detail=detail, errors=errors)
+
+
+async def _safe_call(coro) -> dict:
+    """서비스가 fail-safe 계약을 어겨 예외를 내도 응답은 구조화된 offline 으로 만든다."""
+    try:
+        result = await coro
+        return result if isinstance(result, dict) else {"status": "error", "error": "응답 형식 오류"}
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("observability: 외부 조회 예외 — offline 처리 (%s)", exc)
+        return {"status": "offline", "data": None, "error": str(exc) or type(exc).__name__}
 
 
 async def _noop_result() -> dict:
     """Alertmanager 미설정 시 gather 자리를 채우는 no-op."""
-    return {"status": "offline", "data": None, "error": "Alertmanager 미설정"}
+    return {"status": "offline", "data": None, "error": "Alertmanager 가 설정되지 않았습니다."}
 
 
 # ── 알람 인박스 ──────────────────────────────────────────────────────────────
@@ -1093,7 +1462,7 @@ def _verify_alert_token(authorization: str = Header(default="")) -> None:
     if authorization and authorization.lower().startswith("bearer "):
         token = authorization.split(None, 1)[1].strip()
     if not secrets.compare_digest(token, expected):
-        raise HTTPException(status_code=401, detail="Invalid ingest token")
+        raise HTTPException(status_code=401, detail="수신 토큰이 올바르지 않습니다.")
 
 
 def _resolve_cluster_id(db: Session, hint: Optional[str]) -> Optional[UUID]:

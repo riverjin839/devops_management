@@ -537,6 +537,8 @@ def _run_migrations():
             # Cluster Trends — per-cluster Prometheus URL 오버라이드 + 토글.
             ("prometheus_url", "VARCHAR(512)"),
             ("prometheus_enabled", "BOOLEAN NOT NULL DEFAULT FALSE"),
+            # Cluster Trends 노드 매칭 라벨 — NULL/'auto' = 자동 탐지 (D-185).
+            ("trend_node_label", "VARCHAR(64)"),
             # Observability 대시보드 — Alertmanager URL + 수집 모드(pull/push) 토글.
             ("alertmanager_url", "VARCHAR(512)"),
             ("observability_mode", "VARCHAR(16) NOT NULL DEFAULT 'pull'"),

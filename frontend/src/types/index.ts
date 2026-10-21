@@ -76,6 +76,8 @@ export interface Cluster {
   // Cluster Trends — per-cluster Prometheus URL 오버라이드 / 토글.
   prometheusUrl?: string | null;
   prometheusEnabled?: boolean;
+  // 추이 노드 매칭 라벨 (서버 trend_node_label) — null/'auto' 면 node→kubernetes_node→instance 자동 탐지.
+  trendNodeLabel?: string | null;
   // Observability 대시보드 — Alertmanager URL + 수집 모드(pull=직접조회 / push=수집기 스냅샷).
   alertmanagerUrl?: string | null;
   observabilityMode?: 'pull' | 'push' | null;
@@ -170,6 +172,7 @@ export interface ClusterManageUpdate {
   iconConfig?: ClusterIconConfig | null;
   prometheusUrl?: string | null;
   prometheusEnabled?: boolean;
+  trendNodeLabel?: string | null;
   alertmanagerUrl?: string | null;
   observabilityMode?: 'pull' | 'push' | null;
   observabilityEnabled?: boolean;
@@ -193,6 +196,8 @@ export interface TrendSeries {
 export interface TrendMetricBlock {
   unit: string;
   series: TrendSeries[];
+  /** 이 지표 질의 실패 사유(D-184). 있으면 셀에 "조회 실패 — 사유"(값 없음과 구분). */
+  error?: string | null;
 }
 export interface ClusterTrendsResponse {
   range: TrendRange;
@@ -201,6 +206,12 @@ export interface ClusterTrendsResponse {
   error?: string | null;
   dropped: string[];    // 상한 초과로 제외된 노드명
   metrics: Partial<Record<TrendMetricKey, TrendMetricBlock>>;
+  /** 데이터가 없을 때 원인 안내(D-185) — 토글 이름·노드 라벨 불일치 등. 구버전 서버는 없음. */
+  hint?: string | null;
+  /** 노드 선택 상한(서버 `trends_max_nodes`) — 프론트 상수 대신 이 값을 쓴다(D-185 ③). */
+  maxNodes?: number;
+  /** 노드 매칭에 쓴 Prometheus 라벨(클러스터 `trend_node_label` 또는 auto 탐지 결과). */
+  nodeLabel?: string | null;
 }
 
 // Addon
@@ -5242,7 +5253,44 @@ export interface LabelPair {
 export type ObservabilityModuleStatus = 'active' | 'planned';
 export type MetricState = 'ok' | 'warning' | 'critical' | 'unknown';
 export type FetchStatus = 'ok' | 'error' | 'offline';
-export type DataSource = 'live' | 'snapshot' | 'offline';
+/** `partial` = 일부 소스(예: Prometheus)만 실패하고 나머지(Alertmanager) 결과는 있는 상태(D-183). */
+export type DataSource = 'live' | 'snapshot' | 'offline' | 'partial';
+
+/** 관측 조회 응답의 소스별 실패 사유(D-183) — 구버전 서버는 보내지 않는다. */
+export interface ObservabilitySourceError {
+  source: 'prometheus' | 'alertmanager' | 'push' | string;
+  message: string;
+}
+
+/** 관측 조회 응답 공통 신선도 필드(D-183). 전부 optional — 구버전 서버 호환. */
+export interface ObservabilityFreshness {
+  errors?: ObservabilitySourceError[];
+  /** push 스냅샷이 "오래됨" 기준(`stale_minutes`)보다 오래됐으면 true. */
+  stale?: boolean;
+  snapshotAgeSec?: number | null;
+}
+
+/** `GET/PUT /observability/settings` (PUT 은 admin). */
+export interface ObservabilitySettings {
+  staleMinutes: number;
+}
+
+/** 미리 조회 표본 — 라벨은 `{k,v}` 배열(권장) 또는 dict(키가 camelCase 로 바뀔 수 있음). */
+export interface ObservabilityPreviewSample {
+  labels: LabelPair[] | Record<string, string>;
+  value: number | string | null;
+}
+
+/** `POST /observability/metrics/preview` 응답(D-186). */
+export interface ObservabilityPreviewResult {
+  ok: boolean;
+  resultType?: string | null;
+  samples: ObservabilityPreviewSample[];
+  /** 잘리기 전 전체 시리즈 수(서버는 표본을 최대 20개만 돌려준다). */
+  seriesCount?: number | null;
+  error?: string | null;
+  durationMs?: number | null;
+}
 
 export interface ObservabilityModule {
   id: string;
@@ -5309,7 +5357,7 @@ export interface ObservabilityMetricValue {
   error?: string | null;
 }
 
-export interface ObservabilityMetricValuesResponse {
+export interface ObservabilityMetricValuesResponse extends ObservabilityFreshness {
   module: string;
   clusterId?: string | null;
   source: DataSource;
@@ -5362,7 +5410,7 @@ export interface PromActiveAlert {
   annotations: LabelPair[];
 }
 
-export interface PromViewResponse {
+export interface PromViewResponse extends ObservabilityFreshness {
   clusterId?: string | null;
   source: DataSource;
   collectedAt?: string | null;

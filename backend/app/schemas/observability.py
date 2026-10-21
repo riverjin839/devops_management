@@ -11,7 +11,7 @@ from datetime import datetime
 from typing import Any, Optional
 from uuid import UUID
 
-from pydantic import BaseModel, Field
+from pydantic import AliasChoices, BaseModel, Field
 
 
 class KV(BaseModel):
@@ -118,6 +118,13 @@ class MetricValueOut(BaseModel):
     error: Optional[str] = None
 
 
+class SourceError(BaseModel):
+    """조회 실패 1건 — 어느 출처가 실패했는지 화면이 "없음"과 구분하게 한다(D-183)."""
+
+    source: str                        # prometheus | alertmanager | push
+    message: str
+
+
 class MetricValuesResponse(BaseModel):
     module: str
     cluster_id: Optional[UUID] = None
@@ -125,6 +132,10 @@ class MetricValuesResponse(BaseModel):
     collected_at: Optional[datetime] = None
     detail: Optional[str] = None       # offline 사유 등 화면 안내 문구
     data: list[MetricValueOut] = Field(default_factory=list)
+    # D-183 — 조회 실패 출처(정상이면 빈 배열) + push 스냅샷 신선도. 전부 추가 필드(하위 호환).
+    errors: list[SourceError] = Field(default_factory=list)
+    stale: bool = False
+    snapshot_age_sec: Optional[int] = None
 
 
 class PromRuleOut(BaseModel):
@@ -175,12 +186,73 @@ class PromViewResponse(BaseModel):
     """규칙/타겟/발화중알람 공통 봉투."""
 
     cluster_id: Optional[UUID] = None
+    # live | snapshot | offline | partial(Prometheus 실패 + Alertmanager 알람만 — 발화 중 알람 전용)
     source: str = "live"
     collected_at: Optional[datetime] = None
     detail: Optional[str] = None
     rules: list[PromRuleOut] = Field(default_factory=list)
     targets: list[PromTargetOut] = Field(default_factory=list)
     alerts: list[ActiveAlertOut] = Field(default_factory=list)
+    # D-183 — 조회 실패 출처(정상이면 빈 배열) + push 스냅샷 신선도. 전부 추가 필드(하위 호환).
+    errors: list[SourceError] = Field(default_factory=list)
+    stale: bool = False
+    snapshot_age_sec: Optional[int] = None
+
+
+# ── 관측 화면 설정 / 카탈로그 편집 보조 ──────────────────────────────────────
+
+class ObservabilitySettingsOut(BaseModel):
+    """AppSetting ``observability.settings`` — push 스냅샷 "오래됨" 기준(분)."""
+
+    stale_minutes: int = 15
+
+
+class ObservabilitySettingsUpdate(BaseModel):
+    stale_minutes: int = Field(ge=1, le=1440)
+
+
+class ObservabilityModuleInput(BaseModel):
+    key: str = Field(min_length=1, max_length=64)
+    label: str = Field(min_length=1, max_length=100)
+    description: Optional[str] = Field(default=None, max_length=500)
+    icon: Optional[str] = Field(default=None, max_length=64)
+    status: str = Field(default="planned", max_length=16)
+    enabled: bool = True
+    sort_order: int = 0
+
+
+class ObservabilityModuleUpdate(BaseModel):
+    label: Optional[str] = Field(default=None, min_length=1, max_length=100)
+    description: Optional[str] = Field(default=None, max_length=500)
+    icon: Optional[str] = Field(default=None, max_length=64)
+    status: Optional[str] = Field(default=None, max_length=16)
+    enabled: Optional[bool] = None
+    sort_order: Optional[int] = None
+
+
+class MetricPreviewInput(BaseModel):
+    """저장 전 PromQL 미리 조회(D-186). ``promql`` 이름으로 보내도 받는다."""
+
+    cluster_id: UUID
+    query: str = Field(
+        min_length=1, max_length=2000,
+        validation_alias=AliasChoices("query", "promql"),
+    )
+
+
+class MetricPreviewSample(BaseModel):
+    # 다른 엔드포인트와 같이 [{k, v}] — 프론트 응답 인터셉터가 dict 키를 camelCase 로 바꿔 라벨 이름이 변하지 않게.
+    labels: list[KV] = Field(default_factory=list)
+    value: Optional[float] = None
+
+
+class MetricPreviewOut(BaseModel):
+    ok: bool
+    result_type: Optional[str] = None      # vector | scalar | matrix | string
+    samples: list[MetricPreviewSample] = Field(default_factory=list)   # 최대 20개
+    series_count: int = 0                  # 잘리기 전 전체 시리즈 수
+    error: Optional[str] = None
+    duration_ms: int = 0
 
 
 # ── 알람 인박스 ──────────────────────────────────────────────────────────────

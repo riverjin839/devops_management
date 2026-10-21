@@ -14,7 +14,7 @@ interface Props {
 
 /** 네임스페이스 단일 선택 — 텍스트 검색 + 리스트(콤보박스). analyzeApi 로 NS 목록 fetch.
  *  SearchableSelect 재사용. 여러 페이지에서 NS 선택 UI 통일용. */
-export function NamespaceSingleSelect({ clusterId, value, onChange, placeholder = 'namespace 검색…', className, clearable, id }: Props) {
+export function NamespaceSingleSelect({ clusterId, value, onChange, placeholder = '네임스페이스 검색…', className, clearable, id }: Props) {
   const nsQ = useAnalyzeNamespaces(clusterId);
   return (
     <SearchableSelect
@@ -25,8 +25,11 @@ export function NamespaceSingleSelect({ clusterId, value, onChange, placeholder 
       getLabel={(n) => n.name + (typeof n.podCount === 'number' ? ` (${n.podCount})` : '')}
       placeholder={placeholder}
       disabled={!clusterId || nsQ.isLoading}
-      loading={nsQ.isLoading}
-      emptyText="namespace 없음"
+      loading={nsQ.isLoading || (nsQ.isError && nsQ.isFetching)}
+      // 조회 실패(kubeconfig·RBAC·타임아웃 502/504)를 "네임스페이스 없음"으로 보이지 않게 — D-188
+      error={nsQ.isError ? nsQ.error : undefined}
+      onRetry={() => { void nsQ.refetch(); }}
+      emptyText="네임스페이스 없음"
       clearable={clearable}
       className={className}
       id={id}

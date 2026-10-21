@@ -50,10 +50,17 @@ interface Props {
 }
 
 /** 클러스터 이벤트 SSE 뷰어 — 전체 스트림 + 클라이언트 필터(네임스페이스 멀티셀렉트/타입/검색). */
+const END_REASON: Record<string, string> = {
+  eof: '스트림이 끝났습니다',
+  max_duration: '최대 스트림 시간(30분)이 지나 끊겼습니다',
+  truncated: '전송 한도에 도달해 끊겼습니다',
+};
+
 export function EventsStream({ clusterId, selectedNs, onSelectedNsChange }: Props) {
   const [events, setEvents] = useState<K8sEvent[]>([]);
   const [streaming, setStreaming] = useState(false);
   const [err, setErr] = useState('');
+  const [ended, setEnded] = useState('');
   const [typeFilter, setTypeFilter] = useState<'all' | 'Normal' | 'Warning'>('all');
   const [search, setSearch] = useState('');
   const acRef = useRef<AbortController | null>(null);
@@ -96,6 +103,7 @@ export function EventsStream({ clusterId, selectedNs, onSelectedNsChange }: Prop
     setEvents([]);
     bufRef.current = [];
     setErr('');
+    setEnded('');
     const ac = new AbortController();
     acRef.current = ac;
     setStreaming(true);
@@ -105,7 +113,13 @@ export function EventsStream({ clusterId, selectedNs, onSelectedNsChange }: Prop
       headers: token ? { Authorization: `Bearer ${token}` } : {},
     })
       .then(async (resp) => {
-        if (!resp.ok || !resp.body) { setErr(`서버 오류 ${resp.status}`); setStreaming(false); return; }
+        if (!resp.ok || !resp.body) {
+          // 429(동시 스트림 한도) 등은 서버 detail 을 그대로 보여준다.
+          const detail = await resp.json().then((b: { detail?: unknown }) => b?.detail).catch(() => null);
+          setErr(typeof detail === 'string' && detail ? detail : `서버 오류 ${resp.status}`);
+          setStreaming(false);
+          return;
+        }
         const reader = resp.body.getReader();
         const decoder = new TextDecoder('utf-8');
         let buf = '';
@@ -117,10 +131,15 @@ export function EventsStream({ clusterId, selectedNs, onSelectedNsChange }: Prop
           while ((idx = buf.indexOf('\n\n')) >= 0) {
             const block = buf.slice(0, idx);
             buf = buf.slice(idx + 2);
+            // SSE 블록: `event: end|error` 는 상태로, `: ping` 주석은 무시, 나머지 `data:` 는 이벤트.
+            let evName = '';
             for (const ln of block.split('\n')) {
+              if (ln.startsWith('event:')) { evName = ln.slice(6).trim(); continue; }
               if (!ln.startsWith('data:')) continue;
               try {
                 const obj = JSON.parse(ln.slice(5).trim());
+                if (evName === 'end') { setEnded(END_REASON[obj?.reason] ?? '스트림이 끝났습니다'); continue; }
+                if (evName === 'error') { setErr(String(obj?.message ?? '스트림 오류')); continue; }
                 if (obj.error) { setErr(String(obj.error)); continue; }
                 bufRef.current.push(obj as K8sEvent);
               } catch { /* skip malformed */ }
@@ -181,7 +200,8 @@ export function EventsStream({ clusterId, selectedNs, onSelectedNsChange }: Prop
             className="rounded-xl border border-border bg-card pl-7 pr-2 py-1.5 text-sm w-44 focus:outline-none focus:ring-1 focus:ring-primary" />
         </div>
 
-        {err && <span className="text-sm text-status-critical">{err}</span>}
+        {err && <span role="alert" className="text-sm text-status-critical">{err}</span>}
+        {!err && ended && !streaming && <span role="status" className="text-sm text-muted-foreground">{ended} — 재시작으로 이어서 받습니다</span>}
       </>}
     >
       <div>

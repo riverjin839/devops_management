@@ -10,9 +10,23 @@
 
 1.69.0 이후 main 에 병합된 변경 (다음 릴리스 후보).
 
+### Added
+- **관측 지표 — 저장 전 미리 조회·사용 안 함 지표 관리**: 지표 편집 창의 **미리 조회** 버튼으로 PromQL 을 저장하기 전에 선택 클러스터에서 시험 조회해 결과(최대 20개)를 본다. 표 아래 "사용 안 함" 섹션에서 꺼 둔 지표를 다시 켜고, 지표가 없는 준비 중 모듈에도 첫 지표를 추가할 수 있다. 지표 삭제는 확인 창을 거치고, 카탈로그 편집은 감사 로그에 남는다. Backend: `POST /observability/metrics/preview`(operator, fail-safe), `GET /observability/metrics/{id}`, 모듈 `POST`·`PUT`·`DELETE /observability/modules`, `?include_disabled`, 감사 `observability.module.*`·`observability.metric.*`. Frontend: `DisabledMetricsSection`.
+- **관측 지표 — "오래됨" 기준 화면 설정**: push 스냅샷이 오래됐다고 볼 기준(기본 15분)을 관측 지표 화면의 설정 창에서 관리자가 고친다. Backend: AppSetting `observability.settings.stale_minutes`, `GET`·`PUT /observability/settings`(PUT 은 admin), `services/observability/view_settings.py`. Frontend: `ObservabilitySettingsDialog`.
+- **클러스터 추이 — 클러스터별 노드 라벨**: 클러스터 정보 수정의 **추이 노드 라벨 (선택)** 에서 node-exporter 시리즈의 노드 라벨을 클러스터마다 지정한다. 비워 두면 `node` → `kubernetes_node` → `instance` 순으로 자동 탐지하고, 환경변수 `PROMETHEUS_NODE_LABEL` 은 배포 전역 fallback 이 된다. Backend: `clusters.trend_node_label`.
+
 ### Fixed
+- **관측 지표 테넌트 격리**: 관측 지표 화면의 지표 값·알람 규칙·스크레이프 대상·발화 중 알람 조회가 다른 테넌트 클러스터 것을 돌려줄 수 있었다. 이제 캐시를 보기 전에 클러스터 읽기 권한을 확인하고, 클러스터 없이 전역 Prometheus 를 조회하는 것은 관리자만 할 수 있다(그 외 422).
+- **파드 로그 스트림이 서버 자원을 붙잡던 문제**: 끊긴 로그·이벤트 스트림이 다음 줄이 올 때까지 서버 스레드와 동시 스트림 슬롯을 점유해, 조용한 파드 몇 개만 열어도 다른 사용자가 429 를 받았다. 이제 30초 읽기 타임아웃과 15초 하트비트로 끊김을 감지하고, 최대 30분 뒤에는 종료 이벤트를 보낸 뒤 슬롯을 반납한다. 동시 스트림은 사용자당 3·전체 20 이며, 초과하면 한국어 사유를 담은 429 를 받는다. Backend: SSE `event: end`(`eof`·`max_duration`·`truncated`)·`event: error`, `since_seconds` 이어 읽기, 다운로드 `X-Log-Truncated: 1`.
+- **파드 로그 화면의 종료·오류 표시**: 스트림 종료와 오류가 로그 줄에 섞여 보였고, 중지·화면 이동·대상 변경 뒤에도 스트림이 남았다. 이제 로그 영역 밖 상태 줄에 종료 사유와 오류를 보여주고 **처음부터 다시**·**이어 받기**를 고른다. 컨테이너를 바꾸면 스트림을 다시 시작하고, 잘린 로그는 안내한다. Frontend: `PodLogStream`(2만 줄 링 버퍼 + 100ms 묶음 반영), K8s 관리 콘솔 이벤트 탭(`EventsStream`)도 같은 형식으로 해석.
+- **관측 스택 장애가 "없음"으로 보이던 문제**: Prometheus·Alertmanager 미도달이나 조회 실패가 "발화 중인 알람이 없습니다" 같은 빈 상태로 보였다. 이제 조회 실패는 오류 상태와 다시 시도, 미도달은 원인과 클러스터 정보 수정 링크, 일부 소스 실패·오래된 스냅샷은 목록이 불완전하다는 안내로 표시한다. 갱신이 멈추면 실시간 배지 옆에 "갱신 실패 · 마지막 성공 n분 전"이 붙는다. Backend: 응답 `errors[]`·`stale`·`snapshot_age_sec`, 발화 중 알람 `source=partial`.
+- **클러스터 추이 정확성**: 클러스터를 바꿔도 이전 클러스터의 차트·노드 선택이 남고, 조회 실패와 일부 지표 실패가 "데이터 없음"으로 보였다. 이제 노드 선택은 클러스터별로 따로 기억하고, 실패는 오류 상태로, 지표별 실패는 셀에 사유로 보이며, 데이터가 없으면 원인 안내와 클러스터 정보 수정 링크를 준다. Backend: 지표 병렬 조회(25초 예산), 응답 `metrics[m].error`·`hint`·`max_nodes`·`node_label`.
+- **관측 3화면 목록 오류·접근성**: 클러스터·네임스페이스·파드 목록 조회 실패가 빈 목록으로 보였다 — 이제 오류 상태와 다시 시도를 보여준다(공용 `SearchableSelect` `error`·`onRetry`·`ariaLabel`, 기존 사용처 호환). 관측 표 행은 키보드로 펼치고, 노드 선택 목록은 방향키·Esc 로 다루며, 토글·탭·아이콘 버튼에 접근성 이름과 상태를 붙였다.
 - **콘솔 보안 잔여 정리**: 보호 운영레벨로 클러스터를 새로 만드는 것도 admin 만 할 수 있다(수정 경로와 같은 규칙). etcdctl·mc·일괄 실행·노드 SSH·k9s 의 접속 호스트 판정이 DNS 를 기다리는 동안 서버 이벤트 루프를 막지 않는다. Backend: `services/operation_levels.py`(보호 레벨 판정 이동), `cluster_access.acluster_ids_for_hosts`.
 - **앱 첫 로딩 화면**: 저장된 테마가 독립 테마(umber·journal 등 14종)일 때 로딩 중 엉뚱한 바탕이 잠깐 보이던 문제와, 로딩 실패 안내 글자의 대비 부족(접근성)을 고쳤다. 접근성 스캔은 앱이 뜬 뒤에만 측정하고, 측정하지 못한 화면이 있으면 실패로 끝난다.
+
+### Changed
+- **관측 3화면 표기·디자인 정리**: 관측 지표·클러스터 추이·파드 로그의 용어를 한국어 표준어로 맞췄다(발화·대기·비활성, 정상·중단, 스크레이프 대상, 마지막 N줄, 따라가기, 메모리 등). 페이지 제목은 메뉴와 같은 "파드 로그". 인라인 스타일을 토큰 클래스로 바꾸고, 차트 툴팁은 팝오버 토큰(`lib/chartTokens.ts` `CHART_TOOLTIP_PROPS`)을 쓰며, 빈 값은 `—` 로 표시한다. 클러스터 추이는 새로고침 버튼과 자동 갱신(30분·1시간 창 60초, 6시간 이상 끔, 탭이 숨겨지면 멈춤)을 갖추고, 시간창·지표·열 수를 URL 에 남긴다. 관측 지표 편집 버튼은 viewer 에게 숨기지 않고 사유와 함께 비활성화한다.
 
 ## [1.69.0] - 2026-10-21
 
