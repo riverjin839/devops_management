@@ -1,0 +1,102 @@
+{{- if .Values.gateway.enabled }}
+{{- $host := .Values.gateway.host | default .Values.ingress.host }}
+{{- $gwName := .Values.gateway.name | default "k8s-monitor-gw" }}
+{{- if .Values.gateway.create }}
+# Gateway API(Cilium 등) 진입점 — ingress-nginx 대체. 리스너는 이 앱 전용이다.
+# 클러스터 공용 Gateway 를 쓰려면 gateway.create=false + gateway.parentRefs 로 붙인다.
+apiVersion: gateway.networking.k8s.io/v1
+kind: Gateway
+metadata:
+  name: {{ $gwName }}
+  labels:
+    {{- include "k8s-daily-monitor.labels" . | nindent 4 }}
+  {{- with .Values.gateway.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  gatewayClassName: {{ .Values.gateway.className }}
+  listeners:
+    - name: http
+      protocol: HTTP
+      port: 80
+      hostname: {{ $host | quote }}
+      allowedRoutes:
+        namespaces:
+          from: Same
+    {{- if .Values.gateway.tls.enabled }}
+    - name: https
+      protocol: HTTPS
+      port: 443
+      hostname: {{ $host | quote }}
+      tls:
+        mode: Terminate
+        certificateRefs:
+          - kind: Secret
+            name: {{ required "gateway.tls.secretName 이 필요합니다 (TLS 인증서 Secret)" .Values.gateway.tls.secretName }}
+      allowedRoutes:
+        namespaces:
+          from: Same
+    {{- end }}
+---
+{{- end }}
+# 모든 경로를 frontend 로 보낸다 — /api·/health·WebSocket 은 frontend nginx 가 backend 로 프록시하며
+# 거기에 이미 실행 한도(3600s) timeout 이 걸려 있다. Gateway 에서 /api 를 따로 나누지 않아야
+# timeout 을 맞출 곳이 Gateway·frontend nginx 두 곳으로 줄어든다.
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: k8s-monitor
+  labels:
+    {{- include "k8s-daily-monitor.labels" . | nindent 4 }}
+spec:
+  parentRefs:
+    {{- if .Values.gateway.create }}
+    - name: {{ $gwName }}
+      {{- if and .Values.gateway.tls.enabled .Values.gateway.tls.redirectHttp }}
+      sectionName: https
+      {{- end }}
+    {{- else }}
+    {{- if not .Values.gateway.parentRefs }}
+    {{- fail "gateway.create=false 이면 gateway.parentRefs 가 필요합니다" }}
+    {{- end }}
+    {{- toYaml .Values.gateway.parentRefs | nindent 4 }}
+    {{- end }}
+  hostnames:
+    - {{ $host | quote }}
+  rules:
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /
+      backendRefs:
+        - name: frontend
+          port: {{ .Values.frontend.service.port }}
+      {{- with .Values.gateway.requestTimeout }}
+      timeouts:
+        # 동기 실행(일괄 SSH·플레이북·백업 복구 등, 최대 60분)이 Gateway 에서 먼저 끊기지 않게.
+        request: {{ . }}
+      {{- end }}
+{{- if and .Values.gateway.create .Values.gateway.tls.enabled .Values.gateway.tls.redirectHttp }}
+---
+# HTTP(80) 요청은 HTTPS 로 301 리다이렉트한다.
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: k8s-monitor-https-redirect
+  labels:
+    {{- include "k8s-daily-monitor.labels" . | nindent 4 }}
+spec:
+  parentRefs:
+    - name: {{ $gwName }}
+      sectionName: http
+  hostnames:
+    - {{ $host | quote }}
+  rules:
+    - filters:
+        - type: RequestRedirect
+          requestRedirect:
+            scheme: https
+            statusCode: 301
+{{- end }}
+{{- end }}

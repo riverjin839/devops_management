@@ -466,6 +466,126 @@ helm lint ./helm/k8s-daily-monitor \
 
 ---
 
+## Gateway API(Cilium)로 노출
+
+ingress-nginx 는 2026년 3월로 유지보수가 끝났다. Cilium 을 CNI 로 쓰는 클러스터라면 별도 컨트롤러 없이
+Cilium 의 Gateway API 구현(Envoy)으로 PEP 를 노출할 수 있다. 저장소에는 두 경로가 준비돼 있다.
+
+| 배포 방식 | 켜는 방법 | 파일 |
+|---|---|---|
+| Helm | `gateway.enabled=true` (+ 검증 후 `ingress.enabled=false`) | `helm/k8s-daily-monitor/templates/gateway.yaml` |
+| Kustomize | overlay 에 `components: [../../components/gateway-api]` | `k8s/components/gateway-api/` |
+
+### 라우팅 구조
+
+```
+Client ─▶ Cilium Gateway(:80/:443) ─▶ HTTPRoute "/" ─▶ frontend(nginx :80)
+                                                         ├─ /api/*, WebSocket, SSE ─▶ backend:8000
+                                                         └─ 그 외 ─▶ SPA 정적 파일
+```
+
+- HTTPRoute 는 **모든 경로를 frontend 로** 보낸다. `/api`·`/health`·WebSocket(`k8s_exec`·`k9s_ssh`·`node_ssh`)·SSE 는
+  frontend nginx 가 backend 로 프록시하고, 거기에 이미 실행 한도(3600s) timeout 이 걸려 있다.
+- 기존 Ingress 처럼 `/api` 를 Gateway 에서 backend 로 직접 나누지 않는다 — 그러면 timeout 을 맞출 곳이 하나 더 늘어난다.
+- nginx 어노테이션 대응: timeout → HTTPRoute `timeouts.request: 3600s` + Cilium Envoy idle timeout,
+  body-size → Envoy 는 스트리밍 요청에 기본 한도가 없어 불필요, CORS → 같은 호스트(same-origin)라 불필요.
+
+### 사전 조건 (클러스터 1회)
+
+```bash
+# 1) Gateway API CRD (standard channel) — Cilium 버전이 지원하는 Gateway API 버전에 맞춘다
+kubectl apply -f https://github.com/kubernetes-sigs/gateway-api/releases/download/<버전>/standard-install.yaml
+
+# 2) Cilium Gateway API 활성화 + Envoy idle timeout 상향
+helm upgrade cilium cilium/cilium -n kube-system --reuse-values \
+  --set kubeProxyReplacement=true \
+  --set gatewayAPI.enabled=true \
+  --set envoy.streamIdleTimeoutDurationSeconds=3600
+kubectl -n kube-system rollout restart deploy/cilium-operator ds/cilium
+kubectl -n kube-system rollout restart ds/cilium-envoy   # 독립 Envoy DaemonSet 을 쓰는 경우
+
+# 3) GatewayClass 확인 — ACCEPTED=True 여야 한다
+kubectl get gatewayclass cilium
+```
+
+> **`envoy.streamIdleTimeoutDurationSeconds` 를 빼먹으면** Envoy 기본값 300초에 걸려 실시간 실행 로그(SSE)·
+> 수 분 걸리는 동기 실행·SSH 터미널이 5분에 끊긴다. HTTPRoute `timeouts.request` 만으로는 막히지 않는다.
+
+### Helm 으로 전환
+
+```bash
+# 1단계 — Ingress 와 병행 (다른 컨트롤러·다른 IP 라 충돌 없음)
+helm upgrade k8s-monitor ./helm/k8s-daily-monitor \
+  -f ./helm/k8s-daily-monitor/values-prod.yaml -n k8s-monitor \
+  --set gateway.enabled=true \
+  --set gateway.host=k8s-monitor.company.internal
+
+# 2단계 — Gateway 주소로 검증한 뒤 DNS 를 Gateway IP 로 바꾸고 Ingress 를 끈다
+helm upgrade k8s-monitor ./helm/k8s-daily-monitor \
+  -f ./helm/k8s-daily-monitor/values-prod.yaml -n k8s-monitor \
+  --set gateway.enabled=true --set gateway.host=k8s-monitor.company.internal \
+  --set ingress.enabled=false
+```
+
+| values | 기본값 | 설명 |
+|---|---|---|
+| `gateway.enabled` | `false` | Gateway·HTTPRoute 생성 |
+| `gateway.create` | `true` | `false` 면 Gateway 를 만들지 않고 `gateway.parentRefs` 의 공용 Gateway 에 HTTPRoute 만 붙인다 |
+| `gateway.className` | `cilium` | GatewayClass 이름 |
+| `gateway.host` | `""` | 비우면 `ingress.host` 를 쓴다 |
+| `gateway.requestTimeout` | `3600s` | HTTPRoute 요청 timeout. 컨트롤러가 미지원이면 `""` 로 뺀다 |
+| `gateway.tls.enabled` / `secretName` | `false` / `""` | HTTPS 리스너(Terminate). Secret 은 같은 네임스페이스의 `kubernetes.io/tls` |
+| `gateway.tls.redirectHttp` | `true` | TLS 사용 시 80 → 443 301 리다이렉트 |
+| `gateway.parentRefs` | `[]` | `create=false` 일 때 붙을 Gateway (`name`·`namespace`·`sectionName`) |
+
+공용 Gateway 를 쓰는 경우, 그 Gateway 리스너의 `allowedRoutes.namespaces` 가 PEP 네임스페이스를 허용해야 한다.
+
+### Kustomize 로 전환
+
+overlay(예: `k8s/overlays/prod/kustomization.yaml`)에 component 를 추가하고 호스트를 patch 한다.
+component 가 base Ingress 를 지우므로, overlay 의 기존 **Ingress host/TLS patch 는 함께 지운다**(대상이 없어 빌드가 실패한다).
+
+```yaml
+components:
+  - ../../components/gateway-api
+patches:
+  - patch: |-
+      - op: replace
+        path: /spec/listeners/0/hostname
+        value: k8s-monitor.example.com
+    target: { kind: Gateway, name: k8s-monitor-gw }
+  - patch: |-
+      - op: replace
+        path: /spec/hostnames/0
+        value: k8s-monitor.example.com
+    target: { kind: HTTPRoute, name: k8s-monitor }
+```
+
+TLS 가 필요하면 Gateway 에 HTTPS 리스너를 patch 로 추가한다(Helm 템플릿의 `gateway.tls` 렌더 결과를 참고).
+
+### 점검
+
+```bash
+kubectl get gateway,httproute -n <ns>
+# Gateway: PROGRAMMED=True, ADDRESS 에 IP — 비어 있으면 LB IPAM(CiliumLoadBalancerIPPool)·L2 announcement 확인
+# HTTPRoute: status.parents[].conditions 의 Accepted / ResolvedRefs 가 True 인지
+kubectl describe httproute k8s-monitor -n <ns>
+
+GW_IP=$(kubectl get gateway k8s-monitor-gw -n <ns> -o jsonpath='{.status.addresses[0].value}')
+curl -sI -H 'Host: k8s-monitor.company.internal' http://$GW_IP/            # 200 (SPA)
+curl -s  -H 'Host: k8s-monitor.company.internal' http://$GW_IP/health      # {"status":"healthy"}
+```
+
+| 증상 | 원인 | 조치 |
+|---|---|---|
+| Gateway `ADDRESS` 비어 있음 | LoadBalancer IP 를 줄 수단이 없음 | `CiliumLoadBalancerIPPool` + L2/BGP announcement 설정 |
+| HTTPRoute `Accepted=False` (`NotAllowedByListeners`) | 리스너 hostname 불일치 또는 공용 Gateway 가 네임스페이스를 허용 안 함 | `gateway.host` 와 리스너 hostname 일치, 공용 Gateway `allowedRoutes` 확인 |
+| `ResolvedRefs=False` | frontend Service 이름·포트 불일치 | `kubectl get svc frontend -n <ns>` |
+| 실행 로그·터미널이 정확히 5분에 끊김 | Envoy stream idle timeout 기본 300초 | Cilium `envoy.streamIdleTimeoutDurationSeconds=3600` |
+| 503 `no healthy upstream` | frontend/backend 파드 미Ready (부팅 마이그레이션 중 등) | `kubectl get endpointslices -n <ns>`, backend startupProbe 진행 확인 |
+
+---
+
 ## 데이터 백업 / 복구
 
 애플리케이션 데이터(클러스터·업무·점검 정의·지식 문서·설정 등)는 **Settings → 백업 / 복구** 탭에서

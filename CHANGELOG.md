@@ -26,6 +26,9 @@
 ### Changed
 - **`docs/AIRGAP_LLM_ARCHITECTURE.md` v3 현행화**: as-is 를 현재 게이트웨이 구조로 고치고, 구현되지 않은 `LLM_PROVIDER`·`AUTO_ANALYZE_*` 환경변수 설계를 화면 설정 기준으로 대체했다. `LLM_API_BASE` 예시의 `/v1` 이중 경로(404)를 바로잡고, 운영 체크리스트와 다음 단계 로드맵(HNSW 인덱스·청크 분할·다국어 임베딩·하이브리드 검색·품질 관측)을 갱신했다.
 
+### Added
+- **Gateway API(Cilium) 노출 템플릿**: ingress-nginx(2026-03 유지보수 종료) 대신 Cilium Gateway + HTTPRoute 로 PEP 를 노출할 수 있다. 모든 경로를 frontend 로 보내고 `/api`·WebSocket·SSE 는 frontend nginx 가 backend 로 넘기며, HTTPRoute 요청 timeout 3600s·TLS 리스너·HTTP→HTTPS 리다이렉트·공용 Gateway 연결(`parentRefs`)을 고를 수 있다. Ingress 와 병행 운영 후 전환하는 절차·Cilium Envoy idle timeout(기본 300s) 주의점·점검 명령은 `docs/DEPLOY_GUIDE.md` "Gateway API(Cilium)로 노출". Helm: `gateway.*` values + `templates/gateway.yaml`. Kustomize: opt-in 컴포넌트 `k8s/components/gateway-api`.
+
 ## [1.68.0] - 2026-10-21
 
 ### Added
