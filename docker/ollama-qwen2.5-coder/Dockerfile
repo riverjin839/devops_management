@@ -10,6 +10,9 @@
 #   1. serve 기동 → 준비 대기 → pull → 검증을 **하나의 RUN 레이어**에서 끝낸다.
 #   2. `ollama list` 로 모델이 실제로 잡혔는지 빌드 타임에 검증하고, 없으면 빌드 자체를
 #      실패시킨다 — "이미지는 성공적으로 빌드됐는데 모델은 없는" 상황을 원천 차단.
+#   3. 같은 레이어에서 K8s 운영 전용 파생 모델(OPS_MODEL_NAME, 기본 pep-k8s-ops)을
+#      Modelfile.k8s-ops 로 만든다 — 베이스 블롭을 공유해 이미지가 거의 커지지 않는다.
+#      이미지 안에는 베이스(qwen2.5-coder:7b)와 파생(pep-k8s-ops:latest) 두 이름이 함께 있다.
 #
 # 빌드/게시는 .github/workflows/ollama-qwen2.5-coder.yml 이 담당한다 (GITHUB_TOKEN 사용,
 # 별도 PAT/수동 docker push 불필요) — docker/ollama-qwen2.5-coder/** 변경 시 자동 실행.
@@ -17,7 +20,13 @@ ARG OLLAMA_BASE_TAG=latest
 FROM ollama/ollama:${OLLAMA_BASE_TAG}
 
 ARG OLLAMA_MODEL=qwen2.5-coder:7b
+# 비우면 파생 모델을 만들지 않는다.
+ARG OPS_MODEL_NAME=pep-k8s-ops
 ENV OLLAMA_HOST=0.0.0.0
+# 모델을 메모리에 상주시켜 CPU 콜드 로딩(수십 초~수 분)이 챗봇 타임아웃으로 번지지 않게 한다.
+ENV OLLAMA_KEEP_ALIVE=24h
+
+COPY Modelfile.k8s-ops /tmp/Modelfile.k8s-ops
 
 RUN set -eux; \
     ollama serve & \
@@ -36,6 +45,15 @@ RUN set -eux; \
         echo "ERROR: model '${OLLAMA_MODEL}' missing from 'ollama list' after pull — build must fail, not ship empty" >&2; \
         exit 1; \
     }; \
+    if [ -n "${OPS_MODEL_NAME}" ]; then \
+        sed "s|^FROM .*|FROM ${OLLAMA_MODEL}|" /tmp/Modelfile.k8s-ops > /tmp/Modelfile; \
+        ollama create "${OPS_MODEL_NAME}" -f /tmp/Modelfile; \
+        ollama list | grep -F "${OPS_MODEL_NAME}" || { \
+            echo "ERROR: derived model '${OPS_MODEL_NAME}' missing after ollama create" >&2; \
+            exit 1; \
+        }; \
+    fi; \
+    rm -f /tmp/Modelfile /tmp/Modelfile.k8s-ops; \
     du -sh /root/.ollama/models >&2; \
     kill "$server_pid"; \
     wait "$server_pid" 2>/dev/null || true

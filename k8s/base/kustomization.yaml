@@ -71,6 +71,10 @@ configMapGenerator:
       - REDIS_HOST=redis
       - REDIS_PORT=6379
       - OLLAMA_URL=http://ollama:11434
+      # 이미지(ollama-qwen2.5-coder:7b)에 구워진 모델명과 같아야 한다. 이 키가 없으면 backend 의
+      # configMapKeyRef(OLLAMA_MODEL)가 풀리지 않아 파드가 CreateContainerConfigError 로 멈춘다.
+      # K8s 운영 전용 파생 모델은 pep-k8s-ops (docs/LLM_CHATBOT_SETUP.md) — 전환은 Settings → AI/LLM.
+      - OLLAMA_MODEL=qwen2.5-coder:7b
       - PROMETHEUS_URL=http://prometheus:9090
       - GRAFANA_URL=http://grafana:3000
       - GRAFANA_RENDERER_URL=http://grafana-renderer:8081

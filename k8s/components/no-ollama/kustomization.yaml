@@ -1,0 +1,33 @@
+# Opt-in component — 인클러스터 Ollama(로컬 AI)를 배포하지 않는다.
+# CPU/메모리 여유가 없는 클러스터용. base/ollama.yaml 은 requests cpu 2 · memory 4Gi 라
+# 자원이 없으면 파드가 Pending 으로 남고, 챗봇은 Service 엔드포인트가 비어 연결 실패가 된다.
+# 이 컴포넌트로 아예 빼고, 챗봇은 Settings → AI/LLM 에서 사내 LLM(openai_compat) 프로필로
+# 라우팅한다. 어느 LLM 도 없으면 챗봇은 오프라인 안내문, 장애 분석은 rule_based 로 동작한다.
+#
+#   # k8s/overlays/<env>/kustomization.yaml
+#   components:
+#     - ../../components/no-ollama
+#
+# Helm 은 values 의 ollama.enabled=false 가 같은 역할이다.
+apiVersion: kustomize.config.k8s.io/v1alpha1
+kind: Component
+
+patches:
+  - patch: |-
+      $patch: delete
+      apiVersion: apps/v1
+      kind: Deployment
+      metadata:
+        name: ollama
+    target:
+      kind: Deployment
+      name: ollama
+  - patch: |-
+      $patch: delete
+      apiVersion: v1
+      kind: Service
+      metadata:
+        name: ollama
+    target:
+      kind: Service
+      name: ollama

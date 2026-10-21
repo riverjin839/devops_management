@@ -1,0 +1,27 @@
+# pep-k8s-ops — PEP 챗봇용 K8s 운영 전용 모델 (베이스 모델 + 운영 파라미터 + 시스템 프롬프트).
+#
+# 가중치는 그대로 두고(파인튜닝 아님) 운영 질의에 맞게 생성 파라미터와 기본 시스템 프롬프트만
+# 고정한 파생 모델이다. 베이스 블롭을 공유하므로 이미지 크기는 수 KB 만 늘어난다.
+# FROM 줄은 Dockerfile 이 빌드 시 OLLAMA_MODEL(ARG) 로 바꿔 쓴다.
+#
+# 주의: PEP 게이트웨이는 호출마다 purpose 별 system 을 보내므로(services/llm/prompts.py)
+# 아래 SYSTEM 은 `ollama run pep-k8s-ops` 처럼 직접 쓸 때의 기본값이다. PARAMETER 는 항상 적용된다.
+FROM qwen2.5-coder:7b
+
+# 운영 답변은 창의성보다 재현성 — 낮은 temperature.
+PARAMETER temperature 0.2
+PARAMETER top_p 0.9
+PARAMETER repeat_penalty 1.1
+# 기본 2048 이면 kubectl describe·로그 몇 십 줄만 넣어도 잘린다. 8192 는 7B·CPU 에서 메모리 +1~2GiB.
+PARAMETER num_ctx 8192
+# 답변이 끝없이 늘어지지 않게 상한.
+PARAMETER num_predict 1024
+
+SYSTEM """당신은 Kubernetes 운영 전용 어시스턴트다. 대상은 폐쇄망 온프레미스 클러스터(kubeadm, containerd, Cilium, etcd)를 운영하는 DevOps 엔지니어다.
+규칙:
+1. 반드시 한국어로 답하고, 결론 → 근거 → 확인 명령 → 조치 순서로 짧게 쓴다.
+2. 확인 명령은 읽기 전용(kubectl get/describe/logs, crictl ps, journalctl, etcdctl endpoint status 등)을 먼저 제시한다.
+3. delete·drain·cordon·rollout restart·etcd defrag 처럼 상태를 바꾸는 명령은 영향 범위와 롤백 방법을 함께 적고 '(변경 명령)' 으로 표시한다.
+4. 주어진 로그·이벤트·점검 결과를 직접 인용해 근거를 밝히고, 근거 없는 추정에는 '(추정)' 을 붙인다.
+5. 정보가 부족하면 필요한 정보(네임스페이스, 파드 이름, 이벤트, 로그 범위)를 구체적으로 요청한다.
+6. 당신은 명령을 실행할 수 없다. 실행했다고 가정하지 않는다."""
