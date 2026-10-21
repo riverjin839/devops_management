@@ -29,6 +29,7 @@ from sqlalchemy.orm import Session
 
 from app.models.external_service import ExternalServiceSnapshot
 from app.services import external_checks as chk
+from app.services import external_tls as tls
 from app.services.external_checks import (
     DEFAULT_FWD_COMMAND, DEFAULT_PROBE_HTTP_COMMAND, DEFAULT_PROBE_TCP_COMMAND,
 )
@@ -68,6 +69,12 @@ DEFAULTS: dict[str, Any] = {
     "probe_max": 300,
     "probe_tcp_command": DEFAULT_PROBE_TCP_COMMAND,
     "probe_http_command": DEFAULT_PROBE_HTTP_COMMAND,
+    # TLS 인증서 점검 — https Ingress + 아래 포트의 LB/ExternalIP/NodePort 인증서 만료일·호스트 일치.
+    "tls_check": True,
+    "tls_ports": [443, 8443],
+    "tls_warn_days": 30,        # 남은 일수가 이 이하면 경고
+    "tls_critical_days": 7,     # 이 이하면 위험
+    "tls_command": tls.DEFAULT_TLS_COMMAND,
 }
 
 Emit = Callable[[str, str], None]          # (level, message)
@@ -86,16 +93,22 @@ def normalize(values: dict[str, Any]) -> dict[str, Any]:
         if k in DEFAULTS and v is not None:
             out[k] = v
     for k in ("public_enabled", "schedule_enabled", "include_nodeport", "backend_ptr", "forward_check",
-              "probe_enabled", "probe_http"):
+              "probe_enabled", "probe_http", "tls_check"):
         out[k] = bool(out[k])
-    for k, lo, hi in (("dns_timeout_sec", 1, 10), ("probe_timeout_sec", 1, 15), ("probe_max", 1, 2000)):
+    for k, lo, hi in (("dns_timeout_sec", 1, 10), ("probe_timeout_sec", 1, 15), ("probe_max", 1, 2000),
+                      ("tls_warn_days", 1, 365), ("tls_critical_days", 0, 365)):
         try:
             out[k] = max(lo, min(hi, int(out[k])))
         except (TypeError, ValueError):
             out[k] = DEFAULTS[k]
     if out["check_source"] not in ("auto", "node", "backend"):
         out["check_source"] = "auto"
-    for k, ph in (("fwd_command", "{domain}"), ("probe_tcp_command", "{ip}"), ("probe_http_command", "{host}")):
+    out["tls_critical_days"] = min(out["tls_critical_days"], out["tls_warn_days"])
+    ports = out.get("tls_ports")
+    out["tls_ports"] = sorted({int(p) for p in ports if str(p).strip().isdigit() and 0 < int(p) < 65536}) \
+        if isinstance(ports, list) else list(DEFAULTS["tls_ports"])
+    for k, ph in (("fwd_command", "{domain}"), ("probe_tcp_command", "{ip}"), ("probe_http_command", "{host}"),
+                  ("tls_command", "{ip}")):
         v = str(out[k] or "").strip()
         out[k] = v if ph in v and template_ok(v) else DEFAULTS[k]
     for k in ("public_cluster_ids", "exclude_namespaces"):
@@ -110,7 +123,7 @@ def normalize(values: dict[str, Any]) -> dict[str, Any]:
 def template_ok(t: str) -> bool:
     """명령 템플릿이 허용된 자리표시만 쓰는지(`{{`/`}}` 은 리터럴 중괄호)."""
     try:
-        t.format(domain="d", ip="1.1.1.1", port=1, host="h", scheme="http", timeout=1)
+        t.format(domain="d", ip="1.1.1.1", port=1, host="h", scheme="http", timeout=1, sni="")
         return True
     except (KeyError, IndexError, ValueError):
         return False
@@ -347,7 +360,8 @@ def _snapshot(db: Session, cluster_id) -> Optional[ExternalServiceSnapshot]:
 
 def collect(db: Session, cluster, *, resolver: str = "backend", ssh_target=None, actor: str = "schedule",
             emit: Optional[Emit] = None, step: Optional[StepEmit] = None,
-            forward_check: Optional[bool] = None, probe: Optional[bool] = None) -> dict[str, Any]:
+            forward_check: Optional[bool] = None, probe: Optional[bool] = None,
+            tls_check: Optional[bool] = None) -> dict[str, Any]:
     """동기 수집(Celery·SSE 실행기에서 부른다). 결과 요약을 돌려주고 스냅샷을 저장한다."""
     from kubernetes import client as k8s_client
     from app.services.k8s_client_pool import get_api_client
@@ -496,11 +510,47 @@ def collect(db: Session, cluster, *, resolver: str = "backend", ssh_target=None,
     keep = {chk.probe_key(t) for t in chk.probe_targets(entries, nodes, cfg["probe_http"], 10 ** 6)}
     probe_results = {k: v for k, v in probe_results.items() if k in keep}
 
+    tls_results = dict(snap.tls_results or {})
+    do_tls = cfg["tls_check"] if tls_check is None else tls_check
+    tls_all = tls.tls_targets(entries, nodes, ptr_cache, cfg["tls_ports"], 10 ** 6)
+    tls_tg = tls_all[: cfg["probe_max"]] if do_tls else []
+    if tls_tg:
+        step("tls", "TLS 인증서 확인", "running")
+        t_out = cfg["probe_timeout_sec"]
+        try:
+            res = (tls.fetch_ssh(tls_tg, ssh_target, cfg["tls_command"], t_out, emit) if use_node
+                   else tls.fetch_backend(tls_tg, t_out, emit))
+        except Exception as e:  # noqa: BLE001
+            res = {}
+            emit("error", f"인증서 확인 실패: {str(e)[:300]}")
+        counts = {"ok": 0, "warning": 0, "critical": 0, "expired": 0, "error": 0, "mismatch": 0}
+        for k, r in res.items():
+            tls_results[k] = {**r, "source": "node" if use_node else "backend", "checked_at": now}
+            host, ip, port = k.split("|", 2)
+            v = tls.tls_view(tls_results[k], host or None, cfg["tls_warn_days"], cfg["tls_critical_days"])
+            counts[v["level"]] += 1
+            if v.get("host_match") is False:
+                counts["mismatch"] += 1
+            if tls.is_issue(v) or v["level"] == "error":
+                what = (v["error"] if v["level"] == "error" else
+                        "만료됨" if v["level"] == "expired" else f"D-{v['days_left']} ({v['not_after'][:10]})")
+                if v.get("host_match") is False:
+                    what += f" · 호스트 불일치(인증서: {', '.join((v['san'] or [v['subject_cn'] or '?'])[:3])})"
+                emit("warn", f"  {host or ip}:{port} ({ip}) — {what}")
+        emit("warn" if counts["expired"] or counts["critical"] or counts["warning"] or counts["mismatch"] else "info",
+             f"인증서 확인({where}) {len(res)}건 — 정상 {counts['ok']} · 임박 {counts['warning'] + counts['critical']}"
+             f" · 만료 {counts['expired']} · 호스트 불일치 {counts['mismatch']} · 확인 실패 {counts['error']}"
+             f" (경고 {cfg['tls_warn_days']}일·위험 {cfg['tls_critical_days']}일)")
+        step("tls", "TLS 인증서 확인", "done")
+    tls_keep = {tls.tls_key(t) for t in tls_all}
+    tls_results = {k: v for k, v in tls_results.items() if k in tls_keep}
+
     snap.entries = entries
     snap.node_ips = nodes
     snap.ptr_cache = ptr_cache
     snap.fwd_cache = fwd_cache
     snap.probe_results = probe_results
+    snap.tls_results = tls_results
     snap.summary = {"by_kind": by_kind, "total": len(entries), "ips": len(ips),
                     "resolved": sum(1 for ip in ips if (cache.get(ip) or {}).get("names"))}
     snap.resolver = used
@@ -521,8 +571,11 @@ def public_view(db: Session, cluster) -> dict[str, Any]:
     cache = snap.ptr_cache or {}
     fwd = snap.fwd_cache or {}
     probes = snap.probe_results or {}
+    tls_res = snap.tls_results or {}
+    cfg = get_settings(db)
     nodes = snap.node_ips or []
     entries = []
+    tls_expiring = 0
     issues = 0
     for e in snap.entries or []:
         ptr = cache.get(e.get("ip") or "") or {}
@@ -536,7 +589,12 @@ def public_view(db: Session, cluster) -> dict[str, Any]:
             if chk.probe_key(t) in probes:
                 pr = probes[chk.probe_key(t)]
                 break
-        if fst in ("mismatch", "nxdomain") or (pr is not None and not pr.get("reachable")):
+        tkey = tls.entry_tls_key(e, nodes, cache, cfg["tls_ports"])
+        tv = tls.tls_view(tls_res.get(tkey) if tkey else None, tkey.split("|", 1)[0] or None if tkey else None,
+                          cfg["tls_warn_days"], cfg["tls_critical_days"])
+        if tv and tv["level"] in ("warning", "critical", "expired"):
+            tls_expiring += 1
+        if fst in ("mismatch", "nxdomain") or (pr is not None and not pr.get("reachable")) or tls.is_issue(tv):
             issues += 1
         entries.append({
             **e, "ptr_names": names, "ptr_source": ptr.get("source"),
@@ -544,13 +602,15 @@ def public_view(db: Session, cluster) -> dict[str, Any]:
                                              "source": rec.get("source"), "checked_at": rec.get("checked_at")},
             "probe": None if pr is None else {k: pr.get(k) for k in (
                 "reachable", "method", "http_status", "latency_ms", "error", "source", "checked_at")},
+            "tls": tv,
         })
     return {
         "cluster": {"id": str(cluster.id), "name": cluster.name},
         "collected_at": snap.collected_at.isoformat() if snap.collected_at else None,
         "collected_by": "정기 수집" if snap.collected_by == "schedule" else "수동 수집",
         "resolver": snap.resolver,
-        "summary": {**(snap.summary or {}), "issues": issues},
+        "summary": {**(snap.summary or {}), "issues": issues, "tls_expiring": tls_expiring},
+        "tls_thresholds": {"warn_days": cfg["tls_warn_days"], "critical_days": cfg["tls_critical_days"]},
         "error": snap.error,
         "entries": entries,
         "node_ips": snap.node_ips or [],

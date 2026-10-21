@@ -1463,6 +1463,7 @@ def _run_migrations():
     if "external_service_snapshots" in inspector.get_table_names():
         _safe_add_column("external_service_snapshots", "fwd_cache", "JSONB")
         _safe_add_column("external_service_snapshots", "probe_results", "JSONB")
+        _safe_add_column("external_service_snapshots", "tls_results", "JSONB")
 
 
 def _sync_missing_model_columns() -> None:
@@ -2519,6 +2520,7 @@ app = FastAPI(
     title=settings.app_name,
     description="DevOps K8s Daily Monitoring Dashboard API",
     version="1.64.2",
+    version="1.66.0",
     docs_url="/docs",
     redoc_url="/redoc",
     lifespan=lifespan,
@@ -2714,6 +2716,7 @@ def root():
     return {
         "name": settings.app_name,
         "version": "1.64.2",
+        "version": "1.66.0",
         "version": "1.8.2",
         "status": "running"
     }
