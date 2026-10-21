@@ -21,7 +21,9 @@ from app.models.app_setting import AppSetting
 from app.models.llm_credential import LlmCredential
 from app.models.user import User
 from app.services.llm import llm_service, LLM_SETTINGS_KEY, PURPOSES
+from app.services.llm.diagnostics import diagnose_profile
 from app.services.llm.service import merge_llm_settings
+from app.services.sse import stream_async_job
 
 logger = logging.getLogger(__name__)
 
@@ -60,6 +62,10 @@ class LlmTestRequest(BaseModel):
         default="한국어로 한 문장으로 답하세요: 정상적으로 연결되면 '연결 확인 완료' 라고 답하십시오.",
         max_length=500,
     )
+
+
+class LlmDiagnoseRequest(BaseModel):
+    profile: str
 
 
 class LlmCredentialCreate(BaseModel):
@@ -174,6 +180,29 @@ async def llm_test(
         "answer_preview": (result.text or "")[:300],
         "error": result.error,
     }
+
+
+@router.post("/diagnose")
+async def llm_diagnose(
+    body: LlmDiagnoseRequest,
+    db: Session = Depends(get_db),
+    _: User = Depends(require_admin),
+):
+    """프로필 연결을 계층별로 진단한다 — SSE(log/step/result).
+
+    설정 원천 → DNS → TCP → 서버 → 모델 목록·이름 해석 → 모델 정보 → 실제 생성 순서로
+    확인하고, 단계마다 조치 힌트를 로그로 남긴다(``services/llm/diagnostics.py``).
+    """
+    profile = llm_service.get_profile(body.profile, llm_service.resolve_settings(db))
+    if profile is None:
+        raise HTTPException(status_code=404, detail=f"프로필 '{body.profile}' 이 없습니다.")
+    stored = db.query(AppSetting).filter(AppSetting.key == LLM_SETTINGS_KEY).first() is not None
+    api_key = llm_service.resolve_api_key(profile)
+
+    async def job(_sdb, emit):
+        return await diagnose_profile(profile, emit, settings_stored=stored, api_key=api_key)
+
+    return stream_async_job(job, name="llm-diagnose")
 
 
 @router.get("/usage")

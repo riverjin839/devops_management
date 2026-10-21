@@ -115,7 +115,8 @@ pre-baked 되어 있어 볼륨 마운트가 기본적으로 없습니다(재시�
 오버레이에 추가하세요. GPU 어피니티는 포함돼 있지 않습니다 — GPU 기반 서빙(vLLM)이
 필요하면 `k8s/components/vllm-gpu/` 를 참고하세요. 사내 LLM 서비스(OpenAI-호환)에
 연결하는 경우 이 파일 자체가 필요 없습니다 — Settings → AI/LLM 탭에서 프로필로 등록하면
-됩니다. AI 기능이 전혀 필요 없을 경우 kustomization 에서 제외할 수 있습니다.
+됩니다. CPU/메모리 여유가 없거나 AI 기능이 필요 없으면 오버레이에 `k8s/components/no-ollama/`
+컴포넌트를 추가해 Ollama Deployment·Service 를 빼세요(설정 가이드: `docs/LLM_CHATBOT_SETUP.md`).
 
 ---
 

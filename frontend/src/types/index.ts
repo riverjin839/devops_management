@@ -5508,6 +5508,33 @@ export interface LlmHealthEntry {
   model: string;
   detail: string;
   latencyMs: number;
+  /** Ollama 전용 — 설정 모델이 서버에 있는지(자동 해석 포함). */
+  modelReady?: boolean;
+  /** 설정 모델명이 정확히 없어 서버 모델로 자동 해석된 이름. */
+  resolvedModel?: string;
+  availableModels?: string[];
+  hint?: string;
+}
+
+/** `POST /llm/diagnose` (SSE) 의 단계 결과 한 행. */
+export interface LlmDiagnoseCheck {
+  name: string;
+  label: string;
+  status: 'ok' | 'warn' | 'fail';
+  detail: string;
+  hint: string;
+  elapsedMs: number | null;
+}
+
+export interface LlmDiagnoseResult {
+  profile: string;
+  provider: LlmProviderType;
+  baseUrl: string;
+  model: string;
+  resolvedModel: string | null;
+  availableModels: string[];
+  ok: boolean;
+  checks: LlmDiagnoseCheck[];
 }
 
 export interface LlmTestResult {
