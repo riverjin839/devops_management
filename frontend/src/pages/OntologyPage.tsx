@@ -27,17 +27,35 @@ const ENTITY_TOKEN: Record<OntologyEntityType, { token: string; lighten?: number
   config_item:       { token: '--chart-3', lighten: 16 }, // 설정 계열 명도 변형
 };
 
-/** 엔티티 타입별 색 묶음 — solid(재질·점), tint(칩 배경), edge(칩 테두리). */
-interface EntityColors { solid: string; tint: string; edge: string }
+/** three.js 재질용 색 — 캔버스는 CSS 클래스를 못 쓰므로 현재 테마 값을 읽어 넘긴다. */
+interface EntityColors { solid: string }
 
 function entityColors(): Record<OntologyEntityType, EntityColors> {
   return Object.fromEntries(
     (Object.entries(ENTITY_TOKEN) as Array<[OntologyEntityType, { token: string; lighten?: number }]>).map(([t, { token, lighten }]) => [t, {
       solid: cssVarColor(token, { lighten }),
-      tint: cssVarColor(token, { lighten, alpha: 0.13 }),
-      edge: cssVarColor(token, { lighten, alpha: 0.38 }),
     }]),
   ) as Record<OntologyEntityType, EntityColors>;
+}
+
+/** DOM(칩·점·상세 패널) 색 — 같은 chart 번호의 Tailwind 토큰 클래스(테마를 바로 따른다, 인라인 style 금지).
+ *  JIT 가 찾도록 리터럴로 적는다. 명도 변형 2종은 점 밝기(brightness)와 칩 점선 테두리로 구분한다. */
+interface EntityClasses { dot: string; chipOn: string; chipEdge: string; accent: string }
+const ENTITY_CLASS: Record<OntologyEntityType, EntityClasses> = {
+  node:             { dot: 'bg-chart-1', chipOn: 'bg-chart-1/[0.13]', chipEdge: 'border-chart-1/40', accent: 'border-l-chart-1' },
+  hardware:         { dot: 'bg-chart-8', chipOn: 'bg-chart-8/[0.13]', chipEdge: 'border-chart-8/40', accent: 'border-l-chart-8' },
+  os:               { dot: 'bg-chart-2', chipOn: 'bg-chart-2/[0.13]', chipEdge: 'border-chart-2/40', accent: 'border-l-chart-2' },
+  kernel_param:     { dot: 'bg-chart-3', chipOn: 'bg-chart-3/[0.13]', chipEdge: 'border-chart-3/40', accent: 'border-l-chart-3' },
+  network:          { dot: 'bg-chart-6', chipOn: 'bg-chart-6/[0.13]', chipEdge: 'border-chart-6/40', accent: 'border-l-chart-6' },
+  k8s_component:    { dot: 'bg-chart-4', chipOn: 'bg-chart-4/[0.13]', chipEdge: 'border-chart-4/40', accent: 'border-l-chart-4' },
+  cilium_component: { dot: 'bg-chart-6 brightness-125', chipOn: 'bg-chart-6/[0.08]', chipEdge: 'border-chart-6/40 border-dashed', accent: 'border-l-chart-6' },
+  workload:         { dot: 'bg-chart-7', chipOn: 'bg-chart-7/[0.13]', chipEdge: 'border-chart-7/40', accent: 'border-l-chart-7' },
+  service:          { dot: 'bg-chart-5', chipOn: 'bg-chart-5/[0.13]', chipEdge: 'border-chart-5/40', accent: 'border-l-chart-5' },
+  config_item:      { dot: 'bg-chart-3 brightness-125', chipOn: 'bg-chart-3/[0.08]', chipEdge: 'border-chart-3/40 border-dashed', accent: 'border-l-chart-3' },
+};
+
+function entityClass(t: OntologyEntityType | string | undefined): EntityClasses {
+  return ENTITY_CLASS[t as OntologyEntityType] ?? ENTITY_CLASS.hardware;
 }
 
 const ENTITY_LABEL: Record<OntologyEntityType, string> = {
@@ -105,9 +123,8 @@ function makeNodeObject(node: NodeObject, colors: Record<OntologyEntityType, Ent
 }
 
 // ── 상세 패널 ─────────────────────────────────────────────────────────────────
-function NodeDetailPanel({ node, color, onClose, onAnalyzeImpact }: {
+function NodeDetailPanel({ node, onClose, onAnalyzeImpact }: {
   node: GNode;
-  color: string;
   onClose: () => void;
   onAnalyzeImpact: (entityId: string) => void;
 }) {
@@ -115,8 +132,7 @@ function NodeDetailPanel({ node, color, onClose, onAnalyzeImpact }: {
 
   return (
     <div className="absolute top-4 right-4 w-72 bg-card border border-border rounded-md shadow-card overflow-hidden z-10">
-      <div className="flex items-center justify-between px-4 py-3 border-b border-border"
-        style={{ borderLeftColor: color, borderLeftWidth: 4 }}>
+      <div className={`flex items-center justify-between px-4 py-3 border-b border-border border-l-4 ${entityClass(node.entityType).accent}`}>
         <div className="min-w-0">
           <p className="text-xs font-medium text-muted-foreground">
             {ENTITY_LABEL[node.entityType] ?? node.entityType}
@@ -172,8 +188,7 @@ function NodeDetailPanel({ node, color, onClose, onAnalyzeImpact }: {
 }
 
 // ── Impact 결과 패널 ──────────────────────────────────────────────────────────
-function ImpactPanel({ result, colors, onClose }: {
-  colors: Record<OntologyEntityType, EntityColors>;
+function ImpactPanel({ result, onClose }: {
   result: { blastRadiusScore: number; impactedEntities: { id: string; name: string; entityType: OntologyEntityType }[]; impactPaths: { pathNames: string[]; pathRelations: string[]; score: number }[] };
   onClose: () => void;
 }) {
@@ -203,7 +218,7 @@ function ImpactPanel({ result, colors, onClose }: {
             <div className="space-y-1">
               {result.impactedEntities.slice(0, 8).map((e) => (
                 <div key={e.id} className="flex items-center gap-2 text-sm">
-                  <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: colors[e.entityType]?.solid }} />
+                  <span className={`w-2 h-2 rounded-full flex-shrink-0 ${entityClass(e.entityType).dot}`} />
                   <span className="text-foreground truncate">{e.name}</span>
                 </div>
               ))}
@@ -469,14 +484,10 @@ export function OntologyPage({ embedded = false }: { embedded?: boolean } = {}) 
                 aria-pressed={active}
                 onClick={() => toggleType(t)}
                 className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium text-foreground border flex-shrink-0 transition-opacity ${
-                  active ? 'opacity-100' : 'opacity-35'
+                  entityClass(t).chipEdge} ${active ? `opacity-100 ${entityClass(t).chipOn}` : 'opacity-35 bg-transparent'
                 }`}
-                style={{
-                  background: active ? colors[t].tint : 'transparent',
-                  borderColor: colors[t].edge,
-                }}
               >
-                <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: colors[t].solid }} />
+                <span className={`w-2 h-2 rounded-full flex-shrink-0 ${entityClass(t).dot}`} />
                 {ENTITY_LABEL[t]}
               </button>
             );
@@ -555,7 +566,7 @@ export function OntologyPage({ embedded = false }: { embedded?: boolean } = {}) 
               <p className="text-xs font-medium text-muted-foreground mb-2">엔티티 타입</p>
               {ALL_TYPES.map((t) => (
                 <div key={t} className="flex items-center gap-2">
-                  <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ background: colors[t].solid }} />
+                  <span className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${entityClass(t).dot}`} />
                   <span className="text-sm text-muted-foreground">{ENTITY_LABEL[t]}</span>
                 </div>
               ))}
@@ -572,7 +583,6 @@ export function OntologyPage({ embedded = false }: { embedded?: boolean } = {}) 
           {selectedNode && (
             <NodeDetailPanel
               node={selectedNode}
-              color={colors[selectedNode.entityType]?.solid ?? cssVarColor('--chart-8')}
               onClose={() => { setSelectedNode(null); setImpactResult(null); }}
               onAnalyzeImpact={(id) => { void handleAnalyzeImpact(id); }}
             />
@@ -582,7 +592,6 @@ export function OntologyPage({ embedded = false }: { embedded?: boolean } = {}) 
           {impactResult && (
             <ImpactPanel
               result={impactResult}
-              colors={colors}
               onClose={() => setImpactResult(null)}
             />
           )}
