@@ -8,7 +8,9 @@
 
 ## [Unreleased]
 
-1.65.0 이후 main 에 병합된 변경 (다음 릴리스 후보).
+1.66.0 이후 main 에 병합된 변경 (다음 릴리스 후보).
+
+## [1.66.0] - 2026-10-21
 
 ### Added
 - **외부 서비스 — TLS 인증서 만료일**: 외부 서비스 화면(`/external-services`)에 **인증서** 열을 더했다. https Ingress(SNI = 선언 도메인)와 TLS 포트(기본 443·8443)의 LoadBalancer·ExternalIP·NodePort 인증서를 받아 `D-23 (2026-11-13)` 처럼 만료까지 남은 일수를 보여주고, 경고(기본 30일)·위험(기본 7일)·만료·호스트 불일치(인증서 SAN 이 도메인과 안 맞음)만 색으로 표시한다. 셀에 마우스를 올리면 주체·발급자·SAN, **문제 있음** 필터와 CSV 에도 포함된다. 남은 일수는 조회 시점 기준으로 다시 계산한다. 수집 다이얼로그에서 이번 수집의 확인 여부를 고르고, SSH 노드를 주면 노드에서 `openssl s_client` 로, 아니면 backend 에서 확인한다. TLS 포트·경고/위험 일수·노드 명령은 관리자 설정. Backend: `services/external_tls.py` + `external_service_snapshots.tls_results` 컬럼(`_safe_add_column` 보강).
