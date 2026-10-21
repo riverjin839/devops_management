@@ -8,7 +8,9 @@
 
 ## [Unreleased]
 
-1.69.0 이후 main 에 병합된 변경 (다음 릴리스 후보).
+1.69.1 이후 main 에 병합된 변경 (다음 릴리스 후보).
+
+## [1.69.1] - 2026-10-21
 
 ### Added
 - **관측 지표 — 저장 전 미리 조회·사용 안 함 지표 관리**: 지표 편집 창의 **미리 조회** 버튼으로 PromQL 을 저장하기 전에 선택 클러스터에서 시험 조회해 결과(최대 20개)를 본다. 표 아래 "사용 안 함" 섹션에서 꺼 둔 지표를 다시 켜고, 지표가 없는 준비 중 모듈에도 첫 지표를 추가할 수 있다. 지표 삭제는 확인 창을 거치고, 카탈로그 편집은 감사 로그에 남는다. Backend: `POST /observability/metrics/preview`(operator, fail-safe), `GET /observability/metrics/{id}`, 모듈 `POST`·`PUT`·`DELETE /observability/modules`, `?include_disabled`, 감사 `observability.module.*`·`observability.metric.*`. Frontend: `DisabledMetricsSection`.
