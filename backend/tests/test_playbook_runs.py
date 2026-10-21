@@ -263,10 +263,16 @@ def test_real_ansible_streams_events_and_parses_result(tmp_path, monkeypatch):
     )
     (tmp_path / "inv.ini").write_text(f"localhost ansible_connection=local ansible_python_interpreter={sys.executable}\n")
     orig = playbook_executor._run_streaming
-    # 실행기는 PATH 를 고정하므로(이미지 기준) 테스트 환경의 ansible 이 보이게 앞에 붙인다.
+    # 실행기는 PATH·HOME 을 이미지 기준(root)으로 고정한다 — 테스트 환경의 ansible 이 보이게 PATH 앞에
+    # 붙이고, 비root CI 러너가 쓸 수 있게 로컬·원격(local 연결) 임시 디렉터리를 tmp_path 아래로 둔다.
     monkeypatch.setattr(
         playbook_executor, "_run_streaming",
-        lambda cmd, env, t, on, sc: orig(cmd, {**env, "PATH": f"{venv_bin}:{env['PATH']}"}, t, on, sc),
+        lambda cmd, env, t, on, sc: orig(
+            cmd,
+            {**env, "PATH": f"{venv_bin}:{env['PATH']}", "HOME": str(tmp_path),
+             "ANSIBLE_REMOTE_TEMP": str(tmp_path / "remote-tmp")},
+            t, on, sc,
+        ),
     )
     events = []
     r = playbook_executor.run_playbook(
