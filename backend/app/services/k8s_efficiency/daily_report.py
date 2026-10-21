@@ -38,6 +38,8 @@ DEFAULTS: dict[str, Any] = {
     "exclude_system_namespaces": True,
     # 공개 대상 클러스터 id 목록. 비어 있으면 테넌트 바인딩이 없는 클러스터 전체.
     "public_cluster_ids": [],
+    # 공개 방식 — open(누구나) | link(만료 기한이 있는 공유 링크로만). 판정은 services/public_pages.py.
+    "access_mode": "open",
 }
 
 RANK_KEYS = ("cpu_rate", "mem_rate", "cpu_slack", "mem_slack")
@@ -67,6 +69,8 @@ def normalize(values: dict[str, Any]) -> dict[str, Any]:
     out["top_n"] = _clamp_int(out["top_n"], 1, 50, DEFAULTS["top_n"])
     out["min_cpu_req_m"] = _clamp_int(out["min_cpu_req_m"], 0, 10 ** 9, DEFAULTS["min_cpu_req_m"])
     out["min_mem_req_b"] = _clamp_int(out["min_mem_req_b"], 0, 10 ** 15, DEFAULTS["min_mem_req_b"])
+    if out["access_mode"] not in ("open", "link"):
+        out["access_mode"] = "open"
     ids = out.get("public_cluster_ids") or []
     out["public_cluster_ids"] = [str(i) for i in ids if str(i).strip()] if isinstance(ids, list) else []
     return out
@@ -260,6 +264,17 @@ def _day_rows(db: Session, cluster, day: date) -> tuple[list[dict[str, Any]], st
     return rows, ("backfill" if rows else "none"), (datetime.utcnow() if rows else None)
 
 
+def _with_owners(db: Session, cluster, items: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """NS 담당자(규칙 → 라벨 캐시) 를 붙인다. 실패해도 리포트는 뜬다."""
+    try:
+        from app.services import ns_owners
+        resolve = ns_owners.resolver(db, cluster.id)
+    except Exception:  # noqa: BLE001
+        log.exception("ns owner resolver failed cluster=%s", cluster.id)
+        return [{**it, "owner": None} for it in items]
+    return [{**it, "owner": resolve(it["namespace"])} for it in items]
+
+
 def build_report(db: Session, cluster, day: date, rank_by: str = "cpu_rate") -> dict[str, Any]:
     cfg = get_settings(db)
     if rank_by not in RANK_KEYS:
@@ -268,7 +283,7 @@ def build_report(db: Session, cluster, day: date, rank_by: str = "cpu_rate") -> 
     is_today = day == today
     rows, source, computed_at = _day_rows(db, cluster, day)
 
-    items = [_item(r) for r in rows]
+    items = _with_owners(db, cluster, [_item(r) for r in rows])
     ranked, total = rank(items, rank_by, cfg, _system_namespaces(db))
     top = [{"rank": i + 1, **it} for i, it in enumerate(ranked[: cfg["top_n"]])]
 
@@ -324,7 +339,7 @@ _WL_SEARCH_SQL = text("""
 
 
 def search_report(db: Session, cluster, day: date, q: str, rank_by: str = "cpu_rate") -> dict[str, Any]:
-    """네임스페이스 이름 또는 워크로드/파드 이름(부분 일치, 대소문자 무시)으로 당일 NS 를 찾는다.
+    """네임스페이스·담당자·워크로드/파드 이름(부분 일치, 대소문자 무시)으로 당일 NS 를 찾는다.
 
     TOP N 밖의 NS 도 찾을 수 있게 당일 전체 NS 를 대상으로 하고, 각 결과에 비효율 랭킹 순위
     (랭킹 대상이 아니면 None)를 붙인다. 워크로드/파드 매치는 `k8s_workload_samples` 기준이라
@@ -335,7 +350,7 @@ def search_report(db: Session, cluster, day: date, q: str, rank_by: str = "cpu_r
         rank_by = "cpu_rate"
     needle = (q or "").strip().lower()
     rows, source, _ = _day_rows(db, cluster, day)
-    items = {it["namespace"]: it for it in (_item(r) for r in rows)}
+    items = {it["namespace"]: it for it in _with_owners(db, cluster, [_item(r) for r in rows])}
     ranked, _total = rank(list(items.values()), rank_by, cfg, _system_namespaces(db))
     pos = {it["namespace"]: i + 1 for i, it in enumerate(ranked)}
 
@@ -349,15 +364,101 @@ def search_report(db: Session, cluster, day: date, q: str, rank_by: str = "cpu_r
     out = []
     for ns, it in items.items():
         ns_hit = needle in ns.lower()
+        owner_hit = bool(it.get("owner") and needle in (it["owner"]["owner"] or "").lower())
         wls = wl_by_ns.get(ns, [])
-        if not ns_hit and not wls:
+        if not ns_hit and not owner_hit and not wls:
             continue
         out.append({**it, "rank": pos.get(ns),
-                    "match": {"namespace": ns_hit, "workloads": sorted(wls, key=lambda w: w["name"])[:10],
+                    "match": {"namespace": ns_hit, "owner": owner_hit,
+                              "workloads": sorted(wls, key=lambda w: w["name"])[:10],
                               "workload_matches": len(wls)}})
     out.sort(key=lambda x: (x["rank"] is None, x["rank"] or 0, x["namespace"]))
     return {"q": q, "date": day.isoformat(), "rank_by": rank_by, "source": source,
             "total": len(out), "items": out[:SEARCH_LIMIT]}
+
+
+# ── 기간(주간·월간) 리포트 ──────────────────────────────────────────────────────────
+PERIODS = {"week": 7, "month": 30}
+
+
+def _period_item(ns: str, days: list[dict[str, Any]]) -> dict[str, Any]:
+    """하루 단위 NS 집계 여러 개 → 기간 집계. request/limit/평균 사용은 일 평균의 평균, 최소·최대는 기간 전체."""
+    def avg(vals):
+        vals = [v for v in vals if v is not None]
+        return (sum(vals) / len(vals)) if vals else None
+
+    def res(prefix_req, prefix_lim, use, umin, umax, rate, rmin, rmax):
+        req = avg([d[prefix_req] for d in days]) or 0
+        use_avg = avg([d[use] for d in days])
+        return {
+            "req": int(round(req)), "lim": int(round(avg([d[prefix_lim] for d in days]) or 0)),
+            "use_avg": None if use_avg is None else int(round(use_avg)),
+            "use_min": min((d[umin] for d in days if d[umin] is not None), default=None),
+            "use_max": max((d[umax] for d in days if d[umax] is not None), default=None),
+            "rate_avg": avg([d[rate] for d in days]),
+            "rate_min": min((d[rmin] for d in days if d[rmin] is not None), default=None),
+            "rate_max": max((d[rmax] for d in days if d[rmax] is not None), default=None),
+            "slack": None if use_avg is None else max(0, int(round(req - use_avg))),
+        }
+    return {
+        "namespace": ns,
+        "samples": sum(d["samples"] for d in days),
+        "usage_samples": sum(d["usage_samples"] for d in days),
+        "pods": None if avg([d["pod_avg"] for d in days]) is None else round(avg([d["pod_avg"] for d in days]), 1),
+        "days": len(days),
+        "cpu": res("cpu_req_m", "cpu_lim_m", "cpu_use_avg_m", "cpu_use_min_m", "cpu_use_max_m",
+                   "cpu_rate_avg", "cpu_rate_min", "cpu_rate_max"),
+        "mem": res("mem_req_b", "mem_lim_b", "mem_use_avg_b", "mem_use_min_b", "mem_use_max_b",
+                   "mem_rate_avg", "mem_rate_min", "mem_rate_max"),
+        "gpu": {"req": None, "lim": None},
+    }
+
+
+def period_report(db: Session, cluster, end: date, period: str = "week", rank_by: str = "cpu_rate") -> dict[str, Any]:
+    """end 를 포함한 최근 7/30일 — 일자별 클러스터 사용률 추이 + 기간 평균 비효율 랭킹(만성 낭비).
+
+    지난 날짜는 롤업을 읽고(없으면 계산·저장), 오늘이 포함되면 오늘은 실시간 집계. 보관 기간 밖 날짜는 뺀다."""
+    cfg = get_settings(db)
+    if rank_by not in RANK_KEYS:
+        rank_by = "cpu_rate"
+    n = PERIODS.get(period, 7)
+    today = today_local()
+    min_day = today - timedelta(days=cfg["retention_days"])
+    days = [d for d in (end - timedelta(days=i) for i in range(n - 1, -1, -1)) if min_day <= d <= today]
+
+    series = []
+    by_ns: dict[str, list[dict[str, Any]]] = {}
+    for d in days:
+        rows, _source, _ = _day_rows(db, cluster, d)
+        cpu_req = sum(r["cpu_req_m"] for r in rows if r["cpu_use_avg_m"] is not None)
+        cpu_use = sum(r["cpu_use_avg_m"] for r in rows if r["cpu_use_avg_m"] is not None)
+        mem_req = sum(r["mem_req_b"] for r in rows if r["mem_use_avg_b"] is not None)
+        mem_use = sum(r["mem_use_avg_b"] for r in rows if r["mem_use_avg_b"] is not None)
+        series.append({
+            "date": d.isoformat(), "namespaces": len(rows),
+            "cpu_req": sum(r["cpu_req_m"] for r in rows), "cpu_use": cpu_use if rows else None,
+            "cpu_rate": (cpu_use / cpu_req) if cpu_req else None,
+            "mem_req": sum(r["mem_req_b"] for r in rows), "mem_use": mem_use if rows else None,
+            "mem_rate": (mem_use / mem_req) if mem_req else None,
+        })
+        for r in rows:
+            by_ns.setdefault(r["namespace"], []).append(r)
+
+    items = _with_owners(db, cluster, [_period_item(ns, ds) for ns, ds in by_ns.items()])
+    ranked, total = rank(items, rank_by, cfg, _system_namespaces(db))
+    top = [{"rank": i + 1, **it} for i, it in enumerate(ranked[: cfg["top_n"]])]
+    return {
+        "cluster": {"id": str(cluster.id), "name": cluster.name},
+        "period": period if period in PERIODS else "week",
+        "start": days[0].isoformat() if days else end.isoformat(),
+        "end": end.isoformat(),
+        "days_with_data": sum(1 for p in series if p["namespaces"]),
+        "rank_by": rank_by,
+        "top_n": cfg["top_n"],
+        "ranked_total": total,
+        "series": series,
+        "items": top,
+    }
 
 
 # ── 공개 대상 클러스터 ──────────────────────────────────────────────────────────
@@ -384,6 +485,14 @@ def rollup_recent(db: Session, days: int = 1) -> dict[str, Any]:
                 db.rollback()
                 log.exception("daily_report rollup failed cluster=%s day=%s", c.id, day)
                 errors[f"{c.name}:{day.isoformat()}"] = str(e)[:200]
+    # NS 담당자 라벨 캐시도 하루 한 번 갱신(공개 화면은 캐시만 읽는다).
+    try:
+        from app.services import ns_owners
+        for c in db.query(Cluster).all():
+            ns_owners.refresh_labels(db, c)
+    except Exception as e:  # noqa: BLE001
+        db.rollback()
+        errors["ns_owner_labels"] = str(e)[:200]
     try:
         purged = purge_old(db, cfg["retention_days"])
     except Exception as e:  # noqa: BLE001

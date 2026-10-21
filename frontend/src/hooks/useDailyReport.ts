@@ -1,7 +1,7 @@
 // 일일 리포트 — 공개 조회(비인증) + 설정(admin) 서버 상태(TanStack Query).
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { dailyReportApi } from '@/services/api';
-import type { DailyReportRankBy, DailyReportSettings } from '@/types';
+import type { DailyReportRankBy, DailyReportSettings, NsOwnersSettings } from '@/types';
 
 export function useDailyReportClusters() {
   return useQuery({
@@ -37,6 +37,41 @@ export function useDailyReportSearch(clusterId: string, date: string, q: string,
     placeholderData: keepPreviousData,
     refetchOnWindowFocus: false,
     retry: false,
+  });
+}
+
+/** 주간·월간 — 일자별 사용률 추이 + 기간 평균 비효율 랭킹. 지난 날짜 롤업이라 자주 다시 읽지 않는다. */
+export function useDailyReportPeriod(clusterId: string, end: string, period: 'week' | 'month' | null, rankBy: DailyReportRankBy) {
+  return useQuery({
+    queryKey: ['daily-report-period', clusterId, end, period, rankBy],
+    queryFn: async () => (await dailyReportApi.period(clusterId, end, period as 'week' | 'month', rankBy)).data,
+    enabled: !!clusterId && !!end && !!period,
+    staleTime: 10 * 60_000,
+    placeholderData: keepPreviousData,
+    refetchOnWindowFocus: false,
+    retry: false,
+  });
+}
+
+export function useNsOwners(enabled: boolean) {
+  return useQuery({
+    queryKey: ['ns-owners'],
+    queryFn: async () => (await dailyReportApi.owners()).data,
+    enabled,
+  });
+}
+
+export function useSaveNsOwners() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (body: Partial<NsOwnersSettings>) => (await dailyReportApi.putOwners(body)).data,
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ['ns-owners'] });
+      void qc.invalidateQueries({ queryKey: ['daily-report'] });
+      void qc.invalidateQueries({ queryKey: ['daily-report-period'] });
+      void qc.invalidateQueries({ queryKey: ['daily-report-search'] });
+      void qc.invalidateQueries({ queryKey: ['external-services'] });
+    },
   });
 }
 

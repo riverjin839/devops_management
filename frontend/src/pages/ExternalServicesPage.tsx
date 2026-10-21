@@ -4,11 +4,11 @@
 // 클러스터·유형·검색어를 URL 쿼리(c, k, q)에 담아 링크로 공유한다.
 import { useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { Download, Globe, RefreshCw, Search, X } from 'lucide-react';
+import { Download, Globe, Lock, RefreshCw, Search, X } from 'lucide-react';
 import { EmptyState, ErrorState, LoadingState, PageHeader, PageShell } from '@/components/common';
 import { MacCard } from '@/components/ui/MacCard';
-import { CollectPanel, ExternalServicesTable, KIND_OPTIONS, domainOf, hasIssue, matches, toCsv } from '@/components/external-services';
-import { PublicPageLinks } from '@/components/public-pages';
+import { ChangesCard, CollectPanel, ExternalServicesTable, KIND_OPTIONS, domainOf, hasIssue, matches, toCsv } from '@/components/external-services';
+import { PublicPageLinks, SHARE_TITLES, shareDenied } from '@/components/public-pages';
 import { useExternalServiceClusters, useExternalServices } from '@/hooks/useExternalServices';
 import { useAuthStore } from '@/stores/authStore';
 import { cn } from '@/lib/utils';
@@ -108,11 +108,14 @@ export function ExternalServicesPage() {
   }
   if (meta.isError) {
     const status = (meta.error as { response?: { status?: number } })?.response?.status;
+    const denied = shareDenied(meta.error);
     return (
       <div className="min-h-screen bg-background">
         <PageShell density="hub" className="mx-auto space-y-4">
           {header}
-          {status === 404
+          {denied
+            ? <EmptyState icon={Lock} title={SHARE_TITLES[denied.code] ?? '공유 링크가 필요합니다'} description={denied.message} />
+            : status === 404
             ? <EmptyState title="외부 서비스 목록이 공개되어 있지 않습니다" description="관리자가 외부 서비스 설정에서 공개 페이지를 끈 상태입니다." />
             : <ErrorState error={meta.error} onRetry={() => void meta.refetch()} />}
         </PageShell>
@@ -141,7 +144,7 @@ export function ExternalServicesPage() {
               <label className="relative flex items-center">
                 <Search className="absolute left-2.5 w-4 h-4 text-muted-foreground pointer-events-none" />
                 <input type="search" value={qInput} onChange={(e) => setQInput(e.target.value)}
-                  placeholder="도메인 · IP · 포트 · 네임스페이스 검색" aria-label="도메인·IP·포트·네임스페이스 검색"
+                  placeholder="도메인 · IP · 포트 · 네임스페이스 · 담당자 검색" aria-label="도메인·IP·포트·네임스페이스·담당자 검색"
                   className="w-72 max-w-full text-sm pl-8 pr-8 py-1.5 rounded-xl border border-border bg-card text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary" />
                 {qInput && (
                   <button type="button" className="absolute right-2 text-muted-foreground hover:text-foreground"
@@ -156,6 +159,11 @@ export function ExternalServicesPage() {
               </button>
             </div>
 
+            {meta.data?.accessMode === 'link' && meta.data.linkExpiresAt && (
+              <p className="text-xs text-muted-foreground">
+                공유 링크로 열람 중 — {new Date(`${meta.data.linkExpiresAt}Z`).toLocaleString()} 까지 유효
+              </p>
+            )}
             {loggedIn && clusterId && <CollectPanel clusterId={clusterId} clusterName={clusterName} />}
 
             {view.isError ? (
@@ -207,6 +215,8 @@ export function ExternalServicesPage() {
                 )}
               </MacCard>
             )}
+
+            {data?.collectedAt && <ChangesCard clusterId={clusterId} />}
 
             {data && data.nodeIps.length > 0 && (counts.NodePort ?? 0) > 0 && (
               <details className="text-xs text-muted-foreground">

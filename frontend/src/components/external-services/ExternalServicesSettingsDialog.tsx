@@ -83,6 +83,21 @@ export function ExternalServicesSettingsDialog({ open, onClose }: { open: boolea
           <div className="space-y-3 max-h-[60vh] overflow-y-auto px-5 pb-3">
             <Check checked={form.publicEnabled} onChange={(v) => set('publicEnabled', v)}
               label="공개 페이지 사용" help="끄면 /external-services 와 공개 API 가 404 를 돌려준다." />
+            <fieldset className="text-xs">
+              <legend className="text-muted-foreground">공개 방식</legend>
+              <div className="mt-0.5 flex gap-4 text-sm">
+                {([['open', '누구나'], ['link', '공유 링크만']] as const).map(([v, l]) => (
+                  <label key={v} className="inline-flex items-center gap-1.5">
+                    <input type="radio" name="access-mode" className="accent-primary" checked={form.accessMode === v}
+                      onChange={() => set('accessMode', v)} />
+                    {l}
+                  </label>
+                ))}
+              </div>
+              <span className="block text-[11px] text-muted-foreground mt-0.5 leading-snug">
+                공유 링크만: 관리자가 발급한 만료 기한 있는 링크(?t=)로만 열린다. 링크는 화면 상단 &apos;공유 링크&apos;에서 만든다.
+              </span>
+            </fieldset>
             <div className="grid grid-cols-2 gap-3">
               <Check checked={form.scheduleEnabled} onChange={(v) => set('scheduleEnabled', v)}
                 label="정기 수집" help="자격증명 없이 수집 — 역조회는 backend 방식, 노드 nslookup 으로 찾은 이름은 유지." />
@@ -158,6 +173,16 @@ export function ExternalServicesSettingsDialog({ open, onClose }: { open: boolea
             <Field label="노드 인증서 확인 명령" help="{ip}·{port}·{timeout}·{sni}(-servername 도메인, 없으면 빈 값)·{host}. openssl x509 -enddate/-subject/-issuer/-text 출력을 읽는다.">
               <input className={`${INPUT} font-mono`} value={form.tlsCommand} onChange={(e) => set('tlsCommand', e.target.value)} />
             </Field>
+            <div className="grid grid-cols-2 gap-3">
+              <Field label="변경 이력 보관(일)" help="새로 열리거나 사라진 엔드포인트 기록 보관 기간(1~400). 수집 때 정리된다.">
+                <input type="number" min={1} max={400} className={INPUT} value={form.changeRetentionDays}
+                  onChange={(e) => set('changeRetentionDays', Number(e.target.value))} />
+              </Field>
+              <Field label="신규 표시(일)" help="최근 이 기간에 새로 열린 엔드포인트에 '신규' 표시(0 = 끔).">
+                <input type="number" min={0} max={90} className={INPUT} value={form.newBadgeDays}
+                  onChange={(e) => set('newBadgeDays', Number(e.target.value))} />
+              </Field>
+            </div>
             <Field label="공개 클러스터"
               help="아무것도 고르지 않으면 테넌트에 묶이지 않은 클러스터 전체가 공개된다. 고르면 고른 것만 공개된다.">
               <div className="max-h-40 overflow-y-auto rounded-xl border border-border p-2 space-y-1">
