@@ -14,7 +14,8 @@ interface RunCredsModalProps {
 
 /** Playbook 실행 직전 SSH 자격증명을 받는 모달.
  *
- * - 자격증명은 sessionStorage 에 저장돼 같은 탭/세션 동안 자동으로 채워짐.
+ * - "이 세션 동안 기억하기"를 켠 경우에만 sessionStorage 에 저장돼 같은 탭/세션 동안 자동으로 채워짐.
+ *   비밀번호·개인키가 평문으로 남으므로 기본은 꺼 둔다. 끄고 실행하면 저장된 값도 지운다.
  * - 서버에는 휘발성으로 전달되며 DB 에 보관되지 않음.
  * - 노드에 이미 매니지드 inventory(ansible_user/pass 포함) 가 설정돼 있다면
  *   비워두고 실행해도 무방하다.
@@ -27,7 +28,7 @@ export function RunCredsModal({ open, playbookName, onClose, onRun }: RunCredsMo
   const [become, setBecome] = useState(true);
   const [becomePass, setBecomePass] = useState('');
   const [authMode, setAuthMode] = useState<'password' | 'key'>('password');
-  const [remember, setRemember] = useState(true);
+  const [remember, setRemember] = useState(false);
   const titleId = useId();
   const dialogRef = useModalA11y(open, onClose);
 
@@ -36,6 +37,8 @@ export function RunCredsModal({ open, playbookName, onClose, onRun }: RunCredsMo
     if (!open) return;
     try {
       const raw = sessionStorage.getItem(SESSION_KEY);
+      // 앞서 기억하기를 켜 둔 세션이면 그 선택을 유지한다.
+      setRemember(!!raw);
       if (raw) {
         const c = JSON.parse(raw) as PlaybookSshCreds & { authMode?: 'password' | 'key' };
         if (c.ssh_username) setUsername(c.ssh_username);
@@ -61,11 +64,10 @@ export function RunCredsModal({ open, playbookName, onClose, onRun }: RunCredsMo
     if (authMode === 'key' && privateKey.trim()) creds.ssh_private_key = privateKey.trim();
     if (become && becomePass) creds.become_password = becomePass;
 
-    if (remember) {
-      try {
-        sessionStorage.setItem(SESSION_KEY, JSON.stringify({ ...creds, authMode }));
-      } catch { /* ignore */ }
-    }
+    try {
+      if (remember) sessionStorage.setItem(SESSION_KEY, JSON.stringify({ ...creds, authMode }));
+      else sessionStorage.removeItem(SESSION_KEY);
+    } catch { /* ignore */ }
 
     onRun(creds);
   };
@@ -84,7 +86,7 @@ export function RunCredsModal({ open, playbookName, onClose, onRun }: RunCredsMo
             <KeyRound className="w-4 h-4 text-primary" />
             <h2 id={titleId} className="font-semibold text-sm">SSH 자격증명</h2>
           </div>
-          <button onClick={onClose} className="p-1 rounded hover:bg-secondary text-muted-foreground hover:text-foreground">
+          <button onClick={onClose} title="닫기" aria-label="닫기" className="p-1 rounded-md hover:bg-secondary text-muted-foreground hover:text-foreground">
             <X className="w-4 h-4" />
           </button>
         </div>
@@ -99,24 +101,24 @@ export function RunCredsModal({ open, playbookName, onClose, onRun }: RunCredsMo
             <label className="col-span-2 text-sm">
               <span className="block text-muted-foreground mb-1">사용자명</span>
               <input value={username} onChange={(e) => setUsername(e.target.value)}
-                className="w-full px-2 py-1.5 text-sm bg-background border border-border rounded-lg focus:outline-none focus:ring-1 focus:ring-primary"
+                className="w-full px-2 py-1.5 text-sm bg-background border border-border rounded-xl focus:outline-none focus:ring-1 focus:ring-primary"
                 placeholder="root" />
             </label>
             <label className="text-sm">
               <span className="block text-muted-foreground mb-1">포트</span>
               <input type="number" value={port}
                 onChange={(e) => setPort(e.target.value ? parseInt(e.target.value, 10) : '')}
-                className="w-full px-2 py-1.5 text-sm bg-background border border-border rounded-lg focus:outline-none focus:ring-1 focus:ring-primary" />
+                className="w-full px-2 py-1.5 text-sm bg-background border border-border rounded-xl focus:outline-none focus:ring-1 focus:ring-primary" />
             </label>
           </div>
 
           <div className="flex items-center gap-1 text-sm">
             <button type="button" onClick={() => setAuthMode('password')}
-              className={`px-3 py-1 rounded-lg border ${authMode === 'password' ? 'bg-primary/10 text-primary border-primary/40' : 'bg-secondary border-border text-muted-foreground'}`}>
+              className={`px-3 py-1 rounded-xl border ${authMode === 'password' ? 'bg-primary/10 text-primary border-primary/40' : 'bg-secondary border-border text-muted-foreground'}`}>
               비밀번호
             </button>
             <button type="button" onClick={() => setAuthMode('key')}
-              className={`px-3 py-1 rounded-lg border ${authMode === 'key' ? 'bg-primary/10 text-primary border-primary/40' : 'bg-secondary border-border text-muted-foreground'}`}>
+              className={`px-3 py-1 rounded-xl border ${authMode === 'key' ? 'bg-primary/10 text-primary border-primary/40' : 'bg-secondary border-border text-muted-foreground'}`}>
               개인키
             </button>
           </div>
@@ -125,14 +127,14 @@ export function RunCredsModal({ open, playbookName, onClose, onRun }: RunCredsMo
             <label className="block text-sm">
               <span className="block text-muted-foreground mb-1">비밀번호</span>
               <input type="password" value={password} onChange={(e) => setPassword(e.target.value)}
-                className="w-full px-2 py-1.5 text-sm bg-background border border-border rounded-lg focus:outline-none focus:ring-1 focus:ring-primary"
+                className="w-full px-2 py-1.5 text-sm bg-background border border-border rounded-xl focus:outline-none focus:ring-1 focus:ring-primary"
                 placeholder="••••••••" />
             </label>
           ) : (
             <label className="block text-sm">
               <span className="block text-muted-foreground mb-1">SSH 개인키 (PEM)</span>
               <textarea value={privateKey} onChange={(e) => setPrivateKey(e.target.value)} rows={4}
-                className="w-full px-2 py-1.5 text-sm font-mono bg-background border border-border rounded-lg focus:outline-none focus:ring-1 focus:ring-primary resize-y"
+                className="w-full px-2 py-1.5 text-sm font-mono bg-background border border-border rounded-xl focus:outline-none focus:ring-1 focus:ring-primary resize-y"
                 placeholder="-----BEGIN OPENSSH PRIVATE KEY-----&#10;...&#10;-----END OPENSSH PRIVATE KEY-----" />
             </label>
           )}
@@ -146,24 +148,24 @@ export function RunCredsModal({ open, playbookName, onClose, onRun }: RunCredsMo
               <label className="block text-sm">
                 <span className="block text-muted-foreground mb-1">become 비밀번호 (필요 시)</span>
                 <input type="password" value={becomePass} onChange={(e) => setBecomePass(e.target.value)}
-                  className="w-full px-2 py-1.5 text-sm bg-background border border-border rounded-lg focus:outline-none focus:ring-1 focus:ring-primary"
+                  className="w-full px-2 py-1.5 text-sm bg-background border border-border rounded-xl focus:outline-none focus:ring-1 focus:ring-primary"
                   placeholder="(NOPASSWD 면 비워둠)" />
               </label>
             )}
             <label className="flex items-center gap-2 text-sm">
               <input type="checkbox" checked={remember} onChange={(e) => setRemember(e.target.checked)} />
-              <span>이 세션 동안 기억하기 (브라우저 sessionStorage)</span>
+              <span>이 세션 동안 기억하기 (비밀번호·키를 브라우저 sessionStorage 에 저장)</span>
             </label>
           </div>
         </div>
 
         <div className="flex justify-end gap-2 px-5 py-3 border-t border-border bg-muted/10">
           <button onClick={onClose}
-            className="px-4 py-1.5 text-sm font-medium bg-secondary hover:bg-secondary/80 border border-border rounded-lg">
+            className="px-4 py-1.5 text-sm font-medium bg-secondary hover:bg-secondary/80 border border-border rounded-xl">
             취소
           </button>
           <button onClick={handleSubmit}
-            className="px-4 py-1.5 text-sm font-semibold bg-primary hover:bg-primary/90 text-primary-foreground rounded-lg flex items-center gap-1.5">
+            className="px-4 py-1.5 text-sm font-semibold bg-primary hover:bg-primary/90 text-primary-foreground rounded-xl flex items-center gap-1.5">
             <Play className="w-3.5 h-3.5" /> 실행
           </button>
         </div>

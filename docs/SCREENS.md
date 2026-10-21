@@ -1286,10 +1286,12 @@ hover 시 flyout 자체가 라벨을 보여주므로 이름만 뜨는 중복 툴
   - Dashboard 노출 토글(`show_on_dashboard`) — 메인 Dashboard 화면에 카드로 표시
   - 클러스터 단일 선택 시 해당 클러스터 한정 Markdown 리포트 export, 다중/전체 선택 시 전체 export
   - **[2026-09-15, D-066]** 실행 이력이 `Playbook.last_result`(최신 1건만 덮어씀) 와 별개로 `PlaybookRun` 테이블에 append-only 로 전부 보존 — 로그 다이얼로그에서 과거 실행들을 함께 확인 가능. 이 화면 밖에서도 점검 매트릭스/운영 점검 콘솔이 **이름**으로 이 Playbook 을 카탈로그 항목으로 연결해 실행할 수 있다(아래 "요청사항" 및 "운영 점검 콘솔"/"홈" 섹션 참고) — 그 실행도 동일하게 `PlaybookRun` 에 쌓인다.
-- **URL 상태(D-029)**: `?cluster=`(쉼표 구분 다중) · `sort`/`dir` · `view`. 새로고침·공유·뒤로가기에서 유지(`hooks/useUrlParams`, replace). 모달은 뒤로가기로 닫힌다.
+- **URL 상태(D-029)**: `?cluster=`(쉼표 구분 다중) · `sort`(`manual`|`name`|`status`|`lastRunAt`)/`dir` · `view`. 새로고침·공유·뒤로가기에서 유지(`hooks/useUrlParams`, replace). 모달은 뒤로가기로 닫힌다.
 - **요청사항 (수정 요청)**:
   - _(여기에 개선/수정 요청을 직접 적어주세요)_
   - **[2026-10-12]** 등록·수정 모달(`AddPlaybookModal`)에 **실행 제한 시간(초, 10~1800)** 입력 — `playbooks.timeout_seconds`, 비우면 기본 30초. 점검 매트릭스·스케줄 실행에 그대로 적용되고 매트릭스 셀 태스크 한도도 +60초로 늘어난다.
+  - **[2026-10-21] 화면 점검 반영(F1~F4·S1·D1~D4)** — 정렬에 **사용자 지정 순서**(`?sort=manual`) 추가: 다른 정렬 중에 드래그하면 보이는 순서를 저장하고 manual 로 전환(예전엔 정렬이 드래그를 덮었고, `useLocalOrder` 가 첫 로딩 때 저장 순서를 지워 새로고침마다 초기화). 카드 보기에 실행 로그 버튼·클러스터 이름(`PlaybookCard` `onViewLog`/`clusterName`/`dragHandle`, MacCard 슬롯). 전체 실행은 `useMyClusterAccess` 로 operate 권한 없는 클러스터 플레이북을 제외하고 확인 창에 제외 건수 표시, 대상 0개면 확인 창 자동 닫힘(`busy` 오용 제거). `RunCredsModal` "기억하기" 기본 꺼짐(이전에 켠 세션이면 유지, 끄고 실행하면 저장값 삭제). 버튼·입력 `rounded-xl`, 정렬 방향 아이콘, 리포트 파일명 `playbook-report-<날짜>.md`, 목록 행은 `Card` 프리미티브.
+  - **잔여(별도 PR)**: 실행 중 ansible 출력 실시간 로그(R1) + 실행 취소(R2) — 지금은 `POST /playbooks/{id}/run` 동기 실행이라 결과 요약만 남는다. 배치잡·운영 점검처럼 비동기 실행 + 실행 ID 조회 + 취소 API 로 바꿔야 한다.
 
 ### Batch Jobs (홈 `/` → **플랫폼 현황** 탭의 **배치잡** 서브탭, 구 독립 라우트 `/batch-jobs`)
 

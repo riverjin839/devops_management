@@ -3,6 +3,7 @@ import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import type { Playbook } from '@/types';
 import { useCanOperate } from '@/hooks/useCanOperate';
+import { Card } from '@/components/ui/card';
 
 interface PlaybookListRowProps {
   playbook: Playbook;
@@ -49,16 +50,17 @@ export function PlaybookListRow({
   const fileLabel = playbook.playbookFileName || playbook.playbookPath || '(출처 없음)';
 
   return (
-    <div
+    // 행 표면은 shadcn Card 프리미티브(MacCard 의 바탕) — 카드 div 를 손으로 조합하지 않는다(D-004).
+    <Card
       ref={setNodeRef}
       style={style}
-      className="group flex items-center gap-3 px-3 py-2 bg-card border border-border rounded-md hover:border-primary/40 transition-colors"
+      className="group flex items-center gap-3 px-3 py-2 shadow-none hover:border-primary/40 transition-colors"
     >
       {/* Drag handle */}
       <button
         {...attributes}
         {...listeners}
-        className="cursor-grab active:cursor-grabbing p-1 text-muted-foreground/30 hover:text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity"
+        className="cursor-grab active:cursor-grabbing p-1 rounded-md text-muted-foreground/30 hover:text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity"
         title="드래그하여 순서 변경"
         aria-label="드래그하여 순서 변경"
       >
@@ -171,7 +173,7 @@ export function PlaybookListRow({
           <Trash2 className="w-4 h-4" />
         </button>
       </div>
-    </div>
+    </Card>
   );
 }
 
