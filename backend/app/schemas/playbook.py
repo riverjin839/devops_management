@@ -106,3 +106,27 @@ class PlaybookRunHistoryEntry(BaseModel):
 
 class PlaybookRunHistoryListResponse(BaseModel):
     data: list[PlaybookRunHistoryEntry]
+
+
+class PlaybookRunStartResponse(BaseModel):
+    """R1 — 백그라운드 실행 시작. 진행은 ``GET /playbooks/runs/{run_id}`` 로 읽는다."""
+    run_id: UUID
+    playbook_id: UUID
+    status: str
+
+
+class PlaybookRunProgress(BaseModel):
+    """R1·R2 — 실행 1건의 진행. ``log_lines`` 는 ``since`` 이후 줄만, ``next`` 는 다음 ``since``."""
+    run_id: UUID
+    playbook_id: UUID
+    status: str
+    finished: bool
+    message: Optional[str] = None
+    stats: Optional[dict[str, Any]] = None
+    duration_ms: int = 0
+    started_at: datetime
+    finished_at: Optional[datetime] = None
+    cancel_requested: bool = False
+    cancelled_by: Optional[str] = None
+    log_lines: list[list[Any]] = []
+    next: int = 0

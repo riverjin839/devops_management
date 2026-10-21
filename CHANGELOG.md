@@ -10,6 +10,12 @@
 
 1.69.0 이후 main 에 병합된 변경 (다음 릴리스 후보).
 
+### Added
+- **플레이북 실시간 실행 로그·실행 취소(`/playbooks`, 대시보드 플레이북 카드)**: 실행 버튼이 백그라운드 실행을 시작하고, 실행 로그 패널에 PLAY·TASK·호스트별 결과(ok/changed/failed/unreachable)와 RECAP 이 진행되는 대로 쌓인다. 패널 헤더의 **실행 취소**로 진행 중인 ansible-playbook 을 1초 안에 멈춘다 — 취소는 판정이 아니라 플레이북 상태·최신 결과는 그대로 두고 실행 이력에 "취소됨" 으로 남는다. 같은 플레이북을 이미 실행 중이면 다시 실행하지 않는다(409). SSH 자격증명은 실행 스레드 메모리에만 있고 저장되지 않는다. Backend: `POST /playbooks/{id}/runs` · `GET /playbooks/runs/{run_id}?since=N` · `POST /playbooks/runs/{run_id}/cancel`, `playbook_runs.log_lines`·`cancel_requested`·`cancelled_by`(`_safe_add_column`), ansible 콜백 플러그인 `services/ansible_callbacks/pep_events.py`.
+
+### Fixed
+- **플레이북 실행이 항상 실패하던 문제**: 이미지의 ansible-core 2.16 에는 결과 파싱에 쓰던 `json` stdout 콜백이 없어(`ansible.posix` 로 이동) 실행이 "Invalid callback for stdout specified: json" 으로 끝났다. 결과 통계·실패 태스크를 자체 콜백(`pep_events`)이 만들고, 원문 출력은 사람이 읽는 기본 출력으로 남긴다. 플레이북 로그 다이얼로그가 응답의 camelCase 키를 읽지 못해 원문 출력·실패 태스크가 늘 비어 보이던 문제도 고쳤다.
+
 ## [1.69.0] - 2026-10-21
 
 ### Added

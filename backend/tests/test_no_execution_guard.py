@@ -30,6 +30,7 @@ EXECUTION_MODULE_NAMES = {
     "app.services.ssh_runner",
     "app.services.ssh_pty",
     "app.services.playbook_executor",
+    "app.services.playbook_run_jobs",
     "app.services.kubectl_exec",
     "app.services.batch_job_service",
     "app.services.tcpdump_runner",

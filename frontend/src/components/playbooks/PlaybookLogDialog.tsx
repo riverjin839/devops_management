@@ -1,7 +1,7 @@
 import { X, Terminal, AlertTriangle, XCircle, CheckCircle, History } from 'lucide-react';
 import type { Playbook } from '@/types';
 import { DoubleScrollX, LogViewer, useModalA11y } from '@/components/common';
-import { StatusBadge } from '@/components/common';
+import { StatusBadge, statusToVariant } from '@/components/common';
 import { parseUTC } from '@/lib/utils';
 import { usePlaybookRuns } from '@/hooks/usePlaybook';
 
@@ -40,12 +40,14 @@ export function PlaybookLogDialog({ playbook, onClose }: PlaybookLogDialogProps)
   const stats = (result.stats ?? {}) as Record<string, unknown>;
   const totals = (stats.totals ?? {}) as HostStat;
   const hosts = (stats.hosts ?? {}) as Record<string, HostStat>;
-  const failedTasks = ((stats.failed_tasks as FailedTask[] | undefined) ?? []);
-  const unreachableTasks = ((stats.unreachable_tasks as FailedTask[] | undefined) ?? []);
+  // api 인터셉터가 응답 키를 깊게 camelCase 로 바꾼다(JSONB 안쪽까지) — snake_case 만 읽으면
+  // 원문 출력·실패 태스크가 늘 "없음"으로 보였다. 둘 다 받는다(runLogLines 와 같은 방식).
+  const failedTasks = ((stats.failedTasks ?? stats.failed_tasks) as FailedTask[] | undefined) ?? [];
+  const unreachableTasks = ((stats.unreachableTasks ?? stats.unreachable_tasks) as FailedTask[] | undefined) ?? [];
   const returncode = stats.returncode as number | undefined;
   const message = result.message as string | undefined;
-  const rawOutput = result.raw_output as string | undefined;
-  const durationMs = result.duration_ms as number | undefined;
+  const rawOutput = (result.rawOutput ?? result.raw_output) as string | undefined;
+  const durationMs = (result.durationMs ?? result.duration_ms) as number | undefined;
 
   const isSuccess = (returncode === 0) || (totals.failures === 0 && totals.unreachable === 0);
 
@@ -187,7 +189,14 @@ export function PlaybookLogDialog({ playbook, onClose }: PlaybookLogDialogProps)
                           {parseUTC(r.startedAt).toLocaleString('ko-KR')}
                         </td>
                         <td className="px-3 py-1.5">
-                          <StatusBadge variant={r.status as 'healthy' | 'warning' | 'critical'} size="sm" />
+                          {/* 이력에 running(진행 중)·cancelled(취소) 도 있다 — 고정 캐스팅하면 없는 variant 로 깨진다. */}
+                          {r.status === 'running' ? (
+                            <StatusBadge variant="loading" label="실행 중" size="sm" />
+                          ) : r.status === 'cancelled' ? (
+                            <StatusBadge variant="neutral" label="취소됨" size="sm" />
+                          ) : (
+                            <StatusBadge variant={statusToVariant(r.status)} size="sm" />
+                          )}
                         </td>
                         <td className="px-3 py-1.5 text-muted-foreground">
                           {r.trigger === 'check_matrix' ? '점검 매트릭스' : r.trigger === 'manual' ? '수동' : r.trigger}

@@ -3,7 +3,7 @@ import { Plus, Play, BookOpen, Download, ArrowUpDown, ArrowUp, ArrowDown, Layout
 import { DndContext, closestCenter, PointerSensor, useSensor, useSensors, type DragEndEvent } from '@dnd-kit/core';
 import { SortableContext, rectSortingStrategy, verticalListSortingStrategy, useSortable, arrayMove } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { PlaybookCard, PlaybookListRow, PlaybookLogDialog, AddPlaybookModal, RunCredsModal, playbookRunLines } from '@/components/playbooks';
+import { PlaybookCard, PlaybookListRow, PlaybookLogDialog, AddPlaybookModal, RunCredsModal, CancelPlaybookRunsButton, playbookRunLines } from '@/components/playbooks';
 import type { PlaybookFormSubmit } from '@/components/playbooks/AddPlaybookModal';
 import type { PlaybookSshCreds } from '@/types';
 import { ClusterSidebar, ConfirmDialog, EmptyState, ErrorState, Skeleton, PageShell, RunLogPanel } from '@/components/common';
@@ -249,12 +249,14 @@ export function PlaybooksPage() {
     setEditPlaybook(null);
   };
 
-  // 단건 실행 — 실행 로그에 요청·대기·상태/통계·실패 사유를 남긴다(실패해도 throw 하지 않음).
+  // 단건 실행 — 서버가 흘리는 진행 줄(PLAY·TASK·호스트 결과)을 실시간으로 쌓고, 끝나면 상태·통계·실패
+  // 사유 요약을 남긴다(R1). 실패해도 throw 하지 않음. 진행 중엔 패널의 "실행 취소"(R2)로 멈춘다.
   const runOneLogged = (pb: Playbook, creds?: PlaybookSshCreds) => runLogged(runLog, {
     title: `플레이북 실행 — ${pb.name}`,
     first: `${pb.name} — ${clusterNameMap[pb.clusterId] ?? pb.clusterId} 대상 실행 요청${creds?.ssh_username ? ` (SSH ${creds.ssh_username})` : ''}`,
-    fn: () => runPlaybook.mutateAsync({ id: pb.id, creds }),
+    fn: (run) => runPlaybook.mutateAsync({ id: pb.id, creds, run }),
     summarize: ({ data }) => playbookRunLines(data),
+    heartbeatMs: 0,
   });
 
   // 카드의 ▶ 버튼 클릭 — 세션에 저장된 자격증명이 있으면 확인 다이얼로그(D-141) 후 실행, 없으면 자격증명 모달
@@ -294,10 +296,11 @@ export function PlaybooksPage() {
       title: `플레이북 일괄 실행 — ${targets.length}개`,
       first: `플레이북 ${targets.length}개 병렬 실행 요청${cached ? ` (세션 자격증명 ${cached.ssh_username ?? ''})` : ' (세션 자격증명 없음)'}${
         runAllNoAccess > 0 ? ` · 실행 권한 없는 클러스터의 ${runAllNoAccess}개 제외` : ''}`,
-      fn: () => Promise.allSettled(targets.map(async (p) => {
+      heartbeatMs: 0,
+      fn: (run) => Promise.allSettled(targets.map(async (p) => {
         runLog.setStep(p.id, p.name, 'running');
         try {
-          const { data } = await runPlaybook.mutateAsync({ id: p.id, creds: cached ?? undefined });
+          const { data } = await runPlaybook.mutateAsync({ id: p.id, creds: cached ?? undefined, run, prefix: p.name });
           runLog.setStep(p.id, p.name, data.status === 'critical' ? 'failed' : 'done');
           for (const [lv, msg] of playbookRunLines(data, p.name).slice(0, 2)) runLog.log(lv, msg);
           results.push({ status: data.status });
@@ -495,7 +498,17 @@ export function PlaybooksPage() {
 
           {(runLog.running || runLog.lines.length > 0) && (
             <div className="mb-4">
-              <RunLogPanel run={runLog} show={showRunLog} onShowChange={setShowRunLog} />
+              <RunLogPanel
+                run={runLog}
+                show={showRunLog}
+                onShowChange={setShowRunLog}
+                actions={
+                  <CancelPlaybookRunsButton
+                    onRequested={(n, failed) => runLog.log(failed > 0 ? 'warn' : 'info',
+                      `실행 취소 요청 ${n}건${failed > 0 ? ` · ${failed}건 요청 실패` : ''} — 서버가 ansible-playbook 을 중단한다`)}
+                  />
+                }
+              />
             </div>
           )}
 

@@ -199,8 +199,8 @@ AI 어시스턴트 + 사람 개발자용 — 기능 → 파일 경로와 자주 
 ### Playbook / Ansible / 기타
 | 기능 | 위치 |
 |---|---|
-| 플레이북 CRUD + 실행 | `backend/app/routers/playbooks.py`(+ `GET /{id}/runs` 이력) → `backend/app/services/playbook_service.py`(DB 글루 — 라우터·점검 매트릭스가 공유, `PlaybookRun` 이력 append) → `backend/app/services/playbook_executor.py`(subprocess 실행 + 결과 파싱) |
-| 플레이북 페이지 | `frontend/src/pages/PlaybooksPage.tsx`, `frontend/src/components/playbooks/`(`PlaybookLogDialog.tsx` 에 최신 결과 + 이전 실행 이력 `usePlaybookRuns`) |
+| 플레이북 CRUD + 실행 | `backend/app/routers/playbooks.py`(+ `GET /{id}/runs` 이력, 백그라운드 실행 `POST /{id}/runs` → 진행 `GET /runs/{run_id}?since=N` · 취소 `POST /runs/{run_id}/cancel`) → `services/playbook_run_jobs.py`(실행 스레드 — 자격증명은 프로세스 메모리에만) → `backend/app/services/playbook_service.py`(DB 글루 — `begin`/`perform`/`execute_playbook_run`, 라우터·점검 매트릭스가 공유, `PlaybookRun` 이력·`log_lines`·`cancel_requested`, 사라진 실행 마감 `reap_if_stale`) → `backend/app/services/playbook_executor.py`(Popen 스트리밍 실행·프로세스 그룹 취소 + 결과 파싱) + `services/ansible_callbacks/pep_events.py`(ansible 콜백 플러그인 — 진행 `PEP_EVENT`·결과 `PEP_RESULT` 를 stderr 로) |
+| 플레이북 페이지 | `frontend/src/pages/PlaybooksPage.tsx`, `frontend/src/components/playbooks/`(`PlaybookLogDialog.tsx` 에 최신 결과 + 이전 실행 이력 `usePlaybookRuns`, 실행 취소 `CancelPlaybookRunsButton`) + `hooks/usePlaybook.ts` `useRunPlaybook`(시작 → 1초 폴링으로 진행 줄을 실행 로그에) · `useCancelPlaybookRun` |
 | Ansible 플레이북 소스 | `ansible/playbooks/` |
 | 일일 점검 (Celery) | `backend/app/services/core_bundle_checker.py`, `backend/app/celery_app.py` |
 | 트렌드 다이제스트 | `backend/app/services/trends/trend_service.py`, `frontend/src/pages/TrendDigestPage.tsx` |

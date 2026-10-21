@@ -807,8 +807,17 @@ export const playbooksApi = {
     api.put<ApiResponse<Playbook>>(`/playbooks/${id}`, data),
   delete: (id: string) => api.delete(`/playbooks/${id}`),
   run: (id: string, creds?: PlaybookSshCreds) =>
-    // 플레이북 timeout_seconds 는 최대 1800초 — ansible 이 끝나기 전에 화면이 먼저 끊기지 않게.
+    // 구 동기 실행(호환용) — 화면은 startRun + getRunProgress(실시간 로그) + cancelRun 을 쓴다.
     api.post<PlaybookRunResult>(`/playbooks/${id}/run`, creds ?? {}, { timeout: runTimeout(1800, 60) }),
+  // R1 — 백그라운드 실행 시작. 자격증명은 이 요청 본문으로만 가고 서버에 저장되지 않는다.
+  startRun: (id: string, creds?: PlaybookSshCreds) =>
+    api.post<import('@/types').PlaybookRunStart>(`/playbooks/${id}/runs`, creds ?? {}),
+  // R1 — 진행·로그(since 이후 줄만).
+  getRunProgress: (runId: string, since = 0) =>
+    api.get<import('@/types').PlaybookRunProgress>(`/playbooks/runs/${runId}`, { params: { since } }),
+  // R2 — 실행 취소(실행 스레드가 1초 안에 ansible 프로세스를 끊는다).
+  cancelRun: (runId: string) =>
+    api.post<import('@/types').PlaybookRunProgress>(`/playbooks/runs/${runId}/cancel`),
   // D-066 — append-only 실행 이력(최신 lastResult 덮어쓰기와 별개로 전부 보존).
   getRuns: (id: string, limit = 50) =>
     api.get<ApiResponse<import('@/types').PlaybookRunHistoryEntry[]>>(`/playbooks/${id}/runs`, {

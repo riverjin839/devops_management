@@ -67,6 +67,7 @@ class PlaybookRun(Base):
 
     # healthy / warning / critical (playbook_executor.PlaybookResult.status 와 동일 어휘 —
     # BatchJobRun.status 의 ok/error 체계와 다르다, Ansible 실행 결과는 StatusEnum 과 1:1).
+    # + running(백그라운드 실행 중, R1) / cancelled(사용자 취소, R2).
     status = Column(String(20), nullable=False)
     # manual(UI "실행" 버튼) / check_matrix(매트릭스 셀 cron·수동 실행 경유).
     trigger = Column(String(20), default="manual")
@@ -83,6 +84,13 @@ class PlaybookRun(Base):
     duration_ms = Column(Integer, default=0)
     started_at = Column(DateTime, default=datetime.utcnow)
     finished_at = Column(DateTime, nullable=True)
+
+    # R1 실시간 로그 — 실행 중 ansible 콜백 이벤트를 [ts, level, message] 로 쌓는다(상한
+    # ``playbook_run_jobs.LOG_LINE_LIMIT``). 화면은 ``GET /playbooks/runs/{id}?since=N`` 으로 이어 읽는다.
+    log_lines = Column(JSONB, nullable=True)
+    # R2 취소 — 다른 replica 가 요청을 받아도 실행 스레드가 이 플래그를 보고 프로세스를 끊는다.
+    cancel_requested = Column(Boolean, default=False, nullable=False)
+    cancelled_by = Column(String(64), nullable=True)
 
     playbook = relationship("Playbook", back_populates="runs")
 

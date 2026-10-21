@@ -400,6 +400,33 @@ export interface PlaybookRunResult {
   durationMs: number;
 }
 
+/** R1 — 백그라운드 실행 시작(`POST /playbooks/{id}/runs`). 진행은 `PlaybookRunProgress` 로 읽는다. */
+export interface PlaybookRunStart {
+  runId: string;
+  playbookId: string;
+  status: string;
+}
+
+/** R1·R2 — 실행 1건의 진행(`GET /playbooks/runs/{runId}?since=N`). `logLines` 는 since 이후 줄만,
+ *  `next` 는 다음 since. 줄은 `[ISO 시각, level, message]`. */
+export interface PlaybookRunProgress {
+  runId: string;
+  playbookId: string;
+  /** running | healthy | warning | critical | cancelled */
+  status: string;
+  finished: boolean;
+  message?: string | null;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  stats?: Record<string, any> | null;
+  durationMs: number;
+  startedAt: string;
+  finishedAt?: string | null;
+  cancelRequested: boolean;
+  cancelledBy?: string | null;
+  logLines: [string, string, string][];
+  next: number;
+}
+
 /** Playbook 실행 시 휘발성으로 전달되는 SSH 자격증명 — 서버에 저장되지 않음. */
 export interface PlaybookSshCreds {
   ssh_username?: string;
