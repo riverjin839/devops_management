@@ -104,6 +104,8 @@ Secrets Operator, Sealed Secrets, Vault 중 하나로 교체 검토.
 
 #### `ingress.yaml`
 NGINX Ingress Controller 기반 라우팅 규칙입니다. `/api/*` 는 backend Service 로, 나머지는 frontend Service 로 프록시합니다.
+ingress-nginx 대신 Cilium Gateway API(HTTPRoute)로 노출하려면 오버레이에 `k8s/components/gateway-api/` 컴포넌트를
+추가하세요 — 이 Ingress 를 지우고 Gateway·HTTPRoute 를 넣습니다(절차: `docs/DEPLOY_GUIDE.md` "Gateway API(Cilium)로 노출").
 
 #### `hpa.yaml`
 backend / frontend / celery-worker 세 Deployment 에 대해 CPU 70% 임계값 기준 HPA 를 정의합니다.

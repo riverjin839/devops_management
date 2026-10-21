@@ -1,0 +1,43 @@
+# Opt-in component — Ingress(ingress-nginx) 대신 Gateway API(Cilium Gateway + HTTPRoute)로 노출한다.
+# base 의 Ingress(k8s-monitor-ingress)는 지우고 Gateway·HTTPRoute 를 넣는다.
+#
+# 사전 조건 (클러스터 1회):
+#   - Gateway API CRD (standard channel) 설치
+#   - Cilium: kubeProxyReplacement=true, gatewayAPI.enabled=true
+#   - Cilium: envoy.streamIdleTimeoutDurationSeconds=3600 — 기본 300s 라 SSE 실시간 로그·장시간 실행이 5분에 끊긴다
+#
+#   # k8s/overlays/<env>/kustomization.yaml
+#   components:
+#     - ../../components/gateway-api
+#   patches:
+#     # 호스트 지정 (overlay 의 기존 Ingress host patch 는 지운다 — Ingress 가 삭제되므로 대상이 없다)
+#     - patch: |-
+#         - op: replace
+#           path: /spec/listeners/0/hostname
+#           value: pep.example.com
+#       target: { kind: Gateway, name: k8s-monitor-gw }
+#     - patch: |-
+#         - op: replace
+#           path: /spec/hostnames/0
+#           value: pep.example.com
+#       target: { kind: HTTPRoute, name: k8s-monitor }
+#
+# 전체 절차·TLS·공용 Gateway 사용·점검 명령은 docs/DEPLOY_GUIDE.md "Gateway API(Cilium)로 노출".
+# Helm 은 values 의 gateway.enabled=true(+ ingress.enabled=false)가 같은 역할이다.
+apiVersion: kustomize.config.k8s.io/v1alpha1
+kind: Component
+
+resources:
+  - gateway.yaml
+  - httproute.yaml
+
+patches:
+  - patch: |-
+      $patch: delete
+      apiVersion: networking.k8s.io/v1
+      kind: Ingress
+      metadata:
+        name: k8s-monitor-ingress
+    target:
+      kind: Ingress
+      name: k8s-monitor-ingress

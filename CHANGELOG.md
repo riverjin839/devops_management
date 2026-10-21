@@ -10,6 +10,9 @@
 
 1.68.0 이후 main 에 병합된 변경 (다음 릴리스 후보).
 
+### Added
+- **Gateway API(Cilium) 노출 템플릿**: ingress-nginx(2026-03 유지보수 종료) 대신 Cilium Gateway + HTTPRoute 로 PEP 를 노출할 수 있다. 모든 경로를 frontend 로 보내고 `/api`·WebSocket·SSE 는 frontend nginx 가 backend 로 넘기며, HTTPRoute 요청 timeout 3600s·TLS 리스너·HTTP→HTTPS 리다이렉트·공용 Gateway 연결(`parentRefs`)을 고를 수 있다. Ingress 와 병행 운영 후 전환하는 절차·Cilium Envoy idle timeout(기본 300s) 주의점·점검 명령은 `docs/DEPLOY_GUIDE.md` "Gateway API(Cilium)로 노출". Helm: `gateway.*` values + `templates/gateway.yaml`. Kustomize: opt-in 컴포넌트 `k8s/components/gateway-api`.
+
 ## [1.68.0] - 2026-10-21
 
 ### Added

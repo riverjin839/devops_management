@@ -1,0 +1,25 @@
+# 모든 경로를 frontend 로 보낸다 — /api·/health·WebSocket 은 frontend nginx 가 backend 로 프록시하며
+# 거기에 이미 실행 한도(3600s) timeout 이 걸려 있다. Gateway 에서 /api 를 따로 나누지 않아야
+# timeout 을 맞출 곳이 Gateway·frontend nginx 두 곳으로 줄어든다.
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: k8s-monitor
+  labels:
+    app.kubernetes.io/name: k8s-daily-monitor
+spec:
+  parentRefs:
+    - name: k8s-monitor-gw
+  hostnames:
+    - k8s-monitor.local
+  rules:
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /
+      backendRefs:
+        - name: frontend
+          port: 80
+      timeouts:
+        # 동기 실행(일괄 SSH·플레이북·백업 복구 등, 최대 60분)이 Gateway 에서 먼저 끊기지 않게.
+        request: 3600s
