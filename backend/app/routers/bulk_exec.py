@@ -21,7 +21,7 @@ from app.services.kubeconfig import ensure_kubeconfig_file
 from app.services.script_wrap import wrap_script_for_language
 from app.services.ssh_runner import SSHTarget, fetch_remote_file, run_bulk
 from app.services import audit_logger
-from app.services.cluster_access import cluster_ids_for_hosts, require_clusters_access
+from app.services.cluster_access import acluster_ids_for_hosts, require_clusters_access
 from app.services.command_mask import audit_command, audit_error, audit_hosts
 from app.services.k8s_client_pool import get_api_client_for_path
 
@@ -123,7 +123,7 @@ async def bulk_exec_run(
     require_clusters_access(db, actor, [
         payload.cluster_id,
         *(t.cluster_id for t in targets),
-        *cluster_ids_for_hosts(db, (t.host for t in targets)),
+        *await acluster_ids_for_hosts(db, (t.host for t in targets)),
     ])
     if payload.action == "ssh" and not (payload.command and payload.command.strip()):
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
@@ -234,7 +234,7 @@ async def bulk_exec_fetch_file(
     뒤 (필요하면 다시) 여러 노드에 업로드하는 용도. 인증 정보는 요청에만 존재하고
     저장되지 않는다(bulk_exec_run 과 동일 원칙).
     """
-    require_clusters_access(db, actor, cluster_ids_for_hosts(db, [payload.host]))
+    require_clusters_access(db, actor, await acluster_ids_for_hosts(db, [payload.host]))
     if not payload.password and not payload.private_key:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
                             detail="password 또는 private_key 중 하나는 필수입니다.")

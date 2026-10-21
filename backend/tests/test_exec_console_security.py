@@ -469,6 +469,82 @@ def test_dns_resolved_name_matches_and_failure_falls_back(world, db, monkeypatch
     assert ca.cluster_ids_for_host(db, "slow.test") == set()
 
 
+async def test_async_host_scope_matches_sync(world, db, monkeypatch):
+    """async 판은 sync 판과 같은 코어를 쓴다 — 우회 표기·DNS 결과·실패 폴백이 같은 판정."""
+    import socket
+
+    import app.services.cluster_access as ca
+
+    def _fake(host):
+        if host == "bound-alias.test":
+            return {BOUND_HOST}
+        raise socket.gaierror("no such host")
+    monkeypatch.setattr(ca, "_getaddrinfo_ips", _fake)
+    hosts = ["bound-alias.test", "missing.test", OUTSIDE_HOST, "::ffff:" + OPEN_HOST,
+             *_bound_variants(BOUND_HOST)]
+    assert await ca.aresolve_hosts_scope(db, hosts) == ca.resolve_hosts_scope(db, hosts)
+    assert await ca.acluster_ids_for_hosts(db, (h for h in hosts)) == ca.cluster_ids_for_hosts(db, hosts)
+    assert world["bound"].id in await ca.acluster_ids_for_host(db, "bound-alias.test")
+    assert await ca.acluster_ids_for_host(db, "missing.test") == set()
+    assert await ca.acluster_ids_for_host(db, OUTSIDE_HOST) == set()
+    assert await ca.acluster_ids_for_hosts(db, []) == set()
+
+
+async def test_async_host_scope_does_not_block_event_loop(world, db, monkeypatch):
+    """느린 DNS 를 기다리는 동안 다른 코루틴이 계속 돌고, 전체 상한 안에 리터럴 폴백으로 끝난다."""
+    import asyncio
+    import time
+
+    import app.services.cluster_access as ca
+
+    def _fake(host):
+        if host == "bound-alias.test":
+            return {BOUND_HOST}
+        time.sleep(0.6)  # slow.test — 상한보다 오래 걸리는 조회
+        return {BOUND_HOST}
+    monkeypatch.setattr(ca, "_getaddrinfo_ips", _fake)
+    monkeypatch.setattr(ca, "_RESOLVE_TIMEOUT_SEC", 0.3)
+
+    ticks = 0
+
+    async def _ticker():
+        nonlocal ticks
+        while True:
+            ticks += 1
+            await asyncio.sleep(0.01)
+
+    async def _measure(coro_fn):
+        nonlocal ticks
+        task = asyncio.create_task(_ticker())
+        await asyncio.sleep(0)  # ticker 를 한 번 돌려 둔다
+        ticks = 0
+        started = time.monotonic()
+        result = await coro_fn()
+        elapsed = time.monotonic() - started
+        task.cancel()
+        try:
+            await task
+        except asyncio.CancelledError:
+            pass
+        return result, elapsed, ticks
+
+    async def _async_call():
+        return await ca.aresolve_hosts_scope(db, ["slow.test", "bound-alias.test"])
+
+    (ids, ips), elapsed, async_ticks = await _measure(_async_call)
+    assert elapsed < 0.55, elapsed  # 0.3s 상한 + DB 여유 — 0.6s 조회를 기다리지 않는다
+    assert async_ticks >= 10, async_ticks  # 기다리는 동안 루프가 다른 코루틴을 돌렸다
+    assert world["bound"].id in ids  # 제때 풀린 이름은 반영
+    assert ips["slow.test"] == [] and ips["bound-alias.test"] == [BOUND_HOST]  # 시간 초과 = 리터럴 폴백
+
+    # 대조군: sync 판을 루프 안에서 부르면 같은 대기 동안 다른 코루틴이 전혀 돌지 못한다(측정이 유효함).
+    async def _sync_call():
+        return ca.resolve_hosts_scope(db, ["slow.test"])
+
+    _, _, sync_ticks = await _measure(_sync_call)
+    assert sync_ticks == 0, sync_ticks
+
+
 # ── 정책 2: cilium-dbg 읽기 전용 allowlist ───────────────────────────────────
 
 @pytest.fixture

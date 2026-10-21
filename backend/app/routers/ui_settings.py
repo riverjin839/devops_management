@@ -23,6 +23,7 @@ from app.services.cluster_network_mask import (
     DEFAULT_CLUSTER_VIEWER_MASK,
     normalize_mask_setting,
 )
+from app.services.operation_levels import DEFAULT_OPERATION_LEVELS, OPERATION_LEVELS_KEY
 from app.schemas.home_prefs import HomePrefsDefaults
 from app.services.home_prefs import (
     DEFAULTS_KEY as HOME_PREFS_DEFAULTS_KEY,
@@ -46,7 +47,6 @@ router = APIRouter(prefix="/ui-settings", tags=["ui-settings"])
 UI_SETTINGS_KEY = "ui_settings"
 CLUSTER_LINKS_KEY = "cluster_links"
 DEFAULT_FEATURE_ACCESS: dict = {}
-OPERATION_LEVELS_KEY = "operation_levels"
 WORK_ITEM_BOARD_SETTINGS_KEY = "work_item_board_settings"
 BOARD_VIEW_KEYS = ("epic", "table", "calendar", "kanban")
 BOARD_BADGE_KEYS = ("total", "wip", "done", "overdue")
@@ -58,15 +58,6 @@ DEFAULT_WORK_ITEM_BOARD_SETTINGS = {
     "badge_visibility": {"total": False, "wip": False, "done": False, "overdue": False},
 }
 _HEX_RE = re.compile(r"^#[0-9a-fA-F]{3,8}$")
-DEFAULT_OPERATION_LEVELS = {
-    "levels": [
-        {"value": "production", "label": "운영 (Production)", "color": "red",    "icon": "🚀", "guarded": True},
-        {"value": "staging",    "label": "스테이징 (Staging)", "color": "amber",  "icon": "✨", "guarded": False},
-        {"value": "dev",        "label": "개발 (Dev)",         "color": "blue",   "icon": "💻", "guarded": False},
-        {"value": "test",       "label": "테스트 (Test)",      "color": "slate",  "icon": "🧪", "guarded": False},
-        {"value": "dr",         "label": "DR",                 "color": "purple", "icon": "🛡️", "guarded": True},
-    ]
-}
 
 
 DEFAULT_UI_SETTINGS = {

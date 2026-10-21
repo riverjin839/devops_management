@@ -26,7 +26,8 @@
   - ``summary.md``       : 사람이 읽는 요약
 
 종료 코드: 0 = 정상(또는 ``--fail-on none``), 1 = ``--fail-on`` 이상 영향도의 위반 존재,
-2 = 실행 실패(로그인·브라우저·axe 로드 등).
+2 = 실행 실패(로그인·브라우저·axe 로드 등, 또는 ``--fail-on`` 이 none 이 아닐 때 측정하지 못한
+라우트 — 앱이 마운트되지 않은 로딩 화면은 측정하지 않고 실패로 센다).
 """
 from __future__ import annotations
 
@@ -213,6 +214,13 @@ def scan_theme(pw, args, theme: str, routes: list[dict], token: str, user: dict,
                         page.wait_for_load_state("networkidle", timeout=min(args.timeout, 8000))
                     except Exception:  # noqa: BLE001 — 폴링하는 화면은 idle 이 안 온다
                         pass
+                    # 앱이 마운트될 때까지(index.html 의 #app-loader 가 사라질 때까지) 기다린다 — vite 콜드
+                    # 스타트에 첫 라우트가 로딩 화면(또는 10초 뒤 "불러오지 못했다" 안내)으로 측정되지 않게.
+                    try:
+                        page.wait_for_function("() => !document.getElementById('app-loader')",
+                                               timeout=args.timeout)
+                    except Exception:  # noqa: BLE001
+                        raise RuntimeError("앱이 마운트되지 않았다(#app-loader 잔존) — 로딩 화면은 측정하지 않는다")
                     page.wait_for_timeout(args.settle)
                     if not page.evaluate("() => !!window.axe"):
                         page.add_script_tag(content=axe_src)
@@ -451,6 +459,11 @@ def main() -> int:
             ", ".join(f"{k} {v}" for k, v in t["byImpact"].items()))
 
     if args.fail_on != "none":
+        # 측정하지 못한 라우트(마운트 실패·타임아웃)는 "위반 0" 으로 통과시키지 않는다.
+        errored = sorted({rid for agg in summary["byTheme"].values() for rid in agg.get("routesErrored", [])})
+        if errored:
+            log(f"[axe_scan] 측정 실패 라우트 {len(errored)}개: {', '.join(errored)}")
+            return 2
         floor = IMPACTS.index(args.fail_on)
         hit = sum(n for agg in summary["byTheme"].values()
                   for imp, n in agg["totals"]["byImpact"].items() if IMPACTS.index(imp) >= floor)
