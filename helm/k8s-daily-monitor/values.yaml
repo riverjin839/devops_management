@@ -197,6 +197,8 @@ hpa:
 serviceAccount:
   create: true
   name: k8s-monitor-sa
+  # celery-worker-llm 전용 읽기 전용 SA(get/list/watch + pods/log) — 자동 분석은 조치 권한이 없다.
+  llmName: k8s-monitor-llm-sa
 
 # ============================================
 # Monitoring Stack (Prometheus + Grafana)

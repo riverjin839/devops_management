@@ -41,6 +41,8 @@ function analyzerLabel(by: string | null | undefined): string {
     return detail ? `로컬 LLM (${detail})` : '로컬 LLM';
   }
   if (by.startsWith('claude')) return 'Claude AI';
+  // `rule_based:fallback:<원래 분석기>` — LLM 이 답하지 못해 규칙 기반 결과로 대체한 경우
+  if (by.startsWith('rule_based:fallback')) return '규칙 기반 (LLM 대체)';
   if (by.startsWith('rule_based')) return '규칙 기반';
   return by;
 }

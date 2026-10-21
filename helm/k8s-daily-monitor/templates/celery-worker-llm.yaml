@@ -22,7 +22,8 @@ spec:
         app.kubernetes.io/component: worker
         app.kubernetes.io/part-of: k8s-daily-monitor
     spec:
-      serviceAccountName: {{ .Values.serviceAccount.name }}
+      # 읽기 전용 SA — 분석 전용(조치 권한 없음)을 권한 차원에서도 보증 (serviceaccount.yaml 의 llm 블록)
+      serviceAccountName: {{ .Values.serviceAccount.llmName | default "k8s-monitor-llm-sa" }}
       {{- with .Values.global.imagePullSecrets }}
       imagePullSecrets:
         {{- toYaml . | nindent 8 }}
