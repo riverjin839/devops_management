@@ -37,6 +37,7 @@ from typing import Any, Optional, TYPE_CHECKING
 
 from app.config import settings
 from app.services.llm import llm_service
+from app.services.llm.prompts import wrap_untrusted
 
 if TYPE_CHECKING:
     from sqlalchemy.orm import Session
@@ -185,17 +186,18 @@ class AIAgentService:
                 parts.append(f"Cluster: {context['cluster_name']}")
             if context.get("cluster_status"):
                 parts.append(f"Cluster status: {context['cluster_status']}")
+            # 로그·상태·에러는 클러스터에서 온 데이터 — 경계 안에 넣어 그 속 지시문을 따르지 않게 한다.
             if context.get("pod_logs"):
-                parts.append(f"Recent pod logs:\n```\n{context['pod_logs']}\n```")
+                parts.append("Recent pod logs:\n" + wrap_untrusted("파드 로그", str(context["pod_logs"])))
             if context.get("node_status"):
-                parts.append(f"Node status:\n{context['node_status']}")
+                parts.append("Node status:\n" + wrap_untrusted("노드 상태", str(context["node_status"])))
             if context.get("error_messages"):
                 msgs = context["error_messages"]
                 if isinstance(msgs, list):
-                    msgs = "\n".join(msgs)
-                parts.append(f"Error messages:\n{msgs}")
+                    msgs = "\n".join(str(m) for m in msgs)
+                parts.append("Error messages:\n" + wrap_untrusted("에러 메시지", str(msgs)))
             if context.get("extra"):
-                parts.append(f"Additional info:\n{context['extra']}")
+                parts.append("Additional info:\n" + wrap_untrusted("추가 정보", str(context["extra"])))
 
         if parts:
             ctx_block = "\n\n".join(parts)

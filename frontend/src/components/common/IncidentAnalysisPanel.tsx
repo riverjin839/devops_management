@@ -164,7 +164,9 @@ export function IncidentAnalysisPanel({
             className="px-1.5 py-0.5 text-xs rounded-md bg-secondary text-muted-foreground"
             title="분석을 수행한 백엔드/프로필"
           >
-            {isRuleBased ? '규칙 기반 (오프라인)' : analysis.analyzedBy}
+            {isRuleBased
+              ? (analysis.analyzedBy.startsWith('rule_based:fallback') ? '규칙 기반 (LLM 대체)' : '규칙 기반 (오프라인)')
+              : analysis.analyzedBy}
           </span>
         )}
         {typeof analysis?.confidence === 'number' && (

@@ -69,11 +69,19 @@ class OllamaProvider(BaseLLMProvider):
         options: Optional[dict] = None,
     ) -> LLMResult:
         model = self._model()
-        result = await self._chat_once(model, prompt, system=system, options=options)
+        opts = dict(options or {})
+        schema = opts.pop("json_schema", None)
+        result = await self._chat_once(model, prompt, system=system, options=opts, schema=schema)
         if (result.error or "").startswith("model_not_found"):
             alt = await self._resolve_missing(model)
             if alt:
-                result = await self._chat_once(alt, prompt, system=system, options=options)
+                model = alt
+                result = await self._chat_once(model, prompt, system=system, options=opts, schema=schema)
+        if schema is not None and result.error == "http_400":
+            # 구버전 Ollama(<0.5)는 format 에 스키마 객체를 받지 못한다 — 스키마 없이 재시도.
+            logger.warning("Ollama 가 format 스키마를 거부(HTTP 400) — 스키마 없이 재시도 (profile=%s)",
+                           self.profile.name)
+            result = await self._chat_once(model, prompt, system=system, options=opts, schema=None)
         return result
 
     async def _chat_once(
@@ -83,6 +91,7 @@ class OllamaProvider(BaseLLMProvider):
         *,
         system: Optional[str],
         options: Optional[dict],
+        schema: Optional[dict] = None,
     ) -> LLMResult:
         p = self.profile
         payload: dict = {
@@ -90,6 +99,8 @@ class OllamaProvider(BaseLLMProvider):
             "prompt": prompt,
             "stream": False,
         }
+        if schema is not None:
+            payload["format"] = schema
         if system:
             payload["system"] = system
         if options:
@@ -133,6 +144,8 @@ class OllamaProvider(BaseLLMProvider):
         options: Optional[dict] = None,
     ) -> AsyncIterator[LLMStreamChunk]:
         # 404 는 델타가 나오기 전에만 생기므로, 그때만 모델을 다시 해석해 한 번 재시도한다.
+        # 스트리밍은 사람이 읽는 답변이라 json_schema 를 쓰지 않는다(넘어와도 버린다).
+        options = {k: v for k, v in (options or {}).items() if k != "json_schema"} or None
         model = self._model()
         async for chunk in self._stream_once(model, prompt, system=system, options=options):
             if chunk.done and (chunk.error or "").startswith("model_not_found"):

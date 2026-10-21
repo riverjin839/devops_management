@@ -25,7 +25,8 @@ spec:
         app.kubernetes.io/component: worker
         app.kubernetes.io/part-of: k8s-daily-monitor
     spec:
-      serviceAccountName: k8s-monitor-sa
+      # 읽기 전용 SA — 분석 전용(조치 권한 없음)을 권한 차원에서도 보증 (llm-serviceaccount.yaml)
+      serviceAccountName: k8s-monitor-llm-sa
       initContainers:
         - name: wait-for-redis
           image: redis:7-alpine

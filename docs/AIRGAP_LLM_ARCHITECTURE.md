@@ -2,6 +2,21 @@
 
 > 모델 파일/이미지의 **반입 절차**(Nexus)는 [AIRGAP_LLM_NEXUS.md](AIRGAP_LLM_NEXUS.md) 참고.
 > 이 문서는 그 위에서의 **아키텍처/기능 설계**를 다룬다.
+> 챗봇 연동 트러블슈팅·프로필 설정 예시는 [LLM_CHATBOT_SETUP.md](LLM_CHATBOT_SETUP.md).
+>
+> **v3 (2026-10-21) — 현행화 + 안전장치 보강.** 문서가 v1.6.0 시점에 머물러 있던 부분을 코드
+> 기준으로 고쳤다(§1 as-is, §2.2 설정 계층, §6 체크리스트). 함께 반영한 구현:
+>
+> - **규칙 기반 대체 결과** — LLM 호출·파싱 실패 시 `RuleBasedAnalyzer` 결과로 채운다
+>   (`analyzed_by=rule_based:fallback:…`, `degraded=True`). 이전엔 "LLM 분석 불가" 한 줄만 남았다.
+> - **LLM 워커 전용 읽기 전용 SA** — `celery-worker-llm` 이 `k8s-monitor-llm-sa`(get/list/watch +
+>   `pods/log`)를 쓴다. 공용 SA 의 exec·pod 생성/삭제·event 생성 권한을 갖지 않는다.
+> - **구조화 출력** — 장애 분석 JSON 을 생성 단계에서 스키마로 강제한다(Ollama `format` /
+>   OpenAI-호환 `response_format`, 미지원 서버는 HTTP 400 → 스키마 없이 자동 재시도).
+> - **로그 속 지시문 방어** — 로그·이벤트·describe 를 `<<<수집 데이터 시작/끝>>>` 경계로 감싸고
+>   시스템 프롬프트가 경계 안의 지시를 따르지 않게 한다(`prompts.wrap_untrusted`).
+> - **Ollama 모델명 자동 해석 + 연결 진단** — `POST /llm/diagnose`(SSE 7단계), `pep-k8s-ops` 파생 모델,
+>   CPU 없는 클러스터용 `k8s/components/no-ollama`.
 >
 > **v2 (2026-07-29) — 프레임 전환: "마이그레이션" → "프로필 × 용도 라우팅 병행 운용".**
 > v1 은 Ollama → vLLM(GLM) *전환*을 전제로 썼지만, 실제 요구는 **사내 제공 LLM 서비스
@@ -29,7 +44,7 @@
 > 같은 프로필 형태로 붙는다.
 >
 > 작성 기준: v1.6.0 (2026-07-17), v2 개정 2026-07-29, K8s 이벤트 직접 트리거·Ontology
-> RAG 확장 반영 2026-07-30. 코드 참조는 각 기준.
+> RAG 확장 반영 2026-07-30, v3 현행화 2026-10-21. 코드 참조는 각 기준.
 
 ---
 
@@ -48,30 +63,39 @@
 
 ---
 
-## 1. 현재 상태 (as-is, v1.6.0)
+## 1. 현재 상태 (as-is, 2026-10)
+
+```
+Settings → AI/LLM (AppSetting llm_settings — UI-First, env 는 행이 없을 때의 초기값)
+  └─ services/llm/ 게이트웨이 — 프로필(ollama | openai_compat) × 용도(chat · incident_analysis ·
+       review_summary · arch_doc · trends · embedding) 의 primary → fallback 라우팅
+       ├─ ollama_provider    /api/generate · /api/embeddings · /api/tags (모델명 자동 해석)
+       ├─ openai_provider    {base_url}/v1/chat/completions · /v1/embeddings · /v1/models
+       ├─ masking.py         프롬프트 진입점 시크릿 마스킹
+       └─ prompts.py         용도별 한국어 시스템 프롬프트 + 수집 데이터 경계(wrap_untrusted)
+
+호출부: agent_service(/agent/chat·stream, AI 요약 카드) · analyzers/local_llm_analyzer(장애 분석,
+        JSON 스키마 강제, 실패 시 rule_based 대체) · rag_service(근거 인용) · trends · arch_doc
+
+자동 분석: 알람(AlertEvent) / K8s 이벤트(kubewatch) → analysis_hook(llm_analysis_scope 규칙·디바운스·
+        레이트) → Celery `llm` 큐(celery-worker-llm, 읽기 전용 SA) → IncidentAnalysis 저장 → 알림
+
+서빙: 인클러스터 Ollama(CPU, qwen2.5-coder:7b + pep-k8s-ops pre-baked) — opt-out 은 components/no-ollama
+      GPU 서빙은 opt-in components/vllm-gpu, 사내 LLM 은 openai_compat 프로필로 연결
+```
+
+<details>
+<summary>v1.6.0 시점 as-is (기록용)</summary>
 
 ```
 Ollama (k8s/base/ollama.yaml — CPU 전용, 모델 pre-baked 이미지)
   ├─ /api/generate  ← agent_service.py (AI 클러스터 요약 카드, /agent/chat)
   ├─ /api/generate  ← analyzers/local_llm_analyzer.py (장애 분석, JSON 출력)
   └─ /api/embeddings ← embedding_service.py (nomic-embed-text, dim 768)
-                        └─ pgvector: work_items.embedding, work_guides.embedding
-
-이벤트 수집: kubewatch → POST /api/v1/events/kubewatch (push, Bearer 토큰)
-  └─ k8s_event_classifier.py 로 severity 분류 → K8sEvent 저장
-  └─ critical 이면 인앱 알림(UserNotification, 전체 공지)
-
-로그/컨텍스트 조회(read-only): routers/analyze.py
-  ├─ SSE 로그 스트리밍 (/pods/{pod}/logs/stream) → K8sLogsPage
-  ├─ SSE 이벤트 watch (/events/stream)
-  └─ 원클릭 컨텍스트 수집 (/pods/{pod}/context: logs+previous+describe+events)
-       → IncidentAnalysisPage "자동 채우기"
-
-장애 분석: POST /analyze/incident → get_analyzer() (ANALYZER_BACKend env)
-  ├─ rule_based (기본값): 정규식 시그니처 8종 — 항상 가용한 fallback
-  ├─ local_llm: Ollama /api/generate, JSON-only SRE 프롬프트  ← 폐쇄망 경로
-  └─ claude: 클라우드 (폐쇄망 비활성)
+장애 분석: POST /analyze/incident → get_analyzer() (ANALYZER_BACKEND env)
 ```
+
+</details>
 
 **핵심 갭 (이 문서가 채우는 것) — 현황 (2026-07-30, Phase 1~4 반영):**
 
@@ -88,6 +112,10 @@ Ollama (k8s/base/ollama.yaml — CPU 전용, 모델 pre-baked 이미지)
 - **UI-First 위반**(LLM 설정이 env 전용) → Settings → AI/LLM 탭 + AppSetting `llm_settings`
 - **무실행 보증이 관례뿐** → `tests/test_no_execution_guard.py`(AST import 그래프) + `services/llm/masking.py`(프롬프트 진입점 일괄 시크릿 마스킹)
 - **한국어 불일치** → `services/llm/prompts.py` 한국어 기본 시스템 프롬프트, `AgentChat.tsx` 전면 한국어화
+- **(v3) LLM 장애 시 자동 분석 공백** → `LocalLLMAnalyzer._rule_based_fallback` — 규칙 기반 원인 후보·조치 가이드로 채움
+- **(v3) 권한 차원의 무실행 보증 부재** → `k8s/base/celery/llm-serviceaccount.yaml`(Helm `serviceAccount.llmName`)
+- **(v3) JSON 파싱 실패로 인한 degraded 결과** → `INCIDENT_ANALYSIS_SCHEMA` 구조화 출력
+- **(v3) 로그 속 지시문(prompt injection)** → `prompts.wrap_untrusted` + `UNTRUSTED_DATA_RULE_*`
 
 ---
 
@@ -136,11 +164,11 @@ Ollama (k8s/base/ollama.yaml — CPU 전용, 모델 pre-baked 이미지)
 | B. Ollama (현행 유지) | GLM 의 GGUF 양자화 빌드를 기존 Ollama 에 적재 | GPU 없이 소규모 검증, 기존 인프라 재사용 |
 
 - 옵션 B 는 코드 변경이 0 (모델명만 교체)이지만 양자화 손실 + CPU 추론 속도 한계가 있다.
-- 옵션 A 가 목표 상태다. `agent_service.py` 의 **`LLMCallerNode` 가 설계된 단일 교체 지점**
-  (코드 주석에 "Phase 3 vLLM 마이그레이션, OpenAI-compatible endpoint" 로 명시)이며,
-  `local_llm_analyzer.py` 의 `_call` 도 같은 방식으로 교체한다.
+- 옵션 A 가 목표 상태다. (v3) 교체 지점은 이제 코드가 아니라 **`services/llm/` 게이트웨이의 프로필**이다 —
+  vLLM 을 띄우고 Settings → AI/LLM 에 `openai_compat` 프로필을 추가해 용도별 라우팅만 바꾸면 된다.
+  (v1 의 `LLMCallerNode`·`_call` 교체 계획은 게이트웨이 도입으로 해소됐다.)
 
-**vLLM 배포 스케치** (`k8s/base/llm-vllm.yaml` 신규 — airgap overlay 에서 이미지/모델 경로 치환):
+**vLLM 배포 스케치** (실제 매니페스트는 opt-in 컴포넌트 `k8s/components/vllm-gpu/` — airgap overlay 에서 이미지/모델 경로 치환):
 
 ```yaml
 # Deployment 요점만 — 실제 매니페스트는 구현 시 작성
@@ -152,6 +180,8 @@ containers:
       - --served-model-name=glm5.2
       - --max-model-len=32768                          # 로그 분석은 긴 컨텍스트 필요
       - --gpu-memory-utilization=0.90
+      - --enable-prefix-caching                        # (v3) 매 호출이 같은 시스템 프롬프트로 시작 — 첫 토큰 지연 절감
+      # GPU 사양에 맞춰 --quantization=awq|fp8 검토 (VRAM 절감)
     resources:
       limits:
         nvidia.com/gpu: "1"        # 모델 크기에 따라 1~4 (양자화/AWQ 시 절감)
@@ -172,25 +202,26 @@ nodeSelector: { gpu: "true" }      # GPU 노드 풀
 | ~9B 급 | AWQ/INT4 | ~8 GB | GPU 여유 없을 때 |
 | 30B+ 급 | BF16 | 80 GB+ (멀티 GPU) | 필요성 검증 후 |
 
-### 2.2 백엔드 설정 계층 — 신규 환경변수 설계
+### 2.2 백엔드 설정 계층 (v3 현행)
 
-`Settings`(config.py) 에 **provider 추상화**를 추가한다. 기본값이 현행과 동일해
-기존 배포는 무변경으로 동작한다.
+v1 의 `LLM_PROVIDER` / `AUTO_ANALYZE_ENABLED` / `AUTO_ANALYZE_MIN_INTERVAL_SECONDS` 환경변수 설계는
+**구현되지 않았고 앞으로도 쓰지 않는다** — UI-First 원칙에 따라 화면 설정으로 대체됐다.
 
-| 변수 | 기본값 | 설명 |
+| 설정 | 원천 | 비고 |
 |---|---|---|
-| `LLM_PROVIDER` | `ollama` | `ollama` \| `openai_compat` — 생성(추론) 경로 선택 |
-| `LLM_API_BASE` | *(empty)* | openai_compat 일 때 base URL (예: `http://vllm:8000/v1`) |
-| `LLM_API_KEY` | *(empty)* | vLLM `--api-key` 사용 시 |
-| `LLM_MODEL` | *(empty)* | openai_compat 모델명 (예: `glm5.2`) — 비면 `OLLAMA_MODEL` 사용 |
-| `ANALYZER_BACKEND` | `rule_based` | 폐쇄망 운영값: `local_llm` (Settings 편입 권장 — 현재 raw `os.getenv`) |
-| `AUTO_ANALYZE_ENABLED` | `false` | critical 이벤트 자동 분석 on/off (§3) |
-| `AUTO_ANALYZE_MIN_INTERVAL_SECONDS` | `600` | 같은 리소스 재분석 최소 간격 (폭주 방지) |
+| 프로필(provider·base_url·model·키 참조·타임아웃·동시성) | Settings → AI/LLM (AppSetting `llm_settings`) | 저장 후에는 env 를 덮는다 |
+| 용도별 라우팅(primary/fallback), 분석기 백엔드, 응답 언어, 임베딩 모델 | 같은 곳 | `ANALYZER_BACKEND` env 는 초기값 |
+| 자동 분석 on/off·규칙·디바운스·시간당 상한 | Settings → AI/LLM → 알람 자동 분석 범위 (AppSetting `llm_analysis_scope`) | 전역 기본 꺼짐 |
+| API 키 | `llm_credentials`(암호화) → 프로필은 `credential:<name>` 참조 | 원문 재표시 없음 |
 
-임베딩은 당분간 Ollama(`nomic-embed-text`) 유지 — GLM 임베딩 모델로 교체할 경우
-`EMBEDDING_DIM` 이 바뀌므로 기존 벡터 전량 재계산이 필요하다(config.py 주석 참고).
+환경변수는 AppSetting 행이 없을 때의 **초기값**뿐이다(전체 목록 `docs/ENVIRONMENT.md`):
 
----
+| 변수 | 예시 | 주의 |
+|---|---|---|
+| `OLLAMA_URL` / `OLLAMA_MODEL` | `http://ollama:11434` / `qwen2.5-coder:7b` | 모델명은 `ollama list` 기준 |
+| `LLM_API_BASE` | `http://vllm:8000` | **`/v1` 을 붙이지 않는다** — provider 가 `/v1/chat/completions` 를 붙인다 (v1 문서의 `.../v1` 예시는 404) |
+| `LLM_API_KEY` / `LLM_MODEL` / `LLM_TIMEOUT` | — / `glm5.2` / `120` | 키는 `env:LLM_API_KEY` 참조로만 |
+| `EMBEDDING_MODEL` / `EMBEDDING_DIM` | `nomic-embed-text` / `768` | 차원 변경 = 벡터 컬럼 재생성 + 전량 재계산 |
 
 ## 3. K8s 로그 모니터링 + 에러 자동 분석 (분석 전용)
 
@@ -214,17 +245,22 @@ kubewatch → /events/kubewatch (severity=critical: OOMKilling, CrashLoopBackOff
 ```
 
 - **실행 주체는 Celery worker** (LLM 추론이 느리므로 웹훅 응답 경로에서 분리).
-- rule_based 분석기가 **항상 fallback**: LLM offline 이면 규칙 기반 결과라도 저장
-  (`analyzed_by` 필드로 구분 — UI 배지 표기 기존 지원).
+  (v3 현행) 트리거 판정은 `services/observability/analysis_hook.py` 의 `llm_analysis_scope` 규칙
+  (알람·K8s 이벤트 공통 디바운스 키·레이트), 실행은 전용 `llm` 큐의 `run_auto_incident_analysis(_k8s_event)`,
+  결과는 `IncidentAnalysis` 모델에 저장된다. 위 의사코드의 `AUTO_ANALYZE_*` env 는 쓰지 않는다.
+- rule_based 분석기가 **항상 fallback** (v3 구현): LLM 호출·응답 파싱이 실패하면 규칙 기반 결과로
+  원인 후보·조치 가이드를 채운다. `analyzed_by=rule_based:fallback:<원래 분석기>`,
+  `degraded=True` 라 자동 분석 행은 `failed` + 사유로 남고 UI 는 "규칙 기반 (LLM 대체)" 로 표시한다.
 
 ### 3.2 권한 경계 (조치 권한 없음 — 강제 장치)
 
 | 계층 | 장치 |
 |---|---|
 | API | 자동 분석이 사용하는 엔드포인트/서비스 함수는 전부 조회 계열 (`read_namespaced_pod_log`, `list_namespaced_event`, describe). 변경 계열 K8s 호출을 analyzer 경로에 두지 않는다 |
-| ServiceAccount | in-cluster 배포 시 분석용 SA 는 `get/list/watch` 만 가진 ClusterRole 바인딩 (기존 `k8s/base/backend/serviceaccount.yaml` 검토·분리) |
-| 프롬프트/출력 | analyzer JSON 스키마에 "실행" 필드가 없음 — `suggested_actions` 는 사람이 읽는 텍스트. 출력에 포함된 명령은 UI 에서 복사만 가능(자동 실행 버튼 금지) |
-| 마스킹 | 수집 컨텍스트에서 Secret/token 패턴 마스킹 후 LLM 전달 (k8s_resources 의 Secret 마스킹 로직 재사용) |
+| ServiceAccount | (v3 구현) `celery-worker-llm` 은 `k8s-monitor-llm-sa` — `get/list/watch` + `pods/log get` 만 가진 ClusterRole(`k8s/base/celery/llm-serviceaccount.yaml`, Helm `serviceAccount.llmName`). 등록 클러스터를 DB kubeconfig 로 조회할 때는 그 kubeconfig 권한이 쓰이므로, 분석 대상 클러스터용 kubeconfig 도 읽기 전용 계정으로 발급하는 것을 권장한다 |
+| 프롬프트/출력 | analyzer JSON 스키마(`INCIDENT_ANALYSIS_SCHEMA`, 생성 단계에서 강제)에 "실행" 필드가 없음 — `suggested_actions` 는 사람이 읽는 텍스트. 출력에 포함된 명령은 UI 에서 복사만 가능(자동 실행 버튼 금지) |
+| 수집 데이터 경계 | (v3 구현) 로그·이벤트·describe·챗 컨텍스트를 `wrap_untrusted` 로 감싸고, 시스템 프롬프트가 경계 안 지시를 따르지 않게 한다. 데이터 속 경계 표지는 무력화한다 |
+| 마스킹 | 수집 컨텍스트에서 Secret/token 패턴 마스킹 후 LLM 전달 (`services/llm/masking.py`, 게이트웨이 진입점 일괄 적용) |
 
 ### 3.3 UI
 
@@ -289,16 +325,27 @@ analyzer 프롬프트에 주입:
 | **3. RAG** | ops_notes 임베딩, work_guides 검색 API, `rag_service.py`, analyzer 프롬프트 주입 + related_runbooks 내부 링크 | embedding_service.py, rag_service.py(신규), ops_note.py, work_guide.py |
 | **4. 품질/운영** | 분석 품질 피드백(👍/👎 — reactions 재사용), 프롬프트 튜닝, 마스킹 규칙 점검, 부하 테스트 | — |
 
+**진행 현황 (v3)**: Phase 1~3 완료(게이트웨이·자동 분석·RAG 4종), Phase 4 는 일부(마스킹·부하 제어 완료,
+품질 피드백·회귀 평가 미완). 다음 단계:
+
+| Phase | 내용 | 비고 |
+|---|---|---|
+| **5. RAG 기반 보강** | `work_items`·`ops_notes`·`ontology_events` 에 HNSW 인덱스(현재 `work_guides` 만), 문서 청크 분할 임베딩·청크 단위 인용 | 데이터가 쌓이면 검색 1회가 전체 스캔 |
+| **6. 검색 품질** | 다국어 임베딩(예: bge-m3, 1024차원) 전환 + Postgres 전문 검색과의 하이브리드 + 재정렬(reranker) | `EMBEDDING_DIM` 변경 = 컬럼 재생성·재계산 별도 계획 |
+| **7. 대화·도구** | 멀티턴 messages API(Ollama `/api/chat`), 조회 전용 도구 호출(로그·describe·events) | 도구 호출은 GPU 서빙/사내 LLM 이후, 무실행 가드 유지 |
+| **8. 품질 관측** | 분석 1건 단위 프롬프트 버전·모델·근거·피드백 저장, 골든 장애 세트로 모델 교체 회귀 평가 | 모델 세대 교체의 판단 근거 |
+
 각 Phase 는 독립 배포 가능. Phase 1 완료 시점부터 GLM-5.2 로 기존 기능(요약 카드,
 수동 장애 분석)이 동작하고, Phase 2 부터 자동 분석이 켜진다.
 
 ## 6. 운영 체크리스트
 
-- [ ] GLM-5.2 가중치 sha256 검증 후 Nexus 등록 (반입 대장 기록)
-- [ ] vLLM `/v1/models` 응답에 `glm5.2` 확인 → `GET /api/v1/agent/health` OK
-- [ ] `ANALYZER_BACKEND=local_llm`, `LLM_PROVIDER=openai_compat` 설정 후
-      `GET /api/v1/analyze/health` 에서 backend/available 확인
-- [ ] 분석용 ServiceAccount 권한이 get/list/watch 뿐인지 `kubectl auth can-i` 로 확인
-- [ ] LLM 중단 시 rule_based fallback 으로 자동 분석이 계속 저장되는지 확인
+- [ ] 가중치·이미지 sha256 검증 후 Nexus 등록 (반입 대장 기록)
+- [ ] vLLM `/v1/models` 에 서빙 모델명 확인 → Settings → AI/LLM 에 `openai_compat` 프로필 추가
+      (base_url 에 `/v1` 붙이지 않기) → 프로필 행 **연결 진단 실행** 7단계 통과
+- [ ] 용도별 라우팅에서 `incident_analysis`·`chat` primary 지정, 분석기 백엔드 `local_llm`
+      → `GET /api/v1/analyze/health` 에서 backend/available 확인
+- [ ] `kubectl auth can-i create pods --subresource=exec --as=system:serviceaccount:<ns>:k8s-monitor-llm-sa` 가 `no` 인지 확인
+- [ ] LLM 을 내린 상태에서 자동 분석 1건 → `analyzed_by=rule_based:fallback:…` 결과가 남는지 확인
 - [ ] Secret 마스킹: 분석 리포트 원문에 토큰/패스워드 패턴이 없는지 샘플 점검
-- [ ] `AUTO_ANALYZE_MIN_INTERVAL_SECONDS` 로 CrashLoopBackOff 폭주 시 분석 큐 안정 확인
+- [ ] 알람 자동 분석 범위의 디바운스·시간당 상한으로 CrashLoopBackOff 폭주 시 `llm` 큐 안정 확인

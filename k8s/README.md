@@ -145,6 +145,8 @@ pre-baked 되어 있어 볼륨 마운트가 기본적으로 없습니다(재시�
 | 파일 | 역할 |
 |---|---|
 | `worker-deployment.yaml` | Celery Worker. 헬스 체크 태스크 실행. 동시성 2, HPA 대상 |
+| `worker-llm-deployment.yaml` | `llm` 큐 전용 워커(자동 장애 분석·임베딩 백필). 동시성 1 = LLM 부하 상한 |
+| `llm-serviceaccount.yaml` | LLM 워커 전용 읽기 전용 SA `k8s-monitor-llm-sa`(get/list/watch + `pods/log`). 자동 분석은 조치 권한이 없다 — 공용 SA 의 exec·pod 생성/삭제 권한을 주지 않는다 |
 | `beat-deployment.yaml` | Celery Beat 스케줄러. 09:00 / 13:00 / 18:00 KST 정기 체크 트리거. 레플리카는 항상 1개로 고정(중복 방지) |
 
 ---

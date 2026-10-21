@@ -10,6 +10,17 @@
 
 1.68.0 이후 main 에 병합된 변경 (다음 릴리스 후보).
 
+### Added
+- **장애 분석 구조화 출력**: LLM 장애 분석이 JSON 스키마(severity·root_cause·suggested_actions·confidence)를 생성 단계에서 강제한다(Ollama `format` / OpenAI 호환 `response_format`). 스키마를 지원하지 않는 서버는 HTTP 400 을 받으면 스키마 없이 자동으로 다시 호출한다. 작은 모델에서 "응답 파싱 실패" 결과가 줄어든다.
+- **로그 속 지시문 방어**: 장애 분석·챗봇에 넣는 파드 로그·이벤트·describe·에러 메시지를 수집 데이터 경계로 감싸고, 시스템 프롬프트가 경계 안의 지시·역할 변경 문구를 따르지 않게 했다. 데이터 속 경계 표지는 무력화한다. Backend: `services/llm/prompts.py` `wrap_untrusted`.
+- **LLM 워커 전용 읽기 전용 ServiceAccount**: `celery-worker-llm` 이 `k8s-monitor-llm-sa`(get/list/watch + `pods/log`)를 쓴다. 자동 분석의 "조치 권한 없음" 을 코드뿐 아니라 권한으로도 보증한다(공용 SA 의 exec·pod 생성/삭제 권한 제외). Helm: `serviceAccount.llmName`.
+
+### Fixed
+- **LLM 장애 시 자동 분석이 비던 문제**: LLM 호출·응답 파싱이 실패하면 "LLM 분석 불가" 한 줄만 남았다. 이제 규칙 기반 분석 결과(원인 후보·조치 가이드)로 채우고 "규칙 기반 (LLM 대체)" 로 표시한다(`degraded` 유지 — 자동 분석 행은 실패 + 사유로 남는다).
+
+### Changed
+- **`docs/AIRGAP_LLM_ARCHITECTURE.md` v3 현행화**: as-is 를 현재 게이트웨이 구조로 고치고, 구현되지 않은 `LLM_PROVIDER`·`AUTO_ANALYZE_*` 환경변수 설계를 화면 설정 기준으로 대체했다. `LLM_API_BASE` 예시의 `/v1` 이중 경로(404)를 바로잡고, 운영 체크리스트와 다음 단계 로드맵(HNSW 인덱스·청크 분할·다국어 임베딩·하이브리드 검색·품질 관측)을 갱신했다.
+
 ## [1.68.0] - 2026-10-21
 
 ### Added

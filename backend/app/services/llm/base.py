@@ -90,7 +90,12 @@ class BaseLLMProvider(ABC):
         system: Optional[str] = None,
         options: Optional[dict] = None,
     ) -> LLMResult:
-        """단발 프롬프트 호출. 절대 raise 하지 않는다."""
+        """단발 프롬프트 호출. 절대 raise 하지 않는다.
+
+        ``options["json_schema"]`` (JSON Schema dict) 를 주면 provider 가 생성 단계에서 출력 형식을
+        강제한다(Ollama ``format`` · OpenAI-호환 ``response_format``). 서버가 이를 지원하지 않아
+        HTTP 400 을 내면 스키마 없이 한 번 다시 호출한다 — 호출부 파서는 그대로 둔다.
+        """
 
     @abstractmethod
     def chat_stream(

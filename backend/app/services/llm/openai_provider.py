@@ -32,12 +32,35 @@ class OpenAICompatProvider(BaseLLMProvider):
         system: Optional[str] = None,
         options: Optional[dict] = None,
     ) -> LLMResult:
+        opts = dict(options or {})
+        schema = opts.pop("json_schema", None)
+        result = await self._chat_once(prompt, system=system, options=opts, schema=schema)
+        if schema is not None and result.error == "http_400":
+            # response_format(json_schema)을 지원하지 않는 OpenAI-호환 서버 — 스키마 없이 재시도.
+            logger.warning("OpenAI-compat 서버가 response_format 을 거부(HTTP 400) — 스키마 없이 재시도 (profile=%s)",
+                           self.profile.name)
+            result = await self._chat_once(prompt, system=system, options=opts, schema=None)
+        return result
+
+    async def _chat_once(
+        self,
+        prompt: str,
+        *,
+        system: Optional[str],
+        options: Optional[dict],
+        schema: Optional[dict],
+    ) -> LLMResult:
         p = self.profile
         messages: list[dict] = []
         if system:
             messages.append({"role": "system", "content": system})
         messages.append({"role": "user", "content": prompt})
         payload: dict = {"model": p.model, "messages": messages, "stream": False}
+        if schema is not None:
+            payload["response_format"] = {
+                "type": "json_schema",
+                "json_schema": {"name": "pep_output", "schema": schema},
+            }
         if options:
             # Ollama options 형태({"temperature":…, "num_predict":…})를 OpenAI 파라미터로 변환
             if "temperature" in options:
