@@ -283,6 +283,49 @@ def test_admin_may_change_guarded_level(client_as, db, levels, world):
                      json={"operation_level": "xguard"}).status_code == 200
 
 
+def _create_body(name: str, level: str | None) -> dict:
+    # api_endpoint 미입력 + 연결 검증 생략 — 가등록(pending) 경로라 실제 연결을 하지 않는다.
+    return {"name": name, "api_endpoint": "", "operation_level": level, "skip_connectivity_check": True}
+
+
+@pytest.fixture
+def created_clusters(client_as, db, world):
+    """POST 로 만든 클러스터 이름을 모아 두었다가 admin DELETE(연관 행 정리 포함)로 지운다."""
+    names: list[str] = []
+    yield names
+    admin = client_as(world["admin"])
+    db.expire_all()
+    for c in db.query(Cluster).filter(Cluster.name.in_(names)).all():
+        admin.delete(f"/api/v1/clusters/{c.id}")
+
+
+@pytest.mark.parametrize("level", ["production", "xguard", "dr", " xguard "])
+def test_operator_cannot_create_cluster_at_guarded_level(client_as, db, levels, world, created_clusters, level):
+    name = f"r13c-{uuid.uuid4().hex[:8]}"
+    created_clusters.append(name)
+    r = client_as(world["operator"]).post("/api/v1/clusters", json=_create_body(name, level))
+    assert r.status_code == 403, r.text
+    assert "admin" in r.json()["detail"] and "보호 운영레벨" in r.json()["detail"]
+    db.expire_all()
+    assert db.query(Cluster).filter(Cluster.name == name).first() is None
+
+
+@pytest.mark.parametrize("level", ["staging", "dev", None, "", "unknown-level"])
+def test_operator_may_create_cluster_at_unguarded_level(client_as, db, levels, world, created_clusters, level):
+    name = f"r13c-{uuid.uuid4().hex[:8]}"
+    created_clusters.append(name)
+    r = client_as(world["operator"]).post("/api/v1/clusters", json=_create_body(name, level))
+    assert r.status_code == 201, r.text
+
+
+def test_admin_may_create_cluster_at_guarded_level(client_as, db, levels, world, created_clusters):
+    name = f"r13c-{uuid.uuid4().hex[:8]}"
+    created_clusters.append(name)
+    r = client_as(world["admin"]).post("/api/v1/clusters", json=_create_body(name, "xguard"))
+    assert r.status_code == 201, r.text
+    assert r.json()["operation_level"] == "xguard"
+
+
 # ── 4. k8s pod exec 감사 마스킹 ──────────────────────────────────────────────
 
 @pytest.fixture

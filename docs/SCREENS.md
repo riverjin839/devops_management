@@ -325,7 +325,7 @@ hover 시 flyout 자체가 라벨을 보여주므로 이름만 뜨는 중복 툴
   - 두 번째 sticky 사이드바 — Lens 식 카테고리 내비(`NAV` 상수, `kindAvailability` 응답으로 존재하는 kind만 노출). `LeafMode`(`kind|overview|events|helm|crd|nsdash`)로 분기. **리프가 2개 이상인 대분류는 헤더를 눌러 접기/펼치기** 가능 — 상태는 `localStorage`(`pep:k8s:navCollapsed`)에 저장돼 다음 방문에도 유지되고, 현재 선택된 리프가 속한 대분류는 저장된 상태와 무관하게 항상 펼쳐 보인다.
   - 리소스별 패널: `NodesPanel`(cordon/drain 포함 노드 전용 컬럼), `PodsPanel`(터미널 진입), 그 외 kind는 공통 `ResourceTablePanel`(Virtuoso 가상 스크롤, 네임스페이스 멀티셀렉트, 컬럼 토글, 검색). 두 컴포넌트 모두 `hideNsSelector?` prop 지원 — 네임스페이스가 상위(대시보드)에서 이미 고정된 곳에 임베드할 때 내장 NS 선택기를 숨긴다.
   - `NamespaceDashboardPanel`(**대시보드** 리프) — `NamespaceMultiSelect`(`singleSelect` 모드, 종류별 탐색 화면과 동일한 "전체 네임스페이스" 버튼 + 검색 드롭다운)로 네임스페이스 1개 선택 → 엑셀 스타일 **리소스 인벤토리** 표(종류/구분(Workload·Config·Network·Storage 색 점)/개수/정상/경고/위험/비고, `caps[kind].namespaced` + `avail[kind].present`로 표시 대상 자동 필터, 종류별 `k8sResourcesApi.list`/`richPods` 병렬 조회로 개수·상태 산출 — 상태 개념이 없는 종류(ConfigMap 등)는 `—`) → 행 클릭 시 상세 목록으로 바로 이동(**탭 드릴인형**: 카테고리 탭 + 종류 필 로우 + 선택한 종류 패널이 먼저 나오고 인벤토리 표는 그 아래 / **전체 나열형**: 인벤토리 표가 위, 4개 카테고리 전부를 세로로 펼쳐 종류별 패널을 다 쌓은 목록이 아래, 상단 토글로 두 레이아웃 전환). 실제 리소스 테이블은 두 모드 다 같은 `ResourceTablePanel`/`PodsPanel` 인스턴스(`KindPanel` 래퍼로 NS 고정)를 쓰므로 스케일/재시작/삭제/YAML 편집·Pod 터미널이 종류별 탐색과 동일하게 동작. PV/StorageClass 등 cluster-scoped 종류는 제외.
-  - `OverviewPanel`(노드/네임스페이스 통계), `HelmPanel`(릴리스 목록 + values 보기), `CrdPanel`(CRD 목록 → 오브젝트 드릴다운), `EventsStream`(events 탭).
+  - `OverviewPanel`(노드/네임스페이스 통계), `HelmPanel`(릴리스 목록 + values 보기), `CrdPanel`(CRD 목록 → 오브젝트 드릴다운), `EventsStream`(events 탭 — SSE `event: end` 는 종료 사유 `role="status"`, `event: error`·429 사유는 `role="alert"` 로 표시하고 `: ping` 은 무시).
   - `DetailDrawer` — 우측 슬라이드 패널(요약/YAML/이벤트 탭 — 이벤트 탭은 열려 있고 브라우저 탭이 보일 때만 30s 갱신), `RoleGate(['admin','operator'])`로 편집·쓰기 UI 게이팅, viewer는 읽기 전용 배지. 대시보드에서도 페이지 최상단의 같은 `DetailDrawer`/`PodTerminal`/`ConfirmDialog`를 콜백으로 그대로 재사용.
   - `PodTerminal` 모달(WebSocket exec).
 - **Frontend**: 별도 커스텀 hook 없이 TanStack `useQuery`/`useQueries` 직접 사용(`k8s-mng-list`/`k8s-mng-nodes`/`k8s-mng-helm`/`k8s-mng-crds`/`k8s-mng-yaml`/`k8s-caps`/`k8s-avail` 등 쿼리키), `useColumnPrefs`(컬럼 표시/숨김 로컬 저장). `useClusters`. `NamespaceDashboardPanel`은 네임스페이스 목록을 `NamespaceMultiSelect`(내부적으로 `k8sResourcesApi.list(clusterId, 'namespaces')`) 경유로 얻는다. api.ts: `k8sResourcesApi.{list,yaml,resourceEvents,capabilities,kindAvailability,richNodes,richPods,scale,restart,remove,apply,cordon,drain,crds,crdObjects,crdObjectYaml}`, `k8sHelmApi.{releases,values}`.
@@ -456,20 +456,21 @@ hover 시 flyout 자체가 라벨을 보여주므로 이름만 뜨는 중복 툴
 
 ### 클러스터 추이 (`/cluster-trends`, `/cluster-trends/:clusterId`)
 
-- **파일**: `frontend/src/pages/ClusterTrendsPage.tsx` (+ `components/k8s/NodeMultiSelect.tsx`, `components/common/EmptyState.tsx`, Recharts `LineChart`).
-- **목적 / UX**: 선택한 노드×지표(CPU/Memory/Disk/DiskIO/Network/Network Err) 조합의 Prometheus 시계열을 (노드 × 지표) 카드 그리드로 나란히 비교해 시간대별 추이를 훑는 화면. 노드/지표를 최소 1개씩 선택해야 조회(과수집 방지).
+- **파일**: `frontend/src/pages/ClusterTrendsPage.tsx` (+ `components/k8s/NodeMultiSelect.tsx`, `components/common/EmptyState.tsx`(`EmptyState`·`ErrorState`), `lib/chartTokens.ts`(`CHART_TOOLTIP_PROPS`·`chartAxisTick`), Recharts `LineChart`).
+- **목적 / UX**: 선택한 노드×지표(CPU·메모리·디스크·디스크 I/O·네트워크·네트워크 오류) 조합의 Prometheus 시계열을 (노드 × 지표) 카드 그리드로 나란히 비교해 시간대별 추이를 훑는 화면. 노드/지표를 최소 1개씩 선택해야 조회(과수집 방지).
 - **UI 구성**:
   - `ClusterSidebar` — `iconOnly` 단일 선택, URL 파라미터 동기화.
-  - 컨트롤 바 MacCard — 시간창(30m/1h/6h/24h/7d) 토글, 지표 토글 버튼, `NodeMultiSelect`(최대 30개, `MAX_NODES`), 이름/최신값 정렬, 카드 열 수(1/5/10/20) 선택.
-  - offline/error/dropped(상한 초과 노드 제외) 상태 배너.
-  - 차트 그리드 — 셀 = `{node}__{metric}`, 각 셀에 최신값 + `LineChart`(recharts, `connectNulls`).
-- **Frontend**: `useClusterTrends` (`hooks/useClusterTrends.ts`, `keepPreviousData` + `enabled: nodes>0 && metrics>0`, 자동갱신 off 기본). `useClusters`. api.ts: `clusterTrendsApi.get(clusterId, {range, metrics, nodes})`.
-- **Backend**: `GET /api/v1/k8s/{clusterId}/trends` — 라우터 `backend/app/routers/cluster_trends.py`(prefix `/k8s`). 클러스터별 Prometheus(`Cluster.prometheus_url`/`prometheus_enabled`, 없으면 전역 `PROMETHEUS_URL` fallback)로 PromQL 질의, 노드 상한은 `settings.trends_max_nodes`(프론트 `MAX_NODES=30`과 동기화 필요).
+  - 컨트롤 바 MacCard — 시간창(30m/1h/6h/24h/7d) 토글(`aria-pressed`), 지표 토글 버튼, `NodeMultiSelect`(상한 = 응답 `max_nodes`, listbox + 방향키·Esc, `key={clusterId}` 로 클러스터마다 재마운트), 이름/최신값 정렬, 카드 열 수(1/5/10/20 — 정적 `grid-cols-*` 맵), **새로고침** 버튼, **자동 갱신** 토글(30m·1h 창은 60초 기본 켬, 6h 이상 끔, 탭이 숨겨지면 멈춤 — D-184 ⑤).
+  - 시간창·지표·열 수는 URL(`useUrlParams` — `range`·`metrics`·`cols`)에 남는다. 노드 선택은 **클러스터별로 따로** 기억한다(`nodesByCluster` — 클러스터를 바꿔도 이전 클러스터 노드로 질의하지 않음).
+  - 상태: 조회 실패 → `ErrorState`(다시 시도), offline·데이터 없음 → `EmptyState`(서버 `hint` + 클러스터 정보 수정 링크 `/cluster-manage/:id/edit`), dropped(상한 초과 노드 제외) 안내.
+  - 차트 그리드 — 셀 = `{node}__{metric}`, 각 셀에 최신값(`text-foreground`, 선 색만 `--chart-*`) + `LineChart`(recharts, `connectNulls`, 툴팁은 팝오버 토큰). 지표별 실패는 셀에 "조회 실패 — 사유"(값 없음과 구분), 셀마다 sr-only 요약(노드·지표·최신값·구간 최소/최대). 빈 값은 `—`.
+- **Frontend**: `useClusterTrends` (`hooks/useClusterTrends.ts` — `placeholderData` 는 **같은 클러스터일 때만** 이전 결과, `enabled: nodes>0 && metrics>0`, `autoMs` 주기 갱신 + `refetchIntervalInBackground: false`). `useClusters`. api.ts: `clusterTrendsApi.get(clusterId, {range, metrics, nodes})`(timeout 35초).
+- **Backend**: `GET /api/v1/k8s/{clusterId}/trends` — 라우터 `backend/app/routers/cluster_trends.py`(prefix `/k8s`, `_cluster_scoped` read). 클러스터별 Prometheus(`Cluster.prometheus_url`/`prometheus_enabled`, 없으면 전역 `PROMETHEUS_URL` fallback)로 PromQL 질의 — 지표 6종을 **병렬**로, 전체 예산 25초(`_TRENDS_BUDGET_SECONDS`). 응답 `{range, step, status, error, hint, dropped, max_nodes, node_label, metrics: {<m>: {unit, error, series}}}`. 노드 라벨은 클러스터 컬럼 `trend_node_label`(클러스터 정보 수정 "추이 노드 라벨 (선택)"), 비었거나 `auto` 면 `node` → `kubernetes_node` → `instance` 순으로 시리즈가 나오는 첫 라벨을 자동 탐지(10분 캐시) — env `PROMETHEUS_NODE_LABEL` 은 표준 후보 밖 이름일 때 자동 탐지 첫 후보로 쓰는 배포 전역 fallback(D-185). 노드 상한은 `settings.trends_max_nodes` → 응답 `max_nodes`.
 - **핵심 기능**:
   - 노드×지표 매트릭스 시계열 카드 그리드, 컬럼 수/정렬 커스터마이즈.
-  - 시간창 5종, 지표 6종(CPU/Memory/Disk/DiskIO/Network/NetworkErr) 토글 조합.
-  - Prometheus offline/에러/노드 상한 초과 시 명시적 경고 배너.
-  - `%`/`B/s` 단위 자동 포맷팅 및 값 없음(`null`) 처리.
+  - 시간창 5종, 지표 6종 토글 조합, 수동 새로고침 + 시간창별 자동 갱신.
+  - 조회 실패·부분 실패·연동 꺼짐·라벨 불일치를 "데이터 없음"과 구분해 원인과 고칠 위치(`hint`)를 보여준다.
+  - `%`/`B/s` 단위 자동 포맷팅 및 값 없음(`null` → `—`) 처리.
 - **요청사항 (수정 요청)**:
   - _(여기에 개선/수정 요청을 직접 적어주세요)_
 
@@ -497,21 +498,29 @@ hover 시 flyout 자체가 라벨을 보여주므로 이름만 뜨는 중복 툴
 
 ### Observability 지표 대시보드 (`/observability`, `/observability/:clusterId`)
 
-- **파일**: `frontend/src/pages/ObservabilityPage.tsx` (+ `components/observability/{MetricsTable,RulesTable,TargetsTable,ActiveAlertsTable,MetricEditModal,shared}`).
+- **파일**: `frontend/src/pages/ObservabilityPage.tsx` (+ `components/observability/{MetricsTable,RulesTable,TargetsTable,ActiveAlertsTable,MetricEditModal,DisabledMetricsSection,ObservabilitySettingsDialog,shared}`).
 - **목적 / UX**: 클러스터에 깔린 관측 스택(`kube-prometheus-stack`, 이후 `alert-forwarder`/`opensearch-stack`/`fluent-operator`)의 **개별 지표를 dense 리스트 테이블**로 한 화면에서 훑는다. 카드형(`/cluster-overview` PromQL 카드)과 달리 수십 개 지표를 스캔하는 용도.
 - **UI 구성**:
   - `ClusterSidebar` — `iconOnly` 단일 선택(클러스터별 Prometheus 를 봐야 하므로 `allowAll` 없음).
   - 상단 `PageHeader` "관측 지표"(2026-10-14, D-117) — 예전 "Observability 모듈" 카드 제목을 페이지 제목으로 올렸다.
-  - 모듈 탭(카드 래퍼 없는 pill 줄) — 지표가 1개 이상 등록된 모듈만 활성, 나머지는 "준비중"(disabled + 툴팁).
-  - 뷰 탭 — **지표 / 알람 규칙 / 스크레이프 타겟 / 발화중 알람** (kube-prometheus-stack 에서만 4종 전부).
-  - 툴바 — `SourceBadge`(실시간 vs 스냅샷 n분 전), 지표 추가(operator 이상), 새로고침.
-  - 지표 테이블 — 상태 dot · 지표 · 카테고리 · 현재값 · 임계 · 대상(라벨) · PromQL · 편집. 행 클릭 시 설명/전체 라벨/PromQL/참고문서 펼침. 상단에 정상·경고·심각·수집불가 요약 pill.
-- **Frontend**: `useObservabilityModules`, `useObservabilityMetrics`, `useMetricValues`, `usePromRules`, `usePromTargets`, `usePromActiveAlerts`(`hooks/useObservability.ts`, 30초 `refetchInterval`), `useCreateMetric`/`useUpdateMetric`/`useDeleteMetric`. `useClusterRouteParam('/observability')`. api.ts: `observabilityApi.*`.
-- **Backend**: `GET /api/v1/observability/{modules,metrics,metrics/values}`, `GET /observability/prometheus/{rules,targets,active-alerts}`, 지표 CRUD(`require_operator`) — 라우터 `backend/app/routers/observability.py`. 모델: `models/observability.py`(`ObservabilityModule`/`ObservabilityMetric`/`ObservabilitySnapshot`). 서비스: `services/prometheus_service.py`(rules/targets/status 확장) · `services/alertmanager_service.py`.
+  - 모듈 탭(카드 래퍼 없는 pill 줄, `aria-pressed`) — 지표가 없는 "준비 중" 모듈도 선택할 수 있고, 본문 `EmptyState` 에서 첫 지표를 추가하면 활성화된다(D-186 ③).
+  - 뷰 탭(`role=tablist/tab`) — **지표 / 알람 규칙 / 스크레이프 대상 / 발화 중 알람** (kube-prometheus-stack 에서만 4종 전부). 뷰·규칙 상태·대상 상태·모듈·검색어는 URL(`useUrlParams` — `view`·`state`·`health`·`module`·`q`)에 남는다.
+  - 툴바 — `SourceBadge`(실시간 vs 스냅샷 n분 전, 오래됨 표시, 갱신이 실패하면 "갱신 실패 · 마지막 성공 n분 전"), 지표 추가, 새로고침, 설정(톱니 — `ObservabilitySettingsDialog`, push 스냅샷 "오래됨" 기준 분, admin 만 저장). 쓰기 버튼은 viewer 에게 숨기지 않고 `useCanOperate` 로 비활성 + 사유.
+  - 상태 분기 — 클러스터 미선택 → 로딩 → 조회 실패 `ErrorState`(다시 시도) → `offline` `OfflineState`(서버 사유 + 연동 꺼짐이면 클러스터 정보 수정 링크) → 빈 배열. 일부 소스 실패(`errors[]`)·오래된 스냅샷(`stale`)·`source=partial` 은 표 위 `ObservabilityNotice` 로 "목록이 불완전" 안내(빈 문구 대신 사유).
+  - 지표 테이블 — 상태 dot(색 + 라벨) · 지표 · 카테고리 · 현재값 · 임계 · 대상(라벨) · PromQL · 편집. 행 첫 셀 `ExpandButton`(`aria-expanded`, 키보드)으로 설명/전체 라벨/PromQL/참고문서 펼침(알람 규칙·스크레이프 대상·발화 중 알람 표도 같음). 상단에 정상·경고·심각·수집 불가 요약 pill. 표 아래 **사용 안 함 N개** 접힘 섹션(`DisabledMetricsSection`) — 꺼 둔 지표를 편집·다시 켬.
+  - 지표 편집 모달(`MetricEditModal`) — **미리 조회** 버튼으로 저장 전 PromQL 을 선택 클러스터에서 시험 조회(샘플 최대 20개, 인라인 결과 — 실행 로그 대상 아님), 지표 삭제는 `ConfirmDialog`(danger), 지표 정의 로딩 중엔 편집 버튼 비활성(사유 표시). 서버에는 단건 조회 `GET /metrics/{id}` 도 있다.
+  - 표기 — 상태값 라벨 맵(발화·대기·비활성·기록 규칙 / 정상·중단·알 수 없음 / 심각·경고·정보, 원문은 `title`), 빈 값 `—`.
+- **Frontend**: `useObservabilityModules`, `useObservabilityMetrics`(`include_disabled=true`), `useMetricValues`, `usePromRules`, `usePromTargets`, `usePromActiveAlerts`(`hooks/useObservability.ts`, 30초 `refetchInterval`), `useCreateMetric`/`useUpdateMetric`/`useDeleteMetric`, `usePreviewMetric`, `useObservabilitySettings`/`useUpdateObservabilitySettings`, `useCanOperate`. `useClusterRouteParam('/observability')`, `useUrlParams`. api.ts: `observabilityApi.*`(`previewMetric`·`settings`·`updateSettings` 포함).
+- **Backend**: 라우터 `backend/app/routers/observability.py`.
+  - 조회: `GET /api/v1/observability/{modules,metrics,metrics/values,metrics/{id}}`(`?include_disabled`), `GET /observability/prometheus/{rules,targets,active-alerts}`. 조회 4종(`metrics/values`·`rules`·`targets`·`active-alerts`)은 **캐시를 보기 전에** `_visible_cluster` 로 클러스터 read 권한을 확인한다 — `cluster_id` 생략(전역 Prometheus)은 admin 만, 그 외 422(D-181). 응답에 `errors[]`(소스별 실패 사유)·`stale`·`snapshot_age_sec`, 발화 중 알람은 `source=partial` 가능(D-183).
+  - 카탈로그(`require_operator`, 감사 `observability.module.*`·`observability.metric.*` — id·이름만): 모듈 `POST`·`PUT`·`DELETE /observability/modules`, 지표 `POST`·`PUT`·`DELETE /observability/metrics`, `POST /observability/metrics/preview`(`{cluster_id, query}` → 샘플 `[{labels:[{k,v}], value}]` 최대 20, fail-safe).
+  - 설정: `GET /observability/settings` · `PUT`(admin) — AppSetting `observability.settings.stale_minutes`(기본 15, 1~1440), 서비스 `services/observability/view_settings.py`.
+  - 모델: `models/observability.py`(`ObservabilityModule`/`ObservabilityMetric`/`ObservabilitySnapshot`). 서비스: `services/prometheus_service.py`(rules/targets/status 확장) · `services/alertmanager_service.py`.
 - **핵심 기능**:
-  - 지표 카탈로그가 **DB 행**이라 PromQL·임계값·표시형식을 화면에서 편집(CLAUDE.md §UI-First). 새 모듈도 지표 행 추가만으로 활성화.
-  - 수집 경로 2종 — `pull`(PEP 가 직접 조회) / `push`(in-cluster 수집기 스냅샷). 클러스터의 `observability_mode` 로 결정하고 응답의 `source`/`collectedAt` 으로 신선도 표시.
-  - Prometheus/Alertmanager 미도달 시 500 이 아니라 `offline` + 안내 문구(fail-safe 계약).
+  - 지표 카탈로그가 **DB 행**이라 PromQL·임계값·표시형식을 화면에서 편집(CLAUDE.md §UI-First) — 저장 전 미리 조회, 삭제 확인, 사용 안 함 지표 재활성. 새 모듈도 지표 행 추가만으로 활성화.
+  - 수집 경로 2종 — `pull`(PEP 가 직접 조회) / `push`(in-cluster 수집기 스냅샷). 클러스터의 `observability_mode` 로 결정하고 응답의 `source`/`collectedAt`/`stale` 로 신선도 표시("오래됨" 기준은 화면 설정).
+  - Prometheus/Alertmanager 미도달 시 500 이 아니라 `offline` + 안내 문구(fail-safe 계약) — 화면은 미도달·조회 실패·부분 실패를 "없음"과 구분해 보여준다.
+  - 테넌트 격리 — 다른 테넌트 클러스터의 지표·규칙·대상·알람은 캐시가 데워져 있어도 403.
 - **요청사항 (수정 요청)**:
   - _(여기에 개선/수정 요청을 직접 적어주세요)_
 
@@ -539,21 +548,23 @@ hover 시 flyout 자체가 라벨을 보여주므로 이름만 뜨는 중복 툴
 - **요청사항 (수정 요청)**:
   - _(여기에 개선/수정 요청을 직접 적어주세요)_
 
-### 실시간 로그 (`/k8s-logs`, `/k8s-logs/:clusterId`)
+### 파드 로그 (`/k8s-logs`, `/k8s-logs/:clusterId`)
 
-- **파일**: `frontend/src/pages/K8sLogsPage.tsx` (+ `components/common/{LogViewTabs,NamespaceSingleSelect,PodSingleSelect}`, `components/k8s/PodLogStream.tsx`).
-- **목적 / UX**: 특정 클러스터의 특정 네임스페이스/파드 로그를 실시간 스트리밍으로 확인하는 화면(OpenLens 파리티). K8s 관리 콘솔의 파드 목록 "로그" 버튼에서 `?namespace=&pod=&container=` 쿼리로 딥링크 진입 시 자동으로 스트림이 시작된다.
+- **파일**: `frontend/src/pages/K8sLogsPage.tsx` (+ `components/common/{LogViewTabs,NamespaceSingleSelect,PodSingleSelect,SearchableSelect}`, `components/k8s/PodLogStream.tsx`).
+- **목적 / UX**: 특정 클러스터의 특정 네임스페이스/파드 로그를 실시간 스트리밍으로 확인하는 화면(OpenLens 파리티). 메뉴·페이지 제목은 "파드 로그"(화면 안 탭 이름만 "실시간 로그" — D-191). K8s 관리 콘솔의 파드 목록 "로그" 버튼에서 `?namespace=&pod=&container=` 쿼리로 딥링크 진입 시 자동으로 스트림이 시작된다.
 - **UI 구성**:
-  - `ClusterSidebar` — `iconOnly` 단일 선택, URL 파라미터 동기화.
-  - `LogViewTabs`(로그 화면 종류 전환 탭, 현재 `stream`).
-  - `로그 스트림` MacCard — `NamespaceSingleSelect` + `PodSingleSelect` 대상 선택 → `PodLogStream`(네임스페이스+파드 선택 시에만 렌더, `key`로 재마운트).
-- **Frontend**: 페이지 자체는 커스텀 데이터 hook 없이 `useClusters`만 사용하고 네임스페이스/파드 목록은 `NamespaceSingleSelect`/`PodSingleSelect` 내부에서 처리; 로그 스트림은 `PodLogStream` 컴포넌트가 SSE(`fetch` + `ReadableStream`, `k8sStreamUrls.logsStream`)로 소비. 로컬 state: `namespace`, `pod`(쿼리 파라미터로 초기화, 클러스터 변경 시 리셋).
-- **Backend**: 스트리밍은 `GET /api/v1/analyze/clusters/{clusterId}/namespaces/{ns}/pods/{pod}/logs/stream`(SSE), 다운로드는 `.../logs/download` — 라우터 `backend/app/routers/analyze.py`(prefix `/analyze`). 네임스페이스/파드 목록은 같은 라우터의 `GET /analyze/clusters/{id}/namespaces`, `GET /analyze/clusters/{id}/namespaces/{ns}/pods`.
+  - `ClusterSidebar` — `iconOnly` 단일 선택, URL 파라미터 동기화. 클러스터 목록 조회 실패는 `ErrorState`(다시 시도) — "파드를 고르세요" 빈 상태로 보이지 않는다(D-188).
+  - `LogViewTabs`(로그 화면 종류 전환 `nav`, `aria-current`) — **아일랜드 패널 임베드에서는 숨김**(여기서 navigate 하면 앱이 아일랜드 밖으로 나간다).
+  - `로그 스트림` MacCard — `<label htmlFor>` 로 연결된 `NamespaceSingleSelect` + `PodSingleSelect`(목록 실패 시 공용 `SearchableSelect` 의 `error`·`onRetry` 로 `ErrorState compact`, combobox 의미) 대상 선택 → `PodLogStream`(네임스페이스+파드 선택 시에만 렌더, `key`로 재마운트).
+  - `PodLogStream` 컨트롤 — 컨테이너 선택(바꾸면 스트림 재시작), **마지막 N줄**, **따라가기**(follow — D-191 권장 "계속 받기" 대신 채택), previous/timestamps, 검색, 다운로드. 로그 영역 **밖** 상태 줄: 종료(`role="status"` — 사유: 끝까지 읽음·최대 스트림 시간 초과·전송 한도 10MB 잘림) / 오류(`role="alert"`, 429 동시 한도 사유 포함) + **처음부터 다시**(화면 비우고 재시작) · **이어 받기**(줄 유지, 마지막 수신 시각 기준 `since_seconds` + 타임스탬프 중복 제거). 다운로드가 잘리면(`X-Log-Truncated: 1`) 안내.
+- **Frontend**: 페이지는 `useClusters` + `useTerminalEnvSync(clusters, clusterId)`(로그 색 프로파일을 이 화면 클러스터 등급으로); 네임스페이스/파드 목록은 `NamespaceSingleSelect`/`PodSingleSelect` 내부에서 처리. 로그 스트림은 `PodLogStream` 이 SSE(`fetch` + `ReadableStream`, `k8sStreamUrls.logsStream` — `sinceSeconds` 옵션)로 소비하며 이름 있는 이벤트(`end`·`error`)와 `: ping` 주석을 구분한다. 수신 줄은 2만 줄 링 버퍼(`LineRing`, 넘치면 오래된 줄부터 덮어씀) + 100ms 묶음 반영, react-virtuoso 가상화. 중지·언마운트·대상 변경 시 `AbortController` 로 abort. 로컬 state: `namespace`, `pod`(쿼리 파라미터로 초기화, 클러스터 변경 시 리셋).
+- **Backend**: 스트리밍은 `GET /api/v1/analyze/clusters/{clusterId}/namespaces/{ns}/pods/{pod}/logs/stream`(SSE, `since_seconds`), 다운로드는 `.../logs/download`(10MB 상한, 잘리면 `X-Log-Truncated: 1`) — 라우터 `backend/app/routers/analyze.py`(prefix `/analyze`, `_cluster_scoped` read). SSE 계약: 로그 `data:` · 종료 `event: end` `{"reason": "eof"|"max_duration"|"truncated"}` · 오류 `event: error` `{"message"}` · 15초 `: ping` 하트비트. 30초 읽기 타임아웃으로 깨어나 끊김을 감지하고 이어 읽으며, 최대 `LOG_STREAM_MAX_DURATION_SECONDS`(30분) 뒤 `end`(max_duration). 동시 스트림은 사용자당 3·전체 `LOG_STREAM_MAX_CONCURRENT`(20, 프로세스당) — 초과는 한국어 `detail` 429, 슬롯은 `finally` 에서 반납(D-182). 클러스터 이벤트 SSE(`/analyze/clusters/{id}/events/stream`, `/k8s-manage` 이벤트 탭의 `EventsStream`)도 같은 계약. 네임스페이스/파드 목록은 같은 라우터의 `GET /analyze/clusters/{id}/namespaces`, `GET /analyze/clusters/{id}/namespaces/{ns}/pods`.
 - **핵심 기능**:
-  - 네임스페이스/파드 선택 후 실시간 로그 스트림(follow) 시작/중지.
+  - 네임스페이스/파드 선택 후 실시간 로그 스트림(따라가기) 시작/중지, 종료·오류를 로그 줄과 분리해 표시.
+  - 이어 받기(끊긴 지점부터) / 처음부터 다시.
   - 딥링크(`namespace`/`pod`/`container` 쿼리 파라미터)로 자동 스트림 시작.
-  - 컨테이너 선택(멀티 컨테이너 파드), previous/timestamps 옵션(`PodLogStream` 내부).
-  - 로그 전체 다운로드(non-follow).
+  - 컨테이너 선택(멀티 컨테이너 파드 — 변경 시 재시작), previous/timestamps 옵션(`PodLogStream` 내부).
+  - 로그 전체 다운로드(non-follow, 잘림 안내).
 - **요청사항 (수정 요청)**:
   - _(여기에 개선/수정 요청을 직접 적어주세요)_
 
@@ -956,14 +967,14 @@ hover 시 flyout 자체가 라벨을 보여주므로 이름만 뜨는 중복 툴
 - **목적 / UX**: 단일 클러스터의 수동 메타데이터(노드 스펙/NIC, N/W CIDR, BGP, Cilium 설정, Prometheus 연동 등)를 탭 폼으로 편집·저장한다. `ClusterManagePage`의 자동수집으로 채워지지 않는 값(설명 등)을 사람이 직접 입력하는 용도.
 - **UI 구성**: **ClusterSidebar 미사용** — 단일 클러스터 편집 폼 페이지(뒤로가기 헤더 + `클러스터명` 표시). 본문은 `MacCard`(`bodyPadding="p-0"`) 안에 상단 공통 필드(지역/운영레벨/호스트명) + 3개 탭(`노드 스펙/NIC`, `N/W CIDR`, `기타`) + 하단 취소/저장 푸터. 탭은 WAI-ARIA tabs 패턴(`role=tablist/tab/tabpanel`, roving tabindex, ←/→·Home/End 이동)이며 활성 탭은 **`?tab=node|network|extra`** 쿼리로 영속화된다(`replace: true` — 탭 전환이 히스토리에 쌓이지 않음, 알 수 없는 값은 `node` 폴백). N/W CIDR 탭의 3개 도메인 섹션(INTERNAL_IP/Pod/Service)과 Prometheus 섹션은 categorical `--chart-1~4` 토큰으로 색 구분.
 - **Frontend**: `useClusters()`(`isLoading`/`isError`/`refetch` 사용) + `useClusterStore()`(Zustand)로 `id` 매칭 클러스터 조회, `useOperationLevels()`. **데이터 확정 전에는 폼 대신 skeleton**, 조회 실패 시 재시도 안내를 렌더한다(빈 폼 렌더 금지 — 입력 유실 방지). 폼 필드는 모두 `useState`로 개별 관리 후 `hydrated` 플래그로 최초 1회 동기화. 저장 시 **빈 입력은 `null` 로 전송**(값 해제 반영 — `undefined` 는 `exclude_unset=True` 백엔드에서 무시됨). 호출 함수: `clustersApi.update(cluster.id, payload)`.
-- **Backend**: `PUT /api/v1/clusters/{cluster_id}` — `backend/app/routers/clusters.py` (391행). `Cluster` 모델(`backend/app/models/cluster.py`)의 `region/operation_level/node_count/max_pod/hostname/cidr/internal_ips/first_host/last_host/pod_cidr/pod_first_host/pod_last_host/svc_cidr/svc_first_host/svc_last_host/bond0_ip/bond0_mac/bond1_ip/bond1_mac/cilium_config/description/bgp_enabled/as_number/prometheus_url/prometheus_enabled` 컬럼을 갱신(전부 `nullable=True` — `null` 로 해제 가능). `ClusterUpdate` 스키마는 `model_dump(exclude_unset=True)` 로 적용되므로 **미전송 필드는 기존 값 유지**.
+- **Backend**: `PUT /api/v1/clusters/{cluster_id}` — `backend/app/routers/clusters.py` (391행). `Cluster` 모델(`backend/app/models/cluster.py`)의 `region/operation_level/node_count/max_pod/hostname/cidr/internal_ips/first_host/last_host/pod_cidr/pod_first_host/pod_last_host/svc_cidr/svc_first_host/svc_last_host/bond0_ip/bond0_mac/bond1_ip/bond1_mac/cilium_config/description/bgp_enabled/as_number/prometheus_url/prometheus_enabled/trend_node_label` 컬럼을 갱신(전부 `nullable=True` — `null` 로 해제 가능). `ClusterUpdate` 스키마는 `model_dump(exclude_unset=True)` 로 적용되므로 **미전송 필드는 기존 값 유지**.
 - **핵심 기능**:
   - 노드 수/Max Pod, bond0·bond1 NIC(IP/MAC) 수동 입력
   - BGP 사용 여부 + AS Number
   - INTERNAL_IP 정규식 리스트(자동수집 우선순위: nodeIps > 수동 IP 리스트 > fallback CIDR) / Pod CIDR / Service CIDR
   - Cilium 주요 설정 텍스트, 클러스터 설명
-  - Cluster Trends Prometheus 연동(사용 토글 + URL 오버라이드)
-  - **입력 형식 검증 15필드**(CIDR 3 / IPv4 6 / IP\|CIDR 2 / MAC 2 / AS Number) — 값이 있을 때만 검사하고, 실패 필드는 `aria-invalid`+인라인 사유 표시 후 해당 탭으로 자동 전환. 규칙은 `ClusterManagePage` 의 `parseCidrRange`(CIDR 겹침 검사)와 동일 형식
+  - Cluster Trends Prometheus 연동(사용 토글 + URL 오버라이드) + **추이 노드 라벨 (선택)**(`trendNodeLabel` → 컬럼 `trend_node_label`, `기타` 탭) — node-exporter 시리즈에서 노드 이름이 든 라벨. 비우거나 `auto` 면 `node` → `kubernetes_node` → `instance` 자동 탐지, 형식은 Prometheus 라벨 이름(서버 `TREND_NODE_LABEL_PATTERN` 과 같은 정규식 검사). env `PROMETHEUS_NODE_LABEL` 은 배포 전역 fallback(D-185)
+  - **입력 형식 검증 16필드**(CIDR 3 / IPv4 6 / IP\|CIDR 2 / MAC 2 / AS Number / 추이 노드 라벨) — 값이 있을 때만 검사하고, 실패 필드는 `aria-invalid`+인라인 사유 표시 후 해당 탭으로 자동 전환. 규칙은 `ClusterManagePage` 의 `parseCidrRange`(CIDR 겹침 검사)와 동일 형식
   - 저장 실패 시 `formatApiError` 로 백엔드 오류 사유를 그대로 노출(`role="alert"`)
   - **미저장 변경 보호** — 기준 스냅샷 대비 dirty 추적 → 취소·뒤로가기 시 `ConfirmDialog`, 새로고침·탭 닫기 시 `beforeunload` 경고. 저장 성공 시 `toast.success`. (앱 내 링크 이동은 선언형 `BrowserRouter` 라 `useBlocker` 불가 — 미차단)
   - 클러스터 전환 시 재하이드레이션 — `hydratedId` 로 `cluster.id` 변경을 감지(같은 id 의 30초 자동 리페치에서는 편집 중 입력을 덮어쓰지 않음)

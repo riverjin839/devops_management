@@ -35,6 +35,28 @@ export function cssVarColor(token: string | undefined, opts: TokenColorOpts = {}
     : `hsla(${h}, ${s}, ${light}, ${opts.alpha})`;
 }
 
+// ── Recharts(SVG) 공용 툴팁·축 스타일 (D-190) ──
+// Recharts `Tooltip` 기본값은 흰 배경·회색 글자라 다크 계열 테마에서 흰 박스가 뜬다. SVG/DOM 은
+// `hsl(var(--x))` 를 그대로 풀 수 있으므로 토큰 문자열을 넘긴다(테마가 바뀌면 자동으로 따라간다).
+// 사용: `<Tooltip {...CHART_TOOLTIP_PROPS} />`, `<XAxis tick={chartAxisTick(10)} />`.
+export const CHART_TOOLTIP_PROPS = {
+  contentStyle: {
+    fontSize: 12,
+    borderRadius: 'var(--radius)',
+    background: 'hsl(var(--popover))',
+    color: 'hsl(var(--popover-foreground))',
+    border: '1px solid hsl(var(--border))',
+  },
+  labelStyle: { color: 'hsl(var(--popover-foreground))' },
+  itemStyle: { color: 'hsl(var(--popover-foreground))' },
+  cursor: { stroke: 'hsl(var(--border))' },
+} as const;
+
+/** 축 눈금 글자 — 기본 회색 대신 muted-foreground 토큰. */
+export function chartAxisTick(fontSize = 10) {
+  return { fontSize, fill: 'hsl(var(--muted-foreground))' };
+}
+
 // ── 테마 변경 감지: <html> 의 class(바탕 테마)·data-accent(강조색) 변화를 구독한다 ──
 function subscribe(onChange: () => void): () => void {
   const obs = new MutationObserver(onChange);

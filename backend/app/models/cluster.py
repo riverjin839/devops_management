@@ -87,6 +87,9 @@ class Cluster(Base):
     # base URL 은 비우면 전역 settings.prometheus_url fallback. enabled=false 면 Trends offline 표기.
     prometheus_url = Column(String(512), nullable=True)        # 선택 — 클러스터별 Prometheus URL 오버라이드
     prometheus_enabled = Column(Boolean, nullable=False, default=False, server_default="false")
+    # 추이 노드 매칭 라벨(node-exporter 시리즈에서 K8s 노드 이름이 든 라벨). NULL/'auto' =
+    # node → kubernetes_node → instance 자동 탐지. 클러스터 정보 수정 화면에서 편집 (D-185).
+    trend_node_label = Column(String(64), nullable=True)
 
     # Observability 대시보드(/observability) 연동.
     #  - alertmanager_url: 비우면 전역 settings.alertmanager_url fallback.

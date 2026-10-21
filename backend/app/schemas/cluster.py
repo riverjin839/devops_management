@@ -1,8 +1,31 @@
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 from datetime import datetime
 from uuid import UUID
 from typing import Any, Optional
 from enum import Enum
+import re
+
+
+# Prometheus 라벨 이름 규칙 — 추이 노드 라벨이 PromQL 에 그대로 들어가므로 이 형식만 허용한다.
+TREND_NODE_LABEL_PATTERN = r"^[A-Za-z_][A-Za-z0-9_]{0,63}$"
+_TREND_NODE_LABEL_RE = re.compile(TREND_NODE_LABEL_PATTERN)
+
+
+def _normalize_trend_node_label(v: Optional[str]) -> Optional[str]:
+    """빈 값 → None(자동 탐지), `auto` → "auto", 그 외는 Prometheus 라벨 이름 형식 검증."""
+    if v is None:
+        return None
+    s = str(v).strip()
+    if not s:
+        return None
+    if s.lower() == "auto":
+        return "auto"
+    if not _TREND_NODE_LABEL_RE.match(s):
+        raise ValueError(
+            "추이 노드 라벨은 Prometheus 라벨 이름 형식(영문·숫자·밑줄, 숫자로 시작 불가, 최대 64자)"
+            " 또는 auto 여야 합니다."
+        )
+    return s
 
 
 class StatusEnum(str, Enum):
@@ -55,6 +78,9 @@ class ClusterBase(BaseModel):
     # Cluster Trends — per-cluster Prometheus URL 오버라이드 / 토글.
     prometheus_url: Optional[str] = Field(default=None, max_length=512)
     prometheus_enabled: Optional[bool] = None
+    # Cluster Trends 노드 매칭 라벨 — node-exporter 시리즈에서 K8s 노드 이름이 든 라벨.
+    # 빈 값·auto = node → kubernetes_node → instance 순 자동 탐지 (D-185).
+    trend_node_label: Optional[str] = Field(default=None, max_length=64)
     # Observability 대시보드 — Alertmanager URL + 수집 모드(pull/push) + 토글.
     alertmanager_url: Optional[str] = Field(default=None, max_length=512)
     observability_mode: Optional[str] = Field(default=None, max_length=16)
@@ -67,6 +93,13 @@ class ClusterCreate(ClusterBase):
     kubeconfig_content: Optional[str] = None
     # 연결 검증 생략 여부 (네트워크 미연결 환경에서 임시 등록 시 사용)
     skip_connectivity_check: bool = False
+
+    # 입력 검증은 생성·수정 스키마에만 — 응답(ClusterResponse)에 걸면 복원·수동 편집으로 들어온
+    # 형식 밖 값 하나가 클러스터 목록 전체를 500 으로 만든다.
+    @field_validator("trend_node_label", mode="before")
+    @classmethod
+    def _v_trend_node_label(cls, v):
+        return _normalize_trend_node_label(v)
 
 
 class ClusterUpdate(BaseModel):
@@ -104,10 +137,18 @@ class ClusterUpdate(BaseModel):
     # Cluster Trends — per-cluster Prometheus URL 오버라이드 / 토글.
     prometheus_url: Optional[str] = Field(default=None, max_length=512)
     prometheus_enabled: Optional[bool] = None
+    # Cluster Trends 노드 매칭 라벨 — node-exporter 시리즈에서 K8s 노드 이름이 든 라벨.
+    # 빈 값·auto = node → kubernetes_node → instance 순 자동 탐지 (D-185).
+    trend_node_label: Optional[str] = Field(default=None, max_length=64)
     # Observability 대시보드 — Alertmanager URL + 수집 모드(pull/push) + 토글.
     alertmanager_url: Optional[str] = Field(default=None, max_length=512)
     observability_mode: Optional[str] = Field(default=None, max_length=16)
     observability_enabled: Optional[bool] = None
+
+    @field_validator("trend_node_label", mode="before")
+    @classmethod
+    def _v_trend_node_label(cls, v):
+        return _normalize_trend_node_label(v)
 
 
 class ClusterResponse(ClusterBase):

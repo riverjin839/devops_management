@@ -48,7 +48,11 @@ const FIELD_TAB: Record<string, TabId> = {
   cidr: 'network', firstHost: 'network', lastHost: 'network',
   podCidr: 'network', podFirstHost: 'network', podLastHost: 'network',
   svcCidr: 'network', svcFirstHost: 'network', svcLastHost: 'network',
+  trendNodeLabel: 'extra',
 };
+
+/** Prometheus 라벨 이름 형식 — 서버 `TREND_NODE_LABEL_PATTERN` 과 같다 (D-185). */
+const TREND_NODE_LABEL_RE = /^[A-Za-z_][A-Za-z0-9_]{0,63}$/;
 
 export function ClusterMetaFormPage() {
   const { id } = useParams<{ id: string }>();
@@ -87,6 +91,7 @@ export function ClusterMetaFormPage() {
   const [asNumber, setAsNumber]         = useState('');
   const [prometheusUrl, setPrometheusUrl] = useState('');
   const [prometheusEnabled, setPrometheusEnabled] = useState(false);
+  const [trendNodeLabel, setTrendNodeLabel] = useState('');
   const [alertmanagerUrl, setAlertmanagerUrl] = useState('');
   const [observabilityMode, setObservabilityMode] = useState<'pull' | 'push'>('pull');
   const [observabilityEnabled, setObservabilityEnabled] = useState(false);
@@ -147,6 +152,7 @@ export function ClusterMetaFormPage() {
       asNumber: cluster.asNumber ?? '',
       prometheusUrl: cluster.prometheusUrl ?? '',
       prometheusEnabled: cluster.prometheusEnabled ?? false,
+      trendNodeLabel: cluster.trendNodeLabel ?? '',
       alertmanagerUrl: cluster.alertmanagerUrl ?? '',
       observabilityMode: (cluster.observabilityMode ?? 'pull') as 'pull' | 'push',
       observabilityEnabled: cluster.observabilityEnabled ?? false,
@@ -176,6 +182,7 @@ export function ClusterMetaFormPage() {
     setAsNumber(next.asNumber);
     setPrometheusUrl(next.prometheusUrl);
     setPrometheusEnabled(next.prometheusEnabled);
+    setTrendNodeLabel(next.trendNodeLabel);
     setAlertmanagerUrl(next.alertmanagerUrl);
     setObservabilityMode(next.observabilityMode);
     setObservabilityEnabled(next.observabilityEnabled);
@@ -192,14 +199,14 @@ export function ClusterMetaFormPage() {
     svcCidr, svcFirstHost, svcLastHost,
     bond0Ip, bond0Mac, bond1Ip, bond1Mac,
     ciliumConfig, description, bgpEnabled, asNumber, prometheusUrl, prometheusEnabled,
-    alertmanagerUrl, observabilityMode, observabilityEnabled,
+    trendNodeLabel, alertmanagerUrl, observabilityMode, observabilityEnabled,
   }), [
     region, operationLevel, nodeCount, maxPod, hostname, cidr, internalIps,
     firstHost, lastHost, podCidr, podFirstHost, podLastHost,
     svcCidr, svcFirstHost, svcLastHost,
     bond0Ip, bond0Mac, bond1Ip, bond1Mac,
     ciliumConfig, description, bgpEnabled, asNumber, prometheusUrl, prometheusEnabled,
-    alertmanagerUrl, observabilityMode, observabilityEnabled,
+    trendNodeLabel, alertmanagerUrl, observabilityMode, observabilityEnabled,
   ]);
   const isDirty = baselineRef.current !== null && serialize(snapshot) !== baselineRef.current;
 
@@ -351,6 +358,11 @@ export function ClusterMetaFormPage() {
       (v) => MAC_RE.test(v),
       'MAC 주소 형식이 아닙니다 (예: aa:bb:cc:dd:ee:ff)',
     );
+    checkAll(
+      [['trendNodeLabel', trendNodeLabel]],
+      (v) => v.toLowerCase() === 'auto' || TREND_NODE_LABEL_RE.test(v),
+      '라벨 이름은 영문·숫자·밑줄만 쓸 수 있고 숫자로 시작할 수 없습니다 (예: node, kubernetes_node, instance)',
+    );
     if (bgpEnabled) {
       const v = asNumber.trim();
       if (v && (!/^\d+$/.test(v) || Number(v) < 1 || Number(v) > 4294967295)) {
@@ -406,6 +418,7 @@ export function ClusterMetaFormPage() {
         asNumber: orNull(asNumber),
         prometheusUrl: orNull(prometheusUrl),
         prometheusEnabled,
+        trendNodeLabel: orNull(trendNodeLabel),
         alertmanagerUrl: orNull(alertmanagerUrl),
         observabilityMode,
         observabilityEnabled,
@@ -712,10 +725,20 @@ export function ClusterMetaFormPage() {
                       onChange={(e) => setPrometheusUrl(e.target.value)}
                       placeholder="비우면 전역 PROMETHEUS_URL 사용" className={ic} />
                   </div>
-                  <p className="text-xs text-muted-foreground">
-                    node-exporter 메트릭의 노드 식별 라벨(<code>PROMETHEUS_NODE_LABEL</code>, 기본 <code>instance</code>)
-                    값이 k8s 노드명과 일치해야 per-node 추이가 매칭됩니다.
-                  </p>
+                  <div>
+                    <label htmlFor={f('trendNodeLabel')} className={lc}>추이 노드 라벨 (선택)</label>
+                    <input id={f('trendNodeLabel')} type="text" value={trendNodeLabel}
+                      onChange={(e) => setTrendNodeLabel(e.target.value)}
+                      aria-invalid={!!fieldErrors.trendNodeLabel}
+                      aria-describedby={f('trendNodeLabel-help')}
+                      placeholder="비우면 자동 탐지 (auto)" className={ic + invalidCls('trendNodeLabel')} />
+                    {fieldMsg('trendNodeLabel')}
+                    <p id={f('trendNodeLabel-help')} className="mt-1 text-xs text-muted-foreground">
+                      node-exporter 시리즈에서 노드 이름이 든 라벨: <code>node</code>·<code>kubernetes_node</code>·<code>instance</code>.
+                      이 라벨 값이 K8s 노드 이름과 같아야 노드별 추이가 나옵니다. 비우거나 <code>auto</code> 면
+                      위 순서로 시리즈가 나오는 첫 라벨을 씁니다.
+                    </p>
+                  </div>
 
                   {/* Observability 대시보드(/observability) 연동 — Trends 와 독립 토글 */}
                   <div className="pt-3 mt-3 border-t border-border space-y-3">

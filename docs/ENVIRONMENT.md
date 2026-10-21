@@ -44,8 +44,8 @@
 |---|---|---|
 | `CHECK_INTERVAL_MINUTES` | `5` | Health check interval |
 | `CHECK_TIMEOUT_SECONDS` | `30` | kubectl/HTTP timeout |
-| `LOG_STREAM_MAX_CONCURRENT` | `20` | Pod 로그/클러스터 이벤트 SSE(`analyze.py`) 프로세스당 동시 스트림 상한. kubernetes SDK 가 blocking 이라 스트림 하나가 anyio 스레드풀 슬롯을 스트림 수명 내내 점유한다 — 초과 요청은 429 |
-| `LOG_STREAM_MAX_DURATION_SECONDS` | `1800` | `follow=True` pod 로그 스트림 최대 수명(초). 초과 시 정상 종료 메시지를 보내고 끊는다(프론트가 재연결) |
+| `LOG_STREAM_MAX_CONCURRENT` | `20` | Pod 로그/클러스터 이벤트 SSE(`analyze.py`) 프로세스당 전체 동시 스트림 상한(사용자당 상한 3 은 코드 상수). kubernetes SDK 가 blocking 이라 스트림 하나가 스레드 슬롯을 스트림 수명 동안 점유한다 — 30초 읽기 타임아웃·15초 `: ping` 하트비트로 끊긴 연결을 감지해 슬롯을 반납하고, 초과 요청은 한국어 사유와 함께 429 (D-182) |
+| `LOG_STREAM_MAX_DURATION_SECONDS` | `1800` | `follow=True` pod 로그·클러스터 이벤트 스트림 최대 수명(초). 초과 시 `event: end`(`max_duration`)를 보내고 끊는다 — 화면 상태 줄의 "이어 받기"로 `since_seconds` 기준 재개 (D-187) |
 | `SYNC_THREADPOOL_SIZE` | `100` | sync 라우트(전체의 대다수)가 공유하는 anyio 스레드풀 총량. 기본값(40)은 kubectl subprocess·SSH·로그 스트림처럼 오래 걸리는 sync 요청 비중이 높은 이 앱에는 작아서 부팅 시 lifespan 에서 이 값으로 올린다 |
 | `KUBECONFIG_STORE_DIR` | `/tmp/k8s-monitor/kubeconfigs` | content 방식 kubeconfig 저장 위치 |
 | `KUBEWATCH_TOKEN` | *(empty)* | kubewatch 웹훅 Bearer 토큰. **fail-closed** — 미설정 시 웹훅 수신 자체를 503 으로 거부(deep_check ingest 의 `SUPERPOD_INGEST_TOKEN` 과 동일 정책) |
@@ -83,7 +83,7 @@
 | `ALERTMANAGER_URL` | `http://alertmanager-operated.monitoring.svc:9093` | Alertmanager endpoint (Observability 대시보드 전역 기본값 — 클러스터별 `clusters.alertmanager_url` 이 우선) |
 | `GRAFANA_URL` | `http://grafana.monitoring.svc:3000` | Grafana endpoint |
 | `GRAFANA_RENDERER_URL` | `http://grafana-renderer:8081` | 패널 이미지 렌더러 |
-| `PROMETHEUS_NODE_LABEL` | `instance` | node-exporter 노드 식별 라벨 (배포 의존) |
+| `PROMETHEUS_NODE_LABEL` | `instance` | node-exporter 노드 식별 라벨의 **배포 전역 fallback**. 클러스터별 `clusters.trend_node_label`(클러스터 정보 수정 화면 "추이 노드 라벨 (선택)")이 우선하고, 그 값이 비었거나 `auto` 면 `node` → `kubernetes_node` → `instance` 순으로 자동 탐지한다 — 이 값이 표준 후보 밖의 이름이면 자동 탐지에서 가장 먼저 시도 (D-185) |
 | `TRENDS_MAX_NODES` | `30` | 추이 조회 최대 노드 수 |
 | `TRENDS_GITHUB_API_URL` | `https://api.github.com` | 트렌드 수집 GitHub API (폐쇄망: 내부 GHE) |
 | `TRENDS_GITHUB_TOKEN` | *(empty)* | optional — rate limit 향상 |

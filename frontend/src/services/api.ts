@@ -1403,7 +1403,8 @@ export const clusterTrendsApi = {
         metrics: params.metrics.join(','),
         nodes: params.nodes.join(','),
       },
-      timeout: 60_000,
+      // 서버가 지표를 병렬 질의해 25초 안에 끝낸다(D-184) — 여유 10초.
+      timeout: 35_000,
     }),
 };
 
@@ -2479,10 +2480,20 @@ export const notificationsApi = {
 export const observabilityApi = {
   modules: () => api.get<import('@/types').ObservabilityModule[]>('/observability/modules'),
 
-  metrics: (module?: string) =>
+  // include_disabled=true — "사용 안 함" 지표도 받아 화면에서 다시 켤 수 있게 한다(D-186).
+  metrics: (module?: string, includeDisabled = true) =>
     api.get<import('@/types').ObservabilityMetric[]>('/observability/metrics', {
-      params: module ? { module } : undefined,
+      params: { ...(module ? { module } : {}), include_disabled: includeDisabled },
     }),
+  // 저장 전 PromQL 시험 조회(D-186) — 조회일 뿐 실행이 아니라 실행 로그 없이 인라인 결과만.
+  previewMetric: (clusterId: string, query: string) =>
+    api.post<import('@/types').ObservabilityPreviewResult>('/observability/metrics/preview', {
+      clusterId, query,
+    }),
+  // push 스냅샷 "오래됨" 기준(D-183). PUT 은 admin.
+  settings: () => api.get<import('@/types').ObservabilitySettings>('/observability/settings'),
+  updateSettings: (data: import('@/types').ObservabilitySettings) =>
+    api.put<import('@/types').ObservabilitySettings>('/observability/settings', data),
   createMetric: (data: import('@/types').ObservabilityMetricInput) =>
     api.post<import('@/types').ObservabilityMetric>('/observability/metrics', data),
   updateMetric: (id: string, data: Partial<import('@/types').ObservabilityMetricInput>) =>
@@ -2843,7 +2854,11 @@ export const k8sStreamUrls = {
   /** 파드 로그 SSE 스트림 — Authorization 헤더 fetch 로 소비. */
   logsStream: (
     clusterId: string, namespace: string, pod: string,
-    opts: { container?: string; tailLines?: number; follow?: boolean; previous?: boolean; timestamps?: boolean },
+    opts: {
+      container?: string; tailLines?: number; follow?: boolean; previous?: boolean; timestamps?: boolean;
+      /** 이어 받기(D-187) — 마지막 수신 줄 이후만 다시 받는다. 서버 `since_seconds`. */
+      sinceSeconds?: number;
+    },
   ) => {
     const p = new URLSearchParams({
       tail_lines: String(opts.tailLines ?? 200),
@@ -2852,6 +2867,7 @@ export const k8sStreamUrls = {
       timestamps: String(opts.timestamps ?? true),
     });
     if (opts.container) p.set('container', opts.container);
+    if (opts.sinceSeconds && opts.sinceSeconds > 0) p.set('since_seconds', String(Math.ceil(opts.sinceSeconds)));
     return `/api/v1/analyze/clusters/${clusterId}/namespaces/${namespace}/pods/${pod}/logs/stream?${p.toString()}`;
   },
   /** 파드 로그 전체 다운로드 (non-follow) — Authorization fetch → blob. */

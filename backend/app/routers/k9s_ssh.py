@@ -28,16 +28,13 @@ import shlex
 from uuid import UUID
 
 from fastapi import APIRouter, WebSocket
-from sqlalchemy.orm import Session
 
 from app.database import SessionLocal
 from app.models import Cluster
-from app.models.app_setting import AppSetting
 from app.models.user import User
-from app.routers.ui_settings import DEFAULT_OPERATION_LEVELS, OPERATION_LEVELS_KEY
-from app.schemas.ui_settings import default_guarded
 from app.services import audit_logger
-from app.services.cluster_access import cluster_ids_for_host, has_cluster_access
+from app.services.cluster_access import acluster_ids_for_host, has_cluster_access
+from app.services.operation_levels import is_operation_level_guarded
 from app.services.ssh_pty import (
     CLOSE_CLUSTER_FORBIDDEN,
     CLOSE_DISABLED,
@@ -61,32 +58,6 @@ _NS_RE = re.compile(r"^[a-z0-9][a-z0-9.-]{0,62}$")  # k8s 네임스페이스 형
 
 def _k9s_enabled() -> bool:
     return env_flag_enabled("PEP_K9S_SSH_ENABLED", default=True)
-
-
-def is_operation_level_guarded(db: Session, level: str | None) -> bool:
-    """운영레벨 ``level`` 이 보호(guarded) 레벨인지 — `GET /ui-settings/operation-levels` 와 같은 해석.
-
-    저장된 레벨 목록(AppSetting ``operation_levels``)에서 value 가 같은 항목의 ``guarded`` 를 쓰고,
-    값이 없거나(구버전 데이터)·목록에 없는 레벨·저장값이 비었으면 ``default_guarded``(production·dr)로
-    본다. 읽기 전용 — 설정 행을 만들지 않는다. 빈 레벨은 보호 아님.
-    """
-    v = (level or "").strip()
-    if not v:
-        return False
-    try:
-        setting = db.query(AppSetting).filter(AppSetting.key == OPERATION_LEVELS_KEY).first()
-    except Exception:  # noqa: BLE001 — 조회 실패 시 기본 규칙으로 판정
-        db.rollback()
-        return default_guarded(v)
-    raw = (setting.value or {}).get("levels", []) if setting is not None else []
-    stored = [it for it in raw if isinstance(it, dict) and str(it.get("value", "")).strip()]
-    if not stored:
-        stored = DEFAULT_OPERATION_LEVELS["levels"]
-    for it in stored:
-        if str(it.get("value", "")).strip() == v:
-            g = it.get("guarded")
-            return g if isinstance(g, bool) else default_guarded(v)
-    return default_guarded(v)
 
 
 def k9s_effective_readonly(requested: bool, user: User, guarded: bool) -> bool:
@@ -182,7 +153,7 @@ async def k9s_terminal(websocket: WebSocket, cluster_id: UUID, token: str | None
 
         # init host 가 실제로 속한 클러스터까지 operate 판정(D-169 ④) — 경로 클러스터만 보면
         # 바인딩 없는 경로로 다른 테넌트 control-plane 에 붙어 그 서버의 kubeconfig 로 k9s 가 뜬다.
-        foreign = [cid for cid in cluster_ids_for_host(db, init.host)
+        foreign = [cid for cid in await acluster_ids_for_host(db, init.host)
                    if not has_cluster_access(db, user, cid, "operate")]
         if foreign:
             audit_logger.record(

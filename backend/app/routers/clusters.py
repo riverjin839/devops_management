@@ -32,6 +32,7 @@ from app.services.health_checker import HealthChecker
 from app.services.k8s_diagnose import diagnose_connect_error
 from app.services.cluster_purge import purge_cluster_references
 from app.services.config_snapshot import record_cluster_meta_snapshots
+from app.services.operation_levels import is_operation_level_guarded
 from app.services import audit_logger
 from app.schemas import (
     ClusterCreate,
@@ -368,6 +369,13 @@ def create_cluster(
     actor: User = Depends(require_operator),
 ):
     """클러스터 생성 (등록 전 연결 검증 포함, skip_connectivity_check=True 시 임시 등록)"""
+    # 보호(guarded) 운영레벨로 바로 생성하는 것도 admin 만 — 수정(update_cluster)의 같은 규칙을
+    # 생성 경로로 우회하지 못하게 한다(보호 레벨 지정 권한은 생성·수정 모두 admin 에게만 있다).
+    if actor.role != "admin" and is_operation_level_guarded(db, cluster_data.operation_level):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="보호 운영레벨로 클러스터를 생성하는 것은 admin 만 할 수 있습니다.",
+        )
     # 중복 이름 체크
     existing = db.query(Cluster).filter(Cluster.name == cluster_data.name).first()
     if existing:
@@ -542,8 +550,6 @@ def update_cluster(
     # 보호(guarded) 운영레벨에서 빼거나 넣는 변경은 admin 만 — operator 가 레벨을 바꿔 보호(k9s
     # --readonly 강제·PTY 접속 확인)를 스스로 해제하지 못하게 한다.
     if "operation_level" in update_data and actor.role != "admin":
-        from app.routers.k9s_ssh import is_operation_level_guarded
-
         old_level = (cluster.operation_level or "").strip()
         new_level = (update_data.get("operation_level") or "").strip()
         if new_level != old_level and (

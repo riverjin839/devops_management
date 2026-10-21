@@ -39,6 +39,7 @@ from app.models import Cluster
 from app.models.user import User
 from app.services import audit_logger
 from app.services.cluster_access import (
+    acluster_ids_for_host,
     cluster_ids_for_host,
     has_cluster_access,
     require_clusters_access,
@@ -182,7 +183,7 @@ async def node_ssh_terminal(
 
         # 테넌트 바인딩 — 화면이 넘긴 cluster_id 뿐 아니라 host 가 실제로 속한 클러스터까지 본다
         # (cluster_id 를 빼고 접속해 우회하는 것을 막는다).
-        scoped = cluster_ids_for_host(db, init.host)
+        scoped = await acluster_ids_for_host(db, init.host)
         if cluster_uuid is not None:
             scoped.add(cluster_uuid)
         label = init.label

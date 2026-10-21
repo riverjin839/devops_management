@@ -1,10 +1,16 @@
 import { useEffect, useId, useState } from 'react';
-import { Trash2, X } from 'lucide-react';
-import { useToast } from '@/components/common';
+import { Search, Trash2, X } from 'lucide-react';
+import { ConfirmDialog, useToast } from '@/components/common';
 import { useModalA11y } from '@/components/common/useModalA11y';
-import { useCreateMetric, useDeleteMetric, useUpdateMetric } from '@/hooks/useObservability';
-import type { ObservabilityMetric, ObservabilityMetricInput } from '@/types';
+import { useCanOperate } from '@/hooks/useCanOperate';
+import {
+  useCreateMetric, useDeleteMetric, usePreviewMetric, useUpdateMetric,
+} from '@/hooks/useObservability';
+import type {
+  LabelPair, ObservabilityMetric, ObservabilityMetricInput, ObservabilityPreviewResult, ObservabilityPreviewSample,
+} from '@/types';
 import { formatApiError } from '@/lib/utils';
+import { formatMetricValue, labelsSummary } from './shared';
 
 interface MetricEditModalProps {
   isOpen: boolean;
@@ -12,11 +18,13 @@ interface MetricEditModalProps {
   moduleKey: string;
   /** null = 새 지표 추가 */
   editing: ObservabilityMetric | null;
+  /** 미리 조회 대상 클러스터 — 없으면 미리 조회 비활성. */
+  clusterId?: string | null;
 }
 
 const DISPLAY_TYPES = [
   { value: 'value', label: '숫자', hint: '일반 수치 (rate, count 등)' },
-  { value: 'bool', label: '가동여부', hint: '1=UP / 0=DOWN' },
+  { value: 'bool', label: '가동 여부', hint: '1=가동 / 0=중단' },
   { value: 'ratio', label: '비율(%)', hint: '0~100 백분율' },
   { value: 'bytes', label: '바이트', hint: 'KB/MB/GB 자동 환산' },
   { value: 'duration', label: '시간(초)', hint: 'ms/s/m/h 자동 환산' },
@@ -44,19 +52,29 @@ const EMPTY: ObservabilityMetricInput = {
  * 지표 정의 편집 — UI-First 원칙(CLAUDE.md)의 핵심 진입점.
  * PromQL·임계값·표시 형식이 전부 DB 행이라, 현장 환경이 달라도 코드 수정 없이 여기서 맞춘다.
  */
-export function MetricEditModal({ isOpen, onClose, moduleKey, editing }: MetricEditModalProps) {
+export function MetricEditModal({ isOpen, onClose, moduleKey, editing, clusterId }: MetricEditModalProps) {
   const toast = useToast();
   const formId = useId();
   const dialogRef = useModalA11y(isOpen, onClose);
+  const { canOperate, withHint, ariaWithHint } = useCanOperate();
 
   const createMetric = useCreateMetric();
   const updateMetric = useUpdateMetric();
   const deleteMetric = useDeleteMetric();
+  const preview = usePreviewMetric();
 
   const [form, setForm] = useState<ObservabilityMetricInput>(EMPTY);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [previewResult, setPreviewResult] = useState<ObservabilityPreviewResult | null>(null);
+  const [previewError, setPreviewError] = useState<unknown>(null);
+  const resetPreview = preview.reset;
 
   useEffect(() => {
     if (!isOpen) return;
+    setConfirmDelete(false);
+    setPreviewResult(null);
+    setPreviewError(null);
+    resetPreview();
     if (editing) {
       setForm({
         moduleKey: editing.moduleKey,
@@ -76,7 +94,7 @@ export function MetricEditModal({ isOpen, onClose, moduleKey, editing }: MetricE
     } else {
       setForm({ ...EMPTY, moduleKey });
     }
-  }, [isOpen, editing, moduleKey]);
+  }, [isOpen, editing, moduleKey, resetPreview]);
 
   if (!isOpen) return null;
 
@@ -84,6 +102,11 @@ export function MetricEditModal({ isOpen, onClose, moduleKey, editing }: MetricE
     setForm((prev) => ({ ...prev, [key]: value }));
 
   const busy = createMetric.isPending || updateMetric.isPending || deleteMetric.isPending;
+  const previewDisabledReason = !clusterId
+    ? '클러스터를 선택하면 미리 조회할 수 있습니다'
+    : !form.promql.trim()
+      ? 'PromQL 을 입력하세요'
+      : undefined;
 
   const handleSubmit = async () => {
     if (!form.key.trim() || !form.label.trim() || !form.promql.trim()) {
@@ -109,9 +132,23 @@ export function MetricEditModal({ isOpen, onClose, moduleKey, editing }: MetricE
     try {
       await deleteMetric.mutateAsync(editing.id);
       toast.success('지표 삭제됨');
+      setConfirmDelete(false);
       onClose();
     } catch (err) {
+      setConfirmDelete(false);
       toast.error(formatApiError(err, '지표 삭제 실패'));
+    }
+  };
+
+  // 저장 전 PromQL 시험 — 조회일 뿐이라 실행 로그 대신 결과를 인라인으로 보여준다(§12.9.1 예외 ①).
+  const handlePreview = async () => {
+    if (!clusterId || !form.promql.trim()) return;
+    setPreviewResult(null);
+    setPreviewError(null);
+    try {
+      setPreviewResult(await preview.mutateAsync({ clusterId, query: form.promql.trim() }));
+    } catch (err) {
+      setPreviewError(err);
     }
   };
 
@@ -129,17 +166,18 @@ export function MetricEditModal({ isOpen, onClose, moduleKey, editing }: MetricE
         className="bg-card border border-border rounded-md shadow-xl w-full max-w-2xl mx-4 max-h-[90vh] overflow-y-auto"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex items-center justify-between px-6 py-4 border-b border-border sticky top-0 bg-card rounded-t-2xl z-10">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-border sticky top-0 bg-card z-10">
           <h2 id={`${formId}-title`} className="text-lg font-semibold">
             {editing ? '지표 수정' : '지표 추가'}
           </h2>
           <button
+            type="button"
             onClick={onClose}
             aria-label="닫기"
             title="닫기"
             className="p-1 hover:bg-secondary rounded-xl transition-colors"
           >
-            <X className="w-5 h-5" />
+            <X className="w-5 h-5" aria-hidden />
           </button>
         </div>
 
@@ -170,11 +208,32 @@ export function MetricEditModal({ isOpen, onClose, moduleKey, editing }: MetricE
           </div>
 
           <div>
-            <label className={label} htmlFor={`${formId}-promql`}>PromQL</label>
+            <div className="flex items-end justify-between gap-2 mb-1">
+              <label className="block text-xs font-medium text-muted-foreground" htmlFor={`${formId}-promql`}>
+                PromQL
+              </label>
+              <button
+                type="button"
+                onClick={() => void handlePreview()}
+                disabled={!canOperate || !!previewDisabledReason || preview.isPending}
+                title={withHint(previewDisabledReason ?? '선택한 클러스터의 Prometheus 에 이 표현식을 조회해 봅니다 (저장하지 않음)')}
+                aria-label={ariaWithHint('미리 조회')}
+                className="inline-flex items-center gap-1 px-2.5 py-1 rounded-xl text-xs bg-secondary text-foreground border border-border hover:bg-secondary/80 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <Search className="w-3.5 h-3.5" aria-hidden />
+                {preview.isPending ? '조회 중…' : '미리 조회'}
+              </button>
+            </div>
             <textarea
               id={`${formId}-promql`} className={`${input} font-mono min-h-[5rem]`} value={form.promql}
               onChange={(e) => set('promql', e.target.value)}
               placeholder='min(up{job=~".*prometheus.*"})'
+            />
+            <PreviewResult
+              result={previewResult}
+              error={previewError}
+              displayType={form.displayType}
+              unit={form.unit}
             />
           </div>
 
@@ -219,7 +278,7 @@ export function MetricEditModal({ isOpen, onClose, moduleKey, editing }: MetricE
                 onChange={(e) => set('thresholds', e.target.value)}
                 placeholder="warning:70,critical:90"
               />
-              <p className="mt-1 text-[11px] text-muted-foreground">
+              <p className="mt-1 text-xs text-muted-foreground">
                 비우면 항상 정상으로 표시되는 정보성 지표가 됩니다.
               </p>
             </div>
@@ -238,7 +297,7 @@ export function MetricEditModal({ isOpen, onClose, moduleKey, editing }: MetricE
                   onChange={(e) => set('enabled', e.target.checked)}
                   className="rounded"
                 />
-                사용 (끄면 목록에서 조회하지 않음)
+                사용 (끄면 조회하지 않음 — 표 아래 &apos;사용 안 함&apos;에서 다시 켤 수 있음)
               </label>
             </div>
           </div>
@@ -271,33 +330,122 @@ export function MetricEditModal({ isOpen, onClose, moduleKey, editing }: MetricE
           </div>
         </div>
 
-        <div className="flex items-center justify-between gap-3 px-6 py-4 border-t border-border sticky bottom-0 bg-card rounded-b-2xl">
+        <div className="flex items-center justify-between gap-3 px-6 py-4 border-t border-border sticky bottom-0 bg-card">
           {editing ? (
             <button
-              onClick={handleDelete}
-              disabled={busy}
-              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-sm text-status-critical hover:bg-secondary transition-colors disabled:opacity-50"
+              type="button"
+              onClick={() => setConfirmDelete(true)}
+              disabled={!canOperate || busy}
+              title={withHint('지표 삭제')}
+              aria-label={ariaWithHint('지표 삭제')}
+              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-sm text-destructive hover:bg-secondary transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <Trash2 className="w-4 h-4" aria-hidden /> 삭제
             </button>
           ) : <span />}
           <div className="flex items-center gap-2">
             <button
+              type="button"
               onClick={onClose}
               className="px-4 py-2 rounded-xl text-sm bg-secondary hover:bg-secondary/80 transition-colors"
             >
               취소
             </button>
             <button
-              onClick={handleSubmit}
-              disabled={busy}
-              className="px-4 py-2 rounded-xl text-sm bg-primary text-primary-foreground hover:opacity-90 transition-opacity disabled:opacity-50"
+              type="button"
+              onClick={() => void handleSubmit()}
+              disabled={!canOperate || busy}
+              title={withHint('저장')}
+              aria-label={ariaWithHint('저장')}
+              className="px-4 py-2 rounded-xl text-sm bg-primary text-primary-foreground hover:opacity-90 transition-opacity disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              {busy ? '저장 중…' : '저장'}
+              {createMetric.isPending || updateMetric.isPending ? '저장 중…' : '저장'}
             </button>
           </div>
         </div>
       </div>
+
+      <ConfirmDialog
+        open={confirmDelete && !!editing}
+        danger
+        title="지표 삭제"
+        description={`'${editing?.label ?? ''}' 지표를 삭제합니다 — 모든 클러스터의 관측 지표 화면에서 사라집니다. 잠시 숨기려면 삭제 대신 '사용'을 끄세요.`}
+        confirmLabel="삭제"
+        busy={deleteMetric.isPending}
+        onConfirm={() => void handleDelete()}
+        onCancel={() => setConfirmDelete(false)}
+      />
+    </div>
+  );
+}
+
+const PREVIEW_MAX = 10;
+
+function sampleLabels(labels: ObservabilityPreviewSample['labels']): LabelPair[] {
+  if (Array.isArray(labels)) return labels;
+  return Object.entries(labels ?? {}).map(([k, v]) => ({ k, v: String(v) }));
+}
+
+function sampleValue(value: ObservabilityPreviewSample['value'], displayType: string, unit: string): string {
+  if (value === null || value === undefined || value === '') return '—';
+  const num = typeof value === 'number' ? value : Number(value);
+  return Number.isNaN(num) ? String(value) : formatMetricValue(num, displayType, unit);
+}
+
+/** 미리 조회 결과 — 표본 값 또는 실패 사유를 PromQL 입력 바로 아래에 보여준다. */
+function PreviewResult({ result, error, displayType, unit }: {
+  result: ObservabilityPreviewResult | null;
+  error: unknown;
+  displayType: string;
+  unit: string;
+}) {
+  if (error) {
+    return (
+      <p role="alert" className="mt-2 text-xs text-status-critical break-words">
+        미리 조회 실패 — {formatApiError(error)}
+      </p>
+    );
+  }
+  if (!result) return null;
+  const meta = [
+    result.resultType ? `결과 형식 ${result.resultType}` : null,
+    result.durationMs != null ? `${Math.round(result.durationMs)}ms` : null,
+  ].filter(Boolean).join(' · ');
+  if (!result.ok) {
+    return (
+      <p role="alert" className="mt-2 text-xs text-status-critical break-words">
+        조회 오류 — {result.error || '사유를 받지 못했습니다'}{meta ? ` (${meta})` : ''}
+      </p>
+    );
+  }
+  const samples = result.samples ?? [];
+  const total = Math.max(result.seriesCount ?? 0, samples.length);
+  const shown = Math.min(samples.length, PREVIEW_MAX);
+  return (
+    <div role="status" className="mt-2 rounded-xl border border-border bg-secondary/40 p-2 space-y-1">
+      <p className="text-xs text-muted-foreground">
+        시리즈 {total}개{meta ? ` · ${meta}` : ''}
+        {total === 0 ? ' — 결과가 비었습니다. 라벨 셀렉터(job 등)가 이 클러스터와 맞는지 확인하세요.' : ''}
+      </p>
+      {samples.length > 0 ? (
+        <table className="w-full text-xs">
+          <tbody>
+            {samples.slice(0, PREVIEW_MAX).map((sample, idx) => (
+              <tr key={idx} className="align-top">
+                <td className="pr-3 py-0.5 font-mono text-muted-foreground break-all">
+                  {labelsSummary(sampleLabels(sample.labels), ['__name__']) || '(라벨 없음)'}
+                </td>
+                <td className="py-0.5 text-right tabular-nums whitespace-nowrap">
+                  {sampleValue(sample.value, displayType, unit)}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      ) : null}
+      {total > shown ? (
+        <p className="text-xs text-muted-foreground">외 {total - shown}개</p>
+      ) : null}
     </div>
   );
 }

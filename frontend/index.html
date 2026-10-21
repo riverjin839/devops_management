@@ -7,34 +7,50 @@
     <title>PEP — Platform Engineering Portal</title>
     <script>
       // D-070 — 테마 플래시(FOUC) 방지. React/themeStore 가 뜨기 전에 저장된 테마 클래스를
-      // <html> 에 먼저 붙인다. 판정 규칙은 src/stores/themeStore.ts 의 applyTheme 과 동일해야
-      // 한다(standalone 8종은 그대로 클래스, system 은 OS 설정 → light/dark, 레거시 'claude' 는
-      // 'default'). 저장값이 없거나 이상하면 기본 테마 'default'.
+      // <html> 에 먼저 붙인다. 판정 규칙은 src/stores/themeStore.ts 의 applyTheme·resolveInitial 과
+      // 같아야 한다(독립 테마 14종은 그대로 클래스, light/dark, system 은 OS 설정, P2 에서 없앤 옛 테마는
+      // LEGACY_THEME_MAP 의 바탕으로). 저장값이 없거나 이상하면 기본 테마 'light'.
       (function () {
-        var STANDALONE = ['default', 'comfort', 'burnt-sienna', 'tuscan-sunset', 'electropop',
-          'summer-breeze', 'wildflower-meadow', 'tropical-punch'];
+        var STANDALONE = ['comfort', 'high-contrast', 'umber', 'umber-light', 'plaster', 'journal',
+          'relief', 'harlequin', 'ozenfant', 'whanki', 'picasso-girl', 'picasso-portrait',
+          'picasso-violin', 'gris-guitar'];
         var t = null;
         try { t = localStorage.getItem('k8s:theme'); } catch (e) { /* storage 차단 환경 */ }
-        if (t === 'claude') t = 'default';
         var cls;
         if (t && STANDALONE.indexOf(t) >= 0) cls = t;
         else if (t === 'light' || t === 'dark') cls = t;
         else if (t === 'system') cls = (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) ? 'dark' : 'light';
-        else cls = 'default';
+        else if (t === 'electropop') cls = 'dark';
+        else cls = 'light';
         document.documentElement.classList.add(cls);
       })();
     </script>
     <style>
       /* 로더 색은 index.css 의 테마 토큰(--background/--foreground)과 같은 값 — CSS 가 아직
-         로드되지 않은 시점이라 여기서 클래스별로 직접 준다. 기본은 default(라이트 페이퍼). */
-      body { margin: 0; background: hsl(36 38% 96%); color: hsl(28 18% 16%); font-family: system-ui, -apple-system, sans-serif; }
-      html.light body { background: hsl(210 40% 98%); color: hsl(222 47% 11%); }
+         로드되지 않은 시점이라 여기서 클래스별로 직접 준다. 테마 값을 바꾸면 여기도 맞춘다. */
+      body { margin: 0; background: hsl(210 40% 98%); color: hsl(222 47% 11%); font-family: system-ui, -apple-system, sans-serif; }
       html.dark body { background: hsl(220 18% 7%); color: hsl(220 10% 96%); }
-      html.electropop body { background: hsl(260 25% 8%); color: hsl(70 10% 94%); }
-      #app-loader { display: flex; align-items: center; justify-content: center; min-height: 100vh; flex-direction: column; gap: 12px; }
+      html.comfort body { background: hsl(60 15% 98%); color: hsl(160 20% 12%); }
+      html.high-contrast body { background: hsl(0 0% 100%); color: hsl(0 0% 0%); }
+      html.umber body { background: hsl(8 14% 11%); color: hsl(40 28% 90%); }
+      html.umber-light body { background: hsl(40 28% 95%); color: hsl(10 22% 13%); }
+      html.plaster body { background: hsl(42 32% 94%); color: hsl(20 15% 15%); }
+      html.journal body { background: hsl(230 14% 8%); color: hsl(38 22% 88%); }
+      html.relief body { background: hsl(36 16% 91%); color: hsl(30 18% 15%); }
+      html.harlequin body { background: hsl(30 2% 88%); color: hsl(220 16% 7%); }
+      html.ozenfant body { background: hsl(210 12% 92%); color: hsl(215 22% 15%); }
+      html.whanki body { background: hsl(170 10% 90%); color: hsl(168 25% 10%); }
+      html.picasso-girl body { background: hsl(38 8% 89%); color: hsl(30 10% 10%); }
+      html.picasso-portrait body { background: hsl(155 26% 11%); color: hsl(40 20% 91%); }
+      html.picasso-violin body { background: hsl(40 10% 91%); color: hsl(20 15% 10%); }
+      html.gris-guitar body { background: hsl(150 16% 91%); color: hsl(214 30% 12%); }
+      #app-loader { display: flex; align-items: center; justify-content: center; min-height: 100vh; flex-direction: column; gap: 12px; padding: 0 16px; text-align: center; }
       #app-loader .spinner { width: 32px; height: 32px; border: 3px solid currentColor; border-top-color: transparent; border-radius: 50%; opacity: 0.55; animation: spin 0.8s linear infinite; }
-      #app-loader p { font-size: 14px; opacity: 0.7; }
+      #app-loader p { font-size: 14px; margin: 0; }
+      #app-loader .loader-error { font-size: 16px; font-weight: 600; }
+      #app-loader a { color: inherit; text-decoration: underline; }
       @keyframes spin { to { transform: rotate(360deg); } }
+      @media (prefers-reduced-motion: reduce) { #app-loader .spinner { animation: none; } }
     </style>
   </head>
   <body>
@@ -46,13 +62,15 @@
     </div>
     <script type="module" src="/src/main.tsx"></script>
     <script>
-      // JS 로드 실패 감지 (10초 후에도 React가 마운트 안 되면 에러 표시)
+      // JS 로드 실패 감지 (10초 후에도 React가 마운트 안 되면 안내). 글자는 테마 전경색 그대로 —
+      // 반투명·고정 빨강은 바탕에 따라 대비 4.5:1 을 못 넘는다(axe color-contrast).
       setTimeout(function() {
         var loader = document.getElementById('app-loader');
         if (loader) {
-          loader.innerHTML = '<p style="color:#ef4444;font-size:16px;">⚠ 애플리케이션을 불러오지 못했습니다</p>' +
-            '<p style="font-size:13px;opacity:0.7;">F12 → Console 탭에서 오류를 확인하세요</p>' +
-            '<p style="font-size:12px;opacity:0.6;">Backend API: <a href="/api/v1/health/summary" style="color:inherit">/api/v1/health/summary</a></p>';
+          loader.setAttribute('role', 'alert');
+          loader.innerHTML = '<p class="loader-error">애플리케이션을 불러오지 못했습니다</p>' +
+            '<p>새로고침해도 같으면 브라우저 개발자 도구(F12) ▸ 콘솔에서 오류를 확인하세요.</p>' +
+            '<p>백엔드 상태: <a href="/api/v1/health/summary">/api/v1/health/summary</a></p>';
         }
       }, 10000);
     </script>

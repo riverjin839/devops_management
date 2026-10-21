@@ -9,6 +9,7 @@
 """
 from __future__ import annotations
 
+import asyncio
 import ipaddress
 import json
 import re
@@ -170,8 +171,41 @@ def _resolve_names(names: Iterable[str], timeout: float | None = None) -> dict[s
     return out
 
 
-def resolve_host_keys(hosts: Iterable[str | None]) -> dict[str, set[str]]:
-    """입력 host(원문, strip 한 값) → 매칭 키 집합(정규화 리터럴 + 정규화 IP + DNS 로 푼 IP)."""
+async def _aresolve_names(names: Iterable[str], timeout: float | None = None) -> dict[str, set[str]]:
+    """:func:`_resolve_names` 의 async 판 — 이벤트 루프를 막지 않고 기다린다.
+
+    같은 공용 스레드 풀에서 getaddrinfo 를 돌리고 ``asyncio.wait`` 로 전체 ``timeout`` 까지만 기다린다.
+    상한·fail-safe(실패·시간 초과한 이름은 결과에 없음, 예외를 올리지 않음)는 sync 판과 같다.
+    """
+    todo = set(names)
+    if not todo:
+        return {}
+    if timeout is None:
+        timeout = _RESOLVE_TIMEOUT_SEC
+    loop = asyncio.get_running_loop()
+    try:
+        futures = {loop.run_in_executor(_resolver_pool, _getaddrinfo_ips, n): n for n in todo}
+    except RuntimeError:  # 인터프리터 종료 중 등
+        return {}
+    done, not_done = await asyncio.wait(futures, timeout=timeout)
+    for fut in not_done:
+        fut.cancel()  # 아직 시작 안 한 조회는 풀에서도 버려진다(이미 도는 조회는 취소 불가)
+    out: dict[str, set[str]] = {}
+    for fut in done:
+        try:
+            ips = fut.result()
+        except Exception:  # noqa: BLE001 — gaierror·UnicodeError 등 무엇이든 리터럴 비교로 폴백
+            continue
+        if ips:
+            out[futures[fut]] = ips
+    return out
+
+
+# sync/async 판정 경로는 아래 공용 코어(_split_host_keys → [DNS] → _merge_resolved,
+# _scope_precheck → [DNS] → _scope_from_keys)를 함께 쓴다 — 매칭 규칙이 갈라지지 않게 DNS 대기만 다르다.
+
+def _split_host_keys(hosts: Iterable[str | None]) -> tuple[dict[str, set[str]], set[str]]:
+    """입력 host(원문, strip 한 값) → (DNS 전 매칭 키 집합, DNS 로 풀어야 할 이름들). 네트워크 조회 없음."""
     keys: dict[str, set[str]] = {}
     names: set[str] = set()
     for h in hosts:
@@ -186,30 +220,45 @@ def resolve_host_keys(hosts: Iterable[str | None]) -> dict[str, set[str]]:
         else:
             names.add(raw)
         keys[raw] = ks
-    # 실제 접속과 같은 이름으로 푼다 — ``node1.``(절대 이름)과 ``node1``(search 도메인 적용)은 다를 수 있다.
-    resolved = _resolve_names(names)
+    return keys, names
+
+
+def _merge_resolved(keys: dict[str, set[str]], names: set[str],
+                    resolved: dict[str, set[str]]) -> dict[str, set[str]]:
     for raw in names:
         keys[raw] |= resolved.get(raw, set())
     return keys
 
 
-def resolve_hosts_scope(db: Session, hosts: Iterable[str | None]) -> tuple[set[UUID], dict[str, list[str]]]:
-    """host 들의 (소속 클러스터 집합, host → 해석된 IP 목록).
+def resolve_host_keys(hosts: Iterable[str | None]) -> dict[str, set[str]]:
+    """입력 host(원문, strip 한 값) → 매칭 키 집합(정규화 리터럴 + 정규화 IP + DNS 로 푼 IP)."""
+    keys, names = _split_host_keys(hosts)
+    # 실제 접속과 같은 이름으로 푼다 — ``node1.``(절대 이름)과 ``node1``(search 도메인 적용)은 다를 수 있다.
+    return _merge_resolved(keys, names, _resolve_names(names))
 
-    - 클러스터 매칭: ``clusters.node_ips``(정규화) · ``infra_nodes.ip_address``(정규화) ·
-      ``infra_nodes.hostname``(소문자·끝 점 제거)을, 입력의 정규화 리터럴·IP·DNS 해석 IP 전부와 비교한 합집합.
-    - IP 목록: 판정에 쓴 IP(리터럴 IP 또는 DNS 결과). 호출부가 이 IP 로 접속하면 판정과 접속 사이의
-      DNS 재해석(rebinding)도 막을 수 있다. 해석 실패한 이름은 빈 목록.
-    - 바인딩이 하나도 없으면(격리 미사용) 클러스터 조회·DNS 를 건너뛰고 ``(빈 집합, IP 리터럴만)``.
-    """
+
+async def aresolve_host_keys(hosts: Iterable[str | None]) -> dict[str, set[str]]:
+    """:func:`resolve_host_keys` 의 async 판 — DNS 대기가 이벤트 루프를 막지 않는다."""
+    keys, names = _split_host_keys(hosts)
+    return _merge_resolved(keys, names, await _aresolve_names(names))
+
+
+_ScopeResult = tuple[set[UUID], dict[str, list[str]]]
+
+
+def _scope_precheck(db: Session, hosts: Iterable[str | None]) -> tuple[list[str], _ScopeResult | None]:
+    """DNS 가 필요 없는 경우의 조기 결과. 반환 ``(host 목록, 조기 결과 또는 None)``."""
     host_list = [h for h in hosts if h and str(h).strip()]
     if not host_list:
-        return set(), {}
+        return host_list, (set(), {})
     if db.query(ClusterBinding.id).first() is None:
         lits = {str(h).strip(): ([ip] if (ip := _norm_ip(h)) else []) for h in host_list}
-        return set(), lits
+        return host_list, (set(), lits)
+    return host_list, None
 
-    keys_by_host = resolve_host_keys(host_list)
+
+def _scope_from_keys(db: Session, keys_by_host: dict[str, set[str]]) -> _ScopeResult:
+    """매칭 키(DNS 해석 반영 후) → (소속 클러스터 집합, host → 판정에 쓴 IP 목록). DB 조회만 한다."""
     wanted: set[str] = set().union(*keys_by_host.values()) if keys_by_host else set()
     ips_by_host = {
         raw: sorted(k for k in ks if _norm_ip(k) == k) for raw, ks in keys_by_host.items()
@@ -242,6 +291,35 @@ def resolve_hosts_scope(db: Session, hosts: Iterable[str | None]) -> tuple[set[U
     return out, ips_by_host
 
 
+def resolve_hosts_scope(db: Session, hosts: Iterable[str | None]) -> _ScopeResult:
+    """host 들의 (소속 클러스터 집합, host → 해석된 IP 목록).
+
+    - 클러스터 매칭: ``clusters.node_ips``(정규화) · ``infra_nodes.ip_address``(정규화) ·
+      ``infra_nodes.hostname``(소문자·끝 점 제거)을, 입력의 정규화 리터럴·IP·DNS 해석 IP 전부와 비교한 합집합.
+    - IP 목록: 판정에 쓴 IP(리터럴 IP 또는 DNS 결과). 호출부가 이 IP 로 접속하면 판정과 접속 사이의
+      DNS 재해석(rebinding)도 막을 수 있다. 해석 실패한 이름은 빈 목록.
+    - 바인딩이 하나도 없으면(격리 미사용) 클러스터 조회·DNS 를 건너뛰고 ``(빈 집합, IP 리터럴만)``.
+
+    DNS 를 최대 ``_RESOLVE_TIMEOUT_SEC`` 동안 **블로킹으로** 기다린다 — sync 핸들러(FastAPI 스레드풀)용.
+    ``async def`` 핸들러·WebSocket 에서는 :func:`aresolve_hosts_scope` 를 쓴다.
+    """
+    host_list, early = _scope_precheck(db, hosts)
+    if early is not None:
+        return early
+    return _scope_from_keys(db, resolve_host_keys(host_list))
+
+
+async def aresolve_hosts_scope(db: Session, hosts: Iterable[str | None]) -> _ScopeResult:
+    """:func:`resolve_hosts_scope` 의 async 판 — 규칙·상한·fail-safe 동일, DNS 대기만 루프 밖에서.
+
+    DB 조회는 호출 스레드에서 한다(Session 은 스레드 간에 넘기지 않는다).
+    """
+    host_list, early = _scope_precheck(db, hosts)
+    if early is not None:
+        return early
+    return _scope_from_keys(db, await aresolve_host_keys(host_list))
+
+
 def cluster_ids_for_hosts(db: Session, hosts: Iterable[str]) -> set[UUID]:
     """호스트(IP/호스트명)들이 속한 클러스터 — 노드 SSH·일괄 실행처럼 host 로 접속하는 경로의 범위 판정용.
 
@@ -250,12 +328,22 @@ def cluster_ids_for_hosts(db: Session, hosts: Iterable[str]) -> set[UUID]:
     나온 IP 까지 본다 — 상세는 :func:`resolve_hosts_scope`.
     어느 클러스터에도 매칭되지 않는 호스트(관리 서버 등)는 클러스터 범위 밖이라 결과에 없다.
     바인딩이 하나도 없으면(격리 미사용) 조회 없이 빈 집합 — 판정 결과가 같으므로 비용만 아낀다.
+    sync 판(DNS 블로킹) — ``async def`` 안에서는 :func:`acluster_ids_for_hosts` 를 쓴다.
     """
     return resolve_hosts_scope(db, hosts)[0]
 
 
 def cluster_ids_for_host(db: Session, host: str) -> set[UUID]:
     return cluster_ids_for_hosts(db, [host])
+
+
+async def acluster_ids_for_hosts(db: Session, hosts: Iterable[str]) -> set[UUID]:
+    """:func:`cluster_ids_for_hosts` 의 async 판 — ``async def`` 핸들러·WebSocket 용."""
+    return (await aresolve_hosts_scope(db, hosts))[0]
+
+
+async def acluster_ids_for_host(db: Session, host: str) -> set[UUID]:
+    return await acluster_ids_for_hosts(db, [host])
 
 
 def hidden_cluster_ids(db: Session, user: User) -> frozenset[UUID]:
