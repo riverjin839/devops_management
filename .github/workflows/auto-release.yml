@@ -23,6 +23,15 @@ on:
   push:
     branches: [main]
 
+# 실행을 한 줄로 세운다. 연달아 머지되면 두 실행이 같은 버전 파일을 동시에 고쳐, 늦은 쪽 릴리스 PR 이
+# "merge conflicts" 로 머지에 실패하고 열린 채 남았다. 그 PR 을 사람이 충돌 해결로 머지하자 버전 줄이
+# 두 번씩 들어가 main 의 backend/app/main.py 가 SyntaxError 가 됐다(1.64.2/1.66.0 사례).
+# cancel-in-progress: false — 진행 중인 릴리스는 끝까지 돌린다. 대기 중 실행이 더 새 실행에 밀려
+# 취소돼도 그 PR 의 [Unreleased] 항목은 main 에 남아 다음 실행이 함께 릴리스한다.
+concurrency:
+  group: auto-release
+  cancel-in-progress: false
+
 jobs:
   determine-bump:
     runs-on: ubuntu-latest
@@ -87,6 +96,8 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
         with:
+          # 트리거 커밋이 아니라 지금의 main — 앞 실행이 대기 중에 릴리스 커밋을 올렸으면 그 위에서 bump 한다.
+          ref: main
           fetch-depth: 0
           token: ${{ secrets.RELEASE_PAT || github.token }}
 
@@ -104,7 +115,8 @@ jobs:
           # 들어갔으면, 직전 main(HEAD^1) 대비 끼어든 줄을 [Unreleased] 로 되돌린 뒤 bump 한다.
           RESCUE_ARGS=()
           if [[ "${{ needs.determine-bump.outputs.rescue }}" != "false" ]]; then
-            RESCUE_ARGS=(--rescue-from HEAD^1)
+            # 기준은 트리거 PR 머지 직전의 main(github.sha 의 첫 부모) — checkout 이 main 끝이라 HEAD^1 이 아니다.
+            RESCUE_ARGS=(--rescue-from "${{ github.sha }}^1")
           fi
           OUTPUT="$(python3 scripts/release/bump_version.py ${{ needs.determine-bump.outputs.bump }} "${RESCUE_ARGS[@]}")"
           CODE=$?
@@ -150,7 +162,14 @@ jobs:
             --body "자동 생성된 릴리즈 PR — 버전 3곳(frontend/package.json, backend/app/main.py ×2) + CHANGELOG.md [Unreleased] 확정. .github/workflows/auto-release.yml 참고." \
             --base main --head "${BRANCH}"
 
-          gh pr merge "${BRANCH}" --merge --admin --delete-branch
+          # 머지에 실패한 릴리스 PR 을 열어 두지 않는다 — 남은 PR 을 사람이 충돌 해결로 머지하면 버전 줄이
+          # 중복된다. 닫고 브랜치를 지운 뒤 실패로 끝낸다(항목은 [Unreleased] 에 남아 다음 실행이 릴리스한다).
+          if ! gh pr merge "${BRANCH}" --merge --admin --delete-branch; then
+            echo "::error::릴리스 PR 머지 실패 — PR 을 닫고 ${BRANCH} 를 삭제한다. 수동으로 머지하지 말 것."
+            gh pr close "${BRANCH}" --delete-branch \
+              --comment "auto-release: 머지 실패로 닫음. 이 PR 을 수동 머지하지 말 것 — [Unreleased] 항목은 다음 auto-release 가 릴리스한다." || true
+            exit 1
+          fi
 
       - name: Tag the merged release commit
         if: steps.bump.outputs.skip != 'true'

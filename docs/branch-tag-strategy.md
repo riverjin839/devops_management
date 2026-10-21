@@ -33,12 +33,24 @@ PEP 는 **v1.0.0 정식 오픈** 이후 **trunk 기반 + SemVer 태그**로 운�
    `!`(breaking)는 type 기준으로 판정한다 — MAJOR 는 수동 릴리스 대상.
 2. `scripts/release/bump_version.py` 로 버전 3곳(`frontend/package.json`,
    `backend/app/main.py` ×2) + `CHANGELOG.md` `[Unreleased]` → `## [X.Y.Z] - <date>` 확정
-   (Unreleased 에 실제 항목이 없으면 전체를 스킵). 이때 `--rescue-from HEAD^1` 로 **릴리스 섹션
+   (Unreleased 에 실제 항목이 없으면 전체를 스킵). 이때 `--rescue-from <트리거 커밋>^1` 로 **릴리스 섹션
    구제**를 먼저 한다 — 아래 "이미 릴리스된 섹션 보호" 참고.
 3. `chore(release): vX.Y.Z` PR 을 열고 즉시 병합. 릴리스 커밋 메시지에 `[skip ci]` 를 붙여 PR CI 를 띄우지 않는다 —
    PR 이 곧바로 머지·브랜치 삭제돼 PR CI 가 사라진 merge ref 를 못 찾고 job 0개로 실패하던 노이즈 제거.
    검증은 병합 커밋의 `main` push CI 가 한다.
 4. 병합 커밋에 annotated 태그 `vX.Y.Z` 를 push → 아래 `release.yml` 자동 트리거.
+
+#### 실행 직렬화 · 실패한 릴리스 PR
+
+- **한 번에 하나만 돈다**(`concurrency: auto-release`). 연달아 머지되면 예전엔 두 실행이 같은 버전으로
+  bump 해 늦은 쪽 릴리스 PR 이 충돌로 열린 채 남았다(`chore/release-v1.64.2`, PR #847). 이제 뒤 실행은
+  앞 실행이 끝날 때까지 기다렸다가 **그 시점의 `main`** 을 checkout 해 이어서 bump 한다. 대기 중 실행이
+  더 새 실행에 밀려 취소돼도 그 PR 의 `[Unreleased]` 항목은 다음 실행이 함께 릴리스한다(bump 종류는 다음
+  실행 PR 제목 기준).
+- **머지에 실패한 릴리스 PR 은 자동으로 닫고 브랜치를 지운다.** 남은 `chore(release)` PR 을 GitHub UI
+  에서 충돌 해결로 머지하지 않는다 — 버전 줄이 양쪽 다 남아 `backend/app/main.py` 가 SyntaxError 가 된다.
+- **버전 정합성 검사**: CI `docs-sync` job 의 `scripts/release/check_versions.py` 가 버전 3곳이 각각 정확히
+  1개이고 `CHANGELOG.md` 최신 `## [X.Y.Z]` 와 같은지 본다(`chore(release)` PR 도 예외 없음).
 
 #### 이미 릴리스된 섹션 보호
 
@@ -51,7 +63,7 @@ PR 이 `[Unreleased]` 끝에 항목을 넣은 뒤, 그 PR 이 머지되기 전�
 | 단계 | 동작 |
 |---|---|
 | PR CI (`docs-sync` job) | `check_changelog_sections.py <base-sha>` — PR→base 머지 결과에서 base 에 있던 버전 섹션의 헤더·본문이 바뀌면 실패. 해결: main 을 머지하고 항목을 `[Unreleased]` 로 옮긴다 |
-| auto-release | CI 이후에 릴리스가 끼어든 경우(CI 가 오래된 base 로 통과) `bump_version.py --rescue-from HEAD^1` 이 직전 main 대비 릴리스 섹션에 **순수 추가된 줄**을 `[Unreleased]` 의 같은 `### 소제목` 아래로 되돌린 뒤 bump 한다. 기존 줄 수정·삭제는 건드리지 않는다 |
+| auto-release | CI 이후에 릴리스가 끼어든 경우(CI 가 오래된 base 로 통과) `bump_version.py --rescue-from <트리거 커밋>^1` 이 직전 main 대비 릴리스 섹션에 **순수 추가된 줄**을 `[Unreleased]` 의 같은 `### 소제목` 아래로 되돌린 뒤 bump 한다. 기존 줄 수정·삭제는 건드리지 않는다 |
 
 릴리스 섹션을 **의도적으로** 고치는 PR(위치 정리 등)은 제목에 `[changelog-fix]` 를 붙인다 —
 CI 가드와 구제 둘 다 건너뛴다. `chore(release): …` 도 CI 가드 예외다.
