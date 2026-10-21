@@ -82,6 +82,21 @@ export function DailyReportSettingsDialog({ open, onClose }: { open: boolean; on
           <div className="space-y-3 max-h-[60vh] overflow-y-auto px-5 pb-3">
             <Check checked={form.publicEnabled} onChange={(v) => set('publicEnabled', v)}
               label="공개 페이지 사용" help="끄면 /daily-report 와 공개 API 가 404 를 돌려준다." />
+            <fieldset className="text-xs">
+              <legend className="text-muted-foreground">공개 방식</legend>
+              <div className="mt-0.5 flex gap-4 text-sm">
+                {([['open', '누구나'], ['link', '공유 링크만']] as const).map(([v, l]) => (
+                  <label key={v} className="inline-flex items-center gap-1.5">
+                    <input type="radio" name="access-mode" className="accent-primary" checked={form.accessMode === v}
+                      onChange={() => set('accessMode', v)} />
+                    {l}
+                  </label>
+                ))}
+              </div>
+              <span className="block text-[11px] text-muted-foreground mt-0.5 leading-snug">
+                공유 링크만: 관리자가 발급한 만료 기한 있는 링크(?t=)로만 열린다. 링크는 화면 상단 &apos;공유 링크&apos;에서 만든다.
+              </span>
+            </fieldset>
             <div className="grid grid-cols-2 gap-3">
               <Field label="보관·조회 일수" help="오늘 기준 과거 N 일까지 이동·보관한다. 지난 롤업은 매일 정리된다(1~400).">
                 <input type="number" min={1} max={400} className={INPUT} value={form.retentionDays}

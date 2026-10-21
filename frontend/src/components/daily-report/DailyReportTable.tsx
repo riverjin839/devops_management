@@ -1,5 +1,6 @@
 // 네임스페이스 비효율 랭킹 표 — NS 별 당일 CPU/메모리(GPU 예정) request·limit·사용량(평균/최소/최대)·사용률.
 import type { ReactNode } from 'react';
+import { OwnerLine } from '@/components/public-pages/OwnerLine';
 import { cn } from '@/lib/utils';
 import type { DailyReportItem, DailyReportRankBy, DailyReportResource, DailyReportSearchItem } from '@/types';
 import { DASH, cores, gi, pct, rateCls } from './format';
@@ -98,6 +99,7 @@ export function DailyReportTable({ items, rankBy }: { items: Row[]; rankBy: Dail
               <td className={cn('px-2 py-1.5 font-mono text-foreground align-top', hasMatch(it) ? 'min-w-[22rem]' : 'whitespace-nowrap')}
                 title={`샘플 ${it.samples}개 (사용량 ${it.usageSamples}개)`}>
                 {it.namespace}
+                <OwnerLine owner={it.owner} />
                 {hasMatch(it) && <MatchLine match={it.match} />}
               </td>
               <td className={TD}>{it.pods == null ? DASH : it.pods}</td>

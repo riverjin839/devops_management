@@ -3,6 +3,7 @@
 - `public_router` (`/public/external-services/*`): **비인증**. 로그인 없는 공개 화면(`/external-services`)이
   쓴다. 저장된 스냅샷만 읽는다(K8s 직접 조회 없음). 노출 클러스터 규칙은 일일 리포트와 같다
   (`services/public_pages.py` — 테넌트 바인딩 없는 클러스터 또는 allowlist). `public_enabled=false` 면 404.
+  공개 방식이 `link` 면 `?t=<공유 링크 토큰>` 이 필요하다. `/{cluster_id}/changes` 는 외부 노출 변경 이력.
 - `router` (`/external-services/*`, JWT):
   - `POST /{cluster_id}/collect/stream` — 지금 수집(require_operator + 클러스터 operate 권한). SSE 로
     단계·로그를 흘린다. SSH 역조회 자격증명은 이 요청에서만 쓰고 저장하지 않는다.
@@ -14,7 +15,7 @@ import asyncio
 from typing import Literal, Optional
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
@@ -24,6 +25,7 @@ from app.models import Cluster
 from app.models.user import User
 from app.services import audit_logger
 from app.services import external_services as _es
+from app.services import public_pages as _pp
 from app.services.cluster_access import require_cluster_access
 from app.services.sse import Emit, log_evt, step_evt, stream_async_job
 
@@ -31,26 +33,41 @@ public_router = APIRouter(prefix="/public/external-services", tags=["external-se
 router = APIRouter(prefix="/external-services", tags=["external-services"])
 
 
-def _ensure_public(db: Session) -> dict:
+def _ensure_public(db: Session, token: Optional[str]):
     cfg = _es.get_settings(db)
     if not cfg["public_enabled"]:
         raise HTTPException(status_code=404, detail="외부 서비스 목록 공개가 비활성화되어 있습니다")
-    return cfg
+    return cfg, _pp.authorize(db, "external_services", cfg["access_mode"], token)
+
+
+def _public_cluster(db: Session, cluster_id: UUID, link):
+    cluster = next((c for c in _pp.filter_by_link(_es.public_clusters(db), link) if c.id == cluster_id), None)
+    if cluster is None:
+        raise HTTPException(status_code=404, detail="공개 대상 클러스터가 아닙니다")
+    return cluster
 
 
 @public_router.get("/clusters")
-def public_clusters(db: Session = Depends(get_db)):
-    _ensure_public(db)
-    return {"clusters": [{"id": str(c.id), "name": c.name} for c in _es.public_clusters(db)]}
+def public_clusters(t: Optional[str] = Query(None, max_length=200), db: Session = Depends(get_db)):
+    cfg, link = _ensure_public(db, t)
+    return {"clusters": [{"id": str(c.id), "name": c.name} for c in _pp.filter_by_link(_es.public_clusters(db), link)],
+            "access_mode": cfg["access_mode"],
+            "link_expires_at": link.expires_at.isoformat() if link else None}
 
 
 @public_router.get("/{cluster_id}")
-def public_cluster_view(cluster_id: UUID, db: Session = Depends(get_db)):
-    _ensure_public(db)
-    cluster = next((c for c in _es.public_clusters(db) if c.id == cluster_id), None)
-    if cluster is None:
-        raise HTTPException(status_code=404, detail="공개 대상 클러스터가 아닙니다")
-    return _es.public_view(db, cluster)
+def public_cluster_view(cluster_id: UUID, t: Optional[str] = Query(None, max_length=200),
+                        db: Session = Depends(get_db)):
+    _cfg, link = _ensure_public(db, t)
+    return _es.public_view(db, _public_cluster(db, cluster_id, link))
+
+
+@public_router.get("/{cluster_id}/changes")
+def public_changes(cluster_id: UUID, days: int = Query(30, ge=1, le=400),
+                   t: Optional[str] = Query(None, max_length=200), db: Session = Depends(get_db)):
+    """외부 노출 변경 이력 — 최근 days 일 동안 새로 열리거나 사라진 엔드포인트."""
+    _cfg, link = _ensure_public(db, t)
+    return _es.changes_view(db, _public_cluster(db, cluster_id, link), days)
 
 
 class SshCreds(BaseModel):
@@ -131,6 +148,9 @@ class SettingsBody(BaseModel):
     tls_warn_days: Optional[int] = None
     tls_critical_days: Optional[int] = None
     tls_command: Optional[str] = None
+    access_mode: Optional[Literal["open", "link"]] = None
+    change_retention_days: Optional[int] = None
+    new_badge_days: Optional[int] = None
 
 
 @router.get("/settings")

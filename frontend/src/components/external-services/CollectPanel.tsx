@@ -3,7 +3,7 @@
 // SSH 역조회 자격증명은 이 요청에만 쓰고 저장하지 않는다(서버도 저장하지 않는다).
 import { useRef, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import { RefreshCw, Settings2 } from 'lucide-react';
+import { Link2, RefreshCw, Settings2, Users } from 'lucide-react';
 import { MasterHostPicker, RunLogPanel, useToast } from '@/components/common';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { useCanOperate } from '@/hooks/useCanOperate';
@@ -12,6 +12,8 @@ import { applyRunEvent, useRunLog } from '@/hooks/useRunLog';
 import { postSse } from '@/lib/sse';
 import { externalServicesApi } from '@/services/api';
 import { useAuthStore } from '@/stores/authStore';
+import { NsOwnersDialog } from '@/components/daily-report/NsOwnersDialog';
+import { ShareLinksDialog } from '@/components/public-pages/ShareLinksDialog';
 import { ExternalServicesSettingsDialog } from './ExternalServicesSettingsDialog';
 
 type Resolver = 'ssh' | 'backend' | 'none';
@@ -35,6 +37,8 @@ export function CollectPanel({ clusterId, clusterName }: { clusterId: string; cl
   const [showLog, setShowLog] = useLogPref('external-services-collect');
   const [open, setOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [ownersOpen, setOwnersOpen] = useState(false);
+  const [shareOpen, setShareOpen] = useState(false);
   const [resolver, setResolver] = useState<Resolver>('ssh');
   const [forwardCheck, setForwardCheck] = useState(true);
   const [probe, setProbe] = useState(true);
@@ -112,9 +116,17 @@ export function CollectPanel({ clusterId, clusterName }: { clusterId: string; cl
           <button type="button" className={BTN} onClick={() => abortRef.current?.abort()}>중지</button>
         )}
         {isAdmin && (
-          <button type="button" className={BTN} onClick={() => setSettingsOpen(true)}>
-            <Settings2 className="w-4 h-4" /> 설정
-          </button>
+          <>
+            <button type="button" className={BTN} onClick={() => setOwnersOpen(true)}>
+              <Users className="w-4 h-4" /> 담당자
+            </button>
+            <button type="button" className={BTN} onClick={() => setShareOpen(true)}>
+              <Link2 className="w-4 h-4" /> 공유 링크
+            </button>
+            <button type="button" className={BTN} onClick={() => setSettingsOpen(true)}>
+              <Settings2 className="w-4 h-4" /> 설정
+            </button>
+          </>
         )}
         <span className="text-xs text-muted-foreground">운영자 전용 — 로그인하지 않은 방문자에게는 보이지 않는다</span>
       </div>
@@ -207,7 +219,13 @@ export function CollectPanel({ clusterId, clusterName }: { clusterId: string; cl
           </DialogFooter>
         </DialogContent>
       </Dialog>
-      {isAdmin && <ExternalServicesSettingsDialog open={settingsOpen} onClose={() => setSettingsOpen(false)} />}
+      {isAdmin && (
+        <>
+          <ExternalServicesSettingsDialog open={settingsOpen} onClose={() => setSettingsOpen(false)} />
+          <NsOwnersDialog open={ownersOpen} onClose={() => setOwnersOpen(false)} />
+          <ShareLinksDialog open={shareOpen} onClose={() => setShareOpen(false)} defaultPage="external_services" />
+        </>
+      )}
     </div>
   );
 }

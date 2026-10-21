@@ -1,16 +1,18 @@
 // 일일 리포트 — 로그인 없이 여는 공개 화면(App.tsx 가 AuthGate 바깥에서 렌더).
-// 클러스터·날짜·랭킹 기준을 URL 쿼리(c, d, r)에 담아 링크로 공유할 수 있다.
+// 클러스터·날짜·랭킹 기준·기간·검색어를 URL 쿼리(c, d, r, p, q)에 담아 링크로 공유할 수 있다.
 // 데이터는 비인증 공개 API(`/public/daily-report/*`) — 지난 날짜는 일 롤업, 오늘은 실시간 집계.
+// 공개 방식이 "공유 링크만"이면 URL `t`(공유 링크 토큰)가 필요하다 — API 레이어가 자동으로 싣는다.
 import { useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { CalendarDays, ChevronLeft, ChevronRight, FileBarChart, RefreshCw, Search, Settings2, X } from 'lucide-react';
+import { CalendarDays, ChevronLeft, ChevronRight, FileBarChart, Link2, Lock, RefreshCw, Search, Settings2, Users, X } from 'lucide-react';
 import { EmptyState, ErrorState, LoadingState, PageHeader, PageShell } from '@/components/common';
 import { MacCard } from '@/components/ui/MacCard';
 import {
-  DailyReportSettingsDialog, DailyReportTable, RANK_OPTIONS, cores, dateLabel, gi, pct, shiftDate,
+  DailyReportSettingsDialog, DailyReportTable, NsOwnersDialog, PeriodTrendChart, RANK_OPTIONS, cores, dateLabel, gi, pct,
+  shiftDate,
 } from '@/components/daily-report';
-import { PublicPageLinks } from '@/components/public-pages';
-import { useDailyReport, useDailyReportClusters, useDailyReportSearch } from '@/hooks/useDailyReport';
+import { PublicPageLinks, SHARE_TITLES, ShareLinksDialog, shareDenied } from '@/components/public-pages';
+import { useDailyReport, useDailyReportClusters, useDailyReportPeriod, useDailyReportSearch } from '@/hooks/useDailyReport';
 import { useAuthStore } from '@/stores/authStore';
 import { cn } from '@/lib/utils';
 import type { DailyReportRankBy } from '@/types';
@@ -27,6 +29,13 @@ const SOURCE_TEXT: Record<string, string> = {
   backfill: '일 단위 롤업(방금 계산)',
   none: '수집 데이터 없음',
 };
+
+type Period = 'day' | 'week' | 'month';
+const PERIOD_OPTIONS: { value: Period; label: string; help: string }[] = [
+  { value: 'day', label: '일', help: '선택한 날짜 하루' },
+  { value: 'week', label: '주', help: '선택한 날짜까지 7일 — 일자별 추이 + 기간 평균 랭킹' },
+  { value: 'month', label: '월', help: '선택한 날짜까지 30일 — 일자별 추이 + 기간 평균 랭킹(만성 낭비)' },
+];
 
 function isRankBy(v: string | null): v is DailyReportRankBy {
   return !!v && RANK_OPTIONS.some((o) => o.value === v);
@@ -47,6 +56,8 @@ export function DailyReportPage() {
   const [params, setParams] = useSearchParams();
   const isAdmin = useAuthStore((s) => !!s.token && s.user?.role === 'admin');
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [ownersOpen, setOwnersOpen] = useState(false);
+  const [shareOpen, setShareOpen] = useState(false);
   const meta = useDailyReportClusters();
   const clusters = useMemo(() => meta.data?.clusters ?? [], [meta.data]);
   const today = meta.data?.today ?? '';
@@ -57,6 +68,7 @@ export function DailyReportPage() {
   const rawDate = params.get('d') ?? '';
   const date = rawDate && today && rawDate <= today && rawDate >= minDate ? rawDate : today;
   const rankBy: DailyReportRankBy = isRankBy(params.get('r')) ? (params.get('r') as DailyReportRankBy) : 'cpu_rate';
+  const period: Period = params.get('p') === 'week' || params.get('p') === 'month' ? (params.get('p') as Period) : 'day';
 
   const update = (patch: Record<string, string>) => {
     const next = new URLSearchParams(params);
@@ -93,6 +105,8 @@ export function DailyReportPage() {
   const search = useDailyReportSearch(clusterId, date, q, rankBy);
 
   const report = useDailyReport(clusterId, date, rankBy, date === today);
+  const periodQ = useDailyReportPeriod(clusterId, date, period === 'day' ? null : period, rankBy);
+  const pdata = periodQ.data;
   const data = report.data;
   const rankHelp = RANK_OPTIONS.find((o) => o.value === rankBy)?.help ?? '';
 
@@ -109,16 +123,31 @@ export function DailyReportPage() {
           : 'K8S 자원 관리 — 네임스페이스별 request·limit·사용량 일 단위 리포트'
       }
       actions={(
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           {isAdmin && (
-            <button type="button" className={BTN} onClick={() => setSettingsOpen(true)}>
-              <Settings2 className="w-4 h-4" /> 설정
-            </button>
+            <>
+              <button type="button" className={BTN} onClick={() => setOwnersOpen(true)}>
+                <Users className="w-4 h-4" /> 담당자
+              </button>
+              <button type="button" className={BTN} onClick={() => setShareOpen(true)}>
+                <Link2 className="w-4 h-4" /> 공유 링크
+              </button>
+              <button type="button" className={BTN} onClick={() => setSettingsOpen(true)}>
+                <Settings2 className="w-4 h-4" /> 설정
+              </button>
+            </>
           )}
           <PublicPageLinks />
         </div>
       )}
     />
+  );
+  const adminDialogs = isAdmin && (
+    <>
+      <DailyReportSettingsDialog open={settingsOpen} onClose={() => setSettingsOpen(false)} />
+      <NsOwnersDialog open={ownersOpen} onClose={() => setOwnersOpen(false)} />
+      <ShareLinksDialog open={shareOpen} onClose={() => setShareOpen(false)} defaultPage="daily_report" />
+    </>
   );
 
   if (meta.isLoading) {
@@ -126,15 +155,18 @@ export function DailyReportPage() {
   }
   if (meta.isError) {
     const status = (meta.error as { response?: { status?: number } })?.response?.status;
+    const denied = shareDenied(meta.error);
     return (
       <div className="min-h-screen bg-background">
         <PageShell density="hub" className="mx-auto space-y-4">
           {header}
-          {status === 404
-            ? <EmptyState title="일일 리포트가 공개되어 있지 않습니다" description="관리자가 일일 리포트 설정에서 공개 페이지를 끈 상태입니다." />
-            : <ErrorState error={meta.error} onRetry={() => void meta.refetch()} />}
+          {denied
+            ? <EmptyState icon={Lock} title={SHARE_TITLES[denied.code] ?? '공유 링크가 필요합니다'} description={denied.message} />
+            : status === 404
+              ? <EmptyState title="일일 리포트가 공개되어 있지 않습니다" description="관리자가 일일 리포트 설정에서 공개 페이지를 끈 상태입니다." />
+              : <ErrorState error={meta.error} onRetry={() => void meta.refetch()} />}
         </PageShell>
-        {isAdmin && <DailyReportSettingsDialog open={settingsOpen} onClose={() => setSettingsOpen(false)} />}
+        {adminDialogs}
       </div>
     );
   }
@@ -162,7 +194,7 @@ export function DailyReportPage() {
               <label className="relative flex items-center">
                 <Search className="absolute left-2.5 w-4 h-4 text-muted-foreground pointer-events-none" />
                 <input type="search" value={qInput} onChange={(e) => setQInput(e.target.value)}
-                  placeholder="내 네임스페이스·워크로드·파드 검색" aria-label="네임스페이스·워크로드·파드 검색"
+                  placeholder="내 네임스페이스·담당자·워크로드·파드 검색" aria-label="네임스페이스·담당자·워크로드·파드 검색"
                   className="w-72 max-w-full text-sm pl-8 pr-8 py-1.5 rounded-xl border border-border bg-card text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary" />
                 {qInput && (
                   <button type="button" className="absolute right-2 text-muted-foreground hover:text-foreground"
@@ -171,7 +203,16 @@ export function DailyReportPage() {
                   </button>
                 )}
               </label>
-              <div className="flex items-center gap-1.5 ml-auto" role="group" aria-label="날짜 이동">
+              <div className="flex gap-1 ml-auto" role="group" aria-label="기간">
+                {PERIOD_OPTIONS.map((o) => (
+                  <button key={o.value} type="button" title={o.help} aria-pressed={o.value === period}
+                    className={cn(CHIP, 'px-2.5', o.value === period ? CHIP_ON : CHIP_OFF)}
+                    onClick={() => update({ p: o.value === 'day' ? '' : o.value })}>
+                    {o.label}
+                  </button>
+                ))}
+              </div>
+              <div className="flex items-center gap-1.5" role="group" aria-label="날짜 이동">
                 <button type="button" className={ICON_BTN} disabled={!canPrev}
                   onClick={() => update({ d: shiftDate(date, -1) })} title="전날" aria-label="전날">
                   <ChevronLeft className="w-4 h-4" />
@@ -187,14 +228,63 @@ export function DailyReportPage() {
                   <ChevronRight className="w-4 h-4" />
                 </button>
                 <button type="button" className={BTN} disabled={date === today} onClick={() => update({ d: today })}>오늘</button>
-                <button type="button" className={ICON_BTN} onClick={() => void report.refetch()}
-                  title="다시 불러오기" aria-label="다시 불러오기" disabled={report.isFetching}>
-                  <RefreshCw className={cn('w-4 h-4', report.isFetching && 'animate-spin')} />
+                <button type="button" className={ICON_BTN}
+                  onClick={() => void (period === 'day' ? report.refetch() : periodQ.refetch())}
+                  title="다시 불러오기" aria-label="다시 불러오기" disabled={report.isFetching || periodQ.isFetching}>
+                  <RefreshCw className={cn('w-4 h-4', (report.isFetching || periodQ.isFetching) && 'animate-spin')} />
                 </button>
               </div>
             </div>
+            {meta.data?.accessMode === 'link' && meta.data.linkExpiresAt && (
+              <p className="text-xs text-muted-foreground">
+                공유 링크로 열람 중 — {new Date(`${meta.data.linkExpiresAt}Z`).toLocaleString()} 까지 유효
+              </p>
+            )}
 
-            {report.isError ? (
+            {period !== 'day' && (
+              periodQ.isError ? (
+                <ErrorState error={periodQ.error} onRetry={() => void periodQ.refetch()} />
+              ) : !pdata ? (
+                <LoadingState />
+              ) : (
+                <>
+                  <MacCard title={`${pdata.cluster.name} · ${pdata.start} ~ ${pdata.end}`}
+                    description={`${period === 'week' ? '주간' : '월간'} 사용률 추이 — 데이터 있는 날 ${pdata.daysWithData}/${pdata.series.length}일 · 사용량이 수집된 NS 의 사용량 ÷ request`}>
+                    {pdata.daysWithData === 0 ? (
+                      <EmptyState compact title="이 기간의 수집 데이터가 없습니다"
+                        description="효율화 수집이 꺼져 있었거나 보관 기간 밖입니다." />
+                    ) : (
+                      <PeriodTrendChart series={pdata.series} />
+                    )}
+                  </MacCard>
+                  <MacCard
+                    title={`기간 평균 비효율 TOP ${pdata.topN}`}
+                    description={`${rankHelp} · 일 평균의 평균, 최소·최대는 기간 전체 · 대상 ${pdata.rankedTotal}개`}
+                    actions={(
+                      <div className="flex flex-wrap gap-1" role="group" aria-label="랭킹 기준">
+                        {RANK_OPTIONS.map((o) => (
+                          <button key={o.value} type="button" title={o.help} aria-pressed={o.value === rankBy}
+                            className={cn(CHIP, 'text-xs px-2.5', o.value === rankBy ? CHIP_ON : CHIP_OFF)}
+                            onClick={() => update({ r: o.value })}>
+                            {o.label}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                    bodyPadding="p-0"
+                  >
+                    {pdata.items.length === 0 ? (
+                      <EmptyState compact title="랭킹 대상 네임스페이스가 없습니다"
+                        description="사용량이 수집되지 않았거나 모든 NS 가 최소 request 기준 미만입니다." />
+                    ) : (
+                      <DailyReportTable items={pdata.items} rankBy={rankBy} />
+                    )}
+                  </MacCard>
+                </>
+              )
+            )}
+
+            {period !== 'day' ? null : report.isError ? (
               <ErrorState error={report.error} onRetry={() => void report.refetch()} />
             ) : !data ? (
               <LoadingState />
@@ -233,7 +323,7 @@ export function DailyReportPage() {
                       <LoadingState compact />
                     ) : search.data.items.length === 0 ? (
                       <EmptyState compact icon={Search} title="일치하는 네임스페이스가 없습니다"
-                        description="네임스페이스·워크로드·파드 이름의 일부(2자 이상)로 찾는다. 다른 날짜나 클러스터에서 다시 찾아본다." />
+                        description="네임스페이스·담당자·워크로드·파드 이름의 일부(2자 이상)로 찾는다. 다른 날짜나 클러스터에서 다시 찾아본다." />
                     ) : (
                       <DailyReportTable items={search.data.items} rankBy={rankBy} />
                     )}
@@ -276,7 +366,7 @@ export function DailyReportPage() {
           </>
         )}
       </PageShell>
-      {isAdmin && <DailyReportSettingsDialog open={settingsOpen} onClose={() => setSettingsOpen(false)} />}
+      {adminDialogs}
     </div>
   );
 }

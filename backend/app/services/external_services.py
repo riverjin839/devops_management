@@ -22,12 +22,12 @@ import logging
 import re
 import socket
 from concurrent.futures import ThreadPoolExecutor, wait
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Any, Callable, Optional
 
 from sqlalchemy.orm import Session
 
-from app.models.external_service import ExternalServiceSnapshot
+from app.models.external_service import ExternalServiceChange, ExternalServiceSnapshot
 from app.services import external_checks as chk
 from app.services import external_tls as tls
 from app.services.external_checks import (
@@ -75,6 +75,11 @@ DEFAULTS: dict[str, Any] = {
     "tls_warn_days": 30,        # 남은 일수가 이 이하면 경고
     "tls_critical_days": 7,     # 이 이하면 위험
     "tls_command": tls.DEFAULT_TLS_COMMAND,
+    # 공개 방식 — open(누구나) | link(만료 기한이 있는 공유 링크로만). 판정은 services/public_pages.py.
+    "access_mode": "open",
+    # 외부 노출 변경 이력 보관 일수와 "신규" 배지를 붙이는 기간(일).
+    "change_retention_days": 90,
+    "new_badge_days": 7,
 }
 
 Emit = Callable[[str, str], None]          # (level, message)
@@ -96,11 +101,14 @@ def normalize(values: dict[str, Any]) -> dict[str, Any]:
               "probe_enabled", "probe_http", "tls_check"):
         out[k] = bool(out[k])
     for k, lo, hi in (("dns_timeout_sec", 1, 10), ("probe_timeout_sec", 1, 15), ("probe_max", 1, 2000),
-                      ("tls_warn_days", 1, 365), ("tls_critical_days", 0, 365)):
+                      ("tls_warn_days", 1, 365), ("tls_critical_days", 0, 365),
+                      ("change_retention_days", 1, 400), ("new_badge_days", 0, 90)):
         try:
             out[k] = max(lo, min(hi, int(out[k])))
         except (TypeError, ValueError):
             out[k] = DEFAULTS[k]
+    if out["access_mode"] not in ("open", "link"):
+        out["access_mode"] = "open"
     if out["check_source"] not in ("auto", "node", "backend"):
         out["check_source"] = "auto"
     out["tls_critical_days"] = min(out["tls_critical_days"], out["tls_warn_days"])
@@ -545,6 +553,34 @@ def collect(db: Session, cluster, *, resolver: str = "backend", ssh_target=None,
     tls_keep = {tls.tls_key(t) for t in tls_all}
     tls_results = {k: v for k, v in tls_results.items() if k in tls_keep}
 
+    # 외부 노출 변경 이력 — 직전 수집과 비교(첫 수집은 기준선이라 기록하지 않는다).
+    if snap.collected_at is not None:
+        try:
+            added, removed = diff_entries(snap.entries or [], entries)
+            for change, items in (("added", added), ("removed", removed)):
+                for e in items:
+                    db.add(ExternalServiceChange(
+                        cluster_id=cluster.id, change=change, entry_key=entry_key(e), kind=e.get("kind") or "",
+                        namespace=e.get("namespace") or "", name=e.get("name") or "",
+                        address=e.get("ip") or e.get("hostname"), host=e.get("host"), port=e.get("port"),
+                        scheme=e.get("scheme"), collected_by=actor))
+            if added or removed:
+                emit("warn" if added else "info", f"노출 변경 — 새로 열림 {len(added)} · 사라짐 {len(removed)}")
+                for change, items in (("+", added), ("-", removed)):
+                    for e in items[:20]:
+                        emit("info", f"  {change} {e.get('kind')} {e.get('namespace')}/{e.get('name')} "
+                                     f"{e.get('host') or e.get('ip') or e.get('hostname') or '<노드 IP>'}:{e.get('port')}")
+            else:
+                emit("info", "노출 변경 없음(직전 수집과 동일)")
+            cutoff = datetime.utcnow() - timedelta(days=cfg["change_retention_days"])
+            db.query(ExternalServiceChange).filter(ExternalServiceChange.cluster_id == cluster.id,
+                                                   ExternalServiceChange.detected_at < cutoff).delete(
+                synchronize_session=False)
+        except Exception as e:  # noqa: BLE001
+            emit("warn", f"변경 이력 기록 실패(목록 저장은 계속): {str(e)[:200]}")
+    else:
+        emit("info", "첫 수집 — 변경 이력 기준선으로 저장")
+
     snap.entries = entries
     snap.node_ips = nodes
     snap.ptr_cache = ptr_cache
@@ -559,7 +595,49 @@ def collect(db: Session, cluster, *, resolver: str = "backend", ssh_target=None,
     snap.error = None
     db.commit()
     emit("info", f"스냅샷 저장 — 엔드포인트 {len(entries)}건")
+    # NS 담당자 라벨 캐시도 같이 갱신(fail-safe).
+    try:
+        from app.services import ns_owners
+        ns_owners.refresh_labels(db, cluster, emit=emit)
+    except Exception as e:  # noqa: BLE001
+        db.rollback()
+        emit("warn", f"NS 담당자 라벨 갱신 실패: {str(e)[:200]}")
     return {"ok": True, **snap.summary, "resolver": used}
+
+
+# ── 변경 이력 ──────────────────────────────────────────────────────────────────
+def entry_key(e: dict[str, Any]) -> str:
+    return "|".join(str(x) for x in (e.get("kind") or "", e.get("namespace") or "", e.get("name") or "",
+                                     e.get("ip") or e.get("hostname") or "", e.get("host") or "", e.get("port") or ""))[:800]
+
+
+def diff_entries(prev: list[dict[str, Any]], cur: list[dict[str, Any]]) -> tuple[list[dict], list[dict]]:
+    p = {entry_key(e): e for e in prev}
+    c = {entry_key(e): e for e in cur}
+    added = [c[k] for k in sorted(c.keys() - p.keys())]
+    removed = [p[k] for k in sorted(p.keys() - c.keys())]
+    return added, removed
+
+
+def changes_view(db: Session, cluster, days: int = 30, limit: int = 500) -> dict[str, Any]:
+    since = datetime.utcnow() - timedelta(days=days)
+    q = (db.query(ExternalServiceChange)
+         .filter(ExternalServiceChange.cluster_id == cluster.id, ExternalServiceChange.detected_at >= since)
+         .order_by(ExternalServiceChange.detected_at.desc()))
+    rows = q.limit(limit).all()
+    return {
+        "cluster": {"id": str(cluster.id), "name": cluster.name},
+        "days": days,
+        "total": q.count(),
+        "added": sum(1 for r in rows if r.change == "added"),
+        "removed": sum(1 for r in rows if r.change == "removed"),
+        "items": [{
+            "detected_at": r.detected_at.isoformat(), "change": r.change, "kind": r.kind,
+            "namespace": r.namespace, "name": r.name, "address": r.address, "host": r.host,
+            "port": r.port, "scheme": r.scheme,
+            "by": "정기 수집" if r.collected_by == "schedule" else "수동 수집",
+        } for r in rows],
+    }
 
 
 # ── 공개 응답 ───────────────────────────────────────────────────────────────────
@@ -576,6 +654,18 @@ def public_view(db: Session, cluster) -> dict[str, Any]:
     nodes = snap.node_ips or []
     entries = []
     tls_expiring = 0
+    try:
+        from app.services import ns_owners
+        owner_of = ns_owners.resolver(db, cluster.id)
+    except Exception:  # noqa: BLE001
+        log.exception("ns owner resolver failed cluster=%s", cluster.id)
+        owner_of = lambda _ns: None  # noqa: E731
+    new_keys: set[str] = set()
+    if cfg["new_badge_days"] > 0:
+        since = datetime.utcnow() - timedelta(days=cfg["new_badge_days"])
+        new_keys = {k for (k,) in db.query(ExternalServiceChange.entry_key).filter(
+            ExternalServiceChange.cluster_id == cluster.id, ExternalServiceChange.change == "added",
+            ExternalServiceChange.detected_at >= since).all()}
     issues = 0
     for e in snap.entries or []:
         ptr = cache.get(e.get("ip") or "") or {}
@@ -603,6 +693,8 @@ def public_view(db: Session, cluster) -> dict[str, Any]:
             "probe": None if pr is None else {k: pr.get(k) for k in (
                 "reachable", "method", "http_status", "latency_ms", "error", "source", "checked_at")},
             "tls": tv,
+            "owner": owner_of(e.get("namespace") or ""),
+            "is_new": entry_key(e) in new_keys,
         })
     return {
         "cluster": {"id": str(cluster.id), "name": cluster.name},
@@ -611,6 +703,7 @@ def public_view(db: Session, cluster) -> dict[str, Any]:
         "resolver": snap.resolver,
         "summary": {**(snap.summary or {}), "issues": issues, "tls_expiring": tls_expiring},
         "tls_thresholds": {"warn_days": cfg["tls_warn_days"], "critical_days": cfg["tls_critical_days"]},
+        "new_badge_days": cfg["new_badge_days"],
         "error": snap.error,
         "entries": entries,
         "node_ips": snap.node_ips or [],

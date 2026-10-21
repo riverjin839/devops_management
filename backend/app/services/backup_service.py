@@ -77,6 +77,8 @@ LOG_TABLES: frozenset[str] = frozenset({
     "k8s_ns_daily_reports",
     # 외부 서비스 스냅샷 — 재수집 가능한 파생 데이터.
     "external_service_snapshots",
+    # 외부 노출 변경 이력 — 수집마다 쌓이는 로그성 행.
+    "external_service_changes",
 })
 
 # 민감 컬럼을 마스킹할 때 쓰는 센티널. ``None`` 을 쓰면 "값이 원래 없었다"와
