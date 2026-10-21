@@ -153,3 +153,16 @@ def test_parallel_collect_keeps_order_and_is_silent_without_stream():
     events.clear()
     asyncio.run(versions._parallel_collect(["x"], worker=lambda h: {"host": h, "status": "ok"}))
     assert events == []
+
+
+@pytest.mark.parametrize("kind", [
+    "collect-etcd-systemd", "collect-kernel-params", "collect-kubelet-config",
+    "collect-etcdctl-config", "collect-kubeadm-certs", "collect-node-nics",
+])
+def test_sync_collect_shares_validation(client, world, kind):
+    """동기 수집 6종이 스트림과 같은 검증(_require_collect_target)을 쓴다 — 404/422 문구까지 동일."""
+    cid = world["cluster"].id
+    r = client.post(f"/api/v1/clusters/{uuid.uuid4()}/{kind}", json=_body())
+    assert r.status_code == 404 and r.json()["detail"] == "Cluster not found"
+    r = client.post(f"/api/v1/clusters/{cid}/{kind}", json=_body(password=None))
+    assert r.status_code == 422 and r.json()["detail"] == "password 또는 private_key 중 하나는 필수입니다."
