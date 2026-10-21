@@ -1,6 +1,8 @@
+import type { ReactNode } from 'react';
 import { Play, Trash2, Clock, Loader2, LayoutDashboard, Pencil, FileText } from 'lucide-react';
 import { Playbook } from '@/types';
 import { useCanOperate } from '@/hooks/useCanOperate';
+import { MacCard } from '@/components/ui/MacCard';
 
 interface PlaybookCardProps {
   playbook: Playbook;
@@ -9,6 +11,12 @@ interface PlaybookCardProps {
   onDelete: () => void;
   onEdit?: () => void;
   onToggleDashboard?: () => void;
+  /** 실행 로그 다이얼로그 열기 — 없으면 로그 버튼을 그리지 않는다. */
+  onViewLog?: () => void;
+  /** 여러 클러스터가 섞여 보일 때 어느 클러스터 플레이북인지 */
+  clusterName?: string;
+  /** 헤더 액션 맨 앞에 둘 드래그 손잡이(정렬 가능한 목록에서만) */
+  dragHandle?: ReactNode;
 }
 
 const statusConfig: Record<string, { color: string; bg: string; label: string }> = {
@@ -31,7 +39,9 @@ function formatTimeAgo(dateStr?: string): string {
   return `${Math.floor(hours / 24)}일 전`;
 }
 
-export function PlaybookCard({ playbook, isRunning, onRun, onDelete, onEdit, onToggleDashboard }: PlaybookCardProps) {
+export function PlaybookCard({
+  playbook, isRunning, onRun, onDelete, onEdit, onToggleDashboard, onViewLog, clusterName, dragHandle,
+}: PlaybookCardProps) {
   // §12.9 — 실행·수정·삭제·대시보드 토글은 operator 이상 + 클러스터 operate 바인딩. 숨기지 않고 비활성+사유.
   const { canOperate, withHint, ariaWithHint } = useCanOperate(playbook.clusterId);
   const effectiveStatus = isRunning ? 'running' : playbook.status;
@@ -39,17 +49,12 @@ export function PlaybookCard({ playbook, isRunning, onRun, onDelete, onEdit, onT
   const result = playbook.lastResult;
   const totals = result?.stats?.totals;
 
+  // 카드는 MacCard 슬롯으로 — 제목=플레이북 이름, 옆에 상태 pill, 우측에 손잡이(D-004 · §12.12-4 수제 헤더 금지).
   return (
-    <div className="bg-card border border-border rounded-md p-5">
-      {/* Header */}
-      <div className="flex items-start justify-between mb-3">
-        <div className="flex-1 min-w-0">
-          <h3 className="font-semibold text-sm truncate">{playbook.name}</h3>
-          {playbook.description && (
-            <p className="text-sm text-muted-foreground mt-0.5 truncate">{playbook.description}</p>
-          )}
-        </div>
-        <span className={`text-sm font-medium px-2 py-0.5 rounded-full border ${config.bg} ${config.color}`}>
+    <MacCard
+      title={playbook.name}
+      titleExtra={
+        <span className={`text-xs font-medium px-2 py-0.5 rounded-full border shrink-0 ${config.bg} ${config.color}`}>
           {isRunning ? (
             <span className="flex items-center gap-1">
               <Loader2 className="w-3 h-3 animate-spin" />
@@ -57,7 +62,21 @@ export function PlaybookCard({ playbook, isRunning, onRun, onDelete, onEdit, onT
             </span>
           ) : config.label}
         </span>
-      </div>
+      }
+      actions={dragHandle}
+    >
+      {(playbook.description || clusterName) && (
+        <div className="flex items-center gap-2 mb-3 min-w-0">
+          {clusterName && (
+            <span className="text-xs text-muted-foreground px-1.5 py-0.5 rounded bg-secondary/50 truncate shrink-0 max-w-[50%]">
+              {clusterName}
+            </span>
+          )}
+          {playbook.description && (
+            <p className="text-sm text-muted-foreground truncate">{playbook.description}</p>
+          )}
+        </div>
+      )}
 
       {/* Playbook 출처 — DB 파일명 우선, 없으면 path */}
       <div className="text-sm text-muted-foreground font-mono bg-background/50 rounded px-2 py-1 mb-3 space-y-0.5">
@@ -101,6 +120,17 @@ export function PlaybookCard({ playbook, isRunning, onRun, onDelete, onEdit, onT
           )}
         </div>
         <div className="flex items-center gap-1">
+          {onViewLog && (
+            <button
+              onClick={onViewLog}
+              disabled={!result}
+              className="p-1.5 rounded-md text-muted-foreground hover:bg-secondary hover:text-foreground transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+              title={result ? '실행 로그 보기' : '실행 기록 없음'}
+              aria-label={`${playbook.name} 실행 로그 보기`}
+            >
+              <FileText className="w-4 h-4" />
+            </button>
+          )}
           {onToggleDashboard && (
             <button
               onClick={onToggleDashboard}
@@ -150,7 +180,7 @@ export function PlaybookCard({ playbook, isRunning, onRun, onDelete, onEdit, onT
           </button>
         </div>
       </div>
-    </div>
+    </MacCard>
   );
 }
 

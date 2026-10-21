@@ -6,6 +6,7 @@ import { arrayMove } from '@dnd-kit/sortable';
  * - When `items` change (new items / deleted items), the stored order is merged.
  * - Returns `orderedItems` (the items in persisted order) and `handleDragEnd`.
  * - Call `clearOrder()` to reset to the default API order.
+ * - Call `setOrder(ids)` to replace the whole order at once (e.g. save the currently displayed sorted order).
  */
 export function useLocalOrder<T extends { id: string }>(
   items: T[],
@@ -22,6 +23,9 @@ export function useLocalOrder<T extends { id: string }>(
 
   // Keep orderedIds in sync when items change (new/deleted)
   useEffect(() => {
+    // 목록이 아직 비어 있으면(첫 로딩) 저장된 순서를 지우지 않는다 — 지우면 데이터가 도착했을 때 API 순서로
+    // 다시 쌓여 새로고침마다 드래그한 순서가 사라졌다.
+    if (items.length === 0) return;
     setOrderedIds((prev) => {
       const existingIds = new Set(items.map((i) => i.id));
       // Remove stale ids
@@ -60,10 +64,15 @@ export function useLocalOrder<T extends { id: string }>(
     });
   };
 
+  const setOrder = (ids: string[]) => {
+    try { localStorage.setItem(storageKey, JSON.stringify(ids)); } catch { /* ignore */ }
+    setOrderedIds(ids);
+  };
+
   const clearOrder = () => {
     localStorage.removeItem(storageKey);
     setOrderedIds(items.map((i) => i.id));
   };
 
-  return { orderedItems, handleDragEnd, clearOrder };
+  return { orderedItems, handleDragEnd, setOrder, clearOrder };
 }

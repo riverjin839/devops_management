@@ -1,19 +1,20 @@
 import { useState, useMemo, useEffect } from 'react';
-import { Plus, Play, BookOpen, Download, ArrowUpDown, LayoutGrid, List, GripVertical } from 'lucide-react';
+import { Plus, Play, BookOpen, Download, ArrowUpDown, ArrowUp, ArrowDown, LayoutGrid, List, GripVertical } from 'lucide-react';
 import { DndContext, closestCenter, PointerSensor, useSensor, useSensors, type DragEndEvent } from '@dnd-kit/core';
-import { SortableContext, rectSortingStrategy, verticalListSortingStrategy, useSortable } from '@dnd-kit/sortable';
+import { SortableContext, rectSortingStrategy, verticalListSortingStrategy, useSortable, arrayMove } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { PlaybookCard, PlaybookListRow, PlaybookLogDialog, AddPlaybookModal, RunCredsModal, playbookRunLines } from '@/components/playbooks';
 import type { PlaybookFormSubmit } from '@/components/playbooks/AddPlaybookModal';
 import type { PlaybookSshCreds } from '@/types';
 import { ClusterSidebar, ConfirmDialog, EmptyState, ErrorState, Skeleton, PageShell, RunLogPanel } from '@/components/common';
 import { PageHeader } from '@/components/common/PageHeader';
-import { useCanOperate } from '@/hooks/useCanOperate';
+import { useCanOperate, useMyClusterAccess } from '@/hooks/useCanOperate';
 import { usePlaybooks, useCreatePlaybook, useUpdatePlaybook, useDeletePlaybook, useRunPlaybook, useToggleDashboard } from '@/hooks/usePlaybook';
 import { playbooksApi } from '@/services/api';
 import { usePlaybookStore } from '@/stores/playbookStore';
 import { useClusters } from '@/hooks/useCluster';
 import { useClusterStore } from '@/stores/clusterStore';
+import { useAuthStore } from '@/stores/authStore';
 import { useLocalOrder } from '@/hooks/useLocalOrder';
 import { runLogged, useRunLog, type RunLogEntry } from '@/hooks/useRunLog';
 import { useLogPref } from '@/hooks/useLogPref';
@@ -22,7 +23,9 @@ import { formatApiError } from '@/lib/utils';
 import type { PlaybookRunResult } from '@/types';
 import { Playbook } from '@/types';
 
-type PlaybookSortKey = 'name' | 'status' | 'lastRunAt';
+// manual = 드래그로 정한 순서(useLocalOrder). 다른 기준이면 정렬이 드래그 순서를 덮으므로, 드래그하면 manual 로 바뀐다.
+type PlaybookSortKey = 'manual' | 'name' | 'status' | 'lastRunAt';
+const SORT_KEYS: PlaybookSortKey[] = ['manual', 'name', 'status', 'lastRunAt'];
 type ViewMode = 'list' | 'card';
 const STATUS_ORDER: Record<string, number> = { critical: 0, warning: 1, healthy: 2, unknown: 3 };
 // localStorage 캐시는 하지 않는다 — 페이지 진입 시 항상 리스트가 기본.
@@ -30,23 +33,28 @@ const STATUS_ORDER: Record<string, number> = { critical: 0, warning: 1, healthy:
 // 마운트 시 한 번 삭제. 카드 보기는 우상단 토글로 일시적으로만 사용.
 const LEGACY_VIEW_MODE_KEY = 'k8s:playbooks:view-mode';
 
-function SortableCardCell({ playbook, isRunning, onRun, onEdit, onDelete, onToggleDashboard }: {
-  playbook: Playbook; isRunning: boolean;
-  onRun: () => void; onEdit: () => void; onDelete: () => void; onToggleDashboard: () => void;
+function SortableCardCell({ playbook, isRunning, clusterName, onRun, onEdit, onDelete, onToggleDashboard, onViewLog }: {
+  playbook: Playbook; isRunning: boolean; clusterName?: string;
+  onRun: () => void; onEdit: () => void; onDelete: () => void; onToggleDashboard: () => void; onViewLog: () => void;
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: playbook.id });
   const style = { transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.5 : 1 };
   return (
-    <div ref={setNodeRef} style={style} className="relative group/card">
-      <button
-        {...attributes} {...listeners}
-        className="absolute top-2 left-2 z-10 cursor-grab active:cursor-grabbing p-1 rounded text-muted-foreground/30 opacity-0 group-hover/card:opacity-100 hover:text-muted-foreground hover:bg-secondary transition"
-        title="드래그하여 순서 변경"
-        aria-label="드래그하여 순서 변경"
-      >
-        <GripVertical className="w-3.5 h-3.5" aria-hidden="true" />
-      </button>
-      <PlaybookCard playbook={playbook} isRunning={isRunning} onRun={onRun} onEdit={onEdit} onDelete={onDelete} onToggleDashboard={onToggleDashboard} />
+    <div ref={setNodeRef} style={style} className="group/card">
+      <PlaybookCard
+        playbook={playbook} isRunning={isRunning} clusterName={clusterName}
+        onRun={onRun} onEdit={onEdit} onDelete={onDelete} onToggleDashboard={onToggleDashboard} onViewLog={onViewLog}
+        dragHandle={
+          <button
+            {...attributes} {...listeners}
+            className="cursor-grab active:cursor-grabbing p-1 rounded-md text-muted-foreground/40 hover:text-muted-foreground hover:bg-secondary transition"
+            title="드래그하여 순서 변경"
+            aria-label={`${playbook.name} 드래그하여 순서 변경`}
+          >
+            <GripVertical className="w-3.5 h-3.5" aria-hidden="true" />
+          </button>
+        }
+      />
     </div>
   );
 }
@@ -77,7 +85,7 @@ export function PlaybooksPage() {
     [urlParams.cluster],
   );
   const setSelectedClusterIds = (ids: string[]) => setUrlParams({ cluster: ids.join(',') });
-  const sortKey = pickParam<PlaybookSortKey>(urlParams.sort, ['name', 'status', 'lastRunAt'], 'name');
+  const sortKey = pickParam<PlaybookSortKey>(urlParams.sort, SORT_KEYS, 'name');
   const setSortKey = (k: PlaybookSortKey) => setUrlParams({ sort: k });
   const sortDir = pickParam(urlParams.dir, ['asc', 'desc'] as const, 'asc');
   const viewMode = pickParam<ViewMode>(urlParams.view, ['list', 'card'], 'list');
@@ -104,6 +112,13 @@ export function PlaybooksPage() {
   const toggleDashboard = useToggleDashboard();
   // §12.9 — 등록·전체 실행은 operator 이상. 숨기지 않고 비활성+사유(D-145). 행·카드 버튼은 컴포넌트가 클러스터별로 판정.
   const { canOperate, withHint, ariaWithHint } = useCanOperate();
+  // 전체 실행은 클러스터마다 operate 권한을 따로 본다(테넌트 바인딩) — 없는 클러스터의 플레이북은 보내지 않는다.
+  const isAdmin = useAuthStore((s) => s.user?.role === 'admin');
+  const clusterAccess = useMyClusterAccess(!isAdmin);
+  const canOperateCluster = (clusterId: string) => {
+    const level = clusterAccess.data?.[clusterId];
+    return level === undefined || level === 'operate';
+  };
   // 실행·삭제 확인(D-141·D-142) — 무엇을 어디에 실행/삭제하는지 보여준 뒤 진행한다.
   const [runConfirm, setRunConfirm] = useState<{ pb: Playbook; creds: PlaybookSshCreds } | null>(null);
   const [runAllConfirm, setRunAllConfirm] = useState(false);
@@ -124,7 +139,7 @@ export function PlaybooksPage() {
     () => `k8s:order:playbooks:${selectedClusterIds.length === 0 ? '__all__' : [...selectedClusterIds].sort().join(',')}`,
     [selectedClusterIds],
   );
-  const { orderedItems: dndPlaybooks, handleDragEnd: dndHandleDragEnd } = useLocalOrder(basePlaybooks, orderKey);
+  const { orderedItems: dndPlaybooks, handleDragEnd: dndHandleDragEnd, setOrder: setManualOrder } = useLocalOrder(basePlaybooks, orderKey);
   const dndSensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
 
   // 과거에 'card' 로 저장된 사용자가 있을 수 있으므로 마운트 시 캐시를 한 번 정리한다.
@@ -142,6 +157,7 @@ export function PlaybooksPage() {
 
   // 정렬 적용
   const filteredPlaybooks = useMemo(() => {
+    if (sortKey === 'manual') return sortDir === 'asc' ? dndPlaybooks : [...dndPlaybooks].reverse();
     const sorted = [...dndPlaybooks].sort((a, b) => {
       let cmp = 0;
       if (sortKey === 'name') {
@@ -155,6 +171,24 @@ export function PlaybooksPage() {
     });
     return sorted;
   }, [dndPlaybooks, sortKey, sortDir]);
+
+  // 드래그 = 보이는 순서를 그대로 옮긴다. 정렬 기준이 켜져 있으면 지금 화면 순서를 사용자 지정 순서로 먼저
+  // 저장하고 manual 로 바꾼다 — 그러지 않으면 정렬이 드래그 결과를 바로 덮어 아무 일도 안 일어난 것처럼 보였다.
+  const handlePlaybookDragEnd = (e: DragEndEvent) => {
+    if (!e.over || e.active.id === e.over.id) return;
+    const activeId = String(e.active.id);
+    const overId = String(e.over.id);
+    if (sortKey === 'manual' && sortDir === 'asc') {
+      dndHandleDragEnd(activeId, overId);
+      return;
+    }
+    const ids = filteredPlaybooks.map((p) => p.id);
+    const from = ids.indexOf(activeId);
+    const to = ids.indexOf(overId);
+    if (from < 0 || to < 0) return;
+    setManualOrder(arrayMove(ids, from, to));
+    setUrlParams({ sort: 'manual', dir: 'asc' });
+  };
 
   // 모달이 결과를 기다린다(D-143) — Promise 를 그대로 돌려줘 실패 시 모달 안에 사유를 띄운다.
   const handleCreate = (data: PlaybookFormSubmit) =>
@@ -236,23 +270,30 @@ export function PlaybooksPage() {
   };
 
   // Run All 확인 문구용 — 대상(실행 중 제외)과 클러스터별 건수.
-  const runAllTargets = filteredPlaybooks.filter((p) => !runningIds.has(p.id));
+  const runAllTargets = filteredPlaybooks.filter((p) => !runningIds.has(p.id) && canOperateCluster(p.clusterId));
+  const runAllNoAccess = filteredPlaybooks.filter((p) => !runningIds.has(p.id) && !canOperateCluster(p.clusterId)).length;
   const runAllByCluster = (() => {
     const m = new Map<string, number>();
     for (const p of runAllTargets) m.set(p.clusterId, (m.get(p.clusterId) ?? 0) + 1);
     return [...m.entries()].map(([id, n]) => ({ id, name: clusterNameMap[id] ?? id, n }));
   })();
   const runAllCreds = runAllConfirm ? readSessionCreds() : null;
+  // 확인 창이 열린 사이 대상이 0개가 되면(전부 실행 중) 창을 닫는다 — 예전엔 busy 로 "처리 중"에 굳었다.
+  const noRunAllTargets = runAllTargets.length === 0;
+  useEffect(() => {
+    if (runAllConfirm && noRunAllTargets) setRunAllConfirm(false);
+  }, [runAllConfirm, noRunAllTargets]);
 
   // Run All — 표시 중인 플레이북을 병렬 실행. 한 개 실패가 나머지를 막지 않는다(allSettled).
   const handleRunAll = async () => {
     const cached = readSessionCreds();
-    const targets = filteredPlaybooks.filter((p) => !runningIds.has(p.id));
+    const targets = runAllTargets;
     if (targets.length === 0) return;
     const results: { status: string | null }[] = [];
     await runLogged(runLog, {
       title: `플레이북 일괄 실행 — ${targets.length}개`,
-      first: `플레이북 ${targets.length}개 병렬 실행 요청${cached ? ` (세션 자격증명 ${cached.ssh_username ?? ''})` : ' (세션 자격증명 없음)'}`,
+      first: `플레이북 ${targets.length}개 병렬 실행 요청${cached ? ` (세션 자격증명 ${cached.ssh_username ?? ''})` : ' (세션 자격증명 없음)'}${
+        runAllNoAccess > 0 ? ` · 실행 권한 없는 클러스터의 ${runAllNoAccess}개 제외` : ''}`,
       fn: () => Promise.allSettled(targets.map(async (p) => {
         runLog.setStep(p.id, p.name, 'running');
         try {
@@ -293,7 +334,7 @@ export function PlaybooksPage() {
         const a = document.createElement('a');
         const today = new Date().toISOString().slice(0, 10);
         a.href = url;
-        a.download = `k8s-daily-report-${today}.md`;
+        a.download = `playbook-report-${today}.md`;
         a.click();
         URL.revokeObjectURL(url);
         return [['info', `${a.download} 내려받기 · ${blob.size} bytes`]];
@@ -363,10 +404,10 @@ export function PlaybooksPage() {
             actions={
             <div className="flex items-center gap-3 flex-wrap">
               {/* View Mode Toggle */}
-              <div className="inline-flex items-center bg-background border border-border rounded-lg p-0.5">
+              <div className="inline-flex items-center bg-background border border-border rounded-xl p-0.5">
                 <button
                   onClick={() => setViewMode('list')}
-                  className={`px-2 py-1.5 text-sm rounded inline-flex items-center gap-1 transition-colors ${
+                  className={`px-2 py-1.5 text-sm rounded-lg inline-flex items-center gap-1 transition-colors ${
                     viewMode === 'list' ? 'bg-secondary text-foreground font-medium' : 'text-muted-foreground hover:text-foreground'
                   }`}
                   title="목록 보기"
@@ -378,7 +419,7 @@ export function PlaybooksPage() {
                 </button>
                 <button
                   onClick={() => setViewMode('card')}
-                  className={`px-2 py-1.5 text-sm rounded inline-flex items-center gap-1 transition-colors ${
+                  className={`px-2 py-1.5 text-sm rounded-lg inline-flex items-center gap-1 transition-colors ${
                     viewMode === 'card' ? 'bg-secondary text-foreground font-medium' : 'text-muted-foreground hover:text-foreground'
                   }`}
                   title="카드 보기"
@@ -397,19 +438,20 @@ export function PlaybooksPage() {
                   aria-label="정렬 기준"
                   value={sortKey}
                   onChange={(e) => setSortKey(e.target.value as PlaybookSortKey)}
-                  className="px-2 py-1.5 text-sm bg-background border border-border rounded-lg"
+                  className="px-2 py-1.5 text-sm bg-background border border-border rounded-xl"
                 >
+                  <option value="manual">사용자 지정 순서</option>
                   <option value="name">이름순</option>
                   <option value="status">상태순</option>
                   <option value="lastRunAt">최근 실행순</option>
                 </select>
                 <button
                   onClick={() => setUrlParams({ dir: sortDir === 'asc' ? 'desc' : 'asc' })}
-                  className="px-2 py-1.5 text-sm bg-background border border-border rounded-lg hover:bg-secondary transition-colors"
+                  className="px-2 py-1.5 text-sm bg-background border border-border rounded-xl hover:bg-secondary transition-colors"
                   title={sortDir === 'asc' ? '오름차순' : '내림차순'}
                   aria-label={sortDir === 'asc' ? '오름차순' : '내림차순'}
                 >
-                  {sortDir === 'asc' ? '↑' : '↓'}
+                  {sortDir === 'asc' ? <ArrowUp className="w-4 h-4" aria-hidden="true" /> : <ArrowDown className="w-4 h-4" aria-hidden="true" />}
                 </button>
               </div>
 
@@ -417,7 +459,7 @@ export function PlaybooksPage() {
                 <>
                   <button
                     onClick={handleExportReport}
-                    className="px-4 py-2 text-sm font-medium bg-secondary hover:bg-secondary/80 border border-border rounded-lg transition-colors flex items-center gap-2"
+                    className="px-4 py-2 text-sm font-medium bg-secondary hover:bg-secondary/80 border border-border rounded-xl transition-colors flex items-center gap-2"
                   >
                     <Download className="w-4 h-4" />
                     리포트 내보내기(.md)
@@ -425,9 +467,11 @@ export function PlaybooksPage() {
                   <button
                     onClick={() => setRunAllConfirm(true)}
                     disabled={!canOperate || runAllTargets.length === 0}
-                    title={withHint(runAllTargets.length === 0 ? '모든 플레이북이 이미 실행 중입니다' : '표시 중인 플레이북 전체 실행')}
+                    title={withHint(runAllTargets.length === 0
+                      ? (runAllNoAccess > 0 ? '실행할 수 있는 플레이북이 없습니다(실행 중이거나 클러스터 실행 권한 없음)' : '모든 플레이북이 이미 실행 중입니다')
+                      : '표시 중인 플레이북 전체 실행')}
                     aria-label={ariaWithHint('전체 실행')}
-                    className="px-4 py-2 text-sm font-medium bg-primary hover:bg-primary/90 text-primary-foreground rounded-lg transition-colors flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="px-4 py-2 text-sm font-medium bg-primary hover:bg-primary/90 text-primary-foreground rounded-xl transition-colors flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     <Play className="w-4 h-4" />
                     전체 실행
@@ -440,7 +484,7 @@ export function PlaybooksPage() {
                 disabled={!canOperate}
                 title={withHint('플레이북 등록')}
                 aria-label={ariaWithHint('플레이북 등록')}
-                className="px-4 py-2 text-sm font-medium bg-primary hover:bg-primary/90 text-primary-foreground rounded-lg transition-colors flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                className="px-4 py-2 text-sm font-medium bg-primary hover:bg-primary/90 text-primary-foreground rounded-xl transition-colors flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 <Plus className="w-4 h-4" />
                 플레이북 등록
@@ -483,7 +527,7 @@ export function PlaybooksPage() {
                 <button
                   type="button"
                   onClick={() => { setEditPlaybook(null); setShowAdd(true); }}
-                  className="mt-4 px-3.5 py-1.5 text-sm font-semibold rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 transition-colors"
+                  className="mt-4 px-3.5 py-1.5 text-sm font-semibold rounded-xl bg-primary text-primary-foreground hover:bg-primary/90 transition-colors"
                 >
                   플레이북 등록
                 </button>
@@ -493,7 +537,7 @@ export function PlaybooksPage() {
             <DndContext
               sensors={dndSensors}
               collisionDetection={closestCenter}
-              onDragEnd={(e: DragEndEvent) => { if (e.over) dndHandleDragEnd(String(e.active.id), String(e.over.id)); }}
+              onDragEnd={handlePlaybookDragEnd}
             >
               <SortableContext items={filteredPlaybooks.map((p) => p.id)} strategy={verticalListSortingStrategy}>
                 <div className="space-y-1.5">
@@ -517,7 +561,7 @@ export function PlaybooksPage() {
             <DndContext
               sensors={dndSensors}
               collisionDetection={closestCenter}
-              onDragEnd={(e: DragEndEvent) => { if (e.over) dndHandleDragEnd(String(e.active.id), String(e.over.id)); }}
+              onDragEnd={handlePlaybookDragEnd}
             >
               <SortableContext items={filteredPlaybooks.map((p) => p.id)} strategy={rectSortingStrategy}>
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
@@ -526,10 +570,12 @@ export function PlaybooksPage() {
                       key={playbook.id}
                       playbook={playbook}
                       isRunning={runningIds.has(playbook.id)}
+                      clusterName={showClusterLabel ? clusterNameMap[playbook.clusterId] : undefined}
                       onRun={() => handleRunOne(playbook)}
                       onEdit={() => handleOpenEdit(playbook)}
                       onDelete={() => handleDelete(playbook)}
                       onToggleDashboard={() => handleToggleDashboard(playbook)}
+                      onViewLog={() => setLogTarget(playbook)}
                     />
                   ))}
                 </div>
@@ -605,7 +651,6 @@ export function PlaybooksPage() {
         }에서 병렬로 실행합니다. 각 인벤토리의 호스트에 ansible-playbook 이 바로 실행됩니다.`}
         confirmLabel={`${runAllTargets.length}개 실행`}
         danger
-        busy={runAllTargets.length === 0}
         onConfirm={() => {
           setRunAllConfirm(false);
           void handleRunAll();
@@ -615,6 +660,9 @@ export function PlaybooksPage() {
         <div className="space-y-2 text-sm">
           {selectedClusterIds.length === 0 && (
             <p className="font-semibold text-status-warning">클러스터를 고르지 않아 전체 클러스터가 대상입니다.</p>
+          )}
+          {runAllNoAccess > 0 && (
+            <p className="text-muted-foreground">실행 권한이 없는 클러스터(테넌트 바인딩)의 플레이북 {runAllNoAccess}개는 제외합니다.</p>
           )}
           <ul className="max-h-40 overflow-y-auto space-y-0.5">
             {runAllByCluster.map((c) => (
