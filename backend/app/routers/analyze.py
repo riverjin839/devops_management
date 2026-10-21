@@ -18,7 +18,7 @@ import re
 import threading
 import time
 import weakref
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Literal, Optional
 from uuid import UUID
 
@@ -668,7 +668,8 @@ _SSE_HEADERS = {
 }
 
 # kubelet 이 붙이는 RFC3339Nano 타임스탬프 (timestamps=true).
-_LOG_TS_RE = re.compile(r"^(\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d)(?:\.(\d{1,9}))?Z$")
+# 끝은 `Z` 또는 `+09:00` 같은 오프셋 — containerd 가 노드 로컬 시간대로 쓴 줄도 kubelet 이 그대로 넘긴다.
+_LOG_TS_RE = re.compile(r"^(\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d)(?:\.(\d{1,9}))?(Z|[+-]\d\d:\d\d)$")
 
 
 def _stream_limit_detail() -> str:
@@ -732,7 +733,15 @@ def _log_ts_key(line: str) -> tuple[Optional[tuple[str, int]], str]:
     if not m:
         return None, line
     nanos = int((m.group(2) or "0").ljust(9, "0"))
-    return (m.group(1), nanos), rest
+    secs = m.group(1)
+    if m.group(3) != "Z":
+        # 오프셋 시각은 UTC 로 맞춰 비교한다(재연결 중복 제거 키는 UTC 초 문자열 + 나노초).
+        try:
+            secs = (datetime.fromisoformat(secs + m.group(3)).astimezone(timezone.utc)
+                    .strftime("%Y-%m-%dT%H:%M:%S"))
+        except ValueError:
+            return None, line
+    return (secs, nanos), rest
 
 
 def _shutdown_resp(resp) -> None:

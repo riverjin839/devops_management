@@ -317,3 +317,15 @@ def _safe_float(val) -> Optional[float]:
 
 # Module-level singleton
 prometheus_service = PrometheusService()
+
+
+async def aclose_if_private(svc: "PrometheusService") -> None:
+    """클러스터별 URL 오버라이드로 새로 만든 인스턴스의 httpx 클라이언트를 닫는다(전역 싱글톤은 유지)."""
+    if svc is prometheus_service:
+        return
+    client = getattr(svc, "_client", None)
+    if client is not None:
+        try:
+            await client.aclose()
+        except Exception:  # noqa: BLE001
+            pass

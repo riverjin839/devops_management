@@ -218,3 +218,13 @@ def test_schema_rejects_invalid_label(raw):
 def test_schema_update_unset_keeps_value():
     assert "trend_node_label" not in ClusterUpdate(name="x").model_dump(exclude_unset=True)
     assert ClusterResponse.model_fields["trend_node_label"].default is None
+
+
+def test_node_names_with_dash_and_dot_are_valid_promql_strings(monkeypatch):
+    # re.escape 결과(`\-`·`\.`)를 그대로 PromQL 큰따옴표 문자열에 넣으면 "unknown escape sequence" 로
+    # 질의 전체가 실패한다 — 문자열 안에서는 `\\-` 로 한 번 더 escape 돼야 한다.
+    svc = FakeProm("instance")
+    _call(monkeypatch, svc, label="instance", nodes="worker-1.example,n2")
+    assert svc.range_queries
+    for q in svc.range_queries:
+        assert r'instance=~"worker\\-1\\.example|n2"' in q

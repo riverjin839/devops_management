@@ -86,11 +86,6 @@ class ClusterBase(BaseModel):
     observability_mode: Optional[str] = Field(default=None, max_length=16)
     observability_enabled: Optional[bool] = None
 
-    @field_validator("trend_node_label", mode="before")
-    @classmethod
-    def _v_trend_node_label(cls, v):
-        return _normalize_trend_node_label(v)
-
 
 class ClusterCreate(ClusterBase):
     # kubeconfig YAML 원문 (직접 입력 / 파일 업로드 시 사용). 연결 검증에 임시 파일로 쓰고,
@@ -98,6 +93,13 @@ class ClusterCreate(ClusterBase):
     kubeconfig_content: Optional[str] = None
     # 연결 검증 생략 여부 (네트워크 미연결 환경에서 임시 등록 시 사용)
     skip_connectivity_check: bool = False
+
+    # 입력 검증은 생성·수정 스키마에만 — 응답(ClusterResponse)에 걸면 복원·수동 편집으로 들어온
+    # 형식 밖 값 하나가 클러스터 목록 전체를 500 으로 만든다.
+    @field_validator("trend_node_label", mode="before")
+    @classmethod
+    def _v_trend_node_label(cls, v):
+        return _normalize_trend_node_label(v)
 
 
 class ClusterUpdate(BaseModel):

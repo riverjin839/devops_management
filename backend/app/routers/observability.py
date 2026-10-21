@@ -87,7 +87,7 @@ from app.services.observability.alert_router import (
     route_and_notify,
     set_alert_settings,
 )
-from app.services.prometheus_service import PrometheusService, prometheus_service
+from app.services.prometheus_service import PrometheusService, aclose_if_private, prometheus_service
 
 logger = logging.getLogger(__name__)
 
@@ -596,7 +596,11 @@ async def preview_metric(
         prom = _prom_for(cluster)
         if prom is None:
             return MetricPreviewOut(ok=False, duration_ms=_elapsed(), error=_offline_detail(cluster))
-        out = await asyncio.wait_for(_run_preview(prom, body.query), timeout=_PREVIEW_TIMEOUT_SEC)
+        try:
+            out = await asyncio.wait_for(_run_preview(prom, body.query), timeout=_PREVIEW_TIMEOUT_SEC)
+        finally:
+            # URL 오버라이드 클러스터는 요청마다 새 클라이언트를 만든다 — 소켓이 GC 까지 남지 않게 닫는다.
+            await aclose_if_private(prom)
         return MetricPreviewOut(duration_ms=_elapsed(), **out)
     except asyncio.TimeoutError:
         return MetricPreviewOut(

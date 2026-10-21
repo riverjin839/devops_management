@@ -638,7 +638,8 @@ export function PodLogStream({
 
   const targetChanged = !!shownTarget && view.count > 0 && !streaming
     && (shownTarget.container !== container || shownTarget.previous !== previous);
-  const canResume = !Number.isNaN(lastMsRef.current) && view.count > 0 && follow && !previous;
+  // 대상(컨테이너·이전 컨테이너)이 바뀐 뒤에는 이어 받기를 막는다 — 새 대상 로그를 옛 대상 마지막 시각으로 걸러 이어 붙이면 섞인다.
+  const canResume = !Number.isNaN(lastMsRef.current) && view.count > 0 && follow && !previous && !targetChanged;
 
   return (
     <div>

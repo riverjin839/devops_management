@@ -380,3 +380,17 @@ def test_events_share_limit_with_logs(monkeypatch):
     for h in held:
         h.gen.close()
     assert analyze._stream_limiter.in_use() == 0
+
+
+@pytest.mark.parametrize("line, key", [
+    ("2026-10-21T00:00:00.5Z hi", ("2026-10-21T00:00:00", 500_000_000)),
+    # 노드 로컬 시간대(+09:00)로 기록된 줄도 UTC 로 맞춰 같은 키가 된다 — 재연결 중복 제거가 꺼지지 않게.
+    ("2026-10-21T09:00:00.5+09:00 hi", ("2026-10-21T00:00:00", 500_000_000)),
+    ("2026-10-20T23:30:00-00:30 hi", ("2026-10-21T00:00:00", 0)),
+])
+def test_log_ts_key_accepts_offsets(line, key):
+    assert analyze._log_ts_key(line) == (key, "hi")
+
+
+def test_log_ts_key_without_timestamp():
+    assert analyze._log_ts_key("plain line") == (None, "plain line")

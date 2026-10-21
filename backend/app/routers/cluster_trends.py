@@ -206,7 +206,9 @@ async def cluster_trends(
     duration, step, window = _RANGE_MAP[range]
     configured = _configured_label(cluster)
     # 노드명을 regex 로 묶음 (정규식 메타문자 escape — 노드명에 '.' 등 포함 가능).
-    node_regex = "|".join(re.escape(n) for n in node_list)
+    # re.escape 는 `-`·`.` 앞에 `\` 를 붙이는데 PromQL 큰따옴표 문자열은 `\-` 같은 미지의 escape 를 거부한다
+    # (parse error) — 문자열 안에서 한 번 더 escape 해 정규식 엔진에 `\-` 가 그대로 가게 한다.
+    node_regex = "|".join(re.escape(n) for n in node_list).replace("\\", "\\\\")
 
     base = {
         "range": range,
@@ -312,16 +314,8 @@ async def cluster_trends(
 
 
 async def _close_if_private(svc: PrometheusService) -> None:
-    """클러스터별 URL 오버라이드로 새로 만든 인스턴스의 httpx 클라이언트를 닫는다(전역 싱글톤은 유지)."""
-    from app.services.prometheus_service import prometheus_service as _shared
-    if svc is _shared:
-        return
-    client = getattr(svc, "_client", None)
-    if client is not None:
-        try:
-            await client.aclose()
-        except Exception:  # noqa: BLE001
-            pass
+    from app.services.prometheus_service import aclose_if_private
+    await aclose_if_private(svc)
 
 
 def _to_float(val) -> Optional[float]:
