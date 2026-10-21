@@ -344,3 +344,128 @@ def test_settings_rejects_bad_templates(db, settings_reset):
         assert r.status_code == 200 and r.json()["probe_timeout_sec"] == 15 and r.json()["check_source"] == "node"
     finally:
         app.dependency_overrides.pop(get_current_user, None)
+
+
+# ── TLS 인증서 ──────────────────────────────────────────────────────────────────
+from app.services import external_tls as tls  # noqa: E402
+
+
+def _self_signed(cn: str, sans: list[str], days: int, tmp_path):
+    from datetime import datetime as _dt, timedelta as _td, timezone as _tz
+    from cryptography import x509
+    from cryptography.hazmat.primitives import hashes, serialization
+    from cryptography.hazmat.primitives.asymmetric import ec
+    from cryptography.x509.oid import NameOID
+    key = ec.generate_private_key(ec.SECP256R1())
+    name = x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, cn)])
+    now = _dt.now(_tz.utc)
+    cert = (x509.CertificateBuilder().subject_name(name).issuer_name(name).public_key(key.public_key())
+            .serial_number(x509.random_serial_number()).not_valid_before(now - _td(days=1))
+            .not_valid_after(now + _td(days=days))
+            .add_extension(x509.SubjectAlternativeName([x509.DNSName(s) for s in sans]), critical=False)
+            .sign(key, hashes.SHA256()))
+    cert_p, key_p = tmp_path / "c.pem", tmp_path / "k.pem"
+    cert_p.write_bytes(cert.public_bytes(serialization.Encoding.PEM))
+    key_p.write_bytes(key.private_bytes(serialization.Encoding.PEM, serialization.PrivateFormat.PKCS8,
+                                        serialization.NoEncryption()))
+    return cert_p, key_p
+
+
+def test_fetch_backend_real_tls_handshake(tmp_path):
+    import socket as _s
+    import ssl as _ssl
+    import threading
+    cert_p, key_p = _self_signed("shop.example.com", ["shop.example.com", "*.shop.example.com"], 20, tmp_path)
+    ctx = _ssl.SSLContext(_ssl.PROTOCOL_TLS_SERVER)
+    ctx.load_cert_chain(cert_p, key_p)
+    srv = _s.socket()
+    srv.bind(("127.0.0.1", 0))
+    srv.listen(4)
+    port = srv.getsockname()[1]
+
+    def serve():
+        for _ in range(2):
+            try:
+                conn, _ = srv.accept()
+                with ctx.wrap_socket(conn, server_side=True) as c:
+                    c.recv(1)
+            except Exception:  # noqa: BLE001
+                pass
+    threading.Thread(target=serve, daemon=True).start()
+    try:
+        res = tls.fetch_backend([{"ip": "127.0.0.1", "port": port, "host": "a.shop.example.com"}], 3, lambda *_: None)
+    finally:
+        srv.close()
+    r = res[f"a.shop.example.com|127.0.0.1|{port}"]
+    assert r["error"] is None and r["subject_cn"] == "shop.example.com"
+    assert "*.shop.example.com" in r["san"]
+    v = tls.tls_view(r, "a.shop.example.com", 30, 7)
+    assert v["level"] == "warning" and v["days_left"] in (19, 20) and v["host_match"] is True
+    v2 = tls.tls_view(r, "other.example.com", 30, 7)
+    assert v2["host_match"] is False and tls.is_issue(v2)
+    closed = socket_free_port()
+    assert tls.fetch_backend([{"ip": "127.0.0.1", "port": closed, "host": None}], 2, lambda *_: None)[
+        f"|127.0.0.1|{closed}"]["error"] == "연결 거부"
+
+
+def test_tls_view_levels_and_host_match():
+    from datetime import datetime as _dt, timedelta as _td
+    now = _dt(2026, 10, 21)
+    rec = lambda d: {"not_after": (now + _td(days=d)).isoformat(), "san": ["a.example.com"]}  # noqa: E731
+    assert tls.tls_view(rec(100), "a.example.com", 30, 7, now)["level"] == "ok"
+    assert tls.tls_view(rec(20), None, 30, 7, now)["level"] == "warning"
+    assert tls.tls_view(rec(5), None, 30, 7, now)["level"] == "critical"
+    assert tls.tls_view(rec(-1), None, 30, 7, now)["level"] == "expired"
+    assert tls.tls_view({"error": "시간 초과"}, None, 30, 7, now)["level"] == "error"
+    assert not tls.is_issue(tls.tls_view({"error": "x"}, None, 30, 7, now))
+    assert tls.host_matches("x.example.com", ["*.example.com"])
+    assert not tls.host_matches("a.b.example.com", ["*.example.com"])
+    assert not tls.host_matches("example.com", ["*.example.com"])
+
+
+def test_parse_openssl_output():
+    out = """notAfter=Nov  2 12:00:00 2026 GMT
+subject=CN = shop.example.com
+issuer=C = US, O = Let's Encrypt, CN = R11
+Certificate:
+        X509v3 extensions:
+            X509v3 Subject Alternative Name:
+                DNS:shop.example.com, DNS:www.shop.example.com
+"""
+    r = tls.parse_openssl_output(out)
+    assert r["not_after"] == "2026-11-02T12:00:00" and r["subject_cn"] == "shop.example.com"
+    assert r["issuer_cn"] == "R11" and r["san"] == ["shop.example.com", "www.shop.example.com"]
+    assert tls.parse_openssl_output("")["error"]
+
+
+def test_tls_targets_and_script():
+    entries = [
+        {"kind": "Ingress", "ip": "10.0.0.7", "port": 443, "scheme": "https", "host": "a.example.com"},
+        {"kind": "Ingress", "ip": "10.0.0.7", "port": 80, "scheme": "http", "host": "a.example.com"},
+        {"kind": "LoadBalancer", "ip": "10.0.0.5", "port": 443, "scheme": None, "host": None},
+        {"kind": "LoadBalancer", "ip": "10.0.0.6", "port": 9200, "scheme": None, "host": None},
+    ]
+    ts = tls.tls_targets(entries, [], {"10.0.0.5": {"names": ["gw.corp."]}}, [443, 8443], 100)
+    assert [tls.tls_key(t) for t in ts] == ["a.example.com|10.0.0.7|443", "gw.corp|10.0.0.5|443"]
+    script = tls.build_tls_script(ts + [{"ip": "10.0.0.8", "port": 443, "host": "x;reboot"}],
+                                  tls.DEFAULT_TLS_COMMAND, 3)
+    assert "-connect 10.0.0.7:443 -servername a.example.com" in script and "reboot" not in script
+    assert es.template_ok(tls.DEFAULT_TLS_COMMAND)
+
+
+def test_collect_tls_view(db, cluster, settings_reset, fake_k8s, monkeypatch):
+    from datetime import datetime as _dt, timedelta as _td
+    es.set_settings(db, {"exclude_namespaces": ["kube-system"], "forward_check": False, "probe_enabled": False})
+    monkeypatch.setattr(es, "resolve_backend", lambda ips, timeout, emit: {ip: [] for ip in ips})
+    soon = (_dt.utcnow() + _td(days=3, hours=1)).isoformat()
+    monkeypatch.setattr(tls, "fetch_backend", lambda targets, timeout, emit: {
+        tls.tls_key(t): {"not_after": soon, "subject_cn": "x", "issuer_cn": "ca", "san": [t["host"] or "x"],
+                         "error": None} for t in targets})
+    logs = []
+    assert es.collect(db, cluster, resolver="backend", emit=lambda lvl, msg: logs.append(msg))["ok"]
+    assert any("인증서 확인(backend)" in m and "임박 1" in m for m in logs)
+    view = es.public_view(db, cluster)
+    by_ip = {e["ip"]: e for e in view["entries"]}
+    assert by_ip["10.0.0.5"]["tls"]["level"] == "critical" and by_ip["10.0.0.5"]["tls"]["days_left"] == 3
+    assert by_ip["10.0.0.7"]["tls"] is None            # http 전용 Ingress → 대상 아님
+    assert view["summary"]["tls_expiring"] == 1 and view["summary"]["issues"] == 1

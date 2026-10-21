@@ -9,6 +9,8 @@
 - fwd_cache: {domain: {ips, source, error, checked_at}} — 도메인 정방향(A 레코드) 검증 결과.
 - probe_results: {"scheme|host|ip|port": {reachable, method, http_status, latency_ms, error, source, checked_at}}
   — 엔드포인트 응답 확인 결과.
+- tls_results: {"host|ip|port": {not_after, subject_cn, issuer_cn, san, error, source, checked_at}} — TLS 인증서
+  점검 결과(남은 일수는 조회 시점에 계산).
 - 자격증명은 저장하지 않는다(SSH 역조회는 요청 시에만 쓰고 버린다).
 """
 from __future__ import annotations
@@ -34,6 +36,7 @@ class ExternalServiceSnapshot(Base):
     ptr_cache = Column(JSONB, nullable=False, default=dict)
     fwd_cache = Column(JSONB, nullable=True)
     probe_results = Column(JSONB, nullable=True)
+    tls_results = Column(JSONB, nullable=True)
     summary = Column(JSONB, nullable=True)
     resolver = Column(String(16), nullable=True)     # 마지막 수집의 역조회 방식: ssh | backend | none
     collected_by = Column(String(64), nullable=True)  # 사용자명 | schedule

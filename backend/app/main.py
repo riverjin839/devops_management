@@ -1463,6 +1463,7 @@ def _run_migrations():
     if "external_service_snapshots" in inspector.get_table_names():
         _safe_add_column("external_service_snapshots", "fwd_cache", "JSONB")
         _safe_add_column("external_service_snapshots", "probe_results", "JSONB")
+        _safe_add_column("external_service_snapshots", "tls_results", "JSONB")
 
 
 def _sync_missing_model_columns() -> None:

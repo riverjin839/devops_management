@@ -53,8 +53,32 @@ export function probeView(e: ExternalServiceEntry): { text: string; cls: string;
   return { text: `열림${ms}`, cls: 'text-muted-foreground', title: `${where} TCP 연결` };
 }
 
+/** 인증서 표시 — 만료·위험(≤ 위험 일수)=critical, 경고(≤ 경고 일수)·호스트 불일치=warning, 정상은 회색. */
+export function tlsView(e: ExternalServiceEntry): { text: string; cls: string; title?: string } | null {
+  const t = e.tls;
+  if (!t) return null;
+  const where = t.source === 'node' ? '노드' : 'backend';
+  if (t.level === 'error') return { text: t.error || '확인 실패', cls: 'text-muted-foreground', title: `${where}에서 인증서를 받지 못함` };
+  const date = t.notAfter ? t.notAfter.slice(0, 10) : '';
+  const detail = [
+    `만료 ${t.notAfter?.replace('T', ' ').slice(0, 16)} UTC`,
+    t.subjectCn ? `주체 ${t.subjectCn}` : null,
+    t.issuerCn ? `발급자 ${t.issuerCn}` : null,
+    t.san.length ? `SAN ${t.san.join(', ')}` : null,
+    `${where}에서 확인`,
+  ].filter(Boolean).join('\n');
+  const mismatch = t.hostMatch === false ? ' · 호스트 불일치' : '';
+  if (t.level === 'expired') return { text: `만료됨 (${date})${mismatch}`, cls: 'text-status-critical font-medium', title: detail };
+  const text = `D-${t.daysLeft} (${date})${mismatch}`;
+  if (t.level === 'critical') return { text, cls: 'text-status-critical font-medium', title: detail };
+  if (t.level === 'warning' || t.hostMatch === false) return { text, cls: 'text-status-warning font-medium', title: detail };
+  return { text, cls: 'text-muted-foreground', title: detail };
+}
+
 export function hasIssue(e: ExternalServiceEntry): boolean {
-  return e.fwd?.status === 'mismatch' || e.fwd?.status === 'nxdomain' || (e.probe != null && !e.probe.reachable);
+  const t = e.tls;
+  return e.fwd?.status === 'mismatch' || e.fwd?.status === 'nxdomain' || (e.probe != null && !e.probe.reachable)
+    || (t != null && (t.level === 'warning' || t.level === 'critical' || t.level === 'expired' || t.hostMatch === false));
 }
 
 export function matches(e: ExternalServiceEntry, q: string): boolean {
@@ -67,13 +91,15 @@ export function matches(e: ExternalServiceEntry, q: string): boolean {
 export function toCsv(rows: ExternalServiceEntry[]): string {
   const esc = (v: unknown) => `"${String(v ?? '').replace(/"/g, '""')}"`;
   const head = ['domain', 'domain_source', 'ptr_names', 'ip', 'port', 'protocol', 'scheme', 'kind', 'namespace', 'name', 'target', 'paths',
-    'forward_status', 'forward_ips', 'reachable', 'http_status', 'latency_ms', 'probe_error'];
+    'forward_status', 'forward_ips', 'reachable', 'http_status', 'latency_ms', 'probe_error',
+    'cert_not_after', 'cert_days_left', 'cert_level', 'cert_host_match', 'cert_subject', 'cert_issuer'];
   const lines = rows.map((e) => {
     const d = domainOf(e);
     return [d.primary, d.source, (e.ptrNames ?? []).join(' '), e.ip ?? e.hostname, e.port, e.protocol, e.scheme,
       e.kind, e.namespace, e.name, e.target, (e.paths ?? []).join(' | '),
       e.fwd?.status, (e.fwd?.ips ?? []).join(' '), e.probe ? String(e.probe.reachable) : '', e.probe?.httpStatus,
-      e.probe?.latencyMs, e.probe?.error].map(esc).join(',');
+      e.probe?.latencyMs, e.probe?.error, e.tls?.notAfter, e.tls?.daysLeft, e.tls?.level,
+      e.tls?.hostMatch == null ? '' : String(e.tls.hostMatch), e.tls?.subjectCn, e.tls?.issuerCn].map(esc).join(',');
   });
   return [head.join(','), ...lines].join('\n');
 }
