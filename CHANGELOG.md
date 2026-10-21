@@ -8,7 +8,9 @@
 
 ## [Unreleased]
 
-1.67.0 이후 main 에 병합된 변경 (다음 릴리스 후보).
+1.68.0 이후 main 에 병합된 변경 (다음 릴리스 후보).
+
+## [1.68.0] - 2026-10-21
 
 ### Added
 - **AI/LLM 연결 진단 실행**: Settings → AI/LLM 프로필 행의 **연결 진단 실행** 버튼이 설정 원천(DB 저장값이 env 를 덮는지) → DNS → 포트 → Ollama 서버 → 모델 확인(이름 해석) → 모델 정보(크기·양자화·num_ctx) → 응답 테스트(로딩 시간·tok/s) 7단계를 실시간 실행 로그로 보여주고, 막힌 단계마다 조치 힌트를 남긴다. 자동 해석된 실제 모델명은 버튼 한 번으로 프로필에 저장한다. Backend: `POST /api/v1/llm/diagnose`(SSE, `services/llm/diagnostics.py`).
