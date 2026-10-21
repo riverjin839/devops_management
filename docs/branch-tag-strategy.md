@@ -35,7 +35,9 @@ PEP 는 **v1.0.0 정식 오픈** 이후 **trunk 기반 + SemVer 태그**로 운�
    `backend/app/main.py` ×2) + `CHANGELOG.md` `[Unreleased]` → `## [X.Y.Z] - <date>` 확정
    (Unreleased 에 실제 항목이 없으면 전체를 스킵). 이때 `--rescue-from HEAD^1` 로 **릴리스 섹션
    구제**를 먼저 한다 — 아래 "이미 릴리스된 섹션 보호" 참고.
-3. `chore(release): vX.Y.Z` PR 을 열고 즉시 병합.
+3. `chore(release): vX.Y.Z` PR 을 열고 즉시 병합. 릴리스 커밋 메시지에 `[skip ci]` 를 붙여 PR CI 를 띄우지 않는다 —
+   PR 이 곧바로 머지·브랜치 삭제돼 PR CI 가 사라진 merge ref 를 못 찾고 job 0개로 실패하던 노이즈 제거.
+   검증은 병합 커밋의 `main` push CI 가 한다.
 4. 병합 커밋에 annotated 태그 `vX.Y.Z` 를 push → 아래 `release.yml` 자동 트리거.
 
 #### 이미 릴리스된 섹션 보호

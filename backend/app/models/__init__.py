@@ -40,6 +40,7 @@ from app.models.user import User
 from app.models.user_setting import UserSetting
 from app.models.island import Island
 from app.models.audit_log import AuditLog
+from app.models.system_error_log import SystemErrorLog
 from app.models.check_definitions import (
     DeepCheckDefinition,
     DeepCheckResult,
@@ -140,6 +141,7 @@ __all__ = [
     "UserSetting",
     "Island",
     "AuditLog",
+    "SystemErrorLog",
     "DeepCheckDefinition",
     "DeepCheckResult",
     "NotificationChannel",

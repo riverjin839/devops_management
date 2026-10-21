@@ -3581,6 +3581,94 @@ export interface AuthUserDetail {
   authSource?: 'local' | 'ldap' | 'external' | null;
 }
 
+/** GET /system-diagnostics — 섹션별 상태. 수집 실패 섹션은 status='offline' + error 만 있을 수 있다. */
+export type DiagStatus = 'ok' | 'warning' | 'critical' | 'offline';
+
+interface DiagSectionBase {
+  status: DiagStatus;
+  error?: string;
+  problems?: string[];
+  collectedMs?: number;
+}
+
+export interface DiagPodHeartbeat {
+  pod: string;
+  version: string | null;
+  processStartedAt: string | null;
+  bootFinishedAt: string | null;
+  bootDurationMs: number | null;
+  failedSteps: string[];
+  pendingDdl: string[];
+  rssMb: number | null;
+  ts: string;
+}
+
+export interface DiagBootStep { name: string; ok: boolean; error: string | null; durationMs: number }
+
+export interface SystemDiagnostics {
+  generatedAt: string;
+  overall: DiagStatus;
+  thresholds: Record<string, number>;
+  respondingPod: DiagSectionBase & {
+    pod?: string; version?: string | null; processStartedAt?: string; uptimeSeconds?: number; rssMb?: number | null;
+  };
+  pods: DiagSectionBase & { pods?: DiagPodHeartbeat[]; versions?: string[] };
+  boot: DiagSectionBase & {
+    startedAt?: string | null; finishedAt?: string | null; durationMs?: number | null;
+    advisoryLock?: string | null; stepCount?: number; failedSteps?: DiagBootStep[]; slowSteps?: DiagBootStep[];
+    pendingDdl?: string[];
+  };
+  celery: DiagSectionBase & {
+    brokerOk?: boolean; workers?: { name: string; active: number; reserved: number }[]; queues?: Record<string, number>;
+  };
+  database: DiagSectionBase & {
+    connections?: { total: number; max: number; usage: number };
+    pool?: { size: number | null; checkedOut: number | null; overflow: number | null };
+    longTransactions?: { pid: number; state: string | null; ageSeconds: number; application: string | null; client: string | null; query: string | null }[];
+    lockWaits?: { pid: number; waitSeconds: number | null; waitEvent: string | null; blockedBy: number[]; query: string | null }[];
+  };
+  runs: DiagSectionBase & { queued?: number; running?: number; staleQueued?: number; staleRunning?: number };
+  errors: DiagSectionBase & {
+    last1h?: number; last24h?: number; topPaths?: { path: string | null; count: number }[];
+    latest?: { requestId: string | null; method: string | null; path: string | null; statusCode: number; errorType: string | null; createdAt: string }[];
+  };
+}
+
+/** GET /system-errors — 서버 오류(처리 안 된 예외·5xx) 1건. 화면 오류 토스트의 요청 ID 로 찾는다. */
+export interface SystemErrorLog {
+  id: string;
+  requestId: string | null;
+  method: string | null;
+  path: string | null;
+  statusCode: number;
+  username: string | null;
+  pod: string | null;
+  appVersion: string | null;
+  errorType: string | null;
+  message: string | null;
+  traceback: string | null;
+  durationMs: number | null;
+  createdAt: string;
+}
+
+export interface SystemErrorRelatedAudit {
+  id: string;
+  action: string;
+  status: string;
+  actorUsername: string;
+  targetType: string | null;
+  targetId: string | null;
+  createdAt: string;
+}
+
+export interface SystemErrorListResponse {
+  total: number;
+  page: number;
+  pageSize: number;
+  items: SystemErrorLog[];
+  relatedAudit: SystemErrorRelatedAudit[];
+}
+
 export interface AuditLog {
   id: string;
   actorUserId?: string | null;
@@ -3895,7 +3983,7 @@ export interface OpsCheckRunItem {
   checkType?: string | null;
   name?: string | null;
   /** 실행 진행 상태 */
-  status: 'queued' | 'running' | 'done' | 'error';
+  status: 'queued' | 'running' | 'done' | 'error' | 'cancelled';
   /** 점검 판정 결과 */
   resultStatus?: 'healthy' | 'warning' | 'critical' | 'pending' | null;
   message?: string | null;

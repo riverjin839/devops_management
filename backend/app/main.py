@@ -4,13 +4,21 @@ from contextlib import asynccontextmanager
 from typing import Callable
 
 from anyio.to_thread import current_default_thread_limiter
-from fastapi import FastAPI
+import anyio
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import ORJSONResponse
 from sqlalchemy import event, text, inspect, func
 
 from app.config import settings
+import time as _time_mod
+
+from app.services import boot_state, pod_heartbeat, system_error_logger
+from app.services.request_context import (
+    HEADER as REQUEST_ID_HEADER, get_request_id, install_logging, new_request_id,
+)
+from app.services.request_id_middleware import RequestIdMiddleware
 from app.services.memory_watch import MemoryWatchMiddleware
 from app.database import engine, Base, SessionLocal
 from fastapi import Depends
@@ -66,6 +74,8 @@ from app.routers import (
     auth_oidc_router,
     auth_ldap_router,
     audit_logs_router,
+    system_errors_router,
+    system_diagnostics_router,
     check_results_router,
     check_ingest_router,
     check_definitions_router,
@@ -2390,9 +2400,14 @@ async def lifespan(app: FastAPI):
     # §config.py sync_threadpool_size 주석 참고.
     current_default_thread_limiter().total_tokens = settings.sync_threadpool_size
 
+    boot_state.begin()
+    boot_state.pending_ddl_provider = lambda: list(_pending_ddl)
+    _t = _time_mod.monotonic()
     try:
         _ensure_pgvector_extension()
+        boot_state.record_step("pgvector", _t)
     except Exception as e:  # noqa: BLE001
+        boot_state.record_step("pgvector", _t, e)
         _startup_log.exception("pgvector extension step failed — continuing: %s", e)
 
     # 멀티 replica(backend HPA, celery worker/beat 이미지 공용) 가 동시에 부팅하며
@@ -2418,12 +2433,14 @@ async def lifespan(app: FastAPI):
             if _locked or _time.monotonic() >= _deadline:
                 break
             _time.sleep(2)
+        boot_state.set_advisory_lock("acquired" if _locked else "timeout")
         if not _locked:
             _startup_log.warning(
                 "startup migration lock 을 %ss 안에 못 잡음 — 다른 replica 가 마이그레이션 중, 락 없이 진행",
                 settings.migration_advisory_wait_seconds,
             )
     except Exception as e:  # noqa: BLE001
+        boot_state.set_advisory_lock("failed")
         _startup_log.warning("startup migration lock 획득 실패(%s) — 락 없이 진행", e)
         if _lock_conn is not None:
             try:
@@ -2434,7 +2451,9 @@ async def lifespan(app: FastAPI):
 
     _migration_phase["active"] = True
     try:
+        _t = _time_mod.monotonic()
         _create_all_with_retry()
+        boot_state.record_step("create_all", _t, None if "create_all" not in _pending_ddl else RuntimeError("lock 경합으로 미룸"))
         for step_name, step in [
             ("migrations", _run_migrations),
             ("sync_missing_model_columns", _sync_missing_model_columns),
@@ -2460,9 +2479,12 @@ async def lifespan(app: FastAPI):
             ("seed_initial_admin", _seed_initial_admin),
             ("migrate_assignee_roster_to_users", _migrate_assignee_roster_to_users),
         ]:
+            _t = _time_mod.monotonic()
             try:
                 step()
+                boot_state.record_step(step_name, _t)
             except Exception as e:  # noqa: BLE001
+                boot_state.record_step(step_name, _t, e)
                 _startup_log.exception("startup step '%s' failed — continuing: %s", step_name, e)
     finally:
         _migration_phase["active"] = False
@@ -2481,6 +2503,9 @@ async def lifespan(app: FastAPI):
             len(_pending_ddl), ", ".join(_pending_ddl),
         )
         threading.Thread(target=_retry_pending_ddl_forever, name="pending-ddl", daemon=True).start()
+    boot_state.finish()
+    # 이 파드의 버전·부팅 결과·메모리를 Redis 에 주기적으로 알린다 — 시스템 진단이 전 파드를 한눈에 본다.
+    pod_heartbeat.start(app.version)
     yield
     # Shutdown: 필요한 정리 작업
 
@@ -2488,6 +2513,8 @@ async def lifespan(app: FastAPI):
 # FastAPI 앱 생성
 # default_response_class=ORJSONResponse: stdlib json 대신 orjson(Rust) 으로 직렬화 —
 # 목록 엔드포인트(§.all() 124곳) 의 대용량 JSON 응답 직렬화 비용을 낮춘다.
+install_logging()  # 앱 로그 줄마다 [req=요청ID] — services/request_context.py
+
 app = FastAPI(
     title=settings.app_name,
     description="DevOps K8s Daily Monitoring Dashboard API",
@@ -2511,13 +2538,42 @@ extra_origins = os.getenv("ALLOWED_ORIGINS", "")
 if extra_origins:
     allowed_origins.extend([o.strip() for o in extra_origins.split(",") if o.strip()])
 
+# 요청 ID — 가장 안쪽(gzip·CORS 보다 먼저 add)이라 5xx 응답 본문을 압축 전에 읽어 사유로 남긴다.
+app.add_middleware(RequestIdMiddleware)
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=allowed_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+    expose_headers=[REQUEST_ID_HEADER],
 )
+
+
+@app.exception_handler(Exception)
+async def _unhandled_exception(request: Request, exc: Exception):
+    """처리 안 된 예외 — 빈 500 대신 요청 ID 를 담아 돌려주고, 스택과 함께 system_error_logs 에 남긴다.
+
+    화면은 "요청 ID" 로 Settings ▸ 서버 오류에서 이 기록을 찾는다(파드 로그는 재시작하면 사라진다).
+    """
+    rid = request.scope.get("pep_request_id") or get_request_id() or new_request_id()
+    logging.getLogger("k8s_monitor.unhandled").error(
+        "unhandled %s %s req=%s", request.method, request.url.path, rid, exc_info=exc,
+    )
+    await anyio.to_thread.run_sync(lambda: system_error_logger.record(
+        request_id=rid, method=request.method, path=request.url.path, status_code=500,
+        username=system_error_logger.username_from_headers(request.headers),
+        app_version=request.app.version, exc=exc,
+    ))
+    return ORJSONResponse(
+        status_code=500,
+        content={
+            "detail": f"서버 내부 오류({type(exc).__name__}) — 요청 ID {rid} 로 Settings ▸ 서버 오류에서 원인을 확인하세요.",
+            "request_id": rid,
+        },
+        headers={REQUEST_ID_HEADER: rid},
+    )
 
 # 대용량 목록/응답(§.all() 124곳)을 무압축으로 보내지 않도록 gzip. SSE 스트림 5곳은
 # 각 핸들러가 "Content-Encoding: identity" 헤더를 직접 얹어 스스로 제외한다 —
@@ -2596,6 +2652,8 @@ app.include_router(check_results_router, prefix="/api/v1", dependencies=_cluster
 app.include_router(check_definitions_router, prefix="/api/v1", dependencies=_auth)
 app.include_router(notifications_router, prefix="/api/v1", dependencies=_auth)
 app.include_router(audit_logs_router, prefix="/api/v1", dependencies=_auth)
+app.include_router(system_errors_router, prefix="/api/v1", dependencies=_auth)
+app.include_router(system_diagnostics_router, prefix="/api/v1", dependencies=_auth)
 # lake-service-monitoring (신규 PDCA) — LAKE OSS 서비스 모니터링.
 app.include_router(lake_services_router, prefix="/api/v1", dependencies=_auth)
 # pod-bottleneck-analyzer (신규 PDCA) — pod-to-pod 병목 진단 (4-Probe Strategy).

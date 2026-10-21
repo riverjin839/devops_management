@@ -238,6 +238,13 @@ export const ko = {
       emptyHint: '검색어를 바꾸거나 지워 보세요.',
       ungrouped: '기타',
     },
+    /** 오류 토스트의 요청 ID 동작(Toast — lib/requestId.ts). */
+    requestId: {
+      label: '요청 ID',
+      copy: '요청 ID 복사',
+      copied: '복사됨',
+      openCause: '원인 보기',
+    },
   },
   /** Settings ▸ 화면 UI 설정 — 조직 기본 앱 구성(`DefaultAppsManager`)·메뉴 이름 편집(`NavMenuManager`). */
   settings: {

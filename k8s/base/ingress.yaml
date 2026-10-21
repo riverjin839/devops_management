@@ -8,8 +8,9 @@ metadata:
   annotations:
     nginx.ingress.kubernetes.io/proxy-body-size: "10m"
     nginx.ingress.kubernetes.io/proxy-connect-timeout: "60"
-    nginx.ingress.kubernetes.io/proxy-send-timeout: "60"
-    nginx.ingress.kubernetes.io/proxy-read-timeout: "60"
+    # 동기 실행 API(최대 60분)가 ingress 에서 먼저 504 로 끊기지 않게 — frontend nginx /api 와 같은 값.
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
     # (옵션) 세션 어피니티 — backend 가 다중 replica 일 때 같은 브라우저의 폴링을 같은 파드로
     # 보낸다. 자원 관리 스냅샷은 Redis 로 replica 간 공유되므로(K8S_ALLOC_SNAPSHOT_BACKEND)
     # 기본은 끈다. Redis 없이 운영하거나 진행률 편차가 보이면 아래 주석을 푼다.

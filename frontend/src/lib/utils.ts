@@ -179,6 +179,21 @@ export function formatRelativeTime(dateString: string): string {
 export function formatApiError(err: unknown, fallbackArg?: string): string {
   // 호출부가 넘긴 fallback 이 우선, 없으면 현재 로케일의 기본 문구.
   const fallback = fallbackArg ?? i18n.t('common.error.requestFailed');
+  const base = formatApiErrorBase(err, fallback);
+  // 서버 오류(5xx)·응답 없음(타임아웃·끊김)이면 요청 ID 를 붙인다 — 토스트가 "원인 보기"로 서버 오류 기록에 잇는다.
+  const e = err as {
+    response?: { status?: number; headers?: Record<string, unknown> };
+    config?: { headers?: Record<string, unknown> };
+  } | null;
+  if (!e || base === i18n.t('common.error.canceled')) return base;
+  const status = e.response?.status;
+  if (status !== undefined && status < 500) return base;
+  const rid = e.response?.headers?.['x-request-id'] ?? e.config?.headers?.['X-Request-ID'];
+  if (typeof rid !== 'string' || !rid || base.includes(rid)) return base;
+  return `${base}\n${i18n.t('common.requestId.label')} ${rid}`;
+}
+
+function formatApiErrorBase(err: unknown, fallback: string): string {
   if (!err) return fallback;
   const e = err as {
     response?: { data?: { detail?: unknown; message?: unknown } };

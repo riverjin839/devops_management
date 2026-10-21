@@ -135,6 +135,11 @@ def record(
             _log.debug("audit: tenant resolve failed action=%s — %s", action, e)
             t_id, t_name = (None if tenant_id is None else str(tenant_id)), tenant_name
         username = actor.username if actor is not None else (actor_username or "-")
+        # 요청 ID — 화면 오류·서버 오류 기록과 감사 기록을 같은 ID 로 잇는다(services/request_context.py).
+        from app.services.request_context import get_request_id
+        rid = get_request_id()
+        if rid and (details is None or (isinstance(details, dict) and "request_id" not in details)):
+            details = {**(details or {}), "request_id": rid}
         entry = AuditLog(
             actor_user_id=actor.id if actor is not None else None,
             actor_username=(username or "-")[:64],

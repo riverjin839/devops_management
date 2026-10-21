@@ -1,6 +1,6 @@
 // "효율화" 탭 — 추천 목록 · NS 추이/저효율 랭킹 · 정책 · 실행 로그. 모든 실행 버튼은 run 을 만들고
 // 실시간 로그(EfficiencyRunLog)를 띄운다("로그 보기" 토글로 접기 가능).
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useMemo, useRef, useState } from 'react';
 import { Play, RefreshCcw, Settings2, Sparkles } from 'lucide-react';
 import { RoleGate } from '@/components/auth/RoleGate';
 import { ConfirmDialog, useToast } from '@/components/common';
@@ -24,7 +24,12 @@ const BTN = 'text-sm inline-flex items-center gap-1 px-3 py-1 rounded-xl border 
 export function EfficiencyTab({ clusterId }: { clusterId: string; clusterName?: string }) {
   const toast = useToast();
   const [activeRun, setActiveRun] = useState<string | null>(null);
-  const onRun = useCallback((runId: string) => { if (readLogPref()) setActiveRun(runId); }, []);
+  // 마지막으로 시작한 실행 — "로그 보기" 를 꺼 둔 사용자도 토스트의 "로그 보기" 로 언제든 연다.
+  const lastRunRef = useRef<string | null>(null);
+  const onRun = useCallback((runId: string) => {
+    lastRunRef.current = runId;
+    if (readLogPref()) setActiveRun(runId);
+  }, []);
   const m = useEffMutations(clusterId, onRun);
   const recsQ = useEffRecommendations(clusterId);
   const defaultsQ = useEffPolicyDefaults();
@@ -45,7 +50,15 @@ export function EfficiencyTab({ clusterId }: { clusterId: string; clusterName?: 
   const selectAll = useCallback((ids: string[]) => setSelected(new Set(ids)), []);
 
   const runGuard = async (fn: () => Promise<unknown>, okMsg: string) => {
-    try { await fn(); toast.success(okMsg, '실행 로그에서 진행 상황을 확인하세요.'); }
+    lastRunRef.current = null; // 실행을 만들지 않는 동작(추천 무시)에 이전 실행의 로그 버튼이 붙지 않게
+    try {
+      await fn();
+      const runId = lastRunRef.current;
+      toast.show({
+        variant: 'success', title: okMsg, description: '실행 로그에서 진행 상황을 확인하세요.',
+        action: runId && !readLogPref() ? { label: '로그 보기', onClick: () => setActiveRun(runId) } : undefined,
+      });
+    }
     catch (e) { toast.error('실행 실패', effErrMsg(e)); }
   };
   const mine = scheduleQ.data?.clusters?.[clusterId];

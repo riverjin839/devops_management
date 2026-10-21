@@ -2,6 +2,9 @@ import { useState } from 'react';
 import { Plus, Trash2, Power, PowerOff, Send } from 'lucide-react';
 import { MacCard } from '@/components/ui/MacCard';
 import { EmptyState } from '@/components/common/EmptyState';
+import { RunLogPanel } from '@/components/common';
+import { useRunLog, runLogged } from '@/hooks/useRunLog';
+import { useLogPref } from '@/hooks/useLogPref';
 import {
   useNotificationChannels,
   useCreateChannel,
@@ -25,6 +28,21 @@ export function NotificationSettingsPanel() {
   const remove = useDeleteChannel();
   const test = useTestChannel();
   const [adding, setAdding] = useState(false);
+  const runLog = useRunLog();
+  const [showRunLog, setShowRunLog] = useLogPref('notification-channel-test');
+
+  // 테스트 발송 — 서버는 발송이 실패해도 200 + status='failed' 로 돌려준다. 예전엔 결과를 보여 주지 않아
+  // 실패해도 성공처럼 보였다. 실행 로그에 채널·결과·실패 사유를 남긴다.
+  const runTest = (c: NotificationChannel) => {
+    void runLogged(runLog, {
+      title: '알림 채널 테스트',
+      first: `«${c.name}» (${c.channelType}) 로 테스트 메시지 발송 요청`,
+      fn: async () => (await test.mutateAsync(c.id)).data,
+      summarize: (r) => r.status === 'failed'
+        ? [['error', `발송 실패 — ${r.error || '사유 없음'}`]]
+        : [['info', `발송 ${r.status} — 수신 측에서 [TEST] ${c.name} 메시지를 확인한다`]],
+    });
+  };
 
   return (
     <MacCard
@@ -42,6 +60,7 @@ export function NotificationSettingsPanel() {
       }
     >
       <div className="space-y-3">
+        <RunLogPanel run={runLog} show={showRunLog} onShowChange={setShowRunLog} maxHeight="max-h-48" />
 
         {adding && (
           <ChannelForm
@@ -82,7 +101,7 @@ export function NotificationSettingsPanel() {
                     remove.mutate(c.id);
                   }
                 }}
-                onTest={() => test.mutate(c.id)}
+                onTest={() => runTest(c)}
                 testing={test.isPending}
               />
             ))}

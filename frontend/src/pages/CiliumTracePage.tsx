@@ -129,7 +129,7 @@ const ciliumApi = {
       namespace: body.namespace ?? 'kube-system',
       command_args: body.commandArgs,
       timeout: body.timeout ?? 30,
-    }).then((r) => r.data),
+    }, { timeout: ((body.timeout ?? 30) + 30) * 1000 }).then((r) => r.data),
 };
 
 interface CiliumExecResponse {

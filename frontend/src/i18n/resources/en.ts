@@ -226,6 +226,12 @@ export const en: TranslationResource = {
       emptyHint: 'Change or clear the search term.',
       ungrouped: 'Other',
     },
+    requestId: {
+      label: 'Request ID',
+      copy: 'Copy request ID',
+      copied: 'Copied',
+      openCause: 'View cause',
+    },
   },
   settings: {
     defaultApps: {

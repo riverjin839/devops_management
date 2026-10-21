@@ -278,6 +278,11 @@ def _audits(db, username: str) -> list[AuditLog]:
             .order_by(AuditLog.created_at).all())
 
 
+def _no_rid(details):
+    """감사 details 에서 요청 ID(audit_logger 가 요청마다 자동으로 붙임)를 뺀다 — 정확 비교용."""
+    return {k: v for k, v in (details or {}).items() if k != "request_id"}
+
+
 def _last_login_audit(db, username: str) -> AuditLog:
     rows = [r for r in _audits(db, username) if r.action.startswith("login.")]
     assert rows, "login audit 없음"
@@ -307,7 +312,7 @@ def test_direct_bind_auto_provision(client, directory, ldap_cfg, rate, db, users
     u = db.query(User).filter(User.username == name).first()
     assert u.hashed_password is None and u.display_name == f"디렉터리 {name}" and u.email == f"{name}@corp.test"
     audit = _last_login_audit(db, name)
-    assert audit.action == "login.success" and audit.details == {"method": "ldap", "provisioned": True}
+    assert audit.action == "login.success" and _no_rid(audit.details) == {"method": "ldap", "provisioned": True}
 
     h = {"Authorization": f"Bearer {body['access_token']}"}
     me = client.get("/api/v1/auth/me", headers=h).json()
@@ -518,7 +523,7 @@ def test_local_first_order(client, directory, ldap_cfg, rate, db, users):
     assert r.status_code == 200
     assert r.json()["user"]["auth_source"] == "local"
     assert _user_binds(directory) == []  # 로컬이 맞으면 LDAP 는 시도하지 않는다
-    assert _last_login_audit(db, name).details == {"method": "local"}
+    assert _no_rid(_last_login_audit(db, name).details) == {"method": "local"}
     r = _login(client, name, USER_PW)  # 로컬 실패 → LDAP 성공
     # 로컬 비밀번호가 살아 있는 계정은 LDAP 로 들어와도 auth_source 가 local(본인이 비밀번호를 바꿀 수 있게).
     assert r.status_code == 200 and r.json()["user"]["auth_source"] == "local"
@@ -614,7 +619,7 @@ def test_disabled_keeps_legacy_login(client, ldap_cfg, rate, db, users):
     _make_user(db, users, name, password="local-pw-5")
     assert _login(client, name, "local-pw-5").status_code == 200
     assert _login(client, name, "bad").status_code == 401
-    assert _last_login_audit(db, name).details == {"reason": "invalid_credentials"}
+    assert _no_rid(_last_login_audit(db, name).details) == {"reason": "invalid_credentials"}
 
 
 def test_audit_never_contains_password(client, directory, ldap_cfg, rate, db, users):
@@ -649,7 +654,7 @@ def test_password_change_blocked_for_ldap(client, directory, ldap_cfg, rate, db,
     u = db.query(User).filter(User.username == name).first()
     log = (db.query(AuditLog).filter(AuditLog.action == "user.password.change", AuditLog.target_id == u.id)
            .order_by(AuditLog.created_at.desc()).first())
-    assert log.details == {"reason": "directory_account"}
+    assert _no_rid(log.details) == {"reason": "directory_account"}
 
 
 def test_local_password_stays_rotatable_after_ldap_login(client, directory, ldap_cfg, rate, db, users):

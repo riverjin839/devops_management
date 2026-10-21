@@ -306,6 +306,8 @@ class OpsCheckService:
             return
         cluster = self.db.query(Cluster).filter(Cluster.id == run.cluster_id).first()
 
+        if run.status == "cancelled":
+            return  # 집기 전에 취소됨
         run.status = "running"
         self.db.commit()
 
@@ -317,6 +319,14 @@ class OpsCheckService:
             .all()
         )
         for item in items:
+            # 항목 사이마다 취소를 확인한다 — 사용자 취소가 남은 항목을 멈춘다(실행 중인 항목은 끝까지 간다).
+            self.db.refresh(run)
+            if run.status == "cancelled":
+                logger.info("ops-check run %s cancelled — 남은 항목 중단", run.id)
+                break
+            self.db.refresh(item)
+            if item.status != "queued":
+                continue
             item.status = "running"
             item.started_at = datetime.utcnow()
             self.db.commit()
@@ -348,9 +358,29 @@ class OpsCheckService:
             self.db.commit()
 
         run.ok_count, run.warn_count, run.crit_count, run.error_count = ok, warn, crit, err
-        run.status = "done"
-        run.finished_at = datetime.utcnow()
+        if run.status != "cancelled":
+            run.status = "done"
+        run.finished_at = run.finished_at or datetime.utcnow()
         self.db.commit()
+
+    def cancel_run(self, run_id: str | UUID, *, actor: Optional[str] = None) -> Optional[OpsCheckRun]:
+        """대기·실행 중인 운영 점검 묶음 취소 — 아직 안 돈 항목은 cancelled 로 마감하고, 실행 중인 항목은
+        끝난 뒤 다음 항목부터 멈춘다(execute_run 이 항목 사이마다 확인). 이미 끝난 묶음은 그대로 둔다."""
+        run = self.db.query(OpsCheckRun).filter(OpsCheckRun.id == run_id).first()
+        if run is None or run.status not in ("pending", "running"):
+            return run
+        reason = f"사용자 취소{f' — {actor}' if actor else ''}"
+        now = datetime.utcnow()
+        for it in self.db.query(OpsCheckRunItem).filter(
+            OpsCheckRunItem.run_id == run.id, OpsCheckRunItem.status == "queued",
+        ).all():
+            it.status = "cancelled"
+            it.message = reason
+            it.finished_at = now
+        run.status = "cancelled"
+        run.finished_at = now
+        self.db.commit()
+        return run
 
     # ──────────────────────────────────────────────────────────────
     # 소스별 dispatch

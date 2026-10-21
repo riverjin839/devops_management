@@ -33,6 +33,18 @@ export function useStartOpsRun() {
   });
 }
 
+/** 대기·실행 중인 묶음 취소 — 진행 상태·항목을 바로 다시 받는다. */
+export function useCancelOpsRun() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (runId: string) => opsCheckApi.cancelRun(runId).then((r) => r.data),
+    onSuccess: (_run, runId) => {
+      qc.invalidateQueries({ queryKey: opsCheckKeys.run(runId) });
+      qc.invalidateQueries({ queryKey: opsCheckKeys.runItems(runId) });
+    },
+  });
+}
+
 /** 실행 묶음 진행 상태 — 완료 전까지 폴링 */
 export function useOpsRun(runId: string | undefined) {
   return useQuery({
