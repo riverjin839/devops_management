@@ -5890,8 +5890,17 @@ export interface ClusterEndpointAllowlist {
 // ── 일일 리포트 (공개 페이지 `/daily-report`) ──────────────────────────────────
 export type DailyReportRankBy = 'cpu_rate' | 'mem_rate' | 'cpu_slack' | 'mem_slack';
 
+/** NS 담당자 — 규칙(rule) 또는 NS 라벨(label:<키>) 에서 온다. */
+export interface NsOwner {
+  owner: string;
+  contact: string | null;
+  source: string;
+}
+
 export interface DailyReportClusters {
   clusters: { id: string; name: string }[];
+  accessMode?: 'open' | 'link';
+  linkExpiresAt?: string | null;
   today: string;
   minDate: string;
   retentionDays: number;
@@ -5922,6 +5931,57 @@ export interface DailyReportItem {
   mem: DailyReportResource;
   /** 예정 — GPU 수집 경로가 붙기 전까지 항상 null */
   gpu: { req: number | null; lim: number | null };
+  owner?: NsOwner | null;
+  /** 기간 리포트에서만 — 기간 중 데이터가 있던 일수 */
+  days?: number;
+}
+
+export interface DailyReportPeriod {
+  cluster: { id: string; name: string };
+  period: 'week' | 'month';
+  start: string;
+  end: string;
+  daysWithData: number;
+  rankBy: DailyReportRankBy;
+  topN: number;
+  rankedTotal: number;
+  series: {
+    date: string;
+    namespaces: number;
+    cpuReq: number;
+    cpuUse: number | null;
+    cpuRate: number | null;
+    memReq: number;
+    memUse: number | null;
+    memRate: number | null;
+  }[];
+  items: DailyReportItem[];
+}
+
+export interface NsOwnersSettings {
+  rules: { pattern: string; owner: string; contact?: string | null; clusterId?: string | null }[];
+  labelKeys: string[];
+  showContact: boolean;
+  labelCache?: Record<string, { updatedAt: string | null; count: number }>;
+}
+
+export type PublicSharePage = 'all' | 'daily_report' | 'external_services';
+
+export interface PublicShareLink {
+  id: string;
+  label: string;
+  page: PublicSharePage;
+  clusterIds: string[];
+  tokenPrefix: string;
+  expiresAt: string;
+  createdBy: string | null;
+  createdAt: string;
+  revokedAt: string | null;
+  lastUsedAt: string | null;
+  useCount: number;
+  state: 'active' | 'expired' | 'revoked';
+  /** 발급 응답에서만 — 원문 토큰(이후 다시 볼 수 없다) */
+  token?: string;
 }
 
 export interface DailyReport {
@@ -5953,6 +6013,7 @@ export interface DailyReportSearchItem extends Omit<DailyReportItem, 'rank'> {
   rank: number | null;
   match: {
     namespace: boolean;
+    owner?: boolean;
     workloadMatches: number;
     workloads: { kind: string; name: string; pods: string[]; podMatches: number }[];
   };
@@ -5975,6 +6036,7 @@ export interface DailyReportSettings {
   minMemReqB: number;
   excludeSystemNamespaces: boolean;
   publicClusterIds: string[];
+  accessMode: 'open' | 'link';
 }
 
 // ── 외부 서비스 (공개 페이지 `/external-services`) ─────────────────────────────
@@ -6031,6 +6093,29 @@ export interface ExternalServiceEntry {
     source: 'node' | 'backend' | null;
     checkedAt: string | null;
   } | null;
+  owner?: NsOwner | null;
+  /** 최근 newBadgeDays 일 안에 새로 열린 엔드포인트 */
+  isNew?: boolean;
+}
+
+export interface ExternalServiceChanges {
+  cluster: { id: string; name: string };
+  days: number;
+  total: number;
+  added: number;
+  removed: number;
+  items: {
+    detectedAt: string;
+    change: 'added' | 'removed';
+    kind: string;
+    namespace: string;
+    name: string;
+    address: string | null;
+    host: string | null;
+    port: number | null;
+    scheme: string | null;
+    by: string;
+  }[];
 }
 
 export interface ExternalServicesView {
@@ -6040,6 +6125,7 @@ export interface ExternalServicesView {
   resolver?: string | null;
   summary: { byKind: Record<string, number>; total: number; ips: number; resolved: number; issues?: number; tlsExpiring?: number } | null;
   tlsThresholds?: { warnDays: number; criticalDays: number };
+  newBadgeDays?: number;
   error: string | null;
   entries: ExternalServiceEntry[];
   nodeIps: { name: string; internalIp: string | null; externalIp: string | null }[];
@@ -6069,4 +6155,7 @@ export interface ExternalServicesSettings {
   tlsWarnDays: number;
   tlsCriticalDays: number;
   tlsCommand: string;
+  accessMode: 'open' | 'link';
+  changeRetentionDays: number;
+  newBadgeDays: number;
 }

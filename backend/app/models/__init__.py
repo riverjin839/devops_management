@@ -3,7 +3,8 @@ from app.models.k8s_efficiency import (
     K8sEfficiencyRun, K8sNamespacePolicy, K8sNamespaceSample, K8sNsDailyReport, K8sRightsizeRecommendation,
     K8sWorkloadSample,
 )
-from app.models.external_service import ExternalServiceSnapshot
+from app.models.external_service import ExternalServiceChange, ExternalServiceSnapshot
+from app.models.public_share import PublicShareLink
 from app.models.addon import Addon
 from app.models.check_log import CheckLog
 from app.models.core_bundle_snapshot import DailyCheckLog, CheckScheduleType
@@ -188,6 +189,8 @@ __all__ = [
     "K8sEfficiencyRun",
     "K8sNsDailyReport",
     "ExternalServiceSnapshot",
+    "ExternalServiceChange",
+    "PublicShareLink",
     "Tenant",
     "TenantMember",
     "ClusterBinding",

@@ -24,6 +24,19 @@ export function useExternalServices(clusterId: string) {
   });
 }
 
+/** 외부 노출 변경 이력 — 최근 days 일. */
+export function useExternalServiceChanges(clusterId: string, days: number, enabled = true) {
+  return useQuery({
+    queryKey: ['external-services-changes', clusterId, days],
+    queryFn: async () => (await externalServicesApi.changes(clusterId, days)).data,
+    enabled: enabled && !!clusterId,
+    staleTime: 60_000,
+    placeholderData: keepPreviousData,
+    refetchOnWindowFocus: false,
+    retry: false,
+  });
+}
+
 export function useExternalServicesSettings(enabled: boolean) {
   return useQuery({
     queryKey: ['external-services-settings'],

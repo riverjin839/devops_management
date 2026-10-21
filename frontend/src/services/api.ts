@@ -2712,30 +2712,66 @@ export const k8sAllocationApi = {
 };
 
 // ── 일일 리포트 — 조회는 비인증 공개 API(`/public/daily-report`), 설정은 JWT(admin 변경) ──
+/** 공개 화면 공유 링크 토큰 — 공개 방식이 `link` 인 화면은 URL `?t=` 의 토큰을 모든 공개 API 에 싣는다. */
+export function shareToken(): string | undefined {
+  try {
+    return new URLSearchParams(window.location.search).get('t') || undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 export const dailyReportApi = {
-  clusters: () => api.get<import('@/types').DailyReportClusters>('/public/daily-report/clusters'),
+  clusters: () => api.get<import('@/types').DailyReportClusters>('/public/daily-report/clusters', {
+    params: { t: shareToken() },
+  }),
   report: (clusterId: string, date: string, rankBy: import('@/types').DailyReportRankBy) =>
     api.get<import('@/types').DailyReport>('/public/daily-report/report', {
-      params: { cluster_id: clusterId, date, rank_by: rankBy }, timeout: 60_000,
+      params: { cluster_id: clusterId, date, rank_by: rankBy, t: shareToken() }, timeout: 60_000,
     }),
   search: (clusterId: string, date: string, q: string, rankBy: import('@/types').DailyReportRankBy) =>
     api.get<import('@/types').DailyReportSearch>('/public/daily-report/search', {
-      params: { cluster_id: clusterId, date, q, rank_by: rankBy }, timeout: 60_000,
+      params: { cluster_id: clusterId, date, q, rank_by: rankBy, t: shareToken() }, timeout: 60_000,
+    }),
+  period: (clusterId: string, end: string, period: 'week' | 'month', rankBy: import('@/types').DailyReportRankBy) =>
+    api.get<import('@/types').DailyReportPeriod>('/public/daily-report/period', {
+      params: { cluster_id: clusterId, end, period, rank_by: rankBy, t: shareToken() }, timeout: 120_000,
     }),
   settings: () => api.get<import('@/types').DailyReportSettings>('/daily-report/settings'),
   putSettings: (body: Partial<import('@/types').DailyReportSettings>) =>
     api.put<import('@/types').DailyReportSettings>('/daily-report/settings', body),
+  owners: () => api.get<import('@/types').NsOwnersSettings>('/daily-report/owners'),
+  putOwners: (body: Partial<import('@/types').NsOwnersSettings>) =>
+    api.put<import('@/types').NsOwnersSettings>('/daily-report/owners', body),
+  /** SSE — NS 담당자 라벨 다시 읽기(`postSse`). */
+  ownersRefreshStreamUrl: '/api/v1/daily-report/owners/refresh/stream',
 };
 
 // ── 외부 서비스 — 조회는 비인증 공개 API(저장 스냅샷), 수집(SSE)·설정은 JWT ──────────────────
 export const externalServicesApi = {
-  clusters: () => api.get<{ clusters: { id: string; name: string }[] }>('/public/external-services/clusters'),
-  view: (clusterId: string) => api.get<import('@/types').ExternalServicesView>(`/public/external-services/${clusterId}`),
+  clusters: () => api.get<{ clusters: { id: string; name: string }[]; accessMode?: string; linkExpiresAt?: string | null }>(
+    '/public/external-services/clusters', { params: { t: shareToken() } }),
+  view: (clusterId: string) => api.get<import('@/types').ExternalServicesView>(`/public/external-services/${clusterId}`, {
+    params: { t: shareToken() },
+  }),
+  changes: (clusterId: string, days: number) =>
+    api.get<import('@/types').ExternalServiceChanges>(`/public/external-services/${clusterId}/changes`, {
+      params: { days, t: shareToken() },
+    }),
   /** SSE 엔드포인트 경로 — `postSse` 로 호출(본문은 snake_case). */
   collectStreamUrl: (clusterId: string) => `/api/v1/external-services/${clusterId}/collect/stream`,
   settings: () => api.get<import('@/types').ExternalServicesSettings>('/external-services/settings'),
   putSettings: (body: Partial<import('@/types').ExternalServicesSettings>) =>
     api.put<import('@/types').ExternalServicesSettings>('/external-services/settings', body),
+};
+
+// ── 공개 화면 공유 링크(만료 기한이 있는 접근 토큰) — admin ─────────────────────────────
+export const publicShareApi = {
+  list: (includeInactive = false) =>
+    api.get<{ links: import('@/types').PublicShareLink[] }>('/public-share-links', { params: { include_inactive: includeInactive } }),
+  create: (body: { label: string; page: import('@/types').PublicSharePage; expiresDays: number; clusterIds?: string[] }) =>
+    api.post<import('@/types').PublicShareLink>('/public-share-links', body),
+  revoke: (id: string) => api.delete<import('@/types').PublicShareLink>(`/public-share-links/${id}`),
 };
 
 // ── K8S 자원 효율화 (히스토리/추천/정책/실행) ─────────────────────────────────

@@ -84,7 +84,8 @@ export function hasIssue(e: ExternalServiceEntry): boolean {
 export function matches(e: ExternalServiceEntry, q: string): boolean {
   const t = q.trim().toLowerCase();
   if (!t) return true;
-  const hay = [e.host, e.hostname, e.ip, String(e.port), e.namespace, e.name, ...(e.ptrNames ?? []), ...(e.paths ?? [])];
+  const hay = [e.host, e.hostname, e.ip, String(e.port), e.namespace, e.name, e.owner?.owner,
+    ...(e.ptrNames ?? []), ...(e.paths ?? [])];
   return hay.some((v) => v && v.toLowerCase().includes(t));
 }
 

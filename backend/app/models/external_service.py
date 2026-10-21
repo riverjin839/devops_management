@@ -18,7 +18,7 @@ from __future__ import annotations
 import uuid
 from datetime import datetime
 
-from sqlalchemy import Column, DateTime, ForeignKey, String
+from sqlalchemy import Column, DateTime, ForeignKey, Index, Integer, String
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import backref, relationship
 
@@ -46,3 +46,32 @@ class ExternalServiceSnapshot(Base):
 
     cluster = relationship("Cluster", backref=backref("external_service_snapshot", passive_deletes=True,
                                                       uselist=False))
+
+
+class ExternalServiceChange(Base):
+    """외부 노출 변경 이력 — 수집마다 직전 스냅샷과 비교해 새로 열리거나 사라진 엔드포인트 1건 = 1행.
+
+    `entry_key` 는 kind|namespace|name|주소|host|port 로 엔드포인트를 식별한다. 보관 일수는
+    AppSetting `external_services.settings.change_retention_days`(수집 때 정리)."""
+    __tablename__ = "external_service_changes"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    cluster_id = Column(UUID(as_uuid=True), ForeignKey("clusters.id", ondelete="CASCADE"), nullable=False)
+    detected_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+    change = Column(String(16), nullable=False)          # added | removed
+    entry_key = Column(String(800), nullable=False)
+    kind = Column(String(32), nullable=False)
+    namespace = Column(String(253), nullable=False)
+    name = Column(String(253), nullable=False)
+    address = Column(String(253), nullable=True)         # ip | LB hostname | None(NodePort)
+    host = Column(String(253), nullable=True)
+    port = Column(Integer, nullable=True)
+    scheme = Column(String(8), nullable=True)
+    collected_by = Column(String(64), nullable=True)
+
+    cluster = relationship("Cluster", backref=backref("external_service_changes", passive_deletes=True))
+
+    __table_args__ = (
+        Index("ix_ext_svc_changes_cluster_at", "cluster_id", "detected_at"),
+        Index("ix_ext_svc_changes_at", "detected_at"),
+    )

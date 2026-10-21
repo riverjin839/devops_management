@@ -1,6 +1,7 @@
 // 외부 서비스 목록 표 — 도메인 / 주소(IP:Port) / 유형 / 네임스페이스·이름 / 대상 / 도메인 출처 / 정방향 검증 / 응답 / 인증서.
 import { ExternalLink } from 'lucide-react';
 import type { ExternalServiceEntry } from '@/types';
+import { OwnerLine } from '@/components/public-pages/OwnerLine';
 import { addressOf, domainOf, fwdView, probeView, tlsView } from './format';
 
 const TH = 'px-3 py-2 text-left font-medium text-muted-foreground whitespace-nowrap';
@@ -41,6 +42,10 @@ export function ExternalServicesTable({ rows, nodeHint }: { rows: ExternalServic
                 <td className={TD}>
                   {d.primary ? (
                     <span className="inline-flex items-center gap-1 font-mono text-foreground break-all">
+                      {e.isNew && (
+                        <span className="font-sans text-[11px] px-1.5 rounded-md border border-status-warning text-status-warning"
+                          title="최근 새로 열린 엔드포인트(노출 변경 이력 참고)">신규</span>
+                      )}
                       {d.primary}
                       {url && (
                         <a href={url} target="_blank" rel="noreferrer" className="text-muted-foreground hover:text-foreground"
@@ -50,7 +55,10 @@ export function ExternalServicesTable({ rows, nodeHint }: { rows: ExternalServic
                       )}
                     </span>
                   ) : (
-                    <span className="text-muted-foreground">이름 미확인</span>
+                    <span className="text-muted-foreground">
+                      {e.isNew && <span className="mr-1 text-[11px] px-1.5 rounded-md border border-status-warning text-status-warning">신규</span>}
+                      이름 미확인
+                    </span>
                   )}
                   {d.extra.length > 0 && (
                     <div className="text-xs text-muted-foreground font-mono break-all">{d.extra.join(', ')}</div>
@@ -66,6 +74,7 @@ export function ExternalServicesTable({ rows, nodeHint }: { rows: ExternalServic
                 <td className={`${TD} whitespace-nowrap`}>{e.kind}</td>
                 <td className={`${TD} font-mono whitespace-nowrap`}>
                   <span className="text-muted-foreground">{e.namespace}/</span>{e.name}
+                  <OwnerLine owner={e.owner} />
                 </td>
                 <td className={`${TD} text-xs text-muted-foreground font-mono`}>
                   {e.paths.length > 0 ? e.paths.map((p) => <div key={p}>{p}</div>)
