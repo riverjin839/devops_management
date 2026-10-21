@@ -10,14 +10,6 @@
 
 1.67.0 이후 main 에 병합된 변경 (다음 릴리스 후보).
 
-## [1.67.0] - 2026-10-21
-
-### Added
-- **공개 화면 — 주간·월간 추이**: 일일 자원 리포트에 일/주/월 토글을 더했다. 주(7일)·월(30일)을 고르면 일자별 CPU·메모리 사용률 추이 차트와 **기간 평균 비효율 TOP 10**(일 평균의 평균, 최소·최대는 기간 전체)이 나와 하루 변동과 만성 낭비를 구분해 본다. Backend: `GET /public/daily-report/period`.
-- **공개 화면 — NS 담당자**: 일일 리포트·외부 서비스 표의 네임스페이스 아래에 담당 팀/사람과 연락처를 보여주고, 검색으로 담당자 이름도 찾는다. 관리자가 **담당자** 화면에서 NS 패턴 규칙(위에서부터 첫 일치, 클러스터별 지정 가능)을 편집하고, 규칙이 없으면 NS 라벨/어노테이션(기본 `owner`·`team`) 값을 쓴다. 라벨은 하루 한 번·외부 서비스 수집 때 자동으로, **라벨 다시 읽기**로 즉시(실시간 로그) 갱신한다. Backend: `services/ns_owners.py`, `GET|PUT /daily-report/owners`, `POST /daily-report/owners/refresh/stream`.
-- **공개 화면 — 만료 기한이 있는 공유 링크**: 화면 설정의 공개 방식을 "공유 링크만"으로 바꾸면 관리자가 발급한 링크(`?t=`)로만 열린다. 링크마다 이름·화면 범위·유효 기간(1~365일)·볼 수 있는 클러스터를 정하고, 사용 횟수·마지막 사용을 보며 언제든 폐기한다. 토큰은 발급 직후 한 번만 보여주고 해시로만 저장한다. 링크 없이·만료·폐기 링크로 열면 잠금 안내가 나온다. Backend: `public_share_links` 테이블 + `routers/public_share.py`(admin).
-- **외부 서비스 — 노출 변경 이력**: 수집마다 직전 수집과 비교해 새로 열리거나 사라진 엔드포인트를 기록하고, **노출 변경 이력** 카드(7/30/90일)와 표의 **신규** 배지(기본 최근 7일)로 보여준다. 의도하지 않은 외부 노출을 빨리 알아챈다. 보관 일수·신규 표시 기간은 설정. Backend: `external_service_changes` 테이블, `GET /public/external-services/{id}/changes`.
-
 ### Added
 - **AI/LLM 연결 진단 실행**: Settings → AI/LLM 프로필 행의 **연결 진단 실행** 버튼이 설정 원천(DB 저장값이 env 를 덮는지) → DNS → 포트 → Ollama 서버 → 모델 확인(이름 해석) → 모델 정보(크기·양자화·num_ctx) → 응답 테스트(로딩 시간·tok/s) 7단계를 실시간 실행 로그로 보여주고, 막힌 단계마다 조치 힌트를 남긴다. 자동 해석된 실제 모델명은 버튼 한 번으로 프로필에 저장한다. Backend: `POST /api/v1/llm/diagnose`(SSE, `services/llm/diagnostics.py`).
 - **K8s 운영 전용 모델 `pep-k8s-ops`**: Ollama 이미지가 `qwen2.5-coder:7b` 와 함께 운영용 파라미터(temperature 0.2·num_ctx 8192·num_predict 1024)와 K8s 운영 시스템 프롬프트를 고정한 파생 모델을 굽는다(`docker/ollama-qwen2.5-coder/Modelfile.k8s-ops`). CPU 자원이 없는 클러스터는 새 opt-in 컴포넌트 `k8s/components/no-ollama` 로 Ollama 를 빼고 사내 LLM 프로필로 라우팅한다. 설정·트러블슈팅 가이드는 `docs/LLM_CHATBOT_SETUP.md`.
@@ -25,6 +17,14 @@
 ### Fixed
 - **Ollama 챗봇이 "온라인" 인데 응답하지 않던 문제**: 프로필 모델명이 서버 모델과 태그가 다르면(`qwen2.5-coder` ↔ `qwen2.5-coder:7b`, 이미지 태그 `:5b` 등) `/api/generate` 가 404 인데 health 는 이름 앞부분만 비교해 정상으로 표시했다. 이제 404 시 서버 모델 목록에서 실제 이름을 찾아 1회 재시도하고(결과 기억), health 는 호출할 수 있는 이름이 없으면 "모델 미준비", 자동 해석 중이면 "자동 해석" 으로 표시한다.
 - **kustomize base 배포에서 backend 파드가 뜨지 않을 수 있던 문제**: base `configMapGenerator` 에 `OLLAMA_MODEL` 키가 없어 backend·llm 워커의 configMapKeyRef 가 풀리지 않았다. base 이미지와 같은 `qwen2.5-coder:7b` 를 넣고, Ollama 에 `OLLAMA_KEEP_ALIVE=24h` 를 줘 CPU 콜드 로딩이 챗봇 타임아웃으로 번지지 않게 했다.
+
+## [1.67.0] - 2026-10-21
+
+### Added
+- **공개 화면 — 주간·월간 추이**: 일일 자원 리포트에 일/주/월 토글을 더했다. 주(7일)·월(30일)을 고르면 일자별 CPU·메모리 사용률 추이 차트와 **기간 평균 비효율 TOP 10**(일 평균의 평균, 최소·최대는 기간 전체)이 나와 하루 변동과 만성 낭비를 구분해 본다. Backend: `GET /public/daily-report/period`.
+- **공개 화면 — NS 담당자**: 일일 리포트·외부 서비스 표의 네임스페이스 아래에 담당 팀/사람과 연락처를 보여주고, 검색으로 담당자 이름도 찾는다. 관리자가 **담당자** 화면에서 NS 패턴 규칙(위에서부터 첫 일치, 클러스터별 지정 가능)을 편집하고, 규칙이 없으면 NS 라벨/어노테이션(기본 `owner`·`team`) 값을 쓴다. 라벨은 하루 한 번·외부 서비스 수집 때 자동으로, **라벨 다시 읽기**로 즉시(실시간 로그) 갱신한다. Backend: `services/ns_owners.py`, `GET|PUT /daily-report/owners`, `POST /daily-report/owners/refresh/stream`.
+- **공개 화면 — 만료 기한이 있는 공유 링크**: 화면 설정의 공개 방식을 "공유 링크만"으로 바꾸면 관리자가 발급한 링크(`?t=`)로만 열린다. 링크마다 이름·화면 범위·유효 기간(1~365일)·볼 수 있는 클러스터를 정하고, 사용 횟수·마지막 사용을 보며 언제든 폐기한다. 토큰은 발급 직후 한 번만 보여주고 해시로만 저장한다. 링크 없이·만료·폐기 링크로 열면 잠금 안내가 나온다. Backend: `public_share_links` 테이블 + `routers/public_share.py`(admin).
+- **외부 서비스 — 노출 변경 이력**: 수집마다 직전 수집과 비교해 새로 열리거나 사라진 엔드포인트를 기록하고, **노출 변경 이력** 카드(7/30/90일)와 표의 **신규** 배지(기본 최근 7일)로 보여준다. 의도하지 않은 외부 노출을 빨리 알아챈다. 보관 일수·신규 표시 기간은 설정. Backend: `external_service_changes` 테이블, `GET /public/external-services/{id}/changes`.
 
 ## [1.66.1] - 2026-10-21
 
