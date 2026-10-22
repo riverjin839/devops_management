@@ -946,14 +946,16 @@ hover 시 flyout 자체가 라벨을 보여주므로 이름만 뜨는 중복 툴
 > **2026-10-15 (D-135)**: 자체 실행 로그(`appendLog`·LogViewer 카드·수동 SSE 파서)를 표준 실행 로그(`cluster-manage`)로 대체했다. 검증은 `components/cluster-manage/verifyLogged.ts`(`/verify/stream` → 단계 칩, 설정 화면과 공유), 재수집·IP 수집·일괄 수집(클러스터별 칩)·적용은 `runLogged`, 실패 재시도는 패널 버튼.
 
 - **파일**: `frontend/src/pages/ClusterManagePage.tsx` (+ `components/cluster-manage/{CiliumConfigModal,ClusterCard,ClusterTableRow,ClusterUpdateDiffDialog,ClusterCustomFieldsManager,StandardizeClusterNamesModal}`, `components/versions/NodeNicsCollectModal`)
+>
+> **2026-10-22 (디자인 검토 반영)**: 툴바 「문제만」(`?problems=1` — 상태 ≠ 정상 또는 CIDR 겹침) · 이름/상태/운영레벨 **머리글 클릭 정렬**(다시 누르면 수동). 쓰기 동사를 **재수집**으로 통일 — 편집 칸 ↻ = 재수집(미리보기), 노드 IP 칸 = 재수집(바로 반영, 확인), 툴바 = **일괄 재수집**(확인 다이얼로그에서 범위 선택: 노드 IP 빈 클러스터 / 지금 화면 목록). 적용 시 미리보기 값과 반영값을 대조해 다른 필드를 실행 로그·토스트로 표시(`diffFormat.ts` 공용 라벨·값 표기). 삭제는 이름 재입력(`ConfirmDialog confirmDisabled`) + 실행 로그, 이름 표준화는 "바뀐 N개 모두 적용" + 실행 로그(모달 안 `RunLogPanel`). 행·카드 실행 버튼은 `useCanOperate(cluster.id)` 로 테넌트 바인딩을 판정해 비활성 + 사유(역할 미달은 기존대로 숨김·"조회 전용"). 인라인 편집은 성공 시에만 닫힌다. 편집 칸 기본 폭 184px. 카드 뷰는 KPI 타일·중첩 박스 제거, 탭 `role="tablist"`, Cilium 설정 보기 버튼.
 - **목적 / UX**: 등록된 전체 클러스터를 테이블/카드 뷰로 관리 — 검색/필터/정렬/그룹화(지역·운영레벨), CIDR 겹침 감지, kubeconfig 기반 자동 정보 수집(diff 미리보기 후 적용), 커스텀 컬럼 추가, 드래그 정렬. `/cluster-manage/:id/edit`으로 이동해 상세 메타를 편집한다.
 - **UI 구성**:
   - 이 페이지 자체는 **ClusterSidebar를 사용하지 않음** — 전체 클러스터를 관리하는 목록/테이블 화면이라 별도 좌측 사이드바 없이 본문 전체가 테이블/카드
-  - 헤더: 테이블/카드 뷰 토글(`ViewModeBar`), 이름 표준화, 컬럼 관리(커스텀 필드), 노드 IP 일괄 수집, 컬럼너비 리셋, 검색/필터 패널. 액션이 많아 좁은 폭에서는 줄바꿈(`flex-wrap`)
+  - 헤더: 테이블/카드 뷰 토글(`ViewModeBar`), 검색, 「문제만」, 일괄 재수집, 필터 · 정렬, 도구(이름 표준화 · 컬럼 관리(커스텀 필드) · 너비 리셋 · 표시 컬럼). 액션이 많아 좁은 폭에서는 줄바꿈(`flex-wrap`)
   - 검색/필터 패널과 표 컨테이너는 `MacCard`(표는 `bodyPadding="p-0"`), 표 본문은 `DoubleScrollX bodyClassName="max-h-…"` 안에서 세로 스크롤되며 **`thead` 가 sticky 로 고정**된다. 셀은 `overflow-hidden`+`truncate`(툴팁 병행)이라 컬럼을 좁혀도 이웃 열로 넘치지 않는다
   - 색은 전부 테마 토큰 — 상태 `status-*`, 범주(BGP·bond0/1·버전·CIDR 겹침 그룹) categorical `chart-*` (고정 팔레트 0건)
   - 상태 표시는 3분기: 로딩=표 skeleton / 조회 실패=`EmptyState`+사유+다시 시도 / 0건·검색 무결과=`EmptyState`+CTA(Settings 등록·필터 초기화)
-  - **검색/필터/정렬/그룹/뷰모드는 URL 쿼리(`?q=&level=&sort=&group=&view=`)에 영속화**(기본값 생략, `replace: true` 로 히스토리 미적재) — 새로고침·공유·뒤로가기에서 유지
+  - **검색/필터/정렬/그룹/뷰모드/「문제만」은 URL 쿼리(`?q=&level=&sort=&group=&view=&problems=`)에 영속화**(기본값 생략, `replace: true` 로 히스토리 미적재) — 새로고침·공유·뒤로가기에서 유지
   - 테이블 뷰: 리사이즈 가능한 다열 테이블(이름/상태/지역/운영레벨/BGP/CIDR/bond0·1/Pod·Svc CIDR/Max Pods/K8s·Cilium 버전/노드 IP + 커스텀 필드), 지역/운영레벨 그룹 헤더 행. **수동 정렬 모드에서 행 드래그 지원**(이름 셀 좌측 그립, `DndContext`+그룹별 `SortableContext`)
   - 카드 뷰: `dnd-kit` 드래그 정렬 가능한 `ClusterCard` 그리드(그룹 내에서만 순서 변경)
   - 드래그 정렬(테이블/카드 공통)은 **정렬이 `수동(드래그)` 일 때만 활성** — 이름/상태/운영레벨순에서는 핸들이 노출되지 않음(D-045). 정보 수집(auto-update)은 클러스터별로 동시 실행·개별 중지 가능(D-047)
@@ -967,7 +969,7 @@ hover 시 flyout 자체가 라벨을 보여주므로 이름만 뜨는 중복 툴
   - 클러스터별 커스텀 컬럼 CRUD(`ClusterCustomFieldsManager`) + 값 편집 — 편집 진입 시점의 서버 값으로 초기화(stale draft 방지), 저장 실패 시 토스트+편집 유지
   - 이름 일괄 표준화(`StandardizeClusterNamesModal`), 노드 IP 일괄 수집 — 일괄 수집은 실행 전 `ConfirmDialog`(대상 수·이름 미리보기·hostname/CIDR/버전까지 갱신됨을 명시) → 진행률 `n/N` 버튼 표기 → 재클릭으로 중단, 결과는 완료/중단/부분 실패/전건 실패 구분 토스트(D-048)
   - 클러스터 삭제는 `ConfirmDialog`(danger) — Addon·Playbook·점검 이력 연쇄 삭제 범위를 명시(D-048)
-- **URL 상태(D-029)**: `?q=` · `level` · `sort` · `group` · `view` (D-053, 공용 훅으로 이전). 새로고침·공유·뒤로가기에서 유지(`hooks/useUrlParams`, replace). 모달은 뒤로가기로 닫힌다.
+- **URL 상태(D-029)**: `?q=` · `level` · `sort` · `group` · `view` · `problems` (D-053, 공용 훅으로 이전). 새로고침·공유·뒤로가기에서 유지(`hooks/useUrlParams`, replace). 모달은 뒤로가기로 닫힌다.
 - **요청사항 (수정 요청)**:
   - _(여기에 개선/수정 요청을 직접 적어주세요)_
 

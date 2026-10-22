@@ -1,7 +1,8 @@
-import { useMemo, useState } from 'react';
+import { useId, useMemo, useState } from 'react';
 import { Pencil, Trash2, Cpu, Network, AlertTriangle, RefreshCw, Loader2, Cable, ShieldCheck } from 'lucide-react';
 import { MacCard } from '@/components/ui/MacCard';
 import type { Cluster } from '@/types';
+import { useCanOperate } from '@/hooks/useCanOperate';
 import { STATUS_STYLE, OVERLAP_COLORS } from './constants';
 import { useOperationLevels, levelBadgeClass, levelBadgeStyle, levelLabel, levelColor, levelIcon } from '@/hooks/useOperationLevels';
 import { CidrRow } from './CidrRow';
@@ -29,14 +30,19 @@ interface ClusterCardProps {
   autoUpdating: boolean;
   /** SSH 기반 NIC 수집(bond0/bond1 채움) 모달 열기 */
   onCollectNics?: (c: Cluster) => void;
+  /** Cilium 설정 보기 — 테이블 뷰의 K8s/Cilium 셀과 같은 진입점 */
+  onCilium?: (c: Cluster) => void;
   /** viewer 역할은 조회만 — 수집/수정/삭제 진입점을 노출하지 않는다 */
   canEdit?: boolean;
 }
 
-export function ClusterCard({ cluster, onEdit, onDelete, deletingId, overlapGroupIdx, overlapPeers, onAutoUpdate, onVerify, verifying = false, autoUpdating, onCollectNics, canEdit = true }: ClusterCardProps) {
+export function ClusterCard({ cluster, onEdit, onDelete, deletingId, overlapGroupIdx, overlapPeers, onAutoUpdate, onVerify, verifying = false, autoUpdating, onCollectNics, onCilium, canEdit = true }: ClusterCardProps) {
   const [tab, setTab] = useState<CardTab>('node');
+  const tabId = useId();
   const st = STATUS_STYLE[cluster.status] ?? STATUS_STYLE.pending;
   const { data: opsLevels } = useOperationLevels();
+  // 테넌트 바인딩은 클러스터마다 다르다 — 역할은 있어도 이 클러스터에 operate 가 없으면 비활성 + 사유.
+  const { canOperate, withHint, ariaWithHint } = useCanOperate(cluster.id);
   const overlapColor = overlapGroupIdx !== undefined
     ? OVERLAP_COLORS[overlapGroupIdx % OVERLAP_COLORS.length]
     : null;
@@ -67,6 +73,8 @@ export function ClusterCard({ cluster, onEdit, onDelete, deletingId, overlapGrou
   const hasNodeData    = !!(cluster.nodeCount || cluster.maxPod || cluster.hostname) || hasBondData;
   const hasNetworkData = !!(cluster.cidr || cluster.podCidr || cluster.svcCidr || cluster.nodeIps);
 
+  const iconBtn = 'p-1.5 rounded-xl transition-colors disabled:opacity-50 disabled:cursor-not-allowed';
+
   return (
     <MacCard rootClassName={`border-l-4 ${st.border} shadow-card`} bodyPadding="p-0" className="flex flex-col h-full">
       {/* 카드 헤더 */}
@@ -74,16 +82,7 @@ export function ClusterCard({ cluster, onEdit, onDelete, deletingId, overlapGrou
         <div className="flex items-start justify-between gap-2">
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 mb-1.5">
-              <span className={`w-2 h-2 rounded-full flex-shrink-0 ${st.dot}`} />
-              {cluster.operationLevel && (
-                <span
-                  className="text-lg leading-none flex-shrink-0"
-                  title={`운영레벨: ${levelLabel(opsLevels, cluster.operationLevel)}`}
-                  aria-hidden
-                >
-                  {levelIcon(opsLevels, cluster.operationLevel)}
-                </span>
-              )}
+              <span role="img" aria-label={`상태: ${st.label}`} title={`상태: ${st.label}`} className={`w-2 h-2 rounded-full flex-shrink-0 ${st.dot}`} />
               <h3 className="text-sm font-bold truncate">{cluster.name}</h3>
             </div>
             <div className="flex flex-wrap items-center gap-1.5">
@@ -93,7 +92,7 @@ export function ClusterCard({ cluster, onEdit, onDelete, deletingId, overlapGrou
                   className={`inline-flex items-center gap-0.5 text-xs px-1.5 py-0.5 rounded-full border ${levelBadgeClass(levelColor(opsLevels, cluster.operationLevel))}`}
                   style={levelBadgeStyle(opsLevels, cluster.operationLevel)}
                 >
-                  <span>{levelIcon(opsLevels, cluster.operationLevel)}</span>
+                  <span aria-hidden>{levelIcon(opsLevels, cluster.operationLevel)}</span>
                   <span>{levelLabel(opsLevels, cluster.operationLevel)}</span>
                 </span>
               )}
@@ -113,53 +112,65 @@ export function ClusterCard({ cluster, onEdit, onDelete, deletingId, overlapGrou
               </p>
             )}
           </div>
-          {canEdit && (
+          {canEdit ? (
             <div className="flex items-center gap-1 flex-shrink-0">
               {onVerify && (
                 <button onClick={() => onVerify(cluster)}
-                  className={`p-1.5 rounded-md transition-colors ${
+                  disabled={!canOperate}
+                  className={`${iconBtn} ${
                     verifying
                       ? 'bg-status-critical/10 text-status-critical hover:bg-status-critical/20'
                       : 'text-muted-foreground hover:bg-primary/10 hover:text-primary'
                   }`}
-                  title={verifying ? '검증 중지' : '연결 검증 — API server / kubeconfig 인증 / kubectl 단계별 점검 (실행 로그에 실시간 기록)'}
-                  aria-label={verifying ? `${cluster.name} 검증 중지` : `${cluster.name} 연결 검증`}>
+                  title={withHint(verifying
+                    ? '검증 중지 — 남은 단계는 실행하지 않고 상태도 바꾸지 않습니다'
+                    : '연결 검증 — API 서버 · kubeconfig 인증 · kubectl 을 단계별로 점검하고 진행 상황을 실행 로그에 실시간으로 남깁니다 (상태 갱신됨)')}
+                  aria-label={ariaWithHint(verifying ? `${cluster.name} 검증 중지` : `${cluster.name} 연결 검증`)}>
                   {verifying
                     ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
                     : <ShieldCheck className="w-3.5 h-3.5" />}
                 </button>
               )}
               <button onClick={() => onAutoUpdate(cluster)}
-                className={`p-1.5 rounded-md transition-colors ${
+                disabled={!canOperate}
+                className={`${iconBtn} ${
                   autoUpdating
                     ? 'bg-status-critical/10 text-status-critical hover:bg-status-critical/20'
                     : 'text-muted-foreground hover:bg-primary/10 hover:text-primary'
                 }`}
-                title={autoUpdating ? '중지' : '클러스터 정보 수집 (kubeconfig 기반)'}
-                aria-label={autoUpdating ? `${cluster.name} 수집 중지` : `${cluster.name} 정보 수집`}>
+                title={withHint(autoUpdating
+                  ? '재수집 중지'
+                  : '재수집 (미리보기) — kubeconfig 로 노드 · 버전 · CIDR 등을 다시 조회해 변경분을 먼저 보여줍니다')}
+                aria-label={ariaWithHint(autoUpdating ? `${cluster.name} 재수집 중지` : `${cluster.name} 재수집 (미리보기)`)}>
                 {autoUpdating
                   ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
                   : <RefreshCw className="w-3.5 h-3.5" />}
               </button>
               {onCollectNics && (
                 <button onClick={() => onCollectNics(cluster)}
-                  className="p-1.5 hover:bg-primary/10 rounded-md transition-colors text-muted-foreground hover:text-primary"
-                  title="NIC 수집 (SSH 기반) — bond0/bond1 IP/MAC 채움"
-                  aria-label={`${cluster.name} NIC 수집`}>
+                  disabled={!canOperate}
+                  className={`${iconBtn} text-muted-foreground hover:bg-primary/10 hover:text-primary`}
+                  title={withHint('NIC 수집 (SSH) — bond0/bond1 IP·MAC 을 채웁니다. kubectl 만으로는 인터페이스 이름을 알 수 없어 SSH 로 따로 수집합니다')}
+                  aria-label={ariaWithHint(`${cluster.name} NIC 수집`)}>
                   <Cable className="w-3.5 h-3.5" />
                 </button>
               )}
               <button onClick={() => onEdit(cluster)}
-                className="p-1.5 hover:bg-secondary rounded-md transition-colors text-muted-foreground hover:text-foreground"
-                title="수정" aria-label={`${cluster.name} 수정`}>
+                disabled={!canOperate}
+                className={`${iconBtn} text-muted-foreground hover:bg-secondary hover:text-foreground`}
+                title={withHint('전체 수정 — 이름 · 지역 · 운영레벨 · 메타데이터 등 수정 화면으로 이동')}
+                aria-label={ariaWithHint(`${cluster.name} 전체 수정`)}>
                 <Pencil className="w-3.5 h-3.5" />
               </button>
-              <button onClick={() => onDelete(cluster)} disabled={deletingId === cluster.id}
-                className="p-1.5 hover:bg-status-critical/10 rounded-md transition-colors text-muted-foreground hover:text-status-critical disabled:opacity-40"
-                title="삭제" aria-label={`${cluster.name} 삭제`}>
+              <button onClick={() => onDelete(cluster)} disabled={deletingId === cluster.id || !canOperate}
+                className={`${iconBtn} text-muted-foreground hover:bg-status-critical/10 hover:text-status-critical`}
+                title={withHint('삭제 — 클러스터와 연관된 Addon · Playbook · 점검 이력이 함께 제거됩니다')}
+                aria-label={ariaWithHint(`${cluster.name} 삭제`)}>
                 <Trash2 className="w-3.5 h-3.5" />
               </button>
             </div>
+          ) : (
+            <span className="text-xs text-muted-foreground flex-shrink-0" title="조회 전용 계정입니다">조회 전용</span>
           )}
         </div>
         <p className="text-xs font-mono text-muted-foreground mt-1.5 truncate" title={cluster.apiEndpoint}>
@@ -168,48 +179,62 @@ export function ClusterCard({ cluster, onEdit, onDelete, deletingId, overlapGrou
       </div>
 
       {/* 탭 스위처 */}
-      <div className="flex border-b border-border/50">
-        <button onClick={() => setTab('node')}
+      <div role="tablist" aria-label={`${cluster.name} 상세`} className="flex border-b border-border/50">
+        <button
+          type="button"
+          role="tab"
+          id={`${tabId}-node-tab`}
+          aria-selected={tab === 'node'}
+          aria-controls={`${tabId}-panel`}
+          onClick={() => setTab('node')}
           className={`flex-1 flex items-center justify-center gap-1.5 py-2 text-sm font-medium transition-colors ${
             tab === 'node' ? 'text-primary border-b-2 border-primary bg-primary/5' : 'text-muted-foreground hover:text-foreground'
           }`}>
-          <Cpu className="w-3 h-3" />노드 스펙
-          {hasNodeData && tab !== 'node' && <span className="w-1.5 h-1.5 rounded-full bg-primary/50" />}
+          <Cpu className="w-3 h-3" aria-hidden />노드 스펙
+          {hasNodeData && tab !== 'node' && <span className="w-1.5 h-1.5 rounded-full bg-primary/50" aria-hidden />}
         </button>
-        <button onClick={() => setTab('network')}
+        <button
+          type="button"
+          role="tab"
+          id={`${tabId}-network-tab`}
+          aria-selected={tab === 'network'}
+          aria-controls={`${tabId}-panel`}
+          onClick={() => setTab('network')}
           className={`flex-1 flex items-center justify-center gap-1.5 py-2 text-sm font-medium transition-colors ${
             tab === 'network' ? 'text-primary border-b-2 border-primary bg-primary/5' : 'text-muted-foreground hover:text-foreground'
           }`}>
-          <Network className="w-3 h-3" />N/W CIDR
-          {overlapColor && <AlertTriangle className="w-3 h-3 text-status-warning" />}
-          {hasNetworkData && tab !== 'network' && !overlapColor && <span className="w-1.5 h-1.5 rounded-full bg-primary/50" />}
+          <Network className="w-3 h-3" aria-hidden />네트워크
+          {overlapColor && <AlertTriangle className="w-3 h-3 text-status-warning" aria-label="CIDR 겹침" />}
+          {hasNetworkData && tab !== 'network' && !overlapColor && <span className="w-1.5 h-1.5 rounded-full bg-primary/50" aria-hidden />}
         </button>
       </div>
 
       {/* 탭 콘텐츠 */}
-      <div className="px-4 py-3 flex-1">
+      <div
+        role="tabpanel"
+        id={`${tabId}-panel`}
+        aria-labelledby={`${tabId}-${tab}-tab`}
+        className="px-4 py-3 flex-1"
+      >
         {tab === 'node' && (
           <div className="space-y-3">
-            <div className="grid grid-cols-2 gap-2">
-              <div className="bg-secondary/50 rounded-lg px-3 py-2 text-center">
-                <p className="text-xs text-muted-foreground mb-0.5">노드 수</p>
-                <p className="text-lg font-bold text-foreground">{cluster.nodeCount ?? <span className="text-muted-foreground text-sm">-</span>}</p>
-              </div>
-              <div className="bg-secondary/50 rounded-lg px-3 py-2 text-center">
-                <p className="text-xs text-muted-foreground mb-0.5">Max Pod</p>
-                <p className="text-lg font-bold text-foreground">{cluster.maxPod ?? <span className="text-muted-foreground text-sm">-</span>}</p>
-              </div>
-            </div>
-            {cluster.hostname && (
-              <div className="px-3 py-2 bg-secondary/30 rounded-lg">
-                <p className="text-xs text-muted-foreground mb-0.5">호스트명</p>
-                <p className="text-sm font-mono text-foreground truncate">{cluster.hostname}</p>
-              </div>
-            )}
+            {/* 값 목록 — 수치를 큰 글씨 타일로 띄우지 않는다(§12.12 KPI 타일 금지) */}
+            <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 text-sm">
+              <dt className="text-muted-foreground">노드 수</dt>
+              <dd className="font-mono text-foreground tabular-nums">{cluster.nodeCount ?? <span className="text-muted-foreground">-</span>}</dd>
+              <dt className="text-muted-foreground">노드당 최대 Pod</dt>
+              <dd className="font-mono text-foreground tabular-nums">{cluster.maxPod ?? <span className="text-muted-foreground">-</span>}</dd>
+              {cluster.hostname && (
+                <>
+                  <dt className="text-muted-foreground">호스트명</dt>
+                  <dd className="font-mono text-foreground truncate" title={cluster.hostname}>{cluster.hostname}</dd>
+                </>
+              )}
+            </dl>
             {hasBondData ? (
               <div className="space-y-2">
-                <p className="text-xs font-semibold text-muted-foreground">NIC</p>
-                <div className="grid grid-cols-2 gap-2">
+                <p className="text-xs font-medium text-muted-foreground">NIC</p>
+                <div className="grid grid-cols-2 gap-3">
                   <NicCompact
                     label="bond0"
                     groups={nicData.bond0.groups}
@@ -230,7 +255,7 @@ export function ClusterCard({ cluster, onEdit, onDelete, deletingId, overlapGrou
               </div>
             ) : (
               !cluster.nodeCount && !cluster.maxPod && !cluster.hostname && (
-                <p className="text-sm text-muted-foreground text-center py-2">노드 스펙 정보 없음 — 수정 버튼으로 입력하세요</p>
+                <p className="text-sm text-muted-foreground text-center py-2">노드 스펙 정보 없음 — 재수집하거나 수정 화면에서 입력하세요</p>
               )
             )}
           </div>
@@ -245,19 +270,26 @@ export function ClusterCard({ cluster, onEdit, onDelete, deletingId, overlapGrou
               <BondIpRow cluster={cluster} bond="bond1" />
             </div>
             <CidrRow label="Pod CIDR" cidr={cluster.podCidr} first={cluster.podFirstHost} last={cluster.podLastHost}
-              color={{ bg: 'bg-chart-2/5', border: 'border-chart-2/20', text: 'text-chart-2-text', label: 'text-chart-2-text' }}
+              color={{ bg: 'bg-chart-2/5', border: 'border-chart-2/40', text: 'text-chart-2-text', label: 'text-chart-2-text' }}
               overlapColor={cluster.podCidr ? overlapColor : null} />
             <CidrRow label="Service CIDR" cidr={cluster.svcCidr} first={cluster.svcFirstHost} last={cluster.svcLastHost}
-              color={{ bg: 'bg-chart-4/5', border: 'border-chart-4/20', text: 'text-chart-4-text', label: 'text-chart-4-text' }}
+              color={{ bg: 'bg-chart-4/5', border: 'border-chart-4/40', text: 'text-chart-4-text', label: 'text-chart-4-text' }}
               overlapColor={cluster.svcCidr ? overlapColor : null} />
-            {cluster.ciliumConfig && (
-              <div className="mt-1 pt-2 border-t border-border/40">
-                <p className="text-xs font-semibold text-muted-foreground mb-1">Cilium 설정</p>
-                <pre className="text-xs font-mono text-muted-foreground bg-muted/20 rounded p-2 whitespace-pre-wrap max-h-20 overflow-y-auto">
-                  {cluster.ciliumConfig}
-                </pre>
-              </div>
-            )}
+            <div className="mt-1 pt-2 border-t border-border/40 flex items-center justify-between gap-2">
+              <p className="text-xs font-medium text-muted-foreground">
+                Cilium {cluster.ciliumVersion ? <span className="font-mono text-foreground">{cluster.ciliumVersion}</span> : '버전 미수집'}
+              </p>
+              {onCilium && (
+                <button
+                  type="button"
+                  onClick={() => onCilium(cluster)}
+                  className="text-xs px-2 py-0.5 rounded-xl border border-border bg-secondary text-muted-foreground hover:text-foreground hover:bg-secondary/80 transition-colors"
+                  aria-label={`${cluster.name} Cilium 설정 보기`}
+                >
+                  설정 보기
+                </button>
+              )}
+            </div>
           </div>
         )}
       </div>
@@ -291,9 +323,9 @@ function NicCompact({
   const hasFallback = !!fallbackIp || !!fallbackMac;
   if (!hasGroups && !hasMacs && !hasFallback) return null;
   return (
-    <div className="border border-border rounded-lg px-2.5 py-2 bg-muted/10">
+    <div className="border-l-2 border-border pl-2.5 py-0.5">
       <div className="flex items-center justify-between mb-1.5">
-        <p className="text-xs font-bold text-primary">{label}</p>
+        <p className="text-xs font-semibold text-foreground">{label}</p>
         {ipCount > 0 && (
           <span className="text-[11px] font-mono text-muted-foreground tabular-nums">{ipCount}개</span>
         )}
@@ -313,7 +345,7 @@ function NicCompact({
         </div>
       ) : fallbackIp ? (
         <div className="mb-1">
-          <p className="text-[11px] text-muted-foreground">IP (master)</p>
+          <p className="text-[11px] text-muted-foreground">IP (마스터)</p>
           <p className="text-xs font-mono text-foreground">{fallbackIp}</p>
         </div>
       ) : null}
@@ -329,7 +361,7 @@ function NicCompact({
         </div>
       ) : fallbackMac ? (
         <div>
-          <p className="text-[11px] text-muted-foreground">MAC (master)</p>
+          <p className="text-[11px] text-muted-foreground">MAC (마스터)</p>
           <p className="text-xs font-mono text-foreground">{fallbackMac}</p>
         </div>
       ) : null}

@@ -4,9 +4,9 @@
 //  로 옮겨간 뒤 참조가 0건이라 제거했다.)
 
 export const STATUS_STYLE: Record<string, { dot: string; border: string; badge: string; label: string }> = {
-  healthy:  { dot: 'bg-muted-foreground/40', border: 'border-l-border',     badge: 'bg-secondary text-muted-foreground',          label: 'Healthy'  },
-  warning:  { dot: 'bg-status-warning',  border: 'border-l-status-warning',  badge: 'bg-status-warning/10 text-status-warning',   label: 'Warning'  },
-  critical: { dot: 'bg-status-critical', border: 'border-l-status-critical', badge: 'bg-status-critical/10 text-status-critical', label: 'Critical' },
+  healthy:  { dot: 'bg-muted-foreground/40', border: 'border-l-border',     badge: 'bg-secondary text-muted-foreground',          label: '정상'  },
+  warning:  { dot: 'bg-status-warning',  border: 'border-l-status-warning',  badge: 'bg-status-warning/10 text-status-warning',   label: '경고'  },
+  critical: { dot: 'bg-status-critical', border: 'border-l-status-critical', badge: 'bg-status-critical/10 text-status-critical', label: '위험' },
   pending:  { dot: 'bg-status-unknown',  border: 'border-l-status-unknown',  badge: 'bg-status-unknown/10 text-status-unknown',   label: '미연결'   },
 };
 
