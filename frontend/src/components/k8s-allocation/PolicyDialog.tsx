@@ -3,12 +3,14 @@
 import { useEffect, useMemo, useState } from 'react';
 import type { ReactNode } from 'react';
 import { Download, Plus, Trash2, X } from 'lucide-react';
-import { RoleGate } from '@/components/auth/RoleGate';
-import { Skeleton, useToast, useModalA11y } from '@/components/common';
+import { ConfirmDialog, Skeleton, useToast, useModalA11y } from '@/components/common';
+import { useCanOperate } from '@/hooks/useCanOperate';
+import { hasRole, useAuthStore } from '@/stores/authStore';
 import {
   effErrMsg, useEffMutations, useEffPolicies, useEffPolicyDefaults, useEffQuotas, useEffSchedule, useEffSummary,
 } from '@/hooks/useK8sEfficiency';
 import type { EffCustomTarget, EffNamespacePolicy, EffPolicyDefaults } from '@/types';
+import { SegTabs } from './primitives';
 
 type Tab = 'defaults' | 'namespace' | 'schedule';
 
@@ -21,7 +23,7 @@ function Field({ label, help, children }: { label: string; help?: string; childr
     <label className="block text-xs">
       <span className="text-muted-foreground">{label}</span>
       <div className="mt-0.5">{children}</div>
-      {help && <span className="block text-[11px] text-muted-foreground mt-0.5 leading-snug">{help}</span>}
+      {help && <span className="block text-xs text-muted-foreground mt-0.5 leading-snug">{help}</span>}
     </label>
   );
 }
@@ -42,7 +44,7 @@ function Toggle({ checked, onChange, label, help }: { checked: boolean; onChange
       <input type="checkbox" checked={checked} onChange={(e) => onChange(e.target.checked)} className="accent-primary mt-0.5" />
       <span>
         {label}
-        {help && <span className="block text-[11px] text-muted-foreground leading-snug">{help}</span>}
+        {help && <span className="block text-xs text-muted-foreground leading-snug">{help}</span>}
       </span>
     </label>
   );
@@ -51,12 +53,21 @@ function Toggle({ checked, onChange, label, help }: { checked: boolean; onChange
 const MI = 1024 ** 2;
 const GI = 1024 ** 3;
 
+/** 전역 기본값·수집 스케줄 저장은 admin 전용 — 숨기지 않고 비활성 + 사유(§12.9). */
+function useAdminGate() {
+  const user = useAuthStore((s) => s.user);
+  const isAdmin = hasRole(user, 'admin');
+  return { isAdmin, hint: isAdmin ? undefined : `admin 권한이 필요합니다 (현재: ${user?.role ?? '미로그인'})` };
+}
+
 // ── 전역 기본값 탭 ──────────────────────────────────────────────────────────────
 function DefaultsTab() {
   const q = useEffPolicyDefaults();
   const { saveDefaults } = useEffMutations('');
   const toast = useToast();
+  const { isAdmin, hint } = useAdminGate();
   const [form, setForm] = useState<EffPolicyDefaults | null>(null);
+  const [confirmAutomation, setConfirmAutomation] = useState(false);
   useEffect(() => { if (q.data && !form) setForm(q.data); }, [q.data, form]);
   if (!form) return <Skeleton className="h-40 w-full" />;
   const set = <K extends keyof EffPolicyDefaults>(k: K, v: EffPolicyDefaults[K]) => setForm({ ...form, [k]: v });
@@ -68,6 +79,9 @@ function DefaultsTab() {
       toast.success('전역 기본값 저장됨', undefined);
     } catch (e) { toast.error('저장 실패', effErrMsg(e)); }
   };
+  // 자동 적용을 새로 켜는 저장은 opt-in 한 모든 NS 의 워크로드를 사람 없이 패치하게 만든다 — 한 번 더 확인한다.
+  const turningOn = form.automationEnabled && !q.data?.automationEnabled;
+  const onSave = () => { if (turningOn) setConfirmAutomation(true); else void save(); };
   return (
     <div className="space-y-3">
       <div className="rounded-lg border border-status-warning/40 bg-status-warning/5 p-2 space-y-1.5">
@@ -86,7 +100,7 @@ function DefaultsTab() {
         </Field>
         <Field label="백분위(p)" help="관측 사용량의 상위 백분위(기본 95)"><Num value={form.percentile} min={50} onChange={(v) => set('percentile', v ?? 95)} /></Field>
         <Field label="관측 창(일)" help="p95 를 계산하는 기간"><Num value={form.windowDays} min={1} onChange={(v) => set('windowDays', v ?? 7)} /></Field>
-        <Field label="여유율 headroom(%)" help="목표 = p95 × (1 + headroom)"><Num value={form.headroomPct} min={0} onChange={(v) => set('headroomPct', v ?? 30)} /></Field>
+        <Field label="여유율(%)" help="목표 = p95 × (1 + 여유율)"><Num value={form.headroomPct} min={0} onChange={(v) => set('headroomPct', v ?? 30)} /></Field>
         <Field label="CPU 하한(m)" help="이 아래로는 추천하지 않음"><Num value={form.floorCpuM} min={1} onChange={(v) => set('floorCpuM', v ?? 50)} /></Field>
         <Field label="MEM 하한(Mi)"><Num value={Math.round(form.floorMemB / MI)} min={1} onChange={(v) => set('floorMemB', (v ?? 64) * MI)} /></Field>
         <Field label="임계 비율" help="현재 request > 목표 × 비율 일 때만 추천"><Num value={form.thresholdRatio} step={0.05} min={1} onChange={(v) => set('thresholdRatio', v ?? 1.25)} /></Field>
@@ -119,10 +133,13 @@ function DefaultsTab() {
         </div>
       </div>
       <div className="flex justify-end">
-        <RoleGate allow={['admin']} fallback={<span className="text-xs text-muted-foreground">전역 기본값 변경은 admin 만 가능합니다.</span>}>
-          <button type="button" className={BTN_PRIMARY} onClick={() => void save()} disabled={saveDefaults.isPending}>저장</button>
-        </RoleGate>
+        <button type="button" className={BTN_PRIMARY} onClick={onSave} disabled={saveDefaults.isPending || !isAdmin}
+          title={hint ?? '전역 기본값 저장'} aria-label={hint ? `저장 — ${hint}` : '저장'}>저장</button>
       </div>
+      <ConfirmDialog open={confirmAutomation} danger title="자동 적용 켜기" confirmLabel="켜고 저장" busy={saveDefaults.isPending}
+        description={`자동 right-size 를 opt-in 한 네임스페이스는 이후 수집 사이클마다 사람 확인 없이 request 가 패치되고 롤링 재시작이 일어날 수 있습니다. 허용 시간대: ${form.maintenanceCron || '항상'} · 1회 최대 감소폭 ${form.maxStepPct}% · 쿨다운 ${form.cooldownMinutes}분 · run 당 최대 ${form.maxTargetsPerRun}개. 모든 자동 적용은 실행 로그와 감사 로그에 남고 롤백할 수 있습니다.`}
+        onCancel={() => setConfirmAutomation(false)}
+        onConfirm={() => { setConfirmAutomation(false); void save(); }} />
     </div>
   );
 }
@@ -154,6 +171,8 @@ function NamespaceTab({ clusterId, initialNamespace }: { clusterId: string; init
   const [loadQuotas, setLoadQuotas] = useState(false);
   const quotasQ = useEffQuotas(clusterId, loadQuotas);
   const { savePolicy, deletePolicy } = useEffMutations(clusterId);
+  const { canOperate, withHint, ariaWithHint } = useCanOperate(clusterId);
+  const [confirmDelete, setConfirmDelete] = useState(false);
   const toast = useToast();
   const namespaces = useMemo(() => {
     const s = new Set<string>((summaryQ.data?.items ?? []).map((i) => i.namespace));
@@ -221,15 +240,16 @@ function NamespaceTab({ clusterId, initialNamespace }: { clusterId: string; init
             {namespaces.map((n) => <option key={n} value={n}>{n}</option>)}
           </select>
         </Field>
-        <div className="text-[11px] text-muted-foreground">정책 있는 NS</div>
+        <div className="text-xs text-muted-foreground">정책 있는 NS</div>
         <ul className="text-xs max-h-64 overflow-auto rounded-lg border border-border divide-y divide-border">
           {(policiesQ.data?.items ?? []).map((p) => (
             <li key={p.id}>
               <button type="button" onClick={() => setNs(p.namespace)}
                 className={`w-full text-left px-2 py-1 hover:bg-muted/10 ${p.namespace === ns ? 'bg-primary/5' : ''}`}>
                 <span className="truncate block">{p.namespace}</span>
-                <span className="text-[11px] text-muted-foreground">
-                  {p.autoRightsize ? 'auto-rightsize ' : ''}{p.quotaElastic ? 'quota ' : ''}{p.customTargets.length ? `CR×${p.customTargets.length}` : ''}
+                <span className="text-xs text-muted-foreground">
+                  {[p.autoRightsize ? '자동 right-size' : '', p.quotaElastic ? 'Quota 탄력' : '', p.customTargets.length ? `CR ${p.customTargets.length}개` : '']
+                    .filter(Boolean).join(' · ') || '추천만'}
                 </span>
               </button>
             </li>
@@ -253,7 +273,7 @@ function NamespaceTab({ clusterId, initialNamespace }: { clusterId: string; init
                   disabled={quotasQ.isFetching} title="클러스터에서 현재 Quota 를 읽어 기본값 채우기">
                   <Download className="w-3.5 h-3.5" /> 라이브 Quota 불러오기
                 </button>
-                {liveQuota && <span className="text-[11px] text-muted-foreground">현재 {liveQuota.name}: CPU {liveQuota.hardCpuM == null ? '-' : `${liveQuota.hardCpuM / 1000}코어`} · MEM {liveQuota.hardMemB == null ? '-' : `${(liveQuota.hardMemB / GI).toFixed(1)}Gi`}</span>}
+                {liveQuota && <span className="text-xs text-muted-foreground">현재 {liveQuota.name}: CPU {liveQuota.hardCpuM == null ? '—' : `${liveQuota.hardCpuM / 1000}코어`} · MEM {liveQuota.hardMemB == null ? '—' : `${(liveQuota.hardMemB / GI).toFixed(1)}Gi`}</span>}
               </div>
               <div className="grid grid-cols-2 md:grid-cols-5 gap-2">
                 <Field label="Quota 이름"><input className={INPUT} value={form.quotaName} onChange={(e) => set('quotaName', e.target.value)} placeholder="자동 감지" /></Field>
@@ -269,7 +289,7 @@ function NamespaceTab({ clusterId, initialNamespace }: { clusterId: string; init
             <div className="rounded-lg border border-border p-2">
               <div className="text-xs font-semibold text-muted-foreground mb-1.5">right-size 오버라이드(비우면 전역)</div>
               <div className="grid grid-cols-3 gap-2">
-                <Field label="headroom(%)"><Num value={form.headroomPct} min={0} onChange={(v) => set('headroomPct', v)} placeholder="전역" /></Field>
+                <Field label="여유율(%)"><Num value={form.headroomPct} min={0} onChange={(v) => set('headroomPct', v)} placeholder="전역" /></Field>
                 <Field label="쿨다운(분)"><Num value={form.cooldownMinutes} min={0} onChange={(v) => set('cooldownMinutes', v)} placeholder="전역" /></Field>
                 <Field label="1회 최대 감소폭(%)"><Num value={form.maxStepPct} min={1} onChange={(v) => set('maxStepPct', v)} placeholder="전역" /></Field>
               </div>
@@ -277,7 +297,7 @@ function NamespaceTab({ clusterId, initialNamespace }: { clusterId: string; init
             <div className="rounded-lg border border-border p-2 space-y-2">
               <div className="flex items-center gap-2">
                 <span className="text-xs font-semibold text-muted-foreground">오퍼레이터 CR 어댑터</span>
-                <span className="text-[11px] text-muted-foreground">예: StarRocks CN — starrocks.com / v1 / starrocksclusters / spec.starRocksCnSpec.replicas</span>
+                <span className="text-xs text-muted-foreground">예: StarRocks CN — starrocks.com / v1 / starrocksclusters / spec.starRocksCnSpec.replicas</span>
                 <button type="button" className={`${BTN} ml-auto`} onClick={() => set('targets', [...form.targets, { ...EMPTY_TARGET }])}>
                   <Plus className="w-3.5 h-3.5" /> 추가
                 </button>
@@ -294,19 +314,26 @@ function NamespaceTab({ clusterId, initialNamespace }: { clusterId: string; init
                   <Field label="max"><Num value={t.max} min={0} onChange={(v) => setTarget(i, { max: v ?? 0 })} /></Field>
                   <div className="flex items-center gap-1">
                     <Toggle checked={t.enabled ?? true} onChange={(v) => setTarget(i, { enabled: v })} label="자동" />
-                    <button type="button" onClick={() => set('targets', form.targets.filter((_, j) => j !== i))} title="삭제" aria-label="어댑터 삭제"
-                      className="p-1 rounded-md text-muted-foreground hover:bg-secondary hover:text-status-critical"><Trash2 className="w-3.5 h-3.5" /></button>
+                    <button type="button" onClick={() => set('targets', form.targets.filter((_, j) => j !== i))} title="어댑터 삭제(저장 전까지 반영 안 됨)" aria-label="어댑터 삭제"
+                      className="p-1 rounded-xl text-muted-foreground hover:bg-secondary hover:text-status-critical"><Trash2 className="w-3.5 h-3.5" aria-hidden="true" /></button>
                   </div>
                 </div>
               ))}
-              {!form.targets.length && <div className="text-[11px] text-muted-foreground">없음 — 워크로드의 owner 가 CR 이면(예: StarRocksCluster) request 는 추천만 하고, 확장/회수는 이 어댑터로 CR 필드를 조정합니다.</div>}
+              {!form.targets.length && <div className="text-xs text-muted-foreground">없음 — 워크로드의 owner 가 CR 이면(예: StarRocksCluster) request 는 추천만 하고, 확장/회수는 이 어댑터로 CR 필드를 조정합니다.</div>}
             </div>
             <div className="flex justify-end gap-2">
-              <RoleGate allow={['admin', 'operator']} fallback={<span className="text-xs text-muted-foreground">정책 변경은 operator 이상만 가능합니다.</span>}>
-                {existing && <button type="button" className={`${BTN} text-status-critical`} onClick={() => void remove()} disabled={deletePolicy.isPending}>정책 삭제</button>}
-                <button type="button" className={BTN_PRIMARY} onClick={() => void save()} disabled={savePolicy.isPending}>저장</button>
-              </RoleGate>
+              {existing && (
+                <button type="button" className={`${BTN} text-status-critical`} onClick={() => setConfirmDelete(true)}
+                  disabled={deletePolicy.isPending || !canOperate}
+                  title={withHint(`${ns} 정책 삭제`)} aria-label={ariaWithHint('정책 삭제')}>정책 삭제</button>
+              )}
+              <button type="button" className={BTN_PRIMARY} onClick={() => void save()} disabled={savePolicy.isPending || !canOperate}
+                title={withHint(`${ns} 정책 저장`)} aria-label={ariaWithHint('저장')}>저장</button>
             </div>
+            <ConfirmDialog open={confirmDelete} danger title={`${ns} 정책 삭제`} confirmLabel="삭제" busy={deletePolicy.isPending}
+              description={`${ns} 의 자동 right-size · Quota 탄력 · CR 어댑터 설정이 모두 지워지고, 이 NS 는 다시 추천만 받습니다. 이미 적용된 request·Quota 값은 그대로 남습니다.`}
+              onCancel={() => setConfirmDelete(false)}
+              onConfirm={() => { setConfirmDelete(false); void remove(); }} />
           </>
         )}
       </div>
@@ -319,6 +346,7 @@ function ScheduleTab({ clusterId }: { clusterId: string }) {
   const q = useEffSchedule();
   const { saveSchedule } = useEffMutations('');
   const toast = useToast();
+  const { isAdmin, hint } = useAdminGate();
   const [enabled, setEnabled] = useState(true);
   const [cron, setCron] = useState('*/10 * * * *');
   const [cEnabled, setCEnabled] = useState(true);
@@ -356,9 +384,8 @@ function ScheduleTab({ clusterId }: { clusterId: string }) {
       </div>
       <Toggle checked={cEnabled} onChange={setCEnabled} label="이 클러스터 수집 사용" />
       <div className="flex justify-end">
-        <RoleGate allow={['admin']} fallback={<span className="text-xs text-muted-foreground">스케줄 변경은 admin 만 가능합니다.</span>}>
-          <button type="button" className={BTN_PRIMARY} onClick={() => void save()} disabled={saveSchedule.isPending}>저장</button>
-        </RoleGate>
+        <button type="button" className={BTN_PRIMARY} onClick={() => void save()} disabled={saveSchedule.isPending || !isAdmin}
+          title={hint ?? '수집 스케줄 저장'} aria-label={hint ? `저장 — ${hint}` : '저장'}>저장</button>
       </div>
     </div>
   );
@@ -377,14 +404,10 @@ export function PolicyDialog({ clusterId, open, onClose, initialTab = 'namespace
         className="w-full max-w-5xl max-h-[90vh] overflow-auto rounded-md border border-border bg-card shadow-xl">
         <div className="flex items-center gap-2 px-4 py-2 border-b border-border sticky top-0 bg-card z-10">
           <span className="font-semibold">자원 효율화 정책</span>
-          <div className="inline-flex rounded-xl border border-border bg-muted/20 p-0.5 ml-2">
-            {([['namespace', '네임스페이스 정책'], ['defaults', '전역 기본값'], ['schedule', '수집 스케줄']] as [Tab, string][]).map(([k, l]) => (
-              <button key={k} type="button" onClick={() => setTab(k)}
-                className={`px-2.5 py-1 rounded-lg text-xs ${tab === k ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground'}`}>{l}</button>
-            ))}
-          </div>
-          <button type="button" onClick={onClose} title="닫기" aria-label="닫기" className="ml-auto p-1 rounded-md text-muted-foreground hover:bg-secondary hover:text-foreground">
-            <X className="w-4 h-4" />
+          <SegTabs<Tab> mode="tabs" className="ml-2" label="정책 구분" value={tab} onChange={setTab}
+            options={[['namespace', '네임스페이스 정책'], ['defaults', '전역 기본값'], ['schedule', '수집 스케줄']]} />
+          <button type="button" onClick={onClose} title="닫기" aria-label="닫기" className="ml-auto p-1 rounded-xl text-muted-foreground hover:bg-secondary hover:text-foreground">
+            <X className="w-4 h-4" aria-hidden="true" />
           </button>
         </div>
         <div className="p-4">

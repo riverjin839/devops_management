@@ -2,12 +2,16 @@
 import { useMemo } from 'react';
 import { ArrowDownRight, ArrowRight, ArrowUpRight } from 'lucide-react';
 import { CartesianGrid, Legend, Line, LineChart, ResponsiveContainer, Tooltip as RechartsTooltip, XAxis, YAxis } from 'recharts';
-import { EmptyState, Skeleton } from '@/components/common';
+import { EmptyState, ErrorState, Skeleton } from '@/components/common';
 import { useEffRanking } from '@/hooks/useK8sEfficiency';
 import { fmtCores, fmtGi } from './format';
 import type { EffRange } from './effUtils';
 
-const COLORS = ['--chart-1', '--chart-2', '--chart-3', '--chart-4', '--chart-5', '--status-warning', '--status-info', '--status-critical'];
+// 시리즈 구분은 카테고리 토큰(--chart-1~8)만 — 상태색을 섞으면 "이 NS 는 장애" 로 읽힌다.
+const COLORS = ['--chart-1', '--chart-2', '--chart-3', '--chart-4', '--chart-5', '--chart-6', '--chart-7', '--chart-8'];
+// 범례 점 — Tailwind 가 클래스를 찾을 수 있게 리터럴로 둔다(인라인 style 금지).
+const DOT = ['bg-chart-1', 'bg-chart-2', 'bg-chart-3', 'bg-chart-4', 'bg-chart-5', 'bg-chart-6', 'bg-chart-7', 'bg-chart-8'];
+const TREND_TEXT = { up: '개선', down: '악화', flat: '유지' } as const;
 
 export function LowEfficiencyRankingChart({ clusterId, range, metric, onPick }: {
   clusterId: string; range: EffRange; metric: 'cpu' | 'mem'; onPick?: (ns: string) => void;
@@ -35,7 +39,8 @@ export function LowEfficiencyRankingChart({ clusterId, range, metric, onPick }: 
   return (
     <div className="min-h-56">
       {q.isLoading && !q.data ? <Skeleton className="h-56 w-full" />
-        : !items.length ? <EmptyState title="데이터 없음" description="실사용(usage) 샘플이 있는 NS 가 없습니다. metrics-server 또는 Prometheus 연결을 확인하세요." />
+        : q.isError && !q.data ? <ErrorState error={q.error} title="저효율 랭킹을 불러오지 못했습니다" onRetry={() => void q.refetch()} compact />
+        : !items.length ? <EmptyState title="데이터 없음" description="실사용 샘플이 있는 NS 가 없습니다. metrics-server 또는 Prometheus 연결을 확인하세요." />
         : (
           <div className="grid grid-cols-1 xl:grid-cols-[1fr_260px] gap-3">
             <ResponsiveContainer width="100%" height={240}>
@@ -43,7 +48,7 @@ export function LowEfficiencyRankingChart({ clusterId, range, metric, onPick }: 
                 <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
                 <XAxis dataKey="label" tick={{ fontSize: 11, fill: 'hsl(var(--muted-foreground))' }} minTickGap={24} />
                 <YAxis tick={{ fontSize: 11, fill: 'hsl(var(--muted-foreground))' }} unit="%" width={48} domain={[0, 'auto']} />
-                <RechartsTooltip formatter={(v: number) => [`${v}%`, '사용효율(use/req)']}
+                <RechartsTooltip formatter={(v: number) => [`${v}%`, '사용효율(실사용 ÷ request)']}
                   contentStyle={{ fontSize: 12, borderRadius: 8, background: 'hsl(var(--card))', color: 'hsl(var(--foreground))', border: '1px solid hsl(var(--border))' }} />
                 <Legend wrapperStyle={{ fontSize: 11 }} />
                 {keys.map((k, i) => (
@@ -54,16 +59,20 @@ export function LowEfficiencyRankingChart({ clusterId, range, metric, onPick }: 
             <ul className="text-xs divide-y divide-border rounded-lg border border-border overflow-hidden self-start">
               {items.map((it, i) => {
                 const Icon = it.trend === 'up' ? ArrowUpRight : it.trend === 'down' ? ArrowDownRight : ArrowRight;
-                const cls = it.trend === 'up' ? 'text-status-healthy' : it.trend === 'down' ? 'text-status-critical' : 'text-muted-foreground';
+                // 효율 추세는 비용 신호라 상태색을 쓰지 않는다 — 악화만 진한 글자로 강조하고 글자 라벨을 함께 둔다.
+                const cls = it.trend === 'down' ? 'text-foreground' : 'text-muted-foreground';
+                const trendText = TREND_TEXT[it.trend ?? 'flat'];
                 return (
                   <li key={it.namespace}>
                     <button type="button" onClick={() => onPick?.(it.namespace)} title="추이 차트에서 보기"
                       className="w-full flex items-center gap-2 px-2 py-1.5 hover:bg-muted/10 text-left">
-                      <span className="w-2 h-2 rounded-full shrink-0" style={{ background: `hsl(var(${COLORS[i % COLORS.length]}))` }} />
+                      <span className={`w-2 h-2 rounded-full shrink-0 ${DOT[i % DOT.length]}`} aria-hidden="true" />
                       <span className="truncate flex-1" title={it.namespace}>{it.namespace}</span>
                       <span className="tabular-nums font-medium">{it.avgEfficiency == null ? '—' : `${Math.round(it.avgEfficiency * 100)}%`}</span>
-                      <span className="tabular-nums text-muted-foreground" title="평균 낭비(req−use)">{fmt(it.avgSlack)}</span>
-                      <Icon className={`w-3.5 h-3.5 ${cls}`} aria-label={it.trend ?? 'flat'} />
+                      <span className="tabular-nums text-muted-foreground" title="평균 낭비(request − 실사용)">{fmt(it.avgSlack)}</span>
+                      <span className={`inline-flex items-center gap-0.5 ${cls}`} title={`추세 ${trendText}`}>
+                        <Icon className="w-3.5 h-3.5" aria-hidden="true" /><span className="sr-only">추세 {trendText}</span>
+                      </span>
                     </button>
                   </li>
                 );

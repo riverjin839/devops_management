@@ -1,14 +1,14 @@
 // 네임스페이스별 자원 — 워크로드 → 파드/컨테이너 드릴다운.
 import { Fragment, memo, useCallback, useEffect, useMemo, useState } from 'react';
-import { ChevronDown, ChevronRight, RefreshCw } from 'lucide-react';
+import { AlertTriangle, ChevronDown, ChevronRight, RefreshCw } from 'lucide-react';
 import { MacCard } from '@/components/ui/MacCard';
-import { EmptyState, Skeleton, SnapshotProgressCard } from '@/components/common';
+import { EmptyState, ErrorState, Skeleton, SnapshotProgressCard } from '@/components/common';
 import { useAllocNamespaces, useRefreshAllocNamespace } from '@/hooks/useK8sAllocation';
 import { buildCsv, downloadCsv } from '@/lib/csv';
 import type { AllocNamespaceRow } from '@/types';
-import { EFF_BADGE, csvCluster, efficiency, fmtN, today, utilPct } from './format';
+import { EFF_BADGE, csvCluster, fmtN, today, utilPct, utilRatio, worstEfficiency } from './format';
 import {
-  CsvButton, EffBadge, PageSizeSelect, Pager, ReqUseCell, SearchInput, SortableTh, StatTooltip, UtilPct,
+  CsvButton, PageSizeSelect, Pager, ReqUseCell, SearchInput, SortableTh, StatTooltip, UtilPct, WorstEffBadge,
 } from './primitives';
 import { nextSort, paginate, useTableSort } from './tableSort';
 import type { SortState } from './tableSort';
@@ -22,9 +22,13 @@ const NS_ACCESSORS: Record<string, (r: AllocNamespaceRow) => number | string | n
   workloadCount: (r) => r.workloadCount,
   cpuReqM: (r) => r.cpuReqM,
   memReqB: (r) => r.memReqB,
-  // `efficiency()` 배지와 동일하게 reqM<=0 이면 null(배지 없음).
-  eff: (r) => (r.cpuUsageM == null || r.cpuReqM <= 0 ? null : r.cpuUsageM / r.cpuReqM),
+  // 배지와 같은 기준 — CPU·MEM 중 실사용/request 가 더 높은(위험한) 쪽. 둘 다 모르면 null(배지 없음).
+  eff: (r) => {
+    const rs = [utilRatio(r.cpuUsageM, r.cpuReqM), utilRatio(r.memUsageB, r.memReqB)].filter((v): v is number => v != null);
+    return rs.length ? Math.max(...rs) : null;
+  },
 };
+const nsEfficiency = (ns: AllocNamespaceRow) => worstEfficiency(ns.cpuReqM, ns.cpuUsageM, ns.memReqB, ns.memUsageB);
 const NS_PAGE_SIZES = [10, 20, 50, 100];
 
 export function NamespacesView({ clusterId, clusterName, onOpenDetail }: {
@@ -66,8 +70,8 @@ export function NamespacesView({ clusterId, clusterName, onOpenDetail }: {
       'MEM 요청', 'MEM 사용', 'MEM 사용률(req)', 'MEM 사용률(lim)', '효율'];
     const pct = (v: number | null) => (v == null ? '' : `${v}%`);
     const effLabel = (r: AllocNamespaceRow) => {
-      const k = efficiency(r.cpuReqM, r.cpuUsageM);
-      return k ? EFF_BADGE[k].label : '';
+      const { kind, res } = nsEfficiency(r);
+      return kind ? `${EFF_BADGE[kind].label}${res ? ` (${res})` : ''}` : '';
     };
     const data2 = rows.map((ns) => [
       ns.namespace, ns.podCount, ns.workloadCount, ns.noRequestPods,
@@ -82,7 +86,7 @@ export function NamespacesView({ clusterId, clusterName, onOpenDetail }: {
   if (isLoading && !data) {
     body = <div className="p-3"><Skeleton className="h-40 w-full" /></div>;
   } else if (isError && !data) {
-    body = <div className="p-3"><EmptyState title="조회 실패" description={(error as Error)?.message ?? '불러오지 못했습니다.'} /></div>;
+    body = <div className="p-3"><ErrorState error={error} title="네임스페이스 자원을 불러오지 못했습니다" onRetry={() => void refetch()} /></div>;
   } else if (computing && !allItems.length) {
     body = (
       <div className="p-3">
@@ -92,7 +96,7 @@ export function NamespacesView({ clusterId, clusterName, onOpenDetail }: {
       </div>
     );
   } else if (!allItems.length) {
-    body = <div className="p-3"><EmptyState title="데이터 없음" description="표시할 네임스페이스가 없습니다." /></div>;
+    body = <div className="p-3"><EmptyState title="네임스페이스 없음" description="집계된 네임스페이스가 없습니다. 상단의 '다시 집계'로 집계를 시작하세요." /></div>;
   } else {
     body = (
       <>
@@ -101,19 +105,20 @@ export function NamespacesView({ clusterId, clusterName, onOpenDetail }: {
             <thead className="bg-muted/20 text-left text-xs text-muted-foreground">
               <tr>
                 <th className="px-2 py-2 font-medium w-7"><span className="sr-only">펼치기</span></th>
-                <SortableTh label="Namespace" k="namespace" sort={sort} onSort={onSort} />
-                <SortableTh label="Pods" k="podCount" sort={sort} onSort={onSort} align="right" />
-                <SortableTh label="Workloads" k="workloadCount" sort={sort} onSort={onSort} align="right" />
-                <SortableTh label="CPU req/use" k="cpuReqM" sort={sort} onSort={onSort} title="CPU 요청량 기준 정렬" />
-                <SortableTh label="MEM req/use" k="memReqB" sort={sort} onSort={onSort} title="MEM 요청량 기준 정렬" />
-                <SortableTh label="효율" k="eff" sort={sort} onSort={onSort} title="사용/요청 비율 기준 정렬" />
+                <SortableTh label="네임스페이스" k="namespace" sort={sort} onSort={onSort} />
+                <SortableTh label="Pod" k="podCount" sort={sort} onSort={onSort} align="right" />
+                <SortableTh label="워크로드" k="workloadCount" sort={sort} onSort={onSort} align="right" />
+                <SortableTh label="CPU 요청/사용" k="cpuReqM" sort={sort} onSort={onSort} title="CPU 요청량 기준 정렬" />
+                <SortableTh label="MEM 요청/사용" k="memReqB" sort={sort} onSort={onSort} title="MEM 요청량 기준 정렬" />
+                <SortableTh label="효율" k="eff" sort={sort} onSort={onSort} title="실사용/요청 비율 기준 정렬 — CPU·MEM 중 높은 쪽" />
               </tr>
             </thead>
             <tbody>
               {!rows.length && (
                 <tr className="border-t border-border">
                   <td colSpan={7}>
-                    <EmptyState compact title={`'${q}' 와 일치하는 네임스페이스가 없습니다.`} description="검색어를 줄이거나 지우면 전체 목록이 다시 보입니다." />
+                    <EmptyState compact title={`'${q}' 와 일치하는 네임스페이스가 없습니다.`} description="검색어를 줄이거나 지우면 전체 목록이 다시 보입니다."
+                      action={{ label: '검색 지우기', onClick: () => setQ(''), variant: 'secondary' }} />
                   </td>
                 </tr>
               )}
@@ -146,18 +151,19 @@ export function NamespacesView({ clusterId, clusterName, onOpenDetail }: {
       bodyPadding="p-0"
       actions={<>
         <CsvButton onClick={exportCsv} disabled={!rows.length} />
-        <button type="button" onClick={() => refetch()} className="text-sm text-muted-foreground hover:text-foreground flex items-center gap-1">
-          <RefreshCw className={`w-3.5 h-3.5 ${isFetching ? 'animate-spin' : ''}`} /> 새로고침
+        <button type="button" onClick={() => refetch()} title="저장된 집계 결과를 다시 불러옵니다(클러스터를 다시 집계하지 않음)"
+          className="text-sm text-muted-foreground hover:text-foreground flex items-center gap-1">
+          <RefreshCw className={`w-3.5 h-3.5 ${isFetching ? 'animate-spin' : ''}`} aria-hidden="true" /> 다시 읽기
         </button>
       </>}
     >
       <div className="flex items-center gap-3 flex-wrap px-3 py-2 border-b border-border">
         <SearchInput value={q} onChange={setQ} placeholder="네임스페이스 찾기" width="w-52" />
         <span className="text-xs text-muted-foreground inline-flex items-center">
-          NS 명 클릭=상세 · 행 클릭=펼치기 · 열 머리글을 클릭해 정렬
+          NS 명을 누르면 상세 · 왼쪽 화살표로 워크로드 펼치기 · 열 머리글로 정렬
           <StatTooltip>
             <p><b>R</b> = 사용 ÷ 요청(request) 비율 · <b>L</b> = 사용 ÷ 제한(limit) 비율</p>
-            <p className="text-muted-foreground mt-1">네임스페이스/워크로드/파드 표 전반에서 공통으로 쓰이는 표기입니다.</p>
+            <p className="text-muted-foreground mt-1">네임스페이스/워크로드/Pod 표 전반에서 공통으로 쓰이는 표기입니다.</p>
           </StatTooltip>
         </span>
         <PageSizeSelect value={pageSize} onChange={setPageSize} options={NS_PAGE_SIZES} />
@@ -167,6 +173,12 @@ export function NamespacesView({ clusterId, clusterName, onOpenDetail }: {
   );
 }
 
+/** CPU·MEM 중 더 나쁜 쪽 배지 — 예전엔 CPU 만 봐서 메모리 사용 초과(OOM 위험)가 "적정"으로 보였다. */
+function NsEffBadge({ ns }: { ns: AllocNamespaceRow }) {
+  const { kind, res } = nsEfficiency(ns);
+  return <WorstEffBadge kind={kind} res={res} />;
+}
+
 const NsRow = memo(function NsRow({ ns, clusterId, open, onToggle, onRefresh, refreshing, onOpenDetail }: {
   ns: AllocNamespaceRow; clusterId: string; open: boolean;
   onToggle: (ns: string) => void; onRefresh: (ns: string) => void; refreshing: boolean;
@@ -174,23 +186,23 @@ const NsRow = memo(function NsRow({ ns, clusterId, open, onToggle, onRefresh, re
 }) {
   return (
     <Fragment>
-      <tr
-        className="border-t border-border hover:bg-muted/10 cursor-pointer"
-        onClick={() => onToggle(ns.namespace)}
-        role="button"
-        tabIndex={0}
-        aria-expanded={open}
-        onKeyDown={(e) => {
-          if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onToggle(ns.namespace); }
-        }}
-      >
-        <td className="px-2 py-2 text-muted-foreground">{open ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}</td>
+      {/* 행 클릭(마우스 편의) = 펼치기. 키보드·스크린리더는 첫 칸의 펼치기 버튼을 쓴다 — 행 자체를 버튼으로 만들면
+          안에 든 상세·다시 집계 버튼과 대화형 요소가 중첩된다. */}
+      <tr className="border-t border-border hover:bg-muted/10 cursor-pointer" onClick={() => onToggle(ns.namespace)}>
+        <td className="px-2 py-2 text-muted-foreground">
+          <button type="button" onClick={(e) => { e.stopPropagation(); onToggle(ns.namespace); }}
+            aria-expanded={open} aria-label={`${ns.namespace} 워크로드 ${open ? '접기' : '펼치기'}`}
+            title={open ? '워크로드 접기' : '워크로드 펼치기'}
+            className="p-0.5 rounded-xl hover:bg-secondary hover:text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+            {open ? <ChevronDown className="w-4 h-4" aria-hidden="true" /> : <ChevronRight className="w-4 h-4" aria-hidden="true" />}
+          </button>
+        </td>
         <td className="px-2 py-2 font-medium">
           <span className="inline-flex items-center gap-1.5">
             <button
               type="button"
               onClick={(e) => { e.stopPropagation(); onOpenDetail(ns.namespace); }}
-              title={`${ns.namespace} — 이 네임스페이스의 리소스(워크로드/파드) 할당·사용 상세 보기`}
+              title={`${ns.namespace} — 이 네임스페이스의 리소스(워크로드/Pod) 할당·사용 상세 보기`}
               className="text-left hover:text-primary hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded"
             >
               {ns.namespace}
@@ -198,14 +210,18 @@ const NsRow = memo(function NsRow({ ns, clusterId, open, onToggle, onRefresh, re
             <button
               type="button"
               onClick={(e) => { e.stopPropagation(); onRefresh(ns.namespace); }}
-              title="이 네임스페이스만 새로고침"
-              aria-label="이 네임스페이스만 새로고침"
-              className="text-muted-foreground hover:text-primary shrink-0"
+              title="이 네임스페이스만 다시 집계"
+              aria-label={`${ns.namespace} 다시 집계`}
+              className="p-0.5 rounded-xl text-muted-foreground hover:text-primary shrink-0"
             >
-              <RefreshCw className={`w-3 h-3 ${refreshing ? 'animate-spin' : ''}`} />
+              <RefreshCw className={`w-3 h-3 ${refreshing ? 'animate-spin' : ''}`} aria-hidden="true" />
             </button>
           </span>
-          {ns.noRequestPods > 0 && <span className="ml-2 text-xs text-status-warning">· req미설정 {ns.noRequestPods}</span>}
+          {ns.noRequestPods > 0 && (
+            <span className="ml-2 inline-flex items-center gap-0.5 text-xs text-status-warning" title="request 가 없는 Pod 는 스케줄러가 자원을 계산하지 못합니다">
+              <AlertTriangle className="w-3 h-3" aria-hidden="true" /> request 미설정 {ns.noRequestPods}
+            </span>
+          )}
         </td>
         <td className="px-2 py-2 text-right tabular-nums">{ns.podCount}</td>
         <td className="px-2 py-2 text-right tabular-nums">{ns.workloadCount}</td>
@@ -217,7 +233,7 @@ const NsRow = memo(function NsRow({ ns, clusterId, open, onToggle, onRefresh, re
           <ReqUseCell req={ns.memReqDisplay} usage={ns.memUsageDisplay} icon="mem" />
           <UtilPct usage={ns.memUsageB} req={ns.memReqB} lim={ns.memLimB} className="mt-0.5" />
         </td>
-        <td className="px-2 py-2"><EffBadge kind={efficiency(ns.cpuReqM, ns.cpuUsageM)} /></td>
+        <td className="px-2 py-2"><NsEffBadge ns={ns} /></td>
       </tr>
       {open && (
         <tr className="bg-muted/5">

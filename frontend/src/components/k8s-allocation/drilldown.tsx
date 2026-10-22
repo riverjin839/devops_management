@@ -1,16 +1,16 @@
-// 자원 드릴다운 공용 — 워크로드(Deployment/STS/DS…) → 파드 → 컨테이너 단위로
+// 자원 드릴다운 공용 — 워크로드(Deployment/STS/DS…) → Pod → 컨테이너 단위로
 // "자원 할당(request/limit) vs 실제 사용(usage)" 을 펼쳐 보여준다.
 //
 // 네임스페이스별 자원 탭의 인라인 드릴다운과, 노드/네임스페이스 상세 다이얼로그가 같은
-// 컴포넌트를 쓴다 — 한쪽만 표기(사이드카 합산·사용률 배지·QoS)가 달라지면 같은 파드가
+// 컴포넌트를 쓴다 — 한쪽만 표기(사이드카 합산·사용률 배지·QoS)가 달라지면 같은 Pod가
 // 화면마다 다르게 보인다.
 import { Fragment, useMemo, useState } from 'react';
 import { ChevronDown, ChevronRight } from 'lucide-react';
 import { Skeleton } from '@/components/common';
 import { useAllocPods, useAllocWorkloads } from '@/hooks/useK8sAllocation';
 import type { AllocPodRow, AllocWorkloadRow } from '@/types';
-import { efficiency, fmtCores, fmtGi } from './format';
-import { EffBadge, ReqUseCell, UtilPct } from './primitives';
+import { fmtCores, fmtGi, worstEfficiency } from './format';
+import { ReqUseCell, UtilPct, WorstEffBadge } from './primitives';
 import { groupPodsByWorkload } from './podGroup';
 
 // ── 배지 ──────────────────────────────────────────────────────────────────────
@@ -36,8 +36,8 @@ export function QosBadge({ qos }: { qos: string | null }) {
   return <span className={`text-xs px-1.5 py-0.5 rounded ${cls}`}>{qos ?? '—'}</span>;
 }
 
-// ── 파드 + 컨테이너 표 ─────────────────────────────────────────────────────────
-/** 파드 행(합계) + 컨테이너 행(↳)으로 req/lim/use 를 나란히 보여준다.
+// ── Pod + 컨테이너 표 ─────────────────────────────────────────────────────────
+/** Pod 행(합계) + 컨테이너 행(↳)으로 req/lim/use 를 나란히 보여준다.
  * showNamespace: 노드 상세처럼 여러 NS 가 섞일 때만 NS 열을 추가한다. */
 export function PodAllocTable({ pods, showNamespace = false }: {
   pods: AllocPodRow[]; showNamespace?: boolean;
@@ -60,7 +60,7 @@ export function PodAllocTable({ pods, showNamespace = false }: {
         <tbody>
           {!pods.length && (
             <tr className="border-t border-border">
-              <td colSpan={span} className="px-2 py-4 text-center text-sm text-muted-foreground">파드 없음</td>
+              <td colSpan={span} className="px-2 py-4 text-center text-sm text-muted-foreground">Pod 없음</td>
             </tr>
           )}
           {pods.map((p) => (
@@ -102,20 +102,20 @@ export function PodAllocTable({ pods, showNamespace = false }: {
   );
 }
 
-/** 워크로드 소속 파드/컨테이너 — 워크로드 행을 펼쳤을 때 lazy 조회. */
+/** 워크로드 소속 Pod/컨테이너 — 워크로드 행을 펼쳤을 때 lazy 조회. */
 export function PodsDrill({ clusterId, namespace, kind, name }: {
   clusterId: string; namespace: string; kind: string; name: string;
 }) {
   const { data, isLoading, isError } = useAllocPods(clusterId, namespace, kind, name, true);
   if (isLoading) return <Skeleton className="h-10 w-full" />;
-  if (isError) return <div className="text-sm text-status-critical">파드 조회 실패</div>;
+  if (isError) return <div className="text-sm text-status-critical">Pod 조회 실패</div>;
   const rows = data?.items ?? [];
-  if (!rows.length) return <div className="text-sm text-muted-foreground py-1">파드 없음</div>;
+  if (!rows.length) return <div className="text-sm text-muted-foreground py-1">Pod 없음</div>;
   return <PodAllocTable pods={rows} />;
 }
 
 // ── 워크로드 표 (공용 렌더) ────────────────────────────────────────────────────
-/** 워크로드 1행 + 펼침 영역. children 이 펼쳤을 때의 내용(파드 표)이다. */
+/** 워크로드 1행 + 펼침 영역. children 이 펼쳤을 때의 내용(Pod 표)이다. */
 export function WorkloadTable({ rows, renderDetail, showNamespace = false }: {
   rows: AllocWorkloadRow[];
   renderDetail: (w: AllocWorkloadRow) => React.ReactNode;
@@ -136,10 +136,10 @@ export function WorkloadTable({ rows, renderDetail, showNamespace = false }: {
         <thead className="bg-muted/20 text-left text-xs text-muted-foreground">
           <tr>
             <th className="px-2 py-1.5 font-medium w-7"><span className="sr-only">펼치기</span></th>
-            <th className="px-2 py-1.5 font-medium">Workload</th>
-            <th className="px-2 py-1.5 font-medium text-right">Pods</th>
-            <th className="px-2 py-1.5 font-medium">CPU req/use</th>
-            <th className="px-2 py-1.5 font-medium">MEM req/use</th>
+            <th className="px-2 py-1.5 font-medium">워크로드</th>
+            <th className="px-2 py-1.5 font-medium text-right">Pod</th>
+            <th className="px-2 py-1.5 font-medium">CPU 요청/사용</th>
+            <th className="px-2 py-1.5 font-medium">MEM 요청/사용</th>
             <th className="px-2 py-1.5 font-medium">효율</th>
           </tr>
         </thead>
@@ -149,22 +149,20 @@ export function WorkloadTable({ rows, renderDetail, showNamespace = false }: {
             const open = expanded.has(k);
             return (
               <Fragment key={k}>
-                <tr
-                  className="border-t border-border hover:bg-muted/10 cursor-pointer"
-                  onClick={() => toggle(k)}
-                  role="button"
-                  tabIndex={0}
-                  aria-expanded={open}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggle(k); }
-                  }}
-                >
-                  <td className="px-2 py-1.5 text-muted-foreground">{open ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}</td>
+                {/* 행 클릭(마우스 편의) = 펼치기 · 키보드는 첫 칸 버튼 — 표 행을 role="button" 으로 바꾸면 표 구조가 사라진다. */}
+                <tr className="border-t border-border hover:bg-muted/10 cursor-pointer" onClick={() => toggle(k)}>
+                  <td className="px-2 py-1.5 text-muted-foreground">
+                    <button type="button" onClick={(e) => { e.stopPropagation(); toggle(k); }}
+                      aria-expanded={open} aria-label={`${w.name} Pod ${open ? '접기' : '펼치기'}`} title={open ? 'Pod 접기' : 'Pod 펼치기'}
+                      className="p-0.5 rounded-xl hover:bg-secondary hover:text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+                      {open ? <ChevronDown className="w-3.5 h-3.5" aria-hidden="true" /> : <ChevronRight className="w-3.5 h-3.5" aria-hidden="true" />}
+                    </button>
+                  </td>
                   <td className="px-2 py-1.5">
                     <span className="text-xs text-muted-foreground mr-1.5">{w.kind}</span>
                     {showNamespace && <span className="text-xs text-muted-foreground">{w.namespace}/</span>}
                     <span className="font-medium">{w.name}</span>
-                    {w.noRequestPods > 0 && <span className="ml-2 text-xs text-status-warning">· req미설정 {w.noRequestPods}</span>}
+                    {w.noRequestPods > 0 && <span className="ml-2 text-xs text-status-warning">· request 미설정 {w.noRequestPods}</span>}
                   </td>
                   <td className="px-2 py-1.5 text-right tabular-nums">{w.podCount}</td>
                   <td className="px-2 py-1.5">
@@ -175,7 +173,7 @@ export function WorkloadTable({ rows, renderDetail, showNamespace = false }: {
                     <ReqUseCell req={fmtGi(w.memReqB)} usage={w.memUsageB == null ? null : fmtGi(w.memUsageB)} icon="mem" />
                     <UtilPct usage={w.memUsageB} req={w.memReqB} lim={w.memLimB} className="mt-0.5" />
                   </td>
-                  <td className="px-2 py-1.5"><EffBadge kind={efficiency(w.cpuReqM, w.cpuUsageM)} /></td>
+                  <td className="px-2 py-1.5"><WorstEffBadge {...worstEfficiency(w.cpuReqM, w.cpuUsageM, w.memReqB, w.memUsageB)} /></td>
                 </tr>
                 {open && (
                   <tr className="bg-muted/5">
@@ -192,7 +190,7 @@ export function WorkloadTable({ rows, renderDetail, showNamespace = false }: {
   );
 }
 
-/** NS 내 워크로드 → 파드 드릴다운 (서버 집계 사용). */
+/** NS 내 워크로드 → Pod 드릴다운 (서버 집계 사용). */
 export function WorkloadsDrill({ clusterId, namespace }: { clusterId: string; namespace: string }) {
   const { data, isLoading, isError } = useAllocWorkloads(clusterId, namespace, true);
   if (isLoading) return <Skeleton className="h-12 w-full" />;
@@ -207,7 +205,7 @@ export function WorkloadsDrill({ clusterId, namespace }: { clusterId: string; na
   );
 }
 
-/** 노드 상세: 워크로드(여러 NS 혼재) → 그 노드에 뜬 파드만 펼침. */
+/** 노드 상세: 워크로드(여러 NS 혼재) → 그 노드에 뜬 Pod만 펼침. */
 export function NodeWorkloadsDrill({ pods, showNamespace = true }: {
   pods: AllocPodRow[]; showNamespace?: boolean;
 }) {

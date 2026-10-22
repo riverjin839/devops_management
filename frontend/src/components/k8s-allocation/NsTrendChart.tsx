@@ -1,12 +1,13 @@
 // NS 자원 추이 — request / 실사용 / Quota 한도 시계열(24h/7d/30d), CPU/MEM 토글.
 import { useEffect, useMemo, useState } from 'react';
 import { CartesianGrid, Legend, Line, LineChart, ResponsiveContainer, Tooltip as RechartsTooltip, XAxis, YAxis } from 'recharts';
-import { EmptyState, Skeleton } from '@/components/common';
+import { EmptyState, ErrorState, Skeleton } from '@/components/common';
 import { useEffNsSeries, useEffSummary } from '@/hooks/useK8sEfficiency';
 import type { EffNsSummaryItem } from '@/types';
 
 import { RANGE_OPTIONS } from './effUtils';
 import type { EffRange } from './effUtils';
+import { SegTabs } from './primitives';
 
 const fmtT = (t: number, range: EffRange) => {
   const d = new Date(t * 1000);
@@ -14,30 +15,14 @@ const fmtT = (t: number, range: EffRange) => {
   return range === '24h' ? `${pad(d.getHours())}:${pad(d.getMinutes())}` : `${d.getMonth() + 1}/${d.getDate()} ${pad(d.getHours())}h`;
 };
 
+const RANGE_LABEL: Record<EffRange, string> = { '24h': '24시간', '7d': '7일', '30d': '30일' };
+
 export function RangeToggle({ value, onChange }: { value: EffRange; onChange: (r: EffRange) => void }) {
-  return (
-    <div className="inline-flex rounded-xl border border-border bg-muted/20 p-0.5">
-      {RANGE_OPTIONS.map((r) => (
-        <button key={r} type="button" onClick={() => onChange(r)}
-          className={`px-2 py-0.5 rounded-lg text-xs ${value === r ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground'}`}>
-          {r}
-        </button>
-      ))}
-    </div>
-  );
+  return <SegTabs<EffRange> label="기간" value={value} onChange={onChange} options={RANGE_OPTIONS.map((r) => [r, RANGE_LABEL[r]] as const)} />;
 }
 
 export function MetricToggle({ value, onChange }: { value: 'cpu' | 'mem'; onChange: (m: 'cpu' | 'mem') => void }) {
-  return (
-    <div className="inline-flex rounded-xl border border-border bg-muted/20 p-0.5">
-      {(['cpu', 'mem'] as const).map((m) => (
-        <button key={m} type="button" onClick={() => onChange(m)}
-          className={`px-2 py-0.5 rounded-lg text-xs ${value === m ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground'}`}>
-          {m === 'cpu' ? 'CPU' : 'MEM'}
-        </button>
-      ))}
-    </div>
-  );
+  return <SegTabs<'cpu' | 'mem'> label="자원" value={value} onChange={onChange} options={[['cpu', 'CPU'], ['mem', 'MEM']]} />;
 }
 
 export function NsTrendChart({ clusterId, range, metric, namespace, onNamespace }: {
@@ -88,8 +73,9 @@ export function NsTrendChart({ clusterId, range, metric, namespace, onNamespace 
       </div>
       <div className="min-h-56">
         {seriesQ.isLoading && !seriesQ.data ? <Skeleton className="h-56 w-full" />
+          : seriesQ.isError && !seriesQ.data ? <ErrorState error={seriesQ.error} title="자원 추이를 불러오지 못했습니다" onRetry={() => void seriesQ.refetch()} compact />
           : !namespace ? <EmptyState title="네임스페이스 없음" description="수집이 한 번 이상 돌아야 추이가 표시됩니다." />
-          : !data.length ? <EmptyState title="데이터 없음" description={`${range} 범위에 샘플이 없습니다. 수집 주기를 확인하세요.`} />
+          : !data.length ? <EmptyState title="샘플 없음" description={`${RANGE_LABEL[range]} 범위에 샘플이 없습니다. 기간을 늘리거나 '정책 설정 → 수집 스케줄'에서 수집 주기를 확인하세요.`} />
           : (
             <ResponsiveContainer width="100%" height={240}>
               <LineChart data={data} margin={{ left: 4, right: 12, top: 8, bottom: 4 }}>
