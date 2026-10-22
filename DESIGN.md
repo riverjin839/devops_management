@@ -10,6 +10,69 @@
 
 ---
 
+<!-- design-spec-summary: 아래 Colors / Typography / Components 세 섹션은 Impeccable 이 읽는 명세 요약이다.
+     현행화·감사 때 삭제하거나 운영 섹션으로 합치지 않는다. 구조가 바뀔 때(테마 추가·표준 컴포넌트 교체·글꼴 변경)만 갱신한다. -->
+
+> **명세 요약 (Impeccable 용)** — 아래 세 섹션은 `DESIGN_SYSTEM.md` 의 요약이다. 둘이 다르면 **`DESIGN_SYSTEM.md` 가 우선**이고,
+> 토큰 실측값의 원천은 `frontend/src/index.css` 다. 값은 기본 테마(`light` 슬레이트) 기준이며 바탕 테마 16종 + 강조색 6종에서
+> 모두 달라지므로, 코드에는 아래 값이 아니라 **토큰 이름**을 쓴다.
+
+## Colors (색상)
+
+토큰 기반이다 — JSX 에 raw hex·고정 팔레트(`text-white`, `bg-gray-*`, `zinc-*`) 금지. 정상 상태는 중립색으로 두고
+상태색은 비정상에만 쓴다. 카테고리(시리즈) 구분은 `--chart-1`~`--chart-8` 만 쓴다. 테마 매트릭스는 `DESIGN_SYSTEM.md` §12.1.
+
+### Surface · Text
+
+- **Background** (#F8FAFC): `bg-background` — 페이지 바탕(slate-50)
+- **Card** (#FFFFFF): `bg-card` — 카드 표면. 깊이는 그림자가 아니라 `bg-surface-container-lowest`~`highest` 톤 차이로 준다
+- **Foreground** (#0F172A): `text-foreground` — 본문 글자(slate-900)
+- **Muted Foreground** (#5D6B80): `text-muted-foreground` — 보조 글자. 투명도(`/50~90`) 없이 쓴다(AA 4.5:1 유지)
+- **Border** (#E2E8F0): `border-border` — 1px 경계, 그림자 대체
+- **Sidebar** (#1B2530): `bg-sidebar` — 메인 사이드바(라이트에서도 다크 네이비)
+
+### Brand
+
+- **Primary** (#0369A1): `bg-primary` / 글자는 `text-primary`(`--primary-text`) — 액션·링크·활성 탭. 강조색 6종으로 바뀐다
+- **Destructive** (#DC2626): `bg-destructive` — 삭제·되돌릴 수 없는 액션
+
+### Status
+
+- **Healthy** (#22C55E): `status-healthy` — 정상·Running. 글자는 `text-status-healthy`(`*-text` 파생 토큰)
+- **Warning** (#F59E0B): `status-warning` — 경고·성능 저하
+- **Critical** (#DC2626): `status-critical` — 장애·실패
+- **Unknown** (#6B7280): `status-unknown` — 알 수 없음·대기
+- **Info** (#0EA5E9): `status-info` — 정보·스트리밍 갱신
+
+## Typography (글꼴)
+
+시스템 폰트 스택만 쓴다(D-131) — 웹폰트 CDN 금지(폐쇄망). 새 글꼴은 `@fontsource` 로 번들한다. 상세는 `DESIGN_SYSTEM.md` §3.
+
+- **Sans**: `-apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, "Apple SD Gothic Neo", "Malgun Gothic", "Noto Sans KR", Helvetica, Arial, sans-serif`
+- **Mono**: `ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace` — 코드·로그·PromQL·식별자 전용
+- **위계 4단**: 페이지 제목 `text-xl font-semibold`(`PageHeader` 만, 화면당 1개) · 카드 제목 `text-xs font-semibold`(MacCard 내장) ·
+  본문 `text-sm` · 보조 `text-xs text-muted-foreground`
+- **굵기**: 본문 400 · 라벨 500 · 제목 600. 최소 글자 11px(`text-[11px]` 는 표 셀만)
+- **숫자**: `tabular-nums` 로 자리 맞춤(`font-mono` 아님). `text-2xl` 이상 큰 숫자는 `/cluster-overview` Health Hero 한정
+- **언어**: UI 문자열은 한국어 중심 · 용어는 한국어 표준어(용어 규칙은 `DESIGN_SYSTEM.md` §12.12)
+
+## Components (컴포넌트)
+
+운영 화면(Operate) 기준 — 정보 밀도 우선, 마케팅식 여백·KPI 타일 행·아이콘 타일 헤더 금지. 규칙 원천은 `DESIGN_SYSTEM.md` §12.
+
+- **PageShell / PageHeader**: 본문 컨테이너 밀도 3종(콘솔·허브·문서) — 그 외 `max-w-[NNNNpx]` 금지. `<h1>` 은 `PageHeader` 로 1개만
+- **MacCard**: 모든 카드. flat 표면 + 1px 보더 + `rounded-md`. 헤더는 `title`·`actions`·`titleExtra` 슬롯만 — 카드 안 카드·수제 헤더·`<h2>` 중복 금지
+- **라운딩**: 카드 `rounded-md` · 버튼/입력 `rounded-xl`. 전 단계가 `--radius` 기준 테마 인지. sharp corner 금지
+- **ClusterSidebar**: per-cluster 페이지는 `iconOnly` 필수, 메인 사이드바에 flush. 페이지 내 `<select>` 클러스터 선택기 금지
+- **콘솔 패턴**: SSH/exec 화면은 좌(컨트롤)/우(결과) 한 로우, `ExecOutputTabs` + `LogViewer`, 최상단 `useTerminalEnvSync`
+- **실행 버튼**: `RunLogPanel` + `useRunLog` + `useLogPref` — 상세·실시간 로그를 함께 제공하고 "로그 보기" 여부는 사용자가 정한다(§12.9.1)
+- **권한 UX**: operator 이상이 필요한 버튼은 숨기지 않고 `useCanOperate()` 로 `disabled` + 사유(`withHint`)
+- **EmptyState**: 빈 상태는 `common/EmptyState` 만
+- **접근성**: 아이콘 전용 버튼은 `title` + `aria-label`. flyout 항목은 `FlyoutLink`/`FlyoutAction`. 이모지·⚠✓✗ 문자 아이콘 금지
+- **모달**: shadcn Dialog 어댑터만(`scripts/ui/check_dialogs.py` 가 CI 에서 검사)
+
+---
+
 ## 1. 현행화 (Current State)
 
 _최근 감사일: **2026-10-13** (R-4 10차 — AI 개발티 조합 수준 전수 감사 + 4회차 정량 재집계 — `frontend/src` grep. pages 72 / components tsx 약 300. 3회차: 2026-10-08, 2회차: 2026-09-10, 1회차: 2026-07-19)_
