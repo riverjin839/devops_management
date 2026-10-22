@@ -8,7 +8,9 @@
 
 ## [Unreleased]
 
-1.73.1 이후 main 에 병합된 변경 (다음 릴리스 후보).
+1.74.0 이후 main 에 병합된 변경 (다음 릴리스 후보).
+
+## [1.74.0] - 2026-10-22
 
 ### Added
 - **K8s 상세 관리 — 네임스페이스 대시보드에 빠졌던 셋업 추가**: 네임스페이스 하나를 고르면 Access Control(ServiceAccount·Role·RoleBinding, 그리고 이 NS 의 ServiceAccount 등을 subject 로 묶는 ClusterRoleBinding), Custom Resources(이 NS 에 오브젝트가 있는 namespaced CRD 와 개수, 오브젝트 목록·YAML), Helm 릴리스(values 보기), Events(이 NS 만 서버에서 실시간 수신), 네임스페이스 자체 상세·YAML 까지 한 화면에 나온다. Backend: `GET /k8s/{id}/namespaces/{ns}/custom-resources`(CRD 당 `limit=1` 프로브, 응답 예산·목록 캐시), `GET /k8s/{id}/namespaces/{ns}/cluster-role-bindings`.
