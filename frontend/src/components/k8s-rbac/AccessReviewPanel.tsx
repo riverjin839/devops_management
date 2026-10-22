@@ -76,7 +76,8 @@ export function AccessReviewPanel({ clusterId, serviceAccounts }: Props) {
   // 항목(행) × 네임스페이스(열) 매트릭스로 접는다.
   const matrix = useMemo(() => {
     if (!entries) return null;
-    const namespaces = Array.from(new Set(entries.map((e) => e.namespace ?? '-')));
+    // 열 키와 셀 키가 같은 표기를 써야 네임스페이스 없는(클러스터 스코프) 점검 결과가 칸에 들어간다.
+    const namespaces = Array.from(new Set(entries.map((e) => e.namespace ?? '—')));
     const labels = Array.from(new Set(entries.map((e) => e.label)));
     const cell = new Map<string, RbacAccessReviewEntry>();
     entries.forEach((e) => cell.set(`${e.label}::${e.namespace ?? '—'}`, e));
@@ -165,7 +166,7 @@ export function AccessReviewPanel({ clusterId, serviceAccounts }: Props) {
                       if (!e)
                         return (
                           <td key={ns} className="px-3 py-2 text-xs text-muted-foreground">
-                            -
+                            —
                           </td>
                         );
                       return (

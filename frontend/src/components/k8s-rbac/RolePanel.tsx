@@ -1,10 +1,12 @@
 /** Role / ClusterRole 목록 + 규칙 편집. 빌트인(system:*, cluster-admin …)은 읽기 전용이다. */
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Save, Search, Shield, Trash2, Undo2 } from 'lucide-react';
-import { ConfirmDialog, EmptyState, ErrorState, LoadingState, useToastSafe } from '@/components/common';
+import { ConfirmDialog, EmptyState, ErrorState, LoadingState, RunLogPanel, useToastSafe } from '@/components/common';
 import { MacCard } from '@/components/ui/MacCard';
 import { useCanOperate } from '@/hooks/useCanOperate';
 import { useDeleteRole, useUpsertRole } from '@/hooks/useK8sRbac';
+import { useLogPref } from '@/hooks/useLogPref';
+import { runLogged, useRunLog } from '@/hooks/useRunLog';
 import { formatApiError } from '@/lib/utils';
 import type { RbacBinding, RbacPolicyRule, RbacRole } from '@/types';
 import { emptyRule, ruleHasClusterScopedResource } from './rbacShared';
@@ -61,6 +63,9 @@ export function RolePanel({
 
   const upsert = useUpsertRole(clusterId);
   const remove = useDeleteRole(clusterId);
+  // 실행 로그(D-089) — 저장·삭제는 살아 있는 바인딩의 권한을 바로 바꾸므로 무엇이 나갔는지 남긴다.
+  const runLog = useRunLog();
+  const [showLog, setShowLog] = useLogPref('k8s-rbac-roles');
 
   const all = useMemo(() => [...clusterRoles, ...roles], [clusterRoles, roles]);
 
@@ -128,36 +133,47 @@ export function RolePanel({
 
   const save = async () => {
     if (!selected || !draft) return;
-    try {
-      await upsert.mutateAsync({
-        scope: selected.scope,
-        namespace: selected.namespace,
-        name: selected.name,
-        rules: draft,
-      });
-      toast.success('저장됨', `${selected.scope === 'cluster' ? 'ClusterRole' : 'Role'} ${selected.name}`);
-    } catch (e) {
-      toast.error('저장 실패', formatApiError(e));
-    }
+    const kind = selected.scope === 'cluster' ? 'ClusterRole' : 'Role';
+    const target = `${kind} ${selected.namespace ? `${selected.namespace}/` : ''}${selected.name}`;
+    const affected = referencingBindings.length;
+    const r = await runLogged(runLog, {
+      title: '롤 저장',
+      first: `${target} — 규칙 ${draft.length}줄 저장 요청`,
+      fn: () =>
+        upsert.mutateAsync({
+          scope: selected.scope,
+          namespace: selected.namespace,
+          name: selected.name,
+          rules: draft,
+        }),
+      summarize: () => [
+        ['info', `저장됨 · ${target}`],
+        [affected ? 'warn' : 'info', affected ? `참조 바인딩 ${affected}개의 권한이 즉시 바뀜` : '참조하는 바인딩 없음'],
+      ],
+    });
+    if (r.ok) toast.success('저장됨', target);
+    else if (!r.aborted) toast.error('저장 실패', formatApiError(r.error));
   };
 
   const handleDelete = async () => {
-    if (!pendingDelete) return;
-    try {
-      await remove.mutateAsync({
-        scope: pendingDelete.scope,
-        namespace: pendingDelete.namespace,
-        name: pendingDelete.name,
-      });
-      toast.success('삭제됨', pendingDelete.name);
-      if (roleKey(pendingDelete) === selectedKey) {
+    const role = pendingDelete;
+    if (!role) return;
+    setPendingDelete(null);
+    const target = `${role.scope === 'cluster' ? 'ClusterRole' : 'Role'} ${role.namespace ? `${role.namespace}/` : ''}${role.name}`;
+    const r = await runLogged(runLog, {
+      title: '롤 삭제',
+      first: `${target} 삭제 요청`,
+      fn: () => remove.mutateAsync({ scope: role.scope, namespace: role.namespace, name: role.name }),
+      summarize: () => [['info', `삭제됨 · ${target}`]],
+    });
+    if (r.ok) {
+      toast.success('삭제됨', role.name);
+      if (roleKey(role) === selectedKey) {
         setSelectedKey(null);
         setDraft(null);
       }
-    } catch (e) {
-      toast.error('삭제 실패', formatApiError(e));
-    } finally {
-      setPendingDelete(null);
+    } else if (!r.aborted) {
+      toast.error('삭제 실패', formatApiError(r.error));
     }
   };
 
@@ -173,6 +189,10 @@ export function RolePanel({
     !referencingBindings.some((b) => b.kind === 'ClusterRoleBinding');
 
   return (
+    <div className="space-y-3">
+      {(runLog.running || runLog.lines.length > 0) && (
+        <RunLogPanel run={runLog} show={showLog} onShowChange={setShowLog} maxHeight="max-h-56" />
+      )}
     <div className="grid grid-cols-1 xl:grid-cols-2 gap-3 items-start">
       <MacCard
         title="Role / ClusterRole"
@@ -377,6 +397,7 @@ export function RolePanel({
         onConfirm={handleDelete}
         onCancel={() => setPendingDelete(null)}
       />
+    </div>
     </div>
   );
 }

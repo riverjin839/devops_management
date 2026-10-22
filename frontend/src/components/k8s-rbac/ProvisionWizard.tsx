@@ -6,6 +6,7 @@
  */
 import { useEffect, useMemo, useState } from 'react';
 import { AlertTriangle, Play, Plus, X } from 'lucide-react';
+import { ConfirmDialog } from '@/components/common';
 import { formatApiError } from '@/lib/utils';
 import { MacCard } from '@/components/ui/MacCard';
 import { useCanOperate } from '@/hooks/useCanOperate';
@@ -16,10 +17,13 @@ import type {
   RbacPresetCatalog,
   RbacProvisionRequest,
 } from '@/types';
+import { grantRiskReasons } from './rbacShared';
 import { RiskBadge } from './RbacTags';
 import { RuleEditor } from './RuleEditor';
 
 interface ProvisionWizardProps {
+  /** 테넌트 바인딩까지 반영한 실행 권한 판정용(§12.9). */
+  clusterId: string;
   catalog: RbacPresetCatalog | undefined;
   namespaces: RbacNamespace[];
   /** 네임스페이스 조회 상태 — 실패면 상단 배너 + 발급 버튼 비활성(사유)(D-139). */
@@ -80,9 +84,9 @@ function Toggle({
 }
 
 export function ProvisionWizard({
-  catalog, namespaces, namespacesLoading = false, namespacesError, onRetryNamespaces, running, onRun,
+  clusterId, catalog, namespaces, namespacesLoading = false, namespacesError, onRetryNamespaces, running, onRun,
 }: ProvisionWizardProps) {
-  const { canOperate, hint, withHint } = useCanOperate();
+  const { canOperate, hint, withHint } = useCanOperate(clusterId);
 
   const [presetKey, setPresetKey] = useState<string>('dev-deploy');
   const [rules, setRules] = useState<RbacPolicyRule[]>([]);
@@ -104,14 +108,25 @@ export function ProvisionWizard({
     [catalog, presetKey],
   );
 
-  // 프리셋을 고르면 규칙을 그 템플릿으로 갈아끼운다. 단, 사용자가 이미 규칙을 손댔으면
-  // 프리셋을 새로 고를 때만 덮어쓴다(편집 중인 내용을 카탈로그 리패치가 날리지 않게).
+  // 프리셋을 고르면 규칙을 그 템플릿으로 갈아끼운다 — 프리셋 **키가 바뀔 때만**.
+  // `preset` 객체는 카탈로그 리패치마다 새로 만들어질 수 있어, 객체에 걸면 사용자가 좁혀 둔
+  // 규칙이 프리셋 기본값(더 넓은 권한)으로 조용히 되돌아간 채 발급될 수 있다.
+  const [appliedPresetKey, setAppliedPresetKey] = useState<string | null>(null);
   useEffect(() => {
-    if (!preset) return;
+    if (!preset || appliedPresetKey === preset.key) return;
     setRules(preset.rules.map((r) => ({ ...r })));
     setRulesTouched(false);
     setBindingMode(preset.recommendedBindingMode);
-  }, [preset]);
+    setAppliedPresetKey(preset.key);
+  }, [preset, appliedPresetKey]);
+
+  // 위험한 발급(모든 네임스페이스·와일드카드·만료 없는 토큰)은 실행 전에 SA 이름을 다시 입력받는다.
+  const [confirming, setConfirming] = useState(false);
+  const [confirmName, setConfirmName] = useState('');
+  const riskReasons = useMemo(
+    () => grantRiskReasons({ bindingMode, rules, longLivedToken: longLived, presetRisk: rulesTouched ? undefined : preset?.risk }),
+    [bindingMode, rules, longLived, rulesTouched, preset],
+  );
 
   // 네임스페이스 목록이 오면 첫 값을 기본 선택으로.
   useEffect(() => {
@@ -151,8 +166,20 @@ export function ProvisionWizard({
     return `SA 1 · ClusterRole 1 · RoleBinding ${targetNamespaces.length}`;
   }, [bindingMode, targetNamespaces.length]);
 
+  const requestRun = () => {
+    if (problems.length > 0 || !canOperate) return;
+    // 모의 실행은 아무것도 만들지 않으니 바로 보낸다.
+    if (!dryRun && riskReasons.length > 0) {
+      setConfirmName('');
+      setConfirming(true);
+      return;
+    }
+    run();
+  };
+
   const run = () => {
     if (problems.length > 0 || !canOperate) return;
+    setConfirming(false);
     onRun({
       namespace: primaryNs,
       serviceAccount: saName.trim(),
@@ -420,12 +447,22 @@ export function ProvisionWizard({
             </select>
           </label>
         </div>
+        {longLived && (
+          <p
+            role="note"
+            className="mt-3 flex items-start gap-2 text-xs leading-relaxed rounded-md border border-status-warning/40 bg-status-warning/10 text-foreground px-3 py-2"
+          >
+            <AlertTriangle className="w-3.5 h-3.5 mt-0.5 shrink-0 text-status-warning" aria-hidden="true" />
+            만료 없는 토큰은 Secret 을 지우기 전까지 계속 유효합니다 — 노트북·채팅에 한 번 흘러나가면 회수할 때까지
+            누구든 쓸 수 있습니다. 사람에게 주는 kubeconfig 라면 단기 토큰을 쓰세요.
+          </p>
+        )}
         <div className="flex flex-wrap gap-x-5 gap-y-2 mt-3">
-          <Toggle checked={issueKubeconfig} onChange={setIssueKubeconfig} label="kubeconfig 발급" />
-          <Toggle checked={verify} onChange={setVerify} label="생성 후 권한 검증" />
-          <Toggle checked={dryRun} onChange={setDryRun} label="모의 실행 (변경 없음)" />
+          <Toggle checked={issueKubeconfig} onChange={setIssueKubeconfig} label="kubeconfig 발급" disabled={!canOperate} hint={hint} />
+          <Toggle checked={verify} onChange={setVerify} label="생성 후 권한 검증" disabled={!canOperate} hint={hint} />
+          <Toggle checked={dryRun} onChange={setDryRun} label="모의 실행 (변경 없음)" disabled={!canOperate} hint={hint} />
         </div>
-        <p className="mt-3 text-[11.5px] leading-relaxed rounded-md border border-primary/30 bg-primary/5 text-primary px-3 py-2">
+        <p className="mt-3 text-xs leading-relaxed text-muted-foreground">
           단기 토큰은 만료되면 개발자가 다시 받아야 합니다. CI 처럼 사람이 갱신할 수 없는 곳에는 만료 없는
           Secret 토큰을 쓰고, 회수는 그 Secret 을 지워서 합니다.
         </p>
@@ -435,7 +472,7 @@ export function ProvisionWizard({
       <div className="sticky bottom-3 z-10 flex flex-wrap items-center gap-3 p-3 rounded-md bg-card border border-border shadow-sm">
         <button
           type="button"
-          onClick={run}
+          onClick={requestRun}
           disabled={!canOperate || running || problems.length > 0}
           title={
             !canOperate
@@ -453,7 +490,63 @@ export function ProvisionWizard({
         <span className="text-xs text-muted-foreground">
           {problems.length > 0 ? problems[0] : objectSummary}
         </span>
+        {problems.length === 0 && !dryRun && riskReasons.length > 0 && (
+          <span className="inline-flex items-center gap-1 text-xs text-foreground">
+            <AlertTriangle className="w-3.5 h-3.5 text-status-warning" aria-hidden="true" />
+            실행 전에 영향 범위를 한 번 더 확인받습니다
+          </span>
+        )}
       </div>
+
+      <ConfirmDialog
+        open={confirming}
+        title="넓은 권한을 발급할까요?"
+        description="아래 범위로 권한이 열립니다. kubeconfig 를 건넨 뒤에는 토큰을 되돌릴 수 없어, 회수하려면 ServiceAccount 탭에서 액세스를 회수해야 합니다."
+        confirmLabel="발급 실행"
+        danger
+        confirmDisabled={confirmName.trim() !== saName.trim()}
+        onConfirm={run}
+        onCancel={() => setConfirming(false)}
+      >
+        <div className="space-y-3 text-sm">
+          <ul className="space-y-1.5">
+            {riskReasons.map((r) => (
+              <li key={r} className="flex items-start gap-2 text-foreground">
+                <AlertTriangle className="w-3.5 h-3.5 mt-0.5 shrink-0 text-status-warning" aria-hidden="true" />
+                <span>{r}</span>
+              </li>
+            ))}
+          </ul>
+          <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 text-xs">
+            <dt className="text-muted-foreground">대상</dt>
+            <dd className="font-mono">{primaryNs}/{saName.trim()}</dd>
+            <dt className="text-muted-foreground">네임스페이스</dt>
+            <dd className="font-mono">
+              {bindingMode === 'clusterrole-clusterrolebinding' ? '전체 네임스페이스' : targetNamespaces.join(', ')}
+            </dd>
+            <dt className="text-muted-foreground">만들 오브젝트</dt>
+            <dd className="font-mono">{objectSummary}</dd>
+            <dt className="text-muted-foreground">토큰</dt>
+            <dd>{longLived ? '만료 없음' : `${TTL_OPTIONS.find((o) => o.value === ttl)?.label ?? ''} 후 만료`}</dd>
+          </dl>
+          <p className="text-xs text-muted-foreground">
+            확신이 없으면 취소하고 <span className="text-foreground">모의 실행</span> 을 먼저 켜 보세요 — 아무것도 만들지 않고
+            같은 로그를 냅니다.
+          </p>
+          <label className="flex flex-col gap-1.5 text-xs text-muted-foreground font-medium">
+            확인을 위해 ServiceAccount 이름을 입력하세요
+            <input
+              value={confirmName}
+              onChange={(e) => setConfirmName(e.target.value)}
+              placeholder={saName.trim()}
+              spellCheck={false}
+              autoComplete="off"
+              aria-label="확인용 ServiceAccount 이름"
+              className={`${inputCls} font-mono`}
+            />
+          </label>
+        </div>
+      </ConfirmDialog>
     </div>
   );
 }

@@ -31,7 +31,14 @@ import {
   useRbacRoles,
   useRbacServiceAccounts,
 } from '@/hooks/useK8sRbac';
-import type { RbacBinding, RbacBindingSummary, RbacNamespace, RbacRole, RbacServiceAccount } from '@/types';
+import type {
+  RbacBinding,
+  RbacBindingSummary,
+  RbacKubeconfigResult,
+  RbacNamespace,
+  RbacRole,
+  RbacServiceAccount,
+} from '@/types';
 
 // 쿼리 data 가 없을 때의 안정된 빈 배열 — 렌더마다 새 [] 를 만들면 하위 useMemo 가 매번 다시 돈다.
 const EMPTY_LIST_NS: RbacNamespace[] = [];
@@ -63,6 +70,8 @@ export function K8sRbacPage() {
   const [showLogs, setShowLogs] = useLogPref('k8s-rbac-provision');
   // ServiceAccount 탭의 "연결된 권한" 클릭 → Role/ClusterRole 탭으로 이동해 그 롤을 연다.
   const [roleFocus, setRoleFocus] = useState<RbacRoleFocusRequest | null>(null);
+  // ServiceAccount 탭에서 재발급한 kubeconfig — 탭을 옮겨도 남도록 페이지가 들고 있다. 다른 클러스터로 옮기면 보이지 않는다(토큰은 다시 볼 수 없다).
+  const [issuedKubeconfig, setIssuedKubeconfig] = useState<{ clusterId: string; result: RbacKubeconfigResult } | null>(null);
 
   const clusterId = selectedClusterId ?? clusters[0]?.id ?? '';
   const cluster = useMemo(() => clusters.find((c) => c.id === clusterId), [clusters, clusterId]);
@@ -172,6 +181,7 @@ export function K8sRbacPage() {
           ) : tab === 'wizard' ? (
             <div className="grid grid-cols-1 xl:grid-cols-2 gap-3 items-start">
               <ProvisionWizard
+                clusterId={clusterId}
                 catalog={catalog}
                 namespaces={namespaces}
                 namespacesLoading={nsQ.isLoading}
@@ -193,6 +203,11 @@ export function K8sRbacPage() {
               error={saQ.isError ? saQ.error : null}
               onRetry={() => { void saQ.refetch(); }}
               onSelectRole={handleSelectRole}
+              bindings={bindings}
+              roles={roles}
+              clusterRoles={clusterRoles}
+              issued={issuedKubeconfig?.clusterId === clusterId ? issuedKubeconfig.result : null}
+              onIssuedChange={(v) => setIssuedKubeconfig(v ? { clusterId, result: v } : null)}
             />
           ) : tab === 'roles' ? (
             <RolePanel

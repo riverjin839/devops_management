@@ -17,6 +17,8 @@ interface ConfirmDialogProps {
   children?: React.ReactNode;  // 추가 상세 (실행 대상 요약 등)
   /** true = 확인 처리 중 — 버튼을 잠가 연타·Enter 로 같은 작업이 두 번 나가지 않게 한다. */
   busy?: boolean;
+  /** true = 확인 조건 미충족(예: 이름 재입력 불일치) — 확인 버튼·Enter 를 막는다. */
+  confirmDisabled?: boolean;
 }
 
 /** 중요 액션(ssh/etcdctl 실행 등) 실행 전에 확인을 받는 모달.
@@ -24,7 +26,7 @@ interface ConfirmDialogProps {
  */
 export function ConfirmDialog({
   open, title, description, confirmLabel, cancelLabel,
-  danger = false, onConfirm, onCancel, children, busy = false,
+  danger = false, onConfirm, onCancel, children, busy = false, confirmDisabled = false,
 }: ConfirmDialogProps) {
   const { t } = useTranslation();
   // 확인 처리 중(busy)에는 Escape·뒤로가기·배경 클릭으로 닫지 않는다 — 맨 위 모달이 Escape 를 삼키므로
@@ -40,12 +42,12 @@ export function ConfirmDialog({
   // 그래도 겹치는 호출은 시간 창으로 한 번 더 걸러낸다.
   const lastFiredAt = useRef(0);
   const fire = useCallback(() => {
-    if (busy) return;
+    if (busy || confirmDisabled) return;
     const now = Date.now();
     if (now - lastFiredAt.current < 800) return;
     lastFiredAt.current = now;
     onConfirm();
-  }, [busy, onConfirm]);
+  }, [busy, confirmDisabled, onConfirm]);
 
   // Enter = 확인 (Escape/포커스 트랩은 useModalA11y)
   useEffect(() => {
@@ -110,9 +112,9 @@ export function ConfirmDialog({
           <button
             onClick={fire}
             autoFocus
-            disabled={busy}
+            disabled={busy || confirmDisabled}
             aria-busy={busy || undefined}
-            className={`px-4 py-1.5 text-sm font-semibold rounded-xl text-primary-foreground disabled:opacity-60 disabled:cursor-wait ${
+            className={`px-4 py-1.5 text-sm font-semibold rounded-xl text-primary-foreground disabled:opacity-60 ${busy ? 'disabled:cursor-wait' : 'disabled:cursor-not-allowed'} ${
               danger
                 ? 'bg-status-critical hover:bg-status-critical/90'
                 : 'bg-primary hover:bg-primary/90'
