@@ -1,7 +1,6 @@
 import { useEffect } from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { BrowserRouter, Routes, Route, Navigate, useParams, useLocation, useNavigate } from 'react-router-dom';
-import { Dashboard } from '@/pages/Dashboard';
 import { PlaybooksPage } from '@/pages/PlaybooksPage';
 import { WorkItemBoardPage } from '@/pages/WorkItemBoardPage';
 import { WorkItemFormPage } from '@/pages/WorkItemFormPage';
@@ -162,7 +161,7 @@ function AppShell() {
               {/* Your Island — 사용자 커스텀 화면. islandId 없이 들어오면 마지막에 보던 것으로 리다이렉트 */}
               <Route path="/island" element={<IslandPage />} />
               <Route path="/island/:islandId" element={<IslandPage />} />
-              <Route path="/cluster-overview" element={<Dashboard />} />
+              <Route path="/cluster-overview" element={<Navigate to="/clusters" replace />} />
               <Route path="/playbooks" element={<PlaybooksPage />} />
               {/* 업무 관리 — 정식 경로 */}
               {/* LAKE service monitoring (lake-service-monitoring PDCA) */}

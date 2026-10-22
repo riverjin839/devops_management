@@ -87,7 +87,7 @@ devops_management/
 │       #  bottleneck_probes/  analyzers/(claude|local_llm|rule_based)  batch_jobs/  trends/
 ├── backend/tests/       # pytest (pytest.ini: testpaths=tests, asyncio_mode=auto)
 ├── frontend/src/
-│   ├── App.tsx          # React Router — `/` = HomePage, 구 대시보드는 /cluster-overview,
+│   ├── App.tsx          # React Router — `/` = HomePage, 구 대시보드(/cluster-overview)는 /clusters 로 redirect,
 │   │                    #   레거시 경로 redirect, RequireAdmin·RequireFeature 가드
 │   ├── services/api.ts  # axios 기반 API 레이어 — 모든 백엔드 호출의 단일 창구
 │   ├── types/index.ts   # 공용 TypeScript 인터페이스
@@ -304,7 +304,7 @@ offline/error dict 를 반환**하고 HTTP 500 을 올리지 않는다 (`agent_s
   `useCanOperate()` 로 `disabled` + 사유(`withHint`)를 붙인다 (`DESIGN_SYSTEM.md` §12.9).
 - **Tailwind 만.** 인라인 스타일·CSS modules·styled-components 금지.
 - **조합 규칙(`DESIGN_SYSTEM.md` §12.12 — AI 템플릿 티 방지).** 페이지 `<h1>` 1개(공용 PageHeader, 아이콘 타일 금지) ·
-  KPI 타일 행은 `/cluster-overview` Health Hero 외 금지 · 정상 상태는 중립색(상태색은 비정상에만) · 카드는 1단
+  KPI 타일 행 금지 · 정상 상태는 중립색(상태색은 비정상에만) · 카드는 1단
   `rounded-md`(단일 요소 래핑·카드 안 카드·수제 헤더 금지 — 헤더는 MacCard `actions` 등 슬롯) · 본문 컨테이너는 `PageShell`
   밀도 3종(콘솔/허브/문서, 그 외 `max-w-[NNNNpx]` 금지) · 글꼴은 시스템 스택(웹폰트 CDN 금지) ·
   빈 상태는 `common/EmptyState` 만 · 카테고리 색은 `--chart-*` 만 · 이모지·⚠✓✗ 문자 아이콘 금지 · 용어는 한국어 표준어(K8S·Pod·체크·Settings ✗).

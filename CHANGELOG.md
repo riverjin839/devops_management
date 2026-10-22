@@ -29,6 +29,14 @@
 - **K8s 자원 관리 — 권한·접근성·용어**: viewer 에게 숨겨지던 실행 버튼(지금 수집·추천 재생성·선택 적용·무시·롤백·정책 저장)을 비활성 + 사유로 보이게 했다. 탭은 `tablist`(←/→ 이동), 값 토글은 `aria-pressed`, 표 행 안에 버튼이 중첩되던 펼치기는 첫 칸 버튼으로, 랭킹 차트는 키보드용 목록을 함께 둔다. 헤더 "새로고침"은 **다시 집계**(실시간 실행 로그 포함), 카드의 새로고침은 **다시 읽기**로 이름을 나눴다. 추천 일괄 무시, 실패 화면의 다시 시도, 한영 혼용 용어 정리.
   Frontend: `components/k8s-allocation/*` · `pages/K8sAllocationPage.tsx` · `hooks/useK8sAllocation.ts`(`run`·`fetchAllocNamespaces`). 공용 `primitives.SegTabs`·`WorstEffBadge`, `format.nodeRisk`·`isProblemNode`·`worstEfficiency`.
 
+### Changed
+- **클러스터 현황(`/cluster-overview`) 화면 삭제 — 클러스터 상세·관측 지표로 통합**: 홈 상태 매트릭스·클러스터 상세와 겹치던
+  화면을 지웠다. 애드온 점검(점검 실행 + 실시간 실행 로그·로그 보기, 항목 추가·기본 애드온·단건 실행·삭제), 현황 아이템, 클러스터에
+  표시할 플레이북, 최근 점검 이력, 일일 리포트(.md/.csv), Kubeconfig 편집은 `/clusters/:id` 로, PromQL 카드 관리는 `/observability`
+  하단으로 옮겼다. 옛 주소는 `/clusters` 로 이동하고 사이드바에 설치해 둔 "클러스터 현황"은 "클러스터 상세"로 바뀐다. 전 클러스터
+  카드 그리드·Health Hero·업무 현황 차트는 홈 매트릭스·`/tasks-mgmt` 가 대신한다. Backend: `services/home_prefs.py`
+  `RETIRED_PATH_ALIASES` 가 저장된 설치 목록·고정 경로·조직 기본값의 옛 경로를 읽을 때 치환.
+
 ## [1.72.0] - 2026-10-22
 
 ### Added

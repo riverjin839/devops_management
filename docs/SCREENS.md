@@ -292,36 +292,6 @@ hover 시 flyout 자체가 라벨을 보여주므로 이름만 뜨는 중복 툴
 
 ## 클러스터 — 모니터링 / 리소스 관리
 
-### 클러스터 대시보드 (`/cluster-overview`)
-
-> **2026-10-14 (D-128)**: "점검 실행" 이 실행 로그 패널(`RunLogPanel` + 로그 보기)을 띄운다 — 클러스터별 시작 줄, 응답 대기 하트비트, 애드온별
-> 상태·응답 ms·메시지 줄(`POST /health/check/{id}` 응답 `addons[]`), 클러스터·전체 요약. 실패한 클러스터는 오류 줄을 남기고 다음으로 진행.
-
-> **2026-10-14 (D-119)**: 클러스터 카드는 위험 → 경고 → 미연결 → 정상 순으로 정렬되고(`sortByStatus`), 정상 카드는 색 없이 회색 점·아이콘만 쓴다. 애드온 카드 아이콘은 타입별 lucide(`AddonCard` `ADDON_TYPE_ICON`).
-
-- **파일**: `frontend/src/pages/Dashboard.tsx` (+ `components/dashboard/{SummaryStats,AddonGrid,MetricCardGrid,KanbanSummaryCharts,ClusterItemsGrid,AddClusterModal,AddAddonModal,AddMetricCardModal,KubeconfigEditModal,ClusterItemModal}`, `components/playbooks/{PlaybookCard,AddPlaybookModal,RunCredsModal}`)
-- **메트릭 카드 공유 범위(멀티테넌시 4단계)**: `AddMetricCardModal` 의 `공유 범위`(`TenantScopeSelect`)로 카드를 테넌트 전용으로 둘 수 있다 — 목록·단건·쿼리·스파크라인·`/promql/query/all`(캐시 후 사용자별 필터)에서 그 멤버·admin 에게만 보인다(`routers/promql.py`).
-- **목적 / UX**: PEP 의 오리지널 핵심 화면. 등록된 K8s 클러스터의 헬스(API 서버/컨트롤플레인/etcd/노드/애드온), PromQL 기반 Prometheus 인사이트, 대시보드 노출용 Ansible 플레이북, 업무 현황(칸반)을 한 화면에서 훑고 즉시 점검(Run Check)을 트리거하는 랜딩 화면.
-- **UI 구성**:
-  - `ClusterSidebar` — `iconOnly` + `allowAll`(`allLabel="전체 현황"`) 단일 선택. "전체 현황" 선택 시 `ClusterOverviewGrid`(클러스터별 카드 그리드)로 전환.
-  - 상단 sticky 툴바 — Cluster/Check/Metric 추가 버튼, Daily Report(.md/.csv) 다운로드, Kubeconfig 편집, Run Check.
-  - `현황 아이템` MacCard(단일 클러스터 선택 시만) — `ClusterItemsGrid` (사용자 정의 카드, 실행/리사이즈/삭제).
-  - `Cluster Status` MacCard — `AddonGrid`(애드온별 헬스 카드) 또는 미연결(pending) 시 grayscale 오버레이 안내.
-  - `Prometheus Insights` MacCard — `MetricCardGrid`(PromQL 카드).
-  - 2단 그리드: `Playbook Checks`(대시보드 노출 플레이북) ↔ `업무 현황`(`KanbanSummaryCharts`).
-- **Frontend**: `useClusters`/`useSummary`/`useAddons`/`useHealthCheck`/`useCreateAddon`/`useDeleteAddon`/`useAddonHealthCheck` (`hooks/useCluster.ts`), `useDashboardPlaybooks`/`useRunPlaybook`/`useDeletePlaybook`/`useToggleDashboard`/`useUpdatePlaybook` (`hooks/usePlaybook.ts`), `useMetricCards`/`useMetricResults`/`useDeleteMetricCard` (`hooks/useMetricCards.ts`), `useClusterItems`/`useRunClusterItem`/`useUpdateClusterItem`/`useDeleteClusterItem`, `useWorkItems`. Zustand: `useClusterStore`(clusters/summary/addons/isChecking), `usePlaybookStore`(runningIds). `healthApi.exportReport()` 직접 호출(리포트 다운로드).
-- **Backend**: `GET /api/v1/clusters`, `GET /api/v1/health/summary`, `GET /api/v1/health/addons/{clusterId}`, `POST /api/v1/health/check/{clusterId}`, `POST /api/v1/health/check/{clusterId}/addons/{addonId}`, `POST/PUT/DELETE /api/v1/health/addons...`, `GET /api/v1/health/report` — 라우터 `backend/app/routers/health.py` + `clusters.py`. 서비스: `services/core_bundle_checker.py`(`DailyChecker`), `services/health_checker.py`, `services/checkers/*`(argocd/control_plane/etcd/jenkins/keycloak/nexus/node/system_pod). 모델: `models/cluster.py`(`Cluster`, `StatusEnum`), `models/addon.py`(`Addon`), `models/metric_card.py`.
-- **핵심 기능**:
-  - 클러스터 전체/개별 헬스 체크 실행 및 실시간 상태 반영.
-  - 애드온(체크 항목) CRUD, 기본 애드온(etcd Leader/Node Status/Control Plane/CoreDNS) 일괄 추가.
-  - PromQL 메트릭 카드 조회/추가/편집/삭제.
-  - 대시보드 노출 플레이북 실행(SSH 자격증명 세션 캐시 지원) 및 토글.
-  - 클러스터별 커스텀 "현황 아이템" 카드 실행/리사이즈.
-  - Daily Report(.md/.csv) 익스포트, Kubeconfig 편집 모달.
-- **요청사항 (수정 요청)**:
-  - _(여기에 개선/수정 요청을 직접 적어주세요)_
-  - **[2026-09-08, D-067]** `Cluster Status` 카드 상단에 종합 상태 원인 1줄(예: "심층 점검 cert_expiry 12일")과 "점검 허브로" 링크 추가 — writer 2곳(기본점검·애드온)이 서로 덮어쓰고 심층 점검은 반영되지 않는 문제를 단일 롤업 서비스(`cluster_status_service.recompute()`)로 해소한 뒤 노출. 상세: [점검 체계 통합 설계안](https://claude.ai/code/artifact/9d204e4a-c106-48e8-91b8-4d0b37ebc250) §5·§10
-
 ### K8s 상세 관리 (`/k8s-manage`, `/k8s-manage/:clusterId`)
 
 - **파일**: `frontend/src/pages/K8sManagePage.tsx` (단일 파일 — `ResourceTablePanel`/`NodesPanel`/`PodsPanel`/`OverviewPanel`/`HelmPanel`/`CrdPanel`/`DetailDrawer`를 내부 정의하고 `ResourceTablePanel`/`PodsPanel`은 `NamespaceDashboardPanel`이 재사용할 수 있게 `export`), `frontend/src/components/k8s-manage/NamespaceDashboardPanel.tsx`(네임스페이스 대시보드 — 신규), + `components/k8s/{PodTerminal,EventsStream,NamespaceMultiSelect,ColumnToggle}`, `components/common/LogViewer`, `components/auth/RoleGate`.
@@ -506,7 +476,7 @@ hover 시 flyout 자체가 라벨을 보여주므로 이름만 뜨는 중복 툴
 ### Observability 지표 대시보드 (`/observability`, `/observability/:clusterId`)
 
 - **파일**: `frontend/src/pages/ObservabilityPage.tsx` (+ `components/observability/{MetricsTable,RulesTable,TargetsTable,ActiveAlertsTable,MetricEditModal,DisabledMetricsSection,ObservabilitySettingsDialog,shared}`).
-- **목적 / UX**: 클러스터에 깔린 관측 스택(`kube-prometheus-stack`, 이후 `alert-forwarder`/`opensearch-stack`/`fluent-operator`)의 **개별 지표를 dense 리스트 테이블**로 한 화면에서 훑는다. 카드형(`/cluster-overview` PromQL 카드)과 달리 수십 개 지표를 스캔하는 용도.
+- **목적 / UX**: 클러스터에 깔린 관측 스택(`kube-prometheus-stack`, 이후 `alert-forwarder`/`opensearch-stack`/`fluent-operator`)의 **개별 지표를 dense 리스트 테이블**로 한 화면에서 훑는다. 하단의 PromQL 카드(`MetricCardsPanel`)와 달리 수십 개 지표를 스캔하는 용도.
 - **UI 구성**:
   - `ClusterSidebar` — `iconOnly` 단일 선택(클러스터별 Prometheus 를 봐야 하므로 `allowAll` 없음).
   - 상단 `PageHeader` "관측 지표"(2026-10-14, D-117) — 예전 "Observability 모듈" 카드 제목을 페이지 제목으로 올렸다.
@@ -517,6 +487,7 @@ hover 시 flyout 자체가 라벨을 보여주므로 이름만 뜨는 중복 툴
   - 지표 테이블 — 상태 dot(색 + 라벨) · 지표 · 카테고리 · 현재값 · 임계 · 대상(라벨) · PromQL · 편집. 행 첫 셀 `ExpandButton`(`aria-expanded`, 키보드)으로 설명/전체 라벨/PromQL/참고문서 펼침(알람 규칙·스크레이프 대상·발화 중 알람 표도 같음). 상단에 정상·경고·심각·수집 불가 요약 pill. 표 아래 **사용 안 함 N개** 접힘 섹션(`DisabledMetricsSection`) — 꺼 둔 지표를 편집·다시 켬.
   - 지표 편집 모달(`MetricEditModal`) — **미리 조회** 버튼으로 저장 전 PromQL 을 선택 클러스터에서 시험 조회(샘플 최대 20개, 인라인 결과 — 실행 로그 대상 아님), 지표 삭제는 `ConfirmDialog`(danger), 지표 정의 로딩 중엔 편집 버튼 비활성(사유 표시). 서버에는 단건 조회 `GET /metrics/{id}` 도 있다.
   - 표기 — 상태값 라벨 맵(발화·대기·비활성·기록 규칙 / 정상·중단·알 수 없음 / 심각·경고·정보, 원문은 `title`), 빈 값 `—`.
+  - 하단 MacCard "PromQL 카드"(`components/dashboard/MetricCardsPanel.tsx`, 2026-10-22 구 `/cluster-overview` 에서 이관) — `metric_cards` 전역 카드(클러스터 선택과 무관, `PROMETHEUS_URL` 기준) 조회·추가·편집·삭제. 추가/편집 `AddMetricCardModal`(공유 범위 `TenantScopeSelect` 포함), 삭제 `ConfirmDialog`. 쓰기는 `useCanOperate` 비활성 + 사유. 훅 `useMetricCards`/`useMetricResults`/`useDeleteMetricCard`, 백엔드 `routers/promql.py`.
 - **Frontend**: `useObservabilityModules`, `useObservabilityMetrics`(`include_disabled=true`), `useMetricValues`, `usePromRules`, `usePromTargets`, `usePromActiveAlerts`(`hooks/useObservability.ts`, 30초 `refetchInterval`), `useCreateMetric`/`useUpdateMetric`/`useDeleteMetric`, `usePreviewMetric`, `useObservabilitySettings`/`useUpdateObservabilitySettings`, `useCanOperate`. `useClusterRouteParam('/observability')`, `useUrlParams`. api.ts: `observabilityApi.*`(`previewMetric`·`settings`·`updateSettings` 포함).
 - **Backend**: 라우터 `backend/app/routers/observability.py`.
   - 조회: `GET /api/v1/observability/{modules,metrics,metrics/values,metrics/{id}}`(`?include_disabled`), `GET /observability/prometheus/{rules,targets,active-alerts}`. 조회 4종(`metrics/values`·`rules`·`targets`·`active-alerts`)은 **캐시를 보기 전에** `_visible_cluster` 로 클러스터 read 권한을 확인한다 — `cluster_id` 생략(전역 Prometheus)은 admin 만, 그 외 422(D-181). 응답에 `errors[]`(소스별 실패 사유)·`stale`·`snapshot_age_sec`, 발화 중 알람은 `source=partial` 가능(D-183).
@@ -622,21 +593,26 @@ hover 시 flyout 자체가 라벨을 보여주므로 이름만 뜨는 중복 툴
 
 ### 클러스터 상세 (`/clusters`, `/clusters/:clusterId`)
 
-- **파일**: `frontend/src/pages/ClusterDetailPage.tsx` (+ `components/ops-check/ClusterOpsCheckPanel.tsx` — 카탈로그/실행/로그를 `/ops-checks` 와 공유, `components/common/{ClusterSidebar,StatusBadge}`)
+- **파일**: `frontend/src/pages/ClusterDetailPage.tsx` (+ `components/ops-check/ClusterOpsCheckPanel.tsx` — 카탈로그/실행/로그를 `/ops-checks` 와 공유, `components/common/{ClusterSidebar,StatusBadge,RunLogPanel}`, `components/dashboard/{AddonGrid,AddAddonModal,ClusterItemsGrid,ClusterItemModal,KubeconfigEditModal,CheckHistoryHeatmap}`, `components/playbooks/{PlaybookCard,AddPlaybookModal,RunCredsModal}`)
 - **목적 / UX**: 매트릭스 재편 로드맵 3단계(F3) — 점검 매트릭스의 클러스터명 클릭이 도착하는 클러스터 상세 화면. 이 클러스터의 **종합 상태(정상/경고/위험)와 그 원인**을 한눈에 보여주고, 바로 아래에 점검 카탈로그(등록된 모든 실행 기술 — deep_check/addon/배치잡(SSH)/플레이북(Ansible), D-066 로 전부 편입 완료)로 이어진다. "왜 이 클러스터가 warning 인가"를 카드 하나로 답하는 게 목적 — 예전엔 애드온 그리드만 봐서는 심층 점검이 원인이어도 보이지 않았다(D-067).
 - **UI 구성**:
   - `ClusterSidebar` `iconOnly` — 다른 per-cluster 화면과 동일 패턴.
   - MacCard "종합 상태" — `StatusBadge`(healthy/warning/critical) + "N개 신호를 종합한 결과입니다" + 원인 목록(source 배지 "핵심 점검 번들"/"애드온"/"심층 점검" + 이름 + 메시지 + 마지막 확인 시각), severity(critical→warning→pending→healthy) 순 정렬. 원인 없음(전부 healthy)이면 "아직 점검 결과가 없습니다"/정상 안내만.
   - 그 아래 `ClusterOpsCheckPanel` — 카탈로그 테이블 + 일괄/개별 실행 + 실행 진행 + 결과 상세 모달(`/ops-checks` 섹션과 동일 컴포넌트, 위 참고).
-  - 헤더에 `/daily-check/review/:clusterId`, `/daily-check/settings` 바로가기.
-- **Frontend**: `useClusters`, `useClusterStatusBreakdown(clusterId)`(신규 — `clustersApi.getStatusBreakdown`, 30초 폴링, 호출마다 서버가 재집계), `useClusterRouteParam('/clusters', clusters)`(아일랜드 임베드 호환). 카탈로그/실행 훅은 `ClusterOpsCheckPanel` 내부에서 `/ops-checks` 섹션과 동일하게 사용.
-- **Backend**: `GET /api/v1/clusters/{cluster_id}/status-breakdown` — `backend/app/routers/clusters.py`, `services/cluster_status_service.py::recompute()` 를 그대로 다시 실행해 최신 원인 목록을 돌려준다(멱등이라 조회만으로 재계산해도 부작용 없음). 카탈로그/실행 API 는 `/ops-checks` 섹션과 동일.
+  - 헤더에 `/daily-check/review/:clusterId`, `/daily-check/settings` 바로가기 + 일일 리포트 `.md`/`.csv`(`healthApi.exportReport`, 이 클러스터) + Kubeconfig 편집(`KubeconfigEditModal`) + **점검 실행**(애드온 헬스 체크 `POST /health/check/{id}`).
+  - `RunLogPanel`(+ 로그 보기 토글, `useLogPref('dashboard-health-check')`) — 점검 실행·애드온 ▶·현황 아이템 ▶·플레이북 실행이 공유. 점검 실행은 시작 줄 → 5초 응답 대기 하트비트 → 애드온별 상태·응답 ms·메시지 줄 → 요약 줄.
+  - MacCard "애드온" — `AddonGrid`(애드온별 헬스 카드, 단건 ▶·편집·삭제) + "점검 항목" 추가(`AddAddonModal`) + 기본 애드온(etcd Leader/Node Status/Control Plane/CoreDNS) 일괄 추가. 미연결(pending)이면 grayscale 오버레이 안내.
+  - MacCard "현황 아이템" — `ClusterItemsGrid`/`ClusterItemModal`(사용자 정의 카드 실행/리사이즈/삭제).
+  - (카탈로그 아래) MacCard "플레이북 점검" — `/playbooks` 에서 "클러스터 상세에 표시"로 지정한 이 클러스터 플레이북(`useDashboardPlaybooks`, 백엔드 `show_on_dashboard`) 실행(SSH 자격증명 세션 캐시 + 실행 전 확인)·수정·삭제.
+  - MacCard "최근 점검 이력" — `CheckHistoryHeatmap`(이 클러스터 로그만).
+  - 2026-10-22: 구 `/cluster-overview`("클러스터 현황")의 클러스터 단위 기능을 이 화면으로 합쳤다. `/cluster-overview` 는 `/clusters` 로 redirect, 전 클러스터 한눈 보기는 홈 `PlatformStatusMatrix`, 업무 현황 차트는 `/tasks-mgmt` 가 대신한다. 저장된 사이드바 설치 목록·고정 경로의 `/cluster-overview` 는 읽을 때 `/clusters` 로 치환(`services/home_prefs.py` `RETIRED_PATH_ALIASES`).
+- **Frontend**: `useClusters`, `useClusterStatusBreakdown(clusterId)`(신규 — `clustersApi.getStatusBreakdown`, 30초 폴링, 호출마다 서버가 재집계), `useClusterRouteParam('/clusters', clusters)`(아일랜드 임베드 호환), `useAddons`/`useHealthCheck`/`useCreateAddon`/`useDeleteAddon`/`useAddonHealthCheck`/`useCheckHistoryHeatmap`(`hooks/useCluster.ts`), `useClusterItems`/`useRunClusterItem`/`useUpdateClusterItem`/`useDeleteClusterItem`, `useDashboardPlaybooks`/`useRunPlaybook`/`useDeletePlaybook`/`useToggleDashboard`/`useUpdatePlaybook`, `useRunLog`/`useLogPref`, `useCanOperate`. 카탈로그/실행 훅은 `ClusterOpsCheckPanel` 내부에서 `/ops-checks` 섹션과 동일하게 사용.
+- **Backend**: 애드온·점검 실행·리포트는 `routers/health.py`(`GET /health/addons/{id}`, `POST /health/check/{id}`, `POST /health/check/{id}/addons/{addonId}`, `POST/PUT/DELETE /health/addons...`, `GET /health/report`), 현황 아이템은 `routers/cluster_items.py`, 플레이북은 `routers/playbooks.py`. `GET /api/v1/clusters/{cluster_id}/status-breakdown` — `backend/app/routers/clusters.py`, `services/cluster_status_service.py::recompute()` 를 그대로 다시 실행해 최신 원인 목록을 돌려준다(멱등이라 조회만으로 재계산해도 부작용 없음). 카탈로그/실행 API 는 `/ops-checks` 섹션과 동일.
 - **핵심 기능**:
   - 클러스터 종합 상태의 **단일 롤업**(`cluster_status_service.recompute()`) — 예전엔 `DailyChecker`(core_bundle)·`HealthChecker`(addon)가 각자 `Cluster.status` 를 직접 덮어써(마지막 실행이 이김) 서로의 판정을 지웠고, 애드온 단일 실행(`run_single_addon_check`)은 핵심 번들의 연결 확인 없이 애드온 결과만으로 클러스터 전체 상태를 다시 계산하는 비대칭이 있었다(D-067). 지금은 `DailyChecker`/`HealthChecker`/`DeepCheckService` 세 곳 모두 자기 도메인 결과를 커밋(flush)한 뒤 `recompute()` 하나만 호출한다.
   - 심층 점검은 **opt-in**(`DeepCheckDefinition.affects_cluster_status`, 기본 `false`) — 정의 편집 폼(`/daily-check/settings`)에서 "클러스터 상태에 반영" 토글로 켠다. 애드온은 기존처럼 항상 반영(클러스터별 인스턴스라 opt-in 개념 없음).
   - 우선순위 critical > warning > healthy, 단 핵심 번들이 미연결(pending)이면 다른 신호와 무관하게 전체가 pending(다른 신호는 "연결이 안 되니 의미 없음"으로 무시). 애드온의 개별 pending(연결 실패)은 warning 으로 승격되지만, 심층 점검의 개별 pending(미판정)은 원인 목록에서 제외된다(집계 노이즈 방지).
   - 점검 매트릭스 그리드(`GET /check-matrix/grid`)의 `clusters[].status` 도 같은 롤업 값을 읽는다 — 매트릭스 열 헤더 cron 배지(`ClusterCronBadge`)가 예전 `coreHealth`(core_bundle 셀 상태만) 대신 이 값으로 색을 정한다.
-  - 대시보드(`/cluster-overview`)의 "Cluster Status" 카드에서 특정 클러스터를 선택하면 이 롤업 상태 + 대표 원인 1건 + "클러스터 상세로" 링크가 애드온 그리드 위에 한 줄로 뜬다.
 - **요청사항 (수정 요청)**:
   - _(여기에 개선/수정 요청을 직접 적어주세요)_
 

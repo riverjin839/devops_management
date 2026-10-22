@@ -142,7 +142,7 @@ export function K8sAllocationPage() {
         <div ref={contentRef} className="flex-1 min-w-0 space-y-1.5">
           <div className="flex items-center gap-3 flex-wrap">
             <PageHeader
-              back={{ to: '/cluster-overview', label: '클러스터 현황' }}
+              back={{ to: '/clusters', label: '클러스터 상세' }}
               icon={Gauge}
               title="K8s 자원 관리"
               description="노드 여유 대비 request·사용량(slack) 진단"
