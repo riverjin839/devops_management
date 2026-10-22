@@ -10,16 +10,6 @@
 
 1.70.0 이후 main 에 병합된 변경 (다음 릴리스 후보).
 
-## [1.70.0] - 2026-10-22
-
-### Added
-- **AI 개발 리포트 — 커스텀 기능 목업(모션)**: k9s·Lens·Rancher·Grafana·Jira 기본 기능과 비교한 커스텀 기능 표와,
-  점검 매트릭스·연결 검증·K8s 접근 권한 발급·자원 효율화·공개 리포트/외부 서비스·주간보고·폐쇄망 장애 분석·테넌트 안전장치
-  8개 화면의 목업 슬라이드를 추가했다. 목업은 실제 화면 라벨로 재현했고, 화면에 들어오면 로그 스트리밍·단계 체크·막대
-  성장·kubeconfig 타이핑 같은 모션이 재생된다(「다시 재생」, 동작 줄이기 설정 시 정지). 발표 스크립트도 35장으로 갱신.
-- **플레이북 실시간 실행 로그·실행 취소(`/playbooks`, 대시보드 플레이북 카드)**: 실행 버튼이 백그라운드 실행을 시작하고, 실행 로그 패널에 PLAY·TASK·호스트별 결과(ok/changed/failed/unreachable)와 RECAP 이 진행되는 대로 쌓인다. 패널 헤더의 **실행 취소**로 진행 중인 ansible-playbook 을 1초 안에 멈춘다 — 취소는 판정이 아니라 플레이북 상태·최신 결과는 그대로 두고 실행 이력에 "취소됨" 으로 남는다. 같은 플레이북을 이미 실행 중이면 다시 실행하지 않는다(409). SSH 자격증명은 실행 스레드 메모리에만 있고 저장되지 않는다. Backend: `POST /playbooks/{id}/runs` · `GET /playbooks/runs/{run_id}?since=N` · `POST /playbooks/runs/{run_id}/cancel`, `playbook_runs.log_lines`·`cancel_requested`·`cancelled_by`(`_safe_add_column`), ansible 콜백 플러그인 `services/ansible_callbacks/pep_events.py`.
-- **플레이북 실행이 항상 실패하던 문제**: 이미지의 ansible-core 2.16 에는 결과 파싱에 쓰던 `json` stdout 콜백이 없어(`ansible.posix` 로 이동) 실행이 "Invalid callback for stdout specified: json" 으로 끝났다. 결과 통계·실패 태스크를 자체 콜백(`pep_events`)이 만들고, 원문 출력은 사람이 읽는 기본 출력으로 남긴다. 플레이북 로그 다이얼로그가 응답의 camelCase 키를 읽지 못해 원문 출력·실패 태스크가 늘 비어 보이던 문제도 고쳤다.
-
 ### Added
 - **기술 동향 — 실시간 수집 로그·수집 설정**: "지금 수집"이 소스별 결과(신규 n·실패 사유), 요약 진행 n/N, 합계를 실시간 로그로 보여주고 중지할 수 있다. 서버가 새 엔드포인트를 모르면 기존 방식으로 폴백한다. 새 **수집 설정** 창에서 관리자가 GitHub API 주소(폐쇄망 GHE), 사설 대역 허용 호스트, GitHub 토큰(쓰기 전용)을 고친다. 환경변수는 fallback 이다. 소스마다 항목 종류(릴리스·블로그·뉴스)를 고르고, 카테고리 필터 칩은 등록된 소스에서 만들어진다. Backend: SSE `POST /trends/collect/stream`, `GET`·`PUT /trends/settings`(AppSetting `trends.settings`, 토큰 암호화·백업 마스킹), `services/trends/{url_guard,collect_lock,trend_settings}.py`, 소스 `item_type`·`last_success_at`.
 - **서비스 아키텍처 — 목록 보기·현행화 주기·주소 공유**: 다이어그램 대신 노드·연결 표로 보고 키보드로 주석·수동 연결을 다루는 **목록 보기**를 추가했다. **현행화 주기** 창에서 자동 동기화 cron 을 확인하고, 관리자는 고칠 수 있다. 클러스터·모듈·뷰가 주소(`/service-architecture/:clusterId?module=&view=`)에 남아 새로고침·공유해도 유지된다. Frontend: `ArchDocListView`, `ArchScheduleDialog`.
@@ -42,6 +32,17 @@
 ### Changed
 - **기술 동향 다이제스트 = 그날 새로 발견된 항목**: 매일 지난 90일치를 다시 담고 다시 요약하던 동작을 바꿨다. 항목 URL 은 전역에서 한 번만 저장되고, 자동 수집은 소스별 마지막 성공 이후분만 가져온다. 수동 수집의 기간 선택은 백필용이다. **업그레이드 시 마이그레이션이 기존 `trend_items` 의 URL 중복 행을 한 번 삭제한다**(가장 먼저 수집된 행을 남기고 다이제스트 건수를 다시 센다). 이전 버전이 요약 본문에 저장한 실패 문구는 요약 실패 상태로 되돌려 다시 요약한다.
 - **지식·기타 9화면 표기·접근성 정리**: 마인드맵(도형·선·크기·색), 온톨로지(엔티티 유형·"영향 반경 점수"), 서비스 아키텍처("사라진 노드", 중립색 "사용자 수정본"), Jira 엑셀(표 헤더), CIDR, 버전 그래프(유형·분류·수집 시각)의 라벨을 한국어로 맞췄다. native `confirm`/`prompt` 를 확인·입력 대화상자로 바꿨다. 조회 실패는 공용 오류 상태로 보인다. 버튼·입력 라운딩·글자 크기·인라인 스타일을 토큰 클래스로 정리했다(알람 인박스 알림 규칙 탭의 `text-[11px]` 포함). 동향 소스 토글은 스위치 역할과 이름을 갖는다. 아일랜드 공유 라벨은 "모든 사용자에게 공유"이고, 아일랜드에 임베드된 화면의 제목은 h2 다.
+
+
+## [1.70.0] - 2026-10-22
+
+### Added
+- **AI 개발 리포트 — 커스텀 기능 목업(모션)**: k9s·Lens·Rancher·Grafana·Jira 기본 기능과 비교한 커스텀 기능 표와,
+  점검 매트릭스·연결 검증·K8s 접근 권한 발급·자원 효율화·공개 리포트/외부 서비스·주간보고·폐쇄망 장애 분석·테넌트 안전장치
+  8개 화면의 목업 슬라이드를 추가했다. 목업은 실제 화면 라벨로 재현했고, 화면에 들어오면 로그 스트리밍·단계 체크·막대
+  성장·kubeconfig 타이핑 같은 모션이 재생된다(「다시 재생」, 동작 줄이기 설정 시 정지). 발표 스크립트도 35장으로 갱신.
+- **플레이북 실시간 실행 로그·실행 취소(`/playbooks`, 대시보드 플레이북 카드)**: 실행 버튼이 백그라운드 실행을 시작하고, 실행 로그 패널에 PLAY·TASK·호스트별 결과(ok/changed/failed/unreachable)와 RECAP 이 진행되는 대로 쌓인다. 패널 헤더의 **실행 취소**로 진행 중인 ansible-playbook 을 1초 안에 멈춘다 — 취소는 판정이 아니라 플레이북 상태·최신 결과는 그대로 두고 실행 이력에 "취소됨" 으로 남는다. 같은 플레이북을 이미 실행 중이면 다시 실행하지 않는다(409). SSH 자격증명은 실행 스레드 메모리에만 있고 저장되지 않는다. Backend: `POST /playbooks/{id}/runs` · `GET /playbooks/runs/{run_id}?since=N` · `POST /playbooks/runs/{run_id}/cancel`, `playbook_runs.log_lines`·`cancel_requested`·`cancelled_by`(`_safe_add_column`), ansible 콜백 플러그인 `services/ansible_callbacks/pep_events.py`.
+- **플레이북 실행이 항상 실패하던 문제**: 이미지의 ansible-core 2.16 에는 결과 파싱에 쓰던 `json` stdout 콜백이 없어(`ansible.posix` 로 이동) 실행이 "Invalid callback for stdout specified: json" 으로 끝났다. 결과 통계·실패 태스크를 자체 콜백(`pep_events`)이 만들고, 원문 출력은 사람이 읽는 기본 출력으로 남긴다. 플레이북 로그 다이얼로그가 응답의 camelCase 키를 읽지 못해 원문 출력·실패 태스크가 늘 비어 보이던 문제도 고쳤다.
 
 ## [1.69.1] - 2026-10-21
 
