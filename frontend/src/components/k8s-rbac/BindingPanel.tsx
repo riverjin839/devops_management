@@ -9,10 +9,12 @@
  */
 import { useMemo, useState } from 'react';
 import { Link2, Plus, Search, Trash2 } from 'lucide-react';
-import { ConfirmDialog, EmptyState, ErrorState, LoadingState, useToastSafe } from '@/components/common';
+import { ConfirmDialog, EmptyState, ErrorState, LoadingState, RunLogPanel, useToastSafe } from '@/components/common';
 import { MacCard } from '@/components/ui/MacCard';
 import { useCanOperate } from '@/hooks/useCanOperate';
 import { useCreateBinding, useDeleteBinding } from '@/hooks/useK8sRbac';
+import { useLogPref } from '@/hooks/useLogPref';
+import { runLogged, useRunLog } from '@/hooks/useRunLog';
 import { formatApiError } from '@/lib/utils';
 import type { RbacBinding, RbacNamespace, RbacRole, RbacServiceAccount } from '@/types';
 import { Tag } from './RbacTags';
@@ -57,6 +59,9 @@ export function BindingPanel({
   const [pendingDelete, setPendingDelete] = useState<RbacBinding | null>(null);
   const remove = useDeleteBinding(clusterId);
   const create = useCreateBinding(clusterId);
+  // 실행 로그(D-089) — 바인딩 생성·삭제는 곧바로 권한을 주고 거두는 클러스터 변경이다.
+  const runLog = useRunLog();
+  const [showLog, setShowLog] = useLogPref('k8s-rbac-bindings');
 
   const [creating, setCreating] = useState(false);
   const [kind, setKind] = useState<BindingKind>('RoleBinding');
@@ -102,23 +107,28 @@ export function BindingPanel({
   const handleCreate = async () => {
     const subject = subjectOptions.find((sa) => `${sa.namespace}/${sa.name}` === subjectKey);
     if (problems.length > 0 || !subject) return;
-    try {
-      await create.mutateAsync({
-        kind,
-        name: name.trim(),
-        namespace: kind === 'RoleBinding' ? namespace : null,
-        roleKind: effectiveRoleKind,
-        roleName,
-        subjects: [{ kind: 'ServiceAccount', name: subject.name, namespace: subject.namespace }],
-      });
-      toast.success(
-        `${kind} 생성됨`,
-        `${subject.namespace}/${subject.name} → ${effectiveRoleKind}/${roleName}`,
-      );
+    const where = kind === 'RoleBinding' ? namespace : '전체 네임스페이스';
+    const link = `${subject.namespace}/${subject.name} → ${effectiveRoleKind}/${roleName}`;
+    const r = await runLogged(runLog, {
+      title: `${kind} 생성`,
+      first: `${kind} ${name.trim()} (${where}) — ${link}`,
+      fn: () =>
+        create.mutateAsync({
+          kind,
+          name: name.trim(),
+          namespace: kind === 'RoleBinding' ? namespace : null,
+          roleKind: effectiveRoleKind,
+          roleName,
+          subjects: [{ kind: 'ServiceAccount', name: subject.name, namespace: subject.namespace }],
+        }),
+      summarize: () => [['info', `생성됨 · ${kind} ${name.trim()} — ${where} 에서 권한 발동`]],
+    });
+    if (r.ok) {
+      toast.success(`${kind} 생성됨`, link);
       setCreating(false);
       resetForm();
-    } catch (e) {
-      toast.error('생성 실패', formatApiError(e));
+    } else if (!r.aborted) {
+      toast.error('생성 실패', formatApiError(r.error));
     }
   };
 
@@ -135,19 +145,18 @@ export function BindingPanel({
   }, [bindings, query]);
 
   const handleDelete = async () => {
-    if (!pendingDelete) return;
-    try {
-      await remove.mutateAsync({
-        kind: pendingDelete.kind,
-        name: pendingDelete.name,
-        namespace: pendingDelete.namespace,
-      });
-      toast.success('바인딩 삭제됨', pendingDelete.name);
-    } catch (e) {
-      toast.error('삭제 실패', formatApiError(e));
-    } finally {
-      setPendingDelete(null);
-    }
+    const b = pendingDelete;
+    if (!b) return;
+    setPendingDelete(null);
+    const target = `${b.kind} ${b.namespace ? `${b.namespace}/` : ''}${b.name}`;
+    const r = await runLogged(runLog, {
+      title: '바인딩 삭제',
+      first: `${target} 삭제 요청 — 대상 ${b.subjects.length}개가 ${b.namespace ?? '모든 네임스페이스'} 에서 권한을 잃습니다`,
+      fn: () => remove.mutateAsync({ kind: b.kind, name: b.name, namespace: b.namespace }),
+      summarize: () => [['info', `삭제됨 · ${target}`]],
+    });
+    if (r.ok) toast.success('바인딩 삭제됨', b.name);
+    else if (!r.aborted) toast.error('삭제 실패', formatApiError(r.error));
   };
 
   return (
@@ -189,6 +198,11 @@ export function BindingPanel({
         </button>
       </>}
     >
+      {(runLog.running || runLog.lines.length > 0) && (
+        <div className="mb-3">
+          <RunLogPanel run={runLog} show={showLog} onShowChange={setShowLog} maxHeight="max-h-56" />
+        </div>
+      )}
       {creating && (
         <div className="mb-3 p-3 rounded-xl border border-border bg-secondary space-y-3">
           <div className="flex flex-wrap items-end gap-2">
@@ -300,9 +314,9 @@ export function BindingPanel({
             <button
               type="button"
               onClick={handleCreate}
-              disabled={problems.length > 0 || create.isPending}
-              title={problems.length > 0 ? problems[0] : '바인딩 생성'}
-              aria-label="바인딩 생성"
+              disabled={!canOperate || problems.length > 0 || create.isPending}
+              title={!canOperate ? withHint('바인딩 생성') : problems.length > 0 ? problems[0] : '바인딩 생성'}
+              aria-label={ariaWithHint('바인딩 생성')}
               className="px-4 py-2 rounded-xl bg-primary text-primary-foreground text-xs font-medium disabled:opacity-50"
             >
               {create.isPending ? '생성 중…' : '생성'}

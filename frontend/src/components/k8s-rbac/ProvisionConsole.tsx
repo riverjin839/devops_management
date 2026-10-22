@@ -5,11 +5,12 @@
  * (CLAUDE.md riverjin839 custom 요청). 접어둔 동안에도 스트림은 계속 쌓여서,
  * 실행이 끝난 뒤 펼쳐도 전체 로그가 그대로 있다.
  */
-import { useMemo, useState } from 'react';
-import { Check, Copy, Download, Loader2, ShieldCheck, ShieldX, Square, X } from 'lucide-react';
+import { useMemo } from 'react';
+import { Check, Loader2, ShieldCheck, ShieldX, Square, X } from 'lucide-react';
 import { EmptyState, LogViewer } from '@/components/common';
 import { MacCard } from '@/components/ui/MacCard';
 import { PROVISION_STEPS, type ProvisionStream } from '@/hooks/useK8sRbac';
+import { CredentialResult } from './CredentialResult';
 
 interface ProvisionConsoleProps {
   stream: ProvisionStream;
@@ -42,24 +43,8 @@ function StepChips({ steps, running }: { steps: ProvisionStream['steps']; runnin
   );
 }
 
-/** 클립보드 복사 — 브라우저가 막으면 사용자가 직접 선택할 수 있게 조용히 실패한다. */
-function useCopy() {
-  const [copied, setCopied] = useState(false);
-  const copy = async (text: string) => {
-    try {
-      await navigator.clipboard.writeText(text);
-      setCopied(true);
-      window.setTimeout(() => setCopied(false), 1600);
-    } catch {
-      /* 클립보드 권한 없음 — 아래 텍스트를 직접 선택해 복사 */
-    }
-  };
-  return { copied, copy };
-}
-
 export function ProvisionConsole({ stream, showLogs }: ProvisionConsoleProps) {
   const { running, logs, steps, result, error, abort } = stream;
-  const { copied, copy } = useCopy();
 
   const logText = useMemo(
     () =>
@@ -75,17 +60,6 @@ export function ProvisionConsole({ stream, showLogs }: ProvisionConsoleProps) {
 
   const denied = result?.accessReview.filter((r) => !r.allowed) ?? [];
   const allowedCount = (result?.accessReview.length ?? 0) - denied.length;
-
-  const downloadKubeconfig = () => {
-    if (!result?.kubeconfig) return;
-    const blob = new Blob([result.kubeconfig], { type: 'text/yaml' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `kubeconfig-${result.serviceAccount}-${result.namespace}.yaml`;
-    a.click();
-    URL.revokeObjectURL(url);
-  };
 
   if (!running && logs.length === 0 && !result && !error) {
     return (
@@ -205,36 +179,10 @@ export function ProvisionConsole({ stream, showLogs }: ProvisionConsoleProps) {
             )}
 
             {result.kubeconfig && (
-              <>
-                <pre className="bg-secondary border border-border rounded-md p-3 text-[11px] font-mono overflow-x-auto max-h-56 text-foreground">
-                  {result.kubeconfig}
-                </pre>
-                <div className="flex flex-wrap gap-2">
-                  <button
-                    type="button"
-                    onClick={() => copy(result.kubeconfig ?? '')}
-                    title="kubeconfig 복사"
-                    aria-label="kubeconfig 복사"
-                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-primary text-primary-foreground text-xs font-medium"
-                  >
-                    {copied ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
-                    {copied ? '복사됨' : 'kubeconfig 복사'}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={downloadKubeconfig}
-                    title="kubeconfig 파일로 저장"
-                    aria-label="kubeconfig 파일로 저장"
-                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-border text-xs hover:border-primary"
-                  >
-                    <Download className="w-3.5 h-3.5" /> .yaml 저장
-                  </button>
-                </div>
-                <div className="text-[11.5px] rounded-md border border-status-warning/30 bg-status-warning/10 text-status-warning px-3 py-2">
-                  토큰은 이 화면에서만 볼 수 있습니다. 창을 닫으면 다시 발급해야 합니다 — 감사 로그에는 발급
-                  사실만 남고 토큰 값은 남지 않습니다.
-                </div>
-              </>
+              <CredentialResult
+                kubeconfig={result.kubeconfig}
+                fileName={`kubeconfig-${result.serviceAccount}-${result.namespace}.yaml`}
+              />
             )}
           </div>
         </MacCard>

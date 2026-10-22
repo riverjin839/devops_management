@@ -1,6 +1,6 @@
 /** `/k8s-rbac` 화면이 공유하는 순수 헬퍼·상수. 컴포넌트는 `RbacTags.tsx` 에 둔다
  *  (한 파일이 컴포넌트와 상수를 함께 export 하면 react-refresh 가 경고한다). */
-import type { RbacPolicyRule } from '@/types';
+import type { RbacBinding, RbacBindingMode, RbacPolicyRule, RbacRole, RbacServiceAccount } from '@/types';
 
 /** 쿠버네티스에서 core 그룹은 빈 문자열이라 화면에는 'core' 로 적는다. */
 export const CORE_GROUP_LABEL = 'core';
@@ -94,4 +94,90 @@ export function shortDate(iso: string | null): string {
   } catch {
     return '-';
   }
+}
+
+/** PEP 가 만든 오브젝트에 붙이는 라벨 — 회수 대상 롤을 고를 때 쓴다(백엔드 `k8s_rbac_service`). */
+export const PEP_MANAGED_LABEL = 'app.kubernetes.io/managed-by';
+
+export function isPepManaged(labels: Record<string, string> | undefined): boolean {
+  return labels?.[PEP_MANAGED_LABEL] === 'pep';
+}
+
+/**
+ * 발급 직전에 한 번 더 확인받아야 하는 이유 목록 — 비어 있으면 바로 실행한다.
+ * 기준: 모든 네임스페이스에 걸리는 바인딩, `*` 와일드카드, 만료 없는 토큰, 프리셋 위험도 높음.
+ */
+export function grantRiskReasons(opts: {
+  bindingMode: RbacBindingMode;
+  rules: RbacPolicyRule[];
+  longLivedToken: boolean;
+  presetRisk?: 'low' | 'medium' | 'high';
+}): string[] {
+  const { bindingMode, rules, longLivedToken, presetRisk } = opts;
+  const out: string[] = [];
+  const writeVerbs = Array.from(new Set(rules.flatMap((r) => r.verbs.filter(isWriteVerb))));
+  if (bindingMode === 'clusterrole-clusterrolebinding') {
+    out.push(
+      writeVerbs.length > 0
+        ? `모든 네임스페이스에서 ${writeVerbs.join('/')} 가능 — ClusterRoleBinding 은 네임스페이스를 가리지 않습니다`
+        : '모든 네임스페이스에서 조회 가능 — ClusterRoleBinding 은 네임스페이스를 가리지 않습니다',
+    );
+  }
+  if (rules.some((r) => r.verbs.includes('*') || r.resources.includes('*') || r.apiGroups.includes('*'))) {
+    out.push('와일드카드(*) 규칙 — 지금 없는 리소스·동작까지 앞으로 생기는 대로 허용됩니다');
+  }
+  if (longLivedToken) {
+    out.push('만료 없는 토큰 — Secret 을 지우기 전까지 이 kubeconfig 는 계속 유효합니다');
+  }
+  if (presetRisk === 'high' && out.length === 0) {
+    out.push('위험도 높음 프리셋 — 쓰기 권한이 넓게 열립니다');
+  }
+  return out;
+}
+
+/** ServiceAccount 한 개의 액세스를 통째로 거둘 때 지울 것·남길 것. */
+export interface RevokePlan {
+  /** 이 SA 만 subject 로 가진 바인딩 — 지운다. */
+  bindings: RbacBinding[];
+  /** 다른 subject 도 함께 묶인 바인딩 — 지우면 남의 권한까지 사라져 남긴다. */
+  sharedBindings: RbacBinding[];
+  /** PEP 가 만든 롤 중 지울 바인딩 말고는 참조하는 곳이 없는 것 — 지운다. */
+  roles: RbacRole[];
+}
+
+export function buildRevokePlan(
+  sa: RbacServiceAccount,
+  bindings: RbacBinding[],
+  roles: RbacRole[],
+  clusterRoles: RbacRole[],
+): RevokePlan {
+  const isMe = (b: RbacBinding) =>
+    b.subjects.some((s) => s.kind === 'ServiceAccount' && s.name === sa.name && s.namespace === sa.namespace);
+  const mine = bindings.filter((b) => !b.builtin && isMe(b));
+  const sole = mine.filter((b) => b.subjects.length === 1);
+  const sharedBindings = mine.filter((b) => b.subjects.length > 1);
+  const removing = new Set(sole.map((b) => `${b.kind}/${b.namespace ?? ''}/${b.name}`));
+  const remaining = bindings.filter((b) => !removing.has(`${b.kind}/${b.namespace ?? ''}/${b.name}`));
+
+  const roleOf = (b: RbacBinding) =>
+    b.roleKind === 'ClusterRole'
+      ? clusterRoles.find((r) => r.name === b.roleName)
+      : roles.find((r) => r.name === b.roleName && r.namespace === b.namespace);
+  const stillUsed = (r: RbacRole) =>
+    remaining.some((b) =>
+      r.scope === 'cluster'
+        ? b.roleKind === 'ClusterRole' && b.roleName === r.name
+        : b.roleKind === 'Role' && b.roleName === r.name && b.namespace === r.namespace,
+    );
+  const seen = new Set<string>();
+  const out: RbacRole[] = [];
+  for (const b of sole) {
+    const r = roleOf(b);
+    if (!r || r.builtin || !isPepManaged(r.labels) || stillUsed(r)) continue;
+    const key = `${r.scope}/${r.namespace ?? ''}/${r.name}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(r);
+  }
+  return { bindings: sole, sharedBindings, roles: out };
 }
