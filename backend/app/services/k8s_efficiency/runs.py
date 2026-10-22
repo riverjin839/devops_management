@@ -50,7 +50,8 @@ class RunLogger:
 
     def step(self, step_id: str, status: str, detail: Optional[str] = None,
              label: Optional[str] = None) -> None:
-        steps = list(self.run.steps or [])
+        # 사본으로 고친다 — 로드된 dict 를 제자리 변경하면 JSONB 변경 감지가 안 돼 커밋되지 않는다.
+        steps = [dict(s) for s in (self.run.steps or [])]
         now_ms = int((time.monotonic() - self._t0) * 1000)
         found = None
         for s in steps:

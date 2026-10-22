@@ -71,6 +71,8 @@ LOG_TABLES: frozenset[str] = frozenset({
     "k8s_ns_samples",
     "k8s_workload_samples",
     "k8s_efficiency_runs",
+    # NS 마이그레이션 실행 로그(리소스별 diff 포함).
+    "ns_migration_runs",
     # 서버 오류 기록(요청 ID 추적) — 로그성.
     "system_error_logs",
     # 일일 리포트 NS 롤업 — 샘플에서 재계산 가능한 파생 테이블.

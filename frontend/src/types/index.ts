@@ -6351,3 +6351,36 @@ export interface ExternalServicesSettings {
   changeRetentionDays: number;
   newBadgeDays: number;
 }
+
+// ── NS 마이그레이션 (개발 → 운영 클러스터) — /ns-migration ──────────────────────
+export type NsMigKindGroup = 'base' | 'workload' | 'secret';
+export interface NsMigKind { kind: string; apiVersion: string; group: NsMigKindGroup; label: string }
+export interface NsMigKindCatalog { data: NsMigKind[]; defaultKinds: string[]; ruleTypes: NsMigRuleType[] }
+export type NsMigRuleType = 'image_registry' | 'string' | 'replicas' | 'label';
+export interface NsMigRule { type: NsMigRuleType; from: string; to: string; kind?: string | null; name?: string | null }
+export interface NsMigOptions { keepNodePorts: boolean; forceConflicts: boolean }
+export interface NsMigSpec {
+  sourceClusterId: string; targetClusterId: string;
+  sourceNamespace: string; targetNamespace: string;
+  kinds: string[]; includeSecrets: boolean; rules: NsMigRule[]; options: NsMigOptions;
+}
+export interface NsMigProfile extends NsMigSpec { id: string; name: string; createdBy: string | null; updatedAt: string | null }
+export type NsMigRunState = 'queued' | 'running' | 'succeeded' | 'failed' | 'partial';
+export interface NsMigItem {
+  kind: string; name: string; action: 'create' | 'update' | 'unchanged' | 'error';
+  notes: string[]; diff: string; status: 'ok' | 'failed'; message: string;
+}
+export interface NsMigSkipped { kind: string; name: string; reason: string }
+export interface NsMigSummary { create: number; update: number; unchanged: number; failed: number; skipped: number }
+export interface NsMigRunStep {
+  id: string; label: string; status: 'pending' | 'running' | 'success' | 'failed';
+  detail?: string; startedMs?: number; durationMs?: number;
+}
+export interface NsMigRun {
+  id: string; sourceClusterId: string; targetClusterId: string;
+  sourceNamespace: string; targetNamespace: string;
+  mode: 'plan' | 'apply'; dryRun: boolean; triggeredBy: string | null; runState: NsMigRunState;
+  summary: NsMigSummary | null; error: string | null; steps: NsMigRunStep[];
+  queuedAt: string | null; startedAt: string | null; finishedAt: string | null; durationMs: number;
+  spec?: Partial<NsMigSpec>; logLines?: string; items?: { resources: NsMigItem[]; skipped: NsMigSkipped[] };
+}

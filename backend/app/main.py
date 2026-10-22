@@ -88,6 +88,7 @@ from app.routers import (
     k8s_resources_router,
     k8s_allocation_router,
     k8s_efficiency_router,
+    ns_migration_router,
     daily_report_router,
     daily_report_public_router,
     external_services_router,
@@ -2721,6 +2722,8 @@ app.include_router(k8s_resources_router, prefix="/api/v1", dependencies=_cluster
 # k8s-allocation (자원 관리) — 노드/NS/워크로드/파드 단위 request vs 사용량(slack) 가시화(읽기 전용).
 app.include_router(k8s_allocation_router, prefix="/api/v1", dependencies=_cluster_scoped)
 app.include_router(k8s_efficiency_router, prefix="/api/v1", dependencies=_cluster_scoped)
+# NS 마이그레이션(개발 → 운영) — 소스 read·타깃 operate 는 body 의 클러스터라 라우터가 직접 검사한다.
+app.include_router(ns_migration_router, prefix="/api/v1", dependencies=_cluster_scoped)
 # 일일 리포트 — 공개 조회(`/public/daily-report/*`)는 비인증(로그인 없는 공개 화면), 설정은 JWT.
 app.include_router(daily_report_public_router, prefix="/api/v1")
 app.include_router(daily_report_router, prefix="/api/v1", dependencies=_auth)

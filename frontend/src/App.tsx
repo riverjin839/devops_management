@@ -15,6 +15,7 @@ import { SettingsPage } from '@/pages/SettingsPage';
 import { ClusterLinksPage } from '@/pages/ClusterLinksPage';
 import { NodeLabelsPage } from '@/pages/NodeLabelsPage';
 import { K8sRbacPage } from '@/pages/K8sRbacPage';
+import { NsMigrationPage } from '@/pages/NsMigrationPage';
 import { NodeImagesPage } from '@/pages/NodeImagesPage';
 import { CidrCalculatorPage } from '@/pages/CidrCalculatorPage';
 import { ClusterManagePage } from '@/pages/ClusterManagePage';
@@ -192,6 +193,7 @@ function AppShell() {
               <Route path="/links" element={<ClusterLinksPage />} />
               <Route path="/node-labels" element={<NodeLabelsPage />} />
               <Route path="/k8s-rbac" element={<K8sRbacPage />} />
+              <Route path="/ns-migration" element={<NsMigrationPage />} />
               <Route path="/node-images" element={<NodeImagesPage />} />
               <Route path="/cidr" element={<CidrCalculatorPage />} />
               <Route path="/cluster-manage" element={<ClusterManagePage />} />

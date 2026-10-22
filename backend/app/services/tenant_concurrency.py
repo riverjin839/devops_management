@@ -44,6 +44,7 @@ KIND_LABELS = {
     "check_matrix_run": "점검 매트릭스 수행",
     "deep_check": "심층 점검",
     "k8s_efficiency_run": "효율화 적용",
+    "ns_migration_run": "NS 마이그레이션",
 }
 
 _ACQUIRE_LUA = """
