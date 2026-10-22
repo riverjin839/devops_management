@@ -1097,6 +1097,56 @@
           "n",
           "n"
         ]
+      ],
+      [
+        "Jira·Confluence 가져오기·동기화 + 테넌트 단위 팀 공유 범위",
+        [
+          "n",
+          "n",
+          "n",
+          "n",
+          "p"
+        ]
+      ],
+      [
+        "가져온 사내 문서를 근거로 답하는 폐쇄망 LLM 챗봇 (RAG·출처 인용)",
+        [
+          "n",
+          "n",
+          "n",
+          "n",
+          "n"
+        ]
+      ],
+      [
+        "ServiceAccount 관리 + API 서버 기준 권한 점검 매트릭스",
+        [
+          "p",
+          "p",
+          "p",
+          "n",
+          "n"
+        ]
+      ],
+      [
+        "노드별 이미지 목록 조회 + 다른 노드로 이미지 배포(prepull)",
+        [
+          "n",
+          "n",
+          "n",
+          "n",
+          "n"
+        ]
+      ],
+      [
+        "관측 지표·추이·이벤트·알람·로그·Hubble 을 한 포털에서 (클러스터별)",
+        [
+          "p",
+          "p",
+          "p",
+          "p",
+          "n"
+        ]
       ]
     ],
     "note": "각 도구의 기본(오픈소스·무료) 기능 기준 정성 비교다. ✗ = 기능 없음, △ = 일부만 있거나 플러그인·수작업이 필요함. 유료판·별도 플러그인은 따지지 않았다."
@@ -1156,6 +1206,24 @@
       ]
     },
     {
+      "key": "sa",
+      "title": "ServiceAccount 관리 — 연결된 권한 추적과 실제 권한 점검",
+      "route": "/k8s-rbac · ServiceAccount",
+      "ver": "1.35.0 · 1.36.0",
+      "gap": "SA 가 어떤 Role 에 묶였는지 보려면 RoleBinding·ClusterRoleBinding 을 일일이 뒤져야 했고, '정말 그 권한이 되는지'는 kubectl auth can-i 를 네임스페이스마다 쳐 봐야 알았다.",
+      "built": "SA 목록에 연결된 권한(Binding → Role)을 태그로 붙이고 클릭하면 롤 상세로 이동한다. 행에서 바로 kubeconfig 를 발급하고, 권한 점검 탭은 규칙을 추측하지 않고 API 서버(SubjectAccessReview)에 직접 물어 항목 × 네임스페이스 매트릭스로 보여 준다.",
+      "points": [
+        "PEP 생성분만 보기 · 기본 SA 는 편집 불가 보호",
+        "삭제 시 영향(접속 중인 개발자·파드 인증 실패) 경고",
+        "롤 편집 시 영향받는 바인딩 수 표시"
+      ],
+      "tools": [
+        "k9s",
+        "Lens",
+        "Rancher"
+      ]
+    },
+    {
       "key": "efficiency",
       "title": "자원 효율화 — 추천을 넘어선 적용·롤백 자동화",
       "route": "/k8s-allocation/prod-a",
@@ -1169,6 +1237,24 @@
       ],
       "tools": [
         "Grafana",
+        "Lens",
+        "Rancher"
+      ]
+    },
+    {
+      "key": "images",
+      "title": "노드 이미지 — 배포 이미지 목록 확인과 노드별 배포",
+      "route": "/node-images",
+      "ver": "1.10.0 · 1.11.0 · 1.64.1",
+      "gap": "폐쇄망에서 새 노드에 이미지가 없으면 파드가 ImagePullBackOff 로 멈춘다. 어느 노드에 어떤 이미지가 있는지는 노드마다 SSH 로 crictl images 를 쳐서 확인했다.",
+      "built": "클러스터 전 노드의 이미지를 수집해 노드별·라벨 그룹별·이미지별로 보여 주고, 이미지 하나를 골라 미보유 노드에 SSH 로 레지스트리 pull(prepull)한다. 노드별 결과·exit·소요와 stdout/stderr 를 남긴다.",
+      "points": [
+        "보유/미보유 자동 판정 · '미보유만' 한 번에 선택",
+        "런타임 crictl·nerdctl·ctr 자동 감지, 동시 실행 수·제한 시간",
+        "자격증명은 요청에만 사용·미저장, 실행 전 확인 창"
+      ],
+      "tools": [
+        "k9s",
         "Lens",
         "Rancher"
       ]
@@ -1191,6 +1277,24 @@
       ]
     },
     {
+      "key": "monitoring",
+      "title": "통합 모니터링 — 관측 지표·추이·이벤트·알람·로그·Hubble 을 한 포털에서",
+      "route": "/observability · /cluster-trends · /alerts …",
+      "ver": "1.1.0 ~ 1.69.1",
+      "gap": "Grafana·Alertmanager·Kibana·Hubble UI·kubectl logs 를 클러스터마다 따로 열어야 했다. 관측 스택 자체가 죽으면 '알람 없음'으로 보여 장애를 놓쳤다.",
+      "built": "클러스터를 고르면 관측 지표(PromQL·임계·발화 중 알람), 노드 추이 차트, K8s 실시간 이벤트, 알람 인박스(+AI 분석), 파드 로그 스트림, Cilium/Hubble 흐름, 파드 병목 진단, 토폴로지를 같은 화면 체계로 연다.",
+      "points": [
+        "관측 스택 미도달은 '수집 불가'로 구분 표시",
+        "지표 카탈로그·임계는 화면에서 편집 (UI-First), 저장 전 미리 조회",
+        "알람 확인·AI 분석까지 테넌트 범위로 격리"
+      ],
+      "tools": [
+        "Grafana",
+        "Lens",
+        "k9s"
+      ]
+    },
+    {
       "key": "weekly",
       "title": "주간보고 자동 생성 — Jira Epic 진척률의 Confluence 게시",
       "route": "/weekly-report",
@@ -1205,6 +1309,41 @@
       "tools": [
         "Jira",
         "Confluence"
+      ]
+    },
+    {
+      "key": "worktrack",
+      "title": "업무 관리 — Jira·Confluence 가져오기와 팀 공유 범위",
+      "route": "/tasks-mgmt · /documents",
+      "ver": "1.2.0 · 1.18.0 · 1.40.0 · 1.58.0",
+      "gap": "업무는 Jira 에, 문서는 Confluence 에, 운영 기록은 메신저에 흩어져 있었다. Jira·Confluence 화면만으로는 클러스터 운영 맥락과 묶어 보거나 팀 단위로 공개 범위를 나누기 어려웠다.",
+      "built": "JQL·프로젝트·내게 할당 조건으로 Jira 이슈를 미리보기(생성·갱신·변경 없음) 후 가져오고, Confluence 페이지는 스페이스·상위 페이지·라벨·기간으로 골라 문서 관리로 동기화한다. 업무·문서마다 '공유 범위'로 테넌트(팀) 단위 공개를 정한다.",
+      "points": [
+        "Epic → Task → Sub-task 에픽뷰, DL#(Jira 키)·WIKI(Confluence) 칩",
+        "재가져오기·Jira 로 보내기 양방향 + 실행 로그",
+        "동기화 상태(v7·수정됨·오류) 표시, 공유 범위는 서버에서 강제"
+      ],
+      "tools": [
+        "Jira",
+        "Confluence"
+      ]
+    },
+    {
+      "key": "rag",
+      "title": "사내 문서 기반 LLM 챗봇 — 가져온 문서를 근거로 답하는 RAG",
+      "route": "AI 어시스턴트 · Settings ▸ AI/LLM",
+      "ver": "1.18.0 · 1.40.0 · 1.68.0",
+      "gap": "폐쇄망이라 외부 AI 를 쓸 수 없고, 범용 모델은 우리 클러스터·런북을 모른다. 답의 근거도 확인할 수 없었다.",
+      "built": "가져온 Confluence 문서·작업 가이드·업무 이력·운영 노트를 저장할 때마다 임베딩(pgvector)하고, 질문이 오면 유사 문서 4건을 찾아 사내 로컬 LLM 에 함께 넘긴다. 답변 아래에 '근거 자료'를 유사도와 함께 링크로 단다.",
+      "points": [
+        "용도별 LLM 라우팅 (챗봇·장애 분석·요약·임베딩, primary/fallback)",
+        "테넌트별 LLM 라우팅·사용량 집계",
+        "분석·조언만 — 아무것도 직접 실행하지 않음"
+      ],
+      "tools": [
+        "Confluence",
+        "Jira",
+        "Lens"
       ]
     },
     {
