@@ -36,15 +36,15 @@ export function InternalIpRow({ cluster, overlapColor }: InternalIpRowProps) {
   const totalIps = autoGroups.length > 0 ? ips.length : 0;
 
   const fallback = cluster.cidr ? (
-    <p className="text-sm font-mono text-muted-foreground" title="nodeIps / internalIps 미입력 — fallback CIDR">
-      <span className="text-muted-foreground text-xs mr-1">fallback CIDR</span>
+    <p className="text-sm font-mono text-muted-foreground" title="노드 IP 미수집·수동 IP 미입력 — 수동 입력 CIDR 을 대신 표시">
+      <span className="text-muted-foreground text-xs mr-1">수동 CIDR</span>
       <span className="text-foreground">{cluster.cidr}</span>
     </p>
   ) : null;
 
   return (
     <IpGroupRow
-      label="INTERNAL_IP"
+      label="내부 IP"
       groups={groups}
       totalIps={totalIps}
       accent="sky"

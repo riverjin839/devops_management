@@ -6,6 +6,8 @@ import { CSS } from '@dnd-kit/utilities';
 import type { Cluster, ClusterCustomField, ClusterManageUpdate } from '@/types';
 import { useUpdateCluster } from '@/hooks/useCluster';
 import { InlineEdit, useToast } from '@/components/common';
+import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
+import { useCanOperate } from '@/hooks/useCanOperate';
 import { formatApiError, formatRelativeTime } from '@/lib/utils';
 import { useClusterIconSrc } from '@/hooks/useClusterIconSrc';
 import { STATUS_STYLE } from './constants';
@@ -44,16 +46,19 @@ interface ClusterTableRowProps {
 
 type EditField = null | 'region' | 'operationLevel' | 'cidr' | 'podCidr' | 'svcCidr';
 
-/** 편집 가능 셀 wrapper — 더블클릭 OR hover 시 나타나는 ✏️ 아이콘 클릭으로 진입.
+/** 편집 가능 셀 wrapper — 더블클릭 OR hover 시 나타나는 연필 아이콘 클릭으로 진입.
  *  text 선택을 막아 dblclick 이 안정적으로 발화되게 함. `canEdit=false`(viewer)면
  *  더블클릭·연필 버튼 없이 순수 읽기 전용 셀로 렌더한다.
+ *  `label` 은 연필 버튼의 접근 가능한 이름 — 행마다 같은 "수정" 이 수십 개 읽히지 않게
+ *  "{클러스터} {필드} 수정" 으로 붙인다.
  */
 function EditableCell({
-  isEditing, onEnter, children, className = '', canEdit = true,
+  isEditing, onEnter, children, label, className = '', canEdit = true,
 }: {
   isEditing: boolean;
   onEnter: () => void;
   children: React.ReactNode;
+  label: string;
   className?: string;
   canEdit?: boolean;
 }) {
@@ -77,9 +82,9 @@ function EditableCell({
       <button
         type="button"
         onClick={(e) => { e.stopPropagation(); onEnter(); }}
-        className="absolute top-1 right-1 p-0.5 rounded opacity-0 group-hover:opacity-100 focus-visible:opacity-100 focus-visible:ring-1 focus-visible:ring-primary text-muted-foreground hover:text-primary hover:bg-secondary/80 transition-opacity"
-        title="이 셀 수정"
-        aria-label="수정"
+        className="absolute top-1 right-1 p-0.5 rounded-xl opacity-0 group-hover:opacity-100 focus-visible:opacity-100 focus-visible:ring-1 focus-visible:ring-primary text-muted-foreground hover:text-primary hover:bg-secondary/80 transition-opacity"
+        title={label}
+        aria-label={label}
       >
         <Pencil className="w-3 h-3" />
       </button>
@@ -97,16 +102,22 @@ export function ClusterTableRow({ cluster, onEdit, onDelete, deletingId, overlap
   const toast = useToast();
   const [editingField, setEditingField] = useState<EditField>(null);
   const iconAnchorRef = useRef<HTMLSpanElement | null>(null);
+  // 역할(canEdit)은 페이지가 판정해 진입점을 숨기고(§12.9 기존 화면 예외), 테넌트 바인딩은
+  // 클러스터마다 다르므로 행에서 판정해 비활성 + 사유로 보여준다 — 눌러보고서야 403 을 알지 않게.
+  const { canOperate, withHint, ariaWithHint } = useCanOperate(cluster.id);
+  const editable = canEdit && canOperate;
+  const editLabel = (field: string) => `${cluster.name} ${field} 수정`;
 
   // 빈 입력은 `null` 로 보내야 값 해제가 저장된다 — `undefined` 는 JSON 직렬화에서
   // 사라져 백엔드 `exclude_unset=True` 가 기존 값을 유지한다. (D-041)
   // 실패는 토스트로 고지 — 422/403 이어도 조용히 원복되지 않게. (D-042)
+  // 편집기는 성공했을 때만 닫는다 — 실패 시 입력한 값을 그대로 두어 고쳐서 다시 저장할 수 있게.
   const quickUpdate = (patch: ClusterManageUpdate) => {
     updateCluster.mutate(
       { id: cluster.id, data: patch },
       {
-        onError: (e) => toast.error('저장 실패', formatApiError(e)),
-        onSettled: () => setEditingField(null),
+        onSuccess: () => setEditingField(null),
+        onError: (e) => toast.error('저장 실패 — 입력값은 그대로 남겨 두었습니다', formatApiError(e)),
       },
     );
   };
@@ -143,15 +154,16 @@ export function ClusterTableRow({ cluster, onEdit, onDelete, deletingId, overlap
             <button
               type="button"
               {...attributes} {...listeners}
-              className="p-0.5 -ml-1 rounded cursor-grab active:cursor-grabbing text-muted-foreground/30 opacity-0 group-hover/row:opacity-100 focus-visible:opacity-100 hover:text-muted-foreground hover:bg-secondary transition-colors flex-shrink-0"
+              className="p-0.5 -ml-1 rounded-xl cursor-grab active:cursor-grabbing text-muted-foreground/30 opacity-0 group-hover/row:opacity-100 focus-visible:opacity-100 hover:text-muted-foreground hover:bg-secondary transition-colors flex-shrink-0"
               title="드래그하여 순서 변경 (정렬: 수동 모드)"
               aria-label="순서 변경 핸들"
             >
               <GripVertical className="w-3.5 h-3.5" />
             </button>
           )}
-          <span className={`w-2 h-2 rounded-full flex-shrink-0 ${st.dot}`} />
-          {/* 현재 아이콘 표시 (읽기 전용) — 변경은 시스템 → Settings → 클러스터 탭에서 */}
+          {/* 상태 컬럼을 숨겨도 상태를 읽을 수 있게 점에 이름을 붙인다(색만으로 전달하지 않음) */}
+          <span role="img" aria-label={`상태: ${st.label}`} title={`상태: ${st.label}`} className={`w-2 h-2 rounded-full flex-shrink-0 ${st.dot}`} />
+          {/* 현재 아이콘 표시 (읽기 전용) — 변경은 시스템 → 설정 → 클러스터 탭에서 */}
           <span
             ref={iconAnchorRef}
             className="flex items-center justify-center w-6 h-6 rounded-md text-muted-foreground flex-shrink-0"
@@ -191,7 +203,8 @@ export function ClusterTableRow({ cluster, onEdit, onDelete, deletingId, overlap
       <EditableCell
         isEditing={editingField === 'region'}
         onEnter={() => setEditingField('region')}
-        canEdit={canEdit}
+        label={editLabel('지역')}
+        canEdit={editable}
         className="text-sm text-muted-foreground"
       >
         {editingField === 'region' ? (
@@ -211,7 +224,8 @@ export function ClusterTableRow({ cluster, onEdit, onDelete, deletingId, overlap
       <EditableCell
         isEditing={editingField === 'operationLevel'}
         onEnter={() => setEditingField('operationLevel')}
-        canEdit={canEdit}
+        label={editLabel('운영레벨')}
+        canEdit={editable}
       >
         {editingField === 'operationLevel' ? (
           <select
@@ -219,7 +233,7 @@ export function ClusterTableRow({ cluster, onEdit, onDelete, deletingId, overlap
             value={cluster.operationLevel ?? ''}
             onChange={(e) => quickUpdate({ operationLevel: e.target.value || null })}
             onBlur={() => setEditingField(null)}
-            className="text-sm bg-background border border-border rounded px-1.5 py-0.5 focus:outline-none focus:ring-1 focus:ring-primary"
+            className="text-sm bg-background border border-border rounded-xl px-1.5 py-0.5 focus:outline-none focus:ring-1 focus:ring-primary"
           >
             <option value="">—</option>
             {(opsLevels ?? []).map((l) => <option key={l.value} value={l.value}>{l.label}</option>)}
@@ -248,7 +262,8 @@ export function ClusterTableRow({ cluster, onEdit, onDelete, deletingId, overlap
       <EditableCell
         isEditing={editingField === 'cidr'}
         onEnter={() => setEditingField('cidr')}
-        canEdit={canEdit}
+        label={editLabel('내부 IP (대체 CIDR)')}
+        canEdit={editable}
       >
         {editingField === 'cidr' ? (
           <InlineEdit
@@ -286,28 +301,36 @@ export function ClusterTableRow({ cluster, onEdit, onDelete, deletingId, overlap
                 <p className="text-xs text-muted-foreground mt-0.5">수동 입력 (정규식)</p>
               </div>
             ) : (
-              <p className="text-sm font-mono text-muted-foreground" title="nodeIps / internalIps 미입력 — fallback CIDR">
-                <span className="text-muted-foreground text-xs mr-1">fallback</span>
+              <p className="text-sm font-mono text-muted-foreground" title="노드 IP 미수집·수동 IP 미입력 — 수동 입력 CIDR 을 대신 표시">
+                <span className="text-muted-foreground text-xs mr-1 font-sans">수동 CIDR</span>
                 <span className="text-foreground">{cluster.cidr}</span>
               </p>
             )}
             <div className="flex items-center gap-1 mt-1">
               {overlapGroupIdx !== undefined && (
-                <span
-                  className="text-xs text-status-warning inline-flex items-center gap-0.5"
-                  title={overlapPeers?.length ? `겹치는 클러스터: ${overlapPeers.join(', ')}` : undefined}
-                >
-                  <AlertTriangle className="w-2.5 h-2.5" />겹침
-                </span>
+                // 겹치는 상대는 title 전용이면 키보드·스크린리더가 닿지 못한다 — 포커스로도 열리는 Tooltip
+                <Tooltip>
+                  <TooltipTrigger
+                    type="button"
+                    onClick={(e) => e.stopPropagation()}
+                    aria-label={overlapPeers?.length ? `CIDR 겹침 — 겹치는 클러스터: ${overlapPeers.join(', ')}` : 'CIDR 겹침'}
+                    className="text-xs text-status-warning inline-flex items-center gap-0.5 rounded-xl px-0.5 focus:outline-none focus-visible:ring-1 focus-visible:ring-primary"
+                  >
+                    <AlertTriangle className="w-2.5 h-2.5" aria-hidden />겹침
+                  </TooltipTrigger>
+                  <TooltipContent side="bottom" className="max-w-72 whitespace-normal text-left">
+                    {overlapPeers?.length ? `겹치는 클러스터: ${overlapPeers.join(', ')}` : '다른 클러스터와 CIDR 이 겹칩니다'}
+                  </TooltipContent>
+                </Tooltip>
               )}
               {cluster.cidr && (
                 <Link
                   to={`/cidr?cidr=${encodeURIComponent(cluster.cidr)}`}
                   onClick={(e) => e.stopPropagation()}
-                  className="text-xs text-muted-foreground hover:text-primary inline-flex items-center gap-0.5 ml-auto px-1 py-0.5 rounded hover:bg-primary/10 transition-colors"
-                  title={`CIDR Calculator 에서 ${cluster.cidr} 분석`}
+                  className="text-xs text-muted-foreground hover:text-primary inline-flex items-center gap-0.5 ml-auto px-1 py-0.5 rounded-xl hover:bg-primary/10 transition-colors"
+                  title={`CIDR 계산기에서 ${cluster.cidr} 분석`}
                 >
-                  <ArrowUpRight className="w-2.5 h-2.5" />Calc
+                  <ArrowUpRight className="w-2.5 h-2.5" aria-hidden />계산기
                 </Link>
               )}
             </div>
@@ -350,7 +373,8 @@ export function ClusterTableRow({ cluster, onEdit, onDelete, deletingId, overlap
       <EditableCell
         isEditing={editingField === 'podCidr'}
         onEnter={() => setEditingField('podCidr')}
-        canEdit={canEdit}
+        label={editLabel('Pod CIDR')}
+        canEdit={editable}
       >
         {editingField === 'podCidr' ? (
           <InlineEdit
@@ -376,7 +400,8 @@ export function ClusterTableRow({ cluster, onEdit, onDelete, deletingId, overlap
       <EditableCell
         isEditing={editingField === 'svcCidr'}
         onEnter={() => setEditingField('svcCidr')}
-        canEdit={canEdit}
+        label={editLabel('Service CIDR')}
+        canEdit={editable}
       >
         {editingField === 'svcCidr' ? (
           <InlineEdit
@@ -410,10 +435,10 @@ export function ClusterTableRow({ cluster, onEdit, onDelete, deletingId, overlap
         <div className="flex flex-col gap-1">
           {cluster.k8sVersion ? (
             <span className="text-xs font-mono px-1.5 py-0.5 rounded-full bg-chart-1/10 text-chart-1-text border border-chart-1/20 w-fit">
-              k8s {cluster.k8sVersion}
+              K8s {cluster.k8sVersion}
             </span>
           ) : (
-            <span className="text-xs text-muted-foreground italic">k8s 미수집</span>
+            <span className="text-xs text-muted-foreground italic">K8s 미수집</span>
           )}
           <button
             type="button"
@@ -428,7 +453,7 @@ export function ClusterTableRow({ cluster, onEdit, onDelete, deletingId, overlap
                 : 'bg-secondary text-muted-foreground border-border hover:bg-secondary/80 hover:text-foreground'
             }`}
           >
-            {cluster.ciliumVersion ? `cilium ${cluster.ciliumVersion}` : 'cilium 설정 →'}
+            {cluster.ciliumVersion ? `Cilium ${cluster.ciliumVersion}` : 'Cilium 설정 보기'}
           </button>
         </div>
       </td>
@@ -449,13 +474,14 @@ export function ClusterTableRow({ cluster, onEdit, onDelete, deletingId, overlap
                   <button
                     type="button"
                     onClick={() => onCollectNodeIps(cluster)}
-                    disabled={isCollecting}
-                    className="px-1.5 py-0.5 rounded bg-primary/10 text-primary border border-primary/30 hover:bg-primary/20 disabled:opacity-50 flex items-center gap-1"
-                    title="kubeconfig 로 노드 IP 즉시 수집 (diff 다이얼로그 없이 적용)"
+                    disabled={isCollecting || !canOperate}
+                    className="px-1.5 py-0.5 rounded-xl bg-secondary text-foreground border border-border hover:bg-secondary/80 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1"
+                    title={withHint('재수집 — 미리보기 없이 바로 반영 (실행 전 확인). 노드 IP 와 함께 호스트명·CIDR·버전·노드당 최대 Pod 도 갱신됩니다')}
+                    aria-label={ariaWithHint(`${cluster.name} 재수집 (미리보기 없이 반영)`)}
                   >
                     {isCollecting
-                      ? <><Loader2 className="w-3 h-3 animate-spin" /> 수집중</>
-                      : <>IP 수집</>}
+                      ? <><Loader2 className="w-3 h-3 animate-spin" aria-hidden /> 재수집 중</>
+                      : <><RefreshCw className="w-3 h-3" aria-hidden /> 재수집</>}
                   </button>
                 )}
               </div>
@@ -506,7 +532,7 @@ export function ClusterTableRow({ cluster, onEdit, onDelete, deletingId, overlap
                                         ? 'bg-status-warning/10 text-status-warning'
                                         : 'bg-chart-1/10 text-chart-1-text'
                                     }`}
-                                    title={isPub ? 'public' : sc}>
+                                    title={isPub ? '공인 IP' : sc === 'private' ? '사설 IP' : sc}>
                                     {isPub ? <Globe className="w-2.5 h-2.5" /> : <Lock className="w-2.5 h-2.5" />}
                                     {ip}
                                   </span>
@@ -537,7 +563,7 @@ export function ClusterTableRow({ cluster, onEdit, onDelete, deletingId, overlap
                     </div>
                   );
                 })}
-                {rest > 0 && <p className="text-muted-foreground">+{rest} more</p>}
+                {rest > 0 && <p className="text-muted-foreground font-sans">외 {rest}대</p>}
                 <div className="flex items-center gap-2 pt-0.5">
                   {multiCount > 0 && (
                     <span className="text-xs text-primary/70" title="노드당 IP 여러 개 (bond0/bond1 등)">
@@ -545,8 +571,8 @@ export function ClusterTableRow({ cluster, onEdit, onDelete, deletingId, overlap
                     </span>
                   )}
                   {pubCount > 0 && (
-                    <span className="text-xs text-status-warning/80" title="public IP 보유 NIC 수">
-                      public {pubCount}건
+                    <span className="text-xs text-status-warning" title="공인(public) IP 를 가진 NIC 수">
+                      공인 IP {pubCount}건
                     </span>
                   )}
                   {!hasIfaces && (
@@ -566,61 +592,66 @@ export function ClusterTableRow({ cluster, onEdit, onDelete, deletingId, overlap
 
       {customFields.map((f) => (
         <td key={f.id} className="px-3 py-2.5 border-l border-primary/10 align-top overflow-hidden">
-          <ClusterCustomCell cluster={cluster} field={f} canEdit={canEdit} />
+          <ClusterCustomCell cluster={cluster} field={f} canEdit={editable} />
         </td>
       ))}
 
       <td className="px-3 py-2.5 overflow-hidden">
         {canEdit ? (
-          <div className="flex items-center gap-1">
+          // 기본 컬럼 폭(페이지 columnDefaults.actions)은 이 5개 버튼이 잘리지 않는 폭에 맞춘다.
+          <div className="flex items-center gap-1 flex-nowrap">
             {onVerify && (
               <button onClick={() => onVerify(cluster)}
-                className={`p-1.5 rounded transition-colors ${
+                disabled={!canOperate}
+                className={`p-1.5 rounded-xl transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
                   verifying
                     ? 'bg-status-critical/10 text-status-critical hover:bg-status-critical/20'
                     : 'text-muted-foreground hover:bg-primary/10 hover:text-primary'
                 }`}
-                title={verifying
+                title={withHint(verifying
                   ? '검증 중지 — 남은 단계는 실행하지 않고 상태도 바꾸지 않습니다'
-                  : '연결 검증 — API server / kubeconfig 인증 / kubectl 을 단계별로 점검하고 진행 상황을 실행 로그에 실시간으로 남깁니다 (상태 갱신됨)'}
-                aria-label={verifying ? `${cluster.name} 검증 중지` : `${cluster.name} 연결 검증`}>
+                  : '연결 검증 — API 서버 · kubeconfig 인증 · kubectl 을 단계별로 점검하고 진행 상황을 실행 로그에 실시간으로 남깁니다 (상태 갱신됨)')}
+                aria-label={ariaWithHint(verifying ? `${cluster.name} 검증 중지` : `${cluster.name} 연결 검증`)}>
                 {verifying
                   ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
                   : <ShieldCheck className="w-3.5 h-3.5" />}
               </button>
             )}
             <button onClick={() => onAutoUpdate(cluster)}
-              className={`p-1.5 rounded transition-colors ${
+              disabled={!canOperate}
+              className={`p-1.5 rounded-xl transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
                 autoUpdating
                   ? 'bg-status-critical/10 text-status-critical hover:bg-status-critical/20'
                   : 'text-muted-foreground hover:bg-primary/10 hover:text-primary'
               }`}
-              title={autoUpdating
-                ? '수집 중지'
-                : '재수집(diff 미리보기) — kubeconfig 로 노드 / 버전 / CIDR 등 다시 조회 후 변경분 확인'}
-              aria-label={autoUpdating ? `${cluster.name} 수집 중지` : `${cluster.name} 재수집`}>
+              title={withHint(autoUpdating
+                ? '재수집 중지'
+                : '재수집 (미리보기) — kubeconfig 로 노드 · 버전 · CIDR 등을 다시 조회해 변경분을 먼저 보여줍니다')}
+              aria-label={ariaWithHint(autoUpdating ? `${cluster.name} 재수집 중지` : `${cluster.name} 재수집 (미리보기)`)}>
               {autoUpdating
                 ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
                 : <RefreshCw className="w-3.5 h-3.5" />}
             </button>
             {onCollectNics && (
               <button onClick={() => onCollectNics(cluster)}
-                className="p-1.5 hover:bg-primary/10 rounded text-muted-foreground hover:text-primary transition-colors"
-                title="NIC 수집 (SSH 기반) — bond0/bond1 IP/MAC 채움. kubectl 만으로는 인터페이스 이름을 알 수 없어 별도 SSH 수집 필요"
-                aria-label={`${cluster.name} NIC 수집`}>
+                disabled={!canOperate}
+                className="p-1.5 hover:bg-primary/10 rounded-xl text-muted-foreground hover:text-primary transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                title={withHint('NIC 수집 (SSH) — bond0/bond1 IP·MAC 을 채웁니다. kubectl 만으로는 인터페이스 이름을 알 수 없어 SSH 로 따로 수집합니다')}
+                aria-label={ariaWithHint(`${cluster.name} NIC 수집`)}>
                 <Cable className="w-3.5 h-3.5" />
               </button>
             )}
             <button onClick={() => onEdit(cluster)}
-              className="p-1.5 hover:bg-secondary rounded text-muted-foreground hover:text-foreground transition-colors"
-              title="전체 수정 — 이름/지역/운영레벨/메타데이터 등 폼 페이지로 이동"
-              aria-label={`${cluster.name} 전체 수정`}>
+              disabled={!canOperate}
+              className="p-1.5 hover:bg-secondary rounded-xl text-muted-foreground hover:text-foreground transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              title={withHint('전체 수정 — 이름 · 지역 · 운영레벨 · 메타데이터 등 수정 화면으로 이동')}
+              aria-label={ariaWithHint(`${cluster.name} 전체 수정`)}>
               <Pencil className="w-3.5 h-3.5" />
             </button>
-            <button onClick={() => onDelete(cluster)} disabled={deletingId === cluster.id}
-              className="p-1.5 hover:bg-status-critical/10 rounded text-muted-foreground hover:text-status-critical disabled:opacity-40 transition-colors"
-              title="삭제 — 클러스터와 연관된 Addon/Playbook/점검 이력이 함께 제거됩니다"
-              aria-label={`${cluster.name} 삭제`}>
+            <button onClick={() => onDelete(cluster)} disabled={deletingId === cluster.id || !canOperate}
+              className="p-1.5 hover:bg-status-critical/10 rounded-xl text-muted-foreground hover:text-status-critical disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+              title={withHint('삭제 — 클러스터와 연관된 Addon · Playbook · 점검 이력이 함께 제거됩니다')}
+              aria-label={ariaWithHint(`${cluster.name} 삭제`)}>
               <Trash2 className="w-3.5 h-3.5" />
             </button>
           </div>

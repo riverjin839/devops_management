@@ -36,7 +36,7 @@ export function CiliumConfigModal({ cluster, onClose }: CiliumConfigModalProps) 
         className="relative bg-card border border-border rounded-md w-full max-w-4xl mx-4 shadow-2xl flex flex-col max-h-[80vh]">
         <div className="flex items-center justify-between px-5 py-4 border-b border-border flex-shrink-0">
           <div>
-            <h3 id={titleId} className="text-base font-semibold">Cilium 설정 — {cluster.name}</h3>
+            <h2 id={titleId} className="text-sm font-semibold">Cilium 설정 — {cluster.name}</h2>
             {data && (
               <p className="text-sm text-muted-foreground mt-0.5 flex items-center gap-1.5 flex-wrap">
                 {/* 이모지(🟢🟡⚪)는 스크린리더/폰트에 따라 의미가 전달되지 않아 StatusDot + 텍스트로 (D-052 준용) */}
@@ -53,7 +53,7 @@ export function CiliumConfigModal({ cluster, onClose }: CiliumConfigModalProps) 
               </p>
             )}
           </div>
-          <button onClick={onClose} title="닫기" aria-label="닫기" className="p-1.5 hover:bg-secondary rounded-lg text-muted-foreground hover:text-foreground transition-colors">
+          <button onClick={onClose} title="닫기" aria-label="닫기" className="p-1.5 hover:bg-secondary rounded-xl text-muted-foreground hover:text-foreground transition-colors">
             <X className="w-5 h-5" />
           </button>
         </div>
@@ -66,7 +66,7 @@ export function CiliumConfigModal({ cluster, onClose }: CiliumConfigModalProps) 
               value={search}
               onChange={e => setSearch(e.target.value)}
               placeholder="설정 항목 검색..."
-              className="w-full pl-8 pr-3 py-2 bg-background border border-border rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-primary"
+              className="w-full pl-8 pr-3 py-2 bg-background border border-border rounded-xl text-sm focus:outline-none focus:ring-1 focus:ring-primary"
             />
           </div>
           {search && <p className="text-sm text-muted-foreground mt-1">{filteredLines.length}줄 매치</p>}

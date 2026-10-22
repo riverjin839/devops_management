@@ -13,25 +13,25 @@ interface CidrRowProps {
 export function CidrRow({ label, cidr, first, last, color, overlapColor }: CidrRowProps) {
   if (!cidr && !first && !last) {
     return (
-      <div className="rounded-lg border border-dashed border-border/40 px-3 py-2.5">
+      <div className="border-l-2 border-dashed border-border pl-3 py-1.5">
         <p className={`text-xs font-semibold mb-0.5 ${color.label}`}>{label}</p>
         <p className="text-sm text-muted-foreground">미입력</p>
       </div>
     );
   }
   return (
-    <div className={`rounded-lg border px-3 py-2.5 ${overlapColor ? `${overlapColor.bg} ${overlapColor.border}` : `${color.bg} ${color.border}`}`}>
+    <div className={`border-l-2 rounded-r-md pl-3 pr-2 py-1.5 ${overlapColor ? `${overlapColor.bg} ${overlapColor.border}` : color.border}`}>
       <div className="flex items-center justify-between mb-1.5">
         <p className={`text-xs font-semibold ${overlapColor ? overlapColor.text : color.label}`}>{label}</p>
         {overlapColor && (
           <span className={`flex items-center gap-1 text-xs font-medium ${overlapColor.text}`}>
-            <AlertTriangle className="w-3 h-3" />겹침
+            <AlertTriangle className="w-3 h-3" aria-hidden />겹침
           </span>
         )}
       </div>
-      {cidr  && <p className="text-sm font-mono"><span className="text-muted-foreground text-xs">CIDR  </span><span className="text-foreground font-semibold">{cidr}</span></p>}
-      {first && <p className="text-sm font-mono mt-0.5"><span className="text-muted-foreground text-xs">First </span><span className="text-foreground">{first}</span></p>}
-      {last  && <p className="text-sm font-mono mt-0.5"><span className="text-muted-foreground text-xs">Last  </span><span className="text-foreground">{last}</span></p>}
+      {cidr  && <p className="text-sm font-mono"><span className="text-muted-foreground text-xs">CIDR </span><span className="text-foreground font-semibold">{cidr}</span></p>}
+      {first && <p className="text-sm font-mono mt-0.5"><span className="text-muted-foreground text-xs">첫 호스트 </span><span className="text-foreground">{first}</span></p>}
+      {last  && <p className="text-sm font-mono mt-0.5"><span className="text-muted-foreground text-xs">마지막 호스트 </span><span className="text-foreground">{last}</span></p>}
     </div>
   );
 }

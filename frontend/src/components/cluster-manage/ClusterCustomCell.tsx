@@ -70,7 +70,7 @@ export function ClusterCustomCell({ cluster, field, canEdit = true }: Props) {
           aria-label={`${field.label} 값 선택`}
           onChange={(e) => setDraft(e.target.value)}
           onBlur={save}
-          className="w-full px-1 py-0.5 text-sm bg-background border border-primary rounded focus:outline-none focus:ring-1 focus:ring-primary"
+          className="w-full px-1 py-0.5 text-sm bg-background border border-primary rounded-xl focus:outline-none focus:ring-1 focus:ring-primary"
         >
           <option value="">(없음)</option>
           {(field.options ?? []).map((o) => <option key={o} value={o}>{o}</option>)}
@@ -90,7 +90,7 @@ export function ClusterCustomCell({ cluster, field, canEdit = true }: Props) {
           }}
           onBlur={save}
           aria-label={`${field.label} 값 입력`}
-          className="w-full px-1 py-0.5 text-sm bg-background border border-primary rounded focus:outline-none focus:ring-1 focus:ring-primary"
+          className="w-full px-1 py-0.5 text-sm bg-background border border-primary rounded-xl focus:outline-none focus:ring-1 focus:ring-primary"
         />
       </div>
     );
@@ -123,7 +123,7 @@ export function ClusterCustomCell({ cluster, field, canEdit = true }: Props) {
           const next = current === true ? false : current === false ? null : true;
           commit(next);
         }}
-        className={`font-mono text-sm px-1 rounded hover:bg-primary/10 disabled:opacity-40 ${
+        className={`font-mono text-sm px-1 rounded-xl hover:bg-primary/10 disabled:opacity-40 ${
           current === true ? 'text-foreground font-bold'
           : current === false ? 'text-muted-foreground'
           : 'text-muted-foreground/30'
@@ -162,7 +162,7 @@ export function ClusterCustomCell({ cluster, field, canEdit = true }: Props) {
       <button
         type="button"
         onClick={beginEdit}
-        className="flex-shrink-0 p-0.5 rounded opacity-0 group-hover:opacity-100 focus-visible:opacity-100 focus-visible:ring-1 focus-visible:ring-primary text-muted-foreground hover:text-primary hover:bg-secondary/80 transition-opacity"
+        className="flex-shrink-0 p-0.5 rounded-xl opacity-0 group-hover:opacity-100 focus-visible:opacity-100 focus-visible:ring-1 focus-visible:ring-primary text-muted-foreground hover:text-primary hover:bg-secondary/80 transition-opacity"
         title={`${field.label} 편집`}
         aria-label={`${field.label} 편집`}
       >
