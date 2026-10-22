@@ -15,6 +15,7 @@ export const ko = {
     page: {
       home: '홈',
       island: '나의 아일랜드',
+      k8sHub: 'K8s 클러스터',
       k8sManage: 'K8s 상세 관리',
       k8sAllocation: 'K8s 자원 관리',
       k9s: 'k9s 콘솔',
@@ -74,6 +75,7 @@ export const ko = {
     },
     /** GROUPS 의 `labelKey`(= 그룹 id). */
     group: {
+      k8s: 'K8s 클러스터',
       observe: '관측',
       inspect: '점검·진단',
       operate: '운영 조작',
@@ -86,6 +88,7 @@ export const ko = {
     },
     /** GROUPS 의 `descriptionKey` — 설명이 있는 그룹만. */
     groupDesc: {
+      k8s: '클러스터 하나를 골라 상세·리소스·자원·관측·로그·점검을 한 화면에서',
       observe: '상태를 본다 — 읽기 전용',
       inspect: '상태를 확인·기록하고 원인을 추적한다',
       operate: '클러스터·노드·스토리지에 명령을 보낸다 — 실행 전 대상을 확인할 것',

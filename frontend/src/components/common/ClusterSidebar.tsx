@@ -10,6 +10,7 @@ import {
 import { CSS } from '@dnd-kit/utilities';
 import type { Cluster, Status } from '@/types';
 import { useSidebarStore } from '@/stores/sidebarStore';
+import { useK8sHub } from '@/lib/k8sHub';
 import { useClusterIconSrc } from '@/hooks/useClusterIconSrc';
 import { ResizeHandle } from './ResizeHandle';
 
@@ -356,6 +357,10 @@ export function ClusterSidebar({
   const reset = useSidebarStore((s) => s.resetClusterSidebar);
   const [sortMode, setSortMode] = useState(false);
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 4 } }));
+  const hub = useK8sHub();
+
+  // K8s 클러스터 허브 안에 임베드된 화면 — 레일은 허브가 하나만 그린다(lib/k8sHub.ts).
+  if (hub) return null;
 
   // 아이콘 레일 모드 — 메인 사이드바 스타일. multiSelect 와 함께 쓰일 수 있음 (PlaybooksPage).
   // onReorder 와 같이 쓰는 경우는 현재 없음 — 사용 시 정렬 토글은 노출되지 않음.

@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react';
 import { cn } from '@/lib/utils';
+import { useK8sHub } from '@/lib/k8sHub';
 
 export type PageDensity = 'console' | 'hub' | 'doc';
 
@@ -30,14 +31,19 @@ const DENSITY_CLS: Record<PageDensity, string> = {
  * 이전엔 루트 패딩 16종·폭 11종(1200~2400px)이 페이지마다 손으로 흩어져 있었다.
  * 페이지 루트(`app-min-h-screen bg-background` + ClusterSidebar flex 행)는 그대로 두고,
  * 패딩을 갖던 본문 컨테이너를 이것으로 바꾼다. 세로 간격(`space-y-*`)·flex 는 className 으로.
+ *
+ * K8s 클러스터 허브 안에 임베드되면(`lib/k8sHub.ts`) 허브의 `PageShell`/`<main>` 이 이미 밖에 있으므로
+ * `div` 로 바꾸고 밀도 패딩을 빼서 셸이 이중으로 쌓이지 않게 한다(`.island-embed` 가 min-h 는 무력화).
  */
-export function PageShell({ density, sidebar = true, as: Tag = 'main', className, children }: PageShellProps) {
+export function PageShell({ density, sidebar = true, as, className, children }: PageShellProps) {
+  const hub = useK8sHub();
+  const Tag = hub ? 'div' : (as ?? 'main');
   return (
     <Tag
       className={cn(
         'flex-1 min-w-0 w-full',
-        DENSITY_CLS[density],
-        density === 'console' && !sidebar && 'pl-3',
+        !hub && DENSITY_CLS[density],
+        !hub && density === 'console' && !sidebar && 'pl-3',
         className,
       )}
     >

@@ -1080,7 +1080,7 @@ export function PlatformStatusMatrix({ toolbarSlot }: PlatformStatusMatrixProps 
                             <StatusDot variant={cluster.status ?? 'pending'} />
                           </span>
                           <button
-                            onClick={() => navigate(`/clusters/${cluster.id}`)}
+                            onClick={() => navigate(`/k8s/${cluster.id}/overview`)}
                             className="truncate hover:text-primary hover:underline underline-offset-2"
                             title={`${cluster.name} — 상태 원인·점검 카탈로그 보기`}
                           >

@@ -603,6 +603,13 @@ MacCard `title` 아래 또 그린 툴바 행(이중 헤더), 같은 모양의 �
 `local` 은 허브 탭 안에 다시 마운트된 화면(지식 허브의 온톨로지)처럼 이동하면 안 되는 곳용이다. `pathFor` 는 모듈 스코프 함수로 넘긴다.
 예: `K8sLogsPage`·`IncidentAnalysisPage`(쿼리 `?namespace=&pod=` 병행)·`VersionGraphPage`·`OntologyPage`.
 
+**K8s 클러스터 허브 임베드 — `lib/k8sHub.ts` (D-240):** per-cluster K8s 화면은 `/k8s/:clusterId/:view` 허브의 서브뷰로도 마운트된다.
+허브가 `K8sHubContext` 를 제공하면 ① `useClusterRouteParam()` 은 URL 을 건드리지 않고 허브의 `clusterId`/`selectCluster` 를 돌려주고
+② `ClusterSidebar` 는 null(레일은 허브가 하나만) ③ `PageShell` 은 `div` + 밀도 패딩 없음(허브의 `<main>` 안) ④ `PageHeader` 는 h2 + `back` 숨김
+⑤ `LogViewTabs` 는 null 이다. 그래서 새 per-cluster 화면도 이 네 공용 요소와 `useClusterRouteParam` 만 쓰면 허브에 들어갈 수 있다 —
+클러스터를 `useState`/`?cluster=` 로 따로 들고 있으면 허브에서 허브의 선택을 따르지 못하므로(`K8sEventsPage` 는 `useK8sHub()` 로 보강), 신규 화면은 훅을 쓴다.
+허브 뷰는 path 세그먼트이고 뷰 내부 탭은 `useUrlParams` 쿼리라 키가 겹치지 않는다. 허브 탭바는 공용 `components/common/SegTabs` `mode="tabs"`.
+
 **전체 높이 캔버스 페이지(PageShell 예외)**: 루트를 `app-h-screen flex overflow-hidden` 가로 행으로 두고
 `<div className="py-3 flex-shrink-0"><ClusterSidebar iconOnly … /></div>` + `<div className="flex-1 min-w-0 flex flex-col">`(툴바·캔버스)로 나눈다.
 캔버스는 ResizeObserver 로 줄어든 폭을 따라간다. 예: `VersionGraphPage`·`OntologyPage`.

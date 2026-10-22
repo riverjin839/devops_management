@@ -10,6 +10,16 @@
 
 1.73.1 이후 main 에 병합된 변경 (다음 릴리스 후보).
 
+### Added
+- **K8s 클러스터 허브(`/k8s/:clusterId/:view`)** — 클러스터 하나를 고르고 보는 K8s 화면 9개(클러스터 상세·K8s 상세 관리·K8s 자원 관리·
+  클러스터 추이·관측 지표·실시간 이벤트·파드 로그·AI 장애 분석·점검 결과 리뷰)가 사이드바 4그룹에 흩어져 있어 화면마다 클러스터를
+  다시 고르던 것을, 클러스터 레일 하나 + 카테고리 탭(개요/리소스/자원/관측/로그/점검) 한 화면으로 모았다. 클러스터는 URL 이 들고
+  있어 뷰를 바꿔도 유지되고, 뷰 전환은 path 라 뒤로가기가 이전 뷰로 돌아온다. 옛 URL(`/clusters`·`/k8s-manage`·`/k8s-allocation`·
+  `/cluster-trends`·`/observability`·`/k8s-events`·`/k8s-logs`·`/incident-analysis`·`/daily-check/review`)은 해당 뷰로 redirect(클러스터·
+  쿼리 보존). 사이드바에 "K8s 클러스터" 그룹이 생기고 옛 leaf 는 그 그룹의 바로가기로 남는다(접근 제어·라벨·아일랜드 패널 호환).
+  Frontend: `K8sHubPage`, `components/k8s-hub/*`, `lib/k8sHub.ts`(임베드 컨텍스트 — 흡수된 화면은 코드 수정 없이 레일/헤더/셸만 허브에
+  넘긴다), 공용 `SegTabs` 승격, `App.tsx` `RedirectToHub`. 2단계(구성·콘솔)·3단계(진단) 뷰는 후속.
+
 ## [1.73.1] - 2026-10-22
 
 ### Fixed

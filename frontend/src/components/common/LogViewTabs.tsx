@@ -1,6 +1,7 @@
 import { useNavigate, useParams } from 'react-router-dom';
 import { Zap, ScrollText } from 'lucide-react';
 import { useIsIslandEmbedded } from '@/lib/islandEmbed';
+import { useK8sHub } from '@/lib/k8sHub';
 
 /**
  * K8s 로그 화면 전환 탭 — "AI 분석"(IncidentAnalysisPage, /incident-analysis) 과
@@ -10,12 +11,14 @@ import { useIsIslandEmbedded } from '@/lib/islandEmbed';
  *
  * 아일랜드 패널 임베드에서는 그리지 않는다(D-187 ⑥) — 여기서 `navigate` 하면 앱 전체가
  * 아일랜드 밖 라우트로 끌려 나가고, 임베드에는 경로 `clusterId` 도 없다.
+ * K8s 클러스터 허브 안에서도 그리지 않는다(D-240) — 허브 "로그" 카테고리의 2행 탭이 같은 전환을 맡는다.
  */
 export function LogViewTabs({ current }: { current: 'analysis' | 'stream' }) {
   const navigate = useNavigate();
   const { clusterId } = useParams<{ clusterId: string }>();
   const embedded = useIsIslandEmbedded();
-  if (embedded) return null;
+  const hub = useK8sHub();
+  if (embedded || hub) return null;
 
   const Tab = ({
     id, to, Icon, label,

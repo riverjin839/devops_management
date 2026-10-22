@@ -39,7 +39,6 @@ import { MindMapPage } from '@/pages/MindMapPage';
 import { WbsFlowPage } from '@/pages/WbsFlowPage';
 import { InfraTopologyPage } from '@/pages/InfraTopologyPage';
 import { NodeSpecPage } from '@/pages/NodeSpecPage';
-import { IncidentAnalysisPage } from '@/pages/IncidentAnalysisPage';
 import { PacketFlowPage } from '@/pages/PacketFlowPage';
 import { OntologyPage } from '@/pages/OntologyPage';
 import { TrendDigestPage } from '@/pages/TrendDigestPage';
@@ -47,27 +46,20 @@ import { CiliumTracePage } from '@/pages/CiliumTracePage';
 import { ServiceTopologyPage } from '@/pages/ServiceTopologyPage';
 import { ServiceArchitecturePage } from '@/pages/ServiceArchitecturePage';
 import { ArchitecturePage } from '@/pages/ArchitecturePage';
-import { K8sEventsPage } from '@/pages/K8sEventsPage';
-import { ObservabilityPage } from '@/pages/ObservabilityPage';
 import { AlertInboxPage } from '@/pages/AlertInboxPage';
-import { DailyCheckReviewPage } from '@/pages/DailyCheckReview';
 import { DeepCheckSettingsPage } from '@/pages/DeepCheckSettings';
 import { OpsCheckConsolePage } from '@/pages/OpsCheckConsolePage';
-import { ClusterDetailPage } from '@/pages/ClusterDetailPage';
 import { CheckItemDetailPage } from '@/pages/CheckItemDetailPage';
-import { K8sLogsPage } from '@/pages/K8sLogsPage';
-import { K8sManagePage } from '@/pages/K8sManagePage';
-import { K8sAllocationPage } from '@/pages/K8sAllocationPage';
 import { K9sPage } from '@/pages/K9sPage';
 import { K9sPopupPage } from '@/pages/K9sPopupPage';
 import { NodeSshPage } from '@/pages/NodeSshPage';
 import { NodeSshPopupPage } from '@/pages/NodeSshPopupPage';
-import { ClusterTrendsPage } from '@/pages/ClusterTrendsPage';
 import { LakeServicesPage } from '@/pages/LakeServicesPage';
 import { LakeServiceDetailPage } from '@/pages/LakeServiceDetailPage';
 import { PodBottleneckPage } from '@/pages/PodBottleneckPage';
 import { PodBottleneckDetailPage } from '@/pages/PodBottleneckDetailPage';
 import { KnowledgeHubPage } from '@/pages/KnowledgeHubPage';
+import { K8sHubPage } from '@/pages/K8sHubPage';
 import { HomePage } from '@/pages/HomePage';
 import { IslandPage } from '@/pages/IslandPage';
 import { ChangePasswordPage } from '@/pages/ChangePasswordPage';
@@ -76,16 +68,33 @@ import { DailyReportPage } from '@/pages/DailyReportPage';
 import { ExternalServicesPage } from '@/pages/ExternalServicesPage';
 import { AgentChat } from '@/components/agent';
 import { Sidebar, PageStyleProvider } from '@/components/layout';
-import { ToastProvider } from '@/components/common';
+import { ToastProvider, LoadingState } from '@/components/common';
 import { AuthGate } from '@/components/auth/AuthGate';
 import { useAuthStore } from '@/stores/authStore';
 import { useFeatureAccess, canAccessFeature } from '@/hooks/useFeatureAccess';
 import { useRecentPathsStore } from '@/stores/recentPathsStore';
+import { useClusters } from '@/hooks/useCluster';
 import { NAV_MAP } from '@/components/layout/navConfig';
 
 function RedirectWithId({ to, suffix = '' }: { to: string; suffix?: string }) {
   const { id } = useParams<{ id: string }>();
   return <Navigate to={`${to}/${id ?? ''}${suffix}`} replace />;
+}
+
+/**
+ * 옛 per-cluster K8s 화면 URL → K8s 클러스터 허브(`/k8s/:clusterId/:view`) 서브뷰(D-240).
+ * `:clusterId` 와 쿼리(`?namespace=&pod=`·`?tab=` 등)를 그대로 넘긴다 — `RedirectWithId` 는 쿼리를 버린다.
+ * 클러스터 없이 들어온 bare URL(`/k8s-manage`)은 첫 클러스터로 보낸다(각 화면이 하던 "첫 클러스터로
+ * replace" 와 같은 동작). 클러스터가 하나도 없으면 허브가 안내한다.
+ */
+function RedirectToHub({ view }: { view: string }) {
+  const { clusterId } = useParams<{ clusterId: string }>();
+  const { search } = useLocation();
+  const { data: clusters, isLoading } = useClusters();
+  if (clusterId) return <Navigate to={`/k8s/${clusterId}/${view}${search}`} replace />;
+  if (isLoading && !clusters) return <LoadingState />;
+  const first = clusters?.[0]?.id;
+  return <Navigate to={first ? `/k8s/${first}/${view}${search}` : '/k8s'} replace />;
 }
 
 /** Settings 등 admin 전용 라우트 가드 — 비-admin 은 홈으로. (추후 role/권한 세분화 예정) */
@@ -162,6 +171,11 @@ function AppShell() {
               <Route path="/island" element={<IslandPage />} />
               <Route path="/island/:islandId" element={<IslandPage />} />
               <Route path="/cluster-overview" element={<Navigate to="/clusters" replace />} />
+              {/* K8s 클러스터 허브(D-240) — 클러스터 레일 하나 + 탭으로 per-cluster K8s 화면을 모은다.
+                  아래 옛 경로들(/clusters·/k8s-manage·/k8s-allocation·/cluster-trends·/observability·/k8s-events·
+                  /k8s-logs·/incident-analysis·/daily-check/review)은 해당 뷰로 redirect(클러스터·쿼리 보존). */}
+              <Route path="/k8s" element={<K8sHubPage />} />
+              <Route path="/k8s/:clusterId/:view?" element={<K8sHubPage />} />
               <Route path="/playbooks" element={<PlaybooksPage />} />
               {/* 업무 관리 — 정식 경로 */}
               {/* LAKE service monitoring (lake-service-monitoring PDCA) */}
@@ -228,8 +242,8 @@ function AppShell() {
               {/* /wbs 의 접근 제어는 더 이상 라우트별 개별 가드가 아니라 RouteAccessGate 가
                   NAV_MAP 을 통해 범용으로 처리한다(Settings "접근 제어"). */}
               <Route path="/wbs" element={<WbsFlowPage />} />
-              <Route path="/incident-analysis" element={<IncidentAnalysisPage />} />
-              <Route path="/incident-analysis/:clusterId" element={<IncidentAnalysisPage />} />
+              <Route path="/incident-analysis" element={<RedirectToHub view="incident" />} />
+              <Route path="/incident-analysis/:clusterId" element={<RedirectToHub view="incident" />} />
               <Route path="/packet-flow" element={<PacketFlowPage />} />
               <Route path="/ontology" element={<OntologyPage />} />
               <Route path="/ontology/:clusterId" element={<OntologyPage />} />
@@ -239,18 +253,18 @@ function AppShell() {
               <Route path="/service-architecture" element={<ServiceArchitecturePage />} />
               <Route path="/service-architecture/:clusterId" element={<ServiceArchitecturePage />} />
               <Route path="/architecture" element={<ArchitecturePage />} />
-              <Route path="/k8s-events" element={<K8sEventsPage />} />
-              {/* Observability — 관측 스택(kube-prometheus-stack 등) 개별 지표 dense 대시보드 */}
-              <Route path="/observability/:clusterId" element={<ObservabilityPage />} />
-              <Route path="/observability" element={<ObservabilityPage />} />
+              <Route path="/k8s-events" element={<RedirectToHub view="events" />} />
+              {/* Observability — 관측 스택(kube-prometheus-stack 등) 개별 지표 dense 대시보드 → 허브 metrics 뷰 */}
+              <Route path="/observability/:clusterId" element={<RedirectToHub view="metrics" />} />
+              <Route path="/observability" element={<RedirectToHub view="metrics" />} />
               {/* 알람 인박스 — Alertmanager / alert-forwarder 수신 인시던트 알람 */}
               <Route path="/alerts" element={<AlertInboxPage />} />
-              <Route path="/daily-check/review/:clusterId" element={<DailyCheckReviewPage />} />
-              <Route path="/daily-check/review" element={<DailyCheckReviewPage />} />
+              <Route path="/daily-check/review/:clusterId" element={<RedirectToHub view="review" />} />
+              <Route path="/daily-check/review" element={<RedirectToHub view="review" />} />
               <Route path="/daily-check/settings" element={<RequireAdmin><DeepCheckSettingsPage /></RequireAdmin>} />
-              {/* 클러스터 상세 — 종합 상태(원인) + 점검 카탈로그. 매트릭스 클러스터명 클릭이 여기로. */}
-              <Route path="/clusters/:clusterId" element={<ClusterDetailPage />} />
-              <Route path="/clusters" element={<ClusterDetailPage />} />
+              {/* 클러스터 상세 — 종합 상태(원인) + 점검 카탈로그. 매트릭스 클러스터명 클릭이 여기로 → 허브 overview 뷰. */}
+              <Route path="/clusters/:clusterId" element={<RedirectToHub view="overview" />} />
+              <Route path="/clusters" element={<RedirectToHub view="overview" />} />
               {/* 항목 상세(R-4 6차 라운드 4단계) — 정의·테스트·적용·실행방식·로그·히스토리.
                   매트릭스 항목명 클릭이 여기로. /daily-check/settings 는 전 항목 검색/일괄 관리용으로 별도 유지. */}
               <Route path="/checks/:itemId" element={<CheckItemDetailPage />} />
@@ -259,25 +273,25 @@ function AppShell() {
               <Route path="/ops-checks/:clusterId" element={<OpsCheckConsolePage />} />
               <Route path="/ops-checks" element={<OpsCheckConsolePage />} />
               {/* OpenLens P0 — 파드 로그 스트리밍(읽기전용) */}
-              <Route path="/k8s-logs/:clusterId" element={<K8sLogsPage />} />
-              <Route path="/k8s-logs" element={<K8sLogsPage />} />
+              <Route path="/k8s-logs/:clusterId" element={<RedirectToHub view="logs" />} />
+              <Route path="/k8s-logs" element={<RedirectToHub view="logs" />} />
               {/* 구 /k8s-resources(리소스 탐색기)는 K8S 상세 관리로 통합·제거됨 → 리다이렉트 */}
               <Route path="/k8s-resources/:clusterId" element={<Navigate to="/k8s-manage" replace />} />
               <Route path="/k8s-resources" element={<Navigate to="/k8s-manage" replace />} />
               {/* Lens 식 K8S 상세 관리 — 리소스 탐색 + 쓰기 액션 + 터미널/이벤트/Helm/RBAC/CRD */}
-              <Route path="/k8s-manage/:clusterId" element={<K8sManagePage />} />
-              <Route path="/k8s-manage" element={<K8sManagePage />} />
+              <Route path="/k8s-manage/:clusterId" element={<RedirectToHub view="manage" />} />
+              <Route path="/k8s-manage" element={<RedirectToHub view="manage" />} />
               {/* K8S 자원 관리 — 노드/NS/워크로드/파드 단위 request vs 사용량(slack) 가시화 */}
-              <Route path="/k8s-allocation/:clusterId" element={<K8sAllocationPage />} />
-              <Route path="/k8s-allocation" element={<K8sAllocationPage />} />
+              <Route path="/k8s-allocation/:clusterId" element={<RedirectToHub view="allocation" />} />
+              <Route path="/k8s-allocation" element={<RedirectToHub view="allocation" />} />
               {/* k9s 콘솔 — control-plane 서버 내장 k9s 를 SSH 로 웹 터미널 스트리밍 */}
               <Route path="/k9s/:clusterId" element={<K9sPage />} />
               <Route path="/k9s" element={<K9sPage />} />
               {/* 노드 SSH 터미널 — 개별 노드에 로그인 셸을 열어 웹 터미널로 스트리밍 */}
               <Route path="/node-ssh/:clusterId" element={<NodeSshPage />} />
               <Route path="/node-ssh" element={<NodeSshPage />} />
-              <Route path="/cluster-trends/:clusterId" element={<ClusterTrendsPage />} />
-              <Route path="/cluster-trends" element={<ClusterTrendsPage />} />
+              <Route path="/cluster-trends/:clusterId" element={<RedirectToHub view="trends" />} />
+              <Route path="/cluster-trends" element={<RedirectToHub view="trends" />} />
               <Route path="/docs" element={<KnowledgeHubPage />} />
               {/* 사용자 관리(로그인 계정)는 Settings ▸ 시스템 담당자 ▸ 로그인 계정 서브탭으로 통합됨 */}
               <Route path="/settings/users" element={<Navigate to="/settings?tab=assignee" replace />} />

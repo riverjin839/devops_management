@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { ArrowLeft } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useIsIslandEmbedded } from '@/lib/islandEmbed';
+import { useK8sHub } from '@/lib/k8sHub';
 
 interface PageHeaderProps {
   /** 페이지 제목 — 화면당 `<h1>` 은 이것 하나뿐이어야 한다. */
@@ -20,7 +21,8 @@ interface PageHeaderProps {
   className?: string;
   /** 제목 heading 레벨 — 기본 1. 다른 페이지 안에 임베드돼 바깥에 이미 `<h1>` 이 있을 때만 2 로 낮춘다
    *  (예: 홈 배치잡 탭의 `BatchJobsPage`, §12.12-1 — 화면당 h1 1개). 시각 크기는 같다.
-   *  아일랜드 패널 안(`useIsIslandEmbedded()`)에서는 지정하지 않으면 2 — 아일랜드 이름이 h1 이다. */
+   *  아일랜드 패널 안(`useIsIslandEmbedded()`)·K8s 클러스터 허브 안(`useK8sHub()`)에서는 지정하지 않으면 2 —
+   *  아일랜드 이름·허브 제목이 h1 이다. 허브 안에서는 `back` 링크도 그리지 않는다(허브를 벗어나는 이동). */
   level?: 1 | 2;
 }
 
@@ -32,11 +34,12 @@ interface PageHeaderProps {
  */
 export function PageHeader({ title, description, icon: Icon, back, titleExtra, actions, className, level }: PageHeaderProps) {
   const embedded = useIsIslandEmbedded();
-  const Heading = (level ?? (embedded ? 2 : 1)) === 2 ? 'h2' : 'h1';
+  const hub = useK8sHub();
+  const Heading = (level ?? ((embedded || hub) ? 2 : 1)) === 2 ? 'h2' : 'h1';
   return (
     <header className={cn('flex items-start justify-between gap-x-4 gap-y-2 flex-wrap', className)}>
       <div className="flex items-start gap-3 min-w-0 flex-1">
-        {back && (
+        {back && !hub && (
           <Link
             to={back.to}
             className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground shrink-0 mt-1 whitespace-nowrap"
