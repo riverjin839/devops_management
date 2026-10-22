@@ -1,27 +1,28 @@
 // 노드별 자원 — 카드/테이블 뷰. 대형 클러스터(수백 노드)는 react-virtuoso 로 가상화해
 // 1.5초 폴링마다 전량 리렌더되던 비용을 화면에 보이는 행만으로 줄인다.
 import { forwardRef, memo, useCallback, useMemo, useRef, useState } from 'react';
-import { LayoutGrid, List, RefreshCw } from 'lucide-react';
+import { AlertTriangle, LayoutGrid, List, RefreshCw } from 'lucide-react';
 import { TableVirtuoso, VirtuosoGrid } from 'react-virtuoso';
 import type { GridComponents, GridListProps, TableComponents } from 'react-virtuoso';
 import { MacCard } from '@/components/ui/MacCard';
-import { EmptyState, Skeleton, SnapshotProgressCard } from '@/components/common';
+import { EmptyState, ErrorState, Skeleton, SnapshotProgressCard } from '@/components/common';
 import { useAllocNodes, useRefreshAllocNode } from '@/hooks/useK8sAllocation';
 import { buildCsv, downloadCsv } from '@/lib/csv';
 import type { AllocNodeRow } from '@/types';
 import {
-  calcGridCols, csvCluster, efficiency, fmtCores, fmtGi, pctText, ratio, slackCls, slackLabel, today, utilPct,
+  calcGridCols, csvCluster, efficiency, fmtCores, fmtGi, isProblemNode, nodeRisk, pctText, ratio, slackCls, slackLabel, today, utilPct,
 } from './format';
-import { CsvButton, EffBadge, MeterBar, SearchInput, SortableTh, StatTooltip, UtilPct } from './primitives';
+import { CsvButton, EffBadge, MeterBar, SearchInput, SegTabs, SortableTh, StatTooltip, UtilPct } from './primitives';
 import { nextSort, useTableSort } from './tableSort';
 import type { SortState } from './tableSort';
 import type { AllocDetailTarget } from './AllocDetailDialog';
-import { allocPhaseText } from './effUtils';
+import { allocPhaseText, readAllocPref, writeAllocPref } from './effUtils';
 
 // 이 수를 넘으면 가상 스크롤(고정 높이 뷰포트)로 전환한다. 작은 클러스터는 종전처럼 전량 렌더.
 const VIRTUALIZE_AT = 48;
 
 const NODE_ACCESSORS: Record<string, (r: AllocNodeRow) => number | string | null> = {
+  risk: (r) => nodeRisk(r),
   name: (r) => r.name,
   cpuReqM: (r) => r.cpuReqM,
   memReqB: (r) => r.memReqB,
@@ -39,6 +40,20 @@ const COL_OPTIONS: { label: string; value: ColMode }[] = [
   { label: '20열', value: 20 },
 ];
 
+// 카드 뷰에는 열 머리글이 없으므로 정렬을 이 선택기로 고른다(표 뷰의 머리글 정렬과 같은 상태를 공유).
+// 기본은 "위험 높은 순" — 장애 대응 중 과할당·과사용 노드가 맨 위에 와야 한다.
+const SORT_PRESETS: { id: string; label: string; sort: SortState }[] = [
+  { id: 'risk', label: '위험 높은 순', sort: { key: 'risk', dir: 'desc' } },
+  { id: 'cpuSlack-asc', label: 'CPU 여유 적은 순', sort: { key: 'cpuSlackM', dir: 'asc' } },
+  { id: 'memSlack-asc', label: 'MEM 여유 적은 순', sort: { key: 'memSlackB', dir: 'asc' } },
+  { id: 'cpuSlack-desc', label: 'CPU 여유 많은 순', sort: { key: 'cpuSlackM', dir: 'desc' } },
+  { id: 'pods-desc', label: 'Pod 많은 순', sort: { key: 'podCount', dir: 'desc' } },
+  { id: 'name', label: '이름순', sort: { key: 'name', dir: 'asc' } },
+];
+const SORT_IDS = SORT_PRESETS.map((p) => p.id);
+const presetOf = (s: SortState) => SORT_PRESETS.find((p) => p.sort.key === s.key && p.sort.dir === s.dir)?.id ?? '';
+const VIEW_STYLES = ['card', 'table'] as const;
+
 // ── 노드 게이지 행 (카드 뷰에서 사용) ─────────────────────────────────────────────
 const GaugeRow = memo(function GaugeRow({ label, alloc, req, lim, usage }: {
   label: string; alloc: number; req: number; lim: number; usage: number | null;
@@ -53,13 +68,16 @@ const GaugeRow = memo(function GaugeRow({ label, alloc, req, lim, usage }: {
       <div className="flex justify-between text-xs text-muted-foreground mb-0.5">
         <span>{label}</span>
         <span className="tabular-nums">
-          req <b className={over ? 'text-status-critical' : 'text-status-info'}>{pctText(req, alloc)}</b>
-          {usage != null && <> · use <b className="text-status-healthy">{pctText(usage, alloc)}</b></>}
+          {/* 시리즈 구분은 --chart-*(요청=chart-1, 사용=chart-2). 과할당일 때만 상태색 + 아이콘. */}
+          요청 <b className={over ? 'text-status-critical' : 'text-foreground'}>
+            {over && <AlertTriangle className="inline w-3 h-3 mr-0.5 -mt-0.5" aria-hidden="true" />}{pctText(req, alloc)}
+          </b>
+          {usage != null && <> · 사용 <b className="text-foreground">{pctText(usage, alloc)}</b></>}
         </span>
       </div>
       <div className="relative h-3 rounded-full bg-muted/40 overflow-hidden">
-        <div className={`absolute inset-y-0 left-0 ${over ? 'bg-status-critical/80' : 'bg-status-info/70'}`} style={{ width: `${reqPct}%` }} />
-        {usage != null && <div className="absolute inset-y-0 left-0 bg-status-healthy opacity-85" style={{ width: `${usePct}%` }} />}
+        <div className={`absolute inset-y-0 left-0 ${over ? 'bg-status-critical/80' : 'bg-chart-1/50'}`} style={{ width: `${reqPct}%` }} />
+        {usage != null && <div className="absolute inset-y-0 left-0 bg-chart-2" style={{ width: `${usePct}%` }} />}
       </div>
       <div className="flex items-center gap-1.5 mt-0.5">
         <UtilPct usage={usage} req={req} lim={lim} />
@@ -80,22 +98,22 @@ const NodeCard = memo(function NodeCard({ n, onRefresh, refreshing, onOpenDetail
         <button
           type="button"
           onClick={() => onOpenDetail(n.name)}
-          title={`${n.name} — 이 노드의 리소스(파드/워크로드) 할당·사용 상세 보기`}
+          title={`${n.name} — 이 노드의 리소스(Pod/워크로드) 할당·사용 상세 보기`}
           className="font-medium text-sm truncate text-left hover:text-primary hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded"
         >
           {n.name}
         </button>
         <div className="flex items-center gap-1 shrink-0 ml-1.5">
           <span className="text-xs text-muted-foreground">{n.roles.join(',')}</span>
-          {n.unschedulable && <span className="text-xs text-status-warning">cordoned</span>}
+          {n.unschedulable && <span className="text-xs text-status-warning" title="cordon — 새 Pod 가 배치되지 않습니다">스케줄 중지</span>}
           <button
             type="button"
             onClick={() => onRefresh(n.name)}
-            title="이 노드만 새로고침"
-            aria-label="이 노드만 새로고침"
-            className="text-muted-foreground hover:text-primary"
+            title="이 노드만 다시 집계"
+            aria-label={`${n.name} 다시 집계`}
+            className="p-0.5 rounded-xl text-muted-foreground hover:text-primary"
           >
-            <RefreshCw className={`w-3 h-3 ${refreshing ? 'animate-spin' : ''}`} />
+            <RefreshCw className={`w-3 h-3 ${refreshing ? 'animate-spin' : ''}`} aria-hidden="true" />
           </button>
         </div>
       </div>
@@ -106,7 +124,7 @@ const NodeCard = memo(function NodeCard({ n, onRefresh, refreshing, onOpenDetail
       <div className="flex justify-between text-xs mt-1.5 tabular-nums">
         <span className={slackCls(n.cpuSlackM)}>{slackLabel(n.cpuSlackM)} {fmtCores(n.cpuSlackM)}</span>
         <span className={slackCls(n.memSlackB)}>{slackLabel(n.memSlackB)} {fmtGi(n.memSlackB)}</span>
-        <span className="text-muted-foreground">{n.podCount}p</span>
+        <span className="text-muted-foreground">Pod {n.podCount}</span>
       </div>
     </div>
   );
@@ -124,7 +142,7 @@ const NodeRowCells = memo(function NodeRowCells({ n, onRefresh, refreshing, onOp
           <button
             type="button"
             onClick={() => onOpenDetail(n.name)}
-            title={`${n.name} — 이 노드의 리소스(파드/워크로드) 할당·사용 상세 보기`}
+            title={`${n.name} — 이 노드의 리소스(Pod/워크로드) 할당·사용 상세 보기`}
             className="font-medium text-left hover:text-primary hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded"
           >
             {n.name}
@@ -132,15 +150,15 @@ const NodeRowCells = memo(function NodeRowCells({ n, onRefresh, refreshing, onOp
           <button
             type="button"
             onClick={() => onRefresh(n.name)}
-            title="이 노드만 새로고침"
-            aria-label="이 노드만 새로고침"
-            className="text-muted-foreground hover:text-primary shrink-0"
+            title="이 노드만 다시 집계"
+            aria-label={`${n.name} 다시 집계`}
+            className="p-0.5 rounded-xl text-muted-foreground hover:text-primary shrink-0"
           >
-            <RefreshCw className={`w-3 h-3 ${refreshing ? 'animate-spin' : ''}`} />
+            <RefreshCw className={`w-3 h-3 ${refreshing ? 'animate-spin' : ''}`} aria-hidden="true" />
           </button>
         </div>
         <div className="text-xs text-muted-foreground">
-          {n.roles.join(', ')}{n.unschedulable && <span className="text-status-warning"> · cordoned</span>}
+          {n.roles.join(', ')}{n.unschedulable && <span className="text-status-warning" title="cordon — 새 Pod 가 배치되지 않습니다"> · 스케줄 중지</span>}
         </div>
       </td>
       <td className={CELL}>
@@ -182,23 +200,36 @@ const GridList = forwardRef<HTMLDivElement, GridListProps & { context: GridCtx }
 );
 const GRID_COMPONENTS: GridComponents<GridCtx> = { List: GridList };
 
-export function NodesView({ clusterId, clusterName, onOpenDetail }: {
+export function NodesView({ clusterId, clusterName, onOpenDetail, problemsOnly, onProblemsOnly }: {
   clusterId: string; clusterName?: string; onOpenDetail: (t: AllocDetailTarget) => void;
+  /** 문제 노드만 보기 — 페이지(요약 스트립의 과할당 칩)에서도 켤 수 있도록 상위가 들고 있다. */
+  problemsOnly: boolean; onProblemsOnly: (v: boolean) => void;
 }) {
   const { data, isLoading, isError, error, refetch, isFetching } = useAllocNodes(clusterId);
   const refreshNode = useRefreshAllocNode(clusterId);
-  const [sort, setSort] = useState<SortState>({ key: 'cpuSlackM', dir: 'desc' });
-  const [viewStyle, setViewStyle] = useState<'table' | 'card'>('card');
+  const [sort, setSortState] = useState<SortState>(() => {
+    const id = readAllocPref('nodeSort', 'risk', SORT_IDS);
+    return (SORT_PRESETS.find((p) => p.id === id) ?? SORT_PRESETS[0]).sort;
+  });
+  const setSort = (next: SortState | ((p: SortState) => SortState)) => setSortState((p) => {
+    const s = typeof next === 'function' ? next(p) : next;
+    const id = presetOf(s);
+    if (id) writeAllocPref('nodeSort', id);
+    return s;
+  });
+  const [viewStyle, setViewStyleState] = useState<'table' | 'card'>(() => readAllocPref('nodeView', 'card', VIEW_STYLES));
+  const setViewStyle = (v: 'table' | 'card') => { setViewStyleState(v); writeAllocPref('nodeView', v); };
   const [colMode, setColMode] = useState<ColMode>('auto');
   const [q, setQ] = useState('');
   const onSort = (k: string) => setSort((p) => nextSort(p, k, k !== 'name'));
   const computing = data?.status === 'computing';
 
   const allItems = useMemo(() => data?.items ?? [], [data]);
+  const problemCount = useMemo(() => allItems.filter(isProblemNode).length, [allItems]);
   const filtered = useMemo(() => {
     const s = q.trim().toLowerCase();
-    return s ? allItems.filter((n) => n.name.toLowerCase().includes(s)) : allItems;
-  }, [allItems, q]);
+    return allItems.filter((n) => (!s || n.name.toLowerCase().includes(s)) && (!problemsOnly || isProblemNode(n)));
+  }, [allItems, q, problemsOnly]);
   // 집계 중에는 순서를 고정(frozen) — 부분 결과가 들어올 때마다 카드가 자리를 바꾸지 않게.
   const rows = useTableSort(filtered, NODE_ACCESSORS, sort, computing);
 
@@ -232,12 +263,12 @@ export function NodesView({ clusterId, clusterName, onOpenDetail }: {
   const virtual = rows.length > VIRTUALIZE_AT;
   const headerRow = (
     <tr className="bg-muted/20 text-left text-xs text-muted-foreground">
-      <SortableTh label="Node" k="name" sort={sort} onSort={onSort} />
+      <SortableTh label="노드" k="name" sort={sort} onSort={onSort} />
       <SortableTh label="CPU (req)" k="cpuReqM" sort={sort} onSort={onSort} title="CPU 요청량 기준 정렬" />
       <SortableTh label="MEM (req)" k="memReqB" sort={sort} onSort={onSort} title="MEM 요청량 기준 정렬" />
-      <SortableTh label="CPU 가용 / 할당" k="cpuSlackM" sort={sort} onSort={onSort} align="right" title="할당 가용(slack=alloc−req) 기준 정렬" />
-      <SortableTh label="MEM 가용 / 할당" k="memSlackB" sort={sort} onSort={onSort} align="right" title="할당 가용(slack=alloc−req) 기준 정렬" />
-      <SortableTh label="Pods" k="podCount" sort={sort} onSort={onSort} align="right" />
+      <SortableTh label="CPU 가용 / 할당" k="cpuSlackM" sort={sort} onSort={onSort} align="right" title="할당 가용(allocatable − request) 기준 정렬" />
+      <SortableTh label="MEM 가용 / 할당" k="memSlackB" sort={sort} onSort={onSort} align="right" title="할당 가용(allocatable − request) 기준 정렬" />
+      <SortableTh label="Pod" k="podCount" sort={sort} onSort={onSort} align="right" />
     </tr>
   );
 
@@ -246,7 +277,7 @@ export function NodesView({ clusterId, clusterName, onOpenDetail }: {
   if (isLoading && !data) {
     body = <div className="p-3"><Skeleton className="h-40 w-full" /></div>;
   } else if (isError && !data) {
-    body = <div className="p-3"><EmptyState title="조회 실패" description={(error as Error)?.message ?? '노드 자원을 불러오지 못했습니다.'} /></div>;
+    body = <div className="p-3"><ErrorState error={error} title="노드 자원을 불러오지 못했습니다" onRetry={() => void refetch()} /></div>;
   } else if (computing && !allItems.length) {
     body = (
       <div className="p-3">
@@ -256,9 +287,15 @@ export function NodesView({ clusterId, clusterName, onOpenDetail }: {
       </div>
     );
   } else if (!allItems.length) {
-    body = <div className="p-3"><EmptyState title="노드 없음" description="표시할 노드가 없습니다." /></div>;
+    body = <div className="p-3"><EmptyState title="노드 없음" description="집계된 노드가 없습니다. 상단의 '다시 집계'로 집계를 시작하거나 클러스터 연결(kubeconfig)을 확인하세요." /></div>;
   } else if (!rows.length) {
-    body = <div className="p-6"><EmptyState title="검색 결과 없음" description={`'${q}' 와 일치하는 노드가 없습니다.`} /></div>;
+    body = problemsOnly && !q.trim() ? (
+      <div className="p-6"><EmptyState title="문제 노드 없음" description="과할당·사용 초과·limit 근접·스케줄 중지 노드가 없습니다."
+        action={{ label: '전체 노드 보기', onClick: () => onProblemsOnly(false), variant: 'secondary' }} /></div>
+    ) : (
+      <div className="p-6"><EmptyState title="검색 결과 없음" description={`'${q}' 와 일치하는 노드가 없습니다${problemsOnly ? '(문제 노드만 보는 중)' : ''}.`}
+        action={{ label: '조건 지우기', onClick: () => { setQ(''); onProblemsOnly(false); }, variant: 'secondary' }} /></div>
+    );
   } else if (viewStyle === 'card') {
     body = virtual ? (
       <VirtuosoGrid
@@ -309,42 +346,41 @@ export function NodesView({ clusterId, clusterName, onOpenDetail }: {
       title="노드별 자원"
       bodyPadding="p-0"
       actions={<>
-        {/* 뷰 전환 토글 */}
-        <div className="inline-flex rounded-lg border border-border bg-muted/20 p-0.5">
-          <button
-            type="button"
-            onClick={() => setViewStyle('table')}
-            title="테이블 뷰"
-            aria-label="테이블 뷰"
-            className={`p-1.5 rounded-md ${viewStyle === 'table' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground'}`}
-          >
-            <List className="w-3.5 h-3.5" />
-          </button>
-          <button
-            type="button"
-            onClick={() => setViewStyle('card')}
-            title="카드 뷰"
-            aria-label="카드 뷰"
-            className={`p-1.5 rounded-md ${viewStyle === 'card' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground'}`}
-          >
-            <LayoutGrid className="w-3.5 h-3.5" />
-          </button>
-        </div>
+        <SegTabs<'table' | 'card'> label="보기 방식" value={viewStyle} onChange={setViewStyle}
+          options={[
+            ['table', <><List className="w-3.5 h-3.5" aria-hidden="true" /><span>표</span></>],
+            ['card', <><LayoutGrid className="w-3.5 h-3.5" aria-hidden="true" /><span>카드</span></>],
+          ]} />
         <CsvButton onClick={exportCsv} disabled={!rows.length} />
-        <button type="button" onClick={() => refetch()} className="text-sm text-muted-foreground hover:text-foreground flex items-center gap-1">
-          <RefreshCw className={`w-3.5 h-3.5 ${isFetching ? 'animate-spin' : ''}`} /> 새로고침
+        <button type="button" onClick={() => refetch()} title="저장된 집계 결과를 다시 불러옵니다(클러스터를 다시 집계하지 않음)"
+          className="text-sm text-muted-foreground hover:text-foreground flex items-center gap-1">
+          <RefreshCw className={`w-3.5 h-3.5 ${isFetching ? 'animate-spin' : ''}`} aria-hidden="true" /> 다시 읽기
         </button>
       </>}
     >
       <div className="flex items-center gap-2 flex-wrap px-3 py-2 border-b border-border">
         <SearchInput value={q} onChange={setQ} placeholder="노드 찾기" />
+        <label className="flex items-center gap-1 text-xs text-muted-foreground">
+          정렬
+          <select value={presetOf(sort)} onChange={(e) => { const p = SORT_PRESETS.find((x) => x.id === e.target.value); if (p) setSort(p.sort); }}
+            className="text-sm px-1.5 py-0.5 rounded-xl border border-border bg-card text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+            title="노드 정렬 기준">
+            {!presetOf(sort) && <option value="">열 머리글 기준</option>}
+            {SORT_PRESETS.map((p) => <option key={p.id} value={p.id}>{p.label}</option>)}
+          </select>
+        </label>
+        <label className={`flex items-center gap-1 text-xs ${problemCount > 0 ? 'text-foreground' : 'text-muted-foreground'}`}
+          title="과할당(여유 음수) · 실사용이 request 105% 초과 · limit 90% 이상 · 스케줄 중지(cordon)">
+          <input type="checkbox" checked={problemsOnly} onChange={(e) => onProblemsOnly(e.target.checked)} className="accent-primary" />
+          문제 노드만 <span className="tabular-nums">({problemCount})</span>
+        </label>
         <span className="text-xs text-muted-foreground">노드명을 클릭하면 그 노드의 리소스 상세가 열립니다</span>
         {viewStyle === 'table' && (
           <span className="text-xs text-muted-foreground inline-flex items-center">
             열 머리글을 클릭해 정렬
             <StatTooltip>
               <p><b>R</b> = 사용 ÷ 요청(request) 비율 · <b>L</b> = 사용 ÷ 제한(limit) 비율</p>
-              <p className="text-muted-foreground mt-1">노드/네임스페이스/워크로드/파드 표 전반에서 공통으로 쓰이는 표기입니다.</p>
+              <p className="text-muted-foreground mt-1">노드/네임스페이스/워크로드/Pod 표 전반에서 공통으로 쓰이는 표기입니다.</p>
             </StatTooltip>
           </span>
         )}
@@ -355,7 +391,7 @@ export function NodesView({ clusterId, clusterName, onOpenDetail }: {
               <select
                 value={String(colMode)}
                 onChange={(e) => setColMode(e.target.value === 'auto' ? 'auto' : (Number(e.target.value) as ColMode))}
-                className="text-sm px-1.5 py-0.5 rounded-lg border border-border bg-card text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+                className="text-sm px-1.5 py-0.5 rounded-xl border border-border bg-card text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
                 title="한 줄에 표시할 카드 열 수"
               >
                 {COL_OPTIONS.map((o) => <option key={o.label} value={String(o.value)}>{o.label}</option>)}

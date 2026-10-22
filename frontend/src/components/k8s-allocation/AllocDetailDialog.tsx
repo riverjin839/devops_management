@@ -10,7 +10,7 @@ import { Box, Layers, RefreshCw, Server } from 'lucide-react';
 import {
   Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle,
 } from '@/components/ui/dialog';
-import { EmptyState, Skeleton } from '@/components/common';
+import { EmptyState, ErrorState, Skeleton } from '@/components/common';
 import {
   useAllocNamespaces, useAllocNodePods, useAllocNodes, useAllocWorkloads,
 } from '@/hooks/useK8sAllocation';
@@ -86,7 +86,7 @@ function NodeDetail({ clusterId, node, clusterName }: {
       {row && <NodeSummary n={row} />}
       <div className="grid gap-2 grid-cols-2 sm:grid-cols-4">
         <Stat label="워크로드" value={fmtN(workloads.length)} icon={<Box className="w-3 h-3" />} />
-        <Stat label="파드" value={fmtN(pods.length)} icon={<Layers className="w-3 h-3" />}
+        <Stat label="Pod" value={fmtN(pods.length)} icon={<Layers className="w-3 h-3" />}
           sub={row ? `노드 집계 ${fmtN(row.podCount)}개` : undefined} />
         <Stat label="네임스페이스" value={fmtN(data?.namespaceCount ?? new Set(pods.map((p) => p.namespace)).size)} />
         <Stat label="역할" value={row?.roles.join(', ') || '—'}
@@ -94,8 +94,8 @@ function NodeDetail({ clusterId, node, clusterName }: {
       </div>
 
       <div className="flex items-center gap-2 flex-wrap">
-        <SearchInput value={q} onChange={setQ} placeholder="파드/워크로드/NS 찾기" width="w-56" />
-        <span className="text-xs text-muted-foreground">워크로드 행을 펼치면 파드·컨테이너별 req/limit/사용량이 보입니다</span>
+        <SearchInput value={q} onChange={setQ} placeholder="Pod/워크로드/NS 찾기" width="w-56" />
+        <span className="text-xs text-muted-foreground">워크로드 행을 펼치면 Pod·컨테이너별 req/limit/사용량이 보입니다</span>
         <div className="ml-auto flex items-center gap-3">
           <CsvButton
             onClick={() => exportWorkloadCsv(workloads, `k8s-node-detail-${csvCluster(clusterName)}-${node}-${today()}.csv`)}
@@ -103,7 +103,7 @@ function NodeDetail({ clusterId, node, clusterName }: {
           />
           <button type="button" onClick={() => refetch()}
             className="text-sm text-muted-foreground hover:text-foreground flex items-center gap-1">
-            <RefreshCw className={`w-3.5 h-3.5 ${isFetching ? 'animate-spin' : ''}`} /> 새로고침
+            <RefreshCw className={`w-3.5 h-3.5 ${isFetching ? 'animate-spin' : ''}`} aria-hidden="true" /> 다시 읽기
           </button>
         </div>
       </div>
@@ -111,10 +111,10 @@ function NodeDetail({ clusterId, node, clusterName }: {
       {isLoading && !data ? (
         <Skeleton className="h-40 w-full" />
       ) : isError && !data ? (
-        <EmptyState title="조회 실패" description={(error as Error)?.message ?? '노드의 파드를 불러오지 못했습니다.'} />
+        <ErrorState error={error} title="노드의 Pod 를 불러오지 못했습니다" onRetry={() => void refetch()} />
       ) : !pods.length ? (
-        <EmptyState title={q.trim() ? '검색 결과 없음' : '파드 없음'}
-          description={q.trim() ? `'${q}' 와 일치하는 리소스가 없습니다.` : '이 노드에 스케줄된 활성 파드가 없습니다.'} />
+        <EmptyState title={q.trim() ? '검색 결과 없음' : 'Pod 없음'}
+          description={q.trim() ? `'${q}' 와 일치하는 리소스가 없습니다.` : '이 노드에 스케줄된 활성 Pod가 없습니다.'} />
       ) : (
         <NodeWorkloadsDrill pods={pods} />
       )}
@@ -124,7 +124,7 @@ function NodeDetail({ clusterId, node, clusterName }: {
       )}
       {data?.ownerApprox && (
         <div className="text-sm text-muted-foreground">
-          ※ 이 노드엔 네임스페이스가 {fmtN(data.namespaceCount)}개라 ReplicaSet 조회를 생략하고 Deployment 귀속을 파드 이름으로 추정했습니다.
+          이 노드엔 네임스페이스가 {fmtN(data.namespaceCount)}개라 ReplicaSet 조회를 생략하고 Deployment 귀속을 Pod 이름으로 추정했습니다.
         </div>
       )}
     </div>
@@ -150,20 +150,20 @@ function NamespaceDetail({ clusterId, namespace, clusterName }: {
     <div className="space-y-3">
       {row && (
         <div className="grid gap-2 grid-cols-2 sm:grid-cols-5">
-          <Stat label="파드" value={fmtN(row.podCount)} icon={<Layers className="w-3 h-3" />} />
+          <Stat label="Pod" value={fmtN(row.podCount)} icon={<Layers className="w-3 h-3" />} />
           <Stat label="워크로드" value={fmtN(row.workloadCount)} icon={<Box className="w-3 h-3" />} />
           <Stat label="CPU req / use" value={`${row.cpuReqDisplay} / ${row.cpuUsageDisplay ?? '—'}`}
             sub={`limit ${fmtCores(row.cpuLimM)} · 사용률(req) ${utilPct(row.cpuUsageM, row.cpuReqM) ?? '—'}%`} />
           <Stat label="MEM req / use" value={`${row.memReqDisplay} / ${row.memUsageDisplay ?? '—'}`}
             sub={`limit ${fmtGi(row.memLimB)} · 사용률(req) ${utilPct(row.memUsageB, row.memReqB) ?? '—'}%`} />
-          <Stat label="req 미설정 파드" value={fmtN(row.noRequestPods)} warn={row.noRequestPods > 0}
-            help="request 가 없는 파드는 스케줄러가 자원을 계산하지 못해 노드 과밀·OOM 의 원인이 된다." />
+          <Stat label="req 미설정 Pod" value={fmtN(row.noRequestPods)} warn={row.noRequestPods > 0}
+            help="request 가 없는 Pod는 스케줄러가 자원을 계산하지 못해 노드 과밀·OOM 의 원인이 된다." />
         </div>
       )}
 
       <div className="flex items-center gap-2 flex-wrap">
         <SearchInput value={q} onChange={setQ} placeholder="워크로드 찾기" width="w-56" />
-        <span className="text-xs text-muted-foreground">워크로드 행을 펼치면 파드·컨테이너별 req/limit/사용량이 보입니다</span>
+        <span className="text-xs text-muted-foreground">워크로드 행을 펼치면 Pod·컨테이너별 req/limit/사용량이 보입니다</span>
         <div className="ml-auto flex items-center gap-3">
           <CsvButton
             onClick={() => exportWorkloadCsv(rows, `k8s-ns-detail-${csvCluster(clusterName)}-${namespace}-${today()}.csv`)}
@@ -171,7 +171,7 @@ function NamespaceDetail({ clusterId, namespace, clusterName }: {
           />
           <button type="button" onClick={() => refetch()}
             className="text-sm text-muted-foreground hover:text-foreground flex items-center gap-1">
-            <RefreshCw className={`w-3.5 h-3.5 ${isFetching ? 'animate-spin' : ''}`} /> 새로고침
+            <RefreshCw className={`w-3.5 h-3.5 ${isFetching ? 'animate-spin' : ''}`} aria-hidden="true" /> 다시 읽기
           </button>
         </div>
       </div>
@@ -179,7 +179,7 @@ function NamespaceDetail({ clusterId, namespace, clusterName }: {
       {isLoading && !data ? (
         <Skeleton className="h-40 w-full" />
       ) : isError && !data ? (
-        <EmptyState title="조회 실패" description={(error as Error)?.message ?? '워크로드를 불러오지 못했습니다.'} />
+        <ErrorState error={error} title="워크로드를 불러오지 못했습니다" onRetry={() => void refetch()} />
       ) : !rows.length ? (
         <EmptyState title={q.trim() ? '검색 결과 없음' : '워크로드 없음'}
           description={q.trim() ? `'${q}' 와 일치하는 워크로드가 없습니다.` : '이 네임스페이스에 활성 워크로드가 없습니다.'} />

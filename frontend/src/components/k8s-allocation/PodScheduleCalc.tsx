@@ -42,17 +42,17 @@ export function PodScheduleCalc({ clusterId }: { clusterId: string }) {
   return (
     <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm border-t border-border pt-2">
       <span className="flex items-center gap-1.5 text-muted-foreground">
-        <Cpu className="w-4 h-4 text-status-info" /> 파드 스케줄 가능 수:
+        <Cpu className="w-4 h-4 text-muted-foreground" aria-hidden="true" /> Pod 스케줄 가능 수:
       </span>
       <label className="flex items-center gap-1 text-xs text-muted-foreground">
         CPU
         <input type="number" min="0" step="0.1" value={cpu} onChange={(e) => setCpu(e.target.value)}
-          className="w-16 px-1.5 py-0.5 rounded-lg border border-border bg-card text-foreground tabular-nums focus:outline-none focus:ring-1 focus:ring-primary" /> 코어
+          className="w-16 px-1.5 py-0.5 rounded-xl border border-border bg-card text-foreground tabular-nums focus:outline-none focus:ring-1 focus:ring-primary" /> 코어
       </label>
       <label className="flex items-center gap-1 text-xs text-muted-foreground">
         MEM
         <input type="number" min="0" step="0.5" value={mem} onChange={(e) => setMem(e.target.value)}
-          className="w-16 px-1.5 py-0.5 rounded-lg border border-border bg-card text-foreground tabular-nums focus:outline-none focus:ring-1 focus:ring-primary" /> Gi
+          className="w-16 px-1.5 py-0.5 rounded-xl border border-border bg-card text-foreground tabular-nums focus:outline-none focus:ring-1 focus:ring-primary" /> Gi
       </label>
       {isError ? (
         <span className="inline-flex items-center gap-1 text-xs text-status-warning">

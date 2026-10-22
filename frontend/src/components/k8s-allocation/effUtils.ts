@@ -1,5 +1,6 @@
 // 효율화 탭 공용 상수/헬퍼 — 컴포넌트가 아닌 export 는 react-refresh 규칙상 별도 파일.
-import type { EffRun } from '@/types';
+import type { RunLogEntry } from '@/hooks/useRunLog';
+import type { AllocNamespacesResponse, EffRun } from '@/types';
 
 export type EffRange = '24h' | '7d' | '30d';
 export const RANGE_OPTIONS: EffRange[] = ['24h', '7d', '30d'];
@@ -16,8 +17,12 @@ export const RUN_TYPE_LABEL: Record<EffRun['runType'], string> = {
   collect: '수집', recommend: '추천 생성', rightsize_apply: 'request 적용', quota_adjust: 'Quota 조정', custom_scale: 'CR 스케일',
 };
 
+export const TRIGGER_LABEL: Record<EffRun['trigger'], string> = {
+  manual: '수동', auto: '자동', rollback: '롤백', schedule: '스케줄',
+};
+
 export function fmtTs(iso: string | null | undefined): string {
-  if (!iso) return '-';
+  if (!iso) return '—';
   const d = new Date(iso.endsWith('Z') || iso.includes('+') ? iso : iso + 'Z');
   if (isNaN(d.getTime())) return iso;
   const pad = (n: number) => String(n).padStart(2, '0');
@@ -33,6 +38,38 @@ export function readSummaryDetailPref(): boolean {
 }
 export function writeSummaryDetailPref(v: boolean) {
   try { localStorage.setItem(SUMMARY_DETAIL_KEY, v ? '1' : '0'); } catch { /* ignore */ }
+}
+
+// ── 화면 보기 설정(노드 보기 방식·정렬 등) — 새로고침 후에도 사용자가 고른 대로 ─────────
+/** 허용 목록 안의 값만 돌려준다 — 예전 값·손상된 값은 기본값으로. */
+export function readAllocPref<T extends string>(key: string, fallback: T, allowed: readonly T[]): T {
+  try {
+    const v = localStorage.getItem(`pep.k8s-allocation.${key}`);
+    return v != null && (allowed as readonly string[]).includes(v) ? (v as T) : fallback;
+  } catch { return fallback; }
+}
+export function writeAllocPref(key: string, v: string) {
+  try { localStorage.setItem(`pep.k8s-allocation.${key}`, v); } catch { /* ignore */ }
+}
+
+// ── "다시 집계" 실행 로그 줄 ─────────────────────────────────────────────────────
+/** 집계 스냅샷 → 실행 로그 줄. `prev` 와 비교해 새로 생긴 변화(단계 전환·진행·완료 요약·실패 NS)만 돌려준다. */
+export function allocRunLines(s: AllocNamespacesResponse, prev?: AllocNamespacesResponse): RunLogEntry[] {
+  const out: RunLogEntry[] = [];
+  const phase = allocPhaseText(s.phase, s.processed);
+  if (s.status === 'computing') {
+    if (phase && (!prev || prev.phase !== s.phase)) out.push(['info', phase]);
+    else if (!prev || prev.processed !== s.processed) out.push(['info', `Pod ${(s.processed ?? 0).toLocaleString()}개 처리${s.total ? ` / ${s.total.toLocaleString()}` : ''}`]);
+    return out;
+  }
+  if (s.status === 'error') { out.push(['error', '집계 실패 — 클러스터 연결(kubeconfig)·apiserver 상태를 확인하세요']); return out; }
+  const sm = s.summary;
+  if (sm) out.push(['info', `완료 — 노드 ${sm.nodeCount} · 네임스페이스 ${sm.namespaceCount} · Pod ${sm.podCount}`]);
+  if (s.podUsageSkipped) out.push(['warn', 'metrics-server 미가용 — 실사용량 없이 request 만 집계']);
+  const failed = s.failedNamespaces ?? [];
+  if (failed.length) out.push(['warn', `수집 실패·절단된 네임스페이스 ${failed.length}개 — ${failed.slice(0, 10).join(', ')}${failed.length > 10 ? ` 외 ${failed.length - 10}개` : ''}`]);
+  else if (s.partial) out.push(['warn', '일부만 집계된 잠정 결과 — 자동으로 다시 시도됩니다']);
+  return out;
 }
 
 /** epoch 초 → "n초/분/시간 전"(NS 롤링 갱신 데이터 나이 표시용). 값이 없으면 undefined. */

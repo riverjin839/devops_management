@@ -1,13 +1,13 @@
 // 네임스페이스 비효율 랭킹 — req vs 실사용 바 차트(간격이 클수록 낭비).
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
-  ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip as RechartsTooltip, CartesianGrid, Cell, Legend,
+  ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip as RechartsTooltip, CartesianGrid, Legend,
 } from 'recharts';
 import { MacCard } from '@/components/ui/MacCard';
-import { EmptyState, Skeleton, SnapshotProgressCard } from '@/components/common';
+import { EmptyState, ErrorState, Skeleton, SnapshotProgressCard } from '@/components/common';
 import { useAllocNamespaces } from '@/hooks/useK8sAllocation';
 import { fmtN } from './format';
-import { PageSizeSelect, Pager, SearchInput } from './primitives';
+import { PageSizeSelect, Pager, SearchInput, SegTabs } from './primitives';
 import { paginate } from './tableSort';
 import type { AllocDetailTarget } from './AllocDetailDialog';
 import { allocPhaseText } from './effUtils';
@@ -79,7 +79,7 @@ export function NsRankingView({ clusterId, onOpenDetail }: {
   let body: React.ReactNode;
   if (isError && !nsQ.data) {
     // 조회 실패를 "데이터 없음" 과 구분 — 안 그러면 502 가 빈 클러스터처럼 보인다.
-    body = <EmptyState title="조회 실패" description={(error as Error)?.message ?? '네임스페이스 자원을 불러오지 못했습니다.'} />;
+    body = <ErrorState error={error} title="네임스페이스 자원을 불러오지 못했습니다" onRetry={() => void nsQ.refetch()} />;
   } else if (computing && !(nsQ.data?.items?.length)) {
     body = (
       <SnapshotProgressCard processed={nsQ.data?.processed ?? 0} total={nsQ.data?.total ?? null}
@@ -89,7 +89,9 @@ export function NsRankingView({ clusterId, onOpenDetail }: {
   } else if (nsQ.isLoading && !nsQ.data) {
     body = <Skeleton className="h-64 w-full" />;
   } else if (!nsChart.length) {
-    body = <EmptyState title="데이터 없음" description={q.trim() ? `'${q}' 와 일치하는 네임스페이스가 없습니다.` : '표시할 네임스페이스가 없습니다.'} />;
+    body = q.trim()
+      ? <EmptyState title="검색 결과 없음" description={`'${q}' 와 일치하는 네임스페이스가 없습니다.`} action={{ label: '검색 지우기', onClick: () => setQ(''), variant: 'secondary' }} />
+      : <EmptyState title="네임스페이스 없음" description="이 클러스터에서 집계된 네임스페이스가 없습니다. 헤더의 새로고침으로 다시 집계하세요." />;
   } else {
     body = (
       <ResponsiveContainer width="100%" height={Math.max(280, chartRows * 32)}>
@@ -113,44 +115,48 @@ export function NsRankingView({ clusterId, onOpenDetail }: {
             contentStyle={{ fontSize: 13, borderRadius: 8, background: 'hsl(var(--card))', color: 'hsl(var(--foreground))', border: '1px solid hsl(var(--border))' }}
           />
           <Legend formatter={(v) => (v === 'req' ? 'request' : '실사용')} wrapperStyle={{ fontSize: 13 }} />
-          <Bar dataKey="req" name="req" fill="hsl(var(--chart-1))" radius={[0, 4, 4, 0]}>
-            {nsChart.map((d, i) => (
-              <Cell key={i} fill={d.use != null && d.req > 0 && d.use / d.req < 0.3 ? 'hsl(var(--status-warning))' : 'hsl(var(--chart-1))'} />
-            ))}
-          </Bar>
+          {/* 낭비는 막대 간격 자체가 보여준다 — 상태색(주황)으로 따로 칠하지 않는다(카테고리는 --chart-* 만). */}
+          <Bar dataKey="req" name="req" fill="hsl(var(--chart-1))" radius={[0, 4, 4, 0]} />
           <Bar dataKey="use" name="use" fill="hsl(var(--chart-2))" radius={[0, 4, 4, 0]} />
         </BarChart>
       </ResponsiveContainer>
     );
   }
+  // 차트 막대·축 라벨은 마우스 전용이다 — 키보드·스크린리더용으로 같은 NS 목록을 버튼으로 둔다(포커스하면 보인다).
+  const keyboardList = nsChart.length > 0 && !(isError && !nsQ.data) && (
+    <ul aria-label="네임스페이스 상세 열기" className="sr-only focus-within:not-sr-only focus-within:mt-2 focus-within:flex focus-within:flex-wrap focus-within:gap-1">
+      {nsChart.map((d) => (
+        <li key={d.namespace}>
+          <button type="button" onClick={() => onOpenDetail({ scope: 'namespace', name: d.namespace })}
+            className="text-xs px-2 py-0.5 rounded-xl border border-border bg-card hover:bg-secondary">
+            {d.namespace} 상세 (request {d.req}{unit} · 실사용 {d.use == null ? '—' : `${d.use}${unit}`})
+          </button>
+        </li>
+      ))}
+    </ul>
+  );
 
   return (
     <MacCard
       title="네임스페이스 비효율 랭킹"
       titleExtra={<span className="text-xs text-muted-foreground tabular-nums">{fmtN(nsRanked.length)}개</span>}
-      description="req vs 실사용 — 간격이 클수록 낭비"
+      description="request vs 실사용 — 간격이 클수록 낭비"
       bodyPadding="p-3"
-      actions={<>
-        <span className="text-sm text-muted-foreground">기준</span>
-        {(['cpu', 'mem'] as ChartMetric[]).map((m) => (
-          <button key={m} type="button" onClick={() => setMetric(m)}
-            className={`px-2.5 py-1 rounded-lg border text-sm ${metric === m ? 'border-primary text-primary' : 'border-border text-muted-foreground'}`}>
-            {m === 'cpu' ? 'CPU' : 'MEM'}
-          </button>
-        ))}
-      </>}
+      actions={<SegTabs<ChartMetric> label="랭킹 기준 자원" value={metric} onChange={setMetric}
+        options={[['cpu', 'CPU'], ['mem', 'MEM']]} />}
     >
       <div className="flex items-center gap-2 mb-2 flex-wrap">
         <SearchInput value={q} onChange={setQ} placeholder="네임스페이스 찾기" width="w-52" />
-        <span className="text-xs text-muted-foreground ml-1">비효율(req−use) 내림차순 · 막대/NS 명 클릭 시 상세</span>
+        <span className="text-xs text-muted-foreground ml-1">비효율(request − 실사용) 내림차순 · 막대/NS 명 클릭 시 상세</span>
         <div className="ml-auto flex items-center gap-3">
           <PageSizeSelect value={pageSize} onChange={setPageSize} options={RANK_PAGE_SIZES} />
           <Pager page={safePage} totalPages={totalPages} onPage={setPage} />
         </div>
       </div>
       <div className="min-h-64">{body}</div>
+      {keyboardList}
       {nsQ.data && !nsQ.data.metricsAvailable && (
-        <div className="text-sm text-muted-foreground mt-2">※ 사용량(use) 미가용 — request 기준만 표시됩니다.</div>
+        <div className="text-sm text-muted-foreground mt-2">실사용량을 가져오지 못해 request 기준만 표시합니다(metrics-server 확인).</div>
       )}
     </MacCard>
   );

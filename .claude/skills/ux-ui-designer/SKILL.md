@@ -16,6 +16,10 @@ description: UX/UI 디자인 운영 절차 — DESIGN.md 를 현행화하고 디
 3. **고도화 로드맵 (Roadmap)** — 테마 단위 중장기 과제 (접근성, 다크모드 정합성, 컴포넌트 통합 등)
 4. **점검 이력 (Audit Log)** — 감사 실행 기록 (일자/범위/신규·해결 건수/커밋)
 
+번호 섹션 앞의 **Colors / Typography / Components** 세 섹션(`design-spec-summary` 주석으로 표시)은 Impeccable
+스킬이 읽는 `DESIGN_SYSTEM.md` 요약이다 — 현행화·감사 때 삭제하거나 운영 섹션으로 합치지 않는다. 테마 추가·표준
+컴포넌트 교체·글꼴 변경처럼 `DESIGN_SYSTEM.md` 구조가 바뀐 감사에서만 함께 갱신한다(지표·백로그는 여기 넣지 않는다).
+
 ## 절차 A — 정기 감사 (현행화)
 
 1. 정량 스캔 (`frontend/src` 대상, 결과 건수를 현행화 섹션 지표 테이블에 기록):
