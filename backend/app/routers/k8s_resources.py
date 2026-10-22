@@ -1371,28 +1371,160 @@ def list_crds(cluster_id: UUID, db: Session = Depends(get_db)):
         result = ext.list_custom_resource_definition(limit=_LIST_LIMIT)
     except Exception as e:  # noqa: BLE001
         raise HTTPException(status_code=502, detail=f"CRD 조회 실패: {str(e)[:200]}")
-    items = []
-    for crd in (result.items or []):
-        spec = crd.spec
-        served = [v.name for v in (spec.versions or []) if getattr(v, "served", False)]
-        version = served[0] if served else (spec.versions[0].name if spec.versions else "")
-        try:
-            printer_columns = _crd_printer_columns(spec, version)
-        except Exception:  # noqa: BLE001
-            printer_columns = []
-        items.append({
-            "name": crd.metadata.name,
-            "group": spec.group,
-            "kind": spec.names.kind,
-            "plural": spec.names.plural,
-            "scope": spec.scope,  # Namespaced | Cluster
-            "versions": served,
-            "version": version,
-            "age_seconds": _age_seconds(crd.metadata),
-            "printer_columns": printer_columns,
-        })
+    items = [_crd_info(crd) for crd in (result.items or [])]
     items.sort(key=lambda x: (x["group"] or "", x["kind"]))
     return {"count": len(items), "items": items}
+
+
+def _crd_info(crd) -> dict:
+    """CRD 1건 → 프론트 K8sCrdInfo 형태(group/version/plural/kind/scope + printer columns)."""
+    spec = crd.spec
+    served = [v.name for v in (spec.versions or []) if getattr(v, "served", False)]
+    version = served[0] if served else (spec.versions[0].name if spec.versions else "")
+    try:
+        printer_columns = _crd_printer_columns(spec, version)
+    except Exception:  # noqa: BLE001
+        printer_columns = []
+    return {
+        "name": crd.metadata.name,
+        "group": spec.group,
+        "kind": spec.names.kind,
+        "plural": spec.names.plural,
+        "scope": spec.scope,  # Namespaced | Cluster
+        "versions": served,
+        "version": version,
+        "age_seconds": _age_seconds(crd.metadata),
+        "printer_columns": printer_columns,
+    }
+
+
+# ── 네임스페이스 대시보드 보강 — 종류별 목록 API 로는 얻을 수 없는 "이 NS 기준" 묶음 ─────────
+_NS_CR_PROBE_TIMEOUT = 8.0   # CRD 1종 프로브 read timeout(초) — limit=1 이라 정상이면 수십 ms
+_NS_CR_BUDGET = 15.0         # 전체 응답 예산(초) — 넘긴 프로브는 "확인 못 함"으로 응답
+_NS_CR_WORKERS = 6
+
+
+def _probe_ns_custom_objects(co, info: dict, namespace: str, timeout: float) -> dict:
+    """namespaced CRD 1종을 이 NS 에서 **limit=1** 로 LIST — 존재 여부 + remainingItemCount 개수."""
+    try:
+        res = co.list_namespaced_custom_object(
+            info["group"], info["version"], namespace, info["plural"],
+            limit=1, _request_timeout=(3.05, timeout),
+        )
+    except ApiException as e:
+        return {"ok": False, "status": e.status}
+    except Exception:  # noqa: BLE001
+        return {"ok": False, "status": None}
+    items = res.get("items") or []
+    meta = res.get("metadata") or {}
+    more = bool(meta.get("continue"))
+    remaining = meta.get("remainingItemCount")
+    if not more:
+        count: Optional[int] = len(items)
+    elif remaining is not None:
+        count = len(items) + int(remaining)
+    else:
+        count = None
+    return {"ok": True, "present": bool(items) or more, "count": count}
+
+
+@router.get("/{cluster_id}/namespaces/{namespace}/custom-resources")
+def list_namespace_custom_resources(
+    cluster_id: UUID,
+    namespace: str,
+    refresh: bool = False,
+    db: Session = Depends(get_db),
+):
+    """이 네임스페이스에 오브젝트가 1개 이상 있는 namespaced CRD 와 개수 (NS 대시보드 인벤토리).
+
+    CRD 마다 `limit=1` LIST 1회(본문 대량 전송 없음)를 병렬로 돌리고, 전체 예산을 넘긴 프로브는
+    기다리지 않는다(`unknown` 에 집계). 권한 없음(403) 등 실패는 `errors` 로 센다. 결과는 서버 목록
+    캐시(SWR)를 거친다 — 쓰기가 있으면 다른 목록과 함께 자동 무효화된다.
+    """
+    cluster = _require_cluster(cluster_id, db)
+    client = _api_client(cluster)
+
+    def _load() -> dict:
+        ext = k8s_client.ApiextensionsV1Api(client)
+        crds = ext.list_custom_resource_definition(limit=_LIST_LIMIT, _request_timeout=_LIST_TIMEOUT)
+        infos = [i for i in (_crd_info(c) for c in (crds.items or [])) if i["scope"] == "Namespaced" and i["version"]]
+        co = k8s_client.CustomObjectsApi(client)
+        items: list[dict] = []
+        errors = unknown = 0
+        deadline = time.monotonic() + _NS_CR_BUDGET
+        ex = ThreadPoolExecutor(max_workers=_NS_CR_WORKERS, thread_name_prefix="ns-cr")
+        try:
+            futs = [(i, ex.submit(_probe_ns_custom_objects, co, i, namespace, _NS_CR_PROBE_TIMEOUT)) for i in infos]
+            for info, fut in futs:
+                try:
+                    r = fut.result(timeout=max(0.05, deadline - time.monotonic()))
+                except Exception:  # noqa: BLE001 — 예산 초과
+                    unknown += 1
+                    continue
+                if not r["ok"]:
+                    errors += 1
+                elif r["present"]:
+                    items.append({**info, "count": r["count"]})
+        finally:
+            ex.shutdown(wait=False, cancel_futures=True)
+        items.sort(key=lambda x: (x["group"] or "", x["kind"]))
+        return {"namespace": namespace, "checked": len(infos), "errors": errors, "unknown": unknown,
+                "count": len(items), "items": items}
+
+    try:
+        data, meta = _list_cache.get((cache_group(client, cluster_id), "ns-cr", namespace), _load, refresh=refresh)
+    except Exception as e:  # noqa: BLE001
+        raise _list_http_error("커스텀 리소스", e)
+    return {**data, "cache": meta["cache"], "cache_age_seconds": meta["age"]}
+
+
+@router.get("/{cluster_id}/namespaces/{namespace}/cluster-role-bindings", response_model=ResourceListResponse)
+def list_namespace_cluster_role_bindings(
+    cluster_id: UUID,
+    namespace: str,
+    refresh: bool = False,
+    db: Session = Depends(get_db),
+):
+    """subject 중 하나라도 이 네임스페이스(ServiceAccount 등)를 가리키는 ClusterRoleBinding.
+
+    RoleBinding 은 NS 안에 있어 종류별 목록으로 보이지만, 이 NS 의 ServiceAccount 에 클러스터 전역
+    권한을 주는 ClusterRoleBinding 은 cluster-scoped 라 NS 필터로는 안 잡힌다 — 여기서 골라 준다.
+    목록은 watch cache(`resource_version=0`)로 읽고 서버 목록 캐시를 거친다.
+    """
+    cluster = _require_cluster(cluster_id, db)
+    client = _api_client(cluster)
+
+    def _load() -> dict:
+        rbac = k8s_client.RbacAuthorizationV1Api(client)
+        res = raw_call(rbac.list_cluster_role_binding, timeout=_LIST_TIMEOUT, resource_version="0")
+        rows: list[dict] = []
+        for o in (res.items or []):
+            subs = [s for s in (o.subjects or []) if getattr(s, "namespace", None) == namespace]
+            if not subs:
+                continue
+            rows.append(ResourceRow(
+                name=o.metadata.name,
+                namespace=None,
+                summary=f"→ {o.role_ref.kind}/{o.role_ref.name}",
+                cols={
+                    "role": f"{o.role_ref.kind}/{o.role_ref.name}",
+                    "subjects": ", ".join(f"{s.kind}/{s.name}" for s in subs),
+                },
+                age_seconds=_age_seconds(o.metadata),
+            ).model_dump())
+        rows.sort(key=lambda r: r["name"])
+        truncated = bool(res.metadata._continue) if res.metadata else False
+        return {"rows": rows, "truncated": truncated}
+
+    try:
+        data, meta = _list_cache.get((cache_group(client, cluster_id), "ns-crb", namespace), _load, refresh=refresh)
+    except Exception as e:  # noqa: BLE001
+        raise _list_http_error("ClusterRoleBinding", e)
+    columns = [ColumnDef(key="role", label="Role"), ColumnDef(key="subjects", label="이 NS 의 Subjects")]
+    rows = data["rows"]
+    return ResourceListResponse(kind="clusterrolebindings", columns=columns, count=len(rows),
+                                truncated=data["truncated"], items=rows,
+                                cache=meta["cache"], cache_age_seconds=meta["age"])
 
 
 @router.get("/{cluster_id}/crds/{group}/{version}/{plural}")

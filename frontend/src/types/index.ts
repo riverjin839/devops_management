@@ -4241,6 +4241,23 @@ export interface K8sCrdListResponse {
   count: number;
   items: K8sCrdInfo[];
 }
+/** NS 대시보드 — 이 네임스페이스에 오브젝트가 있는 namespaced CRD (count: remainingItemCount 기반, 모르면 null). */
+export interface K8sNsCustomResource extends K8sCrdInfo {
+  count: number | null;
+}
+export interface K8sNsCustomResourcesResponse {
+  namespace: string;
+  /** 프로브한 namespaced CRD 수 */
+  checked: number;
+  /** 권한 없음(403) 등으로 확인 못 한 CRD 수 */
+  errors: number;
+  /** 응답 예산 초과로 확인 못 한 CRD 수 */
+  unknown: number;
+  count: number;
+  items: K8sNsCustomResource[];
+  cache?: K8sListCacheState | null;
+  cacheAgeSeconds?: number | null;
+}
 export interface HelmRelease {
   name: string;
   namespace: string;
