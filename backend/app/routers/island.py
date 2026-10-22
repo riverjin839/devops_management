@@ -7,6 +7,7 @@
 양쪽에서 `_normalize_panels()` 로 방어적으로 정규화한다 (terminal_appearance.py 와 같은 사상).
 """
 
+from datetime import datetime, timezone
 from uuid import uuid4
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -28,6 +29,9 @@ from app.schemas.island import (
 router = APIRouter(prefix="/islands", tags=["islands"])
 
 VALID_LAYOUT_MODES = {"tabs", "sidebar"}
+
+# PUT 의 expected_updated_at 이 현재 값과 다를 때 — 다른 기기·탭이 먼저 저장했다.
+CONFLICT_DETAIL = "다른 곳에서 바뀌었습니다. 새로고침하세요"
 
 
 def _normalize_panels(raw) -> list[dict]:
@@ -84,9 +88,19 @@ def _to_response(island: Island) -> IslandResponse:
     )
 
 
-def _get_owned(db: Session, island_id: str, user: User) -> Island:
-    """쓰기용 조회 — 소유자가 아니면 403."""
-    island = db.query(Island).filter(Island.id == island_id).first()
+def _as_naive_utc(value: datetime) -> datetime:
+    """DB 컬럼은 naive UTC(`datetime.utcnow`) — 클라이언트가 tz 를 붙여 보내도 같은 기준으로 비교한다."""
+    if value.tzinfo is not None:
+        value = value.astimezone(timezone.utc).replace(tzinfo=None)
+    return value
+
+
+def _get_owned(db: Session, island_id: str, user: User, *, for_update: bool = False) -> Island:
+    """쓰기용 조회 — 소유자가 아니면 403. `for_update` 면 행 잠금(버전 확인~커밋 사이 경합 차단)."""
+    query = db.query(Island).filter(Island.id == island_id)
+    if for_update:
+        query = query.with_for_update()
+    island = query.first()
     if not island:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Island not found")
     if island.owner_id != user.id:
@@ -163,12 +177,24 @@ def update_island(
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
-    island = _get_owned(db, island_id, user)
-    for key, value in payload.model_dump(exclude_unset=True).items():
+    """보낸 필드만 바꾼다. `expected_updated_at` 이 있으면 현재 버전과 비교해 다르면 409.
+
+    panels 는 배열 통째 교체라, 다른 기기의 저장을 모른 채 덮어쓰면 그쪽 변경이 사라진다(B-12).
+    """
+    island = _get_owned(db, island_id, user, for_update=True)
+    changes = payload.model_dump(exclude_unset=True)
+    expected = changes.pop("expected_updated_at", None)
+    if expected is not None and island.updated_at is not None:
+        if _as_naive_utc(expected) != _as_naive_utc(island.updated_at):
+            db.rollback()  # 행 잠금 해제
+            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=CONFLICT_DETAIL)
+    for key, value in changes.items():
         if key == "panels":
             value = _normalize_panels(value)
         setattr(island, key, value)
     island.owner_name = _owner_name(user)
+    # 값이 그대로여도 버전은 매 저장마다 올린다 — 클라이언트는 응답의 updated_at 을 다음 기대값으로 쓴다.
+    island.updated_at = datetime.utcnow()
     db.commit()
     db.refresh(island)
     return _to_response(island)
@@ -219,6 +245,18 @@ def clone_island(
     return _to_response(clone)
 
 
+def _set_sort_order(db: Session, island: Island, order: int) -> None:
+    """목록 순서만 바꾼다. updated_at(내용 버전)은 그대로 둬야 진행 중인 패널 저장이 409 로 튕기지 않는다.
+    ORM 대입은 `onupdate=datetime.utcnow` 가 끼어들어 버전을 올리므로, updated_at 을 자기 자신으로
+    명시한 UPDATE 문으로 보낸다(명시된 컬럼에는 onupdate 가 적용되지 않는다)."""
+    if island.sort_order == order:
+        return
+    db.query(Island).filter(Island.id == island.id).update(
+        {Island.sort_order: order, Island.updated_at: Island.updated_at},
+        synchronize_session=False,
+    )
+
+
 @router.post("/reorder", response_model=IslandListResponse)
 def reorder_islands(
     payload: IslandReorder,
@@ -233,11 +271,11 @@ def reorder_islands(
         island = by_id.pop(island_id, None)
         if island is None:
             continue
-        island.sort_order = order
+        _set_sort_order(db, island, order)
         order += 1
     # 재정렬 목록에 없던 것들은 기존 순서를 유지한 채 뒤에 붙인다.
     for island in sorted(by_id.values(), key=lambda i: (i.sort_order or 0, i.created_at)):
-        island.sort_order = order
+        _set_sort_order(db, island, order)
         order += 1
     db.commit()
     return list_islands(db=db, user=user)

@@ -7,7 +7,8 @@ import { useJiraImport, useJiraCredential, useJiraVerifyLinks, useJiraUnlink } f
 import { JiraConnectCard } from '@/components/settings/JiraConnectCard';
 import { jiraApi } from '@/services/api';
 import { useModalA11y } from '@/components/common/useModalA11y';
-import { ConfirmDialog, RunLogPanel, useToast } from '@/components/common';
+import { ConfirmDialog, RunLogPanel, TenantScopeSelect, useToast } from '@/components/common';
+import { useMyTenants } from '@/hooks/useTenants';
 import { useRunLog, runLogged, type RunLogEntry } from '@/hooks/useRunLog';
 import { useLogPref } from '@/hooks/useLogPref';
 import { formatApiError } from '@/lib/utils';
@@ -109,6 +110,12 @@ export function JiraImportModal({ open, onClose, defaultProjectKey }: JiraImport
   const [excelRows, setExcelRows] = useState<JiraExcelImportResult | null>(null);
   const [pasteText, setPasteText] = useState('');
   const [excelError, setExcelError] = useState<string | null>(null);
+  // 새 업무의 공유 범위 — 소속 테넌트가 1개면 그 테넌트, 0개면 전체 공유, 여럿이면 선택 필수
+  // (서버가 422 "공유 범위를 선택하세요" 로 거절한다, 15차 B-1).
+  const { data: myTenants = [] } = useMyTenants();
+  const [tenantChoice, setTenantChoice] = useState<string | null>(null);
+  const excelTenantId = tenantChoice ?? (myTenants.length === 1 ? myTenants[0].id : null);
+  const tenantMissing = myTenants.length > 1 && !excelTenantId;
 
   // 연결 점검 — Jira 에서 지워졌거나 안 보이는 이슈에 붙어 있는 죽은 링크를 찾아 정리한다.
   const verifyMut = useJiraVerifyLinks();
@@ -297,7 +304,7 @@ export function JiraImportModal({ open, onClose, defaultProjectKey }: JiraImport
     const r = await runLogged(runLog, {
       title: '업무 관리에 저장',
       first: `Excel·붙여넣기 ${rows.length}행 업무 관리 저장 요청`,
-      fn: async () => (await jiraApi.importSaveToBoard(rows)).data,
+      fn: async () => (await jiraApi.importSaveToBoard(rows, excelTenantId)).data,
       summarize: importResultLines,
     });
     setExcelBusy(false);
@@ -615,9 +622,14 @@ export function JiraImportModal({ open, onClose, defaultProjectKey }: JiraImport
                           </li>
                         ))}
                       </ul>
+                      <div className="mt-3">
+                        <TenantScopeSelect value={excelTenantId} onChange={setTenantChoice}
+                          labelClassName="block text-xs font-medium text-muted-foreground mb-1" />
+                      </div>
                       <div className="flex items-center gap-2 mt-3">
-                        <button type="button" onClick={() => void saveExcelRows()} disabled={busy}
-                          className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 disabled:opacity-50">
+                        <button type="button" onClick={() => void saveExcelRows()} disabled={busy || tenantMissing}
+                          title={tenantMissing ? '공유 범위를 선택하세요' : undefined}
+                          className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 disabled:opacity-50">
                           {excelBusy ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />}
                           업무 관리에 저장
                         </button>

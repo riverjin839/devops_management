@@ -576,7 +576,12 @@ def dispatch_architecture_doc_sync(self):
 
 @celery_app.task(bind=True, name="app.celery_app.generate_arch_doc_llm", ignore_result=True)
 def generate_arch_doc_llm(self, doc_id: str):
-    """아키텍처 문서 LLM enrichment — 최초 sync 시 백그라운드 1회 (fail-safe)."""
+    """아키텍처 문서 LLM enrichment — 최초 sync 시 백그라운드 1회 (fail-safe).
+
+    LLM 호출은 ``generate_llm_content`` 안에서 클러스터 소유 테넌트의 라우팅 컨텍스트로 감싼다
+    (수동 재생성과 같은 경로, 정책 ⑨). 예기치 않은 예외로 끝나면 pending 에 고착되지 않게
+    llm_status=error + 사유를 남긴다(남기지 못해도 조회 시 10분 후 error 로 복구된다).
+    """
     import logging
     from app.database import SessionLocal
     from app.models import LakeService
@@ -602,6 +607,17 @@ def generate_arch_doc_llm(self, doc_id: str):
     except Exception as e:  # noqa: BLE001
         db.rollback()
         log.exception("generate_arch_doc_llm 실패 doc=%s: %s", doc_id, e)
+        try:
+            stuck = db.query(ServiceArchDoc).filter(ServiceArchDoc.id == doc_id).first()
+            if stuck is not None and stuck.llm_status == "pending":
+                ads.record_llm_failure(
+                    db, stuck, status="error",
+                    message=f"AI 분석 작업이 예외로 중단됐습니다: {str(e)[:200]}", code="task_exception",
+                )
+                db.commit()
+        except Exception:  # noqa: BLE001
+            db.rollback()
+            log.warning("generate_arch_doc_llm: 실패 상태 기록 실패 doc=%s", doc_id, exc_info=True)
         return {"error": str(e)[:200], "doc_id": doc_id}
     finally:
         db.close()
@@ -609,23 +625,42 @@ def generate_arch_doc_llm(self, doc_id: str):
 
 @celery_app.task(bind=True, name="app.celery_app.run_trend_collect", ignore_result=True)
 def run_trend_collect(self):
-    """매일 07:00 KST 기술 트렌드 수집"""
+    """매일 07:00 KST 기술 트렌드 수집 — 증분(소스별 마지막 성공 수집 이후분만, A-10).
+
+    화면의 수동 수집과 같은 다이제스트 락을 쓴다 — 이미 수집 중이면 건너뛴다(중복 삽입 방지, A-9).
+    """
+    import logging
+    from datetime import date as _date
+
     from app.database import SessionLocal
+    from app.services.trends.collect_lock import collect_lock
     from app.services.trends.trend_service import TrendService
 
+    today = _date.today()
+    token = collect_lock.acquire(today)
+    if token is None:
+        logging.getLogger(__name__).info("run_trend_collect: %s 다이제스트를 이미 수집 중 — 건너뜀", today)
+        return {"digest_date": str(today), "status": "skipped", "reason": "이미 수집 중입니다"}
+
     db = SessionLocal()
+    loop = asyncio.new_event_loop()
     try:
-        svc = TrendService(db)
-        loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
-        digest = loop.run_until_complete(svc.run_daily_collect())
-        loop.close()
+        svc = TrendService(db)
+        digest = loop.run_until_complete(
+            svc.run_daily_collect(today, lookback_days=None, lock_token=token)
+        )
+        token = None  # run_daily_collect 가 해제했다
         return {
             "digest_date": str(digest.digest_date),
             "status": digest.status,
             "item_count": digest.item_count,
+            "error_message": digest.error_message,
         }
     finally:
+        if token is not None:
+            collect_lock.release(today, token)
+        loop.close()
         db.close()
 
 

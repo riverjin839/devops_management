@@ -127,10 +127,15 @@ def _history_block(db: Session, conv: AgentConversation) -> str:
     return "### 이전 대화\n" + "\n".join(lines)
 
 
-async def _retrieve_citations(db: Session, query: str) -> list[dict]:
+async def _retrieve_citations(db: Session, query: str, user: Optional[User] = None) -> list[dict]:
     try:
         from app.services import rag_service
-        return await rag_service.retrieve(db, query, k=3)
+        scope = None
+        if user is not None:
+            # 온톨로지 이벤트 근거를 사용자 클러스터 가시 범위로 거른다(없으면 rag_service 의 fail-closed 기본).
+            from app.services.cluster_access import ClusterScope, hidden_cluster_ids
+            scope = ClusterScope(hidden_cluster_ids(db, user))
+        return await rag_service.retrieve(db, query, k=3, cluster_scope=scope)
     except Exception:  # noqa: BLE001  (RAG 실패가 챗을 막지 않게)
         return []
 
@@ -153,6 +158,7 @@ def _resolve_conversation(db: Session, conversation_id: Optional[str], query: st
 
 async def _build_chat_prompt(
     db: Session, conv: Optional[AgentConversation], query: str, context: Optional[dict],
+    user: Optional[User] = None,
 ) -> tuple[str, list[dict]]:
     """히스토리 + RAG 참고자료 + 컨텍스트 + 질문을 하나의 프롬프트로 조립.
 
@@ -166,7 +172,7 @@ async def _build_chat_prompt(
                 parts.append(history)
         except Exception:  # noqa: BLE001
             pass
-    citations = await _retrieve_citations(db, query)
+    citations = await _retrieve_citations(db, query, user)
     if citations:
         from app.services.rag_service import build_reference_block
         parts.append(build_reference_block(citations))
@@ -217,7 +223,7 @@ async def agent_chat(
     - ``status: "offline"`` → LLM unreachable; ``answer`` contains a friendly message
     """
     conv = _resolve_conversation(db, body.conversation_id, body.query, user)
-    prompt, citations = await _build_chat_prompt(db, conv, body.query, body.context)
+    prompt, citations = await _build_chat_prompt(db, conv, body.query, body.context, user)
 
     # 멀티테넌시 4단계 — 사용자 테넌트의 LLM 라우팅 오버라이드 + 테넌트별 사용량 집계
     with llm_tenant_context(resolve_llm_tenant(db, user)):
@@ -252,7 +258,7 @@ async def agent_chat_stream(
     한 번 수행한다(best-effort — 실패해도 이미 보낸 응답에는 영향 없음).
     """
     conv = _resolve_conversation(db, body.conversation_id, body.query, user)
-    prompt, citations = await _build_chat_prompt(db, conv, body.query, body.context)
+    prompt, citations = await _build_chat_prompt(db, conv, body.query, body.context, user)
     conversation_id = str(conv.id) if conv is not None else None
     llm_tenant = resolve_llm_tenant(db, user)  # 스트림 시작 전에 확정 (4단계)
 

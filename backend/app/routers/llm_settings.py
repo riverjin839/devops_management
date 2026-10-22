@@ -14,7 +14,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
-from app.auth.deps import require_admin
+from app.auth.deps import get_cluster_scope, require_admin
 from app.config import settings
 from app.database import get_db
 from app.models.app_setting import AppSetting
@@ -218,11 +218,12 @@ async def rag_search(
     q: str,
     k: int = 5,
     db: Session = Depends(get_db),
+    scope=Depends(get_cluster_scope),
 ):
     """사내 지식(작업 가이드/업무 이력/운영 노트) 유사 검색 — 정보요청 칩의
     '트러블슈팅 이력 첨부' 모달 + 근거 탐색용. fail-safe (실패 시 빈 목록)."""
     from app.services import rag_service
-    citations = await rag_service.retrieve(db, q, k=min(max(k, 1), 20))
+    citations = await rag_service.retrieve(db, q, k=min(max(k, 1), 20), cluster_scope=scope)
     return {"data": citations}
 
 

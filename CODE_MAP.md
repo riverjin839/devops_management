@@ -24,7 +24,7 @@ AI 어시스턴트 + 사람 개발자용 — 기능 → 파일 경로와 자주 
 | 자동 업데이트 (k8s API) | `POST /clusters/{id}/auto-update` (clusters.py) | `clustersApi.autoUpdate` in `api.ts` |
 | 버전/설정 스냅샷 수집 + 히스토리 | `backend/app/routers/versions.py` · model: `backend/app/models/config_snapshot.py` | `frontend/src/pages/VersionsPage.tsx` |
 | SSH 수집 실시간 스트림 (D-135) | `POST /clusters/{id}/collect-{etcd-systemd,kernel-params,kubelet-config,kubeadm-certs,node-nics}/stream` in `versions.py`(`_collect_emit` ContextVar — 동기 엔드포인트와 같은 함수) · SSE 공용 `backend/app/services/sse.py`(`stream_async_job`) | `components/versions/*Modal.tsx` → `streamLogged` + `versionsCollectStreamUrl` |
-| 컴포넌트 관계 3D 그래프 | `GET /clusters/{id}/versions/graph` | `frontend/src/pages/VersionGraphPage.tsx` |
+| 컴포넌트 관계 3D 그래프 | `GET /clusters/{id}/versions/graph`(끝점 없는 엣지 제거, 컴포넌트 `flag_total`) · 재수집 응답 `components[]` | `frontend/src/pages/VersionGraphPage.tsx`(표로 보기·화면 맞춤, 툴팁 `lib/html.ts` `escapeHtml`) |
 | 노드 일괄 SSH/SCP 실행 | `backend/app/routers/bulk_exec.py` + `backend/app/services/ssh_runner.py` (paramiko) + `services/script_wrap.py`(python 스크립트 → heredoc 래핑) | `frontend/src/pages/BulkExecPage.tsx` |
 | 클러스터 노드 목록 조회 (선택용) | `GET /clusters/{id}/node-list` in `bulk_exec.py` | `bulkExecApi.nodeList` |
 | 사용자별 저장 스크립트 (bulk-exec 재사용) | `backend/app/routers/saved_scripts.py` + `models/saved_script.py`(`SavedScript`, `username` 소유권) | `components/bulk-exec/{SavedScriptPanel,SavedScriptEditorModal}` + `hooks/useSavedScripts.ts` |
@@ -69,7 +69,7 @@ AI 어시스턴트 + 사람 개발자용 — 기능 → 파일 경로와 자주 
 | 상세 보기 / 댓글·활동 | — | `WorkItemReadView.tsx` · `CommentThread.tsx` · `ActivityTimeline.tsx` |
 | 저장된 뷰(필터·정렬·보기 스냅샷, localStorage) | — | `components/work-items/SavedViews.tsx` |
 | 사용자 정의 필드(custom_values) | `backend/app/routers/work_item_custom_fields.py` | `WorkItemCustomFieldsManager.tsx` |
-| Jira 가져오기/양방향 반영 | `backend/app/routers/jira.py` (`/jira`) | `JiraImportModal.tsx` · `frontend/src/pages/JiraExcelImportPage.tsx` |
+| Jira 가져오기/양방향 반영 | `backend/app/routers/jira.py` (`/jira`) — 엑셀 저장 `POST /jira/import/excel/save`(`dry_run`·`only_keys`·`tenant_id`, 행별 `changes`, 행 savepoint, 상한 10MB/2MB/2000행 413) · 테넌트 판정 `_resolve_import_tenant`/`_pick_visible`(라이브 `/jira/import` 공용) | `JiraImportModal.tsx` · `frontend/src/pages/JiraExcelImportPage.tsx`(dry-run 표 → 확인 → 선택 적용) · 공유 범위 `components/common/TenantScopeSelect.tsx` |
 | Jira 원본 항목 매핑(Epic·Sub-task·component·label·상태) + 보존 규칙 | `services/jira_service.py` `map_jira_issue()`/`extract_epic_parts()`/`extract_confluence_url()` · `routers/jira.py` `_jira_sync_values()`/`_apply_jira_fields()` | `components/work-items/workItemColumns.ts` · `WorkItemTableRow.tsx` · `JiraIssueChip.tsx` · `DocLinkChip.tsx`(제목 옆 Confluence 링크 박스, 인라인 편집) |
 | 업무 → Jira 이슈 + Confluence 문서 연계 생성 (Epic/Sub-task, 사용자별 조건 프리셋) | `routers/jira.py` `GET/POST /jira/provision*` (`user_settings` key=`jira_provision_preset`) | `components/work-items/JiraProvisionModal.tsx` |
 | Jira+Confluence SSO 자동 로그인 / Confluence API | `backend/app/services/jira_sso_http.py`(다중 제품 폼 SSO) · `services/confluence_service.py` · `routers/jira.py` `/jira/sso/*`·`/jira/confluence/*` (401 자동 재로그인 포함) | `components/settings/JiraIntegrationPanel.tsx` |
@@ -144,13 +144,13 @@ AI 어시스턴트 + 사람 개발자용 — 기능 → 파일 경로와 자주 
 | Cilium BPF Trace | `backend/app/routers/cilium_trace.py` + `services/cilium_trace_service.py` · `hubble_client.py` → `frontend/src/pages/CiliumTracePage.tsx` |
 | 패킷 흐름 분석 | `backend/app/routers/topology_trace.py` + `services/tcpdump_runner.py` → `frontend/src/pages/PacketFlowPage.tsx` |
 | 서비스 토폴로지 | `backend/app/routers/service_topology.py` → `frontend/src/pages/ServiceTopologyPage.tsx` |
-| 서비스 아키텍처 문서 (자동생성·현행화) | `backend/app/routers/architecture_docs.py` + `services/architecture_doc_service.py` + `models/service_arch_doc.py` → `frontend/src/pages/ServiceArchitecturePage.tsx` + `components/serviceArch/` + `hooks/useArchDoc.ts` |
+| 서비스 아키텍처 문서 (자동생성·현행화) | `backend/app/routers/architecture_docs.py`(`_visible_service` — 조회 read·쓰기 operator+operate, `cluster_id` 없는 목록 admin 전용, schedule PUT admin) + `services/architecture_doc_service.py`(`llm_status` error·`llm_error`, 10분 pending 복구, 소유 테넌트 LLM 라우팅) + `models/service_arch_doc.py` → `frontend/src/pages/ServiceArchitecturePage.tsx`(라우트 `/service-architecture/:clusterId`, `?module=`·`?view=`) + `components/serviceArch/`(`ArchDocListView` 목록 보기 · `ArchScheduleDialog` 현행화 주기) + `hooks/useArchDoc.ts` |
 | 서비스 모듈 관계도 | — → `frontend/src/pages/ArchitecturePage.tsx` |
 | 인프라 물리 토폴로지 | `backend/app/routers/infra_nodes.py`(동기화·검증 SSE `…/stream` — `_run_sync`·`_run_verify`·`_stream_job`) → `frontend/src/pages/InfraTopologyPage.tsx` |
 | 노드 서버스펙 자산 대장 | `backend/app/routers/node_server_specs.py` → `frontend/src/pages/NodeSpecPage.tsx` |
 | 관리 서버 대장 | `backend/app/routers/management_servers.py` |
 | Isilon NFS 모니터링 | `backend/app/routers/isilon_nfs.py` + `services/isilon_service.py` → `frontend/src/pages/IsilonNfsPage.tsx` |
-| CIDR 계산기 / 주요 링크 | — → `frontend/src/pages/CidrCalculatorPage.tsx` · `ClusterLinksPage.tsx` |
+| CIDR 계산기 / 주요 링크 | 링크 `GET/PUT /ui-settings/cluster-links`(`routers/ui_settings.py` — GET 클러스터 범위 필터 + `version`, PUT admin·`version` 409·http(s) URL 만) / CIDR 적용은 `PUT /clusters/{id}` → `frontend/src/pages/CidrCalculatorPage.tsx` · `ClusterLinksPage.tsx` |
 
 ### 서비스 카탈로그 (LAKE)
 
@@ -169,8 +169,8 @@ AI 어시스턴트 + 사람 개발자용 — 기능 → 파일 경로와 자주 
 |---|---|
 | 지식 허브 | `backend/app/routers/work_guide.py` → `frontend/src/pages/KnowledgeHubPage.tsx` · `WorkGuidePage.tsx` |
 | DevOps Q&A / 업무 메모 | `backend/app/routers/ops_note.py` → `frontend/src/pages/OpsNotesPage.tsx` · `OpsNoteDetailPage.tsx` · `OpsNoteFormPage.tsx` |
-| 마인드맵 / 온톨로지 | `backend/app/routers/mindmap.py` · `ontology.py` → `frontend/src/pages/MindMapPage.tsx` · `OntologyPage.tsx` |
-| 트렌드 다이제스트 | `backend/app/routers/trends.py` + `backend/app/services/trends/` (github/rss 수집 + summarizer) → `frontend/src/pages/TrendDigestPage.tsx` |
+| 마인드맵 / 온톨로지 | `backend/app/routers/mindmap.py`(`_validate_parent` 같은 맵·순환 422, 명시적 null 해제, 삭제 감사) · `ontology.py`(쓰기 operator+operate·영향 분석 read, 분석은 `impact_simulation` 기록) + `services/rag_service.py`(영향 시뮬레이션 제외·클러스터 범위 필터) → `frontend/src/pages/MindMapPage.tsx`(개요 트리) · `OntologyPage.tsx`(엔티티 표·엔티티/관계 추가) |
+| 트렌드 다이제스트 | `backend/app/routers/trends.py`(SSE `POST /trends/collect/stream`, `GET/PUT /trends/settings`, 쓰기 operator + 감사) + `backend/app/services/trends/` (github/rss 수집 + summarizer · `url_guard.py` SSRF 가드 · `collect_lock.py` 다이제스트 Redis 락 · `trend_settings.py` AppSetting `trends.settings`) → `frontend/src/pages/TrendDigestPage.tsx` |
 | 사용자 VOC 게시판 | `backend/app/routers/voc.py` → `VocBoardPanel` (사이드바 SidePane) |
 | 공감(리액션) | `backend/app/routers/reactions.py` → `ReactionBar` |
 | 릴리즈 노트 패널 | `backend/app/routers/release_notes.py` (CHANGELOG.md 파싱) → `ReleaseNotesPanel` |
@@ -194,7 +194,7 @@ AI 어시스턴트 + 사람 개발자용 — 기능 → 파일 경로와 자주 
 | 테넌트 실행 동시성 상한 · 감사 로그 테넌트 귀속 (멀티테넌시 5단계) | `backend/app/services/tenant_concurrency.py`(`owner_tenant`=클러스터 operate 바인딩 우선, `TenantRunSlots` Redis ZSET 슬롯·대기 등록, Celery 태스크용 `acquire_run_slot` → 상한 초과 시 `task.retry`·대기 초과 `TenantRunLimitTimeout`) + `celery_app.py` 적용 태스크(`run_batch_job`·`run_ops_check_batch`·`run_check_matrix_run_one`·`run_deep_check_for_cluster`·`run_k8s_efficiency_run`) + `tenants.max_concurrent_runs` · `routers/tenants.py` `GET /run-slots` · `services/audit_logger.py` `_resolve_tenant`(→ `audit_logs.tenant_id`/`tenant_name`) + `routers/audit_logs.py` `tenant_id` 필터 → `components/settings/TenantManager.tsx` `TenantRunSlotsCard` · `components/settings/AuditLogManager.tsx` |
 | 화면별 접근 제어 서버 강제 | `backend/app/auth/feature_access.py`(`FEATURE_API_PATTERNS` = 화면 → 전용 API 정규식, `enforce_feature_access` 는 `main.py` `_auth` 에 포함) — 판정은 프론트 `hooks/useFeatureAccess.ts` `canAccessFeature` 와 동일해야 한다 |
 | 스키마 점검/복구 (모델↔DB 드리프트) | `backend/app/routers/schema_health.py` + `services/schema_health.py` → `frontend/src/components/settings/SchemaHealthPanel.tsx` (Settings ▸ 스키마 점검 탭). 부팅 안전망은 `main.py` 의 `_sync_missing_model_columns`(누락 컬럼) + `_relax_not_null_drift`(레거시 NOT NULL) |
-| Your Island (사용자 커스텀 화면) | `backend/app/routers/island.py` + `models/island.py` → `frontend/src/pages/IslandPage.tsx` · `components/island/` (`panelRegistry.ts` = 임베드 가능 화면 등록부) · `hooks/useIslands.ts` · `hooks/useNavCatalog.ts` · `hooks/useClusterRouteParam.ts`(`/<base>/:clusterId` 동기화, `pathFor`·`local` 옵션) · `hooks/useUrlParams.ts`(목록 탭·필터 URL 쿼리, 임베드 시 로컬) + `lib/islandEmbed.ts` (임베드 시 URL 이동 억제) |
+| Your Island (사용자 커스텀 화면) | `backend/app/routers/island.py`(PUT `expected_updated_at` 불일치 409, reorder 는 `updated_at` 유지) + `models/island.py` → `frontend/src/pages/IslandPage.tsx` · `components/island/` (`panelRegistry.ts` = 임베드 가능 화면 등록부) · `hooks/useIslands.ts`(아일랜드별 직렬화 낙관적 저장 큐) · `components/common/PageHeader.tsx`(임베드 시 기본 h2) · `hooks/useNavCatalog.ts` · `hooks/useClusterRouteParam.ts`(`/<base>/:clusterId` 동기화, `pathFor`·`local` 옵션) · `hooks/useUrlParams.ts`(목록 탭·필터 URL 쿼리, 임베드 시 로컬) + `lib/islandEmbed.ts` (임베드 시 URL 이동 억제) |
 
 ### Playbook / Ansible / 기타
 | 기능 | 위치 |
@@ -203,7 +203,7 @@ AI 어시스턴트 + 사람 개발자용 — 기능 → 파일 경로와 자주 
 | 플레이북 페이지 | `frontend/src/pages/PlaybooksPage.tsx`, `frontend/src/components/playbooks/`(`PlaybookLogDialog.tsx` 에 최신 결과 + 이전 실행 이력 `usePlaybookRuns`) |
 | Ansible 플레이북 소스 | `ansible/playbooks/` |
 | 일일 점검 (Celery) | `backend/app/services/core_bundle_checker.py`, `backend/app/celery_app.py` |
-| 트렌드 다이제스트 | `backend/app/services/trends/trend_service.py`, `frontend/src/pages/TrendDigestPage.tsx` |
+| 트렌드 다이제스트 | `backend/app/services/trends/trend_service.py`(증분 수집·URL 전역 중복 제거·요약 재시도), `frontend/src/pages/TrendDigestPage.tsx` |
 | 온톨로지 그래프 | `backend/app/routers/ontology.py` 외, `frontend/src/pages/OntologyPage.tsx` |
 
 ### 공통 UI / 인프라
@@ -211,6 +211,7 @@ AI 어시스턴트 + 사람 개발자용 — 기능 → 파일 경로와 자주 
 |---|---|
 | 테마 / CSS 변수 | `frontend/src/index.css` (`:root`, `html.light`, `html.dark`; 글자 전용 파생 토큰 `--primary-text`·`--status-*-text`·`--brand-jira-text`) — 캔버스·three.js 용 토큰 색은 `frontend/src/lib/chartTokens.ts`(`cssVarColor`·`useThemeColorKey`, D-120) — 대표 색 스냅샷은 `frontend/src/lib/themeSwatches.ts`(D-072, 사용자 메뉴 스와치·`components/settings/ThemeGallery.tsx` 가 공유). 선택값은 `stores/themeStore.ts`(localStorage 캐시) ↔ 서버 `home_prefs.theme`/`accent` 를 `hooks/useThemeSync.ts` 가 맞춘다 |
 | MacCard 공통 컴포넌트 | `frontend/src/components/ui/MacCard.tsx` |
+| 툴팁 HTML 이스케이프 (저장형 XSS 방지) | `frontend/src/lib/html.ts` `escapeHtml` — force-graph `nodeLabel`/`linkLabel` 처럼 HTML 문자열을 조립하는 곳은 사용자·외부 값마다 거친다(사용처 `OntologyPage`·`VersionGraphPage`·`components/topology/Topology3D`·`components/packet-flow/FlowGraph3D`) |
 | Sidebar(플랫폼 도메인) + 네비 설정 | `frontend/src/components/layout/Sidebar.tsx` (`NAV_MAP`/`GROUPS` 는 `navConfig.ts` 로 분리, `GROUPS.domain` 이 배치 결정) |
 | leaf 단위 opt-in 앱 카탈로그(사이드바+상단바, Main UI 간소화 + 후속 개편) | `frontend/src/components/layout/installableApps.ts`(leaf 단위 설치 가능 카탈로그 + `sidebarAppSections()`/`topbarAppSections()`) + `AddAppDialog.tsx`(공용 카드형 추가 다이얼로그) → `HomePrefs.installedApps`(`backend/app/schemas/home_prefs.py` — `None` = 조직 기본값 따름, 리스트 = 사용자 지정; 공용 로직 `services/home_prefs.py`(`apply_update` 델타·초기화, `get/set_default_installed_apps`), `home_prefs.py` 라우터는 행 잠금 아래 갱신) · 조직 기본값 `GET/PUT /ui-settings/home-prefs-defaults` → `components/settings/DefaultAppsManager.tsx` · 순서 변경 `installed_apps_move` → `components/layout/InstalledAppOrder.tsx`(dnd-kit) — 옛 레이아웃 계정 이관은 `backend/app/main.py::_migrate_home_prefs_layout()`(행 단위 `layout_version` — 전역 sentinel 없음, 재실행 안전) |
 | 전역 상단바(업무 도메인) | `frontend/src/components/layout/AppTopBar.tsx` + `NavFlyout.tsx`(`FlyoutShell`/`FlyoutLink`/`FlyoutAction` 공용, Sidebar 와 공유 — 키보드 메뉴 규약은 `DESIGN_SYSTEM.md` §12.8) — opt-in 설치된 업무 leaf + 즐겨찾기/Your Island, `lg:` 미만(<1024px)은 `Menu` 트리거 하나로 접힘(D-076, §12.10) |

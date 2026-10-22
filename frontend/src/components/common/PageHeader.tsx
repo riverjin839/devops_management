@@ -2,6 +2,7 @@ import { type ComponentType, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import { ArrowLeft } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { useIsIslandEmbedded } from '@/lib/islandEmbed';
 
 interface PageHeaderProps {
   /** 페이지 제목 — 화면당 `<h1>` 은 이것 하나뿐이어야 한다. */
@@ -18,7 +19,8 @@ interface PageHeaderProps {
   actions?: ReactNode;
   className?: string;
   /** 제목 heading 레벨 — 기본 1. 다른 페이지 안에 임베드돼 바깥에 이미 `<h1>` 이 있을 때만 2 로 낮춘다
-   *  (예: 홈 배치잡 탭의 `BatchJobsPage`, §12.12-1 — 화면당 h1 1개). 시각 크기는 같다. */
+   *  (예: 홈 배치잡 탭의 `BatchJobsPage`, §12.12-1 — 화면당 h1 1개). 시각 크기는 같다.
+   *  아일랜드 패널 안(`useIsIslandEmbedded()`)에서는 지정하지 않으면 2 — 아일랜드 이름이 h1 이다. */
   level?: 1 | 2;
 }
 
@@ -28,8 +30,9 @@ interface PageHeaderProps {
  * 또는 pill 모양 뒤로가기 + `text-lg font-semibold` 를 손으로 그려 h1 이 22가지 class 로 흩어져 있었다.
  * 제목 크기·굵기·아이콘 톤·뒤로가기 모양을 여기 한 곳에 고정한다.
  */
-export function PageHeader({ title, description, icon: Icon, back, titleExtra, actions, className, level = 1 }: PageHeaderProps) {
-  const Heading = level === 2 ? 'h2' : 'h1';
+export function PageHeader({ title, description, icon: Icon, back, titleExtra, actions, className, level }: PageHeaderProps) {
+  const embedded = useIsIslandEmbedded();
+  const Heading = (level ?? (embedded ? 2 : 1)) === 2 ? 'h2' : 'h1';
   return (
     <header className={cn('flex items-start justify-between gap-x-4 gap-y-2 flex-wrap', className)}>
       <div className="flex items-start gap-3 min-w-0 flex-1">

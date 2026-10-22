@@ -116,7 +116,14 @@ class ManualEdgeOut(BaseModel):
 
 # ── doc ──────────────────────────────────────────────────────────────────────
 class ArchDocResponse(BaseModel):
-    id: UUID
+    """문서 응답. 문서 행이 아직 없으면(GET 은 행을 만들지 않는다) ``has_doc=False`` 인 빈 문서 —
+    ``id``·``updated_at`` 이 null 이고 나머지는 기본값이다.
+
+    ``llm_status``: none | pending | ok | offline(연결 불가) | error(호출 실패 — 사유는 ``llm_error``) |
+    failed(노드가 없어 생성 불가 = failed_no_nodes). 10분을 넘긴 pending 은 조회 시 error 로 복구된다.
+    """
+    id: Optional[UUID] = None
+    has_doc: bool = True
     service_id: UUID
     cluster_id: UUID
     namespace: str
@@ -132,10 +139,12 @@ class ArchDocResponse(BaseModel):
     last_sync_status: str = "pending"
     sync_error: Optional[str] = None
     auto_sync_enabled: bool = True
-    llm_status: str = "none"
+    llm_status: str = "none"  # none | pending | ok | offline | error | failed
+    # offline/error/failed 일 때 운영자용 사유 문자열 (그 외 null)
+    llm_error: Optional[str] = None
     manual_nodes: list[ManualNodeOut] = Field(default_factory=list)
     manual_edges: list[ManualEdgeOut] = Field(default_factory=list)
-    updated_at: datetime
+    updated_at: Optional[datetime] = None
 
 
 class ArchDocSummary(BaseModel):
@@ -172,8 +181,9 @@ class LayoutPosition(BaseModel):
 
 
 class LayoutPatch(BaseModel):
+    """positions 의 id 중 문서 노드(auto·manual)가 아닌 것은 서버가 버린다 (A-13)."""
     view: ViewType
-    positions: list[LayoutPosition]
+    positions: list[LayoutPosition] = Field(..., max_length=2000)
 
 
 class SchedulePayload(BaseModel):

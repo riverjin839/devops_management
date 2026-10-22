@@ -43,7 +43,7 @@ export function ManualNodeDialog({ editing, pending, onSubmit, onClose }: Props)
             {editing ? '수동 노드 수정' : '수동 노드 추가'}
           </h2>
           <button onClick={onClose} disabled={pending} aria-label="닫기" title="닫기"
-            className="p-1 rounded-lg text-muted-foreground hover:bg-secondary disabled:opacity-50">
+            className="p-1 rounded-xl text-muted-foreground hover:bg-secondary disabled:opacity-50">
             <X className="w-4 h-4" />
           </button>
         </div>

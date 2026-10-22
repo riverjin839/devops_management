@@ -1,9 +1,9 @@
 """Architecture Docs endpoints — 서비스 모듈별 아키텍처/플로우 다이어그램 문서.
 
-- `GET    /architecture-docs`                          모듈별 문서 요약 목록
+- `GET    /architecture-docs`                          모듈별 문서 요약 목록 (?cluster_id 필수 — 생략은 admin 만)
 - `GET    /architecture-docs/schedule`                 전역 자동 sync cron 조회
-- `PUT    /architecture-docs/schedule`                 전역 자동 sync cron 설정
-- `GET    /architecture-docs/{service_id}`             문서 조회 (없으면 빈 shell 생성)
+- `PUT    /architecture-docs/schedule`                 전역 자동 sync cron 설정 (admin)
+- `GET    /architecture-docs/{service_id}`             문서 조회 (없으면 행을 만들지 않고 빈 문서 응답)
 - `POST   /architecture-docs/{service_id}/sync`        즉시 현행화 (?prune= 로 stale 정리)
 - `POST   /architecture-docs/{service_id}/llm-regenerate`  LLM 요약/플로우 재생성
 - `PATCH  /architecture-docs/{service_id}`             summary/annotations/auto_sync 수정
@@ -13,6 +13,12 @@
 - `GET    /architecture-docs/{service_id}/audit`       현행화/편집 감사 이력
 
 sync 는 fail-soft — 실패해도 200 + last_sync_status="failed" (빈 500 금지).
+
+권한 (R-4 15차 A-3 — 키가 service_id 라 마운트의 경로 판정이 닿지 않아 핸들러가 직접 판정):
+- 조회(문서·감사 이력) = 모듈 클러스터에 read.
+- 동기화·AI 재생성·요약/주석/배치·수동 노드/엣지 = ``require_operator`` + 모듈 클러스터에 operate
+  (같은 계열 ``service_topology`` 수동 링크와 맞춤).
+- 현행화 cron 변경 = admin (전역 설정).
 """
 from __future__ import annotations
 
@@ -22,10 +28,10 @@ import uuid as uuid_mod
 from typing import Optional
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from sqlalchemy.orm import Session
 
-from app.auth.deps import get_current_user
+from app.auth.deps import get_current_user, require_admin, require_operator
 from app.database import get_db
 from app.models import LakeService, TopologyAuditLog
 from app.models.service_arch_doc import (
@@ -50,6 +56,8 @@ from app.schemas.architecture_doc import (
     ScheduleOut,
 )
 from app.services import architecture_doc_service as svc
+from app.services import audit_logger
+from app.services.cluster_access import require_cluster_access
 
 logger = logging.getLogger(__name__)
 
@@ -64,9 +72,30 @@ def _require_service(service_id: UUID, db: Session) -> LakeService:
     return s
 
 
-def _doc_response(doc: ServiceArchDoc) -> ArchDocResponse:
+def _visible_service(db: Session, user: User, service_id: UUID, level: str) -> LakeService:
+    """모듈을 찾고 그 클러스터에 대한 접근(read|operate)을 판정한다 — 없으면 404, 권한 없으면 403."""
+    service = _require_service(service_id, db)
+    require_cluster_access(db, user, service.cluster_id, level)
+    return service
+
+
+def _empty_doc_response(service: LakeService) -> ArchDocResponse:
+    """문서 행이 아직 없는 모듈 — 조회는 행을 만들지 않고 빈 문서 모양을 돌려준다."""
+    return ArchDocResponse(
+        id=None,
+        has_doc=False,
+        service_id=service.id,
+        cluster_id=service.cluster_id,
+        namespace=service.namespace or "",
+        last_sync_status="pending",
+        llm_status="none",
+    )
+
+
+def _doc_response(doc: ServiceArchDoc, db: Optional[Session] = None) -> ArchDocResponse:
     return ArchDocResponse(
         id=doc.id,
+        has_doc=True,
         service_id=doc.lake_service_id,
         cluster_id=doc.cluster_id,
         namespace=doc.namespace,
@@ -83,6 +112,7 @@ def _doc_response(doc: ServiceArchDoc) -> ArchDocResponse:
         sync_error=doc.sync_error,
         auto_sync_enabled=doc.auto_sync_enabled,
         llm_status=doc.llm_status,
+        llm_error=svc.llm_error_for(db, doc) if db is not None else None,
         manual_nodes=[ManualNodeOut.model_validate(n) for n in doc.manual_nodes],
         manual_edges=[
             ManualEdgeOut.model_validate(e)
@@ -114,7 +144,19 @@ def _audit_edit(
 
 # ── list / schedule (정적 경로 — /{service_id} 보다 먼저 선언) ────────────────
 @router.get("", response_model=list[ArchDocSummary])
-def list_docs(cluster_id: Optional[UUID] = None, db: Session = Depends(get_db)):
+def list_docs(
+    cluster_id: Optional[UUID] = None,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    if cluster_id is None:
+        if user.role != "admin":
+            raise HTTPException(
+                status_code=422,
+                detail="cluster_id 가 필요합니다 — 클러스터를 먼저 선택하세요 (전체 목록은 관리자만 조회할 수 있습니다).",
+            )
+    else:
+        require_cluster_access(db, user, cluster_id, "read")
     return svc.list_doc_summaries(db, cluster_id)
 
 
@@ -124,23 +166,43 @@ def get_schedule(db: Session = Depends(get_db)):
 
 
 @router.put("/schedule", response_model=ScheduleOut)
-def set_schedule(payload: SchedulePayload, db: Session = Depends(get_db)):
+def set_schedule(
+    payload: SchedulePayload,
+    request: Request,
+    db: Session = Depends(get_db),
+    admin: User = Depends(require_admin),
+):
     try:
         from croniter import croniter
         if not croniter.is_valid(payload.cron):
             raise HTTPException(status_code=422, detail="cron 표현식이 올바르지 않습니다.")
     except ImportError:  # pragma: no cover
         pass
+    before = svc.get_schedule(db)
     val = svc.set_schedule(db, payload.enabled, payload.cron)
+    audit_logger.record(
+        db, action="arch_doc.schedule.update", actor=admin, target_type="app_setting",
+        target_id=svc.SCHEDULE_KEY,
+        details={"before": {"enabled": before.get("enabled"), "cron": before.get("cron")},
+                 "after": {"enabled": val["enabled"], "cron": val["cron"]}},
+        request=request,
+    )
     return ScheduleOut(**val)
 
 
 # ── doc read / sync / llm ────────────────────────────────────────────────────
 @router.get("/{service_id}", response_model=ArchDocResponse)
-def get_doc(service_id: UUID, db: Session = Depends(get_db)):
-    service = _require_service(service_id, db)
-    doc = svc.get_or_create_doc(db, service)
-    return _doc_response(doc)
+def get_doc(
+    service_id: UUID,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    service = _visible_service(db, user, service_id, "read")
+    doc = svc.get_doc(db, service)
+    if doc is None:
+        return _empty_doc_response(service)
+    svc.recover_stale_pending(db, doc)
+    return _doc_response(doc, db)
 
 
 @router.post("/{service_id}/sync", response_model=ArchDocResponse)
@@ -148,9 +210,9 @@ async def sync_doc(
     service_id: UUID,
     prune: bool = Query(False),
     db: Session = Depends(get_db),
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_operator),
 ):
-    service = _require_service(service_id, db)
+    service = _visible_service(db, user, service_id, "operate")
     doc = await asyncio.to_thread(
         svc.sync_doc, db, service,
         triggered_by="manual", username=user.username, prune=prune,
@@ -162,15 +224,19 @@ async def sync_doc(
             generate_arch_doc_llm.delay(str(doc.id))
         except Exception as e:  # noqa: BLE001
             logger.warning("LLM enrichment 큐잉 실패(무시): %s", e)
-    return _doc_response(doc)
+    return _doc_response(doc, db)
 
 
 @router.post("/{service_id}/llm-regenerate", response_model=ArchDocResponse)
-async def llm_regenerate(service_id: UUID, db: Session = Depends(get_db)):
-    service = _require_service(service_id, db)
+async def llm_regenerate(
+    service_id: UUID,
+    db: Session = Depends(get_db),
+    user: User = Depends(require_operator),
+):
+    service = _visible_service(db, user, service_id, "operate")
     doc = svc.get_or_create_doc(db, service)
     doc = await svc.generate_llm_content(db, doc, service)
-    return _doc_response(doc)
+    return _doc_response(doc, db)
 
 
 # ── doc patch / layout ───────────────────────────────────────────────────────
@@ -179,9 +245,9 @@ def patch_doc(
     service_id: UUID,
     payload: DocPatch,
     db: Session = Depends(get_db),
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_operator),
 ):
-    service = _require_service(service_id, db)
+    service = _visible_service(db, user, service_id, "operate")
     doc = svc.get_or_create_doc(db, service)
     data = payload.model_dump(exclude_unset=True)
     if "summary_override" in data:
@@ -203,16 +269,25 @@ def patch_doc(
     except Exception as e:  # noqa: BLE001
         db.rollback()
         raise HTTPException(status_code=500, detail=f"문서 저장 실패: {str(e)[:200]}") from e
-    return _doc_response(doc)
+    return _doc_response(doc, db)
 
 
 @router.patch("/{service_id}/layout", response_model=ArchDocResponse)
-def patch_layout(service_id: UUID, payload: LayoutPatch, db: Session = Depends(get_db)):
-    service = _require_service(service_id, db)
+def patch_layout(
+    service_id: UUID,
+    payload: LayoutPatch,
+    db: Session = Depends(get_db),
+    user: User = Depends(require_operator),
+):
+    service = _visible_service(db, user, service_id, "operate")
     doc = svc.get_or_create_doc(db, service)
+    # 문서 노드(auto·manual)가 아닌 id 는 버린다 — 모듈 전환 직후 이전 모듈 좌표가 섞여 들어오는 것 방지(A-13).
+    known = svc.doc_node_ids(doc)
     layout = dict(doc.layout or {})
     view_map = dict(layout.get(payload.view) or {})
     for p in payload.positions:
+        if p.id not in known:
+            continue
         view_map[p.id] = {"x": round(p.x, 2), "y": round(p.y, 2)}
     layout[payload.view] = view_map
     doc.layout = layout
@@ -221,7 +296,7 @@ def patch_layout(service_id: UUID, payload: LayoutPatch, db: Session = Depends(g
     except Exception as e:  # noqa: BLE001
         db.rollback()
         raise HTTPException(status_code=500, detail=f"배치 저장 실패: {str(e)[:200]}") from e
-    return _doc_response(doc)
+    return _doc_response(doc, db)
 
 
 # ── manual nodes CRUD ────────────────────────────────────────────────────────
@@ -230,9 +305,9 @@ def create_manual_node(
     service_id: UUID,
     payload: ManualNodeCreate,
     db: Session = Depends(get_db),
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_operator),
 ):
-    service = _require_service(service_id, db)
+    service = _visible_service(db, user, service_id, "operate")
     doc = svc.get_or_create_doc(db, service)
     node = ServiceArchManualNode(
         doc_id=doc.id,
@@ -260,9 +335,9 @@ def update_manual_node(
     node_pk: UUID,
     payload: ManualNodeUpdate,
     db: Session = Depends(get_db),
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_operator),
 ):
-    service = _require_service(service_id, db)
+    service = _visible_service(db, user, service_id, "operate")
     doc = svc.get_or_create_doc(db, service)
     node = (
         db.query(ServiceArchManualNode)
@@ -289,9 +364,9 @@ def delete_manual_node(
     service_id: UUID,
     node_pk: UUID,
     db: Session = Depends(get_db),
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_operator),
 ):
-    service = _require_service(service_id, db)
+    service = _visible_service(db, user, service_id, "operate")
     doc = svc.get_or_create_doc(db, service)
     node = (
         db.query(ServiceArchManualNode)
@@ -319,9 +394,9 @@ def create_manual_edge(
     service_id: UUID,
     payload: ManualEdgeCreate,
     db: Session = Depends(get_db),
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_operator),
 ):
-    service = _require_service(service_id, db)
+    service = _visible_service(db, user, service_id, "operate")
     doc = svc.get_or_create_doc(db, service)
     if payload.source_id == payload.target_id:
         raise HTTPException(status_code=422, detail="source 와 target 이 같을 수 없습니다.")
@@ -354,9 +429,9 @@ def update_manual_edge(
     edge_pk: UUID,
     payload: ManualEdgeUpdate,
     db: Session = Depends(get_db),
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_operator),
 ):
-    service = _require_service(service_id, db)
+    service = _visible_service(db, user, service_id, "operate")
     doc = svc.get_or_create_doc(db, service)
     edge = (
         db.query(ServiceArchManualEdge)
@@ -384,9 +459,9 @@ def delete_manual_edge(
     service_id: UUID,
     edge_pk: UUID,
     db: Session = Depends(get_db),
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_operator),
 ):
-    service = _require_service(service_id, db)
+    service = _visible_service(db, user, service_id, "operate")
     doc = svc.get_or_create_doc(db, service)
     edge = (
         db.query(ServiceArchManualEdge)
@@ -408,8 +483,9 @@ def list_audit(
     service_id: UUID,
     limit: int = Query(50, ge=1, le=200),
     db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
 ):
-    _require_service(service_id, db)
+    _visible_service(db, user, service_id, "read")
     rows = (
         db.query(TopologyAuditLog)
         .filter(TopologyAuditLog.entity_type == "arch_doc",

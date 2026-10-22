@@ -236,6 +236,7 @@ function AppShell() {
               <Route path="/cilium-trace" element={<CiliumTracePage />} />
               <Route path="/service-topology" element={<ServiceTopologyPage />} />
               <Route path="/service-architecture" element={<ServiceArchitecturePage />} />
+              <Route path="/service-architecture/:clusterId" element={<ServiceArchitecturePage />} />
               <Route path="/architecture" element={<ArchitecturePage />} />
               <Route path="/k8s-events" element={<K8sEventsPage />} />
               {/* Observability — 관측 스택(kube-prometheus-stack 등) 개별 지표 dense 대시보드 */}

@@ -1,7 +1,6 @@
 import { useMemo, useState } from 'react';
 import { PageHeader } from '@/components/common/PageHeader';
 import { StatTile, StatTileRow } from '@/components/common/StatTile';
-import { useSearchParams } from 'react-router-dom';
 import {
   AlertTriangle,
   ArrowRight,
@@ -14,15 +13,27 @@ import {
   Globe,
   Lock,
   Plus,
+  Repeat,
   Scissors,
   Trash2,
+  X,
 } from 'lucide-react';
-import { useClusters } from '@/hooks/useCluster';
-import { useClusterStore } from '@/stores/clusterStore';
-import { clustersApi } from '@/services/api';
-import { ResizeGrip, DoubleScrollX, PageShell } from '@/components/common';
+import { useClusters, useUpdateCluster } from '@/hooks/useCluster';
+import { useCanOperate } from '@/hooks/useCanOperate';
+import { useUrlParams } from '@/hooks/useUrlParams';
+import {
+  ConfirmDialog,
+  DoubleScrollX,
+  EmptyState,
+  ErrorState,
+  PageShell,
+  ResizeGrip,
+  useToast,
+} from '@/components/common';
 import { useColumnWidths } from '@/hooks/useColumnWidths';
 import { MacCard } from '@/components/ui/MacCard';
+import { formatApiError } from '@/lib/utils';
+import type { Cluster, ClusterManageUpdate } from '@/types';
 
 // ── Pure CIDR logic ───────────────────────────────────────────────────────────
 
@@ -82,8 +93,8 @@ function parseCidr(cidr: string): CidrInfo | null {
   let ipClass = 'A';
   if (firstOctet >= 128 && firstOctet <= 191) ipClass = 'B';
   else if (firstOctet >= 192 && firstOctet <= 223) ipClass = 'C';
-  else if (firstOctet >= 224 && firstOctet <= 239) ipClass = 'D (Multicast)';
-  else if (firstOctet >= 240) ipClass = 'E (Reserved)';
+  else if (firstOctet >= 224 && firstOctet <= 239) ipClass = 'D (멀티캐스트)';
+  else if (firstOctet >= 240) ipClass = 'E (예약)';
 
   return {
     network: numToIp(networkNum),
@@ -99,20 +110,40 @@ function parseCidr(cidr: string): CidrInfo | null {
   };
 }
 
-// Divide a CIDR block into N equal subnets
-function divideSubnets(cidr: string, count: number): string[] {
-  if (count < 2 || count > 256) return [];
-  const info = parseCidr(cidr);
-  if (!info) return [];
+const DIVIDE_MIN = 2;
+const DIVIDE_MAX = 256;
 
-  const bitsNeeded = Math.ceil(Math.log2(count));
-  const newPrefix = info.prefix + bitsNeeded;
-  if (newPrefix > 32) return [];
+type DivisionPlan =
+  | { ok: true; requested: number; actual: number; newPrefix: number }
+  | { ok: false; reason: string };
 
+/**
+ * N개 분할 계획. 서브넷은 2의 거듭제곱으로만 나뉘므로 실제 개수(actual)는 N 이상인 가장 작은 2^k 다.
+ * 범위 오류(개수)와 prefix 초과(/32 넘음)는 서로 다른 문구로 알린다.
+ */
+function planDivision(info: CidrInfo, count: number): DivisionPlan {
+  if (!Number.isFinite(count)) {
+    return { ok: false, reason: `분할 개수를 입력하세요 (${DIVIDE_MIN}~${DIVIDE_MAX})` };
+  }
+  if (count < DIVIDE_MIN || count > DIVIDE_MAX) {
+    return { ok: false, reason: `분할 개수는 ${DIVIDE_MIN}~${DIVIDE_MAX} 사이여야 합니다 (입력: ${count})` };
+  }
+  const bits = Math.ceil(Math.log2(count));
+  const newPrefix = info.prefix + bits;
+  if (newPrefix > 32) {
+    return {
+      ok: false,
+      reason: `${info.network}/${info.prefix} 블록을 ${count}개로 나누면 /${newPrefix}가 되어 /32를 넘습니다`,
+    };
+  }
+  return { ok: true, requested: count, actual: Math.pow(2, bits), newPrefix };
+}
+
+function divideSubnets(info: CidrInfo, newPrefix: number, actual: number): string[] {
   const base = ipToNum(info.network);
   const step = Math.pow(2, 32 - newPrefix);
   const result: string[] = [];
-  for (let i = 0; i < Math.pow(2, bitsNeeded); i++) {
+  for (let i = 0; i < actual; i++) {
     result.push(`${numToIp((base + i * step) >>> 0)}/${newPrefix}`);
   }
   return result;
@@ -146,17 +177,84 @@ function cidrsOverlap(cidr1: string, cidr2: string): boolean {
   return computeOverlap(cidr1, cidr2) !== null;
 }
 
+// ── 등록 클러스터 대역 (노드·파드·서비스) ─────────────────────────────────────
+
+type ClusterCidrField = 'cidr' | 'podCidr' | 'svcCidr';
+
+const CLUSTER_CIDR_FIELDS: ReadonlyArray<{ key: ClusterCidrField; label: string; band: string }> = [
+  { key: 'cidr', label: '노드 CIDR', band: '노드 대역' },
+  { key: 'podCidr', label: '파드 CIDR', band: '파드 대역' },
+  { key: 'svcCidr', label: '서비스 CIDR', band: '서비스 대역' },
+];
+
+interface ClusterRange {
+  clusterId: string;
+  clusterName: string;
+  field: ClusterCidrField;
+  band: string;
+  cidr: string;
+}
+
+interface UnparsedValue {
+  clusterName: string;
+  band: string;
+  value: string;
+}
+
+/** 쉼표·공백으로 구분된 CIDR 목록을 나눈다(듀얼스택 `10.0.0.0/16,fd00::/108` 등). */
+function splitCidrList(value: string | null | undefined): string[] {
+  if (!value) return [];
+  return value.split(/[,\s]+/).map((s) => s.trim()).filter(Boolean);
+}
+
+/** 보이는 클러스터의 노드·파드·서비스 CIDR 을 비교 단위로 펼친다. 해석 못 한 값(IPv6 등)은 따로 모은다. */
+function collectClusterRanges(clusters: Cluster[]): { ranges: ClusterRange[]; unparsed: UnparsedValue[] } {
+  const ranges: ClusterRange[] = [];
+  const unparsed: UnparsedValue[] = [];
+  for (const c of clusters) {
+    for (const f of CLUSTER_CIDR_FIELDS) {
+      for (const value of splitCidrList(c[f.key])) {
+        if (parseCidr(value)) {
+          ranges.push({ clusterId: c.id, clusterName: c.name, field: f.key, band: f.band, cidr: value });
+        } else {
+          unparsed.push({ clusterName: c.name, band: f.band, value });
+        }
+      }
+    }
+  }
+  return { ranges, unparsed };
+}
+
+function buildClusterCidrUpdate(field: ClusterCidrField, info: CidrInfo): ClusterManageUpdate {
+  const cidr = `${info.network}/${info.prefix}`;
+  switch (field) {
+    case 'podCidr':
+      return { podCidr: cidr, podFirstHost: info.firstHost, podLastHost: info.lastHost };
+    case 'svcCidr':
+      return { svcCidr: cidr, svcFirstHost: info.firstHost, svcLastHost: info.lastHost };
+    default:
+      return { cidr, firstHost: info.firstHost, lastHost: info.lastHost };
+  }
+}
+
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-function isPrivateRange(ip: string): boolean {
-  const parts = ip.split('.').map(Number);
-  const [a, b] = parts;
-  if (a === 10) return true;
-  if (a === 172 && b >= 16 && b <= 31) return true;
-  if (a === 192 && b === 168) return true;
-  if (a === 127) return true;
-  return false;
+type IpScope = 'private' | 'loopback' | 'public';
+
+function ipScope(ip: string): IpScope {
+  const [a, b] = ip.split('.').map(Number);
+  if (a === 127) return 'loopback';
+  if (a === 10) return 'private';
+  if (a === 172 && b >= 16 && b <= 31) return 'private';
+  if (a === 192 && b === 168) return 'private';
+  return 'public';
 }
+
+const SCOPE_BADGE: Record<IpScope, { label: string; cls: string; icon: typeof Lock }> = {
+  private: { label: '사설', cls: 'bg-chart-1/10 text-chart-1-text border-chart-1/30', icon: Lock },
+  loopback: { label: '루프백', cls: 'bg-secondary text-muted-foreground border-border', icon: Repeat },
+  public: { label: '공인', cls: 'bg-chart-3/10 text-chart-3-text border-chart-3/30', icon: Globe },
+};
 
 function maskBinary(mask: string): string[] {
   return mask.split('.').map((o) => parseInt(o, 10).toString(2).padStart(8, '0'));
@@ -170,22 +268,34 @@ function formatHosts(n: number): string {
 
 // ── UI subatoms ───────────────────────────────────────────────────────────────
 
+const COPY_FAILED = '복사할 수 없습니다(HTTPS 필요)';
+
 function CopyButton({ value, className = '' }: { value: string; className?: string }) {
   const [copied, setCopied] = useState(false);
+  const toast = useToast();
   const handleCopy = (e: React.MouseEvent) => {
     e.stopPropagation();
-    navigator.clipboard.writeText(value).then(() => {
-      setCopied(true);
-      setTimeout(() => setCopied(false), 1500);
-    });
+    // 비보안 컨텍스트(HTTP 폐쇄망)에서는 navigator.clipboard 자체가 없다 — 무음 TypeError 대신 알린다.
+    const pending = navigator.clipboard?.writeText(value);
+    if (!pending) {
+      toast.error(COPY_FAILED);
+      return;
+    }
+    pending.then(
+      () => {
+        setCopied(true);
+        setTimeout(() => setCopied(false), 1500);
+      },
+      () => toast.error(COPY_FAILED),
+    );
   };
   return (
     <button
       type="button"
       onClick={handleCopy}
-      className={`inline-flex items-center justify-center p-1 rounded-md hover:bg-secondary text-muted-foreground hover:text-foreground transition-colors ${className}`}
+      className={`inline-flex items-center justify-center p-1 rounded-xl hover:bg-secondary text-muted-foreground hover:text-foreground transition-colors ${className}`}
       title="복사"
-      aria-label={`Copy ${value}`}
+      aria-label={`${value} 복사`}
     >
       {copied ? <Check className="w-3 h-3 text-status-healthy" /> : <Copy className="w-3 h-3" />}
     </button>
@@ -240,10 +350,104 @@ function OverlapPair({ leftLabel, leftCidr, rightLabel, rightCidr, hue = 'amber'
             {overlap.start} – {overlap.end}
           </span>
           <span className="font-mono tabular-nums text-muted-foreground ml-auto flex-shrink-0">
-            {formatHosts(overlap.size)} IPs
+            {formatHosts(overlap.size)} 주소
           </span>
         </div>
       )}
+    </div>
+  );
+}
+
+/** 클러스터 비교 범위 안내 — "보이는 클러스터 N개 기준" + 해석하지 못한 값 목록(정책 ⑤). */
+function ClusterScopeNote({ visibleCount, unparsed }: { visibleCount: number; unparsed: UnparsedValue[] }) {
+  return (
+    <div className="text-xs text-muted-foreground">
+      <p>보이는 클러스터 {visibleCount}개 기준 · 노드·파드·서비스 CIDR 비교</p>
+      {unparsed.length > 0 && (
+        <details className="mt-1">
+          <summary className="cursor-pointer text-status-warning">
+            검사하지 못한 값 {unparsed.length}개
+          </summary>
+          <p className="mt-1">IPv4 CIDR(예: 10.0.0.0/16)만 비교합니다. IPv6·잘못된 형식은 제외됐습니다.</p>
+          <ul className="mt-1 space-y-0.5">
+            {unparsed.map((u, i) => (
+              <li key={i}>
+                {u.clusterName} · {u.band}: <span className="font-mono tabular-nums">{u.value}</span>
+              </li>
+            ))}
+          </ul>
+        </details>
+      )}
+    </div>
+  );
+}
+
+interface ClusterPair {
+  key: string;
+  leftLabel: string;
+  leftCidr: string;
+  rightLabel: string;
+  rightCidr: string;
+  hue?: OverlapPairProps['hue'];
+}
+
+interface ClusterOverlapSectionProps {
+  failed: boolean;
+  error: unknown;
+  onRetry: () => void;
+  loaded: boolean;
+  visibleCount: number;
+  unparsed: UnparsedValue[];
+  pairs: ClusterPair[];
+  conflictTitle: string;
+  gridCls: string;
+}
+
+/** 등록 클러스터 대역과의 겹침 영역 — 조회 실패는 빈 결과("겹침 없음")가 아니라 ErrorState 로 보인다. */
+function ClusterOverlapSection({
+  failed, error, onRetry, loaded, visibleCount, unparsed, pairs, conflictTitle, gridCls,
+}: ClusterOverlapSectionProps) {
+  if (failed) {
+    return (
+      <div className="mt-3">
+        <ErrorState
+          compact
+          error={error}
+          title="클러스터 목록을 불러오지 못해 겹침을 검사하지 못했습니다"
+          onRetry={onRetry}
+        />
+      </div>
+    );
+  }
+  if (!loaded || visibleCount === 0) return null;
+  return (
+    <div className="mt-3 space-y-2">
+      {pairs.length > 0 ? (
+        <div>
+          <p className="text-sm font-semibold text-status-warning inline-flex items-center gap-1.5 mb-2">
+            <AlertTriangle className="w-3.5 h-3.5" />
+            {conflictTitle}
+          </p>
+          <div className={gridCls}>
+            {pairs.map((p) => (
+              <OverlapPair
+                key={p.key}
+                leftLabel={p.leftLabel}
+                leftCidr={p.leftCidr}
+                rightLabel={p.rightLabel}
+                rightCidr={p.rightCidr}
+                hue={p.hue ?? 'amber'}
+              />
+            ))}
+          </div>
+        </div>
+      ) : (
+        <p className="text-xs text-muted-foreground inline-flex items-center gap-1">
+          <Check className="w-3 h-3" />
+          등록 클러스터 대역과 겹침 없음
+        </p>
+      )}
+      <ClusterScopeNote visibleCount={visibleCount} unparsed={unparsed} />
     </div>
   );
 }
@@ -260,100 +464,127 @@ function genId() {
   return Math.random().toString(36).slice(2, 8);
 }
 
+const DEFAULT_CIDR = '192.168.1.0/24';
+const INVALID_CIDR = '잘못된 CIDR 표기입니다. 예: 192.168.1.0/24';
+
 const QUICK_REF: ReadonlyArray<readonly [string, string, string]> = [
-  ['/8', '16.7M', 'hosts'],
-  ['/16', '65,534', 'hosts'],
-  ['/20', '4,094', 'hosts'],
-  ['/22', '1,022', 'hosts'],
-  ['/24', '254', 'hosts'],
-  ['/25', '126', 'hosts'],
-  ['/26', '62', 'hosts'],
-  ['/27', '30', 'hosts'],
-  ['/28', '14', 'hosts'],
-  ['/29', '6', 'hosts'],
-  ['/30', '2', 'hosts'],
-  ['/32', 'Single', 'IP'],
+  ['/8', '16.7M', '호스트'],
+  ['/16', '65,534', '호스트'],
+  ['/20', '4,094', '호스트'],
+  ['/22', '1,022', '호스트'],
+  ['/24', '254', '호스트'],
+  ['/25', '126', '호스트'],
+  ['/26', '62', '호스트'],
+  ['/27', '30', '호스트'],
+  ['/28', '14', '호스트'],
+  ['/29', '6', '호스트'],
+  ['/30', '2', '호스트'],
+  ['/32', '단일', '주소'],
 ];
 
 export function CidrCalculatorPage() {
-  const [searchParams] = useSearchParams();
-  const initialCidr = searchParams.get('cidr')?.trim() || '192.168.1.0/24';
+  // 입력 CIDR 은 URL(?cidr=)과 동기화 — 새로고침·링크 공유 시 같은 값으로 열린다(§12.13).
+  const [urlParams, setUrlParams] = useUrlParams({ cidr: DEFAULT_CIDR });
+  const input = urlParams.cidr;
+  const info = useMemo(() => parseCidr(input), [input]);
+  const inputError = info ? '' : INVALID_CIDR;
+  const curCidr = info ? `${info.network}/${info.prefix}` : '';
 
-  // Main calculator
-  const [input, setInput] = useState(initialCidr);
-  const [info, setInfo] = useState<CidrInfo | null>(() => parseCidr(initialCidr));
-  const [inputError, setInputError] = useState(() =>
-    parseCidr(initialCidr) ? '' : '잘못된 CIDR 표기입니다. 예: 192.168.1.0/24',
-  );
-
-  // Subnet divider
-  const [divideCount, setDivideCount] = useState(4);
-  const [subnets, setSubnets] = useState<string[]>([]);
-  const [divideError, setDivideError] = useState('');
+  // Subnet divider — 개수 입력은 문자열로 두고 blur 때 범위로 보정한다.
+  const [divideCountText, setDivideCountText] = useState('4');
+  const [division, setDivision] = useState<{ key: string; subnets: string[] } | null>(null);
+  const divideCount = /^\d+$/.test(divideCountText.trim()) ? parseInt(divideCountText.trim(), 10) : NaN;
+  const plan = info ? planDivision(info, divideCount) : null;
+  const subnets = division && division.key === curCidr ? division.subnets : [];
 
   const compareColW = useColumnWidths('cidr-compare-table', {
     defaults: { label: 140, network: 180, mask: 160, hosts: 140, overlap: 220 },
     min: 60, max: 600,
   });
 
-  // Apply CIDR to cluster
-  const { clusters } = useClusterStore();
-  useClusters();
-  const [applyClusterId, setApplyClusterId] = useState('');
-  const [applyStatus, setApplyStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
+  // 등록 클러스터 (보이는 클러스터만 — 테넌트 격리)
+  const clustersQ = useClusters();
+  const clusters = useMemo(() => clustersQ.data ?? [], [clustersQ.data]);
+  const clustersFailed = clustersQ.isError && !clustersQ.data;
+  const clustersLoaded = Boolean(clustersQ.data);
+  const { ranges: clusterRanges, unparsed: clusterUnparsed } = useMemo(
+    () => collectClusterRanges(clusters),
+    [clusters],
+  );
+  const retryClusters = () => { void clustersQ.refetch(); };
 
-  const handleApplyToCluster = async () => {
-    if (!applyClusterId || !info) return;
-    setApplyStatus('loading');
-    try {
-      const networkCidr = `${info.network}/${info.prefix}`;
-      await clustersApi.update(applyClusterId, {
-        cidr: networkCidr,
-        first_host: info.firstHost,
-        last_host: info.lastHost,
-      } as Record<string, unknown>);
-      setApplyStatus('success');
-      setTimeout(() => setApplyStatus('idle'), 3000);
-    } catch {
-      setApplyStatus('error');
-      setTimeout(() => setApplyStatus('idle'), 3000);
-    }
+  // Apply CIDR to cluster
+  const [applyClusterId, setApplyClusterId] = useState('');
+  const [applyFieldKey, setApplyFieldKey] = useState<ClusterCidrField>('cidr');
+  const [applyDone, setApplyDone] = useState<string | null>(null);
+  const [applyError, setApplyError] = useState<string | null>(null);
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const updateCluster = useUpdateCluster();
+  const { canOperate, hint: operateHint, withHint, ariaWithHint } = useCanOperate(applyClusterId || null);
+
+  const applyField = CLUSTER_CIDR_FIELDS.find((f) => f.key === applyFieldKey) ?? CLUSTER_CIDR_FIELDS[0];
+  const applyCluster = clusters.find((c) => c.id === applyClusterId);
+  const applyCurrentValue = (applyCluster?.[applyField.key] ?? '').trim();
+  const applyConflicts = useMemo(() => {
+    if (!curCidr || !applyClusterId) return [];
+    // 같은 클러스터의 같은 필드는 이번 저장으로 바뀌므로 제외한다. 같은 클러스터의 다른 대역은 포함.
+    return clusterRanges.filter(
+      (r) => !(r.clusterId === applyClusterId && r.field === applyFieldKey) && cidrsOverlap(curCidr, r.cidr),
+    );
+  }, [curCidr, applyClusterId, applyFieldKey, clusterRanges]);
+  const applyNeedsConfirm =
+    (applyCurrentValue !== '' && applyCurrentValue !== curCidr) || applyConflicts.length > 0;
+
+  const doApply = () => {
+    if (!applyCluster || !info) return;
+    setApplyError(null);
+    setApplyDone(null);
+    const name = applyCluster.name;
+    const label = applyField.label;
+    const saved = curCidr;
+    updateCluster.mutate(
+      { id: applyCluster.id, data: buildClusterCidrUpdate(applyField.key, info) },
+      {
+        onSuccess: () => {
+          setConfirmOpen(false);
+          setApplyDone(`${name} · ${label}을 ${saved}로 저장했습니다`);
+        },
+        onError: (err) => {
+          setConfirmOpen(false);
+          setApplyError(formatApiError(err, '저장하지 못했습니다'));
+        },
+      },
+    );
+  };
+
+  const handleApplyClick = () => {
+    if (!applyCluster || !info || !canOperate) return;
+    if (applyNeedsConfirm) setConfirmOpen(true);
+    else doApply();
   };
 
   // Multi-CIDR comparator
   const [entries, setEntries] = useState<SubnetEntry[]>([
-    { id: genId(), cidr: '10.0.0.0/8', label: 'Cluster A' },
-    { id: genId(), cidr: '172.16.0.0/12', label: 'Cluster B' },
+    { id: genId(), cidr: '10.0.0.0/8', label: '클러스터 A' },
+    { id: genId(), cidr: '172.16.0.0/12', label: '클러스터 B' },
   ]);
 
   const handleCalculate = (value: string) => {
-    setInput(value);
-    const result = parseCidr(value);
-    if (result) {
-      setInfo(result);
-      setInputError('');
-      setSubnets([]);
-      setDivideError('');
-    } else {
-      setInfo(null);
-      setInputError('잘못된 CIDR 표기입니다. 예: 192.168.1.0/24');
-    }
+    setUrlParams({ cidr: value });
+  };
+
+  const commitDivideCount = () => {
+    const n = Number.isFinite(divideCount) ? divideCount : DIVIDE_MIN;
+    setDivideCountText(String(Math.min(DIVIDE_MAX, Math.max(DIVIDE_MIN, n))));
   };
 
   const handleDivide = () => {
-    if (!info) return;
-    const result = divideSubnets(input, divideCount);
-    if (result.length === 0) {
-      setDivideError(`/${info.prefix} 을 ${divideCount}개로 분할할 수 없습니다 — prefix 가 /32 를 초과합니다`);
-      setSubnets([]);
-    } else {
-      setSubnets(result);
-      setDivideError('');
-    }
+    if (!info || !plan || !plan.ok) return;
+    setDivision({ key: curCidr, subnets: divideSubnets(info, plan.newPrefix, plan.actual) });
   };
 
   const addEntry = () => {
-    setEntries((prev) => [...prev, { id: genId(), cidr: '10.0.0.0/24', label: `Network ${prev.length + 1}` }]);
+    setEntries((prev) => [...prev, { id: genId(), cidr: '10.0.0.0/24', label: `네트워크 ${prev.length + 1}` }]);
   };
 
   const updateEntry = (id: string, field: keyof SubnetEntry, value: string) => {
@@ -365,14 +596,21 @@ export function CidrCalculatorPage() {
   };
 
   // Derived
-  const isPrivate = info ? isPrivateRange(info.network) : false;
+  const scope = info ? SCOPE_BADGE[ipScope(info.network)] : null;
   const sliderPct = info ? (info.prefix / 32) * 100 : 0;
 
-  const overlappingClusters = useMemo(() => {
-    if (!info) return [];
-    const cur = `${info.network}/${info.prefix}`;
-    return clusters.filter((c) => Boolean(c.cidr) && cidrsOverlap(cur, c.cidr as string));
-  }, [info, clusters]);
+  const currentPairs: ClusterPair[] = useMemo(() => {
+    if (!curCidr) return [];
+    return clusterRanges
+      .filter((r) => cidrsOverlap(curCidr, r.cidr))
+      .map((r, i) => ({
+        key: `${r.clusterId}-${r.field}-${i}`,
+        leftLabel: '현재 입력',
+        leftCidr: curCidr,
+        rightLabel: `${r.clusterName} · ${r.band}`,
+        rightCidr: r.cidr,
+      }));
+  }, [curCidr, clusterRanges]);
 
   /**
    * 비교 테이블의 충돌 그룹별 색상 매핑.
@@ -411,8 +649,30 @@ export function CidrCalculatorPage() {
     return map;
   }, [entries]);
 
+  const entryPairs: ClusterPair[] = useMemo(() => {
+    const out: ClusterPair[] = [];
+    for (const entry of entries) {
+      if (!parseCidr(entry.cidr)) continue;
+      clusterRanges.forEach((r, i) => {
+        if (cidrsOverlap(entry.cidr, r.cidr)) {
+          out.push({
+            key: `${entry.id}-${r.clusterId}-${r.field}-${i}`,
+            leftLabel: entry.label || entry.cidr,
+            leftCidr: entry.cidr,
+            rightLabel: `${r.clusterName} · ${r.band}`,
+            rightCidr: r.cidr,
+            hue: entryHueMap[entry.id],
+          });
+        }
+      });
+    }
+    return out;
+  }, [entries, clusterRanges, entryHueMap]);
+
   const inputBaseCls =
-    'px-3 py-2 bg-secondary border border-border rounded-lg text-sm font-mono tabular-nums focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary/40 transition-colors';
+    'px-3 py-2 bg-secondary border border-border rounded-xl text-sm font-mono tabular-nums focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary/40 transition-colors';
+
+  const ScopeIcon = scope?.icon;
 
   return (
     <div className="app-min-h-screen bg-background">
@@ -425,10 +685,10 @@ export function CidrCalculatorPage() {
           actions={
             <div className="flex items-center gap-3 text-xs text-muted-foreground">
               <span className="inline-flex items-center gap-1.5">
-                <span className="w-1.5 h-1.5 rounded-full bg-chart-1" /> Private (RFC1918)
+                <span className="w-1.5 h-1.5 rounded-full bg-chart-1" /> 사설(RFC1918)
               </span>
               <span className="inline-flex items-center gap-1.5">
-                <span className="w-1.5 h-1.5 rounded-full bg-chart-3" /> Public
+                <span className="w-1.5 h-1.5 rounded-full bg-chart-3" /> 공인
               </span>
             </div>
           }
@@ -453,6 +713,7 @@ export function CidrCalculatorPage() {
                   onChange={(e) => handleCalculate(e.target.value)}
                   placeholder="192.168.1.0/24"
                   spellCheck={false}
+                  aria-invalid={Boolean(inputError)}
                   className={[
                     'w-full px-4 py-3 pr-36 bg-secondary/60 border border-border rounded-xl',
                     'text-lg font-mono tabular-nums tracking-tight',
@@ -460,21 +721,16 @@ export function CidrCalculatorPage() {
                     inputError ? 'border-status-critical/60 focus:ring-status-critical/30' : '',
                   ].join(' ')}
                 />
-                {info && !inputError && (
+                {info && scope && ScopeIcon && (
                   <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1">
                     <span className="px-2 py-0.5 text-xs font-semibold rounded-md bg-primary/10 text-primary border border-primary/20">
-                      Class {info.ipClass.split(' ')[0]}
+                      클래스 {info.ipClass.split(' ')[0]}
                     </span>
                     <span
-                      className={[
-                        'px-2 py-0.5 text-xs font-semibold rounded-md border inline-flex items-center gap-1',
-                        isPrivate
-                          ? 'bg-chart-1/10 text-chart-1-text border-chart-1/30'
-                          : 'bg-chart-3/10 text-chart-3-text border-chart-3/30',
-                      ].join(' ')}
+                      className={`px-2 py-0.5 text-xs font-semibold rounded-md border inline-flex items-center gap-1 ${scope.cls}`}
                     >
-                      {isPrivate ? <Lock className="w-2.5 h-2.5" /> : <Globe className="w-2.5 h-2.5" />}
-                      {isPrivate ? 'Private' : 'Public'}
+                      <ScopeIcon className="w-2.5 h-2.5" />
+                      {scope.label}
                     </span>
                   </div>
                 )}
@@ -524,22 +780,22 @@ export function CidrCalculatorPage() {
                     <div className="text-xs font-medium text-muted-foreground mb-1">
                       사용 가능 호스트
                     </div>
-                    <div className="text-3xl font-bold tabular-nums text-primary leading-none">
+                    <div className="text-xl font-semibold tabular-nums text-foreground leading-none">
                       {formatHosts(info.usableHosts)}
                     </div>
                     <div className="text-xs text-muted-foreground mt-1.5 font-mono tabular-nums">
-                      {info.usableHosts.toLocaleString()} addresses
+                      {info.usableHosts.toLocaleString()}개 주소
                     </div>
                   </div>
                   <div>
                     <div className="text-xs font-medium text-muted-foreground mb-1">
                       전체 주소
                     </div>
-                    <div className="text-3xl font-bold tabular-nums text-foreground leading-none">
+                    <div className="text-xl font-semibold tabular-nums text-foreground leading-none">
                       {formatHosts(info.totalHosts)}
                     </div>
                     <div className="text-xs text-muted-foreground mt-1.5 font-mono tabular-nums">
-                      2<sup>{32 - info.prefix}</sup> addresses
+                      2<sup>{32 - info.prefix}</sup>개 주소
                     </div>
                   </div>
                 </div>
@@ -557,8 +813,13 @@ export function CidrCalculatorPage() {
                 </div>
               </div>
             ) : (
-              <div className="p-6 bg-muted/30 flex items-center justify-center text-sm text-muted-foreground">
-                CIDR 입력 시 결과가 여기에 표시됩니다.
+              <div className="bg-muted/30 flex items-center justify-center">
+                <EmptyState
+                  compact
+                  icon={Calculator}
+                  title="결과 없음"
+                  description="CIDR을 입력하면 결과가 여기에 표시됩니다."
+                />
               </div>
             )}
           </div>
@@ -568,14 +829,14 @@ export function CidrCalculatorPage() {
         {info && (
           <MacCard title="네트워크 정보">
             <StatTileRow>
-              <StatTile label="네트워크" value={`${info.network}/${info.prefix}`} hint={<CopyButton value={`${info.network}/${info.prefix}`} />} />
+              <StatTile label="네트워크" value={curCidr} hint={<CopyButton value={curCidr} />} />
               <StatTile label="브로드캐스트" value={info.broadcast} hint={<CopyButton value={info.broadcast} />} />
               <StatTile label="서브넷 마스크" value={info.mask} hint={<CopyButton value={info.mask} />} />
               <StatTile label="와일드카드" value={info.wildcard} hint={<CopyButton value={info.wildcard} />} />
             </StatTileRow>
 
             {/* Binary mask visualization */}
-            <div className="mt-4 p-3.5 bg-secondary/40 border border-border rounded-lg">
+            <div className="mt-4 p-3.5 bg-secondary/40 border border-border rounded-md">
               <div className="flex items-center justify-between mb-2 flex-wrap gap-2">
                 <span className="text-xs font-medium text-muted-foreground">
                   이진 마스크
@@ -583,11 +844,11 @@ export function CidrCalculatorPage() {
                 <div className="flex items-center gap-3 text-xs text-muted-foreground">
                   <span className="inline-flex items-center gap-1.5">
                     <span className="w-2 h-2 rounded-sm bg-primary" />
-                    network bits ({info.prefix})
+                    네트워크 비트 ({info.prefix})
                   </span>
                   <span className="inline-flex items-center gap-1.5">
                     <span className="w-2 h-2 rounded-sm bg-muted-foreground/30" />
-                    host bits ({32 - info.prefix})
+                    호스트 비트 ({32 - info.prefix})
                   </span>
                 </div>
               </div>
@@ -618,30 +879,18 @@ export function CidrCalculatorPage() {
               </div>
             </div>
 
-            {/* Cluster overlap warning — "현재 입력 ↔ 클러스터" 형태로 양쪽을 함께 보여준다 */}
-            {overlappingClusters.length > 0 && (() => {
-              const cur = `${info.network}/${info.prefix}`;
-              return (
-                <div className="mt-3">
-                  <p className="text-sm font-semibold text-status-warning inline-flex items-center gap-1.5 mb-2">
-                    <AlertTriangle className="w-3.5 h-3.5" />
-                    등록 클러스터와 CIDR 겹침 — {overlappingClusters.length}개 충돌
-                  </p>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
-                    {overlappingClusters.map((c) => (
-                      <OverlapPair
-                        key={c.id}
-                        leftLabel="현재 입력"
-                        leftCidr={cur}
-                        rightLabel={c.name}
-                        rightCidr={c.cidr as string}
-                        hue="amber"
-                      />
-                    ))}
-                  </div>
-                </div>
-              );
-            })()}
+            {/* Cluster overlap — "현재 입력 ↔ 클러스터 · 대역" 형태로 양쪽을 함께 보여준다 */}
+            <ClusterOverlapSection
+              failed={clustersFailed}
+              error={clustersQ.error}
+              onRetry={retryClusters}
+              loaded={clustersLoaded}
+              visibleCount={clusters.length}
+              unparsed={clusterUnparsed}
+              pairs={currentPairs}
+              conflictTitle={`등록 클러스터 대역과 겹침 — ${currentPairs.length}건`}
+              gridCls="grid grid-cols-1 sm:grid-cols-2 gap-1.5"
+            />
           </MacCard>
         )}
 
@@ -650,7 +899,7 @@ export function CidrCalculatorPage() {
           {/* LEFT column */}
           <div className="space-y-5 min-w-0">
             {/* Subnet divider */}
-            {info && (
+            {info && plan && (
               <MacCard title="서브넷 분할">
                 <div className="flex items-end gap-3 flex-wrap">
                   <div className="flex-shrink-0">
@@ -663,38 +912,41 @@ export function CidrCalculatorPage() {
                     <input
                       id="cidr-divide-count"
                       type="number"
-                      min={2}
-                      max={256}
-                      value={divideCount}
-                      onChange={(e) => setDivideCount(parseInt(e.target.value, 10) || 2)}
+                      inputMode="numeric"
+                      min={DIVIDE_MIN}
+                      max={DIVIDE_MAX}
+                      value={divideCountText}
+                      onChange={(e) => setDivideCountText(e.target.value)}
+                      onBlur={commitDivideCount}
+                      aria-invalid={!plan.ok}
+                      aria-describedby="cidr-divide-plan"
                       className={`${inputBaseCls} w-24`}
                     />
                   </div>
                   <button
                     type="button"
                     onClick={handleDivide}
-                    className="px-4 py-2 text-sm font-medium bg-primary hover:bg-primary/90 text-primary-foreground rounded-lg transition-colors inline-flex items-center gap-1.5"
+                    disabled={!plan.ok}
+                    title={plan.ok ? '분할' : plan.reason}
+                    className="px-4 py-2 text-sm font-medium bg-primary hover:bg-primary/90 text-primary-foreground rounded-xl transition-colors inline-flex items-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     <Scissors className="w-3.5 h-3.5" />
                     분할
                   </button>
-                  <div className="flex-1 min-w-0 text-xs text-muted-foreground">
-                    {info.network}/{info.prefix} 을 {divideCount}개 균등 분할
-                    {(() => {
-                      const bits = Math.ceil(Math.log2(Math.max(divideCount, 2)));
-                      const newPrefix = info.prefix + bits;
-                      if (newPrefix > 32) return <> · <span className="text-status-critical">/32 초과</span></>;
-                      return <> · 결과 prefix /{newPrefix} · 각 {formatHosts(Math.pow(2, 32 - newPrefix))} addresses</>;
-                    })()}
+                  <div id="cidr-divide-plan" className="flex-1 min-w-0 text-xs text-muted-foreground">
+                    {plan.ok ? (
+                      <>
+                        {curCidr} · {plan.requested}개 요청 → {plan.actual}개(/{plan.newPrefix})로 분할 · 각{' '}
+                        {formatHosts(Math.pow(2, 32 - plan.newPrefix))} 주소
+                      </>
+                    ) : (
+                      <span className="text-status-critical inline-flex items-center gap-1.5">
+                        <AlertTriangle className="w-3 h-3" />
+                        {plan.reason}
+                      </span>
+                    )}
                   </div>
                 </div>
-
-                {divideError && (
-                  <p className="mt-3 text-sm text-status-critical inline-flex items-center gap-1.5">
-                    <AlertTriangle className="w-3 h-3" />
-                    {divideError}
-                  </p>
-                )}
 
                 {subnets.length > 0 && (
                   <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-1.5 max-h-72 overflow-y-auto pr-1">
@@ -714,7 +966,7 @@ export function CidrCalculatorPage() {
                               {si.firstHost}–{si.lastHost}
                             </span>
                           )}
-                          <span className="opacity-0 group-hover:opacity-100 transition-opacity">
+                          <span className="opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity">
                             <CopyButton value={s} />
                           </span>
                         </div>
@@ -734,7 +986,7 @@ export function CidrCalculatorPage() {
                 <button
                   type="button"
                   onClick={addEntry}
-                  className="px-2.5 py-1 text-xs font-medium bg-primary/10 hover:bg-primary/20 text-primary border border-primary/20 rounded-md transition-colors inline-flex items-center gap-1"
+                  className="px-2.5 py-1 text-xs font-medium bg-primary/10 hover:bg-primary/20 text-primary border border-primary/20 rounded-xl transition-colors inline-flex items-center gap-1"
                 >
                   <Plus className="w-3 h-3" />
                   추가
@@ -759,22 +1011,25 @@ export function CidrCalculatorPage() {
                         type="text"
                         value={entry.label}
                         onChange={(e) => updateEntry(entry.id, 'label', e.target.value)}
-                        placeholder="Label"
-                        className="px-2 py-1.5 bg-secondary border border-border rounded-md text-sm w-32 focus:outline-none focus:ring-1 focus:ring-primary/40"
+                        placeholder="이름"
+                        aria-label="이름"
+                        className="px-2 py-1.5 bg-secondary border border-border rounded-xl text-sm w-32 focus:outline-none focus:ring-1 focus:ring-primary/40"
                       />
                       <input
                         type="text"
                         value={entry.cidr}
                         onChange={(e) => updateEntry(entry.id, 'cidr', e.target.value)}
                         placeholder="10.0.0.0/24"
+                        aria-label="CIDR"
                         spellCheck={false}
                         className={`${inputBaseCls} flex-1 text-sm py-1.5`}
                       />
                       <button
                         type="button"
                         onClick={() => removeEntry(entry.id)}
-                        className="p-1.5 hover:bg-status-critical/10 rounded-md text-muted-foreground hover:text-status-critical flex-shrink-0 transition-colors"
-                        aria-label="Remove entry"
+                        className="p-1.5 hover:bg-status-critical/10 rounded-xl text-muted-foreground hover:text-status-critical flex-shrink-0 transition-colors"
+                        title="항목 삭제"
+                        aria-label={`${entry.label || entry.cidr} 항목 삭제`}
                       >
                         <Trash2 className="w-3.5 h-3.5" />
                       </button>
@@ -797,19 +1052,19 @@ export function CidrCalculatorPage() {
                   <thead>
                     <tr className="bg-muted/40 border-b border-border">
                       <th className="relative text-left py-2 px-3 text-muted-foreground font-medium text-xs">
-                        Label
+                        이름
                         <ResizeGrip onMouseDown={(e) => compareColW.beginResize('label', e)} onDoubleClick={() => compareColW.autoFit('label')} />
                       </th>
                       <th className="relative text-left py-2 px-3 text-muted-foreground font-medium text-xs">
-                        Network
+                        네트워크
                         <ResizeGrip onMouseDown={(e) => compareColW.beginResize('network', e)} onDoubleClick={() => compareColW.autoFit('network')} />
                       </th>
                       <th className="relative text-left py-2 px-3 text-muted-foreground font-medium text-xs">
-                        Mask
+                        마스크
                         <ResizeGrip onMouseDown={(e) => compareColW.beginResize('mask', e)} onDoubleClick={() => compareColW.autoFit('mask')} />
                       </th>
                       <th className="relative text-right py-2 px-3 text-muted-foreground font-medium text-xs">
-                        Usable
+                        사용 가능
                         <ResizeGrip onMouseDown={(e) => compareColW.beginResize('hosts', e)} onDoubleClick={() => compareColW.autoFit('hosts')} />
                       </th>
                       <th className="relative text-left py-2 px-3 text-muted-foreground font-medium text-xs">
@@ -845,12 +1100,12 @@ export function CidrCalculatorPage() {
                             </span>
                           </td>
                           <td className="py-2 px-3 font-mono tabular-nums text-muted-foreground truncate">
-                            {ei ? `${ei.network}/${ei.prefix}` : <span className="text-status-critical">invalid</span>}
+                            {ei ? `${ei.network}/${ei.prefix}` : <span className="text-status-critical">형식 오류</span>}
                           </td>
                           <td className="py-2 px-3 font-mono tabular-nums text-muted-foreground truncate">
                             {ei ? ei.mask : '—'}
                           </td>
-                          <td className="py-2 px-3 text-right font-mono tabular-nums text-primary font-medium">
+                          <td className="py-2 px-3 text-right font-mono tabular-nums text-foreground font-medium">
                             {ei ? formatHosts(ei.usableHosts) : '—'}
                           </td>
                           <td className="py-2 px-3">
@@ -863,7 +1118,7 @@ export function CidrCalculatorPage() {
                                     <span
                                       key={e.id}
                                       className={`inline-flex items-center gap-1 text-xs px-1.5 py-0.5 rounded-md border ${tone.bg} ${tone.border} ${tone.text}`}
-                                      title={ov ? `겹침 구간: ${ov.start} – ${ov.end} (${formatHosts(ov.size)} IPs)` : undefined}
+                                      title={ov ? `겹침 구간: ${ov.start} – ${ov.end} (${formatHosts(ov.size)} 주소)` : undefined}
                                     >
                                       <AlertTriangle className="w-2.5 h-2.5" />
                                       <span className="font-medium">{e.label || e.cidr}</span>
@@ -892,143 +1147,184 @@ export function CidrCalculatorPage() {
                 </table>
               </DoubleScrollX>
 
-              {/* Registered cluster overlap check — entry ↔ cluster 페어로 표시 */}
-              {clusters.length > 0 && (() => {
-                const conflicts: { entry: SubnetEntry; clusterName: string; clusterCidr: string }[] = [];
-                for (const entry of entries) {
-                  for (const cluster of clusters) {
-                    if (cluster.cidr && cidrsOverlap(entry.cidr, cluster.cidr)) {
-                      conflicts.push({ entry, clusterName: cluster.name, clusterCidr: cluster.cidr });
-                    }
-                  }
-                }
-                if (conflicts.length === 0) return null;
-                return (
-                  <div className="mt-3">
-                    <p className="text-sm font-semibold text-status-warning inline-flex items-center gap-1.5 mb-2">
-                      <AlertTriangle className="w-3.5 h-3.5" />
-                      등록 클러스터 CIDR 겹침 — {conflicts.length}건
-                    </p>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-1.5">
-                      {conflicts.map((c, i) => (
-                        <OverlapPair
-                          key={i}
-                          leftLabel={c.entry.label || c.entry.cidr}
-                          leftCidr={c.entry.cidr}
-                          rightLabel={c.clusterName}
-                          rightCidr={c.clusterCidr}
-                          hue={entryHueMap[c.entry.id] ?? 'amber'}
-                        />
-                      ))}
-                    </div>
-                  </div>
-                );
-              })()}
+              {/* Registered cluster overlap check — entry ↔ 클러스터 · 대역 페어로 표시 */}
+              <ClusterOverlapSection
+                failed={clustersFailed}
+                error={clustersQ.error}
+                onRetry={retryClusters}
+                loaded={clustersLoaded}
+                visibleCount={clusters.length}
+                unparsed={clusterUnparsed}
+                pairs={entryPairs}
+                conflictTitle={`등록 클러스터 대역과 겹침 — ${entryPairs.length}건`}
+                gridCls="grid grid-cols-1 md:grid-cols-2 gap-1.5"
+              />
             </MacCard>
           </div>
 
           {/* RIGHT column */}
           <div className="space-y-5 min-w-0">
-            {/* Apply to cluster */}
-            {info && clusters.length > 0 && (
+            {/* Apply to cluster — DB 메타 저장(폼 저장)이라 §12.9.1 실행 로그 대상이 아니다 */}
+            {info && (clusters.length > 0 || clustersFailed) && (
               <MacCard title="클러스터에 적용">
-                <p className="text-xs text-muted-foreground mb-3 inline-flex items-center gap-1.5">
-                  <ExternalLink className="w-3 h-3" />
-                  계산된 Network CIDR 을 클러스터 메타정보에 저장
-                </p>
+                {clustersFailed ? (
+                  <ErrorState
+                    compact
+                    error={clustersQ.error}
+                    title="클러스터 목록을 불러오지 못했습니다"
+                    onRetry={retryClusters}
+                  />
+                ) : (
+                  <>
+                    <p className="text-xs text-muted-foreground mb-3 inline-flex items-center gap-1.5">
+                      <ExternalLink className="w-3 h-3" />
+                      계산된 네트워크 CIDR을 클러스터 메타정보에 저장
+                    </p>
 
-                <div className="space-y-2">
-                  <label
-                    htmlFor="cidr-apply-cluster-select"
-                    className="block text-xs font-medium text-muted-foreground"
-                  >
-                    대상 클러스터
-                  </label>
-                  <select
-                    id="cidr-apply-cluster-select"
-                    value={applyClusterId}
-                    onChange={(e) => { setApplyClusterId(e.target.value); setApplyStatus('idle'); }}
-                    className="w-full px-3 py-2 bg-secondary border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/40"
-                  >
-                    <option value="">— 클러스터 선택 —</option>
-                    {clusters.map((c) => (
-                      <option key={c.id} value={c.id}>
-                        {c.name}{c.cidr ? ` (현재: ${c.cidr})` : ''}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                {/* Preview of what will be saved */}
-                {applyClusterId && (
-                  <div className="mt-3 p-3 bg-secondary/40 border border-border rounded-lg">
-                    <div className="text-xs font-medium text-muted-foreground mb-2">
-                      저장될 값
-                    </div>
-                    <dl className="space-y-1 text-sm font-mono tabular-nums">
-                      <div className="flex justify-between gap-2">
-                        <dt className="text-muted-foreground">cidr</dt>
-                        <dd className="text-primary truncate">{info.network}/{info.prefix}</dd>
-                      </div>
-                      <div className="flex justify-between gap-2">
-                        <dt className="text-muted-foreground">first_host</dt>
-                        <dd className="text-foreground truncate">{info.firstHost}</dd>
-                      </div>
-                      <div className="flex justify-between gap-2">
-                        <dt className="text-muted-foreground">last_host</dt>
-                        <dd className="text-foreground truncate">{info.lastHost}</dd>
-                      </div>
-                    </dl>
-                  </div>
-                )}
-
-                <button
-                  type="button"
-                  onClick={handleApplyToCluster}
-                  disabled={!applyClusterId || applyStatus === 'loading'}
-                  className="mt-3 w-full px-4 py-2 text-sm font-medium bg-primary hover:bg-primary/90 text-primary-foreground rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center justify-center gap-1.5"
-                >
-                  {applyStatus === 'loading' ? '적용 중…' : '클러스터에 적용'}
-                </button>
-
-                {applyStatus === 'success' && (
-                  <p className="mt-2 text-sm text-status-healthy inline-flex items-center gap-1">
-                    <Check className="w-3 h-3" /> 클러스터 CIDR 이 저장되었습니다
-                  </p>
-                )}
-                {applyStatus === 'error' && (
-                  <p className="mt-2 text-sm text-status-critical inline-flex items-center gap-1">
-                    <AlertTriangle className="w-3 h-3" /> 저장 실패 — 다시 시도해주세요
-                  </p>
-                )}
-
-                {applyClusterId && (() => {
-                  const currentCidr = `${info.network}/${info.prefix}`;
-                  const conflicting = clusters.filter(
-                    (c) => c.id !== applyClusterId && Boolean(c.cidr) && cidrsOverlap(currentCidr, c.cidr as string),
-                  );
-                  if (conflicting.length === 0) return null;
-                  return (
-                    <div className="mt-3">
-                      <p className="text-xs font-semibold text-status-warning inline-flex items-center gap-1.5 mb-1.5">
-                        <AlertTriangle className="w-3 h-3" />
-                        다른 클러스터와 CIDR 겹침
-                      </p>
-                      <div className="space-y-1.5">
-                        {conflicting.map((c) => (
-                          <OverlapPair
-                            key={c.id}
-                            leftLabel="저장 예정"
-                            leftCidr={currentCidr}
-                            rightLabel={c.name}
-                            rightCidr={c.cidr as string}
-                            hue="amber"
-                          />
+                    <div className="space-y-2">
+                      <label
+                        htmlFor="cidr-apply-cluster-select"
+                        className="block text-xs font-medium text-muted-foreground"
+                      >
+                        대상 클러스터
+                      </label>
+                      {/* 정책 ⑥: 계산 도구의 "적용 대상" 폼 필드 — ClusterSidebar 규칙 예외 */}
+                      <select
+                        id="cidr-apply-cluster-select"
+                        value={applyClusterId}
+                        onChange={(e) => { setApplyClusterId(e.target.value); setApplyDone(null); }}
+                        className="w-full px-3 py-2 bg-secondary border border-border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/40"
+                      >
+                        <option value="">— 클러스터 선택 —</option>
+                        {clusters.map((c) => (
+                          <option key={c.id} value={c.id}>
+                            {c.name}{c[applyFieldKey] ? ` (현재: ${c[applyFieldKey]})` : ''}
+                          </option>
                         ))}
+                      </select>
+                    </div>
+
+                    <div className="mt-3 space-y-2">
+                      <span id="cidr-apply-field-label" className="block text-xs font-medium text-muted-foreground">
+                        대상 필드
+                      </span>
+                      <div role="group" aria-labelledby="cidr-apply-field-label" className="grid grid-cols-3 gap-1.5">
+                        {CLUSTER_CIDR_FIELDS.map((f) => {
+                          const active = f.key === applyFieldKey;
+                          return (
+                            <button
+                              key={f.key}
+                              type="button"
+                              aria-pressed={active}
+                              onClick={() => { setApplyFieldKey(f.key); setApplyDone(null); }}
+                              className={`px-2 py-1.5 text-xs font-medium rounded-xl border transition-colors ${
+                                active
+                                  ? 'bg-primary/10 border-primary/40 text-foreground'
+                                  : 'bg-secondary border-border text-muted-foreground hover:text-foreground'
+                              }`}
+                            >
+                              {f.label}
+                            </button>
+                          );
+                        })}
                       </div>
                     </div>
-                  );
-                })()}
+
+                    {/* Preview of what will be saved */}
+                    {applyClusterId && (
+                      <div className="mt-3 p-3 bg-secondary/40 border border-border rounded-md">
+                        <div className="text-xs font-medium text-muted-foreground mb-2">
+                          저장될 값
+                        </div>
+                        <dl className="space-y-1 text-sm">
+                          <div className="flex justify-between gap-2">
+                            <dt className="text-muted-foreground">{applyField.label}</dt>
+                            <dd className="font-mono tabular-nums text-foreground truncate">{curCidr}</dd>
+                          </div>
+                          <div className="flex justify-between gap-2">
+                            <dt className="text-muted-foreground">첫 호스트</dt>
+                            <dd className="font-mono tabular-nums text-foreground truncate">{info.firstHost}</dd>
+                          </div>
+                          <div className="flex justify-between gap-2">
+                            <dt className="text-muted-foreground">마지막 호스트</dt>
+                            <dd className="font-mono tabular-nums text-foreground truncate">{info.lastHost}</dd>
+                          </div>
+                          <div className="flex justify-between gap-2 pt-1 border-t border-border/60">
+                            <dt className="text-muted-foreground">현재 값</dt>
+                            <dd className="font-mono tabular-nums text-muted-foreground truncate">
+                              {applyCurrentValue || '없음'}
+                            </dd>
+                          </div>
+                        </dl>
+                      </div>
+                    )}
+
+                    <button
+                      type="button"
+                      onClick={handleApplyClick}
+                      disabled={!applyClusterId || updateCluster.isPending || !canOperate}
+                      title={withHint(applyClusterId ? `${applyField.label}에 적용` : '대상 클러스터를 먼저 고르세요')}
+                      aria-label={ariaWithHint('클러스터에 적용')}
+                      className="mt-3 w-full px-4 py-2 text-sm font-medium bg-primary hover:bg-primary/90 text-primary-foreground rounded-xl transition-colors disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center justify-center gap-1.5"
+                    >
+                      {updateCluster.isPending ? '적용 중…' : '클러스터에 적용'}
+                    </button>
+                    {applyClusterId && operateHint && (
+                      <p className="mt-1.5 text-xs text-muted-foreground">{operateHint}</p>
+                    )}
+
+                    {applyDone && (
+                      <p className="mt-2 text-sm text-status-healthy inline-flex items-center gap-1" role="status">
+                        <Check className="w-3 h-3" /> {applyDone}
+                      </p>
+                    )}
+                    {applyError && (
+                      <div
+                        role="alert"
+                        className="mt-2 flex items-start gap-1.5 px-2.5 py-2 text-sm text-status-critical bg-status-critical/10 border border-status-critical/30 rounded-md"
+                      >
+                        <AlertTriangle className="w-3.5 h-3.5 mt-0.5 flex-shrink-0" />
+                        <span className="flex-1 min-w-0 whitespace-pre-line break-words">
+                          저장 실패: {applyError}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => setApplyError(null)}
+                          className="p-0.5 rounded-xl hover:bg-status-critical/10 flex-shrink-0"
+                          title="닫기"
+                          aria-label="오류 닫기"
+                        >
+                          <X className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    )}
+
+                    {applyClusterId && applyConflicts.length > 0 && (
+                      <div className="mt-3">
+                        <p className="text-xs font-semibold text-status-warning inline-flex items-center gap-1.5 mb-1.5">
+                          <AlertTriangle className="w-3 h-3" />
+                          기존 대역과 겹침 — {applyConflicts.length}건
+                        </p>
+                        <div className="space-y-1.5">
+                          {applyConflicts.map((r, i) => (
+                            <OverlapPair
+                              key={`${r.clusterId}-${r.field}-${i}`}
+                              leftLabel="저장 예정"
+                              leftCidr={curCidr}
+                              rightLabel={`${r.clusterName} · ${r.band}`}
+                              rightCidr={r.cidr}
+                              hue="amber"
+                            />
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    <div className="mt-3">
+                      <ClusterScopeNote visibleCount={clusters.length} unparsed={clusterUnparsed} />
+                    </div>
+                  </>
+                )}
               </MacCard>
             )}
 
@@ -1044,7 +1340,7 @@ export function CidrCalculatorPage() {
                     key={prefix}
                     type="button"
                     onClick={() => handleCalculate(`${input.split('/')[0] || '192.168.1.0'}${prefix}`)}
-                    className="group flex items-center justify-between gap-2 px-2.5 py-1.5 bg-secondary/40 hover:bg-secondary hover:border-primary/30 border border-border rounded-md transition-colors text-left"
+                    className="group flex items-center justify-between gap-2 px-2.5 py-1.5 bg-secondary/40 hover:bg-secondary hover:border-primary/30 border border-border rounded-xl transition-colors text-left"
                     title={`${prefix} 적용`}
                   >
                     <span className="font-mono tabular-nums text-primary text-sm font-semibold">{prefix}</span>
@@ -1058,6 +1354,32 @@ export function CidrCalculatorPage() {
           </div>
         </div>
       </PageShell>
+
+      <ConfirmDialog
+        open={confirmOpen}
+        title="클러스터 CIDR 덮어쓰기"
+        description={
+          applyCluster
+            ? `${applyCluster.name} · ${applyField.label}: 현재 ${applyCurrentValue || '없음'} → ${curCidr}, 겹침 ${applyConflicts.length}건`
+            : undefined
+        }
+        confirmLabel="저장"
+        danger={applyConflicts.length > 0}
+        busy={updateCluster.isPending}
+        onConfirm={doApply}
+        onCancel={() => setConfirmOpen(false)}
+      >
+        {applyConflicts.length > 0 && (
+          <ul className="mt-2 space-y-0.5 text-xs text-muted-foreground">
+            {applyConflicts.slice(0, 8).map((r, i) => (
+              <li key={`${r.clusterId}-${r.field}-${i}`}>
+                {r.clusterName} · {r.band}: <span className="font-mono tabular-nums">{r.cidr}</span>
+              </li>
+            ))}
+            {applyConflicts.length > 8 && <li>외 {applyConflicts.length - 8}건</li>}
+          </ul>
+        )}
+      </ConfirmDialog>
     </div>
   );
 }

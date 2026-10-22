@@ -1,13 +1,13 @@
 import { useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import {
-  DndContext, closestCenter, PointerSensor, useSensor, useSensors, type DragEndEvent,
+  DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors, type DragEndEvent,
 } from '@dnd-kit/core';
 import {
-  SortableContext, verticalListSortingStrategy, arrayMove, useSortable,
+  SortableContext, verticalListSortingStrategy, arrayMove, sortableKeyboardCoordinates, useSortable,
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { Pencil, Plus, X } from 'lucide-react';
+import { GripVertical, Pencil, Plus, X } from 'lucide-react';
 import type { IslandPanelView } from './IslandTabBar';
 
 interface SortableRailItemProps {
@@ -20,7 +20,9 @@ interface SortableRailItemProps {
 }
 
 function SortableRailItem({ panel, active, editable, onSelect, onRemove, onEdit }: SortableRailItemProps) {
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+  const {
+    attributes, listeners, setNodeRef, setActivatorNodeRef, transform, transition, isDragging,
+  } = useSortable({
     id: panel.key,
     disabled: !editable,
   });
@@ -39,8 +41,6 @@ function SortableRailItem({ panel, active, editable, onSelect, onRemove, onEdit 
       ref={setNodeRef}
       style={{ transform: CSS.Transform.toString(transform), transition }}
       className={`group relative ${isDragging ? 'opacity-50 z-10' : ''}`}
-      {...attributes}
-      {...listeners}
     >
       <button
         ref={buttonRef}
@@ -65,6 +65,19 @@ function SortableRailItem({ panel, active, editable, onSelect, onRemove, onEdit 
       </button>
       {editable && (
         <>
+          {/* 드래그 핸들 — dnd 속성은 여기에만(B-17). 패널 버튼을 감싼 div 에 붙이면 중첩 인터랙티브가 된다.
+              키보드: 포커스하면 보이고, Space 로 잡아 ↑/↓ 로 옮긴 뒤 Space 로 놓는다. */}
+          <button
+            type="button"
+            ref={setActivatorNodeRef}
+            {...attributes}
+            {...listeners}
+            title={`${panel.displayLabel} 순서 변경 (끌거나 Space 후 화살표)`}
+            aria-label={`${panel.displayLabel} 순서 변경`}
+            className="absolute -bottom-0.5 -left-0.5 p-0.5 rounded-full bg-card border border-border text-muted-foreground opacity-0 group-hover:opacity-100 focus:opacity-100 hover:text-foreground transition-opacity cursor-grab active:cursor-grabbing touch-none"
+          >
+            <GripVertical className="w-3 h-3" aria-hidden="true" />
+          </button>
           <button
             type="button"
             onClick={onEdit}
@@ -89,7 +102,7 @@ function SortableRailItem({ panel, active, editable, onSelect, onRemove, onEdit 
         <span
           role="tooltip"
           style={{ top: tooltipPos.top, left: tooltipPos.left, transform: 'translateY(-50%)' }}
-          className="fixed px-2 py-1 text-sm font-medium whitespace-nowrap bg-zinc-700 text-white rounded shadow-lg pointer-events-none z-[60]"
+          className="fixed px-2 py-1 text-sm font-medium whitespace-nowrap bg-foreground text-background rounded shadow-lg pointer-events-none z-[60]"
         >
           {panel.displayLabel}
         </span>,
@@ -119,7 +132,10 @@ interface IslandRailProps {
 export function IslandRail({
   panels, activeKey, editable, onSelect, onRemove, onEdit, onReorder, onAdd, atCapacity,
 }: IslandRailProps) {
-  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
+  );
 
   const handleDragEnd = (e: DragEndEvent) => {
     const { active, over } = e;

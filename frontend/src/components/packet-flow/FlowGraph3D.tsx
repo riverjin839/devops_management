@@ -3,6 +3,7 @@ import ForceGraph3D, { type ForceGraph3DInstance, type NodeObject, type LinkObje
 import * as THREE from 'three';
 import type { TopologyTraceHopV2, HopVerdict } from '@/types';
 import { cssVarColor, useThemeColorKey } from '@/lib/chartTokens';
+import { escapeHtml } from '@/lib/html';
 
 interface Props {
   hops: TopologyTraceHopV2[];
@@ -73,10 +74,6 @@ function flowColors(): FlowColors {
 }
 
 /** 툴팁 HTML 에 넣는 서버 값(홉 이름·인터페이스) 이스케이프. */
-function escapeHtml(v: string | undefined | null): string {
-  return String(v ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c] ?? c));
-}
-
 interface GNode extends NodeObject {
   id: string;
   label: string;

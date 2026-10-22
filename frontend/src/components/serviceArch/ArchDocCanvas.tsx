@@ -1,5 +1,5 @@
-import { forwardRef, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { StickyNote } from 'lucide-react';
+import { forwardRef, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react';
+import { Minus, Plus, RotateCcw, StickyNote } from 'lucide-react';
 import type { TopoNode, TopoEdge } from '@/types';
 import {
   computeLayout, edgeStyleToken, useTopologyColors, statusColor,
@@ -101,10 +101,20 @@ export const ArchDocCanvas = forwardRef<SVGSVGElement, Props>(function ArchDocCa
   };
 
   // ── pan / zoom / drag ─────────────────────────────────────────────────────
-  const onWheel = useCallback((e: React.WheelEvent) => {
-    e.preventDefault();
-    const scale = e.deltaY < 0 ? 1.1 : 0.9;
-    setView((v) => ({ ...v, k: Math.max(0.2, Math.min(2.5, v.k * scale)) }));
+  // 휠 줌 — React 의 onWheel 은 passive 로 붙어 preventDefault 가 무시되고 페이지가 함께 스크롤된다.
+  // 그래서 svg 에 { passive: false } 리스너를 직접 건다(A-22).
+  const svgRef = useRef<SVGSVGElement>(null);
+  useImperativeHandle(svgForwardRef, () => svgRef.current as SVGSVGElement);
+  useEffect(() => {
+    const el = svgRef.current;
+    if (!el) return;
+    const onWheel = (e: WheelEvent) => {
+      e.preventDefault();
+      const scale = e.deltaY < 0 ? 1.1 : 0.9;
+      setView((v) => ({ ...v, k: Math.max(0.2, Math.min(2.5, v.k * scale)) }));
+    };
+    el.addEventListener('wheel', onWheel, { passive: false });
+    return () => el.removeEventListener('wheel', onWheel);
   }, []);
 
   const onBgDown = (e: React.MouseEvent) => {
@@ -158,139 +168,149 @@ export const ArchDocCanvas = forwardRef<SVGSVGElement, Props>(function ArchDocCa
   );
 
   return (
-    <svg
-      ref={svgForwardRef}
-      className="w-full h-full select-none touch-none"
-      style={{ cursor: panning.current ? 'grabbing' : 'default', background: 'transparent' }}
-      onWheel={onWheel}
-      onMouseDown={onBgDown}
-      onMouseMove={onMove}
-      onMouseUp={onUp}
-      onMouseLeave={onUp}
-      onClick={() => !editMode && onSelectNode(null)}
-    >
-      <defs>
-        <marker id="arch-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
-          <path d="M 0 0 L 10 5 L 0 10 z" fill="hsl(var(--muted-foreground))" />
-        </marker>
-      </defs>
-      <g transform={`translate(${view.x},${view.y}) scale(${view.k})`}>
-        {/* 엣지 */}
-        {edges.map((e) => {
-          const a = center(e.source);
-          const b = center(e.target);
-          if (!a || !b) return null;
-          const isTraffic = e.type === 'traffic';
-          const st = edgeStyleToken(e.type, e.dropped);
-          const active = selectedId && (e.source === selectedId || e.target === selectedId);
-          const width = isTraffic
-            ? 1.5 + ((e.flowCount ?? 0) / maxFlow) * 4
-            : active ? st.width + 1 : st.width;
-          const mid = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
-          return (
-            <g key={e.id}>
-              <path
-                d={bezier(a, b)}
-                fill="none"
-                stroke={st.stroke}
-                strokeWidth={width}
-                strokeDasharray={st.dash}
-                strokeOpacity={selectedId && !active ? 0.25 : 0.85}
-                markerEnd="url(#arch-arrow)"
-              >
-                {isTraffic && (
-                  <animate attributeName="stroke-dashoffset" from="20" to="0" dur="0.6s" repeatCount="indefinite" />
-                )}
-              </path>
-              {e.label && !isTraffic && (
-                <text x={mid.x} y={mid.y - 6} fontSize={9} fill={st.stroke}
-                  textAnchor="middle" className="pointer-events-none">
-                  {e.label.length > 20 ? `${e.label.slice(0, 19)}…` : e.label}
-                </text>
-              )}
-              {isTraffic && (
-                <text x={mid.x} y={mid.y - 4} fontSize={9} fill={st.stroke}
-                  textAnchor="middle" className="pointer-events-none">
-                  {e.flowCount}{e.dropped ? ' (드롭)' : ''}
-                </text>
-              )}
-              {/* 플로우 순번 뱃지 */}
-              {e.step != null && (
-                <g className="pointer-events-none">
-                  <circle cx={mid.x} cy={mid.y + 10} r={9} fill={MANUAL_ACCENT} />
-                  <text x={mid.x} y={mid.y + 13.5} fontSize={10} fontWeight={700}
-                    fill="hsl(var(--background))" textAnchor="middle">
-                    {e.step}
+    <div className="relative w-full h-full">
+      <svg
+        ref={svgRef}
+        className="w-full h-full select-none touch-none cursor-default bg-transparent"
+        onMouseDown={onBgDown}
+        onMouseMove={onMove}
+        onMouseUp={onUp}
+        onMouseLeave={onUp}
+        onClick={() => !editMode && onSelectNode(null)}
+      >
+        <defs>
+          <marker id="arch-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+            <path d="M 0 0 L 10 5 L 0 10 z" fill="hsl(var(--muted-foreground))" />
+          </marker>
+        </defs>
+        <g transform={`translate(${view.x},${view.y}) scale(${view.k})`}>
+          {/* 엣지 */}
+          {edges.map((e) => {
+            const a = center(e.source);
+            const b = center(e.target);
+            if (!a || !b) return null;
+            const isTraffic = e.type === 'traffic';
+            const st = edgeStyleToken(e.type, e.dropped);
+            const active = selectedId && (e.source === selectedId || e.target === selectedId);
+            const width = isTraffic
+              ? 1.5 + ((e.flowCount ?? 0) / maxFlow) * 4
+              : active ? st.width + 1 : st.width;
+            const mid = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
+            return (
+              <g key={e.id}>
+                <path
+                  d={bezier(a, b)}
+                  fill="none"
+                  stroke={st.stroke}
+                  strokeWidth={width}
+                  strokeDasharray={st.dash}
+                  strokeOpacity={selectedId && !active ? 0.25 : 0.85}
+                  markerEnd="url(#arch-arrow)"
+                >
+                  {isTraffic && (
+                    <animate attributeName="stroke-dashoffset" from="20" to="0" dur="0.6s" repeatCount="indefinite" />
+                  )}
+                </path>
+                {e.label && !isTraffic && (
+                  <text x={mid.x} y={mid.y - 6} fontSize={9} fill={st.stroke}
+                    textAnchor="middle" className="pointer-events-none">
+                    {e.label.length > 20 ? `${e.label.slice(0, 19)}…` : e.label}
                   </text>
-                </g>
-              )}
-            </g>
-          );
-        })}
+                )}
+                {isTraffic && (
+                  <text x={mid.x} y={mid.y - 4} fontSize={9} fill={st.stroke}
+                    textAnchor="middle" className="pointer-events-none">
+                    {e.flowCount}{e.dropped ? ' (드롭)' : ''}
+                  </text>
+                )}
+                {/* 플로우 순번 뱃지 */}
+                {e.step != null && (
+                  <g className="pointer-events-none">
+                    <circle cx={mid.x} cy={mid.y + 10} r={9} fill={MANUAL_ACCENT} />
+                    <text x={mid.x} y={mid.y + 13.5} fontSize={10} fontWeight={700}
+                      fill="hsl(var(--background))" textAnchor="middle">
+                      {e.step}
+                    </text>
+                  </g>
+                )}
+              </g>
+            );
+          })}
 
-        {/* 노드 */}
-        {nodes.map((n) => {
-          const p = layout[n.id];
-          if (!p) return null;
-          const accent = n.manual ? MANUAL_ACCENT : topoColors.kind(n.kind);
-          const isSel = selectedId === n.id;
-          const isLinkSrc = linkSourceId === n.id;
-          const abbr = n.manual
-            ? (MANUAL_KIND_ABBR[n.kind] ?? 'EXT')
-            : (KIND_ABBR[n.kind] ?? n.kind);
-          return (
-            <g
-              key={n.id}
-              transform={`translate(${p.x},${p.y})`}
-              onMouseDown={(e) => onNodeDown(e, n.id)}
-              onClick={(e) => onNodeClick(e, n.id)}
-              style={{ cursor: 'pointer' }}
-            >
-              <rect
-                width={NODE_W} height={NODE_H} rx={10}
-                fill="hsl(var(--card))"
-                stroke={isLinkSrc ? MANUAL_ACCENT : isSel ? 'hsl(var(--primary))' : accent}
-                strokeWidth={isSel || isLinkSrc ? 2.5 : 1.2}
-                strokeDasharray={n.stale ? '4 3' : n.manual ? '6 3' : undefined}
-                opacity={n.stale ? 0.55 : 1}
-              />
-              <rect width={4} height={NODE_H} rx={2} fill={accent} />
-              <text x={12} y={16} fontSize={8} fontWeight={700} fill={accent}>{abbr}</text>
-              {!n.manual && <circle cx={NODE_W - 10} cy={12} r={4} fill={statusColor(n.stale ? 'unknown' : n.status)} />}
-              <text x={12} y={31} fontSize={11} fontWeight={600} fill="hsl(var(--foreground))">
-                {n.name.length > 18 ? `${n.name.slice(0, 17)}…` : n.name}
-              </text>
-              {n.stale && (
-                <text x={12} y={45} fontSize={8} fill="hsl(var(--status-warning))">현행화 시점에 미존재 (stale)</text>
-              )}
-              {!n.stale && n.detail && (
-                <text x={12} y={45} fontSize={8} fill="hsl(var(--muted-foreground))">
-                  {n.detail.length > 26 ? `${n.detail.slice(0, 25)}…` : n.detail}
+          {/* 노드 */}
+          {nodes.map((n) => {
+            const p = layout[n.id];
+            if (!p) return null;
+            const accent = n.manual ? MANUAL_ACCENT : topoColors.kind(n.kind);
+            const isSel = selectedId === n.id;
+            const isLinkSrc = linkSourceId === n.id;
+            const abbr = n.manual
+              ? (MANUAL_KIND_ABBR[n.kind] ?? 'EXT')
+              : (KIND_ABBR[n.kind] ?? n.kind);
+            return (
+              <g
+                key={n.id}
+                transform={`translate(${p.x},${p.y})`}
+                onMouseDown={(e) => onNodeDown(e, n.id)}
+                onClick={(e) => onNodeClick(e, n.id)}
+                className="cursor-pointer"
+              >
+                <rect
+                  width={NODE_W} height={NODE_H} rx={10}
+                  fill="hsl(var(--card))"
+                  stroke={isLinkSrc ? MANUAL_ACCENT : isSel ? 'hsl(var(--primary))' : accent}
+                  strokeWidth={isSel || isLinkSrc ? 2.5 : 1.2}
+                  strokeDasharray={n.stale ? '4 3' : n.manual ? '6 3' : undefined}
+                  opacity={n.stale ? 0.55 : 1}
+                />
+                <rect width={4} height={NODE_H} rx={2} fill={accent} />
+                <text x={12} y={16} fontSize={8} fontWeight={700} fill={accent}>{abbr}</text>
+                {!n.manual && <circle cx={NODE_W - 10} cy={12} r={4} fill={statusColor(n.stale ? 'unknown' : n.status)} />}
+                <text x={12} y={31} fontSize={11} fontWeight={600} fill="hsl(var(--foreground))">
+                  {n.name.length > 18 ? `${n.name.slice(0, 17)}…` : n.name}
                 </text>
-              )}
-              {n.annotated && (
-                <StickyNote x={NODE_W - 22} y={39} size={10} className="text-muted-foreground pointer-events-none" aria-label="주석 있음" />
-              )}
-            </g>
-          );
-        })}
-      </g>
+                {n.stale && (
+                  <text x={12} y={45} fontSize={8} fill="hsl(var(--status-warning))">사라진 노드</text>
+                )}
+                {!n.stale && n.detail && (
+                  <text x={12} y={45} fontSize={8} fill="hsl(var(--muted-foreground))">
+                    {n.detail.length > 26 ? `${n.detail.slice(0, 25)}…` : n.detail}
+                  </text>
+                )}
+                {n.annotated && (
+                  <StickyNote x={NODE_W - 22} y={39} size={10} className="text-muted-foreground pointer-events-none" aria-label="주석 있음" />
+                )}
+              </g>
+            );
+          })}
+        </g>
+      </svg>
 
-      {/* zoom 컨트롤 */}
-      <g transform="translate(12,12)" className="pointer-events-auto">
-        <ZoomBtn y={0} label="+" onClick={() => setView((v) => ({ ...v, k: Math.min(2.5, v.k * 1.2) }))} />
-        <ZoomBtn y={28} label="−" onClick={() => setView((v) => ({ ...v, k: Math.max(0.2, v.k / 1.2) }))} />
-        <ZoomBtn y={56} label="⟲" onClick={() => setView({ x: 60, y: 40, k: 1 })} />
-      </g>
-    </svg>
+      {/* 줌 컨트롤 — HTML 버튼(키보드·스크린리더로 조작 가능, 내보내기 이미지에는 들어가지 않는다) */}
+      <div className="absolute top-3 left-3 flex flex-col gap-1">
+        <ZoomBtn label="확대" icon={Plus}
+          onClick={() => setView((v) => ({ ...v, k: Math.min(2.5, v.k * 1.2) }))} />
+        <ZoomBtn label="축소" icon={Minus}
+          onClick={() => setView((v) => ({ ...v, k: Math.max(0.2, v.k / 1.2) }))} />
+        <ZoomBtn label="보기 초기화" icon={RotateCcw}
+          onClick={() => setView({ x: 60, y: 40, k: 1 })} />
+      </div>
+    </div>
   );
 });
 
-function ZoomBtn({ y, label, onClick }: { y: number; label: string; onClick: () => void }) {
+function ZoomBtn({ label, icon: Icon, onClick }: {
+  label: string; icon: React.ComponentType<{ className?: string }>; onClick: () => void;
+}) {
   return (
-    <g transform={`translate(0,${y})`} onClick={(e) => { e.stopPropagation(); onClick(); }} style={{ cursor: 'pointer' }}>
-      <rect width={24} height={24} rx={6} fill="hsl(var(--card))" stroke="hsl(var(--border))" />
-      <text x={12} y={16} fontSize={14} textAnchor="middle" fill="hsl(var(--foreground))">{label}</text>
-    </g>
+    <button
+      type="button"
+      onClick={onClick}
+      aria-label={label}
+      title={label}
+      className="w-7 h-7 inline-flex items-center justify-center rounded-xl border border-border bg-card text-foreground hover:bg-secondary"
+    >
+      <Icon className="w-3.5 h-3.5" />
+    </button>
   );
 }
