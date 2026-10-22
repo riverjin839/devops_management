@@ -17,15 +17,24 @@ Inventory 우선순위:
   4) 정적 fallback ``{ansible_inventory_dir}/clusters.yml``
 
 Playbook 본문도 동일하게 ``playbook_content`` 가 주어지면 임시 파일로 머터리얼라이즈.
+
+실시간 진행·취소(R1·R2):
+  ``on_event(level, message)`` 를 주면 ``ansible_callbacks/pep_events.py`` 콜백이 stderr 로 흘리는
+  play·task·호스트 결과를 실행 중에 한 줄씩 넘긴다(stdout 은 결과 파싱용 json 콜백 그대로).
+  ``should_cancel()`` 이 참이 되면 ansible 프로세스 그룹을 끊고 status ``cancelled`` 로 돌려준다.
 """
 import contextlib
 import json
 import os
 import re
+import signal
 import subprocess
 import tempfile
+import threading
+import time
 from datetime import datetime
-from typing import Any
+from pathlib import Path
+from typing import Any, Callable, Optional
 
 from app.config import settings
 
@@ -104,6 +113,120 @@ def _build_dynamic_inventory(hosts: list[str]) -> str:
     return "\n".join(lines)
 
 
+# ansible 이 콜백 플러그인으로 읽는 디렉터리 — 앱 패키지가 아니다(ansible 만 로드).
+CALLBACK_PLUGIN_DIR = str(Path(__file__).resolve().parent / "ansible_callbacks")
+EVENT_PREFIX = "PEP_EVENT "
+RESULT_PREFIX = "PEP_RESULT "
+_POLL_SEC = 0.5
+_KILL_GRACE_SEC = 5
+
+EventSink = Callable[[str, str], None]
+
+
+def _emit(on_event: Optional[EventSink], level: str, message: str) -> None:
+    if on_event is None:
+        return
+    try:
+        on_event(level, message)
+    except Exception:  # noqa: BLE001 — 로그 기록 실패가 실행을 깨면 안 된다
+        pass
+
+
+def _kill_group(proc: subprocess.Popen) -> None:
+    """ansible 은 워커를 fork 하므로 프로세스 그룹째 끊는다(TERM → 유예 → KILL)."""
+    try:
+        pgid = os.getpgid(proc.pid)
+    except (ProcessLookupError, OSError):
+        return
+    for sig, wait in ((signal.SIGTERM, _KILL_GRACE_SEC), (signal.SIGKILL, 2)):
+        try:
+            os.killpg(pgid, sig)
+        except (ProcessLookupError, OSError):
+            return
+        try:
+            proc.wait(timeout=wait)
+            return
+        except subprocess.TimeoutExpired:
+            continue
+
+
+def _run_streaming(
+    cmd: list[str],
+    env: dict[str, str],
+    timeout: int,
+    on_event: Optional[EventSink],
+    should_cancel: Optional[Callable[[], bool]],
+) -> tuple[subprocess.CompletedProcess, str]:
+    """ansible-playbook 을 띄우고 stdout(사람이 읽는 출력)·stderr(진행 이벤트+경고)를 동시에 비운다.
+
+    반환: (CompletedProcess, outcome) — outcome 은 ``done`` | ``timeout`` | ``cancelled``.
+    stderr 의 ``PEP_EVENT`` 줄은 on_event 로만 넘기고, ``PEP_RESULT`` 줄(콜백의 결과 json)은
+    ``CompletedProcess.result_payload`` 로 붙인다. 둘 다 원문 stderr 에서는 뺀다.
+    """
+    proc = subprocess.Popen(
+        cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, env=env,
+        bufsize=1, start_new_session=True,
+    )
+    out_chunks: list[str] = []
+    err_lines: list[str] = []
+    payload: dict[str, Any] = {}
+
+    def drain_stdout() -> None:
+        assert proc.stdout is not None
+        for chunk in proc.stdout:
+            out_chunks.append(chunk)
+
+    def drain_stderr() -> None:
+        assert proc.stderr is not None
+        for line in proc.stderr:
+            if line.startswith(RESULT_PREFIX):
+                try:
+                    payload.update(json.loads(line[len(RESULT_PREFIX):]))
+                except ValueError:
+                    err_lines.append(line)
+                continue
+            if line.startswith(EVENT_PREFIX):
+                try:
+                    evt = json.loads(line[len(EVENT_PREFIX):])
+                    _emit(on_event, str(evt.get("level") or "info"), str(evt.get("message") or ""))
+                except (ValueError, AttributeError):
+                    err_lines.append(line)
+                continue
+            err_lines.append(line)
+            text = line.strip()
+            if text:
+                _emit(on_event, "warn", text[:500])
+
+    readers = [threading.Thread(target=drain_stdout, daemon=True), threading.Thread(target=drain_stderr, daemon=True)]
+    for t in readers:
+        t.start()
+
+    outcome = "done"
+    deadline = time.monotonic() + timeout
+    while proc.poll() is None:
+        if should_cancel is not None:
+            try:
+                cancelled = bool(should_cancel())
+            except Exception:  # noqa: BLE001
+                cancelled = False
+            if cancelled:
+                outcome = "cancelled"
+                _kill_group(proc)
+                break
+        if time.monotonic() >= deadline:
+            outcome = "timeout"
+            _kill_group(proc)
+            break
+        time.sleep(_POLL_SEC)
+
+    for t in readers:
+        t.join(timeout=5)
+    rc = proc.returncode if proc.returncode is not None else -1
+    completed = subprocess.CompletedProcess(cmd, rc, "".join(out_chunks), "".join(err_lines))
+    completed.result_payload = payload or None  # type: ignore[attr-defined]
+    return completed, outcome
+
+
 def run_playbook(
     playbook_path: str | None = None,
     inventory_path: str | None = None,
@@ -116,6 +239,8 @@ def run_playbook(
     inventory_hosts: list[str] | None = None,
     ssh_private_key: str | None = None,
     check_mode: bool = False,
+    on_event: Optional[EventSink] = None,
+    should_cancel: Optional[Callable[[], bool]] = None,
 ) -> PlaybookResult:
     """ansible-playbook을 JSON callback과 함께 실행하고 결과를 파싱합니다.
 
@@ -140,8 +265,16 @@ def run_playbook(
         effective_inv_content = _build_dynamic_inventory(inventory_hosts)
 
     env = {
-        "ANSIBLE_STDOUT_CALLBACK": "json",
+        # stdout 은 사람이 읽는 기본 출력(원문 로그). 결과 통계는 pep_events 콜백의 PEP_RESULT 로 받는다
+        # — ansible-core 2.16 에는 json stdout 콜백이 없다(ansible.posix 로 이동).
+        "ANSIBLE_STDOUT_CALLBACK": "default",
         "ANSIBLE_LOAD_CALLBACK_PLUGINS": "1",
+        "ANSIBLE_NOCOLOR": "1",
+        # 실시간 진행·결과 콜백(pep_events) — stderr 에 한 줄씩 흘린다.
+        "ANSIBLE_CALLBACK_PLUGINS": CALLBACK_PLUGIN_DIR,
+        "ANSIBLE_CALLBACKS_ENABLED": "pep_events",
+        "ANSIBLE_CALLBACK_WHITELIST": "pep_events",  # ansible < 2.11
+        "PYTHONUNBUFFERED": "1",
         "PATH": "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
         "HOME": "/root",
     }
@@ -182,23 +315,25 @@ def run_playbook(
             cmd.append("--check")
 
         try:
-            result = subprocess.run(
-                cmd,
-                capture_output=True,
-                text=True,
-                timeout=effective_timeout,
-                env=env,
-            )
+            _emit(on_event, "info", f"ansible-playbook 시작 · 제한 {effective_timeout}초{' · --check' if check_mode else ''}")
+            result, outcome = _run_streaming(cmd, env, effective_timeout, on_event, should_cancel)
             elapsed = int((datetime.utcnow() - start).total_seconds() * 1000)
+            if outcome == "cancelled":
+                return PlaybookResult(
+                    status="cancelled",
+                    message="사용자가 실행을 취소했습니다 — ansible-playbook 프로세스를 중단했습니다.",
+                    duration_ms=elapsed,
+                    raw_output=_build_raw_output(result.stdout or "", result.stderr or ""),
+                )
+            if outcome == "timeout":
+                return PlaybookResult(
+                    status="critical",
+                    message=f"Playbook timed out after {effective_timeout}s",
+                    duration_ms=elapsed,
+                    raw_output=_build_raw_output(result.stdout or "", result.stderr or ""),
+                )
             return _parse_result(result, elapsed)
 
-        except subprocess.TimeoutExpired:
-            elapsed = int((datetime.utcnow() - start).total_seconds() * 1000)
-            return PlaybookResult(
-                status="critical",
-                message=f"Playbook timed out after {effective_timeout}s",
-                duration_ms=elapsed,
-            )
         except FileNotFoundError:
             return PlaybookResult(
                 status="critical",
@@ -215,14 +350,18 @@ def run_playbook(
 
 
 def _parse_result(result: subprocess.CompletedProcess, elapsed: int) -> PlaybookResult:
-    """ansible JSON callback 출력을 파싱하여 상태를 결정합니다."""
+    """pep_events 콜백의 결과(json callback 과 같은 모양)를 파싱하여 상태를 결정합니다.
+
+    콜백 결과가 없으면(구 실행 환경) stdout 을 json 으로 시도하고, 그것도 아니면 returncode 로 판단한다.
+    """
     raw = result.stdout or ""
     stderr = result.stderr or ""
     combined_output = _build_raw_output(raw, stderr)
 
-    # JSON 파싱 시도
     try:
-        data = json.loads(raw)
+        data = getattr(result, "result_payload", None) or json.loads(raw)
+        if not isinstance(data, dict):
+            raise ValueError("not an object")
     except (json.JSONDecodeError, ValueError):
         # JSON이 아닌 경우 returncode 기반 판단
         if result.returncode == 0:

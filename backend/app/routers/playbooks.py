@@ -19,8 +19,11 @@ from app.schemas.playbook import (
     PlaybookRunRequest,
     PlaybookRunResponse,
     PlaybookRunHistoryListResponse,
+    PlaybookRunProgress,
+    PlaybookRunStartResponse,
 )
-from app.services.playbook_service import execute_playbook_run
+from app.services.playbook_service import begin_playbook_run, execute_playbook_run, reap_if_stale
+from app.services.playbook_run_jobs import start_background_run
 from app.services import audit_logger
 from app.services.cluster_access import require_cluster_access
 
@@ -288,6 +291,137 @@ def delete_playbook(
     return None
 
 
+def _progress(run: PlaybookRun, since: int) -> PlaybookRunProgress:
+    lines = list(run.log_lines or [])
+    since = max(0, min(since, len(lines)))
+    return PlaybookRunProgress(
+        run_id=run.id,
+        playbook_id=run.playbook_id,
+        status=run.status,
+        finished=run.status != "running",
+        message=run.message,
+        stats=run.stats,
+        duration_ms=run.duration_ms or 0,
+        started_at=run.started_at,
+        finished_at=run.finished_at,
+        cancel_requested=bool(run.cancel_requested),
+        cancelled_by=run.cancelled_by,
+        log_lines=lines[since:],
+        next=len(lines),
+    )
+
+
+@router.post("/{playbook_id}/runs", response_model=PlaybookRunStartResponse, status_code=status.HTTP_202_ACCEPTED)
+def start_playbook_run(
+    playbook_id: UUID,
+    request: Request,
+    payload: PlaybookRunRequest = PlaybookRunRequest(),
+    db: Session = Depends(get_db),
+    actor: User = Depends(require_operator),
+):
+    """Playbook 백그라운드 실행(R1) — ``run_id`` 를 바로 돌려주고, 진행·로그는
+    ``GET /playbooks/runs/{run_id}?since=N`` 으로, 취소는 ``POST /playbooks/runs/{run_id}/cancel`` 로 한다.
+
+    SSH 자격증명은 이 프로세스의 실행 스레드에만 넘긴다 — DB·브로커에 남지 않는다.
+    같은 플레이북이 이미 실행 중이면 409.
+    """
+    playbook = db.query(Playbook).filter(Playbook.id == playbook_id).first()
+    if not playbook:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Playbook not found")
+    require_cluster_access(db, actor, playbook.cluster_id)
+
+    active = (
+        db.query(PlaybookRun)
+        .filter(PlaybookRun.playbook_id == playbook.id, PlaybookRun.status == "running")
+        .order_by(PlaybookRun.started_at.desc())
+        .all()
+    )
+    still_running = [r for r in active if not reap_if_stale(db, r, playbook)]
+    if still_running:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"이미 실행 중입니다 (run {still_running[0].id}) — 끝나거나 취소한 뒤 다시 실행하세요.",
+        )
+
+    audit_logger.record(
+        db,
+        action="playbook.run",
+        actor=actor,
+        status="success",
+        target_type="playbook",
+        target_id=playbook.id,
+        details={"name": playbook.name, "cluster_id": str(playbook.cluster_id) if playbook.cluster_id else None, "mode": "background"},
+        request=request,
+    )
+    run, prev_status = begin_playbook_run(
+        db, playbook,
+        trigger="manual",
+        triggered_by_user_id=str(actor.id),
+        triggered_by_username=actor.display_name or actor.username,
+    )
+    start_background_run(run.id, prev_status, {
+        "ssh_username": payload.ssh_username,
+        "ssh_password": payload.ssh_password,
+        "ssh_port": payload.ssh_port,
+        "ssh_private_key": payload.ssh_private_key,
+        "become": payload.become,
+        "become_password": payload.become_password,
+    })
+    return PlaybookRunStartResponse(run_id=run.id, playbook_id=playbook.id, status=run.status)
+
+
+@router.get("/runs/{run_id}", response_model=PlaybookRunProgress)
+def get_playbook_run(
+    run_id: UUID,
+    since: int = Query(default=0, ge=0, description="이미 받은 로그 줄 수 — 그 뒤 줄만 돌려준다"),
+    db: Session = Depends(get_db),
+    scope: ClusterScope = Depends(get_cluster_scope),
+):
+    """실행 진행(R1) — 상태·요약과 ``since`` 이후 로그 줄. 실행 스레드가 사라진 행은 여기서 실패로 마감한다."""
+    run = db.query(PlaybookRun).filter(PlaybookRun.id == run_id).first()
+    if not run:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Playbook run not found")
+    playbook = db.query(Playbook).filter(Playbook.id == run.playbook_id).first()
+    if playbook is not None and not scope.visible(playbook.cluster_id):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Playbook run not found")
+    reap_if_stale(db, run, playbook)
+    return _progress(run, since)
+
+
+@router.post("/runs/{run_id}/cancel", response_model=PlaybookRunProgress)
+def cancel_playbook_run(
+    run_id: UUID,
+    request: Request,
+    db: Session = Depends(get_db),
+    actor: User = Depends(require_operator),
+):
+    """실행 취소(R2) — 실행 스레드가 1초 안에 이 요청을 보고 ansible 프로세스 그룹을 끊는다.
+    이미 끝난 실행이면 상태를 그대로 돌려준다(멱등)."""
+    run = db.query(PlaybookRun).filter(PlaybookRun.id == run_id).first()
+    if not run:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Playbook run not found")
+    playbook = db.query(Playbook).filter(Playbook.id == run.playbook_id).first()
+    if playbook is not None:
+        require_cluster_access(db, actor, playbook.cluster_id)
+    if run.status == "running" and not reap_if_stale(db, run, playbook):
+        who = actor.display_name or actor.username
+        run.cancel_requested = True
+        run.cancelled_by = (who or "")[:64]
+        db.commit()
+        audit_logger.record(
+            db,
+            action="playbook.run.cancel",
+            actor=actor,
+            status="success",
+            target_type="playbook",
+            target_id=run.playbook_id,
+            details={"run_id": str(run.id), "name": playbook.name if playbook else None},
+            request=request,
+        )
+        db.refresh(run)
+    return _progress(run, 0)
+
+
 @router.post("/{playbook_id}/run", response_model=PlaybookRunResponse)
 def run_playbook_endpoint(
     playbook_id: UUID,
@@ -296,7 +430,8 @@ def run_playbook_endpoint(
     db: Session = Depends(get_db),
     actor: User = Depends(require_operator),
 ):
-    """Playbook 실행 (동기).
+    """Playbook 실행 (동기) — 구 API 호환. 화면은 ``POST /playbooks/{id}/runs``(백그라운드 실행 +
+    실시간 로그 + 취소)를 쓴다.
 
     payload 로 전달된 SSH 자격증명은 휘발성 — DB 에 저장되지 않고
     extra_vars 에 합쳐 ``ansible-playbook -e`` 로만 전달된다.

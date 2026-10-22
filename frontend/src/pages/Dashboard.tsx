@@ -15,7 +15,7 @@ import {
   ClusterItemsGrid,
   ClusterItemModal,
 } from '@/components/dashboard';
-import { PlaybookCard, AddPlaybookModal, RunCredsModal, playbookRunLines } from '@/components/playbooks';
+import { PlaybookCard, AddPlaybookModal, RunCredsModal, CancelPlaybookRunsButton, playbookRunLines } from '@/components/playbooks';
 import type { PlaybookSshCreds } from '@/types';
 import { MacCard } from '@/components/ui/MacCard';
 import { ClusterSidebar, DebugLogPanel, ConfirmDialog, useToast, StatusBadge, statusToVariant, EmptyState, PageHeader, PageShell, RunLogPanel } from '@/components/common';
@@ -291,8 +291,9 @@ export function Dashboard() {
     void runLogged(runLog, {
       title: `플레이북 실행 — ${pb.name}`,
       first: `${pb.name} — ${clusterName} 대상 실행 요청${creds.ssh_username ? ` (SSH ${creds.ssh_username})` : ''}`,
-      fn: () => runPlaybook.mutateAsync({ id: pb.id, creds }),
+      fn: (run) => runPlaybook.mutateAsync({ id: pb.id, creds, run }),
       summarize: ({ data }) => playbookRunLines(data),
+      heartbeatMs: 0,
     });
   };
 
@@ -515,7 +516,17 @@ export function Dashboard() {
       <main className="flex-1 min-w-0 space-y-3">
         <DebugLogPanel pageKey="dashboard" extra={{ activeClusterId, clusters: clusters.length, metricCards: metricCards.length }} />
 
-        <RunLogPanel run={runLog} show={showRunLog} onShowChange={setShowRunLog} />
+        <RunLogPanel
+          run={runLog}
+          show={showRunLog}
+          onShowChange={setShowRunLog}
+          actions={
+            <CancelPlaybookRunsButton
+              onRequested={(n, failed) => runLog.log(failed > 0 ? 'warn' : 'info',
+                `플레이북 실행 취소 요청 ${n}건${failed > 0 ? ` · ${failed}건 요청 실패` : ''}`)}
+            />
+          }
+        />
 
         {/* ── Health Hero (Bento) ──────────────────────────────────────────── */}
         <HealthHero
