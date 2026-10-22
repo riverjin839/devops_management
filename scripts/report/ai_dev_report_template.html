@@ -147,6 +147,43 @@
   .cases { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(320px, 100%), 1fr)); gap: 14px; }
   .case .top .chip { white-space: nowrap; flex-shrink: 0; } .case b { font-size: 16px; } .case p { margin: 8px 0 0; font-size: 14px; } .case .pr { color: hsl(var(--muted-foreground)); }
   .case .tag { display: inline-block; font-size: 11px; font-weight: 800; margin-right: 6px; padding: 0 6px; border-radius: 6px; background: hsl(var(--secondary)); color: hsl(var(--foreground)); }
+  /* 목업 (실제 화면 구조를 단순화한 정적 재현 — 예시 데이터) */
+  .mk-wrap { display: grid; grid-template-columns: minmax(0, 1.55fr) minmax(0, 1fr); gap: 16px; align-items: start; }
+  @media (max-width: 860px) { .mk-wrap { grid-template-columns: 1fr; } }
+  .mock { border: 1px solid hsl(var(--border)); border-radius: 10px; overflow: hidden; background: hsl(var(--background)); box-shadow: 0 6px 24px hsl(var(--foreground) / .08); font-size: 12px; }
+  .mock .mbar { display: flex; align-items: center; gap: 6px; padding: 7px 10px; background: hsl(var(--secondary)); border-bottom: 1px solid hsl(var(--border)); }
+  .mock .mbar i { width: 9px; height: 9px; border-radius: 50%; background: hsl(var(--muted-foreground) / .35); }
+  .mock .mbar .url { margin-left: 8px; flex: 1; min-width: 0; padding: 2px 10px; border-radius: 6px; background: hsl(var(--card)); color: hsl(var(--muted-foreground)); font-family: ui-monospace, monospace; font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .mock .mbody { padding: 12px; display: grid; gap: 10px; }
+  .mock .mhead { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; justify-content: space-between; }
+  .mock .mtitle { font-weight: 800; font-size: 14px; }
+  .mock .mtabs { display: flex; gap: 4px; flex-wrap: wrap; border-bottom: 1px solid hsl(var(--border)); }
+  .mock .mtabs span { padding: 4px 10px; color: hsl(var(--muted-foreground)); border-bottom: 2px solid transparent; }
+  .mock .mtabs span.on { color: hsl(var(--foreground)); font-weight: 700; border-color: hsl(var(--primary)); }
+  .mock .mbtn { display: inline-block; padding: 3px 10px; border-radius: 8px; border: 1px solid hsl(var(--border)); background: hsl(var(--card)); font-weight: 600; white-space: nowrap; }
+  .mock .mbtn.pri { background: hsl(var(--primary)); border-color: hsl(var(--primary)); color: hsl(var(--primary-foreground)); }
+  .mock .mbtn.dng { border-color: hsl(var(--status-critical)); color: hsl(var(--status-critical-text, var(--status-critical))); }
+  .mock .mcard { border: 1px solid hsl(var(--border)); border-radius: 8px; background: hsl(var(--card)); padding: 8px 10px; min-width: 0; }
+  .mock .mgrid { display: grid; gap: 8px; }
+  .mock table { width: 100%; border-collapse: collapse; font-size: 11.5px; }
+  .mock th { text-align: left; font-weight: 700; color: hsl(var(--muted-foreground)); padding: 4px 6px; border-bottom: 1px solid hsl(var(--border)); white-space: nowrap; }
+  .mock td { padding: 4px 6px; border-bottom: 1px solid hsl(var(--border) / .6); vertical-align: middle; }
+  .mock .num { font-variant-numeric: tabular-nums; }
+  .mb { display: inline-block; padding: 1px 7px; border-radius: 999px; font-size: 10.5px; font-weight: 700; white-space: nowrap; }
+  .mb.ok { background: hsl(var(--status-healthy-bg)); color: hsl(var(--status-healthy-text)); }
+  .mb.warn { background: hsl(var(--status-warning-bg)); color: hsl(var(--status-warning-text)); }
+  .mb.crit { background: hsl(var(--status-critical-bg)); color: hsl(var(--status-critical-text)); }
+  .mb.info { background: hsl(var(--status-info-bg)); color: hsl(var(--status-info-text)); }
+  .mb.mute { background: hsl(var(--secondary)); color: hsl(var(--muted-foreground)); }
+  .mock .mlog { background: hsl(var(--foreground) / .92); color: hsl(var(--background)); border-radius: 8px; padding: 8px 10px; font-family: ui-monospace, monospace; font-size: 11px; line-height: 1.55; white-space: pre-wrap; overflow: hidden; }
+  .mock .mlog .t { opacity: .55; } .mock .mlog .g { color: hsl(var(--status-healthy)); } .mock .mlog .y { color: hsl(var(--status-warning)); } .mock .mlog .r { color: hsl(var(--status-critical)); }
+  .mock .mbarv { height: 7px; border-radius: 4px; background: hsl(var(--secondary)); overflow: hidden; } .mock .mbarv > b { display: block; height: 100%; background: hsl(var(--primary)); }
+  .mock .cell { display: inline-flex; align-items: center; justify-content: center; width: 100%; min-width: 34px; padding: 3px 0; border-radius: 6px; font-weight: 700; font-size: 10.5px; }
+  .mk-side h4 { margin: 0 0 6px; font-size: 14px; } .mk-side p { margin: 0 0 10px; font-size: 13.5px; line-height: 1.55; }
+  .mk-side .gap { color: hsl(var(--muted-foreground)); }
+  .mk-side .tools { display: flex; flex-wrap: wrap; gap: 4px; margin: 0 0 10px; }
+  .mk-side .tools span { font-size: 11px; padding: 1px 7px; border-radius: 6px; background: hsl(var(--secondary)); color: hsl(var(--muted-foreground)); text-decoration: line-through; }
+  .cmp td.y { color: hsl(var(--primary-text, var(--primary))); font-weight: 800; text-align: center; } .cmp td.n, .cmp td.p { text-align: center; color: hsl(var(--muted-foreground)); }
   .case .tag.acc { background: hsl(var(--primary)); color: hsl(var(--primary-foreground)); }
   .calc { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 8px 12px; }
   .calc label { display: flex; flex-direction: column; gap: 3px; font-size: 12px; color: hsl(var(--muted-foreground)); }
