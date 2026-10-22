@@ -10,6 +10,13 @@
 
 1.73.1 이후 main 에 병합된 변경 (다음 릴리스 후보).
 
+### Added
+- **K8s 상세 관리 — 네임스페이스 대시보드에 빠졌던 셋업 추가**: 네임스페이스 하나를 고르면 Access Control(ServiceAccount·Role·RoleBinding, 그리고 이 NS 의 ServiceAccount 등을 subject 로 묶는 ClusterRoleBinding), Custom Resources(이 NS 에 오브젝트가 있는 namespaced CRD 와 개수, 오브젝트 목록·YAML), Helm 릴리스(values 보기), Events(이 NS 만 서버에서 실시간 수신), 네임스페이스 자체 상세·YAML 까지 한 화면에 나온다. Backend: `GET /k8s/{id}/namespaces/{ns}/custom-resources`(CRD 당 `limit=1` 프로브, 응답 예산·목록 캐시), `GET /k8s/{id}/namespaces/{ns}/cluster-role-bindings`.
+
+### Fixed
+- **네임스페이스 대시보드의 NS 선택 드롭다운이 느리던 문제**: NS 1만 개 클러스터에서 드롭다운을 열 때마다 모든 항목을 DOM 으로 그려 수 초씩 멈췄다. 가상 스크롤로 보이는 항목만 그리고, 검색은 입력과 분리해 끊김 없이 거르며, Namespaces → 목록 화면과 같은 쿼리 캐시를 써서 다시 받지 않는다(이벤트 화면 등 이 선택기를 쓰는 곳 모두 적용).
+- **네임스페이스 대시보드에서 ResourceQuota 등이 안 보이던 문제**: 클러스터 전체 기준 존재 여부(5분 캐시)로 종류를 숨겨, 그 뒤에 만든 리소스가 NS 에 있어도 표에서 빠졌다. 이제 API 미지원 종류만 숨기고 0개인 종류도 인벤토리에 표시한다.
+
 ## [1.73.1] - 2026-10-22
 
 ### Fixed
@@ -45,13 +52,6 @@
 - **K8s 자원 관리 — 장애 대응 동선**: 노드 기본 정렬을 "위험 높은 순"으로 바꾸고 카드 보기에도 정렬 선택기를 넣었다. "문제 노드만" 필터, 요약 스트립의 위험 칩 클릭 이동(문제 노드·Pod 상태·네임스페이스), 탭·필터 URL 저장(`?tab=`·`?problems=1`), 보기 방식·정렬 기억을 더했다.
 - **K8s 자원 관리 — 권한·접근성·용어**: viewer 에게 숨겨지던 실행 버튼(지금 수집·추천 재생성·선택 적용·무시·롤백·정책 저장)을 비활성 + 사유로 보이게 했다. 탭은 `tablist`(←/→ 이동), 값 토글은 `aria-pressed`, 표 행 안에 버튼이 중첩되던 펼치기는 첫 칸 버튼으로, 랭킹 차트는 키보드용 목록을 함께 둔다. 헤더 "새로고침"은 **다시 집계**(실시간 실행 로그 포함), 카드의 새로고침은 **다시 읽기**로 이름을 나눴다. 추천 일괄 무시, 실패 화면의 다시 시도, 한영 혼용 용어 정리.
   Frontend: `components/k8s-allocation/*` · `pages/K8sAllocationPage.tsx` · `hooks/useK8sAllocation.ts`(`run`·`fetchAllocNamespaces`). 공용 `primitives.SegTabs`·`WorstEffBadge`, `format.nodeRisk`·`isProblemNode`·`worstEfficiency`.
-
-### Added
-- **K8s 상세 관리 — 네임스페이스 대시보드에 빠졌던 셋업 추가**: 네임스페이스 하나를 고르면 Access Control(ServiceAccount·Role·RoleBinding, 그리고 이 NS 의 ServiceAccount 등을 subject 로 묶는 ClusterRoleBinding), Custom Resources(이 NS 에 오브젝트가 있는 namespaced CRD 와 개수, 오브젝트 목록·YAML), Helm 릴리스(values 보기), Events(이 NS 만 서버에서 실시간 수신), 네임스페이스 자체 상세·YAML 까지 한 화면에 나온다. Backend: `GET /k8s/{id}/namespaces/{ns}/custom-resources`(CRD 당 `limit=1` 프로브, 응답 예산·목록 캐시), `GET /k8s/{id}/namespaces/{ns}/cluster-role-bindings`.
-
-### Fixed
-- **네임스페이스 대시보드의 NS 선택 드롭다운이 느리던 문제**: NS 1만 개 클러스터에서 드롭다운을 열 때마다 모든 항목을 DOM 으로 그려 수 초씩 멈췄다. 가상 스크롤로 보이는 항목만 그리고, 검색은 입력과 분리해 끊김 없이 거르며, Namespaces → 목록 화면과 같은 쿼리 캐시를 써서 다시 받지 않는다(이벤트 화면 등 이 선택기를 쓰는 곳 모두 적용).
-- **네임스페이스 대시보드에서 ResourceQuota 등이 안 보이던 문제**: 클러스터 전체 기준 존재 여부(5분 캐시)로 종류를 숨겨, 그 뒤에 만든 리소스가 NS 에 있어도 표에서 빠졌다. 이제 API 미지원 종류만 숨기고 0개인 종류도 인벤토리에 표시한다.
 
 ## [1.72.0] - 2026-10-22
 
