@@ -147,6 +147,21 @@
   .cases { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(320px, 100%), 1fr)); gap: 14px; }
   .case .top .chip { white-space: nowrap; flex-shrink: 0; } .case b { font-size: 16px; } .case p { margin: 8px 0 0; font-size: 14px; } .case .pr { color: hsl(var(--muted-foreground)); }
   .case .tag { display: inline-block; font-size: 11px; font-weight: 800; margin-right: 6px; padding: 0 6px; border-radius: 6px; background: hsl(var(--secondary)); color: hsl(var(--foreground)); }
+  /* 섹션 모션 — 화면에 들어올 때 카드·차트·숫자가 순서대로 등장 */
+  section.anim .card, section.anim .kpi { animation: secIn .55s cubic-bezier(.2,.7,.2,1) calc(var(--i, 0) * 70ms) both; animation-play-state: paused; }
+  section.anim svg rect.bar { transform-box: fill-box; transform-origin: 50% 100%; animation: barUp .8s cubic-bezier(.2,.7,.2,1) calc(var(--j, 0) * 22ms + 150ms) both; animation-play-state: paused; }
+  section.anim svg rect.hbar { transform-origin: 0 50%; animation-name: barRight; }
+  section.anim svg polyline { stroke-dasharray: 3000; animation: lineDraw 1.6s ease-out .25s both; animation-play-state: paused; }
+  section.anim svg circle.pt { animation: dotPop .4s ease-out calc(var(--j, 0) * 40ms + .6s) both; animation-play-state: paused; }
+  section.anim .tl .dot { animation: dotPop .45s ease-out calc(var(--i, 0) * 110ms + .2s) both; animation-play-state: paused; }
+  section.anim.play .card, section.anim.play .kpi, section.anim.play svg rect.bar, section.anim.play svg polyline, section.anim.play svg circle.pt, section.anim.play .tl .dot { animation-play-state: running; }
+  @keyframes secIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+  @keyframes barUp { from { transform: scaleY(0); } }
+  @keyframes barRight { from { transform: scaleX(0); } }
+  @keyframes lineDraw { from { stroke-dashoffset: 3000; } to { stroke-dashoffset: 0; } }
+  @keyframes dotPop { from { opacity: 0; transform: scale(.3); } to { opacity: 1; transform: none; } }
+  @media (prefers-reduced-motion: reduce) { section.anim .card, section.anim .kpi, section.anim svg rect.bar, section.anim svg polyline, section.anim svg circle.pt, section.anim .tl .dot { animation: none !important; } }
+  @media print { section.anim .card, section.anim .kpi, section.anim svg rect.bar, section.anim svg polyline, section.anim svg circle.pt, section.anim .tl .dot { animation: none !important; } }
   /* 목업 (실제 화면 구조를 단순화한 정적 재현 — 예시 데이터) */
   .mk-wrap { display: grid; grid-template-columns: minmax(0, 1.55fr) minmax(0, 1fr); gap: 16px; align-items: start; }
   @media (max-width: 860px) { .mk-wrap { grid-template-columns: 1fr; } }
@@ -181,7 +196,7 @@
   .mock .mbarv { height: 7px; border-radius: 4px; background: hsl(var(--secondary)); overflow: hidden; } .mock .mbarv > b { display: block; height: 100%; background: hsl(var(--primary)); }
   .mock .cell { display: inline-flex; align-items: center; justify-content: center; width: 100%; min-width: 34px; padding: 3px 0; border-radius: 6px; font-weight: 700; font-size: 10.5px; }
   .mock .mk-replay { margin-left: auto; font: inherit; font-size: 11px; padding: 1px 8px; border-radius: 6px; border: 1px solid hsl(var(--border)); background: hsl(var(--card)); color: hsl(var(--muted-foreground)); cursor: pointer; }
-  .mock.armed .mk-a, .mock.armed .mk-grow, .mock.armed .mk-shrink { animation-play-state: paused; }
+  .mock.armed .mk-a, .mock.armed .mk-grow, .mock.armed .mk-shrink, .mock.armed .mk-draw { animation-play-state: paused; }
   .mock .mk-a { animation: mkIn .45s cubic-bezier(.2,.7,.2,1) var(--d, 0s) both; }
   .mock .mk-a.pop { animation-name: mkPop; }
   .mock .mk-a.mk-click { animation: mkIn .3s var(--d, 0s) both, mkPulse 1s calc(var(--d, 0s) + .3s) 2; }
@@ -189,6 +204,8 @@
   .mock .mk-grow { width: var(--w); transform-origin: left; animation: mkGrow 1s cubic-bezier(.2,.7,.2,1) var(--d, 0s) both; }
   .mock .mk-shrink { width: var(--to); animation: mkShrink 1.2s cubic-bezier(.4,0,.2,1) var(--d, 0s) both; }
   .mock .mk-modal { animation-name: mkModal; }
+  .mock .mk-draw { stroke-dasharray: 400; animation: mkDraw 1.8s ease-out var(--d, 0s) both; }
+  @keyframes mkDraw { from { stroke-dashoffset: 400; } to { stroke-dashoffset: 0; } }
   @keyframes mkIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
   @keyframes mkPop { 0% { opacity: 0; transform: scale(.6); } 70% { opacity: 1; transform: scale(1.08); } 100% { opacity: 1; transform: none; } }
   @keyframes mkPulse { 0% { box-shadow: 0 0 0 0 hsl(var(--primary) / .55); } 100% { box-shadow: 0 0 0 10px hsl(var(--primary) / 0); } }
@@ -196,8 +213,8 @@
   @keyframes mkGrow { from { transform: scaleX(0); } }
   @keyframes mkShrink { from { width: var(--from); } }
   @keyframes mkModal { from { opacity: 0; transform: translateY(14px) scale(.97); } to { opacity: 1; transform: none; } }
-  @media (prefers-reduced-motion: reduce) { .mock .mk-a, .mock .mk-grow, .mock .mk-shrink, .mock .mk-type { animation: none !important; } }
-  @media print { .mock .mk-a, .mock .mk-grow, .mock .mk-shrink, .mock .mk-type { animation: none !important; } }
+  @media (prefers-reduced-motion: reduce) { .mock .mk-a, .mock .mk-grow, .mock .mk-shrink, .mock .mk-type, .mock .mk-draw { animation: none !important; } }
+  @media print { .mock .mk-a, .mock .mk-grow, .mock .mk-shrink, .mock .mk-type, .mock .mk-draw { animation: none !important; } }
   .mk-side h4 { margin: 0 0 6px; font-size: 14px; } .mk-side p { margin: 0 0 10px; font-size: 13.5px; line-height: 1.55; }
   .mk-side .gap { color: hsl(var(--muted-foreground)); }
   .mk-side .tools { display: flex; flex-wrap: wrap; gap: 4px; margin: 0 0 10px; }
@@ -429,7 +446,7 @@ function hbars(c, { rows, log = true }) {
   rows.forEach((r, i) => {
     const y = P.t + i * rh, w = Math.max(2, f(r.value) / max * iw);
     el("text", { x: P.l - 10, y: y + rh / 2 + 5, "text-anchor": "end", class: r.hl ? "lbl" : "" }, svg).textContent = r.label;
-    const b = el("rect", { class: "bar", x: P.l, y: y + 8, width: w, height: rh - 16, rx: 4, fill: col(r.hl ? C.acc : C.mute, r.hl ? 1 : .45) }, svg);
+    const b = el("rect", { class: "bar hbar", x: P.l, y: y + 8, width: w, height: rh - 16, rx: 4, fill: col(r.hl ? C.acc : C.mute, r.hl ? 1 : .45) }, svg);
     b.addEventListener("mousemove", e => showTip(e, `<b>${r.label}</b><br><span class="num">${r.text}</span>`)); b.addEventListener("mouseleave", hideTip);
     el("text", { x: P.l + w + 8, y: y + rh / 2 + 5, class: "lbl" }, svg).textContent = r.text;
   });
@@ -629,6 +646,69 @@ function build() {
             <div style="margin-top:6px"><span class="mb mute">조치 방안</span>${["memory limit 1Gi 로 상향 (request 768Mi)", "-XX:MaxRAMPercentage=75 로 힙 상한 조정", "HPA 메트릭에 메모리 추가 검토"].map((t, i) => MA(3.0 + i * 0.3, `<div>${i + 1}. ${t}</div>`)).join("")}</div>
             ${MA(4.0, `<div class="hint" style="margin-top:6px">조치 가이드 — 직접 실행되지 않음 (사람이 수행) · 관련 런북 <span class="mb info">OOMKilled 대응</span></div>`)}</div>`)}
         </div>`),
+    worktrack: () => win("/tasks-mgmt", `
+        <div class="mhead"><span class="mtitle">업무 관리 게시판 <span class="mb mute">WIP 9</span> <span class="mb crit">지연 2</span></span><span><span class="mbtn mk-a mk-click" style="--d:0.4s">JIRA</span> <span class="mbtn">Confluence</span> <span class="mbtn pri">업무 등록</span></span></div>
+        <div class="mtabs"><span class="on">에픽뷰</span><span>목록</span></div>
+        <table><thead><tr><th>작업</th><th>DL</th><th>WIKI</th><th>상태</th><th>담당자</th><th>마감일</th></tr></thead><tbody>
+          <tr><td><b>▾ 스토리지 안정화</b> <span class="mb mute">Epic</span></td><td><span class="mb info">OPS-1400</span></td><td><span class="mb mute">2</span></td><td><span class="mb info">진행 중</span></td><td>김OO</td><td class="num">10-31</td></tr>
+          <tr><td>　Ceph OSD 디스크 교체</td><td><span class="mb info">OPS-1423</span></td><td><span class="mb mute">1</span></td><td><span class="mb info">진행 중</span></td><td>김OO</td><td class="num">10-24</td></tr>
+          ${[["　kube-apiserver 인증서 갱신", "OPS-1431", "할 일", "이OO", "10-28"], ["　etcd 백업 주기 점검", "OPS-1436", "할 일", "박OO", "11-04"]].map(([t, k, s, a, d], i) => `<tr class="mk-a" style="--d:${3.2 + i * 0.3}s"><td>${t} <span class="mb ok">신규</span></td><td><span class="mb info">${k}</span></td><td><span class="mbtn" style="border-style:dashed;padding:0 6px">＋문서</span></td><td><span class="mb mute">${s}</span></td><td>${a}</td><td class="num">${d}</td></tr>`).join("")}
+        </tbody></table>
+        ${MA(0.8, `<div class="mcard" style="box-shadow:0 8px 28px hsl(var(--foreground) / .15)"><div class="mhead"><b>Jira 가져오기 — 미리보기</b><span class="mtabs" style="border:0"><span class="on">Jira 에서 검색</span><span>Excel · 붙여넣기</span><span>연결 점검</span></span></div>
+          <div class="hint">조건: 프로젝트 <b>OPS</b> · 내게 할당 · 이번 주 &nbsp; 공유 범위 <span class="mb info">플랫폼A팀 테넌트만</span></div>
+          <div class="mlog" style="margin-top:6px">${L2(1.3, "미리보기", "OPS-1423 Ceph OSD 디스크 교체 · 갱신 (변경 필드 2)", "y")}${L2(1.7, "미리보기", "OPS-1431 kube-apiserver 인증서 갱신 · 생성", "g")}${L2(2.1, "미리보기", "OPS-1436 etcd 백업 주기 점검 · 생성", "g")}${L2(2.7, "완료", "총 42 · 신규 5 · 갱신 12 · 변경 없음 25", "g")}</div></div>`, "mk-modal")}`),
+    rag: () => win("/ (AI 어시스턴트)", `
+        <div class="mgrid" style="grid-template-columns:1.35fr 1fr">
+          <div class="mcard"><div class="mhead"><b>AI 어시스턴트 <span class="mb ok">온라인 · 120ms</span></b><span><span class="mbtn">새 대화</span></span></div>
+            <div style="display:grid;gap:6px;margin-top:6px">
+              ${MA(0.2, `<div style="justify-self:end;max-width:85%" class="mb info">prod-a 의 Ceph OSD 교체 절차 알려줘</div>`)}
+              ${MA(0.7, `<span class="hint">생각 중…</span>`)}
+              ${MA(1.3, `<div class="mcard" style="background:hsl(var(--secondary))">${["1. <b>ceph osd out osd.12</b> 로 데이터 이동 시작", "2. 재조정 완료(HEALTH_OK) 확인 후 OSD 중지", "3. 디스크 교체 → <b>ceph-volume lvm create</b>", "4. 사내 런북 기준: 작업 전 noout 설정 필수"].map((t, i) => `<div class="mk-a" style="--d:${1.5 + i * 0.35}s">${t}</div>`).join("")}</div>`)}
+              ${MA(3.0, `<div><span class="mb mute">근거 자료</span>${[["Ceph OSD 교체 런북", "작업 가이드", 91], ["OPS-1423 Ceph OSD 디스크 교체", "업무 이력", 84], ["스토리지 장애 회고 (Confluence)", "작업 가이드", 72]].map(([t, k, s], i) => `<div class="mk-a" style="--d:${3.2 + i * 0.3}s;display:grid;grid-template-columns:1fr 70px;gap:6px;align-items:center;margin-top:4px"><span>${t} <span class="hint">· ${k}</span></span><span><div class="mbarv"><b class="mk-grow" style="--w:${s}%;--d:${3.3 + i * 0.3}s"></b></div><span class="hint num">유사도 ${s}%</span></span></div>`).join("")}</div>`)}
+            </div></div>
+          <div class="mgrid">
+            <div class="mcard"><b>문서 관리</b><table><thead><tr><th>제목</th><th>출처</th><th>동기화</th></tr></thead><tbody>
+              ${[["Ceph OSD 교체 런북", "Confluence", "v7"], ["스토리지 장애 회고", "Confluence", "v3"], ["etcd 백업 가이드", "PEP", "—"]].map(([t, s, v], i) => `<tr><td>${t}</td><td><span class="mb ${s === "PEP" ? "mute" : "info"}">${s}</span></td><td>${MA(0.3 + i * 0.25, `<span class="mb ok">${v === "—" ? "임베딩" : v + " · 임베딩"}</span>`, "pop")}</td></tr>`).join("")}</tbody></table></div>
+            <div class="mcard"><b>용도별 LLM 라우팅</b>${[["AI 챗봇", "pep-k8s-ops", "qwen2.5-coder:7b"], ["장애 분석", "pep-k8s-ops", "규칙 기반"], ["임베딩 (유사 검색)", "임베딩 모델 · 768차원", "—"]].map(([u, a, b]) => `<div class="hint" style="margin-top:3px">${u} → <b>${a}</b> <span class="mb mute">fallback ${b}</span></div>`).join("")}</div>
+          </div></div>`),
+    sa: () => win("/k8s-rbac", `
+        <div class="mhead"><span class="mtitle">K8s 접근 권한 — prod-a</span><span class="mbtn">로그 보기</span></div>
+        <div class="mtabs"><span>액세스 발급</span><span class="on">ServiceAccount</span><span>Role / ClusterRole</span><span>Binding</span><span>권한 점검</span></div>
+        <div class="mhead"><span class="hint">네임스페이스 / 이름 / 롤 검색… · 모든 네임스페이스 · <b>PEP 생성분만</b></span><span class="mbtn pri">ServiceAccount 추가</span></div>
+        <table><thead><tr><th>네임스페이스</th><th>이름</th><th>연결된 권한</th><th>생성</th><th></th></tr></thead><tbody>
+          ${[["dev", "deployer", ["dev → ClusterRole/pep-dev-deploy", "dev-batch → ClusterRole/pep-dev-deploy"], "3일 전"], ["lake", "lake-api", ["lake-api → ClusterRole/pep-dev-hjkim"], "12일 전"], ["ops", "viewer-bot", ["전역 → ClusterRole/view"], "1달 전"]].map(([ns, n, tags, c], i) => `<tr><td>${ns}</td><td><b>${n}</b></td><td>${tags.map((t, j) => MA(0.2 + i * 0.3 + j * 0.15, `<span class="mb info">${t}</span>`, "pop")).join(" ")}</td><td class="hint">${c}</td><td><span class="mbtn ${i === 0 ? "mk-a mk-click" : ""}" ${i === 0 ? 'style="--d:1.4s"' : ""}>kubeconfig 발급</span></td></tr>`).join("")}
+          <tr><td>dev</td><td>default</td><td class="hint">연결된 권한 없음</td><td class="hint">—</td><td class="hint">기본 SA — 편집 불가</td></tr></tbody></table>
+        ${MA(2.0, `<div class="mcard"><div class="mhead"><b>권한 점검 — dev/deployer <span class="hint">(배포 + 로그 프리셋 기대값 대비)</span></b>${MA(4.4, `<span class="mb ok">12/12 통과</span>`, "pop")}</div>
+          <table><thead><tr><th>확인 항목</th><th>dev</th><th>dev-batch</th><th>prod</th></tr></thead><tbody>
+          ${[["deployments create", ["ok", "ok", "crit"]], ["pods/log get", ["ok", "ok", "crit"]], ["pods/exec create", ["crit", "crit", "crit"]], ["secrets get", ["crit", "crit", "crit"]]].map(([q, cs], r) => `<tr><td class="num">${q}</td>${cs.map((k, c) => `<td>${MA(2.4 + r * 0.3 + c * 0.12, `<span class="mb ${k}">${k === "ok" ? "✓ 허용" : "✗ 거부"}</span>`, "pop")}</td>`).join("")}</tr>`).join("")}</tbody></table></div>`)}`),
+    images: () => win("/node-images", `
+        <div class="mhead"><span class="mtitle">K8s 노드 이미지 — prod-a</span><span><span class="mbtn">CSV</span></span></div>
+        <div class="mgrid" style="grid-template-columns:repeat(4,1fr)">${[["노드", 8, ""], ["총 이미지 슬롯", 1136, ""], ["고유 이미지", 214, ""], ["총 용량", 305, " GB"]].map(([l, v, u]) => `<div class="mcard"><span class="hint">${l}</span><div style="font-size:17px;font-weight:800"><span class="num" data-count="${v}">${v}</span>${u}</div></div>`).join("")}</div>
+        <div class="mtabs"><span class="on">노드별 표</span><span>라벨 그룹</span><span>이미지별</span></div>
+        <table><thead><tr><th>노드</th><th>역할</th><th>상태</th><th>이미지 수</th><th>총 용량</th></tr></thead><tbody>
+          <tr><td><b>▾ worker-03</b></td><td>Worker</td><td><span class="mb ok">Ready</span></td><td class="num">142</td><td class="num">38.2 GB</td></tr>
+          <tr><td colspan="5" style="padding-left:18px"><span class="num">harbor.local/lake/api:1.8.2</span> · 512 MB <span class="mbtn pri mk-a mk-click" style="--d:0.6s">배포</span></td></tr></tbody></table>
+        ${MA(1.1, `<div class="mcard" style="box-shadow:0 8px 28px hsl(var(--foreground) / .15)"><div class="mhead"><b>이미지 배포 (다른 노드로 prepull)</b><span class="mb mute">crictl · 동시 4 · 제한 300초</span></div>
+          <div class="hint">대상 노드 (3 / 8 선택) · 보유 5 · 미보유 3 &nbsp; <span class="mbtn">미보유만</span></div>
+          <table><thead><tr><th>노드</th><th>보유</th><th>상태</th><th>exit</th><th>소요</th></tr></thead><tbody>
+          ${[["worker-06", "12.4s"], ["worker-07", "11.8s"], ["worker-08", "14.1s"]].map(([n, t], i) => `<tr><td>${n}</td><td><span class="mb warn">미보유</span></td><td>${MA(2.4 + i * 0.6, `<span class="mb ok">완료</span>`, "pop")}</td><td class="num">${MA(2.4 + i * 0.6, "0")}</td><td class="num">${MA(2.4 + i * 0.6, t)}</td></tr>`).join("")}</tbody></table>
+          ${MA(4.0, `<span class="mb ok">성공 3</span> <span class="mb mute">실패 0</span> <span class="hint">— 3개 노드 모두 이미지 보유 확인 (verified present)</span>`, "pop")}</div>`, "mk-modal")}`),
+    monitoring: () => {
+      const pts = (seed, d) => Array.from({ length: 14 }, (_, i) => `${i * 10},${(30 - 10 * Math.sin(i / 2 + seed) - (i === 11 && d ? 14 : 0)).toFixed(1)}`).join(" ");
+      return win("/observability", `
+        <div class="mtabs">${["관측 지표", "클러스터 추이", "K8s 이벤트", "알람 인박스", "파드 로그", "Cilium·Hubble", "파드 병목", "토폴로지"].map((t, i) => `<span class="${i === 0 ? "on" : ""}">${t}</span>`).join("")}</div>
+        <div class="mgrid" style="grid-template-columns:1fr 1fr">
+          <div class="mcard"><div class="mhead"><b>관측 지표 <span class="mb mute">kube-prometheus-stack</span></b><span class="mb info">실시간</span></div>
+            <table><tbody>${[["Prometheus 기동", "1", "ok"], ["규칙 평가 실패(5m)", "0", "ok"], ["스크레이프 샘플 drop(5m)", "37", "warn"], ["발화 중 알람", "3", "warn"], ["Critical 발화", "1", "crit"]].map(([n, v, k], i) => `<tr><td>${MA(0.2 + i * 0.2, `<span class="mb ${k}">${k === "ok" ? "정상" : k === "warn" ? "경고" : "심각"}</span>`, "pop")}</td><td>${n}</td><td class="num"><b>${v}</b></td></tr>`).join("")}</tbody></table></div>
+          <div class="mcard"><b>클러스터 추이 · CPU (1h)</b>
+            <svg viewBox="0 0 130 44" style="width:100%;height:70px;display:block;margin-top:4px">${[[0, "var(--primary)", 1.4, 1], [1.8, "var(--muted-foreground)", 1.7, 0], [3.1, "var(--chart-3, var(--muted-foreground))", 2.0, 0]].map(([s, c, d, sp]) => `<polyline class="mk-draw" style="--d:${d}s" fill="none" stroke="hsl(${c})" stroke-width="1.6" stroke-linejoin="round" points="${pts(s, sp)}"/>`).join("")}</svg>
+            <div class="hint">worker-01 · worker-02 · worker-03</div></div>
+          <div class="mcard"><div class="mhead"><b>알람 인박스</b><span class="mb crit">발생중 2</span></div>
+            ${[["crit", "KubePodCrashLooping", "shop/api · ×12"], ["warn", "NodeDiskPressure", "worker-05 · ×3"]].map(([k, n, t], i) => MA(2.2 + i * 0.4, `<div style="display:flex;gap:6px;align-items:center;margin-top:4px"><span class="mb ${k}">${k === "crit" ? "심각" : "경고"}</span><b>${n}</b><span class="hint">${t}</span></div>`)).join("")}
+            ${MA(3.2, `<div class="hint" style="margin-top:4px">AI 분석 <span class="mb ok">분석 완료</span> 신뢰도 82%</div>`)}</div>
+          <div class="mlog">${L2(2.6, "10:21:03", "shop/api-7f9c → db/postgres:5432 FORWARDED", "g")}${L2(3.0, "10:21:03", "shop/api-7f9c → kube-dns:53 FORWARDED", "g")}${L2(3.4, "10:21:04", "batch/etl-2x → 10.2.0.9:9000 DROPPED (Policy denied)", "r")}${L2(3.8, "10:21:05", "Warning BackOff · shop/api-7f9c · Back-off restarting", "y")}</div>
+        </div>`);
+    },
     security: () => win("/settings", `
         <div class="mgrid" style="grid-template-columns:1fr 1fr">
           <div class="mcard"><b>테넌트 정보 — 플랫폼A팀</b><div class="hint">동시 실행 상한 <b>3</b> · 멤버 7명</div>
@@ -903,16 +983,92 @@ function build() {
   /* 15. 교훈 */
   add("lessons", "LESSONS", "8개월간 얻은 교훈 3가지 — AI 는 속도, 하네스는 방향", h(`<div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(240px,1fr))">${N.lessons.map(([t, d], i) => `<div class="card"><div class="step"><div class="n num" style="background:hsl(var(--primary));color:hsl(var(--primary-foreground))">${i + 1}</div></div><div style="font-size:18px;font-weight:800">${t}</div><p class="muted">${d}</p></div>`).join("")}</div>`));
 
+  /* 16. 결론 */
+  const CN = N.conclusion;
+  if (CN) {
+    const e0 = eraStats[0], eN = eraStats[eraStats.length - 1];
+    const s16 = add("conclusion-trend", "CONCLUSION · 1", "모델 기술력 발전 검증 — 추세와 개발 성능", h(`
+      <div class="grid g2"><div class="card"><h3>세대별 성장 지수 (초기 = 100)</h3><div class="chart" id="c-concl"></div>
+        <p class="hint">PR당 변경 파일 ${e0.med} → ${eN.med}개 · 월 코드 증가 +${(e0.growth / 1000).toFixed(1)}K → 최대 +${(Math.max(...eraStats.map(x => x.growth)) / 1000).toFixed(1)}K · AI 작성 커밋 ${share}%</p></div>
+      <div class="card"><div class="mb ok" style="font-size:13px;padding:4px 10px;border-radius:8px;display:inline-block">판정</div><h3 style="font-size:18px;margin:8px 0 12px">${CN.trend.verdict}</h3>
+        ${CN.trend.points.map(([t, d]) => `<p style="margin:0 0 10px"><b class="acc">${t}</b><br><span class="muted">${d}</span></p>`).join("")}</div></div>
+      <p class="note">${CN.trend.note}</p>`));
+    chart($("#c-concl", s16), c => lines(c, { labels: eraStats.map(x => x.e.key),
+      series: [{ name: "PR당 변경 파일", color: C.acc, labels: true, values: eraStats.map(x => idx(x.med, e0.med)) },
+               { name: "월 코드 증가량", color: C.mute, alpha: .8, labels: true, values: eraStats.map(x => idx(x.growth, e0.growth)) },
+               { name: "월 기능 PR", color: C.mute, alpha: .35, values: eraStats.map(x => idx(x.featPR, e0.featPR)) }] }));
+
+    add("conclusion-ai", "CONCLUSION · 2", CN.ai.title, h(`
+      <div class="card hl" style="margin-bottom:14px"><b style="font-size:18px">${CN.ai.answer}</b></div>
+      <div class="grid" style="grid-template-columns:minmax(0,1fr) minmax(0,2.6fr);gap:14px">
+        <div class="card"><h3>덜 알아도 되는 것</h3><ul style="margin:0;padding-left:18px;color:hsl(var(--muted-foreground))">${CN.ai.less.map(x => `<li style="text-decoration:line-through">${x}</li>`).join("")}</ul>
+          <h3 style="margin-top:14px">근거 (이 저장소)</h3><div style="display:grid;gap:6px">${ev("fixPeak")}${ev("gaps")}${ev("filesPerPR")}</div></div>
+        <div class="tablewrap"><table><thead><tr><th style="white-space:nowrap">더 알아야 하는 것</th><th>왜</th><th class="acc">어떻게 익히나</th></tr></thead><tbody>
+          ${CN.ai.more.map(([a, b, c]) => `<tr><td style="white-space:nowrap"><b>${a}</b></td><td class="muted">${b}</td><td class="acc-cell">${c}</td></tr>`).join("")}</tbody></table></div></div>
+      <p class="note" style="font-size:14px;color:hsl(var(--foreground))"><b>${CN.ai.close}</b></p>`));
+
+    add("conclusion-mine", "CONCLUSION · 3", CN.mine.title, h(`<div class="mk-wrap">
+      <div class="card"><ol style="margin:0;padding-left:22px;display:grid;gap:12px">${CN.mine.points.map(([t, d]) => `<li><b style="font-size:16px">${t}</b>${d ? `<div class="muted" style="margin-top:4px">${d}</div>` : ""}</li>`).join("")}</ol>
+        <div class="card hl" style="margin-top:16px"><div class="hint">${CN.mine.asof}</div><b style="font-size:18px;line-height:1.5">"${CN.mine.final}"</b></div></div>
+      ${win("/ (예: toast 를 몰랐을 때)", `
+        <div class="mcard"><span class="mb mute">용어를 모를 때</span>
+          ${["저장 누르면 화면 오른쪽 아래에 잠깐 뜨는 작은 상자 있잖아…", "아니 팝업처럼 막는 건 아니고, 몇 초 있다가 사라지는…", "모달 말고요, 알림인데 화면을 안 가리는…"].map((t, i) => MA(0.3 + i * 0.6, `<div class="mb warn" style="display:block;border-radius:8px;padding:4px 8px;margin-top:4px;white-space:normal">${t}</div>`)).join("")}
+          ${MA(2.2, `<div class="hint" style="margin-top:4px">3번 왕복 · 긴 설명 → 토큰·시간·공수 낭비</div>`)}</div>
+        <div class="mcard"><span class="mb mute">용어를 알 때</span>${MA(2.8, `<div class="mb ok" style="display:block;border-radius:8px;padding:4px 8px;margin-top:4px">저장 성공 시 toast 로 알려 줘</div>`)}
+          ${MA(3.2, `<div class="hint" style="margin-top:4px">1번 · 한 줄</div>`)}</div>
+        <div style="position:relative;min-height:96px" class="mcard"><span class="mbtn pri mk-a mk-click" style="--d:3.6s">저장</span>
+          ${MA(4.1, `<div style="position:absolute;right:10px;top:10px;background:hsl(var(--foreground));color:hsl(var(--background));padding:6px 12px;border-radius:8px;box-shadow:0 8px 24px hsl(var(--foreground) / .25)">저장되었습니다</div>`, "mk-modal")}
+          ${MA(4.6, `<div class="hint" style="position:absolute;right:10px;bottom:8px"> ↓ 이 알림의 이름이 <b class="acc">toast</b></div>`)}</div>`)}
+    </div>`));
+  }
+
   charts.forEach(renderChart);
   setupMocks();
+  setupSectionAnim();
   if (document.body.classList.contains("present")) show(cur, 0);
+}
+/* ── 섹션 모션: 들어올 때마다 재생, KPI 숫자 카운트업 ── */
+let secIO;
+const ANIM_SEL = ".card, .kpi, svg rect.bar, svg polyline, svg circle.pt, .tl .dot";
+function countUp(e) {
+  if (!e.dataset.animating) e.dataset.final = e.textContent;
+  const fin = e.dataset.final, m = fin.match(/^([\d,]*\.?\d+)(.*)$/);
+  if (!m || reduceMotion()) { e.textContent = fin; return; }
+  const raw = m[1], to = parseFloat(raw.replace(/,/g, "")), dec = (raw.split(".")[1] || "").length, comma = raw.includes(",");
+  const t0 = performance.now(), dur = 1100;
+  const step = t => { const k = Math.min(1, (t - t0) / dur), v = to * (1 - Math.pow(1 - k, 3));
+    const sv = comma ? v.toLocaleString("en-US", { minimumFractionDigits: dec, maximumFractionDigits: dec }) : v.toFixed(dec);
+    e.textContent = k < 1 ? sv + m[2] : fin; if (k < 1) requestAnimationFrame(step); else delete e.dataset.animating; };
+  e.dataset.animating = "1"; requestAnimationFrame(step);
+}
+function playSection(sec) {
+  sec.classList.remove("play");
+  sec.querySelectorAll(ANIM_SEL).forEach(e => { e.style.animationName = "none"; void e.getBoundingClientRect(); e.style.animationName = ""; });
+  sec.classList.add("play");
+  sec.querySelectorAll(".kpi .v").forEach(countUp);
+}
+function setupSectionAnim() {
+  if (secIO) secIO.disconnect();
+  const secs = [...document.querySelectorAll("main > section")];
+  secs.forEach(sec => {
+    sec.classList.add("anim"); sec.classList.remove("play");
+    [...sec.querySelectorAll(".card, .kpi")].forEach((c, i) => c.style.setProperty("--i", Math.min(i, 12)));
+    [...sec.querySelectorAll(".tl .dot")].forEach((c, i) => c.style.setProperty("--i", i));
+    sec.querySelectorAll("svg").forEach(svg => [...svg.querySelectorAll("rect.bar, circle.pt")].forEach((r, j) => r.style.setProperty("--j", Math.min(j, 40))));
+  });
+  if (!("IntersectionObserver" in window)) { secs.forEach(playSection); return; }
+  secIO = new IntersectionObserver(es => es.forEach(e => {
+    if (e.isIntersecting && !e.target.dataset.seen) { e.target.dataset.seen = "1"; playSection(e.target); }
+    else if (!e.isIntersecting && e.target.dataset.seen) { delete e.target.dataset.seen; e.target.classList.remove("play"); }
+  }), { threshold: 0.12 });
+  secs.forEach(sec => secIO.observe(sec));
 }
 /* ── 목업 모션: 화면에 들어올 때마다 재생, 「다시 재생」 버튼 ── */
 const reduceMotion = () => matchMedia("(prefers-reduced-motion: reduce)").matches;
 let mockIO;
 function playMock(m) {
   m.classList.add("armed");
-  m.querySelectorAll(".mk-a, .mk-grow, .mk-shrink").forEach(e => { e.style.animationName = "none"; void e.offsetWidth; e.style.animationName = ""; });
+  m.querySelectorAll(".mk-a, .mk-grow, .mk-shrink, .mk-draw").forEach(e => { e.style.animationName = "none"; void e.offsetWidth; e.style.animationName = ""; });
   m.classList.remove("armed");
   m.querySelectorAll("[data-count]").forEach(e => {
     const to = +e.dataset.count, dec = +(e.dataset.dec || 0);
