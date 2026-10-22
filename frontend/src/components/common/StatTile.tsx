@@ -40,7 +40,7 @@ function isZero(v: ReactNode): boolean {
  * 요약 수치 타일 표준 (DESIGN_SYSTEM.md §12.12-2, D-118).
  * 14개 화면이 각자 "아이콘 타일 + 큰 숫자" 를 손으로 그려(3곳은 바이트 동일 복붙) 랜딩 페이지 문법이 됐다.
  * 여기서는 라벨 `text-xs`, 값 `text-xl tabular-nums`, 카드 `rounded-md` 로 고정하고 색은 비정상에만 준다.
- * 한 줄에 4개 이하. Health Hero(`/cluster-overview`) 외에는 KPI 행 자체를 두지 않는 것이 원칙이다.
+ * 한 줄에 4개 이하. 페이지 상단 KPI 행 자체는 두지 않는 것이 원칙이다.
  */
 export function StatTile({ label, value, hint, icon: Icon, tone, onClick, active, children, className }: StatTileProps) {
   const toned = tone != null && tone !== 'neutral' && !isZero(value);

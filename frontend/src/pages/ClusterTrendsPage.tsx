@@ -364,7 +364,7 @@ export function ClusterTrendsPage() {
 
         <main className="flex-1 min-w-0 space-y-2">
           <PageHeader
-            back={{ to: '/cluster-overview', label: '클러스터 현황' }}
+            back={{ to: '/clusters', label: '클러스터 상세' }}
             icon={TrendingUp}
             title="클러스터 추이"
             description={

@@ -371,3 +371,19 @@ def test_corrupt_stored_theme_does_not_break_read(db, me, cleanup):
     set_user_setting(db, me.id, "home_prefs", {"theme": "BAD THEME!", "accent": "pink", "pinned_paths": ["/k9s"]})
     prefs = home_prefs_router.get_home_prefs(db=db, user=me)
     assert prefs.theme is None and prefs.accent is None and prefs.pinned_paths == ["/k9s"]
+
+
+def test_retired_cluster_overview_path_is_aliased_on_read():
+    """화면이 없어진 `/cluster-overview` 는 읽을 때 `/clusters` 로 치환되고 중복은 하나로 합친다."""
+    from app.services.home_prefs import _clean_ids, load_prefs
+
+    prefs = load_prefs({
+        "installed_apps": ["/cluster-overview", "/k9s", "/clusters"],
+        "pinned_paths": ["/cluster-overview"],
+        "layout_version": 3,
+    })
+    assert prefs.installed_apps == ["/clusters", "/k9s"]
+    assert prefs.pinned_paths == ["/clusters"]
+    assert _clean_ids(["/tasks-mgmt", "/cluster-overview"]) == ["/tasks-mgmt", "/clusters"]
+    # 조직 기본값을 따르는(None) 행은 그대로 None 이다.
+    assert load_prefs({"installed_apps": None, "layout_version": 3}).installed_apps is None

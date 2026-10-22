@@ -10,7 +10,6 @@ export const en: TranslationResource = {
     page: {
       home: 'Home',
       island: 'My Island',
-      clusterOverview: 'Cluster Overview',
       k8sManage: 'K8s Management',
       k8sAllocation: 'K8s Resources',
       k9s: 'k9s Console',
