@@ -147,6 +147,21 @@
   .cases { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(320px, 100%), 1fr)); gap: 14px; }
   .case .top .chip { white-space: nowrap; flex-shrink: 0; } .case b { font-size: 16px; } .case p { margin: 8px 0 0; font-size: 14px; } .case .pr { color: hsl(var(--muted-foreground)); }
   .case .tag { display: inline-block; font-size: 11px; font-weight: 800; margin-right: 6px; padding: 0 6px; border-radius: 6px; background: hsl(var(--secondary)); color: hsl(var(--foreground)); }
+  /* 섹션 모션 — 화면에 들어올 때 카드·차트·숫자가 순서대로 등장 */
+  section.anim .card, section.anim .kpi { animation: secIn .55s cubic-bezier(.2,.7,.2,1) calc(var(--i, 0) * 70ms) both; animation-play-state: paused; }
+  section.anim svg rect.bar { transform-box: fill-box; transform-origin: 50% 100%; animation: barUp .8s cubic-bezier(.2,.7,.2,1) calc(var(--j, 0) * 22ms + 150ms) both; animation-play-state: paused; }
+  section.anim svg rect.hbar { transform-origin: 0 50%; animation-name: barRight; }
+  section.anim svg polyline { stroke-dasharray: 3000; animation: lineDraw 1.6s ease-out .25s both; animation-play-state: paused; }
+  section.anim svg circle.pt { animation: dotPop .4s ease-out calc(var(--j, 0) * 40ms + .6s) both; animation-play-state: paused; }
+  section.anim .tl .dot { animation: dotPop .45s ease-out calc(var(--i, 0) * 110ms + .2s) both; animation-play-state: paused; }
+  section.anim.play .card, section.anim.play .kpi, section.anim.play svg rect.bar, section.anim.play svg polyline, section.anim.play svg circle.pt, section.anim.play .tl .dot { animation-play-state: running; }
+  @keyframes secIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+  @keyframes barUp { from { transform: scaleY(0); } }
+  @keyframes barRight { from { transform: scaleX(0); } }
+  @keyframes lineDraw { from { stroke-dashoffset: 3000; } to { stroke-dashoffset: 0; } }
+  @keyframes dotPop { from { opacity: 0; transform: scale(.3); } to { opacity: 1; transform: none; } }
+  @media (prefers-reduced-motion: reduce) { section.anim .card, section.anim .kpi, section.anim svg rect.bar, section.anim svg polyline, section.anim svg circle.pt, section.anim .tl .dot { animation: none !important; } }
+  @media print { section.anim .card, section.anim .kpi, section.anim svg rect.bar, section.anim svg polyline, section.anim svg circle.pt, section.anim .tl .dot { animation: none !important; } }
   /* 목업 (실제 화면 구조를 단순화한 정적 재현 — 예시 데이터) */
   .mk-wrap { display: grid; grid-template-columns: minmax(0, 1.55fr) minmax(0, 1fr); gap: 16px; align-items: start; }
   @media (max-width: 860px) { .mk-wrap { grid-template-columns: 1fr; } }
@@ -431,7 +446,7 @@ function hbars(c, { rows, log = true }) {
   rows.forEach((r, i) => {
     const y = P.t + i * rh, w = Math.max(2, f(r.value) / max * iw);
     el("text", { x: P.l - 10, y: y + rh / 2 + 5, "text-anchor": "end", class: r.hl ? "lbl" : "" }, svg).textContent = r.label;
-    const b = el("rect", { class: "bar", x: P.l, y: y + 8, width: w, height: rh - 16, rx: 4, fill: col(r.hl ? C.acc : C.mute, r.hl ? 1 : .45) }, svg);
+    const b = el("rect", { class: "bar hbar", x: P.l, y: y + 8, width: w, height: rh - 16, rx: 4, fill: col(r.hl ? C.acc : C.mute, r.hl ? 1 : .45) }, svg);
     b.addEventListener("mousemove", e => showTip(e, `<b>${r.label}</b><br><span class="num">${r.text}</span>`)); b.addEventListener("mouseleave", hideTip);
     el("text", { x: P.l + w + 8, y: y + rh / 2 + 5, class: "lbl" }, svg).textContent = r.text;
   });
@@ -968,9 +983,85 @@ function build() {
   /* 15. 교훈 */
   add("lessons", "LESSONS", "8개월간 얻은 교훈 3가지 — AI 는 속도, 하네스는 방향", h(`<div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(240px,1fr))">${N.lessons.map(([t, d], i) => `<div class="card"><div class="step"><div class="n num" style="background:hsl(var(--primary));color:hsl(var(--primary-foreground))">${i + 1}</div></div><div style="font-size:18px;font-weight:800">${t}</div><p class="muted">${d}</p></div>`).join("")}</div>`));
 
+  /* 16. 결론 */
+  const CN = N.conclusion;
+  if (CN) {
+    const e0 = eraStats[0], eN = eraStats[eraStats.length - 1];
+    const s16 = add("conclusion-trend", "CONCLUSION · 1", "모델 기술력 발전 검증 — 추세와 개발 성능", h(`
+      <div class="grid g2"><div class="card"><h3>세대별 성장 지수 (초기 = 100)</h3><div class="chart" id="c-concl"></div>
+        <p class="hint">PR당 변경 파일 ${e0.med} → ${eN.med}개 · 월 코드 증가 +${(e0.growth / 1000).toFixed(1)}K → 최대 +${(Math.max(...eraStats.map(x => x.growth)) / 1000).toFixed(1)}K · AI 작성 커밋 ${share}%</p></div>
+      <div class="card"><div class="mb ok" style="font-size:13px;padding:4px 10px;border-radius:8px;display:inline-block">판정</div><h3 style="font-size:18px;margin:8px 0 12px">${CN.trend.verdict}</h3>
+        ${CN.trend.points.map(([t, d]) => `<p style="margin:0 0 10px"><b class="acc">${t}</b><br><span class="muted">${d}</span></p>`).join("")}</div></div>
+      <p class="note">${CN.trend.note}</p>`));
+    chart($("#c-concl", s16), c => lines(c, { labels: eraStats.map(x => x.e.key),
+      series: [{ name: "PR당 변경 파일", color: C.acc, labels: true, values: eraStats.map(x => idx(x.med, e0.med)) },
+               { name: "월 코드 증가량", color: C.mute, alpha: .8, labels: true, values: eraStats.map(x => idx(x.growth, e0.growth)) },
+               { name: "월 기능 PR", color: C.mute, alpha: .35, values: eraStats.map(x => idx(x.featPR, e0.featPR)) }] }));
+
+    add("conclusion-ai", "CONCLUSION · 2", CN.ai.title, h(`
+      <div class="card hl" style="margin-bottom:14px"><b style="font-size:18px">${CN.ai.answer}</b></div>
+      <div class="grid" style="grid-template-columns:minmax(0,1fr) minmax(0,2.6fr);gap:14px">
+        <div class="card"><h3>덜 알아도 되는 것</h3><ul style="margin:0;padding-left:18px;color:hsl(var(--muted-foreground))">${CN.ai.less.map(x => `<li style="text-decoration:line-through">${x}</li>`).join("")}</ul>
+          <h3 style="margin-top:14px">근거 (이 저장소)</h3><div style="display:grid;gap:6px">${ev("fixPeak")}${ev("gaps")}${ev("filesPerPR")}</div></div>
+        <div class="tablewrap"><table><thead><tr><th style="white-space:nowrap">더 알아야 하는 것</th><th>왜</th><th class="acc">어떻게 익히나</th></tr></thead><tbody>
+          ${CN.ai.more.map(([a, b, c]) => `<tr><td style="white-space:nowrap"><b>${a}</b></td><td class="muted">${b}</td><td class="acc-cell">${c}</td></tr>`).join("")}</tbody></table></div></div>
+      <p class="note" style="font-size:14px;color:hsl(var(--foreground))"><b>${CN.ai.close}</b></p>`));
+
+    add("conclusion-mine", "CONCLUSION · 3", CN.mine.title, h(`<div class="mk-wrap">
+      <div class="card"><ol style="margin:0;padding-left:22px;display:grid;gap:12px">${CN.mine.points.map(([t, d]) => `<li><b style="font-size:16px">${t}</b>${d ? `<div class="muted" style="margin-top:4px">${d}</div>` : ""}</li>`).join("")}</ol>
+        <div class="card hl" style="margin-top:16px"><div class="hint">${CN.mine.asof}</div><b style="font-size:18px;line-height:1.5">"${CN.mine.final}"</b></div></div>
+      ${win("/ (예: toast 를 몰랐을 때)", `
+        <div class="mcard"><span class="mb mute">용어를 모를 때</span>
+          ${["저장 누르면 화면 오른쪽 아래에 잠깐 뜨는 작은 상자 있잖아…", "아니 팝업처럼 막는 건 아니고, 몇 초 있다가 사라지는…", "모달 말고요, 알림인데 화면을 안 가리는…"].map((t, i) => MA(0.3 + i * 0.6, `<div class="mb warn" style="display:block;border-radius:8px;padding:4px 8px;margin-top:4px;white-space:normal">${t}</div>`)).join("")}
+          ${MA(2.2, `<div class="hint" style="margin-top:4px">3번 왕복 · 긴 설명 → 토큰·시간·공수 낭비</div>`)}</div>
+        <div class="mcard"><span class="mb mute">용어를 알 때</span>${MA(2.8, `<div class="mb ok" style="display:block;border-radius:8px;padding:4px 8px;margin-top:4px">저장 성공 시 toast 로 알려 줘</div>`)}
+          ${MA(3.2, `<div class="hint" style="margin-top:4px">1번 · 한 줄</div>`)}</div>
+        <div style="position:relative;min-height:96px" class="mcard"><span class="mbtn pri mk-a mk-click" style="--d:3.6s">저장</span>
+          ${MA(4.1, `<div style="position:absolute;right:10px;top:10px;background:hsl(var(--foreground));color:hsl(var(--background));padding:6px 12px;border-radius:8px;box-shadow:0 8px 24px hsl(var(--foreground) / .25)">저장되었습니다</div>`, "mk-modal")}
+          ${MA(4.6, `<div class="hint" style="position:absolute;right:10px;bottom:8px"> ↓ 이 알림의 이름이 <b class="acc">toast</b></div>`)}</div>`)}
+    </div>`));
+  }
+
   charts.forEach(renderChart);
   setupMocks();
+  setupSectionAnim();
   if (document.body.classList.contains("present")) show(cur, 0);
+}
+/* ── 섹션 모션: 들어올 때마다 재생, KPI 숫자 카운트업 ── */
+let secIO;
+const ANIM_SEL = ".card, .kpi, svg rect.bar, svg polyline, svg circle.pt, .tl .dot";
+function countUp(e) {
+  if (!e.dataset.animating) e.dataset.final = e.textContent;
+  const fin = e.dataset.final, m = fin.match(/^([\d,]*\.?\d+)(.*)$/);
+  if (!m || reduceMotion()) { e.textContent = fin; return; }
+  const raw = m[1], to = parseFloat(raw.replace(/,/g, "")), dec = (raw.split(".")[1] || "").length, comma = raw.includes(",");
+  const t0 = performance.now(), dur = 1100;
+  const step = t => { const k = Math.min(1, (t - t0) / dur), v = to * (1 - Math.pow(1 - k, 3));
+    const sv = comma ? v.toLocaleString("en-US", { minimumFractionDigits: dec, maximumFractionDigits: dec }) : v.toFixed(dec);
+    e.textContent = k < 1 ? sv + m[2] : fin; if (k < 1) requestAnimationFrame(step); else delete e.dataset.animating; };
+  e.dataset.animating = "1"; requestAnimationFrame(step);
+}
+function playSection(sec) {
+  sec.classList.remove("play");
+  sec.querySelectorAll(ANIM_SEL).forEach(e => { e.style.animationName = "none"; void e.getBoundingClientRect(); e.style.animationName = ""; });
+  sec.classList.add("play");
+  sec.querySelectorAll(".kpi .v").forEach(countUp);
+}
+function setupSectionAnim() {
+  if (secIO) secIO.disconnect();
+  const secs = [...document.querySelectorAll("main > section")];
+  secs.forEach(sec => {
+    sec.classList.add("anim"); sec.classList.remove("play");
+    [...sec.querySelectorAll(".card, .kpi")].forEach((c, i) => c.style.setProperty("--i", Math.min(i, 12)));
+    [...sec.querySelectorAll(".tl .dot")].forEach((c, i) => c.style.setProperty("--i", i));
+    sec.querySelectorAll("svg").forEach(svg => [...svg.querySelectorAll("rect.bar, circle.pt")].forEach((r, j) => r.style.setProperty("--j", Math.min(j, 40))));
+  });
+  if (!("IntersectionObserver" in window)) { secs.forEach(playSection); return; }
+  secIO = new IntersectionObserver(es => es.forEach(e => {
+    if (e.isIntersecting && !e.target.dataset.seen) { e.target.dataset.seen = "1"; playSection(e.target); }
+    else if (!e.isIntersecting && e.target.dataset.seen) { delete e.target.dataset.seen; e.target.classList.remove("play"); }
+  }), { threshold: 0.12 });
+  secs.forEach(sec => secIO.observe(sec));
 }
 /* ── 목업 모션: 화면에 들어올 때마다 재생, 「다시 재생」 버튼 ── */
 const reduceMotion = () => matchMedia("(prefers-reduced-motion: reduce)").matches;
