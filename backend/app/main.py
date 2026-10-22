@@ -479,6 +479,12 @@ def _run_migrations():
     if "playbooks" in inspector.get_table_names():
         _safe_add_column("playbooks", "show_on_dashboard", "BOOLEAN DEFAULT FALSE")
         _safe_add_column("playbooks", "timeout_seconds", "INTEGER")
+    if "playbook_runs" in inspector.get_table_names():
+        # R1·R2 — 실시간 실행 로그 + 취소 요청
+        _safe_add_column("playbook_runs", "log_lines", "JSONB")
+        _safe_add_column("playbook_runs", "cancel_requested", "BOOLEAN NOT NULL DEFAULT FALSE")
+        _safe_add_column("playbook_runs", "cancelled_by", "VARCHAR(64)")
+    if "playbooks" in inspector.get_table_names():
         # 신규 FK 컬럼 — 컬럼만 먼저, REFERENCES 는 별도 ADD CONSTRAINT 로 분리 (대상 테이블 부재 위험 격리).
         _safe_add_column("playbooks", "playbook_file_id", "UUID")
         _safe_add_column("playbooks", "inventory_id", "UUID")
@@ -2564,7 +2570,7 @@ install_logging()  # 앱 로그 줄마다 [req=요청ID] — services/request_co
 app = FastAPI(
     title=settings.app_name,
     description="DevOps K8s Daily Monitoring Dashboard API",
-    version="1.69.1",
+    version="1.70.0",
     docs_url="/docs",
     redoc_url="/redoc",
     lifespan=lifespan,
@@ -2761,7 +2767,7 @@ app.include_router(tenants_router, prefix="/api/v1", dependencies=_auth)
 def root():
     return {
         "name": settings.app_name,
-        "version": "1.69.1",
+        "version": "1.70.0",
         "status": "running"
     }
 

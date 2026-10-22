@@ -1,5 +1,6 @@
 // frontend/src/components/playbooks/runLogLines.ts
-// 플레이북 실행 응답(POST /playbooks/{id}/run) → 실행 로그 줄(D-135, DESIGN_SYSTEM.md §12.9.1).
+// 플레이북 실행 결과(백그라운드 실행 종료 시점 요약) → 실행 로그 줄(D-135, DESIGN_SYSTEM.md §12.9.1).
+// 실행 중 진행 줄(PLAY·TASK·호스트 결과)은 useRunPlaybook 이 서버 로그를 그대로 흘린다(R1).
 // 전체 출력·이력은 PlaybookLogDialog 가 보여주므로 여기서는 상태·통계·실패 태스크 요약만 남긴다.
 import type { PlaybookRunResult } from '@/types';
 import type { RunLogEntry, RunLogLevel } from '@/hooks/useRunLog';
@@ -10,6 +11,7 @@ const STATUS_KO: Record<string, string> = {
   critical: '실패',
   unknown: '알 수 없음',
   running: '실행 중',
+  cancelled: '취소됨',
 };
 
 export function playbookStatusLevel(status: string): RunLogLevel {

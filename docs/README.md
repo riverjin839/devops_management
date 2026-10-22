@@ -31,7 +31,7 @@ PEP 문서 모음. 루트의 [README](../README.md) · [CHANGELOG](../CHANGELOG.
 ## 릴리스 / 프로세스
 - [branch-tag-strategy.md](branch-tag-strategy.md) — 브랜치·태그·릴리스(SemVer, trunk)
 - [reports/ai-dev-report.html](reports/ai-dev-report.html) — **AI 개발 리포트**(HTML, 매월 자동 갱신 — `scripts/report/`, `.github/workflows/ai-dev-report.yml`). 2026-10 PPT 판은 [reports/2026-10_PEP_AI개발_리포트.pptx](reports/2026-10_PEP_AI개발_리포트.pptx)
-- [reports/ai-dev-report-script.md](reports/ai-dev-report-script.md) — AI 개발 리포트 **팀 발표 구두 스크립트**(발표 모드 26장 순서, 슬라이드별 멘트·시간 배분·예상 Q&A)
+- [reports/ai-dev-report-script.md](reports/ai-dev-report-script.md) — AI 개발 리포트 **팀 발표 구두 스크립트**(발표 모드 35장 순서, 슬라이드별 멘트·시간 배분·예상 Q&A)
 
 ## 아키텍처 / 로드맵
 - [openlens-architecture-roadmap.md](openlens-architecture-roadmap.md) — 범용 K8s 관리 + 300노드 실시간 로드맵(P0~P5)
