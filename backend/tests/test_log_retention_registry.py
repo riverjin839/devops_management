@@ -1,7 +1,7 @@
 """로그성 테이블 등록 정합성 — 효율화 샘플/실행 로그가 purge · backup 양쪽에 빠짐없이 등록됐는지."""
 from app.services import backup_service, log_retention_service as lrs
 
-NEW_LOG_TABLES = ("k8s_ns_samples", "k8s_workload_samples", "k8s_efficiency_runs")
+NEW_LOG_TABLES = ("k8s_ns_samples", "k8s_workload_samples", "k8s_efficiency_runs", "ns_migration_runs")
 
 
 def test_new_tables_registered_for_retention_and_backup():

@@ -3030,4 +3030,25 @@ export const homePrefsApi = {
     api.put<import('@/types').HomePrefsDefaults>('/ui-settings/home-prefs-defaults', data),
 };
 
+// ── NS 마이그레이션 (개발 → 운영) — /ns-migration ─────────────────────────────
+export const nsMigrationApi = {
+  kinds: () => api.get<import('@/types').NsMigKindCatalog>('/ns-migration/kinds'),
+  namespaces: (clusterId: string) =>
+    api.get<{ data: string[]; error: string | null }>(`/ns-migration/clusters/${clusterId}/namespaces`),
+  // 변환된 다중 문서 YAML 다운로드 — 소스 수집이라 큰 NS 는 오래 걸릴 수 있다.
+  exportBundle: (spec: import('@/types').NsMigSpec) =>
+    api.post('/ns-migration/export', spec, { responseType: 'blob', timeout: 5 * 60_000 }),
+  // 큐잉 후 queued run 을 돌려준다 — 진행은 run(id) 폴링으로 본다.
+  createRun: (spec: import('@/types').NsMigSpec & { mode: 'plan' | 'apply' }) =>
+    api.post<import('@/types').NsMigRun>('/ns-migration/runs', spec),
+  runs: (limit = 30) => api.get<{ data: import('@/types').NsMigRun[] }>('/ns-migration/runs', { params: { limit } }),
+  run: (id: string) => api.get<import('@/types').NsMigRun>(`/ns-migration/runs/${id}`),
+  profiles: () => api.get<{ data: import('@/types').NsMigProfile[] }>('/ns-migration/profiles'),
+  createProfile: (body: import('@/types').NsMigSpec & { name: string }) =>
+    api.post<import('@/types').NsMigProfile>('/ns-migration/profiles', body),
+  updateProfile: (id: string, body: import('@/types').NsMigSpec & { name: string }) =>
+    api.put<import('@/types').NsMigProfile>(`/ns-migration/profiles/${id}`, body),
+  deleteProfile: (id: string) => api.delete(`/ns-migration/profiles/${id}`),
+};
+
 export default api;

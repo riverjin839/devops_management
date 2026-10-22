@@ -47,6 +47,7 @@ export const ko = {
       links: '클러스터 링크',
       nodeLabels: 'K8s 노드 라벨',
       k8sRbac: 'K8s 접근 권한',
+      nsMigration: 'NS 마이그레이션',
       nodeImages: 'K8s 노드 이미지',
       cidr: 'CIDR 계산기',
       k8sEvents: 'K8s 실시간 이벤트',

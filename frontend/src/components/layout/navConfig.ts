@@ -5,7 +5,7 @@ import {
   Map, BarChart3, Network, Zap, Route, Share2, Rss, Users, GitCommit, Terminal, Database, Cpu, HardDrive,
   ClipboardCheck, ListTree, Waves, TerminalSquare, Library, Home, Workflow,
   ShieldCheck, Activity, GitBranch, ScrollText, Rocket, ShipWheel, Gauge, Bell, BellRing, Dog,
-  TrendingUp, FileSpreadsheet, Palmtree, FileText, FileCode2, LayoutGrid, KeyRound,
+  TrendingUp, FileSpreadsheet, Palmtree, FileText, FileCode2, LayoutGrid, KeyRound, ArrowRightLeft,
 } from 'lucide-react';
 import type { NavGroupDescKey, NavGroupKey, NavPageKey } from '@/i18n/resources/ko';
 
@@ -61,6 +61,7 @@ export const NAV_MAP: Record<string, NavMapEntry> = {
   '/links':              { labelKey: 'links', defaultLabel: '클러스터 링크',  icon: Link2 },
   '/node-labels':        { labelKey: 'nodeLabels', defaultLabel: 'K8s 노드 라벨',   icon: Tags },
   '/k8s-rbac':           { labelKey: 'k8sRbac', defaultLabel: 'K8s 접근 권한',  icon: KeyRound },
+  '/ns-migration':       { labelKey: 'nsMigration', defaultLabel: 'NS 마이그레이션', icon: ArrowRightLeft },
   '/node-images':        { labelKey: 'nodeImages', defaultLabel: 'K8s 노드 이미지', icon: Boxes },
   '/cidr':               { labelKey: 'cidr', defaultLabel: 'CIDR 계산기',    icon: Calculator },
   '/k8s-events':         { labelKey: 'k8sEvents', defaultLabel: 'K8s 실시간 이벤트', icon: Bell },
@@ -130,7 +131,7 @@ export const GROUPS: NavGroup[] = [
   { id: 'inspect',   label: '점검·진단', labelKey: 'inspect', descriptionKey: 'inspect', icon: ShieldCheck, description: '상태를 확인·기록하고 원인을 추적한다', domain: 'platform',
     paths: ['/daily-check/review', '/daily-check/settings', '/pod-bottleneck', '/cilium-trace', '/packet-flow', '/versions'] },
   { id: 'operate',   label: '운영 조작', labelKey: 'operate', descriptionKey: 'operate', icon: Terminal,    description: '클러스터·노드·스토리지에 명령을 보낸다 — 실행 전 대상을 확인할 것', domain: 'platform', tone: 'danger',
-    paths: ['/k8s-manage', '/k9s', '/bulk-exec', '/node-ssh', '/etcdctl', '/mc', '/kernel-params'] },
+    paths: ['/k8s-manage', '/ns-migration', '/k9s', '/bulk-exec', '/node-ssh', '/etcdctl', '/mc', '/kernel-params'] },
   { id: 'configure', label: '구성·자산', labelKey: 'configure', descriptionKey: 'configure', icon: Layers,      description: '클러스터 등록·자원·권한·노드 자산을 관리한다', domain: 'platform',
     paths: ['/clusters', '/cluster-manage', '/k8s-allocation', '/k8s-rbac', '/node-labels', '/node-images', '/node-specs', '/links'] },
   { id: 'topology',  label: '토폴로지', labelKey: 'topology', descriptionKey: 'topology', icon: Network,     description: '인프라·서비스 구조를 지도로 본다', domain: 'platform',

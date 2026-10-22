@@ -822,6 +822,25 @@ hover 시 flyout 자체가 라벨을 보여주므로 이름만 뜨는 중복 툴
 - **요청사항 (수정 요청)**:
   - _(여기에 개선/수정 요청을 직접 적어주세요)_
 
+### NS 마이그레이션 (`/ns-migration`)
+
+- **파일**: `frontend/src/pages/NsMigrationPage.tsx` (+ `components/ns-migration/NsMigrationRunPanel.tsx`, `RuleEditor.tsx`)
+- **목적 / UX**: 개발 클러스터의 네임스페이스 리소스를 운영 클러스터로 옮긴다. 손으로 `kubectl get -o yaml` → 정리 → apply 하던 일을 소스·타깃 선택 → 종류 선택 → 치환 규칙 → 미리보기(diff·서버 dry-run) → 적용(또는 YAML 다운로드) 한 화면으로 묶는다.
+- **UI 구성**:
+  - 두 클러스터를 고르는 화면이라 `ClusterSidebar` 대신 좌측 "소스 → 타깃" 카드(DESIGN_SYSTEM §12.5 예외), `PageShell density="console" sidebar={false}`
+  - 좌(컨트롤): 프로필(불러오기·저장·삭제) / 소스 → 타깃(클러스터·NS, 타깃 NS 기본 = 소스) / 리소스 종류(기본·워크로드 체크, Secret 별도 + 안내, nodePort 유지·force 옵션) / 치환 규칙 편집기 / 버튼 **미리보기 · YAML 다운로드 · 운영 적용**
+  - 우(결과): 실행 결과 카드 — 상태·단계 타임라인·요약(생성/갱신/동일/실패/제외), **"로그 보기"** 토글(`useLogPref('ns-migration')`)로 실시간 로그, 리소스 표(행 펼침 → 치환 내역·diff·실패 사유) / 실행 이력 목록
+  - 운영 적용은 `ConfirmDialog`(danger) 에서 타깃 클러스터 이름을 입력해야 진행
+- **Frontend**: `useNsMigKinds` · `useNsMigNamespaces` · `useNsMigRuns` · `useNsMigRun`(활성 시 1.5초 폴링) · `useNsMigProfiles` · `useNsMigMutations`(`hooks/useNsMigration.ts`), 호출 레이어 `nsMigrationApi`(`services/api.ts`). 쓰기 버튼은 `useCanOperate(targetId)` 로 viewer·타깃 operate 권한 없음에 `disabled` + 사유.
+- **Backend**: `backend/app/routers/ns_migration.py` — `/api/v1/ns-migration/*`. `GET kinds`, `GET clusters/{cluster_id}/namespaces`(fail-safe), `POST export`(YAML 번들), `POST runs`(plan|apply → Celery `run_ns_migration`), `GET runs`, `GET runs/{id}`, 프로필 CRUD `profiles`. 쓰기는 `require_operator` + 소스 read · 타깃 operate 테넌트 권한 직접 검사 + 감사(`k8s.ns_migration.export|apply`). 서비스 `services/ns_migration/transform.py`(정리·치환·마스킹·diff) · `engine.py`(DynamicClient 수집·비교·server-side apply, 리소스 단위 실패 격리 → partial). 모델 `NsMigrationProfile` · `NsMigrationRun`.
+- **핵심 기능**:
+  - 소스 정리 — uid·resourceVersion·status·managedFields·할당 clusterIP·nodePort(옵션)·PVC volumeName·pod-template-hash 제거, 컨트롤러가 만든 객체(ownerReferences)·기본 SA·`kube-root-ca.crt` 제외
+  - NS 이름 변경 시 metadata.namespace · RoleBinding subject · 내부 DNS(`.ns.svc`) 자동 반영 + 사용자 치환 규칙(레지스트리·문자열·replicas·라벨, 종류·이름 범위 지정)
+  - 미리보기 — 타깃 현재 상태를 원하는 필드로 투영해 diff(서버 기본값 잡음 없음), 서버 dry-run 으로 admission·quota 오류 사전 검출
+  - 적용 순서 보장(NS → 쿼터 → SA → RBAC → 설정 → PVC → Service → 워크로드 → 노출·정책), 타깃 전용 리소스는 삭제하지 않음(prune 없음)
+- **요청사항 (수정 요청)**:
+  - _(여기에 개선/수정 요청을 직접 적어주세요)_
+
 ### K8S 노드 이미지 (`/node-images`)
 
 - **파일**: `frontend/src/pages/NodeImagesPage.tsx` (+ `components/node-images/NodeImagesTable.tsx`, `NodeLabelGroupView.tsx`, `ImageCentricView.tsx`, `NodeImagesCsvExportMenu.tsx`, `ImageDistributeDialog.tsx`, `components/common/SnapshotProgressCard`)

@@ -2069,6 +2069,61 @@ def _run_k8s_efficiency_body(self, db, run, log):
     return {"run_id": str(run.id), "state": run.run_state, "summary": run.summary}
 
 
+# ── NS 마이그레이션(개발 → 운영) ──────────────────────────────────────────────────
+@celery_app.task(bind=True, name="app.celery_app.run_ns_migration", time_limit=900)
+def run_ns_migration(self, run_id: str):
+    """NS 마이그레이션 계획/적용 run — engine.execute_run + 감사 기록. 동시성 슬롯은 타깃 클러스터 기준."""
+    import logging
+    from app.database import SessionLocal
+    from app.models import Cluster
+    from app.models.ns_migration import NsMigrationRun
+    from app.services import audit_logger
+    from app.services.k8s_efficiency.runs import RunLogger
+    from app.services.ns_migration.engine import execute_run
+    from app.services.tenant_concurrency import TenantRunLimitTimeout, acquire_run_slot
+
+    log = logging.getLogger(__name__)
+    db = SessionLocal()
+    try:
+        run = db.query(NsMigrationRun).filter(NsMigrationRun.id == run_id).first()
+        if run is None:
+            return {"error": "run not found"}
+        if run.run_state != "queued":
+            return {"error": f"run already {run.run_state}"}
+        try:
+            slot = acquire_run_slot(self, db, cluster_id=run.target_cluster_id, kind="ns_migration_run",
+                                    ref=run_id, label=f"NS 마이그레이션 {run.target_namespace}",
+                                    on_wait=RunLogger(db, run).log)
+        except TenantRunLimitTimeout as e:
+            RunLogger(db, run).finish("failed", error=str(e))
+            return {"run_id": run_id, "error": "tenant_limit_timeout"}
+        try:
+            src = db.query(Cluster).filter(Cluster.id == run.source_cluster_id).first()
+            dst = db.query(Cluster).filter(Cluster.id == run.target_cluster_id).first()
+            if src is None or dst is None:
+                RunLogger(db, run).finish("failed", error="소스 또는 타깃 클러스터가 삭제됐습니다.")
+            else:
+                try:
+                    execute_run(db, run, src, dst)
+                except Exception as e:  # noqa: BLE001
+                    db.rollback()
+                    log.exception("ns migration run failed run=%s", run_id)
+                    RunLogger(db, run).finish("failed", error=str(e))
+        finally:
+            slot.release()
+        if run.mode == "apply":
+            audit_logger.record(db, action="k8s.ns_migration.apply",
+                                actor_username=run.triggered_by or "automation",
+                                status="success" if run.run_state == "succeeded" else "failure",
+                                target_type="cluster", target_id=str(run.target_cluster_id),
+                                details={"run_id": run_id, "source_ns": run.source_namespace,
+                                         "target_ns": run.target_namespace, "summary": run.summary,
+                                         "error": run.error})
+        return {"run_id": run_id, "state": run.run_state, "summary": run.summary}
+    finally:
+        db.close()
+
+
 # ── K8S 자원 관리 NS 롤링 갱신 ───────────────────────────────────────────────────
 @celery_app.task(bind=True, name="app.celery_app.dispatch_k8s_alloc_rolling", ignore_result=True)
 def dispatch_k8s_alloc_rolling(self):

@@ -63,6 +63,7 @@ from app.routers.ops_check import router as ops_check_router
 from app.routers.k8s_resources import router as k8s_resources_router
 from app.routers.k8s_allocation import router as k8s_allocation_router
 from app.routers.k8s_efficiency import router as k8s_efficiency_router
+from app.routers.ns_migration import router as ns_migration_router
 from app.routers.daily_report import router as daily_report_router
 from app.routers.daily_report import public_router as daily_report_public_router
 from app.routers.external_services import router as external_services_router
@@ -98,6 +99,7 @@ __all__ = [
     "node_ssh_router",
     "k8s_allocation_router",
     "k8s_efficiency_router",
+    "ns_migration_router",
     "daily_report_router",
     "daily_report_public_router",
     "external_services_router",

@@ -3,6 +3,7 @@ from app.models.k8s_efficiency import (
     K8sEfficiencyRun, K8sNamespacePolicy, K8sNamespaceSample, K8sNsDailyReport, K8sRightsizeRecommendation,
     K8sWorkloadSample,
 )
+from app.models.ns_migration import NsMigrationProfile, NsMigrationRun
 from app.models.external_service import ExternalServiceChange, ExternalServiceSnapshot
 from app.models.public_share import PublicShareLink
 from app.models.addon import Addon
@@ -188,6 +189,8 @@ __all__ = [
     "K8sNamespacePolicy",
     "K8sEfficiencyRun",
     "K8sNsDailyReport",
+    "NsMigrationProfile",
+    "NsMigrationRun",
     "ExternalServiceSnapshot",
     "ExternalServiceChange",
     "PublicShareLink",

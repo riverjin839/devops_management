@@ -42,6 +42,7 @@ export const en: TranslationResource = {
       links: 'Cluster Links',
       nodeLabels: 'K8s Node Labels',
       k8sRbac: 'K8s Access Control',
+      nsMigration: 'NS Migration',
       nodeImages: 'K8s Node Images',
       cidr: 'CIDR Calculator',
       k8sEvents: 'K8s Live Events',
