@@ -209,3 +209,83 @@ def test_node_delete_cascades_and_records_audit(client, world, db):
     assert row.details["mindmap_id"] == str(map_id)
     assert row.details["deleted_count"] == 2
     assert "note" not in row.details and "color" not in row.details
+
+
+# ── Confluence URL 스킴 ───────────────────────────────────────────────────────
+
+@pytest.mark.parametrize("bad", ["javascript:alert(1)", "data:text/html,x", "ftp://wiki.example/x", "wiki.example/x"])
+def test_confluence_url_must_be_http_or_empty(client, world, bad):
+    assert client.put(_url(world), json={"confluence_url": bad}).status_code == 422
+    assert client.post("/api/v1/mindmaps/", json={"title": f"x-{world['tag']}", "confluence_url": bad}).status_code == 422
+    r = client.put(_url(world), json={"confluence_url": " https://wiki.example/p "})
+    assert r.status_code == 200 and r.json()["confluence_url"] == "https://wiki.example/p"
+    r = client.post("/api/v1/mindmaps/", json={"title": f"y-{world['tag']}", "confluence_url": ""})
+    assert r.status_code == 201 and r.json()["confluence_url"] is None
+
+
+# ── 동시 부모 변경 — 맵 행 잠금 ──────────────────────────────────────────────
+
+def test_concurrent_reparent_waits_for_map_lock_and_rejects_cycle(client, world, db):
+    """다른 트랜잭션이 맵을 잠근 채 P→Q 를 저장하는 동안 Q→P 요청은 기다렸다가, 커밋된 P→Q 를 보고 422."""
+    import threading
+    from fastapi.testclient import TestClient
+    from app.main import app
+
+    p = MindMapNode(mindmap_id=world["map"].id, label="P")
+    q = MindMapNode(mindmap_id=world["map"].id, label="Q")
+    db.add_all([p, q])
+    db.commit()
+
+    other = SessionLocal()
+    try:
+        other.query(MindMap).filter(MindMap.id == world["map"].id).with_for_update().one()
+        other.query(MindMapNode).filter(MindMapNode.id == p.id).update({"parent_id": q.id})
+        other.flush()
+
+        result = {}
+
+        def _put():
+            result["status"] = TestClient(app).put(_url(world, "nodes", q.id), json={"parent_id": str(p.id)}).status_code
+
+        t = threading.Thread(target=_put)
+        t.start()
+        t.join(timeout=1.0)
+        assert t.is_alive(), "맵 잠금 없이 부모 검증이 먼저 끝났다"
+        other.commit()
+        t.join(timeout=15)
+        assert not t.is_alive()
+    finally:
+        other.rollback()
+        other.close()
+    assert result["status"] == 422
+    db.expire_all()
+    assert db.get(MindMapNode, q.id).parent_id is None
+
+
+def test_node_create_locks_map_row(client, world, db):
+    """노드 생성도 맵 잠금을 기다린다(부모 검증과 저장 사이에 다른 재배치가 끼지 않게)."""
+    import threading
+    from fastapi.testclient import TestClient
+    from app.main import app
+
+    other = SessionLocal()
+    try:
+        # FOR NO KEY UPDATE — 노드 INSERT 의 FK 검사(KEY SHARE)와는 충돌하지 않고 라우터의 FOR UPDATE 와만
+        # 충돌하므로, 요청이 기다린다면 그건 맵 잠금 때문이다.
+        other.query(MindMap).filter(MindMap.id == world["map"].id).with_for_update(key_share=True).one()  # FOR NO KEY UPDATE
+        result = {}
+
+        def _post():
+            result["status"] = TestClient(app).post(_url(world, "nodes"), json={
+                "mindmap_id": str(world["map"].id), "label": "n", "parent_id": str(world["root"].id)}).status_code
+
+        t = threading.Thread(target=_post)
+        t.start()
+        t.join(timeout=1.0)
+        assert t.is_alive()
+        other.commit()
+        t.join(timeout=15)
+    finally:
+        other.rollback()
+        other.close()
+    assert result["status"] == 201

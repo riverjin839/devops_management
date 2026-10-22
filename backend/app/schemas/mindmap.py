@@ -1,11 +1,25 @@
-from pydantic import BaseModel, Field, StringConstraints, model_validator
+from pydantic import BaseModel, Field, StringConstraints, field_validator, model_validator
 from datetime import datetime
+from urllib.parse import urlparse
 from uuid import UUID
 from typing import Annotated, Optional, Any
 
 
 # 맵 제목 — 앞뒤 공백을 걷어낸 뒤 1자 이상(빈 제목 저장 차단). 200 = DB 컬럼 길이.
 MindMapTitle = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=200)]
+
+
+def _http_url_or_clear(v: Optional[str]) -> Optional[str]:
+    """Confluence 링크 — http(s) 주소만. ``null``·빈 문자열(공백)은 지우기(None). 그 외 스킴은 422."""
+    if v is None:
+        return None
+    s = v.strip()
+    if not s:
+        return None
+    p = urlparse(s)
+    if p.scheme.lower() not in ("http", "https") or not p.netloc:
+        raise ValueError("confluence_url 은 http:// 또는 https:// 주소여야 합니다(지우려면 빈 값)")
+    return s
 
 
 def _reject_explicit_null(model: BaseModel, fields: tuple[str, ...]) -> None:
@@ -79,6 +93,8 @@ class MindMapBase(BaseModel):
 class MindMapCreate(MindMapBase):
     title: MindMapTitle
 
+    _confluence_url = field_validator("confluence_url")(_http_url_or_clear)
+
 
 class MindMapUpdate(BaseModel):
     """부분 수정 — 보낸 필드만 반영한다(``model_fields_set``).
@@ -91,6 +107,8 @@ class MindMapUpdate(BaseModel):
     title: Optional[MindMapTitle] = None
     description: Optional[str] = None
     confluence_url: Optional[str] = Field(default=None, max_length=2048)
+
+    _confluence_url = field_validator("confluence_url")(_http_url_or_clear)
 
     @model_validator(mode="after")
     def _non_nullable(self):

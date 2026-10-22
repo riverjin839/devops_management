@@ -339,9 +339,14 @@ export function ClusterLinksPage() {
     void linksQ.refetch();
   };
 
+  // 저장 중에는 다음 저장을 막는다 — 직전 응답의 새 version 을 받기 전에 옛 version 으로 또 보내면
+  // 자기 자신과 409 충돌이 난다. isPending 은 렌더 주기라 같은 틱의 연속 호출을 못 막으므로 ref 로 판정.
+  const savingRef = useRef(false);
+
   /** 문서 저장 — 그룹 배열 순서가 곧 저장 순서. 성공하면 true, 실패하면 토스트 후 false(화면은 서버 값 유지). */
   const save = async (groups: ClusterLinkGroup[], common: ClusterLink[], okMessage?: string): Promise<boolean> => {
-    if (!linksData || !gate.canEdit) return false;
+    if (!linksData || !gate.canEdit || savingRef.current || updateClusterLinks.isPending) return false;
+    savingRef.current = true;
     // 화면에 없는 그룹(고아 등)은 저장된 문서에서 그대로 뒤에 붙여 보낸다 — 요청에 빠졌다고 지워지지 않게.
     const ids = new Set(groups.map(g => g.clusterId));
     const rest = serverGroups.filter(g => !ids.has(g.clusterId));
@@ -369,6 +374,8 @@ export function ClusterLinksPage() {
         toast.error(status === 403 ? '링크 저장 실패 — 권한이 없습니다' : '링크 저장 실패', formatApiError(err));
       }
       return false;
+    } finally {
+      savingRef.current = false;
     }
   };
 
@@ -382,7 +389,7 @@ export function ClusterLinksPage() {
   );
   const handleDragEnd = (ev: DragEndEvent) => {
     const { active, over } = ev;
-    if (!over || active.id === over.id || !gate.canEdit) return;
+    if (!over || active.id === over.id || !gate.canEdit || savingRef.current) return;
     const oi = orderedGroups.findIndex(g => g.clusterId === active.id);
     const ni = orderedGroups.findIndex(g => g.clusterId === over.id);
     if (oi < 0 || ni < 0) return;
@@ -779,7 +786,7 @@ export function ClusterLinksPage() {
               >
                 <div className={layout === 'horizontal' ? 'grid grid-cols-1 md:grid-cols-2 gap-3' : 'flex flex-col gap-3'}>
                   {filteredOrderedGroups.map(g => (
-                    <SortableItem key={g.clusterId} id={g.clusterId} disabled={!gate.canEdit || !!normalizedKeyword}>
+                    <SortableItem key={g.clusterId} id={g.clusterId} disabled={!gate.canEdit || !!normalizedKeyword || updateClusterLinks.isPending}>
                       {h => renderGroupCard(g, false, h)}
                     </SortableItem>
                   ))}

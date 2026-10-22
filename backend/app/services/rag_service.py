@@ -39,12 +39,17 @@ async def retrieve(
     source_types: Optional[list[str]] = None,
     *,
     cluster_scope: Any = None,
+    tenant_scope: Any = None,
 ) -> list[dict[str, Any]]:
     """query_text 와 유사한 내부 문서 상위 k 건을 Citation 목록으로 반환.
 
     ``cluster_scope`` (``services.cluster_access.ClusterScope`` — ``.hidden`` 집합)를 주면 온톨로지 이벤트를
     그 사용자의 클러스터 가시 범위로 거른다. 없으면 fail-closed 기본 범위를 쓴다
     (:func:`_search_ontology_events` 참고).
+
+    ``tenant_scope`` (``services.tenant_scope.TenantScope``)를 주면 작업 가이드·업무 이력·운영 노트를 그
+    사용자의 테넌트 가시 범위(업무 항목은 소속 프로젝트 테넌트 포함)로 거른다. 없으면 fail-closed —
+    공유(``tenant_id IS NULL``) 행만(업무 항목은 공유 프로젝트 소속이거나 프로젝트 없는 것만).
 
     절대 raise 하지 않는다 — 어떤 실패도 빈 목록으로 수렴.
     """
@@ -57,15 +62,16 @@ async def retrieve(
     if vector is None:
         return []
 
+    tscope = tenant_scope if tenant_scope is not None else _shared_only_scope()
     wanted = set(source_types or ("work_guide", "work_item", "ops_note", "ontology_event"))
     candidates: list[dict[str, Any]] = []
 
     if "work_guide" in wanted:
-        candidates += _search_work_guides(db, vector, k)
+        candidates += _search_work_guides(db, vector, k, tscope)
     if "work_item" in wanted:
-        candidates += _search_work_items(db, vector, k)
+        candidates += _search_work_items(db, vector, k, tscope)
     if "ops_note" in wanted:
-        candidates += _search_ops_notes(db, vector, k)
+        candidates += _search_ops_notes(db, vector, k, tscope)
     if "ontology_event" in wanted:
         candidates += _search_ontology_events(db, vector, k, cluster_scope=cluster_scope)
 
@@ -74,13 +80,19 @@ async def retrieve(
     return candidates[:k]
 
 
-def _search_work_guides(db: Session, vector: list[float], k: int) -> list[dict]:
+def _shared_only_scope():
+    """사용자 맥락이 없는 호출의 fail-closed 범위 — 공유(``tenant_id IS NULL``) 행만 보인다."""
+    from app.services.tenant_scope import TenantScope
+    return TenantScope(is_admin=False, tenant_ids=frozenset())
+
+
+def _search_work_guides(db: Session, vector: list[float], k: int, tscope: Any) -> list[dict]:
     try:
         from app.models.work_guide import WorkGuide
         dist = WorkGuide.embedding.cosine_distance(vector)
+        q = db.query(WorkGuide, dist.label("dist")).filter(WorkGuide.embedding.isnot(None))
         rows = (
-            db.query(WorkGuide, dist.label("dist"))
-            .filter(WorkGuide.embedding.isnot(None))
+            tscope.apply(q, WorkGuide.tenant_id)
             .order_by(dist)
             .limit(k)
             .all()
@@ -99,13 +111,14 @@ def _search_work_guides(db: Session, vector: list[float], k: int) -> list[dict]:
         return []
 
 
-def _search_work_items(db: Session, vector: list[float], k: int) -> list[dict]:
+def _search_work_items(db: Session, vector: list[float], k: int, tscope: Any) -> list[dict]:
     try:
         from app.models.work_item import WorkItem
+        from app.services.tenant_scope import work_item_visibility
         dist = WorkItem.embedding.cosine_distance(vector)
+        q = db.query(WorkItem, dist.label("dist")).filter(WorkItem.embedding.isnot(None))
         rows = (
-            db.query(WorkItem, dist.label("dist"))
-            .filter(WorkItem.embedding.isnot(None))
+            work_item_visibility(tscope, q, db)  # 항목 tenant_id + 소속(비공개) 프로젝트 tenant_id
             .order_by(dist)
             .limit(k)
             .all()
@@ -124,13 +137,13 @@ def _search_work_items(db: Session, vector: list[float], k: int) -> list[dict]:
         return []
 
 
-def _search_ops_notes(db: Session, vector: list[float], k: int) -> list[dict]:
+def _search_ops_notes(db: Session, vector: list[float], k: int, tscope: Any) -> list[dict]:
     try:
         from app.models.ops_note import OpsNote
         dist = OpsNote.embedding.cosine_distance(vector)
+        q = db.query(OpsNote, dist.label("dist")).filter(OpsNote.embedding.isnot(None))
         rows = (
-            db.query(OpsNote, dist.label("dist"))
-            .filter(OpsNote.embedding.isnot(None))
+            tscope.apply(q, OpsNote.tenant_id)
             .order_by(dist)
             .limit(k)
             .all()

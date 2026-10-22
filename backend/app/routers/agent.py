@@ -131,11 +131,15 @@ async def _retrieve_citations(db: Session, query: str, user: Optional[User] = No
     try:
         from app.services import rag_service
         scope = None
+        tscope = None
         if user is not None:
             # 온톨로지 이벤트 근거를 사용자 클러스터 가시 범위로 거른다(없으면 rag_service 의 fail-closed 기본).
             from app.services.cluster_access import ClusterScope, hidden_cluster_ids
             scope = ClusterScope(hidden_cluster_ids(db, user))
-        return await rag_service.retrieve(db, query, k=3, cluster_scope=scope)
+            # 가이드·업무 이력·운영 노트는 테넌트 가시 범위로 — auth.deps.get_tenant_scope 와 같은 판정.
+            from app.services.tenant_scope import TenantScope, user_tenant_ids
+            tscope = TenantScope(is_admin=user.role == "admin", tenant_ids=user_tenant_ids(db, user))
+        return await rag_service.retrieve(db, query, k=3, cluster_scope=scope, tenant_scope=tscope)
     except Exception:  # noqa: BLE001  (RAG 실패가 챗을 막지 않게)
         return []
 

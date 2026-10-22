@@ -89,6 +89,8 @@
 | `TRENDS_GITHUB_TOKEN` | *(empty)* | optional — rate limit 향상. **fallback** — 화면 "수집 설정"에 저장한 토큰(AppSetting `trends.settings`, `secret_box` 암호문·응답 미노출·백업 마스킹)이 우선한다 |
 | `TRENDS_COLLECT_HOUR` | `7` | 매일 자동 수집 시각 (KST) |
 
+> 기술 동향 RSS 수집은 매 hop 을 해석·검사한 IP 로 직접 연결해 DNS rebinding 을 막는다. 단 `HTTP(S)_PROXY`/`ALL_PROXY` 가 적용되면 접속 대상을 프록시가 해석하므로 주소 고정이 불가능하다 — **프록시를 쓰는 배포에서는 egress 프록시가 내부 주소(사설·루프백·링크로컬·메타데이터 대역) 차단을 강제해야 한다.**
+
 ## 알림 / 기타
 
 | Variable | Default | Description |

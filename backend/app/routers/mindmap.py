@@ -16,9 +16,16 @@ from app.schemas.mindmap import (
 router = APIRouter(prefix="/mindmaps", tags=["mindmaps"])
 
 
-def _get_map(db: Session, map_id: UUID, scope: TenantScope) -> MindMap:
-    """맵 조회 + 테넌트 가시 범위 확인 — 노드 엔드포인트도 부모 맵 기준으로 판정한다."""
-    m = db.query(MindMap).filter(MindMap.id == map_id).first()
+def _get_map(db: Session, map_id: UUID, scope: TenantScope, *, lock: bool = False) -> MindMap:
+    """맵 조회 + 테넌트 가시 범위 확인 — 노드 엔드포인트도 부모 맵 기준으로 판정한다.
+
+    ``lock=True`` 면 맵 행을 ``SELECT ... FOR UPDATE`` 로 잠근다 — 같은 맵의 노드 생성·부모 변경을
+    직렬화해, 동시 요청이 서로의 변경을 못 본 채 ``_validate_parent`` 를 통과해 순환을 만드는 것을 막는다.
+    """
+    q = db.query(MindMap).filter(MindMap.id == map_id)
+    if lock:
+        q = q.with_for_update()
+    m = q.first()
     if not m or not scope.visible(m.tenant_id):
         raise HTTPException(status_code=404, detail="MindMap not found")
     return m
@@ -132,7 +139,7 @@ def delete_mindmap(map_id: UUID, request: Request, db: Session = Depends(get_db)
 @router.post("/{map_id}/nodes", response_model=MindMapNodeResponse, status_code=status.HTTP_201_CREATED)
 def create_node(map_id: UUID, payload: MindMapNodeCreate, db: Session = Depends(get_db),
                 scope: TenantScope = Depends(get_tenant_scope)):
-    _get_map(db, map_id, scope)
+    _get_map(db, map_id, scope, lock=True)  # 커밋까지 맵 잠금 — 부모 검증·저장 직렬화
     _validate_parent(db, map_id, payload.parent_id)
     node = MindMapNode(
         mindmap_id=map_id,
@@ -155,7 +162,7 @@ def create_node(map_id: UUID, payload: MindMapNodeCreate, db: Session = Depends(
 @router.put("/{map_id}/nodes/{node_id}", response_model=MindMapNodeResponse)
 def update_node(map_id: UUID, node_id: UUID, payload: MindMapNodeUpdate, db: Session = Depends(get_db),
                 scope: TenantScope = Depends(get_tenant_scope)):
-    _get_map(db, map_id, scope)
+    _get_map(db, map_id, scope, lock=True)  # 커밋까지 맵 잠금 — 동시 부모 변경이 순환을 만들지 않게
     node = db.query(MindMapNode).filter(
         MindMapNode.id == node_id, MindMapNode.mindmap_id == map_id
     ).first()

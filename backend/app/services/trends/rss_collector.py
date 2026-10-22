@@ -2,6 +2,7 @@ import logging
 import feedparser
 from datetime import datetime, timezone
 from email.utils import parsedate_to_datetime
+from urllib.parse import urlparse
 
 from app.services.trends.base import BaseTrendCollector, CollectedItem, TrendCollectError
 from app.services.trends.url_guard import guarded_get
@@ -50,6 +51,10 @@ class RSSCollector(BaseTrendCollector):
             published = _parse_date(entry)
             if published is None or published < since_aware:
                 continue
+            link = (entry.get("link") or "").strip()
+            lp = urlparse(link)
+            if lp.scheme.lower() not in ("http", "https") or not lp.netloc:
+                continue  # javascript:/data:/상대 경로 등 — 화면 링크로 쓸 수 없으므로 버린다
             content = _entry_content(entry)
             items.append(CollectedItem(
                 source_name=display_name,
@@ -57,7 +62,7 @@ class RSSCollector(BaseTrendCollector):
                 category=category,
                 item_type=item_type,
                 title=entry.get("title", "(제목 없음)"),
-                url=entry.get("link", ""),
+                url=link,
                 published_at=published.astimezone(timezone.utc).replace(tzinfo=None),
                 raw_content=content,
             ))

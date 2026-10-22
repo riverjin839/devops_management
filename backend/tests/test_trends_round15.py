@@ -466,7 +466,8 @@ def test_redirect_to_metadata_is_rechecked_and_blocked(monkeypatch):
     monkeypatch.setattr(url_guard, "_resolve", fake_resolve)
 
     def handler(req):
-        if req.url.host == "pub.example":
+        # 연결은 검사한 IP 로 고정되므로 원래 호스트는 Host 헤더로 본다.
+        if req.headers.get("host") == "pub.example":
             return httpx.Response(302, headers={"location": "http://169.254.169.254/latest/meta-data/"})
         return httpx.Response(200, text="secret")
     _transport(handler, monkeypatch)
@@ -497,6 +498,145 @@ def test_rss_collect_uses_source_item_type(monkeypatch):
     _transport(lambda req: httpx.Response(200, text=xml), monkeypatch)
     items = _run(RSSCollector().collect("https://pub.example/feed", datetime(2020, 1, 1), item_type="news"))
     assert len(items) == 1 and items[0].item_type == "news" and items[0].url == "https://pub.example/p/1"
+
+
+def _public(monkeypatch, addr="93.184.216.34"):
+    calls = []
+
+    async def fake_resolve(host, port):
+        calls.append(host)
+        return [addr]
+    monkeypatch.setattr(url_guard, "_resolve", fake_resolve)
+    return calls
+
+
+def test_guarded_get_pins_checked_ip_with_host_header_and_sni(monkeypatch):
+    _public(monkeypatch)
+    seen = []
+
+    def handler(req):
+        seen.append((req.url.scheme, req.url.host, req.url.port, req.headers.get("host"),
+                     req.extensions.get("sni_hostname")))
+        if len(seen) == 1:
+            return httpx.Response(301, headers={"location": "http://pub.example:8080/feed2"})
+        return httpx.Response(200, text="ok")
+    _transport(handler, monkeypatch)
+    r = _run(url_guard.guarded_get("https://pub.example/feed"))
+    assert r.text == "ok"
+    assert seen[0] == ("https", "93.184.216.34", None, "pub.example", "pub.example")
+    # redirect hop 도 다시 해석·고정. http 는 SNI 확장 없음, Host 에 포트 유지
+    assert seen[1] == ("http", "93.184.216.34", 8080, "pub.example:8080", None)
+
+
+def test_guarded_get_resolves_once_per_hop_dns_rebinding(monkeypatch):
+    """검사 때 공인 → 이후 사설로 바뀌는 rebinding 이어도, 연결은 검사한 공인 IP 로 간다."""
+    answers = iter([["93.184.216.34"], ["127.0.0.1"], ["169.254.169.254"]])
+    calls = []
+
+    async def fake_resolve(host, port):
+        calls.append(host)
+        return next(answers)
+    monkeypatch.setattr(url_guard, "_resolve", fake_resolve)
+    seen = []
+    _transport(lambda req: seen.append(req.url.host) or httpx.Response(200, text="ok"), monkeypatch)
+    _run(url_guard.guarded_get("https://rebind.example/feed"))
+    assert calls == ["rebind.example"] and seen == ["93.184.216.34"]
+
+
+def test_guarded_get_pins_ipv6_with_brackets(monkeypatch):
+    _public(monkeypatch, "2606:4700::6810:84e5")
+    seen = {}
+
+    def handler(req):
+        seen["url"], seen["host"] = str(req.url), req.headers.get("host")
+        return httpx.Response(200, text="ok")
+    _transport(handler, monkeypatch)
+    _run(url_guard.guarded_get("https://v6.example/feed"))
+    assert seen["url"] == "https://[2606:4700::6810:84e5]/feed" and seen["host"] == "v6.example"
+
+
+def test_guarded_get_allowed_host_is_exempt_but_still_pinned(monkeypatch):
+    _public(monkeypatch, "10.0.0.5")
+    seen = []
+    _transport(lambda req: seen.append((req.url.host, req.headers.get("host"))) or httpx.Response(200), monkeypatch)
+    with pytest.raises(url_guard.UrlBlocked):
+        _run(url_guard.guarded_get("https://mirror.example/feed"))
+    _run(url_guard.guarded_get("https://mirror.example/feed", allowed_hosts=["*.example"]))
+    assert seen == [("10.0.0.5", "mirror.example")]
+
+
+def test_guarded_get_via_proxy_keeps_unpinned_request(monkeypatch):
+    calls = _public(monkeypatch)
+    monkeypatch.setattr(url_guard, "_proxy_for", lambda url: True)
+    seen = []
+    _transport(lambda req: seen.append((req.url.host, req.extensions.get("sni_hostname"))) or httpx.Response(200),
+               monkeypatch)
+    _run(url_guard.guarded_get("https://pub.example/feed"))
+    assert seen == [("pub.example", None)] and calls == ["pub.example"]  # 사전 검사는 그대로
+
+
+class _ExplodingStream(httpx.AsyncByteStream):
+    async def __aiter__(self):
+        raise AssertionError("Content-Length 초과면 본문을 읽지 않아야 한다")
+        yield b""  # pragma: no cover
+
+
+def test_guarded_get_rejects_large_content_length_before_reading(monkeypatch):
+    _public(monkeypatch)
+    _transport(lambda req: httpx.Response(200, headers={"content-length": str(url_guard.MAX_BODY_BYTES + 1)},
+                                          stream=_ExplodingStream()), monkeypatch)
+    with pytest.raises(TrendCollectError, match="응답이 너무 큽니다"):
+        _run(url_guard.guarded_get("https://pub.example/feed"))
+
+
+def test_guarded_get_aborts_stream_once_cap_exceeded(monkeypatch):
+    _public(monkeypatch)
+    monkeypatch.setattr(url_guard, "MAX_BODY_BYTES", 10 * 1024)
+    produced = []
+
+    async def endless():
+        while True:
+            produced.append(1)
+            yield b"x" * 1024
+    _transport(lambda req: httpx.Response(200, content=endless()), monkeypatch)
+    with pytest.raises(TrendCollectError, match="응답이 너무 큽니다"):
+        _run(url_guard.guarded_get("https://pub.example/feed"))
+    assert len(produced) <= 12
+
+
+def test_guarded_get_cap_counts_decompressed_bytes(monkeypatch):
+    import gzip
+    _public(monkeypatch)
+    monkeypatch.setattr(url_guard, "MAX_BODY_BYTES", 10 * 1024)
+    bomb = gzip.compress(b"\0" * (200 * 1024))
+    assert len(bomb) < 10 * 1024
+    _transport(lambda req: httpx.Response(200, headers={"content-encoding": "gzip"}, content=bomb), monkeypatch)
+    with pytest.raises(TrendCollectError, match="응답이 너무 큽니다"):
+        _run(url_guard.guarded_get("https://pub.example/feed"))
+    # 상한 이내 gzip 본문은 해제된 텍스트로 돌려준다
+    small = gzip.compress("안녕 feed".encode())
+    _transport(lambda req: httpx.Response(200, headers={"content-encoding": "gzip",
+                                                        "content-type": "text/xml; charset=utf-8"},
+                                          content=small), monkeypatch)
+    assert _run(url_guard.guarded_get("https://pub.example/feed")).text == "안녕 feed"
+
+
+def test_rss_drops_items_with_non_http_links(monkeypatch):
+    _public(monkeypatch)
+    feedparser = pytest.importorskip("feedparser")
+    if not hasattr(feedparser, "parse"):
+        pytest.skip("feedparser stub")
+
+    def item(link):
+        return (f"<item><title>{link}</title><link>{link}</link>"
+                "<pubDate>Mon, 01 Jan 2029 00:00:00 GMT</pubDate><description>x</description></item>")
+    xml = ("<?xml version='1.0'?><rss version='2.0'><channel><title>t</title>"
+           + item("javascript:alert(1)") + item("data:text/html,x") + item("/relative/path")
+           + item("ftp://pub.example/f") + item("https://pub.example/ok") + item("http://pub.example/ok2")
+           + "</channel></rss>")
+    _transport(lambda req: httpx.Response(200, text=xml), monkeypatch)
+    items = _run(RSSCollector().collect("https://pub.example/feed", datetime(2020, 1, 1)))
+    assert [i.url for i in items] == ["https://pub.example/ok", "http://pub.example/ok2"]
 
 
 def test_github_rate_limit_raises_reason(monkeypatch):
