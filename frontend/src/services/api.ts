@@ -2718,6 +2718,19 @@ export const k8sResourcesApi = {
     api.get<import('@/types').K8sResourceYaml>(
       `/k8s/${clusterId}/crds/${group}/${version}/${plural}/${namespace || '-'}/${name}/yaml`,
     ),
+  // ── 네임스페이스 대시보드 보강 ────────────────────────────────────────────
+  /** 이 NS 에 오브젝트가 있는 namespaced CRD + 개수 (CRD 당 limit=1 프로브). */
+  nsCustomResources: (clusterId: string, namespace: string, refresh = false) =>
+    api.get<import('@/types').K8sNsCustomResourcesResponse>(
+      `/k8s/${clusterId}/namespaces/${encodeURIComponent(namespace)}/custom-resources`,
+      { params: refresh ? { refresh: true } : undefined, timeout: 60_000 },
+    ),
+  /** subject 가 이 NS 를 가리키는 ClusterRoleBinding (cluster-scoped 라 NS 필터로는 안 잡힘). */
+  nsClusterRoleBindings: (clusterId: string, namespace: string, refresh = false) =>
+    api.get<import('@/types').K8sResourceListResponse>(
+      `/k8s/${clusterId}/namespaces/${encodeURIComponent(namespace)}/cluster-role-bindings`,
+      { params: refresh ? { refresh: true } : undefined },
+    ),
 };
 
 // ── K8s 자원 관리 (allocation: request vs 사용량 slack) ──────────────────────
