@@ -8,7 +8,9 @@
 
 ## [Unreleased]
 
-1.71.0 이후 main 에 병합된 변경 (다음 릴리스 후보).
+1.72.0 이후 main 에 병합된 변경 (다음 릴리스 후보).
+
+## [1.72.0] - 2026-10-22
 
 ### Added
 - **NS 마이그레이션(개발 → 운영)**: 새 화면 `/ns-migration` 에서 소스 클러스터·네임스페이스의 리소스를 타깃(운영) 클러스터로 옮긴다. 기본 종류(Namespace·ServiceAccount·Role·RoleBinding·ConfigMap·ResourceQuota·LimitRange)에 워크로드(Deployment·StatefulSet·DaemonSet·CronJob·Service·Ingress·PVC 정의·HPA·PDB·NetworkPolicy)를 골라 더하고, Secret 은 명시 선택 시만 포함한다(SA 토큰·Helm release Secret 은 항상 제외, 로그·미리보기에서는 값 마스킹). 치환 규칙(이미지 레지스트리·문자열·replicas·라벨)과 NS 이름 변경(RoleBinding subject·내부 DNS 자동 반영)을 화면에서 정하고 프로필로 저장한다. **미리보기**는 리소스별 생성/갱신/동일과 diff, 서버 dry-run 결과를, **운영 적용**은 server-side apply 를 단계별 실시간 로그(로그 보기 토글)로 보여준다(타깃 클러스터 이름 입력 확인, 타깃 전용 리소스는 지우지 않음). **YAML 다운로드**로 GitOps 반영용 다중 문서 번들도 받는다. Backend: `routers/ns_migration.py`, `services/ns_migration/{transform,engine}.py`(DynamicClient), Celery `run_ns_migration`, 모델 `NsMigrationProfile`·`NsMigrationRun`(로그성 365일), 감사 `k8s.ns_migration.*`.
