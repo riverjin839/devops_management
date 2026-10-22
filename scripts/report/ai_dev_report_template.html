@@ -150,6 +150,7 @@
   /* 목업 (실제 화면 구조를 단순화한 정적 재현 — 예시 데이터) */
   .mk-wrap { display: grid; grid-template-columns: minmax(0, 1.55fr) minmax(0, 1fr); gap: 16px; align-items: start; }
   @media (max-width: 860px) { .mk-wrap { grid-template-columns: 1fr; } }
+  @media (max-width: 600px) { .mock table { display: block; overflow-x: auto; white-space: nowrap; } .mock .mgrid[style*="grid-template-columns"] { grid-template-columns: 1fr !important; } }
   .mock { border: 1px solid hsl(var(--border)); border-radius: 10px; overflow: hidden; background: hsl(var(--background)); box-shadow: 0 6px 24px hsl(var(--foreground) / .08); font-size: 12px; }
   .mock .mbar { display: flex; align-items: center; gap: 6px; padding: 7px 10px; background: hsl(var(--secondary)); border-bottom: 1px solid hsl(var(--border)); }
   .mock .mbar i { width: 9px; height: 9px; border-radius: 50%; background: hsl(var(--muted-foreground) / .35); }
@@ -179,6 +180,24 @@
   .mock .mlog .t { opacity: .55; } .mock .mlog .g { color: hsl(var(--status-healthy)); } .mock .mlog .y { color: hsl(var(--status-warning)); } .mock .mlog .r { color: hsl(var(--status-critical)); }
   .mock .mbarv { height: 7px; border-radius: 4px; background: hsl(var(--secondary)); overflow: hidden; } .mock .mbarv > b { display: block; height: 100%; background: hsl(var(--primary)); }
   .mock .cell { display: inline-flex; align-items: center; justify-content: center; width: 100%; min-width: 34px; padding: 3px 0; border-radius: 6px; font-weight: 700; font-size: 10.5px; }
+  .mock .mk-replay { margin-left: auto; font: inherit; font-size: 11px; padding: 1px 8px; border-radius: 6px; border: 1px solid hsl(var(--border)); background: hsl(var(--card)); color: hsl(var(--muted-foreground)); cursor: pointer; }
+  .mock.armed .mk-a, .mock.armed .mk-grow, .mock.armed .mk-shrink { animation-play-state: paused; }
+  .mock .mk-a { animation: mkIn .45s cubic-bezier(.2,.7,.2,1) var(--d, 0s) both; }
+  .mock .mk-a.pop { animation-name: mkPop; }
+  .mock .mk-a.mk-click { animation: mkIn .3s var(--d, 0s) both, mkPulse 1s calc(var(--d, 0s) + .3s) 2; }
+  .mock .mk-type { animation-name: mkType; animation-duration: .5s; animation-timing-function: steps(24); white-space: pre; overflow: hidden; width: calc(var(--n) * 1ch); }
+  .mock .mk-grow { width: var(--w); transform-origin: left; animation: mkGrow 1s cubic-bezier(.2,.7,.2,1) var(--d, 0s) both; }
+  .mock .mk-shrink { width: var(--to); animation: mkShrink 1.2s cubic-bezier(.4,0,.2,1) var(--d, 0s) both; }
+  .mock .mk-modal { animation-name: mkModal; }
+  @keyframes mkIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+  @keyframes mkPop { 0% { opacity: 0; transform: scale(.6); } 70% { opacity: 1; transform: scale(1.08); } 100% { opacity: 1; transform: none; } }
+  @keyframes mkPulse { 0% { box-shadow: 0 0 0 0 hsl(var(--primary) / .55); } 100% { box-shadow: 0 0 0 10px hsl(var(--primary) / 0); } }
+  @keyframes mkType { from { width: 0; } }
+  @keyframes mkGrow { from { transform: scaleX(0); } }
+  @keyframes mkShrink { from { width: var(--from); } }
+  @keyframes mkModal { from { opacity: 0; transform: translateY(14px) scale(.97); } to { opacity: 1; transform: none; } }
+  @media (prefers-reduced-motion: reduce) { .mock .mk-a, .mock .mk-grow, .mock .mk-shrink, .mock .mk-type { animation: none !important; } }
+  @media print { .mock .mk-a, .mock .mk-grow, .mock .mk-shrink, .mock .mk-type { animation: none !important; } }
   .mk-side h4 { margin: 0 0 6px; font-size: 14px; } .mk-side p { margin: 0 0 10px; font-size: 13.5px; line-height: 1.55; }
   .mk-side .gap { color: hsl(var(--muted-foreground)); }
   .mk-side .tools { display: flex; flex-wrap: wrap; gap: 4px; margin: 0 0 10px; }
@@ -528,6 +547,111 @@ function build() {
       <p class="pr"><span class="tag">문제</span>${c.problem}</p><p class="bt"><span class="tag acc">만든 것</span>${c.built}</p></div>`).join("")}</div>
     <p class="note">${N.cases_note || ""}</p>`));
 
+  /* 7-0c. 기존 제품 대비 커스텀 기능 비교 + 주요 기능 목업 */
+  const CC = N.custom_compare;
+  if (CC) add("custom-compare", "CUSTOM FEATURES", "기존 제품·오픈소스에 없는 커스텀 기능 비교", h(`
+    <div class="tablewrap"><table class="cmp"><thead><tr><th>기능</th>${CC.tools.map(t => `<th style="text-align:center">${t}</th>`).join("")}<th class="acc" style="text-align:center">PEP</th></tr></thead><tbody>
+    ${CC.rows.map(([f, v]) => `<tr><td>${f}</td>${v.map(x => `<td class="${x}">${x === "n" ? "✗" : "△"}</td>`).join("")}<td class="y">✓</td></tr>`).join("")}
+    </tbody></table></div><p class="note">${CC.note} 다음 장부터 각 기능을 목업으로 소개한다.</p>`));
+  const MA = (d, html, cls = "") => `<div class="mk-a ${cls}" style="--d:${d}s">${html}</div>`;
+  const L2 = (d, t, msg, c = "") => `<div class="mk-a" style="--d:${d}s"><span class="t">${t}</span> <span class="${c}">${msg}</span></div>`;
+  const win = (route, body) => `<div class="mock"><div class="mbar"><i></i><i></i><i></i><span class="url">pep.local${route.startsWith("/") ? "" : "/"}${route}</span><button type="button" class="mk-replay noprint" title="다시 재생" aria-label="목업 애니메이션 다시 재생">↻ 다시 재생</button></div><div class="mbody">${body}</div></div>`;
+  const cellOf = s => ({ ok: ["정상", "ok"], warn: ["경고", "warn"], crit: ["위험", "crit"], none: ["—", "mute"], run: ["실행 중", "info"] })[s];
+  const MOCK = {
+    matrix: () => {
+      const cl = [["prod-a", "매일 09:00"], ["prod-b", "매일 09:00"], ["stg-a", "6시간마다"], ["dev-a", "주기 꺼짐"]];
+      const rows = [["K8S API-SERVER 응답시간 (ms)", ["ok", "ok", "warn", "ok"]], ["K8s 인증서 만료", ["warn", "ok", "ok", "crit"]], ["etcd 단편화 / 알람", ["ok", "ok", "ok", "none"]], ["CoreDNS 상태", ["ok", "ok", "ok", "ok"]], ["PVC / PV 상태", ["ok", "crit", "ok", "ok"]]];
+      return win("/?tab=platform", `
+        <div class="mtabs"><span>업무 현황</span><span class="on">플랫폼 현황</span></div>
+        <div class="mhead"><span class="mtitle">점검 매트릭스 <span class="mb mute">행 = 점검 항목 · 열 = 클러스터 · 셀 = 최근 판정</span></span><span><span class="mbtn">문제만</span> <span class="mbtn">실행 로그</span> <span class="mbtn pri">+ 항목 추가</span></span></div>
+        <table><thead><tr><th>점검 항목 <span class="mb mute">K8s · 5개</span></th>${cl.map(([c, cron], i) => `<th style="text-align:center">${c}<br><span class="mb mute">${cron}</span>${i === 0 ? ` <span class="mbtn mk-a mk-click" style="--d:2.4s">▶ 전체</span>` : ""}</th>`).join("")}</tr></thead><tbody>
+        ${rows.map(([n, cs], r) => `<tr><td>${n}</td>${cs.map((s, c) => { const [l, k] = cellOf(r === 3 && c === 0 ? "ok" : s); return `<td>${MA(0.15 + (r + c) * 0.1, `<span class="cell mb ${k}">${l}</span>`, "pop")}</td>`; }).join("")}</tr>`).join("")}</tbody></table>
+        <div class="mcard mk-a" style="--d:2.8s"><div class="mhead"><b>실행 로그 — CoreDNS 상태 × prod-a</b><span>${MA(5.2, `<span class="mb ok">완료</span>`, "pop")} <span class="mbtn dng">실행 취소</span></span></div>
+        <div class="mlog">${L2(3.1, "[14:02:11]", "대기열 등록 — «CoreDNS 상태» × «prod-a» · 요청자 admin · 트리거 manual_cell")}${L2(3.6, "[14:02:12]", "실행 시작 — 워커가 수행을 집었습니다.")}${L2(4.0, "[14:02:12]", "점검 정의 «CoreDNS 상태» 실행 중 (check_type=coredns_health)")}${L2(4.5, "[14:02:13]", "단계 kubectl get pods -n kube-system: done (120ms)", "g")}${L2(5.0, "[14:02:13]", "완료 · 판정 healthy · 값 3", "g")}</div></div>`);
+    },
+    verify: () => win("/cluster-manage", `
+        <div class="mhead"><span class="mtitle">클러스터 관리</span><span><span class="mbtn">노드 IP 일괄 수집</span> <span class="mbtn">필터</span></span></div>
+        <table><thead><tr><th>클러스터명</th><th>상태</th><th>운영레벨</th><th>K8s / Cilium</th><th>작업</th></tr></thead><tbody>
+          <tr><td><b>prod-a</b></td><td>${MA(4.6, `<span class="mb ok">정상</span>`, "pop")}</td><td><span class="mb crit">🚀 운영</span></td><td class="num">1.30 / 1.16</td><td><span class="mbtn pri mk-a mk-click" style="--d:0.5s">연결 검증</span></td></tr>
+          <tr><td>stg-a</td><td><span class="mb ok">정상</span></td><td><span class="mb warn">✨ 스테이징</span></td><td class="num">1.30 / 1.16</td><td><span class="mbtn">연결 검증</span></td></tr></tbody></table>
+        <div class="mcard"><div class="mhead"><b>연결 검증 — prod-a</b><span class="mbtn">로그 보기</span></div>
+          <div style="display:flex;gap:6px;flex-wrap:wrap;margin:6px 0">${[["API server", 1.6], ["kubeconfig 인증", 2.6], ["kubectl get nodes", 3.6]].map(([s, d]) => MA(d, `<span class="mb ok">✓ ${s}</span>`, "pop")).join("")}</div>
+          <div class="mlog">${L2(0.9, "10:21:03 INFO ", "prod-a 연결 검증 요청 — API server → kubeconfig 인증 → kubectl 순서로 점검")}${L2(1.3, "10:21:03 INFO ", "API server 확인 중")}${L2(1.6, "10:21:03 INFO ", "API server 통과 — HTTP 200 — ok", "g")}${L2(2.6, "10:21:04 INFO ", "kubeconfig 인증 통과 — 인증 성공", "g")}${L2(3.6, "10:21:05 INFO ", "kubectl get nodes 통과 — 6개 노드 조회 성공", "g")}${L2(4.4, "10:21:05 INFO ", "prod-a 검증 통과 — 상태 healthy 반영")}${L2(4.8, "10:21:05 INFO ", "총 소요 2.1s")}</div></div>`),
+    rbac: () => win("/k8s-rbac", `
+        <div class="mhead"><span class="mtitle">K8s 접근 권한 — prod-a · 네임스페이스 42</span><span class="mbtn">로그 보기</span></div>
+        <div class="mtabs"><span class="on">액세스 발급</span><span>ServiceAccount</span><span>Role / ClusterRole</span><span>Binding</span><span>권한 점검</span></div>
+        <div class="mgrid" style="grid-template-columns:1fr 1fr">
+          <div class="mgrid">${[["1 · 권한 프리셋", "개발자 배포 + 로그 (권장)"], ["2 · 대상", "SA <b>deployer</b> · NS dev (+ dev-batch)"], ["3 · 바인딩 방식", "ClusterRole + 네임스페이스별 RoleBinding"], ["5 · 발급 옵션", "단기 토큰 · 7일 · kubeconfig 발급 ✓ · 생성 후 권한 검증 ✓"]].map(([h2, v], i) => MA(0.1 + i * 0.25, `<div class="mcard"><span class="mb mute">${h2}</span><div>${v}</div></div>`)).join("")}
+            <div class="mhead">${MA(1.2, `<span class="mb info">SA 1 · ClusterRole 1 · RoleBinding 2</span>`)}<span class="mbtn pri mk-a mk-click" style="--d:1.5s">액세스 발급 실행</span></div></div>
+          <div class="mgrid"><div class="mlog">${L2(1.9, "", "네임스페이스 2개 모두 존재 확인")}${L2(2.3, "", "ServiceAccount dev/deployer 생성 완료", "g")}${L2(2.7, "", "ClusterRole pep-dev-deploy 적용 완료 (5줄)", "g")}${L2(3.1, "", "RoleBinding dev, dev-batch 적용 완료", "g")}${L2(3.5, "", "권한 검증 — create deployments: yes · get pods/log: yes", "g")}</div>
+            ${MA(3.9, `<div class="mcard"><b>발급 결과</b> <span class="mb mute">토큰 만료 7일 · 소요 1.8s · 생성·갱신 4개</span>
+              <div class="mlog" style="margin-top:6px">${["apiVersion: v1", "kind: Config", "clusters: [{ name: prod-a }]", "users:", "- name: dev-deployer", "  user: { token: eyJhbGciOiJSUzI1Ni… }"].map((t, i) => `<div class="mk-a mk-type" style="--d:${4.1 + i * 0.35}s;--n:${t.length}">${t}</div>`).join("")}</div>
+              <div style="margin-top:6px"><span class="mbtn">복사</span> <span class="mbtn">.yaml 저장</span></div></div>`)}</div></div>`),
+    efficiency: () => {
+      const rows = [["shop / api", "api", "CPU", 500, 200, "p95 160m", "300m"], ["shop / worker", "worker", "MEM", 2048, 768, "p95 610Mi", "1.25Gi"], ["data / etl", "spark", "CPU", 2000, 900, "p95 720m", "1.1 core"]];
+      return win("/k8s-allocation/prod-a", `
+        <div class="mhead"><span class="mtitle">K8s 자원 관리</span><span class="mbtn">자동갱신 1분</span></div>
+        <div class="mtabs"><span>노드별 자원</span><span>네임스페이스별 자원</span><span>네임스페이스 비효율 랭킹</span><span class="on">효율화</span></div>
+        <div class="mcard"><div class="mhead"><b>자원 효율화</b><span><span class="mbtn">지금 수집</span> <span class="mbtn">추천 재생성</span> <span class="mbtn">정책 설정</span></span></div>
+          <div class="hint">수집 */10 * * * * · 자동 적용 OFF · 사용률 소스 auto · 절감 가능 CPU <b class="num" data-count="3.2" data-dec="1">3.2</b> core / MEM <b class="num" data-count="9.6" data-dec="1">9.6</b> GiB</div></div>
+        <div class="mcard"><div class="mhead"><b>request 축소 추천</b><span class="mbtn pri mk-a mk-click" style="--d:3.2s">선택 적용 (3)</span></div>
+          <table><thead><tr><th>NS / 워크로드</th><th>컨테이너</th><th>자원</th><th>현재 → 목표 (파드당)</th><th>관측</th><th>절감</th></tr></thead><tbody>
+          ${rows.map(([w, c, r, from, to, p95, save], i) => `<tr><td>${w}</td><td>${c}</td><td>${r}</td><td style="min-width:120px"><div class="mbarv"><b class="mk-shrink" style="--from:100%;--to:${Math.round(to / from * 100)}%;--d:${0.6 + i * 0.4}s"></b></div><span class="num hint">${r === "MEM" ? `${from}Mi → ${to}Mi` : `${from}m → ${to}m`}</span></td><td class="num">${p95}</td><td>${MA(1.4 + i * 0.4, `<span class="mb ok">−${save}</span>`, "pop")}</td></tr>`).join("")}</tbody></table></div>
+        <div class="mlog mk-a" style="--d:3.5s">${L2(3.7, "[12:00:01]", "실행 시작 — type=apply trigger=manual dry_run=False targets=3")}${L2(4.1, "[12:00:02]", "[shop/deploy/api cpu] before requests=500m → 200m", "g")}${L2(4.5, "[12:00:03]", "[shop/deploy/worker memory] before requests=2Gi → 768Mi", "g")}${L2(4.9, "[12:00:04]", "실행 종료 — succeeded (성공 3 / 실패 0) · 롤백 가능", "g")}</div>`);
+    },
+    public: () => win("/daily-report", `
+        <div class="mhead"><span class="mtitle">일일 자원 리포트 <span class="mb info">로그인 불필요</span></span><span><span class="mbtn">담당자</span> <span class="mbtn">공유 링크</span></span></div>
+        ${MA(0.1, `<div class="mb warn" style="border-radius:8px;display:block;padding:4px 8px">공유 링크로 열람 중 — 2026-11-21 까지 유효</div>`)}
+        <div class="mhead"><span><span class="mb ok">prod-a</span> <span class="mb mute">prod-b</span></span><span class="mtabs" style="border:0"><span class="on">일</span><span>주</span><span>월</span></span></div>
+        <table><thead><tr><th>순위</th><th>네임스페이스</th><th>파드</th><th>CPU Request</th><th>평균 사용률</th><th>유휴량</th></tr></thead><tbody>
+        ${[["1", "data · 데이터팀 김OO", 38, "24 core", 18], ["2", "shop · 커머스팀 이OO", 22, "12 core", 31], ["3", "ml · AI팀 박OO", 9, "16 core", 44]].map(([r, ns, p, req, u], i) => `<tr><td>${r}</td><td>${ns}</td><td class="num">${p}</td><td class="num">${req}</td><td style="min-width:90px"><div class="mbarv"><b class="mk-grow" style="--w:${u}%;--d:${0.5 + i * 0.3}s"></b></div><span class="hint num">${u}%</span></td><td>${MA(1.4 + i * 0.3, `<span class="mb warn">${Math.round(100 - u)}% 유휴</span>`, "pop")}</td></tr>`).join("")}</tbody></table>
+        <div class="mcard mk-a" style="--d:2.4s"><div class="mhead"><b>외부 서비스 · prod-a · 12/40건</b><span class="mb crit">문제 있음 2</span></div>
+          <table><thead><tr><th>도메인</th><th>주소 (IP:Port)</th><th>정방향 검증</th><th>응답</th><th>인증서</th></tr></thead><tbody>
+          <tr><td>shop.example.com</td><td class="num">10.1.2.3:443</td><td>${MA(2.8, `<span class="mb ok">일치</span>`, "pop")}</td><td>${MA(3.0, `<span class="mb ok">HTTP 200 · 35ms</span>`, "pop")}</td><td>${MA(3.2, `<span class="mb warn">12일 남음</span>`, "pop")}</td></tr>
+          <tr><td>api.example.com ${MA(3.4, `<span class="mb info">신규</span>`, "pop")}</td><td class="num">10.1.2.9:443</td><td>${MA(3.6, `<span class="mb crit">불일치 → 10.1.2.3</span>`, "pop")}</td><td>${MA(3.8, `<span class="mb crit">응답 없음</span>`, "pop")}</td><td>${MA(4.0, `<span class="mb crit">만료됨</span>`, "pop")}</td></tr></tbody></table></div>`),
+    weekly: () => win("/weekly-report", `
+        <div class="mhead"><span class="mtitle">주간보고 <span class="mb mute">2026-10-19 ~ 2026-10-23</span></span><span class="mbtn">다시 생성</span></div>
+        <div class="mtabs"><span class="on">1. 전체 요약</span><span>2. 구분별 상세</span><span>3. 담당자별</span><span>Confluence 게시</span></div>
+        <div class="mgrid" style="grid-template-columns:repeat(4,1fr)">${[["전체 task", 24, ""], ["진행중", 9, "info"], ["완료", 13, "ok"], ["지연", 2, "crit"]].map(([l, v, k]) => `<div class="mcard"><span class="hint">${l}</span><div style="font-size:18px;font-weight:800" class="num ${k ? "" : ""}" data-count="${v}">${v}</div></div>`).join("")}</div>
+        <div class="mcard"><b>진척률</b><table><thead><tr><th>category</th><th>task(Epic)</th><th>계획</th><th>실적</th><th>달성률</th></tr></thead><tbody>
+        ${[["플랫폼", "점검 매트릭스 고도화", 80, 76], ["보안", "SSO·LDAP 로그인", 60, 66], ["관측", "/metrics exporter", 50, 30]].map(([c, t, p, a], i) => { const r = Math.round(a / p * 100); return `<tr><td>${c}</td><td>${t}</td><td class="num">${p}%</td><td class="num">${a}%</td><td style="min-width:110px"><div class="mbarv"><b class="mk-grow" style="--w:${Math.min(100, r)}%;--d:${0.5 + i * 0.3}s"></b></div><span class="mb ${r >= 100 ? "ok" : r >= 80 ? "warn" : "crit"} mk-a" style="--d:${1.2 + i * 0.3}s">${r}%</span></td></tr>`; }).join("")}</tbody></table></div>
+        <div class="mcard"><div class="mhead"><span class="hint">스페이스 키 <b>OPS</b> · 문서 제목 <b>[주간보고] 2026-10 4주차</b></span><span class="mbtn pri mk-a mk-click" style="--d:2.6s">Confluence 에 게시</span></div>
+          ${MA(3.4, `<span class="mb ok">새 페이지를 생성했습니다.</span> <span class="mbtn">Confluence 에서 열기</span>`, "pop")}</div>`),
+    incident: () => win("/incident-analysis/prod-a", `
+        <div class="mgrid" style="grid-template-columns:1fr 1.25fr">
+          <div class="mgrid"><div class="mcard"><b>대상 선택</b><div class="hint">ns <b>shop</b> · pod <b>api-7f9c…</b> · container <b>api</b></div><div style="margin-top:6px"><span class="mbtn">로그/이벤트/Describe 자동 채우기</span></div></div>
+            <div class="mlog">${L2(0.2, "W", "Back-off restarting failed container", "y")}${L2(0.4, "E", "java.lang.OutOfMemoryError: Java heap space", "r")}${L2(0.6, "", "Last State: Terminated · Reason: OOMKilled", "r")}${L2(0.8, "", "Limits: memory 512Mi · Requests: memory 512Mi")}</div>
+            <span class="mbtn pri mk-a mk-click" style="--d:1.2s;justify-self:start;align-self:start">장애 분석 시작</span></div>
+          ${MA(1.9, `<div class="mcard"><div class="mhead"><b>분석 결과</b><span>${MA(2.1, `<span class="mb crit">위험</span>`, "pop")} <span class="mb mute">로컬 LLM (airgap · pep-k8s-ops)</span></span></div>
+            <div class="hint">prod-a · shop/api-7f9c… · 분석 시각 14:21</div>
+            ${MA(2.4, `<div class="mcard" style="margin-top:6px"><span class="mb mute">근본 원인</span><div>JVM 힙이 컨테이너 메모리 limit(512Mi)에 근접해 OOMKilled 반복 — 최근 트래픽 증가로 힙 사용량 상승</div></div>`)}
+            <div style="margin-top:6px" class="hint">신뢰도 <b class="num" data-count="82">82</b>%</div><div class="mbarv"><b class="mk-grow" style="--w:82%;--d:2.7s"></b></div>
+            <div style="margin-top:6px"><span class="mb mute">조치 방안</span>${["memory limit 1Gi 로 상향 (request 768Mi)", "-XX:MaxRAMPercentage=75 로 힙 상한 조정", "HPA 메트릭에 메모리 추가 검토"].map((t, i) => MA(3.0 + i * 0.3, `<div>${i + 1}. ${t}</div>`)).join("")}</div>
+            ${MA(4.0, `<div class="hint" style="margin-top:6px">조치 가이드 — 직접 실행되지 않음 (사람이 수행) · 관련 런북 <span class="mb info">OOMKilled 대응</span></div>`)}</div>`)}
+        </div>`),
+    security: () => win("/settings", `
+        <div class="mgrid" style="grid-template-columns:1fr 1fr">
+          <div class="mcard"><b>테넌트 정보 — 플랫폼A팀</b><div class="hint">동시 실행 상한 <b>3</b> · 멤버 7명</div>
+            <table><thead><tr><th>클러스터 바인딩</th><th>권한</th></tr></thead><tbody>
+            ${[["prod-a", "operate (실행·변경)", "ok"], ["prod-b", "read (조회)", "info"], ["stg-a", "바인딩 없음", "mute"]].map(([c, r, k], i) => `<tr><td>${c}</td><td>${MA(0.3 + i * 0.25, `<span class="mb ${k}">${r}</span>`, "pop")}</td></tr>`).join("")}</tbody></table></div>
+          <div class="mcard"><b>운영레벨 관리</b><table><thead><tr><th>표시 라벨</th><th>보호</th></tr></thead><tbody>
+            ${[["🚀 운영 (Production)", true], ["✨ 스테이징 (Staging)", false], ["💻 개발 (Dev)", false], ["🛡️ DR", true]].map(([l, p], i) => `<tr><td>${l}</td><td>${p ? MA(0.9 + i * 0.2, `<span class="mb crit">보호 ✓</span>`, "pop") : `<span class="hint">—</span>`}</td></tr>`).join("")}</tbody></table></div></div>
+        ${MA(1.8, `<div class="mcard" style="border-color:hsl(var(--status-critical));box-shadow:0 8px 28px hsl(var(--foreground) / .18)"><div class="mhead"><b>etcdctl 실행 확인</b><span class="mb crit">보호 · prod-a</span></div>
+          <div class="hint">조회 명령이 아니므로 etcd 데이터·클러스터 구성을 되돌릴 수 없게 바꿀 수 있습니다.</div>
+          <div class="mlog" style="margin:6px 0"><span class="t">타겟</span> root@10.0.0.11:22 · 개인키
+<span class="t">실행</span> etcdctl --endpoints=*** defrag</div>
+          ${MA(2.4, `<div class="mb crit" style="border-radius:8px;display:block;padding:4px 8px">⚠ 쓰기·삭제 가능 명령 — defrag</div>`, "pop")}
+          <div style="margin-top:6px;text-align:right"><span class="mbtn">취소</span> <span class="mbtn dng">etcdctl 실행</span></div></div>`, "mk-modal")}`),
+  };
+  (N.mockups || []).forEach(m => {
+    if (!MOCK[m.key]) return;
+    add("mock-" + m.key, "MOCKUP · " + m.route, m.title, h(`<div class="mk-wrap">${MOCK[m.key]()}
+      <div class="card mk-side"><h4>기존 도구의 한계</h4><div class="tools">${m.tools.map(t => `<span>${t}</span>`).join("")}</div><p class="gap">${m.gap}</p>
+        <h4 class="acc">PEP 커스텀 구현</h4><p>${m.built}</p><ul style="margin:0 0 10px;padding-left:18px;font-size:13px">${m.points.map(x => `<li>${x}</li>`).join("")}</ul>
+        <span class="chip acc num">v${m.ver}</span></div></div>
+      <p class="note">${N.mockups_note || ""}</p>`));
+  });
+
   const s71 = add("modules", "MODULES", "모듈별 월간 변화량", h(`
     <div class="card"><h3>모듈 × 월 커밋 히트맵 <span class="hint">(칸을 누르면 그 달·그 모듈의 PR 목록)</span></h3>
       <div class="tablewrap"><table class="heat"><thead><tr><th></th>${L.map(l => `<th class="num">${l}</th>`).join("")}<th>합계</th></tr></thead><tbody>
@@ -780,7 +904,34 @@ function build() {
   add("lessons", "LESSONS", "8개월간 얻은 교훈 3가지 — AI 는 속도, 하네스는 방향", h(`<div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(240px,1fr))">${N.lessons.map(([t, d], i) => `<div class="card"><div class="step"><div class="n num" style="background:hsl(var(--primary));color:hsl(var(--primary-foreground))">${i + 1}</div></div><div style="font-size:18px;font-weight:800">${t}</div><p class="muted">${d}</p></div>`).join("")}</div>`));
 
   charts.forEach(renderChart);
+  setupMocks();
   if (document.body.classList.contains("present")) show(cur, 0);
+}
+/* ── 목업 모션: 화면에 들어올 때마다 재생, 「다시 재생」 버튼 ── */
+const reduceMotion = () => matchMedia("(prefers-reduced-motion: reduce)").matches;
+let mockIO;
+function playMock(m) {
+  m.classList.add("armed");
+  m.querySelectorAll(".mk-a, .mk-grow, .mk-shrink").forEach(e => { e.style.animationName = "none"; void e.offsetWidth; e.style.animationName = ""; });
+  m.classList.remove("armed");
+  m.querySelectorAll("[data-count]").forEach(e => {
+    const to = +e.dataset.count, dec = +(e.dataset.dec || 0);
+    if (reduceMotion()) { e.textContent = to.toFixed(dec); return; }
+    const t0 = performance.now(), dur = 1400;
+    const step = t => { const k = Math.min(1, (t - t0) / dur), v = to * (1 - Math.pow(1 - k, 3)); e.textContent = v.toFixed(dec); if (k < 1) requestAnimationFrame(step); };
+    requestAnimationFrame(step);
+  });
+}
+function setupMocks() {
+  if (mockIO) mockIO.disconnect();
+  const mocks = document.querySelectorAll(".mock");
+  mocks.forEach(m => { m.classList.add("armed"); const b = m.querySelector(".mk-replay"); if (b) b.onclick = () => playMock(m); });
+  if (!("IntersectionObserver" in window)) { mocks.forEach(playMock); return; }
+  mockIO = new IntersectionObserver(es => es.forEach(e => {
+    if (e.isIntersecting && !e.target.dataset.on) { e.target.dataset.on = "1"; playMock(e.target); }
+    else if (!e.isIntersecting && e.target.dataset.on) { delete e.target.dataset.on; e.target.classList.add("armed"); }
+  }), { threshold: 0.15 });
+  mocks.forEach(m => mockIO.observe(m));
 }
 function updateOverall() { const o = Math.round(S.scores.reduce((a, b) => a + b, 0) / S.scores.length); document.querySelectorAll("[data-overall]").forEach(n => n.textContent = o + "%"); }
 function rebuildKeep() { const y = scrollY; build(); scrollTo(0, y); }
