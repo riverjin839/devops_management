@@ -4,6 +4,7 @@ import ForceGraph3D, { type ForceGraph3DInstance, type NodeObject, type LinkObje
 import type { TopoNode, TopoEdge, TopologyTrafficEdge } from '@/types';
 import { useTopologyColors, KIND_ABBR } from './topologyShared';
 import { usePrefersReducedMotion } from '@/hooks/usePrefersReducedMotion';
+import { escapeHtml } from '@/lib/html';
 
 interface Props {
   graph: { nodes: TopoNode[]; edges: TopoEdge[] };
@@ -99,7 +100,8 @@ export function Topology3D({ graph, trafficEdges = [], showTraffic, width, heigh
       height={height}
       backgroundColor={colors.background}
       nodeId="id"
-      nodeLabel={(n: NodeObject) => (n as G3Node).name}
+      // 툴팁은 HTML 로 들어간다 — 워크로드·서비스 이름은 클러스터에서 온 외부 값이라 이스케이프(D-181).
+      nodeLabel={(n: NodeObject) => escapeHtml((n as G3Node).name)}
       nodeColor={nodeColor}
       nodeVal={(n: NodeObject) => Math.max(1.5, (n as G3Node).degree)}
       linkSource="source"

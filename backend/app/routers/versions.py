@@ -93,18 +93,35 @@ def _collect_all(cluster: Cluster, kc_path: str, db: Session) -> dict:
     now = datetime.utcnow()
     changed = 0
     errors: list[str] = []
+    # 컴포넌트별 결과 줄(D-135 체크리스트 ③) — 프론트 실행 로그가 대상마다 한 줄씩 남긴다.
+    components: list[dict] = []
+
+    def _record(comp_key: str, version: Any, did_change: bool) -> bool:
+        # 같은 컴포넌트를 두 라벨로 다시 볼 수 있다(cilium_operator) — 줄은 하나로 합친다.
+        prev = next((c for c in components if c["component"] == comp_key), None)
+        if prev is not None:
+            prev["version"] = None if version is None else str(version)
+            prev["changed"] = prev["changed"] or bool(did_change)
+        else:
+            components.append({
+                "component": comp_key,
+                "version": None if version is None else str(version),
+                "changed": bool(did_change),
+            })
+        return bool(did_change)
 
     # 1. K8s server version
     try:
         info = version_api.get_code(_request_timeout=_K8S_TIMEOUT)
-        if _store_if_changed(db, cluster.id, "k8s_server", "control_plane",
-                             info.git_version, {
-                                 "major": info.major,
-                                 "minor": info.minor,
-                                 "platform": info.platform,
-                                 "buildDate": info.build_date,
-                                 "goVersion": info.go_version,
-                             }, now):
+        if _record("k8s_server", info.git_version, _store_if_changed(
+                db, cluster.id, "k8s_server", "control_plane",
+                info.git_version, {
+                    "major": info.major,
+                    "minor": info.minor,
+                    "platform": info.platform,
+                    "buildDate": info.build_date,
+                    "goVersion": info.go_version,
+                }, now)):
             changed += 1
     except Exception as e:
         errors.append(f"k8s_server: {str(e)[:120]}")
@@ -131,8 +148,9 @@ def _collect_all(cluster: Cluster, kc_path: str, db: Session) -> dict:
                 # 모든 필드의 출처는 동일 — Node.status.nodeInfo (kubeconfig 로 K8s API 조회)
                 "_sources": {k: "k8s_api:Node.status.nodeInfo" for k in kubelet_fields},
             }
-            if _store_if_changed(db, cluster.id, f"kubelet:{name}", "kubelet",
-                                 data.get("kubeletVersion"), data, now):
+            if _record(f"kubelet:{name}", data.get("kubeletVersion"), _store_if_changed(
+                    db, cluster.id, f"kubelet:{name}", "kubelet",
+                    data.get("kubeletVersion"), data, now)):
                 changed += 1
     except Exception as e:
         errors.append(f"nodes: {str(e)[:120]}")
@@ -170,7 +188,8 @@ def _collect_all(cluster: Cluster, kc_path: str, db: Session) -> dict:
                 "podName": pod.metadata.name,
             }
             version = _image_tag(main.image)
-            _store_if_changed(db, cluster.id, comp_key, category, version, data, now) and (changed := changed + 1)
+            if _record(comp_key, version, _store_if_changed(db, cluster.id, comp_key, category, version, data, now)):
+                changed += 1
 
         # 4. Cilium — agent + operator (kube-system, labels k8s-app 또는 app.kubernetes.io/name)
         for label_key, label_val, comp_key in [
@@ -194,7 +213,7 @@ def _collect_all(cluster: Cluster, kc_path: str, db: Session) -> dict:
                 "namespace": pod.metadata.namespace,
             }
             version = _image_tag(main.image)
-            if _store_if_changed(db, cluster.id, comp_key, "cni", version, data, now):
+            if _record(comp_key, version, _store_if_changed(db, cluster.id, comp_key, "cni", version, data, now)):
                 changed += 1
 
     # 5. cilium-config ConfigMap
@@ -203,7 +222,8 @@ def _collect_all(cluster: Cluster, kc_path: str, db: Session) -> dict:
                                            _request_timeout=_K8S_TIMEOUT)
         data = {"data": dict(cm.data or {})}
         version = (cm.data or {}).get("cilium-version") or (cm.data or {}).get("cni-version")
-        if _store_if_changed(db, cluster.id, "cilium_config", "cni", version, data, now):
+        if _record("cilium_config", version,
+                   _store_if_changed(db, cluster.id, "cilium_config", "cni", version, data, now)):
             changed += 1
     except ApiException as e:
         if e.status != 404:
@@ -212,7 +232,7 @@ def _collect_all(cluster: Cluster, kc_path: str, db: Session) -> dict:
         errors.append(f"cilium-config: {str(e)[:120]}")
 
     db.commit()
-    return {"changed": changed, "errors": errors, "collectedAt": now.isoformat()}
+    return {"changed": changed, "errors": errors, "collectedAt": now.isoformat(), "components": components}
 
 
 # ── Endpoints ────────────────────────────────────────────────────────────────
@@ -1411,6 +1431,10 @@ def export_versions_csv(
     )
 
 
+# 그래프에서 컴포넌트당 그리는 플래그 leaf 상한 — 전체 목록은 /versions 화면(정책 ⑪).
+_GRAPH_FLAG_LIMIT = 6
+
+
 @router.get("/{cluster_id}/versions/graph")
 def get_versions_graph(cluster_id: UUID, db: Session = Depends(get_db)):
     """3D 그래프용: 최신 스냅샷 기반으로 노드/엣지 산출.
@@ -1454,20 +1478,23 @@ def get_versions_graph(cluster_id: UUID, db: Session = Depends(get_db)):
             edges.append({"source": f"cluster:{cluster.id}", "target": cat_id, "type": "contains"})
 
         node_id = f"comp:{comp}"
-        nodes.append({
+        comp_node: dict = {
             "id":       node_id,
             "label":    comp,
             "type":     "component",
             "category": cat,
             "version":  s.version,
             "collectedAt": s.collected_at.isoformat(),
-        })
+        }
+        nodes.append(comp_node)
         edges.append({"source": cat_id, "target": node_id, "type": "contains"})
 
-        # 주요 flags 를 작은 leaf 노드로 (최대 6개만 — 그래프 폭주 방지)
+        # 주요 flags 를 작은 leaf 노드로 (최대 _GRAPH_FLAG_LIMIT 개만 — 그래프 폭주 방지).
+        # 잘린 사실을 화면이 알 수 있도록 전체 개수를 컴포넌트 노드에 싣는다(flag_total, B-10).
         flags = (s.data or {}).get("flags") if isinstance(s.data, dict) else None
         if isinstance(flags, dict):
-            for idx, (fk, fv) in enumerate(list(flags.items())[:6]):
+            comp_node["flag_total"] = len(flags)
+            for fk, fv in list(flags.items())[:_GRAPH_FLAG_LIMIT]:
                 leaf_id = f"flag:{comp}:{fk}"
                 nodes.append({
                     "id":       leaf_id,
@@ -1478,10 +1505,9 @@ def get_versions_graph(cluster_id: UUID, db: Session = Depends(get_db)):
                 })
                 edges.append({"source": node_id, "target": leaf_id, "type": "param"})
 
-        # cilium_config data → cilium_agent 로 연결
+        # cilium_config data → cilium_agent 로 연결 (agent 노드가 없으면 마무리 필터가 걸러낸다)
         if comp == "cilium_config":
-            agent_node = "comp:cilium_agent"
-            edges.append({"source": node_id, "target": agent_node, "type": "configures"})
+            edges.append({"source": node_id, "target": "comp:cilium_agent", "type": "configures"})
 
     # kube_proxy 가 비어있거나 Cilium kubeProxyReplacement 가 true 면 표시
     cilium_cfg = latest.get("cilium_config")
@@ -1489,12 +1515,16 @@ def get_versions_graph(cluster_id: UUID, db: Session = Depends(get_db)):
         d = cilium_cfg.data.get("data", {}) if isinstance(cilium_cfg.data.get("data"), dict) else {}
         kpr = str(d.get("kube-proxy-replacement", "")).lower()
         if kpr in ("strict", "true", "enabled"):
-            if "comp:cilium_agent" in {n["id"] for n in nodes} and "comp:kube_proxy" in {n["id"] for n in nodes}:
-                edges.append({
-                    "source": "comp:cilium_agent",
-                    "target": "comp:kube_proxy",
-                    "type":   "replaces",
-                })
+            edges.append({
+                "source": "comp:cilium_agent",
+                "target": "comp:kube_proxy",
+                "type":   "replaces",
+            })
+
+    # 마무리 필터(B-10) — 양 끝이 모두 노드 집합에 있는 엣지만 보낸다. 끝점 없는 링크는 d3 force 가
+    # "node not found" 예외를 던져 화면 전체가 죽는다. 엣지를 추가하는 경로가 늘어도 여기서 한 번에 막는다.
+    node_ids = {n["id"] for n in nodes}
+    edges = [e for e in edges if e["source"] in node_ids and e["target"] in node_ids]
 
     return {
         "cluster_id": str(cluster_id),

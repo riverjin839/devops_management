@@ -1,11 +1,13 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy.orm import Session
 from uuid import UUID
 
-from app.auth.deps import get_tenant_scope
+from app.auth.deps import get_current_user, get_tenant_scope
 from app.database import get_db
+from app.services import audit_logger
 from app.services.tenant_scope import TenantScope
 from app.models.mindmap import MindMap, MindMapNode
+from app.models.user import User
 from app.schemas.mindmap import (
     MindMapCreate, MindMapUpdate, MindMapResponse, MindMapListItem,
     MindMapNodeCreate, MindMapNodeUpdate, MindMapNodeResponse,
@@ -14,12 +16,43 @@ from app.schemas.mindmap import (
 router = APIRouter(prefix="/mindmaps", tags=["mindmaps"])
 
 
-def _get_map(db: Session, map_id: UUID, scope: TenantScope) -> MindMap:
-    """맵 조회 + 테넌트 가시 범위 확인 — 노드 엔드포인트도 부모 맵 기준으로 판정한다."""
-    m = db.query(MindMap).filter(MindMap.id == map_id).first()
+def _get_map(db: Session, map_id: UUID, scope: TenantScope, *, lock: bool = False) -> MindMap:
+    """맵 조회 + 테넌트 가시 범위 확인 — 노드 엔드포인트도 부모 맵 기준으로 판정한다.
+
+    ``lock=True`` 면 맵 행을 ``SELECT ... FOR UPDATE`` 로 잠근다 — 같은 맵의 노드 생성·부모 변경을
+    직렬화해, 동시 요청이 서로의 변경을 못 본 채 ``_validate_parent`` 를 통과해 순환을 만드는 것을 막는다.
+    """
+    q = db.query(MindMap).filter(MindMap.id == map_id)
+    if lock:
+        q = q.with_for_update()
+    m = q.first()
     if not m or not scope.visible(m.tenant_id):
         raise HTTPException(status_code=404, detail="MindMap not found")
     return m
+
+
+def _validate_parent(db: Session, map_id: UUID, parent_id: UUID | None, node_id: UUID | None = None) -> None:
+    """``parent_id`` 검증 — 같은 맵의 노드여야 하고, 자기 자신·자손을 부모로 두면(순환) 422.
+
+    순환 부모는 화면의 부모 추적(``getBranchColor`` 등)을 무한 루프로 만든다(A-20).
+    부모 사슬은 방문 집합으로 따라가므로 이미 저장된 순환이 있어도 멈춘다.
+    """
+    if parent_id is None:
+        return
+    parents = dict(
+        db.query(MindMapNode.id, MindMapNode.parent_id).filter(MindMapNode.mindmap_id == map_id).all()
+    )
+    if parent_id not in parents:
+        raise HTTPException(status_code=422, detail="parent_id 는 같은 마인드맵의 노드여야 합니다")
+    if node_id is None:
+        return
+    cur: UUID | None = parent_id
+    seen: set[UUID] = set()
+    while cur is not None and cur not in seen:
+        if cur == node_id:
+            raise HTTPException(status_code=422, detail="자기 자신이나 하위 노드를 부모로 지정할 수 없습니다")
+        seen.add(cur)
+        cur = parents.get(cur)
 
 
 # ── Maps ─────────────────────────────────────────────────────────────────────
@@ -72,23 +105,33 @@ def update_mindmap(map_id: UUID, payload: MindMapUpdate, db: Session = Depends(g
     if "tenant_id" in payload.model_fields_set:
         scope.ensure_assignable(payload.tenant_id)
         m.tenant_id = payload.tenant_id
-    if payload.title is not None:
+    # 보낸 필드만 반영 — 명시적 null 은 값 지우기(title 은 스키마가 null·공백을 422 로 막는다).
+    fields = payload.model_fields_set
+    if "title" in fields:
         m.title = payload.title
-    if payload.description is not None:
+    if "description" in fields:
         m.description = payload.description
-    if payload.confluence_url is not None:
-        m.confluence_url = payload.confluence_url or None
+    if "confluence_url" in fields:
+        m.confluence_url = (payload.confluence_url or "").strip() or None
     db.commit()
     db.refresh(m)
     return m
 
 
 @router.delete("/{map_id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_mindmap(map_id: UUID, db: Session = Depends(get_db),
-                   scope: TenantScope = Depends(get_tenant_scope)):
+def delete_mindmap(map_id: UUID, request: Request, db: Session = Depends(get_db),
+                   scope: TenantScope = Depends(get_tenant_scope),
+                   actor: User = Depends(get_current_user)):
     m = _get_map(db, map_id, scope)
+    # 감사 — id·제목만 남긴다(노드 본문·메모는 기록하지 않음).
+    details = {"title": m.title, "node_count": len(m.nodes)}
+    tenant_id = m.tenant_id
     db.delete(m)
     db.commit()
+    audit_logger.record(
+        db, action="mindmap.delete", actor=actor, target_type="mindmap", target_id=map_id,
+        details=details, request=request, tenant_id=tenant_id,
+    )
 
 
 # ── Nodes ─────────────────────────────────────────────────────────────────────
@@ -96,7 +139,8 @@ def delete_mindmap(map_id: UUID, db: Session = Depends(get_db),
 @router.post("/{map_id}/nodes", response_model=MindMapNodeResponse, status_code=status.HTTP_201_CREATED)
 def create_node(map_id: UUID, payload: MindMapNodeCreate, db: Session = Depends(get_db),
                 scope: TenantScope = Depends(get_tenant_scope)):
-    _get_map(db, map_id, scope)
+    _get_map(db, map_id, scope, lock=True)  # 커밋까지 맵 잠금 — 부모 검증·저장 직렬화
+    _validate_parent(db, map_id, payload.parent_id)
     node = MindMapNode(
         mindmap_id=map_id,
         parent_id=payload.parent_id,
@@ -118,23 +162,28 @@ def create_node(map_id: UUID, payload: MindMapNodeCreate, db: Session = Depends(
 @router.put("/{map_id}/nodes/{node_id}", response_model=MindMapNodeResponse)
 def update_node(map_id: UUID, node_id: UUID, payload: MindMapNodeUpdate, db: Session = Depends(get_db),
                 scope: TenantScope = Depends(get_tenant_scope)):
-    _get_map(db, map_id, scope)
+    _get_map(db, map_id, scope, lock=True)  # 커밋까지 맵 잠금 — 동시 부모 변경이 순환을 만들지 않게
     node = db.query(MindMapNode).filter(
         MindMapNode.id == node_id, MindMapNode.mindmap_id == map_id
     ).first()
     if not node:
         raise HTTPException(status_code=404, detail="Node not found")
-    for field, value in payload.model_dump(exclude_unset=True).items():
-        setattr(node, field, value)
+    if "parent_id" in payload.model_fields_set:
+        _validate_parent(db, map_id, payload.parent_id, node_id=node.id)
+    # 보낸 필드만 반영 — 명시적 null 은 값 지우기(메모·색·좌표·parent_id). 지울 수 없는 필드의
+    # null 은 스키마(NODE_NON_NULLABLE_FIELDS)가 422 로 막는다.
+    for field in payload.model_fields_set:
+        setattr(node, field, getattr(payload, field))
     db.commit()
     db.refresh(node)
     return node
 
 
 @router.delete("/{map_id}/nodes/{node_id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_node(map_id: UUID, node_id: UUID, db: Session = Depends(get_db),
-                scope: TenantScope = Depends(get_tenant_scope)):
-    _get_map(db, map_id, scope)
+def delete_node(map_id: UUID, node_id: UUID, request: Request, db: Session = Depends(get_db),
+                scope: TenantScope = Depends(get_tenant_scope),
+                actor: User = Depends(get_current_user)):
+    m = _get_map(db, map_id, scope)
     node = db.query(MindMapNode).filter(
         MindMapNode.id == node_id, MindMapNode.mindmap_id == map_id
     ).first()
@@ -153,7 +202,17 @@ def delete_node(map_id: UUID, node_id: UUID, db: Session = Depends(get_db),
     for n in all_nodes:
         if str(n.id) in to_delete:
             db.delete(n)
+    details = {
+        "mindmap_id": str(map_id), "mindmap_title": m.title,
+        "label": node.label, "deleted_count": len(to_delete),
+    }
+    tenant_id = m.tenant_id
     db.commit()
+    # 감사 — id·제목만 남긴다(메모·색 등 본문은 기록하지 않음).
+    audit_logger.record(
+        db, action="mindmap.node.delete", actor=actor, target_type="mindmap_node", target_id=node_id,
+        details=details, request=request, tenant_id=tenant_id,
+    )
 
 
 # Bulk position save (drag-and-drop canvas)
@@ -164,7 +223,11 @@ def bulk_update_positions(
     db: Session = Depends(get_db),
     scope: TenantScope = Depends(get_tenant_scope),
 ):
-    """Update x/y positions for multiple nodes at once."""
+    """Update x/y positions for multiple nodes at once.
+
+    부분 목록을 받는다 — 움직인 노드만 보내면 그 노드만 바뀌고 나머지는 그대로다(정책 ⑦).
+    다른 맵의 노드 id·모르는 id 는 무시한다. 응답은 맵의 전체 노드.
+    """
     m = _get_map(db, map_id, scope)
 
     node_map = {str(n.id): n for n in m.nodes}

@@ -55,7 +55,7 @@ export function PanelEditDialog({ panel, fallbackLabel, onClose, onSave }: Panel
                 onClick={() => setIconPickerOpen(true)}
                 title="아이콘 변경"
                 aria-label="패널 아이콘 변경"
-                className="flex items-center justify-center w-10 h-10 rounded-lg bg-secondary text-muted-foreground hover:text-foreground transition-colors flex-shrink-0"
+                className="flex items-center justify-center w-10 h-10 rounded-xl bg-secondary text-muted-foreground hover:text-foreground transition-colors flex-shrink-0"
               >
                 {resolved?.kind === 'image'
                   ? <img src={resolved.value} alt="" className="w-5 h-5 object-contain rounded-sm" />

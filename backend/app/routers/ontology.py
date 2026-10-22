@@ -1,12 +1,23 @@
+"""Ontology 엔드포인트 — 클러스터별 구성 요소 그래프 + 변경 영향(what-if) 분석.
+
+권한 (R-4 15차 A-1):
+- 그래프 조회 ``GET /graph/{cluster_id}`` — 마운트(`_cluster_scoped`)가 경로 기준 read 를 판정한다.
+- 엔티티·관계 생성 — ``require_operator`` + 본문 ``cluster_id`` 에 operate (경로 판정이 닿지 않아 핸들러가 직접).
+- 영향 분석 — 인증 사용자 + 본문 ``cluster_id`` 에 read. 가정 분석이므로
+  ``category="impact_simulation"``, ``severity="info"`` 로 고정 기록하고 RAG 대상(임베딩)에서 뺀다(A-17).
+"""
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.orm import Session
 
+from app.auth.deps import get_current_user, require_operator
 from app.database import get_db
 from app.models.cluster import Cluster
 from app.models.ontology import OntologyEntity, OntologyEntityType, OntologyEvent, OntologyRelationship
+from app.models.user import User
 from app.schemas.ontology import (
+    IMPACT_SIMULATION_CATEGORY,
     ConfigChangeImpactRequest,
     ConfigChangeImpactResponse,
     ImpactPath,
@@ -16,28 +27,24 @@ from app.schemas.ontology import (
     OntologyRelationshipCreate,
     OntologyRelationshipRead,
 )
+from app.services import audit_logger
+from app.services.cluster_access import require_cluster_access
 from app.services.ontology_service import Edge, calculate_blast_radius
 
 router = APIRouter(prefix="/ontology", tags=["ontology"])
 
 
-def _queue_embedding_recompute(ontology_event_id) -> None:
-    """RAG 검색용 임베딩 계산 큐잉 — best-effort (ops_note.py 의 동일 헬퍼 패턴)."""
-    try:
-        from app.celery_app import compute_ontology_event_embedding
-        compute_ontology_event_embedding.delay(str(ontology_event_id))
-    except Exception:
-        import logging
-        logging.getLogger(__name__).warning(
-            "Failed to queue embedding recompute for ontology_event %s", ontology_event_id
-        )
-
-
 @router.post("/entities", response_model=OntologyEntityRead)
-def create_entity(payload: OntologyEntityCreate, db: Session = Depends(get_db)):
+def create_entity(
+    payload: OntologyEntityCreate,
+    request: Request,
+    db: Session = Depends(get_db),
+    actor: User = Depends(require_operator),
+):
     cluster = db.query(Cluster).filter(Cluster.id == payload.cluster_id).first()
     if not cluster:
         raise HTTPException(status_code=404, detail="Cluster not found")
+    require_cluster_access(db, actor, payload.cluster_id, "operate")
 
     try:
         entity_type = OntologyEntityType(payload.entity_type)
@@ -56,11 +63,23 @@ def create_entity(payload: OntologyEntityCreate, db: Session = Depends(get_db)):
     db.add(row)
     db.commit()
     db.refresh(row)
+    audit_logger.record(
+        db, action="ontology.entity.create", actor=actor,
+        target_type="cluster", target_id=payload.cluster_id,
+        details={"entity_id": str(row.id), "entity_type": entity_type.value, "name": row.name},
+        request=request,
+    )
     return row
 
 
 @router.post("/relationships", response_model=OntologyRelationshipRead)
-def create_relationship(payload: OntologyRelationshipCreate, db: Session = Depends(get_db)):
+def create_relationship(
+    payload: OntologyRelationshipCreate,
+    request: Request,
+    db: Session = Depends(get_db),
+    actor: User = Depends(require_operator),
+):
+    require_cluster_access(db, actor, payload.cluster_id, "operate")
     source = db.query(OntologyEntity).filter(
         OntologyEntity.id == payload.source_entity_id,
         OntologyEntity.cluster_id == payload.cluster_id,
@@ -76,6 +95,14 @@ def create_relationship(payload: OntologyRelationshipCreate, db: Session = Depen
     db.add(row)
     db.commit()
     db.refresh(row)
+    audit_logger.record(
+        db, action="ontology.relationship.create", actor=actor,
+        target_type="cluster", target_id=payload.cluster_id,
+        details={"relationship_id": str(row.id), "relation_type": row.relation_type,
+                 "source_entity_id": str(row.source_entity_id),
+                 "target_entity_id": str(row.target_entity_id)},
+        request=request,
+    )
     return row
 
 
@@ -96,7 +123,12 @@ def get_graph(cluster_id: UUID, db: Session = Depends(get_db)):
 
 
 @router.post("/impact", response_model=ConfigChangeImpactResponse)
-def analyze_config_change_impact(payload: ConfigChangeImpactRequest, db: Session = Depends(get_db)):
+def analyze_config_change_impact(
+    payload: ConfigChangeImpactRequest,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    require_cluster_access(db, user, payload.cluster_id, "read")
     config_entity = db.query(OntologyEntity).filter(
         OntologyEntity.id == payload.config_entity_id,
         OntologyEntity.cluster_id == payload.cluster_id,
@@ -129,21 +161,25 @@ def analyze_config_change_impact(payload: ConfigChangeImpactRequest, db: Session
 
     blast_radius_score = round(sum(blast_map.values()) / max(len(blast_map), 1), 4)
 
+    # 가정 분석 기록 — 분류는 서버가 고정한다. 실제 변경 이력이 아니므로 RAG 임베딩을 큐잉하지 않는다
+    # (rag_service 도 impact_simulation 을 검색에서 제외한다). 클라이언트가 보낸 분류는 근거에만 남긴다.
+    evidence = dict(payload.evidence or {})
+    if payload.category != IMPACT_SIMULATION_CATEGORY or payload.severity != "info":
+        evidence.setdefault("requested", {"category": payload.category, "severity": payload.severity})
+    evidence.setdefault("requested_by", getattr(user, "username", None))
     event = OntologyEvent(
         cluster_id=payload.cluster_id,
-        category=payload.category,
-        severity=payload.severity,
+        category=IMPACT_SIMULATION_CATEGORY,
+        severity="info",
         title=payload.title,
         description=payload.description,
-        evidence=payload.evidence,
+        evidence=evidence,
         blast_radius_score=blast_radius_score,
         impacted_count=len(impacted_entities),
     )
     db.add(event)
     db.commit()
     db.refresh(event)
-
-    _queue_embedding_recompute(event.id)
 
     entity_name_map = {
         e.id: e.name

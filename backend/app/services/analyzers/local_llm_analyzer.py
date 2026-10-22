@@ -75,6 +75,8 @@ class LocalLLMAnalyzer(BaseAnalyzer):
             return []
         try:
             from app.services import rag_service
+            # 사용자 맥락이 없는 자동 분석 — cluster_scope/tenant_scope 를 넘기지 않으므로 rag_service 의
+            # fail-closed 기본(공유 행·바인딩 없는 클러스터만)이 적용된다. 의도된 동작.
             return await rag_service.retrieve(self._db, prompt, k=4)
         except Exception:  # noqa: BLE001  (RAG 실패가 분석을 막지 않게)
             return []

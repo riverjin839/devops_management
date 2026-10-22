@@ -630,8 +630,50 @@ def _run_migrations():
             ("last_message", "TEXT"),
             ("last_item_count", "INTEGER DEFAULT 0"),
             ("last_collected_at", "TIMESTAMP WITHOUT TIME ZONE"),
+            # 15차 A-19·A-10: RSS 항목 종류(NULL=알려진 피드 표→blog) · 증분 수집 기준 시각
+            ("item_type", "VARCHAR(20)"),
+            ("last_success_at", "TIMESTAMP WITHOUT TIME ZONE"),
         ]:
             _safe_add_column("trend_sources", col_name, col_type)
+    # trend_items: 15차 A-8 요약 상태(ok|failed|pending) + 재시도 횟수, A-10 URL 전역 unique
+    if "trend_items" in inspector.get_table_names():
+        _safe_add_column("trend_items", "summary_status", "VARCHAR(20) NOT NULL DEFAULT 'pending'")
+        _safe_add_column("trend_items", "summary_error", "TEXT")
+        _safe_add_column("trend_items", "summary_attempts", "INTEGER NOT NULL DEFAULT 0")
+        # 구버전이 summary_ko 에 영구 저장한 실패 문구 → failed 로 되돌려 다음 수집 때 재요약(멱등)
+        _safe_exec(
+            "UPDATE trend_items SET summary_ko = NULL, summary_status = 'failed', summary_attempts = 1, "
+            "summary_error = '이전 버전에서 요약 실패 문구로 저장됨 — 다음 수집 때 다시 요약' "
+            "WHERE summary_ko LIKE '%요약을 생성할 수 없습니다.'",
+            label="trend_items 요약 실패 문구 → failed",
+        )
+        _safe_exec(
+            "UPDATE trend_items SET summary_status = 'ok' WHERE summary_status = 'pending' AND summary_ko IS NOT NULL",
+            label="trend_items 기존 요약 → ok",
+        )
+        _safe_create_index("ix_trend_items_summary_status", "trend_items", "(summary_status)")
+        if not _relation_exists("uq_trend_items_url"):
+            # 다이제스트 = 그날 새로 발견된 항목(정책 ④) — 가장 먼저 수집된 행만 남기고 재수집 중복을 지운다
+            _safe_exec(
+                "DELETE FROM trend_items a USING trend_items b WHERE a.url = b.url AND a.url <> '' AND "
+                "(a.digest_date > b.digest_date OR (a.digest_date = b.digest_date AND CAST(a.id AS TEXT) > CAST(b.id AS TEXT)))",
+                label="trend_items URL 중복 정리",
+            )
+            _safe_exec(
+                "CREATE UNIQUE INDEX IF NOT EXISTS uq_trend_items_url ON trend_items (url) WHERE url <> ''",
+                label="index uq_trend_items_url",
+            )
+            _safe_exec(
+                "UPDATE trend_digests d SET item_count = "
+                "(SELECT COUNT(*) FROM trend_items i WHERE i.digest_date = d.digest_date)",
+                label="trend_digests item_count 재계산",
+            )
+    if "trend_digests" in inspector.get_table_names():
+        _safe_exec(
+            "UPDATE trend_digests SET overall_summary_ko = NULL "
+            "WHERE overall_summary_ko = '오늘 수집된 동향의 종합 요약을 생성할 수 없습니다.'",
+            label="trend_digests 종합 요약 실패 문구 정리",
+        )
 
     if "issues" in inspector.get_table_names():
         _safe_add_column("issues", "detail_content", "TEXT")

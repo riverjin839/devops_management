@@ -168,15 +168,15 @@ hover 시 flyout 자체가 라벨을 보여주므로 이름만 뜨는 중복 툴
 - **목적 / UX**: 사용자가 자주 쓰는 PEP 화면을 하나에 모아두는 **개인 커스텀 화면**. 사이드바 레일 → flyout → 페이지 이동을 매번 반복하지 않도록, 등록한 화면을 **탭 또는 좌측 아이콘 레일**로 즉시 전환한다. 패널 내용은 새로 만든 위젯이 아니라 **기존 페이지 컴포넌트를 그대로 임베드**한 것이라, 각 화면의 기능이 원본과 100% 동일하다. 라우트는 `/island`(마지막에 보던 아일랜드로 리다이렉트)와 `/island/:islandId` 두 가지. 진입점은 `AppTopBar`(상단바, 이름 옆)의 opt-in 항목 "나의 아일랜드"(야자수 아이콘) — 다른 업무 도메인 leaf 페이지와 같은 카탈로그(`installableApps.ts` 의 "개인" 섹션)에서 설치/제거한다. 내 아일랜드 + 공유받은 아일랜드가 합쳐 2개 이상이면 클릭 시 flyout 목록에서 고른다(공유분은 "팀 공유" 구분선 아래에 소유자명과 함께 표시). 마지막에 보던 아일랜드로 바로 가고, 하나도 없으면 `/island` 로 이동해 만들기로 이어진다. **[2026-09-17]** 예전엔 홈 상단 KPI 스트립에도 진입 필(`IslandPill`)이 있고 사이드바 푸터에도 상시 노출 아이콘이 있어 진입점이 최대 두 곳이었지만, Main UI 간소화(KPI 스트립 제거)와 후속 요청(사이드바 푸터 상시 노출 → 상단바 opt-in 전환)을 거쳐 지금은 상단바의 opt-in 항목 하나로 수렴했다.
 - **UI 구성**:
   - **상단 헤더**: 아일랜드 이름 + (공유받은 것이면) `소유자 · 읽기 전용` 배지 + 레이아웃 전환 버튼(탭↔사이드바, 소유자만) + 아일랜드 관리 버튼.
-  - **탭 모드(`layoutMode='tabs'`)**: 헤더 아래 pill 탭바(`IslandTabBar`, SettingsPage 탭바 룩). 드래그로 순서 변경, hover 시 × 로 제거, 끝에 "화면 추가".
-  - **사이드바 모드(`layoutMode='sidebar'`)**: 좌측 **iconOnly 56px 레일**(`IslandRail`)이 메인 사이드바에 **flush**(좌측 공백 0)로 붙는다 — CLAUDE.md 보조 사이드바 간격 표준 준수. hover 시 portal 툴팁으로 화면명 표시, 드래그로 순서 변경.
+  - **탭 모드(`layoutMode='tabs'`)**: 헤더 아래 pill 탭바(`IslandTabBar`, SettingsPage 탭바 룩). 핸들 드래그(키보드 가능)로 순서 변경, hover 시 × 로 제거("되돌리기" 토스트), 끝에 "화면 추가".
+  - **사이드바 모드(`layoutMode='sidebar'`)**: 좌측 **iconOnly 56px 레일**(`IslandRail`)이 메인 사이드바에 **flush**(좌측 공백 0)로 붙는다 — CLAUDE.md 보조 사이드바 간격 표준 준수. hover 시 portal 툴팁으로 화면명 표시, 핸들 드래그(키보드 가능)로 순서 변경.
   - **패널 본문**: `IslandPanelHost` 가 `.island-embed` 래퍼 + `IslandEmbedContext.Provider` 로 감싸 페이지를 렌더한다. 컨텍스트가 필요한 이유는 `/ops-checks/:clusterId` 처럼 **클러스터 선택을 URL 에 담는 화면**들 때문 — 이들은 파라미터가 없으면 마운트 시 자기 라우트로 `navigate` 하므로, 표식이 없으면 앱 전체가 아일랜드 밖으로 나가버린다. 공통 훅 `hooks/useClusterRouteParam.ts` 가 임베드 상태에서는 URL 대신 로컬 state 로 클러스터를 고른다(적용: `/clusters`, `/ops-checks`, `/k8s-manage`, `/k8s-allocation`, `/k8s-logs`). 이 래퍼는 `index.css` 의 `.island-embed :is(.min-h-screen,.h-screen)` 규칙으로 페이지 루트의 전체화면 셸을 무력화하고, 스크롤을 자기가 소유해서 아일랜드 크롬(탭바/레일)이 고정되게 한다. **활성 패널 하나만 마운트**한다.
   - **화면 추가 다이얼로그**(`PanelPickerDialog`): 검색 + 그룹별(사이드바 GROUPS 기준) 목록. 이미 담긴 화면은 체크 표시. 패널 수가 상한(`MAX_PANELS` = 20, 백엔드 스키마와 동일)에 도달하면 상단 안내 + 항목/추가 버튼 비활성화.
   - **아일랜드 관리 SidePane**(`IslandManagerPane`): 생성 / 이름·설명 인라인 편집 / 아이콘(`ClusterIconPicker`) / **드래그 순서 변경**(`GripVertical` 핸들, `POST /islands/reorder`) / 레이아웃 토글 / 공유 토글 / 삭제, 그리고 **팀 공유 아일랜드** 목록(읽기 전용 + 복제 버튼).
   - **패널 표시 설정 다이얼로그**(`PanelEditDialog`): 탭·레일 항목의 연필 아이콘으로 열어 패널별 표시 이름·아이콘을 오버라이드한다. 비우면 `null` 로 저장되어 사이드바 기본값(navLabels → NAV_MAP)으로 되돌아간다.
   - 아일랜드 자체는 `ClusterSidebar` 를 쓰지 않는다 — 임베드된 페이지가 필요하면 **그 페이지가 자기 것을 렌더**한다(사이드바 모드에서는 메인/아일랜드/클러스터 3개 레일이 각 56px 로 나란히 붙는다).
 - **Frontend**: `hooks/useIslands.ts`(`useIslands`/`useCreateIsland`/`useUpdateIsland`/`useDeleteIsland`/`useCloneIsland`/`useReorderIslands`) · `hooks/useNavCatalog.ts`(동적 navMap + `getLabel` + `featureAllowed` — **Sidebar.tsx 와 공유**, 관리자가 바꾼 메뉴명·숨긴 기능이 패널 카탈로그에도 그대로 반영) · `stores/islandStore.ts`(Zustand, 마지막 아일랜드/활성 패널만 localStorage `pep:lastIslandId`/`pep:islandActivePanel` — 아일랜드 정의 자체는 서버) · `services/api.ts` 의 `islandsApi`.
-- **Backend**: 테스트는 `backend/tests/test_island.py`(21 케이스 — 소유권 403/404, 복제 시 소유권 이전, `_normalize_panels` 방어, reorder 격리). `island.py` 라우터(prefix `/islands`): `GET ""`(내 것 + 공유된 것), `GET/PUT/DELETE /{id}`, `POST ""`, `POST /{id}/clone`, `POST /reorder`. 모델 `backend/app/models/island.py`(`Island` — `owner_id`/`name`/`icon`/`layout_mode`/`panels(JSONB)`/`is_shared`/`sort_order`), 스키마 `backend/app/schemas/island.py`. **쓰기는 소유자만**(아니면 403), 공유된 것은 읽기 + 복제만. 저장된 `panels` 는 읽기·쓰기 양쪽에서 `_normalize_panels()` 로 방어적 정규화(형식 깨진 항목 드롭, 최대 20개).
+- **Backend**: 테스트는 `backend/tests/test_island.py`(21 케이스 — 소유권 403/404, 복제 시 소유권 이전, `_normalize_panels` 방어, reorder 격리) + `test_island_round15.py`(`expected_updated_at` 409, reorder 가 버전을 올리지 않음). `island.py` 라우터(prefix `/islands`): `GET ""`(내 것 + 공유된 것), `GET/PUT/DELETE /{id}`(PUT 은 선택 `expected_updated_at` 낙관적 동시성 — 불일치 409), `POST ""`, `POST /{id}/clone`, `POST /reorder`. 모델 `backend/app/models/island.py`(`Island` — `owner_id`/`name`/`icon`/`layout_mode`/`panels(JSONB)`/`is_shared`/`sort_order`), 스키마 `backend/app/schemas/island.py`. **쓰기는 소유자만**(아니면 403), 공유된 것은 읽기 + 복제만. 저장된 `panels` 는 읽기·쓰기 양쪽에서 `_normalize_panels()` 로 방어적 정규화(형식 깨진 항목 드롭, 최대 20개).
 - **핵심 기능**:
   - 아일랜드 다중 생성 + 이름/아이콘/설명, 탭↔사이드바 레이아웃 전환.
   - 패널(화면) 추가·제거·드래그 순서 변경 — 순서는 서버에 저장돼 기기 간 동기화된다.
@@ -184,6 +184,12 @@ hover 시 flyout 자체가 라벨을 보여주므로 이름만 뜨는 중복 툴
   - 임베드 가능 화면은 `components/island/panelRegistry.ts` 의 `PANEL_COMPONENTS` 에 등록된 것만. `ISLAND_DENYLIST`(`/k9s` 터미널, `/settings`·`/daily-check/settings` admin 전용, `/`·`/island` 자기 자신)와 라우트 파라미터가 필요한 화면(`/services/:key` 등)은 카탈로그에서 제외된다.
   - Settings "접근 제어"(`canAccessFeature`)와 같은 권한 판정을 패널 렌더 시점에도 적용 — 공유받은 아일랜드에 권한 없는 화면이 있어도 페이지가 깨지는 대신 안내가 나온다.
   - 활성 패널은 URL `?panel=<key>` 로 딥링크된다(`?tab=` 은 임베드된 SettingsPage 등이 이미 써서 의도적으로 피함).
+- **15차 감사(2026-10-22, D-227·D-228·D-233·D-236)**:
+  - **조회 상태**: 목록 조회 실패는 `ErrorState`(다시 시도), 로딩은 `LoadingState` 다. 실패 중에는 `/island` 리다이렉트나 마지막 아일랜드 기억(`setLastIslandId(null)`) 삭제를 하지 않는다. 레이아웃·이름·설명·공유·아이콘 변경 실패는 토스트로 알리고 입력값을 되돌린다.
+  - **저장**: 패널 변경은 `useUpdateIsland` 의 아일랜드별 직렬화 낙관적 큐를 거친다. 앞 저장이 끝난 뒤 최신 캐시 기준으로 계산하고, 실패하면 롤백한다. PUT 은 `expected_updated_at` 을 보내고, 서버 값과 다르면 409("다른 곳에서 바뀌었습니다. 새로고침하세요")다. `POST /islands/reorder` 는 `updated_at` 을 올리지 않는다.
+  - **패널 제거**: 탭·레일 × 는 즉시 제거하고 "패널 제거됨 · 되돌리기" 토스트를 띄운다. 아일랜드 삭제는 `ConfirmDialog` 를 유지한다.
+  - **접근성**: 탭·레일·관리 목록의 정렬은 별도 `GripVertical` 핸들 버튼 + `KeyboardSensor` 로 한다. 공유 토글은 `aria-pressed` 를 쓰고 라벨은 "모든 사용자에게 공유"다(공유 범위 = 전체 사용자 — 현재 동작 유지).
+  - **표준**: 임베드된 페이지의 `PageHeader` 는 아일랜드 안에서 기본 h2 로 내려간다(`useIsIslandEmbedded`). 레일 툴팁은 `bg-foreground text-background` 이고, 패널 안내는 `EmptyState`, 빈 아일랜드는 `PageShell density="hub"` 다.
 - **요청사항 (수정 요청)**:
   - _(여기에 개선/수정 요청을 직접 적어주세요)_
 
@@ -545,6 +551,7 @@ hover 시 flyout 자체가 라벨을 보여주므로 이름만 뜨는 중복 툴
   - firing → resolved 상태 전이, 확인(ack)·일괄 확인, 보존기간 자동 정리(`log_retention_service`). 일괄 확인은 화면 조건(클러스터·심각도·상태·검색어)과 같은 미확인 알람만, 조건 요약 확인 창 후 실행(D-103).
   - **테넌트 범위(D-103)**: 단건 확인·분석 조회는 보이는 알람만(404), 삭제·분석 실행은 operator + 클러스터 operate. `all` 알림 팬아웃도 그 클러스터를 볼 수 있는 사용자로 한정.
 - **URL 상태(D-029)**: `?tab=`(inbox|rules) · `cluster` · `sev` · `status`(기본 firing) · `q`. 새로고침·공유·뒤로가기에서 유지(`hooks/useUrlParams`, replace). 모달은 뒤로가기로 닫힌다.
+- **15차 감사(2026-10-22, D-238 — D-190 잔여)**: 알림 규칙 탭(`AlertNotifyRulesPanel`)의 필드 오류·"저장하지 않은 변경"·도움말 글자를 표 밖 `text-[11px]` 에서 `text-xs` 로 맞췄다.
 - **요청사항 (수정 요청)**:
   - _(여기에 개선/수정 요청을 직접 적어주세요)_
 
@@ -875,9 +882,9 @@ hover 시 flyout 자체가 라벨을 보여주므로 이름만 뜨는 중복 툴
 
 - **파일**: `frontend/src/pages/VersionGraphPage.tsx` (react-force-graph-3d + three.js)
 - **목적 / UX**: `/versions` 페이지의 스냅샷 데이터를 클러스터→카테고리→컴포넌트→플래그 계층의 3D 노드-엣지 그래프로 시각화해, 어떤 플래그/설정이 어떤 컴포넌트에 속하는지 탐색한다.
-- **UI 구성**: 좌측 `ClusterSidebar iconOnly` 레일 + 오른쪽 열(상단 툴바: 뒤로가기, 색상 범례, 재수집 버튼 / 전체 높이 3D 그래프 캔버스), 노드 클릭 시 우상단 상세 패널(`NodeDetail`: type/version/value/category/collectedAt).
-- **Frontend**: `useClusters()`, `useQuery(['versions','graph',selectedId])` → `versionsApi.graph`. 선택은 `useClusterRouteParam('/versions', clusters, { pathFor })` — URL 이 곧 선택이다. 로컬 state: `dims`(ResizeObserver), `selectedNode`. 노드·링크·툴팁 색은 `lib/chartTokens.ts` `cssVarColor`(테마 전환 시 다시 칠함). 호출 함수: `versionsApi.graph`, `versionsApi.collect`(재수집).
-- **Backend**: `GET /api/v1/clusters/{cluster_id}/versions/graph` — `backend/app/routers/versions.py` (1248행). `ClusterConfigSnapshot`을 카테고리/컴포넌트/플래그 노드+엣지(`contains`/`param`/`configures`/`replaces`)로 변환해 반환. 재수집은 `POST /clusters/{id}/collect-versions` 재사용.
+- **UI 구성**: 좌측 `ClusterSidebar iconOnly` 레일 + 오른쪽 열(상단 툴바: 뒤로가기, 색상 범례(한국어 유형 라벨), "표로 보기" 토글, 재수집 버튼 / 전체 높이 3D 그래프 캔버스 + "화면 맞춤" 버튼), 노드 클릭 시 우상단 상세 패널(`NodeDetail`: 유형·버전·값·분류·수집 시각, 컴포넌트는 "플래그 6/N — 전체는 버전 화면" 링크). 재수집 실행 로그(`RunLogPanel`)는 중지 버튼과 컴포넌트별 줄을 갖는다.
+- **Frontend**: `useClusters()`, `useQuery(['versions','graph',selectedId])` → `versionsApi.graph`. 선택은 `useClusterRouteParam('/versions', clusters, { pathFor })` — URL 이 곧 선택이다. 로컬 state: `dims`(ResizeObserver), `selectedNode`, 표/그래프 보기. 노드·링크·툴팁 색은 `lib/chartTokens.ts` `cssVarColor`(테마 전환 시 다시 칠함), 툴팁 HTML 의 라벨·버전·값은 `lib/html.ts` `escapeHtml` 을 거친다. 그리기 전에 끝점 없는 링크를 버린다(방어). 호출 함수: `versionsApi.graph`, `versionsApi.collect`(재수집 — `AbortController` signal 전달, `useCanOperate(selectedId)`).
+- **Backend**: `GET /api/v1/clusters/{cluster_id}/versions/graph` — `backend/app/routers/versions.py`. `ClusterConfigSnapshot`을 카테고리/컴포넌트/플래그 노드+엣지(`contains`/`param`/`configures`/`replaces`)로 변환해 반환. 양 끝 노드가 없는 엣지는 마무리 단계에서 거르고, 컴포넌트 노드에 `flag_total`(플래그 노드는 앞 6개만)을 싣는다. 재수집은 `POST /clusters/{id}/collect-versions` 재사용 — 응답에 `components[]`(`component`·`version`·`changed`). 테스트 `test_version_graph_round15.py`.
 - **핵심 기능**:
   - 클러스터/카테고리/컴포넌트/플래그 4-tier 3D 그래프 (타입별 색상/크기)
   - 노드 클릭 시 카메라 이동 + 상세 패널
@@ -885,6 +892,11 @@ hover 시 flyout 자체가 라벨을 보여주므로 이름만 뜨는 중복 툴
 - **요청사항 (수정 요청)**:
   - ~~`<select>` 드롭다운 클러스터 선택기 표준화~~ — 2026-10-15 D-113 에서 `ClusterSidebar iconOnly` 로 교체 완료(select 를 바꿔도 URL 이 그대로라 화면과 어긋나던 문제도 해소)
   - _(추가 개선/수정 요청을 여기에 적어주세요)_
+- **15차 감사(2026-10-22, D-219·D-224·D-225·D-226·D-231·D-237)**:
+  - **XSS 차단**: 툴팁 HTML 이스케이프로 클러스터 이름·파드 인자를 통한 저장형 XSS 를 막았다.
+  - **분기 순서**: 클러스터 미선택 → 로딩 → `ErrorState`(다시 시도) → 컴포넌트 0개면 `EmptyState`("수집 이력이 없습니다") 순서다. 클러스터 목록 실패도 `ErrorState` 다.
+  - **3D 대안**: 캔버스는 `role="group"` + 요약 `aria-label` + sr-only 조작 안내를 단다. "표로 보기"(분류·컴포넌트·버전·플래그 수·수집 시각, 행 선택 = 상세)를 둔다. `prefers-reduced-motion` 이면 카메라 이동 시간이 0 이다.
+  - **표기**: 유형·카테고리는 한국어 라벨(원문은 `title`)이고, 수집 시각은 `formatDateTime` 이다.
 
 ### 노드 일괄 실행 (SSH/SCP) (`/bulk-exec`)
 
@@ -1134,24 +1146,26 @@ hover 시 flyout 자체가 라벨을 보여주므로 이름만 뜨는 중복 툴
 - **요청사항 (수정 요청)**:
   - _(여기에 개선/수정 요청을 직접 적어주세요)_
 
-### 서비스 아키텍처 (`/service-architecture`)
+### 서비스 아키텍처 (`/service-architecture`, `/service-architecture/:clusterId`)
 
 > **2026-10-15 (D-136)**: 동기화·정리 동기화·AI 재생성이 실행 로그(`arch-doc-sync`)를 남긴다 — partial 은 경고, 첫 동기화 뒤 LLM 생성 진행을 폴링해 이어 쓴다. AI 재생성 failed 는 오류로 표시.
 
-- **파일**: `frontend/src/pages/ServiceArchitecturePage.tsx` (+ `components/serviceArch/{ArchDocCanvas,ManualNodeDialog,ManualEdgeDialog,NodeDetailPanel,LlmSummaryPanel,exportDiagram}.tsx`)
+- **파일**: `frontend/src/pages/ServiceArchitecturePage.tsx` (+ `components/serviceArch/{ArchDocCanvas,ArchDocListView,ArchScheduleDialog,ManualNodeDialog,ManualEdgeDialog,NodeDetailPanel,LlmSummaryPanel,exportDiagram}.tsx`)
 - **목적 / UX**: Settings 에 등록된 서비스 모듈(`LakeService` — cluster+namespace) 단위로 K8s 리소스를 자동 탐색해 **아키텍처 다이어그램/서비스 플로우 도식을 영속 문서로 생성·현행화**하고, 자동화가 부족한 부분(외부 DB/API 연계, 주석, 배치)은 사용자가 수동 편집한다. LLM(Ollama) 이 있으면 아키텍처 요약·컴포넌트 역할·플로우 스텝을 자동 서술한다(없어도 완전 동작).
 - **UI 구성**:
-  - `ClusterSidebar`(`iconOnly` 단일선택) + 좌측 "서비스 모듈" 목록 패널(sync 상태 dot + 드리프트 Δ 배지).
-  - 툴바: [아키텍처|서비스 플로우] 뷰 탭, 마지막 현행화 시각/드리프트 배지, 편집 모드, 수동 노드 추가, PNG/SVG 내보내기, 정리 동기화(prune), 동기화.
-  - 캔버스: `ArchDocCanvas`(커스텀 SVG, pan/zoom/드래그) — 노드 배치는 뷰별로 **DB 영속**(800ms 디바운스 bulk PATCH), stale(사라진) 노드는 점선 ghost, 수동 노드는 오렌지 점선. 플로우 뷰는 실트래픽 엣지 + LLM flow_steps 순번 뱃지.
-  - 선택 노드 `NodeDetailPanel`(AI 역할, 주석 편집, 수동 연결 목록, 수동 노드 수정/삭제), 하단 `LlmSummaryPanel`(요약 — 사용자 수정본 우선, 재생성 버튼, 오프라인 안내).
+  - `ClusterSidebar`(`iconOnly` 단일선택, 선택은 경로 `/service-architecture/:clusterId` — `useClusterRouteParam`) + 좌측 "서비스 모듈" 목록 패널(sync 상태 dot + 드리프트 Δ 배지). 모듈·뷰는 URL `?module=`·`?view=`.
+  - 툴바: [아키텍처|서비스 플로우] 뷰 탭, 캔버스/"목록 보기" 토글(선택은 localStorage), 마지막 현행화 시각/드리프트 배지, 편집 모드, 수동 노드 추가, PNG/SVG 내보내기, 정리 동기화(prune — 제거 예정 stale 노드 수 확인 창), 동기화, "현행화 주기"(`ArchScheduleDialog` — 조회는 누구나, 편집은 admin).
+  - 캔버스: `ArchDocCanvas`(커스텀 SVG, pan/zoom/드래그, 줌 컨트롤은 HTML 버튼, 휠은 non-passive 리스너) — 노드 배치는 뷰별로 **DB 영속**(800ms 디바운스 bulk PATCH, 대기분은 서비스별로 보관해 모듈 전환·언마운트 때 flush), stale(사라진) 노드는 점선 ghost("사라진 노드"), 수동 노드는 오렌지 점선. 플로우 뷰는 실트래픽 엣지 + LLM flow_steps 순번 뱃지.
+  - 목록 보기: `ArchDocListView` — 노드·연결 표(키보드로 노드 선택 → 주석·수동 연결).
+  - 선택 노드 `NodeDetailPanel`(AI 역할, 주석 편집 — 저장 안 한 주석은 노드 전환 전 확인, 수동 연결 목록, 수동 노드 수정/삭제 — 삭제는 `ConfirmDialog`("연결 n개도 함께 삭제")), 하단 `LlmSummaryPanel`(요약 — 사용자 수정본 우선(중립색 배지), 재생성 버튼, 오프라인/호출 실패 사유 `llm_error` 표시).
   - 편집 모드에서 노드 2개 클릭 → `ManualEdgeDialog` 로 수동 연결(유형/뷰/순서/라벨).
-- **Frontend**: `useArchDocs`/`useArchDoc`/`useSyncArchDoc`/`useRegenerateLlm`/`usePatchArchDoc`/`useUpdateArchLayout`(디바운스 배치 저장)/수동 노드·엣지 mutations (`frontend/src/hooks/useArchDoc.ts`, `architectureDocsApi` 래핑); `useClusters`.
-- **Backend**: `GET /api/v1/architecture-docs`(모듈별 요약), `GET/PATCH /api/v1/architecture-docs/{service_id}`, `POST .../sync?prune=`, `POST .../llm-regenerate`, `PATCH .../layout`, `POST/PATCH/DELETE .../manual-nodes|manual-edges`, `GET .../audit`, `GET/PUT /api/v1/architecture-docs/schedule` — 라우터 `backend/app/routers/architecture_docs.py`, 서비스 `backend/app/services/architecture_doc_service.py`(기존 `collect_topology`/`build_traffic` 재사용), 모델 `backend/app/models/service_arch_doc.py`(`ServiceArchDoc`, `ServiceArchManualNode`, `ServiceArchManualEdge`).
+- **Frontend**: `useArchDocs`(`enabled: !!clusterId`)/`useArchDoc`/`useSyncArchDoc`/`useRegenerateLlm`/`usePatchArchDoc`/`useUpdateArchLayout`(서비스별 디바운스 배치 저장 + flush, 실패 토스트)/수동 노드·엣지 mutations/`useArchDocSchedule`·`useSetArchDocSchedule` (`frontend/src/hooks/useArchDoc.ts`, `architectureDocsApi` 래핑); `useClusters`, `useClusterRouteParam`, `useUrlParam('module'|'view')`. 쓰기 버튼(동기화·정리·재생성·수동 노드/엣지·주석)은 `useCanOperate(clusterId)` 비활성 + 사유, 모듈·문서 조회 실패는 `ErrorState`.
+- **Backend**: `GET /api/v1/architecture-docs?cluster_id=`(모듈별 요약 — `cluster_id` 생략은 admin 만, 그 외 422), `GET/PATCH /api/v1/architecture-docs/{service_id}`(GET 은 문서 행을 만들지 않는다 — 없으면 `has_doc=false` 빈 응답), `POST .../sync?prune=`, `POST .../llm-regenerate`, `PATCH .../layout`(문서 노드가 아닌 id 는 버림), `POST/PATCH/DELETE .../manual-nodes|manual-edges`, `GET .../audit`, `GET/PUT /api/v1/architecture-docs/schedule`(PUT 은 admin + 감사 `arch_doc.schedule.update`) — 권한은 `_visible_service`(서비스의 클러스터 기준: 조회 read, 쓰기 operator + operate). LLM 호출(수동·Celery `generate_arch_doc_llm`)은 클러스터 소유 테넌트 라우팅 컨텍스트에서 돈다. `llm_status` = none·pending·ok·offline·error(사유 `llm_error`)·failed(노드 없음), 10분 넘은 pending 은 조회 시 error 로 복구. 테스트 `test_architecture_docs_round15.py`. 라우터 `backend/app/routers/architecture_docs.py`, 서비스 `backend/app/services/architecture_doc_service.py`(기존 `collect_topology`/`build_traffic` 재사용), 모델 `backend/app/models/service_arch_doc.py`(`ServiceArchDoc`, `ServiceArchManualNode`, `ServiceArchManualEdge`).
 - **핵심 기능**:
   - 자동 탐색 그래프를 아키텍처 수준으로 단순화(pods collapse, ConfigMap/Secret 제거) 후 문서로 영속화 — 요청마다 재계산하지 않음.
   - **현행화(sync)**: 수동 "동기화" + Celery 주기(cron 은 `GET/PUT .../schedule`, beat `arch-doc-sync-dispatcher`) — 수동 편집(노드/엣지/배치/주석/요약)은 절대 덮어쓰지 않고, 사라진 리소스는 stale 마킹 후 drift 로 보고, `TopologyAuditLog`(entity_type=arch_doc) 에 이력 기록.
-  - LLM enrichment 는 fail-safe — Ollama 오프라인이면 상태만 표기하고 기존 콘텐츠 보존.
+  - LLM enrichment 는 fail-safe — Ollama 오프라인이나 호출 실패면 상태·사유만 표기하고 기존 콘텐츠 보존.
+- **15차 감사(2026-10-22, D-194·D-203~D-207·D-213~D-215)**: 라우터 전체에 테넌트·역할 판정이 들어갔다. 배치 대기분 유실·다른 모듈 기록을 막았다. 삭제·정리는 확인을 거친다. LLM 실패 사유를 구분한다. "목록 보기"·URL 상태를 넣고 한국어 라벨로 바꿨다. 탭을 닫을 때 배치 대기분을 보내는 `keepalive` 전송은 아직 없다(후속).
 - **요청사항 (수정 요청)**:
   - _(여기에 개선/수정 요청을 직접 적어주세요)_
 
@@ -1197,14 +1211,15 @@ hover 시 flyout 자체가 라벨을 보여주므로 이름만 뜨는 중복 툴
 - **목적 / UX**: CIDR 표기 입력만으로 네트워크/브로드캐스트/호스트 범위/서브넷마스크를 계산하고, 서브넷 균등 분할, 다중 CIDR 충돌 검사, 등록된 클러스터 CIDR과의 겹침 경고, 계산 결과를 클러스터 메타정보에 저장하는 것까지 지원하는 네트워크 유틸리티.
 - **UI 구성**:
   - **`ClusterSidebar` 미사용** — 클러스터 개념이 아닌 순수 계산 도구이므로 페이지 전체가 `max-w` 중앙 정렬 단일 컬럼.
-  - HERO 입력(CIDR 텍스트 입력 + Private/Public 배지 + Address Space 슬라이더), Network Details(4개 stat tile + 이진 마스크 시각화 + 클러스터 겹침 경고), 좌 컬럼(서브넷 분할/멀티 CIDR 비교 테이블 — 충돌 그룹 색상 매핑), 우 컬럼(클러스터에 적용 — plain `<select>`로 대상 클러스터 선택, Quick Reference prefix 표).
-- **Frontend**: 순수 클라이언트 계산 함수(`parseCidr`, `divideSubnets`, `computeOverlap`, `cidrsOverlap` 등, 상태 없는 비트연산)로 구성되며 서버 데이터 의존 없음. `useClusterStore`/`useClusters`는 등록 클러스터의 CIDR과 충돌 검사 및 "적용" 대상 목록 조회용으로만 사용. `useColumnWidths`(비교 테이블 컬럼 리사이즈).
-- **Backend**: **계산 로직 자체는 백엔드 호출 없음**(완전 클라이언트 유틸). 유일한 서버 호출은 "클러스터에 적용" 버튼 → `PUT /api/v1/clusters/{id}`(`clustersApi.update`, body: `cidr/first_host/last_host`) — 라우터 `backend/app/routers/clusters.py`, 모델 `backend/app/models/cluster.py`(`Cluster`).
+  - HERO 입력(CIDR 텍스트 입력 + 사설/공인/루프백 배지 + 주소 공간 슬라이더), 네트워크 상세(4개 stat tile + 이진 마스크 시각화 + 클러스터 겹침 경고 — "보이는 클러스터 N개 기준", 노드·파드·서비스 대역 3종 비교, 해석 못 한 값은 "검사하지 못한 값 N개"), 좌 컬럼(서브넷 분할 — "N개 요청 → 2^k개(/p)" 표기 / 멀티 CIDR 비교 테이블 — 충돌 그룹 색상 매핑), 우 컬럼(클러스터에 적용 — 대상 클러스터와 대상 필드(노드·파드·서비스 CIDR)를 폼 필드 `<select>` 로 고른다(DESIGN_SYSTEM §12.5 예외 — per-cluster 화면 선택기가 아님), Quick Reference prefix 표).
+- **Frontend**: 순수 클라이언트 계산 함수(`parseCidr`, `divideSubnets`, `computeOverlap`, `cidrsOverlap` 등, 상태 없는 비트연산 — 쉼표 목록은 나눠 각각 비교)로 구성되며 서버 데이터 의존 없음. `useClusters`는 등록 클러스터의 CIDR과 충돌 검사 및 "적용" 대상 목록 조회용(조회 실패는 겹침 영역 `ErrorState`). 적용은 `useUpdateCluster`(클러스터 캐시 무효화) + `useCanOperate(applyClusterId)` 비활성 + 사유, 실패 사유는 해제 전까지 유지(`role="alert"`), 기존 값과 다르거나 겹침이 있으면 `ConfirmDialog`("현재 x → y, 겹침 N건"). 입력 CIDR 은 `useUrlParams({ cidr })` 로 URL 과 동기화. 복사는 `navigator.clipboard?.` + 실패 토스트(HTTPS 필요). `useColumnWidths`(비교 테이블 컬럼 리사이즈).
+- **Backend**: **계산 로직 자체는 백엔드 호출 없음**(완전 클라이언트 유틸). 유일한 서버 호출은 "클러스터에 적용" 버튼 → `PUT /api/v1/clusters/{id}`(`useUpdateCluster`, body: 대상 필드에 따라 `cidr/first_host/last_host` · `pod_cidr/pod_first_host/pod_last_host` · `svc_cidr/…`, `require_operator` + 클러스터 operate) — 라우터 `backend/app/routers/clusters.py`, 모델 `backend/app/models/cluster.py`(`Cluster`).
 - **핵심 기능**:
-  - CIDR 파싱/네트워크·브로드캐스트·마스크·와일드카드·호스트범위 계산, Private(RFC1918) 여부 판정.
+  - CIDR 파싱/네트워크·브로드캐스트·마스크·와일드카드·호스트범위 계산, 사설(RFC1918)·루프백(127/8)·공인 판정.
   - 서브넷 N등분(2~256), 다중 CIDR 겹침 검사(그래프 탐색으로 충돌 그룹 색상 클러스터링).
   - 등록 클러스터 CIDR과의 실시간 충돌 경고(현재 입력/적용 예정 값 기준 양방향).
   - Quick Reference로 prefix 클릭 시 현재 입력에 즉시 적용.
+- **15차 감사(2026-10-22, D-229·D-230·D-232·D-235)**: 적용 권한·실패 사유·덮어쓰기 확인을 넣었다. 겹침 검사를 3종 대역으로 넓혔다. 분할·범위 오류 문구를 바로잡았고, 숫자 입력은 blur 때 보정한다. 라벨은 한국어(사설·공인·클래스·주소·네트워크 비트·마스크·사용 가능·형식 오류 등)이고, 행 삭제·복사 버튼에 `title`+`aria-label` 을 달았다. 본문 숫자는 `text-xl`, 빈 상태는 `EmptyState compact` 다.
 - **요청사항 (수정 요청)**:
   - _(여기에 개선/수정 요청을 직접 적어주세요)_
 
@@ -1217,15 +1232,17 @@ hover 시 flyout 자체가 라벨을 보여주므로 이름만 뜨는 중복 툴
   - **`ClusterSidebar` 미사용** — 모든 클러스터의 링크를 동시에 비교/열람하는 것이 목적이라 사이드바 대신 표/카드 매트릭스 레이아웃 사용.
   - `ViewModeBar`(표/종/횡 3가지 레이아웃), 검색, 통계 타일(전체 링크/클러스터 수/공통 링크).
   - **표 모드**: 클러스터별 열 + 공통 링크 열의 CSS Grid 매트릭스(컬럼 드래그 리사이즈, 인라인 추가/편집 폼).
-  - **카드 모드**(종/횡): `dnd-kit`로 클러스터 그룹 드래그 정렬, `LinkCard` 그리드.
-  - 삭제된 클러스터에 남은 "고아 그룹" 링크는 읽기 전용으로 별도 표시.
-- **Frontend**: `useClusters`/`useClusterStore`; `useClusterLinks`/`useUpdateClusterLinks`(`frontend/src/hooks/useUiSettings.ts`, `uiSettingsApi` 래핑); `useTableViewStore`(표 스타일: 폰트크기/밀도/줄무늬/헤더테마, 로컬 Zustand).
-- **Backend**: `GET/PUT /api/v1/ui-settings/cluster-links` — 라우터 `backend/app/routers/ui_settings.py`. 별도 전용 모델 없이 `AppSetting`(`backend/app/models/app_setting.py`) 류의 key-value/JSON 설정 테이블에 `clusterGroups`+`commonLinks` 구조로 저장되는 것으로 추정(모델 파일 상세 미확인).
+  - **카드 모드**(종/횡): `dnd-kit`로 클러스터 그룹 드래그 정렬(손잡이 버튼 + `KeyboardSensor`, 순서는 서버에 저장), `LinkCard` 그리드.
+  - 삭제된 클러스터에 남은 "고아 그룹" 링크는 admin 에게만, 클러스터·링크 두 조회가 모두 로드된 뒤 읽기 전용으로 별도 표시.
+  - 편집(추가·수정·삭제·공통 링크·정렬)은 **admin 전용** — 다른 사용자는 버튼 비활성 + 사유("관리자만 링크를 편집할 수 있습니다"). 조회 전·조회 실패 중에는 편집을 막고 `ErrorState`. 삭제는 `ConfirmDialog`.
+- **Frontend**: `useClusters`/`useClusterStore`; `useClusterLinks`/`useUpdateClusterLinks`(`frontend/src/hooks/useUiSettings.ts`, `uiSettingsApi` 래핑 — 저장 성공 뒤에 화면에 반영, 실패는 `formatApiError` 토스트, 409 는 "다른 곳에서 바뀌었습니다" + 새로고침); `useTableViewStore`(표 스타일: 폰트크기/밀도/줄무늬/헤더테마, 로컬 Zustand).
+- **Backend**: `GET/PUT /api/v1/ui-settings/cluster-links` — 라우터 `backend/app/routers/ui_settings.py`, `AppSetting`(`backend/app/models/app_setting.py`) JSON 값에 `clusterGroups`+`commonLinks` 로 저장. GET 은 누구나(응답 `version` = 저장 시각) — 클러스터 그룹은 사용자의 클러스터 가시 범위로 거르고 고아 그룹은 admin 에게만. PUT 은 `require_admin` — 보낸 `version` 이 현재와 다르면 409("다른 곳에서 링크가 바뀌었습니다…"), 요청자가 볼 수 없는 그룹은 저장값에 다시 합치며, 배열 순서를 그대로 저장, URL 은 http(s) 절대 주소만(그 외 422). 테스트 `test_cluster_links_round15.py`.
 - **핵심 기능**:
   - 클러스터별 링크 + 공통 링크 이중 구조, 3가지 뷰(표/종형카드/횡형카드) 전환.
-  - 드래그 정렬(클러스터 그룹 순서), 컬럼 너비 드래그 리사이즈(localStorage 영속화).
+  - 드래그 정렬(클러스터 그룹 순서 — 서버 저장), 컬럼 너비 드래그 리사이즈(localStorage 영속화).
   - 라벨/설명/URL 통합 검색.
-  - 클러스터 삭제 후에도 남은 링크를 "고아 그룹"으로 보존 표시.
+  - 클러스터 삭제 후에도 남은 링크를 "고아 그룹"으로 보존 표시(admin).
+- **15차 감사(2026-10-22, D-195·D-196·D-203·D-209)**: 화면은 서버의 admin 전용 저장과 맞췄다. 문서 `version` 409 로 통째 덮어쓰기를 막는다. 다른 테넌트 그룹은 노출하지 않는다. 링크 폼 입력에 라벨을 달았다. 헤더 `StatTileRow` 3칸(§12.12-2 KPI 타일 행)은 남아 있다(후속).
 - **요청사항 (수정 요청)**:
   - _(여기에 개선/수정 요청을 직접 적어주세요)_
 
@@ -1634,13 +1651,17 @@ hover 시 flyout 자체가 라벨을 보여주므로 이름만 뜨는 중복 툴
 - **파일**: `frontend/src/pages/JiraExcelImportPage.tsx`
 - **목적 / UX**: Jira에서 내보낸 이슈 목록 Excel(.xlsx/.xls)을 업로드하거나, 표를 그대로 복사해 붙여넣어 테이블로 미리보고, 담당자(Assignee, "이름 회사" 형식)를 PEP에 등록된 담당자와 자동 매칭해 확인한 뒤 **"업무 관리에 저장"** 버튼으로 PEP 업무 관리 게시판(work_items)에 실제로 매핑 저장하는 화면. 저장 전까지는 미리보기(서버에 남지 않음).
 - **UI 구성**:
-  - 헤더 우측 `ViewModeBar`로 "파일 업로드" ↔ "붙여넣기" 모드 전환. 미리보기가 성공(`status: 'ok'`, 1건 이상)하면 그 옆에 **"업무 관리에 저장"** 버튼이 나타난다(`require_operator` — viewer 역할은 클릭 시 403 에러 배너로 표시됨).
-  - 저장 성공/실패 배너: 저장 직후 헤더 아래에 생성/갱신/스킵 건수(+오류 있으면 앞 3개 미리보기) 배너와 "업무 관리 게시판에서 보기"(`/tasks-mgmt`) 링크가 뜬다.
-  - 파일 업로드 모드: 파일 선택 버튼(.xlsx/.xlsm/.xls), 로딩 스피너, 파일명, 결과 요약 배지(총 건수/담당자 매칭/미매칭), 초기화 버튼, 에러 메시지.
+  - 헤더 우측 `ViewModeBar`로 "파일 업로드" ↔ "붙여넣기" 모드 전환. 미리보기가 성공(`status: 'ok'`, 1건 이상)하면 그 옆에 **"업무 관리에 저장"** 버튼이 나타난다(`require_operator` — viewer 는 `useCanOperate` 로 비활성 + 사유).
+  - **2단계 저장**: "업무 관리에 저장" → 먼저 dry-run 결과 표(행별 생성/갱신/건너뜀/오류 + 바뀌는 필드 전·후, 체크박스로 적용 대상 선택) → `ConfirmDialog`("기존 업무 N건의 필드를 바꿉니다") → 체크한 키만 적용(`onlyKeys`). 표 위에 **공유 범위** 선택(`TenantScopeSelect` — 소속 테넌트가 여러 개면 선택 필수).
+  - 저장 결과 배너: 생성/갱신/스킵 건수와 "업무 관리 게시판에서 보기"(`/tasks-mgmt`) 링크. 오류가 있으면 `status-warning` "일부 실패 N건" 배너, 중복 키·행 잘림(`truncated`)도 표시한다. 오류·저장 실패 배너는 `role="alert"`.
+  - 파일 업로드 모드: 파일 선택 버튼(.xlsx/.xlsm/.xls — 입력은 `sr-only` 라 Tab 으로 도달, 라벨에 포커스 링), 로딩 스피너, 파일명, 결과 요약 배지(총 건수/담당자 매칭/미매칭, 중복 키·2000행 잘림 안내), 초기화 버튼, 에러 메시지.
   - 붙여넣기 모드: 사용법 안내(Ctrl+C/Ctrl+V/Ctrl+Enter) + `<textarea>`(TSV 붙여넣기) + "가져오기" 버튼, 나머지 요약 배지/초기화/에러는 파일 모드와 공유(`ImportSummaryBadges`).
-  - 결과 테이블: Key(Jira 링크)/Summary/Issue Type/Status/Assignee(매칭 여부 아이콘)/Created(날짜만, 시간 제외)/Resolved/Due Date/Environment/Description
-- **Frontend**: 전용 TanStack Query hook 없이 `jiraApi.importExcel(file)` / `jiraApi.importPaste(text)` / `jiraApi.importSaveToBoard(rows)`를 로컬 `useState`(mode/loading/error/result/saving/saveError/saveResult)와 함께 직접 호출(파일은 FormData multipart, 붙여넣기·저장은 JSON body, 모두 timeout 2분). 저장은 파일을 다시 읽지 않고 이미 미리보기로 받아둔 `result.rows`(`JiraExcelRow[]`)를 그대로 되돌려 보낸다.
-- **Backend**: `POST /api/v1/jira/import/excel`(파일), `POST /api/v1/jira/import/paste`(붙여넣은 TSV 텍스트, `JiraExcelPasteRequest{text}`) — 둘 다 `backend/app/routers/jira.py`의 공용 헬퍼 `_extract_jira_rows(tables, db)`로 수렴(표 목록에서 헤더를 찾아 `assigneeRaw`→이름 추출, PEP 담당자 마스터와 매칭해 `assigneeMatched`/`assigneeName` 계산, `environment`/`description`은 `_strip_inline_html()`로 HTML 태그 제거). 응답 타입은 둘 다 `JiraExcelImportResult`(`total`, `matched`, `rows: JiraExcelRow[]`). **저장**은 `POST /api/v1/jira/import/excel/save`(`JiraExcelSaveRequest{rows}`, `require_operator`) — 라이브 JQL 가져오기(`POST /jira/import`)와 달리 `jira_issue_id`가 없으므로 **`jira_issue_key`로 dedup**해 기존 work_item을 갱신하거나 새로 생성(`type`은 `jira_service.map_issue_type()` 재사용, `kanban_status`는 상태명 텍스트 매칭 `_map_excel_status_to_kanban()`, `category="Jira"` 고정, `jira_watchers`에 저장한 사용자 추가). 응답은 라이브 가져오기와 같은 `JiraImportResult`(`imported`/`updated`/`skipped`/`errors`/`items`) 재사용.
+  - 결과 테이블: 키(Jira 링크)/요약/유형/상태/담당자(매칭 여부 아이콘)/생성일(날짜만)/해결일/마감일/환경/설명 — 원문 헤더는 `title`, 빈 셀은 `—`.
+- **Frontend**: 전용 TanStack Query hook 없이 `jiraApi.importExcel(file)` / `jiraApi.importPaste(text)` / `jiraApi.importExcelSave({ rows, dryRun, onlyKeys, tenantId })`(구 `importSaveToBoard(rows, tenantId)` 는 업무 화면 `JiraImportModal` 엑셀 탭이 사용 — 같은 공유 범위 선택)를 로컬 `useState`(mode/loading/error/result/saving/saveError/saveResult)와 함께 직접 호출(파일은 FormData multipart, 붙여넣기·저장은 JSON body, 모두 timeout 2분). 저장은 파일을 다시 읽지 않고 이미 미리보기로 받아둔 `result.rows`(`JiraExcelRow[]`)를 그대로 되돌려 보낸다.
+- **Backend**: `POST /api/v1/jira/import/excel`(파일), `POST /api/v1/jira/import/paste`(붙여넣은 TSV 텍스트, `JiraExcelPasteRequest{text}`) — 둘 다 `backend/app/routers/jira.py`의 공용 헬퍼 `_extract_jira_rows(tables, db)`로 수렴(표 목록에서 헤더를 찾아 `assigneeRaw`→이름 추출, PEP 담당자 마스터와 매칭해 `assigneeMatched`/`assigneeName` 계산, `environment`/`description`은 `_strip_inline_html()`로 HTML 태그 제거). 응답 타입은 둘 다 `JiraExcelImportResult`(`total`, `matched`, `rows: JiraExcelRow[]`). **저장**은 `POST /api/v1/jira/import/excel/save`(`JiraExcelSaveRequest{rows, dry_run, only_keys, tenant_id}`, `require_operator`) — 라이브 JQL 가져오기(`POST /jira/import`)와 달리 `jira_issue_id`가 없으므로 **`jira_issue_key`로 dedup**해 기존 work_item을 갱신하거나 새로 생성(`type`은 `jira_service.map_issue_type()` 재사용, `kanban_status`는 상태명 텍스트 매칭 `_map_excel_status_to_kanban()`, `category="Jira"` 고정, `jira_watchers`에 저장한 사용자 추가). 응답은 `JiraExcelSaveResult`(`JiraImportResult` 필드 + `dry_run`·`truncated`·`warnings`·`tenant_id`, `items[]` 행별 `action`·`changes[{field,label,before,after}]`·`error`, 상한 200). 규칙:
+  - **테넌트 범위**: 사용자에게 보이지 않는 기존 항목(`work_item_visible`)은 갱신하지 않고 행 오류("다른 공유 범위의 항목과 키가 겹칩니다"). 새 항목은 `tenant_id`(`ensure_assignable`) → 비우면 소속 테넌트 1개일 때 그 테넌트, 0개면 전체 공유, 여러 개면 422. 라이브 `POST /jira/import` 도 범위를 지키되, 다중 테넌트 사용자가 `tenant_id` 를 보내지 않으면 아직 전체 공유로 만든다(라이브 화면에 범위 선택이 없음 — 후속).
+  - **덮어쓰기**: 빈 셀은 기존 값 유지, 본문(`content`)·칸반 상태는 기존 값이 비었을 때만 채운다. `jira_url` 은 요청 값을 무시하고 서버 `base_url` + `/browse/{key}` 로 다시 만든다(키 형식 정규식 — 어긋나면 행 오류).
+  - **원자성·상한**: 행마다 savepoint(실패 행만 롤백), 요청 안 중복 키는 첫 행만(나머지 경고). 파일 10MB·붙여넣기 2MB·2000행 초과는 413, 미리보기 응답에 `truncated`·`duplicates`. 세 핸들러는 동기 `def`(스레드풀). 감사 `details.keys`(앞 200). 테스트 `test_jira_excel_round15.py`.
 - **핵심 기능**:
   - .xlsx/.xlsm/.xls 업로드 또는 표 복사·붙여넣기(TSV) → 서버 파싱 → 테이블 미리보기
   - **"업무 관리에 저장"** — 미리보기 행을 실제 work_items로 upsert(`jira_issue_key` dedup), 결과 배너 + 업무 관리 게시판 바로가기
@@ -1651,6 +1672,7 @@ hover 시 flyout 자체가 라벨을 보여주므로 이름만 뜨는 중복 툴
   - 담당자 이름 자동 추출 + PEP 등록 담당자와 매칭(매칭 성공/실패 아이콘 구분, 실패 시 원본 텍스트 tooltip)
   - Jira Key에 원본 이슈 링크(`jiraUrl`) 제공(있는 경우)
   - 총 건수 대비 매칭/미매칭 건수 요약 배지
+- **15차 감사(2026-10-22, D-217·D-218·D-220~D-223·D-234)**: 테넌트 범위 우회·확인 없는 덮어쓰기·부분 실패 오보·이벤트 루프 차단·`javascript:` 링크·viewer 게이팅을 고쳤다. `<kbd>` 는 `text-xs`, 표 폭은 클래스(`table-fixed`)다.
 - **요청사항 (수정 요청)**:
   - _(여기에 개선/수정 요청을 직접 적어주세요)_
 
@@ -1757,19 +1779,20 @@ hover 시 flyout 자체가 라벨을 보여주므로 이름만 뜨는 중복 툴
 
 ### 마인드맵 (`/mindmap`)
 
-- **파일**: `frontend/src/pages/MindMapPage.tsx` (SVG 캔버스를 자체 구현, 별도 하위 컴포넌트 없이 페이지 내부에 `MindMapCanvas`/`NodeEditor` 정의)
+- **파일**: `frontend/src/pages/MindMapPage.tsx` (SVG 캔버스를 자체 구현, 별도 하위 컴포넌트 없이 페이지 내부에 `MindMapCanvas`/`MindMapOutline`/`NodeEditor`/`TextInputDialog` 정의)
 - **목적 / UX**: 여러 개의 마인드맵을 만들고 각 맵 안에서 루트/자식 노드를 자유롭게 추가·배치해 개념 간 관계를 시각적으로 정리하는 화면. 마인드맵/트리/조직도 3가지 레이아웃, 노드 도형·색상·테두리 커스터마이즈, PNG/SVG 내보내기를 지원한다.
 - **UI 구성**:
-  - 좌측 사이드바: 마인드맵 목록(생성/이름변경/Confluence 링크/삭제)
-  - 우측 캔버스: 줌/팬/자동배치 툴바, 레이아웃 전환(마인드맵/트리/조직도), 커넥터 스타일(베지어/직선/꺾은선), PNG/SVG 내보내기, 키보드 단축키 도움말 패널
-  - 노드 편집 모달(`NodeEditor`): 이름, 메모, 색상, 모양(8종), 테두리, 크기
-- **Frontend**: `frontend/src/hooks/useMindMap.ts`의 `useMindMaps`, `useMindMap(id)`, `useCreateMindMap`, `useUpdateMindMap`, `useDeleteMindMap`, `useCreateNode`, `useUpdateNode`, `useDeleteNode`, `useBulkUpdatePositions` — 모두 TanStack Query 뮤테이션으로 `mindmapApi` 래핑. 드래그로 노드 이동 시 800ms 디바운스 후 `bulkUpdatePositions` 호출.
-- **Backend**: `GET/POST /api/v1/mindmaps/`, `GET/PUT/DELETE /api/v1/mindmaps/{map_id}`, `POST/PUT/DELETE /api/v1/mindmaps/{map_id}/nodes[/{node_id}]`, `PATCH /api/v1/mindmaps/{map_id}/nodes/positions` — `backend/app/routers/mindmap.py`. 모델은 `backend/app/models/mindmap.py`의 `MindMap`/`MindMapNode`(`parent_id`로 트리, `x`/`y`로 좌표, `extra` JSONB에 모양/테두리/크기 저장).
+  - 좌측 사이드바: 마인드맵 목록(행은 `<button>`, 행 동작은 hover·키보드 포커스(`group-focus-within`)에서 보임 — 생성/이름변경/Confluence 링크(비우면 제거)/삭제). 이름 변경·링크 입력은 `TextInputDialog`, 삭제는 `ConfirmDialog`(native `prompt`/`confirm` 없음). 조회는 `isLoading → ErrorState → 빈 상태` 순서.
+  - 우측 캔버스: 줌/팬/자동배치 툴바, 레이아웃 전환(마인드맵/트리/조직도), 커넥터 스타일(베지어/직선/꺾은선), PNG/SVG 내보내기, 키보드 단축키 도움말 패널, **"목록 보기"** 토글(개요 트리 `MindMapOutline` — `role="tree"`, 방향키 탐색·선택·편집, 선택은 localStorage). 휠 줌은 non-passive 리스너라 페이지가 함께 스크롤되지 않는다.
+  - 노드 편집 모달(`NodeEditor`): 이름, 메모, 색상, 모양(8종 — 사각형·둥근 사각형·알약·원·마름모·육각형·평행사변형·구름), 테두리(실선·파선·점선), 크기(작게·보통·크게). 저장이 성공해야 닫히고, 비운 메모·색은 `null` 로 보내 해제한다.
+- **Frontend**: `frontend/src/hooks/useMindMap.ts`의 `useMindMaps`, `useMindMap(id)`(탭이 보일 때 30초 refetch), `useCreateMindMap`, `useUpdateMindMap`, `useDeleteMindMap`, `useCreateNode`, `useUpdateNode`, `useDeleteNode`, `useBulkUpdatePositions` — 모두 TanStack Query 뮤테이션으로 `mindmapApi` 래핑, 실패는 `formatApiError` 토스트. 드래그로 노드 이동 시 800ms 디바운스 후 **움직인 노드만** `bulkUpdatePositions` 로 보내고, 언마운트·맵 전환 때 대기분을 flush 한다(캔버스·개요 `key={currentMap.id}`). 부모 추적(`getBranchColor`)은 방문 집합으로 순환을 끊는다.
+- **Backend**: `GET/POST /api/v1/mindmaps/`, `GET/PUT/DELETE /api/v1/mindmaps/{map_id}`, `POST/PUT/DELETE /api/v1/mindmaps/{map_id}/nodes[/{node_id}]`, `PATCH /api/v1/mindmaps/{map_id}/nodes/positions` — `backend/app/routers/mindmap.py`. 수정은 보낸 필드만 반영하고 명시적 `null` 은 해제(`model_fields_set`), `title` 최소 1자. `parent_id` 는 같은 맵의 노드여야 하고 자기 자신·자손이면 422. 삭제는 감사 `mindmap.delete`·`mindmap.node.delete`. 쓰기 권한은 인증 + 테넌트 범위(12차 정책 유지). 테스트 `test_mindmap_round15.py`. 모델은 `backend/app/models/mindmap.py`의 `MindMap`/`MindMapNode`(`parent_id`로 트리, `x`/`y`로 좌표, `extra` JSONB에 모양/테두리/크기 저장).
 - **핵심 기능**:
-  - Tab(자식 추가)/Enter(형제 추가)/Delete(삭제)/F2(수정)/방향키(인접 이동) 키보드 단축키
-  - 노드 삭제 시 하위 트리 전체를 재귀적으로 함께 삭제(프론트 확인 다이얼로그 + 백엔드에서도 descendant 재귀 삭제)
+  - Insert·Ctrl+Enter(자식 추가)/Enter(형제 추가)/Delete·Backspace(삭제)/F2(수정)/방향키(인접 이동) 키보드 단축키 — **캔버스에 포커스가 있을 때만** 동작한다(모달·사이드바 입력은 가로채지 않음, Tab 은 가로채지 않음)
+  - 노드 삭제는 자식 유무와 관계없이 항상 `ConfirmDialog` 를 거치고, 하위 트리 전체를 재귀적으로 함께 삭제(백엔드에서도 descendant 재귀 삭제)
   - 노드 드래그 위치를 디바운스 벌크 저장으로 서버에 영속화
   - PNG(2x 래스터)/SVG 내보내기(선택 핸들 제외하고 캡처)
+- **15차 감사(2026-10-22, D-197·D-202·D-203·D-204·D-207·D-211·D-213·D-215·D-216)**: 단축키 범위를 캔버스로 좁혔다. 쓰기 실패를 알리고, 지운 값을 저장할 수 있게 했다. 조회 상태 3단, 움직인 노드만 저장, 개요 트리 대안, 순환 방지, 한국어 라벨, 생성 폼 라벨을 넣었다.
 - **요청사항 (수정 요청)**:
   - _(여기에 개선/수정 요청을 직접 적어주세요)_
 
@@ -1779,35 +1802,45 @@ hover 시 flyout 자체가 라벨을 보여주므로 이름만 뜨는 중복 툴
 - **목적 / UX**: 클러스터 내 인프라 구성요소(노드/하드웨어/OS/커널 파라미터/네트워크/K8s·Cilium 컴포넌트/워크로드/서비스/설정 항목)와 그 관계를 3D 그래프로 시각화하고, 설정 변경(config_item/kernel_param)이 다른 엔티티에 미치는 파급 범위(blast radius)를 분석하는 화면.
 - **UI 구성**:
   - 좌측 `ClusterSidebar iconOnly` 레일로 클러스터 선택(`/ontology/:clusterId`, 지식 허브 탭 안에서는 URL 대신 로컬 선택 — `embedded` prop) (D-113)
-  - 상단 툴바: 노드 검색, 노드/관계 수 통계, 범례 토글, 필터 초기화, 새로고침
+  - 상단 툴바: 노드 검색, 노드/관계 수 통계, 범례 토글, 필터 초기화, 새로고침, **"목록 보기"** 토글(엔티티 표 — 행에서 상세·영향 분석), **"엔티티 추가"**(`CreateEntityDialog`) — 쓰기 버튼은 `useCanOperate(clusterId)` 비활성 + 사유
   - 엔티티 타입별 chip 필터 바(10종, 색상 구분 — `--chart-*` 8토큰 + 같은 계열 명도 변형 2종, `lib/chartTokens.ts` `cssVarColor`, 배경·링크도 테마 토큰)
   - 중앙 3D 포스 그래프(구체 크기=연결 수, 파티클=관계 방향, 링크 굵기=가중치)
-  - 좌상단 범례 패널, 우상단 노드 상세 패널(속성 + "변경 영향 분석" 버튼), 좌하단 영향 분석 결과 패널(blast radius score, 영향 엔티티, 영향 경로)
-- **Frontend**: `useClusters()`(클러스터 목록), `frontend/src/hooks/useOntology.ts`의 `useOntologyGraph(clusterId)`(`useQuery`), `useAnalyzeImpact()`(`useMutation`, 성공 시 그래프 쿼리 invalidate).
-- **Backend**: `GET /api/v1/ontology/graph/{cluster_id}`, `POST /api/v1/ontology/impact` (엔티티/관계 등록용 `POST /api/v1/ontology/entities`, `/relationships`도 존재하나 이 화면은 조회/분석만 사용) — `backend/app/routers/ontology.py`. 모델은 `backend/app/models/ontology.py`의 `OntologyEntity`/`OntologyRelationship`/`OntologyEvent`. 영향 분석 알고리즘은 `backend/app/services/ontology_service.py`의 `calculate_blast_radius`(그래프 탐색으로 blast score·경로 계산), 분석 결과는 `OntologyEvent`로 감사 기록됨.
+  - 좌상단 범례 패널, 우상단 노드 상세 패널(속성 + "변경 영향 분석" 버튼 + **"관계 추가"**(`CreateRelationDialog`)), 좌하단 영향 분석 결과 패널(영향 반경 점수, 영향 엔티티, 영향 경로). 엔티티 타입 라벨은 한국어(노드·하드웨어·OS·커널 파라미터·네트워크·K8s 구성요소·Cilium·워크로드·서비스·설정 항목).
+  - 툴팁(`nodeLabel`·`linkLabel`)은 사용자 저장 값을 `lib/html.ts` `escapeHtml` 로 이스케이프한다(float-tooltip 은 문자열을 HTML 로 넣음).
+- **Frontend**: `useClusters()`(클러스터 목록), `frontend/src/hooks/useOntology.ts`의 `useOntologyGraph(clusterId)`(`useQuery`), `useAnalyzeImpact()`(`useMutation` — 그래프를 invalidate 하지 않음, 응답이 올 때 클러스터·엔티티가 바뀌었으면 결과를 버림), `useCreateOntologyEntity()`/`useCreateOntologyRelationship()`(성공 시 그래프 invalidate). 조회 실패는 `ErrorState`, 클러스터가 없으면 `SelectClusterEmptyState`.
+- **Backend**: `GET /api/v1/ontology/graph/{cluster_id}`, `POST /api/v1/ontology/impact`(클러스터 read), `POST /api/v1/ontology/entities`·`/relationships`(operator + 클러스터 operate, 감사 `ontology.entity.create`·`ontology.relationship.create`, 엔티티 이름의 `<`·`>`·제어문자는 422) — `backend/app/routers/ontology.py`. 모델은 `backend/app/models/ontology.py`의 `OntologyEntity`/`OntologyRelationship`/`OntologyEvent`. 영향 분석 알고리즘은 `backend/app/services/ontology_service.py`의 `calculate_blast_radius`(그래프 탐색으로 blast score·경로 계산), 분석 결과는 `OntologyEvent`(`category="impact_simulation"`, `severity="info"`)로 기록되고 RAG 근거 검색에서 제외된다(RAG 의 온톨로지 이벤트는 사용자 클러스터 범위로 거름 — Agent 채팅·`/llm-settings/rag-search` 가 범위를 넘김). 테스트 `test_ontology_round15.py`.
 - **핵심 기능**:
   - 엔티티 타입별 표시 on/off, 이름 검색 필터
   - 노드 클릭 시 카메라 포커스 이동 + 상세 속성 패널
   - config_item/kernel_param 노드에서 "변경 영향 분석" 실행 → blast radius score, 영향받는 엔티티, 영향 경로(최대 4단계 depth) 표시
-  - 데이터 없는 클러스터에는 빈 상태 안내(엔티티 등록 API 예시 코드 노출)
+  - 데이터 없는 클러스터에는 원인 + 다음 행동 빈 상태("엔티티 추가" 안내 — API 경로는 노출하지 않음)
+- **15차 감사(2026-10-22, D-192·D-193·D-203·D-207·D-208·D-212·D-215)**: 쓰기·분석 권한 판정과 툴팁 XSS 를 고쳤다. 화면 생산 경로(엔티티·관계 추가)와 목록 대안을 넣었다. 영향 분석을 시뮬레이션으로 분리하고, 오래된 분석 결과를 버린다. 메뉴는 숨기지 않았다(정책 결정). 이전에 `config_change` 로 저장된 분석 행은 재분류하지 않았다(후속).
 - **요청사항 (수정 요청)**:
   - _(여기에 개선/수정 요청을 직접 적어주세요)_
 
 ### 기술 동향 다이제스트 (`/trends`)
 
-- **파일**: `frontend/src/pages/TrendDigestPage.tsx` (하위 컴포넌트 없이 페이지 내부에 `DigestPanel`/`TrendItemCard`/`SourcesPanel`/`SourceRow`/`AddSourceForm` 정의)
+- **파일**: `frontend/src/pages/TrendDigestPage.tsx` (하위 컴포넌트 없이 페이지 내부에 `DigestPanel`/`TrendItemCard`/`SourcesPanel`/`SourceRow`/`AddSourceForm`/`TrendSettingsDialog` 정의)
 - **목적 / UX**: Kubernetes/Cilium/Linux/CNCF 관련 릴리즈·블로그·뉴스를 RSS/GitHub Releases 소스에서 자동 수집하고 AI로 한국어 요약해 날짜별 다이제스트로 제공하는 화면. 수집 소스 등록/편집/활성화 관리도 같은 화면에서 수행한다.
 - **UI 구성**:
-  - 좌측: lookback 기간 select + "지금 수집" 버튼, 날짜별 다이제스트 목록(상태 아이콘: 대기/수집중/요약중/완료/실패), 하단 "소스 관리" 탭 토글
-  - 우측(다이제스트 탭): 상태 + 종합 AI 요약, 카테고리(k8s/cilium/linux/cncf)/타입(릴리즈/블로그/뉴스) 필터, 접이식 아이템 카드(개별 AI 요약 + 원문 링크)
-  - 우측(소스 관리 탭): 카테고리별로 그룹핑된 소스 목록, 소스별 활성 토글/수정/삭제, 새 소스 추가 폼(GitHub Releases owner/repo 또는 RSS URL)
-- **Frontend**: `frontend/src/hooks/useTrends.ts`의 `useTrendDigests(30)`, `useTrendItems(date, category, itemType)`, `useTrendSources`, `useTriggerCollect`, `useToggleSource`, `useCreateSource`, `useUpdateSource`, `useDeleteSource` — 모두 TanStack Query.
-- **Backend**: `POST /api/v1/trends/collect`(`target_date`, `lookback_days`), `GET /api/v1/trends/digests`, `GET /api/v1/trends/digests/{date}`, `GET /api/v1/trends/items/{date}`, `GET/POST/PUT/PATCH/DELETE /api/v1/trends/sources[/{id}]` — `backend/app/routers/trends.py`. 서비스 로직은 `backend/app/services/trends/trend_service.py`(`TrendService`), 모델은 `backend/app/models/trend.py`(`TrendSource`/`TrendDigest`/`TrendItem` 추정 — 소스별 `last_status`/`last_message`/`last_item_count` 등 수집 상태 필드 포함).
+  - 좌측: lookback 기간 select(백필용 — 자동·기본 수집은 소스별 마지막 성공 이후분) + "지금 수집" 버튼(`useCanOperate` 비활성 + 사유) + 실행 로그(`RunLogPanel` — 소스별 "이름 · 신규 n · 실패 사유", 요약 진행 n/N, 합계 줄, 중지), 날짜별 다이제스트 목록(상태 아이콘: 대기/수집중/요약중/완료/일부 실패/실패 — 진행 중이면 5초 폴링), 하단 "소스 관리" 탭 토글
+  - 우측(다이제스트 탭): 상태 + 종합 AI 요약(일부 실패 안내), 카테고리 칩(소스 카테고리에서 동적 생성, `aria-pressed`)/타입(릴리즈/블로그/뉴스) 필터, 접이식 아이템 카드(`aria-expanded` — 개별 AI 요약 또는 "요약 실패 — 사유"/"요약 대기" + 원문 링크)
+  - 우측(소스 관리 탭): 카테고리별로 그룹핑된 소스 목록, 소스별 활성 스위치(`role="switch"` + `aria-checked`, "{이름} 수집 사용")/수정/비활성화(하드 삭제는 admin — 둘 다 `ConfirmDialog`), 새 소스 추가 폼(GitHub Releases owner/repo 또는 RSS URL + 항목 종류 `item_type` 선택, 입력 라벨), "수집 설정"(`TrendSettingsDialog` — GitHub API 주소·허용 호스트·토큰(쓰기 전용), 저장은 admin)
+  - 조회 3종(다이제스트·항목·소스) 실패는 각각 `ErrorState`(다시 시도)
+- **Frontend**: `frontend/src/hooks/useTrends.ts`의 `useTrendDigests(30)`(진행 중 다이제스트가 있으면 5초 `refetchInterval`), `useTrendItems(date, category, itemType, live)`, `useTrendSources`, `useTriggerCollect`(구 동기 엔드포인트 폴백), `useInvalidateTrends`, `useToggleSource`, `useCreateSource`, `useUpdateSource`, `useDeleteSource`(`hard`), `useTrendSettings`/`useUpdateTrendSettings` — 모두 TanStack Query. "지금 수집"은 `streamLogged`(SSE `trendsApi.collectStreamUrl`)로 실행하고, 서버가 스트림 엔드포인트를 모르면(404/405) 기존 `POST /trends/collect` 로 폴백한다.
+- **Backend**: `POST /api/v1/trends/collect/stream`(SSE — 소스·요약 진행 줄 + 최종 다이제스트), `POST /api/v1/trends/collect`(`target_date`, `lookback_days` — 구 동기 경로, 폴백용), `GET /api/v1/trends/digests`, `GET /api/v1/trends/digests/{date}`, `GET /api/v1/trends/items/{date}`, `GET/POST/PUT/PATCH/DELETE /api/v1/trends/sources[/{id}]`(DELETE 는 비활성화, `?hard=true` 는 admin), `GET/PUT /api/v1/trends/settings`(PUT 은 admin) — `backend/app/routers/trends.py`. 수집·소스 쓰기는 operator + 감사(`trends.collect`·`trends.source.*`·`trends.settings.update`). 서비스는 `backend/app/services/trends/`:
+  - `trend_service.py`(`TrendService`): 증분 수집(소스 `last_success_at` 이후), URL 전역 중복 제거, 항목 요약 재시도 ≤3(실패는 `summary_ko=None` + `summary_status=failed`·`summary_error`), 다이제스트 `partial`(일부 소스·요약 실패), 오래 멈춘 `collecting`/`summarizing` 복구.
+  - `collect_lock.py`: 다이제스트 날짜 단위 Redis 락 — 수동·beat 공통, 진행 중이면 409 "이미 수집 중입니다".
+  - `url_guard.py`: SSRF 가드 — http(s)만, 공인 IP 만, redirect 최종 주소 재검사, AppSetting `allowed_hosts`(호스트·`*.도메인`·IP·CIDR) 예외. GitHub slug 정규식 검증.
+  - `trend_settings.py`: AppSetting `trends.settings`(`github_api_url`·`allowed_hosts`·`github_token_encrypted` — 응답에 싣지 않고 백업 `SENSITIVE_JSON_KEYS` 로 마스킹). 비면 env `TRENDS_GITHUB_API_URL`/`TRENDS_GITHUB_TOKEN` 폴백.
+  - 수집기(`rss_collector`·`github_collector`)는 실패를 사유가 담긴 예외로 올린다(빈 결과와 구분).
+  모델은 `backend/app/models/trend.py`(`TrendSource` — `item_type`·`last_success_at`·`last_status`/`last_message`/`last_item_count`, `TrendDigest`, `TrendItem` — `summary_status`·`summary_error`·`summary_attempts`, URL 전역 unique `uq_trend_items_url`). 테스트 `test_trends_round15.py`.
 - **핵심 기능**:
-  - 수동 "지금 수집" 트리거(lookback 7~365일 선택), 백그라운드로 수집·AI 요약 진행
-  - 다이제스트 상태 실시간 표시(대기/수집중/요약중/완료/실패) 및 실패 사유 노출
+  - 수동 "지금 수집"(SSE 실시간 로그 + 중지, lookback 7~365일은 백필용) — 다이제스트는 "그날 새로 발견된 항목"
+  - 다이제스트 상태 실시간 표시(대기/수집중/요약중/완료/일부 실패/실패) 및 실패 사유 노출
   - 카테고리/타입 교차 필터로 아이템 탐색, 항목별 한국어 AI 요약 펼쳐보기
-  - 소스 CRUD + 활성/비활성 토글, 소스별 마지막 수집 결과(성공/빈 결과/실패) 상태 배지
+  - 소스 CRUD + 활성/비활성 토글, 소스별 마지막 수집 결과(성공/빈 결과/실패 + 사유) 상태 배지
+- **15차 감사(2026-10-22, D-198~D-201·D-203·D-210·D-215·D-216)**: 역할 판정·SSRF 가드를 넣었다. 수집·요약 실패를 "없음"과 구분한다. 수집은 SSE 실행 로그와 중복 방지 락으로 돈다. URL 전역 중복 제거(**마이그레이션이 기존 URL 중복 행을 1회 삭제** — 가장 먼저 수집된 행 유지)와 증분 수집을 넣었다. GitHub API 주소·허용 호스트·토큰은 화면에서 설정한다(UI-First). 동적 카테고리, 스위치 접근성도 고쳤다.
 - **요청사항 (수정 요청)**:
   - _(여기에 개선/수정 요청을 직접 적어주세요)_
 

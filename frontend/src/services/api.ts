@@ -475,6 +475,8 @@ export interface VersionGraphNode {
   version?: string | null;
   value?: string;
   collectedAt?: string;
+  /** component 노드만 — 수집된 플래그 전체 개수(그래프는 앞 6개만 leaf 로 그린다). */
+  flagTotal?: number;
 }
 
 export interface VersionGraphEdge {
@@ -483,9 +485,20 @@ export interface VersionGraphEdge {
   type: 'contains' | 'param' | 'configures' | 'replaces';
 }
 
+/** `POST /collect-versions` 응답의 컴포넌트별 결과 — 실행 로그가 대상마다 한 줄씩 남긴다. */
+export interface VersionCollectComponent {
+  component: string;
+  version: string | null;
+  changed: boolean;
+}
+
 export const versionsApi = {
   collect: (clusterId: string, signal?: AbortSignal) =>
-    api.post<{ clusterId: string; changed: number; errors: string[]; collectedAt: string }>(
+    api.post<{
+      clusterId: string; changed: number; errors: string[]; collectedAt: string;
+      /** 구버전 백엔드는 이 필드가 없다. */
+      components?: VersionCollectComponent[];
+    }>(
       `/clusters/${clusterId}/collect-versions`, undefined, { signal, timeout: SYNC_RUN_TIMEOUT },
     ),
   collectEtcdctlConfig: (
@@ -1095,8 +1108,14 @@ export const jiraApi = {
     api.post<import('@/types').JiraExcelImportResult>('/jira/import/paste', { text }, {
       timeout: 2 * 60_000,
     }),
-  importSaveToBoard: (rows: import('@/types').JiraExcelRow[]) =>
-    api.post<import('@/types').JiraImportResult>('/jira/import/excel/save', { rows }, {
+  importSaveToBoard: (rows: import('@/types').JiraExcelRow[], tenantId?: string | null) =>
+    api.post<import('@/types').JiraImportResult>('/jira/import/excel/save', { rows, tenantId: tenantId ?? null }, {
+      timeout: 2 * 60_000,
+    }),
+  // /jira-import 화면의 2단계 저장 — dryRun=true 로 행별 생성/갱신/변경 필드를 먼저 받고,
+  // 사용자가 고른 키(onlyKeys)만 dryRun=false 로 적용한다. tenantId 는 새 업무의 공유 범위.
+  importExcelSave: (req: import('@/types').JiraExcelSaveRequest) =>
+    api.post<import('@/types').JiraExcelSaveResult>('/jira/import/excel/save', req, {
       timeout: 2 * 60_000,
     }),
   push: (itemId: string, data: import('@/types').JiraPushRequest) =>
@@ -1202,8 +1221,10 @@ export const tenantsApi = {
 export const uiSettingsApi = {
   get: () => api.get<UiSettings>('/ui-settings'),
   update: (data: Partial<UiSettings>) => api.put<UiSettings>('/ui-settings', data),
-  getClusterLinks: () => api.get<{ data: ClusterLinksPayload }>('/ui-settings/cluster-links'),
-  updateClusterLinks: (data: ClusterLinksPayload) => api.put<{ data: ClusterLinksPayload }>('/ui-settings/cluster-links', data),
+  getClusterLinks: () => api.get<{ data: ClusterLinksPayload; version?: string | null }>('/ui-settings/cluster-links'),
+  /** admin 전용. `version` 이 서버 문서 버전과 다르면 409, http(s) 아닌 URL 은 422. */
+  updateClusterLinks: (data: ClusterLinksPayload) =>
+    api.put<{ data: ClusterLinksPayload; version?: string | null }>('/ui-settings/cluster-links', data),
   getOperationLevels: () =>
     api.get<{ levels: import('@/types').OperationLevelItem[] }>('/ui-settings/operation-levels'),
   updateOperationLevels: (levels: import('@/types').OperationLevelItem[]) =>
@@ -1567,6 +1588,7 @@ export const mindmapApi = {
   list: () => api.get<MindMapListItem[]>('/mindmaps/'),
   get: (id: string) => api.get<MindMap>(`/mindmaps/${id}`),
   create: (data: MindMapCreate) => api.post<MindMap>('/mindmaps/', data),
+  // 값 해제(메모·색·Confluence 링크 비우기)는 `null` 로 보낸다 — `undefined` 는 "기존 값 유지"(clustersApi.update 주석 참고).
   update: (id: string, data: MindMapUpdate) => api.put<MindMap>(`/mindmaps/${id}`, data),
   delete: (id: string) => api.delete(`/mindmaps/${id}`),
   // nodes
@@ -1576,6 +1598,7 @@ export const mindmapApi = {
     api.put<MindMapNode>(`/mindmaps/${mapId}/nodes/${nodeId}`, data),
   deleteNode: (mapId: string, nodeId: string) =>
     api.delete(`/mindmaps/${mapId}/nodes/${nodeId}`),
+  // 움직인 노드만 보낸다 — 서버는 부분 갱신을 받고, 보내지 않은 노드 좌표는 그대로 둔다(동시 편집자 보호).
   bulkUpdatePositions: (mapId: string, updates: { id: string; x: number; y: number }[]) =>
     api.patch<MindMapNode[]>(`/mindmaps/${mapId}/nodes/positions`, updates),
 };
@@ -1735,14 +1758,13 @@ export const assigneesApi = {
 export const ontologyApi = {
   getGraph: (clusterId: string) =>
     api.get<import('@/types').OntologyGraph>(`/ontology/graph/${clusterId}`),
-  createEntity: (data: {
-    clusterId: string; entityType: string; name: string;
-    externalId?: string; version?: string; properties?: Record<string, unknown>;
-  }) => api.post<import('@/types').OntologyEntity>('/ontology/entities', data),
-  createRelationship: (data: {
-    clusterId: string; sourceEntityId: string; relationType: string;
-    targetEntityId: string; weight?: number; relationMetadata?: Record<string, unknown>;
-  }) => api.post<import('@/types').OntologyRelationship>('/ontology/relationships', data),
+  /** operator + 클러스터 operate 필요(아니면 403). */
+  createEntity: (data: import('@/types').OntologyEntityCreate) =>
+    api.post<import('@/types').OntologyEntity>('/ontology/entities', data),
+  /** operator + 클러스터 operate 필요(아니면 403). */
+  createRelationship: (data: import('@/types').OntologyRelationshipCreate) =>
+    api.post<import('@/types').OntologyRelationship>('/ontology/relationships', data),
+  /** 클러스터 read 필요 — viewer 도 실행할 수 있다. */
   analyzeImpact: (data: import('@/types').OntologyImpactRequest) =>
     api.post<import('@/types').OntologyImpactResponse>('/ontology/impact', data),
 };
@@ -1952,6 +1974,7 @@ export const k8sEventsApi = {
 
 // Trend Digest API
 export const trendsApi = {
+  /** 단건 수집(구 서버 폴백) — 전 소스를 다 모은 뒤 한 번에 응답한다. 화면은 `collectStreamUrl` 을 먼저 쓴다. */
   triggerCollect: (targetDate?: string, lookbackDays?: number) =>
     api.post<TrendDigest>('/trends/collect', undefined, {
       timeout: 10 * 60_000, // 전 소스(GitHub/RSS)를 다 모은 뒤 응답한다
@@ -1960,6 +1983,16 @@ export const trendsApi = {
         ...(lookbackDays ? { lookback_days: lookbackDays } : {}),
       },
     }),
+  /** 지금 수집(SSE: log·step·result) — `streamLogged` 로 소비. 본문 `{ targetDate?, lookbackDays }`
+   *  (streamLogged 가 snake_case 로 바꾼다). 같은 값을 쿼리로도 붙여 서버가 어느 쪽으로 받든 맞게 한다.
+   *  이미 수집 중이면 409 "이미 수집 중입니다". */
+  collectStreamUrl: (targetDate?: string, lookbackDays?: number) => {
+    const p = new URLSearchParams();
+    if (targetDate) p.set('target_date', targetDate);
+    if (lookbackDays) p.set('lookback_days', String(lookbackDays));
+    const qs = p.toString();
+    return `/api/v1/trends/collect/stream${qs ? `?${qs}` : ''}`;
+  },
   listDigests: (limit = 30) =>
     api.get<TrendDigest[]>('/trends/digests', { params: { limit } }),
   getDigest: (date: string) =>
@@ -1971,13 +2004,16 @@ export const trendsApi = {
   listSources: () => api.get<TrendSource[]>('/trends/sources'),
   toggleSource: (id: string, enabled: boolean) =>
     api.patch<TrendSource>(`/trends/sources/${id}`, { enabled }),
-  createSource: (data: {
-    name: string; sourceType: 'github_release' | 'rss'; url: string; category: string; enabled?: boolean;
-  }) => api.post<TrendSource>('/trends/sources', data),
-  updateSource: (id: string, data: Partial<{
-    name: string; sourceType: 'github_release' | 'rss'; url: string; category: string; enabled: boolean;
-  }>) => api.put<TrendSource>(`/trends/sources/${id}`, data),
-  deleteSource: (id: string) => api.delete(`/trends/sources/${id}`),
+  createSource: (data: import('@/types').TrendSourceCreate) => api.post<TrendSource>('/trends/sources', data),
+  updateSource: (id: string, data: Partial<import('@/types').TrendSourceCreate>) =>
+    api.put<TrendSource>(`/trends/sources/${id}`, data),
+  /** 기본은 비활성화(과거 다이제스트 보존). `hard` 는 admin 전용 완전 삭제. */
+  deleteSource: (id: string, hard = false) =>
+    api.delete(`/trends/sources/${id}`, hard ? { params: { hard: true } } : undefined),
+  /** GitHub API 주소·허용 호스트·토큰 설정 여부(토큰 값은 돌려주지 않는다). */
+  getSettings: () => api.get<import('@/types').TrendSettings>('/trends/settings'),
+  /** admin 전용. `githubToken` 은 쓰기 전용 — 비우면(undefined) 기존 토큰을 유지한다. */
+  updateSettings: (data: import('@/types').TrendSettingsUpdate) => api.put<import('@/types').TrendSettings>('/trends/settings', data),
 };
 
 // LAKE Service Monitoring — lake-service-monitoring PDCA
@@ -2972,7 +3008,7 @@ export const islandsApi = {
   get: (id: string) => api.get<import('@/types').Island>(`/islands/${id}`),
   create: (data: import('@/types').IslandCreatePayload) =>
     api.post<import('@/types').Island>('/islands', data),
-  update: (id: string, data: Partial<import('@/types').IslandCreatePayload>) =>
+  update: (id: string, data: import('@/types').IslandUpdatePayload) =>
     api.put<import('@/types').Island>(`/islands/${id}`, data),
   remove: (id: string) => api.delete(`/islands/${id}`),
   clone: (id: string) => api.post<import('@/types').Island>(`/islands/${id}/clone`),

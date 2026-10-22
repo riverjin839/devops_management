@@ -104,8 +104,9 @@ SENSITIVE_COLUMNS: dict[str, list[str]] = {
 # JSON 컬럼 안의 민감 키 — 컬럼 전체가 아니라 그 키만 마스킹한다(설정 나머지는 백업돼야 한다).
 # import 시 센티널 키는 기존 행 값을 유지하고, 기존 행이 없으면 비운다.
 SENSITIVE_JSON_KEYS: dict[str, dict[str, list[str]]] = {
-    # 사내 SSO(OIDC) client secret 암호문 — AppSetting ``auth.oidc``.
-    "app_settings": {"value": ["client_secret_encrypted", "bind_password_encrypted"]},
+    # 사내 SSO(OIDC) client secret·LDAP bind 비밀번호·기술 동향 GitHub 토큰 암호문
+    # — AppSetting ``auth.oidc`` / ``auth.ldap`` / ``trends.settings``.
+    "app_settings": {"value": ["client_secret_encrypted", "bind_password_encrypted", "github_token_encrypted"]},
 }
 
 

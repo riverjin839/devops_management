@@ -50,7 +50,7 @@ export function ManualEdgeDialog({ sourceName, targetName, pending, onSubmit, on
           <ArrowRight className="w-4 h-4 text-muted-foreground" />
           <h2 id={titleId} className="text-sm font-semibold flex-1">수동 연결 추가</h2>
           <button onClick={onClose} disabled={pending} aria-label="닫기" title="닫기"
-            className="p-1 rounded-lg text-muted-foreground hover:bg-secondary disabled:opacity-50">
+            className="p-1 rounded-xl text-muted-foreground hover:bg-secondary disabled:opacity-50">
             <X className="w-4 h-4" />
           </button>
         </div>

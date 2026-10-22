@@ -1,11 +1,13 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { LayoutGrid, PanelLeft, Settings2, Palmtree } from 'lucide-react';
-import { useIslands, useUpdateIsland } from '@/hooks/useIslands';
+import {
+  useIslands, useUpdateIsland, describeIslandSaveError, type IslandPanelsUpdater,
+} from '@/hooks/useIslands';
 import { useNavCatalog } from '@/hooks/useNavCatalog';
 import { useIslandStore } from '@/stores/islandStore';
 import { useAuthStore } from '@/stores/authStore';
-import { EmptyState, useToast } from '@/components/common';
+import { EmptyState, ErrorState, LoadingState, PageShell, useToast } from '@/components/common';
 import { PageHeader } from '@/components/common/PageHeader';
 import {
   IslandManagerPane, IslandPanelHost, IslandRail, IslandTabBar, PanelPickerDialog,
@@ -21,20 +23,18 @@ function nextPanelKey(panels: IslandPanel[]): string {
   return `p${n}`;
 }
 
-function EmptyIslandState({ onOpenManager }: { onOpenManager: () => void }) {
+/** 아일랜드가 아직 정해지지 않은 상태(로딩·조회 실패·없음)의 공통 틀 — 허브 밀도(§12.12-5). */
+function IslandHubShell({ children }: { children: ReactNode }) {
   return (
-    <div className="space-y-4">
-      <PageHeader
-        icon={Palmtree}
-        title="나의 아일랜드"
-        description="자주 쓰는 PEP 화면을 하나에 모아두는 개인 화면입니다."
-      />
-      <EmptyState
-        icon={Palmtree}
-        title="아직 만든 아일랜드가 없습니다."
-        description="아일랜드를 만들고 원하는 화면을 패널로 추가하면 탭이나 좌측 사이드바로 바로 전환할 수 있습니다."
-        action={{ label: '첫 아일랜드 만들기', onClick: onOpenManager }}
-      />
+    <div className="app-min-h-screen bg-background">
+      <PageShell density="hub" className="space-y-4">
+        <PageHeader
+          icon={Palmtree}
+          title="나의 아일랜드"
+          description="자주 쓰는 PEP 화면을 하나에 모아두는 개인 화면입니다."
+        />
+        {children}
+      </PageShell>
     </div>
   );
 }
@@ -52,7 +52,7 @@ export function IslandPage() {
   const navigate = useNavigate();
   const toast = useToast();
   const [searchParams, setSearchParams] = useSearchParams();
-  const { data, isLoading } = useIslands();
+  const { data, isLoading, isError, error, refetch } = useIslands();
   const updateIsland = useUpdateIsland();
   const { navMap, getLabel } = useNavCatalog();
   const currentUser = useAuthStore((s) => s.user);
@@ -73,19 +73,23 @@ export function IslandPage() {
   // 소유자만 편집 가능 — 공유받은 아일랜드는 읽기 전용(복제해서 쓰는 모델).
   const editable = !!island && island.ownerId === currentUser?.id;
 
+  // 목록을 **성공적으로** 받았을 때만 리다이렉트·기억 삭제를 판단한다(B-11). 조회 실패를 "없음"으로
+  // 읽으면 마지막에 보던 아일랜드 기억을 지우고 빈 상태로 보내 중복 생성을 유도한다.
+  const listReady = !!data && !isError;
+
   // `/island` 로 들어오면 마지막에 보던 아일랜드(없으면 첫 번째)로 보낸다.
   useEffect(() => {
-    if (islandId || isLoading || mine.length === 0) return;
+    if (islandId || !listReady || mine.length === 0) return;
     const target = mine.find((i) => i.id === lastIslandId) ?? mine[0];
     navigate(`/island/${target.id}`, { replace: true });
-  }, [islandId, isLoading, mine, lastIslandId, navigate]);
+  }, [islandId, listReady, mine, lastIslandId, navigate]);
 
-  // 존재하지 않는(또는 삭제된) 아일랜드 id 로 들어오면 목록으로 되돌린다.
+  // 성공 응답에 없는(삭제된) 아일랜드 id 로 들어오면 목록으로 되돌린다.
   useEffect(() => {
-    if (!islandId || isLoading || island) return;
+    if (!islandId || !listReady || island) return;
     setLastIslandId(null);
     navigate('/island', { replace: true });
-  }, [islandId, isLoading, island, navigate, setLastIslandId]);
+  }, [islandId, listReady, island, navigate, setLastIslandId]);
 
   useEffect(() => {
     if (island) setLastIslandId(island.id);
@@ -117,38 +121,73 @@ export function IslandPage() {
     }, { replace: true });
   };
 
-  const savePanels = (nextPanels: IslandPanel[]) => {
+  const notifySaveError = (title: string) => (err: unknown) => {
+    const msg = describeIslandSaveError(err, title);
+    toast.error(msg.title, msg.description);
+  };
+
+  /**
+   * 패널 변경은 "현재 패널 → 다음 패널" 함수로 보낸다. 훅이 아일랜드별로 직렬화하고, 앞 변경이
+   * 서버에 반영된 최신 배열 위에서 이 함수를 다시 계산하므로 빠르게 이어진 변경이 서로 지우지 않는다(B-12).
+   * 화면은 즉시 바뀌고(낙관적), 실패하면 그 변경만 되돌아간다.
+   */
+  const savePanels = (updater: IslandPanelsUpdater, failTitle = '패널 저장 실패') => {
     if (!island) return;
-    updateIsland.mutate(
-      { id: island.id, panels: nextPanels },
-      { onError: () => toast.error('패널 저장 실패') },
-    );
+    updateIsland.mutate({ id: island.id, panels: updater }, { onError: notifySaveError(failTitle) });
   };
 
   const handleAddPanel = (path: string) => {
     if (!island) return;
     setPickerOpen(false);
     const panel: IslandPanel = { key: nextPanelKey(panels), path, label: null, icon: null };
-    savePanels([...panels, panel]);
+    savePanels((cur) => (
+      cur.some((p) => p.key === panel.key) || cur.length >= MAX_PANELS ? cur : [...cur, panel]
+    ), '화면 추가 실패');
     handleSelect(panel.key);
   };
 
-  const handleRemovePanel = (key: string) => savePanels(panels.filter((p) => p.key !== key));
+  // 제거는 확인 대화상자 대신 5초 "되돌리기" 토스트(정책 ⑧) — 사용자 지정 이름·아이콘까지 그대로 복원한다.
+  const handleRemovePanel = (key: string) => {
+    const index = panels.findIndex((p) => p.key === key);
+    if (index < 0) return;
+    const removed = panels[index];
+    savePanels((cur) => cur.filter((p) => p.key !== key), '패널 제거 실패');
+    toast.show({
+      variant: 'info',
+      title: '패널 제거됨',
+      description: removed.label || getLabel(removed.path),
+      durationMs: 5000,
+      action: {
+        label: '되돌리기',
+        onClick: () => savePanels((cur) => {
+          if (cur.some((p) => p.key === removed.key) || cur.length >= MAX_PANELS) return cur;
+          const next = [...cur];
+          next.splice(Math.min(index, next.length), 0, removed);
+          return next;
+        }, '패널 복원 실패'),
+      },
+    });
+  };
 
   const handleEditPanel = (key: string, patch: { label: string | null; icon: string | null }) =>
-    savePanels(panels.map((p) => (p.key === key ? { ...p, ...patch } : p)));
+    savePanels((cur) => cur.map((p) => (p.key === key ? { ...p, ...patch } : p)), '패널 표시 설정 저장 실패');
 
   const handleReorder = (keys: string[]) => {
-    const byKey = new Map(panels.map((p) => [p.key, p]));
-    savePanels(keys.map((k) => byKey.get(k)).filter((p): p is IslandPanel => !!p));
+    savePanels((cur) => {
+      const byKey = new Map(cur.map((p) => [p.key, p]));
+      const ordered = keys.map((k) => byKey.get(k)).filter((p): p is IslandPanel => !!p);
+      // 순서를 정하는 사이 다른 변경으로 생긴 패널은 뒤에 붙여 잃지 않는다.
+      const placed = new Set(ordered.map((p) => p.key));
+      return [...ordered, ...cur.filter((p) => !placed.has(p.key))];
+    }, '순서 저장 실패');
   };
 
   const toggleLayout = () => {
     if (!island) return;
-    updateIsland.mutate({
-      id: island.id,
-      layoutMode: island.layoutMode === 'tabs' ? 'sidebar' : 'tabs',
-    });
+    updateIsland.mutate(
+      { id: island.id, layoutMode: island.layoutMode === 'tabs' ? 'sidebar' : 'tabs' },
+      { onError: notifySaveError('레이아웃 전환 실패') },
+    );
   };
 
   // 패널 → 표시용 뷰모델. 라벨/아이콘은 사용자 지정값이 있으면 그것, 없으면 사이드바와 같은 소스.
@@ -163,14 +202,31 @@ export function IslandPage() {
 
   const editingPanel = panelViews.find((p) => p.key === editingPanelKey) ?? null;
 
-  if (isLoading) return null;
-
   if (!island) {
+    // 조회 실패는 "아일랜드 없음"이 아니다 — 다시 시도만 제공하고 생성으로 유도하지 않는다(B-11).
+    if (isError) {
+      return (
+        <IslandHubShell>
+          <ErrorState error={error} title="아일랜드 목록을 불러오지 못했습니다." onRetry={() => { void refetch(); }} />
+        </IslandHubShell>
+      );
+    }
+    // 첫 로딩, 또는 리다이렉트 직전(`/island` → 마지막 아일랜드, 없는 id → `/island`).
+    if (isLoading || !data || islandId || mine.length > 0) {
+      return <IslandHubShell><LoadingState /></IslandHubShell>;
+    }
     return (
-      <div className="app-min-h-screen bg-background p-6">
-        <EmptyIslandState onOpenManager={() => setManagerOpen(true)} />
+      <>
+        <IslandHubShell>
+          <EmptyState
+            icon={Palmtree}
+            title="아직 만든 아일랜드가 없습니다."
+            description="아일랜드를 만들고 원하는 화면을 패널로 추가하면 탭이나 좌측 사이드바로 바로 전환할 수 있습니다."
+            action={{ label: '첫 아일랜드 만들기', onClick: () => setManagerOpen(true) }}
+          />
+        </IslandHubShell>
         <IslandManagerPane open={managerOpen} onClose={() => setManagerOpen(false)} currentId={null} />
-      </div>
+      </>
     );
   }
 
@@ -190,7 +246,7 @@ export function IslandPage() {
           onClick={toggleLayout}
           title={island.layoutMode === 'tabs' ? '사이드바 레이아웃으로' : '탭 레이아웃으로'}
           aria-label="레이아웃 전환"
-          className="p-1.5 rounded-lg text-muted-foreground hover:bg-secondary hover:text-foreground transition-colors"
+          className="p-1.5 rounded-xl text-muted-foreground hover:bg-secondary hover:text-foreground transition-colors"
         >
           {island.layoutMode === 'tabs'
             ? <PanelLeft className="w-4 h-4" />
@@ -202,7 +258,7 @@ export function IslandPage() {
         onClick={() => setManagerOpen(true)}
         title="아일랜드 관리"
         aria-label="아일랜드 관리"
-        className="p-1.5 rounded-lg text-muted-foreground hover:bg-secondary hover:text-foreground transition-colors"
+        className="p-1.5 rounded-xl text-muted-foreground hover:bg-secondary hover:text-foreground transition-colors"
       >
         <Settings2 className="w-4 h-4" />
       </button>
@@ -212,7 +268,13 @@ export function IslandPage() {
   );
 
   const body = activePanel
-    ? <IslandPanelHost path={activePanel.path} label={activePanel.label || getLabel(activePanel.path)} />
+    ? (
+      <IslandPanelHost
+        path={activePanel.path}
+        label={activePanel.label || getLabel(activePanel.path)}
+        onRemove={editable ? () => handleRemovePanel(activePanel.key) : undefined}
+      />
+    )
     : (
       <EmptyState
         icon={Palmtree}

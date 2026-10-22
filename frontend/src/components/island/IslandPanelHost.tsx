@@ -2,6 +2,7 @@ import { AlertTriangle, Lock } from 'lucide-react';
 import { useAuthStore } from '@/stores/authStore';
 import { useFeatureAccess, canAccessFeature } from '@/hooks/useFeatureAccess';
 import { IslandEmbedContext } from '@/lib/islandEmbed';
+import { EmptyState, LoadingState } from '@/components/common';
 import { PANEL_COMPONENTS, ISLAND_DENYLIST } from './panelRegistry';
 
 interface IslandPanelHostProps {
@@ -9,20 +10,8 @@ interface IslandPanelHostProps {
   path: string;
   /** 표시용 라벨 — 오류 메시지에 사용. */
   label: string;
-}
-
-function Placeholder({ Icon, title, body }: {
-  Icon: typeof AlertTriangle;
-  title: string;
-  body: string;
-}) {
-  return (
-    <div className="flex flex-col items-center justify-center gap-2 py-20 text-center">
-      <Icon className="w-8 h-8 text-muted-foreground" />
-      <p className="text-sm font-semibold text-foreground">{title}</p>
-      <p className="text-sm text-muted-foreground max-w-md">{body}</p>
-    </div>
-  );
+  /** 편집 가능한 아일랜드에서만 — 열 수 없는 패널을 바로 빼는 다음 행동. */
+  onRemove?: () => void;
 }
 
 /**
@@ -35,29 +24,37 @@ function Placeholder({ Icon, title, body }: {
  * 판정을 적용해, 공유받은 아일랜드에 권한 없는 화면이 들어 있어도 페이지가 깨지는 대신
  * 안내가 나오게 한다 — 키가 라우트 경로 자체라 화면마다 개별 매핑을 유지할 필요가 없다.
  */
-export function IslandPanelHost({ path, label }: IslandPanelHostProps) {
+export function IslandPanelHost({ path, label, onRemove }: IslandPanelHostProps) {
   const user = useAuthStore((s) => s.user);
   const { data: featureAccess, isLoading: accessLoading } = useFeatureAccess();
 
   const Component = PANEL_COMPONENTS[path];
 
+  const removeAction = onRemove ? { label: '패널에서 제거', onClick: onRemove, variant: 'secondary' as const } : undefined;
+
   if (!Component || ISLAND_DENYLIST.has(path)) {
     return (
-      <Placeholder
-        Icon={AlertTriangle}
+      <EmptyState
+        icon={AlertTriangle}
         title="이 화면은 아일랜드에 담을 수 없습니다"
-        body={`"${label}" (${path}) 은 전체 화면 전용이거나 더 이상 존재하지 않는 화면입니다. 패널에서 제거해 주세요.`}
+        description={`"${label}" (${path}) 은 전체 화면 전용이거나 더 이상 존재하지 않는 화면입니다.${
+          onRemove ? ' 패널에서 제거해 주세요.' : ''
+        }`}
+        action={removeAction}
       />
     );
   }
 
-  if (accessLoading) return null;
+  if (accessLoading) return <LoadingState />;
   if (!canAccessFeature(featureAccess, path, user)) {
     return (
-      <Placeholder
-        Icon={Lock}
+      <EmptyState
+        icon={Lock}
         title="접근 권한이 없습니다"
-        body={`"${label}" 화면에 대한 접근 권한이 없습니다. 관리자에게 문의하세요.`}
+        description={`"${label}" 화면에 대한 접근 권한이 없습니다. 관리자에게 문의${
+          onRemove ? '하거나 이 패널을 제거하세요.' : '하세요.'
+        }`}
+        action={removeAction}
       />
     );
   }

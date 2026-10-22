@@ -1,23 +1,27 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useId, useMemo, useRef } from 'react';
 import {
   Link2, Plus, Pencil, Trash2, ExternalLink, X, Check, Globe, Server,
-  GripVertical, Table2, LayoutList, LayoutGrid, Search,
+  GripVertical, Table2, LayoutList, LayoutGrid, Search, RefreshCw, AlertTriangle,
 } from 'lucide-react';
 import {
-  DndContext, closestCenter, PointerSensor, useSensor, useSensors,
+  DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors,
   DragEndEvent,
 } from '@dnd-kit/core';
 import {
   SortableContext, verticalListSortingStrategy, horizontalListSortingStrategy,
-  arrayMove, useSortable,
+  arrayMove, sortableKeyboardCoordinates, useSortable,
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { useClusters } from '@/hooks/useCluster';
 import { useClusterLinks, useUpdateClusterLinks } from '@/hooks/useUiSettings';
-import { useClusterStore } from '@/stores/clusterStore';
+import { useAuthStore, hasRole } from '@/stores/authStore';
 import { useTableViewStore, TS } from '@/stores/tableViewStore';
-import { ViewModeBar, EmptyState, PageHeader, PageShell, StatTile, StatTileRow } from '@/components/common';
+import {
+  ViewModeBar, EmptyState, ErrorState, LoadingState, ConfirmDialog, PageHeader, PageShell, StatTile, StatTileRow,
+  useToast,
+} from '@/components/common';
 import { MacCard } from '@/components/ui/MacCard';
+import { formatApiError } from '@/lib/utils';
 import { ClusterLink, ClusterLinkGroup } from '@/types';
 
 type LayoutMode = 'table' | 'vertical' | 'horizontal';
@@ -27,6 +31,17 @@ const DEFAULT_COL  = 220;
 const MIN_COL      = 110;
 
 function genId() { return Math.random().toString(36).slice(2, 10); }
+
+/** 편집 권한 사유 — 서버(`PUT /ui-settings/cluster-links`)가 admin 만 받는다(정책 ⑥). */
+const ADMIN_ONLY_HINT = '관리자만 링크를 편집할 수 있습니다';
+const HTTP_URL = /^https?:\/\/\S+$/i;
+
+/** 편집 버튼 게이트 — 비활성일 때 사유를 title/aria-label 에 붙인다(DESIGN_SYSTEM §12.9 패턴). */
+interface EditGate {
+  canEdit: boolean;
+  withHint: (title: string) => string;
+  ariaWithHint: (label: string) => string;
+}
 
 function saveColWidths(w: Record<string, number>) {
   try { localStorage.setItem(COLW_KEY, JSON.stringify(w)); } catch { /* noop */ }
@@ -69,32 +84,59 @@ function ColResizeHandle({ colId, currentWidth, onResize, onResizeDone }: {
 }
 
 // ── Link form ─────────────────────────────────────────────────────────────────
-interface LinkFormProps { initial?: ClusterLink; onSave: (l: ClusterLink) => void; onCancel: () => void; }
+/** onSave 가 true(저장 성공)를 돌려줄 때만 부모가 폼을 닫는다 — 실패하면 입력이 그대로 남는다. */
+interface LinkFormProps { initial?: ClusterLink; onSave: (l: ClusterLink) => Promise<boolean>; onCancel: () => void; }
 function LinkForm({ initial, onSave, onCancel }: LinkFormProps) {
+  const uid = useId();
   const [label, setLabel] = useState(initial?.label ?? '');
   const [url,   setUrl]   = useState(initial?.url ?? '');
   const [desc,  setDesc]  = useState(initial?.description ?? '');
-  const submit = (e: React.FormEvent) => {
+  const [busy,  setBusy]  = useState(false);
+  const [urlError, setUrlError] = useState<string | null>(null);
+  const submit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!label.trim() || !url.trim()) return;
-    onSave({ id: initial?.id ?? genId(), label: label.trim(), url: url.trim(), description: desc.trim() || undefined });
+    if (busy || !label.trim() || !url.trim()) return;
+    if (!HTTP_URL.test(url.trim())) {
+      setUrlError('http:// 또는 https:// 로 시작하는 주소만 저장할 수 있습니다');
+      return;
+    }
+    setUrlError(null);
+    setBusy(true);
+    try {
+      await onSave({ id: initial?.id ?? genId(), label: label.trim(), url: url.trim(), description: desc.trim() || undefined });
+    } finally {
+      setBusy(false);
+    }
   };
-  const cls = 'w-full px-3 py-2 bg-background border border-border rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-primary';
+  const cls = 'w-full px-3 py-2 bg-background border border-border rounded-xl text-sm focus:outline-none focus:ring-1 focus:ring-primary';
+  const lbl = 'block text-xs font-medium text-muted-foreground mb-1';
   return (
-    <form onSubmit={submit} className="bg-secondary/40 border border-border/60 rounded-lg p-3 space-y-2">
+    <form onSubmit={submit} className="bg-secondary/40 border border-border/60 rounded-md p-3 space-y-2">
       <div className="grid grid-cols-2 gap-2">
-        <input type="text"  value={label} onChange={e => setLabel(e.target.value)} placeholder="링크 이름 *"       className={cls} required autoFocus />
-        <input type="url"   value={url}   onChange={e => setUrl(e.target.value)}   placeholder="URL * (https://...)" className={cls} required />
+        <div>
+          <label htmlFor={`${uid}-label`} className={lbl}>링크 이름 *</label>
+          <input id={`${uid}-label`} type="text" value={label} onChange={e => setLabel(e.target.value)} placeholder="예: Grafana" className={cls} required autoFocus />
+        </div>
+        <div>
+          <label htmlFor={`${uid}-url`} className={lbl}>URL *</label>
+          <input id={`${uid}-url`} type="url" value={url} onChange={e => { setUrl(e.target.value); setUrlError(null); }}
+            placeholder="https://…" className={cls} required
+            aria-invalid={urlError ? true : undefined} aria-describedby={urlError ? `${uid}-url-err` : undefined} />
+        </div>
       </div>
-      <input type="text" value={desc} onChange={e => setDesc(e.target.value)} placeholder="설명 (선택)" className={cls} />
+      {urlError && <p id={`${uid}-url-err`} role="alert" className="text-xs text-status-critical">{urlError}</p>}
+      <div>
+        <label htmlFor={`${uid}-desc`} className={lbl}>설명 (선택)</label>
+        <input id={`${uid}-desc`} type="text" value={desc} onChange={e => setDesc(e.target.value)} className={cls} />
+      </div>
       <div className="flex justify-end gap-2 pt-1">
         <button type="button" onClick={onCancel}
-          className="px-3 py-1.5 text-sm font-medium bg-secondary hover:bg-secondary/80 border border-border rounded-lg transition-colors flex items-center gap-1">
+          className="px-3 py-1.5 text-sm font-medium bg-secondary hover:bg-secondary/80 border border-border rounded-xl transition-colors flex items-center gap-1">
           <X className="w-3.5 h-3.5" /> 취소
         </button>
-        <button type="submit"
-          className="px-3 py-1.5 text-sm font-medium bg-primary hover:bg-primary/90 text-primary-foreground rounded-lg transition-colors flex items-center gap-1">
-          <Check className="w-3.5 h-3.5" /> 저장
+        <button type="submit" disabled={busy}
+          className="px-3 py-1.5 text-sm font-medium bg-primary hover:bg-primary/90 text-primary-foreground rounded-xl transition-colors flex items-center gap-1 disabled:opacity-50">
+          <Check className="w-3.5 h-3.5" /> {busy ? '저장 중…' : '저장'}
         </button>
       </div>
     </form>
@@ -102,7 +144,7 @@ function LinkForm({ initial, onSave, onCancel }: LinkFormProps) {
 }
 
 // ── Link card (vertical/horizontal modes) ─────────────────────────────────────
-function LinkCard({ link, onEdit, onDelete }: { link: ClusterLink; onEdit: () => void; onDelete: () => void }) {
+function LinkCard({ link, onEdit, onDelete, gate }: { link: ClusterLink; onEdit: () => void; onDelete: () => void; gate: EditGate }) {
   return (
     <div className="group relative flex items-start gap-3 px-3.5 py-3 bg-background hover:bg-secondary/60 border border-border/60 hover:border-primary/30 rounded-md transition-colors">
       <div className="w-8 h-8 bg-secondary rounded-md flex items-center justify-center flex-shrink-0 mt-0.5">
@@ -117,18 +159,22 @@ function LinkCard({ link, onEdit, onDelete }: { link: ClusterLink; onEdit: () =>
         {link.description && <p className="text-sm text-muted-foreground mt-0.5 truncate">{link.description}</p>}
         <p className="text-xs text-muted-foreground font-mono truncate mt-1">{link.url}</p>
       </div>
-      <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0">
-        <button onClick={onEdit}   className="p-1.5 hover:bg-secondary rounded-md text-muted-foreground hover:text-foreground" title="편집" aria-label="편집"><Pencil className="w-3.5 h-3.5" /></button>
-        <button onClick={onDelete} className="p-1.5 hover:bg-status-critical/10 rounded-md text-muted-foreground hover:text-status-critical" title="삭제" aria-label="삭제"><Trash2 className="w-3.5 h-3.5" /></button>
+      <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity flex-shrink-0">
+        <button type="button" onClick={onEdit} disabled={!gate.canEdit}
+          className="p-1.5 hover:bg-secondary rounded-xl text-muted-foreground hover:text-foreground disabled:opacity-40 disabled:cursor-not-allowed"
+          title={gate.withHint('편집')} aria-label={gate.ariaWithHint(`${link.label} 편집`)}><Pencil className="w-3.5 h-3.5" /></button>
+        <button type="button" onClick={onDelete} disabled={!gate.canEdit}
+          className="p-1.5 hover:bg-status-critical/10 rounded-xl text-muted-foreground hover:text-status-critical disabled:opacity-40 disabled:cursor-not-allowed"
+          title={gate.withHint('삭제')} aria-label={gate.ariaWithHint(`${link.label} 삭제`)}><Trash2 className="w-3.5 h-3.5" /></button>
       </div>
     </div>
   );
 }
 
 // ── Compact link cell (table mode) ────────────────────────────────────────────
-function CompactLinkCell({ link, onEdit, onDelete, fontClass, fsClass }: {
+function CompactLinkCell({ link, onEdit, onDelete, fontClass, fsClass, gate }: {
   link: ClusterLink; onEdit: () => void; onDelete: () => void;
-  fontClass: string; fsClass: string;
+  fontClass: string; fsClass: string; gate: EditGate;
 }) {
   return (
     <div className={`group flex items-center gap-2 px-2 py-1.5 rounded-md hover:bg-muted/50 transition-colors ${fontClass} ${fsClass}`}>
@@ -139,9 +185,13 @@ function CompactLinkCell({ link, onEdit, onDelete, fontClass, fsClass }: {
         </a>
         {link.description && <p className="text-muted-foreground truncate leading-tight mt-0.5">{link.description}</p>}
       </div>
-      <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0">
-        <button onClick={onEdit}   className="p-1 hover:bg-secondary rounded text-muted-foreground hover:text-foreground" aria-label="편집"><Pencil className="w-2.5 h-2.5" /></button>
-        <button onClick={onDelete} className="p-1 hover:bg-status-critical/10 rounded text-muted-foreground hover:text-status-critical" aria-label="삭제"><Trash2 className="w-2.5 h-2.5" /></button>
+      <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity flex-shrink-0">
+        <button type="button" onClick={onEdit} disabled={!gate.canEdit}
+          className="p-1 hover:bg-secondary rounded-xl text-muted-foreground hover:text-foreground disabled:opacity-40 disabled:cursor-not-allowed"
+          title={gate.withHint('편집')} aria-label={gate.ariaWithHint(`${link.label} 편집`)}><Pencil className="w-2.5 h-2.5" /></button>
+        <button type="button" onClick={onDelete} disabled={!gate.canEdit}
+          className="p-1 hover:bg-status-critical/10 rounded-xl text-muted-foreground hover:text-status-critical disabled:opacity-40 disabled:cursor-not-allowed"
+          title={gate.withHint('삭제')} aria-label={gate.ariaWithHint(`${link.label} 삭제`)}><Trash2 className="w-2.5 h-2.5" /></button>
       </div>
     </div>
   );
@@ -168,20 +218,25 @@ const VIEW_MODES = [
 ];
 
 // ── Main page ──────────────────────────────────────────────────────────────────
+type PendingDelete = { scope: 'common' } | { scope: 'cluster'; clusterId: string };
+
 export function ClusterLinksPage() {
-  const { clusters } = useClusterStore();
-  useClusters();
-  const { data: linksData } = useClusterLinks();
+  const clustersQ = useClusters();
+  const clusters = useMemo(() => clustersQ.data ?? [], [clustersQ.data]);
+  const linksQ = useClusterLinks();
+  const linksData = linksQ.data;
   const updateClusterLinks   = useUpdateClusterLinks();
   const { style }            = useTableViewStore();
+  const toast = useToast();
+  const isAdmin = useAuthStore((st) => hasRole(st.user, 'admin'));
 
   // Layout
-  const [layout, setLayout] = useState<LayoutMode>(() =>
-    (localStorage.getItem(LAYOUT_KEY) as LayoutMode) ?? 'table',
-  );
+  const [layout, setLayout] = useState<LayoutMode>(() => {
+    try { return (localStorage.getItem(LAYOUT_KEY) as LayoutMode) ?? 'table'; } catch { return 'table'; }
+  });
   const changeLayout = (mode: string) => {
     setLayout(mode as LayoutMode);
-    localStorage.setItem(LAYOUT_KEY, mode);
+    try { localStorage.setItem(LAYOUT_KEY, mode); } catch { /* noop */ }
   };
 
   // Column widths (table mode)
@@ -198,39 +253,64 @@ export function ClusterLinksPage() {
   }, []);
   const colW = (id: string) => colWidths[id] ?? DEFAULT_COL;
 
-  // Data
-  const [linkGroups,       setLinkGroups]       = useState<ClusterLinkGroup[]>([]);
-  const [groupOrder,       setGroupOrder]        = useState<string[]>([]);
+  // UI state — 링크 데이터 자체는 서버 캐시(linksData)가 원천이다. 저장이 성공한 뒤에만 화면이 바뀌고
+  // (응답이 캐시에 들어감), 실패하면 서버 값이 그대로 남는다(A-4).
   const [addingTo,         setAddingTo]          = useState<string | null>(null);
   const [editingLink,      setEditingLink]       = useState<{ clusterId: string; link: ClusterLink } | null>(null);
-  const [commonLinks,      setCommonLinks]       = useState<ClusterLink[]>([]);
   const [addingCommon,     setAddingCommon]      = useState(false);
   const [editingCommon,    setEditingCommon]     = useState<ClusterLink | null>(null);
   const [tableFormTarget,  setTableFormTarget]   = useState<string | null>(null); // 'common' | clusterId
+  const [pendingDelete,    setPendingDelete]     = useState<{ target: PendingDelete; link: ClusterLink } | null>(null);
+  // 드래그 직후 저장 응답까지만 쓰는 순서(실패하면 지워져 서버 순서로 돌아간다).
+  const [pendingOrder,     setPendingOrder]      = useState<string[] | null>(null);
+  // 409(다른 관리자가 먼저 저장) — 새로고침 전까지 편집을 막는다.
+  const [conflict,         setConflict]          = useState<string | null>(null);
 
-  useEffect(() => {
-    if (!linksData) return;
-    setLinkGroups(linksData.clusterGroups || []);
-    setCommonLinks(linksData.commonLinks  || []);
-  }, [linksData]);
+  const linksReady    = !!linksData && !linksQ.isError;
+  const clustersReady = clustersQ.isSuccess;
+  const serverGroups  = useMemo(() => linksData?.clusterGroups ?? [], [linksData]);
+  const commonLinks   = useMemo(() => linksData?.commonLinks ?? [], [linksData]);
 
-  const persist = (groups: ClusterLinkGroup[], common: ClusterLink[]) =>
-    updateClusterLinks.mutate({ clusterGroups: groups, commonLinks: common });
+  // 편집 게이트 — admin + 링크 로드 완료 + 충돌 없음(A-4·A-5).
+  const editHint = !isAdmin
+    ? ADMIN_ONLY_HINT
+    : !linksReady
+      ? '링크를 불러온 뒤 편집할 수 있습니다'
+      : conflict
+        ? '다른 곳에서 바뀐 링크를 새로고침한 뒤 편집할 수 있습니다'
+        : undefined;
+  const gate: EditGate = {
+    canEdit: !editHint,
+    withHint: (title) => editHint ?? title,
+    ariaWithHint: (label) => (editHint ? `${label} — ${editHint}` : label),
+  };
 
-  const allGroups: ClusterLinkGroup[] = clusters.map(c => {
-    const ex = linkGroups.find(g => g.clusterId === c.id);
-    return ex ?? { clusterId: c.id, clusterName: c.name, links: [] };
-  });
-  const orphanGroups = linkGroups.filter(g => !clusters.find(c => c.id === g.clusterId));
-  const orderedGroups = groupOrder.length > 0
-    ? [...allGroups].sort((a, b) => {
-        const ia = groupOrder.indexOf(a.clusterId);
-        const ib = groupOrder.indexOf(b.clusterId);
-        if (ia === -1) return 1; if (ib === -1) return -1;
-        return ia - ib;
-      })
-    : allGroups;
+  // 보이는 클러스터의 그룹 — 저장된 배열 순서 그대로, 링크가 없는 클러스터는 클러스터 목록 순서로 뒤에 붙인다.
+  const orderedGroups = useMemo<ClusterLinkGroup[]>(() => {
+    const byId = new Map(clusters.map(c => [c.id, c]));
+    const seen = new Set<string>();
+    const out: ClusterLinkGroup[] = [];
+    for (const g of serverGroups) {
+      const c = byId.get(g.clusterId);
+      if (!c || seen.has(g.clusterId)) continue;
+      seen.add(g.clusterId);
+      out.push({ ...g, clusterName: c.name });
+    }
+    for (const c of clusters) {
+      if (!seen.has(c.id)) out.push({ clusterId: c.id, clusterName: c.name, links: [] });
+    }
+    if (!pendingOrder) return out;
+    const idx = (id: string) => { const i = pendingOrder.indexOf(id); return i === -1 ? Number.MAX_SAFE_INTEGER : i; };
+    return [...out].sort((a, b) => idx(a.clusterId) - idx(b.clusterId));
+  }, [serverGroups, clusters, pendingOrder]);
 
+  // 고아(삭제된 클러스터) 판정은 클러스터 목록과 링크가 둘 다 로드된 뒤에만 한다(A-12). 서버는 고아 그룹을
+  // admin 에게만 내려주고, 구버전 서버가 다른 테넌트 그룹을 내려줘도 admin 이 아니면 보이지 않게 거른다.
+  const orphanGroups = useMemo<ClusterLinkGroup[]>(() => {
+    if (!clustersReady || !linksReady || !isAdmin) return [];
+    const ids = new Set(clusters.map(c => c.id));
+    return serverGroups.filter(g => !ids.has(g.clusterId));
+  }, [clustersReady, linksReady, isAdmin, clusters, serverGroups]);
 
   const [keyword, setKeyword] = useState('');
 
@@ -254,50 +334,100 @@ export function ClusterLinksPage() {
 
   const totalLinks = commonLinks.length + orderedGroups.reduce((acc, g) => acc + g.links.length, 0);
 
-  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
+  const refreshLinks = () => {
+    setConflict(null);
+    void linksQ.refetch();
+  };
+
+  // 저장 중에는 다음 저장을 막는다 — 직전 응답의 새 version 을 받기 전에 옛 version 으로 또 보내면
+  // 자기 자신과 409 충돌이 난다. isPending 은 렌더 주기라 같은 틱의 연속 호출을 못 막으므로 ref 로 판정.
+  const savingRef = useRef(false);
+
+  /** 문서 저장 — 그룹 배열 순서가 곧 저장 순서. 성공하면 true, 실패하면 토스트 후 false(화면은 서버 값 유지). */
+  const save = async (groups: ClusterLinkGroup[], common: ClusterLink[], okMessage?: string): Promise<boolean> => {
+    if (!linksData || !gate.canEdit || savingRef.current || updateClusterLinks.isPending) return false;
+    savingRef.current = true;
+    // 화면에 없는 그룹(고아 등)은 저장된 문서에서 그대로 뒤에 붙여 보낸다 — 요청에 빠졌다고 지워지지 않게.
+    const ids = new Set(groups.map(g => g.clusterId));
+    const rest = serverGroups.filter(g => !ids.has(g.clusterId));
+    try {
+      await updateClusterLinks.mutateAsync({
+        clusterGroups: [...groups, ...rest],
+        commonLinks: common,
+        version: linksData.version ?? undefined,
+      });
+      if (okMessage) toast.success(okMessage);
+      return true;
+    } catch (err) {
+      const status = (err as { response?: { status?: number } } | null)?.response?.status;
+      if (status === 409) {
+        const detail = formatApiError(err, '다른 곳에서 링크가 먼저 바뀌었습니다.');
+        setConflict(detail);
+        toast.show({
+          variant: 'error',
+          title: '저장 충돌 — 최신 링크를 다시 불러오세요',
+          description: detail,
+          action: { label: '새로고침', onClick: refreshLinks },
+          durationMs: 0,
+        });
+      } else {
+        toast.error(status === 403 ? '링크 저장 실패 — 권한이 없습니다' : '링크 저장 실패', formatApiError(err));
+      }
+      return false;
+    } finally {
+      savingRef.current = false;
+    }
+  };
+
+  /** 보이는 그룹 + 고아 그룹 중 cid 의 링크 목록만 바꾼 그룹 배열(보이는 순서 유지). */
+  const withGroupLinks = (cid: string, fn: (links: ClusterLink[]) => ClusterLink[]): ClusterLinkGroup[] =>
+    [...orderedGroups, ...orphanGroups].map(g => (g.clusterId === cid ? { ...g, links: fn(g.links) } : g));
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
+  );
   const handleDragEnd = (ev: DragEndEvent) => {
     const { active, over } = ev;
-    if (!over || active.id === over.id) return;
+    if (!over || active.id === over.id || !gate.canEdit || savingRef.current) return;
     const oi = orderedGroups.findIndex(g => g.clusterId === active.id);
     const ni = orderedGroups.findIndex(g => g.clusterId === over.id);
-    setGroupOrder(arrayMove(orderedGroups, oi, ni).map(g => g.clusterId));
+    if (oi < 0 || ni < 0) return;
+    const next = arrayMove(orderedGroups, oi, ni);
+    setPendingOrder(next.map(g => g.clusterId));
+    void save(next, commonLinks).finally(() => setPendingOrder(null));
   };
 
-  const upsert = (groups: ClusterLinkGroup[], g: ClusterLinkGroup) => {
-    const i = groups.findIndex(x => x.clusterId === g.clusterId);
-    if (i >= 0) { const n = [...groups]; n[i] = g; return n; }
-    return [...groups, g];
+  const handleAddLink = async (cid: string, link: ClusterLink) => {
+    const ok = await save(withGroupLinks(cid, links => [...links, link]), commonLinks, `"${link.label}" 링크를 추가했습니다`);
+    if (ok) { setAddingTo(null); setTableFormTarget(null); }
+    return ok;
   };
-
-  const handleAddLink = (cid: string, cname: string, link: ClusterLink) => {
-    const g = allGroups.find(x => x.clusterId === cid) ?? orphanGroups.find(x => x.clusterId === cid) ?? { clusterId: cid, clusterName: cname, links: [] };
-    const next = upsert(linkGroups, { ...g, links: [...g.links, link] });
-    setLinkGroups(next); persist(next, commonLinks);
-    setAddingTo(null); setTableFormTarget(null);
+  const handleEditLink = async (cid: string, updated: ClusterLink) => {
+    const ok = await save(withGroupLinks(cid, links => links.map(l => l.id === updated.id ? updated : l)), commonLinks, '링크를 저장했습니다');
+    if (ok) setEditingLink(null);
+    return ok;
   };
-  const handleEditLink = (cid: string, cname: string, updated: ClusterLink) => {
-    const g = allGroups.find(x => x.clusterId === cid) ?? orphanGroups.find(x => x.clusterId === cid) ?? { clusterId: cid, clusterName: cname, links: [] };
-    const next = upsert(linkGroups, { ...g, links: g.links.map(l => l.id === updated.id ? updated : l) });
-    setLinkGroups(next); persist(next, commonLinks); setEditingLink(null);
+  const handleAddCommon = async (link: ClusterLink) => {
+    const ok = await save(orderedGroups, [...commonLinks, link], `"${link.label}" 공통 링크를 추가했습니다`);
+    if (ok) { setAddingCommon(false); setTableFormTarget(null); }
+    return ok;
   };
-  const handleDeleteLink = (cid: string, lid: string) => {
-    const next = linkGroups.map(g => g.clusterId === cid ? { ...g, links: g.links.filter(l => l.id !== lid) } : g);
-    setLinkGroups(next); persist(next, commonLinks);
+  const handleEditCommon = async (updated: ClusterLink) => {
+    const ok = await save(orderedGroups, commonLinks.map(l => l.id === updated.id ? updated : l), '링크를 저장했습니다');
+    if (ok) setEditingCommon(null);
+    return ok;
   };
-  const handleAddCommon = (link: ClusterLink) => {
-    const next = [...commonLinks, link];
-    setCommonLinks(next); persist(linkGroups, next);
-    setAddingCommon(false); setTableFormTarget(null);
+  const confirmDelete = async () => {
+    if (!pendingDelete) return;
+    const { target, link } = pendingDelete;
+    const ok = target.scope === 'common'
+      ? await save(orderedGroups, commonLinks.filter(l => l.id !== link.id), `"${link.label}" 링크를 삭제했습니다`)
+      : await save(withGroupLinks(target.clusterId, links => links.filter(l => l.id !== link.id)), commonLinks, `"${link.label}" 링크를 삭제했습니다`);
+    if (ok) setPendingDelete(null);
   };
-  const handleEditCommon = (updated: ClusterLink) => {
-    const next = commonLinks.map(l => l.id === updated.id ? updated : l);
-    setCommonLinks(next); persist(linkGroups, next); setEditingCommon(null);
-  };
-  const handleDeleteCommon = (lid: string) => {
-    if (!confirm('이 링크를 삭제하시겠습니까?')) return;
-    const next = commonLinks.filter(l => l.id !== lid);
-    setCommonLinks(next); persist(linkGroups, next);
-  };
+  const askDeleteCommon  = (link: ClusterLink) => setPendingDelete({ target: { scope: 'common' }, link });
+  const askDeleteCluster = (clusterId: string, link: ClusterLink) => setPendingDelete({ target: { scope: 'cluster', clusterId }, link });
 
   // ── Derived style helpers ──────────────────────────────────────────────────
   const fsClass   = TS.fontSize[style.fontSize];
@@ -331,8 +461,10 @@ export function ClusterLinksPage() {
         <Globe className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
         <span className="font-semibold text-xs text-foreground truncate">공통 링크</span>
         <span className="ml-auto text-xs text-muted-foreground tabular-nums flex-shrink-0">({filteredCommonLinks.length})</span>
-        <button onClick={() => { setTableFormTarget('common'); setEditingCommon(null); setEditingLink(null); }}
-          className="ml-1 p-0.5 rounded text-muted-foreground opacity-60 hover:opacity-100 hover:text-foreground hover:bg-muted transition-colors flex-shrink-0" title="공통 링크 추가" aria-label="공통 링크 추가">
+        <button type="button" onClick={() => { setTableFormTarget('common'); setEditingCommon(null); setEditingLink(null); }}
+          disabled={!gate.canEdit}
+          className="ml-1 p-0.5 rounded-xl text-muted-foreground opacity-60 hover:opacity-100 hover:text-foreground hover:bg-muted transition-colors flex-shrink-0 disabled:opacity-30 disabled:cursor-not-allowed"
+          title={gate.withHint('공통 링크 추가')} aria-label={gate.ariaWithHint('공통 링크 추가')}>
           <Plus className="w-3 h-3" />
         </button>
         <ColResizeHandle colId="common" currentWidth={colW('common')} onResize={handleColResize} onResizeDone={handleColResizeDone} />
@@ -345,8 +477,10 @@ export function ClusterLinksPage() {
           <Server aria-hidden="true" className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
           <span className={`font-semibold text-xs truncate ${hdrText}`}>{g.clusterName}</span>
           <span className="ml-auto text-xs text-muted-foreground tabular-nums flex-shrink-0">({g.links.length})</span>
-          <button onClick={() => { setTableFormTarget(g.clusterId); setEditingLink(null); setEditingCommon(null); }}
-            className={`ml-1 p-0.5 rounded transition-colors flex-shrink-0 ${hdrText} opacity-60 hover:opacity-100 hover:bg-muted`} title="링크 추가" aria-label="링크 추가">
+          <button type="button" onClick={() => { setTableFormTarget(g.clusterId); setEditingLink(null); setEditingCommon(null); }}
+            disabled={!gate.canEdit}
+            className={`ml-1 p-0.5 rounded-xl transition-colors flex-shrink-0 ${hdrText} opacity-60 hover:opacity-100 hover:bg-muted disabled:opacity-30 disabled:cursor-not-allowed`}
+            title={gate.withHint('링크 추가')} aria-label={gate.ariaWithHint(`${g.clusterName} 링크 추가`)}>
             <Plus className="w-3 h-3" />
           </button>
           <ColResizeHandle colId={g.clusterId} currentWidth={colW(g.clusterId)} onResize={handleColResize} onResizeDone={handleColResizeDone} />
@@ -382,9 +516,9 @@ export function ClusterLinksPage() {
               editingCommon?.id === filteredCommonLinks[rowIdx].id ? (
                 <LinkForm initial={filteredCommonLinks[rowIdx]} onSave={handleEditCommon} onCancel={() => setEditingCommon(null)} />
               ) : (
-                <CompactLinkCell link={filteredCommonLinks[rowIdx]} fontClass={fontClass} fsClass={fsClass}
+                <CompactLinkCell link={filteredCommonLinks[rowIdx]} fontClass={fontClass} fsClass={fsClass} gate={gate}
                   onEdit={() => { setEditingCommon(filteredCommonLinks[rowIdx]); setTableFormTarget(null); }}
-                  onDelete={() => handleDeleteCommon(filteredCommonLinks[rowIdx].id)} />
+                  onDelete={() => askDeleteCommon(filteredCommonLinks[rowIdx])} />
               )
             ) : null}
           </div>,
@@ -400,12 +534,12 @@ export function ClusterLinksPage() {
               {link ? (
                 editingLink?.clusterId === g.clusterId && editingLink.link.id === link.id ? (
                   <LinkForm initial={link}
-                    onSave={updated => handleEditLink(g.clusterId, g.clusterName, updated)}
+                    onSave={updated => handleEditLink(g.clusterId, updated)}
                     onCancel={() => setEditingLink(null)} />
                 ) : (
-                  <CompactLinkCell link={link} fontClass={fontClass} fsClass={fsClass}
+                  <CompactLinkCell link={link} fontClass={fontClass} fsClass={fsClass} gate={gate}
                     onEdit={() => { setEditingLink({ clusterId: g.clusterId, link }); setTableFormTarget(null); }}
-                    onDelete={() => { if (confirm(`"${link.label}" 링크를 삭제하시겠습니까?`)) handleDeleteLink(g.clusterId, link.id); }} />
+                    onDelete={() => askDeleteCluster(g.clusterId, link)} />
                 )
               ) : null}
             </div>,
@@ -439,7 +573,7 @@ export function ClusterLinksPage() {
               const g = orderedGroups.find(x => x.clusterId === tableFormTarget);
               return g ? (
                 <LinkForm
-                  onSave={link => handleAddLink(g.clusterId, g.clusterName, link)}
+                  onSave={link => handleAddLink(g.clusterId, link)}
                   onCancel={() => setTableFormTarget(null)} />
               ) : null;
             })()}
@@ -485,29 +619,36 @@ export function ClusterLinksPage() {
       }
       actions={!isOrphan && (
         <>
-          <button onClick={() => { setAddingTo(g.clusterId); setEditingLink(null); }}
-            className="px-2 py-1 text-xs font-medium bg-primary/10 hover:bg-primary/15 text-primary border border-primary/20 rounded-md transition-colors flex items-center gap-1"
-            title="링크 추가">
+          <button type="button" onClick={() => { setAddingTo(g.clusterId); setEditingLink(null); }}
+            disabled={!gate.canEdit}
+            className="px-2 py-1 text-xs font-medium bg-primary/10 hover:bg-primary/15 text-primary border border-primary/20 rounded-xl transition-colors flex items-center gap-1 disabled:opacity-50 disabled:cursor-not-allowed"
+            title={gate.withHint('링크 추가')} aria-label={gate.ariaWithHint(`${g.clusterName} 링크 추가`)}>
             <Plus className="w-3 h-3" /> 추가
           </button>
-          <span {...dragHandle} className="cursor-grab active:cursor-grabbing p-0.5 rounded text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors" title="드래그하여 순서 변경">
-            <GripVertical className="w-3.5 h-3.5" />
-          </span>
+          {/* 순서 변경 손잡이 — 마우스 드래그 또는 포커스 후 Space → 화살표 → Space(KeyboardSensor). 순서는 저장된다. */}
+          <button type="button" {...dragHandle} disabled={!gate.canEdit || !!normalizedKeyword}
+            className="cursor-grab active:cursor-grabbing p-0.5 rounded-xl text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors disabled:cursor-not-allowed disabled:opacity-40"
+            title={normalizedKeyword && gate.canEdit ? '검색 중에는 순서를 바꿀 수 없습니다' : gate.withHint('드래그하거나 Space·화살표로 순서 변경')}
+            aria-label={gate.ariaWithHint(`${g.clusterName} 순서 변경`)}>
+            <GripVertical className="w-3.5 h-3.5" aria-hidden="true" />
+          </button>
         </>
       )}
       rootClassName="h-full flex flex-col"
       className="space-y-2 flex-1"
     >
       {addingTo === g.clusterId && (
-        <LinkForm onSave={link => handleAddLink(g.clusterId, g.clusterName, link)} onCancel={() => setAddingTo(null)} />
+        <LinkForm onSave={link => handleAddLink(g.clusterId, link)} onCancel={() => setAddingTo(null)} />
       )}
       {g.links.length === 0 && addingTo !== g.clusterId ? (
         <EmptyState
           compact
           icon={Link2}
           title="등록된 링크가 없습니다"
-          description={isOrphan ? '클러스터가 삭제되어 링크 추가가 비활성화되었습니다.' : undefined}
-          action={isOrphan ? undefined : {
+          description={isOrphan
+            ? '클러스터가 삭제되어 링크 추가가 비활성화되었습니다.'
+            : gate.canEdit ? undefined : `${editHint}.`}
+          action={isOrphan || !gate.canEdit ? undefined : {
             label: '+ 첫 번째 링크 추가',
             variant: 'secondary',
             onClick: () => { setAddingTo(g.clusterId); setEditingLink(null); },
@@ -519,12 +660,12 @@ export function ClusterLinksPage() {
             <div key={link.id}>
               {editingLink?.clusterId === g.clusterId && editingLink.link.id === link.id ? (
                 <LinkForm initial={link}
-                  onSave={updated => handleEditLink(g.clusterId, g.clusterName, updated)}
+                  onSave={updated => handleEditLink(g.clusterId, updated)}
                   onCancel={() => setEditingLink(null)} />
               ) : (
-                <LinkCard link={link}
+                <LinkCard link={link} gate={gate}
                   onEdit={() => { setEditingLink({ clusterId: g.clusterId, link }); setAddingTo(null); }}
-                  onDelete={() => { if (confirm(`"${link.label}" 링크를 삭제하시겠습니까?`)) handleDeleteLink(g.clusterId, link.id); }} />
+                  onDelete={() => askDeleteCluster(g.clusterId, link)} />
               )}
             </div>
           ))}
@@ -533,7 +674,7 @@ export function ClusterLinksPage() {
     </MacCard>
   );
 
-  const noClusters = clusters.length === 0 && orphanGroups.length === 0;
+  const noClusters = clustersReady && clusters.length === 0 && orphanGroups.length === 0;
 
   return (
     <div className="app-min-h-screen bg-background">
@@ -563,8 +704,26 @@ export function ClusterLinksPage() {
           />
         </div>
 
-        {/* ── Empty: no clusters ────────────────────────────────────────── */}
-        {noClusters ? (
+        {/* 저장 충돌(409) — 새로고침 전까지 편집이 잠긴다 */}
+        {conflict && (
+          <div role="alert" className="flex items-center gap-3 rounded-md border border-status-warning/40 bg-status-warning/10 px-3 py-2 text-sm">
+            <AlertTriangle className="w-4 h-4 text-status-warning flex-shrink-0" aria-hidden="true" />
+            <p className="flex-1 min-w-0 text-foreground">{conflict}</p>
+            <button type="button" onClick={refreshLinks}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium bg-secondary hover:bg-muted border border-border rounded-xl transition-colors flex-shrink-0">
+              <RefreshCw className={`w-3.5 h-3.5 ${linksQ.isFetching ? 'animate-spin' : ''}`} aria-hidden="true" /> 새로고침
+            </button>
+          </div>
+        )}
+
+        {/* 조회 순서: 로딩 → 실패(ErrorState) → 빈 상태(A-12). 링크·클러스터 둘 다 와야 그룹·고아를 판정한다. */}
+        {linksQ.isLoading || (clustersQ.isLoading && !clustersQ.data) ? (
+          <LoadingState />
+        ) : linksQ.isError ? (
+          <ErrorState error={linksQ.error} title="링크를 불러오지 못했습니다" onRetry={() => { void linksQ.refetch(); }} />
+        ) : clustersQ.isError ? (
+          <ErrorState error={clustersQ.error} title="클러스터 목록을 불러오지 못했습니다" onRetry={() => { void clustersQ.refetch(); }} />
+        ) : noClusters ? (
           <EmptyState
             icon={Link2}
             title="등록된 클러스터가 없습니다"
@@ -582,8 +741,10 @@ export function ClusterLinksPage() {
               icon={Globe}
               titleExtra={<span className="text-xs text-muted-foreground tabular-nums">{filteredCommonLinks.length}</span>}
               actions={
-                <button onClick={() => { setAddingCommon(true); setEditingCommon(null); }}
-                  className="px-2 py-1 text-xs font-medium bg-secondary hover:bg-muted text-foreground border border-border rounded-xl transition-colors flex items-center gap-1">
+                <button type="button" onClick={() => { setAddingCommon(true); setEditingCommon(null); }}
+                  disabled={!gate.canEdit}
+                  title={gate.withHint('공통 링크 추가')} aria-label={gate.ariaWithHint('공통 링크 추가')}
+                  className="px-2 py-1 text-xs font-medium bg-secondary hover:bg-muted text-foreground border border-border rounded-xl transition-colors flex items-center gap-1 disabled:opacity-50 disabled:cursor-not-allowed">
                   <Plus className="w-3 h-3" /> 추가
                 </button>
               }
@@ -595,8 +756,10 @@ export function ClusterLinksPage() {
                   compact
                   icon={Globe}
                   title="공통 링크가 없습니다"
-                  description="모든 클러스터에서 공통으로 사용하는 링크를 등록하세요."
-                  action={{ label: '+ 첫 번째 공통 링크 추가', variant: 'secondary', onClick: () => setAddingCommon(true) }}
+                  description={gate.canEdit
+                    ? '모든 클러스터에서 공통으로 사용하는 링크를 등록하세요.'
+                    : `모든 클러스터에서 공통으로 쓰는 링크가 여기에 표시됩니다. ${editHint}.`}
+                  action={gate.canEdit ? { label: '+ 첫 번째 공통 링크 추가', variant: 'secondary', onClick: () => setAddingCommon(true) } : undefined}
                 />
               ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-2">
@@ -605,9 +768,9 @@ export function ClusterLinksPage() {
                       {editingCommon?.id === link.id ? (
                         <LinkForm initial={link} onSave={handleEditCommon} onCancel={() => setEditingCommon(null)} />
                       ) : (
-                        <LinkCard link={link}
+                        <LinkCard link={link} gate={gate}
                           onEdit={() => { setEditingCommon(link); setAddingCommon(false); }}
-                          onDelete={() => handleDeleteCommon(link.id)} />
+                          onDelete={() => askDeleteCommon(link)} />
                       )}
                     </div>
                   ))}
@@ -623,7 +786,7 @@ export function ClusterLinksPage() {
               >
                 <div className={layout === 'horizontal' ? 'grid grid-cols-1 md:grid-cols-2 gap-3' : 'flex flex-col gap-3'}>
                   {filteredOrderedGroups.map(g => (
-                    <SortableItem key={g.clusterId} id={g.clusterId}>
+                    <SortableItem key={g.clusterId} id={g.clusterId} disabled={!gate.canEdit || !!normalizedKeyword || updateClusterLinks.isPending}>
                       {h => renderGroupCard(g, false, h)}
                     </SortableItem>
                   ))}
@@ -638,6 +801,19 @@ export function ClusterLinksPage() {
           </>
         )}
       </PageShell>
+
+      <ConfirmDialog
+        open={!!pendingDelete}
+        danger
+        title="링크 삭제"
+        description={pendingDelete ? `"${pendingDelete.link.label}" 링크를 삭제합니다. 모든 사용자의 화면에서 사라집니다.` : undefined}
+        confirmLabel="삭제"
+        busy={updateClusterLinks.isPending}
+        onConfirm={() => { void confirmDelete(); }}
+        onCancel={() => setPendingDelete(null)}
+      >
+        {pendingDelete && <p className="text-xs font-mono text-muted-foreground break-all">{pendingDelete.link.url}</p>}
+      </ConfirmDialog>
     </div>
   );
 }

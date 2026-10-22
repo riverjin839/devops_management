@@ -14,7 +14,7 @@ import hashlib
 import json
 import logging
 import re
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Any, Optional
 from uuid import UUID
 
@@ -168,6 +168,15 @@ def reconcile(doc: ServiceArchDoc, new_graph: dict[str, Any], *, prune: bool = F
 
 
 # ── doc lifecycle ────────────────────────────────────────────────────────────
+def get_doc(db: Session, service: LakeService) -> Optional[ServiceArchDoc]:
+    """문서 조회만 — 없으면 None (조회 경로는 행을 만들지 않는다, A-3)."""
+    return (
+        db.query(ServiceArchDoc)
+        .filter(ServiceArchDoc.lake_service_id == service.id)
+        .first()
+    )
+
+
 def get_or_create_doc(db: Session, service: LakeService) -> ServiceArchDoc:
     """문서 조회, 없으면 빈 shell 생성 (K8s 호출 없음)."""
     doc = (
@@ -414,9 +423,15 @@ def parse_llm_response(text: str) -> dict[str, Any]:
     return out
 
 
-def _filter_known_node_ids(content: dict[str, Any], doc: ServiceArchDoc) -> dict[str, Any]:
-    known = {n["id"] for n in (doc.auto_graph or {}).get("nodes") or []}
+def doc_node_ids(doc: ServiceArchDoc) -> set[str]:
+    """문서가 아는 노드 id — auto 그래프 노드(stale 포함) + 수동 노드."""
+    known = {n["id"] for n in (doc.auto_graph or {}).get("nodes") or [] if isinstance(n, dict) and n.get("id")}
     known.update(mn.node_id for mn in doc.manual_nodes or [])
+    return known
+
+
+def _filter_known_node_ids(content: dict[str, Any], doc: ServiceArchDoc) -> dict[str, Any]:
+    known = doc_node_ids(doc)
     content["components"] = [c for c in content.get("components") or [] if c["node_id"] in known]
     content["flow_steps"] = [
         s for s in content.get("flow_steps") or []
@@ -425,44 +440,178 @@ def _filter_known_node_ids(content: dict[str, Any], doc: ServiceArchDoc) -> dict
     return content
 
 
+# ── LLM 상태 ────────────────────────────────────────────────────────────────
+# llm_status 값:
+#   none     — 아직 생성 시도 없음
+#   pending  — 생성 중 (LLM_PENDING_TIMEOUT 을 넘기면 다음 조회에서 error 로 복구)
+#   ok       — 생성 완료
+#   offline  — LLM 서버에 닿지 않음(연결 실패·활성 프로필 없음)
+#   error    — 호출은 했지만 실패(시간 초과·HTTP 오류·모델/인증·라우팅 오류·작업 중단) — 사유는 llm_error
+#   failed   — 노드가 없어 생성할 수 없음(= failed_no_nodes, 먼저 동기화 필요). 이름은 하위 호환으로 유지
+LLM_STATUS_FAILED_NO_NODES = "failed"
+LLM_PENDING_TIMEOUT = timedelta(minutes=10)
+LLM_NO_NODES_MESSAGE = "다이어그램 노드가 없어 AI 분석을 만들 수 없습니다 — 먼저 동기화하세요."
+LLM_PENDING_TIMEOUT_MESSAGE = (
+    "AI 분석이 10분 넘게 끝나지 않아 중단된 것으로 처리했습니다 (워커 재시작·작업 유실 추정). 다시 시도하세요."
+)
+_LLM_AUDIT_REASON = "llm_regenerate"
+# 게이트웨이가 "닿지 않음"으로 보고하는 코드 — 나머지 실패는 error 로 구분한다.
+_OFFLINE_ERROR_CODES = {"connect_error", "no_enabled_profile"}
+
+
+def describe_llm_error(error: Optional[str], *, profile: str = "", model: str = "") -> str:
+    """게이트웨이 오류 코드 → 운영자가 읽을 사유 문자열 (원문 코드도 괄호로 남긴다)."""
+    code = (error or "").strip() or "unknown"
+    where = f" (프로필 {profile})" if profile else ""
+    if code == "connect_error":
+        msg = f"LLM 서버에 연결할 수 없습니다{where}"
+    elif code == "no_enabled_profile":
+        msg = "사용 가능한 LLM 프로필이 없습니다 — Settings → AI/LLM 에서 프로필·용도 라우팅(arch_doc)을 확인하세요"
+    elif code.startswith("timeout"):
+        msg = f"LLM 응답 시간 초과{where}"
+    elif code.startswith("model_not_found"):
+        msg = f"모델 '{model or '?'}' 을 찾을 수 없습니다{where}"
+    elif code.startswith("auth_failed"):
+        msg = f"LLM 인증 실패{where} — API 키를 확인하세요"
+    elif "429" in code or "rate" in code.lower():
+        msg = f"LLM 호출 한도 초과(429){where}"
+    else:
+        msg = f"LLM 호출 실패{where}"
+    return f"{msg} [{code[:200]}]"
+
+
+def _llm_status_for_error(error: Optional[str]) -> str:
+    return "offline" if (error or "") in _OFFLINE_ERROR_CODES else "error"
+
+
+def record_llm_failure(db: Session, doc: ServiceArchDoc, *, status: str, message: str,
+                        code: Optional[str] = None, profile: str = "", model: str = "") -> None:
+    doc.llm_status = status
+    _audit(db, doc, action="update", scope="sync", status="failed", reason=_LLM_AUDIT_REASON,
+           after_data={"llm_status": status, "error": message, "code": code,
+                       "profile": profile or None, "model": model or None})
+
+
+def recover_stale_pending(db: Session, doc: Optional[ServiceArchDoc]) -> bool:
+    """pending 이 LLM_PENDING_TIMEOUT 을 넘기면 error 로 바꾸고 사유를 남긴다 (조회 시 호출).
+
+    기준 시각은 updated_at — pending 진입 시 갱신된다. 다른 편집이 updated_at 을 밀면 복구가 늦어질 뿐
+    잘못 error 가 되지는 않는다. 반환: 복구했으면 True.
+    """
+    if doc is None or doc.llm_status != "pending" or doc.updated_at is None:
+        return False
+    if datetime.utcnow() - doc.updated_at < LLM_PENDING_TIMEOUT:
+        return False
+    try:
+        record_llm_failure(db, doc, status="error", message=LLM_PENDING_TIMEOUT_MESSAGE, code="pending_timeout")
+        db.commit()
+        db.refresh(doc)
+        return True
+    except Exception as e:  # noqa: BLE001 — 복구 실패가 조회를 막지 않게
+        db.rollback()
+        logger.warning("arch doc pending 복구 실패 doc=%s: %s", doc.id, e)
+        return False
+
+
+def is_pending_stale(doc_status: Optional[str], updated_at: Optional[datetime]) -> bool:
+    """목록처럼 쓰기 없이 표시만 할 때 — pending 이 시간 초과인지."""
+    return (doc_status == "pending" and updated_at is not None
+            and datetime.utcnow() - updated_at >= LLM_PENDING_TIMEOUT)
+
+
+def llm_error_for(db: Session, doc: Optional[ServiceArchDoc]) -> Optional[str]:
+    """현재 llm_status 의 실패 사유. 성공·미시도·진행 중이면 None."""
+    if doc is None:
+        return None
+    status = doc.llm_status
+    if status == LLM_STATUS_FAILED_NO_NODES:
+        return LLM_NO_NODES_MESSAGE
+    if status not in ("offline", "error"):
+        return None
+    try:
+        row = (
+            db.query(TopologyAuditLog)
+            .filter(TopologyAuditLog.entity_type == "arch_doc",
+                    TopologyAuditLog.entity_id == str(doc.lake_service_id),
+                    TopologyAuditLog.reason == _LLM_AUDIT_REASON,
+                    TopologyAuditLog.status == "failed")
+            .order_by(TopologyAuditLog.created_at.desc())
+            .first()
+        )
+        msg = (row.after_data or {}).get("error") if row is not None else None
+    except Exception as e:  # noqa: BLE001
+        db.rollback()
+        logger.debug("arch doc llm_error 조회 실패: %s", e)
+        msg = None
+    if msg:
+        return str(msg)
+    # 사유 기록 이전(구버전)에 남은 상태
+    return ("LLM 서버에 연결할 수 없습니다 (사유 기록 없음)" if status == "offline"
+            else "LLM 호출 실패 (사유 기록 없음)")
+
+
+def _owner_llm_tenant(db: Session, cluster_id) -> Optional[dict]:
+    """클러스터 소유 테넌트의 LLM 라우팅 컨텍스트 (정책 ⑨, D-114 와 같은 방식). 실패하면 None(전역 설정)."""
+    try:
+        from app.services.tenant_concurrency import owner_tenant
+        from app.services.tenant_scope import llm_tenant_dict
+        return llm_tenant_dict(owner_tenant(db, cluster_id))
+    except Exception:  # noqa: BLE001
+        logger.warning("arch doc: 소유 테넌트 조회 실패 (cluster=%s) — 전역 LLM 설정 사용", cluster_id, exc_info=True)
+        try:
+            db.rollback()
+        except Exception:  # noqa: BLE001
+            logger.debug("arch doc: rollback 실패", exc_info=True)
+        return None
+
+
 async def generate_llm_content(
     db: Session, doc: ServiceArchDoc, service: LakeService,
 ) -> ServiceArchDoc:
-    """LLM 요약/역할/플로우 생성. never raises — 실패는 llm_status 로만 표시.
+    """LLM 요약/역할/플로우 생성. never raises — 실패는 llm_status + llm_error(감사 행)로만 표시.
 
-    Ollama 오프라인이면 기존 llm_content 를 보존하고 status 만 offline 으로 둔다.
+    실패해도 기존 llm_content 는 보존한다. LLM 호출은 클러스터 소유 테넌트의 라우팅 컨텍스트 안에서 한다
+    (수동 재생성·Celery 동일).
     """
-    from app.services.agent_service import agent_service
+    from app.services.llm.service import llm_service, llm_tenant_context
 
     if not (doc.auto_graph or {}).get("nodes"):
-        doc.llm_status = "failed"
+        doc.llm_status = LLM_STATUS_FAILED_NO_NODES
         db.commit()
         db.refresh(doc)
         return doc
 
+    tenant = _owner_llm_tenant(db, doc.cluster_id)
     doc.llm_status = "pending"
     db.commit()
 
     try:
-        resp = await agent_service._call_llm(build_llm_prompt(doc, service), purpose="arch_doc")
-    except Exception as e:  # noqa: BLE001  (방어 — _call_llm 은 원래 raise 하지 않음)
+        with llm_tenant_context(tenant):
+            result = await llm_service.chat_for_purpose("arch_doc", build_llm_prompt(doc, service))
+        status, text = result.status, result.text or ""
+        error, profile, model = result.error, result.profile or "", result.model or ""
+    except Exception as e:  # noqa: BLE001  (방어 — 게이트웨이는 원래 raise 하지 않음)
         logger.exception("arch doc LLM 호출 실패: %s", e)
-        resp = {"status": "offline", "answer": "", "model": ""}
+        status, text, error, profile, model = "error", "", f"exception: {str(e)[:180]}", "", ""
 
-    if resp.get("status") != "ok":
-        doc.llm_status = "offline"
+    if status != "ok":
+        record_llm_failure(
+            db, doc, status=_llm_status_for_error(error),
+            message=describe_llm_error(error, profile=profile, model=model),
+            code=error, profile=profile, model=model,
+        )
         db.commit()
         db.refresh(doc)
         return doc
 
-    content = _filter_known_node_ids(parse_llm_response(resp.get("answer") or ""), doc)
-    content["model"] = resp.get("model") or ""
+    content = _filter_known_node_ids(parse_llm_response(text), doc)
+    content["model"] = model
     content["generated_at"] = datetime.utcnow().isoformat()
     doc.llm_content = content
     doc.llm_status = "ok"
     _audit(db, doc, action="update", scope="sync", status="success",
-           reason="llm_regenerate", after_data={"model": content["model"],
-                                                "raw_fallback": content.get("raw_fallback", False)})
+           reason=_LLM_AUDIT_REASON, after_data={"model": content["model"],
+                                                 "raw_fallback": content.get("raw_fallback", False)})
     db.commit()
     db.refresh(doc)
     return doc
@@ -502,7 +651,11 @@ def set_schedule(
 
 # ── list ─────────────────────────────────────────────────────────────────────
 def list_doc_summaries(db: Session, cluster_id: Optional[UUID] = None) -> list[dict]:
-    """모듈별 문서 요약 — LakeService 목록 기준 (문서 미생성 모듈 포함)."""
+    """모듈별 문서 요약 — LakeService 목록 기준 (문서 미생성 모듈 포함).
+
+    권한 판정은 라우터가 한다(cluster_id 없는 전체 목록은 admin 전용). 시간 초과 pending 은
+    표시만 error 로 바꾼다(기록은 문서 조회 시 :func:`recover_stale_pending`).
+    """
     q = db.query(LakeService).filter(LakeService.enabled.is_(True))
     if cluster_id:
         q = q.filter(LakeService.cluster_id == cluster_id)
@@ -527,7 +680,10 @@ def list_doc_summaries(db: Session, cluster_id: Optional[UUID] = None) -> list[d
             "has_doc": d is not None,
             "last_synced_at": d.last_synced_at.isoformat() if d and d.last_synced_at else None,
             "last_sync_status": d.last_sync_status if d else "pending",
-            "llm_status": d.llm_status if d else "none",
+            "llm_status": (
+                "error" if d and is_pending_stale(d.llm_status, d.updated_at)
+                else (d.llm_status if d else "none")
+            ),
             "auto_sync_enabled": d.auto_sync_enabled if d else True,
             "drift_counts": (
                 {k: len(v) for k, v in drift.items() if isinstance(v, list)} if drift else None

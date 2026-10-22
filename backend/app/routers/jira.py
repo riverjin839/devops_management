@@ -16,6 +16,7 @@ from html.parser import HTMLParser
 from io import BytesIO
 from pathlib import Path
 from typing import Any, Optional
+from uuid import UUID
 
 import openpyxl
 import xlrd
@@ -26,12 +27,14 @@ from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.models.app_setting import AppSetting
+from app.models.tenant import Tenant
 from app.models.sprint import Sprint
 from app.models.user import User
 from app.models.user_jira_credential import UserJiraCredential
 from app.models.work_item import WorkItem
 from app.schemas.work_item import WorkItemResponse
-from app.auth.deps import get_current_user, require_admin, require_operator
+from app.auth.deps import get_current_user, get_tenant_scope, require_admin, require_operator
+from app.services.tenant_scope import TenantScope, work_item_visible
 from app.services import secret_box
 from app.services import audit_logger
 from app.services.jira_service import (
@@ -70,6 +73,9 @@ from app.schemas.jira import (
     JiraExcelImportResult,
     JiraExcelPasteRequest,
     JiraExcelSaveRequest,
+    JiraExcelFieldChange,
+    JiraExcelSaveItem,
+    JiraExcelSaveResult,
     JiraPushRequest,
     JiraPushResult,
     JiraCreateRequest,
@@ -2430,13 +2436,54 @@ async def weekly_report_publish_stream(
 
 
 # ── 가져오기 (단방향, upsert by jira_issue_id) ──────────────────────────────────
+# ── 가져오기 공통: 테넌트 공유 범위 ─────────────────────────────────────────────
+_TENANT_CONFLICT_MSG = "다른 공유 범위의 항목과 키가 겹칩니다"
+
+
+def _resolve_import_tenant(
+    db: Session, scope: TenantScope, requested: Optional[UUID], *, require_choice: bool,
+) -> Optional[UUID]:
+    """가져오기로 **새로 만드는** 업무의 tenant_id.
+
+    - 지정값이 있으면 ``ensure_assignable``(속하지 않은 테넌트면 403) 후 그대로 쓴다.
+    - 비우면 소속 테넌트가 1개일 때 그 테넌트, 0개면 전체 공유(None).
+    - 여러 개인데 비웠으면 ``require_choice`` 일 때 422("공유 범위를 선택하세요"), 아니면 전체 공유.
+    """
+    if requested is not None:
+        scope.ensure_assignable(requested)
+        if db.query(Tenant.id).filter(Tenant.id == requested).first() is None:
+            raise HTTPException(status_code=422, detail="존재하지 않는 테넌트입니다.")
+        return requested
+    ids = scope.tenant_ids
+    if len(ids) == 1:
+        return next(iter(ids))
+    if len(ids) > 1 and require_choice:
+        raise HTTPException(status_code=422, detail="공유 범위를 선택하세요")
+    return None
+
+
+def _pick_visible(scope: TenantScope, db: Session, candidates: list[WorkItem]) -> tuple[Optional[WorkItem], bool]:
+    """같은 키를 가진 기존 업무들 중 호출자에게 보이는 첫 항목.
+
+    반환 (항목, 충돌) — 후보가 있는데 하나도 안 보이면 (None, True). 이때 호출부는 갱신도
+    새로 만들기도 하지 않는다(같은 키 중복 생성은 라이브 가져오기의 키 매칭을 꼬이게 한다)."""
+    for c in candidates:
+        if work_item_visible(scope, db, c):
+            return c, False
+    return None, bool(candidates)
+
+
 @router.post("/import", response_model=JiraImportResult)
 async def import_issues(
     payload: JiraImportRequest,
     db: Session = Depends(get_db),
     actor: User = Depends(require_operator),
+    scope: TenantScope = Depends(get_tenant_scope),
 ):
     cfg = _get_config(db)
+    # 새 업무의 공유 범위 — 라이브 가져오기 화면은 아직 범위를 보내지 않으므로 여러 테넌트
+    # 소속이어도 422 대신 전체 공유로 둔다(기존 동작). 지정하면 ensure_assignable 로 검증한다.
+    new_tenant_id = _resolve_import_tenant(db, scope, payload.tenant_id, require_choice=False)
     base_url = cfg.get("base_url", "")
     if not base_url or not cfg.get("enabled", False):
         return JiraImportResult(status="error", detail="Jira 연동이 비활성화되었거나 URL 미설정 (설정에서 활성화하세요).")
@@ -2518,17 +2565,25 @@ async def import_issues(
             if not jid:
                 skipped += 1
                 continue
-            existing = db.query(WorkItem).filter(WorkItem.jira_issue_id == jid).first()
-            if existing is None and fields.get("jira_issue_key"):
+            # 다른 공유 범위(테넌트·비공개 프로젝트)의 항목은 덮지도, 같은 키로 새로 만들지도 않는다.
+            existing, conflict = _pick_visible(
+                scope, db, db.query(WorkItem).filter(WorkItem.jira_issue_id == jid).all(),
+            )
+            if existing is None and not conflict and fields.get("jira_issue_key"):
                 # id 가 없던(Excel 로 들어왔거나 잘못 저장된) 기존 행은 **키(DL-#) 기준**으로
                 # 찾아 덮어쓴다 — 중복 생성 대신 정정이 되게 한다.
-                existing = (
+                existing, conflict = _pick_visible(
+                    scope, db,
                     db.query(WorkItem)
                     .filter(WorkItem.jira_issue_key == fields["jira_issue_key"])
-                    .first()
+                    .order_by(WorkItem.created_at)
+                    .all(),
                 )
                 if existing is not None:
                     existing.jira_issue_id = jid
+            if conflict:
+                errors.append(f"{fields.get('jira_issue_key') or issue.get('key', '?')}: {_TENANT_CONFLICT_MSG}")
+                continue
             changes = _diff_existing(existing, fields) if existing else []
             if not existing:
                 action = "create"
@@ -2604,6 +2659,7 @@ async def import_issues(
                     jira_synced_at=now,
                     jira_watchers=[actor.username],
                     created_by=actor.username,
+                    tenant_id=new_tenant_id,
                 )
                 db.add(item)
                 created += 1
@@ -2620,7 +2676,10 @@ async def import_issues(
         audit_logger.record(
             db, action="work_item.jira_import", actor=actor,
             target_type="work_item", target_id=None,
-            details={"scope": payload.scope, "created": created, "updated": updated, "skipped": skipped},
+            details={
+                "scope": payload.scope, "created": created, "updated": updated, "skipped": skipped,
+                "tenant_id": str(new_tenant_id) if new_tenant_id else None,
+            },
         )
 
     return JiraImportResult(
@@ -2639,6 +2698,13 @@ async def import_issues(
 
 # ── Jira 에서 추출한 Excel(.xlsx/.xls) / 복사·붙여넣기 가져오기 (미리보기 전용, 저장 없음) ──
 _EXCEL_MAX_ROWS = 2000  # 과도한 업로드로부터의 안전장치
+_EXCEL_FILE_MAX_BYTES = 10 * 1024 * 1024  # 업로드 파일 상한 10MB
+_PASTE_MAX_BYTES = 2 * 1024 * 1024  # 붙여넣기 텍스트 상한 2MB
+_EXCEL_SAVE_ITEMS_MAX = 200  # 저장 응답의 행별 상세 상한(라이브 가져오기와 동일)
+_EXCEL_KEY_RE = re.compile(r"^[A-Z][A-Z0-9_]+-\d+$")
+_EXCEL_KEY_MAX = 50       # work_items.jira_issue_key String(50)
+_EXCEL_STATUS_MAX = 100   # work_items.jira_status String(100)
+_EXCEL_ASSIGNEE_MAX = 100  # work_items.primary_assignee String(100)
 _EXCEL_HEADER_SCAN_ROWS = 5  # 헤더가 1행이 아닐 수 있어(제목행 등) 최대 이 행수까지 탐색
 
 
@@ -2706,12 +2772,24 @@ def _extract_jira_rows(tables: list[list[tuple]], db: Session) -> JiraExcelImpor
 
     out_rows: list[JiraExcelRow] = []
     matched = 0
+    truncated = False
+    seen_keys: set[str] = set()
+    duplicates: list[str] = []
     for r in data_rows:
         if r is None or all(v is None or v == "" for v in r):
             continue
         key = cell(r, "key")
         if not key:
             continue
+        if len(out_rows) >= _EXCEL_MAX_ROWS:
+            # 상한을 넘는 유효 행이 더 있다 — 조용히 자르지 않고 truncated 로 알린다.
+            truncated = True
+            break
+        if key in seen_keys:
+            if key not in duplicates:
+                duplicates.append(key)
+        else:
+            seen_keys.add(key)
         assignee_raw = cell(r, "assignee")
         assignee_name, is_matched = _match_excel_assignee(assignee_raw, roster_by_lower)
         if is_matched:
@@ -2731,14 +2809,15 @@ def _extract_jira_rows(tables: list[list[tuple]], db: Session) -> JiraExcelImpor
             environment=_strip_inline_html(cell(r, "environment")),
             description=_strip_inline_html(cell(r, "description")),
         ))
-        if len(out_rows) >= _EXCEL_MAX_ROWS:
-            break
 
-    return JiraExcelImportResult(status="ok", total=len(out_rows), matched=matched, rows=out_rows)
+    return JiraExcelImportResult(
+        status="ok", total=len(out_rows), matched=matched, rows=out_rows,
+        truncated=truncated, duplicates=duplicates,
+    )
 
 
 @router.post("/import/excel", response_model=JiraExcelImportResult)
-async def import_excel(
+def import_excel(
     file: UploadFile = File(...),
     db: Session = Depends(get_db),
     _: User = Depends(get_current_user),
@@ -2747,12 +2826,20 @@ async def import_excel(
 
     WorkItem 으로 저장하지 않는 순수 미리보기 기능 — 담당자 셀("이름 회사")에서
     이름을 추출해 등록된 담당자(Settings ▸ 담당자) 레지스트리와 매칭한다.
+
+    동기 핸들러(`def`)라 스레드풀에서 돈다 — openpyxl/xlrd 파싱이 이벤트 루프(SSE 하트비트 등)를
+    막지 않는다. 파일은 상한+1 바이트까지만 읽어 10MB 를 넘으면 413 으로 거절한다.
     """
     fname = (file.filename or "").lower()
     if not fname.endswith((".xlsx", ".xlsm", ".xls")):
         return JiraExcelImportResult(status="error", detail=".xlsx/.xls 파일만 업로드할 수 있습니다.")
 
-    raw = await file.read()
+    raw = file.file.read(_EXCEL_FILE_MAX_BYTES + 1)
+    if len(raw) > _EXCEL_FILE_MAX_BYTES:
+        raise HTTPException(
+            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            detail="파일이 너무 큽니다 — 최대 10MB 까지 올릴 수 있습니다. 필요한 열·행만 남겨 다시 내보내세요.",
+        )
     try:
         if fname.endswith(".xls"):
             if _looks_like_html(raw):
@@ -2773,14 +2860,20 @@ async def import_excel(
 
 
 @router.post("/import/paste", response_model=JiraExcelImportResult)
-async def import_paste(
+def import_paste(
     payload: JiraExcelPasteRequest,
     db: Session = Depends(get_db),
     _: User = Depends(get_current_user),
 ):
     """엑셀/Jira 표를 복사해 그대로 붙여넣은 텍스트를 파싱한다(파일 업로드 없이).
     브라우저에서 표를 드래그로 복사하면 클립보드에 탭(TSV) 구분 텍스트가 담기는 것을
-    이용 — 파일 업로드(import_excel)와 동일한 헤더 탐색/매칭 로직을 공유한다."""
+    이용 — 파일 업로드(import_excel)와 동일한 헤더 탐색/매칭 로직을 공유한다.
+    붙여넣기는 2MB(UTF-8) 를 넘으면 413 으로 거절한다."""
+    if len(payload.text.encode("utf-8")) > _PASTE_MAX_BYTES:
+        raise HTTPException(
+            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            detail="붙여넣은 내용이 너무 큽니다 — 최대 2MB 까지 붙여넣을 수 있습니다. 나눠서 붙여넣거나 파일로 올리세요.",
+        )
     text = payload.text.replace("\r\n", "\n").replace("\r", "\n")
     lines = [ln for ln in text.split("\n") if ln.strip() != ""]
     if not lines:
@@ -2789,116 +2882,289 @@ async def import_paste(
     return _extract_jira_rows([rows], db)
 
 
-@router.post("/import/excel/save", response_model=JiraImportResult)
-async def import_excel_save(
+# 엑셀 저장이 기존 업무에서 바꿀 수 있는 필드(표시 순서 = 변경 diff 순서).
+_EXCEL_SAVE_FIELDS: tuple[tuple[str, str], ...] = (
+    ("title", "제목"),
+    ("content", "내용"),
+    ("kanban_status", "진행 상태"),
+    ("jira_status", "Jira 상태"),
+    ("due_date", "마감일"),
+    ("closed_at", "완료일"),
+    ("primary_assignee", "담당자"),
+    ("jira_url", "Jira 링크"),
+)
+_EXCEL_SAVE_LABELS = dict(_EXCEL_SAVE_FIELDS)
+_EXCEL_DUP_MSG = "요청 안에서 중복된 키입니다 — 첫 행만 반영합니다."
+
+
+def _excel_str(v) -> str:
+    return "" if v is None else str(v)
+
+
+def _excel_row_error(key: str, row: JiraExcelRow) -> Optional[str]:
+    """DB 에 쓰기 전에 거를 수 있는 행 오류 — 길이 초과는 flush 에서 터지기 전에 막는다."""
+    if len(key) > _EXCEL_KEY_MAX:
+        return f"이슈 키가 {_EXCEL_KEY_MAX}자를 넘습니다."
+    if not _EXCEL_KEY_RE.match(key):
+        return "이슈 키 형식이 아닙니다 (예: PROJ-123)."
+    if len((row.status or "").strip()) > _EXCEL_STATUS_MAX:
+        return f"Jira 상태가 {_EXCEL_STATUS_MAX}자를 넘습니다."
+    return None
+
+
+def _excel_row_values(row: JiraExcelRow) -> dict:
+    """엑셀 행 → 정규화한 값. 빈 셀은 빈 문자열/None 으로 남겨 '기존 값 유지' 를 판단하게 한다."""
+    status_name = (row.status or "").strip()
+    kanban = _map_excel_status_to_kanban(status_name) if status_name else None
+    due_dt = _parse_excel_date(row.due_date)
+    resolved_dt = _parse_excel_date(row.resolved)
+    # assignee_name 은 미리보기 단계(_match_excel_assignee)에서 이미 담당자 레지스트리와
+    # 매칭 시도된 값 — 매칭 실패해도 원본 첫 토큰이 담겨 있어 빈 문자열이 아닌 한 그대로 쓴다.
+    assignee = (row.assignee_name or "").strip()[:_EXCEL_ASSIGNEE_MAX]
+    return {
+        "summary": (row.summary or "").strip(),
+        "description": (row.description or "").strip(),
+        "status": status_name,
+        "kanban": kanban,
+        "due_date": due_dt.date() if due_dt else None,
+        "closed_at": resolved_dt if kanban == "done" else None,
+        "started_at": _parse_excel_date(row.created),
+        "assignee": assignee,
+        "issue_type": row.issue_type,
+    }
+
+
+def _excel_update_plan(existing: WorkItem, vals: dict, jira_url: Optional[str]) -> dict[str, Any]:
+    """기존 업무에 실제로 쓸 값(바뀌는 필드만).
+
+    보존 규칙(정책 ②): 빈 셀은 기존 값 유지 · 제목/Jira 상태/마감일은 엑셀이 소유 ·
+    본문(content)/칸반 상태는 기존 값이 비었을 때만 채움 · jira_url 은 서버 base_url 로만.
+    diff(dry_run)와 적용이 이 한 함수만 보므로 둘이 어긋나지 않는다."""
+    plan: dict[str, Any] = {}
+    if vals["summary"]:
+        plan["title"] = vals["summary"][:200]
+    if vals["status"]:
+        plan["jira_status"] = vals["status"]
+    if vals["due_date"]:
+        plan["due_date"] = vals["due_date"]
+    body = vals["description"] or vals["summary"]
+    if body and not (existing.content or "").strip():
+        plan["content"] = body
+    if vals["kanban"] and not (existing.kanban_status or "").strip():
+        plan["kanban_status"] = vals["kanban"]
+    if jira_url:
+        plan["jira_url"] = jira_url
+    if vals["closed_at"] and not existing.closed_at:
+        plan["closed_at"] = vals["closed_at"]
+    cur_assignee = (existing.primary_assignee or "").strip()
+    if vals["assignee"] and (not cur_assignee or cur_assignee == "(미할당)"):
+        plan["primary_assignee"] = vals["assignee"]
+    return {a: v for a, v in plan.items() if _excel_str(getattr(existing, a, None)) != _excel_str(v)}
+
+
+@router.post("/import/excel/save", response_model=JiraExcelSaveResult)
+def import_excel_save(
     payload: JiraExcelSaveRequest,
     db: Session = Depends(get_db),
     actor: User = Depends(require_operator),
+    scope: TenantScope = Depends(get_tenant_scope),
 ):
     """import_excel/import_paste 로 미리 확인한 행을 실제 업무 관리 게시판(work_items)에
     저장한다. 파일을 다시 읽지 않고 프론트가 들고 있던 미리보기 rows 를 그대로 받는다.
 
     라이브 JQL 가져오기(POST /import)는 `jira_issue_id`(Jira 내부 불변 ID)로 dedup 하지만,
-    엑셀에는 그 값이 없으므로 여기서는 `jira_issue_key`(예: PROJ-123)로 dedup 한다 — 같은
-    이슈를 라이브로 먼저 가져왔다면 jira_issue_key 가 이미 채워져 있어 그 레코드를 그대로
-    갱신한다(반대로 엑셀로 먼저 저장한 뒤 라이브로 가져오면 jira_issue_id 매칭에는 안 걸려
-    새 레코드가 생길 수 있음 — 라이브 가져오기 dedup 정책은 이번 변경 범위 밖).
+    엑셀에는 그 값이 없으므로 여기서는 `jira_issue_key`(예: PROJ-123)로 dedup 한다.
+
+    - ``dry_run`` 이면 아무것도 바꾸지 않고 행별 action(create/update/skip/error)과 변경 필드만 돌려준다.
+    - 적용은 ``only_keys`` 의 키만(None 이면 전체). 행마다 savepoint + flush 라 한 행의 DB 오류는
+      그 행만 되돌리고 ``action="error"`` 로 보고한다(부분 성공, 정책 ③).
+    - 호출자에게 보이지 않는 업무(다른 테넌트·비공개 프로젝트)와 키가 겹치면 갱신도 생성도 하지 않는다.
+    - 같은 요청 안의 중복 키는 첫 행만 쓰고 나머지는 skip + warnings.
+    - 동기 핸들러(`def`) — 스레드풀에서 돌아 이벤트 루프를 막지 않는다.
     """
-    created = updated = skipped = 0
-    errors: list[str] = []
-    preview: list[JiraImportItemPreview] = []
+    if len(payload.rows) > _EXCEL_MAX_ROWS:
+        raise HTTPException(
+            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            detail=f"한 번에 저장할 수 있는 행은 최대 {_EXCEL_MAX_ROWS}개입니다. 나눠서 저장하세요.",
+        )
+    new_tenant_id = _resolve_import_tenant(db, scope, payload.tenant_id, require_choice=not payload.dry_run)
+
+    cfg = _get_config(db)
+    base_url = (cfg.get("base_url") or "").strip().rstrip("/")
+    only: Optional[set[str]] = None
+    if payload.only_keys is not None and not payload.dry_run:
+        only = {(k or "").strip() for k in payload.only_keys}
     now = datetime.utcnow()
 
-    for row in payload.rows:
-        key = (row.key or "").strip()
+    keys = [(row.key or "").strip() for row in payload.rows]
+    # 기존 업무를 키 한 번에 미리 조회(행마다 SELECT 하던 N+1 제거).
+    lookup = {k for k in keys if k and len(k) <= _EXCEL_KEY_MAX and _EXCEL_KEY_RE.match(k)}
+    existing_by_key: dict[str, list[WorkItem]] = {}
+    if lookup:
+        for wi in (
+            db.query(WorkItem)
+            .filter(WorkItem.jira_issue_key.in_(lookup))
+            .order_by(WorkItem.created_at)
+            .all()
+        ):
+            existing_by_key.setdefault(wi.jira_issue_key, []).append(wi)
+
+    created = updated = skipped = 0
+    errors: list[str] = []
+    warnings: list[str] = []
+    items: list[JiraExcelSaveItem] = []
+    applied_keys: list[str] = []
+    seen: set[str] = set()
+
+    def _fail(item: JiraExcelSaveItem, msg: str) -> None:
+        item.action = "error"
+        item.error = msg
+        item.changes = []
+        errors.append(f"{item.jira_key or '(키 없음)'}: {msg}")
+        items.append(item)
+
+    for row, key in zip(payload.rows, keys):
         if not key:
             skipped += 1
-            continue
-        try:
-            wtype, type_label = map_issue_type(row.issue_type)
-            kanban = _map_excel_status_to_kanban(row.status)
-            summary = (row.summary or "").strip()
-            title = (summary or key)[:200]
-            content = row.description if (row.description or "").strip() else (summary or key)
-            started_at = _parse_excel_date(row.created) or now
-            closed_at = _parse_excel_date(row.resolved) if kanban == "done" else None
-            due_dt = _parse_excel_date(row.due_date)
-            due_date = due_dt.date() if due_dt else None
-            # assignee_name 은 미리보기 단계(_match_excel_assignee)에서 이미 담당자 레지스트리와
-            # 매칭 시도된 값 — 매칭 실패해도 원본 첫 토큰이 담겨 있어 빈 문자열이 아닌 한 그대로 쓴다.
-            assignee_name = (row.assignee_name or "").strip() or "(미할당)"
-
-            existing = db.query(WorkItem).filter(WorkItem.jira_issue_key == key).first()
-            action = "update" if existing else "create"
-            preview.append(JiraImportItemPreview(
-                jira_key=key, title=title, kanban_status=kanban, action=action,
+            items.append(JiraExcelSaveItem(
+                jira_key="", title=(row.summary or "")[:200], action="skip", error="이슈 키가 비어 있습니다.",
             ))
+            continue
+        if key in seen:
+            skipped += 1
+            warnings.append(f"{key}: {_EXCEL_DUP_MSG}")
+            items.append(JiraExcelSaveItem(
+                jira_key=key, title=(row.summary or "")[:200], action="skip", error=_EXCEL_DUP_MSG,
+            ))
+            continue
+        seen.add(key)
 
-            if existing:
-                existing.title = title
-                existing.content = content
-                existing.kanban_status = kanban
-                existing.jira_status = row.status
-                existing.jira_url = row.jira_url
-                existing.jira_synced_at = now
-                if closed_at and not existing.closed_at:
-                    existing.closed_at = closed_at
-                if due_date:
-                    existing.due_date = due_date
-                if not (existing.primary_assignee or "").strip() or existing.primary_assignee == "(미할당)":
-                    existing.primary_assignee = assignee_name
-                    existing.assignee = assignee_name
-                watchers = list(existing.jira_watchers or [])
-                if actor.username not in watchers:
-                    watchers.append(actor.username)
-                existing.jira_watchers = watchers
-                updated += 1
-            else:
-                item = WorkItem(
-                    type=wtype,
-                    type_label=type_label,
-                    assignee=assignee_name,
-                    primary_assignee=assignee_name,
-                    category="Jira",
-                    title=title,
-                    content=content,
-                    kanban_status=kanban,
-                    started_at=started_at,
-                    closed_at=closed_at,
-                    due_date=due_date,
-                    jira_issue_key=key,
-                    jira_url=row.jira_url,
-                    jira_status=row.status,
-                    jira_synced_at=now,
-                    jira_watchers=[actor.username],
-                    created_by=actor.username,
+        item = JiraExcelSaveItem(jira_key=key, title=(row.summary or key)[:200], action="skip")
+        if only is not None and key not in only:
+            skipped += 1
+            items.append(item)
+            continue
+        row_err = _excel_row_error(key, row)
+        if row_err:
+            _fail(item, row_err)
+            continue
+        existing, conflict = _pick_visible(scope, db, existing_by_key.get(key, []))
+        if conflict:
+            _fail(item, _TENANT_CONFLICT_MSG)
+            continue
+
+        vals = _excel_row_values(row)
+        # 클라이언트가 보낸 row.jira_url 은 쓰지 않는다(javascript: 링크 방지) — 서버 설정으로 다시 만든다.
+        jira_url = f"{base_url}/browse/{key}" if base_url else None
+        plan: dict[str, Any] = {}
+        if existing is not None:
+            plan = _excel_update_plan(existing, vals, jira_url)
+            item.action = "update" if plan else "skip"
+            item.title = _excel_str(plan.get("title", existing.title))
+            item.kanban_status = _excel_str(plan.get("kanban_status", existing.kanban_status))
+            item.changes = [
+                JiraExcelFieldChange(
+                    field=attr, label=_EXCEL_SAVE_LABELS.get(attr, attr),
+                    before=_excel_str(getattr(existing, attr, None))[:300],
+                    after=_excel_str(plan[attr])[:300],
                 )
-                db.add(item)
+                for attr, _label in _EXCEL_SAVE_FIELDS if attr in plan
+            ]
+        else:
+            item.action = "create"
+            item.title = (vals["summary"] or key)[:200]
+            item.kanban_status = vals["kanban"] or "todo"
+
+        if item.action == "skip":
+            skipped += 1
+            items.append(item)
+            continue
+        if payload.dry_run:
+            if item.action == "create":
                 created += 1
-        except Exception as exc:  # noqa: BLE001 - 한 행 실패가 전체 저장을 막지 않도록
+            else:
+                updated += 1
+            items.append(item)
+            continue
+
+        try:
+            with db.begin_nested():
+                if existing is not None:
+                    for attr, val in plan.items():
+                        setattr(existing, attr, val)
+                    if "primary_assignee" in plan:
+                        existing.assignee = plan["primary_assignee"]
+                    existing.jira_synced_at = now
+                    watchers = list(existing.jira_watchers or [])
+                    if actor.username not in watchers:
+                        watchers.append(actor.username)
+                    existing.jira_watchers = watchers
+                else:
+                    wtype, type_label = map_issue_type(vals["issue_type"])
+                    assignee_name = vals["assignee"] or "(미할당)"
+                    db.add(WorkItem(
+                        type=wtype,
+                        type_label=type_label,
+                        assignee=assignee_name,
+                        primary_assignee=assignee_name,
+                        category="Jira",
+                        title=item.title,
+                        content=vals["description"] or vals["summary"] or key,
+                        kanban_status=item.kanban_status,
+                        started_at=vals["started_at"] or now,
+                        closed_at=vals["closed_at"],
+                        due_date=vals["due_date"],
+                        jira_issue_key=key,
+                        jira_url=jira_url,
+                        jira_status=vals["status"] or None,
+                        jira_synced_at=now,
+                        jira_watchers=[actor.username],
+                        created_by=actor.username,
+                        tenant_id=new_tenant_id,
+                    ))
+                db.flush()
+        except Exception as exc:  # noqa: BLE001 - 한 행 실패는 그 행만 되돌린다(savepoint)
             logger.warning("Jira Excel 저장 항목 실패 (%s): %s", key, exc)
-            errors.append(f"{key}: {str(exc)[:120]}")
+            _fail(item, f"저장 실패: {str(exc).splitlines()[0][:160] if str(exc) else type(exc).__name__}")
+            continue
 
-    try:
-        db.commit()
-    except Exception as exc:  # noqa: BLE001
+        if item.action == "create":
+            created += 1
+        else:
+            updated += 1
+        applied_keys.append(key)
+        items.append(item)
+
+    if payload.dry_run:
         db.rollback()
-        return JiraImportResult(status="error", detail=f"저장 실패: {str(exc)[:200]}")
+    else:
+        try:
+            db.commit()
+        except Exception as exc:  # noqa: BLE001
+            db.rollback()
+            return JiraExcelSaveResult(status="error", detail=f"저장 실패: {str(exc)[:200]}")
+        audit_logger.record(
+            db, action="work_item.jira_excel_import", actor=actor,
+            target_type="work_item", target_id=None,
+            details={
+                "created": created, "updated": updated, "skipped": skipped, "failed": len(errors),
+                "tenant_id": str(new_tenant_id) if new_tenant_id else None,
+                "keys": applied_keys[:200],
+            },
+        )
 
-    audit_logger.record(
-        db, action="work_item.jira_excel_import", actor=actor,
-        target_type="work_item", target_id=None,
-        details={"created": created, "updated": updated, "skipped": skipped},
-    )
-
-    return JiraImportResult(
+    return JiraExcelSaveResult(
         status="ok",
         imported=created,
         updated=updated,
         skipped=skipped,
         total=len(payload.rows),
+        truncated=len(items) > _EXCEL_SAVE_ITEMS_MAX,
+        dry_run=payload.dry_run,
         errors=errors,
-        items=preview[:50],
+        warnings=warnings,
+        tenant_id=new_tenant_id,
+        items=items[:_EXCEL_SAVE_ITEMS_MAX],
     )
 
 

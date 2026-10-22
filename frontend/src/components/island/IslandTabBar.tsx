@@ -1,12 +1,12 @@
 import type { ComponentType } from 'react';
 import {
-  DndContext, closestCenter, PointerSensor, useSensor, useSensors, type DragEndEvent,
+  DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors, type DragEndEvent,
 } from '@dnd-kit/core';
 import {
-  SortableContext, horizontalListSortingStrategy, arrayMove, useSortable,
+  SortableContext, horizontalListSortingStrategy, arrayMove, sortableKeyboardCoordinates, useSortable,
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { Pencil, Plus, X } from 'lucide-react';
+import { GripVertical, Pencil, Plus, X } from 'lucide-react';
 import type { IslandPanel } from '@/types';
 
 export interface IslandPanelView extends IslandPanel {
@@ -24,7 +24,9 @@ interface SortableTabProps {
 }
 
 function SortableTab({ panel, active, editable, onSelect, onRemove, onEdit }: SortableTabProps) {
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+  const {
+    attributes, listeners, setNodeRef, setActivatorNodeRef, transform, transition, isDragging,
+  } = useSortable({
     id: panel.key,
     disabled: !editable,
   });
@@ -34,20 +36,35 @@ function SortableTab({ panel, active, editable, onSelect, onRemove, onEdit }: So
     <div
       ref={setNodeRef}
       style={{ transform: CSS.Transform.toString(transform), transition }}
-      className={`group relative flex items-center rounded-lg ${isDragging ? 'opacity-50 z-10' : ''}`}
-      {...attributes}
-      {...listeners}
+      className={`group relative flex items-center rounded-xl transition-colors ${isDragging ? 'opacity-50 z-10' : ''} ${
+        active ? 'bg-card shadow-sm' : 'hover:bg-card/60'
+      }`}
     >
+      {/* 드래그 핸들 — dnd 속성은 여기에만 붙인다. 탭 버튼을 감싼 div 에 붙이면 중첩 인터랙티브가
+          되고 탭마다 Tab 정지가 2개가 된다(B-17). 키보드: Space 로 잡고 ←/→ 로 옮긴 뒤 Space 로 놓는다. */}
+      {editable && (
+        <button
+          type="button"
+          ref={setActivatorNodeRef}
+          {...attributes}
+          {...listeners}
+          title="순서 변경 (끌거나 Space 후 화살표)"
+          aria-label={`${panel.displayLabel} 순서 변경`}
+          className="flex items-center self-stretch pl-1.5 pr-0.5 rounded-xl text-muted-foreground hover:text-foreground cursor-grab active:cursor-grabbing touch-none"
+        >
+          <GripVertical className="w-3.5 h-3.5" aria-hidden="true" />
+        </button>
+      )}
       <button
         type="button"
         onClick={onSelect}
         aria-current={active ? 'page' : undefined}
-        className={`flex items-center gap-1.5 pl-3 py-1.5 text-sm rounded-lg transition-colors whitespace-nowrap ${
-          editable ? 'pr-12' : 'pr-3'
+        className={`flex items-center gap-1.5 py-1.5 text-sm rounded-xl transition-colors whitespace-nowrap ${
+          editable ? 'pl-1 pr-12' : 'px-3'
         } ${
           active
-            ? 'bg-card text-foreground font-semibold shadow-sm'
-            : 'text-muted-foreground hover:text-foreground hover:bg-card/60'
+            ? 'text-foreground font-semibold'
+            : 'text-muted-foreground hover:text-foreground'
         }`}
       >
         <Icon className="w-4 h-4 flex-shrink-0" />
@@ -96,7 +113,10 @@ interface IslandTabBarProps {
 export function IslandTabBar({
   panels, activeKey, editable, onSelect, onRemove, onEdit, onReorder, onAdd, atCapacity,
 }: IslandTabBarProps) {
-  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
+  );
 
   const handleDragEnd = (e: DragEndEvent) => {
     const { active, over } = e;
@@ -131,7 +151,7 @@ export function IslandTabBar({
           disabled={atCapacity}
           title={atCapacity ? '패널 수가 상한에 도달했습니다' : '화면 추가'}
           aria-label={atCapacity ? '패널 수가 상한에 도달했습니다' : '화면 추가'}
-          className="flex items-center gap-1 px-2.5 py-1.5 text-sm rounded-lg text-muted-foreground hover:text-foreground hover:bg-card/60 transition-colors whitespace-nowrap disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:text-muted-foreground disabled:cursor-not-allowed"
+          className="flex items-center gap-1 px-2.5 py-1.5 text-sm rounded-xl text-muted-foreground hover:text-foreground hover:bg-card/60 transition-colors whitespace-nowrap disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:text-muted-foreground disabled:cursor-not-allowed"
         >
           <Plus className="w-4 h-4" />
           <span>화면 추가</span>

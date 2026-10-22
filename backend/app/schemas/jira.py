@@ -1,6 +1,7 @@
 """Jira 연동 pydantic 스키마."""
 from datetime import datetime
 from typing import Literal, Optional
+from uuid import UUID
 
 from pydantic import BaseModel
 
@@ -205,6 +206,8 @@ class JiraImportRequest(BaseModel):
     dry_run: bool = False
     # dry_run 미리보기에서 사용자가 고른 Jira 키만 반영 (비우면 전체 적용).
     only_keys: list[str] = []
+    # 새로 만드는 업무의 공유 범위(테넌트). 비우면 소속 테넌트가 1개일 때 그 테넌트, 그 외엔 전체 공유.
+    tenant_id: Optional[UUID] = None
 
 
 class JiraFieldChange(BaseModel):
@@ -263,6 +266,10 @@ class JiraExcelImportResult(BaseModel):
     total: int = 0
     matched: int = 0
     rows: list[JiraExcelRow] = []
+    # 행 상한(2000)에 걸려 뒤쪽 행을 버렸는지 — 화면이 "일부만 읽음" 을 표시한다.
+    truncated: bool = False
+    # 표 안에서 두 번 이상 나온 이슈 키(등장 순서). 저장 시 첫 행만 반영된다.
+    duplicates: list[str] = []
 
 
 class JiraExcelPasteRequest(BaseModel):
@@ -273,8 +280,56 @@ class JiraExcelPasteRequest(BaseModel):
 
 class JiraExcelSaveRequest(BaseModel):
     """미리보기(import_excel/import_paste)로 확인한 행을 실제 work_items 로 저장.
-    파일을 다시 읽지 않고 프론트가 이미 갖고 있는 미리보기 rows 를 그대로 되돌려 받는다."""
+    파일을 다시 읽지 않고 프론트가 이미 갖고 있는 미리보기 rows 를 그대로 되돌려 받는다.
+
+    - ``dry_run`` — 아무것도 바꾸지 않고 행별 action/changes 만 돌려준다(저장 전 확인용).
+    - ``only_keys`` — 이 키들만 반영(나머지는 skip). None 이면 전체.
+    - ``tenant_id`` — 새 업무의 공유 범위. 비우면 소속 테넌트가 1개일 때 그 테넌트, 0개면 전체
+      공유(NULL), 여러 개면 422("공유 범위를 선택하세요").
+    - 행의 ``jira_url`` 은 무시한다 — 서버가 설정 base_url + ``/browse/{key}`` 로 다시 만든다.
+    """
     rows: list[JiraExcelRow]
+    dry_run: bool = False
+    only_keys: Optional[list[str]] = None
+    tenant_id: Optional[UUID] = None
+
+
+class JiraExcelFieldChange(BaseModel):
+    """엑셀 저장이 기존 업무에서 바꾸는 필드 한 개."""
+    field: str
+    label: str = ""
+    before: str = ""
+    after: str = ""
+
+
+class JiraExcelSaveItem(BaseModel):
+    jira_key: str
+    title: str = ""
+    kanban_status: str = ""
+    action: Literal["create", "update", "skip", "error"]
+    changes: list[JiraExcelFieldChange] = []
+    # error 행은 실패 사유, skip 행은 건너뛴 사유(중복 키 등). 그 외 None.
+    error: Optional[str] = None
+
+
+class JiraExcelSaveResult(BaseModel):
+    """엑셀 저장 결과 — ``JiraImportResult`` 의 필드를 그대로 두고 행별 상세를 더한다."""
+    status: Literal["ok", "offline", "error", "missing"]
+    applied_jql: str = ""
+    imported: int = 0
+    updated: int = 0
+    skipped: int = 0
+    total: int = 0
+    # items 가 상한(200)에 걸려 뒤쪽 행 상세를 생략했는지.
+    truncated: bool = False
+    dry_run: bool = False
+    detail: str = ""
+    errors: list[str] = []
+    # 실패는 아니지만 알려야 하는 것(요청 안 중복 키 등).
+    warnings: list[str] = []
+    # 새 업무에 실제로 지정된(또는 dry_run 이면 지정될) 공유 범위. None = 전체 공유.
+    tenant_id: Optional[UUID] = None
+    items: list[JiraExcelSaveItem] = []
 
 
 # ── 양방향 push (Phase 2) ──────────────────────────────────────────────────────

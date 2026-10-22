@@ -1,16 +1,20 @@
 import re
 from collections import Counter
+from datetime import datetime
+from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.models.app_setting import AppSetting
+from app.models.cluster import Cluster
 from app.models.user import User
-from app.auth.deps import get_current_user, require_admin
+from app.auth.deps import get_cluster_scope, get_current_user, require_admin
 from app.auth.feature_access import FEATURE_ACCESS_KEY, normalize_feature_access
 from app.auth.security import hash_password
 from app.services import audit_logger
+from app.services.cluster_access import ClusterScope
 from app.services.assignee_accounts import ASSIGNEE_ACCOUNT_ROLE
 from app.services.cluster_endpoint_policy import (
     CLUSTER_ENDPOINT_ALLOWLIST_KEY,
@@ -40,6 +44,7 @@ from app.schemas.ui_settings import (
     OperationLevelsUpdate,
     OperationLevelItem,
     default_guarded,
+    is_http_url,
 )
 
 router = APIRouter(prefix="/ui-settings", tags=["ui-settings"])
@@ -151,33 +156,131 @@ def update_ui_settings(
     )
 
 
+CLUSTER_LINKS_CONFLICT_DETAIL = "다른 곳에서 링크가 바뀌었습니다. 새로고침 후 다시 저장하세요."
+
+
+def _cluster_links_version(setting: AppSetting | None) -> str:
+    """링크 문서 버전 — 마지막 저장 시각(updated_at ISO). 행이 없거나 시각이 없으면 "0"."""
+    if setting is None or setting.updated_at is None:
+        return "0"
+    return setting.updated_at.isoformat()
+
+
+def _as_uuid(value) -> UUID | None:
+    try:
+        return value if isinstance(value, UUID) else UUID(str(value))
+    except (TypeError, ValueError):
+        return None
+
+
+def _existing_cluster_ids(db: Session, groups: list) -> set[UUID]:
+    ids = {
+        cid for cid in (_as_uuid(g.get("cluster_id")) for g in groups if isinstance(g, dict)) if cid
+    }
+    if not ids:
+        return set()
+    return {cid for (cid,) in db.query(Cluster.id).filter(Cluster.id.in_(ids)).all()}
+
+
+def _group_visible(cluster_id, scope: ClusterScope, existing: set[UUID], is_admin: bool) -> bool:
+    """이 사용자에게 링크 그룹이 보이는가 — 클러스터 가시 범위(테넌트 바인딩)를 따른다.
+
+    클러스터가 없어진(또는 id 가 깨진) 고아 그룹은 admin 에게만 보인다 — 정리는 admin 몫이고,
+    다른 사용자에게 "삭제된 클러스터" 로 남의 링크를 보여주지 않는다(A-18).
+    """
+    cid = _as_uuid(cluster_id)
+    if cid is None or cid not in existing:
+        return is_admin
+    return scope.visible(cid)
+
+
+def _safe_links(links) -> list[dict]:
+    """저장된 링크 중 http(s) URL 만 응답한다(검증 도입 전 저장된 javascript: 등은 노출하지 않음)."""
+    out: list[dict] = []
+    for link in links or []:
+        if isinstance(link, dict) and is_http_url(link.get("url")):
+            out.append(link)
+    return out
+
+
+def _cluster_links_view(db: Session, value: dict, scope: ClusterScope, is_admin: bool) -> ClusterLinksPayload:
+    groups = [g for g in (value.get("cluster_groups") or []) if isinstance(g, dict)]
+    existing = _existing_cluster_ids(db, groups)
+    visible_groups = [
+        {**g, "links": _safe_links(g.get("links"))}
+        for g in groups
+        if _group_visible(g.get("cluster_id"), scope, existing, is_admin)
+    ]
+    return ClusterLinksPayload(
+        common_links=_safe_links(value.get("common_links")),
+        cluster_groups=visible_groups,
+    )
+
+
 @router.get("/cluster-links", response_model=ClusterLinksResponse)
-def get_cluster_links(db: Session = Depends(get_db)):
+def get_cluster_links(
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+    scope: ClusterScope = Depends(get_cluster_scope),
+):
+    """공용 링크 + 클러스터별 링크 그룹. 그룹은 호출자에게 보이는 클러스터만(고아 그룹은 admin 만),
+    배열 순서 = 저장된 순서. ``version`` 은 PUT 의 충돌 검사용."""
     setting = _get_or_create(db, CLUSTER_LINKS_KEY, DEFAULT_CLUSTER_LINKS)
     value = setting.value or DEFAULT_CLUSTER_LINKS
-    payload = ClusterLinksPayload(
-        common_links=value.get("common_links", []),
-        cluster_groups=value.get("cluster_groups", []),
-    )
-    return ClusterLinksResponse(data=payload)
+    version = _cluster_links_version(setting)
+    payload = _cluster_links_view(db, value, scope, user.role == "admin")
+    payload.version = version
+    return ClusterLinksResponse(data=payload, version=version)
 
 
 @router.put("/cluster-links", response_model=ClusterLinksResponse)
 def update_cluster_links(
     payload: ClusterLinksUpdate,
     db: Session = Depends(get_db),
-    _: User = Depends(require_admin),
+    actor: User = Depends(require_admin),
+    scope: ClusterScope = Depends(get_cluster_scope),
 ):
-    setting = _get_or_create(db, CLUSTER_LINKS_KEY, DEFAULT_CLUSTER_LINKS)
+    """링크 문서 저장(admin). ``version`` 을 주면 저장된 버전과 다를 때 409.
+
+    ``cluster_groups`` 배열 순서를 그대로 저장한다. 호출자에게 안 보이는 그룹(다른 테넌트 클러스터,
+    admin 이 아니면 고아 그룹)은 요청에 없어도 지우지 않고 저장된 문서에서 다시 합친다(뒤에 붙임).
+    """
+    # 버전 검사와 저장 사이에 다른 저장이 끼지 않게 행을 잠근다.
+    setting = (
+        db.query(AppSetting).filter(AppSetting.key == CLUSTER_LINKS_KEY).with_for_update().first()
+    )
+    current_version = _cluster_links_version(setting)
+    if payload.version is not None and payload.version != current_version:
+        db.rollback()
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=CLUSTER_LINKS_CONFLICT_DETAIL)
+
+    is_admin = actor.role == "admin"
+    stored = (setting.value or {}) if setting is not None else {}
+    stored_groups = [g for g in (stored.get("cluster_groups") or []) if isinstance(g, dict)]
+    incoming = [group.model_dump() for group in payload.cluster_groups]
+    existing = _existing_cluster_ids(db, stored_groups + incoming)
+
+    # 보이는 그룹만 요청대로(순서 포함) 반영 — 안 보이는 클러스터의 그룹을 요청으로 덮어쓰지 못한다.
+    groups = [g for g in incoming if _group_visible(g["cluster_id"], scope, existing, is_admin)]
+    hidden = [g for g in stored_groups if not _group_visible(g.get("cluster_id"), scope, existing, is_admin)]
     next_value = {
         "common_links": [item.model_dump() for item in payload.common_links],
-        "cluster_groups": [group.model_dump() for group in payload.cluster_groups],
+        "cluster_groups": groups + hidden,
     }
-    setting.value = next_value
+    if setting is None:
+        setting = AppSetting(key=CLUSTER_LINKS_KEY, value=next_value)
+        db.add(setting)
+    else:
+        setting.value = next_value
+    # 내용이 같아도 버전은 올린다(동일 JSON 대입은 UPDATE 가 생략돼 onupdate 가 안 돈다).
+    setting.updated_at = datetime.utcnow()
     db.commit()
     db.refresh(setting)
 
-    return ClusterLinksResponse(data=ClusterLinksPayload(**next_value))
+    version = _cluster_links_version(setting)
+    view = _cluster_links_view(db, next_value, scope, is_admin)
+    view.version = version
+    return ClusterLinksResponse(data=view, version=version)
 
 
 # 담당자 명부는 users 테이블 자체다(모델 docstring 참고) — app_settings JSON 이 아니다.

@@ -1,5 +1,7 @@
 export { ArchDocCanvas } from './ArchDocCanvas';
 export type { ArchCanvasNode, ArchCanvasEdge } from './ArchDocCanvas';
+export { ArchDocListView } from './ArchDocListView';
+export { ArchScheduleDialog } from './ArchScheduleDialog';
 export { ManualNodeDialog } from './ManualNodeDialog';
 export { ManualEdgeDialog } from './ManualEdgeDialog';
 export { NodeDetailPanel } from './NodeDetailPanel';

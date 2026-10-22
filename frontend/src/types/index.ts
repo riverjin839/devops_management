@@ -1089,6 +1089,54 @@ export interface JiraExcelImportResult {
   total: number;
   matched: number;
   rows: JiraExcelRow[];
+  /** 행 상한(2000)을 넘어 앞부분만 담았는지. 구버전 서버 응답에는 없다. */
+  truncated?: boolean;
+  /** 표 안에서 두 번 이상 나온 키(첫 행만 저장). 구버전 서버 응답에는 없다. */
+  duplicates?: string[] | number;
+}
+
+/** 엑셀 저장 요청 — dryRun 으로 변경 내역을 먼저 받고, onlyKeys 로 고른 행만 적용한다. */
+export interface JiraExcelSaveRequest {
+  rows: JiraExcelRow[];
+  dryRun?: boolean;
+  /** 적용할 Jira 키(비우면 전체). */
+  onlyKeys?: string[];
+  /** 새 업무의 공유 범위 — null 이면 전체 공유. 소속 테넌트가 여럿이면 서버가 필수로 요구(422). */
+  tenantId?: string | null;
+}
+
+/** 엑셀 저장 행의 필드 변경 — 신규 서버는 before/after, 라이브 가져오기 형식은 old/new. */
+export interface JiraExcelFieldChange {
+  field: string;
+  label?: string;
+  before?: string | number | null;
+  after?: string | number | null;
+  old?: string;
+  new?: string;
+}
+
+export interface JiraExcelSaveItem {
+  jiraKey?: string;
+  key?: string;
+  title?: string;
+  kanbanStatus?: string;
+  action: 'create' | 'update' | 'skip' | 'error' | 'unchanged';
+  changes?: JiraExcelFieldChange[];
+  error?: string | null;
+}
+
+/** 엑셀 저장 응답 — `items` 는 앞 200행까지(`truncated`). */
+export interface JiraExcelSaveResult {
+  status: 'ok' | 'offline' | 'error' | 'missing';
+  imported: number;
+  updated: number;
+  skipped: number;
+  total: number;
+  truncated?: boolean;
+  dryRun?: boolean;
+  detail: string;
+  errors: string[];
+  items: JiraExcelSaveItem[];
 }
 
 export interface JiraPushRequest {
@@ -1638,7 +1686,13 @@ export interface ClusterLinkGroup {
 
 export interface ClusterLinksPayload {
   commonLinks: ClusterLink[];
+  /** 배열 순서 = 화면의 클러스터 그룹 순서(드래그 정렬이 이 순서로 저장된다). */
   clusterGroups: ClusterLinkGroup[];
+  /**
+   * 문서 버전(낙관적 잠금). GET 이 돌려준 값을 PUT 에 그대로 실어 보내면 그 사이 다른 관리자가 저장했을 때
+   * 서버가 409 로 거절한다. 구버전 서버는 내려주지 않는다(없으면 생략해 보낸다).
+   */
+  version?: string | null;
 }
 
 // Ops Notes (업무 게시판)
@@ -1739,8 +1793,8 @@ export interface MindMapNode {
   mindmapId: string;
   parentId?: string | null;
   label: string;
-  note?: string;
-  color?: string;
+  note?: string | null;
+  color?: string | null;
   x?: number;
   y?: number;
   collapsed: boolean;
@@ -1756,9 +1810,9 @@ export interface MindMap {
   tenantId?: string | null;
   id: string;
   title: string;
-  description?: string;
+  description?: string | null;
   /** 관련 Confluence 문서 링크 (선택) */
-  confluenceUrl?: string;
+  confluenceUrl?: string | null;
   nodes: MindMapNode[];
   createdAt: string;
   updatedAt: string;
@@ -1769,8 +1823,8 @@ export interface MindMapListItem {
   tenantId?: string | null;
   id: string;
   title: string;
-  description?: string;
-  confluenceUrl?: string;
+  description?: string | null;
+  confluenceUrl?: string | null;
   nodeCount: number;
   createdAt: string;
   updatedAt: string;
@@ -1787,9 +1841,12 @@ export interface MindMapCreate {
 export interface MindMapUpdate {
   /** 멀티테넌시 3단계 — null/미지정 = 전체 공유, 값이 있으면 그 테넌트 멤버·admin 만 본다. */
   tenantId?: string | null;
+  /** 빈 제목은 서버가 422 로 거절한다. */
   title?: string;
-  description?: string;
-  confluenceUrl?: string;
+  /** `null` = 값 해제, 미전송(undefined) = 기존 값 유지. */
+  description?: string | null;
+  /** `null` = 링크 제거, 미전송(undefined) = 기존 값 유지. */
+  confluenceUrl?: string | null;
 }
 
 export interface MindMapNodeCreate {
@@ -2967,6 +3024,24 @@ export interface OntologyRelationship {
   createdAt: string;
 }
 
+export interface OntologyEntityCreate {
+  clusterId: string;
+  entityType: OntologyEntityType;
+  name: string;
+  externalId?: string;
+  version?: string;
+  properties?: Record<string, unknown>;
+}
+
+export interface OntologyRelationshipCreate {
+  clusterId: string;
+  sourceEntityId: string;
+  relationType: string;
+  targetEntityId: string;
+  weight?: number;
+  relationMetadata?: Record<string, unknown>;
+}
+
 export interface OntologyGraph {
   clusterId: string;
   entities: OntologyEntity[];
@@ -3251,7 +3326,10 @@ export interface ArchDrift {
   detectedAt?: string;
 }
 export interface ArchDoc {
-  id: string;
+  /** 문서가 아직 없으면(조회만 한 모듈 — 서버는 행을 만들지 않고 빈 문서를 돌려준다) null. */
+  id: string | null;
+  /** false = 빈 문서(아직 동기화 전). 구버전 서버는 보내지 않는다. */
+  hasDoc?: boolean;
   serviceId: string;
   clusterId: string;
   namespace: string;
@@ -3269,10 +3347,16 @@ export interface ArchDoc {
   lastSyncStatus: 'pending' | 'ok' | 'partial' | 'failed';
   syncError?: string | null;
   autoSyncEnabled: boolean;
-  llmStatus: 'none' | 'pending' | 'ok' | 'offline' | 'failed';
+  /**
+   * none(미생성) · pending(생성 중 — 10분 넘게 멈추면 서버가 error 로 복구) · ok ·
+   * offline(LLM 미연결) · error(LLM 호출 실패 — 사유는 `llmError`) · failed(다이어그램 노드가 없어 생성 불가).
+   */
+  llmStatus: 'none' | 'pending' | 'ok' | 'offline' | 'error' | 'failed';
+  /** LLM 실패 사유(타임아웃·429·프로필 오류·테넌트 라우팅 거부 등). 구버전 서버는 보내지 않는다. */
+  llmError?: string | null;
   manualNodes: ArchManualNode[];
   manualEdges: ArchManualEdge[];
-  updatedAt: string;
+  updatedAt: string | null;
 }
 export interface ArchDocSummary {
   serviceId: string;
@@ -3343,6 +3427,9 @@ export interface TrendSource {
   url: string;
   category: TrendCategory;
   enabled: boolean;
+  /** RSS 항목의 종류(기본 `blog`). 구 서버 응답에는 없다. */
+  itemType?: TrendItemType | null;
+  /** `error` 면 `lastMessage` 가 실패 사유다. */
   lastStatus?: 'ok' | 'error' | 'empty' | null;
   lastMessage?: string | null;
   lastItemCount?: number;
@@ -3354,15 +3441,22 @@ export interface TrendSourceCreate {
   sourceType: 'github_release' | 'rss';
   url: string;
   category: string;
+  itemType?: TrendItemType;
   enabled?: boolean;
 }
+
+/** 항목 요약 상태 — 실패면 `summaryKo` 는 비고 `summaryError` 에 사유가 있다(다음 수집 때 재시도). */
+export type TrendSummaryStatus = 'ok' | 'failed' | 'pending';
 
 export interface TrendItem {
   id: string;
   title: string;
   url: string;
   publishedAt: string;
-  summaryKo?: string;
+  summaryKo?: string | null;
+  /** 구 서버 응답에는 없다 — 그때는 `summaryKo` 유무로 판단한다. */
+  summaryStatus?: TrendSummaryStatus | null;
+  summaryError?: string | null;
   version?: string;
   itemType: TrendItemType;
   sourceName: string;
@@ -3372,20 +3466,38 @@ export interface TrendItem {
 export interface TrendDigest {
   id: string;
   digestDate: string;
-  overallSummaryKo?: string;
+  overallSummaryKo?: string | null;
   itemCount: number;
-  status: 'pending' | 'collecting' | 'summarizing' | 'done' | 'failed';
-  errorMessage?: string;
+  /** `partial` = 일부 소스 수집 또는 항목 요약이 실패했다. */
+  status: 'pending' | 'collecting' | 'summarizing' | 'done' | 'partial' | 'failed';
+  errorMessage?: string | null;
+}
+
+/** `GET /trends/settings` — 토큰 값은 돌려주지 않고 설정 여부만 준다. */
+export interface TrendSettings {
+  githubApiUrl: string;
+  allowedHosts: string[];
+  tokenSet: boolean;
+}
+
+/** `PUT /trends/settings`(admin). `githubToken` 은 쓰기 전용 — 생략하면 기존 토큰 유지. */
+export interface TrendSettingsUpdate {
+  githubApiUrl: string;
+  allowedHosts: string[];
+  githubToken?: string;
 }
 
 export interface MindMapNodeUpdate {
   label?: string;
-  note?: string;
-  color?: string;
+  /** `null` = 메모 해제, 미전송(undefined) = 기존 값 유지. */
+  note?: string | null;
+  /** `null` = 기본 색으로 되돌림, 미전송(undefined) = 기존 값 유지. */
+  color?: string | null;
   x?: number;
   y?: number;
   collapsed?: boolean;
   sortOrder?: number;
+  /** 같은 맵의 노드가 아니거나 자기 자신·자손이면 서버가 422 로 거절한다. */
   parentId?: string | null;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   extra?: Record<string, any>;
@@ -5147,6 +5259,11 @@ export interface IslandCreatePayload {
   layoutMode?: IslandLayoutMode;
   panels?: IslandPanel[];
   isShared?: boolean;
+}
+
+/** PUT /islands/:id — 보낸 필드만 바뀐다. `expectedUpdatedAt` 이 서버 값과 다르면 409(다른 곳에서 먼저 저장됨). */
+export interface IslandUpdatePayload extends Partial<IslandCreatePayload> {
+  expectedUpdatedAt?: string | null;
 }
 
 

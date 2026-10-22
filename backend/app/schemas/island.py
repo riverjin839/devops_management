@@ -32,6 +32,9 @@ class IslandUpdate(BaseModel):
     layout_mode: Optional[str] = Field(None, pattern="^(tabs|sidebar)$")
     panels: Optional[list[IslandPanel]] = Field(None, max_length=MAX_PANELS)
     is_shared: Optional[bool] = None
+    # 낙관적 동시성 — 클라이언트가 마지막으로 받은 `updated_at`. 서버 값과 다르면 409.
+    # 생략하면 확인하지 않는다(구 클라이언트 호환). 저장 필드가 아니라 비교용이다.
+    expected_updated_at: Optional[datetime] = None
 
 
 class IslandReorder(BaseModel):

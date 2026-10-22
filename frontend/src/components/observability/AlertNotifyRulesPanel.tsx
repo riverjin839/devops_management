@@ -73,7 +73,7 @@ const inputCls = 'w-full px-2.5 py-1.5 rounded-xl bg-secondary border border-bor
   + 'focus:outline-none focus:ring-2 focus:ring-primary/40 disabled:opacity-60 disabled:cursor-not-allowed';
 const invalidCls = ' border-status-critical';
 const labelCls = 'block text-xs font-medium text-muted-foreground mb-1';
-const errorCls = 'mt-1 text-[11px] text-status-critical';
+const errorCls = 'mt-1 text-xs text-status-critical';
 
 /**
  * 알림 규칙 + 전역 기본값 편집 (operator 이상).
@@ -463,7 +463,7 @@ function GlobalSettingsCard({ query }: { query: ReturnType<typeof useAlertSettin
   return (
     <MacCard
       title={title}
-      titleExtra={dirty ? <span className="text-[11px] text-muted-foreground">· 저장하지 않은 변경</span> : undefined}
+      titleExtra={dirty ? <span className="text-xs text-muted-foreground">· 저장하지 않은 변경</span> : undefined}
     >
       {query.isError ? (
         <p className="mb-3 text-xs text-status-warning">
@@ -642,7 +642,7 @@ function RuleEditor({
               onChange={(e) => set('moduleKey', e.target.value || null)}
               placeholder="fluent|opensearch"
             />
-            <p className="mt-1 text-[11px] text-muted-foreground">
+            <p className="mt-1 text-xs text-muted-foreground">
               알람 라벨 중 <code>module</code> · <code>job</code> · <code>service</code> ·
               {' '}<code>component</code> · <code>app</code> 순으로 처음 있는 값에 매칭합니다
               (대개 <code>job</code>).

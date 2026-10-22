@@ -1,4 +1,6 @@
-from pydantic import BaseModel, Field
+from urllib.parse import urlparse
+
+from pydantic import BaseModel, Field, field_validator
 
 
 class HomeIcons(BaseModel):
@@ -41,6 +43,21 @@ class UiSettingsUpdate(BaseModel):
     page_styles: dict[str, PageStyle] | None = None
 
 
+# 링크 URL 허용 스킴 — javascript:/data: 등은 href 로 렌더되면 스크립트가 돈다(A-18).
+CLUSTER_LINK_URL_SCHEMES = frozenset({"http", "https"})
+
+
+def is_http_url(value: str | None) -> bool:
+    """http(s) 스킴 + 호스트가 있는 절대 URL 인지."""
+    if not value:
+        return False
+    try:
+        parsed = urlparse(value.strip())
+    except ValueError:
+        return False
+    return parsed.scheme.lower() in CLUSTER_LINK_URL_SCHEMES and bool(parsed.netloc)
+
+
 class ClusterLinkItem(BaseModel):
     id: str
     label: str
@@ -56,16 +73,41 @@ class ClusterLinkGroup(BaseModel):
 
 class ClusterLinksPayload(BaseModel):
     common_links: list[ClusterLinkItem] = Field(default_factory=list)
+    # 배열 순서 = 화면의 클러스터 그룹 순서(드래그 정렬 결과를 그대로 저장한다).
     cluster_groups: list[ClusterLinkGroup] = Field(default_factory=list)
+    # 문서 버전 — 저장 시각(updated_at ISO), 저장된 적이 없으면 "0". PUT 에 그대로 돌려보내면
+    # 그 사이 다른 곳에서 바뀌었을 때 409 로 덮어쓰기를 막는다.
+    version: str = "0"
 
 
 class ClusterLinksResponse(BaseModel):
     data: ClusterLinksPayload
+    # data.version 과 같은 값(최상위에서도 읽을 수 있게 둔다).
+    version: str = "0"
+
+
+class ClusterLinkItemIn(ClusterLinkItem):
+    """저장 요청용 링크 — URL 은 http(s) 절대 URL 만(그 외 422)."""
+
+    @field_validator("url")
+    @classmethod
+    def _http_only(cls, v: str) -> str:
+        v = (v or "").strip()
+        if not is_http_url(v):
+            raise ValueError("링크 URL 은 http:// 또는 https:// 로 시작하는 주소여야 합니다")
+        return v
+
+
+class ClusterLinkGroupIn(ClusterLinkGroup):
+    links: list[ClusterLinkItemIn] = Field(default_factory=list)
 
 
 class ClusterLinksUpdate(BaseModel):
-    common_links: list[ClusterLinkItem] = Field(default_factory=list)
-    cluster_groups: list[ClusterLinkGroup] = Field(default_factory=list)
+    common_links: list[ClusterLinkItemIn] = Field(default_factory=list)
+    # 배열 순서가 곧 저장 순서다.
+    cluster_groups: list[ClusterLinkGroupIn] = Field(default_factory=list)
+    # GET 에서 받은 version. 주면 저장된 문서 버전과 다를 때 409, 생략하면 검사하지 않는다.
+    version: str | None = None
 
 
 # ── 운영레벨 (사용자 정의) ──────────────────────────────────────────────

@@ -1,10 +1,10 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
-  DndContext, closestCenter, PointerSensor, useSensor, useSensors, type DragEndEvent,
+  DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors, type DragEndEvent,
 } from '@dnd-kit/core';
 import {
-  SortableContext, verticalListSortingStrategy, arrayMove, useSortable,
+  SortableContext, verticalListSortingStrategy, arrayMove, sortableKeyboardCoordinates, useSortable,
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import {
@@ -14,7 +14,7 @@ import { SidePane, ConfirmDialog, ClusterIconPicker, useToast } from '@/componen
 import { resolveClusterIcon } from '@/lib/clusterIcons';
 import {
   useIslands, useCreateIsland, useUpdateIsland, useDeleteIsland, useCloneIsland,
-  useReorderIslands,
+  useReorderIslands, describeIslandSaveError, type IslandPatch,
 } from '@/hooks/useIslands';
 import { useIslandStore } from '@/stores/islandStore';
 import type { Island } from '@/types';
@@ -55,65 +55,93 @@ interface SortableIslandRowProps {
 function SortableIslandRow({
   island, current, onRename, onDescribe, onPickIcon, onToggleLayout, onToggleShare, onDelete,
 }: SortableIslandRowProps) {
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+  const {
+    attributes, listeners, setNodeRef, setActivatorNodeRef, transform, transition, isDragging,
+  } = useSortable({
     id: island.id,
   });
+  // 입력 중일 때만 초안을 들고, 그 외에는 캐시 값을 그대로 보여준다(제어 입력, B-11).
+  // 저장이 실패하면 훅이 캐시를 되돌리므로 입력도 저절로 이전 값으로 돌아간다.
+  const [nameDraft, setNameDraft] = useState<string | null>(null);
+  const [descDraft, setDescDraft] = useState<string | null>(null);
+
+  const commitName = () => {
+    if (nameDraft === null) return;
+    const name = nameDraft.trim();
+    setNameDraft(null);
+    if (name && name !== island.name) onRename(name);
+  };
+
+  const commitDescription = () => {
+    if (descDraft === null) return;
+    const description = descDraft.trim();
+    setDescDraft(null);
+    if (description !== (island.description ?? '')) onDescribe(description);
+  };
 
   return (
     <div
       ref={setNodeRef}
       style={{ transform: CSS.Transform.toString(transform), transition }}
-      className={`p-2.5 rounded-xl border transition-colors ${isDragging ? 'opacity-50 z-10' : ''} ${
+      className={`p-2.5 rounded-md border transition-colors ${isDragging ? 'opacity-50 z-10' : ''} ${
         current ? 'border-primary/50 bg-primary/5' : 'border-border bg-card'
       }`}
     >
       <div className="flex items-center gap-2">
-        {/* 드래그 핸들만 잡아야 입력 필드 클릭이 드래그로 먹히지 않는다. */}
-        <span
+        {/* 드래그 핸들만 잡아야 입력 필드 클릭이 드래그로 먹히지 않는다. 키보드: Space 로 잡고 ↑/↓. */}
+        <button
+          type="button"
+          ref={setActivatorNodeRef}
           {...attributes}
           {...listeners}
+          title="순서 변경 (끌거나 Space 후 화살표)"
           aria-label={`${island.name} 순서 변경`}
-          className="flex items-center justify-center flex-shrink-0 p-0.5 -ml-1 rounded text-muted-foreground hover:text-foreground cursor-grab active:cursor-grabbing touch-none"
+          className="flex items-center justify-center flex-shrink-0 p-0.5 -ml-1 rounded-xl text-muted-foreground hover:text-foreground cursor-grab active:cursor-grabbing touch-none"
         >
-          <GripVertical className="w-4 h-4" />
-        </span>
+          <GripVertical className="w-4 h-4" aria-hidden="true" />
+        </button>
         <button
           type="button"
           onClick={onPickIcon}
           title="아이콘 변경"
           aria-label={`${island.name} 아이콘 변경`}
-          className="flex items-center justify-center w-8 h-8 rounded-lg bg-secondary text-muted-foreground hover:text-foreground transition-colors flex-shrink-0"
+          className="flex items-center justify-center w-8 h-8 rounded-xl bg-secondary text-muted-foreground hover:text-foreground transition-colors flex-shrink-0"
         >
           <IslandIcon icon={island.icon} className="w-4 h-4" />
         </button>
         <input
           type="text"
-          defaultValue={island.name}
+          value={nameDraft ?? island.name}
           aria-label={`${island.name} 이름`}
-          onBlur={(e) => {
-            const name = e.target.value.trim();
-            if (name && name !== island.name) onRename(name);
-            else e.target.value = island.name;
+          maxLength={100}
+          onFocus={() => setNameDraft(island.name)}
+          onChange={(e) => setNameDraft(e.target.value)}
+          onBlur={commitName}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') e.currentTarget.blur();
+            if (e.key === 'Escape') { setNameDraft(null); e.currentTarget.blur(); }
           }}
-          className="flex-1 min-w-0 px-2 py-1 text-sm bg-transparent border border-transparent rounded-lg hover:border-border focus:border-border focus:outline-none"
+          className="flex-1 min-w-0 px-2 py-1 text-sm bg-transparent border border-transparent rounded-xl hover:border-border focus:border-border focus:outline-none"
         />
         <button
           type="button"
           onClick={onToggleLayout}
           title={island.layoutMode === 'tabs' ? '탭 레이아웃 (클릭 시 사이드바)' : '사이드바 레이아웃 (클릭 시 탭)'}
           aria-label="레이아웃 전환"
-          className="p-1.5 rounded-lg text-muted-foreground hover:bg-secondary hover:text-foreground transition-colors flex-shrink-0"
+          className="p-1.5 rounded-xl text-muted-foreground hover:bg-secondary hover:text-foreground transition-colors flex-shrink-0"
         >
           {island.layoutMode === 'tabs'
             ? <LayoutGrid className="w-4 h-4" />
             : <PanelLeft className="w-4 h-4" />}
         </button>
+        {/* 공유 범위는 테넌트와 무관한 **전체 사용자**다(정책 ⑦) — 라벨이 그 범위를 그대로 말한다. */}
         <button
           type="button"
           onClick={onToggleShare}
-          title={island.isShared ? '팀에 공유됨 (클릭 시 비공개)' : '비공개 (클릭 시 팀에 공유)'}
-          aria-label="공유 전환"
-          className={`p-1.5 rounded-lg transition-colors flex-shrink-0 ${
+          title={island.isShared ? '모든 사용자에게 공유 중 (클릭 시 비공개)' : '비공개 (클릭 시 모든 사용자에게 공유)'}
+          aria-label="모든 사용자에게 공유"
+          aria-pressed={island.isShared}
+          className={`p-1.5 rounded-xl transition-colors flex-shrink-0 ${
             island.isShared
               ? 'text-primary bg-primary/10'
               : 'text-muted-foreground hover:bg-secondary hover:text-foreground'
@@ -126,21 +154,24 @@ function SortableIslandRow({
           onClick={onDelete}
           title="삭제"
           aria-label={`${island.name} 삭제`}
-          className="p-1.5 rounded-lg text-muted-foreground hover:bg-status-critical-soft hover:text-status-critical transition-colors flex-shrink-0"
+          className="p-1.5 rounded-xl text-muted-foreground hover:bg-status-critical-soft hover:text-status-critical transition-colors flex-shrink-0"
         >
           <Trash2 className="w-4 h-4" />
         </button>
       </div>
       <input
         type="text"
-        defaultValue={island.description ?? ''}
+        value={descDraft ?? island.description ?? ''}
         aria-label={`${island.name} 설명`}
         placeholder="설명 (선택)"
-        onBlur={(e) => {
-          const description = e.target.value.trim();
-          if (description !== (island.description ?? '')) onDescribe(description);
+        onFocus={() => setDescDraft(island.description ?? '')}
+        onChange={(e) => setDescDraft(e.target.value)}
+        onBlur={commitDescription}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') e.currentTarget.blur();
+          if (e.key === 'Escape') { setDescDraft(null); e.currentTarget.blur(); }
         }}
-        className="w-full mt-1 ml-8 px-2 py-1 text-xs bg-transparent border border-transparent rounded-lg text-muted-foreground hover:border-border focus:border-border focus:outline-none"
+        className="w-full mt-1 ml-8 px-2 py-1 text-xs bg-transparent border border-transparent rounded-xl text-muted-foreground hover:border-border focus:border-border focus:outline-none"
       />
     </div>
   );
@@ -157,7 +188,10 @@ export function IslandManagerPane({ open, onClose, currentId }: IslandManagerPan
   const cloneIsland = useCloneIsland();
   const reorderIslands = useReorderIslands();
   const setLastIslandId = useIslandStore((s) => s.setLastIslandId);
-  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
+  );
 
   const [newName, setNewName] = useState('');
   const [pendingDelete, setPendingDelete] = useState<Island | null>(null);
@@ -181,6 +215,16 @@ export function IslandManagerPane({ open, onClose, currentId }: IslandManagerPan
         onError: () => toast.error('아일랜드 생성 실패'),
       },
     );
+  };
+
+  /** 모든 수정은 실패를 알린다(B-11). 화면 값은 훅이 이미 되돌려 놓는다. */
+  const saveIsland = (patch: IslandPatch, failTitle: string) => {
+    updateIsland.mutate(patch, {
+      onError: (err) => {
+        const msg = describeIslandSaveError(err, failTitle);
+        toast.error(msg.title, msg.description);
+      },
+    });
   };
 
   const handleDragEnd = (e: DragEndEvent) => {
@@ -261,14 +305,17 @@ export function IslandManagerPane({ open, onClose, currentId }: IslandManagerPan
                   key={island.id}
                   island={island}
                   current={island.id === currentId}
-                  onRename={(name) => updateIsland.mutate({ id: island.id, name })}
-                  onDescribe={(description) => updateIsland.mutate({ id: island.id, description })}
+                  onRename={(name) => saveIsland({ id: island.id, name }, '이름 변경 실패')}
+                  onDescribe={(description) => saveIsland({ id: island.id, description }, '설명 변경 실패')}
                   onPickIcon={() => setIconTarget(island)}
-                  onToggleLayout={() => updateIsland.mutate({
+                  onToggleLayout={() => saveIsland({
                     id: island.id,
                     layoutMode: island.layoutMode === 'tabs' ? 'sidebar' : 'tabs',
-                  })}
-                  onToggleShare={() => updateIsland.mutate({ id: island.id, isShared: !island.isShared })}
+                  }, '레이아웃 전환 실패')}
+                  onToggleShare={() => saveIsland(
+                    { id: island.id, isShared: !island.isShared },
+                    island.isShared ? '공유 해제 실패' : '공유 실패',
+                  )}
                   onDelete={() => setPendingDelete(island)}
                 />
               ))}
@@ -281,12 +328,12 @@ export function IslandManagerPane({ open, onClose, currentId }: IslandManagerPan
           <>
             <p className="mb-2 flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
               <Users className="w-3.5 h-3.5" />
-              팀 공유 아일랜드
+              다른 사용자가 공유한 아일랜드
             </p>
             <div className="space-y-2">
               {shared.map((island) => (
                 <div key={island.id} className="flex items-center gap-2 p-2.5 rounded-md border border-border bg-card">
-                  <span className="flex items-center justify-center w-8 h-8 rounded-lg bg-secondary text-muted-foreground flex-shrink-0">
+                  <span className="flex items-center justify-center w-8 h-8 rounded-xl bg-secondary text-muted-foreground flex-shrink-0">
                     <IslandIcon icon={island.icon} className="w-4 h-4" />
                   </span>
                   <button
@@ -304,7 +351,7 @@ export function IslandManagerPane({ open, onClose, currentId }: IslandManagerPan
                     onClick={() => handleClone(island)}
                     title="내 아일랜드로 복제"
                     aria-label={`${island.name} 복제`}
-                    className="p-1.5 rounded-lg text-muted-foreground hover:bg-secondary hover:text-foreground transition-colors flex-shrink-0"
+                    className="p-1.5 rounded-xl text-muted-foreground hover:bg-secondary hover:text-foreground transition-colors flex-shrink-0"
                   >
                     <Copy className="w-4 h-4" />
                   </button>
@@ -330,7 +377,7 @@ export function IslandManagerPane({ open, onClose, currentId }: IslandManagerPan
           value={iconTarget.icon}
           title="아일랜드 아이콘 선택"
           clusterName={iconTarget.name}
-          onChange={(next) => updateIsland.mutate({ id: iconTarget.id, icon: next })}
+          onChange={(next) => saveIsland({ id: iconTarget.id, icon: next }, '아이콘 변경 실패')}
           onClose={() => setIconTarget(null)}
         />
       )}
