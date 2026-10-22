@@ -22,13 +22,24 @@ from app.schemas.home_prefs import (
 DEFAULTS_KEY = "home_prefs_defaults"
 
 
+# 화면이 없어져 다른 화면으로 합쳐진 경로 → 대체 경로. 저장된 설치 목록·고정 경로·조직 기본값을
+# 읽을 때 치환한다(상태 없는 읽기 시점 치환 — 구 백업을 복원해도 같은 결과). 화면 쪽 옛 URL 은
+# App.tsx 의 `<Navigate>` 가 받는다.
+RETIRED_PATH_ALIASES: dict[str, str] = {
+    "/cluster-overview": "/clusters",  # 클러스터 현황 → 클러스터 상세(+ PromQL 카드는 /observability)
+}
+
+
 def _clean_ids(ids: Any) -> list[str]:
-    """문자열만, 중복 제거, 순서 보존."""
+    """문자열만, 은퇴한 경로는 대체 경로로, 중복 제거, 순서 보존."""
     out: list[str] = []
     if not isinstance(ids, list):
         return out
     for v in ids:
-        if isinstance(v, str) and v and v not in out:
+        if not isinstance(v, str) or not v:
+            continue
+        v = RETIRED_PATH_ALIASES.get(v, v)
+        if v not in out:
             out.append(v)
     return out
 
@@ -67,6 +78,9 @@ def load_prefs(raw: Any) -> HomePrefs:
     # 최신 버전을 찍어 저장하면 옛 그룹 id 가 변환 없이 "최신"으로 굳으므로 0 으로 유지한다.
     if "layout_version" not in raw:
         prefs.layout_version = 0
+    prefs.pinned_paths = _clean_ids(prefs.pinned_paths)
+    if isinstance(prefs.installed_apps, list):
+        prefs.installed_apps = _clean_ids(prefs.installed_apps)
     return prefs
 
 

@@ -15,7 +15,6 @@ export const ko = {
     page: {
       home: '홈',
       island: '나의 아일랜드',
-      clusterOverview: '클러스터 현황',
       k8sManage: 'K8s 상세 관리',
       k8sAllocation: 'K8s 자원 관리',
       k9s: 'k9s 콘솔',

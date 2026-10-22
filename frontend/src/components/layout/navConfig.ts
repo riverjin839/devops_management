@@ -1,6 +1,6 @@
 import type { ComponentType } from 'react';
 import {
-  LayoutDashboard, BookOpen, ListTodo, Sparkles, Settings, Server,
+  BookOpen, ListTodo, Sparkles, Settings, Server,
   CalendarCheck2, Link2, Tags, Calculator, GitFork, BookMarked, Layers, Boxes,
   Map, BarChart3, Network, Zap, Route, Share2, Rss, Users, GitCommit, Terminal, Database, Cpu, HardDrive,
   ClipboardCheck, ListTree, Waves, TerminalSquare, Library, Home, Workflow,
@@ -29,7 +29,6 @@ export const NAV_MAP: Record<string, NavMapEntry> = {
   // Your Island — 사용자 커스텀 화면. GROUPS 에는 넣지 않는다(그룹 레일이 아니라
   // 사이드바 최상단 독립 버튼). NAV_MAP 에는 라벨 오버라이드/화면 UI 설정 대상이 되도록 등록.
   '/island':             { labelKey: 'island', defaultLabel: '나의 아일랜드', icon: Palmtree },
-  '/cluster-overview':   { labelKey: 'clusterOverview', defaultLabel: '클러스터 현황',  icon: LayoutDashboard },
   '/k8s-manage':         { labelKey: 'k8sManage', defaultLabel: 'K8s 상세 관리',  icon: ShipWheel, iconSize: 'w-5 h-5' },
   '/k8s-allocation':     { labelKey: 'k8sAllocation', defaultLabel: 'K8s 자원 관리',  icon: Gauge, iconSize: 'w-5 h-5' },
   '/k9s':                { labelKey: 'k9s', defaultLabel: 'k9s 콘솔',        icon: Dog, iconSize: 'w-5 h-5' },
@@ -124,7 +123,7 @@ export interface NavGroup {
  */
 export const GROUPS: NavGroup[] = [
   { id: 'observe',   label: '관측', labelKey: 'observe', descriptionKey: 'observe', icon: Activity,    description: '상태를 본다 — 읽기 전용', domain: 'platform',
-    paths: ['/cluster-overview', '/cluster-trends', '/observability', '/alerts', '/k8s-events', '/k8s-logs', '/incident-analysis', '/isilon-nfs', '/lake-services'] },
+    paths: ['/cluster-trends', '/observability', '/alerts', '/k8s-events', '/k8s-logs', '/incident-analysis', '/isilon-nfs', '/lake-services'] },
   // '/ops-checks'(운영 점검 콘솔, 레거시)는 사이드바에서 뺐다 — 같은 패널을 종합 상태까지 포함해
   // 보여주는 '/clusters/:id' 로 대체됐다(App.tsx 주석). 라우트·NAV_MAP 은 북마크/아일랜드 패널
   // 호환으로 유지(D-129).

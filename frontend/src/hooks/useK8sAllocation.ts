@@ -103,8 +103,12 @@ export function useForceAllocRefresh(clusterId: string) {
       await mutateAsync();
     } catch { /* isError/error 로 조회 가능 — 호출부에서 처리 */ }
   }, [clusterId, mutateAsync]);
-  return { refresh, isPending, isError, error };
+  // 사용자가 누른 "다시 집계" 용 — 결과를 돌려주고 실패는 throw 해 실행 로그(runLogged)가 사유를 남기게 한다.
+  return { refresh, run: mutateAsync, isPending, isError, error };
 }
+
+/** 집계 진행 스냅샷 1회 조회 — "다시 집계" 실행 로그가 끝날 때까지 진행을 이어 쓰는 데 쓴다(pollIntoRunLog). */
+export const fetchAllocNamespaces = async (clusterId: string) => (await k8sAllocationApi.namespaces(clusterId)).data;
 
 /** 비강제 재조회 — NS 롤링 갱신 중인 클러스터는 Celery 가 스냅샷을 계속 게시하므로 재집계(force)
  * 없이 저장된 결과만 다시 읽는다(세 쿼리가 같은 스냅샷을 공유). 서버 부하는 GET 3회뿐이다. */

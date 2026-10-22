@@ -10,6 +10,69 @@
 
 ---
 
+<!-- design-spec-summary: 아래 Colors / Typography / Components 세 섹션은 Impeccable 이 읽는 명세 요약이다.
+     현행화·감사 때 삭제하거나 운영 섹션으로 합치지 않는다. 구조가 바뀔 때(테마 추가·표준 컴포넌트 교체·글꼴 변경)만 갱신한다. -->
+
+> **명세 요약 (Impeccable 용)** — 아래 세 섹션은 `DESIGN_SYSTEM.md` 의 요약이다. 둘이 다르면 **`DESIGN_SYSTEM.md` 가 우선**이고,
+> 토큰 실측값의 원천은 `frontend/src/index.css` 다. 값은 기본 테마(`light` 슬레이트) 기준이며 바탕 테마 16종 + 강조색 6종에서
+> 모두 달라지므로, 코드에는 아래 값이 아니라 **토큰 이름**을 쓴다.
+
+## Colors (색상)
+
+토큰 기반이다 — JSX 에 raw hex·고정 팔레트(`text-white`, `bg-gray-*`, `zinc-*`) 금지. 정상 상태는 중립색으로 두고
+상태색은 비정상에만 쓴다. 카테고리(시리즈) 구분은 `--chart-1`~`--chart-8` 만 쓴다. 테마 매트릭스는 `DESIGN_SYSTEM.md` §12.1.
+
+### Surface · Text
+
+- **Background** (#F8FAFC): `bg-background` — 페이지 바탕(slate-50)
+- **Card** (#FFFFFF): `bg-card` — 카드 표면. 깊이는 그림자가 아니라 `bg-surface-container-lowest`~`highest` 톤 차이로 준다
+- **Foreground** (#0F172A): `text-foreground` — 본문 글자(slate-900)
+- **Muted Foreground** (#5D6B80): `text-muted-foreground` — 보조 글자. 투명도(`/50~90`) 없이 쓴다(AA 4.5:1 유지)
+- **Border** (#E2E8F0): `border-border` — 1px 경계, 그림자 대체
+- **Sidebar** (#1B2530): `bg-sidebar` — 메인 사이드바(라이트에서도 다크 네이비)
+
+### Brand
+
+- **Primary** (#0369A1): `bg-primary` / 글자는 `text-primary`(`--primary-text`) — 액션·링크·활성 탭. 강조색 6종으로 바뀐다
+- **Destructive** (#DC2626): `bg-destructive` — 삭제·되돌릴 수 없는 액션
+
+### Status
+
+- **Healthy** (#22C55E): `status-healthy` — 정상·Running. 글자는 `text-status-healthy`(`*-text` 파생 토큰)
+- **Warning** (#F59E0B): `status-warning` — 경고·성능 저하
+- **Critical** (#DC2626): `status-critical` — 장애·실패
+- **Unknown** (#6B7280): `status-unknown` — 알 수 없음·대기
+- **Info** (#0EA5E9): `status-info` — 정보·스트리밍 갱신
+
+## Typography (글꼴)
+
+시스템 폰트 스택만 쓴다(D-131) — 웹폰트 CDN 금지(폐쇄망). 새 글꼴은 `@fontsource` 로 번들한다. 상세는 `DESIGN_SYSTEM.md` §3.
+
+- **Sans**: `-apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, "Apple SD Gothic Neo", "Malgun Gothic", "Noto Sans KR", Helvetica, Arial, sans-serif`
+- **Mono**: `ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace` — 코드·로그·PromQL·식별자 전용
+- **위계 4단**: 페이지 제목 `text-xl font-semibold`(`PageHeader` 만, 화면당 1개) · 카드 제목 `text-xs font-semibold`(MacCard 내장) ·
+  본문 `text-sm` · 보조 `text-xs text-muted-foreground`
+- **굵기**: 본문 400 · 라벨 500 · 제목 600. 최소 글자 11px(`text-[11px]` 는 표 셀만)
+- **숫자**: `tabular-nums` 로 자리 맞춤(`font-mono` 아님). `text-2xl` 이상 큰 숫자는 `/cluster-overview` Health Hero 한정
+- **언어**: UI 문자열은 한국어 중심 · 용어는 한국어 표준어(용어 규칙은 `DESIGN_SYSTEM.md` §12.12)
+
+## Components (컴포넌트)
+
+운영 화면(Operate) 기준 — 정보 밀도 우선, 마케팅식 여백·KPI 타일 행·아이콘 타일 헤더 금지. 규칙 원천은 `DESIGN_SYSTEM.md` §12.
+
+- **PageShell / PageHeader**: 본문 컨테이너 밀도 3종(콘솔·허브·문서) — 그 외 `max-w-[NNNNpx]` 금지. `<h1>` 은 `PageHeader` 로 1개만
+- **MacCard**: 모든 카드. flat 표면 + 1px 보더 + `rounded-md`. 헤더는 `title`·`actions`·`titleExtra` 슬롯만 — 카드 안 카드·수제 헤더·`<h2>` 중복 금지
+- **라운딩**: 카드 `rounded-md` · 버튼/입력 `rounded-xl`. 전 단계가 `--radius` 기준 테마 인지. sharp corner 금지
+- **ClusterSidebar**: per-cluster 페이지는 `iconOnly` 필수, 메인 사이드바에 flush. 페이지 내 `<select>` 클러스터 선택기 금지
+- **콘솔 패턴**: SSH/exec 화면은 좌(컨트롤)/우(결과) 한 로우, `ExecOutputTabs` + `LogViewer`, 최상단 `useTerminalEnvSync`
+- **실행 버튼**: `RunLogPanel` + `useRunLog` + `useLogPref` — 상세·실시간 로그를 함께 제공하고 "로그 보기" 여부는 사용자가 정한다(§12.9.1)
+- **권한 UX**: operator 이상이 필요한 버튼은 숨기지 않고 `useCanOperate()` 로 `disabled` + 사유(`withHint`)
+- **EmptyState**: 빈 상태는 `common/EmptyState` 만
+- **접근성**: 아이콘 전용 버튼은 `title` + `aria-label`. flyout 항목은 `FlyoutLink`/`FlyoutAction`. 이모지·⚠✓✗ 문자 아이콘 금지
+- **모달**: shadcn Dialog 어댑터만(`scripts/ui/check_dialogs.py` 가 CI 에서 검사)
+
+---
+
 ## 1. 현행화 (Current State)
 
 _최근 감사일: **2026-10-13** (R-4 10차 — AI 개발티 조합 수준 전수 감사 + 4회차 정량 재집계 — `frontend/src` grep. pages 72 / components tsx 약 300. 3회차: 2026-10-08, 2회차: 2026-09-10, 1회차: 2026-07-19)_
@@ -23,7 +86,7 @@ _최근 감사일: **2026-10-13** (R-4 10차 — AI 개발티 조합 수준 전�
 ### 1.1 디자인 시스템 요약
 
 - **테마**: 라이트 `light`(슬레이트) + 강조색 `blue` 기본(`themeStore.ts:75-76`). 바탕 16종 + `system`, 강조색 6종 — 전수는 CLAUDE.md §UI Design System. (구 "다크 Ops Slate 기본" 서술은 폐기 — D-134)
-- **레이아웃**: MacCard 섹션 카드(헤더 슬롯 `icon`·`description`·`titleExtra`·`actions`, D-122) + ClusterSidebar(iconOnly, 56px 레일) + 페이지 밀도 `PageShell` 3종(콘솔/허브/문서, D-123). 12-col Bento Health Hero 는 `/cluster-overview` 한정.
+- **레이아웃**: MacCard 섹션 카드(헤더 슬롯 `icon`·`description`·`titleExtra`·`actions`, D-122) + ClusterSidebar(iconOnly, 56px 레일) + 페이지 밀도 `PageShell` 3종(콘솔/허브/문서, D-123). Health Hero(`/cluster-overview`)는 화면 통합으로 제거(D-239) — KPI 타일 행은 예외 없이 금지.
 - **타이포**: 시스템 폰트 스택 일원화(D-131) — sans 는 `tailwind.config.js` `fontFamily.sans` = `index.css` body(한글 Apple SD Gothic Neo·맑은 고딕), mono 는 `ui-monospace` 계열(터미널 기본과 동일). 웹폰트 CDN 없음(폐쇄망 동일 렌더). 위계 4단: h1 `text-xl` · 카드 제목(MacCard) · 본문 `text-sm` · 보조 `text-xs`, 숫자 `tabular-nums`.
 - **차트**: Bullet Chart(SVG) · Sparkline · CheckHistoryHeatmap — Gauge/Pie 비추천.
 - **DESIGN_SYSTEM.md 적용 로드맵 상태**: W3(Health Hero)·W4(접근성 패스)·W5(차트 교체) 완료,
@@ -595,6 +658,7 @@ Cilium Monitor·Hubble 라이브 스트림의 실행 로그 생략(§12.9.1 예�
 | D-236 | 조합 | **(B-20) 아일랜드 잔여** — 레일 툴팁 `bg-zinc-700 text-white`, 관리 행 `bg-card rounded-xl`, `rounded-lg` 14, 로컬 `Placeholder` 빈 상태, 임의 `p-6` | 테마 불일치 | 낮음 | 완료 (2026-10-22) | `bg-foreground text-background` 툴팁, `rounded-md`/`rounded-xl` 을 적용했다. `EmptyState`, `PageShell density="hub"` 로 바꾸고, 공유 라벨은 "모든 사용자에게 공유"다 |
 | D-237 | 용어 | **(B-21) 버전 그래프 용어 잔여** — 유형 `cluster/category/component/flag`, 카테고리 원문, ISO 수집 시각 | 영어 원문 노출 | 낮음 | 완료 (2026-10-22) | 유형·카테고리 라벨 맵(원문은 `title`)과 `formatDateTime` 을 적용했다 |
 | D-238 | 조합 규칙 잔여 | **(B-22) D-190 잔여: `/alerts` `AlertNotifyRulesPanel` 의 표 밖 `text-[11px]` 3건**(필드 오류·"저장하지 않은 변경"·도움말) | 글자 크기 하한 불일치 | 낮음 | 완료 (2026-10-22) | 셋 다 `text-xs` 로 바꿨다 |
+| D-239 | 화면 통합 | **(2026-10-22) `/cluster-overview` "클러스터 현황" 삭제** — 홈 `PlatformStatusMatrix`·`/clusters/:id` 와 역할이 겹쳐, 클러스터 단위 기능(애드온·점검 실행·현황 아이템·플레이북·점검 이력·일일 리포트·Kubeconfig)은 `/clusters/:id`, PromQL 카드는 `/observability` 하단 `MetricCardsPanel` 로 옮기고 화면을 지웠다. 전 클러스터 그리드·`HealthHero`·`KanbanSummaryCharts`·`ui/BulletChart` 제거 → §12.12-2 KPI 행 예외 소멸. 옛 URL 은 `/clusters` redirect | 같은 정보를 보는 진입점이 3곳으로 갈려 있었다 | 중간 | 완료 (2026-10-22) | 사용자 요청. 저장된 설치 목록의 옛 경로는 읽을 때 `/clusters` 로 치환 |
 
 ---
 
@@ -705,3 +769,4 @@ Cilium Monitor·Hubble 라이브 스트림의 실행 로그 생략(§12.9.1 예�
 | 2026-10-21 | R-4 14차 라운드 — 관측 3화면 정성 리뷰(`/observability`·`/cluster-trends`·`/k8s-logs` — 사용자 동작→hook→API→라우터·Prometheus 서비스·SSE 생성기·마운트 추적) + 로드맵 R-4 현행화 | 11 (D-181~D-191: 높음 3·중간 5·낮음 3) | 0 | ux-ui-designer | 13차 R-4 "다음 라운드 후보" 중 관측 3화면 배정(권장 순서). **코드 변경 없음 — 등재만.** 정량(프론트 14파일 + 라우터 3): raw hex 0·정적/색 인라인 style 2·고정 팔레트 0(로그 `zinc-*` 예외)·native `confirm()` 0·`ErrorState`/`isError` 0/3·`useCanOperate` 0(편집은 `hasRole` 숨김)·`useTerminalEnvSync` 0/1·`rounded-lg` 17. 공통 패턴: fail-safe `offline` 응답·HTTP 실패를 표가 "없음"으로 표시(알람 뷰 "발화 중인 알람이 없습니다"), 쿼리 파라미터 `cluster_id` 의 테넌트 판정 누락(`_auth` 마운트), 로그 스트림이 끊긴 뒤에도 스레드·슬롯 점유·종료/오류를 로그 줄로 섞음. 실행 로그 규칙은 대상 버튼 없음(위반 0). 정책 결정 8건 권장 기본값 등재. 15차 후보: 지식·기타 잔여 9화면 |
 | 2026-10-21 | 14차 감사 수정 — D-181~D-191 전 항목 + R-3 로컬 재측정 | 0 | 11 (D-181~D-191) | claude-code | 정책 8건은 권장 기본값 채택(`cluster_id` 없는 조회 admin 전용·로그 스트림 사용자당 3/전체 20·30초 읽기 타임아웃·30분 상한·오래됨 15분 AppSetting·추이 자동 갱신 30m/1h 60초·노드 라벨 클러스터 컬럼 + auto·카탈로그 감사·"파드 로그" 표기). 감사안과 다른 결정 2건: D-185 컬럼명 `trend_node_label`(env `PROMETHEUS_NODE_LABEL` 은 전역 fallback), D-191 follow 표기 "따라가기". 서버(권한·SSE 계약·병렬 추이·카탈로그 엔드포인트·설정) + 프론트(관측 지표·추이·파드 로그·공용 `SearchableSelect`) + pytest 51건(`test_{observability,cluster_trends,pod_log_stream}_round14.py`). 같은 브랜치에 13차 잔여(보호 레벨 생성 admin 전용·비동기 DNS 호스트 판정 `services/operation_levels.py`)와 로딩 화면 테마·대비 + `axe_scan` 앱 마운트 대기 포함 — 로컬 axe light 0 / dark 0, 원격 `a11y.yml` 은 GitHub 앱 403 이라 사용자가 Actions 탭에서 실행. 15차 후보: 지식·기타 잔여 9화면 |
 | 2026-10-22 | R-4 15차 라운드 + 수정 — 지식·기타 9화면 정성 리뷰(`/mindmap`·`/ontology`·`/trends`·`/service-architecture`·`/links`·`/jira-import`·`/cidr`·`/island`·`/versions/:clusterId/graph` + `/alerts` D-190 잔여 — 사용자 동작→hook→API→라우터·서비스·마운트 추적) 후 같은 날 전 항목 수정, 로드맵 R-4 화면 순회 완료 | 47 (D-192~D-238: 높음 11·중간 22·낮음 14 — A-n = D-(191+n), B-n = D-(216+n)) | 47 (D-192~D-238) | ux-ui-designer + claude-code | 14차 R-4 "다음 라운드 후보" 9화면 전부. 감사 2갈래(A 지식 5화면 / B 기타 4화면 + `/alerts`) → 수정 12묶음(서버 영역: 온톨로지·아키텍처 문서·동향·마인드맵·링크·Jira 엑셀·버전 그래프·아일랜드 / 프론트: 9화면 + `/alerts`). 정책 22건은 권장 기본값 채택, 다른 결정 2건: 온톨로지 메뉴 숨김 미채택(빈 상태 수정 + 화면 추가 대화상자), 라이브 Jira 가져오기 다중 테넌트 + `tenant_id` 없음은 전체 공유 유지. **동향 마이그레이션이 URL 중복 행을 1회 삭제**(가장 먼저 수집된 행 유지). pytest 8파일(`test_{ontology,architecture_docs,trends,mindmap,cluster_links,jira_excel,version_graph,island}_round15.py`). 화면 단위 리뷰가 전 라우트를 덮었다 — 다음 라운드 후보 없음. 후속 5건은 R-4 행 참조 |
+| 2026-10-22 | 클러스터 현황(`/cluster-overview`) 삭제 — 기능을 `/clusters/:id`·`/observability` 로 이관 (D-239) | 0 | 0 | claude-code | KPI 행 예외 소멸. lint·tsc·build 통과 |

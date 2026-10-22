@@ -4,6 +4,7 @@ import {
 } from '@/components/common';
 import { Activity, Plus, RefreshCw, Search, Settings2 } from 'lucide-react';
 import { MacCard } from '@/components/ui/MacCard';
+import { MetricCardsPanel } from '@/components/dashboard/MetricCardsPanel';
 import { ClusterSidebar } from '@/components/common/ClusterSidebar';
 import { useClusters } from '@/hooks/useCluster';
 import { useClusterRouteParam } from '@/hooks/useClusterRouteParam';
@@ -497,6 +498,8 @@ export function ObservabilityPage() {
               ) : null}
             </div>
           </MacCard>
+
+          <MetricCardsPanel />
         </div>
       </PageShell>
 

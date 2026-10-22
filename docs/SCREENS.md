@@ -292,36 +292,6 @@ hover 시 flyout 자체가 라벨을 보여주므로 이름만 뜨는 중복 툴
 
 ## 클러스터 — 모니터링 / 리소스 관리
 
-### 클러스터 대시보드 (`/cluster-overview`)
-
-> **2026-10-14 (D-128)**: "점검 실행" 이 실행 로그 패널(`RunLogPanel` + 로그 보기)을 띄운다 — 클러스터별 시작 줄, 응답 대기 하트비트, 애드온별
-> 상태·응답 ms·메시지 줄(`POST /health/check/{id}` 응답 `addons[]`), 클러스터·전체 요약. 실패한 클러스터는 오류 줄을 남기고 다음으로 진행.
-
-> **2026-10-14 (D-119)**: 클러스터 카드는 위험 → 경고 → 미연결 → 정상 순으로 정렬되고(`sortByStatus`), 정상 카드는 색 없이 회색 점·아이콘만 쓴다. 애드온 카드 아이콘은 타입별 lucide(`AddonCard` `ADDON_TYPE_ICON`).
-
-- **파일**: `frontend/src/pages/Dashboard.tsx` (+ `components/dashboard/{SummaryStats,AddonGrid,MetricCardGrid,KanbanSummaryCharts,ClusterItemsGrid,AddClusterModal,AddAddonModal,AddMetricCardModal,KubeconfigEditModal,ClusterItemModal}`, `components/playbooks/{PlaybookCard,AddPlaybookModal,RunCredsModal}`)
-- **메트릭 카드 공유 범위(멀티테넌시 4단계)**: `AddMetricCardModal` 의 `공유 범위`(`TenantScopeSelect`)로 카드를 테넌트 전용으로 둘 수 있다 — 목록·단건·쿼리·스파크라인·`/promql/query/all`(캐시 후 사용자별 필터)에서 그 멤버·admin 에게만 보인다(`routers/promql.py`).
-- **목적 / UX**: PEP 의 오리지널 핵심 화면. 등록된 K8s 클러스터의 헬스(API 서버/컨트롤플레인/etcd/노드/애드온), PromQL 기반 Prometheus 인사이트, 대시보드 노출용 Ansible 플레이북, 업무 현황(칸반)을 한 화면에서 훑고 즉시 점검(Run Check)을 트리거하는 랜딩 화면.
-- **UI 구성**:
-  - `ClusterSidebar` — `iconOnly` + `allowAll`(`allLabel="전체 현황"`) 단일 선택. "전체 현황" 선택 시 `ClusterOverviewGrid`(클러스터별 카드 그리드)로 전환.
-  - 상단 sticky 툴바 — Cluster/Check/Metric 추가 버튼, Daily Report(.md/.csv) 다운로드, Kubeconfig 편집, Run Check.
-  - `현황 아이템` MacCard(단일 클러스터 선택 시만) — `ClusterItemsGrid` (사용자 정의 카드, 실행/리사이즈/삭제).
-  - `Cluster Status` MacCard — `AddonGrid`(애드온별 헬스 카드) 또는 미연결(pending) 시 grayscale 오버레이 안내.
-  - `Prometheus Insights` MacCard — `MetricCardGrid`(PromQL 카드).
-  - 2단 그리드: `Playbook Checks`(대시보드 노출 플레이북) ↔ `업무 현황`(`KanbanSummaryCharts`).
-- **Frontend**: `useClusters`/`useSummary`/`useAddons`/`useHealthCheck`/`useCreateAddon`/`useDeleteAddon`/`useAddonHealthCheck` (`hooks/useCluster.ts`), `useDashboardPlaybooks`/`useRunPlaybook`/`useDeletePlaybook`/`useToggleDashboard`/`useUpdatePlaybook` (`hooks/usePlaybook.ts`), `useMetricCards`/`useMetricResults`/`useDeleteMetricCard` (`hooks/useMetricCards.ts`), `useClusterItems`/`useRunClusterItem`/`useUpdateClusterItem`/`useDeleteClusterItem`, `useWorkItems`. Zustand: `useClusterStore`(clusters/summary/addons/isChecking), `usePlaybookStore`(runningIds). `healthApi.exportReport()` 직접 호출(리포트 다운로드).
-- **Backend**: `GET /api/v1/clusters`, `GET /api/v1/health/summary`, `GET /api/v1/health/addons/{clusterId}`, `POST /api/v1/health/check/{clusterId}`, `POST /api/v1/health/check/{clusterId}/addons/{addonId}`, `POST/PUT/DELETE /api/v1/health/addons...`, `GET /api/v1/health/report` — 라우터 `backend/app/routers/health.py` + `clusters.py`. 서비스: `services/core_bundle_checker.py`(`DailyChecker`), `services/health_checker.py`, `services/checkers/*`(argocd/control_plane/etcd/jenkins/keycloak/nexus/node/system_pod). 모델: `models/cluster.py`(`Cluster`, `StatusEnum`), `models/addon.py`(`Addon`), `models/metric_card.py`.
-- **핵심 기능**:
-  - 클러스터 전체/개별 헬스 체크 실행 및 실시간 상태 반영.
-  - 애드온(체크 항목) CRUD, 기본 애드온(etcd Leader/Node Status/Control Plane/CoreDNS) 일괄 추가.
-  - PromQL 메트릭 카드 조회/추가/편집/삭제.
-  - 대시보드 노출 플레이북 실행(SSH 자격증명 세션 캐시 지원) 및 토글.
-  - 클러스터별 커스텀 "현황 아이템" 카드 실행/리사이즈.
-  - Daily Report(.md/.csv) 익스포트, Kubeconfig 편집 모달.
-- **요청사항 (수정 요청)**:
-  - _(여기에 개선/수정 요청을 직접 적어주세요)_
-  - **[2026-09-08, D-067]** `Cluster Status` 카드 상단에 종합 상태 원인 1줄(예: "심층 점검 cert_expiry 12일")과 "점검 허브로" 링크 추가 — writer 2곳(기본점검·애드온)이 서로 덮어쓰고 심층 점검은 반영되지 않는 문제를 단일 롤업 서비스(`cluster_status_service.recompute()`)로 해소한 뒤 노출. 상세: [점검 체계 통합 설계안](https://claude.ai/code/artifact/9d204e4a-c106-48e8-91b8-4d0b37ebc250) §5·§10
-
 ### K8s 상세 관리 (`/k8s-manage`, `/k8s-manage/:clusterId`)
 
 - **파일**: `frontend/src/pages/K8sManagePage.tsx` (단일 파일 — `ResourceTablePanel`/`NodesPanel`/`PodsPanel`/`OverviewPanel`/`HelmPanel`/`CrdPanel`/`DetailDrawer`를 내부 정의하고 `ResourceTablePanel`/`PodsPanel`은 `NamespaceDashboardPanel`이 재사용할 수 있게 `export`), `frontend/src/components/k8s-manage/NamespaceDashboardPanel.tsx`(네임스페이스 대시보드) + `NsExtraPanels.tsx`(대시보드 전용 CR 오브젝트·ClusterRoleBinding 표). `HelmPanel` 도 `namespace?` prop 으로 대시보드가 재사용하게 `export`, + `components/k8s/{PodTerminal,EventsStream,NamespaceMultiSelect,ColumnToggle}`, `components/common/LogViewer`, `components/auth/RoleGate`.
@@ -353,11 +323,12 @@ hover 시 flyout 자체가 라벨을 보여주므로 이름만 뜨는 중복 툴
 - **UI 구성**:
   - `ClusterSidebar` — `iconOnly` 단일 선택.
   - 진행/안내 슬롯 — 집계 중엔 `SnapshotProgressBar`, 아니면 partial/stale 안내(표시할 게 없으면 높이를 차지하지 않는다).
-  - **`SummaryStrip`(기본)** — 노드/NS/파드/배치여유/CPU·MEM 할당·사용효율/여유·낭비/Run·Pend·Err 를 **칩 한 줄**로 압축. 큰 요약 카드가 세로를 다 먹어 정작 봐야 할 자원 탭이 접히는 선 아래로 밀리던 문제를 없앤 것 — 탭이 화면 위쪽에 오고 스크롤이 최소화된다.
+  - **헤더 "다시 집계"** — 강제 재집계. `RunLogPanel`(`useRunLog` + `useLogPref('k8s-allocation')`)에 요청 → 집계 단계·Pod 처리 수(`pollIntoRunLog`, `fetchAllocNamespaces` 3초) → 완료 요약·실패 NS 를 한 줄씩 남긴다(줄 생성 `effUtils.allocRunLines`). 카드의 "다시 읽기" 는 저장된 결과만 다시 불러온다(재집계 아님). 자동 다시 집계 타이머는 로그를 남기지 않는다.
+  - **`SummaryStrip`(기본, MacCard)** — **위험 칩(있을 때만, 맨 앞, 아이콘+글자)**: CPU/MEM 과할당(>100%)·사용 초과(>105%) → 노드 탭 "문제 노드만", Pod 오류/대기 → 요약 상세 펼침, request 미설정 → 네임스페이스 탭. 그 뒤 노드/NS/Pod/배치 여유/CPU·MEM 할당·사용/낭비 칩은 **전부 중립색**(할당률이 낮은 여유·낭비는 비용 정보라 경고색을 쓰지 않는다). 큰 요약 카드가 세로를 다 먹어 정작 봐야 할 자원 탭이 접히는 선 아래로 밀리던 문제를 없앤 것.
   - `요약 상세` 토글(localStorage `pep.k8s-allocation.summaryDetail`, **기본 접힘**) — 켜면 기존 `클러스터 요약` MacCard(할당·사용효율 스탯 + 물음표 툴팁, `PodScheduleCalc`, 할당 가용/추정 낭비 라인)와 `PodCapacityStatusCards`(**POD 용량** / **POD 상태**)가 스트립 아래로 펼쳐진다.
-  - 4-탭 전환(`view`, **sticky** — 긴 표를 스크롤해도 탭 바가 화면에 남는다): `NodesView`(카드/테이블 뷰 토글, 정렬·검색·CSV. **48노드 초과 시 `react-virtuoso` 가상 스크롤**(카드 `VirtuosoGrid`, 테이블 `TableVirtuoso`, 뷰포트 64vh)), `NamespacesView`(네임스페이스 → 워크로드 → 파드 인라인 드릴다운, 페이징), `NsRankingView`(req vs 실사용 막대 랭킹 차트), **`EfficiencyTab`(효율화)**.
+  - 4-탭 전환(**URL 쿼리 `?tab=`** — `useUrlParams`, 기본 `nodes` 는 쿼리에서 생략. **sticky**, `SegTabs mode="tabs"` = `tablist`/`aria-selected`/←→): `NodesView`(표/카드 보기 토글 + **정렬 선택기**(기본 "위험 높은 순" = `format.nodeRisk`, 카드 뷰에서도 정렬 가능) — 둘 다 localStorage `pep.k8s-allocation.nodeView`/`nodeSort` 기억, **"문제 노드만"**(`?problems=1`, `format.isProblemNode` = 여유 음수·request 105% 초과·limit 90% 이상·cordon), 검색·CSV. 요청/사용 막대는 `--chart-1`/`--chart-2`(과할당만 critical). **48노드 초과 시 `react-virtuoso` 가상 스크롤**(카드 `VirtuosoGrid`, 테이블 `TableVirtuoso`, 뷰포트 64vh)), `NamespacesView`(네임스페이스 → 워크로드 → Pod 인라인 드릴다운, 페이징. 펼치기는 첫 칸 버튼(`aria-expanded`) — 행 클릭은 마우스 편의. 효율 배지는 **CPU·MEM 중 더 나쁜 쪽**(`format.worstEfficiency`)), `NsRankingView`(request vs 실사용 막대 랭킹 차트 — 막대·축 라벨은 마우스 전용이라 같은 목록을 포커스 시 보이는 버튼 목록으로 함께 둔다), **`EfficiencyTab`(효율화)**. 탭·값 토글은 공용 `primitives.SegTabs` 하나로 그린다.
   - **`AllocDetailDialog`(기준 정보 클릭 → 리소스 상세)** — 세 탭이 공유하는 단일 다이얼로그. `NodesView` 의 노드명(카드/테이블), `NamespacesView` 의 NS 명, `NsRankingView` 의 막대·Y축 라벨을 클릭하면 열린다. 노드 스코프는 헤더에 CPU/MEM `MeterBar`(alloc 대비 req·use) + 워크로드/파드/NS/역할 스탯, 본문은 `NodeWorkloadsDrill`(그 노드에 뜬 파드를 Deployment/STS/DS/Pod 로 묶어 req·limit·usage 합산 → 펼치면 파드·컨테이너별 `PodAllocTable`). NS 스코프는 NS 스탯(파드/워크로드/CPU·MEM req·use·limit/req미설정) + `WorkloadTable` → `PodsDrill`. 양쪽 다 검색·CSV·개별 새로고침 제공.
-  - **효율화 탭**(`components/k8s-allocation/EfficiencyTab.tsx`): 툴바(수집 cron/마지막 수집/자동 적용 ON·OFF/사용률 소스/절감 가능 합계 + **지금 수집** · **추천 재생성** · **정책 설정** 버튼) → `RecommendationTable`(컨테이너별 request 축소 추천, 다중 선택 → `ApplyDialog`(before/after, **dry-run 기본 on**, "실행 후 실시간 로그 보기"), 무시. 오퍼레이터(CR) 관리 워크로드는 "오퍼레이터 관리 — CR로 조정" 배지 + 적용 불가) → `NsTrendChart`(NS 별 request/실사용/Quota 한도 시계열 24h/7d/30d, CPU/MEM) + `LowEfficiencyRankingChart`(사용효율 낮은 NS 상위 8 추이 + 추세 화살표, 클릭 시 추이 차트 연동) → `EfficiencyRunPanel`(실행 이력, 행 펼치면 `EfficiencyRunLog`). **모든 실행 버튼은 run 을 만들고 `EfficiencyRunLog`(`ExecutionStepsTimeline` + `LogViewer`, 1.5초 폴링)를 즉시 띄운다 — "로그 보기" 토글(localStorage 기억)로 접을 수 있다.** 롤백 버튼은 비 dry-run 성공/부분 성공 run 에만. `PolicyDialog`(`useModalA11y`): 네임스페이스 정책(auto right-size/Quota 탄력 opt-in, Quota min/max — "라이브 Quota 불러오기" 프리필, 오버라이드, **오퍼레이터 CR 어댑터**(group/version/plural/name/jsonpath/min/max — 예: StarRocks CN `spec.starRocksCnSpec.replicas`)) / 전역 기본값(admin — 자동 적용 마스터 스위치·허용 시간대 cron·백분위/여유율/하한/임계/최소 절감/쿨다운/최대 감소폭/시스템 NS/opt-out annotation/Quota 임계) / 수집 스케줄(admin — 기본 cron + 클러스터 오버라이드).
+  - **효율화 탭**(`components/k8s-allocation/EfficiencyTab.tsx`): 툴바(수집 cron/마지막 수집/자동 적용 켜짐·꺼짐/사용률 소스/절감 가능 합계 + **지금 수집** · **추천 재생성** · **정책 설정** 버튼 — viewer 는 숨기지 않고 `useCanOperate` 비활성 + 사유) → `RecommendationTable`(컨테이너별 request 축소 추천, 다중 선택 → `ApplyDialog`(**열 때만 마운트 — 드라이런은 매번 켜진 채 시작**, 대상 워크로드·Pod 수·절감 합계 요약, before/after, "실행 후 실시간 로그 보기"). **드라이런 후 선택 유지**(같은 대상으로 다시 열면 "결과 확인 후 실제 적용" 안내), 실제 적용 후에만 선택 해제. 무시는 한 건 또는 **선택 무시**(확인 창). 오퍼레이터(CR) 관리 워크로드는 "오퍼레이터 관리 — CR로 조정" 중립 배지 + 적용 불가) → `NsTrendChart`(NS 별 request/실사용/Quota 한도 시계열 24h/7d/30d, CPU/MEM) + `LowEfficiencyRankingChart`(사용효율 낮은 NS 상위 8 추이 + 추세 화살표, 클릭 시 추이 차트 연동) → `EfficiencyRunPanel`(실행 이력, 행 펼치면 `EfficiencyRunLog`). **모든 실행 버튼은 run 을 만들고 `EfficiencyRunLog`(`ExecutionStepsTimeline` + `LogViewer`, 1.5초 폴링)를 즉시 띄운다 — "로그 보기" 토글(localStorage 기억)로 접을 수 있다.** 롤백 버튼은 비 dry-run 성공/부분 성공 run 에만, **누르면 위험 확인 창**(`targets[i]` ↔ `before[i]` 로 대상별 현재 → 되돌릴 값 목록). `PolicyDialog`(`useModalA11y`, 탭은 `SegTabs mode="tabs"`. 저장 버튼은 숨기지 않고 비활성 + 사유 — NS 정책은 `useCanOperate`, 전역·스케줄은 admin. **정책 삭제·자동 적용 켜기는 확인 창**(켜기 확인 창에 허용 시간대·최대 감소폭·쿨다운·run 당 최대 대상 표시)): 네임스페이스 정책(auto right-size/Quota 탄력 opt-in, Quota min/max — "라이브 Quota 불러오기" 프리필, 오버라이드, **오퍼레이터 CR 어댑터**(group/version/plural/name/jsonpath/min/max — 예: StarRocks CN `spec.starRocksCnSpec.replicas`)) / 전역 기본값(admin — 자동 적용 마스터 스위치·허용 시간대 cron·백분위/여유율/하한/임계/최소 절감/쿨다운/최대 감소폭/시스템 NS/opt-out annotation/Quota 임계) / 수집 스케줄(admin — 기본 cron + 클러스터 오버라이드).
   - 자동갱신 셀렉트(끔/15초~5분), `ExportMenu`(화면 캡처/내보내기 — 가상 스크롤 상태에선 뷰포트에 보이는 행만 캡처되고 CSV 는 전량).
   - **모든 카드는 프레임(MacCard)을 항상 렌더하고 내부만 로딩/실패/집계중/데이터로 교체**한다(early return 으로 통째 교체 금지 — 폴링마다 높이가 달라져 화면이 흔들린다). 집계 중에는 표 정렬을 동결(`useTableSort frozen`)해 부분 결과가 들어와도 행이 자리를 바꾸지 않는다.
 - **Frontend(효율화)**: `hooks/useK8sEfficiency.ts` — `useEffRecommendations`/`useEffNsSeries`/`useEffRanking`/`useEffSummary`/`useEffQuotas`/`useEffPolicies`/`useEffPolicyDefaults`/`useEffSchedule`/`useEffRuns`/`useEffRun`(queued·running 동안 1.5s 폴링)/`useEffMutations`(collect·generate·apply·dismiss·rollback·quotaAdjust·customScale·savePolicy·deletePolicy·saveDefaults·saveSchedule). api.ts: `k8sEfficiencyApi`.
@@ -505,7 +476,7 @@ hover 시 flyout 자체가 라벨을 보여주므로 이름만 뜨는 중복 툴
 ### Observability 지표 대시보드 (`/observability`, `/observability/:clusterId`)
 
 - **파일**: `frontend/src/pages/ObservabilityPage.tsx` (+ `components/observability/{MetricsTable,RulesTable,TargetsTable,ActiveAlertsTable,MetricEditModal,DisabledMetricsSection,ObservabilitySettingsDialog,shared}`).
-- **목적 / UX**: 클러스터에 깔린 관측 스택(`kube-prometheus-stack`, 이후 `alert-forwarder`/`opensearch-stack`/`fluent-operator`)의 **개별 지표를 dense 리스트 테이블**로 한 화면에서 훑는다. 카드형(`/cluster-overview` PromQL 카드)과 달리 수십 개 지표를 스캔하는 용도.
+- **목적 / UX**: 클러스터에 깔린 관측 스택(`kube-prometheus-stack`, 이후 `alert-forwarder`/`opensearch-stack`/`fluent-operator`)의 **개별 지표를 dense 리스트 테이블**로 한 화면에서 훑는다. 하단의 PromQL 카드(`MetricCardsPanel`)와 달리 수십 개 지표를 스캔하는 용도.
 - **UI 구성**:
   - `ClusterSidebar` — `iconOnly` 단일 선택(클러스터별 Prometheus 를 봐야 하므로 `allowAll` 없음).
   - 상단 `PageHeader` "관측 지표"(2026-10-14, D-117) — 예전 "Observability 모듈" 카드 제목을 페이지 제목으로 올렸다.
@@ -516,6 +487,7 @@ hover 시 flyout 자체가 라벨을 보여주므로 이름만 뜨는 중복 툴
   - 지표 테이블 — 상태 dot(색 + 라벨) · 지표 · 카테고리 · 현재값 · 임계 · 대상(라벨) · PromQL · 편집. 행 첫 셀 `ExpandButton`(`aria-expanded`, 키보드)으로 설명/전체 라벨/PromQL/참고문서 펼침(알람 규칙·스크레이프 대상·발화 중 알람 표도 같음). 상단에 정상·경고·심각·수집 불가 요약 pill. 표 아래 **사용 안 함 N개** 접힘 섹션(`DisabledMetricsSection`) — 꺼 둔 지표를 편집·다시 켬.
   - 지표 편집 모달(`MetricEditModal`) — **미리 조회** 버튼으로 저장 전 PromQL 을 선택 클러스터에서 시험 조회(샘플 최대 20개, 인라인 결과 — 실행 로그 대상 아님), 지표 삭제는 `ConfirmDialog`(danger), 지표 정의 로딩 중엔 편집 버튼 비활성(사유 표시). 서버에는 단건 조회 `GET /metrics/{id}` 도 있다.
   - 표기 — 상태값 라벨 맵(발화·대기·비활성·기록 규칙 / 정상·중단·알 수 없음 / 심각·경고·정보, 원문은 `title`), 빈 값 `—`.
+  - 하단 MacCard "PromQL 카드"(`components/dashboard/MetricCardsPanel.tsx`, 2026-10-22 구 `/cluster-overview` 에서 이관) — `metric_cards` 전역 카드(클러스터 선택과 무관, `PROMETHEUS_URL` 기준) 조회·추가·편집·삭제. 추가/편집 `AddMetricCardModal`(공유 범위 `TenantScopeSelect` 포함), 삭제 `ConfirmDialog`. 쓰기는 `useCanOperate` 비활성 + 사유. 훅 `useMetricCards`/`useMetricResults`/`useDeleteMetricCard`, 백엔드 `routers/promql.py`.
 - **Frontend**: `useObservabilityModules`, `useObservabilityMetrics`(`include_disabled=true`), `useMetricValues`, `usePromRules`, `usePromTargets`, `usePromActiveAlerts`(`hooks/useObservability.ts`, 30초 `refetchInterval`), `useCreateMetric`/`useUpdateMetric`/`useDeleteMetric`, `usePreviewMetric`, `useObservabilitySettings`/`useUpdateObservabilitySettings`, `useCanOperate`. `useClusterRouteParam('/observability')`, `useUrlParams`. api.ts: `observabilityApi.*`(`previewMetric`·`settings`·`updateSettings` 포함).
 - **Backend**: 라우터 `backend/app/routers/observability.py`.
   - 조회: `GET /api/v1/observability/{modules,metrics,metrics/values,metrics/{id}}`(`?include_disabled`), `GET /observability/prometheus/{rules,targets,active-alerts}`. 조회 4종(`metrics/values`·`rules`·`targets`·`active-alerts`)은 **캐시를 보기 전에** `_visible_cluster` 로 클러스터 read 권한을 확인한다 — `cluster_id` 생략(전역 Prometheus)은 admin 만, 그 외 422(D-181). 응답에 `errors[]`(소스별 실패 사유)·`stale`·`snapshot_age_sec`, 발화 중 알람은 `source=partial` 가능(D-183).
@@ -621,21 +593,26 @@ hover 시 flyout 자체가 라벨을 보여주므로 이름만 뜨는 중복 툴
 
 ### 클러스터 상세 (`/clusters`, `/clusters/:clusterId`)
 
-- **파일**: `frontend/src/pages/ClusterDetailPage.tsx` (+ `components/ops-check/ClusterOpsCheckPanel.tsx` — 카탈로그/실행/로그를 `/ops-checks` 와 공유, `components/common/{ClusterSidebar,StatusBadge}`)
+- **파일**: `frontend/src/pages/ClusterDetailPage.tsx` (+ `components/ops-check/ClusterOpsCheckPanel.tsx` — 카탈로그/실행/로그를 `/ops-checks` 와 공유, `components/common/{ClusterSidebar,StatusBadge,RunLogPanel}`, `components/dashboard/{AddonGrid,AddAddonModal,ClusterItemsGrid,ClusterItemModal,KubeconfigEditModal,CheckHistoryHeatmap}`, `components/playbooks/{PlaybookCard,AddPlaybookModal,RunCredsModal}`)
 - **목적 / UX**: 매트릭스 재편 로드맵 3단계(F3) — 점검 매트릭스의 클러스터명 클릭이 도착하는 클러스터 상세 화면. 이 클러스터의 **종합 상태(정상/경고/위험)와 그 원인**을 한눈에 보여주고, 바로 아래에 점검 카탈로그(등록된 모든 실행 기술 — deep_check/addon/배치잡(SSH)/플레이북(Ansible), D-066 로 전부 편입 완료)로 이어진다. "왜 이 클러스터가 warning 인가"를 카드 하나로 답하는 게 목적 — 예전엔 애드온 그리드만 봐서는 심층 점검이 원인이어도 보이지 않았다(D-067).
 - **UI 구성**:
   - `ClusterSidebar` `iconOnly` — 다른 per-cluster 화면과 동일 패턴.
   - MacCard "종합 상태" — `StatusBadge`(healthy/warning/critical) + "N개 신호를 종합한 결과입니다" + 원인 목록(source 배지 "핵심 점검 번들"/"애드온"/"심층 점검" + 이름 + 메시지 + 마지막 확인 시각), severity(critical→warning→pending→healthy) 순 정렬. 원인 없음(전부 healthy)이면 "아직 점검 결과가 없습니다"/정상 안내만.
   - 그 아래 `ClusterOpsCheckPanel` — 카탈로그 테이블 + 일괄/개별 실행 + 실행 진행 + 결과 상세 모달(`/ops-checks` 섹션과 동일 컴포넌트, 위 참고).
-  - 헤더에 `/daily-check/review/:clusterId`, `/daily-check/settings` 바로가기.
-- **Frontend**: `useClusters`, `useClusterStatusBreakdown(clusterId)`(신규 — `clustersApi.getStatusBreakdown`, 30초 폴링, 호출마다 서버가 재집계), `useClusterRouteParam('/clusters', clusters)`(아일랜드 임베드 호환). 카탈로그/실행 훅은 `ClusterOpsCheckPanel` 내부에서 `/ops-checks` 섹션과 동일하게 사용.
-- **Backend**: `GET /api/v1/clusters/{cluster_id}/status-breakdown` — `backend/app/routers/clusters.py`, `services/cluster_status_service.py::recompute()` 를 그대로 다시 실행해 최신 원인 목록을 돌려준다(멱등이라 조회만으로 재계산해도 부작용 없음). 카탈로그/실행 API 는 `/ops-checks` 섹션과 동일.
+  - 헤더에 `/daily-check/review/:clusterId`, `/daily-check/settings` 바로가기 + 일일 리포트 `.md`/`.csv`(`healthApi.exportReport`, 이 클러스터) + Kubeconfig 편집(`KubeconfigEditModal`) + **점검 실행**(애드온 헬스 체크 `POST /health/check/{id}`).
+  - `RunLogPanel`(+ 로그 보기 토글, `useLogPref('dashboard-health-check')`) — 점검 실행·애드온 ▶·현황 아이템 ▶·플레이북 실행이 공유. 점검 실행은 시작 줄 → 5초 응답 대기 하트비트 → 애드온별 상태·응답 ms·메시지 줄 → 요약 줄.
+  - MacCard "애드온" — `AddonGrid`(애드온별 헬스 카드, 단건 ▶·편집·삭제) + "점검 항목" 추가(`AddAddonModal`) + 기본 애드온(etcd Leader/Node Status/Control Plane/CoreDNS) 일괄 추가. 미연결(pending)이면 grayscale 오버레이 안내.
+  - MacCard "현황 아이템" — `ClusterItemsGrid`/`ClusterItemModal`(사용자 정의 카드 실행/리사이즈/삭제).
+  - (카탈로그 아래) MacCard "플레이북 점검" — `/playbooks` 에서 "클러스터 상세에 표시"로 지정한 이 클러스터 플레이북(`useDashboardPlaybooks`, 백엔드 `show_on_dashboard`) 실행(SSH 자격증명 세션 캐시 + 실행 전 확인)·수정·삭제.
+  - MacCard "최근 점검 이력" — `CheckHistoryHeatmap`(이 클러스터 로그만).
+  - 2026-10-22: 구 `/cluster-overview`("클러스터 현황")의 클러스터 단위 기능을 이 화면으로 합쳤다. `/cluster-overview` 는 `/clusters` 로 redirect, 전 클러스터 한눈 보기는 홈 `PlatformStatusMatrix`, 업무 현황 차트는 `/tasks-mgmt` 가 대신한다. 저장된 사이드바 설치 목록·고정 경로의 `/cluster-overview` 는 읽을 때 `/clusters` 로 치환(`services/home_prefs.py` `RETIRED_PATH_ALIASES`).
+- **Frontend**: `useClusters`, `useClusterStatusBreakdown(clusterId)`(신규 — `clustersApi.getStatusBreakdown`, 30초 폴링, 호출마다 서버가 재집계), `useClusterRouteParam('/clusters', clusters)`(아일랜드 임베드 호환), `useAddons`/`useHealthCheck`/`useCreateAddon`/`useDeleteAddon`/`useAddonHealthCheck`/`useCheckHistoryHeatmap`(`hooks/useCluster.ts`), `useClusterItems`/`useRunClusterItem`/`useUpdateClusterItem`/`useDeleteClusterItem`, `useDashboardPlaybooks`/`useRunPlaybook`/`useDeletePlaybook`/`useToggleDashboard`/`useUpdatePlaybook`, `useRunLog`/`useLogPref`, `useCanOperate`. 카탈로그/실행 훅은 `ClusterOpsCheckPanel` 내부에서 `/ops-checks` 섹션과 동일하게 사용.
+- **Backend**: 애드온·점검 실행·리포트는 `routers/health.py`(`GET /health/addons/{id}`, `POST /health/check/{id}`, `POST /health/check/{id}/addons/{addonId}`, `POST/PUT/DELETE /health/addons...`, `GET /health/report`), 현황 아이템은 `routers/cluster_items.py`, 플레이북은 `routers/playbooks.py`. `GET /api/v1/clusters/{cluster_id}/status-breakdown` — `backend/app/routers/clusters.py`, `services/cluster_status_service.py::recompute()` 를 그대로 다시 실행해 최신 원인 목록을 돌려준다(멱등이라 조회만으로 재계산해도 부작용 없음). 카탈로그/실행 API 는 `/ops-checks` 섹션과 동일.
 - **핵심 기능**:
   - 클러스터 종합 상태의 **단일 롤업**(`cluster_status_service.recompute()`) — 예전엔 `DailyChecker`(core_bundle)·`HealthChecker`(addon)가 각자 `Cluster.status` 를 직접 덮어써(마지막 실행이 이김) 서로의 판정을 지웠고, 애드온 단일 실행(`run_single_addon_check`)은 핵심 번들의 연결 확인 없이 애드온 결과만으로 클러스터 전체 상태를 다시 계산하는 비대칭이 있었다(D-067). 지금은 `DailyChecker`/`HealthChecker`/`DeepCheckService` 세 곳 모두 자기 도메인 결과를 커밋(flush)한 뒤 `recompute()` 하나만 호출한다.
   - 심층 점검은 **opt-in**(`DeepCheckDefinition.affects_cluster_status`, 기본 `false`) — 정의 편집 폼(`/daily-check/settings`)에서 "클러스터 상태에 반영" 토글로 켠다. 애드온은 기존처럼 항상 반영(클러스터별 인스턴스라 opt-in 개념 없음).
   - 우선순위 critical > warning > healthy, 단 핵심 번들이 미연결(pending)이면 다른 신호와 무관하게 전체가 pending(다른 신호는 "연결이 안 되니 의미 없음"으로 무시). 애드온의 개별 pending(연결 실패)은 warning 으로 승격되지만, 심층 점검의 개별 pending(미판정)은 원인 목록에서 제외된다(집계 노이즈 방지).
   - 점검 매트릭스 그리드(`GET /check-matrix/grid`)의 `clusters[].status` 도 같은 롤업 값을 읽는다 — 매트릭스 열 헤더 cron 배지(`ClusterCronBadge`)가 예전 `coreHealth`(core_bundle 셀 상태만) 대신 이 값으로 색을 정한다.
-  - 대시보드(`/cluster-overview`)의 "Cluster Status" 카드에서 특정 클러스터를 선택하면 이 롤업 상태 + 대표 원인 1건 + "클러스터 상세로" 링크가 애드온 그리드 위에 한 줄로 뜬다.
 - **요청사항 (수정 요청)**:
   - _(여기에 개선/수정 요청을 직접 적어주세요)_
 
@@ -802,21 +779,23 @@ hover 시 flyout 자체가 라벨을 보여주므로 이름만 뜨는 중복 툴
 
 ### K8S 접근 권한 (`/k8s-rbac`)
 
-- **파일**: `frontend/src/pages/K8sRbacPage.tsx` (+ `components/k8s-rbac/ProvisionWizard.tsx`, `ProvisionConsole.tsx`, `RuleEditor.tsx`, `ServiceAccountPanel.tsx`, `RolePanel.tsx`, `BindingPanel.tsx`, `AccessReviewPanel.tsx`, `RbacTags.tsx`, `rbacShared.ts`)
+- **파일**: `frontend/src/pages/K8sRbacPage.tsx` (+ `components/k8s-rbac/ProvisionWizard.tsx`, `ProvisionConsole.tsx`, `RuleEditor.tsx`, `ServiceAccountPanel.tsx`, `RolePanel.tsx`, `BindingPanel.tsx`, `AccessReviewPanel.tsx`, `CredentialResult.tsx`, `RbacTags.tsx`, `rbacShared.ts`)
 - **목적 / UX**: 개발자가 **자기 LOCAL 의 kubectl 로** 클러스터에 붙어 배포하고 로그를 보는 데 필요한 ServiceAccount · (Cluster)Role · Binding · kubeconfig 한 세트를 화면에서 만들고 편집·회수한다. 배포는 보통 자기 네임스페이스 기준이지만 다른 네임스페이스도 권한이 필요할 수 있어, 발급 마법사가 주 네임스페이스 + 추가 네임스페이스를 함께 받아 한 번에 붙인다.
 - **UI 구성**:
   - `ClusterSidebar` — `iconOnly` (per-cluster 페이지 규칙)
-  - 헤더 우측에 **"로그 보기"** 토글 — 실행 로그는 항상 수집하고 펼침 여부만 사용자가 정한다
+  - 헤더 우측에 **"로그 보기"** 토글(액세스 발급 탭) — 실행 로그는 항상 수집하고 펼침 여부만 사용자가 정한다. 나머지 탭의 쓰기 동작(SA 생성·재발급·회수·삭제, Role 저장·삭제, 바인딩 생성·삭제)은 탭마다 `RunLogPanel`(자체 로그 보기)로 남긴다
   - 탭 5개: **액세스 발급**(마법사) / **ServiceAccount** / **Role · ClusterRole** / **Binding** / **권한 점검**
   - 액세스 발급 탭은 좌(컨트롤) / 우(결과) 2열 — 좌측 5단계(프리셋 → 대상 → 바인딩 방식 → 규칙 → 발급 옵션) + 하단 sticky 실행 바, 우측은 단계 칩 + 실시간 로그(`LogViewer`) + 발급된 kubeconfig
-- **Frontend**: `useRbacPresets` / `useRbacNamespaces` / `useRbacServiceAccounts` / `useRbacRoles` / `useRbacClusterRoles` / `useRbacBindings` (TanStack Query), `useCreateServiceAccount` · `useDeleteServiceAccount` · `useUpsertRole` · `useDeleteRole` · `useDeleteBinding` · `useAccessReview` · `useIssueKubeconfig` (mutation), 그리고 실행 전용 `useProvisionStream` — SSE 를 fetch+reader 로 소비해 `logs` / `steps` / `result` 로 풀어준다(`hooks/useK8sRbac.ts`). 호출 레이어는 `k8sRbacApi` · `k8sRbacStreamUrl`(`services/api.ts`). 쓰기 버튼은 `useCanOperate()` 로 viewer 에게 `disabled` + 사유를 붙인다.
+- **Frontend**: `useRbacPresets` / `useRbacNamespaces` / `useRbacServiceAccounts` / `useRbacRoles` / `useRbacClusterRoles` / `useRbacBindings` (TanStack Query), `useCreateServiceAccount` · `useDeleteServiceAccount` · `useUpsertRole` · `useDeleteRole` · `useDeleteBinding` · `useAccessReview` · `useIssueKubeconfig` (mutation), 그리고 실행 전용 `useProvisionStream` — SSE 를 fetch+reader 로 소비해 `logs` / `steps` / `result` 로 풀어준다(`hooks/useK8sRbac.ts`). 호출 레이어는 `k8sRbacApi` · `k8sRbacStreamUrl`(`services/api.ts`). 쓰기 버튼은 `useCanOperate(clusterId)` 로 viewer·테넌트 비멤버에게 `disabled` + 사유를 붙인다.
 - **Backend**: `backend/app/routers/k8s_rbac.py` — `/api/v1/clusters/{cluster_id}/rbac/*`. 조회(`GET presets|namespaces|service-accounts|roles|cluster-roles|bindings`)는 인증만, 쓰기(`POST service-accounts`, `PUT roles/{ns}/{name}`, `PUT cluster-roles/{name}`, `DELETE …`, `POST kubeconfig`, `POST provision`, `POST provision/stream`)는 `require_operator` + 감사 로그. 서비스는 `services/k8s_rbac_service.py`(`RbacService` — 클러스터별 격리 `Configuration`, TokenRequest·장기 Secret 토큰, kubeconfig 조립, SubjectAccessReview, 단계별 로그를 yield 하는 `provision()`)와 `services/k8s_rbac_presets.py`(프리셋·바인딩 방식 카탈로그). DB 모델 관여 없음(순수 K8s API 프록시 + 감사 로그).
 - **핵심 기능**:
   - 액세스 일괄 발급 — SA + 권한 + 바인딩 + kubeconfig 를 한 번에, SSE 로 단계별 실시간 로그
   - 다중 네임스페이스 — 기본은 ClusterRole 1개 + 네임스페이스별 RoleBinding(정의가 갈라지지 않는다), 필요 시 Role per NS / ClusterRoleBinding 전역
   - 권한 프리셋 5종(배포+로그 / 조회 전용 / 디버깅 / NS 관리자 / 클러스터 조회)을 편집 가능한 규칙 표로 펼침 (UI-First)
   - 발급 직후 SubjectAccessReview 로 "정말 배포·로그 조회가 되는지" 를 API 서버에 직접 확인
-  - 기존 SA 의 kubeconfig 재발급, Role/ClusterRole 규칙 편집(영향 받는 바인딩 수 표시), 바인딩 삭제
+  - 넓은 권한 발급 확인 — ClusterRoleBinding·와일드카드·만료 없는 토큰·위험도 높음 프리셋이면 영향 범위를 보여주고 SA 이름 재입력으로 확인(`grantRiskReasons`, 모의 실행은 예외)
+  - 액세스 회수 — 이 SA 에만 묶인 바인딩 → PEP 가 만든(다른 바인딩이 안 쓰는) 롤 → SA 를 한 번에 삭제, 공유 바인딩은 남김(`buildRevokePlan`)
+  - 기존 SA 의 kubeconfig 재발급(토큰 방식·유효기간 선택, 결과 카드는 마법사와 공용 `CredentialResult`, 탭 이동에도 유지), Role/ClusterRole 규칙 편집(영향 받는 바인딩 수 표시), 바인딩 삭제
   - 가드레일 — `system:*` / `cluster-admin`·`admin`·`edit`·`view` / 네임스페이스 `default` SA 는 조회 전용
 - **URL 상태(D-029)**: `?cluster=` · `tab`. 새로고침·공유·뒤로가기에서 유지(`hooks/useUrlParams`, replace). 모달은 뒤로가기로 닫힌다.
 - **요청사항 (수정 요청)**:
@@ -967,14 +946,16 @@ hover 시 flyout 자체가 라벨을 보여주므로 이름만 뜨는 중복 툴
 > **2026-10-15 (D-135)**: 자체 실행 로그(`appendLog`·LogViewer 카드·수동 SSE 파서)를 표준 실행 로그(`cluster-manage`)로 대체했다. 검증은 `components/cluster-manage/verifyLogged.ts`(`/verify/stream` → 단계 칩, 설정 화면과 공유), 재수집·IP 수집·일괄 수집(클러스터별 칩)·적용은 `runLogged`, 실패 재시도는 패널 버튼.
 
 - **파일**: `frontend/src/pages/ClusterManagePage.tsx` (+ `components/cluster-manage/{CiliumConfigModal,ClusterCard,ClusterTableRow,ClusterUpdateDiffDialog,ClusterCustomFieldsManager,StandardizeClusterNamesModal}`, `components/versions/NodeNicsCollectModal`)
+>
+> **2026-10-22 (디자인 검토 반영)**: 툴바 「문제만」(`?problems=1` — 상태 ≠ 정상 또는 CIDR 겹침) · 이름/상태/운영레벨 **머리글 클릭 정렬**(다시 누르면 수동). 쓰기 동사를 **재수집**으로 통일 — 편집 칸 ↻ = 재수집(미리보기), 노드 IP 칸 = 재수집(바로 반영, 확인), 툴바 = **일괄 재수집**(확인 다이얼로그에서 범위 선택: 노드 IP 빈 클러스터 / 지금 화면 목록). 적용 시 미리보기 값과 반영값을 대조해 다른 필드를 실행 로그·토스트로 표시(`diffFormat.ts` 공용 라벨·값 표기). 삭제는 이름 재입력(`ConfirmDialog confirmDisabled`) + 실행 로그, 이름 표준화는 "바뀐 N개 모두 적용" + 실행 로그(모달 안 `RunLogPanel`). 행·카드 실행 버튼은 `useCanOperate(cluster.id)` 로 테넌트 바인딩을 판정해 비활성 + 사유(역할 미달은 기존대로 숨김·"조회 전용"). 인라인 편집은 성공 시에만 닫힌다. 편집 칸 기본 폭 184px. 카드 뷰는 KPI 타일·중첩 박스 제거, 탭 `role="tablist"`, Cilium 설정 보기 버튼.
 - **목적 / UX**: 등록된 전체 클러스터를 테이블/카드 뷰로 관리 — 검색/필터/정렬/그룹화(지역·운영레벨), CIDR 겹침 감지, kubeconfig 기반 자동 정보 수집(diff 미리보기 후 적용), 커스텀 컬럼 추가, 드래그 정렬. `/cluster-manage/:id/edit`으로 이동해 상세 메타를 편집한다.
 - **UI 구성**:
   - 이 페이지 자체는 **ClusterSidebar를 사용하지 않음** — 전체 클러스터를 관리하는 목록/테이블 화면이라 별도 좌측 사이드바 없이 본문 전체가 테이블/카드
-  - 헤더: 테이블/카드 뷰 토글(`ViewModeBar`), 이름 표준화, 컬럼 관리(커스텀 필드), 노드 IP 일괄 수집, 컬럼너비 리셋, 검색/필터 패널. 액션이 많아 좁은 폭에서는 줄바꿈(`flex-wrap`)
+  - 헤더: 테이블/카드 뷰 토글(`ViewModeBar`), 검색, 「문제만」, 일괄 재수집, 필터 · 정렬, 도구(이름 표준화 · 컬럼 관리(커스텀 필드) · 너비 리셋 · 표시 컬럼). 액션이 많아 좁은 폭에서는 줄바꿈(`flex-wrap`)
   - 검색/필터 패널과 표 컨테이너는 `MacCard`(표는 `bodyPadding="p-0"`), 표 본문은 `DoubleScrollX bodyClassName="max-h-…"` 안에서 세로 스크롤되며 **`thead` 가 sticky 로 고정**된다. 셀은 `overflow-hidden`+`truncate`(툴팁 병행)이라 컬럼을 좁혀도 이웃 열로 넘치지 않는다
   - 색은 전부 테마 토큰 — 상태 `status-*`, 범주(BGP·bond0/1·버전·CIDR 겹침 그룹) categorical `chart-*` (고정 팔레트 0건)
   - 상태 표시는 3분기: 로딩=표 skeleton / 조회 실패=`EmptyState`+사유+다시 시도 / 0건·검색 무결과=`EmptyState`+CTA(Settings 등록·필터 초기화)
-  - **검색/필터/정렬/그룹/뷰모드는 URL 쿼리(`?q=&level=&sort=&group=&view=`)에 영속화**(기본값 생략, `replace: true` 로 히스토리 미적재) — 새로고침·공유·뒤로가기에서 유지
+  - **검색/필터/정렬/그룹/뷰모드/「문제만」은 URL 쿼리(`?q=&level=&sort=&group=&view=&problems=`)에 영속화**(기본값 생략, `replace: true` 로 히스토리 미적재) — 새로고침·공유·뒤로가기에서 유지
   - 테이블 뷰: 리사이즈 가능한 다열 테이블(이름/상태/지역/운영레벨/BGP/CIDR/bond0·1/Pod·Svc CIDR/Max Pods/K8s·Cilium 버전/노드 IP + 커스텀 필드), 지역/운영레벨 그룹 헤더 행. **수동 정렬 모드에서 행 드래그 지원**(이름 셀 좌측 그립, `DndContext`+그룹별 `SortableContext`)
   - 카드 뷰: `dnd-kit` 드래그 정렬 가능한 `ClusterCard` 그리드(그룹 내에서만 순서 변경)
   - 드래그 정렬(테이블/카드 공통)은 **정렬이 `수동(드래그)` 일 때만 활성** — 이름/상태/운영레벨순에서는 핸들이 노출되지 않음(D-045). 정보 수집(auto-update)은 클러스터별로 동시 실행·개별 중지 가능(D-047)
@@ -988,7 +969,7 @@ hover 시 flyout 자체가 라벨을 보여주므로 이름만 뜨는 중복 툴
   - 클러스터별 커스텀 컬럼 CRUD(`ClusterCustomFieldsManager`) + 값 편집 — 편집 진입 시점의 서버 값으로 초기화(stale draft 방지), 저장 실패 시 토스트+편집 유지
   - 이름 일괄 표준화(`StandardizeClusterNamesModal`), 노드 IP 일괄 수집 — 일괄 수집은 실행 전 `ConfirmDialog`(대상 수·이름 미리보기·hostname/CIDR/버전까지 갱신됨을 명시) → 진행률 `n/N` 버튼 표기 → 재클릭으로 중단, 결과는 완료/중단/부분 실패/전건 실패 구분 토스트(D-048)
   - 클러스터 삭제는 `ConfirmDialog`(danger) — Addon·Playbook·점검 이력 연쇄 삭제 범위를 명시(D-048)
-- **URL 상태(D-029)**: `?q=` · `level` · `sort` · `group` · `view` (D-053, 공용 훅으로 이전). 새로고침·공유·뒤로가기에서 유지(`hooks/useUrlParams`, replace). 모달은 뒤로가기로 닫힌다.
+- **URL 상태(D-029)**: `?q=` · `level` · `sort` · `group` · `view` · `problems` (D-053, 공용 훅으로 이전). 새로고침·공유·뒤로가기에서 유지(`hooks/useUrlParams`, replace). 모달은 뒤로가기로 닫힌다.
 - **요청사항 (수정 요청)**:
   - _(여기에 개선/수정 요청을 직접 적어주세요)_
 

@@ -1,4 +1,5 @@
 // K8S 자원 관리 화면 공용 포맷/판정 헬퍼 — 페이지·뷰 컴포넌트가 함께 쓴다.
+import type { AllocNodeRow } from '@/types';
 
 // 분모(whole)가 0/음수면(allocatable 미상 등) 비율을 알 수 없다 — 0%(정상처럼 보임)로
 // 위장하지 않고 null 로 구분해 호출부가 "—" 를 표시하게 한다.
@@ -40,8 +41,20 @@ export function efficiency(reqM: number, usageM: number | null): EffKind {
   if (r > 1.05) return 'under';     // 실사용이 request 초과(위험)
   return 'ok';
 }
+const EFF_RANK: Record<Exclude<EffKind, null>, number> = { under: 2, over: 1, ok: 0 };
+/** CPU·MEM 각각 판정해 더 나쁜 쪽(사용 초과 > request 과대 > 적정). 둘이 다르면 해당 자원 이름(res)을 함께 준다 —
+ *  CPU 만 보면 메모리 사용 초과(OOM 위험)가 "적정" 으로 가려진다. */
+export function worstEfficiency(cpuReqM: number, cpuUseM: number | null, memReqB: number, memUseB: number | null):
+  { kind: EffKind; res: 'CPU' | 'MEM' | null } {
+  const cpu = efficiency(cpuReqM, cpuUseM);
+  const mem = efficiency(memReqB, memUseB);
+  if (!cpu && !mem) return { kind: null, res: null };
+  if (!mem || (cpu && EFF_RANK[cpu] >= EFF_RANK[mem])) return { kind: cpu, res: cpu === mem ? null : 'CPU' };
+  return { kind: mem, res: 'MEM' };
+}
 export const EFF_BADGE: Record<Exclude<EffKind, null>, { label: string; cls: string }> = {
-  over: { label: 'request 과대', cls: 'bg-status-warning/10 text-status-warning border-status-warning/30' },
+  // 낭비는 비용 문제이지 장애 위험이 아니다 — 주황을 쓰지 않고 글자(라벨)와 진한 테두리로 구분한다.
+  over: { label: 'request 과대', cls: 'bg-secondary text-foreground border-foreground/30' },
   ok: { label: '적정', cls: 'bg-secondary text-muted-foreground border-border' },
   under: { label: '사용 초과', cls: 'bg-status-critical/10 text-status-critical border-status-critical/30' },
 };
@@ -54,6 +67,23 @@ export const utilPct = (usage: number | null, base: number): number | null => {
   const r = utilRatio(usage, base);
   return r == null ? null : Math.round(r * 100);
 };
+
+// ── 노드 위험도 — 장애 대응 시 "먼저 볼 노드" 를 위로 올리는 기준 ─────────────────
+// 할당 가능량 대비 request·실사용 중 가장 빡빡한 비율. 1 을 넘으면 과할당/과사용.
+export function nodeRisk(n: AllocNodeRow): number {
+  const rs = [ratio(n.cpuReqM, n.cpuAllocM), ratio(n.memReqB, n.memAllocB),
+    n.cpuUsageM == null ? null : ratio(n.cpuUsageM, n.cpuAllocM), n.memUsageB == null ? null : ratio(n.memUsageB, n.memAllocB)];
+  return Math.max(0, ...rs.filter((r): r is number => r != null));
+}
+/** "문제 노드" — 과할당(여유 음수) · 실사용이 request 의 105% 초과 · limit 의 90% 이상 · cordon. 배지와 같은 임계를 쓴다. */
+export function isProblemNode(n: AllocNodeRow): boolean {
+  if (n.cpuSlackM < 0 || n.memSlackB < 0 || n.unschedulable) return true;
+  const hot = (u: number | null, req: number, lim: number) => {
+    const r = utilRatio(u, req); const l = utilRatio(u, lim);
+    return (r != null && r > 1.05) || (l != null && l >= 0.9);
+  };
+  return hot(n.cpuUsageM, n.cpuReqM, n.cpuLimM) || hot(n.memUsageB, n.memReqB, n.memLimB);
+}
 
 export function csvCluster(name: string | undefined): string {
   // 파일명에 안전한 문자만 남긴다. `\w` 는 ASCII 전용이라 한글 클러스터명이 전부 "-" 로

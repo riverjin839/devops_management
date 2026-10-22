@@ -3,7 +3,7 @@
   "routes": [
     { "id": "login", "path": "/", "auth": false, "page": "frontend/src/pages/LoginPage.tsx", "label": "로그인(토큰 없음)" },
     { "id": "home", "path": "/", "auth": true, "page": "frontend/src/pages/HomePage.tsx", "label": "홈" },
-    { "id": "cluster-overview", "path": "/cluster-overview", "auth": true, "page": "frontend/src/pages/Dashboard.tsx", "label": "클러스터 개요" },
+    { "id": "clusters", "path": "/clusters", "auth": true, "page": "frontend/src/pages/ClusterDetailPage.tsx", "label": "클러스터 상세" },
     { "id": "alerts", "path": "/alerts", "auth": true, "page": "frontend/src/pages/AlertInboxPage.tsx", "label": "알람 수신함" },
     { "id": "k8s-events", "path": "/k8s-events", "auth": true, "page": "frontend/src/pages/K8sEventsPage.tsx", "label": "K8s 이벤트" },
     { "id": "tasks-mgmt", "path": "/tasks-mgmt", "auth": true, "page": "frontend/src/pages/WorkItemBoardPage.tsx", "label": "업무 보드" },

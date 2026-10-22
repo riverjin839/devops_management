@@ -3,17 +3,17 @@ import { Link } from 'react-router-dom';
 import { AlertTriangle, ArrowUpRight, Check, Copy } from 'lucide-react';
 import type { OverlapColor } from './constants';
 
-/** 도메인(INTERNAL_IP/bond0/bond1/Pod/Svc) 구분용 범주색 — 의미색이 아니라 시리즈
+/** 도메인(내부 IP/bond0/bond1/Pod/Service) 구분용 범주색 — 의미색이 아니라 시리즈
  *  구분이므로 categorical `chart-*` 토큰을 쓴다. 고정 팔레트는 테마별로 대비가
  *  깨지므로 금지 (D-049). accent 이름은 호출부 호환을 위해 유지. */
 export type IpGroupAccent = 'sky' | 'cyan' | 'amber' | 'emerald' | 'violet';
 
 const ACCENT: Record<IpGroupAccent, { surface: string; label: string }> = {
-  sky:     { surface: 'bg-chart-1/5 border-chart-1/20', label: 'text-chart-1-text' },
-  cyan:    { surface: 'bg-chart-6/5 border-chart-6/20', label: 'text-chart-6-text' },
-  amber:   { surface: 'bg-chart-3/5 border-chart-3/20', label: 'text-chart-3-text' },
-  emerald: { surface: 'bg-chart-2/5 border-chart-2/20', label: 'text-chart-2-text' },
-  violet:  { surface: 'bg-chart-4/5 border-chart-4/20', label: 'text-chart-4-text' },
+  sky:     { surface: 'border-chart-1/40', label: 'text-chart-1-text' },
+  cyan:    { surface: 'border-chart-6/40', label: 'text-chart-6-text' },
+  amber:   { surface: 'border-chart-3/40', label: 'text-chart-3-text' },
+  emerald: { surface: 'border-chart-2/40', label: 'text-chart-2-text' },
+  violet:  { surface: 'border-chart-4/40', label: 'text-chart-4-text' },
 };
 
 interface IpGroupRowProps {
@@ -44,7 +44,7 @@ export function IpGroupRow({
 }: IpGroupRowProps) {
   if (!hasContent) {
     return (
-      <div className="rounded-lg border border-dashed border-border/40 px-3 py-2.5">
+      <div className="border-l-2 border-dashed border-border pl-3 py-1.5">
         <p className={`text-xs font-semibold mb-0.5 ${ACCENT[accent].label}`}>
           {label}
         </p>
@@ -59,7 +59,7 @@ export function IpGroupRow({
   const labelCls = overlapColor ? overlapColor.text : ACCENT[accent].label;
 
   return (
-    <div className={`rounded-lg border px-3 py-2.5 ${surface}`}>
+    <div className={`border-l-2 rounded-r-md pl-3 pr-2 py-1.5 ${surface}`}>
       <div className="flex items-center justify-between gap-2 mb-1.5">
         <p className={`text-xs font-semibold ${labelCls}`}>
           {label}
@@ -72,7 +72,7 @@ export function IpGroupRow({
           )}
           {overlapColor && (
             <span className={`flex items-center gap-1 text-xs font-medium ${overlapColor.text}`}>
-              <AlertTriangle className="w-3 h-3" />겹침
+              <AlertTriangle className="w-3 h-3" aria-hidden />겹침
             </span>
           )}
         </div>
@@ -100,10 +100,10 @@ export function IpGroupRow({
           {calcCidr && (
             <Link
               to={`/cidr?cidr=${encodeURIComponent(calcCidr)}`}
-              className="inline-flex items-center gap-0.5 px-1.5 py-0.5 text-xs text-muted-foreground hover:text-primary hover:bg-primary/10 rounded transition-colors"
-              title={`CIDR Calculator 에서 ${calcCidr} 분석`}
+              className="inline-flex items-center gap-0.5 px-1.5 py-0.5 text-xs text-muted-foreground hover:text-primary hover:bg-primary/10 rounded-xl transition-colors"
+              title={`CIDR 계산기에서 ${calcCidr} 분석`}
             >
-              <ArrowUpRight className="w-2.5 h-2.5" />Calc
+              <ArrowUpRight className="w-2.5 h-2.5" aria-hidden />계산기
             </Link>
           )}
         </div>
@@ -125,11 +125,12 @@ function CopyChip({ value }: { value: string }) {
     <button
       type="button"
       onClick={handleCopy}
-      className="inline-flex items-center gap-0.5 px-1.5 py-0.5 text-xs text-muted-foreground hover:text-foreground hover:bg-secondary rounded transition-colors"
+      className="inline-flex items-center gap-0.5 px-1.5 py-0.5 text-xs text-muted-foreground hover:text-foreground hover:bg-secondary rounded-xl transition-colors"
+      aria-label={copied ? '복사됨' : 'IP 그룹 복사'}
       title="줄바꿈으로 구분해 복사"
     >
-      {copied ? <Check className="w-2.5 h-2.5 text-status-healthy" /> : <Copy className="w-2.5 h-2.5" />}
-      {copied ? 'OK' : '복사'}
+      {copied ? <Check className="w-2.5 h-2.5" aria-hidden /> : <Copy className="w-2.5 h-2.5" />}
+      {copied ? '복사됨' : '복사'}
     </button>
   );
 }

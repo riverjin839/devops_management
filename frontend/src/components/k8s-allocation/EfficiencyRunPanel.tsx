@@ -1,9 +1,9 @@
 // 최근 실행 이력 — 행 클릭 시 상세(단계 + 로그) 펼침.
 import { useState } from 'react';
-import { EmptyState, Skeleton } from '@/components/common';
+import { EmptyState, ErrorState, Skeleton } from '@/components/common';
 import { useEffRuns } from '@/hooks/useK8sEfficiency';
 import { EfficiencyRunLog, RunStatePill } from './EfficiencyRunLog';
-import { RUN_TYPE_LABEL, fmtTs } from './effUtils';
+import { RUN_TYPE_LABEL, TRIGGER_LABEL, fmtTs } from './effUtils';
 
 export function EfficiencyRunPanel({ clusterId, onRollback, rollbackPending }: {
   clusterId: string; onRollback: (runId: string) => void; rollbackPending: boolean;
@@ -14,7 +14,8 @@ export function EfficiencyRunPanel({ clusterId, onRollback, rollbackPending }: {
   return (
     <div className="min-h-24">
       {q.isLoading && !q.data ? <Skeleton className="h-24 w-full" />
-        : !items.length ? <EmptyState title="실행 이력 없음" description="수집/적용/롤백 실행이 여기 쌓입니다." />
+        : q.isError && !items.length ? <ErrorState error={q.error} title="실행 이력을 불러오지 못했습니다" onRetry={() => void q.refetch()} compact />
+        : !items.length ? <EmptyState compact title="실행 이력 없음" description="지금 수집 · 선택 적용 · 롤백을 실행하면 여기에 쌓이고, 행을 펼쳐 단계와 로그를 볼 수 있습니다." />
         : (
           <div className="divide-y divide-border">
             {items.map((r) => (
@@ -23,8 +24,8 @@ export function EfficiencyRunPanel({ clusterId, onRollback, rollbackPending }: {
                   className="w-full flex items-center gap-2 px-3 py-1.5 text-sm hover:bg-muted/10 text-left">
                   <RunStatePill state={r.runState} />
                   <span className="font-medium">{RUN_TYPE_LABEL[r.runType] ?? r.runType}</span>
-                  {r.dryRun && <span className="text-[11px] px-1.5 py-0.5 rounded bg-status-info/10 text-status-info">dry-run</span>}
-                  <span className="text-xs text-muted-foreground">{r.trigger} · {r.triggeredBy ?? '—'}</span>
+                  {r.dryRun && <span className="text-xs px-1.5 py-0.5 rounded bg-status-info/10 text-status-info">드라이런</span>}
+                  <span className="text-xs text-muted-foreground">{TRIGGER_LABEL[r.trigger] ?? r.trigger} · {r.triggeredBy ?? '—'}</span>
                   <span className="text-xs text-muted-foreground tabular-nums">대상 {r.targets?.length ?? 0}</span>
                   <span className="ml-auto text-xs text-muted-foreground tabular-nums">{fmtTs(r.queuedAt)}</span>
                 </button>

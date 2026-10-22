@@ -1,6 +1,5 @@
 import type { ComponentType } from 'react';
 
-import { Dashboard } from '@/pages/Dashboard';
 import { K8sManagePage } from '@/pages/K8sManagePage';
 import { K8sAllocationPage } from '@/pages/K8sAllocationPage';
 import { ClusterTrendsPage } from '@/pages/ClusterTrendsPage';
@@ -60,7 +59,6 @@ import { JiraExcelImportPage } from '@/pages/JiraExcelImportPage';
  * 임베드 시 파라미터를 받을 수 없어 빈 화면이 되기 때문.
  */
 export const PANEL_COMPONENTS: Record<string, ComponentType> = {
-  '/cluster-overview': Dashboard,
   '/k8s-manage': K8sManagePage,
   '/k8s-allocation': K8sAllocationPage,
   '/cluster-trends': ClusterTrendsPage,

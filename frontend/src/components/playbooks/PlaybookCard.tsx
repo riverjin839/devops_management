@@ -42,7 +42,7 @@ function formatTimeAgo(dateStr?: string): string {
 export function PlaybookCard({
   playbook, isRunning, onRun, onDelete, onEdit, onToggleDashboard, onViewLog, clusterName, dragHandle,
 }: PlaybookCardProps) {
-  // §12.9 — 실행·수정·삭제·대시보드 토글은 operator 이상 + 클러스터 operate 바인딩. 숨기지 않고 비활성+사유.
+  // §12.9 — 실행·수정·삭제·클러스터 상세 표시 토글은 operator 이상 + 클러스터 operate 바인딩. 숨기지 않고 비활성+사유.
   const { canOperate, withHint, ariaWithHint } = useCanOperate(playbook.clusterId);
   const effectiveStatus = isRunning ? 'running' : playbook.status;
   const config = statusConfig[effectiveStatus] || statusConfig.unknown;
@@ -140,8 +140,8 @@ export function PlaybookCard({
                   ? 'bg-primary/15 text-primary'
                   : 'hover:bg-primary/10 text-muted-foreground'
               }`}
-              title={withHint(playbook.showOnDashboard ? '대시보드에서 빼기' : '대시보드에 표시')}
-              aria-label={ariaWithHint(`${playbook.name} 대시보드 표시`)}
+              title={withHint(playbook.showOnDashboard ? '클러스터 상세에서 빼기' : '클러스터 상세에 표시')}
+              aria-label={ariaWithHint(`${playbook.name} 클러스터 상세 표시`)}
               aria-pressed={!!playbook.showOnDashboard}
             >
               <LayoutDashboard className="w-4 h-4" />

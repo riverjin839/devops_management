@@ -6,6 +6,7 @@ export { InternalIpRow } from './InternalIpRow';
 export { BondIpRow } from './BondIpRow';
 export { IpGroupRow } from './IpGroupRow';
 export { ClusterUpdateDiffDialog } from './ClusterUpdateDiffDialog';
+export { diffFieldLabel, renderDiffValue } from './diffFormat';
 export type { DiffRow } from './ClusterUpdateDiffDialog';
 export { ClusterCustomFieldsManager } from './ClusterCustomFieldsManager';
 export { ClusterCustomCell } from './ClusterCustomCell';

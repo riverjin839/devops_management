@@ -1,5 +1,6 @@
-import { X, ArrowRight, Loader2, AlertTriangle, CheckCircle2 } from 'lucide-react';
+import { X, ArrowRight, Loader2, AlertTriangle } from 'lucide-react';
 import { EmptyState, useModalA11y } from '@/components/common';
+import { diffFieldLabel, renderDiffValue } from './diffFormat';
 
 export interface DiffRow {
   field: string;
@@ -20,53 +21,6 @@ interface Props {
   logSlot?: React.ReactNode;
 }
 
-const FIELD_LABELS: Record<string, string> = {
-  nodeCount: '노드 수',
-  hostname: 'Master 호스트명',
-  maxPod: '노드당 Max Pod',
-  cidr: 'INTERNAL_IP (집계 CIDR)',
-  firstHost: 'Node 첫 호스트',
-  lastHost: 'Node 마지막 호스트',
-  svcCidr: 'Service CIDR',
-  svcFirstHost: 'Service 첫 호스트',
-  svcLastHost: 'Service 마지막 호스트',
-  podCidr: 'Pod CIDR',
-  podFirstHost: 'Pod 첫 호스트',
-  podLastHost: 'Pod 마지막 호스트',
-  ciliumConfig: 'Cilium Config',
-  bgpEnabled: 'BGP 활성화',
-  asNumber: 'AS Number',
-  k8sVersion: 'Kubernetes 버전',
-  ciliumVersion: 'Cilium 버전',
-  nodeIps: '노드 IP 목록',
-  bond0Ip:  'bond0 IP (master)',
-  bond0Mac: 'bond0 MAC (master)',
-  bond1Ip:  'bond1 IP (master)',
-  bond1Mac: 'bond1 MAC (master)',
-};
-
-function renderValue(v: unknown, field?: string): string {
-  if (v === null || v === undefined || v === '') return '—';
-  if (typeof v === 'boolean') return v ? 'true' : 'false';
-  if (field === 'nodeIps' && typeof v === 'string') {
-    try {
-      const arr = JSON.parse(v) as { name: string; ip?: string; ips?: string[] }[];
-      if (Array.isArray(arr)) {
-        const multi = arr.filter((n) => (n.ips?.length ?? 0) > 1).length;
-        const preview = arr.slice(0, 3).map((n) => {
-          const ips = n.ips && n.ips.length > 0 ? n.ips : (n.ip ? [n.ip] : []);
-          return `${n.name}(${ips.join(',') || '?'})`;
-        }).join(', ');
-        const suffix = arr.length > 3 ? ' …' : '';
-        const multiHint = multi > 0 ? ` · 다중IP ${multi}대` : '';
-        return `${arr.length} 노드${multiHint} · ${preview}${suffix}`;
-      }
-    } catch { /* JSON 아님 */ }
-  }
-  if (typeof v === 'object') return JSON.stringify(v);
-  return String(v);
-}
-
 export function ClusterUpdateDiffDialog({
   open, clusterName, diff, warnings, applying, onCancel, onConfirm, logSlot,
 }: Props) {
@@ -79,32 +33,30 @@ export function ClusterUpdateDiffDialog({
   const unchanged = diff.filter((d) => !d.changed);
 
   return (
-    <div ref={dialogRef} className="fixed inset-0 z-50 flex items-center justify-center" role="dialog" aria-modal="true" aria-label={`클러스터 정보 수집 결과 — ${clusterName}`}>
+    <div ref={dialogRef} className="fixed inset-0 z-50 flex items-center justify-center" role="dialog" aria-modal="true" aria-label={`재수집 미리보기 — ${clusterName}`}>
       <div className="absolute inset-0 bg-black/60" onClick={() => !applying && onCancel()} />
       <div className="relative bg-card border border-border rounded-md shadow-2xl w-full max-w-3xl mx-4 overflow-hidden">
-        <div className="flex items-center gap-3 px-5 py-4 border-b border-border bg-muted/30">
-          <div className="w-9 h-9 rounded-lg flex items-center justify-center bg-primary/10 text-primary">
-            {changed.length > 0 ? <AlertTriangle className="w-4 h-4" /> : <CheckCircle2 className="w-4 h-4" />}
-          </div>
+        {/* 변경이 있다는 것 자체는 위험 신호가 아니다 — 일상적인 갱신이라 아이콘 타일 없이 중립 헤더 */}
+        <div className="flex items-start gap-3 px-5 py-4 border-b border-border bg-muted/30">
           <div className="flex-1 min-w-0">
-            <h2 className="text-sm font-semibold">클러스터 정보 수집 결과 — {clusterName}</h2>
+            <h2 className="text-sm font-semibold">재수집 미리보기 — {clusterName}</h2>
             <p className="text-sm text-muted-foreground mt-0.5">
               {changed.length > 0
-                ? `${changed.length}개 필드에 변경사항이 있습니다. 적용하시겠습니까?`
-                : '변경된 필드가 없습니다.'}
+                ? `${changed.length}개 필드가 바뀝니다. 적용하면 서버가 한 번 더 수집해 반영하고, 미리보기와 달라진 값은 실행 로그에 따로 표시합니다.`
+                : '바뀌는 필드가 없습니다.'}
             </p>
           </div>
           <button onClick={onCancel} disabled={applying} title="닫기" aria-label="닫기"
-            className="p-1 rounded hover:bg-secondary text-muted-foreground disabled:opacity-40">
+            className="p-1 rounded-xl hover:bg-secondary text-muted-foreground disabled:opacity-40">
             <X className="w-4 h-4" />
           </button>
         </div>
 
-        <div className="max-h-[520px] overflow-y-auto">
+        <div className="max-h-[60vh] overflow-y-auto">
           {warnings.length > 0 && (
             <div className="px-5 py-3 border-b border-border bg-status-warning/5">
               <p className="text-sm font-medium text-status-warning mb-1 flex items-center gap-1">
-                <AlertTriangle className="w-3 h-3" /> 경고 {warnings.length}건
+                <AlertTriangle className="w-3 h-3" aria-hidden /> 경고 {warnings.length}건
               </p>
               <ul className="text-xs text-muted-foreground list-disc pl-4 space-y-0.5">
                 {warnings.map((w, i) => <li key={i}>{w}</li>)}
@@ -115,29 +67,39 @@ export function ClusterUpdateDiffDialog({
           {changed.length > 0 && (
             <div className="px-5 py-3">
               <p className="text-xs font-medium text-muted-foreground mb-2">변경 예정</p>
-              <table className="w-full text-sm">
+              {/* 값은 자르지 않는다 — ciliumConfig 같은 긴 값을 tooltip 으로만 보여주면 검토할 수 없다.
+                  셀마다 높이 상한 + 내부 스크롤로 표 전체 높이만 제한한다. */}
+              <table className="w-full text-sm table-fixed">
+                <colgroup>
+                  <col className="w-40" />
+                  <col />
+                  <col className="w-6" />
+                  <col />
+                </colgroup>
                 <thead>
                   <tr className="text-left text-xs text-muted-foreground border-b border-border">
                     <th className="py-1.5 font-medium">필드</th>
                     <th className="py-1.5 font-medium">기존 값</th>
-                    <th className="py-1.5 font-medium w-4"><span className="sr-only">변경 방향</span></th>
+                    <th className="py-1.5 font-medium"><span className="sr-only">변경 방향</span></th>
                     <th className="py-1.5 font-medium">신규 값</th>
                   </tr>
                 </thead>
                 <tbody>
                   {changed.map((d) => (
-                    <tr key={d.field} className="border-b border-border/50">
+                    <tr key={d.field} className="border-b border-border/50 align-top">
                       <td className="py-1.5 pr-2 text-sm font-medium text-foreground">
-                        {FIELD_LABELS[d.field] ?? d.field}
+                        {diffFieldLabel(d.field)}
                       </td>
-                      <td className="py-1.5 pr-2 font-mono text-xs text-muted-foreground max-w-[200px] truncate"
-                        title={renderValue(d.current, d.field)}>
-                        {renderValue(d.current, d.field)}
+                      <td className="py-1.5 pr-2">
+                        <div className="max-h-32 overflow-y-auto font-mono text-xs text-muted-foreground whitespace-pre-wrap break-all">
+                          {renderDiffValue(d.current, d.field)}
+                        </div>
                       </td>
-                      <td className="py-1.5"><ArrowRight className="w-3 h-3 text-muted-foreground" /></td>
-                      <td className="py-1.5 font-mono text-xs text-primary max-w-[260px] truncate"
-                        title={renderValue(d.proposed, d.field)}>
-                        {renderValue(d.proposed, d.field)}
+                      <td className="py-1.5"><ArrowRight className="w-3 h-3 text-muted-foreground" aria-hidden /></td>
+                      <td className="py-1.5">
+                        <div className="max-h-32 overflow-y-auto font-mono text-xs text-foreground whitespace-pre-wrap break-all">
+                          {renderDiffValue(d.proposed, d.field)}
+                        </div>
                       </td>
                     </tr>
                   ))}
@@ -151,10 +113,10 @@ export function ClusterUpdateDiffDialog({
               <summary className="text-xs text-muted-foreground cursor-pointer">
                 변경 없음 {unchanged.length}건 보기
               </summary>
-              <ul className="mt-2 text-xs text-muted-foreground space-y-0.5 font-mono">
+              <ul className="mt-2 text-xs text-muted-foreground space-y-0.5 font-mono break-all">
                 {unchanged.map((d) => (
                   <li key={d.field}>
-                    {FIELD_LABELS[d.field] ?? d.field}: {renderValue(d.current, d.field)}
+                    {diffFieldLabel(d.field)}: {renderDiffValue(d.current, d.field)}
                   </li>
                 ))}
               </ul>
@@ -170,11 +132,11 @@ export function ClusterUpdateDiffDialog({
 
         <div className="flex justify-end gap-2 px-5 py-3 border-t border-border bg-muted/10">
           <button onClick={onCancel} disabled={applying}
-            className="px-4 py-1.5 text-sm font-medium bg-secondary hover:bg-secondary/80 border border-border rounded-lg disabled:opacity-40">
+            className="px-4 py-1.5 text-sm font-medium bg-secondary hover:bg-secondary/80 border border-border rounded-xl disabled:opacity-40">
             취소
           </button>
           <button onClick={onConfirm} disabled={applying || changed.length === 0}
-            className="flex items-center gap-1.5 px-4 py-1.5 text-sm font-semibold bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 disabled:opacity-50">
+            className="flex items-center gap-1.5 px-4 py-1.5 text-sm font-semibold bg-primary text-primary-foreground rounded-xl hover:bg-primary/90 disabled:opacity-50">
             {applying && <Loader2 className="w-3 h-3 animate-spin" />}
             {changed.length > 0 ? `${changed.length}개 필드 적용` : '적용'}
           </button>
