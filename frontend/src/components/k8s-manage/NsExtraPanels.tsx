@@ -1,11 +1,12 @@
 // NS 대시보드 전용 보조 패널 — 종류별 공통 ResourceTablePanel 로는 그릴 수 없는 "이 NS 기준" 목록.
 //  - NsCrdObjectsPanel: namespaced CRD 1종의 이 NS 오브젝트(additionalPrinterColumns 동적 컬럼)
-//  - NsClusterBindingsPanel: subject 가 이 NS 를 가리키는 ClusterRoleBinding(cluster-scoped)
+//  - NsBindingsPanel: subject 가 이 NS 를 가리키는 ClusterRoleBinding(cluster-scoped) · 다른 NS 의 RoleBinding
 import { useQuery } from '@tanstack/react-query';
 import { RefreshCw } from 'lucide-react';
 import { MacCard } from '@/components/ui/MacCard';
 import { EmptyState, Skeleton } from '@/components/common';
 import { k8sResourcesApi } from '@/services/api';
+import { NS_BINDING_QUERY, type NsBindingScope } from './nsBindingQueries';
 import type { K8sCrdInfo, K8sResourceRow } from '@/types';
 
 function ageText(sec?: number | null): string {
@@ -84,34 +85,47 @@ export function NsCrdObjectsPanel({ clusterId, ns, crd, onOpenObject }: {
   );
 }
 
-export function NsClusterBindingsPanel({ clusterId, ns, onOpenDetail }: {
-  clusterId: string; ns: string;
+const BINDING_TEXT: Record<NsBindingScope, { title: string; description: string; empty: string }> = {
+  cluster: {
+    title: 'ClusterRoleBindings',
+    description: '이 네임스페이스의 ServiceAccount 등에 클러스터 전역 권한을 주는 바인딩',
+    empty: '이 네임스페이스를 묶는 ClusterRoleBinding 이 없습니다.',
+  },
+  external: {
+    title: '다른 네임스페이스의 RoleBindings',
+    description: '다른 네임스페이스 안에서 이 네임스페이스의 ServiceAccount 등에 권한을 주는 바인딩',
+    empty: '이 네임스페이스를 묶는 다른 네임스페이스의 RoleBinding 이 없습니다.',
+  },
+};
+
+export function NsBindingsPanel({ clusterId, ns, scope, onOpenDetail }: {
+  clusterId: string; ns: string; scope: NsBindingScope;
   onOpenDetail: (row: K8sResourceRow) => void;
 }) {
-  const q = useQuery({
-    queryKey: ['k8s-mng-ns-crb', clusterId, ns],
-    queryFn: async () => (await k8sResourcesApi.nsClusterRoleBindings(clusterId, ns)).data,
-    enabled: !!clusterId && !!ns,
-    retry: false,
-  });
-  const grid = { gridTemplateColumns: 'minmax(180px,1.2fr) minmax(160px,1fr) minmax(200px,1.4fr) 60px' };
+  const q = useQuery({ ...NS_BINDING_QUERY[scope](clusterId, ns), enabled: !!clusterId && !!ns, retry: false });
+  const text = BINDING_TEXT[scope];
+  const withNs = scope === 'external';
+  const grid = {
+    gridTemplateColumns: [
+      ...(withNs ? ['minmax(120px,0.8fr)'] : []),
+      'minmax(180px,1.2fr) minmax(160px,1fr) minmax(200px,1.4fr) 60px',
+    ].join(' '),
+  };
   return (
-    <MacCard
-      title="ClusterRoleBindings"
-      description="이 네임스페이스의 ServiceAccount 등에 클러스터 전역 권한을 주는 바인딩"
-      bodyPadding="p-0"
-    >
+    <MacCard title={text.title} description={text.description} bodyPadding="p-0">
       <div className="grid gap-2 px-4 py-1.5 text-xs font-semibold text-muted-foreground border-b border-border bg-secondary/30" style={grid}>
+        {withNs && <span>네임스페이스</span>}
         <span>이름</span><span>Role</span><span>이 NS 의 Subjects</span><span className="text-right">Age</span>
       </div>
       {q.isLoading ? <Rows /> : q.isError ? (
         <div className="p-6 text-sm text-status-critical">조회 실패: {errText(q.error)}</div>
       ) : (q.data?.items.length ?? 0) === 0 ? (
-        <EmptyState compact title="이 네임스페이스를 묶는 ClusterRoleBinding 이 없습니다." />
+        <EmptyState compact title={text.empty} />
       ) : (
         q.data!.items.map((r) => (
-          <button key={r.name} type="button" onClick={() => onOpenDetail(r)}
+          <button key={`${r.namespace ?? ''}/${r.name}`} type="button" onClick={() => onOpenDetail(r)}
             className="w-full grid gap-2 px-4 py-1.5 text-sm text-left border-b border-border/40 hover:bg-secondary/30 items-center" style={grid}>
+            {withNs && <span className="truncate text-muted-foreground">{r.namespace ?? '—'}</span>}
             <span className="truncate font-medium">{r.name}</span>
             <span className="truncate text-muted-foreground">{r.cols?.role ?? '—'}</span>
             <span className="truncate text-muted-foreground" title={r.cols?.subjects ?? ''}>{r.cols?.subjects ?? '—'}</span>

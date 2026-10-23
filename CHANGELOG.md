@@ -22,6 +22,9 @@
   Frontend: `K8sHubPage`, `components/k8s-hub/*`, `lib/k8sHub.ts`(임베드 컨텍스트 — 흡수된 화면은 코드 수정 없이 레일/헤더/셸만 허브에
   넘긴다), 공용 `SegTabs` 승격, `App.tsx` `RedirectToHub`. 2단계(구성·콘솔)·3단계(진단) 뷰는 후속.
 
+### Added
+- **K8s 상세 관리 — 네임스페이스 대시보드에 "다른 NS 의 RoleBinding" 추가**: Access Control 에 다른 네임스페이스 안에서 이 네임스페이스의 ServiceAccount 에 권한을 주는 RoleBinding 이 나온다(바인딩 NS·Role·대상 subject, 행 클릭 시 상세·YAML). `system:serviceaccounts:<ns>` 그룹(이 NS 의 SA 전체)으로 묶은 바인딩도 잡으며, ClusterRoleBinding 목록에도 같은 그룹 판정을 적용했다. Backend: `GET /k8s/{id}/namespaces/{ns}/external-role-bindings`.
+
 ## [1.74.0] - 2026-10-22
 
 ### Added
