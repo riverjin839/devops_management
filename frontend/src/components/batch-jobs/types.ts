@@ -17,12 +17,4 @@ export interface SortState {
   dir: 'asc' | 'desc';
 }
 
-/** 상태 칩 메타 정보 — chip 색·라벨·필터 술어. */
-export interface FilterChipMeta {
-  key: FilterKey;
-  label: string;
-  className: string; // tailwind: 활성/비활성에 따라 페이지에서 분기
-  match: (job: { lastStatus: string; cron?: string | null; hasSavedPassword: boolean; hasSavedPrivateKey: boolean }) => boolean;
-}
-
 export const FAILED_STATUSES = new Set(['error', 'timeout', 'auth_error', 'connect_error']);

@@ -58,12 +58,3 @@ export function useTestChannel() {
   });
 }
 
-export function useNotificationLog(limit = 50) {
-  return useQuery({
-    queryKey: [...notificationKeys.log, limit],
-    queryFn: async () => {
-      const { data } = await notificationsApi.log(limit);
-      return data;
-    },
-  });
-}

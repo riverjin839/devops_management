@@ -41,10 +41,6 @@ export const SERVICE_BY_KEY: Record<string, ServiceDef> = Object.fromEntries(
   SERVICE_CATALOG.map((s) => [s.key, s]),
 );
 
-export function getServiceDef(key: string): ServiceDef {
-  return SERVICE_BY_KEY[key] ?? { ...SERVICE_BY_KEY.other, key, label: key };
-}
-
 // ── Phase B (knowledge-workitem-linkage) — service 하위 component 추천 enum ────
 // 자유 텍스트지만 dropdown 추천을 위해 service 별 후보 목록을 둔다. WorkItemForm 의
 // service select 옆 component select 에서 사용. "직접 입력" escape hatch 도 제공.
@@ -64,11 +60,6 @@ export const COMPONENT_BY_SERVICE: Record<string, readonly string[]> = {
   other:      [],
 };
 
-export function getComponentsForService(service: string | null | undefined): readonly string[] {
-  if (!service) return [];
-  return COMPONENT_BY_SERVICE[service] ?? [];
-}
-
 // kind 메타
 export interface KindDef {
   key: 'note' | 'guide' | 'troubleshoot' | 'history' | 'link';
@@ -86,10 +77,6 @@ export const KIND_CATALOG: KindDef[] = [
   { key: 'history',      label: '변경 이력',     icon: Clock,          color: 'emerald' },
   { key: 'link',         label: '리소스 링크',   icon: Link2,          color: 'purple' },
 ];
-
-export const KIND_BY_KEY: Record<string, KindDef> = Object.fromEntries(
-  KIND_CATALOG.map((k) => [k.key, k]),
-);
 
 // 컬러 → tailwind 클래스 (StatusBadge 와 같은 매핑이지만 가벼운 버전)
 // 키(이름)는 저장값 호환을 위해 유지하고, 장식 팔레트 키는 chart-N 토큰으로 그린다(D-120). purple·violet 은 chart-4 로 수렴.

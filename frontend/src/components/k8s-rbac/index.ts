@@ -6,5 +6,5 @@ export { RolePanel } from './RolePanel';
 export type { RbacRoleFocusRequest } from './RolePanel';
 export { BindingPanel } from './BindingPanel';
 export { AccessReviewPanel } from './AccessReviewPanel';
-export { RiskBadge, Tag, VerbTags } from './RbacTags';
+export { RiskBadge, Tag } from './RbacTags';
 export { shortDate } from './rbacShared';

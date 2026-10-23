@@ -88,3 +88,11 @@ vagrant/**/.vagrant-*/
 vagrant/**/_out/
 vagrant/**/_out-*/
 *-kubeconfig.yaml
+
+# 외부 스킬 설치기 산출물 — 공유 스킬은 .claude/skills/ 에만 둔다
+.agents/
+skills-lock.json
+# impeccable 스킬 critique 로그 (생성물)
+.impeccable/critique/
+# 생성된 리포트 바이너리 (docs/reports/build_ai_dev_report.js 로 재생성)
+docs/reports/*.pptx

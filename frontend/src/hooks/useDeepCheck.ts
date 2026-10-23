@@ -9,29 +9,6 @@ export const deepCheckKeys = {
     ['deepCheckTrend', clusterId, days] as const,
 };
 
-export function useDeepCheckResults(clusterId: string | undefined) {
-  return useQuery({
-    queryKey: deepCheckKeys.results(clusterId || ''),
-    queryFn: async () => {
-      const { data } = await deepCheckApi.listResults(clusterId!);
-      return data;
-    },
-    enabled: !!clusterId,
-  });
-}
-
-export function useLatestDeepCheckResults(clusterId: string | undefined) {
-  return useQuery({
-    queryKey: deepCheckKeys.latest(clusterId || ''),
-    queryFn: async () => {
-      const { data } = await deepCheckApi.latestResults(clusterId!);
-      return data;
-    },
-    enabled: !!clusterId,
-    refetchInterval: 60000,
-  });
-}
-
 export function useDeepCheckReview(dailyCheckLogId: string | undefined) {
   return useQuery({
     queryKey: deepCheckKeys.review(dailyCheckLogId || ''),

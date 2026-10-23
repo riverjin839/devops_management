@@ -10,6 +10,14 @@
 
 1.74.0 이후 main 에 병합된 변경 (다음 릴리스 후보).
 
+### Changed
+- **저장소 구조 정리 — 미사용 코드·의존성·중복 파일 제거**: 화면 동작 변화는 없다. 정리한 것은 다음과 같다.
+  - Frontend: 아무도 import 하지 않는 파일 7개(`src/analyzers/`, `usePacketFlow`, `WorkItemFormModal`, `WeeklyWorkTable`, `WorkItemCustomFieldsManager`), 호출되지 않는 `api.ts` 메서드 57개, 미사용 hook·유틸 41개, 미사용 패키지 3개(`@radix-ui/react-dialog`·`@radix-ui/react-toast`·`@types/dompurify`).
+  - Backend: 미사용 `schemas/node_image.py`, 빈 `app/data/` 패키지, 미사용 의존성 `alembic`·`ansible-runner`(플레이북은 `ansible-core` 의 `ansible-playbook` CLI 로 실행).
+  - Repo: 중복 사본(`.agents/`·`skills-lock.json`, `k8s/ansible-playbooks/`), 생성 로그(`.impeccable/critique/`), 생성 바이너리(리포트 `.pptx`), 대체된 `scripts/version-tag.sh` 를 제거하고 `.gitignore` 에 등록.
+  - `.gitattributes` 신설: 줄바꿈 고정(`*.sh` LF, `*.ps1` CRLF), lockfile·생성 리포트는 generated, vendored 스킬 스크립트는 vendored 로 표시.
+  - CI: 같은 ref 의 이전 실행 자동 취소(`concurrency`), frontend `npm ci` + npm 캐시, backend pip 캐시 키를 `requirements.txt` 로 고정.
+
 ## [1.74.0] - 2026-10-22
 
 ### Added

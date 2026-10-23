@@ -79,10 +79,9 @@ k8s/
 │   ├── serviceaccount.yaml
 │   ├── secret.yaml.tmpl
 │   └── README.md
-│
-└── ansible-playbooks/                 # Ansible 플레이북 소스 (ConfigMap 원본)
-    └── check_cluster.yml
 ```
+
+> Ansible 플레이북 원본은 저장소 루트 `ansible/playbooks/` 에 있다 (k8s/ 아래 사본 없음).
 
 ---
 
@@ -258,15 +257,15 @@ PEP 메인 스택과 별도로 배포되는 SuperPod(in_cluster deep check) Cron
 
 ---
 
-### ansible-playbooks/ — Ansible 플레이북 소스
+### Ansible 플레이북 소스 (`ansible/playbooks/`)
 
-백엔드 Celery Worker 가 마운트하는 Ansible 플레이북 원본 파일입니다.
+백엔드 Celery Worker 가 마운트하는 Ansible 플레이북 원본 파일입니다 (저장소 루트 `ansible/playbooks/`).
 
 | 파일 | 역할 |
 |---|---|
 | `check_cluster.yml` | 대상 클러스터에 SSH 접속하여 노드 상태, 시스템 리소스, 서비스 프로세스를 점검하고 결과를 JSON 으로 반환 |
 
-> `k8s/base/ansible-playbooks-check_cluster.yml` 은 이 파일을 ConfigMap 으로 패키징한 K8s 리소스입니다. 백엔드 Deployment 에서 볼륨 마운트하여 `ansible-runner` 로 실행합니다.
+> `k8s/base/ansible-playbooks-check_cluster.yml` 은 이 파일을 ConfigMap 으로 패키징한 K8s 리소스입니다. 백엔드 Deployment 에서 볼륨 마운트하여 `ansible-playbook` 으로 실행합니다. 원본 플레이북은 `ansible/playbooks/check_cluster.yml` 입니다.
 
 ---
 

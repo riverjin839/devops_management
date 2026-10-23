@@ -140,10 +140,3 @@ export function useCanEditScripts() {
   };
 }
 
-export function useUpdateScriptAccessSettings() {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: (adminOnly: boolean) => scriptsApi.updateAccessSettings(adminOnly).then((r) => r.data),
-    onSuccess: () => qc.invalidateQueries({ queryKey: scriptsKeys.accessSettings }),
-  });
-}

@@ -118,18 +118,6 @@ export function useUpdateCluster() {
   });
 }
 
-// Reorder Clusters (drag-and-drop) — 받은 순서대로 seq 일괄 갱신
-export function useReorderClusters() {
-  const queryClient = useQueryClient();
-
-  return useMutation({
-    mutationFn: (clusterIds: string[]) => clustersApi.reorder(clusterIds),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.clusters });
-    },
-  });
-}
-
 // Delete Cluster
 export function useDeleteCluster() {
   const queryClient = useQueryClient();
@@ -250,7 +238,6 @@ export function useHealthCheck() {
     },
   });
 }
-
 
 export function useAddonHealthCheck() {
   const queryClient = useQueryClient();

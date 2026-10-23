@@ -15,7 +15,6 @@ export {
   ExpandButton,
   StateDot,
   LabelTable,
-  TableMessage,
   HealthIcon,
   formatMetricValue,
   formatTime,

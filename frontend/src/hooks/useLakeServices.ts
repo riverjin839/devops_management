@@ -1,7 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { lakeServicesApi, lakeServiceTypesApi } from '@/services/api';
 import type {
-  LakeServiceInput, LakeServiceUpdate,
+  LakeServiceInput,
   LakeServiceTypeInput, LakeServiceTypeUpdate,
 } from '@/types';
 
@@ -62,18 +62,6 @@ export function useCreateLakeService() {
     mutationFn: (data: LakeServiceInput) => lakeServicesApi.create(data),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['lakeServices'] });
-    },
-  });
-}
-
-export function useUpdateLakeService() {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: ({ id, data }: { id: string; data: LakeServiceUpdate }) =>
-      lakeServicesApi.update(id, data),
-    onSuccess: (_res, { id }) => {
-      qc.invalidateQueries({ queryKey: ['lakeServices'] });
-      qc.invalidateQueries({ queryKey: lakeServiceKeys.detail(id) });
     },
   });
 }

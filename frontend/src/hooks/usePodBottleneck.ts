@@ -1,6 +1,5 @@
 import { useInfiniteQuery, useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { podBottleneckApi } from '@/services/api';
-import type { BottleneckRunInput } from '@/types';
 
 export const bottleneckKeys = {
   probes: () => ['bottleneckProbes'] as const,
@@ -34,16 +33,6 @@ export function useBottleneckRun(id: string | undefined) {
     queryKey: bottleneckKeys.run(id || ''),
     queryFn: async () => (await podBottleneckApi.getRun(id!)).data,
     enabled: !!id,
-  });
-}
-
-export function useRunBottleneckAnalysis() {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: (data: BottleneckRunInput) => podBottleneckApi.runAnalysis(data),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['bottleneckRuns'] });
-    },
   });
 }
 

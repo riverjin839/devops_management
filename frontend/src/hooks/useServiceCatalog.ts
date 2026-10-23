@@ -7,11 +7,8 @@ import {
 import {
   BookOpen, type LucideIcon,
 } from 'lucide-react';
-import { resolveClusterIcon, CLUSTER_ICON_OPTIONS } from '@/lib/clusterIcons';
+import { resolveClusterIcon } from '@/lib/clusterIcons';
 import { useLakeServiceTypeRows } from './useLakeServices';
-
-/** 서비스 카탈로그의 아이콘 옵션 — cluster 와 같은 lucide 화이트리스트 사용 (재사용성). */
-export const SERVICE_ICON_OPTIONS = Object.keys(CLUSTER_ICON_OPTIONS);
 
 /**
  * 저장된 아이콘 값(lucide 이름 / emoji / data URL)을 ``ComponentType`` 으로 변환.
@@ -73,22 +70,6 @@ export function useServiceCatalog(): ServiceDef[] {
       description: s.description ?? undefined,
     }));
   }, [data]);
-}
-
-/** 카탈로그 항목 + 'other' fallback 조회. */
-export function useGetServiceDef() {
-  const catalog = useServiceCatalog();
-  return useMemo(() => {
-    const map = new Map(catalog.map((s) => [s.key, s]));
-    return (key: string): ServiceDef => {
-      const found = map.get(key);
-      if (found) return found;
-      const other = map.get('other');
-      return other
-        ? { ...other, key, label: key }
-        : { key, label: key, icon: getServiceIcon('MoreHorizontal'), color: 'slate' };
-    };
-  }, [catalog]);
 }
 
 export { colorBadgeClass };

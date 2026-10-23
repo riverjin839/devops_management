@@ -56,7 +56,7 @@ PEP 의 문서·에디터·블록·협업/지식관리 기능을 발전시킬 �
   pydantic-settings · Python 3.11.
   - **마이그레이션은 `main.py` 의 `_run_migrations()` 인라인 방식 — Alembic CLI 없음.**
   - K8s 점검은 `subprocess` 의 `kubectl` + `kubernetes` SDK 두 경로를 함께 쓴다.
-  - Ollama(로컬 LLM)와 ansible-runner 는 **optional 의존** — 없어도 앱이 떠야 한다.
+  - Ollama(로컬 LLM)와 Ansible(`ansible-core` 의 `ansible-playbook` CLI) 은 **optional 의존** — 없어도 앱이 떠야 한다.
 - **Frontend**: React + TypeScript · Vite · Tailwind + shadcn/ui(Base UI 기본, Radix 호환) ·
   axios · Recharts · React Router v6 · lucide-react.
   - **상태는 Zustand(client) / TanStack Query(server) 로 엄격히 분리** — §Frontend Architecture.

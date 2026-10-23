@@ -12,7 +12,6 @@ export { AddMetricCardModal } from './AddMetricCardModal';
 export { KubeconfigEditModal } from './KubeconfigEditModal';
 export { WorkCalendar } from './WorkCalendar';
 export { MemberTodayTodos } from './MemberTodayTodos';
-export { WeeklyWorkTable } from './WeeklyWorkTable';
 export { WeeklyStatusTimeline } from './WeeklyStatusTimeline';
 export { DayScheduleBoard } from './DayScheduleBoard';
 export { StatusGlyph } from './StatusGlyph';
