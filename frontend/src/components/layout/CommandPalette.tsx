@@ -6,6 +6,7 @@ import { Search, Server, Clock, CornerDownLeft, LayoutGrid } from 'lucide-react'
 import { useCommandPaletteStore } from '@/stores/commandPaletteStore';
 import { useRecentPathsStore } from '@/stores/recentPathsStore';
 import { useNavCatalog, groupLabelForPath } from '@/hooks/useNavCatalog';
+import { isHubAbsorbed } from '@/components/layout/navConfig';
 import { useModalA11y } from '@/components/common/useModalA11y';
 import { EmptyState } from '@/components/common/EmptyState';
 import { clustersApi } from '@/services/api';
@@ -87,7 +88,8 @@ export function CommandPalette() {
 
   const screenItems = useMemo<PaletteItem[]>(() => (
     Object.keys(navMap)
-      .filter((p) => featureAllowed(p))
+      // 허브에 흡수된 옛 화면은 허브("K8s 클러스터")·클러스터 항목으로만 들어간다(D-240 3단계).
+      .filter((p) => featureAllowed(p) && !isHubAbsorbed(p))
       .map((p) => ({
         key: `screen:${p}`,
         label: getLabel(p),
@@ -117,7 +119,7 @@ export function CommandPalette() {
     const q = query.trim().toLowerCase();
     if (!q) {
       const recent = recentPaths
-        .filter((p) => navMap[p] && featureAllowed(p))
+        .filter((p) => navMap[p] && featureAllowed(p) && !isHubAbsorbed(p))
         .slice(0, MAX_RECENT)
         .map<PaletteItem>((p) => ({
           key: `recent:${p}`,

@@ -311,7 +311,7 @@ export function ClusterDetailPage() {
             />
             {clusterId && (
               <>
-                <Link to={`/daily-check/review/${clusterId}`} className={HEADER_BTN}>
+                <Link to={`/k8s/${clusterId}/review`} className={HEADER_BTN}>
                   <ClipboardCheck className="w-3.5 h-3.5" /> 결과 리뷰
                 </Link>
                 <Link to="/daily-check/settings" className={HEADER_BTN}>

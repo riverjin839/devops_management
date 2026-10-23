@@ -37,7 +37,6 @@ export { DoubleScrollX } from './DoubleScrollX';
 export { SearchableSelect } from './SearchableSelect';
 export { NamespaceSingleSelect } from './NamespaceSingleSelect';
 export { PodSingleSelect } from './PodSingleSelect';
-export { LogViewTabs } from './LogViewTabs';
 export { ReactionBar } from './ReactionBar';
 export { SnapshotProgressCard, SnapshotProgressBar } from './SnapshotProgress';
 export { ExportMenu } from './ExportMenu';

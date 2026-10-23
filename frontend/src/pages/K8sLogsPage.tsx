@@ -7,7 +7,7 @@ import { MacCard } from '@/components/ui/MacCard';
 import { ClusterSidebar } from '@/components/common/ClusterSidebar';
 import { PageShell } from '@/components/common/PageShell';
 import {
-  EmptyState, ErrorState, LogViewTabs, NamespaceSingleSelect, PodSingleSelect, SelectClusterEmptyState,
+  EmptyState, ErrorState, NamespaceSingleSelect, PodSingleSelect, SelectClusterEmptyState,
 } from '@/components/common';
 import { PodLogStream } from '@/components/k8s';
 import { useClusters } from '@/hooks/useCluster';
@@ -72,8 +72,6 @@ export function K8sLogsPage() {
               title={cluster ? `${cluster.name} — 파드 로그` : '파드 로그'}
               className="min-w-[180px]"
             />
-            <div className="flex-1" />
-            <LogViewTabs current="stream" />
           </div>
 
           <MacCard

@@ -91,6 +91,25 @@ export const NAV_MAP: Record<string, NavMapEntry> = {
   '/documents':          { labelKey: 'documents', defaultLabel: '문서 관리',      icon: FileText },
 };
 
+/**
+ * K8s 클러스터 허브(`/k8s/:clusterId/:view`, D-240)에 **흡수된** 옛 화면 경로. 옛 URL 은 허브 뷰로 redirect 되고,
+ * 사이드바 카탈로그·커맨드 팔레트·즐겨찾기·최근 방문에서는 보이지 않는다(허브 하나로만 들어간다 — 3단계 잔존 정리).
+ * NAV_MAP 항목은 지우지 않는다: Settings ▸ 접근 제어가 허브 탭을 하나씩 켜고 끄는 키(`HubView.navKey`)이고,
+ * 아일랜드 패널(페이지 직접 임베드)·RouteAccessGate 도 이 키를 쓴다. 접근 제어 목록에서는 "K8s 클러스터" 그룹 아래에 묶인다.
+ * 저장된 설치 목록·고정 경로의 옛 경로는 서버가 읽을 때 `/k8s` 로 바꾼다(`backend/app/services/home_prefs.py`
+ * `RETIRED_PATH_ALIASES` — 두 목록은 같이 고친다). 허브 뷰가 있어도 단독 화면이 남는 `/node-labels`·`/k9s`·`/node-ssh` 는 여기 없다.
+ */
+export const HUB_ABSORBED_PATHS: ReadonlySet<string> = new Set([
+  '/clusters', '/k8s-manage', '/k8s-allocation', '/cluster-trends', '/observability', '/k8s-events',
+  '/k8s-logs', '/incident-analysis', '/daily-check/review', '/k8s-rbac', '/node-images', '/versions',
+  '/etcdctl', '/kernel-params', '/pod-bottleneck', '/cilium-trace', '/packet-flow', '/ops-checks',
+]);
+
+/** 허브에 흡수돼 메뉴·팔레트·즐겨찾기에서 숨기는 경로인가. */
+export function isHubAbsorbed(path: string): boolean {
+  return HUB_ABSORBED_PATHS.has(path);
+}
+
 // 사이드바 레일에 표시되는 그룹들
 export type GroupId =
   | 'k8s' | 'observe' | 'inspect' | 'operate' | 'configure'
@@ -127,19 +146,18 @@ export interface NavGroup {
  */
 export const GROUPS: NavGroup[] = [
   // K8s 클러스터 허브(2026-10-22, D-240) — 클러스터 하나를 고르고 보는 K8s 화면을 `/k8s` 한 화면으로 모았다.
-  // 첫 항목이 허브, 나머지는 허브 뷰로 redirect 되는 옛 leaf(설치하면 그 뷰로 바로 가는 바로가기).
-  // 2단계(2026-10-23): 구성·콘솔 5화면 추가. `/node-labels` 는 허브 뷰도 있지만 단독(전체 클러스터) 화면이 남아 구성·자산에,
+  // 3단계(2026-10-23) 잔존 정리 — 허브 하나만 남기고 흡수된 옛 leaf 는 그룹에서 뺐다(`HUB_ABSORBED_PATHS`).
+  // `/node-labels` 는 허브 뷰도 있지만 단독(전체 클러스터) 화면이 남아 구성·자산에,
   // `/k9s`·`/node-ssh` 는 허브 ▸ 콘솔 ▸ 터미널 카드가 여는 단독 터미널이라 운영 조작(danger)에 남긴다.
-  { id: 'k8s',       label: 'K8s 클러스터', labelKey: 'k8s', descriptionKey: 'k8s', icon: ShipWheel, description: '클러스터 하나를 골라 상세·리소스·자원·관측·로그·점검·구성·콘솔을 한 화면에서', domain: 'platform',
-    paths: ['/k8s', '/clusters', '/k8s-manage', '/k8s-allocation', '/cluster-trends', '/observability', '/k8s-events', '/k8s-logs', '/incident-analysis', '/daily-check/review',
-      '/k8s-rbac', '/node-images', '/versions', '/etcdctl', '/kernel-params'] },
+  { id: 'k8s',       label: 'K8s 클러스터', labelKey: 'k8s', descriptionKey: 'k8s', icon: ShipWheel, description: '클러스터 하나를 골라 상세·리소스·자원·관측·로그·점검·진단·구성·콘솔을 한 화면에서', domain: 'platform',
+    paths: ['/k8s'] },
   { id: 'observe',   label: '관측', labelKey: 'observe', descriptionKey: 'observe', icon: Activity,    description: '상태를 본다 — 읽기 전용', domain: 'platform',
     paths: ['/alerts', '/isilon-nfs', '/lake-services'] },
   // '/ops-checks'(운영 점검 콘솔, 레거시)는 사이드바에서 뺐다 — 같은 패널을 종합 상태까지 포함해
   // 보여주는 '/clusters/:id' 로 대체됐다(App.tsx 주석). 라우트·NAV_MAP 은 북마크/아일랜드 패널
   // 호환으로 유지(D-129).
   { id: 'inspect',   label: '점검·진단', labelKey: 'inspect', descriptionKey: 'inspect', icon: ShieldCheck, description: '상태를 확인·기록하고 원인을 추적한다', domain: 'platform',
-    paths: ['/daily-check/settings', '/pod-bottleneck', '/cilium-trace', '/packet-flow'] },
+    paths: ['/daily-check/settings'] },
   { id: 'operate',   label: '운영 조작', labelKey: 'operate', descriptionKey: 'operate', icon: Terminal,    description: '클러스터·노드·스토리지에 명령을 보낸다 — 실행 전 대상을 확인할 것', domain: 'platform', tone: 'danger',
     paths: ['/ns-migration', '/k9s', '/bulk-exec', '/node-ssh', '/mc'] },
   { id: 'configure', label: '구성·자산', labelKey: 'configure', descriptionKey: 'configure', icon: Layers,      description: '클러스터 등록·자원·권한·노드 자산을 관리한다', domain: 'platform',

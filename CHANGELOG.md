@@ -10,6 +10,19 @@
 
 1.78.2 이후 main 에 병합된 변경 (다음 릴리스 후보).
 
+### Added
+- **K8s 클러스터 허브 3단계 — 진단**: 허브(`/k8s/:clusterId/:view`)에 **진단** 카테고리(파드 병목 진단·Cilium BPF 추적·패킷 흐름 분석)를 더했다.
+  허브 레일에서 고른 클러스터를 그대로 따르고, 옛 URL(`/pod-bottleneck`·`/cilium-trace`·`/packet-flow`)은 해당 뷰로 redirect 된다.
+  패킷 흐름의 "병목 진단으로" 이동과 병목 실행 상세의 "목록"은 같은 클러스터의 허브 병목 뷰로 간다.
+
+### Changed
+- **허브로 합친 옛 K8s 화면을 메뉴에서 정리**: 사이드바 앱 카탈로그의 "K8s 클러스터" 그룹에는 이제 허브 하나만 있다. 허브에 흡수된 옛 화면 18개는
+  커맨드 팔레트·즐겨찾기·최근 방문에서도 숨고, 레일에 설치했거나 즐겨찾기에 고정해 둔 옛 화면은 "K8s 클러스터" 하나로 접힌다(중복은 합침).
+  옛 주소는 계속 허브 뷰로 redirect 되고, Settings ▸ 접근 제어에서는 허브 탭별 켜기/끄기가 "K8s 클러스터" 그룹 아래에 그대로 남는다.
+  레거시 운영 점검 콘솔(`/ops-checks`)도 허브 개요 뷰로 redirect 된다. 허브 2행 탭과 겹치던 파드 로그 ↔ AI 분석 전환 버튼을 지웠다.
+  Frontend: `navConfig.ts` `HUB_ABSORBED_PATHS`/`isHubAbsorbed`, `CommandPalette`·`FavoritesFlyoutBody` 필터, `LogViewTabs` 삭제, `clusterStore` 의 안 쓰는 선택 필드 제거.
+  Backend: `services/home_prefs.py` `RETIRED_PATH_ALIASES` 에 흡수 경로 → `/k8s`(`/cluster-overview` 도 `/k8s` 로).
+
 ## [1.78.2] - 2026-10-23
 
 ### Fixed

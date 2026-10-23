@@ -25,8 +25,17 @@ DEFAULTS_KEY = "home_prefs_defaults"
 # 화면이 없어져 다른 화면으로 합쳐진 경로 → 대체 경로. 저장된 설치 목록·고정 경로·조직 기본값을
 # 읽을 때 치환한다(상태 없는 읽기 시점 치환 — 구 백업을 복원해도 같은 결과). 화면 쪽 옛 URL 은
 # App.tsx 의 `<Navigate>` 가 받는다.
+# K8s 클러스터 허브(D-240)에 흡수된 per-cluster 화면은 전부 `/k8s` 로 접는다 — 사이드바 레일·즐겨찾기에
+# 옛 화면 아이콘이 따로 남지 않게(3단계 잔존 정리). 목록은 프론트 `navConfig.ts` `HUB_ABSORBED_PATHS` 와 같이 고친다.
+# 허브 뷰가 있어도 단독 화면이 남는 `/node-labels`·`/k9s`·`/node-ssh` 는 넣지 않는다.
+_HUB_ABSORBED_PATHS = (
+    "/clusters", "/k8s-manage", "/k8s-allocation", "/cluster-trends", "/observability", "/k8s-events",
+    "/k8s-logs", "/incident-analysis", "/daily-check/review", "/k8s-rbac", "/node-images", "/versions",
+    "/etcdctl", "/kernel-params", "/pod-bottleneck", "/cilium-trace", "/packet-flow", "/ops-checks",
+)
 RETIRED_PATH_ALIASES: dict[str, str] = {
-    "/cluster-overview": "/clusters",  # 클러스터 현황 → 클러스터 상세(+ PromQL 카드는 /observability)
+    "/cluster-overview": "/k8s",  # 클러스터 현황 → 클러스터 상세(D-239) → K8s 클러스터 허브 개요(D-240)
+    **{p: "/k8s" for p in _HUB_ABSORBED_PATHS},
 }
 
 

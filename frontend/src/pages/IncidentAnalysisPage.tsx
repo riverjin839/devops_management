@@ -5,7 +5,7 @@ import {
 } from 'lucide-react';
 import { Link, useSearchParams } from 'react-router-dom';
 import {
-  ClusterSidebar, EmptyState, LogViewer, SearchableSelect, LogViewTabs, PageHeader, PageShell, RunLogPanel,
+  ClusterSidebar, EmptyState, LogViewer, SearchableSelect, PageHeader, PageShell, RunLogPanel,
 } from '@/components/common';
 import { PodLogStream } from '@/components/k8s';
 import { useClusterRouteParam } from '@/hooks/useClusterRouteParam';
@@ -577,7 +577,6 @@ export function IncidentAnalysisPage() {
           <PageHeader
             icon={Zap}
             title="K8s 로그 — AI 분석"
-            titleExtra={<LogViewTabs current="analysis" />}
             actions={health && (
               <div className="flex items-center gap-2 text-sm">
                 {health.available

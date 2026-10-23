@@ -6,6 +6,7 @@ import { Activity, Play, AlertCircle, ListTree, Loader2, ExternalLink, Square } 
 import { ClusterSidebar, EmptyState, NamespaceSingleSelect, PodSingleSelect, RunLogPanel, SelectClusterEmptyState, Skeleton, PageShell } from '@/components/common';
 import { MacCard } from '@/components/ui/MacCard';
 import { useClusters } from '@/hooks/useCluster';
+import { useK8sHub } from '@/lib/k8sHub';
 import { useCanOperate } from '@/hooks/useCanOperate';
 import { useBottleneckRunsPaged } from '@/hooks/usePodBottleneck';
 import { BOTTLENECK_STATUS_META } from '@/components/pod-bottleneck';
@@ -47,7 +48,10 @@ export function PodBottleneckPage() {
   const prefillDst = params.get('dst') ?? '';
   const prefillSvc = params.get('svc') ?? '';
 
-  const [selectedClusterId, setSelectedClusterId] = useState<string | null>(prefillCluster || null);
+  const [localClusterId, setSelectedClusterId] = useState<string | null>(prefillCluster || null);
+  // K8s 클러스터 허브(D-240 3단계) 안에서는 허브가 고른 클러스터가 우선(레일은 허브가 그린다). 단독·아일랜드에선 로컬 선택("전체" 포함).
+  const hub = useK8sHub();
+  const selectedClusterId = hub ? hub.clusterId : localClusterId;
   const [namespace, setNamespace] = useState(prefillNs);
   const [sourcePod, setSourcePod] = useState(prefillSrc);
   const [destPod, setDestPod] = useState(prefillDst);

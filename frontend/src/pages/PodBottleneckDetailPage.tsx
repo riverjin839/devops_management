@@ -37,9 +37,12 @@ export function PodBottleneckDetailPage() {
     [probes],
   );
 
+  // 목록 = K8s 클러스터 허브 ▸ 진단 ▸ 파드 병목(D-240 3단계) — 이 실행의 클러스터로 돌아간다.
+  const listPath = run?.clusterId ? `/k8s/${run.clusterId}/bottleneck` : '/pod-bottleneck';
+
   const doDelete = () => {
     setConfirmDelete(false);
-    del.mutate(id, { onSuccess: () => navigate('/pod-bottleneck') });
+    del.mutate(id, { onSuccess: () => navigate(listPath) });
   };
 
   if (isLoading) {
@@ -83,7 +86,7 @@ export function PodBottleneckDetailPage() {
     <div className="app-min-h-screen bg-background">
       <PageShell density="hub" className="space-y-4">
         <PageHeader
-          back={{ to: '/pod-bottleneck', label: '목록' }}
+          back={{ to: listPath, label: '목록' }}
           title={
             <span className="font-mono">
               <span className="text-muted-foreground">{run.namespace}/</span>

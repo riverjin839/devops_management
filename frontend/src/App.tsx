@@ -34,16 +34,13 @@ import { MindMapPage } from '@/pages/MindMapPage';
 import { WbsFlowPage } from '@/pages/WbsFlowPage';
 import { InfraTopologyPage } from '@/pages/InfraTopologyPage';
 import { NodeSpecPage } from '@/pages/NodeSpecPage';
-import { PacketFlowPage } from '@/pages/PacketFlowPage';
 import { OntologyPage } from '@/pages/OntologyPage';
 import { TrendDigestPage } from '@/pages/TrendDigestPage';
-import { CiliumTracePage } from '@/pages/CiliumTracePage';
 import { ServiceTopologyPage } from '@/pages/ServiceTopologyPage';
 import { ServiceArchitecturePage } from '@/pages/ServiceArchitecturePage';
 import { ArchitecturePage } from '@/pages/ArchitecturePage';
 import { AlertInboxPage } from '@/pages/AlertInboxPage';
 import { DeepCheckSettingsPage } from '@/pages/DeepCheckSettings';
-import { OpsCheckConsolePage } from '@/pages/OpsCheckConsolePage';
 import { CheckItemDetailPage } from '@/pages/CheckItemDetailPage';
 import { K9sPage } from '@/pages/K9sPage';
 import { K9sPopupPage } from '@/pages/K9sPopupPage';
@@ -51,7 +48,6 @@ import { NodeSshPage } from '@/pages/NodeSshPage';
 import { NodeSshPopupPage } from '@/pages/NodeSshPopupPage';
 import { LakeServicesPage } from '@/pages/LakeServicesPage';
 import { LakeServiceDetailPage } from '@/pages/LakeServiceDetailPage';
-import { PodBottleneckPage } from '@/pages/PodBottleneckPage';
 import { PodBottleneckDetailPage } from '@/pages/PodBottleneckDetailPage';
 import { KnowledgeHubPage } from '@/pages/KnowledgeHubPage';
 import { K8sHubPage } from '@/pages/K8sHubPage';
@@ -176,7 +172,8 @@ function AppShell() {
               {/* K8s 클러스터 허브(D-240) — 클러스터 레일 하나 + 탭으로 per-cluster K8s 화면을 모은다.
                   아래 옛 경로들(/clusters·/k8s-manage·/k8s-allocation·/cluster-trends·/observability·/k8s-events·
                   /k8s-logs·/incident-analysis·/daily-check/review, 2단계: /k8s-rbac·/node-images·/versions·/etcdctl·/kernel-params)은
-                  해당 뷰로 redirect(클러스터·쿼리 보존). /node-labels(전체 클러스터 모드)·/k9s·/node-ssh(전체 높이 터미널)는 단독 유지. */}
+                  해당 뷰로 redirect(클러스터·쿼리 보존). 3단계: /pod-bottleneck·/cilium-trace·/packet-flow·/ops-checks.
+                  /node-labels(전체 클러스터 모드)·/k9s·/node-ssh(전체 높이 터미널)·/pod-bottleneck/:id(실행 상세)는 단독 유지. */}
               <Route path="/k8s" element={<K8sHubPage />} />
               <Route path="/k8s/:clusterId/:view?" element={<K8sHubPage />} />
               <Route path="/playbooks" element={<PlaybooksPage />} />
@@ -186,7 +183,7 @@ function AppShell() {
               <Route path="/lake-services/:id" element={<LakeServiceDetailPage />} />
 
               {/* Pod-to-pod bottleneck analyzer (pod-bottleneck-analyzer PDCA) */}
-              <Route path="/pod-bottleneck" element={<PodBottleneckPage />} />
+              <Route path="/pod-bottleneck" element={<RedirectToHub view="bottleneck" />} />
               <Route path="/pod-bottleneck/:id" element={<PodBottleneckDetailPage />} />
 
               <Route path="/tasks-mgmt" element={<WorkItemBoardPage />} />
@@ -247,11 +244,11 @@ function AppShell() {
               <Route path="/wbs" element={<WbsFlowPage />} />
               <Route path="/incident-analysis" element={<RedirectToHub view="incident" />} />
               <Route path="/incident-analysis/:clusterId" element={<RedirectToHub view="incident" />} />
-              <Route path="/packet-flow" element={<PacketFlowPage />} />
+              <Route path="/packet-flow" element={<RedirectToHub view="packet-flow" />} />
               <Route path="/ontology" element={<OntologyPage />} />
               <Route path="/ontology/:clusterId" element={<OntologyPage />} />
               <Route path="/trends" element={<TrendDigestPage />} />
-              <Route path="/cilium-trace" element={<CiliumTracePage />} />
+              <Route path="/cilium-trace" element={<RedirectToHub view="cilium" />} />
               <Route path="/service-topology" element={<ServiceTopologyPage />} />
               <Route path="/service-architecture" element={<ServiceArchitecturePage />} />
               <Route path="/service-architecture/:clusterId" element={<ServiceArchitecturePage />} />
@@ -271,10 +268,10 @@ function AppShell() {
               {/* 항목 상세(R-4 6차 라운드 4단계) — 정의·테스트·적용·실행방식·로그·히스토리.
                   매트릭스 항목명 클릭이 여기로. /daily-check/settings 는 전 항목 검색/일괄 관리용으로 별도 유지. */}
               <Route path="/checks/:itemId" element={<CheckItemDetailPage />} />
-              {/* 운영 점검 통합 콘솔(레거시) — 점검 항목 리스트 + 일괄/개별 실행 + 결과/로그.
-                  /clusters/:id 가 더 완전하지만(종합 상태 포함) 기존 링크/북마크 호환을 위해 유지. */}
-              <Route path="/ops-checks/:clusterId" element={<OpsCheckConsolePage />} />
-              <Route path="/ops-checks" element={<OpsCheckConsolePage />} />
+              {/* 운영 점검 통합 콘솔(레거시) — 같은 패널을 종합 상태까지 보여 주는 허브 개요 뷰로 redirect(D-240 3단계).
+                  페이지 컴포넌트는 아일랜드 패널 호환으로 남는다. */}
+              <Route path="/ops-checks/:clusterId" element={<RedirectToHub view="overview" />} />
+              <Route path="/ops-checks" element={<RedirectToHub view="overview" />} />
               {/* OpenLens P0 — 파드 로그 스트리밍(읽기전용) */}
               <Route path="/k8s-logs/:clusterId" element={<RedirectToHub view="logs" />} />
               <Route path="/k8s-logs" element={<RedirectToHub view="logs" />} />

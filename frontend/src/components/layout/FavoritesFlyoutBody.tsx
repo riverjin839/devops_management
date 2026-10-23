@@ -1,5 +1,6 @@
 import { useLocation } from 'react-router-dom';
 import { useNavCatalog } from '@/hooks/useNavCatalog';
+import { isHubAbsorbed } from './navConfig';
 import { useFavorites } from '@/hooks/useFavorites';
 import { useRecentPathsStore } from '@/stores/recentPathsStore';
 import { FlyoutLink } from './NavFlyout';
@@ -15,9 +16,10 @@ export function FavoritesFlyoutBody({ onClose }: { onClose: () => void }) {
   const { pinnedPaths, isPinned, togglePin } = useFavorites();
   const recentPaths = useRecentPathsStore((s) => s.paths);
 
-  const visiblePinned = pinnedPaths.filter((p) => navMap[p] && featureAllowed(p));
+  // 허브에 흡수된 옛 화면(D-240)은 숨긴다 — 서버가 고정 경로를 `/k8s` 로 바꾸지만 기기 로컬 최근 방문엔 옛 경로가 남아 있을 수 있다.
+  const visiblePinned = pinnedPaths.filter((p) => navMap[p] && featureAllowed(p) && !isHubAbsorbed(p));
   const visibleRecent = recentPaths.filter(
-    (p) => !pinnedPaths.includes(p) && navMap[p] && featureAllowed(p),
+    (p) => !pinnedPaths.includes(p) && navMap[p] && featureAllowed(p) && !isHubAbsorbed(p),
   );
 
   const renderItem = (p: string) => {
