@@ -22,6 +22,7 @@ import {
 } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { useClusters } from '@/hooks/useCluster';
+import { useK8sHub } from '@/lib/k8sHub';
 import { useTerminalEnvSync } from '@/hooks/useTerminalEnvSync';
 import { useClusterStore } from '@/stores/clusterStore';
 import { ClusterSidebar, ConfirmDialog, LogViewer, SearchableSelect, EmptyState, ErrorState, SelectClusterEmptyState, LoadingState, Skeleton, PageShell, RunLogPanel } from '@/components/common';
@@ -221,10 +222,14 @@ const TABS: { id: TabId; label: string; icon: typeof Database }[] = [
 export function CiliumTracePage() {
   const clustersQ = useClusters();
   const { clusters } = useClusterStore();
-  const [selectedClusterId, setSelectedClusterId] = useState<string | null>(null);
+  const [localClusterId, setSelectedClusterId] = useState<string | null>(null);
+  // K8s 클러스터 허브(D-240 3단계) 안에서는 허브가 고른 클러스터가 우선. 단독·아일랜드에선 로컬 선택.
+  const hub = useK8sHub();
+  const selectedClusterId = hub ? hub.clusterId : localClusterId;
   useEffect(() => {
-    if (!selectedClusterId && clusters.length > 0) setSelectedClusterId(clusters[0].id);
-  }, [clusters, selectedClusterId]);
+    if (hub || localClusterId || clusters.length === 0) return;
+    setSelectedClusterId(clusters[0].id);
+  }, [hub, clusters, localClusterId]);
   // 선택 클러스터 운영등급 → 터미널 Appearance(개발/운영) 자동 적용.
   useTerminalEnvSync(clusters, selectedClusterId);
   const [tab, setTab] = useState<TabId>('bpf');

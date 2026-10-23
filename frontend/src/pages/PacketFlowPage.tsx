@@ -6,6 +6,7 @@ import {
 } from 'lucide-react';
 import { useAbortableMutation } from '@/hooks/useAbortableMutation';
 import { useClusters } from '@/hooks/useCluster';
+import { useK8sHub } from '@/lib/k8sHub';
 import { useTerminalEnvSync } from '@/hooks/useTerminalEnvSync';
 import { useRunLog, runLogged, type RunLogEntry } from '@/hooks/useRunLog';
 import { useLogPref } from '@/hooks/useLogPref';
@@ -112,10 +113,14 @@ function HopBreadcrumb({
 export function PacketFlowPage() {
   const clustersQ = useClusters();
   const clusters = clustersQ.data ?? EMPTY_CLUSTERS;
-  const [clusterId, setClusterId] = useState('');
+  const [localClusterId, setClusterId] = useState('');
+  // K8s 클러스터 허브(D-240 3단계) 안에서는 허브가 고른 클러스터가 우선. 단독·아일랜드에선 로컬 선택.
+  const hub = useK8sHub();
+  const clusterId = hub ? hub.clusterId : localClusterId;
   useEffect(() => {
-    if (!clusterId && clusters.length > 0) setClusterId(clusters[0].id);
-  }, [clusters, clusterId]);
+    if (hub || localClusterId || clusters.length === 0) return;
+    setClusterId(clusters[0].id);
+  }, [hub, clusters, localClusterId]);
   // 선택 클러스터 운영등급 → 터미널 Appearance(개발/운영) 자동 적용 — tcpdump stderr LogViewer 등(§12.6, D-175 ②).
   useTerminalEnvSync(clusters, clusterId || null);
 
@@ -229,13 +234,13 @@ export function PacketFlowPage() {
 
   const handleGoBottleneck = () => {
     if (!bottleneckPrefill || !clusterId) return;
+    // 같은 클러스터의 허브 ▸ 진단 ▸ 파드 병목 뷰로(D-240 3단계) — 클러스터는 경로, 나머지는 prefill 쿼리.
     const p = new URLSearchParams();
-    p.set('cluster', clusterId);
     p.set('ns', bottleneckPrefill.ns);
     p.set('src', bottleneckPrefill.src);
     if (bottleneckPrefill.dst) p.set('dst', bottleneckPrefill.dst);
     if (bottleneckPrefill.svc) p.set('svc', bottleneckPrefill.svc);
-    navigate(`/pod-bottleneck?${p.toString()}`);
+    navigate(`/k8s/${clusterId}/bottleneck?${p.toString()}`);
   };
 
   // Hubble 탭 자동 프리필 — Phase A 의 source/destination 에서 파생

@@ -84,7 +84,8 @@ def test_put_then_get_roundtrips(db, me, cleanup):
 def test_put_is_partial_and_preserves_unset_fields(db, me, cleanup):
     cleanup.append(me.id)
     home_prefs_router.update_home_prefs(
-        payload=HomePrefsUpdate(default_home_tab="work", pinned_paths=["/etcdctl"]),
+        # 허브에 흡수되지 않는 경로를 쓴다 — `/etcdctl` 같은 흡수 경로는 읽을 때 `/k8s` 로 접힌다(D-240, 별도 테스트).
+        payload=HomePrefsUpdate(default_home_tab="work", pinned_paths=["/k9s"]),
         db=db, user=me,
     )
     # pinned_paths 를 보내지 않은 업데이트 — default_home_tab 만 바뀌고 기존 pinned_paths 는 유지.
@@ -93,7 +94,7 @@ def test_put_is_partial_and_preserves_unset_fields(db, me, cleanup):
         db=db, user=me,
     )
     assert updated.default_home_tab == "platform"
-    assert updated.pinned_paths == ["/etcdctl"]
+    assert updated.pinned_paths == ["/k9s"]
 
 
 def test_locale_partial_update_preserves_other_fields(db, me, cleanup):
@@ -374,7 +375,7 @@ def test_corrupt_stored_theme_does_not_break_read(db, me, cleanup):
 
 
 def test_retired_cluster_overview_path_is_aliased_on_read():
-    """화면이 없어진 `/cluster-overview` 는 읽을 때 `/clusters` 로 치환되고 중복은 하나로 합친다."""
+    """화면이 없어진 `/cluster-overview` 와 허브에 흡수된 화면은 읽을 때 `/k8s` 로 치환되고 중복은 하나로 합친다."""
     from app.services.home_prefs import _clean_ids, load_prefs
 
     prefs = load_prefs({
@@ -382,8 +383,22 @@ def test_retired_cluster_overview_path_is_aliased_on_read():
         "pinned_paths": ["/cluster-overview"],
         "layout_version": 3,
     })
-    assert prefs.installed_apps == ["/clusters", "/k9s"]
-    assert prefs.pinned_paths == ["/clusters"]
-    assert _clean_ids(["/tasks-mgmt", "/cluster-overview"]) == ["/tasks-mgmt", "/clusters"]
+    assert prefs.installed_apps == ["/k8s", "/k9s"]
+    assert prefs.pinned_paths == ["/k8s"]
+    assert _clean_ids(["/tasks-mgmt", "/cluster-overview"]) == ["/tasks-mgmt", "/k8s"]
     # 조직 기본값을 따르는(None) 행은 그대로 None 이다.
     assert load_prefs({"installed_apps": None, "layout_version": 3}).installed_apps is None
+
+
+def test_hub_absorbed_paths_fold_into_k8s_hub():
+    """K8s 클러스터 허브(D-240)에 흡수된 옛 화면은 레일·즐겨찾기에서 `/k8s` 하나로 접히고, 단독 화면은 그대로다."""
+    from app.services.home_prefs import _clean_ids, load_prefs
+
+    prefs = load_prefs({
+        "installed_apps": ["/k8s-manage", "/k8s-allocation", "/tasks-mgmt", "/etcdctl", "/node-labels", "/k9s", "/node-ssh"],
+        "pinned_paths": ["/pod-bottleneck", "/ops-checks", "/observability"],
+        "layout_version": 3,
+    })
+    assert prefs.installed_apps == ["/k8s", "/tasks-mgmt", "/node-labels", "/k9s", "/node-ssh"]
+    assert prefs.pinned_paths == ["/k8s"]
+    assert _clean_ids(["/k8s", "/versions", "/cilium-trace"]) == ["/k8s"]

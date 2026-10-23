@@ -606,9 +606,11 @@ MacCard `title` 아래 또 그린 툴바 행(이중 헤더), 같은 모양의 �
 **K8s 클러스터 허브 임베드 — `lib/k8sHub.ts` (D-240):** per-cluster K8s 화면은 `/k8s/:clusterId/:view` 허브의 서브뷰로도 마운트된다.
 허브가 `K8sHubContext` 를 제공하면 ① `useClusterRouteParam()` 은 URL 을 건드리지 않고 허브의 `clusterId`/`selectCluster` 를 돌려주고
 ② `ClusterSidebar` 는 null(레일은 허브가 하나만) ③ `PageShell` 은 `div` + 밀도 패딩 없음(허브의 `<main>` 안) ④ `PageHeader` 는 h2 + `back` 숨김
-⑤ `LogViewTabs` 는 null 이다. 그래서 새 per-cluster 화면도 이 네 공용 요소와 `useClusterRouteParam` 만 쓰면 허브에 들어갈 수 있다 —
+이다(옛 `LogViewTabs` 는 허브 2행 탭이 대체해 삭제). 그래서 새 per-cluster 화면도 이 세 공용 요소와 `useClusterRouteParam` 만 쓰면 허브에 들어갈 수 있다 —
 클러스터를 `useState`/`?cluster=` 로 따로 들고 있으면 허브에서 허브의 선택을 따르지 못하므로(`K8sEventsPage` 는 `useK8sHub()` 로 보강), 신규 화면은 훅을 쓴다.
 허브 뷰는 path 세그먼트이고 뷰 내부 탭은 `useUrlParams` 쿼리라 키가 겹치지 않는다. 허브 탭바는 공용 `components/common/SegTabs` `mode="tabs"`.
+허브에 흡수한 옛 화면 경로는 `navConfig.ts` `HUB_ABSORBED_PATHS` 에 둔다 — 앱 카탈로그(GROUPS)·커맨드 팔레트·즐겨찾기·최근 방문에서 숨고,
+저장된 설치 목록·고정 경로는 서버 `RETIRED_PATH_ALIASES` 가 `/k8s` 로 접는다(§12.11). NAV_MAP 항목은 접근 제어 키라 지우지 않는다.
 
 **전체 높이 캔버스 페이지(PageShell 예외)**: 루트를 `app-h-screen flex overflow-hidden` 가로 행으로 두고
 `<div className="py-3 flex-shrink-0"><ClusterSidebar iconOnly … /></div>` + `<div className="flex-1 min-w-0 flex flex-col">`(툴바·캔버스)로 나눈다.

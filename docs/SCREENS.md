@@ -295,21 +295,21 @@ hover 시 flyout 자체가 라벨을 보여주므로 이름만 뜨는 중복 툴
 ### K8s 클러스터 허브 (`/k8s`, `/k8s/:clusterId/:view?`)
 
 - **파일**: `frontend/src/pages/K8sHubPage.tsx` + `frontend/src/components/k8s-hub/{hubViews.ts,HubTabs.tsx,HubTerminalsView.tsx}`, 임베드 컨텍스트 `frontend/src/lib/k8sHub.ts`, 공용 탭 `components/common/SegTabs.tsx`(K8s 자원 관리에서 승격).
-- **목적 / UX**: (2026-10-22, D-240) 클러스터 하나를 고르고 보는 K8s 화면 9개(클러스터 상세·K8s 상세 관리·K8s 자원 관리·클러스터 추이·관측 지표·실시간 이벤트·파드 로그·AI 장애 분석·점검 결과 리뷰)가 사이드바 4그룹에 흩어져 있어 화면마다 클러스터를 다시 고르던 것을, **클러스터 레일 하나 + 카테고리 탭** 한 화면으로 모았다. 클러스터는 URL(`:clusterId`)이 들고 있어 뷰를 바꿔도 유지되고, 레일에서 클러스터를 바꾸면 뷰·쿼리는 그대로 클러스터만 바뀐다. 2단계(2026-10-23)로 구성(K8s 접근 권한·노드 라벨·노드 이미지·버전/설정)·콘솔(etcdctl·커널 파라미터·터미널 실행 카드)을 더했다.
+- **목적 / UX**: (2026-10-22, D-240) 클러스터 하나를 고르고 보는 K8s 화면 9개(클러스터 상세·K8s 상세 관리·K8s 자원 관리·클러스터 추이·관측 지표·실시간 이벤트·파드 로그·AI 장애 분석·점검 결과 리뷰)가 사이드바 4그룹에 흩어져 있어 화면마다 클러스터를 다시 고르던 것을, **클러스터 레일 하나 + 카테고리 탭** 한 화면으로 모았다. 클러스터는 URL(`:clusterId`)이 들고 있어 뷰를 바꿔도 유지되고, 레일에서 클러스터를 바꾸면 뷰·쿼리는 그대로 클러스터만 바뀐다. 2단계(2026-10-23)로 구성(K8s 접근 권한·노드 라벨·노드 이미지·버전/설정)·콘솔(etcdctl·커널 파라미터·터미널 실행 카드)을, 3단계로 진단(파드 병목·Cilium BPF 추적·패킷 흐름)을 더하고 메뉴에 남아 있던 옛 화면을 정리했다 — 사이드바·커맨드 팔레트·즐겨찾기에는 이제 허브 하나만 보인다.
 - **UI 구성**:
   - `ClusterSidebar iconOnly`(허브가 하나만 그린다) + `PageHeader`(h1 = 클러스터명 + `StatusBadge`, 설명 = "K8s 클러스터 · 뷰 이름").
-  - `HubTabs` — 1행 카테고리(개요 / 리소스 / 자원 / 관측 / 로그 / 점검 / 구성 / 콘솔, `SegTabs mode="tabs"`), 2행은 그 카테고리에 뷰가 둘 이상일 때만(관측: 추이·지표·이벤트, 로그: 파드 로그·AI 분석, 구성: 접근 권한·노드 라벨·노드 이미지·버전/설정, 콘솔: etcdctl·커널 파라미터·터미널). 뷰 전환은 **path** 이동(`/k8s/:clusterId/<view>`)이라 뒤로가기가 이전 뷰로 돌아온다. 쿼리는 넘기지 않는다(뷰마다 `?tab=`·`?view=` 같은 자기 키를 쓴다). 허브 헤더·탭바는 sticky 가 아니다(K8s 상세 관리의 2차 사이드바·자원 관리의 sticky 탭바와 겹치지 않게).
-  - 서브뷰는 **기존 페이지 컴포넌트를 그대로 마운트**한다(`.island-embed` 래퍼 + `K8sHubContext.Provider`). 컨텍스트가 있으면 페이지 쪽 `ClusterSidebar` 는 null, `PageShell` 은 `div`·패딩 없음, `PageHeader` 는 h2·`back` 숨김, `useClusterRouteParam` 은 허브의 clusterId/selectCluster 를 돌려준다 — 그래서 흡수된 화면의 코드는 거의 그대로다(지식 허브 `/docs`·홈 배치잡 서브탭과 같은 "페이지를 탭 안에 마운트" 패턴). `LogViewTabs` 도 허브 안에서는 그리지 않는다(2행 탭이 대체).
-  - 뷰 id: `overview`(클러스터 상세) · `manage` · `allocation` · `trends` · `metrics` · `events` · `logs` · `incident` · `review` · `rbac` · `node-labels` · `node-images` · `versions` · `etcdctl` · `kernel-params` · `terminals`. 모르는 view → overview 로 replace. 클러스터 미지정(`/k8s`) → 첫 클러스터로 replace, 클러스터가 없으면 `SelectClusterEmptyState`.
+  - `HubTabs` — 1행 카테고리(개요 / 리소스 / 자원 / 관측 / 로그 / 점검 / 진단 / 구성 / 콘솔, `SegTabs mode="tabs"`), 2행은 그 카테고리에 뷰가 둘 이상일 때만(관측: 추이·지표·이벤트, 로그: 파드 로그·AI 분석, 진단: 파드 병목·Cilium·패킷 흐름, 구성: 접근 권한·노드 라벨·노드 이미지·버전/설정, 콘솔: etcdctl·커널 파라미터·터미널). 뷰 전환은 **path** 이동(`/k8s/:clusterId/<view>`)이라 뒤로가기가 이전 뷰로 돌아온다. 쿼리는 넘기지 않는다(뷰마다 `?tab=`·`?view=` 같은 자기 키를 쓴다). 허브 헤더·탭바는 sticky 가 아니다(K8s 상세 관리의 2차 사이드바·자원 관리의 sticky 탭바와 겹치지 않게).
+  - 서브뷰는 **기존 페이지 컴포넌트를 그대로 마운트**한다(`.island-embed` 래퍼 + `K8sHubContext.Provider`). 컨텍스트가 있으면 페이지 쪽 `ClusterSidebar` 는 null, `PageShell` 은 `div`·패딩 없음, `PageHeader` 는 h2·`back` 숨김, `useClusterRouteParam` 은 허브의 clusterId/selectCluster 를 돌려준다 — 그래서 흡수된 화면의 코드는 거의 그대로다(지식 허브 `/docs`·홈 배치잡 서브탭과 같은 "페이지를 탭 안에 마운트" 패턴). 옛 `LogViewTabs`(파드 로그 ↔ AI 분석 전환)는 2행 탭이 대체해 3단계에서 지웠다.
+  - 뷰 id: `overview`(클러스터 상세) · `manage` · `allocation` · `trends` · `metrics` · `events` · `logs` · `incident` · `review` · `rbac` · `node-labels` · `node-images` · `versions` · `etcdctl` · `kernel-params` · `terminals` · `bottleneck` · `cilium` · `packet-flow`. 모르는 view → overview 로 replace. 클러스터 미지정(`/k8s`) → 첫 클러스터로 replace, 클러스터가 없으면 `SelectClusterEmptyState`.
   - **콘솔 ▸ 터미널**(`HubTerminalsView`) — k9s 콘솔·노드 SSH 터미널은 전체 높이 웹 터미널(xterm + WebSocket, 새 창 handoff)이라 임베드하지 않고, 카드의 "열기"가 단독 화면(`/k9s/:clusterId`·`/node-ssh/:clusterId`)을 허브가 고른 클러스터로 연다. 접근 제어로 꺼진 쪽은 카드가 빠지고(둘 다 꺼지면 탭도 빠짐 — `HubView.extraNavKeys`), viewer 는 숨기지 않고 비활성 + 사유.
   - **노드 라벨 이중 진입** — 허브 뷰는 고른 클러스터 하나만 보고, 여러 클러스터를 한 표로 보는 "전체 클러스터" 모드는 단독 화면 `/node-labels`(구성·자산 그룹)에 그대로 남는다.
   - **접근 제어**: 허브 URL 은 `RouteAccessGate` 의 longest-prefix 가 `/k8s` 만 보므로, 뷰마다 흡수한 옛 경로(`HubView.navKey`, 예 `/k8s-manage`)로 `featureAllowed` 를 직접 판정한다 — 꺼진 뷰는 탭에서 빠지고 직접 URL 은 Lock `EmptyState`(아일랜드 패널 호스트와 같은 안내).
 - **Frontend**: `useClusters`, `useNavCatalog`(`featureAllowed`·`getLabel`), `useParams`/`useNavigate`/`useLocation`. 서브뷰의 훅·API 는 각 화면 섹션 참고(허브 전용 API 없음).
 - **Backend**: 없음(프론트 전용 통합).
 - **핵심 기능**:
-  - 옛 URL 은 전부 허브 뷰로 redirect(`App.tsx` `RedirectToHub` — `:clusterId` 와 쿼리 보존, 경로에 클러스터가 없고 쿼리에 `cluster=` 가 있으면 그 클러스터로 보내고 그 키는 뺀다, 그 외 bare URL 은 첫 클러스터). 예외는 `/node-labels`·`/k9s`·`/node-ssh`(단독 유지)·`/versions/:clusterId/graph`(전체 높이 캔버스 — 뒤로가기 링크는 허브 버전 뷰로). 홈 매트릭스 클러스터명·커맨드 팔레트는 `/k8s/<id>/overview` 로 직행.
-  - 사이드바: 새 플랫폼 그룹 **"K8s 클러스터"**(`navConfig.ts` `k8s`) = `/k8s` + 흡수된 옛 leaf 14개(1단계 9 + 2단계 `/k8s-rbac`·`/node-images`·`/versions`·`/etcdctl`·`/kernel-params`). 옛 leaf 는 NAV_MAP 에 남아 접근 제어·라벨 오버라이드·아일랜드 패널(페이지 직접 임베드)·leaf 단위 설치(설치하면 그 뷰로 바로 가는 바로가기)가 그대로다. `/k8s` 자체는 아일랜드 패널 불가(`ISLAND_DENYLIST`).
-  - 후속: 3단계 진단(파드 병목·Cilium·패킷 흐름) — `HUB_VIEWS` 에 항목을 더하고 옛 라우트를 `RedirectToHub` 로 바꾸면 된다.
+  - 옛 URL 은 전부 허브 뷰로 redirect(`App.tsx` `RedirectToHub` — `:clusterId` 와 쿼리 보존, 경로에 클러스터가 없고 쿼리에 `cluster=` 가 있으면 그 클러스터로 보내고 그 키는 뺀다, 그 외 bare URL 은 첫 클러스터). 예외는 `/node-labels`·`/k9s`·`/node-ssh`(단독 유지)·`/versions/:clusterId/graph`(전체 높이 캔버스 — 뒤로가기 링크는 허브 버전 뷰로)·`/pod-bottleneck/:id`(실행 상세 — 목록 링크는 그 실행 클러스터의 허브 병목 뷰로). 앱 안의 링크(클러스터 상세의 "결과 리뷰", 파드 → 로그, 패킷 흐름 → 병목 진단 prefill)는 허브 경로로 직행한다. 홈 매트릭스 클러스터명·커맨드 팔레트는 `/k8s/<id>/overview` 로 직행.
+  - **사이드바·팔레트·즐겨찾기(3단계 잔존 정리)**: 플랫폼 그룹 **"K8s 클러스터"**(`navConfig.ts` `k8s`)에는 `/k8s` 하나만 있다. 흡수된 옛 화면 18개(`HUB_ABSORBED_PATHS` — 1·2·3단계 17개 + 레거시 `/ops-checks`)는 앱 카탈로그·커맨드 팔레트·즐겨찾기·최근 방문에서 숨긴다. 이미 레일에 설치했거나 즐겨찾기에 고정한 옛 경로는 서버가 읽을 때 `/k8s` 로 접는다(`services/home_prefs.py` `RETIRED_PATH_ALIASES`). NAV_MAP 항목은 남는다 — Settings ▸ 접근 제어에서 허브 탭을 하나씩 켜고 끄는 키이고(목록에선 "K8s 클러스터" 그룹 아래), 아일랜드 패널에 화면 하나를 담는 용도로도 쓴다. `/k8s` 자체는 아일랜드 패널 불가(`ISLAND_DENYLIST`).
+  - 새 뷰 추가: `HUB_VIEWS` 에 항목을 더하고, 옛 라우트를 `RedirectToHub` 로, 옛 경로를 `HUB_ABSORBED_PATHS`·`RETIRED_PATH_ALIASES` 두 목록에 같이 더한다.
 - **요청사항 (수정 요청)**:
   - _(여기에 개선/수정 요청을 직접 적어주세요)_
 
@@ -567,11 +567,11 @@ hover 시 flyout 자체가 라벨을 보여주므로 이름만 뜨는 중복 툴
 
 > **허브로 통합(2026-10-22, D-240)**: 이 화면은 K8s 클러스터 허브 `/k8s/:clusterId/logs` 의 서브뷰로 마운트된다. 옛 URL 은 그 뷰로 redirect(클러스터·쿼리 보존). 레일·h1·`PageShell` 은 허브가 그리고(`lib/k8sHub.ts` 컨텍스트), 아래 설명의 나머지는 그대로다.
 
-- **파일**: `frontend/src/pages/K8sLogsPage.tsx` (+ `components/common/{LogViewTabs,NamespaceSingleSelect,PodSingleSelect,SearchableSelect}`, `components/k8s/PodLogStream.tsx`).
+- **파일**: `frontend/src/pages/K8sLogsPage.tsx` (+ `components/common/{NamespaceSingleSelect,PodSingleSelect,SearchableSelect}`, `components/k8s/PodLogStream.tsx`).
 - **목적 / UX**: 특정 클러스터의 특정 네임스페이스/파드 로그를 실시간 스트리밍으로 확인하는 화면(OpenLens 파리티). 메뉴·페이지 제목은 "파드 로그"(화면 안 탭 이름만 "실시간 로그" — D-191). K8s 관리 콘솔의 파드 목록 "로그" 버튼에서 `?namespace=&pod=&container=` 쿼리로 딥링크 진입 시 자동으로 스트림이 시작된다.
 - **UI 구성**:
   - `ClusterSidebar` — `iconOnly` 단일 선택, URL 파라미터 동기화. 클러스터 목록 조회 실패는 `ErrorState`(다시 시도) — "파드를 고르세요" 빈 상태로 보이지 않는다(D-188).
-  - `LogViewTabs`(로그 화면 종류 전환 `nav`, `aria-current`) — **아일랜드 패널 임베드에서는 숨김**(여기서 navigate 하면 앱이 아일랜드 밖으로 나간다).
+  - 로그 화면 종류 전환(파드 로그 ↔ AI 분석)은 허브 "로그" 카테고리의 2행 탭이 한다(옛 `LogViewTabs` 는 3단계에서 삭제).
   - `로그 스트림` MacCard — `<label htmlFor>` 로 연결된 `NamespaceSingleSelect` + `PodSingleSelect`(목록 실패 시 공용 `SearchableSelect` 의 `error`·`onRetry` 로 `ErrorState compact`, combobox 의미) 대상 선택 → `PodLogStream`(네임스페이스+파드 선택 시에만 렌더, `key`로 재마운트).
   - `PodLogStream` 컨트롤 — 컨테이너 선택(바꾸면 스트림 재시작), **마지막 N줄**, **따라가기**(follow — D-191 권장 "계속 받기" 대신 채택), previous/timestamps, 검색, 다운로드. 로그 영역 **밖** 상태 줄: 종료(`role="status"` — 사유: 끝까지 읽음·최대 스트림 시간 초과·전송 한도 10MB 잘림) / 오류(`role="alert"`, 429 동시 한도 사유 포함) + **처음부터 다시**(화면 비우고 재시작) · **이어 받기**(줄 유지, 마지막 수신 시각 기준 `since_seconds` + 타임스탬프 중복 제거). 다운로드가 잘리면(`X-Log-Truncated: 1`) 안내.
 - **Frontend**: 페이지는 `useClusters` + `useTerminalEnvSync(clusters, clusterId)`(로그 색 프로파일을 이 화면 클러스터 등급으로); 네임스페이스/파드 목록은 `NamespaceSingleSelect`/`PodSingleSelect` 내부에서 처리. 로그 스트림은 `PodLogStream` 이 SSE(`fetch` + `ReadableStream`, `k8sStreamUrls.logsStream` — `sinceSeconds` 옵션)로 소비하며 이름 있는 이벤트(`end`·`error`)와 `: ping` 주석을 구분한다. 수신 줄은 2만 줄 링 버퍼(`LineRing`, 넘치면 오래된 줄부터 덮어씀) + 100ms 묶음 반영, react-virtuoso 가상화. 중지·언마운트·대상 변경 시 `AbortController` 로 abort. 로컬 state: `namespace`, `pod`(쿼리 파라미터로 초기화, 클러스터 변경 시 리셋).
@@ -590,6 +590,8 @@ hover 시 flyout 자체가 라벨을 보여주므로 이름만 뜨는 중복 툴
 ## 클러스터 — 운영 점검 / 로그·분석 / 파드 병목
 
 ### 운영 점검 콘솔 (`/ops-checks`, `/ops-checks/:clusterId`)
+
+> **허브로 통합(2026-10-23, D-240 3단계)**: 레거시 콘솔 — 옛 URL 은 같은 점검 카탈로그를 종합 상태와 함께 보여 주는 K8s 클러스터 허브 개요 뷰(`/k8s/:clusterId/overview`)로 redirect 된다. 페이지 컴포넌트는 아일랜드 패널 호환으로만 남는다.
 
 > **레거시(2026-10-13, D-129)** — 사이드바 「클러스터 · 점검」그룹에서 제외됐다. 같은 패널을 종합 상태까지 포함해 보여주는 `/clusters/:id` 가 정본이고, 이 라우트는 북마크·아일랜드 패널 호환으로만 유지한다.
 
@@ -684,7 +686,7 @@ hover 시 flyout 자체가 라벨을 보여주므로 이름만 뜨는 중복 툴
 
 > **허브로 통합(2026-10-22, D-240)**: 이 화면은 K8s 클러스터 허브 `/k8s/:clusterId/incident` 의 서브뷰로 마운트된다. 옛 URL 은 그 뷰로 redirect(클러스터·쿼리 보존). 레일·h1·`PageShell` 은 허브가 그리고(`lib/k8sHub.ts` 컨텍스트), 아래 설명의 나머지는 그대로다.
 
-- **파일**: `frontend/src/pages/IncidentAnalysisPage.tsx` (+ `components/common/SearchableSelect`, `components/common/LogViewTabs`)
+- **파일**: `frontend/src/pages/IncidentAnalysisPage.tsx` (+ `components/common/SearchableSelect`)
 - **목적 / UX**: 클러스터 → namespace → pod 를 드릴다운으로 선택하고, `kubectl logs`/`events`/`describe` 를 자동 수집(또는 직접 붙여넣기)한 뒤 LLM(또는 rule-based) 분석기에 보내 근본 원인·신뢰도·조치 방안을 받는다. 실시간 로그 스트리밍(폴링), 로그 라인 필터도 제공한다.
 - **UI 구성**:
   - 좌측 `ClusterSidebar iconOnly`(K8s 로그 화면과 같은 console 밀도 레이아웃) + 드릴다운 카드의 `SearchableSelect`(namespace/pod) 2열로 대상 선택. 선택은 URL 에 담긴다 — `/incident-analysis/:clusterId?namespace=&pod=`(딥링크·공유 가능, 클러스터를 바꾸면 namespace/pod 초기화). (D-113)
@@ -694,7 +696,7 @@ hover 시 flyout 자체가 라벨을 보여주므로 이름만 뜨는 중복 툴
   - "실시간 로그" 카드 — `PodLogStream`(SSE, `logs/stream`) 으로 선택 Pod 를 따라 본다(예전 LIVE 폴링 대체, D-112).
   - 대상(cluster/ns/pod/container)이 바뀌면 입력·결과를 비우고, 다른 대상의 입력이면 분석 시작을 막는다(D-110). 분석 중 "중지"(150초 타임아웃, D-109).
   - 결과 패널(`ResultPanel`) — 분석 대상·시각, severity 배지, 근본 원인, confidence bar, 조치 방안 순번 리스트, 관련 런북, RAG 근거 목록. 분석기 실패 대체 결과(`degraded`)는 경고 배너(D-115). 실패는 결과 영역에 오류로 표시.
-  - `LogViewTabs current="analysis"` 로 로그 관련 다른 화면과 탭 전환 — 탭을 바꿔도 선택한 클러스터를 이어 간다.
+  - 파드 로그 화면과의 전환은 허브 "로그" 카테고리의 2행 탭이 한다 — 탭을 바꿔도 선택한 클러스터를 이어 간다.
 - **Frontend**: `useAnalyzerHealth()`, `useAnalyzeIncident()`(mutation), `useAnalyzeNamespaces(clusterId, onlyWithIssues, withCounts, nsPattern, podPattern)`(300ms 디바운스), `useAnalyzePods(clusterId, namespace, onlyWithIssues)`, `useFetchIncidentContext()`(mutation, 자동채우기/스트리밍 공용). `useClusters()`, `useClusterRouteParam('/incident-analysis', clusters)`(클러스터), `useSearchParams`(namespace/pod). 로컬 state 다수(`onlyIssues`/로그 텍스트/`streaming`/`logFilter` 등). api.ts: `analyzeApi.health`, `analyzeApi.analyze`, `analyzeApi.listNamespaces`, `analyzeApi.listPods`, `analyzeApi.fetchContext`.
 - **Backend**: `POST /api/v1/analyze/incident`, `GET /api/v1/analyze/health`, `GET /api/v1/analyze/clusters/{cluster_id}/namespaces`, `GET /api/v1/analyze/clusters/{cluster_id}/namespaces/{namespace}/pods`, `GET /api/v1/analyze/clusters/{cluster_id}/namespaces/{namespace}/pods/{podName}/context` — `backend/app/routers/analyze.py`. `kubernetes` SDK(`CoreV1Api`)로 실시간 조회, `app/services/analyzers.py`(`get_analyzer()` — `ANALYZER_BACKEND` env 로 Claude/Local LLM/Rule-based 선택).
 - **핵심 기능**:
@@ -759,6 +761,8 @@ hover 시 flyout 자체가 라벨을 보여주므로 이름만 뜨는 중복 툴
 
 ### 파드 병목 진단 (`/pod-bottleneck`)
 
+> **허브로 통합(2026-10-23, D-240 3단계)**: 이 화면은 K8s 클러스터 허브 `/k8s/:clusterId/bottleneck`(진단 카테고리)의 서브뷰로 마운트된다. 옛 URL 은 그 뷰로 redirect(`?cluster=` 는 경로로, `?ns=&src=&dst=&svc=` prefill 은 보존). 허브 안에서는 허브가 고른 클러스터로만 실행·목록을 보인다("전체 클러스터" 목록은 아일랜드 패널 임베드에서만).
+
 - **파일**: `frontend/src/pages/PodBottleneckPage.tsx` (+ `components/common/{NamespaceSingleSelect,PodSingleSelect}`)
 - **목적 / UX**: 두 pod 사이의 네트워크 병목을 4개 축(TCP 상태/TCP 성능/DNS 지연/K8s endpoints)으로 진단하는 폼과 최근 진단 이력 목록을 제공한다. `PacketFlowPage` 등 다른 화면에서 `?cluster=&ns=&src=&dst=&svc=` 쿼리로 넘어와 폼을 prefill 할 수 있다.
 - **UI 구성**:
@@ -778,6 +782,8 @@ hover 시 flyout 자체가 라벨을 보여주므로 이름만 뜨는 중복 툴
   - _(여기에 개선/수정 요청을 직접 적어주세요)_
 
 ### 파드 병목 진단 상세 (`/pod-bottleneck/:id`)
+
+> **허브로 통합(2026-10-23, D-240 3단계)**: 단독 화면 유지(실행 1건 상세). "목록"·삭제 후 이동은 그 실행 클러스터의 허브 병목 뷰(`/k8s/:clusterId/bottleneck`)로 돌아간다.
 
 - **파일**: `frontend/src/pages/PodBottleneckDetailPage.tsx` (+ `components/pod-bottleneck/ProbeResultCard`, `components/common/ConfirmDialog`)
 - **목적 / UX**: 특정 진단 run 1건의 4개 probe(`tcp_state`/`tcp_perf`/`dns_latency`/`endpoints`) 결과를 카드 그리드로 상세히 보여주고, 필요 시 해당 진단 결과를 삭제할 수 있다.
@@ -1165,6 +1171,8 @@ hover 시 flyout 자체가 라벨을 보여주므로 이름만 뜨는 중복 툴
 
 ### Cilium BPF Trace (`/cilium-trace`)
 
+> **허브로 통합(2026-10-23, D-240 3단계)**: 이 화면은 K8s 클러스터 허브 `/k8s/:clusterId/cilium`(진단 카테고리)의 서브뷰로 마운트된다. 옛 URL 은 그 뷰로 redirect. 허브에서 클러스터를 바꾸면 뷰가 다시 마운트돼 열려 있던 스트림·결과가 정리된다.
+
 - **파일**: `frontend/src/pages/CiliumTracePage.tsx`
 - **목적 / UX**: Cilium/Hubble 기반 네트워크 디버깅 콘솔. BPF 맵(엔드포인트/LB/NAT/conntrack/tunnel 등)을 조회하고, `cilium monitor`·Hubble flow를 SSE로 실시간 스트리밍해 드롭/트레이스 이벤트를 분석한다.
 - **UI 구성**:
@@ -1242,6 +1250,8 @@ hover 시 flyout 자체가 라벨을 보여주므로 이름만 뜨는 중복 툴
   - _(여기에 개선/수정 요청을 직접 적어주세요)_
 
 ### 패킷 흐름 분석 (`/packet-flow`)
+
+> **허브로 통합(2026-10-23, D-240 3단계)**: 이 화면은 K8s 클러스터 허브 `/k8s/:clusterId/packet-flow`(진단 카테고리)의 서브뷰로 마운트된다. 옛 URL 은 그 뷰로 redirect. "병목 진단으로" 이동은 같은 클러스터의 허브 병목 뷰(`/k8s/:clusterId/bottleneck?ns=…`)로 간다.
 
 - **파일**: `frontend/src/pages/PacketFlowPage.tsx` (+ `components/packet-flow/{FlowGraph3D,HopDetailPanel,HubbleTimeline,TcpdumpPanel}.tsx`)
 - **목적 / UX**: North-South(외부→Ingress→Service→Pod) 또는 East-West(Pod↔Pod) 패킷 경로를 hop 단위로 추적해 각 hop의 정책/Identity/latency/error를 진단한다. Hubble flow 타임라인과 원격 tcpdump 캡처도 같은 화면에서 이어서 확인.

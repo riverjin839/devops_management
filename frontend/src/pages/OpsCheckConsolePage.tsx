@@ -37,10 +37,10 @@ export function OpsCheckConsolePage() {
             />
             {clusterId && (
               <>
-                <Link to={`/clusters/${clusterId}`} className="inline-flex items-center gap-1.5 rounded-xl border border-border bg-card px-3 py-1.5 text-sm hover:bg-muted">
+                <Link to={`/k8s/${clusterId}/overview`} className="inline-flex items-center gap-1.5 rounded-xl border border-border bg-card px-3 py-1.5 text-sm hover:bg-muted">
                   <LayoutGrid className="w-3.5 h-3.5" /> 클러스터 상세
                 </Link>
-                <Link to={`/daily-check/review/${clusterId}`} className="inline-flex items-center gap-1.5 rounded-xl border border-border bg-card px-3 py-1.5 text-sm hover:bg-muted">
+                <Link to={`/k8s/${clusterId}/review`} className="inline-flex items-center gap-1.5 rounded-xl border border-border bg-card px-3 py-1.5 text-sm hover:bg-muted">
                   <ClipboardCheck className="w-3.5 h-3.5" /> 결과 리뷰
                 </Link>
                 <Link to="/daily-check/settings" className="inline-flex items-center gap-1.5 rounded-xl border border-border bg-card px-3 py-1.5 text-sm hover:bg-muted">

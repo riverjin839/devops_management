@@ -420,7 +420,7 @@ export function K8sManagePage() {
         {/* 본문 */}
         <div className="flex-1 min-w-0 space-y-3">
           <PageHeader
-            back={{ to: clusterId ? `/clusters/${clusterId}` : '/clusters', label: '클러스터 상세' }}
+            back={{ to: clusterId ? `/k8s/${clusterId}/overview` : '/k8s', label: '클러스터 상세' }}
             icon={Boxes}
             title={<>{cluster ? cluster.name : '클러스터'} — {leaf.label}</>}
             titleExtra={
@@ -1402,7 +1402,7 @@ export function PodsPanel(p: PodsPanelProps) {
                   )}
                   <IconBtn
                     title="로그"
-                    onClick={() => navigate(`/k8s-logs/${clusterId}?namespace=${encodeURIComponent(ns)}&pod=${encodeURIComponent(r.name)}`)}
+                    onClick={() => navigate(`/k8s/${clusterId}/logs?namespace=${encodeURIComponent(ns)}&pod=${encodeURIComponent(r.name)}`)}
                   >
                     <ScrollText className="w-3.5 h-3.5" />
                   </IconBtn>

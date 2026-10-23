@@ -1,5 +1,5 @@
 import { useCallback, type ComponentType } from 'react';
-import { NAV_MAP, GROUPS, type GroupId } from '@/components/layout/navConfig';
+import { NAV_MAP, GROUPS, type GroupId, isHubAbsorbed } from '@/components/layout/navConfig';
 import type { NavGroupKey } from '@/i18n/resources/ko';
 import { useNavLabel } from '@/i18n/useNavLabel';
 import { useFeatureAccess, canAccessFeature } from './useFeatureAccess';
@@ -50,8 +50,10 @@ export function useNavCatalog(): NavCatalog {
  * 화면에 그릴 때 로케일을 따르려면 `t(\`nav.group.${labelKey}\`)` 를 쓴다.
  */
 export function groupLabelForPath(path: string): { id: GroupId; label: string; labelKey: NavGroupKey } | null {
+  // 허브에 흡수된 옛 화면(접근 제어·아일랜드 목록에만 남는다)은 허브 그룹 아래에 묶는다.
+  const key = isHubAbsorbed(path) ? '/k8s' : path;
   for (const g of GROUPS) {
-    if (g.paths.includes(path)) return { id: g.id, label: g.label, labelKey: g.labelKey };
+    if (g.paths.includes(key)) return { id: g.id, label: g.label, labelKey: g.labelKey };
   }
   return null;
 }

@@ -1,7 +1,7 @@
 import type { ComponentType } from 'react';
 import {
   LayoutGrid, Boxes, Gauge, TrendingUp, Activity, Bell, ScrollText, Zap, ClipboardCheck,
-  KeyRound, Tags, Package, GitCommit, Database, Cpu, TerminalSquare,
+  KeyRound, Tags, Package, GitCommit, Database, Cpu, TerminalSquare, Waves, Route,
 } from 'lucide-react';
 import { ClusterDetailPage } from '@/pages/ClusterDetailPage';
 import { K8sManagePage } from '@/pages/K8sManagePage';
@@ -18,10 +18,13 @@ import { NodeImagesPage } from '@/pages/NodeImagesPage';
 import { VersionsPage } from '@/pages/VersionsPage';
 import { EtcdCtlPage } from '@/pages/EtcdCtlPage';
 import { KernelParamsPage } from '@/pages/KernelParamsPage';
+import { PodBottleneckPage } from '@/pages/PodBottleneckPage';
+import { CiliumTracePage } from '@/pages/CiliumTracePage';
+import { PacketFlowPage } from '@/pages/PacketFlowPage';
 import { HubTerminalsView } from './HubTerminalsView';
 
 /** 허브 카테고리 탭(1행). 순서가 곧 탭 순서다. */
-export type HubCategory = 'overview' | 'resources' | 'allocation' | 'observe' | 'logs' | 'checks' | 'config' | 'console';
+export type HubCategory = 'overview' | 'resources' | 'allocation' | 'observe' | 'logs' | 'checks' | 'diagnose' | 'config' | 'console';
 
 export const HUB_CATEGORIES: ReadonlyArray<{ id: HubCategory; label: string }> = [
   { id: 'overview', label: '개요' },
@@ -30,6 +33,7 @@ export const HUB_CATEGORIES: ReadonlyArray<{ id: HubCategory; label: string }> =
   { id: 'observe', label: '관측' },
   { id: 'logs', label: '로그' },
   { id: 'checks', label: '점검' },
+  { id: 'diagnose', label: '진단' },
   { id: 'config', label: '구성' },
   { id: 'console', label: '콘솔' },
 ];
@@ -59,7 +63,8 @@ export interface HubView {
  * 2단계(2026-10-23)로 구성(RBAC·노드 라벨·노드 이미지·버전)·콘솔(etcdctl·커널 파라미터·터미널 실행 카드)을 더했다.
  * 노드 라벨은 단독 화면(`/node-labels`, 전체 클러스터 모드)도 유지한다 — 허브 뷰는 선택 클러스터만.
  * k9s·노드 SSH 는 전체 높이 웹 터미널이라 임베드하지 않고 `HubTerminalsView` 가 단독 화면으로 연다.
- * 3단계(진단)는 후속 — 이 목록에 항목을 더하고 App.tsx 의 옛 라우트를 `RedirectToHub` 로 바꾸면 된다.
+ * 3단계(2026-10-23)로 진단(파드 병목·Cilium BPF 추적·패킷 흐름)을 더했다. 새 뷰를 넣을 땐 이 목록에 항목을 더하고
+ * App.tsx 의 옛 라우트를 `RedirectToHub` 로, `navConfig.ts` `HUB_ABSORBED_PATHS` 에 옛 경로를 더한다(메뉴에서 숨김).
  */
 export const HUB_VIEWS: readonly HubView[] = [
   { id: 'overview', category: 'overview', label: '클러스터 상세', icon: LayoutGrid, navKey: '/clusters', component: ClusterDetailPage },
@@ -71,6 +76,9 @@ export const HUB_VIEWS: readonly HubView[] = [
   { id: 'logs', category: 'logs', label: '파드 로그', icon: ScrollText, navKey: '/k8s-logs', component: K8sLogsPage },
   { id: 'incident', category: 'logs', label: 'AI 장애 분석', icon: Zap, navKey: '/incident-analysis', component: IncidentAnalysisPage },
   { id: 'review', category: 'checks', label: '점검 결과 리뷰', icon: ClipboardCheck, navKey: '/daily-check/review', component: DailyCheckReviewPage },
+  { id: 'bottleneck', category: 'diagnose', label: '파드 병목 진단', icon: Activity, navKey: '/pod-bottleneck', component: PodBottleneckPage },
+  { id: 'cilium', category: 'diagnose', label: 'Cilium BPF 추적', icon: Waves, navKey: '/cilium-trace', component: CiliumTracePage },
+  { id: 'packet-flow', category: 'diagnose', label: '패킷 흐름 분석', icon: Route, navKey: '/packet-flow', component: PacketFlowPage },
   { id: 'rbac', category: 'config', label: '접근 권한', icon: KeyRound, navKey: '/k8s-rbac', component: K8sRbacPage },
   { id: 'node-labels', category: 'config', label: '노드 라벨', icon: Tags, navKey: '/node-labels', component: NodeLabelsPage },
   { id: 'node-images', category: 'config', label: '노드 이미지', icon: Package, navKey: '/node-images', component: NodeImagesPage },

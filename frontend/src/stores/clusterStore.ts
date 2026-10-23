@@ -4,7 +4,6 @@ import { Cluster, Addon, CheckLog, SummaryStats, Status } from '@/types';
 interface ClusterState {
   // State
   clusters: Cluster[];
-  selectedClusterId: string | null;
   addons: Record<string, Addon[]>;
   logs: CheckLog[];
   summary: SummaryStats;
@@ -14,7 +13,6 @@ interface ClusterState {
 
   // Actions
   setClusters: (clusters: Cluster[]) => void;
-  selectCluster: (id: string | null) => void;
   setAddons: (clusterId: string, addons: Addon[]) => void;
   setLogs: (logs: CheckLog[]) => void;
   addLog: (log: CheckLog) => void;
@@ -29,7 +27,6 @@ interface ClusterState {
 export const useClusterStore = create<ClusterState>((set) => ({
   // Initial state
   clusters: [],
-  selectedClusterId: null,
   addons: {},
   logs: [],
   summary: {
@@ -44,8 +41,6 @@ export const useClusterStore = create<ClusterState>((set) => ({
 
   // Actions
   setClusters: (clusters) => set({ clusters }),
-
-  selectCluster: (id) => set({ selectedClusterId: id }),
 
   setAddons: (clusterId, addons) =>
     set((state) => ({
