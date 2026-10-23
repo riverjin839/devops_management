@@ -378,7 +378,7 @@ export function Sidebar() {
                   key={appId}
                   label={getLabel(appId)}
                   Icon={entry.icon}
-                  active={location.pathname === appId}
+                  active={location.pathname === appId || location.pathname.startsWith(`${appId}/`)}
                   onClick={() => navigate(appId)}
                 />
               );

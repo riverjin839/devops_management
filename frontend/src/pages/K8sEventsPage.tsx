@@ -6,6 +6,7 @@ import { ConfirmDialog, useToast, PageHeader, PageShell, LoadingState, EmptyStat
 import { useClusters } from '@/hooks/useCluster';
 import { useCanOperate } from '@/hooks/useCanOperate';
 import { pickParam, useUrlParams } from '@/hooks/useUrlParams';
+import { useK8sHub } from '@/lib/k8sHub';
 import { useK8sEventsPaged, useK8sEventStats, useDeleteK8sEvent } from '@/hooks/useK8sEvents';
 import { K8sEventAnalysisPanel } from '@/components/k8s/K8sEventAnalysisPanel';
 import type { K8sEvent, K8sEventSeverity } from '@/types';
@@ -59,7 +60,9 @@ export function K8sEventsPage() {
   // 클러스터·심각도 탭은 URL 쿼리(D-029) — 새로고침·링크 공유·뒤로가기에도 같은 조건으로 열린다.
   // Your Island 패널 임베드에서는 훅이 알아서 로컬 state 로 동작한다.
   const [listParams, setListParams] = useUrlParams({ cluster: '', sev: 'all' });
-  const selectedClusterId: string | null = listParams.cluster || null;
+  // K8s 클러스터 허브 안에서는 허브가 고른 클러스터가 우선이다(`?cluster=` 는 단독 화면용).
+  const hub = useK8sHub();
+  const selectedClusterId: string | null = hub ? hub.clusterId : (listParams.cluster || null);
   const severityTab: string = pickParam(listParams.sev, SEVERITY_VALUES, 'all');
   const [expandedId, setExpandedId] = useState<string | null>(null);
 
