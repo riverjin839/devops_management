@@ -8,7 +8,12 @@
 
 ## [Unreleased]
 
-1.76.0 이후 main 에 병합된 변경 (다음 릴리스 후보).
+1.77.0 이후 main 에 병합된 변경 (다음 릴리스 후보).
+
+## [1.77.0] - 2026-10-23
+
+### Added
+- **Vagrant 테스트 클러스터 안에 PEP 직접 배포**: `k8s/overlays/vagrant` + `vagrant/deploy-pep.sh`. Mac 에서 arm64 이미지를 빌드해 3노드 containerd 로 주입하고(레지스트리 불필요) NodePort(30080/30800)로 노출한다. postgres 는 정적 hostPath PV, 메모리 절약을 위해 Ollama·grafana-renderer·blackbox 제외. 가이드: `docs/MAC_LOCAL_TEST_GUIDE.md` §7.
 
 ## [1.76.0] - 2026-10-23
 
@@ -26,9 +31,6 @@
   쿼리 보존). 사이드바에 "K8s 클러스터" 그룹이 생기고 옛 leaf 는 그 그룹의 바로가기로 남는다(접근 제어·라벨·아일랜드 패널 호환).
   Frontend: `K8sHubPage`, `components/k8s-hub/*`, `lib/k8sHub.ts`(임베드 컨텍스트 — 흡수된 화면은 코드 수정 없이 레일/헤더/셸만 허브에
   넘긴다), 공용 `SegTabs` 승격, `App.tsx` `RedirectToHub`. 2단계(구성·콘솔)·3단계(진단) 뷰는 후속.
-
-### Added
-- **Vagrant 테스트 클러스터 안에 PEP 직접 배포**: `k8s/overlays/vagrant` + `vagrant/deploy-pep.sh`. Mac 에서 arm64 이미지를 빌드해 3노드 containerd 로 주입하고(레지스트리 불필요) NodePort(30080/30800)로 노출한다. postgres 는 정적 hostPath PV, 메모리 절약을 위해 Ollama·grafana-renderer·blackbox 제외. 가이드: `docs/MAC_LOCAL_TEST_GUIDE.md` §7.
 
 ## [1.74.0] - 2026-10-22
 
