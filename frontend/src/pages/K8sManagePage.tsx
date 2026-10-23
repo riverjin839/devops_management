@@ -497,6 +497,11 @@ export function K8sManagePage() {
               onRestart={doRestart}
               onDelete={doDelete}
               onTerminal={(ns, name) => setTerminalPod({ namespace: ns, name })}
+              onHelmValues={(r) => setDetail({ kind: 'helmValues', namespace: r.namespace, name: r.name })}
+              onOpenCrdObject={(crd, row) => setDetail({
+                kind: 'crd', group: crd.group, version: crd.version, plural: crd.plural,
+                namespace: row.namespace || '-', name: row.name,
+              })}
             />
           )}
 
@@ -807,10 +812,11 @@ function OverviewPanel({ clusterId }: { clusterId: string }) {
 }
 
 // ── Helm 패널 ─────────────────────────────────────────────────────────────────
-function HelmPanel({ clusterId, onViewValues }: { clusterId: string; onViewValues: (r: HelmRelease) => void }) {
+/** Helm 릴리스 목록. `namespace` 를 주면 그 NS 의 릴리스만(NS 대시보드 임베드). */
+export function HelmPanel({ clusterId, namespace, onViewValues }: { clusterId: string; namespace?: string; onViewValues: (r: HelmRelease) => void }) {
   const { data, isLoading, isError, error } = useQuery({
-    queryKey: ['k8s-mng-helm', clusterId],
-    queryFn: async () => (await k8sHelmApi.releases(clusterId)).data,
+    queryKey: ['k8s-mng-helm', clusterId, namespace ?? 'all'],
+    queryFn: async () => (await k8sHelmApi.releases(clusterId, namespace)).data,
     enabled: !!clusterId,
     retry: false,
   });
@@ -824,7 +830,7 @@ function HelmPanel({ clusterId, onViewValues }: { clusterId: string; onViewValue
       ) : isError ? (
         <div className="p-6 text-sm text-status-critical">조회 실패: {errMsg(error)}</div>
       ) : (data?.items.length ?? 0) === 0 ? (
-        <EmptyState compact title="Helm 릴리스가 없습니다." description="이 클러스터에 helm 으로 설치된 릴리스가 없습니다." />
+        <EmptyState compact title="Helm 릴리스가 없습니다." description={namespace ? '이 네임스페이스에 helm 으로 설치된 릴리스가 없습니다.' : '이 클러스터에 helm 으로 설치된 릴리스가 없습니다.'} />
       ) : (
         data!.items.map((r) => (
           <div key={`${r.namespace}/${r.name}`} className="grid grid-cols-[1fr_140px_70px_1fr_90px] gap-2 px-4 py-1.5 text-sm border-b border-border/40 items-center">

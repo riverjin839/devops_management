@@ -45,9 +45,14 @@ function rel(iso?: string | null): string {
 
 interface Props {
   clusterId: string;
-  selectedNs: Set<string>;
-  onSelectedNsChange: (s: Set<string>) => void;
+  selectedNs?: Set<string>;
+  onSelectedNsChange?: (s: Set<string>) => void;
+  /** 네임스페이스 1개로 고정(NS 대시보드) — 서버에서 그 NS 이벤트만 watch 하고 NS 선택기를 숨긴다.
+   *  1만 NS 클러스터에서 전체 스트림을 받아 클라이언트 필터하는 비용을 피한다. */
+  fixedNamespace?: string;
 }
+
+const EMPTY_NS = new Set<string>();
 
 /** 클러스터 이벤트 SSE 뷰어 — 전체 스트림 + 클라이언트 필터(네임스페이스 멀티셀렉트/타입/검색). */
 const END_REASON: Record<string, string> = {
@@ -56,7 +61,7 @@ const END_REASON: Record<string, string> = {
   truncated: '전송 한도에 도달해 끊겼습니다',
 };
 
-export function EventsStream({ clusterId, selectedNs, onSelectedNsChange }: Props) {
+export function EventsStream({ clusterId, selectedNs = EMPTY_NS, onSelectedNsChange, fixedNamespace }: Props) {
   const [events, setEvents] = useState<K8sEvent[]>([]);
   const [streaming, setStreaming] = useState(false);
   const [err, setErr] = useState('');
@@ -108,7 +113,7 @@ export function EventsStream({ clusterId, selectedNs, onSelectedNsChange }: Prop
     acRef.current = ac;
     setStreaming(true);
     const token = getAuthToken();
-    fetch(k8sStreamUrls.events(clusterId), {
+    fetch(k8sStreamUrls.events(clusterId, fixedNamespace), {
       signal: ac.signal,
       headers: token ? { Authorization: `Bearer ${token}` } : {},
     })
@@ -155,17 +160,17 @@ export function EventsStream({ clusterId, selectedNs, onSelectedNsChange }: Prop
     start();
     return () => acRef.current?.abort();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [clusterId]);
+  }, [clusterId, fixedNamespace]);
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
     return events.filter((e) => {
-      if (selectedNs.size > 0 && !(e.namespace && selectedNs.has(e.namespace))) return false;
+      if (!fixedNamespace && selectedNs.size > 0 && !(e.namespace && selectedNs.has(e.namespace))) return false;
       if (typeFilter !== 'all' && e.type !== typeFilter) return false;
       if (q && !`${e.reason ?? ''} ${e.message ?? ''} ${e.involvedKind ?? ''} ${e.involvedName ?? ''} ${e.source ?? ''}`.toLowerCase().includes(q)) return false;
       return true;
     });
-  }, [events, selectedNs, typeFilter, search]);
+  }, [events, selectedNs, typeFilter, search, fixedNamespace]);
 
   return (
     <MacCard
@@ -183,7 +188,9 @@ export function EventsStream({ clusterId, selectedNs, onSelectedNsChange }: Prop
           </button>
         )}
 
-        <NamespaceMultiSelect clusterId={clusterId} selected={selectedNs} onChange={onSelectedNsChange} />
+        {!fixedNamespace && onSelectedNsChange && (
+          <NamespaceMultiSelect clusterId={clusterId} selected={selectedNs} onChange={onSelectedNsChange} />
+        )}
 
         <div className="inline-flex rounded-xl border border-border overflow-hidden">
           {(['all', 'Normal', 'Warning'] as const).map((t) => (
