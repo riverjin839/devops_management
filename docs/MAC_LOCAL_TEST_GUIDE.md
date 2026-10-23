@@ -391,6 +391,37 @@ kind delete cluster --name test-a
 
 ---
 
+## 7. (선택) PEP 를 Vagrant 클러스터 안에 직접 배포
+
+3단계는 PEP 를 Mac 의 docker compose 로 띄우고 클러스터를 "대상"으로 등록한다. 이 절은 반대로
+**PEP 자체를 클러스터 B 안에 파드로 배포**한다(`k8s/overlays/vagrant`, in-cluster ServiceAccount 로
+자기 자신 모니터링). 3단계(compose)와 포트가 겹치지 않아 동시에 둘 수 있다.
+
+```bash
+# 전제: 클러스터 B 가 Ready 이고 vagrant/kubeadm-kubeconfig.yaml 이 있음 (2단계)
+bash vagrant/deploy-pep.sh            # 이미지 빌드(arm64) → 3노드 containerd 주입 → kubectl apply -k → 롤아웃 대기
+bash vagrant/deploy-pep.sh reload     # 코드 수정 후 재빌드 + 재배포
+bash vagrant/deploy-pep.sh status     # 파드/서비스
+bash vagrant/deploy-pep.sh logs backend
+bash vagrant/deploy-pep.sh destroy    # PEP 제거 (postgres 데이터는 Retain)
+```
+
+| 접속 | 주소 |
+|---|---|
+| UI | http://192.168.10.100:30080 (admin/admin) |
+| API 문서 | http://192.168.10.100:30800/docs |
+| Prometheus / Grafana | :30090 / :30030 (같은 노드 IP) |
+
+overlay 요점: 레지스트리가 없어 이미지는 `pep/{backend,frontend}:vagrant` 를 노드에 직접 import
+(`imagePullPolicy: IfNotPresent`) · kubeadm 에는 기본 StorageClass 가 없어 postgres 는 정적 hostPath PV
+(`pep-local`, k8s-w1 `/var/lib/pep-postgres`) 사용 · VM 메모리(워커 1.5GB) 때문에 Ollama·grafana-renderer·
+blackbox 는 제외 · Ingress/HPA 제거, 레플리카 1.
+
+> 파드가 `Pending` 이면 메모리 부족이다 — `Vagrantfile` 의 워커 메모리를 올리거나
+> `kubectl -n k8s-monitor describe pod` 로 사유를 확인한다. 이미지 빌드는 Docker Desktop 이 떠 있어야 한다.
+
+---
+
 ## 트러블슈팅
 
 | 증상 | 원인 | 해결 |

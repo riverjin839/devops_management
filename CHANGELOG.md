@@ -10,6 +10,9 @@
 
 1.74.0 이후 main 에 병합된 변경 (다음 릴리스 후보).
 
+### Added
+- **Vagrant 테스트 클러스터 안에 PEP 직접 배포**: `k8s/overlays/vagrant` + `vagrant/deploy-pep.sh`. Mac 에서 arm64 이미지를 빌드해 3노드 containerd 로 주입하고(레지스트리 불필요) NodePort(30080/30800)로 노출한다. postgres 는 정적 hostPath PV, 메모리 절약을 위해 Ollama·grafana-renderer·blackbox 제외. 가이드: `docs/MAC_LOCAL_TEST_GUIDE.md` §7.
+
 ## [1.74.0] - 2026-10-22
 
 ### Added
