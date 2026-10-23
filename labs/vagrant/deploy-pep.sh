@@ -6,17 +6,17 @@
 # → kubectl apply -k. 모든 단계의 상세 로그를 출력한다(LOG=quiet 로 요약만).
 #
 # 사용법 (레포 어디서든):
-#   bash vagrant/deploy-pep.sh            # 빌드 + 주입 + 배포
-#   bash vagrant/deploy-pep.sh build      # 이미지 빌드 + 노드 주입만
-#   bash vagrant/deploy-pep.sh apply      # overlay 적용 + 롤아웃 대기만
-#   bash vagrant/deploy-pep.sh reload     # 재빌드 + 주입 + 롤아웃 재시작 (코드 수정 후)
-#   bash vagrant/deploy-pep.sh status|logs [deploy]|destroy
+#   bash labs/vagrant/deploy-pep.sh            # 빌드 + 주입 + 배포
+#   bash labs/vagrant/deploy-pep.sh build      # 이미지 빌드 + 노드 주입만
+#   bash labs/vagrant/deploy-pep.sh apply      # overlay 적용 + 롤아웃 대기만
+#   bash labs/vagrant/deploy-pep.sh reload     # 재빌드 + 주입 + 롤아웃 재시작 (코드 수정 후)
+#   bash labs/vagrant/deploy-pep.sh status|logs [deploy]|destroy
 #
-# 전제: `vagrant/` 에서 클러스터가 Ready (bash up.sh) 이고 kubeadm-kubeconfig.yaml 이 있다.
+# 전제: `labs/vagrant/` 에서 클러스터가 Ready (bash up.sh) 이고 kubeadm-kubeconfig.yaml 이 있다.
 set -euo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-ROOT="$(cd "${HERE}/.." && pwd)"
+ROOT="$(cd "${HERE}/../.." && pwd)"
 export KUBECONFIG="${KUBECONFIG_FILE:-${HERE}/kubeadm-kubeconfig.yaml}"
 NS=k8s-monitor
 NODES=(k8s-ctr k8s-w1 k8s-w2)
@@ -29,7 +29,7 @@ die()  { echo "ERROR: $*" >&2; exit 1; }
 
 preflight() {
   for c in docker kubectl vagrant; do command -v "$c" >/dev/null || die "$c 미설치 (brew install ...)"; done
-  [ -f "$KUBECONFIG" ] || die "kubeconfig 없음: $KUBECONFIG — (cd vagrant && bash up.sh) 로 먼저 클러스터를 만든다"
+  [ -f "$KUBECONFIG" ] || die "kubeconfig 없음: $KUBECONFIG — (cd labs/vagrant && bash up.sh) 로 먼저 클러스터를 만든다"
   kubectl get nodes >/dev/null 2>&1 || die "API 도달 불가 — curl -k https://192.168.10.100:6443/livez 확인 (절전이면 bash up.sh --keep)"
   local notready; notready=$(kubectl get nodes --no-headers | grep -vc ' Ready' || true)
   [ "$notready" = 0 ] || die "NotReady 노드 ${notready}개 — Cilium 설치 확인(vagrant provision k8s-ctr --provision-with cilium)"
@@ -68,7 +68,7 @@ apply_overlay() {
   UI       : http://192.168.10.100:30080   (admin / admin)
   API 문서 : http://192.168.10.100:30800/docs
   이 클러스터는 in-cluster ServiceAccount 로 자기 자신을 모니터링한다.
-  로그     : bash vagrant/deploy-pep.sh logs backend
+  로그     : bash labs/vagrant/deploy-pep.sh logs backend
 MSG
 }
 

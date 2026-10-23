@@ -236,7 +236,7 @@ K8s 클러스터에서 발생하는 Pod CrashLoop, 배포 실패 등의 이벤�
 |---|---|---|
 | `dev/` | `k8s-monitor-dev` (namePrefix `dev-`) | 개발 환경. 레플리카 1개, DEBUG 활성화, 체크 주기 1분, 인그레스 호스트 `k8s-monitor-dev.local` |
 | `prod/` | `k8s-monitor-prod` (namePrefix `prod-`) | 프로덕션. backend/frontend/celery 각 3개 레플리카, TLS(cert-manager), HPA 활성화, 체크 주기 5분 |
-| `kind/` | `k8s-monitor` | 로컬 kind 클러스터. NodePort(30080 frontend / 30800 backend) 노출. `scripts/kind-setup.sh` 와 연동 |
+| `kind/` | `k8s-monitor` | 로컬 kind 클러스터. NodePort(30080 frontend / 30800 backend) 노출. `scripts/deploy/kind-setup.sh` 와 연동 |
 | `airgap/` | `k8s-monitor` | 폐쇄망. 모든 이미지를 내부 레지스트리 미러로 교체, 외부 인터넷 불필요. **레플리카 1개**(HPA 전체 삭제), `DEBUG=true`, Ingress 삭제(NodePort 노출, TLS 없음) |
 
 ---
@@ -302,9 +302,9 @@ kubectl apply -k k8s/overlays/prod
 ### 로컬 kind 클러스터 배포
 
 ```bash
-bash scripts/kind-setup.sh up      # 클러스터 생성 + 이미지 빌드 + 배포
-bash scripts/kind-setup.sh reload  # 코드 변경 후 재빌드
-bash scripts/kind-setup.sh destroy # 클러스터 삭제
+bash scripts/deploy/kind-setup.sh up      # 클러스터 생성 + 이미지 빌드 + 배포
+bash scripts/deploy/kind-setup.sh reload  # 코드 변경 후 재빌드
+bash scripts/deploy/kind-setup.sh destroy # 클러스터 삭제
 # Frontend: http://localhost:30080
 # Backend:  http://localhost:30800/docs
 ```

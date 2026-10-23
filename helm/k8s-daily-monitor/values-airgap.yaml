@@ -62,7 +62,7 @@ ollama:
     # 상대 경로만 지정 — global.imageRegistry(위) 가 k8s-daily-monitor.image 헬퍼를
     # 통해 자동으로 접두된다("10.61.162.101:5000/ollama-qwen2.5-coder"). 여기 직접
     # 레지스트리 주소를 박으면 이중 접두(registry/registry/repo)가 된다.
-    # scripts/deploy-airgap.sh 로 이 이미지를 내부 레지스트리에 미러링해야 한다.
+    # scripts/deploy/deploy-airgap.sh 로 이 이미지를 내부 레지스트리에 미러링해야 한다.
     repository: ollama-qwen2.5-coder
     tag: "7b"
     pullPolicy: IfNotPresent

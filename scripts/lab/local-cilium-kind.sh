@@ -8,8 +8,8 @@
 # 사전: brew install kind kubectl cilium-cli
 #
 # 사용법:
-#   bash scripts/local-cilium-kind.sh [클러스터이름]
-#   CILIUM_VERSION=1.16.5 K8S_VERSION=v1.34.0 bash scripts/local-cilium-kind.sh test-a
+#   bash scripts/lab/local-cilium-kind.sh [클러스터이름]
+#   CILIUM_VERSION=1.16.5 K8S_VERSION=v1.34.0 bash scripts/lab/local-cilium-kind.sh test-a
 set -euo pipefail
 
 CLUSTER_NAME="${1:-test-a}"
@@ -62,4 +62,4 @@ echo ""
 kubectl get nodes -o wide
 echo ""
 echo "✓ Cilium kind 클러스터 '${CLUSTER_NAME}' 준비 완료"
-echo "  PEP 등록: bash scripts/register-local-cluster.sh --name ${CLUSTER_NAME} --kind ${CLUSTER_NAME}"
+echo "  PEP 등록: bash scripts/lab/register-local-cluster.sh --name ${CLUSTER_NAME} --kind ${CLUSTER_NAME}"

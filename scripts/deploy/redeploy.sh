@@ -10,11 +10,11 @@ set -euo pipefail
 # 두 가지 사용법:
 #
 # 1) 전체 이미지 참조를 직접 지정 (레지스트리/저장소를 바꿀 때 등):
-#   scripts/redeploy.sh [-n <namespace>] <image> <target> [<target> ...]
+#   scripts/deploy/redeploy.sh [-n <namespace>] <image> <target> [<target> ...]
 #
 # 2) -t 로 태그만 지정 (권장 — 저장소 경로는 클러스터에 이미 떠 있는 이미지에서 그대로 읽어와
 #    태그만 바꿔치기하므로, 레지스트리 경로를 매번 입력할 필요가 없다):
-#   scripts/redeploy.sh [-n <namespace>] -t <tag> <target> [<target> ...]
+#   scripts/deploy/redeploy.sh [-n <namespace>] -t <tag> <target> [<target> ...]
 #
 # <target> 은 둘 중 하나:
 #   - <deployment>              컨테이너가 1개뿐인 Deployment 는 이름만 적으면 자동 판별.
@@ -23,16 +23,16 @@ set -euo pipefail
 # -n 을 생략하면 현재 kubectl context 의 네임스페이스를 그대로 쓴다.
 #
 # 예 (전체 이미지 참조):
-#   scripts/redeploy.sh -n k8s-monitor-prod ghcr.io/riverjin839/devops_management/backend:abc1234 \
+#   scripts/deploy/redeploy.sh -n k8s-monitor-prod ghcr.io/riverjin839/devops_management/backend:abc1234 \
 #       prod-backend:backend prod-celery-worker:celery-worker prod-celery-beat:celery-beat
 #
 # 예 (태그만, 백엔드/프론트엔드 한 번에 — 각자 현재 저장소 경로를 유지한 채 태그만 교체):
-#   scripts/redeploy.sh -n k8s-monitor-prod -t v1.4.0 \
+#   scripts/deploy/redeploy.sh -n k8s-monitor-prod -t v1.4.0 \
 #       prod-backend:backend prod-celery-worker:celery-worker prod-celery-beat:celery-beat \
 #       prod-frontend:frontend
 #
 # 예 (Deployment 이름만, 컨테이너 자동 판별 — 컨테이너 1개짜리 Deployment 인 backend/frontend):
-#   scripts/redeploy.sh -n k8s-monitor-prod -t v1.4.0 backend frontend
+#   scripts/deploy/redeploy.sh -n k8s-monitor-prod -t v1.4.0 backend frontend
 # ============================================
 
 RED='\033[0;31m'
