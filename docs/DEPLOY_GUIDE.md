@@ -5,14 +5,14 @@
 | 하고 싶은 것 | 위치 | 진입점 |
 |---|---|---|
 | 운영 매니페스트 (Kustomize base/overlays/components) | `deploy/k8s/` | `kubectl apply -k deploy/k8s/overlays/<env>` |
-| Helm 차트 / ArgoCD 앱 | `helm/` · `argocd/` | `helm install ... -f values-<env>.yaml` |
+| Helm 차트 / ArgoCD 앱 | `deploy/helm/` · `deploy/argocd/` | `helm install ... -f values-<env>.yaml` |
 | 이미지 빌드 정의 (pgvector, ollama) | `docker/` | CI/`scripts/deploy/` 가 사용 |
 | 배포 스크립트 (kind, 폐쇄망, 재배포, 모니터링 스택) | `scripts/deploy/` | `kind-setup.sh` · `deploy-airgap.sh` · `redeploy.sh` · `setup-monitoring.sh` |
 | 로컬 테스트 보조 (Cilium kind, 클러스터 등록, 샘플 데이터) | `scripts/lab/` | `local-cilium-kind.sh` · `register-local-cluster.sh` · `seed-test-data.sh` |
 | 릴리스·버전 도구 | `scripts/release/` | `bump_version.py` · `version-tag.sh` |
 | **로컬 테스트 클러스터 (Vagrant/Windows)** | **`labs/`** | `labs/vagrant/up.sh` · `labs/vagrant/deploy-pep.sh` — `labs/README.md` |
 
-원칙: **운영에 쓰는 것은 `deploy/k8s/ helm/ argocd/ docker/`, 사람이 PC 에서 돌려 보는 것은 `labs/` + `scripts/lab/`.**
+원칙: **운영에 쓰는 것은 `deploy/ docker/`, 사람이 PC 에서 돌려 보는 것은 `labs/` + `scripts/lab/`.**
 
 
 > 로컬 개발 → 폐쇄망 검증 → CI/CD 운영 배포까지 3단계 가이드
@@ -297,7 +297,7 @@ bash scripts/deploy/deploy-airgap.sh check    # K8s API 서버 헬스 체크
 
 ### values-airgap.yaml 설정 항목
 
-`helm/k8s-daily-monitor/values-airgap.yaml`에서 환경에 맞게 수정:
+`deploy/helm/k8s-daily-monitor/values-airgap.yaml`에서 환경에 맞게 수정:
 
 | 항목 | 기본값 | 설명 |
 |------|--------|------|
@@ -347,9 +347,9 @@ bash scripts/deploy/deploy-airgap.sh check    # K8s API 서버 헬스 체크
 | 파일 | 용도 |
 |------|------|
 | `Jenkinsfile` | CI 파이프라인 정의 |
-| `helm/k8s-daily-monitor/` | Helm Chart (배포 패키지) |
-| `argocd/application.yaml` | ArgoCD Application 정의 |
-| `argocd/project.yaml` | ArgoCD AppProject (선택) |
+| `deploy/helm/k8s-daily-monitor/` | Helm Chart (배포 패키지) |
+| `deploy/argocd/application.yaml` | ArgoCD Application 정의 |
+| `deploy/argocd/project.yaml` | ArgoCD AppProject (선택) |
 
 ### Jenkins 설정
 
@@ -399,10 +399,10 @@ argocd repo add https://git.company.internal/devops/k8s_daily_monitor.git \
 #### 2. Application 생성
 
 ```bash
-kubectl apply -f argocd/application.yaml
+kubectl apply -f deploy/argocd/application.yaml
 ```
 
-`argocd/application.yaml` 수정 필요 항목:
+`deploy/argocd/application.yaml` 수정 필요 항목:
 
 ```yaml
 spec:
@@ -488,7 +488,7 @@ Cilium 의 Gateway API 구현(Envoy)으로 PEP 를 노출할 수 있다. 저장�
 
 | 배포 방식 | 켜는 방법 | 파일 |
 |---|---|---|
-| Helm | `gateway.enabled=true` (+ 검증 후 `ingress.enabled=false`) | `helm/k8s-daily-monitor/templates/gateway.yaml` |
+| Helm | `gateway.enabled=true` (+ 검증 후 `ingress.enabled=false`) | `deploy/helm/k8s-daily-monitor/templates/gateway.yaml` |
 | Kustomize | overlay 에 `components: [../../components/gateway-api]` | `deploy/k8s/components/gateway-api/` |
 
 ### 라우팅 구조
@@ -677,7 +677,7 @@ k8s_daily_monitor/
 │       ├── prod/                   # 운영 환경
 │       └── airgap/                 # 폐쇄망
 │
-├── helm/k8s-daily-monitor/         # Helm Chart (Phase 2, 3)
+├── deploy/helm/k8s-daily-monitor/         # Helm Chart (Phase 2, 3)
 │   ├── Chart.yaml
 │   ├── values.yaml                 # 기본값
 │   ├── values-dev.yaml             # kind/개발
@@ -692,7 +692,7 @@ k8s_daily_monitor/
 │
 ├── Jenkinsfile                     # Phase 3: CI 파이프라인
 │
-├── argocd/
+├── deploy/argocd/
 │   ├── application.yaml            # Phase 3: ArgoCD Application
 │   └── project.yaml                # Phase 3: ArgoCD Project
 │

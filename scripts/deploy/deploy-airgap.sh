@@ -14,7 +14,7 @@ NAMESPACE="${NAMESPACE:-k8s-monitor}"
 IMAGE_TAG="${IMAGE_TAG:-latest}"
 
 # 인클러스터 자체 LLM(Ollama) 이미지 — 모델이 pre-baked 된 커스텀 이미지.
-# helm/k8s-daily-monitor/values.yaml 의 ollama.image 기본값과 반드시 일치시킬 것.
+# deploy/helm/k8s-daily-monitor/values.yaml 의 ollama.image 기본값과 반드시 일치시킬 것.
 # SKIP_OLLAMA=1 로 이 이미지의 미러링/저장 단계를 건너뛸 수 있다(사내 LLM 프로필만
 # 쓰거나, docs/AIRGAP_LLM_NEXUS.md 의 다른 방법으로 이미 반입한 경우).
 OLLAMA_IMAGE="${OLLAMA_IMAGE:-ghcr.io/riverjin839/devops_management/ollama-qwen2.5-coder}"

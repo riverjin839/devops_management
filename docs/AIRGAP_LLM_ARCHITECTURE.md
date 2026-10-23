@@ -319,7 +319,7 @@ analyzer 프롬프트에 주입:
 
 | Phase | 내용 | 변경 파일(예상) |
 |---|---|---|
-| **0. 서빙 준비** | GLM-5.2 가중치/vLLM 이미지 Nexus 반입, GPU 노드 라벨링, `deploy/k8s/base/llm-vllm.yaml` + airgap overlay | k8s/, helm/ |
+| **0. 서빙 준비** | GLM-5.2 가중치/vLLM 이미지 Nexus 반입, GPU 노드 라벨링, `deploy/k8s/base/llm-vllm.yaml` + airgap overlay | deploy/k8s/, deploy/helm/ |
 | **1. Provider 추상화** | `LLM_PROVIDER=openai_compat` 지원 — `LLMCallerNode`·`local_llm_analyzer._call` 에 OpenAI-호환 chat 호출 추가 (httpx 직접, SDK 불필요), health check 확장 | config.py, agent_service.py, local_llm_analyzer.py |
 | **2. 자동 분석 파이프라인** | `run_auto_incident_analysis` Celery 태스크 + 디바운스, `incident_analysis` 모델(+`_safe_*` 마이그레이션, backup LOG_TABLES 등록), 알림 연동, UI 이력 탭 | celery_app.py, k8s_events.py, models/, analyze.py, IncidentAnalysisPage |
 | **3. RAG** | ops_notes 임베딩, work_guides 검색 API, `rag_service.py`, analyzer 프롬프트 주입 + related_runbooks 내부 링크 | embedding_service.py, rag_service.py(신규), ops_note.py, work_guide.py |

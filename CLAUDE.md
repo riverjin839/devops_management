@@ -62,7 +62,7 @@ PEP 의 문서·에디터·블록·협업/지식관리 기능을 발전시킬 �
   - **상태는 Zustand(client) / TanStack Query(server) 로 엄격히 분리** — §Frontend Architecture.
   - shadcn 컴포넌트는 shadcn MCP(`frontend/.mcp.json`)로 추가한다 (props 를 추측하지 말 것).
 - **Infra**: Docker Compose(로컬) · Kustomize base + overlays(dev/prod/airgap/kind) ·
-  Helm(`helm/k8s-daily-monitor/`) · kind(`scripts/deploy/kind-setup.sh`) · Skaffold ·
+  Helm(`deploy/helm/k8s-daily-monitor/`) · kind(`scripts/deploy/kind-setup.sh`) · Skaffold ·
   GitHub Actions(CI/CD) · ArgoCD · Jenkins(`Jenkinsfile`, phase 3).
 
 ---
@@ -95,14 +95,13 @@ devops_management/
 │   ├── pages/           # 화면별 명세는 docs/SCREENS.md
 │   └── components/      # common/(ClusterSidebar) ui/(MacCard, shadcn)
 │                        #   layout/(Sidebar, navConfig.ts) + 도메인 폴더
-├── deploy/k8s/          # Kustomize base + overlays(dev/prod/kind/airgap/vagrant) + superpod/(CronJob)
-├── helm/k8s-daily-monitor/   # values / -dev / -prod / -airgap
+├── deploy/              # 운영 배포 정의 — k8s/(Kustomize base + overlays(dev/prod/kind/airgap/vagrant) + superpod/(CronJob)) · helm/k8s-daily-monitor/(values / -dev / -prod / -airgap) · argocd/
 ├── scripts/             # deploy/(kind-setup·deploy-airgap·redeploy·setup-monitoring·init-cluster — 배포),
 │                        #   lab/(local-cilium-kind·register-local-cluster·seed-test-data — 로컬 테스트),
 │                        #   release/{version-tag.sh,bump_version,decide_bump,changelog_sections,check_changelog_sections,check_versions}.py,
 │                        #   docs/check_docs_sync.py, report/(AI 개발 리포트 집계·HTML 빌드),
 │                        #   a11y/(axe 접근성 스캔), ui/check_dialogs.py(모달 어댑터 검사 — CI)
-├── ansible/playbooks/  argocd/  docker/
+├── ansible/playbooks/  docker/
 ├── labs/                # 로컬 테스트 클러스터 — vagrant/(Mac VirtualBox·AlmaLinux)·windows-docker/ (운영 배포물 아님, labs/README.md)
 ├── docs/                # 인덱스는 docs/README.md (01-plan/ 02-design/ 03-analysis/
 │                        #   archive/ superpowers/ 하위 폴더 포함)

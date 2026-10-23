@@ -1,7 +1,7 @@
 # ============================================
 # ArgoCD Application - K8s Daily Monitor
 # ============================================
-# 적용: kubectl apply -f argocd/application.yaml
+# 적용: kubectl apply -f deploy/argocd/application.yaml
 #
 # 사전 조건:
 #   1. ArgoCD에 Git repo 등록 (argocd repo add ...)
@@ -25,7 +25,7 @@ spec:
     # 폐쇄망 내부 Git 주소로 변경
     repoURL: https://git.company.internal/devops/k8s_daily_monitor.git
     targetRevision: main
-    path: helm/k8s-daily-monitor
+    path: deploy/helm/k8s-daily-monitor
 
     helm:
       # 환경별 values 파일

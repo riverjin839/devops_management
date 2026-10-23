@@ -11,7 +11,7 @@
 1.77.0 이후 main 에 병합된 변경 (다음 릴리스 후보).
 
 ### Changed
-- **`k8s/` → `deploy/k8s/`**: Kustomize 매니페스트를 `deploy/` 아래로 옮겼다(내부 상대 경로·overlay 구성은 그대로). 갱신: `cd.yml`(트리거 paths·kustomize 경로), `Makefile`, `skaffold.yaml`, `.gitignore`, `version-tag.sh`, 문서. `helm/`·`argocd/` 는 ArgoCD `path:` 때문에 이번에 옮기지 않았다. 옛 `kubectl apply -k k8s/overlays/<env>` 는 `deploy/k8s/overlays/<env>` 로 바꿔야 한다.
+- **`k8s/`·`helm/`·`argocd/` → `deploy/`**: Kustomize 매니페스트를 `deploy/` 아래로 옮겼다(내부 상대 경로·overlay 구성은 그대로). 갱신: `cd.yml`(트리거 paths·kustomize 경로), `Makefile`, `skaffold.yaml`, `.gitignore`, `version-tag.sh`, 문서. `helm/`→`deploy/helm/`, `argocd/`→`deploy/argocd/` 도 함께 옮겼다(Jenkinsfile `HELM_CHART`·ArgoCD Application `spec.source.path` 갱신). **이미 클러스터에 적용된 ArgoCD Application 은 머지 후 `kubectl apply -f deploy/argocd/application.yaml` 로 다시 적용해야 한다.** 옛 `kubectl apply -k k8s/overlays/<env>` 는 `deploy/k8s/overlays/<env>` 로 바꿔야 한다.
 
 ## [1.77.0] - 2026-10-23
 

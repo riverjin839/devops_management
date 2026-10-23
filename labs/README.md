@@ -1,7 +1,7 @@
 # labs/ — 로컬 테스트 환경 (PEP 가 모니터링할 가짜 클러스터)
 
 운영 배포물이 아니다. 개발자 PC 에서 테스트 K8s 를 띄우고 PEP 를 붙여 보는 실험실이다.
-**운영 배포(deploy/k8s/·helm/·argocd/)와 섞이지 않도록 한 곳에 모았다.** 전체 지도는 [`docs/DEPLOY_GUIDE.md`](../docs/DEPLOY_GUIDE.md) 상단 표.
+**운영 배포(`deploy/`)와 섞이지 않도록 한 곳에 모았다.** 전체 지도는 [`docs/DEPLOY_GUIDE.md`](../docs/DEPLOY_GUIDE.md) 상단 표.
 
 | 디렉터리 | 호스트 | 형태 | 가이드 |
 |---|---|---|---|

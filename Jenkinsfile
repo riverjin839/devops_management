@@ -26,7 +26,7 @@ pipeline {
         ARGOCD_APP     = "k8s-daily-monitor"
 
         // -- Helm Chart 경로
-        HELM_CHART     = "helm/k8s-daily-monitor"
+        HELM_CHART     = "deploy/helm/k8s-daily-monitor"
     }
 
     options {
