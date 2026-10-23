@@ -84,7 +84,8 @@ def test_put_then_get_roundtrips(db, me, cleanup):
 def test_put_is_partial_and_preserves_unset_fields(db, me, cleanup):
     cleanup.append(me.id)
     home_prefs_router.update_home_prefs(
-        payload=HomePrefsUpdate(default_home_tab="work", pinned_paths=["/etcdctl"]),
+        # 허브에 흡수되지 않는 경로를 쓴다 — `/etcdctl` 같은 흡수 경로는 읽을 때 `/k8s` 로 접힌다(D-240, 별도 테스트).
+        payload=HomePrefsUpdate(default_home_tab="work", pinned_paths=["/k9s"]),
         db=db, user=me,
     )
     # pinned_paths 를 보내지 않은 업데이트 — default_home_tab 만 바뀌고 기존 pinned_paths 는 유지.
@@ -93,7 +94,7 @@ def test_put_is_partial_and_preserves_unset_fields(db, me, cleanup):
         db=db, user=me,
     )
     assert updated.default_home_tab == "platform"
-    assert updated.pinned_paths == ["/etcdctl"]
+    assert updated.pinned_paths == ["/k9s"]
 
 
 def test_locale_partial_update_preserves_other_fields(db, me, cleanup):
