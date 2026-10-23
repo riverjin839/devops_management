@@ -8,7 +8,9 @@
 
 ## [Unreleased]
 
-1.78.1 이후 main 에 병합된 변경 (다음 릴리스 후보).
+1.78.2 이후 main 에 병합된 변경 (다음 릴리스 후보).
+
+## [1.78.2] - 2026-10-23
 
 ### Fixed
 - **점검 매트릭스 열/행 일괄 실행 데드락**: 같은 클러스터를 동시에 처리하는 워커들이 `DeadlockDetected` 로 대부분 실패하던 문제(열 실행 21건 중 19건). 각 실행이 clusters 를 FK 로 참조하는 결과 행을 INSERT 해 `FOR KEY SHARE` 를 쥔 채 `recompute()` 에서 `SELECT ... FOR UPDATE` 를 걸어 서로 막혔다 — 잠금을 `FOR NO KEY UPDATE`(`with_for_update(key_share=True)`)로 바꿔 직렬화만 되고 교착은 없게 했다.
