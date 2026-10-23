@@ -20,7 +20,7 @@ build:
 manifests:
   kustomize:
     paths:
-      - k8s/overlays/dev
+      - deploy/k8s/overlays/dev
 
 deploy:
   kubectl: {}
@@ -34,7 +34,7 @@ profiles:
     manifests:
       kustomize:
         paths:
-          - k8s/overlays/dev
+          - deploy/k8s/overlays/dev
     deploy:
       kubectl:
         hooks:
@@ -46,7 +46,7 @@ profiles:
     manifests:
       kustomize:
         paths:
-          - k8s/overlays/prod
+          - deploy/k8s/overlays/prod
 
 portForward:
   - resourceType: service

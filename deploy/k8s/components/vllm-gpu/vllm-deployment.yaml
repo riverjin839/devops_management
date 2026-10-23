@@ -1,9 +1,9 @@
 # GPU 서빙 옵션 — vLLM 으로 OpenAI-호환 엔드포인트를 인클러스터에 띄운다.
-# CPU 전용 Ollama(k8s/base/ollama.yaml) 보다 처리량이 필요할 때(예: 알람 자동 분석
+# CPU 전용 Ollama(deploy/k8s/base/ollama.yaml) 보다 처리량이 필요할 때(예: 알람 자동 분석
 # 범위를 넓혀 부하가 커진 경우) 선택적으로 추가한다. base 는 무변경 — 이 컴포넌트를
 # GPU 노드가 있는 오버레이에만 opt-in 으로 추가한다:
 #
-#   # k8s/overlays/<env>/kustomization.yaml
+#   # deploy/k8s/overlays/<env>/kustomization.yaml
 #   components:
 #     - ../../components/vllm-gpu
 #

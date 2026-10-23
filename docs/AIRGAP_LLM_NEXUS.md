@@ -84,16 +84,16 @@
 
 이미 저장소에 매니페스트가 있습니다.
 
-- Kubernetes: `k8s/base/ollama.yaml` (선택적 Deployment + Service)
+- Kubernetes: `deploy/k8s/base/ollama.yaml` (선택적 Deployment + Service)
 - Docker Compose: `OLLAMA_URL` 만 사내 Ollama 로 지정하면 됩니다.
 
 K8s 로 배포 시 백엔드와 같은 네임스페이스에 올리면 `OLLAMA_URL=http://ollama:11434` 로
 접근할 수 있습니다.
 
-> ⚠️ **`k8s/base/ollama.yaml` 은 이미 `qwen2.5-coder:7b` 모델을 사전 적재한 커스텀 이미지**
+> ⚠️ **`deploy/k8s/base/ollama.yaml` 은 이미 `qwen2.5-coder:7b` 모델을 사전 적재한 커스텀 이미지**
 > (`ghcr.io/riverjin839/devops_management/ollama-qwen2.5-coder:7b`)를 쓰며, 매니페스트
 > 자체에 "폐쇄망에서 `ollama pull` 을 args 에 넣지 말 것(실패하거나 무한 대기)"이라는 주석이
-> 있다. `k8s/overlays/airgap/` 도 같은 이미지를 내부 레지스트리로 경로만 바꿔 재사용한다.
+> 있다. `deploy/k8s/overlays/airgap/` 도 같은 이미지를 내부 레지스트리로 경로만 바꿔 재사용한다.
 > 즉 **이 이미지를 그대로 쓰면 아래 §2(Nexus 모델 수급) 절차 자체가 필요 없다** — 이미
 > 반입돼 있다. 다른 모델로 바꾸거나 vanilla Ollama 이미지를 쓸 때만 §2 를 따른다.
 >

@@ -40,7 +40,7 @@ celery_app.conf.update(
 # LLM 자동 분석은 전용 `llm` 큐로 라우팅한다 — 점검/배치잡이 쓰는 기본(celery) 큐의
 # 2-slot 워커 풀을 LLM 대기(최대 120s+)로 점유하지 않도록 격리. 소비자는
 # `celery -A app.celery_app worker -Q llm --concurrency=1` 로 따로 띄운다
-# (k8s/base/celery/worker-llm.yaml · docker-compose `celery-worker-llm`).
+# (deploy/k8s/base/celery/worker-llm.yaml · docker-compose `celery-worker-llm`).
 celery_app.conf.task_routes = {
     "app.celery_app.run_auto_incident_analysis": {"queue": "llm"},
     "app.celery_app.run_auto_incident_analysis_k8s_event": {"queue": "llm"},

@@ -95,7 +95,7 @@ devops_management/
 │   ├── pages/           # 화면별 명세는 docs/SCREENS.md
 │   └── components/      # common/(ClusterSidebar) ui/(MacCard, shadcn)
 │                        #   layout/(Sidebar, navConfig.ts) + 도메인 폴더
-├── k8s/                 # Kustomize base + overlays(dev/prod/kind/airgap/vagrant) + superpod/(CronJob)
+├── deploy/k8s/          # Kustomize base + overlays(dev/prod/kind/airgap/vagrant) + superpod/(CronJob)
 ├── helm/k8s-daily-monitor/   # values / -dev / -prod / -airgap
 ├── scripts/             # deploy/(kind-setup·deploy-airgap·redeploy·setup-monitoring·init-cluster — 배포),
 │                        #   lab/(local-cilium-kind·register-local-cluster·seed-test-data — 로컬 테스트),
@@ -410,8 +410,8 @@ All shared interfaces live in `src/types/index.ts`. Keep backend response shapes
 
 | Phase | 대상 | 진입 명령 | 설정 |
 |---|---|---|---|
-| 1 | 로컬 kind | `bash scripts/deploy/kind-setup.sh up｜reload｜destroy` | `k8s/overlays/kind/` |
-| 2 | 폐쇄망(air-gap) | `bash scripts/deploy/deploy-airgap.sh all` (registry·CLI·인증정보 대화형 입력) | `values-airgap.yaml` · `k8s/overlays/airgap/` |
+| 1 | 로컬 kind | `bash scripts/deploy/kind-setup.sh up｜reload｜destroy` | `deploy/k8s/overlays/kind/` |
+| 2 | 폐쇄망(air-gap) | `bash scripts/deploy/deploy-airgap.sh all` (registry·CLI·인증정보 대화형 입력) | `values-airgap.yaml` · `deploy/k8s/overlays/airgap/` |
 | 3 | 프로덕션 | `helm install k8s-monitor ./helm/k8s-daily-monitor -f .../values-prod.yaml -n k8s-monitor --create-namespace` | `values-prod.yaml` · Jenkins + ArgoCD |
 
 네임스페이스: dev = `k8s-monitor-dev`, prod = `k8s-monitor-prod`.
@@ -581,7 +581,7 @@ Compose 는 kubeconfig 볼륨을 마운트하지 않고, backend/celery 컨테�
 `/tmp/k8s-monitor` 를 공유하지 않으므로 **경로만 등록된(=DB `kubeconfig_content` 가 빈)
 클러스터는 워커에서 kubeconfig 를 재구체화하지 못한다**. `/cluster-manage` 에서
 kubeconfig 파일을 업로드해 DB 에 content 로 저장하면 모든 컨테이너에서 동작한다.
-K8s 배포에서는 서비스 어카운트(`k8s/base/backend/serviceaccount.yaml`) 또는
+K8s 배포에서는 서비스 어카운트(`deploy/k8s/base/backend/serviceaccount.yaml`) 또는
 kubeconfig 시크릿 마운트를 쓴다. 실패 사유는 배치잡 사전 점검(연결 테스트)과
 실행 로그의 kubeconfig 해석 단계에 그대로 표시된다(`services/kubeconfig.py`
 `resolve_kubeconfig`).

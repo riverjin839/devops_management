@@ -125,7 +125,7 @@ Context 조립 ─┘                                     │
 - **in_cluster**: 대상 클러스터 **내부**에서 실행. DB 가 없으므로 registry 의 모든 check_type 을
   기본 임계/파라미터로 1회씩 돌리고, 결과를 `SUPERPOD_INGEST_URL`(`/deep-check/ingest`)로
   Bearer 토큰(`SUPERPOD_INGEST_TOKEN`) 인증 POST. 관리 backend 가 최신 회차에 자동 연결 후
-  AI 리뷰 큐잉. 배포 산출물은 **`k8s/superpod/`**(CronJob + kustomization + secret 템플릿) —
+  AI 리뷰 큐잉. 배포 산출물은 **`deploy/k8s/superpod/`**(CronJob + kustomization + secret 템플릿) —
   Helm CronJob(`SUPERPOD_MODE=centralized`, 기본값)과는 별도의 kustomize 번들이다.
 
 ---

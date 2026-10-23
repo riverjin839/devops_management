@@ -156,7 +156,7 @@ Celery 기반 백그라운드 자동화.
 | Story | 요약 | 산출물 | 우선 |
 |---|---|---|---|
 | Docker Compose 로컬 개발 | postgres + redis + backend + frontend + celery 한 번에 기동 | `docker-compose.yml`, `Makefile` | P0 |
-| Kubernetes Kustomize 배포 | base + overlays/{dev,prod,airgap,kind} | `k8s/`, `scripts/deploy/kind-setup.sh` | P0 |
+| Kubernetes Kustomize 배포 | base + overlays/{dev,prod,airgap,kind} | `deploy/k8s/`, `scripts/deploy/kind-setup.sh` | P0 |
 | Helm 차트 | values-{dev,prod,airgap}.yaml 분리된 프로덕션 차트 | `helm/k8s-daily-monitor/` | P1 |
 | Skaffold 핫리로드 | dev 모드 watch/rebuild | `skaffold.yaml` | P2 |
 | 폐쇄망(airgap) 배포 | 사설 레지스트리 미러링 + 대화형 설치 스크립트 | `scripts/deploy/deploy-airgap.sh`, overlays/airgap | P1 |

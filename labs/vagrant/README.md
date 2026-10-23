@@ -102,7 +102,7 @@ vagrant destroy -f
 | `init_cfg.sh` | 모든 노드 공통: swap off, k8s repo, kubelet/kubeadm/kubectl + containerd + helm 설치 |
 | `k8s-ctr.sh` | control-plane `kubeadm init`(pod 10.244/16, svc 10.96/16, advertise 192.168.10.100) + 편의설정 |
 | `k8s-w.sh` | worker `kubeadm join` |
-| `deploy-pep.sh` | **PEP 를 이 클러스터 안에 배포**(이미지 빌드→노드 주입→`k8s/overlays/vagrant` 적용). 가이드 §7 |
+| `deploy-pep.sh` | **PEP 를 이 클러스터 안에 배포**(이미지 빌드→노드 주입→`deploy/k8s/overlays/vagrant` 적용). 가이드 §7 |
 | `install-cilium.sh` | Cilium Helm 설치(kubeProxyReplacement/native/cluster-pool) + cilium CLI. `--provision-with cilium` 으로 실행 |
 
 ## PEP 등록

@@ -102,7 +102,7 @@ sync generator 를 `StreamingResponse` 에 넘기면 Starlette 은 매 `next()` 
 ```
 backend/Dockerfile:72   CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
                         # ← --workers 없음 = 단일 프로세스
-k8s/base/backend/deployment.yaml:11   replicas: 2
+deploy/k8s/base/backend/deployment.yaml:11   replicas: 2
 ```
 
 따라서 **전체 시스템의 sync 동시성 상한 = 40 × 2 = 80** 이다. 300 노드급 클러스터를

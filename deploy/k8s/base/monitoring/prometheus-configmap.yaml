@@ -74,7 +74,7 @@ data:
           - role: node
         metrics_path: /metrics/resource
 
-      # ── 네트워크 옵저버빌리티 수집기 (k8s/base/observability) ──────────────
+      # ── 네트워크 옵저버빌리티 수집기 (deploy/k8s/base/observability) ──────────────
       # Telegraf SNMP 수집기 → ifHCIn/OutOctets, ifIn/OutErrors, ifOperStatus
       - job_name: 'telegraf-snmp'
         static_configs:

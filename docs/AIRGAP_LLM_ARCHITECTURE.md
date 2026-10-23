@@ -16,7 +16,7 @@
 > - **로그 속 지시문 방어** — 로그·이벤트·describe 를 `<<<수집 데이터 시작/끝>>>` 경계로 감싸고
 >   시스템 프롬프트가 경계 안의 지시를 따르지 않게 한다(`prompts.wrap_untrusted`).
 > - **Ollama 모델명 자동 해석 + 연결 진단** — `POST /llm/diagnose`(SSE 7단계), `pep-k8s-ops` 파생 모델,
->   CPU 없는 클러스터용 `k8s/components/no-ollama`.
+>   CPU 없는 클러스터용 `deploy/k8s/components/no-ollama`.
 >
 > **v2 (2026-07-29) — 프레임 전환: "마이그레이션" → "프로필 × 용도 라우팅 병행 운용".**
 > v1 은 Ollama → vLLM(GLM) *전환*을 전제로 썼지만, 실제 요구는 **사내 제공 LLM 서비스
@@ -88,7 +88,7 @@ Settings → AI/LLM (AppSetting llm_settings — UI-First, env 는 행이 없을
 <summary>v1.6.0 시점 as-is (기록용)</summary>
 
 ```
-Ollama (k8s/base/ollama.yaml — CPU 전용, 모델 pre-baked 이미지)
+Ollama (deploy/k8s/base/ollama.yaml — CPU 전용, 모델 pre-baked 이미지)
   ├─ /api/generate  ← agent_service.py (AI 클러스터 요약 카드, /agent/chat)
   ├─ /api/generate  ← analyzers/local_llm_analyzer.py (장애 분석, JSON 출력)
   └─ /api/embeddings ← embedding_service.py (nomic-embed-text, dim 768)
@@ -105,7 +105,7 @@ Ollama (k8s/base/ollama.yaml — CPU 전용, 모델 pre-baked 이미지)
 | G2 | 에러 발생 시 **자동** 분석이 없음 — IncidentAnalysisPage 에서 사람이 수동 실행 | `k8s_events.py` ↔ `analyze.py` 미연결 | ✅ **해소** — `services/observability/analysis_hook.py` + `AlertNotifyRule`/`llm_analysis_scope` 매칭 → 전용 `llm` 큐. 규칙마다 `sources`(알람/K8s 이벤트) 로 적용 파이프라인 선택 — kubewatch 로 수신된 K8s 이벤트도 알람을 거치지 않고 직접 트리거(`maybe_enqueue_analysis_for_k8s_event`, `run_auto_incident_analysis_k8s_event`), 같은 대상은 공유 디바운스 키로 중복 방지 |
 | G3 | RAG 부재 — 검색(`/work-items/{id}/similar`)과 생성(analyzer)이 분리돼 있고, 검색 결과가 프롬프트에 주입되지 않음 | `embedding_service.py` | ✅ **해소** — `services/rag_service.py`, `AnalysisResult.citations`, 챗봇 응답 `citations`, 프롬프트에 참고자료 블록 주입 |
 | G4 | 임베딩 대상이 WorkItem/WorkGuide 뿐 — OpsNote·Ontology 미색인, WorkGuide 는 검색 엔드포인트도 없음 | `models/ops_note.py` 등 | ✅ **해소** — OpsNote 임베딩 추가(`compute_ops_note_embedding`) + `GET /llm/rag-search` 검색 엔드포인트 신설 + Ontology(`OntologyEvent`, 구성변경 영향분석 이력) 임베딩 추가(`compute_ontology_event_embedding`, `POST /ontology/impact` 커밋 직후 큐잉) — RAG 소스 4종(work_guide/work_item/ops_note/ontology_event) 전부 색인 |
-| G5 | GPU 서빙 매니페스트 없음 — `ollama.yaml` 은 CPU 전용 | `k8s/base/`, `k8s/overlays/airgap/` | 🟡 **부분 해소** — opt-in kustomize component `k8s/components/vllm-gpu/`(nvidia.com/gpu + PVC) 추가, base 는 여전히 CPU 전용(의도적 — GPU 는 오버레이 opt-in) |
+| G5 | GPU 서빙 매니페스트 없음 — `ollama.yaml` 은 CPU 전용 | `deploy/k8s/base/`, `deploy/k8s/overlays/airgap/` | 🟡 **부분 해소** — opt-in kustomize component `deploy/k8s/components/vllm-gpu/`(nvidia.com/gpu + PVC) 추가, base 는 여전히 CPU 전용(의도적 — GPU 는 오버레이 opt-in) |
 
 추가로 이번 구현에서 해소된 갭(당초 목록에 없었으나 진단에서 발견):
 - **부하 제어 부재** → `llm_analysis_scope`(전역 기본 꺼짐, 디바운스+레이트) + 전용 `llm` Celery 큐 + 사용량 대시보드(`GET /llm/usage`)
@@ -113,7 +113,7 @@ Ollama (k8s/base/ollama.yaml — CPU 전용, 모델 pre-baked 이미지)
 - **무실행 보증이 관례뿐** → `tests/test_no_execution_guard.py`(AST import 그래프) + `services/llm/masking.py`(프롬프트 진입점 일괄 시크릿 마스킹)
 - **한국어 불일치** → `services/llm/prompts.py` 한국어 기본 시스템 프롬프트, `AgentChat.tsx` 전면 한국어화
 - **(v3) LLM 장애 시 자동 분석 공백** → `LocalLLMAnalyzer._rule_based_fallback` — 규칙 기반 원인 후보·조치 가이드로 채움
-- **(v3) 권한 차원의 무실행 보증 부재** → `k8s/base/celery/llm-serviceaccount.yaml`(Helm `serviceAccount.llmName`)
+- **(v3) 권한 차원의 무실행 보증 부재** → `deploy/k8s/base/celery/llm-serviceaccount.yaml`(Helm `serviceAccount.llmName`)
 - **(v3) JSON 파싱 실패로 인한 degraded 결과** → `INCIDENT_ANALYSIS_SCHEMA` 구조화 출력
 - **(v3) 로그 속 지시문(prompt injection)** → `prompts.wrap_untrusted` + `UNTRUSTED_DATA_RULE_*`
 
@@ -168,7 +168,7 @@ Ollama (k8s/base/ollama.yaml — CPU 전용, 모델 pre-baked 이미지)
   vLLM 을 띄우고 Settings → AI/LLM 에 `openai_compat` 프로필을 추가해 용도별 라우팅만 바꾸면 된다.
   (v1 의 `LLMCallerNode`·`_call` 교체 계획은 게이트웨이 도입으로 해소됐다.)
 
-**vLLM 배포 스케치** (실제 매니페스트는 opt-in 컴포넌트 `k8s/components/vllm-gpu/` — airgap overlay 에서 이미지/모델 경로 치환):
+**vLLM 배포 스케치** (실제 매니페스트는 opt-in 컴포넌트 `deploy/k8s/components/vllm-gpu/` — airgap overlay 에서 이미지/모델 경로 치환):
 
 ```yaml
 # Deployment 요점만 — 실제 매니페스트는 구현 시 작성
@@ -257,7 +257,7 @@ kubewatch → /events/kubewatch (severity=critical: OOMKilling, CrashLoopBackOff
 | 계층 | 장치 |
 |---|---|
 | API | 자동 분석이 사용하는 엔드포인트/서비스 함수는 전부 조회 계열 (`read_namespaced_pod_log`, `list_namespaced_event`, describe). 변경 계열 K8s 호출을 analyzer 경로에 두지 않는다 |
-| ServiceAccount | (v3 구현) `celery-worker-llm` 은 `k8s-monitor-llm-sa` — `get/list/watch` + `pods/log get` 만 가진 ClusterRole(`k8s/base/celery/llm-serviceaccount.yaml`, Helm `serviceAccount.llmName`). 등록 클러스터를 DB kubeconfig 로 조회할 때는 그 kubeconfig 권한이 쓰이므로, 분석 대상 클러스터용 kubeconfig 도 읽기 전용 계정으로 발급하는 것을 권장한다 |
+| ServiceAccount | (v3 구현) `celery-worker-llm` 은 `k8s-monitor-llm-sa` — `get/list/watch` + `pods/log get` 만 가진 ClusterRole(`deploy/k8s/base/celery/llm-serviceaccount.yaml`, Helm `serviceAccount.llmName`). 등록 클러스터를 DB kubeconfig 로 조회할 때는 그 kubeconfig 권한이 쓰이므로, 분석 대상 클러스터용 kubeconfig 도 읽기 전용 계정으로 발급하는 것을 권장한다 |
 | 프롬프트/출력 | analyzer JSON 스키마(`INCIDENT_ANALYSIS_SCHEMA`, 생성 단계에서 강제)에 "실행" 필드가 없음 — `suggested_actions` 는 사람이 읽는 텍스트. 출력에 포함된 명령은 UI 에서 복사만 가능(자동 실행 버튼 금지) |
 | 수집 데이터 경계 | (v3 구현) 로그·이벤트·describe·챗 컨텍스트를 `wrap_untrusted` 로 감싸고, 시스템 프롬프트가 경계 안 지시를 따르지 않게 한다. 데이터 속 경계 표지는 무력화한다 |
 | 마스킹 | 수집 컨텍스트에서 Secret/token 패턴 마스킹 후 LLM 전달 (`services/llm/masking.py`, 게이트웨이 진입점 일괄 적용) |
@@ -319,7 +319,7 @@ analyzer 프롬프트에 주입:
 
 | Phase | 내용 | 변경 파일(예상) |
 |---|---|---|
-| **0. 서빙 준비** | GLM-5.2 가중치/vLLM 이미지 Nexus 반입, GPU 노드 라벨링, `k8s/base/llm-vllm.yaml` + airgap overlay | k8s/, helm/ |
+| **0. 서빙 준비** | GLM-5.2 가중치/vLLM 이미지 Nexus 반입, GPU 노드 라벨링, `deploy/k8s/base/llm-vllm.yaml` + airgap overlay | k8s/, helm/ |
 | **1. Provider 추상화** | `LLM_PROVIDER=openai_compat` 지원 — `LLMCallerNode`·`local_llm_analyzer._call` 에 OpenAI-호환 chat 호출 추가 (httpx 직접, SDK 불필요), health check 확장 | config.py, agent_service.py, local_llm_analyzer.py |
 | **2. 자동 분석 파이프라인** | `run_auto_incident_analysis` Celery 태스크 + 디바운스, `incident_analysis` 모델(+`_safe_*` 마이그레이션, backup LOG_TABLES 등록), 알림 연동, UI 이력 탭 | celery_app.py, k8s_events.py, models/, analyze.py, IncidentAnalysisPage |
 | **3. RAG** | ops_notes 임베딩, work_guides 검색 API, `rag_service.py`, analyzer 프롬프트 주입 + related_runbooks 내부 링크 | embedding_service.py, rag_service.py(신규), ops_note.py, work_guide.py |

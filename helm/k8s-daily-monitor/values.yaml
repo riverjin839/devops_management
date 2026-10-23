@@ -318,7 +318,7 @@ ollama:
   nodeSelector: {}
   tolerations: []
   # 모델 영속화 — 기본은 이미지에 구운 모델만 사용(꺼짐). true 로 켜면 PVC 를 마운트해
-  # 재시작 후에도 추가로 pull 한 모델을 유지한다 (k8s/base/ollama.yaml 의 동일 주석 참고).
+  # 재시작 후에도 추가로 pull 한 모델을 유지한다 (deploy/k8s/base/ollama.yaml 의 동일 주석 참고).
   persistence:
     enabled: false
     size: 20Gi

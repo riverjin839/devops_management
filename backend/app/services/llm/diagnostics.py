@@ -127,7 +127,7 @@ async def diagnose_profile(
             "tcp", "포트 연결", "fail", f"{host}:{port} 연결 실패: {type(exc).__name__} {exc}",
             hint=("`kubectl get endpoints <svc> -n <ns>` 가 비어 있으면 Service selector 가 파드 라벨과 "
                   "다르거나 파드가 Ready 가 아니다. 파드가 Pending(Insufficient cpu/memory)이면 노드 자원이 "
-                  "없는 것이다 — 작은 모델(3b)로 requests 를 낮추거나, Ollama 를 빼고(k8s/components/no-ollama) "
+                  "없는 것이다 — 작은 모델(3b)로 requests 를 낮추거나, Ollama 를 빼고(deploy/k8s/components/no-ollama) "
                   "사내 LLM 프로필로 라우팅한다. 포트(11434)·NetworkPolicy·OLLAMA_HOST=0.0.0.0 도 확인한다."),
             t0=t0,
         )

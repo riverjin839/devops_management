@@ -1,4 +1,4 @@
-# 네트워크 옵저버빌리티 수집 스택 (`k8s/base/observability`)
+# 네트워크 옵저버빌리티 수집 스택 (`deploy/k8s/base/observability`)
 
 대규모(200+ 노드) 데이터레이크 환경의 **네트워크 계층 관측**을 위한 수집기 묶음. 장비(라우터/스위치)는
 클러스터 밖에 있고, 여기 배포되는 것은 **수집기(collector)** 다. 모든 지표는 단일 Prometheus 로 모인다.
@@ -14,7 +14,7 @@
 
 ## 배포
 ```bash
-kubectl apply -k k8s/base/observability/
+kubectl apply -k deploy/k8s/base/observability/
 
 # 시크릿(권장) — 평문 community/계정 대신
 kubectl -n network-observability create secret generic telegraf-snmp-secret --from-literal=community=<RO_COMMUNITY>
@@ -25,9 +25,9 @@ kubectl -n network-observability create secret generic gnmic-secret --from-liter
   데이터레이크의 기존 Kafka 로 `KAFKA_FQDN` 지정.
 
 ## Prometheus 연동
-- **이 레포의 plain Prometheus**: `k8s/base/monitoring/prometheus-configmap.yaml` 에 `telegraf-snmp`/`gnmic`
+- **이 레포의 plain Prometheus**: `deploy/k8s/base/monitoring/prometheus-configmap.yaml` 에 `telegraf-snmp`/`gnmic`
   스크랩 job 을 추가해 두었다(cross-namespace FQDN). 
-- **운영 kube-prometheus-stack(operator)**: `k8s/base/monitoring/network-quality-servicemonitor.yaml` 의
+- **운영 kube-prometheus-stack(operator)**: `deploy/k8s/base/monitoring/network-quality-servicemonitor.yaml` 의
   ServiceMonitor 가 `component: observability` 라벨을 셀렉트한다.
 
 ## PEP Observability 수집기 (`pep-collector-cronjob.yaml`)
@@ -39,7 +39,7 @@ kubectl -n network-observability create secret generic gnmic-secret --from-liter
 ```bash
 kubectl -n monitoring create secret generic pep-ingest --from-literal=token=<ALERT_INGEST_TOKEN>
 # 매니페스트의 PEP_URL / CLUSTER_NAME / PROM_URL / AM_URL 을 환경에 맞게 고친 뒤
-kubectl apply -f k8s/base/observability/pep-collector-cronjob.yaml
+kubectl apply -f deploy/k8s/base/observability/pep-collector-cronjob.yaml
 ```
 
 5분마다 `rules` / `targets` / `alerts` / `metrics` 스냅샷을

@@ -394,7 +394,7 @@ kind delete cluster --name test-a
 ## 7. (선택) PEP 를 Vagrant 클러스터 안에 직접 배포
 
 3단계는 PEP 를 Mac 의 docker compose 로 띄우고 클러스터를 "대상"으로 등록한다. 이 절은 반대로
-**PEP 자체를 클러스터 B 안에 파드로 배포**한다(`k8s/overlays/vagrant`, in-cluster ServiceAccount 로
+**PEP 자체를 클러스터 B 안에 파드로 배포**한다(`deploy/k8s/overlays/vagrant`, in-cluster ServiceAccount 로
 자기 자신 모니터링). 3단계(compose)와 포트가 겹치지 않아 동시에 둘 수 있다.
 
 ```bash

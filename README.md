@@ -71,7 +71,7 @@ docker-compose up -d           # postgres + redis + backend + frontend + celery(
 devops_management/
 ├── backend/        # FastAPI (app/{models,routers,services,...})
 ├── frontend/       # React + TS (src/{pages,components,hooks,services,stores})
-├── k8s/            # Kustomize base + overlays(dev/prod/airgap/kind) + superpod(딥체크 CronJob)
+├── deploy/k8s/     # Kustomize base + overlays(dev/prod/airgap/kind) + superpod(딥체크 CronJob)
 ├── helm/           # Helm chart
 ├── ansible/        # 플레이북
 ├── argocd/         # ArgoCD Application/Project

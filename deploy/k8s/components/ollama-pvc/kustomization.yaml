@@ -1,9 +1,9 @@
-# Opt-in component — 인클러스터 Ollama(k8s/base/ollama.yaml)에 모델 영속화 PVC 를
+# Opt-in component — 인클러스터 Ollama(deploy/k8s/base/ollama.yaml)에 모델 영속화 PVC 를
 # 추가한다. 기본(base)은 이미지에 구운 모델만 쓰고 볼륨을 마운트하지 않는다
 # (base/ollama.yaml 하단 주석 참고) — 추가로 pull 한 모델을 재시작 후에도 유지하려면
 # 이 컴포넌트를 오버레이에 추가한다:
 #
-#   # k8s/overlays/<env>/kustomization.yaml
+#   # deploy/k8s/overlays/<env>/kustomization.yaml
 #   components:
 #     - ../../components/ollama-pvc
 #

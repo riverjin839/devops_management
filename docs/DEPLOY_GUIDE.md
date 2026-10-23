@@ -4,7 +4,7 @@
 
 | 하고 싶은 것 | 위치 | 진입점 |
 |---|---|---|
-| 운영 매니페스트 (Kustomize base/overlays/components) | `k8s/` | `kubectl apply -k k8s/overlays/<env>` |
+| 운영 매니페스트 (Kustomize base/overlays/components) | `deploy/k8s/` | `kubectl apply -k deploy/k8s/overlays/<env>` |
 | Helm 차트 / ArgoCD 앱 | `helm/` · `argocd/` | `helm install ... -f values-<env>.yaml` |
 | 이미지 빌드 정의 (pgvector, ollama) | `docker/` | CI/`scripts/deploy/` 가 사용 |
 | 배포 스크립트 (kind, 폐쇄망, 재배포, 모니터링 스택) | `scripts/deploy/` | `kind-setup.sh` · `deploy-airgap.sh` · `redeploy.sh` · `setup-monitoring.sh` |
@@ -12,7 +12,7 @@
 | 릴리스·버전 도구 | `scripts/release/` | `bump_version.py` · `version-tag.sh` |
 | **로컬 테스트 클러스터 (Vagrant/Windows)** | **`labs/`** | `labs/vagrant/up.sh` · `labs/vagrant/deploy-pep.sh` — `labs/README.md` |
 
-원칙: **운영에 쓰는 것은 `k8s/ helm/ argocd/ docker/`, 사람이 PC 에서 돌려 보는 것은 `labs/` + `scripts/lab/`.**
+원칙: **운영에 쓰는 것은 `deploy/k8s/ helm/ argocd/ docker/`, 사람이 PC 에서 돌려 보는 것은 `labs/` + `scripts/lab/`.**
 
 
 > 로컬 개발 → 폐쇄망 검증 → CI/CD 운영 배포까지 3단계 가이드
@@ -115,7 +115,7 @@ bash scripts/deploy/kind-setup.sh up   # kind 노드 이미지 v1.34.0, 기본 C
 | 1 | 로컬 Docker Registry 생성 (`localhost:5001`) |
 | 2 | kind 3노드 클러스터 생성 (control-plane 1 + worker 2) |
 | 3 | Backend/Frontend 이미지 빌드 & Push |
-| 4 | Kustomize로 K8s 배포 (`k8s/overlays/kind`, namespace `k8s-monitor`) |
+| 4 | Kustomize로 K8s 배포 (`deploy/k8s/overlays/kind`, namespace `k8s-monitor`) |
 | 5 | Pod 상태 대기 및 접속 URL 안내 |
 
 ### 접속 확인
@@ -489,7 +489,7 @@ Cilium 의 Gateway API 구현(Envoy)으로 PEP 를 노출할 수 있다. 저장�
 | 배포 방식 | 켜는 방법 | 파일 |
 |---|---|---|
 | Helm | `gateway.enabled=true` (+ 검증 후 `ingress.enabled=false`) | `helm/k8s-daily-monitor/templates/gateway.yaml` |
-| Kustomize | overlay 에 `components: [../../components/gateway-api]` | `k8s/components/gateway-api/` |
+| Kustomize | overlay 에 `components: [../../components/gateway-api]` | `deploy/k8s/components/gateway-api/` |
 
 ### 라우팅 구조
 
@@ -557,7 +557,7 @@ helm upgrade k8s-monitor ./helm/k8s-daily-monitor \
 
 ### Kustomize 로 전환
 
-overlay(예: `k8s/overlays/prod/kustomization.yaml`)에 component 를 추가하고 호스트를 patch 한다.
+overlay(예: `deploy/k8s/overlays/prod/kustomization.yaml`)에 component 를 추가하고 호스트를 patch 한다.
 component 가 base Ingress 를 지우므로, overlay 의 기존 **Ingress host/TLS patch 는 함께 지운다**(대상이 없어 빌드가 실패한다).
 
 ```yaml
@@ -670,7 +670,7 @@ k8s_daily_monitor/
 ├── backend/                        # FastAPI Backend
 ├── frontend/                       # React Frontend
 │
-├── k8s/                            # Kustomize 매니페스트 (Phase 1, 2)
+├── deploy/k8s/                     # Kustomize 매니페스트 (Phase 1, 2)
 │   ├── base/                       # 기본 리소스
 │   └── overlays/
 │       ├── dev/                    # 개발 환경

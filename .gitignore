@@ -57,7 +57,7 @@ kubeconfig*
 !kubeconfig.example
 !backend/app/services/kubeconfig.py
 # Super pod in-cluster bundle — secret.yaml.tmpl 을 채워서 만든 실제 시크릿은 커밋 금지.
-k8s/superpod/secret.yaml
+deploy/k8s/superpod/secret.yaml
 
 # Ansible
 *.retry
