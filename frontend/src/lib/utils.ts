@@ -1,6 +1,5 @@
 import { type ClassValue, clsx } from 'clsx';
 import { twMerge } from 'tailwind-merge';
-import { Status } from '@/types';
 // R-6 i18n — formatApiError 기본 문구용. hook 이 아니라 인스턴스의 t 를 직접 쓴다.
 // 순환 없음: i18n/index → resources(ko/en) 만 불러오고 lib/utils 를 되부르지 않는다. 초기화 시점도 안전 —
 // main.tsx 는 boot 동기화 뒤 `import('./i18n')` 을 먼저 끝내고 App(→ 이 모듈)을 불러온다.
@@ -102,32 +101,6 @@ export function generateUUID(): string {
     const r = (Math.random() * 16) | 0;
     return (c === 'x' ? r : (r & 0x3) | 0x8).toString(16);
   });
-}
-
-export function getStatusColor(status: Status): string {
-  switch (status) {
-    case 'healthy':
-      return 'text-muted-foreground';
-    case 'warning':
-      return 'text-status-warning';
-    case 'critical':
-      return 'text-status-critical';
-    default:
-      return 'text-muted-foreground';
-  }
-}
-
-export function getStatusBgColor(status: Status): string {
-  switch (status) {
-    case 'healthy':
-      return 'bg-secondary';
-    case 'warning':
-      return 'bg-status-warning/10';
-    case 'critical':
-      return 'bg-status-critical/10';
-    default:
-      return 'bg-muted';
-  }
 }
 
 // Backend는 datetime.utcnow() (UTC)로 저장하지만 timezone suffix 없이 반환

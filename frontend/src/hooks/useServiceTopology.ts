@@ -72,16 +72,6 @@ export function useCreateTopologyLink(clusterId: string) {
   });
 }
 
-export function useUpdateTopologyLink() {
-  const invalidate = useInvalidateGraph();
-  return useMutation({
-    mutationFn: ({ linkId, data }: {
-      linkId: string; data: { linkType?: string; label?: string | null; note?: string | null };
-    }) => serviceTopologyApi.updateLink(linkId, data),
-    onSuccess: invalidate,
-  });
-}
-
 export function useDeleteTopologyLink() {
   const invalidate = useInvalidateGraph();
   return useMutation({

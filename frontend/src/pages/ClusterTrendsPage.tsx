@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import {
   TrendingUp, ArrowUp, ArrowDown, ChevronsUpDown, AlertTriangle, RefreshCw, Info,
 } from 'lucide-react';
@@ -14,6 +14,7 @@ import { PageHeader } from '@/components/common/PageHeader';
 import { MacCard } from '@/components/ui/MacCard';
 import { NodeMultiSelect } from '@/components/k8s/NodeMultiSelect';
 import { useClusters } from '@/hooks/useCluster';
+import { useClusterRouteParam } from '@/hooks/useClusterRouteParam';
 import { useClusterTrends } from '@/hooks/useClusterTrends';
 import { useUrlParams, pickParam } from '@/hooks/useUrlParams';
 import { CHART_TOOLTIP_PROPS, chartAxisTick } from '@/lib/chartTokens';
@@ -115,11 +116,12 @@ function parseMetrics(raw: string): Set<TrendMetricKey> {
 }
 
 export function ClusterTrendsPage() {
-  const { clusterId = '' } = useParams<{ clusterId: string }>();
   const navigate = useNavigate();
-  const location = useLocation();
   const clustersQ = useClusters();
   const { data: clusters = [] } = clustersQ;
+  // 클러스터 선택 — 공용 훅(D-240 2단계 이관). 허브 안에선 허브 값(레일 전환 시 시간창·지표·열 수 쿼리는 허브가 보존,
+  // D-190 ⑨), 아일랜드 패널에선 로컬 state. 단독 경로(`/cluster-trends`)는 허브로 redirect 된다.
+  const { clusterId, selectCluster } = useClusterRouteParam('/cluster-trends', clusters);
 
   // D-190 ⑨: 시간창·지표·열 수는 URL 쿼리(새로고침·링크 공유 유지).
   const [url, setUrl] = useUrlParams({ range: '1h', metrics: 'cpu,memory', cols: '5' });
@@ -357,7 +359,7 @@ export function ClusterTrendsPage() {
             clusters={clusters}
             selectedId={clusterId || null}
             // 시간창·지표·열 수(URL 쿼리)는 유지하고 클러스터만 바꾼다.
-            onSelect={(id) => { if (id) navigate(`/cluster-trends/${id}${location.search}`); }}
+            onSelect={(id) => { if (id) selectCluster(id); }}
             iconOnly
           />
         </div>

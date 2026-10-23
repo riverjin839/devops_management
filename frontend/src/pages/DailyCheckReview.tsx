@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react';
 import { PageHeader } from '@/components/common/PageHeader';
-import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import type { AxiosError } from 'axios';
 import { Play, Settings, RefreshCw, ClipboardList } from 'lucide-react';
 import { MacCard } from '@/components/ui/MacCard';
@@ -16,6 +16,7 @@ import {
   ResourceTrendChecklist,
 } from '@/components/daily-check';
 import { useClusters } from '@/hooks/useCluster';
+import { useClusterRouteParam } from '@/hooks/useClusterRouteParam';
 import {
   useDeepCheckReview,
   useDailyCheckTrend,
@@ -98,18 +99,13 @@ function summarizeDailyRun(res: DailyCheckRunDetail): RunLogEntry[] {
 }
 
 export function DailyCheckReviewPage() {
-  const { clusterId = '' } = useParams<{ clusterId: string }>();
-  const navigate = useNavigate();
   const [params, setParams] = useSearchParams();
   const { data: clusters = [] } = useClusters();
 
-  // /daily-check/review (clusterId 미지정) 진입 시 첫 번째 클러스터로 자동 라우팅.
-  // 메뉴에서 들어오는 사용자가 비어 있는 화면을 보지 않도록.
-  useEffect(() => {
-    if (!clusterId && clusters.length > 0) {
-      navigate(`/daily-check/review/${clusters[0].id}`, { replace: true });
-    }
-  }, [clusterId, clusters, navigate]);
+  // 클러스터 선택 — 공용 훅(D-240 2단계 이관). 허브 안에선 허브 값, 아일랜드 패널에선 로컬 state,
+  // 그 외엔 `/daily-check/review/:clusterId`(미지정이면 첫 클러스터로 replace). 예전엔 raw useParams + navigate 라
+  // 아일랜드 패널에서 앱 전체가 패널 밖 라우트로 끌려 나갔다.
+  const { clusterId, selectCluster } = useClusterRouteParam('/daily-check/review', clusters);
 
   // 최신 daily_check_log_id 자동 조회 — TanStack Query 훅으로 분리해 React 안티패턴 제거
   const { data: latestLog } = useLatestDailyCheckLog(clusterId);
@@ -242,11 +238,7 @@ export function DailyCheckReviewPage() {
           <ClusterSidebar
             clusters={clusters}
             selectedId={clusterId || null}
-            onSelect={(id) => {
-              if (id) {
-                navigate(`/daily-check/review/${id}`);
-              }
-            }}
+            onSelect={selectCluster}
             iconOnly
           />
         </div>

@@ -70,18 +70,3 @@ export interface DailyCheckSummaryItem {
   } | null;
 }
 
-export function useDailyCheckSummary() {
-  return useQuery<DailyCheckSummaryItem[]>({
-    queryKey: ['dailyCheckSummary'],
-    queryFn: async () => {
-      try {
-        const { data } = await dailyCheckApi.getSummary();
-        return data;
-      } catch {
-        return [];
-      }
-    },
-    staleTime: 5 * 60 * 1000,
-    refetchInterval: 5 * 60 * 1000,
-  });
-}

@@ -414,26 +414,6 @@ export function LabelTable({ title, pairs }: { title: string; pairs: LabelPair[]
   );
 }
 
-/** 로딩/빈/오프라인 상태를 테이블 자리에 그대로 채우는 공통 행. */
-export function TableMessage({ colSpan, children, tone = 'muted' }: {
-  colSpan: number;
-  children: React.ReactNode;
-  tone?: 'muted' | 'warning';
-}) {
-  return (
-    <tr>
-      <td colSpan={colSpan} className="py-12 text-center text-sm">
-        <span className={tone === 'warning'
-          ? 'text-status-warning inline-flex items-center gap-2'
-          : 'text-muted-foreground inline-flex items-center gap-2'}>
-          {tone === 'warning' ? <AlertTriangle className="w-4 h-4" aria-hidden /> : null}
-          {children}
-        </span>
-      </td>
-    </tr>
-  );
-}
-
 export const TH = 'text-left py-2 px-3 font-medium text-xs text-muted-foreground whitespace-nowrap';
 export const TD = 'py-2 px-3 align-middle';
 export const ROW = 'border-t border-border hover:bg-muted/20 transition-colors';

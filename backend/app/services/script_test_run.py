@@ -2,7 +2,7 @@
 
 kind 별 분기:
   - shell            → SSH 로 원격 실행 (``ssh_runner.run_bulk`` 재사용)
-  - ansible_playbook → ansible-runner 재사용 (``playbook_executor.run_playbook``)
+  - ansible_playbook → ansible-playbook 실행 재사용 (``playbook_executor.run_playbook``)
   - python           → 아직 미지원. 대상 클러스터의 일회용 K8s Job 실행기는 Phase 2
                         구현 예정(설계 문서 §4.4) — 지금은 명확한 사유와 함께 거부한다.
 

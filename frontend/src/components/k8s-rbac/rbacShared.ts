@@ -25,11 +25,6 @@ export function groupLabel(group: string): string {
   return group === '' ? CORE_GROUP_LABEL : group;
 }
 
-/** 규칙 한 줄에 쓰기 권한이 있는지 — 프리셋/롤의 위험도 표시에 쓴다. */
-export function ruleHasWrite(rule: RbacPolicyRule): boolean {
-  return rule.verbs.some(isWriteVerb);
-}
-
 export function emptyRule(): RbacPolicyRule {
   return { apiGroups: [''], resources: [], verbs: [], resourceNames: [], nonResourceUrls: [] };
 }

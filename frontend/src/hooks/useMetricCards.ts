@@ -34,18 +34,6 @@ export function useMetricResults() {
   });
 }
 
-export function useMetricCardResult(cardId: string) {
-  return useQuery({
-    queryKey: metricCardKeys.result(cardId),
-    queryFn: async () => {
-      const { data } = await promqlApi.queryCard(cardId);
-      return data;
-    },
-    enabled: !!cardId,
-    refetchInterval: 30000,
-  });
-}
-
 /** KPI 카드 하단 Sparkline 용 최근 1시간 추이. Prometheus 미연결이어도 500 없이
  *  status: 'offline'/'error' 로 응답(fail-safe) — 카드 쪽에서 조용히 숨기면 됨. */
 export function useMetricSparkline(cardId: string, enabled = true) {
@@ -58,17 +46,6 @@ export function useMetricSparkline(cardId: string, enabled = true) {
     enabled: !!cardId && enabled,
     refetchInterval: 60000,
     staleTime: 30000,
-  });
-}
-
-export function usePrometheusHealth() {
-  return useQuery({
-    queryKey: metricCardKeys.health,
-    queryFn: async () => {
-      const { data } = await promqlApi.health();
-      return data;
-    },
-    refetchInterval: 60000,
   });
 }
 

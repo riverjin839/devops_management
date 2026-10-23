@@ -30,7 +30,7 @@ PEP 문서 모음. 루트의 [README](../README.md) · [CHANGELOG](../CHANGELOG.
 
 ## 릴리스 / 프로세스
 - [branch-tag-strategy.md](branch-tag-strategy.md) — 브랜치·태그·릴리스(SemVer, trunk)
-- [reports/ai-dev-report.html](reports/ai-dev-report.html) — **AI 개발 리포트**(HTML, 매월 자동 갱신 — `scripts/report/`, `.github/workflows/ai-dev-report.yml`). 2026-10 PPT 판은 [reports/2026-10_PEP_AI개발_리포트.pptx](reports/2026-10_PEP_AI개발_리포트.pptx)
+- [reports/ai-dev-report.html](reports/ai-dev-report.html) — **AI 개발 리포트**(HTML, 매월 자동 갱신 — `scripts/report/`, `.github/workflows/ai-dev-report.yml`). 2026-10 PPT 판은 git 에 두지 않는다 — `node docs/reports/build_ai_dev_report.js` 로 생성(pptxgenjs)
 - [reports/ai-dev-report-script.md](reports/ai-dev-report-script.md) — AI 개발 리포트 **팀 발표 구두 스크립트**(발표 모드 43장 순서, 슬라이드별 멘트·시간 배분·예상 Q&A)
 
 ## 아키텍처 / 로드맵
@@ -40,6 +40,9 @@ PEP 문서 모음. 루트의 [README](../README.md) · [CHANGELOG](../CHANGELOG.
 - [03-analysis/ai-look-audit-2026-10.md](03-analysis/ai-look-audit-2026-10.md) — **AI 개발티 조합 수준 감사(2026-10)**: 페이지 헤더 템플릿·KPI 타일 복붙·정상 과잉 채색·무지개 팔레트·카드 남용·밀도·빈 상태·이모지·용어 전수 증거(file:line), 화면별 매트릭스, D-117~D-134 백로그, DESIGN_SYSTEM §12.12 조합 규칙 근거, 재집계 명령·재검증 체크리스트
 - [03-analysis/backend-language-migration-review.md](03-analysis/backend-language-migration-review.md) — **백엔드 언어 변경(Python→TypeScript) 검토**: 무응답 원인(스레드풀 고갈)·타입 게이트 부재 실측, 권고 = 변경하지 않음
 - [03-analysis/personalization-review.md](03-analysis/personalization-review.md) — **개인화 설정 상용화 검토**: 배포 후 사이드바 설치 목록 초기화 버그 원인(전역 sentinel + 운영 DB pytest)·수정, 남은 P1/P2 과제
+- [03-analysis/k8s-allocation-audit-2026-07.md](03-analysis/k8s-allocation-audit-2026-07.md) — K8S 자원 관리 화면 감사(2026-07)
+- [03-analysis/knowledge-services-coherence.analysis.md](03-analysis/knowledge-services-coherence.analysis.md) — 지식 서비스(가이드·노트·온톨로지) 일관성 분석
+- [03-analysis/work-status-audit.md](03-analysis/work-status-audit.md) — 업무 현황 화면 감사
 - [architecture.drawio](architecture.drawio) — 아키텍처 다이어그램 소스
 - [observability-agentic-architecture.drawio](observability-agentic-architecture.drawio) — 관측/에이전틱 아키텍처 다이어그램 소스
 
@@ -47,7 +50,7 @@ PEP 문서 모음. 루트의 [README](../README.md) · [CHANGELOG](../CHANGELOG.
 - `01-plan/`, `02-design/`, `03-analysis/` — 기능별 계획/설계/분석
   - [02-design/k8s-efficiency-automation.md](02-design/k8s-efficiency-automation.md) — K8S 자원 효율화 자동화(request 축소 추천·적용/롤백·NS 정책·Quota 탄력·CR 어댑터) 설계와 안전장치
 - `superpowers/` — 기획 스펙/플랜
-- `archive/` — 완료된 기능의 분석/설계/리포트 보관
+- `archive/` — 완료된 기능의 분석/설계/리포트 보관 — 색인: [archive/2026-05/_INDEX.md](archive/2026-05/_INDEX.md)
 
 > 참고: AI 어시스턴트 컨텍스트는 루트 [CLAUDE.md](../CLAUDE.md), 재사용 작업 절차는
 > [`.claude/skills/`](../.claude/skills/) 에 있다.

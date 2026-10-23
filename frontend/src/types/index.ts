@@ -126,20 +126,6 @@ export interface WorkItemCustomField {
   createdAt: string;
   updatedAt: string;
 }
-export interface WorkItemCustomFieldCreate {
-  key: string;
-  label: string;
-  dataType?: WorkItemCustomFieldType;
-  options?: string[];
-  description?: string;
-  sortOrder?: number;
-}
-export type WorkItemCustomFieldUpdate = Partial<Omit<WorkItemCustomFieldCreate, 'key'>>;
-
-export interface ClusterCustomValuesUpdate {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  values: Record<string, any>;
-}
 
 // 값 해제(빈 입력)를 서버에 반영하려면 `undefined` 가 아니라 `null` 을 보내야 한다 —
 // `undefined` 키는 JSON 직렬화에서 사라지고, 백엔드가 `model_dump(exclude_unset=True)`
@@ -888,36 +874,6 @@ export interface JiraImportItemPreview {
   changes?: JiraFieldChange[];
 }
 
-// ── PEP → Jira 생성/삭제 ──────────────────────────────────────────────────────
-export interface JiraCreateRequest {
-  workItemId?: string;
-  projectKey?: string;
-  summary?: string;
-  description?: string;
-  issueType?: string;
-  priority?: string;
-  labels?: string[];
-  components?: string[];
-  /** issueType 이 'Epic' 일 때만 쓰인다 — "Epic Name" 커스텀 필드 값. 미지정 시 summary 로 채운다. */
-  epicName?: string;
-  /** 담당자로 지정할 PEP 사용자명 — 미지정 시 로그인 사용자 자신. */
-  assigneeUsername?: string;
-}
-
-export interface JiraCreateResult {
-  status: 'ok' | 'error' | 'offline';
-  detail: string;
-  jiraKey?: string | null;
-  jiraUrl?: string | null;
-  linkedWorkItemId?: string | null;
-}
-
-export interface JiraDeleteResult {
-  status: 'ok' | 'error' | 'offline';
-  detail: string;
-  unlinkedWorkItemId?: string | null;
-}
-
 // ── 연결 복구 (해제 / 갈아끼우기 / 고아 점검) ──────────────────────────────────
 // Jira 이슈를 직접 지웠거나 잘못된 프로젝트에 만들었을 때, PEP 에 남은 죽은 링크를
 // 화면에서 정리하기 위한 타입들. Jira 쪽은 건드리지 않는다.
@@ -1021,12 +977,6 @@ export interface WeeklyReport {
 export interface WeeklyReportRequest {
   weekOf?: string;
   projectFilter?: string;
-}
-
-export interface WeeklyPublishRequest extends WeeklyReportRequest {
-  spaceKey?: string;
-  parentPageId?: string;
-  title?: string;
 }
 
 export interface WeeklyPublishResult {
@@ -1435,10 +1385,6 @@ export interface Workflow {
   edges: WorkflowEdge[];
   createdAt: string;
   updatedAt: string;
-}
-
-export interface WorkflowListResponse {
-  data: Workflow[];
 }
 
 export interface WorkflowCreate {
@@ -2038,21 +1984,6 @@ export interface IsilonK8sNfsPv {
   phase?: string | null;
 }
 
-export interface IsilonNfsOverview {
-  configured: boolean;
-  message?: string;
-  server?: { id: string; name: string; host: string };
-  collectedAt?: string;
-  fromCache?: boolean;
-  connectionOk?: boolean;
-  connectionError?: string | null;
-  results?: IsilonCommandResult[];
-  errors?: string[];
-  k8sNfsPvs?: IsilonK8sNfsPv[];
-  /** K8s NFS PV 조회 오류(D-147, 백엔드 `k8s_nfs_pvs_error`). 성공이면 null. */
-  k8sNfsPvsError?: string | null;
-}
-
 /** mc 클라이언트 패턴 — 등록된 isi 명령 중 선택한 것만 온디맨드 실행한 결과(캐시 미사용). */
 export interface IsilonRunResponse {
   server?: { id: string; name: string; host: string };
@@ -2165,7 +2096,6 @@ export interface InfraSyncResult {
   verifiedTruncated?: boolean;
 }
 
-
 export type TopologyTargetType = 'service' | 'pod';
 
 export interface TopologyTraceRequest {
@@ -2189,23 +2119,6 @@ export interface TopologyTraceResponse {
   namespace: string;
   targetType: TopologyTargetType;
   targetName: string;
-  hops: TopologyTraceHop[];
-}
-
-export type PacketProtocol = 'http' | 'https' | 'grpc' | 'tcp';
-
-export interface PacketFlowRequest {
-  clusterId: string;
-  host: string;
-  path?: string;
-  protocol?: PacketProtocol;
-}
-
-export interface PacketFlowResponse {
-  clusterId: string;
-  host: string;
-  path: string;
-  protocol: string;
   hops: TopologyTraceHop[];
 }
 
@@ -2450,35 +2363,6 @@ export interface KubeletConfigCollectResponse {
   changed: number;
   hosts: KubeletConfigPerHost[];
   componentKey: string;
-  errors: string[];
-}
-
-export interface EtcdctlConfigCollectRequest {
-  hosts: string[];
-  port?: number;
-  username?: string;
-  password?: string;
-  privateKey?: string;
-  useSudo?: boolean;
-  connectTimeout?: number;
-  envFiles?: string[];
-  queryEndpointStatus?: boolean;
-  etcdctlPath?: string;
-  sourceEnvFile?: string | null;
-}
-
-export interface EtcdctlConfigPerHost {
-  host: string;
-  envFile?: string | null;
-  hasEndpointStatus: boolean;
-  stored?: boolean;
-  error?: string | null;
-}
-
-export interface EtcdctlConfigCollectResponse {
-  clusterId: string;
-  changed: number;
-  hosts: EtcdctlConfigPerHost[];
   errors: string[];
 }
 
@@ -3719,18 +3603,6 @@ export interface NotificationLogEntry {
 
 export type UserRole = 'admin' | 'operator' | 'viewer';
 
-export interface AuthUserDetail {
-  id: string;
-  username: string;
-  role: UserRole;
-  displayName?: string | null;
-  isActive: boolean;
-  mustChangePassword: boolean;
-  createdAt: string;
-  /** 로그인 방식 — /auth/login·/auth/me·/auth/refresh 만 채운다(목록 응답은 null). */
-  authSource?: 'local' | 'ldap' | 'external' | null;
-}
-
 /** GET /system-diagnostics — 섹션별 상태. 수집 실패 섹션은 status='offline' + error 만 있을 수 있다. */
 export type DiagStatus = 'ok' | 'warning' | 'critical' | 'offline';
 
@@ -3871,7 +3743,6 @@ export interface ReleaseNotesResponse {
 export type LakeServiceType =
   | 'airflow' | 'spark' | 'iceberg' | 'trino'
   | 'starrocks' | 'jupyterlab' | 'superset' | 'polaris';
-export type LakeServiceCategory = 'catalog' | 'runtime' | 'analytics';
 export type LakeStatus = 'healthy' | 'warning' | 'critical' | 'pending';
 
 export interface LakeServiceTypeInfo {
@@ -4009,15 +3880,6 @@ export interface LakeServiceInput {
   meta?: Record<string, unknown> | null;
 }
 
-export interface LakeServiceUpdate {
-  name?: string;
-  endpointUrl?: string;
-  namespace?: string | null;
-  enabled?: boolean;
-  tlsVerify?: boolean;
-  meta?: Record<string, unknown> | null;
-}
-
 export interface LakeServiceListResponse {
   data: LakeService[];
   total: number;
@@ -4062,15 +3924,6 @@ export interface ProbeResultOut {
   details: Record<string, any>;
   manualFallback?: ProbeManualFallback | null;
   recommendation?: string | null;
-}
-
-export interface BottleneckRunInput {
-  clusterId: string;
-  namespace: string;
-  sourcePod: string;
-  destPod: string;
-  destService?: string | null;
-  probes?: BottleneckProbeKey[] | null;
 }
 
 export interface BottleneckRun {
@@ -4270,14 +4123,6 @@ export interface HelmRelease {
 export interface HelmReleaseListResponse {
   count: number;
   items: HelmRelease[];
-}
-export interface HelmHistoryItem {
-  revision: string | number;
-  status: string;
-  chart: string;
-  appVersion?: string;
-  updated?: string;
-  description?: string;
 }
 
 // 구조화 상세(요약 탭) — 백엔드가 생성
@@ -5283,7 +5128,6 @@ export interface IslandUpdatePayload extends Partial<IslandCreatePayload> {
   expectedUpdatedAt?: string | null;
 }
 
-
 // ── 업무 등록 시 Jira + Confluence 동시 생성 (프로비저닝) ────────────────────────
 export interface JiraIssueLookupItem {
   key: string;
@@ -5674,15 +5518,6 @@ export interface AlertSettings {
 
 export type LlmProviderType = 'ollama' | 'openai_compat';
 
-/** camelCase purpose 키 (백엔드 snake_case 와 인터셉터로 상호 변환됨) */
-export type LlmPurpose =
-  | 'chat'
-  | 'incidentAnalysis'
-  | 'reviewSummary'
-  | 'archDoc'
-  | 'trends'
-  | 'embedding';
-
 export interface LlmProfile {
   name: string;
   provider: LlmProviderType;
@@ -5960,38 +5795,6 @@ export interface RbacCreatedObject {
   kind: string;
   name: string;
   namespace: string | null;
-}
-
-/** SSE `/provision/stream` 이 흘려보내는 이벤트 — 본문은 snake_case 원문이다. */
-export type RbacProvisionEvent =
-  | { type: 'log'; level: 'info' | 'warn' | 'error'; ts: string; message: string }
-  | { type: 'step'; name: string; status: 'running' | 'done' }
-  | { type: 'error'; message: string }
-  | { type: 'done' }
-  | ({ type: 'result' } & RbacProvisionResultRaw);
-
-/** SSE result 이벤트 본문 (snake_case — axios 인터셉터를 타지 않는다). */
-export interface RbacProvisionResultRaw {
-  namespace: string;
-  service_account: string;
-  namespaces: string[];
-  binding_mode: RbacBindingMode;
-  role_name: string;
-  binding_name: string;
-  created: { kind: string; name: string; namespace: string | null }[];
-  access_review: {
-    label: string;
-    namespace: string | null;
-    verb: string | null;
-    resource: string | null;
-    subresource: string | null;
-    allowed: boolean;
-    reason: string | null;
-  }[];
-  kubeconfig: string | null;
-  token_expires_at: string | null;
-  dry_run: boolean;
-  elapsed_seconds: number;
 }
 
 export interface RbacProvisionRequest {

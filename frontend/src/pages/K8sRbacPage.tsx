@@ -22,6 +22,7 @@ import {
 import { useClusters } from '@/hooks/useCluster';
 import { useLogPref } from '@/hooks/useLogPref';
 import { useUrlParams, pickParam } from '@/hooks/useUrlParams';
+import { useK8sHub } from '@/lib/k8sHub';
 import {
   useProvisionStream,
   useRbacBindings,
@@ -60,7 +61,9 @@ export function K8sRbacPage() {
   const { data: clusters = [] } = useClusters();
   // 클러스터 선택·탭은 URL 쿼리에 둔다(D-029) — 새로고침·링크 공유에도 같은 화면이 열린다.
   const [urlParams, setUrlParams] = useUrlParams({ cluster: '', tab: 'wizard' });
-  const selectedClusterId = urlParams.cluster || null;
+  // K8s 클러스터 허브(D-240) 안에서는 허브가 고른 클러스터가 우선이다(`?cluster=` 는 단독·아일랜드용).
+  const hub = useK8sHub();
+  const selectedClusterId = hub ? hub.clusterId : (urlParams.cluster || null);
   const setSelectedClusterId = (id: string | null) => setUrlParams({ cluster: id ?? '' });
   const tab = pickParam<TabKey>(urlParams.tab, TABS.map((t) => t.key), 'wizard');
   const setTab = (k: TabKey) => setUrlParams({ tab: k });

@@ -75,10 +75,6 @@ function saveBase(userId: string, base: Base): void {
   } catch { /* quota — 다음 동기화 때 다시 맞춘다 */ }
 }
 
-export function dropSyncBase(userId: string): void {
-  try { localStorage.removeItem(BASE_PREFIX + userId); } catch { /* ignore */ }
-}
-
 function localValues(skip: string[] = []): Values {
   const out: Values = {};
   for (const [k, v] of Object.entries(snapshotPersonal())) {

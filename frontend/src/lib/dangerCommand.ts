@@ -184,9 +184,6 @@ const SHELL_READ_ONLY: Record<string, (args: string[]) => boolean> = {
   sha256sum: () => false,
 };
 
-/** 화면 판정 요약용 셸 조회 명령 목록. */
-export const SHELL_READ_ONLY_COMMANDS: readonly string[] = Object.keys(SHELL_READ_ONLY);
-
 // ── 공통 토크나이저 ─────────────────────────────────────────────────────────────────────────
 
 interface Segment { words: string[] }
@@ -364,7 +361,3 @@ export function judgeCommand(cmd: string, screen: CommandScreen): CommandVerdict
   return judgeShell(c);
 }
 
-/** allowlist 의 조회 명령인가 — false 면 danger `ConfirmDialog` 를 거친다. */
-export function isReadOnly(cmd: string, screen: CommandScreen): boolean {
-  return judgeCommand(cmd, screen).readOnly;
-}

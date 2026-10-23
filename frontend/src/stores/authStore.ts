@@ -279,10 +279,6 @@ export function getAuthToken(): string | null {
   return useAuthStore.getState().token;
 }
 
-export function clearAuthSession() {
-  useAuthStore.getState().clear();
-}
-
 /** axios 401 인터셉터용 — 현재 화면 경로를 복귀 지점으로 남기며 세션을 끊는다(D-079). */
 export function expireAuthSession() {
   const here = `${window.location.pathname}${window.location.search}`;

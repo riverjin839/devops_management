@@ -1,6 +1,7 @@
 import { useMemo, useRef, useState } from 'react';
 import { Tags, Search, LayoutList, Tag, AlertTriangle, FileSpreadsheet, RefreshCw, Pause, Play } from 'lucide-react';
 import { useClusters } from '@/hooks/useCluster';
+import { useK8sHub } from '@/lib/k8sHub';
 import { useClustersNodes, usePatchNodeLabels, NodeRow } from '@/hooks/useNodeLabels';
 import { NodeLabelEditorModal, NodeLabelsTable, type NodeEditAccess, type NodeLabelPatch } from '@/components/node-labels';
 import { matchesSearch, buildLabelEntries, filterLabelEntries } from '@/components/node-labels/nodeLabelsShared';
@@ -31,8 +32,11 @@ export function NodeLabelsPage() {
   const [autoRefresh, setAutoRefresh] = useState(true);
 
   // 실제 선택 — 미선택(undefined)이면 첫 클러스터로 폴백(기본 단일 뷰). null 이면 전체.
-  const effectiveSelection: string | null =
-    selectedClusterId === undefined ? (clusters[0]?.id ?? null) : selectedClusterId;
+  // K8s 클러스터 허브(D-240) 안에서는 허브가 고른 클러스터 하나만 — "전체 클러스터" 는 단독 화면(`/node-labels`)에서.
+  const hub = useK8sHub();
+  const effectiveSelection: string | null = hub
+    ? hub.clusterId
+    : selectedClusterId === undefined ? (clusters[0]?.id ?? null) : selectedClusterId;
 
   // 취합 대상 클러스터 — 전체(null)면 모든 클러스터, 아니면 선택된 하나. (useQueries 안정화를 위해 memo)
   const targetClusters = useMemo(

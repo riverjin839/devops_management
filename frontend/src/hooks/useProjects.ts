@@ -14,14 +14,6 @@ export function useProjects(status?: string) {
   });
 }
 
-export function useProject(id: string) {
-  return useQuery({
-    queryKey: projectKeys.detail(id),
-    queryFn: () => projectsApi.get(id).then((r) => r.data),
-    enabled: !!id,
-  });
-}
-
 export function useCreateProject() {
   const qc = useQueryClient();
   return useMutation({

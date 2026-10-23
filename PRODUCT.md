@@ -53,7 +53,7 @@ web
 - 언어: UI 텍스트는 한국어 중심. 한글 가독성이 좋은 글꼴이 필요하다(후보: Pretendard 번들링 — 현재
   `DESIGN_SYSTEM.md` D-131 은 시스템 폰트 스택을 채택하고 있어, 번들 글꼴 도입 여부는 미결정).
 - Secret 값은 화면에 마스킹되어 노출되며, 주요 조작은 감사 로그(`audit_logs`)에 기록된다.
-- 폐쇄망(air-gap) 배포를 반드시 지원해야 하며, Ollama·ansible-runner 등은 optional dependency로
+- 폐쇄망(air-gap) 배포를 반드시 지원해야 하며, Ollama·Ansible 등은 optional dependency로
   이들이 없어도 앱이 떠야 한다(CLAUDE.md Tech Stack 원칙).
 - 외부 의존 서비스(Prometheus/Alertmanager/Ollama 등) 장애 시에도 대시보드 자체는 계속 동작해야
   한다(fail-safe 패턴, CLAUDE.md).

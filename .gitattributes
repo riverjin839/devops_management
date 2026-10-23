@@ -1,0 +1,12 @@
+# 줄바꿈 정규화 — 셸 스크립트는 LF, PowerShell 은 CRLF 고정
+* text=auto
+*.sh text eol=lf
+*.ps1 text eol=crlf
+*.pptx binary
+*.png binary
+*.ico binary
+
+# 생성물 / vendored — GitHub diff·언어 통계에서 접어 둔다
+frontend/package-lock.json linguist-generated
+docs/reports/ai-dev-report.html linguist-generated
+.claude/skills/impeccable/scripts/** linguist-vendored
