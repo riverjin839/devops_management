@@ -1,7 +1,13 @@
 services:
   # PostgreSQL Database
   postgres:
-    image: postgres:15-alpine
+    # pgvector 확장 포함 이미지 — work_items 등 embedding(VECTOR) 컬럼이 필요하다. 그냥
+    # postgres:15-alpine 은 vector 확장이 없어 /work-items 가 UndefinedColumn(embedding) 500.
+    # 공식 pgvector/pgvector:pg15(Debian/glibc)로 바꾸면 기존 alpine(musl) 볼륨과 컬레이션이
+    # 달라 인덱스가 깨질 수 있어, 같은 alpine 베이스에 pgvector 만 얹은 레포 이미지를 빌드한다.
+    build:
+      context: ./docker/postgres-pgvector
+    image: k8s_monitor_postgres_pgvector:15
     container_name: k8s_monitor_db
     environment:
       POSTGRES_USER: postgres
