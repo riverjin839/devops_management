@@ -411,7 +411,7 @@ All shared interfaces live in `src/types/index.ts`. Keep backend response shapes
 |---|---|---|---|
 | 1 | 로컬 kind | `bash scripts/deploy/kind-setup.sh up｜reload｜destroy` | `deploy/k8s/overlays/kind/` |
 | 2 | 폐쇄망(air-gap) | `bash scripts/deploy/deploy-airgap.sh all` (registry·CLI·인증정보 대화형 입력) | `values-airgap.yaml` · `deploy/k8s/overlays/airgap/` |
-| 3 | 프로덕션 | `helm install k8s-monitor ./helm/k8s-daily-monitor -f .../values-prod.yaml -n k8s-monitor --create-namespace` | `values-prod.yaml` · Jenkins + ArgoCD |
+| 3 | 프로덕션 | `helm install k8s-monitor ./deploy/helm/k8s-daily-monitor -f .../values-prod.yaml -n k8s-monitor --create-namespace` | `values-prod.yaml` · Jenkins + ArgoCD |
 
 네임스페이스: dev = `k8s-monitor-dev`, prod = `k8s-monitor-prod`.
 Makefile 타깃(`make k8s-dev`, `make docker-rebuild` 등)은 `make help` 로 확인한다.

@@ -237,13 +237,13 @@ bash scripts/deploy/deploy-airgap.sh build
 bash scripts/deploy/deploy-airgap.sh push
 
 # Helm으로 배포
-helm install k8s-monitor ./helm/k8s-daily-monitor \
-  -f ./helm/k8s-daily-monitor/values-airgap.yaml \
+helm install k8s-monitor ./deploy/helm/k8s-daily-monitor \
+  -f ./deploy/helm/k8s-daily-monitor/values-airgap.yaml \
   -n k8s-monitor --create-namespace
 
 # 업그레이드
-helm upgrade k8s-monitor ./helm/k8s-daily-monitor \
-  -f ./helm/k8s-daily-monitor/values-airgap.yaml \
+helm upgrade k8s-monitor ./deploy/helm/k8s-daily-monitor \
+  -f ./deploy/helm/k8s-daily-monitor/values-airgap.yaml \
   -n k8s-monitor
 ```
 
@@ -455,13 +455,13 @@ argocd app sync k8s-daily-monitor
 
 ```bash
 # 설치
-helm install k8s-monitor ./helm/k8s-daily-monitor \
-  -f ./helm/k8s-daily-monitor/values-prod.yaml \
+helm install k8s-monitor ./deploy/helm/k8s-daily-monitor \
+  -f ./deploy/helm/k8s-daily-monitor/values-prod.yaml \
   -n k8s-monitor --create-namespace
 
 # 업그레이드
-helm upgrade k8s-monitor ./helm/k8s-daily-monitor \
-  -f ./helm/k8s-daily-monitor/values-prod.yaml \
+helm upgrade k8s-monitor ./deploy/helm/k8s-daily-monitor \
+  -f ./deploy/helm/k8s-daily-monitor/values-prod.yaml \
   -n k8s-monitor
 
 # 롤백
@@ -471,12 +471,12 @@ helm rollback k8s-monitor 1 -n k8s-monitor
 helm uninstall k8s-monitor -n k8s-monitor
 
 # 템플릿 미리보기 (dry-run)
-helm template k8s-monitor ./helm/k8s-daily-monitor \
-  -f ./helm/k8s-daily-monitor/values-prod.yaml
+helm template k8s-monitor ./deploy/helm/k8s-daily-monitor \
+  -f ./deploy/helm/k8s-daily-monitor/values-prod.yaml
 
 # 검증
-helm lint ./helm/k8s-daily-monitor \
-  -f ./helm/k8s-daily-monitor/values-prod.yaml
+helm lint ./deploy/helm/k8s-daily-monitor \
+  -f ./deploy/helm/k8s-daily-monitor/values-prod.yaml
 ```
 
 ---
@@ -530,14 +530,14 @@ kubectl get gatewayclass cilium
 
 ```bash
 # 1단계 — Ingress 와 병행 (다른 컨트롤러·다른 IP 라 충돌 없음)
-helm upgrade k8s-monitor ./helm/k8s-daily-monitor \
-  -f ./helm/k8s-daily-monitor/values-prod.yaml -n k8s-monitor \
+helm upgrade k8s-monitor ./deploy/helm/k8s-daily-monitor \
+  -f ./deploy/helm/k8s-daily-monitor/values-prod.yaml -n k8s-monitor \
   --set gateway.enabled=true \
   --set gateway.host=k8s-monitor.company.internal
 
 # 2단계 — Gateway 주소로 검증한 뒤 DNS 를 Gateway IP 로 바꾸고 Ingress 를 끈다
-helm upgrade k8s-monitor ./helm/k8s-daily-monitor \
-  -f ./helm/k8s-daily-monitor/values-prod.yaml -n k8s-monitor \
+helm upgrade k8s-monitor ./deploy/helm/k8s-daily-monitor \
+  -f ./deploy/helm/k8s-daily-monitor/values-prod.yaml -n k8s-monitor \
   --set gateway.enabled=true --set gateway.host=k8s-monitor.company.internal \
   --set ingress.enabled=false
 ```

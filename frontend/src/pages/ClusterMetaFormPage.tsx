@@ -765,7 +765,7 @@ export function ClusterMetaFormPage() {
                     <p className="text-xs text-muted-foreground">
                       PEP 백엔드에서 이 클러스터의 Prometheus 에 네트워크로 닿지 않으면
                       <code> push</code> 를 선택하고, 클러스터 안에 수집기 CronJob
-                      (<code>k8s/base/observability/pep-collector-cronjob.yaml</code>)을 배포하세요.
+                      (<code>deploy/k8s/base/observability/pep-collector-cronjob.yaml</code>)을 배포하세요.
                     </p>
                   </div>
                 </div>
