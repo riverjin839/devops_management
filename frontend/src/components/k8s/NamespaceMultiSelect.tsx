@@ -1,7 +1,8 @@
-import { useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { useDeferredValue, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { ChevronDown, Check, Search } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
+import { Virtuoso } from 'react-virtuoso';
 import { k8sResourcesApi } from '@/services/api';
 
 interface Props {
@@ -15,6 +16,8 @@ interface Props {
 }
 
 const PANEL_W = 240;
+const ROW_H = 32;          // 항목 1줄 높이(py-1.5 + text-sm) — Virtuoso fixedItemHeight
+const PANEL_CHROME_H = 88; // 검색창 + "전체 네임스페이스" + 구분선
 
 /** OpenLens 식 네임스페이스 멀티셀렉트 드롭다운. 빈 선택 = 전체. 여러 리소스 뷰에서 공용.
  *  패널은 createPortal 로 body 에 fixed 렌더 — 부모 MacCard 의 overflow-hidden 에 잘리지 않음. */
@@ -24,18 +27,21 @@ export function NamespaceMultiSelect({ clusterId, selected, onChange, singleSele
   const [pos, setPos] = useState<{ top: number; left: number; maxHeight: number } | null>(null);
   const btnRef = useRef<HTMLButtonElement | null>(null);
 
+  // 쿼리 키는 Namespaces → 목록 화면(ResourceTablePanel)과 같다 — 한쪽에서 받은 목록을 다른 쪽이 재사용.
   const { data } = useQuery({
-    queryKey: ['k8s-namespaces', clusterId],
+    queryKey: ['k8s-mng-list', clusterId, 'namespaces', 'all'],
     queryFn: async () => (await k8sResourcesApi.list(clusterId, 'namespaces')).data,
     enabled: !!clusterId,
     staleTime: 60_000,
     retry: false,
   });
   const namespaces = useMemo(() => (data?.items ?? []).map((r) => r.name).sort(), [data]);
+  // 입력은 즉시 반영하고 필터링은 뒤따르게 — 1만 NS 에서도 타이핑이 끊기지 않는다.
+  const deferredQ = useDeferredValue(q);
   const shown = useMemo(() => {
-    const s = q.trim().toLowerCase();
+    const s = deferredQ.trim().toLowerCase();
     return s ? namespaces.filter((n) => n.toLowerCase().includes(s)) : namespaces;
-  }, [namespaces, q]);
+  }, [namespaces, deferredQ]);
 
   // 열릴 때 버튼 위치 기준으로 패널 좌표 계산(viewport clamp).
   useLayoutEffect(() => {
@@ -83,20 +89,28 @@ export function NamespaceMultiSelect({ clusterId, selected, onChange, singleSele
                   className="w-full rounded-lg border border-border bg-background pl-7 pr-2 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-primary" />
               </div>
             </div>
-            <div className="overflow-auto">
+            <div>
               <button onClick={() => onChange(new Set())}
                 className="w-full flex items-center gap-2 px-3 py-1.5 text-sm hover:bg-secondary/60">
                 <span className={`w-3.5 h-3.5 flex items-center justify-center ${selected.size === 0 ? 'text-primary' : 'text-transparent'}`}><Check className="w-3 h-3" /></span>
                 전체 네임스페이스
               </button>
               <div className="my-1 border-t border-border" />
-              {shown.map((ns) => (
-                <button key={ns} onClick={() => toggle(ns)}
-                  className="w-full flex items-center gap-2 px-3 py-1.5 text-sm hover:bg-secondary/60">
-                  <span className={`w-3.5 h-3.5 flex items-center justify-center ${selected.has(ns) ? 'text-primary' : 'text-transparent'}`}><Check className="w-3 h-3" /></span>
-                  <span className="truncate">{ns}</span>
-                </button>
-              ))}
+              {/* 가상 스크롤 — 보이는 항목만 DOM 에 둔다(1만 NS 를 전부 그리면 열 때마다 수 초 멈춤). */}
+              {shown.length > 0 && (
+                <Virtuoso
+                  style={{ height: Math.min(shown.length * ROW_H, Math.max(ROW_H * 3, pos.maxHeight - PANEL_CHROME_H)) }}
+                  data={shown}
+                  fixedItemHeight={ROW_H}
+                  itemContent={(_i, ns) => (
+                    <button onClick={() => toggle(ns)}
+                      className="w-full flex items-center gap-2 px-3 py-1.5 text-sm hover:bg-secondary/60">
+                      <span className={`w-3.5 h-3.5 flex items-center justify-center ${selected.has(ns) ? 'text-primary' : 'text-transparent'}`}>{selected.has(ns) && <Check className="w-3 h-3" />}</span>
+                      <span className="truncate">{ns}</span>
+                    </button>
+                  )}
+                />
+              )}
               {shown.length === 0 && <div className="px-3 py-2 text-sm text-muted-foreground">결과 없음</div>}
             </div>
           </div>

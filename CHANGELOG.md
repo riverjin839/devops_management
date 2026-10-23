@@ -8,7 +8,7 @@
 
 ## [Unreleased]
 
-1.73.1 이후 main 에 병합된 변경 (다음 릴리스 후보).
+1.74.0 이후 main 에 병합된 변경 (다음 릴리스 후보).
 
 ### Added
 - **K8s 클러스터 허브(`/k8s/:clusterId/:view`)** — 클러스터 하나를 고르고 보는 K8s 화면 9개(클러스터 상세·K8s 상세 관리·K8s 자원 관리·
@@ -19,6 +19,15 @@
   쿼리 보존). 사이드바에 "K8s 클러스터" 그룹이 생기고 옛 leaf 는 그 그룹의 바로가기로 남는다(접근 제어·라벨·아일랜드 패널 호환).
   Frontend: `K8sHubPage`, `components/k8s-hub/*`, `lib/k8sHub.ts`(임베드 컨텍스트 — 흡수된 화면은 코드 수정 없이 레일/헤더/셸만 허브에
   넘긴다), 공용 `SegTabs` 승격, `App.tsx` `RedirectToHub`. 2단계(구성·콘솔)·3단계(진단) 뷰는 후속.
+
+## [1.74.0] - 2026-10-22
+
+### Added
+- **K8s 상세 관리 — 네임스페이스 대시보드에 빠졌던 셋업 추가**: 네임스페이스 하나를 고르면 Access Control(ServiceAccount·Role·RoleBinding, 그리고 이 NS 의 ServiceAccount 등을 subject 로 묶는 ClusterRoleBinding), Custom Resources(이 NS 에 오브젝트가 있는 namespaced CRD 와 개수, 오브젝트 목록·YAML), Helm 릴리스(values 보기), Events(이 NS 만 서버에서 실시간 수신), 네임스페이스 자체 상세·YAML 까지 한 화면에 나온다. Backend: `GET /k8s/{id}/namespaces/{ns}/custom-resources`(CRD 당 `limit=1` 프로브, 응답 예산·목록 캐시), `GET /k8s/{id}/namespaces/{ns}/cluster-role-bindings`.
+
+### Fixed
+- **네임스페이스 대시보드의 NS 선택 드롭다운이 느리던 문제**: NS 1만 개 클러스터에서 드롭다운을 열 때마다 모든 항목을 DOM 으로 그려 수 초씩 멈췄다. 가상 스크롤로 보이는 항목만 그리고, 검색은 입력과 분리해 끊김 없이 거르며, Namespaces → 목록 화면과 같은 쿼리 캐시를 써서 다시 받지 않는다(이벤트 화면 등 이 선택기를 쓰는 곳 모두 적용).
+- **네임스페이스 대시보드에서 ResourceQuota 등이 안 보이던 문제**: 클러스터 전체 기준 존재 여부(5분 캐시)로 종류를 숨겨, 그 뒤에 만든 리소스가 NS 에 있어도 표에서 빠졌다. 이제 API 미지원 종류만 숨기고 0개인 종류도 인벤토리에 표시한다.
 
 ## [1.73.1] - 2026-10-22
 
