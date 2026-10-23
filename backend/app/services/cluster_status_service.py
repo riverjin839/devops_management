@@ -225,7 +225,14 @@ def recompute(db: Session, cluster_id) -> dict[str, Any]:
 
     # row-level lock 으로 동시 갱신(Beat cron + 사용자 수동 트리거 등) race 차단 — 예전
     # DailyChecker/HealthChecker 각자 걸던 SELECT FOR UPDATE 를 여기 한 곳으로 모았다.
-    locked = db.query(Cluster).filter(Cluster.id == cluster_id).with_for_update().first()
+    # FOR NO KEY UPDATE 여야 한다(key_share=True): 호출자는 이미 같은 트랜잭션에서 clusters 를 FK 로
+    # 참조하는 행(DeepCheckResult·DailyCheckLog 등)을 INSERT 해 clusters 행에 FOR KEY SHARE 를
+    # 쥐고 있다. 일반 FOR UPDATE 는 KEY SHARE 와 충돌해, 같은 클러스터를 동시에 처리하는 워커
+    # 둘이 서로의 KEY SHARE 를 기다리는 데드락이 난다(점검 매트릭스 열/행 일괄 실행 21건 중 19건
+    # DeadlockDetected). status 만 바꾸고 PK 는 건드리지 않으므로 NO KEY UPDATE 로 충분하다. (SQLAlchemy 는 key_share=True → "FOR NO KEY UPDATE")
+    locked = (
+        db.query(Cluster).filter(Cluster.id == cluster_id).with_for_update(key_share=True).first()
+    )
     if locked is not None:
         locked.status = final_status
     db.commit()

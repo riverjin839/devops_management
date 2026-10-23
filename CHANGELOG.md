@@ -10,6 +10,10 @@
 
 1.78.1 이후 main 에 병합된 변경 (다음 릴리스 후보).
 
+### Fixed
+- **점검 매트릭스 열/행 일괄 실행 데드락**: 같은 클러스터를 동시에 처리하는 워커들이 `DeadlockDetected` 로 대부분 실패하던 문제(열 실행 21건 중 19건). 각 실행이 clusters 를 FK 로 참조하는 결과 행을 INSERT 해 `FOR KEY SHARE` 를 쥔 채 `recompute()` 에서 `SELECT ... FOR UPDATE` 를 걸어 서로 막혔다 — 잠금을 `FOR NO KEY UPDATE`(`with_for_update(key_share=True)`)로 바꿔 직렬화만 되고 교착은 없게 했다.
+- **로컬 compose 에서 `/work-items` 500 (`work_items.embedding` 없음)**: `postgres:15-alpine` 에 pgvector 가 없어 부팅 마이그레이션의 embedding 컬럼 추가가 조용히 실패했다. compose 의 postgres 를 레포의 `docker/postgres-pgvector`(같은 alpine 베이스 + pgvector) 빌드로 바꿨다 — 기존 볼륨과 컬레이션이 같아 그대로 쓴다.
+
 ## [1.78.1] - 2026-10-23
 
 ### Changed
