@@ -6,6 +6,7 @@ import {
   ShieldAlert, Wifi, Clock, ScrollText,
 } from 'lucide-react';
 import { useClusters } from '@/hooks/useCluster';
+import { useK8sHub } from '@/lib/k8sHub';
 import { useCanOperate } from '@/hooks/useCanOperate';
 import { useTerminalEnvSync } from '@/hooks/useTerminalEnvSync';
 import { useRunLog, runLogged, consoleRunLines, type RunLogEntry } from '@/hooks/useRunLog';
@@ -98,12 +99,16 @@ type Tab = 'run' | 'logs';
 export function EtcdCtlPage() {
   const clustersQ = useClusters();
   const { data: clusters = [] } = clustersQ;
-  const [clusterId, setClusterId] = useState('');
+  const [localClusterId, setClusterId] = useState('');
+  // K8s 클러스터 허브(D-240) 안에서는 허브가 고른 클러스터가 우선(레일은 허브가 그린다). 단독·아일랜드에선 로컬 선택.
+  const hub = useK8sHub();
+  const clusterId = hub ? hub.clusterId : localClusterId;
   const toast = useToast();
   const { canOperate, withHint, ariaWithHint } = useCanOperate(clusterId || null);
   useEffect(() => {
-    if (!clusterId && clusters.length > 0) setClusterId(clusters[0].id);
-  }, [clusters, clusterId]);
+    if (hub || localClusterId || clusters.length === 0) return;
+    setClusterId(clusters[0].id);
+  }, [hub, clusters, localClusterId]);
   // 선택 클러스터 운영등급 → 터미널 Appearance(개발/운영) 자동 적용.
   useTerminalEnvSync(clusters, clusterId || null);
 

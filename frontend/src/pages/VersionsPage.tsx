@@ -6,6 +6,7 @@ import {
   Server, Cpu, Network, Settings2, HardDrive, Search, FileSpreadsheet, FileText,
 } from 'lucide-react';
 import { useClusters } from '@/hooks/useCluster';
+import { useK8sHub } from '@/lib/k8sHub';
 import {
   ClusterSidebar, DebugLogPanel, useToast, EmptyState, ErrorState, LoadingState, SkeletonCard, DoubleScrollX, PageShell, RunLogPanel,
 } from '@/components/common';
@@ -826,7 +827,10 @@ export function VersionsPage() {
     data: clusters = [], isLoading: clustersLoading, isError: clustersError, error: clustersErrorObj, refetch: refetchClusters,
   } = useClusters();
   const toast = useToast();
-  const [clusterId, setClusterId] = useState<string>('');
+  const [localClusterId, setClusterId] = useState<string>('');
+  // K8s 클러스터 허브(D-240) 안에서는 허브가 고른 클러스터가 우선(레일은 허브가 그린다). 단독·아일랜드에선 로컬 선택.
+  const hub = useK8sHub();
+  const clusterId = hub ? hub.clusterId : localClusterId;
   // 수집(지금 수집·MinIO·SSH 수집 5종)은 서버가 operator 를 요구한다 — viewer·테넌트 비권한은 비활성 + 사유(§12.9, D-160).
   const { canOperate, withHint, ariaWithHint } = useCanOperate(clusterId || null);
   const [etcdModalOpen, setEtcdModalOpen] = useState(false);
@@ -841,8 +845,9 @@ export function VersionsPage() {
 
   // 사이드바 진입 시 자동으로 첫 클러스터 선택
   useEffect(() => {
-    if (!clusterId && clusters.length > 0) setClusterId(clusters[0].id);
-  }, [clusters, clusterId]);
+    if (hub || localClusterId || clusters.length === 0) return;
+    setClusterId(clusters[0].id);
+  }, [hub, clusters, localClusterId]);
 
   const { data: current, isLoading, isError: currentError, error: currentErrorObj, refetch: refetchCurrent } = useQuery({
     queryKey: ['versions', 'current', clusterId],

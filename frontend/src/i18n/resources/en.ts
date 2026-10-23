@@ -81,7 +81,7 @@ export const en: TranslationResource = {
       system: 'System',
     },
     groupDesc: {
-      k8s: 'Pick one cluster and work its details, resources, capacity, observability, logs and checks in one screen',
+      k8s: 'Pick one cluster and work its details, resources, capacity, observability, logs, checks, config and consoles in one screen',
       observe: 'See the current state — read-only',
       inspect: 'Check and record state, and trace root causes',
       operate: 'Send commands to clusters, nodes, and storage — confirm the target before running',

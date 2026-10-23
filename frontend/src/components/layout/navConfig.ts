@@ -128,19 +128,22 @@ export interface NavGroup {
 export const GROUPS: NavGroup[] = [
   // K8s 클러스터 허브(2026-10-22, D-240) — 클러스터 하나를 고르고 보는 K8s 화면을 `/k8s` 한 화면으로 모았다.
   // 첫 항목이 허브, 나머지는 허브 뷰로 redirect 되는 옛 leaf(설치하면 그 뷰로 바로 가는 바로가기).
-  { id: 'k8s',       label: 'K8s 클러스터', labelKey: 'k8s', descriptionKey: 'k8s', icon: ShipWheel, description: '클러스터 하나를 골라 상세·리소스·자원·관측·로그·점검을 한 화면에서', domain: 'platform',
-    paths: ['/k8s', '/clusters', '/k8s-manage', '/k8s-allocation', '/cluster-trends', '/observability', '/k8s-events', '/k8s-logs', '/incident-analysis', '/daily-check/review'] },
+  // 2단계(2026-10-23): 구성·콘솔 5화면 추가. `/node-labels` 는 허브 뷰도 있지만 단독(전체 클러스터) 화면이 남아 구성·자산에,
+  // `/k9s`·`/node-ssh` 는 허브 ▸ 콘솔 ▸ 터미널 카드가 여는 단독 터미널이라 운영 조작(danger)에 남긴다.
+  { id: 'k8s',       label: 'K8s 클러스터', labelKey: 'k8s', descriptionKey: 'k8s', icon: ShipWheel, description: '클러스터 하나를 골라 상세·리소스·자원·관측·로그·점검·구성·콘솔을 한 화면에서', domain: 'platform',
+    paths: ['/k8s', '/clusters', '/k8s-manage', '/k8s-allocation', '/cluster-trends', '/observability', '/k8s-events', '/k8s-logs', '/incident-analysis', '/daily-check/review',
+      '/k8s-rbac', '/node-images', '/versions', '/etcdctl', '/kernel-params'] },
   { id: 'observe',   label: '관측', labelKey: 'observe', descriptionKey: 'observe', icon: Activity,    description: '상태를 본다 — 읽기 전용', domain: 'platform',
     paths: ['/alerts', '/isilon-nfs', '/lake-services'] },
   // '/ops-checks'(운영 점검 콘솔, 레거시)는 사이드바에서 뺐다 — 같은 패널을 종합 상태까지 포함해
   // 보여주는 '/clusters/:id' 로 대체됐다(App.tsx 주석). 라우트·NAV_MAP 은 북마크/아일랜드 패널
   // 호환으로 유지(D-129).
   { id: 'inspect',   label: '점검·진단', labelKey: 'inspect', descriptionKey: 'inspect', icon: ShieldCheck, description: '상태를 확인·기록하고 원인을 추적한다', domain: 'platform',
-    paths: ['/daily-check/settings', '/pod-bottleneck', '/cilium-trace', '/packet-flow', '/versions'] },
+    paths: ['/daily-check/settings', '/pod-bottleneck', '/cilium-trace', '/packet-flow'] },
   { id: 'operate',   label: '운영 조작', labelKey: 'operate', descriptionKey: 'operate', icon: Terminal,    description: '클러스터·노드·스토리지에 명령을 보낸다 — 실행 전 대상을 확인할 것', domain: 'platform', tone: 'danger',
-    paths: ['/ns-migration', '/k9s', '/bulk-exec', '/node-ssh', '/etcdctl', '/mc', '/kernel-params'] },
+    paths: ['/ns-migration', '/k9s', '/bulk-exec', '/node-ssh', '/mc'] },
   { id: 'configure', label: '구성·자산', labelKey: 'configure', descriptionKey: 'configure', icon: Layers,      description: '클러스터 등록·자원·권한·노드 자산을 관리한다', domain: 'platform',
-    paths: ['/cluster-manage', '/k8s-rbac', '/node-labels', '/node-images', '/node-specs', '/links'] },
+    paths: ['/cluster-manage', '/node-labels', '/node-specs', '/links'] },
   { id: 'topology',  label: '토폴로지', labelKey: 'topology', descriptionKey: 'topology', icon: Network,     description: '인프라·서비스 구조를 지도로 본다', domain: 'platform',
     paths: ['/infra-topology', '/service-topology', '/service-architecture', '/architecture'] },
   // '/batch-jobs' 는 사이드바 진입점에서 뺐다 — 홈 화면 "플랫폼 현황" 탭의 서브탭으로

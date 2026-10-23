@@ -10,6 +10,18 @@
 
 1.77.0 이후 main 에 병합된 변경 (다음 릴리스 후보).
 
+### Added
+- **K8s 클러스터 허브 2단계 — 구성·콘솔**: 허브(`/k8s/:clusterId/:view`)에 **구성**(K8s 접근 권한·노드 라벨·노드 이미지·버전/설정)과
+  **콘솔**(etcdctl·커널 파라미터·터미널) 카테고리를 더했다. 이 화면들도 허브 레일에서 고른 클러스터를 그대로 따르고, 옛 URL
+  (`/k8s-rbac`·`/node-images`·`/versions`·`/etcdctl`·`/kernel-params`)은 해당 뷰로 redirect 된다(`?cluster=` 로 클러스터를 넘기던 옛 링크도
+  그 클러스터로). k9s 콘솔·노드 SSH 터미널은 전체 높이 터미널이라 허브의 "터미널" 카드가 단독 화면을 그 클러스터로 연다(viewer 는 비활성 + 사유).
+  노드 라벨은 허브 뷰(선택 클러스터)와 함께 단독 화면 `/node-labels` 의 "전체 클러스터" 모드를 그대로 둔다. 버전 관계 그래프의 뒤로가기는 허브 버전 뷰로 돌아온다.
+  Frontend: `components/k8s-hub/HubTerminalsView.tsx`, `hubViews.ts`(카테고리 `config`·`console`, `extraNavKeys`), 6개 화면에 허브 우선 클러스터 선택(`useK8sHub`), `App.tsx` `RedirectToHub` 쿼리 `cluster` 처리.
+
+### Fixed
+- **아일랜드 패널의 점검 결과 리뷰가 앱을 패널 밖으로 끌어내던 문제**: 점검 결과 리뷰·클러스터 추이 화면이 클러스터 선택을 자체 `useParams`+`navigate` 로
+  하던 것을 공용 `useClusterRouteParam` 으로 바꿨다 — 아일랜드 패널에서는 로컬 선택, 허브 안에서는 허브 선택을 쓴다.
+
 ## [1.77.0] - 2026-10-23
 
 ### Added
