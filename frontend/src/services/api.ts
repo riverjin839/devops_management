@@ -1,5 +1,5 @@
 import axios, { type InternalAxiosRequestConfig } from 'axios';
-import { Cluster, Addon, CheckLog, SummaryStats, ApiResponse, PaginatedResponse, Playbook, PlaybookRunResult, PlaybookSshCreds, AgentChatRequest, AgentChatResponse, AgentHealthResponse, MetricCard, MetricQueryResult, MetricSparklineResult, ClusterItem, WorkItem, WorkItemType, WorkItemListResponse, WorkItemCreate, WorkItemUpdate, WorkItemStatusResponse, KanbanStatus, UiSettings, ClusterLinksPayload, WorkGuide, WorkGuideCreate, WorkGuideUpdate, WorkGuideListResponse, OpsNote, OpsNoteCreate, OpsNoteUpdate, OpsNoteListResponse, MindMap, MindMapListItem, MindMapCreate, MindMapUpdate, MindMapNode, MindMapNodeCreate, MindMapNodeUpdate, ManagementServer, ManagementServerCreate, ManagementServerUpdate, ManagementServerListResponse, TopologyTraceRequest, TopologyTraceResponse, TrendDigest, TrendItem, TrendSource, ClusterTrendsResponse, ReleaseNotesResponse, CheckMatrixItem, CheckMatrixItemInput, CheckMatrixGrid, CheckMatrixHistory, CheckMatrixSettings, CheckMatrixRunbook, CheckMatrixRun, CheckMatrixRunDetail, CheckMatrixRunList, CheckMatrixBatchResult, SystemErrorListResponse, SystemDiagnostics, CheckMatrixCancelResult, CheckMatrixSourceConfigEntry, CheckMatrixCatalog, CheckMatrixItemPreviewInput, CheckMatrixItemPreviewResult, CheckMatrixItemSourceConfig, CheckMatrixItemDetail, ClusterStatusBreakdown, SchemaHealthReport, SchemaRepairResult, LlmSettings, LlmHealthEntry, LlmTestResult, LlmCredentialSummary, LlmUsageBucket, Tenant, TenantBrief, ClusterAccessLevel, HealthCheckRunResult, AddonCheckRunResult } from '@/types';
+import { Cluster, Addon, CheckLog, SummaryStats, ApiResponse, PaginatedResponse, Playbook, PlaybookSshCreds, AgentChatRequest, AgentChatResponse, AgentHealthResponse, MetricCard, MetricQueryResult, MetricSparklineResult, ClusterItem, WorkItem, WorkItemType, WorkItemListResponse, WorkItemCreate, WorkItemUpdate, WorkItemStatusResponse, KanbanStatus, UiSettings, ClusterLinksPayload, WorkGuide, WorkGuideCreate, WorkGuideUpdate, WorkGuideListResponse, OpsNote, OpsNoteCreate, OpsNoteUpdate, OpsNoteListResponse, MindMap, MindMapListItem, MindMapCreate, MindMapUpdate, MindMapNode, MindMapNodeCreate, MindMapNodeUpdate, ManagementServer, ManagementServerCreate, ManagementServerUpdate, ManagementServerListResponse, TopologyTraceRequest, TopologyTraceResponse, TrendDigest, TrendItem, TrendSource, ClusterTrendsResponse, ReleaseNotesResponse, CheckMatrixItem, CheckMatrixItemInput, CheckMatrixGrid, CheckMatrixHistory, CheckMatrixSettings, CheckMatrixRunbook, CheckMatrixRun, CheckMatrixRunDetail, CheckMatrixRunList, CheckMatrixBatchResult, SystemErrorListResponse, SystemDiagnostics, CheckMatrixCancelResult, CheckMatrixSourceConfigEntry, CheckMatrixCatalog, CheckMatrixItemPreviewInput, CheckMatrixItemPreviewResult, CheckMatrixItemSourceConfig, CheckMatrixItemDetail, ClusterStatusBreakdown, SchemaHealthReport, SchemaRepairResult, LlmSettings, LlmHealthEntry, LlmTestResult, LlmCredentialSummary, LlmUsageBucket, Tenant, TenantBrief, ClusterAccessLevel, HealthCheckRunResult, AddonCheckRunResult } from '@/types';
 import { newRequestId, REQUEST_ID_HEADER } from '@/lib/requestId';
 import { isDebugEnabled, useDebugStore } from '@/stores/debugStore';
 import { getAuthToken, expireAuthSession, type AuthUser } from '@/stores/authStore';
@@ -340,15 +340,6 @@ export const clustersApi = {
     api.get<{ content: string; path: string }>(`/clusters/${id}/kubeconfig`),
   updateKubeconfig: (id: string, content: string) =>
     api.put<{ content: string; path: string }>(`/clusters/${id}/kubeconfig`, { content }),
-  verify: (id: string) =>
-    api.post<{
-      ok: boolean;
-      cluster_name: string;
-      /** 반영된 cluster.status — healthy | warning(kubeconfig 부재/인증불가) | pending(API 도달 불가) */
-      status?: string;
-      statusReason?: string | null;
-      results: { check: string; ok: boolean | null; detail: string }[];
-    }>(`/clusters/${id}/verify`),
   autoUpdate: (id: string, opts?: { dryRun?: boolean; signal?: AbortSignal }) =>
     api.post<{
       clusterId: string;
@@ -448,12 +439,6 @@ export const clusterCustomFieldsApi = {
 export const workItemCustomFieldsApi = {
   list: () =>
     api.get<{ data: import('@/types').WorkItemCustomField[] }>('/work-item-custom-fields'),
-  create: (data: import('@/types').WorkItemCustomFieldCreate) =>
-    api.post<import('@/types').WorkItemCustomField>('/work-item-custom-fields', data),
-  update: (id: string, data: import('@/types').WorkItemCustomFieldUpdate) =>
-    api.put<import('@/types').WorkItemCustomField>(`/work-item-custom-fields/${id}`, data),
-  delete: (id: string) =>
-    api.delete(`/work-item-custom-fields/${id}`),
 };
 
 // Versions API — 클러스터 컴포넌트 버전/설정 스냅샷 수집 & 히스토리
@@ -501,19 +486,6 @@ export const versionsApi = {
     }>(
       `/clusters/${clusterId}/collect-versions`, undefined, { signal, timeout: SYNC_RUN_TIMEOUT },
     ),
-  collectEtcdctlConfig: (
-    clusterId: string,
-    payload: import('@/types').EtcdctlConfigCollectRequest,
-    signal?: AbortSignal,
-  ) => {
-    const n = payload.hosts.length;
-    const perHost = ((payload.connectTimeout ?? 8) + 20) * 1000;
-    const est = Math.ceil(n / 10) * perHost + 10_000;
-    const timeout = Math.max(60_000, Math.min(est, 30 * 60_000));
-    return api.post<import('@/types').EtcdctlConfigCollectResponse>(
-      `/clusters/${clusterId}/collect-etcdctl-config`, payload, { signal, timeout },
-    );
-  },
   collectMinio: (clusterId: string, signal?: AbortSignal) =>
     api.post<import('@/types').MinioCollectResponse>(
       `/clusters/${clusterId}/collect-minio`, undefined, { signal, timeout: 120_000 },
@@ -758,8 +730,6 @@ export const terminalAppearanceApi = {
     api.get<import('@/types').TerminalAppearanceResponse>('/terminal-appearance'),
   save: (appearance: import('@/types').TerminalAppearance) =>
     api.put<import('@/types').TerminalAppearanceResponse>('/terminal-appearance', { appearance }),
-  getShared: () =>
-    api.get<{ templates: import('@/types').TerminalTemplate[] }>('/terminal-appearance/shared'),
   saveShared: (templates: import('@/types').TerminalTemplate[]) =>
     api.put<{ templates: import('@/types').TerminalTemplate[] }>('/terminal-appearance/shared', { templates }),
 };
@@ -783,7 +753,6 @@ export const healthApi = {
     api.post<HealthCheckRunResult>(`/health/check/${clusterId}`, undefined, { timeout: SYNC_RUN_TIMEOUT }),
   runAddonCheck: (clusterId: string, addonId: string) =>
     api.post<AddonCheckRunResult>(`/health/check/${clusterId}/addons/${addonId}`, undefined, { timeout: 2 * 60_000 }),
-  getStatus: (clusterId: string) => api.get<ApiResponse<Cluster>>(`/health/status/${clusterId}`),
   getAddons: (clusterId: string) => api.get<ApiResponse<Addon[]>>(`/health/addons/${clusterId}`),
   getSummary: () => api.get<ApiResponse<SummaryStats>>('/health/summary'),
   exportReport: (clusterId?: string, fmt: 'md' | 'csv' = 'md') =>
@@ -804,8 +773,6 @@ export const historyApi = {
     api.get<PaginatedResponse<CheckLog>>('/history', {
       params: { cluster_id: clusterId, page, page_size: pageSize },
     }),
-  exportCsv: (clusterId: string) =>
-    api.get(`/history/${clusterId}/export`, { responseType: 'blob' }),
 };
 
 // Playbooks API
@@ -814,14 +781,10 @@ export const playbooksApi = {
     api.get<ApiResponse<Playbook[]>>('/playbooks', {
       params: clusterId ? { clusterId } : {},
     }),
-  getById: (id: string) => api.get<ApiResponse<Playbook>>(`/playbooks/${id}`),
   create: (data: Partial<Playbook>) => api.post<ApiResponse<Playbook>>('/playbooks', data),
   update: (id: string, data: import('@/types').PlaybookUpdatePayload) =>
     api.put<ApiResponse<Playbook>>(`/playbooks/${id}`, data),
   delete: (id: string) => api.delete(`/playbooks/${id}`),
-  run: (id: string, creds?: PlaybookSshCreds) =>
-    // 구 동기 실행(호환용) — 화면은 startRun + getRunProgress(실시간 로그) + cancelRun 을 쓴다.
-    api.post<PlaybookRunResult>(`/playbooks/${id}/run`, creds ?? {}, { timeout: runTimeout(1800, 60) }),
   // R1 — 백그라운드 실행 시작. 자격증명은 이 요청 본문으로만 가고 서버에 저장되지 않는다.
   startRun: (id: string, creds?: PlaybookSshCreds) =>
     api.post<import('@/types').PlaybookRunStart>(`/playbooks/${id}/runs`, creds ?? {}),
@@ -850,8 +813,6 @@ export const ansibleAssetsApi = {
   // Playbook YAML files (공용 — 클러스터 무관)
   listFiles: () =>
     api.get<import('@/types').AnsiblePlaybookFile[]>('/playbook-files'),
-  getFile: (id: string) =>
-    api.get<import('@/types').AnsiblePlaybookFile>(`/playbook-files/${id}`),
   createFile: (data: { name: string; description?: string; content: string; tags?: string }) =>
     api.post<import('@/types').AnsiblePlaybookFile>('/playbook-files', data),
   updateFile: (id: string, data: Partial<{ name: string; description: string; content: string; tags: string }>) =>
@@ -863,8 +824,6 @@ export const ansibleAssetsApi = {
     api.get<import('@/types').AnsibleInventory[]>('/playbook-inventories', {
       params: clusterId ? { cluster_id: clusterId } : {},
     }),
-  getInventory: (id: string) =>
-    api.get<import('@/types').AnsibleInventory>(`/playbook-inventories/${id}`),
   createInventory: (data: {
     clusterId: string; name: string; description?: string; content: string; isDefault?: boolean;
   }) => api.post<import('@/types').AnsibleInventory>('/playbook-inventories', data),
@@ -911,8 +870,6 @@ export const llmApi = {
     api.delete<{ ok: boolean }>(`/llm/credentials/${encodeURIComponent(name)}`),
   ragSearch: (q: string, k = 5) =>
     api.get<{ data: import('@/types').RagCitation[] }>('/llm/rag-search', { params: { q, k }, timeout: 30000 }),
-  backfillEmbeddings: () =>
-    api.post<{ ok: boolean; detail: string }>('/llm/backfill-embeddings'),
   getAnalysisScope: () =>
     api.get<{ data: import('@/types').LlmAnalysisScope }>('/llm/analysis-scope'),
   updateAnalysisScope: (data: import('@/types').LlmAnalysisScope) =>
@@ -925,14 +882,11 @@ export const promqlApi = {
     api.get<{ data: MetricCard[] }>('/promql/cards', {
       params: category ? { category } : {},
     }),
-  getCard: (id: string) => api.get<MetricCard>(`/promql/cards/${id}`),
   createCard: (data: Partial<MetricCard>) =>
     api.post<MetricCard>('/promql/cards', data),
   updateCard: (id: string, data: Partial<MetricCard>) =>
     api.put<MetricCard>(`/promql/cards/${id}`, data),
   deleteCard: (id: string) => api.delete(`/promql/cards/${id}`),
-  queryCard: (id: string) =>
-    api.get<MetricQueryResult>(`/promql/query/${id}`),
   querySparkline: (id: string) =>
     api.get<MetricSparklineResult>(`/promql/query/${id}/sparkline`),
   queryAll: () =>
@@ -983,8 +937,6 @@ export interface WorkItemFilters {
 export const projectsApi = {
   getAll: (status?: string) =>
     api.get<import('@/types').ProjectListResponse>('/projects', { params: status ? { status } : undefined }),
-  get: (id: string) =>
-    api.get<import('@/types').Project>(`/projects/${id}`),
   create: (data: import('@/types').ProjectCreate) =>
     api.post<import('@/types').Project>('/projects', data),
   update: (id: string, data: import('@/types').ProjectUpdate) =>
@@ -998,8 +950,6 @@ export const sprintsApi = {
     api.get<import('@/types').SprintListResponse>('/sprints', { params: status ? { status } : undefined }),
   getCurrent: () =>
     api.get<import('@/types').Sprint | null>('/sprints/current'),
-  get: (id: string) =>
-    api.get<import('@/types').Sprint>(`/sprints/${id}`),
   create: (data: import('@/types').SprintCreate) =>
     api.post<import('@/types').Sprint>('/sprints', data),
   update: (id: string, data: import('@/types').SprintUpdate) =>
@@ -1049,8 +999,6 @@ export const workItemsApi = {
   // 날짜별 시간 블록 (time blocks)
   listTimeBlocksRange: (start: string, end: string) =>
     api.get<import('@/types').WorkItemTimeBlock[]>('/work-items/time-blocks/range', { params: { start, end } }),
-  listTimeBlocks: (itemId: string) =>
-    api.get<import('@/types').WorkItemTimeBlock[]>(`/work-items/${itemId}/time-blocks`),
   createTimeBlock: (itemId: string, data: { blockDate: string; startMinute: number; endMinute: number; note?: string | null }) =>
     api.post<import('@/types').WorkItemTimeBlock>(`/work-items/${itemId}/time-blocks`, data),
   updateTimeBlock: (blockId: string, data: { blockDate?: string; startMinute?: number; endMinute?: number; note?: string | null }) =>
@@ -1132,10 +1080,6 @@ export const jiraApi = {
     }),
   refreshItem: (itemId: string) =>
     api.post<import('@/types').JiraImportResult>(`/jira/refresh/${itemId}`),
-  createIssue: (data: import('@/types').JiraCreateRequest) =>
-    api.post<import('@/types').JiraCreateResult>('/jira/create', data),
-  deleteIssue: (key: string) =>
-    api.delete<import('@/types').JiraDeleteResult>(`/jira/issue/${key}`),
   // 연결 복구 — Jira 이슈는 건드리지 않고 PEP 쪽 연결만 정리/교체한다.
   unlink: (itemId: string, data?: import('@/types').JiraUnlinkRequest) =>
     api.post<import('@/types').JiraUnlinkResult>(`/jira/unlink/${itemId}`, data ?? {}),
@@ -1150,10 +1094,6 @@ export const jiraApi = {
   // 주간보고
   weeklyPreview: (data?: import('@/types').WeeklyReportRequest) =>
     api.post<import('@/types').WeeklyReport>('/jira/weekly-report/preview', data ?? {}),
-  weeklyPublish: (data?: import('@/types').WeeklyPublishRequest) =>
-    api.post<import('@/types').WeeklyPublishResult>('/jira/weekly-report/publish', data ?? {}, {
-      timeout: 2 * 60_000,
-    }),
   weeklySettings: () =>
     api.get<import('@/types').WeeklyReportSettings>('/jira/weekly-report/settings'),
   updateWeeklySettings: (data: import('@/types').WeeklyReportSettings) =>
@@ -1442,7 +1382,6 @@ export const clusterTrendsApi = {
 // Workflows API
 export const workflowsApi = {
   getAll: () => api.get<{ data: import('@/types').Workflow[] }>('/workflows'),
-  getById: (id: string) => api.get<import('@/types').Workflow>(`/workflows/${id}`),
   create: (data: import('@/types').WorkflowCreate) => api.post<import('@/types').Workflow>('/workflows', data),
   update: (id: string, data: import('@/types').WorkflowUpdate) => api.put<import('@/types').Workflow>(`/workflows/${id}`, data),
   delete: (id: string) => api.delete(`/workflows/${id}`),
@@ -1470,7 +1409,6 @@ export const workGuidesApi = {
           )
         : undefined,
     }),
-  getById: (id: string) => api.get<WorkGuide>(`/work-guides/${id}`),
   create: (data: WorkGuideCreate) => api.post<WorkGuide>('/work-guides', data),
   update: (id: string, data: WorkGuideUpdate) => api.put<WorkGuide>(`/work-guides/${id}`, data),
   delete: (id: string) => api.delete(`/work-guides/${id}`),
@@ -1505,7 +1443,6 @@ export const savedScriptsApi = {
     api.get<import('@/types').SavedScript[]>('/saved-scripts', {
       params: language ? { language } : undefined,
     }),
-  get: (id: string) => api.get<import('@/types').SavedScript>(`/saved-scripts/${id}`),
   create: (data: import('@/types').SavedScriptCreate) =>
     api.post<import('@/types').SavedScript>('/saved-scripts', data),
   update: (id: string, data: import('@/types').SavedScriptUpdate) =>
@@ -1525,8 +1462,6 @@ export const scriptsApi = {
   delete: (id: string) => api.delete(`/scripts/${id}`),
   listVersions: (id: string) =>
     api.get<import('@/types').ExecutableScriptVersion[]>(`/scripts/${id}/versions`),
-  getVersion: (id: string, version: number) =>
-    api.get<import('@/types').ExecutableScriptVersion>(`/scripts/${id}/versions/${version}`),
   createVersion: (id: string, data: import('@/types').ExecutableScriptVersionCreate) =>
     api.post<import('@/types').ExecutableScriptVersion>(`/scripts/${id}/versions`, data),
   setCurrentVersion: (id: string, versionId: string) =>
@@ -1536,8 +1471,6 @@ export const scriptsApi = {
       timeout: 60_000,
     }),
   getAccessSettings: () => api.get<{ adminOnly: boolean }>('/scripts/access-settings'),
-  updateAccessSettings: (adminOnly: boolean) =>
-    api.put<{ adminOnly: boolean }>('/scripts/access-settings', { adminOnly }),
 };
 
 // Commands API (지식 허브 - 주요 명령어/파라미터 모음)
@@ -1550,7 +1483,6 @@ export const commandsApi = {
           )
         : undefined,
     }),
-  get: (id: string) => api.get<import('@/types').CommandEntry>(`/commands/${id}`),
   create: (data: import('@/types').CommandEntryCreate) =>
     api.post<import('@/types').CommandEntry>('/commands', data),
   update: (id: string, data: import('@/types').CommandEntryUpdate) =>
@@ -1564,7 +1496,6 @@ export const opsNotesApi = {
     api.get<OpsNoteListResponse>('/ops-notes', {
       params: service ? { service } : undefined,
     }),
-  getById: (id: string) => api.get<OpsNote>(`/ops-notes/${id}`),
   create: (data: OpsNoteCreate) => api.post<OpsNote>('/ops-notes', data),
   update: (id: string, data: OpsNoteUpdate) => api.put<OpsNote>(`/ops-notes/${id}`, data),
   delete: (id: string) => api.delete(`/ops-notes/${id}`),
@@ -1574,7 +1505,6 @@ export const opsNotesApi = {
 export const vocApi = {
   getAll: (params?: { category?: string; status?: string }) =>
     api.get<import('@/types').VocListResponse>('/voc', { params: params || undefined }),
-  getById: (id: string) => api.get<import('@/types').VocPost>(`/voc/${id}`),
   create: (data: import('@/types').VocCreate) => api.post<import('@/types').VocPost>('/voc', data),
   update: (id: string, data: import('@/types').VocUpdate) =>
     api.put<import('@/types').VocPost>(`/voc/${id}`, data),
@@ -1609,7 +1539,6 @@ export const managementServersApi = {
     api.get<ManagementServerListResponse>('/management-servers', {
       params: serverType ? { server_type: serverType } : {},
     }),
-  getById: (id: string) => api.get<ManagementServer>(`/management-servers/${id}`),
   create: (data: ManagementServerCreate) => api.post<ManagementServer>('/management-servers', data),
   update: (id: string, data: ManagementServerUpdate) =>
     api.put<ManagementServer>(`/management-servers/${id}`, data),
@@ -1644,10 +1573,6 @@ export const isilonNfsApi = {
       api.put<import('@/types').IsilonCommand>(`/isilon-nfs/commands/${id}`, data),
     delete: (id: string) => api.delete(`/isilon-nfs/commands/${id}`),
   },
-  getOverview: (serverId?: string, force = false) =>
-    api.get<import('@/types').IsilonNfsOverview>('/isilon-nfs/overview', {
-      params: { ...(serverId ? { server_id: serverId } : {}), force },
-    }),
   /** mc 클라이언트 패턴 — 등록된 명령 중 선택한 키만 온디맨드 실행(캐시 미사용). */
   runCommands: (serverId: string, keys: string[]) =>
     api.post<import('@/types').IsilonRunResponse>(`/isilon-nfs/servers/${serverId}/run`, { keys }, { timeout: SYNC_RUN_TIMEOUT }),
@@ -1657,16 +1582,11 @@ export const isilonNfsApi = {
 export const infraNodesApi = {
   getAll: (params?: { clusterId?: string; rackName?: string }) =>
     api.get<import('@/types').InfraNodeListResponse>('/infra-nodes', { params, headers: { 'X-API-Scopes': 'infra_topology.read' } }),
-  getById: (id: string) => api.get<import('@/types').InfraNode>(`/infra-nodes/${id}`, { headers: { 'X-API-Scopes': 'infra_topology.read' } }),
   create: (data: import('@/types').InfraNodeCreate) =>
     api.post<import('@/types').InfraNode>('/infra-nodes', data, { headers: { 'X-API-Scopes': 'infra_topology.edit' } }),
   update: (id: string, data: import('@/types').InfraNodeUpdate) =>
     api.put<import('@/types').InfraNode>(`/infra-nodes/${id}`, data, { headers: { 'X-API-Scopes': 'infra_topology.edit' } }),
   delete: (id: string) => api.delete(`/infra-nodes/${id}`, { headers: { 'X-API-Scopes': 'infra_topology.force_fix' } }),
-  sync: (clusterId: string) =>
-    api.post<import('@/types').InfraSyncResult>(`/infra-nodes/sync/${clusterId}`, undefined, { headers: { 'X-API-Scopes': 'infra_topology.sync' } }),
-  verify: (id: string) =>
-    api.post<import('@/types').NodeVerifyResult>(`/infra-nodes/${id}/verify`, undefined, { headers: { 'X-API-Scopes': 'infra_topology.sync' } }),
 };
 
 // Node Server Spec (자산 관리 대장)
@@ -1683,8 +1603,6 @@ export const nodeSpecsApi = {
         : undefined,
       signal,
     }),
-  getById: (id: string) =>
-    api.get<import('@/types').NodeServerSpec>(`/node-specs/${id}`),
   create: (data: import('@/types').NodeServerSpecCreate) =>
     api.post<import('@/types').NodeServerSpec>('/node-specs', data),
   update: (id: string, data: import('@/types').NodeServerSpecUpdate) =>
@@ -1720,8 +1638,6 @@ export const nodeSpecsApi = {
 export const topologyTraceApi = {
   trace: (payload: TopologyTraceRequest) =>
     api.post<TopologyTraceResponse>('/topology-trace', payload),
-  packetFlow: (payload: import('@/types').PacketFlowRequest) =>
-    api.post<import('@/types').PacketFlowResponse>('/topology-trace/packet-flow', payload),
   packetFlowV2: (payload: import('@/types').PacketFlowRequestV2, signal?: AbortSignal) =>
     api.post<import('@/types').PacketFlowResponseV2>('/topology-trace/packet-flow-v2', payload, { signal }),
   hubbleFlows: (payload: import('@/types').HubbleFlowsRequest, signal?: AbortSignal) =>
@@ -1866,18 +1782,11 @@ export const serviceTopologyApi = {
         timeout: 60_000,
       },
     ),
-  listLinks: (clusterId: string, namespace?: string) =>
-    api.get<import('@/types').ServiceTopologyLink[]>(
-      `/service-topology/${clusterId}/links`,
-      { params: namespace ? { namespace } : {} },
-    ),
   createLink: (clusterId: string, data: {
     namespace: string; sourceKind: string; sourceName: string;
     targetKind: string; targetName: string; linkType: string;
     label?: string | null; note?: string | null;
   }) => api.post<import('@/types').ServiceTopologyLink>(`/service-topology/${clusterId}/links`, data),
-  updateLink: (linkId: string, data: { linkType?: string; label?: string | null; note?: string | null }) =>
-    api.patch<import('@/types').ServiceTopologyLink>(`/service-topology/links/${linkId}`, data),
   deleteLink: (linkId: string) => api.delete(`/service-topology/links/${linkId}`),
   createExternalNode: (clusterId: string, data: {
     namespace: string; name: string; nodeType: string; note?: string | null;
@@ -1932,16 +1841,8 @@ export const architectureDocsApi = {
     view?: import('@/types').ArchViewType | 'both'; sortOrder?: number;
   }) => api.post<import('@/types').ArchManualEdge>(
     `/architecture-docs/${serviceId}/manual-edges`, data),
-  updateManualEdge: (serviceId: string, edgePk: string, data: {
-    edgeType?: string; label?: string | null; description?: string | null;
-    view?: import('@/types').ArchViewType | 'both'; sortOrder?: number;
-  }) => api.patch<import('@/types').ArchManualEdge>(
-    `/architecture-docs/${serviceId}/manual-edges/${edgePk}`, data),
   deleteManualEdge: (serviceId: string, edgePk: string) =>
     api.delete(`/architecture-docs/${serviceId}/manual-edges/${edgePk}`),
-  audit: (serviceId: string, limit = 50) =>
-    api.get<Record<string, unknown>[]>(
-      `/architecture-docs/${serviceId}/audit`, { params: { limit } }),
   getSchedule: () =>
     api.get<import('@/types').ArchDocSchedule>('/architecture-docs/schedule'),
   setSchedule: (data: { enabled: boolean; cron: string }) =>
@@ -1964,7 +1865,6 @@ export const k8sEventsApi = {
     api.get<import('@/types').K8sEventStats>('/events/stats', {
       params: clusterId ? { cluster_id: clusterId } : {},
     }),
-  get: (id: string) => api.get<import('@/types').K8sEvent>(`/events/${id}`),
   delete: (id: string) => api.delete(`/events/${id}`),
   getAnalysis: (id: string) =>
     api.get<{ data: import('@/types').AlertIncidentAnalysis }>(`/events/${id}/analysis`),
@@ -1995,8 +1895,6 @@ export const trendsApi = {
   },
   listDigests: (limit = 30) =>
     api.get<TrendDigest[]>('/trends/digests', { params: { limit } }),
-  getDigest: (date: string) =>
-    api.get<TrendDigest>(`/trends/digests/${date}`),
   listItems: (date: string, category?: string, itemType?: string) =>
     api.get<TrendItem[]>(`/trends/items/${date}`, {
       params: { ...(category && { category }), ...(itemType && { item_type: itemType }) },
@@ -2020,7 +1918,6 @@ export const trendsApi = {
 import type {
   LakeService as _LakeService,
   LakeServiceInput as _LakeServiceInput,
-  LakeServiceUpdate as _LakeServiceUpdate,
   LakeServiceListResponse as _LakeServiceListResponse,
   LakeServiceCheck as _LakeServiceCheck,
   LakeServiceCheckListResponse as _LakeServiceCheckListResponse,
@@ -2043,8 +1940,6 @@ export const lakeServicesApi = {
   listChecks: (id: string, params?: { offset?: number; limit?: number }) =>
     api.get<_LakeServiceCheckListResponse>(`/lake-services/${id}/checks`, { params }),
   create: (data: _LakeServiceInput) => api.post<_LakeService>('/lake-services', data),
-  update: (id: string, data: _LakeServiceUpdate) =>
-    api.put<_LakeService>(`/lake-services/${id}`, data),
   remove: (id: string) => api.delete(`/lake-services/${id}`),
   runCheck: (id: string) => api.post<_LakeServiceCheck>(`/lake-services/${id}/check`, undefined, { timeout: 2 * 60_000 }),
 };
@@ -2060,7 +1955,6 @@ import type {
 export const lakeServiceTypesApi = {
   list: (params?: { enabled?: boolean; domain?: string; offset?: number; limit?: number }) =>
     api.get<_LakeServiceTypeListResponseRows>('/lake-service-types', { params }),
-  get: (id: string) => api.get<_LakeServiceTypeRow>(`/lake-service-types/${id}`),
   create: (data: _LakeServiceTypeInput) =>
     api.post<_LakeServiceTypeRow>('/lake-service-types', data),
   update: (id: string, data: _LakeServiceTypeUpdate) =>
@@ -2081,7 +1975,6 @@ import type {
 export const serviceCategoriesApi = {
   list: (params?: { domain?: string; enabled?: boolean; offset?: number; limit?: number }) =>
     api.get<_ServiceCategoryListResponse>('/service-categories', { params }),
-  get: (id: string) => api.get<_ServiceCategory>(`/service-categories/${id}`),
   create: (data: _ServiceCategoryInput) =>
     api.post<_ServiceCategory>('/service-categories', data),
   update: (id: string, data: _ServiceCategoryUpdate) =>
@@ -2092,7 +1985,6 @@ export const serviceCategoriesApi = {
 // Pod-to-pod bottleneck analyzer — pod-bottleneck-analyzer PDCA
 import type {
   BottleneckRun as _BottleneckRun,
-  BottleneckRunInput as _BottleneckRunInput,
   BottleneckRunListResponse as _BottleneckRunListResponse,
   BottleneckProbeCatalogEntry as _BottleneckProbeCatalogEntry,
 } from '@/types';
@@ -2122,8 +2014,6 @@ export const podBottleneckApi = {
     limit?: number;
   }) => api.get<_BottleneckRunListResponse>('/pod-bottleneck/runs', { params }),
   getRun: (id: string) => api.get<_BottleneckRun>(`/pod-bottleneck/runs/${id}`),
-  runAnalysis: (data: _BottleneckRunInput) =>
-    api.post<_BottleneckRun>('/pod-bottleneck/run', data),
   deleteRun: (id: string) => api.delete(`/pod-bottleneck/runs/${id}`),
 };
 
@@ -2304,7 +2194,6 @@ export const batchJobsApi = {
     api.get<{ data: BatchJobTypeDescriptor[] }>('/batch-jobs/types'),
   list: (params?: { clusterId?: string; jobType?: string }) =>
     api.get<{ data: BatchJob[] }>('/batch-jobs', { params }),
-  get: (id: string) => api.get<BatchJob>(`/batch-jobs/${id}`),
   create: (data: BatchJobCreate) => api.post<BatchJob>('/batch-jobs', data),
   update: (id: string, data: BatchJobUpdate) => api.put<BatchJob>(`/batch-jobs/${id}`, data),
   delete: (id: string) => api.delete(`/batch-jobs/${id}`),
@@ -2361,14 +2250,11 @@ export const dailyCheckApi = {
     api.get<DailyCheckLogLite[]>(`/daily-check/results/${clusterId}`, { params }),
   runNow: (clusterId: string) =>
     api.post<DailyCheckLogLite>(`/daily-check/run/${clusterId}`, undefined, { timeout: SYNC_RUN_TIMEOUT }),
-  getSummary: () => api.get('/daily-check/summary'),
 };
 
 export const deepCheckApi = {
   listResults: (clusterId: string, params?: { limit?: number; offset?: number }) =>
     api.get<DeepCheckResult[]>(`/deep-check/results/${clusterId}`, { params }),
-  latestResults: (clusterId: string) =>
-    api.get<DeepCheckResult[]>(`/deep-check/results/${clusterId}/latest`),
   review: (dailyCheckLogId: string) =>
     api.get<DeepCheckReview>(`/deep-check/review/${dailyCheckLogId}`),
   regenerateReview: (dailyCheckLogId: string) =>
@@ -2396,7 +2282,6 @@ export const deepCheckDefinitionsApi = {
     if (params?.checkType) q.check_type = params.checkType;
     return api.get<DeepCheckDefinition[]>('/deep-check/definitions', { params: q });
   },
-  get: (id: string) => api.get<DeepCheckDefinition>(`/deep-check/definitions/${id}`),
   create: (data: DeepCheckDefinitionInput) =>
     api.post<DeepCheckDefinition>('/deep-check/definitions', data),
   update: (id: string, data: DeepCheckDefinitionInput) =>
@@ -2510,8 +2395,6 @@ export const notificationsApi = {
     api.put<NotificationChannel>(`/notifications/channels/${id}`, data),
   remove: (id: string) => api.delete(`/notifications/channels/${id}`),
   test: (id: string) => api.post<NotificationLogEntry>(`/notifications/test/${id}`),
-  log: (limit = 50) =>
-    api.get<NotificationLogEntry[]>('/notifications/log', { params: { limit } }),
   // 개인 인앱 알림 (알림 종)
   listMy: (limit = 30) =>
     api.get<{ data: import('@/types').UserNotification[]; unread: number }>('/notifications/my', { params: { limit } }),
@@ -2633,20 +2516,14 @@ export const opsCheckApi = {
     api.get<OpsCheckCatalogItem[]>(`/ops-checks/catalog/${clusterId}`),
   run: (clusterId: string, items: OpsCheckRunRequestItem[]) =>
     api.post<OpsCheckRun>('/ops-checks/run', { clusterId, items }),
-  listRuns: (clusterId?: string, limit = 20) =>
-    api.get<OpsCheckRun[]>('/ops-checks/runs', { params: { cluster_id: clusterId, limit } }),
   getRun: (runId: string) => api.get<OpsCheckRun>(`/ops-checks/runs/${runId}`),
   // 아직 안 돈 항목은 건너뛰고, 실행 중인 항목이 끝나면 멈춘다.
   cancelRun: (runId: string) => api.post<OpsCheckRun>(`/ops-checks/runs/${runId}/cancel`),
   getRunItems: (runId: string) =>
     api.get<OpsCheckRunItem[]>(`/ops-checks/runs/${runId}/items`),
-  itemHistory: (source: string, itemRefId: string, limit = 20) =>
-    api.get<OpsCheckRunItem[]>(`/ops-checks/items/${source}/${itemRefId}/history`, { params: { limit } }),
 };
 
 export const k8sResourcesApi = {
-  kinds: (clusterId: string) =>
-    api.get<{ kinds: string[] }>(`/k8s/${clusterId}/resources/kinds`),
   // refresh=true: 서버 목록 캐시(SWR)를 건너뛰고 새로 조회 — 수동 "새로고침" 버튼 전용
   list: (clusterId: string, kind: string, namespace?: string, refresh?: boolean) =>
     api.get<import('@/types').K8sResourceListResponse>(
@@ -2898,10 +2775,6 @@ export const k8sHelmApi = {
       `/k8s/${clusterId}/helm/releases`,
       { params: namespace ? { namespace } : undefined, timeout: 60_000 },
     ),
-  history: (clusterId: string, namespace: string, name: string) =>
-    api.get<{ count: number; items: import('@/types').HelmHistoryItem[] }>(
-      `/k8s/${clusterId}/helm/releases/${namespace}/${name}/history`,
-    ),
   values: (clusterId: string, namespace: string, name: string) =>
     api.get<{ name: string; namespace: string; yaml: string }>(
       `/k8s/${clusterId}/helm/releases/${namespace}/${name}/values`,
@@ -3015,16 +2888,11 @@ export const reactionsApi = {
     }),
   toggle: (targetType: string, targetId: string, emoji: string) =>
     api.post<import('@/types').ReactionSummary>('/reactions/toggle', { targetType, targetId, emoji }),
-  batch: (targetType: string, targetIds: string[]) =>
-    api.get<Record<string, import('@/types').ReactionSummary>>('/reactions/batch', {
-      params: { target_type: targetType, target_ids: targetIds.join(',') },
-    }),
 };
 
 // ── Your Island API (사용자 커스텀 화면) ────────────────────────────────────
 export const islandsApi = {
   list: () => api.get<import('@/types').IslandListResponse>('/islands'),
-  get: (id: string) => api.get<import('@/types').Island>(`/islands/${id}`),
   create: (data: import('@/types').IslandCreatePayload) =>
     api.post<import('@/types').Island>('/islands', data),
   update: (id: string, data: import('@/types').IslandUpdatePayload) =>

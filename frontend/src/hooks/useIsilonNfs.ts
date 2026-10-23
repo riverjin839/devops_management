@@ -34,23 +34,6 @@ export function useIsilonCommands(serverId?: string, enabled = true) {
   });
 }
 
-/**
- * NFS 스냅샷 조회. 부하 보호상 자동 폴링하지 않는다(백엔드 캐시 TTL 이 있으나 불필요한
- * SSH 호출을 줄이려 refetch 를 끔). 사용자가 "새로고침" 을 눌러 refetch 하거나 force 로 재수집.
- */
-export function useIsilonOverview(serverId?: string, enabled = true) {
-  return useQuery({
-    queryKey: isilonKeys.overview(serverId),
-    queryFn: async () => {
-      const { data } = await isilonNfsApi.getOverview(serverId);
-      return data;
-    },
-    enabled,
-    refetchOnWindowFocus: false,
-    staleTime: 60_000,
-  });
-}
-
 export function useCreateIsilonServer() {
   const qc = useQueryClient();
   return useMutation({

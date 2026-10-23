@@ -1,5 +1,4 @@
 /** `/k8s-rbac` 의 작은 표시 컴포넌트 — 위험도 뱃지와 리소스·verb 태그. */
-import { isWriteVerb } from './rbacShared';
 
 const RISK_LABEL: Record<string, string> = { low: '낮음', medium: '보통', high: '높음' };
 // 글자는 text-foreground — 11px 글자를 상태색 틴트(/10) 위에 상태색으로 쓰면 일부 테마에서 대비가
@@ -61,14 +60,3 @@ export function Tag({
   return <span className={base}>{children}</span>;
 }
 
-export function VerbTags({ verbs }: { verbs: string[] }) {
-  return (
-    <>
-      {verbs.map((v) => (
-        <Tag key={v} tone={isWriteVerb(v) ? 'write' : 'read'}>
-          {v}
-        </Tag>
-      ))}
-    </>
-  );
-}

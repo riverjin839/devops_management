@@ -1,7 +1,6 @@
 export { WorkItemCalendar } from './WorkItemCalendar';
 export { WorkItemKanban } from './WorkItemKanban';
 export { WorkItemForm } from './WorkItemForm';
-export { WorkItemFormModal } from './WorkItemFormModal';
 export { WorkItemReadView } from './WorkItemReadView';
 export { WorkItemTableRow } from './WorkItemTableRow';
 export { WorkItemActionsMenu } from './WorkItemActionsMenu';

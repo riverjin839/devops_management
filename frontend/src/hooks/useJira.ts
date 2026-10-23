@@ -163,22 +163,6 @@ export function useJiraRefreshItem() {
   });
 }
 
-export function useJiraCreateIssue() {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: (data: import('@/types').JiraCreateRequest) => jiraApi.createIssue(data),
-    onSuccess: () => qc.invalidateQueries({ queryKey: workItemKeys.all }),
-  });
-}
-
-export function useJiraDeleteIssue() {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: (key: string) => jiraApi.deleteIssue(key),
-    onSuccess: () => qc.invalidateQueries({ queryKey: workItemKeys.all }),
-  });
-}
-
 /** 연결 해제 (선택적으로 업무 삭제까지) — Jira 이슈는 건드리지 않는다. */
 export function useJiraUnlink() {
   const qc = useQueryClient();
@@ -209,12 +193,6 @@ export function useJiraVerifyLinks() {
 export function useWeeklyReportPreview() {
   return useMutation({
     mutationFn: (data?: import('@/types').WeeklyReportRequest) => jiraApi.weeklyPreview(data),
-  });
-}
-
-export function useWeeklyReportPublish() {
-  return useMutation({
-    mutationFn: (data?: import('@/types').WeeklyPublishRequest) => jiraApi.weeklyPublish(data),
   });
 }
 

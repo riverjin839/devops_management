@@ -1,6 +1,5 @@
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useQuery } from '@tanstack/react-query';
 import { workGuidesApi } from '@/services/api';
-import type { WorkGuideCreate, WorkGuideUpdate } from '@/types';
 
 export const workGuideKeys = {
   all: ['work-guides'] as const,
@@ -18,27 +17,3 @@ export function useWorkGuides(params?: { category?: string; status?: string; pri
   });
 }
 
-export function useCreateWorkGuide() {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: (data: WorkGuideCreate) => workGuidesApi.create(data).then((r) => r.data),
-    onSuccess: () => qc.invalidateQueries({ queryKey: guideKeys.all }),
-  });
-}
-
-export function useUpdateWorkGuide() {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: ({ id, data }: { id: string; data: WorkGuideUpdate }) =>
-      workGuidesApi.update(id, data).then((r) => r.data),
-    onSuccess: () => qc.invalidateQueries({ queryKey: guideKeys.all }),
-  });
-}
-
-export function useDeleteWorkGuide() {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: (id: string) => workGuidesApi.delete(id),
-    onSuccess: () => qc.invalidateQueries({ queryKey: guideKeys.all }),
-  });
-}

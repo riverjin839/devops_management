@@ -68,7 +68,7 @@ AI 어시스턴트 + 사람 개발자용 — 기능 → 파일 경로와 자주 
 | 표 행(인라인 편집·시간옵션) / 칸반 / 캘린더 / 에픽뷰(Epic→Task→Sub-task 계층) | — | `components/work-items/WorkItemTableRow.tsx` · `WorkItemKanban.tsx` · `WorkItemCalendar.tsx` · `WorkItemEpicView.tsx` · `WorkItemActionsMenu.tsx`("변경" 드롭다운, 표 행/에픽뷰 공유) |
 | 상세 보기 / 댓글·활동 | — | `WorkItemReadView.tsx` · `CommentThread.tsx` · `ActivityTimeline.tsx` |
 | 저장된 뷰(필터·정렬·보기 스냅샷, localStorage) | — | `components/work-items/SavedViews.tsx` |
-| 사용자 정의 필드(custom_values) | `backend/app/routers/work_item_custom_fields.py` | `WorkItemCustomFieldsManager.tsx` |
+| 사용자 정의 필드(custom_values) | `backend/app/routers/work_item_custom_fields.py` | `hooks/useWorkItemCustomFields.ts` (조회 — 필드 관리는 Settings) |
 | Jira 가져오기/양방향 반영 | `backend/app/routers/jira.py` (`/jira`) — 엑셀 저장 `POST /jira/import/excel/save`(`dry_run`·`only_keys`·`tenant_id`, 행별 `changes`, 행 savepoint, 상한 10MB/2MB/2000행 413) · 테넌트 판정 `_resolve_import_tenant`/`_pick_visible`(라이브 `/jira/import` 공용) | `JiraImportModal.tsx` · `frontend/src/pages/JiraExcelImportPage.tsx`(dry-run 표 → 확인 → 선택 적용) · 공유 범위 `components/common/TenantScopeSelect.tsx` |
 | Jira 원본 항목 매핑(Epic·Sub-task·component·label·상태) + 보존 규칙 | `services/jira_service.py` `map_jira_issue()`/`extract_epic_parts()`/`extract_confluence_url()` · `routers/jira.py` `_jira_sync_values()`/`_apply_jira_fields()` | `components/work-items/workItemColumns.ts` · `WorkItemTableRow.tsx` · `JiraIssueChip.tsx` · `DocLinkChip.tsx`(제목 옆 Confluence 링크 박스, 인라인 편집) |
 | 업무 → Jira 이슈 + Confluence 문서 연계 생성 (Epic/Sub-task, 사용자별 조건 프리셋) | `routers/jira.py` `GET/POST /jira/provision*` (`user_settings` key=`jira_provision_preset`) | `components/work-items/JiraProvisionModal.tsx` |

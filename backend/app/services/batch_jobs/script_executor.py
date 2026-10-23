@@ -133,7 +133,7 @@ class ScriptExecutor(BatchJobExecutor):
         start = time.monotonic()
         with self._step("execute", "ansible-playbook 실행") as st:
             t0 = time.time()
-            # ansible-runner 는 blocking subprocess — 이벤트 루프를 막지 않게 스레드로.
+            # ansible-playbook 은 blocking subprocess — 이벤트 루프를 막지 않게 스레드로.
             # (참고: run_playbook 내부 subprocess 는 cancel_token 에 attach 되지 않아
             # "중지"가 이 단계는 인터럽트하지 못한다 — playbook_executor 의 기존 한계.)
             result = await asyncio.to_thread(
