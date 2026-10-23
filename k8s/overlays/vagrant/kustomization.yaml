@@ -14,7 +14,7 @@ components:
 
 # ============================================
 # Vagrant(VirtualBox) kubeadm 3노드 테스트 클러스터 — PEP 인클러스터 배포
-#   배포: bash vagrant/deploy-pep.sh   (docs/MAC_LOCAL_TEST_GUIDE.md §7)
+#   배포: bash labs/vagrant/deploy-pep.sh   (docs/MAC_LOCAL_TEST_GUIDE.md §7)
 #   접속: http://192.168.10.100:30080 (UI) · :30800/docs (API)
 # namePrefix 없음 (서비스 디스커버리 깨짐 방지, kind overlay 와 동일)
 # ============================================

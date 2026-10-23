@@ -245,11 +245,11 @@ vagrant ssh k8s-ctr -c 'sudo cat /etc/kubernetes/admin.conf' > kubeadm-kubeconfi
 ok "kubeadm-kubeconfig.yaml 생성 (server: https://192.168.10.100:6443)"
 
 # ---- 9) (선택) PEP 등록 ----
-REG_CMD="bash ../scripts/register-local-cluster.sh --name vagrant-kubeadm --kubeconfig vagrant/kubeadm-kubeconfig.yaml --server https://192.168.10.100:6443"
+REG_CMD="bash scripts/lab/register-local-cluster.sh --name vagrant-kubeadm --kubeconfig labs/vagrant/kubeadm-kubeconfig.yaml --server https://192.168.10.100:6443"
 if $DO_REGISTER; then
   if curl -fsS --max-time 5 http://localhost:8000/health >/dev/null 2>&1; then
     log "PEP 에 등록..."
-    bash ../scripts/register-local-cluster.sh --name vagrant-kubeadm \
+    bash ../../scripts/lab/register-local-cluster.sh --name vagrant-kubeadm \
       --kubeconfig kubeadm-kubeconfig.yaml --server https://192.168.10.100:6443
   else
     warn "PEP 백엔드(localhost:8000) 미기동 → 등록 생략. 'docker compose up -d' 후 레포 루트에서:"

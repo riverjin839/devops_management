@@ -152,7 +152,7 @@ docker build docker/ollama-qwen2.5-coder \
   -t <registry>/ollama-qwen2.5-coder:3b
 ```
 
-- 폐쇄망은 `scripts/deploy-airgap.sh` 로 내부 레지스트리에 미러링한다.
+- 폐쇄망은 `scripts/deploy/deploy-airgap.sh` 로 내부 레지스트리에 미러링한다.
 
 #### 5.3 이미 떠 있는 파드에서 바로 만들기 (임시)
 

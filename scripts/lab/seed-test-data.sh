@@ -11,8 +11,8 @@
 # 협업/지식/인프라 데이터(프로젝트·작업·이슈·인프라 노드·지식 문서·운영 메모)만 채운다.
 #
 # 사용법:
-#   bash scripts/seed-test-data.sh
-#   API_URL=http://localhost:8000 PEP_USER=admin PEP_PASS=admin bash scripts/seed-test-data.sh
+#   bash scripts/lab/seed-test-data.sh
+#   API_URL=http://localhost:8000 PEP_USER=admin PEP_PASS=admin bash scripts/lab/seed-test-data.sh
 #
 # 멱등성: 같은 이름이 이미 있어도 API 가 중복 생성하므로, 한 번만 실행하는 것을 권장.
 # 재실행하면 샘플이 중복으로 쌓인다(테스트 환경이라 무방하지만 인지할 것).

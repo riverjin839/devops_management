@@ -5,7 +5,7 @@
 > docker-compose 로 기동한 뒤 두 클러스터를 등록해 **멀티 클러스터** 모니터링·Host Facts·MinIO 를 검증한다.
 >
 > kind(Docker) 노드는 SSH/서버정보가 없어 폐쇄망 충실도가 떨어진다. 그래서 Windows 도 **Vagrant +
-> VirtualBox 로 진짜 VM** 을 쓴다. 더 가벼운 Docker(kind) 대안이 필요하면 [`windows-docker/`](../windows-docker/README.md) 참고.
+> VirtualBox 로 진짜 VM** 을 쓴다. 더 가벼운 Docker(kind) 대안이 필요하면 [`labs/windows-docker/`](../labs/windows-docker/README.md) 참고.
 > Mac(Apple Silicon) 은 [MAC_LOCAL_TEST_GUIDE.md](MAC_LOCAL_TEST_GUIDE.md) 를 본다 — 이 문서와 패턴은 동일하다.
 
 ---
@@ -51,14 +51,14 @@ winget install Kubernetes.kubectl        # (선택) 호스트에서 kubectl
 - **VirtualBox + Docker Desktop(WSL2) 공존**: VirtualBox **7.x** + 최신 Windows 10/11 에서
   Hyper-V/WSL2 와 공존 가능(성능 약간 저하). 충돌 시 [트러블슈팅](#트러블슈팅) 참고.
 - **리소스**: VM 클러스터 2개(각 3노드) + PEP. **CPU 6+ / RAM 16GB+** 권장.
-- **WSL2/Git Bash**: 등록 스크립트(`scripts/register-local-cluster.sh`)는 bash 라 WSL2 또는 Git Bash 에서 실행한다(또는 PEP UI 로 등록).
+- **WSL2/Git Bash**: 등록 스크립트(`scripts/lab/register-local-cluster.sh`)는 bash 라 WSL2 또는 Git Bash 에서 실행한다(또는 PEP UI 로 등록).
 
 ---
 
 ## 1. 클러스터 1 — AlmaLinux kubeadm VM 생성
 
 ```powershell
-cd vagrant\kubeadm-almalinux
+cd labs\vagrant\kubeadm-almalinux
 vagrant up --provider=virtualbox        # control-plane + worker×2 (CRI-O + Cilium). 5~10분
 vagrant status
 ```
@@ -83,7 +83,7 @@ kubectl get nodes -o wide               # k8s-control-1 / k8s-worker-1 / k8s-wor
 서브넷(192.168.57.x) · host 포트(6444) · VM 이름(`c2-…`) · 산출물(`_out-c2\`)이 자동 분리된다.
 
 ```powershell
-cd vagrant\kubeadm-almalinux
+cd labs\vagrant\kubeadm-almalinux
 $env:PEP_CLUSTER = "2"
 $env:VAGRANT_DOTFILE_PATH = ".vagrant-c2"
 vagrant up --provider=virtualbox        # 클러스터 2 생성
@@ -127,11 +127,11 @@ curl http://localhost:8000/health
 
 **(B) 스크립트** (WSL2 / Git Bash) — Mac 과 동일한 헬퍼 재사용:
 ```bash
-bash scripts/register-local-cluster.sh --name alma-c1 \
-  --kubeconfig vagrant/kubeadm-almalinux/_out/pep-kubeconfig.yaml \
+bash scripts/lab/register-local-cluster.sh --name alma-c1 \
+  --kubeconfig labs/vagrant/kubeadm-almalinux/_out/pep-kubeconfig.yaml \
   --server https://host.docker.internal:6443
-bash scripts/register-local-cluster.sh --name alma-c2 \
-  --kubeconfig vagrant/kubeadm-almalinux/_out-c2/pep-kubeconfig.yaml \
+bash scripts/lab/register-local-cluster.sh --name alma-c2 \
+  --kubeconfig labs/vagrant/kubeadm-almalinux/_out-c2/pep-kubeconfig.yaml \
   --server https://host.docker.internal:6444
 ```
 
@@ -167,7 +167,7 @@ kubectl -n minio rollout status deploy/minio
 ```powershell
 docker compose down                      # PEP 중지 (데이터 유지; -v 로 볼륨까지)
 
-cd vagrant\kubeadm-almalinux
+cd labs\vagrant\kubeadm-almalinux
 vagrant destroy -f                       # 클러스터 1
 Remove-Item -Recurse -Force _out, .vagrant -ErrorAction SilentlyContinue
 
@@ -195,7 +195,7 @@ Remove-Item -Recurse -Force _out-c2, .vagrant-c2 -ErrorAction SilentlyContinue
 
 디버그:
 ```powershell
-cd vagrant\kubeadm-almalinux; vagrant ssh k8s-control-1 -c 'sudo KUBECONFIG=/etc/kubernetes/admin.conf kubectl get nodes -o wide'
+cd labs\vagrant\kubeadm-almalinux; vagrant ssh k8s-control-1 -c 'sudo KUBECONFIG=/etc/kubernetes/admin.conf kubectl get nodes -o wide'
 docker compose logs -f backend
 ```
 
@@ -205,19 +205,19 @@ docker compose logs -f backend
 
 ```powershell
 # 1) 클러스터 1
-cd vagrant\kubeadm-almalinux; vagrant up --provider=virtualbox; cd ..\..
+cd labs\vagrant\kubeadm-almalinux; vagrant up --provider=virtualbox; cd ..\..\..
 
 # 2) 클러스터 2 (별도 셸 또는 변수 설정)
-cd vagrant\kubeadm-almalinux
+cd labs\vagrant\kubeadm-almalinux
 $env:PEP_CLUSTER="2"; $env:VAGRANT_DOTFILE_PATH=".vagrant-c2"; vagrant up --provider=virtualbox
-Remove-Item Env:\PEP_CLUSTER, Env:\VAGRANT_DOTFILE_PATH; cd ..\..
+Remove-Item Env:\PEP_CLUSTER, Env:\VAGRANT_DOTFILE_PATH; cd ..\..\..
 
 # 3) PEP 기동
 Copy-Item .env.example backend\.env
 docker compose up -d --build
 
 # 4) 등록 (UI: host.docker.internal:6443 / :6444 + 각 _out*/pep-kubeconfig.yaml)
-#    또는 WSL2: bash scripts/register-local-cluster.sh ... (위 4-B)
+#    또는 WSL2: bash scripts/lab/register-local-cluster.sh ... (위 4-B)
 
 # 5) 확인 → http://localhost:5173
 ```

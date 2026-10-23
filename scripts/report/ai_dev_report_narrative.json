@@ -279,7 +279,7 @@
     {
       "key": "infra-ci",
       "label": "배포·CI/CD",
-      "pattern": "^(k8s/|helm/|docker/|argocd/|ansible/|vagrant/|windows-docker/|\\.github/workflows/|scripts/|Jenkinsfile|Makefile|skaffold\\.yaml|docker-compose|backend/Dockerfile|frontend/Dockerfile|frontend/nginx)",
+      "pattern": "^(k8s/|helm/|docker/|argocd/|ansible/|labs/|\\.github/workflows/|scripts/|Jenkinsfile|Makefile|skaffold\\.yaml|docker-compose|backend/Dockerfile|frontend/Dockerfile|frontend/nginx)",
       "desc": "Compose 단일 구성에서 kind·Kustomize overlay 4종·Helm·폐쇄망 배포로 확장. CI 게이트·SHA 고정 CD·자동 릴리스·문서 동기화 검사를 붙였다.",
       "features": [
         "Compose·kind·Kustomize 4 overlay·Helm·폐쇄망 배포 스크립트",
@@ -655,7 +655,7 @@
       "label": "폐쇄망 배포",
       "module": "infra-ci",
       "paths": [
-        "scripts/deploy-airgap.sh"
+        "scripts/deploy/deploy-airgap.sh"
       ],
       "desc": "레지스트리·CLI·인증정보 대화형 설치"
     },

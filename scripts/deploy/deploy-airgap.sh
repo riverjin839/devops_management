@@ -7,7 +7,7 @@ set -e
 
 # 프로젝트 루트 경로 (스크립트 위치 기준으로 상위 디렉토리)
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PROJECT_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
+PROJECT_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
 
 # 기본값
 NAMESPACE="${NAMESPACE:-k8s-monitor}"

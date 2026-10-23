@@ -6,16 +6,16 @@ set -euo pipefail
 # Builds and pushes images with auto-incrementing semver tags.
 #
 # Usage:
-#   bash scripts/version-tag.sh build          # Build with current version
-#   bash scripts/version-tag.sh bump patch     # 0.1.0 → 0.1.1
-#   bash scripts/version-tag.sh bump minor     # 0.1.1 → 0.2.0
-#   bash scripts/version-tag.sh bump major     # 0.2.0 → 1.0.0
-#   bash scripts/version-tag.sh show           # Show current version
-#   bash scripts/version-tag.sh deploy         # Build + push + kustomize set image
+#   bash scripts/release/version-tag.sh build          # Build with current version
+#   bash scripts/release/version-tag.sh bump patch     # 0.1.0 → 0.1.1
+#   bash scripts/release/version-tag.sh bump minor     # 0.1.1 → 0.2.0
+#   bash scripts/release/version-tag.sh bump major     # 0.2.0 → 1.0.0
+#   bash scripts/release/version-tag.sh show           # Show current version
+#   bash scripts/release/version-tag.sh deploy         # Build + push + kustomize set image
 # ============================================
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PROJECT_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
+PROJECT_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
 VERSION_FILE="${PROJECT_ROOT}/VERSION"
 
 # Registry (override via env)

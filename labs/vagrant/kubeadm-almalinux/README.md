@@ -4,13 +4,13 @@ PEP 에 등록해 모니터링하고, MinIO 를 올려볼 수 있는 kubeadm 기
 **폐쇄망 운영(RHEL 10)과 동일하게** 검증하려고 OS 를 RHEL 1:1 리빌드인 **AlmaLinux 10**
 으로 맞췄습니다 (커널 6.12 + dnf/SELinux/firewalld/NetworkManager 동일 userland).
 
-이 디렉터리(`vagrant/kubeadm-almalinux/`)는 **AlmaLinux + kubeadm 멀티노드 VM**(VMware Fusion /
+이 디렉터리(`labs/vagrant/kubeadm-almalinux/`)는 **AlmaLinux + kubeadm 멀티노드 VM**(VMware Fusion /
 VirtualBox) 경로입니다. 다른 테스트 환경(Ubuntu kubeadm Cilium 스터디 / Windows docker) 비교는
-[상위 vagrant/README.md](../README.md) 참고. 환경별 대안:
+[상위 labs/vagrant/README.md](../README.md) 참고. 환경별 대안:
 
 | 환경 | 경로 | 형태 | 비고 |
 |---|---|---|---|
-| Mac/Intel/Linux — VMware·VirtualBox | `vagrant/kubeadm-almalinux/` (여기) | 멀티노드 VM | control-plane + worker N, worker 실디스크 |
+| Mac/Intel/Linux — VMware·VirtualBox | `labs/vagrant/kubeadm-almalinux/` (여기) | 멀티노드 VM | control-plane + worker N, worker 실디스크 |
 | **Mac Apple Silicon — 무료 QEMU** | [`qemu/`](qemu/README.md) | **단일노드 VM** | Fusion 불필요. QEMU 제약상 단일노드 |
 | **Windows — Docker** | [`../../windows-docker/`](../../windows-docker/README.md) | kind(Docker) | 동일 패턴을 Docker/kind 로 재현 |
 
@@ -49,7 +49,7 @@ VirtualBox) 경로입니다. 다른 테스트 환경(Ubuntu kubeadm Cilium 스�
 - **Intel Mac / Linux / Windows — VirtualBox 6.1+** (별도 플러그인 불필요)
   - Windows: `winget install Hashicorp.Vagrant Oracle.VirtualBox`. Docker Desktop(WSL2) 와
     공존하려면 **VirtualBox 7.x + 최신 Windows** 필요. 전체 흐름은
-    [../../docs/WIN_LOCAL_TEST_GUIDE.md](../../docs/WIN_LOCAL_TEST_GUIDE.md) 참고.
+    [../../../docs/WIN_LOCAL_TEST_GUIDE.md](../../../docs/WIN_LOCAL_TEST_GUIDE.md) 참고.
 
 > Vagrantfile 은 `vmware_desktop` 과 `virtualbox` provider 블록을 **둘 다** 정의합니다.
 > 기동 시 `--provider` 로 사용할 것을 고르세요(아래).
@@ -58,7 +58,7 @@ VirtualBox) 경로입니다. 다른 테스트 환경(Ubuntu kubeadm Cilium 스�
 
 **Apple Silicon (VMware Fusion):**
 ```bash
-cd vagrant/kubeadm-almalinux
+cd labs/vagrant/kubeadm-almalinux
 vagrant up --provider=vmware_desktop      # 5~10분 (control-plane → worker 순)
 # 매번 입력이 번거로우면: export VAGRANT_DEFAULT_PROVIDER=vmware_desktop
 vagrant status
@@ -66,7 +66,7 @@ vagrant status
 
 **Intel Mac / Linux (VirtualBox):**
 ```bash
-cd vagrant/kubeadm-almalinux
+cd labs/vagrant/kubeadm-almalinux
 vagrant up --provider=virtualbox
 ```
 

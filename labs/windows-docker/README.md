@@ -1,12 +1,12 @@
 # Windows + Docker 테스트 환경 — kind 기반 PEP 클러스터 (Mac vagrant 와 동일 패턴)
 
-Mac 의 `vagrant/`(VM) 경로와 **같은 목적·같은 흐름**을, Windows 에서는 **Docker Desktop +
+Mac 의 `labs/vagrant/`(VM) 경로와 **같은 목적·같은 흐름**을, Windows 에서는 **Docker Desktop +
 kind(Kubernetes IN Docker)** 로 재현한다. PEP 에 클러스터를 등록해 모니터링하고, MinIO 를
 올리고, Host Facts(SSH) 까지 테스트한다.
 
 ## Mac(vagrant) ↔ Windows(docker) 패턴 매핑
 
-| 항목 | Mac — `vagrant/` (VM) | Windows — `windows-docker/` (Docker) |
+| 항목 | Mac — `labs/vagrant/` (VM) | Windows — `labs/windows-docker/` (Docker) |
 |---|---|---|
 | K8s 노드 | AlmaLinux VM (kubeadm) | **kind 노드 컨테이너** (control-plane + worker) |
 | kube-API 노출 | 6443 포워딩 → `host.docker.internal` | kind `apiServerAddress 0.0.0.0:6443` → `host.docker.internal` |
@@ -33,7 +33,7 @@ kind(Kubernetes IN Docker)** 로 재현한다. PEP 에 클러스터를 등록해
 ## 1) 클러스터 생성
 
 ```powershell
-cd windows-docker
+cd labs/windows-docker
 
 # MinIO 디스크로 쓸 Windows 폴더 생성 (Docker Desktop 파일 공유 대상이어야 함)
 New-Item -ItemType Directory -Force -Path C:\pep-kind\minio\data | Out-Null

@@ -75,9 +75,9 @@ devops_management/
 ├── helm/           # Helm chart
 ├── ansible/        # 플레이북
 ├── argocd/         # ArgoCD Application/Project
-├── scripts/        # kind/airgap/init/release/docs 스크립트
+├── scripts/        # deploy/(kind·airgap·재배포) lab/(로컬 테스트) release/ docs/ …
 ├── docs/           # 운영/설계/아카이브 문서 (색인: docs/README.md)
-├── docker/ vagrant/ windows-docker/  # 로컬 실험 환경
+├── docker/ labs/  # 로컬 실험 환경
 └── .claude/skills/ # 재사용 작업 플레이북
 ```
 

@@ -1,6 +1,6 @@
 # PEP Host Facts(SSH) 테스트용 AlmaLinux 10 노드 컨테이너 2대.
 #
-#   cd windows-docker/node-ssh
+#   cd labs/windows-docker/node-ssh
 #   docker compose up -d --build
 #
 # 접속(테스트):
