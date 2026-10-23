@@ -10,6 +10,7 @@ export const en: TranslationResource = {
     page: {
       home: 'Home',
       island: 'My Island',
+      k8sHub: 'K8s Cluster Hub',
       k8sManage: 'K8s Management',
       k8sAllocation: 'K8s Resources',
       k9s: 'k9s Console',
@@ -68,6 +69,7 @@ export const en: TranslationResource = {
       documents: 'Documents',
     },
     group: {
+      k8s: 'K8s Cluster',
       observe: 'Observe',
       inspect: 'Check & Diagnose',
       operate: 'Operate',
@@ -79,6 +81,7 @@ export const en: TranslationResource = {
       system: 'System',
     },
     groupDesc: {
+      k8s: 'Pick one cluster and work its details, resources, capacity, observability, logs and checks in one screen',
       observe: 'See the current state — read-only',
       inspect: 'Check and record state, and trace root causes',
       operate: 'Send commands to clusters, nodes, and storage — confirm the target before running',

@@ -420,7 +420,7 @@ export function K8sManagePage() {
         {/* 본문 */}
         <div className="flex-1 min-w-0 space-y-3">
           <PageHeader
-            back={{ to: '/clusters', label: '클러스터 상세' }}
+            back={{ to: clusterId ? `/clusters/${clusterId}` : '/clusters', label: '클러스터 상세' }}
             icon={Boxes}
             title={<>{cluster ? cluster.name : '클러스터'} — {leaf.label}</>}
             titleExtra={

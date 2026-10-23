@@ -26,6 +26,7 @@ export { PageHeader } from './PageHeader';
 export { PageShell } from './PageShell';
 export type { PageDensity } from './PageShell';
 export { StatTile, StatTileRow } from './StatTile';
+export { SegTabs } from './SegTabs';
 export { StatusBadge, StatusDot, statusToVariant } from './StatusBadge';
 export type { StatusVariant } from './StatusBadge';
 export { ResizeGrip } from './ResizeGrip';
