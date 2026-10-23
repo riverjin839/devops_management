@@ -1478,6 +1478,17 @@ def list_namespace_custom_resources(
     return {**data, "cache": meta["cache"], "cache_age_seconds": meta["age"]}
 
 
+def _ns_subjects(subjects, namespace: str) -> list:
+    """바인딩 subject 중 이 네임스페이스를 가리키는 것 — `namespace` 필드가 이 NS 인 subject
+    (ServiceAccount 등) + 이 NS 의 ServiceAccount 전체를 뜻하는 그룹 `system:serviceaccounts:<ns>`."""
+    group = f"system:serviceaccounts:{namespace}"
+    return [
+        s for s in (subjects or [])
+        if getattr(s, "namespace", None) == namespace
+        or (getattr(s, "kind", None) == "Group" and getattr(s, "name", None) == group)
+    ]
+
+
 @router.get("/{cluster_id}/namespaces/{namespace}/cluster-role-bindings", response_model=ResourceListResponse)
 def list_namespace_cluster_role_bindings(
     cluster_id: UUID,
@@ -1485,7 +1496,7 @@ def list_namespace_cluster_role_bindings(
     refresh: bool = False,
     db: Session = Depends(get_db),
 ):
-    """subject 중 하나라도 이 네임스페이스(ServiceAccount 등)를 가리키는 ClusterRoleBinding.
+    """subject 중 하나라도 이 네임스페이스(ServiceAccount 등, `_ns_subjects`)를 가리키는 ClusterRoleBinding.
 
     RoleBinding 은 NS 안에 있어 종류별 목록으로 보이지만, 이 NS 의 ServiceAccount 에 클러스터 전역
     권한을 주는 ClusterRoleBinding 은 cluster-scoped 라 NS 필터로는 안 잡힌다 — 여기서 골라 준다.
@@ -1499,7 +1510,7 @@ def list_namespace_cluster_role_bindings(
         res = raw_call(rbac.list_cluster_role_binding, timeout=_LIST_TIMEOUT, resource_version="0")
         rows: list[dict] = []
         for o in (res.items or []):
-            subs = [s for s in (o.subjects or []) if getattr(s, "namespace", None) == namespace]
+            subs = _ns_subjects(o.subjects, namespace)
             if not subs:
                 continue
             rows.append(ResourceRow(
@@ -1523,6 +1534,57 @@ def list_namespace_cluster_role_bindings(
     columns = [ColumnDef(key="role", label="Role"), ColumnDef(key="subjects", label="이 NS 의 Subjects")]
     rows = data["rows"]
     return ResourceListResponse(kind="clusterrolebindings", columns=columns, count=len(rows),
+                                truncated=data["truncated"], items=rows,
+                                cache=meta["cache"], cache_age_seconds=meta["age"])
+
+
+@router.get("/{cluster_id}/namespaces/{namespace}/external-role-bindings", response_model=ResourceListResponse)
+def list_namespace_external_role_bindings(
+    cluster_id: UUID,
+    namespace: str,
+    refresh: bool = False,
+    db: Session = Depends(get_db),
+):
+    """**다른** 네임스페이스에 있으면서 subject 가 이 네임스페이스(`_ns_subjects`)를 가리키는 RoleBinding.
+
+    이 NS 의 ServiceAccount 가 다른 NS 안에서 갖는 권한이다. 바인딩이 그 NS 에 있어 이 NS 의
+    RoleBinding 목록(종류별 NS 필터)으로는 안 잡힌다. 전 NS RoleBinding 을 watch cache
+    (`resource_version=0`)로 한 번 읽어 고르고, 결과는 서버 목록 캐시를 거친다.
+    """
+    cluster = _require_cluster(cluster_id, db)
+    client = _api_client(cluster)
+
+    def _load() -> dict:
+        rbac = k8s_client.RbacAuthorizationV1Api(client)
+        res = raw_call(rbac.list_role_binding_for_all_namespaces, timeout=_LIST_TIMEOUT, resource_version="0")
+        rows: list[dict] = []
+        for o in (res.items or []):
+            if o.metadata.namespace == namespace:
+                continue  # 이 NS 안의 RoleBinding 은 종류별 목록(RoleBindings)에 이미 보인다
+            subs = _ns_subjects(o.subjects, namespace)
+            if not subs:
+                continue
+            rows.append(ResourceRow(
+                name=o.metadata.name,
+                namespace=o.metadata.namespace,
+                summary=f"→ {o.role_ref.kind}/{o.role_ref.name}",
+                cols={
+                    "role": f"{o.role_ref.kind}/{o.role_ref.name}",
+                    "subjects": ", ".join(f"{s.kind}/{s.name}" for s in subs),
+                },
+                age_seconds=_age_seconds(o.metadata),
+            ).model_dump())
+        rows.sort(key=lambda r: (r["namespace"] or "", r["name"]))
+        truncated = bool(res.metadata._continue) if res.metadata else False
+        return {"rows": rows, "truncated": truncated}
+
+    try:
+        data, meta = _list_cache.get((cache_group(client, cluster_id), "ns-ext-rb", namespace), _load, refresh=refresh)
+    except Exception as e:  # noqa: BLE001
+        raise _list_http_error("RoleBinding", e)
+    columns = [ColumnDef(key="role", label="Role"), ColumnDef(key="subjects", label="이 NS 의 Subjects")]
+    rows = data["rows"]
+    return ResourceListResponse(kind="rolebindings", columns=columns, count=len(rows),
                                 truncated=data["truncated"], items=rows,
                                 cache=meta["cache"], cache_age_seconds=meta["age"])
 
