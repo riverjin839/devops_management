@@ -2,7 +2,7 @@
 # ArgoCD AppProject - 모니터링 프로젝트
 # ============================================
 # 선택사항: default 프로젝트 대신 전용 프로젝트 사용 시
-# 적용: kubectl apply -f argocd/project.yaml
+# 적용: kubectl apply -f deploy/argocd/project.yaml
 # ============================================
 apiVersion: argoproj.io/v1alpha1
 kind: AppProject

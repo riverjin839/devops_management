@@ -84,7 +84,7 @@ kubectl -n $NS describe pod -l app=ollama | grep -E "Last State|Reason|Limits" -
 
 - Ollama 를 PEP 와 다른 네임스페이스에 띄웠다면 base_url 을
   `http://ollama.<ns>.svc.cluster.local:11434` 로 적는다.
-- Deployment 만 만들고 Service 를 안 만들었으면 `k8s/base/ollama.yaml` 의 Service 블록을 그대로 쓴다.
+- Deployment 만 만들고 Service 를 안 만들었으면 `deploy/k8s/base/ollama.yaml` 의 Service 블록을 그대로 쓴다.
 
 ---
 
@@ -182,7 +182,7 @@ Settings → AI/LLM → `local-ollama` 프로필의 모델을 `pep-k8s-ops` 로 
 | qwen2.5-coder:3b | ~3 GiB | 빠름 (10+ tok/s) | 노드가 작을 때, 요약·분류 |
 | **qwen2.5-coder:7b** | ~5–6 GiB | 보통 (4–8 tok/s) | **기본값** — 챗봇·장애 분석 |
 | qwen2.5-coder:14b | ~10 GiB | 느림 (2–3 tok/s) | CPU 에서는 비추천 |
-| 14b 이상 | GPU 필요 | — | vLLM(`k8s/components/vllm-gpu`) + openai_compat 프로필 |
+| 14b 이상 | GPU 필요 | — | vLLM(`deploy/k8s/components/vllm-gpu`) + openai_compat 프로필 |
 
 - 진단의 "응답 테스트" 가 3 tok/s 미만이면 경고를 띄운다. CPU limit 을 늘리거나 한 단계 작은 모델로 내린다.
 
@@ -198,7 +198,7 @@ CPU·메모리를 클러스터가 직접 낸다. 자원이 있을 수도 없을 
 |---|---|---|---|
 | CPU 여유 충분 (8코어·12Gi+) | Ollama 7B (`pep-k8s-ops`) | 챗봇 primary = local-ollama | 로컬 AI 응답 |
 | CPU 빠듯 (4코어·6Gi) | Ollama 3B (`OLLAMA_MODEL=qwen2.5-coder:3b` 빌드), requests 낮춤 | 동일 | 느리지만 응답 |
-| 사내 LLM 있음 + CPU 없음 | `k8s/components/no-ollama` / Helm `ollama.enabled=false` | 챗봇 primary = 사내 LLM(openai_compat) | 사내 LLM 응답 |
+| 사내 LLM 있음 + CPU 없음 | `deploy/k8s/components/no-ollama` / Helm `ollama.enabled=false` | 챗봇 primary = 사내 LLM(openai_compat) | 사내 LLM 응답 |
 | 둘 다 있음 | Ollama + 사내 LLM | primary = 사내 LLM, fallback = local-ollama | 사내 LLM 장애 시 로컬로 자동 전환 |
 | 아무 LLM 도 없음 | no-ollama | — | 오프라인 안내문, 장애 분석은 `rule_based` |
 
@@ -218,7 +218,7 @@ CPU 를 못 쓰는 클러스터는 로컬 AI 를 빼고 모든 용도를 사내 
 #### 8.1 배포 — Ollama 빼기
 
 ```yaml
-# kustomize: k8s/overlays/<env>/kustomization.yaml
+# kustomize: deploy/k8s/overlays/<env>/kustomization.yaml
 components:
   - ../../components/no-ollama
 ```
@@ -306,7 +306,7 @@ llm:
   자동 해석 중이면 "온라인 · `<모델>` 로 자동 해석" 으로 보여준다.
 - **연결 진단 실행 버튼** — `POST /api/v1/llm/diagnose`(SSE). 7단계 결과·조치 힌트를 실시간 로그로 남긴다.
 - **K8s 운영 전용 모델** — `Modelfile.k8s-ops` + Dockerfile 이 `pep-k8s-ops` 를 함께 굽는다.
-- **`k8s/components/no-ollama`** — CPU 자원이 없는 클러스터에서 Ollama 를 빼는 opt-in 컴포넌트.
+- **`deploy/k8s/components/no-ollama`** — CPU 자원이 없는 클러스터에서 Ollama 를 빼는 opt-in 컴포넌트.
 - **매니페스트 보정** — kustomize base 에 `OLLAMA_MODEL` 키가 없어 backend 파드의 configMapKeyRef 가
   풀리지 않던 문제를 고쳤고(base 이미지와 같은 `qwen2.5-coder:7b`), Ollama 에 `OLLAMA_KEEP_ALIVE=24h` 를 줬다.
 

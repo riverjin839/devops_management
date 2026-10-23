@@ -84,7 +84,7 @@ spec:
             failureThreshold: 3
           # No volumeMount for /root/.ollama — mounting an emptyDir there would shadow
           # models baked into the image. For persistent model storage across pod restarts,
-          # add a PVC in your overlay (k8s/overlays/<env>/ollama-pvc.yaml).
+          # add a PVC in your overlay (deploy/k8s/overlays/<env>/ollama-pvc.yaml).
 ---
 apiVersion: v1
 kind: Service

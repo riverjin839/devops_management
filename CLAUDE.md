@@ -62,7 +62,7 @@ PEP 의 문서·에디터·블록·협업/지식관리 기능을 발전시킬 �
   - **상태는 Zustand(client) / TanStack Query(server) 로 엄격히 분리** — §Frontend Architecture.
   - shadcn 컴포넌트는 shadcn MCP(`frontend/.mcp.json`)로 추가한다 (props 를 추측하지 말 것).
 - **Infra**: Docker Compose(로컬) · Kustomize base + overlays(dev/prod/airgap/kind) ·
-  Helm(`helm/k8s-daily-monitor/`) · kind(`scripts/deploy/kind-setup.sh`) · Skaffold ·
+  Helm(`deploy/helm/k8s-daily-monitor/`) · kind(`scripts/deploy/kind-setup.sh`) · Skaffold ·
   GitHub Actions(CI/CD) · ArgoCD · Jenkins(`Jenkinsfile`, phase 3).
 
 ---
@@ -95,14 +95,13 @@ devops_management/
 │   ├── pages/           # 화면별 명세는 docs/SCREENS.md
 │   └── components/      # common/(ClusterSidebar) ui/(MacCard, shadcn)
 │                        #   layout/(Sidebar, navConfig.ts) + 도메인 폴더
-├── k8s/                 # Kustomize base + overlays(dev/prod/kind/airgap/vagrant) + superpod/(CronJob)
-├── helm/k8s-daily-monitor/   # values / -dev / -prod / -airgap
+├── deploy/              # 운영 배포 정의 — k8s/(Kustomize base + overlays(dev/prod/kind/airgap/vagrant) + superpod/(CronJob)) · helm/k8s-daily-monitor/(values / -dev / -prod / -airgap) · argocd/
 ├── scripts/             # deploy/(kind-setup·deploy-airgap·redeploy·setup-monitoring·init-cluster — 배포),
 │                        #   lab/(local-cilium-kind·register-local-cluster·seed-test-data — 로컬 테스트),
 │                        #   release/{version-tag.sh,bump_version,decide_bump,changelog_sections,check_changelog_sections,check_versions}.py,
 │                        #   docs/check_docs_sync.py, report/(AI 개발 리포트 집계·HTML 빌드),
 │                        #   a11y/(axe 접근성 스캔), ui/check_dialogs.py(모달 어댑터 검사 — CI)
-├── ansible/playbooks/  argocd/  docker/
+├── ansible/playbooks/  docker/
 ├── labs/                # 로컬 테스트 클러스터 — vagrant/(Mac VirtualBox·AlmaLinux)·windows-docker/ (운영 배포물 아님, labs/README.md)
 ├── docs/                # 인덱스는 docs/README.md (01-plan/ 02-design/ 03-analysis/
 │                        #   archive/ superpowers/ 하위 폴더 포함)
@@ -410,9 +409,9 @@ All shared interfaces live in `src/types/index.ts`. Keep backend response shapes
 
 | Phase | 대상 | 진입 명령 | 설정 |
 |---|---|---|---|
-| 1 | 로컬 kind | `bash scripts/deploy/kind-setup.sh up｜reload｜destroy` | `k8s/overlays/kind/` |
-| 2 | 폐쇄망(air-gap) | `bash scripts/deploy/deploy-airgap.sh all` (registry·CLI·인증정보 대화형 입력) | `values-airgap.yaml` · `k8s/overlays/airgap/` |
-| 3 | 프로덕션 | `helm install k8s-monitor ./helm/k8s-daily-monitor -f .../values-prod.yaml -n k8s-monitor --create-namespace` | `values-prod.yaml` · Jenkins + ArgoCD |
+| 1 | 로컬 kind | `bash scripts/deploy/kind-setup.sh up｜reload｜destroy` | `deploy/k8s/overlays/kind/` |
+| 2 | 폐쇄망(air-gap) | `bash scripts/deploy/deploy-airgap.sh all` (registry·CLI·인증정보 대화형 입력) | `values-airgap.yaml` · `deploy/k8s/overlays/airgap/` |
+| 3 | 프로덕션 | `helm install k8s-monitor ./deploy/helm/k8s-daily-monitor -f .../values-prod.yaml -n k8s-monitor --create-namespace` | `values-prod.yaml` · Jenkins + ArgoCD |
 
 네임스페이스: dev = `k8s-monitor-dev`, prod = `k8s-monitor-prod`.
 Makefile 타깃(`make k8s-dev`, `make docker-rebuild` 등)은 `make help` 로 확인한다.
@@ -581,7 +580,7 @@ Compose 는 kubeconfig 볼륨을 마운트하지 않고, backend/celery 컨테�
 `/tmp/k8s-monitor` 를 공유하지 않으므로 **경로만 등록된(=DB `kubeconfig_content` 가 빈)
 클러스터는 워커에서 kubeconfig 를 재구체화하지 못한다**. `/cluster-manage` 에서
 kubeconfig 파일을 업로드해 DB 에 content 로 저장하면 모든 컨테이너에서 동작한다.
-K8s 배포에서는 서비스 어카운트(`k8s/base/backend/serviceaccount.yaml`) 또는
+K8s 배포에서는 서비스 어카운트(`deploy/k8s/base/backend/serviceaccount.yaml`) 또는
 kubeconfig 시크릿 마운트를 쓴다. 실패 사유는 배치잡 사전 점검(연결 테스트)과
 실행 로그의 kubeconfig 해석 단계에 그대로 표시된다(`services/kubeconfig.py`
 `resolve_kubeconfig`).

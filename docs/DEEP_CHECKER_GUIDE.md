@@ -82,7 +82,7 @@ status / 노드 Ready / kube-system 파드)만 본다. 이것만으로는 "노�
 | 매트릭스 디스패처 | `backend/app/services/check_matrix_service.py` | cron 평가 → deep_check 항목을 `run_definition_once(persist=True)` 로 실행. |
 | 운영 점검 콘솔 | `backend/app/services/ops_check_service.py` + `routers/ops_check.py` | deep_check/addon 을 공통 "점검 항목" 으로 normalize, 카탈로그/배치 실행. |
 | Super Pod | `backend/app/superpod/runner.py` | `python -m app.superpod.runner` — in_cluster / centralized 두 모드. |
-| Helm CronJob | `helm/k8s-daily-monitor/templates/deepcheck-cronjob.yaml` | Super Pod 를 K8s CronJob 으로 스케줄. |
+| Helm CronJob | `deploy/helm/k8s-daily-monitor/templates/deepcheck-cronjob.yaml` | Super Pod 를 K8s CronJob 으로 스케줄. |
 | 프론트 — 정의 관리 | `frontend/src/pages/DeepCheckSettings.tsx` (`/daily-check/settings`, 메뉴 "점검 항목 관리") | 정의 CRUD + 동적 폼 + "Test now". |
 | 프론트 — 운영 콘솔 | `frontend/src/pages/OpsCheckConsolePage.tsx` (`/ops-checks`, 메뉴 "운영 점검") | 카탈로그에서 항목 골라 배치 실행 + 진행률 폴링. |
 | 프론트 — API/hooks | `services/api.ts`(`deepCheck*`, `opsCheck*`), `hooks/useDeepCheck.ts`, `hooks/useDeepCheckDefinitions.ts` | |
@@ -125,7 +125,7 @@ Context 조립 ─┘                                     │
 - **in_cluster**: 대상 클러스터 **내부**에서 실행. DB 가 없으므로 registry 의 모든 check_type 을
   기본 임계/파라미터로 1회씩 돌리고, 결과를 `SUPERPOD_INGEST_URL`(`/deep-check/ingest`)로
   Bearer 토큰(`SUPERPOD_INGEST_TOKEN`) 인증 POST. 관리 backend 가 최신 회차에 자동 연결 후
-  AI 리뷰 큐잉. 배포 산출물은 **`k8s/superpod/`**(CronJob + kustomization + secret 템플릿) —
+  AI 리뷰 큐잉. 배포 산출물은 **`deploy/k8s/superpod/`**(CronJob + kustomization + secret 템플릿) —
   Helm CronJob(`SUPERPOD_MODE=centralized`, 기본값)과는 별도의 kustomize 번들이다.
 
 ---

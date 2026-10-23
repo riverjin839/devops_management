@@ -71,10 +71,8 @@ docker-compose up -d           # postgres + redis + backend + frontend + celery(
 devops_management/
 ├── backend/        # FastAPI (app/{models,routers,services,...})
 ├── frontend/       # React + TS (src/{pages,components,hooks,services,stores})
-├── k8s/            # Kustomize base + overlays(dev/prod/airgap/kind) + superpod(딥체크 CronJob)
-├── helm/           # Helm chart
+├── deploy/         # k8s/(Kustomize base+overlays+superpod) helm/(Helm chart) argocd/(Application/Project)
 ├── ansible/        # 플레이북
-├── argocd/         # ArgoCD Application/Project
 ├── scripts/        # deploy/(kind·airgap·재배포) lab/(로컬 테스트) release/ docs/ …
 ├── docs/           # 운영/설계/아카이브 문서 (색인: docs/README.md)
 ├── docker/ labs/  # 로컬 실험 환경

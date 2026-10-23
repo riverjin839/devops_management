@@ -121,7 +121,7 @@ kind-logs:
 # Kubernetes Deployments (실제 클러스터용)
 k8s-dev:
 	@echo "Deploying to Kubernetes (dev environment)..."
-	kubectl apply -k k8s/overlays/dev
+	kubectl apply -k deploy/k8s/overlays/dev
 	@echo ""
 	@echo "Waiting for deployments..."
 	kubectl rollout status deployment/dev-backend -n k8s-monitor-dev --timeout=300s || true
@@ -132,7 +132,7 @@ k8s-dev:
 
 k8s-prod:
 	@echo "Deploying to Kubernetes (prod environment)..."
-	kubectl apply -k k8s/overlays/prod
+	kubectl apply -k deploy/k8s/overlays/prod
 	@echo ""
 	@echo "Waiting for deployments..."
 	kubectl rollout status deployment/prod-backend -n k8s-monitor-prod --timeout=300s || true
@@ -142,11 +142,11 @@ k8s-prod:
 
 k8s-delete-dev:
 	@echo "Deleting dev Kubernetes deployment..."
-	kubectl delete -k k8s/overlays/dev --ignore-not-found
+	kubectl delete -k deploy/k8s/overlays/dev --ignore-not-found
 
 k8s-delete-prod:
 	@echo "Deleting prod Kubernetes deployment..."
-	kubectl delete -k k8s/overlays/prod --ignore-not-found
+	kubectl delete -k deploy/k8s/overlays/prod --ignore-not-found
 
 k8s-status:
 	@echo "=== Namespaces ==="

@@ -172,7 +172,7 @@ deploy() {
     echo -e "  Images: ${YELLOW}${REGISTRY}/k8s-monitor/backend:${new_version}${NC}"
     echo -e "          ${YELLOW}${REGISTRY}/k8s-monitor/frontend:${new_version}${NC}"
     echo ""
-    echo -e "  Apply:  ${CYAN}kubectl apply -k k8s/overlays/${overlay}${NC}"
+    echo -e "  Apply:  ${CYAN}kubectl apply -k deploy/k8s/overlays/${overlay}${NC}"
     echo ""
 }
 

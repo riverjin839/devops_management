@@ -7,7 +7,7 @@ PEP (Platform Engineering Portal) — 구 K8s Daily Monitor — 를 Kubernetes �
 ## 디렉토리 구조
 
 ```
-k8s/
+deploy/k8s/
 ├── target-cluster/                    # PEP 가 **조회하는 대상 클러스터**에 적용(PEP 배포 overlay 아님)
 │   └── pep-apf.yaml                   # PEP 전용 APF FlowSchema/PriorityLevel — docs/K8S_APISERVER_PROTECTION.md
 ├── base/                              # 환경 공통 기본 매니페스트
@@ -103,7 +103,7 @@ Secrets Operator, Sealed Secrets, Vault 중 하나로 교체 검토.
 
 #### `ingress.yaml`
 NGINX Ingress Controller 기반 라우팅 규칙입니다. `/api/*` 는 backend Service 로, 나머지는 frontend Service 로 프록시합니다.
-ingress-nginx 대신 Cilium Gateway API(HTTPRoute)로 노출하려면 오버레이에 `k8s/components/gateway-api/` 컴포넌트를
+ingress-nginx 대신 Cilium Gateway API(HTTPRoute)로 노출하려면 오버레이에 `deploy/k8s/components/gateway-api/` 컴포넌트를
 추가하세요 — 이 Ingress 를 지우고 Gateway·HTTPRoute 를 넣습니다(절차: `docs/DEPLOY_GUIDE.md` "Gateway API(Cilium)로 노출").
 
 #### `hpa.yaml`
@@ -112,11 +112,11 @@ backend / frontend / celery-worker 세 Deployment 에 대해 CPU 70% 임계값 �
 #### `ollama.yaml`
 인클러스터 자체 LLM(Ollama, CPU 전용) 서버를 실행할 때 사용합니다. 모델이 이미지에
 pre-baked 되어 있어 볼륨 마운트가 기본적으로 없습니다(재시작해도 이미지 안 모델은
-유지됨) — 추가로 pull 한 모델을 영속화하려면 `k8s/components/ollama-pvc/` 컴포넌트를
+유지됨) — 추가로 pull 한 모델을 영속화하려면 `deploy/k8s/components/ollama-pvc/` 컴포넌트를
 오버레이에 추가하세요. GPU 어피니티는 포함돼 있지 않습니다 — GPU 기반 서빙(vLLM)이
-필요하면 `k8s/components/vllm-gpu/` 를 참고하세요. 사내 LLM 서비스(OpenAI-호환)에
+필요하면 `deploy/k8s/components/vllm-gpu/` 를 참고하세요. 사내 LLM 서비스(OpenAI-호환)에
 연결하는 경우 이 파일 자체가 필요 없습니다 — Settings → AI/LLM 탭에서 프로필로 등록하면
-됩니다. CPU/메모리 여유가 없거나 AI 기능이 필요 없으면 오버레이에 `k8s/components/no-ollama/`
+됩니다. CPU/메모리 여유가 없거나 AI 기능이 필요 없으면 오버레이에 `deploy/k8s/components/no-ollama/`
 컴포넌트를 추가해 Ollama Deployment·Service 를 빼세요(설정 가이드: `docs/LLM_CHATBOT_SETUP.md`).
 
 ---
@@ -265,7 +265,7 @@ PEP 메인 스택과 별도로 배포되는 SuperPod(in_cluster deep check) Cron
 |---|---|
 | `check_cluster.yml` | 대상 클러스터에 SSH 접속하여 노드 상태, 시스템 리소스, 서비스 프로세스를 점검하고 결과를 JSON 으로 반환 |
 
-> `k8s/base/ansible-playbooks-check_cluster.yml` 은 이 파일을 ConfigMap 으로 패키징한 K8s 리소스입니다. 백엔드 Deployment 에서 볼륨 마운트하여 `ansible-playbook` 으로 실행합니다. 원본 플레이북은 `ansible/playbooks/check_cluster.yml` 입니다.
+> `deploy/k8s/base/ansible-playbooks-check_cluster.yml` 은 이 파일을 ConfigMap 으로 패키징한 K8s 리소스입니다. 백엔드 Deployment 에서 볼륨 마운트하여 `ansible-playbook` 으로 실행합니다. 원본 플레이북은 `ansible/playbooks/check_cluster.yml` 입니다.
 
 ---
 
@@ -285,17 +285,17 @@ PEP 메인 스택과 별도로 배포되는 SuperPod(in_cluster deep check) Cron
 
 ```bash
 # 매니페스트 미리보기
-kustomize build k8s/overlays/dev
+kustomize build deploy/k8s/overlays/dev
 
 # 배포
-kubectl apply -k k8s/overlays/dev
+kubectl apply -k deploy/k8s/overlays/dev
 ```
 
 ### 프로덕션 환경 배포
 
 ```bash
 # 시크릿 수정 후 배포
-kubectl apply -k k8s/overlays/prod
+kubectl apply -k deploy/k8s/overlays/prod
 ```
 
 ### 로컬 kind 클러스터 배포
@@ -312,9 +312,9 @@ bash scripts/deploy/kind-setup.sh destroy # 클러스터 삭제
 
 ```bash
 # secret 템플릿 복사·값 채우기 → kustomization.yaml 에서 secret.yaml 주석 해제 → 배포
-cp k8s/superpod/secret.yaml.tmpl k8s/superpod/secret.yaml
+cp deploy/k8s/superpod/secret.yaml.tmpl deploy/k8s/superpod/secret.yaml
 # secret.yaml 값 채운 뒤:
-kubectl apply -k k8s/superpod/
+kubectl apply -k deploy/k8s/superpod/
 ```
 
 > 상세 절차는 [superpod/README.md](superpod/README.md) 참고 (`envsubst` 방식이 아니다).
@@ -380,7 +380,7 @@ spec:
 
 ```bash
 # k8s-monitor-secret 리터럴을 kustomize build 로 렌더링한 뒤 실제 Secret 을 봉인
-kubectl kustomize k8s/base | kubeseal --format yaml > sealed-secret.yaml
+kubectl kustomize deploy/k8s/base | kubeseal --format yaml > sealed-secret.yaml
 ```
 
 ### HashiCorp Vault
@@ -481,7 +481,7 @@ cat ~/.kube/config | base64 -w 0
 
 ```bash
 kustomize edit set image ghcr.io/your-repo/backend=ghcr.io/your-repo/backend:v1.2.0
-kubectl apply -k k8s/overlays/prod
+kubectl apply -k deploy/k8s/overlays/prod
 kubectl rollout status deployment/prod-backend -n k8s-monitor-prod
 ```
 
@@ -497,9 +497,9 @@ kubectl rollout undo deployment/prod-frontend -n k8s-monitor-prod
 ## 리소스 정리
 
 ```bash
-kubectl delete -k k8s/overlays/dev
-kubectl delete -k k8s/overlays/prod
-kubectl delete -k k8s/superpod/
+kubectl delete -k deploy/k8s/overlays/dev
+kubectl delete -k deploy/k8s/overlays/prod
+kubectl delete -k deploy/k8s/superpod/
 # 또는 네임스페이스 전체 삭제 (kind/airgap 은 둘 다 k8s-monitor 공유 — 함께 삭제됨)
 kubectl delete namespace k8s-monitor-dev k8s-monitor-prod k8s-monitor k8s-monitor-agent devops
 ```

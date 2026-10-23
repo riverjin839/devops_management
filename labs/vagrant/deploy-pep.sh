@@ -1,6 +1,6 @@
 #!/bin/bash
 # ============================================================
-# Vagrant kubeadm 클러스터 안에 PEP 를 직접 배포 (k8s/overlays/vagrant)
+# Vagrant kubeadm 클러스터 안에 PEP 를 직접 배포 (deploy/k8s/overlays/vagrant)
 # ============================================================
 # 레지스트리가 없으므로: Mac 에서 이미지 빌드 → docker save → 각 VM containerd(k8s.io)로 import
 # → kubectl apply -k. 모든 단계의 상세 로그를 출력한다(LOG=quiet 로 요약만).
@@ -52,7 +52,7 @@ build_images() {
 }
 
 apply_overlay() {
-  log "[3/3] overlay 적용 (k8s/overlays/vagrant)"
+  log "[3/3] overlay 적용 (deploy/k8s/overlays/vagrant)"
   run kubectl apply -k "${ROOT}/k8s/overlays/vagrant"
   for d in postgres:statefulset redis:deployment backend:deployment celery-worker:deployment celery-beat:deployment frontend:deployment; do
     log "  롤아웃 대기: ${d%%:*}"

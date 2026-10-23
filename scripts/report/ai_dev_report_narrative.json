@@ -279,7 +279,7 @@
     {
       "key": "infra-ci",
       "label": "배포·CI/CD",
-      "pattern": "^(k8s/|helm/|docker/|argocd/|ansible/|labs/|\\.github/workflows/|scripts/|Jenkinsfile|Makefile|skaffold\\.yaml|docker-compose|backend/Dockerfile|frontend/Dockerfile|frontend/nginx)",
+      "pattern": "^(deploy/|docker/|ansible/|labs/|\\.github/workflows/|scripts/|Jenkinsfile|Makefile|skaffold\\.yaml|docker-compose|backend/Dockerfile|frontend/Dockerfile|frontend/nginx)",
       "desc": "Compose 단일 구성에서 kind·Kustomize overlay 4종·Helm·폐쇄망 배포로 확장. CI 게이트·SHA 고정 CD·자동 릴리스·문서 동기화 검사를 붙였다.",
       "features": [
         "Compose·kind·Kustomize 4 overlay·Helm·폐쇄망 배포 스크립트",
@@ -607,7 +607,7 @@
       "label": "Kustomize overlays",
       "module": "infra-ci",
       "paths": [
-        "k8s/overlays"
+        "deploy/k8s/overlays"
       ],
       "desc": "dev·prod·kind·airgap 환경 분리"
     },
@@ -695,7 +695,7 @@
       "label": "SuperPod 심층 점검",
       "module": "monitor",
       "paths": [
-        "k8s/superpod"
+        "deploy/k8s/superpod"
       ],
       "desc": "클러스터 내 CronJob 심층 점검"
     },

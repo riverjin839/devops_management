@@ -38,7 +38,7 @@ PEP 는 등록된 여러 클러스터의 apiserver 를 조회한다. 화면 조�
 
 APF(API Priority and Fairness)는 apiserver 가 요청을 **FlowSchema → PriorityLevel** 로 분류해 레벨마다 동시성 몫을 나누는 기능이다. 기본 설정에서 PEP 의 ServiceAccount 요청은 내장 `service-accounts` 스키마로 분류돼 `workload-low` 레벨로 간다. 그러면 **다른 워크로드 SA(오퍼레이터, CI 등)와 같은 몫을 나눠 쓰게 된다.** PEP 가 몰리면 그들도 함께 느려진다.
 
-`k8s/target-cluster/pep-apf.yaml` 은 PEP 전용 레벨(`pep-portal`)을 만들어 PEP 요청을 그 안에 가둔다.
+`deploy/k8s/target-cluster/pep-apf.yaml` 은 PEP 전용 레벨(`pep-portal`)을 만들어 PEP 요청을 그 안에 가둔다.
 
 - PEP 가 폭주해도 PEP 요청만 전용 큐에서 기다리거나 거절(429)된다. 컨트롤러·스케줄러·kubelet 은 영향받지 않는다.
 - `lendablePercent: 0` / `borrowingLimitPercent: 0` 이면 PEP 몫이 고정된다. 한가한 다른 레벨의 몫을 빌려 쓰지도 않는다.
@@ -54,7 +54,7 @@ APF(API Priority and Fairness)는 apiserver 가 요청을 **FlowSchema → Prior
 2. 클러스터 버전에 맞는 `apiVersion` 을 쓴다. 1.29 이상은 `flowcontrol.apiserver.k8s.io/v1`, 1.26~1.28 은 `v1beta3` 이다.
 3. 대상 클러스터 관리자 권한으로 적용한다.
    ```bash
-   kubectl apply -f k8s/target-cluster/pep-apf.yaml
+   kubectl apply -f deploy/k8s/target-cluster/pep-apf.yaml
    kubectl get flowschema pep-portal -o jsonpath='{.status.conditions}'   # Dangling=False 확인
    ```
 

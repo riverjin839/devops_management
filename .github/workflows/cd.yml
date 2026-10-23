@@ -7,7 +7,7 @@ on:
     paths:
       - 'backend/**'
       - 'frontend/**'
-      - 'k8s/**'
+      - 'deploy/k8s/**'
       - '.github/workflows/cd.yml'
   workflow_dispatch:
     inputs:
@@ -146,7 +146,7 @@ jobs:
 
       - name: Update image tags in kustomization
         if: steps.check-secret.outputs.has_kubeconfig == 'true'
-        working-directory: k8s/overlays/dev
+        working-directory: deploy/k8s/overlays/dev
         run: |
           SHORT_SHA="${GITHUB_SHA:0:7}"
           kustomize edit set image \
@@ -156,7 +156,7 @@ jobs:
       - name: Deploy to Dev Kubernetes
         if: steps.check-secret.outputs.has_kubeconfig == 'true'
         run: |
-          kustomize build k8s/overlays/dev | kubectl apply -f -
+          kustomize build deploy/k8s/overlays/dev | kubectl apply -f -
 
       - name: Wait for deployment rollout
         if: steps.check-secret.outputs.has_kubeconfig == 'true'
@@ -227,7 +227,7 @@ jobs:
 
       - name: Update image tags in kustomization
         if: steps.check-secret.outputs.has_kubeconfig == 'true'
-        working-directory: k8s/overlays/prod
+        working-directory: deploy/k8s/overlays/prod
         run: |
           SHORT_SHA="${GITHUB_SHA:0:7}"
           kustomize edit set image \
@@ -237,7 +237,7 @@ jobs:
       - name: Deploy to Prod Kubernetes
         if: steps.check-secret.outputs.has_kubeconfig == 'true'
         run: |
-          kustomize build k8s/overlays/prod | kubectl apply -f -
+          kustomize build deploy/k8s/overlays/prod | kubectl apply -f -
 
       - name: Wait for deployment rollout
         if: steps.check-secret.outputs.has_kubeconfig == 'true'

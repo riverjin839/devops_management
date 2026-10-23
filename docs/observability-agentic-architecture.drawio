@@ -180,7 +180,7 @@
         <mxCell id="legend-ports" value="검증 포트: SNMP UDP 161/162 · gNMI gRPC 57400(장비 의존) · BMP TCP 5000 · Kafka 9092 · blackbox :9115 · telegraf :9273 · gnmic :9804 · TWAMP-Control TCP 862" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=top;whiteSpace=wrap;fontSize=11;fontColor=#52525B;" vertex="1" parent="1">
           <mxGeometry x="56" y="970" width="730" height="44" as="geometry" />
         </mxCell>
-        <mxCell id="legend-note" value="구현 위치: ② k8s/base/observability/ · ②~③ k8s/base/monitoring/(blackbox + prometheus scrape/rule) · ④ backend agent_service(Ollama)" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=top;whiteSpace=wrap;fontSize=11;fontStyle=2;fontColor=#52525B;" vertex="1" parent="1">
+        <mxCell id="legend-note" value="구현 위치: ② deploy/k8s/base/observability/ · ②~③ deploy/k8s/base/monitoring/(blackbox + prometheus scrape/rule) · ④ backend agent_service(Ollama)" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=top;whiteSpace=wrap;fontSize=11;fontStyle=2;fontColor=#52525B;" vertex="1" parent="1">
           <mxGeometry x="56" y="1018" width="730" height="34" as="geometry" />
         </mxCell>
       </root>

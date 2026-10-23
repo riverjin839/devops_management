@@ -6,7 +6,7 @@
 #   - Cilium: kubeProxyReplacement=true, gatewayAPI.enabled=true
 #   - Cilium: envoy.streamIdleTimeoutDurationSeconds=3600 — 기본 300s 라 SSE 실시간 로그·장시간 실행이 5분에 끊긴다
 #
-#   # k8s/overlays/<env>/kustomization.yaml
+#   # deploy/k8s/overlays/<env>/kustomization.yaml
 #   components:
 #     - ../../components/gateway-api
 #   patches:

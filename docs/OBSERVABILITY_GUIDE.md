@@ -38,7 +38,7 @@ kubectl -n monitoring create secret generic pep-ingest \
   --from-literal=token=<ALERT_INGEST_TOKEN>
 
 # 2) 매니페스트의 PEP_URL / 네임스페이스 / 서비스명을 환경에 맞게 고친 뒤 적용
-kubectl apply -f k8s/base/observability/pep-collector-cronjob.yaml
+kubectl apply -f deploy/k8s/base/observability/pep-collector-cronjob.yaml
 ```
 
 수집기는 5분마다 아래를 PEP 로 POST 한다 (`kind` 별로 1건씩):

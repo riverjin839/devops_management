@@ -4,15 +4,15 @@
 
 | 하고 싶은 것 | 위치 | 진입점 |
 |---|---|---|
-| 운영 매니페스트 (Kustomize base/overlays/components) | `k8s/` | `kubectl apply -k k8s/overlays/<env>` |
-| Helm 차트 / ArgoCD 앱 | `helm/` · `argocd/` | `helm install ... -f values-<env>.yaml` |
+| 운영 매니페스트 (Kustomize base/overlays/components) | `deploy/k8s/` | `kubectl apply -k deploy/k8s/overlays/<env>` |
+| Helm 차트 / ArgoCD 앱 | `deploy/helm/` · `deploy/argocd/` | `helm install ... -f values-<env>.yaml` |
 | 이미지 빌드 정의 (pgvector, ollama) | `docker/` | CI/`scripts/deploy/` 가 사용 |
 | 배포 스크립트 (kind, 폐쇄망, 재배포, 모니터링 스택) | `scripts/deploy/` | `kind-setup.sh` · `deploy-airgap.sh` · `redeploy.sh` · `setup-monitoring.sh` |
 | 로컬 테스트 보조 (Cilium kind, 클러스터 등록, 샘플 데이터) | `scripts/lab/` | `local-cilium-kind.sh` · `register-local-cluster.sh` · `seed-test-data.sh` |
 | 릴리스·버전 도구 | `scripts/release/` | `bump_version.py` · `version-tag.sh` |
 | **로컬 테스트 클러스터 (Vagrant/Windows)** | **`labs/`** | `labs/vagrant/up.sh` · `labs/vagrant/deploy-pep.sh` — `labs/README.md` |
 
-원칙: **운영에 쓰는 것은 `k8s/ helm/ argocd/ docker/`, 사람이 PC 에서 돌려 보는 것은 `labs/` + `scripts/lab/`.**
+원칙: **운영에 쓰는 것은 `deploy/ docker/`, 사람이 PC 에서 돌려 보는 것은 `labs/` + `scripts/lab/`.**
 
 
 > 로컬 개발 → 폐쇄망 검증 → CI/CD 운영 배포까지 3단계 가이드
@@ -115,7 +115,7 @@ bash scripts/deploy/kind-setup.sh up   # kind 노드 이미지 v1.34.0, 기본 C
 | 1 | 로컬 Docker Registry 생성 (`localhost:5001`) |
 | 2 | kind 3노드 클러스터 생성 (control-plane 1 + worker 2) |
 | 3 | Backend/Frontend 이미지 빌드 & Push |
-| 4 | Kustomize로 K8s 배포 (`k8s/overlays/kind`, namespace `k8s-monitor`) |
+| 4 | Kustomize로 K8s 배포 (`deploy/k8s/overlays/kind`, namespace `k8s-monitor`) |
 | 5 | Pod 상태 대기 및 접속 URL 안내 |
 
 ### 접속 확인
@@ -237,13 +237,13 @@ bash scripts/deploy/deploy-airgap.sh build
 bash scripts/deploy/deploy-airgap.sh push
 
 # Helm으로 배포
-helm install k8s-monitor ./helm/k8s-daily-monitor \
-  -f ./helm/k8s-daily-monitor/values-airgap.yaml \
+helm install k8s-monitor ./deploy/helm/k8s-daily-monitor \
+  -f ./deploy/helm/k8s-daily-monitor/values-airgap.yaml \
   -n k8s-monitor --create-namespace
 
 # 업그레이드
-helm upgrade k8s-monitor ./helm/k8s-daily-monitor \
-  -f ./helm/k8s-daily-monitor/values-airgap.yaml \
+helm upgrade k8s-monitor ./deploy/helm/k8s-daily-monitor \
+  -f ./deploy/helm/k8s-daily-monitor/values-airgap.yaml \
   -n k8s-monitor
 ```
 
@@ -297,7 +297,7 @@ bash scripts/deploy/deploy-airgap.sh check    # K8s API 서버 헬스 체크
 
 ### values-airgap.yaml 설정 항목
 
-`helm/k8s-daily-monitor/values-airgap.yaml`에서 환경에 맞게 수정:
+`deploy/helm/k8s-daily-monitor/values-airgap.yaml`에서 환경에 맞게 수정:
 
 | 항목 | 기본값 | 설명 |
 |------|--------|------|
@@ -347,9 +347,9 @@ bash scripts/deploy/deploy-airgap.sh check    # K8s API 서버 헬스 체크
 | 파일 | 용도 |
 |------|------|
 | `Jenkinsfile` | CI 파이프라인 정의 |
-| `helm/k8s-daily-monitor/` | Helm Chart (배포 패키지) |
-| `argocd/application.yaml` | ArgoCD Application 정의 |
-| `argocd/project.yaml` | ArgoCD AppProject (선택) |
+| `deploy/helm/k8s-daily-monitor/` | Helm Chart (배포 패키지) |
+| `deploy/argocd/application.yaml` | ArgoCD Application 정의 |
+| `deploy/argocd/project.yaml` | ArgoCD AppProject (선택) |
 
 ### Jenkins 설정
 
@@ -399,10 +399,10 @@ argocd repo add https://git.company.internal/devops/k8s_daily_monitor.git \
 #### 2. Application 생성
 
 ```bash
-kubectl apply -f argocd/application.yaml
+kubectl apply -f deploy/argocd/application.yaml
 ```
 
-`argocd/application.yaml` 수정 필요 항목:
+`deploy/argocd/application.yaml` 수정 필요 항목:
 
 ```yaml
 spec:
@@ -455,13 +455,13 @@ argocd app sync k8s-daily-monitor
 
 ```bash
 # 설치
-helm install k8s-monitor ./helm/k8s-daily-monitor \
-  -f ./helm/k8s-daily-monitor/values-prod.yaml \
+helm install k8s-monitor ./deploy/helm/k8s-daily-monitor \
+  -f ./deploy/helm/k8s-daily-monitor/values-prod.yaml \
   -n k8s-monitor --create-namespace
 
 # 업그레이드
-helm upgrade k8s-monitor ./helm/k8s-daily-monitor \
-  -f ./helm/k8s-daily-monitor/values-prod.yaml \
+helm upgrade k8s-monitor ./deploy/helm/k8s-daily-monitor \
+  -f ./deploy/helm/k8s-daily-monitor/values-prod.yaml \
   -n k8s-monitor
 
 # 롤백
@@ -471,12 +471,12 @@ helm rollback k8s-monitor 1 -n k8s-monitor
 helm uninstall k8s-monitor -n k8s-monitor
 
 # 템플릿 미리보기 (dry-run)
-helm template k8s-monitor ./helm/k8s-daily-monitor \
-  -f ./helm/k8s-daily-monitor/values-prod.yaml
+helm template k8s-monitor ./deploy/helm/k8s-daily-monitor \
+  -f ./deploy/helm/k8s-daily-monitor/values-prod.yaml
 
 # 검증
-helm lint ./helm/k8s-daily-monitor \
-  -f ./helm/k8s-daily-monitor/values-prod.yaml
+helm lint ./deploy/helm/k8s-daily-monitor \
+  -f ./deploy/helm/k8s-daily-monitor/values-prod.yaml
 ```
 
 ---
@@ -488,8 +488,8 @@ Cilium 의 Gateway API 구현(Envoy)으로 PEP 를 노출할 수 있다. 저장�
 
 | 배포 방식 | 켜는 방법 | 파일 |
 |---|---|---|
-| Helm | `gateway.enabled=true` (+ 검증 후 `ingress.enabled=false`) | `helm/k8s-daily-monitor/templates/gateway.yaml` |
-| Kustomize | overlay 에 `components: [../../components/gateway-api]` | `k8s/components/gateway-api/` |
+| Helm | `gateway.enabled=true` (+ 검증 후 `ingress.enabled=false`) | `deploy/helm/k8s-daily-monitor/templates/gateway.yaml` |
+| Kustomize | overlay 에 `components: [../../components/gateway-api]` | `deploy/k8s/components/gateway-api/` |
 
 ### 라우팅 구조
 
@@ -530,14 +530,14 @@ kubectl get gatewayclass cilium
 
 ```bash
 # 1단계 — Ingress 와 병행 (다른 컨트롤러·다른 IP 라 충돌 없음)
-helm upgrade k8s-monitor ./helm/k8s-daily-monitor \
-  -f ./helm/k8s-daily-monitor/values-prod.yaml -n k8s-monitor \
+helm upgrade k8s-monitor ./deploy/helm/k8s-daily-monitor \
+  -f ./deploy/helm/k8s-daily-monitor/values-prod.yaml -n k8s-monitor \
   --set gateway.enabled=true \
   --set gateway.host=k8s-monitor.company.internal
 
 # 2단계 — Gateway 주소로 검증한 뒤 DNS 를 Gateway IP 로 바꾸고 Ingress 를 끈다
-helm upgrade k8s-monitor ./helm/k8s-daily-monitor \
-  -f ./helm/k8s-daily-monitor/values-prod.yaml -n k8s-monitor \
+helm upgrade k8s-monitor ./deploy/helm/k8s-daily-monitor \
+  -f ./deploy/helm/k8s-daily-monitor/values-prod.yaml -n k8s-monitor \
   --set gateway.enabled=true --set gateway.host=k8s-monitor.company.internal \
   --set ingress.enabled=false
 ```
@@ -557,7 +557,7 @@ helm upgrade k8s-monitor ./helm/k8s-daily-monitor \
 
 ### Kustomize 로 전환
 
-overlay(예: `k8s/overlays/prod/kustomization.yaml`)에 component 를 추가하고 호스트를 patch 한다.
+overlay(예: `deploy/k8s/overlays/prod/kustomization.yaml`)에 component 를 추가하고 호스트를 patch 한다.
 component 가 base Ingress 를 지우므로, overlay 의 기존 **Ingress host/TLS patch 는 함께 지운다**(대상이 없어 빌드가 실패한다).
 
 ```yaml
@@ -670,14 +670,14 @@ k8s_daily_monitor/
 ├── backend/                        # FastAPI Backend
 ├── frontend/                       # React Frontend
 │
-├── k8s/                            # Kustomize 매니페스트 (Phase 1, 2)
+├── deploy/k8s/                     # Kustomize 매니페스트 (Phase 1, 2)
 │   ├── base/                       # 기본 리소스
 │   └── overlays/
 │       ├── dev/                    # 개발 환경
 │       ├── prod/                   # 운영 환경
 │       └── airgap/                 # 폐쇄망
 │
-├── helm/k8s-daily-monitor/         # Helm Chart (Phase 2, 3)
+├── deploy/helm/k8s-daily-monitor/         # Helm Chart (Phase 2, 3)
 │   ├── Chart.yaml
 │   ├── values.yaml                 # 기본값
 │   ├── values-dev.yaml             # kind/개발
@@ -692,7 +692,7 @@ k8s_daily_monitor/
 │
 ├── Jenkinsfile                     # Phase 3: CI 파이프라인
 │
-├── argocd/
+├── deploy/argocd/
 │   ├── application.yaml            # Phase 3: ArgoCD Application
 │   └── project.yaml                # Phase 3: ArgoCD Project
 │

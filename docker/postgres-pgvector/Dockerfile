@@ -1,6 +1,6 @@
 # Postgres 15 (Alpine) + pgvector 확장.
 #
-# k8s/base/postgres/statefulset.yaml 의 postgres:15-alpine 과 동일한 베이스(musl libc)를
+# deploy/k8s/base/postgres/statefulset.yaml 의 postgres:15-alpine 과 동일한 베이스(musl libc)를
 # 유지한 채 pgvector 만 소스 빌드로 추가한다 — Docker Hub 의 공식 pgvector/pgvector:pg15
 # 이미지(Debian/glibc 베이스)로 통째로 바꾸면 컬레이션(정렬 순서) 차이로 기존 인덱스가
 # 깨질 수 있어, 베이스를 바꾸지 않는 쪽을 택했다.

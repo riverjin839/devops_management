@@ -282,7 +282,7 @@ Python 스크립트는 원격 서버 SSH 접속도, PEP 백엔드/워커 프로�
   `resolve_kubeconfig` 와 동일하게 이미 등록된 kubeconfig 권한으로 수행). 클러스터 RBAC 상 backend
   서비스계정에 네임스페이스 생성 권한이 없는 등 자동 생성이 실패하면, **에러를 숨기지 않고 사유를
   그대로 노출**(`kubeconfig.py` 의 "사유 반환" 패턴과 동일)하고 `/cluster-manage` 화면에 "수동 설정
-  필요" 안내 + 적용할 manifest(namespace+ServiceAccount yaml, `k8s/base` 에 템플릿으로 함께 제공)를
+  필요" 안내 + 적용할 manifest(namespace+ServiceAccount yaml, `deploy/k8s/base` 에 템플릿으로 함께 제공)를
   보여준 뒤 운영자가 직접 적용 후 "재확인" 버튼으로 프로비저닝 상태를 재검증하게 한다 — 신규 클러스터
   등록 시 코드/배포 없이 UI 흐름만으로 해결되게 하는 것이 목표(UI-First 원칙).
 
