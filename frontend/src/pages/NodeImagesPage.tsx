@@ -1,6 +1,7 @@
 import { useMemo, useRef, useState } from 'react';
 import { Boxes, Search, LayoutList, LayoutGrid, Layers } from 'lucide-react';
 import { useClusters } from '@/hooks/useCluster';
+import { useK8sHub } from '@/lib/k8sHub';
 import { useNodeImageList } from '@/hooks/useNodeImages';
 import { NodeImagesTable, NodeLabelGroupView, ImageCentricView, NodeImagesCsvExportMenu, ImageDistributeDialog } from '@/components/node-images';
 import { ClusterSidebar, SnapshotProgressCard, ExportMenu, SelectClusterEmptyState, LoadingState, ErrorState, PageShell } from '@/components/common';
@@ -30,7 +31,9 @@ export function NodeImagesPage() {
   // 이미지 배포 다이얼로그 — 선택한 이미지를 배포되지 않은 다른 노드로 prepull
   const [distributeImage, setDistributeImage] = useState<string | null>(null);
 
-  const activeClusterId = selectedClusterId || clusters[0]?.id || '';
+  // K8s 클러스터 허브(D-240) 안에서는 허브가 고른 클러스터가 우선.
+  const hub = useK8sHub();
+  const activeClusterId = hub ? hub.clusterId : (selectedClusterId || clusters[0]?.id || '');
   const {
     data: result,
     isLoading: nodesLoading,

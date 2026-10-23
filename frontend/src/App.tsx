@@ -13,17 +13,12 @@ import { MemberBoardPage } from '@/pages/MemberBoardPage';
 import { SettingsPage } from '@/pages/SettingsPage';
 import { ClusterLinksPage } from '@/pages/ClusterLinksPage';
 import { NodeLabelsPage } from '@/pages/NodeLabelsPage';
-import { K8sRbacPage } from '@/pages/K8sRbacPage';
 import { NsMigrationPage } from '@/pages/NsMigrationPage';
-import { NodeImagesPage } from '@/pages/NodeImagesPage';
 import { CidrCalculatorPage } from '@/pages/CidrCalculatorPage';
 import { ClusterManagePage } from '@/pages/ClusterManagePage';
 import { ClusterMetaFormPage } from '@/pages/ClusterMetaFormPage';
-import { VersionsPage } from '@/pages/VersionsPage';
 import { VersionGraphPage } from '@/pages/VersionGraphPage';
 import { BulkExecPage } from '@/pages/BulkExecPage';
-import { EtcdCtlPage } from '@/pages/EtcdCtlPage';
-import { KernelParamsPage } from '@/pages/KernelParamsPage';
 import { McClientPage } from '@/pages/McClientPage';
 import { IsilonNfsPage } from '@/pages/IsilonNfsPage';
 import { WorkflowBoardPage } from '@/pages/WorkflowBoardPage';
@@ -88,13 +83,20 @@ function RedirectWithId({ to, suffix = '' }: { to: string; suffix?: string }) {
  * replace" 와 같은 동작). 클러스터가 하나도 없으면 허브가 안내한다.
  */
 function RedirectToHub({ view }: { view: string }) {
-  const { clusterId } = useParams<{ clusterId: string }>();
+  const { clusterId: pathClusterId } = useParams<{ clusterId: string }>();
   const { search } = useLocation();
   const { data: clusters, isLoading } = useClusters();
-  if (clusterId) return <Navigate to={`/k8s/${clusterId}/${view}${search}`} replace />;
+  // 쿼리로 클러스터를 들고 있던 옛 화면(`/k8s-rbac?cluster=…&tab=…`·`/k8s-events?cluster=…`)의 링크도 그 클러스터로 —
+  // 허브에선 클러스터가 경로에 있으므로 `cluster` 키는 쿼리에서 뺀다.
+  const qs = new URLSearchParams(search);
+  const queryClusterId = qs.get('cluster') ?? '';
+  qs.delete('cluster');
+  const rest = qs.toString() ? `?${qs.toString()}` : '';
+  const clusterId = pathClusterId || queryClusterId;
+  if (clusterId) return <Navigate to={`/k8s/${clusterId}/${view}${rest}`} replace />;
   if (isLoading && !clusters) return <LoadingState />;
   const first = clusters?.[0]?.id;
-  return <Navigate to={first ? `/k8s/${first}/${view}${search}` : '/k8s'} replace />;
+  return <Navigate to={first ? `/k8s/${first}/${view}${rest}` : '/k8s'} replace />;
 }
 
 /** Settings 등 admin 전용 라우트 가드 — 비-admin 은 홈으로. (추후 role/권한 세분화 예정) */
@@ -173,7 +175,8 @@ function AppShell() {
               <Route path="/cluster-overview" element={<Navigate to="/clusters" replace />} />
               {/* K8s 클러스터 허브(D-240) — 클러스터 레일 하나 + 탭으로 per-cluster K8s 화면을 모은다.
                   아래 옛 경로들(/clusters·/k8s-manage·/k8s-allocation·/cluster-trends·/observability·/k8s-events·
-                  /k8s-logs·/incident-analysis·/daily-check/review)은 해당 뷰로 redirect(클러스터·쿼리 보존). */}
+                  /k8s-logs·/incident-analysis·/daily-check/review, 2단계: /k8s-rbac·/node-images·/versions·/etcdctl·/kernel-params)은
+                  해당 뷰로 redirect(클러스터·쿼리 보존). /node-labels(전체 클러스터 모드)·/k9s·/node-ssh(전체 높이 터미널)는 단독 유지. */}
               <Route path="/k8s" element={<K8sHubPage />} />
               <Route path="/k8s/:clusterId/:view?" element={<K8sHubPage />} />
               <Route path="/playbooks" element={<PlaybooksPage />} />
@@ -205,20 +208,20 @@ function AppShell() {
               <Route path="/weekly-report" element={<WeeklyReportPage />} />
               <Route path="/links" element={<ClusterLinksPage />} />
               <Route path="/node-labels" element={<NodeLabelsPage />} />
-              <Route path="/k8s-rbac" element={<K8sRbacPage />} />
+              <Route path="/k8s-rbac" element={<RedirectToHub view="rbac" />} />
               <Route path="/ns-migration" element={<NsMigrationPage />} />
-              <Route path="/node-images" element={<NodeImagesPage />} />
+              <Route path="/node-images" element={<RedirectToHub view="node-images" />} />
               <Route path="/cidr" element={<CidrCalculatorPage />} />
               <Route path="/cluster-manage" element={<ClusterManagePage />} />
               <Route path="/cluster-manage/:id/edit" element={<ClusterMetaFormPage />} />
-              <Route path="/versions" element={<VersionsPage />} />
+              <Route path="/versions" element={<RedirectToHub view="versions" />} />
               <Route path="/versions/:clusterId/graph" element={<VersionGraphPage />} />
               <Route path="/bulk-exec" element={<BulkExecPage />} />
-              <Route path="/etcdctl" element={<EtcdCtlPage />} />
+              <Route path="/etcdctl" element={<RedirectToHub view="etcdctl" />} />
               {/* 홈 화면 "플랫폼 현황" 탭의 배치잡 서브탭으로 병합됨 — 기존 링크/북마크가 홈 첫 탭이 아니라
                   배치잡 서브탭에 바로 떨어지도록 쿼리로 탭/서브뷰를 넘긴다(HomePage 가 읽고 지움, D-129). */}
               <Route path="/batch-jobs" element={<Navigate to="/?tab=platform&view=batch" replace />} />
-              <Route path="/kernel-params" element={<KernelParamsPage />} />
+              <Route path="/kernel-params" element={<RedirectToHub view="kernel-params" />} />
               <Route path="/mc" element={<McClientPage />} />
               <Route path="/isilon-nfs" element={<IsilonNfsPage />} />
               <Route path="/infra-topology" element={<InfraTopologyPage />} />

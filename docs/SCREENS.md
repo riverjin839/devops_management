@@ -294,20 +294,22 @@ hover 시 flyout 자체가 라벨을 보여주므로 이름만 뜨는 중복 툴
 
 ### K8s 클러스터 허브 (`/k8s`, `/k8s/:clusterId/:view?`)
 
-- **파일**: `frontend/src/pages/K8sHubPage.tsx` + `frontend/src/components/k8s-hub/{hubViews.ts,HubTabs.tsx}`, 임베드 컨텍스트 `frontend/src/lib/k8sHub.ts`, 공용 탭 `components/common/SegTabs.tsx`(K8s 자원 관리에서 승격).
-- **목적 / UX**: (2026-10-22, D-240) 클러스터 하나를 고르고 보는 K8s 화면 9개(클러스터 상세·K8s 상세 관리·K8s 자원 관리·클러스터 추이·관측 지표·실시간 이벤트·파드 로그·AI 장애 분석·점검 결과 리뷰)가 사이드바 4그룹에 흩어져 있어 화면마다 클러스터를 다시 고르던 것을, **클러스터 레일 하나 + 카테고리 탭** 한 화면으로 모았다. 클러스터는 URL(`:clusterId`)이 들고 있어 뷰를 바꿔도 유지되고, 레일에서 클러스터를 바꾸면 뷰·쿼리는 그대로 클러스터만 바뀐다.
+- **파일**: `frontend/src/pages/K8sHubPage.tsx` + `frontend/src/components/k8s-hub/{hubViews.ts,HubTabs.tsx,HubTerminalsView.tsx}`, 임베드 컨텍스트 `frontend/src/lib/k8sHub.ts`, 공용 탭 `components/common/SegTabs.tsx`(K8s 자원 관리에서 승격).
+- **목적 / UX**: (2026-10-22, D-240) 클러스터 하나를 고르고 보는 K8s 화면 9개(클러스터 상세·K8s 상세 관리·K8s 자원 관리·클러스터 추이·관측 지표·실시간 이벤트·파드 로그·AI 장애 분석·점검 결과 리뷰)가 사이드바 4그룹에 흩어져 있어 화면마다 클러스터를 다시 고르던 것을, **클러스터 레일 하나 + 카테고리 탭** 한 화면으로 모았다. 클러스터는 URL(`:clusterId`)이 들고 있어 뷰를 바꿔도 유지되고, 레일에서 클러스터를 바꾸면 뷰·쿼리는 그대로 클러스터만 바뀐다. 2단계(2026-10-23)로 구성(K8s 접근 권한·노드 라벨·노드 이미지·버전/설정)·콘솔(etcdctl·커널 파라미터·터미널 실행 카드)을 더했다.
 - **UI 구성**:
   - `ClusterSidebar iconOnly`(허브가 하나만 그린다) + `PageHeader`(h1 = 클러스터명 + `StatusBadge`, 설명 = "K8s 클러스터 · 뷰 이름").
-  - `HubTabs` — 1행 카테고리(개요 / 리소스 / 자원 / 관측 / 로그 / 점검, `SegTabs mode="tabs"`), 2행은 그 카테고리에 뷰가 둘 이상일 때만(관측: 추이·지표·이벤트, 로그: 파드 로그·AI 분석). 뷰 전환은 **path** 이동(`/k8s/:clusterId/<view>`)이라 뒤로가기가 이전 뷰로 돌아온다. 쿼리는 넘기지 않는다(뷰마다 `?tab=`·`?view=` 같은 자기 키를 쓴다). 허브 헤더·탭바는 sticky 가 아니다(K8s 상세 관리의 2차 사이드바·자원 관리의 sticky 탭바와 겹치지 않게).
+  - `HubTabs` — 1행 카테고리(개요 / 리소스 / 자원 / 관측 / 로그 / 점검 / 구성 / 콘솔, `SegTabs mode="tabs"`), 2행은 그 카테고리에 뷰가 둘 이상일 때만(관측: 추이·지표·이벤트, 로그: 파드 로그·AI 분석, 구성: 접근 권한·노드 라벨·노드 이미지·버전/설정, 콘솔: etcdctl·커널 파라미터·터미널). 뷰 전환은 **path** 이동(`/k8s/:clusterId/<view>`)이라 뒤로가기가 이전 뷰로 돌아온다. 쿼리는 넘기지 않는다(뷰마다 `?tab=`·`?view=` 같은 자기 키를 쓴다). 허브 헤더·탭바는 sticky 가 아니다(K8s 상세 관리의 2차 사이드바·자원 관리의 sticky 탭바와 겹치지 않게).
   - 서브뷰는 **기존 페이지 컴포넌트를 그대로 마운트**한다(`.island-embed` 래퍼 + `K8sHubContext.Provider`). 컨텍스트가 있으면 페이지 쪽 `ClusterSidebar` 는 null, `PageShell` 은 `div`·패딩 없음, `PageHeader` 는 h2·`back` 숨김, `useClusterRouteParam` 은 허브의 clusterId/selectCluster 를 돌려준다 — 그래서 흡수된 화면의 코드는 거의 그대로다(지식 허브 `/docs`·홈 배치잡 서브탭과 같은 "페이지를 탭 안에 마운트" 패턴). `LogViewTabs` 도 허브 안에서는 그리지 않는다(2행 탭이 대체).
-  - 뷰 id: `overview`(클러스터 상세) · `manage` · `allocation` · `trends` · `metrics` · `events` · `logs` · `incident` · `review`. 모르는 view → overview 로 replace. 클러스터 미지정(`/k8s`) → 첫 클러스터로 replace, 클러스터가 없으면 `SelectClusterEmptyState`.
+  - 뷰 id: `overview`(클러스터 상세) · `manage` · `allocation` · `trends` · `metrics` · `events` · `logs` · `incident` · `review` · `rbac` · `node-labels` · `node-images` · `versions` · `etcdctl` · `kernel-params` · `terminals`. 모르는 view → overview 로 replace. 클러스터 미지정(`/k8s`) → 첫 클러스터로 replace, 클러스터가 없으면 `SelectClusterEmptyState`.
+  - **콘솔 ▸ 터미널**(`HubTerminalsView`) — k9s 콘솔·노드 SSH 터미널은 전체 높이 웹 터미널(xterm + WebSocket, 새 창 handoff)이라 임베드하지 않고, 카드의 "열기"가 단독 화면(`/k9s/:clusterId`·`/node-ssh/:clusterId`)을 허브가 고른 클러스터로 연다. 접근 제어로 꺼진 쪽은 카드가 빠지고(둘 다 꺼지면 탭도 빠짐 — `HubView.extraNavKeys`), viewer 는 숨기지 않고 비활성 + 사유.
+  - **노드 라벨 이중 진입** — 허브 뷰는 고른 클러스터 하나만 보고, 여러 클러스터를 한 표로 보는 "전체 클러스터" 모드는 단독 화면 `/node-labels`(구성·자산 그룹)에 그대로 남는다.
   - **접근 제어**: 허브 URL 은 `RouteAccessGate` 의 longest-prefix 가 `/k8s` 만 보므로, 뷰마다 흡수한 옛 경로(`HubView.navKey`, 예 `/k8s-manage`)로 `featureAllowed` 를 직접 판정한다 — 꺼진 뷰는 탭에서 빠지고 직접 URL 은 Lock `EmptyState`(아일랜드 패널 호스트와 같은 안내).
 - **Frontend**: `useClusters`, `useNavCatalog`(`featureAllowed`·`getLabel`), `useParams`/`useNavigate`/`useLocation`. 서브뷰의 훅·API 는 각 화면 섹션 참고(허브 전용 API 없음).
 - **Backend**: 없음(프론트 전용 통합).
 - **핵심 기능**:
-  - 옛 URL 은 전부 허브 뷰로 redirect(`App.tsx` `RedirectToHub` — `:clusterId` 와 쿼리 보존, bare URL 은 첫 클러스터). 홈 매트릭스 클러스터명·커맨드 팔레트는 `/k8s/<id>/overview` 로 직행.
-  - 사이드바: 새 플랫폼 그룹 **"K8s 클러스터"**(`navConfig.ts` `k8s`) = `/k8s` + 흡수된 옛 leaf 9개. 옛 leaf 는 NAV_MAP 에 남아 접근 제어·라벨 오버라이드·아일랜드 패널(페이지 직접 임베드)·leaf 단위 설치(설치하면 그 뷰로 바로 가는 바로가기)가 그대로다. `/k8s` 자체는 아일랜드 패널 불가(`ISLAND_DENYLIST`).
-  - 후속: 2단계 구성·콘솔(RBAC·노드 라벨·노드 이미지·버전·etcdctl·커널 파라미터·k9s/노드 SSH 실행 카드), 3단계 진단(파드 병목·Cilium·패킷 흐름) — `HUB_VIEWS` 에 항목을 더하고 옛 라우트를 `RedirectToHub` 로 바꾸면 된다.
+  - 옛 URL 은 전부 허브 뷰로 redirect(`App.tsx` `RedirectToHub` — `:clusterId` 와 쿼리 보존, 경로에 클러스터가 없고 쿼리에 `cluster=` 가 있으면 그 클러스터로 보내고 그 키는 뺀다, 그 외 bare URL 은 첫 클러스터). 예외는 `/node-labels`·`/k9s`·`/node-ssh`(단독 유지)·`/versions/:clusterId/graph`(전체 높이 캔버스 — 뒤로가기 링크는 허브 버전 뷰로). 홈 매트릭스 클러스터명·커맨드 팔레트는 `/k8s/<id>/overview` 로 직행.
+  - 사이드바: 새 플랫폼 그룹 **"K8s 클러스터"**(`navConfig.ts` `k8s`) = `/k8s` + 흡수된 옛 leaf 14개(1단계 9 + 2단계 `/k8s-rbac`·`/node-images`·`/versions`·`/etcdctl`·`/kernel-params`). 옛 leaf 는 NAV_MAP 에 남아 접근 제어·라벨 오버라이드·아일랜드 패널(페이지 직접 임베드)·leaf 단위 설치(설치하면 그 뷰로 바로 가는 바로가기)가 그대로다. `/k8s` 자체는 아일랜드 패널 불가(`ISLAND_DENYLIST`).
+  - 후속: 3단계 진단(파드 병목·Cilium·패킷 흐름) — `HUB_VIEWS` 에 항목을 더하고 옛 라우트를 `RedirectToHub` 로 바꾸면 된다.
 - **요청사항 (수정 요청)**:
   - _(여기에 개선/수정 요청을 직접 적어주세요)_
 
@@ -419,6 +421,8 @@ hover 시 flyout 자체가 라벨을 보여주므로 이름만 뜨는 중복 툴
 
 ### k9s 콘솔 (`/k9s`, `/k9s/:clusterId`)
 
+> **허브로 통합(2026-10-23, D-240 2단계)**: 단독 화면 유지 — 전체 높이 웹 터미널이라 허브에 임베드하지 않는다. K8s 클러스터 허브 ▸ 콘솔 ▸ 터미널 카드의 "열기"가 `/k9s/:clusterId` 로 이 화면을 연다.
+
 - **파일**: `frontend/src/pages/K9sPage.tsx` + `frontend/src/components/k8s/K9sTerminal.tsx`(xterm.js 터미널) + `components/common/{ClusterSidebar,EmptyState}`, `components/ui/MacCard`.
 - **목적 / UX**: 각 클러스터의 control-plane(master) 서버에 **SSH 로 접속해 서버에 내장된 `k9s` TUI 를 그대로 웹 터미널로 스트리밍**한다. 별도 재구현이 아니라 실제 k9s 를 브라우저에서 조작(파드/노드/디플로이 탐색, 로그, describe 등)한다.
 - **UI 구성**:
@@ -437,6 +441,8 @@ hover 시 flyout 자체가 라벨을 보여주므로 이름만 뜨는 중복 툴
   - _(여기에 개선/수정 요청을 직접 적어주세요)_
 
 ### 노드 SSH 터미널 (`/node-ssh`, `/node-ssh/:clusterId`)
+
+> **허브로 통합(2026-10-23, D-240 2단계)**: 단독 화면 유지 — 전체 높이 웹 터미널이라 허브에 임베드하지 않는다. K8s 클러스터 허브 ▸ 콘솔 ▸ 터미널 카드의 "열기"가 `/node-ssh/:clusterId` 로 이 화면을 연다.
 
 - **파일**: `frontend/src/pages/NodeSshPage.tsx` + `frontend/src/pages/NodeSshPopupPage.tsx`(별도 창) + `frontend/src/components/k8s/{NodeSshTerminal,SshTerminalWindow}.tsx` + `components/common/{ClusterSidebar,EmptyState}`, `components/ui/MacCard`.
 - **목적 / UX**: 클러스터의 **개별 노드 하나에 SSH 로 붙어 로그인 셸을 그대로** 웹 터미널로 쓴다. k9s 콘솔이 control-plane 의 k9s TUI 만 띄우는 것과 달리 범용 셸이라 `journalctl`·`top`·`vi` 같은 인터랙티브 명령까지 동작한다(tty + resize). 여러 노드에 같은 명령을 돌리는 용도는 `/bulk-exec`, 리소스 TUI 탐색은 `/k9s` 로 안내한다.
@@ -796,6 +802,8 @@ hover 시 flyout 자체가 라벨을 보여주므로 이름만 뜨는 중복 툴
 
 ### K8S 노드 라벨 (`/node-labels`)
 
+> **허브로 통합(2026-10-23, D-240 2단계)**: K8s 클러스터 허브 `/k8s/:clusterId/node-labels`(구성 카테고리)에도 같은 화면이 뷰로 들어 있다 — 허브에서는 고른 클러스터 하나만 보인다. 이 단독 화면은 redirect 하지 않고 "전체 클러스터" 모드(여러 클러스터의 노드를 한 표로)를 위해 그대로 둔다.
+
 - **파일**: `frontend/src/pages/NodeLabelsPage.tsx` (+ `components/node-labels/NodeLabelEditorModal.tsx`, `NodeLabelsTable.tsx`, `nodeLabelsShared.ts`, `components/common/ExportMenu`)
 - **목적 / UX**: 클러스터(또는 전체 클러스터)의 모든 노드에 붙은 K8s 라벨을 노드 기준 / 레이블 기준 두 뷰로 조회하고, 특정 노드를 골라 라벨을 추가·삭제(patch)한다. 여러 클러스터를 한 화면에서 취합해 라벨 표준화 여부를 점검하는 용도.
 - **UI 구성**:
@@ -816,6 +824,8 @@ hover 시 flyout 자체가 라벨을 보여주므로 이름만 뜨는 중복 툴
   - _(여기에 개선/수정 요청을 직접 적어주세요)_
 
 ### K8S 접근 권한 (`/k8s-rbac`)
+
+> **허브로 통합(2026-10-23, D-240 2단계)**: 이 화면은 K8s 클러스터 허브 `/k8s/:clusterId/rbac` 의 서브뷰로 마운트된다. 옛 URL 은 그 뷰로 redirect(`?cluster=` 는 경로로 옮기고 `?tab=` 등은 보존). 허브 안에서는 허브가 고른 클러스터를 쓰고(`useK8sHub`), 레일·h1·`PageShell` 은 허브가 그린다.
 
 - **파일**: `frontend/src/pages/K8sRbacPage.tsx` (+ `components/k8s-rbac/ProvisionWizard.tsx`, `ProvisionConsole.tsx`, `RuleEditor.tsx`, `ServiceAccountPanel.tsx`, `RolePanel.tsx`, `BindingPanel.tsx`, `AccessReviewPanel.tsx`, `CredentialResult.tsx`, `RbacTags.tsx`, `rbacShared.ts`)
 - **목적 / UX**: 개발자가 **자기 LOCAL 의 kubectl 로** 클러스터에 붙어 배포하고 로그를 보는 데 필요한 ServiceAccount · (Cluster)Role · Binding · kubeconfig 한 세트를 화면에서 만들고 편집·회수한다. 배포는 보통 자기 네임스페이스 기준이지만 다른 네임스페이스도 권한이 필요할 수 있어, 발급 마법사가 주 네임스페이스 + 추가 네임스페이스를 함께 받아 한 번에 붙인다.
@@ -860,6 +870,8 @@ hover 시 flyout 자체가 라벨을 보여주므로 이름만 뜨는 중복 툴
 
 ### K8S 노드 이미지 (`/node-images`)
 
+> **허브로 통합(2026-10-23, D-240 2단계)**: 이 화면은 K8s 클러스터 허브 `/k8s/:clusterId/node-images` 의 서브뷰로 마운트된다. 옛 URL 은 그 뷰로 redirect. 허브 안에서는 허브가 고른 클러스터를 쓴다(`useK8sHub`).
+
 - **파일**: `frontend/src/pages/NodeImagesPage.tsx` (+ `components/node-images/NodeImagesTable.tsx`, `NodeLabelGroupView.tsx`, `ImageCentricView.tsx`, `NodeImagesCsvExportMenu.tsx`, `ImageDistributeDialog.tsx`, `components/common/SnapshotProgressCard`)
 - **목적 / UX**: 선택한 클러스터의 모든 노드에 캐시된 컨테이너 이미지를 노드별/라벨그룹별/이미지별 3가지 시각으로 확인해, 불필요한 이미지·중복 적재·용량을 파악한다. 또한 특정 노드의 이미지를 아직 없는 다른 노드(동일/타 클러스터)로 배포(prepull)할 수 있다.
 - **UI 구성**:
@@ -890,6 +902,8 @@ hover 시 flyout 자체가 라벨을 보여주므로 이름만 뜨는 중복 툴
   - _(여기에 개선/수정 요청을 직접 적어주세요)_
 
 ### 버전 / 설정 관리 (`/versions`)
+
+> **허브로 통합(2026-10-23, D-240 2단계)**: 이 화면은 K8s 클러스터 허브 `/k8s/:clusterId/versions` 의 서브뷰로 마운트된다. 옛 URL 은 그 뷰로 redirect. "관계 그래프"(`/versions/:clusterId/graph`)는 전체 높이 캔버스라 단독 화면으로 열리고, 그 화면의 뒤로가기는 허브 버전 뷰로 돌아온다.
 
 > **2026-10-14 (D-128)**: 수집 모달 5종(etcd systemd·kubeadm 인증서·커널 파라미터·kubelet 설정·노드 NIC)의 "수집 실행" 이 모달 안 실행 로그를
 > 띄운다 — 요청 줄, 응답 대기 하트비트, 호스트별 상태·exit·저장 여부·오류 줄, 요약(`components/versions/collectRunLog.ts`).
@@ -958,6 +972,8 @@ hover 시 flyout 자체가 라벨을 보여주므로 이름만 뜨는 중복 툴
   - _(여기에 개선/수정 요청을 직접 적어주세요)_
 
 ### etcdctl 콘솔 (`/etcdctl`)
+
+> **허브로 통합(2026-10-23, D-240 2단계)**: 이 화면은 K8s 클러스터 허브 `/k8s/:clusterId/etcdctl`(콘솔 카테고리)의 서브뷰로 마운트된다. 옛 URL 은 그 뷰로 redirect. 허브에서 클러스터를 바꾸면 뷰가 다시 마운트돼 이전 결과·마스터 선택이 비워진다(단독 화면의 레일 전환과 같은 효과).
 
 - **파일**: `frontend/src/pages/EtcdCtlPage.tsx` (+ `components/common/{ConfirmDialog,LogViewer,SavedCommands}`)
 - **목적 / UX**: control-plane(master) 노드에 SSH로 접속해 `etcdctl` 명령을 실행(endpoint health, member list, snapshot 등)하거나 `etcd.service`의 systemd 로그(journalctl)를 조회한다. defrag/compact/snapshot 등 위험 명령은 확인 모달에서 경고 표시.
@@ -1101,6 +1117,8 @@ hover 시 flyout 자체가 라벨을 보여주므로 이름만 뜨는 중복 툴
   - _(여기에 개선/수정 요청을 직접 적어주세요)_
 
 ### OS / 커널 파라미터 조회 (`/kernel-params`)
+
+> **허브로 통합(2026-10-23, D-240 2단계)**: 이 화면은 K8s 클러스터 허브 `/k8s/:clusterId/kernel-params`(콘솔 카테고리)의 서브뷰로 마운트된다. 옛 URL 은 그 뷰로 redirect. 허브에서 클러스터를 바꾸면 뷰가 다시 마운트돼 이전 실행 결과가 비워진다.
 
 - **파일**: `frontend/src/pages/KernelParamsPage.tsx`
 - **목적 / UX**: 선택한 노드 여러 대에 SSH로 접속해 sysctl/conntrack/ulimit/디스크·IO/커널모듈/시간동기화 등을 **읽기 전용**으로 일괄 조회한다. 인증정보는 저장되지 않고 실행에만 사용됨을 명시.

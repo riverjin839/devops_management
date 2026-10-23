@@ -467,7 +467,7 @@ export function VersionGraphPage() {
         <div className="flex items-center gap-3 px-4 py-2.5 border-b border-border bg-card flex-shrink-0 z-20">
           <PageHeader
             className="flex-1 items-center"
-            back={{ to: '/versions', label: '버전' }}
+            back={{ to: selectedId ? `/k8s/${selectedId}/versions` : '/versions', label: '버전' }}
             icon={Share2}
             title="컴포넌트 관계 그래프"
             actions={<>

@@ -3,7 +3,7 @@ import { Navigate, useLocation, useNavigate, useParams } from 'react-router-dom'
 import { Lock, ShipWheel } from 'lucide-react';
 import { PageHeader, PageShell, EmptyState, LoadingState, SelectClusterEmptyState, StatusBadge, statusToVariant } from '@/components/common';
 import { ClusterSidebar } from '@/components/common/ClusterSidebar';
-import { HubTabs, HUB_VIEWS, DEFAULT_HUB_VIEW, findHubView } from '@/components/k8s-hub';
+import { HubTabs, HUB_VIEWS, DEFAULT_HUB_VIEW, findHubView, hubViewAllowed } from '@/components/k8s-hub';
 import { useClusters } from '@/hooks/useCluster';
 import { useNavCatalog } from '@/hooks/useNavCatalog';
 import { K8sHubContext, type K8sHubEmbed } from '@/lib/k8sHub';
@@ -30,7 +30,7 @@ export function K8sHubPage() {
   const { featureAllowed, getLabel } = useNavCatalog();
 
   const viewId = viewParam ?? DEFAULT_HUB_VIEW;
-  const allowedViews = useMemo(() => HUB_VIEWS.filter((v) => featureAllowed(v.navKey)), [featureAllowed]);
+  const allowedViews = useMemo(() => HUB_VIEWS.filter((v) => hubViewAllowed(v, featureAllowed)), [featureAllowed]);
   const view = findHubView(viewId);
   const cluster = clusters.find((c) => c.id === clusterId);
 
