@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useIsIslandEmbedded } from '@/lib/islandEmbed';
+import { useK8sHub } from '@/lib/k8sHub';
 import type { Cluster } from '@/types';
 
 interface ClusterRouteParam {
@@ -23,6 +24,9 @@ interface ClusterRouteParam {
  *   없으면 `${basePath}/${id}`.
  * @param opts.local true 면 URL 을 건드리지 않고 로컬 state 로 동작한다 — 허브 탭 안에 다른 화면을
  *   그대로 마운트한 경우(예: 지식 허브의 온톨로지 탭)처럼 이동하면 탭을 벗어나는 곳에서 쓴다.
+ *
+ * - **K8s 클러스터 허브 임베드**(`lib/k8sHub.ts`): 허브가 `/k8s/:clusterId/:view` 로 선택을 들고 있으므로
+ *   허브의 clusterId/selectCluster 를 그대로 돌려준다(이 훅은 URL 을 건드리지 않는다).
  */
 export function useClusterRouteParam(
   basePath: string,
@@ -32,17 +36,18 @@ export function useClusterRouteParam(
   const { clusterId: routeClusterId = '' } = useParams<{ clusterId: string }>();
   const navigate = useNavigate();
   const islandEmbedded = useIsIslandEmbedded();
+  const hub = useK8sHub();
   const embedded = islandEmbedded || !!opts.local;
   const { pathFor } = opts;
   const [localClusterId, setLocalClusterId] = useState('');
 
-  const clusterId = embedded ? localClusterId : routeClusterId;
+  const clusterId = hub ? hub.clusterId : embedded ? localClusterId : routeClusterId;
 
   useEffect(() => {
-    if (clusterId || clusters.length === 0) return;
+    if (hub || clusterId || clusters.length === 0) return;
     if (embedded) setLocalClusterId(clusters[0].id);
     else navigate(pathFor ? pathFor(clusters[0].id) : `${basePath}/${clusters[0].id}`, { replace: true });
-  }, [clusterId, clusters, embedded, basePath, pathFor, navigate]);
+  }, [hub, clusterId, clusters, embedded, basePath, pathFor, navigate]);
 
   const selectCluster = useCallback((id: string | null) => {
     if (!id) return;
@@ -50,5 +55,5 @@ export function useClusterRouteParam(
     else navigate(pathFor ? pathFor(id) : `${basePath}/${id}`);
   }, [embedded, basePath, pathFor, navigate]);
 
-  return { clusterId, selectCluster };
+  return hub ? { clusterId: hub.clusterId, selectCluster: hub.selectCluster } : { clusterId, selectCluster };
 }

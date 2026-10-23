@@ -292,7 +292,29 @@ hover 시 flyout 자체가 라벨을 보여주므로 이름만 뜨는 중복 툴
 
 ## 클러스터 — 모니터링 / 리소스 관리
 
+### K8s 클러스터 허브 (`/k8s`, `/k8s/:clusterId/:view?`)
+
+- **파일**: `frontend/src/pages/K8sHubPage.tsx` + `frontend/src/components/k8s-hub/{hubViews.ts,HubTabs.tsx}`, 임베드 컨텍스트 `frontend/src/lib/k8sHub.ts`, 공용 탭 `components/common/SegTabs.tsx`(K8s 자원 관리에서 승격).
+- **목적 / UX**: (2026-10-22, D-240) 클러스터 하나를 고르고 보는 K8s 화면 9개(클러스터 상세·K8s 상세 관리·K8s 자원 관리·클러스터 추이·관측 지표·실시간 이벤트·파드 로그·AI 장애 분석·점검 결과 리뷰)가 사이드바 4그룹에 흩어져 있어 화면마다 클러스터를 다시 고르던 것을, **클러스터 레일 하나 + 카테고리 탭** 한 화면으로 모았다. 클러스터는 URL(`:clusterId`)이 들고 있어 뷰를 바꿔도 유지되고, 레일에서 클러스터를 바꾸면 뷰·쿼리는 그대로 클러스터만 바뀐다.
+- **UI 구성**:
+  - `ClusterSidebar iconOnly`(허브가 하나만 그린다) + `PageHeader`(h1 = 클러스터명 + `StatusBadge`, 설명 = "K8s 클러스터 · 뷰 이름").
+  - `HubTabs` — 1행 카테고리(개요 / 리소스 / 자원 / 관측 / 로그 / 점검, `SegTabs mode="tabs"`), 2행은 그 카테고리에 뷰가 둘 이상일 때만(관측: 추이·지표·이벤트, 로그: 파드 로그·AI 분석). 뷰 전환은 **path** 이동(`/k8s/:clusterId/<view>`)이라 뒤로가기가 이전 뷰로 돌아온다. 쿼리는 넘기지 않는다(뷰마다 `?tab=`·`?view=` 같은 자기 키를 쓴다). 허브 헤더·탭바는 sticky 가 아니다(K8s 상세 관리의 2차 사이드바·자원 관리의 sticky 탭바와 겹치지 않게).
+  - 서브뷰는 **기존 페이지 컴포넌트를 그대로 마운트**한다(`.island-embed` 래퍼 + `K8sHubContext.Provider`). 컨텍스트가 있으면 페이지 쪽 `ClusterSidebar` 는 null, `PageShell` 은 `div`·패딩 없음, `PageHeader` 는 h2·`back` 숨김, `useClusterRouteParam` 은 허브의 clusterId/selectCluster 를 돌려준다 — 그래서 흡수된 화면의 코드는 거의 그대로다(지식 허브 `/docs`·홈 배치잡 서브탭과 같은 "페이지를 탭 안에 마운트" 패턴). `LogViewTabs` 도 허브 안에서는 그리지 않는다(2행 탭이 대체).
+  - 뷰 id: `overview`(클러스터 상세) · `manage` · `allocation` · `trends` · `metrics` · `events` · `logs` · `incident` · `review`. 모르는 view → overview 로 replace. 클러스터 미지정(`/k8s`) → 첫 클러스터로 replace, 클러스터가 없으면 `SelectClusterEmptyState`.
+  - **접근 제어**: 허브 URL 은 `RouteAccessGate` 의 longest-prefix 가 `/k8s` 만 보므로, 뷰마다 흡수한 옛 경로(`HubView.navKey`, 예 `/k8s-manage`)로 `featureAllowed` 를 직접 판정한다 — 꺼진 뷰는 탭에서 빠지고 직접 URL 은 Lock `EmptyState`(아일랜드 패널 호스트와 같은 안내).
+- **Frontend**: `useClusters`, `useNavCatalog`(`featureAllowed`·`getLabel`), `useParams`/`useNavigate`/`useLocation`. 서브뷰의 훅·API 는 각 화면 섹션 참고(허브 전용 API 없음).
+- **Backend**: 없음(프론트 전용 통합).
+- **핵심 기능**:
+  - 옛 URL 은 전부 허브 뷰로 redirect(`App.tsx` `RedirectToHub` — `:clusterId` 와 쿼리 보존, bare URL 은 첫 클러스터). 홈 매트릭스 클러스터명·커맨드 팔레트는 `/k8s/<id>/overview` 로 직행.
+  - 사이드바: 새 플랫폼 그룹 **"K8s 클러스터"**(`navConfig.ts` `k8s`) = `/k8s` + 흡수된 옛 leaf 9개. 옛 leaf 는 NAV_MAP 에 남아 접근 제어·라벨 오버라이드·아일랜드 패널(페이지 직접 임베드)·leaf 단위 설치(설치하면 그 뷰로 바로 가는 바로가기)가 그대로다. `/k8s` 자체는 아일랜드 패널 불가(`ISLAND_DENYLIST`).
+  - 후속: 2단계 구성·콘솔(RBAC·노드 라벨·노드 이미지·버전·etcdctl·커널 파라미터·k9s/노드 SSH 실행 카드), 3단계 진단(파드 병목·Cilium·패킷 흐름) — `HUB_VIEWS` 에 항목을 더하고 옛 라우트를 `RedirectToHub` 로 바꾸면 된다.
+- **요청사항 (수정 요청)**:
+  - _(여기에 개선/수정 요청을 직접 적어주세요)_
+
 ### K8s 상세 관리 (`/k8s-manage`, `/k8s-manage/:clusterId`)
+
+- **파일**: `frontend/src/pages/K8sManagePage.tsx` (단일 파일 — `ResourceTablePanel`/`NodesPanel`/`PodsPanel`/`OverviewPanel`/`HelmPanel`/`CrdPanel`/`DetailDrawer`를 내부 정의하고 `ResourceTablePanel`/`PodsPanel`은 `NamespaceDashboardPanel`이 재사용할 수 있게 `export`), `frontend/src/components/k8s-manage/NamespaceDashboardPanel.tsx`(네임스페이스 대시보드) + `NsExtraPanels.tsx`(대시보드 전용 CR 오브젝트·바인딩 표). `HelmPanel` 도 `namespace?` prop 으로 대시보드가 재사용하게 `export`, + `components/k8s/{PodTerminal,EventsStream,NamespaceMultiSelect,ColumnToggle}`, `components/common/LogViewer`, `components/auth/RoleGate`.
+> **허브로 통합(2026-10-22, D-240)**: 이 화면은 K8s 클러스터 허브 `/k8s/:clusterId/manage` 의 서브뷰로 마운트된다. 옛 URL 은 그 뷰로 redirect(클러스터·쿼리 보존). 레일·h1·`PageShell` 은 허브가 그리고(`lib/k8sHub.ts` 컨텍스트), 아래 설명의 나머지는 그대로다.
 
 - **파일**: `frontend/src/pages/K8sManagePage.tsx` (단일 파일 — `ResourceTablePanel`/`NodesPanel`/`PodsPanel`/`OverviewPanel`/`HelmPanel`/`CrdPanel`/`DetailDrawer`를 내부 정의하고 `ResourceTablePanel`/`PodsPanel`은 `NamespaceDashboardPanel`이 재사용할 수 있게 `export`), `frontend/src/components/k8s-manage/NamespaceDashboardPanel.tsx`(네임스페이스 대시보드) + `NsExtraPanels.tsx`(대시보드 전용 CR 오브젝트·ClusterRoleBinding 표). `HelmPanel` 도 `namespace?` prop 으로 대시보드가 재사용하게 `export`, + `components/k8s/{PodTerminal,EventsStream,NamespaceMultiSelect,ColumnToggle}`, `components/common/LogViewer`, `components/auth/RoleGate`.
 - **목적 / UX**: Lens/OpenLens 스타일의 K8s 리소스 탐색기. 좌측 카테고리 내비(Cluster/Nodes/Namespaces/Workloads/Config/Network/Storage/Events/Helm/AccessControl/CRD 순 — Namespaces 는 Nodes 바로 아래)로 리소스 종류를 전환하며 목록 조회, YAML 상세/편집, scale/restart/delete/cordon/drain 같은 쓰기 작업, Pod 터미널·이벤트 확인까지 한 화면에서 처리. **Namespaces 카테고리는 "목록"(기존 Namespace 오브젝트 나열)과 "대시보드"(종류가 아니라 네임스페이스를 먼저 골라 그 안의 workload/config/network/storage 전체를 한 화면에서 보는 뷰) 두 리프로 나뉜다.**
@@ -300,12 +322,12 @@ hover 시 flyout 자체가 라벨을 보여주므로 이름만 뜨는 중복 툴
   - `ClusterSidebar` — `iconOnly` 단일 선택(`allowAll` 없음), URL 파라미터(`:clusterId`) 동기화.
   - 두 번째 sticky 사이드바 — Lens 식 카테고리 내비(`NAV` 상수, `kindAvailability` 응답으로 존재하는 kind만 노출). `LeafMode`(`kind|overview|events|helm|crd|nsdash`)로 분기. **리프가 2개 이상인 대분류는 헤더를 눌러 접기/펼치기** 가능 — 상태는 `localStorage`(`pep:k8s:navCollapsed`)에 저장돼 다음 방문에도 유지되고, 현재 선택된 리프가 속한 대분류는 저장된 상태와 무관하게 항상 펼쳐 보인다.
   - 리소스별 패널: `NodesPanel`(cordon/drain 포함 노드 전용 컬럼), `PodsPanel`(터미널 진입), 그 외 kind는 공통 `ResourceTablePanel`(Virtuoso 가상 스크롤, 네임스페이스 멀티셀렉트, 컬럼 토글, 검색). 두 컴포넌트 모두 `hideNsSelector?` prop 지원 — 네임스페이스가 상위(대시보드)에서 이미 고정된 곳에 임베드할 때 내장 NS 선택기를 숨긴다.
-  - `NamespaceDashboardPanel`(**대시보드** 리프) — `NamespaceMultiSelect`(`singleSelect` 모드, 종류별 탐색 화면과 동일한 "전체 네임스페이스" 버튼 + 검색 드롭다운)로 네임스페이스 1개 선택 → 툴바의 **네임스페이스 상세·YAML**(같은 `DetailDrawer`, 라벨·어노테이션 확인) + 엑셀 스타일 **리소스 인벤토리** 표(종류/구분(Workload·Config·Network·Storage·Access Control·Custom Resources·Helm 색 점)/개수/정상/경고/위험/비고, `caps[kind].namespaced` + `avail[kind].available`(API 미지원만 숨김 — 클러스터 전체 기준 `present` 는 쓰지 않아 0개 종류도 표시)로 표시 대상 필터, 종류별 `k8sResourcesApi.list`/`richPods` 병렬 조회로 개수·상태 산출 — 상태 개념이 없는 종류(ConfigMap 등)는 `—`) → 행 클릭 시 상세 목록으로 바로 이동(**탭 드릴인형**: 카테고리 탭 + 종류 필 로우 + 선택한 종류 패널이 먼저 나오고 인벤토리 표는 그 아래 / **전체 나열형**: 인벤토리 표가 위, 4개 카테고리 전부를 세로로 펼쳐 종류별 패널을 다 쌓은 목록이 아래, 상단 토글로 두 레이아웃 전환). 실제 리소스 테이블은 두 모드 다 같은 `ResourceTablePanel`/`PodsPanel` 인스턴스(`KindPanel` 래퍼로 NS 고정)를 쓰므로 스케일/재시작/삭제/YAML 편집·Pod 터미널이 종류별 탐색과 동일하게 동작. PV/StorageClass 등 cluster-scoped 종류는 제외. 고정 종류 외 카테고리: **Access Control** 은 ServiceAccount·Role·RoleBinding + 이 NS 를 subject 로 묶는 ClusterRoleBinding(`NsClusterBindingsPanel`), **Custom Resources** 는 이 NS 에 오브젝트가 있는 namespaced CRD 종류별 표(`NsCrdObjectsPanel`, 확인 못 한 CRD 수 안내), **Helm** 은 이 NS 릴리스(`HelmPanel namespace`), **Events** 는 `EventsStream fixedNamespace`(서버에서 이 NS 만 watch — 탭 드릴인형은 Events 탭을 열 때만 연결). 전체 나열형은 0개 종류의 빈 패널을 쌓지 않는다.
+  - `NamespaceDashboardPanel`(**대시보드** 리프) — `NamespaceMultiSelect`(`singleSelect` 모드, 종류별 탐색 화면과 동일한 "전체 네임스페이스" 버튼 + 검색 드롭다운)로 네임스페이스 1개 선택 → 툴바의 **네임스페이스 상세·YAML**(같은 `DetailDrawer`, 라벨·어노테이션 확인) + 엑셀 스타일 **리소스 인벤토리** 표(종류/구분(Workload·Config·Network·Storage·Access Control·Custom Resources·Helm 색 점)/개수/정상/경고/위험/비고, `caps[kind].namespaced` + `avail[kind].available`(API 미지원만 숨김 — 클러스터 전체 기준 `present` 는 쓰지 않아 0개 종류도 표시)로 표시 대상 필터, 종류별 `k8sResourcesApi.list`/`richPods` 병렬 조회로 개수·상태 산출 — 상태 개념이 없는 종류(ConfigMap 등)는 `—`) → 행 클릭 시 상세 목록으로 바로 이동(**탭 드릴인형**: 카테고리 탭 + 종류 필 로우 + 선택한 종류 패널이 먼저 나오고 인벤토리 표는 그 아래 / **전체 나열형**: 인벤토리 표가 위, 4개 카테고리 전부를 세로로 펼쳐 종류별 패널을 다 쌓은 목록이 아래, 상단 토글로 두 레이아웃 전환). 실제 리소스 테이블은 두 모드 다 같은 `ResourceTablePanel`/`PodsPanel` 인스턴스(`KindPanel` 래퍼로 NS 고정)를 쓰므로 스케일/재시작/삭제/YAML 편집·Pod 터미널이 종류별 탐색과 동일하게 동작. PV/StorageClass 등 cluster-scoped 종류는 제외. 고정 종류 외 카테고리: **Access Control** 은 ServiceAccount·Role·RoleBinding + 이 NS 를 subject 로 묶는 ClusterRoleBinding · 다른 NS 의 RoleBinding(둘 다 `NsBindingsPanel` `scope=cluster|external`, 쿼리 정의 `nsBindingQueries.ts` — subject 판정은 `namespace` 가 이 NS 이거나 그룹 `system:serviceaccounts:<ns>`), **Custom Resources** 는 이 NS 에 오브젝트가 있는 namespaced CRD 종류별 표(`NsCrdObjectsPanel`, 확인 못 한 CRD 수 안내), **Helm** 은 이 NS 릴리스(`HelmPanel namespace`), **Events** 는 `EventsStream fixedNamespace`(서버에서 이 NS 만 watch — 탭 드릴인형은 Events 탭을 열 때만 연결). 전체 나열형은 0개 종류의 빈 패널을 쌓지 않는다.
   - `OverviewPanel`(노드/네임스페이스 통계), `HelmPanel`(릴리스 목록 + values 보기), `CrdPanel`(CRD 목록 → 오브젝트 드릴다운), `EventsStream`(events 탭 — SSE `event: end` 는 종료 사유 `role="status"`, `event: error`·429 사유는 `role="alert"` 로 표시하고 `: ping` 은 무시).
   - `DetailDrawer` — 우측 슬라이드 패널(요약/YAML/이벤트 탭 — 이벤트 탭은 열려 있고 브라우저 탭이 보일 때만 30s 갱신), `RoleGate(['admin','operator'])`로 편집·쓰기 UI 게이팅, viewer는 읽기 전용 배지. 대시보드에서도 페이지 최상단의 같은 `DetailDrawer`/`PodTerminal`/`ConfirmDialog`를 콜백으로 그대로 재사용.
   - `PodTerminal` 모달(WebSocket exec).
-- **Frontend**: 별도 커스텀 hook 없이 TanStack `useQuery`/`useQueries` 직접 사용(`k8s-mng-list`/`k8s-mng-nodes`/`k8s-mng-helm`/`k8s-mng-crds`/`k8s-mng-yaml`/`k8s-caps`/`k8s-avail` 등 쿼리키), `useColumnPrefs`(컬럼 표시/숨김 로컬 저장). `useClusters`. `NamespaceDashboardPanel`은 네임스페이스 목록을 `NamespaceMultiSelect`(내부적으로 `k8sResourcesApi.list(clusterId, 'namespaces')`, 쿼리 키 `['k8s-mng-list', id, 'namespaces', 'all']` 로 목록 화면과 캐시 공유, 드롭다운은 Virtuoso 가상 스크롤 + `useDeferredValue` 검색 — 1만 NS 대응) 경유로 얻는다. api.ts: `k8sResourcesApi.{list,yaml,resourceEvents,capabilities,kindAvailability,richNodes,richPods,scale,restart,remove,apply,cordon,drain,crds,crdObjects,crdObjectYaml,nsCustomResources,nsClusterRoleBindings}`, `k8sHelmApi.{releases,values}`.
-- **Backend**: 라우터 `backend/app/routers/k8s_resources.py`(prefix `/k8s`) — `GET /k8s/{id}/resources/{kind}`(`namespace` 쿼리 파라미터 기지원 — 대시보드도 이 엔드포인트를 그대로 재사용, 백엔드 변경 없음), `GET .../yaml`, `GET .../events`, `POST .../scale`, `POST .../restart`, `DELETE .../{kind}/{ns}/{name}`, `PUT .../yaml`, `POST /k8s/{id}/nodes/{name}/cordon`, `POST /k8s/{id}/nodes/{name}/drain`, `GET /k8s/{id}/crds(...)`, `GET /k8s/{id}/resources-capabilities`, `GET /k8s/{id}/nodes`, `GET /k8s/{id}/pods`, `GET /k8s/{id}/kind-availability`, NS 대시보드 보강 `GET /k8s/{id}/namespaces/{ns}/custom-resources`(namespaced CRD 마다 이 NS 에서 `limit=1` LIST 병렬 프로브 — `remainingItemCount` 로 개수, 예산 15초 초과분은 `unknown`·403 등은 `errors` 로 집계, 목록 캐시 거침) · `GET /k8s/{id}/namespaces/{ns}/cluster-role-bindings`(watch cache 로 읽어 subject namespace 가 이 NS 인 바인딩만); `backend/app/routers/k8s_helm.py`(`/k8s/{id}/helm/releases(...)`); Pod 터미널은 `backend/app/routers/k8s_exec.py`(`WS /k8s/{id}/exec`). kubernetes SDK 직접 호출(DB 캐시 없음) — 단 목록 3종(`resources/{kind}` · `nodes` · `pods`)과 상세 drawer 이벤트(`.../events`)는 **서버 목록 캐시**(`services/k8s_list_cache.py`, fresh 5s / stale 30s SWR + single-flight, apiserver 단위 그룹 — 탐색기뿐 아니라 효율화 적용·노드 라벨·RBAC·배치잡 kubectl 삭제 등 PEP 의 모든 쓰기가 모든 replica 의 캐시를 자동 무효화)를 거치고 응답을 원본 JSON 으로 파싱(`services/k8s_raw.py`, 모델 역직렬화 생략)한다. 응답에 `cache`(hit/stale/miss)·`cache_age_seconds` 포함. 패널의 **새로고침 버튼만** `refresh=true` 로 캐시를 건너뛴다. 파드 패널은 **200건 페이지 + 무한 스크롤**(`GET /k8s/{id}/pods?limit=200&continue=<토큰>`, 응답 `continue_token`/`remaining_count`, 토큰 만료는 410 → 새로고침으로 처음부터) — 검색은 불러온 파드 기준이며 푸터에 불러온 수/전체 추정치와 "다음 200개 불러오기" 버튼이 있다(네임스페이스 대시보드 임베드는 기존처럼 NS 전량 조회). 노드·네임스페이스 등 작은 cluster-scoped 목록은 `resource_version=0`(watch cache)으로 읽는다. 대상 apiserver 동시 호출 상한 대기 초과는 503 으로 사유를 표시한다. `kind-availability` 는 종류당 `limit=1` 프로브 + 5분 캐시.
+- **Frontend**: 별도 커스텀 hook 없이 TanStack `useQuery`/`useQueries` 직접 사용(`k8s-mng-list`/`k8s-mng-nodes`/`k8s-mng-helm`/`k8s-mng-crds`/`k8s-mng-yaml`/`k8s-caps`/`k8s-avail` 등 쿼리키), `useColumnPrefs`(컬럼 표시/숨김 로컬 저장). `useClusters`. `NamespaceDashboardPanel`은 네임스페이스 목록을 `NamespaceMultiSelect`(내부적으로 `k8sResourcesApi.list(clusterId, 'namespaces')`, 쿼리 키 `['k8s-mng-list', id, 'namespaces', 'all']` 로 목록 화면과 캐시 공유, 드롭다운은 Virtuoso 가상 스크롤 + `useDeferredValue` 검색 — 1만 NS 대응) 경유로 얻는다. api.ts: `k8sResourcesApi.{list,yaml,resourceEvents,capabilities,kindAvailability,richNodes,richPods,scale,restart,remove,apply,cordon,drain,crds,crdObjects,crdObjectYaml,nsCustomResources,nsClusterRoleBindings,nsExternalRoleBindings}`, `k8sHelmApi.{releases,values}`.
+- **Backend**: 라우터 `backend/app/routers/k8s_resources.py`(prefix `/k8s`) — `GET /k8s/{id}/resources/{kind}`(`namespace` 쿼리 파라미터 기지원 — 대시보드도 이 엔드포인트를 그대로 재사용, 백엔드 변경 없음), `GET .../yaml`, `GET .../events`, `POST .../scale`, `POST .../restart`, `DELETE .../{kind}/{ns}/{name}`, `PUT .../yaml`, `POST /k8s/{id}/nodes/{name}/cordon`, `POST /k8s/{id}/nodes/{name}/drain`, `GET /k8s/{id}/crds(...)`, `GET /k8s/{id}/resources-capabilities`, `GET /k8s/{id}/nodes`, `GET /k8s/{id}/pods`, `GET /k8s/{id}/kind-availability`, NS 대시보드 보강 `GET /k8s/{id}/namespaces/{ns}/custom-resources`(namespaced CRD 마다 이 NS 에서 `limit=1` LIST 병렬 프로브 — `remainingItemCount` 로 개수, 예산 15초 초과분은 `unknown`·403 등은 `errors` 로 집계, 목록 캐시 거침) · `GET /k8s/{id}/namespaces/{ns}/cluster-role-bindings`(watch cache 로 읽어 subject namespace 가 이 NS 인 바인딩만) · `GET /k8s/{id}/namespaces/{ns}/external-role-bindings`(전 NS RoleBinding 을 watch cache 로 읽어 다른 NS 에 있으면서 이 NS 를 subject 로 묶는 것만); `backend/app/routers/k8s_helm.py`(`/k8s/{id}/helm/releases(...)`); Pod 터미널은 `backend/app/routers/k8s_exec.py`(`WS /k8s/{id}/exec`). kubernetes SDK 직접 호출(DB 캐시 없음) — 단 목록 3종(`resources/{kind}` · `nodes` · `pods`)과 상세 drawer 이벤트(`.../events`)는 **서버 목록 캐시**(`services/k8s_list_cache.py`, fresh 5s / stale 30s SWR + single-flight, apiserver 단위 그룹 — 탐색기뿐 아니라 효율화 적용·노드 라벨·RBAC·배치잡 kubectl 삭제 등 PEP 의 모든 쓰기가 모든 replica 의 캐시를 자동 무효화)를 거치고 응답을 원본 JSON 으로 파싱(`services/k8s_raw.py`, 모델 역직렬화 생략)한다. 응답에 `cache`(hit/stale/miss)·`cache_age_seconds` 포함. 패널의 **새로고침 버튼만** `refresh=true` 로 캐시를 건너뛴다. 파드 패널은 **200건 페이지 + 무한 스크롤**(`GET /k8s/{id}/pods?limit=200&continue=<토큰>`, 응답 `continue_token`/`remaining_count`, 토큰 만료는 410 → 새로고침으로 처음부터) — 검색은 불러온 파드 기준이며 푸터에 불러온 수/전체 추정치와 "다음 200개 불러오기" 버튼이 있다(네임스페이스 대시보드 임베드는 기존처럼 NS 전량 조회). 노드·네임스페이스 등 작은 cluster-scoped 목록은 `resource_version=0`(watch cache)으로 읽는다. 대상 apiserver 동시 호출 상한 대기 초과는 503 으로 사유를 표시한다. `kind-availability` 는 종류당 `limit=1` 프로브 + 5분 캐시.
 - **핵심 기능**:
   - 20여 종 K8s 리소스 종류별 목록/검색/네임스페이스 필터/컬럼 커스터마이즈.
   - YAML 보기·편집(apply), scale/restart/delete/cordon/drain 등 쓰기 액션(operator/admin만).
@@ -317,6 +339,8 @@ hover 시 flyout 자체가 라벨을 보여주므로 이름만 뜨는 중복 툴
   - _(여기에 개선/수정 요청을 직접 적어주세요)_
 
 ### K8s 자원 관리 (`/k8s-allocation`, `/k8s-allocation/:clusterId`)
+
+> **허브로 통합(2026-10-22, D-240)**: 이 화면은 K8s 클러스터 허브 `/k8s/:clusterId/allocation` 의 서브뷰로 마운트된다. 옛 URL 은 그 뷰로 redirect(클러스터·쿼리 보존). 레일·h1·`PageShell` 은 허브가 그리고(`lib/k8sHub.ts` 컨텍스트), 아래 설명의 나머지는 그대로다.
 
 - **파일**: `frontend/src/pages/K8sAllocationPage.tsx`(페이지 셸 — 요약 스트립/진행 슬롯/sticky 탭/자동갱신/상세 다이얼로그 상태) + `frontend/src/components/k8s-allocation/`(`SummaryStrip`(압축 요약), `SummarySection`, `PodScheduleCalc`, `PodCapacityStatusCards`, `NodesView`, `NamespacesView`, `NsRankingView`, **`AllocDetailDialog`**(노드/NS 상세), 공용 `drilldown.tsx`(`WorkloadTable`/`WorkloadsDrill`/`PodsDrill`/`PodAllocTable`/`NodeWorkloadsDrill`)·`podGroup.ts`·`format.ts`/`primitives.tsx`/`tableSort.ts`), + `components/common/{EmptyState,Skeleton,SnapshotProgressCard,SnapshotProgressBar,ExportMenu}`.
 - **목적 / UX**: 노드/네임스페이스/워크로드별 request 대비 실사용량(slack)을 진단해 과할당(낭비) · 과사용(위험) 파드를 찾는 용량 계획 화면. "얼마나 더 스케줄할 수 있는가", "어디서 자원이 낭비되고 있는가"를 시각화.
@@ -433,6 +457,8 @@ hover 시 flyout 자체가 라벨을 보여주므로 이름만 뜨는 중복 툴
 
 ### 클러스터 추이 (`/cluster-trends`, `/cluster-trends/:clusterId`)
 
+> **허브로 통합(2026-10-22, D-240)**: 이 화면은 K8s 클러스터 허브 `/k8s/:clusterId/trends` 의 서브뷰로 마운트된다. 옛 URL 은 그 뷰로 redirect(클러스터·쿼리 보존). 레일·h1·`PageShell` 은 허브가 그리고(`lib/k8sHub.ts` 컨텍스트), 아래 설명의 나머지는 그대로다.
+
 - **파일**: `frontend/src/pages/ClusterTrendsPage.tsx` (+ `components/k8s/NodeMultiSelect.tsx`, `components/common/EmptyState.tsx`(`EmptyState`·`ErrorState`), `lib/chartTokens.ts`(`CHART_TOOLTIP_PROPS`·`chartAxisTick`), Recharts `LineChart`).
 - **목적 / UX**: 선택한 노드×지표(CPU·메모리·디스크·디스크 I/O·네트워크·네트워크 오류) 조합의 Prometheus 시계열을 (노드 × 지표) 카드 그리드로 나란히 비교해 시간대별 추이를 훑는 화면. 노드/지표를 최소 1개씩 선택해야 조회(과수집 방지).
 - **UI 구성**:
@@ -452,6 +478,8 @@ hover 시 flyout 자체가 라벨을 보여주므로 이름만 뜨는 중복 툴
   - _(여기에 개선/수정 요청을 직접 적어주세요)_
 
 ### K8s 실시간 이벤트 (`/k8s-events`)
+
+> **허브로 통합(2026-10-22, D-240)**: 이 화면은 K8s 클러스터 허브 `/k8s/:clusterId/events` 의 서브뷰로 마운트된다. 옛 URL 은 그 뷰로 redirect(클러스터·쿼리 보존). 레일·h1·`PageShell` 은 허브가 그리고(`lib/k8sHub.ts` 컨텍스트), 아래 설명의 나머지는 그대로다.
 
 - **파일**: `frontend/src/pages/K8sEventsPage.tsx`.
 - **목적 / UX**: kubewatch 웹훅으로 수집된 K8s 이벤트(Pod/Node/Deployment/PVC 등)를 심각도(critical/warning/info)별로 필터링해 확인하고 필요 시 삭제하는 이벤트 로그 화면. 클러스터별 필터 또는 전체 클러스터 통합 조회 지원.
@@ -474,6 +502,8 @@ hover 시 flyout 자체가 라벨을 보여주므로 이름만 뜨는 중복 툴
   - _(여기에 개선/수정 요청을 직접 적어주세요)_
 
 ### Observability 지표 대시보드 (`/observability`, `/observability/:clusterId`)
+
+> **허브로 통합(2026-10-22, D-240)**: 이 화면은 K8s 클러스터 허브 `/k8s/:clusterId/metrics` 의 서브뷰로 마운트된다. 옛 URL 은 그 뷰로 redirect(클러스터·쿼리 보존). 레일·h1·`PageShell` 은 허브가 그리고(`lib/k8sHub.ts` 컨텍스트), 아래 설명의 나머지는 그대로다.
 
 - **파일**: `frontend/src/pages/ObservabilityPage.tsx` (+ `components/observability/{MetricsTable,RulesTable,TargetsTable,ActiveAlertsTable,MetricEditModal,DisabledMetricsSection,ObservabilitySettingsDialog,shared}`).
 - **목적 / UX**: 클러스터에 깔린 관측 스택(`kube-prometheus-stack`, 이후 `alert-forwarder`/`opensearch-stack`/`fluent-operator`)의 **개별 지표를 dense 리스트 테이블**로 한 화면에서 훑는다. 하단의 PromQL 카드(`MetricCardsPanel`)와 달리 수십 개 지표를 스캔하는 용도.
@@ -528,6 +558,8 @@ hover 시 flyout 자체가 라벨을 보여주므로 이름만 뜨는 중복 툴
   - _(여기에 개선/수정 요청을 직접 적어주세요)_
 
 ### 파드 로그 (`/k8s-logs`, `/k8s-logs/:clusterId`)
+
+> **허브로 통합(2026-10-22, D-240)**: 이 화면은 K8s 클러스터 허브 `/k8s/:clusterId/logs` 의 서브뷰로 마운트된다. 옛 URL 은 그 뷰로 redirect(클러스터·쿼리 보존). 레일·h1·`PageShell` 은 허브가 그리고(`lib/k8sHub.ts` 컨텍스트), 아래 설명의 나머지는 그대로다.
 
 - **파일**: `frontend/src/pages/K8sLogsPage.tsx` (+ `components/common/{LogViewTabs,NamespaceSingleSelect,PodSingleSelect,SearchableSelect}`, `components/k8s/PodLogStream.tsx`).
 - **목적 / UX**: 특정 클러스터의 특정 네임스페이스/파드 로그를 실시간 스트리밍으로 확인하는 화면(OpenLens 파리티). 메뉴·페이지 제목은 "파드 로그"(화면 안 탭 이름만 "실시간 로그" — D-191). K8s 관리 콘솔의 파드 목록 "로그" 버튼에서 `?namespace=&pod=&container=` 쿼리로 딥링크 진입 시 자동으로 스트림이 시작된다.
@@ -593,6 +625,8 @@ hover 시 flyout 자체가 라벨을 보여주므로 이름만 뜨는 중복 툴
 
 ### 클러스터 상세 (`/clusters`, `/clusters/:clusterId`)
 
+> **허브로 통합(2026-10-22, D-240)**: 이 화면은 K8s 클러스터 허브 `/k8s/:clusterId/overview` 의 서브뷰로 마운트된다. 옛 URL 은 그 뷰로 redirect(클러스터·쿼리 보존). 레일·h1·`PageShell` 은 허브가 그리고(`lib/k8sHub.ts` 컨텍스트), 아래 설명의 나머지는 그대로다.
+
 - **파일**: `frontend/src/pages/ClusterDetailPage.tsx` (+ `components/ops-check/ClusterOpsCheckPanel.tsx` — 카탈로그/실행/로그를 `/ops-checks` 와 공유, `components/common/{ClusterSidebar,StatusBadge,RunLogPanel}`, `components/dashboard/{AddonGrid,AddAddonModal,ClusterItemsGrid,ClusterItemModal,KubeconfigEditModal,CheckHistoryHeatmap}`, `components/playbooks/{PlaybookCard,AddPlaybookModal,RunCredsModal}`)
 - **목적 / UX**: 매트릭스 재편 로드맵 3단계(F3) — 점검 매트릭스의 클러스터명 클릭이 도착하는 클러스터 상세 화면. 이 클러스터의 **종합 상태(정상/경고/위험)와 그 원인**을 한눈에 보여주고, 바로 아래에 점검 카탈로그(등록된 모든 실행 기술 — deep_check/addon/배치잡(SSH)/플레이북(Ansible), D-066 로 전부 편입 완료)로 이어진다. "왜 이 클러스터가 warning 인가"를 카드 하나로 답하는 게 목적 — 예전엔 애드온 그리드만 봐서는 심층 점검이 원인이어도 보이지 않았다(D-067).
 - **UI 구성**:
@@ -642,6 +676,8 @@ hover 시 flyout 자체가 라벨을 보여주므로 이름만 뜨는 중복 툴
 
 ### K8s 로그 — AI 장애 분석 (`/incident-analysis`, `/incident-analysis/:clusterId`)
 
+> **허브로 통합(2026-10-22, D-240)**: 이 화면은 K8s 클러스터 허브 `/k8s/:clusterId/incident` 의 서브뷰로 마운트된다. 옛 URL 은 그 뷰로 redirect(클러스터·쿼리 보존). 레일·h1·`PageShell` 은 허브가 그리고(`lib/k8sHub.ts` 컨텍스트), 아래 설명의 나머지는 그대로다.
+
 - **파일**: `frontend/src/pages/IncidentAnalysisPage.tsx` (+ `components/common/SearchableSelect`, `components/common/LogViewTabs`)
 - **목적 / UX**: 클러스터 → namespace → pod 를 드릴다운으로 선택하고, `kubectl logs`/`events`/`describe` 를 자동 수집(또는 직접 붙여넣기)한 뒤 LLM(또는 rule-based) 분석기에 보내 근본 원인·신뢰도·조치 방안을 받는다. 실시간 로그 스트리밍(폴링), 로그 라인 필터도 제공한다.
 - **UI 구성**:
@@ -666,6 +702,8 @@ hover 시 flyout 자체가 라벨을 보여주므로 이름만 뜨는 중복 툴
   - _(여기에 개선/수정 요청을 직접 적어주세요)_
 
 ### 일일 점검 리뷰 (`/daily-check/review`, `/daily-check/review/:clusterId`)
+
+> **허브로 통합(2026-10-22, D-240)**: 이 화면은 K8s 클러스터 허브 `/k8s/:clusterId/review` 의 서브뷰로 마운트된다. 옛 URL 은 그 뷰로 redirect(클러스터·쿼리 보존). 레일·h1·`PageShell` 은 허브가 그리고(`lib/k8sHub.ts` 컨텍스트), 아래 설명의 나머지는 그대로다.
 
 > **2026-10-14 (D-128)**: 기본 점검 실행은 API 서버·컴포넌트·노드 Ready·kube-system 파드·경고/오류 줄을, 심층 점검 실행은 큐잉 후 결과를
 > 폴링해 정의별 결과 줄 + 요약을 실행 로그에 남긴다(실패 시 아무 표시가 없던 문제 해소). 리소스 추이 "지금 스냅샷" 도 수집 완료를 폴링해 기록한다.

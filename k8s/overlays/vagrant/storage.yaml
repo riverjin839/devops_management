@@ -1,0 +1,35 @@
+# kubeadm 클러스터에는 기본 StorageClass/프로비저너가 없어 postgres PVC 가 Pending 으로 남는다.
+# 외부 프로비저너(인터넷 매니페스트) 없이 동작하도록 정적 hostPath PV 1개를 제공한다.
+# 데이터는 k8s-w1 노드의 /var/lib/pep-postgres 에 남는다(vagrant destroy 전까지 유지).
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: pep-local
+provisioner: kubernetes.io/no-provisioner
+volumeBindingMode: WaitForFirstConsumer
+reclaimPolicy: Retain
+---
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: pep-postgres-pv
+  labels:
+    app.kubernetes.io/name: postgres
+spec:
+  capacity:
+    storage: 5Gi
+  accessModes:
+    - ReadWriteOnce
+  persistentVolumeReclaimPolicy: Retain
+  storageClassName: pep-local
+  hostPath:
+    path: /var/lib/pep-postgres
+    type: DirectoryOrCreate
+  nodeAffinity:
+    required:
+      nodeSelectorTerms:
+        - matchExpressions:
+            - key: kubernetes.io/hostname
+              operator: In
+              values:
+                - k8s-w1

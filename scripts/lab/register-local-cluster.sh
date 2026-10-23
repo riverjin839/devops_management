@@ -8,12 +8,12 @@
 #
 # 사용법:
 #   # kind 클러스터 (컨테이너 네트워크 내부 주소로 자동 등록)
-#   bash scripts/register-local-cluster.sh --name kind-dev --kind k8s-monitor-dev
+#   bash scripts/lab/register-local-cluster.sh --name kind-dev --kind k8s-monitor-dev
 #
 #   # Vagrant k3s (Mac 호스트 포워딩 경유)
-#   bash scripts/register-local-cluster.sh \
+#   bash scripts/lab/register-local-cluster.sh \
 #       --name vagrant-k3s \
-#       --kubeconfig vagrant/k3s-kubeconfig.yaml \
+#       --kubeconfig labs/vagrant/k3s-kubeconfig.yaml \
 #       --server https://host.docker.internal:6443
 #
 # 옵션:

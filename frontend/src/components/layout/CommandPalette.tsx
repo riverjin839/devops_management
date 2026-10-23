@@ -108,7 +108,7 @@ export function CommandPalette() {
         c.status === 'critical' || c.status === 'warning' || c.status === 'healthy' ? c.status : 'unknown'
       }`),
       section: 'cluster' as const,
-      to: `/clusters/${c.id}`,
+      to: `/k8s/${c.id}/overview`,
       Icon: Server,
     }))
   ), [clusters, t]);

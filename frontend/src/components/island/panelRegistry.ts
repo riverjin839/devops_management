@@ -111,8 +111,11 @@ export const PANEL_COMPONENTS: Record<string, ComponentType> = {
  * - `/k9s`: WebSocket + xterm 전체화면 터미널 — 패널 안에서 정상 동작하지 않는다.
  * - `/settings`, `/daily-check/settings`: admin 전용 관리 화면(RequireAdmin).
  * - `/`: 홈 자신, `/island`: 아일랜드 자신 — 중첩 방지.
+ * - `/k8s`: K8s 클러스터 허브 — 탭 전환이 라우트 이동이라 아일랜드를 벗어난다. 흡수된 옛 경로
+ *   (`/k8s-manage` 등)는 페이지 컴포넌트를 직접 담으므로 그대로 패널 가능.
  */
 export const ISLAND_DENYLIST = new Set<string>([
+  '/k8s',
   '/k9s',
   '/node-ssh',
   '/settings',

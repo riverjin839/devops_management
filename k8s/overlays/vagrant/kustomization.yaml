@@ -1,0 +1,206 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: k8s-monitor
+
+resources:
+  - ../../base
+  - storage.yaml
+
+components:
+  # VM 메모리(워커 1.5GB)로는 Ollama(requests 4Gi)를 못 올린다 → 제외.
+  # 챗봇은 Settings → AI/LLM 에서 외부 LLM 프로필로 라우팅한다.
+  - ../../components/no-ollama
+
+# ============================================
+# Vagrant(VirtualBox) kubeadm 3노드 테스트 클러스터 — PEP 인클러스터 배포
+#   배포: bash labs/vagrant/deploy-pep.sh   (docs/MAC_LOCAL_TEST_GUIDE.md §7)
+#   접속: http://192.168.10.100:30080 (UI) · :30800/docs (API)
+# namePrefix 없음 (서비스 디스커버리 깨짐 방지, kind overlay 와 동일)
+# ============================================
+
+# 레지스트리가 없다 — Mac 에서 빌드한 이미지를 각 노드 containerd 로 직접 import 한다
+# (deploy-pep.sh). 그래서 IfNotPresent 가 필수다.
+images:
+  - name: k8s-daily-monitor/backend
+    newName: pep/backend
+    newTag: vagrant
+  - name: k8s-daily-monitor/frontend
+    newName: pep/frontend
+    newTag: vagrant
+
+patches:
+  - patch: |-
+      - op: replace
+        path: /spec/template/spec/containers/0/imagePullPolicy
+        value: IfNotPresent
+    target:
+      kind: Deployment
+      name: "backend|frontend|celery-worker|celery-worker-llm|celery-beat"
+
+  # postgres: 정적 hostPath PV(pep-local)에 바인딩
+  - patch: |-
+      - op: add
+        path: /spec/volumeClaimTemplates/0/spec/storageClassName
+        value: pep-local
+      - op: replace
+        path: /spec/volumeClaimTemplates/0/spec/resources/requests/storage
+        value: 5Gi
+    target:
+      kind: StatefulSet
+      name: postgres
+
+  # Ingress / HPA 비활성화 (NodePort 사용, 레플리카 1 고정)
+  - patch: |-
+      $patch: delete
+      apiVersion: networking.k8s.io/v1
+      kind: Ingress
+      metadata:
+        name: k8s-monitor-ingress
+    target:
+      kind: Ingress
+  - patch: |-
+      $patch: delete
+      apiVersion: autoscaling/v2
+      kind: HorizontalPodAutoscaler
+      metadata:
+        name: backend-hpa
+    target:
+      kind: HorizontalPodAutoscaler
+      name: backend-hpa
+  - patch: |-
+      $patch: delete
+      apiVersion: autoscaling/v2
+      kind: HorizontalPodAutoscaler
+      metadata:
+        name: celery-worker-hpa
+    target:
+      kind: HorizontalPodAutoscaler
+      name: celery-worker-hpa
+  - patch: |-
+      $patch: delete
+      apiVersion: autoscaling/v2
+      kind: HorizontalPodAutoscaler
+      metadata:
+        name: frontend-hpa
+    target:
+      kind: HorizontalPodAutoscaler
+      name: frontend-hpa
+
+  # 메모리 절약 — 무거운/선택 구성요소 제외 (필요하면 아래 패치만 지우면 복원)
+  - patch: |-
+      $patch: delete
+      apiVersion: apps/v1
+      kind: Deployment
+      metadata:
+        name: grafana-renderer
+    target:
+      kind: Deployment
+      name: grafana-renderer
+  - patch: |-
+      $patch: delete
+      apiVersion: v1
+      kind: Service
+      metadata:
+        name: grafana-renderer
+    target:
+      kind: Service
+      name: grafana-renderer
+  - patch: |-
+      $patch: delete
+      apiVersion: apps/v1
+      kind: Deployment
+      metadata:
+        name: blackbox-exporter
+    target:
+      kind: Deployment
+      name: blackbox-exporter
+  - patch: |-
+      $patch: delete
+      apiVersion: v1
+      kind: Service
+      metadata:
+        name: blackbox-exporter
+    target:
+      kind: Service
+      name: blackbox-exporter
+  - patch: |-
+      $patch: delete
+      apiVersion: v1
+      kind: ConfigMap
+      metadata:
+        name: blackbox-exporter-config
+    target:
+      kind: ConfigMap
+      name: blackbox-exporter-config
+
+  - patch: |-
+      - op: replace
+        path: /spec/replicas
+        value: 1
+    target:
+      kind: Deployment
+
+  # NodePort — 노드 IP(192.168.10.100~102) 어디로든 접속된다
+  - patch: |-
+      - op: replace
+        path: /spec/type
+        value: NodePort
+      - op: add
+        path: /spec/ports/0/nodePort
+        value: 30080
+    target:
+      kind: Service
+      name: frontend
+  - patch: |-
+      - op: replace
+        path: /spec/type
+        value: NodePort
+      - op: add
+        path: /spec/ports/0/nodePort
+        value: 30800
+    target:
+      kind: Service
+      name: backend
+  - patch: |-
+      - op: replace
+        path: /spec/type
+        value: NodePort
+      - op: add
+        path: /spec/ports/0/nodePort
+        value: 30090
+    target:
+      kind: Service
+      name: prometheus
+  - patch: |-
+      - op: replace
+        path: /spec/type
+        value: NodePort
+      - op: add
+        path: /spec/ports/0/nodePort
+        value: 30030
+    target:
+      kind: Service
+      name: grafana
+
+configMapGenerator:
+  - name: k8s-monitor-config
+    behavior: merge
+    literals:
+      - DEBUG=true
+      - CHECK_INTERVAL_MINUTES=5
+
+# 테스트 클러스터 전용 값 — 운영에서는 절대 재사용하지 않는다.
+secretGenerator:
+  - name: k8s-monitor-secret
+    behavior: merge
+    literals:
+      - DATABASE_PASSWORD=postgres
+      - SECRET_KEY=vagrant-test-secret-key
+      - DATABASE_URL=postgresql://postgres:postgres@postgres:5432/k8s_monitor
+      - REDIS_URL=redis://redis:6379/0
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/0
+
+generatorOptions:
+  disableNameSuffixHash: true

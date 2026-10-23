@@ -1,5 +1,20 @@
 # DEVOPS MANAGEMENT - 배포 가이드
 
+## 배포·실험 환경 지도 (어디에 무엇이 있나)
+
+| 하고 싶은 것 | 위치 | 진입점 |
+|---|---|---|
+| 운영 매니페스트 (Kustomize base/overlays/components) | `k8s/` | `kubectl apply -k k8s/overlays/<env>` |
+| Helm 차트 / ArgoCD 앱 | `helm/` · `argocd/` | `helm install ... -f values-<env>.yaml` |
+| 이미지 빌드 정의 (pgvector, ollama) | `docker/` | CI/`scripts/deploy/` 가 사용 |
+| 배포 스크립트 (kind, 폐쇄망, 재배포, 모니터링 스택) | `scripts/deploy/` | `kind-setup.sh` · `deploy-airgap.sh` · `redeploy.sh` · `setup-monitoring.sh` |
+| 로컬 테스트 보조 (Cilium kind, 클러스터 등록, 샘플 데이터) | `scripts/lab/` | `local-cilium-kind.sh` · `register-local-cluster.sh` · `seed-test-data.sh` |
+| 릴리스·버전 도구 | `scripts/release/` | `bump_version.py` · `version-tag.sh` |
+| **로컬 테스트 클러스터 (Vagrant/Windows)** | **`labs/`** | `labs/vagrant/up.sh` · `labs/vagrant/deploy-pep.sh` — `labs/README.md` |
+
+원칙: **운영에 쓰는 것은 `k8s/ helm/ argocd/ docker/`, 사람이 PC 에서 돌려 보는 것은 `labs/` + `scripts/lab/`.**
+
+
 > 로컬 개발 → 폐쇄망 검증 → CI/CD 운영 배포까지 3단계 가이드
 
 ## 배포 전략 개요
@@ -86,11 +101,11 @@ brew install docker kind kubectl helm
 git clone <repo-url>
 cd devops_management
 
-bash scripts/kind-setup.sh up   # kind 노드 이미지 v1.34.0, 기본 CNI(kindnet)
+bash scripts/deploy/kind-setup.sh up   # kind 노드 이미지 v1.34.0, 기본 CNI(kindnet)
 ```
 
 > kind 는 기본 CNI(kindnet)로 뜬다. **Cilium/Hubble 딥 트러블슈팅**까지 로컬에서 검증하려면
-> 별도 워크플로(`scripts/local-cilium-kind.sh`)나 Vagrant 클러스터를 쓴다 —
+> 별도 워크플로(`scripts/lab/local-cilium-kind.sh`)나 Vagrant 클러스터를 쓴다 —
 > [MAC_LOCAL_TEST_GUIDE.md](MAC_LOCAL_TEST_GUIDE.md) 참고.
 
 이 명령이 수행하는 작업:
@@ -117,14 +132,14 @@ bash scripts/kind-setup.sh up   # kind 노드 이미지 v1.34.0, 기본 CNI(kind
 # 1. 코드 수정 (VSCode에서)
 
 # 2. 재빌드 & 재배포
-bash scripts/kind-setup.sh reload
+bash scripts/deploy/kind-setup.sh reload
 
 # 3. 로그 확인
-bash scripts/kind-setup.sh logs backend
-bash scripts/kind-setup.sh logs frontend
+bash scripts/deploy/kind-setup.sh logs backend
+bash scripts/deploy/kind-setup.sh logs frontend
 
 # 4. 상태 확인
-bash scripts/kind-setup.sh status
+bash scripts/deploy/kind-setup.sh status
 ```
 
 ### 검증 후 커밋
@@ -145,19 +160,19 @@ git push origin main
 ### 환경 정리
 
 ```bash
-bash scripts/kind-setup.sh destroy
+bash scripts/deploy/kind-setup.sh destroy
 ```
 
 ### 스크립트 전체 명령어
 
 ```bash
-bash scripts/kind-setup.sh up       # 전체 환경 구축 (최초 1회)
-bash scripts/kind-setup.sh build    # 이미지 빌드만
-bash scripts/kind-setup.sh deploy   # K8s 배포만
-bash scripts/kind-setup.sh reload   # 코드 수정 후 재빌드 & 재배포
-bash scripts/kind-setup.sh status   # Pod 상태 확인
-bash scripts/kind-setup.sh logs <name>  # 로그 확인 (backend/frontend/celery-worker)
-bash scripts/kind-setup.sh destroy  # 전체 환경 삭제
+bash scripts/deploy/kind-setup.sh up       # 전체 환경 구축 (최초 1회)
+bash scripts/deploy/kind-setup.sh build    # 이미지 빌드만
+bash scripts/deploy/kind-setup.sh deploy   # K8s 배포만
+bash scripts/deploy/kind-setup.sh reload   # 코드 수정 후 재빌드 & 재배포
+bash scripts/deploy/kind-setup.sh status   # Pod 상태 확인
+bash scripts/deploy/kind-setup.sh logs <name>  # 로그 확인 (backend/frontend/celery-worker)
+bash scripts/deploy/kind-setup.sh destroy  # 전체 환경 삭제
 ```
 
 ---
@@ -179,7 +194,7 @@ bash scripts/kind-setup.sh destroy  # 전체 환경 삭제
 cd /path/to/k8s_daily_monitor
 
 # 전체 수행: CLI 선택 → 레지스트리 입력 → 로그인 → 빌드 → 푸시 → 배포
-bash scripts/deploy-airgap.sh all
+bash scripts/deploy/deploy-airgap.sh all
 ```
 
 대화형으로 진행됩니다:
@@ -211,15 +226,15 @@ bash scripts/deploy-airgap.sh all
 
 ```bash
 CTR_CLI=podman REGISTRY=10.61.162.101:5000 REGISTRY_USER=admin REGISTRY_PASS=xxxx \
-  bash scripts/deploy-airgap.sh all
+  bash scripts/deploy/deploy-airgap.sh all
 ```
 
 ### 방법 B: Helm으로 배포
 
 ```bash
 # 이미지 빌드 & 푸시 (방법 A와 동일)
-bash scripts/deploy-airgap.sh build
-bash scripts/deploy-airgap.sh push
+bash scripts/deploy/deploy-airgap.sh build
+bash scripts/deploy/deploy-airgap.sh push
 
 # Helm으로 배포
 helm install k8s-monitor ./helm/k8s-daily-monitor \
@@ -236,7 +251,7 @@ helm upgrade k8s-monitor ./helm/k8s-daily-monitor \
 
 인터넷 되는 PC에서:
 ```bash
-bash scripts/deploy-airgap.sh save
+bash scripts/deploy/deploy-airgap.sh save
 # → images/ 디렉토리에 tar.gz 약 8개 생성
 #   (앱: backend, frontend + DB: postgres, redis
 #    + 모니터링 스택: prometheus, grafana, node-exporter, kube-state-metrics)
@@ -245,9 +260,9 @@ bash scripts/deploy-airgap.sh save
 
 폐쇄망에서:
 ```bash
-bash scripts/deploy-airgap.sh load   # tar.gz → 이미지 로드
-bash scripts/deploy-airgap.sh push   # 레지스트리에 푸시
-bash scripts/deploy-airgap.sh deploy # K8s 배포
+bash scripts/deploy/deploy-airgap.sh load   # tar.gz → 이미지 로드
+bash scripts/deploy/deploy-airgap.sh push   # 레지스트리에 푸시
+bash scripts/deploy/deploy-airgap.sh deploy # K8s 배포
 ```
 
 ### 배포 확인
@@ -270,14 +285,14 @@ curl http://<NODE_IP>:30800/health/ready
 ### 스크립트 전체 명령어
 
 ```bash
-bash scripts/deploy-airgap.sh build    # 이미지 빌드
-bash scripts/deploy-airgap.sh push     # 레지스트리 푸시 (로그인 포함)
-bash scripts/deploy-airgap.sh save     # tar.gz 저장 (오프라인 전송용)
-bash scripts/deploy-airgap.sh load     # tar.gz 로드
-bash scripts/deploy-airgap.sh deploy   # K8s 배포
-bash scripts/deploy-airgap.sh all      # 빌드 → 로그인 → 푸시 → 배포
-bash scripts/deploy-airgap.sh status   # 배포 상태
-bash scripts/deploy-airgap.sh check    # K8s API 서버 헬스 체크
+bash scripts/deploy/deploy-airgap.sh build    # 이미지 빌드
+bash scripts/deploy/deploy-airgap.sh push     # 레지스트리 푸시 (로그인 포함)
+bash scripts/deploy/deploy-airgap.sh save     # tar.gz 저장 (오프라인 전송용)
+bash scripts/deploy/deploy-airgap.sh load     # tar.gz 로드
+bash scripts/deploy/deploy-airgap.sh deploy   # K8s 배포
+bash scripts/deploy/deploy-airgap.sh all      # 빌드 → 로그인 → 푸시 → 배포
+bash scripts/deploy/deploy-airgap.sh status   # 배포 상태
+bash scripts/deploy/deploy-airgap.sh check    # K8s API 서버 헬스 체크
 ```
 
 ### values-airgap.yaml 설정 항목

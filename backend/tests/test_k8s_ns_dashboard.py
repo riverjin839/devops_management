@@ -63,8 +63,20 @@ def env(monkeypatch):
 
     monkeypatch.setattr(kr.k8s_client, "ApiextensionsV1Api", Ext)
     monkeypatch.setattr(kr.k8s_client, "CustomObjectsApi", Co)
-    monkeypatch.setattr(kr.k8s_client, "RbacAuthorizationV1Api", lambda c: SimpleNamespace(list_cluster_role_binding=None))
-    monkeypatch.setattr(kr, "raw_call", lambda fn, *a, **kw: crbs)
+    rbs = K8sObj({"metadata": {}, "items": [
+        {"metadata": {"name": "deployer-edit", "namespace": "team-b"}, "roleRef": {"kind": "ClusterRole", "name": "edit"},
+         "subjects": [{"kind": "ServiceAccount", "name": "deployer", "namespace": "team-a"}]},
+        {"metadata": {"name": "all-sa-view", "namespace": "team-c"}, "roleRef": {"kind": "Role", "name": "viewer"},
+         "subjects": [{"kind": "Group", "name": "system:serviceaccounts:team-a", "apiGroup": "rbac.authorization.k8s.io"}]},
+        {"metadata": {"name": "own-ns", "namespace": "team-a"}, "roleRef": {"kind": "Role", "name": "x"},
+         "subjects": [{"kind": "ServiceAccount", "name": "deployer", "namespace": "team-a"}]},
+        {"metadata": {"name": "unrelated", "namespace": "team-b"}, "roleRef": {"kind": "Role", "name": "x"},
+         "subjects": [{"kind": "User", "name": "alice"}]},
+    ]})
+    lists = {"crb": crbs, "rb": rbs}
+    monkeypatch.setattr(kr.k8s_client, "RbacAuthorizationV1Api",
+                        lambda c: SimpleNamespace(list_cluster_role_binding="crb", list_role_binding_for_all_namespaces="rb"))
+    monkeypatch.setattr(kr, "raw_call", lambda fn, *a, **kw: lists[fn])
     monkeypatch.setattr(kr, "_list_cache", SWRCache(fresh=5, stale=30, max_entries=16, store=None, name="t"))
     monkeypatch.setattr(kr, "cache_group", lambda client, cid: str(cid))
     monkeypatch.setattr(kr, "_require_cluster", lambda cid, db: SimpleNamespace(id=cid))
@@ -98,3 +110,11 @@ def test_cluster_role_bindings_filtered_to_namespace_subjects(env):
     assert row.name == "team-a-admin"
     assert row.cols == {"role": "ClusterRole/admin", "subjects": "ServiceAccount/deployer"}
     assert [c.key for c in out.columns] == ["role", "subjects"]
+
+
+def test_external_role_bindings_from_other_namespaces_only(env):
+    out = kr.list_namespace_external_role_bindings(uuid.uuid4(), "team-a", db=None)
+    # 이 NS 안의 바인딩(own-ns)·무관 subject(unrelated)는 제외, SA 그룹 subject 는 포함
+    assert [(r.namespace, r.name) for r in out.items] == [("team-b", "deployer-edit"), ("team-c", "all-sa-view")]
+    assert out.items[0].cols == {"role": "ClusterRole/edit", "subjects": "ServiceAccount/deployer"}
+    assert out.items[1].cols["subjects"] == "Group/system:serviceaccounts:team-a"

@@ -15,7 +15,8 @@ import { NamespaceMultiSelect } from '@/components/k8s/NamespaceMultiSelect';
 import { EventsStream } from '@/components/k8s/EventsStream';
 import { k8sHelmApi, k8sResourcesApi } from '@/services/api';
 import { ResourceTablePanel, PodsPanel, HelmPanel } from '@/pages/K8sManagePage';
-import { NsClusterBindingsPanel, NsCrdObjectsPanel } from './NsExtraPanels';
+import { NsBindingsPanel, NsCrdObjectsPanel } from './NsExtraPanels';
+import { NS_BINDING_QUERY } from './nsBindingQueries';
 import type {
   HelmRelease, K8sCrdInfo, K8sResourceCapability, K8sResourceRow, K8sPodRichRow, KindAvailabilityInfo,
 } from '@/types';
@@ -27,6 +28,7 @@ interface CatDef { id: CatId; label: string; icon: React.ComponentType<{ classNa
 // "이 네임스페이스 안" 이라는 전제와 맞지 않는다(단, 이 NS 를 subject 로 묶는 ClusterRoleBinding 은
 // 이 NS 의 권한 셋업이라 Access Control 에 별도 키로 넣는다).
 const CRB_KEY = '__clusterrolebindings';
+const EXT_RB_KEY = '__external_rolebindings';
 const HELM_KEY = '__helm';
 const crKey = (crd: K8sCrdInfo) => `cr:${crd.name}`;
 
@@ -51,7 +53,7 @@ const KIND_LABEL: Record<string, string> = {
   services: 'Services', endpoints: 'Endpoints', endpointslices: 'Endpoint Slices', ingresses: 'Ingresses',
   networkpolicies: 'Network Policies', persistentvolumeclaims: 'Persistent Volume Claims',
   serviceaccounts: 'ServiceAccounts', roles: 'Roles', rolebindings: 'RoleBindings',
-  [CRB_KEY]: 'ClusterRoleBindings (이 NS)', [HELM_KEY]: 'Helm 릴리스',
+  [CRB_KEY]: 'ClusterRoleBindings (이 NS)', [EXT_RB_KEY]: 'RoleBindings (다른 NS)', [HELM_KEY]: 'Helm 릴리스',
 };
 
 /** 이 NS 에 그 종류를 표시할지. kind-availability 의 `present`(클러스터 어디엔가 1개 이상 — 5분 캐시)는
@@ -191,12 +193,10 @@ export function NamespaceDashboardPanel(p: NamespaceDashboardPanelProps) {
       enabled,
     })),
   });
-  // 키는 각 패널(NsClusterBindingsPanel/HelmPanel)과 같아 인벤토리·상세 목록이 한 번만 조회한다.
-  const crbQ = useQuery({
-    queryKey: ['k8s-mng-ns-crb', clusterId, ns],
-    queryFn: async () => (await k8sResourcesApi.nsClusterRoleBindings(clusterId, ns)).data,
-    enabled: enabled && showCrb, retry: false,
-  });
+  // 키는 각 패널(NsBindingsPanel/HelmPanel)과 같아 인벤토리·상세 목록이 한 번만 조회한다.
+  const crbQ = useQuery({ ...NS_BINDING_QUERY.cluster(clusterId, ns), enabled: enabled && showCrb, retry: false });
+  const showExtRb = avail?.rolebindings?.available !== false;
+  const extRbQ = useQuery({ ...NS_BINDING_QUERY.external(clusterId, ns), enabled: enabled && showExtRb, retry: false });
   const helmQ = useQuery({
     queryKey: ['k8s-mng-helm', clusterId, ns],
     queryFn: async () => (await k8sHelmApi.releases(clusterId, ns)).data,
@@ -223,6 +223,10 @@ export function NamespaceDashboardPanel(p: NamespaceDashboardPanelProps) {
     ...(showCrb ? [{
       cat: CATS[4], key: CRB_KEY, label: KIND_LABEL[CRB_KEY], count: crbQ.data?.count ?? 0, health: null,
       isLoading: crbQ.isLoading, isError: crbQ.isError,
+    } satisfies InvRow] : []),
+    ...(showExtRb ? [{
+      cat: CATS[4], key: EXT_RB_KEY, label: KIND_LABEL[EXT_RB_KEY], count: extRbQ.data?.count ?? 0, health: null,
+      isLoading: extRbQ.isLoading, isError: extRbQ.isError,
     } satisfies InvRow] : []),
     ...(crQ.isLoading || crQ.isError ? [{
       cat: CUSTOM_CAT, key: 'cr:__pending', label: 'Custom Resources', count: 0, health: null,
@@ -251,8 +255,14 @@ export function NamespaceDashboardPanel(p: NamespaceDashboardPanelProps) {
   const renderPanel = (key: string) => {
     if (key === CRB_KEY) {
       return (
-        <NsClusterBindingsPanel clusterId={clusterId} ns={ns}
+        <NsBindingsPanel clusterId={clusterId} ns={ns} scope="cluster"
           onOpenDetail={(row) => onOpenDetail('clusterrolebindings', row, !!caps.clusterrolebindings?.editable)} />
+      );
+    }
+    if (key === EXT_RB_KEY) {
+      return (
+        <NsBindingsPanel clusterId={clusterId} ns={ns} scope="external"
+          onOpenDetail={(row) => onOpenDetail('rolebindings', row, !!caps.rolebindings?.editable)} />
       );
     }
     if (key === HELM_KEY) return <HelmPanel clusterId={clusterId} namespace={ns} onViewValues={onHelmValues} />;

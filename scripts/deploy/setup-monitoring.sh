@@ -5,10 +5,10 @@
 # for the K8s Daily Monitor PromQL Insights feature.
 #
 # Usage:
-#   bash scripts/setup-monitoring.sh status      # Check monitoring pod status
-#   bash scripts/setup-monitoring.sh test         # Test Prometheus connectivity
-#   bash scripts/setup-monitoring.sh port-forward # Port-forward Prometheus & Grafana
-#   bash scripts/setup-monitoring.sh images       # List images to pull for airgap
+#   bash scripts/deploy/setup-monitoring.sh status      # Check monitoring pod status
+#   bash scripts/deploy/setup-monitoring.sh test         # Test Prometheus connectivity
+#   bash scripts/deploy/setup-monitoring.sh port-forward # Port-forward Prometheus & Grafana
+#   bash scripts/deploy/setup-monitoring.sh images       # List images to pull for airgap
 # ============================================
 
 set -euo pipefail

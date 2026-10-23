@@ -2,7 +2,7 @@
 
 PEP 가 모니터링할 **2번째 테스트 클러스터**(kubeadm control-plane 1 + worker 2 + **Cilium CNI**)를
 VirtualBox VM 으로 띄운다. **Cilium 스터디 1주차 실습 환경을 레포에 고정한 것**으로,
-[../docs/MAC_LOCAL_TEST_GUIDE.md](../docs/MAC_LOCAL_TEST_GUIDE.md) 의 "클러스터 B" 와 동일하다.
+[../../docs/MAC_LOCAL_TEST_GUIDE.md](../../docs/MAC_LOCAL_TEST_GUIDE.md) 의 "클러스터 B" 와 동일하다.
 (upstream: [gasida/vagrant-lab](https://github.com/gasida/vagrant-lab) `cilium-study/1w`)
 
 CNI 는 미설치 상태로 부팅(노드 `NotReady`)되고, Cilium 은 `kubeProxyReplacement + native routing +
@@ -18,7 +18,7 @@ cluster-pool IPAM` 로 Helm 설치한다 — PEP 의 Cilium/Hubble 딥 트러블
 >
 > **복구는 한 줄이다** (`up.sh` 가 자동 진단·복구한다):
 > ```bash
-> cd vagrant && bash up.sh --keep
+> cd labs/vagrant && bash up.sh --keep
 > ```
 > 자세한 증상별 대응은 아래 [트러블슈팅](#트러블슈팅) 참고. **테스트를 오래 돌릴 거면
 > 시스템 설정 → 배터리/잠금 화면에서 절전을 꺼두는 것이 가장 확실하다.**
@@ -40,15 +40,15 @@ cluster-pool IPAM` 로 Helm 설치한다 — PEP 의 Cilium/Hubble 딥 트러블
 
 ## 테스트 환경 선택 (3가지)
 
-목적에 맞게 고른다. **이 디렉터리(`vagrant/`)가 기본 경로**(Ubuntu + kubeadm 3노드 + Cilium)다.
+목적에 맞게 고른다. **이 디렉터리(`labs/vagrant/`)가 기본 경로**(Ubuntu + kubeadm 3노드 + Cilium)다.
 
 | 경로 | OS / 런타임 | 형태 | 언제 쓰나 |
 |---|---|---|---|
-| **`vagrant/` (여기)** | Ubuntu 24.04 + **kubeadm**(VirtualBox) | 멀티노드(ctr+w1+w2) | **Cilium 스터디 1주차** 환경으로 PEP 등록·Cilium/Hubble 확인 |
-| [`vagrant/kubeadm-almalinux/`](kubeadm-almalinux/README.md) | **AlmaLinux 10**(RHEL10 호환) + kubeadm | 멀티노드(VMware/VBox) · 단일노드(QEMU) | **폐쇄망 RHEL 충실도** (CRI-O·SELinux·firewalld·실디스크·root SSH·bond) |
+| **`labs/vagrant/` (여기)** | Ubuntu 24.04 + **kubeadm**(VirtualBox) | 멀티노드(ctr+w1+w2) | **Cilium 스터디 1주차** 환경으로 PEP 등록·Cilium/Hubble 확인 |
+| [`labs/vagrant/kubeadm-almalinux/`](kubeadm-almalinux/README.md) | **AlmaLinux 10**(RHEL10 호환) + kubeadm | 멀티노드(VMware/VBox) · 단일노드(QEMU) | **폐쇄망 RHEL 충실도** (CRI-O·SELinux·firewalld·실디스크·root SSH·bond) |
 | [`../windows-docker/`](../windows-docker/README.md) | kind(Docker) | control+worker | **Windows / Docker** 환경에서 동일 패턴 재현 |
 
-> RHEL 동일성·실디스크·SSH(Host Facts) 가 필요하면 AlmaLinux 경로를, Windows 면 windows-docker 를 쓴다.
+> RHEL 동일성·실디스크·SSH(Host Facts) 가 필요하면 AlmaLinux 경로를, Windows 면 labs/windows-docker 를 쓴다.
 
 ## 원샷 설치 (권장)
 
@@ -56,7 +56,7 @@ cluster-pool IPAM` 로 Helm 설치한다 — PEP 의 Cilium/Hubble 딥 트러블
 → DNS/이미지풀 자동 보정 → kubeconfig 추출까지 한 번에 처리한다.
 
 ```bash
-cd vagrant
+cd labs/vagrant
 bash up.sh                 # 인터랙티브 원샷
 bash up.sh --recreate      # 기존 VM 삭제 후 새로
 bash up.sh --yes --register  # 비대화 + 끝나면 PEP 등록까지
@@ -102,12 +102,13 @@ vagrant destroy -f
 | `init_cfg.sh` | 모든 노드 공통: swap off, k8s repo, kubelet/kubeadm/kubectl + containerd + helm 설치 |
 | `k8s-ctr.sh` | control-plane `kubeadm init`(pod 10.244/16, svc 10.96/16, advertise 192.168.10.100) + 편의설정 |
 | `k8s-w.sh` | worker `kubeadm join` |
+| `deploy-pep.sh` | **PEP 를 이 클러스터 안에 배포**(이미지 빌드→노드 주입→`k8s/overlays/vagrant` 적용). 가이드 §7 |
 | `install-cilium.sh` | Cilium Helm 설치(kubeProxyReplacement/native/cluster-pool) + cilium CLI. `--provision-with cilium` 으로 실행 |
 
 ## PEP 등록
 
 ```bash
-bash ../scripts/register-local-cluster.sh \
+bash ../../scripts/lab/register-local-cluster.sh \
   --name vagrant-kubeadm \
   --kubeconfig kubeadm-kubeconfig.yaml \
   --server https://192.168.10.100:6443
@@ -130,7 +131,7 @@ curl -k -m5 https://192.168.10.100:6443/livez        # ③ 'ok' 가 아니면 �
 **막혔으면 이 한 줄이 대부분 해결한다** — `up.sh` 가 ①②를 자동 진단·복구하고 다시 띄운다:
 
 ```bash
-cd vagrant && bash up.sh --keep
+cd labs/vagrant && bash up.sh --keep
 ```
 
 ### 증상별
@@ -159,12 +160,12 @@ cd vagrant && bash up.sh --keep
 pkill -9 -f 'MacOS/VBoxManage'; pkill -9 -f 'gems/vagrant-.*/bin/vagrant'
 pkill -9 -f 'MacOS/VBoxHeadless'; pkill -f 'MacOS/VBoxSVC'     # 교착된 서비스까지 정리
 for v in k8s-ctr k8s-w1 k8s-w2; do VBoxManage controlvm $v poweroff 2>/dev/null; done
-cd vagrant && vagrant up --provider=virtualbox
+cd labs/vagrant && vagrant up --provider=virtualbox
 ```
 
 > **예방이 최선**: 테스트를 오래 돌릴 거면 **Mac 절전을 꺼둔다**
 > (시스템 설정 → 배터리/잠금 화면 → 디스플레이 끈 뒤 자동으로 잠자기: 안 함).
-> 잠시 자리를 비울 거면 절전 전에 `cd vagrant && vagrant halt` 로 **정상 종료**해두면
+> 잠시 자리를 비울 거면 절전 전에 `cd labs/vagrant && vagrant halt` 로 **정상 종료**해두면
 > 깨어난 뒤 `vagrant up` 으로 깔끔하게 복귀한다.
 
 ### NodeIP 수동 교정 (기존 VM)
@@ -173,7 +174,7 @@ cd vagrant && vagrant up --provider=virtualbox
 (`192.168.10.100/101/102`). 전부 `10.0.2.15` 로 같거나 kubelet 이 플레이스홀더를 씹고 있으면:
 
 ```bash
-cd vagrant
+cd labs/vagrant
 for n in k8s-ctr k8s-w1 k8s-w2; do
   vagrant ssh $n -c 'IP="$(ip -4 -o addr show eth1 | awk "{print \$4}" | cut -d/ -f1)"; \
     echo "KUBELET_EXTRA_ARGS=\"--node-ip=${IP}\"" | sudo tee /etc/default/kubelet; \
@@ -182,4 +183,4 @@ done
 vagrant ssh k8s-ctr -c 'sudo kubectl get nodes -o wide'   # IP 3개가 서로 달라야 정상
 ```
 
-자세한 표는 [가이드 트러블슈팅](../docs/MAC_LOCAL_TEST_GUIDE.md#트러블슈팅) 참고.
+자세한 표는 [가이드 트러블슈팅](../../docs/MAC_LOCAL_TEST_GUIDE.md#트러블슈팅) 참고.

@@ -29,7 +29,11 @@ export const NAV_MAP: Record<string, NavMapEntry> = {
   // Your Island — 사용자 커스텀 화면. GROUPS 에는 넣지 않는다(그룹 레일이 아니라
   // 사이드바 최상단 독립 버튼). NAV_MAP 에는 라벨 오버라이드/화면 UI 설정 대상이 되도록 등록.
   '/island':             { labelKey: 'island', defaultLabel: '나의 아일랜드', icon: Palmtree },
-  '/k8s-manage':         { labelKey: 'k8sManage', defaultLabel: 'K8s 상세 관리',  icon: ShipWheel, iconSize: 'w-5 h-5' },
+  // K8s 클러스터 허브 — per-cluster K8s 화면(상세·상세 관리·자원·추이·관측·이벤트·로그·분석·점검 리뷰)을
+  // 클러스터 레일 하나 + 탭으로 모은 화면(`/k8s/:clusterId/:view`). 아래 흡수된 leaf 경로들은 허브 뷰로
+  // redirect 되지만 NAV_MAP 에 남겨 접근 제어·라벨 오버라이드·아일랜드 패널·leaf 단위 설치(바로가기)를 유지한다.
+  '/k8s':                { labelKey: 'k8sHub', defaultLabel: 'K8s 클러스터',   icon: ShipWheel, iconSize: 'w-5 h-5' },
+  '/k8s-manage':         { labelKey: 'k8sManage', defaultLabel: 'K8s 상세 관리',  icon: Boxes, iconSize: 'w-5 h-5' },
   '/k8s-allocation':     { labelKey: 'k8sAllocation', defaultLabel: 'K8s 자원 관리',  icon: Gauge, iconSize: 'w-5 h-5' },
   '/k9s':                { labelKey: 'k9s', defaultLabel: 'k9s 콘솔',        icon: Dog, iconSize: 'w-5 h-5' },
   '/cluster-trends':     { labelKey: 'clusterTrends', defaultLabel: '클러스터 추이',  icon: TrendingUp, iconSize: 'w-5 h-5' },
@@ -89,7 +93,7 @@ export const NAV_MAP: Record<string, NavMapEntry> = {
 
 // 사이드바 레일에 표시되는 그룹들
 export type GroupId =
-  | 'observe' | 'inspect' | 'operate' | 'configure'
+  | 'k8s' | 'observe' | 'inspect' | 'operate' | 'configure'
   | 'topology' | 'automate' | 'collab' | 'documents' | 'system';
 /**
  * `domain` — 예전엔 홈 모드(work/platform)가 이 값으로 사이드바 그룹 자체를 게이팅했다
@@ -122,17 +126,21 @@ export interface NavGroup {
  * 설치 단위는 leaf path 라 그룹 id 를 바꿔도 사용자가 설치해 둔 레일 아이콘·라벨·페이지 스타일은 그대로다.
  */
 export const GROUPS: NavGroup[] = [
+  // K8s 클러스터 허브(2026-10-22, D-240) — 클러스터 하나를 고르고 보는 K8s 화면을 `/k8s` 한 화면으로 모았다.
+  // 첫 항목이 허브, 나머지는 허브 뷰로 redirect 되는 옛 leaf(설치하면 그 뷰로 바로 가는 바로가기).
+  { id: 'k8s',       label: 'K8s 클러스터', labelKey: 'k8s', descriptionKey: 'k8s', icon: ShipWheel, description: '클러스터 하나를 골라 상세·리소스·자원·관측·로그·점검을 한 화면에서', domain: 'platform',
+    paths: ['/k8s', '/clusters', '/k8s-manage', '/k8s-allocation', '/cluster-trends', '/observability', '/k8s-events', '/k8s-logs', '/incident-analysis', '/daily-check/review'] },
   { id: 'observe',   label: '관측', labelKey: 'observe', descriptionKey: 'observe', icon: Activity,    description: '상태를 본다 — 읽기 전용', domain: 'platform',
-    paths: ['/cluster-trends', '/observability', '/alerts', '/k8s-events', '/k8s-logs', '/incident-analysis', '/isilon-nfs', '/lake-services'] },
+    paths: ['/alerts', '/isilon-nfs', '/lake-services'] },
   // '/ops-checks'(운영 점검 콘솔, 레거시)는 사이드바에서 뺐다 — 같은 패널을 종합 상태까지 포함해
   // 보여주는 '/clusters/:id' 로 대체됐다(App.tsx 주석). 라우트·NAV_MAP 은 북마크/아일랜드 패널
   // 호환으로 유지(D-129).
   { id: 'inspect',   label: '점검·진단', labelKey: 'inspect', descriptionKey: 'inspect', icon: ShieldCheck, description: '상태를 확인·기록하고 원인을 추적한다', domain: 'platform',
-    paths: ['/daily-check/review', '/daily-check/settings', '/pod-bottleneck', '/cilium-trace', '/packet-flow', '/versions'] },
+    paths: ['/daily-check/settings', '/pod-bottleneck', '/cilium-trace', '/packet-flow', '/versions'] },
   { id: 'operate',   label: '운영 조작', labelKey: 'operate', descriptionKey: 'operate', icon: Terminal,    description: '클러스터·노드·스토리지에 명령을 보낸다 — 실행 전 대상을 확인할 것', domain: 'platform', tone: 'danger',
-    paths: ['/k8s-manage', '/ns-migration', '/k9s', '/bulk-exec', '/node-ssh', '/etcdctl', '/mc', '/kernel-params'] },
+    paths: ['/ns-migration', '/k9s', '/bulk-exec', '/node-ssh', '/etcdctl', '/mc', '/kernel-params'] },
   { id: 'configure', label: '구성·자산', labelKey: 'configure', descriptionKey: 'configure', icon: Layers,      description: '클러스터 등록·자원·권한·노드 자산을 관리한다', domain: 'platform',
-    paths: ['/clusters', '/cluster-manage', '/k8s-allocation', '/k8s-rbac', '/node-labels', '/node-images', '/node-specs', '/links'] },
+    paths: ['/cluster-manage', '/k8s-rbac', '/node-labels', '/node-images', '/node-specs', '/links'] },
   { id: 'topology',  label: '토폴로지', labelKey: 'topology', descriptionKey: 'topology', icon: Network,     description: '인프라·서비스 구조를 지도로 본다', domain: 'platform',
     paths: ['/infra-topology', '/service-topology', '/service-architecture', '/architecture'] },
   // '/batch-jobs' 는 사이드바 진입점에서 뺐다 — 홈 화면 "플랫폼 현황" 탭의 서브탭으로

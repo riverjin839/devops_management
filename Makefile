@@ -102,21 +102,21 @@ docker-rebuild:
 kind-up:
 	@echo "=== kind 로컬 환경 구축 ==="
 	@echo "Frontend: http://localhost:30080  Backend: http://localhost:30800"
-	@bash scripts/kind-setup.sh up
+	@bash scripts/deploy/kind-setup.sh up
 
 kind-reload:
 	@echo "=== 코드 재빌드 & 재배포 ==="
-	@bash scripts/kind-setup.sh reload
+	@bash scripts/deploy/kind-setup.sh reload
 
 kind-down:
 	@echo "=== kind 클러스터 삭제 ==="
-	@bash scripts/kind-setup.sh destroy
+	@bash scripts/deploy/kind-setup.sh destroy
 
 kind-status:
-	@bash scripts/kind-setup.sh status
+	@bash scripts/deploy/kind-setup.sh status
 
 kind-logs:
-	@bash scripts/kind-setup.sh logs backend
+	@bash scripts/deploy/kind-setup.sh logs backend
 
 # Kubernetes Deployments (실제 클러스터용)
 k8s-dev:
@@ -176,13 +176,13 @@ skaffold-delete:
 
 # Monitoring Stack
 monitoring-status:
-	@bash scripts/setup-monitoring.sh status
+	@bash scripts/deploy/setup-monitoring.sh status
 
 monitoring-test:
-	@bash scripts/setup-monitoring.sh test
+	@bash scripts/deploy/setup-monitoring.sh test
 
 monitoring-port-forward:
-	@bash scripts/setup-monitoring.sh port-forward
+	@bash scripts/deploy/setup-monitoring.sh port-forward
 
 monitoring-images:
-	@bash scripts/setup-monitoring.sh images
+	@bash scripts/deploy/setup-monitoring.sh images

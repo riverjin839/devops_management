@@ -79,18 +79,18 @@ dump.rdb
 .superpowers/
 
 # Vagrant (로컬 테스트 클러스터 — Mac/Windows, 멀티클러스터 포함)
-vagrant/.vagrant/
-vagrant/*.yaml
-!vagrant/Vagrantfile
+labs/vagrant/.vagrant/
+labs/vagrant/*.yaml
+!labs/vagrant/Vagrantfile
 # 서브디렉터리(kubeadm-almalinux 등) 의 vagrant 상태/산출물 — 멀티클러스터 c2 변형 포함
-vagrant/**/.vagrant/
-vagrant/**/.vagrant-*/
-vagrant/**/_out/
-vagrant/**/_out-*/
+labs/vagrant/**/.vagrant/
+labs/vagrant/**/.vagrant-*/
+labs/vagrant/**/_out/
+labs/vagrant/**/_out-*/
 *-kubeconfig.yaml
 
 # 외부 스킬 설치기 산출물 — 공유 스킬은 .claude/skills/ 에만 둔다
-.agents/
+.agents/skills/
 skills-lock.json
 # impeccable 스킬 critique 로그 (생성물)
 .impeccable/critique/

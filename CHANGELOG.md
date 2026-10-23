@@ -8,15 +8,37 @@
 
 ## [Unreleased]
 
-1.74.0 이후 main 에 병합된 변경 (다음 릴리스 후보).
+1.77.0 이후 main 에 병합된 변경 (다음 릴리스 후보).
 
 ### Changed
 - **저장소 구조 정리 — 미사용 코드·의존성·중복 파일 제거**: 화면 동작 변화는 없다. 정리한 것은 다음과 같다.
   - Frontend: 아무도 import 하지 않는 파일 7개(`src/analyzers/`, `usePacketFlow`, `WorkItemFormModal`, `WeeklyWorkTable`, `WorkItemCustomFieldsManager`), 호출되지 않는 `api.ts` 메서드 57개, 미사용 hook·유틸 41개, 미사용 패키지 3개(`@radix-ui/react-dialog`·`@radix-ui/react-toast`·`@types/dompurify`).
   - Backend: 미사용 `schemas/node_image.py`, 빈 `app/data/` 패키지, 미사용 의존성 `alembic`·`ansible-runner`(플레이북은 `ansible-core` 의 `ansible-playbook` CLI 로 실행).
-  - Repo: 중복 사본(`.agents/`·`skills-lock.json`, `k8s/ansible-playbooks/`), 생성 로그(`.impeccable/critique/`), 생성 바이너리(리포트 `.pptx`), 대체된 `scripts/version-tag.sh` 를 제거하고 `.gitignore` 에 등록.
+  - Repo: 중복 사본(`.agents/skills/`·`skills-lock.json`, `k8s/ansible-playbooks/`), 생성 로그(`.impeccable/critique/`), 생성 바이너리(리포트 `.pptx`)를 제거하고 `.gitignore` 에 등록.
   - `.gitattributes` 신설: 줄바꿈 고정(`*.sh` LF, `*.ps1` CRLF), lockfile·생성 리포트는 generated, vendored 스킬 스크립트는 vendored 로 표시.
   - CI: 같은 ref 의 이전 실행 자동 취소(`concurrency`), frontend `npm ci` + npm 캐시, backend pip 캐시 키를 `requirements.txt` 로 고정.
+
+## [1.77.0] - 2026-10-23
+
+### Added
+- **Vagrant 테스트 클러스터 안에 PEP 직접 배포**: `k8s/overlays/vagrant` + `vagrant/deploy-pep.sh`. Mac 에서 arm64 이미지를 빌드해 3노드 containerd 로 주입하고(레지스트리 불필요) NodePort(30080/30800)로 노출한다. postgres 는 정적 hostPath PV, 메모리 절약을 위해 Ollama·grafana-renderer·blackbox 제외. 가이드: `docs/MAC_LOCAL_TEST_GUIDE.md` §7.
+
+## [1.76.0] - 2026-10-23
+
+### Added
+- **K8s 상세 관리 — 네임스페이스 대시보드에 "다른 NS 의 RoleBinding" 추가**: Access Control 에 다른 네임스페이스 안에서 이 네임스페이스의 ServiceAccount 에 권한을 주는 RoleBinding 이 나온다(바인딩 NS·Role·대상 subject, 행 클릭 시 상세·YAML). `system:serviceaccounts:<ns>` 그룹(이 NS 의 SA 전체)으로 묶은 바인딩도 잡으며, ClusterRoleBinding 목록에도 같은 그룹 판정을 적용했다. Backend: `GET /k8s/{id}/namespaces/{ns}/external-role-bindings`.
+
+## [1.75.0] - 2026-10-23
+
+### Added
+- **K8s 클러스터 허브(`/k8s/:clusterId/:view`)** — 클러스터 하나를 고르고 보는 K8s 화면 9개(클러스터 상세·K8s 상세 관리·K8s 자원 관리·
+  클러스터 추이·관측 지표·실시간 이벤트·파드 로그·AI 장애 분석·점검 결과 리뷰)가 사이드바 4그룹에 흩어져 있어 화면마다 클러스터를
+  다시 고르던 것을, 클러스터 레일 하나 + 카테고리 탭(개요/리소스/자원/관측/로그/점검) 한 화면으로 모았다. 클러스터는 URL 이 들고
+  있어 뷰를 바꿔도 유지되고, 뷰 전환은 path 라 뒤로가기가 이전 뷰로 돌아온다. 옛 URL(`/clusters`·`/k8s-manage`·`/k8s-allocation`·
+  `/cluster-trends`·`/observability`·`/k8s-events`·`/k8s-logs`·`/incident-analysis`·`/daily-check/review`)은 해당 뷰로 redirect(클러스터·
+  쿼리 보존). 사이드바에 "K8s 클러스터" 그룹이 생기고 옛 leaf 는 그 그룹의 바로가기로 남는다(접근 제어·라벨·아일랜드 패널 호환).
+  Frontend: `K8sHubPage`, `components/k8s-hub/*`, `lib/k8sHub.ts`(임베드 컨텍스트 — 흡수된 화면은 코드 수정 없이 레일/헤더/셸만 허브에
+  넘긴다), 공용 `SegTabs` 승격, `App.tsx` `RedirectToHub`. 2단계(구성·콘솔)·3단계(진단) 뷰는 후속.
 
 ## [1.74.0] - 2026-10-22
 

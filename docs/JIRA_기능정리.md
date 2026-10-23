@@ -156,10 +156,10 @@ Celery 기반 백그라운드 자동화.
 | Story | 요약 | 산출물 | 우선 |
 |---|---|---|---|
 | Docker Compose 로컬 개발 | postgres + redis + backend + frontend + celery 한 번에 기동 | `docker-compose.yml`, `Makefile` | P0 |
-| Kubernetes Kustomize 배포 | base + overlays/{dev,prod,airgap,kind} | `k8s/`, `scripts/kind-setup.sh` | P0 |
+| Kubernetes Kustomize 배포 | base + overlays/{dev,prod,airgap,kind} | `k8s/`, `scripts/deploy/kind-setup.sh` | P0 |
 | Helm 차트 | values-{dev,prod,airgap}.yaml 분리된 프로덕션 차트 | `helm/k8s-daily-monitor/` | P1 |
 | Skaffold 핫리로드 | dev 모드 watch/rebuild | `skaffold.yaml` | P2 |
-| 폐쇄망(airgap) 배포 | 사설 레지스트리 미러링 + 대화형 설치 스크립트 | `scripts/deploy-airgap.sh`, overlays/airgap | P1 |
+| 폐쇄망(airgap) 배포 | 사설 레지스트리 미러링 + 대화형 설치 스크립트 | `scripts/deploy/deploy-airgap.sh`, overlays/airgap | P1 |
 | GitOps (ArgoCD) | Application/Project 매니페스트 | `argocd/` | P1 |
 | CI/CD | GitHub Actions: lint/type/build (CI), GHCR 푸시 + Kustomize 적용 (CD), Jenkins 파이프라인(P3) | `.github/workflows/`, `Jenkinsfile` | P1 |
 

@@ -17,7 +17,7 @@
 #   - ./seed.iso    (Vagrantfile 이 부팅 시 cloud-init datasource 로 첨부)
 #
 # 사용:
-#   cd vagrant/qemu
+#   cd labs/vagrant/qemu
 #   bash build-almalinux-box.sh           # 박스가 이미 있으면 skip (FORCE=1 로 재빌드)
 #
 # 요구: qemu(brew install qemu) — qemu-img 사용. macOS 는 seed.iso 를 hdiutil 로,
