@@ -16,7 +16,7 @@ import {
 } from '@/hooks/useK8sAllocation';
 import { buildCsv, downloadCsv } from '@/lib/csv';
 import type { AllocNodeRow, AllocWorkloadRow } from '@/types';
-import { csvCluster, efficiency, EFF_BADGE, fmtCores, fmtGi, fmtN, today, utilPct } from './format';
+import { csvCluster, EFF_BADGE, fmtCores, fmtGi, fmtN, today, utilPct, worstEfficiency } from './format';
 import { CsvButton, MeterBar, SearchInput, Stat } from './primitives';
 import { NodeWorkloadsDrill, PodsDrill, WorkloadTable } from './drilldown';
 import { groupPodsByWorkload } from './podGroup';
@@ -31,14 +31,14 @@ function exportWorkloadCsv(rows: AllocWorkloadRow[], filename: string) {
     'MEM 요청', 'MEM 제한', 'MEM 사용', 'MEM 사용률(req)', '효율'];
   const pct = (v: number | null) => (v == null ? '' : `${v}%`);
   const data = rows.map((w) => {
-    const k = efficiency(w.cpuReqM, w.cpuUsageM);
+    const { kind: k, res } = worstEfficiency(w.cpuReqM, w.cpuUsageM, w.memReqB, w.memUsageB);
     return [
       w.namespace, w.kind, w.name, w.podCount, w.noRequestPods,
       fmtCores(w.cpuReqM), fmtCores(w.cpuLimM), w.cpuUsageM == null ? '' : fmtCores(w.cpuUsageM),
       pct(utilPct(w.cpuUsageM, w.cpuReqM)),
       fmtGi(w.memReqB), fmtGi(w.memLimB), w.memUsageB == null ? '' : fmtGi(w.memUsageB),
       pct(utilPct(w.memUsageB, w.memReqB)),
-      k ? EFF_BADGE[k].label : '',
+      k ? `${EFF_BADGE[k].label}${res ? ` (${res})` : ''}` : '',
     ];
   });
   downloadCsv(filename, buildCsv(headers, data));
