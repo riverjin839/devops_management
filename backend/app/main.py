@@ -456,6 +456,26 @@ def _safe_add_constraint(
     _safe_exec(f"ALTER TABLE {table} ADD CONSTRAINT {name} {definition}", label=lbl)
 
 
+def _backfill_impact_simulation_events() -> None:
+    """구버전 영향 분석(what-if) 기록을 ``impact_simulation``/``info`` 로 재분류한다(A-17 후속).
+
+    ``ontology_events`` 의 유일한 작성 경로는 처음부터 ``POST /ontology/impact`` 였고, 15차 이전에는
+    분류를 클라이언트 값 그대로 저장했다. 온톨로지 화면은 항상
+    ``category='config_change'``, ``severity='warning'``, ``title='<이름> 변경 영향 분석'`` 을 보냈고
+    ``evidence`` 에 ``requested_by`` 를 넣지 않았다(현행 코드는 항상 넣는다). 이 네 가지가 모두
+    맞는 행만 영향 분석으로 확정해 고친다 — 다른 분류로 API 를 직접 부른 행은 표지가 없어 건너뛴다.
+    재분류되면 RAG 검색(``rag_service.EXCLUDED_ONTOLOGY_CATEGORIES``)에서 자동으로 빠진다.
+    WHERE 가 이미 고친 행과 겹치지 않으므로 매 부팅 재실행해도 안전하다(멱등).
+    """
+    _safe_exec(
+        "UPDATE ontology_events SET category = 'impact_simulation', severity = 'info' "
+        "WHERE category = 'config_change' AND severity = 'warning' "
+        "AND right(title, 8) = '변경 영향 분석' "
+        "AND evidence -> 'requested_by' IS NULL",
+        label="ontology_events impact_simulation backfill",
+    )
+
+
 def _run_migrations():
     """기존 테이블에 누락된 컬럼 추가 (경량 마이그레이션)"""
     _reset_schema_cache()  # create_all 직후 스키마 기준으로 존재 확인
@@ -1082,6 +1102,7 @@ def _run_migrations():
     # ontology_events: RAG(근거 인용) 검색용 임베딩 — 구버전 DB 호환 보강.
     if "ontology_events" in inspector.get_table_names():
         _safe_add_column("ontology_events", "embedding", f"VECTOR({settings.embedding_dim})")
+        _backfill_impact_simulation_events()
 
     # 지식베이스(KnowledgePage) 기능 제거 — 더 이상 사용하지 않는 테이블 정리(데이터 불필요).
     # 구버전 DB 에 남아있을 수 있는 3개 테이블을 안전하게 DROP.

@@ -34,7 +34,7 @@ from app.models.user_jira_credential import UserJiraCredential
 from app.models.work_item import WorkItem
 from app.schemas.work_item import WorkItemResponse
 from app.auth.deps import get_current_user, get_tenant_scope, require_admin, require_operator
-from app.services.tenant_scope import TenantScope, work_item_visible
+from app.services.tenant_scope import TenantScope, work_item_visibility, work_item_visible
 from app.services import secret_box
 from app.services import audit_logger
 from app.services.jira_service import (
@@ -132,6 +132,18 @@ DEFAULT_JIRA_SETTINGS = {
     # 미설정이면 Epic 생성 시 이 필드를 보내지 않는다(프로젝트가 요구하면 400 으로 실패).
     "jira_epic_name_field": "",
 }
+
+
+_ITEM_NOT_FOUND = "업무를 찾을 수 없습니다."
+
+
+def _get_visible_item(db: Session, scope: TenantScope, item_id) -> WorkItem:
+    """업무 1건 조회 + 테넌트 가시성 — 안 보이는 업무는 없는 업무와 **같은 404** 로 숨긴다
+    (존재 여부가 새지 않게 메시지도 동일)."""
+    item = db.query(WorkItem).filter(WorkItem.id == item_id).first()
+    if not item or not work_item_visible(scope, db, item):
+        raise HTTPException(status_code=404, detail=_ITEM_NOT_FOUND)
+    return item
 
 
 def _get_config(db: Session) -> dict:
@@ -1284,13 +1296,12 @@ async def sync_confluence_page(
     item_id: str,
     db: Session = Depends(get_db),
     actor: User = Depends(require_operator),
+    scope: TenantScope = Depends(get_tenant_scope),
 ):
     """업무의 현재 내용을 이미 연결된 Confluence 문서에 재게시한다 — Jira 의 "반영"
     (push) 버튼과 동일한 역할. page_id 기준으로 갱신하므로 제목이 바뀌어도 같은 문서를
     유지한다(upsert_page 의 제목 기반 매칭과 달리 새 페이지가 생기지 않음)."""
-    item = db.query(WorkItem).filter(WorkItem.id == item_id).first()
-    if not item:
-        raise HTTPException(status_code=404, detail="업무를 찾을 수 없습니다.")
+    item = _get_visible_item(db, scope, item_id)
     if not item.confluence_page_id:
         return ConfluenceSyncResult(status="not_linked", detail="Confluence 문서와 연결되지 않은 업무입니다.")
 
@@ -1329,13 +1340,12 @@ async def refresh_work_item_from_jira(
     item_id: str,
     db: Session = Depends(get_db),
     actor: User = Depends(require_operator),
+    scope: TenantScope = Depends(get_tenant_scope),
 ):
     """업무 1건을 연결된 Jira 이슈 기준으로 다시 가져온다 (게시판 행 단위 동기화).
 
     전체 가져오기와 동일한 매핑/보존 규칙을 쓰고, 변경 내역을 `items[0].changes` 로 돌려준다."""
-    item = db.query(WorkItem).filter(WorkItem.id == item_id).first()
-    if not item:
-        raise HTTPException(status_code=404, detail="업무를 찾을 수 없습니다.")
+    item = _get_visible_item(db, scope, item_id)
     if not item.jira_issue_key:
         return JiraImportResult(status="error", detail="Jira 와 연결되지 않은 업무입니다.")
 
@@ -1417,6 +1427,7 @@ async def create_jira_issue(
     payload: JiraCreateRequest,
     db: Session = Depends(get_db),
     actor: User = Depends(require_operator),
+    scope: TenantScope = Depends(get_tenant_scope),
 ):
     """PEP 에서 Jira 이슈를 새로 만든다. work_item_id 를 주면 그 업무 내용으로 만들고
     생성된 키/URL 을 업무에 연결해 이후 push/가져오기가 이어지게 한다."""
@@ -1426,9 +1437,7 @@ async def create_jira_issue(
 
     item: Optional[WorkItem] = None
     if payload.work_item_id:
-        item = db.query(WorkItem).filter(WorkItem.id == payload.work_item_id).first()
-        if not item:
-            raise HTTPException(status_code=404, detail="업무를 찾을 수 없습니다.")
+        item = _get_visible_item(db, scope, payload.work_item_id)
         if item.jira_issue_key:
             return JiraCreateResult(status="error",
                                     detail=f"이미 Jira({item.jira_issue_key})와 연결된 업무입니다.")
@@ -1484,6 +1493,7 @@ async def delete_jira_issue(
     key: str,
     db: Session = Depends(get_db),
     actor: User = Depends(require_operator),
+    scope: TenantScope = Depends(get_tenant_scope),
 ):
     """Jira 이슈 삭제 — 연결된 PEP 업무가 있으면 연결만 해제한다(업무는 보존)."""
     cfg = _get_config(db)
@@ -1497,7 +1507,11 @@ async def delete_jira_issue(
         return JiraDeleteResult(status=res.get("status", "error"),
                                 detail=res.get("detail", "이슈 삭제 실패"))
     unlinked = None
-    item = db.query(WorkItem).filter(WorkItem.jira_issue_key == key).first()
+    # 연결 해제는 호출자에게 보이는 업무만 — 다른 테넌트 업무는 건드리지도, 응답에 드러내지도
+    # 않는다(그 업무는 다음 새로고침/연결 점검에서 "missing" 으로 드러난다).
+    item = work_item_visibility(
+        scope, db.query(WorkItem).filter(WorkItem.jira_issue_key == key), db,
+    ).first()
     if item:
         _clear_jira_link(item)
         db.commit()
@@ -1516,6 +1530,7 @@ def unlink_work_item(
     payload: JiraUnlinkRequest,
     db: Session = Depends(get_db),
     actor: User = Depends(require_operator),
+    scope: TenantScope = Depends(get_tenant_scope),
 ):
     """업무의 Jira 연결을 끊는다 (선택적으로 업무 행까지 삭제).
 
@@ -1525,9 +1540,7 @@ def unlink_work_item(
 
     연결을 끊으면 `jira_issue_key` 가 비어 프로비저닝이 다시 열리므로, 잘못된 프로젝트에
     만들어진 이슈를 지우고 올바른 곳에 재생성하는 복구가 가능해진다."""
-    item = db.query(WorkItem).filter(WorkItem.id == item_id).first()
-    if not item:
-        raise HTTPException(status_code=404, detail="업무를 찾을 수 없습니다.")
+    item = _get_visible_item(db, scope, item_id)
 
     prev_key = item.jira_issue_key or ""
     if payload.delete_work_item:
@@ -1569,14 +1582,13 @@ async def relink_work_item(
     payload: JiraRelinkRequest,
     db: Session = Depends(get_db),
     actor: User = Depends(require_operator),
+    scope: TenantScope = Depends(get_tenant_scope),
 ):
     """연결을 다른 Jira 이슈로 갈아끼운다 (이슈 키 또는 브라우저 URL 입력).
 
     **Jira 에서 실제로 조회해 존재를 확인한 뒤에만** 연결한다 — 검증 없이 키를 받으면
     또 다른 죽은 링크가 생기고, 그게 애초에 이 기능이 필요해진 이유다."""
-    item = db.query(WorkItem).filter(WorkItem.id == item_id).first()
-    if not item:
-        raise HTTPException(status_code=404, detail="업무를 찾을 수 없습니다.")
+    item = _get_visible_item(db, scope, item_id)
 
     key = _parse_issue_key(payload.key_or_url)
     if not key:
@@ -1589,9 +1601,13 @@ async def relink_work_item(
         .first()
     )
     if dup:
+        # 키 중복은 공유 범위와 무관하게 막되(라이브 가져오기 키 매칭 보호), 안 보이는 업무의
+        # 제목은 드러내지 않는다.
+        dup_label = (dup.title or dup.category) if work_item_visible(scope, db, dup) else None
         return JiraRelinkResult(
             status="error",
-            detail=f"{key} 는 이미 다른 업무({dup.title or dup.category})에 연결돼 있습니다.",
+            detail=(f"{key} 는 이미 다른 업무({dup_label})에 연결돼 있습니다." if dup_label
+                    else f"{key} 는 이미 다른 업무에 연결돼 있습니다."),
         )
 
     cfg = _get_config(db)
@@ -1659,6 +1675,7 @@ async def verify_links(
     all_users: bool = False,
     db: Session = Depends(get_db),
     actor: User = Depends(require_operator),
+    scope: TenantScope = Depends(get_tenant_scope),
 ):
     """연결된 업무들의 Jira 이슈가 아직 살아 있는지 확인해 **죽은 링크 목록**을 돌려준다.
 
@@ -1675,7 +1692,7 @@ async def verify_links(
     if svc is None:
         return JiraVerifyLinksResult(status="error", detail="내 Jira 인증이 등록되지 않았습니다.")
 
-    q = db.query(WorkItem).filter(WorkItem.jira_issue_key.isnot(None))
+    q = work_item_visibility(scope, db.query(WorkItem).filter(WorkItem.jira_issue_key.isnot(None)), db)
     if not all_users:
         # 기본은 내가 담당이거나 내가 가져온(watcher) 업무만 — 남의 업무까지 훑지 않는다.
         name = (actor.display_name or actor.username or "").strip()
@@ -1835,6 +1852,7 @@ async def provision_defaults(
     work_item_id: Optional[str] = None,
     db: Session = Depends(get_db),
     actor: User = Depends(get_current_user),
+    scope: TenantScope = Depends(get_tenant_scope),
 ):
     """업무 → Jira/Confluence 생성 화면의 **기본값**.
 
@@ -1843,6 +1861,8 @@ async def provision_defaults(
     cfg = _get_config(db)
     weekly = _get_weekly_settings(db)
     item = db.query(WorkItem).filter(WorkItem.id == work_item_id).first() if work_item_id else None
+    if item is not None and not work_item_visible(scope, db, item):
+        item = None  # 안 보이는 업무는 없는 업무와 같게 — 내용이 기본값으로 새지 않게
 
     cred = db.query(UserJiraCredential).filter(UserJiraCredential.username == actor.username).first()
     missing: list[str] = []
@@ -1904,14 +1924,13 @@ async def provision_work_item(
     payload: ProvisionRequest,
     db: Session = Depends(get_db),
     actor: User = Depends(require_operator),
+    scope: TenantScope = Depends(get_tenant_scope),
 ):
     """업무 1건을 Jira 이슈 + Confluence 문서로 만들고 둘 다 업무에 연결한다.
 
     한쪽이 실패해도 다른 쪽 결과는 유지하고 `partial` 로 알린다(둘 다 실패면 error).
     Confluence 문서에는 생성된 Jira 키 링크가 함께 들어간다."""
-    item = db.query(WorkItem).filter(WorkItem.id == payload.work_item_id).first()
-    if not item:
-        raise HTTPException(status_code=404, detail="업무를 찾을 수 없습니다.")
+    item = _get_visible_item(db, scope, payload.work_item_id)
     cfg = _get_config(db)
 
     jira_key = jira_url = ""
@@ -3175,10 +3194,9 @@ async def push_to_jira(
     payload: JiraPushRequest,
     db: Session = Depends(get_db),
     actor: User = Depends(require_operator),
+    scope: TenantScope = Depends(get_tenant_scope),
 ):
-    item = db.query(WorkItem).filter(WorkItem.id == item_id).first()
-    if not item:
-        raise HTTPException(status_code=404, detail="업무를 찾을 수 없습니다.")
+    item = _get_visible_item(db, scope, item_id)
     if not item.jira_issue_key:
         return JiraPushResult(status="not_linked", detail="Jira 와 연결되지 않은 업무입니다.")
 

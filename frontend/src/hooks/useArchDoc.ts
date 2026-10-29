@@ -1,7 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { architectureDocsApi } from '@/services/api';
+import { getAuthToken } from '@/stores/authStore';
+import { newRequestId, REQUEST_ID_HEADER } from '@/lib/requestId';
 import type { ArchDoc, ArchViewType } from '@/types';
+
+/** `fetch` keepalive 본문 한도(진행 중 keepalive 요청 합계) — 넘치면 일반 경로로 보낸다. */
+const KEEPALIVE_BODY_LIMIT = 64 * 1024;
 
 /**
  * 모듈별 문서 요약 목록 (문서 미생성 모듈 포함).
@@ -84,6 +89,7 @@ type PendingLayout = Map<string, Map<ArchViewType, Map<string, { x: number; y: n
  * - 대기분은 **큐에 넣은 시점의 serviceId 별로** 보관한다. 모듈을 바꾼 직후 타이머가 터져도
  *   이전 모듈 좌표는 이전 모듈 문서로 간다(예전엔 새 모듈 layout 에 섞였다).
  * - `serviceId` 가 바뀌거나 화면을 떠나면(언마운트·pagehide) 대기분을 즉시 보낸다.
+ *   탭 닫기(pagehide)만 `fetch` keepalive 로 보내 문서가 내려가도 요청이 끝까지 가게 한다.
  * - 저장이 실패하면 `onError` 로 알리고 서버 값으로 되돌린다 — 문서를 다시 읽고 `revision` 을 올려
  *   캔버스의 로컬 드래그 좌표를 버리게 한다(`resetKey` 에 넣어 쓴다).
  */
@@ -124,6 +130,60 @@ export function useUpdateArchLayout(
     for (const sid of Array.from(pending.current.keys())) send(sid);
   }, [send]);
 
+  /**
+   * 탭 닫기(pagehide) 전용 — axios 요청은 문서가 내려가면 브라우저가 취소할 수 있어
+   * `fetch(..., { keepalive: true })` 로 보낸다. 경로·본문은 `architectureDocsApi.patchLayout` 과 같다
+   * (axios 인터셉터의 camel→snake 변환을 거치지 않으므로 키를 직접 snake_case 로 적는다).
+   * keepalive 본문은 진행 중인 keepalive 요청 합계 64KB 까지라 넘치는 분은 일반 경로로 보낸다.
+   */
+  const flushKeepalive = useCallback(() => {
+    if (timer.current) { clearTimeout(timer.current); timer.current = null; }
+    const token = getAuthToken();
+    const encoder = new TextEncoder();
+    let budget = KEEPALIVE_BODY_LIMIT;
+    const overflow: PendingLayout = new Map();
+    for (const [sid, byView] of Array.from(pending.current)) {
+      pending.current.delete(sid);
+      for (const [view, posMap] of byView) {
+        if (posMap.size === 0) continue;
+        const body = JSON.stringify({
+          view,
+          positions: Array.from(posMap, ([id, p]) => ({ id, x: p.x, y: p.y })),
+        });
+        const size = encoder.encode(body).length;
+        if (size > budget) {
+          let ov = overflow.get(sid);
+          if (!ov) { ov = new Map(); overflow.set(sid, ov); }
+          ov.set(view, posMap);
+          continue;
+        }
+        budget -= size;
+        fetch(`/api/v1/architecture-docs/${sid}/layout`, {
+          method: 'PATCH',
+          keepalive: true,
+          headers: {
+            'Content-Type': 'application/json',
+            [REQUEST_ID_HEADER]: newRequestId(),
+            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          },
+          body,
+        })
+          .then((r) => {
+            // bfcache 로 돌아온 경우에만 실행된다 — 서버 값으로 다시 읽는다.
+            if (!r.ok) {
+              onErrorRef.current?.(new Error(`배치 저장 실패 (HTTP ${r.status})`));
+              setRevision((v) => v + 1);
+            }
+            qc.invalidateQueries({ queryKey: ['arch-doc', sid] });
+          })
+          .catch(() => { /* 문서가 내려가는 중 — 알릴 화면이 없다 */ });
+      }
+    }
+    // 64KB 를 넘는 분은 일반 경로(axios) — 취소될 수 있지만 보내지 않는 것보다 낫다.
+    for (const [sid, byView] of overflow) pending.current.set(sid, byView);
+    for (const sid of overflow.keys()) send(sid);
+  }, [qc, send]);
+
   const queuePosition = useCallback(
     (view: ArchViewType, id: string, x: number, y: number) => {
       if (!serviceId) return;
@@ -144,15 +204,15 @@ export function useUpdateArchLayout(
     return () => { if (sid) send(sid); };
   }, [serviceId, send]);
 
-  // 화면 이탈(언마운트) · 탭 닫기 — 남은 대기분 전부.
+  // 화면 이탈(언마운트) · 탭 닫기 — 남은 대기분 전부. 탭 닫기는 keepalive fetch, 언마운트는 일반 경로.
   useEffect(() => {
-    const onHide = () => flushAll();
+    const onHide = () => flushKeepalive();
     window.addEventListener('pagehide', onHide);
     return () => {
       window.removeEventListener('pagehide', onHide);
       flushAll();
     };
-  }, [flushAll]);
+  }, [flushAll, flushKeepalive]);
 
   return { queuePosition, flush: flushAll, isSaving: inFlight > 0, revision };
 }
