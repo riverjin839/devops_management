@@ -2604,7 +2604,7 @@ export const k8sResourcesApi = {
     ),
   /** subject 가 이 NS 를 가리키는 ClusterRoleBinding (cluster-scoped 라 NS 필터로는 안 잡힘). */
   nsClusterRoleBindings: (clusterId: string, namespace: string, refresh = false) =>
-    api.get<import('@/types').K8sResourceListResponse>(
+    api.get<import('@/types').K8sBindingListResponse>(
       `/k8s/${clusterId}/namespaces/${encodeURIComponent(namespace)}/cluster-role-bindings`,
       { params: refresh ? { refresh: true } : undefined },
     ),

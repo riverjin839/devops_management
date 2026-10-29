@@ -1,7 +1,7 @@
 // NS 대시보드 전용 보조 패널 — 종류별 공통 ResourceTablePanel 로는 그릴 수 없는 "이 NS 기준" 목록.
 //  - NsCrdObjectsPanel: namespaced CRD 1종의 이 NS 오브젝트(additionalPrinterColumns 동적 컬럼)
 //  - NsBindingsPanel: subject 가 이 NS 를 가리키는 ClusterRoleBinding(cluster-scoped) · 다른 NS 의 RoleBinding
-//    (다른 NS 쪽은 행을 펼치면 참조 Role/ClusterRole 의 권한 규칙을 보여준다 — RoleRulesView)
+//    (두 표 모두 행을 펼치면 참조 Role/ClusterRole 의 권한 규칙을 보여준다 — RoleRulesView)
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { ChevronRight, RefreshCw } from 'lucide-react';
@@ -115,10 +115,12 @@ function RuleValues({ values, empty = '—' }: { values: string[]; empty?: strin
 const RULE_GRID = { gridTemplateColumns: 'minmax(140px,1fr) minmax(110px,0.8fr) minmax(160px,1.2fr) minmax(120px,1fr)' };
 
 /** 참조 Role/ClusterRole 의 규칙 표 — kubectl describe role 처럼 규칙 1개 = 1줄. */
-function RoleRulesView({ row }: { row: K8sBindingRow }) {
-  const scopeNote = row.roleKind === 'ClusterRole'
-    ? `ClusterRole ${row.roleName} 의 규칙이지만, RoleBinding 으로 묶여 ${row.namespace} 네임스페이스 안에서만 유효합니다.`
-    : `${row.namespace} 네임스페이스의 Role ${row.roleName} 규칙입니다.`;
+function RoleRulesView({ row, scope }: { row: K8sBindingRow; scope: NsBindingScope }) {
+  const scopeNote = scope === 'cluster'
+    ? `ClusterRole ${row.roleName} 의 규칙입니다 — ClusterRoleBinding 이라 클러스터 전체(모든 네임스페이스)에서 유효합니다.`
+    : row.roleKind === 'ClusterRole'
+      ? `ClusterRole ${row.roleName} 의 규칙이지만, RoleBinding 으로 묶여 ${row.namespace} 네임스페이스 안에서만 유효합니다.`
+      : `${row.namespace} 네임스페이스의 Role ${row.roleName} 규칙입니다.`;
   return (
     <div className="px-4 pb-2 pt-1 pl-10 space-y-1.5 bg-secondary/20 border-b border-border/40">
       {row.rulesError ? (
@@ -170,7 +172,8 @@ export function NsBindingsPanel({ clusterId, ns, scope, onOpenDetail }: {
   };
   const grid = {
     gridTemplateColumns: [
-      ...(withNs ? ['20px', 'minmax(120px,0.8fr)'] : []),
+      '20px',
+      ...(withNs ? ['minmax(120px,0.8fr)'] : []),
       'minmax(180px,1.2fr) minmax(160px,1fr) minmax(200px,1.4fr) 60px',
     ].join(' '),
   };
@@ -178,9 +181,9 @@ export function NsBindingsPanel({ clusterId, ns, scope, onOpenDetail }: {
   return (
     <MacCard
       title={text.title}
-      description={withNs ? `${text.description} · 행 앞 화살표로 참조 Role 의 권한을 펼친다` : text.description}
+      description={`${text.description} · 행 앞 화살표로 참조 ${withNs ? 'Role' : 'ClusterRole'} 의 권한을 펼친다`}
       bodyPadding="p-0"
-      actions={withNs && hasRows ? (
+      actions={hasRows ? (
         <button type="button" onClick={() => { setAllOpen((v) => !v); setExpanded(new Set()); }}
           className="rounded-xl border border-border px-2.5 py-1 text-xs text-muted-foreground hover:text-foreground hover:bg-secondary/60">
           {allOpen ? '권한 모두 접기' : '권한 모두 펼치기'}
@@ -188,7 +191,7 @@ export function NsBindingsPanel({ clusterId, ns, scope, onOpenDetail }: {
       ) : undefined}
     >
       <div className="grid gap-2 px-4 py-1.5 text-xs font-semibold text-muted-foreground border-b border-border bg-secondary/30" style={grid}>
-        {withNs && <span aria-hidden />}
+        <span aria-hidden />
         {withNs && <span>네임스페이스</span>}
         <span>이름</span><span>Role</span><span>이 NS 의 Subjects</span><span className="text-right">Age</span>
       </div>
@@ -199,18 +202,7 @@ export function NsBindingsPanel({ clusterId, ns, scope, onOpenDetail }: {
       ) : (
         q.data!.items.map((r) => {
           const key = `${r.namespace ?? ''}/${r.name}`;
-          if (!withNs) {
-            return (
-              <button key={key} type="button" onClick={() => onOpenDetail(r)}
-                className="w-full grid gap-2 px-4 py-1.5 text-sm text-left border-b border-border/40 hover:bg-secondary/30 items-center" style={grid}>
-                <span className="truncate font-medium">{r.name}</span>
-                <span className="truncate text-muted-foreground">{r.cols?.role ?? '—'}</span>
-                <span className="truncate text-muted-foreground" title={r.cols?.subjects ?? ''}>{r.cols?.subjects ?? '—'}</span>
-                <span className="text-right text-muted-foreground tabular-nums">{ageText(r.ageSeconds)}</span>
-              </button>
-            );
-          }
-          // 다른 NS RoleBinding — 행 앞 화살표로 참조 Role 권한을 펼치고, 이름을 누르면 바인딩 상세·YAML.
+          // 행 앞 화살표로 참조 Role/ClusterRole 권한을 펼치고, 이름을 누르면 바인딩 상세·YAML.
           const open = allOpen || expanded.has(key);
           return (
             <div key={key}>
@@ -220,14 +212,14 @@ export function NsBindingsPanel({ clusterId, ns, scope, onOpenDetail }: {
                   className="flex items-center justify-center w-5 h-5 rounded-xl text-muted-foreground hover:text-foreground hover:bg-secondary/60">
                   <ChevronRight className={`w-3.5 h-3.5 transition-transform ${open ? 'rotate-90' : ''}`} />
                 </button>
-                <span className="truncate text-muted-foreground">{r.namespace ?? '—'}</span>
+                {withNs && <span className="truncate text-muted-foreground">{r.namespace ?? '—'}</span>}
                 <button type="button" onClick={() => onOpenDetail(r)} title="바인딩 상세·YAML"
                   className="truncate font-medium text-left hover:underline">{r.name}</button>
                 <span className="truncate text-muted-foreground">{r.cols?.role ?? '—'}</span>
                 <span className="truncate text-muted-foreground" title={r.cols?.subjects ?? ''}>{r.cols?.subjects ?? '—'}</span>
                 <span className="text-right text-muted-foreground tabular-nums">{ageText(r.ageSeconds)}</span>
               </div>
-              {open && <RoleRulesView row={r} />}
+              {open && <RoleRulesView row={r} scope={scope} />}
             </div>
           );
         })

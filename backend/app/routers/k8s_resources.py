@@ -1489,55 +1489,6 @@ def _ns_subjects(subjects, namespace: str) -> list:
     ]
 
 
-@router.get("/{cluster_id}/namespaces/{namespace}/cluster-role-bindings", response_model=ResourceListResponse)
-def list_namespace_cluster_role_bindings(
-    cluster_id: UUID,
-    namespace: str,
-    refresh: bool = False,
-    db: Session = Depends(get_db),
-):
-    """subject 중 하나라도 이 네임스페이스(ServiceAccount 등, `_ns_subjects`)를 가리키는 ClusterRoleBinding.
-
-    RoleBinding 은 NS 안에 있어 종류별 목록으로 보이지만, 이 NS 의 ServiceAccount 에 클러스터 전역
-    권한을 주는 ClusterRoleBinding 은 cluster-scoped 라 NS 필터로는 안 잡힌다 — 여기서 골라 준다.
-    목록은 watch cache(`resource_version=0`)로 읽고 서버 목록 캐시를 거친다.
-    """
-    cluster = _require_cluster(cluster_id, db)
-    client = _api_client(cluster)
-
-    def _load() -> dict:
-        rbac = k8s_client.RbacAuthorizationV1Api(client)
-        res = raw_call(rbac.list_cluster_role_binding, timeout=_LIST_TIMEOUT, resource_version="0")
-        rows: list[dict] = []
-        for o in (res.items or []):
-            subs = _ns_subjects(o.subjects, namespace)
-            if not subs:
-                continue
-            rows.append(ResourceRow(
-                name=o.metadata.name,
-                namespace=None,
-                summary=f"→ {o.role_ref.kind}/{o.role_ref.name}",
-                cols={
-                    "role": f"{o.role_ref.kind}/{o.role_ref.name}",
-                    "subjects": ", ".join(f"{s.kind}/{s.name}" for s in subs),
-                },
-                age_seconds=_age_seconds(o.metadata),
-            ).model_dump())
-        rows.sort(key=lambda r: r["name"])
-        truncated = bool(res.metadata._continue) if res.metadata else False
-        return {"rows": rows, "truncated": truncated}
-
-    try:
-        data, meta = _list_cache.get((cache_group(client, cluster_id), "ns-crb", namespace), _load, refresh=refresh)
-    except Exception as e:  # noqa: BLE001
-        raise _list_http_error("ClusterRoleBinding", e)
-    columns = [ColumnDef(key="role", label="Role"), ColumnDef(key="subjects", label="이 NS 의 Subjects")]
-    rows = data["rows"]
-    return ResourceListResponse(kind="clusterrolebindings", columns=columns, count=len(rows),
-                                truncated=data["truncated"], items=rows,
-                                cache=meta["cache"], cache_age_seconds=meta["age"])
-
-
 class RoleRule(BaseModel):
     """Role/ClusterRole 규칙 1개(PolicyRule) — kubectl describe role 의 표 한 줄."""
     api_groups: list[str] = []
@@ -1601,6 +1552,7 @@ def _attach_role_rules(rbac, rows: list[dict]) -> None:
 
     RoleBinding 의 `Role` 은 바인딩과 같은 NS 에서 찾고, `ClusterRole` 은 클러스터 전역이다 — 다만
     RoleBinding 으로 묶인 ClusterRole 권한은 바인딩 NS 안에서만 유효하다(화면이 그렇게 안내한다).
+    ClusterRoleBinding 행(namespace=None)은 항상 ClusterRole 을 참조한다.
     """
     refs: dict[tuple, dict] = {}
     for r in rows:
@@ -1625,6 +1577,59 @@ def _attach_role_rules(rbac, rows: list[dict]) -> None:
         got = refs[(r["role_kind"], r["namespace"] if r["role_kind"] == "Role" else "", r["role_name"])]
         r["rules"] = got.get("rules")
         r["rules_error"] = got.get("error")
+
+
+@router.get("/{cluster_id}/namespaces/{namespace}/cluster-role-bindings", response_model=BindingListResponse)
+def list_namespace_cluster_role_bindings(
+    cluster_id: UUID,
+    namespace: str,
+    refresh: bool = False,
+    db: Session = Depends(get_db),
+):
+    """subject 중 하나라도 이 네임스페이스(ServiceAccount 등, `_ns_subjects`)를 가리키는 ClusterRoleBinding.
+
+    RoleBinding 은 NS 안에 있어 종류별 목록으로 보이지만, 이 NS 의 ServiceAccount 에 클러스터 전역
+    권한을 주는 ClusterRoleBinding 은 cluster-scoped 라 NS 필터로는 안 잡힌다 — 여기서 골라 준다.
+    목록은 watch cache(`resource_version=0`)로 읽고 서버 목록 캐시를 거친다.
+    각 행에는 참조 ClusterRole 의 규칙(`rules`)을 붙인다(`_attach_role_rules`).
+    """
+    cluster = _require_cluster(cluster_id, db)
+    client = _api_client(cluster)
+
+    def _load() -> dict:
+        rbac = k8s_client.RbacAuthorizationV1Api(client)
+        res = raw_call(rbac.list_cluster_role_binding, timeout=_LIST_TIMEOUT, resource_version="0")
+        rows: list[dict] = []
+        for o in (res.items or []):
+            subs = _ns_subjects(o.subjects, namespace)
+            if not subs:
+                continue
+            rows.append(BindingRow(
+                name=o.metadata.name,
+                namespace=None,
+                summary=f"→ {o.role_ref.kind}/{o.role_ref.name}",
+                cols={
+                    "role": f"{o.role_ref.kind}/{o.role_ref.name}",
+                    "subjects": ", ".join(f"{s.kind}/{s.name}" for s in subs),
+                },
+                age_seconds=_age_seconds(o.metadata),
+                role_kind=o.role_ref.kind,
+                role_name=o.role_ref.name,
+            ).model_dump())
+        rows.sort(key=lambda r: r["name"])
+        _attach_role_rules(rbac, rows)
+        truncated = bool(res.metadata._continue) if res.metadata else False
+        return {"rows": rows, "truncated": truncated}
+
+    try:
+        data, meta = _list_cache.get((cache_group(client, cluster_id), "ns-crb", namespace), _load, refresh=refresh)
+    except Exception as e:  # noqa: BLE001
+        raise _list_http_error("ClusterRoleBinding", e)
+    columns = [ColumnDef(key="role", label="Role"), ColumnDef(key="subjects", label="이 NS 의 Subjects")]
+    rows = data["rows"]
+    return BindingListResponse(kind="clusterrolebindings", columns=columns, count=len(rows),
+                               truncated=data["truncated"], items=rows,
+                               cache=meta["cache"], cache_age_seconds=meta["age"])
 
 
 @router.get("/{cluster_id}/namespaces/{namespace}/external-role-bindings", response_model=BindingListResponse)

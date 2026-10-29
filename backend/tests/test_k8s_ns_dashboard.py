@@ -77,6 +77,9 @@ def env(monkeypatch):
     role_reads: list[tuple] = []
 
     def fake_raw_call(fn, *a, **kw):
+        if fn == "read_crole" and a == ("admin",):   # ClusterRoleBinding team-a-admin → ClusterRole/admin
+            role_reads.append(("ClusterRole", *a))
+            return K8sObj({"rules": [{"apiGroups": ["*"], "resources": ["*"], "verbs": ["*"]}]})
         if fn == "read_crole":       # ClusterRole/edit
             role_reads.append(("ClusterRole", *a))
             return K8sObj({"rules": [
@@ -146,3 +149,11 @@ def test_external_role_bindings_carry_referenced_role_rules(env):
     assert edit.rules[1].non_resource_urls == ["/healthz"]
     # 참조 Role 이 없으면 규칙 대신 사유
     assert viewer.rules is None and "없습니다" in viewer.rules_error
+
+
+def test_cluster_role_bindings_carry_cluster_role_rules(env):
+    out = kr.list_namespace_cluster_role_bindings(uuid.uuid4(), "team-a", db=None)
+    (row,) = out.items
+    assert env.role_reads == [("ClusterRole", "admin")]
+    assert (row.role_kind, row.role_name, row.rules_error) == ("ClusterRole", "admin", None)
+    assert [(r.api_groups, r.resources, r.verbs) for r in row.rules] == [(["*"], ["*"], ["*"])]
