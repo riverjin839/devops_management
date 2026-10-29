@@ -1489,7 +1489,97 @@ def _ns_subjects(subjects, namespace: str) -> list:
     ]
 
 
-@router.get("/{cluster_id}/namespaces/{namespace}/cluster-role-bindings", response_model=ResourceListResponse)
+class RoleRule(BaseModel):
+    """Role/ClusterRole 규칙 1개(PolicyRule) — kubectl describe role 의 표 한 줄."""
+    api_groups: list[str] = []
+    resources: list[str] = []
+    resource_names: list[str] = []
+    non_resource_urls: list[str] = []
+    verbs: list[str] = []
+
+
+class BindingRow(ResourceRow):
+    """바인딩 행 + 참조하는 Role/ClusterRole 의 규칙. 규칙을 못 읽으면 `rules=None` + `rules_error`."""
+    role_kind: Optional[str] = None
+    role_name: Optional[str] = None
+    rules: Optional[list[RoleRule]] = None
+    rules_error: Optional[str] = None
+
+
+class BindingListResponse(ResourceListResponse):
+    items: list[BindingRow]
+
+
+_ROLE_RULES_MAX_REFS = 200     # 한 응답에서 규칙을 읽을 참조 Role 상한(대부분 수 개 — 폭주 보호)
+_ROLE_RULES_TIMEOUT = 8.0      # Role 1건 read timeout(초)
+_ROLE_RULES_BUDGET = 15.0      # 전체 규칙 조회 예산(초) — 넘긴 것은 "시간 초과"로 표시
+_ROLE_RULES_WORKERS = 6
+
+
+def _rules_of(obj: dict) -> list[dict]:
+    return [
+        {
+            "api_groups": list(r.get("apiGroups") or []),
+            "resources": list(r.get("resources") or []),
+            "resource_names": list(r.get("resourceNames") or []),
+            "non_resource_urls": list(r.get("nonResourceURLs") or []),
+            "verbs": list(r.get("verbs") or []),
+        }
+        for r in (obj.get("rules") or [])
+    ]
+
+
+def _read_role_rules(rbac, kind: str, namespace: str, name: str) -> dict:
+    """참조 Role(바인딩 NS) / ClusterRole 1건의 규칙 — 실패는 사유 문자열로(호출부가 행에 표시)."""
+    try:
+        if kind == "Role":
+            obj = raw_call(rbac.read_namespaced_role, name, namespace, timeout=(3.05, _ROLE_RULES_TIMEOUT))
+        else:
+            obj = raw_call(rbac.read_cluster_role, name, timeout=(3.05, _ROLE_RULES_TIMEOUT))
+        return {"rules": _rules_of(obj.to_dict())}
+    except ApiException as e:
+        if e.status == 404:
+            return {"error": f"참조하는 {kind} 가 없습니다(삭제됐거나 아직 만들지 않음)"}
+        if e.status == 403:
+            return {"error": f"{kind} 를 읽을 권한이 없습니다"}
+        return {"error": f"{kind} 조회 실패 ({e.status})"}
+    except Exception as e:  # noqa: BLE001
+        return {"error": f"{kind} 조회 실패: {str(e)[:120]}"}
+
+
+def _attach_role_rules(rbac, rows: list[dict]) -> None:
+    """각 바인딩 행에 roleRef 가 가리키는 Role/ClusterRole 규칙을 붙인다(같은 참조는 1회만 읽음).
+
+    RoleBinding 의 `Role` 은 바인딩과 같은 NS 에서 찾고, `ClusterRole` 은 클러스터 전역이다 — 다만
+    RoleBinding 으로 묶인 ClusterRole 권한은 바인딩 NS 안에서만 유효하다(화면이 그렇게 안내한다).
+    ClusterRoleBinding 행(namespace=None)은 항상 ClusterRole 을 참조한다.
+    """
+    refs: dict[tuple, dict] = {}
+    for r in rows:
+        key = (r["role_kind"], r["namespace"] if r["role_kind"] == "Role" else "", r["role_name"])
+        refs.setdefault(key, {})
+    keys = list(refs)
+    skipped = set(keys[_ROLE_RULES_MAX_REFS:])
+    deadline = time.monotonic() + _ROLE_RULES_BUDGET
+    ex = ThreadPoolExecutor(max_workers=_ROLE_RULES_WORKERS, thread_name_prefix="role-rules")
+    try:
+        futs = {k: ex.submit(_read_role_rules, rbac, k[0], k[1], k[2]) for k in keys[:_ROLE_RULES_MAX_REFS]}
+        for k, fut in futs.items():
+            try:
+                refs[k] = fut.result(timeout=max(0.05, deadline - time.monotonic()))
+            except Exception:  # noqa: BLE001 — 예산 초과
+                refs[k] = {"error": "시간 초과로 권한 내용을 읽지 못했습니다 — 새로고침해 보세요"}
+    finally:
+        ex.shutdown(wait=False, cancel_futures=True)
+    for k in skipped:
+        refs[k] = {"error": f"참조 Role 이 {_ROLE_RULES_MAX_REFS}개를 넘어 권한 내용을 생략했습니다"}
+    for r in rows:
+        got = refs[(r["role_kind"], r["namespace"] if r["role_kind"] == "Role" else "", r["role_name"])]
+        r["rules"] = got.get("rules")
+        r["rules_error"] = got.get("error")
+
+
+@router.get("/{cluster_id}/namespaces/{namespace}/cluster-role-bindings", response_model=BindingListResponse)
 def list_namespace_cluster_role_bindings(
     cluster_id: UUID,
     namespace: str,
@@ -1501,6 +1591,7 @@ def list_namespace_cluster_role_bindings(
     RoleBinding 은 NS 안에 있어 종류별 목록으로 보이지만, 이 NS 의 ServiceAccount 에 클러스터 전역
     권한을 주는 ClusterRoleBinding 은 cluster-scoped 라 NS 필터로는 안 잡힌다 — 여기서 골라 준다.
     목록은 watch cache(`resource_version=0`)로 읽고 서버 목록 캐시를 거친다.
+    각 행에는 참조 ClusterRole 의 규칙(`rules`)을 붙인다(`_attach_role_rules`).
     """
     cluster = _require_cluster(cluster_id, db)
     client = _api_client(cluster)
@@ -1513,7 +1604,7 @@ def list_namespace_cluster_role_bindings(
             subs = _ns_subjects(o.subjects, namespace)
             if not subs:
                 continue
-            rows.append(ResourceRow(
+            rows.append(BindingRow(
                 name=o.metadata.name,
                 namespace=None,
                 summary=f"→ {o.role_ref.kind}/{o.role_ref.name}",
@@ -1522,8 +1613,11 @@ def list_namespace_cluster_role_bindings(
                     "subjects": ", ".join(f"{s.kind}/{s.name}" for s in subs),
                 },
                 age_seconds=_age_seconds(o.metadata),
+                role_kind=o.role_ref.kind,
+                role_name=o.role_ref.name,
             ).model_dump())
         rows.sort(key=lambda r: r["name"])
+        _attach_role_rules(rbac, rows)
         truncated = bool(res.metadata._continue) if res.metadata else False
         return {"rows": rows, "truncated": truncated}
 
@@ -1533,12 +1627,12 @@ def list_namespace_cluster_role_bindings(
         raise _list_http_error("ClusterRoleBinding", e)
     columns = [ColumnDef(key="role", label="Role"), ColumnDef(key="subjects", label="이 NS 의 Subjects")]
     rows = data["rows"]
-    return ResourceListResponse(kind="clusterrolebindings", columns=columns, count=len(rows),
-                                truncated=data["truncated"], items=rows,
-                                cache=meta["cache"], cache_age_seconds=meta["age"])
+    return BindingListResponse(kind="clusterrolebindings", columns=columns, count=len(rows),
+                               truncated=data["truncated"], items=rows,
+                               cache=meta["cache"], cache_age_seconds=meta["age"])
 
 
-@router.get("/{cluster_id}/namespaces/{namespace}/external-role-bindings", response_model=ResourceListResponse)
+@router.get("/{cluster_id}/namespaces/{namespace}/external-role-bindings", response_model=BindingListResponse)
 def list_namespace_external_role_bindings(
     cluster_id: UUID,
     namespace: str,
@@ -1550,6 +1644,7 @@ def list_namespace_external_role_bindings(
     이 NS 의 ServiceAccount 가 다른 NS 안에서 갖는 권한이다. 바인딩이 그 NS 에 있어 이 NS 의
     RoleBinding 목록(종류별 NS 필터)으로는 안 잡힌다. 전 NS RoleBinding 을 watch cache
     (`resource_version=0`)로 한 번 읽어 고르고, 결과는 서버 목록 캐시를 거친다.
+    각 행에는 roleRef 가 가리키는 Role/ClusterRole 의 규칙(`rules`)을 붙인다(`_attach_role_rules`).
     """
     cluster = _require_cluster(cluster_id, db)
     client = _api_client(cluster)
@@ -1564,7 +1659,7 @@ def list_namespace_external_role_bindings(
             subs = _ns_subjects(o.subjects, namespace)
             if not subs:
                 continue
-            rows.append(ResourceRow(
+            rows.append(BindingRow(
                 name=o.metadata.name,
                 namespace=o.metadata.namespace,
                 summary=f"→ {o.role_ref.kind}/{o.role_ref.name}",
@@ -1573,8 +1668,11 @@ def list_namespace_external_role_bindings(
                     "subjects": ", ".join(f"{s.kind}/{s.name}" for s in subs),
                 },
                 age_seconds=_age_seconds(o.metadata),
+                role_kind=o.role_ref.kind,
+                role_name=o.role_ref.name,
             ).model_dump())
         rows.sort(key=lambda r: (r["namespace"] or "", r["name"]))
+        _attach_role_rules(rbac, rows)
         truncated = bool(res.metadata._continue) if res.metadata else False
         return {"rows": rows, "truncated": truncated}
 
@@ -1584,9 +1682,9 @@ def list_namespace_external_role_bindings(
         raise _list_http_error("RoleBinding", e)
     columns = [ColumnDef(key="role", label="Role"), ColumnDef(key="subjects", label="이 NS 의 Subjects")]
     rows = data["rows"]
-    return ResourceListResponse(kind="rolebindings", columns=columns, count=len(rows),
-                                truncated=data["truncated"], items=rows,
-                                cache=meta["cache"], cache_age_seconds=meta["age"])
+    return BindingListResponse(kind="rolebindings", columns=columns, count=len(rows),
+                               truncated=data["truncated"], items=rows,
+                               cache=meta["cache"], cache_age_seconds=meta["age"])
 
 
 @router.get("/{cluster_id}/crds/{group}/{version}/{plural}")

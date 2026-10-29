@@ -74,14 +74,32 @@ def env(monkeypatch):
          "subjects": [{"kind": "User", "name": "alice"}]},
     ]})
     lists = {"crb": crbs, "rb": rbs}
+    role_reads: list[tuple] = []
+
+    def fake_raw_call(fn, *a, **kw):
+        if fn == "read_crole" and a == ("admin",):   # ClusterRoleBinding team-a-admin → ClusterRole/admin
+            role_reads.append(("ClusterRole", *a))
+            return K8sObj({"rules": [{"apiGroups": ["*"], "resources": ["*"], "verbs": ["*"]}]})
+        if fn == "read_crole":       # ClusterRole/edit
+            role_reads.append(("ClusterRole", *a))
+            return K8sObj({"rules": [
+                {"apiGroups": ["apps"], "resources": ["deployments"], "verbs": ["get", "update"]},
+                {"nonResourceURLs": ["/healthz"], "verbs": ["get"]},
+            ]})
+        if fn == "read_role":        # Role/viewer @team-c — 지워진 Role
+            role_reads.append(("Role", *a))
+            raise ApiException(status=404)
+        return lists[fn]
+
     monkeypatch.setattr(kr.k8s_client, "RbacAuthorizationV1Api",
-                        lambda c: SimpleNamespace(list_cluster_role_binding="crb", list_role_binding_for_all_namespaces="rb"))
-    monkeypatch.setattr(kr, "raw_call", lambda fn, *a, **kw: lists[fn])
+                        lambda c: SimpleNamespace(list_cluster_role_binding="crb", list_role_binding_for_all_namespaces="rb",
+                                                  read_cluster_role="read_crole", read_namespaced_role="read_role"))
+    monkeypatch.setattr(kr, "raw_call", fake_raw_call)
     monkeypatch.setattr(kr, "_list_cache", SWRCache(fresh=5, stale=30, max_entries=16, store=None, name="t"))
     monkeypatch.setattr(kr, "cache_group", lambda client, cid: str(cid))
     monkeypatch.setattr(kr, "_require_cluster", lambda cid, db: SimpleNamespace(id=cid))
     monkeypatch.setattr(kr, "_api_client", lambda cluster: object())
-    return SimpleNamespace(calls=calls)
+    return SimpleNamespace(calls=calls, role_reads=role_reads)
 
 
 def test_custom_resources_probe_only_namespaced_crds_with_limit_1(env):
@@ -118,3 +136,24 @@ def test_external_role_bindings_from_other_namespaces_only(env):
     assert [(r.namespace, r.name) for r in out.items] == [("team-b", "deployer-edit"), ("team-c", "all-sa-view")]
     assert out.items[0].cols == {"role": "ClusterRole/edit", "subjects": "ServiceAccount/deployer"}
     assert out.items[1].cols["subjects"] == "Group/system:serviceaccounts:team-a"
+
+
+def test_external_role_bindings_carry_referenced_role_rules(env):
+    out = kr.list_namespace_external_role_bindings(uuid.uuid4(), "team-a", db=None)
+    edit, viewer = out.items
+    # ClusterRole 은 이름으로, Role 은 바인딩 NS 에서 찾는다
+    assert sorted(env.role_reads) == [("ClusterRole", "edit"), ("Role", "viewer", "team-c")]
+    assert (edit.role_kind, edit.role_name, edit.rules_error) == ("ClusterRole", "edit", None)
+    assert [(r.api_groups, r.resources, r.verbs) for r in edit.rules] == [
+        (["apps"], ["deployments"], ["get", "update"]), ([], [], ["get"])]
+    assert edit.rules[1].non_resource_urls == ["/healthz"]
+    # 참조 Role 이 없으면 규칙 대신 사유
+    assert viewer.rules is None and "없습니다" in viewer.rules_error
+
+
+def test_cluster_role_bindings_carry_cluster_role_rules(env):
+    out = kr.list_namespace_cluster_role_bindings(uuid.uuid4(), "team-a", db=None)
+    (row,) = out.items
+    assert env.role_reads == [("ClusterRole", "admin")]
+    assert (row.role_kind, row.role_name, row.rules_error) == ("ClusterRole", "admin", None)
+    assert [(r.api_groups, r.resources, r.verbs) for r in row.rules] == [(["*"], ["*"], ["*"])]
