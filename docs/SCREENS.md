@@ -146,8 +146,8 @@ hover 시 flyout 자체가 라벨을 보여주므로 이름만 뜨는 중복 툴
   - **[2026-10-12, 상용화 재검토 P2 후속]** 배치잡·플레이북·수동 항목 「클러스터 상태에 반영」(opt-in, `affects_cluster_status`), 플레이북 실행 제한 시간(`/playbooks`), 목록 보기·문제만 보기, 배치잡 런북 실행기 표기 정정.
   - **[2026-10-12, 상용화 재검토]** "다수 버그 + 직관성 부족으로 상용화 불가" 판정에 따른 전면 재검토 — 백엔드 테넌트 격리(행 실행·미리 실행·새 플레이북·수행 로그·항목 상세), 설정 편집 값 유실(camelCase), 스케줄러(즉시 발화·중복 발화·비활성 실행·재시작 재시드·stale 오인), 셀 실행 비동기화 + 실시간 실행 로그, 확인창 이중 실행, 그리드/모달/마법사 직관성(범례·신선도·상태/주기 분리·텍스트 실행 버튼·CronInput·3단계 마법사) 반영. 보고서: `docs/03-analysis/check-matrix-commercial-review.md`.
   - **[2026-09-08, D-061~D-065]** 이 화면(플랫폼 현황 탭)을 로그인 직후 첫 화면으로: 홈 기본 탭 `work`→`platform` 전환 + 네비게이션에 진입 경로 추가. 행의 소스 배지("핵심/Deep/Addon/수동")를 실행 기술(K8s API/kubectl/HTTP/PromQL/스냅샷/SSH bash·python/Ansible) × 컴포넌트(기존 category) 2축으로 재명명. 클러스터 열 헤더·행 이름에 드릴다운 링크 추가(`/clusters/:id`, `/checks/:itemId` 신설). 항목 추가를 "실행기술→종류→컴포넌트→값→테스트(필수)→적용" 마법사로 재구성. 설계안: [점검 체계 통합 설계안](https://claude.ai/code/artifact/9d204e4a-c106-48e8-91b8-4d0b37ebc250)
-    - **[2026-09-09, 로드맵 1단계 완료분]** 홈 기본 탭 `work`→`platform` 전환 완료. 행 소스 배지를 `ExecTechBadge`(실행 기술: K8s API/kubectl/HTTP/PromQL/스냅샷/bash(SSH)/수동)로 교체 완료 — `CheckMatrixItem.execTech`(백엔드 `_resolve_exec_tech()` 가 `DeepCheckTypeSpec.exec_tech`/addon `EXEC_TECH`/core_bundle/manual 을 해석). 클러스터 열 헤더 이름을 클릭하면 기존 `/ops-checks/:clusterId` 로 이동(신규 `/clusters/:id` 전용 라우트는 다음 단계). 잔여: 네비게이션 진입 경로, 항목명 드릴다운(`/checks/:itemId`), 등록 마법사(실행기술→종류→컴포넌트→값→테스트→적용).
-    - **[2026-09-09, 로드맵 2단계 완료분]** "항목 추가"(`CheckMatrixItemFormModal`)가 신규 항목에 한해 **실행기술→종류→세부정보→값 설정→테스트→적용** 6단계 마법사(`RegisterItemWizard`)로 바뀌었다 — 종류 목록은 `GET /check-matrix/exec-techs` 카탈로그에서 오고(하드코딩 제거), "테스트" 단계에서 `POST /check-matrix/items/preview` 로 저장 없이 1회 실행해볼 수 있다(클러스터가 있으면 다음 단계로 가려면 최소 1회 테스트 필요). 커스텀 점검(예: 커스텀 HTTP/kubectl/PromQL)을 새로 등록하면 값 설정 단계에서 입력한 임계값/파라미터로 글로벌 점검 정의가 함께 생성돼 등록 즉시 실행 가능하다. 기존 항목 수정은 여전히 단일 폼(`EditItemForm`)이지만 애드온/점검 종류 드롭다운이 같은 카탈로그를 쓴다. 셀 상세의 "실행 방식" 탭에서 임계값을 편집하면 그 정의가 글로벌일 때 클러스터 전용 사본이 자동 생성된다(copy-on-write) — 예전처럼 전 클러스터에 실수로 적용되지 않는다. 잔여: 네비게이션 진입 경로, 항목명 드릴다운, `/clusters/:id`·`/checks/:itemId` 신규 라우트, cron 3곳 분산 통합.
+    - **[2026-09-09, 로드맵 1단계 완료분]** 홈 기본 탭 `work`→`platform` 전환 완료. 행 소스 배지를 `ExecTechBadge`(실행 기술: K8s API/kubectl/HTTP/PromQL/스냅샷/bash(SSH)/수동)로 교체 완료 — `CheckMatrixItem.execTech`(백엔드 `_resolve_exec_tech()` 가 `DeepCheckTypeSpec.exec_tech`/addon `EXEC_TECH`/core_bundle/manual 을 해석). 클러스터 열 헤더 이름을 클릭하면 당시엔 `/ops-checks/:clusterId` 로 이동했다. 당시 잔여(네비게이션 진입 경로·항목명 드릴다운 `/checks/:itemId`·등록 마법사)는 이후 모두 반영됐다 — 현재 클러스터명은 K8s 클러스터 허브 개요(`/k8s/:clusterId/overview`, D-240), 항목명은 `/checks/:itemId` 로 간다.
+    - **[2026-09-09, 로드맵 2단계 완료분]** "항목 추가"(`CheckMatrixItemFormModal`)가 신규 항목에 한해 **실행기술→종류→세부정보→값 설정→테스트→적용** 6단계 마법사(`RegisterItemWizard`)로 바뀌었다 — 종류 목록은 `GET /check-matrix/exec-techs` 카탈로그에서 오고(하드코딩 제거), "테스트" 단계에서 `POST /check-matrix/items/preview` 로 저장 없이 1회 실행해볼 수 있다(클러스터가 있으면 다음 단계로 가려면 최소 1회 테스트 필요). 커스텀 점검(예: 커스텀 HTTP/kubectl/PromQL)을 새로 등록하면 값 설정 단계에서 입력한 임계값/파라미터로 글로벌 점검 정의가 함께 생성돼 등록 즉시 실행 가능하다. 기존 항목 수정은 여전히 단일 폼(`EditItemForm`)이지만 애드온/점검 종류 드롭다운이 같은 카탈로그를 쓴다. 셀 상세의 "실행 방식" 탭에서 임계값을 편집하면 그 정의가 글로벌일 때 클러스터 전용 사본이 자동 생성된다(copy-on-write) — 예전처럼 전 클러스터에 실수로 적용되지 않는다. 당시 잔여(네비게이션 진입 경로·항목명 드릴다운·`/clusters/:id`·`/checks/:itemId` 신규 라우트·cron 3곳 분산 통합)는 이후 모두 반영됐다 — cron 편집은 `/checks/:itemId` "실행 주기" 탭으로 통합(D-065), 클러스터 상세는 허브 개요 뷰가 됐다(D-240).
     - **[2026-09-17]** 등록 마법사가 "정해진 카드"에 갇히지 않는다 — 종류 단계 아래 **직접 만들기** 구역(서버가 `GET /check-matrix/exec-techs` 의 `creatable` 로 알려주므로 프론트 하드코딩 없음)에서 ① **새 플레이북 만들어 등록**(Ansible): `플레이북 작성` 단계가 추가돼 이름·YAML(직접 작성 / `.yml` 파일 업로드 / 플레이북 라이브러리에서 불러오기)·태그·extra vars·실행할 클러스터(다중)를 지정하면 저장 시 `AnsiblePlaybookFile` + 클러스터별 `Playbook` + 매트릭스 행이 한 번에 만들어진다 ② **커스텀 점검(HTTP/kubectl/PromQL) 새 인스턴스**: 같은 점검 종류로 대상만 다른 카드를 여러 장 만들 수 있다. 값 설정 단계의 임계값/파라미터는 **기본 등록 종류에서도 더 이상 잠기지 않고**(예전엔 `seedDefault` 면 readonly), `이 항목 전용 설정으로 저장` 스위치로 행 전용 정의(`CheckMatrixItem.definitionId`)를 만들지 공유할지 고른다. 테스트 단계는 결과 아래 **로그 보기**(`LogViewer`) 로 상세 실행 로그를 펼쳐 주고, 새 플레이북은 기본 `ansible --check`(dry-run)로 돌린 뒤 체크박스를 꺼야 실제 실행된다. 항목 수정 폼(`EditItemForm`)에도 실행 설정 섹션이 생겨 기본 등록 카드의 임계값/파라미터를 바로 확인·수정하고 `이 항목 전용 설정으로 분리` 할 수 있다(`GET|PUT /check-matrix/items/{id}/source-config`).
     - **[2026-09-15, D-066 완료]** 실행기술 목록에 **SSH(bash/python)**·**Ansible** 이 추가됐다 —
       단, deep_check/addon 처럼 새 "타입"을 만드는 게 아니라 `/batch-jobs`·`/playbooks` 화면에
@@ -376,7 +376,7 @@ hover 시 flyout 자체가 라벨을 보여주므로 이름만 뜨는 중복 툴
   - **[2026-09-22] 요약 영역 압축 — 자원 탭을 화면 중앙으로, 스크롤 최소화** — 요청: 클러스터 요약 카드가 커서 노드별/네임스페이스별 자원 탭이 너무 밑에 나오고 잘려 보임. 카드 축소·공간 효율화, POD 용량/상태 카드는 없애거나 1/10 크기로. 반영: 기본 화면을 칩 한 줄 `SummaryStrip`(노드/NS/파드/배치여유/할당·사용효율/여유·낭비/Run·Pend·Err/req미설정)으로 대체 — POD 용량·상태는 칩으로 흡수. 기존 큰 카드(`SummarySection`+`PodCapacityStatusCards`, 스케줄 계산기 포함)는 `요약 상세` 토글(기본 접힘, localStorage 유지)로만 펼침. 탭 바 sticky. ([PR #709](https://github.com/riverjin839/devops_management/pull/709))
   - **[2026-09-23] 노드 상세 정확도 — NS 가 많은 운영 노드에서 사용량이 비던 문제** — 첫 반영에서는 노드에 걸린 NS 가 12개를 넘으면 cluster-wide metrics 1회로 떨어졌는데, 운영 워커는 DaemonSet 만으로도 NS 가 10개를 쉽게 넘고 대형 클러스터에서 cluster-wide metrics 는 타임아웃으로 빈 결과가 되기 쉬워 **노드 상세의 사용량 열이 통째로 비고** Deployment 귀속도 이름 추정으로 떨어졌다. NS 별 metrics·ReplicaSet 조회를 순차 → **병렬**(8 workers)로 바꾸고 상한을 64 로 올렸다. 상한을 넘는 극단적인 노드는 여전히 근사로 떨어지지만 이제 화면에 그 사실을 표시한다(`owner_approx`). 테스트 `tests/test_allocation_node_pods.py` 추가.
   - **[2026-09-28] 대형 클러스터(376노드·3만 Pod)에서 "자원 집계 중 · 0 Pod 처리됨"에 멈춤** — 요청: 작은 클러스터는 정상인데 가장 큰 클러스터만 집계가 끝나지 않는다. NS 등 단위로 쪼개 누적 연산하면 규모와 무관하게 준실시간이 되지 않나. → 검토 결과 이미 페이지(500 Pod) 단위 누적 구조였고, 병목은 ① Pod 마다 kubernetes 모델 역직렬화(3만 Pod 약 150초 CPU) ② 집계 파드가 죽으면 30분간 인계 불가. **P0 반영**: 원본 JSON 순회(약 70배, `K8S_ALLOC_RAW_LIST`) + heartbeat 인계(`K8S_ALLOC_HEARTBEAT_TIMEOUT`) + 진행 카드 단계 표시. **P1 반영(2026-09-29)**: NS 단위 수집 — NS 단위 metrics 로 대형 클러스터 실사용량, NS 실패 격리(`failed_namespaces` 페이지 안내), 완료 NS Redis 저장 → 인계 시 이어하기, 진행 `ns:<완료>/<전체>`. **P2 반영(2026-09-30)**: Celery NS 롤링 갱신(`K8S_ALLOC_ROLLING`, 기본 viewed) — 오래된 NS 부터 매분 예산(40초)만큼 재수집, 전 NS 가 모이면 개요 스냅샷 게시, 화면은 1분마다 비강제 재조회 + "가장 오래된 NS 데이터 n분 전" 표시, 새로고침은 5분 내 NS 재사용.
-  - 잔여: 실 클러스터 확인 — ① metrics-server 없는 클러스터에서 "사용량 미가용" 폴백 ② NS 수십 개 노드에서 상세 응답 시간(병렬 8 workers 기준).
+  - 잔여(코드 반영은 완료, 운영 환경 확인만 남음): 실 클러스터 확인 — ① metrics-server 없는 클러스터에서 "사용량 미가용" 폴백 ② NS 수십 개 노드에서 상세 응답 시간(병렬 8 workers 기준).
 
 ### 일일 자원 리포트 (`/daily-report`) — 로그인 불필요(공개)
 
@@ -593,7 +593,7 @@ hover 시 flyout 자체가 라벨을 보여주므로 이름만 뜨는 중복 툴
 
 > **허브로 통합(2026-10-23, D-240 3단계)**: 레거시 콘솔 — 옛 URL 은 같은 점검 카탈로그를 종합 상태와 함께 보여 주는 K8s 클러스터 허브 개요 뷰(`/k8s/:clusterId/overview`)로 redirect 된다. 페이지 컴포넌트는 아일랜드 패널 호환으로만 남는다.
 
-> **레거시(2026-10-13, D-129)** — 사이드바 「클러스터 · 점검」그룹에서 제외됐다. 같은 패널을 종합 상태까지 포함해 보여주는 `/clusters/:id` 가 정본이고, 이 라우트는 북마크·아일랜드 패널 호환으로만 유지한다.
+> **레거시(2026-10-13, D-129)** — 사이드바 「클러스터 · 점검」그룹에서 제외됐다. 같은 패널을 종합 상태까지 포함해 보여주는 클러스터 상세가 정본이다(지금은 K8s 클러스터 허브 개요 `/k8s/:clusterId/overview`). 이 라우트는 2026-10-23(D-240 3단계)부터 허브 개요로 redirect 되고, 페이지 컴포넌트는 아일랜드 패널 호환으로만 남는다.
 
 - **파일**: `frontend/src/pages/OpsCheckConsolePage.tsx` (+ `components/common/ClusterSidebar`, `components/common/LogViewer`, `components/common/StatusBadge`)
 - **목적 / UX**: 클러스터 하나를 골라 `deep_check`/`addon`/`batch_job(SSH)`/`playbook(Ansible)` 등 소스가 다른 점검 항목을 하나의 카탈로그 테이블에 모아 놓고, 카테고리(OS/K8s/Storage/Network/앱서비스)·이름 검색으로 필터링해 개별 실행 또는 체크박스 다중 선택 후 일괄 실행할 수 있게 한다. 실행 중 진행 상황을 실시간(폴링)으로 보여주고, 완료된 항목은 모달로 상세 로그(JSON)를 연다.
@@ -616,8 +616,8 @@ hover 시 flyout 자체가 라벨을 보여주므로 이름만 뜨는 중복 툴
   - **[2026-09-08, D-063·D-066]** 이 화면을 `/clusters/:id` 클러스터 상세로 승격: 헤더에 종합 상태+원인 카드 추가, 카탈로그에 core_bundle(기본 점검) 행 포함, 카탈로그 소스에 배치잡(SSH)·플레이북(Ansible) 편입(`ops_check_service.py` 의 "단계 1 이후" 미구현 어댑터), 행별 설정 편집 딥링크. 설계안: [점검 체계 통합 설계안](https://claude.ai/code/artifact/9d204e4a-c106-48e8-91b8-4d0b37ebc250) §1·§5
     - **[2026-09-09, 로드맵 3단계 완료분]** "승격"은 기존 화면을 고치는 대신 카탈로그·실행·로그 UI 를
       `components/ops-check/ClusterOpsCheckPanel.tsx` 로 추출해 신규 `/clusters/:id`(아래 섹션)와
-      공유하는 방식으로 구현했다 — `/ops-checks/:clusterId` 는 레거시 링크·북마크·아일랜드 패널
-      호환을 위해 그대로 남아 있다(내용은 동일한 패널). 종합 상태+원인 카드, core_bundle 행 포함은
+      공유하는 방식으로 구현했다 — `/ops-checks/:clusterId` 는 당시 레거시 링크·북마크·아일랜드 패널
+      호환을 위해 남겨 뒀다(내용은 동일한 패널 — 2026-10-23 D-240 3단계부터 허브 개요로 redirect). 종합 상태+원인 카드, core_bundle 행 포함은
       `/clusters/:id` 쪽에만 추가됐다.
     - **[2026-09-15, D-066 완료]** 배치잡(SSH)·플레이북(Ansible) 카탈로그 편입 처리 —
       `OpsCheckService._catalog_batch_jobs`/`_catalog_playbooks` 가 그 클러스터의 등록된
@@ -641,13 +641,13 @@ hover 시 flyout 자체가 라벨을 보여주므로 이름만 뜨는 중복 툴
   - `ClusterSidebar` `iconOnly` — 다른 per-cluster 화면과 동일 패턴.
   - MacCard "종합 상태" — `StatusBadge`(healthy/warning/critical) + "N개 신호를 종합한 결과입니다" + 원인 목록(source 배지 "핵심 점검 번들"/"애드온"/"심층 점검" + 이름 + 메시지 + 마지막 확인 시각), severity(critical→warning→pending→healthy) 순 정렬. 원인 없음(전부 healthy)이면 "아직 점검 결과가 없습니다"/정상 안내만.
   - 그 아래 `ClusterOpsCheckPanel` — 카탈로그 테이블 + 일괄/개별 실행 + 실행 진행 + 결과 상세 모달(`/ops-checks` 섹션과 동일 컴포넌트, 위 참고).
-  - 헤더에 `/daily-check/review/:clusterId`, `/daily-check/settings` 바로가기 + 일일 리포트 `.md`/`.csv`(`healthApi.exportReport`, 이 클러스터) + Kubeconfig 편집(`KubeconfigEditModal`) + **점검 실행**(애드온 헬스 체크 `POST /health/check/{id}`).
+  - 헤더에 "결과 리뷰"(허브 점검 결과 리뷰 뷰 `/k8s/:clusterId/review`), "점검 항목 관리"(`/daily-check/settings`) 바로가기 + 일일 리포트 `.md`/`.csv`(`healthApi.exportReport`, 이 클러스터) + Kubeconfig 편집(`KubeconfigEditModal`) + **점검 실행**(애드온 헬스 체크 `POST /health/check/{id}`).
   - `RunLogPanel`(+ 로그 보기 토글, `useLogPref('dashboard-health-check')`) — 점검 실행·애드온 ▶·현황 아이템 ▶·플레이북 실행이 공유. 점검 실행은 시작 줄 → 5초 응답 대기 하트비트 → 애드온별 상태·응답 ms·메시지 줄 → 요약 줄.
   - MacCard "애드온" — `AddonGrid`(애드온별 헬스 카드, 단건 ▶·편집·삭제) + "점검 항목" 추가(`AddAddonModal`) + 기본 애드온(etcd Leader/Node Status/Control Plane/CoreDNS) 일괄 추가. 미연결(pending)이면 grayscale 오버레이 안내.
   - MacCard "현황 아이템" — `ClusterItemsGrid`/`ClusterItemModal`(사용자 정의 카드 실행/리사이즈/삭제).
   - (카탈로그 아래) MacCard "플레이북 점검" — `/playbooks` 에서 "클러스터 상세에 표시"로 지정한 이 클러스터 플레이북(`useDashboardPlaybooks`, 백엔드 `show_on_dashboard`) 실행(SSH 자격증명 세션 캐시 + 실행 전 확인)·수정·삭제.
   - MacCard "최근 점검 이력" — `CheckHistoryHeatmap`(이 클러스터 로그만).
-  - 2026-10-22: 구 `/cluster-overview`("클러스터 현황")의 클러스터 단위 기능을 이 화면으로 합쳤다. `/cluster-overview` 는 `/clusters` 로 redirect, 전 클러스터 한눈 보기는 홈 `PlatformStatusMatrix`, 업무 현황 차트는 `/tasks-mgmt` 가 대신한다. 저장된 사이드바 설치 목록·고정 경로의 `/cluster-overview` 는 읽을 때 `/clusters` 로 치환(`services/home_prefs.py` `RETIRED_PATH_ALIASES`).
+  - 2026-10-22: 구 `/cluster-overview`("클러스터 현황")의 클러스터 단위 기능을 이 화면으로 합쳤다. `/cluster-overview` 는 `/clusters` 로 redirect(그 뒤 허브 개요로), 전 클러스터 한눈 보기는 홈 `PlatformStatusMatrix`, 업무 현황 차트는 `/tasks-mgmt` 가 대신한다. 저장된 사이드바 설치 목록·고정 경로의 `/cluster-overview` 는 읽을 때 `/k8s` 로 치환한다(`services/home_prefs.py` `RETIRED_PATH_ALIASES` — 처음엔 `/clusters`, D-240 3단계부터 허브).
 - **Frontend**: `useClusters`, `useClusterStatusBreakdown(clusterId)`(신규 — `clustersApi.getStatusBreakdown`, 30초 폴링, 호출마다 서버가 재집계), `useClusterRouteParam('/clusters', clusters)`(아일랜드 임베드 호환), `useAddons`/`useHealthCheck`/`useCreateAddon`/`useDeleteAddon`/`useAddonHealthCheck`/`useCheckHistoryHeatmap`(`hooks/useCluster.ts`), `useClusterItems`/`useRunClusterItem`/`useUpdateClusterItem`/`useDeleteClusterItem`, `useDashboardPlaybooks`/`useRunPlaybook`/`useDeletePlaybook`/`useToggleDashboard`/`useUpdatePlaybook`, `useRunLog`/`useLogPref`, `useCanOperate`. 카탈로그/실행 훅은 `ClusterOpsCheckPanel` 내부에서 `/ops-checks` 섹션과 동일하게 사용.
 - **Backend**: 애드온·점검 실행·리포트는 `routers/health.py`(`GET /health/addons/{id}`, `POST /health/check/{id}`, `POST /health/check/{id}/addons/{addonId}`, `POST/PUT/DELETE /health/addons...`, `GET /health/report`), 현황 아이템은 `routers/cluster_items.py`, 플레이북은 `routers/playbooks.py`. `GET /api/v1/clusters/{cluster_id}/status-breakdown` — `backend/app/routers/clusters.py`, `services/cluster_status_service.py::recompute()` 를 그대로 다시 실행해 최신 원인 목록을 돌려준다(멱등이라 조회만으로 재계산해도 부작용 없음). 카탈로그/실행 API 는 `/ops-checks` 섹션과 동일.
 - **핵심 기능**:
@@ -757,7 +757,7 @@ hover 시 flyout 자체가 라벨을 보여주므로 이름만 뜨는 중복 툴
   - `sort_order` 로 UI 표시 순서 제어.
 - **요청사항 (수정 요청)**:
   - _(여기에 개선/수정 요청을 직접 적어주세요)_
-  - **[2026-09-08, D-063·D-064·D-065]** 이 화면을 `/checks/:itemId` 항목 상세로 흡수: 탭을 라이프사이클(정의·테스트·적용·실행방식·로그·히스토리) 순으로 재구성, 클러스터별 오버라이드 표(글로벌 값 vs 클러스터 값)를 추가하고 편집 시 클러스터 전용 정의를 copy-on-write 로 자동 생성(현재는 클러스터 전용 정의가 없으면 글로벌 정의를 직접 수정). "미리 실행" 버튼을 매트릭스 항목 등록 마법사의 테스트 단계로도 재사용. 설계안: [점검 체계 통합 설계안](https://claude.ai/code/artifact/9d204e4a-c106-48e8-91b8-4d0b37ebc250) §1·§3·§8
+  - **[2026-09-08, D-063·D-064·D-065]** 이 화면을 `/checks/:itemId` 항목 상세로 흡수: 탭을 라이프사이클(정의·테스트·적용·실행방식·로그·히스토리) 순으로 재구성, 클러스터별 오버라이드 표(글로벌 값 vs 클러스터 값)를 추가하고 편집 시 클러스터 전용 정의를 copy-on-write 로 자동 생성(요청 당시엔 클러스터 전용 정의가 없으면 글로벌 정의를 직접 수정했다 — 이후 셀 상세 "실행 방식" 탭의 자동 사본과 `/checks/:itemId` 의 "전용으로 분리"·"글로벌로 복귀"로 반영 완료. 이 화면은 전 항목 검색·일괄 관리용으로 유지). "미리 실행" 버튼을 매트릭스 항목 등록 마법사의 테스트 단계로도 재사용. 설계안: [점검 체계 통합 설계안](https://claude.ai/code/artifact/9d204e4a-c106-48e8-91b8-4d0b37ebc250) §1·§3·§8
 
 ### 파드 병목 진단 (`/pod-bottleneck`)
 
