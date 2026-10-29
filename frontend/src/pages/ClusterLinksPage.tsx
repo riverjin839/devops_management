@@ -17,7 +17,7 @@ import { useClusterLinks, useUpdateClusterLinks } from '@/hooks/useUiSettings';
 import { useAuthStore, hasRole } from '@/stores/authStore';
 import { useTableViewStore, TS } from '@/stores/tableViewStore';
 import {
-  ViewModeBar, EmptyState, ErrorState, LoadingState, ConfirmDialog, PageHeader, PageShell, StatTile, StatTileRow,
+  ViewModeBar, EmptyState, ErrorState, LoadingState, ConfirmDialog, PageHeader, PageShell,
   useToast,
 } from '@/components/common';
 import { MacCard } from '@/components/ui/MacCard';
@@ -682,15 +682,19 @@ export function ClusterLinksPage() {
         <PageHeader
           icon={Link2}
           title="클러스터 주요 링크"
-          description="운영 클러스터별 대시보드 · 모니터링 · 관리 콘솔을 한곳에서 빠르게 접근하세요."
+          description={
+            <>
+              운영 클러스터별 대시보드 · 모니터링 · 관리 콘솔을 한곳에서 빠르게 접근하세요.{' '}
+              {/* 한 줄 중립 요약 — KPI 타일 행 대체(DESIGN_SYSTEM.md §12.12-2) */}
+              {linksQ.isSuccess && (
+                <span className="tabular-nums">
+                  클러스터 {orderedGroups.length}개 · 링크 {totalLinks}개 · 공통 {commonLinks.length}개
+                </span>
+              )}
+            </>
+          }
           actions={<ViewModeBar modes={VIEW_MODES} active={layout} onChange={changeLayout} />}
         />
-
-        <StatTileRow>
-          <StatTile label="전체 링크" value={totalLinks} />
-          <StatTile label="클러스터" value={orderedGroups.length} />
-          <StatTile label="공통 링크" value={commonLinks.length} />
-        </StatTileRow>
 
         {/* Search */}
         <div className="relative">

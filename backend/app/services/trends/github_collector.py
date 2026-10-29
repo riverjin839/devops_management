@@ -1,10 +1,11 @@
 from datetime import datetime, timezone
+from urllib.parse import urlparse
 
 import httpx
 
 from app.config import settings
 from app.services.trends.base import BaseTrendCollector, CollectedItem, TrendCollectError
-from app.services.trends.url_guard import make_client, validate_github_slug
+from app.services.trends.url_guard import guarded_get, validate_github_slug
 
 # GitHub slug → display name + category
 GITHUB_SOURCES: dict[str, tuple[str, str]] = {
@@ -17,18 +18,24 @@ GITHUB_SOURCES: dict[str, tuple[str, str]] = {
 class GitHubReleaseCollector(BaseTrendCollector):
     """GitHub Releases API 를 통해 릴리즈 노트 수집.
 
-    API 주소·토큰은 AppSetting ``trends.settings``(env 폴백) — ``TrendService`` 가 넘긴다.
-    API 주소는 admin 이 정한 값이라(폐쇄망 GHE 는 내부 주소) SSRF 가드 대상이 아니고, 대신 slug 를
-    엄격히 검증해 경로 조작을 막는다. 실패는 사유와 함께 ``TrendCollectError`` 로 올린다.
+    API 주소·토큰·허용 호스트는 AppSetting ``trends.settings``(env 폴백) — ``TrendService`` 가 넘긴다.
+    요청은 RSS 와 같은 SSRF 가드(``url_guard.guarded_get``)를 거친다 — 매 hop 검사한 IP 로 고정 연결,
+    redirect 재검사, 본문 상한, 다른 origin 으로 redirect 되면 토큰 헤더 제거. admin 이 정한 API 주소의
+    호스트는 허용 호스트로 취급해(폐쇄망 GHE 는 내부 주소) 차단하지 않되 주소 고정은 똑같이 하고,
+    redirect 로 넘어가는 **다른** 내부 호스트는 허용 호스트 설정에 없으면 막는다. slug 는 엄격히 검증해
+    경로 조작을 막는다. 실패는 사유와 함께 ``TrendCollectError`` 로 올린다.
     """
 
-    def __init__(self, api_url: str | None = None, token: str | None = None):
+    def __init__(self, api_url: str | None = None, token: str | None = None,
+                 allowed_hosts: list[str] | None = None):
         headers = {"Accept": "application/vnd.github+json", "X-GitHub-Api-Version": "2022-11-28"}
         tok = token if token is not None else (settings.trends_github_token or None)
         if tok:
             headers["Authorization"] = f"Bearer {tok}"
         self._headers = headers
         self._api_url = (api_url or settings.trends_github_api_url).rstrip("/")
+        api_host = (urlparse(self._api_url).hostname or "").lower()
+        self._allowed_hosts = [*(allowed_hosts or []), *([api_host] if api_host else [])]
 
     async def collect(self, url: str, since: datetime) -> list[CollectedItem]:
         """url = 'owner/repo' 슬러그"""
@@ -40,13 +47,13 @@ class GitHubReleaseCollector(BaseTrendCollector):
         api_url = f"{self._api_url}/repos/{slug}/releases?per_page=20"
 
         try:
-            # 저장소 이름이 바뀌면 301 — 따라간다(httpx 는 다른 origin 으로 갈 때 Authorization 을 뗀다).
-            async with make_client(timeout=30, follow_redirects=True) as client:
-                r = await client.get(api_url, headers=self._headers)
-        except httpx.TimeoutException:
-            raise TrendCollectError("GitHub API 응답 시간 초과(30초)") from None
-        except httpx.HTTPError as e:
-            raise TrendCollectError(f"GitHub API 연결 실패 — {type(e).__name__}: {str(e)[:200]}") from None
+            # 저장소 이름이 바뀌면 301 — guarded_get 이 hop 마다 다시 검사하며 따라간다(다른 origin 으로
+            # 가면 Authorization 을 뗀다). 4xx/5xx 는 응답으로 받아 GitHub 전용 사유로 바꾼다.
+            r = await guarded_get(api_url, allowed_hosts=self._allowed_hosts, headers=self._headers,
+                                  timeout=30, raise_for_status=False)
+        except TrendCollectError as e:
+            # 차단(UrlBlocked)은 그 유형을 유지한다 — 사유 앞에 출처만 붙인다.
+            raise type(e)(f"GitHub API {e}") from None
 
         if r.status_code >= 400:
             raise TrendCollectError(_http_reason(r, slug))

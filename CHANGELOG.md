@@ -10,6 +10,15 @@
 
 1.79.1 이후 main 에 병합된 변경 (다음 릴리스 후보).
 
+### Fixed
+- **Jira 업무 연동 테넌트 격리**: 새로고침·Jira 내보내기·연결 해제·재연결·Confluence 동기화·Jira 이슈 생성 등 업무 단위 Jira 동작이 볼 수 없는 업무(다른 테넌트·비공개 프로젝트)에는 없는 업무와 같은 404 로 막힌다. 링크 검증은 보이는 업무만 대상으로 하고, Jira 이슈를 키로 지울 때 보이지 않는 업무의 연결은 건드리지 않는다. Backend: `jira.py` `_get_visible_item`.
+- **기술 동향 GitHub 수집 SSRF 방어**: GitHub 릴리스 수집도 RSS 와 같이 검사한 IP 로 연결·redirect 마다 재검사·본문 상한을 적용하고, 다른 출처로 redirect 되면 토큰 헤더를 보내지 않는다. 관리자가 설정한 GitHub API 주소의 호스트(사내 GHE)는 허용 호스트로 본다. Backend: `github_collector` → `url_guard.guarded_get(raise_for_status=False)`.
+- **옛 영향 분석 기록 재분류**: 이전 온톨로지 화면이 `config_change`·`warning` 으로 남긴 영향 분석 기록을 부팅 시 한 번 `impact_simulation`·`info` 로 바꿔 장애 분석 근거(RAG)에서 빠지게 한다.
+- **서비스 아키텍처 배치 — 탭 닫기 저장**: 탭을 닫거나 새로고침할 때 남은 노드 배치를 `keepalive` 요청으로 보내 유실을 줄였다.
+
+### Changed
+- **클러스터 주요 링크 헤더**: KPI 타일 행을 없애고 페이지 설명 끝에 "클러스터 N개 · 링크 M개 · 공통 K개" 한 줄 요약으로 바꿨다.
+
 ## [1.79.1] - 2026-10-29
 
 ### Fixed

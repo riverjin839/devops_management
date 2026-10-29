@@ -21,6 +21,10 @@ from app.models.work_item import WorkItem  # noqa: E402
 from app.main import _ensure_pgvector_extension, _run_migrations  # noqa: E402
 import app.routers.jira as jira_router  # noqa: E402
 from app.routers.jira import provision_work_item  # noqa: E402
+from app.services.tenant_scope import TenantScope  # noqa: E402
+
+# 엔드포인트를 직접 부르므로 Depends 주입 대신 전체 가시 범위를 넘긴다(테넌트 판정 자체는 test_jira_item_visibility).
+_ALL_SCOPE = TenantScope(is_admin=True, tenant_ids=frozenset())
 from app.schemas.jira import ProvisionRequest  # noqa: E402
 
 
@@ -122,7 +126,7 @@ async def test_partial_failure_persists_status_and_error(db, monkeypatch):
     res = await provision_work_item(
         ProvisionRequest(work_item_id=str(item.id), remember_preset=False,
                          project_key="OPS", space_key="OPS"),
-        db, _Actor(),
+        db, _Actor(), scope=_ALL_SCOPE,
     )
     assert res.status == "partial"
     assert res.jira_key == key
@@ -152,7 +156,7 @@ async def test_retry_skips_already_succeeded_jira_side(db, monkeypatch):
     res = await provision_work_item(
         ProvisionRequest(work_item_id=str(item.id), remember_preset=False,
                          project_key="OPS", space_key="OPS"),
-        db, _Actor(),
+        db, _Actor(), scope=_ALL_SCOPE,
     )
     assert res.status == "ok"
     assert jira_svc.calls == 0          # Jira 는 이미 연결돼 있어 호출조차 안 됨
@@ -182,7 +186,7 @@ async def test_retry_skips_already_succeeded_confluence_side(db, monkeypatch):
     res = await provision_work_item(
         ProvisionRequest(work_item_id=str(item.id), remember_preset=False,
                          project_key="OPS", space_key="OPS"),
-        db, _Actor(),
+        db, _Actor(), scope=_ALL_SCOPE,
     )
     assert res.status == "ok"
     assert conf_svc.calls == 0
@@ -205,7 +209,7 @@ async def test_mutual_link_runs_only_when_confluence_created_now(db, monkeypatch
     res = await provision_work_item(
         ProvisionRequest(work_item_id=str(item.id), remember_preset=False,
                          project_key="OPS", space_key="OPS"),
-        db, _Actor(),
+        db, _Actor(), scope=_ALL_SCOPE,
     )
     assert res.status == "ok"
     assert len(jira_svc.update_calls) == 1
@@ -225,7 +229,7 @@ async def test_auth_failure_sets_auth_issue_flags(db, monkeypatch):
     res = await provision_work_item(
         ProvisionRequest(work_item_id=str(item.id), remember_preset=False,
                          project_key="OPS", space_key="OPS"),
-        db, _Actor(),
+        db, _Actor(), scope=_ALL_SCOPE,
     )
     assert res.status == "error"
     assert res.jira_auth_issue is True
@@ -249,7 +253,7 @@ async def test_epic_link_applied_persists_epic_key(db, monkeypatch):
     res = await provision_work_item(
         ProvisionRequest(work_item_id=str(item.id), remember_preset=False,
                          project_key="OPS", space_key="OPS", epic_key="OPS-1"),
-        db, _Actor(),
+        db, _Actor(), scope=_ALL_SCOPE,
     )
     assert res.status == "ok"
     assert res.jira_detail == ""
@@ -274,7 +278,7 @@ async def test_epic_link_not_applied_skips_epic_key_and_warns(db, monkeypatch):
     res = await provision_work_item(
         ProvisionRequest(work_item_id=str(item.id), remember_preset=False,
                          project_key="OPS", space_key="OPS", epic_key="OPS-1"),
-        db, _Actor(),
+        db, _Actor(), scope=_ALL_SCOPE,
     )
     assert res.status == "ok"  # 이슈 생성 자체는 성공
     assert res.jira_key == key
@@ -297,7 +301,7 @@ async def test_create_issue_auth_failed_propagates_to_jira_auth_issue(db, monkey
     res = await provision_work_item(
         ProvisionRequest(work_item_id=str(item.id), remember_preset=False,
                          project_key="OPS", space_key="OPS"),
-        db, _Actor(),
+        db, _Actor(), scope=_ALL_SCOPE,
     )
     assert res.status == "partial"
     assert res.jira_auth_issue is True

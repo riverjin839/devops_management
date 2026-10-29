@@ -639,7 +639,12 @@ def test_rss_drops_items_with_non_http_links(monkeypatch):
     assert [i.url for i in items] == ["https://pub.example/ok", "http://pub.example/ok2"]
 
 
+def _gh_release(tag="v1.0.0", url="https://ghe.corp/o/r/releases/v1"):
+    return [{"tag_name": tag, "html_url": url, "published_at": "2030-01-01T00:00:00Z", "body": "b"}]
+
+
 def test_github_rate_limit_raises_reason(monkeypatch):
+    _public(monkeypatch)
     _transport(lambda req: httpx.Response(403, headers={"x-ratelimit-remaining": "0"},
                                           json={"message": "API rate limit exceeded"}), monkeypatch)
     with pytest.raises(TrendCollectError, match="레이트 리밋"):
@@ -647,21 +652,128 @@ def test_github_rate_limit_raises_reason(monkeypatch):
             "kubernetes/kubernetes", datetime(2020, 1, 1)))
 
 
+@pytest.mark.parametrize("status,headers,body,expected", [
+    (429, {}, {"message": "rate limit"}, "레이트 리밋"),
+    (401, {}, {"message": "Bad credentials"}, "인증 실패"),
+    (404, {}, {"message": "Not Found"}, "'o/r' 를 찾을 수 없습니다"),
+    (500, {}, {"message": "boom"}, "GitHub API HTTP 500"),
+])
+def test_github_http_errors_keep_specific_reasons(monkeypatch, status, headers, body, expected):
+    _public(monkeypatch)
+    _transport(lambda req: httpx.Response(status, headers=headers, json=body), monkeypatch)
+    with pytest.raises(TrendCollectError, match=expected):
+        _run(GitHubReleaseCollector(api_url="https://api.github.com", token="t").collect(
+            "o/r", datetime(2020, 1, 1)))
+
+
 def test_github_uses_settings_api_url_and_token(db, monkeypatch):
+    calls = _public(monkeypatch)
     seen = {}
 
     def handler(req):
-        seen["url"] = str(req.url)
+        seen["path"] = req.url.raw_path.decode()
+        seen["host"] = req.headers.get("host")
         seen["auth"] = req.headers.get("authorization")
-        return httpx.Response(200, json=[{"tag_name": "v1.0.0", "html_url": "https://ghe.corp/o/r/releases/v1",
-                                          "published_at": "2030-01-01T00:00:00Z", "body": "b"}])
+        return httpx.Response(200, json=_gh_release())
     _transport(handler, monkeypatch)
     trend_settings.update(db, github_api_url="https://ghe.corp/api/v3/", github_token="s3cret")
     svc = TrendService(db)
     items = _run(svc._github.collect("o/r", datetime(2020, 1, 1)))
-    assert seen["url"].startswith("https://ghe.corp/api/v3/repos/o/r/releases")
+    assert seen["path"].startswith("/api/v3/repos/o/r/releases")
+    assert seen["host"] == "ghe.corp" and calls == ["ghe.corp"]
     assert seen["auth"] == "Bearer s3cret"
     assert items[0].version == "v1.0.0"
+
+
+def test_github_request_is_pinned_and_redirect_rechecked(monkeypatch):
+    """GitHub 수집도 RSS 와 같은 가드 — 검사한 IP 로 고정 연결(Host/SNI = 원래 호스트), redirect hop 마다
+    다시 해석·검사, 내부 대역으로 넘어가면 차단."""
+    answers = {"api.github.com": ["140.82.112.6"], "moved.example": ["185.199.108.1"],
+               "evil.example": ["169.254.169.254"]}
+    calls = []
+
+    async def fake_resolve(host, port):
+        calls.append(host)
+        return answers[host]
+    monkeypatch.setattr(url_guard, "_resolve", fake_resolve)
+    seen = []
+
+    def handler(req):
+        seen.append((req.url.host, req.headers.get("host"), req.extensions.get("sni_hostname"),
+                     req.headers.get("authorization")))
+        if req.headers.get("host") == "api.github.com":
+            return httpx.Response(301, headers={"location": "https://moved.example/repos/o/r2/releases"})
+        return httpx.Response(200, json=_gh_release())
+    _transport(handler, monkeypatch)
+    items = _run(GitHubReleaseCollector(api_url="https://api.github.com", token="tok").collect(
+        "o/r", datetime(2020, 1, 1)))
+    assert items and calls == ["api.github.com", "moved.example"]
+    assert seen[0] == ("140.82.112.6", "api.github.com", "api.github.com", "Bearer tok")
+    # 다른 origin 으로 넘어간 hop 은 고정 연결 + 토큰을 떼고 보낸다
+    assert seen[1] == ("185.199.108.1", "moved.example", "moved.example", None)
+
+    # redirect 대상이 메타데이터 대역이면 막는다(GitHub API 호스트 허용과 무관)
+    def to_metadata(req):
+        return httpx.Response(302, headers={"location": "http://evil.example/latest/meta-data/"})
+    _transport(to_metadata, monkeypatch)
+    with pytest.raises(url_guard.UrlBlocked, match="GitHub API .*내부 대역"):
+        _run(GitHubReleaseCollector(api_url="https://api.github.com", token="tok").collect(
+            "o/r", datetime(2020, 1, 1)))
+
+
+def test_github_internal_api_host_allowed_but_other_internal_blocked(monkeypatch):
+    """admin 이 정한 GHE 주소(내부 대역)는 허용 호스트로 취급하지만 고정 연결은 그대로 하고,
+    설정 허용 호스트에 없는 다른 내부 호스트로의 redirect 는 막는다. 설정 허용 호스트는 그대로 적용된다."""
+    answers = {"ghe.corp": ["10.0.0.5"], "other.corp": ["10.0.0.9"]}
+
+    async def fake_resolve(host, port):
+        return answers[host]
+    monkeypatch.setattr(url_guard, "_resolve", fake_resolve)
+    seen = []
+
+    def handler(req):
+        seen.append((req.url.host, req.headers.get("host")))
+        if req.headers.get("host") == "ghe.corp":
+            return httpx.Response(301, headers={"location": "https://other.corp/api/v3/repos/o/r/releases"})
+        return httpx.Response(200, json=_gh_release())
+    _transport(handler, monkeypatch)
+    with pytest.raises(url_guard.UrlBlocked):
+        _run(GitHubReleaseCollector(api_url="https://ghe.corp/api/v3").collect("o/r", datetime(2020, 1, 1)))
+    assert seen == [("10.0.0.5", "ghe.corp")]
+    items = _run(GitHubReleaseCollector(api_url="https://ghe.corp/api/v3", allowed_hosts=["*.corp"]).collect(
+        "o/r", datetime(2020, 1, 1)))
+    assert items and seen[-1] == ("10.0.0.9", "other.corp")
+
+
+def test_github_body_cap_applies(monkeypatch):
+    _public(monkeypatch)
+    _transport(lambda req: httpx.Response(200, headers={"content-length": str(url_guard.MAX_BODY_BYTES + 1)},
+                                          stream=_ExplodingStream()), monkeypatch)
+    with pytest.raises(TrendCollectError, match="응답이 너무 큽니다"):
+        _run(GitHubReleaseCollector(api_url="https://api.github.com").collect("o/r", datetime(2020, 1, 1)))
+
+
+def test_guarded_get_keeps_auth_header_on_same_origin_redirect(monkeypatch):
+    _public(monkeypatch)
+    seen = []
+
+    def handler(req):
+        seen.append(req.headers.get("authorization"))
+        if len(seen) == 1:
+            return httpx.Response(301, headers={"location": "/repos/new/releases"})
+        return httpx.Response(200, text="ok")
+    _transport(handler, monkeypatch)
+    _run(url_guard.guarded_get("https://pub.example/repos/old/releases", headers={"Authorization": "Bearer x"}))
+    assert seen == ["Bearer x", "Bearer x"]
+
+
+def test_guarded_get_raise_for_status_false_returns_error_response(monkeypatch):
+    _public(monkeypatch)
+    _transport(lambda req: httpx.Response(404, json={"message": "nf"}), monkeypatch)
+    with pytest.raises(TrendCollectError, match="HTTP 404"):
+        _run(url_guard.guarded_get("https://pub.example/x"))
+    r = _run(url_guard.guarded_get("https://pub.example/x", raise_for_status=False))
+    assert r.status_code == 404 and r.json() == {"message": "nf"}
 
 
 # ── 설정 API ───────────────────────────────────────────────────────────────

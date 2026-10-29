@@ -74,7 +74,8 @@ class TrendService:
     def __init__(self, db: Session):
         self.db = db
         cfg = trend_settings.effective(db)
-        self._github = GitHubReleaseCollector(api_url=cfg["github_api_url"], token=cfg["github_token"])
+        self._github = GitHubReleaseCollector(api_url=cfg["github_api_url"], token=cfg["github_token"],
+                                              allowed_hosts=cfg["allowed_hosts"])
         self._rss = RSSCollector(allowed_hosts=cfg["allowed_hosts"])
         # 마지막 run_daily_collect 의 실행 요약(응답 `run` 필드)
         self.last_run: dict[str, Any] | None = None

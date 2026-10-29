@@ -5,7 +5,8 @@
   - DNS 해석 뒤 사설·루프백·링크로컬(메타데이터 169.254.169.254 포함)·CGNAT·멀티캐스트·예약 대역이면
     차단한다(= 공인 주소만 허용). 예외는 AppSetting ``trends.settings.allowed_hosts``
     (호스트명·``*.도메인``·IP·CIDR).
-  - redirect 는 직접 따라가며 **매 hop**(=최종 주소 포함)을 다시 검사한다.
+  - redirect 는 직접 따라가며 **매 hop**(=최종 주소 포함)을 다시 검사한다. 다른 origin 으로 넘어가면
+    ``Authorization``·``Cookie`` 헤더를 뗀다(GitHub 토큰 유출 방지).
   - 매 hop 은 검사한 IP 로 직접 연결한다(URL 호스트 → IP 리터럴, ``Host`` 헤더 = 원래 host, https 는
     ``sni_hostname`` 확장으로 SNI·인증서 검증을 원래 호스트명으로) — DNS rebinding 방지. 허용 호스트도 고정한다.
   - 본문은 스트리밍으로 읽어 ``MAX_BODY_BYTES``(압축 해제 후) 를 넘는 즉시 중단한다.
@@ -217,6 +218,15 @@ def _build_request(client: httpx.AsyncClient, url: str, ip: str | None, headers:
     return client.build_request("GET", u.copy_with(host=ip), headers=hdrs, extensions=ext)
 
 
+# 다른 origin 으로 redirect 되면 떼는 자격증명 헤더 — httpx 자체 redirect 처리와 같은 규칙.
+_CREDENTIAL_HEADERS = {"authorization", "proxy-authorization", "cookie"}
+
+
+def _origin(url: str) -> tuple[str, str, int | None]:
+    u = httpx.URL(url)
+    return u.scheme, u.host, u.port
+
+
 def _too_big() -> TrendCollectError:
     return TrendCollectError(f"응답이 너무 큽니다({MAX_BODY_BYTES // 1024 // 1024}MB 초과)")
 
@@ -227,15 +237,19 @@ async def guarded_get(
     allowed_hosts: Iterable[str] = (),
     headers: dict | None = None,
     timeout: float = 20,
+    raise_for_status: bool = True,
 ) -> httpx.Response:
     """SSRF 가드를 거친 GET — redirect 를 직접 따라가며 매 hop 을 다시 검사한다.
 
     매 hop 마다 해석·검사한 IP 로 직접 연결한다(검사 뒤 httpx 가 다시 해석하면 rebinding 으로 내부 주소에
     닿을 수 있다). 본문은 스트리밍으로 읽으며 ``MAX_BODY_BYTES``(압축 해제 후 기준)를 넘는 즉시 중단한다.
-    실패는 ``TrendCollectError``(사유 포함)로 올린다.
+    redirect 가 다른 origin(scheme·host·port)으로 가면 ``Authorization``·``Cookie`` 헤더를 뗀다.
+    실패는 ``TrendCollectError``(사유 포함)로 올린다. ``raise_for_status=False`` 면 HTTP 4xx/5xx 도
+    (본문 상한을 지켜) 응답으로 돌려줘, 호출부가 상태 코드별 사유를 직접 만들 수 있다.
     """
     allowed = list(allowed_hosts or ())
     current = url
+    hop_headers = dict(headers or {})
     async with make_client(timeout=timeout, follow_redirects=False) as client:
         for _hop in range(MAX_REDIRECTS + 1):
             if _proxy_for(current):
@@ -243,9 +257,9 @@ async def guarded_get(
                 # 터널의 SNI·인증서 검증이 깨진다). 사전 검사만 하고 원래 URL 로 보낸다 — 이 경우 내부 대역
                 # 차단(rebinding 방어)은 egress 프록시가 맡아야 한다(docs/ENVIRONMENT.md TRENDS 항목).
                 await check_url(current, allowed)
-                req = _build_request(client, current, None, headers)
+                req = _build_request(client, current, None, hop_headers)
             else:
-                req = _build_request(client, current, await _pinned_ip(current, allowed), headers)
+                req = _build_request(client, current, await _pinned_ip(current, allowed), hop_headers)
             try:
                 r = await client.send(req, stream=True)
             except httpx.TimeoutException:
@@ -257,9 +271,12 @@ async def guarded_get(
                     loc = r.headers.get("location")
                     if not loc:
                         raise TrendCollectError(f"HTTP {r.status_code} redirect 에 Location 이 없습니다")
-                    current = urljoin(current, loc)
+                    nxt = urljoin(current, loc)
+                    if _origin(nxt) != _origin(current):
+                        hop_headers = {k: v for k, v in hop_headers.items() if k.lower() not in _CREDENTIAL_HEADERS}
+                    current = nxt
                     continue
-                if r.status_code >= 400:
+                if r.status_code >= 400 and raise_for_status:
                     raise TrendCollectError(f"HTTP {r.status_code} {r.reason_phrase or ''}".strip() + f" — {current}")
                 cl = (r.headers.get("content-length") or "").strip()
                 if cl.isdigit() and int(cl) > MAX_BODY_BYTES:
