@@ -17,6 +17,8 @@ import { useLogPref } from '@/hooks/useLogPref';
 import { runLogged, useRunLog } from '@/hooks/useRunLog';
 import { formatApiError } from '@/lib/utils';
 import type { RbacBinding, RbacNamespace, RbacRole, RbacServiceAccount } from '@/types';
+import { GrantRiskDialog } from './GrantRiskDialog';
+import { grantRiskReasons, isWriteVerb } from './rbacShared';
 import { Tag } from './RbacTags';
 
 interface Props {
@@ -104,8 +106,26 @@ export function BindingPanel({
     return out;
   }, [name, kind, namespace, roleName, subjectKey]);
 
+  // 고른 롤의 규칙 — 폼에서 바로 보여줘(다른 탭에서 기억해 오지 않게) 위험 판정에도 쓴다.
+  const selectedRole = useMemo(() => roleOptions.find((r) => r.name === roleName) ?? null, [roleOptions, roleName]);
+  const subject = subjectOptions.find((sa) => `${sa.namespace}/${sa.name}` === subjectKey) ?? null;
+  // 발급 마법사와 같은 판정 — ClusterRoleBinding·와일드카드(cluster-admin 등)·Secret·exec·권한 상승이면 확인받는다.
+  const createRisk = useMemo(
+    () => (selectedRole ? grantRiskReasons({ clusterWide: kind === 'ClusterRoleBinding', rules: selectedRole.rules }) : []),
+    [selectedRole, kind],
+  );
+  const [confirmCreate, setConfirmCreate] = useState(false);
+  const requestCreate = () => {
+    if (problems.length > 0 || !subject || !canOperate) return;
+    if (createRisk.length > 0) {
+      setConfirmCreate(true);
+      return;
+    }
+    void handleCreate();
+  };
+
   const handleCreate = async () => {
-    const subject = subjectOptions.find((sa) => `${sa.namespace}/${sa.name}` === subjectKey);
+    setConfirmCreate(false);
     if (problems.length > 0 || !subject) return;
     const where = kind === 'RoleBinding' ? namespace : '전체 네임스페이스';
     const link = `${subject.namespace}/${subject.name} → ${effectiveRoleKind}/${roleName}`;
@@ -313,7 +333,7 @@ export function BindingPanel({
             </label>
             <button
               type="button"
-              onClick={handleCreate}
+              onClick={requestCreate}
               disabled={!canOperate || problems.length > 0 || create.isPending}
               title={!canOperate ? withHint('바인딩 생성') : problems.length > 0 ? problems[0] : '바인딩 생성'}
               aria-label={ariaWithHint('바인딩 생성')}
@@ -323,11 +343,27 @@ export function BindingPanel({
             </button>
           </div>
 
+          {selectedRole && (
+            <div className="text-xs">
+              <div className="text-muted-foreground mb-1">
+                {selectedRole.scope === 'cluster' ? 'ClusterRole' : 'Role'} <span className="font-mono text-foreground">{selectedRole.name}</span> 의 규칙 {selectedRole.rules.length}줄
+                {createRisk.length > 0 && ' — 생성 전에 영향 범위를 한 번 더 확인받습니다'}
+              </div>
+              <div className="flex flex-wrap max-h-24 overflow-y-auto">
+                {selectedRole.rules.map((r, i) => (
+                  <Tag key={i} tone={r.verbs.some(isWriteVerb) ? 'write' : 'default'}>
+                    {r.resources.join(',') || '—'}: {r.verbs.join(',') || '—'}
+                  </Tag>
+                ))}
+              </div>
+            </div>
+          )}
+
           {kind === 'ClusterRoleBinding' && (
-            <p className="text-[11.5px] leading-relaxed rounded-md border border-status-warning/30 bg-status-warning/10 text-status-warning px-3 py-2">
+            <p className="text-xs leading-relaxed text-muted-foreground">
               nodes·namespaces·persistentvolumes 처럼 네임스페이스가 없는(클러스터 스코프) 리소스는
               RoleBinding 으로는 권한이 발동하지 않습니다 — 이 조합(ClusterRoleBinding)이 필요한 이유입니다.
-              선택한 롤에 해당 규칙이 이미 있는지 Role/ClusterRole 탭에서 먼저 확인하세요.
+              위 규칙에 그런 리소스가 있는지 확인하세요.
             </p>
           )}
         </div>
@@ -366,7 +402,7 @@ export function BindingPanel({
                   className="border-t border-border hover:bg-secondary/60"
                 >
                   <td className="px-3 py-2">
-                    <Tag tone={b.kind === 'ClusterRoleBinding' ? 'write' : 'default'}>{b.kind}</Tag>
+                    <Tag>{b.kind}</Tag>
                   </td>
                   <td className="px-3 py-2 font-mono text-xs">{b.name}</td>
                   <td className="px-3 py-2">
@@ -396,7 +432,7 @@ export function BindingPanel({
                         disabled={!canOperate}
                         title={withHint('바인딩 삭제')}
                         aria-label={ariaWithHint(`${b.name} 삭제`)}
-                        className="p-1.5 rounded-lg text-muted-foreground hover:text-destructive hover:bg-destructive/10 disabled:opacity-50"
+                        className="p-1.5 rounded-xl text-muted-foreground hover:text-destructive hover:bg-destructive/10 disabled:opacity-50"
                       >
                         <Trash2 className="w-4 h-4" />
                       </button>
@@ -428,6 +464,25 @@ export function BindingPanel({
         onConfirm={handleDelete}
         onCancel={() => setPendingDelete(null)}
       />
+
+      {subject && selectedRole && (
+        <GrantRiskDialog
+          open={confirmCreate}
+          title="넓은 권한을 연결할까요?"
+          description={`${subject.namespace}/${subject.name} 에 ${effectiveRoleKind} ${roleName} 을(를) 묶습니다. 생성 즉시 권한이 발동합니다.`}
+          reasons={createRisk}
+          details={[
+            { label: '바인딩', value: `${kind} ${name.trim()}` },
+            { label: '적용 범위', value: kind === 'ClusterRoleBinding' ? '전체 네임스페이스' : namespace },
+            { label: '참조 롤', value: `${effectiveRoleKind}/${roleName} · 규칙 ${selectedRole.rules.length}줄` },
+          ]}
+          confirmName={subject.name}
+          confirmNameLabel="ServiceAccount 이름"
+          confirmLabel="바인딩 생성"
+          onConfirm={() => { void handleCreate(); }}
+          onCancel={() => setConfirmCreate(false)}
+        />
+      )}
     </MacCard>
   );
 }

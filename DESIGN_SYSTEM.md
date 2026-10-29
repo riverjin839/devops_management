@@ -515,6 +515,8 @@ MacCard `title` 아래 또 그린 툴바 행(이중 헤더), 같은 모양의 �
   `--card-shadow(-hover)`)만 쓴다. `Card` 기본 컴포넌트가 이미 달고 있으니 개별 shadow 클래스를 만들지 않는다.
   CSS 에서 `[class*="…"]` 처럼 클래스 이름 부분 문자열로 요소를 고르는 선택자는 쓰지 않는다(P3 에서 제거).
 - **Section titles inside MacCard**: 카드 제목을 본문 `<h2>` 로 중복하지 않는다.
+- **탭·토글·스위치**: 내용을 바꾸는 탭과 기준값 토글은 `components/common/SegTabs`(`mode="tabs"` / `"toggle"`),
+  켜기/끄기는 `components/common/SwitchToggle`(`role="switch"`, 비활성 사유 `hint`)을 쓴다. 화면마다 밑줄 탭·스위치를 손으로 만들지 않는다.
 - **타이포 (P2)**: 본문 기본 굵기 400(`body`), 라벨 500, 제목 600. 최소 글자 `text-[11px]` — 8~10px 금지.
   보조 글자는 `text-muted-foreground` 를 투명도 없이 쓴다(`/50~90` 은 라이트에서 2~3:1). 장식용
   아이콘·구분선만 `/20~40` 허용, 입력 안내는 `placeholder:` 변형. 둘 다 ESLint(`TYPO_RE`)가 error 로 막는다.

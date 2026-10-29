@@ -5,13 +5,14 @@
  * 겹치거나, 네임스페이스에 별도 정책이 걸려 있을 때). 그래서 SubjectAccessReview 를 쓴다.
  */
 import { useMemo, useState } from 'react';
-import { Check, Play, ShieldCheck, X } from 'lucide-react';
+import { AlertTriangle, Check, Play, ShieldCheck, X } from 'lucide-react';
 import { EmptyState, RunLogPanel, useToastSafe } from '@/components/common';
 import { MacCard } from '@/components/ui/MacCard';
 import { useAccessReview } from '@/hooks/useK8sRbac';
 import { formatApiError } from '@/lib/utils';
 import { useRunLog, runLogged, type RunLogEntry } from '@/hooks/useRunLog';
 import { useLogPref } from '@/hooks/useLogPref';
+import { useUrlParams } from '@/hooks/useUrlParams';
 import type { RbacAccessReviewEntry, RbacServiceAccount } from '@/types';
 
 interface Props {
@@ -22,7 +23,10 @@ interface Props {
 export function AccessReviewPanel({ clusterId, serviceAccounts }: Props) {
   const toast = useToastSafe();
   const review = useAccessReview(clusterId);
-  const [target, setTarget] = useState('');
+  // 점검 대상은 URL 에 둔다(D-029) — "이 SA 권한 봐 주세요" 를 링크로 넘길 수 있다.
+  const [params, setParams] = useUrlParams({ reviewSa: '' });
+  const target = params.reviewSa;
+  const setTarget = (v: string) => setParams({ reviewSa: v });
   const [entries, setEntries] = useState<RbacAccessReviewEntry[] | null>(null);
   // 실행 로그(D-089/D-135) — 요청·대기·허용/거부 요약·거부 항목. 펼침 여부는 화면별로 기억한다.
   const runLog = useRunLog();
@@ -195,9 +199,12 @@ export function AccessReviewPanel({ clusterId, serviceAccounts }: Props) {
           </div>
 
           {denied.length > 0 && (
-            <p className="text-[11.5px] leading-relaxed rounded-md border border-status-warning/30 bg-status-warning/10 text-status-warning px-3 py-2">
-              {denied.length}건이 거부됐습니다. 의도한 것이 아니라면 Binding 탭에서 그 네임스페이스에 다른
-              바인딩이 걸려 있지 않은지 확인하세요.
+            <p className="flex items-start gap-2 text-xs leading-relaxed rounded-md border border-status-critical/30 bg-status-critical/10 text-foreground px-3 py-2">
+              <AlertTriangle className="w-3.5 h-3.5 mt-0.5 shrink-0 text-status-critical" aria-hidden="true" />
+              <span>
+                {denied.length}건이 거부됐습니다. 의도한 것이 아니라면 바인딩 탭에서 그 네임스페이스에 다른
+                바인딩이 걸려 있지 않은지 확인하세요.
+              </span>
             </p>
           )}
         </div>

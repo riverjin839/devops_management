@@ -13,17 +13,17 @@ import {
 } from '@/hooks/useK8sRbac';
 import { useLogPref } from '@/hooks/useLogPref';
 import { runLogged, useRunLog } from '@/hooks/useRunLog';
+import { useUrlParams } from '@/hooks/useUrlParams';
 import { formatApiError } from '@/lib/utils';
+import { useRbacCredentialStore } from '@/stores/rbacCredentialStore';
 import type {
   RbacBinding,
   RbacBindingSummary,
-  RbacKubeconfigResult,
   RbacNamespace,
   RbacRole,
   RbacServiceAccount,
 } from '@/types';
-import { CredentialResult } from './CredentialResult';
-import { buildRevokePlan, shortDate } from './rbacShared';
+import { buildRevokePlan, grantRiskReasons, shortDate } from './rbacShared';
 import { Tag } from './RbacTags';
 
 interface Props {
@@ -40,9 +40,8 @@ interface Props {
   onRetry?: () => void;
   /** "연결된 권한" 태그 클릭 — Role/ClusterRole 탭으로 이동해 그 롤을 바로 연다. */
   onSelectRole: (binding: RbacBindingSummary) => void;
-  /** 재발급한 kubeconfig — 페이지가 들고 있어 탭을 옮겨도 사라지지 않는다. */
-  issued: RbacKubeconfigResult | null;
-  onIssuedChange: (v: RbacKubeconfigResult | null) => void;
+  /** 재발급 카드·파일 이름에 쓰는 클러스터 이름. */
+  clusterName: string;
 }
 
 const TTL_OPTIONS = [
@@ -69,14 +68,20 @@ export function ServiceAccountPanel({
   error,
   onRetry,
   onSelectRole,
-  issued,
-  onIssuedChange,
+  clusterName,
 }: Props) {
   const { canOperate, withHint, ariaWithHint } = useCanOperate(clusterId);
   const toast = useToastSafe();
-  const [query, setQuery] = useState('');
-  const [nsFilter, setNsFilter] = useState('');
-  const [pepOnly, setPepOnly] = useState(false);
+  // 검색·필터는 URL 에 둔다(D-029) — 새로고침·링크 공유에도 같은 목록이 열린다.
+  const [params, setParams] = useUrlParams({ saQ: '', saNs: '', saPep: '' });
+  const query = params.saQ;
+  const setQuery = (v: string) => setParams({ saQ: v });
+  const nsFilter = params.saNs;
+  const setNsFilter = (v: string) => setParams({ saNs: v });
+  const pepOnly = params.saPep === '1';
+  const setPepOnly = (v: boolean) => setParams({ saPep: v ? '1' : '' });
+  const setCredential = useRbacCredentialStore((s) => s.set);
+  const [issueName, setIssueName] = useState('');
   const [creating, setCreating] = useState(false);
   const [newNs, setNewNs] = useState('');
   const [newName, setNewName] = useState('');
@@ -110,6 +115,11 @@ export function ServiceAccountPanel({
       );
     });
   }, [serviceAccounts, query, nsFilter, pepOnly]);
+
+  const issueRisk = useMemo(
+    () => (pendingIssue ? grantRiskReasons({ clusterWide: false, rules: [], longLivedToken: longLived }) : []),
+    [pendingIssue, longLived],
+  );
 
   const revokePlan = useMemo(
     () => (pendingRevoke ? buildRevokePlan(pendingRevoke, bindings, roles, clusterRoles) : null),
@@ -149,6 +159,7 @@ export function ServiceAccountPanel({
   };
 
   const openIssue = (sa: RbacServiceAccount) => {
+    setIssueName('');
     setLongLived(false);
     setTtl(TTL_OPTIONS[1].value);
     setPendingIssue(sa);
@@ -175,7 +186,16 @@ export function ServiceAccountPanel({
       ],
     });
     if (r.ok) {
-      onIssuedChange(r.data);
+      setCredential({
+        clusterId,
+        clusterName,
+        namespace: r.data.namespace,
+        serviceAccount: r.data.serviceAccount,
+        kubeconfig: r.data.kubeconfig,
+        expiresAt: r.data.expiresAt,
+        source: 'reissue',
+        issuedAt: Date.now(),
+      });
       toast.success('kubeconfig 발급됨', r.data.expiresAt ? `만료 ${r.data.expiresAt.replace('T', ' ').slice(0, 16)}` : '만료 없음');
     } else if (!r.aborted) {
       toast.error('발급 실패', formatApiError(r.error));
@@ -243,7 +263,7 @@ export function ServiceAccountPanel({
       summarize: (failed) => [
         [failed.length ? 'warn' : 'info', `${total}건 중 ${total - failed.length}건 삭제 · 실패 ${failed.length}`],
         ...(failed.length
-          ? [['warn', `남은 오브젝트: ${failed.join(', ')} — 각 탭에서 직접 정리하세요`] as ['warn', string]]
+          ? [['warn', `남은 오브젝트: ${failed.join(', ')} — 잠시 뒤 회수를 다시 실행하거나(지운 것은 건너뜀), 바인딩·롤 탭에서 이 이름으로 검색해 지우세요`] as ['warn', string]]
           : []),
       ],
     });
@@ -396,7 +416,7 @@ export function ServiceAccountPanel({
                       <td className="px-3 py-2 font-mono text-xs">
                         {sa.name}
                         {sa.managedByPep && (
-                          <span className="ml-1.5 text-[11px] px-1.5 py-px rounded-full border border-primary/30 bg-primary/10 text-primary font-medium">
+                          <span className="ml-1.5 text-[11px] px-1.5 py-px rounded-full border border-border bg-secondary text-muted-foreground font-medium">
                             PEP
                           </span>
                         )}
@@ -471,44 +491,18 @@ export function ServiceAccountPanel({
         </p>
       </MacCard>
 
-      {issued && (
-        <MacCard
-          title="발급된 kubeconfig"
-          titleExtra={
-            <span className="text-xs text-muted-foreground">
-              <span className="font-mono">{issued.namespace}/{issued.serviceAccount}</span> ·{' '}
-              {issued.expiresAt ? `만료 ${issued.expiresAt.replace('T', ' ').slice(0, 16)}` : '만료 없음'}
-            </span>
-          }
-          actions={
-            <button
-              type="button"
-              onClick={() => onIssuedChange(null)}
-              title="kubeconfig 닫기 — 닫으면 다시 볼 수 없습니다"
-              aria-label="kubeconfig 닫기"
-              className="px-3 py-1.5 rounded-xl border border-border text-xs hover:border-primary"
-            >
-              닫기
-            </button>
-          }
-        >
-          <CredentialResult
-            kubeconfig={issued.kubeconfig}
-            fileName={`kubeconfig-${issued.serviceAccount}-${issued.namespace}.yaml`}
-            maxHeight="max-h-72"
-          />
-        </MacCard>
-      )}
-
+      {/* 만료 없는 토큰은 발급 마법사와 같은 위험 판정(grantRiskReasons) — danger + 이름 재입력. */}
       <ConfirmDialog
         open={!!pendingIssue}
-        title="kubeconfig 를 다시 발급할까요?"
+        title={issueRisk.length > 0 ? '만료 없는 토큰을 발급할까요?' : 'kubeconfig 를 다시 발급할까요?'}
         description={
           pendingIssue
             ? `${pendingIssue.namespace}/${pendingIssue.name} 의 토큰을 새로 만듭니다. 이전에 건넨 단기 토큰은 만료 시각까지 그대로 유효합니다.`
             : undefined
         }
         confirmLabel="발급"
+        danger={issueRisk.length > 0}
+        confirmDisabled={issueRisk.length > 0 && issueName.trim() !== (pendingIssue?.name ?? '')}
         onConfirm={handleIssue}
         onCancel={() => setPendingIssue(null)}
       >
@@ -540,11 +534,33 @@ export function ServiceAccountPanel({
             </select>
           </label>
         </div>
-        {longLived && (
-          <p className="mt-3 flex items-start gap-2 text-xs leading-relaxed rounded-md border border-status-warning/40 bg-status-warning/10 text-foreground px-3 py-2">
-            <AlertTriangle className="w-3.5 h-3.5 mt-0.5 shrink-0 text-status-warning" aria-hidden="true" />
-            만료 없는 토큰은 Secret 을 지우거나 액세스를 회수하기 전까지 계속 유효합니다.
-          </p>
+        {issueRisk.length > 0 && pendingIssue && (
+          <div className="mt-3 space-y-3 text-xs">
+            <ul className="space-y-1.5" aria-label="확인이 필요한 이유">
+              {issueRisk.map((r) => (
+                <li key={r} className="flex items-start gap-2 text-sm text-foreground">
+                  <AlertTriangle className="w-3.5 h-3.5 mt-0.5 shrink-0 text-status-warning" aria-hidden="true" />
+                  <span>{r}</span>
+                </li>
+              ))}
+            </ul>
+            <p className="text-muted-foreground">
+              Secret 을 지우거나 액세스를 회수하기 전까지 계속 유효합니다. 사람에게 주는 kubeconfig 라면 단기 토큰을 쓰세요.
+            </p>
+            <label className="flex flex-col gap-1.5 text-muted-foreground font-medium">
+              <span>
+                확인을 위해 ServiceAccount 이름 <span className="font-mono text-foreground">{pendingIssue.name}</span> 을(를) 입력하세요
+              </span>
+              <input
+                value={issueName}
+                onChange={(e) => setIssueName(e.target.value)}
+                spellCheck={false}
+                autoComplete="off"
+                aria-label="확인용 ServiceAccount 이름"
+                className={`${inputCls} font-mono`}
+              />
+            </label>
+          </div>
         )}
       </ConfirmDialog>
 
@@ -592,11 +608,12 @@ export function ServiceAccountPanel({
               PEP 가 만들지 않은 롤과 다른 바인딩이 함께 쓰는 롤은 지우지 않습니다.
             </p>
             <label className="flex flex-col gap-1.5 text-muted-foreground font-medium">
-              확인을 위해 ServiceAccount 이름을 입력하세요
+              <span>
+                확인을 위해 ServiceAccount 이름 <span className="font-mono text-foreground">{pendingRevoke.name}</span> 을(를) 입력하세요
+              </span>
               <input
                 value={revokeName}
                 onChange={(e) => setRevokeName(e.target.value)}
-                placeholder={pendingRevoke.name}
                 spellCheck={false}
                 autoComplete="off"
                 aria-label="확인용 ServiceAccount 이름"

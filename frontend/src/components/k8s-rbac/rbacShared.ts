@@ -98,20 +98,28 @@ export function isPepManaged(labels: Record<string, string> | undefined): boolea
   return labels?.[PEP_MANAGED_LABEL] === 'pep';
 }
 
+const has = (list: string[], ...wanted: string[]) => list.some((v) => v === '*' || wanted.includes(v));
+const READ_VERBS = ['get', 'list', 'watch'];
+const RBAC_RESOURCES = ['roles', 'rolebindings', 'clusterroles', 'clusterrolebindings'];
+
 /**
- * 발급 직전에 한 번 더 확인받아야 하는 이유 목록 — 비어 있으면 바로 실행한다.
- * 기준: 모든 네임스페이스에 걸리는 바인딩, `*` 와일드카드, 만료 없는 토큰, 프리셋 위험도 높음.
+ * 권한을 넓히는 쓰기 동작 직전에 한 번 더 확인받아야 하는 이유 목록 — 비어 있으면 바로 실행한다.
+ * 발급 마법사·바인딩 생성·롤 저장·kubeconfig 재발급이 **같은 판정**을 쓴다(경로마다 통제가 다르면
+ * 가장 약한 경로가 실제 보안 수준이 된다).
+ * 기준: 모든 네임스페이스에 걸리는 바인딩, `*` 와일드카드, Secret 조회, Pod exec/attach/port-forward,
+ * 권한 상승 동작(impersonate/escalate/bind)·RBAC 오브젝트 쓰기, 만료 없는 토큰, 프리셋 위험도 높음.
  */
 export function grantRiskReasons(opts: {
-  bindingMode: RbacBindingMode;
+  /** ClusterRoleBinding 처럼 네임스페이스를 가리지 않고 걸리는가. */
+  clusterWide: boolean;
   rules: RbacPolicyRule[];
-  longLivedToken: boolean;
+  longLivedToken?: boolean;
   presetRisk?: 'low' | 'medium' | 'high';
 }): string[] {
-  const { bindingMode, rules, longLivedToken, presetRisk } = opts;
+  const { clusterWide, rules, longLivedToken = false, presetRisk } = opts;
   const out: string[] = [];
   const writeVerbs = Array.from(new Set(rules.flatMap((r) => r.verbs.filter(isWriteVerb))));
-  if (bindingMode === 'clusterrole-clusterrolebinding') {
+  if (clusterWide) {
     out.push(
       writeVerbs.length > 0
         ? `모든 네임스페이스에서 ${writeVerbs.join('/')} 가능 — ClusterRoleBinding 은 네임스페이스를 가리지 않습니다`
@@ -121,6 +129,16 @@ export function grantRiskReasons(opts: {
   if (rules.some((r) => r.verbs.includes('*') || r.resources.includes('*') || r.apiGroups.includes('*'))) {
     out.push('와일드카드(*) 규칙 — 지금 없는 리소스·동작까지 앞으로 생기는 대로 허용됩니다');
   }
+  if (rules.some((r) => has(r.resources, 'secrets') && has(r.verbs, ...READ_VERBS))) {
+    out.push('Secret 조회 — 같은 네임스페이스의 다른 토큰·비밀번호까지 읽을 수 있습니다');
+  }
+  if (rules.some((r) => has(r.resources, 'pods/exec', 'pods/attach', 'pods/portforward') && has(r.verbs, 'create', 'get'))) {
+    out.push('Pod 접속(exec·attach·port-forward) — 컨테이너 안에서 명령을 실행할 수 있습니다');
+  }
+  if (rules.some((r) => has(r.verbs, 'impersonate', 'escalate', 'bind')
+    || (has(r.resources, ...RBAC_RESOURCES) && r.verbs.some(isWriteVerb)))) {
+    out.push('권한 상승 — 롤·바인딩을 고치거나 다른 사용자로 행세해 스스로 권한을 넓힐 수 있습니다');
+  }
   if (longLivedToken) {
     out.push('만료 없는 토큰 — Secret 을 지우기 전까지 이 kubeconfig 는 계속 유효합니다');
   }
@@ -128,6 +146,50 @@ export function grantRiskReasons(opts: {
     out.push('위험도 높음 프리셋 — 쓰기 권한이 넓게 열립니다');
   }
   return out;
+}
+
+/** 바인딩 방식이 네임스페이스를 가리지 않는가(마법사용). */
+export const isClusterWideMode = (m: RbacBindingMode) => m === 'clusterrole-clusterrolebinding';
+
+/** 규칙 변경 전후 비교 — `그룹/리소스: verb` 단위로 더해진 것·빠진 것. 롤 저장 확인에 쓴다. */
+export function ruleDiff(before: RbacPolicyRule[], after: RbacPolicyRule[]): { added: string[]; removed: string[] } {
+  const flat = (rules: RbacPolicyRule[]) => {
+    const out = new Set<string>();
+    for (const r of rules) {
+      const names = r.resourceNames.length ? ` (${r.resourceNames.join(', ')})` : '';
+      for (const g of r.apiGroups.length ? r.apiGroups : ['']) {
+        for (const res of r.resources) {
+          for (const v of r.verbs) out.add(`${groupLabel(g)}/${res}${names}: ${v}`);
+        }
+      }
+    }
+    return out;
+  };
+  const a = flat(before);
+  const b = flat(after);
+  return {
+    added: [...b].filter((x) => !a.has(x)).sort(),
+    removed: [...a].filter((x) => !b.has(x)).sort(),
+  };
+}
+
+/** ServiceAccount 이름 형식(DNS-1123 서브도메인) — 틀리면 실행 전에 알려준다(서버 오류를 기다리지 않게). */
+export function saNameProblem(name: string): string | null {
+  const n = name.trim();
+  if (!n) return null;
+  if (n.length > 253) return 'ServiceAccount 이름은 253자를 넘을 수 없습니다.';
+  if (!/^[a-z0-9]([-a-z0-9.]*[a-z0-9])?$/.test(n)) {
+    return 'ServiceAccount 이름은 영문 소문자·숫자·하이픈(-)·점(.)만 쓰고, 영문 소문자나 숫자로 시작하고 끝나야 합니다.';
+  }
+  return null;
+}
+
+/** kubeconfig 의 토큰 값을 가린다(끝 4자만 남김) — 화면 표시용. 복사·저장은 원문을 쓴다. */
+export function maskKubeconfig(text: string): string {
+  return text.replace(
+    /^(\s*(?:token|client-key-data|password):\s*)(\S+)\s*$/gm,
+    (_m, head: string, value: string) => `${head}${'•'.repeat(12)}${value.slice(-4)}`,
+  );
 }
 
 /** ServiceAccount 한 개의 액세스를 통째로 거둘 때 지울 것·남길 것. */

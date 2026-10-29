@@ -1,15 +1,17 @@
 /** Role / ClusterRole 목록 + 규칙 편집. 빌트인(system:*, cluster-admin …)은 읽기 전용이다. */
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Save, Search, Shield, Trash2, Undo2 } from 'lucide-react';
+import { AlertTriangle, Save, Search, Shield, Trash2, Undo2 } from 'lucide-react';
 import { ConfirmDialog, EmptyState, ErrorState, LoadingState, RunLogPanel, useToastSafe } from '@/components/common';
 import { MacCard } from '@/components/ui/MacCard';
 import { useCanOperate } from '@/hooks/useCanOperate';
 import { useDeleteRole, useUpsertRole } from '@/hooks/useK8sRbac';
 import { useLogPref } from '@/hooks/useLogPref';
 import { runLogged, useRunLog } from '@/hooks/useRunLog';
+import { useUrlParams } from '@/hooks/useUrlParams';
 import { formatApiError } from '@/lib/utils';
 import type { RbacBinding, RbacPolicyRule, RbacRole } from '@/types';
-import { emptyRule, ruleHasClusterScopedResource } from './rbacShared';
+import { emptyRule, grantRiskReasons, isPepManaged, ruleDiff, ruleHasClusterScopedResource } from './rbacShared';
+import { GrantRiskDialog, RuleDiffList } from './GrantRiskDialog';
 import { Tag } from './RbacTags';
 import { RuleEditor } from './RuleEditor';
 
@@ -55,10 +57,18 @@ export function RolePanel({
 }: Props) {
   const { canOperate, hint, withHint, ariaWithHint } = useCanOperate(clusterId);
   const toast = useToastSafe();
-  const [query, setQuery] = useState('');
-  const [selectedKey, setSelectedKey] = useState<string | null>(null);
+  // 검색어·선택한 롤은 URL 에 둔다(D-029) — 링크로 "이 롤 봐 주세요" 를 공유할 수 있다.
+  const [params, setParams] = useUrlParams({ roleQ: '', role: '' });
+  const query = params.roleQ;
+  const setQuery = (v: string) => setParams({ roleQ: v });
+  const selectedKey = params.role || null;
+  const setSelectedKey = (k: string | null) => setParams({ role: k ?? '' });
   const [draft, setDraft] = useState<RbacPolicyRule[] | null>(null);
   const [pendingDelete, setPendingDelete] = useState<RbacRole | null>(null);
+  // 저장하지 않은 변경이 있을 때 다른 롤을 고르면 버릴지 먼저 묻는다.
+  const [pendingSelect, setPendingSelect] = useState<RbacRole | null>(null);
+  // 저장 확인 — 참조 바인딩이 있거나 권한을 넓히면 무엇이 바뀌는지 보여주고 확인받는다.
+  const [confirmSave, setConfirmSave] = useState(false);
   const rowRefs = useRef(new Map<string, HTMLTableRowElement>());
 
   const upsert = useUpsertRole(clusterId);
@@ -93,10 +103,25 @@ export function RolePanel({
     );
   }, [bindings, selected]);
 
+  const dirty =
+    !!selected && !!draft && JSON.stringify(draft) !== JSON.stringify(selected.rules);
+
   const select = (r: RbacRole) => {
     setSelectedKey(roleKey(r));
     setDraft(r.rules.map((rule) => ({ ...rule })));
   };
+  const requestSelect = (r: RbacRole) => {
+    if (dirty && roleKey(r) !== selectedKey) {
+      setPendingSelect(r);
+      return;
+    }
+    select(r);
+  };
+
+  // URL 로 롤이 정해진 채 열리면(새로고침·공유 링크) 목록이 온 뒤 편집본을 채운다.
+  useEffect(() => {
+    if (selected && !draft) setDraft(selected.rules.map((rule) => ({ ...rule })));
+  }, [selected, draft]);
 
   // ServiceAccount 탭에서 "연결된 권한" 을 클릭해 넘어온 요청을 처리한다. 검색어로
   // 가려져 있을 수 있어 먼저 비우고, system:*/cluster-admin 같은 빌트인 롤을 가리키면
@@ -117,7 +142,7 @@ export function RolePanel({
     );
     if (target) {
       setQuery('');
-      select(target);
+      requestSelect(target);
       rowRefs.current.get(roleKey(target))?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
       focusState.current.settled = true;
       return;
@@ -128,10 +153,34 @@ export function RolePanel({
     }
     focusState.current.settled = true;
     toast.warning('롤을 찾을 수 없습니다', `${focusRequest.name} — 삭제됐거나 목록에 없습니다`);
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- select/toast/onIncludeSystemChange 는 매 렌더 새 함수라 넣으면 무한 루프
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- requestSelect/toast/onIncludeSystemChange 는 매 렌더 새 함수라 넣으면 무한 루프
   }, [focusRequest, all, includeSystem]);
 
+  // 저장이 권한을 넓히는지 — 발급 마법사와 같은 판정. 원래 롤에 이미 있던 사유는 빼고
+  // 이번 편집으로 **새로 생기는** 위험만 확인받는다(기존 롤을 조금 고칠 때마다 막지 않게).
+  const clusterWide = referencingBindings.some((b) => b.kind === 'ClusterRoleBinding');
+  const saveRisk = useMemo(() => {
+    if (!selected || !draft) return [];
+    const before = new Set(grantRiskReasons({ clusterWide, rules: selected.rules }));
+    return grantRiskReasons({ clusterWide, rules: draft }).filter((r) => !before.has(r));
+  }, [selected, draft, clusterWide]);
+  const diff = useMemo(
+    () => (selected && draft ? ruleDiff(selected.rules, draft) : { added: [], removed: [] }),
+    [selected, draft],
+  );
+  const affectedScope = Array.from(new Set(referencingBindings.map((b) => b.namespace ?? '전체 네임스페이스')));
+
+  const requestSave = () => {
+    if (!selected || !draft) return;
+    if (saveRisk.length > 0 || referencingBindings.length > 0) {
+      setConfirmSave(true);
+      return;
+    }
+    void save();
+  };
+
   const save = async () => {
+    setConfirmSave(false);
     if (!selected || !draft) return;
     const kind = selected.scope === 'cluster' ? 'ClusterRole' : 'Role';
     const target = `${kind} ${selected.namespace ? `${selected.namespace}/` : ''}${selected.name}`;
@@ -155,6 +204,14 @@ export function RolePanel({
     else if (!r.aborted) toast.error('저장 실패', formatApiError(r.error));
   };
 
+  const deleteRefCount = pendingDelete
+    ? bindings.filter(
+      (b) => b.roleName === pendingDelete.name
+        && b.roleKind === (pendingDelete.scope === 'cluster' ? 'ClusterRole' : 'Role')
+        && (pendingDelete.scope === 'cluster' || b.namespace === pendingDelete.namespace),
+    ).length
+    : 0;
+
   const handleDelete = async () => {
     const role = pendingDelete;
     if (!role) return;
@@ -176,9 +233,6 @@ export function RolePanel({
       toast.error('삭제 실패', formatApiError(r.error));
     }
   };
-
-  const dirty =
-    !!selected && !!draft && JSON.stringify(draft) !== JSON.stringify(selected.rules);
 
   // nodes 같은 클러스터 스코프 리소스는 RoleBinding(네임스페이스 스코프)으로는 권한이
   // 발동하지 않는다 — ClusterRoleBinding 이 하나도 없으면(바인딩이 아예 없거나 전부
@@ -253,17 +307,27 @@ export function RolePanel({
                     className={`border-t border-border cursor-pointer hover:bg-secondary/60 ${
                       roleKey(r) === selectedKey ? 'bg-primary/5' : ''
                     }`}
-                    onClick={() => select(r)}
+                    onClick={() => requestSelect(r)}
                   >
                     <td className="px-3 py-2">
-                      <Tag tone={r.scope === 'cluster' ? 'read' : 'default'}>
-                        {r.scope === 'cluster' ? 'Cluster' : r.namespace}
-                      </Tag>
+                      <Tag>{r.scope === 'cluster' ? '클러스터' : r.namespace}</Tag>
                     </td>
                     <td className="px-3 py-2 font-mono text-xs">
-                      {r.name}
-                      {r.labels['app.kubernetes.io/managed-by'] === 'pep' && (
-                        <span className="ml-1.5 text-[11px] px-1.5 py-px rounded-full border border-primary/30 bg-primary/10 text-primary font-medium">
+                      {/* 행 클릭은 마우스용 — 키보드는 이름 버튼(Tab → Enter)으로 고른다. */}
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          requestSelect(r);
+                        }}
+                        aria-pressed={roleKey(r) === selectedKey}
+                        title={`${r.name} 규칙 편집`}
+                        className="text-left hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 rounded"
+                      >
+                        {r.name}
+                      </button>
+                      {isPepManaged(r.labels) && (
+                        <span className="ml-1.5 text-[11px] px-1.5 py-px rounded-full border border-border bg-secondary text-muted-foreground font-medium">
                           PEP
                         </span>
                       )}
@@ -282,7 +346,7 @@ export function RolePanel({
                           disabled={!canOperate}
                           title={withHint('롤 삭제')}
                           aria-label={ariaWithHint(`${r.name} 삭제`)}
-                          className="p-1.5 rounded-lg text-muted-foreground hover:text-destructive hover:bg-destructive/10 disabled:opacity-50"
+                          className="p-1.5 rounded-xl text-muted-foreground hover:text-destructive hover:bg-destructive/10 disabled:opacity-50"
                         >
                           <Trash2 className="w-4 h-4" />
                         </button>
@@ -307,7 +371,7 @@ export function RolePanel({
         ) : (
           <div className="space-y-3">
             <div className="flex items-center gap-2 flex-wrap text-xs">
-              <Tag tone="read">{selected.scope === 'cluster' ? 'ClusterRole' : `Role · ${selected.namespace}`}</Tag>
+              <Tag>{selected.scope === 'cluster' ? 'ClusterRole' : `Role · ${selected.namespace}`}</Tag>
               <span className="font-mono text-sm font-semibold">{selected.name}</span>
               {selected.builtin && (
                 <span className="text-[11px] text-muted-foreground">빌트인 — 읽기 전용</span>
@@ -322,22 +386,21 @@ export function RolePanel({
             />
 
             {referencingBindings.length > 0 && (
-              <p className="text-[11.5px] leading-relaxed rounded-md border border-primary/30 bg-primary/5 text-primary px-3 py-2">
+              <p className="text-xs leading-relaxed rounded-md border border-border bg-secondary text-foreground px-3 py-2">
                 저장하면 이 롤을 참조하는 바인딩 {referencingBindings.length}개의 권한이 즉시 바뀝니다 — 영향
-                범위:{' '}
-                {Array.from(
-                  new Set(referencingBindings.map((b) => b.namespace ?? '전체 네임스페이스')),
-                ).join(', ')}
-                .
+                범위: {affectedScope.join(', ')}. 저장 전에 바뀌는 권한을 한 번 더 보여줍니다.
               </p>
             )}
 
             {needsClusterRoleBinding && (
-              <p className="text-[11.5px] leading-relaxed rounded-md border border-status-warning/30 bg-status-warning/10 text-status-warning px-3 py-2">
-                nodes 같은 클러스터 스코프(네임스페이스 없는) 리소스가 규칙에 있습니다. 이 롤은{' '}
-                {referencingBindings.length === 0 ? '아직 어떤 바인딩에도 연결돼 있지 않습니다' : 'RoleBinding 으로만 연결돼 있습니다'}
-                — RoleBinding 으로는 이런 리소스에 권한이 발동하지 않습니다. 저장 후 <b>Binding 탭</b>에서
-                ClusterRoleBinding 을 추가로 만들어야 실제로 동작합니다.
+              <p className="flex items-start gap-2 text-xs leading-relaxed rounded-md border border-status-warning/30 bg-status-warning/10 text-foreground px-3 py-2">
+                <AlertTriangle className="w-3.5 h-3.5 mt-0.5 shrink-0 text-status-warning" aria-hidden="true" />
+                <span>
+                  nodes 같은 클러스터 스코프(네임스페이스 없는) 리소스가 규칙에 있습니다. 이 롤은{' '}
+                  {referencingBindings.length === 0 ? '아직 어떤 바인딩에도 연결돼 있지 않습니다' : 'RoleBinding 으로만 연결돼 있습니다'}
+                  — RoleBinding 으로는 이런 리소스에 권한이 발동하지 않습니다. 저장 후 <b>바인딩 탭</b>에서
+                  ClusterRoleBinding 을 추가로 만들어야 실제로 동작합니다.
+                </span>
               </p>
             )}
 
@@ -365,7 +428,7 @@ export function RolePanel({
               <div className="flex-1" />
               <button
                 type="button"
-                onClick={save}
+                onClick={requestSave}
                 disabled={!canOperate || selected.builtin || !dirty || upsert.isPending}
                 title={
                   selected.builtin
@@ -389,7 +452,9 @@ export function RolePanel({
         title="롤을 삭제할까요?"
         description={
           pendingDelete
-            ? `${pendingDelete.name} 을(를) 지우면 이 롤을 참조하는 바인딩이 아무 권한도 주지 못하게 됩니다.`
+            ? deleteRefCount > 0
+              ? `${pendingDelete.name} 을(를) 참조하는 바인딩 ${deleteRefCount}개가 있습니다 — 지우면 그 바인딩들이 아무 권한도 주지 못하게 됩니다.`
+              : `${pendingDelete.name} 을(를) 참조하는 바인딩은 없습니다.`
             : undefined
         }
         confirmLabel="삭제"
@@ -397,6 +462,49 @@ export function RolePanel({
         onConfirm={handleDelete}
         onCancel={() => setPendingDelete(null)}
       />
+
+      <ConfirmDialog
+        open={!!pendingSelect}
+        title="저장하지 않은 변경을 버릴까요?"
+        description={selected ? `${selected.name} 의 규칙 편집 내용이 아직 저장되지 않았습니다. 다른 롤을 열면 편집 내용이 사라집니다.` : undefined}
+        confirmLabel="버리고 열기"
+        danger
+        onConfirm={() => {
+          if (pendingSelect) select(pendingSelect);
+          setPendingSelect(null);
+        }}
+        onCancel={() => setPendingSelect(null)}
+      />
+
+      {selected && draft && (saveRisk.length > 0 ? (
+        <GrantRiskDialog
+          open={confirmSave}
+          title="권한을 넓히는 저장입니다 — 계속할까요?"
+          description={`${selected.scope === 'cluster' ? 'ClusterRole' : 'Role'} ${selected.name} 을(를) 저장하면 참조 바인딩 ${referencingBindings.length}개의 권한이 즉시 바뀝니다.`}
+          reasons={saveRisk}
+          details={[
+            { label: '영향 범위', value: affectedScope.length ? affectedScope.join(', ') : '참조 바인딩 없음' },
+          ]}
+          confirmName={selected.name}
+          confirmNameLabel="롤 이름"
+          confirmLabel="저장"
+          onConfirm={() => { void save(); }}
+          onCancel={() => setConfirmSave(false)}
+        >
+          <RuleDiffList added={diff.added} removed={diff.removed} />
+        </GrantRiskDialog>
+      ) : (
+        <ConfirmDialog
+          open={confirmSave}
+          title="롤 규칙을 저장할까요?"
+          description={`참조 바인딩 ${referencingBindings.length}개(${affectedScope.join(', ')})의 권한이 즉시 바뀝니다.`}
+          confirmLabel="저장"
+          onConfirm={() => { void save(); }}
+          onCancel={() => setConfirmSave(false)}
+        >
+          <RuleDiffList added={diff.added} removed={diff.removed} />
+        </ConfirmDialog>
+      ))}
     </div>
     </div>
   );

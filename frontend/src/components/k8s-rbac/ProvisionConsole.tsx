@@ -10,7 +10,6 @@ import { Check, Loader2, ShieldCheck, ShieldX, Square, X } from 'lucide-react';
 import { EmptyState, LogViewer } from '@/components/common';
 import { MacCard } from '@/components/ui/MacCard';
 import { PROVISION_STEPS, type ProvisionStream } from '@/hooks/useK8sRbac';
-import { CredentialResult } from './CredentialResult';
 
 interface ProvisionConsoleProps {
   stream: ProvisionStream;
@@ -132,7 +131,7 @@ export function ProvisionConsole({ stream, showLogs }: ProvisionConsoleProps) {
                 {result.tokenExpiresAt ? result.tokenExpiresAt.replace('T', ' ').slice(0, 16) : '만료 없음'}
               </dd>
               <dt className="text-xs text-muted-foreground">소요</dt>
-              <dd className="font-mono text-xs">{result.elapsedSeconds}s</dd>
+              <dd className="text-xs tabular-nums">{result.elapsedSeconds}초</dd>
             </dl>
 
             {result.created.length > 0 && (
@@ -156,9 +155,9 @@ export function ProvisionConsole({ stream, showLogs }: ProvisionConsoleProps) {
               <div className="text-xs">
                 <div className="flex items-center gap-2 mb-1">
                   {denied.length === 0 ? (
-                    <ShieldCheck className="w-4 h-4 text-status-healthy" />
+                    <ShieldCheck className="w-4 h-4 text-status-healthy" aria-hidden="true" />
                   ) : (
-                    <ShieldX className="w-4 h-4 text-status-warning" />
+                    <ShieldX className="w-4 h-4 text-status-critical" aria-hidden="true" />
                   )}
                   <span className="text-muted-foreground">
                     권한 점검 {allowedCount}/{result.accessReview.length} 통과
@@ -167,8 +166,8 @@ export function ProvisionConsole({ stream, showLogs }: ProvisionConsoleProps) {
                 {denied.length > 0 && (
                   <ul className="space-y-0.5">
                     {denied.map((d, i) => (
-                      <li key={i} className="flex items-start gap-1 text-status-warning">
-                        <X className="w-3 h-3 mt-0.5 flex-shrink-0" aria-hidden />
+                      <li key={i} className="flex items-start gap-1 text-foreground">
+                        <X className="w-3 h-3 mt-0.5 flex-shrink-0 text-status-critical" aria-hidden />
                         <span>[{d.namespace}] {d.label}
                         {d.reason ? ` — ${d.reason}` : ''}</span>
                       </li>
@@ -179,10 +178,10 @@ export function ProvisionConsole({ stream, showLogs }: ProvisionConsoleProps) {
             )}
 
             {result.kubeconfig && (
-              <CredentialResult
-                kubeconfig={result.kubeconfig}
-                fileName={`kubeconfig-${result.serviceAccount}-${result.namespace}.yaml`}
-              />
+              <p className="text-xs text-muted-foreground">
+                kubeconfig 는 화면 위쪽 <span className="text-foreground">발급된 kubeconfig</span> 카드에 있습니다 — 닫기 전까지
+                탭이나 클러스터를 옮겨도 남습니다.
+              </p>
             )}
           </div>
         </MacCard>

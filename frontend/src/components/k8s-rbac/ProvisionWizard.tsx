@@ -6,7 +6,7 @@
  */
 import { useEffect, useMemo, useState } from 'react';
 import { AlertTriangle, Play, Plus, X } from 'lucide-react';
-import { ConfirmDialog } from '@/components/common';
+import { SwitchToggle } from '@/components/common';
 import { formatApiError } from '@/lib/utils';
 import { MacCard } from '@/components/ui/MacCard';
 import { useCanOperate } from '@/hooks/useCanOperate';
@@ -17,7 +17,8 @@ import type {
   RbacPresetCatalog,
   RbacProvisionRequest,
 } from '@/types';
-import { grantRiskReasons } from './rbacShared';
+import { grantRiskReasons, isClusterWideMode, saNameProblem } from './rbacShared';
+import { GrantRiskDialog } from './GrantRiskDialog';
 import { RiskBadge } from './RbacTags';
 import { RuleEditor } from './RuleEditor';
 
@@ -42,46 +43,6 @@ const TTL_OPTIONS = [
   { label: '30일', value: 30 * 24 * 3600 },
   { label: '90일', value: 90 * 24 * 3600 },
 ];
-
-function Toggle({
-  checked,
-  onChange,
-  label,
-  disabled,
-  hint,
-}: {
-  checked: boolean;
-  onChange: (v: boolean) => void;
-  label: string;
-  disabled?: boolean;
-  hint?: string;
-}) {
-  return (
-    <button
-      type="button"
-      role="switch"
-      aria-checked={checked}
-      disabled={disabled}
-      onClick={() => onChange(!checked)}
-      title={disabled ? hint : label}
-      aria-label={disabled ? `${label} — ${hint ?? ''}` : label}
-      className="inline-flex items-center gap-2 text-sm text-foreground disabled:opacity-60 disabled:cursor-not-allowed"
-    >
-      <span
-        className={`w-9 h-5 shrink-0 rounded-full border relative transition-colors ${
-          checked ? 'bg-primary border-primary' : 'bg-secondary border-border'
-        }`}
-      >
-        <span
-          className={`absolute top-0.5 left-0.5 w-3.5 h-3.5 rounded-full bg-card shadow-sm transition-transform ${
-            checked ? 'translate-x-4' : ''
-          }`}
-        />
-      </span>
-      {label}
-    </button>
-  );
-}
 
 export function ProvisionWizard({
   clusterId, catalog, namespaces, namespacesLoading = false, namespacesError, onRetryNamespaces, running, onRun,
@@ -120,11 +81,10 @@ export function ProvisionWizard({
     setAppliedPresetKey(preset.key);
   }, [preset, appliedPresetKey]);
 
-  // 위험한 발급(모든 네임스페이스·와일드카드·만료 없는 토큰)은 실행 전에 SA 이름을 다시 입력받는다.
+  // 위험한 발급(모든 네임스페이스·와일드카드·Secret·exec·권한 상승·만료 없는 토큰)은 실행 전에 SA 이름을 다시 입력받는다(GrantRiskDialog).
   const [confirming, setConfirming] = useState(false);
-  const [confirmName, setConfirmName] = useState('');
   const riskReasons = useMemo(
-    () => grantRiskReasons({ bindingMode, rules, longLivedToken: longLived, presetRisk: rulesTouched ? undefined : preset?.risk }),
+    () => grantRiskReasons({ clusterWide: isClusterWideMode(bindingMode), rules, longLivedToken: longLived, presetRisk: rulesTouched ? undefined : preset?.risk }),
     [bindingMode, rules, longLived, rulesTouched, preset],
   );
 
@@ -152,6 +112,8 @@ export function ProvisionWizard({
     const out: string[] = [];
     if (namespacesError) out.push(NS_ERROR_PROBLEM);
     if (!saName.trim()) out.push('ServiceAccount 이름을 입력하세요.');
+    const nameProblem = saNameProblem(saName);
+    if (nameProblem) out.push(nameProblem);
     if (!primaryNs) out.push('주 네임스페이스를 고르세요.');
     if (rules.length === 0) out.push('권한 규칙이 최소 한 줄은 있어야 합니다.');
     if (rules.some((r) => r.verbs.length === 0)) out.push('동작(verb)이 비어 있는 규칙이 있습니다.');
@@ -170,7 +132,6 @@ export function ProvisionWizard({
     if (problems.length > 0 || !canOperate) return;
     // 모의 실행은 아무것도 만들지 않으니 바로 보낸다.
     if (!dryRun && riskReasons.length > 0) {
-      setConfirmName('');
       setConfirming(true);
       return;
     }
@@ -339,7 +300,7 @@ export function ProvisionWizard({
                 onClick={addExtra}
                 title="추가 네임스페이스 등록"
                 aria-label="추가 네임스페이스 등록"
-                className="p-1 rounded-lg border border-border hover:border-primary hover:text-primary"
+                className="p-1 rounded-xl border border-border hover:border-primary hover:text-primary"
               >
                 <Plus className="w-3.5 h-3.5" />
               </button>
@@ -355,7 +316,7 @@ export function ProvisionWizard({
         </div>
 
         <div className="mt-3">
-          <Toggle
+          <SwitchToggle
             checked={createNamespace}
             onChange={setCreateNamespace}
             label="네임스페이스가 없으면 함께 생성"
@@ -458,9 +419,9 @@ export function ProvisionWizard({
           </p>
         )}
         <div className="flex flex-wrap gap-x-5 gap-y-2 mt-3">
-          <Toggle checked={issueKubeconfig} onChange={setIssueKubeconfig} label="kubeconfig 발급" disabled={!canOperate} hint={hint} />
-          <Toggle checked={verify} onChange={setVerify} label="생성 후 권한 검증" disabled={!canOperate} hint={hint} />
-          <Toggle checked={dryRun} onChange={setDryRun} label="모의 실행 (변경 없음)" disabled={!canOperate} hint={hint} />
+          <SwitchToggle checked={issueKubeconfig} onChange={setIssueKubeconfig} label="kubeconfig 발급" disabled={!canOperate} hint={hint} />
+          <SwitchToggle checked={verify} onChange={setVerify} label="생성 후 권한 검증" disabled={!canOperate} hint={hint} />
+          <SwitchToggle checked={dryRun} onChange={setDryRun} label="모의 실행 (변경 없음)" disabled={!canOperate} hint={hint} />
         </div>
         <p className="mt-3 text-xs leading-relaxed text-muted-foreground">
           단기 토큰은 만료되면 개발자가 다시 받아야 합니다. CI 처럼 사람이 갱신할 수 없는 곳에는 만료 없는
@@ -498,55 +459,28 @@ export function ProvisionWizard({
         )}
       </div>
 
-      <ConfirmDialog
+      <GrantRiskDialog
         open={confirming}
         title="넓은 권한을 발급할까요?"
         description="아래 범위로 권한이 열립니다. kubeconfig 를 건넨 뒤에는 토큰을 되돌릴 수 없어, 회수하려면 ServiceAccount 탭에서 액세스를 회수해야 합니다."
+        reasons={riskReasons}
+        details={[
+          { label: '대상', value: `${primaryNs}/${saName.trim()}` },
+          { label: '네임스페이스', value: isClusterWideMode(bindingMode) ? '전체 네임스페이스' : targetNamespaces.join(', ') },
+          { label: '만들 오브젝트', value: objectSummary },
+          { label: '토큰', value: longLived ? '만료 없음' : `${TTL_OPTIONS.find((o) => o.value === ttl)?.label ?? ''} 후 만료` },
+        ]}
+        confirmName={saName.trim()}
+        confirmNameLabel="ServiceAccount 이름"
         confirmLabel="발급 실행"
-        danger
-        confirmDisabled={confirmName.trim() !== saName.trim()}
         onConfirm={run}
         onCancel={() => setConfirming(false)}
       >
-        <div className="space-y-3 text-sm">
-          <ul className="space-y-1.5">
-            {riskReasons.map((r) => (
-              <li key={r} className="flex items-start gap-2 text-foreground">
-                <AlertTriangle className="w-3.5 h-3.5 mt-0.5 shrink-0 text-status-warning" aria-hidden="true" />
-                <span>{r}</span>
-              </li>
-            ))}
-          </ul>
-          <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 text-xs">
-            <dt className="text-muted-foreground">대상</dt>
-            <dd className="font-mono">{primaryNs}/{saName.trim()}</dd>
-            <dt className="text-muted-foreground">네임스페이스</dt>
-            <dd className="font-mono">
-              {bindingMode === 'clusterrole-clusterrolebinding' ? '전체 네임스페이스' : targetNamespaces.join(', ')}
-            </dd>
-            <dt className="text-muted-foreground">만들 오브젝트</dt>
-            <dd className="font-mono">{objectSummary}</dd>
-            <dt className="text-muted-foreground">토큰</dt>
-            <dd>{longLived ? '만료 없음' : `${TTL_OPTIONS.find((o) => o.value === ttl)?.label ?? ''} 후 만료`}</dd>
-          </dl>
-          <p className="text-xs text-muted-foreground">
-            확신이 없으면 취소하고 <span className="text-foreground">모의 실행</span> 을 먼저 켜 보세요 — 아무것도 만들지 않고
-            같은 로그를 냅니다.
-          </p>
-          <label className="flex flex-col gap-1.5 text-xs text-muted-foreground font-medium">
-            확인을 위해 ServiceAccount 이름을 입력하세요
-            <input
-              value={confirmName}
-              onChange={(e) => setConfirmName(e.target.value)}
-              placeholder={saName.trim()}
-              spellCheck={false}
-              autoComplete="off"
-              aria-label="확인용 ServiceAccount 이름"
-              className={`${inputCls} font-mono`}
-            />
-          </label>
-        </div>
-      </ConfirmDialog>
+        <p className="text-xs text-muted-foreground">
+          확신이 없으면 취소하고 <span className="text-foreground">모의 실행</span> 을 먼저 켜 보세요 — 아무것도 만들지 않고
+          같은 로그를 냅니다.
+        </p>
+      </GrantRiskDialog>
     </div>
   );
 }

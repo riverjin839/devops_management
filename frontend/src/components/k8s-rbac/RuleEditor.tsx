@@ -8,6 +8,7 @@ import { useState } from 'react';
 import { Plus, Trash2, Code2, Table2 } from 'lucide-react';
 import type { RbacPolicyRule } from '@/types';
 import { EmptyState } from '@/components/common/EmptyState';
+import { SegTabs } from '@/components/common/SegTabs';
 import {
   COMMON_API_GROUPS,
   VERB_OPTIONS,
@@ -60,32 +61,17 @@ export function RuleEditor({ rules, onChange, disabled, disabledHint }: RuleEdit
   return (
     <div className="space-y-3">
       <div className="flex items-center gap-2 flex-wrap">
-        <div className="flex items-center gap-1 bg-secondary rounded-xl p-1">
-          <button
-            type="button"
-            onClick={() => setView('table')}
-            title="표로 편집"
-            aria-label="표로 편집"
-            className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs ${
-              view === 'table' ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground'
-            }`}
-          >
-            <Table2 className="w-3.5 h-3.5" /> 표
-          </button>
-          <button
-            type="button"
-            onClick={() => setView('yaml')}
-            title="YAML 로 보기"
-            aria-label="YAML 로 보기"
-            className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs ${
-              view === 'yaml' ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground'
-            }`}
-          >
-            <Code2 className="w-3.5 h-3.5" /> YAML
-          </button>
-        </div>
+        <SegTabs
+          label="규칙 보기 방식"
+          value={view}
+          onChange={setView}
+          options={[
+            ['table', <><Table2 className="w-3.5 h-3.5" aria-hidden="true" /> 표</>] as const,
+            ['yaml', <><Code2 className="w-3.5 h-3.5" aria-hidden="true" /> YAML</>] as const,
+          ]}
+        />
         <span className="text-xs text-muted-foreground">
-          {rules.length}줄 · 쓰기 권한 {writeCount}줄
+          {rules.length}줄 · 쓰기 권한 {writeCount}줄 · 진하게 칠한 동작이 쓰기
         </span>
         <div className="flex-1" />
         <button
@@ -101,7 +87,7 @@ export function RuleEditor({ rules, onChange, disabled, disabledHint }: RuleEdit
       </div>
 
       {view === 'yaml' ? (
-        <pre className="bg-secondary border border-border rounded-md p-3 text-[11.5px] font-mono overflow-x-auto text-foreground">
+        <pre className="bg-secondary border border-border rounded-md p-3 text-xs font-mono overflow-x-auto text-foreground">
           {toYaml(rules) || 'rules: []'}
         </pre>
       ) : rules.length === 0 ? (
@@ -137,7 +123,7 @@ export function RuleEditor({ rules, onChange, disabled, disabledHint }: RuleEdit
                       disabled={disabled}
                       onChange={(e) => update(idx, { apiGroups: splitGroups(e.target.value) })}
                       placeholder="core, apps"
-                      className="w-full font-mono text-xs px-2 py-1.5 bg-secondary border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/50 disabled:opacity-60"
+                      className="w-full font-mono text-xs px-2 py-1.5 bg-secondary border border-border rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/50 disabled:opacity-60"
                     />
                   </td>
                   <td className="px-3 py-2">
@@ -148,7 +134,7 @@ export function RuleEditor({ rules, onChange, disabled, disabledHint }: RuleEdit
                       disabled={disabled}
                       onChange={(e) => update(idx, { resources: splitList(e.target.value) })}
                       placeholder="pods, deployments, pods/log"
-                      className="w-full font-mono text-xs px-2 py-1.5 bg-secondary border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/50 disabled:opacity-60"
+                      className="w-full font-mono text-xs px-2 py-1.5 bg-secondary border border-border rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/50 disabled:opacity-60"
                     />
                   </td>
                   <td className="px-3 py-2">
@@ -162,12 +148,12 @@ export function RuleEditor({ rules, onChange, disabled, disabledHint }: RuleEdit
                             type="button"
                             disabled={disabled}
                             onClick={() => toggleVerb(idx, verb)}
-                            title={disabled ? disabledHint : `${verb} ${on ? '해제' : '추가'}`}
+                            title={disabled ? disabledHint : `${verb}${write ? ' (쓰기 동작)' : ''} ${on ? '해제' : '추가'}`}
                             aria-pressed={on}
                             className={`font-mono text-[11px] px-1.5 py-0.5 rounded border disabled:opacity-60 ${
  on
  ? write
- ? 'bg-status-warning/15 border-status-warning/40 text-status-warning font-semibold'
+ ? 'bg-primary border-primary text-primary-foreground font-semibold'
  : 'bg-primary/15 border-primary/40 text-primary font-semibold'
  : 'bg-secondary border-border text-muted-foreground hover:border-primary/40'
  }`}
@@ -185,7 +171,7 @@ export function RuleEditor({ rules, onChange, disabled, disabledHint }: RuleEdit
                       disabled={disabled}
                       title={disabled ? disabledHint : '이 규칙 삭제'}
                       aria-label={disabled ? disabledHint : '이 규칙 삭제'}
-                      className="p-1.5 rounded-lg text-muted-foreground hover:text-destructive hover:bg-destructive/10 disabled:opacity-50"
+                      className="p-1.5 rounded-xl text-muted-foreground hover:text-destructive hover:bg-destructive/10 disabled:opacity-50"
                     >
                       <Trash2 className="w-4 h-4" />
                     </button>
