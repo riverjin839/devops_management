@@ -2608,9 +2608,9 @@ export const k8sResourcesApi = {
       `/k8s/${clusterId}/namespaces/${encodeURIComponent(namespace)}/cluster-role-bindings`,
       { params: refresh ? { refresh: true } : undefined },
     ),
-  /** 다른 NS 에 있으면서 subject 가 이 NS(SA·SA 그룹)를 가리키는 RoleBinding. */
+  /** 다른 NS 에 있으면서 subject 가 이 NS(SA·SA 그룹)를 가리키는 RoleBinding + 참조 Role 규칙. */
   nsExternalRoleBindings: (clusterId: string, namespace: string, refresh = false) =>
-    api.get<import('@/types').K8sResourceListResponse>(
+    api.get<import('@/types').K8sBindingListResponse>(
       `/k8s/${clusterId}/namespaces/${encodeURIComponent(namespace)}/external-role-bindings`,
       { params: refresh ? { refresh: true } : undefined },
     ),
