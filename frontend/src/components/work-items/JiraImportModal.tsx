@@ -110,12 +110,15 @@ export function JiraImportModal({ open, onClose, defaultProjectKey }: JiraImport
   const [excelRows, setExcelRows] = useState<JiraExcelImportResult | null>(null);
   const [pasteText, setPasteText] = useState('');
   const [excelError, setExcelError] = useState<string | null>(null);
-  // 새 업무의 공유 범위 — 소속 테넌트가 1개면 그 테넌트, 0개면 전체 공유, 여럿이면 선택 필수
-  // (서버가 422 "공유 범위를 선택하세요" 로 거절한다, 15차 B-1).
+  // 새 업무의 공유 범위(Jira 검색 가져오기 · Excel 저장 공통) — 소속 테넌트가 1개면 그 테넌트,
+  // 0개면 전체 공유, 여럿이면 선택 필수(서버가 422 "공유 범위를 선택하세요" 로 거절한다, 15차 B-1).
+  // 미리보기(dryRun)는 아무것도 만들지 않으므로 범위 없이도 돌린다.
   const { data: myTenants = [] } = useMyTenants();
-  const [tenantChoice, setTenantChoice] = useState<string | null>(null);
-  const excelTenantId = tenantChoice ?? (myTenants.length === 1 ? myTenants[0].id : null);
-  const tenantMissing = myTenants.length > 1 && !excelTenantId;
+  // undefined = 아직 고르지 않음, null = "전체 공유"를 고름. 서버에는 고른 경우에만 보낸다(생략 = 서버 기본).
+  const [tenantChoice, setTenantChoice] = useState<string | null | undefined>(undefined);
+  const tenantMissing = myTenants.length > 1 && tenantChoice === undefined;
+  const newTenantId = tenantChoice !== undefined ? tenantChoice
+    : tenantMissing ? undefined : (myTenants.length === 1 ? myTenants[0].id : null);
 
   // 연결 점검 — Jira 에서 지워졌거나 안 보이는 이슈에 붙어 있는 죽은 링크를 찾아 정리한다.
   const verifyMut = useJiraVerifyLinks();
@@ -247,6 +250,7 @@ export function JiraImportModal({ open, onClose, defaultProjectKey }: JiraImport
         updatedSinceDays: scope !== 'jql' && sinceDays.trim() ? Number(sinceDays) : undefined,
         onlyKeys: !dryRun && excluded.size > 0 ? applicable.filter((k) => !excluded.has(k)) : undefined,
         dryRun,
+        ...(tenantChoice !== undefined ? { tenantId: tenantChoice } : {}),
       })).data,
       summarize: importResultLines,
     });
@@ -304,7 +308,7 @@ export function JiraImportModal({ open, onClose, defaultProjectKey }: JiraImport
     const r = await runLogged(runLog, {
       title: '업무 관리에 저장',
       first: `Excel·붙여넣기 ${rows.length}행 업무 관리 저장 요청`,
-      fn: async () => (await jiraApi.importSaveToBoard(rows, excelTenantId)).data,
+      fn: async () => (await jiraApi.importSaveToBoard(rows, tenantChoice)).data,
       summarize: importResultLines,
     });
     setExcelBusy(false);
@@ -554,6 +558,11 @@ export function JiraImportModal({ open, onClose, defaultProjectKey }: JiraImport
                     </div>
                   )}
 
+                  {/* 새로 만들어질 업무의 공유 범위 — 미리보기는 범위 없이도 돌고, 확정은 여러 테넌트
+                      소속이면 선택해야 한다(서버 422 와 같은 규칙). */}
+                  <TenantScopeSelect value={newTenantId} onChange={setTenantChoice}
+                    labelClassName="block text-xs font-medium text-muted-foreground mb-1" />
+
                   <div className="flex items-center gap-2 pt-1">
                     {preview && preview.status === 'ok' && (
                       <button type="button" onClick={() => setPreview(null)} disabled={busy}
@@ -563,7 +572,8 @@ export function JiraImportModal({ open, onClose, defaultProjectKey }: JiraImport
                     )}
                     <button type="button"
                       onClick={() => void run(!(preview && preview.status === 'ok'))}
-                      disabled={busy || !cred?.configured}
+                      disabled={busy || !cred?.configured || (preview?.status === 'ok' && tenantMissing)}
+                      title={preview?.status === 'ok' && tenantMissing ? '공유 범위를 선택하세요' : undefined}
                       className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 disabled:opacity-50">
                       {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />}
                       {preview && preview.status === 'ok' ? '가져오기 확정' : '가져오기'}
@@ -623,7 +633,7 @@ export function JiraImportModal({ open, onClose, defaultProjectKey }: JiraImport
                         ))}
                       </ul>
                       <div className="mt-3">
-                        <TenantScopeSelect value={excelTenantId} onChange={setTenantChoice}
+                        <TenantScopeSelect value={newTenantId} onChange={setTenantChoice}
                           labelClassName="block text-xs font-medium text-muted-foreground mb-1" />
                       </div>
                       <div className="flex items-center gap-2 mt-3">

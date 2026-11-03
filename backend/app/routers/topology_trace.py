@@ -32,9 +32,8 @@ from app.schemas.topology_trace import (
 )
 from app.services import audit_logger
 from app.services.cluster_access import (
-    cluster_ids_for_hosts,
     require_cluster_access,
-    require_clusters_access,
+    require_hosts_scope,
 )
 from app.services.command_mask import audit_command, audit_error
 from app.services.hubble_client import HubbleFilter, fetch_flows
@@ -65,12 +64,15 @@ def _readable_cluster(db: Session, user: User, cluster_id) -> Cluster:
     return cluster
 
 
-def _ssh_scope(db: Session, user: User, host: str, cluster_id: UUID | None) -> tuple[str, str]:
-    """tcpdump 대상 host 의 operate 판정 + 감사 대상(target_type, target_id) 반환."""
-    require_clusters_access(db, user, [cluster_id, *cluster_ids_for_hosts(db, [host])])
+def _ssh_scope(db: Session, user: User, host: str, cluster_id: UUID | None) -> tuple[str, str, str | None]:
+    """tcpdump 대상 host 의 operate 판정 + (감사 target_type, target_id, 접속 고정 IP) 반환.
+
+    격리 사용 중 해석 안 되는 host 는 403. 세 번째 값은 ``SSHTarget.connect_ip`` 로 넘긴다(DNS rebinding 차단).
+    """
+    scope = require_hosts_scope(db, user, [host], also=[cluster_id])
     if cluster_id is not None:
-        return "cluster", str(cluster_id)
-    return "host", host
+        return "cluster", str(cluster_id), scope.connect_ip(host)
+    return "host", host, scope.connect_ip(host)
 
 
 @router.post("", response_model=TopologyTraceResponse)
@@ -224,11 +226,12 @@ def tcpdump_run(
             status_code=422,
             detail="password 또는 private_key 중 하나는 필수입니다.",
         )
-    target_type, target_id = _ssh_scope(db, actor, payload.host, payload.cluster_id)
+    target_type, target_id, connect_ip = _ssh_scope(db, actor, payload.host, payload.cluster_id)
 
     target = SSHTarget(
         host=payload.host, port=payload.port, username=payload.username,
         password=payload.password, private_key=payload.private_key,
+        connect_ip=connect_ip,
     )
     # 감사는 try/finally 로 정확히 1행 — 캡처 도중 예외도 failure(마스킹한 예외 요약)로 남긴다.
     result = None
@@ -293,10 +296,11 @@ def tcpdump_interfaces(
             status_code=422,
             detail="password 또는 private_key 중 하나는 필수입니다.",
         )
-    target_type, target_id = _ssh_scope(db, actor, payload.host, cluster_id)
+    target_type, target_id, connect_ip = _ssh_scope(db, actor, payload.host, cluster_id)
     target = SSHTarget(
         host=payload.host, port=payload.port, username=payload.username,
         password=payload.password, private_key=payload.private_key,
+        connect_ip=connect_ip,
     )
     ifaces: list | None = None
     exc: BaseException | None = None

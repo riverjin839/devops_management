@@ -33,7 +33,7 @@ from app.auth.deps import require_operator
 from app.services.kubeconfig import ensure_kubeconfig_file
 from app.services.ssh_runner import SSHTarget, run_bulk
 from app.services import audit_logger
-from app.services.cluster_access import acluster_ids_for_hosts, require_clusters_access
+from app.services.cluster_access import arequire_hosts_scope
 from app.services.command_mask import audit_command, audit_error, mask_command
 from app.services.k8s_client_pool import get_api_client_for_path
 
@@ -296,7 +296,8 @@ async def run_etcdctl(
     if not cluster:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Cluster not found")
     # 경로 클러스터는 _cluster_scoped 가 봤다 — host 가 실제로 속한 클러스터도 operate 필요(D-169 ③).
-    require_clusters_access(db, actor, [cluster_id, *await acluster_ids_for_hosts(db, [payload.host])])
+    # 격리 사용 중 해석 안 되는 host 는 403, 접속은 판정한 IP 로(connect_ip — DNS rebinding 차단).
+    scope = await arequire_hosts_scope(db, actor, [payload.host], also=[cluster_id])
 
     bash_cmd = _build_etcdctl_command(payload)
     # bash -c "..." 로 한 번에 실행. source 지원을 위해 bash 강제.
@@ -305,6 +306,7 @@ async def run_etcdctl(
     target = SSHTarget(
         host=payload.host, port=payload.port, username=payload.username,
         password=payload.password, private_key=payload.private_key,
+        connect_ip=scope.connect_ip(payload.host),
     )
     r = await _run_audited(
         db, request, actor, action="etcdctl.run", cluster_id=cluster_id, host=payload.host, bash_cmd=bash_cmd,
@@ -342,7 +344,7 @@ async def get_etcd_logs(
     cluster = db.query(Cluster).filter(Cluster.id == cluster_id).first()
     if not cluster:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Cluster not found")
-    require_clusters_access(db, actor, [cluster_id, *await acluster_ids_for_hosts(db, [payload.host])])
+    scope = await arequire_hosts_scope(db, actor, [payload.host], also=[cluster_id])
 
     # journalctl -u etcd.service -n <tail> --no-pager [--since "..."] [ | grep -i "..." ]
     cmd_parts = [f"journalctl -u {shlex.quote(payload.unit)} -n {int(payload.tail)} --no-pager"]
@@ -357,6 +359,7 @@ async def get_etcd_logs(
     target = SSHTarget(
         host=payload.host, port=payload.port, username=payload.username,
         password=payload.password, private_key=payload.private_key,
+        connect_ip=scope.connect_ip(payload.host),
     )
     r = await _run_audited(
         db, request, actor, action="etcdctl.logs", cluster_id=cluster_id, host=payload.host, bash_cmd=bash_cmd,

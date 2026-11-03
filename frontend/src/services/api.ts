@@ -1057,7 +1057,8 @@ export const jiraApi = {
       timeout: 2 * 60_000,
     }),
   importSaveToBoard: (rows: import('@/types').JiraExcelRow[], tenantId?: string | null) =>
-    api.post<import('@/types').JiraImportResult>('/jira/import/excel/save', { rows, tenantId: tenantId ?? null }, {
+    // tenantId: undefined = 고르지 않음(키 생략 → 서버 기본), null = "전체 공유" 명시
+    api.post<import('@/types').JiraImportResult>('/jira/import/excel/save', { rows, ...(tenantId !== undefined ? { tenantId } : {}) }, {
       timeout: 2 * 60_000,
     }),
   // /jira-import 화면의 2단계 저장 — dryRun=true 로 행별 생성/갱신/변경 필드를 먼저 받고,

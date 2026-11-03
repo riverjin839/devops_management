@@ -2461,13 +2461,17 @@ _TENANT_CONFLICT_MSG = "다른 공유 범위의 항목과 키가 겹칩니다"
 
 def _resolve_import_tenant(
     db: Session, scope: TenantScope, requested: Optional[UUID], *, require_choice: bool,
+    explicit: bool = False,
 ) -> Optional[UUID]:
     """가져오기로 **새로 만드는** 업무의 tenant_id.
 
     - 지정값이 있으면 ``ensure_assignable``(속하지 않은 테넌트면 403) 후 그대로 쓴다.
-    - 비우면 소속 테넌트가 1개일 때 그 테넌트, 0개면 전체 공유(None).
-    - 여러 개인데 비웠으면 ``require_choice`` 일 때 422("공유 범위를 선택하세요"), 아니면 전체 공유.
+    - ``explicit``(요청 본문에 ``tenant_id`` 가 null 로 **명시**됨) 이면 사용자가 "전체 공유"를 고른 것 — None.
+    - 보내지 않았으면 소속 테넌트가 1개일 때 그 테넌트, 0개면 전체 공유(None).
+    - 여러 개인데 보내지 않았으면 ``require_choice`` 일 때 422("공유 범위를 선택하세요"), 아니면 전체 공유.
     """
+    if requested is None and explicit:
+        return None
     if requested is not None:
         scope.ensure_assignable(requested)
         if db.query(Tenant.id).filter(Tenant.id == requested).first() is None:
@@ -2500,9 +2504,13 @@ async def import_issues(
     scope: TenantScope = Depends(get_tenant_scope),
 ):
     cfg = _get_config(db)
-    # 새 업무의 공유 범위 — 라이브 가져오기 화면은 아직 범위를 보내지 않으므로 여러 테넌트
-    # 소속이어도 422 대신 전체 공유로 둔다(기존 동작). 지정하면 ensure_assignable 로 검증한다.
-    new_tenant_id = _resolve_import_tenant(db, scope, payload.tenant_id, require_choice=False)
+    # 새 업무의 공유 범위 — 엑셀 저장과 같은 규칙: 여러 테넌트 소속인데 비우면 실제 가져오기는
+    # 422("공유 범위를 선택하세요"), 미리보기(dry_run)는 아무것도 만들지 않으므로 통과시킨다.
+    # 소속 1개면 그 테넌트, 0개면 전체 공유. 지정하면 ensure_assignable 로 검증한다.
+    new_tenant_id = _resolve_import_tenant(
+        db, scope, payload.tenant_id, require_choice=not payload.dry_run,
+        explicit="tenant_id" in payload.model_fields_set,
+    )
     base_url = cfg.get("base_url", "")
     if not base_url or not cfg.get("enabled", False):
         return JiraImportResult(status="error", detail="Jira 연동이 비활성화되었거나 URL 미설정 (설정에서 활성화하세요).")
@@ -3006,7 +3014,10 @@ def import_excel_save(
             status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
             detail=f"한 번에 저장할 수 있는 행은 최대 {_EXCEL_MAX_ROWS}개입니다. 나눠서 저장하세요.",
         )
-    new_tenant_id = _resolve_import_tenant(db, scope, payload.tenant_id, require_choice=not payload.dry_run)
+    new_tenant_id = _resolve_import_tenant(
+        db, scope, payload.tenant_id, require_choice=not payload.dry_run,
+        explicit="tenant_id" in payload.model_fields_set,
+    )
 
     cfg = _get_config(db)
     base_url = (cfg.get("base_url") or "").strip().rstrip("/")

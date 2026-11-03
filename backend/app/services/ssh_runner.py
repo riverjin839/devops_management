@@ -10,6 +10,7 @@ from __future__ import annotations
 import asyncio
 import io
 import os
+import socket
 import time
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, asdict, field
@@ -51,6 +52,15 @@ class SSHTarget:
     name: Optional[str] = None
     cluster_id: Optional[str] = None
     cluster_name: Optional[str] = None
+    # 접속 주소 고정 — 테넌트 판정(``cluster_access.HostScope.connect_ip``)이 DNS 로 푼 IP.
+    # 있으면 TCP 는 이 IP 로 열고, 호스트 키 검증(TOFU 저장소 키)·결과 host·감사는 ``host`` 그대로 쓴다.
+    # 판정 뒤 이름이 다른 노드로 다시 풀리는 DNS rebinding 을 막는다. None 이면 ``host`` 로 접속(예전 동작).
+    connect_ip: Optional[str] = None
+
+
+def _open_pinned_socket(ip: str, port: int, timeout: int) -> socket.socket:
+    """판정한 IP 로 직접 TCP 연결 — paramiko 에 ``sock=`` 으로 넘겨 이름 재해석 없이 접속한다."""
+    return socket.create_connection((ip, port), timeout=timeout)
 
 
 def _build_client(tgt: SSHTarget, connect_timeout: int) -> paramiko.SSHClient:
@@ -89,7 +99,22 @@ def _build_client(tgt: SSHTarget, connect_timeout: int) -> paramiko.SSHClient:
     else:
         raise ValueError("password 또는 private_key 중 하나는 필수입니다")
 
-    client.connect(**kwargs)
+    sock: Optional[socket.socket] = None
+    if tgt.connect_ip:
+        # hostname 은 원래 이름 그대로 둔다 — paramiko 는 sock 이 있으면 hostname 으로 다시 풀지 않고,
+        # 호스트 키 조회·missing_host_key(TOFU 기록)만 hostname 기준으로 한다(위 apply_known_key 와 같은 키).
+        sock = _open_pinned_socket(tgt.connect_ip, tgt.port, connect_timeout)
+        kwargs["sock"] = sock
+    try:
+        client.connect(**kwargs)
+    except BaseException:
+        if sock is not None:
+            try:
+                client.close()
+                sock.close()
+            except Exception:  # noqa: BLE001
+                pass
+        raise
     return client
 
 

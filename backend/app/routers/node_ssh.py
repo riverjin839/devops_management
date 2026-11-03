@@ -20,7 +20,8 @@ UI-First: 접속 후 실행할 명령(`initialCommand`)·셸 종류·터미널 �
 권한·감사(D-169·D-170·D-172):
 - `/test` 와 WS 모두 host 가 실제로 속한 클러스터(+화면이 넘긴 cluster_id)의 operate 를 본다.
   어느 클러스터에도 속하지 않는 host(관리 서버 등)는 허용하고 감사 `target_type=host` 로 남긴다(정책 5).
-- WS 토큰 문제는 4401, 역할 부족은 4402, 테넌트 거부는 4413.
+- WS 토큰 문제는 4401, 역할 부족은 4402, 테넌트 거부는 4413(격리 사용 중 해석 안 되는 host 도 4413).
+- 접속은 판정한 IP 로 고정한다(`HostScope.connect_ip` → `SSHTarget.connect_ip`, DNS rebinding 차단).
 - 테넌트 거부·SSH 접속 실패는 `node.ssh.open` ``status="failure"``. `initialCommand` 는 마스킹 후 500자.
 """
 from __future__ import annotations
@@ -39,10 +40,10 @@ from app.models import Cluster
 from app.models.user import User
 from app.services import audit_logger
 from app.services.cluster_access import (
-    acluster_ids_for_host,
-    cluster_ids_for_host,
+    HOST_UNRESOLVED_DETAIL,
+    aresolve_hosts_scope,
     has_cluster_access,
-    require_clusters_access,
+    require_hosts_scope,
 )
 from app.services.command_mask import audit_command
 from app.services.ssh_pty import (
@@ -104,8 +105,9 @@ def test_node_ssh(
     자격증명을 대입해 보는 경로 차단), 결과를 감사(`node.ssh.test`)에 남긴다.
     """
     host = body.host.strip()
-    scoped = cluster_ids_for_host(db, host)
-    require_clusters_access(db, current_user, scoped)
+    # 격리 사용 중 해석 안 되는 host 는 403, 접속은 판정한 IP 로(connect_ip — DNS rebinding 차단).
+    scope = require_hosts_scope(db, current_user, [host])
+    scoped = scope.cluster_ids
     result = test_connection(
         SSHTarget(
             host=host,
@@ -113,6 +115,7 @@ def test_node_ssh(
             username=body.username.strip(),
             password=body.password or None,
             private_key=body.private_key or None,
+            connect_ip=scope.connect_ip(host),
         ),
         connect_timeout=body.connect_timeout,
     )
@@ -183,7 +186,8 @@ async def node_ssh_terminal(
 
         # 테넌트 바인딩 — 화면이 넘긴 cluster_id 뿐 아니라 host 가 실제로 속한 클러스터까지 본다
         # (cluster_id 를 빼고 접속해 우회하는 것을 막는다).
-        scoped = await acluster_ids_for_host(db, init.host)
+        scope = await aresolve_hosts_scope(db, [init.host])
+        scoped = set(scope.cluster_ids)
         if cluster_uuid is not None:
             scoped.add(cluster_uuid)
         label = init.label
@@ -212,6 +216,15 @@ async def node_ssh_terminal(
             await reject_init(websocket, "이 노드가 속한 클러스터에 대한 실행 권한이 없습니다 (테넌트 바인딩)",
                               code=CLOSE_CLUSTER_FORBIDDEN)
             return
+        # 격리 사용 중 해석되지 않는 host 는 거부(fail-closed) — 판정 때 못 푼 이름이 접속 때 풀려 우회하지 않게.
+        if scope.unresolved:
+            audit_logger.record(
+                db, action="node.ssh.open", actor=user, status="failure",
+                target_type=audit_target[0], target_id=audit_target[1],
+                details={**base_details, "reason": "host_unresolved"},
+            )
+            await reject_init(websocket, HOST_UNRESOLVED_DETAIL, code=CLOSE_CLUSTER_FORBIDDEN)
+            return
 
         def _log_open() -> None:
             audit_logger.record(
@@ -236,6 +249,8 @@ async def node_ssh_terminal(
                 "name": node_name or None,
                 "cluster_id": str(cluster_uuid) if cluster_uuid else None,
                 "cluster_name": cluster_name,
+                # 판정한 IP 로 접속(DNS rebinding 차단) — 호스트 키·감사 label 은 init.host 그대로.
+                "connect_ip": scope.connect_ip(init.host),
             },
             on_open=_log_open,
             on_fail=_log_fail,

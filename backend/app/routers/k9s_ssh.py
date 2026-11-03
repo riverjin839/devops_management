@@ -33,7 +33,7 @@ from app.database import SessionLocal
 from app.models import Cluster
 from app.models.user import User
 from app.services import audit_logger
-from app.services.cluster_access import acluster_ids_for_host, has_cluster_access
+from app.services.cluster_access import HOST_UNRESOLVED_DETAIL, aresolve_hosts_scope, has_cluster_access
 from app.services.operation_levels import is_operation_level_guarded
 from app.services.ssh_pty import (
     CLOSE_CLUSTER_FORBIDDEN,
@@ -153,7 +153,8 @@ async def k9s_terminal(websocket: WebSocket, cluster_id: UUID, token: str | None
 
         # init host 가 실제로 속한 클러스터까지 operate 판정(D-169 ④) — 경로 클러스터만 보면
         # 바인딩 없는 경로로 다른 테넌트 control-plane 에 붙어 그 서버의 kubeconfig 로 k9s 가 뜬다.
-        foreign = [cid for cid in await acluster_ids_for_host(db, init.host)
+        scope = await aresolve_hosts_scope(db, [init.host])
+        foreign = [cid for cid in scope.cluster_ids
                    if not has_cluster_access(db, user, cid, "operate")]
         if foreign:
             audit_logger.record(
@@ -164,6 +165,15 @@ async def k9s_terminal(websocket: WebSocket, cluster_id: UUID, token: str | None
             )
             await reject_init(websocket, "이 호스트가 속한 클러스터에 대한 실행 권한이 없습니다 (테넌트 바인딩)",
                               code=CLOSE_CLUSTER_FORBIDDEN)
+            return
+        # 격리 사용 중 해석되지 않는 host 는 거부(fail-closed) — 판정 때 못 푼 이름이 접속 때 풀려 우회하지 않게.
+        if scope.unresolved:
+            audit_logger.record(
+                db, action="k9s.ssh.open", actor=user, status="failure",
+                target_type="cluster", target_id=str(cluster_id),
+                details={**base_details, "reason": "host_unresolved"},
+            )
+            await reject_init(websocket, HOST_UNRESOLVED_DETAIL, code=CLOSE_CLUSTER_FORBIDDEN)
             return
 
         def _log_open() -> None:
@@ -187,6 +197,8 @@ async def k9s_terminal(websocket: WebSocket, cluster_id: UUID, token: str | None
             target_meta={
                 "cluster_id": str(cluster_id),
                 "cluster_name": cluster.name,
+                # 판정한 IP 로 접속(DNS rebinding 차단) — 호스트 키·감사 label 은 init.host 그대로.
+                "connect_ip": scope.connect_ip(init.host),
             },
             on_open=_log_open,
             on_fail=_log_fail,

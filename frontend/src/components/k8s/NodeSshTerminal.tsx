@@ -31,7 +31,7 @@ interface NodeSshTerminalProps {
 
 const CLOSE_NOTES: Record<number, string> = {
   4403: '[노드 SSH 터미널 기능이 비활성화되어 있습니다]',
-  4413: '[이 노드가 속한 클러스터에 실행 권한이 없습니다 — 테넌트 바인딩 확인]',
+  4413: '[접속이 거부되었습니다 — 노드가 속한 클러스터의 테넌트 바인딩 또는 접속 호스트(DNS) 확인]',
 };
 
 /**

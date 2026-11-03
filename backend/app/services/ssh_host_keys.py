@@ -99,7 +99,18 @@ class TofuHostKeyPolicy(paramiko.MissingHostKeyPolicy):
 
     def missing_host_key(self, client: paramiko.SSHClient, hostname: str, key: paramiko.PKey) -> None:
         port = getattr(client, "_pep_ssh_port", 22)
-        _save(hostname, port, key)
+        # 22 외 포트에서 paramiko 는 "[host]:port" 를 넘긴다 — 저장 키는 _load 와 같은 (host, port) 로 맞춘다.
+        _save(_strip_port_brackets(hostname), port, key)
+
+
+def _paramiko_host_key_name(host: str, port: int) -> str:
+    return host if port == 22 else f"[{host}]:{port}"
+
+
+def _strip_port_brackets(hostname: str) -> str:
+    if hostname.startswith("[") and "]:" in hostname:
+        return hostname[1:hostname.index("]:")]
+    return hostname
 
 
 def apply_known_key(client: paramiko.SSHClient, host: str, port: int) -> None:
@@ -110,6 +121,7 @@ def apply_known_key(client: paramiko.SSHClient, host: str, port: int) -> None:
     """
     key = _load(host, port)
     if key is not None:
-        client.get_host_keys().add(host, key.get_name(), key)
+        # paramiko 는 22 외 포트를 "[host]:port" 로 조회한다 — 같은 이름으로 넣어야 비교가 실제로 일어난다.
+        client.get_host_keys().add(_paramiko_host_key_name(host, port), key.get_name(), key)
     # missing_host_key 에서 port 를 알 수 있도록 클라이언트에 임시로 실어둠.
     client._pep_ssh_port = port  # noqa: SLF001

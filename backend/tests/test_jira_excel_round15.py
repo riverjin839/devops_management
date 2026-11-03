@@ -1,7 +1,8 @@
 """Jira 엑셀 가져오기 저장 경로 — R-4 15차 B-1·B-2·B-4·B-5·B-6 회귀 테스트.
 
 - B-1 테넌트: 안 보이는 기존 업무는 덮지 않고(행 오류), 새 업무는 지정/기본 공유 범위로 만든다.
-  라이브 가져오기(`POST /jira/import`)도 같은 규칙.
+  라이브 가져오기(`POST /jira/import`)도 같은 규칙 — 여러 테넌트 소속이면 실제 가져오기는 범위
+  선택 필수(422), 미리보기(dry_run)는 통과.
 - B-2 덮어쓰기: dry_run diff · only_keys · 빈 셀 유지 · 본문/칸반은 비었을 때만.
 - B-4 원자성: 행별 savepoint — 한 행의 DB 오류는 그 행만. 요청 안 중복 키는 첫 행만.
 - B-5 상한: 파일 10MB · 붙여넣기 2MB · 저장 2000행 → 413. 미리보기 truncated/duplicates.
@@ -445,3 +446,75 @@ async def test_live_import_assigns_single_tenant(db, world, monkeypatch):
     )
     assert res.imported == 1
     assert _get(db, key)[0].tenant_id == world["t1"].id
+
+
+def _live(db, user, **kw):
+    return jira_router.import_issues(
+        JiraImportRequest(scope="jql", jql="project = X", **kw), db=db,
+        actor=user, scope=_scope(db, user),
+    )
+
+
+async def test_live_import_multi_tenant_requires_choice(db, world, monkeypatch):
+    key = f"{world['prefix']}-83"
+    _patch_live(monkeypatch, [key])
+
+    with pytest.raises(HTTPException) as ei:
+        await _live(db, world["multi"])
+    assert ei.value.status_code == 422
+    assert ei.value.detail == "공유 범위를 선택하세요"
+    assert _get(db, key) == []
+
+
+async def test_live_import_multi_tenant_dry_run_without_choice_ok(db, world, monkeypatch):
+    key = f"{world['prefix']}-84"
+    _patch_live(monkeypatch, [key])
+
+    res = await _live(db, world["multi"], dry_run=True)
+    assert res.status == "ok"
+    assert res.dry_run is True
+    assert [i.action for i in res.items] == ["create"]
+    assert res.imported == 1
+    assert _get(db, key) == []  # 미리보기는 아무것도 만들지 않는다
+
+
+async def test_live_import_explicit_tenant_assigned(db, world, monkeypatch):
+    key = f"{world['prefix']}-85"
+    _patch_live(monkeypatch, [key])
+
+    res = await _live(db, world["multi"], tenant_id=world["t2"].id)
+    assert res.status == "ok" and res.imported == 1
+    assert _get(db, key)[0].tenant_id == world["t2"].id
+
+
+async def test_live_import_rejects_unassignable_tenant(db, world, monkeypatch):
+    key = f"{world['prefix']}-86"
+    _patch_live(monkeypatch, [key])
+
+    with pytest.raises(HTTPException) as ei:
+        await _live(db, world["outsider"], tenant_id=world["t1"].id)
+    assert ei.value.status_code == 403
+    assert _get(db, key) == []
+
+
+# ── 명시적 "전체 공유"(tenant_id: null) — 생략(미선택)과 구분한다 ─────────────────────
+
+def test_save_explicit_null_is_shared_for_multi_tenant(db, world):
+    key = f"{world['prefix']}-90"
+    res = _save(db, world["multi"], [_row(key)], tenant_id=None)  # 키를 명시 → model_fields_set 포함
+    assert res.imported == 1
+    assert _get(db, key)[0].tenant_id is None
+
+
+def test_save_explicit_null_overrides_single_tenant_default(db, world):
+    key = f"{world['prefix']}-91"
+    res = _save(db, world["member"], [_row(key)], tenant_id=None)
+    assert res.imported == 1
+    assert _get(db, key)[0].tenant_id is None
+
+
+async def test_live_import_explicit_null_is_shared_for_multi_tenant(db, world, monkeypatch):
+    key = f"{world['prefix']}-92"
+    _patch_live(monkeypatch, [key])
+    await _live(db, world["multi"], tenant_id=None)
+    assert _get(db, key)[0].tenant_id is None

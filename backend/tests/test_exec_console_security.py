@@ -445,9 +445,11 @@ def test_infra_hostname_case_and_trailing_dot(world, db):
         db.commit()
 
 
-def test_dns_resolved_name_matches_and_failure_falls_back(world, db, monkeypatch):
+def test_dns_resolved_name_matches_and_failure_is_rejected(world, db, monkeypatch):
     import socket
     import time
+
+    from fastapi import HTTPException
 
     import app.services.cluster_access as ca
 
@@ -460,13 +462,17 @@ def test_dns_resolved_name_matches_and_failure_falls_back(world, db, monkeypatch
         raise socket.gaierror("no such host")
     monkeypatch.setattr(ca, "_getaddrinfo_ips", _fake)
     monkeypatch.setattr(ca, "_RESOLVE_TIMEOUT_SEC", 0.1)
-    ids, ips = ca.resolve_hosts_scope(db, ["bound-alias.test", "missing.test", "::ffff:" + OPEN_HOST])
+    ids, ips, pinned, unresolved = ca.resolve_hosts_scope(
+        db, ["bound-alias.test", "missing.test", "::ffff:" + OPEN_HOST])
     assert world["bound"].id in ids and world["open"].id in ids
     assert ips["bound-alias.test"] == [BOUND_HOST]
     assert ips["missing.test"] == [] and ips["::ffff:" + OPEN_HOST] == [OPEN_HOST]
-    # 해석 실패·시간 초과는 리터럴 비교만(예외 없이) — 이전 동작 수준
-    assert ca.cluster_ids_for_host(db, "missing.test") == set()
-    assert ca.cluster_ids_for_host(db, "slow.test") == set()
+    assert pinned == {"bound-alias.test": BOUND_HOST} and unresolved == ["missing.test"]
+    # 바인딩이 있으면(격리 사용 중) 해석 실패·시간 초과한 미지의 이름은 403(fail-closed)
+    for name in ("missing.test", "slow.test"):
+        with pytest.raises(HTTPException) as exc:
+            ca.cluster_ids_for_host(db, name)
+        assert exc.value.status_code == 403 and "DNS 해석 실패" in exc.value.detail
 
 
 async def test_async_host_scope_matches_sync(world, db, monkeypatch):
@@ -483,9 +489,13 @@ async def test_async_host_scope_matches_sync(world, db, monkeypatch):
     hosts = ["bound-alias.test", "missing.test", OUTSIDE_HOST, "::ffff:" + OPEN_HOST,
              *_bound_variants(BOUND_HOST)]
     assert await ca.aresolve_hosts_scope(db, hosts) == ca.resolve_hosts_scope(db, hosts)
-    assert await ca.acluster_ids_for_hosts(db, (h for h in hosts)) == ca.cluster_ids_for_hosts(db, hosts)
+    resolvable = [h for h in hosts if h != "missing.test"]
+    assert await ca.acluster_ids_for_hosts(db, (h for h in resolvable)) == ca.cluster_ids_for_hosts(db, resolvable)
     assert world["bound"].id in await ca.acluster_ids_for_host(db, "bound-alias.test")
-    assert await ca.acluster_ids_for_host(db, "missing.test") == set()
+    with pytest.raises(ca.HostUnresolvedError):  # 격리 사용 중 해석 실패 = 거부(sync 판과 같은 규칙)
+        await ca.acluster_ids_for_host(db, "missing.test")
+    with pytest.raises(ca.HostUnresolvedError):
+        ca.cluster_ids_for_host(db, "missing.test")
     assert await ca.acluster_ids_for_host(db, OUTSIDE_HOST) == set()
     assert await ca.acluster_ids_for_hosts(db, []) == set()
 
@@ -531,11 +541,12 @@ async def test_async_host_scope_does_not_block_event_loop(world, db, monkeypatch
     async def _async_call():
         return await ca.aresolve_hosts_scope(db, ["slow.test", "bound-alias.test"])
 
-    (ids, ips), elapsed, async_ticks = await _measure(_async_call)
+    (ids, ips, _pinned, unresolved), elapsed, async_ticks = await _measure(_async_call)
     assert elapsed < 0.55, elapsed  # 0.3s 상한 + DB 여유 — 0.6s 조회를 기다리지 않는다
     assert async_ticks >= 10, async_ticks  # 기다리는 동안 루프가 다른 코루틴을 돌렸다
     assert world["bound"].id in ids  # 제때 풀린 이름은 반영
     assert ips["slow.test"] == [] and ips["bound-alias.test"] == [BOUND_HOST]  # 시간 초과 = 리터럴 폴백
+    assert unresolved == ["slow.test"]  # …그리고 격리 사용 중이라 거부 대상
 
     # 대조군: sync 판을 루프 안에서 부르면 같은 대기 동안 다른 코루틴이 전혀 돌지 못한다(측정이 유효함).
     async def _sync_call():
