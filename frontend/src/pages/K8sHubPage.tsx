@@ -60,14 +60,12 @@ export function K8sHubPage() {
   return (
     <div className="app-min-h-screen bg-background">
       <PageShell density="console" className="flex gap-3">
-        <div className="sticky top-4 self-start">
-          <ClusterSidebar
-            clusters={clusters}
-            selectedId={clusterId || null}
-            onSelect={selectCluster}
-            iconOnly
-          />
-        </div>
+        <ClusterSidebar
+          clusters={clusters}
+          selectedId={clusterId || null}
+          onSelect={selectCluster}
+          iconOnly
+        />
 
         <div className="flex-1 min-w-0 space-y-3">
           <PageHeader
