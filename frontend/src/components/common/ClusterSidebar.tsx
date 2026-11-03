@@ -1,43 +1,39 @@
 import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { Server, CheckCircle, AlertTriangle, XCircle, WifiOff, LayoutGrid, GripVertical, ArrowDownUp } from 'lucide-react';
-import {
-  DndContext, closestCenter, PointerSensor, useSensor, useSensors, type DragEndEvent,
-} from '@dnd-kit/core';
-import {
-  SortableContext, verticalListSortingStrategy, useSortable, arrayMove,
-} from '@dnd-kit/sortable';
-import { CSS } from '@dnd-kit/utilities';
+import { Link } from 'react-router-dom';
+import { Server, CheckCircle, AlertTriangle, XCircle, WifiOff, LayoutGrid, Plus, RefreshCw, ShieldAlert } from 'lucide-react';
 import type { Cluster, Status } from '@/types';
 import { useSidebarStore } from '@/stores/sidebarStore';
 import { useK8sHub } from '@/lib/k8sHub';
 import { useClusterIconSrc } from '@/hooks/useClusterIconSrc';
+import { isGuardedLevel, levelLabel, useOperationLevels } from '@/hooks/useOperationLevels';
 import { ResizeHandle } from './ResizeHandle';
+import { Skeleton } from './Skeleton';
 
 interface ClusterSidebarProps {
   clusters: Cluster[];
   /** 현재 선택 — null 이면 전체(All), 문자열이면 해당 cluster.id */
   selectedId: string | null;
   onSelect: (id: string | null) => void;
-  title?: string;
-  /** 지금 선택된 클러스터가 상단 고정 (풀 배경) */
+  /** 지금 선택된 클러스터를 강조할지 */
   highlightActive?: boolean;
   /** 최상단에 "전체" 선택지 (Dashboard 에 유용) */
   allowAll?: boolean;
   /** "전체" 표시 라벨 */
   allLabel?: string;
-  /** 정렬 모드 토글 + 드래그 앤 드랍 활성화. onReorder 가 주어지면 기능 노출. */
-  onReorder?: (orderedClusterIds: string[]) => void;
-  /** 다중 선택 모드 — 활성화 시 selectedIds/onMultiSelectChange 가 우선한다.
-   *  noop pages 영향 없음: 기본 false. */
+  /** 다중 선택 모드 — 활성화 시 selectedIds/onMultiSelectChange 가 우선한다. 기본 false. */
   multiSelect?: boolean;
   /** multiSelect 모드일 때 현재 선택된 클러스터 id 들 */
   selectedIds?: string[];
   /** multiSelect 모드일 때 선택 변경 콜백 */
   onMultiSelectChange?: (ids: string[]) => void;
-  /** 아이콘 전용 레일 모드 — 메인 사이드바처럼 좁은 폭에 아이콘만 표시하고 호버 시 클러스터 이름 툴팁.
-   *  multiSelect / onReorder 와 함께 쓰지 않는다 (Dashboard 같이 단일 선택 페이지 전용). */
+  /** 표준(§12.5) 표기용 — 레일은 늘 아이콘 전용이다. 예전 넓은 목록 모드는 쓰는 화면이 없어 걷어냈다. */
   iconOnly?: boolean;
+  /** 클러스터 목록을 불러오는 중 — 빈 목록 대신 자리표시 타일을 그린다. */
+  isLoading?: boolean;
+  /** 목록 조회 실패 — "없음" 대신 오류와 다시 시도를 보인다. */
+  error?: unknown;
+  onRetry?: () => void;
 }
 
 // 아이콘 레일 폭(useSidebarStore.clusterIconRailWidth, 드래그로 조절)에서 아이콘 크기를
@@ -55,6 +51,7 @@ function iconSizeFor(railWidth: number) {
     icon: Math.round(btn * 0.5),
     dot: Math.max(5, Math.round(btn * 0.145)),
     mark: Math.max(10, Math.round(btn * 0.26)),
+    bar: Math.round(btn * 0.5),
     emojiFont: Math.round(btn * 0.44),
   };
 }
@@ -107,73 +104,6 @@ const STATUS_DOT: Record<Status, string> = {
   pending:  'bg-status-unknown',
 };
 
-interface RowProps {
-  cluster: Cluster;
-  active: boolean;
-  sortMode: boolean;
-  onSelect: () => void;
-  /** 다중 선택 모드 — true 면 좌측에 체크박스 노출 */
-  multiSelect?: boolean;
-  checked?: boolean;
-}
-
-function ClusterRow({ cluster, active, sortMode, onSelect, multiSelect, checked }: RowProps) {
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
-    id: cluster.id,
-    disabled: !sortMode,
-  });
-  const Icon = STATUS_ICON[cluster.status] ?? Server;
-  return (
-    <div
-      ref={setNodeRef}
-      style={{ transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.5 : 1 }}
-      className={`group flex items-center gap-1.5 rounded-lg transition-colors ${
-        active && !sortMode
-          ? 'bg-primary/10 text-primary border border-primary/30'
-          : 'hover:bg-secondary text-foreground border border-transparent'
-      }`}
-    >
-      {sortMode && (
-        <button
-          {...attributes}
-          {...listeners}
-          className="px-1 py-1.5 text-muted-foreground hover:text-foreground cursor-grab active:cursor-grabbing"
-          aria-label="드래그하여 순서 변경"
-        >
-          <GripVertical className="w-3.5 h-3.5" />
-        </button>
-      )}
-      {multiSelect && !sortMode && (
-        <input
-          type="checkbox"
-          checked={!!checked}
-          onChange={onSelect}
-          aria-label={`${cluster.name} 선택`}
-          className="ml-2 w-4 h-4 accent-primary flex-shrink-0"
-        />
-      )}
-      <button
-        onClick={sortMode ? undefined : onSelect}
-        disabled={sortMode}
-        className={`flex-1 flex items-center gap-2 ${sortMode ? 'pl-1' : 'pl-2'} pr-2 py-1.5 text-left min-w-0 disabled:cursor-default`}
-      >
-        <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${STATUS_DOT[cluster.status] ?? 'bg-status-unknown'}`} />
-        <span className="flex-1 min-w-0">
-          <span className="block text-sm font-medium truncate">{cluster.name}</span>
-          {(cluster.region || cluster.operationLevel) && (
-            <span className="block text-xs text-muted-foreground truncate">
-              {cluster.region}{cluster.region && cluster.operationLevel ? ' · ' : ''}{cluster.operationLevel}
-            </span>
-          )}
-        </span>
-        {!sortMode && (
-          <Icon className={`w-3 h-3 flex-shrink-0 ${active ? 'text-primary' : 'text-muted-foreground'}`} />
-        )}
-      </button>
-    </div>
-  );
-}
-
 // ── 아이콘 전용 레일 버튼 — 메인 Sidebar 의 RailIconButton 패턴을 차용. ────────
 interface IconRailButtonProps {
   label: string;
@@ -181,6 +111,8 @@ interface IconRailButtonProps {
   railId: string;
   /** 우측 상단 상태 표식(정상 = 점, 비정상 = 아이콘). 미지정 시 표시 없음. */
   status?: Status;
+  /** 보호 등급 클러스터 — 좌측 하단 방패 표식. */
+  guarded?: boolean;
   /** Tab 으로 들어오는 하나의 항목인가(roving tabindex). */
   tabbable: boolean;
   onRailKeyDown: (e: React.KeyboardEvent<HTMLButtonElement>, id: string) => void;
@@ -202,7 +134,7 @@ interface IconRailButtonProps {
 }
 
 function IconRailButton({
-  label, railId, status, tabbable, onRailKeyDown, onRailFocus, current, pressed,
+  label, railId, status, guarded, tabbable, onRailKeyDown, onRailFocus, current, pressed,
   Icon, emojiText, imageSrc, active, onClick, size,
 }: IconRailButtonProps) {
   const buttonRef = useRef<HTMLButtonElement | null>(null);
@@ -240,12 +172,17 @@ function IconRailButton({
         style={{ width: size.btn, height: size.btn }}
         className={`relative flex items-center justify-center rounded-md transition-colors ${
           active
-            ? 'bg-primary/15 text-primary'
+            // 타일 이미지가 버튼의 82% 를 덮어 배경만으로는 띠처럼만 보인다 — 바깥 링으로 확실히 보이게.
+            ? 'bg-primary/15 text-primary ring-2 ring-primary'
             : 'text-muted-foreground hover:bg-secondary/60 hover:text-foreground'
         }`}
       >
         {active && (
-          <span aria-hidden className="absolute left-0 top-1.5 -translate-x-[3px] w-1 h-7 bg-primary rounded-r" />
+          <span
+            aria-hidden
+            style={{ height: size.bar }}
+            className="absolute left-0 top-1/2 -translate-y-1/2 -translate-x-[3px] w-1 bg-primary rounded-r"
+          />
         )}
         {imageSrc
           ? <img src={imageSrc} alt="" style={{ width: size.image, height: size.image }} className="rounded-md object-cover" />
@@ -268,6 +205,16 @@ function IconRailButton({
             style={{ width: size.dot, height: size.dot }}
             className={`absolute top-1 right-1 rounded-full ring-1 ring-card ${STATUS_DOT[status] ?? 'bg-status-unknown'}`}
           />
+        )}
+        {guarded && (
+          // 보호 등급(운영·DR 등 — Settings 운영레벨의 `guarded`)은 상태와 무관하게 늘 표시한다.
+          <span
+            aria-hidden
+            style={{ width: size.mark, height: size.mark }}
+            className="absolute bottom-0.5 left-0.5 flex items-center justify-center rounded-full bg-card text-foreground"
+          >
+            <ShieldAlert className="w-full h-full p-px" />
+          </span>
         )}
       </button>
       {tooltipPos && createPortal(
@@ -292,7 +239,7 @@ function ClusterRailIconButton({
   cluster: Cluster;
   tooltip: string;
 } & Pick<IconRailButtonProps,
-  'railId' | 'tabbable' | 'onRailKeyDown' | 'onRailFocus' | 'current' | 'pressed' | 'active' | 'onClick' | 'size'
+  'railId' | 'guarded' | 'tabbable' | 'onRailKeyDown' | 'onRailFocus' | 'current' | 'pressed' | 'active' | 'onClick' | 'size'
 >) {
   // 아이콘 미지정 클러스터도 이름 이니셜 타일로 그려 레일의 모양을 통일한다.
   const resolved = useClusterIconSrc(cluster, { monogramFallback: true });
@@ -314,17 +261,15 @@ function ClusterRailIconButton({
   );
 }
 
-/** 좌측 클러스터 선택 사이드바 — 드래그로 폭 조절 가능.
+/** 좌측 클러스터 선택 레일 — 드래그·키보드로 폭 조절 가능.
  *  부모가 flex row 레이아웃을 잡아주면, 이 컴포넌트는 자기 폭을 가짐.
- *  onReorder 가 주어지면 정렬 모드 토글 버튼이 노출되고, 모드에서 드래그로 seq 를 재할당한다.
  */
 function ClusterSidebarIconRail({
   clusters, selectedId, onSelect, highlightActive, allowAll, allLabel,
-  multiSelect, selectedIds, onMultiSelectChange,
-}: Pick<ClusterSidebarProps,
-  'clusters' | 'selectedId' | 'onSelect' | 'highlightActive' | 'allowAll' | 'allLabel'
-  | 'multiSelect' | 'selectedIds' | 'onMultiSelectChange'
->) {
+  multiSelect, selectedIds, onMultiSelectChange, isLoading, error, onRetry,
+}: Omit<ClusterSidebarProps, 'iconOnly'>) {
+  // 보호 등급(운영·DR 등)과 등급 이름은 Settings 운영레벨이 원천이다(UI-First) — 레일에 박지 않는다.
+  const { data: levels } = useOperationLevels();
   const selectedSet = multiSelect ? new Set(selectedIds ?? []) : null;
   const isAllActive = multiSelect
     ? (selectedSet?.size ?? 0) === 0
@@ -446,29 +391,63 @@ function ClusterSidebarIconRail({
             />
           )}
           {clusters.length === 0 ? (
-            <p className="px-1 py-3 text-xs text-muted-foreground text-center">없음</p>
+            // 불러오는 중·조회 실패·정말 없음을 구분한다 — 셋 다 "없음" 이면 장애를 빈 목록으로 오인한다.
+            isLoading ? (
+              <div aria-busy="true" aria-label="클러스터 목록을 불러오는 중" className="flex flex-col items-center gap-1">
+                {[0, 1, 2, 3].map((i) => <Skeleton key={i} width={size.btn} height={size.btn} />)}
+              </div>
+            ) : error ? (
+              <button
+                type="button"
+                onClick={onRetry}
+                disabled={!onRetry}
+                title="클러스터 목록을 불러오지 못했습니다 — 눌러서 다시 시도"
+                aria-label="클러스터 목록을 불러오지 못했습니다 — 다시 시도"
+                style={{ width: size.btn, height: size.btn }}
+                className="flex flex-col items-center justify-center gap-0.5 rounded-xl text-[11px] text-foreground hover:bg-secondary/60 disabled:cursor-default"
+              >
+                <AlertTriangle aria-hidden className="w-4 h-4 text-status-critical" />
+                {onRetry && <RefreshCw aria-hidden className="w-3 h-3 text-muted-foreground" />}
+              </button>
+            ) : (
+              <Link
+                to="/cluster-manage"
+                title="등록된 클러스터가 없습니다 — 클러스터 관리에서 등록"
+                aria-label="등록된 클러스터가 없습니다 — 클러스터 관리에서 등록"
+                style={{ width: size.btn, height: size.btn }}
+                className="flex items-center justify-center rounded-xl border border-dashed border-border text-muted-foreground hover:text-foreground hover:border-primary"
+              >
+                <Plus aria-hidden className="w-4 h-4" />
+              </Link>
+            )
           ) : (
             groups.map(({ level, items }) => {
-              const levelLabel = level || '등급 미지정';
+              const groupName = level ? levelLabel(levels, level) : '등급 미지정';
               return (
                 <div
                   key={level}
                   role="group"
-                  aria-label={showLevels ? levelLabel : undefined}
+                  aria-label={showLevels ? groupName : undefined}
                   className="w-full flex flex-col items-center gap-1"
                 >
                   {showLevels && (
                     <div
                       aria-hidden
-                      title={levelLabel}
+                      title={groupName}
                       className="w-full mt-1 pt-1 px-0.5 border-t border-border text-center text-[11px] leading-tight text-muted-foreground truncate"
                     >
-                      {levelLabel}
+                      {/* "운영 (Production)" 처럼 괄호 설명은 좁은 레일에서 뺀다 — 전체 이름은 title 로 */}
+                      {groupName.replace(/\s*\(.*\)\s*$/, '')}
                     </div>
                   )}
                   {items.map((c) => {
-                    const details = [c.region, c.operationLevel, STATUS_LABEL[c.status] ?? STATUS_LABEL.pending]
-                      .filter(Boolean).join(' · ');
+                    const guarded = isGuardedLevel(levels, c.operationLevel);
+                    const details = [
+                      c.region,
+                      c.operationLevel ? levelLabel(levels, c.operationLevel) : '',
+                      guarded ? '보호 등급' : '',
+                      STATUS_LABEL[c.status] ?? STATUS_LABEL.pending,
+                    ].filter(Boolean).join(' · ');
                     const isActive = multiSelect
                       ? !!selectedSet?.has(c.id)
                       : (highlightActive ?? true) && c.id === selectedId;
@@ -482,6 +461,7 @@ function ClusterSidebarIconRail({
                         {...railProps}
                         key={c.id}
                         railId={c.id}
+                        guarded={guarded}
                         tabbable={tabbableId === c.id}
                         current={!multiSelect && c.id === selectedId}
                         pressed={multiSelect ? isActive : undefined}
@@ -498,153 +478,36 @@ function ClusterSidebarIconRail({
           )}
         </nav>
       </div>
-      <ResizeHandle width={railWidth} onResize={setRailWidth} onReset={resetRailWidth} />
+      <ResizeHandle width={railWidth} onResize={setRailWidth} onReset={resetRailWidth} ariaLabel="클러스터 레일 폭 조절" />
     </aside>
   );
 }
 
 export function ClusterSidebar({
-  clusters, selectedId, onSelect, title = '클러스터',
+  clusters, selectedId, onSelect,
   highlightActive = true, allowAll = false, allLabel = '전체 클러스터',
-  onReorder,
   multiSelect = false, selectedIds, onMultiSelectChange,
-  iconOnly = false,
+  isLoading = false, error, onRetry,
 }: ClusterSidebarProps) {
-  // hooks-order: 모든 훅은 어떤 early return 보다도 위에 있어야 한다.
-  const width = useSidebarStore((s) => s.clusterSidebarWidth);
-  const setWidth = useSidebarStore((s) => s.setClusterSidebarWidth);
-  const reset = useSidebarStore((s) => s.resetClusterSidebar);
-  const [sortMode, setSortMode] = useState(false);
-  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 4 } }));
   const hub = useK8sHub();
 
   // K8s 클러스터 허브 안에 임베드된 화면 — 레일은 허브가 하나만 그린다(lib/k8sHub.ts).
   if (hub) return null;
 
-  // 아이콘 레일 모드 — 메인 사이드바 스타일. multiSelect 와 함께 쓰일 수 있음 (PlaybooksPage).
-  // onReorder 와 같이 쓰는 경우는 현재 없음 — 사용 시 정렬 토글은 노출되지 않음.
-  if (iconOnly) {
-    return (
-      <ClusterSidebarIconRail
-        clusters={clusters}
-        selectedId={selectedId}
-        onSelect={onSelect}
-        highlightActive={highlightActive}
-        allowAll={allowAll}
-        allLabel={allLabel}
-        multiSelect={multiSelect}
-        selectedIds={selectedIds}
-        onMultiSelectChange={onMultiSelectChange}
-      />
-    );
-  }
-
-  const selectedSet = multiSelect ? new Set(selectedIds ?? []) : null;
-  const toggleMulti = (id: string) => {
-    if (!multiSelect || !onMultiSelectChange) return;
-    const next = new Set(selectedSet ?? []);
-    if (next.has(id)) next.delete(id);
-    else next.add(id);
-    // 클러스터 정렬 순서를 유지하기 위해 원본 배열 순서로 정렬해서 내려준다.
-    const ordered = clusters.map((c) => c.id).filter((cid) => next.has(cid));
-    onMultiSelectChange(ordered);
-  };
-  const toggleAllMulti = () => {
-    if (!multiSelect || !onMultiSelectChange) return;
-    const all = clusters.map((c) => c.id);
-    if ((selectedSet?.size ?? 0) === all.length) onMultiSelectChange([]);
-    else onMultiSelectChange(all);
-  };
-  const totalN = clusters.length;
-
-  const handleDragEnd = (e: DragEndEvent) => {
-    if (!onReorder) return;
-    const { active, over } = e;
-    if (!over || active.id === over.id) return;
-    const oldIndex = clusters.findIndex((c) => c.id === active.id);
-    const newIndex = clusters.findIndex((c) => c.id === over.id);
-    if (oldIndex < 0 || newIndex < 0) return;
-    const reordered = arrayMove(clusters, oldIndex, newIndex);
-    onReorder(reordered.map((c) => c.id));
-  };
-
   return (
-    <aside
-      style={{ width }}
-      className="flex-shrink-0 bg-card border border-border rounded-md p-2 h-fit sticky top-4 relative"
-    >
-      <div className="flex items-center justify-between px-2 py-1.5">
-        <p className="text-xs font-medium text-muted-foreground">
-          {title}
-          <span className="ml-1 text-muted-foreground">
-            {multiSelect ? `(${selectedSet?.size ?? 0}/${totalN})` : `(${totalN})`}
-          </span>
-        </p>
-        {multiSelect && !sortMode && totalN > 0 && (
-          <button
-            onClick={toggleAllMulti}
-            className="text-xs text-primary hover:text-primary/80"
-          >
-            {(selectedSet?.size ?? 0) === totalN ? '전체 해제' : '전체 선택'}
-          </button>
-        )}
-        {onReorder && (
-          <button
-            onClick={() => setSortMode((v) => !v)}
-            className={`p-1 rounded text-xs inline-flex items-center gap-1 ${
-              sortMode ? 'bg-primary/15 text-primary' : 'text-muted-foreground hover:text-foreground hover:bg-secondary'
-            }`}
-            title={sortMode ? '정렬 모드 종료' : '드래그로 순서 변경'}
-            aria-label={sortMode ? '정렬 모드 종료' : '드래그로 순서 변경'}
-          >
-            <ArrowDownUp className="w-3 h-3" />
-            {sortMode && <span>완료</span>}
-          </button>
-        )}
-      </div>
-
-      {allowAll && !sortMode && !multiSelect && (
-        <button
-          onClick={() => onSelect(null)}
-          className={`w-full flex items-center gap-2 px-2 py-1.5 rounded-lg text-left transition-colors mb-0.5 ${
-            selectedId === null && highlightActive
-              ? 'bg-primary/10 text-primary border border-primary/30'
-              : 'hover:bg-secondary text-foreground border border-transparent'
-          }`}
-        >
-          <LayoutGrid className={`w-3.5 h-3.5 flex-shrink-0 ${selectedId === null ? 'text-primary' : 'text-muted-foreground'}`} />
-          <span className="flex-1 min-w-0 text-sm font-medium truncate">{allLabel}</span>
-          {totalN > 0 && (
-            <span className="text-xs text-muted-foreground flex-shrink-0">{totalN}</span>
-          )}
-        </button>
-      )}
-
-      <div className="space-y-0.5">
-        {clusters.length === 0 ? (
-          <p className="px-2 py-3 text-sm text-muted-foreground">등록된 클러스터 없음</p>
-        ) : (
-          <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
-            <SortableContext items={clusters.map((c) => c.id)} strategy={verticalListSortingStrategy}>
-              {clusters.map((c) => (
-                <ClusterRow
-                  key={c.id}
-                  cluster={c}
-                  active={multiSelect
-                    ? !!selectedSet?.has(c.id)
-                    : highlightActive && c.id === selectedId}
-                  sortMode={sortMode}
-                  onSelect={multiSelect ? () => toggleMulti(c.id) : () => onSelect(c.id)}
-                  multiSelect={multiSelect}
-                  checked={multiSelect ? selectedSet?.has(c.id) : undefined}
-                />
-              ))}
-            </SortableContext>
-          </DndContext>
-        )}
-      </div>
-
-      <ResizeHandle width={width} onResize={setWidth} onReset={reset} />
-    </aside>
+    <ClusterSidebarIconRail
+      clusters={clusters}
+      selectedId={selectedId}
+      onSelect={onSelect}
+      highlightActive={highlightActive}
+      allowAll={allowAll}
+      allLabel={allLabel}
+      multiSelect={multiSelect}
+      selectedIds={selectedIds}
+      onMultiSelectChange={onMultiSelectChange}
+      isLoading={isLoading}
+      error={error}
+      onRetry={onRetry}
+    />
   );
 }
