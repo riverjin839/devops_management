@@ -30,7 +30,7 @@ interface K9sTerminalProps {
 const CLOSE_NOTES: Record<number, string> = {
   4403: '[k9s SSH 기능이 비활성화되어 있습니다]',
   4404: '[클러스터를 찾을 수 없습니다]',
-  4413: '[이 클러스터에 실행 권한이 없습니다 — 테넌트 바인딩 확인]',
+  4413: '[접속이 거부되었습니다 — 테넌트 바인딩 또는 접속 호스트(DNS) 확인]',
 };
 
 /**

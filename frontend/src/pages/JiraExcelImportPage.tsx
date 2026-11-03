@@ -166,6 +166,9 @@ export function JiraExcelImportPage() {
   const [tenantId, setTenantId] = useState<string | null>(null);
   const [tenantChosen, setTenantChosen] = useState(false);
   const effectiveTenantId = tenantChosen ? tenantId : (myTenants.length === 1 ? myTenants[0].id : null);
+  // 서버에는 사용자가 **고른 경우에만** 보낸다 — null 명시 = "전체 공유" 선택, 생략 = 서버 기본(소속 1개면 그
+  // 테넌트, 0개면 공유, 여러 개면 저장 시 422).
+  const tenantPayload = tenantChosen ? { tenantId } : {};
   const tenantMissing = myTenants.length > 1 && !tenantChosen;
 
   const { canOperate, withHint, ariaWithHint } = useCanOperate();
@@ -233,7 +236,7 @@ export function JiraExcelImportPage() {
     const r = await runLogged(runLog, {
       title: '저장 미리보기',
       first: `${rows.length}행 저장 미리보기(dry-run) 요청 — 아직 저장하지 않습니다`,
-      fn: async () => (await jiraApi.importExcelSave({ rows, dryRun: true, tenantId: effectiveTenantId })).data,
+      fn: async () => (await jiraApi.importExcelSave({ rows, dryRun: true, ...tenantPayload })).data,
       summarize: (d) => (d.dryRun === true
         ? saveLines(d, '미리보기')
         : [['warn', '서버가 미리보기를 지원하지 않아 바로 저장했습니다'], ...saveLines(d, '적용')]),
@@ -286,7 +289,7 @@ export function JiraExcelImportPage() {
     const r = await runLogged(runLog, {
       title: '업무 관리에 저장',
       first: `선택 적용 요청 — 생성 ${applyCreates} · 갱신 ${applyUpdates}${excluded.size ? ` · 체크 해제 ${excluded.size}건 제외` : ''}`,
-      fn: async () => (await jiraApi.importExcelSave({ rows, dryRun: false, onlyKeys, tenantId: effectiveTenantId })).data,
+      fn: async () => (await jiraApi.importExcelSave({ rows, dryRun: false, onlyKeys, ...tenantPayload })).data,
       summarize: (d) => saveLines(d, '적용'),
     });
     setSaving(false);
@@ -579,7 +582,7 @@ export function JiraExcelImportPage() {
             {myTenants.length > 0 && (
               <div className="px-4 py-3 border-b border-border sm:w-96">
                 <TenantScopeSelect
-                  value={effectiveTenantId}
+                  value={tenantMissing ? undefined : effectiveTenantId}
                   onChange={(id) => { setTenantId(id); setTenantChosen(true); clearSave(); }}
                   labelClassName="block text-xs font-medium text-muted-foreground mb-1"
                 />

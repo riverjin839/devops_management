@@ -21,7 +21,7 @@ from app.services.kubeconfig import ensure_kubeconfig_file
 from app.services.script_wrap import wrap_script_for_language
 from app.services.ssh_runner import SSHTarget, fetch_remote_file, run_bulk
 from app.services import audit_logger
-from app.services.cluster_access import acluster_ids_for_hosts, require_clusters_access
+from app.services.cluster_access import arequire_hosts_scope
 from app.services.command_mask import audit_command, audit_error, audit_hosts
 from app.services.k8s_client_pool import get_api_client_for_path
 
@@ -119,12 +119,12 @@ async def bulk_exec_run(
     """
     # 타겟이 속한 클러스터에 테넌트 바인딩이 있으면 operate 권한 필요 (멀티테넌시 1단계).
     # cluster_id 를 빼고 host 만 넘겨 우회하지 못하도록 host 가 실제로 속한 클러스터도 본다.
+    # 격리 사용 중 해석 안 되는 host 는 403, 접속은 판정한 IP 로(connect_ip — DNS rebinding 차단).
     targets = payload.targets or []
-    require_clusters_access(db, actor, [
-        payload.cluster_id,
-        *(t.cluster_id for t in targets),
-        *await acluster_ids_for_hosts(db, (t.host for t in targets)),
-    ])
+    scope = await arequire_hosts_scope(
+        db, actor, (t.host for t in targets),
+        also=[payload.cluster_id, *(t.cluster_id for t in targets)],
+    )
     if payload.action == "ssh" and not (payload.command and payload.command.strip()):
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
                             detail="command 는 필수입니다 (ssh 모드).")
@@ -148,6 +148,7 @@ async def bulk_exec_run(
             # UUID -> str (SSHTarget 는 str 보존; 응답 시 다시 UUID 로 변환)
             cluster_id=str(t.cluster_id) if t.cluster_id else None,
             cluster_name=t.cluster_name,
+            connect_ip=scope.connect_ip(t.host),
         )
         for t in payload.targets
     ]
@@ -234,7 +235,7 @@ async def bulk_exec_fetch_file(
     뒤 (필요하면 다시) 여러 노드에 업로드하는 용도. 인증 정보는 요청에만 존재하고
     저장되지 않는다(bulk_exec_run 과 동일 원칙).
     """
-    require_clusters_access(db, actor, await acluster_ids_for_hosts(db, [payload.host]))
+    scope = await arequire_hosts_scope(db, actor, [payload.host])
     if not payload.password and not payload.private_key:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
                             detail="password 또는 private_key 중 하나는 필수입니다.")
@@ -242,6 +243,7 @@ async def bulk_exec_fetch_file(
     target = SSHTarget(
         host=payload.host, port=payload.port, username=payload.username,
         password=payload.password, private_key=payload.private_key,
+        connect_ip=scope.connect_ip(payload.host),
     )
     fetched = None
     exc: BaseException | None = None

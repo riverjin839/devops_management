@@ -856,6 +856,8 @@ export interface JiraImportRequest {
   /** 미리보기에서 고른 Jira 키만 반영 (비우면 전체). */
   onlyKeys?: string[];
   dryRun?: boolean;
+  /** 새 업무의 공유 범위. 비우면 소속 1개 → 그 테넌트, 0개 → 전체 공유, 여럿 → 실제 가져오기는 422. */
+  tenantId?: string | null;
 }
 
 export interface JiraFieldChange {

@@ -30,7 +30,7 @@ from app.models.app_setting import AppSetting
 from app.models.user import User
 from app.auth.deps import get_current_user, require_admin, require_operator
 from app.services import audit_logger
-from app.services.cluster_access import acluster_ids_for_hosts, require_clusters_access
+from app.services.cluster_access import arequire_hosts_scope
 from app.services.command_mask import audit_command, audit_error, mask_command
 from app.services.ssh_runner import SSHTarget, run_bulk
 from app.services.user_settings import get_user_setting, set_user_setting
@@ -272,7 +272,8 @@ async def run_mc(
     if not cluster:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Cluster not found")
     # 경로 클러스터는 _cluster_scoped 가 봤다 — host 가 실제로 속한 클러스터도 operate 필요(D-169 ③).
-    require_clusters_access(db, actor, [cluster_id, *await acluster_ids_for_hosts(db, [payload.host])])
+    # 격리 사용 중 해석 안 되는 host 는 403, 접속은 판정한 IP 로(connect_ip — DNS rebinding 차단).
+    scope = await arequire_hosts_scope(db, actor, [payload.host], also=[cluster_id])
 
     bash_cmd = _build_mc_command(payload)
     remote_cmd = f"bash -lc {shlex.quote(bash_cmd)}"
@@ -280,6 +281,7 @@ async def run_mc(
     target = SSHTarget(
         host=payload.host, port=payload.port, username=payload.username,
         password=payload.password, private_key=payload.private_key,
+        connect_ip=scope.connect_ip(payload.host),
     )
     # 감사는 try/finally 로 정확히 1행 — 실행 도중 예외도 failure(마스킹한 예외 요약)로 남긴다.
     r = None
