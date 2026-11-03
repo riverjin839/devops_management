@@ -72,6 +72,9 @@ export function ResizeHandle({
       aria-orientation="vertical"
       aria-label={ariaLabel}
       aria-valuenow={Math.round(width)}
+      // 포커스 가능한 separator(role="separator" + aria-valuenow)는 WAI-ARIA 상 조작 가능한 위젯이다 —
+      // 방향키로 폭을 조절하므로 Tab 정지점이 필요하다(jsx-a11y 는 separator 를 비상호작용으로 본다).
+      // eslint-disable-next-line jsx-a11y/no-noninteractive-tabindex
       tabIndex={0}
       onKeyDown={handleKeyDown}
       onMouseDown={handleMouseDown}
