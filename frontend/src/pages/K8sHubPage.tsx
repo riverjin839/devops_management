@@ -26,7 +26,7 @@ export function K8sHubPage() {
   const { clusterId = '', view: viewParam } = useParams<{ clusterId: string; view: string }>();
   const navigate = useNavigate();
   const location = useLocation();
-  const { data: clusters = [], isLoading } = useClusters();
+  const { data: clusters = [], isLoading, isError, error, refetch } = useClusters();
   const { featureAllowed, getLabel } = useNavCatalog();
 
   const viewId = viewParam ?? DEFAULT_HUB_VIEW;
@@ -64,6 +64,9 @@ export function K8sHubPage() {
           clusters={clusters}
           selectedId={clusterId || null}
           onSelect={selectCluster}
+          isLoading={isLoading}
+          error={isError ? error : undefined}
+          onRetry={() => { void refetch(); }}
           iconOnly
         />
 
