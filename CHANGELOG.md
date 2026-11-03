@@ -8,7 +8,12 @@
 
 ## [Unreleased]
 
-1.79.3 이후 main 에 병합된 변경 (다음 릴리스 후보).
+1.80.0 이후 main 에 병합된 변경 (다음 릴리스 후보).
+
+## [1.80.0] - 2026-11-03
+
+### Added
+- **K8s 상세 관리 — 바인딩이 주는 권한 내용 표시**: 네임스페이스 대시보드 Access Control 의 "다른 네임스페이스의 RoleBindings"·"ClusterRoleBindings" 행 앞 화살표를 펼치면, 그 바인딩이 참조하는 Role(바인딩 NS) 또는 ClusterRole 의 규칙이 동작(verbs)·API 그룹·리소스/URL·리소스 이름 표로 나온다. 와일드카드 `*` 는 강조하고, 유효 범위(RoleBinding 이면 바인딩 NS 안, ClusterRoleBinding 이면 클러스터 전체)를 안내하며, 참조 Role 이 없거나 읽을 권한이 없으면 사유를 보여준다. "권한 모두 펼치기"도 있다. Backend: `GET /k8s/{id}/namespaces/{ns}/external-role-bindings`·`/cluster-role-bindings` 행에 `role_kind`·`role_name`·`rules`·`rules_error`(같은 참조는 1회만 읽음, 응답 예산·참조 상한).
 
 ## [1.79.3] - 2026-11-03
 
@@ -19,9 +24,6 @@
 
 ### Added
 - **클러스터 레일 — 비정상만 보기·운영등급 묶음**: 비정상이 있으면 맨 위에 개수 버튼이 나타나 비정상 클러스터만 좁혀 볼 수 있다(지금 선택한 클러스터는 남는다). 클러스터는 운영등급별로 묶인다. 상태에 따라 순서를 바꾸지 않아, 폴링 중에 항목이 움직여 잘못 누르는 일이 없다.
-
-### Added
-- **K8s 상세 관리 — 바인딩이 주는 권한 내용 표시**: 네임스페이스 대시보드 Access Control 의 "다른 네임스페이스의 RoleBindings"·"ClusterRoleBindings" 행 앞 화살표를 펼치면, 그 바인딩이 참조하는 Role(바인딩 NS) 또는 ClusterRole 의 규칙이 동작(verbs)·API 그룹·리소스/URL·리소스 이름 표로 나온다. 와일드카드 `*` 는 강조하고, 유효 범위(RoleBinding 이면 바인딩 NS 안, ClusterRoleBinding 이면 클러스터 전체)를 안내하며, 참조 Role 이 없거나 읽을 권한이 없으면 사유를 보여준다. "권한 모두 펼치기"도 있다. Backend: `GET /k8s/{id}/namespaces/{ns}/external-role-bindings`·`/cluster-role-bindings` 행에 `role_kind`·`role_name`·`rules`·`rules_error`(같은 참조는 1회만 읽음, 응답 예산·참조 상한).
 
 ## [1.79.2] - 2026-10-29
 
