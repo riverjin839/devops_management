@@ -4094,6 +4094,24 @@ export interface K8sCrdListResponse {
   count: number;
   items: K8sCrdInfo[];
 }
+/** Role/ClusterRole 규칙 1개(PolicyRule). */
+export interface K8sRoleRule {
+  apiGroups: string[];
+  resources: string[];
+  resourceNames: string[];
+  nonResourceUrls: string[];
+  verbs: string[];
+}
+/** 바인딩 행 + 참조하는 Role/ClusterRole 규칙(못 읽으면 rules=null, rulesError 에 사유). */
+export interface K8sBindingRow extends K8sResourceRow {
+  roleKind?: string | null;
+  roleName?: string | null;
+  rules?: K8sRoleRule[] | null;
+  rulesError?: string | null;
+}
+export interface K8sBindingListResponse extends K8sResourceListResponse {
+  items: K8sBindingRow[];
+}
 /** NS 대시보드 — 이 네임스페이스에 오브젝트가 있는 namespaced CRD (count: remainingItemCount 기반, 모르면 null). */
 export interface K8sNsCustomResource extends K8sCrdInfo {
   count: number | null;
