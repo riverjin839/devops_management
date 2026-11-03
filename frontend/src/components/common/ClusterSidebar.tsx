@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Server, CheckCircle, AlertTriangle, XCircle, WifiOff, LayoutGrid, GripVertical, ArrowDownUp } from 'lucide-react';
 import {
@@ -54,8 +54,42 @@ function iconSizeFor(railWidth: number) {
     image: Math.round(btn * 0.82),
     icon: Math.round(btn * 0.5),
     dot: Math.max(5, Math.round(btn * 0.145)),
+    mark: Math.max(10, Math.round(btn * 0.26)),
     emojiFont: Math.round(btn * 0.44),
   };
+}
+
+/** 레일 "전체" 항목의 id — 클러스터 id(UUID)와 겹치지 않는다. */
+const ALL_RAIL_ID = '__all__';
+
+/** 상태 어휘는 `StatusBadge` 와 같다 — 툴팁·스크린리더가 색 없이도 상태를 전한다. */
+const STATUS_LABEL: Record<Status, string> = {
+  healthy: '정상', warning: '경고', critical: '위험', pending: '미연결',
+};
+
+// 비정상은 색뿐 아니라 모양으로도 구분한다(WCAG 1.4.1) — 정상만 무채색 점.
+const STATUS_MARK: Partial<Record<Status, { Icon: React.ComponentType<{ className?: string }>; cls: string }>> = {
+  warning:  { Icon: AlertTriangle, cls: 'text-status-warning' },
+  critical: { Icon: XCircle,       cls: 'text-status-critical' },
+  pending:  { Icon: WifiOff,       cls: 'text-status-unknown' },
+};
+
+const isAbnormal = (c: Cluster) => c.status === 'critical' || c.status === 'warning';
+
+const railItem = (box: HTMLElement | null, id: string) =>
+  box?.querySelector<HTMLElement>(`[data-rail-item="${window.CSS.escape(id)}"]`) ?? null;
+
+/** 운영등급별로 묶는다 — 등급은 처음 나온 순서, 등급 안은 받은 순서(seq) 그대로, 미지정은 맨 뒤. */
+function groupByLevel(clusters: Cluster[]): { level: string; items: Cluster[] }[] {
+  const groups = new Map<string, Cluster[]>();
+  for (const c of clusters) {
+    const level = c.operationLevel?.trim() ?? '';
+    groups.set(level, [...(groups.get(level) ?? []), c]);
+  }
+  const named = [...groups].filter(([level]) => level);
+  const unnamed = groups.get('');
+  return [...named, ...(unnamed ? [['', unnamed] as [string, Cluster[]]] : [])]
+    .map(([level, items]) => ({ level, items }));
 }
 
 const STATUS_ICON: Record<Status, React.ComponentType<{ className?: string }>> = {
@@ -143,8 +177,18 @@ function ClusterRow({ cluster, active, sortMode, onSelect, multiSelect, checked 
 // ── 아이콘 전용 레일 버튼 — 메인 Sidebar 의 RailIconButton 패턴을 차용. ────────
 interface IconRailButtonProps {
   label: string;
-  /** 우측 상단 작은 상태 도트 색상 (Tailwind class). 미지정 시 도트 미표시. */
-  dotClass?: string;
+  /** 레일 안에서의 id — 방향키 이동·선택 항목 스크롤에 쓴다. */
+  railId: string;
+  /** 우측 상단 상태 표식(정상 = 점, 비정상 = 아이콘). 미지정 시 표시 없음. */
+  status?: Status;
+  /** Tab 으로 들어오는 하나의 항목인가(roving tabindex). */
+  tabbable: boolean;
+  onRailKeyDown: (e: React.KeyboardEvent<HTMLButtonElement>, id: string) => void;
+  onRailFocus: (id: string) => void;
+  /** 단일 선택의 현재 항목 — `aria-current`. */
+  current?: boolean;
+  /** 다중 선택의 선택 여부 — `aria-pressed`. 단일 선택이면 undefined. */
+  pressed?: boolean;
   /** 표시할 lucide 컴포넌트. 다른 표시 옵션이 없을 때 사용. */
   Icon?: React.ComponentType<{ className?: string; style?: React.CSSProperties }>;
   /** 표시할 텍스트(주로 emoji 1자). 우선순위: imageSrc > emojiText > Icon. */
@@ -157,7 +201,10 @@ interface IconRailButtonProps {
   size: ReturnType<typeof iconSizeFor>;
 }
 
-function IconRailButton({ label, dotClass, Icon, emojiText, imageSrc, active, onClick, size }: IconRailButtonProps) {
+function IconRailButton({
+  label, railId, status, tabbable, onRailKeyDown, onRailFocus, current, pressed,
+  Icon, emojiText, imageSrc, active, onClick, size,
+}: IconRailButtonProps) {
   const buttonRef = useRef<HTMLButtonElement | null>(null);
   // viewport 좌표 — 부모 overflow 를 회피하기 위해 portal 로 렌더한다.
   const [tooltipPos, setTooltipPos] = useState<{ top: number; left: number } | null>(null);
@@ -169,18 +216,27 @@ function IconRailButton({ label, dotClass, Icon, emojiText, imageSrc, active, on
     setTooltipPos({ top: rect.top + rect.height / 2, left: rect.right + 8 });
   };
   const hideTooltip = () => setTooltipPos(null);
+  const mark = status ? STATUS_MARK[status] : undefined;
 
   return (
     <>
       <button
         ref={buttonRef}
         type="button"
+        data-rail-item={railId}
+        tabIndex={tabbable ? 0 : -1}
         aria-label={label}
+        aria-current={current ? 'true' : undefined}
+        aria-pressed={pressed}
         onClick={onClick}
         onMouseEnter={showTooltip}
         onMouseLeave={hideTooltip}
-        onFocus={showTooltip}
+        onFocus={() => { showTooltip(); onRailFocus(railId); }}
         onBlur={hideTooltip}
+        onKeyDown={(e) => {
+          if (e.key === 'Escape') hideTooltip();
+          else onRailKeyDown(e, railId);
+        }}
         style={{ width: size.btn, height: size.btn }}
         className={`relative flex items-center justify-center rounded-md transition-colors ${
           active
@@ -198,11 +254,19 @@ function IconRailButton({ label, dotClass, Icon, emojiText, imageSrc, active, on
             : Icon
               ? <Icon style={{ width: size.icon, height: size.icon }} />
               : <Server style={{ width: size.icon, height: size.icon }} />}
-        {dotClass && (
+        {mark ? (
+          <span
+            aria-hidden
+            style={{ width: size.mark, height: size.mark }}
+            className={`absolute top-0.5 right-0.5 flex items-center justify-center rounded-full bg-card ${mark.cls}`}
+          >
+            <mark.Icon className="w-full h-full p-px" />
+          </span>
+        ) : status && (
           <span
             aria-hidden
             style={{ width: size.dot, height: size.dot }}
-            className={`absolute top-1 right-1 rounded-full ring-1 ring-card ${dotClass}`}
+            className={`absolute top-1 right-1 rounded-full ring-1 ring-card ${STATUS_DOT[status] ?? 'bg-status-unknown'}`}
           />
         )}
       </button>
@@ -223,14 +287,13 @@ function IconRailButton({ label, dotClass, Icon, emojiText, imageSrc, active, on
 /** 아이콘 레일의 클러스터 버튼 — `useClusterIconSrc` 훅(테마 동기화)을 써야 해서
  *  `clusters.map()` 콜백 안에서 직접 훅을 호출할 수 없어 별도 컴포넌트로 분리했다. */
 function ClusterRailIconButton({
-  cluster, tooltip, active, onClick, size,
+  cluster, tooltip, ...rest
 }: {
   cluster: Cluster;
   tooltip: string;
-  active: boolean;
-  onClick: () => void;
-  size: ReturnType<typeof iconSizeFor>;
-}) {
+} & Pick<IconRailButtonProps,
+  'railId' | 'tabbable' | 'onRailKeyDown' | 'onRailFocus' | 'current' | 'pressed' | 'active' | 'onClick' | 'size'
+>) {
   // 아이콘 미지정 클러스터도 이름 이니셜 타일로 그려 레일의 모양을 통일한다.
   const resolved = useClusterIconSrc(cluster, { monogramFallback: true });
   const FallbackIcon = STATUS_ICON[cluster.status] ?? Server;
@@ -245,10 +308,8 @@ function ClusterRailIconButton({
       Icon={lucideIcon}
       emojiText={emojiText}
       imageSrc={imageSrc}
-      dotClass={STATUS_DOT[cluster.status] ?? 'bg-status-unknown'}
-      active={active}
-      onClick={onClick}
-      size={size}
+      status={cluster.status}
+      {...rest}
     />
   );
 }
@@ -273,6 +334,50 @@ function ClusterSidebarIconRail({
   const setRailWidth = useSidebarStore((s) => s.setClusterIconRailWidth);
   const resetRailWidth = useSidebarStore((s) => s.resetClusterIconRailWidth);
   const size = iconSizeFor(railWidth);
+  const scrollRef = useRef<HTMLDivElement | null>(null);
+
+  // 비정상만 보기 — 레일 순서를 상태에 따라 재배치하지 않는다. 30초 폴링마다 항목이 움직이면
+  // 누르려던 자리에 다른 클러스터가 올 수 있어서, 순서는 고정하고 운영자가 직접 좁혀 보게 한다.
+  // 비정상이 없어지면 자동으로 전체로 돌아가고, 지금 선택한 클러스터는 좁혀도 남긴다.
+  const [abnormalOnly, setAbnormalOnly] = useState(false);
+  const abnormal = clusters.filter(isAbnormal);
+  const filtering = abnormalOnly && abnormal.length > 0;
+  const isChosen = (c: Cluster) => (multiSelect ? !!selectedSet?.has(c.id) : c.id === selectedId);
+  const groups = groupByLevel(filtering ? clusters.filter((c) => isAbnormal(c) || isChosen(c)) : clusters);
+  const showLevels = groups.length > 1;
+
+  // 방향키 이동(roving tabindex) — 클러스터가 몇 개든 Tab 정지점은 하나다.
+  const [focusId, setFocusId] = useState<string | null>(null);
+  const navOrder = [...(allowAll ? [ALL_RAIL_ID] : []), ...groups.flatMap((g) => g.items.map((c) => c.id))];
+  const chosenId = multiSelect
+    ? groups.flatMap((g) => g.items).find(isChosen)?.id
+    : selectedId ?? ALL_RAIL_ID;
+  const tabbableId = [focusId, chosenId].find((id) => id && navOrder.includes(id)) ?? navOrder[0];
+
+  const handleRailKey = (e: React.KeyboardEvent<HTMLButtonElement>, id: string) => {
+    const i = navOrder.indexOf(id);
+    const n = navOrder.length;
+    const next = e.key === 'ArrowDown' ? (i + 1) % n
+      : e.key === 'ArrowUp' ? (i - 1 + n) % n
+        : e.key === 'Home' ? 0
+          : e.key === 'End' ? n - 1
+            : -1;
+    if (i < 0 || next < 0) return;
+    e.preventDefault();
+    setFocusId(navOrder[next]);
+    railItem(scrollRef.current, navOrder[next])?.focus();
+  };
+
+  // 선택한 클러스터가 레일 스크롤 밖이면 안으로 — scrollIntoView 는 본문까지 움직일 수 있어 레일만 옮긴다.
+  useEffect(() => {
+    const box = scrollRef.current;
+    const el = !multiSelect && selectedId ? railItem(box, selectedId) : null;
+    if (!box || !el) return;
+    const b = box.getBoundingClientRect();
+    const r = el.getBoundingClientRect();
+    if (r.top < b.top) box.scrollTop += r.top - b.top - 8;
+    else if (r.bottom > b.bottom) box.scrollTop += r.bottom - b.bottom + 8;
+  }, [selectedId, multiSelect, clusters.length]);
 
   // 사이드바에서는 아이콘 변경을 허용하지 않는다. 변경은 시스템 등록된 클러스터 관리 화면
   // (/cluster-manage) 의 테이블 첫 컬럼에서만 가능하도록 권한을 한정.
@@ -296,48 +401,102 @@ function ClusterSidebarIconRail({
     }
   };
 
+  const railProps = { size, onRailKeyDown: handleRailKey, onRailFocus: setFocusId };
+
   return (
     <aside
+      aria-label="클러스터 선택"
       style={{ width: size.rail }}
-      className="relative flex-shrink-0 bg-card border border-border rounded-md py-2 h-fit sticky top-4"
+      className="relative flex flex-col flex-shrink-0 self-start bg-card border border-border rounded-md sticky top-4 max-h-[calc(100vh-var(--topbar-h)-2rem)]"
     >
-      <div className="flex flex-col items-center gap-1">
-        {allowAll && (
-          <IconRailButton
-            label={multiSelect
-              ? `${allLabel ?? '전체'} — 선택 비우기 (${selectedSet?.size ?? 0}/${clusters.length})`
-              : `${allLabel ?? '전체'} (${clusters.length})`}
-            Icon={LayoutGrid}
-            active={isAllActive && (highlightActive ?? true)}
-            onClick={handleAllClick}
-            size={size}
+      {abnormal.length > 0 && (
+        <button
+          type="button"
+          onClick={() => setAbnormalOnly(!filtering)}
+          aria-pressed={filtering}
+          title={filtering ? `전체 ${clusters.length}개 보기` : `비정상 ${abnormal.length}개만 보기`}
+          aria-label={filtering ? `전체 ${clusters.length}개 보기` : `비정상 ${abnormal.length}개만 보기`}
+          style={{ width: size.btn }}
+          className={`flex-shrink-0 self-center mt-2 inline-flex items-center justify-center gap-1 rounded-xl py-1 text-xs font-semibold tabular-nums transition-colors ${
+            filtering ? 'bg-primary/15 text-primary' : 'text-foreground hover:bg-secondary/60'
+          }`}
+        >
+          <AlertTriangle
+            aria-hidden
+            className={`w-3.5 h-3.5 ${abnormal.some((c) => c.status === 'critical') ? 'text-status-critical' : 'text-status-warning'}`}
           />
-        )}
-        {clusters.length === 0 ? (
-          <p className="px-1 py-3 text-xs text-muted-foreground text-center">없음</p>
-        ) : (
-          clusters.map((c) => {
-            const subtitle = [c.region, c.operationLevel].filter(Boolean).join(' · ');
-            const isActive = multiSelect
-              ? !!selectedSet?.has(c.id)
-              : (highlightActive ?? true) && c.id === selectedId;
-            const baseTooltip = subtitle ? `${c.name} · ${subtitle}` : c.name;
-            const tooltip = multiSelect
-              ? `${baseTooltip}${isActive ? ' (선택됨 — 클릭하면 해제)' : ' (클릭하면 선택)'}`
-              : baseTooltip;
+          {abnormal.length}
+        </button>
+      )}
+      {/* 높이 제한은 aside, 스크롤은 이 안쪽 — 폭 조절 핸들이 목록과 함께 스크롤되지 않게 나눈다. */}
+      <div ref={scrollRef} className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden overscroll-contain no-scrollbar py-2">
+        <nav aria-label="클러스터 목록" className="flex flex-col items-center gap-1">
+          {allowAll && (
+            <IconRailButton
+              {...railProps}
+              railId={ALL_RAIL_ID}
+              tabbable={tabbableId === ALL_RAIL_ID}
+              current={!multiSelect && isAllActive}
+              label={multiSelect
+                ? `${allLabel ?? '전체'} — 선택 비우기 (${selectedSet?.size ?? 0}/${clusters.length})`
+                : `${allLabel ?? '전체'} (${clusters.length})`}
+              Icon={LayoutGrid}
+              active={isAllActive && (highlightActive ?? true)}
+              onClick={handleAllClick}
+            />
+          )}
+          {clusters.length === 0 ? (
+            <p className="px-1 py-3 text-xs text-muted-foreground text-center">없음</p>
+          ) : (
+            groups.map(({ level, items }) => {
+              const levelLabel = level || '등급 미지정';
+              return (
+                <div
+                  key={level}
+                  role="group"
+                  aria-label={showLevels ? levelLabel : undefined}
+                  className="w-full flex flex-col items-center gap-1"
+                >
+                  {showLevels && (
+                    <div
+                      aria-hidden
+                      title={levelLabel}
+                      className="w-full mt-1 pt-1 px-0.5 border-t border-border text-center text-[11px] leading-tight text-muted-foreground truncate"
+                    >
+                      {levelLabel}
+                    </div>
+                  )}
+                  {items.map((c) => {
+                    const details = [c.region, c.operationLevel, STATUS_LABEL[c.status] ?? STATUS_LABEL.pending]
+                      .filter(Boolean).join(' · ');
+                    const isActive = multiSelect
+                      ? !!selectedSet?.has(c.id)
+                      : (highlightActive ?? true) && c.id === selectedId;
+                    const baseTooltip = `${c.name} · ${details}`;
+                    const tooltip = multiSelect
+                      ? `${baseTooltip}${isActive ? ' (선택됨 — 클릭하면 해제)' : ' (클릭하면 선택)'}`
+                      : baseTooltip;
 
-            return (
-              <ClusterRailIconButton
-                key={c.id}
-                cluster={c}
-                tooltip={tooltip}
-                active={isActive}
-                onClick={() => handleClusterClick(c.id)}
-                size={size}
-              />
-            );
-          })
-        )}
+                    return (
+                      <ClusterRailIconButton
+                        {...railProps}
+                        key={c.id}
+                        railId={c.id}
+                        tabbable={tabbableId === c.id}
+                        current={!multiSelect && c.id === selectedId}
+                        pressed={multiSelect ? isActive : undefined}
+                        cluster={c}
+                        tooltip={tooltip}
+                        active={isActive}
+                        onClick={() => handleClusterClick(c.id)}
+                      />
+                    );
+                  })}
+                </div>
+              );
+            })
+          )}
+        </nav>
       </div>
       <ResizeHandle width={railWidth} onResize={setRailWidth} onReset={resetRailWidth} />
     </aside>
