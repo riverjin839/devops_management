@@ -2918,6 +2918,13 @@ export const homePrefsApi = {
     api.put<import('@/types').HomePrefsDefaults>('/ui-settings/home-prefs-defaults', data),
 };
 
+// ── NS 선택 기억 (마지막 선택 · 최근 선택 NS) ───────────────────────────────
+export const nsPrefsApi = {
+  get: () => api.get<import('@/types').NsPrefs>('/me/ns-prefs'),
+  update: (data: { clusterId: string; selected: string[]; recentLimit?: number }) =>
+    api.put<import('@/types').NsPrefs>('/me/ns-prefs', data),
+};
+
 // ── NS 마이그레이션 (개발 → 운영) — /ns-migration ─────────────────────────────
 export const nsMigrationApi = {
   kinds: () => api.get<import('@/types').NsMigKindCatalog>('/ns-migration/kinds'),

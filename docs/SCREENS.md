@@ -315,6 +315,8 @@ hover 시 flyout 자체가 라벨을 보여주므로 이름만 뜨는 중복 툴
 
 ### K8s 상세 관리 (`/k8s-manage`, `/k8s-manage/:clusterId`)
 
+> **2026-11-04 (NS 선택 기억)**: NS 가 천 개 단위여도 고르는 시간을 줄이도록 선택을 **계정·클러스터별로 서버에 기억**한다(`GET/PUT /me/ns-prefs`, `useNsSelection`). ① 목록·NS 대시보드·이벤트 등 내부 탭과 허브 탭(파드 로그)이 같은 선택을 공유해 탭을 옮겨도 다시 고르지 않는다 ② 다른 화면으로 갔다 오거나 재로그인해도 마지막 선택이 기본값 ③ NS 선택 버튼 옆 **최근 선택 NS 칩(기본 3개)** 을 누르면 그 NS 하나로 바로 선택된다. 저장된 선택을 읽어 오기 전에는 NS 의존 패널을 그리지 않아 "전체 NS" 조회가 먼저 나가지 않는다. NS 대시보드는 선택이 정확히 1개일 때만 그 NS 를 쓴다(여러 개면 비워 둠).
+
 - **파일**: `frontend/src/pages/K8sManagePage.tsx` (단일 파일 — `ResourceTablePanel`/`NodesPanel`/`PodsPanel`/`OverviewPanel`/`HelmPanel`/`CrdPanel`/`DetailDrawer`를 내부 정의하고 `ResourceTablePanel`/`PodsPanel`은 `NamespaceDashboardPanel`이 재사용할 수 있게 `export`), `frontend/src/components/k8s-manage/NamespaceDashboardPanel.tsx`(네임스페이스 대시보드) + `NsExtraPanels.tsx`(대시보드 전용 CR 오브젝트·바인딩 표). `HelmPanel` 도 `namespace?` prop 으로 대시보드가 재사용하게 `export`, + `components/k8s/{PodTerminal,EventsStream,NamespaceMultiSelect,ColumnToggle}`, `components/common/LogViewer`, `components/auth/RoleGate`.
 > **허브로 통합(2026-10-22, D-240)**: 이 화면은 K8s 클러스터 허브 `/k8s/:clusterId/manage` 의 서브뷰로 마운트된다. 옛 URL 은 그 뷰로 redirect(클러스터·쿼리 보존). 레일·h1·`PageShell` 은 허브가 그리고(`lib/k8sHub.ts` 컨텍스트), 아래 설명의 나머지는 그대로다.
 
@@ -564,6 +566,8 @@ hover 시 flyout 자체가 라벨을 보여주므로 이름만 뜨는 중복 툴
   - _(여기에 개선/수정 요청을 직접 적어주세요)_
 
 ### 파드 로그 (`/k8s-logs`, `/k8s-logs/:clusterId`)
+
+> **2026-11-04 (NS 선택 기억)**: 딥링크(`?namespace=`)가 없으면 마지막으로 고른 NS(하나일 때)가 기본 선택되고, 여기서 고른 NS 도 기억된다. NS 선택 아래에 최근 선택 NS 칩(기본 3개)을 보인다 — `K8s 상세 관리` 섹션 참고.
 
 > **허브로 통합(2026-10-22, D-240)**: 이 화면은 K8s 클러스터 허브 `/k8s/:clusterId/logs` 의 서브뷰로 마운트된다. 옛 URL 은 그 뷰로 redirect(클러스터·쿼리 보존). 레일·h1·`PageShell` 은 허브가 그리고(`lib/k8sHub.ts` 컨텍스트), 아래 설명의 나머지는 그대로다.
 
