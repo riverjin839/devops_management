@@ -8,7 +8,7 @@
  */
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { KeyRound, Link2, Shield, ShieldCheck, Wand2 } from 'lucide-react';
-import { ClusterSidebar, SelectClusterEmptyState, PageShell, SegTabs, SwitchToggle } from '@/components/common';
+import { ClusterSidebar, SelectClusterEmptyState, PageShell, SegTabs } from '@/components/common';
 import { PageHeader } from '@/components/common/PageHeader';
 import {
   AccessReviewPanel,
@@ -64,7 +64,7 @@ const TAB_OPTIONS = TABS.map(({ key, label, icon: Icon }) =>
 export function K8sRbacPage() {
   const { data: clusters = [] } = useClusters();
   // 클러스터 선택·탭은 URL 쿼리에 둔다(D-029) — 새로고침·링크 공유에도 같은 화면이 열린다.
-  const [urlParams, setUrlParams] = useUrlParams({ cluster: '', tab: 'wizard' });
+  const [urlParams, setUrlParams] = useUrlParams({ cluster: '', tab: 'wizard', reviewSa: '', saQ: '', saNs: '' });
   // K8s 클러스터 허브(D-240) 안에서는 허브가 고른 클러스터가 우선이다(`?cluster=` 는 단독·아일랜드용).
   const hub = useK8sHub();
   const selectedClusterId = hub ? hub.clusterId : (urlParams.cluster || null);
@@ -161,19 +161,7 @@ export function K8sRbacPage() {
             }
           />
 
-          <div className="flex items-center gap-3 flex-wrap">
-            <SegTabs mode="tabs" size="md" label="K8s 접근 권한 보기" value={tab} onChange={setTab} options={TAB_OPTIONS} />
-            {tab === 'wizard' && (
-              <div className="ml-auto">
-                <SwitchToggle
-                  checked={showLogs}
-                  onChange={setShowLogs}
-                  label="로그 보기"
-                  title={showLogs ? '실행 로그 접기' : '실행 로그 펼치기'}
-                />
-              </div>
-            )}
-          </div>
+          <SegTabs mode="tabs" size="md" label="K8s 접근 권한 보기" value={tab} onChange={setTab} options={TAB_OPTIONS} />
 
           {clusterId && <IssuedCredentialCard clusterId={clusterId} />}
 
@@ -195,7 +183,14 @@ export function K8sRbacPage() {
                 onRun={stream.start}
               />
               <div className="xl:sticky xl:top-3">
-                <ProvisionConsole stream={stream} showLogs={showLogs} />
+                <ProvisionConsole
+                  clusterId={clusterId}
+                  stream={stream}
+                  showLogs={showLogs}
+                  onShowLogsChange={setShowLogs}
+                  onReview={(ns, sa) => setUrlParams({ tab: 'review', reviewSa: `${ns}/${sa}` })}
+                  onRevoke={(ns, sa) => setUrlParams({ tab: 'sa', saQ: sa, saNs: ns })}
+                />
               </div>
             </div>
             <div role="tabpanel" aria-label="롤" className={tab === 'roles' ? '' : 'hidden'}>

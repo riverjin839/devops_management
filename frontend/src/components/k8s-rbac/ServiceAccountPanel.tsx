@@ -30,7 +30,7 @@ interface Props {
   clusterId: string;
   serviceAccounts: RbacServiceAccount[];
   namespaces: RbacNamespace[];
-  /** 액세스 회수 계획(이 SA 만 묶인 바인딩 + PEP 가 만든 롤)을 세우는 데 쓴다. */
+  /** 액세스 회수 계획(이 ServiceAccount 만 묶인 바인딩 + PEP 가 만든 롤)을 세우는 데 쓴다. */
   bindings: RbacBinding[];
   roles: RbacRole[];
   clusterRoles: RbacRole[];
@@ -387,7 +387,7 @@ export function ServiceAccountPanel({
           <EmptyState
             icon={KeyRound}
             title="ServiceAccount 가 없습니다"
-            description="액세스 발급 탭에서 개발자용 SA 를 만들 수 있습니다."
+            description="액세스 발급 탭에서 개발자용 ServiceAccount 를 만들 수 있습니다."
             compact
           />
         ) : (
@@ -400,7 +400,7 @@ export function ServiceAccountPanel({
                       key={h || i}
                       className="text-left px-3 py-2 text-xs font-semibold text-muted-foreground whitespace-nowrap"
                     >
-                      {h}
+                      {h || <span className="sr-only">작업</span>}
                     </th>
                   ))}
                 </tr>
@@ -442,7 +442,7 @@ export function ServiceAccountPanel({
                       </td>
                       <td className="px-3 py-2 whitespace-nowrap">
                         {protectedSa ? (
-                          <span className="text-xs text-muted-foreground">기본 SA — 편집 불가</span>
+                          <span className="text-xs text-muted-foreground">기본 ServiceAccount — 편집 불가</span>
                         ) : (
                           <div className="flex items-center gap-1">
                             <button
@@ -459,7 +459,7 @@ export function ServiceAccountPanel({
                               type="button"
                               onClick={() => openRevoke(sa)}
                               disabled={!canOperate || busy}
-                              title={withHint('액세스 회수 — 이 SA 의 바인딩·PEP 롤·SA 를 한 번에 삭제')}
+                              title={withHint('액세스 회수 — 이 ServiceAccount 의 바인딩·PEP 롤·ServiceAccount 를 한 번에 삭제')}
                               aria-label={ariaWithHint(`${sa.name} 액세스 회수`)}
                               className="inline-flex items-center gap-1 px-2 py-1 rounded-xl border border-border text-xs hover:border-destructive hover:text-destructive disabled:opacity-50"
                             >
@@ -486,7 +486,7 @@ export function ServiceAccountPanel({
           </div>
         )}
         <p className="mt-2 text-xs text-muted-foreground">
-          <span className="text-foreground">회수</span>는 이 SA 에만 묶인 바인딩과 PEP 가 만든 롤까지 함께 지웁니다.
+          <span className="text-foreground">회수</span>는 이 ServiceAccount 에만 묶인 바인딩과 PEP 가 만든 롤까지 함께 지웁니다.
           휴지통은 ServiceAccount 만 지웁니다.
         </p>
       </MacCard>
@@ -569,7 +569,7 @@ export function ServiceAccountPanel({
         title="액세스를 회수할까요?"
         description={
           pendingRevoke
-            ? `${pendingRevoke.namespace}/${pendingRevoke.name} 의 권한을 거둡니다. 이 SA 토큰으로 접속 중인 개발자와 파드는 즉시 인증에 실패합니다.`
+            ? `${pendingRevoke.namespace}/${pendingRevoke.name} 의 권한을 거둡니다. 이 ServiceAccount 토큰으로 접속 중인 개발자와 파드는 즉시 인증에 실패합니다.`
             : undefined
         }
         confirmLabel="회수"
@@ -629,7 +629,7 @@ export function ServiceAccountPanel({
         title="ServiceAccount 만 삭제할까요?"
         description={
           pendingDelete
-            ? `${pendingDelete.namespace}/${pendingDelete.name} 을(를) 지우면 이 SA 토큰으로 접속 중인 개발자와 파드가 즉시 인증에 실패합니다. 롤과 바인딩은 남습니다 — 함께 정리하려면 회수를 쓰세요.`
+            ? `${pendingDelete.namespace}/${pendingDelete.name} 을(를) 지우면 이 ServiceAccount 토큰으로 접속 중인 개발자와 파드가 즉시 인증에 실패합니다. 롤과 바인딩은 남습니다 — 함께 정리하려면 회수를 쓰세요.`
             : undefined
         }
         confirmLabel="삭제"

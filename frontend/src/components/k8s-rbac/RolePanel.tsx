@@ -249,7 +249,7 @@ export function RolePanel({
       )}
     <div className="grid grid-cols-1 xl:grid-cols-2 gap-3 items-start">
       <MacCard
-        title="Role / ClusterRole"
+        title="롤 (Role / ClusterRole)"
         actions={<>
           <div className="relative flex-1 min-w-[180px]">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
@@ -360,7 +360,7 @@ export function RolePanel({
         )}
       </MacCard>
 
-      <MacCard title="규칙 편집">
+      <MacCard title="롤 규칙 편집">
         {!selected || !draft ? (
           <EmptyState
             icon={Shield}

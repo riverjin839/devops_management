@@ -11,6 +11,7 @@
 1.80.3 이후 main 에 병합된 변경 (다음 릴리스 후보).
 
 ### Added
+- **K8S 접근 권한 — 발급 마법사 단순화·위험도 실시간 요약**: 바인딩 방식·토큰 유효기간·검증을 "고급 설정"으로 접고(토큰 방식+유효기간은 하나의 select), 하단 바가 범위·읽기/쓰기·만료·확인 필요 건수를 입력과 함께 실시간으로 보여준다. 모의 실행은 별도 보조 버튼, 발급 결과 카드에서 권한 점검·회수로 바로 이동, "로그 보기"는 실행 로그 카드로 이동. 단계 칩 live region·쓰기 동사 sr-only 표기 등 접근성 보강과 ServiceAccount·롤 용어 통일. Frontend: `ProvisionWizard`·`ProvisionConsole`·`K8sRbacPage`.
 - **K8s 허브 — `[` `]` 화면 이동 단축키**: 허브에서 `[` 는 이전 화면, `]` 는 다음 화면으로 이동한다. 브라우저 기본 단축키·Ctrl+K·Tab 포커스 이동과 겹치지 않고, 입력창에 입력 중이거나 모달이 열려 있으면 동작하지 않는다. Frontend: `useHubTabShortcuts`(`HubTabs`).
 - **화면 밀도 설정 (Settings → 화면 UI 설정)**: 글자 크기·줄간격을 「촘촘하게(12/14px) · 기본(13/14.5px) · 크게(14/16px)」 중 고른다. `text-xs`/`text-sm` 전체에 바로 적용되고 같은 계정의 다른 기기에도 따라온다(`k8s:density`). Frontend: `stores/densityStore`·`DensitySettings`·`index.css` `--fs-*`.
 - **잘린 이름 전체 보기**: 모든 말줄임(`truncate`·`line-clamp`)에 마우스를 올리면 전체 값이 툴팁으로 뜬다(`useTruncateTitle`). K8S 자원 목록의 이름 열은 가운데 말줄임(`MiddleTruncate`)이라 끝 12자가 항상 보인다 — 끝에서 갈리는 Pod·노드 이름을 구분할 수 있다.

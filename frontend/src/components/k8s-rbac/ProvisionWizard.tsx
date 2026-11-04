@@ -1,11 +1,12 @@
 /**
- * 개발자 액세스 발급 마법사 — 프리셋 → 대상 → 바인딩 방식 → 규칙 → 옵션 → 실행.
+ * 개발자 액세스 발급 마법사 — 프리셋 → 대상 → 권한 규칙 → (고급: 바인딩 방식·토큰) → 실행.
+ * 고르는 동안 발급이 여는 범위·위험도를 하단 바에 실시간으로 보여주고, 모의 실행은 보조 버튼으로 둔다.
  *
  * 개발자는 보통 자기 네임스페이스 하나에 배포하지만 다른 네임스페이스도 필요할 때가 있어,
  * 주 네임스페이스와 추가 네임스페이스를 함께 받아 한 번에 붙인다.
  */
 import { useEffect, useMemo, useState } from 'react';
-import { AlertTriangle, Play, Plus, X } from 'lucide-react';
+import { AlertTriangle, ChevronRight, FlaskConical, Play, Plus, X } from 'lucide-react';
 import { SwitchToggle } from '@/components/common';
 import { formatApiError } from '@/lib/utils';
 import { MacCard } from '@/components/ui/MacCard';
@@ -17,7 +18,7 @@ import type {
   RbacPresetCatalog,
   RbacProvisionRequest,
 } from '@/types';
-import { grantRiskReasons, isClusterWideMode, saNameProblem } from './rbacShared';
+import { grantRiskReasons, isClusterWideMode, isWriteVerb, saNameProblem } from './rbacShared';
 import { GrantRiskDialog } from './GrantRiskDialog';
 import { RiskBadge } from './RbacTags';
 import { RuleEditor } from './RuleEditor';
@@ -37,12 +38,16 @@ interface ProvisionWizardProps {
 
 const NS_ERROR_PROBLEM = '네임스페이스 목록을 불러오지 못했습니다 — 다시 시도한 뒤 발급하세요.';
 
+/** 0 = 만료 없는 Secret 토큰(TokenRequest 가 아님). 토큰 방식과 유효기간을 하나의 선택으로 합쳤다. */
+const NO_EXPIRY = 0;
 const TTL_OPTIONS = [
   { label: '1일', value: 24 * 3600 },
   { label: '7일', value: 7 * 24 * 3600 },
   { label: '30일', value: 30 * 24 * 3600 },
   { label: '90일', value: 90 * 24 * 3600 },
+  { label: '만료 없음 (Secret 토큰)', value: NO_EXPIRY },
 ];
+const DEFAULT_TTL = TTL_OPTIONS[1].value;
 
 export function ProvisionWizard({
   clusterId, catalog, namespaces, namespacesLoading = false, namespacesError, onRetryNamespaces, running, onRun,
@@ -60,9 +65,9 @@ export function ProvisionWizard({
   const [createNamespace, setCreateNamespace] = useState(false);
   const [issueKubeconfig, setIssueKubeconfig] = useState(true);
   const [verify, setVerify] = useState(true);
-  const [dryRun, setDryRun] = useState(false);
-  const [longLived, setLongLived] = useState(false);
-  const [ttl, setTtl] = useState(TTL_OPTIONS[1].value);
+  const [ttl, setTtl] = useState(DEFAULT_TTL);
+  const longLived = ttl === NO_EXPIRY;
+  const [advancedOpen, setAdvancedOpen] = useState(false);
 
   const preset = useMemo(
     () => catalog?.presets.find((p) => p.key === presetKey),
@@ -122,23 +127,32 @@ export function ProvisionWizard({
   }, [saName, primaryNs, rules, namespacesError]);
 
   const objectSummary = useMemo(() => {
-    if (bindingMode === 'clusterrole-clusterrolebinding') return 'SA 1 · ClusterRole 1 · ClusterRoleBinding 1';
+    if (bindingMode === 'clusterrole-clusterrolebinding') return 'ServiceAccount 1 · ClusterRole 1 · ClusterRoleBinding 1';
     if (bindingMode === 'role-per-namespace')
-      return `SA 1 · Role ${targetNamespaces.length} · RoleBinding ${targetNamespaces.length}`;
-    return `SA 1 · ClusterRole 1 · RoleBinding ${targetNamespaces.length}`;
+      return `ServiceAccount 1 · Role ${targetNamespaces.length} · RoleBinding ${targetNamespaces.length}`;
+    return `ServiceAccount 1 · ClusterRole 1 · RoleBinding ${targetNamespaces.length}`;
   }, [bindingMode, targetNamespaces.length]);
+
+  // 지금 입력이 여는 범위 — 고르는 동안 하단 바에서 실시간으로 보여준다(위험을 마지막에야 알게 되지 않도록).
+  const scopeLabel = isClusterWideMode(bindingMode)
+    ? '전체 네임스페이스'
+    : targetNamespaces.length > 0
+      ? `네임스페이스 ${targetNamespaces.length}개`
+      : '네임스페이스 미선택';
+  const writes = useMemo(() => rules.some((r) => r.verbs.some((v) => isWriteVerb(v))), [rules]);
+  const expiryLabel = longLived ? '만료 없음' : `${TTL_OPTIONS.find((o) => o.value === ttl)?.label ?? ''} 후 만료`;
 
   const requestRun = () => {
     if (problems.length > 0 || !canOperate) return;
-    // 모의 실행은 아무것도 만들지 않으니 바로 보낸다.
-    if (!dryRun && riskReasons.length > 0) {
+    if (riskReasons.length > 0) {
       setConfirming(true);
       return;
     }
-    run();
+    run(false);
   };
 
-  const run = () => {
+  // 모의 실행은 아무것도 만들지 않으니 확인 없이 바로 보낸다.
+  const run = (dryRun: boolean) => {
     if (problems.length > 0 || !canOperate) return;
     setConfirming(false);
     onRun({
@@ -154,7 +168,7 @@ export function ProvisionWizard({
       verify,
       issueKubeconfig,
       longLivedToken: longLived,
-      tokenTtlSeconds: ttl,
+      tokenTtlSeconds: longLived ? DEFAULT_TTL : ttl,
       dryRun,
     });
   };
@@ -165,7 +179,7 @@ export function ProvisionWizard({
   return (
     <div className="space-y-3">
       {/* 1. 프리셋 */}
-      <MacCard title="1 · 권한 프리셋" description="무엇을 할 수 있게 할 것인가 — 고른 뒤 아래 규칙 표에서 그대로 고칩니다">
+      <MacCard title="권한 프리셋" description="무엇을 할 수 있게 할 것인가 — 고른 뒤 아래 규칙 표에서 그대로 고칩니다">
         <div className="grid gap-2 [grid-template-columns:repeat(auto-fit,minmax(220px,1fr))]">
           {(catalog?.presets ?? []).map((p) => {
             const on = p.key === presetKey;
@@ -175,7 +189,6 @@ export function ProvisionWizard({
                 type="button"
                 aria-pressed={on}
                 onClick={() => setPresetKey(p.key)}
-                title={p.description}
                 className={`text-left p-3 rounded-xl border transition-colors ${
                   on
                     ? 'border-primary bg-primary/5 ring-1 ring-primary'
@@ -197,7 +210,7 @@ export function ProvisionWizard({
       </MacCard>
 
       {/* 2. 대상 */}
-      <MacCard title="2 · 대상" description="누구에게, 어느 네임스페이스에">
+      <MacCard title="대상" description="누구에게, 어느 네임스페이스에">
         {namespacesError ? (
           <div role="alert" className="mb-3 flex items-start gap-2 rounded-md border border-status-critical/30 bg-status-critical/10 px-3 py-2 text-xs text-status-critical">
             <AlertTriangle className="w-3.5 h-3.5 mt-0.5 shrink-0" aria-hidden="true" />
@@ -293,6 +306,7 @@ export function ProvisionWizard({
                   }
                 }}
                 placeholder="네임스페이스 추가"
+                aria-label="추가 네임스페이스 이름"
                 className="w-40 px-2.5 py-1 bg-card border border-dashed border-border rounded-full text-xs font-mono focus:outline-none focus:ring-2 focus:ring-primary/50"
               />
               <button
@@ -326,43 +340,9 @@ export function ProvisionWizard({
         </div>
       </MacCard>
 
-      {/* 3. 바인딩 방식 */}
-      <MacCard title="3 · 바인딩 방식" description="권한을 어떻게 붙일 것인가">
-        <div className="flex flex-col gap-2" role="radiogroup" aria-label="바인딩 방식">
-          {(catalog?.bindingModes ?? []).map((m) => {
-            const on = m.key === bindingMode;
-            return (
-              <button
-                key={m.key}
-                type="button"
-                role="radio"
-                aria-checked={on}
-                aria-label={m.name}
-                onClick={() => setBindingMode(m.key)}
-                className={`grid grid-cols-[18px_1fr] gap-3 items-start text-left p-3 rounded-xl border transition-colors ${
-                  on ? 'border-primary bg-primary/5' : 'border-border bg-secondary hover:border-primary/40'
-                }`}
-              >
-                <span
-                  className={`w-4 h-4 mt-0.5 rounded-full bg-card ${
-                    on ? 'border-[5px] border-primary' : 'border border-border'
-                  }`}
-                />
-                <span>
-                  <span className="block text-sm font-semibold">{m.name}</span>
-                  <span className="block text-xs text-muted-foreground leading-relaxed mt-0.5">
-                    {m.description}
-                  </span>
-                </span>
-              </button>
-            );
-          })}
-        </div>
-      </MacCard>
-
       {/* 4. 규칙 */}
       <MacCard
-        title="4 · 권한 규칙"
+        title="권한 규칙"
         description={`실제로 적용될 규칙 — ${rulesTouched ? '프리셋에서 수정됨' : `프리셋: ${preset?.name ?? '—'}`}`}
       >
         <RuleEditor
@@ -376,38 +356,74 @@ export function ProvisionWizard({
         />
       </MacCard>
 
-      {/* 5. 옵션 */}
-      <MacCard title="5 · 발급 옵션" description="토큰과 검증">
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          <label className="flex flex-col gap-1.5 text-xs text-muted-foreground font-medium">
-            토큰 방식
-            <select
-              id="rbac-token-mode"
-              value={longLived ? 'long' : 'short'}
-              onChange={(e) => setLongLived(e.target.value === 'long')}
-              className={inputCls}
-            >
-              <option value="short">단기 토큰 (TokenRequest)</option>
-              <option value="long">만료 없는 Secret 토큰</option>
-            </select>
-          </label>
-          <label className="flex flex-col gap-1.5 text-xs text-muted-foreground font-medium">
-            유효기간
-            <select
-              id="rbac-token-ttl"
-              value={ttl}
-              disabled={longLived}
-              onChange={(e) => setTtl(Number(e.target.value))}
-              className={`${inputCls} disabled:opacity-50`}
-            >
-              {TTL_OPTIONS.map((o) => (
-                <option key={o.value} value={o.value}>
-                  {o.label}
-                </option>
-              ))}
-            </select>
-          </label>
+      {/* 고급 — 기본값으로 충분한 대부분의 발급에서는 접어 둔다. 현재 값은 접힌 줄에 요약한다. */}
+      <MacCard>
+        <details
+          open={advancedOpen}
+          onToggle={(e) => setAdvancedOpen((e.currentTarget as HTMLDetailsElement).open)}
+        >
+          <summary className="flex cursor-pointer flex-wrap items-center gap-x-2 gap-y-1 text-sm font-semibold text-foreground">
+            <ChevronRight className={`w-4 h-4 text-muted-foreground transition-transform ${advancedOpen ? 'rotate-90' : ''}`} aria-hidden="true" />
+            고급 설정
+            <span className="text-xs font-normal text-muted-foreground">
+              바인딩 방식 · 토큰 유효기간 · 검증 — 현재 {isClusterWideMode(bindingMode) ? '전체 네임스페이스' : '네임스페이스 단위'} · {expiryLabel}
+            </span>
+          </summary>
+          <div className="mt-3 space-y-4">
+      <section aria-labelledby="rbac-binding-mode-h" className="space-y-2">
+        <h3 id="rbac-binding-mode-h" className="text-xs font-semibold text-foreground">
+          바인딩 방식 <span className="font-normal text-muted-foreground">— 권한을 어떻게 붙일 것인가</span>
+        </h3>
+        <div className="flex flex-col gap-2" role="radiogroup" aria-label="바인딩 방식">
+          {(catalog?.bindingModes ?? []).map((m) => {
+            const on = m.key === bindingMode;
+            return (
+              <button
+                key={m.key}
+                type="button"
+                role="radio"
+                aria-checked={on}
+                aria-labelledby={`rbac-bm-${m.key}-n`}
+                aria-describedby={`rbac-bm-${m.key}-d`}
+                onClick={() => setBindingMode(m.key)}
+                className={`grid grid-cols-[18px_1fr] gap-3 items-start text-left p-3 rounded-xl border transition-colors ${
+                  on ? 'border-primary bg-primary/5' : 'border-border bg-secondary hover:border-primary/40'
+                }`}
+              >
+                <span
+                  className={`w-4 h-4 mt-0.5 rounded-full bg-card ${
+                    on ? 'border-[5px] border-primary' : 'border border-border'
+                  }`}
+                />
+                <span>
+                  <span id={`rbac-bm-${m.key}-n`} className="block text-sm font-semibold">{m.name}</span>
+                  <span id={`rbac-bm-${m.key}-d`} className="block text-xs text-muted-foreground leading-relaxed mt-0.5">
+                    {m.description}
+                  </span>
+                </span>
+              </button>
+            );
+          })}
         </div>
+      </section>
+
+      <section aria-labelledby="rbac-token-h" className="space-y-2">
+        <h3 id="rbac-token-h" className="text-xs font-semibold text-foreground">토큰·검증</h3>
+        <label className="flex flex-col gap-1.5 text-xs text-muted-foreground font-medium sm:max-w-xs">
+          토큰 유효기간
+          <select
+            id="rbac-token-ttl"
+            value={ttl}
+            onChange={(e) => setTtl(Number(e.target.value))}
+            className={inputCls}
+          >
+            {TTL_OPTIONS.map((o) => (
+              <option key={o.value} value={o.value}>
+                {o.label}
+              </option>
+            ))}
+          </select>
+        </label>
         {longLived && (
           <p
             role="note"
@@ -415,48 +431,74 @@ export function ProvisionWizard({
           >
             <AlertTriangle className="w-3.5 h-3.5 mt-0.5 shrink-0 text-status-warning" aria-hidden="true" />
             만료 없는 토큰은 Secret 을 지우기 전까지 계속 유효합니다 — 노트북·채팅에 한 번 흘러나가면 회수할 때까지
-            누구든 쓸 수 있습니다. 사람에게 주는 kubeconfig 라면 단기 토큰을 쓰세요.
+            누구든 쓸 수 있습니다. 사람에게 주는 kubeconfig 라면 단기 토큰을 쓰고, CI 처럼 사람이 갱신할 수 없는 곳에만 쓰세요. 회수는 그 Secret 을 지워서 합니다.
           </p>
         )}
         <div className="flex flex-wrap gap-x-5 gap-y-2 mt-3">
           <SwitchToggle checked={issueKubeconfig} onChange={setIssueKubeconfig} label="kubeconfig 발급" disabled={!canOperate} hint={hint} />
           <SwitchToggle checked={verify} onChange={setVerify} label="생성 후 권한 검증" disabled={!canOperate} hint={hint} />
-          <SwitchToggle checked={dryRun} onChange={setDryRun} label="모의 실행 (변경 없음)" disabled={!canOperate} hint={hint} />
         </div>
-        <p className="mt-3 text-xs leading-relaxed text-muted-foreground">
-          단기 토큰은 만료되면 개발자가 다시 받아야 합니다. CI 처럼 사람이 갱신할 수 없는 곳에는 만료 없는
-          Secret 토큰을 쓰고, 회수는 그 Secret 을 지워서 합니다.
-        </p>
+      </section>
+
+          </div>
+        </details>
       </MacCard>
 
-      {/* 실행 */}
-      <div className="sticky bottom-3 z-10 flex flex-wrap items-center gap-3 p-3 rounded-md bg-card border border-border shadow-sm">
-        <button
-          type="button"
-          onClick={requestRun}
-          disabled={!canOperate || running || problems.length > 0}
-          title={
-            !canOperate
-              ? hint
-              : problems.length > 0
-                ? problems[0]
-                : withHint(dryRun ? '모의 실행' : '액세스 발급 실행')
-          }
-          aria-label={dryRun ? '모의 실행' : '액세스 발급 실행'}
-          className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-primary text-primary-foreground text-sm font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
-        >
-          <Play className="w-4 h-4" />
-          {running ? '실행 중…' : dryRun ? '모의 실행' : '액세스 발급 실행'}
-        </button>
-        <span className="text-xs text-muted-foreground">
-          {problems.length > 0 ? problems[0] : objectSummary}
-        </span>
-        {problems.length === 0 && !dryRun && riskReasons.length > 0 && (
-          <span className="inline-flex items-center gap-1 text-xs text-foreground">
-            <AlertTriangle className="w-3.5 h-3.5 text-status-warning" aria-hidden="true" />
-            실행 전에 영향 범위를 한 번 더 확인받습니다
-          </span>
-        )}
+      {/* 실행 — 이 발급이 여는 범위를 고르는 동안 실시간으로 보여준다 */}
+      <div className="sticky bottom-3 z-10 space-y-2 p-3 rounded-md bg-card border border-border shadow-sm">
+        <div aria-live="polite" className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground">
+          <span>범위 <span className="font-medium text-foreground">{scopeLabel}</span></span>
+          <span>동작 <span className="font-medium text-foreground">{writes ? '읽기 + 쓰기' : '읽기 전용'}</span></span>
+          <span>토큰 <span className="font-medium text-foreground">{expiryLabel}</span></span>
+          <span className="font-mono">{objectSummary}</span>
+          {riskReasons.length > 0 ? (
+            <span className="inline-flex items-center gap-1 font-medium text-foreground">
+              <AlertTriangle className="w-3.5 h-3.5 text-status-warning" aria-hidden="true" />
+              확인 필요 {riskReasons.length}건 — 발급 전에 다시 확인받습니다
+            </span>
+          ) : (
+            <span>위험 사유 없음</span>
+          )}
+        </div>
+        <div className="flex flex-wrap items-center gap-3">
+          <button
+            type="button"
+            onClick={requestRun}
+            disabled={!canOperate || running || problems.length > 0}
+            title={
+              !canOperate
+                ? hint
+                : problems.length > 0
+                  ? problems[0]
+                  : withHint('액세스 발급 실행')
+            }
+            aria-label="액세스 발급 실행"
+            className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-primary text-primary-foreground text-sm font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            <Play className="w-4 h-4" />
+            {running ? '실행 중…' : '액세스 발급 실행'}
+          </button>
+          <button
+            type="button"
+            onClick={() => run(true)}
+            disabled={!canOperate || running || problems.length > 0}
+            title={
+              !canOperate
+                ? hint
+                : problems.length > 0
+                  ? problems[0]
+                  : withHint('모의 실행 — 아무것도 만들지 않고 같은 로그를 냅니다')
+            }
+            aria-label="모의 실행"
+            className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl border border-border bg-secondary text-sm font-medium hover:border-primary/40 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            <FlaskConical className="w-4 h-4" aria-hidden="true" />
+            모의 실행
+          </button>
+          {problems.length > 0 && (
+            <span role="status" className="text-xs text-status-critical">{problems[0]}</span>
+          )}
+        </div>
       </div>
 
       <GrantRiskDialog
@@ -473,11 +515,11 @@ export function ProvisionWizard({
         confirmName={saName.trim()}
         confirmNameLabel="ServiceAccount 이름"
         confirmLabel="발급 실행"
-        onConfirm={run}
+        onConfirm={() => run(false)}
         onCancel={() => setConfirming(false)}
       >
         <p className="text-xs text-muted-foreground">
-          확신이 없으면 취소하고 <span className="text-foreground">모의 실행</span> 을 먼저 켜 보세요 — 아무것도 만들지 않고
+          확신이 없으면 취소하고 <span className="text-foreground">모의 실행</span> 을 먼저 눌러 보세요 — 아무것도 만들지 않고
           같은 로그를 냅니다.
         </p>
       </GrantRiskDialog>
