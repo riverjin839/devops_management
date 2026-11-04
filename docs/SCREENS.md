@@ -643,11 +643,12 @@ hover 시 flyout 자체가 라벨을 보여주므로 이름만 뜨는 중복 툴
 - **목적 / UX**: 매트릭스 재편 로드맵 3단계(F3) — 점검 매트릭스의 클러스터명 클릭이 도착하는 클러스터 상세 화면. 이 클러스터의 **종합 상태(정상/경고/위험)와 그 원인**을 한눈에 보여주고, 바로 아래에 점검 카탈로그(등록된 모든 실행 기술 — deep_check/addon/배치잡(SSH)/플레이북(Ansible), D-066 로 전부 편입 완료)로 이어진다. "왜 이 클러스터가 warning 인가"를 카드 하나로 답하는 게 목적 — 예전엔 애드온 그리드만 봐서는 심층 점검이 원인이어도 보이지 않았다(D-067).
 - **UI 구성**:
   - `ClusterSidebar` `iconOnly` — 다른 per-cluster 화면과 동일 패턴.
-  - MacCard "종합 상태" — `StatusBadge`(healthy/warning/critical) + "N개 신호를 종합한 결과입니다" + 원인 목록(source 배지 "핵심 점검 번들"/"애드온"/"심층 점검" + 이름 + 메시지 + 마지막 확인 시각), severity(critical→warning→pending→healthy) 순 정렬. 원인 없음(전부 healthy)이면 "아직 점검 결과가 없습니다"/정상 안내만.
+  - 헤더 제목 아래 **상태 한 줄**(2026-11-04) — `StatusBadge`(healthy/warning/critical) + "N개 신호 종합" + "마지막 점검 <상대시각>"(원인 중 가장 최근 `checkedAt`).
+  - MacCard "상태 근거" — 원인 목록(source 배지 "핵심 점검 번들"/"애드온"/"심층 점검" + 이름 + 메시지 + 마지막 확인 시각)을 severity(critical→warning→pending/unknown→healthy) 순으로 정렬하고 **정상 항목은 접어 둔다**("정상 N개 보기"/"정상 항목 접기"). 경고·위험이 없으면 "경고·위험 신호가 없습니다", 결과가 없으면 「점검 실행」 안내, 로드 실패는 "다시 시도" 버튼.
   - 그 아래 `ClusterOpsCheckPanel` — 카탈로그 테이블 + 일괄/개별 실행 + 실행 진행 + 결과 상세 모달(`/ops-checks` 섹션과 동일 컴포넌트, 위 참고).
-  - 헤더에 "결과 리뷰"(허브 점검 결과 리뷰 뷰 `/k8s/:clusterId/review`), "점검 항목 관리"(`/daily-check/settings`) 바로가기 + 일일 리포트 `.md`/`.csv`(`healthApi.exportReport`, 이 클러스터) + Kubeconfig 편집(`KubeconfigEditModal`) + **점검 실행**(애드온 헬스 체크 `POST /health/check/{id}`).
+  - 헤더 액션은 3개 — **점검 실행**(주 버튼, 애드온 헬스 체크 `POST /health/check/{id}`) + 「내보내기」 메뉴(일일 리포트 마크다운/CSV, `healthApi.exportReport`, 이 클러스터) + 「더 보기」 메뉴("결과 리뷰" = 허브 점검 결과 리뷰 뷰 `/k8s/:clusterId/review`, "점검 항목 관리" = `/daily-check/settings`, "접속 정보(kubeconfig)" = `KubeconfigEditModal`, operator 이상).
   - `RunLogPanel`(+ 로그 보기 토글, `useLogPref('dashboard-health-check')`) — 점검 실행·애드온 ▶·현황 아이템 ▶·플레이북 실행이 공유. 점검 실행은 시작 줄 → 5초 응답 대기 하트비트 → 애드온별 상태·응답 ms·메시지 줄 → 요약 줄.
-  - MacCard "애드온" — `AddonGrid`(애드온별 헬스 카드, 단건 ▶·편집·삭제) + "점검 항목" 추가(`AddAddonModal`) + 기본 애드온(etcd Leader/Node Status/Control Plane/CoreDNS) 일괄 추가. 미연결(pending)이면 grayscale 오버레이 안내.
+  - MacCard "애드온" — `AddonGrid`(애드온별 헬스 카드, 단건 ▶·편집·삭제) + "점검 항목" 추가(`AddAddonModal`) + 기본 애드온(etcd Leader/Node Status/Control Plane/CoreDNS) 일괄 추가(실행 로그에 항목별 성공/실패 기록, 아이콘은 DB 에 저장하지 않고 `AddonCard` 가 lucide 로 그림). 미연결(pending)이면 안내 배너 + 카드 영역 `opacity-70` + `inert`(포인터·키보드 모두 차단).
   - MacCard "현황 아이템" — `ClusterItemsGrid`/`ClusterItemModal`(사용자 정의 카드 실행/리사이즈/삭제).
   - (카탈로그 아래) MacCard "플레이북 점검" — `/playbooks` 에서 "클러스터 상세에 표시"로 지정한 이 클러스터 플레이북(`useDashboardPlaybooks`, 백엔드 `show_on_dashboard`) 실행(SSH 자격증명 세션 캐시 + 실행 전 확인)·수정·삭제.
   - MacCard "최근 점검 이력" — `CheckHistoryHeatmap`(이 클러스터 로그만).
