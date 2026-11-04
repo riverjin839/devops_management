@@ -55,10 +55,11 @@ jobs:
         uses: docker/metadata-action@v5
         with:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME_BACKEND }}
+          # `latest` 는 붙이지 않는다 — release.yml 만 붙인다. 병합 직후 auto-release 가 같은 시각에
+          # 돌아 두 워크플로가 `latest` 를 서로 덮어쓰던 경합(1.80.3 에서 frontend latest 가 hex 이미지로 남음)을 막는다.
           tags: |
             type=sha,prefix=
             type=ref,event=branch
-            type=raw,value=latest,enable={{is_default_branch}}
 
       - name: Extract metadata for Frontend
         id: meta-frontend
@@ -68,7 +69,6 @@ jobs:
           tags: |
             type=sha,prefix=
             type=ref,event=branch
-            type=raw,value=latest,enable={{is_default_branch}}
 
       - name: Copy CHANGELOG for backend image
         # backend/app/routers/release_notes.py 가 이미지 안에서 CHANGELOG.md 를 읽어
