@@ -1,5 +1,6 @@
 import { useId, useMemo, useState } from 'react';
-import { Pencil, Trash2, Cpu, Network, AlertTriangle, RefreshCw, Loader2, Cable, ShieldCheck } from 'lucide-react';
+import { Pencil, Trash2, Cpu, Network, AlertTriangle, RefreshCw, Loader2, Cable, ShieldCheck, MoreHorizontal } from 'lucide-react';
+import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
 import { MacCard } from '@/components/ui/MacCard';
 import type { Cluster } from '@/types';
 import { useCanOperate } from '@/hooks/useCanOperate';
@@ -146,15 +147,6 @@ export function ClusterCard({ cluster, onEdit, onDelete, deletingId, overlapGrou
                   ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
                   : <RefreshCw className="w-3.5 h-3.5" />}
               </button>
-              {onCollectNics && (
-                <button onClick={() => onCollectNics(cluster)}
-                  disabled={!canOperate}
-                  className={`${iconBtn} text-muted-foreground hover:bg-primary/10 hover:text-primary`}
-                  title={withHint('NIC 수집 (SSH) — bond0/bond1 IP·MAC 을 채웁니다. kubectl 만으로는 인터페이스 이름을 알 수 없어 SSH 로 따로 수집합니다')}
-                  aria-label={ariaWithHint(`${cluster.name} NIC 수집`)}>
-                  <Cable className="w-3.5 h-3.5" />
-                </button>
-              )}
               <button onClick={() => onEdit(cluster)}
                 disabled={!canOperate}
                 className={`${iconBtn} text-muted-foreground hover:bg-secondary hover:text-foreground`}
@@ -162,12 +154,38 @@ export function ClusterCard({ cluster, onEdit, onDelete, deletingId, overlapGrou
                 aria-label={ariaWithHint(`${cluster.name} 전체 수정`)}>
                 <Pencil className="w-3.5 h-3.5" />
               </button>
-              <button onClick={() => onDelete(cluster)} disabled={deletingId === cluster.id || !canOperate}
-                className={`${iconBtn} text-muted-foreground hover:bg-status-critical/10 hover:text-status-critical`}
-                title={withHint('삭제 — 클러스터와 연관된 Addon · Playbook · 점검 이력이 함께 제거됩니다')}
-                aria-label={ariaWithHint(`${cluster.name} 삭제`)}>
-                <Trash2 className="w-3.5 h-3.5" />
-              </button>
+              {/* 저빈도·위험 동작(NIC 수집·삭제)은 더보기 메뉴로 — 테이블 행과 동일 */}
+              <DropdownMenu.Root>
+                <DropdownMenu.Trigger asChild>
+                  <button type="button"
+                    className={`${iconBtn} text-muted-foreground hover:bg-secondary hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary`}
+                    title="더보기 — NIC 수집 · 삭제"
+                    aria-label={`${cluster.name} 더보기 메뉴`}>
+                    <MoreHorizontal className="w-3.5 h-3.5" />
+                  </button>
+                </DropdownMenu.Trigger>
+                <DropdownMenu.Portal>
+                  <DropdownMenu.Content align="end" sideOffset={4}
+                    className="z-[60] min-w-[200px] rounded-md border border-border bg-card p-1 shadow-lg">
+                    {onCollectNics && (
+                      <DropdownMenu.Item
+                        disabled={!canOperate}
+                        onSelect={() => onCollectNics(cluster)}
+                        title={withHint('NIC 수집 (SSH) — bond0/bond1 IP·MAC 을 채웁니다. kubectl 만으로는 인터페이스 이름을 알 수 없어 SSH 로 따로 수집합니다')}
+                        className="flex items-center gap-2 px-2 py-1.5 text-sm rounded-xl cursor-pointer outline-none data-[highlighted]:bg-secondary data-[disabled]:opacity-50 data-[disabled]:cursor-not-allowed">
+                        <Cable className="w-3.5 h-3.5 text-muted-foreground" aria-hidden /> NIC 수집 (SSH)
+                      </DropdownMenu.Item>
+                    )}
+                    <DropdownMenu.Item
+                      disabled={deletingId === cluster.id || !canOperate}
+                      onSelect={() => onDelete(cluster)}
+                      title={withHint('삭제 — 클러스터와 연관된 Addon · Playbook · 점검 이력이 함께 제거됩니다')}
+                      className="flex items-center gap-2 px-2 py-1.5 text-sm rounded-xl cursor-pointer outline-none text-status-critical data-[highlighted]:bg-status-critical/10 data-[disabled]:opacity-50 data-[disabled]:cursor-not-allowed">
+                      <Trash2 className="w-3.5 h-3.5" aria-hidden /> 삭제
+                    </DropdownMenu.Item>
+                  </DropdownMenu.Content>
+                </DropdownMenu.Portal>
+              </DropdownMenu.Root>
             </div>
           ) : (
             <span className="text-xs text-muted-foreground flex-shrink-0" title="조회 전용 계정입니다">조회 전용</span>
@@ -327,13 +345,13 @@ function NicCompact({
       <div className="flex items-center justify-between mb-1.5">
         <p className="text-xs font-semibold text-foreground">{label}</p>
         {ipCount > 0 && (
-          <span className="text-[11px] font-mono text-muted-foreground tabular-nums">{ipCount}개</span>
+          <span className="text-xs font-mono text-muted-foreground tabular-nums">{ipCount}개</span>
         )}
       </div>
       {/* IP — 그룹 표기 우선, 없으면 master 단일 값 fallback */}
       {hasGroups ? (
         <div className="mb-1">
-          <p className="text-[11px] text-muted-foreground">IP</p>
+          <p className="text-xs text-muted-foreground">IP</p>
           <div className="space-y-0.5">
             {groups.map((g, i) => (
               <p key={i} className="text-xs font-mono text-foreground tabular-nums"
@@ -345,14 +363,14 @@ function NicCompact({
         </div>
       ) : fallbackIp ? (
         <div className="mb-1">
-          <p className="text-[11px] text-muted-foreground">IP (마스터)</p>
+          <p className="text-xs text-muted-foreground">IP (마스터)</p>
           <p className="text-xs font-mono text-foreground">{fallbackIp}</p>
         </div>
       ) : null}
       {/* MAC — 모든 노드 MAC 나열 (보통 5개 이하). fallback 은 master 단일 */}
       {hasMacs ? (
         <div>
-          <p className="text-[11px] text-muted-foreground">MAC ({macs.length})</p>
+          <p className="text-xs text-muted-foreground">MAC ({macs.length})</p>
           <div className="space-y-0.5">
             {macs.map((m) => (
               <p key={m} className="text-xs font-mono text-foreground/90">{m}</p>
@@ -361,7 +379,7 @@ function NicCompact({
         </div>
       ) : fallbackMac ? (
         <div>
-          <p className="text-[11px] text-muted-foreground">MAC (마스터)</p>
+          <p className="text-xs text-muted-foreground">MAC (마스터)</p>
           <p className="text-xs font-mono text-foreground">{fallbackMac}</p>
         </div>
       ) : null}
