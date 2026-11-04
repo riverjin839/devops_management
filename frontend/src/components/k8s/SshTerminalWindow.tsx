@@ -14,6 +14,10 @@ export interface SshTerminalEvent {
   level: 'info' | 'warn' | 'error';
   message: string;
   end?: boolean;
+  /** 서버 첫 응답을 받았다 — SSH 인증·k9s 기동까지 끝나 화면이 흐르기 시작함. */
+  ready?: boolean;
+  /** 첫 응답 전에 끊겼다 — 접속 자체가 실패(호스트·포트·계정·인증 확인). */
+  failed?: boolean;
 }
 
 export interface SshTerminalWindowProps {
@@ -53,6 +57,8 @@ export interface SshTerminalWindowProps {
 /** 서버 PTY 세션 상한(1시간, 정책 9) — 마지막 5분은 경고한다. */
 export const SSH_SESSION_MAX_SECONDS = 60 * 60;
 const SESSION_WARN_SECONDS = 5 * 60;
+/** 웹소켓이 이 시간 안에 열리지 않으면 로그에 경고를 남긴다. */
+const CONNECT_WARN_SECONDS = 15;
 
 // 4401 = 토큰 만료·무효 전용, 4402 = 역할·클러스터 실행 권한 부족(정책 10, D-172).
 const DEFAULT_CLOSE_NOTES: Record<number, string> = {
@@ -98,6 +104,8 @@ export function SshTerminalWindow({
   const [openedAt, setOpenedAt] = useState<number | null>(null);
   const [now, setNow] = useState(() => Date.now());
   const [confirmClose, setConfirmClose] = useState(false);
+  // 웹소켓이 열려도 SSH 인증·k9s 기동은 끝나지 않았을 수 있다 — 서버 첫 응답을 받아야 "연결됨".
+  const [ready, setReady] = useState(false);
   const warnedRef = useRef(false);
   const [fullscreen, setFullscreen] = useState(false);
   // 플로팅 창 위치 (fill/전체화면이 아닌 기본 모드) — 헤더 드래그로 이동한다.
@@ -139,13 +147,19 @@ export function SshTerminalWindow({
     term.reset();
     setStatus('connecting');
     setOpenedAt(null);
+    setReady(false);
     warnedRef.current = false;
     const ws = new WebSocket(typeof url === 'function' ? url() : url);
     wsRef.current = ws;
     let gotFirstFrame = false;
+    // 웹소켓이 끝내 열리지 않는 경우(프록시·방화벽)를 로그로 알린다 — 소켓은 그대로 두고 경고만 남긴다.
+    const openTimer = window.setTimeout(() => {
+      onEventRef.current?.({ level: 'warn', message: `${CONNECT_WARN_SECONDS}초가 지나도 웹소켓이 열리지 않습니다 — 네트워크·프록시(웹소켓 허용 여부)를 확인하세요` });
+    }, CONNECT_WARN_SECONDS * 1000);
     onEventRef.current?.({ level: 'info', message: '웹소켓 연결 시도 (토큰은 URL, SSH 자격증명은 연결 직후 init 프레임으로 전달)' });
     ws.onopen = () => {
-      onEventRef.current?.({ level: 'info', message: '웹소켓 열림 — SSH 접속 정보(init 프레임) 전송, 서버가 SSH 연결·인증·PTY·k9s 기동을 진행' });
+      window.clearTimeout(openTimer);
+      onEventRef.current?.({ level: 'info', message: '웹소켓 열림 — SSH 접속 정보(init 프레임) 전송, 서버가 SSH 연결·인증·PTY·k9s 기동을 진행하는 중 (아직 인증 전일 수 있음)' });
       setStatus('open');
       setOpenedAt(Date.now());
       setNow(Date.now());
@@ -162,16 +176,19 @@ export function SshTerminalWindow({
     ws.onmessage = (ev) => {
       if (!gotFirstFrame) {
         gotFirstFrame = true;
-        onEventRef.current?.({ level: 'info', message: '서버 첫 응답 수신 — 화면 스트리밍 시작', end: true });
+        setReady(true);
+        onEventRef.current?.({ level: 'info', message: '서버 첫 응답 수신 — SSH 인증·k9s 기동 완료, 화면 스트리밍 시작', end: true, ready: true });
       }
       term.write(String(ev.data));
     };
     ws.onerror = () => {
+      window.clearTimeout(openTimer);
       if (wsRef.current !== ws) return;
       onEventRef.current?.({ level: 'error', message: '웹소켓 오류 — 서버에 도달하지 못했거나 연결이 거부됐습니다' });
       setStatus('error');
     };
     ws.onclose = (ev) => {
+      window.clearTimeout(openTimer);
       // 이미 다른 소켓으로 재연결했으면 옛 소켓의 close 는 상태에 반영하지 않는다.
       if (wsRef.current !== ws) return;
       setStatus('closed');
@@ -179,13 +196,15 @@ export function SshTerminalWindow({
       const note = closeNotesRef.current?.[ev.code]
         ?? DEFAULT_CLOSE_NOTES[ev.code]
         ?? '[연결 종료]';
-      term.write(`\r\n\x1b[33m${note}\x1b[0m\r\n`);
+      // 이벤트를 먼저 알린다 — 터미널이 이미 정리된 뒤라 write 가 던져도 로그는 끝난다.
       // 첫 응답 전에 닫혔다면 접속 자체가 실패한 것(자격증명·호스트 확인), 이후라면 세션 종료.
       onEventRef.current?.({
         level: gotFirstFrame ? 'info' : 'error',
         message: `연결 종료 (코드 ${ev.code}) ${note}${gotFirstFrame ? '' : ' — 첫 응답 전에 끊김: 호스트·포트·계정·인증 정보를 확인하세요'}`,
         end: true,
+        failed: !gotFirstFrame,
       });
+      try { term.write(`\r\n\x1b[33m${note}\x1b[0m\r\n`); } catch { /* 정리된 터미널 */ }
     };
   }, [url]);
 
@@ -225,6 +244,7 @@ export function SshTerminalWindow({
     return () => {
       ro.disconnect();
       wsRef.current?.close();
+      wsRef.current = null; // 정리된 터미널에 옛 소켓의 close 가 쓰지 않게
       term.dispose();
       termRef.current = null;
       fitRef.current = null;
@@ -351,7 +371,7 @@ export function SshTerminalWindow({
         <span className="text-xs font-mono text-zinc-400 truncate">{subtitle}</span>
         <span className={`inline-flex items-center gap-1 text-xs shrink-0 ${statusColor}`} role="status" aria-live="polite">
           <span aria-hidden="true" className="w-1.5 h-1.5 rounded-full bg-current" />
-          {STATUS_LABEL[status]}
+          {status === 'open' && !ready ? 'SSH 접속 중…' : STATUS_LABEL[status]}
         </span>
         {remainingSec !== null && (
           <span

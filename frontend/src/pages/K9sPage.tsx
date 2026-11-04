@@ -51,7 +51,8 @@ export function K9sPage() {
   const clusters = useMemo(() => clustersQ.data ?? [], [clustersQ.data]);
   const f = useId();
   const { canOperate, hint, withHint, ariaWithHint } = useCanOperate(clusterId || null);
-  const { data: levels } = useOperationLevels();
+  const levelsQ = useOperationLevels();
+  const levels = levelsQ.data;
 
   // clusterId 없으면 첫 클러스터로 이동
   useEffect(() => {
@@ -64,7 +65,11 @@ export function K9sPage() {
   useTerminalEnvSync(clusters, clusterId || null);
 
   const cluster = useMemo(() => clusters.find((c) => c.id === clusterId), [clusters, clusterId]);
-  const guarded = isGuardedLevel(levels, cluster?.operationLevel);
+  // fail-closed: 운영레벨이 미지정이거나 레벨 목록을 아직 못 읽었으면 보호 레벨로 취급한다(읽기 전용 기본 + 연결 전 확인).
+  const levelUnknown = !cluster?.operationLevel;
+  const guarded = levelUnknown || levelsQ.isLoading || isGuardedLevel(levels, cluster?.operationLevel);
+  // 클러스터·레벨 판정이 끝나기 전에는 연결하지 못하게 막는다(판정 전 쓰기 가능 연결 방지).
+  const levelPending = clustersQ.isLoading || levelsQ.isLoading;
 
   // master(control-plane) 후보 — etcdctl 라우터의 master-candidates 재사용
   const mastersQ = useQuery({
@@ -96,6 +101,12 @@ export function K9sPage() {
   const [showRunLog, setShowRunLog] = useLogPref('k9s-connect');
   const runHandleRef = useRef<RunLogHandle | null>(null);
   const [connectBusy, setConnectBusy] = useState(false);
+  // 접속 실패(첫 응답 전 종료) 사유 — 폼으로 돌아와 인라인으로 보여준다. 입력값은 유지한다.
+  const [connectError, setConnectError] = useState('');
+  const [advancedOpen, setAdvancedOpen] = useState(false);
+  // 접속에 성공했을 때만 클러스터별로 기억할 입력값(비밀 제외).
+  const pendingRememberRef = useRef<K9sRemembered | null>(null);
+  const passwordRef = useRef<HTMLInputElement | null>(null);
   const clusterIdRef = useRef(clusterId);
   clusterIdRef.current = clusterId;
 
@@ -114,13 +125,15 @@ export function K9sPage() {
     setPortText(r.port ?? '22');
     setAuthMode(r.authMode ?? 'password');
     setNamespace(r.namespace ?? '');
+    setAdvancedOpen((r.port ?? '22') !== '22' || !!r.namespace);
   }, [clusterId]);
 
   // 첫 후보 자동선택
   useEffect(() => {
     if (!mastersQ.data) return;
-    if (!selectedMasterName && mastersQ.data.candidates.length > 0) {
-      setSelectedMasterName(mastersQ.data.candidates[0].name);
+    const cands = mastersQ.data.candidates;
+    if (cands.length > 0 && (!selectedMasterName || !cands.some((c: EtcdMasterCandidate) => c.name === selectedMasterName))) {
+      setSelectedMasterName(cands[0].name);
     }
   }, [mastersQ.data, selectedMasterName]);
 
@@ -133,11 +146,14 @@ export function K9sPage() {
 
   const port = Number(portText);
   const portValid = Number.isInteger(port) && port >= 1 && port <= 65535;
-  const canConnect = !!effectiveHost && !!username && portValid
+  const canConnect = !!effectiveHost && !!username && portValid && !levelPending
     && (authMode === 'password' ? !!password : !!privateKey.trim());
 
   const resetForCluster = (id: string | null) => {
     navigate(`/k9s/${id ?? ''}`);
+    runHandleRef.current?.log('warn', '클러스터를 전환해 세션을 정리했습니다');
+    runHandleRef.current?.end();
+    setConnectError('');
     setSession(null);
     setTermStatus(null);
     setPassword('');
@@ -148,13 +164,33 @@ export function K9sPage() {
 
   // 열린 세션이 있으면 클러스터 전환 전에 확인한다(D-177).
   const requestClusterChange = (id: string | null) => {
-    if (session && termStatus === 'open') setPendingCluster({ id });
+    // 연결 중(상태 미정 포함)에도 확인한다 — 끊긴 세션(closed/error)만 바로 전환.
+    if (session && termStatus !== 'closed' && termStatus !== 'error') setPendingCluster({ id });
     else resetForCluster(id);
   };
 
   const onTerminalEvent = (e: SshTerminalEvent) => {
+    // 핸들은 세션 동안 유지한다 — 첫 응답 이후의 끊김·재연결·만료도 같은 로그에 이어 쓴다.
     runHandleRef.current?.log(e.level, e.message);
-    if (e.end) { runHandleRef.current?.end(); runHandleRef.current = null; }
+    if (e.ready && pendingRememberRef.current) {
+      saveRemembered(clusterIdRef.current, pendingRememberRef.current);
+      pendingRememberRef.current = null;
+    }
+    if (e.end) runHandleRef.current?.end();
+    if (e.failed) {
+      // 접속 자체가 실패 — 창을 닫고 폼으로 돌아간다(입력값 유지, 비밀번호 칸에 포커스).
+      setConnectError(e.message);
+      setSession(null);
+      setTermStatus(null);
+      window.setTimeout(() => passwordRef.current?.focus(), 0);
+    }
+  };
+
+  // 진행 중인 연결 시도를 중단한다 — 연결 중이면 창을 닫고, 새 창 전달 대기면 로그만 끝낸다.
+  const abortConnect = () => {
+    runHandleRef.current?.log('warn', '사용자가 연결을 중단했습니다');
+    runHandleRef.current?.end();
+    if (session && termStatus !== 'open') { setSession(null); setTermStatus(null); }
   };
 
   const beginRunLog = (mode: 'inline' | 'popout') => {
@@ -178,19 +214,28 @@ export function K9sPage() {
     const win = openK9sPopout({ clusterId: cid, params }, (delivered) => {
       if (delivered) {
         runHandleRef.current?.log('info', '새 창에 접속 정보를 전달했습니다 — 이후 연결 진행은 새 창에서 확인하세요');
+        if (pendingRememberRef.current) { saveRemembered(cid, pendingRememberRef.current); pendingRememberRef.current = null; }
         runHandleRef.current?.end();
-        runHandleRef.current = null;
       }
       if (delivered || clusterIdRef.current !== cid) return;
       runHandleRef.current?.log('error', '새 창에 접속 정보를 전달하지 못했습니다');
       setRetryParams(params);
       setPopoutMsg(HANDOFF_FAILED_MSG);
     });
+    if (win) {
+      // 전달 확인 콜백이 끝내 오지 않아도 로그가 "실행 중" 으로 남지 않게 한다.
+      const h = runHandleRef.current;
+      window.setTimeout(() => {
+        if (runHandleRef.current === h) {
+          h?.log('warn', '새 창 전달 확인이 10초 안에 오지 않았습니다 — 새 창 상태를 확인하세요');
+          h?.end();
+        }
+      }, 10_000);
+    }
     if (!win) {
       setPopoutMsg(POPUP_BLOCKED_MSG);
       runHandleRef.current?.log('error', POPUP_BLOCKED_MSG);
       runHandleRef.current?.end();
-      runHandleRef.current = null;
     }
     return win;
   };
@@ -200,9 +245,10 @@ export function K9sPage() {
     // 연속 클릭으로 세션·새 창이 두 번 열리지 않게 잠시 잠근다.
     setConnectBusy(true);
     window.setTimeout(() => setConnectBusy(false), 1500);
-    saveRemembered(clusterId, {
+    pendingRememberRef.current = {
       selectedMasterName, customHost: customHost.trim(), username, port: portText, authMode, namespace: namespace.trim(),
-    });
+    };
+    setConnectError('');
     beginRunLog(mode);
     if (mode === 'inline') {
       setPopoutMsg('');
@@ -304,7 +350,22 @@ export function K9sPage() {
             ) : undefined}
           />
 
-          <RunLogPanel run={runLog} show={showRunLog} onShowChange={setShowRunLog} />
+          <RunLogPanel
+            run={runLog}
+            show={showRunLog}
+            onShowChange={setShowRunLog}
+            actions={runLog.running ? (
+              <button
+                type="button"
+                onClick={abortConnect}
+                title="진행 중인 연결 시도를 중단합니다"
+                aria-label="연결 중단"
+                className="text-xs px-2 py-1 rounded-xl border border-border bg-background hover:bg-secondary"
+              >
+                중단
+              </button>
+            ) : undefined}
+          />
 
           {clustersQ.isError ? (
             <ErrorState
@@ -341,7 +402,12 @@ export function K9sPage() {
               <K9sTerminal
                 clusterId={clusterId}
                 params={session}
-                onClose={() => { setSession(null); setTermStatus(null); runHandleRef.current?.end(); runHandleRef.current = null; }}
+                onClose={() => {
+                  setSession(null); setTermStatus(null);
+                  runHandleRef.current?.end();
+                  // 세션이 끝나면 비밀은 더 필요 없다 — 메모리에서도 비운다.
+                  setPassword(''); setPrivateKey('');
+                }}
                 onPopOut={popOutSession}
                 onStatusChange={setTermStatus}
                 onEvent={onTerminalEvent}
@@ -357,6 +423,12 @@ export function K9sPage() {
                   <li><b className="text-foreground">연결</b>은 이 화면 위의 창으로, <b className="text-foreground">별도 창으로 연결</b>은 별도 브라우저 창으로 k9s 를 엽니다.</li>
                 </ul>
               </details>
+
+              {connectError && (
+                <p className="flex items-start gap-1.5 rounded-xl border border-status-critical/30 bg-status-critical/5 px-3 py-2 text-sm text-status-critical" role="alert">
+                  <ShieldAlert className="w-4 h-4 mt-0.5 shrink-0" aria-hidden="true" /> {connectError}
+                </p>
+              )}
 
               <form
                 className="grid grid-cols-1 lg:grid-cols-2 gap-3"
@@ -414,7 +486,7 @@ export function K9sPage() {
                     )}
                   </div>
 
-                  <div className="grid grid-cols-2 gap-2">
+                  <div className="space-y-4">
                     <div>
                       <label htmlFor={`${f}-user`} className="block text-sm text-muted-foreground mb-1">사용자</label>
                       <input
@@ -423,20 +495,44 @@ export function K9sPage() {
                         autoComplete="username"
                         className={inputCls}
                       />
-                      {username.trim() === 'root' && (
+                      {guarded && username.trim() === 'root' && (
                         <p className="mt-1 text-xs text-status-warning">root 로 접속합니다 — 전용 운영 계정이 있으면 그 계정을 쓰세요.</p>
                       )}
                     </div>
-                    <div>
-                      <label htmlFor={`${f}-port`} className="block text-sm text-muted-foreground mb-1">포트</label>
-                      <input
-                        id={`${f}-port`}
-                        type="number" min={1} max={65535} value={portText} onChange={(e) => setPortText(e.target.value)}
-                        aria-invalid={!portValid}
-                        className={inputCls}
-                      />
-                      {!portValid && <p className="mt-1 text-xs text-status-critical" role="alert">포트는 1–65535 사이여야 합니다.</p>}
-                    </div>
+                    {/* 고급 — 포트·네임스페이스는 드물게 바꾸므로 접어 둔다. 기본값이 아니거나 포트가 잘못되면 펼쳐 둔다. */}
+                    <details
+                      open={advancedOpen || !portValid}
+                      onToggle={(e) => setAdvancedOpen((e.currentTarget as HTMLDetailsElement).open)}
+                      className="text-sm"
+                    >
+                      <summary className="cursor-pointer select-none text-muted-foreground hover:text-foreground">
+                        고급 — 포트 {portText || '-'}{namespace.trim() ? ` · 네임스페이스 ${namespace.trim()}` : ''}
+                      </summary>
+                      <div className="mt-3 grid grid-cols-2 gap-2">
+                        <div>
+                          <label htmlFor={`${f}-port`} className="block text-sm text-muted-foreground mb-1">포트</label>
+                          <input
+                            id={`${f}-port`}
+                            type="number" min={1} max={65535} value={portText} onChange={(e) => setPortText(e.target.value)}
+                            aria-invalid={!portValid}
+                            aria-describedby={!portValid ? `${f}-port-err` : undefined}
+                            className={inputCls}
+                          />
+                          {!portValid && <p id={`${f}-port-err`} className="mt-1 text-xs text-status-critical" role="alert">포트는 1–65535 사이여야 합니다.</p>}
+                        </div>
+                        <div>
+                          <label htmlFor={`${f}-ns`} className="block text-sm text-muted-foreground mb-1">
+                            네임스페이스 <span className="text-xs">(선택)</span>
+                          </label>
+                          <input
+                            id={`${f}-ns`}
+                            type="text" value={namespace} onChange={(e) => setNamespace(e.target.value)}
+                            placeholder="예: kube-system"
+                            className={inputCls}
+                          />
+                        </div>
+                      </div>
+                    </details>
                   </div>
                 </MacCard>
 
@@ -467,6 +563,7 @@ export function K9sPage() {
                       <input
                         id={`${f}-pw`}
                         type="password" value={password} onChange={(e) => setPassword(e.target.value)}
+                        ref={passwordRef}
                         autoComplete="current-password"
                         className={inputCls}
                       />
@@ -484,18 +581,6 @@ export function K9sPage() {
                       />
                     </div>
                   )}
-
-                  <div>
-                    <label htmlFor={`${f}-ns`} className="block text-sm text-muted-foreground mb-1">
-                      네임스페이스 <span className="text-xs text-muted-foreground">(선택)</span>
-                    </label>
-                    <input
-                      id={`${f}-ns`}
-                      type="text" value={namespace} onChange={(e) => setNamespace(e.target.value)}
-                      placeholder="예: kube-system"
-                      className={inputCls}
-                    />
-                  </div>
 
                   {/* 안전 행 — 읽기 전용 여부를 상태 문구로 크게 보여준다. 꺼짐(수정·삭제 가능)일 때만 경고색. */}
                   <div
@@ -524,6 +609,7 @@ export function K9sPage() {
                       type="submit"
                       disabled={!canConnect || !canOperate || connectBusy}
                       title={withHint('이 화면 위의 창으로 k9s 연결')}
+                      aria-describedby={!canConnect ? `${f}-need` : undefined}
                       aria-label={ariaWithHint('연결')}
                       className="flex-1 px-3 py-2 text-sm font-medium rounded-xl bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50 flex items-center justify-center gap-1.5"
                     >
@@ -560,7 +646,9 @@ export function K9sPage() {
       <ConfirmDialog
         open={pendingConnect !== null}
         title="보호 레벨 클러스터에 접속"
-        description="이 클러스터는 보호 레벨입니다. 접속 대상과 계정을 확인한 뒤 연결하세요."
+        description={levelUnknown
+          ? '운영레벨이 지정되지 않아 보호 레벨로 취급합니다. 접속 대상과 계정을 확인한 뒤 연결하세요.'
+          : '이 클러스터는 보호 레벨입니다. 접속 대상과 계정을 확인한 뒤 연결하세요.'}
         confirmLabel={pendingConnect === 'popout' ? '새 창으로 연결' : '연결'}
         onCancel={() => setPendingConnect(null)}
         onConfirm={() => {
