@@ -3,6 +3,17 @@
 @tailwind utilities;
 
 @layer base {
+  /* ── 글자 크기·밀도 (사용자 설정: <html data-density="compact|default|comfortable">) ──────────
+     text-xs / text-sm 만 이 변수를 따른다(tailwind.config.js fontSize). 기본은 12px 가 아니라 13px —
+     한글은 같은 크기에서 라틴보다 x-height 가 작아 12px 로는 장시간 작업에서 획이 뭉친다.
+     compact = 예전 값(12/14), comfortable = 큰 글씨. 선택 UI 는 Settings → 화면 밀도(DensitySettings). */
+  :root {
+    --fs-xs: 0.8125rem;  --lh-xs: 1.25rem;
+    --fs-sm: 0.90625rem; --lh-sm: 1.4rem;
+  }
+  :root[data-density="compact"]     { --fs-xs: 0.75rem;  --lh-xs: 1rem;     --fs-sm: 0.875rem; --lh-sm: 1.25rem; }
+  :root[data-density="comfortable"] { --fs-xs: 0.875rem; --lh-xs: 1.35rem;  --fs-sm: 1rem;     --lh-sm: 1.5rem; }
+
   /* ── Databricks-leaning Light theme (default) ─────────────────────────────
      Phase A redesign — flat surfaces, slate palette, sky accent, dark sidebar.
      See PR description for full token rationale. */
@@ -1478,7 +1489,7 @@ html.high-contrast :where(p, li, td, dd) a { text-decoration: underline; text-un
     /* Databricks tone — flat background, no decorative gradient */
     font-feature-settings: "rlig" 1, "calt" 1;
     /* D-131: tailwind fontFamily.sans 와 같은 스택 — 웹폰트 다운로드 없음(폐쇄망 동일 렌더) */
-    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, "Apple SD Gothic Neo", "Malgun Gothic", "Noto Sans KR", Helvetica, Arial, sans-serif;
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", "Apple SD Gothic Neo", "Malgun Gothic", "Noto Sans KR", Roboto, Helvetica, Arial, sans-serif;
     font-size: 16px;
     line-height: 1.55;
     font-weight: 400;  /* P2: 500→400 — 한글 획 뭉침 방지, medium/semibold 와의 위계 회복 */
@@ -1499,9 +1510,9 @@ html.high-contrast :where(p, li, td, dd) a { text-decoration: underline; text-un
 
 /* ── 최소 글자 크기 (P2) ──────────────────────────────────────────────────
    예전엔 text-[9px]/text-[10px] 를 여기서 !important 로 11px 로 끌어올렸다. P2 에서 소스의
-   8~10px 를 전부 text-[11px] 로 명시해 보정 규칙을 없앴다 — 11px 미만은 쓰지 않는다. */
+   8~10px 를 전부 text-[11px] 로 명시해 보정 규칙을 없앴다. 이후 11px 도 text-xs(밀도 변수)로 합쳤다 — 12px 미만은 쓰지 않는다. */
 
-/* Tailwind defaults restored (no overrides) — relying on tailwind.css's
+/* text-xs / text-sm 은 위 --fs-xs/--fs-sm (밀도 설정) 를 따른다 — tailwind.css's
    built-in text-xs (12px) / text-sm (14px) / text-base (16px) etc.
    타입 스케일(D-131, DESIGN_SYSTEM §12.12-10): 페이지 h1 = PageHeader text-xl semibold 1종 ·
    카드 제목 = MacCard 헤더 1종 · 본문 text-sm · 보조 text-xs · 숫자는 font-mono 대신 tabular-nums. */
@@ -1728,7 +1739,7 @@ html.picasso-portrait input[type="date"]::-webkit-calendar-picker-indicator:hove
   color: hsl(var(--primary));
   padding: 0.125rem 0.375rem;
   border-radius: 4px;
-  font-family: ui-monospace, monospace;
+  font-family: ui-monospace, "D2Coding", "Noto Sans Mono CJK KR", "Malgun Gothic", monospace;
   font-size: 0.85em;
 }
 .ProseMirror pre {
@@ -1907,7 +1918,7 @@ html.picasso-portrait input[type="date"]::-webkit-calendar-picker-indicator:hove
   color: hsl(var(--primary));
   padding: 0.125rem 0.375rem;
   border-radius: 4px;
-  font-family: ui-monospace, monospace;
+  font-family: ui-monospace, "D2Coding", "Noto Sans Mono CJK KR", "Malgun Gothic", monospace;
   font-size: 0.85em;
 }
 .rich-content pre {

@@ -1137,7 +1137,7 @@ export function CidrCalculatorPage() {
                                 겹침 없음
                               </span>
                             ) : (
-                              <span className="text-muted-foreground/40">—</span>
+                              <span className="text-faint">—</span>
                             )}
                           </td>
                         </tr>

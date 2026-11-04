@@ -101,7 +101,7 @@ export function ConfluenceDocsSettingsDialog({ open, onClose }: { open: boolean;
                 className={`mt-1 ${inputCls}`} disabled={busy} />
             </label>
           </div>
-          <p className="text-[11px] text-muted-foreground">
+          <p className="text-xs text-muted-foreground">
             Confluence 접속 정보(SSO 세션·Base URL)는 설정 → <b>연동 (Jira)</b> 탭에서 관리합니다.
           </p>
           <div className="flex items-center justify-end gap-2 pt-1">

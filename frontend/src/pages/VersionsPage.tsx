@@ -148,7 +148,7 @@ function SourceBadge({ src }: { src?: string | null }) {
   return (
     <span
       title={`출처: ${src}`}
-      className="ml-1.5 text-[11px] font-mono px-1.5 py-0.5 rounded bg-muted text-muted-foreground border border-border"
+      className="ml-1.5 text-xs font-mono px-1.5 py-0.5 rounded bg-muted text-muted-foreground border border-border"
     >
       {src}
     </span>
@@ -537,7 +537,7 @@ function MinioTenantDetails({ data }: { data: Record<string, unknown> }) {
 
   const stat = (label: string, value: React.ReactNode, color?: string) => (
     <div className="bg-muted/40 rounded-md px-2 py-1.5">
-      <p className="text-[11px] text-muted-foreground">{label}</p>
+      <p className="text-xs text-muted-foreground">{label}</p>
       <p className={`text-sm font-semibold font-mono ${color ?? 'text-foreground'}`}>{value ?? '—'}</p>
     </div>
   );
@@ -630,7 +630,7 @@ function DirectPVDetails({ data }: { data: Record<string, unknown> }) {
 
   const stat = (label: string, value: React.ReactNode, color?: string) => (
     <div className="bg-muted/40 rounded-md px-2 py-1.5">
-      <p className="text-[11px] text-muted-foreground">{label}</p>
+      <p className="text-xs text-muted-foreground">{label}</p>
       <p className={`text-sm font-semibold font-mono ${color ?? 'text-foreground'}`}>{value ?? '—'}</p>
     </div>
   );

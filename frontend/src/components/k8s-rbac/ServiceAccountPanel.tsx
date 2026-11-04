@@ -398,7 +398,7 @@ export function ServiceAccountPanel({
                   {['네임스페이스', '이름', '연결된 권한', '생성', ''].map((h, i) => (
                     <th
                       key={h || i}
-                      className="text-left px-3 py-2 text-[11px] font-semibold text-muted-foreground whitespace-nowrap"
+                      className="text-left px-3 py-2 text-xs font-semibold text-muted-foreground whitespace-nowrap"
                     >
                       {h}
                     </th>
@@ -416,7 +416,7 @@ export function ServiceAccountPanel({
                       <td className="px-3 py-2 font-mono text-xs">
                         {sa.name}
                         {sa.managedByPep && (
-                          <span className="ml-1.5 text-[11px] px-1.5 py-px rounded-full border border-border bg-secondary text-muted-foreground font-medium">
+                          <span className="ml-1.5 text-xs px-1.5 py-px rounded-full border border-border bg-secondary text-muted-foreground font-medium">
                             PEP
                           </span>
                         )}

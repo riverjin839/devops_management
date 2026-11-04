@@ -124,7 +124,7 @@ function ProfileEditor({
                     onChange={(e) => setColor(key, e.target.value)}
                     className="w-6 h-6 rounded border border-border bg-transparent p-0 cursor-pointer shrink-0"
                   />
-                  <span className="text-[11px] text-muted-foreground truncate flex-1" title={PALETTE_LABELS[key]}>{PALETTE_LABELS[key]}</span>
+                  <span className="text-xs text-muted-foreground truncate flex-1" title={PALETTE_LABELS[key]}>{PALETTE_LABELS[key]}</span>
                   {overridden && (
                     <button onClick={() => setColor(key, null)} title="기본값으로" className="p-0.5 rounded hover:bg-secondary text-muted-foreground">
                       <RotateCcw className="w-3 h-3" />
@@ -243,7 +243,7 @@ export function TerminalAppearanceSettings() {
           </div>
           {isAdmin && shared.length > 0 && (
             <div className="pt-1.5 border-t border-border">
-              <p className="text-[11px] text-muted-foreground mb-1">공용 배포된 템플릿 (admin)</p>
+              <p className="text-xs text-muted-foreground mb-1">공용 배포된 템플릿 (admin)</p>
               <div className="flex flex-wrap gap-1.5">
                 {shared.map((t) => (
                   <span key={t.id} className="inline-flex items-center gap-1 px-2 py-1 text-xs rounded border border-border bg-secondary">

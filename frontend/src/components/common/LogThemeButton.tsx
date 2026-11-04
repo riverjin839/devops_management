@@ -97,7 +97,7 @@ export function LogThemeButton() {
                   </button>
                 ))}
               </div>
-              <p className="text-[11px] text-muted-foreground mt-1">
+              <p className="text-xs text-muted-foreground mt-1">
                 현재 적용 프로파일: <span className="text-foreground font-medium">{env === 'ops' ? '운영' : '개발'}</span>
                 {appearance.mode === 'auto' && ' (클러스터 운영등급 기준)'}
               </p>
@@ -143,7 +143,7 @@ export function LogThemeButton() {
               </div>
             </div>
 
-            <p className="text-[11px] text-muted-foreground border-t border-border pt-2">
+            <p className="text-xs text-muted-foreground border-t border-border pt-2">
               세부 색상·커스텀 템플릿·공용 배포는 <span className="text-foreground">설정 → 화면 UI 설정</span> 에서.
             </p>
           </div>

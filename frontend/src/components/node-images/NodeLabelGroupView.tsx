@@ -148,7 +148,7 @@ export function NodeLabelGroupView({ nodes, searchQuery }: Props) {
                   <span className="tabular-nums font-medium text-foreground">{g.totalImages.toLocaleString()}</span>
                   <span>이미지</span>
                 </span>
-                <span className="text-muted-foreground/40">·</span>
+                <span className="text-faint">·</span>
                 <span className="tabular-nums">{formatBytes(g.totalSize)}</span>
               </div>
             </div>

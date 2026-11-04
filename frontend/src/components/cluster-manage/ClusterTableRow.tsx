@@ -155,7 +155,7 @@ export function ClusterTableRow({ cluster, onEdit, onDelete, deletingId, overlap
             <button
               type="button"
               {...attributes} {...listeners}
-              className="p-0.5 -ml-1 rounded-xl cursor-grab active:cursor-grabbing text-muted-foreground/30 opacity-0 group-hover/row:opacity-100 focus-visible:opacity-100 hover:text-muted-foreground hover:bg-secondary transition-colors flex-shrink-0"
+              className="p-0.5 -ml-1 rounded-xl cursor-grab active:cursor-grabbing text-faint opacity-0 group-hover/row:opacity-100 focus-visible:opacity-100 hover:text-muted-foreground hover:bg-secondary transition-colors flex-shrink-0"
               title="드래그하여 순서 변경 (정렬: 수동 모드)"
               aria-label="순서 변경 핸들"
             >

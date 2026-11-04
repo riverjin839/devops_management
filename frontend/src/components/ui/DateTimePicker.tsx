@@ -344,7 +344,7 @@ export function DateTimePicker({
                           ? 'bg-secondary text-foreground font-semibold ring-1 ring-primary/40'
                           : isCurMonth
                             ? `hover:bg-secondary ${dow === 0 ? 'text-status-critical' : dow === 6 ? 'text-chart-1-text' : 'text-foreground'}`
-                            : 'text-muted-foreground/40 hover:bg-secondary/40'
+                            : 'text-faint hover:bg-secondary/40'
                     }`}
                   >
                     {d.getDate()}

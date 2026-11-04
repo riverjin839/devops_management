@@ -130,7 +130,7 @@ export function KubeconfigEditModal({
               onChange={(e) => setEditContent(e.target.value)}
               placeholder="kubeconfig YAML 내용을 붙여넣으세요..."
               rows={10}
-              className="w-full px-3 py-2.5 bg-secondary border border-border rounded-lg text-sm font-mono text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary resize-none"
+              className="w-full px-3 py-2.5 bg-secondary border border-border rounded-lg text-sm font-mono text-foreground placeholder:text-faint focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary resize-none"
             />
             <div className="flex items-center gap-2">
               <button

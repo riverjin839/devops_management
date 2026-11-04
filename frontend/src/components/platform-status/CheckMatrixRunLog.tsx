@@ -32,7 +32,7 @@ function RunRow({
               <AlertTriangle className="w-3 h-3 text-status-warning" />
             </span>
           )}
-          <span className="text-[11px] text-muted-foreground tabular-nums ml-auto flex-shrink-0">
+          <span className="text-xs text-muted-foreground tabular-nums ml-auto flex-shrink-0">
             {parseUTC(run.queuedAt).toLocaleString('ko-KR')}
           </span>
           <ChevronRight className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
@@ -43,7 +43,7 @@ function RunRow({
             <span className="text-muted-foreground font-normal"> · {run.clusterName ?? '(삭제된 클러스터)'}</span>
           </div>
         )}
-        <div className="flex items-center gap-2 mt-0.5 text-[11px] text-muted-foreground min-w-0">
+        <div className="flex items-center gap-2 mt-0.5 text-xs text-muted-foreground min-w-0">
           <span className="flex-shrink-0">{TRIGGER_LABEL[run.trigger] ?? run.trigger}</span>
           {run.triggeredBy && (
             <span className="flex items-center gap-0.5 flex-shrink-0">
@@ -99,7 +99,7 @@ export function CheckMatrixRunList({
         ))}
       </ul>
       {data.total > data.runs.length && (
-        <p className="text-[11px] text-muted-foreground mt-2">
+        <p className="text-xs text-muted-foreground mt-2">
           최근 {data.runs.length}건 표시 (전체 {data.total}건)
         </p>
       )}
@@ -124,7 +124,7 @@ function CommandTrace({
               onClick={() => setOpen(expanded ? null : i)}
               className="w-full text-left px-2.5 py-2 bg-secondary/30 hover:bg-secondary/60 transition-colors"
             >
-              <div className="flex items-center gap-2 text-[11px] text-muted-foreground mb-1">
+              <div className="flex items-center gap-2 text-xs text-muted-foreground mb-1">
                 <Terminal className="w-3 h-3" />
                 <span>{c.kind}</span>
                 <span
@@ -143,13 +143,13 @@ function CommandTrace({
               <div className="p-2 space-y-2 border-t border-border">
                 {c.stdout ? (
                   <div>
-                    <p className="text-[11px] text-muted-foreground mb-1">stdout</p>
+                    <p className="text-xs text-muted-foreground mb-1">stdout</p>
                     <LogViewer text={c.stdout} maxHeight="max-h-56" collapsible />
                   </div>
                 ) : null}
                 {c.stderr ? (
                   <div>
-                    <p className="text-[11px] text-muted-foreground mb-1">stderr</p>
+                    <p className="text-xs text-muted-foreground mb-1">stderr</p>
                     <LogViewer text={c.stderr} maxHeight="max-h-40" asError collapsible />
                   </div>
                 ) : null}
@@ -157,7 +157,7 @@ function CommandTrace({
                   <p className="text-xs text-muted-foreground italic">출력이 없습니다.</p>
                 )}
                 {c.truncated && (
-                  <p className="text-[11px] text-muted-foreground">
+                  <p className="text-xs text-muted-foreground">
                     출력이 길어 앞부분만 보관합니다.
                   </p>
                 )}
@@ -209,7 +209,7 @@ export function CheckMatrixRunDetailView({ runId }: { runId: string }) {
             </span>
           )}
         </div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-1 text-[11px] text-muted-foreground">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-1 text-xs text-muted-foreground">
           <span className="inline-flex items-center gap-1">
             <CalendarClock className="w-3 h-3" /> 큐잉 {parseUTC(run.queuedAt).toLocaleString('ko-KR')}
           </span>
@@ -228,7 +228,7 @@ export function CheckMatrixRunDetailView({ runId }: { runId: string }) {
                   이 수행에는 별도 사유 메시지가 없습니다 — 아래 &quot;결과 상세&quot;에서 원본 필드를 확인하세요.
                 </p>
               )}
-              <p className="text-[11px] text-muted-foreground">
+              <p className="text-xs text-muted-foreground">
                 더 자세한 원인은 아래 &quot;결과 상세&quot;(자동으로 펼쳐짐)와, 계측됐다면 &quot;실행된 명령&quot;의 출력에서 확인할 수 있습니다.
               </p>
             </div>

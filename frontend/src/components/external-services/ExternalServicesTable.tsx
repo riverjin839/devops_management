@@ -43,7 +43,7 @@ export function ExternalServicesTable({ rows, nodeHint }: { rows: ExternalServic
                   {d.primary ? (
                     <span className="inline-flex items-center gap-1 font-mono text-foreground break-all">
                       {e.isNew && (
-                        <span className="font-sans text-[11px] px-1.5 rounded-md border border-status-warning text-status-warning"
+                        <span className="font-sans text-xs px-1.5 rounded-md border border-status-warning text-status-warning"
                           title="최근 새로 열린 엔드포인트(노출 변경 이력 참고)">신규</span>
                       )}
                       {d.primary}
@@ -56,7 +56,7 @@ export function ExternalServicesTable({ rows, nodeHint }: { rows: ExternalServic
                     </span>
                   ) : (
                     <span className="text-muted-foreground">
-                      {e.isNew && <span className="mr-1 text-[11px] px-1.5 rounded-md border border-status-warning text-status-warning">신규</span>}
+                      {e.isNew && <span className="mr-1 text-xs px-1.5 rounded-md border border-status-warning text-status-warning">신규</span>}
                       이름 미확인
                     </span>
                   )}

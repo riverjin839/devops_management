@@ -94,12 +94,12 @@ export function ExecutionStepsTimeline({ stepPlan, steps }: Props) {
                 >
                   <StatusIcon s={st} />
                 </button>
-                <span className={`mt-1.5 text-[11px] text-center leading-tight ${st === 'failed' ? 'text-status-critical font-medium' : 'text-muted-foreground'}`}>{n.label}</span>
+                <span className={`mt-1.5 text-xs text-center leading-tight ${st === 'failed' ? 'text-status-critical font-medium' : 'text-muted-foreground'}`}>{n.label}</span>
                 {shown && n.detail && (
-                  <span className="mt-0.5 text-[11px] text-center text-muted-foreground line-clamp-2" title={n.detail}>{n.detail}</span>
+                  <span className="mt-0.5 text-xs text-center text-muted-foreground line-clamp-2" title={n.detail}>{n.detail}</span>
                 )}
                 {shown && n.durationMs != null && (
-                  <span className="text-[11px] text-muted-foreground tabular-nums">{n.durationMs}ms</span>
+                  <span className="text-xs text-muted-foreground tabular-nums">{n.durationMs}ms</span>
                 )}
                 {shown && hasLog && (
                   <ChevronDown className={`w-3 h-3 mt-0.5 text-muted-foreground transition-transform ${expandedId === n.id ? 'rotate-180' : ''}`} />
@@ -118,12 +118,12 @@ export function ExecutionStepsTimeline({ stepPlan, steps }: Props) {
       {expanded && (
         <div className="mt-2 rounded-lg border border-border bg-secondary/30 p-3 space-y-1.5">
           <div className="flex items-center gap-2">
-            <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded border text-[11px] font-medium ${RING[expanded.status]}`}>
+            <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded border text-xs font-medium ${RING[expanded.status]}`}>
               <StatusIcon s={expanded.status} /> {STATUS_LABEL[expanded.status]}
             </span>
             <span className="text-xs font-semibold">{expanded.label}</span>
             {expanded.durationMs != null && (
-              <span className="text-[11px] text-muted-foreground tabular-nums ml-auto">{expanded.durationMs}ms</span>
+              <span className="text-xs text-muted-foreground tabular-nums ml-auto">{expanded.durationMs}ms</span>
             )}
           </div>
           {expanded.detail ? (
@@ -134,7 +134,7 @@ export function ExecutionStepsTimeline({ stepPlan, steps }: Props) {
             </p>
           )}
           {expanded.metrics && Object.keys(expanded.metrics).length > 0 && (
-            <dl className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-0.5 text-[11px] pt-1 border-t border-border/60">
+            <dl className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-0.5 text-xs pt-1 border-t border-border/60">
               {Object.entries(expanded.metrics).map(([k, v]) => (
                 <div key={k} className="flex gap-1.5 min-w-0">
                   <dt className="font-mono text-muted-foreground flex-shrink-0">{k}</dt>
@@ -146,7 +146,7 @@ export function ExecutionStepsTimeline({ stepPlan, steps }: Props) {
         </div>
       )}
 
-      <div className="mt-2 text-[11px] text-muted-foreground">
+      <div className="mt-2 text-xs text-muted-foreground">
         ● 초록=성공 · 빨강=실패 · 노랑=진행 · 회색=대기 — 계측되지 않은 항목은 단계 흐름(설계)만 표시됩니다.
         아이콘을 클릭하면 그 단계의 상세 로그를 볼 수 있습니다.
       </div>

@@ -97,9 +97,9 @@ export function IsilonNfsPage() {
                   <div className="flex items-center gap-1.5">
                     <StatusDot variant={statusToVariant(s.status)} />
                     <span className="text-sm font-medium truncate">{s.name}</span>
-                    {s.isDefault && <span className="ml-auto text-[11px] px-1 rounded bg-muted text-muted-foreground">기본</span>}
+                    {s.isDefault && <span className="ml-auto text-xs px-1 rounded bg-muted text-muted-foreground">기본</span>}
                   </div>
-                  <span className="block text-[11px] text-muted-foreground truncate mt-0.5">{s.host}</span>
+                  <span className="block text-xs text-muted-foreground truncate mt-0.5">{s.host}</span>
                 </button>
               ))}
             </div>

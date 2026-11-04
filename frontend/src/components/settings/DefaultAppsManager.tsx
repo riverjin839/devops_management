@@ -112,7 +112,7 @@ export function DefaultAppsManager() {
                     >
                       {on ? <Check className="w-3 h-3" aria-hidden /> : <Plus className="w-3 h-3" aria-hidden />}
                       {appLabel(app)}
-                      {on && <span className="text-[11px] text-muted-foreground">#{current.indexOf(app.id) + 1}</span>}
+                      {on && <span className="text-xs text-muted-foreground">#{current.indexOf(app.id) + 1}</span>}
                     </button>
                   );
                 })}

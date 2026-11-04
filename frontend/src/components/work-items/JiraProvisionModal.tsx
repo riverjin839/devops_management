@@ -552,7 +552,7 @@ export function JiraProvisionModal({ open, onClose, item }: JiraProvisionModalPr
                         placeholder="PROJ" value={projectKey}
                         onChange={(e) => setProjectKey(e.target.value)} />
                       {projectKeyMissing && (
-                        <span className="text-[11px] text-status-critical mt-0.5 block">필수 입력입니다.</span>
+                        <span className="text-xs text-status-critical mt-0.5 block">필수 입력입니다.</span>
                       )}
                     </div>
                     <div>
@@ -601,7 +601,7 @@ export function JiraProvisionModal({ open, onClose, item }: JiraProvisionModalPr
                           ))}
                         </select>
                       ) : (
-                        <p className="text-[11px] text-muted-foreground py-2">
+                        <p className="text-xs text-muted-foreground py-2">
                           선택 가능한 담당자가 없습니다 — 설정 &gt; 연동에서 Jira 계정을 먼저 연동하세요.
                         </p>
                       )}
@@ -614,7 +614,7 @@ export function JiraProvisionModal({ open, onClose, item }: JiraProvisionModalPr
                         <input className={inputCls} placeholder={summary || '에픽 이름'} value={epicName}
                           title="Jira 의 'Epic Name' 필드 — Epic 보드에 표시되는 짧은 이름(제목과 별개). 비우면 제목(summary)으로 채웁니다."
                           onChange={(e) => setEpicName(e.target.value)} />
-                        <p className="text-[11px] text-muted-foreground mt-0.5">
+                        <p className="text-xs text-muted-foreground mt-0.5">
                           Epic 은 상위 연결이 필요 없습니다 (Epic 키 / 상위 이슈 입력 불필요). 관리자가
                           Epic Name 필드를 설정하지 않았으면 이 값은 전송되지 않습니다.
                         </p>
@@ -706,11 +706,11 @@ export function JiraProvisionModal({ open, onClose, item }: JiraProvisionModalPr
                           </button>
                         </div>
                         {pageInfoLookup.isPending ? (
-                          <p className="text-[11px] text-muted-foreground mt-0.5 inline-flex items-center gap-1">
+                          <p className="text-xs text-muted-foreground mt-0.5 inline-flex items-center gap-1">
                             <Loader2 className="w-3 h-3 animate-spin" /> 제목 확인 중…
                           </p>
                         ) : parentPageTitle && (
-                          <p className="text-[11px] text-muted-foreground mt-0.5 truncate" title={parentPageTitle}>
+                          <p className="text-xs text-muted-foreground mt-0.5 truncate" title={parentPageTitle}>
                             → {parentPageTitle}
                           </p>
                         )}
@@ -738,7 +738,7 @@ export function JiraProvisionModal({ open, onClose, item }: JiraProvisionModalPr
                           onChange={(e) => setPageTitle(e.target.value)} />
                       </div>
                     </div>
-                    <p className="text-[11px] text-muted-foreground inline-flex items-center gap-1">
+                    <p className="text-xs text-muted-foreground inline-flex items-center gap-1">
                       <FileText className="w-3 h-3" />
                       담당자·일정·Jira 링크가 들어간 기본 문서로 생성됩니다(같은 제목이 있으면 갱신).
                     </p>

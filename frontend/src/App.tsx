@@ -1,4 +1,5 @@
 import { useEffect } from 'react';
+import { useTruncateTitle } from '@/hooks/useTruncateTitle';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { BrowserRouter, Routes, Route, Navigate, useParams, useLocation, useNavigate } from 'react-router-dom';
 import { PlaybooksPage } from '@/pages/PlaybooksPage';
@@ -148,6 +149,7 @@ const queryClient = new QueryClient({
 });
 
 function AppShell() {
+  useTruncateTitle(); // 말줄임으로 잘린 글자의 전체 값을 title 로 채우는 안전망
   return (
     <div className="flex min-h-screen bg-background">
       <RouteAccessGate />

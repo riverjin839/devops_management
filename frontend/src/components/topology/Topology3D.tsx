@@ -89,7 +89,7 @@ export function Topology3D({ graph, trafficEdges = [], showTraffic, width, heigh
           className="inline-flex items-center gap-1 px-2 py-1 text-xs rounded-xl border border-border bg-card text-foreground hover:bg-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
           <Maximize2 className="w-3.5 h-3.5" aria-hidden />
         </button>
-        <span aria-hidden className="hidden sm:inline text-[11px] text-muted-foreground bg-card rounded-xl px-2 py-0.5">
+        <span aria-hidden className="hidden sm:inline text-xs text-muted-foreground bg-card rounded-xl px-2 py-0.5">
           드래그 회전 · 휠 확대 · 클릭 선택
         </span>
       </div>

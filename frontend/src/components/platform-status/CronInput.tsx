@@ -58,7 +58,7 @@ export function CronInput({
               disabled={disabled}
               onClick={() => onChange(p.value)}
               aria-pressed={value.trim() === p.value}
-              className={`px-2 py-0.5 text-[11px] rounded-xl border transition-colors disabled:opacity-50 ${
+              className={`px-2 py-0.5 text-xs rounded-xl border transition-colors disabled:opacity-50 ${
                 value.trim() === p.value
                   ? 'border-primary bg-primary/10 text-primary'
                   : 'border-border text-muted-foreground hover:bg-secondary'
@@ -69,7 +69,7 @@ export function CronInput({
           ))}
         </div>
       )}
-      <div id={helpId} className="text-[11px] leading-relaxed" aria-live="polite">
+      <div id={helpId} className="text-xs leading-relaxed" aria-live="polite">
         {check.ok ? (
           <div className="text-muted-foreground space-y-0.5">
             {check.description && <p className="text-foreground">{check.description}</p>}

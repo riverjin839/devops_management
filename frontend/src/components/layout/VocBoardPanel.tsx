@@ -117,7 +117,7 @@ export function VocBoardPanel({ open }: Props) {
                     <CategoryBadge category={p.category} />
                     <StatusBadge variant={STATUS_VARIANT[p.status]} label={p.status} />
                     {p.adminReply && <StatusDot variant="healthy" title="답변 완료" />}
-                    <span className="ml-auto text-[11px] text-muted-foreground whitespace-nowrap">
+                    <span className="ml-auto text-xs text-muted-foreground whitespace-nowrap">
                       {parseUTC(p.createdAt).toLocaleDateString()}
                     </span>
                   </div>
@@ -326,5 +326,5 @@ function FilterChip({ label, active, onClick }: { label: string; active: boolean
 }
 
 function CategoryBadge({ category }: { category: VocCategory }) {
-  return <span className={`text-[11px] px-1.5 py-0.5 rounded-full font-medium ${CATEGORY_CLS[category]}`}>{category}</span>;
+  return <span className={`text-xs px-1.5 py-0.5 rounded-full font-medium ${CATEGORY_CLS[category]}`}>{category}</span>;
 }

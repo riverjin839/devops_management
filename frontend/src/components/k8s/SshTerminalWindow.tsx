@@ -335,7 +335,7 @@ export function SshTerminalWindow({
         )}
         {/* 복사/붙여넣기 단축키는 발견되기 어려워(터미널마다 규칙이 달라서) 헤더에 노출한다.
             좁은 창에서는 숨기고 아이콘 title 로만 남긴다. */}
-        <span className="ml-auto hidden xl:inline text-[11px] text-zinc-500 truncate" title={clipboardHint}>
+        <span className="ml-auto hidden xl:inline text-xs text-zinc-500 truncate" title={clipboardHint}>
           <Clipboard className="w-3 h-3 inline-block mr-1 -mt-px" />{clipboardHint}
         </span>
         <button onClick={connect} title="재연결" aria-label="재연결"

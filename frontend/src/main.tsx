@@ -12,6 +12,7 @@ import { bootLocalPrefsSync } from './lib/localPrefsSync';
 async function start() {
   await bootLocalPrefsSync().catch(() => undefined);
   await import('./stores/themeStore'); // initialise theme before first render
+  await import('./stores/densityStore'); // 화면 밀도(글자 크기) — 첫 렌더 전에 <html data-density> 적용
   // R-6 i18n — boot 동기화가 깐 `pep.locale` 을 읽어야 하므로 그 뒤에 초기화한다(정적 import 금지).
   await import('./i18n');
   const [{ default: App }, { ErrorBoundary }] = await Promise.all([

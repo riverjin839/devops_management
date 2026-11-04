@@ -60,7 +60,7 @@ export function PlaybookListRow({
       <button
         {...attributes}
         {...listeners}
-        className="cursor-grab active:cursor-grabbing p-1 rounded-md text-muted-foreground/30 hover:text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity"
+        className="cursor-grab active:cursor-grabbing p-1 rounded-md text-faint hover:text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity"
         title="드래그하여 순서 변경"
         aria-label="드래그하여 순서 변경"
       >
@@ -180,7 +180,7 @@ export function PlaybookListRow({
 function Stat({ label, value, color }: { label: string; value: number; color: string }) {
   const v = Number(value ?? 0);
   return (
-    <span className={`inline-flex items-baseline gap-0.5 ${v > 0 ? color : 'text-muted-foreground/40'}`}>
+    <span className={`inline-flex items-baseline gap-0.5 ${v > 0 ? color : 'text-faint'}`}>
       <span className="font-bold">{v}</span>
       <span className="text-xs text-muted-foreground">{label}</span>
     </span>

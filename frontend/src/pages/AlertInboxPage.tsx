@@ -442,7 +442,7 @@ function AlertRow({ alert, isOpen, onToggle, onAck, onDelete }: {
             {alert.alertname}
           </button>
           {alert.severitySource === 'rule' ? (
-            <span className="ml-1.5 text-[11px] text-muted-foreground" title="알림 규칙이 심각도를 재정의했습니다">
+            <span className="ml-1.5 text-xs text-muted-foreground" title="알림 규칙이 심각도를 재정의했습니다">
               (규칙)
             </span>
           ) : null}
@@ -457,7 +457,7 @@ function AlertRow({ alert, isOpen, onToggle, onAck, onDelete }: {
           {alert.occurrences > 1 ? `×${alert.occurrences}` : '—'}
           {alert.suppressedCount > 0 ? (
             <span
-              className="ml-1 text-[11px] text-muted-foreground"
+              className="ml-1 text-xs text-muted-foreground"
               title={`중복 억제로 알림을 만들지 않은 횟수: ${alert.suppressedCount}`}
             >
               (억제 {alert.suppressedCount})

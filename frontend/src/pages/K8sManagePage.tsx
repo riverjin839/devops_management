@@ -16,6 +16,7 @@ import { MacCard } from '@/components/ui/MacCard';
 import { ClusterSidebar } from '@/components/common/ClusterSidebar';
 import { LogViewer } from '@/components/common/LogViewer';
 import { ConfirmDialog, useModalA11y, Skeleton, SkeletonCard, EmptyState, LoadingState, StatTile, StatTileRow, PageShell, RunLogPanel } from '@/components/common';
+import { MiddleTruncate } from '@/components/common/MiddleTruncate';
 import { useRunLog, runLogged, type RunLogEntry } from '@/hooks/useRunLog';
 import { useLogPref } from '@/hooks/useLogPref';
 import { RoleGate } from '@/components/auth/RoleGate';
@@ -407,7 +408,7 @@ export function K8sManagePage() {
                             >
                               <span className="flex-1 text-left truncate">{lf.label}</span>
                               {cnt != null && (
-                                <span className="text-[11px] tabular-nums rounded-full bg-secondary px-1.5 py-0.5 text-muted-foreground">{cnt}{more ? '+' : ''}</span>
+                                <span className="text-xs tabular-nums rounded-full bg-secondary px-1.5 py-0.5 text-muted-foreground">{cnt}{more ? '+' : ''}</span>
                               )}
                             </button>
                           );
@@ -717,7 +718,7 @@ export function ResourceTablePanel(p: ResourceTablePanelProps) {
             const ns = r.namespace || '-';
             return (
               <div className="grid gap-2 px-4 py-1.5 text-sm border-b border-border/40 hover:bg-secondary/30 items-center" style={{ gridTemplateColumns: gridTemplate }}>
-                <button onClick={() => p.onOpenDetail(r, !!caps?.editable)} className="truncate font-medium text-left hover:text-primary">{r.name}</button>
+                <button onClick={() => p.onOpenDetail(r, !!caps?.editable)} className="min-w-0 font-medium text-left hover:text-primary"><MiddleTruncate text={r.name} /></button>
                 {isNamespaced && <span className="truncate text-muted-foreground">{r.namespace ?? '—'}</span>}
                 {useSummary ? (
                   <span className="truncate text-muted-foreground">{r.summary}</span>
@@ -838,7 +839,7 @@ export function HelmPanel({ clusterId, namespace, onViewValues }: { clusterId: s
       ) : (
         data!.items.map((r) => (
           <div key={`${r.namespace}/${r.name}`} className="grid grid-cols-[1fr_140px_70px_1fr_90px] gap-2 px-4 py-1.5 text-sm border-b border-border/40 items-center">
-            <span className="truncate font-medium">{r.name}</span>
+            <MiddleTruncate text={r.name} className="font-medium" />
             <span className="truncate text-muted-foreground">{r.namespace}</span>
             <span className="text-muted-foreground">{r.revision}</span>
             <span className="truncate text-muted-foreground">{r.chart} {r.status ? `· ${r.status}` : ''}</span>
@@ -910,7 +911,7 @@ function CrdPanel({ clusterId, selectedCrd, setSelectedCrd, onOpenObject }: CrdP
           objects.data!.items.map((r) => (
             <button key={`${r.namespace}/${r.name}`} onClick={() => onOpenObject(selectedCrd, r)}
               className="w-full grid gap-2 px-4 py-1.5 text-sm text-left border-b border-border/40 hover:bg-secondary/30 items-center" style={grid}>
-              <span className="truncate font-medium">{r.name}</span>
+              <MiddleTruncate text={r.name} className="font-medium" />
               {namespaced && <span className="truncate text-muted-foreground">{r.namespace ?? '—'}</span>}
               {dynCols.length > 0
                 ? dynCols.map((c) => (
@@ -1221,7 +1222,7 @@ function NodesPanel({ clusterId, onOpenDetail, onCordon, onDrain }: NodesPanelPr
                   ? <CheckCircle2 className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" aria-label="Ready" />
                   : <AlertTriangle className="w-3.5 h-3.5 text-status-critical flex-shrink-0" aria-label="NotReady" />}
                 <span className="truncate">{n.name}</span>
-                {n.unschedulable && <span className="text-[11px] rounded px-1 bg-status-warning/15 text-status-warning">cordoned</span>}
+                {n.unschedulable && <span className="text-xs rounded px-1 bg-status-warning/15 text-status-warning">cordoned</span>}
               </button>
               {!isHidden('roles') && <span className="truncate text-muted-foreground">{n.roles.join(', ')}</span>}
               {!isHidden('version') && <span className="truncate text-muted-foreground">{n.version ?? '—'}</span>}
@@ -1230,7 +1231,7 @@ function NodesPanel({ clusterId, onOpenDetail, onCordon, onDrain }: NodesPanelPr
               {!isHidden('memory') && <span className="truncate text-muted-foreground">{n.memUsage ? `${n.memUsage} / ` : ''}{n.memCapacity ?? '—'}</span>}
               {!isHidden('age') && <span className="text-right text-muted-foreground tabular-nums">{age(n.ageSeconds)}</span>}
               <div className="flex items-center justify-end gap-1">
-                {warn.length > 0 && <span className="inline-flex items-center gap-0.5 text-[11px] text-status-warning mr-1" title={warn.join(',')}>{warn.length}<AlertTriangle className="w-3 h-3" aria-hidden="true" /></span>}
+                {warn.length > 0 && <span className="inline-flex items-center gap-0.5 text-xs text-status-warning mr-1" title={warn.join(',')}>{warn.length}<AlertTriangle className="w-3 h-3" aria-hidden="true" /></span>}
                 <RoleGate allow={['admin', 'operator']}>
                   <IconBtn title={n.unschedulable ? 'uncordon' : 'cordon'} onClick={() => onCordon(n.name, !n.unschedulable)}>
                     {n.unschedulable ? <CheckCircle2 className="w-3.5 h-3.5" /> : <Ban className="w-3.5 h-3.5" />}

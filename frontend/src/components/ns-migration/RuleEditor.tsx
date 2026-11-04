@@ -72,7 +72,7 @@ export function RuleEditor({ rules, onChange, kinds, disabled }: {
                 aria-label={`규칙 ${i + 1} 대상 이름`}
                 onChange={(e) => update(i, { name: e.target.value || null })} className={`${inputCls} w-full`} />
             </div>
-            <p className="text-[11px] text-muted-foreground">{meta.help}</p>
+            <p className="text-xs text-muted-foreground">{meta.help}</p>
           </div>
         );
       })}

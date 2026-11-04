@@ -57,7 +57,7 @@ export function BugFixLogPanel({ open }: Props) {
         <Bug className="w-4 h-4 text-primary" />
         <span>
           총 <span className="font-semibold text-foreground tabular-nums">{totalFixes}</span>건의 버그 수정
-          <span className="mx-1.5 text-muted-foreground/40">·</span>
+          <span className="mx-1.5 text-faint">·</span>
           {versions.length}개 버전
         </span>
       </div>

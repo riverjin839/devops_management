@@ -681,7 +681,7 @@ export function NodeSpecPage() {
                         className={`relative px-2 py-2 text-xs font-semibold text-muted-foreground ${k === 'ssd' || k === 'vm' ? 'text-center' : ''}`}>
                         <span className="truncate inline-flex items-center gap-1 max-w-full align-middle cursor-help">
                           {COL_LABELS[k]}
-                          <span className="text-[11px] text-muted-foreground">ⓘ</span>
+                          <span className="text-xs text-muted-foreground">ⓘ</span>
                         </span>
                         <ResizeGrip onMouseDown={(e) => colW.beginResize(k, e)} onDoubleClick={() => colW.autoFit(k)} />
                       </th>
@@ -831,7 +831,7 @@ export function NodeSpecPage() {
                             className={`px-1 rounded hover:bg-primary/10 disabled:opacity-40 ${
                               r.isSsd === true ? 'text-foreground font-bold'
                               : r.isSsd === false ? 'text-muted-foreground'
-                              : 'text-muted-foreground/30'
+                              : 'text-faint'
                             }`}
                           >
                             {r.isSsd === true ? 'O' : r.isSsd === false ? 'X' : '·'}
@@ -858,7 +858,7 @@ export function NodeSpecPage() {
                           className={`px-1 rounded text-sm font-mono hover:bg-primary/10 disabled:opacity-40 ${
                             r.isVm === true ? 'text-foreground font-bold'
                             : r.isVm === false ? 'text-muted-foreground'
-                            : 'text-muted-foreground/30'
+                            : 'text-faint'
                           }`}
                         >
                           {r.isVm === true ? 'O' : r.isVm === false ? 'X' : '·'}

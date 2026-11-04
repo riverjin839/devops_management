@@ -355,7 +355,7 @@ export function NodeSshPage() {
                             {n.internalIp ?? '—'}
                           </span>
                           {n.roles.includes('control-plane') && (
-                            <span className="text-[11px] px-1.5 py-0.5 rounded-full bg-chart-7/15 text-chart-7-text border border-chart-7/30 shrink-0">
+                            <span className="text-xs px-1.5 py-0.5 rounded-full bg-chart-7/15 text-chart-7-text border border-chart-7/30 shrink-0">
                               컨트롤 플레인
                             </span>
                           )}

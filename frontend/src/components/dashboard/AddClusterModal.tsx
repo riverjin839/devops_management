@@ -311,7 +311,7 @@ export function AddClusterModal({ isOpen, onClose }: AddClusterModalProps) {
                       onChange={(e) => setName(e.target.value)}
                       placeholder={`e.g. ${selectedProvider.id}-prod-01`}
                       autoFocus
-                      className="w-full px-3 py-2.5 bg-secondary border border-border rounded-lg text-sm text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary"
+                      className="w-full px-3 py-2.5 bg-secondary border border-border rounded-lg text-sm text-foreground placeholder:text-faint focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary"
                     />
                   ) : (
                     <>
@@ -323,7 +323,7 @@ export function AddClusterModal({ isOpen, onClose }: AddClusterModalProps) {
                           onChange={(e) => setBizName(e.target.value)}
                           placeholder="업무명"
                           autoFocus
-                          className="flex-1 min-w-0 px-2.5 py-2.5 bg-secondary border border-border rounded-lg text-sm text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary"
+                          className="flex-1 min-w-0 px-2.5 py-2.5 bg-secondary border border-border rounded-lg text-sm text-foreground placeholder:text-faint focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary"
                         />
                         <span className="text-muted-foreground font-mono">-</span>
                         <select
@@ -343,7 +343,7 @@ export function AddClusterModal({ isOpen, onClose }: AddClusterModalProps) {
                           value={attribute}
                           onChange={(e) => setAttribute(e.target.value)}
                           placeholder="속성"
-                          className="flex-1 min-w-0 px-2.5 py-2.5 bg-secondary border border-border rounded-lg text-sm text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary"
+                          className="flex-1 min-w-0 px-2.5 py-2.5 bg-secondary border border-border rounded-lg text-sm text-foreground placeholder:text-faint focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary"
                         />
                       </div>
                       <p className="mt-1.5 text-xs text-muted-foreground">
@@ -372,7 +372,7 @@ export function AddClusterModal({ isOpen, onClose }: AddClusterModalProps) {
                     value={apiEndpoint}
                     onChange={(e) => setApiEndpoint(e.target.value)}
                     placeholder={`https://your-cluster.example.com:${selectedProvider.defaultPort}`}
-                    className={`w-full px-3 py-2.5 bg-secondary border rounded-lg text-sm text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary ${
+                    className={`w-full px-3 py-2.5 bg-secondary border rounded-lg text-sm text-foreground placeholder:text-faint focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary ${
                       skipConnectivity ? 'border-status-warning/30' : 'border-border'
                     }`}
                   />
@@ -391,7 +391,7 @@ export function AddClusterModal({ isOpen, onClose }: AddClusterModalProps) {
                     value={region}
                     onChange={(e) => setRegion(e.target.value)}
                     placeholder="e.g. ap-northeast-2, 서울"
-                    className="w-full px-3 py-2.5 bg-secondary border border-border rounded-lg text-sm text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary"
+                    className="w-full px-3 py-2.5 bg-secondary border border-border rounded-lg text-sm text-foreground placeholder:text-faint focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary"
                   />
                 </div>
 
@@ -484,7 +484,7 @@ export function AddClusterModal({ isOpen, onClose }: AddClusterModalProps) {
                   onChange={(e) => setKubeconfigContent(e.target.value)}
                   placeholder="여기에 kubeconfig YAML 내용을 붙여넣으세요 (비워두면 kubeconfig 없이 등록)"
                   rows={6}
-                  className="w-full px-3 py-2.5 bg-secondary border border-border rounded-lg text-xs font-mono text-foreground placeholder:text-muted-foreground/40 focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary resize-none"
+                  className="w-full px-3 py-2.5 bg-secondary border border-border rounded-lg text-xs font-mono text-foreground placeholder:text-faint focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary resize-none"
                 />
               </div>
 

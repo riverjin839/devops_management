@@ -180,7 +180,7 @@ export function ConfluenceExportDialog({ open, onClose, guide }: Props) {
                   className={`mt-1 ${inputCls}`} disabled={busy}
                 />
               </label>
-              <p className="text-[11px] text-muted-foreground">
+              <p className="text-xs text-muted-foreground">
                 본문의 붙여넣기 이미지는 페이지 첨부파일로 업로드되고, Callout·토글·코드 블록은
                 Confluence 매크로로 변환됩니다.
               </p>

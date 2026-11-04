@@ -727,7 +727,7 @@ export function WorkflowBoardPage() {
                     <h2 className="text-base font-semibold truncate group-hover/title:text-primary transition-colors">
                       {selectedWf.title}
                     </h2>
-                    <Pencil className="w-3 h-3 text-muted-foreground/40 group-hover/title:text-primary transition-colors flex-shrink-0" aria-hidden />
+                    <Pencil className="w-3 h-3 text-faint group-hover/title:text-primary transition-colors flex-shrink-0" aria-hidden />
                   </button>
                 ) : (
                   <h2 className="text-base font-semibold truncate min-w-0">{selectedWf.title}</h2>
