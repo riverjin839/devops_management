@@ -1,6 +1,7 @@
 import { useRef, useState, useMemo } from 'react';
 import { Link } from 'react-router-dom';
-import { Pencil, Trash2, AlertTriangle, RefreshCw, Loader2, ArrowUpRight, Cable, Server, GripVertical, Globe, Lock, ShieldCheck } from 'lucide-react';
+import { Pencil, Trash2, AlertTriangle, RefreshCw, Loader2, ArrowUpRight, Cable, Server, GripVertical, Globe, Lock, ShieldCheck, MoreHorizontal } from 'lucide-react';
+import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import type { Cluster, ClusterCustomField, ClusterManageUpdate } from '@/types';
@@ -187,7 +188,7 @@ export function ClusterTableRow({ cluster, onEdit, onDelete, deletingId, overlap
         )}
         {/* 값들은 전부 스냅샷이라 "언제 것인지"가 신뢰의 1차 변수 — 마지막 갱신 시각을 상시 노출 */}
         {cluster.updatedAt && (
-          <p className="text-[11px] text-muted-foreground mt-0.5 ml-4" title={`마지막 갱신(수집·편집 포함): ${cluster.updatedAt}`}>
+          <p className="text-xs text-muted-foreground mt-0.5 ml-4" title={`마지막 갱신(수집·편집 포함): ${cluster.updatedAt}`}>
             갱신 {formatRelativeTime(cluster.updatedAt)}
           </p>
         )}
@@ -521,7 +522,7 @@ export function ClusterTableRow({ cluster, onEdit, onDelete, deletingId, overlap
                           const ips = ifc.ips ?? [];
                           return (
                             <div key={`${n.name}-${ifc.name}`} className="flex items-center gap-1 flex-wrap pl-2">
-                              <span className="text-[11px] text-muted-foreground">{ifc.name}</span>
+                              <span className="text-xs text-muted-foreground">{ifc.name}</span>
                               {ips.map((ip, i) => {
                                 const sc = scopes[i] ?? 'unknown';
                                 const isPub = sc === 'public';
@@ -632,15 +633,6 @@ export function ClusterTableRow({ cluster, onEdit, onDelete, deletingId, overlap
                 ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
                 : <RefreshCw className="w-3.5 h-3.5" />}
             </button>
-            {onCollectNics && (
-              <button onClick={() => onCollectNics(cluster)}
-                disabled={!canOperate}
-                className="p-1.5 hover:bg-primary/10 rounded-xl text-muted-foreground hover:text-primary transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                title={withHint('NIC 수집 (SSH) — bond0/bond1 IP·MAC 을 채웁니다. kubectl 만으로는 인터페이스 이름을 알 수 없어 SSH 로 따로 수집합니다')}
-                aria-label={ariaWithHint(`${cluster.name} NIC 수집`)}>
-                <Cable className="w-3.5 h-3.5" />
-              </button>
-            )}
             <button onClick={() => onEdit(cluster)}
               disabled={!canOperate}
               className="p-1.5 hover:bg-secondary rounded-xl text-muted-foreground hover:text-foreground transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
@@ -648,12 +640,38 @@ export function ClusterTableRow({ cluster, onEdit, onDelete, deletingId, overlap
               aria-label={ariaWithHint(`${cluster.name} 전체 수정`)}>
               <Pencil className="w-3.5 h-3.5" />
             </button>
-            <button onClick={() => onDelete(cluster)} disabled={deletingId === cluster.id || !canOperate}
-              className="p-1.5 hover:bg-status-critical/10 rounded-xl text-muted-foreground hover:text-status-critical disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-              title={withHint('삭제 — 클러스터와 연관된 Addon · Playbook · 점검 이력이 함께 제거됩니다')}
-              aria-label={ariaWithHint(`${cluster.name} 삭제`)}>
-              <Trash2 className="w-3.5 h-3.5" />
-            </button>
+            {/* 저빈도·위험 동작(NIC 수집·삭제)은 더보기 메뉴로 분리 — 삭제가 수정 바로 옆에 붙어 오클릭되던 배치 해소 */}
+            <DropdownMenu.Root>
+              <DropdownMenu.Trigger asChild>
+                <button type="button"
+                  className="p-1.5 hover:bg-secondary rounded-xl text-muted-foreground hover:text-foreground transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary"
+                  title="더보기 — NIC 수집 · 삭제"
+                  aria-label={`${cluster.name} 더보기 메뉴`}>
+                  <MoreHorizontal className="w-3.5 h-3.5" />
+                </button>
+              </DropdownMenu.Trigger>
+              <DropdownMenu.Portal>
+                <DropdownMenu.Content align="end" sideOffset={4}
+                  className="z-[60] min-w-[200px] rounded-md border border-border bg-card p-1 shadow-lg">
+                  {onCollectNics && (
+                    <DropdownMenu.Item
+                      disabled={!canOperate}
+                      onSelect={() => onCollectNics(cluster)}
+                      title={withHint('NIC 수집 (SSH) — bond0/bond1 IP·MAC 을 채웁니다. kubectl 만으로는 인터페이스 이름을 알 수 없어 SSH 로 따로 수집합니다')}
+                      className="flex items-center gap-2 px-2 py-1.5 text-sm rounded-xl cursor-pointer outline-none data-[highlighted]:bg-secondary data-[disabled]:opacity-50 data-[disabled]:cursor-not-allowed">
+                      <Cable className="w-3.5 h-3.5 text-muted-foreground" aria-hidden /> NIC 수집 (SSH)
+                    </DropdownMenu.Item>
+                  )}
+                  <DropdownMenu.Item
+                    disabled={deletingId === cluster.id || !canOperate}
+                    onSelect={() => onDelete(cluster)}
+                    title={withHint('삭제 — 클러스터와 연관된 Addon · Playbook · 점검 이력이 함께 제거됩니다')}
+                    className="flex items-center gap-2 px-2 py-1.5 text-sm rounded-xl cursor-pointer outline-none text-status-critical data-[highlighted]:bg-status-critical/10 data-[disabled]:opacity-50 data-[disabled]:cursor-not-allowed">
+                    <Trash2 className="w-3.5 h-3.5" aria-hidden /> 삭제
+                  </DropdownMenu.Item>
+                </DropdownMenu.Content>
+              </DropdownMenu.Portal>
+            </DropdownMenu.Root>
           </div>
         ) : (
           <span className="text-xs text-muted-foreground" title="조회 전용 계정입니다">조회 전용</span>

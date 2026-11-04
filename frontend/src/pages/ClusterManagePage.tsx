@@ -738,13 +738,13 @@ export function ClusterManagePage() {
           title="클러스터 관리"
           titleExtra={<>
             {clusters.length > 0 && (
-              <span className="text-sm px-2 py-0.5 rounded-full bg-secondary text-muted-foreground border border-border">
+              <span className="text-sm text-muted-foreground tabular-nums" aria-label={`전체 ${clusters.length}개 중 ${filteredClusters.length}개 표시`}>
                 {filteredClusters.length} / {clusters.length}
               </span>
             )}
             {overlapCount > 0 && (
               <span
-                className="flex items-center gap-1 text-sm px-2 py-0.5 rounded-full bg-status-warning/10 text-status-warning border border-status-warning/30"
+                className="flex items-center gap-1 text-sm px-2 py-0.5 rounded-md bg-status-warning/10 text-status-warning border border-status-warning/30"
                 title="INTERNAL_IP / Pod / Service CIDR 이 다른 클러스터와 겹치는 클러스터 수"
               >
                 <AlertTriangle className="w-3 h-3" aria-hidden />
@@ -754,7 +754,7 @@ export function ClusterManagePage() {
             )}
             {customFieldsError && (
               <span
-                className="flex items-center gap-1 text-sm px-2 py-0.5 rounded-full bg-status-warning/10 text-status-warning border border-status-warning/30"
+                className="flex items-center gap-1 text-sm px-2 py-0.5 rounded-md bg-status-warning/10 text-status-warning border border-status-warning/30"
                 title="커스텀 컬럼 정의를 불러오지 못해 테이블에서 임시로 빠졌습니다 — 정의가 삭제된 것이 아닙니다. 새로고침 후에도 계속되면 서버 상태를 확인하세요."
               >
                 <AlertTriangle className="w-3 h-3" aria-hidden />
@@ -800,21 +800,15 @@ export function ClusterManagePage() {
               <AlertTriangle className="w-3.5 h-3.5" aria-hidden />
               문제만{problemCount > 0 && <span className="tabular-nums">{problemCount}</span>}
             </button>
-            {canEdit && (
+            {/* 일괄 재수집은 저빈도라 도구 메뉴로 옮겼다 — 실행 중일 때만 툴바에 「중단」 버튼으로 남긴다 */}
+            {canEdit && bulkCollecting && (
               <button
                 onClick={handleBulkCollectNodeIps}
-                disabled={!bulkCollecting && clusters.length === 0}
-                className="flex items-center gap-1.5 px-3 py-1.5 text-sm bg-secondary hover:bg-secondary/80 border border-border rounded-xl text-muted-foreground hover:text-foreground transition-colors disabled:opacity-50"
-                title={bulkCollecting
-                  ? '클릭하면 다음 클러스터로 넘어가기 전에 재수집을 중단합니다'
-                  : '여러 클러스터를 미리보기 없이 재수집합니다 — 실행 전 대상 범위(노드 IP 빈 클러스터 / 화면 목록)를 고릅니다'}
+                className="flex items-center gap-1.5 px-3 py-1.5 text-sm bg-secondary hover:bg-secondary/80 border border-border rounded-xl text-muted-foreground hover:text-foreground transition-colors"
+                title="클릭하면 다음 클러스터로 넘어가기 전에 재수집을 중단합니다"
               >
-                {bulkCollecting
-                  ? <Loader2 className="w-3.5 h-3.5 animate-spin" aria-hidden />
-                  : <Network className="w-3.5 h-3.5" aria-hidden />}
-                {bulkCollecting
-                  ? `재수집 중 ${bulkProgress?.done ?? 0}/${bulkProgress?.total ?? 0} — 중단`
-                  : '일괄 재수집'}
+                <Loader2 className="w-3.5 h-3.5 animate-spin" aria-hidden />
+                {`재수집 중 ${bulkProgress?.done ?? 0}/${bulkProgress?.total ?? 0} — 중단`}
               </button>
             )}
             <button
@@ -851,6 +845,16 @@ export function ClusterManagePage() {
                     aria-label="테이블 도구"
                     className="absolute z-50 top-full mt-1 right-0 w-64 bg-card border border-border rounded-md shadow-xl p-2 space-y-1"
                   >
+                    {canEdit && !bulkCollecting && (
+                      <button
+                        onClick={() => { setToolsOpen(false); handleBulkCollectNodeIps(); }}
+                        disabled={clusters.length === 0}
+                        className="w-full text-left px-2.5 py-1.5 text-sm rounded-md hover:bg-secondary flex items-center gap-2 disabled:opacity-50"
+                        title="여러 클러스터를 미리보기 없이 재수집합니다 — 실행 전 대상 범위(노드 IP 빈 클러스터 / 화면 목록)를 고릅니다"
+                      >
+                        <Network className="w-3.5 h-3.5 text-muted-foreground" /> 일괄 재수집
+                      </button>
+                    )}
                     {canEdit && (
                       <button
                         onClick={() => { setStandardizeOpen(true); setToolsOpen(false); }}
@@ -879,7 +883,7 @@ export function ClusterManagePage() {
                       너비 리셋
                     </button>
                     <div className="border-t border-border/50 pt-1.5 px-2.5 pb-1">
-                      <p className="text-[11px] text-muted-foreground mb-1.5">
+                      <p className="text-xs text-muted-foreground mb-1.5">
                         표시 컬럼 — bond0/bond1 등 IP 상세 컬럼을 켜고 끕니다
                       </p>
                       <div className="grid grid-cols-2 gap-x-2 gap-y-1">
@@ -924,7 +928,7 @@ export function ClusterManagePage() {
               </select>
             </div>
             <div className="min-w-[140px]">
-              <label htmlFor={f('sort')} className="block text-sm text-muted-foreground mb-1">정렬</label>
+              <label htmlFor={f('sort')} className="block text-sm text-muted-foreground mb-1" title="표 머리글(이름·상태·운영레벨)을 눌러도 같은 값이 바뀝니다">정렬 (머리글 클릭과 연동)</label>
               <select id={f('sort')} value={sortBy} onChange={(e) => setSortBy(e.target.value as SortKey)}
                 className="w-full px-3 py-2 bg-secondary border border-border rounded-xl text-sm focus:outline-none focus:ring-1 focus:ring-primary">
                 <option value="manual">수동(드래그)</option>
