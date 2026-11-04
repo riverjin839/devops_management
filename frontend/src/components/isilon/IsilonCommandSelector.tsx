@@ -84,11 +84,11 @@ export function IsilonCommandSelector({
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-1.5">
                     <span className="text-sm font-medium truncate">{c.label}</span>
-                    <span className="ml-auto shrink-0 text-[11px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground">
+                    <span className="ml-auto shrink-0 text-xs px-1.5 py-0.5 rounded bg-muted text-muted-foreground">
                       {ISILON_SECTION_LABEL[c.section] ?? c.section}
                     </span>
                   </div>
-                  <code className="block text-[11px] text-muted-foreground truncate mt-0.5">{c.command}</code>
+                  <code className="block text-xs text-muted-foreground truncate mt-0.5">{c.command}</code>
                 </div>
               </label>
             </li>

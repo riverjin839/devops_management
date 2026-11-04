@@ -132,7 +132,7 @@ function CompleteBtn({ item, busy, onToggleDone }: Omit<ItemProps, 'onOpen'>) {
       onClick={(e) => { e.stopPropagation(); onToggleDone(item); }}
       title={withHint(done ? '완료 취소' : '완료 처리')}
       aria-label={ariaWithHint(label)}
-      className={`relative z-10 flex-shrink-0 rounded-full transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${done ? 'text-muted-foreground' : 'text-muted-foreground/40 hover:text-primary'}`}
+      className={`relative z-10 flex-shrink-0 rounded-full transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${done ? 'text-muted-foreground' : 'text-faint hover:text-primary'}`}
     >
       {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : done ? <CheckCircle2 className="w-4 h-4" /> : <Circle className="w-4 h-4" />}
     </button>
@@ -164,7 +164,7 @@ function ItemCard({ item, busy, onToggleDone, onOpen }: ItemProps) {
             {cl && <span className="inline-flex items-center gap-0.5"><Server className="w-2.5 h-2.5" />{cl}</span>}
           </div>
         </div>
-        <ChevronRight className="w-4 h-4 text-muted-foreground/30 group-hover:text-primary flex-shrink-0" />
+        <ChevronRight className="w-4 h-4 text-faint group-hover:text-primary flex-shrink-0" />
       </div>
     </div>
   );

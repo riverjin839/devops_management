@@ -203,7 +203,7 @@ export function SchemaHealthPanel() {
                       return (
                         <tr key={`${i.table}.${i.column}.${idx}`} className="border-b border-border/60">
                           <td className="py-1.5 pr-3 align-top">
-                            <span className={`inline-block px-1.5 py-0.5 rounded border text-[11px] font-medium whitespace-nowrap ${meta.cls}`}>
+                            <span className={`inline-block px-1.5 py-0.5 rounded border text-xs font-medium whitespace-nowrap ${meta.cls}`}>
                               {meta.label}
                             </span>
                           </td>
@@ -224,7 +224,7 @@ export function SchemaHealthPanel() {
               </div>
             )}
 
-            <p className="flex items-start gap-2 text-[11px] text-muted-foreground mt-3">
+            <p className="flex items-start gap-2 text-xs text-muted-foreground mt-3">
               <Info className="w-3.5 h-3.5 mt-0.5 flex-shrink-0" />
               <span>
                 복구는 <b>컬럼 추가(항상 NULL 허용)</b> 와 <b>레거시 NOT NULL 해제</b>만 합니다 —

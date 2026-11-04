@@ -342,12 +342,12 @@ export function ConfluenceImportModal({ open, onClose }: Props) {
                           className="flex-1 min-w-0 text-left"
                         >
                           <span className="font-medium truncate block">{item.title || item.pageId}</span>
-                          <span className="text-[11px] text-muted-foreground">
+                          <span className="text-xs text-muted-foreground">
                             {item.spaceKey}{item.version ? ` · v${item.version}` : ''}
                             {item.warnings.length > 0 && ` · 경고 ${item.warnings.length}`}
                           </span>
                         </button>
-                        <span className={`px-2 py-0.5 rounded-md text-[11px] font-semibold ${meta.cls}`}>{meta.label}</span>
+                        <span className={`px-2 py-0.5 rounded-md text-xs font-semibold ${meta.cls}`}>{meta.label}</span>
                         {(item.changes.length > 0 || item.warnings.length > 0) && (
                           <button
                             type="button" onClick={() => toggleSet(expanded, item.pageId, setExpanded)}
@@ -375,7 +375,7 @@ export function ConfluenceImportModal({ open, onClose }: Props) {
                   );
                 })}
               </div>
-              <p className="text-[11px] text-muted-foreground">
+              <p className="text-xs text-muted-foreground">
                 체크된 문서만 가져옵니다. unchanged 는 원격 버전이 그대로라 건너뜁니다.
               </p>
               <div className="flex items-center gap-2 pt-1">
@@ -529,7 +529,7 @@ export function ConfluenceImportModal({ open, onClose }: Props) {
                     className="accent-[hsl(var(--primary))]" disabled={busy}
                   />
                   첨부 이미지를 본문에 저장
-                  <span className="text-[11px]">(기본: 원본 링크)</span>
+                  <span className="text-xs">(기본: 원본 링크)</span>
                 </label>
               </div>
 
@@ -561,7 +561,7 @@ export function ConfluenceImportModal({ open, onClose }: Props) {
                         />
                         <span className="flex-1 min-w-0">
                           <span className="font-medium truncate block">{item.title}</span>
-                          <span className="text-[11px] text-muted-foreground">
+                          <span className="text-xs text-muted-foreground">
                             {item.spaceKey}{item.updated ? ` · ${item.updated.slice(0, 10)}` : ''}
                             {item.linked && ' · 이미 연결됨'}
                           </span>

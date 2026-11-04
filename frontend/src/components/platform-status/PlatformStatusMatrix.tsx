@@ -191,7 +191,7 @@ function MatrixLegend({ onHide }: { onHide: () => void }) {
     <span className="inline-flex items-center gap-1 whitespace-nowrap">{node}<span>{label}</span></span>
   );
   return (
-    <div className="flex-shrink-0 flex flex-wrap items-center gap-x-3 gap-y-1 px-3 py-1.5 border-b border-border text-[11px] text-muted-foreground bg-card">
+    <div className="flex-shrink-0 flex flex-wrap items-center gap-x-3 gap-y-1 px-3 py-1.5 border-b border-border text-xs text-muted-foreground bg-card">
       <span className="font-semibold text-foreground">범례</span>
       {item(<StatusDot variant="healthy" />, '정상')}
       {item(<><StatusDot variant="warning" /><AlertTriangle className="w-3 h-3" aria-hidden="true" /></>, '경고')}
@@ -283,7 +283,7 @@ function ClusterCronBadge({
         aria-label={`${cluster.name} 핵심 점검 주기 — ${hint}`}
         aria-haspopup="dialog"
         aria-expanded={open}
-        className={`inline-flex items-center gap-1 text-[11px] transition-colors px-1.5 py-0.5 rounded-xl border hover:brightness-95 disabled:cursor-not-allowed max-w-[150px] ${CRON_TONE_CLS[tone]}`}
+        className={`inline-flex items-center gap-1 text-xs transition-colors px-1.5 py-0.5 rounded-xl border hover:brightness-95 disabled:cursor-not-allowed max-w-[150px] ${CRON_TONE_CLS[tone]}`}
       >
         <ToneIcon className={`w-2.5 h-2.5 flex-shrink-0 ${tone === 'running' ? 'animate-spin' : ''}`} aria-hidden="true" />
         <span className="truncate">{label}</span>
@@ -297,7 +297,7 @@ function ClusterCronBadge({
             aria-label={`${cluster.name} 핵심 점검 주기 설정`}
             className="absolute z-50 top-full mt-1 left-1/2 -translate-x-1/2 w-80 bg-card border border-border rounded-md shadow-xl p-3 space-y-2 text-left font-normal"
           >
-            <p className="text-[11px] text-muted-foreground">
+            <p className="text-xs text-muted-foreground">
               핵심 점검(API 서버·컴포넌트·노드·시스템 파드)의 클러스터 단위 주기입니다. 클러스터 상태(사이드바 색)를 결정합니다.
             </p>
             <CronInput value={value} onChange={setValue} timezone={timezone} hidePresets={false} autoFocus />
@@ -412,7 +412,7 @@ function MatrixDisplaySettings(p: DisplaySettingsProps) {
             className="absolute z-50 top-full mt-1 right-0 w-64 bg-card border border-border rounded-md shadow-xl p-3 space-y-2.5"
           >
             <div className="space-y-1">
-              <span className="text-[11px] text-muted-foreground">행 높이</span>
+              <span className="text-xs text-muted-foreground">행 높이</span>
               <div className="flex items-center rounded-xl bg-secondary/70 p-0.5 gap-px" role="group" aria-label="행 높이">
                 {ROW_DENSITY_OPTIONS.map((o) => (
                   <button
@@ -435,7 +435,7 @@ function MatrixDisplaySettings(p: DisplaySettingsProps) {
                 <input type="checkbox" className="mt-0.5" checked={autoOpenLog} onChange={(e) => setAutoOpenLog(e.target.checked)} />
                 <span>
                   실행하면 실행 로그 창 자동으로 열기
-                  <span className="block text-[11px] text-muted-foreground">끄면 실행 알림의 「로그 보기」 로 엽니다.</span>
+                  <span className="block text-xs text-muted-foreground">끄면 실행 알림의 「로그 보기」 로 엽니다.</span>
                 </span>
               </label>
               <label className="flex items-center gap-2 text-xs cursor-pointer select-none">
@@ -448,7 +448,7 @@ function MatrixDisplaySettings(p: DisplaySettingsProps) {
               </label>
             </div>
             <div className="space-y-1 border-t border-border/50 pt-2">
-              <span className="text-[11px] text-muted-foreground">영역 그룹</span>
+              <span className="text-xs text-muted-foreground">영역 그룹</span>
               <div className="flex items-center gap-1">
                 <button
                   onClick={p.onExpandAllGroups}
@@ -515,10 +515,10 @@ function MatrixListView({
             >
               <ChevronRight className={`w-3.5 h-3.5 text-muted-foreground transition-transform ${expanded ? 'rotate-90' : ''}`} aria-hidden="true" />
               <span className="text-xs font-semibold">{g.label}</span>
-              <span className="text-[11px] text-muted-foreground">{g.entries.length}개</span>
+              <span className="text-xs text-muted-foreground">{g.entries.length}개</span>
               <span className="ml-auto flex items-center gap-1">
-                {g.counts.critical > 0 && <span className={`px-1 rounded border text-[11px] font-semibold ${GROUP_BADGE_CLS.critical}`}>위험 {g.counts.critical}</span>}
-                {g.counts.warning > 0 && <span className={`px-1 rounded border text-[11px] font-semibold ${GROUP_BADGE_CLS.warning}`}>경고 {g.counts.warning}</span>}
+                {g.counts.critical > 0 && <span className={`px-1 rounded border text-xs font-semibold ${GROUP_BADGE_CLS.critical}`}>위험 {g.counts.critical}</span>}
+                {g.counts.warning > 0 && <span className={`px-1 rounded border text-xs font-semibold ${GROUP_BADGE_CLS.warning}`}>경고 {g.counts.warning}</span>}
               </span>
             </button>
             {expanded && (
@@ -535,7 +535,7 @@ function MatrixListView({
                       </button>
                       <ExecTechBadge execTech={item.execTech} />
                       {item.isSystem && <Lock className="w-3 h-3 text-muted-foreground" aria-label="핵심 항목" />}
-                      {!item.enabled && <span className="px-1 rounded border border-border text-[11px] text-muted-foreground">꺼짐</span>}
+                      {!item.enabled && <span className="px-1 rounded border border-border text-xs text-muted-foreground">꺼짐</span>}
                     </div>
                     <div className="flex flex-wrap gap-1.5">
                       {clusters.map((cluster) => {
@@ -859,17 +859,17 @@ export function PlatformStatusMatrix({ toolbarSlot }: PlatformStatusMatrixProps 
     <>
       <button
         onClick={() => setHelpOpen(true)}
-        className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-xl text-[11px] text-muted-foreground hover:text-primary hover:bg-secondary transition-colors flex-shrink-0"
+        className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-xl text-xs text-muted-foreground hover:text-primary hover:bg-secondary transition-colors flex-shrink-0"
         title="사용법 도움말"
         aria-label="사용법 도움말"
       >
         <HelpCircle className="w-3.5 h-3.5" /> 사용법
       </button>
-      <span className="text-[11px] text-muted-foreground truncate hidden md:inline">
+      <span className="text-xs text-muted-foreground truncate hidden md:inline">
         행 = 점검 항목 · 열 = 클러스터 · 셀 = 최근 판정
       </span>
       {isError && grid && (
-        <span className="inline-flex items-center gap-1 text-[11px] text-status-warning" role="status">
+        <span className="inline-flex items-center gap-1 text-xs text-status-warning" role="status">
           <AlertTriangle className="w-3 h-3" aria-hidden="true" /> 최신화 실패 — 마지막으로 받은 값 표시 중
           <button onClick={() => refetch()} className="underline underline-offset-2 hover:text-foreground">다시 시도</button>
         </span>
@@ -922,7 +922,7 @@ export function PlatformStatusMatrix({ toolbarSlot }: PlatformStatusMatrixProps 
         >
           <ScrollText className="w-3.5 h-3.5" /> 실행 로그
           {activeCount > 0 && (
-            <span className="inline-flex items-center gap-0.5 px-1 rounded-full bg-status-info-soft text-status-info text-[11px] tabular-nums">
+            <span className="inline-flex items-center gap-0.5 px-1 rounded-full bg-status-info-soft text-status-info text-xs tabular-nums">
               <Loader2 className="w-2.5 h-2.5 animate-spin" aria-hidden="true" />{activeCount}
             </span>
           )}
@@ -1066,7 +1066,7 @@ export function PlatformStatusMatrix({ toolbarSlot }: PlatformStatusMatrixProps 
                 <tr className="sticky top-0 z-20 bg-card">
                   <th className="relative sticky left-0 z-30 bg-card border-b border-r border-border text-left px-3 py-2">
                     <span className="block">점검 항목</span>
-                    <span className="block text-[11px] font-normal text-muted-foreground">{items.length}개 · 영역별 묶음</span>
+                    <span className="block text-xs font-normal text-muted-foreground">{items.length}개 · 영역별 묶음</span>
                     <ResizeGrip onMouseDown={(e) => colW.beginResize('item', e)} onDoubleClick={() => colW.autoFit('item')} />
                   </th>
                   {clusters.map((cluster) => {
@@ -1099,7 +1099,7 @@ export function PlatformStatusMatrix({ toolbarSlot }: PlatformStatusMatrixProps 
                             disabled={!!hint || requestingCluster}
                             title={hint ?? `${cluster.name} 의 모든 자동 점검을 지금 실행`}
                             aria-label={hint ? `${cluster.name} 전체 실행 — ${hint}` : `${cluster.name} 전체 실행`}
-                            className="inline-flex items-center gap-0.5 px-1.5 py-0.5 text-[11px] rounded-xl border border-border text-muted-foreground hover:text-primary hover:border-primary/50 hover:bg-secondary transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex-shrink-0"
+                            className="inline-flex items-center gap-0.5 px-1.5 py-0.5 text-xs rounded-xl border border-border text-muted-foreground hover:text-primary hover:border-primary/50 hover:bg-secondary transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex-shrink-0"
                           >
                             {requestingCluster
                               ? <Loader2 className="w-3 h-3 animate-spin" aria-hidden="true" />
@@ -1132,21 +1132,21 @@ export function PlatformStatusMatrix({ toolbarSlot }: PlatformStatusMatrixProps 
                             aria-hidden="true"
                           />
                           <span className="text-xs font-semibold text-foreground truncate">{g.label}</span>
-                          <span className="text-[11px] text-muted-foreground flex-shrink-0">{g.entries.length}개</span>
+                          <span className="text-xs text-muted-foreground flex-shrink-0">{g.entries.length}개</span>
                           {/* 상태 카운트는 이름 바로 옆 — 클러스터가 많아 가로 스크롤해도 첫 열에 남는다. */}
                           <span className="flex items-center gap-1 flex-shrink-0 ml-auto">
                             {g.counts.critical > 0 && (
-                              <span title={`위험 셀 ${g.counts.critical}개`} className={`inline-flex items-center gap-0.5 px-1 py-px rounded border text-[11px] font-semibold tabular-nums ${GROUP_BADGE_CLS.critical}`}>
+                              <span title={`위험 셀 ${g.counts.critical}개`} className={`inline-flex items-center gap-0.5 px-1 py-px rounded border text-xs font-semibold tabular-nums ${GROUP_BADGE_CLS.critical}`}>
                                 <XCircle className="w-2.5 h-2.5" aria-hidden="true" />{g.counts.critical}
                               </span>
                             )}
                             {g.counts.warning > 0 && (
-                              <span title={`경고 셀 ${g.counts.warning}개`} className={`inline-flex items-center gap-0.5 px-1 py-px rounded border text-[11px] font-semibold tabular-nums ${GROUP_BADGE_CLS.warning}`}>
+                              <span title={`경고 셀 ${g.counts.warning}개`} className={`inline-flex items-center gap-0.5 px-1 py-px rounded border text-xs font-semibold tabular-nums ${GROUP_BADGE_CLS.warning}`}>
                                 <AlertTriangle className="w-2.5 h-2.5" aria-hidden="true" />{g.counts.warning}
                               </span>
                             )}
                             {g.counts.healthy > 0 && (
-                              <span title={`정상 셀 ${g.counts.healthy}개`} className={`inline-flex items-center gap-0.5 px-1 py-px rounded border text-[11px] font-semibold tabular-nums ${GROUP_BADGE_CLS.healthy}`}>
+                              <span title={`정상 셀 ${g.counts.healthy}개`} className={`inline-flex items-center gap-0.5 px-1 py-px rounded border text-xs font-semibold tabular-nums ${GROUP_BADGE_CLS.healthy}`}>
                                 <CheckCircle2 className="w-2.5 h-2.5" aria-hidden="true" />{g.counts.healthy}
                               </span>
                             )}
@@ -1209,7 +1209,7 @@ export function PlatformStatusMatrix({ toolbarSlot }: PlatformStatusMatrixProps 
                               </span>
                             )}
                             {!item.enabled && (
-                              <span className="flex-shrink-0 px-1 py-px rounded border border-border text-[11px] text-muted-foreground" title="비활성 — 자동·일괄 실행에서 제외됩니다">
+                              <span className="flex-shrink-0 px-1 py-px rounded border border-border text-xs text-muted-foreground" title="비활성 — 자동·일괄 실행에서 제외됩니다">
                                 꺼짐
                               </span>
                             )}
@@ -1221,7 +1221,7 @@ export function PlatformStatusMatrix({ toolbarSlot }: PlatformStatusMatrixProps 
                               <button
                                 onClick={() => setRunConfirm({ type: 'item', item })}
                                 disabled={!canOperate || itemRequesting}
-                                className="inline-flex items-center gap-0.5 px-1.5 py-0.5 text-[11px] rounded-xl border border-transparent text-muted-foreground hover:text-primary hover:border-primary/40 hover:bg-secondary disabled:opacity-50 disabled:cursor-not-allowed"
+                                className="inline-flex items-center gap-0.5 px-1.5 py-0.5 text-xs rounded-xl border border-transparent text-muted-foreground hover:text-primary hover:border-primary/40 hover:bg-secondary disabled:opacity-50 disabled:cursor-not-allowed"
                                 title={withHint('실행 권한이 있는 모든 클러스터에서 이 항목을 지금 실행')}
                                 aria-label={ariaWithHint(`${item.name} — 전 클러스터 실행`)}
                               >

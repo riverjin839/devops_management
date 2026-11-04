@@ -47,7 +47,7 @@ function SortableCardCell({ playbook, isRunning, clusterName, onRun, onEdit, onD
         dragHandle={
           <button
             {...attributes} {...listeners}
-            className="cursor-grab active:cursor-grabbing p-1 rounded-md text-muted-foreground/40 hover:text-muted-foreground hover:bg-secondary transition"
+            className="cursor-grab active:cursor-grabbing p-1 rounded-md text-faint hover:text-muted-foreground hover:bg-secondary transition"
             title="드래그하여 순서 변경"
             aria-label={`${playbook.name} 드래그하여 순서 변경`}
           >

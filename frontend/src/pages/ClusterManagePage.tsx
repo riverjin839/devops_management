@@ -96,7 +96,7 @@ function SortableClusterCard(
       {canDrag && (
         <button
           {...attributes} {...listeners}
-          className="absolute top-2 left-2 z-10 cursor-grab active:cursor-grabbing p-1 rounded text-muted-foreground/30 opacity-0 group-hover/card:opacity-100 focus-visible:opacity-100 hover:text-muted-foreground hover:bg-secondary transition-colors"
+          className="absolute top-2 left-2 z-10 cursor-grab active:cursor-grabbing p-1 rounded text-faint opacity-0 group-hover/card:opacity-100 focus-visible:opacity-100 hover:text-muted-foreground hover:bg-secondary transition-colors"
           title="드래그하여 순서 변경 (정렬: 수동 모드)"
           aria-label="순서 변경 핸들"
         >

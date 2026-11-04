@@ -35,7 +35,7 @@ export function NodeDetailPanel({
   return (
     <div role="region" aria-label={`${node.name} 상세`} className="absolute top-3 right-3 w-72 max-h-[calc(100%-1.5rem)] overflow-y-auto bg-card border border-border rounded-md shadow-card z-20">
       <div className="flex items-start gap-2 px-4 pt-3.5 pb-2 border-b border-border">
-        <span className="text-[11px] font-bold px-1.5 py-0.5 rounded-md mt-0.5 bg-secondary text-foreground border border-border">
+        <span className="text-xs font-bold px-1.5 py-0.5 rounded-md mt-0.5 bg-secondary text-foreground border border-border">
           {KIND_ABBR[node.kind] ?? node.kind}
         </span>
         <div className="min-w-0 flex-1">
@@ -96,7 +96,7 @@ export function NodeDetailPanel({
                 <div key={e.id} className="flex items-center gap-1.5 text-xs rounded-md bg-secondary/40 px-2 py-1">
                   <span className="text-muted-foreground">{out ? '→' : '←'}</span>
                   <span className="flex-1 min-w-0 truncate" title={nodeName(other)}>{nodeName(other)}</span>
-                  <span className="text-[11px] px-1 py-0.5 rounded-md bg-card text-muted-foreground flex-shrink-0">
+                  <span className="text-xs px-1 py-0.5 rounded-md bg-card text-muted-foreground flex-shrink-0">
                     {EDGE_TYPE_LABEL[e.type] ?? e.type}
                   </span>
                   {e.type === 'manual' && e.manualId && onDeleteLink && (

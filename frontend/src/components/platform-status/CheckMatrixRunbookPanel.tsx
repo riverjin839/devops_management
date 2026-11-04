@@ -68,24 +68,24 @@ function CommandRow({ cmd, index }: { cmd: CheckMatrixRunbookCommand; index: num
   return (
     <li className="rounded-md border border-border bg-secondary/30 p-2.5">
       <div className="flex items-center gap-2 mb-1.5">
-        <span className="text-[11px] tabular-nums text-muted-foreground w-4 text-right">{index + 1}</span>
+        <span className="text-xs tabular-nums text-muted-foreground w-4 text-right">{index + 1}</span>
         <span
           title={meta.hint}
-          className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded border border-border text-[11px] font-medium text-muted-foreground"
+          className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded border border-border text-xs font-medium text-muted-foreground"
         >
           <Icon className="w-3 h-3" /> {meta.label}
         </span>
         {!cmd.readonly && (
           <span
             title="대상에 변경을 일으킬 수 있는 명령입니다."
-            className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded border border-status-warning/50 text-[11px] font-medium text-status-warning"
+            className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded border border-status-warning/50 text-xs font-medium text-status-warning"
           >
             <AlertTriangle className="w-3 h-3" /> 변경
           </span>
         )}
       </div>
       <code className="block text-xs font-mono break-all text-foreground/90 pl-6">{cmd.command}</code>
-      <p className="text-[11px] text-muted-foreground mt-1 pl-6">{cmd.description}</p>
+      <p className="text-xs text-muted-foreground mt-1 pl-6">{cmd.description}</p>
     </li>
   );
 }
@@ -120,7 +120,7 @@ function InputsBlock({ inputs, action }: { inputs: CheckMatrixRunbookInput[]; ac
       <div className="space-y-3 max-h-72 overflow-y-auto pr-1">
         {groups.map(({ group, rows }) => (
           <div key={group}>
-            <p className="text-[11px] text-muted-foreground mb-1">{GROUP_LABEL[group] ?? group}</p>
+            <p className="text-xs text-muted-foreground mb-1">{GROUP_LABEL[group] ?? group}</p>
             <dl className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-1 text-xs">
               {rows.map((r) => (
                 <div key={`${group}.${r.name}`} className="flex gap-2 min-w-0">
@@ -224,8 +224,8 @@ function SourceConfigEditor({
             <div key={`${r.group}.${r.name}`} className="space-y-1 min-w-0">
               <div className="flex items-baseline gap-2 min-w-0">
                 <span className="text-xs font-medium text-foreground truncate">{spec?.label ?? r.name}</span>
-                <code className="text-[11px] font-mono text-muted-foreground truncate">{r.name}</code>
-                {spec && <span className="text-[11px] text-muted-foreground flex-shrink-0">{spec.type}</span>}
+                <code className="text-xs font-mono text-muted-foreground truncate">{r.name}</code>
+                {spec && <span className="text-xs text-muted-foreground flex-shrink-0">{spec.type}</span>}
               </div>
               {spec?.type === 'boolean' ? (
                 <select
@@ -248,7 +248,7 @@ function SourceConfigEditor({
                   className="w-full min-w-0 text-xs font-mono border border-border rounded-xl px-2 py-1 bg-background"
                 />
               )}
-              {spec?.help && <p className="text-[11px] text-muted-foreground">{spec.help}</p>}
+              {spec?.help && <p className="text-xs text-muted-foreground">{spec.help}</p>}
             </div>
           );
         })}
@@ -340,7 +340,7 @@ export function CheckMatrixRunbookPanel({ runbook, isLoading, editTarget, latest
             </p>
           )}
           {runbook.kubectlPrefix && (
-            <p className="text-[11px] text-muted-foreground pl-6">
+            <p className="text-xs text-muted-foreground pl-6">
               아래 kubectl 명령은 실제로 <code className="font-mono">{runbook.kubectlPrefix}</code> 접두사와 함께 실행됩니다.
             </p>
           )}
@@ -350,12 +350,12 @@ export function CheckMatrixRunbookPanel({ runbook, isLoading, editTarget, latest
         {latestRun ? (
           <section className="rounded-md border border-border bg-secondary/30 p-3 space-y-1.5">
             <div className="flex flex-wrap items-center gap-2">
-              <span className="text-[11px] text-muted-foreground">최근 수행</span>
+              <span className="text-xs text-muted-foreground">최근 수행</span>
               <RunStateBadge state={latestRun.runState} />
               {latestRun.status && <StatusBadge variant={latestRun.status} size="sm" />}
             </div>
             {running && (
-              <p className="text-[11px] text-status-info">
+              <p className="text-xs text-status-info">
                 진행 중입니다 — 아래 실행 단계가 진행 상황에 따라 실시간으로 색칠됩니다.
               </p>
             )}

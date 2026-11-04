@@ -19,6 +19,7 @@ import { NavMenuManager } from '@/components/settings/NavMenuManager';
 import { DefaultAppsManager } from '@/components/settings/DefaultAppsManager';
 import { PageStyleManager } from '@/components/settings/PageStyleManager';
 import { ThemeGallery } from '@/components/settings/ThemeGallery';
+import { DensitySettings } from '@/components/settings/DensitySettings';
 import { TerminalAppearanceSettings } from '@/components/settings/TerminalAppearanceSettings';
 import { AssigneeManager } from '@/components/settings/AssigneeManager';
 import { AuditLogManager } from '@/components/settings/AuditLogManager';
@@ -918,6 +919,9 @@ export function SettingsPage() {
 
           {/* 테마 갤러리 — 10종을 한 화면에서 비교·선택 (D-072) */}
           <ThemeGallery />
+
+          {/* 화면 밀도 — 글자 크기·줄간격 (기본은 한글 가독성 기준, 사용자가 조절) */}
+          <DensitySettings />
 
           {/* 메뉴 이름 편집 (사이드바에서 이동) */}
           <NavMenuManager />

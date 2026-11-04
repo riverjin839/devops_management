@@ -198,7 +198,7 @@ export function OidcSettingsPanel() {
               <label htmlFor={f('issuer')} className="block text-xs font-medium mb-1">Issuer</label>
               <input id={f('issuer')} className={`${inputCls} font-mono`} value={draft.issuer}
                 onChange={(e) => set('issuer', e.target.value)} placeholder="https://sso.corp/realms/main" />
-              <p className="mt-1 text-[11px] text-muted-foreground">
+              <p className="mt-1 text-xs text-muted-foreground">
                 <code>/.well-known/openid-configuration</code> 앞까지의 주소
               </p>
             </div>
@@ -214,7 +214,7 @@ export function OidcSettingsPanel() {
                 onChange={(e) => set('clientSecret', e.target.value)}
                 placeholder={data?.hasSecret ? '저장됨 — 바꿀 때만 입력' : '공개 클라이언트면 비워 둠'} />
               {data?.hasSecret && (
-                <label className="mt-1 flex items-center gap-2 text-[11px] text-muted-foreground">
+                <label className="mt-1 flex items-center gap-2 text-xs text-muted-foreground">
                   <input type="checkbox" checked={draft.clearClientSecret}
                     onChange={(e) => set('clearClientSecret', e.target.checked)} />
                   저장된 secret 삭제
@@ -230,27 +230,27 @@ export function OidcSettingsPanel() {
               <label htmlFor={f('base')} className="block text-xs font-medium mb-1">공개 주소 (선택)</label>
               <input id={f('base')} className={`${inputCls} font-mono`} value={draft.publicBaseUrl}
                 onChange={(e) => set('publicBaseUrl', e.target.value)} placeholder="https://pep.corp" />
-              <p className="mt-1 text-[11px] text-muted-foreground">브라우저가 여는 PEP 주소. 비우면 요청 기준</p>
+              <p className="mt-1 text-xs text-muted-foreground">브라우저가 여는 PEP 주소. 비우면 요청 기준</p>
             </div>
           </div>
 
           <fieldset className="grid gap-3 sm:grid-cols-3">
             <legend className="mb-1 text-xs font-medium">ID 토큰 claim 매핑</legend>
             <div>
-              <label htmlFor={f('uclaim')} className="block text-[11px] text-muted-foreground mb-1">사용자명 → PEP username</label>
+              <label htmlFor={f('uclaim')} className="block text-xs text-muted-foreground mb-1">사용자명 → PEP username</label>
               <input id={f('uclaim')} className={`${inputCls} font-mono`} value={draft.usernameClaim}
                 onChange={(e) => set('usernameClaim', e.target.value)} placeholder="preferred_username" />
-              <p className="mt-1 text-[11px] text-muted-foreground">
+              <p className="mt-1 text-xs text-muted-foreground">
                 같은 이름의 기존 PEP 계정(관리자 포함)으로 로그인된다. IdP 에서 사용자가 직접 바꿀 수 없는 값(사번 등)을 고른다
               </p>
             </div>
             <div>
-              <label htmlFor={f('nclaim')} className="block text-[11px] text-muted-foreground mb-1">표시 이름</label>
+              <label htmlFor={f('nclaim')} className="block text-xs text-muted-foreground mb-1">표시 이름</label>
               <input id={f('nclaim')} className={`${inputCls} font-mono`} value={draft.displayNameClaim}
                 onChange={(e) => set('displayNameClaim', e.target.value)} placeholder="name" />
             </div>
             <div>
-              <label htmlFor={f('eclaim')} className="block text-[11px] text-muted-foreground mb-1">이메일</label>
+              <label htmlFor={f('eclaim')} className="block text-xs text-muted-foreground mb-1">이메일</label>
               <input id={f('eclaim')} className={`${inputCls} font-mono`} value={draft.emailClaim}
                 onChange={(e) => set('emailClaim', e.target.value)} placeholder="email" />
             </div>
@@ -272,7 +272,7 @@ export function OidcSettingsPanel() {
                   <option value="operator">operator</option>
                 </select>
               </div>
-              <p className="text-[11px] text-muted-foreground">
+              <p className="text-xs text-muted-foreground">
                 끄면 PEP 에 같은 username 이 이미 있어야 로그인됩니다. 자동 생성 계정은 비밀번호가 없어 SSO 로만 로그인합니다.
               </p>
             </div>
@@ -281,13 +281,13 @@ export function OidcSettingsPanel() {
               <textarea id={f('domains')} rows={3} value={draft.allowedDomains}
                 onChange={(e) => set('allowedDomains', e.target.value)} placeholder={'corp.example\nsub.corp.example'}
                 className={`${inputCls} font-mono`} />
-              <p className="mt-1 text-[11px] text-muted-foreground">한 줄에 하나. 비우면 제한 없음(하위 도메인 포함)</p>
+              <p className="mt-1 text-xs text-muted-foreground">한 줄에 하나. 비우면 제한 없음(하위 도메인 포함)</p>
               <label className="mt-2 flex items-start gap-2 text-xs">
                 <input type="checkbox" className="mt-0.5" checked={draft.requireEmailVerified}
                   onChange={(e) => set('requireEmailVerified', e.target.checked)} />
                 <span>
                   IdP 가 검증한 이메일만 허용 (<code className="font-mono">email_verified=true</code>)
-                  <span className="block text-[11px] text-muted-foreground">
+                  <span className="block text-xs text-muted-foreground">
                     도메인 제한이 있을 때 적용. 사용자가 이메일을 직접 고칠 수 있는 IdP 에서 정책 우회를 막는다. email_verified 를 내지 않는 IdP 만 끈다
                   </span>
                 </span>

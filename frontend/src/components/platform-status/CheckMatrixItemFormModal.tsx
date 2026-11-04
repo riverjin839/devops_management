@@ -160,7 +160,7 @@ function FieldRow({ field, value, onChange, error, disabled }: {
     <div className="space-y-1">
       <div className="flex items-baseline justify-between gap-2">
         <label htmlFor={id} className="text-xs font-medium text-foreground">{field.label}</label>
-        <span className="text-[11px] font-mono text-muted-foreground truncate">
+        <span className="text-xs font-mono text-muted-foreground truncate">
           {field.name} · {FIELD_TYPE_LABEL[field.type] ?? field.type}
         </span>
       </div>
@@ -194,9 +194,9 @@ function FieldRow({ field, value, onChange, error, disabled }: {
           className={inputCls}
         />
       )}
-      {field.help && <p id={helpId} className="text-[11px] text-muted-foreground leading-relaxed">{field.help}</p>}
+      {field.help && <p id={helpId} className="text-xs text-muted-foreground leading-relaxed">{field.help}</p>}
       {error && (
-        <p id={errId} className="text-[11px] text-status-critical inline-flex items-center gap-1">
+        <p id={errId} className="text-xs text-status-critical inline-flex items-center gap-1">
           <AlertTriangle className="w-3 h-3" aria-hidden="true" /> {error}
         </p>
       )}
@@ -282,7 +282,7 @@ function RowColorPicker({ color, onChange }: { color: string; onChange: (v: stri
           title="무색"
           aria-label="행 배경 색 없음"
           aria-pressed={color === ''}
-          className={`w-6 h-6 rounded-full border text-[11px] text-muted-foreground flex items-center justify-center ${
+          className={`w-6 h-6 rounded-full border text-xs text-muted-foreground flex items-center justify-center ${
             color === '' ? 'border-primary ring-1 ring-primary/40' : 'border-border'
           }`}
         >
@@ -316,7 +316,7 @@ function ClusterStatusOptIn({ checked, onChange }: { checked: boolean; onChange:
       <input type="checkbox" className="mt-0.5" checked={checked} onChange={(e) => onChange(e.target.checked)} />
       <span>
         클러스터 상태에 반영
-        <span className="block text-[11px] text-muted-foreground">
+        <span className="block text-xs text-muted-foreground">
           켜면 이 항목이 경고·위험일 때 클러스터 종합 상태(사이드바 색·열 머리글 점)도 경고·위험이 됩니다.
           클러스터 상세의 「종합 상태」 원인 목록에도 나옵니다. 기본은 꺼짐.
         </span>
@@ -380,7 +380,7 @@ function AdvancedSection({
           <datalist id={targetKeyListId}>
             {TARGET_SUGGESTIONS.map((t) => <option key={t} value={t}>{t}</option>)}
           </datalist>
-          <p id={targetHelpId} className="text-[11px] text-muted-foreground mt-1">
+          <p id={targetHelpId} className="text-xs text-muted-foreground mt-1">
             같은 값을 가진 다른 실행 방식의 항목이 있으면 매트릭스에 "중복 점검" 배지가 뜹니다(같은
             실행 방식끼리는 표시하지 않음).
           </p>
@@ -477,7 +477,7 @@ function PreviewResultView({ result, pending }: { result: CheckMatrixItemPreview
       </div>
       {result.message && <p className="text-xs whitespace-pre-wrap break-words">{result.message}</p>}
       <div>
-        <span className="text-[11px] font-medium text-muted-foreground mb-1 block">상세 로그</span>
+        <span className="text-xs font-medium text-muted-foreground mb-1 block">상세 로그</span>
         <LogViewer text={log} maxHeight="max-h-72" />
       </div>
     </div>
@@ -727,12 +727,12 @@ function EditItemForm({ onClose, editingItem }: { onClose: () => void; editingIt
               );
             })}
           </select>
-          <p id={sourceHelpId} className="text-[11px] text-muted-foreground mt-1">
+          <p id={sourceHelpId} className="text-xs text-muted-foreground mt-1">
             이 항목이 셀마다 실제로 무엇을 실행하는지 고릅니다. 배치잡/플레이북은 각 클러스터에 같은 이름으로
             등록된 것을 찾아 실행합니다.
           </p>
           {!sourceUnchanged && sourceConfig?.editable && (
-            <p className="text-[11px] text-status-warning mt-1">
+            <p className="text-xs text-status-warning mt-1">
               실행 소스를 바꾸면 기존 임계값·파라미터는 새 소스에 적용되지 않습니다 — 저장 후 다시 열어 새 소스의 값을 설정하세요.
             </p>
           )}
@@ -744,9 +744,9 @@ function EditItemForm({ onClose, editingItem }: { onClose: () => void; editingIt
           <div className="flex items-center justify-between gap-2">
             <span className="text-xs font-semibold">실행 설정 (임계값 · 파라미터)</span>
             {sourceConfig.dedicated ? (
-              <span className="text-[11px] px-1.5 py-0.5 rounded-full bg-primary/10 text-primary">이 항목 전용</span>
+              <span className="text-xs px-1.5 py-0.5 rounded-full bg-primary/10 text-primary">이 항목 전용</span>
             ) : sourceConfig.shared ? (
-              <span className="text-[11px] px-1.5 py-0.5 rounded-full bg-secondary text-muted-foreground">공유 중</span>
+              <span className="text-xs px-1.5 py-0.5 rounded-full bg-secondary text-muted-foreground">공유 중</span>
             ) : null}
           </div>
           {sourceConfig.note && <p className="text-xs text-muted-foreground">{sourceConfig.note}</p>}
@@ -896,7 +896,7 @@ function PlaybookEditor({ value, onChange, clusters, playbookFiles }: {
         <FileCode className="w-4 h-4 text-primary" aria-hidden="true" />
         <span className="text-xs font-semibold">플레이북</span>
       </div>
-      <p className="text-[11px] text-muted-foreground">
+      <p className="text-xs text-muted-foreground">
         저장하면 선택한 클러스터마다 같은 이름의 플레이북이 만들어지고, 이 항목의 셀이 그것을 실행합니다
         (`/playbooks` 화면에서도 관리됩니다).
       </p>
@@ -1044,7 +1044,7 @@ function StepIndicator({ current }: { current: number }) {
           <li key={label} className="flex items-center gap-2 min-w-0" aria-current={active ? 'step' : undefined}>
             {i > 0 && <span className={`h-px w-6 ${done || active ? 'bg-primary' : 'bg-border'}`} aria-hidden="true" />}
             <span
-              className={`w-5 h-5 rounded-full flex items-center justify-center text-[11px] font-semibold flex-shrink-0 ${
+              className={`w-5 h-5 rounded-full flex items-center justify-center text-xs font-semibold flex-shrink-0 ${
                 active ? 'bg-primary text-primary-foreground'
                   : done ? 'bg-primary/15 text-primary' : 'bg-secondary text-muted-foreground'
               }`}
@@ -1363,7 +1363,7 @@ function RegisterItemWizard({ onClose }: { onClose: () => void }) {
           </button>
           <div className="flex items-center gap-2 min-w-0">
             {step === 1 && settingsIssues.length > 0 && (
-              <span className="text-[11px] text-muted-foreground truncate" aria-live="polite">
+              <span className="text-xs text-muted-foreground truncate" aria-live="polite">
                 남은 항목: {settingsIssues.join(' · ')}
               </span>
             )}
@@ -1441,7 +1441,7 @@ function RegisterItemWizard({ onClose }: { onClose: () => void }) {
                 const Icon = meta?.icon;
                 return (
                   <section key={g.tech || 'none'} aria-label={execTechLabel(g.tech)} className="space-y-1">
-                    <h3 className="flex items-center gap-1.5 text-[11px] font-semibold text-muted-foreground">
+                    <h3 className="flex items-center gap-1.5 text-xs font-semibold text-muted-foreground">
                       {Icon && <Icon className="w-3.5 h-3.5" aria-hidden="true" />}
                       {execTechLabel(g.tech)}
                       {meta?.hint && <span className="font-normal normal-case tracking-normal">· {meta.hint}</span>}
@@ -1467,7 +1467,7 @@ function RegisterItemWizard({ onClose }: { onClose: () => void }) {
                             )}
                           </div>
                           {(opt.sourceType === 'batch_job' || opt.sourceType === 'playbook') && (
-                            <span className="flex-shrink-0 text-[11px] px-1.5 py-0.5 rounded-full border border-border text-muted-foreground">
+                            <span className="flex-shrink-0 text-xs px-1.5 py-0.5 rounded-full border border-border text-muted-foreground">
                               {opt.sourceType === 'batch_job' ? '등록된 배치잡' : '등록된 플레이북'}
                             </span>
                           )}
@@ -1486,7 +1486,7 @@ function RegisterItemWizard({ onClose }: { onClose: () => void }) {
               {creatable.length > 0 && (
                 <section aria-label="직접 만들기" className="space-y-1">
                   <div className="flex items-center gap-2 pt-1">
-                    <h3 className="text-[11px] font-semibold text-muted-foreground">직접 만들기</h3>
+                    <h3 className="text-xs font-semibold text-muted-foreground">직접 만들기</h3>
                     <span className="flex-1 h-px bg-border" aria-hidden="true" />
                   </div>
                   {creatable.map((opt) => {
@@ -1512,7 +1512,7 @@ function RegisterItemWizard({ onClose }: { onClose: () => void }) {
                             <div className="text-xs text-muted-foreground truncate" title={opt.description}>{opt.description}</div>
                           )}
                         </div>
-                        <span className="flex-shrink-0 text-[11px] text-muted-foreground">{execTechLabel(opt.execTech)}</span>
+                        <span className="flex-shrink-0 text-xs text-muted-foreground">{execTechLabel(opt.execTech)}</span>
                         {selected && <Check className="w-4 h-4 text-primary flex-shrink-0" aria-hidden="true" />}
                       </button>
                     );
@@ -1547,7 +1547,7 @@ function RegisterItemWizard({ onClose }: { onClose: () => void }) {
               aria-invalid={!trimmedName || undefined}
               className="w-full text-sm border border-border rounded-xl px-3 py-2 bg-background"
             />
-            <div id={nameHelpId} className="flex items-center justify-between gap-2 mt-1 text-[11px]">
+            <div id={nameHelpId} className="flex items-center justify-between gap-2 mt-1 text-xs">
               <span className={duplicateName ? 'text-status-warning inline-flex items-center gap-1' : 'text-muted-foreground'}>
                 {duplicateName ? (
                   <><AlertTriangle className="w-3 h-3" aria-hidden="true" /> 같은 이름의 항목이 이미 있습니다 — 매트릭스에서 구분하기 어려울 수 있습니다.</>
@@ -1628,7 +1628,7 @@ function RegisterItemWizard({ onClose }: { onClose: () => void }) {
                 labelPrefix="애드온 설정"
                 addLabel="필드 추가"
               />
-              <p className="text-[11px] text-muted-foreground mt-2">
+              <p className="text-xs text-muted-foreground mt-2">
                 실제 클러스터별 등록(자격증명 포함)은 대시보드의 "애드온 추가"에서 별도로 합니다 —
                 여기 값은 다음 단계의 테스트에만 쓰입니다.
               </p>
@@ -1670,7 +1670,7 @@ function RegisterItemWizard({ onClose }: { onClose: () => void }) {
             <section className="space-y-3 rounded-xl border border-border p-3" aria-label="테스트 (선택)">
               <div className="flex items-center justify-between gap-2">
                 <span className="text-xs font-semibold">테스트 (선택)</span>
-                <span className="text-[11px] text-muted-foreground">아무것도 저장되지 않습니다</span>
+                <span className="text-xs text-muted-foreground">아무것도 저장되지 않습니다</span>
               </div>
               <p className="text-xs text-muted-foreground">
                 저장 전에 실제 클러스터에서 지금 설정으로 1회 실행해 결과와 상세 로그를 확인합니다.
@@ -1777,7 +1777,7 @@ function RegisterItemWizard({ onClose }: { onClose: () => void }) {
           )}
 
           <section className="rounded-xl border border-border bg-secondary/30 p-3 space-y-1 text-xs" aria-label="저장 요약">
-            <div className="text-[11px] font-semibold text-muted-foreground mb-1">저장 요약</div>
+            <div className="text-xs font-semibold text-muted-foreground mb-1">저장 요약</div>
             <div><span className="text-muted-foreground">이름</span> · {trimmedName || '(미입력)'}</div>
             <div>
               <span className="text-muted-foreground">점검</span> ·{' '}

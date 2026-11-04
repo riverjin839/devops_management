@@ -194,7 +194,7 @@ function LoginForm() {
 
         {/* D-069 — 버전은 package.json 이 원천(vite define). 도움말·지원 진입점은 D-077 에서
             셸 메뉴와 함께 정하므로 여기서는 자리를 비워 둔다. */}
-        <p className="mt-5 text-[11px] text-muted-foreground text-center tabular-nums select-none">
+        <p className="mt-5 text-xs text-muted-foreground text-center tabular-nums select-none">
           v{__APP_VERSION__}
         </p>
       </div>

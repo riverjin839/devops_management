@@ -455,7 +455,7 @@ export function Sidebar() {
               <FlyoutAction
                 label={t('shell.help.searchScreens')}
                 Icon={Search}
-                trailing={<kbd className="text-[11px] font-mono text-muted-foreground border border-border rounded px-1">⌘K</kbd>}
+                trailing={<kbd className="text-xs font-mono text-muted-foreground border border-border rounded px-1">⌘K</kbd>}
                 onSelect={() => { setHelpFlyoutAnchor(null); openPalette(true); }}
               />
               <div className="mx-2 my-1 border-t border-border" />
@@ -526,7 +526,7 @@ export function Sidebar() {
               {THEMES.map((th) => (
                 <FlyoutAction key={th} label={t(`shell.theme.${th}`)} Icon={THEME_ICON[th]} checked={theme === th} onSelect={() => setTheme(th)} />
               ))}
-              <p className="px-2.5 pt-1.5 pb-0.5 text-[11px] text-muted-foreground">{t('shell.user.accent')}</p>
+              <p className="px-2.5 pt-1.5 pb-0.5 text-xs text-muted-foreground">{t('shell.user.accent')}</p>
               {ACCENTS.map((a) => (
                 <FlyoutAction
                   key={a}

@@ -155,7 +155,7 @@ export function PodTerminal({ clusterId, namespace, pod, container: initialConta
             container && <span className="text-xs text-zinc-400">· {container}</span>
           )}
           <span className={`text-xs ${statusColor}`}>● {status}</span>
-          <span className="ml-auto hidden lg:inline text-[11px] text-zinc-500 truncate" title={clipboardHintText()}>
+          <span className="ml-auto hidden lg:inline text-xs text-zinc-500 truncate" title={clipboardHintText()}>
             {clipboardHintText()}
           </span>
           <button onClick={connect} title="재연결" className="lg:ml-2 ml-auto p-1 rounded hover:bg-zinc-700 text-zinc-400">

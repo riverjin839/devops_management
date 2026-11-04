@@ -138,17 +138,17 @@ function ItemCard({ item, onClick }: { item: DayItem; onClick: () => void }) {
       )}
       <div className="flex items-center gap-1 mt-0.5 pl-4 flex-wrap">
         {item.module && (
-          <span className={`text-[11px] px-1 rounded-md ${MODULE_COLOR[item.module] ?? 'bg-secondary text-muted-foreground'}`}>
+          <span className={`text-xs px-1 rounded-md ${MODULE_COLOR[item.module] ?? 'bg-secondary text-muted-foreground'}`}>
             {item.module}
           </span>
         )}
         {item.priority && (
-          <span className={`text-[11px] px-1 rounded-md border ${PRIORITY_COLOR[item.priority] ?? ''}`}>
+          <span className={`text-xs px-1 rounded-md border ${PRIORITY_COLOR[item.priority] ?? ''}`}>
             {PRIORITY_LABEL[item.priority] ?? item.priority}
           </span>
         )}
         {isIssue && (
-          <span className={`text-[11px] px-1 rounded-md ${item.resolved ? 'bg-secondary text-muted-foreground' : 'bg-status-warning/15 text-status-warning'}`}>
+          <span className={`text-xs px-1 rounded-md ${item.resolved ? 'bg-secondary text-muted-foreground' : 'bg-status-warning/15 text-status-warning'}`}>
             {item.resolved ? '해결' : '미해결'}
           </span>
         )}
@@ -386,7 +386,7 @@ function PersonalGanttView({
                 <th key={ds} className={`border-b border-r border-border px-1 py-2 text-center font-medium ${isTd ? 'bg-primary/10 text-primary' : isWE ? 'text-muted-foreground bg-secondary/30' : 'text-muted-foreground'}`}
                   style={{ minWidth: COL_W, width: COL_W }}>
                   <div className="text-xs font-semibold">{dayLabel(d)}</div>
-                  {isTd && <div className="text-[11px] text-primary font-semibold">오늘</div>}
+                  {isTd && <div className="text-xs text-primary font-semibold">오늘</div>}
                 </th>
               );
             })}
@@ -413,7 +413,7 @@ function PersonalGanttView({
                 <tr key={t.id} className={bgClass}>
                   <td className={`sticky left-0 z-10 border-b border-r border-border px-3 py-1.5 align-middle ${stickyBg}`}>
                     <div className={`flex items-center gap-1.5 ${row.indent ? 'ml-4' : ''}`}>
-                      {row.indent && <span className="text-muted-foreground/40 text-sm flex-shrink-0">└</span>}
+                      {row.indent && <span className="text-faint text-sm flex-shrink-0">└</span>}
                       <StatusIcon status={t.kanbanStatus} type="task" />
                       <span className={`truncate max-w-[180px] leading-tight ${row.indent ? 'text-muted-foreground text-xs' : 'font-medium text-sm'}`}>{stripHtml(t.content)}</span>
                     </div>
@@ -944,7 +944,7 @@ export function WbsFlowPage() {
                           {dayLabel(d)}
                         </div>
                         {isTodayCol && (
-                          <div className="text-[11px] text-primary font-semibold">오늘</div>
+                          <div className="text-xs text-primary font-semibold">오늘</div>
                         )}
                       </div>
                     </th>
@@ -964,15 +964,15 @@ export function WbsFlowPage() {
                       <div className="flex flex-wrap gap-1">
                         {row.roles.slice(0, 4).map(role => (
                           <span key={role}
-                            className={`text-[11px] px-1.5 py-0.5 rounded-full ${MODULE_COLOR[role] ?? 'bg-secondary text-muted-foreground'}`}>
+                            className={`text-xs px-1.5 py-0.5 rounded-full ${MODULE_COLOR[role] ?? 'bg-secondary text-muted-foreground'}`}>
                             {role}
                           </span>
                         ))}
                         {row.roles.length > 4 && (
-                          <span className="text-[11px] text-muted-foreground">+{row.roles.length - 4}</span>
+                          <span className="text-xs text-muted-foreground">+{row.roles.length - 4}</span>
                         )}
                       </div>
-                      <div className="mt-1 text-[11px] text-muted-foreground">{totalItemsInRow}건</div>
+                      <div className="mt-1 text-xs text-muted-foreground">{totalItemsInRow}건</div>
                     </td>
                     {dates.map(d => {
                       const ds = fmtDate(d);

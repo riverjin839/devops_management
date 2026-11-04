@@ -24,8 +24,8 @@ const WIDTH_RE = String.raw`/(^|[^\w-])max-w-\[(1[2-9]|2\d)\d\dpx\]/`;
 const WIDTH_MSG = '페이지 폭은 PageShell density(console|hub|doc)로만 정한다 — max-w-[NNNNpx] 금지 (DESIGN_SYSTEM §12.12-5, D-123)';
 /* P2 타이포 — 흐린 보조 글자(text-muted-foreground/50~90 → 라이트에서 1.96~3.23:1)와 11px 미만 글자 금지.
    placeholder: 변형은 입력 안내 글자라 예외. esquery 정규식은 '/' 를 못 쓰므로 슬래시 자리는 '.' 로 매칭. */
-const TYPO_RE = String.raw`/((?<!placeholder:)(?<![\w-])text-muted-foreground.[5-9]\d(?!\d))|text-\[(8|9|10)px\]/`;
-const TYPO_MSG = '보조 글자는 text-muted-foreground(투명도 없이), 최소 글자는 text-[11px] — 흐리게 하거나 더 작게 하지 않는다 (DESIGN_SYSTEM §12 타이포)';
+const TYPO_RE = String.raw`/((?<!placeholder:)(?<![\w-])text-muted-foreground.[5-9]\d(?!\d))|(?<![\w-])text-muted-foreground.[1-4]\d(?!\d)|text-\[(8|9|10|11)px\]/`;
+const TYPO_MSG = '글자를 투명도로 흐리게 하거나 12px 미만으로 줄이지 않는다 — 흐린 보조 글자는 text-faint, 크기는 text-xs/text-sm(화면 밀도 설정을 따른다) (DESIGN_SYSTEM §12 타이포)';
 /* raw hex 금지 (R-1, DESIGN_SYSTEM §12.12-7) — 색은 Tailwind 토큰 클래스, SVG/DOM 은 hsl(var(--x)),
    캔버스·WebGL·var() 를 못 푸는 export 는 lib/chartTokens.ts cssVarColor(+useThemeColorKey) 를 쓴다.
    문자열 전체가 hex 인 리터럴만 잡는다 — 템플릿 리터럴 속 hex 는 grep 으로 0 을 확인한다.

@@ -68,7 +68,7 @@ export function AddAppDialog({
                 {sectionLabel(section)}
               </p>
               {sectionDesc && (
-                <p className="px-0.5 pb-1.5 text-[11px] text-muted-foreground">{sectionDesc}</p>
+                <p className="px-0.5 pb-1.5 text-xs text-muted-foreground">{sectionDesc}</p>
               )}
               <div className="grid grid-cols-2 gap-2">
                 {section.apps.map((app) => {
@@ -90,7 +90,7 @@ export function AddAppDialog({
                       <div className="min-w-0 flex-1">
                         <div className="text-sm font-medium">{appLabel(app)}</div>
                         {appDesc && (
-                          <div className="text-[11px] text-muted-foreground mt-0.5 leading-snug">{appDesc}</div>
+                          <div className="text-xs text-muted-foreground mt-0.5 leading-snug">{appDesc}</div>
                         )}
                       </div>
                       <span className={`flex-shrink-0 w-5 h-5 rounded-full flex items-center justify-center ${
@@ -106,14 +106,14 @@ export function AddAppDialog({
             );
           })}
           {/* installed_apps 는 메뉴 표시 개인화일 뿐 접근 제어가 아니다 — 권한 오해 방지 안내 */}
-          <p className="px-0.5 text-[11px] text-muted-foreground">
+          <p className="px-0.5 text-xs text-muted-foreground">
             {t('apps.accessNote')}
           </p>
         </div>
 
         {onReset && (
           <div className="px-5 pb-4 -mt-1 flex items-center justify-between gap-3 border-t border-border pt-3">
-            <p className="text-[11px] text-muted-foreground">
+            <p className="text-xs text-muted-foreground">
               {customized ? t('apps.customizedNote') : t('apps.defaultNote')}
             </p>
             {customized && (

@@ -266,7 +266,7 @@ export function ClusterOpsCheckPanel({ clusterId, clusterName }: Props) {
                       <div className="flex items-center gap-1.5">
                         <span className="font-medium truncate max-w-[260px]">{c.name || c.checkType}</span>
                         {c.enabled === false && (
-                          <span className="text-[11px] rounded px-1 py-0.5 bg-muted text-muted-foreground border border-border" title="비활성 — cron 미실행, 수동 실행만">비활성</span>
+                          <span className="text-xs rounded px-1 py-0.5 bg-muted text-muted-foreground border border-border" title="비활성 — cron 미실행, 수동 실행만">비활성</span>
                         )}
                       </div>
                       {c.checkType && c.name && (

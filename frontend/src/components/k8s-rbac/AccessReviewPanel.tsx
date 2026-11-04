@@ -148,13 +148,13 @@ export function AccessReviewPanel({ clusterId, serviceAccounts }: Props) {
             <table className="w-full min-w-[520px] text-sm">
               <thead>
                 <tr className="bg-secondary">
-                  <th className="text-left px-3 py-2 text-[11px] font-semibold text-muted-foreground">
+                  <th className="text-left px-3 py-2 text-xs font-semibold text-muted-foreground">
                     확인 항목
                   </th>
                   {matrix.namespaces.map((ns) => (
                     <th
                       key={ns}
-                      className="text-left px-3 py-2 text-[11px] font-semibold text-muted-foreground font-mono whitespace-nowrap"
+                      className="text-left px-3 py-2 text-xs font-semibold text-muted-foreground font-mono whitespace-nowrap"
                     >
                       {ns}
                     </th>
@@ -187,7 +187,7 @@ export function AccessReviewPanel({ clusterId, serviceAccounts }: Props) {
                               : <><X className="w-3.5 h-3.5" aria-hidden /> 거부</>}
                           </span>
                           {!e.allowed && e.reason && (
-                            <div className="text-[11px] text-muted-foreground mt-0.5">{e.reason}</div>
+                            <div className="text-xs text-muted-foreground mt-0.5">{e.reason}</div>
                           )}
                         </td>
                       );

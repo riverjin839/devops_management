@@ -197,7 +197,7 @@ export function CommandPalette() {
             spellCheck={false}
             className="flex-1 min-w-0 bg-transparent py-3 text-sm focus:outline-none placeholder:text-muted-foreground"
           />
-          <kbd className="hidden sm:inline text-[11px] font-mono text-muted-foreground border border-border rounded px-1.5 py-0.5">Esc</kbd>
+          <kbd className="hidden sm:inline text-xs font-mono text-muted-foreground border border-border rounded px-1.5 py-0.5">Esc</kbd>
         </div>
 
         <div ref={listRef} id="command-palette-results" role="listbox" aria-label={t('palette.resultsLabel')} className="flex-1 min-h-0 overflow-y-auto py-1">
@@ -235,7 +235,7 @@ export function CommandPalette() {
           })}
         </div>
 
-        <div className="flex items-center gap-3 px-4 py-2 border-t border-border bg-muted/40 text-[11px] text-muted-foreground">
+        <div className="flex items-center gap-3 px-4 py-2 border-t border-border bg-muted/40 text-xs text-muted-foreground">
           <span className="flex items-center gap-1"><LayoutGrid className="w-3 h-3" aria-hidden="true" /> {t('palette.screenCount', { count: screenItems.length })}</span>
           <span className="ml-auto flex items-center gap-2">
             <kbd className="font-mono border border-border rounded px-1">↑↓</kbd> {t('palette.move')}

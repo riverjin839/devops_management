@@ -27,7 +27,7 @@ function Field({ label, help, children }: { label: string; help?: string; childr
     <label className="block text-xs">
       <span className="text-muted-foreground">{label}</span>
       <div className="mt-0.5">{children}</div>
-      {help && <span className="block text-[11px] text-muted-foreground mt-0.5 leading-snug">{help}</span>}
+      {help && <span className="block text-xs text-muted-foreground mt-0.5 leading-snug">{help}</span>}
     </label>
   );
 }
@@ -148,7 +148,7 @@ export function NsOwnersDialog({ open, onClose }: { open: boolean; onClose: () =
               <input type="checkbox" className="accent-primary mt-0.5" checked={showContact} onChange={(e) => setShowContact(e.target.checked)} />
               <span>
                 공개 화면에 연락처 표시
-                <span className="block text-[11px] text-muted-foreground leading-snug">끄면 담당자 이름만 보인다.</span>
+                <span className="block text-xs text-muted-foreground leading-snug">끄면 담당자 이름만 보인다.</span>
               </span>
             </label>
           </div>

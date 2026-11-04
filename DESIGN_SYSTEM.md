@@ -208,7 +208,7 @@ Tailwind 기본 스케일을 그대로 쓰고, 역할마다 한 단계만 쓴다
 | 페이지 제목(h1) | `text-xl font-semibold` | `PageHeader` 만 그린다 — 화면당 1개 |
 | 카드 제목 | `text-xs font-semibold` (MacCard 헤더 내장) | 카드 안에 `<h2>` 를 중복하지 않는다 |
 | 본문 | `text-sm` | 표·목록·폼 |
-| 보조·라벨 | `text-xs text-muted-foreground` | 최소 11px(`text-[11px]`) |
+| 보조·라벨 | `text-xs text-muted-foreground` | 최소 12px — `text-xs` 는 화면 밀도 설정(기본 13px)을 따른다. `text-[11px]` 금지 |
 | 큰 숫자 | `text-2xl`~`text-4xl font-semibold tabular-nums` | 사용처 없음(Health Hero 제거, D-239) |
 | 코드·로그 | `font-mono text-xs` | LogViewer·ExecOutputTabs |
 
@@ -517,7 +517,7 @@ MacCard `title` 아래 또 그린 툴바 행(이중 헤더), 같은 모양의 �
 - **Section titles inside MacCard**: 카드 제목을 본문 `<h2>` 로 중복하지 않는다.
 - **탭·토글·스위치**: 내용을 바꾸는 탭과 기준값 토글은 `components/common/SegTabs`(`mode="tabs"` / `"toggle"`),
   켜기/끄기는 `components/common/SwitchToggle`(`role="switch"`, 비활성 사유 `hint`)을 쓴다. 화면마다 밑줄 탭·스위치를 손으로 만들지 않는다.
-- **타이포 (P2)**: 본문 기본 굵기 400(`body`), 라벨 500, 제목 600. 최소 글자 `text-[11px]` — 8~10px 금지.
+- **타이포 (P2)**: 본문 기본 굵기 400(`body`), 라벨 500, 제목 600. 글자 크기는 `text-xs`/`text-sm` 두 단계가 **화면 밀도 설정**(`compact` 12/14 · **기본 13/14.5** · `comfortable` 14/16px, `<html data-density>` → `--fs-xs`/`--fs-sm`, `stores/densityStore.ts`)을 따른다 — 8~11px 임의 크기 금지(lint). 흐린 보조 글자(자리표시자·빈 값 대시·핸들)는 `text-muted-foreground/NN` 대신 **`text-faint`**(muted 80%, 모든 테마 3:1 이상) — 투명도 변형은 lint 로 막는다. 식별자(노드·Pod·네임스페이스 이름)는 끝이 다르므로 `truncate` 대신 `common/MiddleTruncate`(가운데 말줄임, 끝 12자 유지)를 쓴다; 그 밖의 잘린 글자는 `useTruncateTitle` 이 hover 시 전체 값을 `title` 로 채운다.
   보조 글자는 `text-muted-foreground` 를 투명도 없이 쓴다(`/50~90` 은 라이트에서 2~3:1). 장식용
   아이콘·구분선만 `/20~40` 허용, 입력 안내는 `placeholder:` 변형. 둘 다 ESLint(`TYPO_RE`)가 error 로 막는다.
   비활성 표현(`disabled:opacity-50`)은 예외 — 비활성은 흐린 게 맞다.
@@ -920,7 +920,7 @@ D-117~D-134)에서 원자는 지켜지는데 화면이 "AI 가 만든 템플릿"
 | 7 | **카테고리·종류 구분 색은 `--chart-1..8` 토큰만** | Tailwind 색상명(blue·orange·purple·violet·indigo·cyan·pink·fuchsia·teal) — 장식 용도 포함, hex 기본색, 유색 배경 위 `text-white` 칩 | `--chart-*` 토큰(`text-[hsl(var(--chart-3))]` 아닌 유틸 클래스). slate/zinc 는 콘솔(터미널) 배경에만. `.eslintrc.cjs` 의 `DECO_PALETTE_RE` 가 **예외 없이** 막는다(D-120, 2026-10-15 allowlist 0). 클래스를 못 쓰는 렌더러(three.js·canvas·SVG 문자열)는 `lib/chartTokens.ts` `cssVarColor(token, {alpha, lighten})` 로 CSS 변수를 읽고, 색 memo 의존성에 `useThemeColorKey()` 를 넣어 테마 전환 시 다시 칠한다(hex 금지 — `.eslintrc.cjs` 가 hex Literal 을 막고, 허용은 DESIGN.md §1.3 화이트리스트 파일만). DOM 에 그리는 SVG(`ArchDocCanvas`·`TopologyCanvas`)는 `hsl(var(--x))` 를 그대로 써도 된다(export 의 `resolveCssVars` 가 해석). 토큰보다 종류가 많으면 같은 계열의 `lighten` 변형으로 구분한다. 브랜드 글자는 `text-brand-jira`(= `--brand-jira-text`, 다크 계열 테마에서 밝은 값) — `dark:` 우회를 붙이지 않는다. **예외**: 사용자가 골라 저장한 색(MindMap 노드 색 등)은 데이터라 토큰 대상이 아니다 |
 | 8 | **uppercase 아이브로우 금지(예외 없음)** | 페이지 본문·h1·버튼·탭·폼 라벨의 `uppercase tracking-wider`, 전부 대문자 제목("CIDR INPUT") | 라벨은 `text-xs text-muted-foreground`(대소문자 그대로). 상태 배지는 `common/StatusBadge` 한국어 1종 |
 | 9 | **아이콘은 lucide 만** | 이모지를 상태(🟢🟡🔴)·카테고리·아이콘·장식(🎉💡☸)으로, ⚠/✓/✗ 문자 접두, 모든 아이콘 `text-primary` 틴트 | lucide + 상태 토큰. `text-primary` 틴트는 클릭 가능한 액션에만. 사용자 데이터로 저장된 클러스터 아이콘(`clusterIcons`)의 예외 여부는 D-126 에서 판정 |
-| 10 | **타이포 위계 4단** | 페이지 내 `text-2xl` 이상, h1 크기 변형, 숫자 `font-mono`, `text-[11px]` 를 표 밖에 | h1 `text-xl font-semibold` · 카드 제목 MacCard 내장 · 본문 `text-sm` · 보조 `text-xs`. 숫자는 `tabular-nums`(`font-mono` 는 식별자·코드·로그만). `text-[11px]` 는 표 셀만. 글꼴은 시스템 스택만 — 웹폰트 CDN 금지(§3, D-131) |
+| 10 | **타이포 위계 4단** | 페이지 내 `text-2xl` 이상, h1 크기 변형, 숫자 `font-mono`, `text-[11px]` 를 표 밖에 | h1 `text-xl font-semibold` · 카드 제목 MacCard 내장 · 본문 `text-sm` · 보조 `text-xs`. 숫자는 `tabular-nums`(`font-mono` 는 식별자·코드·로그만). 크기는 밀도 설정을 따르는 `text-xs`/`text-sm` 만(임의 px 금지). 글꼴은 시스템 스택만 — 웹폰트 CDN 금지(§3, D-131) |
 | 11 | **용어는 한국어 우선 표준어** | K8S · Pod(본문) · 체크 · Settings · 할 일 · 신규 등록/업무 등록(동일 동작에 다른 라벨) · `...` · `-`(빈 값) · 토스트 어미 혼용 · 도메인 명사 없는 제목("안내"·"개요"·"정보"·"필터") · 영어 섹션 제목 | K8s · 파드 · 네임스페이스(표 헤더만 NS) · 점검 · 실행 · 저장 · 설정 · 할일 · 추가(생성)/등록(외부 반입) · 새로고침(화면)/재수집(데이터)/동기화(외부) · 삭제. 생략 `…`, 빈 값 `—`, 진행 "~ 중…", 토스트 "~됨"(예: "저장됨"·"항목 추가됨"·"Jira 가져옴", 목적격 조사 생략) |
 | 12 | **실행 버튼은 §12.9.1 `RunLogPanel` + "로그 보기" 필수**(CLAUDE.md riverjin839 요청) | 토스트·완료 요약·스피너 문구만 주는 실행/수집/점검/스냅샷 버튼 | `useRunLog` + `RunLogPanel` + `useLogPref` 토글. 단건 요청은 `runLogged`, 큐잉 실행은 `pollIntoRunLog`(§12.9.1) |
 

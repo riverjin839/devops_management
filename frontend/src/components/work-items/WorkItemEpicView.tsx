@@ -190,7 +190,7 @@ function TreeRow({ node, depth, collapsedIds, onToggle, onItemClick, jiraBusyId,
               <span className="w-4 flex-shrink-0" />
             )}
             {item.jiraIssueType && (
-              <span className={`flex-shrink-0 inline-flex items-center px-1.5 py-0.5 text-[11px] font-medium rounded border ${jiraTypeClass(item.jiraIssueType)}`}>
+              <span className={`flex-shrink-0 inline-flex items-center px-1.5 py-0.5 text-xs font-medium rounded border ${jiraTypeClass(item.jiraIssueType)}`}>
                 {item.jiraIssueType}
               </span>
             )}
@@ -203,7 +203,7 @@ function TreeRow({ node, depth, collapsedIds, onToggle, onItemClick, jiraBusyId,
               {item.title?.trim() || stripHtml(item.content) || '—'}
             </button>
             {hasChildren && (
-              <span className="flex-shrink-0 text-[11px] text-muted-foreground">({countDescendants(node)})</span>
+              <span className="flex-shrink-0 text-xs text-muted-foreground">({countDescendants(node)})</span>
             )}
           </div>
         </td>
@@ -215,7 +215,7 @@ function TreeRow({ node, depth, collapsedIds, onToggle, onItemClick, jiraBusyId,
               rel="noopener noreferrer"
               onClick={(e) => e.stopPropagation()}
               title={`Jira ${item.jiraIssueKey}${item.jiraStatus ? ` · ${item.jiraStatus}` : ''} (새 창)`}
-              className="inline-flex items-center font-mono text-[11px] font-semibold px-1 py-0.5 rounded bg-brand-jira/10 text-brand-jira border border-brand-jira/20 hover:bg-brand-jira/20"
+              className="inline-flex items-center font-mono text-xs font-semibold px-1 py-0.5 rounded bg-brand-jira/10 text-brand-jira border border-brand-jira/20 hover:bg-brand-jira/20"
             >
               {item.jiraIssueKey}
             </a>

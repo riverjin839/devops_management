@@ -10,6 +10,15 @@
 
 1.80.3 이후 main 에 병합된 변경 (다음 릴리스 후보).
 
+### Added
+- **K8s 허브 — `[` `]` 화면 이동 단축키**: 허브에서 `[` 는 이전 화면, `]` 는 다음 화면으로 이동한다. 브라우저 기본 단축키·Ctrl+K·Tab 포커스 이동과 겹치지 않고, 입력창에 입력 중이거나 모달이 열려 있으면 동작하지 않는다. Frontend: `useHubTabShortcuts`(`HubTabs`).
+- **화면 밀도 설정 (Settings → 화면 UI 설정)**: 글자 크기·줄간격을 「촘촘하게(12/14px) · 기본(13/14.5px) · 크게(14/16px)」 중 고른다. `text-xs`/`text-sm` 전체에 바로 적용되고 같은 계정의 다른 기기에도 따라온다(`k8s:density`). Frontend: `stores/densityStore`·`DensitySettings`·`index.css` `--fs-*`.
+- **잘린 이름 전체 보기**: 모든 말줄임(`truncate`·`line-clamp`)에 마우스를 올리면 전체 값이 툴팁으로 뜬다(`useTruncateTitle`). K8S 자원 목록의 이름 열은 가운데 말줄임(`MiddleTruncate`)이라 끝 12자가 항상 보인다 — 끝에서 갈리는 Pod·노드 이름을 구분할 수 있다.
+
+
+### Changed
+- **가독성 개선**: 기본 보조 글자를 12px → 13px 로 키우고(밀도 설정으로 되돌릴 수 있음) 내비·사이드바의 11px 글자를 `text-xs` 로 합쳤다. 흐린 자리표시자·빈 값 대시·핸들(`text-muted-foreground/30~50`, 1.5~2:1)은 3:1 이상인 `text-faint` 로 바꿨다. 본문 글꼴은 한글 글꼴을 Roboto/Helvetica 앞에 두고, 고정폭 글꼴에 D2Coding·Noto Sans Mono CJK KR 폴백을 더해 로그의 한글이 열을 깨뜨리지 않게 했다. lint 가 글자 투명도·12px 미만 임의 크기를 막는다.
+
 ## [1.80.3] - 2026-11-04
 
 ### Changed

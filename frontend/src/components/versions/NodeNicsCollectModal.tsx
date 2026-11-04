@@ -350,7 +350,7 @@ export function NodeNicsCollectModal({ open, clusterId, clusterName, onClose }: 
                               {(h.interfaces ?? []).map((ifc) => (
                                 <div key={ifc.name} className="flex items-start gap-1.5 flex-wrap">
                                   <span className="font-mono text-foreground">{ifc.name}</span>
-                                  <span className={`text-[11px] px-1 rounded ${
+                                  <span className={`text-xs px-1 rounded ${
                                     ifc.operstate === 'UP' ? 'bg-secondary text-foreground' : 'bg-muted text-muted-foreground'
                                   }`}>{ifc.operstate ?? '?'}</span>
                                   {ifc.addrs.map((a) => {

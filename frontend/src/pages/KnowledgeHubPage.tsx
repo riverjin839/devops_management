@@ -567,7 +567,7 @@ export function KnowledgeHubPage() {
                             {it.category ? (
                               <span className="line-clamp-1 text-sm text-muted-foreground">{it.category}</span>
                             ) : (
-                              <span className="text-sm text-muted-foreground/40">—</span>
+                              <span className="text-sm text-faint">—</span>
                             )}
                           </td>
                           <td className="px-4 py-3 whitespace-nowrap">
@@ -577,7 +577,7 @@ export function KnowledgeHubPage() {
                                 <span className="text-sm font-medium text-foreground">{it.statusLabel}</span>
                               </span>
                             ) : (
-                              <span className="text-sm text-muted-foreground/40">—</span>
+                              <span className="text-sm text-faint">—</span>
                             )}
                           </td>
                           <td className="px-4 py-3 whitespace-nowrap text-sm text-muted-foreground tabular-nums">

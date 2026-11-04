@@ -362,7 +362,7 @@ export function JiraImportModal({ open, onClose, defaultProjectKey }: JiraImport
                   <div><span className="text-muted-foreground">건너뜀</span> <b>{done.skipped}</b></div>
                 </div>
                 {done.appliedJql && (
-                  <p className="mt-2 text-[11px] font-mono text-muted-foreground break-all">JQL: {done.appliedJql}</p>
+                  <p className="mt-2 text-xs font-mono text-muted-foreground break-all">JQL: {done.appliedJql}</p>
                 )}
                 {done.errors.length > 0 && (
                   <div className="mt-2 text-xs text-status-critical">
@@ -434,7 +434,7 @@ export function JiraImportModal({ open, onClose, defaultProjectKey }: JiraImport
                       <span className="text-sm font-medium text-muted-foreground mb-1 block">최근 N일 변경분</span>
                       <input className={inputCls} type="number" min={1} placeholder="7" value={sinceDays}
                         onChange={(e) => { setSinceDays(e.target.value); setPreview(null); }} />
-                      <p className="text-[11px] text-muted-foreground mt-1">
+                      <p className="text-xs text-muted-foreground mt-1">
                         기본값은 이번주 월요일부터입니다 — 비우면 전체 이력을 가져옵니다.
                       </p>
                     </div>
@@ -474,7 +474,7 @@ export function JiraImportModal({ open, onClose, defaultProjectKey }: JiraImport
                             onChange={(e) => { setSinceDays(e.target.value); setPreview(null); }} />
                         </div>
                       </div>
-                      <p className="text-[11px] text-muted-foreground">
+                      <p className="text-xs text-muted-foreground">
                         프로젝트·컴포넌트·라벨은 <b>개별 또는 조합</b>으로 쓸 수 있습니다 — 채운 조건끼리 AND,
                         쉼표로 나열한 값은 OR. <b>하나도 채우지 않으면 실행되지 않습니다.</b>
                       </p>
@@ -498,7 +498,7 @@ export function JiraImportModal({ open, onClose, defaultProjectKey }: JiraImport
                         <span className="text-muted-foreground ml-auto">검색 {preview.total}건{preview.truncated ? '+' : ''}</span>
                       </div>
                       {preview.appliedJql && (
-                        <p className="mt-1 text-[11px] font-mono text-muted-foreground break-all">JQL: {preview.appliedJql}</p>
+                        <p className="mt-1 text-xs font-mono text-muted-foreground break-all">JQL: {preview.appliedJql}</p>
                       )}
                       <p className="text-xs text-muted-foreground mt-1">
                         미리보기 — 아직 저장되지 않았습니다. <b>적용할 항목만 체크</b>한 뒤 "가져오기 확정"을 누르세요.
@@ -520,7 +520,7 @@ export function JiraImportModal({ open, onClose, defaultProjectKey }: JiraImport
                                     })}
                                     aria-label={`${it.jiraKey} 적용 여부`} />
                                 )}
-                                <span className={`text-[11px] font-semibold px-1 rounded ${
+                                <span className={`text-xs font-semibold px-1 rounded ${
                                   it.action === 'create' ? 'bg-status-healthy/15 text-status-healthy'
                                     : it.action === 'update' ? 'bg-status-info/15 text-status-info'
                                     : 'bg-secondary text-muted-foreground'
@@ -533,7 +533,7 @@ export function JiraImportModal({ open, onClose, defaultProjectKey }: JiraImport
                               {(it.changes?.length ?? 0) > 0 && (
                                 <ul className="ml-6 mt-0.5 space-y-0.5">
                                   {(it.changes ?? []).map((c) => (
-                                    <li key={c.field} className="text-[11px] text-muted-foreground">
+                                    <li key={c.field} className="text-xs text-muted-foreground">
                                       <span className="font-medium text-foreground">{c.label || c.field}</span>{' '}
                                       <span className="line-through opacity-70">{c.old || '(없음)'}</span>
                                       {' → '}
@@ -553,7 +553,7 @@ export function JiraImportModal({ open, onClose, defaultProjectKey }: JiraImport
                       <AlertTriangle className="w-3.5 h-3.5 mt-0.5 flex-shrink-0" />
                       <div>
                         <div>{preview.detail}</div>
-                        {preview.appliedJql && <div className="mt-1 font-mono text-[11px] break-all">JQL: {preview.appliedJql}</div>}
+                        {preview.appliedJql && <div className="mt-1 font-mono text-xs break-all">JQL: {preview.appliedJql}</div>}
                       </div>
                     </div>
                   )}

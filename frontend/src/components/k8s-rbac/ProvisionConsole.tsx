@@ -30,7 +30,7 @@ function StepChips({ steps, running }: { steps: ProvisionStream['steps']; runnin
         return (
           <span
             key={key}
-            className={`inline-flex items-center gap-1.5 text-[11px] px-2.5 py-1 rounded-full border ${cls}`}
+            className={`inline-flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-full border ${cls}`}
           >
             {status === 'done' && <Check className="w-3 h-3" />}
             {status === 'running' && running && <Loader2 className="w-3 h-3 animate-spin" />}
@@ -105,7 +105,7 @@ export function ProvisionConsole({ stream, showLogs }: ProvisionConsoleProps) {
               로그 {logs.length}줄을 수집했습니다 — 상단의 <span className="text-foreground">로그 보기</span> 를 켜면
               전체가 펼쳐집니다.
               {logs.length > 0 && (
-                <span className="block mt-1 font-mono text-[11px] text-foreground truncate">
+                <span className="block mt-1 font-mono text-xs text-foreground truncate">
                   {logs[logs.length - 1].message}
                 </span>
               )}
@@ -141,7 +141,7 @@ export function ProvisionConsole({ stream, showLogs }: ProvisionConsoleProps) {
                   {result.created.map((c, i) => (
                     <span
                       key={`${c.kind}-${c.namespace}-${c.name}-${i}`}
-                      className="font-mono text-[11px] px-1.5 py-0.5 rounded border border-border bg-secondary"
+                      className="font-mono text-xs px-1.5 py-0.5 rounded border border-border bg-secondary"
                     >
                       {c.kind} {c.namespace ? `${c.namespace}/` : ''}
                       {c.name}

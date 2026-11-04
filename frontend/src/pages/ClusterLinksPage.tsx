@@ -492,14 +492,14 @@ export function ClusterLinksPage() {
     if (maxRows === 0) {
       cells.push(
         <div key="empty-common" className={`${cellBase} text-center`} style={{ minHeight: rowMinH }}>
-          <span className="text-sm text-muted-foreground/40">—</span>
+          <span className="text-sm text-faint">—</span>
         </div>,
       );
       groups.forEach((g, idx) => cells.push(
         <div key={`empty-${g.clusterId}`}
           className={`${cellBase} text-center${idx < groups.length - 1 ? ` border-r ${borderCls}` : ''}`}
           style={{ minHeight: rowMinH }}>
-          <span className="text-sm text-muted-foreground/40">—</span>
+          <span className="text-sm text-faint">—</span>
         </div>,
       ));
     } else {

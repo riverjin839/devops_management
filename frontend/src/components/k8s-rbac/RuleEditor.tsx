@@ -99,13 +99,13 @@ export function RuleEditor({ rules, onChange, disabled, disabledHint }: RuleEdit
           <table className="w-full min-w-[720px] text-sm">
             <thead>
               <tr className="bg-secondary">
-                <th className="text-left px-3 py-2 text-[11px] font-semibold text-muted-foreground w-[180px]">
+                <th className="text-left px-3 py-2 text-xs font-semibold text-muted-foreground w-[180px]">
                   API 그룹
                 </th>
-                <th className="text-left px-3 py-2 text-[11px] font-semibold text-muted-foreground">
+                <th className="text-left px-3 py-2 text-xs font-semibold text-muted-foreground">
                   리소스
                 </th>
-                <th className="text-left px-3 py-2 text-[11px] font-semibold text-muted-foreground w-[330px]">
+                <th className="text-left px-3 py-2 text-xs font-semibold text-muted-foreground w-[330px]">
                   동작(verb)
                 </th>
                 <th className="w-10"><span className="sr-only">규칙 삭제</span></th>
@@ -150,7 +150,7 @@ export function RuleEditor({ rules, onChange, disabled, disabledHint }: RuleEdit
                             onClick={() => toggleVerb(idx, verb)}
                             title={disabled ? disabledHint : `${verb}${write ? ' (쓰기 동작)' : ''} ${on ? '해제' : '추가'}`}
                             aria-pressed={on}
-                            className={`font-mono text-[11px] px-1.5 py-0.5 rounded border disabled:opacity-60 ${
+                            className={`font-mono text-xs px-1.5 py-0.5 rounded border disabled:opacity-60 ${
  on
  ? write
  ? 'bg-primary border-primary text-primary-foreground font-semibold'

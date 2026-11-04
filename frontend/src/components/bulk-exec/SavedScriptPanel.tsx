@@ -104,7 +104,7 @@ export function SavedScriptPanel({
         <div className="flex flex-wrap gap-1.5">
           {scripts.map((s) => (
             <div key={s.id} className="flex items-center gap-0.5 bg-secondary/50 border border-border rounded-md overflow-hidden">
-              <span className={`px-1.5 py-1 text-[11px] font-semibold border-r ${LANGUAGE_BADGE[s.language]}`}>
+              <span className={`px-1.5 py-1 text-xs font-semibold border-r ${LANGUAGE_BADGE[s.language]}`}>
                 {s.language}
               </span>
               <button

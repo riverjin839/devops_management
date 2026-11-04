@@ -590,12 +590,12 @@ export function WeeklyStatusTimeline({ items, isLoading, selectedClusterId }: We
                       <span className={`text-[13px] truncate ${isTeamRow ? 'font-bold text-primary' : 'font-semibold'}`}>{name}</span>
                     </div>
                     <div className="flex items-center gap-1.5 mt-0.5 pl-5">
-                      <p className="text-[11px] text-muted-foreground">{bars.length}건</p>
+                      <p className="text-xs text-muted-foreground">{bars.length}건</p>
                       {hasMore && (
                         <button
                           type="button"
                           onClick={() => toggleAssigneeExpand(name)}
-                          className="text-[11px] text-muted-foreground hover:text-primary transition-colors"
+                          className="text-xs text-muted-foreground hover:text-primary transition-colors"
                           aria-expanded={isExpanded}
                         >
                           {isExpanded ? '접기' : `+${bars.length - ASSIGNEE_ITEM_LIMIT}건 더보기`}
@@ -626,7 +626,7 @@ export function WeeklyStatusTimeline({ items, isLoading, selectedClusterId }: We
                               className={`w-full h-5 rounded-md ring-1 ${sv.ringClass} shadow-sm flex items-center gap-1 px-1.5 overflow-hidden cursor-pointer hover:brightness-110 transition
                               ${clippedLeft ? 'rounded-l-none' : ''} ${clippedRight || growing ? 'rounded-r-none' : ''}`}>
                               <StatusGlyph status={status} />
-                              <span className="text-[11px] font-semibold truncate">{item.title?.trim() || stripHtml(item.content)}</span>
+                              <span className="text-xs font-semibold truncate">{item.title?.trim() || stripHtml(item.content)}</span>
                               {growing && <ChevronRight className="w-3 h-3 flex-shrink-0 ml-auto" aria-label="진행 중" />}
                             </button>
                           </div>

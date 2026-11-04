@@ -104,7 +104,7 @@ export function ClusterCustomCell({ cluster, field, canEdit = true }: Props) {
           className={`font-mono text-sm px-1 ${
             current === true ? 'text-foreground font-bold'
             : current === false ? 'text-muted-foreground'
-            : 'text-muted-foreground/30'
+            : 'text-faint'
           }`}
           title={field.label}
         >
@@ -126,7 +126,7 @@ export function ClusterCustomCell({ cluster, field, canEdit = true }: Props) {
         className={`font-mono text-sm px-1 rounded-xl hover:bg-primary/10 disabled:opacity-40 ${
           current === true ? 'text-foreground font-bold'
           : current === false ? 'text-muted-foreground'
-          : 'text-muted-foreground/30'
+          : 'text-faint'
         }`}
         title={`${field.label} (클릭 순환: 미설정 → O → X → 미설정)`}
         // 스크린리더에 "O"/"·" 만 announce 되던 것 — 필드명·현재값·조작법을 이름에 담는다.
@@ -145,7 +145,7 @@ export function ClusterCustomCell({ cluster, field, canEdit = true }: Props) {
   if (!canEdit) {
     return (
       <span className="text-sm px-0.5 block min-h-[1.2em] truncate" title={field.label}>
-        {text ?? <span className="text-muted-foreground/40">-</span>}
+        {text ?? <span className="text-faint">-</span>}
       </span>
     );
   }
@@ -157,7 +157,7 @@ export function ClusterCustomCell({ cluster, field, canEdit = true }: Props) {
         className="cursor-text hover:bg-primary/5 rounded px-0.5 text-sm flex-1 min-w-0 truncate"
         title={`더블클릭 또는 편집 버튼으로 수정 — ${field.label}`}
       >
-        {text ?? <span className="text-muted-foreground/40">-</span>}
+        {text ?? <span className="text-faint">-</span>}
       </span>
       <button
         type="button"

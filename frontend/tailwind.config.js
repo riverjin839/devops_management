@@ -102,6 +102,9 @@ export default {
       // text-primary / text-status-* 만 4.5:1 을 보장하는 *-text 토큰으로 갈라낸다.
       // (extend.textColor 는 colors 와 deep-merge 되어 foreground 등 하위 키는 유지된다.)
       textColor: {
+        // 흐린 보조 글자(자리표시자·빈 값 대시·핸들) 전용 — muted-foreground 를 투명도로 흐리게 하면 1.5~2:1 로 떨어져
+        // 쓰지 않는다. 이 토큰은 muted 의 80% 라 모든 테마에서 3:1 이상을 유지한다.
+        faint: "hsl(var(--muted-foreground) / 0.8)",
         primary: {
           DEFAULT: "hsl(var(--primary-text) / <alpha-value>)",
         },
@@ -149,8 +152,15 @@ export default {
       // 같은 글꼴로 그려진다. sans 는 index.css body 와 같은 스택(한글은 Apple SD Gothic Neo·맑은 고딕),
       // mono 는 터미널 기본값(useTerminalAppearance XTERM_DEFAULT_FONT)과 같은 스택이다.
       fontFamily: {
-        sans: ["-apple-system", "BlinkMacSystemFont", '"SF Pro Text"', '"Segoe UI"', "Roboto", '"Apple SD Gothic Neo"', '"Malgun Gothic"', '"Noto Sans KR"', "Helvetica", "Arial", "sans-serif"],
-        mono: ["ui-monospace", "SFMono-Regular", "Menlo", "Consolas", '"Liberation Mono"', "monospace"],
+        // 한글 글꼴을 Roboto/Helvetica 보다 앞에 둔다 — Latin·한글이 한 글꼴로 그려져 혼합 줄이 고르다.
+        sans: ["-apple-system", "BlinkMacSystemFont", '"SF Pro Text"', '"Segoe UI"', '"Apple SD Gothic Neo"', '"Malgun Gothic"', '"Noto Sans KR"', "Roboto", "Helvetica", "Arial", "sans-serif"],
+        // 한글 고정폭 폴백(D2Coding·Noto Sans Mono CJK KR)을 둬 로그의 한글이 비례폭으로 떨어져 열이 어긋나지 않게 한다.
+        mono: ["ui-monospace", "SFMono-Regular", "Menlo", "Consolas", '"Liberation Mono"', '"D2Coding"', '"Noto Sans Mono CJK KR"', '"Malgun Gothic"', "monospace"],
+      },
+      // 글자 크기·줄간격은 밀도 설정(<html data-density>)이 --fs-*/--lh-* 로 바꾼다(index.css, stores/densityStore.ts).
+      fontSize: {
+        xs: ["var(--fs-xs)", { lineHeight: "var(--lh-xs)" }],
+        sm: ["var(--fs-sm)", { lineHeight: "var(--lh-sm)" }],
       },
     },
   },

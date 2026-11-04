@@ -252,7 +252,7 @@ function DraggableSortHeader({
           type="button"
           {...attributes}
           {...listeners}
-          className="cursor-grab active:cursor-grabbing text-muted-foreground/30 hover:text-muted-foreground -ml-1 touch-none"
+          className="cursor-grab active:cursor-grabbing text-faint hover:text-muted-foreground -ml-1 touch-none"
           title="드래그하여 컬럼 순서 변경"
           aria-label="컬럼 이동"
         >

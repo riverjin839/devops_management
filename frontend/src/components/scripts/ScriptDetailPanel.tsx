@@ -244,13 +244,13 @@ export function ScriptDetailPanel({ scriptId, onDeleted, onDirtyChange }: Props)
             <div className="flex items-center gap-1.5 mt-1 flex-wrap">
               <ScriptKindBadge kind={script.kind} />
               {script.isSystem && (
-                <span className="text-[11px] px-1.5 py-0.5 rounded border border-border text-muted-foreground">시스템 제공</span>
+                <span className="text-xs px-1.5 py-0.5 rounded border border-border text-muted-foreground">시스템 제공</span>
               )}
               {script.currentVersion && (
-                <span className="text-[11px] px-1.5 py-0.5 rounded bg-secondary text-muted-foreground">v{script.currentVersion.version}</span>
+                <span className="text-xs px-1.5 py-0.5 rounded bg-secondary text-muted-foreground">v{script.currentVersion.version}</span>
               )}
               {(script.tags ?? []).map((t) => (
-                <span key={t} className="text-[11px] px-1.5 py-0.5 rounded bg-secondary text-muted-foreground">{t}</span>
+                <span key={t} className="text-xs px-1.5 py-0.5 rounded bg-secondary text-muted-foreground">{t}</span>
               ))}
             </div>
           </div>
@@ -392,17 +392,17 @@ export function ScriptDetailPanel({ scriptId, onDeleted, onDirtyChange }: Props)
                 <span className="text-xs font-mono font-medium flex-shrink-0">v{v.version}</span>
                 <div className="min-w-0 flex-1">
                   <p className="text-xs truncate">{v.changelog || '(메모 없음)'}</p>
-                  <p className="text-[11px] text-muted-foreground">{v.createdBy ?? '—'} · {new Date(v.createdAt).toLocaleString('ko-KR')}</p>
+                  <p className="text-xs text-muted-foreground">{v.createdBy ?? '—'} · {new Date(v.createdAt).toLocaleString('ko-KR')}</p>
                 </div>
                 {v.id === script.currentVersionId ? (
-                  <span className="text-[11px] px-1.5 py-0.5 rounded bg-primary/15 text-primary flex-shrink-0">현재</span>
+                  <span className="text-xs px-1.5 py-0.5 rounded bg-primary/15 text-primary flex-shrink-0">현재</span>
                 ) : (
                   <button
                     onClick={() => requestRollback(v)}
                     disabled={!canEdit || setCurrentVersion.isPending}
                     title={withHint('이 버전으로 롤백')}
                     aria-label={ariaWithHint(`v${v.version} 으로 롤백`)}
-                    className="inline-flex items-center gap-1 px-2 py-1 text-[11px] rounded-lg border border-border hover:bg-secondary flex-shrink-0 disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="inline-flex items-center gap-1 px-2 py-1 text-xs rounded-lg border border-border hover:bg-secondary flex-shrink-0 disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     <RotateCcw className="w-3 h-3" /> 롤백
                   </button>
@@ -470,7 +470,7 @@ export function ScriptDetailPanel({ scriptId, onDeleted, onDirtyChange }: Props)
                 )}
               </label>
             </div>
-            <p className="text-[11px] text-muted-foreground">자격증명은 저장되지 않습니다 — 이번 테스트 실행 요청에만 사용됩니다.</p>
+            <p className="text-xs text-muted-foreground">자격증명은 저장되지 않습니다 — 이번 테스트 실행 요청에만 사용됩니다.</p>
             <button
               onClick={handleTestRun}
               disabled={!canEdit || isPython || testRun.isPending}

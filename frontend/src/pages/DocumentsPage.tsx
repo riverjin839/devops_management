@@ -230,7 +230,7 @@ export function DocumentsPage() {
       </div>
 
       {aiMode && query.trim() && aiSearch.data && !aiSearch.data.embeddingAvailable && (
-        <p className="text-[11px] text-muted-foreground">
+        <p className="text-xs text-muted-foreground">
           시맨틱 검색을 사용할 수 없어 일반 텍스트 매칭 결과를 보여줍니다 (Ollama 임베딩 모델 미기동 또는 임베딩 미계산).
         </p>
       )}
@@ -265,16 +265,16 @@ export function DocumentsPage() {
                     <td className="px-4 py-2.5">
                       <div className="font-medium">{guide.title}</div>
                       {similarity != null && (
-                        <div className="text-[11px] text-primary">유사도 {(similarity * 100).toFixed(0)}%</div>
+                        <div className="text-xs text-primary">유사도 {(similarity * 100).toFixed(0)}%</div>
                       )}
                     </td>
                     <td className="px-3 py-2.5 text-muted-foreground">{guide.category || '—'}</td>
                     <td className="px-3 py-2.5">
-                      <span className={`px-2 py-0.5 rounded-full text-[11px] font-medium ${st.cls}`}>{st.label}</span>
+                      <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${st.cls}`}>{st.label}</span>
                     </td>
                     <td className="px-3 py-2.5 text-muted-foreground">{guide.author || '—'}</td>
                     <td className="px-3 py-2.5">
-                      <span className={`px-2 py-0.5 rounded-full text-[11px] font-medium ${
+                      <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${
                         guide.confluencePageId || guide.source === 'confluence'
                           ? 'bg-chart-1/15 text-chart-1-text' : 'bg-secondary text-muted-foreground'
                       }`}>

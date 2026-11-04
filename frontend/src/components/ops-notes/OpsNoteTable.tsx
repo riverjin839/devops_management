@@ -99,7 +99,7 @@ function OpsNoteRow({
         {note.pinned ? (
           <Pin className="w-3.5 h-3.5 inline text-primary" />
         ) : (
-          <span className="text-muted-foreground/30">·</span>
+          <span className="text-faint">·</span>
         )}
       </td>
       {/* Service — click-to-edit select */}
@@ -186,7 +186,7 @@ function OpsNoteRow({
         ) : canOperate ? (
           <span className="text-muted-foreground italic cursor-pointer hover:text-primary transition-colors">+ 작성자</span>
         ) : (
-          <span className="text-muted-foreground/40">—</span>
+          <span className="text-faint">—</span>
         )}
       </td>
       <td

@@ -453,7 +453,7 @@ export function JiraIntegrationPanel() {
                   {diagResult.detail}
                 </p>
                 <div className="overflow-x-auto">
-                  <table className="w-full text-[11px] border border-border rounded-lg">
+                  <table className="w-full text-xs border border-border rounded-lg">
                     <thead className="bg-secondary/60 text-muted-foreground">
                       <tr>
                         <th className="text-left px-2 py-1 font-medium">진입 경로</th>
@@ -489,7 +489,7 @@ export function JiraIntegrationPanel() {
                   </table>
                 </div>
                 {diagResult.entries.filter((e) => (e.loginFields?.length ?? 0) > 0).map((e, i) => (
-                  <div key={`f-${e.product}-${i}`} className="rounded-lg border border-border bg-secondary/40 px-3 py-2 text-[11px] space-y-1">
+                  <div key={`f-${e.product}-${i}`} className="rounded-lg border border-border bg-secondary/40 px-3 py-2 text-xs space-y-1">
                     <p className="font-medium text-foreground break-all">로그인 폼 상세 — {e.finalUrl}</p>
                     <p className="font-mono break-all">action: {e.loginFormAction || '(현재 URL)'}</p>
                     <p className="font-mono break-all">필드: {(e.loginFields ?? []).join(' · ')}</p>
@@ -505,12 +505,12 @@ export function JiraIntegrationPanel() {
                   </div>
                 ))}
                 {(diagResult.podSourceIp || diagResult.podHostname) && (
-                  <p className="text-[11px] text-muted-foreground font-mono break-all">
+                  <p className="text-xs text-muted-foreground font-mono break-all">
                     이 파드: {diagResult.podHostname || '—'} · 출발지 IP {diagResult.podSourceIp || '—'}
                     <span className="font-sans"> — SSO 가 클라이언트 IP 를 검사하는 구성이면 이 IP(보통 노드/게이트웨이 IP 로 NAT 됨)를 허용해야 합니다.</span>
                   </p>
                 )}
-                <p className="text-[11px] text-muted-foreground leading-relaxed">
+                <p className="text-xs text-muted-foreground leading-relaxed">
                   최종 URL 이 IdP 주소로 바뀌고 PW 열이 1 이상이면 정상입니다. IdP 로 안 넘어가면
                   위 공통 설정의 <b>IdP 로그인 URL</b> 에 브라우저에서 확인한 주소를 넣어보세요.
                   로그인이 "거부"로 실패하면 <b>hidden 필드</b> 열을 확인하세요 —
@@ -543,7 +543,7 @@ export function JiraIntegrationPanel() {
               </div>
               <div className="rounded-lg bg-secondary/50 border border-border px-3 py-2 text-xs text-muted-foreground leading-relaxed">
                 <p className="font-medium text-foreground mb-1">실행 방법 (최초 1회 준비 포함)</p>
-                <pre className="font-mono whitespace-pre-wrap break-all text-[11px] leading-relaxed">{helperCmd}</pre>
+                <pre className="font-mono whitespace-pre-wrap break-all text-xs leading-relaxed">{helperCmd}</pre>
               </div>
               <button onClick={() => void runSsoLogin()} disabled={ssoLogin.isPending}
                 className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg border border-border bg-secondary text-sm hover:bg-secondary/70 disabled:opacity-50">

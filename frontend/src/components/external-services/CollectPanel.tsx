@@ -149,7 +149,7 @@ export function CollectPanel({ clusterId, clusterName }: { clusterId: string; cl
                     onChange={() => setResolver(r.value)} />
                   <span>
                     {r.label}
-                    <span className="block text-[11px] text-muted-foreground leading-snug">{r.help}</span>
+                    <span className="block text-xs text-muted-foreground leading-snug">{r.help}</span>
                   </span>
                 </label>
               ))}
@@ -160,21 +160,21 @@ export function CollectPanel({ clusterId, clusterName }: { clusterId: string; cl
                 <input type="checkbox" className="accent-primary mt-1" checked={forwardCheck} onChange={(e) => setForwardCheck(e.target.checked)} />
                 <span>
                   도메인 정방향 검증
-                  <span className="block text-[11px] text-muted-foreground leading-snug">도메인의 A 레코드가 엔드포인트 IP 를 가리키는지 다시 조회한다.</span>
+                  <span className="block text-xs text-muted-foreground leading-snug">도메인의 A 레코드가 엔드포인트 IP 를 가리키는지 다시 조회한다.</span>
                 </span>
               </label>
               <label className="flex items-start gap-2 text-sm">
                 <input type="checkbox" className="accent-primary mt-1" checked={probe} onChange={(e) => setProbe(e.target.checked)} />
                 <span>
                   응답 확인
-                  <span className="block text-[11px] text-muted-foreground leading-snug">IP:Port 에 TCP 연결, Ingress 는 Host 헤더를 실은 HTTP 요청으로 상태코드·지연시간을 잰다.</span>
+                  <span className="block text-xs text-muted-foreground leading-snug">IP:Port 에 TCP 연결, Ingress 는 Host 헤더를 실은 HTTP 요청으로 상태코드·지연시간을 잰다.</span>
                 </span>
               </label>
               <label className="flex items-start gap-2 text-sm">
                 <input type="checkbox" className="accent-primary mt-1" checked={tlsCheck} onChange={(e) => setTlsCheck(e.target.checked)} />
                 <span>
                   TLS 인증서 만료일
-                  <span className="block text-[11px] text-muted-foreground leading-snug">https Ingress 와 TLS 포트(설정)의 인증서를 받아 만료일·호스트 일치를 본다.</span>
+                  <span className="block text-xs text-muted-foreground leading-snug">https Ingress 와 TLS 포트(설정)의 인증서를 받아 만료일·호스트 일치를 본다.</span>
                 </span>
               </label>
             </fieldset>
@@ -209,7 +209,7 @@ export function CollectPanel({ clusterId, clusterName }: { clusterId: string; cl
                   <textarea className={`${INPUT} font-mono h-24`} placeholder="-----BEGIN OPENSSH PRIVATE KEY-----"
                     value={secret} onChange={(e) => setSecret(e.target.value)} aria-label="SSH 개인키" />
                 )}
-                <p className="text-[11px] text-muted-foreground">자격증명은 이번 수집에만 쓰고 저장하지 않는다.</p>
+                <p className="text-xs text-muted-foreground">자격증명은 이번 수집에만 쓰고 저장하지 않는다.</p>
               </div>
             )}
           </div>

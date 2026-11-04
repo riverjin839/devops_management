@@ -57,7 +57,7 @@ function ChipList({ values, className = '' }: { values?: string[] | null; classN
   return (
     <div className="flex items-center gap-1 flex-wrap">
       {values.map((v) => (
-        <span key={v} className={`px-1.5 py-0.5 text-[11px] rounded border border-border bg-secondary/60 whitespace-nowrap ${className}`}>
+        <span key={v} className={`px-1.5 py-0.5 text-xs rounded border border-border bg-secondary/60 whitespace-nowrap ${className}`}>
           {v}
         </span>
       ))}
@@ -577,7 +577,7 @@ export function WorkItemTableRow({
                 rel="noopener noreferrer"
                 onClick={(e) => e.stopPropagation()}
                 title={`Jira ${item.jiraIssueKey}${item.jiraStatus ? ` · ${item.jiraStatus}` : ''} (새 창)`}
-                className="inline-flex items-center font-mono text-[11px] font-semibold px-1 py-0.5 rounded bg-brand-jira/10 text-brand-jira border border-brand-jira/20 hover:bg-brand-jira/20"
+                className="inline-flex items-center font-mono text-xs font-semibold px-1 py-0.5 rounded bg-brand-jira/10 text-brand-jira border border-brand-jira/20 hover:bg-brand-jira/20"
               >
                 {item.jiraIssueKey}
               </a>
@@ -637,7 +637,7 @@ export function WorkItemTableRow({
         return (
           <td key="jiraType" data-col="jiraType" className="pl-4 pr-1 py-1.5 whitespace-nowrap">
             {item.jiraIssueType ? (
-              <span className={`inline-flex items-center px-1.5 py-0.5 text-[11px] font-medium rounded border ${jiraTypeClass(item.jiraIssueType)}`}>
+              <span className={`inline-flex items-center px-1.5 py-0.5 text-xs font-medium rounded border ${jiraTypeClass(item.jiraIssueType)}`}>
                 {item.jiraIssueType}
               </span>
             ) : (
@@ -710,7 +710,7 @@ export function WorkItemTableRow({
     <tr ref={setNodeRef} style={style} className="border-b border-border last:border-b-0 hover:bg-muted/20 transition-colors">
       <td className="px-2 py-1.5 w-7">
         {!isDragDisabled && (
-          <button {...attributes} {...listeners} className="cursor-grab active:cursor-grabbing text-muted-foreground/40 hover:text-muted-foreground p-0.5 rounded">
+          <button {...attributes} {...listeners} className="cursor-grab active:cursor-grabbing text-faint hover:text-muted-foreground p-0.5 rounded">
             <GripVertical className="w-4 h-4" />
           </button>
         )}

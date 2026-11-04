@@ -18,7 +18,7 @@ function Field({ label, help, children }: { label: string; help?: string; childr
     <label className="block text-xs">
       <span className="text-muted-foreground">{label}</span>
       <div className="mt-0.5">{children}</div>
-      {help && <span className="block text-[11px] text-muted-foreground mt-0.5 leading-snug">{help}</span>}
+      {help && <span className="block text-xs text-muted-foreground mt-0.5 leading-snug">{help}</span>}
     </label>
   );
 }
@@ -29,7 +29,7 @@ function Check({ checked, onChange, label, help }: { checked: boolean; onChange:
       <input type="checkbox" checked={checked} onChange={(e) => onChange(e.target.checked)} className="accent-primary mt-0.5" />
       <span>
         {label}
-        {help && <span className="block text-[11px] text-muted-foreground leading-snug">{help}</span>}
+        {help && <span className="block text-xs text-muted-foreground leading-snug">{help}</span>}
       </span>
     </label>
   );
@@ -94,7 +94,7 @@ export function ExternalServicesSettingsDialog({ open, onClose }: { open: boolea
                   </label>
                 ))}
               </div>
-              <span className="block text-[11px] text-muted-foreground mt-0.5 leading-snug">
+              <span className="block text-xs text-muted-foreground mt-0.5 leading-snug">
                 공유 링크만: 관리자가 발급한 만료 기한 있는 링크(?t=)로만 열린다. 링크는 화면 상단 &apos;공유 링크&apos;에서 만든다.
               </span>
             </fieldset>

@@ -404,7 +404,7 @@ function ClusterSidebarIconRail({
                 title="클러스터 목록을 불러오지 못했습니다 — 눌러서 다시 시도"
                 aria-label="클러스터 목록을 불러오지 못했습니다 — 다시 시도"
                 style={{ width: size.btn, height: size.btn }}
-                className="flex flex-col items-center justify-center gap-0.5 rounded-xl text-[11px] text-foreground hover:bg-secondary/60 disabled:cursor-default"
+                className="flex flex-col items-center justify-center gap-0.5 rounded-xl text-xs text-foreground hover:bg-secondary/60 disabled:cursor-default"
               >
                 <AlertTriangle aria-hidden className="w-4 h-4 text-status-critical" />
                 {onRetry && <RefreshCw aria-hidden className="w-3 h-3 text-muted-foreground" />}
@@ -434,7 +434,7 @@ function ClusterSidebarIconRail({
                     <div
                       aria-hidden
                       title={groupName}
-                      className="w-full mt-1 pt-1 px-0.5 border-t border-border text-center text-[11px] leading-tight text-muted-foreground truncate"
+                      className="w-full mt-1 pt-1 px-0.5 border-t border-border text-center text-xs leading-tight text-muted-foreground truncate"
                     >
                       {/* "운영 (Production)" 처럼 괄호 설명은 좁은 레일에서 뺀다 — 전체 이름은 title 로 */}
                       {groupName.replace(/\s*\(.*\)\s*$/, '')}

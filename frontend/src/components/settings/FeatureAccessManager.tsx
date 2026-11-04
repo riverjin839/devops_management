@@ -107,7 +107,7 @@ export function FeatureAccessManager() {
             return (
               <span className="flex items-center gap-2 flex-shrink-0">
                 {roleRestricted && (
-                  <span className="px-1.5 py-0.5 text-[11px] rounded-full border bg-status-warning/10 text-status-warning border-status-warning/30 whitespace-nowrap">
+                  <span className="px-1.5 py-0.5 text-xs rounded-full border bg-status-warning/10 text-status-warning border-status-warning/30 whitespace-nowrap">
                     역할 제한
                   </span>
                 )}

@@ -1093,7 +1093,7 @@ export function BulkExecPage() {
                         </div>
                       </div>
                       <div className="flex items-center justify-between">
-                        <p className="text-[11px] text-muted-foreground">
+                        <p className="text-xs text-muted-foreground">
                           위 인증 정보(사용자/포트/비밀번호|키)를 그대로 사용해 텍스트 파일을 읽어옵니다.
                         </p>
                         <button
@@ -1434,7 +1434,7 @@ export function BulkExecPage() {
             <div>
               <p className="text-xs font-medium text-muted-foreground mb-1 flex items-center gap-1.5">
                 실행할 명령
-                <span className="text-[11px] px-1.5 py-0.5 rounded border border-border bg-secondary">{language}</span>
+                <span className="text-xs px-1.5 py-0.5 rounded border border-border bg-secondary">{language}</span>
               </p>
               <pre className="text-xs font-mono bg-background border border-border rounded p-2 max-h-28 overflow-auto whitespace-pre-wrap break-all">
                 {command}

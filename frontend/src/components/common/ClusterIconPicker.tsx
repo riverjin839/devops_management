@@ -456,11 +456,11 @@ function BuilderTab({ context, onApply }: { context: IconBuilderContext; onApply
       <div className="rounded-lg border border-border bg-muted/20 p-3 flex items-center justify-center gap-6">
         <div className="flex flex-col items-center gap-1">
           <img src={previewUrl} alt="미리보기 64px" className="w-16 h-16" />
-          <span className="text-[11px] text-muted-foreground">64px</span>
+          <span className="text-xs text-muted-foreground">64px</span>
         </div>
         <div className="flex flex-col items-center gap-1">
           <img src={previewUrl} alt="미리보기 40px (사이드바)" className="w-10 h-10" />
-          <span className="text-[11px] text-muted-foreground">사이드바</span>
+          <span className="text-xs text-muted-foreground">사이드바</span>
         </div>
       </div>
 
@@ -525,7 +525,7 @@ function BuilderTab({ context, onApply }: { context: IconBuilderContext; onApply
             <button
               type="button"
               onClick={() => setPatternHex(null)}
-              className="text-[11px] text-muted-foreground hover:text-foreground underline underline-offset-2"
+              className="text-xs text-muted-foreground hover:text-foreground underline underline-offset-2"
             >
               테마 동기화로 되돌리기
             </button>

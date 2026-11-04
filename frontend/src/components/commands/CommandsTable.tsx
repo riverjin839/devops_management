@@ -208,7 +208,7 @@ function CommandRow({ entry: e, onUpdate, onDelete, onTogglePin, onOpenForm }: C
           e.category ? (
             <span className="text-xs font-mono text-muted-foreground bg-muted/30 px-1.5 py-0.5 rounded">{e.category}</span>
           ) : (
-            <span className="text-xs text-muted-foreground/40">—</span>
+            <span className="text-xs text-faint">—</span>
           )
         )}
       </td>
@@ -361,7 +361,7 @@ function CommandRow({ entry: e, onUpdate, onDelete, onTogglePin, onOpenForm }: C
               <button
                 onClick={() => setEditing('confluence')}
                 disabled={!canOperate}
-                className="p-0.5 text-muted-foreground/40 hover:text-primary disabled:cursor-not-allowed"
+                className="p-0.5 text-faint hover:text-primary disabled:cursor-not-allowed"
                 title={withHint('Confluence URL 수정')}
                 aria-label={ariaWithHint('Confluence URL 수정')}
               >

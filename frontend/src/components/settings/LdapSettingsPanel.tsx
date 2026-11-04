@@ -97,7 +97,7 @@ const STEP_LABELS: Record<string, string> = {
 
 const inputCls =
   'w-full px-3 py-2 bg-secondary border border-border rounded-xl text-sm focus:outline-none focus:ring-1 focus:ring-primary disabled:opacity-60';
-const hintCls = 'mt-1 text-[11px] text-muted-foreground';
+const hintCls = 'mt-1 text-xs text-muted-foreground';
 
 /** Settings ▸ 접근 제어 — 사내 디렉터리(LDAP/AD) 비밀번호 로그인 (R-7).
  *  로그인 화면은 그대로 두고 `/auth/login` 이 우선순위에 따라 로컬 비밀번호와 LDAP 바인드를 시도한다.
@@ -203,7 +203,7 @@ export function LdapSettingsPanel() {
           <fieldset className="grid gap-3 sm:grid-cols-2">
             <legend className="mb-1 text-xs font-medium">서버</legend>
             <div>
-              <label htmlFor={f('urls')} className="block text-[11px] text-muted-foreground mb-1">서버 주소</label>
+              <label htmlFor={f('urls')} className="block text-xs text-muted-foreground mb-1">서버 주소</label>
               <textarea id={f('urls')} rows={2} value={draft.serverUrls}
                 onChange={(e) => set('serverUrls', e.target.value)}
                 placeholder={'ldaps://dc1.corp.example:636\nldaps://dc2.corp.example:636'}
@@ -220,18 +220,18 @@ export function LdapSettingsPanel() {
                 <span>TLS 인증서 검증 <span className="text-muted-foreground">(끄면 중간자 공격에 노출됨)</span></span>
               </label>
               <div>
-                <label htmlFor={f('timeout')} className="block text-[11px] text-muted-foreground mb-1">타임아웃(초, 서버당)</label>
+                <label htmlFor={f('timeout')} className="block text-xs text-muted-foreground mb-1">타임아웃(초, 서버당)</label>
                 <input id={f('timeout')} type="number" min={1} max={60} value={draft.timeoutSeconds}
                   onChange={(e) => set('timeoutSeconds', e.target.value)} className={`${inputCls} w-24`} />
               </div>
               {plaintext && (
-                <p className="text-[11px] text-status-warning">
+                <p className="text-xs text-status-warning">
                   ldap:// 에 StartTLS 가 꺼져 있으면 사용자 비밀번호가 평문으로 전송됩니다.
                 </p>
               )}
             </div>
             <div className="sm:col-span-2">
-              <label htmlFor={f('ca')} className="block text-[11px] text-muted-foreground mb-1">사설 CA 인증서 PEM (선택)</label>
+              <label htmlFor={f('ca')} className="block text-xs text-muted-foreground mb-1">사설 CA 인증서 PEM (선택)</label>
               <textarea id={f('ca')} rows={2} value={draft.caCertPem}
                 onChange={(e) => set('caCertPem', e.target.value)}
                 placeholder="-----BEGIN CERTIFICATE-----" className={`${inputCls} font-mono text-xs`} />
@@ -256,7 +256,7 @@ export function LdapSettingsPanel() {
             <div className="grid gap-3 sm:grid-cols-2">
               {draft.bindMode === 'direct' ? (
                 <div className="sm:col-span-2">
-                  <label htmlFor={f('tpl')} className="block text-[11px] text-muted-foreground mb-1">바인드 DN 템플릿</label>
+                  <label htmlFor={f('tpl')} className="block text-xs text-muted-foreground mb-1">바인드 DN 템플릿</label>
                   <input id={f('tpl')} className={`${inputCls} font-mono`} value={draft.bindDnTemplate}
                     onChange={(e) => set('bindDnTemplate', e.target.value)}
                     placeholder="{username}@corp.example  또는  uid={username},ou=people,dc=corp,dc=example" />
@@ -268,20 +268,20 @@ export function LdapSettingsPanel() {
               ) : (
                 <>
                   <div>
-                    <label htmlFor={f('svc')} className="block text-[11px] text-muted-foreground mb-1">서비스 계정 DN</label>
+                    <label htmlFor={f('svc')} className="block text-xs text-muted-foreground mb-1">서비스 계정 DN</label>
                     <input id={f('svc')} className={`${inputCls} font-mono`} value={draft.serviceBindDn}
                       onChange={(e) => set('serviceBindDn', e.target.value)}
                       placeholder="cn=svc-pep,ou=service,dc=corp,dc=example" />
                     <p className={hintCls}>비우면 익명 바인드로 검색합니다(디렉터리가 허용할 때만)</p>
                   </div>
                   <div>
-                    <label htmlFor={f('svcpw')} className="block text-[11px] text-muted-foreground mb-1">서비스 계정 비밀번호</label>
+                    <label htmlFor={f('svcpw')} className="block text-xs text-muted-foreground mb-1">서비스 계정 비밀번호</label>
                     <input id={f('svcpw')} type="password" autoComplete="new-password" className={`${inputCls} font-mono`}
                       value={draft.bindPassword} disabled={draft.clearBindPassword}
                       onChange={(e) => set('bindPassword', e.target.value)}
                       placeholder={data?.hasBindPassword ? '저장됨 — 바꿀 때만 입력' : '입력'} />
                     {data?.hasBindPassword && (
-                      <label className="mt-1 flex items-center gap-2 text-[11px] text-muted-foreground">
+                      <label className="mt-1 flex items-center gap-2 text-xs text-muted-foreground">
                         <input type="checkbox" checked={draft.clearBindPassword}
                           onChange={(e) => set('clearBindPassword', e.target.checked)} />
                         저장된 비밀번호 삭제
@@ -291,12 +291,12 @@ export function LdapSettingsPanel() {
                 </>
               )}
               <div>
-                <label htmlFor={f('base')} className="block text-[11px] text-muted-foreground mb-1">사용자 검색 base</label>
+                <label htmlFor={f('base')} className="block text-xs text-muted-foreground mb-1">사용자 검색 base</label>
                 <input id={f('base')} className={`${inputCls} font-mono`} value={draft.userSearchBase}
                   onChange={(e) => set('userSearchBase', e.target.value)} placeholder="ou=people,dc=corp,dc=example" />
               </div>
               <div>
-                <label htmlFor={f('filter')} className="block text-[11px] text-muted-foreground mb-1">사용자 검색 필터</label>
+                <label htmlFor={f('filter')} className="block text-xs text-muted-foreground mb-1">사용자 검색 필터</label>
                 <input id={f('filter')} className={`${inputCls} font-mono`} value={draft.userSearchFilter}
                   onChange={(e) => set('userSearchFilter', e.target.value)} placeholder="(sAMAccountName={username})" />
                 <p className={hintCls}>
@@ -310,22 +310,22 @@ export function LdapSettingsPanel() {
           <fieldset className="grid gap-3 sm:grid-cols-3">
             <legend className="mb-1 text-xs font-medium">속성 매핑</legend>
             <div>
-              <label htmlFor={f('dname')} className="block text-[11px] text-muted-foreground mb-1">표시 이름</label>
+              <label htmlFor={f('dname')} className="block text-xs text-muted-foreground mb-1">표시 이름</label>
               <input id={f('dname')} className={`${inputCls} font-mono`} value={draft.displayNameAttribute}
                 onChange={(e) => set('displayNameAttribute', e.target.value)} placeholder="displayName" />
             </div>
             <div>
-              <label htmlFor={f('mail')} className="block text-[11px] text-muted-foreground mb-1">이메일</label>
+              <label htmlFor={f('mail')} className="block text-xs text-muted-foreground mb-1">이메일</label>
               <input id={f('mail')} className={`${inputCls} font-mono`} value={draft.emailAttribute}
                 onChange={(e) => set('emailAttribute', e.target.value)} placeholder="mail" />
             </div>
             <div>
-              <label htmlFor={f('gattr')} className="block text-[11px] text-muted-foreground mb-1">그룹 속성</label>
+              <label htmlFor={f('gattr')} className="block text-xs text-muted-foreground mb-1">그룹 속성</label>
               <input id={f('gattr')} className={`${inputCls} font-mono`} value={draft.groupAttribute}
                 onChange={(e) => set('groupAttribute', e.target.value)} placeholder="memberOf" />
             </div>
             <div className="sm:col-span-3">
-              <label htmlFor={f('groups')} className="block text-[11px] text-muted-foreground mb-1">허용 그룹 DN (선택)</label>
+              <label htmlFor={f('groups')} className="block text-xs text-muted-foreground mb-1">허용 그룹 DN (선택)</label>
               <textarea id={f('groups')} rows={2} value={draft.allowedGroups}
                 onChange={(e) => set('allowedGroups', e.target.value)}
                 placeholder="CN=PEP-Users,OU=Groups,DC=corp,DC=example" className={`${inputCls} font-mono`} />
@@ -349,7 +349,7 @@ export function LdapSettingsPanel() {
                   <option value="operator">operator</option>
                 </select>
               </div>
-              <p className="text-[11px] text-muted-foreground">
+              <p className="text-xs text-muted-foreground">
                 끄면 PEP 에 같은 아이디(대소문자 무시)가 이미 있어야 로그인됩니다. 자동 생성 계정은 PEP 비밀번호가 없어
                 LDAP 로만 로그인하고, 비밀번호는 사내 디렉터리에서 바꿉니다.
               </p>
@@ -370,7 +370,7 @@ export function LdapSettingsPanel() {
                   onChange={(e) => set('protectLocalAdmins', e.target.checked)} />
                 <span>
                   로컬 비밀번호가 있는 admin 계정은 LDAP 로 로그인하지 않음
-                  <span className="block text-[11px] text-muted-foreground">
+                  <span className="block text-xs text-muted-foreground">
                     디렉터리에 같은 이름(admin 등)의 계정이 있어도 PEP 관리자 권한을 얻지 못하게 합니다
                   </span>
                 </span>
@@ -380,7 +380,7 @@ export function LdapSettingsPanel() {
 
           <div className="flex flex-wrap items-end justify-end gap-2">
             <div className="mr-auto">
-              <label htmlFor={f('tuser')} className="block text-[11px] text-muted-foreground mb-1">테스트 사용자명 (선택)</label>
+              <label htmlFor={f('tuser')} className="block text-xs text-muted-foreground mb-1">테스트 사용자명 (선택)</label>
               <input id={f('tuser')} className={`${inputCls} w-48 font-mono`} value={testUsername}
                 onChange={(e) => setTestUsername(e.target.value)} placeholder="비밀번호 없이 검색만" />
             </div>

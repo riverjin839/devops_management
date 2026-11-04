@@ -312,7 +312,7 @@ export function NodeSpecCsvUploadModal({ open, onClose, onApplied }: Props) {
 
           {parsedRows.length === 0 && !fileName && (
             <div className="px-3 py-6 text-center text-sm text-muted-foreground space-y-2">
-              <FileSpreadsheet className="w-8 h-8 mx-auto text-muted-foreground/40" />
+              <FileSpreadsheet className="w-8 h-8 mx-auto text-faint" />
               <p>CSV 파일을 업로드하세요. 첫 행은 헤더, <strong>hostname</strong> 컬럼은 필수입니다.</p>
               <details className="text-left max-w-xl mx-auto">
                 <summary className="cursor-pointer text-xs text-primary hover:underline">

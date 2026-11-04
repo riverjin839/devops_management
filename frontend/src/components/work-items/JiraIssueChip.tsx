@@ -30,17 +30,17 @@ export function JiraIssueChip({ issueKey, title, status, url, className = '' }: 
       {issueKey && (
         url ? (
           <a href={url} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()}
-            className="inline-flex items-center gap-0.5 font-mono text-[11px] font-semibold text-brand-jira hover:underline flex-shrink-0"
+            className="inline-flex items-center gap-0.5 font-mono text-xs font-semibold text-brand-jira hover:underline flex-shrink-0"
             title={`${issueKey} 열기`}>
             {issueKey}<ExternalLink className="w-2.5 h-2.5" />
           </a>
         ) : (
-          <span className="font-mono text-[11px] font-semibold text-muted-foreground flex-shrink-0">{issueKey}</span>
+          <span className="font-mono text-xs font-semibold text-muted-foreground flex-shrink-0">{issueKey}</span>
         )
       )}
       {title && <span className="truncate">{title}</span>}
       {status && (
-        <span className={`flex-shrink-0 text-[11px] font-medium px-1 rounded border ${statusClass(status)}`}>
+        <span className={`flex-shrink-0 text-xs font-medium px-1 rounded border ${statusClass(status)}`}>
           {status}
         </span>
       )}

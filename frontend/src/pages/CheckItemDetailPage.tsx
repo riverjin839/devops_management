@@ -126,7 +126,7 @@ export function CheckItemDetailPage() {
                 <ExecTechBadge execTech={item.execTech} />
                 <TargetDuplicateBadge item={item} />
                 {categoryLabel && (
-                  <span className="flex-shrink-0 px-1.5 py-0.5 rounded border border-border text-[11px] font-medium text-muted-foreground">
+                  <span className="flex-shrink-0 px-1.5 py-0.5 rounded border border-border text-xs font-medium text-muted-foreground">
                     {categoryLabel}
                   </span>
                 )}
@@ -135,13 +135,13 @@ export function CheckItemDetailPage() {
             className="flex-1 min-w-0"
             description={<>
             {item.description && <p className="text-xs text-muted-foreground mt-0.5">{item.description}</p>}
-            <p className="text-[11px] text-muted-foreground mt-0.5">
+            <p className="text-xs text-muted-foreground mt-0.5">
               소스: <span className="font-mono">{item.sourceType}</span>
               {item.sourceRef && <span className="font-mono"> · {item.sourceRef}</span>}
               {item.targetKey && <span className="font-mono"> · 대상: {item.targetKey}</span>}
             </p>
             {!!item.targetDuplicateCount && (
-              <p className="text-[11px] text-status-warning mt-0.5">
+              <p className="text-xs text-status-warning mt-0.5">
                 이 대상을 {item.targetDuplicateCount}개 다른 실행기술도 점검 중:{' '}
                 {(item.targetPeers ?? []).map((p) => p.name).join(', ')}
               </p>
@@ -318,9 +318,9 @@ function DefinitionTab({ item, clusters }: { item: CheckMatrixItem; clusters: Cl
                   <div className="flex items-center gap-2 min-w-0">
                     <span className="text-sm font-medium truncate">{c.name}</span>
                     {override ? (
-                      <span className="flex-shrink-0 px-1.5 py-0.5 rounded border border-primary/40 bg-primary/10 text-primary text-[11px] font-medium">전용</span>
+                      <span className="flex-shrink-0 px-1.5 py-0.5 rounded border border-primary/40 bg-primary/10 text-primary text-xs font-medium">전용</span>
                     ) : (
-                      <span className="flex-shrink-0 text-[11px] text-muted-foreground">글로벌 상속</span>
+                      <span className="flex-shrink-0 text-xs text-muted-foreground">글로벌 상속</span>
                     )}
                   </div>
                   <div className="flex items-center gap-1.5 flex-shrink-0">
@@ -475,11 +475,11 @@ function TestTab({ item, clusters }: { item: CheckMatrixItem; clusters: Cluster[
                 {shown.skipped
                   ? <StatusBadge variant="neutral" label="실행 안 함" size="sm" />
                   : <StatusBadge variant={shown.status} size="sm" />}
-                {shown.durationMs != null && <span className="text-[11px] text-muted-foreground tabular-nums">{shown.durationMs}ms</span>}
+                {shown.durationMs != null && <span className="text-xs text-muted-foreground tabular-nums">{shown.durationMs}ms</span>}
               </div>
               {shown.message && <p className="text-sm whitespace-pre-wrap break-words">{shown.message}</p>}
               <div>
-                <span className="text-[11px] font-medium text-muted-foreground mb-1 block">상세 로그</span>
+                <span className="text-xs font-medium text-muted-foreground mb-1 block">상세 로그</span>
                 <LogViewer text={log} maxHeight="max-h-96" />
               </div>
             </div>
@@ -535,7 +535,7 @@ function ApplyTab({ item, cells }: { item: CheckMatrixItem; cells: CheckMatrixIt
       <DoubleScrollX className="border-t border-border">
         <table className="w-full text-sm">
           <thead>
-            <tr className="text-left text-[11px] text-muted-foreground border-b border-border">
+            <tr className="text-left text-xs text-muted-foreground border-b border-border">
               <th className="px-4 py-2 font-medium">클러스터</th>
               <th className="px-3 py-2 font-medium">최근 상태</th>
               <th className="px-3 py-2 font-medium">실행 주기 (cron)</th>
@@ -640,7 +640,7 @@ function ApplyRow({ item, cell, timezone, runnable, isCoreBundle }: {
           {notice && (
             <span
               title={notice.message}
-              className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full border border-status-warning/40 bg-status-warning/10 text-status-warning text-[11px] whitespace-nowrap"
+              className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full border border-status-warning/40 bg-status-warning/10 text-status-warning text-xs whitespace-nowrap"
             >
               <AlertTriangle className="w-3 h-3" aria-hidden="true" />
               {notice.label}

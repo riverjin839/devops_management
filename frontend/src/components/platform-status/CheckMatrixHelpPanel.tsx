@@ -31,7 +31,7 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 function Step({ n, children }: { n: number; children: React.ReactNode }) {
   return (
     <li className="flex items-start gap-2">
-      <span className="flex items-center justify-center w-5 h-5 rounded-full border border-border text-[11px] tabular-nums flex-shrink-0 mt-0.5">
+      <span className="flex items-center justify-center w-5 h-5 rounded-full border border-border text-xs tabular-nums flex-shrink-0 mt-0.5">
         {n}
       </span>
       <span>{children}</span>
@@ -128,9 +128,9 @@ export function CheckMatrixHelpPanel({ open, onClose }: Props) {
             <Section title="행(항목) 표시">
               <ul className="space-y-1.5">
                 <Row icon={<Lock className="w-3.5 h-3.5" />}>핵심 항목 — 클러스터 상태 계산에 쓰여 삭제할 수 없습니다(비활성으로 숨기기만 가능).</Row>
-                <Row icon={<span className="text-[11px] border border-border rounded px-1">kubectl</span>}>실행 기술 배지 — 이 점검이 무엇으로 도는지(K8s API/kubectl/HTTP/SSH/Ansible/수동).</Row>
-                <Row icon={<span className="text-[11px] border border-border rounded px-1">중복</span>}>같은 대상(예: etcd)을 다른 실행 기술로도 점검하는 항목이 있다는 뜻입니다.</Row>
-                <Row icon={<span className="text-[11px] border border-border rounded px-1">꺼짐</span>}>비활성 항목 — 자동·일괄 실행에서 빠집니다. 기본으로 숨겨지며 표시 설정에서 보이게 할 수 있습니다.</Row>
+                <Row icon={<span className="text-xs border border-border rounded px-1">kubectl</span>}>실행 기술 배지 — 이 점검이 무엇으로 도는지(K8s API/kubectl/HTTP/SSH/Ansible/수동).</Row>
+                <Row icon={<span className="text-xs border border-border rounded px-1">중복</span>}>같은 대상(예: etcd)을 다른 실행 기술로도 점검하는 항목이 있다는 뜻입니다.</Row>
+                <Row icon={<span className="text-xs border border-border rounded px-1">꺼짐</span>}>비활성 항목 — 자동·일괄 실행에서 빠집니다. 기본으로 숨겨지며 표시 설정에서 보이게 할 수 있습니다.</Row>
               </ul>
             </Section>
             <Section title="표시 설정">
