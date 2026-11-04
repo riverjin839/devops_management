@@ -178,6 +178,8 @@ export const en: TranslationResource = {
     },
   },
   home: {
+    viewAria: 'Platform view',
+    rangeAria: 'Progress range',
     title: 'Home',
     tabsAria: 'Home view',
     tab: {

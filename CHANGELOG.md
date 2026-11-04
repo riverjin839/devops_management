@@ -16,6 +16,9 @@
 - **잘린 이름 전체 보기**: 모든 말줄임(`truncate`·`line-clamp`)에 마우스를 올리면 전체 값이 툴팁으로 뜬다(`useTruncateTitle`). K8S 자원 목록의 이름 열은 가운데 말줄임(`MiddleTruncate`)이라 끝 12자가 항상 보인다 — 끝에서 갈리는 Pod·노드 이름을 구분할 수 있다.
 
 
+### Fixed
+- **홈·플랫폼 현황 — 접근성·반응형·성능 개선**: 점검 매트릭스/배치잡·주간/월간/담당자 토글에 선택 상태(`aria-pressed`)와 그룹 이름을 달았다. 좁은 폭에서는 탭 줄과 매트릭스 툴바가 줄바꿈되고, 터치 기기에서만 토글 높이를 키운다. 플랫폼 탭의 매트릭스·배치잡은 열 때 로드하고, 홈 탭 선택은 500ms 안에 화면을 떠나도 저장된다. 매트릭스 행의 색 막대는 둥근 모서리와 겹치지 않게 별도 요소로 그리고, 탭 배지는 99 초과 시 "99+" 로 표시한다. Frontend: `HomePage`·`PlatformStatusMatrix`·`rowColors`·`CheckMatrixCellDetailModal`.
+
 ### Changed
 - **가독성 개선**: 기본 보조 글자를 12px → 13px 로 키우고(밀도 설정으로 되돌릴 수 있음) 내비·사이드바의 11px 글자를 `text-xs` 로 합쳤다. 흐린 자리표시자·빈 값 대시·핸들(`text-muted-foreground/30~50`, 1.5~2:1)은 3:1 이상인 `text-faint` 로 바꿨다. 본문 글꼴은 한글 글꼴을 Roboto/Helvetica 앞에 두고, 고정폭 글꼴에 D2Coding·Noto Sans Mono CJK KR 폴백을 더해 로그의 한글이 열을 깨뜨리지 않게 했다. lint 가 글자 투명도·12px 미만 임의 크기를 막는다.
 
