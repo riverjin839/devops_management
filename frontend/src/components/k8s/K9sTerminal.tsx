@@ -1,7 +1,7 @@
 import { useCallback } from 'react';
 import { getAuthToken } from '@/stores/authStore';
 import { k8sStreamUrls } from '@/services/api';
-import { SshTerminalWindow, type SshTerminalStatus } from './SshTerminalWindow';
+import { SshTerminalWindow, type SshTerminalEvent, type SshTerminalStatus } from './SshTerminalWindow';
 
 export interface K9sConnectParams {
   host: string;
@@ -24,6 +24,8 @@ interface K9sTerminalProps {
   fill?: boolean;
   /** 연결 상태 변화 — 페이지가 열린 세션의 클러스터 전환 확인에 쓴다. */
   onStatusChange?: (status: SshTerminalStatus) => void;
+  /** 연결 생애주기 이벤트 — 화면의 실행 로그용. */
+  onEvent?: (e: SshTerminalEvent) => void;
 }
 
 // 4401(세션 만료)·4402(권한 없음)는 SshTerminalWindow 공통 문구를 쓴다(D-172).
@@ -40,7 +42,7 @@ const CLOSE_NOTES: Record<number, string> = {
  * 백엔드가 paramiko PTY(invoke_shell) 로 브리지하며, tty + resize 를 지원하므로
  * k9s 풀스크린 UI 가 그대로 동작한다.
  */
-export function K9sTerminal({ clusterId, params, onClose, onPopOut, fill, onStatusChange }: K9sTerminalProps) {
+export function K9sTerminal({ clusterId, params, onClose, onPopOut, fill, onStatusChange, onEvent }: K9sTerminalProps) {
   // 토큰은 (재)연결 시점에 읽는다 — 세션이 재발급돼도 재연결 버튼이 새 토큰을 쓴다.
   const url = useCallback(() => k8sStreamUrls.k9s(clusterId, getAuthToken()), [clusterId]);
   const init = {
@@ -68,6 +70,7 @@ export function K9sTerminal({ clusterId, params, onClose, onPopOut, fill, onStat
       onPopOut={onPopOut}
       fill={fill}
       onStatusChange={onStatusChange}
+      onEvent={onEvent}
     />
   );
 }

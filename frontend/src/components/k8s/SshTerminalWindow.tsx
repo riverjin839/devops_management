@@ -9,6 +9,13 @@ import { ConfirmDialog } from '@/components/common';
 
 export type SshTerminalStatus = 'connecting' | 'open' | 'closed' | 'error';
 
+/** 연결 생애주기 이벤트 — 화면이 실행 로그(RunLogPanel)에 쌓는다. `end` 가 참이면 연결 시도가 끝난 것. */
+export interface SshTerminalEvent {
+  level: 'info' | 'warn' | 'error';
+  message: string;
+  end?: boolean;
+}
+
 export interface SshTerminalWindowProps {
   /** 헤더 좌측 라벨 (예: `k9s`, `ssh`). */
   label: string;
@@ -37,6 +44,8 @@ export interface SshTerminalWindowProps {
   closeNotes?: Record<number, string>;
   /** 연결 상태 변화 알림 — 페이지가 "열린 세션" 여부로 클러스터 전환 확인을 띄울 때 쓴다. */
   onStatusChange?: (status: SshTerminalStatus) => void;
+  /** 연결 시도·열림·첫 응답·종료(코드 포함)를 알린다 — 화면의 상세 실시간 로그용. */
+  onEvent?: (e: SshTerminalEvent) => void;
   /** 서버 세션 상한(초) — `services/ssh_pty.py` `MAX_SESSION_SECONDS` 와 같다. 연장은 없다. */
   maxSessionSeconds?: number;
 }
@@ -81,7 +90,7 @@ function formatRemaining(sec: number): string {
  */
 export function SshTerminalWindow({
   label, labelClassName = '', subtitle, target, url, init,
-  onClose, onPopOut, fill, closeNotes, onStatusChange,
+  onClose, onPopOut, fill, closeNotes, onStatusChange, onEvent,
   maxSessionSeconds = SSH_SESSION_MAX_SECONDS,
 }: SshTerminalWindowProps) {
   const [status, setStatus] = useState<SshTerminalStatus>('connecting');
@@ -107,6 +116,8 @@ export function SshTerminalWindow({
   closeNotesRef.current = closeNotes;
   const onStatusChangeRef = useRef(onStatusChange);
   onStatusChangeRef.current = onStatusChange;
+  const onEventRef = useRef(onEvent);
+  onEventRef.current = onEvent;
   const targetLabel = target || subtitle;
 
   const appearance = useXtermTheme();
@@ -131,7 +142,10 @@ export function SshTerminalWindow({
     warnedRef.current = false;
     const ws = new WebSocket(typeof url === 'function' ? url() : url);
     wsRef.current = ws;
+    let gotFirstFrame = false;
+    onEventRef.current?.({ level: 'info', message: '웹소켓 연결 시도 (토큰은 URL, SSH 자격증명은 연결 직후 init 프레임으로 전달)' });
     ws.onopen = () => {
+      onEventRef.current?.({ level: 'info', message: '웹소켓 열림 — SSH 접속 정보(init 프레임) 전송, 서버가 SSH 연결·인증·PTY·k9s 기동을 진행' });
       setStatus('open');
       setOpenedAt(Date.now());
       setNow(Date.now());
@@ -145,8 +159,18 @@ export function SshTerminalWindow({
       }));
       term.focus();
     };
-    ws.onmessage = (ev) => term.write(String(ev.data));
-    ws.onerror = () => { if (wsRef.current === ws) setStatus('error'); };
+    ws.onmessage = (ev) => {
+      if (!gotFirstFrame) {
+        gotFirstFrame = true;
+        onEventRef.current?.({ level: 'info', message: '서버 첫 응답 수신 — 화면 스트리밍 시작', end: true });
+      }
+      term.write(String(ev.data));
+    };
+    ws.onerror = () => {
+      if (wsRef.current !== ws) return;
+      onEventRef.current?.({ level: 'error', message: '웹소켓 오류 — 서버에 도달하지 못했거나 연결이 거부됐습니다' });
+      setStatus('error');
+    };
     ws.onclose = (ev) => {
       // 이미 다른 소켓으로 재연결했으면 옛 소켓의 close 는 상태에 반영하지 않는다.
       if (wsRef.current !== ws) return;
@@ -156,6 +180,12 @@ export function SshTerminalWindow({
         ?? DEFAULT_CLOSE_NOTES[ev.code]
         ?? '[연결 종료]';
       term.write(`\r\n\x1b[33m${note}\x1b[0m\r\n`);
+      // 첫 응답 전에 닫혔다면 접속 자체가 실패한 것(자격증명·호스트 확인), 이후라면 세션 종료.
+      onEventRef.current?.({
+        level: gotFirstFrame ? 'info' : 'error',
+        message: `연결 종료 (코드 ${ev.code}) ${note}${gotFirstFrame ? '' : ' — 첫 응답 전에 끊김: 호스트·포트·계정·인증 정보를 확인하세요'}`,
+        end: true,
+      });
     };
   }, [url]);
 
