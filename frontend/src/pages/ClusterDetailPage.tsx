@@ -1,8 +1,9 @@
-import { useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
+import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
 import { PageHeader } from '@/components/common/PageHeader';
 import { PageShell, RunLogPanel, ConfirmDialog, useToast } from '@/components/common';
-import { ClipboardCheck, Settings, AlertTriangle, Loader2, BookOpen, Download, RefreshCw, WifiOff, KeyRound, Plus } from 'lucide-react';
+import { ClipboardCheck, Settings, AlertTriangle, Loader2, BookOpen, Download, RefreshCw, WifiOff, KeyRound, Plus, MoreHorizontal, ChevronDown } from 'lucide-react';
 import { ClusterSidebar } from '@/components/common/ClusterSidebar';
 import { MacCard } from '@/components/ui/MacCard';
 import { StatusBadge, statusToVariant } from '@/components/common/StatusBadge';
@@ -28,7 +29,8 @@ import { useCanOperate } from '@/hooks/useCanOperate';
 import { usePlaybookStore } from '@/stores/playbookStore';
 import { ClusterOpsCheckPanel } from '@/components/ops-check';
 import { healthApi } from '@/services/api';
-import { parseUTC, formatApiError } from '@/lib/utils';
+import { parseUTC, formatApiError, formatRelativeTime } from '@/lib/utils';
+import { useK8sHub } from '@/lib/k8sHub';
 import type {
   Addon, AddonCheckRunResult, ClusterItem, ClusterItemCardSize, ClusterStatusContributor, Playbook, PlaybookSshCreds,
 } from '@/types';
@@ -42,11 +44,16 @@ const ADDON_STATUS_KO: Record<string, string> = { healthy: '정상', warning: '�
 const ADDON_STATUS_LEVEL: Record<string, RunLogLevel> = { healthy: 'info', warning: 'warn', critical: 'error', pending: 'warn', unknown: 'warn' };
 
 const DEFAULT_ADDONS = [
-  { name: 'etcd Leader', type: 'etcd-leader', icon: '💾', description: 'etcd leader election & health status' },
-  { name: 'Node Status', type: 'node-check', icon: '🖥️', description: 'Node readiness & pressure conditions' },
-  { name: 'Control Plane', type: 'control-plane', icon: '🎛️', description: 'API Server, Scheduler, Controller Manager' },
-  { name: 'CoreDNS', type: 'system-pod', icon: '🔍', description: 'Cluster DNS service' },
+  // icon 은 비워 둔다 — 기본 타입은 AddonCard 가 lucide 아이콘으로 그린다(이모지를 DB 에 저장하지 않는다).
+  { name: 'etcd Leader', type: 'etcd-leader', icon: '', description: 'etcd 리더 선출 및 상태' },
+  { name: 'Node Status', type: 'node-check', icon: '', description: '노드 준비 상태 및 압박 조건' },
+  { name: 'Control Plane', type: 'control-plane', icon: '', description: 'API Server, Scheduler, Controller Manager' },
+  { name: 'CoreDNS', type: 'system-pod', icon: '', description: '클러스터 DNS 서비스' },
 ];
+
+// 위험 → 경고 → 그 외(미연결·알 수 없음) → 정상 순. 정상은 기본으로 접는다.
+const SEVERITY_RANK: Record<string, number> = { critical: 0, warning: 1, healthy: 3 };
+const severityRank = (status: string) => SEVERITY_RANK[status] ?? 2;
 
 // ── 삭제 확인 대상 (ConfirmDialog 하나를 여러 삭제 액션이 공유) ────────────
 type PendingDelete =
@@ -96,6 +103,8 @@ function ContributorRow({ c }: { c: ClusterStatusContributor }) {
 }
 
 const HEADER_BTN = 'inline-flex items-center gap-1.5 rounded-xl border border-border bg-card px-3 py-1.5 text-sm hover:bg-muted disabled:opacity-50 disabled:cursor-not-allowed';
+const MENU_CONTENT = 'z-[60] min-w-[200px] rounded-md border border-border bg-card p-1 shadow-lg';
+const MENU_ITEM = 'flex items-center gap-2 px-2 py-1.5 text-sm rounded-lg cursor-pointer outline-none data-[highlighted]:bg-secondary data-[disabled]:opacity-50 data-[disabled]:cursor-not-allowed';
 
 /**
  * 클러스터 상세 — 종합 상태(원인 목록) + 애드온 점검 + 현황 아이템 + 점검 카탈로그 + 플레이북 + 점검 이력.
@@ -111,8 +120,26 @@ export function ClusterDetailPage() {
   const toast = useToast();
   const { canOperate, withHint, ariaWithHint } = useCanOperate(clusterId || null);
 
-  const { data: breakdown, isLoading: breakdownLoading, isError: breakdownError } =
+  const hub = useK8sHub();
+  const { data: breakdown, isLoading: breakdownLoading, isError: breakdownError, refetch: refetchBreakdown } =
     useClusterStatusBreakdown(clusterId || undefined);
+  const [showHealthy, setShowHealthy] = useState(false);
+  const sortedContributors = useMemo(
+    () => [...(breakdown?.contributors ?? [])].sort((a, b) => severityRank(a.status) - severityRank(b.status)),
+    [breakdown],
+  );
+  const healthyCount = sortedContributors.filter((c) => severityRank(c.status) === 3).length;
+  const visibleContributors = showHealthy ? sortedContributors : sortedContributors.filter((c) => severityRank(c.status) !== 3);
+  const lastCheckedAt = useMemo(() => {
+    const times = (breakdown?.contributors ?? []).map((c) => c.checkedAt).filter((t): t is string => !!t);
+    return times.length ? times.reduce((a, b) => (parseUTC(a) > parseUTC(b) ? a : b)) : null;
+  }, [breakdown]);
+
+  // 미연결 시 점검 카드 영역은 `inert` — 포인터뿐 아니라 키보드 포커스도 막는다(React 18 은 inert 속성 미지원 → ref).
+  const disconnectedRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (disconnectedRef.current) disconnectedRef.current.inert = isDisconnected;
+  }, [isDisconnected, clusterId]);
 
   // 점검 실행 로그 — 점검 실행 · 애드온 단건 ▶ · 현황 아이템 ▶ · 플레이북 실행이 공유한다(D-135).
   const runLog = useRunLog();
@@ -199,11 +226,17 @@ export function ClusterDetailPage() {
     });
   };
 
-  const handleAddDefaultAddons = () => {
+  const handleAddDefaultAddons = async () => {
     if (!clusterId) return;
-    missingAddons.forEach((addon) => {
-      createAddon.mutate({ clusterId, ...addon });
+    const run = runLog.begin('기본 점검 항목 추가', `${cluster ? `[${cluster.name}] ` : ''}기본 점검 항목 ${missingAddons.length}개 추가 요청`);
+    const results = await Promise.allSettled(
+      missingAddons.map((addon) => createAddon.mutateAsync({ clusterId, ...addon })),
+    );
+    results.forEach((r, i) => {
+      if (r.status === 'fulfilled') run.log('info', `${missingAddons[i].name} · 추가됨`);
+      else run.log('error', `${missingAddons[i].name} · 추가 실패 — ${formatApiError(r.reason)}`);
     });
+    run.end();
   };
 
   const handleRunItem = (item: ClusterItem) => {
@@ -306,29 +339,64 @@ export function ClusterDetailPage() {
           <div className="flex items-center gap-3 flex-wrap">
             <PageHeader
               back={{ to: '/', label: '홈' }}
-              title={cluster ? `${cluster.name} — 클러스터 상세` : '클러스터 상세'}
+              title={cluster && !hub ? `${cluster.name} — 클러스터 상세` : '클러스터 상세'}
+              description={clusterId && !breakdownLoading && breakdown ? (
+                <span className="inline-flex items-center gap-2 flex-wrap">
+                  <StatusBadge variant={statusToVariant(breakdown.status)} size="sm" />
+                  <span>
+                    {breakdown.contributors.length === 0
+                      ? '아직 점검 결과가 없습니다'
+                      : `${breakdown.contributors.length}개 신호 종합`}
+                    {lastCheckedAt && ` · 마지막 점검 ${formatRelativeTime(lastCheckedAt)}`}
+                  </span>
+                </span>
+              ) : undefined}
               className="flex-1 min-w-[200px]"
             />
             {clusterId && (
               <>
-                <Link to={`/k8s/${clusterId}/review`} className={HEADER_BTN}>
-                  <ClipboardCheck className="w-3.5 h-3.5" /> 결과 리뷰
-                </Link>
-                <Link to="/daily-check/settings" className={HEADER_BTN}>
-                  <Settings className="w-3.5 h-3.5" /> 점검 항목 관리
-                </Link>
-                <button type="button" onClick={() => handleDailyReport('md')} className={HEADER_BTN}
-                  title="일일 리포트 다운로드 (.md)" aria-label="일일 리포트 다운로드 (.md)">
-                  <Download className="w-3.5 h-3.5" /> .md
-                </button>
-                <button type="button" onClick={() => handleDailyReport('csv')} className={HEADER_BTN}
-                  title="일일 리포트 다운로드 (.csv)" aria-label="일일 리포트 다운로드 (.csv)">
-                  <Download className="w-3.5 h-3.5" /> .csv
-                </button>
-                <button type="button" onClick={() => setShowKubeconfig(true)} className={HEADER_BTN}
-                  disabled={!canOperate} title={withHint('Kubeconfig 편집')} aria-label={ariaWithHint('Kubeconfig 편집')}>
-                  <KeyRound className="w-3.5 h-3.5" /> Kubeconfig
-                </button>
+                <DropdownMenu.Root>
+                  <DropdownMenu.Trigger asChild>
+                    <button type="button" className={HEADER_BTN} title="일일 리포트 내보내기" aria-label="일일 리포트 내보내기">
+                      <Download className="w-3.5 h-3.5" /> 내보내기 <ChevronDown className="w-3 h-3" />
+                    </button>
+                  </DropdownMenu.Trigger>
+                  <DropdownMenu.Portal>
+                    <DropdownMenu.Content align="end" sideOffset={4} className={MENU_CONTENT}>
+                      <DropdownMenu.Item className={MENU_ITEM} onSelect={() => { void handleDailyReport('md'); }}>
+                        마크다운 (.md)
+                      </DropdownMenu.Item>
+                      <DropdownMenu.Item className={MENU_ITEM} onSelect={() => { void handleDailyReport('csv'); }}>
+                        CSV (.csv)
+                      </DropdownMenu.Item>
+                    </DropdownMenu.Content>
+                  </DropdownMenu.Portal>
+                </DropdownMenu.Root>
+                <DropdownMenu.Root>
+                  <DropdownMenu.Trigger asChild>
+                    <button type="button" className={HEADER_BTN} title="더 보기" aria-label="더 보기">
+                      <MoreHorizontal className="w-3.5 h-3.5" /> 더 보기
+                    </button>
+                  </DropdownMenu.Trigger>
+                  <DropdownMenu.Portal>
+                    <DropdownMenu.Content align="end" sideOffset={4} className={MENU_CONTENT}>
+                      <DropdownMenu.Item asChild className={MENU_ITEM}>
+                        <Link to={`/k8s/${clusterId}/review`}>
+                          <ClipboardCheck className="w-3.5 h-3.5" /> 결과 리뷰
+                        </Link>
+                      </DropdownMenu.Item>
+                      <DropdownMenu.Item asChild className={MENU_ITEM}>
+                        <Link to="/daily-check/settings">
+                          <Settings className="w-3.5 h-3.5" /> 점검 항목 관리
+                        </Link>
+                      </DropdownMenu.Item>
+                      <DropdownMenu.Item className={MENU_ITEM} disabled={!canOperate} onSelect={() => setShowKubeconfig(true)}
+                        title={withHint('접속 정보(kubeconfig) 편집')}>
+                        <KeyRound className="w-3.5 h-3.5" /> 접속 정보(kubeconfig)
+                      </DropdownMenu.Item>
+                    </DropdownMenu.Content>
+                  </DropdownMenu.Portal>
+                </DropdownMenu.Root>
                 <button
                   type="button"
                   onClick={handleRunCheck}
@@ -344,6 +412,47 @@ export function ClusterDetailPage() {
             )}
           </div>
 
+          {/* 상태 근거 — 상태 요약은 헤더 한 줄, 여기는 원인(위험 → 경고 순, 정상은 접음) */}
+          <MacCard title="상태 근거">
+            {breakdownLoading ? (
+              <div className="flex items-center gap-2 text-sm text-muted-foreground py-4">
+                <Loader2 className="w-4 h-4 animate-spin" /> 불러오는 중…
+              </div>
+            ) : breakdownError || !breakdown ? (
+              <div className="flex items-center gap-2 text-sm text-status-critical py-4">
+                <AlertTriangle className="w-4 h-4" /> 종합 상태를 불러오지 못했습니다.
+                <button type="button" onClick={() => { void refetchBreakdown(); }} className={`${HEADER_BTN} ml-2 text-foreground`}>
+                  <RefreshCw className="w-3.5 h-3.5" /> 다시 시도
+                </button>
+              </div>
+            ) : breakdown.contributors.length === 0 ? (
+              <p className="text-sm text-muted-foreground py-2">아직 점검 결과가 없습니다. 「점검 실행」으로 첫 결과를 만들어 보세요.</p>
+            ) : (
+              <div className="space-y-1">
+                {visibleContributors.length === 0 && (
+                  <p className="text-sm text-muted-foreground py-1">경고·위험 신호가 없습니다.</p>
+                )}
+                {visibleContributors.length > 0 && (
+                  <div className="divide-y divide-border/50">
+                    {visibleContributors.map((c, i) => (
+                      <ContributorRow key={`${c.sourceType}-${c.sourceRef}-${i}`} c={c} />
+                    ))}
+                  </div>
+                )}
+                {healthyCount > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => setShowHealthy((v) => !v)}
+                    aria-expanded={showHealthy}
+                    className="text-sm text-muted-foreground hover:text-foreground underline-offset-2 hover:underline pt-1"
+                  >
+                    {showHealthy ? '정상 항목 접기' : `정상 ${healthyCount}개 보기`}
+                  </button>
+                )}
+              </div>
+            )}
+          </MacCard>
+
           <RunLogPanel
             run={runLog}
             show={showRunLog}
@@ -355,37 +464,6 @@ export function ClusterDetailPage() {
               />
             }
           />
-
-          {/* 종합 상태 */}
-          <MacCard title="종합 상태">
-            {breakdownLoading ? (
-              <div className="flex items-center gap-2 text-sm text-muted-foreground py-4">
-                <Loader2 className="w-4 h-4 animate-spin" /> 불러오는 중…
-              </div>
-            ) : breakdownError || !breakdown ? (
-              <div className="flex items-center gap-2 text-sm text-status-critical py-4">
-                <AlertTriangle className="w-4 h-4" /> 종합 상태를 불러오지 못했습니다.
-              </div>
-            ) : (
-              <div className="space-y-2">
-                <div className="flex items-center gap-2">
-                  <StatusBadge variant={statusToVariant(breakdown.status)} />
-                  <span className="text-sm text-muted-foreground">
-                    {breakdown.contributors.length === 0
-                      ? '아직 점검 결과가 없습니다.'
-                      : `${breakdown.contributors.length}개 신호를 종합한 결과입니다.`}
-                  </span>
-                </div>
-                {breakdown.contributors.length > 0 && (
-                  <div className="divide-y divide-border/50 border-t border-border pt-1">
-                    {breakdown.contributors.map((c, i) => (
-                      <ContributorRow key={`${c.sourceType}-${c.sourceRef}-${i}`} c={c} />
-                    ))}
-                  </div>
-                )}
-              </div>
-            )}
-          </MacCard>
 
           {clusterId && (
             <>
@@ -423,7 +501,7 @@ export function ClusterDetailPage() {
                     </div>
                   </div>
                 )}
-                <div className={isDisconnected ? 'opacity-40 pointer-events-none select-none grayscale' : ''}>
+                <div ref={disconnectedRef} className={isDisconnected ? 'opacity-70 select-none' : ''}>
                   <AddonGrid
                     addons={addons}
                     isLoading={addonsLoading}
