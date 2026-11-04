@@ -24,6 +24,7 @@ import { k8sResourcesApi, k8sHelmApi } from '@/services/api';
 import { PodTerminal } from '@/components/k8s/PodTerminal';
 import { EventsStream } from '@/components/k8s/EventsStream';
 import { NamespaceMultiSelect } from '@/components/k8s/NamespaceMultiSelect';
+import { useNsSelection } from '@/hooks/useNsPrefs';
 import { ColumnToggle } from '@/components/k8s/ColumnToggle';
 import { NamespaceDashboardPanel } from '@/components/k8s-manage/NamespaceDashboardPanel';
 import { useColumnPrefs } from '@/hooks/useColumnPrefs';
@@ -192,7 +193,10 @@ export function K8sManagePage() {
       return next;
     });
   };
-  const [selectedNs, setSelectedNs] = useState<Set<string>>(new Set()); // 비어있으면 전체
+  // 비어있으면 전체. 계정·클러스터별로 서버에 기억되고 허브 탭·내부 탭이 같은 선택을 공유한다(useNsSelection).
+  const nsSel = useNsSelection(clusterId);
+  const selectedNs = useMemo(() => new Set(nsSel.selected), [nsSel.selected]);
+  const setSelectedNs = nsSel.setSelectedSet;
   const [search, setSearch] = useState('');
   const [detail, setDetail] = useState<DetailTarget | null>(null);
   const [editing, setEditing] = useState(false);
@@ -449,7 +453,7 @@ export function K8sManagePage() {
               onDrain={doDrain}
             />
           )}
-          {leaf.mode === 'kind' && leaf.kind === 'pods' && (
+          {nsSel.ready && leaf.mode === 'kind' && leaf.kind === 'pods' && (
             <PodsPanel
               clusterId={clusterId}
               caps={caps.pods}
@@ -462,7 +466,7 @@ export function K8sManagePage() {
               onTerminal={(ns, name) => setTerminalPod({ namespace: ns, name })}
             />
           )}
-          {leaf.mode === 'kind' && leaf.kind && leaf.kind !== 'nodes' && leaf.kind !== 'pods' && (
+          {nsSel.ready && leaf.mode === 'kind' && leaf.kind && leaf.kind !== 'nodes' && leaf.kind !== 'pods' && (
             <ResourceTablePanel
               clusterId={clusterId}
               kind={leaf.kind}
@@ -484,7 +488,7 @@ export function K8sManagePage() {
             />
           )}
 
-          {leaf.mode === 'nsdash' && (
+          {nsSel.ready && leaf.mode === 'nsdash' && (
             <NamespaceDashboardPanel
               clusterId={clusterId}
               caps={caps}

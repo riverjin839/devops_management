@@ -6224,3 +6224,17 @@ export interface NsMigRun {
   queuedAt: string | null; startedAt: string | null; finishedAt: string | null; durationMs: number;
   spec?: Partial<NsMigSpec>; logLines?: string; items?: { resources: NsMigItem[]; skipped: NsMigSkipped[] };
 }
+
+// ── NS 선택 기억 (계정·클러스터별 마지막 선택 + 최근 선택 NS) ──────────────────────
+export interface NsClusterPrefs {
+  clusterId: string;
+  /** 마지막 선택 — 비어 있으면 "전체 네임스페이스" */
+  selected: string[];
+  /** 최근 선택 NS, 최신이 앞 (개수는 recentLimit, 기본 3) */
+  recent: string[];
+}
+
+export interface NsPrefs {
+  recentLimit: number;
+  clusters: NsClusterPrefs[];
+}

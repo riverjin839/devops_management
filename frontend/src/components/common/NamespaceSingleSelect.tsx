@@ -1,5 +1,6 @@
 import { SearchableSelect } from '@/components/common/SearchableSelect';
 import { useAnalyzeNamespaces } from '@/hooks/useIncidentAnalysis';
+import { NsRecentChips } from '@/components/k8s/NsRecentChips';
 
 interface Props {
   clusterId: string;
@@ -10,13 +11,15 @@ interface Props {
   clearable?: boolean;
   /** 바깥 <label htmlFor> 와 연결할 입력 id. */
   id?: string;
+  /** true 면 선택 아래에 최근 선택 NS 칩을 보인다(`useNsSelection` 으로 저장되는 화면에서만 의미가 있다). */
+  showRecent?: boolean;
 }
 
 /** 네임스페이스 단일 선택 — 텍스트 검색 + 리스트(콤보박스). analyzeApi 로 NS 목록 fetch.
  *  SearchableSelect 재사용. 여러 페이지에서 NS 선택 UI 통일용. */
-export function NamespaceSingleSelect({ clusterId, value, onChange, placeholder = '네임스페이스 검색…', className, clearable, id }: Props) {
+export function NamespaceSingleSelect({ clusterId, value, onChange, placeholder = '네임스페이스 검색…', className, clearable, id, showRecent = false }: Props) {
   const nsQ = useAnalyzeNamespaces(clusterId);
-  return (
+  const select = (
     <SearchableSelect
       value={value}
       onChange={onChange}
@@ -34,5 +37,12 @@ export function NamespaceSingleSelect({ clusterId, value, onChange, placeholder 
       className={className}
       id={id}
     />
+  );
+  if (!showRecent) return select;
+  return (
+    <div className="flex flex-col gap-1">
+      {select}
+      <NsRecentChips clusterId={clusterId} selected={new Set(value ? [value] : [])} onPick={onChange} />
+    </div>
   );
 }

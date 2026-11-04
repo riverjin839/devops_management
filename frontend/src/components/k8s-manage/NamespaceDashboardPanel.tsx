@@ -12,6 +12,7 @@ import {
 import { MacCard } from '@/components/ui/MacCard';
 import { EmptyState, Skeleton } from '@/components/common';
 import { NamespaceMultiSelect } from '@/components/k8s/NamespaceMultiSelect';
+import { useNsSelection } from '@/hooks/useNsPrefs';
 import { EventsStream } from '@/components/k8s/EventsStream';
 import { k8sHelmApi, k8sResourcesApi } from '@/services/api';
 import { ResourceTablePanel, PodsPanel, HelmPanel } from '@/pages/K8sManagePage';
@@ -168,7 +169,11 @@ const GRID = 'minmax(150px,1.6fr) 120px 70px 60px 60px 60px 1fr';
 
 export function NamespaceDashboardPanel(p: NamespaceDashboardPanelProps) {
   const { clusterId, caps, avail, onOpenDetail, onScale, onRestart, onDelete, onTerminal, onHelmValues, onOpenCrdObject } = p;
-  const [ns, setNs] = useState('');
+  // 단일 NS 도 허브 공용 선택(useNsSelection)을 쓴다 — 목록 탭에서 고른 NS 하나가 그대로 이어지고, 여기서 고른 NS 도 기억된다.
+  // 여러 개가 선택돼 있으면 비워 둔다(암묵적으로 하나로 좁히지 않는다).
+  const nsSel = useNsSelection(clusterId);
+  const ns = nsSel.selected.length === 1 ? nsSel.selected[0] : '';
+  const setNs = (v: string) => nsSel.setSelected(v ? [v] : []);
   const nsSet = useMemo(() => new Set(ns ? [ns] : []), [ns]);
   const [mode, setMode] = useState<'tab' | 'list'>('tab');
   const [activeCat, setActiveCat] = useState<CatId>('workload');

@@ -10,6 +10,9 @@
 
 1.80.3 이후 main 에 병합된 변경 (다음 릴리스 후보).
 
+### Added
+- **K8s 허브 — NS 선택 기억**: NS 가 천 개 단위인 클러스터에서 고르는 시간을 줄인다. 선택한 NS 를 탭(내부 탭·파드 로그)을 옮겨도 그대로 유지하고, 다른 화면으로 갔다 오거나 재로그인해도 마지막 선택이 기본값으로 복원된다. NS 선택 옆에 최근 선택한 NS(기본 3개)가 칩으로 보여 한 번 눌러 선택한다. Backend: `GET/PUT /me/ns-prefs`(`user_settings` 재사용, 계정·클러스터별, 마이그레이션 없음). Frontend: `useNsSelection`(TanStack Query 캐시 공유 + 디바운스 저장)·`NsRecentChips`.
+
 ## [1.80.3] - 2026-11-04
 
 ### Changed
