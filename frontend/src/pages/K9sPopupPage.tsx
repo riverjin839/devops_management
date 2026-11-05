@@ -5,6 +5,7 @@ import { K9sTerminal } from '@/components/k8s';
 import { requestK9sPopout, type K9sPopoutPayload } from '@/lib/k9sPopout';
 import { useClusters } from '@/hooks/useCluster';
 import { useTerminalEnvSync } from '@/hooks/useTerminalEnvSync';
+import { isGuardedLevel, levelLabel, useOperationLevels } from '@/hooks/useOperationLevels';
 
 type Handoff =
   | { phase: 'loading' }
@@ -13,7 +14,7 @@ type Handoff =
 
 /**
  * k9s 팝업 창 — 메인 UI 와 분리된 별도 브라우저 창에서 k9s 세션을 전체창으로 실행한다.
- * 메인 창의 "새 창으로 열기" 가 연 1회용 handoff(`?h=<id>`)로 원래 창에 접속 정보를
+ * 메인 창의 "별도 창으로 연결" 이 연 1회용 handoff(`?h=<id>`)로 원래 창에 접속 정보를
  * `postMessage` 로 요청한다(저장소 없음 — `lib/terminalPopout.ts`). 받지 못하면(원래 창이
  * 닫힘·새로고침) "다시 열기" 를 안내한다. 이 창을 열어두면 메인 창은 다른 페이지로 이동해도 된다.
  */
@@ -37,6 +38,12 @@ export function K9sPopupPage() {
   const { data: clusters = [] } = useClusters();
   useTerminalEnvSync(clusters, payload?.clusterId ?? null);
 
+  // 별도 창은 어느 클러스터에 붙었는지 한눈에 안 보인다 — 헤더에 클러스터명·운영레벨 칩을 단다.
+  const { data: levels } = useOperationLevels();
+  const popCluster = clusters.find((c) => c.id === payload?.clusterId);
+  const popLevel = levelLabel(levels, popCluster?.operationLevel) || '미지정';
+  const popGuarded = !popCluster?.operationLevel || isGuardedLevel(levels, popCluster.operationLevel);
+
   useEffect(() => {
     if (payload) {
       document.title = `k9s · ${payload.params.username}@${payload.params.host}`;
@@ -59,7 +66,7 @@ export function K9sPopupPage() {
         <p className="text-xs text-muted-foreground leading-relaxed max-w-md">
           접속 정보는 보안을 위해 저장하지 않고 메인 창에서 한 번만 넘겨받습니다. 메인 창을 닫았거나 이 창을 새로고침하면
           다시 받을 수 없습니다. 이 창을 닫고 메인 화면의 <b className="text-foreground">k9s 콘솔</b>에서
-          <b className="text-foreground"> 새 창으로 열기</b>(또는 안내된 <b className="text-foreground">다시 열기</b>)를 눌러 주세요.
+          <b className="text-foreground"> 별도 창으로 연결</b>(또는 안내된 <b className="text-foreground">다시 열기</b>)를 눌러 주세요.
         </p>
         <button
           type="button"
@@ -78,6 +85,8 @@ export function K9sPopupPage() {
       params={payload.params}
       onClose={() => window.close()}
       fill
+      contextLabel={popCluster ? `${popCluster.name} · ${popLevel}` : undefined}
+      contextWarn={popGuarded && !payload.params.readonly}
     />
   );
 }

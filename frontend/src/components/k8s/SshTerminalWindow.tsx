@@ -18,6 +18,12 @@ export interface SshTerminalEvent {
   ready?: boolean;
   /** 첫 응답 전에 끊겼다 — 접속 자체가 실패(호스트·포트·계정·인증 확인). */
   failed?: boolean;
+  /** 사용자에게 그대로 보여줄 실패 사유(코드 없이, 원인별 다음 행동 포함). 없으면 message. */
+  userMessage?: string;
+  /** 사용자가 재연결을 눌렀다 — 화면이 새 로그 실행을 시작한다. */
+  reconnect?: boolean;
+  /** 연결 단계 칩(웹소켓 → SSH 인증) 갱신. */
+  steps?: Array<{ name: string; label: string; status: 'running' | 'done' | 'failed' }>;
 }
 
 export interface SshTerminalWindowProps {
@@ -50,6 +56,10 @@ export interface SshTerminalWindowProps {
   onStatusChange?: (status: SshTerminalStatus) => void;
   /** 연결 시도·열림·첫 응답·종료(코드 포함)를 알린다 — 화면의 상세 실시간 로그용. */
   onEvent?: (e: SshTerminalEvent) => void;
+  /** 헤더에 띄울 접속 맥락(예: `클러스터명 · 운영`) — 별도 창·여러 탭에서도 어디에 붙었는지 보이게 한다. */
+  contextLabel?: string;
+  /** 참이면 맥락 칩을 경고색으로 — 보호 레벨인데 읽기 전용이 꺼진 쓰기 가능 세션. */
+  contextWarn?: boolean;
   /** 서버 세션 상한(초) — `services/ssh_pty.py` `MAX_SESSION_SECONDS` 와 같다. 연장은 없다. */
   maxSessionSeconds?: number;
 }
@@ -59,6 +69,8 @@ export const SSH_SESSION_MAX_SECONDS = 60 * 60;
 const SESSION_WARN_SECONDS = 5 * 60;
 /** 웹소켓이 이 시간 안에 열리지 않으면 로그에 경고를 남긴다. */
 const CONNECT_WARN_SECONDS = 15;
+/** 웹소켓이 열린 뒤 이 시간 안에 서버 첫 응답이 없으면 SSH 인증 지연 경고를 남긴다. */
+const AUTH_WARN_SECONDS = 30;
 
 // 4401 = 토큰 만료·무효 전용, 4402 = 역할·클러스터 실행 권한 부족(정책 10, D-172).
 const DEFAULT_CLOSE_NOTES: Record<number, string> = {
@@ -96,7 +108,7 @@ function formatRemaining(sec: number): string {
  */
 export function SshTerminalWindow({
   label, labelClassName = '', subtitle, target, url, init,
-  onClose, onPopOut, fill, closeNotes, onStatusChange, onEvent,
+  onClose, onPopOut, fill, closeNotes, onStatusChange, onEvent, contextLabel, contextWarn,
   maxSessionSeconds = SSH_SESSION_MAX_SECONDS,
 }: SshTerminalWindowProps) {
   const [status, setStatus] = useState<SshTerminalStatus>('connecting');
@@ -104,6 +116,7 @@ export function SshTerminalWindow({
   const [openedAt, setOpenedAt] = useState<number | null>(null);
   const [now, setNow] = useState(() => Date.now());
   const [confirmClose, setConfirmClose] = useState(false);
+  const [confirmReconnect, setConfirmReconnect] = useState(false);
   // 웹소켓이 열려도 SSH 인증·k9s 기동은 끝나지 않았을 수 있다 — 서버 첫 응답을 받아야 "연결됨".
   const [ready, setReady] = useState(false);
   const warnedRef = useRef(false);
@@ -156,10 +169,27 @@ export function SshTerminalWindow({
     const openTimer = window.setTimeout(() => {
       onEventRef.current?.({ level: 'warn', message: `${CONNECT_WARN_SECONDS}초가 지나도 웹소켓이 열리지 않습니다 — 네트워크·프록시(웹소켓 허용 여부)를 확인하세요` });
     }, CONNECT_WARN_SECONDS * 1000);
-    onEventRef.current?.({ level: 'info', message: '웹소켓 연결 시도 (토큰은 URL, SSH 자격증명은 연결 직후 init 프레임으로 전달)' });
+    let opened = false;
+    let authTimer: number | undefined;
+    onEventRef.current?.({
+      level: 'info',
+      message: '웹소켓 연결 시도 (토큰은 URL, SSH 자격증명은 연결 직후 init 프레임으로 전달)',
+      steps: [{ name: 'ws', label: '웹소켓 연결', status: 'running' }],
+    });
     ws.onopen = () => {
+      opened = true;
       window.clearTimeout(openTimer);
-      onEventRef.current?.({ level: 'info', message: '웹소켓 열림 — SSH 접속 정보(init 프레임) 전송, 서버가 SSH 연결·인증·PTY·k9s 기동을 진행하는 중 (아직 인증 전일 수 있음)' });
+      authTimer = window.setTimeout(() => {
+        onEventRef.current?.({ level: 'warn', message: `SSH 인증 응답이 ${AUTH_WARN_SECONDS}초 넘게 없습니다 — 대상 호스트 도달 여부와 SSH 서버 상태를 확인하세요` });
+      }, AUTH_WARN_SECONDS * 1000);
+      onEventRef.current?.({
+        level: 'info',
+        message: '웹소켓 열림 — SSH 접속 정보(init 프레임) 전송, 서버가 SSH 연결·인증·PTY·k9s 기동을 진행하는 중 (아직 인증 전일 수 있음)',
+        steps: [
+          { name: 'ws', label: '웹소켓 연결', status: 'done' },
+          { name: 'auth', label: 'SSH 인증·k9s 기동', status: 'running' },
+        ],
+      });
       setStatus('open');
       setOpenedAt(Date.now());
       setNow(Date.now());
@@ -177,32 +207,46 @@ export function SshTerminalWindow({
       if (!gotFirstFrame) {
         gotFirstFrame = true;
         setReady(true);
-        onEventRef.current?.({ level: 'info', message: '서버 첫 응답 수신 — SSH 인증·k9s 기동 완료, 화면 스트리밍 시작', end: true, ready: true });
+        window.clearTimeout(authTimer);
+        onEventRef.current?.({
+          level: 'info',
+          message: '서버 첫 응답 수신 — SSH 인증·k9s 기동 완료, 화면 스트리밍 시작',
+          end: true,
+          ready: true,
+          steps: [{ name: 'auth', label: 'SSH 인증·k9s 기동', status: 'done' }],
+        });
       }
       term.write(String(ev.data));
     };
     ws.onerror = () => {
       window.clearTimeout(openTimer);
+      window.clearTimeout(authTimer);
       if (wsRef.current !== ws) return;
       onEventRef.current?.({ level: 'error', message: '웹소켓 오류 — 서버에 도달하지 못했거나 연결이 거부됐습니다' });
       setStatus('error');
     };
     ws.onclose = (ev) => {
       window.clearTimeout(openTimer);
+      window.clearTimeout(authTimer);
       // 이미 다른 소켓으로 재연결했으면 옛 소켓의 close 는 상태에 반영하지 않는다.
       if (wsRef.current !== ws) return;
       setStatus('closed');
       setOpenedAt(null);
-      const note = closeNotesRef.current?.[ev.code]
-        ?? DEFAULT_CLOSE_NOTES[ev.code]
-        ?? '[연결 종료]';
+      const coded = closeNotesRef.current?.[ev.code] ?? DEFAULT_CLOSE_NOTES[ev.code];
+      const note = coded ?? '[연결 종료]';
+      // 코드로 원인이 정해진 종료(만료·권한·비활성 등)는 그 안내만 보여준다 — 맞는 비밀번호를 다시 치게 하지 않는다.
+      const genericHint = opened
+        ? '첫 응답 전에 연결이 끊겼습니다 — 호스트·포트·계정·인증 정보를 확인하세요'
+        : '웹소켓 연결에 실패했습니다 — 서버 접속(네트워크·프록시) 상태를 확인하세요';
       // 이벤트를 먼저 알린다 — 터미널이 이미 정리된 뒤라 write 가 던져도 로그는 끝난다.
-      // 첫 응답 전에 닫혔다면 접속 자체가 실패한 것(자격증명·호스트 확인), 이후라면 세션 종료.
+      // 첫 응답 전에 닫혔다면 접속 자체가 실패한 것, 이후라면 세션 종료.
       onEventRef.current?.({
         level: gotFirstFrame ? 'info' : 'error',
-        message: `연결 종료 (코드 ${ev.code}) ${note}${gotFirstFrame ? '' : ' — 첫 응답 전에 끊김: 호스트·포트·계정·인증 정보를 확인하세요'}`,
+        message: `연결 종료 (코드 ${ev.code}) ${note}${gotFirstFrame || coded ? '' : ` — ${genericHint}`}`,
         end: true,
         failed: !gotFirstFrame,
+        userMessage: coded ? note.replace(/^\[|\]$/g, '') : genericHint,
+        steps: gotFirstFrame ? undefined : [{ name: opened ? 'auth' : 'ws', label: opened ? 'SSH 인증·k9s 기동' : '웹소켓 연결', status: 'failed' }],
       });
       try { term.write(`\r\n\x1b[33m${note}\x1b[0m\r\n`); } catch { /* 정리된 터미널 */ }
     };
@@ -303,6 +347,16 @@ export function SshTerminalWindow({
     return () => window.removeEventListener('beforeunload', onBeforeUnload);
   }, [status]);
 
+  /** 재연결 — 라이브 세션이면 확인을 받는다(스크롤백·원격 작업 유실, 자격증명 재전송). */
+  const doReconnect = () => {
+    onEventRef.current?.({ level: 'info', message: '재연결 요청 — 기존 연결을 끊고 같은 접속 정보로 다시 연결합니다', reconnect: true });
+    connect();
+  };
+  const requestReconnect = () => {
+    if (status === 'open') setConfirmReconnect(true);
+    else doReconnect();
+  };
+
   /** 종료 — 열린 세션이면 확인을 받는다(원격 셸 작업 유실 방지). */
   const requestClose = () => {
     if (status === 'open') setConfirmClose(true);
@@ -368,6 +422,16 @@ export function SshTerminalWindow({
         }`}
       >
         <span className={`text-sm font-semibold ${labelClassName}`}>{label}</span>
+        {contextLabel && (
+          <span
+            className={`text-xs px-2 py-0.5 rounded-full shrink-0 ${
+              contextWarn ? 'bg-status-warning/20 text-status-warning font-medium' : 'bg-zinc-700 text-zinc-300'
+            }`}
+            title={contextWarn ? '보호 레벨 — 읽기 전용이 꺼져 있습니다(수정·삭제 가능)' : undefined}
+          >
+            {contextLabel}
+          </span>
+        )}
         <span className="text-xs font-mono text-zinc-400 truncate">{subtitle}</span>
         <span className={`inline-flex items-center gap-1 text-xs shrink-0 ${statusColor}`} role="status" aria-live="polite">
           <span aria-hidden="true" className="w-1.5 h-1.5 rounded-full bg-current" />
@@ -388,29 +452,38 @@ export function SshTerminalWindow({
         <span className="ml-auto hidden xl:inline text-xs text-zinc-500 truncate" title={clipboardHint}>
           <Clipboard className="w-3 h-3 inline-block mr-1 -mt-px" />{clipboardHint}
         </span>
-        <button onClick={connect} title="재연결" aria-label="재연결"
+        <button type="button" onClick={requestReconnect} title="재연결" aria-label="재연결"
           className="xl:ml-2 ml-auto p-1 rounded hover:bg-zinc-700 text-zinc-400">
-          <RotateCw className="w-3.5 h-3.5" />
+          <RotateCw className="w-3.5 h-3.5" aria-hidden="true" />
         </button>
         {onPopOut && !fill && (
-          <button onClick={onPopOut} title="새 창으로 빼기" aria-label="새 창으로 빼기"
+          <button type="button" onClick={onPopOut} title="새 창으로 빼기" aria-label="새 창으로 빼기"
             className="p-1 rounded hover:bg-zinc-700 text-zinc-400">
-            <ExternalLink className="w-3.5 h-3.5" />
+            <ExternalLink className="w-3.5 h-3.5" aria-hidden="true" />
           </button>
         )}
         {!fill && (
-          <button onClick={() => setFullscreen((v) => !v)} title={fullscreen ? '전체화면 해제' : '전체화면'}
+          <button type="button" onClick={() => setFullscreen((v) => !v)} title={fullscreen ? '전체화면 해제' : '전체화면'}
             aria-label={fullscreen ? '전체화면 해제' : '전체화면'}
             className="p-1 rounded hover:bg-zinc-700 text-zinc-400">
-            {fullscreen ? <Minimize2 className="w-3.5 h-3.5" /> : <Maximize2 className="w-3.5 h-3.5" />}
+            {fullscreen ? <Minimize2 className="w-3.5 h-3.5" aria-hidden="true" /> : <Maximize2 className="w-3.5 h-3.5" aria-hidden="true" />}
           </button>
         )}
-        <button onClick={requestClose} aria-label={`세션 종료 — ${targetLabel}`} title="종료"
+        <button type="button" onClick={requestClose} aria-label={`세션 종료 — ${targetLabel}`} title="종료"
           className="p-1 rounded hover:bg-zinc-700 text-zinc-400">
-          <X className="w-4 h-4" />
+          <X className="w-4 h-4" aria-hidden="true" />
         </button>
       </div>
       <div ref={mountRef} className="flex-1 min-h-0 p-2 [&_.xterm]:h-full" />
+      <ConfirmDialog
+        open={confirmReconnect}
+        danger
+        title="SSH 세션 재연결"
+        description={`연결된 세션을 끊고 같은 접속 정보로 다시 연결합니다 — ${targetLabel}. 터미널 화면(스크롤백)과 실행 중인 원격 작업이 초기화됩니다.`}
+        confirmLabel="끊고 재연결"
+        onCancel={() => setConfirmReconnect(false)}
+        onConfirm={() => { setConfirmReconnect(false); doReconnect(); }}
+      />
       <ConfirmDialog
         open={confirmClose}
         danger

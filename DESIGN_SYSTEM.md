@@ -637,6 +637,8 @@ MacCard `title` 아래 또 그린 툴바 행(이중 헤더), 같은 모양의 �
 원격 명령을 실행하고 로그(stdout/stderr)를 보여주는 화면은 모두 **같은 패턴**을 따른다.
 "콘솔 패턴 반영해줘" 류 요청이 오면 아래 목록의 화면 전부에 일괄 적용한다.
 
+**예외 — SSH 웹 터미널 창(`SshTerminalWindow`, `/k9s`·`/node-ssh`)**: 터미널 크롬은 테마와 무관한 고정 다크(`bg-zinc-*`·`text-zinc-*`, `rounded-2xl`)다. 터미널 화면은 테마가 바뀌어도 같은 대비여야 하고 xterm 팔레트가 별도(Settings ▸ 터미널 Appearance)이기 때문이다. 드래그 창 좌표(`left`/`top`)만 인라인 `style` 을 쓴다. 이 창 안에서 상태·경고 색(`status-*`)은 토큰을 그대로 쓴다.
+
 **적용 화면**: 노드 일괄 실행 `/bulk-exec` · mc 클라이언트 `/mc` · etcdctl `/etcdctl` ·
 Cilium BPF Trace `/cilium-trace` · 커널 파라미터 `/kernel-params` · NFS 모니터링(Isilon) `/isilon-nfs`
 (+ 신규 SSH/exec 콘솔은 전부 이 패턴으로 시작)
