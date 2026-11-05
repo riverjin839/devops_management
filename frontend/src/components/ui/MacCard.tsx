@@ -1,5 +1,5 @@
 /**
- * Section card — flat surface, 1px border, small muted label in a compact left-aligned header.
+ * Section card — flat surface, 1px border, text-sm 반굵은 제목(foreground) in a compact left-aligned header.
  * Internally a thin adapter over the shadcn `Card` primitive (see `ui/card.tsx`).
  *
  * P3(2026-09): macOS 신호등 점(빨강·노랑·초록) 장식을 쓰던 `variant="mac"` 을 없앴다 — 누를 수
@@ -56,7 +56,7 @@ export function MacCard({
           {title && (
             <div className="flex items-center gap-2 min-w-0">
               {Icon && <Icon className="w-3.5 h-3.5 shrink-0 text-muted-foreground" aria-hidden />}
-              <span className="text-xs font-semibold text-muted-foreground select-none truncate">
+              <span className="text-sm font-semibold text-foreground select-none truncate">
                 {title}
               </span>
               {titleExtra}
