@@ -203,8 +203,7 @@ export function AddClusterModal({ isOpen, onClose }: AddClusterModalProps) {
       <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={handleClose} />
 
       <div ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby={titleId}
-           className="relative bg-card border border-border rounded-md shadow-2xl w-full max-w-3xl mx-4 overflow-hidden"
-           style={{ maxHeight: '90vh' }}>
+           className="relative bg-card border border-border rounded-md shadow-card w-full max-w-3xl mx-4 overflow-hidden max-h-[90vh]">
 
         {/* ── Top bar ── */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-border bg-secondary/30">
@@ -250,7 +249,7 @@ export function AddClusterModal({ isOpen, onClose }: AddClusterModalProps) {
         </div>
 
         {/* ── Content ── */}
-        <div className="px-6 py-5 overflow-y-auto" style={{ maxHeight: 'calc(90vh - 200px)' }}>
+        <div className="px-6 py-5 overflow-y-auto max-h-[calc(90vh-200px)]">
 
           {/* Step 0: Provider selection */}
           {step === 0 && (

@@ -178,7 +178,7 @@ export function ClusterItemCard({ item, isRunning, onRun, onEdit, onDelete, onRe
           </p>
         ) : item.currentText != null ? (
           // 문자형(버전 등)
-          <span className="text-2xl font-bold font-mono text-foreground break-all">{valueText}</span>
+          <span className="text-2xl font-bold tabular-nums text-foreground break-all">{valueText}</span>
         ) : (
           // 수치형
           <div className="flex items-baseline gap-1.5">

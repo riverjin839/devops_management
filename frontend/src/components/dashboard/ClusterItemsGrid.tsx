@@ -34,7 +34,7 @@ export function ClusterItemsGrid({
     return (
       <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
         {[0, 1].map((i) => (
-          <div key={i} className="sm:col-span-2 h-36 rounded-xl bg-secondary/40 animate-pulse" />
+          <div key={i} className="sm:col-span-2 h-36 rounded-md bg-secondary/40 animate-pulse" />
         ))}
       </div>
     );
