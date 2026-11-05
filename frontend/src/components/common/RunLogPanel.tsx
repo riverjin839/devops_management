@@ -11,26 +11,36 @@ interface Props {
   /** 헤더 오른쪽 추가 버튼(예: "결과 상세 보기"). */
   actions?: React.ReactNode;
   maxHeight?: string;
+  /** 로그 중심 화면 — 부모 높이를 채우고(flex-1), 실행 전에도 같은 자리에 대기 상태로 존재하며, 새 줄을 따라간다(DESIGN_SYSTEM §12.6.1). */
+  fill?: boolean;
+  /** fill 모드의 대기 문구. */
+  idleHint?: string;
 }
 
-export function RunLogPanel({ run, show, onShowChange, actions, maxHeight = 'max-h-72' }: Props) {
-  if (!run.running && run.lines.length === 0) return null;
+export function RunLogPanel({
+  run, show, onShowChange, actions, maxHeight = 'max-h-72', fill = false,
+  idleHint = '실행하면 요청·접속·출력이 여기에 실시간으로 쌓입니다.',
+}: Props) {
+  const idle = !run.running && run.lines.length === 0;
+  if (idle && !fill) return null;
   const last = run.lines[run.lines.length - 1];
   const hasError = run.lines.some((l) => l.level === 'error');
 
   return (
-    <section aria-label={`${run.title || '실행'} 로그`} className="rounded-md border border-border bg-muted/20">
+    <section aria-label={`${run.title || '실행'} 로그`} className={`rounded-md border border-border bg-muted/20 ${fill ? 'flex flex-col min-h-0 flex-1' : ''}`}>
       <div className="flex items-center gap-2 px-3 py-2 flex-wrap">
         {run.running ? (
           <Loader2 className="w-4 h-4 animate-spin text-primary" aria-hidden />
+        ) : idle ? (
+          <ScrollText className="w-4 h-4 text-muted-foreground" aria-hidden />
         ) : hasError ? (
           <XCircle className="w-4 h-4 text-status-critical" aria-hidden />
         ) : (
           <CheckCircle2 className="w-4 h-4 text-status-healthy" aria-hidden />
         )}
-        <span className="text-sm font-medium">{run.title || '실행'}</span>
+        <span className="text-sm font-medium">{run.title || '실행 로그'}</span>
         <span role="status" className="text-xs text-muted-foreground">
-          {run.running ? '실행 중' : hasError ? '오류 있음' : '완료'} · {run.lines.length}줄
+          {run.running ? '실행 중' : idle ? '대기' : hasError ? '오류 있음' : '완료'} · {run.lines.length}줄
         </span>
         <div className="ml-auto flex items-center gap-2">
           {actions}
@@ -44,7 +54,7 @@ export function RunLogPanel({ run, show, onShowChange, actions, maxHeight = 'max
             {show ? <ChevronDown className="w-3.5 h-3.5" aria-hidden /> : <ChevronRight className="w-3.5 h-3.5" aria-hidden />}
             <ScrollText className="w-3.5 h-3.5" aria-hidden /> 로그 보기
           </button>
-          {!run.running && (
+          {!run.running && !idle && (
             <button
               type="button"
               onClick={run.clear}
@@ -82,8 +92,14 @@ export function RunLogPanel({ run, show, onShowChange, actions, maxHeight = 'max
       )}
 
       {show ? (
-        <div className="px-2 pb-2">
-          <LogViewer text={formatRunLog(run.lines) || '로그 대기 중…'} maxHeight={maxHeight} />
+        <div className={`px-2 pb-2 ${fill ? 'flex flex-col flex-1 min-h-0' : ''}`}>
+          <LogViewer
+            text={idle ? idleHint : (formatRunLog(run.lines) || '로그 대기 중…')}
+            maxHeight={fill ? 'flex-1 min-h-0' : maxHeight}
+            className={fill ? 'flex flex-col flex-1 min-h-0' : ''}
+            hideToolbar={idle}
+            follow={fill}
+          />
         </div>
       ) : (
         last && (

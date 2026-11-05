@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Copy, Check, Search, WrapText } from 'lucide-react';
 import { useLogTheme } from '@/hooks/useTerminalAppearance';
 import { LogThemeButton } from './LogThemeButton';
@@ -14,6 +14,7 @@ interface LogViewerProps {
   className?: string;
   filterOverride?: string;    // 외부에서 강제 필터 (상위 페이지의 global filter)
   hideToolbar?: boolean;      // 툴바 감춤 (상위가 직접 관리할 때)
+  follow?: boolean;           // 새 줄이 추가되면 맨 아래로 따라간다 (실시간 로그 중심 화면)
 }
 
 // ── 포맷 자동 감지 ──────────────────────────────────────────────────────────
@@ -177,8 +178,9 @@ function PlainView({ text }: { text: string }) {
 
 export function LogViewer({
   text, maxHeight = 'max-h-96', asError = false, collapsible = false, className = '',
-  filterOverride, hideToolbar = false,
+  filterOverride, hideToolbar = false, follow = false,
 }: LogViewerProps) {
+  const preRef = useRef<HTMLPreElement>(null);
   const [wrap, setWrap] = useState(true);
   const [copied, setCopied] = useState(false);
   const [localFilter, setLocalFilter] = useState('');
@@ -209,6 +211,10 @@ export function LogViewer({
       setTimeout(() => setCopied(false), 1500);
     } catch { /* clipboard 거절 */ }
   };
+
+  useEffect(() => {
+    if (follow && preRef.current) preRef.current.scrollTop = preRef.current.scrollHeight;
+  }, [follow, text]);
 
   const lineCount = text.split('\n').length;
   const isEmpty = !text.trim();
@@ -279,6 +285,7 @@ export function LogViewer({
       {/* 본문 */}
       {!collapsed && (
         <pre
+          ref={preRef}
           style={themeStyle}
           className={`text-xs font-mono leading-relaxed px-3 py-2 overflow-auto ${maxHeight} ${
             wrap ? 'whitespace-pre-wrap break-all' : 'whitespace-pre'

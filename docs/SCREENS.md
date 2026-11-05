@@ -1006,10 +1006,9 @@ hover 시 flyout 자체가 라벨을 보여주므로 이름만 뜨는 중복 툴
 - **목적 / UX**: control-plane(master) 노드에 SSH로 접속해 `etcdctl` 명령을 실행(endpoint health, member list, snapshot 등)하거나 `etcd.service`의 systemd 로그(journalctl)를 조회한다. defrag/compact/snapshot 등 위험 명령은 확인 모달에서 경고 표시.
 - **UI 구성**:
   - `ClusterSidebar` 단일 선택(`iconOnly`)
-  - 탭: `etcdctl 실행` / `etcd 서비스 로그`
-  - **10-컬럼 그리드 (mc 클라이언트 콘솔과 동일한 좌/우 한 로우 레이아웃)**: 좌(2) 타겟+인증(master 후보 드롭다운(`master-candidates`) + 수동 host override, user/port, password|key), 중(3) 실행 구성(프리셋 버튼 · env file 옵션 · args/`SavedCommands`/etcdctl 경로/timeout, 로그 탭이면 unit/tail/since/grep), 우(5) 결과 패널.
-  - 결과 패널(`ResultPanel`)은 **실행 전에도 같은 자리에 플레이스홀더**로 존재해 레이아웃이 흔들리지 않고, 카드 내부에서만 세로 스크롤(`lg:h-[calc(100vh-260px)]` + `overflow-y-auto`/`overflow-x-hidden`)된다. 상태 배지 헤더는 sticky, 본문은 executed command + `ExecOutputTabs` stdout/stderr 탭.
-  - 실행 확인 `ConfirmDialog`(위험 명령 정규식 매칭 시 danger 스타일). `useTerminalEnvSync` 로 운영등급 → Appearance 자동 적용.
+  - 탭: `etcdctl 실행` / `etcd 서비스 로그` (방향키 이동, `tabpanel`)
+  - **로그 중심 레이아웃(2026-11-05, `DESIGN_SYSTEM.md` §12.6.1)**: 좌(320px) 제어 카드 — 접히는 `대상·인증`(요약 한 줄) + 프리셋/인자(`SavedCommands`)/입력 중 위험 배지/고급 설정(env·경로·timeout) (로그 탭이면 unit/tail/since/grep) + **하단 고정 실행 바**(실행 ↔ 중지, `Ctrl+Enter`). 우: 상단 **실행 로그**(`RunLogPanel fill`, flex 3 — 실행 전에도 대기 상태로 존재, 새 줄 따라가기, "로그 보기" 토글), 하단 **결과**(`ResultPanel`, flex 2 — 상태 배지·exit·소요 + executed command + `ExecOutputTabs`). 스크롤은 카드 내부 한 겹.
+  - **조회 명령·로그 조회는 확인 없이 바로 실행**, 허용 목록 밖 변경 명령만 `ConfirmDialog` danger. 결과는 탭별로 보관(클러스터 전환 시에만 초기화). 오류는 실행 로그 + 실행 바 `role="alert"` 한 곳(토스트는 403 만). `useTerminalEnvSync` 로 운영등급 → Appearance 자동 적용.
 - **Frontend**: `useClusters()`, `useQuery(['etcdctl','masters',clusterId])`(`etcdctlApi.masters`), `useQuery(['etcdctl','presets',clusterId])`(`etcdctlApi.presets`), `useAbortableMutation`으로 `etcdctlApi.run` / `etcdctlApi.logs`. 호출 함수: `etcdctlApi.{presets,masters,run,logs}`.
 - **Backend**: `GET /api/v1/clusters/{cluster_id}/etcdctl/presets`, `GET .../etcdctl/master-candidates`, `POST .../etcdctl/run`, `POST .../etcdctl/logs` — `backend/app/routers/etcdctl.py`. master 후보는 control-plane 라벨 노드를 K8s SDK로 조회, 실행은 SSH 러너(bulk_exec와 유사한 SSH 실행 계층)로 `etcdctl` 바이너리/env file을 원격 실행, 로그는 `journalctl -u {unit}` 실행.
 - **핵심 기능**:
