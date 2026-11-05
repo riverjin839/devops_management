@@ -8,7 +8,9 @@
 
 ## [Unreleased]
 
-1.85.0 이후 main 에 병합된 변경 (다음 릴리스 후보).
+1.85.1 이후 main 에 병합된 변경 (다음 릴리스 후보).
+
+## [1.85.1] - 2026-11-05
 
 ### Fixed
 - **celery-worker·celery-beat 기동 실패(redis 트랜스포트 버전 불일치)**: kombu 가 고정돼 있지 않아 새 이미지 빌드에서 kombu 5.7.0(redis-py 6.1.0 이상 요구)이 설치되고, 고정된 redis-py 5.0.1 과 충돌했다. kombu 를 5.6.2 로 고정한다. Backend: `requirements.txt`.
