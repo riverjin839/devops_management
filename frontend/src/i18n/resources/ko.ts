@@ -187,6 +187,8 @@ export const ko = {
     },
   },
   home: {
+    viewAria: '플랫폼 현황 보기',
+    rangeAria: '진행 현황 범위',
     title: '홈',
     tabsAria: '홈 화면 보기',
     tab: {

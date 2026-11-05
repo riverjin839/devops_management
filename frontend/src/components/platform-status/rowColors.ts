@@ -11,7 +11,7 @@ export interface RowColorPreset {
   label: string;
   /** 행 라벨 셀 배경 틴트 */
   bg: string;
-  /** 좌측 컬러 바 */
+  /** 좌측 컬러 바(배경색 — border-l 은 둥근 모서리와 충돌해 별도 요소로 그린다) */
   bar: string;
   /** 영역 칩(배경+글자+보더) */
   chip: string;
@@ -23,56 +23,56 @@ export const ROW_COLOR_PRESETS: RowColorPreset[] = [
   {
     key: 'chart-1', label: '블루',
     bg: 'bg-[hsl(var(--chart-1)/0.07)]',
-    bar: 'border-l-[hsl(var(--chart-1)/0.6)]',
+    bar: 'bg-[hsl(var(--chart-1)/0.6)]',
     chip: 'bg-[hsl(var(--chart-1)/0.12)] text-[hsl(var(--chart-1))] border-[hsl(var(--chart-1)/0.35)]',
     swatch: 'bg-[hsl(var(--chart-1))]',
   },
   {
     key: 'chart-2', label: '틸',
     bg: 'bg-[hsl(var(--chart-2)/0.07)]',
-    bar: 'border-l-[hsl(var(--chart-2)/0.6)]',
+    bar: 'bg-[hsl(var(--chart-2)/0.6)]',
     chip: 'bg-[hsl(var(--chart-2)/0.12)] text-[hsl(var(--chart-2))] border-[hsl(var(--chart-2)/0.35)]',
     swatch: 'bg-[hsl(var(--chart-2))]',
   },
   {
     key: 'chart-3', label: '앰버',
     bg: 'bg-[hsl(var(--chart-3)/0.07)]',
-    bar: 'border-l-[hsl(var(--chart-3)/0.6)]',
+    bar: 'bg-[hsl(var(--chart-3)/0.6)]',
     chip: 'bg-[hsl(var(--chart-3)/0.12)] text-[hsl(var(--chart-3))] border-[hsl(var(--chart-3)/0.35)]',
     swatch: 'bg-[hsl(var(--chart-3))]',
   },
   {
     key: 'chart-4', label: '바이올렛',
     bg: 'bg-[hsl(var(--chart-4)/0.07)]',
-    bar: 'border-l-[hsl(var(--chart-4)/0.6)]',
+    bar: 'bg-[hsl(var(--chart-4)/0.6)]',
     chip: 'bg-[hsl(var(--chart-4)/0.12)] text-[hsl(var(--chart-4))] border-[hsl(var(--chart-4)/0.35)]',
     swatch: 'bg-[hsl(var(--chart-4))]',
   },
   {
     key: 'chart-5', label: '로즈',
     bg: 'bg-[hsl(var(--chart-5)/0.07)]',
-    bar: 'border-l-[hsl(var(--chart-5)/0.6)]',
+    bar: 'bg-[hsl(var(--chart-5)/0.6)]',
     chip: 'bg-[hsl(var(--chart-5)/0.12)] text-[hsl(var(--chart-5))] border-[hsl(var(--chart-5)/0.35)]',
     swatch: 'bg-[hsl(var(--chart-5))]',
   },
   {
     key: 'chart-6', label: '시안',
     bg: 'bg-[hsl(var(--chart-6)/0.07)]',
-    bar: 'border-l-[hsl(var(--chart-6)/0.6)]',
+    bar: 'bg-[hsl(var(--chart-6)/0.6)]',
     chip: 'bg-[hsl(var(--chart-6)/0.12)] text-[hsl(var(--chart-6))] border-[hsl(var(--chart-6)/0.35)]',
     swatch: 'bg-[hsl(var(--chart-6))]',
   },
   {
     key: 'chart-7', label: '오렌지',
     bg: 'bg-[hsl(var(--chart-7)/0.07)]',
-    bar: 'border-l-[hsl(var(--chart-7)/0.6)]',
+    bar: 'bg-[hsl(var(--chart-7)/0.6)]',
     chip: 'bg-[hsl(var(--chart-7)/0.12)] text-[hsl(var(--chart-7))] border-[hsl(var(--chart-7)/0.35)]',
     swatch: 'bg-[hsl(var(--chart-7))]',
   },
   {
     key: 'chart-8', label: '슬레이트',
     bg: 'bg-[hsl(var(--chart-8)/0.07)]',
-    bar: 'border-l-[hsl(var(--chart-8)/0.6)]',
+    bar: 'bg-[hsl(var(--chart-8)/0.6)]',
     chip: 'bg-[hsl(var(--chart-8)/0.12)] text-[hsl(var(--chart-8))] border-[hsl(var(--chart-8)/0.35)]',
     swatch: 'bg-[hsl(var(--chart-8))]',
   },

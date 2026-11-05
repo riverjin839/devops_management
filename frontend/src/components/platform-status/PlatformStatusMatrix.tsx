@@ -1271,10 +1271,11 @@ export function PlatformStatusMatrix({ toolbarSlot }: PlatformStatusMatrixProps 
                               role="group"
                               aria-label={`${item.name} 행`}
                               style={{ minHeight: ROW_MIN_H[rowDensity] }}
-                              className={`flex items-center gap-1.5 min-w-0 rounded-md px-1.5 border-l-2 ${
-                                color ? `${color.bg} ${color.bar}` : 'border-l-transparent'
+                              className={`relative flex items-center gap-1.5 min-w-0 rounded-md pl-2 pr-1.5 ${
+                                color ? color.bg : ''
                               }`}
                             >
+                              {color && <span aria-hidden className={`absolute left-0 inset-y-1 w-0.5 rounded-full ${color.bar}`} />}
                               {grip}
                               {nameSpan}
                               {sourceMeta}
@@ -1287,10 +1288,11 @@ export function PlatformStatusMatrix({ toolbarSlot }: PlatformStatusMatrixProps 
                             role="group"
                             aria-label={`${item.name} 행`}
                             style={{ minHeight: ROW_MIN_H[rowDensity] }}
-                            className={`flex flex-col justify-center gap-0.5 min-w-0 rounded-md px-1.5 py-1 border-l-2 ${
-                              color ? `${color.bg} ${color.bar}` : 'border-l-transparent'
+                            className={`relative flex flex-col justify-center gap-0.5 min-w-0 rounded-md pl-2 pr-1.5 py-1 ${
+                              color ? color.bg : ''
                             }`}
                           >
+                            {color && <span aria-hidden className={`absolute left-0 inset-y-1 w-0.5 rounded-full ${color.bar}`} />}
                             <div className="flex items-center gap-1.5 min-w-0">
                               {grip}
                               {nameSpan}

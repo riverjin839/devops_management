@@ -1,5 +1,5 @@
 /**
- * 권한 점검 — "이 SA 로 정말 배포·로그 조회가 되나" 를 API server 에 직접 물어본다.
+ * 권한 점검 — "이 ServiceAccount 로 정말 배포·로그 조회가 되나" 를 API server 에 직접 물어본다.
  *
  * 규칙을 눈으로 읽어 추측하는 것과 다른 값이 나오는 경우가 실제로 있다(다른 바인딩이
  * 겹치거나, 네임스페이스에 별도 정책이 걸려 있을 때). 그래서 SubjectAccessReview 를 쓴다.
@@ -23,7 +23,7 @@ interface Props {
 export function AccessReviewPanel({ clusterId, serviceAccounts }: Props) {
   const toast = useToastSafe();
   const review = useAccessReview(clusterId);
-  // 점검 대상은 URL 에 둔다(D-029) — "이 SA 권한 봐 주세요" 를 링크로 넘길 수 있다.
+  // 점검 대상은 URL 에 둔다(D-029) — "이 ServiceAccount 권한 봐 주세요" 를 링크로 넘길 수 있다.
   const [params, setParams] = useUrlParams({ reviewSa: '' });
   const target = params.reviewSa;
   const setTarget = (v: string) => setParams({ reviewSa: v });
@@ -40,7 +40,7 @@ export function AccessReviewPanel({ clusterId, serviceAccounts }: Props) {
   const run = async () => {
     const chosen = options.find((sa) => `${sa.namespace}/${sa.name}` === target);
     if (!chosen) return;
-    // 이 SA 가 실제로 바인딩된 네임스페이스 전부를 대상으로 본다 — 주 네임스페이스만
+    // 이 ServiceAccount 가 실제로 바인딩된 네임스페이스 전부를 대상으로 본다 — 주 네임스페이스만
     // 확인하면 "다른 네임스페이스도 되는지" 라는 정작 궁금한 걸 놓친다.
     const namespaces = Array.from(
       new Set([

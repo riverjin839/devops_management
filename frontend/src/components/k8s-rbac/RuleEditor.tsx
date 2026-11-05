@@ -150,7 +150,7 @@ export function RuleEditor({ rules, onChange, disabled, disabledHint }: RuleEdit
                             onClick={() => toggleVerb(idx, verb)}
                             title={disabled ? disabledHint : `${verb}${write ? ' (쓰기 동작)' : ''} ${on ? '해제' : '추가'}`}
                             aria-pressed={on}
-                            className={`font-mono text-xs px-1.5 py-0.5 rounded border disabled:opacity-60 ${
+                            className={`font-mono text-xs px-1.5 py-0.5 rounded-md border disabled:opacity-60 ${
  on
  ? write
  ? 'bg-primary border-primary text-primary-foreground font-semibold'
@@ -159,6 +159,7 @@ export function RuleEditor({ rules, onChange, disabled, disabledHint }: RuleEdit
  }`}
                           >
                             {verb}
+                            {write && <span className="sr-only"> (쓰기 동작)</span>}
                           </button>
                         );
                       })}

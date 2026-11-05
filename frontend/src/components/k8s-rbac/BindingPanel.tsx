@@ -190,7 +190,7 @@ export function BindingPanel({
             id="rbac-binding-search"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="SA / 롤 / 네임스페이스 검색…"
+            placeholder="ServiceAccount / 롤 / 네임스페이스 검색…"
             className="w-full pl-9 pr-3 py-2 bg-secondary border border-border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
           />
         </div>
@@ -210,7 +210,7 @@ export function BindingPanel({
           type="button"
           onClick={() => setCreating(!creating)}
           disabled={!canOperate}
-          title={withHint('새 바인딩 추가 — 기존 SA 에 기존 Role/ClusterRole 을 묶습니다')}
+          title={withHint('새 바인딩 추가 — 기존 ServiceAccount 에 기존 Role/ClusterRole 을 묶습니다')}
           aria-label={ariaWithHint('새 바인딩 추가')}
           className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-primary text-primary-foreground text-xs font-medium disabled:opacity-50 disabled:cursor-not-allowed"
         >
@@ -390,7 +390,7 @@ export function BindingPanel({
                     key={h || i}
                     className="text-left px-3 py-2 text-xs font-semibold text-muted-foreground whitespace-nowrap"
                   >
-                    {h}
+                    {h || <span className="sr-only">작업</span>}
                   </th>
                 ))}
               </tr>
@@ -415,7 +415,7 @@ export function BindingPanel({
                   <td className="px-3 py-2 font-mono text-xs">
                     {b.subjects.map((s, i) => (
                       <div key={i}>
-                        {s.kind === 'ServiceAccount' ? `SA ${s.namespace}/${s.name}` : `${s.kind} ${s.name}`}
+                        {s.kind === 'ServiceAccount' ? `ServiceAccount ${s.namespace}/${s.name}` : `${s.kind} ${s.name}`}
                       </div>
                     ))}
                   </td>

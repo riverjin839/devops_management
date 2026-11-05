@@ -1,6 +1,6 @@
 export { PodTerminal } from './PodTerminal';
 export { SshTerminalWindow } from './SshTerminalWindow';
-export type { SshTerminalWindowProps, SshTerminalStatus } from './SshTerminalWindow';
+export type { SshTerminalWindowProps, SshTerminalStatus, SshTerminalEvent } from './SshTerminalWindow';
 export { K9sTerminal } from './K9sTerminal';
 export type { K9sConnectParams } from './K9sTerminal';
 export { NodeSshTerminal } from './NodeSshTerminal';

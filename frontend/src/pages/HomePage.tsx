@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import {
@@ -10,8 +10,13 @@ import { MemberTodayTodos } from '@/components/dashboard/MemberTodayTodos';
 import { WorkCalendar } from '@/components/dashboard/WorkCalendar';
 import { WeeklyStatusTimeline } from '@/components/dashboard/WeeklyStatusTimeline';
 import { DayScheduleBoard } from '@/components/dashboard/DayScheduleBoard';
-import { PlatformStatusMatrix } from '@/components/platform-status';
-import { BatchJobsPage } from '@/pages/BatchJobsPage';
+// 플랫폼 탭(대형 매트릭스)·배치잡은 업무 탭만 쓰는 사용자에겐 불필요 — 열 때 로드한다.
+const PlatformStatusMatrix = lazy(() =>
+  import('@/components/platform-status').then((m) => ({ default: m.PlatformStatusMatrix })),
+);
+const BatchJobsPage = lazy(() =>
+  import('@/pages/BatchJobsPage').then((m) => ({ default: m.BatchJobsPage })),
+);
 import { useClusterStore } from '@/stores/clusterStore';
 import { useClusters } from '@/hooks/useCluster';
 import { useCheckMatrixFailureCount } from '@/hooks/useCheckMatrix';
@@ -39,10 +44,20 @@ export function HomePage() {
   }, [homePrefs, setHomeTab]);
 
   const saveTimerRef = useRef<number | undefined>(undefined);
+  // 언마운트 시 대기 중인 저장을 취소하지 않고 즉시 flush — 500ms 안에 화면을 떠나도 선택이 유실되지 않는다.
+  const pendingTabRef = useRef<HomeTab | null>(null);
+  const mutateRef = useRef(updateHomePrefs.mutate);
+  mutateRef.current = updateHomePrefs.mutate;
+  useEffect(() => () => {
+    window.clearTimeout(saveTimerRef.current);
+    if (pendingTabRef.current) mutateRef.current({ defaultHomeTab: pendingTabRef.current });
+  }, []);
   const selectHomeTab = (tab: HomeTab) => {
     setHomeTab(tab);
+    pendingTabRef.current = tab;
     window.clearTimeout(saveTimerRef.current);
     saveTimerRef.current = window.setTimeout(() => {
+      pendingTabRef.current = null;
       updateHomePrefs.mutate({ defaultHomeTab: tab });
     }, 500);
   };
@@ -114,7 +129,7 @@ export function HomePage() {
           제거해 이 탭 줄이 홈의 최상단이 됐다 — 신호는 위험/실패가 있을 때만 뜨는
           탭 배지 하나로 압축했다. 플랫폼 탭일 때는 오른쪽에 매트릭스 툴바(portal slot)를
           같은 줄에 이어 붙여 카드 헤더 줄 하나를 통째로 줄인다. ───────── */}
-      <div className="flex-none flex items-center gap-2 px-3 lg:px-4 py-2 border-b border-border bg-background">
+      <div className="flex-none flex flex-wrap items-center gap-2 px-3 lg:px-4 py-2 border-b border-border bg-background">
         <div
           role="tablist"
           aria-label={t('home.tabsAria')}
@@ -130,7 +145,7 @@ export function HomePage() {
               onClick={() => selectHomeTab(tab.key)}
               onKeyDown={(e) => handleTabKeyDown(e, idx)}
               className={cn(
-                'flex items-center gap-1.5 px-3 py-1.5 transition-colors',
+                'flex items-center gap-1.5 px-3 py-1.5 [@media(pointer:coarse)]:py-3 transition-colors',
                 idx > 0 && 'border-l border-border',
                 homeTab === tab.key
                   ? 'bg-primary text-primary-foreground font-semibold'
@@ -142,21 +157,21 @@ export function HomePage() {
               {!!tab.badge && (
                 <span
                   className={cn(
-                    'inline-flex items-center justify-center min-w-[1.1rem] h-[1.1rem] px-1 rounded-full text-xs font-bold tabular-nums',
+                    'inline-flex items-center justify-center min-w-[1.1rem] h-[1.1rem] px-1 rounded-full whitespace-nowrap text-xs font-bold tabular-nums',
                     homeTab === tab.key
                       ? 'bg-primary-foreground/20 text-primary-foreground'
                       : 'bg-status-critical/15 text-status-critical',
                   )}
                   title={t('home.tab.badgeTitle', { clusters: criticalClusters, cells: checkFailureCount ?? 0 })}
                 >
-                  {tab.badge}
+                  {tab.badge > 99 ? '99+' : tab.badge}
                 </span>
               )}
             </button>
           ))}
         </div>
         {homeTab === 'platform' && (
-          <div ref={setPlatformToolbarSlot} className="flex-1 min-w-0 flex items-center gap-2" />
+          <div ref={setPlatformToolbarSlot} className="flex-1 min-w-[16rem] flex flex-wrap items-center gap-2" />
         )}
       </div>
 
@@ -168,12 +183,17 @@ export function HomePage() {
         return (
           <div className="flex-1 min-h-0 px-3 pt-2 pb-3 flex flex-col gap-2 overflow-hidden">
             {batchJobsAllowed && (
-              <div className="flex-none inline-flex items-center self-start rounded-lg border border-border overflow-hidden text-xs">
+              <div
+                role="group"
+                aria-label={t('home.viewAria')}
+                className="flex-none inline-flex items-center self-start rounded-lg border border-border overflow-hidden text-xs"
+              >
                 <button
                   type="button"
+                  aria-pressed={effectiveView === 'matrix'}
                   onClick={() => setPlatformView('matrix')}
                   className={cn(
-                    'flex items-center gap-1.5 px-2.5 py-1.5 transition-colors',
+                    'flex items-center gap-1.5 px-2.5 py-1.5 [@media(pointer:coarse)]:py-3 transition-colors',
                     effectiveView === 'matrix'
                       ? 'bg-secondary text-foreground font-semibold'
                       : 'text-muted-foreground hover:bg-secondary/60 hover:text-foreground',
@@ -183,9 +203,10 @@ export function HomePage() {
                 </button>
                 <button
                   type="button"
+                  aria-pressed={effectiveView === 'batch'}
                   onClick={() => setPlatformView('batch')}
                   className={cn(
-                    'flex items-center gap-1.5 px-2.5 py-1.5 border-l border-border transition-colors',
+                    'flex items-center gap-1.5 px-2.5 py-1.5 [@media(pointer:coarse)]:py-3 border-l border-border transition-colors',
                     effectiveView === 'batch'
                       ? 'bg-secondary text-foreground font-semibold'
                       : 'text-muted-foreground hover:bg-secondary/60 hover:text-foreground',
@@ -197,7 +218,9 @@ export function HomePage() {
             )}
             {effectiveView === 'matrix' ? (
               <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
-                <PlatformStatusMatrix toolbarSlot={platformToolbarSlot} />
+                <Suspense fallback={<p className="p-3 text-sm text-muted-foreground" role="status">{t('common.status.loading')}</p>}>
+                  <PlatformStatusMatrix toolbarSlot={platformToolbarSlot} />
+                </Suspense>
               </div>
             ) : (
               // BatchJobsPage 는 원래 독립 라우트 페이지라 자체 전체높이 셸을 두른다 —
@@ -205,7 +228,9 @@ export function HomePage() {
               // (Your Island 패널이 페이지 컴포넌트를 임베드할 때 쓰는 것과 같은 패턴).
               <div className="island-embed flex-1 min-h-0 overflow-auto">
                 {/* 홈에 이미 sr-only h1 이 있어 임베드 제목은 h2 로(§12.12-1, D-149) */}
-                <BatchJobsPage headingLevel={2} />
+                <Suspense fallback={<p className="p-3 text-sm text-muted-foreground" role="status">{t('common.status.loading')}</p>}>
+                  <BatchJobsPage headingLevel={2} />
+                </Suspense>
               </div>
             )}
           </div>
@@ -245,29 +270,35 @@ export function HomePage() {
               bodyPadding="p-0"
               className="flex-1 min-h-0 flex flex-col"
               actions={
-                <div className="flex items-center rounded-md border border-border overflow-hidden text-xs">
+                <div role="group" aria-label={t('home.rangeAria')} className="flex items-center rounded-md border border-border overflow-hidden text-xs">
                   <button
+                    type="button"
+                    aria-pressed={weeklyTab === 'week'}
                     onClick={() => setWeeklyTab('week')}
                     className={cn(
-                      'px-2 py-1 transition-colors',
+                      'px-2 py-1 [@media(pointer:coarse)]:py-2.5 transition-colors',
                       weeklyTab === 'week' ? 'bg-primary text-primary-foreground' : 'hover:bg-secondary text-muted-foreground',
                     )}
                   >
                     {t('home.range.week')}
                   </button>
                   <button
+                    type="button"
+                    aria-pressed={weeklyTab === 'month'}
                     onClick={() => setWeeklyTab('month')}
                     className={cn(
-                      'px-2 py-1 border-l border-border transition-colors',
+                      'px-2 py-1 [@media(pointer:coarse)]:py-2.5 border-l border-border transition-colors',
                       weeklyTab === 'month' ? 'bg-primary text-primary-foreground' : 'hover:bg-secondary text-muted-foreground',
                     )}
                   >
                     {t('home.range.month')}
                   </button>
                   <button
+                    type="button"
+                    aria-pressed={weeklyTab === 'member'}
                     onClick={() => setWeeklyTab('member')}
                     className={cn(
-                      'px-2 py-1 border-l border-border transition-colors',
+                      'px-2 py-1 [@media(pointer:coarse)]:py-2.5 border-l border-border transition-colors',
                       weeklyTab === 'member' ? 'bg-primary text-primary-foreground' : 'hover:bg-secondary text-muted-foreground',
                     )}
                   >

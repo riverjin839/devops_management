@@ -441,6 +441,7 @@ hover 시 flyout 자체가 라벨을 보여주므로 이름만 뜨는 중복 툴
   - master 노드 후보 자동 조회 + 수동 host override, 비밀번호/Private Key 인증.
   - 네임스페이스 지정·읽기 전용(`--readonly`) 옵션, 1시간 세션 상한.
 - **13차 감사(2026-10-20)**: 보호 운영레벨 클러스터는 `--readonly` 가 기본으로 켜지고 끌 때 danger 확인. 열린 세션을 끊거나 클러스터를 바꿀 때 확인, 새로고침·탭 닫기 `beforeunload`, 1시간 상한 남은 시간 표시 + 5분 전 경고(연장 없음). 새 창 handoff 는 저장소 없는 `postMessage` 왕복(실패 시 "다시 열기"). 연결 거부 안내: 4401 세션 만료 / 4402 권한 없음 / 4413 테넌트. **보호 운영레벨**(Settings ▸ 운영레벨 "보호", 기본 운영·DR) 클러스터는 연결 전 확인 창(대상·계정·인증·읽기 전용 여부). 최상단 `useTerminalEnvSync`(팝업 포함).
+- **UX 비평 반영(2026-11-04)**: 헤더에 클러스터명·운영레벨 배지(보호 레벨만 경고색) 상시 표시, 연결 시도마다 **실행 로그 패널**(RunLogPanel — 웹소켓 시도·열림·첫 응답·종료 코드, 첫 응답 전 종료는 접속 실패로 기록, 「로그 보기」는 `useLogPref('k9s-connect')` 로 기억). 읽기 전용은 상태 문구가 있는 안전 행. 접속 폼은 `<form>`(Enter 로 연결), 호스트·계정·포트·인증 방식·네임스페이스를 클러스터별로 localStorage(`k9s:last:<id>`)에 기억(비밀번호·개인키 제외), 「별도 창으로 연결」은 보조 버튼, 세션 중에는 대상·읽기 전용 요약 카드. 포트 1–65535 검증, 직접 입력 호스트 우선 안내, root 경고, 연결 버튼 연타 잠금. `SshTerminalWindow` 는 `onEvent` 로 연결 이벤트(첫 응답 `ready`·첫 응답 전 종료 `failed`)를 알린다. 재비평 반영: 운영레벨 미지정·로딩 중은 보호 레벨로 취급(fail-closed), 로그 핸들은 세션 동안 유지(끊김·만료 기록)·「중단」·15초 지연 경고, 웹소켓 열림 후 첫 응답 전에는 「SSH 접속 중…」, 접속 실패는 창을 닫고 폼으로 복귀(사유 배너·값 유지, 성공 시에만 클러스터별 기억), 포트·네임스페이스는 「고급」 접이식.
 - **요청사항 (수정 요청)**:
   - _(여기에 개선/수정 요청을 직접 적어주세요)_
 
@@ -844,10 +845,10 @@ hover 시 flyout 자체가 라벨을 보여주므로 이름만 뜨는 중복 툴
 - **목적 / UX**: 개발자가 **자기 LOCAL 의 kubectl 로** 클러스터에 붙어 배포하고 로그를 보는 데 필요한 ServiceAccount · (Cluster)Role · Binding · kubeconfig 한 세트를 화면에서 만들고 편집·회수한다. 배포는 보통 자기 네임스페이스 기준이지만 다른 네임스페이스도 권한이 필요할 수 있어, 발급 마법사가 주 네임스페이스 + 추가 네임스페이스를 함께 받아 한 번에 붙인다.
 - **UI 구성**:
   - `ClusterSidebar` — `iconOnly` (per-cluster 페이지 규칙)
-  - 탭(`SegTabs mode="tabs"`) 오른쪽에 **"로그 보기"** 스위치(`SwitchToggle`, 액세스 발급 탭) — 실행 로그는 항상 수집하고 펼침 여부만 사용자가 정한다. 나머지 탭의 쓰기 동작(SA 생성·재발급·회수·삭제, Role 저장·삭제, 바인딩 생성·삭제)은 탭마다 `RunLogPanel`(자체 로그 보기)로 남긴다
+  - **"로그 보기"** 스위치(`SwitchToggle`)는 실행 로그 카드(`ProvisionConsole`) 우상단 `actions` 슬롯에 둔다(실행 전·중·후 같은 자리) — 실행 로그는 항상 수집하고 펼침 여부만 사용자가 정한다. 나머지 탭의 쓰기 동작은 각 패널의 표준 실행 로그를 쓴다.
   - 탭 5개: **액세스 발급**(마법사) / **ServiceAccount** / **롤** / **바인딩** / **권한 점검** — 마법사·롤 편집은 탭을 옮겨도 마운트를 유지해 입력이 남는다
   - 탭 위 **발급된 kubeconfig** 카드(`IssuedCredentialCard`) — 마법사 발급·SA 재발급 공용. 값은 메모리 스토어(`rbacCredentialStore`)에 있어 탭·허브 뷰·클러스터를 옮겨도 닫기 전까지 남고, 토큰은 기본으로 가려(끝 4자, "토큰 보기") 보인다(복사·저장은 원문). 카드가 떠 있는 동안 새로고침·창 닫기는 브라우저 이탈 확인
-  - 액세스 발급 탭은 좌(컨트롤) / 우(결과) 2열 — 좌측 5단계(프리셋 → 대상 → 바인딩 방식 → 규칙 → 발급 옵션) + 하단 sticky 실행 바, 우측은 단계 칩 + 실시간 로그(`LogViewer`) + 발급된 kubeconfig
+  - 액세스 발급 탭은 좌(컨트롤) / 우(결과) 2열 — 좌측은 프리셋 → 대상 → 권한 규칙 + 접힌 **고급 설정**(바인딩 방식·토큰 유효기간(만료 없음 포함 단일 select)·kubeconfig/검증 스위치) 이고, 하단 sticky 바가 범위·동작(읽기/쓰기)·토큰 만료·만들 오브젝트·확인 필요 건수를 입력과 함께 실시간(`aria-live`)으로 보여준다. 실행은 `액세스 발급 실행`(위험 사유가 있으면 이름 재입력 확인) + 보조 `모의 실행` 버튼. 우측은 단계 칩 + 실시간 로그 + 발급 결과 카드(권한 점검·회수 바로가기: `?tab=review&reviewSa=ns/name`, `?tab=sa&saQ=&saNs=`)
 - **Frontend**: `useRbacPresets` / `useRbacNamespaces` / `useRbacServiceAccounts` / `useRbacRoles` / `useRbacClusterRoles` / `useRbacBindings` (TanStack Query), `useCreateServiceAccount` · `useDeleteServiceAccount` · `useUpsertRole` · `useDeleteRole` · `useDeleteBinding` · `useAccessReview` · `useIssueKubeconfig` (mutation), 그리고 실행 전용 `useProvisionStream` — SSE 를 fetch+reader 로 소비해 `logs` / `steps` / `result` 로 풀어준다(`hooks/useK8sRbac.ts`). 호출 레이어는 `k8sRbacApi` · `k8sRbacStreamUrl`(`services/api.ts`). 쓰기 버튼은 `useCanOperate(clusterId)` 로 viewer·테넌트 비멤버에게 `disabled` + 사유를 붙인다.
 - **Backend**: `backend/app/routers/k8s_rbac.py` — `/api/v1/clusters/{cluster_id}/rbac/*`. 조회(`GET presets|namespaces|service-accounts|roles|cluster-roles|bindings`)는 인증만, 쓰기(`POST service-accounts`, `PUT roles/{ns}/{name}`, `PUT cluster-roles/{name}`, `DELETE …`, `POST kubeconfig`, `POST provision`, `POST provision/stream`)는 `require_operator` + 감사 로그. 서비스는 `services/k8s_rbac_service.py`(`RbacService` — 클러스터별 격리 `Configuration`, TokenRequest·장기 Secret 토큰, kubeconfig 조립, SubjectAccessReview, 단계별 로그를 yield 하는 `provision()`)와 `services/k8s_rbac_presets.py`(프리셋·바인딩 방식 카탈로그). DB 모델 관여 없음(순수 K8s API 프록시 + 감사 로그).
 - **핵심 기능**:

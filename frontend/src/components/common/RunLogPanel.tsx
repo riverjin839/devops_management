@@ -39,11 +39,10 @@ export function RunLogPanel({ run, show, onShowChange, actions, maxHeight = 'max
             onClick={() => onShowChange(!show)}
             aria-pressed={show}
             title={show ? '로그 숨기기' : '로그 보기'}
-            aria-label={show ? '로그 숨기기' : '로그 보기'}
             className="text-xs inline-flex items-center gap-1 px-2 py-1 rounded-xl border border-border bg-background hover:bg-secondary"
           >
-            {show ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
-            <ScrollText className="w-3.5 h-3.5" /> 로그 보기
+            {show ? <ChevronDown className="w-3.5 h-3.5" aria-hidden /> : <ChevronRight className="w-3.5 h-3.5" aria-hidden />}
+            <ScrollText className="w-3.5 h-3.5" aria-hidden /> 로그 보기
           </button>
           {!run.running && (
             <button

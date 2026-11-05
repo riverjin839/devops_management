@@ -225,7 +225,7 @@ export function CheckMatrixCellDetailModal({ item, cluster, cell, timezone = DEF
               role="tab"
               aria-selected={tab === t.value}
               onClick={() => setTab(t.value)}
-              className={`px-3 py-1.5 text-xs font-medium rounded-t-lg border-b-2 transition-colors ${
+              className={`px-3 py-1.5 text-xs font-medium border-b-2 transition-colors ${
                 tab === t.value
                   ? 'border-primary text-foreground'
                   : 'border-transparent text-muted-foreground hover:text-foreground'

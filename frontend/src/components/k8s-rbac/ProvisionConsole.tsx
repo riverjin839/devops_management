@@ -6,19 +6,28 @@
  * 실행이 끝난 뒤 펼쳐도 전체 로그가 그대로 있다.
  */
 import { useMemo } from 'react';
-import { Check, Loader2, ShieldCheck, ShieldX, Square, X } from 'lucide-react';
-import { EmptyState, LogViewer } from '@/components/common';
+import { Check, Loader2, ShieldCheck, ShieldX, Square, Trash2, X } from 'lucide-react';
+import { EmptyState, LogViewer, SwitchToggle } from '@/components/common';
 import { MacCard } from '@/components/ui/MacCard';
+import { useCanOperate } from '@/hooks/useCanOperate';
 import { PROVISION_STEPS, type ProvisionStream } from '@/hooks/useK8sRbac';
 
 interface ProvisionConsoleProps {
+  clusterId: string;
   stream: ProvisionStream;
   showLogs: boolean;
+  onShowLogsChange: (v: boolean) => void;
+  /** 발급 결과의 ServiceAccount 를 권한 점검 탭에서 바로 확인 */
+  onReview: (namespace: string, serviceAccount: string) => void;
+  /** 발급 결과의 ServiceAccount 를 ServiceAccount 탭에서 열어 회수 */
+  onRevoke: (namespace: string, serviceAccount: string) => void;
 }
+
+const STEP_STATUS_TEXT: Record<string, string> = { done: '완료', running: '진행 중', pending: '대기', error: '실패' };
 
 function StepChips({ steps, running }: { steps: ProvisionStream['steps']; running: boolean }) {
   return (
-    <div className="flex flex-wrap gap-1.5">
+    <div className="flex flex-wrap gap-1.5" role="status" aria-live="polite" aria-label="발급 진행 단계">
       {PROVISION_STEPS.map(({ key, label }) => {
         const status = steps[key] ?? 'pending';
         const cls =
@@ -32,9 +41,10 @@ function StepChips({ steps, running }: { steps: ProvisionStream['steps']; runnin
             key={key}
             className={`inline-flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-full border ${cls}`}
           >
-            {status === 'done' && <Check className="w-3 h-3" />}
-            {status === 'running' && running && <Loader2 className="w-3 h-3 animate-spin" />}
+            {status === 'done' && <Check className="w-3 h-3" aria-hidden="true" />}
+            {status === 'running' && running && <Loader2 className="w-3 h-3 animate-spin" aria-hidden="true" />}
             {label}
+            <span className="sr-only">{STEP_STATUS_TEXT[status] ?? status}</span>
           </span>
         );
       })}
@@ -42,8 +52,9 @@ function StepChips({ steps, running }: { steps: ProvisionStream['steps']; runnin
   );
 }
 
-export function ProvisionConsole({ stream, showLogs }: ProvisionConsoleProps) {
+export function ProvisionConsole({ clusterId, stream, showLogs, onShowLogsChange, onReview, onRevoke }: ProvisionConsoleProps) {
   const { running, logs, steps, result, error, abort } = stream;
+  const { canOperate, withHint } = useCanOperate(clusterId);
 
   const logText = useMemo(
     () =>
@@ -60,10 +71,22 @@ export function ProvisionConsole({ stream, showLogs }: ProvisionConsoleProps) {
   const denied = result?.accessReview.filter((r) => !r.allowed) ?? [];
   const allowedCount = (result?.accessReview.length ?? 0) - denied.length;
 
+  // 로그 보기 선택은 실행 전에도 보이게 — 어느 상태에서든 같은 자리에 같은 토글이 있다.
+  const logToggle = (
+    <SwitchToggle
+      checked={showLogs}
+      onChange={onShowLogsChange}
+      label="로그 보기"
+      title={showLogs ? '실행 로그 접기' : '실행 로그 펼치기'}
+    />
+  );
+
   if (!running && logs.length === 0 && !result && !error) {
     return (
-      <EmptyState icon={ShieldCheck} title="아직 발급을 실행하지 않았습니다."
-        description="왼쪽에서 대상과 권한을 정한 뒤 '액세스 발급 실행'을 누르면 단계별 로그와 발급된 kubeconfig 가 여기에 나옵니다." />
+      <MacCard title="실행 로그" actions={logToggle}>
+        <EmptyState icon={ShieldCheck} title="아직 발급을 실행하지 않았습니다."
+          description="왼쪽에서 대상과 권한을 정한 뒤 '액세스 발급 실행'을 누르면 단계별 로그와 발급된 kubeconfig 가 여기에 나옵니다." />
+      </MacCard>
     );
   }
 
@@ -72,8 +95,10 @@ export function ProvisionConsole({ stream, showLogs }: ProvisionConsoleProps) {
       <MacCard
         title="실행 로그"
         titleExtra={<span className="text-xs text-muted-foreground tabular-nums">{logs.length}줄</span>}
-        actions={running ? (
+        actions={(
           <>
+            {logToggle}
+            {running && (<>
             <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-muted-foreground">
               <Loader2 className="w-3.5 h-3.5 animate-spin" /> 실행 중
             </span>
@@ -86,15 +111,21 @@ export function ProvisionConsole({ stream, showLogs }: ProvisionConsoleProps) {
             >
               <Square className="w-3 h-3" /> 중단
             </button>
+            </>)}
           </>
-        ) : undefined}
+        )}
       >
         <div className="space-y-3">
           <StepChips steps={steps} running={running} />
 
           {error && (
-            <div className="text-sm rounded-md border border-status-critical/40 bg-status-critical/10 text-status-critical px-3 py-2">
-              {error}
+            <div role="alert" className="text-sm rounded-md border border-status-critical/40 bg-status-critical/10 text-status-critical px-3 py-2">
+              <p>{error}</p>
+              {/403|forbidden|권한/i.test(error) && (
+                <p className="mt-1 text-xs text-foreground">
+                  다음 단계: 이 클러스터에 대한 operator 이상 권한(테넌트 바인딩 클러스터는 operate 멤버)이 있는지 확인하고, 아래 로그에서 막힌 단계를 확인하세요.
+                </p>
+              )}
             </div>
           )}
 
@@ -102,7 +133,7 @@ export function ProvisionConsole({ stream, showLogs }: ProvisionConsoleProps) {
             <LogViewer text={logText || '로그 대기 중…'} maxHeight="max-h-80" />
           ) : (
             <div className="text-xs text-muted-foreground border border-dashed border-border rounded-md px-3 py-2.5">
-              로그 {logs.length}줄을 수집했습니다 — 상단의 <span className="text-foreground">로그 보기</span> 를 켜면
+              로그 {logs.length}줄을 수집했습니다 — 카드 오른쪽 위의 <span className="text-foreground">로그 보기</span> 를 켜면
               전체가 펼쳐집니다.
               {logs.length > 0 && (
                 <span className="block mt-1 font-mono text-xs text-foreground truncate">
@@ -141,7 +172,7 @@ export function ProvisionConsole({ stream, showLogs }: ProvisionConsoleProps) {
                   {result.created.map((c, i) => (
                     <span
                       key={`${c.kind}-${c.namespace}-${c.name}-${i}`}
-                      className="font-mono text-xs px-1.5 py-0.5 rounded border border-border bg-secondary"
+                      className="font-mono text-xs px-1.5 py-0.5 rounded-md border border-border bg-secondary"
                     >
                       {c.kind} {c.namespace ? `${c.namespace}/` : ''}
                       {c.name}
@@ -182,6 +213,30 @@ export function ProvisionConsole({ stream, showLogs }: ProvisionConsoleProps) {
                 kubeconfig 는 화면 위쪽 <span className="text-foreground">발급된 kubeconfig</span> 카드에 있습니다 — 닫기 전까지
                 탭이나 클러스터를 옮겨도 남습니다.
               </p>
+            )}
+
+            {!result.dryRun && (
+              <div className="flex flex-wrap items-center gap-2 pt-1">
+                <button
+                  type="button"
+                  onClick={() => onReview(result.namespace, result.serviceAccount)}
+                  title="권한 점검 탭에서 이 ServiceAccount 를 바로 확인합니다"
+                  aria-label="이 ServiceAccount 권한 점검"
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-border bg-secondary text-xs font-medium hover:border-primary/40"
+                >
+                  <ShieldCheck className="w-3.5 h-3.5" aria-hidden="true" /> 권한 점검
+                </button>
+                <button
+                  type="button"
+                  onClick={() => onRevoke(result.namespace, result.serviceAccount)}
+                  disabled={!canOperate}
+                  title={withHint('ServiceAccount 탭에서 이 액세스를 회수합니다')}
+                  aria-label="이 ServiceAccount 액세스 회수"
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-border text-xs hover:border-destructive hover:text-destructive disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  <Trash2 className="w-3.5 h-3.5" aria-hidden="true" /> 회수
+                </button>
+              </div>
             )}
           </div>
         </MacCard>
