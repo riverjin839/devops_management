@@ -26,6 +26,10 @@ interface K9sTerminalProps {
   onStatusChange?: (status: SshTerminalStatus) => void;
   /** 연결 생애주기 이벤트 — 화면의 실행 로그용. */
   onEvent?: (e: SshTerminalEvent) => void;
+  /** 헤더 맥락 칩(예: `클러스터명 · 운영`). */
+  contextLabel?: string;
+  /** 보호 레벨인데 읽기 전용이 꺼진 쓰기 가능 세션이면 경고색. */
+  contextWarn?: boolean;
 }
 
 // 4401(세션 만료)·4402(권한 없음)는 SshTerminalWindow 공통 문구를 쓴다(D-172).
@@ -42,7 +46,7 @@ const CLOSE_NOTES: Record<number, string> = {
  * 백엔드가 paramiko PTY(invoke_shell) 로 브리지하며, tty + resize 를 지원하므로
  * k9s 풀스크린 UI 가 그대로 동작한다.
  */
-export function K9sTerminal({ clusterId, params, onClose, onPopOut, fill, onStatusChange, onEvent }: K9sTerminalProps) {
+export function K9sTerminal({ clusterId, params, onClose, onPopOut, fill, onStatusChange, onEvent, contextLabel, contextWarn }: K9sTerminalProps) {
   // 토큰은 (재)연결 시점에 읽는다 — 세션이 재발급돼도 재연결 버튼이 새 토큰을 쓴다.
   const url = useCallback(() => k8sStreamUrls.k9s(clusterId, getAuthToken()), [clusterId]);
   const init = {
@@ -71,6 +75,8 @@ export function K9sTerminal({ clusterId, params, onClose, onPopOut, fill, onStat
       fill={fill}
       onStatusChange={onStatusChange}
       onEvent={onEvent}
+      contextLabel={contextLabel}
+      contextWarn={contextWarn}
     />
   );
 }

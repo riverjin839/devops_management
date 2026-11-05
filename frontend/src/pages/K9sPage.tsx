@@ -107,6 +107,10 @@ export function K9sPage() {
   // 접속에 성공했을 때만 클러스터별로 기억할 입력값(비밀 제외).
   const pendingRememberRef = useRef<K9sRemembered | null>(null);
   const passwordRef = useRef<HTMLInputElement | null>(null);
+  const keyRef = useRef<HTMLTextAreaElement | null>(null);
+  // 사용자가 중단한 시도의 늦은 이벤트(소켓 정리 직전 도착분)를 무시한다.
+  const abortedRef = useRef(false);
+  const popoutTimerRef = useRef<number | undefined>(undefined);
   const clusterIdRef = useRef(clusterId);
   clusterIdRef.current = clusterId;
 
@@ -151,6 +155,7 @@ export function K9sPage() {
 
   const resetForCluster = (id: string | null) => {
     navigate(`/k9s/${id ?? ''}`);
+    window.clearTimeout(popoutTimerRef.current);
     runHandleRef.current?.log('warn', '클러스터를 전환해 세션을 정리했습니다');
     runHandleRef.current?.end();
     setConnectError('');
@@ -170,8 +175,16 @@ export function K9sPage() {
   };
 
   const onTerminalEvent = (e: SshTerminalEvent) => {
-    // 핸들은 세션 동안 유지한다 — 첫 응답 이후의 끊김·재연결·만료도 같은 로그에 이어 쓴다.
-    runHandleRef.current?.log(e.level, e.message);
+    if (abortedRef.current) return;
+    if (e.reconnect) {
+      // 재연결은 새 시도 — 새 로그 실행을 시작한다(끝난 실행에 이어 쓰면 "완료" 로 보인다).
+      runHandleRef.current?.end();
+      runHandleRef.current = runLog.begin('k9s 재연결', e.message);
+    } else {
+      // 핸들은 세션 동안 유지한다 — 첫 응답 이후의 끊김·만료도 같은 로그에 이어 쓴다.
+      runHandleRef.current?.log(e.level, e.message);
+    }
+    e.steps?.forEach((st) => runHandleRef.current?.setStep(st.name, st.label, st.status));
     if (e.ready && pendingRememberRef.current) {
       saveRemembered(clusterIdRef.current, pendingRememberRef.current);
       pendingRememberRef.current = null;
@@ -179,21 +192,27 @@ export function K9sPage() {
     if (e.end) runHandleRef.current?.end();
     if (e.failed) {
       // 접속 자체가 실패 — 창을 닫고 폼으로 돌아간다(입력값 유지, 비밀번호 칸에 포커스).
-      setConnectError(e.message);
+      setConnectError(e.userMessage ?? e.message);
       setSession(null);
       setTermStatus(null);
-      window.setTimeout(() => passwordRef.current?.focus(), 0);
+      window.setTimeout(() => (authMode === 'password' ? passwordRef : keyRef).current?.focus(), 0);
     }
   };
 
-  // 진행 중인 연결 시도를 중단한다 — 연결 중이면 창을 닫고, 새 창 전달 대기면 로그만 끝낸다.
+  // 진행 중인 연결 시도를 중단한다 — 웹소켓이 열렸어도 SSH 인증 전이면 소켓째 닫아 원격 셸이 남지 않게 한다.
+  // (실행 중 로그는 첫 응답에서 끝나므로 이 버튼은 인증 전에만 보인다.)
   const abortConnect = () => {
+    abortedRef.current = true;
+    window.clearTimeout(popoutTimerRef.current);
     runHandleRef.current?.log('warn', '사용자가 연결을 중단했습니다');
     runHandleRef.current?.end();
-    if (session && termStatus !== 'open') { setSession(null); setTermStatus(null); }
+    pendingRememberRef.current = null;
+    setSession(null);
+    setTermStatus(null);
   };
 
   const beginRunLog = (mode: 'inline' | 'popout') => {
+    abortedRef.current = false;
     runHandleRef.current?.end();
     const where = `${username}@${effectiveHost}:${port}`;
     runHandleRef.current = runLog.begin(
@@ -212,6 +231,7 @@ export function K9sPage() {
     setRetryParams(null);
     const cid = clusterId;
     const win = openK9sPopout({ clusterId: cid, params }, (delivered) => {
+      window.clearTimeout(popoutTimerRef.current);
       if (delivered) {
         runHandleRef.current?.log('info', '새 창에 접속 정보를 전달했습니다 — 이후 연결 진행은 새 창에서 확인하세요');
         if (pendingRememberRef.current) { saveRemembered(cid, pendingRememberRef.current); pendingRememberRef.current = null; }
@@ -225,7 +245,8 @@ export function K9sPage() {
     if (win) {
       // 전달 확인 콜백이 끝내 오지 않아도 로그가 "실행 중" 으로 남지 않게 한다.
       const h = runHandleRef.current;
-      window.setTimeout(() => {
+      window.clearTimeout(popoutTimerRef.current);
+      popoutTimerRef.current = window.setTimeout(() => {
         if (runHandleRef.current === h) {
           h?.log('warn', '새 창 전달 확인이 10초 안에 오지 않았습니다 — 새 창 상태를 확인하세요');
           h?.end();
@@ -378,7 +399,7 @@ export function K9sPage() {
           ) : session ? (
             <>
               {/* 세션 중에도 대상·옵션이 한눈에 보이도록 요약을 남긴다(폼은 접속 전에만 보인다). */}
-              <MacCard title="연결 중인 세션" className="space-y-2">
+              <MacCard title={termStatus === 'closed' || termStatus === 'error' ? '끊긴 세션' : '연결 중인 세션'} className="space-y-2">
                 <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-sm">
                   <dt className="text-muted-foreground">대상</dt>
                   <dd className="font-mono text-foreground break-all">{session.username}@{session.host}:{session.port}</dd>
@@ -408,6 +429,8 @@ export function K9sPage() {
                 onPopOut={popOutSession}
                 onStatusChange={setTermStatus}
                 onEvent={onTerminalEvent}
+                contextLabel={`${cluster?.name ?? clusterId} · ${levelText}`}
+                contextWarn={guarded && !session.readonly}
               />
             </>
           ) : (
@@ -484,7 +507,7 @@ export function K9sPage() {
                     </div>
                     {/* 고급 — 포트·네임스페이스는 드물게 바꾸므로 접어 둔다. 기본값이 아니거나 포트가 잘못되면 펼쳐 둔다. */}
                     <details
-                      open={advancedOpen || !portValid}
+                      open={advancedOpen}
                       onToggle={(e) => setAdvancedOpen((e.currentTarget as HTMLDetailsElement).open)}
                       className="text-sm"
                     >
@@ -496,7 +519,11 @@ export function K9sPage() {
                           <label htmlFor={`${f}-port`} className="block text-sm text-muted-foreground mb-1">포트</label>
                           <input
                             id={`${f}-port`}
-                            type="number" min={1} max={65535} value={portText} onChange={(e) => setPortText(e.target.value)}
+                            type="number" min={1} max={65535} value={portText} onChange={(e) => {
+                              setPortText(e.target.value);
+                              const n = Number(e.target.value);
+                              if (!(Number.isInteger(n) && n >= 1 && n <= 65535)) setAdvancedOpen(true);
+                            }}
                             aria-invalid={!portValid}
                             aria-describedby={!portValid ? `${f}-port-err` : undefined}
                             className={inputCls}
@@ -558,6 +585,7 @@ export function K9sPage() {
                       </label>
                       <textarea
                         id={`${f}-pkey`}
+                        ref={keyRef}
                         value={privateKey} onChange={(e) => setPrivateKey(e.target.value)}
                         placeholder="-----BEGIN OPENSSH PRIVATE KEY-----" rows={4}
                         className="w-full px-3 py-2 text-xs font-mono bg-background border border-border rounded-xl focus:outline-none focus:ring-1 focus:ring-primary resize-none"
