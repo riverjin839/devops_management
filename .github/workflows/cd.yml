@@ -1,14 +1,28 @@
 name: CD - Kubernetes Deployment
 
+# 이 워크플로는 이미지를 빌드하지 않는다. release.yml 이 만든 **숫자 버전 태그(X.Y.Z)** 이미지를 배포만 한다.
+# 배포 이미지 태그는 항상 `1.86.0` 같은 SemVer 숫자여야 한다 — SHA(`4b54f85`)·`main`·`latest` 는 배포에 쓰지 않는다
+# (아래 validate-version 잡이 형식이 다르면 실패시킨다).
+#
+# 호출 경로
+#   1) 자동: release.yml 이 이미지(:X.Y.Z)를 푸시한 직후 `uses: ./.github/workflows/cd.yml` 로 dev 배포를 호출한다.
+#   2) 수동: Actions 탭에서 이 워크플로를 직접 실행 — environment(dev|prod) 와 version(예: 1.86.0) 을 입력한다.
+#      prod 배포나 이전 버전으로의 롤백도 이 경로로 한다(해당 버전 이미지가 GHCR 에 이미 있어야 한다).
+#
+# 예전에는 main push 마다 이 파일이 :<sha>/:main 이미지를 빌드해 SHA 로 배포했고, 병합 직후 auto-release 의
+# 릴리스 커밋이 같은 빌드를 한 번 더 일으켰다. 빌드는 release.yml 한 곳으로 모았다.
+
 on:
-  push:
-    branches:
-      - main
-    paths:
-      - 'backend/**'
-      - 'frontend/**'
-      - 'deploy/k8s/**'
-      - '.github/workflows/cd.yml'
+  workflow_call:
+    inputs:
+      environment:
+        description: 'Deployment environment (dev|prod)'
+        required: true
+        type: string
+      version:
+        description: 'Image version tag — numeric X.Y.Z (예: 1.86.0)'
+        required: true
+        type: string
   workflow_dispatch:
     inputs:
       environment:
@@ -19,6 +33,15 @@ on:
         options:
           - dev
           - prod
+      version:
+        description: 'Image version tag — numeric X.Y.Z (예: 1.86.0)'
+        required: true
+        type: string
+
+# 같은 환경으로의 배포는 한 줄로 — 연달아 릴리스돼도 kubectl apply 가 서로 덮어쓰지 않게 한다.
+concurrency:
+  group: cd-deploy-${{ inputs.environment }}
+  cancel-in-progress: false
 
 env:
   REGISTRY: ghcr.io
@@ -26,80 +49,23 @@ env:
   IMAGE_NAME_FRONTEND: ${{ github.repository }}/frontend
 
 jobs:
-  build-and-push:
+  validate-version:
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      packages: write
-
-    outputs:
-      backend-image: ${{ steps.meta-backend.outputs.tags }}
-      frontend-image: ${{ steps.meta-frontend.outputs.tags }}
-
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Log in to Container Registry
-        uses: docker/login-action@v3
-        with:
-          registry: ${{ env.REGISTRY }}
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Extract metadata for Backend
-        id: meta-backend
-        uses: docker/metadata-action@v5
-        with:
-          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME_BACKEND }}
-          # `latest` 는 붙이지 않는다 — release.yml 만 붙인다. 병합 직후 auto-release 가 같은 시각에
-          # 돌아 두 워크플로가 `latest` 를 서로 덮어쓰던 경합(1.80.3 에서 frontend latest 가 hex 이미지로 남음)을 막는다.
-          tags: |
-            type=sha,prefix=
-            type=ref,event=branch
-
-      - name: Extract metadata for Frontend
-        id: meta-frontend
-        uses: docker/metadata-action@v5
-        with:
-          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME_FRONTEND }}
-          tags: |
-            type=sha,prefix=
-            type=ref,event=branch
-
-      - name: Copy CHANGELOG for backend image
-        # backend/app/routers/release_notes.py 가 이미지 안에서 CHANGELOG.md 를 읽어
-        # 릴리즈 노트 API 를 서빙한다. build context 가 ./backend 라 저장소 루트 파일은
-        # 기본적으로 포함되지 않으므로, 빌드 직전에 컨텍스트 안으로 복사해 넣는다.
-        run: cp CHANGELOG.md backend/CHANGELOG.md
-
-      - name: Build and push Backend image
-        uses: docker/build-push-action@v5
-        with:
-          context: ./backend
-          push: true
-          tags: ${{ steps.meta-backend.outputs.tags }}
-          labels: ${{ steps.meta-backend.outputs.labels }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-
-      - name: Build and push Frontend image
-        uses: docker/build-push-action@v5
-        with:
-          context: ./frontend
-          push: true
-          tags: ${{ steps.meta-frontend.outputs.tags }}
-          labels: ${{ steps.meta-frontend.outputs.labels }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+      - name: Require numeric version tag (X.Y.Z)
+        env:
+          VERSION: ${{ inputs.version }}
+        run: |
+          if ! [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::version 은 숫자 형식(예: 1.86.0)이어야 한다 — 받은 값: '$VERSION'. SHA·main·latest 태그로는 배포하지 않는다."
+            exit 1
+          fi
+          echo "Deploying image tag: $VERSION"
 
   deploy-dev:
-    needs: build-and-push
+    needs: validate-version
     runs-on: ubuntu-latest
-    if: github.event.inputs.environment == 'dev' || (github.event_name == 'push' && github.ref == 'refs/heads/main')
+    if: inputs.environment == 'dev'
     environment: dev
 
     steps:
@@ -147,11 +113,12 @@ jobs:
       - name: Update image tags in kustomization
         if: steps.check-secret.outputs.has_kubeconfig == 'true'
         working-directory: deploy/k8s/overlays/dev
+        env:
+          VERSION: ${{ inputs.version }}
         run: |
-          SHORT_SHA="${GITHUB_SHA:0:7}"
           kustomize edit set image \
-            k8s-daily-monitor/backend=${{ env.REGISTRY }}/${{ env.IMAGE_NAME_BACKEND }}:${SHORT_SHA} \
-            k8s-daily-monitor/frontend=${{ env.REGISTRY }}/${{ env.IMAGE_NAME_FRONTEND }}:${SHORT_SHA}
+            k8s-daily-monitor/backend=${{ env.REGISTRY }}/${{ env.IMAGE_NAME_BACKEND }}:${VERSION} \
+            k8s-daily-monitor/frontend=${{ env.REGISTRY }}/${{ env.IMAGE_NAME_FRONTEND }}:${VERSION}
 
       - name: Deploy to Dev Kubernetes
         if: steps.check-secret.outputs.has_kubeconfig == 'true'
@@ -164,6 +131,7 @@ jobs:
           kubectl rollout status deployment/dev-backend -n k8s-monitor-dev --timeout=300s
           kubectl rollout status deployment/dev-frontend -n k8s-monitor-dev --timeout=300s
           kubectl rollout status deployment/dev-celery-worker -n k8s-monitor-dev --timeout=300s
+          kubectl rollout status deployment/dev-celery-beat -n k8s-monitor-dev --timeout=300s
 
       - name: Verify deployment
         if: steps.check-secret.outputs.has_kubeconfig == 'true'
@@ -178,9 +146,9 @@ jobs:
           kubectl get services -n k8s-monitor-dev
 
   deploy-prod:
-    needs: build-and-push
+    needs: validate-version
     runs-on: ubuntu-latest
-    if: github.event.inputs.environment == 'prod'
+    if: inputs.environment == 'prod'
     environment: prod
 
     steps:
@@ -228,11 +196,12 @@ jobs:
       - name: Update image tags in kustomization
         if: steps.check-secret.outputs.has_kubeconfig == 'true'
         working-directory: deploy/k8s/overlays/prod
+        env:
+          VERSION: ${{ inputs.version }}
         run: |
-          SHORT_SHA="${GITHUB_SHA:0:7}"
           kustomize edit set image \
-            k8s-daily-monitor/backend=${{ env.REGISTRY }}/${{ env.IMAGE_NAME_BACKEND }}:${SHORT_SHA} \
-            k8s-daily-monitor/frontend=${{ env.REGISTRY }}/${{ env.IMAGE_NAME_FRONTEND }}:${SHORT_SHA}
+            k8s-daily-monitor/backend=${{ env.REGISTRY }}/${{ env.IMAGE_NAME_BACKEND }}:${VERSION} \
+            k8s-daily-monitor/frontend=${{ env.REGISTRY }}/${{ env.IMAGE_NAME_FRONTEND }}:${VERSION}
 
       - name: Deploy to Prod Kubernetes
         if: steps.check-secret.outputs.has_kubeconfig == 'true'
@@ -245,6 +214,7 @@ jobs:
           kubectl rollout status deployment/prod-backend -n k8s-monitor-prod --timeout=300s
           kubectl rollout status deployment/prod-frontend -n k8s-monitor-prod --timeout=300s
           kubectl rollout status deployment/prod-celery-worker -n k8s-monitor-prod --timeout=300s
+          kubectl rollout status deployment/prod-celery-beat -n k8s-monitor-prod --timeout=300s
 
       - name: Verify deployment
         if: steps.check-secret.outputs.has_kubeconfig == 'true'
@@ -262,74 +232,4 @@ jobs:
         if: steps.check-secret.outputs.has_kubeconfig == 'true' && success()
         run: |
           echo "Production deployment completed successfully!"
-          echo "Image tags: ${{ github.sha }}"
-
-  cleanup-old-images:
-    needs: build-and-push
-    runs-on: ubuntu-latest
-    permissions:
-      packages: write
-
-    steps:
-      - name: 오래된 컨테이너 이미지 자동 청소 (Backend / Frontend)
-        uses: actions/github-script@v7
-        with:
-          script: |
-            const KEEP = 5;
-            const owner = context.repo.owner;
-            const packages = [
-              `${context.repo.repo}/backend`,
-              `${context.repo.repo}/frontend`,
-            ];
-
-            // org 여부 확인 (org vs 개인 계정 API 엔드포인트 분기)
-            let isOrg = false;
-            try {
-              await github.rest.orgs.get({ org: owner });
-              isOrg = true;
-            } catch (_) {}
-
-            for (const pkg of packages) {
-              let versions;
-              try {
-                versions = isOrg
-                  ? await github.paginate(
-                      github.rest.packages.getAllPackageVersionsForPackageOwnedByOrg,
-                      { package_type: 'container', package_name: pkg, org: owner }
-                    )
-                  : await github.paginate(
-                      github.rest.packages.getAllPackageVersionsForPackageOwnedByUser,
-                      { package_type: 'container', package_name: pkg, username: owner }
-                    );
-              } catch (e) {
-                core.warning(`${pkg} 버전 목록 조회 실패: ${e.message}`);
-                continue;
-              }
-
-              // 태그 없는 버전만, 최신순 정렬 후 KEEP개 초과분 삭제
-              const untagged = versions
-                .filter(v => v.metadata?.container?.tags?.length === 0)
-                .sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
-
-              const toDelete = untagged.slice(KEEP);
-              core.info(`[${pkg}] 미태그 버전 ${untagged.length}개 중 ${toDelete.length}개 삭제`);
-
-              for (const v of toDelete) {
-                try {
-                  if (isOrg) {
-                    await github.rest.packages.deletePackageVersionForOrg({
-                      package_type: 'container', package_name: pkg,
-                      org: owner, package_version_id: v.id,
-                    });
-                  } else {
-                    await github.rest.packages.deletePackageVersionForUser({
-                      package_type: 'container', package_name: pkg,
-                      username: owner, package_version_id: v.id,
-                    });
-                  }
-                  core.info(`  삭제 완료: ${v.name} (id: ${v.id})`);
-                } catch (e) {
-                  core.warning(`  삭제 실패 ${v.id}: ${e.message}`);
-                }
-              }
-            }
+          echo "Image tag: ${{ inputs.version }}"

@@ -4,7 +4,7 @@ CHANGELOG.md 를 유일한 원본(single source of truth)으로 삼아, 사용�
 항상 실제 릴리즈 내용과 정확히 일치하도록 한다(수동 큐레이션 데이터 사본을 따로 두지 않음).
 
 CHANGELOG.md 는 backend 이미지 빌드 시 build context 로 함께 복사되어야 접근 가능하다
-(.github/workflows/cd.yml 의 "Copy CHANGELOG for backend image" 스텝 참고). 파일이 없는
+(.github/workflows/release.yml 의 "Copy CHANGELOG for backend image" 스텝 참고). 파일이 없는
 환경(로컬 backend 단독 실행 등)에서는 빈 목록을 반환하고 조용히 넘어간다 — fail-safe.
 """
 from __future__ import annotations

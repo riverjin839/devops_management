@@ -426,8 +426,12 @@ Makefile 타깃(`make k8s-dev`, `make docker-rebuild` 등)은 `make help` 로 �
   backend `pytest`(PostgreSQL·Redis 서비스 컨테이너 필요), 그리고 `docs-sync` job.
   머지 전 로컬 게이트는 §Development & Tests 와 동일하다 — **CI 에서 처음 확인하지 말 것.**
 - **A11y scan (`a11y.yml`, 수동 실행)**: Postgres·Redis·백엔드·vite 를 띄워 `scripts/a11y/axe_scan.py` 로 20 라우트 × 선택 테마를 axe(WCAG 2.1 A/AA) 검사하고 `--fail-on`(기본 serious) 이상이면 실패한다. 결과는 job summary + `a11y-report` 아티팩트. PR 게이트가 아니다.
-- **CD (`cd.yml`, push → `main`)**: GHCR 이미지 빌드 → `kustomize edit set image` 로 SHA 핀 →
-  apply → rollout status. 배포는 **SHA 태그로만** 고정한다(`latest` 금지).
+- **이미지 빌드 = `release.yml` 한 곳**: 릴리스 태그가 push 되면 GHCR 에 `:X.Y.Z`·`:X.Y`·`:latest` 를 만든다
+  (main push 마다 `:<sha>`/`:main` 을 만들던 빌드는 없앴다).
+- **CD (`cd.yml`, 배포 전용)**: 이미지를 빌드하지 않는다. `release.yml` 이 dev 배포를 호출하고, prod 배포·롤백은
+  Actions 에서 `cd.yml` 을 수동 실행(environment + version 입력)한다. `kustomize edit set image` 로 **숫자 버전
+  태그(`1.86.0`)에만** 고정하고 apply → rollout status(backend·frontend·celery-worker·celery-beat).
+  SHA·`main`·`latest` 로는 배포하지 않는다 — `validate-version` 잡이 `X.Y.Z` 형식이 아니면 실패시킨다.
 - **AI 개발 리포트 (`ai-dev-report.yml`, 매월 1일 + 수동 실행)**: `scripts/report/` 로 git 이력을 다시 집계해
   `docs/reports/ai-dev-report.html` 갱신 PR 을 연다. PR 제목 `chore(report)` 는 `decide_bump.py` 가 릴리스에서
   제외한다. 문구·진척도·세대 구간 같은 판단 값은 `scripts/report/ai_dev_report_narrative.json` 을 직접 고친다.
