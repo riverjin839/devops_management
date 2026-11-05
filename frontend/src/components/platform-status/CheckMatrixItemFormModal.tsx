@@ -249,7 +249,7 @@ function ModalChrome({
         role="dialog"
         aria-modal="true"
         aria-labelledby={titleId}
-        className={`bg-card border border-border rounded-md shadow-xl w-full ${wide ? 'max-w-2xl' : 'max-w-lg'} mx-4 max-h-[88vh] flex flex-col`}
+        className={`bg-card border border-border rounded-md shadow-card w-full ${wide ? 'max-w-2xl' : 'max-w-lg'} mx-4 max-h-[88vh] flex flex-col`}
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between px-6 py-4 border-b border-border">
@@ -859,7 +859,7 @@ function InventoryPicker({ cluster, value, onChange }: {
         disabled={isLoading}
         className="flex-1 min-w-0 text-xs border border-border rounded-xl px-2 py-1.5 bg-background disabled:opacity-60"
       >
-        <option value="">{isLoading ? '불러오는 중…' : '(클러스터 기본 인벤토리 / 없으면 K8s 노드 자동)'}</option>
+        <option value="">{isLoading ? '불러오는 중…' : '(클러스터 기본 인벤토리 / 없으면 K8S 노드 자동)'}</option>
         {(inventories ?? []).map((inv) => (
           <option key={inv.id} value={inv.id}>{inv.name}{inv.isDefault ? ' (기본)' : ''}</option>
         ))}

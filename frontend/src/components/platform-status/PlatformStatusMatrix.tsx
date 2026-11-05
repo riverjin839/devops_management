@@ -5,7 +5,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import {
   Plus, Settings, Pencil, Trash2, GripVertical, Clock, Lock, HelpCircle,
   Play, ScrollText, Loader2, AlertTriangle, XCircle, CheckCircle2, Server, PauseCircle,
-  SlidersHorizontal, ChevronRight, SkipForward, EyeOff, RefreshCw, History,
+  SlidersHorizontal, ChevronRight, SkipForward, EyeOff, RefreshCw, History, MoreHorizontal,
 } from 'lucide-react';
 import { MacCard } from '@/components/ui/MacCard';
 import { StatusDot, ConfirmDialog, useToast, Skeleton, EmptyState, ResizeGrip } from '@/components/common';
@@ -107,10 +107,26 @@ function cellTitle(item: CheckMatrixItem, cell: CheckMatrixCell | undefined, vie
   return lines.join('\n');
 }
 
+/** 스크린리더용 짧은 이름 — 툴팁(cellTitle)의 여러 줄 설명을 셀마다 읽어 주면 너무 길다. */
+function cellAria(item: CheckMatrixItem, cell: CheckMatrixCell | undefined, view: CellView, active: CheckMatrixRunState | undefined, clusterName: string): string {
+  const parts: string[] = [`${item.name}, ${clusterName}`];
+  if (active) parts.push(active === 'queued' ? '실행 대기 중' : '실행 중');
+  if (view.empty) parts.push('결과 없음');
+  else if (cell?.status) parts.push(`${STATUS_LABEL[cell.status]}${cell.value != null ? ` ${cell.value}${item.unit ?? ''}` : ''}`);
+  if (view.stale) parts.push('오래된 결과');
+  if (view.lastRunProblem) parts.push(view.lastRunProblem === 'failed' ? '최근 실행 실패' : '최근 실행 건너뜀');
+  return parts.join(', ');
+}
+
 function CellButton({
-  item, cell, view, active, onClick, onRunNow, minH, runDisabledHint,
+  item, cell, view, active, onClick, onRunNow, minH, runDisabledHint, clusterName, cellId, tabIndex, onFocusCell,
 }: {
   item: CheckMatrixItem; cell: CheckMatrixCell | undefined; view: CellView;
+  clusterName: string;
+  /** 키보드 화살표 이동용 식별자(`itemId:clusterId`) — 표 전체가 탭 스톱 하나(roving tabindex)가 되게 한다. */
+  cellId: string;
+  tabIndex: 0 | -1;
+  onFocusCell: () => void;
   active?: CheckMatrixRunState;
   onClick: () => void;
   /** 수동 입력 항목엔 실행 개념이 없어 전달되지 않는다 — undefined 면 ▶ 버튼 자체를 안 그린다. */
@@ -121,9 +137,13 @@ function CellButton({
 }) {
   const StatusIcon = !view.empty ? CELL_STATUS_ICON[cell!.status!] : undefined;
   return (
-    <div className="relative group/cell w-full h-full">
+    <div className="relative group/cell w-full h-full" data-cellwrap>
       <button
         onClick={onClick}
+        data-cell={cellId}
+        tabIndex={tabIndex}
+        onFocus={onFocusCell}
+        // 행 밀도(좁게/보통/넓게)에서 오는 동적 값이라 Tailwind 클래스로 표현할 수 없다.
         style={{ minHeight: minH }}
         // 오래된 결과는 흐리게(opacity) 하지 않는다 — 글자 대비가 1.95:1 로 떨어졌다(D-152).
         // 대신 점선 테두리 + 시계 아이콘으로 표시하고, 값·상태 글자는 그대로 읽히게 둔다.
@@ -131,7 +151,7 @@ function CellButton({
           view.stale ? 'border border-dashed border-muted-foreground/70' : ''
         } ${active ? 'ring-1 ring-inset ring-status-info/60' : ''}`}
         title={cellTitle(item, cell, view, active)}
-        aria-label={`${item.name} 셀 — ${cellTitle(item, cell, view, active).replace(/\n/g, '. ')}`}
+        aria-label={cellAria(item, cell, view, active, clusterName)}
       >
         {active && <Loader2 className="w-3 h-3 flex-shrink-0 animate-spin text-status-info" aria-hidden="true" />}
         {view.empty ? (
@@ -163,12 +183,15 @@ function CellButton({
       {onRunNow && !active && (
         <button
           onClick={(e) => { e.stopPropagation(); onRunNow(); }}
+          data-cell-run
+          // 셀마다 탭 스톱이 둘이 되지 않게 뺀다 — 키보드는 셀에서 R 키(또는 상세 모달의 「지금 실행」)로 실행한다.
+          tabIndex={-1}
           disabled={!!runDisabledHint}
           title={runDisabledHint ?? `${item.name} — 이 셀만 지금 실행`}
           aria-label={runDisabledHint ? `${item.name} 이 셀만 실행 — ${runDisabledHint}` : `${item.name} 이 셀만 실행`}
-          className="absolute top-0.5 right-0.5 opacity-0 group-hover/cell:opacity-100 group-focus-within/cell:opacity-100 focus:opacity-100 p-0.5 rounded hover:bg-secondary disabled:group-hover/cell:opacity-40 disabled:cursor-not-allowed transition-opacity"
+          className="absolute top-0 right-0 opacity-0 group-hover/cell:opacity-100 group-focus-within/cell:opacity-100 focus:opacity-100 [@media(hover:none)]:opacity-100 p-1.5 rounded-md hover:bg-secondary disabled:group-hover/cell:opacity-40 disabled:cursor-not-allowed transition-opacity"
         >
-          <Play className={`w-3 h-3 ${runDisabledHint ? 'text-muted-foreground' : 'text-primary'}`} aria-hidden="true" />
+          <Play className={`w-3.5 h-3.5 ${runDisabledHint ? 'text-muted-foreground' : 'text-primary'}`} aria-hidden="true" />
         </button>
       )}
     </div>
@@ -202,7 +225,7 @@ function MatrixLegend({ onHide }: { onHide: () => void }) {
       {item(<StaleSample />, '오래된 결과')}
       {item(<XCircle className="w-2.5 h-2.5 text-status-critical" aria-hidden="true" />, '최근 실행 실패')}
       {item(<Lock className="w-3 h-3" aria-hidden="true" />, '핵심 항목(삭제 불가)')}
-      <span className="hidden xl:inline">· 셀을 누르면 상세·실행 기록, 항목 이름을 누르면 항목 상세로 이동</span>
+      <span className="hidden xl:inline">· 행 = 점검 항목 · 열 = 클러스터 · 셀을 누르면 상세·실행 기록 · 화살표 키로 셀 이동, R 키로 이 셀 실행</span>
       <button
         onClick={onHide}
         className="ml-auto inline-flex items-center gap-1 px-1.5 py-0.5 rounded-xl hover:bg-secondary"
@@ -295,7 +318,7 @@ function ClusterCronBadge({
             ref={popRef}
             role="dialog"
             aria-label={`${cluster.name} 핵심 점검 주기 설정`}
-            className="absolute z-50 top-full mt-1 left-1/2 -translate-x-1/2 w-80 bg-card border border-border rounded-md shadow-xl p-3 space-y-2 text-left font-normal"
+            className="absolute z-50 top-full mt-1 left-1/2 -translate-x-1/2 w-80 bg-card border border-border rounded-md shadow-card p-3 space-y-2 text-left font-normal"
           >
             <p className="text-xs text-muted-foreground">
               핵심 점검(API 서버·컴포넌트·노드·시스템 파드)의 클러스터 단위 주기입니다. 클러스터 상태(사이드바 색)를 결정합니다.
@@ -341,6 +364,7 @@ const ROW_PAD_CLS: Record<RowDensity, string> = {
   normal: 'py-1',
   comfortable: 'py-2',
 };
+// 행 높이·열 너비는 사용자가 정하는 동적 값 — Tailwind 클래스로 표현할 수 없어 style 로 지정하는 유일한 예외다.
 const ROW_MIN_H: Record<RowDensity, number> = { compact: 22, normal: 36, comfortable: 48 };
 
 function loadPref<T extends string>(key: string, allowed: readonly T[], fallback: T): T {
@@ -354,11 +378,11 @@ function savePref(key: string, value: string) {
   try { localStorage.setItem(key, value); } catch { /* ignore */ }
 }
 
-// 영역(카테고리)별 그룹 — 대소문자 구분 없이 묶는다("K8s" 와 "k8s" 가 따로 놀던 문제).
+// 영역(카테고리)별 그룹 — 대소문자 구분 없이 묶는다("K8S" 와 "k8s" 가 따로 놀던 문제).
 const UNCATEGORIZED_GROUP = '__uncategorized__';
 const CATEGORY_ORDER = ['k8s', 'network', 'storage', 'os', 'app'];
 const CATEGORY_LABEL: Record<string, string> = {
-  k8s: 'K8s', network: '네트워크', storage: '스토리지', os: 'OS', app: '애플리케이션',
+  k8s: 'K8S', network: '네트워크', storage: '스토리지', os: 'OS', app: '애플리케이션',
 };
 // 펼친 그룹을 저장한다(접힌 그룹이 아니라) — 나중에 생긴 영역은 기본값(문제 있으면 펼침)을 따른다.
 const GROUP_EXPANDED_STORAGE_KEY = 'pep:checkMatrixExpandedGroups';
@@ -382,6 +406,8 @@ interface DisplaySettingsProps {
   onResetWidths: () => void;
   showDisabled: boolean; onShowDisabledChange: (v: boolean) => void; disabledCount: number;
   showLegend: boolean; onShowLegendChange: (v: boolean) => void;
+  /** 이력 보관 일수 설정 모달 — 툴바 톱니바퀴를 이 팝오버로 합쳤다. */
+  onOpenMatrixSettings: () => void; matrixSettingsDisabled: boolean; matrixSettingsTitle: string;
 }
 
 function MatrixDisplaySettings(p: DisplaySettingsProps) {
@@ -394,7 +420,7 @@ function MatrixDisplaySettings(p: DisplaySettingsProps) {
     <div className="relative inline-block">
       <button
         onClick={() => setOpen((v) => !v)}
-        title="표시 설정 — 행 높이 · 범례 · 실행 로그 · 비활성 항목"
+        title="표시 설정 — 행 높이 · 범례 · 실행 로그 · 비활성 항목 · 이력 보관"
         aria-label="표시 설정"
         aria-haspopup="dialog"
         aria-expanded={open}
@@ -409,7 +435,7 @@ function MatrixDisplaySettings(p: DisplaySettingsProps) {
             ref={popRef}
             role="dialog"
             aria-label="표시 설정"
-            className="absolute z-50 top-full mt-1 right-0 w-64 bg-card border border-border rounded-md shadow-xl p-3 space-y-2.5"
+            className="absolute z-50 top-full mt-1 right-0 w-64 bg-card border border-border rounded-md shadow-card p-3 space-y-2.5"
           >
             <div className="space-y-1">
               <span className="text-xs text-muted-foreground">행 높이</span>
@@ -464,12 +490,22 @@ function MatrixDisplaySettings(p: DisplaySettingsProps) {
                 </button>
               </div>
             </div>
-            <button
-              onClick={p.onResetWidths}
-              className="w-full text-xs text-muted-foreground hover:text-foreground transition-colors text-center py-1 border-t border-border/50 pt-2"
-            >
-              열 너비 초기화
-            </button>
+            <div className="border-t border-border/50 pt-2 space-y-1">
+              <button
+                onClick={p.onResetWidths}
+                className="w-full text-xs text-muted-foreground hover:text-foreground transition-colors text-center py-1"
+              >
+                열 너비 초기화
+              </button>
+              <button
+                onClick={() => { setOpen(false); p.onOpenMatrixSettings(); }}
+                disabled={p.matrixSettingsDisabled}
+                title={p.matrixSettingsTitle}
+                className="w-full inline-flex items-center justify-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors py-1 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <Settings className="w-3 h-3" aria-hidden="true" /> 이력 보관 설정
+              </button>
+            </div>
           </div>
         </>
       )}
@@ -517,14 +553,14 @@ function MatrixListView({
               <span className="text-xs font-semibold">{g.label}</span>
               <span className="text-xs text-muted-foreground">{g.entries.length}개</span>
               <span className="ml-auto flex items-center gap-1">
-                {g.counts.critical > 0 && <span className={`px-1 rounded border text-xs font-semibold ${GROUP_BADGE_CLS.critical}`}>위험 {g.counts.critical}</span>}
-                {g.counts.warning > 0 && <span className={`px-1 rounded border text-xs font-semibold ${GROUP_BADGE_CLS.warning}`}>경고 {g.counts.warning}</span>}
+                {g.counts.critical > 0 && <span className={`px-1 rounded-md border text-xs font-semibold ${GROUP_BADGE_CLS.critical}`}>위험 {g.counts.critical}</span>}
+                {g.counts.warning > 0 && <span className={`px-1 rounded-md border text-xs font-semibold ${GROUP_BADGE_CLS.warning}`}>경고 {g.counts.warning}</span>}
               </span>
             </button>
             {expanded && (
               <ul className="divide-y divide-border">
                 {g.entries.map(({ item }) => (
-                  <li key={item.id} className={`px-3 py-2 space-y-1.5 ${item.enabled ? '' : 'opacity-60'}`}>
+                  <li key={item.id} className="px-3 py-2 space-y-1.5">
                     <div className="flex items-center gap-1.5 min-w-0">
                       <button
                         onClick={() => onOpenItem(item)}
@@ -580,6 +616,98 @@ function MatrixListView({
   );
 }
 
+// ── 행 메뉴 ─────────────────────────────────────────────────────────────────
+// 첫 열에 실행·수정·삭제 버튼이 상시 늘어서 있던 것을 메뉴 하나로 접는다 — 운영자가 훑는 건 셀이다.
+function RowActionsMenu({
+  item, canOperate, withHint, ariaWithHint, runnable, runBusy, onRunAll, onEdit, onDelete, onOpenChange,
+}: {
+  item: CheckMatrixItem;
+  canOperate: boolean;
+  withHint: (title: string) => string;
+  ariaWithHint: (label: string) => string;
+  runnable: boolean;
+  runBusy: boolean;
+  onRunAll: () => void;
+  onEdit: () => void;
+  onDelete: () => void;
+  /** 열린 행의 첫 칸이 아래 행에 가려지지 않게 상위가 z-index 를 올린다. */
+  onOpenChange: (open: boolean) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [up, setUp] = useState(false);
+  const btnRef = useRef<HTMLButtonElement>(null);
+  const change = (v: boolean) => { setOpen(v); onOpenChange(v); };
+  const popRef = useModalA11y(open, () => change(false), { historyClose: false });
+  const toggle = () => {
+    const r = btnRef.current?.getBoundingClientRect();
+    setUp(!!r && r.bottom > window.innerHeight - 170);
+    change(!open);
+  };
+  const act = (fn: () => void) => () => { change(false); fn(); };
+  const itemCls = 'w-full flex items-center gap-2 px-3 py-1.5 text-xs text-left hover:bg-secondary disabled:opacity-50 disabled:cursor-not-allowed';
+  return (
+    <div className="relative flex-shrink-0">
+      <button
+        ref={btnRef}
+        onClick={toggle}
+        aria-haspopup="menu"
+        aria-expanded={open}
+        title={`${item.name} — 실행 · 수정 · 삭제`}
+        aria-label={`${item.name} 행 메뉴`}
+        className="p-1 rounded-xl hover:bg-secondary text-muted-foreground"
+      >
+        <MoreHorizontal className="w-3.5 h-3.5" aria-hidden="true" />
+      </button>
+      {open && (
+        <>
+          <div className="fixed inset-0 z-40" onClick={() => change(false)} />
+          <div
+            ref={popRef}
+            role="menu"
+            aria-label={`${item.name} 행 메뉴`}
+            className={`absolute z-50 right-0 w-52 bg-card border border-border rounded-md shadow-card py-1 ${up ? 'bottom-full mb-1' : 'top-full mt-1'}`}
+          >
+            {runnable && (
+              <button
+                role="menuitem"
+                onClick={act(onRunAll)}
+                disabled={!canOperate || runBusy}
+                title={withHint('실행 권한이 있는 모든 클러스터에서 이 항목을 지금 실행')}
+                aria-label={ariaWithHint(`${item.name} — 모든 클러스터에서 실행`)}
+                className={itemCls}
+              >
+                <Play className="w-3.5 h-3.5 text-primary" aria-hidden="true" /> 모든 클러스터에서 실행
+              </button>
+            )}
+            <button
+              role="menuitem"
+              onClick={act(onEdit)}
+              disabled={!canOperate}
+              title={withHint('항목 수정 — 이름·실행 소스·설정·표시')}
+              aria-label={ariaWithHint(`${item.name} 수정`)}
+              className={itemCls}
+            >
+              <Pencil className="w-3.5 h-3.5" aria-hidden="true" /> 항목 수정
+            </button>
+            {!item.isSystem && (
+              <button
+                role="menuitem"
+                onClick={act(onDelete)}
+                disabled={!canOperate}
+                title={withHint('항목 삭제')}
+                aria-label={ariaWithHint(`${item.name} 삭제`)}
+                className={`${itemCls} text-status-critical`}
+              >
+                <Trash2 className="w-3.5 h-3.5" aria-hidden="true" /> 삭제
+              </button>
+            )}
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
 const PROBLEM_STATUSES = new Set<Status>(['warning', 'critical']);
 
 interface PlatformStatusMatrixProps {
@@ -599,7 +727,7 @@ export function PlatformStatusMatrix({ toolbarSlot }: PlatformStatusMatrixProps 
   const navigate = useNavigate();
   const toast = useToast();
   const qc = useQueryClient();
-  const { data: grid, isLoading, isError, error, refetch, isFetching } = useCheckMatrixGrid();
+  const { data: grid, isLoading, isError, error, refetch, isFetching, dataUpdatedAt } = useCheckMatrixGrid();
   const reorderMut = useReorderCheckMatrixItems();
   const deleteMut = useDeleteCheckMatrixItem();
   const runClusterMut = useRunCheckMatrixCluster();
@@ -607,6 +735,8 @@ export function PlatformStatusMatrix({ toolbarSlot }: PlatformStatusMatrixProps 
   const runCellMut = useRunCheckMatrixCell();
   const feedback = useRunFeedback();
   const showLog = useCheckMatrixLogStore((s) => s.show);
+  const autoOpenLog = useCheckMatrixLogStore((s) => s.autoOpen);
+  const setAutoOpenLog = useCheckMatrixLogStore((s) => s.setAutoOpen);
   const timezone = grid?.timezone || DEFAULT_CRON_TIMEZONE;
 
   // 권한 — 역할(viewer 면 전부 비활성 + 사유)과 테넌트 바인딩(클러스터별 operate 여부)을 함께 본다.
@@ -626,6 +756,11 @@ export function PlatformStatusMatrix({ toolbarSlot }: PlatformStatusMatrixProps 
   // 실제 운영 클러스터에 명령이 나가는 실행(셀·행·열)은 모두 확인을 받는다.
   const [runConfirm, setRunConfirm] = useState<RunConfirm | null>(null);
   const [cellTarget, setCellTarget] = useState<{ item: CheckMatrixItem; cluster: CheckMatrixGridCluster } | null>(null);
+  // 행 메뉴가 열린 행 — 그 행의 sticky 첫 칸이 아래 행 첫 칸 위에 그려지게 한다.
+  const [menuRowId, setMenuRowId] = useState<string | null>(null);
+  // roving tabindex — 표 전체가 탭 스톱 하나, 셀 사이는 화살표 키.
+  const [tabCell, setTabCell] = useState<string | null>(null);
+  const tableRef = useRef<HTMLTableElement>(null);
   // HTTP 요청이 진행 중인 실행 키들 — 응답 후엔 activeRuns(서버 기준 대기/실행 중)가 이어받는다.
   const [requesting, setRequesting] = useState<Set<string>>(() => new Set());
   const mark = (key: string, on: boolean) => setRequesting((prev) => {
@@ -753,6 +888,30 @@ export function PlatformStatusMatrix({ toolbarSlot }: PlatformStatusMatrixProps 
   const expandAllGroups = () => setExpandedGroups(Object.fromEntries(groups.map((g) => [g.key, true])));
   const collapseAllGroups = () => setExpandedGroups(Object.fromEntries(groups.map((g) => [g.key, false])));
 
+  const visibleItemIds = groups.filter((g) => isExpanded(g)).flatMap((g) => g.entries.map((e) => e.item.id));
+  const firstCellKey = visibleItemIds.length > 0 && clusters.length > 0 ? `${visibleItemIds[0]}:${clusters[0].id}` : null;
+  const [tabItem, tabCluster] = tabCell ? tabCell.split(':') : [];
+  const activeTabCell = tabCell && visibleItemIds.includes(tabItem) && clusters.some((c) => c.id === tabCluster) ? tabCell : firstCellKey;
+  const onGridKeyDown = (e: React.KeyboardEvent<HTMLTableElement>) => {
+    const el = e.target instanceof HTMLElement ? e.target : null;
+    const cellKey = el?.dataset.cell;
+    if (!el || !cellKey || e.ctrlKey || e.metaKey || e.altKey) return;
+    if (e.key === 'r' || e.key === 'R') {
+      const run = el.closest<HTMLElement>('[data-cellwrap]')?.querySelector<HTMLButtonElement>('[data-cell-run]');
+      if (run && !run.disabled) { e.preventDefault(); run.click(); }
+      return;
+    }
+    const dr = e.key === 'ArrowDown' ? 1 : e.key === 'ArrowUp' ? -1 : 0;
+    const dc = e.key === 'ArrowRight' ? 1 : e.key === 'ArrowLeft' ? -1 : 0;
+    if (!dr && !dc) return;
+    e.preventDefault();
+    const [itemId, clusterId] = cellKey.split(':');
+    const r = visibleItemIds.indexOf(itemId) + dr;
+    const c = clusters.findIndex((cl) => cl.id === clusterId) + dc;
+    if (r < 0 || r >= visibleItemIds.length || c < 0 || c >= clusters.length) return;
+    tableRef.current?.querySelector<HTMLElement>(`[data-cell="${visibleItemIds[r]}:${clusters[c].id}"]`)?.focus();
+  };
+
   const colDefaults = useMemo(
     () => ({ item: 240, ...Object.fromEntries(clusters.map((c) => [c.id, 130])) }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -855,6 +1014,11 @@ export function PlatformStatusMatrix({ toolbarSlot }: PlatformStatusMatrixProps 
   };
 
   const activeCount = activeRuns?.total ?? 0;
+  const updatedLabel = dataUpdatedAt
+    ? new Date(dataUpdatedAt).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })
+    : '';
+  // 툴바는 [보기: 문제만·표/목록·새로고침·표시 설정] | [동작: 실행 로그·항목 추가] 두 묶음.
+  // 매트릭스 설정(이력 보관)은 표시 설정 팝오버로 합쳤고, 주 시선은 위험·경고 셀과 실행 로그에 남긴다.
   const toolbarContent = (
     <>
       <button
@@ -865,9 +1029,6 @@ export function PlatformStatusMatrix({ toolbarSlot }: PlatformStatusMatrixProps 
       >
         <HelpCircle className="w-3.5 h-3.5" /> 사용법
       </button>
-      <span className="text-xs text-muted-foreground truncate hidden md:inline">
-        행 = 점검 항목 · 열 = 클러스터 · 셀 = 최근 판정
-      </span>
       {isError && grid && (
         <span className="inline-flex items-center gap-1 text-xs text-status-warning" role="status">
           <AlertTriangle className="w-3 h-3" aria-hidden="true" /> 최신화 실패 — 마지막으로 받은 값 표시 중
@@ -898,26 +1059,37 @@ export function PlatformStatusMatrix({ toolbarSlot }: PlatformStatusMatrixProps 
             </button>
           ))}
         </div>
-        <button
-          onClick={() => refetch()}
-          disabled={isFetching}
-          className="p-1.5 rounded-xl hover:bg-secondary text-muted-foreground disabled:opacity-50"
-          title="지금 새로고침 (자동 갱신: 60초)"
-          aria-label="매트릭스 새로고침"
-        >
-          <RefreshCw className={`w-3.5 h-3.5 ${isFetching ? 'animate-spin' : ''}`} />
-        </button>
+        <span className="inline-flex items-center gap-1">
+          <button
+            onClick={() => refetch()}
+            disabled={isFetching}
+            className="p-1.5 rounded-xl hover:bg-secondary text-muted-foreground disabled:opacity-50"
+            title="지금 새로고침 (자동 갱신: 60초)"
+            aria-label="매트릭스 새로고침"
+          >
+            <RefreshCw className={`w-3.5 h-3.5 ${isFetching ? 'animate-spin' : ''}`} />
+          </button>
+          {updatedLabel && (
+            <span className="hidden lg:inline text-xs text-muted-foreground tabular-nums" title="마지막으로 값을 받은 시각">
+              {updatedLabel} 갱신
+            </span>
+          )}
+        </span>
         <MatrixDisplaySettings
           density={rowDensity} onDensityChange={setRowDensity}
           onExpandAllGroups={expandAllGroups} onCollapseAllGroups={collapseAllGroups}
           onResetWidths={colW.reset}
           showDisabled={showDisabled} onShowDisabledChange={setShowDisabled} disabledCount={disabledCount}
           showLegend={showLegend} onShowLegendChange={setShowLegend}
+          onOpenMatrixSettings={() => setSettingsOpen(true)}
+          matrixSettingsDisabled={!canOperate}
+          matrixSettingsTitle={withHint('매트릭스 설정 — 이력·실행 기록 보관 기간')}
         />
+        <span className="w-px h-4 bg-border" aria-hidden="true" />
         <button
           onClick={() => showLog(null)}
           className="relative inline-flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-xl hover:bg-secondary transition-colors"
-          title={activeCount > 0 ? `실행 로그 — 지금 ${activeCount}건 대기·실행 중` : '모든 실행의 로그(자동·수동)'}
+          title={activeCount > 0 ? `실행 로그 — 지금 ${activeCount}건 대기·실행 중 (열면 진행 상황 확인·취소)` : '모든 실행의 로그(자동·수동)'}
           aria-label={activeCount > 0 ? `실행 로그 — 지금 ${activeCount}건 대기·실행 중` : '실행 로그'}
         >
           <ScrollText className="w-3.5 h-3.5" /> 실행 로그
@@ -931,40 +1103,39 @@ export function PlatformStatusMatrix({ toolbarSlot }: PlatformStatusMatrixProps 
           onClick={() => setFormItem('new')}
           disabled={!canOperate}
           title={withHint('점검 항목 추가')}
-          className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-xl bg-primary text-primary-foreground hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-xl border border-border bg-secondary text-foreground hover:bg-secondary/80 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
         >
           <Plus className="w-3.5 h-3.5" /> 항목 추가
-        </button>
-        <button
-          onClick={() => setSettingsOpen(true)}
-          disabled={!canOperate}
-          className="p-1.5 rounded-xl hover:bg-secondary transition-colors text-muted-foreground disabled:opacity-50 disabled:cursor-not-allowed"
-          title={withHint('매트릭스 설정 — 이력 보관 기간')}
-          aria-label={ariaWithHint('매트릭스 설정')}
-        >
-          <Settings className="w-4 h-4" />
         </button>
       </div>
     </>
   );
 
+  // 범위가 넓을수록 경고를 강하게 — 셀 하나는 일반 확인, 항목(전 클러스터)·클러스터 전체는 danger.
+  // 확인 버튼 라벨에도 영향 범위(건수)를 넣어 "실행" 만 반복해 누르는 습관을 막는다.
   const confirmText = (() => {
-    if (!runConfirm) return { title: '', description: '' };
+    if (!runConfirm) return { title: '', description: '', confirmLabel: '실행', danger: false };
     if (runConfirm.type === 'cluster') {
       return {
-        title: `${runConfirm.cluster.name} — 전체 점검 실행`,
+        title: `${runConfirm.cluster.name} — 모든 점검 실행`,
         description: `이 클러스터의 자동 점검 항목 ${runnableItemsForCluster}건을 지금 실행합니다(수동 입력·비활성 항목 제외, 이미 실행 중인 셀은 건너뜀). 실제 클러스터에 점검 명령이 나갑니다.`,
+        confirmLabel: `${runnableItemsForCluster}건 실행`,
+        danger: true,
       };
     }
     if (runConfirm.type === 'item') {
       return {
-        title: `${runConfirm.item.name} — 전 클러스터 실행`,
+        title: `${runConfirm.item.name} — 모든 클러스터에서 실행`,
         description: `실행 권한이 있는 클러스터 ${operableClusterCount}곳에서 이 항목을 지금 실행합니다(이미 실행 중인 셀은 건너뜀). 실제 클러스터에 점검 명령이 나갑니다.`,
+        confirmLabel: `${operableClusterCount}곳에서 실행`,
+        danger: true,
       };
     }
     return {
-      title: '이 셀만 지금 실행',
+      title: '이 셀 실행',
       description: `"${runConfirm.item.name}" 을(를) ${runConfirm.cluster.name} 에서 실행합니다. 실제 클러스터에 점검 명령이 나가며, 실행 로그로 진행을 볼 수 있습니다.`,
+      confirmLabel: '실행',
+      danger: false,
     };
   })();
 
@@ -1055,7 +1226,8 @@ export function PlatformStatusMatrix({ toolbarSlot }: PlatformStatusMatrixProps 
             />
           ) : (
           <div className="flex-1 min-h-0 overflow-auto">
-            <table className="border-collapse text-sm" style={{ tableLayout: 'fixed', width: 'max-content', minWidth: '100%' }}>
+            {/* 열 너비는 사용자가 드래그로 정하는 동적 값이라 style 로만 표현된다(고정 레이아웃). */}
+            <table ref={tableRef} onKeyDown={onGridKeyDown} className="border-collapse text-sm" style={{ tableLayout: 'fixed', width: 'max-content', minWidth: '100%' }}>
               <colgroup>
                 <col style={{ width: `${colW.getWidth('item')}px` }} />
                 {clusters.map((cluster) => (
@@ -1098,7 +1270,7 @@ export function PlatformStatusMatrix({ toolbarSlot }: PlatformStatusMatrixProps 
                             onClick={() => setRunConfirm({ type: 'cluster', cluster })}
                             disabled={!!hint || requestingCluster}
                             title={hint ?? `${cluster.name} 의 모든 자동 점검을 지금 실행`}
-                            aria-label={hint ? `${cluster.name} 전체 실행 — ${hint}` : `${cluster.name} 전체 실행`}
+                            aria-label={hint ? `${cluster.name} 모든 점검 실행 — ${hint}` : `${cluster.name} 모든 점검 실행`}
                             className="inline-flex items-center gap-0.5 px-1.5 py-0.5 text-xs rounded-xl border border-border text-muted-foreground hover:text-primary hover:border-primary/50 hover:bg-secondary transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex-shrink-0"
                           >
                             {requestingCluster
@@ -1125,7 +1297,7 @@ export function PlatformStatusMatrix({ toolbarSlot }: PlatformStatusMatrixProps 
                           onClick={() => toggleGroup(g)}
                           aria-expanded={expanded}
                           className="w-full flex items-center gap-1.5 text-left min-w-0"
-                          title={expanded ? '영역 접기' : '영역 펼치기'}
+                          title={`${expanded ? '영역 접기' : '영역 펼치기'}${g.counts.healthy > 0 ? ` — 정상 셀 ${g.counts.healthy}개` : ''}`}
                         >
                           <ChevronRight
                             className={`w-3.5 h-3.5 flex-shrink-0 text-muted-foreground transition-transform ${expanded ? 'rotate-90' : ''}`}
@@ -1136,18 +1308,13 @@ export function PlatformStatusMatrix({ toolbarSlot }: PlatformStatusMatrixProps 
                           {/* 상태 카운트는 이름 바로 옆 — 클러스터가 많아 가로 스크롤해도 첫 열에 남는다. */}
                           <span className="flex items-center gap-1 flex-shrink-0 ml-auto">
                             {g.counts.critical > 0 && (
-                              <span title={`위험 셀 ${g.counts.critical}개`} className={`inline-flex items-center gap-0.5 px-1 py-px rounded border text-xs font-semibold tabular-nums ${GROUP_BADGE_CLS.critical}`}>
+                              <span title={`위험 셀 ${g.counts.critical}개`} className={`inline-flex items-center gap-0.5 px-1 py-px rounded-md border text-xs font-semibold tabular-nums ${GROUP_BADGE_CLS.critical}`}>
                                 <XCircle className="w-2.5 h-2.5" aria-hidden="true" />{g.counts.critical}
                               </span>
                             )}
                             {g.counts.warning > 0 && (
-                              <span title={`경고 셀 ${g.counts.warning}개`} className={`inline-flex items-center gap-0.5 px-1 py-px rounded border text-xs font-semibold tabular-nums ${GROUP_BADGE_CLS.warning}`}>
+                              <span title={`경고 셀 ${g.counts.warning}개`} className={`inline-flex items-center gap-0.5 px-1 py-px rounded-md border text-xs font-semibold tabular-nums ${GROUP_BADGE_CLS.warning}`}>
                                 <AlertTriangle className="w-2.5 h-2.5" aria-hidden="true" />{g.counts.warning}
-                              </span>
-                            )}
-                            {g.counts.healthy > 0 && (
-                              <span title={`정상 셀 ${g.counts.healthy}개`} className={`inline-flex items-center gap-0.5 px-1 py-px rounded border text-xs font-semibold tabular-nums ${GROUP_BADGE_CLS.healthy}`}>
-                                <CheckCircle2 className="w-2.5 h-2.5" aria-hidden="true" />{g.counts.healthy}
                               </span>
                             )}
                           </span>
@@ -1167,11 +1334,9 @@ export function PlatformStatusMatrix({ toolbarSlot }: PlatformStatusMatrixProps 
                     key={item.id}
                     onDragOver={(e) => { if (drag) { e.preventDefault(); setOverId(item.id); } }}
                     onDrop={(e) => { e.preventDefault(); handleDrop(g.key, item.id); }}
-                    className={`group ${isDragOver ? 'bg-primary/5' : ''} ${drag?.id === item.id ? 'opacity-50' : ''} ${
-                      item.enabled ? '' : 'opacity-60'
-                    }`}
+                    className={`group ${isDragOver ? 'bg-primary/5' : ''} ${drag?.id === item.id ? 'opacity-50' : ''}`}
                   >
-                    <td className={`sticky left-0 z-10 bg-card group-hover:bg-muted border-r border-b border-border px-2 ${ROW_PAD_CLS[rowDensity]}`}>
+                    <td className={`sticky left-0 ${menuRowId === item.id ? 'z-20' : 'z-10'} bg-card group-hover:bg-muted border-r border-b border-border px-2 ${ROW_PAD_CLS[rowDensity]}`}>
                       {(() => {
                         const grip = (
                           <span
@@ -1199,70 +1364,48 @@ export function PlatformStatusMatrix({ toolbarSlot }: PlatformStatusMatrixProps 
                             <GripVertical className="w-3.5 h-3.5" />
                           </span>
                         );
-                        const sourceMeta = (
+                        // 첫 열은 "이름 + 상태 표식 + 메뉴" 만 — 실행기술·중복 배지는 둘째 줄, 수정·삭제·전 클러스터 실행은 메뉴.
+                        const nameSpan = (
+                          <button
+                            onClick={() => navigate(`/checks/${item.id}`)}
+                            className={`truncate flex-1 min-w-0 text-left hover:text-primary hover:underline underline-offset-2 ${item.enabled ? '' : 'text-muted-foreground'}`}
+                            title={`${item.name}${item.execTech ? ` (${item.execTech})` : ''}${item.description ? ` — ${item.description}` : ''}\n눌러서 항목 상세(정의·테스트·주기·기록)로 이동`}
+                          >
+                            {item.name}
+                          </button>
+                        );
+                        const stateMarks = (
                           <>
-                            <ExecTechBadge execTech={item.execTech} />
-                            <TargetDuplicateBadge item={item} />
+                            {(itemRequesting || itemActive) && (
+                              <span title="이 항목이 지금 실행 중" className="flex-shrink-0">
+                                <Loader2 className="w-3 h-3 animate-spin text-status-info" aria-hidden="true" />
+                              </span>
+                            )}
                             {item.isSystem && (
                               <span title="핵심 항목 — 클러스터 상태 계산에 쓰여 삭제할 수 없습니다(숨기기만 가능)" className="flex-shrink-0">
                                 <Lock className="w-3 h-3 text-muted-foreground" aria-hidden="true" />
                               </span>
                             )}
                             {!item.enabled && (
-                              <span className="flex-shrink-0 px-1 py-px rounded border border-border text-xs text-muted-foreground" title="비활성 — 자동·일괄 실행에서 제외됩니다">
+                              <span className="flex-shrink-0 px-1 py-px rounded-md border border-border text-xs text-muted-foreground" title="비활성 — 자동·일괄 실행에서 제외됩니다">
                                 꺼짐
                               </span>
                             )}
                           </>
                         );
-                        const actions = (
-                          <div className="flex items-center gap-0.5 flex-shrink-0">
-                            {item.sourceType !== 'manual' && item.enabled && (
-                              <button
-                                onClick={() => setRunConfirm({ type: 'item', item })}
-                                disabled={!canOperate || itemRequesting}
-                                className="inline-flex items-center gap-0.5 px-1.5 py-0.5 text-xs rounded-xl border border-transparent text-muted-foreground hover:text-primary hover:border-primary/40 hover:bg-secondary disabled:opacity-50 disabled:cursor-not-allowed"
-                                title={withHint('실행 권한이 있는 모든 클러스터에서 이 항목을 지금 실행')}
-                                aria-label={ariaWithHint(`${item.name} — 전 클러스터 실행`)}
-                              >
-                                {itemRequesting || itemActive
-                                  ? <Loader2 className={`w-3 h-3 ${itemActive ? 'text-status-info' : ''} animate-spin`} aria-hidden="true" />
-                                  : <Play className="w-3 h-3" aria-hidden="true" />}
-                                <span className={rowDensity === 'compact' ? 'sr-only' : ''}>전 클러스터</span>
-                              </button>
-                            )}
-                            <div className="flex items-center gap-0.5 opacity-40 group-hover:opacity-100 focus-within:opacity-100 transition-opacity">
-                              <button
-                                onClick={() => setFormItem(item)}
-                                disabled={!canOperate}
-                                className="p-1 rounded-xl hover:bg-secondary text-muted-foreground disabled:opacity-50 disabled:cursor-not-allowed"
-                                title={withHint('항목 수정 — 이름·실행 소스·설정·표시')}
-                                aria-label={operateHint ? `${item.name} 수정 — ${operateHint}` : `${item.name} 수정`}
-                              >
-                                <Pencil className="w-3 h-3" />
-                              </button>
-                              {!item.isSystem && (
-                                <button
-                                  onClick={() => setDeleteTarget(item)}
-                                  disabled={!canOperate}
-                                  className="p-1 rounded-xl hover:bg-secondary text-status-critical disabled:opacity-50 disabled:cursor-not-allowed"
-                                  title={withHint('항목 삭제')}
-                                  aria-label={operateHint ? `${item.name} 삭제 — ${operateHint}` : `${item.name} 삭제`}
-                                >
-                                  <Trash2 className="w-3 h-3" />
-                                </button>
-                              )}
-                            </div>
-                          </div>
-                        );
-                        const nameSpan = (
-                          <button
-                            onClick={() => navigate(`/checks/${item.id}`)}
-                            className="truncate flex-1 min-w-0 text-left hover:text-primary hover:underline underline-offset-2"
-                            title={`${item.name}${item.description ? ` — ${item.description}` : ''}\n눌러서 항목 상세(정의·테스트·주기·기록)로 이동`}
-                          >
-                            {item.name}
-                          </button>
+                        const menu = (
+                          <RowActionsMenu
+                            item={item}
+                            canOperate={canOperate}
+                            withHint={withHint}
+                            ariaWithHint={ariaWithHint}
+                            runnable={item.sourceType !== 'manual' && item.enabled}
+                            runBusy={itemRequesting}
+                            onRunAll={() => setRunConfirm({ type: 'item', item })}
+                            onEdit={() => setFormItem(item)}
+                            onDelete={() => setDeleteTarget(item)}
+                            onOpenChange={(o) => setMenuRowId(o ? item.id : null)}
+                          />
                         );
 
                         if (rowDensity === 'compact') {
@@ -1278,8 +1421,9 @@ export function PlatformStatusMatrix({ toolbarSlot }: PlatformStatusMatrixProps 
                               {color && <span aria-hidden className={`absolute left-0 inset-y-1 w-0.5 rounded-full ${color.bar}`} />}
                               {grip}
                               {nameSpan}
-                              {sourceMeta}
-                              {actions}
+                              {stateMarks}
+                              <TargetDuplicateBadge item={item} />
+                              {menu}
                             </div>
                           );
                         }
@@ -1296,12 +1440,12 @@ export function PlatformStatusMatrix({ toolbarSlot }: PlatformStatusMatrixProps 
                             <div className="flex items-center gap-1.5 min-w-0">
                               {grip}
                               {nameSpan}
+                              {stateMarks}
+                              {menu}
                             </div>
                             <div className="flex items-center gap-1 min-w-0 pl-5">
-                              {sourceMeta}
-                              <div className="ml-auto flex items-center gap-0.5 flex-shrink-0">
-                                {actions}
-                              </div>
+                              <ExecTechBadge execTech={item.execTech} />
+                              <TargetDuplicateBadge item={item} />
                             </div>
                           </div>
                         );
@@ -1324,6 +1468,10 @@ export function PlatformStatusMatrix({ toolbarSlot }: PlatformStatusMatrixProps 
                             : () => setRunConfirm({ type: 'cell', item, cluster })}
                           minH={ROW_MIN_H[rowDensity]}
                           runDisabledHint={clusterHint(cluster.id)}
+                          clusterName={cluster.name}
+                          cellId={key}
+                          tabIndex={key === activeTabCell ? 0 : -1}
+                          onFocusCell={() => setTabCell(key)}
                         />
                       </td>
                       );
@@ -1375,11 +1523,20 @@ export function PlatformStatusMatrix({ toolbarSlot }: PlatformStatusMatrixProps 
         open={!!runConfirm}
         title={confirmText.title}
         description={confirmText.description}
-        danger
-        confirmLabel="실행"
+        danger={confirmText.danger}
+        confirmLabel={confirmText.confirmLabel}
         onConfirm={confirmRun}
         onCancel={() => setRunConfirm(null)}
-      />
+      >
+        {/* 실행하는 순간에 로그를 볼지 정한다 — 표시 설정의 같은 값(스토어)과 연결돼 있다. */}
+        <label className="flex items-start gap-2 text-xs cursor-pointer select-none">
+          <input type="checkbox" className="mt-0.5" checked={autoOpenLog} onChange={(e) => setAutoOpenLog(e.target.checked)} />
+          <span>
+            실행하면 실행 로그 창 바로 열기
+            <span className="block text-muted-foreground">끄면 실행 알림의 「로그 보기」 로 엽니다. 표시 설정에서도 바꿀 수 있습니다.</span>
+          </span>
+        </label>
+      </ConfirmDialog>
     </div>
   );
 }
