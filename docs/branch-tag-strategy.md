@@ -97,8 +97,8 @@ CI 가드와 구제 둘 다 건너뛴다. `chore(release): …` 도 CI 가드 �
 `backend/app/routers/release_notes.py` 가 `CHANGELOG.md` 를 파싱해 `/api/v1/release-notes`
 로 제공하고, 사이드바 "릴리즈 노트" 패널이 이를 테이블(버전/날짜/요약, 클릭 시 섹션별 상세
 펼침)로 렌더한다. `Unreleased` 섹션은 노출하지 않음 — 실제 릴리즈된 버전만 표시된다.
-CHANGELOG.md 는 backend 이미지 build context 밖(저장소 루트)에 있어 `cd.yml`/`release.yml`
-이 빌드 직전에 `backend/CHANGELOG.md` 로 복사해 넣는다.
+CHANGELOG.md 는 backend 이미지 build context 밖(저장소 루트)에 있어 `release.yml`
+(이미지를 빌드하는 유일한 워크플로)이 빌드 직전에 `backend/CHANGELOG.md` 로 복사해 넣는다.
 
 ## 태그 규칙
 - 모든 릴리스는 **`main` 커밋**에만 태그(작업 브랜치 태그 금지).

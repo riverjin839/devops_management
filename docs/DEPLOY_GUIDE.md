@@ -317,8 +317,10 @@ bash scripts/deploy/deploy-airgap.sh check    # K8s API 서버 헬스 체크
 
 **기본(인터넷 연결 가능한 환경) 파이프라인은 GitHub Actions** 다 —
 `.github/workflows/ci.yml`(프론트 lint/tsc/build + 백엔드 pytest) →
-`cd.yml`(GHCR 이미지 빌드·푸시 → Kustomize 배포) → `release.yml`/`auto-release.yml`
-(SemVer 자동 태깅 + GitHub Release, 상세는 [branch-tag-strategy.md](branch-tag-strategy.md)).
+`auto-release.yml`(SemVer 자동 태깅) → `release.yml`(GHCR 이미지 빌드·푸시 `:X.Y.Z`/`:X.Y`/`:latest` +
+GitHub Release) → `cd.yml`(Kustomize 배포 — **숫자 버전 태그로만** 배포, 빌드는 하지 않음).
+상세는 [branch-tag-strategy.md](branch-tag-strategy.md). prod 배포·롤백은 Actions 에서 `cd.yml` 을 수동 실행하고
+`environment`·`version`(예: `1.86.0`)을 입력한다.
 필요 GitHub secrets: `KUBECONFIG_DEV`, `KUBECONFIG_PROD`.
 
 **폐쇄망/온프레미스 대안**으로 Jenkins(CI) + ArgoCD(CD) 조합을 아래에 설명한다 —
