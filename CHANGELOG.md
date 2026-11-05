@@ -8,15 +8,21 @@
 
 ## [Unreleased]
 
-1.85.3 이후 main 에 병합된 변경 (다음 릴리스 후보).
+1.87.0 이후 main 에 병합된 변경 (다음 릴리스 후보).
+
+## [1.87.0] - 2026-11-05
 
 ### Added
-- **K8s 자원 관리 — 수치 표기 전환(사용량/사용률)·판단 문구 제거·문제 Pod 상세 팝업**: 헤더 토글로 요약·노드·네임스페이스 수치를 사용량(코어·Gi, 기본) 또는 사용률(%)로 바꿔 본다(선택은 기억). 「사용 초과」「적정」「request 과대」 판정 배지·칩·효율 열과 도움말의 적정 범위 문구를 삭제했다. 요약의 Pod 오류·Pod 대기·request 미설정 칩을 누르면 해당 Pod 목록(네임스페이스·워크로드·노드·상태 사유·재시작, 검색·CSV)을 팝업으로 보여준다. Backend: `GET /k8s/{id}/allocation/problem-pods?kind=error|pending|norequest`(최대 500건). 요약 스트립은 칩 나열 대신 문제 버튼 / 용량 한 줄 / 할당·사용 격자 표로 재구성하고(「낭비」 칩 삭제, 「Pod 스케줄 가능」 표기), 노드·네임스페이스 표는 격자선 있는 촘촘한 시트 스타일로 줄였다. Frontend: `MetricModeContext`·`ProblemPodsDialog`·`SummaryStrip`.
 - **K8S 접근 권한 — 위험 발급 클러스터 확인·ServiceAccount 상세 펼침·키보드 개선**: 확인 대화상자가 적용 클러스터를 보여주고 `클러스터/이름` 전체를 재입력받아 잘못된 클러스터 발급을 막는다. 권한 규칙은 요약 후 펼쳐 보고, 토큰 유효기간에 4시간 추가, 막힌 사유 전체 표시, Ctrl+Enter 발급, 프리셋·바인딩 방식 화살표 키 이동. ServiceAccount 행을 펼치면 바인딩 → 롤 규칙과 권한 점검 바로가기를 한 자리에서 확인. 단계 진행 낭독을 현재 단계 한 줄로 줄이고 "액세스" 용어를 "권한"으로 통일. Frontend: `GrantRiskDialog`·`ProvisionWizard`·`ServiceAccountPanel`.
 - **K8S 접근 권한 — 발급 마법사 단순화·위험도 실시간 요약**: 바인딩 방식·토큰 유효기간·검증을 "고급 설정"으로 접고(토큰 방식+유효기간은 하나의 select), 하단 바가 범위·읽기/쓰기·만료·확인 필요 건수를 입력과 함께 실시간으로 보여준다. 모의 실행은 별도 보조 버튼, 발급 결과 카드에서 권한 점검·회수로 바로 이동, "로그 보기"는 실행 로그 카드로 이동. 단계 칩 live region·쓰기 동사 sr-only 표기 등 접근성 보강과 ServiceAccount·롤 용어 통일. Frontend: `ProvisionWizard`·`ProvisionConsole`·`K8sRbacPage`.
 
 ### Changed
 - **사이드바·메뉴 아이콘 재검토 — 중복 해소**: 같은 아이콘을 쓰던 메뉴(Database·Boxes·Activity·HardDrive·ClipboardCheck·TerminalSquare·FileText·Layers·Users)를 의미에 맞는 고유 아이콘으로 교체하고, AI 전용 느낌의 Sparkles(점검 항목 관리)·Zap(K8s 로그)을 ListChecks·Siren 으로 바꿨다. 그룹 아이콘(관측·토폴로지·자동화)도 하위 화면과 겹치지 않게 정리. Frontend: `navConfig.ts`.
+
+## [1.86.0] - 2026-11-05
+
+### Added
+- **K8s 자원 관리 — 수치 표기 전환(사용량/사용률)·판단 문구 제거·문제 Pod 상세 팝업**: 헤더 토글로 요약·노드·네임스페이스 수치를 사용량(코어·Gi, 기본) 또는 사용률(%)로 바꿔 본다(선택은 기억). 「사용 초과」「적정」「request 과대」 판정 배지·칩·효율 열과 도움말의 적정 범위 문구를 삭제했다. 요약의 Pod 오류·Pod 대기·request 미설정 칩을 누르면 해당 Pod 목록(네임스페이스·워크로드·노드·상태 사유·재시작, 검색·CSV)을 팝업으로 보여준다. Backend: `GET /k8s/{id}/allocation/problem-pods?kind=error|pending|norequest`(최대 500건). 요약 스트립은 칩 나열 대신 문제 버튼 / 용량 한 줄 / 할당·사용 격자 표로 재구성하고(「낭비」 칩 삭제, 「Pod 스케줄 가능」 표기), 노드·네임스페이스 표는 격자선 있는 촘촘한 시트 스타일로 줄였다. Frontend: `MetricModeContext`·`ProblemPodsDialog`·`SummaryStrip`.
 
 ## [1.85.3] - 2026-11-05
 
