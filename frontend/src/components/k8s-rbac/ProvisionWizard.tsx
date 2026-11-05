@@ -1,11 +1,11 @@
 /**
- * 개발자 액세스 발급 마법사 — 프리셋 → 대상 → 권한 규칙 → (고급: 바인딩 방식·토큰) → 실행.
+ * 개발자 권한 발급 마법사 — 프리셋 → 대상 → 권한 규칙 → (고급: 바인딩 방식·토큰) → 실행.
  * 고르는 동안 발급이 여는 범위·위험도를 하단 바에 실시간으로 보여주고, 모의 실행은 보조 버튼으로 둔다.
  *
  * 개발자는 보통 자기 네임스페이스 하나에 배포하지만 다른 네임스페이스도 필요할 때가 있어,
  * 주 네임스페이스와 추가 네임스페이스를 함께 받아 한 번에 붙인다.
  */
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, type KeyboardEvent } from 'react';
 import { AlertTriangle, ChevronRight, FlaskConical, Play, Plus, X } from 'lucide-react';
 import { SwitchToggle } from '@/components/common';
 import { formatApiError } from '@/lib/utils';
@@ -18,7 +18,8 @@ import type {
   RbacPresetCatalog,
   RbacProvisionRequest,
 } from '@/types';
-import { grantRiskReasons, isClusterWideMode, isWriteVerb, saNameProblem } from './rbacShared';
+import { grantRiskReasons, isClusterWideMode, isWriteVerb, radioArrowKey, saNameProblem } from './rbacShared';
+import { useClusters } from '@/hooks/useCluster';
 import { GrantRiskDialog } from './GrantRiskDialog';
 import { RiskBadge } from './RbacTags';
 import { RuleEditor } from './RuleEditor';
@@ -41,18 +42,21 @@ const NS_ERROR_PROBLEM = '네임스페이스 목록을 불러오지 못했습니
 /** 0 = 만료 없는 Secret 토큰(TokenRequest 가 아님). 토큰 방식과 유효기간을 하나의 선택으로 합쳤다. */
 const NO_EXPIRY = 0;
 const TTL_OPTIONS = [
+  { label: '4시간', value: 4 * 3600 },
   { label: '1일', value: 24 * 3600 },
   { label: '7일', value: 7 * 24 * 3600 },
   { label: '30일', value: 30 * 24 * 3600 },
   { label: '90일', value: 90 * 24 * 3600 },
   { label: '만료 없음 (Secret 토큰)', value: NO_EXPIRY },
 ];
-const DEFAULT_TTL = TTL_OPTIONS[1].value;
+const DEFAULT_TTL = 7 * 24 * 3600; // 기존 기본값(7일) 유지 — 옵션 순서가 바뀌어도 기본값이 따라 바뀌지 않게 값으로 고정
 
 export function ProvisionWizard({
   clusterId, catalog, namespaces, namespacesLoading = false, namespacesError, onRetryNamespaces, running, onRun,
 }: ProvisionWizardProps) {
   const { canOperate, hint, withHint } = useCanOperate(clusterId);
+  const { data: clusters = [] } = useClusters();
+  const clusterName = clusters.find((c) => c.id === clusterId)?.name ?? '';
 
   const [presetKey, setPresetKey] = useState<string>('dev-deploy');
   const [rules, setRules] = useState<RbacPolicyRule[]>([]);
@@ -68,6 +72,7 @@ export function ProvisionWizard({
   const [ttl, setTtl] = useState(DEFAULT_TTL);
   const longLived = ttl === NO_EXPIRY;
   const [advancedOpen, setAdvancedOpen] = useState(false);
+  const [rulesOpen, setRulesOpen] = useState(false);
 
   const preset = useMemo(
     () => catalog?.presets.find((p) => p.key === presetKey),
@@ -176,19 +181,38 @@ export function ProvisionWizard({
   const inputCls =
     'w-full px-3 py-2 bg-secondary border border-border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/50';
 
+  // 파워 유저·긴급 대응용 — 폼 어디서든 Ctrl/⌘+Enter 로 발급(위험 사유가 있으면 확인 대화상자를 거친다).
+  const onFormKeyDown = (e: KeyboardEvent<HTMLDivElement>) => {
+    if (e.key === 'Enter' && (e.ctrlKey || e.metaKey) && !running) {
+      e.preventDefault();
+      requestRun();
+    }
+  };
+  const presetKeys = (catalog?.presets ?? []).map((p) => p.key);
+  const modeKeys = (catalog?.bindingModes ?? []).map((m) => m.key);
+  const problemsId = 'rbac-wizard-problems';
+
   return (
-    <div className="space-y-3">
+    // eslint-disable-next-line jsx-a11y/no-static-element-interactions -- 폼 전체의 단축키(Ctrl+Enter) 위임
+    <div className="space-y-3" onKeyDown={onFormKeyDown}>
       {/* 1. 프리셋 */}
       <MacCard title="권한 프리셋">
-        <div className="grid gap-2 [grid-template-columns:repeat(auto-fit,minmax(220px,1fr))]">
+        <div
+          className="grid gap-2 [grid-template-columns:repeat(auto-fit,minmax(220px,1fr))]"
+          role="radiogroup"
+          aria-label="권한 프리셋"
+        >
           {(catalog?.presets ?? []).map((p) => {
             const on = p.key === presetKey;
             return (
               <button
                 key={p.key}
                 type="button"
-                aria-pressed={on}
+                role="radio"
+                aria-checked={on}
+                tabIndex={on || !presetKeys.includes(presetKey) ? 0 : -1}
                 onClick={() => setPresetKey(p.key)}
+                onKeyDown={(e) => radioArrowKey(e, presetKeys, presetKey, setPresetKey)}
                 className={`text-left p-3 rounded-xl border transition-colors ${
                   on
                     ? 'border-primary bg-primary/5 ring-1 ring-primary'
@@ -284,7 +308,7 @@ export function ProvisionWizard({
                     onClick={() => setExtraNs(extraNs.filter((x) => x !== n))}
                     title={`${n} 제외`}
                     aria-label={`${n} 제외`}
-                    className="p-0.5 rounded hover:text-destructive"
+                    className="p-0.5 rounded-md hover:text-destructive"
                   >
                     <X className="w-3 h-3" />
                   </button>
@@ -338,19 +362,30 @@ export function ProvisionWizard({
       </MacCard>
 
       {/* 4. 규칙 */}
-      <MacCard
-        title="권한 규칙"
-        description={rulesTouched ? '프리셋에서 수정됨' : `프리셋: ${preset?.name ?? '—'}`}
-      >
-        <RuleEditor
-          rules={rules}
-          onChange={(next) => {
-            setRules(next);
-            setRulesTouched(true);
-          }}
-          disabled={!canOperate}
-          disabledHint={hint}
-        />
+      <MacCard title="권한 규칙">
+        <details
+          open={rulesOpen}
+          onToggle={(e) => setRulesOpen((e.currentTarget as HTMLDetailsElement).open)}
+        >
+          <summary className="flex cursor-pointer flex-wrap items-center gap-x-2 gap-y-1 text-sm font-semibold text-foreground">
+            <ChevronRight className={`w-4 h-4 text-muted-foreground transition-transform ${rulesOpen ? 'rotate-90' : ''}`} aria-hidden="true" />
+            규칙 {rules.length}개 · {writes ? '쓰기 포함' : '읽기 전용'}
+            <span className="text-xs font-normal text-muted-foreground">
+              {rulesTouched ? '프리셋에서 수정됨' : `프리셋 ${preset?.name ?? '—'} 그대로`} — 눈으로 확인하거나 고치려면 펼치세요
+            </span>
+          </summary>
+          <div className="mt-3">
+            <RuleEditor
+              rules={rules}
+              onChange={(next) => {
+                setRules(next);
+                setRulesTouched(true);
+              }}
+              disabled={!canOperate}
+              disabledHint={hint}
+            />
+          </div>
+        </details>
       </MacCard>
 
       {/* 고급 — 기본값으로 충분한 대부분의 발급에서는 접어 둔다. 현재 값은 접힌 줄에 요약한다. */}
@@ -380,6 +415,8 @@ export function ProvisionWizard({
                 type="button"
                 role="radio"
                 aria-checked={on}
+                tabIndex={on || !modeKeys.includes(bindingMode) ? 0 : -1}
+                onKeyDown={(e) => radioArrowKey(e, modeKeys, bindingMode, (k) => setBindingMode(k as RbacBindingMode))}
                 aria-labelledby={`rbac-bm-${m.key}-n`}
                 aria-describedby={`rbac-bm-${m.key}-d`}
                 onClick={() => setBindingMode(m.key)}
@@ -444,6 +481,7 @@ export function ProvisionWizard({
       {/* 실행 — 이 발급이 여는 범위를 고르는 동안 실시간으로 보여준다 */}
       <div className="sticky bottom-3 z-10 space-y-2 p-3 rounded-md bg-card border border-border shadow-sm">
         <div aria-live="polite" className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground">
+          {clusterName && <span>클러스터 <span className="font-mono font-semibold text-foreground">{clusterName}</span></span>}
           <span>범위 <span className="font-medium text-foreground">{scopeLabel}</span></span>
           <span>동작 <span className="font-medium text-foreground">{writes ? '읽기 + 쓰기' : '읽기 전용'}</span></span>
           <span>토큰 <span className="font-medium text-foreground">{expiryLabel}</span></span>
@@ -467,13 +505,14 @@ export function ProvisionWizard({
                 ? hint
                 : problems.length > 0
                   ? problems[0]
-                  : withHint('액세스 발급 실행')
+                  : withHint('권한 발급 실행')
             }
-            aria-label="액세스 발급 실행"
+            aria-label="권한 발급 실행"
+            aria-describedby={problems.length > 0 ? problemsId : undefined}
             className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-primary text-primary-foreground text-sm font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <Play className="w-4 h-4" />
-            {running ? '실행 중…' : '액세스 발급 실행'}
+            {running ? '실행 중…' : '권한 발급 실행'}
           </button>
           <button
             type="button"
@@ -487,21 +526,26 @@ export function ProvisionWizard({
                   : withHint('모의 실행 — 아무것도 만들지 않고 같은 로그를 냅니다')
             }
             aria-label="모의 실행"
+            aria-describedby={problems.length > 0 ? problemsId : undefined}
             className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl border border-border bg-secondary text-sm font-medium hover:border-primary/40 disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <FlaskConical className="w-4 h-4" aria-hidden="true" />
             모의 실행
           </button>
-          {problems.length > 0 && (
-            <span role="status" className="text-xs text-status-critical">{problems[0]}</span>
-          )}
+          <span className="text-xs text-muted-foreground">Ctrl+Enter 로 발급</span>
         </div>
+        {problems.length > 0 && (
+          <ul id={problemsId} role="status" aria-label="발급을 막는 항목" className="space-y-0.5 text-xs text-status-critical">
+            {problems.map((p) => <li key={p}>{p}</li>)}
+          </ul>
+        )}
       </div>
 
       <GrantRiskDialog
+        clusterId={clusterId}
         open={confirming}
         title="넓은 권한을 발급할까요?"
-        description="발급한 토큰은 ServiceAccount 탭에서 액세스를 회수해야만 무효화됩니다."
+        description="발급한 토큰은 ServiceAccount 탭에서 권한을 회수해야만 무효화됩니다."
         reasons={riskReasons}
         details={[
           { label: '대상', value: `${primaryNs}/${saName.trim()}` },

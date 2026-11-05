@@ -79,7 +79,7 @@ export function RuleEditor({ rules, onChange, disabled, disabledHint }: RuleEdit
           onClick={add}
           disabled={disabled}
           title={disabled ? disabledHint : '규칙 추가'}
-          aria-label={disabled ? disabledHint : '규칙 추가'}
+          aria-label="규칙 추가"
           className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-border text-xs hover:border-primary disabled:opacity-50 disabled:cursor-not-allowed"
         >
           <Plus className="w-3.5 h-3.5" /> 규칙 추가
@@ -171,7 +171,7 @@ export function RuleEditor({ rules, onChange, disabled, disabledHint }: RuleEdit
                       onClick={() => remove(idx)}
                       disabled={disabled}
                       title={disabled ? disabledHint : '이 규칙 삭제'}
-                      aria-label={disabled ? disabledHint : '이 규칙 삭제'}
+                      aria-label="이 규칙 삭제"
                       className="p-1.5 rounded-xl text-muted-foreground hover:text-destructive hover:bg-destructive/10 disabled:opacity-50"
                     >
                       <Trash2 className="w-4 h-4" />

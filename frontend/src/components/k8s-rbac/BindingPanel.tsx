@@ -293,8 +293,8 @@ export function BindingPanel({
                   }}
                   className={inputCls}
                 >
-                  <option value="ClusterRole">ClusterRole</option>
-                  <option value="Role">Role (이 네임스페이스 전용)</option>
+                  <option value="ClusterRole">ClusterRole (클러스터 전체 롤)</option>
+                  <option value="Role">Role (이 네임스페이스 전용 롤)</option>
                 </select>
               </label>
             )}
@@ -377,7 +377,7 @@ export function BindingPanel({
         <EmptyState
           icon={Link2}
           title="바인딩이 없습니다"
-          description='액세스 발급 탭에서 만들거나, 위 "바인딩 추가" 로 직접 만들 수 있습니다.'
+          description='권한 발급 탭에서 만들거나, 위 "바인딩 추가" 로 직접 만들 수 있습니다.'
           compact
         />
       ) : (
@@ -467,6 +467,7 @@ export function BindingPanel({
 
       {subject && selectedRole && (
         <GrantRiskDialog
+          clusterId={clusterId}
           open={confirmCreate}
           title="넓은 권한을 연결할까요?"
           description={`${subject.namespace}/${subject.name} 에 ${effectiveRoleKind} ${roleName} 을(를) 묶습니다. 생성 즉시 권한이 발동합니다.`}

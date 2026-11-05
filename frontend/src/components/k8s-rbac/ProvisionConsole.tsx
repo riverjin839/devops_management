@@ -1,5 +1,5 @@
 /**
- * 액세스 발급 실행 결과 패널 — 진행 단계 + 실시간 로그 + 발급 결과(kubeconfig).
+ * 권한 발급 실행 결과 패널 — 진행 단계 + 실시간 로그 + 발급 결과(kubeconfig).
  *
  * 로그는 항상 수집하고, **보여줄지 말지는 사용자가 "로그 보기" 로 정한다**
  * (CLAUDE.md riverjin839 custom 요청). 접어둔 동안에도 스트림은 계속 쌓여서,
@@ -26,8 +26,13 @@ interface ProvisionConsoleProps {
 const STEP_STATUS_TEXT: Record<string, string> = { done: '완료', running: '진행 중', pending: '대기', error: '실패' };
 
 function StepChips({ steps, running }: { steps: ProvisionStream['steps']; running: boolean }) {
+  // 라이브 영역은 "지금 진행 중인 단계" 한 줄만 낭독한다 — 칩 전체를 live 로 두면 단계가 바뀔 때마다 전부 다시 읽힌다.
+  const current = PROVISION_STEPS.find(({ key }) => steps[key] === 'running');
   return (
-    <div className="flex flex-wrap gap-1.5" role="status" aria-live="polite" aria-label="발급 진행 단계">
+    <div className="flex flex-wrap gap-1.5" role="group" aria-label="발급 진행 단계">
+      <span role="status" className="sr-only">
+        {current ? `${current.label} 단계 진행 중` : ''}
+      </span>
       {PROVISION_STEPS.map(({ key, label }) => {
         const status = steps[key] ?? 'pending';
         const cls =
@@ -85,7 +90,7 @@ export function ProvisionConsole({ clusterId, stream, showLogs, onShowLogsChange
     return (
       <MacCard title="실행 로그" actions={logToggle}>
         <EmptyState icon={ShieldCheck} title="아직 발급을 실행하지 않았습니다."
-          description="왼쪽에서 대상과 권한을 정한 뒤 '액세스 발급 실행'을 누르면 단계별 로그와 발급된 kubeconfig 가 여기에 나옵니다." />
+          description="왼쪽에서 대상과 권한을 정한 뒤 '권한 발급 실행'을 누르면 단계별 로그와 발급된 kubeconfig 가 여기에 나옵니다." />
       </MacCard>
     );
   }
@@ -230,8 +235,8 @@ export function ProvisionConsole({ clusterId, stream, showLogs, onShowLogsChange
                   type="button"
                   onClick={() => onRevoke(result.namespace, result.serviceAccount)}
                   disabled={!canOperate}
-                  title={withHint('ServiceAccount 탭에서 이 액세스를 회수합니다')}
-                  aria-label="이 ServiceAccount 액세스 회수"
+                  title={withHint('ServiceAccount 탭에서 이 권한을 회수합니다')}
+                  aria-label="이 ServiceAccount 권한 회수"
                   className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-border text-xs hover:border-destructive hover:text-destructive disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   <Trash2 className="w-3.5 h-3.5" aria-hidden="true" /> 회수

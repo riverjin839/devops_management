@@ -8,6 +8,7 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import { AlertTriangle } from 'lucide-react';
 import { ConfirmDialog } from '@/components/common';
+import { useClusters } from '@/hooks/useCluster';
 
 export interface GrantRiskDetail {
   label: string;
@@ -16,6 +17,8 @@ export interface GrantRiskDetail {
 
 interface Props {
   open: boolean;
+  /** 이 권한이 적용될 클러스터 — 이름을 확인 문구에 넣어, 잘못된 클러스터에 발급하는 실수를 막는다. */
+  clusterId: string;
   title: string;
   description: string;
   reasons: string[];
@@ -35,9 +38,13 @@ const inputCls =
   'w-full px-3 py-2 bg-secondary border border-border rounded-xl text-sm font-mono focus:outline-none focus:ring-2 focus:ring-primary/50';
 
 export function GrantRiskDialog({
-  open, title, description, reasons, details, confirmName, confirmNameLabel, confirmLabel, onConfirm, onCancel, children,
+  open, clusterId, title, description, reasons, details, confirmName, confirmNameLabel, confirmLabel, onConfirm, onCancel, children,
 }: Props) {
   const [typed, setTyped] = useState('');
+  const { data: clusters = [] } = useClusters();
+  const clusterName = clusters.find((c) => c.id === clusterId)?.name ?? '';
+  // 클러스터 이름을 알면 `클러스터/이름` 전체를 입력받는다. 직전에 입력한 이름만 따라 치는 것으로는 대상 클러스터를 확인했다고 볼 수 없다.
+  const expected = clusterName ? `${clusterName}/${confirmName}` : confirmName;
   useEffect(() => {
     if (open) setTyped('');
   }, [open]);
@@ -49,7 +56,7 @@ export function GrantRiskDialog({
       description={description}
       confirmLabel={confirmLabel}
       danger
-      confirmDisabled={typed.trim() !== confirmName.trim()}
+      confirmDisabled={typed.trim() !== expected.trim()}
       onConfirm={onConfirm}
       onCancel={onCancel}
     >
@@ -62,6 +69,12 @@ export function GrantRiskDialog({
             </li>
           ))}
         </ul>
+        {clusterName && (
+          <p className="text-xs">
+            <span className="text-muted-foreground">적용 클러스터 </span>
+            <span className="font-mono font-semibold text-foreground">{clusterName}</span>
+          </p>
+        )}
         {details.length > 0 && (
           <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 text-xs">
             {details.map((d) => (
@@ -75,7 +88,7 @@ export function GrantRiskDialog({
         {children}
         <label className="flex flex-col gap-1.5 text-xs text-muted-foreground font-medium">
           <span>
-            확인을 위해 {confirmNameLabel} <span className="font-mono text-foreground">{confirmName}</span> 을(를) 입력하세요
+            확인을 위해 {clusterName ? '클러스터/' : ''}{confirmNameLabel} <span className="font-mono text-foreground">{expected}</span> 을(를) 입력하세요
           </span>
           <input
             value={typed}

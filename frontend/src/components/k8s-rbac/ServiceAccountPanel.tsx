@@ -1,6 +1,6 @@
-/** ServiceAccount 목록 — 연결된 권한을 함께 보여주고, kubeconfig 재발급·액세스 회수·삭제를 한다. */
-import { useMemo, useState } from 'react';
-import { AlertTriangle, KeyRound, Search, ShieldOff, Trash2, UserPlus } from 'lucide-react';
+/** ServiceAccount 목록 — 연결된 권한을 함께 보여주고, kubeconfig 재발급·권한 회수·삭제를 한다. */
+import { Fragment, useMemo, useState } from 'react';
+import { AlertTriangle, ChevronRight, KeyRound, Search, ShieldCheck, ShieldOff, Trash2, UserPlus } from 'lucide-react';
 import { ConfirmDialog, EmptyState, ErrorState, LoadingState, RunLogPanel, useToastSafe } from '@/components/common';
 import { MacCard } from '@/components/ui/MacCard';
 import { useCanOperate } from '@/hooks/useCanOperate';
@@ -23,14 +23,14 @@ import type {
   RbacRole,
   RbacServiceAccount,
 } from '@/types';
-import { buildRevokePlan, grantRiskReasons, shortDate } from './rbacShared';
+import { buildRevokePlan, grantRiskReasons, isWriteVerb, shortDate } from './rbacShared';
 import { Tag } from './RbacTags';
 
 interface Props {
   clusterId: string;
   serviceAccounts: RbacServiceAccount[];
   namespaces: RbacNamespace[];
-  /** 액세스 회수 계획(이 ServiceAccount 만 묶인 바인딩 + PEP 가 만든 롤)을 세우는 데 쓴다. */
+  /** 권한 회수 계획(이 ServiceAccount 만 묶인 바인딩 + PEP 가 만든 롤)을 세우는 데 쓴다. */
   bindings: RbacBinding[];
   roles: RbacRole[];
   clusterRoles: RbacRole[];
@@ -42,6 +42,8 @@ interface Props {
   onSelectRole: (binding: RbacBindingSummary) => void;
   /** 재발급 카드·파일 이름에 쓰는 클러스터 이름. */
   clusterName: string;
+  /** 행을 펼친 상세에서 "권한 점검" — 점검 탭으로 이동해 이 ServiceAccount 를 바로 연다. */
+  onReview?: (namespace: string, serviceAccount: string) => void;
 }
 
 const TTL_OPTIONS = [
@@ -69,6 +71,7 @@ export function ServiceAccountPanel({
   onRetry,
   onSelectRole,
   clusterName,
+  onReview,
 }: Props) {
   const { canOperate, withHint, ariaWithHint } = useCanOperate(clusterId);
   const toast = useToastSafe();
@@ -90,6 +93,15 @@ export function ServiceAccountPanel({
   const [longLived, setLongLived] = useState(false);
   const [ttl, setTtl] = useState(TTL_OPTIONS[1].value);
   const [pendingRevoke, setPendingRevoke] = useState<RbacServiceAccount | null>(null);
+  // 행 펼침 — ServiceAccount → 바인딩 → 롤 규칙을 탭을 옮기지 않고 한 자리에서 따라간다.
+  const [expanded, setExpanded] = useState<Set<string>>(() => new Set());
+  const toggleExpanded = (key: string) =>
+    setExpanded((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
   const [revokeName, setRevokeName] = useState('');
 
   // 실행 로그(D-089) — 생성·재발급·회수·삭제 모두 같은 로그에 남긴다. 펼침 여부는 화면별로 기억한다.
@@ -207,7 +219,7 @@ export function ServiceAccountPanel({
     setPendingRevoke(sa);
   };
 
-  /** 액세스 회수 — 바인딩 → PEP 가 만든 롤 → ServiceAccount 순으로 지운다. 하나가 실패해도
+  /** 권한 회수 — 바인딩 → PEP 가 만든 롤 → ServiceAccount 순으로 지운다. 하나가 실패해도
    *  나머지는 계속 지우고(남은 권한을 줄이는 게 우선), 실패한 것은 로그에 남긴다. */
   const handleRevoke = async () => {
     const sa = pendingRevoke;
@@ -216,7 +228,7 @@ export function ServiceAccountPanel({
     setPendingRevoke(null);
     const total = plan.bindings.length + plan.roles.length + 1;
     const r = await runLogged(runLog, {
-      title: '액세스 회수',
+      title: '권한 회수',
       first: `${sa.namespace}/${sa.name} — 바인딩 ${plan.bindings.length} · 롤 ${plan.roles.length} · ServiceAccount 1 삭제`,
       heartbeatMs: 0,
       fn: async (run) => {
@@ -268,7 +280,7 @@ export function ServiceAccountPanel({
       ],
     });
     if (r.ok) {
-      if (r.data.length === 0) toast.success('액세스 회수됨', `${sa.namespace}/${sa.name}`);
+      if (r.data.length === 0) toast.success('권한 회수됨', `${sa.namespace}/${sa.name}`);
       else toast.warning('일부만 회수됨', `${r.data.length}건 삭제 실패 — 실행 로그를 확인하세요`);
     } else if (!r.aborted) {
       toast.error('회수 실패', formatApiError(r.error));
@@ -387,7 +399,7 @@ export function ServiceAccountPanel({
           <EmptyState
             icon={KeyRound}
             title="ServiceAccount 가 없습니다"
-            description="액세스 발급 탭에서 개발자용 ServiceAccount 를 만들 수 있습니다."
+            description="권한 발급 탭에서 개발자용 ServiceAccount 를 만들 수 있습니다."
             compact
           />
         ) : (
@@ -408,12 +420,26 @@ export function ServiceAccountPanel({
               <tbody>
                 {rows.map((sa) => {
                   const protectedSa = sa.name === 'default';
+                  const rowKey = `${sa.namespace}/${sa.name}`;
+                  const open = expanded.has(rowKey);
                   return (
-                    <tr key={`${sa.namespace}/${sa.name}`} className="border-t border-border hover:bg-secondary/60">
+                    <Fragment key={rowKey}>
+                    <tr className="border-t border-border hover:bg-secondary/60">
                       <td className="px-3 py-2">
                         <Tag>{sa.namespace}</Tag>
                       </td>
                       <td className="px-3 py-2 font-mono text-xs">
+                        <button
+                          type="button"
+                          onClick={() => toggleExpanded(rowKey)}
+                          aria-expanded={open}
+                          aria-controls={`rbac-sa-detail-${sa.namespace}-${sa.name}`}
+                          aria-label={`${sa.name} 권한 상세 ${open ? '접기' : '펼치기'}`}
+                          title="연결된 바인딩과 롤 규칙을 이 자리에서 펼쳐 봅니다"
+                          className="mr-1 inline-flex align-middle p-0.5 rounded-md text-muted-foreground hover:text-foreground focus-visible:ring-2 focus-visible:ring-primary"
+                        >
+                          <ChevronRight className={`w-3.5 h-3.5 transition-transform ${open ? 'rotate-90' : ''}`} aria-hidden="true" />
+                        </button>
                         {sa.name}
                         {sa.managedByPep && (
                           <span className="ml-1.5 text-xs px-1.5 py-px rounded-full border border-border bg-secondary text-muted-foreground font-medium">
@@ -459,8 +485,8 @@ export function ServiceAccountPanel({
                               type="button"
                               onClick={() => openRevoke(sa)}
                               disabled={!canOperate || busy}
-                              title={withHint('액세스 회수 — 이 ServiceAccount 의 바인딩·PEP 롤·ServiceAccount 를 한 번에 삭제')}
-                              aria-label={ariaWithHint(`${sa.name} 액세스 회수`)}
+                              title={withHint('권한 회수 — 이 ServiceAccount 의 바인딩·PEP 롤·ServiceAccount 를 한 번에 삭제')}
+                              aria-label={ariaWithHint(`${sa.name} 권한 회수`)}
                               className="inline-flex items-center gap-1 px-2 py-1 rounded-xl border border-border text-xs hover:border-destructive hover:text-destructive disabled:opacity-50"
                             >
                               <ShieldOff className="w-3.5 h-3.5" /> 회수
@@ -479,6 +505,20 @@ export function ServiceAccountPanel({
                         )}
                       </td>
                     </tr>
+                    {open && (
+                      <tr id={`rbac-sa-detail-${sa.namespace}-${sa.name}`} className="bg-secondary/40">
+                        <td colSpan={5} className="px-3 py-3">
+                          <SaGrantDetail
+                            sa={sa}
+                            roles={roles}
+                            clusterRoles={clusterRoles}
+                            onSelectRole={onSelectRole}
+                            onReview={onReview}
+                          />
+                        </td>
+                      </tr>
+                    )}
+                    </Fragment>
                   );
                 })}
               </tbody>
@@ -545,7 +585,7 @@ export function ServiceAccountPanel({
               ))}
             </ul>
             <p className="text-muted-foreground">
-              Secret 을 지우거나 액세스를 회수하기 전까지 계속 유효합니다. 사람에게 주는 kubeconfig 라면 단기 토큰을 쓰세요.
+              Secret 을 지우거나 권한을 회수하기 전까지 계속 유효합니다. 사람에게 주는 kubeconfig 라면 단기 토큰을 쓰세요.
             </p>
             <label className="flex flex-col gap-1.5 text-muted-foreground font-medium">
               <span>
@@ -566,7 +606,7 @@ export function ServiceAccountPanel({
 
       <ConfirmDialog
         open={!!pendingRevoke}
-        title="액세스를 회수할까요?"
+        title="권한을 회수할까요?"
         description={
           pendingRevoke
             ? `${pendingRevoke.namespace}/${pendingRevoke.name} 의 권한을 거둡니다. 이 ServiceAccount 토큰으로 접속 중인 개발자와 파드는 즉시 인증에 실패합니다.`
@@ -637,6 +677,82 @@ export function ServiceAccountPanel({
         onConfirm={handleDelete}
         onCancel={() => setPendingDelete(null)}
       />
+    </div>
+  );
+}
+
+/** 펼친 행의 상세 — ServiceAccount → 바인딩 → 롤 규칙 요약. 롤을 못 찾으면(빌트인·시스템 롤) 숨기지 않고 이유를 알린다. */
+function SaGrantDetail({
+  sa, roles, clusterRoles, onSelectRole, onReview,
+}: {
+  sa: RbacServiceAccount;
+  roles: RbacRole[];
+  clusterRoles: RbacRole[];
+  onSelectRole: (binding: RbacBindingSummary) => void;
+  onReview?: (namespace: string, serviceAccount: string) => void;
+}) {
+  if (sa.bindings.length === 0) {
+    return <p className="text-xs text-muted-foreground">연결된 바인딩이 없어 이 ServiceAccount 로는 아무 권한도 없습니다.</p>;
+  }
+  return (
+    <div className="space-y-3 text-xs">
+      <ul className="space-y-2">
+        {sa.bindings.map((b, i) => {
+          const role = b.roleKind === 'ClusterRole'
+            ? clusterRoles.find((r) => r.name === b.roleName)
+            : roles.find((r) => r.name === b.roleName && r.namespace === b.namespace);
+          return (
+            <li key={`${b.kind}-${b.namespace}-${b.name}-${i}`} className="rounded-md border border-border bg-card px-3 py-2">
+              <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                <span className="font-mono">{b.kind} {b.name}</span>
+                <span className="text-muted-foreground">
+                  {b.kind === 'ClusterRoleBinding' ? '전체 네임스페이스' : `네임스페이스 ${b.namespace}`} →
+                </span>
+                <button
+                  type="button"
+                  onClick={() => onSelectRole(b)}
+                  title="롤 탭에서 이 롤을 열어 규칙을 편집합니다"
+                  className="font-mono underline-offset-2 hover:underline focus-visible:ring-2 focus-visible:ring-primary rounded-md"
+                >
+                  {b.roleKind} {b.roleName}
+                </button>
+              </div>
+              {role ? (
+                <ul className="mt-1.5 space-y-0.5 font-mono text-muted-foreground">
+                  {role.rules.map((r, ri) => (
+                    <li key={ri}>
+                      {r.resources.join(', ') || '(리소스 없음)'}
+                      {' · '}
+                      {r.verbs.map((v, vi) => (
+                        <span key={v}>
+                          {vi > 0 ? ' ' : ''}
+                          <span className={isWriteVerb(v) ? 'font-semibold text-foreground' : ''}>{v}</span>
+                          {isWriteVerb(v) && <span className="sr-only"> (쓰기 동작)</span>}
+                        </span>
+                      ))}
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="mt-1.5 text-muted-foreground">
+                  롤 규칙을 목록에서 찾지 못했습니다 — 빌트인·시스템 롤이면 롤 탭에서 시스템 롤 포함을 켠 뒤 다시 보세요.
+                </p>
+              )}
+            </li>
+          );
+        })}
+      </ul>
+      {onReview && (
+        <button
+          type="button"
+          onClick={() => onReview(sa.namespace, sa.name)}
+          title="실제로 배포·로그 조회가 되는지 API server 에 직접 물어봅니다"
+          aria-label={`${sa.name} 권한 점검`}
+          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-border bg-secondary font-medium hover:border-primary/40"
+        >
+          <ShieldCheck className="w-3.5 h-3.5" aria-hidden="true" /> 권한 점검
+        </button>
+      )}
     </div>
   );
 }

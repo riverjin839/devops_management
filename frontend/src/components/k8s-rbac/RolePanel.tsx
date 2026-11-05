@@ -322,7 +322,7 @@ export function RolePanel({
                         }}
                         aria-pressed={roleKey(r) === selectedKey}
                         title={`${r.name} 규칙 편집`}
-                        className="text-left hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 rounded"
+                        className="text-left hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 rounded-md"
                       >
                         {r.name}
                       </button>
@@ -478,6 +478,7 @@ export function RolePanel({
 
       {selected && draft && (saveRisk.length > 0 ? (
         <GrantRiskDialog
+          clusterId={clusterId}
           open={confirmSave}
           title="권한을 넓히는 저장입니다 — 계속할까요?"
           description={`${selected.scope === 'cluster' ? 'ClusterRole' : 'Role'} ${selected.name} 을(를) 저장하면 참조 바인딩 ${referencingBindings.length}개의 권한이 즉시 바뀝니다.`}
