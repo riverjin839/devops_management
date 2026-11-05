@@ -12,11 +12,15 @@
 
 ### Added
 - **K8s 자원 관리 — 수치 표기 전환(사용량/사용률)·판단 문구 제거·문제 Pod 상세 팝업**: 헤더 토글로 요약·노드·네임스페이스 수치를 사용량(코어·Gi, 기본) 또는 사용률(%)로 바꿔 본다(선택은 기억). 「사용 초과」「적정」「request 과대」 판정 배지·칩·효율 열과 도움말의 적정 범위 문구를 삭제했다. 요약의 Pod 오류·Pod 대기·request 미설정 칩을 누르면 해당 Pod 목록(네임스페이스·워크로드·노드·상태 사유·재시작, 검색·CSV)을 팝업으로 보여준다. Backend: `GET /k8s/{id}/allocation/problem-pods?kind=error|pending|norequest`(최대 500건). 요약 스트립은 칩 나열 대신 문제 버튼 / 용량 한 줄 / 할당·사용 격자 표로 재구성하고(「낭비」 칩 삭제, 「Pod 스케줄 가능」 표기), 노드·네임스페이스 표는 격자선 있는 촘촘한 시트 스타일로 줄였다. Frontend: `MetricModeContext`·`ProblemPodsDialog`·`SummaryStrip`.
+- **K8S 접근 권한 — 위험 발급 클러스터 확인·ServiceAccount 상세 펼침·키보드 개선**: 확인 대화상자가 적용 클러스터를 보여주고 `클러스터/이름` 전체를 재입력받아 잘못된 클러스터 발급을 막는다. 권한 규칙은 요약 후 펼쳐 보고, 토큰 유효기간에 4시간 추가, 막힌 사유 전체 표시, Ctrl+Enter 발급, 프리셋·바인딩 방식 화살표 키 이동. ServiceAccount 행을 펼치면 바인딩 → 롤 규칙과 권한 점검 바로가기를 한 자리에서 확인. 단계 진행 낭독을 현재 단계 한 줄로 줄이고 "액세스" 용어를 "권한"으로 통일. Frontend: `GrantRiskDialog`·`ProvisionWizard`·`ServiceAccountPanel`.
+- **K8S 접근 권한 — 발급 마법사 단순화·위험도 실시간 요약**: 바인딩 방식·토큰 유효기간·검증을 "고급 설정"으로 접고(토큰 방식+유효기간은 하나의 select), 하단 바가 범위·읽기/쓰기·만료·확인 필요 건수를 입력과 함께 실시간으로 보여준다. 모의 실행은 별도 보조 버튼, 발급 결과 카드에서 권한 점검·회수로 바로 이동, "로그 보기"는 실행 로그 카드로 이동. 단계 칩 live region·쓰기 동사 sr-only 표기 등 접근성 보강과 ServiceAccount·롤 용어 통일. Frontend: `ProvisionWizard`·`ProvisionConsole`·`K8sRbacPage`.
+
+### Changed
+- **사이드바·메뉴 아이콘 재검토 — 중복 해소**: 같은 아이콘을 쓰던 메뉴(Database·Boxes·Activity·HardDrive·ClipboardCheck·TerminalSquare·FileText·Layers·Users)를 의미에 맞는 고유 아이콘으로 교체하고, AI 전용 느낌의 Sparkles(점검 항목 관리)·Zap(K8s 로그)을 ListChecks·Siren 으로 바꿨다. 그룹 아이콘(관측·토폴로지·자동화)도 하위 화면과 겹치지 않게 정리. Frontend: `navConfig.ts`.
 
 ## [1.85.3] - 2026-11-05
 
 ### Fixed
-- **K8s 허브 글꼴 크기 위계 개선**: 카드 제목을 `text-sm` 진한 글자로 올려 본문·보조 글자와 구분하고, 허브 서브탭 라벨을 `text-sm` 로 맞췄다. 버전/설정 표 본문은 `text-sm`(머리글 `text-xs`), 노드 이미지 배지의 9.5px 와 차트 축·범례의 10~11px 글자를 12px 이상으로 올렸다. Frontend: `MacCard`·`HubTabs`·`VersionsPage`·`NodeLabelGroupView`·`TrendChart`·`NsTrendChart`·`LowEfficiencyRankingChart`.
 - **k9s 콘솔 — 중단·재연결 안전성과 실패 안내 개선**: 「중단」이 SSH 인증 단계에서도 소켓째 연결을 닫는다(전엔 로그만 끝나고 원격 셸이 남을 수 있었다). 터미널 재연결 아이콘은 연결된 세션이면 확인을 받고 새 로그 실행을 시작한다. 접속 실패는 원인별(세션 만료·권한 없음·기능 비활성·웹소켓 실패·인증 전 끊김)로 안내하고, 웹소켓이 열린 뒤 30초 동안 응답이 없으면 로그에 경고한다. 로그에 연결 단계 칩(웹소켓 → SSH 인증)을 표시하고, 새 창 전달에 성공해도 10초 뒤 지연 경고가 붙던 문제를 고쳤다. 터미널 헤더(별도 창 포함)에 클러스터명·운영레벨 칩을 달고 보호 레벨의 쓰기 가능 세션은 경고색으로 표시한다. 포트 오류가 접이식을 강제로 열던 동작과 문서의 팝업 handoff 서술(localStorage → postMessage)을 바로잡았다. Frontend: `K9sPage`·`K9sPopupPage`·`K9sTerminal`·`SshTerminalWindow`.
 
 ## [1.85.2] - 2026-11-05

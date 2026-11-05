@@ -1,5 +1,6 @@
 /** `/k8s-rbac` 화면이 공유하는 순수 헬퍼·상수. 컴포넌트는 `RbacTags.tsx` 에 둔다
  *  (한 파일이 컴포넌트와 상수를 함께 export 하면 react-refresh 가 경고한다). */
+import type { KeyboardEvent } from 'react';
 import type { RbacBinding, RbacBindingMode, RbacPolicyRule, RbacRole, RbacServiceAccount } from '@/types';
 
 /** 쿠버네티스에서 core 그룹은 빈 문자열이라 화면에는 'core' 로 적는다. */
@@ -237,4 +238,25 @@ export function buildRevokePlan(
     out.push(r);
   }
   return { bindings: sole, sharedBindings, roles: out };
+}
+
+/**
+ * role="radio" 버튼 묶음의 화살표 키 이동(roving tabindex) — 방향키로 다음/이전 항목을 고르고 포커스를 옮긴다.
+ * 선택된 항목만 tabIndex=0 이므로 키보드 사용자는 그룹 전체를 한 번의 Tab 으로 지나간다.
+ */
+export function radioArrowKey(
+  e: KeyboardEvent<HTMLElement>,
+  keys: string[],
+  current: string,
+  select: (key: string) => void,
+): void {
+  const forward = e.key === 'ArrowRight' || e.key === 'ArrowDown';
+  const backward = e.key === 'ArrowLeft' || e.key === 'ArrowUp';
+  if (!forward && !backward) return;
+  e.preventDefault();
+  const idx = Math.max(0, keys.indexOf(current));
+  const next = (idx + (forward ? 1 : -1) + keys.length) % keys.length;
+  select(keys[next]);
+  const radios = e.currentTarget.parentElement?.querySelectorAll<HTMLElement>('[role="radio"]');
+  radios?.[next]?.focus();
 }

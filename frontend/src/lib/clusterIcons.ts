@@ -156,11 +156,10 @@ export const CLUSTER_EMOJI_GROUPS: ClusterIconGroup<string>[] = [
   {
     key: 'level',
     label: '운영레벨 / 등급',
-    hint: 'production 💎 · staging 🟡 · dev 🛠️ · test 🧪 · DR/sandbox 🏝️',
+    hint: 'production 💎 · dev 🛠️ · test 🧪 · DR/sandbox 🏝️ — 색 원(🔴🟢🟡)은 상태색과 혼동돼 제외',
     items: [
-      '💎', '🌟', '⭐', '🔴', '🟢', '🟡', '🟠', '🔵', '⚪', '🟣',
-      '🥇', '🥈', '🥉', '🏆', '🎖️', '🧪', '🔬', '🌱', '🐛', '🚧',
-      '🏗️', '⚠️', '🔐', '🏷️',
+      '💎', '🌟', '⭐', '🥇', '🥈', '🥉', '🏆', '🎖️', '🧪', '🔬',
+      '🌱', '🐛', '🚧', '🏗️', '🔐', '🏷️',
     ],
   },
 ];

@@ -1,7 +1,7 @@
 /**
  * 발급된 kubeconfig 표시(파일명이 `kubeconfig*` 면 .gitignore 에 걸려 CredentialResult 로 둔다) — 본문 + 복사 + .yaml 저장 + "이 화면에서만 볼 수 있음" 안내.
  * 토큰 값은 기본으로 가려 보여준다(화면 공유·어깨너머 노출 방지). 복사·저장은 항상 원문이다.
- * 액세스 발급 마법사 결과와 ServiceAccount 탭 재발급이 같은 블록을 쓴다(`IssuedCredentialCard`).
+ * 권한 발급 마법사 결과와 ServiceAccount 탭 재발급이 같은 블록을 쓴다(`IssuedCredentialCard`).
  */
 import { useMemo, useState } from 'react';
 import { Check, Copy, Download, Eye, EyeOff } from 'lucide-react';

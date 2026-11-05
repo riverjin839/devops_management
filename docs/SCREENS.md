@@ -856,9 +856,11 @@ hover 시 flyout 자체가 라벨을 보여주므로 이름만 뜨는 중복 툴
 - **UI 구성**:
   - `ClusterSidebar` — `iconOnly` (per-cluster 페이지 규칙)
   - **"로그 보기"** 스위치(`SwitchToggle`)는 실행 로그 카드(`ProvisionConsole`) 우상단 `actions` 슬롯에 둔다(실행 전·중·후 같은 자리) — 실행 로그는 항상 수집하고 펼침 여부만 사용자가 정한다. 나머지 탭의 쓰기 동작은 각 패널의 표준 실행 로그를 쓴다.
-  - 탭 5개: **액세스 발급**(마법사) / **ServiceAccount** / **롤** / **바인딩** / **권한 점검** — 마법사·롤 편집은 탭을 옮겨도 마운트를 유지해 입력이 남는다
+  - 탭 5개: **권한 발급**(마법사) / **ServiceAccount** / **롤** / **바인딩** / **권한 점검** — 마법사·롤 편집은 탭을 옮겨도 마운트를 유지해 입력이 남는다
   - 탭 위 **발급된 kubeconfig** 카드(`IssuedCredentialCard`) — 마법사 발급·SA 재발급 공용. 값은 메모리 스토어(`rbacCredentialStore`)에 있어 탭·허브 뷰·클러스터를 옮겨도 닫기 전까지 남고, 토큰은 기본으로 가려(끝 4자, "토큰 보기") 보인다(복사·저장은 원문). 카드가 떠 있는 동안 새로고침·창 닫기는 브라우저 이탈 확인
-  - 액세스 발급 탭은 좌(컨트롤) / 우(결과) 2열 — 좌측은 프리셋 → 대상 → 권한 규칙 + 접힌 **고급 설정**(바인딩 방식·토큰 유효기간(만료 없음 포함 단일 select)·kubeconfig/검증 스위치) 이고, 하단 sticky 바가 범위·동작(읽기/쓰기)·토큰 만료·만들 오브젝트·확인 필요 건수를 입력과 함께 실시간(`aria-live`)으로 보여준다. 실행은 `액세스 발급 실행`(위험 사유가 있으면 이름 재입력 확인) + 보조 `모의 실행` 버튼. 우측은 단계 칩 + 실시간 로그 + 발급 결과 카드(권한 점검·회수 바로가기: `?tab=review&reviewSa=ns/name`, `?tab=sa&saQ=&saNs=`)
+  - 권한 발급 탭은 좌(컨트롤) / 우(결과) 2열 — 좌측은 프리셋 → 대상 → 권한 규칙 + 접힌 **고급 설정**(바인딩 방식·토큰 유효기간(만료 없음 포함 단일 select)·kubeconfig/검증 스위치) 이고, 하단 sticky 바가 범위·동작(읽기/쓰기)·토큰 만료·만들 오브젝트·확인 필요 건수를 입력과 함께 실시간(`aria-live`)으로 보여준다. 실행은 `권한 발급 실행`(위험 사유가 있으면 이름 재입력 확인) + 보조 `모의 실행` 버튼. 우측은 단계 칩 + 실시간 로그 + 발급 결과 카드(권한 점검·회수 바로가기: `?tab=review&reviewSa=ns/name`, `?tab=sa&saQ=&saNs=`)
+  - 위험 발급 확인(`GrantRiskDialog`)은 **적용 클러스터를 보여주고 `클러스터/이름` 전체를 재입력**받는다(마법사·바인딩 생성·롤 저장 공용). 하단 바에도 클러스터명을 표시. 권한 규칙 카드는 접어 두고(`규칙 N개 · 쓰기 포함` 요약), 토큰 유효기간에 4시간 옵션, 막힌 사유는 전부 나열, Ctrl/⌘+Enter 로 발급. 프리셋·바인딩 방식은 화살표 키로 이동하는 라디오 그룹.
+  - ServiceAccount 탭은 행을 펼치면 바인딩 → 롤 규칙 요약(쓰기 동사 강조)과 "권한 점검" 바로가기를 같은 자리에서 보여준다(롤을 목록에서 못 찾으면 이유를 알림).
 - **Frontend**: `useRbacPresets` / `useRbacNamespaces` / `useRbacServiceAccounts` / `useRbacRoles` / `useRbacClusterRoles` / `useRbacBindings` (TanStack Query), `useCreateServiceAccount` · `useDeleteServiceAccount` · `useUpsertRole` · `useDeleteRole` · `useDeleteBinding` · `useAccessReview` · `useIssueKubeconfig` (mutation), 그리고 실행 전용 `useProvisionStream` — SSE 를 fetch+reader 로 소비해 `logs` / `steps` / `result` 로 풀어준다(`hooks/useK8sRbac.ts`). 호출 레이어는 `k8sRbacApi` · `k8sRbacStreamUrl`(`services/api.ts`). 쓰기 버튼은 `useCanOperate(clusterId)` 로 viewer·테넌트 비멤버에게 `disabled` + 사유를 붙인다.
 - **Backend**: `backend/app/routers/k8s_rbac.py` — `/api/v1/clusters/{cluster_id}/rbac/*`. 조회(`GET presets|namespaces|service-accounts|roles|cluster-roles|bindings`)는 인증만, 쓰기(`POST service-accounts`, `PUT roles/{ns}/{name}`, `PUT cluster-roles/{name}`, `DELETE …`, `POST kubeconfig`, `POST provision`, `POST provision/stream`)는 `require_operator` + 감사 로그. 서비스는 `services/k8s_rbac_service.py`(`RbacService` — 클러스터별 격리 `Configuration`, TokenRequest·장기 Secret 토큰, kubeconfig 조립, SubjectAccessReview, 단계별 로그를 yield 하는 `provision()`)와 `services/k8s_rbac_presets.py`(프리셋·바인딩 방식 카탈로그). DB 모델 관여 없음(순수 K8s API 프록시 + 감사 로그).
 - **핵심 기능**:
@@ -867,7 +869,7 @@ hover 시 flyout 자체가 라벨을 보여주므로 이름만 뜨는 중복 툴
   - 권한 프리셋 5종(배포+로그 / 조회 전용 / 디버깅 / NS 관리자 / 클러스터 조회)을 편집 가능한 규칙 표로 펼침 (UI-First)
   - 발급 직후 SubjectAccessReview 로 "정말 배포·로그 조회가 되는지" 를 API 서버에 직접 확인
   - 넓은 권한 확인(`GrantRiskDialog`) — ClusterRoleBinding·와일드카드·Secret 조회·Pod exec/attach/port-forward·권한 상승(impersonate/escalate/bind, 롤·바인딩 쓰기)·만료 없는 토큰·위험도 높음 프리셋이면 사유와 영향 범위를 보여주고 이름 재입력으로 확인(`grantRiskReasons`). **발급 마법사·바인딩 생성·롤 저장(새로 생기는 위험만, 규칙 비교 `ruleDiff`)·kubeconfig 재발급(만료 없는 토큰)** 이 같은 판정을 쓴다. 모의 실행은 예외
-  - 액세스 회수 — 이 SA 에만 묶인 바인딩 → PEP 가 만든(다른 바인딩이 안 쓰는) 롤 → SA 를 한 번에 삭제, 공유 바인딩은 남김(`buildRevokePlan`)
+  - 권한 회수 — 이 SA 에만 묶인 바인딩 → PEP 가 만든(다른 바인딩이 안 쓰는) 롤 → SA 를 한 번에 삭제, 공유 바인딩은 남김(`buildRevokePlan`)
   - 기존 SA 의 kubeconfig 재발급(토큰 방식·유효기간 선택, 결과 카드는 마법사와 공용 `CredentialResult`, 탭 이동에도 유지), Role/ClusterRole 규칙 편집(영향 받는 바인딩 수 표시), 바인딩 삭제
   - 가드레일 — `system:*` / `cluster-admin`·`admin`·`edit`·`view` / 네임스페이스 `default` SA 는 조회 전용
 - **URL 상태(D-029)**: `?cluster=` · `tab` · SA 탭 `saQ`·`saNs`·`saPep` · 롤 탭 `roleQ`·`role`(선택한 롤) · 권한 점검 `reviewSa`. 새로고침·공유·뒤로가기에서 유지(`hooks/useUrlParams`, replace). 모달은 뒤로가기로 닫힌다.

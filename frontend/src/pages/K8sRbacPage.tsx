@@ -52,7 +52,7 @@ type TabKey = 'wizard' | 'sa' | 'roles' | 'bindings' | 'review';
 
 // 탭 이름은 카드 제목과 같은 말을 쓴다(ServiceAccount 는 K8s 오브젝트 이름 그대로).
 const TABS: { key: TabKey; label: string; icon: typeof Wand2 }[] = [
-  { key: 'wizard', label: '액세스 발급', icon: Wand2 },
+  { key: 'wizard', label: '권한 발급', icon: Wand2 },
   { key: 'sa', label: 'ServiceAccount', icon: KeyRound },
   { key: 'roles', label: '롤', icon: Shield },
   { key: 'bindings', label: '바인딩', icon: Link2 },
@@ -171,7 +171,7 @@ export function K8sRbacPage() {
           ) : (<>
             {/* 발급 마법사와 롤 편집은 탭을 옮겨도 입력이 남도록 마운트를 유지하고 숨기기만 한다
                 (SA 탭에서 확인하고 돌아왔을 때 기본 프리셋으로 다시 시작하면 더 넓은 권한을 발급하기 쉽다). */}
-            <div role="tabpanel" aria-label="액세스 발급"
+            <div role="tabpanel" aria-label="권한 발급"
               className={tab === 'wizard' ? 'grid grid-cols-1 xl:grid-cols-2 gap-3 items-start' : 'hidden'}>
               <ProvisionWizard
                 clusterId={clusterId}
@@ -219,6 +219,7 @@ export function K8sRbacPage() {
                   error={saQ.isError ? saQ.error : null}
                   onRetry={() => { void saQ.refetch(); }}
                   onSelectRole={handleSelectRole}
+                  onReview={(ns, sa) => setUrlParams({ tab: 'review', reviewSa: `${ns}/${sa}` })}
                   bindings={bindings}
                   roles={roles}
                   clusterRoles={clusterRoles}
