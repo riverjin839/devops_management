@@ -4,6 +4,7 @@ import { ChevronDown, Check, Search } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { Virtuoso } from 'react-virtuoso';
 import { k8sResourcesApi } from '@/services/api';
+import { NsRecentChips } from '@/components/k8s/NsRecentChips';
 
 interface Props {
   clusterId: string;
@@ -71,10 +72,12 @@ export function NamespaceMultiSelect({ clusterId, selected, onChange, singleSele
 
   return (
     <>
-      <button ref={btnRef} onClick={() => setOpen((o) => !o)}
+      <button ref={btnRef} type="button" onClick={() => setOpen((o) => !o)}
         className="inline-flex items-center gap-1.5 rounded-xl border border-border bg-card px-3 py-1.5 text-sm hover:bg-secondary/60 whitespace-nowrap">
         {label} <ChevronDown className="w-3.5 h-3.5" />
       </button>
+      {/* 최근 선택 NS(기본 3개) — 천 개 단위 목록에서 검색 없이 한 번에 다시 고른다 */}
+      <NsRecentChips clusterId={clusterId} selected={selected} onPick={(ns) => onChange(new Set([ns]))} />
       {open && pos && createPortal(
         <>
           <div className="fixed inset-0 z-[60]" onClick={() => setOpen(false)} aria-hidden />

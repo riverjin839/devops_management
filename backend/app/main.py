@@ -113,6 +113,7 @@ from app.routers import (
     island_router,
     llm_settings_router,
     home_prefs_router,
+    ns_prefs_router,
     tenants_router,
 )
 from app.auth.deps import enforce_cluster_access, get_current_user
@@ -2592,7 +2593,7 @@ install_logging()  # 앱 로그 줄마다 [req=요청ID] — services/request_co
 app = FastAPI(
     title=settings.app_name,
     description="DevOps K8s Daily Monitoring Dashboard API",
-    version="1.80.3",
+    version="1.85.2",
     docs_url="/docs",
     redoc_url="/redoc",
     lifespan=lifespan,
@@ -2784,6 +2785,8 @@ app.include_router(release_notes_router, prefix="/api/v1", dependencies=_auth)
 app.include_router(island_router, prefix="/api/v1", dependencies=_auth)
 # 홈/네비게이션 개인화 — 기본 홈 탭, 즐겨찾기 경로 (user_settings 재사용, 스키마 변경 없음)
 app.include_router(home_prefs_router, prefix="/api/v1", dependencies=_auth)
+# NS 선택 기억 — 마지막 선택·최근 선택 NS (user_settings 재사용, 스키마 변경 없음)
+app.include_router(ns_prefs_router, prefix="/api/v1", dependencies=_auth)
 app.include_router(tenants_router, prefix="/api/v1", dependencies=_auth)
 
 
@@ -2791,7 +2794,7 @@ app.include_router(tenants_router, prefix="/api/v1", dependencies=_auth)
 def root():
     return {
         "name": settings.app_name,
-        "version": "1.80.3",
+        "version": "1.85.2",
         "status": "running"
     }
 

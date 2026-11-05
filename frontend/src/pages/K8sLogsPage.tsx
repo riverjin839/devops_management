@@ -1,6 +1,7 @@
 import { useEffect, useId, useState } from 'react';
 import { PageHeader } from '@/components/common/PageHeader';
 import { useSearchParams } from 'react-router-dom';
+import { useNsSelection } from '@/hooks/useNsPrefs';
 import { useClusterRouteParam } from '@/hooks/useClusterRouteParam';
 import { ScrollText } from 'lucide-react';
 import { MacCard } from '@/components/ui/MacCard';
@@ -39,6 +40,7 @@ export function K8sLogsPage() {
 
   const cluster = clusters.find((c) => c.id === clusterId);
 
+  const nsSel = useNsSelection(clusterId);
   const [namespace, setNamespace] = useState(qsNamespace);
   const [pod, setPod] = useState(qsPod);
 
@@ -48,6 +50,13 @@ export function K8sLogsPage() {
     setPod(qsPod);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [clusterId]);
+
+  // 딥링크가 없으면 마지막으로 고른 NS(하나일 때)를 기본값으로 — 다른 탭에서 고른 NS 가 그대로 이어진다.
+  const savedNs = nsSel.selected.length === 1 ? nsSel.selected[0] : '';
+  useEffect(() => {
+    if (nsSel.ready && !qsNamespace && !namespace && savedNs) setNamespace(savedNs);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [clusterId, nsSel.ready, savedNs]);
 
   const deepLinked = !!(qsNamespace && qsPod && namespace === qsNamespace && pod === qsPod);
   const clustersFailed = clustersQ.isError && clusters.length === 0;
@@ -86,7 +95,8 @@ export function K8sLogsPage() {
                       id={`${fid}-ns`}
                       clusterId={clusterId}
                       value={namespace}
-                      onChange={(ns) => { setNamespace(ns); setPod(''); }}
+                      showRecent
+                      onChange={(ns) => { setNamespace(ns); setPod(''); nsSel.setSelected(ns ? [ns] : []); }}
                     />
                   </div>
                 </div>

@@ -326,6 +326,8 @@ hover 시 flyout 자체가 라벨을 보여주므로 이름만 뜨는 중복 툴
 
 ### K8s 상세 관리 (`/k8s-manage`, `/k8s-manage/:clusterId`)
 
+> **2026-11-04 (NS 선택 기억)**: NS 가 천 개 단위여도 고르는 시간을 줄이도록 선택을 **계정·클러스터별로 서버에 기억**한다(`GET/PUT /me/ns-prefs`, `useNsSelection`). ① 목록·NS 대시보드·이벤트 등 내부 탭과 허브 탭(파드 로그)이 같은 선택을 공유해 탭을 옮겨도 다시 고르지 않는다 ② 다른 화면으로 갔다 오거나 재로그인해도 마지막 선택이 기본값 ③ NS 선택 버튼 옆 **최근 선택 NS 칩(기본 3개)** 을 누르면 그 NS 하나로 바로 선택된다. 저장된 선택을 읽어 오기 전에는 NS 의존 패널을 그리지 않아 "전체 NS" 조회가 먼저 나가지 않는다. NS 대시보드는 선택이 정확히 1개일 때만 그 NS 를 쓴다(여러 개면 비워 둠).
+
 - **파일**: `frontend/src/pages/K8sManagePage.tsx` (단일 파일 — `ResourceTablePanel`/`NodesPanel`/`PodsPanel`/`OverviewPanel`/`HelmPanel`/`CrdPanel`/`DetailDrawer`를 내부 정의하고 `ResourceTablePanel`/`PodsPanel`은 `NamespaceDashboardPanel`이 재사용할 수 있게 `export`), `frontend/src/components/k8s-manage/NamespaceDashboardPanel.tsx`(네임스페이스 대시보드) + `NsExtraPanels.tsx`(대시보드 전용 CR 오브젝트·바인딩 표). `HelmPanel` 도 `namespace?` prop 으로 대시보드가 재사용하게 `export`, + `components/k8s/{PodTerminal,EventsStream,NamespaceMultiSelect,ColumnToggle}`, `components/common/LogViewer`, `components/auth/RoleGate`.
 > **허브로 통합(2026-10-22, D-240)**: 이 화면은 K8s 클러스터 허브 `/k8s/:clusterId/manage` 의 서브뷰로 마운트된다. 옛 URL 은 그 뷰로 redirect(클러스터·쿼리 보존). 레일·h1·`PageShell` 은 허브가 그리고(`lib/k8sHub.ts` 컨텍스트), 아래 설명의 나머지는 그대로다.
 
@@ -577,6 +579,8 @@ hover 시 flyout 자체가 라벨을 보여주므로 이름만 뜨는 중복 툴
 
 ### 파드 로그 (`/k8s-logs`, `/k8s-logs/:clusterId`)
 
+> **2026-11-04 (NS 선택 기억)**: 딥링크(`?namespace=`)가 없으면 마지막으로 고른 NS(하나일 때)가 기본 선택되고, 여기서 고른 NS 도 기억된다. NS 선택 아래에 최근 선택 NS 칩(기본 3개)을 보인다 — `K8s 상세 관리` 섹션 참고.
+
 > **허브로 통합(2026-10-22, D-240)**: 이 화면은 K8s 클러스터 허브 `/k8s/:clusterId/logs` 의 서브뷰로 마운트된다. 옛 URL 은 그 뷰로 redirect(클러스터·쿼리 보존). 레일·h1·`PageShell` 은 허브가 그리고(`lib/k8sHub.ts` 컨텍스트), 아래 설명의 나머지는 그대로다.
 
 - **파일**: `frontend/src/pages/K8sLogsPage.tsx` (+ `components/common/{NamespaceSingleSelect,PodSingleSelect,SearchableSelect}`, `components/k8s/PodLogStream.tsx`).
@@ -651,11 +655,12 @@ hover 시 flyout 자체가 라벨을 보여주므로 이름만 뜨는 중복 툴
 - **목적 / UX**: 매트릭스 재편 로드맵 3단계(F3) — 점검 매트릭스의 클러스터명 클릭이 도착하는 클러스터 상세 화면. 이 클러스터의 **종합 상태(정상/경고/위험)와 그 원인**을 한눈에 보여주고, 바로 아래에 점검 카탈로그(등록된 모든 실행 기술 — deep_check/addon/배치잡(SSH)/플레이북(Ansible), D-066 로 전부 편입 완료)로 이어진다. "왜 이 클러스터가 warning 인가"를 카드 하나로 답하는 게 목적 — 예전엔 애드온 그리드만 봐서는 심층 점검이 원인이어도 보이지 않았다(D-067).
 - **UI 구성**:
   - `ClusterSidebar` `iconOnly` — 다른 per-cluster 화면과 동일 패턴.
-  - MacCard "종합 상태" — `StatusBadge`(healthy/warning/critical) + "N개 신호를 종합한 결과입니다" + 원인 목록(source 배지 "핵심 점검 번들"/"애드온"/"심층 점검" + 이름 + 메시지 + 마지막 확인 시각), severity(critical→warning→pending→healthy) 순 정렬. 원인 없음(전부 healthy)이면 "아직 점검 결과가 없습니다"/정상 안내만.
+  - 헤더 제목 아래 **상태 한 줄**(2026-11-04) — `StatusBadge`(healthy/warning/critical) + "N개 신호 종합" + "마지막 점검 <상대시각>"(원인 중 가장 최근 `checkedAt`).
+  - MacCard "상태 근거" — 원인 목록(source 배지 "핵심 점검 번들"/"애드온"/"심층 점검" + 이름 + 메시지 + 마지막 확인 시각)을 severity(critical→warning→pending/unknown→healthy) 순으로 정렬하고 **정상 항목은 접어 둔다**("정상 N개 보기"/"정상 항목 접기"). 경고·위험이 없으면 "경고·위험 신호가 없습니다", 결과가 없으면 「점검 실행」 안내, 로드 실패는 "다시 시도" 버튼.
   - 그 아래 `ClusterOpsCheckPanel` — 카탈로그 테이블 + 일괄/개별 실행 + 실행 진행 + 결과 상세 모달(`/ops-checks` 섹션과 동일 컴포넌트, 위 참고).
-  - 헤더에 "결과 리뷰"(허브 점검 결과 리뷰 뷰 `/k8s/:clusterId/review`), "점검 항목 관리"(`/daily-check/settings`) 바로가기 + 일일 리포트 `.md`/`.csv`(`healthApi.exportReport`, 이 클러스터) + Kubeconfig 편집(`KubeconfigEditModal`) + **점검 실행**(애드온 헬스 체크 `POST /health/check/{id}`).
+  - 헤더 액션은 3개 — **점검 실행**(주 버튼, 애드온 헬스 체크 `POST /health/check/{id}`) + 「내보내기」 메뉴(일일 리포트 마크다운/CSV, `healthApi.exportReport`, 이 클러스터) + 「더 보기」 메뉴("결과 리뷰" = 허브 점검 결과 리뷰 뷰 `/k8s/:clusterId/review`, "점검 항목 관리" = `/daily-check/settings`, "접속 정보(kubeconfig)" = `KubeconfigEditModal`, operator 이상).
   - `RunLogPanel`(+ 로그 보기 토글, `useLogPref('dashboard-health-check')`) — 점검 실행·애드온 ▶·현황 아이템 ▶·플레이북 실행이 공유. 점검 실행은 시작 줄 → 5초 응답 대기 하트비트 → 애드온별 상태·응답 ms·메시지 줄 → 요약 줄.
-  - MacCard "애드온" — `AddonGrid`(애드온별 헬스 카드, 단건 ▶·편집·삭제) + "점검 항목" 추가(`AddAddonModal`) + 기본 애드온(etcd Leader/Node Status/Control Plane/CoreDNS) 일괄 추가. 미연결(pending)이면 grayscale 오버레이 안내.
+  - MacCard "애드온" — `AddonGrid`(애드온별 헬스 카드, 단건 ▶·편집·삭제) + "점검 항목" 추가(`AddAddonModal`) + 기본 애드온(etcd Leader/Node Status/Control Plane/CoreDNS) 일괄 추가(실행 로그에 항목별 성공/실패 기록, 아이콘은 DB 에 저장하지 않고 `AddonCard` 가 lucide 로 그림). 미연결(pending)이면 안내 배너 + 카드 영역 `opacity-70` + `inert`(포인터·키보드 모두 차단).
   - MacCard "현황 아이템" — `ClusterItemsGrid`/`ClusterItemModal`(사용자 정의 카드 실행/리사이즈/삭제).
   - (카탈로그 아래) MacCard "플레이북 점검" — `/playbooks` 에서 "클러스터 상세에 표시"로 지정한 이 클러스터 플레이북(`useDashboardPlaybooks`, 백엔드 `show_on_dashboard`) 실행(SSH 자격증명 세션 캐시 + 실행 전 확인)·수정·삭제.
   - MacCard "최근 점검 이력" — `CheckHistoryHeatmap`(이 클러스터 로그만).

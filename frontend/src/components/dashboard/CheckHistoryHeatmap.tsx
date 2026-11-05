@@ -90,7 +90,7 @@ export function CheckHistoryHeatmap({ logs, isLoading, days = 14 }: CheckHistory
   return (
     <TooltipProvider delay={150}>
       <div className="overflow-x-auto p-4">
-        <table className="border-separate" style={{ borderSpacing: '3px' }}>
+        <table className="border-separate [border-spacing:3px]">
           <thead>
             <tr>
               <th className="text-left sticky left-0 bg-card">

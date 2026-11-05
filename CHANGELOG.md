@@ -8,15 +8,38 @@
 
 ## [Unreleased]
 
-1.80.3 이후 main 에 병합된 변경 (다음 릴리스 후보).
+1.85.2 이후 main 에 병합된 변경 (다음 릴리스 후보).
+
+## [1.85.2] - 2026-11-05
+
+### Fixed
+- **k9s 콘솔 — 중단·재연결 안전성과 실패 안내 개선**: 「중단」이 SSH 인증 단계에서도 소켓째 연결을 닫는다(전엔 로그만 끝나고 원격 셸이 남을 수 있었다). 터미널 재연결 아이콘은 연결된 세션이면 확인을 받고 새 로그 실행을 시작한다. 접속 실패는 원인별(세션 만료·권한 없음·기능 비활성·웹소켓 실패·인증 전 끊김)로 안내하고, 웹소켓이 열린 뒤 30초 동안 응답이 없으면 로그에 경고한다. 로그에 연결 단계 칩(웹소켓 → SSH 인증)을 표시하고, 새 창 전달에 성공해도 10초 뒤 지연 경고가 붙던 문제를 고쳤다. 터미널 헤더(별도 창 포함)에 클러스터명·운영레벨 칩을 달고 보호 레벨의 쓰기 가능 세션은 경고색으로 표시한다. 포트 오류가 접이식을 강제로 열던 동작과 문서의 팝업 handoff 서술(localStorage → postMessage)을 바로잡았다. Frontend: `K9sPage`·`K9sPopupPage`·`K9sTerminal`·`SshTerminalWindow`.
+
+## [1.85.1] - 2026-11-05
+
+### Fixed
+- **celery-worker·celery-beat 기동 실패(redis 트랜스포트 버전 불일치)**: kombu 가 고정돼 있지 않아 새 이미지 빌드에서 kombu 5.7.0(redis-py 6.1.0 이상 요구)이 설치되고, 고정된 redis-py 5.0.1 과 충돌했다. kombu 를 5.6.2 로 고정한다. Backend: `requirements.txt`.
+
+## [1.85.0] - 2026-11-05
 
 ### Added
 - **화면별 사용 매뉴얼(`/manual`)**: 화면 안 설명 문장을 줄이고 헤더의 「사용법」 링크(새 탭)로 별도 매뉴얼 페이지를 열도록 했다. k9s 콘솔·K8s 접근 권한부터 적용. Frontend: `PageHeader` `manual` prop, `manual/manuals.ts`, `ManualPage`.
+
+## [1.84.0] - 2026-11-04
+
+### Added
 - **K8S 접근 권한 — 발급 마법사 단순화·위험도 실시간 요약**: 바인딩 방식·토큰 유효기간·검증을 "고급 설정"으로 접고(토큰 방식+유효기간은 하나의 select), 하단 바가 범위·읽기/쓰기·만료·확인 필요 건수를 입력과 함께 실시간으로 보여준다. 모의 실행은 별도 보조 버튼, 발급 결과 카드에서 권한 점검·회수로 바로 이동, "로그 보기"는 실행 로그 카드로 이동. 단계 칩 live region·쓰기 동사 sr-only 표기 등 접근성 보강과 ServiceAccount·롤 용어 통일. Frontend: `ProvisionWizard`·`ProvisionConsole`·`K8sRbacPage`.
 - **K8s 허브 — `[` `]` 화면 이동 단축키**: 허브에서 `[` 는 이전 화면, `]` 는 다음 화면으로 이동한다. 브라우저 기본 단축키·Ctrl+K·Tab 포커스 이동과 겹치지 않고, 입력창에 입력 중이거나 모달이 열려 있으면 동작하지 않는다. Frontend: `useHubTabShortcuts`(`HubTabs`).
 - **화면 밀도 설정 (Settings → 화면 UI 설정)**: 글자 크기·줄간격을 「촘촘하게(12/14px) · 기본(13/14.5px) · 크게(14/16px)」 중 고른다. `text-xs`/`text-sm` 전체에 바로 적용되고 같은 계정의 다른 기기에도 따라온다(`k8s:density`). Frontend: `stores/densityStore`·`DensitySettings`·`index.css` `--fs-*`.
 - **잘린 이름 전체 보기**: 모든 말줄임(`truncate`·`line-clamp`)에 마우스를 올리면 전체 값이 툴팁으로 뜬다(`useTruncateTitle`). K8S 자원 목록의 이름 열은 가운데 말줄임(`MiddleTruncate`)이라 끝 12자가 항상 보인다 — 끝에서 갈리는 Pod·노드 이름을 구분할 수 있다.
+- **가독성 개선**: 기본 보조 글자를 12px → 13px 로 키우고(밀도 설정으로 되돌릴 수 있음) 내비·사이드바의 11px 글자를 `text-xs` 로 합쳤다. 흐린 자리표시자·빈 값 대시·핸들(`text-muted-foreground/30~50`, 1.5~2:1)은 3:1 이상인 `text-faint` 로 바꿨다. 본문 글꼴은 한글 글꼴을 Roboto/Helvetica 앞에 두고, 고정폭 글꼴에 D2Coding·Noto Sans Mono CJK KR 폴백을 더해 로그의 한글이 열을 깨뜨리지 않게 했다. lint 가 글자 투명도·12px 미만 임의 크기를 막는다.
 
+## [1.83.0] - 2026-11-04
+
+### Added
+- **K8s 허브 — `[` `]` 화면 이동 단축키**: 허브에서 `[` 는 이전 화면, `]` 는 다음 화면으로 이동한다. 브라우저 기본 단축키·Ctrl+K·Tab 포커스 이동과 겹치지 않고, 입력창에 입력 중이거나 모달이 열려 있으면 동작하지 않는다. Frontend: `useHubTabShortcuts`(`HubTabs`).
+
+## [1.82.0] - 2026-11-04
 
 ### Fixed
 - **K8s 허브 글꼴 크기 위계 개선**: 카드 제목을 `text-sm` 진한 글자로 올려 본문·보조 글자와 구분하고, 허브 서브탭 라벨을 `text-sm` 로 맞췄다. 버전/설정 표 본문은 `text-sm`(머리글 `text-xs`), 노드 이미지 배지의 9.5px 와 차트 축·범례의 10~11px 글자를 12px 이상으로 올렸다. Frontend: `MacCard`·`HubTabs`·`VersionsPage`·`NodeLabelGroupView`·`TrendChart`·`NsTrendChart`·`LowEfficiencyRankingChart`.
@@ -25,7 +48,12 @@
 - **홈·플랫폼 현황 — 접근성·반응형·성능 개선**: 점검 매트릭스/배치잡·주간/월간/담당자 토글에 선택 상태(`aria-pressed`)와 그룹 이름을 달았다. 좁은 폭에서는 탭 줄과 매트릭스 툴바가 줄바꿈되고, 터치 기기에서만 토글 높이를 키운다. 플랫폼 탭의 매트릭스·배치잡은 열 때 로드하고, 홈 탭 선택은 500ms 안에 화면을 떠나도 저장된다. 매트릭스 행의 색 막대는 둥근 모서리와 겹치지 않게 별도 요소로 그리고, 탭 배지는 99 초과 시 "99+" 로 표시한다. Frontend: `HomePage`·`PlatformStatusMatrix`·`rowColors`·`CheckMatrixCellDetailModal`.
 
 ### Changed
-- **가독성 개선**: 기본 보조 글자를 12px → 13px 로 키우고(밀도 설정으로 되돌릴 수 있음) 내비·사이드바의 11px 글자를 `text-xs` 로 합쳤다. 흐린 자리표시자·빈 값 대시·핸들(`text-muted-foreground/30~50`, 1.5~2:1)은 3:1 이상인 `text-faint` 로 바꿨다. 본문 글꼴은 한글 글꼴을 Roboto/Helvetica 앞에 두고, 고정폭 글꼴에 D2Coding·Noto Sans Mono CJK KR 폴백을 더해 로그의 한글이 열을 깨뜨리지 않게 했다. lint 가 글자 투명도·12px 미만 임의 크기를 막는다.
+- **클러스터 상세(개요) — 상태 우선 배치·헤더 정리**: 제목 아래 한 줄에 종합 상태·신호 개수·마지막 점검 시각을 보이고, 「상태 근거」는 위험 → 경고 순으로 정렬해 정상 항목은 접어 둔다(「정상 N개 보기」). 헤더 버튼 6개를 「점검 실행」+「내보내기」(마크다운·CSV)+「더 보기」(결과 리뷰·점검 항목 관리·접속 정보)로 줄였다. 상태 로드 실패에 「다시 시도」, 실행 로그 패널은 상태 근거 아래로 옮겼다. 미연결 상태는 흐림을 줄이고 `inert` 로 키보드 접근도 막는다. 기본 점검 항목 추가는 실행 로그를 남기고, 기본 애드온의 이모지 아이콘·영문 설명을 걷어냈다. Frontend: `ClusterDetailPage`.
+
+## [1.81.0] - 2026-11-04
+
+### Added
+- **K8s 허브 — NS 선택 기억**: NS 가 천 개 단위인 클러스터에서 고르는 시간을 줄인다. 선택한 NS 를 탭(내부 탭·파드 로그)을 옮겨도 그대로 유지하고, 다른 화면으로 갔다 오거나 재로그인해도 마지막 선택이 기본값으로 복원된다. NS 선택 옆에 최근 선택한 NS(기본 3개)가 칩으로 보여 한 번 눌러 선택한다. Backend: `GET/PUT /me/ns-prefs`(`user_settings` 재사용, 계정·클러스터별, 마이그레이션 없음). Frontend: `useNsSelection`(TanStack Query 캐시 공유 + 디바운스 저장)·`NsRecentChips`.
 
 ## [1.80.3] - 2026-11-04
 
