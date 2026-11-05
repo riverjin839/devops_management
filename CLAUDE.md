@@ -299,6 +299,10 @@ offline/error dict 를 반환**하고 HTTP 500 을 올리지 않는다 (`agent_s
   `ExecOutputTabs`, 로그는 `LogViewer`(plain `<pre>` 금지), 최상단에서 `useTerminalEnvSync` 호출.
   적용 화면: `/bulk-exec` `/mc` `/etcdctl` `/cilium-trace` `/kernel-params` `/isilon-nfs`
   (+ 신규 콘솔 전부). 세부 예외(`/isilon-nfs` 의 `ExecOutputTabs` 미적용 등)는 `DESIGN_SYSTEM.md` §12.6.
+- **실행 → 결과 화면은 로그 중심 패턴(`DESIGN_SYSTEM.md` §12.6.1).** 좌 제어(≤320px, 하단 고정 실행 바) / 우 상단
+  실행 로그(`RunLogPanel fill`, 중심) / 우 하단 결과. 조회 명령은 확인 없이 실행·변경 명령만 danger 확인, 입력 중
+  위험 배지, 결과는 모드별 보관. 신규 실행형 화면은 이 패턴으로 시작하고 기존 화면은 재구성할 때 이 패턴으로 옮긴다
+  (레퍼런스 `pages/EtcdCtlPage.tsx`).
 - **접근성**: 아이콘 전용 버튼은 `title` + `aria-label` 병행. 셸 flyout 안의 항목은 `FlyoutLink`/`FlyoutAction`
   만 쓴다(`DESIGN_SYSTEM.md` §12.8 — plain 버튼은 키보드 내비에서 빠진다).
 - **권한 UX**: 서버가 operator 이상을 요구하는 실행/추가/수정/삭제/저장 버튼은 viewer 에게 숨기지 않고

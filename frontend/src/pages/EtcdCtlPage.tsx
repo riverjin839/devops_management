@@ -2,8 +2,8 @@ import { useEffect, useId, useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useAbortableMutation } from '@/hooks/useAbortableMutation';
 import {
-  Database, Play, Square, CheckCircle, XCircle, AlertTriangle, Key, FileText, Terminal,
-  ShieldAlert, Wifi, Clock, ScrollText,
+  Database, Play, Square, CheckCircle, XCircle, AlertTriangle, Key, Terminal,
+  ShieldAlert, Wifi, Clock, ScrollText, ChevronDown, ChevronRight,
 } from 'lucide-react';
 import { useClusters } from '@/hooks/useCluster';
 import { useK8sHub } from '@/lib/k8sHub';
@@ -29,10 +29,10 @@ const STATUS_META: Record<EtcdCtlRunResponse['status'], { label: string; cls: st
   connect_error: { label: '연결 실패', cls: 'bg-status-unknown/10 text-status-unknown border-status-unknown/30',       icon: Wifi },
 };
 
-/** 실패 토스트 — 서버 403(역할·테넌트 권한 부족)은 사유를 그대로 보여 준다(D-172). 실행 로그에는 runLogged 가 error 줄을 남긴다. */
-function toastFailure(toast: ReturnType<typeof useToast>, title: string, error: unknown) {
+/** 권한 부족(403)만 토스트로 알린다 — 그 밖의 실패는 실행 로그의 error 줄과 입력 카드의 알림 한 곳으로 모은다(오류 표시 중복 방지). */
+function toastForbidden(toast: ReturnType<typeof useToast>, title: string, error: unknown) {
   const status = (error as { response?: { status?: number } } | null)?.response?.status;
-  toast.error(status === 403 ? `${title} — 권한이 없습니다` : `${title} 실패`, formatApiError(error));
+  if (status === 403) toast.error(`${title} — 권한이 없습니다`, formatApiError(error));
 }
 
 function outputLines(res: EtcdCtlRunResponse): RunLogEntry[] {
@@ -40,14 +40,14 @@ function outputLines(res: EtcdCtlRunResponse): RunLogEntry[] {
   return [['info', `출력 stdout ${count(res.stdout)}줄 · stderr ${count(res.stderr)}줄 — 본문은 결과 패널`]];
 }
 
-// 타겟/실행 구성 옆(우측)에 고정 위치로 배치 — mc 클라이언트 콘솔과 동일한 패턴이다.
-// 실행 전에도 같은 자리에 플레이스홀더를 보여줘 결과가 나와도 레이아웃이 흔들리지 않는다.
-// 카드 자체는 화면 높이에 맞춰 세로 스크롤만 허용(overflow-y-auto)하고 가로 스크롤은
-// 막는다(overflow-x-hidden) — 좁은 카드 폭 안에 긴 로그가 들어와도 페이지가 옆으로 늘어나지 않는다.
+type Tab = 'run' | 'logs';
+
+// 로그 중심 콘솔(DESIGN_SYSTEM §12.6.1): 우측 열은 실행 로그(3) + 결과(2) 가 한 높이를 나눠 쓴다.
+// 결과 카드는 실행 전에도 같은 자리에 플레이스홀더로 존재하고, 스크롤은 카드 내부에서 한 번만 일어난다.
 function ResultPanel({ result, tab }: { result: EtcdCtlRunResponse | null; tab: Tab }) {
   if (!result) {
     return (
-      <div className="min-w-0 flex items-center justify-center min-h-[200px] lg:h-[calc(100vh-260px)]">
+      <div className="min-w-0 flex-1 flex items-center justify-center min-h-[120px] rounded-md border border-border">
         <EmptyState
           compact
           icon={tab === 'run' ? Terminal : ScrollText}
@@ -59,7 +59,6 @@ function ResultPanel({ result, tab }: { result: EtcdCtlRunResponse | null; tab: 
   }
   const meta = STATUS_META[result.status];
   const Icon = meta.icon;
-  // 헤더(상태·호스트·exit·소요)는 고정, 본문만 세로 스크롤 — 예전 sticky header 와 같은 동작.
   return (
     <MacCard
       title={tab === 'run' ? '실행 결과' : '서비스 로그'}
@@ -79,7 +78,7 @@ function ResultPanel({ result, tab }: { result: EtcdCtlRunResponse | null; tab: 
       actions={result.error ? (
         <span className="text-sm text-status-critical inline-flex items-start gap-1"><AlertTriangle className="w-3.5 h-3.5 mt-0.5 shrink-0" aria-hidden="true" />{result.error}</span>
       ) : undefined}
-      rootClassName="min-w-0 flex flex-col lg:h-[calc(100vh-260px)]"
+      rootClassName="min-w-0 flex flex-col flex-1 min-h-0"
       bodyPadding="px-5 py-3"
       className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden space-y-3"
     >
@@ -89,12 +88,13 @@ function ResultPanel({ result, tab }: { result: EtcdCtlRunResponse | null; tab: 
           {maskCommand(result.executedCommand) || '(서버가 실행 명령을 돌려주지 않았습니다)'}
         </pre>
       </div>
-      <ExecOutputTabs stdout={result.stdout} stderr={result.stderr} maxHeight="max-h-[440px]" />
+      <ExecOutputTabs stdout={result.stdout} stderr={result.stderr} maxHeight="max-h-none" />
     </MacCard>
   );
 }
 
-type Tab = 'run' | 'logs';
+const INPUT = 'w-full px-3 py-2 text-sm bg-background border border-border rounded-xl focus:outline-none focus:ring-1 focus:ring-primary';
+const LABEL = 'block text-sm text-muted-foreground mb-1';
 
 export function EtcdCtlPage() {
   const clustersQ = useClusters();
@@ -126,7 +126,7 @@ export function EtcdCtlPage() {
   const fid = useId();
   const f = (k: string) => `${fid}-${k}`;
 
-  // 타겟 호스트 선택
+  // 대상 호스트 선택
   const [selectedMasterName, setSelectedMasterName] = useState('');
   const [customHost, setCustomHost] = useState('');
   useEffect(() => {
@@ -148,6 +148,7 @@ export function EtcdCtlPage() {
   const [authMode, setAuthMode] = useState<'password' | 'key'>('password');
   const [password, setPassword] = useState('');
   const [privateKey, setPrivateKey] = useState('');
+  const [targetOpen, setTargetOpen] = useState(true);
 
   // etcdctl 구성
   const [args, setArgs] = useState('endpoint health --write-out=table');
@@ -163,7 +164,10 @@ export function EtcdCtlPage() {
   const [grep, setGrep] = useState('');
 
   const [tab, setTab] = useState<Tab>('run');
-  const [result, setResult] = useState<EtcdCtlRunResponse | null>(null);
+  // 결과는 탭별로 보관한다 — 로그 탭을 잠깐 보고 돌아와도 방금 받은 etcdctl 결과가 남는다.
+  const [results, setResults] = useState<Record<Tab, EtcdCtlRunResponse | null>>({ run: null, logs: null });
+  const result = results[tab];
+  const setResultFor = (t: Tab, r: EtcdCtlRunResponse | null) => setResults((prev) => ({ ...prev, [t]: r }));
 
   const runMut = useAbortableMutation({
     mutationFn: async (_: void, signal) => {
@@ -200,7 +204,7 @@ export function EtcdCtlPage() {
     },
   });
 
-  // 실행 수명주기 로그(두 탭 공유) — 출력 본문은 결과 패널, 여기는 요청·대기·결과 요약·실패 사유.
+  // 실행 수명주기 로그(두 탭 공유) — 화면의 중심. 출력 본문은 결과 패널, 여기는 요청·대기·결과 요약·실패 사유.
   const runLog = useRunLog();
   const [showLog, setShowLog] = useLogPref('etcdctl-run');
   const target = `${username}@${effectiveHost}:${port}`;
@@ -212,8 +216,8 @@ export function EtcdCtlPage() {
       fn: () => runMut.mutateAsync(),
       summarize: (res) => [...consoleRunLines(res), ...outputLines(res)],
     });
-    if (r.ok) setResult(r.data);
-    else if (!r.aborted) toastFailure(toast, 'etcdctl 실행', r.error);
+    if (r.ok) setResultFor('run', r.data);
+    else if (!r.aborted) toastForbidden(toast, 'etcdctl 실행', r.error);
   };
   const doLogs = async () => {
     const cmd = `journalctl -u ${unit} -n ${tail}${since.trim() ? ` --since "${since.trim()}"` : ''}${grep.trim() ? ` | grep -i "${grep.trim()}"` : ''}`;
@@ -223,8 +227,8 @@ export function EtcdCtlPage() {
       fn: () => logsMut.mutateAsync(),
       summarize: (res) => [...consoleRunLines(res), ...outputLines(res)],
     });
-    if (r.ok) setResult(r.data);
-    else if (!r.aborted) toastFailure(toast, 'etcd 서비스 로그 조회', r.error);
+    if (r.ok) setResultFor('logs', r.data);
+    else if (!r.aborted) toastForbidden(toast, 'etcd 서비스 로그 조회', r.error);
   };
 
   const baseReady = !!clusterId && !!effectiveHost
@@ -232,13 +236,34 @@ export function EtcdCtlPage() {
   const canRunEtcdctl = baseReady && !!args.trim();
   const canRunLogs = baseReady && !!unit.trim();
 
-  const [confirmAction, setConfirmAction] = useState<null | 'run' | 'logs'>(null);
-  // D-171 — 조회 allowlist 밖 명령은 전부 danger 확인(사유 1줄).
+  const [confirmRun, setConfirmRun] = useState(false);
+  // D-171 — 조회 allowlist 밖 명령은 danger 확인(사유 1줄). 조회 명령과 로그 조회는 확인 없이 바로 실행한다(§12.6.1).
   const runVerdict = useMemo(() => judgeCommand(args, 'etcdctl'), [args]);
   const runCommandMasked = maskCommand(`${useEnv && envFile ? `source ${envFile} && ` : ''}${etcdctlPath} ${args}`);
+  const requestRun = () => {
+    if (!canOperate || !canRunEtcdctl || runMut.isPending) return;
+    if (runVerdict.readOnly) void doRun();
+    else setConfirmRun(true);
+  };
+  const requestLogs = () => {
+    if (!canOperate || !canRunLogs || logsMut.isPending) return;
+    void doLogs();
+  };
 
-  const runError = (tab === 'run' ? runMut.error : logsMut.error) as
-    { response?: { data?: { detail?: string } }; message?: string } | null;
+  const activeMut = tab === 'run' ? runMut : logsMut;
+  const runError = activeMut.error as { response?: { data?: { detail?: string } }; message?: string } | null;
+
+  const tabs: { key: Tab; label: string; icon: React.ComponentType<{ className?: string }> }[] = [
+    { key: 'run', label: 'etcdctl 실행', icon: Terminal },
+    { key: 'logs', label: 'etcd 서비스 로그', icon: ScrollText },
+  ];
+  const onTabKey = (e: React.KeyboardEvent, idx: number) => {
+    if (e.key !== 'ArrowRight' && e.key !== 'ArrowLeft') return;
+    e.preventDefault();
+    const next = tabs[(idx + (e.key === 'ArrowRight' ? 1 : tabs.length - 1)) % tabs.length].key;
+    setTab(next);
+    document.getElementById(f(`tab-${next}`))?.focus();
+  };
 
   return (
     <div className="app-min-h-screen bg-background">
@@ -248,15 +273,14 @@ export function EtcdCtlPage() {
           selectedId={clusterId || null}
           onSelect={(id) => {
             // D-174 ③ — 클러스터를 바꾸면 이전 클러스터의 host 직접 입력·자격증명을 지운다(mc·k9s·노드 SSH 와 동일).
-            setClusterId(id ?? ''); setResult(null); setSelectedMasterName('');
+            setClusterId(id ?? ''); setResults({ run: null, logs: null }); setSelectedMasterName('');
             setCustomHost(''); setPassword(''); setPrivateKey('');
           }}
           iconOnly
         />
         <div className="flex-1 min-w-0">
-        {/* 헤더 */}
         <PageHeader
-          className="mb-6"
+          className="mb-3"
           icon={Database}
           title="etcdctl 콘솔"
           titleExtra={effectiveHost ? (
@@ -266,371 +290,336 @@ export function EtcdCtlPage() {
           ) : undefined}
         />
 
-        {/* 안내 */}
-        <p className="mb-5 text-sm text-muted-foreground leading-relaxed">
-          컨트롤 플레인 노드에 <code className="font-mono text-foreground">etcd.service</code> 가 systemd 로 동작하고
-          <code className="font-mono text-foreground"> /etc/etcd.env</code> 에 <code className="font-mono text-foreground">ETCDCTL_*</code> 환경변수가 정의돼 있다고 가정합니다.
-          다르면 "env 파일 경로"를 바꾸거나 env 로드를 끄고 인자에 직접 지정할 수 있습니다.
-          조회 명령(get·endpoint health/status·member list 등) 밖의 명령은 위험 확인을 거칩니다.
-          SSH 인증정보는 이 실행에만 사용되고 저장되지 않습니다.
-        </p>
-
-        {/* 탭 */}
-        <div role="tablist" aria-label="etcdctl 작업" className="flex items-center gap-1 mb-5">
-          {(['run', 'logs'] as Tab[]).map((t) => (
+        <div role="tablist" aria-label="etcdctl 작업" className="flex items-center gap-1 mb-3 border-b border-border">
+          {tabs.map((t, idx) => (
             <button
-              key={t}
+              key={t.key}
+              id={f(`tab-${t.key}`)}
               type="button"
               role="tab"
-              aria-selected={tab === t}
-              onClick={() => { setTab(t); setResult(null); }}
+              aria-selected={tab === t.key}
+              aria-controls={f('panel')}
+              tabIndex={tab === t.key ? 0 : -1}
+              onClick={() => setTab(t.key)}
+              onKeyDown={(e) => onTabKey(e, idx)}
               className={`px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors flex items-center gap-1.5 ${
-                tab === t
+                tab === t.key
                   ? 'border-primary text-foreground'
                   : 'border-transparent text-muted-foreground hover:text-foreground'
               }`}
             >
-              {t === 'run' ? <><Terminal className="w-3.5 h-3.5" />etcdctl 실행</>
-                           : <><ScrollText className="w-3.5 h-3.5" />etcd 서비스 로그</>}
+              <t.icon className="w-3.5 h-3.5" />{t.label}
             </button>
           ))}
         </div>
 
-        {/* 타겟 2 : 실행 구성 3 : 결과 5 비율 (10 컬럼 그리드) — mc 클라이언트 콘솔과 동일.
-            결과는 항상 같은 자리(우측)에 고정되고 내부에서만 세로 스크롤되어(가로 스크롤 없음)
-            컨트롤과 로그가 한 화면 폭 안에 나란히 들어온다. */}
+        {/* 로그 중심 콘솔 — 좌: 제어(좁게), 우: 실행 로그(3) + 결과(2). 실행 로그가 화면의 중심이다. */}
         {clustersQ.isError ? (
           <ErrorState error={clustersQ.error} title="클러스터 목록을 불러오지 못했습니다" onRetry={() => { void clustersQ.refetch(); }} />
         ) : (
-        <div className="grid grid-cols-1 lg:grid-cols-10 gap-5 items-start">
-          {/* 좌: 타겟 + 인증 */}
-          <MacCard title="타겟" rootClassName="lg:col-span-2 min-w-0" bodyPadding="p-5" className="space-y-4">
-            <div>
-              <label htmlFor={f('master')} className="block text-sm text-muted-foreground mb-1">컨트롤 플레인 노드</label>
-              <select
-                id={f('master')}
-                value={selectedMasterName}
-                onChange={(e) => { setSelectedMasterName(e.target.value); setCustomHost(''); }}
-                disabled={!mastersQ.data?.candidates?.length}
-                className="w-full px-3 py-2 text-sm bg-background border border-border rounded-xl focus:outline-none focus:ring-1 focus:ring-primary disabled:opacity-50"
-              >
-                {mastersQ.isLoading && <option>불러오는 중…</option>}
-                {(mastersQ.data?.candidates ?? []).map((c: EtcdMasterCandidate) => (
-                  <option key={c.name} value={c.name}>
-                    {c.name}{c.internalIp ? ` (${c.internalIp})` : ''}
-                  </option>
-                ))}
-                {mastersQ.data && mastersQ.data.candidates.length === 0 && (
-                  <option value="">— control-plane 라벨 노드 없음 —</option>
+        <div
+          id={f('panel')}
+          role="tabpanel"
+          aria-labelledby={f(`tab-${tab}`)}
+          className="grid grid-cols-1 lg:grid-cols-[320px_minmax(0,1fr)] gap-3 lg:h-[calc(100vh-var(--topbar-h)-10rem)] lg:min-h-[480px]"
+        >
+          {/* 좌: 제어 */}
+          <MacCard title="제어" rootClassName="min-w-0 flex flex-col lg:min-h-0" bodyPadding="p-0" className="flex flex-col flex-1 min-h-0">
+            <div className="flex-1 min-h-0 overflow-y-auto">
+              <section className="border-b border-border">
+                <button
+                  type="button"
+                  onClick={() => setTargetOpen((v) => !v)}
+                  aria-expanded={targetOpen}
+                  aria-controls={f('target')}
+                  className="w-full flex items-center gap-2 px-4 py-2.5 text-sm font-semibold text-left hover:bg-secondary/50"
+                >
+                  {targetOpen ? <ChevronDown className="w-3.5 h-3.5" aria-hidden /> : <ChevronRight className="w-3.5 h-3.5" aria-hidden />}
+                  대상·인증
+                  <span className="ml-auto text-xs font-mono font-normal text-muted-foreground truncate">
+                    {effectiveHost ? `${target} · ${authMode === 'password' ? '비밀번호' : '개인키'}` : '대상 미선택'}
+                  </span>
+                </button>
+                {targetOpen && (
+                  <div id={f('target')} className="px-4 pb-4 space-y-3">
+                    <div>
+                      <label htmlFor={f('master')} className={LABEL}>컨트롤 플레인 노드</label>
+                      <select
+                        id={f('master')}
+                        value={selectedMasterName}
+                        onChange={(e) => { setSelectedMasterName(e.target.value); setCustomHost(''); }}
+                        disabled={!mastersQ.data?.candidates?.length}
+                        className={`${INPUT} disabled:opacity-50`}
+                      >
+                        {mastersQ.isLoading && <option>불러오는 중…</option>}
+                        {(mastersQ.data?.candidates ?? []).map((c: EtcdMasterCandidate) => (
+                          <option key={c.name} value={c.name}>
+                            {c.name}{c.internalIp ? ` (${c.internalIp})` : ''}
+                          </option>
+                        ))}
+                        {mastersQ.data && mastersQ.data.candidates.length === 0 && (
+                          <option value="">— control-plane 라벨 노드 없음 —</option>
+                        )}
+                      </select>
+                      {mastersQ.isError && (
+                        <div className="mt-2">
+                          <ErrorState compact error={mastersQ.error} title="컨트롤 플레인 노드를 불러오지 못했습니다" onRetry={() => { void mastersQ.refetch(); }} />
+                        </div>
+                      )}
+                    </div>
+                    <div>
+                      <label htmlFor={f('customHost')} className={LABEL}>호스트 직접 입력</label>
+                      <input
+                        id={f('customHost')}
+                        type="text"
+                        value={customHost}
+                        onChange={(e) => setCustomHost(e.target.value)}
+                        placeholder="예: 192.168.10.11"
+                        className={`${INPUT} font-mono`}
+                      />
+                      <p className="mt-1 text-xs text-muted-foreground">비우면 위 노드를 사용합니다.</p>
+                    </div>
+                    <div className="grid grid-cols-2 gap-2">
+                      <div>
+                        <label htmlFor={f('user')} className={LABEL}>사용자</label>
+                        <input id={f('user')} type="text" value={username} onChange={(e) => setUsername(e.target.value)} className={INPUT} />
+                      </div>
+                      <div>
+                        <label htmlFor={f('port')} className={LABEL}>포트</label>
+                        <input id={f('port')} type="number" value={port} onChange={(e) => setPort(Number(e.target.value) || 22)} className={INPUT} />
+                      </div>
+                    </div>
+                    <div>
+                      <p id={f('authLabel')} className={LABEL}>인증 방식</p>
+                      <div role="group" aria-labelledby={f('authLabel')} className="flex items-center bg-secondary/60 rounded-xl p-[3px] gap-px">
+                        {(['password', 'key'] as const).map((m) => (
+                          <button
+                            key={m}
+                            type="button"
+                            aria-pressed={authMode === m}
+                            onClick={() => setAuthMode(m)}
+                            className={`flex-1 px-2 py-1.5 text-sm font-medium rounded-md transition-colors ${
+                              authMode === m ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
+                            }`}
+                          >
+                            {m === 'password' ? '비밀번호' : '개인키'}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                    {authMode === 'password' ? (
+                      <div>
+                        <label htmlFor={f('pw')} className={LABEL}>SSH 비밀번호</label>
+                        <input
+                          id={f('pw')}
+                          type="password" value={password} onChange={(e) => setPassword(e.target.value)}
+                          autoComplete="off"
+                          className={INPUT}
+                        />
+                        <p className="mt-1 text-xs text-muted-foreground">이 실행에만 쓰이며 저장되지 않습니다.</p>
+                      </div>
+                    ) : (
+                      <div>
+                        <label htmlFor={f('pkey')} className={`${LABEL} flex items-center gap-1`}>
+                          <Key className="w-3 h-3" aria-hidden="true" /> 개인키(PEM)
+                        </label>
+                        <textarea
+                          id={f('pkey')}
+                          value={privateKey} onChange={(e) => setPrivateKey(e.target.value)}
+                          placeholder="-----BEGIN OPENSSH PRIVATE KEY-----" rows={4}
+                          className={`${INPUT} text-xs font-mono resize-none`}
+                        />
+                        <p className="mt-1 text-xs text-muted-foreground">이 실행에만 쓰이며 저장되지 않습니다.</p>
+                      </div>
+                    )}
+                  </div>
                 )}
-              </select>
-              {mastersQ.isError && (
-                <div className="mt-2">
-                  <ErrorState compact error={mastersQ.error} title="컨트롤 플레인 노드를 불러오지 못했습니다" onRetry={() => { void mastersQ.refetch(); }} />
+              </section>
+
+              {tab === 'run' ? (
+                <div className="px-4 py-3 space-y-3">
+                  <div>
+                    <p className={LABEL}>프리셋 <span className="text-xs inline-flex items-center gap-1 ml-1"><span className="w-1.5 h-1.5 rounded-full bg-status-critical" aria-hidden />변경 명령</span></p>
+                    <div className="flex flex-wrap gap-1.5">
+                      {(presetsQ.data?.presets ?? []).map((p: EtcdPreset) => {
+                        const risky = !judgeCommand(p.args, 'etcdctl').readOnly;
+                        return (
+                          <button
+                            key={p.key}
+                            type="button"
+                            onClick={() => setArgs(p.args)}
+                            className="px-2.5 py-1 text-xs rounded-xl border border-border bg-secondary hover:bg-secondary/80 text-foreground inline-flex items-center gap-1.5"
+                            title={`${risky ? '변경 명령 — ' : ''}${maskCommand(p.args)}`}
+                          >
+                            {risky && <span className="w-1.5 h-1.5 rounded-full bg-status-critical" aria-hidden />}
+                            {p.label}
+                            {risky && <span className="sr-only"> (변경 명령)</span>}
+                          </button>
+                        );
+                      })}
+                    </div>
+                    {presetsQ.isError && (
+                      <ErrorState compact error={presetsQ.error} title="프리셋을 불러오지 못했습니다" onRetry={() => { void presetsQ.refetch(); }} />
+                    )}
+                  </div>
+
+                  <div>
+                    <label htmlFor={f('args')} className={`${LABEL} flex items-center gap-1`}>
+                      <Terminal className="w-3 h-3" aria-hidden />
+                      etcdctl 인자
+                    </label>
+                    <textarea
+                      id={f('args')}
+                      value={args} onChange={(e) => setArgs(e.target.value)}
+                      onKeyDown={(e) => { if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') { e.preventDefault(); requestRun(); } }}
+                      rows={3}
+                      aria-describedby={f('verdict')}
+                      className={`${INPUT} text-xs font-mono resize-none`}
+                    />
+                    <p
+                      id={f('verdict')}
+                      aria-live="polite"
+                      className={`mt-1.5 text-xs flex items-start gap-1.5 ${runVerdict.readOnly ? 'text-muted-foreground' : 'text-status-critical'}`}
+                    >
+                      <span className="shrink-0 rounded-full border border-current px-2 font-semibold">
+                        {runVerdict.readOnly ? '조회 명령' : '변경 명령'}
+                      </span>
+                      <span>{runVerdict.readOnly ? '확인 없이 바로 실행됩니다.' : '실행 전에 확인합니다.'}</span>
+                    </p>
+                    <SavedCommands
+                      className="mt-2"
+                      storageKey="k8s:saved-cmd:etcdctl"
+                      currentValue={args}
+                      onPick={setArgs}
+                    />
+                  </div>
+
+                  <details className="group">
+                    <summary className="cursor-pointer text-sm font-semibold list-none flex items-center gap-1.5">
+                      <ChevronRight className="w-3.5 h-3.5 group-open:rotate-90 transition-transform" aria-hidden />
+                      고급 설정
+                      <span className="text-xs font-normal text-muted-foreground">env 파일 · etcdctl 경로 · 제한 시간</span>
+                    </summary>
+                    <div className="mt-2 space-y-3">
+                      <div>
+                        <label htmlFor={f('envFile')} className={LABEL}>env 파일 경로</label>
+                        <input
+                          id={f('envFile')}
+                          type="text" value={envFile} onChange={(e) => setEnvFile(e.target.value)}
+                          disabled={!useEnv}
+                          placeholder="/etc/etcd.env"
+                          className={`${INPUT} font-mono disabled:opacity-50`}
+                        />
+                        <label className="mt-1.5 flex items-center gap-2 text-sm text-muted-foreground">
+                          <input type="checkbox" checked={useEnv} onChange={(e) => setUseEnv(e.target.checked)} className="w-3.5 h-3.5 accent-primary" />
+                          실행 전에 source (<code className="font-mono">ETCDCTL_*</code> 환경변수 로드)
+                        </label>
+                      </div>
+                      <div className="grid grid-cols-2 gap-2">
+                        <div>
+                          <label htmlFor={f('etcdctlPath')} className={LABEL}>etcdctl 경로</label>
+                          <input id={f('etcdctlPath')} type="text" value={etcdctlPath} onChange={(e) => setEtcdctlPath(e.target.value)} className={`${INPUT} font-mono`} />
+                        </div>
+                        <div>
+                          <label htmlFor={f('timeout')} className={LABEL}>제한 시간(초)</label>
+                          <input id={f('timeout')} type="number" value={timeout} onChange={(e) => setTimeoutSec(Number(e.target.value) || 30)} min={1} max={300} className={INPUT} />
+                        </div>
+                      </div>
+                    </div>
+                  </details>
+                </div>
+              ) : (
+                <div className="px-4 py-3 space-y-3">
+                  <div>
+                    <label htmlFor={f('unit')} className={LABEL}>systemd 유닛</label>
+                    <input id={f('unit')} type="text" value={unit} onChange={(e) => setUnit(e.target.value)} className={`${INPUT} font-mono`} />
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <label htmlFor={f('tail')} className={LABEL}>마지막 N줄</label>
+                      <input id={f('tail')} type="number" value={tail} onChange={(e) => setTail(Number(e.target.value) || 200)} min={1} max={5000} className={INPUT} />
+                    </div>
+                    <div>
+                      <label htmlFor={f('since')} className={LABEL}>시작 시점</label>
+                      <input id={f('since')} type="text" value={since} onChange={(e) => setSince(e.target.value)} placeholder="예: 10 min ago" className={INPUT} />
+                    </div>
+                  </div>
+                  <div>
+                    <label htmlFor={f('grep')} className={LABEL}>grep 필터 (대소문자 무시)</label>
+                    <input id={f('grep')} type="text" value={grep} onChange={(e) => setGrep(e.target.value)} placeholder="예: error 또는 leader" className={`${INPUT} font-mono`} />
+                  </div>
+                  <p className="text-xs text-muted-foreground">조회 전용 — 확인 없이 바로 실행됩니다.</p>
                 </div>
               )}
             </div>
 
-            <div>
-              <label htmlFor={f('customHost')} className="block text-sm text-muted-foreground mb-1">
-                호스트 직접 입력 <span className="text-xs opacity-60">(비우면 위 노드 사용)</span>
-              </label>
-              <input
-                id={f('customHost')}
-                type="text"
-                value={customHost}
-                onChange={(e) => setCustomHost(e.target.value)}
-                placeholder="예: 192.168.10.11"
-                className="w-full px-3 py-2 text-sm font-mono bg-background border border-border rounded-xl focus:outline-none focus:ring-1 focus:ring-primary"
-              />
+            {/* 실행 바 — 스크롤과 무관하게 항상 보인다. */}
+            <div className="border-t border-border p-3 space-y-2">
+              {runError && (
+                <div role="alert" className="px-3 py-2 text-sm rounded-md bg-status-critical/10 text-status-critical border border-status-critical/30">
+                  {formatApiError(runError)}
+                </div>
+              )}
+              {activeMut.isPending ? (
+                <button
+                  type="button"
+                  onClick={activeMut.abort}
+                  className="w-full flex items-center justify-center gap-2 px-5 py-2.5 text-sm font-semibold bg-secondary hover:bg-secondary/80 text-foreground border border-border rounded-xl transition-colors"
+                >
+                  <Square className="w-4 h-4 fill-current" />
+                  중지
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={tab === 'run' ? requestRun : requestLogs}
+                  disabled={!canOperate || !(tab === 'run' ? canRunEtcdctl : canRunLogs)}
+                  title={withHint(tab === 'run' ? 'etcdctl 실행' : '로그 가져오기')}
+                  aria-label={ariaWithHint(tab === 'run' ? 'etcdctl 실행' : '로그 가져오기')}
+                  className="w-full flex items-center justify-center gap-2 px-5 py-2.5 text-sm font-semibold bg-primary hover:bg-primary/90 text-primary-foreground rounded-xl transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {tab === 'run' ? <Play className="w-4 h-4" /> : <ScrollText className="w-4 h-4" />}
+                  {tab === 'run' ? 'etcdctl 실행' : '로그 가져오기'}
+                </button>
+              )}
+              {tab === 'run' && (
+                <p className="text-center text-xs text-muted-foreground">
+                  <kbd className="px-1 rounded border border-border bg-secondary">Ctrl</kbd>+<kbd className="px-1 rounded border border-border bg-secondary">Enter</kbd> 로도 실행
+                </p>
+              )}
             </div>
-
-            <div className="grid grid-cols-2 gap-2">
-              <div>
-                <label htmlFor={f('user')} className="block text-sm text-muted-foreground mb-1">사용자</label>
-                <input
-                  id={f('user')}
-                  type="text" value={username} onChange={(e) => setUsername(e.target.value)}
-                  className="w-full px-3 py-2 text-sm bg-background border border-border rounded-xl focus:outline-none focus:ring-1 focus:ring-primary"
-                />
-              </div>
-              <div>
-                <label htmlFor={f('port')} className="block text-sm text-muted-foreground mb-1">포트</label>
-                <input
-                  id={f('port')}
-                  type="number" value={port} onChange={(e) => setPort(Number(e.target.value) || 22)}
-                  className="w-full px-3 py-2 text-sm bg-background border border-border rounded-xl focus:outline-none focus:ring-1 focus:ring-primary"
-                />
-              </div>
-            </div>
-
-            <div>
-              <p id={f('authLabel')} className="block text-sm text-muted-foreground mb-1">인증 방식</p>
-              <div role="group" aria-labelledby={f('authLabel')} className="flex items-center bg-secondary/60 rounded-xl p-[3px] gap-px">
-                {(['password', 'key'] as const).map((m) => (
-                  <button
-                    key={m}
-                    type="button"
-                    aria-pressed={authMode === m}
-                    onClick={() => setAuthMode(m)}
-                    className={`flex-1 px-2 py-1.5 text-sm font-medium rounded-md transition-colors ${
-                      authMode === m ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
-                    }`}
-                  >
-                    {m === 'password' ? '비밀번호' : '개인키'}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {authMode === 'password' ? (
-              <input
-                type="password" value={password} onChange={(e) => setPassword(e.target.value)}
-                aria-label="SSH 비밀번호" autoComplete="off"
-                placeholder="SSH 비밀번호"
-                className="w-full px-3 py-2 text-sm bg-background border border-border rounded-xl focus:outline-none focus:ring-1 focus:ring-primary"
-              />
-            ) : (
-              <div>
-                <label htmlFor={f('pkey')} className="text-sm text-muted-foreground mb-1 flex items-center gap-1">
-                  <Key className="w-3 h-3" aria-hidden="true" /> 개인키(PEM)
-                </label>
-                <textarea
-                  id={f('pkey')}
-                  value={privateKey} onChange={(e) => setPrivateKey(e.target.value)}
-                  placeholder="-----BEGIN OPENSSH PRIVATE KEY-----" rows={4}
-                  className="w-full px-3 py-2 text-xs font-mono bg-background border border-border rounded-xl focus:outline-none focus:ring-1 focus:ring-primary resize-none"
-                />
-              </div>
-            )}
           </MacCard>
 
-          {/* 중: 실행 구성 */}
-          <MacCard title={tab === 'run' ? '명령' : '로그 조회'} rootClassName="lg:col-span-3 min-w-0" bodyPadding="p-5" className="space-y-4">
-            {tab === 'run' ? (
-              <>
-                {/* 프리셋 */}
-                <div>
-                  <p className="text-sm text-muted-foreground mb-1.5">프리셋 — 누르면 인자 칸에 채웁니다</p>
-                  <div className="flex flex-wrap gap-1.5">
-                    {(presetsQ.data?.presets ?? []).map((p: EtcdPreset) => (
-                      <button
-                        key={p.key}
-                        onClick={() => setArgs(p.args)}
-                        className="px-2.5 py-1 text-xs rounded-xl border border-border bg-secondary hover:bg-secondary/80 text-foreground"
-                        title={maskCommand(p.args)}
-                      >
-                        {p.label}
-                      </button>
-                    ))}
-                  </div>
-                  {presetsQ.isError && (
-                    <ErrorState compact error={presetsQ.error} title="프리셋을 불러오지 못했습니다" onRetry={() => { void presetsQ.refetch(); }} />
-                  )}
-                </div>
-
-                {/* env file */}
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                  <div className="md:col-span-2">
-                    <label htmlFor={f('envFile')} className="text-sm text-muted-foreground mb-1 flex items-center gap-1">
-                      <FileText className="w-3 h-3" aria-hidden="true" /> env 파일 경로
-                    </label>
-                    <input
-                      id={f('envFile')}
-                      type="text" value={envFile} onChange={(e) => setEnvFile(e.target.value)}
-                      disabled={!useEnv}
-                      placeholder="/etc/etcd.env"
-                      className="w-full px-3 py-2 text-sm font-mono bg-background border border-border rounded-xl focus:outline-none focus:ring-1 focus:ring-primary disabled:opacity-50"
-                    />
-                  </div>
-                  <div className="flex items-end">
-                    <label className="flex items-center gap-2 text-sm text-muted-foreground pb-2.5">
-                      <input
-                        type="checkbox" checked={useEnv} onChange={(e) => setUseEnv(e.target.checked)}
-                        className="w-3.5 h-3.5 accent-primary"
-                      />
-                      실행 전에 source
-                    </label>
-                  </div>
-                </div>
-
-                {/* args */}
-                <div>
-                  <label htmlFor={f('args')} className="text-sm text-muted-foreground mb-1 flex items-center gap-1">
-                    <Terminal className="w-3 h-3" />
-                    etcdctl 인자
-                    <span className="ml-1 text-xs opacity-60">(예: endpoint health --write-out=table)</span>
-                  </label>
-                  <textarea
-                    id={f('args')}
-                    value={args} onChange={(e) => setArgs(e.target.value)}
-                    rows={3}
-                    className="w-full px-3 py-2 text-xs font-mono bg-background border border-border rounded-xl focus:outline-none focus:ring-1 focus:ring-primary resize-none"
-                  />
-                  <SavedCommands
-                    className="mt-2"
-                    storageKey="k8s:saved-cmd:etcdctl"
-                    currentValue={args}
-                    onPick={setArgs}
-                  />
-                </div>
-
-                {/* 기타 */}
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label htmlFor={f('etcdctlPath')} className="block text-sm text-muted-foreground mb-1">etcdctl 경로</label>
-                    <input
-                      id={f('etcdctlPath')}
-                      type="text" value={etcdctlPath} onChange={(e) => setEtcdctlPath(e.target.value)}
-                      className="w-full px-3 py-2 text-sm font-mono bg-background border border-border rounded-xl focus:outline-none focus:ring-1 focus:ring-primary"
-                    />
-                  </div>
-                  <div>
-                    <label htmlFor={f('timeout')} className="block text-sm text-muted-foreground mb-1">제한 시간(초)</label>
-                    <input
-                      id={f('timeout')}
-                      type="number" value={timeout} onChange={(e) => setTimeoutSec(Number(e.target.value) || 30)}
-                      min={1} max={300}
-                      className="w-full px-3 py-2 text-sm bg-background border border-border rounded-xl focus:outline-none focus:ring-1 focus:ring-primary"
-                    />
-                  </div>
-                </div>
-
-                {runError && (
-                  <div role="alert" className="px-3 py-2 text-sm rounded-md bg-status-critical/10 text-status-critical border border-status-critical/30">
-                    {formatApiError(runError)}
-                  </div>
-                )}
-
-                <div className="flex justify-end pt-2 border-t border-border">
-                  {runMut.isPending ? (
-                    <button
-                      onClick={runMut.abort}
-                      className="flex items-center gap-2 px-5 py-2.5 text-sm font-semibold bg-secondary hover:bg-secondary/80 text-foreground border border-border rounded-xl transition-colors"
-                    >
-                      <Square className="w-4 h-4 fill-current" />
-                      중지
-                    </button>
-                  ) : (
-                    <button
-                      onClick={() => setConfirmAction('run')}
-                      disabled={!canOperate || !canRunEtcdctl}
-                      title={withHint('etcdctl 실행')}
-                      aria-label={ariaWithHint('etcdctl 실행')}
-                      className="flex items-center gap-2 px-5 py-2.5 text-sm font-semibold bg-primary hover:bg-primary/90 text-primary-foreground rounded-xl transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                      <Play className="w-4 h-4" />
-                      etcdctl 실행
-                    </button>
-                  )}
-                </div>
-              </>
-            ) : (
-              <>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                  <div>
-                    <label htmlFor={f('unit')} className="block text-sm text-muted-foreground mb-1">systemd 유닛</label>
-                    <input
-                      id={f('unit')}
-                      type="text" value={unit} onChange={(e) => setUnit(e.target.value)}
-                      className="w-full px-3 py-2 text-sm font-mono bg-background border border-border rounded-xl focus:outline-none focus:ring-1 focus:ring-primary"
-                    />
-                  </div>
-                  <div>
-                    <label htmlFor={f('tail')} className="block text-sm text-muted-foreground mb-1">마지막 N줄</label>
-                    <input
-                      id={f('tail')}
-                      type="number" value={tail} onChange={(e) => setTail(Number(e.target.value) || 200)}
-                      min={1} max={5000}
-                      className="w-full px-3 py-2 text-sm bg-background border border-border rounded-xl focus:outline-none focus:ring-1 focus:ring-primary"
-                    />
-                  </div>
-                  <div>
-                    <label htmlFor={f('since')} className="block text-sm text-muted-foreground mb-1">시작 시점 <span className="opacity-60">(journalctl --since)</span></label>
-                    <input
-                      id={f('since')}
-                      type="text" value={since} onChange={(e) => setSince(e.target.value)}
-                      placeholder="예: 10 min ago"
-                      className="w-full px-3 py-2 text-sm bg-background border border-border rounded-xl focus:outline-none focus:ring-1 focus:ring-primary"
-                    />
-                  </div>
-                </div>
-                <div>
-                  <label htmlFor={f('grep')} className="block text-sm text-muted-foreground mb-1">
-                    grep 필터 <span className="opacity-60">(대소문자 무시)</span>
-                  </label>
-                  <input
-                    id={f('grep')}
-                    type="text" value={grep} onChange={(e) => setGrep(e.target.value)}
-                    placeholder="예: error 또는 leader"
-                    className="w-full px-3 py-2 text-sm font-mono bg-background border border-border rounded-xl focus:outline-none focus:ring-1 focus:ring-primary"
-                  />
-                </div>
-
-                {runError && (
-                  <div role="alert" className="px-3 py-2 text-sm rounded-md bg-status-critical/10 text-status-critical border border-status-critical/30">
-                    {formatApiError(runError)}
-                  </div>
-                )}
-
-                <div className="flex justify-end pt-2 border-t border-border">
-                  {logsMut.isPending ? (
-                    <button
-                      onClick={logsMut.abort}
-                      className="flex items-center gap-2 px-5 py-2.5 text-sm font-semibold bg-secondary hover:bg-secondary/80 text-foreground border border-border rounded-xl transition-colors"
-                    >
-                      <Square className="w-4 h-4 fill-current" />
-                      중지
-                    </button>
-                  ) : (
-                    <button
-                      onClick={() => setConfirmAction('logs')}
-                      disabled={!canOperate || !canRunLogs}
-                      title={withHint('로그 가져오기')}
-                      aria-label={ariaWithHint('로그 가져오기')}
-                      className="flex items-center gap-2 px-5 py-2.5 text-sm font-semibold bg-primary hover:bg-primary/90 text-primary-foreground rounded-xl transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                      <ScrollText className="w-4 h-4" />
-                      로그 가져오기
-                    </button>
-                  )}
-                </div>
-              </>
-            )}
-          </MacCard>
-
-          {/* 우: 실행 로그(수명주기) + 결과 — 항상 같은 위치(우측)에 고정, 실행 전엔 플레이스홀더 */}
-          <div className="lg:col-span-5 min-w-0 flex flex-col gap-3">
-            <RunLogPanel run={runLog} show={showLog} onShowChange={setShowLog} maxHeight="max-h-56" />
-            <ResultPanel result={result} tab={tab} />
+          {/* 우: 실행 로그(중심) + 결과 — 항상 같은 위치, 실행 전엔 대기 상태 */}
+          <div className="min-w-0 min-h-0 flex flex-col gap-3">
+            <div className="flex flex-col min-h-[240px] lg:min-h-0 flex-[3]">
+              <RunLogPanel run={runLog} show={showLog} onShowChange={setShowLog} fill />
+            </div>
+            <div className="flex flex-col min-h-[200px] lg:min-h-0 flex-[2]">
+              <ResultPanel result={result} tab={tab} />
+            </div>
           </div>
         </div>
         )}
         </div>
       </PageShell>
 
-      {/* 실행 확인 모달 */}
+      {/* 변경(비조회) 명령 확인 모달 — 조회 명령과 로그 조회는 확인 없이 실행한다. */}
       <ConfirmDialog
-        open={confirmAction !== null}
-        title={confirmAction === 'run' ? 'etcdctl 실행 확인' : 'etcd 서비스 로그 조회 확인'}
-        description={confirmAction === 'run'
-          ? (runVerdict.readOnly
-            ? `컨트롤 플레인 노드에 SSH 접속 후 etcdctl 조회 명령(${runVerdict.subcommand})을 실행합니다.`
-            : '컨트롤 플레인 노드에 SSH 접속 후 etcdctl 명령을 실행합니다. 조회 명령이 아니므로 etcd 데이터·클러스터 구성을 되돌릴 수 없게 바꿀 수 있습니다.')
-          : '컨트롤 플레인 노드에 SSH 접속 후 journalctl 로 로그를 가져옵니다.'}
-        confirmLabel={confirmAction === 'run' ? 'etcdctl 실행' : '로그 가져오기'}
-        danger={confirmAction === 'run' && !runVerdict.readOnly}
-        onCancel={() => setConfirmAction(null)}
+        open={confirmRun}
+        title="변경 명령 실행 확인"
+        description="컨트롤 플레인 노드에 SSH 접속 후 etcdctl 명령을 실행합니다. 조회 명령이 아니므로 etcd 데이터·클러스터 구성을 되돌릴 수 없게 바꿀 수 있습니다."
+        confirmLabel="etcdctl 실행"
+        danger
+        onCancel={() => setConfirmRun(false)}
         onConfirm={() => {
-          const which = confirmAction;
-          setConfirmAction(null);
-          if (which === 'run') void doRun();
-          else if (which === 'logs') void doLogs();
+          setConfirmRun(false);
+          void doRun();
         }}
       >
         <div className="space-y-3">
           <div>
-            <p className="text-xs font-medium text-muted-foreground mb-1">타겟</p>
+            <p className="text-xs font-medium text-muted-foreground mb-1">대상</p>
             <p className="font-mono">
               <span className="text-primary">{username}</span>
               <span className="text-muted-foreground">@</span>
@@ -641,29 +630,18 @@ export function EtcdCtlPage() {
               </span>
             </p>
           </div>
-          {confirmAction === 'run' ? (
-            <div>
-              <p className="text-xs font-medium text-muted-foreground mb-1">실행</p>
-              <pre className="text-xs font-mono bg-background border border-border rounded-md p-2 max-h-32 overflow-auto whitespace-pre-wrap break-all">
-                {runCommandMasked}
-              </pre>
-              {runVerdict.reason && (
-                <p className="mt-2 text-sm text-status-critical flex items-start gap-1.5">
-                  <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0" aria-hidden="true" />
-                  {runVerdict.reason}
-                </p>
-              )}
-            </div>
-          ) : (
-            <div>
-              <p className="text-xs font-medium text-muted-foreground mb-1">journalctl</p>
-              <pre className="text-xs font-mono bg-background border border-border rounded-md p-2 overflow-auto whitespace-pre-wrap">
-                journalctl -u {unit} -n {tail}
-                {since && ` --since "${since}"`}
-                {grep && ` | grep -i "${grep}"`}
-              </pre>
-            </div>
-          )}
+          <div>
+            <p className="text-xs font-medium text-muted-foreground mb-1">실행</p>
+            <pre className="text-xs font-mono bg-background border border-border rounded-md p-2 max-h-32 overflow-auto whitespace-pre-wrap break-all">
+              {runCommandMasked}
+            </pre>
+            {runVerdict.reason && (
+              <p className="mt-2 text-sm text-status-critical flex items-start gap-1.5">
+                <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0" aria-hidden="true" />
+                {runVerdict.reason}
+              </p>
+            )}
+          </div>
         </div>
       </ConfirmDialog>
     </div>

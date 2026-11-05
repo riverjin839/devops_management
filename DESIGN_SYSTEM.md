@@ -674,6 +674,49 @@ Cilium BPF Trace `/cilium-trace` · 커널 파라미터 `/kernel-params` · NFS 
 만든다. 4·5 항목은 그대로 지킨다 — `useTerminalEnvSync` 호출(터미널 색/글꼴이 `useXtermTheme` 로 xterm 에도
 적용된다), 연결 테스트 결과는 `STATUS_META` 배지. 새 SSH 터미널 화면을 xterm 부터 직접 붙이는 코드는 금지.
 
+### 12.6.1 로그 중심 실행 화면 — "명령을 수행하고 결과를 본다" 일반 패턴 (2026-11-05, `/etcdctl` 기준)
+
+사용자가 **실행하고 그 과정을 지켜보는 것**이 목적인 화면(명령·점검·배치·마이그레이션·적용/롤백 등
+버튼 한 번에 서버 작업이 도는 화면)의 표준 구성이다. §12.6 의 "좌 컨트롤 / 우 결과" 를 이어받되,
+**화면의 중심을 입력 폼이 아니라 실행 로그에 둔다.** 신규 화면은 이 패턴으로 시작하고, 기존 화면을
+재구성할 때도 이 패턴을 기준으로 삼는다. 레퍼런스 구현: `pages/EtcdCtlPage.tsx`.
+
+**레이아웃** — `grid-cols-1 lg:grid-cols-[320px_minmax(0,1fr)]`, 높이는 뷰포트에 고정
+(`lg:h-[calc(100vh-var(--topbar-h)-10rem)] lg:min-h-[480px]`), 스크롤은 카드 내부에서만 한 번.
+
+| 영역 | 내용 | 규칙 |
+|---|---|---|
+| 좌 (320px, 제어) | 접히는 `대상·인증` 섹션 + 명령/옵션 입력 + **하단 고정 실행 바** | 입력은 이 한 열에 모은다. 자주 안 바꾸는 값(대상·인증·env·경로·시간 제한)은 접고 **요약 한 줄**(`root@10.0.0.1:22 · 비밀번호`)만 보인다. 실행 버튼은 스크롤과 무관하게 항상 보인다. |
+| 우 상단 (flex 3, **중심**) | 실행 로그 — `<RunLogPanel fill />` | 실행 전에도 같은 자리에 "대기" 상태로 존재. 줄이 쌓이면 맨 아래로 따라간다(`follow`). "로그 보기" 토글(`useLogPref`)은 유지(CLAUDE.md). |
+| 우 하단 (flex 2) | 결과 — 상태 배지 + exit/소요 + 실행된 명령 + `ExecOutputTabs` | 실행 전 플레이스홀더(`EmptyState compact`). 바깥에 `max-h` 를 또 걸지 않는다(스크롤 중첩 금지). |
+
+**동작 규칙**
+1. **조회(읽기 전용)는 확인 없이 바로 실행, 변경 명령만 `ConfirmDialog danger`.** 판정은 화면별 allowlist
+   (`lib/dangerCommand.ts` `judgeCommand` 등). 읽기 작업까지 매번 모달을 거치게 하면 확인이 습관이 되어 위험 경고가 무뎌진다.
+2. **위험 신호는 입력하는 동안 보인다.** 인자/명령 입력 아래에 `조회 명령` / `변경 명령` 배지(`aria-live="polite"`),
+   프리셋은 변경 명령에 `status-critical` 점 + `sr-only` 텍스트. 모달에서야 처음 알게 하지 않는다.
+3. **결과는 탭(모드)별로 보관**한다. 탭을 오가도 다른 탭의 결과를 지우지 않는다(클러스터 전환 시에만 전체 초기화).
+4. **오류 표시는 한 곳으로**: 실행 로그의 error 줄 + 실행 바 위 `role="alert"` 한 개. 토스트는 권한 거절(403) 같은 즉시 알림에만.
+5. 실행 중에는 실행 버튼이 **중지**로 바뀐다(`useAbortableMutation.abort`). 단축키: 입력 영역 `Ctrl/⌘+Enter` = 실행.
+6. 자격증명 필드에는 **보이는 라벨**을 단다(placeholder/aria-label 만 금지). 도움말은 `text-xs text-muted-foreground`
+   (`opacity-60` 으로 더 흐리게 만들지 않는다 — 대비 4.5:1 미달).
+7. 모드 탭은 `role="tablist"` + `aria-controls` + `tabpanel` + 좌우 방향키 이동 + roving `tabIndex`.
+
+**재사용 부품** — 새로 만들지 않는다
+- `RunLogPanel` `fill` / `idleHint` (대기 상태 상시 표시·부모 높이 채움), `LogViewer` `follow` (새 줄 따라가기), 둘 다 기존 사용처 기본값은 그대로다.
+- `useRunLog` + `runLogged` + `consoleRunLines`(수명주기 로그), `useLogPref(key)`(로그 보기 기억), `useAbortableMutation`, `useCanOperate`(권한 비활성+사유), `ExecOutputTabs`.
+
+**재구성 체크리스트** (기존 화면에 적용할 때)
+- [ ] 입력이 좌 한 열(≤320px)에 들어가는가 — 안 들어가면 접이식으로
+- [ ] 실행 로그가 우측 최상단 최대 영역이고 실행 전에도 보이는가
+- [ ] 읽기 전용 실행에 확인 모달이 없는가 / 변경 실행만 danger 확인인가
+- [ ] 입력 중 위험 배지가 보이는가
+- [ ] 결과가 모드별로 보존되는가, 스크롤이 카드 내부 한 겹뿐인가
+- [ ] 오류가 로그 + alert 한 곳인가
+
+적용 현황: `/etcdctl` 완료. 나머지 §12.6 적용 화면(`/bulk-exec` `/mc` `/cilium-trace` `/kernel-params` `/isilon-nfs`)은
+다음에 건드릴 때 위 체크리스트로 이행한다(일괄 개편 아님).
+
 ### 12.7 전역 상단바 (`components/layout/AppTopBar.tsx`) — 높이 규약
 
 모든 화면은 `PageStyleProvider` 안에서 `AppTopBar`(업무 도메인 그룹 + 인사말/날짜 + 알람 종) 를
