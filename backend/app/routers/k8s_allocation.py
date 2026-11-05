@@ -1406,6 +1406,81 @@ def allocation_pods(
         return {"count": len(rows), "items": rows, "metrics_available": bool(pusage)}
 
 
+_PROBLEM_POD_KINDS = ("error", "pending", "norequest")
+_PROBLEM_POD_LIMIT = 500
+
+
+def _pod_problem_reason(p) -> str:
+    """상태 사유 — 컨테이너 waiting/terminated reason 우선, 없으면 Pod condition(스케줄 실패 등) 메시지."""
+    st = p.status
+    if st is None:
+        return ""
+    for cs in list(st.container_statuses or []) + list(st.init_container_statuses or []):
+        state = cs.state
+        if state and state.waiting and state.waiting.reason:
+            msg = state.waiting.message or ""
+            return f"{cs.name}: {state.waiting.reason}" + (f" — {msg[:160]}" if msg else "")
+        if state and state.terminated and state.terminated.exit_code not in (0, None):
+            return f"{cs.name}: {state.terminated.reason or 'Terminated'} (exit {state.terminated.exit_code})"
+    for c in st.conditions or []:
+        if c.status == "False" and (c.reason or c.message):
+            return f"{c.type}: {c.reason or ''}" + (f" — {(c.message or '')[:160]}" if c.message else "")
+    return st.reason or ""
+
+
+@router.get("/{cluster_id}/allocation/problem-pods")
+def allocation_problem_pods(cluster_id: UUID, kind: str, db: Session = Depends(get_db)):
+    """요약 칩(Pod 오류 / Pod 대기 / request 미설정)의 상세 팝업용 Pod 목록.
+
+    스냅샷은 Pod 단위를 보존하지 않으므로 전체 Pod 를 한 번 조회해(20초 캐시) 요약과 같은 기준
+    (`_classify_pod_status`, request 0 판정)으로 거른다. 응답은 최대 500건 — total 은 전체 건수.
+    """
+    if kind not in _PROBLEM_POD_KINDS:
+        raise HTTPException(status_code=400, detail=f"kind 는 {', '.join(_PROBLEM_POD_KINDS)} 중 하나")
+    cluster = _require_cluster(cluster_id, db)
+    cid = str(cluster_id)
+    active_only = kind == "norequest"
+    with _api(cluster) as client:
+        core = k8s_client.CoreV1Api(client)
+        try:
+            pods = _cached(
+                f"{cid}:allpods:{'active' if active_only else 'all'}",
+                lambda: _list_all(core.list_pod_for_all_namespaces,
+                                  field_selector=_ACTIVE_FIELD_SELECTOR if active_only else None))
+        except Exception as e:  # noqa: BLE001
+            raise HTTPException(status_code=502, detail=f"파드 조회 실패: {str(e)[:200]}") from e
+        rows = []
+        for p in pods:
+            if not p.metadata:
+                continue
+            phase = (p.status.phase if p.status else None) or "Unknown"
+            if kind == "norequest":
+                if phase not in _ACTIVE_PHASES:
+                    continue
+                rc, rm, _lc, _lm = _pod_effective_resources(p.spec)
+                if rc != 0 or rm != 0:
+                    continue
+            else:
+                bucket = _classify_pod_status(p)
+                if kind == "error" and bucket not in ("error", "failed"):
+                    continue
+                if kind == "pending" and bucket != "pending":
+                    continue
+            ok, on = _top_owner(p, {})
+            restarts = sum((cs.restart_count or 0) for cs in ((p.status.container_statuses or []) if p.status else []))
+            created = p.metadata.creation_timestamp
+            rows.append({
+                "namespace": p.metadata.namespace, "name": p.metadata.name,
+                "node": p.spec.node_name if p.spec else None, "phase": phase,
+                "reason": _pod_problem_reason(p) if kind != "norequest" else "",
+                "restarts": restarts, "owner_kind": ok, "owner_name": on,
+                "created_at": created.isoformat() if created else None,
+            })
+        rows.sort(key=lambda r: (r["namespace"], r["name"]))
+        return {"kind": kind, "total": len(rows), "truncated": len(rows) > _PROBLEM_POD_LIMIT,
+                "items": rows[:_PROBLEM_POD_LIMIT]}
+
+
 @router.get("/{cluster_id}/allocation/nodes/{node}/pods")
 def allocation_node_pods(cluster_id: UUID, node: str, db: Session = Depends(get_db)):
     """노드에 스케줄된 파드 + 컨테이너 단위 request/limit/usage (+ 상위 워크로드 귀속).

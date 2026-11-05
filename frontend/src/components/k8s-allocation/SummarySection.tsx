@@ -5,7 +5,8 @@ import { AlertTriangle, Cpu, Layers, PackageOpen, RefreshCw, Server, TrendingDow
 import { MacCard } from '@/components/ui/MacCard';
 import { EmptyState, ErrorState, Skeleton, SnapshotProgressCard } from '@/components/common';
 import { useAllocNamespaces, usePodsSummary } from '@/hooks/useK8sAllocation';
-import { fmtCores, fmtGi, fmtN, pctText, ratio } from './format';
+import { fmtCores, fmtGi, fmtN, ratio } from './format';
+import { fmtMetric, useMetricMode } from './metricMode';
 import { StatTooltip } from './primitives';
 import { PodScheduleCalc } from './PodScheduleCalc';
 import { allocPhaseText } from './effUtils';
@@ -25,6 +26,8 @@ export function SummarySection({ clusterId }: { clusterId: string }) {
   const { data, isLoading, isError, error, refetch } = useAllocNamespaces(clusterId);
   const { data: podsSummary } = usePodsSummary(clusterId);
   const cap = podsSummary?.capacity;
+  const mode = useMetricMode();
+  const isUsage = mode === 'usage';
 
   let body: React.ReactNode;
   if (isLoading && !data) {
@@ -51,8 +54,6 @@ export function SummarySection({ clusterId }: { clusterId: string }) {
     // 할당효율 경고 — 100% 초과(오버커밋)만. CPU/MEM 동일 기준(alloc 미상 시 null → 경고 안 띄움, 0%로 오인 방지).
     const cpuAllocRatio = ratio(s.cpuReqM, s.cpuAllocM);
     const memAllocRatio = ratio(s.memReqB, s.memAllocB);
-    // 사용효율 경고 — 105% 초과(스로틀·OOM 위험, 빨강)만. 30% 미만 낭비는 비용 정보라 경고색을 쓰지 않는다.
-    const usageWarn = (r: number | null): boolean | 'critical' => (r != null && r > 1.05 ? 'critical' : false);
 
     const cols: SummaryCol[] = [
       { key: 'node', label: '노드', value: fmtN(s.nodeCount), icon: Server },
@@ -72,7 +73,7 @@ export function SummarySection({ clusterId }: { clusterId: string }) {
         ),
       },
       {
-        key: 'cpuAlloc', label: 'CPU 할당효율', value: pctText(s.cpuReqM, s.cpuAllocM),
+        key: 'cpuAlloc', label: isUsage ? 'CPU 할당량' : 'CPU 할당효율', value: fmtMetric(mode, 'cpu', s.cpuReqM, s.cpuAllocM),
         sub: `request ${fmtCores(s.cpuReqM)} / allocatable ${fmtCores(s.cpuAllocM)}`,
         warn: cpuAllocRatio != null && cpuAllocRatio > 1 ? 'critical' : false,
         help: (
@@ -84,13 +85,12 @@ export function SummarySection({ clusterId }: { clusterId: string }) {
             <ul className="list-disc list-inside space-y-0.5 text-muted-foreground">
               <li>100% 초과 → 오버커밋 (스케줄 불가 위험, 빨강 경고)</li>
               <li>50% 미만 → 할당 여유 많음 (경고 아님 — 노드 축소 여지)</li>
-              <li>50–90% → 적정 범위</li>
             </ul>
           </div>
         ),
       },
       {
-        key: 'memAlloc', label: 'MEM 할당효율', value: pctText(s.memReqB, s.memAllocB),
+        key: 'memAlloc', label: isUsage ? 'MEM 할당량' : 'MEM 할당효율', value: fmtMetric(mode, 'mem', s.memReqB, s.memAllocB),
         sub: `request ${fmtGi(s.memReqB)} / allocatable ${fmtGi(s.memAllocB)}`,
         warn: memAllocRatio != null && memAllocRatio > 1 ? 'critical' : false,
         help: (
@@ -107,9 +107,8 @@ export function SummarySection({ clusterId }: { clusterId: string }) {
         ),
       },
       {
-        key: 'cpuUse', label: 'CPU 사용효율', value: useEff == null ? '—' : pctText(s.cpuUsageM ?? 0, s.cpuReqM),
-        sub: s.cpuUsageM == null ? '드릴다운에서 확인' : `실사용 ${fmtCores(s.cpuUsageM)}`,
-        warn: usageWarn(useEff),
+        key: 'cpuUse', label: isUsage ? 'CPU 사용량' : 'CPU 사용효율', value: useEff == null || s.cpuUsageM == null ? '—' : fmtMetric(mode, 'cpu', s.cpuUsageM, s.cpuReqM),
+        sub: s.cpuUsageM == null ? '드릴다운에서 확인' : isUsage ? `request ${fmtCores(s.cpuReqM)}` : `실사용 ${fmtCores(s.cpuUsageM)}`,
         help: (
           <div className="space-y-1.5">
             <p className="font-semibold text-foreground">CPU 사용효율 (Usage Efficiency)</p>
@@ -117,18 +116,14 @@ export function SummarySection({ clusterId }: { clusterId: string }) {
             <p><b>= 실사용량 ÷ Request × 100</b></p>
             <p>request로 예약한 CPU 중 실제로 <b>사용 중인</b> 비율입니다.</p>
             <ul className="list-disc list-inside space-y-0.5 text-muted-foreground">
-              <li>30% 미만 → request 과대 설정 (낭비 — 효율화 탭에서 축소 추천)</li>
-              <li>105% 초과 → 실사용이 request 초과 (스로틀 위험, 빨강 경고)</li>
-              <li>30–105% → 적정 범위</li>
             </ul>
             <p className="text-muted-foreground">metrics-server(또는 Prometheus)가 없으면 표시할 수 없습니다.</p>
           </div>
         ),
       },
       {
-        key: 'memUse', label: 'MEM 사용효율', value: memUseEff == null ? '—' : pctText(s.memUsageB ?? 0, s.memReqB),
-        sub: s.memUsageB == null ? '드릴다운에서 확인' : `실사용 ${fmtGi(s.memUsageB)}`,
-        warn: usageWarn(memUseEff),
+        key: 'memUse', label: isUsage ? 'MEM 사용량' : 'MEM 사용효율', value: memUseEff == null || s.memUsageB == null ? '—' : fmtMetric(mode, 'mem', s.memUsageB, s.memReqB),
+        sub: s.memUsageB == null ? '드릴다운에서 확인' : isUsage ? `request ${fmtGi(s.memReqB)}` : `실사용 ${fmtGi(s.memUsageB)}`,
         help: (
           <div className="space-y-1.5">
             <p className="font-semibold text-foreground">MEM 사용효율 (Usage Efficiency)</p>
@@ -136,9 +131,6 @@ export function SummarySection({ clusterId }: { clusterId: string }) {
             <p><b>= 실사용량 ÷ Request × 100</b></p>
             <p>request로 예약한 메모리 중 실제로 <b>사용 중인</b> 비율입니다.</p>
             <ul className="list-disc list-inside space-y-0.5 text-muted-foreground">
-              <li>30% 미만 → request 과대 설정 (낭비 — 효율화 탭에서 축소 추천)</li>
-              <li>105% 초과 → 실사용이 request 초과 (OOM 위험, 빨강 경고)</li>
-              <li>30–105% → 적정 범위</li>
             </ul>
             <p className="text-muted-foreground">metrics-server(또는 Prometheus)가 없으면 표시할 수 없습니다.</p>
           </div>

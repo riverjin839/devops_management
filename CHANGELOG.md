@@ -10,6 +10,9 @@
 
 1.85.3 이후 main 에 병합된 변경 (다음 릴리스 후보).
 
+### Added
+- **K8s 자원 관리 — 수치 표기 전환(사용량/사용률)·판단 문구 제거·문제 Pod 상세 팝업**: 헤더 토글로 요약·노드·네임스페이스 수치를 사용량(코어·Gi, 기본) 또는 사용률(%)로 바꿔 본다(선택은 기억). 「사용 초과」「적정」「request 과대」 판정 배지·칩·효율 열과 도움말의 적정 범위 문구를 삭제했다. 요약의 Pod 오류·Pod 대기·request 미설정 칩을 누르면 해당 Pod 목록(네임스페이스·워크로드·노드·상태 사유·재시작, 검색·CSV)을 팝업으로 보여준다. Backend: `GET /k8s/{id}/allocation/problem-pods?kind=error|pending|norequest`(최대 500건). 요약 스트립은 칩 나열 대신 문제 버튼 / 용량 한 줄 / 할당·사용 격자 표로 재구성하고(「낭비」 칩 삭제, 「Pod 스케줄 가능」 표기), 노드·네임스페이스 표는 격자선 있는 촘촘한 시트 스타일로 줄였다. Frontend: `MetricModeContext`·`ProblemPodsDialog`·`SummaryStrip`.
+
 ## [1.85.3] - 2026-11-05
 
 ### Fixed

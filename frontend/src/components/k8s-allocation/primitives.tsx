@@ -6,8 +6,9 @@ import {
   AlertTriangle, RefreshCw,
 } from 'lucide-react';
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
-import { EFF_BADGE, efficiency, pctText, ratio, utilRatio } from './format';
-import type { EffKind } from './format';
+import { ratio, utilRatio } from './format';
+import { fmtAmount, fmtMetric, useMetricMode } from './metricMode';
+import type { MetricUnit } from './metricMode';
 import type { SortState } from './tableSort';
 
 // SegTabs 는 `components/common/SegTabs` 로 승격됐다 — 기존 import 경로 호환용 re-export.
@@ -22,7 +23,7 @@ export function SortableTh({ label, k, sort, onSort, align = 'left', title }: {
   const active = sort.key === k;
   const Icon = !active ? ChevronsUpDown : sort.dir === 'asc' ? ArrowUp : ArrowDown;
   return (
-    <th className={`px-3 py-2 font-medium ${align === 'right' ? 'text-right' : ''}`} title={title}
+    <th className={`border border-border bg-secondary px-1.5 py-0.5 text-xs font-semibold ${align === 'right' ? 'text-right' : ''}`} title={title}
       aria-sort={active ? (sort.dir === 'asc' ? 'ascending' : 'descending') : 'none'}>
       <button
         type="button"
@@ -99,30 +100,22 @@ export function SearchInput({ value, onChange, placeholder, width = 'w-44' }: {
   );
 }
 
-export function EffBadge({ kind }: { kind: EffKind }) {
-  if (!kind) return null;
-  const b = EFF_BADGE[kind];
-  return <span className={`inline-block px-2 py-0.5 rounded-full text-xs border ${b.cls}`}>{b.label}</span>;
-}
-
-/** `worstEfficiency()` 결과 배지 — CPU·MEM 판정이 다르면 어느 자원 기준인지 옆에 적는다. */
-export function WorstEffBadge({ kind, res }: { kind: EffKind; res: 'CPU' | 'MEM' | null }) {
-  if (!kind) return null;
-  return (
-    <span className="inline-flex items-center gap-1">
-      <EffBadge kind={kind} />
-      {res && <span className="text-xs text-muted-foreground">{res}</span>}
-    </span>
-  );
-}
-
 // ── 사용률(util) 배지: k9s 의 %R / %L 에 해당 ─────────────────────────────────
 // R = 실사용 ÷ request (req 대비 사용률), L = 실사용 ÷ limit (limit 기준 사용율).
 // usage 없거나(메트릭 미가용) req·lim 모두 0이면 표시하지 않는다.
-export function UtilPct({ usage, req, lim, className = '' }: {
-  usage: number | null; req: number; lim: number; className?: string;
+export function UtilPct({ usage, req, lim, unit, className = '' }: {
+  usage: number | null; req: number; lim: number; unit: MetricUnit; className?: string;
 }) {
+  const mode = useMetricMode();
   if (usage == null) return null;
+  // 사용량 모드: 사용·요청은 바로 옆 셀에 이미 있으므로 limit 절대량만 덧붙인다.
+  if (mode === 'usage') {
+    return (
+      <div className={`text-xs tabular-nums text-muted-foreground ${className}`} title="limit = 컨테이너 제한량(— 은 미설정)">
+        제한 {lim > 0 ? fmtAmount(unit, lim) : '—'}
+      </div>
+    );
+  }
   const rRatio = utilRatio(usage, req);
   const lRatio = utilRatio(usage, lim);
   if (rRatio == null && lRatio == null) return null;
@@ -146,37 +139,37 @@ export function UtilPct({ usage, req, lim, className = '' }: {
 // 시리즈 구분이라 카테고리 색(--chart-*)을 쓴다 — 상태색(초록=정상)을 쓰면 "사용량이 많을수록 정상"으로 읽힌다.
 // 요청이 할당 가능량을 넘는(과할당) 경우에만 상태색(critical)으로 바꾼다.
 export function MeterBar({
-  alloc, req, lim, usage, reqDisplay, usageDisplay,
+  alloc, req, lim, usage, reqDisplay, usageDisplay, unit,
 }: {
   alloc: number; req: number; lim: number; usage: number | null;
-  reqDisplay: string; usageDisplay: string | null;
+  reqDisplay: string; usageDisplay: string | null; unit: MetricUnit;
 }) {
+  const mode = useMetricMode();
   const allocRatio = ratio(req, alloc);
   const reqPct = allocRatio == null ? 0 : Math.min(100, allocRatio * 100);
   const usageRatio = usage == null ? null : ratio(usage, alloc);
   const usagePct = usageRatio == null ? 0 : Math.min(100, usageRatio * 100);
   const reqColor = allocRatio != null && allocRatio > 1 ? 'bg-status-critical' : 'bg-chart-1';
   return (
-    <div className="min-w-[150px]">
+    <div className="min-w-[120px]">
       <div className="flex items-center gap-1.5">
         <span className="w-7 text-xs text-muted-foreground shrink-0">요청</span>
-        <div className="flex-1 h-2.5 rounded-full bg-muted/40 overflow-hidden">
+        <div className="flex-1 h-1.5 rounded-full bg-muted/40 overflow-hidden">
           <div className={`h-full ${reqColor}`} style={{ width: `${reqPct}%` }} />
         </div>
-        <span className="w-20 text-xs tabular-nums text-right shrink-0">{reqDisplay} · {pctText(req, alloc)}</span>
+        <span className="w-14 text-xs tabular-nums text-right shrink-0">{mode === 'usage' ? reqDisplay : fmtMetric(mode, unit, req, alloc)}</span>
       </div>
       <div className="flex items-center gap-1.5 mt-0.5">
         <span className="w-7 text-xs text-muted-foreground shrink-0">사용</span>
-        <div className="flex-1 h-2.5 rounded-full bg-muted/40 overflow-hidden">
+        <div className="flex-1 h-1.5 rounded-full bg-muted/40 overflow-hidden">
           {usage != null && <div className="h-full bg-chart-2" style={{ width: `${usagePct}%` }} />}
         </div>
-        <span className="w-20 text-xs tabular-nums text-right shrink-0 text-muted-foreground">
-          {usage == null ? '—' : `${usageDisplay} · ${pctText(usage, alloc)}`}
+        <span className="w-14 text-xs tabular-nums text-right shrink-0 text-muted-foreground">
+          {usage == null ? '—' : mode === 'usage' ? usageDisplay : fmtMetric(mode, unit, usage, alloc)}
         </span>
       </div>
       <div className="flex items-center gap-1.5 mt-0.5 pl-[34px]">
-        <UtilPct usage={usage} req={req} lim={lim} />
-        <EffBadge kind={efficiency(req, usage)} />
+        <UtilPct usage={usage} req={req} lim={lim} unit={unit} />
       </div>
     </div>
   );

@@ -197,3 +197,15 @@ export function useAllocNodePods(clusterId: string, node: string, enabled: boole
     retry: 1,
   });
 }
+
+/** 요약 칩 상세 팝업의 Pod 목록 — 팝업이 열렸을 때(enabled)만 조회한다. */
+export function useAllocProblemPods(clusterId: string, kind: 'error' | 'pending' | 'norequest' | null) {
+  return useQuery({
+    queryKey: ['alloc-problem-pods', clusterId, kind],
+    queryFn: async () => (await k8sAllocationApi.problemPods(clusterId, kind!)).data,
+    enabled: !!clusterId && !!kind,
+    staleTime: 15_000,
+    refetchOnWindowFocus: false,
+    retry: 1,
+  });
+}

@@ -15,10 +15,10 @@ import { pollIntoRunLog, runLogged, useRunLog } from '@/hooks/useRunLog';
 import { pickParam, useUrlParams } from '@/hooks/useUrlParams';
 import {
   SummarySection, SummaryStrip, PodCapacityStatusCards, NodesView, NamespacesView, NsRankingView,
-  EfficiencyTab, AllocDetailDialog, SegTabs, csvCluster, readSummaryDetailPref, writeSummaryDetailPref,
-  allocPhaseText, allocAgeText, allocRunLines,
+  EfficiencyTab, AllocDetailDialog, ProblemPodsDialog, SegTabs, csvCluster, readSummaryDetailPref, writeSummaryDetailPref,
+  allocPhaseText, allocAgeText, allocRunLines, MetricModeContext, readMetricModePref, writeMetricModePref,
 } from '@/components/k8s-allocation';
-import type { AllocDetailTarget } from '@/components/k8s-allocation';
+import type { AllocDetailTarget, MetricMode, ProblemPodKind } from '@/components/k8s-allocation';
 
 // NS 롤링 갱신 중인 클러스터는 자동갱신이 꺼져 있어도 이 간격으로 저장된 스냅샷을 다시 읽는다(비강제).
 const ROLLING_READ_MS = 60_000;
@@ -61,6 +61,11 @@ export function K8sAllocationPage() {
   // 노드/네임스페이스 클릭 → 대상의 실제 리소스(워크로드·Pod·컨테이너) 할당 vs 사용 상세.
   // 세 탭이 같은 다이얼로그를 열도록 상태를 페이지에 둔다.
   const [detailTarget, setDetailTarget] = useState<AllocDetailTarget>(null);
+  // 요약 칩(Pod 오류·대기·request 미설정) 상세 팝업 대상.
+  const [problemKind, setProblemKind] = useState<ProblemPodKind | null>(null);
+  // 수치 표기 — 사용량(기본) ↔ 사용률(%). 사용자별로 기억한다.
+  const [metricMode, setMetricMode] = useState<MetricMode>(() => readMetricModePref());
+  const pickMetricMode = (m: MetricMode) => { writeMetricModePref(m); setMetricMode(m); };
 
   // 페이지 레벨은 진행 메타만 구독(select) — 1.5초 폴링마다 페이지 전체가 리렌더되지 않게.
   const progQ = useAllocProgress(clusterId);
@@ -128,6 +133,7 @@ export function K8sAllocationPage() {
   }, [autoMs, clusterId, forceRefresh, rolling, softRefresh]);
 
   return (
+    <MetricModeContext.Provider value={metricMode}>
     <div className="app-min-h-screen bg-background">
       <PageShell density="console" className="flex gap-3">
         <div className="sticky top-2 self-start">
@@ -159,6 +165,15 @@ export function K8sAllocationPage() {
                 >
                   <FileBarChart className="w-3.5 h-3.5" aria-hidden="true" /> 일일 리포트
                 </a>
+                <div role="group" aria-label="수치 표시 방식" className="inline-flex rounded-xl border border-border bg-card p-0.5 text-sm">
+                  {([['usage', '사용량'], ['rate', '사용률']] as const).map(([m, label]) => (
+                    <button key={m} type="button" aria-pressed={metricMode === m} onClick={() => pickMetricMode(m)}
+                      title={m === 'usage' ? '코어·Gi 등 절대량으로 표시' : 'allocatable·request 대비 % 로 표시'}
+                      className={`px-2 py-0.5 rounded-lg ${metricMode === m ? 'bg-secondary text-foreground font-medium' : 'text-muted-foreground hover:text-foreground'}`}>
+                      {label}
+                    </button>
+                  ))}
+                </div>
                 <ExportMenu targetRef={contentRef} filenameBase={`k8s-alloc-${csvCluster(clusterName)}`} />
                 <button
                   type="button"
@@ -226,8 +241,7 @@ export function K8sAllocationPage() {
                 expanded={summaryDetail}
                 onToggle={() => setSummaryDetailPersist(!summaryDetail)}
                 onShowProblemNodes={() => setParams({ tab: 'nodes', problems: '1' })}
-                onShowPodStatus={() => setSummaryDetailPersist(true)}
-                onShowNoRequest={() => setView('namespaces')}
+                onShowProblemPods={setProblemKind}
               />
               {summaryDetail && (
                 <>
@@ -250,6 +264,8 @@ export function K8sAllocationPage() {
               {view === 'ns-ranking' && <NsRankingView clusterId={clusterId} onOpenDetail={setDetailTarget} />}
               {view === 'efficiency' && <EfficiencyTab clusterId={clusterId} clusterName={clusterName} />}
 
+              <ProblemPodsDialog clusterId={clusterId} kind={problemKind} clusterName={clusterName}
+                onClose={() => setProblemKind(null)} />
               <AllocDetailDialog
                 clusterId={clusterId}
                 target={detailTarget}
@@ -261,6 +277,7 @@ export function K8sAllocationPage() {
         </div>
       </PageShell>
     </div>
+    </MetricModeContext.Provider>
   );
 }
 

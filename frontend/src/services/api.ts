@@ -2662,6 +2662,12 @@ export const k8sAllocationApi = {
       `/k8s/${clusterId}/allocation/pods-summary`,
       { params: refresh ? { refresh: true } : undefined, timeout: 30_000 },
     ),
+  /** 요약 칩(Pod 오류·대기·request 미설정) 상세 팝업 — 해당 Pod 목록(최대 500건). */
+  problemPods: (clusterId: string, kind: 'error' | 'pending' | 'norequest') =>
+    api.get<import('@/types').AllocProblemPodsResponse>(
+      `/k8s/${clusterId}/allocation/problem-pods`,
+      { params: { kind }, timeout: 120_000 },
+    ),
 };
 
 // ── 일일 리포트 — 조회는 비인증 공개 API(`/public/daily-report`), 설정은 JWT(admin 변경) ──
