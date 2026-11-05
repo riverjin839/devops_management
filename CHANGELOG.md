@@ -11,6 +11,7 @@
 1.80.3 이후 main 에 병합된 변경 (다음 릴리스 후보).
 
 ### Added
+- **K8s 자원 관리 — 수치 표기 전환(사용량/사용률)·판단 문구 제거·문제 Pod 상세 팝업**: 헤더 토글로 요약·노드·네임스페이스 수치를 사용량(코어·Gi, 기본) 또는 사용률(%)로 바꿔 본다(선택은 기억). 「사용 초과」「적정」「request 과대」 판정 배지·칩·효율 열과 도움말의 적정 범위 문구를 삭제했다. 요약의 Pod 오류·Pod 대기·request 미설정 칩을 누르면 해당 Pod 목록(네임스페이스·워크로드·노드·상태 사유·재시작, 검색·CSV)을 팝업으로 보여준다. Backend: `GET /k8s/{id}/allocation/problem-pods?kind=error|pending|norequest`(최대 500건). 요약 스트립은 칩 나열 대신 문제 버튼 / 용량 한 줄 / 할당·사용 격자 표로 재구성하고(「낭비」 칩 삭제, 「Pod 스케줄 가능」 표기), 노드·네임스페이스 표는 격자선 있는 촘촘한 시트 스타일로 줄였다. Frontend: `MetricModeContext`·`ProblemPodsDialog`·`SummaryStrip`.
 - **화면별 사용 매뉴얼(`/manual`)**: 화면 안 설명 문장을 줄이고 헤더의 「사용법」 링크(새 탭)로 별도 매뉴얼 페이지를 열도록 했다. k9s 콘솔·K8s 접근 권한부터 적용. Frontend: `PageHeader` `manual` prop, `manual/manuals.ts`, `ManualPage`.
 - **K8S 접근 권한 — 발급 마법사 단순화·위험도 실시간 요약**: 바인딩 방식·토큰 유효기간·검증을 "고급 설정"으로 접고(토큰 방식+유효기간은 하나의 select), 하단 바가 범위·읽기/쓰기·만료·확인 필요 건수를 입력과 함께 실시간으로 보여준다. 모의 실행은 별도 보조 버튼, 발급 결과 카드에서 권한 점검·회수로 바로 이동, "로그 보기"는 실행 로그 카드로 이동. 단계 칩 live region·쓰기 동사 sr-only 표기 등 접근성 보강과 ServiceAccount·롤 용어 통일. Frontend: `ProvisionWizard`·`ProvisionConsole`·`K8sRbacPage`.
 - **K8s 허브 — `[` `]` 화면 이동 단축키**: 허브에서 `[` 는 이전 화면, `]` 는 다음 화면으로 이동한다. 브라우저 기본 단축키·Ctrl+K·Tab 포커스 이동과 겹치지 않고, 입력창에 입력 중이거나 모달이 열려 있으면 동작하지 않는다. Frontend: `useHubTabShortcuts`(`HubTabs`).

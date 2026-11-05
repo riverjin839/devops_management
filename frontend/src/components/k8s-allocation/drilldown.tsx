@@ -9,8 +9,8 @@ import { ChevronDown, ChevronRight } from 'lucide-react';
 import { Skeleton } from '@/components/common';
 import { useAllocPods, useAllocWorkloads } from '@/hooks/useK8sAllocation';
 import type { AllocPodRow, AllocWorkloadRow } from '@/types';
-import { fmtCores, fmtGi, worstEfficiency } from './format';
-import { ReqUseCell, UtilPct, WorstEffBadge } from './primitives';
+import { fmtCores, fmtGi } from './format';
+import { ReqUseCell, UtilPct } from './primitives';
 import { groupPodsByWorkload } from './podGroup';
 
 // ── 배지 ──────────────────────────────────────────────────────────────────────
@@ -73,11 +73,11 @@ export function PodAllocTable({ pods, showNamespace = false }: {
                 <td className="px-2 py-1.5 text-xs text-muted-foreground">{p.node ?? '—'}</td>
                 <td className="px-2 py-1.5 text-xs tabular-nums">
                   {fmtCores(p.cpuReqM)} / {fmtCores(p.cpuLimM)} / {p.cpuUsageM == null ? '—' : fmtCores(p.cpuUsageM)}
-                  <UtilPct usage={p.cpuUsageM} req={p.cpuReqM} lim={p.cpuLimM} />
+                  <UtilPct usage={p.cpuUsageM} req={p.cpuReqM} lim={p.cpuLimM} unit="cpu" />
                 </td>
                 <td className="px-2 py-1.5 text-xs tabular-nums">
                   {fmtGi(p.memReqB)} / {fmtGi(p.memLimB)} / {p.memUsageB == null ? '—' : fmtGi(p.memUsageB)}
-                  <UtilPct usage={p.memUsageB} req={p.memReqB} lim={p.memLimB} />
+                  <UtilPct usage={p.memUsageB} req={p.memReqB} lim={p.memLimB} unit="mem" />
                 </td>
               </tr>
               {p.containers.map((c) => (
@@ -140,7 +140,6 @@ export function WorkloadTable({ rows, renderDetail, showNamespace = false }: {
             <th className="px-2 py-1.5 font-medium text-right">Pod</th>
             <th className="px-2 py-1.5 font-medium">CPU 요청/사용</th>
             <th className="px-2 py-1.5 font-medium">MEM 요청/사용</th>
-            <th className="px-2 py-1.5 font-medium">효율</th>
           </tr>
         </thead>
         <tbody>
@@ -167,18 +166,17 @@ export function WorkloadTable({ rows, renderDetail, showNamespace = false }: {
                   <td className="px-2 py-1.5 text-right tabular-nums">{w.podCount}</td>
                   <td className="px-2 py-1.5">
                     <ReqUseCell req={fmtCores(w.cpuReqM)} usage={w.cpuUsageM == null ? null : fmtCores(w.cpuUsageM)} icon="cpu" />
-                    <UtilPct usage={w.cpuUsageM} req={w.cpuReqM} lim={w.cpuLimM} className="mt-0.5" />
+                    <UtilPct usage={w.cpuUsageM} req={w.cpuReqM} lim={w.cpuLimM} unit="cpu" className="mt-0.5" />
                   </td>
                   <td className="px-2 py-1.5">
                     <ReqUseCell req={fmtGi(w.memReqB)} usage={w.memUsageB == null ? null : fmtGi(w.memUsageB)} icon="mem" />
-                    <UtilPct usage={w.memUsageB} req={w.memReqB} lim={w.memLimB} className="mt-0.5" />
+                    <UtilPct usage={w.memUsageB} req={w.memReqB} lim={w.memLimB} unit="mem" className="mt-0.5" />
                   </td>
-                  <td className="px-2 py-1.5"><WorstEffBadge {...worstEfficiency(w.cpuReqM, w.cpuUsageM, w.memReqB, w.memUsageB)} /></td>
                 </tr>
                 {open && (
                   <tr className="bg-muted/5">
                     <td aria-hidden="true" />
-                    <td colSpan={5} className="px-2 py-1.5">{renderDetail(w)}</td>
+                    <td colSpan={4} className="px-2 py-1.5">{renderDetail(w)}</td>
                   </tr>
                 )}
               </Fragment>

@@ -16,7 +16,7 @@ import {
 } from '@/hooks/useK8sAllocation';
 import { buildCsv, downloadCsv } from '@/lib/csv';
 import type { AllocNodeRow, AllocWorkloadRow } from '@/types';
-import { csvCluster, EFF_BADGE, fmtCores, fmtGi, fmtN, today, utilPct, worstEfficiency } from './format';
+import { csvCluster, fmtCores, fmtGi, fmtN, today, utilPct } from './format';
 import { CsvButton, MeterBar, SearchInput, Stat } from './primitives';
 import { NodeWorkloadsDrill, PodsDrill, WorkloadTable } from './drilldown';
 import { groupPodsByWorkload } from './podGroup';
@@ -28,17 +28,15 @@ export type AllocDetailTarget = { scope: 'node' | 'namespace'; name: string } | 
 function exportWorkloadCsv(rows: AllocWorkloadRow[], filename: string) {
   const headers = ['Namespace', 'Kind', 'Workload', 'Pods', 'req미설정',
     'CPU 요청', 'CPU 제한', 'CPU 사용', 'CPU 사용률(req)',
-    'MEM 요청', 'MEM 제한', 'MEM 사용', 'MEM 사용률(req)', '효율'];
+    'MEM 요청', 'MEM 제한', 'MEM 사용', 'MEM 사용률(req)'];
   const pct = (v: number | null) => (v == null ? '' : `${v}%`);
   const data = rows.map((w) => {
-    const { kind: k, res } = worstEfficiency(w.cpuReqM, w.cpuUsageM, w.memReqB, w.memUsageB);
     return [
       w.namespace, w.kind, w.name, w.podCount, w.noRequestPods,
       fmtCores(w.cpuReqM), fmtCores(w.cpuLimM), w.cpuUsageM == null ? '' : fmtCores(w.cpuUsageM),
       pct(utilPct(w.cpuUsageM, w.cpuReqM)),
       fmtGi(w.memReqB), fmtGi(w.memLimB), w.memUsageB == null ? '' : fmtGi(w.memUsageB),
       pct(utilPct(w.memUsageB, w.memReqB)),
-      k ? `${EFF_BADGE[k].label}${res ? ` (${res})` : ''}` : '',
     ];
   });
   downloadCsv(filename, buildCsv(headers, data));
@@ -51,12 +49,12 @@ function NodeSummary({ n }: { n: AllocNodeRow }) {
       <div className="rounded-md border border-border bg-card px-2.5 py-2">
         <div className="text-xs text-muted-foreground mb-1">CPU — 할당 {n.cpuAllocDisplay} 기준</div>
         <MeterBar alloc={n.cpuAllocM} req={n.cpuReqM} lim={n.cpuLimM} usage={n.cpuUsageM}
-          reqDisplay={n.cpuReqDisplay} usageDisplay={n.cpuUsageDisplay} />
+          reqDisplay={n.cpuReqDisplay} usageDisplay={n.cpuUsageDisplay} unit="cpu" />
       </div>
       <div className="rounded-md border border-border bg-card px-2.5 py-2">
         <div className="text-xs text-muted-foreground mb-1">MEM — 할당 {n.memAllocDisplay} 기준</div>
         <MeterBar alloc={n.memAllocB} req={n.memReqB} lim={n.memLimB} usage={n.memUsageB}
-          reqDisplay={n.memReqDisplay} usageDisplay={n.memUsageDisplay} />
+          reqDisplay={n.memReqDisplay} usageDisplay={n.memUsageDisplay} unit="mem" />
       </div>
     </div>
   );

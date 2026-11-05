@@ -10,9 +10,11 @@ import { useAllocNodes, useRefreshAllocNode } from '@/hooks/useK8sAllocation';
 import { buildCsv, downloadCsv } from '@/lib/csv';
 import type { AllocNodeRow } from '@/types';
 import {
-  calcGridCols, csvCluster, efficiency, fmtCores, fmtGi, isProblemNode, nodeRisk, pctText, ratio, slackCls, slackLabel, today, utilPct,
+  calcGridCols, csvCluster, fmtCores, fmtGi, isProblemNode, nodeRisk, ratio, slackCls, slackLabel, today, utilPct,
 } from './format';
-import { CsvButton, EffBadge, MeterBar, SearchInput, SegTabs, SortableTh, StatTooltip, UtilPct } from './primitives';
+import { fmtMetric, useMetricMode } from './metricMode';
+import type { MetricUnit } from './metricMode';
+import { CsvButton, MeterBar, SearchInput, SegTabs, SortableTh, StatTooltip, UtilPct } from './primitives';
 import { nextSort, useTableSort } from './tableSort';
 import type { SortState } from './tableSort';
 import type { AllocDetailTarget } from './AllocDetailDialog';
@@ -55,9 +57,10 @@ const presetOf = (s: SortState) => SORT_PRESETS.find((p) => p.sort.key === s.key
 const VIEW_STYLES = ['card', 'table'] as const;
 
 // ── 노드 게이지 행 (카드 뷰에서 사용) ─────────────────────────────────────────────
-const GaugeRow = memo(function GaugeRow({ label, alloc, req, lim, usage }: {
-  label: string; alloc: number; req: number; lim: number; usage: number | null;
+const GaugeRow = memo(function GaugeRow({ label, alloc, req, lim, usage, unit }: {
+  label: string; alloc: number; req: number; lim: number; usage: number | null; unit: MetricUnit;
 }) {
+  const mode = useMetricMode();
   const allocRatio = ratio(req, alloc);
   const reqPct = allocRatio == null ? 0 : Math.min(100, allocRatio * 100);
   const useRatio = usage == null ? null : ratio(usage, alloc);
@@ -70,9 +73,9 @@ const GaugeRow = memo(function GaugeRow({ label, alloc, req, lim, usage }: {
         <span className="tabular-nums">
           {/* 시리즈 구분은 --chart-*(요청=chart-1, 사용=chart-2). 과할당일 때만 상태색 + 아이콘. */}
           요청 <b className={over ? 'text-status-critical' : 'text-foreground'}>
-            {over && <AlertTriangle className="inline w-3 h-3 mr-0.5 -mt-0.5" aria-hidden="true" />}{pctText(req, alloc)}
+            {over && <AlertTriangle className="inline w-3 h-3 mr-0.5 -mt-0.5" aria-hidden="true" />}{fmtMetric(mode, unit, req, alloc)}
           </b>
-          {usage != null && <> · 사용 <b className="text-foreground">{pctText(usage, alloc)}</b></>}
+          {usage != null && <> · 사용 <b className="text-foreground">{fmtMetric(mode, unit, usage, alloc)}</b></>}
         </span>
       </div>
       <div className="relative h-3 rounded-full bg-muted/40 overflow-hidden">
@@ -80,8 +83,7 @@ const GaugeRow = memo(function GaugeRow({ label, alloc, req, lim, usage }: {
         {usage != null && <div className="absolute inset-y-0 left-0 bg-chart-2" style={{ width: `${usePct}%` }} />}
       </div>
       <div className="flex items-center gap-1.5 mt-0.5">
-        <UtilPct usage={usage} req={req} lim={lim} />
-        <EffBadge kind={efficiency(req, usage)} />
+        <UtilPct usage={usage} req={req} lim={lim} unit={unit} />
       </div>
     </div>
   );
@@ -118,8 +120,8 @@ const NodeCard = memo(function NodeCard({ n, onRefresh, refreshing, onOpenDetail
         </div>
       </div>
       <div className="space-y-1.5">
-        <GaugeRow label="CPU" alloc={n.cpuAllocM} req={n.cpuReqM} lim={n.cpuLimM} usage={n.cpuUsageM} />
-        <GaugeRow label="MEM" alloc={n.memAllocB} req={n.memReqB} lim={n.memLimB} usage={n.memUsageB} />
+        <GaugeRow label="CPU" alloc={n.cpuAllocM} req={n.cpuReqM} lim={n.cpuLimM} usage={n.cpuUsageM} unit="cpu" />
+        <GaugeRow label="MEM" alloc={n.memAllocB} req={n.memReqB} lim={n.memLimB} usage={n.memUsageB} unit="mem" />
       </div>
       <div className="flex justify-between text-xs mt-1.5 tabular-nums">
         <span className={slackCls(n.cpuSlackM)}>{slackLabel(n.cpuSlackM)} {fmtCores(n.cpuSlackM)}</span>
@@ -130,7 +132,7 @@ const NodeCard = memo(function NodeCard({ n, onRefresh, refreshing, onOpenDetail
   );
 });
 
-const CELL = 'px-3 py-2 border-t border-border align-middle';
+const CELL = 'px-1.5 py-0.5 border border-border align-middle';
 const NodeRowCells = memo(function NodeRowCells({ n, onRefresh, refreshing, onOpenDetail }: {
   n: AllocNodeRow; onRefresh: (name: string) => void; refreshing: boolean;
   onOpenDetail: (name: string) => void;
@@ -163,11 +165,11 @@ const NodeRowCells = memo(function NodeRowCells({ n, onRefresh, refreshing, onOp
       </td>
       <td className={CELL}>
         <MeterBar alloc={n.cpuAllocM} req={n.cpuReqM} lim={n.cpuLimM} usage={n.cpuUsageM}
-          reqDisplay={n.cpuReqDisplay} usageDisplay={n.cpuUsageDisplay} />
+          reqDisplay={n.cpuReqDisplay} usageDisplay={n.cpuUsageDisplay} unit="cpu" />
       </td>
       <td className={CELL}>
         <MeterBar alloc={n.memAllocB} req={n.memReqB} lim={n.memLimB} usage={n.memUsageB}
-          reqDisplay={n.memReqDisplay} usageDisplay={n.memUsageDisplay} />
+          reqDisplay={n.memReqDisplay} usageDisplay={n.memUsageDisplay} unit="mem" />
       </td>
       <td className={`${CELL} text-right tabular-nums`}>
         <div className={`font-medium ${slackCls(n.cpuSlackM)}`}>{fmtCores(n.cpuSlackM)}</div>
@@ -184,7 +186,7 @@ const NodeRowCells = memo(function NodeRowCells({ n, onRefresh, refreshing, onOp
 
 // ── react-virtuoso 래퍼(모듈 레벨 — 렌더마다 새 컴포넌트를 만들면 Virtuoso 가 리마운트) ───
 const TABLE_COMPONENTS: TableComponents<AllocNodeRow> = {
-  Table: ({ style, context: _context, ...props }) => <table {...props} style={style} className="w-full text-sm" />,
+  Table: ({ style, context: _context, ...props }) => <table {...props} style={style} className="w-full text-xs" />,
   TableRow: ({ item: _item, context: _context, ...props }) => <tr {...props} className="hover:bg-muted/10" />,
 };
 interface GridCtx { cols: number }
@@ -290,7 +292,7 @@ export function NodesView({ clusterId, clusterName, onOpenDetail, problemsOnly, 
     body = <div className="p-3"><EmptyState title="노드 없음" description="집계된 노드가 없습니다. 상단의 '다시 집계'로 집계를 시작하거나 클러스터 연결(kubeconfig)을 확인하세요." /></div>;
   } else if (!rows.length) {
     body = problemsOnly && !q.trim() ? (
-      <div className="p-6"><EmptyState title="문제 노드 없음" description="과할당·사용 초과·limit 근접·스케줄 중지 노드가 없습니다."
+      <div className="p-6"><EmptyState title="문제 노드 없음" description="과할당·limit 근접·스케줄 중지 노드가 없습니다."
         action={{ label: '전체 노드 보기', onClick: () => onProblemsOnly(false), variant: 'secondary' }} /></div>
     ) : (
       <div className="p-6"><EmptyState title="검색 결과 없음" description={`'${q}' 와 일치하는 노드가 없습니다${problemsOnly ? '(문제 노드만 보는 중)' : ''}.`}
@@ -327,7 +329,7 @@ export function NodesView({ clusterId, clusterName, onOpenDetail, problemsOnly, 
       />
     ) : (
       <div className="overflow-x-auto">
-        <table className="w-full text-sm">
+        <table className="w-full text-xs">
           <thead>{headerRow}</thead>
           <tbody>
             {rows.map((n) => (

@@ -356,6 +356,7 @@ hover 시 flyout 자체가 라벨을 보여주므로 이름만 뜨는 중복 툴
 > **허브로 통합(2026-10-22, D-240)**: 이 화면은 K8s 클러스터 허브 `/k8s/:clusterId/allocation` 의 서브뷰로 마운트된다. 옛 URL 은 그 뷰로 redirect(클러스터·쿼리 보존). 레일·h1·`PageShell` 은 허브가 그리고(`lib/k8sHub.ts` 컨텍스트), 아래 설명의 나머지는 그대로다.
 
 - **파일**: `frontend/src/pages/K8sAllocationPage.tsx`(페이지 셸 — 요약 스트립/진행 슬롯/sticky 탭/자동갱신/상세 다이얼로그 상태) + `frontend/src/components/k8s-allocation/`(`SummaryStrip`(압축 요약), `SummarySection`, `PodScheduleCalc`, `PodCapacityStatusCards`, `NodesView`, `NamespacesView`, `NsRankingView`, **`AllocDetailDialog`**(노드/NS 상세), 공용 `drilldown.tsx`(`WorkloadTable`/`WorkloadsDrill`/`PodsDrill`/`PodAllocTable`/`NodeWorkloadsDrill`)·`podGroup.ts`·`format.ts`/`primitives.tsx`/`tableSort.ts`), + `components/common/{EmptyState,Skeleton,SnapshotProgressCard,SnapshotProgressBar,ExportMenu}`.
+  - **수치 표기 토글 / 문제 Pod 팝업**: 헤더의 「사용량 · 사용률」 토글(localStorage `pep.k8s-allocation.metricMode`, 기본 사용량)이 `MetricModeContext` 로 요약 스트립·요약 카드·노드 게이지/미터·NS·워크로드 표의 수치를 코어·Gi ↔ % 로 전환한다. 「사용 초과/적정/request 과대」 판정 문구는 두지 않는다. 요약 스트립의 Pod 오류·Pod 대기·request 미설정 칩은 `ProblemPodsDialog` 를 열어 `GET /k8s/{id}/allocation/problem-pods` 목록을 보여준다.
 - **목적 / UX**: 노드/네임스페이스/워크로드별 request 대비 실사용량(slack)을 진단해 과할당(낭비) · 과사용(위험) 파드를 찾는 용량 계획 화면. "얼마나 더 스케줄할 수 있는가", "어디서 자원이 낭비되고 있는가"를 시각화.
 - **UI 구성**:
   - `ClusterSidebar` — `iconOnly` 단일 선택.

@@ -6224,3 +6224,24 @@ export interface NsMigRun {
   queuedAt: string | null; startedAt: string | null; finishedAt: string | null; durationMs: number;
   spec?: Partial<NsMigSpec>; logLines?: string; items?: { resources: NsMigItem[]; skipped: NsMigSkipped[] };
 }
+
+/** 자원 관리 요약 칩(Pod 오류·대기·request 미설정) 상세 팝업의 Pod 한 건. */
+export interface AllocProblemPod {
+  namespace: string;
+  name: string;
+  node: string | null;
+  phase: string;
+  /** 상태 사유(컨테이너 waiting reason·스케줄 실패 메시지 등). request 미설정 목록은 빈 문자열. */
+  reason: string;
+  restarts: number;
+  ownerKind: string | null;
+  ownerName: string | null;
+  createdAt: string | null;
+}
+export interface AllocProblemPodsResponse {
+  kind: 'error' | 'pending' | 'norequest';
+  total: number;
+  /** true 면 items 가 상한(500)에서 잘린 것 — total 이 전체 건수. */
+  truncated: boolean;
+  items: AllocProblemPod[];
+}
