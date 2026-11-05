@@ -84,27 +84,27 @@ export function TrendChart({ trend, days = 7, isError, error }: Props) {
         <ResponsiveContainer width="100%" height={220}>
           <LineChart data={data}>
             <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-            <XAxis dataKey="time" tick={{ fontSize: 10 }} />
+            <XAxis dataKey="time" tick={{ fontSize: 12 }} />
             <YAxis
               yAxisId="left"
-              tick={{ fontSize: 10 }}
+              tick={{ fontSize: 12 }}
               label={{
                 value: '이벤트 수',
                 angle: -90,
                 position: 'insideLeft',
-                style: { fontSize: 10, fill: 'hsl(var(--muted-foreground))' },
+                style: { fontSize: 12, fill: 'hsl(var(--muted-foreground))' },
               }}
               allowDecimals={false}
             />
             <YAxis
               yAxisId="right"
               orientation="right"
-              tick={{ fontSize: 10 }}
+              tick={{ fontSize: 12 }}
               label={{
                 value: '노드 수',
                 angle: 90,
                 position: 'insideRight',
-                style: { fontSize: 10, fill: 'hsl(var(--muted-foreground))' },
+                style: { fontSize: 12, fill: 'hsl(var(--muted-foreground))' },
               }}
               allowDecimals={false}
             />

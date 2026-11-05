@@ -206,7 +206,7 @@ Tailwind 기본 스케일을 그대로 쓰고, 역할마다 한 단계만 쓴다
 | 역할 | 클래스 | 비고 |
 |---|---|---|
 | 페이지 제목(h1) | `text-xl font-semibold` | `PageHeader` 만 그린다 — 화면당 1개 |
-| 카드 제목 | `text-xs font-semibold` (MacCard 헤더 내장) | 카드 안에 `<h2>` 를 중복하지 않는다 |
+| 카드 제목 | `text-sm font-semibold text-foreground` (MacCard 헤더 내장) | 카드 안에 `<h2>` 를 중복하지 않는다 |
 | 본문 | `text-sm` | 표·목록·폼 |
 | 보조·라벨 | `text-xs text-muted-foreground` | 최소 12px — `text-xs` 는 화면 밀도 설정(기본 13px)을 따른다. `text-[11px]` 금지 |
 | 큰 숫자 | `text-2xl`~`text-4xl font-semibold tabular-nums` | 사용처 없음(Health Hero 제거, D-239) |

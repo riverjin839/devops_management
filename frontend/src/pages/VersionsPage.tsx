@@ -572,8 +572,8 @@ function MinioTenantDetails({ data }: { data: Record<string, unknown> }) {
             Pools ({pools.length})
           </p>
           <DoubleScrollX className="rounded-md border border-border">
-            <table className="w-full text-xs">
-              <thead className="bg-muted/40">
+            <table className="w-full text-sm">
+              <thead className="bg-muted/40 text-xs text-muted-foreground">
                 <tr className="text-left">
                   <th className="px-2 py-1 font-medium">name</th>
                   <th className="px-2 py-1 font-medium">servers</th>
@@ -652,8 +652,8 @@ function DirectPVDetails({ data }: { data: Record<string, unknown> }) {
             노드별 ({nodes.length})
           </p>
           <div className="max-h-60 overflow-y-auto rounded-md border border-border">
-            <table className="w-full text-xs">
-              <thead className="bg-muted/40 sticky top-0">
+            <table className="w-full text-sm">
+              <thead className="bg-muted/40 text-xs text-muted-foreground sticky top-0">
                 <tr className="text-left">
                   <th className="px-2 py-1 font-medium">node</th>
                   <th className="px-2 py-1 font-medium">drives</th>

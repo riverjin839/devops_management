@@ -160,10 +160,10 @@ export function NodeLabelGroupView({ nodes, searchQuery }: Props) {
                   <div className="min-w-0">
                     <p className="text-sm font-mono text-foreground truncate" title={n.node}>{n.node}</p>
                     <div className="flex items-center gap-1.5 mt-0.5">
-                      <span className={`text-[9.5px] px-1.5 py-0.5 rounded ${
+                      <span className={`text-xs px-1.5 py-0.5 rounded ${
                         n.role === 'control-plane' ? 'bg-primary/10 text-primary' : 'bg-secondary text-muted-foreground'
                       }`}>{n.role}</span>
-                      <span className={`text-[9.5px] px-1.5 py-0.5 rounded ${
+                      <span className={`text-xs px-1.5 py-0.5 rounded ${
                         n.status === 'ready' ? 'bg-secondary text-muted-foreground' :
                         n.status === 'not-ready' ? 'bg-status-critical/15 text-status-critical' :
                         'bg-muted text-muted-foreground'

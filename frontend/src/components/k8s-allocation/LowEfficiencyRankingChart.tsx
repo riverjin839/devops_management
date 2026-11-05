@@ -46,11 +46,11 @@ export function LowEfficiencyRankingChart({ clusterId, range, metric, onPick }: 
             <ResponsiveContainer width="100%" height={240}>
               <LineChart data={data} margin={{ left: 4, right: 12, top: 8, bottom: 4 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-                <XAxis dataKey="label" tick={{ fontSize: 11, fill: 'hsl(var(--muted-foreground))' }} minTickGap={24} />
-                <YAxis tick={{ fontSize: 11, fill: 'hsl(var(--muted-foreground))' }} unit="%" width={48} domain={[0, 'auto']} />
+                <XAxis dataKey="label" tick={{ fontSize: 12, fill: 'hsl(var(--muted-foreground))' }} minTickGap={24} />
+                <YAxis tick={{ fontSize: 12, fill: 'hsl(var(--muted-foreground))' }} unit="%" width={48} domain={[0, 'auto']} />
                 <RechartsTooltip formatter={(v: number) => [`${v}%`, '사용효율(실사용 ÷ request)']}
                   contentStyle={{ fontSize: 12, borderRadius: 8, background: 'hsl(var(--card))', color: 'hsl(var(--foreground))', border: '1px solid hsl(var(--border))' }} />
-                <Legend wrapperStyle={{ fontSize: 11 }} />
+                <Legend wrapperStyle={{ fontSize: 12 }} />
                 {keys.map((k, i) => (
                   <Line key={k} type="monotone" dataKey={k} stroke={`hsl(var(${COLORS[i % COLORS.length]}))`} dot={false} strokeWidth={1.5} connectNulls />
                 ))}

@@ -41,7 +41,7 @@ export function HubTabs({ clusterId, views, active }: HubTabsProps) {
       />
       {siblings.length > 1 && (
         <SegTabs
-          mode="tabs" label={`${categories.find((c) => c.id === active.category)?.label ?? ''} 화면`}
+          mode="tabs" size="md" label={`${categories.find((c) => c.id === active.category)?.label ?? ''} 화면`}
           value={active.id} options={subOptions}
           onChange={go}
         />

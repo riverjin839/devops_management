@@ -80,8 +80,8 @@ export function NsTrendChart({ clusterId, range, metric, namespace, onNamespace 
             <ResponsiveContainer width="100%" height={240}>
               <LineChart data={data} margin={{ left: 4, right: 12, top: 8, bottom: 4 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-                <XAxis dataKey="label" tick={{ fontSize: 11, fill: 'hsl(var(--muted-foreground))' }} minTickGap={24} />
-                <YAxis tick={{ fontSize: 11, fill: 'hsl(var(--muted-foreground))' }} unit={` ${unit}`} width={64} />
+                <XAxis dataKey="label" tick={{ fontSize: 12, fill: 'hsl(var(--muted-foreground))' }} minTickGap={24} />
+                <YAxis tick={{ fontSize: 12, fill: 'hsl(var(--muted-foreground))' }} unit={` ${unit}`} width={64} />
                 <RechartsTooltip
                   formatter={(v: number, name) => [`${v} ${unit}`, name === 'req' ? 'request' : name === 'use' ? '실사용' : name === 'quota' ? 'Quota 한도' : 'Quota 사용']}
                   contentStyle={{ fontSize: 12, borderRadius: 8, background: 'hsl(var(--card))', color: 'hsl(var(--foreground))', border: '1px solid hsl(var(--border))' }}
