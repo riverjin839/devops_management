@@ -77,7 +77,7 @@ export function CheckMatrixHelpPanel({ open, onClose }: Props) {
           <div className="space-y-6">
             <Section title="이 화면은">
               <p>행은 <b>점검 항목</b>, 열은 <b>클러스터</b>, 셀은 그 클러스터에서 그 항목의 <b>가장 최근 판정</b>입니다.
-                항목은 영역(K8s·네트워크·스토리지·OS·애플리케이션)별로 묶이며, 경고·위험이 있는 영역은 처음부터 펼쳐집니다.</p>
+                항목은 영역(K8S·네트워크·스토리지·OS·애플리케이션)별로 묶이며, 경고·위험이 있는 영역은 처음부터 펼쳐집니다.</p>
             </Section>
             <Section title="처음 5분">
               <ol className="space-y-1.5">
@@ -128,7 +128,7 @@ export function CheckMatrixHelpPanel({ open, onClose }: Props) {
             <Section title="행(항목) 표시">
               <ul className="space-y-1.5">
                 <Row icon={<Lock className="w-3.5 h-3.5" />}>핵심 항목 — 클러스터 상태 계산에 쓰여 삭제할 수 없습니다(비활성으로 숨기기만 가능).</Row>
-                <Row icon={<span className="text-xs border border-border rounded px-1">kubectl</span>}>실행 기술 배지 — 이 점검이 무엇으로 도는지(K8s API/kubectl/HTTP/SSH/Ansible/수동).</Row>
+                <Row icon={<span className="text-xs border border-border rounded px-1">kubectl</span>}>실행 기술 배지 — 이 점검이 무엇으로 도는지(K8S API/kubectl/HTTP/SSH/Ansible/수동).</Row>
                 <Row icon={<span className="text-xs border border-border rounded px-1">중복</span>}>같은 대상(예: etcd)을 다른 실행 기술로도 점검하는 항목이 있다는 뜻입니다.</Row>
                 <Row icon={<span className="text-xs border border-border rounded px-1">꺼짐</span>}>비활성 항목 — 자동·일괄 실행에서 빠집니다. 기본으로 숨겨지며 표시 설정에서 보이게 할 수 있습니다.</Row>
               </ul>
@@ -155,7 +155,7 @@ export function CheckMatrixHelpPanel({ open, onClose }: Props) {
               <ul className="space-y-2.5">
                 <Row icon={<Play className="w-4 h-4" />}><b>셀 1개</b> — 셀에 마우스를 올리면 나오는 재생 아이콘, 또는 셀 상세 우측 상단 「지금 실행」.</Row>
                 <Row icon={<Play className="w-4 h-4" />}><b>클러스터 전체</b> — 열 머리글의 「전체」(재생 아이콘). 그 클러스터의 활성 자동 점검 항목 전부.</Row>
-                <Row icon={<Play className="w-4 h-4" />}><b>항목 전체</b> — 행의 「전 클러스터」(재생 아이콘). 실행 권한이 있는 클러스터 전부.</Row>
+                <Row icon={<Play className="w-4 h-4" />}><b>항목 전체</b> — 행 끝의 「⋯」 메뉴 → 「모든 클러스터에서 실행」. 실행 권한이 있는 클러스터 전부.</Row>
               </ul>
             </Section>
             <Section title="실시간 실행 로그">
@@ -196,8 +196,8 @@ export function CheckMatrixHelpPanel({ open, onClose }: Props) {
             </Section>
             <Section title="항목 관리">
               <ul className="space-y-2">
-                <Row icon={<Pencil className="w-4 h-4" />}>연필 — 이름·실행 소스·임계값/파라미터·영역·색·활성 여부 수정.</Row>
-                <Row icon={<Trash2 className="w-4 h-4" />}>휴지통 — 삭제(셀 값·이력·주기·실행 기록 함께 삭제). 잠시 빼 두려면 비활성으로 바꾸세요.</Row>
+                <Row icon={<Pencil className="w-4 h-4" />}>행 메뉴(⋯) → 「항목 수정」 — 이름·실행 소스·임계값/파라미터·영역·색·활성 여부 수정.</Row>
+                <Row icon={<Trash2 className="w-4 h-4" />}>행 메뉴(⋯) → 「삭제」 — 삭제(셀 값·이력·주기·실행 기록 함께 삭제). 잠시 빼 두려면 비활성으로 바꾸세요.</Row>
                 <Row icon={<GripVertical className="w-4 h-4" />}>그립 — 드래그하거나 키보드 ↑↓ 로 <b>같은 영역 안에서</b> 순서 변경. 다른 영역으로 옮기려면 항목의 영역을 바꿉니다.</Row>
                 <Row icon={<Plus className="w-4 h-4" />}>항목 이름을 누르면 <b>항목 상세</b> — 정의·테스트·클러스터별 실행 주기·실행 계획·실행 기록·추이를 한 화면에서 봅니다.</Row>
               </ul>
@@ -214,7 +214,7 @@ export function CheckMatrixHelpPanel({ open, onClose }: Props) {
             <Section title="보관 기간">
               <p className="flex items-start gap-2">
                 <Settings className="w-4 h-4 mt-0.5 flex-shrink-0 text-muted-foreground" />
-                <span>툴바 톱니바퀴 — 셀 값 이력과 실행 기록의 보관 일수(1~3650일, 기본 90일). 지난 기록은 매일 03:00 에 정리됩니다.</span>
+                <span>표시 설정(슬라이더 아이콘) → 「이력 보관 설정」 — 셀 값 이력과 실행 기록의 보관 일수(1~3650일, 기본 90일). 지난 기록은 매일 03:00 에 정리됩니다.</span>
               </p>
             </Section>
           </div>

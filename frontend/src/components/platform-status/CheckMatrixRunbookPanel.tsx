@@ -55,7 +55,7 @@ const KIND_META: Record<
   { label: string; icon: typeof Terminal; hint: string }
 > = {
   kubectl: { label: 'kubectl', icon: Terminal, hint: 'PEP 백엔드에서 kubectl 프로세스로 실행' },
-  k8s_api: { label: 'K8s API', icon: Server, hint: 'kubernetes SDK 로 API 서버 직접 호출' },
+  k8s_api: { label: 'K8S API', icon: Server, hint: 'kubernetes SDK 로 API 서버 직접 호출' },
   http: { label: 'HTTP', icon: Globe, hint: '대상 엔드포인트로 직접 HTTP 호출' },
   ssh: { label: 'SSH', icon: KeyRound, hint: '대상 장비에 SSH 접속해 읽기 명령 실행' },
   ansible: { label: 'Ansible', icon: Workflow, hint: '대상 인벤토리에 ansible-playbook 실행' },
