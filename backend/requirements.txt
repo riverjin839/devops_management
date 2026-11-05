@@ -7,6 +7,9 @@ pydantic==2.5.3
 pydantic-settings==2.1.0
 python-dotenv==1.0.0
 celery==5.3.6
+# celery 5.3.6 은 kombu 상한(<6)만 걸어 신규 빌드가 kombu 5.7.0 을 끌어온다 — 5.7.0 의 redis 트랜스포트는
+# redis-py>=6.1.0 을 요구해 redis==5.0.1 과 충돌(VersionMismatch → celery-worker/beat 기동 실패). 5.6.x 로 고정.
+kombu==5.6.2
 redis==5.0.1
 ansible-core==2.16.5
 httpx==0.26.0
