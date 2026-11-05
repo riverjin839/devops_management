@@ -587,7 +587,7 @@ export function WeeklyStatusTimeline({ items, isLoading, selectedClusterId }: We
                   <div className="px-4 py-2 min-w-0 flex flex-col justify-center">
                     <div className="flex items-center gap-1.5 min-w-0">
                       <Users className="w-3.5 h-3.5 flex-shrink-0 text-primary" />
-                      <span className={`text-[13px] truncate ${isTeamRow ? 'font-bold text-primary' : 'font-semibold'}`}>{name}</span>
+                      <span className={`text-xs truncate ${isTeamRow ? 'font-bold text-primary' : 'font-semibold'}`}>{name}</span>
                     </div>
                     <div className="flex items-center gap-1.5 mt-0.5 pl-5">
                       <p className="text-xs text-muted-foreground">{bars.length}건</p>

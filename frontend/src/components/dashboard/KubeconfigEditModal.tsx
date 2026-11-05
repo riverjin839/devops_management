@@ -102,7 +102,7 @@ export function KubeconfigEditModal({
           <button
             onClick={onClose}
             aria-label="닫기"
-            className="p-1.5 rounded-lg hover:bg-secondary transition-colors"
+            className="p-2 rounded-lg hover:bg-secondary transition-colors"
           >
             <X className="w-5 h-5" />
           </button>

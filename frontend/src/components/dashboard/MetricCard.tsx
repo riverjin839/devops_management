@@ -81,7 +81,7 @@ function GaugeDisplay({ value, thresholds, unit }: { value: number | null | unde
   return (
     <div className="space-y-2">
       <div className="flex items-baseline justify-between">
-        <span className={`text-2xl font-bold font-mono ${getThresholdColor(value, thresholds)}`}>
+        <span className={`text-2xl font-bold tabular-nums ${getThresholdColor(value, thresholds)}`}>
           {formatValue(value, unit)}
         </span>
       </div>
@@ -99,7 +99,7 @@ function GaugeDisplay({ value, thresholds, unit }: { value: number | null | unde
 function ValueDisplay({ value, thresholds, unit }: { value: number | null | undefined; thresholds?: string; unit: string }) {
   return (
     <div className="flex items-baseline gap-1">
-      <span className={`text-3xl font-bold font-mono ${getThresholdColor(value, thresholds)}`}>
+      <span className={`text-3xl font-bold tabular-nums ${getThresholdColor(value, thresholds)}`}>
         {formatValue(value, unit)}
       </span>
     </div>

@@ -193,7 +193,6 @@ export function ProvisionWizard({
   const problemsId = 'rbac-wizard-problems';
 
   return (
-    // eslint-disable-next-line jsx-a11y/no-static-element-interactions -- 폼 전체의 단축키(Ctrl+Enter) 위임
     <div className="space-y-3" onKeyDown={onFormKeyDown}>
       {/* 1. 프리셋 */}
       <MacCard title="권한 프리셋">

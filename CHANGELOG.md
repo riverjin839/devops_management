@@ -10,6 +10,9 @@
 
 1.87.0 이후 main 에 병합된 변경 (다음 릴리스 후보).
 
+### Changed
+- **대시보드 폴리시·타이포 정리**: 모달 그림자를 `shadow-card` 로 통일하고 닫기 버튼 클릭 영역을 키웠으며, 임의 px 글자 크기를 `text-xs` 로, 메트릭 수치의 `font-mono` 를 `tabular-nums` 로 바꿨다. Frontend: `components/dashboard/*`.
+
 ## [1.87.0] - 2026-11-05
 
 ### Added

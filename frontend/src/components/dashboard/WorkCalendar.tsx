@@ -298,7 +298,7 @@ export function WorkCalendar({ selectedClusterId }: WorkCalendarProps) {
 
                   {/* Day number row */}
                   <div className="relative flex items-start justify-between gap-1">
-                    <span className={`text-[12px] font-semibold tabular-nums leading-none ${dayNumberClr}`}>
+                    <span className={`text-xs font-semibold tabular-nums leading-none ${dayNumberClr}`}>
                       {d.getDate()}
                       {isToday && (
                         <span className="ml-1 align-super text-xs font-bold text-primary">today</span>

@@ -515,7 +515,7 @@ export function DayScheduleBoard({ selectedClusterId }: DayScheduleBoardProps) {
       <div className="flex-1 min-h-0 overflow-y-auto pr-1 -mr-1">
         {isLoading ? (
           <div className="space-y-2 pt-1">
-            {[...Array(6)].map((_, i) => <div key={i} className="h-12 rounded-xl bg-secondary/40 animate-pulse" />)}
+            {[...Array(6)].map((_, i) => <div key={i} className="h-12 rounded-md bg-secondary/40 animate-pulse" />)}
           </div>
         ) : isError ? (
           <div className="rounded-xl border border-status-critical/40 bg-status-critical/5 py-10 mt-2 text-center text-sm text-status-critical">
@@ -707,7 +707,7 @@ function SessionBox({
           )}
         </div>
         {!compact && (
-          <div className="flex items-center gap-1.5 mt-0.5 text-[9.5px] text-muted-foreground min-w-0">
+          <div className="flex items-center gap-1.5 mt-0.5 text-xs text-muted-foreground min-w-0">
             <span className={cn('w-3.5 h-3.5 rounded-full flex items-center justify-center text-[7px] font-bold flex-shrink-0', assigneeColor(primary))}>
               {primary.slice(0, 2).toUpperCase()}
             </span>
