@@ -55,6 +55,7 @@ import { K8sHubPage } from '@/pages/K8sHubPage';
 import { HomePage } from '@/pages/HomePage';
 import { IslandPage } from '@/pages/IslandPage';
 import { ChangePasswordPage } from '@/pages/ChangePasswordPage';
+import { ManualPage } from '@/pages/ManualPage';
 import { OidcCallbackPage } from '@/pages/OidcCallbackPage';
 import { DailyReportPage } from '@/pages/DailyReportPage';
 import { ExternalServicesPage } from '@/pages/ExternalServicesPage';
@@ -298,6 +299,9 @@ function AppShell() {
               {/* 사용자 관리(로그인 계정)는 Settings ▸ 시스템 담당자 ▸ 로그인 계정 서브탭으로 통합됨 */}
               <Route path="/settings/users" element={<Navigate to="/settings?tab=assignee" replace />} />
               <Route path="/me/change-password" element={<ChangePasswordPage />} />
+              {/* 사용 매뉴얼 — 각 화면 헤더의 「사용법」 링크가 여는 화면별 설명서(내용: manual/manuals.ts) */}
+              <Route path="/manual/:topic" element={<ManualPage />} />
+              <Route path="/manual" element={<ManualPage />} />
               {/* SSO 콜백 — 미로그인 땐 LoginPage 가 그린다. 이미 로그인된 탭으로 돌아온 경우만 여기. */}
               <Route path="/auth/callback" element={<OidcCallbackPage />} />
               <Route path="*" element={<Navigate to="/" replace />} />

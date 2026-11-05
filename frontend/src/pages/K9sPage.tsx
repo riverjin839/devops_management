@@ -327,7 +327,7 @@ export function K9sPage() {
           <PageHeader
             icon={ShipWheel}
             title="k9s 콘솔"
-            description="컨트롤 플레인 서버에 내장된 k9s 를 SSH 로 실행해 웹 터미널로 엽니다"
+            manual="k9s"
             actions={clusterId ? (
               <>
                 {/* 어느 클러스터에 어떤 위험 수준으로 붙는지 — 행동 지점(헤더)에 항상 보인다. 보호 레벨만 경고색. */}
@@ -374,7 +374,7 @@ export function K9sPage() {
               onRetry={() => { void clustersQ.refetch(); }}
             />
           ) : !clusterId ? (
-            <SelectClusterEmptyState description="좌측에서 클러스터를 고르면 k9s 접속 정보를 입력할 수 있습니다." />
+            <SelectClusterEmptyState description="좌측에서 클러스터를 선택하세요." />
           ) : session ? (
             <>
               {/* 세션 중에도 대상·옵션이 한눈에 보이도록 요약을 남긴다(폼은 접속 전에만 보인다). */}
@@ -393,10 +393,7 @@ export function K9sPage() {
                     </>
                   )}
                 </dl>
-                <p className="text-sm text-muted-foreground leading-relaxed">
-                  k9s 가 <b className="text-foreground">화면 위 창</b>으로 열려 있습니다. 상단바를 끌어 이동하고 우하단 모서리로 크기를 조절하세요.
-                  세션은 최대 1시간이며, 다른 메뉴로 이동하면 끊기므로 계속 쓰려면 창 상단바의 <b className="text-foreground">새 창으로 빼기</b>(별도 브라우저 창)를 쓰세요.
-                </p>
+                <p className="text-sm text-muted-foreground">다른 메뉴로 이동하면 세션이 끊깁니다.</p>
               </MacCard>
               {popoutNotice}
               <K9sTerminal
@@ -415,15 +412,6 @@ export function K9sPage() {
             </>
           ) : (
             <>
-              <details className="text-sm text-muted-foreground">
-                <summary className="cursor-pointer select-none hover:text-foreground">사전 조건 · 연결 방식 안내</summary>
-                <ul className="mt-2 list-disc pl-5 space-y-1 leading-relaxed">
-                  <li>컨트롤 플레인 서버에 <code className="font-mono">k9s</code> 가 설치되어 있고, 해당 계정의 <code className="font-mono">~/.kube/config</code> 로 클러스터에 접근할 수 있어야 합니다.</li>
-                  <li>SSH 인증정보는 이 세션에만 쓰이고 저장되지 않습니다(operator 이상 권한 필요). 호스트·계정·포트·네임스페이스만 클러스터별로 기억합니다.</li>
-                  <li><b className="text-foreground">연결</b>은 이 화면 위의 창으로, <b className="text-foreground">별도 창으로 연결</b>은 별도 브라우저 창으로 k9s 를 엽니다.</li>
-                </ul>
-              </details>
-
               {connectError && (
                 <p className="flex items-start gap-1.5 rounded-xl border border-status-critical/30 bg-status-critical/5 px-3 py-2 text-sm text-status-critical" role="alert">
                   <ShieldAlert className="w-4 h-4 mt-0.5 shrink-0" aria-hidden="true" /> {connectError}
@@ -469,7 +457,7 @@ export function K9sPage() {
 
                   <div>
                     <label htmlFor={`${f}-host`} className="block text-sm text-muted-foreground mb-1">
-                      호스트 직접 입력 <span className="text-xs text-muted-foreground">(비우면 위에서 고른 노드 사용)</span>
+                      호스트 직접 입력 <span className="text-xs text-muted-foreground">(비우면 선택한 노드)</span>
                     </label>
                     <input
                       id={`${f}-host`}
@@ -479,11 +467,6 @@ export function K9sPage() {
                       placeholder="예: 192.168.10.11"
                       className={`${inputCls} font-mono`}
                     />
-                    {customHost.trim() && (
-                      <p className="mt-1 text-xs text-muted-foreground">
-                        직접 입력한 호스트 <span className="font-mono text-foreground">{customHost.trim()}</span> 로 접속합니다 — 위에서 고른 노드는 무시됩니다.
-                      </p>
-                    )}
                   </div>
 
                   <div className="space-y-4">
@@ -496,7 +479,7 @@ export function K9sPage() {
                         className={inputCls}
                       />
                       {guarded && username.trim() === 'root' && (
-                        <p className="mt-1 text-xs text-status-warning">root 로 접속합니다 — 전용 운영 계정이 있으면 그 계정을 쓰세요.</p>
+                        <p className="mt-1 text-xs text-status-warning">root 로 접속합니다 — 전용 운영 계정을 권장합니다.</p>
                       )}
                     </div>
                     {/* 고급 — 포트·네임스페이스는 드물게 바꾸므로 접어 둔다. 기본값이 아니거나 포트가 잘못되면 펼쳐 둔다. */}
@@ -599,7 +582,7 @@ export function K9sPage() {
                         {guarded && <span className="text-xs font-normal text-muted-foreground"> · 보호 레벨 기본</span>}
                       </span>
                       <span className={`block text-xs ${readonly ? 'text-muted-foreground' : 'text-status-warning'}`}>
-                        {readonly ? '조회만 가능 — 편집·삭제·스케일·셸 진입이 막힙니다.' : 'k9s 에서 리소스를 수정·삭제하고 셸에 들어갈 수 있습니다.'}
+                        {readonly ? '조회만 가능' : '수정·삭제·스케일·셸 진입 가능'}
                       </span>
                     </label>
                   </div>
@@ -647,8 +630,8 @@ export function K9sPage() {
         open={pendingConnect !== null}
         title="보호 레벨 클러스터에 접속"
         description={levelUnknown
-          ? '운영레벨이 지정되지 않아 보호 레벨로 취급합니다. 접속 대상과 계정을 확인한 뒤 연결하세요.'
-          : '이 클러스터는 보호 레벨입니다. 접속 대상과 계정을 확인한 뒤 연결하세요.'}
+          ? '운영레벨 미지정 — 보호 레벨로 취급합니다.'
+          : '보호 레벨 클러스터입니다.'}
         confirmLabel={pendingConnect === 'popout' ? '새 창으로 연결' : '연결'}
         onCancel={() => setPendingConnect(null)}
         onConfirm={() => {
@@ -672,7 +655,7 @@ export function K9sPage() {
           )}
           <dt className="text-muted-foreground">읽기 전용</dt>
           <dd className={readonly ? 'text-foreground' : 'text-status-critical font-medium'}>
-            {readonly ? '켜짐 (--readonly)' : '꺼짐 — k9s 에서 리소스를 수정·삭제할 수 있습니다'}
+            {readonly ? '켜짐 (--readonly)' : '꺼짐 — 수정·삭제 가능'}
           </dd>
         </dl>
       </ConfirmDialog>
@@ -681,7 +664,7 @@ export function K9sPage() {
         open={confirmReadonlyOff}
         danger
         title="읽기 전용 해제"
-        description={`보호 레벨(${levelText}) 클러스터입니다. 읽기 전용을 끄면 k9s 에서 리소스 편집·삭제·스케일·셸 진입이 가능해집니다.`}
+        description={`보호 레벨(${levelText}) 클러스터에서 수정·삭제·셸 진입이 가능해집니다.`}
         confirmLabel="읽기 전용 끄기"
         onCancel={() => setConfirmReadonlyOff(false)}
         onConfirm={() => { setConfirmReadonlyOff(false); setReadonly(false); }}
@@ -692,7 +675,7 @@ export function K9sPage() {
         danger
         title="클러스터 전환"
         description={session
-          ? `연결된 SSH 세션을 끊습니다 — ${session.username}@${session.host}:${session.port}. 실행 중인 k9s 화면이 함께 종료됩니다.`
+          ? `SSH 세션(${session.username}@${session.host}:${session.port})과 실행 중인 k9s 가 종료됩니다.`
           : undefined}
         confirmLabel="세션 끊고 전환"
         onCancel={() => setPendingCluster(null)}

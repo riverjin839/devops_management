@@ -4,6 +4,7 @@ import { ArrowLeft } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useIsIslandEmbedded } from '@/lib/islandEmbed';
 import { useK8sHub } from '@/lib/k8sHub';
+import { ManualLink } from './ManualLink';
 
 interface PageHeaderProps {
   /** 페이지 제목 — 화면당 `<h1>` 은 이것 하나뿐이어야 한다. */
@@ -19,6 +20,8 @@ interface PageHeaderProps {
   /** 우측 액션 영역(선택). */
   actions?: ReactNode;
   className?: string;
+  /** 사용 매뉴얼 키(`manual/manuals.ts`) — 우측에 「사용법」 링크(새 탭)를 그린다. 화면 안 설명 문장 대신 쓴다. */
+  manual?: string;
   /** 제목 heading 레벨 — 기본 1. 다른 페이지 안에 임베드돼 바깥에 이미 `<h1>` 이 있을 때만 2 로 낮춘다
    *  (예: 홈 배치잡 탭의 `BatchJobsPage`, §12.12-1 — 화면당 h1 1개). 시각 크기는 같다.
    *  아일랜드 패널 안(`useIsIslandEmbedded()`)·K8s 클러스터 허브 안(`useK8sHub()`)에서는 지정하지 않으면 2 —
@@ -32,7 +35,7 @@ interface PageHeaderProps {
  * 또는 pill 모양 뒤로가기 + `text-lg font-semibold` 를 손으로 그려 h1 이 22가지 class 로 흩어져 있었다.
  * 제목 크기·굵기·아이콘 톤·뒤로가기 모양을 여기 한 곳에 고정한다.
  */
-export function PageHeader({ title, description, icon: Icon, back, titleExtra, actions, className, level }: PageHeaderProps) {
+export function PageHeader({ title, description, icon: Icon, back, titleExtra, actions, className, level, manual }: PageHeaderProps) {
   const embedded = useIsIslandEmbedded();
   const hub = useK8sHub();
   const Heading = (level ?? ((embedded || hub) ? 2 : 1)) === 2 ? 'h2' : 'h1';
@@ -57,7 +60,12 @@ export function PageHeader({ title, description, icon: Icon, back, titleExtra, a
           {description && <div className="text-sm text-muted-foreground mt-0.5">{description}</div>}
         </div>
       </div>
-      {actions && <div className="flex items-center gap-2 shrink-0 flex-wrap">{actions}</div>}
+      {(actions || manual) && (
+        <div className="flex items-center gap-2 shrink-0 flex-wrap">
+          {actions}
+          {manual && <ManualLink topic={manual} />}
+        </div>
+      )}
     </header>
   );
 }
