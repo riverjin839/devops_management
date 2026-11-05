@@ -151,6 +151,7 @@ export function K8sRbacPage() {
           <PageHeader
             icon={Shield}
             title="K8s 접근 권한"
+            manual="k8s-rbac"
             titleExtra={
               <span className="text-sm text-muted-foreground">
                 — <span className="font-medium text-foreground">{cluster?.name ?? '—'}</span>

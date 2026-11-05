@@ -225,6 +225,15 @@ hover 시 flyout 자체가 라벨을 보여주므로 이름만 뜨는 중복 툴
 - **요청사항 (수정 요청)**:
   - _(여기에 개선/수정 요청을 직접 적어주세요)_
 
+### 사용 매뉴얼 (`/manual`, `/manual/:topic`)
+
+- **파일**: `frontend/src/pages/ManualPage.tsx` + `frontend/src/manual/manuals.ts`(내용 원천) + `components/common/ManualLink.tsx`
+- **목적 / UX**: 화면 안에 설명 문장을 두지 않고, 각 화면 헤더의 「사용법」 링크(`PageHeader` `manual="<key>"` prop, 새 탭)로 연결하는 화면별 설명서. 터미널 세션·입력 중인 폼을 잃지 않도록 새 탭으로 연다.
+- **UI 구성**: `PageShell density="doc"`. `/manual` 은 매뉴얼 목록, `/manual/:topic` 은 목차(앵커) + 섹션별 `MacCard`(절차·목록·참고/주의). `#section-id` 앵커로 특정 섹션을 바로 연다. 없는 topic 은 EmptyState.
+- **Frontend**: 서버 호출 없음 — 정적 데이터(`MANUALS`). 새 매뉴얼은 `manuals.ts` 에 항목을 추가하고 해당 화면 `PageHeader` 에 `manual` 을 준다. 현재 `k9s`·`k8s-rbac`.
+- **Backend**: 없음. 사이드바 메뉴에는 넣지 않는다(화면 헤더 링크로만 진입).
+- **핵심 기능**: 화면 설명을 화면 밖으로 분리, 섹션 딥링크, 화면 → 매뉴얼 / 매뉴얼 → 화면 양방향 이동.
+
 ### 비밀번호 변경 (`/me/change-password`)
 
 - **파일**: `frontend/src/pages/ChangePasswordPage.tsx`

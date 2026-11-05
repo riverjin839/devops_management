@@ -179,7 +179,7 @@ export function ProvisionWizard({
   return (
     <div className="space-y-3">
       {/* 1. 프리셋 */}
-      <MacCard title="권한 프리셋" description="무엇을 할 수 있게 할 것인가 — 고른 뒤 아래 규칙 표에서 그대로 고칩니다">
+      <MacCard title="권한 프리셋">
         <div className="grid gap-2 [grid-template-columns:repeat(auto-fit,minmax(220px,1fr))]">
           {(catalog?.presets ?? []).map((p) => {
             const on = p.key === presetKey;
@@ -204,13 +204,10 @@ export function ProvisionWizard({
             );
           })}
         </div>
-        {preset && (
-          <p className="mt-3 text-xs text-muted-foreground leading-relaxed">{preset.description}</p>
-        )}
       </MacCard>
 
       {/* 2. 대상 */}
-      <MacCard title="대상" description="누구에게, 어느 네임스페이스에">
+      <MacCard title="대상">
         {namespacesError ? (
           <div role="alert" className="mb-3 flex items-start gap-2 rounded-md border border-status-critical/30 bg-status-critical/10 px-3 py-2 text-xs text-status-critical">
             <AlertTriangle className="w-3.5 h-3.5 mt-0.5 shrink-0" aria-hidden="true" />
@@ -343,7 +340,7 @@ export function ProvisionWizard({
       {/* 4. 규칙 */}
       <MacCard
         title="권한 규칙"
-        description={`실제로 적용될 규칙 — ${rulesTouched ? '프리셋에서 수정됨' : `프리셋: ${preset?.name ?? '—'}`}`}
+        description={rulesTouched ? '프리셋에서 수정됨' : `프리셋: ${preset?.name ?? '—'}`}
       >
         <RuleEditor
           rules={rules}
@@ -504,7 +501,7 @@ export function ProvisionWizard({
       <GrantRiskDialog
         open={confirming}
         title="넓은 권한을 발급할까요?"
-        description="아래 범위로 권한이 열립니다. kubeconfig 를 건넨 뒤에는 토큰을 되돌릴 수 없어, 회수하려면 ServiceAccount 탭에서 액세스를 회수해야 합니다."
+        description="발급한 토큰은 ServiceAccount 탭에서 액세스를 회수해야만 무효화됩니다."
         reasons={riskReasons}
         details={[
           { label: '대상', value: `${primaryNs}/${saName.trim()}` },
@@ -519,8 +516,7 @@ export function ProvisionWizard({
         onCancel={() => setConfirming(false)}
       >
         <p className="text-xs text-muted-foreground">
-          확신이 없으면 취소하고 <span className="text-foreground">모의 실행</span> 을 먼저 눌러 보세요 — 아무것도 만들지 않고
-          같은 로그를 냅니다.
+          확신이 없으면 <span className="text-foreground">모의 실행</span> 을 먼저 해 보세요 — 아무것도 만들지 않습니다.
         </p>
       </GrantRiskDialog>
     </div>
