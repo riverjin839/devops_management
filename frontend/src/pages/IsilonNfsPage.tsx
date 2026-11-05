@@ -1,20 +1,53 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useId, useMemo, useState } from 'react';
 import {
-  HardDrive, Plus, Pencil, ServerCog, AlertTriangle, Settings2, PlayCircle, Inbox,
+  HardDrive, Plus, Pencil, ServerCog, AlertTriangle, Settings2, Inbox, Play, Square, ListChecks, Terminal,
 } from 'lucide-react';
 import { MacCard } from '@/components/ui/MacCard';
 import { StatusBadge, StatusDot, statusToVariant, EmptyState, ErrorState, LoadingState, LogViewer, PageShell, RunLogPanel } from '@/components/common';
 import { useCanOperate } from '@/hooks/useCanOperate';
 import { useRunLog, runLogged, type RunLogEntry } from '@/hooks/useRunLog';
 import { useLogPref } from '@/hooks/useLogPref';
+import { useAbortableMutation } from '@/hooks/useAbortableMutation';
 import { PageHeader } from '@/components/common/PageHeader';
-import { IsilonServerModal, IsilonCommandManager, IsilonCommandSelector, ISILON_SECTION_LABEL } from '@/components/isilon';
-import { useIsilonServers, useRunIsilonCommands } from '@/hooks/useIsilonNfs';
+import { IsilonServerModal, IsilonCommandManager, ISILON_SECTION_LABEL } from '@/components/isilon';
+import { useIsilonServers, useIsilonCommands } from '@/hooks/useIsilonNfs';
 import { useClusters } from '@/hooks/useCluster';
 import { useTerminalEnvSync } from '@/hooks/useTerminalEnvSync';
+import { isilonNfsApi } from '@/services/api';
+import { formatApiError } from '@/lib/utils';
 import type {
-  IsilonServer, IsilonCommandResult, IsilonRunResponse, IsilonK8sNfsPv,
+  IsilonServer, IsilonCommand, IsilonCommandResult, IsilonRunResponse, IsilonK8sNfsPv,
 } from '@/types';
+
+function isAbortError(e: unknown): boolean {
+  const x = e as { name?: string; code?: string } | null;
+  return x?.name === 'CanceledError' || x?.code === 'ERR_CANCELED' || x?.name === 'AbortError';
+}
+
+/**
+ * 실행 API 가 AbortSignal 을 받지 않으므로 "중지"는 결과 대기만 끊는다(서버의 읽기전용 isi 명령은 끝까지 돈다).
+ * 중지 후 도착한 응답은 버려 화면 상태를 바꾸지 않는다.
+ */
+function raceAbort<T>(p: Promise<T>, signal: AbortSignal): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const onAbort = () => reject(new DOMException('사용자 중지', 'AbortError'));
+    if (signal.aborted) { onAbort(); return; }
+    signal.addEventListener('abort', onAbort, { once: true });
+    void p.then(resolve, reject).finally(() => signal.removeEventListener('abort', onAbort));
+  });
+}
+
+/** 글로벌 기본 + 서버 오버라이드를 key 기준으로 병합(서버 전용 우선), enabled 만, sortOrder 순 — 백엔드 `effective_commands` 와 동일한 규칙. */
+function mergeEffective(commands: IsilonCommand[]): IsilonCommand[] {
+  const byKey = new Map<string, IsilonCommand>();
+  for (const c of commands) {
+    const existing = byKey.get(c.key);
+    if (!existing || (existing.serverId == null && c.serverId != null)) byKey.set(c.key, c);
+  }
+  return [...byKey.values()]
+    .filter((c) => c.enabled)
+    .sort((a, b) => (a.sortOrder - b.sortOrder) || a.key.localeCompare(b.key));
+}
 
 export function IsilonNfsPage() {
   const {
@@ -29,11 +62,18 @@ export function IsilonNfsPage() {
   const runLog = useRunLog();
   const { clear: clearRunLog } = runLog;
   const [showLog, setShowLog] = useLogPref('isilon-nfs-run');
+  const fid = useId();
 
   // 서버가 tied 된 K8s 클러스터가 없는 서버 스코프 화면이라 항상 전역 기본(dev) 프로파일 —
   // 그래도 콘솔 화면 표준(§12.6 rule 4)에 맞춰 최상단에서 호출한다.
   const { data: clusters = [] } = useClusters();
   useTerminalEnvSync(clusters, null);
+
+  const runMut = useAbortableMutation({
+    mutationFn: ({ serverId, keys }: { serverId: string; keys: string[] }, signal: AbortSignal) =>
+      raceAbort(isilonNfsApi.runCommands(serverId, keys).then((r) => r.data), signal),
+  });
+  const { abort: abortRun } = runMut;
 
   // 서버 목록 로드 시 기본 선택 — 선택한 서버가 목록에서 사라지면(삭제 등) 기본 서버로 다시 고른다.
   // 조회 실패 중에는 servers 가 빈 기본값이라 선택을 건드리지 않는다.
@@ -44,15 +84,17 @@ export function IsilonNfsPage() {
     if (next !== selectedId) setSelectedId(next);
   }, [servers, selectedId, loadingServers, serversError]);
 
-  // 서버를 바꾸면 이전 서버의 선택/결과를 들고 있지 않는다.
+  // 서버를 바꾸면 이전 서버의 선택/결과/진행 중 대기를 들고 있지 않는다.
   useEffect(() => {
+    abortRun();
     setSelectedKeys(new Set());
     setRunResult(null);
     clearRunLog();
-  }, [selectedId, clearRunLog]);
+  }, [selectedId, clearRunLog, abortRun]);
 
   const selected = servers.find((s) => s.id === selectedId);
-  const runMut = useRunIsilonCommands();
+  const commandsQ = useIsilonCommands(selectedId, !!selectedId);
+  const effective = useMemo(() => mergeEffective(commandsQ.data ?? []), [commandsQ.data]);
 
   const toggleKey = (key: string) => {
     setSelectedKeys((prev) => {
@@ -62,18 +104,26 @@ export function IsilonNfsPage() {
     });
   };
 
+  const canRun = canOperate && !!selectedId && selectedKeys.size > 0 && !runMut.isPending;
+
+  // 등록된 읽기전용 isi 명령(allowlist)만 고르므로 확인 모달 없이 바로 실행한다(§12.6.1 동작 규칙 1).
   const handleRun = async () => {
-    if (!canOperate || !selectedId || selectedKeys.size === 0) return;
+    if (!canRun || !selectedId) return;
     const keys = [...selectedKeys];
     const target = selected ? `${selected.name} (${selected.username}@${selected.host}:${selected.port})` : selectedId;
     const r = await runLogged(runLog, {
       title: 'Isilon 명령 실행',
       first: `${target} — 명령 ${keys.length}개 실행 요청: ${keys.join(', ')}`,
-      fn: (): Promise<IsilonRunResponse> => runMut.mutateAsync({ serverId: selectedId, keys }),
+      fn: () => runMut.mutateAsync({ serverId: selectedId, keys }),
       summarize: isilonRunLines,
     });
     if (r.ok) setRunResult(r.data);
   };
+
+  // 오류 표시는 실행 로그 error 줄 + 실행 바 위 alert 한 곳(§12.6.1 동작 규칙 4).
+  const runErr = runMut.error && !isAbortError(runMut.error) ? formatApiError(runMut.error) : null;
+  const alertText = runErr
+    ?? (runResult && runResult.connectionOk === false ? `SSH 접속 실패 — ${runResult.connectionError ?? '사유 미상'}` : null);
 
   return (
     <div className="app-min-h-screen bg-background">
@@ -92,6 +142,7 @@ export function IsilonNfsPage() {
                 <button
                   key={s.id}
                   onClick={() => setSelectedId(s.id)}
+                  aria-pressed={selectedId === s.id}
                   className={`w-full text-left rounded-xl px-2.5 py-2 border transition ${selectedId === s.id ? 'border-primary bg-primary/5' : 'border-transparent hover:bg-muted'}`}
                 >
                   <div className="flex items-center gap-1.5">
@@ -115,8 +166,9 @@ export function IsilonNfsPage() {
         </div>
 
         {/* 본문 */}
-        <div className="flex-1 min-w-0 space-y-4">
+        <div className="flex-1 min-w-0">
           <PageHeader
+            className="mb-3"
             icon={HardDrive}
             title="NFS 모니터링 (Isilon)"
             description="K8s 가 쓰는 NFS 를 NAS 서버 쪽에서 점검 · 읽기전용/무부하 · 선택한 명령만 실행"
@@ -138,54 +190,37 @@ export function IsilonNfsPage() {
             />
           ) : selected ? (
             <>
-              {/* 서버 헤더 — 헤더만 감싸던 카드를 걷고 구분선 한 줄로(§12.12-4) */}
-              <div className="pb-3 border-b border-border">
-                <div className="flex flex-wrap items-center gap-3">
-                  <div className="min-w-0">
-                    <div className="flex items-center gap-2">
-                      <h2 className="text-sm font-semibold">{selected.name}</h2>
-                      <button onClick={() => setServerModal({ open: true, edit: selected })}
-                        disabled={!canOperate}
-                        className="text-muted-foreground hover:text-foreground disabled:opacity-50 disabled:cursor-not-allowed"
-                        title={withHint('서버 편집')} aria-label={ariaWithHint('서버 편집')}>
-                        <Pencil className="w-3.5 h-3.5" aria-hidden />
-                      </button>
-                    </div>
-                    <span className="text-xs text-muted-foreground">{selected.username}@{selected.host}:{selected.port}</span>
-                  </div>
-                  <div className="ml-auto flex items-center gap-3">
-                    {runResult?.executedAt && (
-                      <span className="text-xs text-muted-foreground">
-                        마지막 실행 {new Date(runResult.executedAt).toLocaleTimeString()}
-                      </span>
-                    )}
-                    <ConnBadge runResult={runResult} running={runMut.isPending} />
-                  </div>
+              {/* 대상 요약 한 줄 — 서버 이름·접속 계정·편집 + 접속 상태(§12.6.1 "요약 한 줄") */}
+              <div className="mb-3 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
+                <h2 className="font-semibold">{selected.name}</h2>
+                <button onClick={() => setServerModal({ open: true, edit: selected })}
+                  disabled={!canOperate}
+                  className="text-muted-foreground hover:text-foreground disabled:opacity-50 disabled:cursor-not-allowed"
+                  title={withHint('서버 편집')} aria-label={ariaWithHint('서버 편집')}>
+                  <Pencil className="w-3.5 h-3.5" aria-hidden />
+                </button>
+                <span className="text-xs font-mono text-muted-foreground">{selected.username}@{selected.host}:{selected.port}</span>
+                <div className="ml-auto flex items-center gap-3">
+                  {runResult?.executedAt && (
+                    <span className="text-xs text-muted-foreground">
+                      마지막 실행 {new Date(runResult.executedAt).toLocaleTimeString()}
+                    </span>
+                  )}
+                  <ConnBadge runResult={runResult} running={runMut.isPending} />
                 </div>
-                {runResult?.connectionError && (
-                  <div className="mt-3 text-sm text-status-critical flex items-start gap-1"><AlertTriangle className="w-3.5 h-3.5 mt-0.5 shrink-0" aria-hidden="true" />{runResult.connectionError}</div>
-                )}
-                {runResult?.skippedKeys && runResult.skippedKeys.length > 0 && (
-                  <p className="mt-2 text-xs text-status-warning">등록/활성화되지 않아 건너뜀: {runResult.skippedKeys.join(', ')}</p>
-                )}
               </div>
 
-              {/* K8s NFS PV ↔ export 매칭 (직전 실행에 exports 명령이 포함된 경우에만 채워짐) */}
-              <MacCard title="K8s 가 사용하는 NFS (PV ↔ Isilon export)">
-                <K8sNfsTable runResult={runResult} />
-              </MacCard>
-
-              {/* 실행 로그 — 요청·대기·명령별 결과 요약·실패 사유(본문 출력은 우측 실행 결과). */}
-              <RunLogPanel run={runLog} show={showLog} onShowChange={setShowLog} maxHeight="max-h-56" />
-
-              {/* 좌(명령 선택) / 우(결과) 한 로우 고정 — 콘솔 화면 표준(§12.6) */}
-              <div className="grid grid-cols-1 lg:grid-cols-10 gap-4 items-start">
+              {/* 로그 중심 콘솔(§12.6.1) — 좌: 명령 선택 + 하단 고정 실행 바, 우: 실행 로그(3) + 결과(2). */}
+              <div className="grid grid-cols-1 lg:grid-cols-[320px_minmax(0,1fr)] gap-3 lg:h-[calc(100vh-var(--topbar-h)-10rem)] lg:min-h-[480px]">
                 <MacCard
                   title="명령 선택"
-                  rootClassName="lg:col-span-4 min-w-0"
-                  bodyPadding="p-4"
+                  titleExtra={selectedKeys.size > 0 ? <span className="text-xs text-muted-foreground tabular-nums">{selectedKeys.size}개 선택</span> : undefined}
+                  rootClassName="min-w-0 flex flex-col lg:min-h-0"
+                  bodyPadding="p-0"
+                  className="flex flex-col flex-1 min-h-0"
                   actions={
                     <button
+                      type="button"
                       onClick={() => setCmdOpen(true)}
                       // viewer 도 명령 정의는 볼 수 있게 연다 — 안의 추가·저장·삭제가 비활성+사유(§12.9).
                       title={canOperate ? 'isi 명령 등록·수정·비활성' : 'isi 명령 보기 (등록·수정은 operator 이상)'}
@@ -195,18 +230,109 @@ export function IsilonNfsPage() {
                     </button>
                   }
                 >
-                  <IsilonCommandSelector
-                    serverId={selectedId}
-                    selectedKeys={selectedKeys}
-                    onToggle={toggleKey}
-                    onSelectAll={(keys) => setSelectedKeys(new Set(keys))}
-                    onClear={() => setSelectedKeys(new Set())}
-                    onRun={handleRun}
-                    running={runMut.isPending}
-                  />
+                  <div
+                    className="flex-1 min-h-0 overflow-y-auto px-4 py-3 space-y-3"
+                    onKeyDown={(e) => { if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') { e.preventDefault(); void handleRun(); } }}
+                  >
+                    <p id={`${fid}-hint`} className="text-xs text-muted-foreground">
+                      등록된 읽기전용 isi 명령 중 선택합니다(복수 선택 가능). 확인 없이 바로 실행됩니다.
+                    </p>
+                    {commandsQ.isLoading ? (
+                      <LoadingState compact />
+                    ) : commandsQ.isError ? (
+                      <ErrorState compact error={commandsQ.error} title="명령 목록을 불러오지 못했습니다" onRetry={() => { void commandsQ.refetch(); }} />
+                    ) : effective.length === 0 ? (
+                      <EmptyState
+                        compact
+                        icon={ListChecks}
+                        title="활성화된 명령이 없습니다"
+                        description="명령 관리에서 isi 명령을 등록하거나 활성화하면 여기서 골라 실행할 수 있습니다."
+                      />
+                    ) : (
+                      <>
+                        <div className="flex items-center gap-2">
+                          <button type="button" onClick={() => setSelectedKeys(new Set(effective.map((c) => c.key)))}
+                            className="text-xs px-2 py-1 rounded-xl border border-border hover:bg-muted">
+                            전체 선택
+                          </button>
+                          <button type="button" onClick={() => setSelectedKeys(new Set())} disabled={selectedKeys.size === 0}
+                            className="text-xs px-2 py-1 rounded-xl border border-border hover:bg-muted disabled:opacity-50">
+                            선택 해제
+                          </button>
+                        </div>
+                        <ul aria-describedby={`${fid}-hint`} className="space-y-1.5">
+                          {effective.map((c) => (
+                            <li key={c.key}>
+                              <label aria-label={c.label} className="flex items-start gap-2 rounded-xl border border-border px-2.5 py-2 hover:bg-muted transition cursor-pointer">
+                                <input
+                                  type="checkbox"
+                                  checked={selectedKeys.has(c.key)}
+                                  onChange={() => toggleKey(c.key)}
+                                  className="mt-0.5 accent-primary"
+                                />
+                                <div className="min-w-0 flex-1">
+                                  <div className="flex items-center gap-1.5">
+                                    <span className="text-sm font-medium truncate">{c.label}</span>
+                                    <span className="ml-auto shrink-0 text-xs px-1.5 py-0.5 rounded bg-muted text-muted-foreground">
+                                      {ISILON_SECTION_LABEL[c.section] ?? c.section}
+                                    </span>
+                                  </div>
+                                  <code className="block text-xs text-muted-foreground truncate mt-0.5" title={c.command}>{c.command}</code>
+                                </div>
+                              </label>
+                            </li>
+                          ))}
+                        </ul>
+                      </>
+                    )}
+                  </div>
+
+                  {/* 실행 바 — 스크롤과 무관하게 항상 보인다. 실행 중에는 중지로 바뀐다. */}
+                  <div className="border-t border-border p-3 space-y-2">
+                    {alertText && (
+                      <div role="alert" className="px-3 py-2 text-sm rounded-md bg-status-critical/10 text-status-critical border border-status-critical/30 break-words">
+                        {alertText}
+                      </div>
+                    )}
+                    {runMut.isPending ? (
+                      <button
+                        type="button"
+                        onClick={abortRun}
+                        title="결과 대기를 멈춥니다 (서버의 읽기전용 명령은 끝까지 수행됩니다)"
+                        className="w-full flex items-center justify-center gap-2 px-5 py-2.5 text-sm font-semibold bg-secondary hover:bg-secondary/80 text-foreground border border-border rounded-xl transition-colors"
+                      >
+                        <Square className="w-4 h-4 fill-current" aria-hidden="true" />
+                        중지
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => { void handleRun(); }}
+                        disabled={!canRun}
+                        title={withHint('선택한 명령 실행')}
+                        aria-label={ariaWithHint(`선택 실행 (${selectedKeys.size})`)}
+                        className="w-full flex items-center justify-center gap-2 px-5 py-2.5 text-sm font-semibold bg-primary hover:bg-primary/90 text-primary-foreground rounded-xl transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        <Play className="w-4 h-4" aria-hidden="true" />
+                        선택 실행 ({selectedKeys.size})
+                      </button>
+                    )}
+                    <p className="text-center text-xs text-muted-foreground">
+                      <kbd className="px-1 rounded border border-border bg-secondary">Ctrl</kbd>+<kbd className="px-1 rounded border border-border bg-secondary">Enter</kbd> 로도 실행
+                    </p>
+                  </div>
                 </MacCard>
 
-                <RunResultPanel runResult={runResult} running={runMut.isPending} />
+                {/* 우: 실행 로그(중심) + 결과 — 항상 같은 위치, 실행 전엔 대기 상태 */}
+                <div className="min-w-0 min-h-0 flex flex-col gap-3">
+                  <div className="flex flex-col min-h-[240px] lg:min-h-0 flex-[3]">
+                    {/* 요청·대기·명령별 결과 요약·실패 사유 — 명령 출력 본문은 아래 결과 카드 */}
+                    <RunLogPanel run={runLog} show={showLog} onShowChange={setShowLog} fill />
+                  </div>
+                  <div className="flex flex-col min-h-[200px] lg:min-h-0 flex-[2]">
+                    <RunResultPanel runResult={runResult} running={runMut.isPending} />
+                  </div>
+                </div>
               </div>
             </>
           ) : null}
@@ -282,23 +408,14 @@ function pathServed(pvPath: string, exportPaths: string[]): boolean {
   });
 }
 
-function K8sNfsTable({ runResult }: { runResult: IsilonRunResponse | null }) {
-  const pvs: IsilonK8sNfsPv[] = runResult?.k8sNfsPvs ?? [];
-  const exportPaths = useMemo(() => extractExportPaths(runResult?.results), [runResult]);
-  // 빈 상태 3분기(D-147) — 미실행 / K8s 조회 실패 / NFS PV 없음 을 한 문장에 섞지 않는다.
-  if (!runResult) {
-    return (
-      <EmptyState
-        compact
-        icon={PlayCircle}
-        title="아직 실행 전입니다"
-        description="아래에서 명령을 하나 이상 실행하면 관리 클러스터의 NFS PV 목록을 함께 조회합니다."
-      />
-    );
-  }
+function K8sNfsTable({ runResult }: { runResult: IsilonRunResponse }) {
+  const pvs: IsilonK8sNfsPv[] = runResult.k8sNfsPvs ?? [];
+  const exportPaths = useMemo(() => extractExportPaths(runResult.results), [runResult]);
+  // 빈 상태 분기(D-147) — K8s 조회 실패 / NFS PV 없음 을 한 문장에 섞지 않는다(미실행은 결과 카드 플레이스홀더).
+  // 조회 실패는 실행 로그 warn 줄에도 남으므로 여기선 alert 를 또 걸지 않는다(오류 표시 한 곳).
   if (runResult.k8sNfsPvsError) {
     return (
-      <div role="alert" className="flex items-start gap-2 text-sm text-status-critical">
+      <div className="flex items-start gap-2 text-sm text-status-critical">
         <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0" aria-hidden="true" />
         <div className="min-w-0">
           <p className="font-medium">K8s PV 조회 실패 — PV ↔ export 매칭을 할 수 없습니다</p>
@@ -354,16 +471,17 @@ function K8sNfsTable({ runResult }: { runResult: IsilonRunResponse | null }) {
   );
 }
 
-// 결과는 실행 전에도 같은 자리(우측)에 플레이스홀더로 존재 — 콘솔 화면 표준(§12.6 rule 1).
-// 로그 출력은 항상 LogViewer(plain <pre> 금지, rule 3).
+// 결과는 실행 전에도 같은 자리(우 하단)에 플레이스홀더로 존재 — §12.6.1.
+// 스크롤은 카드 본문 한 겹뿐 — 안쪽 LogViewer 에 max-h 를 또 걸지 않는다. 로그 출력은 항상 LogViewer(plain <pre> 금지).
 function RunResultPanel({ runResult, running }: { runResult: IsilonRunResponse | null; running: boolean }) {
   if (!runResult && !running) {
     return (
-      <div className="lg:col-span-6 min-w-0 flex items-center justify-center min-h-[200px] lg:h-[calc(100vh-360px)]">
+      <div className="min-w-0 flex-1 flex items-center justify-center min-h-[120px] rounded-md border border-border">
         <EmptyState
           compact
+          icon={Terminal}
           title="아직 실행 결과가 없습니다."
-          description="왼쪽에서 isi 명령을 선택하고 실행하면 결과가 여기에 표시됩니다."
+          description="왼쪽에서 isi 명령을 선택하고 실행하면 명령 출력과 K8s PV ↔ export 매칭이 여기에 표시됩니다."
         />
       </div>
     );
@@ -373,17 +491,23 @@ function RunResultPanel({ runResult, running }: { runResult: IsilonRunResponse |
     <MacCard
       title="실행 결과"
       titleExtra={results.length > 0 ? <span className="text-xs text-muted-foreground tabular-nums">{results.length}건</span> : undefined}
-      rootClassName="lg:col-span-6 min-w-0 flex flex-col lg:h-[calc(100vh-360px)]"
+      rootClassName="min-w-0 flex flex-col flex-1 min-h-0"
       bodyPadding="p-0"
       className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden"
     >
-      {running && !runResult ? (
+      {!runResult ? (
         <LoadingState label="실행 중…" />
-      ) : results.length === 0 ? (
-        <EmptyState compact title="실행된 명령 결과가 없습니다." description="선택한 명령이 결과를 반환하지 않았습니다. 명령 선택을 확인하고 다시 실행하세요." />
       ) : (
         <div className="divide-y divide-border">
-          {results.map((r) => <ResultBlock key={r.key} result={r} />)}
+          <section className="p-4 space-y-2" aria-label="K8s 가 사용하는 NFS">
+            <p className="text-xs font-medium text-muted-foreground">K8s 가 사용하는 NFS (PV ↔ Isilon export)</p>
+            <K8sNfsTable runResult={runResult} />
+          </section>
+          {results.length === 0 ? (
+            <div className="p-4">
+              <EmptyState compact title="실행된 명령 결과가 없습니다." description="선택한 명령이 결과를 반환하지 않았습니다. 명령 선택을 확인하고 다시 실행하세요." />
+            </div>
+          ) : results.map((r) => <ResultBlock key={r.key} result={r} />)}
         </div>
       )}
     </MacCard>
@@ -406,7 +530,7 @@ function ResultBlock({ result }: { result: IsilonCommandResult }) {
         <span className="ml-auto text-muted-foreground shrink-0">{result.durationMs}ms</span>
       </div>
       {content
-        ? <LogViewer text={content} maxHeight="max-h-72" asError={!result.ok} />
+        ? <LogViewer text={content} maxHeight="max-h-none" asError={!result.ok} />
         : <p className="text-xs text-muted-foreground">출력 없음</p>}
     </div>
   );

@@ -1,11 +1,12 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Settings2, Plus, Trash2, RotateCcw, Save, Loader2, Megaphone, X } from 'lucide-react';
+import { AlertTriangle, Settings2, Plus, Trash2, RotateCcw, Save, Loader2, Megaphone, X } from 'lucide-react';
 import { mcApi, type McPreset } from '@/services/api';
 import type { McEffectivePreset, McPresetSource } from '@/types';
 import { EmptyState, ErrorState, useToast } from '@/components/common';
 import { formatApiError } from '@/lib/utils';
 import { maskCommand } from '@/lib/commandMask';
+import { judgeCommand } from '@/lib/dangerCommand';
 
 const SOURCE_BADGE: Record<McPresetSource, { label: string; cls: string }> = {
   builtin:  { label: '기본',  cls: 'bg-chart-8/10 text-chart-8-text border-chart-8/30' },
@@ -91,6 +92,12 @@ export function McPresetManager({
             }`} />
             <span className="sr-only">{SOURCE_BADGE[p.source].label} 프리셋:</span>
             {p.label}
+            {!judgeCommand(p.args, 'mc').readOnly && (
+              <>
+                <AlertTriangle className="w-3 h-3 text-status-critical" aria-hidden="true" />
+                <span className="sr-only"> (변경 명령)</span>
+              </>
+            )}
           </button>
         ))}
       </div>

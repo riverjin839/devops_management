@@ -979,12 +979,11 @@ hover 시 flyout 자체가 라벨을 보여주므로 이름만 뜨는 중복 툴
 
 - **파일**: `frontend/src/pages/BulkExecPage.tsx` (+ `components/common/{ConfirmDialog,LogViewer,DebugLogPanel,ResizeGrip,DoubleScrollX}`, `components/bulk-exec/{SavedScriptPanel,SavedScriptEditorModal}`)
 - **목적 / UX**: 여러 클러스터의 여러 노드를 한 번에 선택해 SSH 명령 실행 또는 SCP 파일 업로드를 병렬/순차로 수행하고, 결과를 요약/상세 뷰로 확인·필터링·내보내기(CSV/TXT/클립보드)한다. 운영자가 대규모 노드에 동일 작업을 배포할 때 쓰는 실행 콘솔.
-- **UI 구성**: mc 클라이언트 콘솔처럼 **[타겟 노드 | 명령 메뉴 | 실행 결과]** 를 한 로우(`lg:grid-cols-12`, 3:4:5)에 나란히 배치. 결과 컬럼은 항상 우측 같은 자리에 고정되고(실행 전엔 플레이스홀더), 컬럼 내부에서만 스크롤된다.
+- **UI 구성**: **로그 중심 실행 화면(DESIGN_SYSTEM §12.6.1)**. 상단 `명령 실행 (SSH)` / `파일 업로드 (SCP)` 탭(role=tablist·방향키) 아래 `[320px 제어 | 실행 로그(3) + 결과(2)]` 2열을 뷰포트 높이에 고정한다. 결과는 탭별로 보관.
   - `ClusterSidebar` — `multiSelect` + `iconOnly` (다중 선택 패턴, `selectedIds`/`onMultiSelectChange`)
-  - 타겟 노드(3): 클러스터별로 묶인 노드 체크박스 목록(`ClusterNodeGroup`, 클러스터별 접기/전체선택)
-  - 명령 메뉴(4): action(ssh/scp) 토글, 병렬/순차 모드, 인증(비밀번호/PrivateKey), 명령/업로드 내용(ssh 모드는 bash/python 언어 토글 포함), 타임아웃/청크 설정
-  - 실행 결과(5): 요약 테이블 `SummaryResultsTable` ↔ 상세 테이블 토글, 공통 필터, CSV/TXT/클립보드 내보내기. 상세 뷰 노드 확장 시 stdout/stderr 는 `ExecOutputTabs`(탭 + 결과 유무 dot·라인수) 로 표시.
-  - 실행 확인 `ConfirmDialog`. `useTerminalEnvSync` 로 선택 클러스터 운영등급 → 터미널 Appearance(개발/운영) 자동 적용(다중 선택은 하나라도 운영이면 ops).
+  - 좌 제어: 접이식 **대상·인증**(요약 한 줄 `root@노드 N개:22 · 비밀번호` — 클러스터별 노드 체크박스 `ClusterNodeGroup`(목록만 제한 높이 스크롤) + 사용자/포트/인증 방식/보이는 라벨의 자격증명) → 명령(bash/python, `SavedScriptPanel`, 입력 중 `조회 명령`/`변경 명령` 배지) 또는 SCP 원격 경로·내용(파일/다른 노드에서 불러오기·로컬 저장) → 접이식 **고급 설정**(병렬/순차·동시성·제한 시간·묶음) → 하단 고정 실행 바(실행↔중지, `role="alert"` 오류 한 곳, `Ctrl/⌘+Enter`).
+  - 우: `RunLogPanel fill`(실행 전에도 대기 상태로 표시, "로그 보기" 토글) + 결과 카드(실행 전 `EmptyState`; 요약 `SummaryResultsTable` ↔ 상세 테이블, 공통 필터, CSV/TXT/클립보드 — 스크롤은 카드 내부 한 겹, 상세 행 `ExecOutputTabs` 는 `max-h-none`).
+  - 확인: bash 조회 명령(`judgeCommand(…, 'shell')`)은 확인 없이 바로 실행, 그 밖의 bash·python 스크립트·SCP 업로드만 `ConfirmDialog danger`(사유 1줄). 오류는 실행 로그 + 실행 바 alert, 토스트는 403 만. `useTerminalEnvSync` 로 선택 클러스터 운영등급 → 터미널 Appearance(개발/운영) 자동 적용(다중 선택은 하나라도 운영이면 ops).
 - **Frontend**: `useClusters()`, `useQueries`로 선택된 클러스터별 노드 목록 병렬 조회(`bulkExecApi.nodeList`), `useAbortableMutation`으로 `bulkExecApi.run`. 저장 스크립트는 `useSavedScripts`/`useCreateSavedScript`/`useUpdateSavedScript`/`useDeleteSavedScript`(TanStack Query, `savedScriptsApi`). 로컬 state: `clusterIds`(다중), `selected`(Set, `clusterId::nodeName` 키), `language`(bash/python), 실행 옵션 다수. 호출 함수: `bulkExecApi.nodeList`, `bulkExecApi.run`.
 - **Backend**: `GET /api/v1/clusters/{cluster_id}/node-list`, `POST /api/v1/bulk-exec/run` — `backend/app/routers/bulk_exec.py`. `require_operator` 권한 필요, `app/services/ssh_runner.py`(`SSHTarget`, `run_bulk`)로 paramiko 기반 SSH/SCP 실행(병렬/청크 단위), `app/services/audit_logger`로 감사 로그 기록. `language="python"` 이면 `app/services/script_wrap.py`(순수 함수)가 스크립트 본문을 `python3 - <<'DELIM' ... DELIM` heredoc 으로 감싸 원격 실행 — 실행 자체는 여전히 DB 모델 없이 휘발성. 저장 스크립트 CRUD 는 `GET/POST /api/v1/saved-scripts`, `GET/PUT/DELETE /api/v1/saved-scripts/{id}` — `backend/app/routers/saved_scripts.py` + `SavedScript` 모델(사용자별, `username` 소유권 검사). SCP 업로드 내용을 다른 노드에서 읽어오는 `POST /api/v1/bulk-exec/fetch-file`(`require_operator`) 는 `ssh_runner.fetch_remote_file`(SFTP pull, UTF-8 텍스트·2MB 상한)을 씀 — 결과는 응답으로만 반환(비저장), 감사 로그에 `bulk_exec.fetch_file` 로 기록.
 - **핵심 기능**:
@@ -1150,9 +1149,9 @@ hover 시 flyout 자체가 라벨을 보여주므로 이름만 뜨는 중복 툴
 - **목적 / UX**: 선택한 노드 여러 대에 SSH로 접속해 sysctl/conntrack/ulimit/디스크·IO/커널모듈/시간동기화 등을 **읽기 전용**으로 일괄 조회한다. 인증정보는 저장되지 않고 실행에만 사용됨을 명시.
 - **UI 구성**:
   - `ClusterSidebar`는 `iconOnly` 단일선택(`allowAll` 없음).
-  - 좌: 노드 체크리스트(ready 상태 dot + role 배지, 전체선택 토글).
-  - 우: 프리셋 그리드(OS/Kernel 정보, sysctl-net/mem/fs, conntrack, limits, memory, disk-io, kernel-modules, time-sync) + 직접 입력(`SavedCommands` 연동), 인증(user/port/password|key), 실행모드(병렬/순차).
-  - 결과: 노드별 접이식 `ResultCard`(exit code, stdout/stderr `LogViewer`, 노드 전체 공통 필터, 전체 펼침/접힘), 실행 전 `ConfirmDialog`.
+  - **로그 중심 실행 화면(§12.6.1, 2026-11-05)**: 좌 320px `제어` 카드 — 접히는 `대상·인증`(노드 체크리스트·사용자/포트·인증·병렬/순차, 접으면 요약 한 줄) + 프리셋 목록(OS/Kernel 정보, sysctl-net/mem/fs, conntrack, limits, memory, disk-io, kernel-modules, time-sync) + 직접 입력(`SavedCommands`, 입력 중 `조회 명령`/`변경 명령` 배지, Ctrl/⌘+Enter) + 하단 고정 실행 바(실행↔중지, `role="alert"` 한 개).
+  - 우: 상단 `RunLogPanel fill`(flex 3, 실행 전 대기 상태) / 하단 노드별 결과(flex 2, 실행 전 플레이스홀더, 카드 내부 한 겹 스크롤 — `ExecOutputTabs max-h-none`, 공통 필터·전체 펼침/접힘). 결과는 프리셋별로 보관하고 클러스터 전환 시에만 비운다.
+  - 프리셋·조회 명령은 확인 없이 바로 실행, 변경 명령만 danger `ConfirmDialog`. 토스트는 403 만.
 - **Frontend**: `useClusters`, `useQuery(['bulk-exec','nodes',clusterId])` → `bulkExecApi.nodeList`; `useAbortableMutation` → `bulkExecApi.run({action:'ssh', ...})`.
 - **Backend**: `GET /api/v1/clusters/{cluster_id}/node-list`, `POST /api/v1/bulk-exec/run` — 라우터 `backend/app/routers/bulk_exec.py`. 전용 DB 모델 없음(상태 비저장 SSH 병렬 실행, 결과는 응답으로만 반환).
 - **핵심 기능**:
@@ -1198,8 +1197,8 @@ hover 시 flyout 자체가 라벨을 보여주므로 이름만 뜨는 중복 툴
 - **UI 구성**:
   - `ClusterSidebar`는 `allowAll={false}` + `iconOnly` 단일선택.
   - 상태 스트립(Cilium 설치여부/버전, Agent Pod 수, Hubble Relay 여부, Trace 가용성).
-  - 3-tab 구조: **BPF Inspector**(kind 선택 + agent pod 검색(`SearchableSelect`) + JSON 테이블/raw 출력, ad-hoc `cilium-dbg` 명령은 `RoleGate allow={['admin','operator']}`로만 노출 + 프리셋 저장), **Cilium Monitor**(SSE 스트림, type 필터 팝오버, related-to 필터, 일시정지/비우기), **Hubble Flows**(from/to pod·namespace·protocol·verdict 필터 + datalist 자동완성, SSE 스트림).
-  - 3개 탭 모두 mc 클라이언트 콘솔과 동일한 **좌(컨트롤 4) / 우(결과·로그 6) 10컬럼 그리드** — 결과/로그 카드가 컨트롤 아래가 아닌 우측 같은 라인에 고정되고(실행 전에는 플레이스홀더), lg 이상에서 내부 스크롤 높이를 `calc(100vh-…)`로 키워 세로 공간을 활용한다. BPF raw/직접명령 출력은 `LogViewer`(터미널 Appearance·필터·복사 적용), `useTerminalEnvSync` 로 운영등급 → Appearance 자동 전환.
+  - 4-tab 구조: **BPF 맵 조회**(맵 선택 + endpoint ID → JSON 표/raw, 내보내기), **직접 명령**(`cilium-dbg` 하위 명령 + 입력 중 `조회 명령`/`변경 명령` 배지 + 프리셋 선택·저장 — BPF 조회와 에이전트 선택 공유), **Cilium 모니터**(유형 필터 팝오버, related-to), **Hubble 흐름**(from/to pod·namespace·protocol·verdict 라벨 입력 + datalist 자동완성). 한 번 연 탭은 마운트를 유지해 모드별 결과·진행 중 스트림이 탭 전환으로 사라지지 않는다.
+  - **로그 중심 실행 화면(DESIGN_SYSTEM §12.6.1, 2026-11-05)**: 좌 320px 제어(접히는 `대상 에이전트` 섹션 + 요약 한 줄, 하단 고정 실행 바 — 실행 ↔ 중지, 스트림은 일시정지·비우기) / 우 상단 `RunLogPanel fill`(전 탭 공유, 스트림도 시작·첫 이벤트·서버 종료·오류·중지를 기록) + 하단 결과(실행 전 플레이스홀더, 카드 내부 스크롤 한 겹). 조회는 확인 없이 실행, 읽기 전용 목록 밖 직접 명령만 danger 확인. 오류는 실행 로그 + 실행 바 `role="alert"` 한 곳(403 만 토스트). BPF raw/직접 명령 출력은 `LogViewer`, `useTerminalEnvSync` 로 운영등급 → Appearance 자동 전환.
 - **Frontend**: `useClusters`/`useClusterStore`; 로컬 `ciliumApi`(`api.get/post` 래퍼, `/cilium/{clusterId}/status|agents|bpf-inspect|bpf-inspect/download|exec-command`) + 자체 `startSseStream`(fetch 기반, Authorization 헤더 포함 SSE 파서, `/cilium/{clusterId}/monitor/stream`·`/hubble/stream`); `useCommands`/`useCreateCommand`(category=`cilium` 프리셋); `useAnalyzeNamespaces`/`useAnalyzePods`(Hubble 자동완성용, `analyzeApi`).
 - **Backend**: `GET /api/v1/cilium/{cluster_id}/status`, `GET .../agents`, `POST .../bpf-inspect`(JSON 으로 파싱되면 원본은 응답에서 빼고 `raw_omitted`/`raw_size` 만), `POST .../bpf-inspect/download`(원본 파일 스트리밍 — 내보내기 버튼, 워커 메모리에 모으지 않음), `POST .../exec-command`, `GET .../monitor/stream`(SSE), `GET .../hubble/stream`(SSE) — 라우터 `backend/app/routers/cilium_trace.py`. 프리셋은 `commands.py`(`CommandEntry` 모델) 재사용. 전용 영속 모델 없음(라이브 조회/스트림).
 - **핵심 기능**:
@@ -1338,8 +1337,8 @@ hover 시 flyout 자체가 라벨을 보여주므로 이름만 뜨는 중복 툴
 - **목적 / UX**: MinIO `mc` CLI가 설치된 노드에 SSH로 접속해 `mc admin info`, `mc ls`, `mc mirror`, `mc policy set` 등 명령을 실행하는 스토리지 운영 콘솔. alias는 사전에 `mc alias set`으로 구성되어 있어야 하며, `{alias}` 플레이스홀더로 프리셋에서 치환.
 - **UI 구성**:
   - `ClusterSidebar`는 `iconOnly` 단일선택.
-  - 10-컬럼 그리드: 좌(2) 타겟+인증(노드 선택 select + 수동 host override, user/port, password|key), 중(3) `McPresetManager`(개인/공유 프리셋) + alias/mc경로/인자 입력(`SavedCommands`) + timeout, 우(5) 결과 패널(항상 고정 위치, executed + `ExecOutputTabs` stdout/stderr 탭).
-  - 위험 명령(`rm`/`mirror`/`admin service stop|restart`/`policy set`/`admin user remove` 등 정규식 매칭) 감지 시 `ConfirmDialog`를 `danger` 스타일로 강조.
+  - **로그 중심 실행 화면(DESIGN_SYSTEM §12.6.1, 2026-11-05)**: 좌 320px `제어` 카드 = 접이식 `대상·인증`(노드 select + host 직접 입력, user/port, 비밀번호|개인키 — 보이는 라벨, 접으면 `root@host:22 · 비밀번호` 요약) + `McPresetManager` + 인자(`Ctrl/⌘+Enter` 실행, `SavedCommands`) + 접이식 `고급 설정`(alias·mc 경로·제한 시간) + 하단 고정 실행 바(실행↔중지, `role="alert"` 오류 1개). 우 = 실행 로그 `RunLogPanel fill`(flex 3, 실행 전 대기 표시, "로그 보기" `useLogPref('mc-client-run')`) + 결과(flex 2, 실행 전 플레이스홀더, `ExecOutputTabs max-h-none` — 스크롤 1겹). 뷰포트 고정 높이.
+  - `judgeCommand(…,'mc')` 조회 명령은 확인 없이 바로 실행, 변경 명령만 `ConfirmDialog danger`. 입력 중 `조회 명령`/`변경 명령` 배지(`aria-live`). 오류는 실행 로그 + alert, 토스트는 403 만.
   - 선택 클러스터의 `operationLevel`에 따라 터미널 테마가 자동 전환(`useTerminalEnvSync` 공용 훅).
 - **Frontend**: `useClusters`; `useQuery(['bulk-exec','nodes',clusterId])` → `bulkExecApi.nodeList`(노드목록 재사용); `useMutation` → `mcApi.run`; `useAuthStore`(admin 여부로 프리셋 공유 편집 권한), `useTerminalEnvSync`.
 - **Backend**: `POST /api/v1/clusters/{cluster_id}/mc/run`, `GET /api/v1/clusters/{cluster_id}/mc/presets`, `GET/PUT /api/v1/mc/presets/personal`, `GET/PUT /api/v1/mc/presets/shared` — 라우터 `backend/app/routers/mc_client.py`. 노드 목록은 `GET /api/v1/clusters/{cluster_id}/node-list`(`bulk_exec.py` 재사용). 전용 실행결과 영속 모델 없음(온디맨드 SSH 실행).
@@ -1358,14 +1357,13 @@ hover 시 flyout 자체가 라벨을 보여주므로 이름만 뜨는 중복 툴
 
 - **파일**: `frontend/src/pages/IsilonNfsPage.tsx` (+ `components/isilon/IsilonServerModal.tsx`, `components/isilon/IsilonCommandManager.tsx`, `components/isilon/IsilonCommandSelector.tsx`)
 - **목적 / UX**: K8s 가 마운트해서 쓰는 NFS 를 Isilon(OneFS) NAS **서버 쪽**에서 점검. SSH 로 `isi` 명령을 실행해 Export/마운트 가용성·쿼터/용량·클라이언트/성능·노드 health 를 수집하고, K8s PV(`spec.nfs`) ↔ Isilon export 매칭(누락 감지)을 보여준다. **NAS 무부하**가 최우선 — 읽기전용 명령만·SSH 세션 1개 직렬 실행·자동 일괄 수집 없음(mc 클라이언트 콘솔 패턴 — 등록된 명령 중 사용자가 선택한 것만 온디맨드 실행, 캐시 미사용).
-- **UI 구성** (콘솔 화면 표준 §12.6 준용 — 좌: 서버, 중: 명령 선택, 우: 결과):
-  - 좌측 서버 레일(Isilon 서버 목록, status dot + 기본 배지) + "서버 추가" 버튼. 클러스터가 아닌 **서버 스코프**라 `ClusterSidebar` 대신 전용 서버 레일 사용.
-  - 본문: 서버 헤더(접속 상태·마지막 실행시각) → "K8s 가 사용하는 NFS(PV↔export)" 매칭 테이블(직전 실행에 `exports` 명령이 포함된 경우 채워짐) → 좌(명령 선택)/우(결과) 한 로우 그리드.
-  - `IsilonCommandSelector`(중): 등록된(글로벌+서버 오버라이드 병합, `enabled` 만) `isi` 명령을 체크박스로 나열, 전체선택/선택해제 + "선택 실행(N)" 버튼. mc 클라이언트의 프리셋 선택과 동일하게 **중복 선택 가능**, 자동 일괄 실행 없음. "명령 관리" 버튼으로 `IsilonCommandManager` CRUD 모달을 연다.
-  - 결과(우): 실행 전에도 같은 자리에 플레이스홀더 고정, 실행 후 명령별 결과 블록(ok/error `StatusBadge` + 실행 명령 + duration + `LogViewer` 출력, plain `<pre>` 미사용)을 내부 스크롤로 표시.
+- **UI 구성** (로그 중심 실행 화면 §12.6.1 — 좌: 서버 레일, 중(320px): 명령 선택 + 하단 고정 실행 바, 우: 실행 로그(flex 3) + 결과(flex 2)):
+  - 좌측 서버 레일(Isilon 서버 목록, status dot + 기본 배지) + "서버 추가" 버튼. 클러스터가 아닌 **서버 스코프**라 `ClusterSidebar` 대신 전용 서버 레일 사용. 본문 상단은 대상 요약 한 줄(서버명·편집·`user@host:port`·마지막 실행·접속 배지).
+  - 명령 선택(중): 등록된(글로벌+서버 오버라이드 병합, `enabled` 만) 읽기전용 `isi` 명령 체크박스(페이지 안에서 렌더 — `IsilonCommandSelector` 는 페이지 미사용), 전체 선택/선택 해제, "명령 관리"(`IsilonCommandManager`). allowlist 라 확인 모달·조회/변경 배지 없음. 하단 실행 바: "선택 실행(N)" ↔ 실행 중 "중지"(실행 API 가 signal 을 받지 않아 결과 대기만 끊음) + `Ctrl/⌘+Enter`. 오류는 실행 로그 + 바 위 `role="alert"` 한 곳.
+  - 우: `RunLogPanel fill`(실행 전에도 대기 상태, "로그 보기" 토글 `useLogPref`) 아래 결과 카드 — 실행 전 플레이스홀더, 실행 후 "K8s 가 사용하는 NFS(PV↔export)" 매칭 + 명령별 결과 블록(`StatusBadge` + 명령 + duration + `LogViewer`)을 카드 내부 한 겹 스크롤로 표시.
   - `IsilonServerModal`: host/port/user/비밀번호|PEM 키 + 연결 테스트. 자격증명은 암호화 저장, 응답엔 `hasPassword`/`hasPrivateKey` 플래그만.
   - `IsilonCommandManager`: `isi` 명령 등록/편집/삭제(글로벌 기본 + 서버 전용). 변경 동사·셸 메타문자·`--repeat` 등은 저장이 422 로 거부됨(부하 보호). builtin 은 비활성만(삭제 불가).
-- **Frontend**: `useIsilonServers`/`useIsilonCommands`/`useRunIsilonCommands`(선택 실행) + CRUD/test 뮤테이션(`hooks/useIsilonNfs.ts`), `isilonNfsApi`(`services/api.ts`), 타입은 `types/index.ts`(`IsilonServer`/`IsilonCommand`/`IsilonRunResponse` 등). 페이지 최상단에서 `useTerminalEnvSync` 호출(서버 스코프라 클러스터 tie 없이 전역 기본 프로파일).
+- **Frontend**: `useIsilonServers`/`useIsilonCommands` + 선택 실행은 페이지의 `useAbortableMutation`(`isilonNfsApi.runCommands`) + CRUD/test 뮤테이션(`hooks/useIsilonNfs.ts`), `isilonNfsApi`(`services/api.ts`), 타입은 `types/index.ts`(`IsilonServer`/`IsilonCommand`/`IsilonRunResponse` 등). 페이지 최상단에서 `useTerminalEnvSync` 호출(서버 스코프라 클러스터 tie 없이 전역 기본 프로파일).
 - **Backend**: `GET/POST/PUT/DELETE /api/v1/isilon-nfs/servers` (+ `/servers/{id}/test`), `GET/POST/PUT/DELETE /api/v1/isilon-nfs/commands`, `GET /api/v1/isilon-nfs/overview`(레거시 일괄 수집, 페이지 미사용·캐시 유지), `POST /api/v1/isilon-nfs/servers/{id}/run`(선택 키만 캐시 없이 온디맨드 실행) — 라우터 `backend/app/routers/isilon_nfs.py`. 수집·검증·캐시는 `services/isilon_service.py`(`collect_nfs_snapshot` / `run_selected_commands`), 모델 `models/isilon_server.py`(`IsilonServer`/`IsilonCommand`, 자격증명 `secret_box` 암호화 + 백업 마스킹). 같은 수집을 쓰는 `isilon_nfs` deep checker(`services/registered_checks/isilon_nfs_checker.py`, registry 등록, `collect_nfs_snapshot` 재사용)가 운영 점검 콘솔/cron 에도 노출(기본 비활성).
 - **핵심 기능**:
   - SSH 기반 `isi` 명령 선택 실행(비밀번호/PEM 키), 읽기전용·무부하 보장.

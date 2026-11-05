@@ -3,13 +3,13 @@ import { useQueries } from '@tanstack/react-query';
 import { useAbortableMutation } from '@/hooks/useAbortableMutation';
 import {
   Terminal, RefreshCw, Play, Square, CheckCircle2, XCircle, AlertTriangle, Key, Upload, ChevronDown, ChevronRight,
-  Wifi, FileText, ShieldAlert, Zap, Clock, Download, LayoutList, Rows, Server, FolderInput, Loader2, X,
+  Wifi, FileText, ShieldAlert, Zap, Clock, Download, LayoutList, Rows, Server, FolderInput, X,
 } from 'lucide-react';
 import { useClusters } from '@/hooks/useCluster';
 import { useTerminalEnvSync } from '@/hooks/useTerminalEnvSync';
 import { useRunLog, runLogged, consoleRunLines, type RunLogEntry } from '@/hooks/useRunLog';
 import { useLogPref } from '@/hooks/useLogPref';
-import { ConfirmDialog, ExecOutputTabs, ClusterSidebar, CommandTraceList, DebugLogPanel, Skeleton, EmptyState, ErrorState, SelectClusterEmptyState, ResizeGrip, DoubleScrollX, PageShell, RunLogPanel } from '@/components/common';
+import { ConfirmDialog, ExecOutputTabs, ClusterSidebar, CommandTraceList, DebugLogPanel, Skeleton, EmptyState, ErrorState, SelectClusterEmptyState, ResizeGrip, DoubleScrollX, PageShell, RunLogPanel, useToast } from '@/components/common';
 import { CLUSTER_OPERATE_REQUIRED_HINT, useCanOperate, useMyClusterAccess } from '@/hooks/useCanOperate';
 import { MacCard } from '@/components/ui/MacCard';
 import { PageHeader } from '@/components/common/PageHeader';
@@ -18,6 +18,7 @@ import { SavedScriptPanel } from '@/components/bulk-exec';
 import { useColumnWidths } from '@/hooks/useColumnWidths';
 import { bulkExecApi, type NodeSummary, type BulkExecResponse, type BulkExecResultItem, type FetchFileResponse } from '@/services/api';
 import { formatApiError } from '@/lib/utils';
+import { judgeCommand, type CommandVerdict } from '@/lib/dangerCommand';
 import type { ScriptLanguage } from '@/types';
 
 // ── 상태 색상 ───────────────────────────────────────────────────────────────
@@ -234,17 +235,23 @@ function NodeRow({ node, checked, onToggle }: { node: NodeSummary; checked: bool
         onChange={onToggle}
         className="w-4 h-4 accent-primary flex-shrink-0"
       />
-      <div className="flex items-center gap-2 flex-1 min-w-0">
-        <span className={`w-2 h-2 rounded-full flex-shrink-0 ${node.ready ? 'bg-muted-foreground/40' : 'bg-status-critical'}`} />
-        <span className="font-mono text-sm text-foreground truncate">{node.name}</span>
-        <span className="text-sm font-mono text-muted-foreground">{host}</span>
-        {node.roles.map((r) => (
-          <span key={r} className="text-xs px-1.5 py-0.5 rounded bg-secondary text-muted-foreground">{r}</span>
-        ))}
+      {/* 좌측 제어 열(320px)에 맞춰 두 줄 — 이름 / IP·역할·kubelet 버전 */}
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center gap-2 min-w-0">
+          <span className={`w-2 h-2 rounded-full flex-shrink-0 ${node.ready ? 'bg-muted-foreground/40' : 'bg-status-critical'}`} aria-hidden />
+          <span className="font-mono text-sm text-foreground truncate">{node.name}</span>
+          {!node.ready && <span className="sr-only">(NotReady)</span>}
+        </div>
+        <div className="flex items-center gap-1.5 flex-wrap pl-4 mt-0.5">
+          <span className="text-xs font-mono text-muted-foreground">{host}</span>
+          {node.roles.map((r) => (
+            <span key={r} className="text-xs px-1.5 rounded bg-secondary text-muted-foreground">{r}</span>
+          ))}
+          {node.kubeletVersion && (
+            <span className="text-xs font-mono text-muted-foreground">{node.kubeletVersion}</span>
+          )}
+        </div>
       </div>
-      {node.kubeletVersion && (
-        <span className="text-xs font-mono text-muted-foreground">{node.kubeletVersion}</span>
-      )}
     </label>
   );
 }
@@ -303,7 +310,7 @@ function ResultRow({ result, globalFilter }: { result: BulkExecResultItem; globa
             <ExecOutputTabs
               stdout={result.stdout}
               stderr={result.stderr}
-              maxHeight="max-h-72"
+              maxHeight="max-h-none"
               filterOverride={globalFilter || undefined}
               hideToolbar={!!globalFilter.trim()}
             />
@@ -443,6 +450,21 @@ const splitKey = (k: string): { clusterId: string; nodeName: string } => {
   return i < 0 ? { clusterId: '', nodeName: k } : { clusterId: k.slice(0, i), nodeName: k.slice(i + SEP.length) };
 };
 
+type Action = 'ssh' | 'scp';
+
+/** 권한 부족(403)만 토스트로 알린다 — 그 밖의 실패는 실행 로그의 error 줄과 실행 바의 알림 한 곳으로 모은다(§12.6.1). */
+function toastForbidden(toast: ReturnType<typeof useToast>, title: string, error: unknown) {
+  const status = (error as { response?: { status?: number } } | null)?.response?.status;
+  if (status === 403) toast.error(`${title} — 권한이 없습니다`, formatApiError(error));
+}
+
+const INPUT = 'w-full px-3 py-2 text-sm bg-background border border-border rounded-xl focus:outline-none focus:ring-1 focus:ring-primary';
+const SMALL_INPUT = 'w-full px-2 py-1.5 text-sm bg-background border border-border rounded-xl focus:outline-none focus:ring-1 focus:ring-primary';
+const LABEL = 'block text-sm text-muted-foreground mb-1';
+const SEG_BTN = (on: boolean) => `px-2 py-1.5 text-sm font-medium rounded-md transition-colors ${
+  on ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
+}`;
+
 export function BulkExecPage() {
   const {
     data: clusters = [],
@@ -450,6 +472,7 @@ export function BulkExecPage() {
     error: clustersErrorObj,
     refetch: refetchClusters,
   } = useClusters();
+  const toast = useToast();
   // 다중 클러스터 선택 — 사이드바에서 체크박스로 고른다
   const [clusterIds, setClusterIds] = useState<string[]>([]);
   const detailColW = useColumnWidths('bulk-exec-detail-table', {
@@ -536,7 +559,7 @@ export function BulkExecPage() {
   const f = (k: string) => `${fid}-${k}`;
 
   // 실행 구성
-  const [action, setAction] = useState<'ssh' | 'scp'>('ssh');
+  const [action, setAction] = useState<Action>('ssh');
   const [username, setUsername] = useState('root');
   const [port, setPort] = useState(22);
   const [authMode, setAuthMode] = useState<'password' | 'key'>('password');
@@ -552,6 +575,7 @@ export function BulkExecPage() {
   const [execTimeout, setExecTimeout] = useState(60);
   const [chunkSize, setChunkSize] = useState(30);
   const [chunkPauseMs, setChunkPauseMs] = useState(200);
+  const [targetOpen, setTargetOpen] = useState(true);
 
   // 선택된 클러스터별로 노드를 그룹화 → 화면 렌더 + 페이로드 빌드 양쪽에서 재사용
   const clusterSections = useMemo(() => {
@@ -604,7 +628,11 @@ export function BulkExecPage() {
     return list;
   }, [clusterSections]);
 
-  const [runResponse, setRunResponse] = useState<BulkExecResponse | null>(null);
+  // 결과는 모드(SSH/SCP)별로 보관한다 — 업로드 탭을 잠깐 보고 돌아와도 방금 받은 명령 결과가 남는다(§12.6.1-3).
+  // label 은 내보내기(CSV/TXT) 머리글에 쓰는 "무엇을 실행했나" — 실행 시점 값으로 고정한다.
+  const [results, setResults] = useState<Record<Action, { response: BulkExecResponse; label: string } | null>>({ ssh: null, scp: null });
+  const current = results[action];
+  const runResponse = current?.response ?? null;
 
   const runMutation = useAbortableMutation({
     mutationFn: async (_: void, signal) => {
@@ -674,29 +702,33 @@ export function BulkExecPage() {
     onError: (err) => { setFetchError(formatApiError(err)); setFetchTrace(null); },
   });
 
-  // 실행 수명주기 로그(일괄 실행·파일 가져오기 공유) — 호스트별 출력은 결과 패널, 여기는 요청·대기·호스트별 상태·실패 사유.
+  // 실행 수명주기 로그(일괄 실행·파일 가져오기 공유) — 화면의 중심. 호스트별 출력은 결과 패널, 여기는 요청·대기·호스트별 상태·실패 사유.
   const runLog = useRunLog();
   const [showLog, setShowLog] = useLogPref('bulk-exec-run');
 
+  const commandHead = `${(command.trim().split('\n')[0] ?? '').slice(0, 120)}${command.trim().includes('\n') ? ' …' : ''}`;
   const doRun = async () => {
     const n = selectedHosts.length;
+    const runAction = action;
     const multiCluster = new Set(selectedHosts.map((t) => t.clusterId)).size > 1;
-    const what = action === 'ssh'
-      ? `${language} 명령 "${(command.trim().split('\n')[0] ?? '').slice(0, 120)}${command.trim().includes('\n') ? ' …' : ''}"`
+    const what = runAction === 'ssh'
+      ? `${language} 명령 "${commandHead}"`
       : `파일 업로드 ${scpRemotePath} (${new Blob([scpContent]).size} bytes)`;
+    const label = runAction === 'ssh' ? command : `scp → ${scpRemotePath}`;
     const r = await runLogged(runLog, {
-      title: action === 'ssh' ? '노드 일괄 SSH 실행' : '노드 일괄 SCP 업로드',
+      title: runAction === 'ssh' ? '노드 일괄 SSH 실행' : '노드 일괄 SCP 업로드',
       first: `${clusterIds.length}개 클러스터 · ${n}개 노드 — ${what} · SSH ${username} 포트 ${port} · ${mode === 'parallel' ? `병렬 ${parallelism}` : '순차'} · 묶음 ${chunkSize} · 제한 시간 연결 ${connectTimeout}s/실행 ${execTimeout}s 요청`,
       fn: () => runMutation.mutateAsync(),
       summarize: (res) => consoleRunLines(res.results.map((x) => {
-        const label = x.name && x.name !== x.host ? `${x.name}(${x.host})` : x.host;
+        const hostLabel = x.name && x.name !== x.host ? `${x.name}(${x.host})` : x.host;
         return {
-          host: multiCluster && x.clusterName ? `${label} @ ${x.clusterName}` : label,
+          host: multiCluster && x.clusterName ? `${hostLabel} @ ${x.clusterName}` : hostLabel,
           status: x.status, exitCode: x.exitCode, durationMs: x.durationMs, stderr: x.stderr, error: x.error,
         };
       })),
     });
-    if (r.ok) setRunResponse(r.data);
+    if (r.ok) setResults((prev) => ({ ...prev, [runAction]: { response: r.data, label } }));
+    else if (!r.aborted) toastForbidden(toast, runAction === 'ssh' ? '노드 일괄 SSH 실행' : '노드 일괄 SCP 업로드', r.error);
   };
 
   // 파일 가져오기 — 단계 trace(ExecutionStepsTimeline)는 그대로 두고, 실행 로그에도 단계·결과를 남긴다.
@@ -719,6 +751,7 @@ export function BulkExecPage() {
       },
     });
     if (!r.ok && r.aborted) setFetchError(null);
+    else if (!r.ok) toastForbidden(toast, '다른 노드에서 파일 가져오기', r.error);
   };
 
   // 권한(§12.9) — 서버는 operator + 대상 노드가 속한 클러스터마다 테넌트 operate 를 요구한다.
@@ -751,12 +784,53 @@ export function BulkExecPage() {
     (authMode === 'password' ? !!password : !!privateKey.trim()) &&
     (action === 'ssh' ? !!command.trim() : !!scpRemotePath.trim());
 
-  const runError = runMutation.error as { response?: { data?: { detail?: string } }; message?: string } | null;
+  // 위험 판정(D-171·§12.6.1-1) — 조회 allowlist(bash) 안의 명령만 확인 없이 바로 실행한다.
+  // python 스크립트는 정적으로 조회 여부를 판정할 수 없고, SCP 는 원격 파일을 덮어쓰므로 항상 danger 확인.
+  const verdict: CommandVerdict = useMemo(() => {
+    if (action === 'scp') return { readOnly: false, subcommand: 'scp', reason: `원격 파일 덮어쓰기 — ${scpRemotePath || '(경로 없음)'}` };
+    if (language === 'python') return { readOnly: false, subcommand: 'python', reason: 'python 스크립트는 조회 명령으로 판정할 수 없습니다' };
+    return judgeCommand(command, 'shell');
+  }, [action, language, command, scpRemotePath]);
 
   const [confirmOpen, setConfirmOpen] = useState(false);
+  const requestRun = () => {
+    if (!canRun || runMutation.isPending) return;
+    if (verdict.readOnly) void doRun();
+    else setConfirmOpen(true);
+  };
+  const runKeyDown = (e: React.KeyboardEvent) => {
+    if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') { e.preventDefault(); requestRun(); }
+  };
+
+  // 오류 표시는 한 곳(§12.6.1-4) — 일괄 실행 실패가 우선, SCP 탭에서는 파일 가져오기 실패도 같은 자리에.
+  const runError = runMutation.error as { response?: { data?: { detail?: string } }; message?: string } | null;
+  const alertMessage = runError
+    ? formatApiError(runError, '실행 중 오류')
+    : action === 'scp' && fetchError ? `파일 가져오기 실패 — ${fetchError}` : null;
+
   const [globalFilter, setGlobalFilter] = useState('');
   const [resultView, setResultView] = useState<'summary' | 'detail'>('summary');
   const [copyToast, setCopyToast] = useState<string | null>(null);
+
+  const tabs: { key: Action; label: string; icon: React.ComponentType<{ className?: string }> }[] = [
+    { key: 'ssh', label: '명령 실행 (SSH)', icon: Terminal },
+    { key: 'scp', label: '파일 업로드 (SCP)', icon: Upload },
+  ];
+  const onTabKey = (e: React.KeyboardEvent, idx: number) => {
+    if (e.key !== 'ArrowRight' && e.key !== 'ArrowLeft') return;
+    e.preventDefault();
+    const next = tabs[(idx + (e.key === 'ArrowRight' ? 1 : tabs.length - 1)) % tabs.length].key;
+    setAction(next);
+    document.getElementById(f(`tab-${next}`))?.focus();
+  };
+
+  const authLabel = authMode === 'password' ? '비밀번호' : '개인키';
+  const targetSummary = selectedHosts.length > 0
+    ? `${username}@노드 ${selectedHosts.length}개:${port} · ${authLabel}`
+    : '노드 미선택';
+  const advancedSummary = `${mode === 'parallel' ? `병렬 ${parallelism}` : '순차'} · 연결 ${connectTimeout}s · 실행 ${execTimeout}s · 묶음 ${chunkSize}`;
+  const runLabel = action === 'ssh' ? `실행 (${selectedHosts.length} 노드)` : `업로드 (${selectedHosts.length} 노드)`;
+  const exportTs = () => new Date().toISOString().slice(0, 19).replace(/[:]/g, '-');
 
   return (
     <div className="app-min-h-screen bg-background">
@@ -787,9 +861,10 @@ export function BulkExecPage() {
           ) : undefined}
           actions={
             <button
+              type="button"
               onClick={refetchAllNodes}
               disabled={clusterIds.length === 0}
-              className="p-2 bg-secondary hover:bg-secondary/80 rounded-lg text-muted-foreground disabled:opacity-50"
+              className="p-2 bg-secondary hover:bg-secondary/80 rounded-xl text-muted-foreground disabled:opacity-50"
               title="노드 목록 새로고침"
               aria-label="노드 목록 새로고침"
             >
@@ -798,561 +873,562 @@ export function BulkExecPage() {
           }
         />
 
-        {/* mc 콘솔처럼 한 로우에 [타겟 노드 | 명령 메뉴 | 실행 결과] 를 나란히 배치.
-            12컬럼 그리드 3:4:5 — 결과는 항상 우측 같은 자리에 고정된다. */}
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-3 items-start">
-          {/* 왼쪽: 노드 선택 — 클러스터별 그룹 */}
-          <MacCard
-            title="타겟 노드"
-            rootClassName="lg:col-span-3 min-w-0"
-            bodyPadding="p-0"
-            actions={
-              <button
-                onClick={toggleAllAcrossClusters}
-                disabled={totalNodesShown === 0}
-                className="text-xs text-primary hover:text-primary/80 disabled:opacity-40"
-              >
-                {selected.size === totalNodesShown && totalNodesShown > 0 ? '전체 해제' : '전체 선택'}
-              </button>
-            }
-          >
-            <div className="max-h-[calc(100vh-160px)] overflow-y-auto">
-              {clustersError ? (
-                <ErrorState compact error={clustersErrorObj} title="클러스터 목록을 불러오지 못했습니다" onRetry={() => { void refetchClusters(); }} />
-              ) : clusterIds.length === 0 ? (
-                <SelectClusterEmptyState compact description="왼쪽 사이드바에서 한 개 이상의 클러스터를 체크하세요." />
-              ) : (
-                clusterSections.map((sec) => {
-                  const allHere = sec.nodes.map((n) => n.name);
-                  const selectedHere = allHere.filter((n) => selected.has(makeKey(sec.clusterId, n))).length;
-                  return (
-                    <ClusterNodeGroup
-                      key={sec.clusterId}
-                      clusterName={sec.clusterName}
-                      nodes={sec.nodes}
-                      isLoading={sec.query?.isLoading ?? false}
-                      isError={sec.query?.isError ?? false}
-                      error={sec.query?.error}
-                      onRefetch={() => sec.query?.refetch()}
-                      selectedCount={selectedHere}
-                      isNodeChecked={(name) => selected.has(makeKey(sec.clusterId, name))}
-                      onToggleNode={(name) => toggleNode(sec.clusterId, name)}
-                      onToggleAll={() => toggleClusterAll(sec.clusterId, allHere)}
-                    />
-                  );
-                })
-              )}
-            </div>
-          </MacCard>
+        <div role="tablist" aria-label="일괄 실행 작업" className="flex items-center gap-1 mb-3 border-b border-border">
+          {tabs.map((t, idx) => (
+            <button
+              key={t.key}
+              id={f(`tab-${t.key}`)}
+              type="button"
+              role="tab"
+              aria-selected={action === t.key}
+              aria-controls={f('panel')}
+              tabIndex={action === t.key ? 0 : -1}
+              onClick={() => setAction(t.key)}
+              onKeyDown={(e) => onTabKey(e, idx)}
+              className={`px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors flex items-center gap-1.5 ${
+                action === t.key
+                  ? 'border-primary text-foreground'
+                  : 'border-transparent text-muted-foreground hover:text-foreground'
+              }`}
+            >
+              <t.icon className="w-3.5 h-3.5" />{t.label}
+            </button>
+          ))}
+        </div>
 
-          {/* 가운데: 실행 구성 (명령 메뉴) */}
-          <MacCard title="실행 구성" rootClassName="lg:col-span-4 min-w-0" className="space-y-3">
-            {/* Action 토글 */}
-            <div className="flex items-center gap-2 flex-wrap">
-              <div className="flex items-center bg-secondary/60 rounded-lg p-[3px] gap-px">
-                {(['ssh', 'scp'] as const).map((a) => (
-                  <button
-                    key={a}
-                    type="button"
-                    onClick={() => setAction(a)}
-                    aria-pressed={action === a}
-                    className={`px-3 py-1.5 text-sm font-medium rounded-md transition-colors ${
-                      action === a
-                        ? 'bg-background text-foreground shadow-sm'
-                        : 'text-muted-foreground hover:text-foreground'
-                    }`}
-                  >
-                    {a === 'ssh' ? '명령 실행 (ssh)' : '파일 업로드 (scp)'}
-                  </button>
-                ))}
-              </div>
-              <div className="flex items-center bg-secondary/60 rounded-lg p-[3px] gap-px">
-                {(['parallel', 'sequential'] as const).map((m) => (
-                  <button
-                    key={m}
-                    type="button"
-                    onClick={() => setMode(m)}
-                    aria-pressed={mode === m}
-                    className={`px-3 py-1.5 text-sm font-medium rounded-md transition-colors ${
-                      mode === m
-                        ? 'bg-background text-foreground shadow-sm'
-                        : 'text-muted-foreground hover:text-foreground'
-                    }`}
-                  >
-                    {m === 'parallel' ? <><Zap className="w-3 h-3 inline mr-1" aria-hidden />병렬</> : '순차'}
-                  </button>
-                ))}
-              </div>
-              {mode === 'parallel' && (
-                <label className="flex items-center gap-2 text-sm text-muted-foreground ml-2">
-                  동시성
-                  <input
-                    type="number"
-                    min={1}
-                    max={50}
-                    value={parallelism}
-                    onChange={(e) => setParallelism(Number(e.target.value) || 1)}
-                    className="w-14 px-2 py-1 bg-background border border-border rounded text-sm"
-                  />
-                </label>
-              )}
-            </div>
-
-            {/* 인증 */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-              <div>
-                <label htmlFor={f('user')} className="block text-sm text-muted-foreground mb-1">사용자</label>
-                <input
-                  id={f('user')}
-                  type="text"
-                  value={username}
-                  onChange={(e) => setUsername(e.target.value)}
-                  className="w-full px-3 py-2 bg-background border border-border rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-primary"
-                />
-              </div>
-              <div>
-                <label htmlFor={f('port')} className="block text-sm text-muted-foreground mb-1">포트</label>
-                <input
-                  id={f('port')}
-                  type="number"
-                  value={port}
-                  onChange={(e) => setPort(Number(e.target.value) || 22)}
-                  className="w-full px-3 py-2 bg-background border border-border rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-primary"
-                />
-              </div>
-              <div>
-                <p id={f('authMode')} className="block text-sm text-muted-foreground mb-1">인증 방식</p>
-                <div className="flex items-center bg-secondary/60 rounded-lg p-[3px] gap-px" role="group" aria-labelledby={f('authMode')}>
-                  {(['password', 'key'] as const).map((m) => (
-                    <button
-                      key={m}
-                      type="button"
-                      onClick={() => setAuthMode(m)}
-                      aria-pressed={authMode === m}
-                      className={`flex-1 px-2 py-1.5 text-sm font-medium rounded-md transition-colors ${
-                        authMode === m
-                          ? 'bg-background text-foreground shadow-sm'
-                          : 'text-muted-foreground hover:text-foreground'
-                      }`}
-                    >
-                      {m === 'password' ? '비밀번호' : '개인키'}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            </div>
-
-            {authMode === 'password' ? (
-              <div>
-                <label htmlFor={f('pw')} className="block text-sm text-muted-foreground mb-1">비밀번호</label>
-                <input
-                  id={f('pw')}
-                  type="password"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  placeholder="SSH 비밀번호"
-                  className="w-full px-3 py-2 bg-background border border-border rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-primary"
-                />
-              </div>
-            ) : (
-              <div>
-                <label htmlFor={f('pkey')} className="text-sm text-muted-foreground mb-1 flex items-center gap-1">
-                  <Key className="w-3 h-3" aria-hidden /> 개인키(PEM)
-                </label>
-                <textarea
-                  id={f('pkey')}
-                  value={privateKey}
-                  onChange={(e) => setPrivateKey(e.target.value)}
-                  placeholder="-----BEGIN OPENSSH PRIVATE KEY----- …"
-                  rows={4}
-                  className="w-full px-3 py-2 bg-background border border-border rounded-lg text-xs font-mono focus:outline-none focus:ring-1 focus:ring-primary resize-none"
-                />
-                <p className="text-xs text-muted-foreground mt-1">RSA / Ed25519 / ECDSA / DSS 지원. 비밀번호 보호된 키는 지원 안 함.</p>
-              </div>
-            )}
-
-            {/* 명령/파일 */}
-            {action === 'ssh' ? (
-              <div>
-                <div className="flex items-center justify-between mb-1">
-                  <label htmlFor={f('cmd')} className="text-sm text-muted-foreground flex items-center gap-1">
-                    <Terminal className="w-3 h-3" /> 실행할 명령 / 스크립트
-                  </label>
-                  <div className="flex items-center bg-secondary/60 rounded-lg p-[3px] gap-px">
-                    {(['bash', 'python'] as const).map((l) => (
-                      <button
-                        key={l}
-                        type="button"
-                        onClick={() => setLanguage(l)}
-                        aria-pressed={language === l}
-                        className={`px-2 py-1 text-xs font-medium rounded-md transition-colors ${
-                          language === l
-                            ? 'bg-background text-foreground shadow-sm'
-                            : 'text-muted-foreground hover:text-foreground'
-                        }`}
-                        title={l === 'python' ? '원격 python3 인터프리터로 실행됩니다' : '원격 기본 셸로 그대로 실행됩니다'}
-                      >
-                        {l}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-                <textarea
-                  id={f('cmd')}
-                  value={command}
-                  onChange={(e) => setCommand(e.target.value)}
-                  placeholder={language === 'python' ? 'import os\nprint(os.uname())' : '예: uname -a && free -m && uptime'}
-                  rows={3}
-                  className="w-full px-3 py-2 bg-background border border-border rounded-lg text-[12px] font-mono focus:outline-none focus:ring-1 focus:ring-primary resize-none"
-                />
-                <SavedScriptPanel
-                  className="mt-2"
-                  currentValue={command}
-                  currentLanguage={language}
-                  onPick={(content, lang) => { setCommand(content); setLanguage(lang); }}
-                />
-              </div>
-            ) : (
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                <div className="md:col-span-2">
-                  <label htmlFor={f('scpContent')} className="text-sm text-muted-foreground mb-1 flex items-center gap-1">
-                    <FileText className="w-3 h-3" /> 업로드할 내용
-                  </label>
-                  <textarea
-                    id={f('scpContent')}
-                    value={scpContent}
-                    onChange={(e) => setScpContent(e.target.value)}
-                    placeholder="업로드할 파일 내용"
-                    rows={4}
-                    className="w-full px-3 py-2 bg-background border border-border rounded-lg text-xs font-mono focus:outline-none focus:ring-1 focus:ring-primary resize-none"
-                  />
-                  <div className="mt-1 flex items-center gap-3 flex-wrap">
-                    <label className="flex items-center gap-1 text-xs text-muted-foreground cursor-pointer hover:text-foreground">
-                      <Upload className="w-3 h-3" /> 파일에서 불러오기
-                      <input
-                        type="file"
-                        className="hidden"
-                        onChange={(e) => {
-                          const f = e.target.files?.[0];
-                          if (!f) return;
-                          const reader = new FileReader();
-                          reader.onload = (ev) => {
-                            if (typeof ev.target?.result === 'string') setScpContent(ev.target.result);
-                          };
-                          reader.readAsText(f);
-                        }}
-                      />
-                    </label>
-                    <button
-                      type="button"
-                      onClick={() => setRemoteFetchOpen((v) => !v)}
-                      className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
-                    >
-                      <FolderInput className="w-3 h-3" /> 다른 노드에서 불러오기
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => downloadBlob(
-                        scpContent, basenameOf(scpRemotePath, 'scp-content.txt'), 'text/plain', false,
-                      )}
-                      disabled={!scpContent}
-                      className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground disabled:opacity-40 disabled:cursor-not-allowed"
-                      title="현재 업로드 내용을 내 컴퓨터에 파일로 저장"
-                    >
-                      <Download className="w-3 h-3" /> 로컬에 저장
-                    </button>
-                  </div>
-
-                  {remoteFetchOpen && (
-                    <div className="mt-2 p-2.5 bg-secondary/30 border border-border rounded-lg space-y-2">
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-                        <div>
-                          <label htmlFor={f('fetchSrc')} className="block text-xs text-muted-foreground mb-1">원본 노드</label>
-                          <select
-                            id={f('fetchSrc')}
-                            value={fetchSourceKey}
-                            onChange={(e) => setFetchSourceKey(e.target.value)}
-                            className="w-full px-2 py-1.5 bg-background border border-border rounded-lg text-xs focus:outline-none focus:ring-1 focus:ring-primary"
-                          >
-                            <option value="">노드를 선택하세요</option>
-                            {knownNodes.map((n) => (
-                              <option key={n.key} value={n.key}>{n.label}</option>
-                            ))}
-                          </select>
-                        </div>
-                        <div>
-                          <label htmlFor={f('fetchPath')} className="block text-xs text-muted-foreground mb-1">원격 파일 경로</label>
-                          <input
-                            id={f('fetchPath')}
-                            type="text"
-                            value={fetchRemotePath}
-                            onChange={(e) => setFetchRemotePath(e.target.value)}
-                            placeholder="/etc/hosts"
-                            className="w-full px-2 py-1.5 bg-background border border-border rounded-lg text-xs font-mono focus:outline-none focus:ring-1 focus:ring-primary"
-                          />
-                        </div>
-                      </div>
-                      <div className="flex items-center justify-between">
-                        <p className="text-xs text-muted-foreground">
-                          위 인증 정보(사용자/포트/비밀번호|키)를 그대로 사용해 텍스트 파일을 읽어옵니다.
-                        </p>
+        {/* 로그 중심 콘솔(DESIGN_SYSTEM §12.6.1) — 좌: 제어(좁게), 우: 실행 로그(3) + 결과(2). 실행 로그가 화면의 중심이다. */}
+        <div
+          id={f('panel')}
+          role="tabpanel"
+          aria-labelledby={f(`tab-${action}`)}
+          className="grid grid-cols-1 lg:grid-cols-[320px_minmax(0,1fr)] gap-3 lg:h-[calc(100vh-var(--topbar-h)-10rem)] lg:min-h-[480px]"
+        >
+          {/* 좌: 제어 */}
+          <MacCard title="제어" rootClassName="min-w-0 flex flex-col lg:min-h-0" bodyPadding="p-0" className="flex flex-col flex-1 min-h-0">
+            <div className="flex-1 min-h-0 overflow-y-auto">
+              {/* 대상·인증 — 자주 바꾸지 않으므로 접으면 요약 한 줄만 남는다. */}
+              <section className="border-b border-border">
+                <button
+                  type="button"
+                  onClick={() => setTargetOpen((v) => !v)}
+                  aria-expanded={targetOpen}
+                  aria-controls={f('target')}
+                  className="w-full flex items-center gap-2 px-4 py-2.5 text-sm font-semibold text-left hover:bg-secondary/50"
+                >
+                  {targetOpen ? <ChevronDown className="w-3.5 h-3.5" aria-hidden /> : <ChevronRight className="w-3.5 h-3.5" aria-hidden />}
+                  대상·인증
+                  <span className="ml-auto text-xs font-mono font-normal text-muted-foreground truncate">{targetSummary}</span>
+                </button>
+                {targetOpen && (
+                  <div id={f('target')} className="px-4 pb-4 space-y-3">
+                    <div>
+                      <div className="flex items-center justify-between mb-1">
+                        <p className="text-sm text-muted-foreground">대상 노드 <span className="font-mono">{selected.size}/{totalNodesShown}</span></p>
                         <button
                           type="button"
-                          onClick={() => void doFetchFile()}
-                          disabled={!!fetchDeniedHint || fetchFileMutation.isPending || !fetchSourceKey || !fetchRemotePath.trim()}
-                          title={fetchDeniedHint ?? '원본 노드의 텍스트 파일을 업로드 내용으로 불러오기'}
-                          aria-label={fetchDeniedHint ? `불러오기 — ${fetchDeniedHint}` : '불러오기'}
-                          className="flex items-center gap-1 px-2.5 py-1 text-xs font-medium rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-40 disabled:cursor-not-allowed flex-shrink-0"
+                          onClick={toggleAllAcrossClusters}
+                          disabled={totalNodesShown === 0}
+                          className="text-xs text-primary hover:text-primary/80 disabled:opacity-40"
                         >
-                          {fetchFileMutation.isPending ? <Loader2 className="w-3 h-3 animate-spin" /> : <FolderInput className="w-3 h-3" />}
-                          불러오기
+                          {selected.size === totalNodesShown && totalNodesShown > 0 ? '전체 해제' : '전체 선택'}
                         </button>
                       </div>
-                      {fetchError && (
-                        <p className="text-xs text-status-critical">{fetchError}</p>
-                      )}
-                      {fetchTrace && (fetchTrace.steps?.length || fetchTrace.commands?.length) ? (
-                        <div className="pt-1 border-t border-border space-y-2">
-                          <ExecutionStepsTimeline steps={fetchTrace.steps} />
-                          <CommandTraceList commands={fetchTrace.commands ?? []} />
-                        </div>
-                      ) : null}
+                      {/* 노드가 수백 개여도 명령 입력이 밀려나지 않게 목록만 제한 높이로 스크롤한다. */}
+                      <div className="max-h-64 overflow-y-auto rounded-md border border-border">
+                        {clustersError ? (
+                          <ErrorState compact error={clustersErrorObj} title="클러스터 목록을 불러오지 못했습니다" onRetry={() => { void refetchClusters(); }} />
+                        ) : clusterIds.length === 0 ? (
+                          <SelectClusterEmptyState compact description="왼쪽 사이드바에서 한 개 이상의 클러스터를 체크하세요." />
+                        ) : (
+                          clusterSections.map((sec) => {
+                            const allHere = sec.nodes.map((n) => n.name);
+                            const selectedHere = allHere.filter((n) => selected.has(makeKey(sec.clusterId, n))).length;
+                            return (
+                              <ClusterNodeGroup
+                                key={sec.clusterId}
+                                clusterName={sec.clusterName}
+                                nodes={sec.nodes}
+                                isLoading={sec.query?.isLoading ?? false}
+                                isError={sec.query?.isError ?? false}
+                                error={sec.query?.error}
+                                onRefetch={() => sec.query?.refetch()}
+                                selectedCount={selectedHere}
+                                isNodeChecked={(name) => selected.has(makeKey(sec.clusterId, name))}
+                                onToggleNode={(name) => toggleNode(sec.clusterId, name)}
+                                onToggleAll={() => toggleClusterAll(sec.clusterId, allHere)}
+                              />
+                            );
+                          })
+                        )}
+                      </div>
                     </div>
-                  )}
-                </div>
-                <div>
-                  <label htmlFor={f('scpPath')} className="block text-sm text-muted-foreground mb-1">원격 경로</label>
-                  <input
-                    id={f('scpPath')}
-                    type="text"
-                    value={scpRemotePath}
-                    onChange={(e) => setScpRemotePath(e.target.value)}
-                    placeholder="/tmp/uploaded.txt"
-                    className="w-full px-3 py-2 bg-background border border-border rounded-lg text-sm font-mono focus:outline-none focus:ring-1 focus:ring-primary"
-                  />
-                </div>
-              </div>
-            )}
+                    <div className="grid grid-cols-2 gap-2">
+                      <div>
+                        <label htmlFor={f('user')} className={LABEL}>사용자</label>
+                        <input id={f('user')} type="text" value={username} onChange={(e) => setUsername(e.target.value)} className={INPUT} />
+                      </div>
+                      <div>
+                        <label htmlFor={f('port')} className={LABEL}>포트</label>
+                        <input id={f('port')} type="number" value={port} onChange={(e) => setPort(Number(e.target.value) || 22)} className={INPUT} />
+                      </div>
+                    </div>
+                    <div>
+                      <p id={f('authMode')} className={LABEL}>인증 방식</p>
+                      <div className="flex items-center bg-secondary/60 rounded-xl p-[3px] gap-px" role="group" aria-labelledby={f('authMode')}>
+                        {(['password', 'key'] as const).map((m) => (
+                          <button key={m} type="button" onClick={() => setAuthMode(m)} aria-pressed={authMode === m} className={`flex-1 ${SEG_BTN(authMode === m)}`}>
+                            {m === 'password' ? '비밀번호' : '개인키'}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                    {authMode === 'password' ? (
+                      <div>
+                        <label htmlFor={f('pw')} className={LABEL}>SSH 비밀번호</label>
+                        <input
+                          id={f('pw')}
+                          type="password"
+                          value={password}
+                          onChange={(e) => setPassword(e.target.value)}
+                          autoComplete="off"
+                          className={INPUT}
+                        />
+                        <p className="mt-1 text-xs text-muted-foreground">이 실행에만 쓰이며 저장되지 않습니다.</p>
+                      </div>
+                    ) : (
+                      <div>
+                        <label htmlFor={f('pkey')} className={`${LABEL} flex items-center gap-1`}>
+                          <Key className="w-3 h-3" aria-hidden /> 개인키(PEM)
+                        </label>
+                        <textarea
+                          id={f('pkey')}
+                          value={privateKey}
+                          onChange={(e) => setPrivateKey(e.target.value)}
+                          placeholder="-----BEGIN OPENSSH PRIVATE KEY----- …"
+                          rows={4}
+                          className={`${INPUT} text-xs font-mono resize-none`}
+                        />
+                        <p className="mt-1 text-xs text-muted-foreground">RSA / Ed25519 / ECDSA / DSS 지원. 비밀번호 보호된 키는 지원하지 않습니다. 이 실행에만 쓰이며 저장되지 않습니다.</p>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </section>
 
-            {/* 타임아웃 */}
-            <div className="flex items-center gap-3 gap-y-2 flex-wrap text-sm text-muted-foreground">
-              <label className="flex items-center gap-1.5" title="노드별 SSH 접속 최대 대기 시간(초)">
-                연결 제한 시간
-                <input
-                  type="number"
-                  min={1}
-                  max={60}
-                  value={connectTimeout}
-                  onChange={(e) => setConnectTimeout(Number(e.target.value) || 8)}
-                  className="w-14 px-2 py-1 bg-background border border-border rounded text-sm"
-                />s
-              </label>
-              <label className="flex items-center gap-1.5" title="노드별 명령 실행 최대 시간(초)">
-                실행 제한 시간
-                <input
-                  type="number"
-                  min={1}
-                  max={600}
-                  value={execTimeout}
-                  onChange={(e) => setExecTimeout(Number(e.target.value) || 60)}
-                  className="w-16 px-2 py-1 bg-background border border-border rounded text-sm"
-                />s
-              </label>
-              <span className="text-border">·</span>
-              <label className="flex items-center gap-1.5" title="한 묶음에서 병렬 실행할 호스트 수. 묶음이 끝나면 잠시 쉬고 다음 묶음.">
-                묶음 크기
-                <input
-                  type="number"
-                  min={1}
-                  max={200}
-                  value={chunkSize}
-                  onChange={(e) => setChunkSize(Number(e.target.value) || 30)}
-                  className="w-14 px-2 py-1 bg-background border border-border rounded text-sm"
-                />개
-              </label>
-              <label className="flex items-center gap-1.5" title="묶음 사이 대기 시간(ms). 베스천/게이트웨이 순간 부하 완화.">
-                묶음 간 대기
-                <input
-                  type="number"
-                  min={0}
-                  max={5000}
-                  step={50}
-                  value={chunkPauseMs}
-                  onChange={(e) => setChunkPauseMs(Number(e.target.value) || 0)}
-                  className="w-16 px-2 py-1 bg-background border border-border rounded text-sm"
-                />ms
-              </label>
+              <div className="px-4 py-3 space-y-3">
+                {/* 명령/파일 */}
+                {action === 'ssh' ? (
+                  <div>
+                    <div className="flex items-center justify-between mb-1">
+                      <label htmlFor={f('cmd')} className="text-sm text-muted-foreground flex items-center gap-1">
+                        <Terminal className="w-3 h-3" aria-hidden /> 명령 / 스크립트
+                      </label>
+                      <div className="flex items-center bg-secondary/60 rounded-xl p-[3px] gap-px" role="group" aria-label="스크립트 언어">
+                        {(['bash', 'python'] as const).map((l) => (
+                          <button
+                            key={l}
+                            type="button"
+                            onClick={() => setLanguage(l)}
+                            aria-pressed={language === l}
+                            className={`px-2 py-0.5 text-xs font-medium rounded-md transition-colors ${
+                              language === l ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
+                            }`}
+                            title={l === 'python' ? '원격 python3 인터프리터로 실행됩니다' : '원격 기본 셸로 그대로 실행됩니다'}
+                          >
+                            {l}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                    <textarea
+                      id={f('cmd')}
+                      value={command}
+                      onChange={(e) => setCommand(e.target.value)}
+                      onKeyDown={runKeyDown}
+                      placeholder={language === 'python' ? 'import os\nprint(os.uname())' : '예: uname -a && free -m && uptime'}
+                      rows={4}
+                      aria-describedby={f('verdict')}
+                      className={`${INPUT} text-xs font-mono resize-y`}
+                    />
+                    {/* 입력하는 동안 위험 신호를 보인다(§12.6.1-2) — live 영역은 항상 두고 내용만 바꾼다. */}
+                    <p
+                      id={f('verdict')}
+                      aria-live="polite"
+                      className={`mt-1.5 text-xs flex items-start gap-1.5 ${verdict.readOnly ? 'text-muted-foreground' : 'text-status-critical'}`}
+                    >
+                      {command.trim() ? (
+                        <>
+                          <span className="shrink-0 rounded-full border border-current px-2 font-semibold">
+                            {verdict.readOnly ? '조회 명령' : '변경 명령'}
+                          </span>
+                          <span>{verdict.readOnly ? '확인 없이 바로 실행됩니다.' : `실행 전에 확인합니다 — ${verdict.reason ?? ''}`}</span>
+                        </>
+                      ) : null}
+                    </p>
+                    <SavedScriptPanel
+                      className="mt-2"
+                      currentValue={command}
+                      currentLanguage={language}
+                      onPick={(content, lang) => { setCommand(content); setLanguage(lang); }}
+                    />
+                  </div>
+                ) : (
+                  <>
+                    <div>
+                      <label htmlFor={f('scpPath')} className={LABEL}>원격 경로</label>
+                      <input
+                        id={f('scpPath')}
+                        type="text"
+                        value={scpRemotePath}
+                        onChange={(e) => setScpRemotePath(e.target.value)}
+                        onKeyDown={runKeyDown}
+                        placeholder="/tmp/uploaded.txt"
+                        aria-describedby={f('verdict')}
+                        className={`${INPUT} font-mono`}
+                      />
+                      <p id={f('verdict')} aria-live="polite" className="mt-1.5 text-xs flex items-start gap-1.5 text-status-critical">
+                        <span className="shrink-0 rounded-full border border-current px-2 font-semibold">변경 명령</span>
+                        <span>같은 경로의 파일을 덮어쓰므로 실행 전에 확인합니다.</span>
+                      </p>
+                    </div>
+                    <div>
+                      <label htmlFor={f('scpContent')} className={`${LABEL} flex items-center gap-1`}>
+                        <FileText className="w-3 h-3" aria-hidden /> 업로드할 내용
+                      </label>
+                      <textarea
+                        id={f('scpContent')}
+                        value={scpContent}
+                        onChange={(e) => setScpContent(e.target.value)}
+                        onKeyDown={runKeyDown}
+                        placeholder="업로드할 파일 내용"
+                        rows={5}
+                        className={`${INPUT} text-xs font-mono resize-y`}
+                      />
+                      <div className="mt-1 flex items-center gap-3 flex-wrap">
+                        <label className="flex items-center gap-1 text-xs text-muted-foreground cursor-pointer hover:text-foreground">
+                          <Upload className="w-3 h-3" aria-hidden /> 파일에서 불러오기
+                          <input
+                            type="file"
+                            className="hidden"
+                            onChange={(e) => {
+                              const file = e.target.files?.[0];
+                              if (!file) return;
+                              const reader = new FileReader();
+                              reader.onload = (ev) => {
+                                if (typeof ev.target?.result === 'string') setScpContent(ev.target.result);
+                              };
+                              reader.readAsText(file);
+                            }}
+                          />
+                        </label>
+                        <button
+                          type="button"
+                          onClick={() => setRemoteFetchOpen((v) => !v)}
+                          aria-expanded={remoteFetchOpen}
+                          className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
+                        >
+                          <FolderInput className="w-3 h-3" aria-hidden /> 다른 노드에서 불러오기
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => downloadBlob(
+                            scpContent, basenameOf(scpRemotePath, 'scp-content.txt'), 'text/plain', false,
+                          )}
+                          disabled={!scpContent}
+                          className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground disabled:opacity-40 disabled:cursor-not-allowed"
+                          title="현재 업로드 내용을 내 컴퓨터에 파일로 저장"
+                        >
+                          <Download className="w-3 h-3" aria-hidden /> 로컬에 저장
+                        </button>
+                      </div>
+
+                      {remoteFetchOpen && (
+                        <div className="mt-2 p-2.5 bg-secondary/30 border border-border rounded-md space-y-2">
+                          <div>
+                            <label htmlFor={f('fetchSrc')} className="block text-xs text-muted-foreground mb-1">원본 노드</label>
+                            <select
+                              id={f('fetchSrc')}
+                              value={fetchSourceKey}
+                              onChange={(e) => setFetchSourceKey(e.target.value)}
+                              className={SMALL_INPUT}
+                            >
+                              <option value="">노드를 선택하세요</option>
+                              {knownNodes.map((n) => (
+                                <option key={n.key} value={n.key}>{n.label}</option>
+                              ))}
+                            </select>
+                          </div>
+                          <div>
+                            <label htmlFor={f('fetchPath')} className="block text-xs text-muted-foreground mb-1">원격 파일 경로</label>
+                            <input
+                              id={f('fetchPath')}
+                              type="text"
+                              value={fetchRemotePath}
+                              onChange={(e) => setFetchRemotePath(e.target.value)}
+                              placeholder="/etc/hosts"
+                              className={`${SMALL_INPUT} font-mono`}
+                            />
+                          </div>
+                          <p className="text-xs text-muted-foreground">
+                            위 인증 정보(사용자/포트/비밀번호|키)를 그대로 사용해 텍스트 파일을 읽어옵니다. 조회 전용이라 확인 없이 실행됩니다.
+                          </p>
+                          {fetchFileMutation.isPending ? (
+                            <button
+                              type="button"
+                              onClick={fetchFileMutation.abort}
+                              className="w-full flex items-center justify-center gap-1 px-2.5 py-1.5 text-xs font-medium rounded-xl bg-secondary hover:bg-secondary/80 text-foreground border border-border"
+                            >
+                              <Square className="w-3 h-3 fill-current" aria-hidden /> 중지
+                            </button>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => void doFetchFile()}
+                              disabled={!!fetchDeniedHint || !fetchSourceKey || !fetchRemotePath.trim()}
+                              title={fetchDeniedHint ?? '원본 노드의 텍스트 파일을 업로드 내용으로 불러오기'}
+                              aria-label={fetchDeniedHint ? `불러오기 — ${fetchDeniedHint}` : '불러오기'}
+                              className="w-full flex items-center justify-center gap-1 px-2.5 py-1.5 text-xs font-medium rounded-xl bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-40 disabled:cursor-not-allowed"
+                            >
+                              <FolderInput className="w-3 h-3" aria-hidden />
+                              불러오기
+                            </button>
+                          )}
+                          {fetchTrace && (fetchTrace.steps?.length || fetchTrace.commands?.length) ? (
+                            <div className="pt-1 border-t border-border space-y-2">
+                              <ExecutionStepsTimeline steps={fetchTrace.steps} />
+                              <CommandTraceList commands={fetchTrace.commands ?? []} />
+                            </div>
+                          ) : null}
+                        </div>
+                      )}
+                    </div>
+                  </>
+                )}
+
+                {/* 고급 설정 — 실행 방식·제한 시간·묶음 */}
+                <details className="group">
+                  <summary className="cursor-pointer text-sm font-semibold list-none flex items-center gap-1.5">
+                    <ChevronRight className="w-3.5 h-3.5 group-open:rotate-90 transition-transform" aria-hidden />
+                    고급 설정
+                    <span className="text-xs font-normal text-muted-foreground truncate">{advancedSummary}</span>
+                  </summary>
+                  <div className="mt-2 space-y-3">
+                    <div>
+                      <p id={f('modeLabel')} className={LABEL}>실행 방식</p>
+                      <div className="flex items-center bg-secondary/60 rounded-xl p-[3px] gap-px" role="group" aria-labelledby={f('modeLabel')}>
+                        {(['parallel', 'sequential'] as const).map((m) => (
+                          <button key={m} type="button" onClick={() => setMode(m)} aria-pressed={mode === m} className={`flex-1 ${SEG_BTN(mode === m)}`}>
+                            {m === 'parallel' ? <><Zap className="w-3 h-3 inline mr-1" aria-hidden />병렬</> : '순차'}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-2 gap-2">
+                      {mode === 'parallel' && (
+                        <div>
+                          <label htmlFor={f('par')} className={LABEL}>동시성</label>
+                          <input id={f('par')} type="number" min={1} max={50} value={parallelism} onChange={(e) => setParallelism(Number(e.target.value) || 1)} className={SMALL_INPUT} />
+                        </div>
+                      )}
+                      <div>
+                        <label htmlFor={f('cto')} className={LABEL}>연결 제한 시간(초)</label>
+                        <input id={f('cto')} type="number" min={1} max={60} value={connectTimeout} onChange={(e) => setConnectTimeout(Number(e.target.value) || 8)} className={SMALL_INPUT} />
+                      </div>
+                      <div>
+                        <label htmlFor={f('eto')} className={LABEL}>실행 제한 시간(초)</label>
+                        <input id={f('eto')} type="number" min={1} max={600} value={execTimeout} onChange={(e) => setExecTimeout(Number(e.target.value) || 60)} className={SMALL_INPUT} />
+                      </div>
+                      <div>
+                        <label htmlFor={f('chunk')} className={LABEL}>묶음 크기(개)</label>
+                        <input id={f('chunk')} type="number" min={1} max={200} value={chunkSize} onChange={(e) => setChunkSize(Number(e.target.value) || 30)} className={SMALL_INPUT} />
+                      </div>
+                      <div>
+                        <label htmlFor={f('pause')} className={LABEL}>묶음 간 대기(ms)</label>
+                        <input id={f('pause')} type="number" min={0} max={5000} step={50} value={chunkPauseMs} onChange={(e) => setChunkPauseMs(Number(e.target.value) || 0)} className={SMALL_INPUT} />
+                      </div>
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      노드별 SSH 접속·명령 실행 최대 시간입니다. 묶음 크기만큼 병렬 실행한 뒤 대기 시간만큼 쉬고 다음 묶음으로 넘어갑니다(베스천·게이트웨이 순간 부하 완화).
+                    </p>
+                  </div>
+                </details>
+
+                {/* 대규모 실행 예상 시간 힌트 */}
+                {selected.size >= 50 && (
+                  <div className="px-3 py-2 text-xs rounded-md bg-status-warning/10 border border-status-warning/30 text-status-warning flex items-start gap-2">
+                    <Clock className="w-3 h-3 mt-0.5 flex-shrink-0" aria-hidden />
+                    <div>
+                      선택 {selected.size}개 호스트 · 동시성 {parallelism} / 묶음 {chunkSize}개 ·
+                      예상 소요 시간 <strong className="font-mono">최소 {Math.ceil(selected.size / chunkSize) * Math.ceil(execTimeout / 10)}초 ~ 최대 {Math.ceil(selected.size / chunkSize) * (execTimeout + connectTimeout)}초</strong>.
+                      실행 중 버튼이 "중지"로 바뀌며 언제든 취소할 수 있습니다.
+                    </div>
+                  </div>
+                )}
+              </div>
             </div>
 
-            {/* 대규모 실행 예상 시간 힌트 */}
-            {selected.size >= 50 && (
-              <div className="px-3 py-2 text-xs rounded-lg bg-status-warning/10 border border-status-warning/30 text-status-warning flex items-start gap-2">
-                <Clock className="w-3 h-3 mt-0.5 flex-shrink-0" />
-                <div>
-                  선택 {selected.size}개 호스트 · 동시성 {parallelism} / 묶음 {chunkSize}개 ·
-                  예상 소요 시간 <strong className="font-mono">최소 {Math.ceil(selected.size / chunkSize) * Math.ceil(execTimeout / 10)}초 ~ 최대 {Math.ceil(selected.size / chunkSize) * (execTimeout + connectTimeout)}초</strong>.
-                  실행 중 버튼이 "중지"로 바뀌며 언제든 취소 가능.
+            {/* 실행 바 — 스크롤과 무관하게 항상 보인다. */}
+            <div className="border-t border-border p-3 space-y-2">
+              {alertMessage && (
+                <div role="alert" className="px-3 py-2 text-sm rounded-md bg-status-critical/10 text-status-critical border border-status-critical/30">
+                  {alertMessage}
                 </div>
-              </div>
-            )}
-
-            {runError && (
-              <div className="px-3 py-2 text-sm rounded-lg bg-status-critical/10 text-status-critical border border-status-critical/30">
-                {formatApiError(runError, '실행 중 오류')}
-              </div>
-            )}
-
-            {/* 실행 */}
-            <div className="flex items-center justify-between pt-2 border-t border-border">
-              <p className="text-sm text-muted-foreground">
-                인증 정보는 이 실행에만 사용되고 저장되지 않습니다.
-              </p>
+              )}
               {runMutation.isPending ? (
                 <button
                   type="button"
                   onClick={runMutation.abort}
-                  className="flex items-center gap-2 px-5 py-2.5 text-sm font-semibold bg-status-critical hover:bg-status-critical/90 text-primary-foreground rounded-xl transition-colors"
+                  className="w-full flex items-center justify-center gap-2 px-5 py-2.5 text-sm font-semibold bg-secondary hover:bg-secondary/80 text-foreground border border-border rounded-xl transition-colors"
                 >
-                  <Square className="w-4 h-4 fill-current" />
+                  <Square className="w-4 h-4 fill-current" aria-hidden />
                   중지
                 </button>
               ) : (
                 <button
                   type="button"
-                  onClick={() => setConfirmOpen(true)}
+                  onClick={requestRun}
                   disabled={!canRun}
-                  title={runDeniedHint ?? (canRun ? '확인 후 선택한 노드에 실행' : '노드·인증 정보·명령(또는 원격 경로)을 입력하세요')}
-                  aria-label={runDeniedHint ? `실행 (${selected.size} 노드) — ${runDeniedHint}` : `실행 (${selected.size} 노드)`}
-                  className="flex items-center gap-2 px-5 py-2.5 text-sm font-semibold bg-primary hover:bg-primary/90 text-primary-foreground rounded-xl transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  title={runDeniedHint ?? (canRun
+                    ? (verdict.readOnly ? '선택한 노드에 바로 실행(조회 명령)' : '확인 후 선택한 노드에 실행')
+                    : '노드·인증 정보·명령(또는 원격 경로)을 입력하세요')}
+                  aria-label={runDeniedHint ? `${runLabel} — ${runDeniedHint}` : runLabel}
+                  className="w-full flex items-center justify-center gap-2 px-5 py-2.5 text-sm font-semibold bg-primary hover:bg-primary/90 text-primary-foreground rounded-xl transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  <Play className="w-4 h-4" />
-                  실행 ({selected.size} 노드)
+                  {action === 'ssh' ? <Play className="w-4 h-4" aria-hidden /> : <Upload className="w-4 h-4" aria-hidden />}
+                  {runLabel}
                 </button>
               )}
+              <p className="text-center text-xs text-muted-foreground">
+                <kbd className="px-1 rounded border border-border bg-secondary">Ctrl</kbd>+<kbd className="px-1 rounded border border-border bg-secondary">Enter</kbd> 로도 실행
+              </p>
             </div>
           </MacCard>
 
-          {/* 우측: 실행 로그(수명주기) + 실행 결과 — mc 콘솔처럼 항상 같은 자리에 고정, 실행 전엔 플레이스홀더.
-              내부에서만 스크롤되어 세 컬럼이 한 화면 폭 안에 들어온다. */}
-          <div className="lg:col-span-5 min-w-0 flex flex-col gap-3">
-          <RunLogPanel run={runLog} show={showLog} onShowChange={setShowLog} maxHeight="max-h-56" />
-          {!runResponse ? (
-            <div className="min-w-0 flex items-center justify-center p-6 lg:h-[calc(100vh-160px)] min-h-[280px]">
-              <EmptyState
-                compact
-                icon={Terminal}
-                title="아직 실행 결과가 없습니다."
-                description="명령을 실행하면 결과가 여기에 표시됩니다."
+          {/* 우: 실행 로그(중심) + 결과 — 항상 같은 위치, 실행 전엔 대기 상태 */}
+          <div className="min-w-0 min-h-0 flex flex-col gap-3">
+            <div className="flex flex-col min-h-[240px] lg:min-h-0 flex-[3]">
+              <RunLogPanel
+                run={runLog}
+                show={showLog}
+                onShowChange={setShowLog}
+                fill
+                idleHint="실행하면 요청·노드별 접속·결과 요약이 여기에 실시간으로 쌓입니다."
               />
             </div>
-          ) : (
-          <MacCard
-            title="실행 결과"
-            rootClassName="min-w-0 flex flex-col lg:h-[calc(100vh-160px)] min-h-[280px]"
-            bodyPadding="p-0"
-            className="flex-1 min-h-0 flex flex-col"
-            titleExtra={
-              <span className="flex flex-wrap items-center gap-2">
-                <span className="text-xs px-2 py-0.5 rounded-full bg-secondary text-muted-foreground border border-border">
-                  성공 {runResponse.okCount}
-                </span>
-                {/* 0 은 중립(§12.12-2) — 실패가 있을 때만 상태색. */}
-                <span className={`text-xs px-2 py-0.5 rounded-full border ${
-                  runResponse.errorCount > 0
-                    ? 'bg-status-critical/10 text-status-critical border-status-critical/30'
-                    : 'bg-secondary text-muted-foreground border-border'
-                }`}>
-                  실패 {runResponse.errorCount}
-                </span>
-                <span className="text-xs text-muted-foreground whitespace-nowrap tabular-nums">
-                  {runResponse.totalDurationMs}ms · {runResponse.mode}
-                </span>
-              </span>
-            }
-            actions={<>
-                {/* 뷰 모드 토글 */}
-                <div className="flex items-center bg-secondary/60 rounded-md p-[2px] gap-px">
-                  <button type="button" onClick={() => setResultView('summary')}
-                    aria-pressed={resultView === 'summary'}
-                    className={`flex items-center gap-1 px-2 py-1 text-xs font-medium rounded transition-colors ${
-                      resultView === 'summary' ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
-                    }`}
-                    title="모든 노드 한 줄 요약">
-                    <LayoutList className="w-3 h-3" /> 요약
-                  </button>
-                  <button type="button" onClick={() => setResultView('detail')}
-                    aria-pressed={resultView === 'detail'}
-                    className={`flex items-center gap-1 px-2 py-1 text-xs font-medium rounded transition-colors ${
-                      resultView === 'detail' ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
-                    }`}
-                    title="호스트별 stdout/stderr 전체">
-                    <Rows className="w-3 h-3" /> 상세
-                  </button>
-                </div>
-
-                {/* 공통 필터 */}
-                <div className="relative">
-                  <input
-                    value={globalFilter}
-                    onChange={(e) => setGlobalFilter(e.target.value)}
-                    placeholder="공통 필터…"
-                    aria-label="실행 결과 공통 필터"
-                    className="pl-2 pr-6 py-1 text-sm bg-background border border-border rounded-md focus:outline-none focus:ring-1 focus:ring-primary w-36"
+            <div className="flex flex-col min-h-[200px] lg:min-h-0 flex-[2]">
+              {!runResponse ? (
+                <div className="min-w-0 flex-1 flex items-center justify-center min-h-[120px] rounded-md border border-border">
+                  <EmptyState
+                    compact
+                    icon={action === 'ssh' ? Terminal : Upload}
+                    title="아직 실행 결과가 없습니다."
+                    description={action === 'ssh' ? '명령을 실행하면 노드별 결과가 여기에 표시됩니다.' : '파일을 업로드하면 노드별 결과가 여기에 표시됩니다.'}
                   />
-                  {globalFilter && (
-                    <button
-                      onClick={() => setGlobalFilter('')}
-                      className="absolute right-1.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-                      title="필터 지우기"
-                      aria-label="필터 지우기"
-                    ><X className="w-3.5 h-3.5" aria-hidden /></button>
-                  )}
                 </div>
+              ) : (
+              <MacCard
+                title={action === 'ssh' ? '실행 결과' : '업로드 결과'}
+                rootClassName="min-w-0 flex flex-col flex-1 min-h-0"
+                bodyPadding="p-0"
+                className="flex-1 min-h-0 flex flex-col"
+                titleExtra={
+                  <span className="flex flex-wrap items-center gap-2">
+                    <span className="text-xs px-2 py-0.5 rounded-full bg-secondary text-muted-foreground border border-border">
+                      성공 {runResponse.okCount}
+                    </span>
+                    {/* 0 은 중립(§12.12-2) — 실패가 있을 때만 상태색. */}
+                    <span className={`text-xs px-2 py-0.5 rounded-full border ${
+                      runResponse.errorCount > 0
+                        ? 'bg-status-critical/10 text-status-critical border-status-critical/30'
+                        : 'bg-secondary text-muted-foreground border-border'
+                    }`}>
+                      실패 {runResponse.errorCount}
+                    </span>
+                    <span className="text-xs text-muted-foreground whitespace-nowrap tabular-nums">
+                      {runResponse.totalDurationMs}ms · {runResponse.mode}
+                    </span>
+                  </span>
+                }
+                actions={<>
+                    {/* 뷰 모드 토글 */}
+                    <div className="flex items-center bg-secondary/60 rounded-xl p-[2px] gap-px" role="group" aria-label="결과 보기 방식">
+                      <button type="button" onClick={() => setResultView('summary')}
+                        aria-pressed={resultView === 'summary'}
+                        className={`flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-md transition-colors ${
+                          resultView === 'summary' ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
+                        }`}
+                        title="모든 노드 한 줄 요약">
+                        <LayoutList className="w-3 h-3" aria-hidden /> 요약
+                      </button>
+                      <button type="button" onClick={() => setResultView('detail')}
+                        aria-pressed={resultView === 'detail'}
+                        className={`flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-md transition-colors ${
+                          resultView === 'detail' ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
+                        }`}
+                        title="호스트별 stdout/stderr 전체">
+                        <Rows className="w-3 h-3" aria-hidden /> 상세
+                      </button>
+                    </div>
 
-                {/* 내보내기 */}
-                <div className="flex items-center gap-1">
-                  <button onClick={() => {
-                      const ts = new Date().toISOString().slice(0, 19).replace(/[:]/g, '-');
-                      downloadBlob(
-                        resultsToCsv(runResponse.results, globalFilter, command),
-                        `bulk-exec-${ts}.csv`,
-                        'text/csv',
-                      );
-                    }}
-                    className="flex items-center gap-1 px-2 py-1 text-xs font-medium bg-secondary hover:bg-secondary/80 border border-border rounded-md"
-                    title="필터 반영 CSV 내보내기">
-                    <Download className="w-3 h-3" /> CSV
-                  </button>
-                  <button onClick={() => {
-                      const ts = new Date().toISOString().slice(0, 19).replace(/[:]/g, '-');
-                      downloadBlob(
-                        resultsToTxt(runResponse.results, globalFilter, command),
-                        `bulk-exec-${ts}.txt`,
-                        'text/plain',
-                      );
-                    }}
-                    className="flex items-center gap-1 px-2 py-1 text-xs font-medium bg-secondary hover:bg-secondary/80 border border-border rounded-md"
-                    title="필터 반영 텍스트 내보내기">
-                    <Download className="w-3 h-3" /> TXT
-                  </button>
-                  <button onClick={async () => {
-                      const ok = await copyToClipboard(resultsToTxt(runResponse.results, globalFilter, command));
-                      setCopyToast(ok ? '클립보드에 복사됨' : '복사 실패');
-                      setTimeout(() => setCopyToast(null), 1500);
-                    }}
-                    className="flex items-center gap-1 px-2 py-1 text-xs font-medium bg-secondary hover:bg-secondary/80 border border-border rounded-md"
-                    title="필터 반영 결과 클립보드 복사">
-                    <FileText className="w-3 h-3" /> 복사
-                  </button>
-                </div>
-            </>}
-          >
+                    {/* 공통 필터 */}
+                    <div className="relative">
+                      <input
+                        value={globalFilter}
+                        onChange={(e) => setGlobalFilter(e.target.value)}
+                        placeholder="공통 필터…"
+                        aria-label="실행 결과 공통 필터"
+                        className="pl-2 pr-6 py-1 text-sm bg-background border border-border rounded-xl focus:outline-none focus:ring-1 focus:ring-primary w-36"
+                      />
+                      {globalFilter && (
+                        <button
+                          type="button"
+                          onClick={() => setGlobalFilter('')}
+                          className="absolute right-1.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                          title="필터 지우기"
+                          aria-label="필터 지우기"
+                        ><X className="w-3.5 h-3.5" aria-hidden /></button>
+                      )}
+                    </div>
+
+                    {/* 내보내기 */}
+                    <div className="flex items-center gap-1">
+                      <button type="button" onClick={() => downloadBlob(
+                          resultsToCsv(runResponse.results, globalFilter, current?.label ?? ''),
+                          `bulk-exec-${exportTs()}.csv`,
+                          'text/csv',
+                        )}
+                        className="flex items-center gap-1 px-2 py-1 text-xs font-medium bg-secondary hover:bg-secondary/80 border border-border rounded-xl"
+                        title="필터 반영 CSV 내보내기">
+                        <Download className="w-3 h-3" aria-hidden /> CSV
+                      </button>
+                      <button type="button" onClick={() => downloadBlob(
+                          resultsToTxt(runResponse.results, globalFilter, current?.label ?? ''),
+                          `bulk-exec-${exportTs()}.txt`,
+                          'text/plain',
+                        )}
+                        className="flex items-center gap-1 px-2 py-1 text-xs font-medium bg-secondary hover:bg-secondary/80 border border-border rounded-xl"
+                        title="필터 반영 텍스트 내보내기">
+                        <Download className="w-3 h-3" aria-hidden /> TXT
+                      </button>
+                      <button type="button" onClick={async () => {
+                          const ok = await copyToClipboard(resultsToTxt(runResponse.results, globalFilter, current?.label ?? ''));
+                          setCopyToast(ok ? '클립보드에 복사됨' : '복사 실패');
+                          setTimeout(() => setCopyToast(null), 1500);
+                        }}
+                        className="flex items-center gap-1 px-2 py-1 text-xs font-medium bg-secondary hover:bg-secondary/80 border border-border rounded-xl"
+                        title="필터 반영 결과 클립보드 복사">
+                        <FileText className="w-3 h-3" aria-hidden /> 복사
+                      </button>
+                    </div>
+                </>}
+              >
                 {copyToast && (
-                  <div className="px-3 py-1.5 text-xs bg-primary/5 text-primary border-b border-primary/20">
+                  <div role="status" className="px-3 py-1.5 text-xs bg-primary/5 text-primary border-b border-primary/20">
                     {copyToast}
                   </div>
                 )}
 
+                {/* 스크롤은 여기 한 겹뿐 — 행 안의 ExecOutputTabs 는 max-h-none. */}
                 <div className="flex-1 overflow-auto min-h-0">
                   {resultView === 'summary' ? (
                     <SummaryResultsTable results={runResponse.results} globalFilter={globalFilter} />
@@ -1397,22 +1473,22 @@ export function BulkExecPage() {
                     </DoubleScrollX>
                   )}
                 </div>
-          </MacCard>
-          )}
+              </MacCard>
+              )}
+            </div>
           </div>
         </div>
         </div>
       </PageShell>
 
-      {/* 실행 확인 모달 */}
+      {/* 변경 명령 확인 모달 — bash 조회 명령은 확인 없이 실행한다(§12.6.1-1). SCP 는 원격 파일을 덮어쓰므로 항상 danger(D-161). */}
       <ConfirmDialog
         open={confirmOpen}
-        title={action === 'ssh' ? '노드 일괄 SSH 실행 확인' : '노드 일괄 SCP 업로드 확인'}
+        title={action === 'ssh' ? '변경 명령 일괄 실행 확인' : '노드 일괄 SCP 업로드 확인'}
         description={action === 'ssh'
-          ? `이 작업은 ${clusterIds.length}개 클러스터의 ${selectedHosts.length}개 노드에 ${mode === 'parallel' ? '병렬' : '순차'}로 실행됩니다.`
+          ? `${clusterIds.length}개 클러스터의 ${selectedHosts.length}개 노드에 ${mode === 'parallel' ? '병렬' : '순차'}로 실행합니다. 조회 명령으로 판정되지 않아 노드 상태를 되돌릴 수 없게 바꿀 수 있습니다.`
           : `${selectedHosts.length}개 노드의 ${scpRemotePath} 에 업로드합니다. 같은 경로에 파일이 있으면 덮어씁니다.`}
         confirmLabel={action === 'ssh' ? '실행' : '덮어쓰기 업로드'}
-        // SCP 도 원격 파일을 덮어쓰므로 SSH 와 같은 danger 톤(D-161).
         danger
         onCancel={() => setConfirmOpen(false)}
         onConfirm={() => { setConfirmOpen(false); void doRun(); }}
@@ -1426,7 +1502,7 @@ export function BulkExecPage() {
               <span className="text-foreground">(선택된 {selectedHosts.length}개 host, {clusterIds.length}개 클러스터)</span>
               <span className="text-muted-foreground">:{port}</span>
               <span className="ml-2 text-xs px-1.5 py-0.5 rounded border border-border bg-secondary">
-                {authMode === 'password' ? '비밀번호' : '개인키'}
+                {authLabel}
               </span>
             </p>
           </div>
@@ -1439,6 +1515,12 @@ export function BulkExecPage() {
               <pre className="text-xs font-mono bg-background border border-border rounded p-2 max-h-28 overflow-auto whitespace-pre-wrap break-all">
                 {command}
               </pre>
+              {verdict.reason && (
+                <p className="mt-2 text-sm text-status-critical flex items-start gap-1.5">
+                  <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0" aria-hidden="true" />
+                  {verdict.reason}
+                </p>
+              )}
             </div>
           ) : (
             <div>
