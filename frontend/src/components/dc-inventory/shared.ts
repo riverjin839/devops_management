@@ -8,9 +8,9 @@ export const TH = 'text-left text-xs font-semibold text-muted-foreground px-3 py
 export const TD = 'text-sm px-3 py-2 border-b border-border align-top';
 
 export const ROLE_LABEL: Record<DcDeviceRole, string> = {
-  server: '서버', leaf: 'leaf', spine: 'spine', 'super-spine': 'super-spine', mgmt: 'mgmt', patch: '패치패널',
+  server: '서버', leaf: 'leaf', spine: 'spine', 'super-spine': 'super-spine', 'fa-core': 'FA 코어', mgmt: 'mgmt', patch: '패치패널',
 };
-export const ROLE_OPTIONS: DcDeviceRole[] = ['server', 'leaf', 'spine', 'super-spine', 'mgmt', 'patch'];
+export const ROLE_OPTIONS: DcDeviceRole[] = ['server', 'leaf', 'spine', 'super-spine', 'fa-core', 'mgmt', 'patch'];
 
 /** 정상(active)은 표시하지 않는다 — 상태 문구는 비정상일 때만(DESIGN_SYSTEM §12.12). */
 export const STATUS_LABEL: Record<DcDeviceStatus, string> = {

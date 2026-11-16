@@ -77,6 +77,7 @@ class SiteCreate(_Base):
 class HallCreate(_Base):
     site_id: UUID
     name: Name
+    zone_no: Optional[int] = Field(None, ge=0, le=9999)
     description: Optional[str] = None
 
 
@@ -189,6 +190,29 @@ class AsnCreate(_Base):
     description: Optional[str] = None
 
 
+class ZoneClusterCreate(_Base):
+    hall_id: UUID
+    cluster_id: UUID
+    note: Optional[str] = None
+
+
+class LinkCreate(_Base):
+    upper_device_id: UUID
+    lower_device_id: UUID
+    note: Optional[str] = None
+
+
+class CanvasPosition(_Base):
+    object_type: Literal["device", "rack"]
+    object_id: UUID
+    x: float = Field(..., ge=-100000, le=100000)
+    y: float = Field(..., ge=-100000, le=100000)
+
+
+class CanvasPositionsRequest(_Base):
+    positions: list[CanvasPosition] = Field(..., max_length=2000)
+
+
 CREATE: dict[str, type[BaseModel]] = {
     "sites": SiteCreate,
     "halls": HallCreate,
@@ -202,6 +226,8 @@ CREATE: dict[str, type[BaseModel]] = {
     "prefixes": PrefixCreate,
     "ip-addresses": IpAddressCreate,
     "asns": AsnCreate,
+    "zone-clusters": ZoneClusterCreate,
+    "links": LinkCreate,
 }
 UPDATE: dict[str, type[BaseModel]] = {
     key: _partial(model, model.__name__.replace("Create", "Update")) for key, model in CREATE.items()

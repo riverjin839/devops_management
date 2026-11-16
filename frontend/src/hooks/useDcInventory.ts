@@ -7,7 +7,15 @@ export const dcKeys = {
   overview: ['dc-inventory', 'overview'] as const,
   devices: (filters: Record<string, unknown>) => ['dc-inventory', 'devices', filters] as const,
   linkPreview: ['dc-inventory', 'link-preview'] as const,
+  topology: ['dc-inventory', 'topology'] as const,
 };
+
+export function useDcTopology() {
+  return useQuery({
+    queryKey: dcKeys.topology,
+    queryFn: async () => (await dcApi.topology()).data,
+  });
+}
 
 export function useDcOverview() {
   return useQuery({

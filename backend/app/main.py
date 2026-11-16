@@ -500,6 +500,8 @@ def _run_migrations():
             _safe_create_index(f"ix_{_t}_tenant_id", _t, "(tenant_id)")
     # DC 인벤토리 — 서버 단일 원본(dc_devices) 연결 컬럼. 데이터 연결은 자동으로 하지 않고
     # /dc-inventory 의 "기존 데이터 연결" 에서 미리보기 후 선택 적용한다(값 덮어쓰기 방지).
+    if "dc_halls" in _existing_tables:
+        _safe_add_column("dc_halls", "zone_no", "INTEGER")  # 구간 번호(토폴로지 화면의 "DC #n 구간")
     if "dc_devices" in _existing_tables:
         for _t in ("node_server_specs", "infra_nodes"):
             if _t in _existing_tables:

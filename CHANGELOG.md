@@ -10,6 +10,9 @@
 
 1.89.0 이후 main 에 병합된 변경 (다음 릴리스 후보).
 
+### Added
+- **DC 인벤토리 토폴로지 — 끌어서 그리고 우클릭으로 고치는 패브릭 편집 화면**: `/dc-inventory` 첫 탭에서 워크플로 보드처럼 DC 구조를 화면에서 바로 등록한다. ① 왼쪽에서 DC 와 **구간(구획)** 을 번호·이름·설명으로 정의하고 ② 구간마다 주요 **K8s 클러스터**를 연결하며 ③ 캔버스에 **FA 코어 → super-spine → spine → leaf(ToR) → 랙** 을 위에서 아래로 놓는다. 랙은 ToR 과 실제 서버가 U 순서로 들어 있는 박스로 보인다. 노드를 끌면 위치가 저장되고, 노드의 점을 다른 장비로 끌면 연결이 생기며(위·아래 계층은 자동 판정, 같은 계층·역방향은 사유와 함께 거부), 빈 곳·장비·랙·연결선을 우클릭하면 추가·수정·폐기·삭제 메뉴가 뜬다. 등록된 케이블이 있으면 그 연결도 함께 그려지고(실선, 케이블 수 표시) 화면에서 그은 논리 연결은 점선이다. 장비나 랙을 누르면 **관계** 패널이 그 개체의 소속·포함·상위/하위 연결·클러스터 관계를 보여준다(개체 + 관계 그래프). 역할에 `fa-core` 가 추가됐다. Backend: `services/dc_inventory/topology.py`, `GET /dc/topology`·`PUT|DELETE /dc/topology/positions`, 리소스 `zone-clusters`·`links`, 테이블 `dc_zone_clusters`·`dc_links`·`dc_canvas_positions`, `dc_halls.zone_no`. Frontend: `components/dc-inventory/DcTopologyBoard.tsx`·`DcZonePanel.tsx`·`DcEntityDialog.tsx`·`topologyLayout.ts`.
+
 ## [1.89.0] - 2026-11-16
 
 ### Added

@@ -22,6 +22,9 @@ from app.models.dc_inventory import (
     DcDevice,
     DcDeviceType,
     DcHall,
+    DcLink,
+    DcZoneCluster,
+    FABRIC_TIER_RANK,
     DcInterface,
     DcIpAddress,
     DcPrefix,
@@ -259,6 +262,31 @@ def _prep_asn(db, data, existing, ctx):
         _need(db, Cluster, data["cluster_id"], "클러스터", "cluster")
 
 
+def _prep_zone_cluster(db, data, existing, ctx):
+    if "hall_id" in data:
+        _need(db, DcHall, data["hall_id"], "구간", "hall")
+    if "cluster_id" in data:
+        _need(db, Cluster, data["cluster_id"], "클러스터", "cluster")
+
+
+def _prep_link(db, data, existing, ctx):
+    """패브릭 연결은 위 계층 → 아래 계층으로만 건다 (FA 코어 → super-spine → spine → leaf)."""
+    upper = _need(db, DcDevice, _merged(data, existing, "upper_device_id"), "상위 장비", "upper_device")
+    lower = _need(db, DcDevice, _merged(data, existing, "lower_device_id"), "하위 장비", "lower_device")
+    if upper.id == lower.id:
+        raise DcInvalid("자기 자신과는 연결할 수 없습니다", code="same_device", column="lower_device")
+    ur, lr = FABRIC_TIER_RANK.get(upper.role), FABRIC_TIER_RANK.get(lower.role)
+    if ur is None or lr is None:
+        raise DcInvalid("패브릭 연결은 FA 코어 · super-spine · spine · leaf 장비끼리만 겁니다. "
+                        "서버는 케이블로 leaf 에 연결하세요.", code="not_fabric", column="lower_device")
+    if ur >= lr:
+        raise DcInvalid(f"{upper.hostname}({upper.role}) 은(는) {lower.hostname}({lower.role}) 의 상위 계층이 아닙니다",
+                        code="tier_order", column="upper_device")
+    reverse = db.query(DcLink).filter(DcLink.upper_device_id == lower.id, DcLink.lower_device_id == upper.id).first()
+    if reverse is not None:
+        raise DcConflict("반대 방향 연결이 이미 있습니다", code="duplicate")
+
+
 RESOURCES: dict[str, Resource] = {r.key: r for r in (
     Resource("sites", DcSite, "site", "사이트", unique=(("name",),),
              children=((DcHall, "site_id", "홀"),), search=("name",), after=_after_location),
@@ -295,11 +323,18 @@ RESOURCES: dict[str, Resource] = {r.key: r for r in (
              order=("address",), prepare=_prep_ip),
     Resource("asns", DcAsn, "asn", "ASN", repr_field="number", unique=(("number",),),
              filters=("target_type", "rack_id", "cluster_id"), order=("number",), prepare=_prep_asn),
+    Resource("zone-clusters", DcZoneCluster, "zone_cluster", "구간 클러스터 연결", repr_field="id",
+             unique=(("hall_id", "cluster_id"),), filters=("hall_id", "cluster_id"), order=("created_at",),
+             prepare=_prep_zone_cluster),
+    Resource("links", DcLink, "link", "패브릭 연결", repr_field="id",
+             unique=(("upper_device_id", "lower_device_id"),), filters=("upper_device_id", "lower_device_id"),
+             order=("created_at",), prepare=_prep_link),
 )}
 
 _UNIQUE_LABELS = {
     "name": "이름", "hostname": "호스트명", "serial": "시리얼", "model": "모델명", "label": "라벨",
     "rack_no": "랙 번호", "number": "ASN 번호", "cidr": "CIDR",
+    "cluster_id": "클러스터", "lower_device_id": "연결",
 }
 
 
@@ -330,6 +365,9 @@ def _check_unique(db: Session, res: Resource, data: dict[str, Any], existing: An
         other = q.first()
         if other is not None:
             col = cols[-1]
+            if res.key in ("zone-clusters", "links"):
+                raise DcConflict("이미 연결돼 있습니다", code="duplicate", column=col,
+                                 conflict={"id": str(other.id)})
             raise DcConflict(
                 f"{_UNIQUE_LABELS.get(col, col)} '{values[col]}' 은(는) 이미 있는 {res.label}입니다",
                 code="duplicate", column=col, conflict={"id": str(other.id)},

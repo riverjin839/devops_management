@@ -38,10 +38,11 @@ from app.schemas.dc_inventory import (
     BulkDevicesRequest,
     BulkInterfacesRequest,
     BulkIpRequest,
+    CanvasPositionsRequest,
     LinkApplyRequest,
 )
 from app.services import audit_logger
-from app.services.dc_inventory import bulk, crud, device_registry, exporter, importer, validation
+from app.services.dc_inventory import bulk, crud, device_registry, exporter, importer, topology, validation
 from app.services.dc_inventory.changelog import Ctx
 from app.services.dc_inventory.errors import DcInvalid
 from app.services.sse import Emit, log_evt, step_evt, stream_async_job
@@ -115,6 +116,31 @@ def list_changes(
         "batch_id": r.batch_id, "source": r.source, "created_at": r.created_at.isoformat(),
     } for r in rows[:limit]]
     return {"items": items, "has_more": len(rows) > limit}
+
+
+# ── 토폴로지 (구간 · 클러스터 · 패브릭 계층 · 랙) ────────────────────────────
+
+@router.get("/topology")
+def get_topology(db: Session = Depends(get_db)):
+    """토폴로지 캔버스 데이터 — 구간·연결 클러스터·패브릭 장비·랙(장착 장비 포함)·연결·온톨로지 관계."""
+    return topology.build(db)
+
+
+@router.put("/topology/positions")
+def save_topology_positions(payload: CanvasPositionsRequest, db: Session = Depends(get_db),
+                            _: User = Depends(require_operator)):
+    """끌어 놓은 노드 위치 저장(모든 사용자가 같은 배치를 본다)."""
+    saved = topology.save_positions(db, [p.model_dump() for p in payload.positions])
+    db.commit()
+    return {"saved": saved}
+
+
+@router.delete("/topology/positions")
+def reset_topology_positions(db: Session = Depends(get_db), _: User = Depends(require_operator)):
+    """저장된 위치를 지우고 계층별 자동 배치로 되돌린다."""
+    removed = topology.reset_positions(db)
+    db.commit()
+    return {"removed": removed}
 
 
 # ── 장비: 다른 화면 재사용 · 상세 · 기존 데이터 연결 ─────────────────────────

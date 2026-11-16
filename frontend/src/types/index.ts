@@ -6261,7 +6261,7 @@ export interface NsPrefs {
 }
 
 // ── DC 인벤토리 (/dc-inventory) — 랙·장비·케이블·IPAM 물리 구간 대장 ─────────────────────
-export type DcDeviceRole = 'server' | 'leaf' | 'spine' | 'super-spine' | 'mgmt' | 'patch';
+export type DcDeviceRole = 'server' | 'leaf' | 'spine' | 'super-spine' | 'fa-core' | 'mgmt' | 'patch';
 export type DcDeviceStatus = 'planned' | 'active' | 'spare' | 'maintenance' | 'decommission';
 
 export interface DcDevice {
@@ -6358,4 +6358,82 @@ export interface DcLinkResult {
   failed: number;
   skipped: number;
   results: { hostname: string; status: 'linked' | 'created' | 'error'; error?: string; deviceId?: string }[];
+}
+
+// ── DC 인벤토리 토폴로지 (구간 · 클러스터 · 패브릭 계층 · 랙) ─────────────────────────────
+export interface DcTopoSite { id: string; name: string; description: string | null; version: number }
+export interface DcTopoZoneCluster { linkId: string; clusterId: string; name: string; status: string; note: string | null }
+export interface DcTopoZone {
+  id: string;
+  siteId: string;
+  name: string;
+  zoneNo: number | null;
+  description: string | null;
+  version: number;
+  clusters: DcTopoZoneCluster[];
+  rackCount: number;
+  deviceCount: number;
+}
+/** 패브릭 장비(FA 코어 0 · super-spine 1 · spine 2 · leaf 3). x·y 는 사용자가 끌어 놓은 위치(없으면 자동 배치). */
+export interface DcTopoFabricNode {
+  id: string;
+  hostname: string;
+  role: DcDeviceRole;
+  tier: number;
+  status: DcDeviceStatus;
+  rackId: string | null;
+  rackName: string | null;
+  zoneId: string | null;
+  clusterId: string | null;
+  version: number;
+  x: number | null;
+  y: number | null;
+  pinned: boolean;
+}
+export interface DcTopoRackDevice {
+  id: string;
+  hostname: string;
+  role: DcDeviceRole;
+  status: DcDeviceStatus;
+  positionU: number | null;
+  uHeight: number;
+  face: 'front' | 'rear';
+  uRange: string | null;
+  clusterId: string | null;
+}
+export interface DcTopoRack {
+  id: string;
+  name: string;
+  rackNo: number | null;
+  rowId: string;
+  rowName: string | null;
+  zoneId: string | null;
+  uHeight: number;
+  usedU: number;
+  version: number;
+  devices: DcTopoRackDevice[];
+  x: number | null;
+  y: number | null;
+  pinned: boolean;
+}
+/** logical = 화면에서 그은 연결, cable = 등록된 케이블에서 파생, both = 둘 다. */
+export interface DcTopoEdge {
+  upperId: string;
+  lowerId: string;
+  linkId: string | null;
+  note: string | null;
+  cableCount: number;
+  kind: 'logical' | 'cable' | 'both';
+}
+export interface DcTopology {
+  sites: DcTopoSite[];
+  zones: DcTopoZone[];
+  fabric: DcTopoFabricNode[];
+  racks: DcTopoRack[];
+  edges: DcTopoEdge[];
+  unracked: { id: string; hostname: string; role: DcDeviceRole; status: DcDeviceStatus }[];
+  ontology: {
+    entities: { id: string; type: string; name: string }[];
+    relationships: { source: string; type: string; target: string }[];
+  };
 }
