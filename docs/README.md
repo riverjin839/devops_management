@@ -27,6 +27,7 @@ PEP 문서 모음. 루트의 [README](../README.md) · [CHANGELOG](../CHANGELOG.
 ## 화면 / 설계 레퍼런스
 - [SCREENS.md](SCREENS.md) — **화면 단위 명세서**(전 라우트의 UX/UI/Frontend/Backend/핵심 기능; 화면별 개선 요청 기록용)
 - [KNOWLEDGE_BASE_DESIGN.md](KNOWLEDGE_BASE_DESIGN.md) — 지식 베이스 설계
+- [dc-inventory/DESIGN.md](dc-inventory/DESIGN.md) — **DC 인벤토리 설계(1단계)**: 랙·장비·케이블·IPAM 데이터 모델, 서버 단일 원본 통합(`dc_devices`), API·화면·단계별 계획·열린 질문
 
 ## 릴리스 / 프로세스
 - [branch-tag-strategy.md](branch-tag-strategy.md) — 브랜치·태그·릴리스(SemVer, trunk)
