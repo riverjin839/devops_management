@@ -41,6 +41,7 @@ FEATURE_API_PATTERNS: dict[str, tuple[str, ...]] = {
     "/isilon-nfs": (r"^/isilon-nfs(/|$)",),
     "/k8s-allocation": (r"^/k8s/[^/]+/allocation(/|$)",),
     "/ns-migration": (r"^/ns-migration(/|$)",),
+    "/dc-inventory": (r"^/dc(/|$)",),
     "/k8s-events": (r"^/events(/|$)",),
     "/pod-bottleneck": (r"^/pod-bottleneck(/|$)",),
     # lake-service-types 는 Settings 에서도 편집하므로 제외.

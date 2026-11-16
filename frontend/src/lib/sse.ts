@@ -8,6 +8,7 @@ export type SseEvent = Record<string, unknown> & { type?: string };
 
 /** 스트림을 끝까지 읽으며 이벤트마다 onEvent 를 호출한다.
  *  스트림 시작 전 거절(403/404/422 등)은 서버 detail 을 담아 Error 로 던진다.
+ *  `body` 가 `FormData` 면 multipart 로 그대로 보낸다(파일을 올리며 실행 로그를 받는 일괄 등록).
  *  `headers` 는 axios 쪽에서 붙이던 화면별 헤더(예: `X-API-Scopes`)를 그대로 넘길 때 쓴다. */
 export async function postSse(
   url: string,
@@ -17,16 +18,18 @@ export async function postSse(
   headers?: Record<string, string>,
 ): Promise<void> {
   const token = getAuthToken();
+  // FormData(파일 업로드)는 브라우저가 boundary 를 붙인 Content-Type 을 직접 정하므로 헤더를 주지 않는다.
+  const isForm = typeof FormData !== 'undefined' && body instanceof FormData;
   const resp = await fetch(url, {
     method: 'POST',
     signal,
     headers: {
-      'Content-Type': 'application/json',
+      ...(isForm ? {} : { 'Content-Type': 'application/json' }),
       Accept: 'text/event-stream',
       ...(headers ?? {}),
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
     },
-    body: JSON.stringify(body),
+    body: isForm ? (body as FormData) : JSON.stringify(body),
   });
   if (!resp.ok) {
     let detail = `서버 오류 ${resp.status}`;

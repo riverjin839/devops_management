@@ -31,6 +31,8 @@ from app.schemas.infra_node import (
 )
 from app.services.check_definition_runner import DeepCheckService
 from app.services.cluster_access import require_cluster_access
+from app.services.dc_inventory import device_registry
+from app.services.dc_inventory.errors import DcError
 from app.services.kubeconfig import resolve_kubeconfig
 
 logger = logging.getLogger(__name__)
@@ -68,6 +70,15 @@ def _serialize_node(node: InfraNode | None) -> dict | None:
         "version": node.version,
         "updated_at": node.updated_at.isoformat() if node.updated_at else None,
     }
+
+
+def _sync_device(db: Session, node: InfraNode, fields: set[str] | None, actor: User | None) -> None:
+    """랙 이름을 DC 인벤토리 장비(단일 원본)와 맞춘다. 제약 위반은 사유와 함께 409/422."""
+    try:
+        device_registry.sync_infra_node(db, node, fields=fields, actor=actor, strict=True)
+    except DcError as e:
+        db.rollback()
+        raise HTTPException(status_code=e.status_code, detail=e.detail) from e
 
 
 def _require_scope(required_scope: str):
@@ -168,6 +179,7 @@ def create_infra_node(
         after_data=payload.model_dump(mode="json"),
     )
     try:
+        _sync_device(db, node, None, user)  # 노드 INSERT 가 여기서 나간다 — 중복은 아래 409 로
         db.commit()
     except IntegrityError:
         db.rollback()
@@ -208,6 +220,9 @@ def update_infra_node(
             patch_data.pop(required)
     for k, v in patch_data.items():
         setattr(node, k, v)
+    touched = set(patch_data) & device_registry.INFRA_IDENTITY_FIELDS
+    if touched or node.device_id is None:
+        _sync_device(db, node, touched, user)
     node.version += 1
     _audit(
         db,
@@ -648,6 +663,8 @@ def _run_sync(db: Session, cluster: Cluster, emit: Emit) -> SyncResult:
                     auto_synced=True,
                 )
                 db.add(new_node)
+                # DC 인벤토리 장비(단일 원본)에 함께 등록 — 실패해도 동기화는 계속한다.
+                device_registry.sync_infra_node(db, new_node, strict=False)
                 created_count += 1
                 created_hostnames.append(hostname)
                 _log(emit, "info", f"[{hostname}] 신규 추가 — {spec}")

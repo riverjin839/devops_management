@@ -66,6 +66,8 @@ class InfraNodeUpdate(BaseModel):
 class InfraNodeResponse(InfraNodeBase):
     id: UUID
     cluster_id: UUID
+    # 연결된 DC 인벤토리 장비(신원·물리 위치의 단일 원본). 없으면 아직 연결 전.
+    device_id: Optional[UUID] = None
     auto_synced: bool
     version: int
     created_at: datetime

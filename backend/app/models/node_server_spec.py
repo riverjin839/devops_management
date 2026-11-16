@@ -90,6 +90,9 @@ class NodeServerSpec(Base):
     # ── 메모 ────────────────────────────────────────────────────────────────
     description = Column(Text, nullable=True)
 
+    # DC 인벤토리 장비(신원·물리 위치의 단일 원본)와의 연결 — services/dc_inventory/device_registry.py
+    device_id = Column(UUID(as_uuid=True), ForeignKey("dc_devices.id", ondelete="SET NULL"), nullable=True, index=True)
+
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 

@@ -40,6 +40,8 @@ CLUSTER_TABLE = "clusters"
 KEEP_ROWS: dict[str, str] = {
     "work_items": "업무 이력 — 클러스터가 사라져도 기록은 보존",
     "node_server_specs": "서버 자산(스펙) 정보 — 클러스터 연결만 해제",
+    "dc_devices": "DC 인벤토리 장비(물리 자산) — 클러스터 연결만 해제",
+    "dc_asns": "DC 인벤토리 ASN 기록 — 대상 클러스터 연결만 해제",
 }
 
 # cluster_id 를 가진 테이블끼리도 FK 로 얽혀 있어 순서가 필요한 것들. 먼저 지운다.

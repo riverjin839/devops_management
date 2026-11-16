@@ -41,6 +41,7 @@ BACKUP_VERSION = "1.0"
 
 # 대용량/로그성 — 옵션으로 제외 가능
 LOG_TABLES: frozenset[str] = frozenset({
+    "dc_change_logs",  # DC 인벤토리 변경 이력(append-only, 무기한 보존 — 백업에서는 로그 옵션으로 제외 가능)
     "check_logs",
     "daily_check_logs",
     "cluster_config_snapshots",

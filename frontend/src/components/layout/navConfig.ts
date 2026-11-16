@@ -5,7 +5,7 @@ import {
   Eye, FileCode2, FileSpreadsheet, FileText, Files, Gauge, GitBranch, GitFork, HardDrive, Home, Hourglass,
   KeyRound, Layers, LayoutGrid, Library, Link2, ListChecks, ListTodo, ListTree, Map, Network,
   NotebookText, Palmtree, Radar, Rocket, Route, Rss, ScrollText, Server, Settings, Share2, ShieldCheck,
-  ShipWheel, Siren, Tag, Tags, Terminal, TerminalSquare, TrendingUp, Users, UsersRound, Waves, Waypoints,
+  ShipWheel, Siren, Tag, Tags, Terminal, TerminalSquare, TrendingUp, Users, UsersRound, Warehouse, Waves, Waypoints,
   Workflow,
 } from 'lucide-react';
 import type { NavGroupDescKey, NavGroupKey, NavPageKey } from '@/i18n/resources/ko';
@@ -62,6 +62,8 @@ export const NAV_MAP: Record<string, NavMapEntry> = {
   '/kernel-params':      { labelKey: 'kernelParams', defaultLabel: '커널 파라미터',  icon: Cpu },
   '/infra-topology':     { labelKey: 'infraTopology', defaultLabel: '인프라 토폴로지', icon: Network },
   '/node-specs':         { labelKey: 'nodeSpecs', defaultLabel: '노드 서버스펙',  icon: ClipboardList },
+  // DC 인벤토리 — 랙·장비·케이블·IPAM 물리 구간 대장. 서버 신원·위치의 단일 원본(노드 서버스펙·인프라 토폴로지가 연결된다).
+  '/dc-inventory':       { labelKey: 'dcInventory', defaultLabel: 'DC 인벤토리',  icon: Warehouse },
   '/links':              { labelKey: 'links', defaultLabel: '클러스터 링크',  icon: Link2 },
   '/node-labels':        { labelKey: 'nodeLabels', defaultLabel: 'K8s 노드 라벨',   icon: Tags },
   '/k8s-rbac':           { labelKey: 'k8sRbac', defaultLabel: 'K8s 접근 권한',  icon: KeyRound },
@@ -162,7 +164,7 @@ export const GROUPS: NavGroup[] = [
   { id: 'operate',   label: '운영 조작', labelKey: 'operate', descriptionKey: 'operate', icon: Terminal,    description: '클러스터·노드·스토리지에 명령을 보낸다 — 실행 전 대상을 확인할 것', domain: 'platform', tone: 'danger',
     paths: ['/ns-migration', '/k9s', '/bulk-exec', '/node-ssh', '/mc'] },
   { id: 'configure', label: '구성·자산', labelKey: 'configure', descriptionKey: 'configure', icon: Layers,      description: '클러스터 등록·자원·권한·노드 자산을 관리한다', domain: 'platform',
-    paths: ['/cluster-manage', '/node-labels', '/node-specs', '/links'] },
+    paths: ['/cluster-manage', '/node-labels', '/node-specs', '/dc-inventory', '/links'] },
   { id: 'topology',  label: '토폴로지', labelKey: 'topology', descriptionKey: 'topology', icon: Map,     description: '인프라·서비스 구조를 지도로 본다', domain: 'platform',
     paths: ['/infra-topology', '/service-topology', '/service-architecture', '/architecture'] },
   // '/batch-jobs' 는 사이드바 진입점에서 뺐다 — 홈 화면 "플랫폼 현황" 탭의 서브탭으로

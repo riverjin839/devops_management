@@ -6259,3 +6259,103 @@ export interface NsPrefs {
   recentLimit: number;
   clusters: NsClusterPrefs[];
 }
+
+// ── DC 인벤토리 (/dc-inventory) — 랙·장비·케이블·IPAM 물리 구간 대장 ─────────────────────
+export type DcDeviceRole = 'server' | 'leaf' | 'spine' | 'super-spine' | 'mgmt' | 'patch';
+export type DcDeviceStatus = 'planned' | 'active' | 'spare' | 'maintenance' | 'decommission';
+
+export interface DcDevice {
+  id: string;
+  hostname: string;
+  role: DcDeviceRole;
+  status: DcDeviceStatus;
+  deviceTypeId: string | null;
+  deviceTypeModel: string | null;
+  rackId: string | null;
+  rackName: string | null;
+  positionU: number | null;
+  /** "U21-U22" — 장비가 차지하는 U 범위. 랙 안 위치가 정해지지 않았으면 null. */
+  uRange: string | null;
+  uHeight: number;
+  face: 'front' | 'rear';
+  serial: string | null;
+  assetTag: string | null;
+  clusterId: string | null;
+  clusterName: string | null;
+  k8sNodeName: string | null;
+  description: string | null;
+  version: number;
+}
+
+export interface DcOverview {
+  racks: number;
+  devices: number;
+  interfaces: number;
+  cables: number;
+  prefixes: number;
+  ipAddresses: number;
+  unrackedDevices: number;
+  unconnectedInterfaces: number;
+  /** 아직 DC 인벤토리 장비에 연결되지 않은 노드 서버스펙·인프라 노드 수. */
+  unlinkedExisting: number;
+}
+
+export type DcImportAction = 'insert' | 'update' | 'error';
+export interface DcImportRowError { column: string; code: string; message: string }
+export interface DcImportChange { column: string; old: string | number | boolean | null; new: string | number | boolean | null }
+export interface DcImportRow {
+  /** Excel 행 번호(헤더가 1행). */
+  row: number;
+  key: string;
+  action: DcImportAction;
+  summary?: string;
+  changes?: DcImportChange[];
+  errors?: DcImportRowError[];
+  warnings?: string[];
+}
+export interface DcImportSheet {
+  name: string;
+  total: number;
+  insert: number;
+  update: number;
+  skip: number;
+  error: number;
+  rows: DcImportRow[];
+  /** 응답에 싣는 행 수 상한에 걸려 일부만 실렸다(건수는 항상 전체). */
+  truncated: boolean;
+}
+export interface DcImportResult {
+  sha256: string;
+  filename: string;
+  ok: boolean;
+  applied: boolean;
+  batchId: string | null;
+  summary: { insert: number; update: number; skip: number; error: number };
+  sheets: DcImportSheet[];
+  implicitCreated: string[];
+  warnings: string[];
+}
+
+export type DcLinkCategory = 'linkable' | 'create' | 'mismatch' | 'duplicate_hostname';
+export interface DcLinkItem {
+  hostname: string;
+  category: DcLinkCategory;
+  specCount: number;
+  infraNodeCount: number;
+  clusters: string[];
+  deviceId: string | null;
+  existing: { serial: string | null; rack: string | null; rackUnit: string | null };
+  diffs: { field: string; existing: string; device: string }[];
+  defaultPrefer: 'existing' | 'device';
+}
+export interface DcLinkPreview {
+  linked: number;
+  counts: Record<DcLinkCategory, number>;
+  items: DcLinkItem[];
+}
+export interface DcLinkResult {
+  linked: number;
+  failed: number;
+  skipped: number;
+  results: { hostname: string; status: 'linked' | 'created' | 'error'; error?: string; deviceId?: string }[];
+}

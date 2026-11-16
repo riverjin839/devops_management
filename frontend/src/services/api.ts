@@ -2953,3 +2953,38 @@ export const nsMigrationApi = {
 };
 
 export default api;
+
+// ── DC 인벤토리 (/dc-inventory) ───────────────────────────────────────────────────────
+export const dcApi = {
+  overview: () => api.get<import('@/types').DcOverview>('/dc/overview'),
+  devices: (params: { q?: string; role?: string; status?: string; unracked?: boolean; limit?: number }, signal?: AbortSignal) =>
+    api.get<{ items: import('@/types').DcDevice[]; total: number }>('/dc/devices', {
+      params: {
+        q: params.q || undefined,
+        role: params.role || undefined,
+        status: params.status || undefined,
+        unracked: params.unracked ? 'true' : undefined,
+        limit: params.limit ?? 1000,
+      },
+      signal,
+    }),
+  /** 빈 양식(시트별 헤더 + 설명 시트). */
+  importTemplate: () => api.get<Blob>('/dc/import/template.xlsx', { responseType: 'blob' }),
+  /** 현재 데이터를 일괄 등록 양식 그대로. */
+  exportXlsx: () => api.get<Blob>('/dc/export.xlsx', { responseType: 'blob', timeout: SYNC_RUN_TIMEOUT }),
+  /** 미리보기 — DB 를 바꾸지 않는다. 수천 행 첫 등록은 수십 초 걸릴 수 있다. */
+  importPreview: (file: File, signal?: AbortSignal) => {
+    const fd = new FormData();
+    fd.append('file', file);
+    return api.post<import('@/types').DcImportResult>('/dc/import/preview', fd, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+      timeout: SYNC_RUN_TIMEOUT,
+      signal,
+    });
+  },
+  /** 확정 SSE 경로 — `postSse(url, FormData{file, sha256})`. */
+  importApplyStreamUrl: '/api/v1/dc/import/apply/stream',
+  linkPreview: () => api.get<import('@/types').DcLinkPreview>('/dc/devices/link/preview'),
+  /** 기존 데이터 연결 SSE 경로 — 본문 `{items: [{hostname, action, prefer}]}`. */
+  linkApplyStreamUrl: '/api/v1/dc/devices/link/apply/stream',
+};

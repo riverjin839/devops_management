@@ -1,6 +1,6 @@
 # DC 인벤토리 설계 (1단계 — 설계만)
 
-> 상태: **검토 대기** · 작성 2026-11-16 · 코드 없음(이 문서와 화면 목업만)
+> 상태: **2단계 구현(모델 · CRUD API · 서버 통합 · 일괄 등록)** · 설계 승인 2026-11-16 · 3~6단계는 미구현
 > 화면 목업: https://claude.ai/artifact/HqZrVkUUaGxLhMrxfJ23MR (비공개 링크 — 작성자 계정에서만 열림, 다른 사람에게는 공유 설정 필요)
 > 범위: 1개 DC · 랙 20~40 · 장비 400대 이하. NetBox 는 **개념과 화면 흐름만** 참고했고 코드·스키마·UI 는 가져오지 않는다.
 
@@ -158,7 +158,7 @@ erDiagram
 | 테이블 | 필드 | 제약 |
 |---|---|---|
 | `dc_device_types` | `vendor`, `model`, `u_height` INT, `is_full_depth` BOOL 기본 true, `default_role`, `interface_templates` JSONB(`[{name, speed_mbps, purpose}]`) | `model` 유일, `u_height` ≥ 0(0 = 랙 공간 미점유) |
-| `dc_devices` | `hostname`, `role`(`server`·`leaf`·`spine`·`super-spine`·`mgmt`·`patch`), `device_type_id` FK, `rack_id` FK NULL, `position_u` INT NULL(가장 아래 U, 1 = 최하단), `face`(`front`·`rear`), `status`(`planned`·`active`·`spare`·`maintenance`·`decommission`), `serial`, `asset_tag`, `cluster_id` FK→`clusters` `SET NULL`, `k8s_node_name`, `description` | `hostname` 전역 유일, `serial` 유일(NULL 제외), `rack_id`·`position_u` 는 둘 다 있거나 둘 다 없음, `position_u + u_height − 1 ≤ rack.u_height`, **같은 랙에서 U 범위 겹침 금지** |
+| `dc_devices` | `hostname`, `role`(`server`·`leaf`·`spine`·`super-spine`·`mgmt`·`patch`), `device_type_id` FK, `rack_id` FK NULL, `position_u` INT NULL(가장 아래 U, 1 = 최하단), `face`(`front`·`rear`), `status`(`planned`·`active`·`spare`·`maintenance`·`decommission`), `serial`, `asset_tag`, `cluster_id` FK→`clusters` `SET NULL`, `k8s_node_name`, `description` | `hostname` 전역 유일, `serial` 유일(NULL 제외), `position_u` 는 `rack_id` 가 있을 때만(랙만 알고 U 를 모르는 장비 허용 — §10), `position_u + u_height − 1 ≤ rack.u_height`, **같은 랙에서 U 범위 겹침 금지** |
 | `dc_interfaces` | `device_id` FK `CASCADE`, `name`(예: `eth0`·`Ethernet1/1`·`P01-front`), `speed_mbps` INT, `purpose`(`private-a`·`private-b`·`public-a`·`public-b`·`bmc`·`uplink`·`patch`·`other`), `mac`, `paired_interface_id` FK self NULL, `enabled` BOOL, `description` | `(device_id, name)` 유일, `paired_interface_id` 는 같은 장비의 다른 포트만, 케이블이 있으면 삭제 거부 |
 
 장비 생성 시 `interface_templates` 로 인터페이스를 자동 생성한다(화면에서 끌 수 있음).
@@ -581,7 +581,9 @@ Jinja2 `SandboxedEnvironment` + `StrictUndefined`. **적용 기능은 없다** �
 
 ---
 
-## 9. 열린 질문 (결정 필요)
+## 9. 결정 사항 (2026-11-16 확정 — 전부 추천안 채택)
+
+아래 16개 질문은 모두 "추천" 열의 안으로 확정됐다. 15번(현재 Excel 의 실제 열 구조)만 자료가 오면 열 이름 매핑을 추가한다.
 
 | # | 질문 | 선택지 | 추천 |
 |---|---|---|---|
@@ -601,3 +603,29 @@ Jinja2 `SandboxedEnvironment` + `StrictUndefined`. **적용 기능은 없다** �
 | 14 | `node_server_specs` 의 bond IP·BMC IP 를 IPAM 주소와 연결할지 | (a) 이번엔 따로 둠 (b) 4단계에서 인터페이스 IP 로 미러 | **(b)** — 통합 원칙상 IP 도 한 곳에 있어야 하지만 2단계 범위를 키우지 않는다 |
 | 15 | 현재 Excel 의 실제 시트·열 구조 | — | §5.3 양식과 다르면 열 이름 매핑을 추가한다. 실제 파일의 헤더 행만 공유해 주면 반영 |
 | 16 | 케이블 양 끝 속도가 다를 때, 그리고 브레이크아웃(100G 1포트 → 25G 4개) | (a) 경고만 (b) 거부 (c) 브레이크아웃을 하위 인터페이스(`Ethernet1/49/1-4`)로 등록해 일치시킴 | **(a)+(c)** — 속도 협상으로 낮춰 쓰는 경우가 있어 거부하지 않고, 브레이크아웃은 하위 인터페이스로 표현 |
+
+---
+
+## 10. 2단계 구현 메모 (설계에서 달라지거나 구체화된 점)
+
+| 항목 | 구현 |
+|---|---|
+| 랙만 알고 U 를 모르는 장비 | 허용한다(`rack_id` 있음 + `position_u` 없음). 인프라 토폴로지처럼 랙 이름만 아는 화면에서 온 값을 받기 위해서다. U 가 없으면 겹침 검사 대상이 아니다. `position_u` 는 `rack_id` 없이 줄 수 없다 |
+| 장비 높이 | `dc_devices` 에 `u_height`·`is_full_depth` 를 장비 종류에서 복제해 둔다 — 겹침 검사와 DB `EXCLUDE` 제약이 한 테이블에서 끝난다. 장비 종류를 바꾸면 다시 복제한다 |
+| DB `EXCLUDE` 제약 | 전체 깊이 장비끼리만 대상(`DEFERRABLE INITIALLY DEFERRED`). 반깊이 앞·뒤 공유 판정은 서비스 검증이 한다. `btree_gist` 를 만들 수 없으면 건너뛴다 |
+| 브레이크아웃 | `dc_interfaces.parent_interface_id`(같은 장비의 부모 포트). Excel `interfaces.parent` 열 |
+| 패치패널 짝 포트 | 한쪽에 `paired_interface_id` 를 걸면 반대쪽도 자동으로 걸린다(양방향 유지) |
+| 기존 화면 → 장비 동기화 규칙 | 서버스펙·인프라 노드에 적은 랙 이름이 **DC 인벤토리에 등록된 랙**이면 장비가 그 랙으로 가고 제약(U 겹침 등)을 어기면 409 로 거부한다. 등록되지 않은 랙 이름은 예전처럼 자유 입력으로 남고 장비 배치는 바뀌지 않는다 — DC 인벤토리에 랙을 넣지 않은 설치에서 기존 화면이 그대로 동작해야 하기 때문이다 |
+| 미러 방향 | 장비에 값이 있는 항목은 장비 값이 이긴다. DC 인벤토리에서 이번에 비운 항목은 연결된 행에서도 비운다. `infra_nodes` 는 `hostname`·`cluster_id` 를 건드리지 않고 랙 이름과 스위치 이름(케이블에서 파생)만 맞춘다 |
+| 기존 행의 빈 U | 서버스펙에 U 가 비어 있으면 "모름" 으로 본다 — 연결하거나 다른 항목을 고칠 때 장비가 아는 U 를 지우지 않는다. U 를 직접 비웠거나 랙이 바뀌었을 때만 장비의 U 를 비운다 |
+| 호스트명 중복 | 같은 호스트명이 다른 클러스터의 장비로 이미 있으면 자동으로 묶지 않는다(`device_id` 없음 → 연결 화면의 "호스트명 중복") |
+| 기존 데이터 연결 API | `GET /dc/devices/link/preview`(읽기 전용) · `POST /dc/devices/link/apply`(+`/stream`, admin). 항목별 `prefer: existing|device` |
+| 일괄 등록 방식 | 파일의 행을 실제 쓰기 경로에 태워 한 트랜잭션에서 적용해 보고, 미리보기는 항상 롤백한다(행마다 SAVEPOINT). 화면과 파일의 검증이 같은 코드다. 행 변경 내역은 `changes: [{column, old, new}]` 목록 |
+| 한 파일에서 두 장비의 U 맞바꾸기 | 행 순서대로 적용하므로 첫 행이 겹쳐 오류로 알린다. 한쪽을 먼저 빈 U 로 옮기는 두 번의 등록으로 처리한다(추후 개선 후보) |
+| 일괄 등록 속도 | 시드(8,924행) 첫 등록 약 34초, 변경 없는 재등록 약 1.4초(로컬 PostgreSQL 기준). 확정은 SSE 로 시트별 진행을 보여준다 |
+| 응답 행 수 | 미리보기 응답은 시트·판정별 300행까지만 싣는다(건수는 전체). 오류 행이 먼저 온다 |
+| 속도 불일치 | 케이블 생성 응답의 `warnings` 와 `speed_mismatch: true` 로 알린다(거부하지 않음) |
+| 장비 삭제 | admin 만. 삭제 전에 서버스펙·인프라 노드의 `device_id` 를 끊고(값은 그대로 둔다) 케이블이 남아 있으면 거부한다 |
+| 2단계 화면 | `/dc-inventory` 의 **장비**(읽기 표) · **일괄 등록** · **기존 데이터 연결** 탭. 랙 열 뷰·상세·생성/수정 폼은 3단계 |
+| 변경 이력 응답 | `GET /dc/changes` 는 `before` 커서(시각)로 쪽을 넘긴다. `before`/`after` 는 컬럼 이름 키의 JSON 이다 |
+

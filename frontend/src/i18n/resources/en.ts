@@ -39,6 +39,7 @@ export const en: TranslationResource = {
       kernelParams: 'Kernel Parameters',
       infraTopology: 'Infra Topology',
       nodeSpecs: 'Node Server Specs',
+      dcInventory: 'DC Inventory',
       links: 'Cluster Links',
       nodeLabels: 'K8s Node Labels',
       k8sRbac: 'K8s Access Control',
