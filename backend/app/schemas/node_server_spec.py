@@ -129,6 +129,8 @@ class NodeServerSpecOut(NodeServerSpecBase):
 
     id: UUID
     cluster_name: Optional[str] = None
+    # 연결된 DC 인벤토리 장비(신원·물리 위치의 단일 원본). 없으면 아직 연결 전.
+    device_id: Optional[UUID] = None
     created_at: datetime
     updated_at: datetime
 

@@ -35,6 +35,9 @@ SSE_HEADERS = {
     "Cache-Control": "no-cache",
     "X-Accel-Buffering": "no",
     "Connection": "keep-alive",
+    # GZipMiddleware(main.py) 가 스트림을 압축하면 zlib 버퍼에 이벤트가 쌓여 브라우저에는 끝날 때 한꺼번에
+    # 도착한다(curl 은 Accept-Encoding 을 안 보내 재현되지 않는다). identity 를 얹어 압축 대상에서 뺀다.
+    "Content-Encoding": "identity",
 }
 # 이벤트 없이 이 시간이 지나면 SSE 주석(ping)을 보내 프록시 유휴 타임아웃을 피한다.
 SSE_PING_SEC = 15.0

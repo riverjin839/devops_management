@@ -373,7 +373,7 @@ All shared interfaces live in `src/types/index.ts`. Keep backend response shapes
 | 네트워크/토폴로지 | `cilium_trace`, `topology_trace`, `service_topology`, `architecture_docs` |
 | 업무 관리 | `work_items`, `work_item_custom_fields`, `jira`, `servicenow`, `projects`, `sprint`, `workflows` |
 | 지식 | `work_guide`, `confluence`, `ops_note`, `mindmap`, `ontology`, `voc`, `reactions`, `analyze`, `trends`, `agent` |
-| 인프라/서비스 | `infra_nodes`, `management_servers`, `isilon_nfs`, `node_server_specs`, `service_categories`, `lake_services`, `lake_service_types`, `versions`, `cluster_custom_fields`, `batch_jobs`, `ansible_assets`, `playbooks`, `scripts` |
+| 인프라/서비스 | `infra_nodes`, `management_servers`, `isilon_nfs`, `node_server_specs`, `dc_inventory`(DC 인벤토리 — 랙·장비·케이블·IPAM, 일괄 등록), `service_categories`, `lake_services`, `lake_service_types`, `versions`, `cluster_custom_fields`, `batch_jobs`, `ansible_assets`, `playbooks`, `scripts` |
 
 ---
 
@@ -398,6 +398,7 @@ All shared interfaces live in `src/types/index.ts`. Keep backend response shapes
 - **점검/이벤트**: `check_matrix`(Item/Schedule/Result/ResultLog/**Run**=수행 로그 — 스키마 상세·운영 특성은 `docs/CHECK_MATRIX_GUIDE.md` §DB 구조), `check_definitions`, `ops_check`, `check_log`, `k8s_event`, `resource_count`, `config_snapshot`, `os_param_change`
 - **업무 관리**: `work_item`(+`work_item_comment`/`work_item_time_block`/`work_item_custom_field`), `sprint`, `project`, `workflow` — `work_items.embedding` 은 pgvector
 - **지식**: `ontology`, `mindmap`, `work_guide`(pgvector `embedding`), `ops_note`, `voc_post`, `command_entry`, `reaction`, `trend`
+- **DC 인벤토리**: `dc_inventory`(`DcSite`→`DcHall`→`DcRackRow`→`DcRack`, `DcDeviceType`/`DcDevice`, `DcInterface`, `DcCable`, `DcVrf`/`DcPrefix`/`DcIpAddress`/`DcAsn`, `DcChangeLog` — 변경 1건=1행 append-only(`LOG_TABLES`, 무기한 보존)). **`dc_devices` 가 서버·스위치 신원·물리 위치의 단일 원본**이고 `node_server_specs.device_id`·`infra_nodes.device_id` 가 가리킨다. 쓰기는 반드시 `services/dc_inventory/crud.py` 경유(제약 검증 + 변경 이력이 같은 트랜잭션), 기존 화면과의 값 일치는 `services/dc_inventory/device_registry.py`. 설계·결정은 `docs/dc-inventory/DESIGN.md`
 - **인프라/서비스**: `infra_node`, `node_server_spec`, `management_server`, `isilon_server`, `service_entry`, `service_category`, `service_topology`, `topology_audit_log`, `lake_service`, `lake_service_type`, `cluster_item`, `cluster_custom_field`
 - **자원 효율화**: `k8s_efficiency`(`K8sNamespaceSample`/`K8sWorkloadSample` — Celery 수집 시계열(로그성, `LOG_TABLES`+`log_retention_service` 보존 400일/8일), `K8sRightsizeRecommendation`(컨테이너 request 축소 추천, 재생성 시 open→superseded), `K8sNamespacePolicy`(NS opt-in: auto_rightsize/quota_elastic/`custom_targets` CR 어댑터), `K8sEfficiencyRun`(수집·적용·롤백·쿼터 실행 로그 — steps/log_lines 단계별 커밋, 365일), `K8sNsDailyReport`(일일 리포트 NS 일 롤업 — 보관 일수는 AppSetting `daily_report.settings`)). 전역 기본값·수집 스케줄은 `AppSetting` `k8s_efficiency.policy_defaults` / `k8s_efficiency.schedule`
 - **NS 마이그레이션**: `ns_migration`(`NsMigrationProfile` — 소스/타깃·종류·치환 규칙 프리셋, `NsMigrationRun` — 계획/적용 실행 로그(steps·log_lines·리소스별 diff, 로그성 365일))

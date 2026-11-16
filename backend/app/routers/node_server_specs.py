@@ -29,6 +29,8 @@ from app.schemas.node_server_spec import (
     NodeSpecHostFactsCollectResponse,
     NodeSpecHostFactsItem,
 )
+from app.services.dc_inventory import device_registry
+from app.services.dc_inventory.errors import DcError
 from app.services.kubeconfig import ensure_kubeconfig_file
 from app.services.ssh_runner import SSHTarget, run_bulk
 from app.services.k8s_client_pool import get_api_client_for_path
@@ -39,6 +41,19 @@ _K8S_TIMEOUT = 10
 
 
 # ── 헬퍼 ──────────────────────────────────────────────────────────────────────
+
+def _sync_device(db: Session, spec: NodeServerSpec, fields: set[str] | None, actor: User | None) -> None:
+    """겹치는 항목(호스트명·랙·U·시리얼·클러스터)을 DC 인벤토리 장비와 맞춘다 — 단일 원본 유지.
+
+    DC 인벤토리에 등록된 랙으로 옮기는데 U 가 겹치는 등 제약을 어기면 사유와 함께 거부한다.
+    DC 인벤토리에 없는 랙 이름은 예전처럼 자유 입력으로 남는다.
+    """
+    try:
+        device_registry.sync_spec(db, spec, fields=fields, actor=actor, strict=True)
+    except DcError as e:
+        db.rollback()
+        raise HTTPException(status_code=e.status_code, detail=e.detail) from e
+
 
 def _to_out(spec: NodeServerSpec) -> NodeServerSpecOut:
     out = NodeServerSpecOut.model_validate(spec)
@@ -95,7 +110,7 @@ def get_spec(spec_id: UUID, db: Session = Depends(get_db)):
 def create_spec(
     payload: NodeServerSpecCreate,
     db: Session = Depends(get_db),
-    _: User = Depends(require_operator),
+    user: User = Depends(require_operator),
 ):
     if payload.cluster_id is not None:
         if not db.query(Cluster).filter(Cluster.id == payload.cluster_id).first():
@@ -118,6 +133,7 @@ def create_spec(
 
     spec = NodeServerSpec(**payload.model_dump(exclude_none=True))
     db.add(spec)
+    _sync_device(db, spec, None, user)
     db.commit()
     db.refresh(spec)
     return _to_out(spec)
@@ -128,7 +144,7 @@ def update_spec(
     spec_id: UUID,
     payload: NodeServerSpecUpdate,
     db: Session = Depends(get_db),
-    _: User = Depends(require_operator),
+    user: User = Depends(require_operator),
 ):
     spec = db.query(NodeServerSpec).filter(NodeServerSpec.id == spec_id).first()
     if not spec:
@@ -139,6 +155,9 @@ def update_spec(
             raise HTTPException(status_code=422, detail="Cluster not found")
     for k, v in data.items():
         setattr(spec, k, v)
+    touched = set(data) & device_registry.SPEC_IDENTITY_FIELDS
+    if touched:
+        _sync_device(db, spec, touched, user)
     db.commit()
     db.refresh(spec)
     return _to_out(spec)
@@ -531,6 +550,7 @@ def import_from_cluster(
                 )
                 db.add(spec)
                 db.flush()
+                device_registry.sync_spec(db, spec, strict=False)
                 out_items.append(spec)
                 inserted += 1
             elif payload.upsert:
@@ -631,6 +651,7 @@ async def collect_host_facts(
             existing = NodeServerSpec(cluster_id=cluster_id, hostname=r.host, status="active")
             db.add(existing)
             db.flush()
+            device_registry.sync_spec(db, existing, strict=False)
             inserted += 1
         if not existing:
             skipped += 1
@@ -747,7 +768,7 @@ def csv_preview(payload: NodeSpecCsvUploadRequest, db: Session = Depends(get_db)
 def csv_apply(
     payload: NodeSpecCsvUploadRequest,
     db: Session = Depends(get_db),
-    _: User = Depends(require_operator),
+    user: User = Depends(require_operator),
 ):
     """CSV 업로드 실제 반영 — preview 와 동일한 로직으로 insert/update."""
     payload.dry_run = False
@@ -767,21 +788,30 @@ def csv_apply(
             if diff.action == "skip":
                 skipped += 1
                 continue
+            # 행마다 SAVEPOINT — DC 인벤토리 제약(U 겹침 등)에 걸린 행만 되돌리고 나머지는 계속 반영한다.
             if diff.action == "insert":
                 clean = {k: v for k, v in row_dict.items() if v is not None and v != ""}
-                spec = NodeServerSpec(**clean)
-                db.add(spec)
-                db.flush()
+                with db.begin_nested():
+                    spec = NodeServerSpec(**clean)
+                    db.add(spec)
+                    db.flush()
+                    device_registry.sync_spec(db, spec, actor=user, strict=True)
                 applied.append(spec)
                 inserted += 1
             elif diff.action == "update" and existing is not None:
-                for k, chg in diff.changes.items():
-                    if k in _CSV_SKIP_KEYS_ON_APPLY:
-                        continue
-                    # row_dict 에서 원본 값(타입 보존) 가져오기
-                    setattr(existing, k, row_dict.get(k))
+                with db.begin_nested():
+                    for k, chg in diff.changes.items():
+                        if k in _CSV_SKIP_KEYS_ON_APPLY:
+                            continue
+                        # row_dict 에서 원본 값(타입 보존) 가져오기
+                        setattr(existing, k, row_dict.get(k))
+                    touched = set(diff.changes) & device_registry.SPEC_IDENTITY_FIELDS
+                    if touched:
+                        device_registry.sync_spec(db, existing, fields=touched, actor=user, strict=True)
                 applied.append(existing)
                 updated += 1
+        except DcError as e:
+            errors.append(f"행 {diff.row_index} ({diff.hostname}): {e.detail}")
         except Exception as e:
             errors.append(f"행 {diff.row_index} ({diff.hostname}): {str(e)[:160]}")
 

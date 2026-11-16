@@ -30,6 +30,10 @@ from app.models.reaction import Reaction
 from app.models.management_server import ManagementServer
 from app.models.isilon_server import IsilonServer, IsilonCommand
 from app.models.infra_node import InfraNode
+from app.models.dc_inventory import (
+    DcSite, DcHall, DcRackRow, DcRack, DcDeviceType, DcDevice, DcInterface, DcCable,
+    DcVrf, DcPrefix, DcIpAddress, DcAsn, DcChangeLog,
+)
 from app.models.topology_audit_log import TopologyAuditLog
 from app.models.ontology import OntologyEntity, OntologyRelationship, OntologyEvent, OntologyEntityType
 from app.models.config_snapshot import ClusterConfigSnapshot
@@ -127,6 +131,8 @@ __all__ = [
     "IsilonServer",
     "IsilonCommand",
     "InfraNode",
+    "DcSite", "DcHall", "DcRackRow", "DcRack", "DcDeviceType", "DcDevice", "DcInterface", "DcCable",
+    "DcVrf", "DcPrefix", "DcIpAddress", "DcAsn", "DcChangeLog",
     "TopologyAuditLog",
     "OntologyEntity",
     "OntologyRelationship",

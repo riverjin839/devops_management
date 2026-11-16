@@ -36,6 +36,8 @@ class InfraNode(Base):
     switch_name = Column(String(100), nullable=True)    # 연결 스위치명
     notes = Column(Text, nullable=True)
     auto_synced = Column(Boolean, default=False)        # K8s에서 자동 수집 여부
+    # DC 인벤토리 장비(신원·물리 위치의 단일 원본)와의 연결 — services/dc_inventory/device_registry.py
+    device_id = Column(UUID(as_uuid=True), ForeignKey("dc_devices.id", ondelete="SET NULL"), nullable=True, index=True)
     version = Column(Integer, nullable=False, default=1)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)

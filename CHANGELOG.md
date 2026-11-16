@@ -10,6 +10,12 @@
 
 1.88.0 이후 main 에 병합된 변경 (다음 릴리스 후보).
 
+### Added
+- **DC 인벤토리 2단계 — 랙·장비·케이블·IPAM 대장과 Excel 일괄 등록**: Excel 로 관리하던 랙·서버·ToR 스위치·케이블·서브넷·ASN 을 `/dc-inventory` 에서 관리한다. 같은 랙의 U 겹침, 인터페이스당 케이블 1개, Prefix 밖 IP, 랙 이름·호스트명 중복은 사유와 함께 거부하고, 모든 생성·수정·삭제는 변경 이력(누가·언제·이전 → 이후)에 남는다. 포트 속도(1G~400G)는 인터페이스마다 가지며 케이블 양 끝 속도가 다르면 경고한다. **일괄 등록**은 양식 받기 → 올리기 → 시트별 미리보기(추가·변경·오류) → 확정 순서이고, 오류가 하나라도 있으면 아무것도 반영하지 않는다. 확정은 시트별 진행이 실시간 로그로 보이며 "로그 보기" 로 접을 수 있다. 내보낸 파일을 다시 올리면 전부 "변경 없음" 이다. **서버 단일 원본**: 노드 서버스펙·인프라 토폴로지의 서버가 DC 인벤토리 장비에 연결돼 호스트명·랙·U·시리얼·클러스터가 어느 화면에서 고쳐도 같은 값이 되고, 이미 있던 데이터는 "기존 데이터 연결" 탭에서 미리보기 후 고른 것만 연결한다(값이 다르면 어느 쪽을 쓸지 선택). 랙 배치도·장비 상세·생성/수정 폼은 다음 단계. Backend: `routers/dc_inventory.py`(`/dc/*`), `models/dc_inventory.py`(13개 테이블), `services/dc_inventory/`(crud·validation·changelog·device_registry·bulk·importer·exporter), `node_server_specs`·`infra_nodes` 에 `device_id`. Frontend: `pages/DcInventoryPage.tsx`, `components/dc-inventory/`. 스크립트: `scripts/lab/seed_dc_inventory.py`(랙 20·장비 400·케이블 1,600 가짜 시드), `scripts/dc_inventory/verify_import.py`(원본 ↔ 내보내기 행 단위 비교). 설계: `docs/dc-inventory/DESIGN.md`.
+
+### Fixed
+- **실행 로그가 끝날 때 한꺼번에 나오던 문제**: 공용 SSE 헬퍼(`services/sse.py` `stream_async_job`)로 보내는 실행 로그가 브라우저에서는 응답 압축(gzip) 버퍼에 쌓여 실행이 끝난 뒤에야 한 번에 표시됐다. 스트림을 압축 대상에서 빼 단계·로그가 진행되는 대로 보인다 이 헬퍼를 쓰는 실행 화면 전부(외부 서비스 수집, 일일 리포트 담당자 갱신, 버전·설정 수집, DC 인벤토리 일괄 등록 등)에 적용된다.
+
 ## [1.88.0] - 2026-11-05
 
 ### Changed

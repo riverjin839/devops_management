@@ -20,6 +20,8 @@ from app.services.request_context import (
 )
 from app.services.request_id_middleware import RequestIdMiddleware
 from app.services.memory_watch import MemoryWatchMiddleware
+from app.services.dc_inventory.errors import DcError
+from app.services.dc_inventory.importer import FileError as DcFileError
 from app.database import engine, Base, SessionLocal
 from fastapi import Depends
 
@@ -50,6 +52,7 @@ from app.routers import (
     management_server_router,
     isilon_nfs_router,
     infra_nodes_router,
+    dc_inventory_router,
     topology_trace_router,
     ontology_router,
     analyze_router,
@@ -495,6 +498,24 @@ def _run_migrations():
         if _t in _existing_tables:
             _safe_add_column(_t, "tenant_id", "UUID REFERENCES tenants(id) ON DELETE RESTRICT")
             _safe_create_index(f"ix_{_t}_tenant_id", _t, "(tenant_id)")
+    # DC 인벤토리 — 서버 단일 원본(dc_devices) 연결 컬럼. 데이터 연결은 자동으로 하지 않고
+    # /dc-inventory 의 "기존 데이터 연결" 에서 미리보기 후 선택 적용한다(값 덮어쓰기 방지).
+    if "dc_devices" in _existing_tables:
+        for _t in ("node_server_specs", "infra_nodes"):
+            if _t in _existing_tables:
+                _safe_add_column(_t, "device_id", "UUID REFERENCES dc_devices(id) ON DELETE SET NULL")
+                _safe_create_index(f"ix_{_t}_device_id", _t, "(device_id)")
+        # 같은 랙 U 겹침의 2차 방어선(1차는 services/dc_inventory/validation.check_placement).
+        # btree_gist 확장 권한이 없으면 건너뛴다 — 서비스 검증만으로도 동작은 같다.
+        # 전체 깊이 장비끼리만 대상이고(반깊이 앞·뒤 공유는 서비스가 판정), 일괄 등록이 한 트랜잭션에서
+        # 위치를 서로 바꿀 수 있도록 커밋 시점에 검사한다(DEFERRABLE).
+        _safe_exec("CREATE EXTENSION IF NOT EXISTS btree_gist", label="extension btree_gist")
+        _safe_add_constraint(
+            "dc_devices", "dc_devices_no_u_overlap",
+            "EXCLUDE USING gist (rack_id WITH =, int4range(position_u, position_u + u_height) WITH &&) "
+            "WHERE (rack_id IS NOT NULL AND position_u IS NOT NULL AND is_full_depth AND u_height > 0) "
+            "DEFERRABLE INITIALLY DEFERRED",
+        )
     if "addons" in inspector.get_table_names():
         _safe_add_column("addons", "details", "JSONB")
         _safe_add_column("addons", "config", "JSONB")
@@ -2073,6 +2094,19 @@ _PEP_NEW_TYPES: list[dict] = [
 _LEGACY_PEP_CATEGORY_KEYS = ("runtime", "catalog", "workflow", "jupyterlab")
 
 
+def _seed_dc_inventory_defaults():
+    """DC 인벤토리 기본 VRF(PUBLIC·PRIVATE) — 테이블이 비어 있을 때만 넣는다(이후 화면에서 편집)."""
+    from app.models.dc_inventory import DcVrf
+    db = SessionLocal()
+    try:
+        if db.query(DcVrf).count() == 0:
+            db.add_all([DcVrf(name="PUBLIC"), DcVrf(name="PRIVATE")])
+            db.commit()
+            _log.info("seeded 2 default dc vrfs")
+    finally:
+        db.close()
+
+
 def _seed_default_service_categories():
     """APP 서비스(domain='app') builtin 카테고리 4개(Runtime/Catalog/Workbench/AI Ready) 시드 +
     기존 8 builtin LakeServiceType 을 domain='app' 으로 재배정 + 과거 domain='pep' 오분류
@@ -2546,6 +2580,7 @@ async def lifespan(app: FastAPI):
             ("seed_metric_checklist_items", _seed_default_metric_checklist_items),
             ("seed_lake_service_types", _seed_default_lake_service_types),
             ("seed_service_categories", _seed_default_service_categories),
+            ("seed_dc_inventory_defaults", _seed_dc_inventory_defaults),
             ("merge_service_catalog_into_pep_types", _merge_service_catalog_into_pep_types),
             ("seed_observability_catalog", _seed_observability_catalog),
             # 행 단위 버전 이관 — 전역 sentinel 이 없어 몇 번을 다시 돌아도 개인 설정을
@@ -2624,6 +2659,20 @@ app.add_middleware(
     allow_headers=["*"],
     expose_headers=[REQUEST_ID_HEADER],
 )
+
+
+@app.exception_handler(DcError)
+async def _dc_inventory_error(request: Request, exc: DcError):
+    """DC 인벤토리 도메인 예외 → 사유·코드·충돌 대상을 담은 4xx (빈 500 금지)."""
+    content = {"detail": exc.detail, "code": exc.code}
+    if exc.conflict:
+        content["conflict"] = exc.conflict
+    return ORJSONResponse(status_code=exc.status_code, content=content)
+
+
+@app.exception_handler(DcFileError)
+async def _dc_inventory_file_error(request: Request, exc: DcFileError):
+    return ORJSONResponse(status_code=exc.status_code, content={"detail": exc.detail, "code": "bad_file"})
 
 
 @app.exception_handler(Exception)
@@ -2714,6 +2763,8 @@ app.include_router(etcdctl_router, prefix="/api/v1", dependencies=_cluster_scope
 app.include_router(cilium_trace_router, prefix="/api/v1", dependencies=_cluster_scoped)
 app.include_router(mc_client_router, prefix="/api/v1", dependencies=_cluster_scoped)
 app.include_router(node_server_specs_router, prefix="/api/v1", dependencies=_cluster_scoped)
+# DC 인벤토리 — 전역 자산(테넌트·클러스터 범위 아님). 쓰기 권한은 엔드포인트가 require_operator/admin 으로 건다.
+app.include_router(dc_inventory_router, prefix="/api/v1", dependencies=_auth)
 app.include_router(cluster_custom_fields_router, prefix="/api/v1", dependencies=_cluster_scoped)
 app.include_router(work_item_custom_fields_router, prefix="/api/v1", dependencies=_auth)
 app.include_router(backup_router, prefix="/api/v1", dependencies=_auth)

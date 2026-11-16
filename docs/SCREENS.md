@@ -1119,6 +1119,30 @@ hover 시 flyout 자체가 라벨을 보여주므로 이름만 뜨는 중복 툴
 
 ## 서버·인프라 / 네트워크 / 스토리지
 
+### DC 인벤토리 (`/dc-inventory`)
+
+> **2단계(2026-11)**: 장비 목록(읽기) · 일괄 등록 · 기존 데이터 연결까지. 랙 열 뷰(42U 배치도)·랙/장비 상세·경로 추적·엔티티 생성/수정 폼은 3단계에서 붙는다 — 설계·목업·결정은 `docs/dc-inventory/DESIGN.md`.
+
+- **파일**: `frontend/src/pages/DcInventoryPage.tsx` (+ `components/dc-inventory/DcDeviceTable.tsx`, `DcImportPanel.tsx`, `DcLinkPanel.tsx`, `shared.ts`)
+- **목적 / UX**: Excel 로 관리하던 데이터센터 물리 구간(랙·서버·ToR 스위치·패치패널·케이블·서브넷·ASN)을 한 곳에서 관리한다. 여기 등록한 장비가 서버 신원·물리 위치의 **단일 원본**이고 노드 서버스펙·인프라 토폴로지가 같은 값을 본다. 스위치·K8s 로 나가는 동작은 없다(기록만 다룬다).
+- **UI 구성**:
+  - 클러스터 단위 화면이 아니므로 `ClusterSidebar` 없음. `PageShell`(hub) + `PageHeader`(건수 한 줄 — 랙·장비·케이블·Prefix·랙 미배정·연결 안 된 기존 서버) + `SegTabs`(tabs) 3개.
+  - **장비**: 호스트명·시리얼 검색, 역할 토글, "랙 미배정만", 표(호스트명·역할·장비 종류·랙·U·시리얼·클러스터·상태 — 정상 상태는 표시하지 않음).
+  - **일괄 등록**: 단계 표시(파일 올리기 → 미리보기·검증 → 확정), 양식 받기·현재 데이터 내보내기, 파일 카드(건수 요약), 시트 탭(오류 건수 표시) + 판정 필터(오류·변경·추가) + 행 표(행 번호·키·판정·내용), 실행 로그(`RunLogPanel`), 확정 바.
+  - **기존 데이터 연결**: 분류 탭(값이 다름 · 장비 생성 후 연결 · 바로 연결 · 호스트명 중복) + 선택 표 + 값이 다른 행의 "기존 값 사용 / 장비 값 사용" 토글 + 실행 로그.
+- **Frontend**: `useDcOverview`·`useDcDevices`·`useDcLinkPreview`(`hooks/useDcInventory.ts`, 검색은 `useDebouncedValue`+`keepPreviousData`), `dcApi`(`services/api.ts`), 탭은 `?tab=`(`useUrlParam`). 확정·연결은 `postSse`(일괄 등록은 `FormData{file, sha256}`) → `applyRunEvent` 로 실행 로그에 반영, "로그 보기" 는 `useLogPref('dc-inventory-import'|'dc-inventory-link')`.
+- **Backend**: `backend/app/routers/dc_inventory.py` — `GET /api/v1/dc/overview`·`/changes`·`/devices/lookup`·`/devices/{id}/detail`, 리소스 CRUD `/dc/{sites|halls|rack-rows|racks|device-types|devices|interfaces|cables|vrfs|prefixes|ip-addresses|asns}`, 일괄 작업 `POST /dc/devices/bulk`·`/interfaces/bulk-update`·`/cables/bulk`·`/ip-addresses/bulk`, 일괄 등록 `GET /dc/import/template.xlsx`·`POST /dc/import/preview`·`/import/apply`(+`/stream`)·`GET /dc/export.xlsx`, 연결 `GET /dc/devices/link/preview`·`POST /dc/devices/link/apply`(+`/stream`). 서비스 `services/dc_inventory/`, 모델 `models/dc_inventory.py`. **권한**: 조회·미리보기·내보내기 = 로그인 사용자, 쓰기·확정 = operator 이상, 장비 삭제·기존 데이터 연결 = admin. 화면 접근 제어 키 `/dc-inventory`(`^/dc`).
+- **핵심 기능**:
+  - 제약 위반은 저장 전에 사유와 함께 거부: 같은 랙 U 겹침(전체 깊이는 앞·뒤 무관, 반깊이는 같은 면만), 랙 높이 초과, 인터페이스당 케이블 1개, Prefix 밖·중복 IP, 같은 VRF 의 Prefix 겹침, 이름·호스트명·시리얼·케이블 라벨·ASN 번호 중복.
+  - 일괄 등록은 upsert(키 열로 찾아 바뀐 열만 수정, 없는 행 추가, 파일에 없는 행은 그대로). 빈 칸은 값 지우기, 빼 놓은 열·시트는 건드리지 않음. 오류가 하나라도 있으면 확정 불가이고 서버도 전부 되돌린다. 확정은 미리보기한 파일과 같은 파일(sha256)이어야 한다.
+  - 미리보기는 DB 를 바꾸지 않는다. 오류 행이 맨 위에 오고 시트·판정별 300행까지만 싣는다(건수는 전체).
+  - 실행 로그: 미리보기는 시트별 건수와 오류 행을 줄로 남기고, 확정·연결은 서버 SSE 로 단계·시트별 진행이 실시간으로 쌓인다.
+  - viewer 는 확정 버튼이 `disabled` + 사유(`useCanOperate`), 연결 적용은 admin 이 아니면 `disabled` + 사유.
+  - 변경 이력(`dc_change_logs`): 생성·수정·삭제마다 이전 → 이후 값과 실행자, 일괄 작업은 같은 `batch_id`.
+- **URL 상태**: `?tab=devices|import|link`.
+- **요청사항 (수정 요청)**:
+  - _(여기에 개선/수정 요청을 직접 적어주세요)_
+
 ### 노드 서버스펙 관리 대장 (`/node-specs`)
 
 > **2026-10-15 (D-135)**: Host Facts 수집은 자체 결과 LogViewer 대신 표준 실행 로그(호스트별 줄), 클러스터 임포트는 `errors[]` 를 줄별로 남긴다.
@@ -1134,6 +1158,7 @@ hover 시 flyout 자체가 라벨을 보여주므로 이름만 뜨는 중복 툴
 - **Backend**: `GET/POST /api/v1/node-specs`, `GET/PUT/DELETE /api/v1/node-specs/{id}`, `POST /api/v1/node-specs/import/{cluster_id}`, `POST /api/v1/node-specs/collect-host-facts/{cluster_id}`, `POST /api/v1/node-specs/csv/preview`·`/csv/apply` — 라우터 `backend/app/routers/node_server_specs.py`, 모델 `backend/app/models/node_server_spec.py` (`NodeServerSpec`).
 - **핵심 기능**:
   - kubeconfig 임포트 시 자동수집 필드만 upsert(벤더/자산태그/랙 등 수기 필드는 보존).
+  - **DC 인벤토리 연결**: 저장하면 같은 호스트명의 DC 인벤토리 장비(`device_id`)에 연결되고(없으면 랙 미배정 장비로 생성) 호스트명·시리얼·상태·클러스터·랙·U 가 그 장비와 같은 값이 된다. DC 인벤토리에 등록된 랙으로 옮길 때 U 가 겹치면 409 로 사유를 알린다. 등록되지 않은 랙 이름은 예전처럼 자유 입력으로 남는다. 같은 호스트명이 다른 클러스터 장비로 이미 있으면 자동 연결하지 않는다(`/dc-inventory` ▸ 기존 데이터 연결).
   - SSH 기반 Host Facts 수집으로 bond0/bond1 IP, lsblk 기반 SSD/디스크 종류 자동판별.
   - CSV 템플릿/업로드/미리보기(preview→apply 2단계) 및 엑셀 클립보드 붙여넣기 지원.
   - 그리드 블록 선택 + TSV 복사, 컬럼 너비 드래그 리사이즈(localStorage 영속화).
@@ -1182,6 +1207,7 @@ hover 시 flyout 자체가 라벨을 보여주므로 이름만 뜨는 중복 툴
   - 노드 값 지우기(D-100): 편집에서 CPU/RAM/Disk·랙·스위치 등을 비우면 `null` 로 보내 실제로 지워진다. 서버 스키마도 공백 문자열을 `NULL` 로 정규화하고(부팅 마이그레이션이 기존 `''` 값도 정리), `hostname`/`role` 에 온 `null` 은 무시한다. 클러스터 관리정보(first_host·description) 자동입력은 **첫 노드에만** 적용한다(두 번째 노드부터 hostname 중복 409·메모 복제 방지). hostname 중복 409 는 한국어 사유로 응답.
   - 클러스터를 바꾸면 이전 클러스터의 동기화·Trace 결과를 지우고, 바꾸기 전에 보낸 요청의 늦은 응답은 버린다(D-094).
   - 스위치/랙 기반 계층형 물리 토폴로지 시각화(role 우선순위 정렬).
+  - **DC 인벤토리 연결**: 노드 추가·수정·K8s 동기화 시 같은 호스트명의 DC 인벤토리 장비(`device_id`)에 연결된다(없으면 생성). 랙 이름은 장비와 같은 값으로 맞춰지고, 장비에 케이블이 등록돼 있으면 스위치 이름이 연결된 leaf 호스트명으로 채워진다.
   - K8s 동기화 시 신규 노드 자동 검증 결과를 배너로 요약 노출.
   - 실패는 삼키지 않는다(D-086/D-088): 동기화 결과(생성·갱신·실패·오류 목록·재시도·검증 절단)를 요약 배너로, 삭제 실패는 확인 모달 안에 사유와 함께 유지, 노드 목록 조회 실패는 빈 상태가 아니라 오류 상태+"다시 시도", 낙관적 락 충돌(409)은 안내 문구("다른 사용자가 먼저 수정했습니다")로 표시.
   - 노드별 수동 "추가 검증"(SSH/API) 및 실패 시 사유 표시.

@@ -44,6 +44,7 @@ export const ko = {
       kernelParams: '커널 파라미터',
       infraTopology: '인프라 토폴로지',
       nodeSpecs: '노드 서버스펙',
+      dcInventory: 'DC 인벤토리',
       links: '클러스터 링크',
       nodeLabels: 'K8s 노드 라벨',
       k8sRbac: 'K8s 접근 권한',

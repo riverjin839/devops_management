@@ -35,6 +35,7 @@ import { MindMapPage } from '@/pages/MindMapPage';
 import { WbsFlowPage } from '@/pages/WbsFlowPage';
 import { InfraTopologyPage } from '@/pages/InfraTopologyPage';
 import { NodeSpecPage } from '@/pages/NodeSpecPage';
+import { DcInventoryPage } from '@/pages/DcInventoryPage';
 import { OntologyPage } from '@/pages/OntologyPage';
 import { TrendDigestPage } from '@/pages/TrendDigestPage';
 import { ServiceTopologyPage } from '@/pages/ServiceTopologyPage';
@@ -226,6 +227,7 @@ function AppShell() {
               <Route path="/isilon-nfs" element={<IsilonNfsPage />} />
               <Route path="/infra-topology" element={<InfraTopologyPage />} />
               <Route path="/node-specs" element={<NodeSpecPage />} />
+              <Route path="/dc-inventory" element={<DcInventoryPage />} />
               <Route path="/settings" element={<RequireAdmin><SettingsPage /></RequireAdmin>} />
               <Route path="/workflow" element={<WorkflowBoardPage />} />
               <Route path="/documents" element={<DocumentsPage />} />
