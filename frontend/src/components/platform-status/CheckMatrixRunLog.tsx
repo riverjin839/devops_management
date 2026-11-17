@@ -271,7 +271,7 @@ export function CheckMatrixRunDetailView({ runId }: { runId: string }) {
         </h3>
         {run.commands.length === 0 ? (
           <p className="text-xs text-muted-foreground italic">
-            이 수행에서 계측된 명령 기록이 없습니다 — K8s API(SDK) 호출만으로 수행된 점검이거나,
+            이 수행에서 계측된 명령 기록이 없습니다 — K8S API(SDK) 호출만으로 수행된 점검이거나,
             대상이 없어 건너뛴 수행입니다. 설계상 어떤 호출이 나가는지는 아래 실행 계획에서 확인하세요.
           </p>
         ) : (
