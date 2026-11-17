@@ -1127,11 +1127,12 @@ hover 시 flyout 자체가 라벨을 보여주므로 이름만 뜨는 중복 툴
 - **UI 구성**:
   - 클러스터 단위 화면이 아니므로 `ClusterSidebar` 없음. `PageShell`(hub) + `PageHeader`(건수 한 줄 — 랙·장비·케이블·Prefix·랙 미배정·연결 안 된 기존 서버) + `SegTabs`(tabs) 3개.
   - **토폴로지**(`DcTopologyBoard`): 왼쪽 `DcZonePanel`(DC·구간 목록 — 추가·수정·삭제, 구간별 클러스터 칩과 연결 선택, 구간을 누르면 그 구간만 또렷하게 · 선택한 개체의 관계 목록) + 오른쪽 SVG 캔버스(계층 라벨, 패브릭 장비 노드, 랙 박스(ToR + 서버가 U 순서), 연결선 — 케이블 실선·논리 연결 점선, 축소/확대, 자동 배치). 드래그 = 위치 저장, 노드의 점을 끌어 다른 장비에 놓기 = 연결, 우클릭(또는 노드에서 Enter) = 메뉴, 더블클릭 = 수정. 폼은 `DcEntityDialog`(shadcn Dialog), 삭제는 `ConfirmDialog`.
+  - **서버 일괄 등록**(`DcServerImportPanel`): 입력 방식 토글(엑셀에서 붙여넣기 / 파일 올리기) + 양식 받기 · 붙여넣으면 바로 표(머리글마다 "→ 읽는 항목" 또는 "무시") · 미리보기(함께 만들어질 DC·구간·랙, 경고, 행별 추가·변경·오류 — 오류 맨 위) · 실행 로그(`RunLogPanel`, "로그 보기") · 확정 바(viewer 는 disabled+사유). 열: 서버구성 · 서버환경 · 호스트명 · 서버용도 · OS버전 · NW설정 · 이중화 · DC 위치 · RACK 열 · 랙 No. · 하단 위치(+ 선택 높이(U)).
   - **장비**: 호스트명·시리얼 검색, 역할 토글, "랙 미배정만", 표(호스트명·역할·장비 종류·랙·U·시리얼·클러스터·상태 — 정상 상태는 표시하지 않음).
   - **일괄 등록**: 단계 표시(파일 올리기 → 미리보기·검증 → 확정), 양식 받기·현재 데이터 내보내기, 파일 카드(건수 요약), 시트 탭(오류 건수 표시) + 판정 필터(오류·변경·추가) + 행 표(행 번호·키·판정·내용), 실행 로그(`RunLogPanel`), 확정 바.
   - **기존 데이터 연결**: 분류 탭(값이 다름 · 장비 생성 후 연결 · 바로 연결 · 호스트명 중복) + 선택 표 + 값이 다른 행의 "기존 값 사용 / 장비 값 사용" 토글 + 실행 로그.
 - **Frontend**: `useDcOverview`·`useDcDevices`·`useDcLinkPreview`(`hooks/useDcInventory.ts`, 검색은 `useDebouncedValue`+`keepPreviousData`), `dcApi`(`services/api.ts`), 탭은 `?tab=`(`useUrlParam`). 확정·연결은 `postSse`(일괄 등록은 `FormData{file, sha256}`) → `applyRunEvent` 로 실행 로그에 반영, "로그 보기" 는 `useLogPref('dc-inventory-import'|'dc-inventory-link')`.
-- **Backend**: `backend/app/routers/dc_inventory.py` — `GET /api/v1/dc/overview`·`/changes`·`/devices/lookup`·`/devices/{id}/detail`, 토폴로지 `GET /dc/topology`·`PUT|DELETE /dc/topology/positions` + 리소스 `zone-clusters`·`links`, 리소스 CRUD `/dc/{sites|halls|rack-rows|racks|device-types|devices|interfaces|cables|vrfs|prefixes|ip-addresses|asns}`, 일괄 작업 `POST /dc/devices/bulk`·`/interfaces/bulk-update`·`/cables/bulk`·`/ip-addresses/bulk`, 일괄 등록 `GET /dc/import/template.xlsx`·`POST /dc/import/preview`·`/import/apply`(+`/stream`)·`GET /dc/export.xlsx`, 연결 `GET /dc/devices/link/preview`·`POST /dc/devices/link/apply`(+`/stream`). 서비스 `services/dc_inventory/`, 모델 `models/dc_inventory.py`. **권한**: 조회·미리보기·내보내기 = 로그인 사용자, 쓰기·확정 = operator 이상, 장비 삭제·기존 데이터 연결 = admin. 화면 접근 제어 키 `/dc-inventory`(`^/dc`).
+- **Backend**: `backend/app/routers/dc_inventory.py` — `GET /api/v1/dc/overview`·`/changes`·`/devices/lookup`·`/devices/{id}/detail`, 토폴로지 `GET /dc/topology`·`PUT|DELETE /dc/topology/positions` + 리소스 `zone-clusters`·`links`, 서버 일괄 등록 `GET /dc/import/servers/template.xlsx`·`POST /dc/import/servers/preview`(multipart `file` 또는 `rows_json`)·`/apply/stream`, 리소스 CRUD `/dc/{sites|halls|rack-rows|racks|device-types|devices|interfaces|cables|vrfs|prefixes|ip-addresses|asns}`, 일괄 작업 `POST /dc/devices/bulk`·`/interfaces/bulk-update`·`/cables/bulk`·`/ip-addresses/bulk`, 일괄 등록 `GET /dc/import/template.xlsx`·`POST /dc/import/preview`·`/import/apply`(+`/stream`)·`GET /dc/export.xlsx`, 연결 `GET /dc/devices/link/preview`·`POST /dc/devices/link/apply`(+`/stream`). 서비스 `services/dc_inventory/`, 모델 `models/dc_inventory.py`. **권한**: 조회·미리보기·내보내기 = 로그인 사용자, 쓰기·확정 = operator 이상, 장비 삭제·기존 데이터 연결 = admin. 화면 접근 제어 키 `/dc-inventory`(`^/dc`).
 - **핵심 기능**:
   - 제약 위반은 저장 전에 사유와 함께 거부: 같은 랙 U 겹침(전체 깊이는 앞·뒤 무관, 반깊이는 같은 면만), 랙 높이 초과, 인터페이스당 케이블 1개, Prefix 밖·중복 IP, 같은 VRF 의 Prefix 겹침, 이름·호스트명·시리얼·케이블 라벨·ASN 번호 중복.
   - 일괄 등록은 upsert(키 열로 찾아 바뀐 열만 수정, 없는 행 추가, 파일에 없는 행은 그대로). 빈 칸은 값 지우기, 빼 놓은 열·시트는 건드리지 않음. 오류가 하나라도 있으면 확정 불가이고 서버도 전부 되돌린다. 확정은 미리보기한 파일과 같은 파일(sha256)이어야 한다.
@@ -1139,7 +1140,7 @@ hover 시 flyout 자체가 라벨을 보여주므로 이름만 뜨는 중복 툴
   - 실행 로그: 미리보기는 시트별 건수와 오류 행을 줄로 남기고, 확정·연결은 서버 SSE 로 단계·시트별 진행이 실시간으로 쌓인다.
   - viewer 는 확정 버튼이 `disabled` + 사유(`useCanOperate`), 연결 적용은 admin 이 아니면 `disabled` + 사유.
   - 변경 이력(`dc_change_logs`): 생성·수정·삭제마다 이전 → 이후 값과 실행자, 일괄 작업은 같은 `batch_id`.
-- **URL 상태**: `?tab=topology|devices|import|link`(기본 topology).
+- **URL 상태**: `?tab=topology|devices|servers|import|link`(기본 topology). 기존 "일괄 등록" 탭은 "전체 양식 등록" 으로 이름만 바뀌었다.
 - **요청사항 (수정 요청)**:
   - _(여기에 개선/수정 요청을 직접 적어주세요)_
 

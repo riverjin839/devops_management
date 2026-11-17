@@ -8,6 +8,7 @@
 스위치·K8s 로 나가는 호출은 없다(인벤토리 기록만 다룬다).
 """
 import asyncio
+import json
 import uuid
 from datetime import datetime
 from typing import Any, Optional
@@ -42,7 +43,7 @@ from app.schemas.dc_inventory import (
     LinkApplyRequest,
 )
 from app.services import audit_logger
-from app.services.dc_inventory import bulk, crud, device_registry, exporter, importer, topology, validation
+from app.services.dc_inventory import bulk, crud, device_registry, exporter, importer, server_sheet, topology, validation
 from app.services.dc_inventory.changelog import Ctx
 from app.services.dc_inventory.errors import DcInvalid
 from app.services.sse import Emit, log_evt, step_evt, stream_async_job
@@ -302,6 +303,92 @@ async def _read_upload(file: UploadFile) -> bytes:
     if not content:
         raise importer.FileError("빈 파일입니다")
     return content
+
+
+# ── 서버 일괄 등록 (현업 엑셀 열 그대로 — 파일 또는 붙여넣기) ──────────────────
+
+async def _server_rows(file: UploadFile | None, rows_json: str | None) -> tuple[list[list], str]:
+    """multipart 의 파일 또는 붙여넣은 표(JSON 2차원 배열) → (행 목록, 입력 이름)."""
+    if file is not None and file.filename:
+        content = await _read_upload(file)
+        return server_sheet.rows_from_file(content, file.filename), file.filename
+    if rows_json:
+        try:
+            rows = json.loads(rows_json)
+        except ValueError as e:
+            raise DcInvalid("붙여넣은 표를 읽지 못했습니다", code="bad_rows") from e
+        if not isinstance(rows, list) or not all(isinstance(r, list) for r in rows):
+            raise DcInvalid("붙여넣은 표 형식이 올바르지 않습니다", code="bad_rows")
+        return rows, "붙여넣기"
+    raise DcInvalid("파일을 올리거나 엑셀에서 복사한 표를 붙여넣으세요", code="empty")
+
+
+def _server_run(db: Session, rows: list[list], source: str, user: User, *, apply: bool,
+                emit: Emit | None = None) -> dict[str, Any]:
+    info = server_sheet.interpret(rows)
+    if info["missing"]:
+        raise DcInvalid(f"필수 열이 없습니다: {', '.join(info['missing'])}", code="missing_column")
+    parsed, created, warnings = server_sheet.to_parsed(db, info)
+    notes = [f"헤더 {info['header_row']}행 · 서버 {len(info['servers']):,}대 · 읽은 열: "
+             + ", ".join(server_sheet.LABEL[k] for k in info["present"])]
+    if created:
+        notes.append(f"새로 만들 위치 {len(created)}개 — " + ", ".join(created[:10]) + (" …" if len(created) > 10 else ""))
+    log = (lambda level, msg: log_evt(emit, level, msg)) if emit is not None else None
+    result = importer.run_parsed(db, parsed, sha256=server_sheet.fingerprint(rows), filename=source, actor=user,
+                                 apply=apply, emit=log, notes=notes)
+    result["columns"] = info["columns"]
+    result["header_row"] = info["header_row"]
+    result["created_locations"] = created
+    result["warnings"] = warnings + result.get("warnings", [])
+    return result
+
+
+@router.get("/import/servers/template.xlsx")
+def server_import_template():
+    """서버 일괄 등록 양식 — 서버구성 · 서버환경 · 호스트명 · 서버용도 · OS버전 · NW설정 · 이중화 · DC 위치 · RACK 열 · 랙 No. · 하단 위치."""
+    return Response(content=server_sheet.template_xlsx(), media_type=_XLSX,
+                    headers={"Content-Disposition": 'attachment; filename="dc-server-import.xlsx"'})
+
+
+@router.post("/import/servers/preview")
+async def server_import_preview(
+    file: Optional[UploadFile] = File(None),
+    rows_json: Optional[str] = Form(None, description="엑셀에서 복사한 표 — JSON 2차원 배열(첫 줄 헤더)"),
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    """서버 행을 검증하고 행별 판정(추가·변경·오류)을 돌려준다. DB 를 바꾸지 않는다."""
+    rows, source = await _server_rows(file, rows_json)
+    return await asyncio.to_thread(_server_run, db, rows, source, user, apply=False)
+
+
+@router.post("/import/servers/apply/stream")
+async def server_import_apply_stream(
+    file: Optional[UploadFile] = File(None),
+    rows_json: Optional[str] = Form(None),
+    sha256: str = Form(..., description="미리보기 응답의 sha256"),
+    user: User = Depends(require_operator),
+):
+    """확정 — 전체 한 트랜잭션, 오류가 하나라도 있으면 아무것도 반영하지 않는다. 진행은 실시간 로그(SSE)."""
+    rows, source = await _server_rows(file, rows_json)
+    if server_sheet.fingerprint(rows) != (sha256 or "").strip().lower():
+        raise DcInvalid("미리보기에서 검증한 내용과 다릅니다. 다시 미리보기부터 진행하세요.", code="sha_mismatch")
+
+    def work(sdb: Session, emit: Emit) -> dict[str, Any]:
+        step_evt(emit, "validate", "검증", "running")
+        result = _server_run(sdb, rows, source, user, apply=True, emit=emit)
+        step_evt(emit, "validate", "검증", "done" if result["ok"] else "failed")
+        step_evt(emit, "apply", "반영", "done" if result["applied"] else "failed")
+        audit_logger.record(
+            sdb, action="dc.import.servers", actor=user, target_type="dc_inventory",
+            status="success" if result["applied"] else "failure",
+            details={"source": source, "summary": result["summary"], "batch_id": result["batch_id"]},
+        )
+        return result
+
+    async def job(sdb: Session, emit: Emit) -> dict[str, Any]:
+        return await asyncio.to_thread(work, sdb, emit)
+    return stream_async_job(job, name="dc-server-import")
 
 
 @router.get("/import/template.xlsx")

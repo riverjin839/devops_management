@@ -115,6 +115,8 @@ def _after_location(db, obj, created, opts, ctx):
 
 
 def _prep_device(db, data, existing, ctx):
+    if "u_height" in data and data["u_height"] is None:
+        data.pop("u_height")  # 비우면 장비 종류 값 또는 기존 값을 쓴다(NOT NULL)
     if data.get("device_type_id") is not None and (
         existing is None or data["device_type_id"] != existing.device_type_id
     ):

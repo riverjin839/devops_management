@@ -1,5 +1,5 @@
 // DC 인벤토리 화면 공용 상수 — 버튼·입력 모양과 표시 문구.
-import type { DcDeviceRole, DcDeviceStatus } from '@/types';
+import type { DcDeviceRole, DcDeviceStatus, DcImportAction } from '@/types';
 
 export const BTN = 'text-sm inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-border bg-card text-foreground hover:bg-secondary disabled:opacity-40 disabled:cursor-not-allowed';
 export const BTN_PRIMARY = 'text-sm font-medium inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed';
@@ -24,3 +24,12 @@ export const SHEET_LABEL: Record<string, string> = {
 };
 
 export const fmt = (n: number) => n.toLocaleString('ko-KR');
+
+/** 일괄 등록 행 판정 표기 — 전체 양식·서버 일괄 등록 공용. */
+export const ACTION_LABEL: Record<DcImportAction, string> = { error: '오류', update: '변경', insert: '추가' };
+export const ACTION_CLS: Record<DcImportAction, string> = {
+  error: 'bg-status-critical/10 text-status-critical border-status-critical/30',
+  update: 'bg-status-warning/10 text-status-warning border-status-warning/30',
+  insert: 'bg-secondary text-foreground border-border',
+};
+

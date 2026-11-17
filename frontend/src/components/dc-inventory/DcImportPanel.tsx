@@ -14,47 +14,9 @@ import { downloadBlob } from '@/lib/download';
 import { postSse } from '@/lib/sse';
 import { formatApiError } from '@/lib/utils';
 import { camelizeKeys, dcApi } from '@/services/api';
-import type { DcImportAction, DcImportResult, DcImportRow } from '@/types';
-import { BTN, BTN_PRIMARY, SHEET_LABEL, TD, TH, fmt } from './shared';
-
-const ACTION_LABEL: Record<DcImportAction, string> = { error: '오류', update: '변경', insert: '추가' };
-const ACTION_CLS: Record<DcImportAction, string> = {
-  error: 'bg-status-critical/10 text-status-critical border-status-critical/30',
-  update: 'bg-status-warning/10 text-status-warning border-status-warning/30',
-  insert: 'bg-secondary text-foreground border-border',
-};
-
-function cell(v: string | number | boolean | null | undefined): string {
-  return v === null || v === undefined || v === '' ? '(빈 값)' : String(v);
-}
-
-function RowDetail({ row }: { row: DcImportRow }) {
-  if (row.action === 'error') {
-    return (
-      <ul className="space-y-0.5">
-        {(row.errors ?? []).map((e, i) => (
-          <li key={i}>
-            {e.column && <span className="font-semibold">{e.column} — </span>}
-            {e.message}
-          </li>
-        ))}
-      </ul>
-    );
-  }
-  if (row.action === 'update') {
-    return (
-      <span>
-        {(row.changes ?? []).map((c, i) => (
-          <span key={c.column}>
-            {i > 0 && ' · '}
-            {c.column} <span className="font-mono text-xs">{cell(c.old)} → {cell(c.new)}</span>
-          </span>
-        ))}
-      </span>
-    );
-  }
-  return <span className="text-muted-foreground">{row.summary}</span>;
-}
+import type { DcImportAction, DcImportResult } from '@/types';
+import { ImportRowDetail as RowDetail } from './ImportRowDetail';
+import { ACTION_CLS, ACTION_LABEL, BTN, BTN_PRIMARY, SHEET_LABEL, TD, TH, fmt } from './shared';
 
 export function DcImportPanel() {
   const toast = useToast();

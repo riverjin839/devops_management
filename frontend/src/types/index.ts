@@ -6283,6 +6283,13 @@ export interface DcDevice {
   clusterId: string | null;
   clusterName: string | null;
   k8sNodeName: string | null;
+  /** 서버 운영 정보(자유 텍스트) — 서버 일괄 등록이 채운다. */
+  serverConfig: string | null;
+  environment: string | null;
+  purpose: string | null;
+  osVersion: string | null;
+  networkConfig: string | null;
+  redundancy: string | null;
   description: string | null;
   version: number;
 }
@@ -6436,4 +6443,11 @@ export interface DcTopology {
     entities: { id: string; type: string; name: string }[];
     relationships: { source: string; type: string; target: string }[];
   };
+}
+
+/** 서버 일괄 등록 미리보기·확정 결과 — 전체 양식 결과에 "어느 열을 무엇으로 읽었는지" 와 자동 생성 위치가 붙는다. */
+export interface DcServerImportResult extends DcImportResult {
+  headerRow: number;
+  columns: { column: string; field: string | null; label: string | null }[];
+  createdLocations: string[];
 }

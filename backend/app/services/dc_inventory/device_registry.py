@@ -45,6 +45,7 @@ logger = logging.getLogger(__name__)
 # 노드 서버스펙에서 장비로 넘어가는 항목(스펙 컬럼 이름 기준).
 SPEC_IDENTITY_FIELDS = frozenset({
     "hostname", "serial_number", "status", "cluster_id", "node_name", "rack", "rack_unit",
+    "current_usage", "os_image",
 })
 INFRA_IDENTITY_FIELDS = frozenset({"hostname", "rack_name"})
 _SPEC_STATUSES = {"active", "spare", "maintenance", "decommission"}
@@ -138,6 +139,11 @@ def mirror_to_linked(db: Session, device: DcDevice) -> None:
                                spec.hostname)
         if device.k8s_node_name is not None or "k8s_node_name" in changed:
             spec.node_name = device.k8s_node_name
+        # 서버용도·OS버전 — 서버 일괄 등록과 노드 서버스펙 화면이 같은 값을 본다.
+        if device.purpose is not None or "purpose" in changed:
+            spec.current_usage = device.purpose
+        if device.os_version is not None or "os_version" in changed:
+            spec.os_image = device.os_version
         if rack is not None:
             spec.rack = rack.name
             spec.rack_unit = validation.u_range_label(device.position_u, device.u_height)
@@ -251,6 +257,7 @@ def sync_spec(db: Session, spec: NodeServerSpec, *, fields: set[str] | None = No
                     "hostname": spec.hostname, "role": "server",
                     "status": spec.status if spec.status in DEVICE_STATUSES else "active",
                     "serial": serial, "cluster_id": spec.cluster_id, "k8s_node_name": spec.node_name,
+                    "purpose": spec.current_usage or None, "os_version": spec.os_image or None,
                     **_placement_from_spec(db, spec, touched | {"rack", "rack_unit"}),
                 }, ctx)
             else:
@@ -265,6 +272,10 @@ def sync_spec(db: Session, spec: NodeServerSpec, *, fields: set[str] | None = No
                     data["cluster_id"] = spec.cluster_id
                 if "node_name" in touched:
                     data["k8s_node_name"] = spec.node_name or None
+                if "current_usage" in touched:
+                    data["purpose"] = spec.current_usage or None
+                if "os_image" in touched:
+                    data["os_version"] = spec.os_image or None
                 data.update(_placement_from_spec(db, spec, touched, device))
                 if data:
                     device = crud.update(db, "devices", device.id, data, ctx)
