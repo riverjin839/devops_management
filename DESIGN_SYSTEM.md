@@ -714,8 +714,10 @@ Cilium BPF Trace `/cilium-trace` · 커널 파라미터 `/kernel-params` · NFS 
 - [ ] 결과가 모드별로 보존되는가, 스크롤이 카드 내부 한 겹뿐인가
 - [ ] 오류가 로그 + alert 한 곳인가
 
-적용 현황: `/etcdctl` 완료. 나머지 §12.6 적용 화면(`/bulk-exec` `/mc` `/cilium-trace` `/kernel-params` `/isilon-nfs`)은
-다음에 건드릴 때 위 체크리스트로 이행한다(일괄 개편 아님).
+적용 현황: §12.6 적용 화면 6개(`/etcdctl` `/bulk-exec` `/mc` `/cilium-trace` `/kernel-params` `/isilon-nfs`) 전부 적용 완료.
+화면 특성에 따른 차이 — `/isilon-nfs` 는 등록된 읽기 전용 명령만 실행하므로 위험 배지·확인 모달이 없고 좌측에 서버 레일이 따로 있다,
+`/kernel-params` 는 프리셋이 모두 조회 명령, `/mc`·`/kernel-params`·`/isilon-nfs` 는 모드 탭이 없어 결과 보관 단위가 프리셋·화면 하나다.
+신규 실행형 화면은 위 체크리스트로 시작한다.
 
 ### 12.7 전역 상단바 (`components/layout/AppTopBar.tsx`) — 높이 규약
 
