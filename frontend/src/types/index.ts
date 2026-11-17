@@ -6451,3 +6451,102 @@ export interface DcServerImportResult extends DcImportResult {
   columns: { column: string; field: string | null; label: string | null }[];
   createdLocations: string[];
 }
+
+// ── 노드 OS 파라미터 감시 (`/k8s/:clusterId/os-param-watch`) ───────────────────
+export type NodeParamOperator = 'any' | 'eq' | 'ne' | 'gte' | 'lte' | 'in';
+export type NodeParamSeverity = 'info' | 'warning' | 'critical';
+
+export interface NodeParamRule {
+  id: string;
+  clusterId: string | null;
+  clusterName: string | null;
+  param: string;
+  operator: NodeParamOperator;
+  expected: string | null;
+  nodePattern: string | null;
+  severity: NodeParamSeverity;
+  alertOnChange: boolean;
+  checkPersistent: boolean;
+  description: string | null;
+  enabled: boolean;
+  createdBy: string | null;
+  updatedAt: string | null;
+}
+export type NodeParamRuleInput = Omit<NodeParamRule, 'id' | 'clusterName' | 'createdBy' | 'updatedAt'>;
+
+export interface NodeParamRuleList {
+  items: NodeParamRule[];
+  operators: { value: NodeParamOperator; label: string }[];
+}
+
+export interface NodeParamStatus {
+  param: string;
+  runtime: string | null;
+  persistent: string | null;
+  persistentSource: string | null;
+  severity: NodeParamSeverity;
+  operator: NodeParamOperator;
+  expected: string | null;
+  ok: boolean;
+  reason: string;
+  persistedOk: boolean;
+  reported: boolean;
+  ruleIds: string[];
+}
+
+/** reporting = 정상 보고 · late = 주기의 3배 넘게 늦음 · offline = 무응답 알람 기준 초과. */
+export type NodeParamAgentState = 'reporting' | 'late' | 'offline' | 'unknown';
+
+export interface NodeParamNode {
+  agentId: string;
+  node: string;
+  hostIp: string | null;
+  agentVersion: string | null;
+  state: NodeParamAgentState;
+  lastSeenAt: string | null;
+  lastSeenAgeSec: number | null;
+  lastChangeAt: string | null;
+  lastError: string | null;
+  snapshotAt: string | null;
+  violationCount: number;
+  mismatchCount: number;
+  params: NodeParamStatus[];
+}
+
+export interface NodeParamClusterState {
+  clusterId: string;
+  intervalSec: number;
+  offlineMinutes: number;
+  ruleCount: number;
+  nodes: NodeParamNode[];
+}
+
+export interface NodeParamChange {
+  id: string;
+  node: string;
+  param: string;
+  oldValue: string | null;
+  newValue: string | null;
+  changeType: 'changed' | 'added' | 'removed';
+  /** agent = 노드 에이전트 감지 · ssh = SSH 수집 비교(OS 파라미터 변경 점검) */
+  source: string;
+  lastUnchangedAt: string | null;
+  detectedAt: string | null;
+}
+
+export interface NodeParamSettings {
+  intervalSec: number;
+  offlineMinutes: number;
+  agentImage: string;
+  agentNamespace: string;
+  ingestBaseUrl: string;
+  tlsVerify: boolean;
+  tokenConfigured: boolean;
+}
+
+export interface NodeParamManifest {
+  yaml: string;
+  apiBaseUrl: string;
+  apiBaseUrlFromSettings: boolean;
+  tokenConfigured: boolean;
+}

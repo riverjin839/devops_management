@@ -2706,6 +2706,28 @@ export const dailyReportApi = {
   ownersRefreshStreamUrl: '/api/v1/daily-report/owners/refresh/stream',
 };
 
+// ── 노드 OS 파라미터 감시 — 노드 에이전트(DaemonSet) 보고 기반. 규칙·상태·변경 이력·설치 매니페스트(JWT) ──
+export const nodeParamWatchApi = {
+  rules: (clusterId?: string) =>
+    api.get<import('@/types').NodeParamRuleList>('/node-params/rules', { params: clusterId ? { cluster_id: clusterId } : {} }),
+  createRule: (body: import('@/types').NodeParamRuleInput) =>
+    api.post<import('@/types').NodeParamRule>('/node-params/rules', body),
+  updateRule: (id: string, body: import('@/types').NodeParamRuleInput) =>
+    api.put<import('@/types').NodeParamRule>(`/node-params/rules/${id}`, body),
+  deleteRule: (id: string) => api.delete(`/node-params/rules/${id}`),
+  nodes: (clusterId: string) =>
+    api.get<import('@/types').NodeParamClusterState>(`/node-params/clusters/${clusterId}/nodes`),
+  changes: (clusterId: string, params: { node?: string; param?: string; limit?: number } = {}) =>
+    api.get<{ items: import('@/types').NodeParamChange[] }>(`/node-params/clusters/${clusterId}/changes`, { params }),
+  deleteAgent: (clusterId: string, agentId: string) =>
+    api.delete(`/node-params/clusters/${clusterId}/agents/${agentId}`),
+  manifest: (clusterId: string) =>
+    api.get<import('@/types').NodeParamManifest>(`/node-params/clusters/${clusterId}/manifest`),
+  settings: () => api.get<import('@/types').NodeParamSettings>('/node-params/settings'),
+  updateSettings: (body: Partial<Omit<import('@/types').NodeParamSettings, 'tokenConfigured'>>) =>
+    api.put<import('@/types').NodeParamSettings>('/node-params/settings', body),
+};
+
 // ── 외부 서비스 — 조회는 비인증 공개 API(저장 스냅샷), 수집(SSE)·설정은 JWT ──────────────────
 export const externalServicesApi = {
   clusters: () => api.get<{ clusters: { id: string; name: string }[]; accessMode?: string; linkExpiresAt?: string | null }>(

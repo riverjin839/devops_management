@@ -91,6 +91,8 @@ from app.routers import (
     k8s_resources_router,
     k8s_allocation_router,
     k8s_efficiency_router,
+    node_param_watch_router,
+    node_param_ingest_router,
     ns_migration_router,
     daily_report_router,
     daily_report_public_router,
@@ -1487,6 +1489,10 @@ def _run_migrations():
     # os_param_changes: OS 파라미터 변경 이력 — 테이블은 create_all, 조회 인덱스 보강.
     if "os_param_changes" in inspector.get_table_names():
         _safe_create_index("ix_os_param_changes_to_snap", "os_param_changes", "(node, to_snapshot_id)")
+        _safe_create_index("ix_os_param_changes_cluster_detected", "os_param_changes", "(cluster_id, detected_at DESC)")
+    # node_param_agents: 노드 파라미터 에이전트 상태 — 테이블은 create_all, 워치독 조회 인덱스 보강.
+    if "node_param_agents" in inspector.get_table_names():
+        _safe_create_index("ix_node_param_agents_last_seen", "node_param_agents", "(last_seen_at)")
 
     # cluster_items: 현황 아이템 — 문자형/도메인상태 컬럼은 구버전 DB 호환을 위해 보강.
     if "cluster_items" in inspector.get_table_names():
@@ -2009,6 +2015,17 @@ def _seed_default_metric_checklist_items():
             added += 1
         if added:
             db.commit()
+    finally:
+        db.close()
+
+
+def _seed_node_param_watch_rules():
+    """노드 OS 파라미터 감시 기본 공통 규칙 — 규칙 테이블이 비어 있을 때만(지운 규칙은 되살리지 않는다)."""
+    from app.services.node_param_watch.service import seed_default_rules
+
+    db = SessionLocal()
+    try:
+        seed_default_rules(db)
     finally:
         db.close()
 
@@ -2585,6 +2602,7 @@ async def lifespan(app: FastAPI):
             ("seed_check_matrix_items", _seed_check_matrix_items),
             ("seed_check_matrix_schedules", _seed_check_matrix_schedules),
             ("seed_metric_checklist_items", _seed_default_metric_checklist_items),
+            ("seed_node_param_watch_rules", _seed_node_param_watch_rules),
             ("seed_lake_service_types", _seed_default_lake_service_types),
             ("seed_service_categories", _seed_default_service_categories),
             ("seed_dc_inventory_defaults", _seed_dc_inventory_defaults),
@@ -2802,6 +2820,10 @@ app.include_router(k8s_resources_router, prefix="/api/v1", dependencies=_cluster
 # k8s-allocation (자원 관리) — 노드/NS/워크로드/파드 단위 request vs 사용량(slack) 가시화(읽기 전용).
 app.include_router(k8s_allocation_router, prefix="/api/v1", dependencies=_cluster_scoped)
 app.include_router(k8s_efficiency_router, prefix="/api/v1", dependencies=_cluster_scoped)
+# 노드 OS 파라미터 감시 — 에이전트 보고 수신(Bearer NODE_PARAM_INGEST_TOKEN 자체 검증, fail-closed)을
+# 먼저 include 해 같은 prefix 의 무인증 경로가 우선 매칭되게 하고, 나머지(규칙·상태·매니페스트)는 JWT.
+app.include_router(node_param_ingest_router, prefix="/api/v1")
+app.include_router(node_param_watch_router, prefix="/api/v1", dependencies=_cluster_scoped)
 # NS 마이그레이션(개발 → 운영) — 소스 read·타깃 operate 는 body 의 클러스터라 라우터가 직접 검사한다.
 app.include_router(ns_migration_router, prefix="/api/v1", dependencies=_cluster_scoped)
 # 일일 리포트 — 공개 조회(`/public/daily-report/*`)는 비인증(로그인 없는 공개 화면), 설정은 JWT.

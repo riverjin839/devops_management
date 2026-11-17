@@ -1,7 +1,7 @@
 import type { ComponentType } from 'react';
 import {
   LayoutGrid, Boxes, Gauge, TrendingUp, Activity, Bell, ScrollText, Zap, ClipboardCheck,
-  KeyRound, Tags, Package, GitCommit, Database, Cpu, TerminalSquare, Waves, Route,
+  KeyRound, Tags, Package, GitCommit, Database, Cpu, TerminalSquare, Waves, Route, ShieldCheck,
 } from 'lucide-react';
 import { ClusterDetailPage } from '@/pages/ClusterDetailPage';
 import { K8sManagePage } from '@/pages/K8sManagePage';
@@ -18,6 +18,7 @@ import { NodeImagesPage } from '@/pages/NodeImagesPage';
 import { VersionsPage } from '@/pages/VersionsPage';
 import { EtcdCtlPage } from '@/pages/EtcdCtlPage';
 import { KernelParamsPage } from '@/pages/KernelParamsPage';
+import { NodeParamWatchPage } from '@/pages/NodeParamWatchPage';
 import { PodBottleneckPage } from '@/pages/PodBottleneckPage';
 import { CiliumTracePage } from '@/pages/CiliumTracePage';
 import { PacketFlowPage } from '@/pages/PacketFlowPage';
@@ -76,6 +77,7 @@ export const HUB_VIEWS: readonly HubView[] = [
   { id: 'logs', category: 'logs', label: '파드 로그', icon: ScrollText, navKey: '/k8s-logs', component: K8sLogsPage },
   { id: 'incident', category: 'logs', label: 'AI 장애 분석', icon: Zap, navKey: '/incident-analysis', component: IncidentAnalysisPage },
   { id: 'review', category: 'checks', label: '점검 결과 리뷰', icon: ClipboardCheck, navKey: '/daily-check/review', component: DailyCheckReviewPage },
+  { id: 'os-param-watch', category: 'checks', label: 'OS 파라미터 감시', icon: ShieldCheck, navKey: '/os-param-watch', component: NodeParamWatchPage },
   { id: 'bottleneck', category: 'diagnose', label: '파드 병목 진단', icon: Activity, navKey: '/pod-bottleneck', component: PodBottleneckPage },
   { id: 'cilium', category: 'diagnose', label: 'Cilium BPF 추적', icon: Waves, navKey: '/cilium-trace', component: CiliumTracePage },
   { id: 'packet-flow', category: 'diagnose', label: '패킷 흐름 분석', icon: Route, navKey: '/packet-flow', component: PacketFlowPage },

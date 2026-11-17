@@ -1190,6 +1190,27 @@ hover 시 flyout 자체가 라벨을 보여주므로 이름만 뜨는 중복 툴
 - **요청사항 (수정 요청)**:
   - _(여기에 개선/수정 요청을 직접 적어주세요)_
 
+### OS 파라미터 감시 (`/os-param-watch`)
+
+> K8s 클러스터 허브 `/k8s/:clusterId/os-param-watch`(**점검** 카테고리)의 서브뷰로만 마운트된다. 옛 형식 URL `/os-param-watch` 는 그 뷰로 redirect. 아일랜드 패널(`panelRegistry`)로도 임베드된다(그때는 자체 `ClusterSidebar iconOnly`).
+
+- **파일**: `frontend/src/pages/NodeParamWatchPage.tsx` (+ `components/node-param-watch/{NodeParamNodesCard,NodeParamChangesCard,NodeParamRulesCard,NodeParamRuleDialog,NodeParamInstallCard}.tsx`)
+- **목적 / UX**: 노드마다 떠 있는 **노드 파라미터 에이전트(DaemonSet)** 가 보고한 커널 파라미터(sysctl)를 보고, 값 변경·기준값 위반·런타임↔영구 설정(`/etc/sysctl.d` 등) 불일치·에이전트 무응답을 확인한다. 알람 자체는 백엔드가 **알람 인박스**(`/alerts`, source `node-param-agent`)로 보낸다 — 이 화면은 상태·이력·규칙·설치 화면이고 **실행 버튼이 없다**(수집은 에이전트가 한다). SSH 로 직접 읽는 `/kernel-params` 콘솔과 달리 자격증명이 필요 없다.
+- **UI 구성**: `PageHeader`(우측 "알람 인박스" 링크) + `SegTabs mode="tabs"` 4개.
+  - **노드 상태**: `MacCard` 표 — 노드(IP) · 에이전트(보고 중/보고 지연/무응답/보고 없음 + 마지막 보고 상대시각·버전·읽기 오류) · 기준 위반 · 영구 설정 불일치 · 마지막 변경 · 목록에서 지우기(operator, danger 확인). 행을 펼치면 파라미터별 현재 값 · 영구 설정(값을 정한 `파일:줄`) · 기준 · 판정. 검색·"문제 있는 노드만". 보고한 노드가 없으면 `EmptyState` → 에이전트 설치 탭. 정상은 중립색, 비정상만 상태색. 탭 라벨에 문제 노드 수.
+  - **변경 이력**: 감지 시각 · 노드 · 파라미터 · 이전→새 값(생김/사라짐) · **변경 구간**(마지막으로 같은 값을 본 시각 이후) · 출처(에이전트/SSH 수집 — `kernel_param_drift` 점검이 남긴 이력도 함께).
+  - **감시 규칙**: 파라미터 · 범위(공통/이 클러스터, 클러스터 규칙에 가려진 공통 규칙 표시) · 적용 노드 glob · 기준(변경만 추적/=/≠/≥/≤/다음 중 하나) · 심각도 · 알람 종류 · 사용. 추가·편집 `NodeParamRuleDialog`(shadcn Dialog), 삭제 `ConfirmDialog`(danger). 쓰기는 `useCanOperate` 비활성 + 사유, 공통 규칙은 admin 만(사유 표시).
+  - **에이전트 설치**: 이 클러스터 UUID·PEP 주소·이미지를 채운 **설치 매니페스트**(Namespace+Secret+DaemonSet, 토큰은 자리표시자) 복사·내려받기 + 토큰 설정 여부 배지 + 권한 설명. 아래 **에이전트 설정**(admin) — 보고 주기(초)·무응답 알람(분)·에이전트 이미지·네임스페이스·PEP API 주소·TLS 검증.
+- **Frontend**: `useNodeParamNodes`/`useNodeParamChanges`(30초 폴링), `useNodeParamRules`, `useNodeParamManifest`, `useNodeParamSettings`, `useSaveNodeParamRule`/`useDeleteNodeParamRule`/`useDeleteNodeParamAgent`/`useUpdateNodeParamSettings`(`hooks/useNodeParamWatch.ts`, 성공 시 `['node-params']` 전체 무효화). api.ts: `nodeParamWatchApi.*`. 허브 안에서는 `useK8sHub()` 의 clusterId.
+- **Backend**: 라우터 `backend/app/routers/node_param_watch.py`.
+  - 수신(`ingest_router`, **JWT 없음**): `POST /api/v1/node-params/agent/report` — Bearer `NODE_PARAM_INGEST_TOKEN`(**미설정 시 503 fail-closed**, 불일치 401, 클러스터 없음 404). 응답 `{interval_sec, params[], changes, violations, mismatches, alerts_opened, alerts_resolved}` — 에이전트는 응답의 감시 목록·주기로 다음 보고를 한다(대상 편집 = 이 화면).
+  - JWT(`_cluster_scoped`): `GET /node-params/clusters/{id}/nodes` · `/changes` · `/manifest`, `DELETE /node-params/clusters/{id}/agents/{agent_id}`(operator), `GET/POST /node-params/rules` · `PUT/DELETE /node-params/rules/{id}`(operator, 공통 규칙은 admin, 클러스터 규칙은 그 클러스터 operate), `GET/PUT /node-params/settings`(PUT admin). 감사 `node_params.rule.*`·`node_params.agent.delete`·`node_params.settings.update`.
+  - 서비스 `services/node_param_watch/`(`rules` 순수 판정 · `service` 보고 처리·상태·워치독·기본 규칙 시드 · `settings` AppSetting `node_param_watch.settings` · `manifest`). 모델 `models/node_param_watch.py`(`NodeParamWatchRule`·`NodeParamAgent`), 값 이력은 `cluster_config_snapshots`(component `node_params:{node}`, 값이 바뀔 때만 새 행) + `os_param_changes`(`extra.source="agent"`).
+  - 알람(`alert_router.route_and_notify` 재사용): `NodeParamChanged`(변경 1회=1건) · `NodeParamBaselineViolation` · `NodeParamNotPersisted`(상태 전이 때만 열고 해소되면 resolved) · `NodeParamAgentOffline`(Celery Beat `node-param-agent-watchdog` 5분).
+  - 에이전트: `python -m app.node_param_agent`(backend 이미지 재사용, 표준 라이브러리만), 배포 번들 `deploy/k8s/node-param-agent/`.
+- **요청사항 (수정 요청)**:
+  - _(여기에 개선/수정 요청을 직접 적어주세요)_
+
 ### 인프라 토폴로지 (`/infra-topology`)
 
 - **파일**: `frontend/src/pages/InfraTopologyPage.tsx` (+ `components/infra/NodeVerifyModal.tsx`)

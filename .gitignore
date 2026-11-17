@@ -96,3 +96,6 @@ skills-lock.json
 .impeccable/critique/
 # 생성된 리포트 바이너리 (docs/reports/build_ai_dev_report.js 로 재생성)
 docs/reports/*.pptx
+
+# 노드 OS 파라미터 에이전트 시크릿(토큰 포함)
+deploy/k8s/node-param-agent/secret.yaml

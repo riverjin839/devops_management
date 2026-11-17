@@ -60,6 +60,7 @@ from app.models.service_category import ServiceCategory
 from app.models.bottleneck_run import BottleneckRun
 from app.models.ops_check import OpsCheckRun, OpsCheckRunItem
 from app.models.os_param_change import OsParamChange
+from app.models.node_param_watch import NodeParamAgent, NodeParamWatchRule
 from app.models.sprint import Sprint
 from app.models.project import Project
 from app.models.service_topology import ServiceTopologyLink, ServiceTopologyExternalNode
@@ -163,6 +164,8 @@ __all__ = [
     "OpsCheckRun",
     "OpsCheckRunItem",
     "OsParamChange",
+    "NodeParamWatchRule",
+    "NodeParamAgent",
     "Sprint",
     "Project",
     "ServiceTopologyLink",

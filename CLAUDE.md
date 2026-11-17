@@ -229,6 +229,7 @@ All routers are imported from `app/routers/__init__.py` and mounted under `/api/
 | `k8s-efficiency-dispatcher` | 매분 | K8S 자원 효율화 — 클러스터별 cron(AppSetting `k8s_efficiency.schedule`, 기본 10분) 평가 → NS/워크로드 request·usage·quota 샘플 수집 + 추천 생성 + opt-in NS 자동화 팬아웃 |
 | `k8s-alloc-rolling-dispatcher` | 매분 | K8S 자원 관리 NS 롤링 갱신 — `K8S_ALLOC_ROLLING`(viewed 기본: 최근 화면을 연 클러스터) 대상 팬아웃 → 대형(namespace 모드) 클러스터의 NS 누적기를 오래된 순으로 시간 예산만큼 다시 수집, 전 NS 가 모이면 개요 스냅샷 게시(`refresh_k8s_alloc_rolling_one`, 클러스터당 Redis 락) |
 | `daily-report-rollup` | 00:20 | 일일 리포트 NS 롤업 — 어제·그제 `k8s_ns_samples` 를 NS 일 단위(`k8s_ns_daily_reports`)로 재계산 + 보관 일수(AppSetting `daily_report.settings`) 밖 롤업 삭제 |
+| `node-param-agent-watchdog` | 5분 | 노드 OS 파라미터 에이전트 무응답 감시 — 마지막 보고가 AppSetting `node_param_watch.settings.offline_minutes`(기본 10분)를 넘긴 노드에 `NodeParamAgentOffline` 알람(열려 있으면 그대로, 다음 보고 때 닫힘) |
 | `external-services-dispatcher` | 매분 | 외부 서비스(도메인·IP:Port) 정기 수집 — AppSetting `external_services.settings.schedule_cron`(기본 매시) 평가 → `collect_external_services_one`(Service/Ingress 추출 + backend PTR 역조회, 노드 nslookup 결과 캐시는 유지) |
 
 태스크 성격별로 디스패처류(`run_check_matrix_dispatch`, `run_batch_job_dispatcher`,
@@ -356,7 +357,7 @@ All shared interfaces live in `src/types/index.ts`. Keep backend response shapes
 
 대부분의 라우터는 JWT 인증(`_auth` dependency)이 걸려 있고, **비인증 마운트 예외는
 `auth`, `auth_oidc`, `auth_ldap`, `health`, `check_ingest`, `k8s_exec`, `k9s_ssh`, `node_ssh`, `k8s_events_ingest`,
-`observability_ingest`, `daily_report_public`, `external_services_public`** 다
+`observability_ingest`, `node_param_ingest`, `daily_report_public`, `external_services_public`** 다
 (`*_public` 은 로그인 없는 공개 화면 `/daily-report`·`/external-services` 용 읽기 전용 `/public/...` — 테넌트 바인딩 없는 클러스터만 노출, 화면 설정 공개 방식이 `link` 면 만료 기한 있는 공유 링크 토큰 `?t=` 필요(거절은 403), 판정 `services/public_pages.py`)
 (`auth_oidc` 는 SSO 진입·콜백·교환과 공개 설정만 비인증이고 `/auth/oidc/settings*` 는 엔드포인트에 `require_admin` 을 직접 건다. `auth_ldap` 은 설정 엔드포인트뿐이며 전부 `require_admin` 을 직접 건다)
 (`k8s_exec`/`k9s_ssh`/`node_ssh` 는 WebSocket 이라 핸들러가 query token 을 직접 검증하고,
@@ -369,7 +370,7 @@ All shared interfaces live in `src/types/index.ts`. Keep backend response shapes
 |---|---|
 | 인증/사용자 | `auth`, `auth_oidc`, `auth_ldap`, `audit_logs`, `system_errors`, `system_diagnostics`, `notifications`, `ui_settings`, `terminal_appearance`, `release_notes`, `backup`, `schema_health`, `island`, `home_prefs`, `tenants` |
 | 모니터링/점검 | `clusters`, `core_bundle_router`, `check_matrix`, `check_results_router`(+ingest), `check_definitions_router`, `ops_check`, `history`, `metric_trend`, `cluster_trends`, `cluster_items`, `k8s_events`(+ingest), `observability`(+ingest), `promql`, `health` |
-| K8s 운영 | `k8s_resources`, `k8s_allocation`, `k8s_efficiency`(히스토리·추천·NS 정책·적용/롤백 run), `daily_report`(+public — 일일 리포트), `external_services`(+public — 외부 도메인·IP:Port), `public_share`(공개 화면 공유 링크 — admin), `k8s_rbac`(SA·Role·ClusterRole·Binding + kubeconfig 발급), `ns_migration`(개발 → 운영 NS 리소스 이전), `k8s_helm`, `k8s_exec`, `k9s_ssh`, `node_ssh`, `bulk_exec`, `saved_scripts`, `etcdctl`, `commands`, `mc_client`, `bottleneck`, `node_labels`, `node_images` |
+| K8s 운영 | `k8s_resources`, `k8s_allocation`, `node_param_watch`(+ingest — 노드 OS 파라미터 감시·에이전트 보고 수신), `k8s_efficiency`(히스토리·추천·NS 정책·적용/롤백 run), `daily_report`(+public — 일일 리포트), `external_services`(+public — 외부 도메인·IP:Port), `public_share`(공개 화면 공유 링크 — admin), `k8s_rbac`(SA·Role·ClusterRole·Binding + kubeconfig 발급), `ns_migration`(개발 → 운영 NS 리소스 이전), `k8s_helm`, `k8s_exec`, `k9s_ssh`, `node_ssh`, `bulk_exec`, `saved_scripts`, `etcdctl`, `commands`, `mc_client`, `bottleneck`, `node_labels`, `node_images` |
 | 네트워크/토폴로지 | `cilium_trace`, `topology_trace`, `service_topology`, `architecture_docs` |
 | 업무 관리 | `work_items`, `work_item_custom_fields`, `jira`, `servicenow`, `projects`, `sprint`, `workflows` |
 | 지식 | `work_guide`, `confluence`, `ops_note`, `mindmap`, `ontology`, `voc`, `reactions`, `analyze`, `trends`, `agent` |
@@ -395,7 +396,7 @@ All shared interfaces live in `src/types/index.ts`. Keep backend response shapes
 이외 모델은 도메인별로 아래처럼 묶인다:
 
 - **관측/알람**: `observability`(`ObservabilityModule`/`ObservabilityMetric`/`ObservabilitySnapshot` — 지표 카탈로그는 DB 행이라 UI 편집 대상), `alert_event`(수신 알람, fingerprint 기준 upsert), `alert_notify_rule`(알림 라우팅·중복 억제 규칙)
-- **점검/이벤트**: `check_matrix`(Item/Schedule/Result/ResultLog/**Run**=수행 로그 — 스키마 상세·운영 특성은 `docs/CHECK_MATRIX_GUIDE.md` §DB 구조), `check_definitions`, `ops_check`, `check_log`, `k8s_event`, `resource_count`, `config_snapshot`, `os_param_change`
+- **점검/이벤트**: `check_matrix`(Item/Schedule/Result/ResultLog/**Run**=수행 로그 — 스키마 상세·운영 특성은 `docs/CHECK_MATRIX_GUIDE.md` §DB 구조), `check_definitions`, `ops_check`, `check_log`, `k8s_event`, `resource_count`, `config_snapshot`, `os_param_change`, `node_param_watch`(`NodeParamWatchRule` 감시 규칙 — 화면 편집, `cluster_id` NULL=공통 · `NodeParamAgent` 노드 에이전트 마지막 보고 상태 — 로그성. 값 이력은 `config_snapshot`(component `node_params:{node}`)+`os_param_change`)
 - **업무 관리**: `work_item`(+`work_item_comment`/`work_item_time_block`/`work_item_custom_field`), `sprint`, `project`, `workflow` — `work_items.embedding` 은 pgvector
 - **지식**: `ontology`, `mindmap`, `work_guide`(pgvector `embedding`), `ops_note`, `voc_post`, `command_entry`, `reaction`, `trend`
 - **DC 인벤토리**: `dc_inventory`(`DcSite`→`DcHall`→`DcRackRow`→`DcRack`, `DcDeviceType`/`DcDevice`, `DcInterface`, `DcCable`, `DcVrf`/`DcPrefix`/`DcIpAddress`/`DcAsn`, 토폴로지용 `DcZoneCluster`(구간 ↔ K8s 클러스터)·`DcLink`(패브릭 계층 논리 연결)·`DcCanvasPosition`(캔버스 좌표), `DcChangeLog` — 변경 1건=1행 append-only(`LOG_TABLES`, 무기한 보존)). **`dc_devices` 가 서버·스위치 신원·물리 위치의 단일 원본**이고 `node_server_specs.device_id`·`infra_nodes.device_id` 가 가리킨다. 쓰기는 반드시 `services/dc_inventory/crud.py` 경유(제약 검증 + 변경 이력이 같은 트랜잭션), 기존 화면과의 값 일치는 `services/dc_inventory/device_registry.py`. 설계·결정은 `docs/dc-inventory/DESIGN.md`

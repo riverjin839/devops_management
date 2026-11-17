@@ -23,6 +23,7 @@ import { BatchJobsPage } from '@/pages/BatchJobsPage';
 import { McClientPage } from '@/pages/McClientPage';
 import { IsilonNfsPage } from '@/pages/IsilonNfsPage';
 import { KernelParamsPage } from '@/pages/KernelParamsPage';
+import { NodeParamWatchPage } from '@/pages/NodeParamWatchPage';
 import { InfraTopologyPage } from '@/pages/InfraTopologyPage';
 import { NodeSpecPage } from '@/pages/NodeSpecPage';
 import { ClusterLinksPage } from '@/pages/ClusterLinksPage';
@@ -82,6 +83,7 @@ export const PANEL_COMPONENTS: Record<string, ComponentType> = {
   '/mc': McClientPage,
   '/isilon-nfs': IsilonNfsPage,
   '/kernel-params': KernelParamsPage,
+  '/os-param-watch': NodeParamWatchPage,
   '/infra-topology': InfraTopologyPage,
   '/node-specs': NodeSpecPage,
   '/links': ClusterLinksPage,

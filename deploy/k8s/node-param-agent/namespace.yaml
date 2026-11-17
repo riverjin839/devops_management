@@ -1,0 +1,6 @@
+# 저장소 원본 — PEP 화면(K8s 허브 ▸ 점검 ▸ OS 파라미터 감시 ▸ 에이전트 설치)이 같은 내용을 클러스터 값으로 채워 렌더한다
+# (backend/app/services/node_param_watch/manifest.py). 둘을 바꿀 땐 같이 바꾼다 — 테스트가 비교한다.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: k8s-monitor-agent

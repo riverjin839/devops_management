@@ -32,6 +32,7 @@ _HUB_ABSORBED_PATHS = (
     "/clusters", "/k8s-manage", "/k8s-allocation", "/cluster-trends", "/observability", "/k8s-events",
     "/k8s-logs", "/incident-analysis", "/daily-check/review", "/k8s-rbac", "/node-images", "/versions",
     "/etcdctl", "/kernel-params", "/pod-bottleneck", "/cilium-trace", "/packet-flow", "/ops-checks",
+    "/os-param-watch",
 )
 RETIRED_PATH_ALIASES: dict[str, str] = {
     "/cluster-overview": "/k8s",  # 클러스터 현황 → 클러스터 상세(D-239) → K8s 클러스터 허브 개요(D-240)
