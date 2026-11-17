@@ -6,6 +6,7 @@ import { formatApiError } from '@/lib/utils';
 import { dcApi } from '@/services/api';
 import type { DcDeviceRole, DcTopology } from '@/types';
 import { BTN, BTN_PRIMARY, INPUT, ROLE_LABEL, ROLE_OPTIONS } from './shared';
+import { ensureRackRow } from './topology/actions';
 
 export type EntityDraft =
   | { kind: 'site'; id?: string; name?: string; description?: string | null }
@@ -66,14 +67,6 @@ export function DcEntityDialog({ draft, topology, clusters, onClose, onSaved }: 
   const editing = Boolean(draft.id);
   const set = (k: string) => (e: { target: { value: string } }) => setForm((p) => ({ ...p, [k]: e.target.value }));
 
-  /** 구간 아래 같은 이름의 열을 찾고, 없으면 만든다(랙은 열에 속한다). */
-  const ensureRow = async (zoneId: string, rowName: string): Promise<string> => {
-    const { data } = await dcApi.list<{ id: string; name: string }>('rack-rows', { hall_id: zoneId, limit: 500 });
-    const found = data.items.find((r) => r.name === rowName);
-    if (found) return found.id;
-    return (await dcApi.create<{ id: string }>('rack-rows', { hallId: zoneId, name: rowName })).data.id;
-  };
-
   const save = async () => {
     setSaving(true);
     setError(null);
@@ -88,7 +81,7 @@ export function DcEntityDialog({ draft, topology, clusters, onClose, onSaved }: 
         await (editing ? dcApi.update('halls', draft.id!, body) : dcApi.create('halls', body));
       } else if (draft.kind === 'rack') {
         if (!form.zoneId) throw new Error('구간을 먼저 만드세요.');
-        const rowId = await ensureRow(form.zoneId, (form.rowName ?? 'A').trim() || 'A');
+        const rowId = await ensureRackRow(form.zoneId, (form.rowName ?? 'A').trim() || 'A');
         const body = { rowId, name: form.name ?? '', rackNo: num(form.rackNo ?? ''), uHeight: num(form.uHeight ?? '') ?? 42 };
         await (editing ? dcApi.update('racks', draft.id!, body) : dcApi.create('racks', body));
       } else {
