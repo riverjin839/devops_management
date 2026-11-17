@@ -8,8 +8,8 @@ import {
   BAND_FILL, BANDS, NO_ZONE, RACK_MAX_ROWS, ROLE_ABBR, ROLE_FILL, ROW_H, leafTag, type Layout, type Rect,
 } from '../topologyLayout';
 import type { ShapeKind } from './Palette';
+import { edgeKey } from './actions';
 
-export const edgeKey = (e: { upperId: string; lowerId: string }) => `${e.upperId}|${e.lowerId}`;
 
 function curve(x1: number, y1: number, x2: number, y2: number): string {
   const my = (y1 + y2) / 2;

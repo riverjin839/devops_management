@@ -154,6 +154,20 @@ Settings → AI/LLM → 프로필 추가 — 모델 하나당 프로필 하나.
 이 단계만으로 "새벽에 CrashLoopBackOff → 로그·이벤트·describe 수집 → 원인 후보·조치 가이드 → 인앱 알림" 이 자동으로 돈다.
 **조치는 사람이 한다.**
 
+### 2.4 연결만으로는 부족하다 — 우리 환경에 맞추는 4개 층
+
+"코드 수정 없음" 은 **연결**까지다. 답의 품질은 아래 층을 얼마나 채우느냐로 갈린다. 효과가 큰 순서.
+
+| 층 | 무엇 | 지금 상태 | 할 일 |
+|---|---|---|---|
+| ① 지식(RAG) | 런북·과거 장애 분석·Cilium/Gateway 트러블슈팅 문서 | 업무 가이드·운영 노트가 임베딩 검색 대상 | 사내 Cilium·네트워크·GPU 장애 문서를 업무 가이드/운영 노트로 넣는다. **효과가 가장 크다.** |
+| ② 컨텍스트·도구 | 로그·이벤트·describe 외에 Hubble 흐름, `cilium status`, 정책 판정, GPU 지표 | 분석기는 로그·이벤트·describe 위주 | L1 도구에 Cilium(Hubble 흐름·정책 판정 — PEP `cilium_trace`·`topology_trace` 재사용)과 GPU 지표를 넣는다 (§4.1) |
+| ③ 시스템 프롬프트 | 환경 사실 — 클러스터 목록·CNI(Cilium, kube-proxy 대체 여부)·Gateway API·폐쇄망·명명 규칙·금지 행위 | 용도별 **범용** K8s 프롬프트가 코드에 고정(`services/llm/prompts.py`), 화면 편집 불가 | 용도별 "환경 설명" 을 Settings 에서 덧붙이게 한다(신규, 작은 기능 — UI-First 원칙 적용) |
+| ④ 미세조정 | 모델 가중치 학습 | 없음 | **처음엔 하지 않는다.** ①~③ 후 §7 평가에서 반복적으로 틀리는 유형이 남을 때만 검토 |
+
+- 시스템 프롬프트를 서빙 쪽(모델 이미지·채팅 템플릿)에 굽지 않는다. PEP 에 두어야 모델을 바꿔도 그대로 유지되고, 바꾼 이력이 남는다.
+- 시스템 프롬프트에는 **사실과 규칙**만 짧게. 긴 절차·명령 모음은 ① 지식으로 보내 필요할 때만 검색되게 한다.
+
 ---
 
 ## 3. 자동화 단계 정의 — 어디까지 LLM 에 맡기나
@@ -181,6 +195,7 @@ Settings → AI/LLM → 프로필 추가 — 모델 하나당 프로필 하나.
 | `describe(kind, namespace, name)` | 이벤트 포함 상세 | K8s API |
 | `get_events(namespace, since)` | 최근 이벤트 | K8s API / PEP k8s_events |
 | `query_prometheus(promql, range)` | 메트릭 (GPU·KV 캐시·지연) | PEP promql |
+| `cilium_flows(namespace, pod, verdict, since)` · `cilium_policy_check(src, dst, port)` | Hubble 흐름·정책 판정(드롭 원인) | PEP cilium_trace · topology_trace |
 | `get_recent_changes(namespace, since)` | 최근 배포·설정 변경 | PEP 변경 이력·감사 로그 |
 | `search_runbooks(query)` | 관련 내부 문서·과거 분석 | PEP RAG (업무 가이드·운영 노트) |
 

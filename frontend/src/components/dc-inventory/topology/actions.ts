@@ -13,3 +13,6 @@ export async function ensureRackRow(zoneId: string, rowName: string): Promise<st
 export function slug(name: string): string {
   return name.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'rack';
 }
+
+/** 연결선 선택 id — 상위|하위 장비 id. */
+export const edgeKey = (e: { upperId: string; lowerId: string }) => `${e.upperId}|${e.lowerId}`;
