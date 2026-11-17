@@ -32,7 +32,7 @@ from app.models.isilon_server import IsilonServer, IsilonCommand
 from app.models.infra_node import InfraNode
 from app.models.dc_inventory import (
     DcSite, DcHall, DcRackRow, DcRack, DcDeviceType, DcDevice, DcInterface, DcCable,
-    DcVrf, DcPrefix, DcIpAddress, DcAsn, DcChangeLog,
+    DcVrf, DcPrefix, DcIpAddress, DcAsn, DcChangeLog, DcZoneCluster, DcLink, DcCanvasPosition,
 )
 from app.models.topology_audit_log import TopologyAuditLog
 from app.models.ontology import OntologyEntity, OntologyRelationship, OntologyEvent, OntologyEntityType
@@ -132,7 +132,7 @@ __all__ = [
     "IsilonCommand",
     "InfraNode",
     "DcSite", "DcHall", "DcRackRow", "DcRack", "DcDeviceType", "DcDevice", "DcInterface", "DcCable",
-    "DcVrf", "DcPrefix", "DcIpAddress", "DcAsn", "DcChangeLog",
+    "DcVrf", "DcPrefix", "DcIpAddress", "DcAsn", "DcChangeLog", "DcZoneCluster", "DcLink", "DcCanvasPosition",
     "TopologyAuditLog",
     "OntologyEntity",
     "OntologyRelationship",

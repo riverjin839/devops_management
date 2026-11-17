@@ -4,17 +4,17 @@
 // 클러스터 단위 화면이 아니므로 ClusterSidebar 를 쓰지 않는다.
 import { Warehouse } from 'lucide-react';
 import { PageHeader, PageShell, SegTabs } from '@/components/common';
-import { DcDeviceTable, DcImportPanel, DcLinkPanel } from '@/components/dc-inventory';
+import { DcDeviceTable, DcImportPanel, DcLinkPanel, DcTopologyBoard } from '@/components/dc-inventory';
 import { fmt } from '@/components/dc-inventory/shared';
 import { useDcOverview } from '@/hooks/useDcInventory';
 import { pickParam, useUrlParam } from '@/hooks/useUrlParams';
 
-const TABS = ['devices', 'import', 'link'] as const;
+const TABS = ['topology', 'devices', 'import', 'link'] as const;
 type Tab = (typeof TABS)[number];
 
 export function DcInventoryPage() {
-  const [tabParam, setTabParam] = useUrlParam('tab', 'devices');
-  const tab = pickParam<Tab>(tabParam, TABS, 'devices');
+  const [tabParam, setTabParam] = useUrlParam('tab', 'topology');
+  const tab = pickParam<Tab>(tabParam, TABS, 'topology');
   const overview = useDcOverview();
   const o = overview.data;
 
@@ -45,8 +45,9 @@ export function DcInventoryPage() {
           size="md"
           value={tab}
           onChange={(v) => setTabParam(v)}
-          options={[['devices', '장비'], ['import', '일괄 등록'], ['link', '기존 데이터 연결']]}
+          options={[['topology', '토폴로지'], ['devices', '장비'], ['import', '일괄 등록'], ['link', '기존 데이터 연결']]}
         />
+        {tab === 'topology' && <DcTopologyBoard />}
         {tab === 'devices' && <DcDeviceTable onGoImport={() => setTabParam('import')} />}
         {tab === 'import' && <DcImportPanel />}
         {tab === 'link' && <DcLinkPanel />}

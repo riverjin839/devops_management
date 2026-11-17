@@ -30,7 +30,9 @@ from sqlalchemy.dialects.postgresql import CIDR, INET, JSONB, UUID
 
 from app.database import Base
 
-DEVICE_ROLES = ("server", "leaf", "spine", "super-spine", "mgmt", "patch")
+DEVICE_ROLES = ("server", "leaf", "spine", "super-spine", "fa-core", "mgmt", "patch")
+# 패브릭 계층 — 숫자가 작을수록 위. FA 코어 → super-spine → spine → leaf(ToR) 순으로 아래로 연결한다.
+FABRIC_TIER_RANK = {"fa-core": 0, "super-spine": 1, "spine": 2, "leaf": 3}
 DEVICE_STATUSES = ("planned", "active", "spare", "maintenance", "decommission")
 DEVICE_FACES = ("front", "rear")
 RACK_STATUSES = ("active", "planned", "retired")
@@ -76,6 +78,8 @@ class DcHall(_Tracked, Base):
     id = _uuid_pk()
     site_id = Column(UUID(as_uuid=True), ForeignKey("dc_sites.id", ondelete="RESTRICT"), nullable=False)
     name = Column(String(100), nullable=False)
+    # 화면에서는 "구간(구획)" 으로 부른다 — DC 안의 물리 구획. zone_no 는 구간 번호(DC #n 구간).
+    zone_no = Column(Integer, nullable=True)
     description = Column(Text, nullable=True)
 
 
@@ -249,6 +253,52 @@ class DcAsn(_Tracked, Base):
     cluster_id = Column(UUID(as_uuid=True), ForeignKey("clusters.id", ondelete="SET NULL"), nullable=True)
     fabric_tier = Column(String(20), nullable=True)
     description = Column(Text, nullable=True)
+
+
+# ── 토폴로지 (구간 ↔ 클러스터, 패브릭 계층 연결, 캔버스 좌표) ────────────────
+
+class DcZoneCluster(_Tracked, Base):
+    """구간(홀)에 걸쳐 있는 주요 K8s 클러스터 — 구간 하나에 여러 클러스터, 클러스터 하나가 여러 구간에 걸칠 수 있다."""
+
+    __tablename__ = "dc_zone_clusters"
+    __table_args__ = (UniqueConstraint("hall_id", "cluster_id", name="uq_dc_zone_clusters_hall_cluster"),)
+
+    id = _uuid_pk()
+    hall_id = Column(UUID(as_uuid=True), ForeignKey("dc_halls.id", ondelete="CASCADE"), nullable=False)
+    cluster_id = Column(UUID(as_uuid=True), ForeignKey("clusters.id", ondelete="CASCADE"), nullable=False)
+    note = Column(Text, nullable=True)
+
+
+class DcLink(_Tracked, Base):
+    """패브릭 계층의 논리 연결(상위 장비 → 하위 장비). 포트·케이블을 아직 모르는 단계에서 구조부터 그릴 때 쓴다.
+
+    실제 케이블(``dc_cables``)이 등록되면 토폴로지는 그 케이블에서 파생한 연결도 함께 보여준다.
+    """
+
+    __tablename__ = "dc_links"
+    __table_args__ = (
+        UniqueConstraint("upper_device_id", "lower_device_id", name="uq_dc_links_pair"),
+        CheckConstraint("upper_device_id <> lower_device_id", name="ck_dc_links_distinct"),
+    )
+
+    id = _uuid_pk()
+    upper_device_id = Column(UUID(as_uuid=True), ForeignKey("dc_devices.id", ondelete="CASCADE"), nullable=False)
+    lower_device_id = Column(UUID(as_uuid=True), ForeignKey("dc_devices.id", ondelete="CASCADE"), nullable=False)
+    note = Column(Text, nullable=True)
+
+
+class DcCanvasPosition(Base):
+    """토폴로지 캔버스에서 사용자가 끌어 놓은 노드 위치. 없으면 계층별 자동 배치를 쓴다."""
+
+    __tablename__ = "dc_canvas_positions"
+    __table_args__ = (UniqueConstraint("object_type", "object_id", name="uq_dc_canvas_positions_object"),)
+
+    id = _uuid_pk()
+    object_type = Column(String(16), nullable=False)   # device | rack
+    object_id = Column(UUID(as_uuid=True), nullable=False)
+    x = Column(Float, nullable=False)
+    y = Column(Float, nullable=False)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
 
 # ── 변경 이력 ────────────────────────────────────────────────────────────────

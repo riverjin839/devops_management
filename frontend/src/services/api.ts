@@ -2984,6 +2984,18 @@ export const dcApi = {
   },
   /** 확정 SSE 경로 — `postSse(url, FormData{file, sha256})`. */
   importApplyStreamUrl: '/api/v1/dc/import/apply/stream',
+  topology: () => api.get<import('@/types').DcTopology>('/dc/topology'),
+  savePositions: (positions: { objectType: 'device' | 'rack'; objectId: string; x: number; y: number }[]) =>
+    api.put<{ saved: number }>('/dc/topology/positions', { positions }),
+  resetPositions: () => api.delete<{ removed: number }>('/dc/topology/positions'),
+  /** 리소스 공통 쓰기 — `sites`·`halls`(구간)·`rack-rows`·`racks`·`devices`·`zone-clusters`·`links` 등. */
+  list: <T = Record<string, unknown>>(resource: string, params?: Record<string, string | number | undefined>) =>
+    api.get<{ items: T[]; total: number }>(`/dc/${resource}`, { params }),
+  create: <T = Record<string, unknown>>(resource: string, body: Record<string, unknown>) =>
+    api.post<T>(`/dc/${resource}`, body),
+  update: <T = Record<string, unknown>>(resource: string, id: string, body: Record<string, unknown>) =>
+    api.put<T>(`/dc/${resource}/${id}`, body),
+  remove: (resource: string, id: string) => api.delete(`/dc/${resource}/${id}`),
   linkPreview: () => api.get<import('@/types').DcLinkPreview>('/dc/devices/link/preview'),
   /** 기존 데이터 연결 SSE 경로 — 본문 `{items: [{hostname, action, prefer}]}`. */
   linkApplyStreamUrl: '/api/v1/dc/devices/link/apply/stream',
