@@ -53,8 +53,8 @@ export function DcDeviceTable({ onGoImport }: { onGoImport: () => void }) {
           <EmptyState icon={Server} title="조건에 맞는 장비가 없습니다" description="검색어나 역할 필터를 바꿔 보세요." compact />
         ) : (
           <EmptyState icon={Server} title="등록된 장비가 없습니다"
-            description="Excel 양식을 받아 랙·장비·케이블을 한 번에 올리거나, 기존 노드 서버스펙을 연결해 시작합니다."
-            action={{ label: '일괄 등록으로 이동', onClick: onGoImport }} />
+            description="서버 일괄 등록에서 엑셀을 붙여넣거나 파일을 올려 한 번에 등록하거나, 기존 노드 서버스펙을 연결해 시작합니다."
+            action={{ label: '서버 일괄 등록으로 이동', onClick: onGoImport }} />
         )
       ) : (
         <div className="overflow-x-auto">
@@ -66,6 +66,9 @@ export function DcDeviceTable({ onGoImport }: { onGoImport: () => void }) {
                 <th className={TH}>장비 종류</th>
                 <th className={TH}>랙</th>
                 <th className={TH}>U</th>
+                <th className={TH}>서버용도</th>
+                <th className={TH}>환경</th>
+                <th className={TH}>OS</th>
                 <th className={TH}>시리얼</th>
                 <th className={TH}>클러스터</th>
                 <th className={TH}>상태</th>
@@ -82,6 +85,9 @@ export function DcDeviceTable({ onGoImport }: { onGoImport: () => void }) {
                     {d.uRange ?? <span className="text-muted-foreground">—</span>}
                     {d.uRange && d.face === 'rear' && <span className="text-muted-foreground"> · 뒷면</span>}
                   </td>
+                  <td className={`${TD} whitespace-nowrap`}>{d.purpose ?? <span className="text-muted-foreground">—</span>}</td>
+                  <td className={`${TD} whitespace-nowrap`}>{d.environment ?? <span className="text-muted-foreground">—</span>}</td>
+                  <td className={`${TD} whitespace-nowrap`}>{d.osVersion ?? <span className="text-muted-foreground">—</span>}</td>
                   <td className={`${TD} whitespace-nowrap font-mono text-xs`}>{d.serial ?? <span className="text-muted-foreground">—</span>}</td>
                   <td className={`${TD} whitespace-nowrap`}>{d.clusterName ?? <span className="text-muted-foreground">—</span>}</td>
                   <td className={`${TD} whitespace-nowrap ${d.status === 'active' ? '' : 'text-status-warning font-medium'}`}>

@@ -73,7 +73,9 @@ SHEETS: tuple[Sheet, ...] = (
     Sheet("devices", "devices", ("hostname",), (
         ("hostname", "str"), ("role", "str"), ("device_type", "str"), ("rack", "str"), ("position_u", "int"),
         ("face", "str"), ("status", "str"), ("serial", "str"), ("asset_tag", "str"), ("cluster", "str"),
-        ("k8s_node_name", "str"), ("description", "str"))),
+        ("k8s_node_name", "str"), ("description", "str"), ("u_height", "int"), ("server_config", "str"),
+        ("environment", "str"), ("purpose", "str"), ("os_version", "str"), ("network_config", "str"),
+        ("redundancy", "str"))),
     Sheet("interfaces", "interfaces", ("device", "name"), (
         ("device", "str"), ("name", "str"), ("speed", "speed"), ("purpose", "str"), ("mac", "str"),
         ("paired_with", "str"), ("parent", "str"), ("enabled", "bool"), ("description", "str"))),
@@ -180,7 +182,9 @@ def row_repr(names: Names, sheet: str, obj: Any) -> dict[str, Any]:
             "rack": n.attr(DcRack, obj.rack_id, "name"), "position_u": obj.position_u, "face": obj.face,
             "status": obj.status, "serial": obj.serial, "asset_tag": obj.asset_tag,
             "cluster": n.attr(Cluster, obj.cluster_id, "name"), "k8s_node_name": obj.k8s_node_name,
-            "description": obj.description,
+            "description": obj.description, "u_height": obj.u_height, "server_config": obj.server_config,
+            "environment": obj.environment, "purpose": obj.purpose, "os_version": obj.os_version,
+            "network_config": obj.network_config, "redundancy": obj.redundancy,
         }
     if sheet == "interfaces":
         return {

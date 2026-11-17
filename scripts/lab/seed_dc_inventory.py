@@ -25,7 +25,8 @@ COLUMNS: dict[str, list[str]] = {
               "description"],
     "device_types": ["model", "vendor", "u_height", "is_full_depth", "default_role", "interface_templates"],
     "devices": ["hostname", "role", "device_type", "rack", "position_u", "face", "status", "serial", "asset_tag",
-                "cluster", "k8s_node_name", "description"],
+                "cluster", "k8s_node_name", "description", "u_height", "server_config", "environment", "purpose",
+                "os_version", "network_config", "redundancy"],
     "interfaces": ["device", "name", "speed", "purpose", "mac", "paired_with", "parent", "enabled", "description"],
     "cables": ["label", "a_device", "a_interface", "b_device", "b_interface", "status", "cable_type", "length_m",
                "description"],
@@ -71,7 +72,9 @@ def build(racks: int = 20) -> dict[str, list[dict]]:
                serial: str | None = None) -> dict:
         return {"hostname": hostname, "role": role, "device_type": dtype, "rack": rack, "position_u": u,
                 "face": face, "status": "active", "serial": serial, "asset_tag": None, "cluster": None,
-                "k8s_node_name": hostname if role == "server" else None, "description": None}
+                "k8s_node_name": hostname if role == "server" else None, "description": None,
+                # 장비 종류의 높이 — 내보내기는 실제 높이를 쓰므로 원본에도 같은 값을 둬 왕복 비교가 맞게 한다.
+                "u_height": 2 if dtype == "Server-2U" else 1}
 
     for n in range(1, racks + 1):
         no = f"{n:02d}"

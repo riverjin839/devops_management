@@ -10,6 +10,9 @@
 
 1.91.1 이후 main 에 병합된 변경 (다음 릴리스 후보).
 
+### Added
+- **DC 인벤토리 서버 일괄 등록 — 현업 엑셀 열 그대로 파일 올리기·붙여넣기**: `/dc-inventory` 의 **서버 일괄 등록** 탭에서 서버구성 · 서버환경 · 호스트명 · 서버용도 · OS버전 · NW설정 · 이중화 · DC 위치 · RACK 열 · 랙 No. · 하단 위치 열을 가진 엑셀을 올리거나, 엑셀에서 복사해 그대로 붙여넣는다. 붙여넣으면 바로 표로 보이고 열마다 무엇으로 읽는지(모르는 열은 "무시") 표시되며, 미리보기에서 행별 추가·변경·오류와 함께 만들어질 DC·구간·랙 목록을 보여준다. 확정은 실시간 로그로 진행이 보이고 오류가 하나라도 있으면 아무것도 반영하지 않는다. DC 위치는 "DC 이름 + 구간"(예: `DC1 2층 A구역`)으로 읽고, 랙 이름은 `열-번호`(예: `A-07`), 하단 위치는 `21`·`U21`·`21U` 모두 받는다. 머리글 변형(`호스트 명`·`Hostname`·`이증화` 등)과 위쪽 제목 줄도 인식한다. 서버용도·OS버전은 노드 서버스펙의 현재 용도·OS 와 같은 값이 된다. Backend: `services/dc_inventory/server_sheet.py`, `POST /dc/import/servers/preview`·`/apply/stream`, `GET /dc/import/servers/template.xlsx`, `dc_devices` 에 `server_config`·`environment`·`purpose`·`os_version`·`network_config`·`redundancy`. Frontend: `components/dc-inventory/DcServerImportPanel.tsx`, 공용 `lib/tabular.ts`(붙여넣기 표 파서 — 노드 서버스펙 붙여넣기와 공유).
+
 ## [1.91.1] - 2026-11-17
 
 ### Changed

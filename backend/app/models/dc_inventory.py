@@ -154,6 +154,13 @@ class DcDevice(_Tracked, Base):
     asset_tag = Column(String(64), nullable=True)
     cluster_id = Column(UUID(as_uuid=True), ForeignKey("clusters.id", ondelete="SET NULL"), nullable=True)
     k8s_node_name = Column(String(255), nullable=True)
+    # 서버 운영 정보 — 현업 엑셀 열 그대로(자유 텍스트). 서버 일괄 등록(services/dc_inventory/server_sheet.py)이 채운다.
+    server_config = Column(Text, nullable=True)       # 서버구성 (예: Dell R750 / 2CPU / 512G)
+    environment = Column(String(64), nullable=True)   # 서버환경 (예: 운영·개발·검증)
+    purpose = Column(String(255), nullable=True)      # 서버용도 → 노드 서버스펙 current_usage 로 미러
+    os_version = Column(String(255), nullable=True)   # OS버전 → 노드 서버스펙 os_image 로 미러
+    network_config = Column(Text, nullable=True)      # NW설정 (예: bond0 25G x2 LACP)
+    redundancy = Column(String(255), nullable=True)   # 이중화 (예: Active-Standby)
     description = Column(Text, nullable=True)
 
 

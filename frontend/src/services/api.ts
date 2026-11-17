@@ -2996,6 +2996,20 @@ export const dcApi = {
   update: <T = Record<string, unknown>>(resource: string, id: string, body: Record<string, unknown>) =>
     api.put<T>(`/dc/${resource}/${id}`, body),
   remove: (resource: string, id: string) => api.delete(`/dc/${resource}/${id}`),
+  /** 서버 일괄 등록 양식(서버구성 · 서버환경 · 호스트명 · … · 하단 위치). */
+  serverImportTemplate: () => api.get<Blob>('/dc/import/servers/template.xlsx', { responseType: 'blob' }),
+  /** 서버 일괄 등록 미리보기 — 파일 또는 붙여넣은 표(2차원 배열, 첫 줄 헤더). DB 를 바꾸지 않는다. */
+  serverImportPreview: (input: { file?: File; rows?: string[][] }) => {
+    const fd = new FormData();
+    if (input.file) fd.append('file', input.file);
+    if (input.rows) fd.append('rows_json', JSON.stringify(input.rows));
+    return api.post<import('@/types').DcServerImportResult>('/dc/import/servers/preview', fd, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+      timeout: SYNC_RUN_TIMEOUT,
+    });
+  },
+  /** 서버 일괄 등록 확정 SSE 경로 — `postSse(url, FormData{file|rows_json, sha256})`. */
+  serverImportApplyStreamUrl: '/api/v1/dc/import/servers/apply/stream',
   linkPreview: () => api.get<import('@/types').DcLinkPreview>('/dc/devices/link/preview'),
   /** 기존 데이터 연결 SSE 경로 — 본문 `{items: [{hostname, action, prefer}]}`. */
   linkApplyStreamUrl: '/api/v1/dc/devices/link/apply/stream',

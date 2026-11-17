@@ -1,3 +1,4 @@
+import { parseTabular } from '@/lib/tabular';
 import { useEffect, useMemo, useState } from 'react';
 import { X, ClipboardPaste, Loader2, AlertTriangle, CheckCircle2, Info } from 'lucide-react';
 import { nodeSpecsApi } from '@/services/api';
@@ -22,38 +23,6 @@ interface Props {
   displayColumns?: NodeSpecColumn[];
   /** 모달 오픈 시 자동으로 채워줄 텍스트 (전역 paste 핸들러용) */
   initialText?: string;
-}
-
-// ── TSV / CSV 둘 다 파서 ────────────────────────────────────────────────
-// Excel 복사본은 기본 TSV (\t 구분). Google Sheets 도 동일.
-// CSV 처럼 쉼표 기반도 감지해서 파싱.
-function parseTabular(text: string): { rows: string[][]; delim: '\t' | ',' } {
-  const firstLine = text.split(/\r?\n/)[0] ?? '';
-  const delim: '\t' | ',' = firstLine.includes('\t') ? '\t' : ',';
-
-  const rows: string[][] = [];
-  let cur: string[] = [];
-  let field = '';
-  let inQuote = false;
-  const n = text.length;
-  let i = 0;
-  while (i < n) {
-    const c = text[i];
-    if (inQuote) {
-      if (c === '"') {
-        if (text[i + 1] === '"') { field += '"'; i += 2; continue; }
-        inQuote = false; i++; continue;
-      }
-      field += c; i++; continue;
-    }
-    if (c === '"') { inQuote = true; i++; continue; }
-    if (c === delim) { cur.push(field); field = ''; i++; continue; }
-    if (c === '\r') { i++; continue; }
-    if (c === '\n') { cur.push(field); rows.push(cur); cur = []; field = ''; i++; continue; }
-    field += c; i++;
-  }
-  if (field.length > 0 || cur.length > 0) { cur.push(field); rows.push(cur); }
-  return { rows: rows.filter((r) => r.some((v) => v.trim() !== '')), delim };
 }
 
 // ── 파싱 결과: 헤더 감지 + 필드 매핑 ───────────────────────────────────

@@ -119,6 +119,14 @@ class DeviceCreate(_Base):
     asset_tag: Optional[str] = Field(None, max_length=64)
     cluster_id: Optional[UUID] = None
     k8s_node_name: Optional[str] = Field(None, max_length=255)
+    # 장비 종류 없이 등록할 때의 높이(U). 장비 종류를 고르면 그 값이 우선한다.
+    u_height: Optional[int] = Field(None, ge=0, le=60)
+    server_config: Optional[str] = None
+    environment: Optional[str] = Field(None, max_length=64)
+    purpose: Optional[str] = Field(None, max_length=255)
+    os_version: Optional[str] = Field(None, max_length=255)
+    network_config: Optional[str] = None
+    redundancy: Optional[str] = Field(None, max_length=255)
     description: Optional[str] = None
     # 장비 종류의 인터페이스 템플릿으로 포트를 함께 만든다(생성 시에만 의미가 있다).
     create_interfaces_from_template: bool = False

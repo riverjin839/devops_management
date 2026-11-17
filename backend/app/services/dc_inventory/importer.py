@@ -271,7 +271,8 @@ def _fields(cx: _Cx, sheet: Sheet, row: dict[str, Any], changed: set[str], exist
             f["interface_templates"] = json.loads(raw) if raw else None
     elif name == "devices":
         copy("hostname", "role", "position_u", "face", "status", "serial", "asset_tag", "k8s_node_name",
-             "description")
+             "description", "u_height", "server_config", "environment", "purpose", "os_version",
+             "network_config", "redundancy")
         if "device_type" in changed:
             dt = cx.dtype(row.get("device_type"))
             f["device_type_id"] = dt.id if dt else None
@@ -485,14 +486,27 @@ def run(db: Session, content: bytes, filename: str, *, actor: Any, apply: bool,
         sheet_hint: str | None = None, only_sheets: list[str] | None = None,
         emit: Emit | None = None) -> dict[str, Any]:
     """파일을 적용해 본다. ``apply`` 가 False 면 항상 되돌린다. 커밋·롤백까지 여기서 끝낸다."""
+    parsed = parse_file(content, filename, sheet_hint)
+    return run_parsed(db, parsed, sha256=sha256_of(content), filename=filename, actor=actor, apply=apply,
+                      only_sheets=only_sheets, emit=emit)
+
+
+def run_parsed(db: Session, parsed: dict[str, dict[str, Any]], *, sha256: str, filename: str, actor: Any,
+               apply: bool, only_sheets: list[str] | None = None, emit: Emit | None = None,
+               notes: list[str] | None = None) -> dict[str, Any]:
+    """``parse_file`` 형식으로 이미 읽은 행을 적용해 본다 — 파일·붙여넣기(서버 일괄 등록)가 같은 경로를 쓴다.
+
+    행 dict 에 ``__error`` 가 있으면 그 행은 적용하지 않고 그 사유로 오류 처리한다(입력 단계에서 찾은 문제).
+    """
     def say(level: str, message: str) -> None:
         if emit is not None:
             emit(level, message)
 
-    parsed = parse_file(content, filename, sheet_hint)
     wanted = [s for s in SHEETS if s.name in parsed and (not only_sheets or s.name in only_sheets)]
     total_rows = sum(len(parsed[s.name]["rows"]) for s in wanted)
-    say("info", f"파일 읽기  {filename} — 시트 {len(wanted)}개, {total_rows:,}행")
+    say("info", f"입력 읽기  {filename} — 시트 {len(wanted)}개, {total_rows:,}행")
+    for note in notes or []:
+        say("info", note)
 
     batch_id = str(uuid.uuid4())
     ctx = Ctx(actor=actor, source="import", batch_id=batch_id)
@@ -519,6 +533,9 @@ def run(db: Session, content: bytes, filename: str, *, actor: Any, apply: bool,
                 key_text = " / ".join(str(raw.get(k) if raw.get(k) is not None else "") for k in sheet.key).strip()
                 cx.pending = []
                 try:
+                    if raw.get("__error"):
+                        col, msg = raw["__error"]
+                        raise DcInvalid(msg, code="input", column=col)
                     key_tuple = tuple(normalize(sheet.type_of(k), raw.get(k), column=k) for k in sheet.key)
                     if key_tuple in seen:
                         raise DcInvalid(f"같은 파일 {seen[key_tuple]}행과 키가 같습니다", code="duplicate_in_file",
@@ -586,7 +603,7 @@ def run(db: Session, content: bytes, filename: str, *, actor: Any, apply: bool,
                 say("info" if ok else "error",
                     f"검증 끝 — 오류 {summary['error']:,}건. DB 는 바뀌지 않았다.")
         return {
-            "sha256": sha256_of(content), "filename": filename, "ok": ok, "applied": applied,
+            "sha256": sha256, "filename": filename, "ok": ok, "applied": applied,
             "batch_id": batch_id if applied else None, "summary": summary, "sheets": sheets_out,
             "implicit_created": cx.implicit, "warnings": warnings[:200],
         }
