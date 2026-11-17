@@ -11,6 +11,7 @@ PEP 문서 모음. 루트의 [README](../README.md) · [CHANGELOG](../CHANGELOG.
 - [AIRGAP_LLM_NEXUS.md](AIRGAP_LLM_NEXUS.md) — 폐쇄망 LLM(Ollama) 모델 수급(Nexus/오프라인)
 - [LLM_CHATBOT_SETUP.md](LLM_CHATBOT_SETUP.md) — Ollama 챗봇 연동 트러블슈팅 + K8s 운영 전용 모델(`pep-k8s-ops`)·챗봇 셋팅 가이드 (구성도 `diagrams/llm-chatbot-flow.drawio`)
 - [AIRGAP_LLM_ARCHITECTURE.md](AIRGAP_LLM_ARCHITECTURE.md) — 폐쇄망 LLM 아키텍처 상세(내부 모델 서빙, K8s 로그 자동 분석·조치 가이드, PEP 지식 RAG)
+- [LLM_AGENT_K8S_OPS.md](LLM_AGENT_K8S_OPS.md) — LLM 에이전트로 K8s 운영하기: GPU 서빙 모델(`ai-serving`) 연결, 용도별 라우팅, 자동화 단계(L0 분석 → L3 제한 자동 실행), 런북 승인·RBAC·보안 체크리스트
 - [ADMIN_MANUAL.md](ADMIN_MANUAL.md) — 관리자 매뉴얼
 - [BACKUP_RESTORE_GUIDE.md](BACKUP_RESTORE_GUIDE.md) — 데이터 백업·복구(JSON export/import, merge/replace)
 - [DEEP_CHECKER_GUIDE.md](DEEP_CHECKER_GUIDE.md) — Deep Check 점검 프레임워크(체커 16종, in-cluster CronJob) 가이드
