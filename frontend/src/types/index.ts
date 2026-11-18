@@ -6597,12 +6597,15 @@ export interface ServiceConfigServiceDef {
   icon: string;
   description: string;
   collectKinds: ServiceConfigCollectKind[];
+  /** 노드 그룹 재정의를 쓰는 서비스인가(cilium 처럼 클러스터 값이 하나면 false). */
+  groupSupported: boolean;
   itemCount?: number;
 }
 export interface ServiceConfigVersionInfo {
   id: string;
   versionNo: number;
   status: 'imported' | 'saved' | 'applied' | 'superseded';
+  groupId: string | null;
   note: string | null;
   createdBy: string | null;
   createdAt: string | null;
@@ -6625,12 +6628,40 @@ export interface ServiceConfigRow {
   options: string[] | null;
   defaultValue: string | null;
   restartScope: ServiceConfigRestartScope;
+  /** 선택 범위의 실효 값(그룹이면 재정의 ?? 기본). */
   versionValue: string | null;
+  /** 기본 그룹 최신 값 — 그룹 화면의 '상속' 표시. */
+  baseValue: string | null;
+  /** 그룹 재정의 값(그룹 화면만). */
+  overrideValue: string | null;
+  inherited: boolean;
   current: ServiceConfigCurrent;
   status: ServiceConfigItemStatus;
 }
+export interface ServiceConfigGroupInfo {
+  id: string;
+  name: string;
+  nodePattern: string;
+  description: string | null;
+  sortOrder: number;
+  nodes: string[];
+}
+export interface ServiceConfigPending {
+  versionNo: number;
+  baselineVersionNo: number | null;
+  count: number;
+  note: string | null;
+  createdBy: string | null;
+  createdAt: string | null;
+}
 export interface ServiceConfigView {
   service: ServiceConfigServiceDef;
+  group: { id: string | null; name: string; nodePattern: string | null };
+  groups: ServiceConfigGroupInfo[];
+  defaultNodes: string[];
+  allNodes: string[];
+  defaultVersionNo: number | null;
+  pending: ServiceConfigPending | null;
   versions: ServiceConfigVersionInfo[];
   version: ServiceConfigVersionInfo | null;
   sources: { component: string; node: string; source: string; collectedAt: string | null }[];
@@ -6644,4 +6675,48 @@ export interface ServiceConfigImportResult {
   total: number;
   mixed: string[];
   nodes: string[];
+}
+
+/** 의존 규칙 평가 결과 1건 — recommend(제안) · require(조건) · impact(안내). */
+export interface ServiceConfigRuleResult {
+  ruleId: string;
+  ruleKey: string;
+  kind: 'recommend' | 'require' | 'impact';
+  ruleType: string;
+  sourceService: string;
+  sourceKey: string;
+  sourceValue: string | null;
+  targetService: string | null;
+  targetKey: string | null;
+  targetValue: string | null;
+  ok: boolean;
+  suggested: string | null;
+  reason: string | null;
+  /** 이번 편집과 관련된 필수 조건 위반 — 저장 불가. */
+  blocking: boolean;
+  touched: boolean;
+  /** 이 화면에서 제안값으로 바로 고칠 수 있는가. */
+  fixableHere: boolean;
+}
+export interface ServiceConfigEvaluation {
+  changed: string[];
+  results: ServiceConfigRuleResult[];
+  blocking: number;
+}
+export interface ServiceConfigDiffRow {
+  key: string;
+  a: string | null;
+  b: string | null;
+  change: 'changed' | 'added' | 'removed';
+  section?: string | null;
+  label?: string | null;
+}
+export interface ServiceConfigCompare {
+  a: ServiceConfigVersionInfo;
+  b: ServiceConfigVersionInfo;
+  rows: ServiceConfigDiffRow[];
+}
+export interface ServiceConfigSaveResult {
+  version: ServiceConfigVersionInfo;
+  changes: ServiceConfigDiffRow[];
 }

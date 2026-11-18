@@ -1498,6 +1498,8 @@ def _run_migrations():
     if "service_config_versions" in inspector.get_table_names():
         _safe_create_index("ix_service_config_versions_lookup", "service_config_versions",
                            "(cluster_id, service, version_no DESC)")
+    if "service_config_groups" in inspector.get_table_names():
+        _safe_create_index("ix_service_config_groups_lookup", "service_config_groups", "(cluster_id, service, sort_order)")
 
     # cluster_items: 현황 아이템 — 문자형/도메인상태 컬럼은 구버전 DB 호환을 위해 보강.
     if "cluster_items" in inspector.get_table_names():
@@ -2036,12 +2038,13 @@ def _seed_node_param_watch_rules():
 
 
 def _seed_service_config_catalog():
-    """서비스 구성 설정 목록 — (service, key) 가 없을 때만 추가(운영자 수정 보존)."""
-    from app.services.service_config.catalog_seed import seed_catalog
+    """서비스 구성 설정 목록·의존 규칙 — 없는 것만 추가(운영자 수정 보존)."""
+    from app.services.service_config.catalog_seed import seed_catalog, seed_rules
 
     db = SessionLocal()
     try:
         seed_catalog(db)
+        seed_rules(db)
     finally:
         db.close()
 

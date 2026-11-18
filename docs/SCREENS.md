@@ -1192,19 +1192,26 @@ hover 시 flyout 자체가 라벨을 보여주므로 이름만 뜨는 중복 툴
 
 ### 서비스 구성 (`/k8s-services`)
 
-> K8S 클러스터 허브 `/k8s/:clusterId/services?service=<etcd|containerd|cilium|linux>&version=<n>`(**구성** 카테고리)의 서브뷰로만 마운트된다. 옛 형식 URL `/k8s-services` 는 그 뷰로 redirect. 아일랜드 패널로도 임베드(그때는 자체 `ClusterSidebar iconOnly`).
+> K8S 클러스터 허브 `/k8s/:clusterId/services?service=<etcd|containerd|cilium|linux>&group=<그룹 id>&version=<n>`(**구성** 카테고리)의 서브뷰로만 마운트된다. 옛 형식 URL `/k8s-services` 는 그 뷰로 redirect. 아일랜드 패널로도 임베드(그때는 자체 `ClusterSidebar iconOnly`).
 
-- **파일**: `frontend/src/pages/ServiceConfigPage.tsx` (+ `components/service-config/{ServiceConfigRail,ServiceConfigSections}.tsx`, 수집 모달 `components/versions/{ContainerdConfigCollectModal,EtcdSystemdModal,KernelParamsCollectModal}.tsx`)
-- **목적 / UX**: 클러스터 서비스(ETCD·CONTAINERD·CILIUM·LINUX(OS))별 **관리 대상 설정**과 노드에서 수집된 **현재 값**을 한 표로 보고, 현재 값으로 **설정 버전 V1** 을 만든다. 서비스 구성 기능(설정 편집 → 의존 변경 표시 → 저장(버전) → 별도 적용)의 **1단계(읽기 전용)** — 편집·의존·노드 그룹·적용은 다음 단계. 목업에서 합의한 흐름을 따른다.
+- **파일**: `frontend/src/pages/ServiceConfigPage.tsx` (+ `components/service-config/{ServiceConfigRail,ServiceConfigSections,SaveVersionDialog,VersionCompareDialog,GroupDialog}.tsx`, `matchNodes.ts`(그룹 패턴 미리보기), `afterModalClose.ts`, 수집 모달 `components/versions/{ContainerdConfigCollectModal,EtcdSystemdModal,KernelParamsCollectModal}.tsx`)
+- **목적 / UX**: 클러스터 서비스(ETCD·CONTAINERD·CILIUM·LINUX(OS))별 **관리 대상 설정**을 노드에서 수집된 **현재 값**과 함께 보고, **편집 → 의존 변경 즉시 표시 → 저장 전 확인 → 새 설정 버전(저장됨·미적용)** 으로 관리한다. 버전 비교·되돌리기, 일부 노드만 다른 값을 주는 **노드 그룹 재정의**. 노드에 실제로 반영하는 **적용은 다음 단계** — 이 화면의 저장·되돌리기·그룹 변경은 DB 만 바꾸고 노드에는 아무것도 하지 않는다(그래서 실행 로그가 없다. 실행 로그는 '현재 값 수집' 에만).
 - **UI 구성**:
-  - 카드 하나 안에 좌측 **서비스 레일**(아이콘+이름, 서버 서비스 정의 순서) + 우측 서비스 화면. 상단: 서비스 이름 · `SegTabs`(설정 / 요약 — 요약은 다음 단계 `EmptyState`) · 버전 선택(`V1 · 가져옴` …) · **현재 값 수집** 버튼(서비스별: ETCD = K8S API 로 수집 + SSH(systemd) 수집, CONTAINERD = SSH, CILIUM = K8S API, LINUX = SSH(노드 에이전트가 있으면 자동 보고)). 전부 operator(`useCanOperate` 비활성 + 사유), 노드 설정은 바꾸지 않는다.
-  - K8S API 수집은 화면 안 `RunLogPanel`(실시간·로그 보기 토글 `useLogPref('service-config-collect')`), SSH 수집은 각 수집 모달의 실행 로그.
-  - 현재 값 출처 한 줄(출처별 노드 수 · 마지막 수집 상대시각). 버전이 없으면 `MacCard` "설정 버전이 아직 없습니다" + **현재 값으로 V1 만들기**(operator, `ConfirmDialog` — DB 저장만).
-  - 검색 · `SegTabs` 전체/확인 필요만 · 집계(항목·노드 간 다름·버전과 다름·값 없음). 섹션별 `MacCard`(접기) 표: 키(설명·도움말) · 설정 값(선택 버전, 읽기 전용 입력 모양 + 기본값) · 현재 노드 값(같으면 값, 다르면 "N가지 값" 펼침 → 값별 노드 목록) · 반영 방식(즉시/etcd 멤버 재시작/containerd 재시작/cilium 롤링 재시작) · 상태(일치는 중립, 버전과 다름·노드 간 다름 경고, 값 없음 미연결).
-- **Frontend**: `useServiceConfigServices`, `useServiceConfigView(clusterId, service, version)`, `useImportServiceConfig`, `useInvalidateServiceConfig`(`hooks/useServiceConfig.ts`), `useUrlParams({service, version})`, `useRunLog`·`runLogged`·`useAbortableMutation`(K8S API 수집 `versionsApi.collect`). api.ts: `serviceConfigApi.*`, `versionsCollectStreamUrl(…, 'containerd-config')`.
-- **Backend**: 라우터 `backend/app/routers/service_config.py`(`_cluster_scoped`) — `GET /api/v1/service-config/services` · `GET /service-config/clusters/{id}/{service}?version=` · `POST /service-config/clusters/{id}/{service}/import`(operator, 이미 버전 있으면 409, 수집 값 없으면 422, 감사 `service_config.import`). containerd 수집은 `routers/versions.py` `POST /clusters/{id}/collect-containerd-config`(+`/stream`) — `containerd config dump` → 실패 시 설정 파일, TOML 평탄화해 `containerd_config:{host}` 스냅샷.
-  - 서비스 `services/service_config/`(`catalog_seed` 서비스 정의·설정 시드 · `current` 스냅샷 → 노드별 현재 값(순수 함수) · `view` 화면 조립·V1). 모델 `models/service_config.py`(`ServiceConfigItem` 설정 목록 — 시드지만 DB 행, `ServiceConfigVersion` 설정 버전 — `group_id` 는 다음 단계 노드 그룹용).
-  - 현재 값 출처: ETCD `etcd`(정적 파드 플래그) + `etcd_systemd:{host}`(env 파일·ExecStart), CILIUM `cilium_config`, LINUX `node_params:{node}`(에이전트) 우선 → `kernel_params:{host}`(SSH), CONTAINERD `containerd_config:{host}`. 컴포넌트별 최신 스냅샷만(DISTINCT ON).
+  - 카드 하나 안에 좌측 **서비스 레일**(아이콘+이름) + 우측 서비스 화면. 상단: 서비스 이름 · `SegTabs`(설정 / 요약 — 요약은 다음 단계 `EmptyState`) · 버전 선택(`V3 · 저장됨·미적용` …, 이전 버전을 고르면 편집 잠금) · **비교** · **현재 값 수집**(ETCD = K8S API + SSH(systemd), CONTAINERD = SSH, CILIUM = K8S API, LINUX = SSH — 노드 설정은 바꾸지 않음, K8S API 수집은 화면 안 `RunLogPanel`(로그 보기 토글 `useLogPref('service-config-collect')`), SSH 는 수집 모달의 실행 로그).
+  - **노드 그룹**(cilium 은 클러스터 값 하나라 없음): `SegTabs` 기본(나머지 노드 수) | 그룹들(노드 수) + **+ 그룹** · 그룹 편집 · 그룹 삭제(danger 확인). `GroupDialog`: 이름·노드 패턴(glob, 쉼표)·설명, 입력하면 일치 노드 미리보기. 노드는 위쪽 그룹부터 처음 일치한 그룹 하나에만, 어느 그룹에도 없으면 기본 그룹.
+  - 버전이 없으면 `MacCard` "설정 버전이 아직 없습니다" + **현재 값으로 V1 만들기**. 최신이 미적용 저장본이면 `MacCard` "저장됨 · 미적용 N건"(버전·작성자·메모) + 변경 보기(비교) + 적용(다음 단계, 비활성).
+  - 검색 · `SegTabs` 전체/확인 필요만/편집한 것만 · 집계. 섹션별 `MacCard`(접기) 표: 키(설명·도움말 + **의존 규칙 결과**: 권장(제안값 + "제안 적용")·필수(저장 막힘 / 기존 위반 경고)·영향) · 설정 값(형식별 입력 — bool/enum 선택, 숫자, 텍스트. 바뀌면 강조 + "이전 → 새" + 행 되돌리기. 그룹 화면은 **재정의 값** 입력, 비우면 "상속: 기본값") · 현재 노드 값(범위 노드만, 다르면 "N가지 값" 펼침) · 반영 방식 · 상태.
+  - 하단 고정 바: 변경 N건 · 의존 제안/필수 위반 수 · 변경 취소 · **저장…**(operator). 초안은 300ms 디바운스로 `POST /service-config/evaluate` 를 불러 행에 결과를 붙인다. 서비스·그룹·버전·클러스터를 바꿀 때 편집 중이면 "저장하지 않은 변경을 버릴까요?" 확인.
+  - **저장 전 확인** `SaveVersionDialog`: 직접 바꾼 값 · 같이 바꾸기를 권하는 값(이 화면에서 고칠 수 있는 권장·필수, 체크해서 포함) · 지켜야 저장되는 조건(남은 위반이 있으면 저장 잠금, 다른 서비스에서 고칠 위반은 경고) · 적용할 때 일어나는 일(영향) · 변경 메모 → "V{n} 로 저장 (적용은 따로)". 409(그사이 다른 저장)면 안내 후 새로 읽기.
+  - **버전 비교** `VersionCompareDialog`: 두 버전 선택 → 변경/추가/삭제 표 + "V{n} 값으로 되돌리기 (새 버전)"(확인 후 새 버전 저장).
+  - 모달을 닫으며 URL 쿼리를 바꾸는 동작(그룹 만들기·삭제, 버리고 이동)은 `afterModalClose` 로 모달 history 기록이 회수된 뒤에 한다(`common/modalHistory.ts` 의 `history.back()` 이 바꾼 쿼리를 되돌리던 문제).
+- **Frontend**: `useServiceConfigServices`, `useServiceConfigView(clusterId, service, version, groupId)`, `useServiceConfigEvaluate`(디바운스 초안), `useSaveServiceConfigVersion`, `useServiceConfigCompare`, `useRevertServiceConfig`, `useSaveServiceConfigGroup`·`useDeleteServiceConfigGroup`, `useImportServiceConfig`, `useInvalidateServiceConfig`(`hooks/useServiceConfig.ts`), `useUrlParams({service, version, group})`, `useDebouncedValue`. api.ts `serviceConfigApi.*` — 설정 값은 `[{key, value}]` 목록으로 보낸다(요청 인터셉터가 객체 키를 snake_case 로 바꿔 `SystemdCgroup` 같은 키가 망가지므로).
+- **Backend**: 라우터 `backend/app/routers/service_config.py`(`_cluster_scoped`):
+  - `GET /api/v1/service-config/services` · `GET /service-config/clusters/{id}/{service}?version=&group_id=` · `POST …/{service}/import`(operator, 409/422).
+  - `POST /service-config/evaluate`(본문 `{cluster_id, service, group_id, values:[{key,value}]}` — 읽기라 경로가 아니라 본문으로 클러스터를 받고 핸들러가 read 판정, viewer 가능).
+  - `POST …/{service}/versions`(`{base_version_no, group_id, values, note}` — 낙관적 잠금 409, 필수 위반 422 `{message, violations}`, 바뀐 것 없음 422, 이전 미적용 저장본은 `superseded`) · `GET …/{service}/versions/compare?a=&b=&group_id=` · `POST …/{service}/versions/{n}/revert?group_id=` · `POST|PUT|DELETE …/{service}/groups[/{group_id}]`(DELETE 는 그룹 버전도 함께). 쓰기는 operator + 감사 `service_config.version.save|revert`·`service_config.group.*`.
+  - 서비스 `services/service_config/`(`catalog_seed` 설정·의존 규칙 시드 · `current` 스냅샷 → 노드별 현재 값 · `rules` 의존 규칙 평가(순수 함수, rule_type 고정 집합) · `view` 화면 조립·V1·평가·저장·비교·되돌리기·그룹). 모델 `models/service_config.py`(`ServiceConfigItem`·`ServiceConfigRule`·`ServiceConfigGroup`·`ServiceConfigVersion` — 그룹 버전은 재정의 값만).
+  - 현재 값 출처: ETCD `etcd`(정적 파드 플래그) + `etcd_systemd:{host}`, CILIUM `cilium_config`, LINUX `node_params:{node}` 우선 → `kernel_params:{host}`, CONTAINERD `containerd_config:{host}`(`versions.py` `collect-containerd-config`). 컴포넌트별 최신 스냅샷만.
 - **요청사항 (수정 요청)**:
   - _(여기에 개선/수정 요청을 직접 적어주세요)_
 

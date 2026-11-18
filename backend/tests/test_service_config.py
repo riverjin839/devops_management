@@ -254,3 +254,167 @@ async def test_collect_containerd_config_dump_and_file_fallback(db, cluster, mon
     from app.services.service_config import view as V
     rows = {r["key"]: r for sec in V.build_view(db, cluster, "containerd")["sections"] for r in sec["items"]}
     assert rows["SystemdCgroup"]["status"] == "mixed"
+
+
+# ── 2단계: 의존 규칙(순수) ───────────────────────────────────────────────────
+
+def _rules():
+    from app.services.service_config.catalog_seed import RULES
+
+    return [SimpleNamespace(id=uuid.uuid4(), enabled=True, params=r.get("params"), target_service=r.get("target_service"),
+                            target_key=r.get("target_key"), **{k: r[k] for k in ("rule_key", "service", "key", "kind",
+                                                                                  "rule_type", "reason")})
+            for r in RULES]
+
+
+def test_rules_recommend_only_when_touched_and_require_blocks():
+    from app.services.service_config import rules as RU
+
+    linux = {"net.core.somaxconn": "8192", "net.ipv4.tcp_max_syn_backlog": "4096", "net.ipv4.ip_forward": "1"}
+    vals = {"linux": linux, "cilium": {"routing-mode": "tunnel"}}
+    # somaxconn 을 바꾸면 SYN 백로그 제안
+    res = RU.evaluate(_rules(), "linux", vals, {"net.core.somaxconn"})
+    rec = [r for r in res if r["rule_key"] == "linux.syn_backlog_ge_somaxconn"]
+    assert rec and rec[0]["suggested"] == "8192" and rec[0]["fixable_here"] and not rec[0]["blocking"]
+    # 아무것도 안 바꿨으면 제안 없음(기존 상태 잡음 방지)
+    assert not [r for r in RU.evaluate(_rules(), "linux", vals, set()) if r["kind"] == "recommend"]
+    # ip_forward=0 으로 바꾸면 CILIUM 규칙이 저장을 막는다
+    bad = {**vals, "linux": {**linux, "net.ipv4.ip_forward": "0"}}
+    req = [r for r in RU.evaluate(_rules(), "linux", bad, {"net.ipv4.ip_forward"}) if r["kind"] == "require"]
+    assert req and req[0]["blocking"] and req[0]["suggested"] == "1"
+    # CILIUM 화면에서 보면 같은 위반은 다른 서비스에서 고칠 것이라 막지 않는다
+    req2 = [r for r in RU.evaluate(_rules(), "cilium", bad, {"routing-mode"}) if r["rule_key"] == "cilium.requires_ip_forward"]
+    assert req2 and not req2[0]["blocking"]
+    # CILIUM 을 관리하지 않으면(값 없음) ip_forward 조건도 없다
+    assert not RU.evaluate(_rules(), "linux", {"linux": bad["linux"]}, {"net.ipv4.ip_forward"})
+
+
+def test_rules_etcd_and_cilium_requires_when():
+    from app.services.service_config import rules as RU
+
+    res = RU.evaluate(_rules(), "etcd", {"etcd": {"heartbeat-interval": "250", "election-timeout": "1000",
+                                                  "quota-backend-bytes": "17179869184"}},
+                      {"heartbeat-interval", "quota-backend-bytes"})
+    by = {r["rule_key"]: r for r in res}
+    assert by["etcd.election_ge_5x_heartbeat"]["blocking"] and by["etcd.election_ge_5x_heartbeat"]["suggested"] == "1250"
+    assert by["etcd.election_10x_heartbeat"]["suggested"] == "2500"
+    assert by["etcd.quota_max_8gib"]["suggested"] == "8589934592"
+    assert by["etcd.quota_defrag_check"]["kind"] == "impact"
+    res = RU.evaluate(_rules(), "cilium", {"cilium": {"kube-proxy-replacement": "true", "routing-mode": "native",
+                                                      "k8s-service-port": "6443"}}, {"kube-proxy-replacement"})
+    by = {r["rule_key"]: r for r in res}
+    assert by["cilium.kpr_requires_host"]["blocking"]
+    assert "cilium.kpr_requires_port" not in by
+    assert not by["cilium.native_requires_cidr"]["blocking"]  # 이번 편집과 무관한 기존 위반은 경고만
+    assert "cilium.restart_notice" in by
+
+
+# ── 2단계: 저장·비교·되돌리기·그룹(실제 DB) ──────────────────────────────────
+
+@pytest.fixture
+def linux_v1(db, cluster):
+    from app.models.service_config import ServiceConfigGroup
+    from app.services.service_config import view as V
+    from app.services.service_config.catalog_seed import seed_rules
+
+    seed_rules(db)
+    for n, (sw, sm) in {"w1": ("1", "4096"), "w2": ("1", "4096"), "gpu-1": ("10", "4096")}.items():
+        _add_snap(db, cluster, f"node_params:{n}", {"runtime": {"vm.swappiness": sw, "net.core.somaxconn": sm,
+                                                               "net.ipv4.tcp_max_syn_backlog": "4096",
+                                                               "net.ipv4.ip_forward": "1"}})
+    _add_snap(db, cluster, "cilium_config", {"data": {"routing-mode": "tunnel"}})  # CILIUM 이 있어야 ip_forward 조건이 걸린다
+    V.import_v1(db, cluster, "linux", "tester")
+    yield cluster
+    db.query(ServiceConfigGroup).filter(ServiceConfigGroup.cluster_id == cluster.id).delete(synchronize_session=False)
+    db.commit()
+
+
+def test_save_compare_revert_flow(db, linux_v1):
+    from app.services.service_config import view as V
+
+    c = linux_v1
+    v1 = V.build_view(db, c, "linux")["version"]["version_no"]
+    draft = {**{k: v for k, v in V.list_versions(db, c.id, "linux")[0].values.items()}, "net.core.somaxconn": "8192"}
+    ev = V.evaluate_draft(db, c, "linux", None, draft)
+    assert ev["changed"] == ["net.core.somaxconn"]
+    assert any(r["rule_key"] == "linux.syn_backlog_ge_somaxconn" for r in ev["results"])
+
+    with pytest.raises(V.ServiceConfigError) as e:  # 낙관적 잠금
+        V.save_version(db, c, "linux", None, 0, draft, "x", "tester")
+    assert e.value.status == 409
+    with pytest.raises(V.ServiceConfigError) as e:  # 필수 위반
+        V.save_version(db, c, "linux", None, v1, {**draft, "net.ipv4.ip_forward": "0"}, None, "tester")
+    assert e.value.status == 422 and e.value.detail["violations"][0]["target_key"] == "net.ipv4.ip_forward"
+    with pytest.raises(V.ServiceConfigError) as e:  # 바뀐 것 없음
+        V.save_version(db, c, "linux", None, v1, dict(V.list_versions(db, c.id, "linux")[0].values), None, "tester")
+    assert e.value.status == 422
+
+    out = V.save_version(db, c, "linux", None, v1, {**draft, "net.ipv4.tcp_max_syn_backlog": "8192"}, "백로그 상향", "tester")
+    assert out["version"]["version_no"] == 2 and out["version"]["status"] == "saved"
+    view = V.build_view(db, c, "linux")
+    assert view["pending"]["count"] == 2 and view["pending"]["baseline_version_no"] == 1
+    rows = {r["key"]: r for s in view["sections"] for r in s["items"]}
+    assert rows["net.core.somaxconn"]["status"] == "differs"  # 노드는 아직 4096
+
+    out3 = V.save_version(db, c, "linux", None, 2, {**draft, "net.ipv4.tcp_max_syn_backlog": "16384"}, None, "tester")
+    statuses = {v.version_no: v.status for v in V.list_versions(db, c.id, "linux")}
+    assert statuses == {3: "saved", 2: "superseded", 1: "imported"} and out3["version"]["version_no"] == 3
+
+    cmp = V.compare_versions(db, c, "linux", None, 1, 3)
+    assert {r["key"]: r["change"] for r in cmp["rows"]} == {"net.core.somaxconn": "changed", "net.ipv4.tcp_max_syn_backlog": "changed"}
+    rv = V.revert_to(db, c, "linux", None, 1, "tester")
+    assert rv["version"]["version_no"] == 4 and "V1" in rv["version"]["note"]
+    assert V.build_view(db, c, "linux")["pending"]["count"] == 0
+
+
+def test_groups_override_and_membership(db, linux_v1):
+    from app.services.service_config import view as V
+
+    c = linux_v1
+    g = V.save_group(db, c, "linux", None, "GPU", "gpu-*", "GPU 노드", "tester")
+    with pytest.raises(V.ServiceConfigError) as e:
+        V.save_group(db, c, "linux", None, "GPU", "x-*", None, "tester")
+    assert e.value.status == 409
+    with pytest.raises(V.ServiceConfigError) as e:
+        V.save_group(db, c, "cilium", None, "A", "a*", None, "tester")
+    assert e.value.status == 422
+
+    base = V.build_view(db, c, "linux")
+    assert base["default_nodes"] == ["w1", "w2"] and base["groups"][0]["nodes"] == ["gpu-1"]
+    rows = {r["key"]: r for s in base["sections"] for r in s["items"]}
+    assert rows["vm.swappiness"]["status"] == "same"  # gpu-1(10) 은 기본 그룹 집계에서 빠진다
+
+    gv = V.build_view(db, c, "linux", group_id=g.id)
+    rows = {r["key"]: r for s in gv["sections"] for r in s["items"]}
+    assert rows["vm.swappiness"]["inherited"] and rows["vm.swappiness"]["status"] == "differs"  # 기본 1 상속, 노드 10
+    out = V.save_version(db, c, "linux", g.id, 0, {"vm.swappiness": "10"}, "GPU 스왑 허용", "tester")
+    assert out["version"]["version_no"] == 1 and out["version"]["group_id"] == str(g.id)
+    rows = {r["key"]: r for s in V.build_view(db, c, "linux", group_id=g.id)["sections"] for r in s["items"]}
+    assert rows["vm.swappiness"]["override_value"] == "10" and rows["vm.swappiness"]["status"] == "same"
+    assert not rows["net.core.somaxconn"]["override_value"] and rows["net.core.somaxconn"]["inherited"]
+
+    assert V.delete_group(db, c, "linux", g.id) == "GPU"
+    assert V.list_versions(db, c.id, "linux", g.id) == []
+
+
+def test_api_evaluate_allowed_for_viewer_but_save_forbidden(db, linux_v1):
+    from fastapi.testclient import TestClient
+
+    from app.auth.deps import get_current_user
+    from app.main import app
+
+    c = linux_v1
+    viewer = SimpleNamespace(id=uuid.uuid4(), username="v", role="viewer", is_active=True, tenant_ids=[])
+    app.dependency_overrides[get_current_user] = lambda: viewer
+    try:
+        client = TestClient(app)
+        r = client.post("/api/v1/service-config/evaluate",
+                        json={"cluster_id": str(c.id), "service": "linux", "values": [{"key": "net.core.somaxconn", "value": "9999"}]})
+        assert r.status_code == 200, r.text
+        r = client.post(f"/api/v1/service-config/clusters/{c.id}/linux/versions",
+                        json={"base_version_no": 1, "values": [{"key": "net.core.somaxconn", "value": "9999"}]})
+        assert r.status_code == 403
+        r = client.get(f"/api/v1/service-config/clusters/{c.id}/linux/versions/compare?a=1&b=1")
+        assert r.status_code == 200 and r.json()["rows"] == []
+    finally:
+        app.dependency_overrides.pop(get_current_user, None)

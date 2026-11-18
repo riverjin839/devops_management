@@ -117,6 +117,9 @@ ITEMS: list[dict[str, Any]] = [
          "routing-mode=native 일 때 마스커레이드하지 않을 대역."),
     _cil("데이터 경로", "kube-proxy-replacement", "kube-proxy 대체", "enum", "false",
          "true 면 k8s-service-host/port 가 설정돼 있어야 한다.", ["true", "false"]),
+    _cil("데이터 경로", "k8s-service-host", "API 서버 주소(kube-proxy 대체 시)", "string", None,
+         "kube-proxy-replacement=true 면 cilium 이 API 서버에 직접 붙을 주소(VIP·LB). 비우면 kube-proxy 없이 동작하지 않는다."),
+    _cil("데이터 경로", "k8s-service-port", "API 서버 포트(kube-proxy 대체 시)", "int", "6443"),
     _cil("데이터 경로", "enable-bpf-masquerade", "eBPF 마스커레이드", "bool", "false"),
     _cil("데이터 경로", "enable-ipv4-masquerade", "IPv4 마스커레이드", "bool", "true"),
     _cil("데이터 경로", "enable-bandwidth-manager", "대역폭 관리자", "bool", "false"),
@@ -174,6 +177,73 @@ def seed_catalog(db: Session) -> int:
             value_type=spec.get("value_type") or "string", unit=spec.get("unit"), options=spec.get("options"),
             default_value=spec.get("default_value"), restart_scope=spec.get("restart_scope") or "immediate",
             source_keys=spec.get("source_keys"), sort_order=order[svc], enabled=True,
+        ))
+        added += 1
+    if added:
+        db.commit()
+    return added
+
+
+# ── 의존 규칙 ────────────────────────────────────────────────────────────────
+# rule_key 는 시드 식별자 — 같은 키가 DB 에 있으면 다시 넣지 않는다(운영자가 끈 규칙을 되살리지 않음).
+RULES: list[dict[str, Any]] = [
+    {"rule_key": "linux.syn_backlog_ge_somaxconn", "service": "linux", "key": "net.core.somaxconn",
+     "target_service": "linux", "target_key": "net.ipv4.tcp_max_syn_backlog", "kind": "recommend", "rule_type": "min_of_key",
+     "reason": "SYN 대기열이 listen 백로그보다 작으면 SYN 단계에서 먼저 막힌다 — somaxconn 이상 권장."},
+    {"rule_key": "linux.file_max_ge_nr_open", "service": "linux", "key": "fs.nr_open",
+     "target_service": "linux", "target_key": "fs.file-max", "kind": "recommend", "rule_type": "min_of_key",
+     "reason": "시스템 전체 상한(file-max)이 프로세스 상한(nr_open)보다 작으면 프로세스 상한을 다 쓸 수 없다."},
+    {"rule_key": "linux.conntrack_memory", "service": "linux", "key": "net.netfilter.nf_conntrack_max",
+     "target_service": None, "target_key": None, "kind": "impact", "rule_type": "impact",
+     "reason": "conntrack 항목당 약 300 B 의 커널 메모리를 쓴다 — 값을 크게 올리면 노드 메모리 여유를 확인한다."},
+    {"rule_key": "cilium.requires_ip_forward", "service": "cilium", "key": "*",
+     "target_service": "linux", "target_key": "net.ipv4.ip_forward", "kind": "require", "rule_type": "fixed_value",
+     "params": {"value": "1"}, "reason": "CILIUM 이 노드를 거치는 파드 트래픽을 라우팅하려면 ip_forward=1 이어야 한다."},
+    {"rule_key": "etcd.election_ge_5x_heartbeat", "service": "etcd", "key": "heartbeat-interval",
+     "target_service": "etcd", "target_key": "election-timeout", "kind": "require", "rule_type": "multiple_of_key",
+     "params": {"factor": 5}, "reason": "선출 시간이 하트비트의 5배보다 짧으면 리더가 끊임없이 바뀐다(etcd 가 기동을 거부한다)."},
+    {"rule_key": "etcd.election_10x_heartbeat", "service": "etcd", "key": "heartbeat-interval",
+     "target_service": "etcd", "target_key": "election-timeout", "kind": "recommend", "rule_type": "multiple_of_key",
+     "params": {"factor": 10}, "reason": "선출 시간은 하트비트 간격의 10배 정도를 권장한다."},
+    {"rule_key": "etcd.quota_max_8gib", "service": "etcd", "key": "quota-backend-bytes",
+     "target_service": "etcd", "target_key": "quota-backend-bytes", "kind": "recommend", "rule_type": "max_value",
+     "params": {"max": "8589934592"}, "reason": "8 GiB 를 넘기면 스냅샷·복구·조각모음이 크게 느려진다 — 공식 권장 최대값."},
+    {"rule_key": "etcd.quota_defrag_check", "service": "etcd", "key": "quota-backend-bytes",
+     "target_service": None, "target_key": None, "kind": "impact", "rule_type": "impact",
+     "reason": "PEP 의 etcd 조각모음 점검 임계값(점검 매트릭스 ▸ etcd_defrag)도 새 quota 에 맞춰 확인한다."},
+    {"rule_key": "containerd.systemd_cgroup_kubelet", "service": "containerd", "key": "SystemdCgroup",
+     "target_service": None, "target_key": None, "kind": "impact", "rule_type": "impact",
+     "reason": "kubelet 의 cgroupDriver 도 같은 값(true ↔ systemd)으로 바꿔야 한다 — 다르면 노드가 NotReady 가 될 수 있다."},
+    {"rule_key": "containerd.sandbox_kubelet", "service": "containerd", "key": "sandbox_image",
+     "target_service": None, "target_key": None, "kind": "impact", "rule_type": "impact",
+     "reason": "kubelet --pod-infra-container-image 와 이미지를 맞추고, 폐쇄망이면 레지스트리에 이미지가 있는지 확인한다."},
+    {"rule_key": "cilium.kpr_requires_host", "service": "cilium", "key": "kube-proxy-replacement",
+     "target_service": "cilium", "target_key": "k8s-service-host", "kind": "require", "rule_type": "requires_when",
+     "params": {"when": "true"}, "reason": "kube-proxy 를 대체하면 cilium 이 API 서버에 직접 붙을 주소가 필요하다."},
+    {"rule_key": "cilium.kpr_requires_port", "service": "cilium", "key": "kube-proxy-replacement",
+     "target_service": "cilium", "target_key": "k8s-service-port", "kind": "require", "rule_type": "requires_when",
+     "params": {"when": "true"}, "reason": "kube-proxy 를 대체하면 API 서버 포트가 필요하다."},
+    {"rule_key": "cilium.native_requires_cidr", "service": "cilium", "key": "routing-mode",
+     "target_service": "cilium", "target_key": "ipv4-native-routing-cidr", "kind": "require", "rule_type": "requires_when",
+     "params": {"when": "native"}, "reason": "네이티브 라우팅이면 마스커레이드하지 않을 대역(파드 CIDR)을 알아야 한다."},
+    {"rule_key": "cilium.restart_notice", "service": "cilium", "key": "*",
+     "target_service": None, "target_key": None, "kind": "impact", "rule_type": "impact",
+     "reason": "cilium-config 변경은 cilium 에이전트(DaemonSet)를 롤링 재시작해야 반영된다 — 재시작 중 노드별로 잠시 정책 갱신이 멈춘다."},
+]
+
+
+def seed_rules(db: Session) -> int:
+    from app.models.service_config import ServiceConfigRule
+
+    existing = {k for (k,) in db.query(ServiceConfigRule.rule_key).all()}
+    added = 0
+    for spec in RULES:
+        if spec["rule_key"] in existing:
+            continue
+        db.add(ServiceConfigRule(
+            rule_key=spec["rule_key"], service=spec["service"], key=spec["key"],
+            target_service=spec.get("target_service"), target_key=spec.get("target_key"), kind=spec["kind"],
+            rule_type=spec["rule_type"], params=spec.get("params"), reason=spec.get("reason"), enabled=True,
         ))
         added += 1
     if added:
