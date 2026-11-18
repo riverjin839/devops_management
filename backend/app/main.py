@@ -93,6 +93,7 @@ from app.routers import (
     k8s_efficiency_router,
     node_param_watch_router,
     node_param_ingest_router,
+    service_config_router,
     ns_migration_router,
     daily_report_router,
     daily_report_public_router,
@@ -1493,6 +1494,10 @@ def _run_migrations():
     # node_param_agents: 노드 파라미터 에이전트 상태 — 테이블은 create_all, 워치독 조회 인덱스 보강.
     if "node_param_agents" in inspector.get_table_names():
         _safe_create_index("ix_node_param_agents_last_seen", "node_param_agents", "(last_seen_at)")
+    # service_config_versions: 서비스 구성 설정 버전 — 테이블은 create_all, 화면 조회 인덱스 보강.
+    if "service_config_versions" in inspector.get_table_names():
+        _safe_create_index("ix_service_config_versions_lookup", "service_config_versions",
+                           "(cluster_id, service, version_no DESC)")
 
     # cluster_items: 현황 아이템 — 문자형/도메인상태 컬럼은 구버전 DB 호환을 위해 보강.
     if "cluster_items" in inspector.get_table_names():
@@ -2026,6 +2031,17 @@ def _seed_node_param_watch_rules():
     db = SessionLocal()
     try:
         seed_default_rules(db)
+    finally:
+        db.close()
+
+
+def _seed_service_config_catalog():
+    """서비스 구성 설정 목록 — (service, key) 가 없을 때만 추가(운영자 수정 보존)."""
+    from app.services.service_config.catalog_seed import seed_catalog
+
+    db = SessionLocal()
+    try:
+        seed_catalog(db)
     finally:
         db.close()
 
@@ -2603,6 +2619,7 @@ async def lifespan(app: FastAPI):
             ("seed_check_matrix_schedules", _seed_check_matrix_schedules),
             ("seed_metric_checklist_items", _seed_default_metric_checklist_items),
             ("seed_node_param_watch_rules", _seed_node_param_watch_rules),
+            ("seed_service_config_catalog", _seed_service_config_catalog),
             ("seed_lake_service_types", _seed_default_lake_service_types),
             ("seed_service_categories", _seed_default_service_categories),
             ("seed_dc_inventory_defaults", _seed_dc_inventory_defaults),
@@ -2824,6 +2841,8 @@ app.include_router(k8s_efficiency_router, prefix="/api/v1", dependencies=_cluste
 # 먼저 include 해 같은 prefix 의 무인증 경로가 우선 매칭되게 하고, 나머지(규칙·상태·매니페스트)는 JWT.
 app.include_router(node_param_ingest_router, prefix="/api/v1")
 app.include_router(node_param_watch_router, prefix="/api/v1", dependencies=_cluster_scoped)
+# 서비스 구성(etcd·containerd·cilium·OS 설정 목록·현재 값·설정 버전) — K8S 허브 ▸ 구성.
+app.include_router(service_config_router, prefix="/api/v1", dependencies=_cluster_scoped)
 # NS 마이그레이션(개발 → 운영) — 소스 read·타깃 operate 는 body 의 클러스터라 라우터가 직접 검사한다.
 app.include_router(ns_migration_router, prefix="/api/v1", dependencies=_cluster_scoped)
 # 일일 리포트 — 공개 조회(`/public/daily-report/*`)는 비인증(로그인 없는 공개 화면), 설정은 JWT.

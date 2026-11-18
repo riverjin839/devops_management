@@ -1,0 +1,326 @@
+import { useEffect, useId, useMemo, useState } from 'react';
+import { X, Box, Play, Loader2, CheckCircle2, AlertTriangle, FileText } from 'lucide-react';
+import { bulkExecApi } from '@/services/api';
+import type { NodeSummary } from '@/services/api';
+import type { ContainerdConfigCollectRequest, ContainerdConfigCollectResponse } from '@/types';
+import { useQuery } from '@tanstack/react-query';
+import { useAbortableMutation } from '@/hooks/useAbortableMutation';
+import { useRunLog } from '@/hooks/useRunLog';
+import { useLogPref } from '@/hooks/useLogPref';
+import { useToast, DoubleScrollX, RunLogPanel } from '@/components/common';
+import { useModalA11y } from '@/components/common/useModalA11y';
+import { RawOutputDetails, CollectErrorList } from './RawOutputDetails';
+import { collectFirstLine, streamCollect } from './collectRunLog';
+import { formatApiError } from '@/lib/utils';
+
+interface Props {
+  open: boolean;
+  clusterId: string;
+  /** 실행 로그 첫 줄에 표시할 클러스터 이름(없으면 생략). */
+  clusterName?: string;
+  onClose: () => void;
+  /** 수집이 끝나면(변경 여부와 무관) 호출 — 서비스 구성 화면이 현재 값을 다시 읽는다. */
+  onCollected?: () => void;
+}
+
+// `containerd config dump` 가 안 될 때 차례로 읽을 설정 파일 후보.
+const DEFAULT_CONFIG_PATHS = ['/etc/containerd/config.toml'];
+
+/** 노드별 containerd 실효 설정을 SSH 로 수집해 `containerd_config:{host}` 스냅샷으로 저장(서비스 구성 ▸ CONTAINERD 현재 값).
+ *  1순위 `containerd config dump`(기본값까지 합쳐진 값), 실패하면 설정 파일을 그대로 읽는다. 출처는 결과 표에 남는다.
+ */
+export function ContainerdConfigCollectModal({ open, clusterId, clusterName, onClose, onCollected }: Props) {
+  const toast = useToast();
+
+  const [username, setUsername] = useState('root');
+  const [port, setPort] = useState(22);
+  const [authMode, setAuthMode] = useState<'password' | 'key'>('password');
+  const [password, setPassword] = useState('');
+  const [privateKey, setPrivateKey] = useState('');
+  const [useSudo, setUseSudo] = useState(true);
+
+  const [fallbacksText, setFallbacksText] = useState(DEFAULT_CONFIG_PATHS.join('\n'));
+
+  const usernameId = useId();
+  const portId = useId();
+  const parallelismId = useId();
+  const fallbacksId = useId();
+  const titleId = useId();
+  const dialogRef = useModalA11y(open, onClose);
+  const [parallelism, setParallelism] = useState(10);
+
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [result, setResult] = useState<ContainerdConfigCollectResponse | null>(null);
+
+  const nodeQ = useQuery({
+    queryKey: ['containerd-config-nodes', clusterId],
+    queryFn: () => bulkExecApi.nodeList(clusterId).then((r) => r.data.nodes),
+    enabled: open && !!clusterId,
+  });
+  const nodes: NodeSummary[] = useMemo(() => nodeQ.data ?? [], [nodeQ.data]);
+
+  useEffect(() => {
+    if (!open) return;
+    if (nodes.length === 0) return;
+    setSelected(new Set(nodes.map((n) => n.internalIp || n.name).filter(Boolean) as string[]));
+  }, [open, nodes]);
+
+  const fallbackPaths = useMemo(
+    () => fallbacksText.split('\n').map((s) => s.trim()).filter(Boolean),
+    [fallbacksText],
+  );
+
+  // 실행 로그(D-135) — 수집을 SSE 스트림으로 실행해 서버가 흘리는 시작·호스트별 결과([i/N])·요약 줄을 실시간으로 쌓는다.
+  // 결과 표·토스트·중지는 기존 mutation 흐름 그대로(streamCollect 가 동기 응답과 같은 본문을 돌려준다).
+  const runLog = useRunLog();
+  const [showLog, setShowLog] = useLogPref('service-config-containerd');
+  const collectMut = useAbortableMutation({
+    mutationFn: (_: void, signal) =>
+      streamCollect<ContainerdConfigCollectResponse>(runLog, {
+        title: 'containerd 설정 수집',
+        first: collectFirstLine(clusterName, selected.size, 'containerd 설정', useSudo),
+        clusterId,
+        kind: 'containerd-config',
+        body: {
+          hosts: Array.from(selected),
+          port,
+          username,
+          password: authMode === 'password' ? password : undefined,
+          privateKey: authMode === 'key' ? privateKey : undefined,
+          useSudo,
+          configPaths: fallbackPaths,
+          parallelism,
+        } satisfies ContainerdConfigCollectRequest,
+        signal,
+        detail: (h) => `${h.sourceLabel ?? '출처 미상'} · 설정 ${h.paramCount ?? 0}개${h.configVersion ? ` · 형식 v${h.configVersion}` : ''}`,
+      }),
+    onSuccess: (d) => {
+      setResult(d);
+      onCollected?.();
+      const ok = d.hosts.filter((h) => h.status === 'ok').length;
+      if (ok === 0) toast.warning('containerd 설정을 읽지 못함', 'config dump 와 설정 파일 모두 실패 — 실행 로그를 확인하세요');
+      else toast.success('containerd 설정 수집됨', `성공 ${ok}/${d.hosts.length} · 변경 ${d.changed}`);
+    },
+    onError: (e: unknown) => {
+      toast.error('수집 실패', formatApiError(e));
+    },
+  });
+
+  const handleRun = () => collectMut.mutate();
+
+  const canRun = selected.size > 0
+    && (authMode === 'password' ? !!password : !!privateKey.trim())
+    && fallbackPaths.length > 0;
+
+  if (!open) return null;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center">
+      <div className="absolute inset-0 bg-black/60" onClick={() => !collectMut.isPending && onClose()} />
+      <div ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby={titleId}
+        className="relative bg-card border border-border rounded-md shadow-2xl w-full max-w-3xl mx-4 max-h-[90vh] overflow-hidden flex flex-col">
+        <div className="flex items-center gap-3 px-5 py-4 border-b border-border bg-muted/30">
+          <Box className="w-4 h-4 text-muted-foreground flex-shrink-0" aria-hidden="true" />
+          <div className="flex-1">
+            <h2 id={titleId} className="text-sm font-semibold">containerd 설정 수집</h2>
+            <p className="text-sm text-muted-foreground mt-0.5">
+              SSH 로 <span className="font-mono">containerd config dump</span>(기본값까지 합친 실효 설정)를 읽고,
+              실패하면 아래 설정 파일을 그대로 읽어 저장한다. 노드 설정은 바꾸지 않는다.
+            </p>
+          </div>
+          <button onClick={onClose} disabled={collectMut.isPending} title="닫기" aria-label="닫기"
+            className="p-1 rounded hover:bg-secondary text-muted-foreground disabled:opacity-40">
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+
+        <div className="px-5 py-4 max-h-[520px] overflow-y-auto space-y-4">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            <div>
+              <label htmlFor={usernameId} className="text-xs text-muted-foreground mb-1 block">SSH 사용자</label>
+              <input id={usernameId} value={username} onChange={(e) => setUsername(e.target.value)}
+                className="w-full px-2 py-1 text-sm font-mono bg-background border border-border rounded-lg focus:outline-none focus:ring-1 focus:ring-primary" />
+            </div>
+            <div>
+              <label htmlFor={portId} className="text-xs text-muted-foreground mb-1 block">SSH 포트</label>
+              <input id={portId} type="number" value={port} onChange={(e) => setPort(Number(e.target.value) || 22)}
+                min={1} max={65535}
+                className="w-full px-2 py-1 text-sm font-mono bg-background border border-border rounded-lg focus:outline-none focus:ring-1 focus:ring-primary" />
+            </div>
+            <div>
+              <label htmlFor={parallelismId} className="text-xs text-muted-foreground mb-1 block">동시 실행 수</label>
+              <input id={parallelismId} type="number" value={parallelism}
+                onChange={(e) => setParallelism(Number(e.target.value) || 10)}
+                min={1} max={50}
+                className="w-full px-2 py-1 text-sm font-mono bg-background border border-border rounded-lg focus:outline-none focus:ring-1 focus:ring-primary" />
+            </div>
+            <div className="flex items-end">
+              <label className="flex items-center gap-1.5 text-sm text-foreground/80"
+                title="containerd 명령·설정 파일이 root 권한일 수 있어 sudo 권장">
+                <input type="checkbox" checked={useSudo} onChange={(e) => setUseSudo(e.target.checked)} />
+                sudo 사용
+              </label>
+            </div>
+          </div>
+
+          <div>
+            <div className="flex items-center gap-2 mb-1">
+              <div className="flex items-center bg-secondary/60 rounded-lg p-[3px] gap-px">
+                {(['password', 'key'] as const).map((m) => (
+                  <button key={m} onClick={() => setAuthMode(m)} aria-pressed={authMode === m}
+                    className={`px-2 py-0.5 text-xs font-medium rounded-md ${
+                      authMode === m ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
+                    }`}>
+                    {m === 'password' ? '비밀번호' : '개인키'}
+                  </button>
+                ))}
+              </div>
+              <span className="text-xs text-muted-foreground">자격증명은 요청에만 사용되고 저장되지 않습니다.</span>
+            </div>
+            {authMode === 'password' ? (
+              <input type="password" value={password} onChange={(e) => setPassword(e.target.value)}
+                placeholder="SSH 비밀번호"
+                aria-label="SSH 비밀번호"
+                className="w-full px-2 py-1 text-sm font-mono bg-background border border-border rounded-lg focus:outline-none focus:ring-1 focus:ring-primary" />
+            ) : (
+              <textarea value={privateKey} onChange={(e) => setPrivateKey(e.target.value)}
+                placeholder="-----BEGIN OPENSSH PRIVATE KEY-----"
+                rows={3}
+                aria-label="SSH 개인키 (PEM)"
+                className="w-full px-2 py-1 text-sm font-mono bg-background border border-border rounded-lg focus:outline-none focus:ring-1 focus:ring-primary" />
+            )}
+          </div>
+
+          <div>
+            <label htmlFor={fallbacksId} className="text-xs text-muted-foreground mb-1 block flex items-center gap-1">
+              <FileText className="w-3 h-3" />
+              설정 파일 경로 (한 줄에 하나, config dump 실패 시 차례로 읽음)
+            </label>
+            <textarea id={fallbacksId} value={fallbacksText} onChange={(e) => setFallbacksText(e.target.value)}
+              rows={4}
+              className="w-full px-2 py-1 text-xs font-mono bg-background border border-border rounded-lg focus:outline-none focus:ring-1 focus:ring-primary" />
+          </div>
+
+          <div>
+            <div className="flex items-center justify-between mb-1">
+              <label className="text-xs text-muted-foreground">대상 노드 ({selected.size} / {nodes.length})</label>
+              <div className="flex gap-1">
+                <button onClick={() => setSelected(new Set(nodes.map((n) => n.internalIp || n.name).filter(Boolean) as string[]))}
+                  className="text-xs text-primary hover:underline">모두</button>
+                <button onClick={() => setSelected(new Set())}
+                  className="text-xs text-muted-foreground hover:text-foreground">해제</button>
+              </div>
+            </div>
+            <div className="max-h-52 overflow-y-auto border border-border rounded-lg bg-background p-1">
+              {nodes.length === 0 ? (
+                <p className="text-center py-3 text-sm text-muted-foreground">
+                  {nodeQ.isLoading ? '노드 불러오는 중…' : nodeQ.isError ? (
+                    <span className="block space-y-1.5">
+                      <span className="block text-status-critical">노드 목록을 불러오지 못했습니다.</span>
+                      <span className="block text-xs text-muted-foreground">{formatApiError(nodeQ.error)}</span>
+                      <button onClick={() => nodeQ.refetch()}
+                        className="px-2 py-1 text-xs font-medium rounded-lg border border-border hover:bg-secondary transition-colors">
+                        다시 시도
+                      </button>
+                    </span>
+                  ) : '노드 없음'}
+                </p>
+              ) : nodes.map((n) => {
+                const host = n.internalIp || n.name;
+                const on = selected.has(host);
+                return (
+                  <label key={n.name}
+                    className={`flex items-center gap-2 px-2 py-1 rounded cursor-pointer text-sm ${
+                      on ? 'bg-primary/5' : 'hover:bg-muted/30'
+                    }`}>
+                    <input type="checkbox" checked={on}
+                      onChange={() => setSelected((s) => {
+                        const next = new Set(s);
+                        if (next.has(host)) next.delete(host); else next.add(host);
+                        return next;
+                      })} />
+                    <span className="font-mono text-foreground">{n.name}</span>
+                    <span className="text-muted-foreground">{n.internalIp ?? ''}</span>
+                  </label>
+                );
+              })}
+            </div>
+          </div>
+
+          <RunLogPanel run={runLog} show={showLog} onShowChange={setShowLog} maxHeight="max-h-56" />
+
+          {result && (
+            <div className="border border-border rounded-xl overflow-hidden">
+              <div className="flex items-center gap-2 px-3 py-2 bg-muted/30 border-b border-border">
+                {result.changed > 0
+                  ? <CheckCircle2 className="w-3.5 h-3.5 text-status-healthy" />
+                  : <AlertTriangle className="w-3.5 h-3.5 text-muted-foreground" />}
+                <span className="text-sm font-semibold">
+                  {result.changed > 0
+                    ? `${result.changed}개 노드 변경 감지 · 히스토리 누적됨`
+                    : '변경 없음 (이전 스냅샷과 동일)'}
+                </span>
+              </div>
+              <DoubleScrollX>
+                <table className="w-full text-sm">
+                  <thead className="bg-muted/30">
+                    <tr className="text-left text-xs text-muted-foreground">
+                      <th className="px-2 py-1">Host</th>
+                      <th className="px-2 py-1">읽은 곳</th>
+                      <th className="px-2 py-1">설정 수</th>
+                      <th className="px-2 py-1">저장</th>
+                      <th className="px-2 py-1">출력</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {result.hosts.map((h) => {
+                      return (
+                        <tr key={h.host} className="border-t border-border align-top">
+                          <td className="px-2 py-1 font-mono">{h.host}</td>
+                          <td className="px-2 py-1 font-mono break-all">
+                            {h.sourceLabel ?? <span className="text-status-critical">읽지 못함</span>}
+                          </td>
+                          <td className="px-2 py-1 text-xs text-muted-foreground">{h.paramCount ?? '—'}{h.configVersion ? ` · v${h.configVersion}` : ''}</td>
+                          <td className="px-2 py-1">
+                            {h.stored === true
+                              ? <span className="text-xs text-status-healthy">신규 저장</span>
+                              : h.stored === false
+                                ? <span className="text-xs text-muted-foreground">동일 (skip)</span>
+                                : <span className="text-xs text-status-critical">{h.error ?? '실패'}</span>}
+                          </td>
+                          <td className="px-2 py-1 align-top">
+                            <RawOutputDetails stdout={h.rawStdout} stderr={h.rawStderr} exitCode={h.exitCode} />
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </DoubleScrollX>
+              <CollectErrorList errors={result.errors} />
+            </div>
+          )}
+        </div>
+
+        <div className="flex justify-end gap-2 px-5 py-3 border-t border-border bg-muted/10">
+          <button onClick={onClose} disabled={collectMut.isPending}
+            className="px-4 py-1.5 text-sm font-medium bg-secondary hover:bg-secondary/80 border border-border rounded-lg disabled:opacity-40">
+            닫기
+          </button>
+          {collectMut.isPending ? (
+            <button onClick={collectMut.abort}
+              className="flex items-center gap-1.5 px-4 py-1.5 text-sm font-semibold bg-status-critical text-primary-foreground rounded-lg hover:bg-status-critical">
+              <Loader2 className="w-3 h-3 animate-spin" /> 중지
+            </button>
+          ) : (
+            <button onClick={handleRun}
+              disabled={!canRun}
+              className="flex items-center gap-1.5 px-4 py-1.5 text-sm font-semibold bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 disabled:opacity-50">
+              <Play className="w-3 h-3" /> 수집 실행
+            </button>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}

@@ -1190,6 +1190,24 @@ hover 시 flyout 자체가 라벨을 보여주므로 이름만 뜨는 중복 툴
 - **요청사항 (수정 요청)**:
   - _(여기에 개선/수정 요청을 직접 적어주세요)_
 
+### 서비스 구성 (`/k8s-services`)
+
+> K8S 클러스터 허브 `/k8s/:clusterId/services?service=<etcd|containerd|cilium|linux>&version=<n>`(**구성** 카테고리)의 서브뷰로만 마운트된다. 옛 형식 URL `/k8s-services` 는 그 뷰로 redirect. 아일랜드 패널로도 임베드(그때는 자체 `ClusterSidebar iconOnly`).
+
+- **파일**: `frontend/src/pages/ServiceConfigPage.tsx` (+ `components/service-config/{ServiceConfigRail,ServiceConfigSections}.tsx`, 수집 모달 `components/versions/{ContainerdConfigCollectModal,EtcdSystemdModal,KernelParamsCollectModal}.tsx`)
+- **목적 / UX**: 클러스터 서비스(ETCD·CONTAINERD·CILIUM·LINUX(OS))별 **관리 대상 설정**과 노드에서 수집된 **현재 값**을 한 표로 보고, 현재 값으로 **설정 버전 V1** 을 만든다. 서비스 구성 기능(설정 편집 → 의존 변경 표시 → 저장(버전) → 별도 적용)의 **1단계(읽기 전용)** — 편집·의존·노드 그룹·적용은 다음 단계. 목업에서 합의한 흐름을 따른다.
+- **UI 구성**:
+  - 카드 하나 안에 좌측 **서비스 레일**(아이콘+이름, 서버 서비스 정의 순서) + 우측 서비스 화면. 상단: 서비스 이름 · `SegTabs`(설정 / 요약 — 요약은 다음 단계 `EmptyState`) · 버전 선택(`V1 · 가져옴` …) · **현재 값 수집** 버튼(서비스별: ETCD = K8S API 로 수집 + SSH(systemd) 수집, CONTAINERD = SSH, CILIUM = K8S API, LINUX = SSH(노드 에이전트가 있으면 자동 보고)). 전부 operator(`useCanOperate` 비활성 + 사유), 노드 설정은 바꾸지 않는다.
+  - K8S API 수집은 화면 안 `RunLogPanel`(실시간·로그 보기 토글 `useLogPref('service-config-collect')`), SSH 수집은 각 수집 모달의 실행 로그.
+  - 현재 값 출처 한 줄(출처별 노드 수 · 마지막 수집 상대시각). 버전이 없으면 `MacCard` "설정 버전이 아직 없습니다" + **현재 값으로 V1 만들기**(operator, `ConfirmDialog` — DB 저장만).
+  - 검색 · `SegTabs` 전체/확인 필요만 · 집계(항목·노드 간 다름·버전과 다름·값 없음). 섹션별 `MacCard`(접기) 표: 키(설명·도움말) · 설정 값(선택 버전, 읽기 전용 입력 모양 + 기본값) · 현재 노드 값(같으면 값, 다르면 "N가지 값" 펼침 → 값별 노드 목록) · 반영 방식(즉시/etcd 멤버 재시작/containerd 재시작/cilium 롤링 재시작) · 상태(일치는 중립, 버전과 다름·노드 간 다름 경고, 값 없음 미연결).
+- **Frontend**: `useServiceConfigServices`, `useServiceConfigView(clusterId, service, version)`, `useImportServiceConfig`, `useInvalidateServiceConfig`(`hooks/useServiceConfig.ts`), `useUrlParams({service, version})`, `useRunLog`·`runLogged`·`useAbortableMutation`(K8S API 수집 `versionsApi.collect`). api.ts: `serviceConfigApi.*`, `versionsCollectStreamUrl(…, 'containerd-config')`.
+- **Backend**: 라우터 `backend/app/routers/service_config.py`(`_cluster_scoped`) — `GET /api/v1/service-config/services` · `GET /service-config/clusters/{id}/{service}?version=` · `POST /service-config/clusters/{id}/{service}/import`(operator, 이미 버전 있으면 409, 수집 값 없으면 422, 감사 `service_config.import`). containerd 수집은 `routers/versions.py` `POST /clusters/{id}/collect-containerd-config`(+`/stream`) — `containerd config dump` → 실패 시 설정 파일, TOML 평탄화해 `containerd_config:{host}` 스냅샷.
+  - 서비스 `services/service_config/`(`catalog_seed` 서비스 정의·설정 시드 · `current` 스냅샷 → 노드별 현재 값(순수 함수) · `view` 화면 조립·V1). 모델 `models/service_config.py`(`ServiceConfigItem` 설정 목록 — 시드지만 DB 행, `ServiceConfigVersion` 설정 버전 — `group_id` 는 다음 단계 노드 그룹용).
+  - 현재 값 출처: ETCD `etcd`(정적 파드 플래그) + `etcd_systemd:{host}`(env 파일·ExecStart), CILIUM `cilium_config`, LINUX `node_params:{node}`(에이전트) 우선 → `kernel_params:{host}`(SSH), CONTAINERD `containerd_config:{host}`. 컴포넌트별 최신 스냅샷만(DISTINCT ON).
+- **요청사항 (수정 요청)**:
+  - _(여기에 개선/수정 요청을 직접 적어주세요)_
+
 ### OS 파라미터 감시 (`/os-param-watch`)
 
 > K8s 클러스터 허브 `/k8s/:clusterId/os-param-watch`(**점검** 카테고리)의 서브뷰로만 마운트된다. 옛 형식 URL `/os-param-watch` 는 그 뷰로 redirect. 아일랜드 패널(`panelRegistry`)로도 임베드된다(그때는 자체 `ClusterSidebar iconOnly`).

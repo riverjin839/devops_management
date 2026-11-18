@@ -24,6 +24,7 @@ import { McClientPage } from '@/pages/McClientPage';
 import { IsilonNfsPage } from '@/pages/IsilonNfsPage';
 import { KernelParamsPage } from '@/pages/KernelParamsPage';
 import { NodeParamWatchPage } from '@/pages/NodeParamWatchPage';
+import { ServiceConfigPage } from '@/pages/ServiceConfigPage';
 import { InfraTopologyPage } from '@/pages/InfraTopologyPage';
 import { NodeSpecPage } from '@/pages/NodeSpecPage';
 import { ClusterLinksPage } from '@/pages/ClusterLinksPage';
@@ -84,6 +85,7 @@ export const PANEL_COMPONENTS: Record<string, ComponentType> = {
   '/isilon-nfs': IsilonNfsPage,
   '/kernel-params': KernelParamsPage,
   '/os-param-watch': NodeParamWatchPage,
+  '/k8s-services': ServiceConfigPage,
   '/infra-topology': InfraTopologyPage,
   '/node-specs': NodeSpecPage,
   '/links': ClusterLinksPage,

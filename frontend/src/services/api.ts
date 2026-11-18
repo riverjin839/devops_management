@@ -1993,7 +1993,7 @@ import type {
 /** 병목 진단 실행(SSE) — fetch+reader 로 소비(`lib/sse.ts` postSse). 본문은 snake_case. */
 export const podBottleneckStreamUrl = '/api/v1/pod-bottleneck/run/stream';
 /** versions SSH 수집의 SSE 버전(D-135) — 호스트가 끝날 때마다 log·step, 마지막에 동기 응답과 같은 result. */
-export type VersionsCollectKind = 'etcd-systemd' | 'kernel-params' | 'kubelet-config' | 'kubeadm-certs' | 'node-nics';
+export type VersionsCollectKind = 'etcd-systemd' | 'kernel-params' | 'kubelet-config' | 'kubeadm-certs' | 'node-nics' | 'containerd-config';
 export const versionsCollectStreamUrl = (clusterId: string, kind: VersionsCollectKind) =>
   `/api/v1/clusters/${clusterId}/collect-${kind}/stream`;
 
@@ -2704,6 +2704,16 @@ export const dailyReportApi = {
     api.put<import('@/types').NsOwnersSettings>('/daily-report/owners', body),
   /** SSE — NS 담당자 라벨 다시 읽기(`postSse`). */
   ownersRefreshStreamUrl: '/api/v1/daily-report/owners/refresh/stream',
+};
+
+// ── 서비스 구성 — 설정 목록·현재 값(수집 스냅샷)·설정 버전(JWT). 노드 실행 없음 ──
+export const serviceConfigApi = {
+  services: () => api.get<{ items: import('@/types').ServiceConfigServiceDef[] }>('/service-config/services'),
+  view: (clusterId: string, service: string, version?: number) =>
+    api.get<import('@/types').ServiceConfigView>(`/service-config/clusters/${clusterId}/${service}`,
+      { params: version ? { version } : {} }),
+  importCurrent: (clusterId: string, service: string) =>
+    api.post<import('@/types').ServiceConfigImportResult>(`/service-config/clusters/${clusterId}/${service}/import`),
 };
 
 // ── 노드 OS 파라미터 감시 — 노드 에이전트(DaemonSet) 보고 기반. 규칙·상태·변경 이력·설치 매니페스트(JWT) ──

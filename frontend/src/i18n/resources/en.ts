@@ -38,6 +38,7 @@ export const en: TranslationResource = {
       isilonNfs: 'NFS Monitoring',
       kernelParams: 'Kernel Parameters',
       osParamWatch: 'OS Parameter Watch',
+      serviceConfig: 'Service Config',
       infraTopology: 'Infra Topology',
       nodeSpecs: 'Node Server Specs',
       dcInventory: 'DC Inventory',

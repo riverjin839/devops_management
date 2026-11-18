@@ -6550,3 +6550,98 @@ export interface NodeParamManifest {
   apiBaseUrlFromSettings: boolean;
   tokenConfigured: boolean;
 }
+
+// ── containerd 설정 수집 (`POST /clusters/{id}/collect-containerd-config`) ─────────
+export interface ContainerdConfigCollectRequest {
+  hosts: string[];
+  port?: number;
+  username?: string;
+  password?: string;
+  privateKey?: string;
+  useSudo?: boolean;
+  connectTimeout?: number;
+  containerdPath?: string;
+  configPaths?: string[];
+  parallelism?: number;
+}
+export interface ContainerdConfigPerHost {
+  host: string;
+  status: string;
+  sourceLabel?: string | null;
+  configFile?: string | null;
+  paramCount?: number | null;
+  configVersion?: string | null;
+  stored?: boolean;
+  error?: string | null;
+  rawStdout?: string | null;
+  rawStderr?: string | null;
+  exitCode?: number | null;
+}
+export interface ContainerdConfigCollectResponse {
+  clusterId: string;
+  changed: number;
+  hosts: ContainerdConfigPerHost[];
+  componentKey: string;
+  errors: string[];
+}
+
+// ── 서비스 구성 (`/k8s/:clusterId/services`) ─────────────────────────────────
+/** 현재 값을 다시 읽는 수집 종류 — 화면의 '현재 값 수집' 이 여는 모달. */
+export type ServiceConfigCollectKind = 'versions' | 'etcd-systemd' | 'containerd-config' | 'kernel-params';
+export type ServiceConfigRestartScope = 'immediate' | 'restart_member' | 'restart_service' | 'rolling_restart_ds' | 'reboot';
+export type ServiceConfigItemStatus = 'same' | 'differs' | 'mixed' | 'unknown';
+
+export interface ServiceConfigServiceDef {
+  key: string;
+  label: string;
+  icon: string;
+  description: string;
+  collectKinds: ServiceConfigCollectKind[];
+  itemCount?: number;
+}
+export interface ServiceConfigVersionInfo {
+  id: string;
+  versionNo: number;
+  status: 'imported' | 'saved' | 'applied' | 'superseded';
+  note: string | null;
+  createdBy: string | null;
+  createdAt: string | null;
+  appliedAt: string | null;
+  valueCount: number;
+}
+export interface ServiceConfigCurrent {
+  uniform: boolean;
+  value: string | null;
+  groups: { value: string; nodes: string[] }[];
+  nodeCount: number;
+}
+export interface ServiceConfigRow {
+  id: string;
+  key: string;
+  label: string | null;
+  help: string | null;
+  valueType: string;
+  unit: string | null;
+  options: string[] | null;
+  defaultValue: string | null;
+  restartScope: ServiceConfigRestartScope;
+  versionValue: string | null;
+  current: ServiceConfigCurrent;
+  status: ServiceConfigItemStatus;
+}
+export interface ServiceConfigView {
+  service: ServiceConfigServiceDef;
+  versions: ServiceConfigVersionInfo[];
+  version: ServiceConfigVersionInfo | null;
+  sources: { component: string; node: string; source: string; collectedAt: string | null }[];
+  nodes: string[];
+  counts: { items: number; same: number; differs: number; mixed: number; unknown: number };
+  sections: { name: string; items: ServiceConfigRow[] }[];
+}
+export interface ServiceConfigImportResult {
+  version: ServiceConfigVersionInfo;
+  imported: number;
+  total: number;
+  mixed: string[];
+  nodes: string[];
+}

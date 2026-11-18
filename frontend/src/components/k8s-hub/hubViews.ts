@@ -1,7 +1,7 @@
 import type { ComponentType } from 'react';
 import {
   LayoutGrid, Boxes, Gauge, TrendingUp, Activity, Bell, ScrollText, Zap, ClipboardCheck,
-  KeyRound, Tags, Package, GitCommit, Database, Cpu, TerminalSquare, Waves, Route, ShieldCheck,
+  KeyRound, Tags, Package, GitCommit, Database, Cpu, TerminalSquare, Waves, Route, ShieldCheck, Layers,
 } from 'lucide-react';
 import { ClusterDetailPage } from '@/pages/ClusterDetailPage';
 import { K8sManagePage } from '@/pages/K8sManagePage';
@@ -19,6 +19,7 @@ import { VersionsPage } from '@/pages/VersionsPage';
 import { EtcdCtlPage } from '@/pages/EtcdCtlPage';
 import { KernelParamsPage } from '@/pages/KernelParamsPage';
 import { NodeParamWatchPage } from '@/pages/NodeParamWatchPage';
+import { ServiceConfigPage } from '@/pages/ServiceConfigPage';
 import { PodBottleneckPage } from '@/pages/PodBottleneckPage';
 import { CiliumTracePage } from '@/pages/CiliumTracePage';
 import { PacketFlowPage } from '@/pages/PacketFlowPage';
@@ -81,6 +82,7 @@ export const HUB_VIEWS: readonly HubView[] = [
   { id: 'bottleneck', category: 'diagnose', label: '파드 병목 진단', icon: Activity, navKey: '/pod-bottleneck', component: PodBottleneckPage },
   { id: 'cilium', category: 'diagnose', label: 'Cilium BPF 추적', icon: Waves, navKey: '/cilium-trace', component: CiliumTracePage },
   { id: 'packet-flow', category: 'diagnose', label: '패킷 흐름 분석', icon: Route, navKey: '/packet-flow', component: PacketFlowPage },
+  { id: 'services', category: 'config', label: '서비스 구성', icon: Layers, navKey: '/k8s-services', component: ServiceConfigPage },
   { id: 'rbac', category: 'config', label: '접근 권한', icon: KeyRound, navKey: '/k8s-rbac', component: K8sRbacPage },
   { id: 'node-labels', category: 'config', label: '노드 라벨', icon: Tags, navKey: '/node-labels', component: NodeLabelsPage },
   { id: 'node-images', category: 'config', label: '노드 이미지', icon: Package, navKey: '/node-images', component: NodeImagesPage },
