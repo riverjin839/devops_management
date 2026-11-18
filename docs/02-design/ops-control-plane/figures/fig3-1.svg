@@ -1,0 +1,80 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1470" height="510" viewBox="0 0 1470 510" font-family="Noto Sans KR,Noto Sans CJK KR,Malgun Gothic,Apple SD Gothic Neo,sans-serif">
+<defs><marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#5B6B82"/></marker></defs>
+<rect x="20" y="40" width="270" height="450" rx="6" fill="none" stroke="#9AA3B2" stroke-width="1.2" stroke-dasharray="6 4"/>
+<text x="30" y="60" font-size="14" font-weight="700" fill="#4B5563">관리 대상 클러스터</text>
+<rect x="340" y="40" width="860" height="450" rx="6" fill="none" stroke="#9AA3B2" stroke-width="1.2" stroke-dasharray="6 4"/>
+<text x="350" y="60" font-size="14" font-weight="700" fill="#4B5563">PEP 관리 평면</text>
+<polygon points="40,90 260,90 270,100 50,100" fill="#EEF2F7" stroke="#8A94A6" stroke-width="1.2" stroke-linejoin="round"/>
+<polygon points="40,90 50,100 50,180 40,170" fill="#EEF2F7" stroke="#8A94A6" stroke-width="1.2" stroke-linejoin="round"/>
+<rect x="50" y="100" width="220" height="80" fill="#EEF2F7" stroke="#8A94A6" stroke-width="1.2"/>
+<text x="160.0" y="136.5" font-size="18" font-weight="700" text-anchor="middle" fill="#1F2937">클러스터 1</text>
+<text x="160.0" y="156.8" font-size="14" font-weight="400" text-anchor="middle" fill="#1F2937">API · 지표</text>
+<polygon points="40,230 260,230 270,240 50,240" fill="#EEF2F7" stroke="#8A94A6" stroke-width="1.2" stroke-linejoin="round"/>
+<polygon points="40,230 50,240 50,320 40,310" fill="#EEF2F7" stroke="#8A94A6" stroke-width="1.2" stroke-linejoin="round"/>
+<rect x="50" y="240" width="220" height="80" fill="#EEF2F7" stroke="#8A94A6" stroke-width="1.2"/>
+<text x="160.0" y="276.5" font-size="18" font-weight="700" text-anchor="middle" fill="#1F2937">클러스터 N</text>
+<text x="160.0" y="296.8" font-size="14" font-weight="400" text-anchor="middle" fill="#1F2937">API · 지표</text>
+<rect x="40" y="370" width="230" height="90" rx="8" fill="#FFFFFF" stroke="#8A94A6" stroke-width="1.2"/>
+<text x="155.0" y="411.5" font-size="18" font-weight="700" text-anchor="middle" fill="#1F2937">클러스터 수집기</text>
+<text x="155.0" y="431.8" font-size="14" font-weight="400" text-anchor="middle" fill="#1F2937">점검 · 이벤트</text>
+<rect x="370" y="90" width="170" height="370" rx="8" fill="#FFFFFF" stroke="#2F4A6D" stroke-width="2.0"/>
+<text x="455.0" y="262.0" font-size="18" font-weight="700" text-anchor="middle" fill="#1F2937">수집</text>
+<text x="455.0" y="282.2" font-size="14" font-weight="400" text-anchor="middle" fill="#1F2937">pull · push</text>
+<text x="455.0" y="301.2" font-size="14" font-weight="400" text-anchor="middle" fill="#1F2937">생존 신호</text>
+<rect x="620" y="90" width="260" height="90" rx="8" fill="#FFF4EC" stroke="#C2410C" stroke-width="2.5"/>
+<text x="750.0" y="122.0" font-size="18" font-weight="700" text-anchor="middle" fill="#1F2937">기준 설정 · 편차</text>
+<text x="750.0" y="142.2" font-size="14" font-weight="400" text-anchor="middle" fill="#1F2937">계층 상속</text>
+<text x="750.0" y="161.2" font-size="14" font-weight="400" text-anchor="middle" fill="#1F2937">스냅샷 비교</text>
+<rect x="620" y="230" width="260" height="90" rx="8" fill="#FFFFFF" stroke="#2F4A6D" stroke-width="2.0"/>
+<text x="750.0" y="262.0" font-size="18" font-weight="700" text-anchor="middle" fill="#1F2937">상태 판정</text>
+<text x="750.0" y="282.2" font-size="14" font-weight="400" text-anchor="middle" fill="#1F2937">컴포넌트 Health</text>
+<text x="750.0" y="301.2" font-size="14" font-weight="400" text-anchor="middle" fill="#1F2937">클러스터 롤업</text>
+<rect x="620" y="370" width="260" height="90" rx="8" fill="#FFFFFF" stroke="#2F4A6D" stroke-width="2.0"/>
+<text x="750.0" y="402.0" font-size="18" font-weight="700" text-anchor="middle" fill="#1F2937">통합 이벤트</text>
+<text x="750.0" y="422.2" font-size="14" font-weight="400" text-anchor="middle" fill="#1F2937">유지보수 모드</text>
+<text x="750.0" y="441.2" font-size="14" font-weight="400" text-anchor="middle" fill="#1F2937">알림 규칙</text>
+<rect x="960" y="90" width="210" height="370" rx="8" fill="#FFFFFF" stroke="#8A94A6" stroke-width="1.2"/>
+<text x="1065.0" y="262.0" font-size="18" font-weight="700" text-anchor="middle" fill="#1F2937">관리 API · 화면</text>
+<text x="1065.0" y="282.2" font-size="14" font-weight="400" text-anchor="middle" fill="#1F2937">인박스</text>
+<text x="1065.0" y="301.2" font-size="14" font-weight="400" text-anchor="middle" fill="#1F2937">실행 로그</text>
+<rect x="1260" y="170" width="190" height="90" rx="8" fill="#FFFFFF" stroke="#8A94A6" stroke-width="1.2"/>
+<text x="1355.0" y="202.0" font-size="18" font-weight="700" text-anchor="middle" fill="#1F2937">알림 채널</text>
+<text x="1355.0" y="222.2" font-size="14" font-weight="400" text-anchor="middle" fill="#1F2937">Slack · Webhook</text>
+<text x="1355.0" y="241.2" font-size="14" font-weight="400" text-anchor="middle" fill="#1F2937">Email</text>
+<rect x="1260" y="330" width="190" height="90" rx="8" fill="#FFFFFF" stroke="#8A94A6" stroke-width="1.2"/>
+<text x="1355.0" y="371.5" font-size="18" font-weight="700" text-anchor="middle" fill="#1F2937">운영자</text>
+<text x="1355.0" y="391.8" font-size="14" font-weight="400" text-anchor="middle" fill="#1F2937">명시적 실행</text>
+<line x1="270" y1="140" x2="370" y2="140" stroke="#5B6B82" stroke-width="1.5" marker-end="url(#arr)"/>
+<rect x="302.08" y="131.0" width="35.839999999999996" height="18" fill="#FFFFFF"/>
+<text x="320.0" y="144.3" font-size="12" text-anchor="middle" fill="#4B5563">pull</text>
+<line x1="270" y1="280" x2="370" y2="280" stroke="#5B6B82" stroke-width="1.5" marker-end="url(#arr)"/>
+<rect x="302.08" y="271.0" width="35.839999999999996" height="18" fill="#FFFFFF"/>
+<text x="320.0" y="284.3" font-size="12" text-anchor="middle" fill="#4B5563">pull</text>
+<line x1="270" y1="415" x2="370" y2="415" stroke="#5B6B82" stroke-width="1.5" marker-end="url(#arr)"/>
+<rect x="302.08" y="406.0" width="35.839999999999996" height="18" fill="#FFFFFF"/>
+<text x="320.0" y="419.3" font-size="12" text-anchor="middle" fill="#4B5563">push</text>
+<line x1="540" y1="135" x2="620" y2="135" stroke="#5B6B82" stroke-width="1.5" marker-end="url(#arr)"/>
+<rect x="558.0" y="126.0" width="44.0" height="18" fill="#FFFFFF"/>
+<text x="580.0" y="139.3" font-size="12" text-anchor="middle" fill="#4B5563">스냅샷</text>
+<line x1="540" y1="275" x2="620" y2="275" stroke="#5B6B82" stroke-width="1.5" marker-end="url(#arr)"/>
+<rect x="545.4" y="266.0" width="69.2" height="18" fill="#FFFFFF"/>
+<text x="580.0" y="279.3" font-size="12" text-anchor="middle" fill="#4B5563">지표 · 점검</text>
+<line x1="540" y1="415" x2="620" y2="415" stroke="#5B6B82" stroke-width="1.5" marker-end="url(#arr)"/>
+<rect x="558.0" y="406.0" width="44.0" height="18" fill="#FFFFFF"/>
+<text x="580.0" y="419.3" font-size="12" text-anchor="middle" fill="#4B5563">이벤트</text>
+<line x1="750" y1="180" x2="750" y2="230" stroke="#5B6B82" stroke-width="1.5" marker-end="url(#arr)"/>
+<rect x="734.0" y="196.0" width="32.0" height="18" fill="#FFFFFF"/>
+<text x="750.0" y="209.3" font-size="12" text-anchor="middle" fill="#4B5563">편차</text>
+<line x1="750" y1="320" x2="750" y2="370" stroke="#5B6B82" stroke-width="1.5" marker-end="url(#arr)"/>
+<rect x="720.2" y="336.0" width="59.6" height="18" fill="#FFFFFF"/>
+<text x="750.0" y="349.3" font-size="12" text-anchor="middle" fill="#4B5563">상태 변화</text>
+<line x1="880" y1="135" x2="960" y2="135" stroke="#5B6B82" stroke-width="1.5" marker-end="url(#arr)"/>
+<line x1="880" y1="275" x2="960" y2="275" stroke="#5B6B82" stroke-width="1.5" marker-end="url(#arr)"/>
+<line x1="880" y1="415" x2="960" y2="415" stroke="#5B6B82" stroke-width="1.5" marker-end="url(#arr)"/>
+<line x1="1170" y1="215" x2="1260" y2="215" stroke="#5B6B82" stroke-width="1.5" marker-end="url(#arr)"/>
+<rect x="1193.0" y="206.0" width="44.0" height="18" fill="#FFFFFF"/>
+<text x="1215.0" y="219.3" font-size="12" text-anchor="middle" fill="#4B5563">재전파</text>
+<line x1="1170" y1="375" x2="1260" y2="375" stroke="#5B6B82" stroke-width="1.5" marker-end="url(#arr)"/>
+<rect x="1180.4" y="366.0" width="69.2" height="18" fill="#FFFFFF"/>
+<text x="1215.0" y="379.3" font-size="12" text-anchor="middle" fill="#4B5563">확인 · 실행</text>
+</svg>
