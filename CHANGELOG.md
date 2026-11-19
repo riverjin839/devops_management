@@ -8,10 +8,7 @@
 
 ## [Unreleased]
 
-1.92.0 이후 main 에 병합된 변경 (다음 릴리스 후보).
-
-### Changed
-- **DC 토폴로지 편집기 재구성 — 끌어다 놓기·손잡이 연결·속성 패널**: `/dc-inventory` 토폴로지 탭을 draw.io 처럼 바꿨다. 왼쪽 도형 팔레트에서 FA 코어·spine·leaf·랙·서버·구간을 캔버스로 끌어다 놓으면 자동 이름(`spine-03`, `R21`)으로 바로 만들어지고(서버·leaf 는 랙의 빈 U 에), 선택한 장비의 손잡이를 끌거나 연결 모드로 두 장비를 누르면 연결된다(이을 수 없는 장비는 흐려짐). 처음 열면 전체가 한 화면에 들어오고 빈 곳 끌기 이동·휠 확대·미니맵을 지원한다. 구간 상자 안에 접힌 랙 카드가 놓이고 펼치면 U 순서 장비 목록이 보인다. 오른쪽 속성 패널에서 이름·역할·상태·위치·클러스터를 즉시 저장하고, 더블클릭/Enter 이름 고치기·Delete 삭제·Esc 해제 키를 쓴다. 왼쪽 구간 패널은 속성 패널로 흡수했다. Frontend: `DcTopologyBoard.tsx`, `DcTopologyInspector.tsx`, `topology/`(`Palette`·`Canvas`·`useCanvasView`), `topologyLayout.ts`. 백엔드 변경 없음.
+1.93.0 이후 main 에 병합된 변경 (다음 릴리스 후보).
 
 ### Added
 - **서비스 구성(4단계) — ETCD·CONTAINERD 적용**: 네 서비스 모두 '적용…' 으로 노드에 반영한다. ETCD 는 시작 전에 대상 멤버 전체의 health 를 확인해 하나라도 비정상이면 시작하지 않고, 한 대씩(고정) 정적 파드 매니페스트의 `- --flag=값` 줄(또는 systemd env 파일의 `ETCD_*` 줄)만 바꿔 서식을 보존한 뒤, 새 설정으로 정상 기동했는지(실행 중 프로세스 값 + health) 확인한다 — 실패하면 백업(매니페스트 디렉터리 밖)으로 자동 복원하고 나머지 멤버는 건너뛴다. CONTAINERD 는 노드마다 config.toml 을 줄 단위로 고치고(version 2/3 키 경로 자동 선택, 쓰기 전 TOML 재해석 확인) cordon(선택: drain) → 기록 → 재시작 → `containerd config dump` 로 값 확인 → 노드 Ready 대기 → uncordon 하며, 실패하면 백업으로 복원·재시작한다. 성공 노드는 현재 값이 바로 갱신된다. 적용 대화상자에 서비스별 옵션과 '실행될 명령' 목록이 보이고, 경로·유닛·재시작 명령·health 명령·대기 시간은 적용 설정(admin)에서 바꾼다. Backend: `services/service_config/apply_nodes.py`(순수 편집 함수 `edit_etcd_manifest`·`edit_env_file`·`edit_containerd_toml`), 계획 응답 `commands`. Frontend: `ApplyDialog`·`ApplySettingsDialog`.
@@ -19,6 +16,25 @@
 - **서비스 구성(2단계) — 설정 편집·의존 변경·저장(버전)·비교·되돌리기·노드 그룹**: 서비스 구성 설정 탭에서 값을 바로 고치면 바뀐 행이 강조되고(이전 → 새, 행 되돌리기), 함께 봐야 할 의존 관계가 즉시 표시된다 — 권장(예: somaxconn 을 올리면 tcp_max_syn_backlog 도 같은 값 이상, etcd 선출 시간 ≥ 하트비트×10, quota ≤ 8 GiB — '제안 적용' 버튼), 필수(예: etcd 선출 시간 ≥ 하트비트×5, cilium kube-proxy 대체면 API 서버 주소·포트, 네이티브 라우팅이면 CIDR, cilium 이 있으면 OS ip_forward=1 — 어기면 저장 불가), 영향(containerd SystemdCgroup ↔ kubelet cgroupDriver, cilium 롤링 재시작 등). '저장' 을 누르면 바꾼 값·같이 바꿀 값(체크해서 포함)·조건·영향·변경 메모를 확인하고 새 버전(저장됨·미적용)으로 저장한다 — 노드에는 아직 반영하지 않으며 '저장됨 · 미적용 N건' 으로 표시된다(적용은 다음 단계). 두 버전 비교와 이전 버전 값으로 되돌리기(새 버전), 그리고 일부 노드만 다른 값을 주는 노드 그룹(glob 패턴, 그룹 화면에서는 재정의 값만 저장하고 나머지는 기본 그룹 값 상속)을 지원한다. 그사이 다른 사람이 저장했으면 덮어쓰지 않고 다시 읽게 한다. 의존 규칙과 설정 목록은 DB 행으로 시드된다. Backend: `services/service_config/rules.py`, `view.py`(평가·저장·비교·되돌리기·그룹), `models/service_config.py`(`ServiceConfigRule`·`ServiceConfigGroup`), `POST /service-config/evaluate` 외. Frontend: `components/service-config/{SaveVersionDialog,VersionCompareDialog,GroupDialog}.tsx`, 편집형 `ServiceConfigSections`.
 - **서비스 구성(1단계) — 서비스별 설정 목록·노드 현재 값·설정 버전 V1**: K8S 허브 ▸ 구성 ▸ **서비스 구성** 에서 ETCD·CONTAINERD·CILIUM·LINUX(OS) 를 고르면 관리 대상 설정(etcd quota·하트비트·선출 시간, containerd SystemdCgroup·샌드박스 이미지·스냅샷터, cilium 라우팅·kube-proxy 대체·BPF 맵, OS 커널 파라미터 등 70여 개)이 섹션별로 나오고, 노드에서 수집된 현재 값과 상태(일치·버전과 다름·노드 간 다름·값 없음)를 함께 보여준다. 노드마다 값이 다르면 값별 노드 목록을 펼쳐 본다. '현재 값 수집' 은 서비스별 수집(K8S API·SSH, 실시간 실행 로그)을 실행하고, '현재 값으로 V1 만들기' 로 이후 변경·적용의 기준 버전을 저장한다(노드는 그대로). 편집·의존 변경·노드 그룹·적용은 다음 단계. containerd 설정 수집(`containerd config dump`, 실패 시 설정 파일) 추가. Backend: `routers/service_config.py`, `services/service_config/`, `models/service_config.py`, `versions.py` `collect-containerd-config`(+stream). Frontend: `pages/ServiceConfigPage.tsx`, `components/service-config/`, `components/versions/ContainerdConfigCollectModal.tsx`.
 - **OS 파라미터 감시 — 노드 에이전트로 커널 파라미터 변경을 바로 알림**: 노드마다 권한 없는 DaemonSet 에이전트가 감시 대상 sysctl 의 현재 값(`/proc/sys`)과 영구 설정 값(`/etc/sysctl.d` 등, systemd-sysctl 우선순위)을 주기적으로(기본 60초) 보고하고, PEP 가 **값 변경 · 기준값 위반 · 현재 값 ≠ 영구 설정(재부팅 시 되돌아감) · 에이전트 무응답** 을 알람 인박스로 보낸다(알림 규칙·중복 억제·AI 분석 그대로). 감시 대상·기준값(같음/다름/이상/이하/다음 중 하나)·적용 노드 glob·심각도는 화면에서 편집하고 에이전트는 보고 응답으로 목록을 받아 다시 배포할 필요가 없다. 같은 값이 계속 보고돼도 알람은 상태가 바뀔 때만 열리고 닫힌다. 변경 이력에는 "마지막으로 같은 값을 본 시각" 이 함께 남아 실제 변경 구간을 알 수 있다. K8s 허브 ▸ 점검 ▸ **OS 파라미터 감시** 화면에서 노드 상태·변경 이력·감시 규칙·설치 매니페스트(클러스터 값 자동 채움, 복사·내려받기)를 다룬다. Backend: `routers/node_param_watch.py`(비인증 `POST /node-params/agent/report` — `NODE_PARAM_INGEST_TOKEN` fail-closed), `services/node_param_watch/`, `models/node_param_watch.py`, 에이전트 `python -m app.node_param_agent`(backend 이미지 재사용·표준 라이브러리만), Celery Beat `node-param-agent-watchdog`(5분), 기본 공통 규칙 12개 시드. Frontend: `pages/NodeParamWatchPage.tsx`, `components/node-param-watch/`. 배포: `deploy/k8s/node-param-agent/`.
+
+## [1.93.0] - 2026-11-19
+
+### Changed
+- **LLM 설정 단순화 — LiteLLM 프로필 1개 + 용도별 모델 선택**: 모델마다 프로필을 만들던 방식 대신, LiteLLM 처럼 한 주소에 여러 모델이 있는 엔드포인트를 프로필 하나로 등록하고 Settings → AI/LLM 의 용도별 라우팅 표에서 용도(챗봇·장애 분석 등)마다 모델을 고른다(목록은 엔드포인트의 `/v1/models`, fallback 은 같은 프로필의 다른 모델도 가능, 비우면 프로필 기본 모델). 프로필 편집의 '목록 조회' 는 저장 전에도 입력한 URL·키로 동작하고, 게이트웨이 고급 옵션은 'HTTPRoute·게이트웨이로 직접 연결' 을 켤 때만 보인다(저장값 유지). 연결 진단은 LiteLLM 응답을 감지해 키 허용 모델·`model_list` 별칭·rate limit 기준 힌트를 준다. 용도·모델이 모두 비면 저장 시 경고. Backend: 라우팅 `primary_model`/`fallback_model`(`services/llm/service.py` `route_candidates`, 테넌트 오버라이드 포함), `POST /llm/probe-models`. Frontend: `LlmSettingsTab` `RouteModelInput`.
+
+## [1.92.2] - 2026-11-19
+
+### Fixed
+- **LLM 연결 진단 — HTTPRoute(Gateway API) 경유 모델이 '설정 확인' 에서 막히던 문제**: 모델 목록 조회가 사유 없이 비어 모델명을 못 고르면 진단이 '설정 확인 단계부터 막혀 있다' 로 끝나 화면에서 풀 수 없었다. 이제 빈 모델명은 경고로 두고 서버 모델로 응답을 시험해 '모델명 저장' 으로 바로 채운다. 진단은 실제 호출 URL·HTTP 옵션을 먼저 찍고, 새 **프록시 경로** 단계(HTTP(S)_PROXY/NO_PROXY 판정)와 응답 코드·`server` 헤더 기반 힌트(envoy 404 → hostnames/URLRewrite, TLS → CA, 401/403 → 인증 헤더, 5xx → backendRefs)를 남긴다. 모델 목록 조회도 실패 사유를 화면에 보여 준다. base_url 끝의 `/v1` 중복(`/v1/v1/models`)은 자동으로 막는다. Backend: `services/llm/diagnostics.py`, `base.py`(`LLMProfile.api_url`/`client_kwargs`/`request_headers`), `openai_provider.py`·`ollama_provider.py` `list_models_detailed`, `GET /llm/profiles/{name}/models` 에 `error`.
+- **LLM 프로필 고급 옵션 — 게이트웨이(HTTPRoute·Ingress) 연결**: Settings → AI/LLM 프로필 편집에 API 경로·Host 헤더·TLS 검증/CA 번들 경로·환경 프록시 사용·인증 헤더 이름/스킴·추가 헤더를 추가했다. 코드 수정 없이 GPU 클러스터 게이트웨이 뒤 모델 서버에 맞출 수 있다(기본값은 기존 동작). 절차는 `docs/LLM_AGENT_K8S_OPS.md` §2.1.1.
+
+## [1.92.1] - 2026-11-19
+
+### Changed
+- **DC 토폴로지 편집기 재구성 — 끌어다 놓기·손잡이 연결·속성 패널**: `/dc-inventory` 토폴로지 탭을 draw.io 처럼 바꿨다. 왼쪽 도형 팔레트에서 FA 코어·spine·leaf·랙·서버·구간을 캔버스로 끌어다 놓으면 자동 이름(`spine-03`, `R21`)으로 바로 만들어지고(서버·leaf 는 랙의 빈 U 에), 선택한 장비의 손잡이를 끌거나 연결 모드로 두 장비를 누르면 연결된다(이을 수 없는 장비는 흐려짐). 처음 열면 전체가 한 화면에 들어오고 빈 곳 끌기 이동·휠 확대·미니맵을 지원한다. 구간 상자 안에 접힌 랙 카드가 놓이고 펼치면 U 순서 장비 목록이 보인다. 오른쪽 속성 패널에서 이름·역할·상태·위치·클러스터를 즉시 저장하고, 더블클릭/Enter 이름 고치기·Delete 삭제·Esc 해제 키를 쓴다. 왼쪽 구간 패널은 속성 패널로 흡수했다. Frontend: `DcTopologyBoard.tsx`, `DcTopologyInspector.tsx`, `topology/`(`Palette`·`Canvas`·`useCanvasView`), `topologyLayout.ts`. 백엔드 변경 없음.
+
+### Added
+- **메인 레일 네비게이션 스타일 — 스포트라이트·글로우 노치**: 사이드바 사용자 메뉴의 테마·강조색 아래 **네비게이션 스타일**에서 현재 페이지 표시를 고른다. 기본은 **스포트라이트**(레일 왼쪽 빛 막대에서 빛이 퍼져 아이콘을 비춤)이고, **글로우 노치**(레일 오른쪽 테두리가 빛나는 선이 되어 아이콘을 감쌈)와 예전 **클래식**도 고를 수 있다. 레일 위에서 마우스를 움직이면 표시가 연속으로 따라오다가 멈추면 가까운 아이콘에 붙고, 레일을 벗어나면 현재 페이지로 돌아온다(페이지 이동은 클릭). 고대비 테마는 빛 없이 굵은 실선, 모션 줄이기는 즉시 이동. Frontend: `stores/navStyleStore.ts`, `components/layout/RailIndicator.tsx`·`useRailIndicator.ts`, `index.css` 레일 표시 블록.
 - **LLM 에이전트 K8s 운영 가이드**: GPU 서빙 모델(`ai-serving`)을 PEP LLM 게이트웨이에 연결하는 절차, 용도별 라우팅, 환경 맞춤 4개 층(지식·도구·시스템 프롬프트·미세조정), 자동화 단계(L0 분석 → L3 제한 자동 실행), 런북 승인·RBAC·보안 체크리스트 — `docs/LLM_AGENT_K8S_OPS.md`.
 
 ## [1.92.0] - 2026-11-17

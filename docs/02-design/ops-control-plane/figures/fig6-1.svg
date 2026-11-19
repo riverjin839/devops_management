@@ -1,0 +1,58 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1370" height="600" viewBox="0 0 1370 600" font-family="Noto Sans KR,Noto Sans CJK KR,Malgun Gothic,Apple SD Gothic Neo,sans-serif">
+<defs><marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#5B6B82"/></marker></defs>
+<rect x="20" y="30" width="250" height="550" rx="6" fill="none" stroke="#9AA3B2" stroke-width="1.2" stroke-dasharray="6 4"/>
+<text x="30" y="50" font-size="14" font-weight="700" fill="#4B5563">이벤트 소스</text>
+<rect x="40" y="80" width="200" height="62" rx="8" fill="#FFFFFF" stroke="#8A94A6" stroke-width="1.2"/>
+<text x="140.0" y="107.5" font-size="18" font-weight="700" text-anchor="middle" fill="#1F2937">외부 알람</text>
+<text x="140.0" y="127.8" font-size="14" font-weight="400" text-anchor="middle" fill="#1F2937">Alertmanager</text>
+<rect x="40" y="162" width="200" height="62" rx="8" fill="#FFFFFF" stroke="#8A94A6" stroke-width="1.2"/>
+<text x="140.0" y="189.5" font-size="18" font-weight="700" text-anchor="middle" fill="#1F2937">K8s 이벤트</text>
+<text x="140.0" y="209.8" font-size="14" font-weight="400" text-anchor="middle" fill="#1F2937">kubewatch</text>
+<rect x="40" y="244" width="200" height="62" rx="8" fill="#FFFFFF" stroke="#8A94A6" stroke-width="1.2"/>
+<text x="140.0" y="271.5" font-size="18" font-weight="700" text-anchor="middle" fill="#1F2937">설정 변경</text>
+<text x="140.0" y="291.8" font-size="14" font-weight="400" text-anchor="middle" fill="#1F2937">감사 로그</text>
+<rect x="40" y="326" width="200" height="62" rx="8" fill="#FFFFFF" stroke="#2F4A6D" stroke-width="2.0"/>
+<text x="140.0" y="353.5" font-size="18" font-weight="700" text-anchor="middle" fill="#1F2937">상태 변화</text>
+<text x="140.0" y="373.8" font-size="14" font-weight="400" text-anchor="middle" fill="#1F2937">Health 판정</text>
+<rect x="40" y="408" width="200" height="62" rx="8" fill="#FFFFFF" stroke="#2F4A6D" stroke-width="2.0"/>
+<text x="140.0" y="435.5" font-size="18" font-weight="700" text-anchor="middle" fill="#1F2937">설정 편차</text>
+<text x="140.0" y="455.8" font-size="14" font-weight="400" text-anchor="middle" fill="#1F2937">기준 대비</text>
+<rect x="40" y="490" width="200" height="62" rx="8" fill="#FFFFFF" stroke="#2F4A6D" stroke-width="2.0"/>
+<text x="140.0" y="517.5" font-size="18" font-weight="700" text-anchor="middle" fill="#1F2937">수집 중단</text>
+<text x="140.0" y="537.8" font-size="14" font-weight="400" text-anchor="middle" fill="#1F2937">생존 신호</text>
+<rect x="340" y="80" width="180" height="472" rx="8" fill="#FFF4EC" stroke="#C2410C" stroke-width="2.5"/>
+<text x="430.0" y="303.0" font-size="18" font-weight="700" text-anchor="middle" fill="#1F2937">통합 이벤트</text>
+<text x="430.0" y="323.2" font-size="14" font-weight="400" text-anchor="middle" fill="#1F2937">출처 · 심각도</text>
+<text x="430.0" y="342.2" font-size="14" font-weight="400" text-anchor="middle" fill="#1F2937">대상 · 시각</text>
+<rect x="600" y="271" width="190" height="90" rx="8" fill="#FFFFFF" stroke="#2F4A6D" stroke-width="2.0"/>
+<text x="695.0" y="312.5" font-size="18" font-weight="700" text-anchor="middle" fill="#1F2937">유지보수 모드</text>
+<text x="695.0" y="332.8" font-size="14" font-weight="400" text-anchor="middle" fill="#1F2937">억제 시간창</text>
+<rect x="870" y="271" width="200" height="90" rx="8" fill="#FFFFFF" stroke="#8A94A6" stroke-width="1.2"/>
+<text x="970.0" y="303.0" font-size="18" font-weight="700" text-anchor="middle" fill="#1F2937">알림 규칙</text>
+<text x="970.0" y="323.2" font-size="14" font-weight="400" text-anchor="middle" fill="#1F2937">우선순위 · 매처</text>
+<text x="970.0" y="342.2" font-size="14" font-weight="400" text-anchor="middle" fill="#1F2937">중복 억제</text>
+<rect x="1150" y="130" width="190" height="80" rx="8" fill="#FFFFFF" stroke="#8A94A6" stroke-width="1.2"/>
+<text x="1245.0" y="166.5" font-size="18" font-weight="700" text-anchor="middle" fill="#1F2937">인박스</text>
+<text x="1245.0" y="186.8" font-size="14" font-weight="400" text-anchor="middle" fill="#1F2937">이력 · 확인</text>
+<rect x="1150" y="276" width="190" height="80" rx="8" fill="#FFFFFF" stroke="#8A94A6" stroke-width="1.2"/>
+<text x="1245.0" y="312.5" font-size="18" font-weight="700" text-anchor="middle" fill="#1F2937">개인 알림</text>
+<text x="1245.0" y="332.8" font-size="14" font-weight="400" text-anchor="middle" fill="#1F2937">전체 · 담당자</text>
+<rect x="1150" y="422" width="190" height="80" rx="8" fill="#FFFFFF" stroke="#8A94A6" stroke-width="1.2"/>
+<text x="1245.0" y="458.5" font-size="18" font-weight="700" text-anchor="middle" fill="#1F2937">재전파 채널</text>
+<text x="1245.0" y="478.8" font-size="14" font-weight="400" text-anchor="middle" fill="#1F2937">Slack · Webhook</text>
+<line x1="240" y1="111" x2="340" y2="111" stroke="#5B6B82" stroke-width="1.5" marker-end="url(#arr)"/>
+<line x1="240" y1="193" x2="340" y2="193" stroke="#5B6B82" stroke-width="1.5" marker-end="url(#arr)"/>
+<line x1="240" y1="275" x2="340" y2="275" stroke="#5B6B82" stroke-width="1.5" marker-end="url(#arr)"/>
+<line x1="240" y1="357" x2="340" y2="357" stroke="#5B6B82" stroke-width="1.5" marker-end="url(#arr)"/>
+<line x1="240" y1="439" x2="340" y2="439" stroke="#5B6B82" stroke-width="1.5" marker-end="url(#arr)"/>
+<line x1="240" y1="521" x2="340" y2="521" stroke="#5B6B82" stroke-width="1.5" marker-end="url(#arr)"/>
+<line x1="520" y1="316" x2="600" y2="316" stroke="#5B6B82" stroke-width="1.5" marker-end="url(#arr)"/>
+<rect x="544.0" y="307.0" width="32.0" height="18" fill="#FFFFFF"/>
+<text x="560.0" y="320.3" font-size="12" text-anchor="middle" fill="#4B5563">통과</text>
+<line x1="790" y1="316" x2="870" y2="316" stroke="#5B6B82" stroke-width="1.5" marker-end="url(#arr)"/>
+<rect x="814.0" y="307.0" width="32.0" height="18" fill="#FFFFFF"/>
+<text x="830.0" y="320.3" font-size="12" text-anchor="middle" fill="#4B5563">평가</text>
+<line x1="1070" y1="300" x2="1150" y2="185" stroke="#5B6B82" stroke-width="1.5" marker-end="url(#arr)"/>
+<line x1="1070" y1="316" x2="1150" y2="316" stroke="#5B6B82" stroke-width="1.5" marker-end="url(#arr)"/>
+<line x1="1070" y1="332" x2="1150" y2="447" stroke="#5B6B82" stroke-width="1.5" marker-end="url(#arr)"/>
+</svg>

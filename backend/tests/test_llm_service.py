@@ -64,7 +64,7 @@ def test_merge_keeps_stored_profiles_and_repairs_routing():
     }
     m = merge_llm_settings(stored)
     assert [p["name"] for p in m["profiles"]] == ["corp"]
-    assert m["routing"]["chat"] == {"primary": "corp", "fallback": None}
+    assert m["routing"]["chat"] == {"primary": "corp", "fallback": None, "primary_model": "", "fallback_model": ""}
     # 존재하지 않는 primary 는 첫 프로필로 복구
     assert m["routing"]["trends"]["primary"] == "corp"
     # 저장에 없던 purpose 도 기본 라우팅으로 채워진다
@@ -519,3 +519,71 @@ async def test_stream_all_fail_yields_final_offline(monkeypatch):
     assert chunks[0].done is True
     assert chunks[0].status == "offline"
     assert chunks[0].profile == "local"
+
+
+# ── 용도별 모델 (LiteLLM 한 프로필에 여러 모델) ─────────────────────────────
+
+_LITELLM_CFG = {
+    "profiles": [
+        {"name": "litellm", "provider": "openai_compat", "base_url": "http://litellm:4000", "model": ""},
+    ],
+    "routing": {
+        "chat": {"primary": "litellm", "primary_model": "glm-flash",
+                 "fallback": "litellm", "fallback_model": "gpt-oss-20b"},
+        "incident_analysis": {"primary": "litellm", "primary_model": "deepseek-flash"},
+    },
+}
+
+
+def _model_echo_service(monkeypatch, cfg: dict, fail_models: frozenset = frozenset()) -> tuple[LLMService, list]:
+    svc = LLMService()
+    calls: list[str] = []
+    monkeypatch.setattr(svc, "resolve_settings", lambda db=None: merge_llm_settings(cfg))
+
+    class _Echo:
+        def __init__(self, profile):
+            self.profile = profile
+
+        async def chat(self, prompt, *, system=None, options=None):
+            calls.append(self.profile.model)
+            if self.profile.model in fail_models:
+                return LLMResult(status="error", profile=self.profile.name, model=self.profile.model, error="http_500")
+            return LLMResult(status="ok", text="ok", profile=self.profile.name, model=self.profile.model)
+
+    monkeypatch.setattr(svc, "build_provider", lambda profile: _Echo(profile))
+    return svc, calls
+
+
+def test_merge_keeps_route_models_and_same_profile_fallback():
+    m = merge_llm_settings(_LITELLM_CFG)
+    assert m["routing"]["chat"] == {"primary": "litellm", "fallback": "litellm",
+                                    "primary_model": "glm-flash", "fallback_model": "gpt-oss-20b"}
+    # 프로필·모델이 둘 다 같은 fallback 은 버린다
+    same = merge_llm_settings({**_LITELLM_CFG, "routing": {"chat": {
+        "primary": "litellm", "primary_model": "a", "fallback": "litellm", "fallback_model": "a"}}})
+    assert same["routing"]["chat"]["fallback"] is None
+
+
+@pytest.mark.asyncio
+async def test_route_model_overrides_profile_model(monkeypatch):
+    svc, calls = _model_echo_service(monkeypatch, _LITELLM_CFG)
+    assert (await svc.chat_for_purpose("chat", "q")).model == "glm-flash"
+    assert (await svc.chat_for_purpose("incident_analysis", "q")).model == "deepseek-flash"
+    assert calls == ["glm-flash", "deepseek-flash"]
+
+
+@pytest.mark.asyncio
+async def test_route_falls_back_to_other_model_on_same_profile(monkeypatch):
+    svc, calls = _model_echo_service(monkeypatch, _LITELLM_CFG, fail_models=frozenset({"glm-flash"}))
+    result = await svc.chat_for_purpose("chat", "q")
+    assert result.status == "ok" and result.model == "gpt-oss-20b"
+    assert calls == ["glm-flash", "gpt-oss-20b"]
+
+
+@pytest.mark.asyncio
+async def test_empty_route_model_uses_profile_default(monkeypatch):
+    cfg = {"profiles": [{"name": "corp", "provider": "openai_compat", "base_url": "http://a", "model": "m1"}],
+           "routing": {"chat": {"primary": "corp"}}}
+    svc, calls = _model_echo_service(monkeypatch, cfg)
+    await svc.chat_for_purpose("chat", "q")
+    assert calls == ["m1"]

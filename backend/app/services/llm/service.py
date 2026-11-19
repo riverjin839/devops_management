@@ -14,6 +14,7 @@
 from __future__ import annotations
 
 import asyncio
+import dataclasses
 import logging
 import time
 from contextlib import contextmanager
@@ -74,6 +75,31 @@ def current_llm_tenant() -> Optional[dict]:
     return _llm_tenant.get()
 
 
+def _route_entry(primary: Any, fallback: Any, primary_model: Any, fallback_model: Any,
+                 names: set[str], default_primary: str) -> dict:
+    """라우트 한 항목 정규화 — 프로필 존재 확인 + 용도별 모델(빈 값 = 프로필 기본 모델).
+
+    같은 프로필을 primary/fallback 에 두고 모델만 다르게 할 수 있다(LiteLLM 하나에 여러 모델).
+    프로필·모델이 둘 다 같은 fallback 만 의미가 없어 버린다.
+    """
+    pm = str(primary_model or "").strip()
+    fm = str(fallback_model or "").strip()
+    primary = primary if primary in names else default_primary
+    if fallback not in names or (fallback == primary and fm == pm):
+        fallback, fm = None, ""
+    return {"primary": primary, "fallback": fallback, "primary_model": pm, "fallback_model": fm}
+
+
+def route_candidates(route: dict) -> list[tuple[str, str]]:
+    """라우트 → 호출 순서 ``[(프로필 이름, 모델 오버라이드)]`` (모델 "" = 프로필 기본)."""
+    out: list[tuple[str, str]] = []
+    if route.get("primary"):
+        out.append((route["primary"], str(route.get("primary_model") or "")))
+    if route.get("fallback"):
+        out.append((route["fallback"], str(route.get("fallback_model") or "")))
+    return out
+
+
 def effective_route(cfg: dict, purpose: str) -> dict:
     """전역 라우팅 위에 현재 테넌트의 오버라이드를 얹은 purpose 라우팅.
 
@@ -87,11 +113,11 @@ def effective_route(cfg: dict, purpose: str) -> dict:
     if not isinstance(ov, dict):
         return route
     names = {p["name"] for p in cfg["profiles"]}
-    primary = ov.get("primary")
-    if primary not in names:
+    if ov.get("primary") not in names:
         return route
-    fallback = ov.get("fallback")
-    return {"primary": primary, "fallback": fallback if (fallback in names and fallback != primary) else None}
+    return _route_entry(ov.get("primary"), ov.get("fallback"), ov.get("primary_model"),
+                        ov.get("fallback_model"), names, route["primary"])
+
 
 _redis_client = None
 
@@ -140,7 +166,8 @@ def default_llm_settings() -> dict:
             "max_concurrency": 4,
             "enabled": True,
         })
-    routing = {p: {"primary": "local-ollama", "fallback": None} for p in PURPOSES}
+    routing = {p: {"primary": "local-ollama", "fallback": None, "primary_model": "", "fallback_model": ""}
+               for p in PURPOSES}
     return {
         "language": "ko",
         "analyzer_backend": (settings.analyzer_backend or "rule_based").lower().strip(),
@@ -189,6 +216,7 @@ def merge_llm_settings(stored: Optional[dict]) -> dict:
                 "model": prof.model, "api_key_ref": prof.api_key_ref,
                 "timeout_seconds": prof.timeout_seconds,
                 "max_concurrency": prof.max_concurrency, "enabled": prof.enabled,
+                **prof.advanced_dict(),
             })
         if cleaned:
             out["profiles"] = cleaned
@@ -200,12 +228,11 @@ def merge_llm_settings(stored: Optional[dict]) -> dict:
             entry = raw_routing.get(purpose)
             if not isinstance(entry, dict):
                 continue
-            primary = entry.get("primary")
-            fallback = entry.get("fallback")
-            routing[purpose] = {
-                "primary": primary if primary in profile_names else routing[purpose]["primary"],
-                "fallback": fallback if (fallback in profile_names and fallback != primary) else None,
-            }
+            routing[purpose] = _route_entry(
+                entry.get("primary"), entry.get("fallback"),
+                entry.get("primary_model"), entry.get("fallback_model"),
+                profile_names, routing[purpose]["primary"],
+            )
     # primary 가 더 이상 존재하지 않는 프로필을 가리키면 첫 프로필로 복구
     first = out["profiles"][0]["name"]
     for purpose in PURPOSES:
@@ -274,6 +301,15 @@ class LLMService:
                 return LLMProfile.from_dict(raw)
         return None
 
+    def _routed_profile(self, name: str, model: str, cfg: dict) -> Optional[LLMProfile]:
+        """라우트 후보 → 호출할 프로필. 용도별 모델이 지정되면 그 모델로 바꾼 사본을 쓴다."""
+        profile = self.get_profile(name, cfg)
+        if profile is None or not profile.enabled:
+            return None
+        if model:
+            profile = dataclasses.replace(profile, model=model)
+        return profile
+
     def resolve_api_key(self, profile: LLMProfile) -> Optional[str]:
         """``api_key_ref`` 해석 — ``credential:<name>`` | ``env:<VAR>`` | ``""``.
 
@@ -337,13 +373,10 @@ class LLMService:
         from app.services.llm.masking import mask_secrets
         prompt = mask_secrets(prompt)
         route = effective_route(cfg, purpose)
-        candidates = [route.get("primary"), route.get("fallback")]
         last: Optional[LLMResult] = None
-        for name in candidates:
-            if not name:
-                continue
-            profile = self.get_profile(name, cfg)
-            if profile is None or not profile.enabled:
+        for name, model in route_candidates(route):
+            profile = self._routed_profile(name, model, cfg)
+            if profile is None:
                 continue
             provider = self.build_provider(profile)
             sem = self._semaphore_for(profile)
@@ -355,7 +388,7 @@ class LLMService:
             logger.warning(
                 "LLM 호출 실패 (purpose=%s, profile=%s, status=%s, error=%s)%s",
                 purpose, profile.name, result.status, result.error,
-                " — fallback 시도" if name == route.get("primary") and route.get("fallback") else "",
+                " — fallback 시도" if (name, model) == route_candidates(route)[0] and route.get("fallback") else "",
             )
             last = result
         return last or LLMResult(status="offline", error="no_enabled_profile",
@@ -382,14 +415,11 @@ class LLMService:
         from app.services.llm.masking import mask_secrets
         prompt = mask_secrets(prompt)
         route = effective_route(cfg, purpose)
-        candidates = [route.get("primary"), route.get("fallback")]
 
         last_error: Optional[LLMStreamChunk] = None
-        for name in candidates:
-            if not name:
-                continue
-            profile = self.get_profile(name, cfg)
-            if profile is None or not profile.enabled:
+        for name, model in route_candidates(route):
+            profile = self._routed_profile(name, model, cfg)
+            if profile is None:
                 continue
             provider = self.build_provider(profile)
             sem = self._semaphore_for(profile)
@@ -424,7 +454,7 @@ class LLMService:
                     logger.warning(
                         "LLM 스트리밍 실패 (purpose=%s, profile=%s, status=%s, error=%s)%s",
                         purpose, profile.name, chunk.status, chunk.error,
-                        " — fallback 시도" if name == route.get("primary") and route.get("fallback") else "",
+                        " — fallback 시도" if (name, model) == route_candidates(route)[0] and route.get("fallback") else "",
                     )
         yield last_error or LLMStreamChunk(done=True, status="offline", error="no_enabled_profile")
 
@@ -489,6 +519,13 @@ class LLMService:
         if profile is None:
             return []
         return await self.build_provider(profile).list_models()
+
+    async def list_profile_models_detailed(self, name: str, db=None) -> tuple[list[str], Optional[str]]:
+        """모델 목록 + 실패 사유 — 프로필 편집 화면의 '목록 조회' 가 사유를 보여 주도록."""
+        profile = self.get_profile(name, self.resolve_settings(db))
+        if profile is None:
+            return [], f"프로필 '{name}' 이 없다."
+        return await self.build_provider(profile).list_models_detailed()
 
     def first_ollama_profile(self, db=None) -> Optional[LLMProfile]:
         """Ollama 전용 기능(pull-model 등)을 위임할 첫 enabled ollama 프로필."""

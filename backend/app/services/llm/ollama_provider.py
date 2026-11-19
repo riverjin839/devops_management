@@ -44,6 +44,10 @@ def pick_ollama_model(configured: str, available: list[str]) -> Optional[str]:
 
 
 class OllamaProvider(BaseLLMProvider):
+    def _h(self) -> dict:
+        """게이트웨이(HTTPRoute) 뒤 Ollama 용 헤더 — Host 덮어쓰기·추가 헤더·키(있으면)."""
+        return self.profile.request_headers(self.api_key)
+
     def _model(self) -> str:
         p = self.profile
         return _RESOLVED_MODELS.get((p.base_url, p.model), p.model)
@@ -107,8 +111,8 @@ class OllamaProvider(BaseLLMProvider):
             payload["options"] = options
         start = datetime.utcnow()
         try:
-            async with httpx.AsyncClient(timeout=p.timeout_seconds) as client:
-                resp = await client.post(f"{p.base_url}/api/generate", json=payload)
+            async with httpx.AsyncClient(**p.client_kwargs(p.timeout_seconds)) as client:
+                resp = await client.post(f"{p.base_url}/api/generate", json=payload, headers=self._h())
                 resp.raise_for_status()
                 data = resp.json()
                 return LLMResult(
@@ -172,8 +176,8 @@ class OllamaProvider(BaseLLMProvider):
             payload["options"] = options
         started = False
         try:
-            async with httpx.AsyncClient(timeout=p.timeout_seconds) as client:
-                async with client.stream("POST", f"{p.base_url}/api/generate", json=payload) as resp:
+            async with httpx.AsyncClient(**p.client_kwargs(p.timeout_seconds)) as client:
+                async with client.stream("POST", f"{p.base_url}/api/generate", json=payload, headers=self._h()) as resp:
                     resp.raise_for_status()
                     async for line in resp.aiter_lines():
                         if not line.strip():
@@ -218,10 +222,11 @@ class OllamaProvider(BaseLLMProvider):
             return None
         p = self.profile
         try:
-            async with httpx.AsyncClient(timeout=p.timeout_seconds) as client:
+            async with httpx.AsyncClient(**p.client_kwargs(p.timeout_seconds)) as client:
                 resp = await client.post(
                     f"{p.base_url}/api/embeddings",
                     json={"model": model or p.model, "prompt": text},
+                    headers=self._h(),
                 )
                 resp.raise_for_status()
                 embedding = resp.json().get("embedding")
@@ -238,12 +243,12 @@ class OllamaProvider(BaseLLMProvider):
         p = self.profile
         start = datetime.utcnow()
         try:
-            async with httpx.AsyncClient(timeout=5) as client:
-                resp = await client.get(f"{p.base_url}/")
+            async with httpx.AsyncClient(**p.client_kwargs(5)) as client:
+                resp = await client.get(f"{p.base_url}/", headers=self._h())
                 if resp.status_code != 200:
                     return {"status": "offline", "model": p.model,
                             "detail": f"HTTP {resp.status_code}", "latency_ms": _elapsed_ms(start)}
-                tags_resp = await client.get(f"{p.base_url}/api/tags")
+                tags_resp = await client.get(f"{p.base_url}/api/tags", headers=self._h())
                 if tags_resp.status_code == 200:
                     full = [m.get("name", "") for m in tags_resp.json().get("models", [])]
                     resolved = pick_ollama_model(p.model, full)
@@ -276,24 +281,31 @@ class OllamaProvider(BaseLLMProvider):
                     "latency_ms": _elapsed_ms(start)}
 
     async def list_models(self) -> list[str]:
+        models, _ = await self.list_models_detailed()
+        return models
+
+    async def list_models_detailed(self) -> tuple[list[str], Optional[str]]:
+        url = f"{self.profile.base_url}/api/tags"
         try:
-            async with httpx.AsyncClient(timeout=5) as client:
-                resp = await client.get(f"{self.profile.base_url}/api/tags")
-                if resp.status_code == 200:
-                    return [m.get("name", "") for m in resp.json().get("models", [])]
-                return []
-        except Exception:  # noqa: BLE001
-            return []
+            async with httpx.AsyncClient(**self.profile.client_kwargs(5)) as client:
+                resp = await client.get(url, headers=self._h())
+            if resp.status_code != 200:
+                return [], f"GET {url} → HTTP {resp.status_code}: {resp.text.strip()[:160]}"
+            models = [m.get("name", "") for m in resp.json().get("models", [])]
+            return models, None if models else "서버에 모델이 하나도 없다(이미지에 모델 미포함)."
+        except Exception as exc:  # noqa: BLE001
+            return [], f"GET {url} 실패: {type(exc).__name__}: {str(exc)[:200]}"
 
     async def pull_model(self, model: Optional[str] = None) -> dict:
         """Ollama 전용 — 모델 pull 트리거 (기존 agent_service.pull_model 이관)."""
         p = self.profile
         target = model or p.model
         try:
-            async with httpx.AsyncClient(timeout=30) as client:
+            async with httpx.AsyncClient(**p.client_kwargs(30)) as client:
                 resp = await client.post(
                     f"{p.base_url}/api/pull",
                     json={"name": target, "stream": False},
+                    headers=self._h(),
                 )
                 if resp.status_code == 200:
                     return {"status": "ok", "message": f"Model '{target}' pull initiated."}

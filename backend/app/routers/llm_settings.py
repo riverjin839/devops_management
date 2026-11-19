@@ -21,6 +21,7 @@ from app.models.app_setting import AppSetting
 from app.models.llm_credential import LlmCredential
 from app.models.user import User
 from app.services.llm import llm_service, LLM_SETTINGS_KEY, PURPOSES
+from app.services.llm.base import LLMProfile
 from app.services.llm.diagnostics import diagnose_profile
 from app.services.llm.service import merge_llm_settings
 from app.services.sse import stream_async_job
@@ -41,11 +42,24 @@ class LlmProfileSchema(BaseModel):
     timeout_seconds: int = Field(default=120, ge=5, le=600)
     max_concurrency: int = Field(default=2, ge=1, le=32)
     enabled: bool = True
+    # 게이트웨이(HTTPRoute/Ingress) 뒤 모델 서버용 고급 옵션 — 기본값은 기존 동작.
+    api_path: str = Field(default="/v1", max_length=128)
+    tls_verify: bool = True
+    ca_bundle: str = Field(default="", max_length=512)
+    use_env_proxy: bool = True
+    host_header: str = Field(default="", max_length=253)
+    auth_header: str = Field(default="Authorization", max_length=64)
+    auth_scheme: str = Field(default="Bearer", max_length=32)
+    # [{"name": "x-model", "value": "qwen3"}] — 비밀 아닌 값만(키는 api_key_ref).
+    extra_headers: list[dict[str, str]] = Field(default_factory=list)
 
 
 class LlmRouteSchema(BaseModel):
     primary: str
     fallback: Optional[str] = None
+    # 용도별 모델 — LiteLLM 처럼 한 프로필(주소)에 여러 모델이 있을 때. 비우면 프로필 기본 모델.
+    primary_model: str = Field(default="", max_length=200)
+    fallback_model: str = Field(default="", max_length=200)
 
 
 class LlmSettingsPayload(BaseModel):
@@ -62,6 +76,11 @@ class LlmTestRequest(BaseModel):
         default="한국어로 한 문장으로 답하세요: 정상적으로 연결되면 '연결 확인 완료' 라고 답하십시오.",
         max_length=500,
     )
+
+
+class LlmProbeModelsRequest(BaseModel):
+    """저장 전 프로필(편집 중 값)로 모델 목록 조회 — 키는 api_key_ref 로만 해석한다."""
+    profile: LlmProfileSchema
 
 
 class LlmDiagnoseRequest(BaseModel):
@@ -109,6 +128,14 @@ def update_llm_settings(
             )
     # credential 참조 유효성 (경고 수준 — 저장은 허용하되 알려준다)
     warnings: list[str] = []
+    # 모델 미지정 경고 — 용도별 모델도, 프로필 기본 모델도 비면 그 용도 호출은 서버가 거부한다.
+    default_models = {p.name.strip(): p.model.strip() for p in payload.profiles}
+    for purpose, route in payload.routing.items():
+        if purpose == "embedding":
+            continue
+        if not route.primary_model.strip() and not default_models.get(route.primary, ""):
+            warnings.append(f"용도 '{purpose}' 의 모델이 비어 있습니다 — 라우팅 표에서 모델을 고르거나 "
+                            f"프로필 '{route.primary}' 의 기본 모델을 지정하세요.")
     for p in payload.profiles:
         ref = (p.api_key_ref or "").strip()
         if ref.startswith("credential:"):
@@ -154,11 +181,28 @@ async def llm_health(db: Session = Depends(get_db)):
 
 @router.get("/profiles/{name}/models")
 async def llm_profile_models(name: str, db: Session = Depends(get_db)):
-    """프로필 엔드포인트의 모델 목록 (ollama: /api/tags, openai_compat: /v1/models)."""
+    """프로필 엔드포인트의 모델 목록 (ollama: /api/tags, openai_compat: {api_path}/models).
+
+    실패 사유(``error``)를 함께 돌려 화면이 "오프라인?" 대신 실제 원인(HTTP 404·TLS·프록시)을 보여 준다.
+    """
     if llm_service.get_profile(name, llm_service.resolve_settings(db)) is None:
         raise HTTPException(status_code=404, detail=f"프로필 '{name}' 이 없습니다.")
-    models = await llm_service.list_profile_models(name, db)
-    return {"data": models}
+    models, error = await llm_service.list_profile_models_detailed(name, db)
+    return {"data": models, "error": error}
+
+
+@router.post("/probe-models")
+async def llm_probe_models(
+    body: LlmProbeModelsRequest,
+    _: User = Depends(require_admin),
+):
+    """편집 중(저장 전) 프로필 값으로 모델 목록을 조회한다 — 새 프로필도 저장 없이 모델을 고를 수 있게.
+
+    실패해도 500 을 내지 않고 ``error`` 에 사유(HTTP 코드·TLS·프록시)를 담는다.
+    """
+    profile = LLMProfile.from_dict(body.profile.model_dump())
+    models, error = await llm_service.build_provider(profile).list_models_detailed()
+    return {"data": models, "error": error}
 
 
 @router.post("/test")
