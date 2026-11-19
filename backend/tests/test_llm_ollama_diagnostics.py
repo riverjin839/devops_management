@@ -198,7 +198,7 @@ async def test_diagnose_full_ollama_path(monkeypatch):
     assert res["ok"] is True
     assert res["resolved_model"] == "pep-k8s-ops:latest"
     by_name = {c["name"]: c for c in res["checks"]}
-    assert list(by_name) == ["config", "dns", "tcp", "server", "models", "show", "generate"]
+    assert list(by_name) == ["config", "dns", "tcp", "proxy", "server", "models", "show", "generate"]
     assert by_name["models"]["status"] == "warn"      # 태그 없는 이름 → 자동 해석 안내
     assert by_name["show"]["status"] == "ok"          # num_ctx 지정됨
     assert "tok/s" in by_name["generate"]["detail"]

@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
   Bot, Plus, Trash2, Pencil, Loader2, PlugZap, KeyRound, RefreshCw,
-  AlertTriangle, Activity, Radar, Stethoscope,
+  AlertTriangle, Activity, Radar, Stethoscope, ChevronDown, ChevronRight, X,
 } from 'lucide-react';
 import { MacCard } from '@/components/ui/MacCard';
 import { useToast, ConfirmDialog, LoadingState, RunLogPanel } from '@/components/common';
@@ -17,7 +17,7 @@ import {
 } from '@/hooks/useLlmSettings';
 import { useClusters } from '@/hooks/useCluster';
 import type {
-  LlmAnalysisScope, LlmAnalysisScopeRule, LlmDiagnoseResult, LlmHealthEntry, LlmProfile, LlmSettings,
+  LlmAnalysisScope, LlmAnalysisScopeRule, LlmDiagnoseResult, LlmExtraHeader, LlmHealthEntry, LlmProfile, LlmSettings,
   LlmTestResult,
 } from '@/types';
 
@@ -966,6 +966,150 @@ function AnalysisScopePanel() {
   );
 }
 
+// ── 게이트웨이 고급 옵션 ────────────────────────────────────────────────
+// GPU 클러스터의 모델 서버를 Gateway API HTTPRoute 로 노출한 경우, DNS·포트는 열려도
+// 경로(prefix/URLRewrite)·Host 매칭·사내 CA·프록시·인증 헤더 형태 때문에 HTTP 단계에서 막힌다.
+// 코드 수정 없이 화면에서 맞출 수 있게 노출한다(UI-First). 진단 로그가 어느 옵션을 볼지 알려준다.
+
+function GatewayOptionsFields({
+  form, setForm,
+}: {
+  form: LlmProfile;
+  setForm: (p: LlmProfile) => void;
+}) {
+  const headers = form.extraHeaders ?? [];
+  const setHeaders = (next: LlmExtraHeader[]) => setForm({ ...form, extraHeaders: next });
+  const inputCls = 'mt-1 w-full bg-secondary border border-border rounded-xl px-3 py-2 text-sm font-mono';
+  const helpCls = 'mt-0.5 block text-xs text-faint';
+  const isOpenAi = form.provider === 'openai_compat';
+
+  return (
+    <div className="mt-3 grid grid-cols-2 gap-3">
+      {isOpenAi && (
+        <label className="block text-xs text-muted-foreground col-span-2">
+          API 경로
+          <input
+            value={form.apiPath ?? '/v1'}
+            onChange={(e) => setForm({ ...form, apiPath: e.target.value })}
+            placeholder="/v1"
+            className={inputCls}
+          />
+          <span className={helpCls}>
+            엔드포인트 URL 뒤에 붙는 OpenAI 호환 접두사. 호출 URL = URL + API 경로 + /models·/chat/completions.
+            URL 이 이미 /v1 로 끝나면 중복으로 붙이지 않는다. 게이트웨이가 경로를 다시 쓴다면 비운다.
+          </span>
+        </label>
+      )}
+      <label className="block text-xs text-muted-foreground col-span-2">
+        Host 헤더
+        <input
+          value={form.hostHeader ?? ''}
+          onChange={(e) => setForm({ ...form, hostHeader: e.target.value })}
+          placeholder="qwen3.llm.gpu.example.internal"
+          className={inputCls}
+        />
+        <span className={helpCls}>
+          Gateway IP 나 다른 이름으로 붙을 때 HTTPRoute 의 hostnames 값을 넣는다. 비우면 URL 의 호스트를 쓴다.
+        </span>
+      </label>
+      <label className="flex items-center gap-2 text-sm col-span-1">
+        <input
+          type="checkbox"
+          checked={form.tlsVerify ?? true}
+          onChange={(e) => setForm({ ...form, tlsVerify: e.target.checked })}
+          className="rounded"
+        />
+        TLS 인증서 검증
+      </label>
+      <label className="flex items-center gap-2 text-sm col-span-1">
+        <input
+          type="checkbox"
+          checked={form.useEnvProxy ?? true}
+          onChange={(e) => setForm({ ...form, useEnvProxy: e.target.checked })}
+          className="rounded"
+        />
+        환경 프록시 사용
+      </label>
+      <span className={`${helpCls} col-span-2 -mt-2`}>
+        검증을 끄는 것은 임시 조치다 — 사내 CA 는 아래 CA 번들 경로로 지정한다. 프록시는 파드의 HTTP(S)_PROXY·NO_PROXY 를
+        따른다. 내부 GPU 게이트웨이가 프록시 밖이면 끈다.
+      </span>
+      <label className="block text-xs text-muted-foreground col-span-2">
+        CA 번들 경로
+        <input
+          value={form.caBundle ?? ''}
+          onChange={(e) => setForm({ ...form, caBundle: e.target.value })}
+          placeholder="/etc/ssl/certs/corp-ca.pem"
+          disabled={form.tlsVerify === false}
+          className={`${inputCls} disabled:opacity-50`}
+        />
+        <span className={helpCls}>backend·celery 파드 안 경로(Secret/ConfigMap 마운트). 비우면 기본 CA 를 쓴다.</span>
+      </label>
+      <label className="block text-xs text-muted-foreground col-span-1">
+        인증 헤더 이름
+        <input
+          value={form.authHeader ?? 'Authorization'}
+          onChange={(e) => setForm({ ...form, authHeader: e.target.value })}
+          placeholder="Authorization"
+          className={inputCls}
+        />
+      </label>
+      <label className="block text-xs text-muted-foreground col-span-1">
+        인증 스킴
+        <input
+          value={form.authScheme ?? 'Bearer'}
+          onChange={(e) => setForm({ ...form, authScheme: e.target.value })}
+          placeholder="Bearer"
+          className={inputCls}
+        />
+      </label>
+      <span className={`${helpCls} col-span-2 -mt-2`}>
+        API 키가 있을 때만 붙는다. 게이트웨이가 api-key: 키 형태를 요구하면 이름을 api-key, 스킴을 비운다.
+      </span>
+      <div className="col-span-2">
+        <p className="text-xs text-muted-foreground">추가 헤더</p>
+        <span className={helpCls}>HTTPRoute 헤더 매칭(x-model 등)용. 비밀 값은 넣지 않는다 — 키는 위 'API 키' 로만.</span>
+        <div className="mt-1 space-y-1.5">
+          {headers.map((h, i) => (
+            <div key={i} className="flex gap-2">
+              <input
+                value={h.name}
+                onChange={(e) => setHeaders(headers.map((x, j) => (j === i ? { ...x, name: e.target.value } : x)))}
+                placeholder="x-model"
+                aria-label={`추가 헤더 ${i + 1} 이름`}
+                className="w-2/5 bg-secondary border border-border rounded-xl px-3 py-1.5 text-sm font-mono"
+              />
+              <input
+                value={h.value}
+                onChange={(e) => setHeaders(headers.map((x, j) => (j === i ? { ...x, value: e.target.value } : x)))}
+                placeholder="qwen3-32b"
+                aria-label={`추가 헤더 ${i + 1} 값`}
+                className="flex-1 bg-secondary border border-border rounded-xl px-3 py-1.5 text-sm font-mono"
+              />
+              <button
+                type="button"
+                onClick={() => setHeaders(headers.filter((_, j) => j !== i))}
+                title="헤더 삭제"
+                aria-label={`추가 헤더 ${i + 1} 삭제`}
+                className="px-2 rounded-xl text-muted-foreground hover:bg-secondary hover:text-foreground"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          ))}
+          <button
+            type="button"
+            onClick={() => setHeaders([...headers, { name: '', value: '' }])}
+            className="inline-flex items-center gap-1 px-2 py-1 rounded-xl text-xs bg-secondary border border-border hover:bg-muted"
+          >
+            <Plus className="w-3 h-3" /> 헤더 추가
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── 프로필 편집 모달 ────────────────────────────────────────────────────
 
 function ProfileEditModal({
@@ -980,9 +1124,18 @@ function ProfileEditModal({
   const [form, setForm] = useState<LlmProfile>(profile);
   const dialogRef = useModalA11y(true, onCancel);
   const [modelListOpen, setModelListOpen] = useState(false);
-  const { data: models, isFetching: modelsLoading } = useLlmProfileModels(
+  const { data: modelList, isFetching: modelsLoading } = useLlmProfileModels(
     isNew ? '' : profile.name, modelListOpen,
   );
+  const models = modelList?.data;
+  const hasGatewayOptions = !!(
+    (form.apiPath !== undefined && form.apiPath !== '/v1') || form.tlsVerify === false || form.caBundle
+    || form.useEnvProxy === false || form.hostHeader
+    || (form.authHeader && form.authHeader !== 'Authorization')
+    || (form.authScheme !== undefined && form.authScheme !== 'Bearer')
+    || (form.extraHeaders?.length ?? 0) > 0
+  );
+  const [gatewayOpen, setGatewayOpen] = useState(hasGatewayOptions);
 
   const keyRefKind = form.apiKeyRef.startsWith('credential:')
     ? 'credential'
@@ -1063,7 +1216,13 @@ function ProfileEditModal({
               </div>
             )}
             {modelListOpen && !modelsLoading && (models ?? []).length === 0 && (
-              <p className="mt-1 text-xs text-muted-foreground">모델 목록을 가져올 수 없습니다 (엔드포인트 오프라인?)</p>
+              <p className="mt-1 text-xs text-destructive break-all">
+                모델 목록을 가져오지 못했습니다{modelList?.error ? ` — ${modelList.error}` : ''}.
+                {' '}모델명을 직접 입력하거나 저장 후 '연결 진단' 으로 원인을 확인하세요.
+              </p>
+            )}
+            {!isNew && modelListOpen && (
+              <p className="mt-1 text-xs text-muted-foreground">목록 조회는 저장된 설정 기준입니다 — URL·고급 옵션을 바꿨다면 먼저 저장하세요.</p>
             )}
           </div>
 
@@ -1129,6 +1288,22 @@ function ProfileEditModal({
               className="mt-1 w-full bg-secondary border border-border rounded-xl px-3 py-2 text-sm"
             />
           </label>
+
+          <div className="col-span-2 border-t border-border pt-3">
+            <button
+              type="button"
+              onClick={() => setGatewayOpen((v) => !v)}
+              aria-expanded={gatewayOpen}
+              className="flex items-center gap-1 text-xs font-medium text-foreground hover:text-primary"
+            >
+              {gatewayOpen ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
+              고급 — 게이트웨이(HTTPRoute·Ingress) 연결
+              {hasGatewayOptions && !gatewayOpen && <span className="ml-1 text-muted-foreground">(설정됨)</span>}
+            </button>
+            {gatewayOpen && (
+              <GatewayOptionsFields form={form} setForm={setForm} />
+            )}
+          </div>
 
           <label className="col-span-2 flex items-center gap-2 text-sm">
             <input

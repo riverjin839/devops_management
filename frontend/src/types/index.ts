@@ -5548,6 +5548,32 @@ export interface LlmProfile {
   timeoutSeconds: number;
   maxConcurrency: number;
   enabled: boolean;
+  // ── 게이트웨이(HTTPRoute/Ingress) 뒤 모델 서버용 고급 옵션 — 생략 시 서버 기본값 ──
+  /** OpenAI 호환 API 접두사(기본 "/v1", "" = 게이트웨이가 이미 붙임) */
+  apiPath?: string;
+  tlsVerify?: boolean;
+  /** 파드 안 CA 번들 경로(사내 CA) */
+  caBundle?: string;
+  /** HTTP(S)_PROXY / NO_PROXY 환경변수 사용 */
+  useEnvProxy?: boolean;
+  /** Host 헤더 덮어쓰기 — IP 로 붙되 HTTPRoute hostnames 로 매칭 */
+  hostHeader?: string;
+  authHeader?: string;
+  /** "" 이면 키 원문만 보낸다 */
+  authScheme?: string;
+  /** 비밀 아닌 추가 헤더(HTTPRoute 헤더 매칭 등) */
+  extraHeaders?: LlmExtraHeader[];
+}
+
+export interface LlmExtraHeader {
+  name: string;
+  value: string;
+}
+
+export interface LlmProfileModels {
+  data: string[];
+  /** 목록 조회 실패 사유(HTTP 코드·TLS·프록시 등) */
+  error?: string | null;
 }
 
 export interface LlmRoute {
