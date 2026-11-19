@@ -236,11 +236,37 @@ def _exc_hint(exc: Exception, profile: LLMProfile) -> str:
     return ""
 
 
+def _is_litellm(resp: httpx.Response) -> bool:
+    """LiteLLM 프록시 응답인지 — ``x-litellm-*`` 헤더나 server/본문 표기로 판단."""
+    if any(k.lower().startswith("x-litellm") for k in resp.headers):
+        return True
+    return "litellm" in (resp.headers.get("server") or "").lower() or "litellm" in resp.text[:500].lower()
+
+
+def _litellm_hint(code: int, body: str) -> str:
+    if code in (401, 403):
+        return ("LiteLLM 이 키를 거부했다 — 프로필의 API 키(virtual key `sk-…`)가 맞는지, 그 키의 "
+                "허용 모델(models)·예산·만료를 LiteLLM UI(/ui) 의 Keys 에서 확인한다.")
+    if code in (400, 404) and ("model" in body or "invalid model" in body):
+        return ("LiteLLM 에 그 이름의 모델이 없다 — config 의 `model_list[].model_name`(별칭)을 써야 한다. "
+                "'모델 확인' 단계의 목록에서 고르거나 라우팅 표의 모델 칸을 맞춘다.")
+    if code == 429:
+        return "LiteLLM 의 키/팀 rate limit(rpm·tpm) 또는 예산을 넘었다 — LiteLLM UI 에서 한도를 확인한다."
+    if code in (500, 502, 503, 504):
+        return ("LiteLLM 은 받았지만 뒤의 모델 서버 호출이 실패했다 — LiteLLM 로그와 해당 모델의 "
+                "`litellm_params.api_base`(GPU 서빙 주소) 도달 여부, 모델 파드 상태를 확인한다.")
+    return ""
+
+
 def _response_hint(resp: httpx.Response, profile: LLMProfile) -> str:
     """HTTP 상태 코드 + 응답 헤더로 게이트웨이(HTTPRoute) 단계의 원인을 추정한다."""
     code = resp.status_code
     server = (resp.headers.get("server") or "").lower()
     body = resp.text[:300].lower()
+    if _is_litellm(resp):
+        hint = _litellm_hint(code, body)
+        if hint:
+            return hint
     via_gateway = "envoy" in server or "istio" in server or any(h.startswith("x-envoy") for h in resp.headers)
     gw = f"게이트웨이({resp.headers.get('server')})" if via_gateway else "게이트웨이/서버"
     path_prefix = urlparse(profile.base_url).path.rstrip("/")
@@ -484,8 +510,10 @@ async def _diagnose_openai(profile: LLMProfile, d: _Diag, headers: dict) -> tupl
 
 def _log_response(d: _Diag, r: httpx.Response) -> None:
     keep = [f"{k}={v}" for k, v in r.headers.items()
-            if k.lower() in ("server", "content-type", "x-envoy-upstream-service-time", "via", "x-request-id")]
-    d.info(f"  응답 HTTP {r.status_code} · {' · '.join(keep) or '헤더 없음'}")
+            if k.lower() in ("server", "content-type", "x-envoy-upstream-service-time", "via", "x-request-id",
+                             "x-litellm-version")]
+    via = " · LiteLLM 프록시" if _is_litellm(r) else ""
+    d.info(f"  응답 HTTP {r.status_code}{via} · {' · '.join(keep) or '헤더 없음'}")
     if r.status_code != 200:
         d.info(f"  본문: {r.text.strip()[:200] or '(비어 있음)'}")
 

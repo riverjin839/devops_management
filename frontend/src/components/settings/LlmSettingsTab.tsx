@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
   Bot, Plus, Trash2, Pencil, Loader2, PlugZap, KeyRound, RefreshCw,
-  AlertTriangle, Activity, Radar, Stethoscope, ChevronDown, ChevronRight, X,
+  AlertTriangle, Activity, Radar, Stethoscope, X,
 } from 'lucide-react';
 import { MacCard } from '@/components/ui/MacCard';
 import { useToast, ConfirmDialog, LoadingState, RunLogPanel } from '@/components/common';
@@ -17,7 +17,7 @@ import {
 } from '@/hooks/useLlmSettings';
 import { useClusters } from '@/hooks/useCluster';
 import type {
-  LlmAnalysisScope, LlmAnalysisScopeRule, LlmDiagnoseResult, LlmExtraHeader, LlmHealthEntry, LlmProfile, LlmSettings,
+  LlmAnalysisScope, LlmAnalysisScopeRule, LlmDiagnoseResult, LlmExtraHeader, LlmHealthEntry, LlmProfile, LlmRoute, LlmSettings,
   LlmTestResult,
 } from '@/types';
 
@@ -242,12 +242,25 @@ export function LlmSettingsTab() {
     setDiagResult({ ...diagResult, model: target });
   };
 
-  const setRoute = (purpose: string, field: 'primary' | 'fallback', value: string) => {
-    const cur = draft.routing[purpose] ?? { primary: draft.profiles[0]?.name ?? '', fallback: null };
-    const nextRoute = { ...cur, [field]: field === 'fallback' && value === '' ? null : value };
-    if (nextRoute.fallback === nextRoute.primary) nextRoute.fallback = null;
+  // 프로필을 바꾸면 그 칸의 모델은 비운다(모델 목록은 프로필마다 다르다). 같은 프로필을 primary·fallback
+  // 에 두고 모델만 다르게 둘 수 있다(LiteLLM 한 주소에 여러 모델) — 둘 다 같은 조합은 서버가 저장 시 버린다.
+  const setRoute = (
+    purpose: string, field: 'primary' | 'fallback' | 'primaryModel' | 'fallbackModel', value: string,
+  ) => {
+    const cur: LlmRoute = draft.routing[purpose] ?? { primary: draft.profiles[0]?.name ?? '', fallback: null };
+    const nextRoute: LlmRoute = { ...cur };
+    if (field === 'primary') {
+      nextRoute.primary = value;
+      nextRoute.primaryModel = '';
+    } else if (field === 'fallback') {
+      nextRoute.fallback = value === '' ? null : value;
+      nextRoute.fallbackModel = '';
+    } else {
+      nextRoute[field] = value;
+    }
     setDraft({ ...draft, routing: { ...draft.routing, [purpose]: nextRoute } });
   };
+  const profileModel = (name: string | null) => draft.profiles.find((p) => p.name === name)?.model ?? '';
 
   const statusPill = (name: string, enabled: boolean) => {
     const h = healthByProfile[name];
@@ -305,7 +318,7 @@ export function LlmSettingsTab() {
                   {statusPill(p.name, p.enabled)}
                 </div>
                 <p className="text-xs text-muted-foreground truncate">
-                  {p.baseUrl} · 모델 {p.model || '(미지정)'} · 동시 {p.maxConcurrency} · {p.timeoutSeconds}s
+                  {p.baseUrl} · 기본 모델 {p.model || '(없음 — 라우팅에서 용도별 지정)'} · 동시 {p.maxConcurrency} · {p.timeoutSeconds}s
                   {p.apiKeyRef ? ` · 키 ${p.apiKeyRef}` : ''}
                 </p>
               </div>
@@ -393,8 +406,8 @@ export function LlmSettingsTab() {
       {/* ── 용도별 라우팅 ── */}
       <MacCard title="용도별 LLM 라우팅" bodyPadding="p-0">
         <p className="px-4 py-2 text-xs text-muted-foreground border-b border-border">
-          각 기능이 어떤 LLM 프로필을 쓸지 지정합니다. primary 실패 시 fallback 으로 자동 전환됩니다.
-          예: 챗봇은 사내 LLM, 임베딩은 Ollama 로 병행 운용.
+          각 기능이 어떤 LLM 프로필·모델을 쓸지 지정합니다. primary 실패 시 fallback 으로 자동 전환됩니다.
+          LiteLLM 은 프로필 하나로 등록하고 여기서 용도별 모델을 고릅니다(모델을 비우면 프로필 기본 모델).
         </p>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
@@ -416,30 +429,54 @@ export function LlmSettingsTab() {
                         <p className="text-xs text-muted-foreground">모델은 아래 임베딩 모델 설정을 따릅니다</p>
                       )}
                     </td>
-                    <td className="px-4 py-2">
-                      <select
-                        value={route.primary}
-                        onChange={(e) => setRoute(purpose, 'primary', e.target.value)}
-                        aria-label={`${PURPOSE_LABELS[purpose] ?? purpose} primary 프로필`}
-                        className="bg-secondary border border-border rounded-xl px-2 py-1.5 text-sm"
-                      >
-                        {draft.profiles.map((p) => (
-                          <option key={p.name} value={p.name}>{p.name}</option>
-                        ))}
-                      </select>
+                    <td className="px-4 py-2 align-top">
+                      <div className="flex flex-wrap gap-1.5">
+                        <select
+                          value={route.primary}
+                          onChange={(e) => setRoute(purpose, 'primary', e.target.value)}
+                          aria-label={`${PURPOSE_LABELS[purpose] ?? purpose} primary 프로필`}
+                          className="bg-secondary border border-border rounded-xl px-2 py-1.5 text-sm"
+                        >
+                          {draft.profiles.map((p) => (
+                            <option key={p.name} value={p.name}>{p.name}</option>
+                          ))}
+                        </select>
+                        {purpose !== 'embedding' && (
+                          <RouteModelInput
+                            id={`llm-route-${purpose}-primary`}
+                            profile={route.primary}
+                            profileDefault={profileModel(route.primary)}
+                            value={route.primaryModel ?? ''}
+                            onChange={(v) => setRoute(purpose, 'primaryModel', v)}
+                            label={`${PURPOSE_LABELS[purpose] ?? purpose} primary 모델`}
+                          />
+                        )}
+                      </div>
                     </td>
-                    <td className="px-4 py-2">
-                      <select
-                        value={route.fallback ?? ''}
-                        onChange={(e) => setRoute(purpose, 'fallback', e.target.value)}
-                        aria-label={`${PURPOSE_LABELS[purpose] ?? purpose} fallback 프로필`}
-                        className="bg-secondary border border-border rounded-xl px-2 py-1.5 text-sm"
-                      >
-                        <option value="">(없음)</option>
-                        {draft.profiles.filter((p) => p.name !== route.primary).map((p) => (
-                          <option key={p.name} value={p.name}>{p.name}</option>
-                        ))}
-                      </select>
+                    <td className="px-4 py-2 align-top">
+                      <div className="flex flex-wrap gap-1.5">
+                        <select
+                          value={route.fallback ?? ''}
+                          onChange={(e) => setRoute(purpose, 'fallback', e.target.value)}
+                          aria-label={`${PURPOSE_LABELS[purpose] ?? purpose} fallback 프로필`}
+                          className="bg-secondary border border-border rounded-xl px-2 py-1.5 text-sm"
+                        >
+                          <option value="">(없음)</option>
+                          {draft.profiles.map((p) => (
+                            <option key={p.name} value={p.name}>{p.name}</option>
+                          ))}
+                        </select>
+                        {purpose !== 'embedding' && route.fallback && (
+                          <RouteModelInput
+                            id={`llm-route-${purpose}-fallback`}
+                            profile={route.fallback}
+                            profileDefault={profileModel(route.fallback)}
+                            value={route.fallbackModel ?? ''}
+                            onChange={(v) => setRoute(purpose, 'fallbackModel', v)}
+                            label={`${PURPOSE_LABELS[purpose] ?? purpose} fallback 모델`}
+                          />
+                        )}
+                      </div>
                     </td>
                   </tr>
                 );
@@ -966,6 +1003,41 @@ function AnalysisScopePanel() {
   );
 }
 
+// ── 라우팅 표의 용도별 모델 입력 ─────────────────────────────────────────
+// 후보는 그 프로필의 /v1/models(LiteLLM 이면 model_list 별칭). 목록에 없는 이름도 직접 입력할 수 있다.
+
+function RouteModelInput({
+  id, profile, profileDefault, value, onChange, label,
+}: {
+  id: string;
+  profile: string;
+  profileDefault: string;
+  value: string;
+  onChange: (v: string) => void;
+  label: string;
+}) {
+  const { data } = useLlmProfileModels(profile, true);
+  const models = data?.data ?? [];
+  const missing = !value && !profileDefault;
+  return (
+    <div className="min-w-0">
+      <input
+        list={`${id}-models`}
+        value={value}
+        onChange={(e) => onChange(e.target.value.trim())}
+        placeholder={profileDefault ? `기본: ${profileDefault}` : '모델 선택'}
+        aria-label={label}
+        title={data?.error ? `모델 목록 조회 실패: ${data.error}` : label}
+        className={`w-48 bg-secondary border rounded-xl px-2 py-1.5 text-sm font-mono ${missing ? 'border-destructive' : 'border-border'}`}
+      />
+      <datalist id={`${id}-models`}>
+        {models.map((m) => <option key={m} value={m}>{m}</option>)}
+      </datalist>
+      {missing && <p className="mt-0.5 text-xs text-destructive">모델을 골라야 합니다</p>}
+    </div>
+  );
+}
+
 // ── 게이트웨이 고급 옵션 ────────────────────────────────────────────────
 // GPU 클러스터의 모델 서버를 Gateway API HTTPRoute 로 노출한 경우, DNS·포트는 열려도
 // 경로(prefix/URLRewrite)·Host 매칭·사내 CA·프록시·인증 헤더 형태 때문에 HTTP 단계에서 막힌다.
@@ -1124,10 +1196,21 @@ function ProfileEditModal({
   const [form, setForm] = useState<LlmProfile>(profile);
   const dialogRef = useModalA11y(true, onCancel);
   const [modelListOpen, setModelListOpen] = useState(false);
-  const { data: modelList, isFetching: modelsLoading } = useLlmProfileModels(
-    isNew ? '' : profile.name, modelListOpen,
-  );
+  // 편집 중 값(URL·키 참조·고급 옵션)으로 바로 조회 — 새 프로필도 저장 없이 모델을 고를 수 있다.
+  const [modelList, setModelList] = useState<{ data: string[]; error?: string | null } | null>(null);
+  const [modelsLoading, setModelsLoading] = useState(false);
   const models = modelList?.data;
+  const probeModels = async () => {
+    setModelListOpen(true);
+    setModelsLoading(true);
+    try {
+      setModelList((await llmApi.probeModels(form)).data);
+    } catch (err) {
+      setModelList({ data: [], error: formatApiError(err) });
+    } finally {
+      setModelsLoading(false);
+    }
+  };
   const hasGatewayOptions = !!(
     (form.apiPath !== undefined && form.apiPath !== '/v1') || form.tlsVerify === false || form.caBundle
     || form.useEnvProxy === false || form.hostHeader
@@ -1165,7 +1248,7 @@ function ProfileEditModal({
               onChange={(e) => setForm({ ...form, provider: e.target.value as LlmProfile['provider'] })}
               className="mt-1 w-full bg-secondary border border-border rounded-xl px-2 py-2 text-sm"
             >
-              <option value="openai_compat">OpenAI 호환 (사내 LLM 서비스 / vLLM)</option>
+              <option value="openai_compat">OpenAI 호환 — LiteLLM·vLLM (권장)</option>
               <option value="ollama">Ollama (인클러스터 자체 LLM)</option>
             </select>
           </label>
@@ -1174,33 +1257,37 @@ function ProfileEditModal({
             <input
               value={form.baseUrl}
               onChange={(e) => setForm({ ...form, baseUrl: e.target.value })}
-              placeholder={form.provider === 'ollama' ? 'http://ollama:11434' : 'http://llm-gw.corp.internal:8000'}
+              placeholder={form.provider === 'ollama' ? 'http://ollama:11434' : 'http://litellm.<namespace>.svc:4000'}
               className="mt-1 w-full bg-secondary border border-border rounded-xl px-3 py-2 text-sm font-mono"
             />
           </label>
           <div className="col-span-2">
             <label className="block text-xs text-muted-foreground">
-              모델
+              {form.provider === 'ollama' ? '모델' : '기본 모델 (선택)'}
               <div className="mt-1 flex gap-2">
                 <input
                   value={form.model}
                   onChange={(e) => setForm({ ...form, model: e.target.value })}
-                  placeholder={form.provider === 'ollama' ? 'qwen2.5-coder:7b' : 'corp-qwen3-32b'}
+                  placeholder={form.provider === 'ollama' ? 'qwen2.5-coder:7b' : '비우면 라우팅 표에서 용도별로 고름'}
                   className="flex-1 bg-secondary border border-border rounded-xl px-3 py-2 text-sm font-mono"
                 />
-                {!isNew && (
-                  <button
-                    type="button"
-                    onClick={() => setModelListOpen(true)}
-                    title="엔드포인트에서 모델 목록 조회"
-                    aria-label="모델 목록 조회"
-                    className="px-3 py-2 rounded-xl text-xs bg-secondary border border-border hover:bg-muted"
-                  >
-                    {modelsLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : '목록 조회'}
-                  </button>
-                )}
+                <button
+                  type="button"
+                  onClick={() => { void probeModels(); }}
+                  disabled={!form.baseUrl.trim() || modelsLoading}
+                  title="입력한 URL·키로 엔드포인트의 모델 목록 조회"
+                  aria-label="모델 목록 조회"
+                  className="px-3 py-2 rounded-xl text-xs bg-secondary border border-border hover:bg-muted disabled:opacity-50"
+                >
+                  {modelsLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : '목록 조회'}
+                </button>
               </div>
             </label>
+            {form.provider !== 'ollama' && (
+              <span className="mt-0.5 block text-xs text-faint">
+                LiteLLM 처럼 한 주소에 여러 모델이 있으면 비워 두고, 아래 '용도별 라우팅' 에서 챗봇·장애 분석 등 용도마다 모델을 고릅니다.
+              </span>
+            )}
             {modelListOpen && (models ?? []).length > 0 && (
               <div className="mt-1 flex flex-wrap gap-1">
                 {(models ?? []).map((m) => (
@@ -1218,11 +1305,8 @@ function ProfileEditModal({
             {modelListOpen && !modelsLoading && (models ?? []).length === 0 && (
               <p className="mt-1 text-xs text-destructive break-all">
                 모델 목록을 가져오지 못했습니다{modelList?.error ? ` — ${modelList.error}` : ''}.
-                {' '}모델명을 직접 입력하거나 저장 후 '연결 진단' 으로 원인을 확인하세요.
+                {' '}URL·API 키를 확인하거나, 저장 후 '연결 진단' 으로 단계별 원인을 확인하세요.
               </p>
-            )}
-            {!isNew && modelListOpen && (
-              <p className="mt-1 text-xs text-muted-foreground">목록 조회는 저장된 설정 기준입니다 — URL·고급 옵션을 바꿨다면 먼저 저장하세요.</p>
             )}
           </div>
 
@@ -1290,16 +1374,19 @@ function ProfileEditModal({
           </label>
 
           <div className="col-span-2 border-t border-border pt-3">
-            <button
-              type="button"
-              onClick={() => setGatewayOpen((v) => !v)}
-              aria-expanded={gatewayOpen}
-              className="flex items-center gap-1 text-xs font-medium text-foreground hover:text-primary"
-            >
-              {gatewayOpen ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
-              고급 — 게이트웨이(HTTPRoute·Ingress) 연결
-              {hasGatewayOptions && !gatewayOpen && <span className="ml-1 text-muted-foreground">(설정됨)</span>}
-            </button>
+            <label className="flex items-center gap-2 text-sm">
+              <input
+                type="checkbox"
+                checked={gatewayOpen}
+                onChange={(e) => setGatewayOpen(e.target.checked)}
+                className="rounded"
+              />
+              HTTPRoute·게이트웨이로 직접 연결
+            </label>
+            <span className="mt-0.5 block text-xs text-faint">
+              LiteLLM·사내 서비스 주소로 붙일 때는 필요 없습니다. 모델 서버를 Gateway API HTTPRoute 로 직접 붙여
+              Host 헤더·사내 CA·프록시·인증 헤더를 맞춰야 할 때만 켭니다(꺼도 저장된 값은 유지).
+            </span>
             {gatewayOpen && (
               <GatewayOptionsFields form={form} setForm={setForm} />
             )}
