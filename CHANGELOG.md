@@ -8,7 +8,9 @@
 
 ## [Unreleased]
 
-1.93.0 이후 main 에 병합된 변경 (다음 릴리스 후보).
+1.94.0 이후 main 에 병합된 변경 (다음 릴리스 후보).
+
+## [1.94.0] - 2026-11-19
 
 ### Added
 - **서비스 구성(4단계) — ETCD·CONTAINERD 적용**: 네 서비스 모두 '적용…' 으로 노드에 반영한다. ETCD 는 시작 전에 대상 멤버 전체의 health 를 확인해 하나라도 비정상이면 시작하지 않고, 한 대씩(고정) 정적 파드 매니페스트의 `- --flag=값` 줄(또는 systemd env 파일의 `ETCD_*` 줄)만 바꿔 서식을 보존한 뒤, 새 설정으로 정상 기동했는지(실행 중 프로세스 값 + health) 확인한다 — 실패하면 백업(매니페스트 디렉터리 밖)으로 자동 복원하고 나머지 멤버는 건너뛴다. CONTAINERD 는 노드마다 config.toml 을 줄 단위로 고치고(version 2/3 키 경로 자동 선택, 쓰기 전 TOML 재해석 확인) cordon(선택: drain) → 기록 → 재시작 → `containerd config dump` 로 값 확인 → 노드 Ready 대기 → uncordon 하며, 실패하면 백업으로 복원·재시작한다. 성공 노드는 현재 값이 바로 갱신된다. 적용 대화상자에 서비스별 옵션과 '실행될 명령' 목록이 보이고, 경로·유닛·재시작 명령·health 명령·대기 시간은 적용 설정(admin)에서 바꾼다. Backend: `services/service_config/apply_nodes.py`(순수 편집 함수 `edit_etcd_manifest`·`edit_env_file`·`edit_containerd_toml`), 계획 응답 `commands`. Frontend: `ApplyDialog`·`ApplySettingsDialog`.
