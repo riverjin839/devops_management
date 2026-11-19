@@ -42,6 +42,8 @@ export const ko = {
       mc: 'mc 클라이언트',
       isilonNfs: 'NFS 모니터링',
       kernelParams: '커널 파라미터',
+      osParamWatch: 'OS 파라미터 감시',
+      serviceConfig: '서비스 구성',
       infraTopology: '인프라 토폴로지',
       nodeSpecs: '노드 서버스펙',
       dcInventory: 'DC 인벤토리',

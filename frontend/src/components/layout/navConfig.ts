@@ -60,6 +60,10 @@ export const NAV_MAP: Record<string, NavMapEntry> = {
   '/mc':                 { labelKey: 'mc', defaultLabel: 'mc 클라이언트',  icon: Archive },
   '/isilon-nfs':         { labelKey: 'isilonNfs', defaultLabel: 'NFS 모니터링',   icon: HardDrive },
   '/kernel-params':      { labelKey: 'kernelParams', defaultLabel: '커널 파라미터',  icon: Cpu },
+  // OS 파라미터 감시 — 노드 에이전트가 보고한 sysctl 값의 변경·기준값 위반·영구 설정 불일치(K8s 허브 점검 탭).
+  '/os-param-watch':     { labelKey: 'osParamWatch', defaultLabel: 'OS 파라미터 감시', icon: ShieldCheck },
+  // 서비스 구성 — etcd·containerd·cilium·OS 설정 목록·현재 값·설정 버전(K8S 허브 구성 탭).
+  '/k8s-services':       { labelKey: 'serviceConfig', defaultLabel: '서비스 구성', icon: Layers },
   '/infra-topology':     { labelKey: 'infraTopology', defaultLabel: '인프라 토폴로지', icon: Network },
   '/node-specs':         { labelKey: 'nodeSpecs', defaultLabel: '노드 서버스펙',  icon: ClipboardList },
   // DC 인벤토리 — 랙·장비·케이블·IPAM 물리 구간 대장. 서버 신원·위치의 단일 원본(노드 서버스펙·인프라 토폴로지가 연결된다).
@@ -106,6 +110,7 @@ export const HUB_ABSORBED_PATHS: ReadonlySet<string> = new Set([
   '/clusters', '/k8s-manage', '/k8s-allocation', '/cluster-trends', '/observability', '/k8s-events',
   '/k8s-logs', '/incident-analysis', '/daily-check/review', '/k8s-rbac', '/node-images', '/versions',
   '/etcdctl', '/kernel-params', '/pod-bottleneck', '/cilium-trace', '/packet-flow', '/ops-checks',
+  '/os-param-watch', '/k8s-services',
 ]);
 
 /** 허브에 흡수돼 메뉴·팔레트·즐겨찾기에서 숨기는 경로인가. */

@@ -131,6 +131,13 @@ celery_app.conf.beat_schedule = {
         "task": "app.celery_app.dispatch_external_services_collect",
         "schedule": crontab(minute="*"),
     },
+    # 노드 OS 파라미터 에이전트 무응답 감시 — 마지막 보고가 설정(offline_minutes)보다 오래된
+    # 노드에 '에이전트 무응답' 알람(열려 있으면 그대로). 에이전트가 죽으면 변경을 감지할 수 없으므로.
+    "node-param-agent-watchdog": {
+        "task": "app.celery_app.run_node_param_watchdog",
+        "schedule": crontab(minute="*/5"),
+        "options": {"expires": 240},
+    },
 }
 
 
@@ -1162,6 +1169,25 @@ def run_daily_report_rollup(self, days: int = 2):
     except Exception as e:  # noqa: BLE001
         logging.getLogger(__name__).exception("run_daily_report_rollup failed: %s", e)
         return {"error": str(e)[:200]}
+    finally:
+        db.close()
+
+
+@celery_app.task(bind=True, name="app.celery_app.run_node_param_watchdog", ignore_result=True)
+def run_node_param_watchdog(self):
+    """노드 OS 파라미터 에이전트 무응답 감시 — ``services/node_param_watch/service.run_watchdog``."""
+    import logging
+
+    from app.database import SessionLocal
+    from app.services.node_param_watch.service import run_watchdog
+
+    db = SessionLocal()
+    try:
+        return run_watchdog(db)
+    except Exception as exc:  # noqa: BLE001 — 다음 주기에 다시 돈다
+        db.rollback()
+        logging.getLogger(__name__).warning("node-param watchdog 실패: %s", exc)
+        return {"error": str(exc)}
     finally:
         db.close()
 

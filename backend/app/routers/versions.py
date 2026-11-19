@@ -975,6 +975,122 @@ async def collect_kubelet_config(
     }
 
 
+# ── containerd 설정 수집 ────────────────────────────────────────────────────
+
+class ContainerdConfigCollectRequest(BaseModel):
+    """각 노드에 SSH 로 접속해 containerd 의 **실제 적용 설정**을 읽는다(서비스 구성 ▸ CONTAINERD 현재 값).
+
+    1) ``containerd config dump`` — 기본값까지 합쳐진 실효 설정(가장 정확).
+    2) 실패하면 ``config_paths`` 후보 파일을 그대로 읽는다(파일에 적힌 값만).
+    TOML 을 평탄화(``a."b.c".d``)해 ``flat`` 으로 저장한다. 저장: ``containerd_config:{host}`` (category=runtime)
+    """
+    hosts: list[str] = Field(..., min_length=1, max_length=2000)
+    port: int = Field(default=22, ge=1, le=65535)
+    username: str = Field(default="root", min_length=1, max_length=64)
+    password: str | None = None
+    private_key: str | None = None
+    use_sudo: bool = False
+    connect_timeout: int = Field(default=8, ge=1, le=60)
+    containerd_path: str = Field(default="containerd", max_length=256)
+    config_paths: list[str] = Field(default_factory=lambda: ["/etc/containerd/config.toml"])
+    max_content_bytes: int = Field(default=262144, ge=1024, le=2_000_000)
+    parallelism: int = Field(default=10, ge=1, le=50)
+    chunk_size: int = Field(default=30, ge=1, le=200)
+    chunk_pause_ms: int = Field(default=200, ge=0, le=5000)
+
+
+@router.post("/{cluster_id}/collect-containerd-config")
+async def collect_containerd_config(
+    cluster_id: UUID,
+    payload: ContainerdConfigCollectRequest,
+    db: Session = Depends(get_db),
+    _: User = Depends(require_operator),
+):
+    """노드별 containerd 실효 설정을 SSH 로 수집해 평탄화 저장(내용 같으면 저장 생략)."""
+    from app.services.service_config.current import parse_containerd_toml
+
+    _require_collect_target(db, cluster_id, payload)
+    now = datetime.utcnow()
+    sudo = "sudo -n " if payload.use_sudo else ""
+    bin_path = payload.containerd_path if re.match(r"^[A-Za-z0-9_./-]+$", payload.containerd_path) else "containerd"
+    dump_cmd = f"{sudo}{bin_path} config dump 2>&1 | head -c {payload.max_content_bytes}"
+    safe_paths = [p for p in payload.config_paths if re.match(r"^[A-Za-z0-9_./-]+$", p)]
+    file_cmd = " || ".join(
+        f"(test -f {p} && echo '===CTD_FILE===:{p}' && {sudo}head -c {payload.max_content_bytes} {p})" for p in safe_paths
+    ) + " || true" if safe_paths else "true"
+
+    def _one(host: str) -> dict:
+        target = SSHTarget(
+            host=host, port=payload.port, username=payload.username,
+            password=payload.password, private_key=payload.private_key,
+        )
+        r_dump = _exec_ssh(target, dump_cmd, connect_timeout=payload.connect_timeout, exec_timeout=20)
+        entry: dict = {"host": host, "status": r_dump.status}
+        # 실행-로그 규칙 — 원본 출력 첨부(성공/실패 무관).
+        entry["raw_stdout"] = (r_dump.stdout or "")[:1500]
+        entry["raw_stderr"] = (r_dump.stderr or "")[:800]
+        entry["exit_code"] = r_dump.exit_code
+        if r_dump.exit_code is None:  # 접속·인증 실패 — 파일 읽기도 같은 이유로 실패하므로 바로 끝낸다
+            entry["status"] = r_dump.status if r_dump.status != "ok" else "error"
+            entry["error"] = r_dump.error or (r_dump.stderr or "")[:200] or "SSH 접속 실패"
+            return entry
+        flat: dict | None = None
+        if r_dump.status == "ok" and r_dump.exit_code == 0 and (r_dump.stdout or "").strip():
+            try:
+                flat = parse_containerd_toml(r_dump.stdout)
+                entry["source_label"] = "containerd config dump"
+            except Exception as exc:  # noqa: BLE001 — 덤프가 TOML 이 아니면(오류 문구 등) 파일로 넘어간다
+                entry["dump_parse_error"] = str(exc)[:200]
+        if flat is None:
+            r_file = _exec_ssh(target, file_cmd, connect_timeout=payload.connect_timeout, exec_timeout=15)
+            m = re.match(r"===CTD_FILE===:([^\n]+)\n(.*)", r_file.stdout or "", re.DOTALL)
+            if not m:
+                entry["status"] = "error"
+                entry["error"] = "containerd config dump 실패, 설정 파일도 찾지 못했습니다 " + (entry.get("dump_parse_error") or "")
+                return entry
+            entry["config_file"] = m.group(1).strip()
+            try:
+                flat = parse_containerd_toml(m.group(2))
+            except Exception as exc:  # noqa: BLE001
+                entry["status"] = "error"
+                entry["error"] = f"{entry['config_file']} TOML 해석 실패: {str(exc)[:160]}"
+                return entry
+            entry["source_label"] = f"file:{entry['config_file']}"
+        entry["status"] = "ok"
+        entry["param_count"] = len(flat)
+        entry["config_version"] = flat.get("version")
+        entry["_flat"] = flat
+        return entry
+
+    per_host: list[dict] = await _parallel_collect(
+        payload.hosts, worker=_one, parallelism=payload.parallelism,
+        chunk_size=payload.chunk_size, chunk_pause_ms=payload.chunk_pause_ms,
+    )
+    changed = 0
+    errors: list[str] = []
+    for entry in per_host:
+        if entry.get("status") != "ok":
+            errors.append(f"{entry.get('host')}: {entry.get('error') or entry.get('status')}")
+            continue
+        host = entry["host"]
+        flat = entry.pop("_flat", {})
+        data = {"source": "ssh", "host": host, "source_label": entry.get("source_label"),
+                "config_file": entry.get("config_file"), "flat": flat}
+        stored = _store_if_changed(
+            db, cluster_id, component=f"containerd_config:{host}", category="runtime",
+            version=str(entry.get("config_version") or "") or None, data=data, now=now,
+        )
+        entry["stored"] = stored
+        if stored:
+            changed += 1
+    if changed:
+        db.commit()
+    return {
+        "cluster_id": str(cluster_id), "changed": changed, "hosts": per_host,
+        "component_key": "containerd_config:{host}", "errors": errors,
+    }
+
+
 # ── etcdctl config 수집 ─────────────────────────────────────────────────────
 
 class EtcdctlConfigCollectRequest(BaseModel):
@@ -2281,6 +2397,22 @@ async def collect_kubelet_config_stream(
         payload, user,
         lambda sdb, u: collect_kubelet_config(cluster_id, payload, db=sdb, _=u),
         label="kubelet 설정",
+    )
+
+
+@router.post("/{cluster_id}/collect-containerd-config/stream")
+async def collect_containerd_config_stream(
+    cluster_id: UUID,
+    payload: ContainerdConfigCollectRequest,
+    db: Session = Depends(get_db),
+    user: User = Depends(require_operator),
+):
+    """``collect-containerd-config`` 의 SSE 버전."""
+    _require_collect_target(db, cluster_id, payload)
+    return _collect_stream(
+        payload, user,
+        lambda sdb, u: collect_containerd_config(cluster_id, payload, db=sdb, _=u),
+        label="containerd 설정",
     )
 
 

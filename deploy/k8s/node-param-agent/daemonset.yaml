@@ -1,0 +1,100 @@
+# 저장소 원본 — PEP 화면(K8s 허브 ▸ 점검 ▸ OS 파라미터 감시 ▸ 에이전트 설치)이 같은 내용을 클러스터 값으로 채워 렌더한다
+# (backend/app/services/node_param_watch/manifest.py). 둘을 바꿀 땐 같이 바꾼다 — 테스트가 비교한다.
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: node-param-agent
+  namespace: k8s-monitor-agent
+  labels:
+    app.kubernetes.io/name: node-param-agent
+    app.kubernetes.io/part-of: k8s-daily-monitor
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: node-param-agent
+  updateStrategy:
+    type: RollingUpdate
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: node-param-agent
+    spec:
+      automountServiceAccountToken: false
+      hostNetwork: true
+      hostIPC: true
+      dnsPolicy: ClusterFirstWithHostNet
+      tolerations:
+      - operator: Exists
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65534
+        runAsGroup: 65534
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+      - name: agent
+        image: ghcr.io/riverjin839/devops_management-backend:latest
+        imagePullPolicy: IfNotPresent
+        command:
+        - python
+        - -m
+        - app.node_param_agent
+        env:
+        - name: NODE_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: spec.nodeName
+        - name: HOST_IP
+          valueFrom:
+            fieldRef:
+              fieldPath: status.hostIP
+        - name: HOST_ROOT
+          value: /host
+        - name: PYTHONDONTWRITEBYTECODE
+          value: '1'
+        envFrom:
+        - secretRef:
+            name: node-param-agent-config
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          capabilities:
+            drop:
+            - ALL
+        resources:
+          requests:
+            cpu: 10m
+            memory: 48Mi
+          limits:
+            cpu: 100m
+            memory: 128Mi
+        volumeMounts:
+        - name: etc-sysctl-conf
+          mountPath: /host/etc/sysctl.conf
+          readOnly: true
+        - name: etc-sysctl-d
+          mountPath: /host/etc/sysctl.d
+          readOnly: true
+        - name: run-sysctl-d
+          mountPath: /host/run/sysctl.d
+          readOnly: true
+        - name: usr-lib-sysctl-d
+          mountPath: /host/usr/lib/sysctl.d
+          readOnly: true
+      volumes:
+      - name: etc-sysctl-conf
+        hostPath:
+          path: /etc/sysctl.conf
+          type: FileOrCreate
+      - name: etc-sysctl-d
+        hostPath:
+          path: /etc/sysctl.d
+          type: DirectoryOrCreate
+      - name: run-sysctl-d
+        hostPath:
+          path: /run/sysctl.d
+          type: DirectoryOrCreate
+      - name: usr-lib-sysctl-d
+        hostPath:
+          path: /usr/lib/sysctl.d
+          type: DirectoryOrCreate

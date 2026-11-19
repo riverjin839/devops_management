@@ -1,0 +1,238 @@
+// 설정 탭 본문 — 섹션별 카드(접기) 안에 항목 표. 설정 값(편집) · 현재 노드 값 · 반영 방식 · 상태.
+// 바뀐 행은 강조 + "이전 → 새" + 되돌리기, 의존 규칙 결과는 해당 행 아래에 붙인다(제안 적용 버튼 포함).
+// 정상(같음)은 중립색, 버전과 다름·노드 간 다름·값 없음·조건 위반만 상태색(DESIGN_SYSTEM §12.12-3).
+import { useState } from 'react';
+import { ChevronDown, ChevronRight, Info, Lightbulb, RotateCcw, ShieldAlert } from 'lucide-react';
+import { MacCard } from '@/components/ui/MacCard';
+import { StatusBadge } from '@/components/common';
+import type { StatusVariant } from '@/components/common';
+import type {
+  ServiceConfigItemStatus, ServiceConfigRestartScope, ServiceConfigRow, ServiceConfigRuleResult,
+} from '@/types';
+
+const TH = 'text-left px-3 py-2 text-xs font-medium text-muted-foreground';
+const TD = 'px-3 py-2 align-top';
+const INPUT = 'w-full px-2 py-1 rounded-xl border bg-card font-mono text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-primary disabled:bg-secondary disabled:cursor-not-allowed';
+
+const RESTART_LABEL: Record<ServiceConfigRestartScope, string> = {
+  immediate: '즉시 반영',
+  restart_member: 'etcd 멤버 재시작 (1대씩)',
+  restart_service: 'containerd 재시작',
+  rolling_restart_ds: 'cilium 롤링 재시작',
+  reboot: '재부팅',
+};
+
+const STATUS: Record<ServiceConfigItemStatus, { variant: StatusVariant; label: string } | null> = {
+  same: null,
+  differs: { variant: 'warning', label: '버전과 다름' },
+  mixed: { variant: 'warning', label: '노드 간 다름' },
+  unknown: { variant: 'pending', label: '값 없음' },
+};
+
+function CurrentCell({ row, nodeCount }: { row: ServiceConfigRow; nodeCount: number }) {
+  const [open, setOpen] = useState(false);
+  const c = row.current;
+  if (c.groups.length === 0) return <span className="text-xs text-muted-foreground">수집된 값 없음</span>;
+  if (c.uniform) {
+    return (
+      <span>
+        <span className="font-mono text-xs break-all">{c.value}</span>
+        {nodeCount > 1 && <span className="block text-xs text-muted-foreground">노드 {c.nodeCount}개 같음</span>}
+      </span>
+    );
+  }
+  return (
+    <div>
+      <button type="button" onClick={() => setOpen((v) => !v)} aria-expanded={open}
+        className="inline-flex items-center gap-1 text-xs text-foreground hover:underline">
+        {open ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
+        {c.groups.length}가지 값 · 노드 {c.nodeCount}개
+      </button>
+      {open && (
+        <ul className="mt-1 space-y-1">
+          {c.groups.map((g) => (
+            <li key={g.value} className="text-xs">
+              <span className="font-mono break-all">{g.value}</span>
+              <span className="text-muted-foreground"> — {g.nodes.length}개: {g.nodes.slice(0, 8).join(', ')}{g.nodes.length > 8 ? ` 외 ${g.nodes.length - 8}` : ''}</span>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+function ValueInput({ row, value, placeholder, disabled, changed, onChange }: {
+  row: ServiceConfigRow; value: string; placeholder: string; disabled: boolean; changed: boolean;
+  onChange: (v: string) => void;
+}) {
+  const border = changed ? 'border-primary' : 'border-border';
+  const label = `${row.key} 설정 값`;
+  const opts = row.valueType === 'bool' ? ['true', 'false'] : row.valueType === 'enum' ? (row.options ?? []) : null;
+  if (opts) {
+    const list = value && !opts.includes(value) ? [value, ...opts] : opts;
+    return (
+      <select value={value} disabled={disabled} aria-label={label} onChange={(e) => onChange(e.target.value)} className={`${INPUT} ${border}`}>
+        <option value="">{placeholder || '(없음)'}</option>
+        {list.map((o) => <option key={o} value={o}>{o}</option>)}
+      </select>
+    );
+  }
+  const numeric = row.valueType === 'int' || row.valueType === 'size';
+  return (
+    <input value={value} disabled={disabled} aria-label={label} placeholder={placeholder || '(없음)'}
+      inputMode={numeric ? 'numeric' : undefined} onChange={(e) => onChange(e.target.value)} className={`${INPUT} ${border}`} />
+  );
+}
+
+function RuleHints({ hints, onApply, editable }: {
+  hints: ServiceConfigRuleResult[]; onApply: (key: string, value: string) => void; editable: boolean;
+}) {
+  if (hints.length === 0) return null;
+  return (
+    <ul className="mt-1.5 space-y-1">
+      {hints.map((h) => {
+        const Icon = h.kind === 'require' ? ShieldAlert : h.kind === 'recommend' ? Lightbulb : Info;
+        const tone = h.kind === 'require' ? (h.blocking ? 'text-status-critical' : 'text-status-warning')
+          : h.kind === 'recommend' ? 'text-status-warning' : 'text-muted-foreground';
+        const label = h.kind === 'require' ? (h.blocking ? '필수' : '필수(기존 위반)') : h.kind === 'recommend' ? '권장' : '영향';
+        return (
+          <li key={h.ruleId} className={`flex items-start gap-1.5 text-xs ${tone}`}>
+            <Icon className="w-3.5 h-3.5 mt-0.5 shrink-0" aria-hidden />
+            <span className="min-w-0">
+              <span className="font-semibold">{label}</span>
+              {h.suggested != null && <> · 제안 <span className="font-mono">{h.suggested}</span></>}
+              {h.targetService && h.targetService !== h.sourceService && <> · {h.sourceService.toUpperCase()} 의 조건</>}
+              {' — '}{h.reason}
+              {h.fixableHere && editable && h.targetKey && h.suggested != null && (
+                <button type="button" onClick={() => onApply(h.targetKey as string, h.suggested as string)}
+                  className="ml-1.5 px-1.5 py-0.5 rounded-xl border border-border bg-card text-foreground hover:bg-secondary">
+                  제안 적용
+                </button>
+              )}
+            </span>
+          </li>
+        );
+      })}
+    </ul>
+  );
+}
+
+interface Props {
+  sections: { name: string; items: ServiceConfigRow[] }[];
+  /** 그룹 화면이면 값 입력 = 재정의, 비우면 기본 값 상속. */
+  groupMode: boolean;
+  versionLabel: string;
+  nodeCount: number;
+  /** 편집 가능(최신 버전·operator). false 면 입력이 잠긴다. */
+  editable: boolean;
+  lockReason?: string;
+  /** 키 → 편집 전 값 / 현재 초안 값(그룹이면 재정의, 없으면 ''). */
+  initial: Record<string, string>;
+  draft: Record<string, string>;
+  onChange: (key: string, value: string) => void;
+  /** 키별 의존 규칙 결과(대상 키 기준, 영향은 원인 키 기준). */
+  hints: Record<string, ServiceConfigRuleResult[]>;
+}
+
+export function ServiceConfigSections({
+  sections, groupMode, versionLabel, nodeCount, editable, lockReason, initial, draft, onChange, hints,
+}: Props) {
+  const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
+  const toggle = (name: string) => setCollapsed((s) => {
+    const next = new Set(s);
+    if (next.has(name)) next.delete(name); else next.add(name);
+    return next;
+  });
+
+  return (
+    <div className="space-y-3">
+      {sections.map((sec) => {
+        const isOpen = !collapsed.has(sec.name);
+        const flagged = sec.items.filter((r) => r.status !== 'same').length;
+        const edited = sec.items.filter((r) => (draft[r.key] ?? '') !== (initial[r.key] ?? '')).length;
+        return (
+          <MacCard
+            key={sec.name}
+            title={sec.name}
+            titleExtra={(
+              <span className="text-xs text-muted-foreground">
+                {sec.items.length}개{flagged ? ` · 확인 필요 ${flagged}` : ''}{edited ? ` · 편집 ${edited}` : ''}
+              </span>
+            )}
+            actions={(
+              <button type="button" onClick={() => toggle(sec.name)} aria-expanded={isOpen}
+                aria-label={`${sec.name} ${isOpen ? '접기' : '펼치기'}`} title={isOpen ? '접기' : '펼치기'}
+                className="inline-flex items-center justify-center w-7 h-7 rounded-xl border border-border bg-card hover:bg-secondary">
+                {isOpen ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
+              </button>
+            )}
+            bodyPadding="p-0"
+          >
+            {isOpen && (
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm min-w-[860px] table-fixed">
+                  <thead>
+                    <tr className="border-b border-border">
+                      <th className={`${TH} w-[30%]`}>키</th>
+                      <th className={`${TH} w-[24%]`}>{groupMode ? `재정의 값 (${versionLabel})` : `설정 값 (${versionLabel})`}</th>
+                      <th className={`${TH} w-[22%]`}>현재 노드 값</th>
+                      <th className={`${TH} w-[13%]`}>반영 방식</th>
+                      <th className={`${TH} w-[11%]`}>상태</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {sec.items.map((r) => {
+                      const st = STATUS[r.status];
+                      const before = initial[r.key] ?? '';
+                      const now = draft[r.key] ?? '';
+                      const changed = now !== before;
+                      const rowHints = hints[r.key] ?? [];
+                      const placeholder = groupMode ? (r.baseValue ? `상속: ${r.baseValue}` : '상속(값 없음)') : '';
+                      return (
+                        <tr key={r.id} className={`border-b border-border last:border-0 ${changed ? 'bg-primary/5' : ''}`}>
+                          <td className={TD}>
+                            <span className="font-mono text-xs break-all">{r.key}</span>
+                            {r.label && <span className="block text-xs text-muted-foreground">{r.label}{r.unit ? ` (${r.unit})` : ''}</span>}
+                            {r.help && <span className="block text-xs text-muted-foreground mt-0.5">{r.help}</span>}
+                            <RuleHints hints={rowHints} editable={editable} onApply={onChange} />
+                          </td>
+                          <td className={TD}>
+                            <div className="flex items-center gap-1">
+                              <div className="flex-1 min-w-0" title={editable ? undefined : lockReason}>
+                                <ValueInput row={r} value={now} placeholder={placeholder} disabled={!editable}
+                                  changed={changed} onChange={(v) => onChange(r.key, v)} />
+                              </div>
+                              {changed && (
+                                <button type="button" onClick={() => onChange(r.key, before)} title="되돌리기" aria-label={`${r.key} 되돌리기`}
+                                  className="inline-flex items-center justify-center w-7 h-7 shrink-0 rounded-xl border border-border bg-card hover:bg-secondary">
+                                  <RotateCcw className="w-3.5 h-3.5" />
+                                </button>
+                              )}
+                            </div>
+                            {changed ? (
+                              <span className="block text-xs text-primary mt-1 break-all">
+                                {before || (groupMode ? '상속' : '없음')} → {now || (groupMode ? '상속' : '없음')}
+                              </span>
+                            ) : groupMode && r.overrideValue ? (
+                              <span className="block text-xs text-muted-foreground mt-1">기본 {r.baseValue ?? '없음'} 을(를) 재정의</span>
+                            ) : r.defaultValue ? (
+                              <span className="block text-xs text-muted-foreground mt-1">커널·제품 기본값 {r.defaultValue}</span>
+                            ) : null}
+                          </td>
+                          <td className={TD}><CurrentCell row={r} nodeCount={nodeCount} /></td>
+                          <td className={`${TD} text-xs text-muted-foreground`}>{RESTART_LABEL[r.restartScope] ?? r.restartScope}</td>
+                          <td className={TD}>{st ? <StatusBadge variant={st.variant} label={st.label} /> : <span className="text-xs text-muted-foreground">일치</span>}</td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </MacCard>
+        );
+      })}
+    </div>
+  );
+}

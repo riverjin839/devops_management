@@ -223,6 +223,8 @@ function AppShell() {
                   배치잡 서브탭에 바로 떨어지도록 쿼리로 탭/서브뷰를 넘긴다(HomePage 가 읽고 지움, D-129). */}
               <Route path="/batch-jobs" element={<Navigate to="/?tab=platform&view=batch" replace />} />
               <Route path="/kernel-params" element={<RedirectToHub view="kernel-params" />} />
+              <Route path="/os-param-watch" element={<RedirectToHub view="os-param-watch" />} />
+              <Route path="/k8s-services" element={<RedirectToHub view="services" />} />
               <Route path="/mc" element={<McClientPage />} />
               <Route path="/isilon-nfs" element={<IsilonNfsPage />} />
               <Route path="/infra-topology" element={<InfraTopologyPage />} />

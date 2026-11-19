@@ -6480,3 +6480,334 @@ export interface DcServerImportResult extends DcImportResult {
   columns: { column: string; field: string | null; label: string | null }[];
   createdLocations: string[];
 }
+
+// ── 노드 OS 파라미터 감시 (`/k8s/:clusterId/os-param-watch`) ───────────────────
+export type NodeParamOperator = 'any' | 'eq' | 'ne' | 'gte' | 'lte' | 'in';
+export type NodeParamSeverity = 'info' | 'warning' | 'critical';
+
+export interface NodeParamRule {
+  id: string;
+  clusterId: string | null;
+  clusterName: string | null;
+  param: string;
+  operator: NodeParamOperator;
+  expected: string | null;
+  nodePattern: string | null;
+  severity: NodeParamSeverity;
+  alertOnChange: boolean;
+  checkPersistent: boolean;
+  description: string | null;
+  enabled: boolean;
+  createdBy: string | null;
+  updatedAt: string | null;
+}
+export type NodeParamRuleInput = Omit<NodeParamRule, 'id' | 'clusterName' | 'createdBy' | 'updatedAt'>;
+
+export interface NodeParamRuleList {
+  items: NodeParamRule[];
+  operators: { value: NodeParamOperator; label: string }[];
+}
+
+export interface NodeParamStatus {
+  param: string;
+  runtime: string | null;
+  persistent: string | null;
+  persistentSource: string | null;
+  severity: NodeParamSeverity;
+  operator: NodeParamOperator;
+  expected: string | null;
+  ok: boolean;
+  reason: string;
+  persistedOk: boolean;
+  reported: boolean;
+  ruleIds: string[];
+}
+
+/** reporting = 정상 보고 · late = 주기의 3배 넘게 늦음 · offline = 무응답 알람 기준 초과. */
+export type NodeParamAgentState = 'reporting' | 'late' | 'offline' | 'unknown';
+
+export interface NodeParamNode {
+  agentId: string;
+  node: string;
+  hostIp: string | null;
+  agentVersion: string | null;
+  state: NodeParamAgentState;
+  lastSeenAt: string | null;
+  lastSeenAgeSec: number | null;
+  lastChangeAt: string | null;
+  lastError: string | null;
+  snapshotAt: string | null;
+  violationCount: number;
+  mismatchCount: number;
+  params: NodeParamStatus[];
+}
+
+export interface NodeParamClusterState {
+  clusterId: string;
+  intervalSec: number;
+  offlineMinutes: number;
+  ruleCount: number;
+  nodes: NodeParamNode[];
+}
+
+export interface NodeParamChange {
+  id: string;
+  node: string;
+  param: string;
+  oldValue: string | null;
+  newValue: string | null;
+  changeType: 'changed' | 'added' | 'removed';
+  /** agent = 노드 에이전트 감지 · ssh = SSH 수집 비교(OS 파라미터 변경 점검) */
+  source: string;
+  lastUnchangedAt: string | null;
+  detectedAt: string | null;
+}
+
+export interface NodeParamSettings {
+  intervalSec: number;
+  offlineMinutes: number;
+  agentImage: string;
+  agentNamespace: string;
+  ingestBaseUrl: string;
+  tlsVerify: boolean;
+  tokenConfigured: boolean;
+}
+
+export interface NodeParamManifest {
+  yaml: string;
+  apiBaseUrl: string;
+  apiBaseUrlFromSettings: boolean;
+  tokenConfigured: boolean;
+}
+
+// ── containerd 설정 수집 (`POST /clusters/{id}/collect-containerd-config`) ─────────
+export interface ContainerdConfigCollectRequest {
+  hosts: string[];
+  port?: number;
+  username?: string;
+  password?: string;
+  privateKey?: string;
+  useSudo?: boolean;
+  connectTimeout?: number;
+  containerdPath?: string;
+  configPaths?: string[];
+  parallelism?: number;
+}
+export interface ContainerdConfigPerHost {
+  host: string;
+  status: string;
+  sourceLabel?: string | null;
+  configFile?: string | null;
+  paramCount?: number | null;
+  configVersion?: string | null;
+  stored?: boolean;
+  error?: string | null;
+  rawStdout?: string | null;
+  rawStderr?: string | null;
+  exitCode?: number | null;
+}
+export interface ContainerdConfigCollectResponse {
+  clusterId: string;
+  changed: number;
+  hosts: ContainerdConfigPerHost[];
+  componentKey: string;
+  errors: string[];
+}
+
+// ── 서비스 구성 (`/k8s/:clusterId/services`) ─────────────────────────────────
+/** 현재 값을 다시 읽는 수집 종류 — 화면의 '현재 값 수집' 이 여는 모달. */
+export type ServiceConfigCollectKind = 'versions' | 'etcd-systemd' | 'containerd-config' | 'kernel-params';
+export type ServiceConfigRestartScope = 'immediate' | 'restart_member' | 'restart_service' | 'rolling_restart_ds' | 'reboot';
+export type ServiceConfigItemStatus = 'same' | 'differs' | 'mixed' | 'unknown';
+
+export interface ServiceConfigServiceDef {
+  key: string;
+  label: string;
+  icon: string;
+  description: string;
+  collectKinds: ServiceConfigCollectKind[];
+  /** 노드 그룹 재정의를 쓰는 서비스인가(cilium 처럼 클러스터 값이 하나면 false). */
+  groupSupported: boolean;
+  itemCount?: number;
+}
+export interface ServiceConfigVersionInfo {
+  id: string;
+  versionNo: number;
+  status: 'imported' | 'saved' | 'applied' | 'superseded';
+  groupId: string | null;
+  note: string | null;
+  createdBy: string | null;
+  createdAt: string | null;
+  appliedAt: string | null;
+  valueCount: number;
+}
+export interface ServiceConfigCurrent {
+  uniform: boolean;
+  value: string | null;
+  groups: { value: string; nodes: string[] }[];
+  nodeCount: number;
+}
+export interface ServiceConfigRow {
+  id: string;
+  key: string;
+  label: string | null;
+  help: string | null;
+  valueType: string;
+  unit: string | null;
+  options: string[] | null;
+  defaultValue: string | null;
+  restartScope: ServiceConfigRestartScope;
+  /** 선택 범위의 실효 값(그룹이면 재정의 ?? 기본). */
+  versionValue: string | null;
+  /** 기본 그룹 최신 값 — 그룹 화면의 '상속' 표시. */
+  baseValue: string | null;
+  /** 그룹 재정의 값(그룹 화면만). */
+  overrideValue: string | null;
+  inherited: boolean;
+  current: ServiceConfigCurrent;
+  status: ServiceConfigItemStatus;
+}
+export interface ServiceConfigGroupInfo {
+  id: string;
+  name: string;
+  nodePattern: string;
+  description: string | null;
+  sortOrder: number;
+  nodes: string[];
+}
+export interface ServiceConfigPending {
+  versionNo: number;
+  baselineVersionNo: number | null;
+  count: number;
+  note: string | null;
+  createdBy: string | null;
+  createdAt: string | null;
+}
+export interface ServiceConfigView {
+  service: ServiceConfigServiceDef;
+  group: { id: string | null; name: string; nodePattern: string | null };
+  groups: ServiceConfigGroupInfo[];
+  defaultNodes: string[];
+  allNodes: string[];
+  defaultVersionNo: number | null;
+  pending: ServiceConfigPending | null;
+  versions: ServiceConfigVersionInfo[];
+  version: ServiceConfigVersionInfo | null;
+  sources: { component: string; node: string; source: string; collectedAt: string | null }[];
+  nodes: string[];
+  counts: { items: number; same: number; differs: number; mixed: number; unknown: number };
+  sections: { name: string; items: ServiceConfigRow[] }[];
+}
+export interface ServiceConfigImportResult {
+  version: ServiceConfigVersionInfo;
+  imported: number;
+  total: number;
+  mixed: string[];
+  nodes: string[];
+}
+
+/** 의존 규칙 평가 결과 1건 — recommend(제안) · require(조건) · impact(안내). */
+export interface ServiceConfigRuleResult {
+  ruleId: string;
+  ruleKey: string;
+  kind: 'recommend' | 'require' | 'impact';
+  ruleType: string;
+  sourceService: string;
+  sourceKey: string;
+  sourceValue: string | null;
+  targetService: string | null;
+  targetKey: string | null;
+  targetValue: string | null;
+  ok: boolean;
+  suggested: string | null;
+  reason: string | null;
+  /** 이번 편집과 관련된 필수 조건 위반 — 저장 불가. */
+  blocking: boolean;
+  touched: boolean;
+  /** 이 화면에서 제안값으로 바로 고칠 수 있는가. */
+  fixableHere: boolean;
+}
+export interface ServiceConfigEvaluation {
+  changed: string[];
+  results: ServiceConfigRuleResult[];
+  blocking: number;
+}
+export interface ServiceConfigDiffRow {
+  key: string;
+  a: string | null;
+  b: string | null;
+  change: 'changed' | 'added' | 'removed';
+  section?: string | null;
+  label?: string | null;
+}
+export interface ServiceConfigCompare {
+  a: ServiceConfigVersionInfo;
+  b: ServiceConfigVersionInfo;
+  rows: ServiceConfigDiffRow[];
+}
+export interface ServiceConfigSaveResult {
+  version: ServiceConfigVersionInfo;
+  changes: ServiceConfigDiffRow[];
+}
+
+// ── 서비스 구성 적용 ─────────────────────────────────────────────────────────
+export interface ServiceConfigApplyPlan {
+  service: ServiceConfigServiceDef;
+  supported: boolean;
+  group: { id: string | null; name: string };
+  versionNo: number;
+  versionStatus: string;
+  baselineVersionNo: number | null;
+  targetMode: 'scope' | 'nodes';
+  scopeNodes: string[];
+  targets: { node: string; host: string }[];
+  changes: ServiceConfigDiffRow[];
+  /** 적용 때 나갈 명령(비밀값 없음) — 대화상자에 그대로 보인다. */
+  commands: string[];
+}
+export interface ServiceConfigApplyNodeResult {
+  node: string;
+  host: string;
+  status: 'ok' | 'failed' | 'skipped';
+  before: Record<string, string | null>;
+  after: Record<string, string | null>;
+  error: string | null;
+  durationMs: number;
+}
+export interface ServiceConfigApplyRun {
+  id: string;
+  service: string;
+  groupId: string | null;
+  versionNo: number;
+  status: 'running' | 'succeeded' | 'partial' | 'failed' | 'stopped';
+  targetMode: 'scope' | 'nodes';
+  targets: { node: string; host: string }[];
+  options: Record<string, unknown>;
+  changes: ServiceConfigDiffRow[];
+  nodeResults: ServiceConfigApplyNodeResult[];
+  stopRequested: boolean;
+  startedBy: string | null;
+  startedAt: string | null;
+  finishedAt: string | null;
+  /** [ts, level, message] — 상세 조회에서만. */
+  logLines?: [string, string, string][];
+}
+export interface ServiceConfigApplySettings {
+  sysctlFile: string;
+  ciliumNamespace: string;
+  ciliumConfigmap: string;
+  ciliumDaemonset: string;
+  rolloutTimeoutSec: number;
+  etcdMode: 'auto' | 'static_pod' | 'systemd';
+  etcdManifest: string;
+  etcdEnvFile: string;
+  etcdService: string;
+  etcdBackupDir: string;
+  etcdHealthCmd: string;
+  etcdHealthExpect: string;
+  etcdHealthTimeoutSec: number;
+  containerdConfig: string;
+  containerdService: string;
+  containerdRestartCmd: string;
+  nodeReadyTimeoutSec: number;
+}

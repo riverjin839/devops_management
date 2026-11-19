@@ -1996,7 +1996,7 @@ import type {
 /** 병목 진단 실행(SSE) — fetch+reader 로 소비(`lib/sse.ts` postSse). 본문은 snake_case. */
 export const podBottleneckStreamUrl = '/api/v1/pod-bottleneck/run/stream';
 /** versions SSH 수집의 SSE 버전(D-135) — 호스트가 끝날 때마다 log·step, 마지막에 동기 응답과 같은 result. */
-export type VersionsCollectKind = 'etcd-systemd' | 'kernel-params' | 'kubelet-config' | 'kubeadm-certs' | 'node-nics';
+export type VersionsCollectKind = 'etcd-systemd' | 'kernel-params' | 'kubelet-config' | 'kubeadm-certs' | 'node-nics' | 'containerd-config';
 export const versionsCollectStreamUrl = (clusterId: string, kind: VersionsCollectKind) =>
   `/api/v1/clusters/${clusterId}/collect-${kind}/stream`;
 
@@ -2707,6 +2707,77 @@ export const dailyReportApi = {
     api.put<import('@/types').NsOwnersSettings>('/daily-report/owners', body),
   /** SSE — NS 담당자 라벨 다시 읽기(`postSse`). */
   ownersRefreshStreamUrl: '/api/v1/daily-report/owners/refresh/stream',
+};
+
+// ── 서비스 구성 — 설정 목록·현재 값(수집 스냅샷)·설정 버전(JWT). 노드 실행 없음 ──
+const toEntries = (values: Record<string, string | null>) =>
+  Object.entries(values).map(([key, value]) => ({ key, value }));
+export const serviceConfigApi = {
+  services: () => api.get<{ items: import('@/types').ServiceConfigServiceDef[] }>('/service-config/services'),
+  view: (clusterId: string, service: string, version?: number, groupId?: string) =>
+    api.get<import('@/types').ServiceConfigView>(`/service-config/clusters/${clusterId}/${service}`,
+      { params: { ...(version ? { version } : {}), ...(groupId ? { group_id: groupId } : {}) } }),
+  importCurrent: (clusterId: string, service: string) =>
+    api.post<import('@/types').ServiceConfigImportResult>(`/service-config/clusters/${clusterId}/${service}/import`),
+  /** 편집 중 초안 → 의존 규칙 결과(저장 안 함, 읽기 권한). */
+  // 설정 값은 [{key, value}] 목록으로 보낸다 — 요청 인터셉터가 객체 키를 snake_case 로 바꿔 `SystemdCgroup` 같은 키가 망가지므로.
+  evaluate: (clusterId: string, service: string, groupId: string | null, values: Record<string, string | null>) =>
+    api.post<import('@/types').ServiceConfigEvaluation>('/service-config/evaluate',
+      { clusterId, service, groupId, values: toEntries(values) }),
+  saveVersion: (clusterId: string, service: string,
+    body: { baseVersionNo: number; groupId: string | null; values: Record<string, string | null>; note?: string }) =>
+    api.post<import('@/types').ServiceConfigSaveResult>(`/service-config/clusters/${clusterId}/${service}/versions`,
+      { ...body, values: toEntries(body.values) }),
+  compare: (clusterId: string, service: string, a: number, b: number, groupId: string | null) =>
+    api.get<import('@/types').ServiceConfigCompare>(`/service-config/clusters/${clusterId}/${service}/versions/compare`,
+      { params: { a, b, ...(groupId ? { group_id: groupId } : {}) } }),
+  revert: (clusterId: string, service: string, versionNo: number, groupId: string | null) =>
+    api.post<import('@/types').ServiceConfigSaveResult>(
+      `/service-config/clusters/${clusterId}/${service}/versions/${versionNo}/revert`, undefined,
+      { params: groupId ? { group_id: groupId } : {} }),
+  createGroup: (clusterId: string, service: string, body: { name: string; nodePattern: string; description?: string | null }) =>
+    api.post(`/service-config/clusters/${clusterId}/${service}/groups`, body),
+  updateGroup: (clusterId: string, service: string, groupId: string,
+    body: { name: string; nodePattern: string; description?: string | null }) =>
+    api.put(`/service-config/clusters/${clusterId}/${service}/groups/${groupId}`, body),
+  deleteGroup: (clusterId: string, service: string, groupId: string) =>
+    api.delete(`/service-config/clusters/${clusterId}/${service}/groups/${groupId}`),
+  applyPlan: (clusterId: string, service: string, version: number | null, groupId: string | null) =>
+    api.get<import('@/types').ServiceConfigApplyPlan>(`/service-config/clusters/${clusterId}/${service}/apply/plan`,
+      { params: { ...(version ? { version } : {}), ...(groupId ? { group_id: groupId } : {}) } }),
+  /** 적용 SSE — `postSse` 로 부른다(본문은 snake_case 그대로, 결과는 camelizeKeys). */
+  applyStreamUrl: (clusterId: string, service: string) => `/api/v1/service-config/clusters/${clusterId}/${service}/apply/stream`,
+  applyRuns: (clusterId: string, service: string) =>
+    api.get<{ items: import('@/types').ServiceConfigApplyRun[] }>(`/service-config/clusters/${clusterId}/${service}/apply-runs`),
+  applyRun: (clusterId: string, service: string, runId: string) =>
+    api.get<import('@/types').ServiceConfigApplyRun>(`/service-config/clusters/${clusterId}/${service}/apply-runs/${runId}`),
+  stopApplyRun: (clusterId: string, service: string, runId: string) =>
+    api.post(`/service-config/clusters/${clusterId}/${service}/apply-runs/${runId}/stop`),
+  settings: () => api.get<import('@/types').ServiceConfigApplySettings>('/service-config/settings'),
+  updateSettings: (body: Partial<import('@/types').ServiceConfigApplySettings>) =>
+    api.put<import('@/types').ServiceConfigApplySettings>('/service-config/settings', body),
+};
+
+// ── 노드 OS 파라미터 감시 — 노드 에이전트(DaemonSet) 보고 기반. 규칙·상태·변경 이력·설치 매니페스트(JWT) ──
+export const nodeParamWatchApi = {
+  rules: (clusterId?: string) =>
+    api.get<import('@/types').NodeParamRuleList>('/node-params/rules', { params: clusterId ? { cluster_id: clusterId } : {} }),
+  createRule: (body: import('@/types').NodeParamRuleInput) =>
+    api.post<import('@/types').NodeParamRule>('/node-params/rules', body),
+  updateRule: (id: string, body: import('@/types').NodeParamRuleInput) =>
+    api.put<import('@/types').NodeParamRule>(`/node-params/rules/${id}`, body),
+  deleteRule: (id: string) => api.delete(`/node-params/rules/${id}`),
+  nodes: (clusterId: string) =>
+    api.get<import('@/types').NodeParamClusterState>(`/node-params/clusters/${clusterId}/nodes`),
+  changes: (clusterId: string, params: { node?: string; param?: string; limit?: number } = {}) =>
+    api.get<{ items: import('@/types').NodeParamChange[] }>(`/node-params/clusters/${clusterId}/changes`, { params }),
+  deleteAgent: (clusterId: string, agentId: string) =>
+    api.delete(`/node-params/clusters/${clusterId}/agents/${agentId}`),
+  manifest: (clusterId: string) =>
+    api.get<import('@/types').NodeParamManifest>(`/node-params/clusters/${clusterId}/manifest`),
+  settings: () => api.get<import('@/types').NodeParamSettings>('/node-params/settings'),
+  updateSettings: (body: Partial<Omit<import('@/types').NodeParamSettings, 'tokenConfigured'>>) =>
+    api.put<import('@/types').NodeParamSettings>('/node-params/settings', body),
 };
 
 // ── 외부 서비스 — 조회는 비인증 공개 API(저장 스냅샷), 수집(SSE)·설정은 JWT ──────────────────
