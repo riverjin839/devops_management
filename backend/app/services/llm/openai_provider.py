@@ -20,10 +20,10 @@ logger = logging.getLogger(__name__)
 
 class OpenAICompatProvider(BaseLLMProvider):
     def _headers(self) -> dict:
-        headers = {"Content-Type": "application/json"}
-        if self.api_key:
-            headers["Authorization"] = f"Bearer {self.api_key}"
-        return headers
+        return self.profile.request_headers(self.api_key, json_body=True)
+
+    def _client(self, timeout: float) -> httpx.AsyncClient:
+        return httpx.AsyncClient(**self.profile.client_kwargs(timeout))
 
     async def chat(
         self,
@@ -71,9 +71,9 @@ class OpenAICompatProvider(BaseLLMProvider):
                 payload["max_tokens"] = options["max_tokens"]
         start = datetime.utcnow()
         try:
-            async with httpx.AsyncClient(timeout=p.timeout_seconds) as client:
+            async with self._client(p.timeout_seconds) as client:
                 resp = await client.post(
-                    f"{p.base_url}/v1/chat/completions",
+                    p.api_url("/chat/completions"),
                     json=payload,
                     headers=self._headers(),
                 )
@@ -136,9 +136,9 @@ class OpenAICompatProvider(BaseLLMProvider):
         started = False
         model_seen = p.model
         try:
-            async with httpx.AsyncClient(timeout=p.timeout_seconds) as client:
+            async with self._client(p.timeout_seconds) as client:
                 async with client.stream(
-                    "POST", f"{p.base_url}/v1/chat/completions",
+                    "POST", p.api_url("/chat/completions"),
                     json=payload, headers=self._headers(),
                 ) as resp:
                     resp.raise_for_status()
@@ -184,9 +184,9 @@ class OpenAICompatProvider(BaseLLMProvider):
             return None
         p = self.profile
         try:
-            async with httpx.AsyncClient(timeout=p.timeout_seconds) as client:
+            async with self._client(p.timeout_seconds) as client:
                 resp = await client.post(
-                    f"{p.base_url}/v1/embeddings",
+                    p.api_url("/embeddings"),
                     json={"model": model or p.model, "input": text},
                     headers=self._headers(),
                 )
@@ -203,8 +203,8 @@ class OpenAICompatProvider(BaseLLMProvider):
         p = self.profile
         start = datetime.utcnow()
         try:
-            async with httpx.AsyncClient(timeout=5) as client:
-                resp = await client.get(f"{p.base_url}/v1/models", headers=self._headers())
+            async with self._client(5) as client:
+                resp = await client.get(p.api_url("/models"), headers=self._headers())
                 if resp.status_code == 200:
                     return {"status": "online", "model": p.model, "detail": "",
                             "latency_ms": _elapsed_ms(start)}
@@ -220,16 +220,27 @@ class OpenAICompatProvider(BaseLLMProvider):
                     "latency_ms": _elapsed_ms(start)}
 
     async def list_models(self) -> list[str]:
+        models, _ = await self.list_models_detailed()
+        return models
+
+    async def list_models_detailed(self) -> tuple[list[str], Optional[str]]:
+        """``GET {api}/models`` — 실패 사유를 버리지 않고 함께 돌려준다(화면 표시용)."""
+        url = self.profile.api_url("/models")
         try:
-            async with httpx.AsyncClient(timeout=5) as client:
-                resp = await client.get(f"{self.profile.base_url}/v1/models",
-                                        headers=self._headers())
-                if resp.status_code == 200:
-                    data = resp.json().get("data") or []
-                    return [m.get("id", "") for m in data if isinstance(m, dict)]
-                return []
-        except Exception:  # noqa: BLE001
-            return []
+            async with self._client(10) as client:
+                resp = await client.get(url, headers=self._headers())
+            if resp.status_code != 200:
+                server = resp.headers.get("server", "")
+                via = f" (server: {server})" if server else ""
+                return [], f"GET {url} → HTTP {resp.status_code}{via}: {resp.text.strip()[:160]}"
+            try:
+                data = resp.json().get("data") or []
+            except ValueError:
+                return [], f"GET {url} → JSON 이 아닌 응답: {resp.text.strip()[:160]}"
+            models = [m.get("id", "") for m in data if isinstance(m, dict) and m.get("id")]
+            return models, None if models else f"GET {url} → 모델 목록이 비어 있다."
+        except Exception as exc:  # noqa: BLE001
+            return [], f"GET {url} 실패: {type(exc).__name__}: {str(exc)[:200]}"
 
     def _fail(self, status: str, error: str, start: datetime) -> LLMResult:
         return LLMResult(status=status, profile=self.profile.name,

@@ -189,6 +189,7 @@ def merge_llm_settings(stored: Optional[dict]) -> dict:
                 "model": prof.model, "api_key_ref": prof.api_key_ref,
                 "timeout_seconds": prof.timeout_seconds,
                 "max_concurrency": prof.max_concurrency, "enabled": prof.enabled,
+                **prof.advanced_dict(),
             })
         if cleaned:
             out["profiles"] = cleaned
@@ -489,6 +490,13 @@ class LLMService:
         if profile is None:
             return []
         return await self.build_provider(profile).list_models()
+
+    async def list_profile_models_detailed(self, name: str, db=None) -> tuple[list[str], Optional[str]]:
+        """모델 목록 + 실패 사유 — 프로필 편집 화면의 '목록 조회' 가 사유를 보여 주도록."""
+        profile = self.get_profile(name, self.resolve_settings(db))
+        if profile is None:
+            return [], f"프로필 '{name}' 이 없다."
+        return await self.build_provider(profile).list_models_detailed()
 
     def first_ollama_profile(self, db=None) -> Optional[LLMProfile]:
         """Ollama 전용 기능(pull-model 등)을 위임할 첫 enabled ollama 프로필."""

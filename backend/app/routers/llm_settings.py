@@ -41,6 +41,16 @@ class LlmProfileSchema(BaseModel):
     timeout_seconds: int = Field(default=120, ge=5, le=600)
     max_concurrency: int = Field(default=2, ge=1, le=32)
     enabled: bool = True
+    # 게이트웨이(HTTPRoute/Ingress) 뒤 모델 서버용 고급 옵션 — 기본값은 기존 동작.
+    api_path: str = Field(default="/v1", max_length=128)
+    tls_verify: bool = True
+    ca_bundle: str = Field(default="", max_length=512)
+    use_env_proxy: bool = True
+    host_header: str = Field(default="", max_length=253)
+    auth_header: str = Field(default="Authorization", max_length=64)
+    auth_scheme: str = Field(default="Bearer", max_length=32)
+    # [{"name": "x-model", "value": "qwen3"}] — 비밀 아닌 값만(키는 api_key_ref).
+    extra_headers: list[dict[str, str]] = Field(default_factory=list)
 
 
 class LlmRouteSchema(BaseModel):
@@ -154,11 +164,14 @@ async def llm_health(db: Session = Depends(get_db)):
 
 @router.get("/profiles/{name}/models")
 async def llm_profile_models(name: str, db: Session = Depends(get_db)):
-    """프로필 엔드포인트의 모델 목록 (ollama: /api/tags, openai_compat: /v1/models)."""
+    """프로필 엔드포인트의 모델 목록 (ollama: /api/tags, openai_compat: {api_path}/models).
+
+    실패 사유(``error``)를 함께 돌려 화면이 "오프라인?" 대신 실제 원인(HTTP 404·TLS·프록시)을 보여 준다.
+    """
     if llm_service.get_profile(name, llm_service.resolve_settings(db)) is None:
         raise HTTPException(status_code=404, detail=f"프로필 '{name}' 이 없습니다.")
-    models = await llm_service.list_profile_models(name, db)
-    return {"data": models}
+    models, error = await llm_service.list_profile_models_detailed(name, db)
+    return {"data": models, "error": error}
 
 
 @router.post("/test")

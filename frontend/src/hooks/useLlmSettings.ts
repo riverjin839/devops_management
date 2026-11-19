@@ -46,7 +46,7 @@ export function useLlmUsage() {
 export function useLlmProfileModels(profile: string, enabled: boolean) {
   return useQuery({
     queryKey: llmKeys.models(profile),
-    queryFn: async () => (await llmApi.profileModels(profile)).data.data,
+    queryFn: async () => (await llmApi.profileModels(profile)).data,
     enabled: enabled && !!profile,
     staleTime: 60_000,
   });

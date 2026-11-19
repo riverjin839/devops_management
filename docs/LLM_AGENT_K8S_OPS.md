@@ -112,7 +112,28 @@ Settings → AI/LLM → 프로필 추가 — 모델 하나당 프로필 하나.
 - API 키가 필요하면 **자격증명(`llm_credentials`, 암호화 저장)** 에 넣고 프로필은 `credential:<이름>` 으로 참조한다.
   키를 프로필 값·ConfigMap 에 평문으로 넣지 않는다.
 - 동시성은 프로필별 세마포어다. GPU KV 캐시 여유에 맞춰 잡고, 서빙 측 대기열 지표(§6)를 보며 조정한다.
-- 저장 후 같은 화면의 **연결 진단**(health)으로 4개 프로필이 모두 온라인인지 확인한다.
+- 저장 후 같은 화면의 **연결 진단**으로 4개 프로필이 모두 응답하는지 확인한다. HTTPRoute 경유라면 §2.1.1.
+
+### 2.1.1 HTTPRoute 경유 연결 — DNS·포트는 되는데 진단이 막힐 때
+
+다른 클러스터(GPU K8s)의 모델을 Gateway API HTTPRoute 로 붙이면 DNS·포트 연결은 Gateway 까지만
+확인해 준다. 그 뒤 HTTP 단계에서 막히는 원인과 **프로필 편집 → 고급 — 게이트웨이(HTTPRoute·Ingress) 연결**
+에서 고칠 위치:
+
+| 진단 로그 증상 | 원인 | 화면에서 고칠 곳 |
+|---|---|---|
+| `설정 확인` 경고 "모델명이 비어 있다" | 모델 목록 조회가 막혀 모델명을 못 고름 | 진단이 서버 목록에서 찾은 모델로 응답을 시험한다 → **모델명 저장** 버튼. 목록도 못 받으면 모델 id 를 직접 입력 |
+| `모델 확인` HTTP 404 · `server: envoy`/`istio-envoy` | HTTPRoute `hostnames` 불일치(IP·다른 이름으로 호출) | **Host 헤더** 에 HTTPRoute 호스트명 |
+| 〃 · base_url 에 `/<모델>` 경로 | 경로 prefix 가 모델 서버까지 전달됨 | HTTPRoute 에 `URLRewrite ReplacePrefixMatch: /` 추가(클러스터 쪽) |
+| 호출 URL 이 `/v1/v1/...` 로 보였던 경우 | base_url 에 `/v1` 포함 | 이제 자동으로 중복을 막는다. 게이트웨이가 `/v1` 을 붙이면 **API 경로** 를 비운다 |
+| `CERTIFICATE_VERIFY_FAILED` | Gateway 인증서가 사내 CA | **CA 번들 경로**(backend·celery 파드에 마운트한 CA 파일), 임시로 **TLS 인증서 검증** 끄기 |
+| `프록시 경로` 경고 · 프록시 4xx/5xx·407 | 파드의 `HTTP(S)_PROXY` 로 나감(포트 확인은 직접 연결) | **환경 프록시 사용** 끄기 또는 `NO_PROXY` 에 게이트웨이 도메인 추가 |
+| HTTP 401/403 | 키 헤더 형태 불일치 | **인증 헤더 이름/스킴**(예: `api-key` + 스킴 비움) |
+| HTTP 502/503/504 | backendRefs Service·포트, 모델 파드 미Ready, ReferenceGrant | `kubectl get httproute -A -o yaml` 의 `status.parents[].conditions` |
+| 모델을 헤더로 고르는 HTTPRoute | `matches.headers` | **추가 헤더**(비밀 아닌 값만) |
+
+진단 로그 첫머리에 **실제 호출 URL**(`GET …/v1/models`, `POST …/v1/chat/completions`)과 HTTP 옵션이 찍히고,
+실패 단계마다 응답 코드·`server` 헤더·본문 앞부분이 남는다. 목록 조회 버튼도 실패 사유를 그대로 보여 준다.
 
 ### 2.2 용도별 라우팅
 
