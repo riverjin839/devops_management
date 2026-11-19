@@ -5,7 +5,11 @@ import {
   Plus, Leaf, Contrast, Brush, Paintbrush, Frame, Newspaper, Shapes, Diamond, Shell, AppWindow, CircleUserRound, Drama, Music, Guitar,
   Moon, Sun, Monitor, LogOut, User, Languages,
   KeyRound, Home, MessageSquare, Bot, HelpCircle, Search, ScrollText, Bug, UserCog, Palette, Download, Upload,
+  PanelLeft, Flashlight, Spline,
 } from 'lucide-react';
+import { useNavStyleStore, NAV_STYLES, type NavStyle } from '@/stores/navStyleStore';
+import { RailIndicator } from './RailIndicator';
+import { useRailIndicator } from './useRailIndicator';
 import { useUiSettings } from '@/hooks/useUiSettings';
 import { useNavCatalog } from '@/hooks/useNavCatalog';
 import { useInstalledAppsActions } from '@/hooks/useHomePrefs';
@@ -66,6 +70,18 @@ function makeAccentSwatchIcon(accent: Accent): ComponentType<{ className?: strin
     );
   };
 }
+// 네비게이션 스타일(레일 활성 표시) 아이콘.
+const NAV_STYLE_ICON: Record<NavStyle, ComponentType<{ className?: string }>> = {
+  classic: PanelLeft,
+  spotlight: Flashlight,
+  notch: Spline,
+};
+// 활성 아이콘 색·효과 — classic 은 배경+막대(버튼 안), 나머지는 레일 표시자(RailIndicator)가 위치를 맡는다.
+const ACTIVE_CLASS: Record<NavStyle, string> = {
+  classic: 'bg-primary/15 text-primary',
+  spotlight: 'text-foreground nav-active-spotlight',
+  notch: 'text-primary nav-active-notch',
+};
 const ACCENT_SWATCH_ICON = Object.fromEntries(
   ACCENTS.map((a) => [a, makeAccentSwatchIcon(a)]),
 ) as Record<Accent, ComponentType<{ className?: string }>>;
@@ -95,9 +111,13 @@ interface RailIconButtonProps {
   onHoverOpen?: (rect: DOMRect) => void;
   /** 위 hover-open 과 짝 — 마우스가 벗어나면 지연 후 닫는다(패널로 이동 중이면 flyout 쪽에서 취소). */
   onHoverClose?: () => void;
+  /** 페이지로 이동하는 레일 메뉴 아이콘 — 활성 표시자가 따라가는 범위(`data-rail-item`)에 들어간다. */
+  railItem?: boolean;
+  /** 활성 표시 스타일(사용자 메뉴 ▸ 네비게이션 스타일). 기본 classic. */
+  navStyle?: NavStyle;
 }
 
-function RailIconButton({ label, Icon, active, highlighted, onClick, suppressTooltip, hasFlyout, onHoverOpen, onHoverClose }: RailIconButtonProps) {
+function RailIconButton({ label, Icon, active, highlighted, onClick, suppressTooltip, hasFlyout, onHoverOpen, onHoverClose, railItem, navStyle = 'classic' }: RailIconButtonProps) {
   const buttonRef = useRef<HTMLButtonElement | null>(null);
   // top / left 는 viewport 기준 (position: fixed). 툴팁은 부모 overflow:auto 의 클리핑을
   // 회피하기 위해 document.body 에 portal 로 렌더한다.
@@ -136,6 +156,8 @@ function RailIconButton({ label, Icon, active, highlighted, onClick, suppressToo
         aria-label={label}
         aria-haspopup={hasFlyout ? 'menu' : undefined}
         aria-expanded={hasFlyout ? !!highlighted : undefined}
+        aria-current={active ? 'page' : undefined}
+        data-rail-item={railItem ? '' : undefined}
         onClick={handleClick}
         onMouseEnter={handleMouseEnter}
         onMouseLeave={handleMouseLeave}
@@ -143,13 +165,13 @@ function RailIconButton({ label, Icon, active, highlighted, onClick, suppressToo
         onBlur={hideTooltip}
         className={`relative flex items-center justify-center w-10 h-10 rounded-md transition-colors ${
           active
-            ? 'bg-primary/15 text-primary'
+            ? ACTIVE_CLASS[navStyle]
             : highlighted
               ? 'bg-secondary text-foreground'
               : 'text-muted-foreground hover:bg-secondary/60 hover:text-foreground'
         }`}
       >
-        {active && (
+        {active && navStyle === 'classic' && (
           <span aria-hidden className="absolute left-0 top-1.5 -translate-x-[3px] w-1 h-7 bg-primary rounded-r" />
         )}
         <Icon className="w-5 h-5" />
@@ -206,6 +228,18 @@ export function Sidebar() {
     [installedApps],
   );
   const [catalogOpen, setCatalogOpen] = useState(false);
+
+  // 레일 활성 표시 — classic(예전) / spotlight(기본) / notch. 마우스 연속 따라가기는 RailIndicator 참고.
+  const { navStyle, setNavStyle } = useNavStyleStore();
+  const railRef = useRef<HTMLElement | null>(null);
+  const navRef = useRef<HTMLElement | null>(null);
+  const railIndicator = useRailIndicator({
+    railRef,
+    navRef,
+    navStyle,
+    activeKey: location.pathname,
+    layoutKey: sidebarInstalled.join('|'),
+  });
 
   const { open: agentChatOpen, toggle: toggleAgentChat } = useAgentChatStore();
 
@@ -338,8 +372,13 @@ export function Sidebar() {
           ['--background' as string]: 'var(--sidebar)',
           ['--primary' as string]: 'var(--sidebar-primary)',
         } as React.CSSProperties}
-        className="fixed top-0 left-0 h-full bg-sidebar text-sidebar-foreground border-r border-sidebar-border flex flex-col z-40"
+        ref={railRef}
+        className={`fixed top-0 left-0 h-full bg-sidebar text-sidebar-foreground border-r flex flex-col z-40 ${
+          // 글로우 노치는 오른쪽 테두리를 빛나는 선(RailIndicator)이 대신한다.
+          navStyle === 'notch' ? 'border-transparent' : 'border-sidebar-border'
+        }`}
       >
+        <RailIndicator navStyle={navStyle} />
         {/* 로고 — 클릭 시 홈으로 이동만 한다(D-055 — 예전엔 모드 토글도 겸했다). */}
         <div className="flex items-center justify-center py-3 border-b border-border flex-shrink-0">
           <button
@@ -359,7 +398,15 @@ export function Sidebar() {
             링크로 보인다(그룹 flyout 없음 — 설치 단위 자체가 이미 최하위 메뉴). 기본은
             빈 레일 + "+" 버튼(맨 아래) 뿐이다 — 뒤로가기도 설치 대상, 홈은 유일한 예외로
             위 로고가 항상 대신한다. */}
-        <nav className="flex-1 py-2 overflow-y-auto" aria-label={t('shell.mainNav')}>
+        <nav
+          ref={navRef}
+          className="flex-1 py-2 overflow-y-auto"
+          aria-label={t('shell.mainNav')}
+          onPointerMove={railIndicator.onPointerMove}
+          onPointerLeave={railIndicator.onPointerLeave}
+          onFocus={railIndicator.onFocus}
+          onBlur={railIndicator.onBlur}
+        >
           <div className="flex flex-col items-center gap-1">
             {sidebarInstalled.map((appId) => {
               if (appId === 'back') {
@@ -379,6 +426,8 @@ export function Sidebar() {
                   label={getLabel(appId)}
                   Icon={entry.icon}
                   active={location.pathname === appId || location.pathname.startsWith(`${appId}/`)}
+                  railItem
+                  navStyle={navStyle}
                   onClick={() => navigate(appId)}
                 />
               );
@@ -536,6 +585,17 @@ export function Sidebar() {
                   disabled={!accentApplies(theme)}
                   title={accentApplies(theme) ? undefined : t('shell.user.accentDisabledHint')}
                   onSelect={() => setAccent(a)}
+                />
+              ))}
+              {/* 레일 활성 표시 — 스포트라이트(기본)·글로우 노치는 마우스를 따라 움직인다. */}
+              <p className="px-2.5 pt-1.5 pb-0.5 text-xs text-muted-foreground">{t('shell.user.navStyle')}</p>
+              {NAV_STYLES.map((s) => (
+                <FlyoutAction
+                  key={s}
+                  label={t(`shell.navStyle.${s}`)}
+                  Icon={NAV_STYLE_ICON[s]}
+                  checked={navStyle === s}
+                  onSelect={() => setNavStyle(s)}
                 />
               ))}
               <div className="mx-2 my-1 border-t border-border" />
