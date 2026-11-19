@@ -1,6 +1,6 @@
 // 서비스 구성 — K8S 허브 ▸ 구성 ▸ 서비스 구성(`/k8s/:clusterId/services?service=&group=&version=`).
 // 서비스(ETCD·CONTAINERD·CILIUM·LINUX)별 설정을 편집 → 의존 변경 즉시 표시 → 저장 전 확인 → 새 버전(저장됨·미적용).
-// 버전 비교·되돌리기, 노드 그룹 재정의. 노드에 실제로 반영하는 적용은 다음 단계 — 이 화면의 저장은 노드에 아무것도 하지 않는다.
+// 버전 비교·되돌리기, 노드 그룹 재정의. 저장은 노드에 아무것도 하지 않고, 별도의 적용(LINUX·CILIUM·ETCD·CONTAINERD)이 실제로 반영한다.
 // '현재 값 수집' 은 노드 설정을 읽기만 하며 실시간 실행 로그를 남긴다.
 import { useEffect, useMemo, useState } from 'react';
 import { Database, GitCompare, History, Layers, Pencil, Play, Plus, Search, Settings2, Trash2 } from 'lucide-react';
@@ -46,7 +46,7 @@ const COLLECT_LABEL: Record<ServiceConfigCollectKind, string> = {
 const STATUS_LABEL: Record<string, string> = { imported: '가져옴', saved: '저장됨·미적용', applied: '적용됨', superseded: '대체됨' };
 
 type Filter = 'all' | 'flagged' | 'edited';
-const APPLY_SUPPORTED = new Set(['linux', 'cilium']);
+const APPLY_SUPPORTED = new Set(['linux', 'cilium', 'etcd', 'containerd']);
 
 function sourceSummary(view: ServiceConfigView | undefined): string {
   if (!view || view.sources.length === 0) return '아직 수집된 값이 없다';
@@ -365,7 +365,7 @@ export function ServiceConfigPage() {
                       <Button size="sm" variant="outline"
                         disabled={!canOperate || !APPLY_SUPPORTED.has(service) || applyStreaming || dirty}
                         onClick={() => setApplyOpen(true)}
-                        title={!APPLY_SUPPORTED.has(service) ? `${meta?.label ?? service} 적용은 다음 단계에서 제공됩니다`
+                        title={!APPLY_SUPPORTED.has(service) ? `${meta?.label ?? service} 은(는) 적용을 지원하지 않습니다`
                           : dirty ? '저장하지 않은 편집이 있습니다 — 먼저 저장하세요' : withHint(`V${view.version.versionNo} 을(를) 노드에 적용`)}
                         aria-label={ariaWithHint(`V${view.version.versionNo} 적용`)}>
                         <Play /> 적용…
@@ -455,13 +455,13 @@ export function ServiceConfigPage() {
                             <Button size="sm" variant="outline" onClick={() => setCompareOpen(true)}>변경 보기</Button>
                             <Button size="sm" disabled={!canOperate || !APPLY_SUPPORTED.has(service) || applyStreaming || dirty}
                               onClick={() => setApplyOpen(true)}
-                              title={!APPLY_SUPPORTED.has(service) ? `${meta?.label ?? service} 적용은 다음 단계에서 제공됩니다` : withHint('노드에 적용')}
+                              title={!APPLY_SUPPORTED.has(service) ? `${meta?.label ?? service} 은(는) 적용을 지원하지 않습니다` : withHint('노드에 적용')}
                               aria-label={ariaWithHint('저장된 변경 적용')}>적용…</Button>
                           </>
                         )}
                       >
                         <p className="text-sm text-muted-foreground">
-                          저장된 값은 아직 노드에 반영되지 않았다. 노드 상태는 &lsquo;버전과 다름&rsquo; 으로 보인다.{!APPLY_SUPPORTED.has(service) && ` ${meta?.label ?? service} 적용은 다음 단계에서 제공된다.`}
+                          저장된 값은 아직 노드에 반영되지 않았다. 노드 상태는 &lsquo;버전과 다름&rsquo; 으로 보인다.{!APPLY_SUPPORTED.has(service) && ` ${meta?.label ?? service} 은(는) 적용을 지원하지 않는다.`}
                         </p>
                       </MacCard>
                     )}

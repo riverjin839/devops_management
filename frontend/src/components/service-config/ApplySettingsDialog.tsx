@@ -1,4 +1,4 @@
-// 적용 설정(admin, 모든 클러스터 공통) — 환경마다 다른 경로·리소스 이름을 코드가 아니라 화면에서 고친다(UI-First).
+// 적용 설정(admin, 모든 클러스터 공통) — 환경마다 다른 경로·리소스 이름·확인 명령을 코드가 아니라 화면에서 고친다(UI-First).
 import { useEffect, useState } from 'react';
 import type { ReactNode } from 'react';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -41,12 +41,12 @@ export function ApplySettingsDialog({ open, isAdmin, onClose }: { open: boolean;
 
   return (
     <Dialog open={open} onOpenChange={(next) => { if (!next && !save.isPending) onClose(); }}>
-      <DialogContent className="max-w-lg">
+      <DialogContent className="max-w-2xl">
         <DialogHeader>
           <DialogTitle>적용 설정</DialogTitle>
           <DialogDescription>모든 클러스터 공통 · {isAdmin ? '관리자만 바꿀 수 있다' : '관리자만 바꿀 수 있습니다(읽기 전용)'}</DialogDescription>
         </DialogHeader>
-        <div className="space-y-3 px-5 pb-3">
+        <div className="max-h-[64vh] overflow-y-auto space-y-3 px-5 pb-3">
           {!form ? <LoadingState /> : (
             <>
               <Field label="LINUX 관리 sysctl 파일" help="PEP 가 통째로 쓰는 파일. /etc/sysctl.d/99-sysctl.conf 보다 뒤에 읽히는 이름이어야 부팅 때 덮이지 않는다.">
@@ -61,6 +61,44 @@ export function ApplySettingsDialog({ open, isAdmin, onClose }: { open: boolean;
                 <input type="number" min={30} max={3600} className={INPUT} disabled={!isAdmin} value={form.rolloutTimeoutSec}
                   onChange={(e) => set({ rolloutTimeoutSec: Number(e.target.value) || 600 })} aria-label="롤아웃 제한 시간" />
               </Field>
+              <p className="pt-2 text-xs font-semibold text-foreground">ETCD</p>
+              <div className="grid grid-cols-2 gap-2">
+                <Field label="실행 방식" help="auto = 노드에 매니페스트가 있으면 정적 파드, 없으면 systemd.">
+                  <select className={INPUT} disabled={!isAdmin} value={form.etcdMode} onChange={(e) => set({ etcdMode: e.target.value as ServiceConfigApplySettings['etcdMode'] })} aria-label="etcd 실행 방식">
+                    <option value="auto">auto(자동 판별)</option>
+                    <option value="static_pod">정적 파드</option>
+                    <option value="systemd">systemd</option>
+                  </select>
+                </Field>
+                <Field label="systemd 유닛"><input className={INPUT} disabled={!isAdmin} value={form.etcdService} onChange={(e) => set({ etcdService: e.target.value })} aria-label="etcd systemd 유닛" /></Field>
+                <Field label="정적 파드 매니페스트"><input className={INPUT} disabled={!isAdmin} value={form.etcdManifest} onChange={(e) => set({ etcdManifest: e.target.value })} aria-label="etcd 매니페스트 경로" /></Field>
+                <Field label="systemd env 파일"><input className={INPUT} disabled={!isAdmin} value={form.etcdEnvFile} onChange={(e) => set({ etcdEnvFile: e.target.value })} aria-label="etcd env 파일 경로" /></Field>
+              </div>
+              <Field label="백업 디렉터리" help="매니페스트 디렉터리 밖이어야 한다 — 안에 두면 kubelet 이 백업본을 정적 파드로 띄운다.">
+                <input className={INPUT} disabled={!isAdmin} value={form.etcdBackupDir} onChange={(e) => set({ etcdBackupDir: e.target.value })} aria-label="etcd 백업 디렉터리" />
+              </Field>
+              <Field label="health 확인 명령" help="노드에서 실행해 아래 문자열이 출력에 있으면 정상. 사전 점검·재시작 뒤 대기에 쓴다.">
+                <input className={INPUT} disabled={!isAdmin} value={form.etcdHealthCmd} onChange={(e) => set({ etcdHealthCmd: e.target.value })} aria-label="etcd health 명령" />
+              </Field>
+              <div className="grid grid-cols-2 gap-2">
+                <Field label="정상 판정 문자열"><input className={INPUT} disabled={!isAdmin} value={form.etcdHealthExpect} onChange={(e) => set({ etcdHealthExpect: e.target.value })} aria-label="health 정상 문자열" /></Field>
+                <Field label="정상 기동 대기 기본값(초)">
+                  <input type="number" min={30} max={1800} className={INPUT} disabled={!isAdmin} value={form.etcdHealthTimeoutSec}
+                    onChange={(e) => set({ etcdHealthTimeoutSec: Number(e.target.value) || 180 })} aria-label="etcd health 대기 시간" />
+                </Field>
+              </div>
+              <p className="pt-2 text-xs font-semibold text-foreground">CONTAINERD</p>
+              <div className="grid grid-cols-2 gap-2">
+                <Field label="설정 파일"><input className={INPUT} disabled={!isAdmin} value={form.containerdConfig} onChange={(e) => set({ containerdConfig: e.target.value })} aria-label="containerd 설정 파일" /></Field>
+                <Field label="systemd 유닛"><input className={INPUT} disabled={!isAdmin} value={form.containerdService} onChange={(e) => set({ containerdService: e.target.value })} aria-label="containerd systemd 유닛" /></Field>
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <Field label="재시작 명령"><input className={INPUT} disabled={!isAdmin} value={form.containerdRestartCmd} onChange={(e) => set({ containerdRestartCmd: e.target.value })} aria-label="containerd 재시작 명령" /></Field>
+                <Field label="노드 Ready 대기 기본값(초)">
+                  <input type="number" min={30} max={1800} className={INPUT} disabled={!isAdmin} value={form.nodeReadyTimeoutSec}
+                    onChange={(e) => set({ nodeReadyTimeoutSec: Number(e.target.value) || 300 })} aria-label="노드 Ready 대기 시간" />
+                </Field>
+              </div>
             </>
           )}
         </div>

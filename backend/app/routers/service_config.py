@@ -290,6 +290,12 @@ class ApplyOptions(BaseModel):
     update_watch_rules: bool = True      # OS — 감시 규칙을 적용 값으로
     restart: bool = True                 # CILIUM — DaemonSet 롤링 재시작
     rollout_timeout_sec: Optional[int] = Field(default=None, ge=30, le=3600)
+    auto_restore: bool = True            # ETCD·CONTAINERD — 실패 시 백업 복원
+    health_timeout_sec: Optional[int] = Field(default=None, ge=30, le=1800)    # ETCD
+    cordon: bool = True                  # CONTAINERD
+    drain: bool = False                  # CONTAINERD
+    drain_timeout_sec: int = Field(default=300, ge=30, le=1800)
+    node_ready_timeout_sec: Optional[int] = Field(default=None, ge=30, le=1800)
 
 
 class ApplyInput(BaseModel):
@@ -318,12 +324,14 @@ async def apply_stream(
     try:
         plan = A.plan_apply(db, cluster, service, body.version_no, body.group_id, body.target_mode, body.nodes)
         creds: dict[str, Any] = {}
-        if service == "linux":
+        if service in A.SSH_SERVICES:
             if body.ssh is None or not (body.ssh.password or (body.ssh.private_key or "").strip()):
-                raise A.ApplyError(422, "LINUX 적용에는 SSH 비밀번호 또는 개인 키가 필요합니다(저장하지 않습니다).")
+                raise A.ApplyError(422, f"{plan['service']['label']} 적용에는 SSH 비밀번호 또는 개인 키가 필요합니다(저장하지 않습니다).")
             creds = body.ssh.model_dump()
             A.validate_pairs(plan["values"])
         opts = body.options.model_dump()
+        if service == "etcd":  # 쿼럼 보호 — 한 대씩·실패 시 중단은 고정
+            opts.update(batch_size=1, stop_on_failure=True)
         run = A.start_run(db, cluster, service, plan, opts, user.username)
     except V.ServiceConfigError as exc:
         _raise(exc)
@@ -413,6 +421,18 @@ class ApplySettingsUpdate(BaseModel):
     cilium_configmap: Optional[str] = Field(default=None, max_length=253)
     cilium_daemonset: Optional[str] = Field(default=None, max_length=253)
     rollout_timeout_sec: Optional[int] = Field(default=None, ge=30, le=3600)
+    etcd_mode: Optional[str] = Field(default=None, pattern="^(auto|static_pod|systemd)$")
+    etcd_manifest: Optional[str] = Field(default=None, max_length=300)
+    etcd_env_file: Optional[str] = Field(default=None, max_length=300)
+    etcd_service: Optional[str] = Field(default=None, max_length=100)
+    etcd_backup_dir: Optional[str] = Field(default=None, max_length=300)
+    etcd_health_cmd: Optional[str] = Field(default=None, max_length=300)
+    etcd_health_expect: Optional[str] = Field(default=None, max_length=300)
+    etcd_health_timeout_sec: Optional[int] = Field(default=None, ge=30, le=1800)
+    containerd_config: Optional[str] = Field(default=None, max_length=300)
+    containerd_service: Optional[str] = Field(default=None, max_length=100)
+    containerd_restart_cmd: Optional[str] = Field(default=None, max_length=300)
+    node_ready_timeout_sec: Optional[int] = Field(default=None, ge=30, le=1800)
 
 
 @router.get("/settings")

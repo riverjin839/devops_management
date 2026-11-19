@@ -583,7 +583,7 @@ async def test_apply_conflict_and_stop(db, linux_v1, monkeypatch):
         out = await A.execute(db, c, run.id, plan, {"batch_size": 1, "pause_sec": 0}, {"password": "x"}, lambda e: None)
         assert out["status"] == "stopped" and all(r["status"] == "skipped" for r in out["node_results"])
         with pytest.raises(A.ApplyError) as e:
-            A.start_run(db, c, "etcd", {**plan, "service": {"label": "ETCD"}}, {}, "tester")
+            A.start_run(db, c, "kafka", {**plan, "service": {"label": "KAFKA"}}, {}, "tester")
         assert e.value.status == 422
     finally:
         db.query(ServiceConfigApplyRun).filter(ServiceConfigApplyRun.cluster_id == c.id).delete(synchronize_session=False)
@@ -667,5 +667,379 @@ def test_apply_api_guards(db, linux_v1):
         r = client.put("/api/v1/service-config/settings", json={"sysctl_file": "/etc/x.conf"})
         assert r.status_code == 403
         assert client.get("/api/v1/service-config/settings").json()["sysctl_file"].startswith("/etc/sysctl.d/")
+    finally:
+        app.dependency_overrides.pop(get_current_user, None)
+
+
+
+# ── 4단계: ETCD·CONTAINERD 적용 ──────────────────────────────────────────────
+
+ETCD_MANIFEST = """apiVersion: v1
+kind: Pod
+metadata:
+  name: etcd
+  namespace: kube-system
+spec:
+  containers:
+  - command:
+    - etcd
+    - --advertise-client-urls=https://10.0.0.1:2379
+    - --quota-backend-bytes=2147483648
+    - --data-dir=/var/lib/etcd
+    image: registry.k8s.io/etcd:3.5.15-0
+    name: etcd
+  hostNetwork: true
+"""
+
+
+def test_edit_etcd_manifest_replace_insert_and_verify():
+    from app.services.service_config import apply_nodes as AN
+
+    out = AN.edit_etcd_manifest(ETCD_MANIFEST, {"quota-backend-bytes": "8589934592", "snapshot-count": "5000",
+                                                "listen-metrics-urls": "http://127.0.0.1:2381"})
+    lines = out.splitlines()
+    assert "    - --quota-backend-bytes=8589934592" in lines
+    # 새 플래그는 마지막 플래그 줄 뒤에 같은 들여쓰기로, 다른 줄은 그대로
+    i = lines.index("    - --data-dir=/var/lib/etcd")
+    assert lines[i + 1].startswith("    - --") and "snapshot-count=5000" in out
+    assert "image: registry.k8s.io/etcd:3.5.15-0" in out and out.count("\n") == ETCD_MANIFEST.count("\n") + 2
+    assert AN.manifest_flags(out)["listen-metrics-urls"] == "http://127.0.0.1:2381"
+    # 공백이 든 값은 따옴표로 감싸 YAML 이 깨지지 않게
+    out2 = AN.edit_etcd_manifest(ETCD_MANIFEST, {"log-level": "a b: c"})
+    assert AN.manifest_flags(out2)["log-level"] == "a b: c"
+    with pytest.raises(AN.EditError):
+        AN.edit_etcd_manifest("apiVersion: v1\nkind: Pod\n", {"snapshot-count": "1"})
+
+
+def test_edit_env_file():
+    from app.services.service_config import apply_nodes as AN
+
+    out = AN.edit_env_file("# etcd\nexport ETCD_SNAPSHOT_COUNT=10000\nETCD_NAME=cp-1\n",
+                           {"ETCD_SNAPSHOT_COUNT": "5000", "ETCD_LOG_LEVEL": "warn"})
+    assert out == "# etcd\nexport ETCD_SNAPSHOT_COUNT=5000\nETCD_NAME=cp-1\nETCD_LOG_LEVEL=warn\n"
+    assert AN.edit_env_file("", {"ETCD_X": "a b"}) == 'ETCD_X="a b"\n'
+
+
+def test_edit_containerd_toml_v2_v3_and_reject():
+    from app.services.service_config import apply_nodes as AN
+
+    cri = 'plugins."io.containerd.grpc.v1.cri"'
+    out = AN.edit_containerd_toml(CTD_V2, {
+        f"{cri}.sandbox_image": ("registry.local/pause:3.10", "string"),
+        f"{cri}.containerd.runtimes.runc.options.SystemdCgroup": ("false", "bool"),
+        f"{cri}.enable_unprivileged_ports": ("true", "bool"),           # 있는 테이블에 추가
+        f"{cri}.registry.config_path": ("/etc/containerd/certs.d", "string"),  # 테이블 새로 만듦
+        "oom_score": ("-999", "int"),                                     # 최상위 키
+    })
+    flat = C.parse_containerd_toml(out)
+    assert flat[f"{cri}.sandbox_image"] == "registry.local/pause:3.10"
+    assert flat[f"{cri}.containerd.runtimes.runc.options.SystemdCgroup"] == "false"
+    assert flat[f"{cri}.enable_unprivileged_ports"] == "true" and flat["oom_score"] == "-999"
+    assert flat[f"{cri}.registry.config_path"] == "/etc/containerd/certs.d"
+    assert '        SystemdCgroup = false' in out.splitlines()  # 들여쓰기 보존
+    assert flat[f"{cri}.max_concurrent_downloads"] == "3"            # 손대지 않은 값 그대로
+    # 경로 고르기 — 있는 경로 → 파일 version 에 맞는 후보
+    paths = [f"{cri}.containerd.snapshotter", 'plugins."io.containerd.cri.v1.images".snapshotter']
+    assert AN.choose_containerd_path(paths, C.parse_containerd_toml(CTD_V3)) == paths[1]
+    assert AN.choose_containerd_path(paths, {"version": "2"}) == paths[0]
+    with pytest.raises(AN.EditError):
+        AN.choose_containerd_path(paths, {})
+    with pytest.raises(AN.EditError):
+        AN.render_toml_value("yes", "bool")
+    # 인라인 테이블과 충돌 → 재해석 실패 → 쓰지 않음
+    with pytest.raises(AN.EditError):
+        AN.edit_containerd_toml('version = 2\n[a]\nb = {c = 1}\n', {"a.b.d": ("1", "int")})
+
+
+def test_apply_settings_validation(db):
+    from app.services.service_config import apply as A
+
+    with pytest.raises(A.ApplyError):
+        A.set_settings(db, {"etcd_health_cmd": "curl x\nrm -rf /"})
+    with pytest.raises(A.ApplyError):
+        A.set_settings(db, {"etcd_backup_dir": "/etc/kubernetes/manifests/bak"})
+    with pytest.raises(A.ApplyError):
+        A.set_settings(db, {"etcd_mode": "docker"})
+    assert A._normalize_settings({"etcd_health_cmd": "a\tb", "node_ready_timeout_sec": 5})["node_ready_timeout_sec"] == 300
+
+
+def _ok(h, out=""):
+    from app.services.ssh_runner import SSHResult
+
+    return SSHResult(host=h, status="ok", exit_code=0, stdout=out, stderr="", duration_ms=1, error=None)
+
+
+def _fail(h, out=""):
+    from app.services.ssh_runner import SSHResult
+
+    return SSHResult(host=h, status="error", exit_code=1, stdout=out, stderr="fail", duration_ms=1, error=None)
+
+
+class FakeEtcd:
+    """정적 파드 etcd 노드 흉내 — 매니페스트 기록 시 '재시작'해 실행 플래그가 바뀐다. crash 노드는 새 설정으로 뜨지 못한다."""
+    MANIFEST = "/etc/kubernetes/manifests/etcd.yaml"
+
+    def __init__(self, hosts, unhealthy=(), crash=()):
+        self.files = {h: {self.MANIFEST: ETCD_MANIFEST} for h in hosts}
+        self.running = {h: ETCD_MANIFEST for h in hosts}
+        self.unhealthy, self.crash = set(unhealthy), set(crash)
+        self.cmds = []
+
+    def __call__(self, target, cmd, connect_timeout=8, exec_timeout=30):
+        from app.services.service_config import apply_nodes as AN
+
+        h = target.host
+        self.cmds.append((h, cmd))
+        f = self.files[h]
+        if "/health" in cmd:
+            ok = h not in self.unhealthy and self.running[h] is not None
+            return _ok(h, '{"health":"true","reason":""}') if ok else _fail(h, '{"health":"false"}')
+        if "test -f" in cmd:
+            return _ok(h, "static_pod")
+        if "pgrep" in cmd:
+            if self.running[h] is None:
+                return _ok(h, "")
+            fl = AN.manifest_flags(self.running[h])
+            return _ok(h, "etcd " + " ".join(f"--{k}={v}" for k, v in fl.items()))
+        if "<<'PEP_CFG_EOF'" in cmd:
+            path = cmd.split("tee ", 1)[1].split(" ", 1)[0]
+            f[path] = cmd.split("<<'PEP_CFG_EOF'\n", 1)[1].rsplit("PEP_CFG_EOF", 1)[0]
+            self.running[h] = None if h in self.crash else f[path]
+            return _ok(h)
+        if "cp -p" in cmd:
+            src, dst = cmd.split("cp -p ", 1)[1].split()[:2]
+            f[dst] = f[src]
+            if dst == self.MANIFEST:  # 복원 → kubelet 이 이전 매니페스트로 다시 띄움
+                self.running[h] = f[dst]
+            return _ok(h)
+        if cmd.startswith("cat "):
+            return _ok(h, f.get(cmd.split()[1], ""))
+        return _ok(h)
+
+
+class FakeCore:
+    """K8S CoreV1Api 흉내 — etcd 파드 목록, 노드(cordon·Ready), 파드·eviction."""
+
+    def __init__(self, events=None, ready_after=1, pods=()):
+        self.events = events if events is not None else []
+        self.unsched = {}
+        self.ready_reads = 0
+        self.ready_after = ready_after
+        self.pods = list(pods)
+
+    def list_namespaced_pod(self, ns, label_selector=None, **_):
+        return SimpleNamespace(items=[SimpleNamespace(spec=SimpleNamespace(node_name=f"cp-{i}"),
+                                                      status=SimpleNamespace(host_ip=f"10.0.0.{i}")) for i in (1, 2, 3)])
+
+    def list_node(self, **_):
+        return SimpleNamespace(items=[SimpleNamespace(metadata=SimpleNamespace(name=n),
+                                                      status=SimpleNamespace(addresses=[SimpleNamespace(address=a)]))
+                                      for n, a in (("node-a", "10.0.1.1"), ("node-b", "10.0.1.2"))])
+
+    def read_node(self, name, **_):
+        self.ready_reads += 1
+        ready = "True" if self.ready_reads >= self.ready_after else "False"
+        return SimpleNamespace(spec=SimpleNamespace(unschedulable=self.unsched.get(name, False)),
+                               status=SimpleNamespace(conditions=[SimpleNamespace(type="Ready", status=ready)]))
+
+    def patch_node(self, name, body, **_):
+        self.unsched[name] = body["spec"]["unschedulable"]
+        self.events.append(("cordon" if self.unsched[name] else "uncordon", name))
+
+    def list_pod_for_all_namespaces(self, field_selector=None, **_):
+        return SimpleNamespace(items=list(self.pods))
+
+    def create_namespaced_pod_eviction(self, name, ns, body, **_):
+        self.events.append(("evict", name))
+        self.pods = [p for p in self.pods if p.metadata.name != name]
+
+
+def _pod(name, kind=None):
+    owners = [SimpleNamespace(kind=kind)] if kind else []
+    return SimpleNamespace(metadata=SimpleNamespace(name=name, namespace="default", annotations={}, owner_references=owners),
+                           status=SimpleNamespace(phase="Running"))
+
+
+@pytest.fixture
+def etcd_v2(db, cluster, monkeypatch):
+    from app.models.service_config import ServiceConfigApplyRun
+    from app.services.service_config import apply as A
+    from app.services.service_config import view as V
+
+    core = FakeCore()
+    monkeypatch.setattr(A, "k8s_apis", lambda c: (core, core))
+    _add_snap(db, cluster, "etcd", {"podName": "etcd-cp-1", "flags": {"quota-backend-bytes": "2147483648"}})
+    V.import_v1(db, cluster, "etcd", "tester")
+    vals = dict(V.list_versions(db, cluster.id, "etcd")[0].values)
+    V.save_version(db, cluster, "etcd", None, 1, {**vals, "quota-backend-bytes": "8589934592"}, None, "tester")
+    yield cluster
+    db.rollback()
+    db.query(ServiceConfigApplyRun).filter(ServiceConfigApplyRun.cluster_id == cluster.id).delete(synchronize_session=False)
+    db.commit()
+
+
+async def test_apply_etcd_static_pod_success_one_by_one(db, etcd_v2, monkeypatch):
+    from app.services import ssh_runner
+    from app.services.service_config import apply as A
+    from app.services.service_config import view as V
+
+    c = etcd_v2
+    fake = FakeEtcd(["10.0.0.1", "10.0.0.2", "10.0.0.3"])
+    monkeypatch.setattr(ssh_runner, "_exec_ssh", fake)
+    plan = A.plan_apply(db, c, "etcd", None, None)
+    assert [(t["node"], t["host"]) for t in plan["targets"]] == [("cp-1", "10.0.0.1"), ("cp-2", "10.0.0.2"), ("cp-3", "10.0.0.3")]
+    assert any("pep-backup" in cmd for cmd in plan["commands"])
+    out = await _run_apply(db, c, "etcd", plan, {"batch_size": 5, "pause_sec": 0, "poll_sec": 0, "settle_sec": 0})
+    assert out["status"] == "succeeded", out
+    for h in fake.files:
+        assert "--quota-backend-bytes=8589934592" in fake.files[h][FakeEtcd.MANIFEST]
+        assert fake.files[h]["/etc/kubernetes/pep-backup/etcd.yaml.pep-bak-v1"] == ETCD_MANIFEST
+    # 한 대씩: 두 번째 노드 기록은 첫 노드 확인(pgrep) 뒤에
+    order = [(h, "write" if "PEP_CFG_EOF" in cmd else "pgrep") for h, cmd in fake.cmds if "PEP_CFG_EOF" in cmd or "pgrep" in cmd]
+    assert order.index(("10.0.0.2", "write")) > order.index(("10.0.0.1", "pgrep"))
+    assert V.list_versions(db, c.id, "etcd")[0].status == "applied"
+
+
+async def test_apply_etcd_preflight_blocks_and_crash_restores(db, etcd_v2, monkeypatch):
+    from app.services import ssh_runner
+    from app.services.service_config import apply as A
+
+    c = etcd_v2
+    hosts = ["10.0.0.1", "10.0.0.2", "10.0.0.3"]
+    fake = FakeEtcd(hosts, unhealthy={"10.0.0.3"})
+    monkeypatch.setattr(ssh_runner, "_exec_ssh", fake)
+    out = await _run_apply(db, c, "etcd", A.plan_apply(db, c, "etcd", None, None), {"poll_sec": 0, "settle_sec": 0})
+    assert out["status"] == "failed" and all(r["status"] == "skipped" for r in out["node_results"])
+    assert not any("PEP_CFG_EOF" in cmd for _, cmd in fake.cmds)  # 아무 노드도 건드리지 않음
+    # 첫 노드가 새 설정으로 못 뜸 → 시간 초과 → 복원, 나머지 건너뜀
+    fake = FakeEtcd(hosts, crash={"10.0.0.1"})
+    monkeypatch.setattr(ssh_runner, "_exec_ssh", fake)
+    out = await _run_apply(db, c, "etcd", A.plan_apply(db, c, "etcd", None, None),
+                           {"poll_sec": 0.01, "settle_sec": 0, "health_timeout_sec": 1})
+    assert [r["status"] for r in out["node_results"]] == ["failed", "skipped", "skipped"]
+    assert "복원" in out["node_results"][0]["error"]
+    assert fake.files["10.0.0.1"][FakeEtcd.MANIFEST] == ETCD_MANIFEST and fake.running["10.0.0.1"] == ETCD_MANIFEST
+    assert "8589934592" not in fake.files["10.0.0.2"][FakeEtcd.MANIFEST]
+
+
+class FakeCtd:
+    PATH = "/etc/containerd/config.toml"
+
+    def __init__(self, hosts, events, stale=()):
+        self.files = {h: {self.PATH: CTD_V2} for h in hosts}
+        self.running = {h: CTD_V2 for h in hosts}
+        self.events = events
+        self.stale = set(stale)  # 재시작해도 새 설정이 반영되지 않는 노드
+        self.cmds = []
+
+    def __call__(self, target, cmd, connect_timeout=8, exec_timeout=30):
+        h = target.host
+        self.cmds.append((h, cmd))
+        f = self.files[h]
+        if "<<'PEP_CFG_EOF'" in cmd:
+            f[self.PATH] = cmd.split("<<'PEP_CFG_EOF'\n", 1)[1].rsplit("PEP_CFG_EOF", 1)[0]
+            self.events.append(("write", h))
+            return _ok(h)
+        if "systemctl restart" in cmd:
+            self.events.append(("restart", h))
+            if h not in self.stale:
+                self.running[h] = f[self.PATH]
+            return _ok(h)
+        if "is-active" in cmd:
+            return _ok(h, "active\n")
+        if "config dump" in cmd:
+            return _ok(h, self.running[h])
+        if "cp -p" in cmd:
+            src, dst = cmd.split("cp -p ", 1)[1].split()[:2]
+            f[dst] = f[src]
+            return _ok(h)
+        if cmd.startswith("cat "):
+            return _ok(h, f.get(cmd.split()[1], ""))
+        return _ok(h)
+
+
+@pytest.fixture
+def ctd_v2(db, cluster):
+    from app.models.service_config import ServiceConfigApplyRun
+    from app.services.service_config import view as V
+
+    for h in ("10.0.1.1", "10.0.1.2"):
+        _add_snap(db, cluster, f"containerd_config:{h}", {"flat": C.parse_containerd_toml(CTD_V2)})
+    V.import_v1(db, cluster, "containerd", "tester")
+    vals = dict(V.list_versions(db, cluster.id, "containerd")[0].values)
+    V.save_version(db, cluster, "containerd", None, 1,
+                   {**vals, "max_concurrent_downloads": "6", "enable_unprivileged_ports": "true"}, None, "tester")
+    yield cluster
+    db.rollback()
+    db.query(ServiceConfigApplyRun).filter(ServiceConfigApplyRun.cluster_id == cluster.id).delete(synchronize_session=False)
+    db.commit()
+
+
+async def test_apply_containerd_cordon_drain_restart_ready_and_snapshot(db, ctd_v2, monkeypatch):
+    from app.services import ssh_runner
+    from app.services.service_config import apply as A
+    from app.services.service_config import view as V
+
+    c = ctd_v2
+    events = []
+    core = FakeCore(events, ready_after=2, pods=[_pod("app-1"), _pod("cilium-x", "DaemonSet")])
+    monkeypatch.setattr(A, "k8s_apis", lambda cl: (core, core))
+    fake = FakeCtd(["10.0.1.1", "10.0.1.2"], events)
+    monkeypatch.setattr(ssh_runner, "_exec_ssh", fake)
+    plan = A.plan_apply(db, c, "containerd", None, None)
+    assert [t["node"] for t in plan["targets"]] == ["10.0.1.1", "10.0.1.2"]
+    out = await _run_apply(db, c, "containerd", plan, {"batch_size": 1, "pause_sec": 0, "poll_sec": 0, "drain": True})
+    assert out["status"] == "succeeded", out
+    first = events[:events.index(("uncordon", "node-a")) + 1]
+    assert first == [("cordon", "node-a"), ("evict", "app-1"), ("write", "10.0.1.1"), ("restart", "10.0.1.1"), ("uncordon", "node-a")]
+    assert ("evict", "cilium-x") not in events  # DaemonSet 파드는 내보내지 않음
+    cri = 'plugins."io.containerd.grpc.v1.cri"'
+    assert C.parse_containerd_toml(fake.files["10.0.1.2"][FakeCtd.PATH])[f"{cri}.max_concurrent_downloads"] == "6"
+    rows = {r["key"]: r for s in V.build_view(db, c, "containerd")["sections"] for r in s["items"]}
+    assert rows["max_concurrent_downloads"]["current"]["value"] == "6"  # 스냅샷 갱신
+    assert V.list_versions(db, c.id, "containerd")[0].status == "applied"
+
+
+async def test_apply_containerd_verify_mismatch_restores(db, ctd_v2, monkeypatch):
+    from app.services import ssh_runner
+    from app.services.service_config import apply as A
+
+    c = ctd_v2
+    events = []
+    core = FakeCore(events)
+    monkeypatch.setattr(A, "k8s_apis", lambda cl: (core, core))
+    fake = FakeCtd(["10.0.1.1", "10.0.1.2"], events, stale={"10.0.1.1"})
+    monkeypatch.setattr(ssh_runner, "_exec_ssh", fake)
+    out = await _run_apply(db, c, "containerd", A.plan_apply(db, c, "containerd", None, None),
+                           {"batch_size": 1, "pause_sec": 0, "poll_sec": 0})
+    assert out["status"] == "failed" and [r["status"] for r in out["node_results"]] == ["failed", "skipped"]
+    assert "실효 설정" in out["node_results"][0]["error"] and "복원" in out["node_results"][0]["error"]
+    assert fake.files["10.0.1.1"][FakeCtd.PATH] == CTD_V2
+    assert events[-1] == ("uncordon", "node-a")  # 복원 성공 → uncordon
+    # K8S 를 못 써도 SSH 만으로 진행(cordon·Ready 건너뜀)
+    def no_k8s(cl):
+        raise RuntimeError("no kubeconfig")
+    monkeypatch.setattr(A, "k8s_apis", no_k8s)
+    monkeypatch.setattr(ssh_runner, "_exec_ssh", FakeCtd(["10.0.1.1", "10.0.1.2"], []))
+    out = await _run_apply(db, c, "containerd", A.plan_apply(db, c, "containerd", None, None),
+                           {"batch_size": 2, "pause_sec": 0, "poll_sec": 0})
+    assert out["status"] == "succeeded", out
+
+
+def test_apply_api_requires_ssh_for_etcd_containerd(db, ctd_v2):
+    from fastapi.testclient import TestClient
+
+    from app.auth.deps import get_current_user
+    from app.main import app
+
+    c = ctd_v2
+    op = SimpleNamespace(id=uuid.uuid4(), username="op", role="operator", is_active=True, tenant_ids=[])
+    app.dependency_overrides[get_current_user] = lambda: op
+    try:
+        client = TestClient(app)
+        r = client.get(f"/api/v1/service-config/clusters/{c.id}/containerd/apply/plan")
+        assert r.status_code == 200 and r.json()["supported"] and r.json()["commands"]
+        r = client.post(f"/api/v1/service-config/clusters/{c.id}/containerd/apply/stream", json={})
+        assert r.status_code == 422 and "SSH" in r.json()["detail"]
     finally:
         app.dependency_overrides.pop(get_current_user, None)

@@ -1,4 +1,4 @@
-"""서비스 구성 — 적용(설정 버전을 노드·클러스터에 실제로 반영). 이번 단계는 LINUX(OS)·CILIUM.
+"""서비스 구성 — 적용(설정 버전을 노드·클러스터에 실제로 반영). LINUX(OS)·CILIUM 은 여기, ETCD·CONTAINERD 는 ``apply_nodes``.
 
 실행은 요청 안 SSE 작업(`services/sse.py` `stream_async_job`)에서 돈다 — SSH 자격증명이 Celery 브로커·DB 에 남지 않게.
 진행은 ``ServiceConfigApplyRun`` 행에 배치마다 커밋돼 화면을 다시 열어도 보이고, 클라이언트가 끊겨도 작업은 끝까지 돈다.
@@ -8,7 +8,7 @@
           끝나면(옵션) OS 파라미터 감시 규칙을 적용 값으로 갱신해 드리프트 감시가 새 값을 따라가게 한다.
 - CILIUM: K8S API 로 ① cilium-config 읽기 ② 바뀐 키만 patch ③ (옵션) DaemonSet 롤링 재시작 + 롤아웃 대기 ④ 다시 읽어 확인
           ⑤ ``cilium_config`` 스냅샷 갱신(화면 현재 값 즉시 반영).
-etcd·containerd 적용은 다음 단계 — 계획(미리보기)만 된다.
+- ETCD·CONTAINERD: ``apply_nodes`` — 사전 점검 · 한 대씩 · 상태 확인 · 실패 시 자동 복원.
 """
 from __future__ import annotations
 
@@ -31,7 +31,8 @@ from app.services.service_config import view as V
 from app.services.ssh_runner import SSHTarget
 from app.services import ssh_runner
 
-APPLY_SUPPORTED = ("linux", "cilium")
+APPLY_SUPPORTED = ("linux", "cilium", "etcd", "containerd")
+SSH_SERVICES = ("linux", "etcd", "containerd")  # 노드에 SSH 로 들어가는 적용 — 요청마다 자격증명 필요
 SETTINGS_KEY = "service_config.settings"
 SETTINGS_DEFAULTS: dict[str, Any] = {
     # PEP 가 소유하는 sysctl 파일 — 99-sysctl.conf(=/etc/sysctl.conf 링크)보다 뒤에 읽혀 부팅 때 덮이지 않는 이름.
@@ -40,7 +41,28 @@ SETTINGS_DEFAULTS: dict[str, Any] = {
     "cilium_configmap": "cilium-config",
     "cilium_daemonset": "cilium",
     "rollout_timeout_sec": 600,
+    # ETCD — auto 면 노드에서 매니페스트가 있으면 정적 파드, 없으면 systemd 로 판별한다.
+    "etcd_mode": "auto",
+    "etcd_manifest": "/etc/kubernetes/manifests/etcd.yaml",
+    "etcd_env_file": "/etc/etcd.env",
+    "etcd_service": "etcd",
+    # 백업은 매니페스트 디렉터리 밖 — kubelet 이 그 안의 사본을 정적 파드로 띄우므로.
+    "etcd_backup_dir": "/etc/kubernetes/pep-backup",
+    "etcd_health_cmd": "curl -fsS http://127.0.0.1:2381/health",
+    "etcd_health_expect": '"health":"true"',
+    "etcd_health_timeout_sec": 180,
+    # CONTAINERD
+    "containerd_config": "/etc/containerd/config.toml",
+    "containerd_service": "containerd",
+    "containerd_restart_cmd": "systemctl restart containerd",
+    "node_ready_timeout_sec": 300,
 }
+_PATH_KEYS = ("sysctl_file", "etcd_manifest", "etcd_env_file", "etcd_backup_dir", "containerd_config")
+_CMD_KEYS = ("etcd_health_cmd", "containerd_restart_cmd")
+_UNIT_KEYS = ("etcd_service", "containerd_service")
+_INT_RANGES = {"rollout_timeout_sec": (30, 3600), "etcd_health_timeout_sec": (30, 1800),
+               "node_ready_timeout_sec": (30, 1800)}
+ETCD_MODES = ("auto", "static_pod", "systemd")
 RUN_ACTIVE = "running"
 WATCH_RULE_OWNER = "service-config"
 
@@ -48,6 +70,13 @@ _KEY_RE = re.compile(r"^[A-Za-z0-9_.\-/]+$")
 _VALUE_RE = re.compile(r"^[A-Za-z0-9 _.:,/+\-]*$")
 _PATH_RE = re.compile(r"^/[A-Za-z0-9_./\-]+$")
 _K8S_NAME_RE = re.compile(r"^[a-z0-9]([-a-z0-9.]*[a-z0-9])?$")
+_UNIT_RE = re.compile(r"^[A-Za-z0-9_.@\-]+$")
+
+
+def _cmd_ok(v: Any) -> bool:
+    """명령류 설정 — 한 줄, 제어문자 없음, 300자 이하. admin 만 바꾸고 감사 기록이 남는다."""
+    s = str(v or "")
+    return 0 < len(s) <= 300 and not any(ord(ch) < 32 or ord(ch) == 127 for ch in s)
 
 
 class ApplyError(V.ServiceConfigError):
@@ -58,16 +87,28 @@ class ApplyError(V.ServiceConfigError):
 
 def _normalize_settings(stored: Any) -> dict[str, Any]:
     out = {**SETTINGS_DEFAULTS, **(stored if isinstance(stored, dict) else {})}
-    if not _PATH_RE.match(str(out["sysctl_file"])):
-        out["sysctl_file"] = SETTINGS_DEFAULTS["sysctl_file"]
+    for k in _PATH_KEYS:
+        if not _PATH_RE.match(str(out[k] or "")):
+            out[k] = SETTINGS_DEFAULTS[k]
     for k in ("cilium_namespace", "cilium_configmap", "cilium_daemonset"):
         if not _K8S_NAME_RE.match(str(out[k] or "")):
             out[k] = SETTINGS_DEFAULTS[k]
-    try:
-        t = int(out["rollout_timeout_sec"])
-    except (TypeError, ValueError):
-        t = SETTINGS_DEFAULTS["rollout_timeout_sec"]
-    out["rollout_timeout_sec"] = t if 30 <= t <= 3600 else SETTINGS_DEFAULTS["rollout_timeout_sec"]
+    for k in _UNIT_KEYS:
+        if not _UNIT_RE.match(str(out[k] or "")):
+            out[k] = SETTINGS_DEFAULTS[k]
+    for k in _CMD_KEYS:
+        if not _cmd_ok(out[k]):
+            out[k] = SETTINGS_DEFAULTS[k]
+    if not _cmd_ok(out["etcd_health_expect"]):
+        out["etcd_health_expect"] = SETTINGS_DEFAULTS["etcd_health_expect"]
+    if out["etcd_mode"] not in ETCD_MODES:
+        out["etcd_mode"] = "auto"
+    for k, (lo, hi) in _INT_RANGES.items():
+        try:
+            t = int(out[k])
+        except (TypeError, ValueError):
+            t = SETTINGS_DEFAULTS[k]
+        out[k] = t if lo <= t <= hi else SETTINGS_DEFAULTS[k]
     return {k: out[k] for k in SETTINGS_DEFAULTS}
 
 
@@ -88,10 +129,18 @@ def set_settings(db: Session, patch: dict[str, Any]) -> dict[str, Any]:
     for k, v in patch.items():
         if v is None:
             continue
-        if k == "sysctl_file" and not _PATH_RE.match(str(v)):
-            raise ApplyError(422, "sysctl 파일 경로는 / 로 시작하는 절대 경로여야 합니다(영문·숫자·_ . / - 만).")
+        if k in _PATH_KEYS and not _PATH_RE.match(str(v)):
+            raise ApplyError(422, f"{k}: / 로 시작하는 절대 경로여야 합니다(영문·숫자·_ . / - 만).")
         if k in ("cilium_namespace", "cilium_configmap", "cilium_daemonset") and not _K8S_NAME_RE.match(str(v)):
             raise ApplyError(422, f"{k}: 쿠버네티스 이름 형식이 아닙니다.")
+        if k in _UNIT_KEYS and not _UNIT_RE.match(str(v)):
+            raise ApplyError(422, f"{k}: systemd 유닛 이름 형식이 아닙니다.")
+        if k in (*_CMD_KEYS, "etcd_health_expect") and not _cmd_ok(v):
+            raise ApplyError(422, f"{k}: 한 줄(300자 이하)이어야 하고 제어문자를 쓸 수 없습니다.")
+        if k == "etcd_mode" and v not in ETCD_MODES:
+            raise ApplyError(422, "etcd_mode 는 auto · static_pod · systemd 중 하나입니다.")
+        if k == "etcd_backup_dir" and str(v).rstrip("/").startswith("/etc/kubernetes/manifests"):
+            raise ApplyError(422, "백업 디렉터리를 매니페스트 디렉터리 안에 두면 kubelet 이 사본을 정적 파드로 띄웁니다.")
     row = db.query(AppSetting).filter(AppSetting.key == SETTINGS_KEY).first()
     prev = row.value if row and isinstance(row.value, dict) else {}
     merged = _normalize_settings({**prev, **{k: v for k, v in patch.items() if v is not None}})
@@ -154,6 +203,7 @@ def plan_apply(db: Session, cluster: Cluster, service: str, version_no: Optional
     changes = V.diff_values({k: v for k, v in before.items() if k in keys}, values)
 
     scope_nodes: list[str] = []
+    etcd_hosts: dict[str, str] = {}
     if service in V.GROUPLESS_SERVICES:
         scope_nodes = [C.CLUSTER_NODE]
         target_mode = "scope"
@@ -161,6 +211,12 @@ def plan_apply(db: Session, cluster: Cluster, service: str, version_no: Optional
         items = V.load_items(db, service)
         cur = C.current_values(service, V.latest_snapshots(db, cluster.id, service), items)
         all_nodes = sorted({s["node"] for s in cur["sources"]})
+        if service == "etcd":
+            from app.services.service_config import apply_nodes as AN
+
+            members = AN.etcd_members(cluster)  # 정적 파드 멤버(K8S API) — 실패해도 수집 값으로 폴백
+            etcd_hosts = {m["node"]: m["host"] for m in members}
+            all_nodes = sorted(set(all_nodes) | set(etcd_hosts))
         membership = V.node_group_map(all_nodes, V.list_groups(db, cluster.id, service))
         scope_nodes = [n for n in all_nodes if membership.get(n) == (str(gid) if gid else None)]
     if target_mode == "nodes":
@@ -171,7 +227,12 @@ def plan_apply(db: Session, cluster: Cluster, service: str, version_no: Optional
         targets = chosen
     else:
         targets = scope_nodes
-    hosts = _node_hosts(db, cluster, targets) if service == "linux" else {n: n for n in targets}
+    if service == "linux":
+        hosts = _node_hosts(db, cluster, targets)
+    elif service == "etcd":
+        hosts = {n: etcd_hosts.get(n) or n for n in targets}
+    else:
+        hosts = {n: n for n in targets}
     return {
         "service": meta, "supported": service in APPLY_SUPPORTED,
         "group": {"id": str(gid) if gid else None, "name": group.name if group else "기본"},
@@ -179,7 +240,28 @@ def plan_apply(db: Session, cluster: Cluster, service: str, version_no: Optional
         "target_mode": target_mode, "scope_nodes": scope_nodes,
         "targets": [{"node": n, "host": hosts.get(n, n)} for n in targets],
         "values": values, "changes": changes,
+        "commands": planned_commands(service, get_settings(db), values, plan_base=baseline.version_no if baseline else 0),
     }
+
+
+def planned_commands(service: str, cfg: dict[str, Any], values: dict[str, Any], plan_base: int = 0) -> list[str]:
+    """적용 대화상자에 그대로 보여 줄 '나가는 명령' — 비밀값 없음, 노드 자리는 <노드>(UI-First 규칙 4)."""
+    if service == "linux":
+        f = cfg["sysctl_file"]
+        return [f"sysctl -e {' '.join(sorted(values))}", f"cp -p {f} {f}.pep-bak-v{plan_base}",
+                f"tee {f}  # 관리 파일 기록({len(values)}개 키)", f"sysctl -p {f}", "sysctl -e …  # 다시 읽어 확인"]
+    if service == "cilium":
+        ns, cm, ds = cfg["cilium_namespace"], cfg["cilium_configmap"], cfg["cilium_daemonset"]
+        return [f"K8S API: read configmap {ns}/{cm}", f"K8S API: patch configmap {ns}/{cm}  # 바뀐 키만",
+                f"K8S API: patch daemonset {ns}/{ds} restartedAt  # 롤링 재시작(옵션)",
+                f"K8S API: read daemonset {ns}/{ds}  # 롤아웃 대기"]
+    from app.services.service_config import apply_nodes as AN
+
+    if service == "etcd":
+        return AN.etcd_commands(cfg, plan_base)
+    if service == "containerd":
+        return AN.containerd_commands(cfg, plan_base)
+    return []
 
 
 # ── 렌더·검증 ────────────────────────────────────────────────────────────────
@@ -239,7 +321,7 @@ class RunLog:
 def start_run(db: Session, cluster: Cluster, service: str, plan: dict[str, Any], options: dict[str, Any],
               username: Optional[str]) -> ServiceConfigApplyRun:
     if service not in APPLY_SUPPORTED:
-        raise ApplyError(422, f"{plan['service']['label']} 적용은 다음 단계에서 제공됩니다(지금은 LINUX·CILIUM).")
+        raise ApplyError(422, f"{plan['service']['label']} 은(는) 적용을 지원하지 않습니다.")
     if not plan["targets"]:
         raise ApplyError(422, "적용할 노드가 없습니다. 먼저 현재 값을 수집하거나 노드를 고르세요.")
     running = db.query(ServiceConfigApplyRun.id).filter(
@@ -581,6 +663,11 @@ async def execute(db: Session, cluster: Cluster, run_id: UUID, plan: dict[str, A
     try:
         if run.service == "linux":
             return await run_os(db, cluster, run, plan, opts, creds, log)
+        if run.service in ("etcd", "containerd"):
+            from app.services.service_config import apply_nodes as AN
+
+            runner = AN.run_etcd if run.service == "etcd" else AN.run_containerd
+            return await runner(db, cluster, run, plan, opts, creds, log)
         return await run_cilium(db, cluster, run, plan, opts, log)
     except Exception as exc:  # noqa: BLE001 — 실행 행이 running 으로 남지 않게
         db.rollback()

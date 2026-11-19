@@ -6733,6 +6733,8 @@ export interface ServiceConfigApplyPlan {
   scopeNodes: string[];
   targets: { node: string; host: string }[];
   changes: ServiceConfigDiffRow[];
+  /** 적용 때 나갈 명령(비밀값 없음) — 대화상자에 그대로 보인다. */
+  commands: string[];
 }
 export interface ServiceConfigApplyNodeResult {
   node: string;
@@ -6767,4 +6769,16 @@ export interface ServiceConfigApplySettings {
   ciliumConfigmap: string;
   ciliumDaemonset: string;
   rolloutTimeoutSec: number;
+  etcdMode: 'auto' | 'static_pod' | 'systemd';
+  etcdManifest: string;
+  etcdEnvFile: string;
+  etcdService: string;
+  etcdBackupDir: string;
+  etcdHealthCmd: string;
+  etcdHealthExpect: string;
+  etcdHealthTimeoutSec: number;
+  containerdConfig: string;
+  containerdService: string;
+  containerdRestartCmd: string;
+  nodeReadyTimeoutSec: number;
 }
