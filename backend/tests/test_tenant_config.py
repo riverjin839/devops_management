@@ -160,7 +160,8 @@ def test_effective_route_applies_tenant_override():
         "incident_analysis": {"primary": "deleted-profile"},  # 없는 프로필 → 전역
     }}
     with llm_tenant_context(tenant):
-        assert effective_route(CFG, "chat") == {"primary": "team-llm", "fallback": "backup-llm"}
+        assert effective_route(CFG, "chat") == {"primary": "team-llm", "fallback": "backup-llm",
+                                                "primary_model": "", "fallback_model": ""}
         assert effective_route(CFG, "embedding")["primary"] == "global-llm"
         assert effective_route(CFG, "incident_analysis")["primary"] == "global-llm"
     assert current_llm_tenant() is None  # 컨텍스트 밖으로 새지 않는다
@@ -180,7 +181,13 @@ def test_put_llm_routing_validation(client_as, world):
     assert c.put(url, json={"routing": {"embedding": {"primary": "local-ollama"}}}).status_code == 422
     r = c.put(url, json={"routing": {"chat": {"primary": "local-ollama", "fallback": "local-ollama"}}})
     assert r.status_code == 200
-    assert r.json()["llm_routing"] == {"chat": {"primary": "local-ollama", "fallback": None}}
+    assert r.json()["llm_routing"] == {"chat": {"primary": "local-ollama", "fallback": None,
+                                                "primary_model": "", "fallback_model": ""}}
+    # 같은 프로필이라도 모델이 다르면 fallback 을 유지한다(LiteLLM 한 주소에 여러 모델)
+    r = c.put(url, json={"routing": {"chat": {"primary": "local-ollama", "fallback": "local-ollama",
+                                               "primary_model": "a", "fallback_model": "b"}}})
+    assert r.json()["llm_routing"]["chat"] == {"primary": "local-ollama", "fallback": "local-ollama",
+                                               "primary_model": "a", "fallback_model": "b"}
     # 비우면 오버라이드 제거
     assert c.put(url, json={"routing": {"chat": {"primary": None}}}).json()["llm_routing"] == {}
     assert client_as(world["member"]).put(url, json={"routing": {}}).status_code == 403

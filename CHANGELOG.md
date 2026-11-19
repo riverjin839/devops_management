@@ -10,6 +10,9 @@
 
 1.92.2 이후 main 에 병합된 변경 (다음 릴리스 후보).
 
+### Changed
+- **LLM 설정 단순화 — LiteLLM 프로필 1개 + 용도별 모델 선택**: 모델마다 프로필을 만들던 방식 대신, LiteLLM 처럼 한 주소에 여러 모델이 있는 엔드포인트를 프로필 하나로 등록하고 Settings → AI/LLM 의 용도별 라우팅 표에서 용도(챗봇·장애 분석 등)마다 모델을 고른다(목록은 엔드포인트의 `/v1/models`, fallback 은 같은 프로필의 다른 모델도 가능, 비우면 프로필 기본 모델). 프로필 편집의 '목록 조회' 는 저장 전에도 입력한 URL·키로 동작하고, 게이트웨이 고급 옵션은 'HTTPRoute·게이트웨이로 직접 연결' 을 켤 때만 보인다(저장값 유지). 연결 진단은 LiteLLM 응답을 감지해 키 허용 모델·`model_list` 별칭·rate limit 기준 힌트를 준다. 용도·모델이 모두 비면 저장 시 경고. Backend: 라우팅 `primary_model`/`fallback_model`(`services/llm/service.py` `route_candidates`, 테넌트 오버라이드 포함), `POST /llm/probe-models`. Frontend: `LlmSettingsTab` `RouteModelInput`.
+
 ## [1.92.2] - 2026-11-19
 
 ### Fixed

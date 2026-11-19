@@ -211,3 +211,23 @@ async def test_diagnose_proxy_warning(monkeypatch, _net_ok):
 
     res = await diag_module.diagnose_profile(_gw(use_env_proxy=False), emit, settings_stored=True)
     assert _by_name(res)["proxy"]["status"] == "ok"
+
+
+# ── LiteLLM 감지 힌트 ────────────────────────────────────────────────
+
+@pytest.mark.asyncio
+async def test_diagnose_litellm_unknown_model_hint(monkeypatch, _net_ok):
+    def handler(req: httpx.Request):
+        h = {"x-litellm-version": "1.50.0"}
+        if req.url.path.endswith("/models"):
+            return httpx.Response(200, headers=h, json={"data": [{"id": "glm-flash"}]})
+        return httpx.Response(400, headers=h, json={"error": {"message": "Invalid model name passed in model=nope"}})
+
+    _mock(monkeypatch, diag_module, handler)
+    events, emit = _emit()
+    res = await diag_module.diagnose_profile(
+        _gw(base_url="http://litellm.ai.svc:4000", model="nope"), emit, settings_stored=True)
+    gen = _by_name(res)["generate"]
+    assert gen["status"] == "fail"
+    assert "model_list" in gen["hint"]
+    assert any("LiteLLM 프록시" in e.get("message", "") for e in events if e.get("type") == "log")

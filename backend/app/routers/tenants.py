@@ -107,6 +107,9 @@ class TenantBindingsPut(BaseModel):
 class LlmRouteIn(BaseModel):
     primary: Optional[str] = None
     fallback: Optional[str] = None
+    # 용도별 모델(LiteLLM 등 한 프로필에 여러 모델) — 비우면 프로필 기본 모델.
+    primary_model: str = Field(default="", max_length=200)
+    fallback_model: str = Field(default="", max_length=200)
 
 
 class TenantLlmRoutingPut(BaseModel):
@@ -409,9 +412,13 @@ def put_llm_routing(tenant_id: UUID, body: TenantLlmRoutingPut, request: Request
         for name in (route.primary, route.fallback):
             if name and name not in profiles:
                 raise HTTPException(status_code=422, detail=f"존재하지 않는 LLM 프로필: {name}")
+        pm, fm = route.primary_model.strip(), route.fallback_model.strip()
+        same = route.fallback == route.primary and fm == pm
         cleaned[purpose] = {
             "primary": route.primary,
-            "fallback": route.fallback if route.fallback and route.fallback != route.primary else None,
+            "fallback": route.fallback if route.fallback and not same else None,
+            "primary_model": pm,
+            "fallback_model": fm if route.fallback and not same else "",
         }
     before = t.llm_routing or {}
     t.llm_routing = cleaned or None

@@ -5579,6 +5579,9 @@ export interface LlmProfileModels {
 export interface LlmRoute {
   primary: string;
   fallback: string | null;
+  /** 용도별 모델 — LiteLLM 처럼 한 프로필에 여러 모델이 있을 때. 비우면 프로필 기본 모델 */
+  primaryModel?: string;
+  fallbackModel?: string;
 }
 
 export interface LlmSettings {

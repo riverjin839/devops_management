@@ -98,7 +98,28 @@ curl -s http://<svc>:<port>/v1/chat/completions -H 'Content-Type: application/js
 PEP 의 LLM 게이트웨이(`backend/app/services/llm/service.py`)는 **프로필 × 용도** 라우팅을 이미 지원한다.
 설정 원천은 **Settings → AI/LLM** (AppSetting `llm_settings`) 이고, 저장하면 환경변수 초기값을 덮는다.
 
-### 2.1 프로필 등록
+### 2.1 프로필 등록 — 권장: LiteLLM 프로필 1개 + 용도별 모델
+
+사내 LiteLLM 이 DNS 로 OpenAI 호환 주소 하나를 제공하면 **모델마다 프로필을 만들지 않는다.**
+
+1. Settings → AI/LLM → 프로필 추가: provider `OpenAI 호환 — LiteLLM·vLLM`, 엔드포인트 URL `http://<litellm 주소>:4000`
+   (끝에 `/v1` 은 붙여도 되고 안 붙여도 된다), API 키는 LiteLLM virtual key 를 **API 키 등록** 후 `credential:<이름>` 으로 참조.
+   **기본 모델은 비워 둔다.** '목록 조회' 는 저장 전에도 입력한 값으로 바로 동작한다.
+2. 아래 **용도별 라우팅** 표에서 용도마다 프로필(같은 LiteLLM)과 모델(LiteLLM `model_list` 별칭 — 목록에서 고르거나 입력)을 고른다.
+   fallback 도 같은 LiteLLM 프로필에 다른 모델로 둘 수 있다.
+3. 저장 → **연결 진단**. LiteLLM 응답이면 로그에 'LiteLLM 프록시' 가 찍히고, 실패 힌트도 LiteLLM 기준
+   (키의 허용 모델·예산, `model_list` 별칭, rate limit, 뒤쪽 `api_base` 도달)으로 나온다.
+
+| 용도 | 프로필 | 모델 (LiteLLM 별칭 예) |
+|---|---|---|
+| 챗봇 | `litellm` | `glm-5.3-flash` (fallback: `litellm` / `gpt-oss-20b`) |
+| 장애 분석 | `litellm` | `deepseek-v4.1-flash` |
+| 점검 리뷰/요약 | `litellm` | `qwen3.6-36b` |
+
+모델을 비워 두면 프로필 기본 모델을 쓰고, 둘 다 비면 저장 시 경고가 뜬다. 동시성은 프로필 단위라 LiteLLM 프로필 하나가
+모든 용도의 동시 호출 상한이 된다 — LiteLLM 쪽 rpm/tpm 한도와 함께 맞춘다.
+
+#### 직접 연결 — LiteLLM 없이 모델 서버마다 프로필을 둘 때
 
 Settings → AI/LLM → 프로필 추가 — 모델 하나당 프로필 하나.
 
@@ -114,10 +135,10 @@ Settings → AI/LLM → 프로필 추가 — 모델 하나당 프로필 하나.
 - 동시성은 프로필별 세마포어다. GPU KV 캐시 여유에 맞춰 잡고, 서빙 측 대기열 지표(§6)를 보며 조정한다.
 - 저장 후 같은 화면의 **연결 진단**으로 4개 프로필이 모두 응답하는지 확인한다. HTTPRoute 경유라면 §2.1.1.
 
-### 2.1.1 HTTPRoute 경유 연결 — DNS·포트는 되는데 진단이 막힐 때
+### 2.1.1 HTTPRoute 직접 연결 — DNS·포트는 되는데 진단이 막힐 때 (LiteLLM 을 쓰면 해당 없음)
 
 다른 클러스터(GPU K8s)의 모델을 Gateway API HTTPRoute 로 붙이면 DNS·포트 연결은 Gateway 까지만
-확인해 준다. 그 뒤 HTTP 단계에서 막히는 원인과 **프로필 편집 → 고급 — 게이트웨이(HTTPRoute·Ingress) 연결**
+확인해 준다. 그 뒤 HTTP 단계에서 막히는 원인과 **프로필 편집 → 'HTTPRoute·게이트웨이로 직접 연결' 체크 후 나오는 옵션**
 에서 고칠 위치:
 
 | 진단 로그 증상 | 원인 | 화면에서 고칠 곳 |
