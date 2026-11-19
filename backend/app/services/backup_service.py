@@ -85,6 +85,8 @@ LOG_TABLES: frozenset[str] = frozenset({
     # 노드 OS 파라미터 에이전트 상태(마지막 보고 시각 등) — 다음 보고로 다시 생기는 파생 데이터.
     # 감시 규칙(node_param_watch_rules)은 설정이라 제외하지 않는다.
     "node_param_agents",
+    # 서비스 구성 적용 실행 이력 — 노드별 결과·로그(로그성, 365일).
+    "service_config_apply_runs",
 })
 
 # 민감 컬럼을 마스킹할 때 쓰는 센티널. ``None`` 을 쓰면 "값이 원래 없었다"와

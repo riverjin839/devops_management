@@ -418,3 +418,254 @@ def test_api_evaluate_allowed_for_viewer_but_save_forbidden(db, linux_v1):
         assert r.status_code == 200 and r.json()["rows"] == []
     finally:
         app.dependency_overrides.pop(get_current_user, None)
+
+
+# ── 3단계: 적용(OS·CILIUM) ───────────────────────────────────────────────────
+
+def test_validate_pairs_and_render():
+    from app.services.service_config import apply as A
+
+    ok = A.validate_pairs({"net.core.somaxconn": "8192", "net.ipv4.ip_local_port_range": "10000  65000"})
+    assert ok["net.ipv4.ip_local_port_range"] == "10000 65000"
+    assert A.validate_pairs({"vm.swappiness": "1\n2"}) == {"vm.swappiness": "1 2"}  # 줄바꿈은 공백으로 정규화돼 줄을 끼워 넣을 수 없다
+    for bad in ("1; reboot", "$(id)", "a'b", "`x`", 'a"b', "1|2", "x>y"):
+        with pytest.raises(A.ApplyError):
+            A.validate_pairs({"vm.swappiness": bad})
+    with pytest.raises(A.ApplyError):
+        A.validate_pairs({"vm swappiness": "1"})
+    text = A.render_sysctl_file(ok, cluster_name="c", version_no=3, group_name="기본")
+    assert "net.core.somaxconn = 8192\n" in text and text.startswith("# PEP")
+
+
+class FakeNodes:
+    """노드별 커널 값·관리 파일을 흉내 내는 가짜 SSH."""
+
+    def __init__(self, nodes, broken=(), ignore_writes=()):
+        self.state = {n: {"net.core.somaxconn": "4096", "net.ipv4.tcp_max_syn_backlog": "4096",
+                          "net.ipv4.ip_forward": "1", "vm.swappiness": "1"} for n in nodes}
+        self.files = {}
+        self.broken = set(broken)
+        self.ignore = set(ignore_writes)
+        self.cmds = []
+
+    def __call__(self, target, cmd, connect_timeout=8, exec_timeout=30):
+        from app.services.ssh_runner import SSHResult
+
+        h = target.host
+        self.cmds.append((h, cmd))
+        if h in self.broken:
+            return SSHResult(host=h, status="connect_error", exit_code=None, stdout="", stderr="", duration_ms=1,
+                             error="connection refused")
+        ok = lambda out="": SSHResult(host=h, status="ok", exit_code=0, stdout=out, stderr="", duration_ms=1, error=None)  # noqa: E731
+        if "sysctl -e" in cmd:
+            keys = cmd.split("sysctl -e", 1)[1].split()
+            return ok("\n".join(f"{k} = {self.state[h].get(k)}" for k in keys if k in self.state[h]))
+        if " tee " in cmd or cmd.startswith("tee "):
+            self.files[h] = cmd.split("<<'PEP_SYSCTL_EOF'\n", 1)[1].rsplit("PEP_SYSCTL_EOF", 1)[0]
+            return ok()
+        if "sysctl -p" in cmd:
+            if h not in self.ignore:
+                for line in self.files.get(h, "").splitlines():
+                    if "=" in line and not line.startswith("#"):
+                        k, v = line.split("=", 1)
+                        self.state[h][k.strip()] = v.strip()
+            return ok("applied")
+        if "sysctl -w" in cmd:
+            if h not in self.ignore:
+                for pair in cmd.split("sysctl -w", 1)[1].split():
+                    k, v = pair.split("=", 1)
+                    self.state[h][k] = v.strip("'")
+            return ok()
+        return ok()
+
+
+def _save_v2(db, c):
+    from app.services.service_config import view as V
+
+    vals = dict(V.list_versions(db, c.id, "linux")[0].values)
+    vals.update({"net.core.somaxconn": "8192", "net.ipv4.tcp_max_syn_backlog": "8192"})
+    return V.save_version(db, c, "linux", None, 1, vals, "상향", "tester")["version"]["version_no"]
+
+
+async def _run_apply(db, c, service, plan, opts, creds=None):
+    from app.services.service_config import apply as A
+
+    run = A.start_run(db, c, service, plan, opts, "tester")
+    return await A.execute(db, c, run.id, plan, opts, creds or {"username": "root", "password": "x"}, lambda e: None)
+
+
+async def test_apply_os_success_marks_applied_and_updates_watch_rules(db, linux_v1, monkeypatch):
+    from app.models.node_param_watch import NodeParamWatchRule
+    from app.models.service_config import ServiceConfigApplyRun
+    from app.services import ssh_runner
+    from app.services.service_config import apply as A
+    from app.services.service_config import view as V
+
+    c = linux_v1
+    fake = FakeNodes(["w1", "w2", "gpu-1"])
+    monkeypatch.setattr(ssh_runner, "_exec_ssh", fake)
+    v2 = _save_v2(db, c)
+    plan = A.plan_apply(db, c, "linux", v2, None)
+    assert [t["node"] for t in plan["targets"]] == ["gpu-1", "w1", "w2"]
+    assert {ch["key"] for ch in plan["changes"]} == {"net.core.somaxconn", "net.ipv4.tcp_max_syn_backlog"}
+    try:
+        out = await _run_apply(db, c, "linux", plan, {"batch_size": 2, "pause_sec": 0})
+        assert out["status"] == "succeeded", out
+        assert all(r["status"] == "ok" and r["after"]["net.core.somaxconn"] == "8192" for r in out["node_results"])
+        assert "net.core.somaxconn = 8192" in fake.files["w1"]
+        assert any("cp -p /etc/sysctl.d/99-zz-pep.conf" in cmd for _, cmd in fake.cmds)
+        assert V.list_versions(db, c.id, "linux")[0].status == "applied"
+        assert V.build_view(db, c, "linux")["pending"] is None
+        rule = db.query(NodeParamWatchRule).filter(NodeParamWatchRule.cluster_id == c.id,
+                                                   NodeParamWatchRule.param == "net.core.somaxconn").one()
+        assert rule.operator == "eq" and rule.expected == "8192" and rule.created_by == "service-config"
+        run = db.query(ServiceConfigApplyRun).filter(ServiceConfigApplyRun.cluster_id == c.id).one()
+        assert "password" not in str(run.options) and "x" not in (run.options or {}).values()
+        assert any("확인 4/4" in line[2] or "일치" in line[2] for line in run.log_lines)
+    finally:
+        db.query(NodeParamWatchRule).filter(NodeParamWatchRule.cluster_id == c.id).delete(synchronize_session=False)
+        db.query(ServiceConfigApplyRun).filter(ServiceConfigApplyRun.cluster_id == c.id).delete(synchronize_session=False)
+        db.commit()
+
+
+async def test_apply_os_failures_stop_partial_and_verify(db, linux_v1, monkeypatch):
+    from app.models.service_config import ServiceConfigApplyRun
+    from app.services import ssh_runner
+    from app.services.service_config import apply as A
+    from app.services.service_config import view as V
+
+    c = linux_v1
+    v2 = _save_v2(db, c)
+    try:
+        # 첫 노드 접속 실패 + 실패 시 중단 → 나머지 건너뜀, failed
+        monkeypatch.setattr(ssh_runner, "_exec_ssh", FakeNodes(["w1", "w2", "gpu-1"], broken={"gpu-1"}))
+        out = await _run_apply(db, c, "linux", A.plan_apply(db, c, "linux", v2, None), {"batch_size": 1, "pause_sec": 0})
+        assert out["status"] == "failed" and [r["status"] for r in out["node_results"]] == ["failed", "skipped", "skipped"]
+        assert V.list_versions(db, c.id, "linux")[0].status == "saved"
+        # 실패해도 계속 → partial
+        monkeypatch.setattr(ssh_runner, "_exec_ssh", FakeNodes(["w1", "w2", "gpu-1"], broken={"gpu-1"}))
+        out = await _run_apply(db, c, "linux", A.plan_apply(db, c, "linux", v2, None),
+                               {"batch_size": 1, "pause_sec": 0, "stop_on_failure": False})
+        assert out["status"] == "partial"
+        # 다시 읽은 값이 다르면 실패
+        monkeypatch.setattr(ssh_runner, "_exec_ssh", FakeNodes(["w1", "w2", "gpu-1"], ignore_writes={"w2"}))
+        out = await _run_apply(db, c, "linux", A.plan_apply(db, c, "linux", v2, None, "nodes", ["w2"]),
+                               {"batch_size": 1, "pause_sec": 0, "persist": False})
+        assert out["status"] == "failed" and "다시 읽은 값" in out["node_results"][0]["error"]
+        # 고른 노드만 성공 → 버전은 저장됨 유지
+        monkeypatch.setattr(ssh_runner, "_exec_ssh", FakeNodes(["w1", "w2", "gpu-1"]))
+        out = await _run_apply(db, c, "linux", A.plan_apply(db, c, "linux", v2, None, "nodes", ["w1"]),
+                               {"batch_size": 1, "pause_sec": 0, "update_watch_rules": True})
+        assert out["status"] == "succeeded" and V.list_versions(db, c.id, "linux")[0].status == "saved"
+        with pytest.raises(A.ApplyError):
+            A.plan_apply(db, c, "linux", v2, None, "nodes", ["nope"])
+    finally:
+        db.query(ServiceConfigApplyRun).filter(ServiceConfigApplyRun.cluster_id == c.id).delete(synchronize_session=False)
+        db.commit()
+
+
+async def test_apply_conflict_and_stop(db, linux_v1, monkeypatch):
+    from app.models.service_config import ServiceConfigApplyRun
+    from app.services import ssh_runner
+    from app.services.service_config import apply as A
+
+    c = linux_v1
+    v2 = _save_v2(db, c)
+    monkeypatch.setattr(ssh_runner, "_exec_ssh", FakeNodes(["w1", "w2", "gpu-1"]))
+    plan = A.plan_apply(db, c, "linux", v2, None)
+    try:
+        run = A.start_run(db, c, "linux", plan, {"batch_size": 1}, "tester")
+        with pytest.raises(A.ApplyError) as e:
+            A.start_run(db, c, "linux", plan, {"batch_size": 1}, "tester")
+        assert e.value.status == 409
+        run.stop_requested = True
+        db.commit()
+        out = await A.execute(db, c, run.id, plan, {"batch_size": 1, "pause_sec": 0}, {"password": "x"}, lambda e: None)
+        assert out["status"] == "stopped" and all(r["status"] == "skipped" for r in out["node_results"])
+        with pytest.raises(A.ApplyError) as e:
+            A.start_run(db, c, "etcd", {**plan, "service": {"label": "ETCD"}}, {}, "tester")
+        assert e.value.status == 422
+    finally:
+        db.query(ServiceConfigApplyRun).filter(ServiceConfigApplyRun.cluster_id == c.id).delete(synchronize_session=False)
+        db.commit()
+
+
+class FakeK8s:
+    def __init__(self, data, ready_after=2):
+        self.data = dict(data)
+        self.patches = []
+        self.restarts = 0
+        self.reads = 0
+        self.ready_after = ready_after
+
+    def read_namespaced_config_map(self, name, ns, **_):
+        return SimpleNamespace(data=dict(self.data))
+
+    def patch_namespaced_config_map(self, name, ns, body, **_):
+        self.patches.append(body)
+        self.data.update(body["data"])
+
+    def patch_namespaced_daemon_set(self, name, ns, body, **_):
+        self.restarts += 1
+
+    def read_namespaced_daemon_set(self, name, ns, **_):
+        self.reads += 1
+        done = self.reads >= self.ready_after
+        return SimpleNamespace(metadata=SimpleNamespace(generation=2),
+                               status=SimpleNamespace(desired_number_scheduled=3, observed_generation=2,
+                                                      updated_number_scheduled=3 if done else 1,
+                                                      number_available=3 if done else 2))
+
+
+async def test_apply_cilium_patch_restart_and_snapshot(db, linux_v1, monkeypatch):
+    from app.models.service_config import ServiceConfigApplyRun
+    from app.services.service_config import apply as A
+    from app.services.service_config import view as V
+
+    c = linux_v1
+    V.import_v1(db, c, "cilium", "tester")
+    v1 = dict(V.list_versions(db, c.id, "cilium")[0].values)
+    V.save_version(db, c, "cilium", None, 1, {**v1, "routing-mode": "tunnel", "enable-hubble": "true"}, None, "tester")
+    k8s = FakeK8s({"routing-mode": "tunnel"})
+    monkeypatch.setattr(A, "k8s_apis", lambda cluster: (k8s, k8s))
+    try:
+        plan = A.plan_apply(db, c, "cilium", None, None)
+        assert plan["targets"][0]["node"] == "(클러스터)"
+        out = await _run_apply(db, c, "cilium", plan, {"restart": True, "poll_sec": 0.01})
+        assert out["status"] == "succeeded", out
+        assert k8s.patches == [{"data": {"enable-hubble": "true"}}] and k8s.restarts == 1
+        rows = {r["key"]: r for s in V.build_view(db, c, "cilium")["sections"] for r in s["items"]}
+        assert rows["enable-hubble"]["current"]["value"] == "true"  # 스냅샷 갱신
+        assert V.list_versions(db, c.id, "cilium")[0].status == "applied"
+        # 롤아웃이 제한 시간 안에 끝나지 않으면 실패
+        V.save_version(db, c, "cilium", None, 2, {**v1, "routing-mode": "tunnel", "enable-hubble": "false"}, None, "tester")
+        slow = FakeK8s(dict(k8s.data), ready_after=10_000)
+        monkeypatch.setattr(A, "k8s_apis", lambda cluster: (slow, slow))
+        out = await _run_apply(db, c, "cilium", A.plan_apply(db, c, "cilium", None, None),
+                               {"restart": True, "poll_sec": 0.05, "rollout_timeout_sec": 1})
+        assert out["status"] == "failed" and "롤아웃" in out["node_results"][0]["error"]
+    finally:
+        db.query(ServiceConfigApplyRun).filter(ServiceConfigApplyRun.cluster_id == c.id).delete(synchronize_session=False)
+        db.commit()
+
+
+def test_apply_api_guards(db, linux_v1):
+    from fastapi.testclient import TestClient
+
+    from app.auth.deps import get_current_user
+    from app.main import app
+
+    c = linux_v1
+    op = SimpleNamespace(id=uuid.uuid4(), username="op", role="operator", is_active=True, tenant_ids=[])
+    app.dependency_overrides[get_current_user] = lambda: op
+    try:
+        client = TestClient(app)
+        r = client.get(f"/api/v1/service-config/clusters/{c.id}/linux/apply/plan")
+        assert r.status_code == 200 and len(r.json()["targets"]) == 3
+        r = client.post(f"/api/v1/service-config/clusters/{c.id}/linux/apply/stream", json={})
+        assert r.status_code == 422 and "SSH" in r.json()["detail"]
+        r = client.put("/api/v1/service-config/settings", json={"sysctl_file": "/etc/x.conf"})
+        assert r.status_code == 403
+        assert client.get("/api/v1/service-config/settings").json()["sysctl_file"].startswith("/etc/sysctl.d/")
+    finally:
+        app.dependency_overrides.pop(get_current_user, None)

@@ -103,3 +103,30 @@ class ServiceConfigGroup(Base):
     sort_order = Column(Integer, nullable=False, default=0)
     created_by = Column(String(128), nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+
+
+class ServiceConfigApplyRun(Base):
+    """적용 1회 = 1행(로그성, 365일). SSH 자격증명은 저장하지 않는다 — 요청 안에서만 쓴다.
+
+    ``status``: running · succeeded(대상 전부 성공) · partial(일부 성공·건너뜀) · failed(성공 없음) · stopped(중지 요청).
+    ``node_results``: 노드별 {node, host, status(ok|failed|skipped), before, after, error, duration_ms}.
+    ``log_lines``: [[ts, level, message], ...] — 배치마다 커밋돼 화면을 다시 열어도 진행이 보인다.
+    """
+    __tablename__ = "service_config_apply_runs"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    cluster_id = Column(UUID(as_uuid=True), ForeignKey("clusters.id", ondelete="CASCADE"), nullable=False, index=True)
+    service = Column(String(32), nullable=False)
+    group_id = Column(UUID(as_uuid=True), nullable=True)
+    version_no = Column(Integer, nullable=False)
+    status = Column(String(16), nullable=False, default="running")
+    target_mode = Column(String(16), nullable=False, default="scope")   # scope(범위 전체) | nodes(고른 노드)
+    targets = Column(JSONB, nullable=True)
+    options = Column(JSONB, nullable=True)
+    changes = Column(JSONB, nullable=True)
+    node_results = Column(JSONB, nullable=True)
+    log_lines = Column(JSONB, nullable=True)
+    stop_requested = Column(Boolean, nullable=False, default=False)
+    started_by = Column(String(128), nullable=True)
+    started_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    finished_at = Column(DateTime, nullable=True)

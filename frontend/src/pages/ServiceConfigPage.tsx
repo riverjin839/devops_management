@@ -3,19 +3,21 @@
 // 버전 비교·되돌리기, 노드 그룹 재정의. 노드에 실제로 반영하는 적용은 다음 단계 — 이 화면의 저장은 노드에 아무것도 하지 않는다.
 // '현재 값 수집' 은 노드 설정을 읽기만 하며 실시간 실행 로그를 남긴다.
 import { useEffect, useMemo, useState } from 'react';
-import { Database, GitCompare, Layers, Pencil, Plus, Search, Trash2 } from 'lucide-react';
+import { Database, GitCompare, History, Layers, Pencil, Play, Plus, Search, Settings2, Trash2 } from 'lucide-react';
 import { useClusters } from '@/hooks/useCluster';
 import { useK8sHub } from '@/lib/k8sHub';
 import { useUrlParams } from '@/hooks/useUrlParams';
 import { useCanOperate } from '@/hooks/useCanOperate';
 import { useLogPref } from '@/hooks/useLogPref';
 import { useDebouncedValue } from '@/hooks/useDebouncedValue';
-import { runLogged, useRunLog, type RunLogEntry } from '@/hooks/useRunLog';
+import { applyRunEvent, runLogged, useRunLog, type RunLogEntry } from '@/hooks/useRunLog';
+import { postSse } from '@/lib/sse';
+import { useAuthStore } from '@/stores/authStore';
 import { useAbortableMutation } from '@/hooks/useAbortableMutation';
 import {
   useDeleteServiceConfigGroup, useImportServiceConfig, useInvalidateServiceConfig, useRevertServiceConfig,
   useSaveServiceConfigGroup, useSaveServiceConfigVersion, useServiceConfigEvaluate, useServiceConfigServices,
-  useServiceConfigView,
+  useServiceConfigView, useServiceConfigApplyRun, useStopServiceConfigApply,
 } from '@/hooks/useServiceConfig';
 import {
   ClusterSidebar, ConfirmDialog, EmptyState, ErrorState, LoadingState, PageShell, RunLogPanel, SegTabs,
@@ -25,13 +27,15 @@ import { PageHeader } from '@/components/common/PageHeader';
 import { MacCard } from '@/components/ui/MacCard';
 import { Button } from '@/components/ui/button';
 import {
-  GroupDialog, SaveVersionDialog, ServiceConfigRail, ServiceConfigSections, VersionCompareDialog, type DraftChange,
+  ApplyDialog, ApplyHistoryDialog, ApplyRunPanel, ApplySettingsDialog, GroupDialog, SaveVersionDialog, ServiceConfigRail,
+  ServiceConfigSections, VersionCompareDialog, type ApplyRequest, type DraftChange,
 } from '@/components/service-config';
 import { afterModalClose } from '@/components/service-config/afterModalClose';
+import { RUN_STATUS } from '@/components/service-config/runStatus';
 import { ContainerdConfigCollectModal, EtcdSystemdModal, KernelParamsCollectModal } from '@/components/versions';
-import { versionsApi } from '@/services/api';
+import { camelizeKeys, serviceConfigApi, versionsApi } from '@/services/api';
 import { formatApiError, formatRelativeTime } from '@/lib/utils';
-import type { ServiceConfigCollectKind, ServiceConfigRuleResult, ServiceConfigView } from '@/types';
+import type { ServiceConfigApplyRun, ServiceConfigCollectKind, ServiceConfigRuleResult, ServiceConfigView } from '@/types';
 
 const COLLECT_LABEL: Record<ServiceConfigCollectKind, string> = {
   versions: 'K8S API 로 수집',
@@ -42,6 +46,7 @@ const COLLECT_LABEL: Record<ServiceConfigCollectKind, string> = {
 const STATUS_LABEL: Record<string, string> = { imported: '가져옴', saved: '저장됨·미적용', applied: '적용됨', superseded: '대체됨' };
 
 type Filter = 'all' | 'flagged' | 'edited';
+const APPLY_SUPPORTED = new Set(['linux', 'cilium']);
 
 function sourceSummary(view: ServiceConfigView | undefined): string {
   if (!view || view.sources.length === 0) return '아직 수집된 값이 없다';
@@ -93,6 +98,14 @@ export function ServiceConfigPage() {
   const [groupDialog, setGroupDialog] = useState<'new' | 'edit' | null>(null);
   const [deleteGroupOpen, setDeleteGroupOpen] = useState(false);
   const [discard, setDiscard] = useState<(() => void) | null>(null);
+  const [applyOpen, setApplyOpen] = useState(false);
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [applyRunId, setApplyRunId] = useState<string | null>(null);
+  const [applyStreaming, setApplyStreaming] = useState(false);
+  const [applyTitle, setApplyTitle] = useState('');
+  const [applyResult, setApplyResult] = useState<ServiceConfigApplyRun | null>(null);
+  const isAdmin = useAuthStore((st) => st.user?.role === 'admin');
 
   const { canOperate, withHint, ariaWithHint } = useCanOperate(clusterId);
   const invalidate = useInvalidateServiceConfig();
@@ -101,6 +114,9 @@ export function ServiceConfigPage() {
   const revertMut = useRevertServiceConfig(clusterId, service);
   const groupMut = useSaveServiceConfigGroup(clusterId, service);
   const deleteGroupMut = useDeleteServiceConfigGroup(clusterId, service);
+  const stopMut = useStopServiceConfigApply(clusterId, service);
+  const applyRunQ = useServiceConfigApplyRun(clusterId, service, applyRunId);
+  const applyRun = applyRunQ.data ?? applyResult ?? undefined;
 
   // ── 초안 ── 기본 그룹은 전체 값, 노드 그룹은 재정의 값만(빈 칸 = 기본 상속).
   const groupMode = !!view?.group.id;
@@ -169,6 +185,44 @@ export function ServiceConfigPage() {
       },
     });
   };
+  // ── 적용 — SSE 실시간 실행 로그(로그 보기 토글 `service-config-apply`), 진행·노드 결과는 실행 이력 행을 다시 읽는다.
+  const applyLog = useRunLog();
+  const [showApplyLog, setShowApplyLog] = useLogPref('service-config-apply');
+  const startApply = async (req: ApplyRequest) => {
+    setApplyOpen(false);
+    setApplyResult(null);
+    setApplyRunId(null);
+    setApplyStreaming(true);
+    const label = `${meta?.label ?? service} · ${view?.group.name ?? '기본'} V${req.version_no}`;
+    setApplyTitle(label);
+    applyLog.clear();
+    const run = applyLog.begin(`적용 — ${label}`, `${clusterName || clusterId} — ${label} 적용 요청 (${req.target_mode === 'nodes' ? `고른 노드 ${req.nodes.length}개` : '범위 전체'})`);
+    let failed: string | null = null;
+    let final: ServiceConfigApplyRun | null = null;
+    try {
+      await postSse(serviceConfigApi.applyStreamUrl(clusterId, service), req, (evt) => {
+        if (evt.type === 'run') setApplyRunId(String(evt.runId ?? evt.run_id ?? ''));
+        else if (evt.type === 'result') { final = camelizeKeys<ServiceConfigApplyRun>(evt.result); setApplyResult(final); }
+        else if (evt.type === 'error') failed = String(evt.message ?? '실패');
+        else applyRunEvent(run, evt);
+      });
+    } catch (e) {
+      failed = formatApiError(e);
+    }
+    if (failed) {
+      run.log('error', failed);
+      toast.error('적용 실패', failed);
+    }
+    run.end();
+    setApplyStreaming(false);
+    void invalidate();
+    const done = final as ServiceConfigApplyRun | null;
+    if (done) {
+      if (done.status === 'succeeded') toast.success('적용을 마쳤습니다', `대상 ${done.nodeResults.length}개 모두 성공`);
+      else toast.warning(`적용 결과: ${RUN_STATUS[done.status].label}`, '노드별 결과와 실행 로그를 확인하세요');
+    }
+  };
+
   const onCollect = (kind: ServiceConfigCollectKind) => {
     if (kind === 'versions') runApiCollect();
     else setModal(kind);
@@ -307,6 +361,18 @@ export function ServiceConfigPage() {
                         <GitCompare /> 비교
                       </Button>
                     )}
+                    {view?.version && (
+                      <Button size="sm" variant="outline"
+                        disabled={!canOperate || !APPLY_SUPPORTED.has(service) || applyStreaming || dirty}
+                        onClick={() => setApplyOpen(true)}
+                        title={!APPLY_SUPPORTED.has(service) ? `${meta?.label ?? service} 적용은 다음 단계에서 제공됩니다`
+                          : dirty ? '저장하지 않은 편집이 있습니다 — 먼저 저장하세요' : withHint(`V${view.version.versionNo} 을(를) 노드에 적용`)}
+                        aria-label={ariaWithHint(`V${view.version.versionNo} 적용`)}>
+                        <Play /> 적용…
+                      </Button>
+                    )}
+                    <Button size="sm" variant="outline" onClick={() => setHistoryOpen(true)} title="적용 이력" aria-label="적용 이력"><History /></Button>
+                    <Button size="sm" variant="outline" onClick={() => setSettingsOpen(true)} title="적용 설정" aria-label="적용 설정"><Settings2 /></Button>
                     {(meta?.collectKinds ?? []).map((k) => (
                       <Button key={k} size="sm" variant="outline" disabled={!canOperate || (k === 'versions' && collectApi.isPending)}
                         onClick={() => onCollect(k)} title={withHint(`현재 값 수집 — ${COLLECT_LABEL[k]} (노드 설정은 바꾸지 않는다)`)}
@@ -328,6 +394,14 @@ export function ServiceConfigPage() {
                   <ErrorState error={viewQ.error} title="설정을 불러오지 못했습니다" onRetry={() => { void viewQ.refetch(); }} />
                 ) : view ? (
                   <>
+                    {(applyStreaming || applyRunId || applyResult) && (
+                      <ApplyRunPanel title={applyTitle} runLog={applyLog} showLog={showApplyLog} onShowLogChange={setShowApplyLog}
+                        run={applyRun} streaming={applyStreaming} canStop={canOperate} stopHint={withHint('중지')}
+                        stopping={stopMut.isPending}
+                        onStop={() => { if (applyRunId) stopMut.mutate(applyRunId, { onError: (e) => toast.error('중지 요청 실패', formatApiError(e)) }); }}
+                        onClose={() => { setApplyRunId(null); setApplyResult(null); applyLog.clear(); }} />
+                    )}
+
                     {groupOptions && (
                       <div className="flex flex-wrap items-center gap-2">
                         <span className="text-xs text-muted-foreground">노드 그룹</span>
@@ -379,12 +453,15 @@ export function ServiceConfigPage() {
                         actions={(
                           <>
                             <Button size="sm" variant="outline" onClick={() => setCompareOpen(true)}>변경 보기</Button>
-                            <Button size="sm" disabled title="노드 적용은 다음 단계에서 제공됩니다" aria-label="적용 — 다음 단계에서 제공">적용…</Button>
+                            <Button size="sm" disabled={!canOperate || !APPLY_SUPPORTED.has(service) || applyStreaming || dirty}
+                              onClick={() => setApplyOpen(true)}
+                              title={!APPLY_SUPPORTED.has(service) ? `${meta?.label ?? service} 적용은 다음 단계에서 제공됩니다` : withHint('노드에 적용')}
+                              aria-label={ariaWithHint('저장된 변경 적용')}>적용…</Button>
                           </>
                         )}
                       >
                         <p className="text-sm text-muted-foreground">
-                          저장된 값은 아직 노드에 반영되지 않았다. 노드 상태는 &lsquo;버전과 다름&rsquo; 으로 보인다.
+                          저장된 값은 아직 노드에 반영되지 않았다. 노드 상태는 &lsquo;버전과 다름&rsquo; 으로 보인다.{!APPLY_SUPPORTED.has(service) && ` ${meta?.label ?? service} 적용은 다음 단계에서 제공된다.`}
                         </p>
                       </MacCard>
                     )}
@@ -516,6 +593,14 @@ export function ServiceConfigPage() {
         onConfirm={() => { void onDeleteGroup(); }}
         onCancel={() => setDeleteGroupOpen(false)}
       />
+      {view && (
+        <ApplyDialog open={applyOpen} clusterId={clusterId} service={service} serviceLabel={meta?.label ?? service}
+          groupId={groupId} versionNo={view.version?.versionNo ?? null} showLog={showApplyLog} onShowLogChange={setShowApplyLog}
+          onClose={() => setApplyOpen(false)} onStart={(req) => { void startApply(req); }} />
+      )}
+      <ApplyHistoryDialog open={historyOpen} clusterId={clusterId} service={service} serviceLabel={meta?.label ?? service}
+        onClose={() => setHistoryOpen(false)} />
+      <ApplySettingsDialog open={settingsOpen} isAdmin={isAdmin} onClose={() => setSettingsOpen(false)} />
       <ConfirmDialog
         open={discard != null}
         title="저장하지 않은 변경을 버릴까요?"

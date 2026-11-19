@@ -2739,6 +2739,20 @@ export const serviceConfigApi = {
     api.put(`/service-config/clusters/${clusterId}/${service}/groups/${groupId}`, body),
   deleteGroup: (clusterId: string, service: string, groupId: string) =>
     api.delete(`/service-config/clusters/${clusterId}/${service}/groups/${groupId}`),
+  applyPlan: (clusterId: string, service: string, version: number | null, groupId: string | null) =>
+    api.get<import('@/types').ServiceConfigApplyPlan>(`/service-config/clusters/${clusterId}/${service}/apply/plan`,
+      { params: { ...(version ? { version } : {}), ...(groupId ? { group_id: groupId } : {}) } }),
+  /** 적용 SSE — `postSse` 로 부른다(본문은 snake_case 그대로, 결과는 camelizeKeys). */
+  applyStreamUrl: (clusterId: string, service: string) => `/api/v1/service-config/clusters/${clusterId}/${service}/apply/stream`,
+  applyRuns: (clusterId: string, service: string) =>
+    api.get<{ items: import('@/types').ServiceConfigApplyRun[] }>(`/service-config/clusters/${clusterId}/${service}/apply-runs`),
+  applyRun: (clusterId: string, service: string, runId: string) =>
+    api.get<import('@/types').ServiceConfigApplyRun>(`/service-config/clusters/${clusterId}/${service}/apply-runs/${runId}`),
+  stopApplyRun: (clusterId: string, service: string, runId: string) =>
+    api.post(`/service-config/clusters/${clusterId}/${service}/apply-runs/${runId}/stop`),
+  settings: () => api.get<import('@/types').ServiceConfigApplySettings>('/service-config/settings'),
+  updateSettings: (body: Partial<import('@/types').ServiceConfigApplySettings>) =>
+    api.put<import('@/types').ServiceConfigApplySettings>('/service-config/settings', body),
 };
 
 // ── 노드 OS 파라미터 감시 — 노드 에이전트(DaemonSet) 보고 기반. 규칙·상태·변경 이력·설치 매니페스트(JWT) ──

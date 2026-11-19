@@ -15,12 +15,13 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
-from app.auth.deps import get_current_user, require_operator
+from app.auth.deps import get_current_user, require_admin, require_operator
 from app.database import get_db
 from app.models.cluster import Cluster
 from app.models.user import User
 from app.services import audit_logger
 from app.services.cluster_access import require_cluster_access
+from app.services.service_config import apply as A
 from app.services.service_config import view as V
 
 router = APIRouter(prefix="/service-config", tags=["Service Config"])
@@ -252,3 +253,185 @@ def delete_group(
         _raise(exc)
     audit_logger.record(db, action="service_config.group.delete", actor=user, target_type="cluster",
                         target_id=str(cluster_id), details={"service": service, "name": name}, request=request)
+
+
+# ── 적용 ─────────────────────────────────────────────────────────────────────
+
+@router.get("/clusters/{cluster_id}/{service}/apply/plan")
+def apply_plan(
+    cluster_id: UUID,
+    service: str,
+    version: Optional[int] = Query(default=None, ge=1),
+    group_id: Optional[UUID] = Query(default=None),
+    db: Session = Depends(get_db),
+    _: User = Depends(get_current_user),
+) -> dict[str, Any]:
+    """적용 미리보기 — 대상 노드·접속 주소·변경 목록(노드에는 아무것도 하지 않는다)."""
+    try:
+        return A.plan_apply(db, _cluster(db, cluster_id), service, version, group_id)
+    except V.ServiceConfigError as exc:
+        _raise(exc)
+
+
+class ApplySsh(BaseModel):
+    username: str = Field(default="root", min_length=1, max_length=64)
+    port: int = Field(default=22, ge=1, le=65535)
+    password: Optional[str] = Field(default=None, max_length=4096)
+    private_key: Optional[str] = Field(default=None, max_length=20000)
+    use_sudo: bool = False
+    connect_timeout: int = Field(default=8, ge=1, le=60)
+
+
+class ApplyOptions(BaseModel):
+    batch_size: int = Field(default=1, ge=1, le=50)
+    pause_sec: int = Field(default=10, ge=0, le=600)
+    stop_on_failure: bool = True
+    persist: bool = True                 # OS — 영구 파일 기록(끄면 sysctl -w 만)
+    update_watch_rules: bool = True      # OS — 감시 규칙을 적용 값으로
+    restart: bool = True                 # CILIUM — DaemonSet 롤링 재시작
+    rollout_timeout_sec: Optional[int] = Field(default=None, ge=30, le=3600)
+
+
+class ApplyInput(BaseModel):
+    version_no: Optional[int] = Field(default=None, ge=1)
+    group_id: Optional[UUID] = None
+    target_mode: str = Field(default="scope", pattern="^(scope|nodes)$")
+    nodes: list[str] = Field(default_factory=list, max_length=2000)
+    options: ApplyOptions = Field(default_factory=ApplyOptions)
+    ssh: Optional[ApplySsh] = None
+
+
+@router.post("/clusters/{cluster_id}/{service}/apply/stream")
+async def apply_stream(
+    cluster_id: UUID,
+    service: str,
+    body: ApplyInput,
+    request: Request,
+    db: Session = Depends(get_db),
+    user: User = Depends(require_operator),
+):
+    """설정 버전을 노드에 적용 — SSE 실시간 로그. 검증 실패는 스트림을 열기 전에 일반 HTTP 오류로 낸다.
+    SSH 자격증명은 이 요청 안에서만 쓰고 어디에도 저장하지 않는다(실행 이력·감사 로그에도 남기지 않는다)."""
+    from app.services.sse import stream_async_job
+
+    cluster = _cluster(db, cluster_id)
+    try:
+        plan = A.plan_apply(db, cluster, service, body.version_no, body.group_id, body.target_mode, body.nodes)
+        creds: dict[str, Any] = {}
+        if service == "linux":
+            if body.ssh is None or not (body.ssh.password or (body.ssh.private_key or "").strip()):
+                raise A.ApplyError(422, "LINUX 적용에는 SSH 비밀번호 또는 개인 키가 필요합니다(저장하지 않습니다).")
+            creds = body.ssh.model_dump()
+            A.validate_pairs(plan["values"])
+        opts = body.options.model_dump()
+        run = A.start_run(db, cluster, service, plan, opts, user.username)
+    except V.ServiceConfigError as exc:
+        _raise(exc)
+    audit_logger.record(db, action="service_config.apply.start", actor=user, target_type="cluster",
+                        target_id=str(cluster_id),
+                        details={"service": service, "run_id": str(run.id), "version_no": plan["version_no"],
+                                 "group": plan["group"]["name"], "target_mode": plan["target_mode"],
+                                 "nodes": [t["node"] for t in plan["targets"]][:50],
+                                 "keys": [c["key"] for c in plan["changes"]][:50]},
+                        request=request)
+    run_id = run.id
+    actor_name = user.username
+
+    async def job(sdb: Session, emit):
+        emit({"type": "run", "run_id": str(run_id)})  # 화면이 중지·이력 조회에 쓸 실행 id 를 먼저 알린다
+        c = sdb.query(type(cluster)).filter(type(cluster).id == cluster_id).one()
+        out = await A.execute(sdb, c, run_id, plan, opts, creds, emit)
+        audit_logger.record(sdb, action="service_config.apply.finish", actor_username=actor_name,
+                            status="success" if out["status"] == "succeeded" else "failure",
+                            target_type="cluster", target_id=str(cluster_id),
+                            details={"service": service, "run_id": str(run_id), "status": out["status"]})
+        return out
+
+    return stream_async_job(job, name=f"service-config-apply-{service}")
+
+
+@router.get("/clusters/{cluster_id}/{service}/apply-runs")
+def list_apply_runs(
+    cluster_id: UUID,
+    service: str,
+    limit: int = Query(default=20, ge=1, le=100),
+    db: Session = Depends(get_db),
+    _: User = Depends(get_current_user),
+) -> dict[str, Any]:
+    from app.models.service_config import ServiceConfigApplyRun as R
+
+    rows = (db.query(R).filter(R.cluster_id == cluster_id, R.service == service)
+            .order_by(R.started_at.desc()).limit(limit).all())
+    return {"items": [A.run_out(r, with_logs=False) for r in rows]}
+
+
+def _get_run(db: Session, cluster_id: UUID, service: str, run_id: UUID):
+    from app.models.service_config import ServiceConfigApplyRun as R
+
+    r = db.query(R).filter(R.id == run_id, R.cluster_id == cluster_id, R.service == service).first()
+    if r is None:
+        raise HTTPException(status_code=404, detail="적용 이력을 찾을 수 없습니다.")
+    return r
+
+
+@router.get("/clusters/{cluster_id}/{service}/apply-runs/{run_id}")
+def get_apply_run(
+    cluster_id: UUID,
+    service: str,
+    run_id: UUID,
+    db: Session = Depends(get_db),
+    _: User = Depends(get_current_user),
+) -> dict[str, Any]:
+    return A.run_out(_get_run(db, cluster_id, service, run_id))
+
+
+@router.post("/clusters/{cluster_id}/{service}/apply-runs/{run_id}/stop")
+def stop_apply_run(
+    cluster_id: UUID,
+    service: str,
+    run_id: UUID,
+    request: Request,
+    db: Session = Depends(get_db),
+    user: User = Depends(require_operator),
+) -> dict[str, Any]:
+    """중지 요청 — 진행 중인 노드는 마치고, 다음 배치부터 건너뛴다."""
+    r = _get_run(db, cluster_id, service, run_id)
+    if r.status != A.RUN_ACTIVE:
+        raise HTTPException(status_code=409, detail="이미 끝난 적용입니다.")
+    r.stop_requested = True
+    db.commit()
+    audit_logger.record(db, action="service_config.apply.stop", actor=user, target_type="cluster",
+                        target_id=str(cluster_id), details={"service": service, "run_id": str(run_id)}, request=request)
+    return {"ok": True}
+
+
+# ── 적용 설정(UI-First) ──────────────────────────────────────────────────────
+
+class ApplySettingsUpdate(BaseModel):
+    sysctl_file: Optional[str] = Field(default=None, max_length=300)
+    cilium_namespace: Optional[str] = Field(default=None, max_length=63)
+    cilium_configmap: Optional[str] = Field(default=None, max_length=253)
+    cilium_daemonset: Optional[str] = Field(default=None, max_length=253)
+    rollout_timeout_sec: Optional[int] = Field(default=None, ge=30, le=3600)
+
+
+@router.get("/settings")
+def read_settings(db: Session = Depends(get_db), _: User = Depends(get_current_user)) -> dict[str, Any]:
+    return A.get_settings(db)
+
+
+@router.put("/settings")
+def update_settings(
+    body: ApplySettingsUpdate,
+    request: Request,
+    db: Session = Depends(get_db),
+    user: User = Depends(require_admin),
+) -> dict[str, Any]:
+    patch = body.model_dump(exclude_unset=True)
+    try:
+        out = A.set_settings(db, patch)
+    except V.ServiceConfigError as exc:
+        _raise(exc)
+    audit_logger.record(db, action="service_config.settings.update", actor=user, target_type="app_setting",
+                        target_id=A.SETTINGS_KEY, details={"fields": sorted(patch)}, request=request)
+    return out

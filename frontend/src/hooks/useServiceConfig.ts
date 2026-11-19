@@ -91,3 +91,53 @@ export function useDeleteServiceConfigGroup(clusterId: string, service: string) 
     onSuccess: invalidate,
   });
 }
+
+export function useServiceConfigApplyPlan(clusterId: string, service: string, version: number | null, groupId: string | null, enabled: boolean) {
+  return useQuery({
+    queryKey: ['service-config', 'apply-plan', clusterId, service, version, groupId ?? 'default'],
+    queryFn: async () => (await serviceConfigApi.applyPlan(clusterId, service, version, groupId)).data,
+    enabled: enabled && !!clusterId,
+  });
+}
+
+export function useServiceConfigApplyRuns(clusterId: string, service: string, enabled: boolean) {
+  return useQuery({
+    queryKey: ['service-config', 'apply-runs', clusterId, service],
+    queryFn: async () => (await serviceConfigApi.applyRuns(clusterId, service)).data.items,
+    enabled: enabled && !!clusterId,
+  });
+}
+
+/** 실행 상세 — 진행 중이면 2초마다 다시 읽어 노드별 결과를 채운다. */
+export function useServiceConfigApplyRun(clusterId: string, service: string, runId: string | null) {
+  return useQuery({
+    queryKey: ['service-config', 'apply-run', clusterId, service, runId],
+    queryFn: async () => (await serviceConfigApi.applyRun(clusterId, service, runId as string)).data,
+    enabled: !!clusterId && !!runId,
+    refetchInterval: (q) => (q.state.data?.status === 'running' ? 2000 : false),
+  });
+}
+
+export function useStopServiceConfigApply(clusterId: string, service: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (runId: string) => { await serviceConfigApi.stopApplyRun(clusterId, service, runId); },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['service-config', 'apply-run'] }),
+  });
+}
+
+export function useServiceConfigSettings(enabled: boolean) {
+  return useQuery({
+    queryKey: ['service-config', 'settings'],
+    queryFn: async () => (await serviceConfigApi.settings()).data,
+    enabled,
+  });
+}
+
+export function useUpdateServiceConfigSettings() {
+  const invalidate = useInvalidateServiceConfig();
+  return useMutation({
+    mutationFn: async (body: Partial<import('@/types').ServiceConfigApplySettings>) => (await serviceConfigApi.updateSettings(body)).data,
+    onSuccess: invalidate,
+  });
+}

@@ -4,3 +4,8 @@ export { SaveVersionDialog } from './SaveVersionDialog';
 export type { DraftChange } from './SaveVersionDialog';
 export { GroupDialog } from './GroupDialog';
 export { VersionCompareDialog } from './VersionCompareDialog';
+export { ApplyDialog } from './ApplyDialog';
+export type { ApplyRequest } from './ApplyDialog';
+export { ApplyRunPanel } from './ApplyRunPanel';
+export { ApplyHistoryDialog } from './ApplyHistoryDialog';
+export { ApplySettingsDialog } from './ApplySettingsDialog';

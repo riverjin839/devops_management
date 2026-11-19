@@ -6720,3 +6720,51 @@ export interface ServiceConfigSaveResult {
   version: ServiceConfigVersionInfo;
   changes: ServiceConfigDiffRow[];
 }
+
+// ── 서비스 구성 적용 ─────────────────────────────────────────────────────────
+export interface ServiceConfigApplyPlan {
+  service: ServiceConfigServiceDef;
+  supported: boolean;
+  group: { id: string | null; name: string };
+  versionNo: number;
+  versionStatus: string;
+  baselineVersionNo: number | null;
+  targetMode: 'scope' | 'nodes';
+  scopeNodes: string[];
+  targets: { node: string; host: string }[];
+  changes: ServiceConfigDiffRow[];
+}
+export interface ServiceConfigApplyNodeResult {
+  node: string;
+  host: string;
+  status: 'ok' | 'failed' | 'skipped';
+  before: Record<string, string | null>;
+  after: Record<string, string | null>;
+  error: string | null;
+  durationMs: number;
+}
+export interface ServiceConfigApplyRun {
+  id: string;
+  service: string;
+  groupId: string | null;
+  versionNo: number;
+  status: 'running' | 'succeeded' | 'partial' | 'failed' | 'stopped';
+  targetMode: 'scope' | 'nodes';
+  targets: { node: string; host: string }[];
+  options: Record<string, unknown>;
+  changes: ServiceConfigDiffRow[];
+  nodeResults: ServiceConfigApplyNodeResult[];
+  stopRequested: boolean;
+  startedBy: string | null;
+  startedAt: string | null;
+  finishedAt: string | null;
+  /** [ts, level, message] — 상세 조회에서만. */
+  logLines?: [string, string, string][];
+}
+export interface ServiceConfigApplySettings {
+  sysctlFile: string;
+  ciliumNamespace: string;
+  ciliumConfigmap: string;
+  ciliumDaemonset: string;
+  rolloutTimeoutSec: number;
+}
