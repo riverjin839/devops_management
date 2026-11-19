@@ -1,0 +1,471 @@
+<mxfile host="app.diagrams.net" agent="build_figures.py" version="24.0.0">
+  <diagram name="그림 3-1 전체 구조" id="fig3-1">
+    <mxGraphModel dx="1200" dy="800" grid="1" gridSize="10" guides="1" tooltips="1" connect="0" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1470" pageHeight="510" math="0" shadow="0" background="none">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="fig3-1-zA" value="관리 대상 클러스터" style="rounded=1;arcSize=3;dashed=1;dashPattern=6 4;fillColor=none;strokeColor=#9AA3B2;strokeWidth=1.2;html=1;whiteSpace=wrap;verticalAlign=top;align=left;spacingLeft=10;spacingTop=4;fontStyle=1;fontSize=14;fontColor=#4B5563;fontFamily=Noto Sans KR,Noto Sans CJK KR,Malgun Gothic,Apple SD Gothic Neo,sans-serif;" vertex="1" parent="1">
+          <mxGeometry x="20" y="40" width="270" height="450" as="geometry" />
+        </mxCell>
+        <mxCell id="fig3-1-zB" value="PEP 관리 평면" style="rounded=1;arcSize=3;dashed=1;dashPattern=6 4;fillColor=none;strokeColor=#9AA3B2;strokeWidth=1.2;html=1;whiteSpace=wrap;verticalAlign=top;align=left;spacingLeft=10;spacingTop=4;fontStyle=1;fontSize=14;fontColor=#4B5563;fontFamily=Noto Sans KR,Noto Sans CJK KR,Malgun Gothic,Apple SD Gothic Neo,sans-serif;" vertex="1" parent="1">
+          <mxGeometry x="340" y="40" width="860" height="450" as="geometry" />
+        </mxCell>
+        <mxCell id="fig3-1-c1" value="&lt;b style=&quot;font-size:18px&quot;&gt;클러스터 1&lt;/b&gt;&lt;br&gt;&lt;span style=&quot;font-size:14px&quot;&gt;API · 지표&lt;/span&gt;" style="shape=cube;size=10;boundedLbl=1;backgroundOutline=1;darkOpacity=0.05;darkOpacity2=0.1;html=1;whiteSpace=wrap;fillColor=#EEF2F7;strokeColor=#8A94A6;strokeWidth=1.2;fontColor=#1F2937;fontFamily=Noto Sans KR,Noto Sans CJK KR,Malgun Gothic,Apple SD Gothic Neo,sans-serif;fontSize=14;align=center;verticalAlign=middle;" vertex="1" parent="1">
+          <mxGeometry x="40" y="90" width="230" height="90" as="geometry" />
+        </mxCell>
+        <mxCell id="fig3-1-c2" value="&lt;b style=&quot;font-size:18px&quot;&gt;클러스터 N&lt;/b&gt;&lt;br&gt;&lt;span style=&quot;font-size:14px&quot;&gt;API · 지표&lt;/span&gt;" style="shape=cube;size=10;boundedLbl=1;backgroundOutline=1;darkOpacity=0.05;darkOpacity2=0.1;html=1;whiteSpace=wrap;fillColor=#EEF2F7;strokeColor=#8A94A6;strokeWidth=1.2;fontColor=#1F2937;fontFamily=Noto Sans KR,Noto Sans CJK KR,Malgun Gothic,Apple SD Gothic Neo,sans-serif;fontSize=14;align=center;verticalAlign=middle;" vertex="1" parent="1">
+          <mxGeometry x="40" y="230" width="230" height="90" as="geometry" />
+        </mxCell>
+        <mxCell id="fig3-1-col" value="&lt;b style=&quot;font-size:18px&quot;&gt;클러스터 수집기&lt;/b&gt;&lt;br&gt;&lt;span style=&quot;font-size:14px&quot;&gt;점검 · 이벤트&lt;/span&gt;" style="rounded=1;arcSize=10;html=1;whiteSpace=wrap;fillColor=#FFFFFF;strokeColor=#8A94A6;strokeWidth=1.2;fontColor=#1F2937;fontFamily=Noto Sans KR,Noto Sans CJK KR,Malgun Gothic,Apple SD Gothic Neo,sans-serif;fontSize=14;align=center;verticalAlign=middle;" vertex="1" parent="1">
+          <mxGeometry x="40" y="370" width="230" height="90" as="geometry" />
+        </mxCell>
+        <mxCell id="fig3-1-ing" value="&lt;b style=&quot;font-size:18px&quot;&gt;수집&lt;/b&gt;&lt;br&gt;&lt;span style=&quot;font-size:14px&quot;&gt;pull · push&lt;br&gt;생존 신호&lt;/span&gt;" style="rounded=1;arcSize=10;html=1;whiteSpace=wrap;fillColor=#FFFFFF;strokeColor=#2F4A6D;strokeWidth=2.0;fontColor=#1F2937;fontFamily=Noto Sans KR,Noto Sans CJK KR,Malgun Gothic,Apple SD Gothic Neo,sans-serif;fontSize=14;align=center;verticalAlign=middle;" vertex="1" parent="1">
+          <mxGeometry x="370" y="90" width="170" height="370" as="geometry" />
+        </mxCell>
+        <mxCell id="fig3-1-cfg" value="&lt;b style=&quot;font-size:18px&quot;&gt;기준 설정 · 편차&lt;/b&gt;&lt;br&gt;&lt;span style=&quot;font-size:14px&quot;&gt;계층 상속&lt;br&gt;스냅샷 비교&lt;/span&gt;" style="rounded=1;arcSize=10;html=1;whiteSpace=wrap;fillColor=#FFF4EC;strokeColor=#C2410C;strokeWidth=2.5;fontColor=#1F2937;fontFamily=Noto Sans KR,Noto Sans CJK KR,Malgun Gothic,Apple SD Gothic Neo,sans-serif;fontSize=14;align=center;verticalAlign=middle;" vertex="1" parent="1">
+          <mxGeometry x="620" y="90" width="260" height="90" as="geometry" />
+        </mxCell>
+        <mxCell id="fig3-1-hl" value="&lt;b style=&quot;font-size:18px&quot;&gt;상태 판정&lt;/b&gt;&lt;br&gt;&lt;span style=&quot;font-size:14px&quot;&gt;컴포넌트 Health&lt;br&gt;클러스터 롤업&lt;/span&gt;" style="rounded=1;arcSize=10;html=1;whiteSpace=wrap;fillColor=#FFFFFF;strokeColor=#2F4A6D;strokeWidth=2.0;fontColor=#1F2937;fontFamily=Noto Sans KR,Noto Sans CJK KR,Malgun Gothic,Apple SD Gothic Neo,sans-serif;fontSize=14;align=center;verticalAlign=middle;" vertex="1" parent="1">
+          <mxGeometry x="620" y="230" width="260" height="90" as="geometry" />
+        </mxCell>
+        <mxCell id="fig3-1-ev" value="&lt;b style=&quot;font-size:18px&quot;&gt;통합 이벤트&lt;/b&gt;&lt;br&gt;&lt;span style=&quot;font-size:14px&quot;&gt;유지보수 모드&lt;br&gt;알림 규칙&lt;/span&gt;" style="rounded=1;arcSize=10;html=1;whiteSpace=wrap;fillColor=#FFFFFF;strokeColor=#2F4A6D;strokeWidth=2.0;fontColor=#1F2937;fontFamily=Noto Sans KR,Noto Sans CJK KR,Malgun Gothic,Apple SD Gothic Neo,sans-serif;fontSize=14;align=center;verticalAlign=middle;" vertex="1" parent="1">
+          <mxGeometry x="620" y="370" width="260" height="90" as="geometry" />
+        </mxCell>
+        <mxCell id="fig3-1-api" value="&lt;b style=&quot;font-size:18px&quot;&gt;관리 API · 화면&lt;/b&gt;&lt;br&gt;&lt;span style=&quot;font-size:14px&quot;&gt;인박스&lt;br&gt;실행 로그&lt;/span&gt;" style="rounded=1;arcSize=10;html=1;whiteSpace=wrap;fillColor=#FFFFFF;strokeColor=#8A94A6;strokeWidth=1.2;fontColor=#1F2937;fontFamily=Noto Sans KR,Noto Sans CJK KR,Malgun Gothic,Apple SD Gothic Neo,sans-serif;fontSize=14;align=center;verticalAlign=middle;" vertex="1" parent="1">
+          <mxGeometry x="960" y="90" width="210" height="370" as="geometry" />
+        </mxCell>
+        <mxCell id="fig3-1-ch" value="&lt;b style=&quot;font-size:18px&quot;&gt;알림 채널&lt;/b&gt;&lt;br&gt;&lt;span style=&quot;font-size:14px&quot;&gt;Slack · Webhook&lt;br&gt;Email&lt;/span&gt;" style="rounded=1;arcSize=10;html=1;whiteSpace=wrap;fillColor=#FFFFFF;strokeColor=#8A94A6;strokeWidth=1.2;fontColor=#1F2937;fontFamily=Noto Sans KR,Noto Sans CJK KR,Malgun Gothic,Apple SD Gothic Neo,sans-serif;fontSize=14;align=center;verticalAlign=middle;" vertex="1" parent="1">
+          <mxGeometry x="1260" y="170" width="190" height="90" as="geometry" />
+        </mxCell>
+        <mxCell id="fig3-1-op" value="&lt;b style=&quot;font-size:18px&quot;&gt;운영자&lt;/b&gt;&lt;br&gt;&lt;span style=&quot;font-size:14px&quot;&gt;명시적 실행&lt;/span&gt;" style="rounded=1;arcSize=10;html=1;whiteSpace=wrap;fillColor=#FFFFFF;strokeColor=#8A94A6;strokeWidth=1.2;fontColor=#1F2937;fontFamily=Noto Sans KR,Noto Sans CJK KR,Malgun Gothic,Apple SD Gothic Neo,sans-serif;fontSize=14;align=center;verticalAlign=middle;" vertex="1" parent="1">
+          <mxGeometry x="1260" y="330" width="190" height="90" as="geometry" />
+        </mxCell>
+        <mxCell id="fig3-1-e0" value="pull" style="endArrow=block;endFill=1;endSize=7;html=1;rounded=0;strokeColor=#5B6B82;strokeWidth=1.5;fontSize=12;fontColor=#4B5563;labelBackgroundColor=#FFFFFF;fontFamily=Noto Sans KR,Noto Sans CJK KR,Malgun Gothic,Apple SD Gothic Neo,sans-serif;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="270" y="140" as="sourcePoint" />
+            <mxPoint x="370" y="140" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="fig3-1-e1" value="pull" style="endArrow=block;endFill=1;endSize=7;html=1;rounded=0;strokeColor=#5B6B82;strokeWidth=1.5;fontSize=12;fontColor=#4B5563;labelBackgroundColor=#FFFFFF;fontFamily=Noto Sans KR,Noto Sans CJK KR,Malgun Gothic,Apple SD Gothic Neo,sans-serif;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="270" y="280" as="sourcePoint" />
+            <mxPoint x="370" y="280" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="fig3-1-e2" value="push" style="endArrow=block;endFill=1;endSize=7;html=1;rounded=0;strokeColor=#5B6B82;strokeWidth=1.5;fontSize=12;fontColor=#4B5563;labelBackgroundColor=#FFFFFF;fontFamily=Noto Sans KR,Noto Sans CJK KR,Malgun Gothic,Apple SD Gothic Neo,sans-serif;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="270" y="415" as="sourcePoint" />
+            <mxPoint x="370" y="415" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="fig3-1-e3" value="스냅샷" style="endArrow=block;endFill=1;endSize=7;html=1;rounded=0;strokeColor=#5B6B82;strokeWidth=1.5;fontSize=12;fontColor=#4B5563;labelBackgroundColor=#FFFFFF;fontFamily=Noto Sans KR,Noto Sans CJK KR,Malgun Gothic,Apple SD Gothic Neo,sans-serif;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="540" y="135" as="sourcePoint" />
+            <mxPoint x="620" y="135" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="fig3-1-e4" value="지표 · 점검" style="endArrow=block;endFill=1;endSize=7;html=1;rounded=0;strokeColor=#5B6B82;strokeWidth=1.5;fontSize=12;fontColor=#4B5563;labelBackgroundColor=#FFFFFF;fontFamily=Noto Sans KR,Noto Sans CJK KR,Malgun Gothic,Apple SD Gothic Neo,sans-serif;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="540" y="275" as="sourcePoint" />
+            <mxPoint x="620" y="275" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="fig3-1-e5" value="이벤트" style="endArrow=block;endFill=1;endSize=7;html=1;rounded=0;strokeColor=#5B6B82;strokeWidth=1.5;fontSize=12;fontColor=#4B5563;labelBackgroundColor=#FFFFFF;fontFamily=Noto Sans KR,Noto Sans CJK KR,Malgun Gothic,Apple SD Gothic Neo,sans-serif;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="540" y="415" as="sourcePoint" />
+            <mxPoint x="620" y="415" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="fig3-1-e6" value="편차" style="endArrow=block;endFill=1;endSize=7;html=1;rounded=0;strokeColor=#5B6B82;strokeWidth=1.5;fontSize=12;fontColor=#4B5563;labelBackgroundColor=#FFFFFF;fontFamily=Noto Sans KR,Noto Sans CJK KR,Malgun Gothic,Apple SD Gothic Neo,sans-serif;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="750" y="180" as="sourcePoint" />
+            <mxPoint x="750" y="230" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="fig3-1-e7" value="상태 변화" style="endArrow=block;endFill=1;endSize=7;html=1;rounded=0;strokeColor=#5B6B82;strokeWidth=1.5;fontSize=12;fontColor=#4B5563;labelBackgroundColor=#FFFFFF;fontFamily=Noto Sans KR,Noto Sans CJK KR,Malgun Gothic,Apple SD Gothic Neo,sans-serif;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="750" y="320" as="sourcePoint" />
+            <mxPoint x="750" y="370" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="fig3-1-e8" value="" style="endArrow=block;endFill=1;endSize=7;html=1;rounded=0;strokeColor=#5B6B82;strokeWidth=1.5;fontSize=12;fontColor=#4B5563;labelBackgroundColor=#FFFFFF;fontFamily=Noto Sans KR,Noto Sans CJK KR,Malgun Gothic,Apple SD Gothic Neo,sans-serif;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="880" y="135" as="sourcePoint" />
+            <mxPoint x="960" y="135" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="fig3-1-e9" value="" style="endArrow=block;endFill=1;endSize=7;html=1;rounded=0;strokeColor=#5B6B82;strokeWidth=1.5;fontSize=12;fontColor=#4B5563;labelBackgroundColor=#FFFFFF;fontFamily=Noto Sans KR,Noto Sans CJK KR,Malgun Gothic,Apple SD Gothic Neo,sans-serif;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="880" y="275" as="sourcePoint" />
+            <mxPoint x="960" y="275" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="fig3-1-e10" value="" style="endArrow=block;endFill=1;endSize=7;html=1;rounded=0;strokeColor=#5B6B82;strokeWidth=1.5;fontSize=12;fontColor=#4B5563;labelBackgroundColor=#FFFFFF;fontFamily=Noto Sans KR,Noto Sans CJK KR,Malgun Gothic,Apple SD Gothic Neo,sans-serif;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="880" y="415" as="sourcePoint" />
+            <mxPoint x="960" y="415" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="fig3-1-e11" value="재전파" style="endArrow=block;endFill=1;endSize=7;html=1;rounded=0;strokeColor=#5B6B82;strokeWidth=1.5;fontSize=12;fontColor=#4B5563;labelBackgroundColor=#FFFFFF;fontFamily=Noto Sans KR,Noto Sans CJK KR,Malgun Gothic,Apple SD Gothic Neo,sans-serif;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="1170" y="215" as="sourcePoint" />
+            <mxPoint x="1260" y="215" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="fig3-1-e12" value="확인 · 실행" style="endArrow=block;endFill=1;endSize=7;html=1;rounded=0;strokeColor=#5B6B82;strokeWidth=1.5;fontSize=12;fontColor=#4B5563;labelBackgroundColor=#FFFFFF;fontFamily=Noto Sans KR,Noto Sans CJK KR,Malgun Gothic,Apple SD Gothic Neo,sans-serif;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="1170" y="375" as="sourcePoint" />
+            <mxPoint x="1260" y="375" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+  <diagram name="그림 4-1 기준 설정 계층" id="fig4-1">
+    <mxGraphModel dx="1200" dy="800" grid="1" gridSize="10" guides="1" tooltips="1" connect="0" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1390" pageHeight="220" math="0" shadow="0" background="none">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="fig4-1-zS" value="기준 설정 저장소" style="rounded=1;arcSize=3;dashed=1;dashPattern=6 4;fillColor=none;strokeColor=#9AA3B2;strokeWidth=1.2;html=1;whiteSpace=wrap;verticalAlign=top;align=left;spacingLeft=10;spacingTop=4;fontStyle=1;fontSize=14;fontColor=#4B5563;fontFamily=Noto Sans KR,Noto Sans CJK KR,Malgun Gothic,Apple SD Gothic Neo,sans-serif;" vertex="1" parent="1">
+          <mxGeometry x="20" y="40" width="1080" height="160" as="geometry" />
+        </mxCell>
+        <mxCell id="fig4-1-l1" value="&lt;b style=&quot;font-size:18px&quot;&gt;공통 기준&lt;/b&gt;&lt;br&gt;&lt;span style=&quot;font-size:14px&quot;&gt;전 클러스터&lt;br&gt;기본값&lt;/span&gt;" style="rounded=1;arcSize=10;html=1;whiteSpace=wrap;fillColor=#FFFFFF;strokeColor=#2F4A6D;strokeWidth=2.0;fontColor=#1F2937;fontFamily=Noto Sans KR,Noto Sans CJK KR,Malgun Gothic,Apple SD Gothic Neo,sans-serif;fontSize=14;align=center;verticalAlign=middle;" vertex="1" parent="1">
+          <mxGeometry x="40" y="90" width="200" height="90" as="geometry" />
+        </mxCell>
+        <mxCell id="fig4-1-l2" value="&lt;b style=&quot;font-size:18px&quot;&gt;클러스터 그룹&lt;/b&gt;&lt;br&gt;&lt;span style=&quot;font-size:14px&quot;&gt;환경 · 테넌트&lt;/span&gt;" style="rounded=1;arcSize=10;html=1;whiteSpace=wrap;fillColor=#FFFFFF;strokeColor=#2F4A6D;strokeWidth=2.0;fontColor=#1F2937;fontFamily=Noto Sans KR,Noto Sans CJK KR,Malgun Gothic,Apple SD Gothic Neo,sans-serif;fontSize=14;align=center;verticalAlign=middle;" vertex="1" parent="1">
+          <mxGeometry x="320" y="90" width="200" height="90" as="geometry" />
+        </mxCell>
+        <mxCell id="fig4-1-l3" value="&lt;b style=&quot;font-size:18px&quot;&gt;클러스터&lt;/b&gt;&lt;br&gt;&lt;span style=&quot;font-size:14px&quot;&gt;클러스터별 값&lt;/span&gt;" style="rounded=1;arcSize=10;html=1;whiteSpace=wrap;fillColor=#FFFFFF;strokeColor=#2F4A6D;strokeWidth=2.0;fontColor=#1F2937;fontFamily=Noto Sans KR,Noto Sans CJK KR,Malgun Gothic,Apple SD Gothic Neo,sans-serif;fontSize=14;align=center;verticalAlign=middle;" vertex="1" parent="1">
+          <mxGeometry x="600" y="90" width="200" height="90" as="geometry" />
+        </mxCell>
+        <mxCell id="fig4-1-l4" value="&lt;b style=&quot;font-size:18px&quot;&gt;노드 · 컴포넌트&lt;/b&gt;&lt;br&gt;&lt;span style=&quot;font-size:14px&quot;&gt;예외 값&lt;/span&gt;" style="rounded=1;arcSize=10;html=1;whiteSpace=wrap;fillColor=#FFFFFF;strokeColor=#2F4A6D;strokeWidth=2.0;fontColor=#1F2937;fontFamily=Noto Sans KR,Noto Sans CJK KR,Malgun Gothic,Apple SD Gothic Neo,sans-serif;fontSize=14;align=center;verticalAlign=middle;" vertex="1" parent="1">
+          <mxGeometry x="880" y="90" width="200" height="90" as="geometry" />
+        </mxCell>
+        <mxCell id="fig4-1-eff" value="&lt;b style=&quot;font-size:18px&quot;&gt;유효 기준값&lt;/b&gt;&lt;br&gt;&lt;span style=&quot;font-size:14px&quot;&gt;차이만 저장&lt;br&gt;키 스키마 검증&lt;/span&gt;" style="rounded=1;arcSize=10;html=1;whiteSpace=wrap;fillColor=#FFF4EC;strokeColor=#C2410C;strokeWidth=2.5;fontColor=#1F2937;fontFamily=Noto Sans KR,Noto Sans CJK KR,Malgun Gothic,Apple SD Gothic Neo,sans-serif;fontSize=14;align=center;verticalAlign=middle;" vertex="1" parent="1">
+          <mxGeometry x="1180" y="90" width="190" height="90" as="geometry" />
+        </mxCell>
+        <mxCell id="fig4-1-e0" value="덮어쓰기" style="endArrow=block;endFill=1;endSize=7;html=1;rounded=0;strokeColor=#5B6B82;strokeWidth=1.5;fontSize=12;fontColor=#4B5563;labelBackgroundColor=#FFFFFF;fontFamily=Noto Sans KR,Noto Sans CJK KR,Malgun Gothic,Apple SD Gothic Neo,sans-serif;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="240" y="135" as="sourcePoint" />
+            <mxPoint x="320" y="135" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="fig4-1-e1" value="덮어쓰기" style="endArrow=block;endFill=1;endSize=7;html=1;rounded=0;strokeColor=#5B6B82;strokeWidth=1.5;fontSize=12;fontColor=#4B5563;labelBackgroundColor=#FFFFFF;fontFamily=Noto Sans KR,Noto Sans CJK KR,Malgun Gothic,Apple SD Gothic Neo,sans-serif;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="520" y="135" as="sourcePoint" />
+            <mxPoint x="600" y="135" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="fig4-1-e2" value="덮어쓰기" style="endArrow=block;endFill=1;endSize=7;html=1;rounded=0;strokeColor=#5B6B82;strokeWidth=1.5;fontSize=12;fontColor=#4B5563;labelBackgroundColor=#FFFFFF;fontFamily=Noto Sans KR,Noto Sans CJK KR,Malgun Gothic,Apple SD Gothic Neo,sans-serif;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="800" y="135" as="sourcePoint" />
+            <mxPoint x="880" y="135" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="fig4-1-e3" value="병합" style="endArrow=block;endFill=1;endSize=7;html=1;rounded=0;strokeColor=#5B6B82;strokeWidth=1.5;fontSize=12;fontColor=#4B5563;labelBackgroundColor=#FFFFFF;fontFamily=Noto Sans KR,Noto Sans CJK KR,Malgun Gothic,Apple SD Gothic Neo,sans-serif;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="1080" y="135" as="sourcePoint" />
+            <mxPoint x="1180" y="135" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+  <diagram name="그림 4-2 편차 판정과 조치" id="fig4-2">
+    <mxGraphModel dx="1200" dy="800" grid="1" gridSize="10" guides="1" tooltips="1" connect="0" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1180" pageHeight="370" math="0" shadow="0" background="none">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="fig4-2-base" value="&lt;b style=&quot;font-size:18px&quot;&gt;유효 기준값&lt;/b&gt;&lt;br&gt;&lt;span style=&quot;font-size:14px&quot;&gt;계층 병합 결과&lt;/span&gt;" style="rounded=1;arcSize=10;html=1;whiteSpace=wrap;fillColor=#FFFFFF;strokeColor=#2F4A6D;strokeWidth=2.0;fontColor=#1F2937;fontFamily=Noto Sans KR,Noto Sans CJK KR,Malgun Gothic,Apple SD Gothic Neo,sans-serif;fontSize=14;align=center;verticalAlign=middle;" vertex="1" parent="1">
+          <mxGeometry x="40" y="60" width="200" height="90" as="geometry" />
+        </mxCell>
+        <mxCell id="fig4-2-cmp" value="&lt;b style=&quot;font-size:18px&quot;&gt;비교&lt;/b&gt;&lt;br&gt;&lt;span style=&quot;font-size:14px&quot;&gt;키 단위 대조&lt;/span&gt;" style="rounded=1;arcSize=10;html=1;whiteSpace=wrap;fillColor=#FFFFFF;strokeColor=#2F4A6D;strokeWidth=2.0;fontColor=#1F2937;fontFamily=Noto Sans KR,Noto Sans CJK KR,Malgun Gothic,Apple SD Gothic Neo,sans-serif;fontSize=14;align=center;verticalAlign=middle;" vertex="1" parent="1">
+          <mxGeometry x="340" y="60" width="200" height="90" as="geometry" />
+        </mxCell>
+        <mxCell id="fig4-2-st" value="&lt;b style=&quot;font-size:18px&quot;&gt;편차 상태&lt;/b&gt;&lt;br&gt;&lt;span style=&quot;font-size:14px&quot;&gt;일치 · 편차&lt;br&gt;재시작 필요&lt;/span&gt;" style="rounded=1;arcSize=10;html=1;whiteSpace=wrap;fillColor=#FFF4EC;strokeColor=#C2410C;strokeWidth=2.5;fontColor=#1F2937;fontFamily=Noto Sans KR,Noto Sans CJK KR,Malgun Gothic,Apple SD Gothic Neo,sans-serif;fontSize=14;align=center;verticalAlign=middle;" vertex="1" parent="1">
+          <mxGeometry x="640" y="60" width="200" height="90" as="geometry" />
+        </mxCell>
+        <mxCell id="fig4-2-run" value="&lt;b style=&quot;font-size:18px&quot;&gt;운영자 실행&lt;/b&gt;&lt;br&gt;&lt;span style=&quot;font-size:14px&quot;&gt;명시적 트리거&lt;br&gt;실시간 로그&lt;/span&gt;" style="rounded=1;arcSize=10;html=1;whiteSpace=wrap;fillColor=#FFFFFF;strokeColor=#2F4A6D;strokeWidth=2.0;fontColor=#1F2937;fontFamily=Noto Sans KR,Noto Sans CJK KR,Malgun Gothic,Apple SD Gothic Neo,sans-serif;fontSize=14;align=center;verticalAlign=middle;" vertex="1" parent="1">
+          <mxGeometry x="940" y="60" width="200" height="90" as="geometry" />
+        </mxCell>
+        <mxCell id="fig4-2-snap" value="&lt;b style=&quot;font-size:18px&quot;&gt;최신 스냅샷&lt;/b&gt;&lt;br&gt;&lt;span style=&quot;font-size:14px&quot;&gt;해시 변경 시 저장&lt;/span&gt;" style="rounded=1;arcSize=10;html=1;whiteSpace=wrap;fillColor=#FFFFFF;strokeColor=#8A94A6;strokeWidth=1.2;fontColor=#1F2937;fontFamily=Noto Sans KR,Noto Sans CJK KR,Malgun Gothic,Apple SD Gothic Neo,sans-serif;fontSize=14;align=center;verticalAlign=middle;" vertex="1" parent="1">
+          <mxGeometry x="340" y="260" width="200" height="90" as="geometry" />
+        </mxCell>
+        <mxCell id="fig4-2-ing" value="&lt;b style=&quot;font-size:18px&quot;&gt;수집&lt;/b&gt;&lt;br&gt;&lt;span style=&quot;font-size:14px&quot;&gt;pull · push&lt;/span&gt;" style="rounded=1;arcSize=10;html=1;whiteSpace=wrap;fillColor=#FFFFFF;strokeColor=#8A94A6;strokeWidth=1.2;fontColor=#1F2937;fontFamily=Noto Sans KR,Noto Sans CJK KR,Malgun Gothic,Apple SD Gothic Neo,sans-serif;fontSize=14;align=center;verticalAlign=middle;" vertex="1" parent="1">
+          <mxGeometry x="640" y="260" width="200" height="90" as="geometry" />
+        </mxCell>
+        <mxCell id="fig4-2-k8s" value="&lt;b style=&quot;font-size:18px&quot;&gt;대상 클러스터&lt;/b&gt;&lt;br&gt;&lt;span style=&quot;font-size:14px&quot;&gt;노드 · 컴포넌트&lt;/span&gt;" style="shape=cube;size=10;boundedLbl=1;backgroundOutline=1;darkOpacity=0.05;darkOpacity2=0.1;html=1;whiteSpace=wrap;fillColor=#EEF2F7;strokeColor=#8A94A6;strokeWidth=1.2;fontColor=#1F2937;fontFamily=Noto Sans KR,Noto Sans CJK KR,Malgun Gothic,Apple SD Gothic Neo,sans-serif;fontSize=14;align=center;verticalAlign=middle;" vertex="1" parent="1">
+          <mxGeometry x="940" y="260" width="200" height="90" as="geometry" />
+        </mxCell>
+        <mxCell id="fig4-2-e0" value="기준" style="endArrow=block;endFill=1;endSize=7;html=1;rounded=0;strokeColor=#5B6B82;strokeWidth=1.5;fontSize=12;fontColor=#4B5563;labelBackgroundColor=#FFFFFF;fontFamily=Noto Sans KR,Noto Sans CJK KR,Malgun Gothic,Apple SD Gothic Neo,sans-serif;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="240" y="105" as="sourcePoint" />
+            <mxPoint x="340" y="105" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="fig4-2-e1" value="판정" style="endArrow=block;endFill=1;endSize=7;html=1;rounded=0;strokeColor=#5B6B82;strokeWidth=1.5;fontSize=12;fontColor=#4B5563;labelBackgroundColor=#FFFFFF;fontFamily=Noto Sans KR,Noto Sans CJK KR,Malgun Gothic,Apple SD Gothic Neo,sans-serif;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="540" y="105" as="sourcePoint" />
+            <mxPoint x="640" y="105" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="fig4-2-e2" value="알림 · 화면" style="endArrow=block;endFill=1;endSize=7;html=1;rounded=0;strokeColor=#5B6B82;strokeWidth=1.5;fontSize=12;fontColor=#4B5563;labelBackgroundColor=#FFFFFF;fontFamily=Noto Sans KR,Noto Sans CJK KR,Malgun Gothic,Apple SD Gothic Neo,sans-serif;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="840" y="105" as="sourcePoint" />
+            <mxPoint x="940" y="105" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="fig4-2-e3" value="Ansible · 배치잡" style="endArrow=block;endFill=1;endSize=7;html=1;rounded=0;strokeColor=#5B6B82;strokeWidth=1.5;fontSize=12;fontColor=#4B5563;labelBackgroundColor=#FFFFFF;fontFamily=Noto Sans KR,Noto Sans CJK KR,Malgun Gothic,Apple SD Gothic Neo,sans-serif;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="1040" y="150" as="sourcePoint" />
+            <mxPoint x="1040" y="260" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="fig4-2-e4" value="수집" style="endArrow=block;endFill=1;endSize=7;html=1;rounded=0;strokeColor=#5B6B82;strokeWidth=1.5;fontSize=12;fontColor=#4B5563;labelBackgroundColor=#FFFFFF;fontFamily=Noto Sans KR,Noto Sans CJK KR,Malgun Gothic,Apple SD Gothic Neo,sans-serif;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="940" y="310" as="sourcePoint" />
+            <mxPoint x="840" y="310" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="fig4-2-e5" value="저장" style="endArrow=block;endFill=1;endSize=7;html=1;rounded=0;strokeColor=#5B6B82;strokeWidth=1.5;fontSize=12;fontColor=#4B5563;labelBackgroundColor=#FFFFFF;fontFamily=Noto Sans KR,Noto Sans CJK KR,Malgun Gothic,Apple SD Gothic Neo,sans-serif;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="640" y="305" as="sourcePoint" />
+            <mxPoint x="540" y="305" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="fig4-2-e6" value="실제값" style="endArrow=block;endFill=1;endSize=7;html=1;rounded=0;strokeColor=#5B6B82;strokeWidth=1.5;fontSize=12;fontColor=#4B5563;labelBackgroundColor=#FFFFFF;fontFamily=Noto Sans KR,Noto Sans CJK KR,Malgun Gothic,Apple SD Gothic Neo,sans-serif;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="440" y="260" as="sourcePoint" />
+            <mxPoint x="440" y="150" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+  <diagram name="그림 5-1 상태 판정 계층" id="fig5-1">
+    <mxGraphModel dx="1200" dy="800" grid="1" gridSize="10" guides="1" tooltips="1" connect="0" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1000" pageHeight="590" math="0" shadow="0" background="none">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="fig5-1-zC" value="컴포넌트 Health" style="rounded=1;arcSize=3;dashed=1;dashPattern=6 4;fillColor=none;strokeColor=#C2410C;strokeWidth=2;html=1;whiteSpace=wrap;verticalAlign=top;align=left;spacingLeft=10;spacingTop=4;fontStyle=1;fontSize=14;fontColor=#4B5563;fontFamily=Noto Sans KR,Noto Sans CJK KR,Malgun Gothic,Apple SD Gothic Neo,sans-serif;" vertex="1" parent="1">
+          <mxGeometry x="20" y="170" width="960" height="140" as="geometry" />
+        </mxCell>
+        <mxCell id="fig5-1-cl" value="&lt;b style=&quot;font-size:18px&quot;&gt;클러스터 종합 상태&lt;/b&gt;&lt;br&gt;&lt;span style=&quot;font-size:14px&quot;&gt;위험 &amp;gt; 경고 &amp;gt; 정상&lt;/span&gt;" style="rounded=1;arcSize=10;html=1;whiteSpace=wrap;fillColor=#FFFFFF;strokeColor=#2F4A6D;strokeWidth=2.0;fontColor=#1F2937;fontFamily=Noto Sans KR,Noto Sans CJK KR,Malgun Gothic,Apple SD Gothic Neo,sans-serif;fontSize=14;align=center;verticalAlign=middle;" vertex="1" parent="1">
+          <mxGeometry x="40" y="40" width="920" height="80" as="geometry" />
+        </mxCell>
+        <mxCell id="fig5-1-k1" value="&lt;b style=&quot;font-size:18px&quot;&gt;컨트롤 플레인&lt;/b&gt;&lt;br&gt;&lt;span style=&quot;font-size:14px&quot;&gt;API · etcd&lt;/span&gt;" style="rounded=1;arcSize=10;html=1;whiteSpace=wrap;fillColor=#FFFFFF;strokeColor=#2F4A6D;strokeWidth=2.0;fontColor=#1F2937;fontFamily=Noto Sans KR,Noto Sans CJK KR,Malgun Gothic,Apple SD Gothic Neo,sans-serif;fontSize=14;align=center;verticalAlign=middle;" vertex="1" parent="1">
+          <mxGeometry x="40" y="215" width="200" height="80" as="geometry" />
+        </mxCell>
+        <mxCell id="fig5-1-k2" value="&lt;b style=&quot;font-size:18px&quot;&gt;네트워크&lt;/b&gt;&lt;br&gt;&lt;span style=&quot;font-size:14px&quot;&gt;CNI · DNS&lt;/span&gt;" style="rounded=1;arcSize=10;html=1;whiteSpace=wrap;fillColor=#FFFFFF;strokeColor=#2F4A6D;strokeWidth=2.0;fontColor=#1F2937;fontFamily=Noto Sans KR,Noto Sans CJK KR,Malgun Gothic,Apple SD Gothic Neo,sans-serif;fontSize=14;align=center;verticalAlign=middle;" vertex="1" parent="1">
+          <mxGeometry x="280" y="215" width="200" height="80" as="geometry" />
+        </mxCell>
+        <mxCell id="fig5-1-k3" value="&lt;b style=&quot;font-size:18px&quot;&gt;스토리지&lt;/b&gt;&lt;br&gt;&lt;span style=&quot;font-size:14px&quot;&gt;CSI · PV&lt;/span&gt;" style="rounded=1;arcSize=10;html=1;whiteSpace=wrap;fillColor=#FFFFFF;strokeColor=#2F4A6D;strokeWidth=2.0;fontColor=#1F2937;fontFamily=Noto Sans KR,Noto Sans CJK KR,Malgun Gothic,Apple SD Gothic Neo,sans-serif;fontSize=14;align=center;verticalAlign=middle;" vertex="1" parent="1">
+          <mxGeometry x="520" y="215" width="200" height="80" as="geometry" />
+        </mxCell>
+        <mxCell id="fig5-1-k4" value="&lt;b style=&quot;font-size:18px&quot;&gt;애드온&lt;/b&gt;&lt;br&gt;&lt;span style=&quot;font-size:14px&quot;&gt;관측 · 수집기&lt;/span&gt;" style="rounded=1;arcSize=10;html=1;whiteSpace=wrap;fillColor=#FFFFFF;strokeColor=#2F4A6D;strokeWidth=2.0;fontColor=#1F2937;fontFamily=Noto Sans KR,Noto Sans CJK KR,Malgun Gothic,Apple SD Gothic Neo,sans-serif;fontSize=14;align=center;verticalAlign=middle;" vertex="1" parent="1">
+          <mxGeometry x="760" y="215" width="200" height="80" as="geometry" />
+        </mxCell>
+        <mxCell id="fig5-1-rule" value="&lt;b style=&quot;font-size:18px&quot;&gt;Health 규칙&lt;/b&gt;&lt;br&gt;&lt;span style=&quot;font-size:14px&quot;&gt;임계값 · 지속 시간&lt;br&gt;미확인 처리&lt;/span&gt;" style="rounded=1;arcSize=10;html=1;whiteSpace=wrap;fillColor=#FFFFFF;strokeColor=#2F4A6D;strokeWidth=2.0;fontColor=#1F2937;fontFamily=Noto Sans KR,Noto Sans CJK KR,Malgun Gothic,Apple SD Gothic Neo,sans-serif;fontSize=14;align=center;verticalAlign=middle;" vertex="1" parent="1">
+          <mxGeometry x="40" y="360" width="920" height="80" as="geometry" />
+        </mxCell>
+        <mxCell id="fig5-1-i1" value="&lt;b style=&quot;font-size:18px&quot;&gt;점검 매트릭스&lt;/b&gt;&lt;br&gt;&lt;span style=&quot;font-size:14px&quot;&gt;심층 · 핵심 점검&lt;/span&gt;" style="rounded=1;arcSize=10;html=1;whiteSpace=wrap;fillColor=#FFFFFF;strokeColor=#8A94A6;strokeWidth=1.2;fontColor=#1F2937;fontFamily=Noto Sans KR,Noto Sans CJK KR,Malgun Gothic,Apple SD Gothic Neo,sans-serif;fontSize=14;align=center;verticalAlign=middle;" vertex="1" parent="1">
+          <mxGeometry x="40" y="490" width="200" height="80" as="geometry" />
+        </mxCell>
+        <mxCell id="fig5-1-i2" value="&lt;b style=&quot;font-size:18px&quot;&gt;애드온 점검&lt;/b&gt;&lt;br&gt;&lt;span style=&quot;font-size:14px&quot;&gt;응답 · 상태&lt;/span&gt;" style="rounded=1;arcSize=10;html=1;whiteSpace=wrap;fillColor=#FFFFFF;strokeColor=#8A94A6;strokeWidth=1.2;fontColor=#1F2937;fontFamily=Noto Sans KR,Noto Sans CJK KR,Malgun Gothic,Apple SD Gothic Neo,sans-serif;fontSize=14;align=center;verticalAlign=middle;" vertex="1" parent="1">
+          <mxGeometry x="280" y="490" width="200" height="80" as="geometry" />
+        </mxCell>
+        <mxCell id="fig5-1-i3" value="&lt;b style=&quot;font-size:18px&quot;&gt;지표 임계값&lt;/b&gt;&lt;br&gt;&lt;span style=&quot;font-size:14px&quot;&gt;지표 카탈로그&lt;/span&gt;" style="rounded=1;arcSize=10;html=1;whiteSpace=wrap;fillColor=#FFFFFF;strokeColor=#2F4A6D;strokeWidth=2.0;fontColor=#1F2937;fontFamily=Noto Sans KR,Noto Sans CJK KR,Malgun Gothic,Apple SD Gothic Neo,sans-serif;fontSize=14;align=center;verticalAlign=middle;" vertex="1" parent="1">
+          <mxGeometry x="520" y="490" width="200" height="80" as="geometry" />
+        </mxCell>
+        <mxCell id="fig5-1-i4" value="&lt;b style=&quot;font-size:18px&quot;&gt;수집 신선도&lt;/b&gt;&lt;br&gt;&lt;span style=&quot;font-size:14px&quot;&gt;생존 신호&lt;/span&gt;" style="rounded=1;arcSize=10;html=1;whiteSpace=wrap;fillColor=#FFFFFF;strokeColor=#2F4A6D;strokeWidth=2.0;fontColor=#1F2937;fontFamily=Noto Sans KR,Noto Sans CJK KR,Malgun Gothic,Apple SD Gothic Neo,sans-serif;fontSize=14;align=center;verticalAlign=middle;" vertex="1" parent="1">
+          <mxGeometry x="760" y="490" width="200" height="80" as="geometry" />
+        </mxCell>
+        <mxCell id="fig5-1-e0" value="" style="endArrow=block;endFill=1;endSize=7;html=1;rounded=0;strokeColor=#5B6B82;strokeWidth=1.5;fontSize=12;fontColor=#4B5563;labelBackgroundColor=#FFFFFF;fontFamily=Noto Sans KR,Noto Sans CJK KR,Malgun Gothic,Apple SD Gothic Neo,sans-serif;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="190" y="490" as="sourcePoint" />
+            <mxPoint x="190" y="440" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="fig5-1-e1" value="" style="endArrow=block;endFill=1;endSize=7;html=1;rounded=0;strokeColor=#5B6B82;strokeWidth=1.5;fontSize=12;fontColor=#4B5563;labelBackgroundColor=#FFFFFF;fontFamily=Noto Sans KR,Noto Sans CJK KR,Malgun Gothic,Apple SD Gothic Neo,sans-serif;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="190" y="360" as="sourcePoint" />
+            <mxPoint x="190" y="295" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="fig5-1-e2" value="" style="endArrow=block;endFill=1;endSize=7;html=1;rounded=0;strokeColor=#5B6B82;strokeWidth=1.5;fontSize=12;fontColor=#4B5563;labelBackgroundColor=#FFFFFF;fontFamily=Noto Sans KR,Noto Sans CJK KR,Malgun Gothic,Apple SD Gothic Neo,sans-serif;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="190" y="215" as="sourcePoint" />
+            <mxPoint x="190" y="120" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="fig5-1-e3" value="" style="endArrow=block;endFill=1;endSize=7;html=1;rounded=0;strokeColor=#5B6B82;strokeWidth=1.5;fontSize=12;fontColor=#4B5563;labelBackgroundColor=#FFFFFF;fontFamily=Noto Sans KR,Noto Sans CJK KR,Malgun Gothic,Apple SD Gothic Neo,sans-serif;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="430" y="490" as="sourcePoint" />
+            <mxPoint x="430" y="440" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="fig5-1-e4" value="" style="endArrow=block;endFill=1;endSize=7;html=1;rounded=0;strokeColor=#5B6B82;strokeWidth=1.5;fontSize=12;fontColor=#4B5563;labelBackgroundColor=#FFFFFF;fontFamily=Noto Sans KR,Noto Sans CJK KR,Malgun Gothic,Apple SD Gothic Neo,sans-serif;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="430" y="360" as="sourcePoint" />
+            <mxPoint x="430" y="295" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="fig5-1-e5" value="" style="endArrow=block;endFill=1;endSize=7;html=1;rounded=0;strokeColor=#5B6B82;strokeWidth=1.5;fontSize=12;fontColor=#4B5563;labelBackgroundColor=#FFFFFF;fontFamily=Noto Sans KR,Noto Sans CJK KR,Malgun Gothic,Apple SD Gothic Neo,sans-serif;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="430" y="215" as="sourcePoint" />
+            <mxPoint x="430" y="120" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="fig5-1-e6" value="" style="endArrow=block;endFill=1;endSize=7;html=1;rounded=0;strokeColor=#5B6B82;strokeWidth=1.5;fontSize=12;fontColor=#4B5563;labelBackgroundColor=#FFFFFF;fontFamily=Noto Sans KR,Noto Sans CJK KR,Malgun Gothic,Apple SD Gothic Neo,sans-serif;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="670" y="490" as="sourcePoint" />
+            <mxPoint x="670" y="440" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="fig5-1-e7" value="" style="endArrow=block;endFill=1;endSize=7;html=1;rounded=0;strokeColor=#5B6B82;strokeWidth=1.5;fontSize=12;fontColor=#4B5563;labelBackgroundColor=#FFFFFF;fontFamily=Noto Sans KR,Noto Sans CJK KR,Malgun Gothic,Apple SD Gothic Neo,sans-serif;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="670" y="360" as="sourcePoint" />
+            <mxPoint x="670" y="295" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="fig5-1-e8" value="" style="endArrow=block;endFill=1;endSize=7;html=1;rounded=0;strokeColor=#5B6B82;strokeWidth=1.5;fontSize=12;fontColor=#4B5563;labelBackgroundColor=#FFFFFF;fontFamily=Noto Sans KR,Noto Sans CJK KR,Malgun Gothic,Apple SD Gothic Neo,sans-serif;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="670" y="215" as="sourcePoint" />
+            <mxPoint x="670" y="120" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="fig5-1-e9" value="" style="endArrow=block;endFill=1;endSize=7;html=1;rounded=0;strokeColor=#5B6B82;strokeWidth=1.5;fontSize=12;fontColor=#4B5563;labelBackgroundColor=#FFFFFF;fontFamily=Noto Sans KR,Noto Sans CJK KR,Malgun Gothic,Apple SD Gothic Neo,sans-serif;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="910" y="490" as="sourcePoint" />
+            <mxPoint x="910" y="440" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="fig5-1-e10" value="" style="endArrow=block;endFill=1;endSize=7;html=1;rounded=0;strokeColor=#5B6B82;strokeWidth=1.5;fontSize=12;fontColor=#4B5563;labelBackgroundColor=#FFFFFF;fontFamily=Noto Sans KR,Noto Sans CJK KR,Malgun Gothic,Apple SD Gothic Neo,sans-serif;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="910" y="360" as="sourcePoint" />
+            <mxPoint x="910" y="295" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="fig5-1-e11" value="" style="endArrow=block;endFill=1;endSize=7;html=1;rounded=0;strokeColor=#5B6B82;strokeWidth=1.5;fontSize=12;fontColor=#4B5563;labelBackgroundColor=#FFFFFF;fontFamily=Noto Sans KR,Noto Sans CJK KR,Malgun Gothic,Apple SD Gothic Neo,sans-serif;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="910" y="215" as="sourcePoint" />
+            <mxPoint x="910" y="120" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+  <diagram name="그림 6-1 이벤트 · 알림 흐름" id="fig6-1">
+    <mxGraphModel dx="1200" dy="800" grid="1" gridSize="10" guides="1" tooltips="1" connect="0" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1370" pageHeight="600" math="0" shadow="0" background="none">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="fig6-1-zE" value="이벤트 소스" style="rounded=1;arcSize=3;dashed=1;dashPattern=6 4;fillColor=none;strokeColor=#9AA3B2;strokeWidth=1.2;html=1;whiteSpace=wrap;verticalAlign=top;align=left;spacingLeft=10;spacingTop=4;fontStyle=1;fontSize=14;fontColor=#4B5563;fontFamily=Noto Sans KR,Noto Sans CJK KR,Malgun Gothic,Apple SD Gothic Neo,sans-serif;" vertex="1" parent="1">
+          <mxGeometry x="20" y="30" width="250" height="550" as="geometry" />
+        </mxCell>
+        <mxCell id="fig6-1-s0" value="&lt;b style=&quot;font-size:18px&quot;&gt;외부 알람&lt;/b&gt;&lt;br&gt;&lt;span style=&quot;font-size:14px&quot;&gt;Alertmanager&lt;/span&gt;" style="rounded=1;arcSize=10;html=1;whiteSpace=wrap;fillColor=#FFFFFF;strokeColor=#8A94A6;strokeWidth=1.2;fontColor=#1F2937;fontFamily=Noto Sans KR,Noto Sans CJK KR,Malgun Gothic,Apple SD Gothic Neo,sans-serif;fontSize=14;align=center;verticalAlign=middle;" vertex="1" parent="1">
+          <mxGeometry x="40" y="80" width="200" height="62" as="geometry" />
+        </mxCell>
+        <mxCell id="fig6-1-s1" value="&lt;b style=&quot;font-size:18px&quot;&gt;K8s 이벤트&lt;/b&gt;&lt;br&gt;&lt;span style=&quot;font-size:14px&quot;&gt;kubewatch&lt;/span&gt;" style="rounded=1;arcSize=10;html=1;whiteSpace=wrap;fillColor=#FFFFFF;strokeColor=#8A94A6;strokeWidth=1.2;fontColor=#1F2937;fontFamily=Noto Sans KR,Noto Sans CJK KR,Malgun Gothic,Apple SD Gothic Neo,sans-serif;fontSize=14;align=center;verticalAlign=middle;" vertex="1" parent="1">
+          <mxGeometry x="40" y="162" width="200" height="62" as="geometry" />
+        </mxCell>
+        <mxCell id="fig6-1-s2" value="&lt;b style=&quot;font-size:18px&quot;&gt;설정 변경&lt;/b&gt;&lt;br&gt;&lt;span style=&quot;font-size:14px&quot;&gt;감사 로그&lt;/span&gt;" style="rounded=1;arcSize=10;html=1;whiteSpace=wrap;fillColor=#FFFFFF;strokeColor=#8A94A6;strokeWidth=1.2;fontColor=#1F2937;fontFamily=Noto Sans KR,Noto Sans CJK KR,Malgun Gothic,Apple SD Gothic Neo,sans-serif;fontSize=14;align=center;verticalAlign=middle;" vertex="1" parent="1">
+          <mxGeometry x="40" y="244" width="200" height="62" as="geometry" />
+        </mxCell>
+        <mxCell id="fig6-1-s3" value="&lt;b style=&quot;font-size:18px&quot;&gt;상태 변화&lt;/b&gt;&lt;br&gt;&lt;span style=&quot;font-size:14px&quot;&gt;Health 판정&lt;/span&gt;" style="rounded=1;arcSize=10;html=1;whiteSpace=wrap;fillColor=#FFFFFF;strokeColor=#2F4A6D;strokeWidth=2.0;fontColor=#1F2937;fontFamily=Noto Sans KR,Noto Sans CJK KR,Malgun Gothic,Apple SD Gothic Neo,sans-serif;fontSize=14;align=center;verticalAlign=middle;" vertex="1" parent="1">
+          <mxGeometry x="40" y="326" width="200" height="62" as="geometry" />
+        </mxCell>
+        <mxCell id="fig6-1-s4" value="&lt;b style=&quot;font-size:18px&quot;&gt;설정 편차&lt;/b&gt;&lt;br&gt;&lt;span style=&quot;font-size:14px&quot;&gt;기준 대비&lt;/span&gt;" style="rounded=1;arcSize=10;html=1;whiteSpace=wrap;fillColor=#FFFFFF;strokeColor=#2F4A6D;strokeWidth=2.0;fontColor=#1F2937;fontFamily=Noto Sans KR,Noto Sans CJK KR,Malgun Gothic,Apple SD Gothic Neo,sans-serif;fontSize=14;align=center;verticalAlign=middle;" vertex="1" parent="1">
+          <mxGeometry x="40" y="408" width="200" height="62" as="geometry" />
+        </mxCell>
+        <mxCell id="fig6-1-s5" value="&lt;b style=&quot;font-size:18px&quot;&gt;수집 중단&lt;/b&gt;&lt;br&gt;&lt;span style=&quot;font-size:14px&quot;&gt;생존 신호&lt;/span&gt;" style="rounded=1;arcSize=10;html=1;whiteSpace=wrap;fillColor=#FFFFFF;strokeColor=#2F4A6D;strokeWidth=2.0;fontColor=#1F2937;fontFamily=Noto Sans KR,Noto Sans CJK KR,Malgun Gothic,Apple SD Gothic Neo,sans-serif;fontSize=14;align=center;verticalAlign=middle;" vertex="1" parent="1">
+          <mxGeometry x="40" y="490" width="200" height="62" as="geometry" />
+        </mxCell>
+        <mxCell id="fig6-1-ev" value="&lt;b style=&quot;font-size:18px&quot;&gt;통합 이벤트&lt;/b&gt;&lt;br&gt;&lt;span style=&quot;font-size:14px&quot;&gt;출처 · 심각도&lt;br&gt;대상 · 시각&lt;/span&gt;" style="rounded=1;arcSize=10;html=1;whiteSpace=wrap;fillColor=#FFF4EC;strokeColor=#C2410C;strokeWidth=2.5;fontColor=#1F2937;fontFamily=Noto Sans KR,Noto Sans CJK KR,Malgun Gothic,Apple SD Gothic Neo,sans-serif;fontSize=14;align=center;verticalAlign=middle;" vertex="1" parent="1">
+          <mxGeometry x="340" y="80" width="180" height="472" as="geometry" />
+        </mxCell>
+        <mxCell id="fig6-1-mm" value="&lt;b style=&quot;font-size:18px&quot;&gt;유지보수 모드&lt;/b&gt;&lt;br&gt;&lt;span style=&quot;font-size:14px&quot;&gt;억제 시간창&lt;/span&gt;" style="rounded=1;arcSize=10;html=1;whiteSpace=wrap;fillColor=#FFFFFF;strokeColor=#2F4A6D;strokeWidth=2.0;fontColor=#1F2937;fontFamily=Noto Sans KR,Noto Sans CJK KR,Malgun Gothic,Apple SD Gothic Neo,sans-serif;fontSize=14;align=center;verticalAlign=middle;" vertex="1" parent="1">
+          <mxGeometry x="600" y="271" width="190" height="90" as="geometry" />
+        </mxCell>
+        <mxCell id="fig6-1-rule" value="&lt;b style=&quot;font-size:18px&quot;&gt;알림 규칙&lt;/b&gt;&lt;br&gt;&lt;span style=&quot;font-size:14px&quot;&gt;우선순위 · 매처&lt;br&gt;중복 억제&lt;/span&gt;" style="rounded=1;arcSize=10;html=1;whiteSpace=wrap;fillColor=#FFFFFF;strokeColor=#8A94A6;strokeWidth=1.2;fontColor=#1F2937;fontFamily=Noto Sans KR,Noto Sans CJK KR,Malgun Gothic,Apple SD Gothic Neo,sans-serif;fontSize=14;align=center;verticalAlign=middle;" vertex="1" parent="1">
+          <mxGeometry x="870" y="271" width="200" height="90" as="geometry" />
+        </mxCell>
+        <mxCell id="fig6-1-o1" value="&lt;b style=&quot;font-size:18px&quot;&gt;인박스&lt;/b&gt;&lt;br&gt;&lt;span style=&quot;font-size:14px&quot;&gt;이력 · 확인&lt;/span&gt;" style="rounded=1;arcSize=10;html=1;whiteSpace=wrap;fillColor=#FFFFFF;strokeColor=#8A94A6;strokeWidth=1.2;fontColor=#1F2937;fontFamily=Noto Sans KR,Noto Sans CJK KR,Malgun Gothic,Apple SD Gothic Neo,sans-serif;fontSize=14;align=center;verticalAlign=middle;" vertex="1" parent="1">
+          <mxGeometry x="1150" y="130" width="190" height="80" as="geometry" />
+        </mxCell>
+        <mxCell id="fig6-1-o2" value="&lt;b style=&quot;font-size:18px&quot;&gt;개인 알림&lt;/b&gt;&lt;br&gt;&lt;span style=&quot;font-size:14px&quot;&gt;전체 · 담당자&lt;/span&gt;" style="rounded=1;arcSize=10;html=1;whiteSpace=wrap;fillColor=#FFFFFF;strokeColor=#8A94A6;strokeWidth=1.2;fontColor=#1F2937;fontFamily=Noto Sans KR,Noto Sans CJK KR,Malgun Gothic,Apple SD Gothic Neo,sans-serif;fontSize=14;align=center;verticalAlign=middle;" vertex="1" parent="1">
+          <mxGeometry x="1150" y="276" width="190" height="80" as="geometry" />
+        </mxCell>
+        <mxCell id="fig6-1-o3" value="&lt;b style=&quot;font-size:18px&quot;&gt;재전파 채널&lt;/b&gt;&lt;br&gt;&lt;span style=&quot;font-size:14px&quot;&gt;Slack · Webhook&lt;/span&gt;" style="rounded=1;arcSize=10;html=1;whiteSpace=wrap;fillColor=#FFFFFF;strokeColor=#8A94A6;strokeWidth=1.2;fontColor=#1F2937;fontFamily=Noto Sans KR,Noto Sans CJK KR,Malgun Gothic,Apple SD Gothic Neo,sans-serif;fontSize=14;align=center;verticalAlign=middle;" vertex="1" parent="1">
+          <mxGeometry x="1150" y="422" width="190" height="80" as="geometry" />
+        </mxCell>
+        <mxCell id="fig6-1-e0" value="" style="endArrow=block;endFill=1;endSize=7;html=1;rounded=0;strokeColor=#5B6B82;strokeWidth=1.5;fontSize=12;fontColor=#4B5563;labelBackgroundColor=#FFFFFF;fontFamily=Noto Sans KR,Noto Sans CJK KR,Malgun Gothic,Apple SD Gothic Neo,sans-serif;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="240" y="111" as="sourcePoint" />
+            <mxPoint x="340" y="111" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="fig6-1-e1" value="" style="endArrow=block;endFill=1;endSize=7;html=1;rounded=0;strokeColor=#5B6B82;strokeWidth=1.5;fontSize=12;fontColor=#4B5563;labelBackgroundColor=#FFFFFF;fontFamily=Noto Sans KR,Noto Sans CJK KR,Malgun Gothic,Apple SD Gothic Neo,sans-serif;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="240" y="193" as="sourcePoint" />
+            <mxPoint x="340" y="193" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="fig6-1-e2" value="" style="endArrow=block;endFill=1;endSize=7;html=1;rounded=0;strokeColor=#5B6B82;strokeWidth=1.5;fontSize=12;fontColor=#4B5563;labelBackgroundColor=#FFFFFF;fontFamily=Noto Sans KR,Noto Sans CJK KR,Malgun Gothic,Apple SD Gothic Neo,sans-serif;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="240" y="275" as="sourcePoint" />
+            <mxPoint x="340" y="275" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="fig6-1-e3" value="" style="endArrow=block;endFill=1;endSize=7;html=1;rounded=0;strokeColor=#5B6B82;strokeWidth=1.5;fontSize=12;fontColor=#4B5563;labelBackgroundColor=#FFFFFF;fontFamily=Noto Sans KR,Noto Sans CJK KR,Malgun Gothic,Apple SD Gothic Neo,sans-serif;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="240" y="357" as="sourcePoint" />
+            <mxPoint x="340" y="357" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="fig6-1-e4" value="" style="endArrow=block;endFill=1;endSize=7;html=1;rounded=0;strokeColor=#5B6B82;strokeWidth=1.5;fontSize=12;fontColor=#4B5563;labelBackgroundColor=#FFFFFF;fontFamily=Noto Sans KR,Noto Sans CJK KR,Malgun Gothic,Apple SD Gothic Neo,sans-serif;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="240" y="439" as="sourcePoint" />
+            <mxPoint x="340" y="439" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="fig6-1-e5" value="" style="endArrow=block;endFill=1;endSize=7;html=1;rounded=0;strokeColor=#5B6B82;strokeWidth=1.5;fontSize=12;fontColor=#4B5563;labelBackgroundColor=#FFFFFF;fontFamily=Noto Sans KR,Noto Sans CJK KR,Malgun Gothic,Apple SD Gothic Neo,sans-serif;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="240" y="521" as="sourcePoint" />
+            <mxPoint x="340" y="521" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="fig6-1-e6" value="통과" style="endArrow=block;endFill=1;endSize=7;html=1;rounded=0;strokeColor=#5B6B82;strokeWidth=1.5;fontSize=12;fontColor=#4B5563;labelBackgroundColor=#FFFFFF;fontFamily=Noto Sans KR,Noto Sans CJK KR,Malgun Gothic,Apple SD Gothic Neo,sans-serif;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="520" y="316" as="sourcePoint" />
+            <mxPoint x="600" y="316" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="fig6-1-e7" value="평가" style="endArrow=block;endFill=1;endSize=7;html=1;rounded=0;strokeColor=#5B6B82;strokeWidth=1.5;fontSize=12;fontColor=#4B5563;labelBackgroundColor=#FFFFFF;fontFamily=Noto Sans KR,Noto Sans CJK KR,Malgun Gothic,Apple SD Gothic Neo,sans-serif;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="790" y="316" as="sourcePoint" />
+            <mxPoint x="870" y="316" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="fig6-1-e8" value="" style="endArrow=block;endFill=1;endSize=7;html=1;rounded=0;strokeColor=#5B6B82;strokeWidth=1.5;fontSize=12;fontColor=#4B5563;labelBackgroundColor=#FFFFFF;fontFamily=Noto Sans KR,Noto Sans CJK KR,Malgun Gothic,Apple SD Gothic Neo,sans-serif;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="1070" y="300" as="sourcePoint" />
+            <mxPoint x="1150" y="185" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="fig6-1-e9" value="" style="endArrow=block;endFill=1;endSize=7;html=1;rounded=0;strokeColor=#5B6B82;strokeWidth=1.5;fontSize=12;fontColor=#4B5563;labelBackgroundColor=#FFFFFF;fontFamily=Noto Sans KR,Noto Sans CJK KR,Malgun Gothic,Apple SD Gothic Neo,sans-serif;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="1070" y="316" as="sourcePoint" />
+            <mxPoint x="1150" y="316" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="fig6-1-e10" value="" style="endArrow=block;endFill=1;endSize=7;html=1;rounded=0;strokeColor=#5B6B82;strokeWidth=1.5;fontSize=12;fontColor=#4B5563;labelBackgroundColor=#FFFFFF;fontFamily=Noto Sans KR,Noto Sans CJK KR,Malgun Gothic,Apple SD Gothic Neo,sans-serif;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="1070" y="332" as="sourcePoint" />
+            <mxPoint x="1150" y="447" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

@@ -1,0 +1,52 @@
+<mxfile host="app.diagrams.net" agent="build_figures.py" version="24.0.0">
+  <diagram name="그림 4-1 기준 설정 계층" id="fig4-1">
+    <mxGraphModel dx="1200" dy="800" grid="1" gridSize="10" guides="1" tooltips="1" connect="0" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1390" pageHeight="220" math="0" shadow="0" background="none">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="fig4-1-zS" value="기준 설정 저장소" style="rounded=1;arcSize=3;dashed=1;dashPattern=6 4;fillColor=none;strokeColor=#9AA3B2;strokeWidth=1.2;html=1;whiteSpace=wrap;verticalAlign=top;align=left;spacingLeft=10;spacingTop=4;fontStyle=1;fontSize=14;fontColor=#4B5563;fontFamily=Noto Sans KR,Noto Sans CJK KR,Malgun Gothic,Apple SD Gothic Neo,sans-serif;" vertex="1" parent="1">
+          <mxGeometry x="20" y="40" width="1080" height="160" as="geometry" />
+        </mxCell>
+        <mxCell id="fig4-1-l1" value="&lt;b style=&quot;font-size:18px&quot;&gt;공통 기준&lt;/b&gt;&lt;br&gt;&lt;span style=&quot;font-size:14px&quot;&gt;전 클러스터&lt;br&gt;기본값&lt;/span&gt;" style="rounded=1;arcSize=10;html=1;whiteSpace=wrap;fillColor=#FFFFFF;strokeColor=#2F4A6D;strokeWidth=2.0;fontColor=#1F2937;fontFamily=Noto Sans KR,Noto Sans CJK KR,Malgun Gothic,Apple SD Gothic Neo,sans-serif;fontSize=14;align=center;verticalAlign=middle;" vertex="1" parent="1">
+          <mxGeometry x="40" y="90" width="200" height="90" as="geometry" />
+        </mxCell>
+        <mxCell id="fig4-1-l2" value="&lt;b style=&quot;font-size:18px&quot;&gt;클러스터 그룹&lt;/b&gt;&lt;br&gt;&lt;span style=&quot;font-size:14px&quot;&gt;환경 · 테넌트&lt;/span&gt;" style="rounded=1;arcSize=10;html=1;whiteSpace=wrap;fillColor=#FFFFFF;strokeColor=#2F4A6D;strokeWidth=2.0;fontColor=#1F2937;fontFamily=Noto Sans KR,Noto Sans CJK KR,Malgun Gothic,Apple SD Gothic Neo,sans-serif;fontSize=14;align=center;verticalAlign=middle;" vertex="1" parent="1">
+          <mxGeometry x="320" y="90" width="200" height="90" as="geometry" />
+        </mxCell>
+        <mxCell id="fig4-1-l3" value="&lt;b style=&quot;font-size:18px&quot;&gt;클러스터&lt;/b&gt;&lt;br&gt;&lt;span style=&quot;font-size:14px&quot;&gt;클러스터별 값&lt;/span&gt;" style="rounded=1;arcSize=10;html=1;whiteSpace=wrap;fillColor=#FFFFFF;strokeColor=#2F4A6D;strokeWidth=2.0;fontColor=#1F2937;fontFamily=Noto Sans KR,Noto Sans CJK KR,Malgun Gothic,Apple SD Gothic Neo,sans-serif;fontSize=14;align=center;verticalAlign=middle;" vertex="1" parent="1">
+          <mxGeometry x="600" y="90" width="200" height="90" as="geometry" />
+        </mxCell>
+        <mxCell id="fig4-1-l4" value="&lt;b style=&quot;font-size:18px&quot;&gt;노드 · 컴포넌트&lt;/b&gt;&lt;br&gt;&lt;span style=&quot;font-size:14px&quot;&gt;예외 값&lt;/span&gt;" style="rounded=1;arcSize=10;html=1;whiteSpace=wrap;fillColor=#FFFFFF;strokeColor=#2F4A6D;strokeWidth=2.0;fontColor=#1F2937;fontFamily=Noto Sans KR,Noto Sans CJK KR,Malgun Gothic,Apple SD Gothic Neo,sans-serif;fontSize=14;align=center;verticalAlign=middle;" vertex="1" parent="1">
+          <mxGeometry x="880" y="90" width="200" height="90" as="geometry" />
+        </mxCell>
+        <mxCell id="fig4-1-eff" value="&lt;b style=&quot;font-size:18px&quot;&gt;유효 기준값&lt;/b&gt;&lt;br&gt;&lt;span style=&quot;font-size:14px&quot;&gt;차이만 저장&lt;br&gt;키 스키마 검증&lt;/span&gt;" style="rounded=1;arcSize=10;html=1;whiteSpace=wrap;fillColor=#FFF4EC;strokeColor=#C2410C;strokeWidth=2.5;fontColor=#1F2937;fontFamily=Noto Sans KR,Noto Sans CJK KR,Malgun Gothic,Apple SD Gothic Neo,sans-serif;fontSize=14;align=center;verticalAlign=middle;" vertex="1" parent="1">
+          <mxGeometry x="1180" y="90" width="190" height="90" as="geometry" />
+        </mxCell>
+        <mxCell id="fig4-1-e0" value="덮어쓰기" style="endArrow=block;endFill=1;endSize=7;html=1;rounded=0;strokeColor=#5B6B82;strokeWidth=1.5;fontSize=12;fontColor=#4B5563;labelBackgroundColor=#FFFFFF;fontFamily=Noto Sans KR,Noto Sans CJK KR,Malgun Gothic,Apple SD Gothic Neo,sans-serif;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="240" y="135" as="sourcePoint" />
+            <mxPoint x="320" y="135" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="fig4-1-e1" value="덮어쓰기" style="endArrow=block;endFill=1;endSize=7;html=1;rounded=0;strokeColor=#5B6B82;strokeWidth=1.5;fontSize=12;fontColor=#4B5563;labelBackgroundColor=#FFFFFF;fontFamily=Noto Sans KR,Noto Sans CJK KR,Malgun Gothic,Apple SD Gothic Neo,sans-serif;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="520" y="135" as="sourcePoint" />
+            <mxPoint x="600" y="135" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="fig4-1-e2" value="덮어쓰기" style="endArrow=block;endFill=1;endSize=7;html=1;rounded=0;strokeColor=#5B6B82;strokeWidth=1.5;fontSize=12;fontColor=#4B5563;labelBackgroundColor=#FFFFFF;fontFamily=Noto Sans KR,Noto Sans CJK KR,Malgun Gothic,Apple SD Gothic Neo,sans-serif;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="800" y="135" as="sourcePoint" />
+            <mxPoint x="880" y="135" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="fig4-1-e3" value="병합" style="endArrow=block;endFill=1;endSize=7;html=1;rounded=0;strokeColor=#5B6B82;strokeWidth=1.5;fontSize=12;fontColor=#4B5563;labelBackgroundColor=#FFFFFF;fontFamily=Noto Sans KR,Noto Sans CJK KR,Malgun Gothic,Apple SD Gothic Neo,sans-serif;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="1080" y="135" as="sourcePoint" />
+            <mxPoint x="1180" y="135" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>
