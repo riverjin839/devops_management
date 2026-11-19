@@ -120,6 +120,7 @@ export const en: TranslationResource = {
       accent: 'Accent Color',
       accentDisabledHint:
         'Painting themes (Umber, Plaster, Breakfast, Relief, Harlequin, Ozenfant, Kim Whanki, Picasso, Juan Gris) and the Comfort and High Contrast backgrounds use their own colors, so the accent color cannot be changed',
+      navStyle: 'Navigation Style',
       language: 'Language',
       logout: 'Log Out',
     },
@@ -154,6 +155,11 @@ export const en: TranslationResource = {
       amber: 'Amber',
       coral: 'Coral',
       violet: 'Violet',
+    },
+    navStyle: {
+      classic: 'Classic',
+      spotlight: 'Spotlight (default)',
+      notch: 'Glow Notch',
     },
     topbar: {
       greeting: '{{name}}',

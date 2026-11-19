@@ -1039,6 +1039,33 @@ D-117~D-134)에서 원자는 지켜지는데 화면이 "AI 가 만든 템플릿"
 7. **고유명사는 그대로.** 영어에서도 K8s·LAKE·Cilium·BPF·etcdctl·k9s·mc·CIDR·WBS·Jira·VOC 는 원어. 언어 메뉴의 "한국어"/"English" 는 번역하지 않는다.
 8. **언어 변경은 `useLocale().changeLocale`.** 즉시 적용 + 서버(`home_prefs.locale`) 저장. `i18n.changeLanguage` 를 직접 부르지 않는다. 원천 순서는 서버 → localStorage `pep.locale`(캐시) → `ko`, `<html lang>` 이 따라간다.
 
+### 12.15 메인 레일 활성 표시 — 네비게이션 스타일 (D-241)
+
+메인 레일(`components/layout/Sidebar.tsx`)의 현재 페이지 표시는 사용자 메뉴 ▸ **네비게이션 스타일**에서
+고른다. 값은 `stores/navStyleStore.ts`(`k8s:nav-style` 개인 키 — 개인 설정 내보내기·기기 간 동기화 대상)이고
+**기본은 `spotlight`** 다. 적용 범위는 메인 레일뿐이다(`ClusterSidebar` 레일은 §12.5 그대로).
+
+| 스타일 | 활성 표시 | 이동 |
+|---|---|---|
+| `classic` | 버튼 배경 `primary/15` + 왼쪽 막대(예전 방식) | 없음 |
+| `spotlight`(기본) | 레일 왼쪽 빛 막대 3px + 오른쪽으로 퍼지는 빛 원뿔, 아이콘은 `foreground` + 은은한 빛 | 380ms 감속 |
+| `notch` | 레일 오른쪽 테두리가 빛나는 선이 되고 활성 아이콘 자리에서 안쪽으로 굽어 감싼다, 아이콘 아래 점 | 460ms, 끝에서 살짝 튕김 |
+
+- **표시자는 레일에 1개다.** 버튼마다 그리지 않고 `RailIndicator`(`<aside>` 첫 자식)를 `<aside>` 의 CSS 변수
+  `--nav-ind-y`(아이콘 중심 px)로 옮긴다. 상태는 data 속성(`data-nav-ind="on|off"` · `data-nav-following` ·
+  `data-nav-ready`)이고, 마우스 이동마다 React 를 다시 그리지 않도록 `useRailIndicator` 가 DOM 에 직접 쓴다.
+  모양·transition 은 `index.css` "메인 레일 활성 표시" 블록.
+- **마우스 따라가기는 연속 고정**(옵션 없음): 레일 메뉴 영역에서 `[data-rail-item]` 첫 아이콘 ~ 마지막 아이콘
+  중심 사이로 포인터 높이를 따라가고(110ms), 160ms 멈추면 가장 가까운 아이콘에 붙는다. 레일을 벗어나면 현재
+  페이지 위치로 돌아간다. **페이지 이동은 클릭으로만** 하고, 현재 페이지는 아이콘 색(`aria-current="page"`)으로
+  계속 구분된다. 키보드 포커스도 같은 방식으로 미리 보여준다. 터치 포인터는 따라가지 않는다.
+- **범위에 들어가는 아이콘**: 설치 leaf 앱(`railItem`)만. 뒤로가기·앱 추가(`+`)·로고·하단 아이콘은 제외다.
+  현재 페이지가 레일에 없거나 메뉴 스크롤 밖이면 표시자를 숨긴다(notch 는 직선 테두리만 남는다).
+- **색은 `--sidebar-primary` 하나**(알파만 조절) — 강조색(`data-accent`)이 덮는 토큰이라 테마·강조색을 따른다.
+  raw 색 금지.
+- **고대비**(`html.high-contrast`): 빛·원뿔을 끄고 굵은 막대(4px)·실선(2.5px)만, spotlight 활성 아이콘엔 배경.
+  **모션 줄이기**: 전역 규칙으로 transition 이 꺼지고, 따라가기는 아이콘 단위 즉시 이동으로 바뀐다.
+
 ## 부록 A — 검증 출처
 
 | 항목 | ui-ux-pro-max 출처 |

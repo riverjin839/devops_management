@@ -127,6 +127,7 @@ export const ko = {
       accent: '강조색',
       accentDisabledHint:
         '그림 테마(움버·플래스터·아침 식사·릴리프·할리퀸과 목걸이를 한 여인·오장팡 자개·김환기 창·피카소·후안 그리스)와 컴포트·고대비 바탕은 자체 색을 써서 강조색을 바꿀 수 없다',
+      navStyle: '네비게이션 스타일',
       language: '언어',
       logout: '로그아웃',
     },
@@ -163,6 +164,12 @@ export const ko = {
       amber: '앰버',
       coral: '코랄',
       violet: '바이올렛',
+    },
+    /** stores/navStyleStore.ts 의 NAV_STYLES 와 같은 id. */
+    navStyle: {
+      classic: '클래식',
+      spotlight: '스포트라이트 (기본)',
+      notch: '글로우 노치',
     },
     topbar: {
       greeting: '{{name}}님',

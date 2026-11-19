@@ -1655,6 +1655,52 @@ button[aria-disabled="true"] {
 .toast-enter { animation: toast-in  var(--motion-base) var(--motion-ease); }
 .toast-exit  { animation: toast-out var(--motion-base) var(--motion-ease) forwards; }
 
+/* ── 메인 레일 활성 표시 (stores/navStyleStore · components/layout/RailIndicator) ──
+   표시자 1개를 <aside> 의 --nav-ind-y(아이콘 중심, px)로 옮긴다. 색은 --sidebar-primary 만 —
+   강조색(data-accent)이 덮는 토큰이라 테마·강조색을 그대로 따른다. 규격은 DESIGN_SYSTEM.md §12.15. */
+.nav-ind-spot {
+  position: absolute; left: 0; top: 0; width: 56px; height: 44px; pointer-events: none;
+  transform: translateY(calc(var(--nav-ind-y, 0px) - 22px));
+  opacity: 0; transition: opacity 200ms ease;
+}
+[data-nav-ind="on"] .nav-ind-spot { opacity: 1; }
+[data-nav-ready] .nav-ind-spot { transition: transform 380ms cubic-bezier(.2, .8, .2, 1), opacity 200ms ease; }
+[data-nav-ready][data-nav-following] .nav-ind-spot { transition: transform 110ms ease-out, opacity 200ms ease; }
+.nav-ind-spot::before {
+  content: ""; position: absolute; left: 0; top: 10px; width: 3px; height: 24px; border-radius: 0 3px 3px 0;
+  background: hsl(var(--sidebar-primary));
+  box-shadow: 0 0 6px 1px hsl(var(--sidebar-primary) / .85), 0 0 16px 2px hsl(var(--sidebar-primary) / .45);
+}
+.nav-ind-spot::after {
+  content: ""; position: absolute; left: 3px; top: 0; width: 50px; height: 44px;
+  background: linear-gradient(90deg, hsl(var(--sidebar-primary) / .42), hsl(var(--sidebar-primary) / .14) 55%, hsl(var(--sidebar-primary) / 0));
+  clip-path: polygon(0 30%, 100% 0, 100% 100%, 0 70%);
+}
+.nav-notch { position: absolute; left: 0; top: 0; height: 100%; overflow: hidden; pointer-events: none; }
+.nav-notch-line {
+  fill: none; stroke: hsl(var(--sidebar-primary)); stroke-width: 1.5;
+  filter: drop-shadow(0 0 2px hsl(var(--sidebar-primary) / .95)) drop-shadow(0 0 6px hsl(var(--sidebar-primary) / .55));
+}
+.nav-notch-fill { fill: hsl(var(--sidebar-primary) / .07); }
+.nav-notch-cover { fill: hsl(var(--sidebar)); }
+.nav-notch-bump { transform: translateY(var(--nav-ind-y, 0px)); opacity: 0; transition: opacity 200ms ease; }
+[data-nav-ind="on"] .nav-notch-bump { opacity: 1; }
+[data-nav-ready] .nav-notch-bump { transition: transform 460ms cubic-bezier(.34, 1.35, .64, 1), opacity 200ms ease; }
+[data-nav-ready][data-nav-following] .nav-notch-bump { transition: transform 110ms ease-out, opacity 200ms ease; }
+/* 활성 아이콘 */
+.nav-active-spotlight { filter: drop-shadow(0 0 6px hsl(var(--sidebar-primary) / .75)); }
+.nav-active-notch::after {
+  content: ""; position: absolute; left: 50%; bottom: 3px; width: 4px; height: 4px; margin-left: -2px; border-radius: 9999px;
+  background: hsl(var(--sidebar-primary)); box-shadow: 0 0 6px hsl(var(--sidebar-primary));
+}
+/* 고대비 — 빛·원뿔 없이 굵은 막대/실선만 */
+html.high-contrast .nav-ind-spot::before { width: 4px; box-shadow: none; }
+html.high-contrast .nav-ind-spot::after { display: none; }
+html.high-contrast .nav-notch-line { stroke-width: 2.5; filter: none; }
+html.high-contrast .nav-notch-fill { fill: none; }
+html.high-contrast .nav-active-spotlight { filter: none; background: hsl(var(--sidebar-accent)); }
+html.high-contrast .nav-active-notch::after { box-shadow: none; }
+
 /* ── Prefers-reduced-motion — 모든 애니메이션/트랜지션 최소화 ────────── */
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {
