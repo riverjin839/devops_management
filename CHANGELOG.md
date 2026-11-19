@@ -8,15 +8,15 @@
 
 ## [Unreleased]
 
-1.92.1 이후 main 에 병합된 변경 (다음 릴리스 후보).
+1.92.2 이후 main 에 병합된 변경 (다음 릴리스 후보).
 
-## [1.92.1] - 2026-11-19
+## [1.92.2] - 2026-11-19
 
 ### Fixed
 - **LLM 연결 진단 — HTTPRoute(Gateway API) 경유 모델이 '설정 확인' 에서 막히던 문제**: 모델 목록 조회가 사유 없이 비어 모델명을 못 고르면 진단이 '설정 확인 단계부터 막혀 있다' 로 끝나 화면에서 풀 수 없었다. 이제 빈 모델명은 경고로 두고 서버 모델로 응답을 시험해 '모델명 저장' 으로 바로 채운다. 진단은 실제 호출 URL·HTTP 옵션을 먼저 찍고, 새 **프록시 경로** 단계(HTTP(S)_PROXY/NO_PROXY 판정)와 응답 코드·`server` 헤더 기반 힌트(envoy 404 → hostnames/URLRewrite, TLS → CA, 401/403 → 인증 헤더, 5xx → backendRefs)를 남긴다. 모델 목록 조회도 실패 사유를 화면에 보여 준다. base_url 끝의 `/v1` 중복(`/v1/v1/models`)은 자동으로 막는다. Backend: `services/llm/diagnostics.py`, `base.py`(`LLMProfile.api_url`/`client_kwargs`/`request_headers`), `openai_provider.py`·`ollama_provider.py` `list_models_detailed`, `GET /llm/profiles/{name}/models` 에 `error`.
-
-### Added
 - **LLM 프로필 고급 옵션 — 게이트웨이(HTTPRoute·Ingress) 연결**: Settings → AI/LLM 프로필 편집에 API 경로·Host 헤더·TLS 검증/CA 번들 경로·환경 프록시 사용·인증 헤더 이름/스킴·추가 헤더를 추가했다. 코드 수정 없이 GPU 클러스터 게이트웨이 뒤 모델 서버에 맞출 수 있다(기본값은 기존 동작). 절차는 `docs/LLM_AGENT_K8S_OPS.md` §2.1.1.
+
+## [1.92.1] - 2026-11-19
 
 ### Changed
 - **DC 토폴로지 편집기 재구성 — 끌어다 놓기·손잡이 연결·속성 패널**: `/dc-inventory` 토폴로지 탭을 draw.io 처럼 바꿨다. 왼쪽 도형 팔레트에서 FA 코어·spine·leaf·랙·서버·구간을 캔버스로 끌어다 놓으면 자동 이름(`spine-03`, `R21`)으로 바로 만들어지고(서버·leaf 는 랙의 빈 U 에), 선택한 장비의 손잡이를 끌거나 연결 모드로 두 장비를 누르면 연결된다(이을 수 없는 장비는 흐려짐). 처음 열면 전체가 한 화면에 들어오고 빈 곳 끌기 이동·휠 확대·미니맵을 지원한다. 구간 상자 안에 접힌 랙 카드가 놓이고 펼치면 U 순서 장비 목록이 보인다. 오른쪽 속성 패널에서 이름·역할·상태·위치·클러스터를 즉시 저장하고, 더블클릭/Enter 이름 고치기·Delete 삭제·Esc 해제 키를 쓴다. 왼쪽 구간 패널은 속성 패널로 흡수했다. Frontend: `DcTopologyBoard.tsx`, `DcTopologyInspector.tsx`, `topology/`(`Palette`·`Canvas`·`useCanvasView`), `topologyLayout.ts`. 백엔드 변경 없음.
