@@ -11,8 +11,8 @@ const TH = 'text-left px-3 py-2 text-xs font-medium text-muted-foreground';
 const TD = 'px-3 py-2 align-top';
 const TYPE_LABEL: Record<NodeParamChange['changeType'], string> = { changed: '변경', added: '생김', removed: '사라짐' };
 
-export function NodeParamChangesCard({ changes }: { changes: NodeParamChange[] }) {
-  const [query, setQuery] = useState('');
+export function NodeParamChangesCard({ changes, initialQuery = '' }: { changes: NodeParamChange[]; initialQuery?: string }) {
+  const [query, setQuery] = useState(initialQuery);
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
     if (!q) return changes;

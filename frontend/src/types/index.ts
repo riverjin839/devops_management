@@ -6792,6 +6792,60 @@ export interface ServiceConfigApplyRun {
   /** [ts, level, message] — 상세 조회에서만. */
   logLines?: [string, string, string][];
 }
+export type ServiceConfigLevel = 'ok' | 'warning' | 'critical';
+export interface ServiceConfigDriftRow {
+  key: string;
+  node: string;
+  current: string;
+  expected: string;
+  groupId: string | null;
+  groupName: string;
+  baselineVersionNo: number;
+}
+export interface ServiceConfigKeySignal {
+  key: string;
+  alerts: { critical: number; warning: number };
+  lastChange: ServiceConfigParamChange | null;
+}
+export interface ServiceConfigParamChange {
+  node: string;
+  key: string;
+  oldValue: string | null;
+  newValue: string | null;
+  changeType: string;
+  detectedAt: string | null;
+}
+/** 서비스 상태 — 드리프트(기준 버전과 다른 노드 값)·열린 알람·최근 변경·미적용·최근 적용. */
+export interface ServiceConfigStatus {
+  service: string;
+  label: string;
+  level: ServiceConfigLevel;
+  reasons: string[];
+  drift: {
+    baselineVersionNo: number | null;
+    baselineStatus: string | null;
+    nodes: string[];
+    keys: string[];
+    /** 그룹 id('' = 기본) → 기준과 다른 노드. */
+    byGroup: Record<string, string[]>;
+    nodeCount: number;
+    lastCollectedAt: string | null;
+    rows: ServiceConfigDriftRow[];
+  };
+  pending: ServiceConfigView['pending'];
+  lastRun: { id: string; versionNo: number; status: ServiceConfigApplyRun['status']; startedBy: string | null; startedAt: string | null; finishedAt: string | null } | null;
+  alertCounts: { critical: number; warning: number };
+  offlineNodes: string[];
+  errors: string[];
+  alerts: { id: string; alertname: string; severity: string; node: string | null; keys: string[]; summary: string | null; startsAt: string | null }[];
+  /** 키별 신호 — 목록(응답 키 camelCase 변환이 설정 키를 망가뜨리지 않게). */
+  keySignals: ServiceConfigKeySignal[];
+  recentChanges: ServiceConfigParamChange[];
+  recentRuns: { id: string; versionNo: number; status: ServiceConfigApplyRun['status']; startedBy: string | null; targetMode: string; targetCount: number; startedAt: string | null }[];
+}
+export interface ServiceConfigStatusAll {
+  services: Record<string, { level: ServiceConfigLevel; reasons: string[]; error?: string }>;
+}
 export interface ServiceConfigApplySettings {
   sysctlFile: string;
   ciliumNamespace: string;

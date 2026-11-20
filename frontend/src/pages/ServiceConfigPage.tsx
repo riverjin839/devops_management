@@ -17,6 +17,7 @@ import { useAbortableMutation } from '@/hooks/useAbortableMutation';
 import {
   useDeleteServiceConfigGroup, useImportServiceConfig, useInvalidateServiceConfig, useRevertServiceConfig,
   useSaveServiceConfigGroup, useSaveServiceConfigVersion, useServiceConfigEvaluate, useServiceConfigServices,
+  useServiceConfigStatus, useServiceConfigStatusAll,
   useServiceConfigView, useServiceConfigApplyRun, useStopServiceConfigApply,
 } from '@/hooks/useServiceConfig';
 import {
@@ -27,7 +28,8 @@ import { PageHeader } from '@/components/common/PageHeader';
 import { MacCard } from '@/components/ui/MacCard';
 import { Button } from '@/components/ui/button';
 import {
-  ApplyDialog, ApplyHistoryDialog, ApplyRunPanel, ApplySettingsDialog, GroupDialog, SaveVersionDialog, ServiceConfigRail,
+  ApplyDialog, ApplyHistoryDialog, ApplyRunPanel, ApplySettingsDialog, DriftBanner, GroupDialog, SaveVersionDialog, ServiceConfigRail,
+  ServiceSummary,
   ServiceConfigSections, VersionCompareDialog, type ApplyRequest, type DraftChange,
 } from '@/components/service-config';
 import { afterModalClose } from '@/components/service-config/afterModalClose';
@@ -84,8 +86,15 @@ export function ServiceConfigPage() {
   const service = services.some((s) => s.key === params.service) ? params.service : (services[0]?.key ?? 'etcd');
   const groupId = params.group || null;
   const versionNo = params.version ? Number(params.version) : undefined;
-  const viewQ = useServiceConfigView(clusterId, service, versionNo, groupId);
+  // 편집 중이 아니면 현재 값을 60초마다 다시 읽는다(노드 파라미터 에이전트 보고 주기). 편집 중엔 초안이 흔들리지 않게 멈춘다.
+  const [liveView, setLiveView] = useState(true);
+  const viewQ = useServiceConfigView(clusterId, service, versionNo, groupId, liveView);
   const view = viewQ.data;
+  const statusQ = useServiceConfigStatus(clusterId, service);
+  const status = statusQ.data;
+  const statusAllQ = useServiceConfigStatusAll(clusterId);
+  /** 드리프트 '다시 적용' — 기준 버전·그 범위·다른 노드로 적용 대화상자를 연다. */
+  const [applyTarget, setApplyTarget] = useState<{ versionNo: number; groupId: string | null; nodes: string[] } | null>(null);
 
   const [tab, setTab] = useState<'config' | 'summary'>('config');
   const [query, setQuery] = useState('');
@@ -140,6 +149,16 @@ export function ServiceConfigPage() {
     .filter((k) => (draft[k] ?? '') !== (initial[k] ?? ''))
     .map((k) => ({ key: k, before: initial[k] ?? '', after: draft[k] ?? '' })), [draft, initial]);
   const dirty = changes.length > 0;
+  useEffect(() => { setLiveView(!dirty); }, [dirty]);
+  const signalMap = useMemo(() => Object.fromEntries((status?.keySignals ?? []).map((sg) => [sg.key, sg])), [status]);
+  const changesHref = (key?: string) => `/k8s/${clusterId}/os-param-watch?tab=changes${key ? `&param=${encodeURIComponent(key)}` : ''}`;
+  const reapply = (gid: string | null, nodes: string[]) => {
+    const row = status?.drift.rows.find((r) => (r.groupId ?? null) === gid);
+    const vno = row?.baselineVersionNo ?? status?.drift.baselineVersionNo;
+    if (!vno) return;
+    setApplyTarget({ versionNo: vno, groupId: gid, nodes });
+    setApplyOpen(true);
+  };
   const draftValues = useMemo(() => {
     const out: Record<string, string | null> = {};
     for (const [k, v] of Object.entries(draft)) if (v.trim()) out[k] = v.trim();
@@ -337,7 +356,7 @@ export function ServiceConfigPage() {
           />
           {clustersLoading || servicesQ.isLoading ? <LoadingState /> : !clusterId ? <SelectClusterEmptyState /> : (
             <div className="flex gap-0 border border-border rounded-md bg-card min-h-[480px]">
-              <ServiceConfigRail services={services} selected={service}
+              <ServiceConfigRail services={services} selected={service} levels={statusAllQ.data?.services}
                 onSelect={(key) => guard(() => { setParams({ service: key, version: '', group: '' }); setQuery(''); })} />
               <main className="flex-1 min-w-0 p-4 pb-0 space-y-3 flex flex-col">
                 <div className="flex flex-wrap items-center gap-3">
@@ -389,7 +408,15 @@ export function ServiceConfigPage() {
                 )}
 
                 {tab === 'summary' ? (
-                  <EmptyState icon={Layers} title="요약은 다음 단계에서 제공됩니다" description="서비스 상태·재시작 필요 여부·적용 이력을 한눈에 보여줄 예정이다." />
+                  statusQ.isLoading && !status ? <LoadingState /> : statusQ.isError ? (
+                    <ErrorState error={statusQ.error} title="서비스 상태를 불러오지 못했습니다" onRetry={() => { void statusQ.refetch(); }} />
+                  ) : status ? (
+                    <ServiceSummary status={status} clusterId={clusterId}
+                      hasAgentData={(view?.sources ?? []).some((src) => src.component.startsWith('node_params:'))}
+                      canApply={canOperate && APPLY_SUPPORTED.has(service) && !applyStreaming && !dirty}
+                      applyHint={dirty ? '저장하지 않은 편집이 있습니다 — 먼저 저장하세요' : withHint('기준 버전 다시 적용')}
+                      changesHref={changesHref} onReapply={reapply} onOpenHistory={() => setHistoryOpen(true)} />
+                  ) : null
                 ) : viewQ.isLoading && !view ? <LoadingState /> : viewQ.isError ? (
                   <ErrorState error={viewQ.error} title="설정을 불러오지 못했습니다" onRetry={() => { void viewQ.refetch(); }} />
                 ) : view ? (
@@ -446,6 +473,13 @@ export function ServiceConfigPage() {
                       </MacCard>
                     )}
 
+                    {status && (
+                      <DriftBanner status={status} groupId={groupId}
+                        canApply={canOperate && APPLY_SUPPORTED.has(service) && !applyStreaming && !dirty}
+                        applyHint={dirty ? '저장하지 않은 편집이 있습니다 — 먼저 저장하세요' : withHint('기준 버전 다시 적용')}
+                        onShowSummary={() => setTab('summary')} onReapply={(nodes) => reapply(groupId, nodes)} />
+                    )}
+
                     {view.pending && view.pending.count > 0 && (
                       <MacCard
                         title={`저장됨 · 미적용 ${view.pending.count}건`}
@@ -497,7 +531,8 @@ export function ServiceConfigPage() {
                       <ServiceConfigSections sections={sections} groupMode={groupMode}
                         versionLabel={view.version ? `V${view.version.versionNo}` : '버전 없음'} nodeCount={view.nodes.length}
                         editable={editable} lockReason={lockReason} initial={initial} draft={draft} hints={hints}
-                        onChange={(k, v) => setDraft((d) => ({ ...d, [k]: v }))} />
+                        onChange={(k, v) => setDraft((d) => ({ ...d, [k]: v }))}
+                        signals={signalMap} signalHref={service === 'linux' ? (k) => changesHref(k) : undefined} />
                     )}
 
                     <div className="sticky bottom-0 -mx-4 mt-auto flex flex-wrap items-center gap-3 px-4 py-3 border-t border-border bg-card">
@@ -595,8 +630,11 @@ export function ServiceConfigPage() {
       />
       {view && (
         <ApplyDialog open={applyOpen} clusterId={clusterId} service={service} serviceLabel={meta?.label ?? service}
-          groupId={groupId} versionNo={view.version?.versionNo ?? null} showLog={showApplyLog} onShowLogChange={setShowApplyLog}
-          onClose={() => setApplyOpen(false)} onStart={(req) => { void startApply(req); }} />
+          groupId={applyTarget ? applyTarget.groupId : groupId} versionNo={applyTarget?.versionNo ?? view.version?.versionNo ?? null}
+          initialNodes={applyTarget?.nodes ?? null}
+          driftRows={applyTarget ? (status?.drift.rows ?? []).filter((r) => (r.groupId ?? null) === applyTarget.groupId) : null}
+          showLog={showApplyLog} onShowLogChange={setShowApplyLog}
+          onClose={() => { setApplyOpen(false); setApplyTarget(null); }} onStart={(req) => { setApplyTarget(null); void startApply(req); }} />
       )}
       <ApplyHistoryDialog open={historyOpen} clusterId={clusterId} service={service} serviceLabel={meta?.label ?? service}
         onClose={() => setHistoryOpen(false)} />

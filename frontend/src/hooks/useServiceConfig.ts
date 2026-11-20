@@ -10,12 +10,38 @@ export function useServiceConfigServices() {
   });
 }
 
-export function useServiceConfigView(clusterId: string, service: string, version?: number, groupId?: string | null) {
+/** 노드 파라미터 에이전트 보고 주기(기본 60초)에 맞춘 다시 읽기 간격. */
+const STATUS_REFETCH_MS = 60_000;
+
+/** ``live`` 면 60초마다 다시 읽는다 — 편집 중에는 끈다(초안이 흔들리지 않게). */
+export function useServiceConfigView(clusterId: string, service: string, version?: number, groupId?: string | null, live = false) {
   return useQuery({
     queryKey: ['service-config', 'view', clusterId, service, version ?? 'latest', groupId ?? 'default'],
     queryFn: async () => (await serviceConfigApi.view(clusterId, service, version, groupId ?? undefined)).data,
     enabled: !!clusterId && !!service,
     placeholderData: keepPreviousData,
+    refetchInterval: live ? STATUS_REFETCH_MS : false,
+  });
+}
+
+/** 서비스별 수준·사유 — 레일 상태 점. */
+export function useServiceConfigStatusAll(clusterId: string) {
+  return useQuery({
+    queryKey: ['service-config', 'status-all', clusterId],
+    queryFn: async () => (await serviceConfigApi.statusAll(clusterId)).data,
+    enabled: !!clusterId,
+    refetchInterval: STATUS_REFETCH_MS,
+  });
+}
+
+/** 한 서비스 상태 — 드리프트 배너·행 배지·요약 탭. */
+export function useServiceConfigStatus(clusterId: string, service: string) {
+  return useQuery({
+    queryKey: ['service-config', 'status', clusterId, service],
+    queryFn: async () => (await serviceConfigApi.status(clusterId, service)).data,
+    enabled: !!clusterId && !!service,
+    placeholderData: keepPreviousData,
+    refetchInterval: STATUS_REFETCH_MS,
   });
 }
 

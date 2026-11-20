@@ -6,6 +6,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Button } from '@/components/ui/button';
 import { ErrorState, LoadingState } from '@/components/common';
 import { useServiceConfigApplyPlan, useServiceConfigSettings } from '@/hooks/useServiceConfig';
+import type { ServiceConfigDriftRow } from '@/types';
 
 const INPUT = 'px-2.5 py-1.5 rounded-xl border border-border bg-card text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary';
 const TH = 'text-left px-2 py-1.5 text-xs font-medium text-muted-foreground border-b border-border';
@@ -53,9 +54,13 @@ interface Props {
   onShowLogChange: (v: boolean) => void;
   onClose: () => void;
   onStart: (req: ApplyRequest) => void;
+  /** 있으면 '노드 선택' 으로 시작하고 이 노드들을 미리 고른다(드리프트 다시 적용). */
+  initialNodes?: string[] | null;
+  /** 드리프트 다시 적용이면 기준과 다른 노드 값 — '변경' 대신 이것을 보여 준다(버전 값을 그대로 다시 쓰므로). */
+  driftRows?: ServiceConfigDriftRow[] | null;
 }
 
-export function ApplyDialog({ open, clusterId, service, serviceLabel, groupId, versionNo, showLog, onShowLogChange, onClose, onStart }: Props) {
+export function ApplyDialog({ open, clusterId, service, serviceLabel, groupId, versionNo, showLog, onShowLogChange, onClose, onStart, initialNodes, driftRows }: Props) {
   const planQ = useServiceConfigApplyPlan(clusterId, service, versionNo, groupId, open);
   const plan = planQ.data;
   const settingsQ = useServiceConfigSettings(open);
@@ -87,11 +92,11 @@ export function ApplyDialog({ open, clusterId, service, serviceLabel, groupId, v
 
   useEffect(() => {
     if (!open) return;
-    setMode('scope');
-    setPicked(new Set());
+    setMode(initialNodes?.length ? 'nodes' : 'scope');
+    setPicked(new Set(initialNodes ?? []));
     setPassword('');
     setKey('');
-  }, [open]);
+  }, [open, initialNodes]);
   useEffect(() => {  // 대기 시간 기본값은 적용 설정을 따른다(실행마다 바꿀 수 있다)
     const st = settingsQ.data;
     if (!open || !st) return;
@@ -138,7 +143,24 @@ export function ApplyDialog({ open, clusterId, service, serviceLabel, groupId, v
           {planQ.isLoading ? <LoadingState /> : planQ.isError ? <ErrorState error={planQ.error} title="적용 계획을 만들지 못했습니다" /> : plan ? (
             <>
               <Row label="변경">
-                {plan.changes.length === 0 ? (
+                {driftRows ? (
+                  <>
+                    <p className="text-muted-foreground">기준 버전 V{plan.versionNo} 값을 그대로 다시 쓴다 — 아래 노드 값이 기준으로 돌아간다.</p>
+                    <table className="w-full">
+                      <thead><tr><th className={TH}>키</th><th className={TH}>노드</th><th className={TH}>현재</th><th className={TH}>되돌릴 값</th></tr></thead>
+                      <tbody>
+                        {driftRows.slice(0, 50).map((r) => (
+                          <tr key={`${r.key}|${r.node}`}>
+                            <td className={`${TD} font-mono text-xs break-all`}>{r.key}</td>
+                            <td className={`${TD} text-xs`}>{r.node}</td>
+                            <td className={`${TD} font-mono text-xs text-muted-foreground`}>{r.current}</td>
+                            <td className={`${TD} font-mono text-xs font-semibold`}>{r.expected}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </>
+                ) : plan.changes.length === 0 ? (
                   <p className="text-muted-foreground">기준 버전과 다른 값이 없습니다 — 버전 값을 그대로 다시 씁니다.</p>
                 ) : (
                   <table className="w-full">
