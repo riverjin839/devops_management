@@ -5,9 +5,10 @@ import { useState } from 'react';
 import { ChevronDown, ChevronRight, Info, Lightbulb, RotateCcw, ShieldAlert } from 'lucide-react';
 import { MacCard } from '@/components/ui/MacCard';
 import { StatusBadge } from '@/components/common';
+import { KeySignal } from './KeySignal';
 import type { StatusVariant } from '@/components/common';
 import type {
-  ServiceConfigItemStatus, ServiceConfigRestartScope, ServiceConfigRow, ServiceConfigRuleResult,
+  ServiceConfigItemStatus, ServiceConfigKeySignal, ServiceConfigRestartScope, ServiceConfigRow, ServiceConfigRuleResult,
 } from '@/types';
 
 const TH = 'text-left px-3 py-2 text-xs font-medium text-muted-foreground';
@@ -133,10 +134,13 @@ interface Props {
   onChange: (key: string, value: string) => void;
   /** 키별 의존 규칙 결과(대상 키 기준, 영향은 원인 키 기준). */
   hints: Record<string, ServiceConfigRuleResult[]>;
+  /** 키별 열린 알람·최근 변경(LINUX — 노드 파라미터 에이전트). */
+  signals?: Record<string, ServiceConfigKeySignal>;
+  signalHref?: (key: string) => string;
 }
 
 export function ServiceConfigSections({
-  sections, groupMode, versionLabel, nodeCount, editable, lockReason, initial, draft, onChange, hints,
+  sections, groupMode, versionLabel, nodeCount, editable, lockReason, initial, draft, onChange, hints, signals, signalHref,
 }: Props) {
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
   const toggle = (name: string) => setCollapsed((s) => {
@@ -222,7 +226,10 @@ export function ServiceConfigSections({
                           </td>
                           <td className={TD}><CurrentCell row={r} nodeCount={nodeCount} /></td>
                           <td className={`${TD} text-xs text-muted-foreground`}>{RESTART_LABEL[r.restartScope] ?? r.restartScope}</td>
-                          <td className={TD}>{st ? <StatusBadge variant={st.variant} label={st.label} /> : <span className="text-xs text-muted-foreground">일치</span>}</td>
+                          <td className={TD}>
+                            {st ? <StatusBadge variant={st.variant} label={st.label} /> : <span className="text-xs text-muted-foreground">일치</span>}
+                            <KeySignal paramKey={r.key} signal={signals?.[r.key]} href={signalHref?.(r.key)} />
+                          </td>
                         </tr>
                       );
                     })}

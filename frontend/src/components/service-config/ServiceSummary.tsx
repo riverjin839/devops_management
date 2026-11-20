@@ -1,0 +1,177 @@
+// 요약 탭 — 서비스 상태를 한 화면에: 상태(사유 문장) / 기준 버전과 다른 노드 값(그룹별 다시 적용) /
+// 열린 알람·최근 변경(LINUX, 노드 파라미터 에이전트) / 최근 적용. KPI 타일 대신 문장·표로(DESIGN_SYSTEM §12.12).
+import { Link } from 'react-router-dom';
+import { MacCard } from '@/components/ui/MacCard';
+import { Button } from '@/components/ui/button';
+import { EmptyState, StatusBadge } from '@/components/common';
+import { formatDateTime, formatRelativeTime } from '@/lib/utils';
+import type { ServiceConfigDriftRow, ServiceConfigStatus } from '@/types';
+import { RUN_STATUS } from './runStatus';
+
+const TH = 'text-left px-3 py-2 text-xs font-medium text-muted-foreground border-b border-border';
+const TD = 'px-3 py-2 border-b border-border align-top text-sm';
+const BASELINE_LABEL: Record<string, string> = { imported: '가져옴', applied: '적용됨' };
+
+interface Props {
+  status: ServiceConfigStatus;
+  clusterId: string;
+  hasAgentData: boolean;
+  canApply: boolean;
+  applyHint?: string;
+  /** 키 → OS 파라미터 감시 변경 이력 주소. */
+  changesHref: (key?: string) => string;
+  onReapply: (groupId: string | null, nodes: string[]) => void;
+  onOpenHistory: () => void;
+}
+
+function groupRows(rows: ServiceConfigDriftRow[]) {
+  const out = new Map<string, { groupId: string | null; groupName: string; version: number; rows: ServiceConfigDriftRow[] }>();
+  for (const r of rows) {
+    const k = r.groupId ?? '';
+    if (!out.has(k)) out.set(k, { groupId: r.groupId, groupName: r.groupName, version: r.baselineVersionNo, rows: [] });
+    out.get(k)?.rows.push(r);
+  }
+  return [...out.values()];
+}
+
+export function ServiceSummary({ status, clusterId, hasAgentData, canApply, applyHint, changesHref, onReapply, onOpenHistory }: Props) {
+  const d = status.drift;
+  const lastRun = status.lastRun;
+  const runSt = lastRun ? RUN_STATUS[lastRun.status] : null;
+  const isLinux = status.service === 'linux';
+  return (
+    <div className="space-y-3">
+      <MacCard title="상태"
+        actions={status.level !== 'ok' ? <StatusBadge variant={status.level} label={status.level === 'critical' ? '위험' : '확인 필요'} /> : undefined}>
+        <ul className="space-y-1.5 text-sm">
+          {status.reasons.length === 0 ? (
+            <li className="text-muted-foreground">기준 버전과 다른 노드 값·열린 알람·실패한 적용이 없다.</li>
+          ) : status.reasons.map((r) => <li key={r} className="text-foreground">{r}</li>)}
+          <li className="text-muted-foreground">
+            기준 버전: {d.baselineVersionNo ? `V${d.baselineVersionNo}(${BASELINE_LABEL[d.baselineStatus ?? ''] ?? d.baselineStatus})` : '없음 — 설정 탭에서 V1 을 만든다'}
+            {' · '}노드 {d.nodeCount}개{d.lastCollectedAt ? ` · 현재 값 마지막 수집 ${formatRelativeTime(d.lastCollectedAt)}` : ''}
+          </li>
+          <li className="text-muted-foreground">
+            미적용 저장본: {status.pending && status.pending.count > 0 ? `V${status.pending.versionNo} · 변경 ${status.pending.count}건` : '없음'}
+          </li>
+          <li className="text-muted-foreground">
+            마지막 적용: {lastRun && runSt ? (
+              <>V{lastRun.versionNo} <StatusBadge variant={runSt.variant} label={runSt.label} />{lastRun.startedAt ? ` · ${formatRelativeTime(lastRun.startedAt)}` : ''}{lastRun.startedBy ? ` · ${lastRun.startedBy}` : ''}</>
+            ) : '없음'}
+          </li>
+          {status.offlineNodes.length > 0 && (
+            <li className="text-status-warning">에이전트 무응답: {status.offlineNodes.join(', ')}</li>
+          )}
+          {status.errors.map((e) => <li key={e} className="text-status-warning">{e}</li>)}
+        </ul>
+      </MacCard>
+
+      <MacCard title="기준 버전과 다른 노드 값" titleExtra={<span className="text-xs text-muted-foreground">{d.rows.length}건</span>} bodyPadding="p-0">
+        {d.rows.length === 0 ? (
+          <EmptyState compact title={d.baselineVersionNo ? '모든 노드가 기준 버전과 같다' : '기준 버전이 없다'}
+            description={d.baselineVersionNo ? '노드에서 값이 바뀌면 여기와 설정 탭 위에 표시된다.' : undefined} />
+        ) : groupRows(d.rows).map((g) => {
+          const nodes = [...new Set(g.rows.map((r) => r.node))];
+          return (
+            <div key={g.groupId ?? 'default'} className="border-b border-border last:border-0">
+              <div className="flex flex-wrap items-center gap-2 px-3 py-2">
+                <span className="text-sm font-medium text-foreground">{g.groupName} 그룹</span>
+                <span className="text-xs text-muted-foreground">기준 V{g.version} · 노드 {nodes.length}개</span>
+                <Button size="sm" className="ml-auto" disabled={!canApply} title={applyHint} onClick={() => onReapply(g.groupId, nodes)}
+                  aria-label={`${g.groupName} 그룹 V${g.version} 을(를) 다른 노드 ${nodes.length}개에 다시 적용`}>다시 적용…</Button>
+              </div>
+              <div className="overflow-x-auto">
+                <table className="w-full min-w-[560px]">
+                  <thead><tr><th className={TH}>키</th><th className={TH}>노드</th><th className={TH}>현재</th><th className={TH}>기준</th></tr></thead>
+                  <tbody>
+                    {g.rows.slice(0, 200).map((r) => (
+                      <tr key={`${r.key}|${r.node}`}>
+                        <td className={`${TD} font-mono text-xs break-all`}>{r.key}</td>
+                        <td className={`${TD} text-xs`}>{r.node}</td>
+                        <td className={`${TD} font-mono text-xs text-status-warning break-all`}>{r.current}</td>
+                        <td className={`${TD} font-mono text-xs break-all`}>{r.expected}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          );
+        })}
+      </MacCard>
+
+      {isLinux && (
+        <MacCard title="열린 알람" titleExtra={<span className="text-xs text-muted-foreground">{status.alerts.length}건 · 노드 파라미터 에이전트</span>}
+          actions={<Link to={`/alerts?cluster=${clusterId}`} className="text-xs text-primary hover:underline">알람 인박스</Link>} bodyPadding="p-0">
+          {status.alerts.length === 0 ? (
+            <EmptyState compact title={hasAgentData ? '열린 알람이 없다' : '노드 파라미터 에이전트 보고가 없다'}
+              description={hasAgentData ? undefined : 'OS 파라미터 감시 화면의 설치 안내대로 에이전트를 배포하면 변경·위반 알람이 여기에 모인다.'} />
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[640px]">
+                <thead><tr><th className={TH}>심각도</th><th className={TH}>노드</th><th className={TH}>내용</th><th className={TH}>시작</th></tr></thead>
+                <tbody>
+                  {status.alerts.map((a) => (
+                    <tr key={a.id}>
+                      <td className={TD}><StatusBadge variant={a.severity === 'critical' ? 'critical' : 'warning'} label={a.severity} /></td>
+                      <td className={`${TD} text-xs`}>{a.node ?? '—'}</td>
+                      <td className={`${TD} text-xs break-all`}>
+                        <Link to={`/alerts?cluster=${clusterId}&q=${encodeURIComponent(a.keys[0] ?? a.alertname)}`} className="text-primary hover:underline">{a.summary ?? a.alertname}</Link>
+                      </td>
+                      <td className={`${TD} text-xs text-muted-foreground whitespace-nowrap`}>{a.startsAt ? formatRelativeTime(a.startsAt) : '—'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </MacCard>
+      )}
+
+      {isLinux && (
+        <MacCard title="최근 변경" titleExtra={<span className="text-xs text-muted-foreground">24시간 · {status.recentChanges.length}건</span>}
+          actions={<Link to={changesHref()} className="text-xs text-primary hover:underline">변경 이력 전체</Link>} bodyPadding="p-0">
+          {status.recentChanges.length === 0 ? <EmptyState compact title="24시간 안에 바뀐 값이 없다" /> : (
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[560px]">
+                <thead><tr><th className={TH}>시각</th><th className={TH}>노드</th><th className={TH}>키</th><th className={TH}>전 → 후</th></tr></thead>
+                <tbody>
+                  {status.recentChanges.map((c, i) => (
+                    <tr key={`${c.node}|${c.key}|${i}`}>
+                      <td className={`${TD} text-xs text-muted-foreground whitespace-nowrap`}>{c.detectedAt ? formatDateTime(c.detectedAt) : '—'}</td>
+                      <td className={`${TD} text-xs`}>{c.node}</td>
+                      <td className={`${TD} font-mono text-xs break-all`}><Link to={changesHref(c.key)} className="text-primary hover:underline">{c.key}</Link></td>
+                      <td className={`${TD} font-mono text-xs break-all`}>{c.oldValue ?? '없음'} → {c.newValue ?? '없음'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </MacCard>
+      )}
+
+      <MacCard title="최근 적용" actions={<Button size="sm" variant="outline" onClick={onOpenHistory}>적용 이력</Button>} bodyPadding="p-0">
+        {status.recentRuns.length === 0 ? <EmptyState compact title="아직 적용한 적이 없다" /> : (
+          <table className="w-full">
+            <thead><tr><th className={TH}>시작</th><th className={TH}>버전</th><th className={TH}>대상</th><th className={TH}>결과</th><th className={TH}>시작한 사람</th></tr></thead>
+            <tbody>
+              {status.recentRuns.map((r) => {
+                const st = RUN_STATUS[r.status];
+                return (
+                  <tr key={r.id}>
+                    <td className={`${TD} text-xs text-muted-foreground`}>{r.startedAt ? formatDateTime(r.startedAt) : '—'}</td>
+                    <td className={TD}>V{r.versionNo}</td>
+                    <td className={`${TD} text-xs`}>{r.targetMode === 'nodes' ? `고른 노드 ${r.targetCount}` : `범위 전체 ${r.targetCount}`}</td>
+                    <td className={TD}><StatusBadge variant={st.variant} label={st.label} /></td>
+                    <td className={`${TD} text-xs`}>{r.startedBy ?? '—'}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        )}
+      </MacCard>
+    </div>
+  );
+}

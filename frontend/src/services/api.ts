@@ -2714,6 +2714,11 @@ const toEntries = (values: Record<string, string | null>) =>
   Object.entries(values).map(([key, value]) => ({ key, value }));
 export const serviceConfigApi = {
   services: () => api.get<{ items: import('@/types').ServiceConfigServiceDef[] }>('/service-config/services'),
+  /** 서비스별 수준·사유(레일 상태 점). 아래 status 는 한 서비스 전체. */
+  statusAll: (clusterId: string) =>
+    api.get<import('@/types').ServiceConfigStatusAll>(`/service-config/clusters/${clusterId}/status`),
+  status: (clusterId: string, service: string) =>
+    api.get<import('@/types').ServiceConfigStatus>(`/service-config/clusters/${clusterId}/${service}/status`),
   view: (clusterId: string, service: string, version?: number, groupId?: string) =>
     api.get<import('@/types').ServiceConfigView>(`/service-config/clusters/${clusterId}/${service}`,
       { params: { ...(version ? { version } : {}), ...(groupId ? { group_id: groupId } : {}) } }),

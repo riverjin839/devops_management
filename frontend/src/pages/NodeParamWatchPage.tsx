@@ -6,6 +6,7 @@ import { Link } from 'react-router-dom';
 import { ShieldCheck } from 'lucide-react';
 import { useClusters } from '@/hooks/useCluster';
 import { useK8sHub } from '@/lib/k8sHub';
+import { pickParam, useUrlParams } from '@/hooks/useUrlParams';
 import { useNodeParamChanges, useNodeParamNodes, useNodeParamRules } from '@/hooks/useNodeParamWatch';
 import {
   ClusterSidebar, ErrorState, LoadingState, PageShell, SegTabs, SelectClusterEmptyState,
@@ -15,7 +16,8 @@ import {
   NodeParamChangesCard, NodeParamInstallCard, NodeParamNodesCard, NodeParamRulesCard,
 } from '@/components/node-param-watch';
 
-type Tab = 'nodes' | 'changes' | 'rules' | 'install';
+const TABS = ['nodes', 'changes', 'rules', 'install'] as const;
+type Tab = typeof TABS[number];
 
 export function NodeParamWatchPage() {
   const { data: clusters = [], isLoading: clustersLoading } = useClusters();
@@ -23,7 +25,10 @@ export function NodeParamWatchPage() {
   const [selected, setSelected] = useState('');
   const clusterId = hub ? hub.clusterId : (selected || clusters[0]?.id || '');
   const clusterName = clusters.find((c) => c.id === clusterId)?.name ?? '';
-  const [tab, setTab] = useState<Tab>('nodes');
+  // 탭·키 필터는 URL 쿼리 — 서비스 구성 화면이 `?tab=changes&param=<키>` 로 바로 연결한다.
+  const [params, setParams] = useUrlParams({ tab: 'nodes', param: '' });
+  const tab: Tab = pickParam(params.tab, TABS, 'nodes');
+  const setTab = (t: Tab) => setParams({ tab: t, param: '' });
 
   const nodesQ = useNodeParamNodes(clusterId);
   const changesQ = useNodeParamChanges(clusterId);
@@ -68,7 +73,7 @@ export function NodeParamWatchPage() {
               {tab === 'changes' && (
                 changesQ.isLoading ? <LoadingState />
                   : changesQ.isError ? <ErrorState error={changesQ.error} title="변경 이력을 불러오지 못했습니다" onRetry={() => { void changesQ.refetch(); }} />
-                    : <NodeParamChangesCard changes={changesQ.data ?? []} />
+                    : <NodeParamChangesCard key={params.param} changes={changesQ.data ?? []} initialQuery={params.param} />
               )}
               {tab === 'rules' && (
                 rulesQ.isLoading ? <LoadingState />

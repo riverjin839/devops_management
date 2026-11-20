@@ -43,6 +43,36 @@ def _raise(exc: "V.ServiceConfigError"):
     raise HTTPException(status_code=exc.status, detail=exc.detail) from exc
 
 
+# ── 서비스 상태(드리프트·알람·최근 변경) — `{service}` 경로보다 먼저 등록해야 'status' 가 서비스 이름으로 잡히지 않는다 ──
+
+@router.get("/clusters/{cluster_id}/status")
+def all_service_status(
+    cluster_id: UUID,
+    db: Session = Depends(get_db),
+    _: User = Depends(get_current_user),
+) -> dict[str, Any]:
+    """서비스별 수준(ok·warning·critical)과 사유 — 서비스 레일 상태 점용."""
+    from app.services.service_config import status as S
+
+    return S.all_status(db, _cluster(db, cluster_id))
+
+
+@router.get("/clusters/{cluster_id}/{service}/status")
+def one_service_status(
+    cluster_id: UUID,
+    service: str,
+    db: Session = Depends(get_db),
+    _: User = Depends(get_current_user),
+) -> dict[str, Any]:
+    """한 서비스의 드리프트(기준 버전과 다른 노드 값)·열린 알람·최근 변경·미적용·최근 적용 — 배너·행 배지·요약 탭용."""
+    from app.services.service_config import status as S
+
+    try:
+        return S.service_status(db, _cluster(db, cluster_id), service)
+    except V.ServiceConfigError as exc:
+        _raise(exc)
+
+
 @router.get("/clusters/{cluster_id}/{service}")
 def service_view(
     cluster_id: UUID,

@@ -1043,3 +1043,88 @@ def test_apply_api_requires_ssh_for_etcd_containerd(db, ctd_v2):
         assert r.status_code == 422 and "SSH" in r.json()["detail"]
     finally:
         app.dependency_overrides.pop(get_current_user, None)
+
+
+# ── 5단계: 서비스 상태(드리프트·알람·최근 변경) ──────────────────────────────
+
+def test_drift_rows_pure():
+    from app.services.service_config import status as S
+
+    values = {"vm.swappiness": {"w1": "1", "w2": "60", "g1": "10"}, "x": {"w1": "a"}}
+    scopes = [{"group_id": None, "group_name": "기본", "baseline_version_no": 1, "nodes": ["w1", "w2"],
+               "expected": {"vm.swappiness": "1", "x": ""}},
+              {"group_id": "g", "group_name": "GPU", "baseline_version_no": 2, "nodes": ["g1"],
+               "expected": {"vm.swappiness": "10"}}]
+    rows = S.drift_rows(values, scopes)
+    assert [(r["node"], r["current"], r["expected"]) for r in rows] == [("w2", "60", "1")]
+    level, reasons = S.judge(1, [{"severity": "critical"}, {"severity": "warning"}], {"status": "failed", "version_no": 3}, [])
+    assert level == "critical" and len(reasons) == 4
+    assert S.judge(0, [], {"status": "succeeded", "version_no": 1}, [])[0] == "ok"
+    assert S.judge(0, [], None, ["w9"])[0] == "warning"
+
+
+def test_service_status_drift_alerts_changes_and_api(db, linux_v1):
+    from fastapi.testclient import TestClient
+
+    from app.auth.deps import get_current_user
+    from app.main import app
+    from app.models.alert_event import AlertEvent
+    from app.models.os_param_change import OsParamChange
+    from app.models.service_config import ServiceConfigGroup
+    from app.services.service_config import status as S
+    from app.services.service_config import view as V
+
+    c = linux_v1
+    try:
+        # V1 은 다수 값(swappiness=1) — gpu-1(10)이 드리프트
+        st = S.service_status(db, c, "linux")
+        assert st["drift"]["nodes"] == ["gpu-1"] and st["drift"]["keys"] == ["vm.swappiness"]
+        assert st["level"] == "warning" and st["drift"]["baseline_version_no"] == 1
+        # 미적용 저장본은 드리프트로 치지 않는다(기준은 V1 그대로)
+        vals = dict(V.list_versions(db, c.id, "linux")[0].values)
+        V.save_version(db, c, "linux", None, 1, {**vals, "net.core.somaxconn": "8192"}, None, "tester")
+        st = S.service_status(db, c, "linux")
+        assert st["drift"]["keys"] == ["vm.swappiness"] and st["pending"]["version_no"] == 2
+        # gpu-* 그룹의 적용된 재정의(10)가 있으면 gpu-1 은 드리프트가 아니다
+        gid = V.save_group(db, c, "linux", None, "GPU", "gpu-*", None, "tester").id
+        V.save_version(db, c, "linux", gid, 0, {"vm.swappiness": "10"}, None, "tester")
+        gv = V.list_versions(db, c.id, "linux", gid)[0]
+        gv.status = "applied"
+        db.commit()
+        st = S.service_status(db, c, "linux")
+        assert st["drift"]["nodes"] == []
+        # 노드에서 ip_forward 를 0 으로 — 에이전트 알람·변경 이력이 키 신호로
+        _add_snap(db, c, "node_params:w1", {"runtime": {"vm.swappiness": "1", "net.core.somaxconn": "4096",
+                                                         "net.ipv4.tcp_max_syn_backlog": "4096", "net.ipv4.ip_forward": "0"}})
+        db.add(AlertEvent(cluster_id=c.id, source="node-param-agent", fingerprint=uuid.uuid4().hex[:32],
+                          alertname="NodeParamBaselineViolation", severity="critical", status="firing", resource="w1",
+                          labels={"param": "net.ipv4.ip_forward"}, starts_at=datetime.utcnow()))
+        db.add(AlertEvent(cluster_id=c.id, source="node-param-agent", fingerprint=uuid.uuid4().hex[:32],
+                          alertname="NodeParamChanged", severity="critical", status="firing", resource="w1",
+                          labels={"params": "net.ipv4.ip_forward"}, acked=True, starts_at=datetime.utcnow()))
+        db.add(OsParamChange(cluster_id=c.id, node="w1", param="net.ipv4.ip_forward", old_value="1", new_value="0",
+                             change_type="changed", detected_at=datetime.utcnow()))
+        db.commit()
+        st = S.service_status(db, c, "linux")
+        assert st["level"] == "critical" and st["drift"]["nodes"] == ["w1"]
+        sig = next(s for s in st["key_signals"] if s["key"] == "net.ipv4.ip_forward")
+        assert sig["alerts"] == {"critical": 1, "warning": 0}  # 확인된 알람은 빠진다
+        assert sig["last_change"]["new_value"] == "0" and st["recent_changes"][0]["node"] == "w1"
+        assert S.all_status(db, c)["services"]["linux"]["level"] == "critical"
+
+        viewer = SimpleNamespace(id=uuid.uuid4(), username="v", role="viewer", is_active=True, tenant_ids=[])
+        app.dependency_overrides[get_current_user] = lambda: viewer
+        client = TestClient(app)
+        r = client.get(f"/api/v1/service-config/clusters/{c.id}/status")
+        assert r.status_code == 200 and set(r.json()["services"]) == {"etcd", "containerd", "cilium", "linux"}
+        r = client.get(f"/api/v1/service-config/clusters/{c.id}/linux/status")
+        assert r.status_code == 200 and r.json()["drift"]["rows"][0]["key"] == "net.ipv4.ip_forward"
+        assert client.get(f"/api/v1/service-config/clusters/{c.id}/nope/status").status_code == 404
+    finally:
+        from app.auth.deps import get_current_user as _g
+        app.dependency_overrides.pop(_g, None)
+        db.rollback()
+        db.query(AlertEvent).filter(AlertEvent.cluster_id == c.id).delete(synchronize_session=False)
+        db.query(OsParamChange).filter(OsParamChange.cluster_id == c.id).delete(synchronize_session=False)
+        db.query(ServiceConfigGroup).filter(ServiceConfigGroup.cluster_id == c.id).delete(synchronize_session=False)
+        db.commit()
