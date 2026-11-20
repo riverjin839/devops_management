@@ -984,6 +984,9 @@ D-117~D-134)에서 원자는 지켜지는데 화면이 "AI 가 만든 템플릿"
 - **8 아이브로우**: `uppercase tracking-wide*` 는 쓰지 않는다(MacCard·Card 헤더 내장도 Phase 3 에서 제거 — 제목 슬롯에 데이터가 들어온다). 표 헤더(`th`)는 `text-xs font-medium text-muted-foreground`(대소문자 그대로).
 - **9 이모지 예외**: 사용자가 고르고 DB 에 저장하는 값은 데이터다 — `lib/clusterIcons.ts` 피커, `hooks/useOperationLevels.ts` 운영레벨 아이콘, 문서 템플릿·사용자 콘텐츠.
   UI 크롬·상태·카테고리 표시에 쓰인 이모지와 ⚠/✓/✗ 문자 접두는 lucide 아이콘 + 상태 토큰.
+- **10 설명 문장은 툴팁**: "이 항목은 무엇이다·이렇게 동작한다" 같은 상시 설명 문장은 본문에 깔지 않고 `common/InfoHint`(ⓘ 아이콘 — 마우스오버·키보드 포커스 툴팁, `aria-label` 에 문장)로 둔다.
+  본문에는 데이터(값·건수·상태·시각)와 결과·오류 문구만. 탭 설명은 `SegTabs` 옵션 3번째 요소(툴팁). 확인 대화상자 설명은 결정에 필요한 문장이라 본문 유지.
+  레퍼런스: 서비스 구성(`pages/ServiceConfigPage.tsx`).
 - **상태 글자색**: `text-[hsl(var(--status-*))]` 금지 — `text-status-*` 가 4.5:1 대비 토큰(`--status-*-text`)을 쓴다. 면은 `bg-status-*/N`·`border-status-*/N`.
 
 **자가 점검(PR 전)** — 변경한 화면에서 ① h1 이 하나이고 PageHeader 인가 ② KPI 행이 있는가 ③ 정상에 색이 있는가

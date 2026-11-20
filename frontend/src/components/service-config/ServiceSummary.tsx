@@ -3,7 +3,7 @@
 import { Link } from 'react-router-dom';
 import { MacCard } from '@/components/ui/MacCard';
 import { Button } from '@/components/ui/button';
-import { EmptyState, StatusBadge } from '@/components/common';
+import { EmptyState, InfoHint, StatusBadge } from '@/components/common';
 import { formatDateTime, formatRelativeTime } from '@/lib/utils';
 import type { ServiceConfigDriftRow, ServiceConfigStatus } from '@/types';
 import { RUN_STATUS } from './runStatus';
@@ -45,9 +45,10 @@ export function ServiceSummary({ status, clusterId, hasAgentData, canApply, appl
         actions={status.level !== 'ok' ? <StatusBadge variant={status.level} label={status.level === 'critical' ? '위험' : '확인 필요'} /> : undefined}>
         <ul className="space-y-1.5 text-sm">
           {status.reasons.length === 0 ? (
-            <li className="text-muted-foreground">기준 버전과 다른 노드 값·열린 알람·실패한 적용이 없다.</li>
+            <li className="text-muted-foreground">정상</li>
           ) : status.reasons.map((r) => <li key={r} className="text-foreground">{r}</li>)}
           <li className="text-muted-foreground">
+            <InfoHint label="기준 버전" text="마지막으로 가져오거나 적용한 버전. 노드 값이 이 버전과 다르면 드리프트로 본다." side="right" />
             기준 버전: {d.baselineVersionNo ? `V${d.baselineVersionNo}(${BASELINE_LABEL[d.baselineStatus ?? ''] ?? d.baselineStatus})` : '없음 — 설정 탭에서 V1 을 만든다'}
             {' · '}노드 {d.nodeCount}개{d.lastCollectedAt ? ` · 현재 값 마지막 수집 ${formatRelativeTime(d.lastCollectedAt)}` : ''}
           </li>
@@ -66,10 +67,13 @@ export function ServiceSummary({ status, clusterId, hasAgentData, canApply, appl
         </ul>
       </MacCard>
 
-      <MacCard title="기준 버전과 다른 노드 값" titleExtra={<span className="text-xs text-muted-foreground">{d.rows.length}건</span>} bodyPadding="p-0">
+      <MacCard title="기준 버전과 다른 노드 값" bodyPadding="p-0" titleExtra={(
+        <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">{d.rows.length}건
+          <InfoHint label="기준 버전과 다른 노드 값" text="기준 버전 = 마지막으로 가져오거나 적용한 버전(노드 그룹은 그 그룹의 마지막 적용 재정의 포함). 저장만 하고 적용하지 않은 버전은 비교 대상이 아니다. 노드에서 값이 바뀌면 여기와 설정 탭 위 배너에 나타난다." />
+        </span>
+      )}>
         {d.rows.length === 0 ? (
-          <EmptyState compact title={d.baselineVersionNo ? '모든 노드가 기준 버전과 같다' : '기준 버전이 없다'}
-            description={d.baselineVersionNo ? '노드에서 값이 바뀌면 여기와 설정 탭 위에 표시된다.' : undefined} />
+          <EmptyState compact title={d.baselineVersionNo ? '모든 노드가 기준 버전과 같음' : '기준 버전 없음'} />
         ) : groupRows(d.rows).map((g) => {
           const nodes = [...new Set(g.rows.map((r) => r.node))];
           return (
@@ -101,11 +105,14 @@ export function ServiceSummary({ status, clusterId, hasAgentData, canApply, appl
       </MacCard>
 
       {isLinux && (
-        <MacCard title="열린 알람" titleExtra={<span className="text-xs text-muted-foreground">{status.alerts.length}건 · 노드 파라미터 에이전트</span>}
+        <MacCard title="열린 알람" titleExtra={(
+          <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">{status.alerts.length}건
+            <InfoHint label="열린 알람" text={hasAgentData ? '노드 파라미터 에이전트가 만든 알람 중 확인(ack)하지 않은 것. 값이 기준으로 돌아오면 위반 알람은 다음 보고 때 닫힌다.' : 'OS 파라미터 감시 화면의 설치 안내대로 노드 파라미터 에이전트를 배포하면 변경·위반 알람이 여기에 모인다.'} />
+          </span>
+        )}
           actions={<Link to={`/alerts?cluster=${clusterId}`} className="text-xs text-primary hover:underline">알람 인박스</Link>} bodyPadding="p-0">
           {status.alerts.length === 0 ? (
-            <EmptyState compact title={hasAgentData ? '열린 알람이 없다' : '노드 파라미터 에이전트 보고가 없다'}
-              description={hasAgentData ? undefined : 'OS 파라미터 감시 화면의 설치 안내대로 에이전트를 배포하면 변경·위반 알람이 여기에 모인다.'} />
+            <EmptyState compact title={hasAgentData ? '열린 알람 없음' : '노드 파라미터 에이전트 보고 없음'} />
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full min-w-[640px]">
@@ -131,7 +138,7 @@ export function ServiceSummary({ status, clusterId, hasAgentData, canApply, appl
       {isLinux && (
         <MacCard title="최근 변경" titleExtra={<span className="text-xs text-muted-foreground">24시간 · {status.recentChanges.length}건</span>}
           actions={<Link to={changesHref()} className="text-xs text-primary hover:underline">변경 이력 전체</Link>} bodyPadding="p-0">
-          {status.recentChanges.length === 0 ? <EmptyState compact title="24시간 안에 바뀐 값이 없다" /> : (
+          {status.recentChanges.length === 0 ? <EmptyState compact title="24시간 안 변경 없음" /> : (
             <div className="overflow-x-auto">
               <table className="w-full min-w-[560px]">
                 <thead><tr><th className={TH}>시각</th><th className={TH}>노드</th><th className={TH}>키</th><th className={TH}>전 → 후</th></tr></thead>
@@ -152,7 +159,7 @@ export function ServiceSummary({ status, clusterId, hasAgentData, canApply, appl
       )}
 
       <MacCard title="최근 적용" actions={<Button size="sm" variant="outline" onClick={onOpenHistory}>적용 이력</Button>} bodyPadding="p-0">
-        {status.recentRuns.length === 0 ? <EmptyState compact title="아직 적용한 적이 없다" /> : (
+        {status.recentRuns.length === 0 ? <EmptyState compact title="적용 이력 없음" /> : (
           <table className="w-full">
             <thead><tr><th className={TH}>시작</th><th className={TH}>버전</th><th className={TH}>대상</th><th className={TH}>결과</th><th className={TH}>시작한 사람</th></tr></thead>
             <tbody>
