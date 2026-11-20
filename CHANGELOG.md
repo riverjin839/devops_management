@@ -8,7 +8,9 @@
 
 ## [Unreleased]
 
-1.94.0 이후 main 에 병합된 변경 (다음 릴리스 후보).
+1.95.0 이후 main 에 병합된 변경 (다음 릴리스 후보).
+
+## [1.95.0] - 2026-11-20
 
 ### Added
 - **서비스 구성(5단계) — 서비스 상태: 드리프트·알람·최근 변경·요약 탭**: 노드에서 값이 직접 바뀌면(예: `sysctl -w net.ipv4.ip_forward=0`) 서비스 구성 화면 안에서 바로 보인다. 서비스 레일 아이콘에 상태 점(critical/warning, 사유는 툴팁), 설정 탭 위에 "노드 값이 V{n}(적용됨)과 다름 — 노드 N · 키 M" 배너와 **다시 적용…**(기준 버전으로 다른 노드만 미리 골라 적용 대화상자를 연다), LINUX 행마다 열린 알람 배지와 "3분 전 변경 · 노드 1 → 0"(누르면 OS 파라미터 감시 변경 이력의 그 키로 이동)이 붙는다. 요약 탭은 상태 사유·기준 버전과 다른 노드 값(그룹별 다시 적용)·열린 알람·최근 24시간 변경·최근 적용을 보여 준다. 미적용 저장본은 드리프트로 치지 않는다. 화면은 노드 파라미터 에이전트 보고 주기(60초)에 맞춰 다시 읽고, 편집 중에는 멈춘다. OS 파라미터 감시 화면 탭·키 필터는 URL 쿼리로 연결된다. Backend: `services/service_config/status.py`, `GET /service-config/clusters/{id}/status`·`…/{service}/status`. Frontend: `DriftBanner`·`KeySignal`·`ServiceSummary`, `ServiceConfigRail` 상태 점, `ApplyDialog` `initialNodes`.
