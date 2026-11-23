@@ -11,6 +11,7 @@
 - linux      : ``{"key": "<sysctl 이름>"}``
 - kube-apiserver·kube-controller-manager·kube-scheduler : ``{"flag": "<--플래그 이름>"}`` (정적 파드 command 플래그)
 - kubelet    : ``{"path": "<KubeletConfiguration 평탄화 경로>"}`` — 점이 든 키는 따옴표(``evictionHard."memory.available"``)
+- nic        : ``{"key": "<평탄화 키>"}`` — ``nic:{node}`` 스냅샷(``services/nic_watch/snapshot.py``)의 ``flat`` 키
 """
 from __future__ import annotations
 
@@ -44,6 +45,10 @@ SERVICES: list[dict[str, Any]] = [
     {"key": "kubelet", "label": "KUBELET", "icon": "boxes",
      "description": "노드 에이전트. 노드의 kubelet 설정 파일(KubeletConfiguration, 보통 /var/lib/kubelet/config.yaml)을 SSH 로 읽는다.",
      "collect_kinds": ["kubelet-config"]},
+    {"key": "nic", "label": "NIC", "icon": "cable",
+     "description": "노드 NIC — 본딩 하위 인터페이스의 ring buffer·채널 수·offload 와 본딩 해시·LACP rate·링크 감시. "
+                    "SSH 로 읽고(현재 값 수집), 노드 파라미터 에이전트가 있으면 그 보고도 쓴다. 상태 탭은 판정·카운터.",
+     "collect_kinds": ["nic"]},
 ]
 STATIC_POD_SERVICES = ("kube-apiserver", "kube-controller-manager", "kube-scheduler")
 SERVICE_KEYS = tuple(s["key"] for s in SERVICES)
@@ -100,6 +105,13 @@ def _os(section, key, label, vtype="int", default=None, help_=None, scope="immed
     return {"service": "linux", "section": section, "key": key, "label": label, "value_type": vtype,
             "default_value": default, "help": help_, "restart_scope": scope, "source_keys": {"key": key}}
 
+
+def _nic(section, key, label, vtype="string", default=None, help_=None, options=None, scope="nic_queue_reset"):
+    return {"service": "nic", "section": section, "key": key, "label": label, "value_type": vtype,
+            "default_value": default, "help": help_, "options": options, "restart_scope": scope, "source_keys": {"key": key}}
+
+
+_ONOFF = ["on", "off"]
 
 ITEMS: list[dict[str, Any]] = [
     # ── ETCD ──
@@ -274,6 +286,26 @@ ITEMS: list[dict[str, Any]] = [
     _kl("수명", "shutdownGracePeriodCriticalPods", "중요 파드 정리 시간", "duration", "0s"),
     _kl("인증서", "rotateCertificates", "클라이언트 인증서 자동 갱신", "bool", "true"),
     _kl("인증서", "serverTLSBootstrap", "서빙 인증서 CSR 발급", "bool", "false"),
+    # ── NIC (본딩 하위 물리 인터페이스 + 본딩) — 값 '현재/최대' 는 화면 표시, 버전 값은 숫자 또는 max ──
+    _nic("Ring buffer", "ring.rx", "수신 ring 크기", "int_or_max", None,
+         "숫자 또는 max(인터페이스별 최대값). 작으면 버스트 트래픽에서 NIC 드롭(rx_missed·rx_out_of_buffer)이 생긴다."),
+    _nic("Ring buffer", "ring.tx", "송신 ring 크기", "int_or_max", None, "숫자 또는 max."),
+    _nic("채널", "channels.combined", "결합 채널(큐) 수", "int_or_max", None,
+         "숫자 또는 max. 큐가 적으면 수신 처리가 CPU 코어 몇 개에 몰린다."),
+    _nic("Offload", "offload.rx-lro", "large-receive-offload", "enum", "off",
+         "K8S 노드는 패킷을 포워딩하므로 꺼야 한다.", _ONOFF),
+    _nic("Offload", "offload.rx-gro", "generic-receive-offload", "enum", "on", None, _ONOFF),
+    _nic("Offload", "offload.tx-tcp-segmentation", "tcp-segmentation-offload", "enum", "on", None, _ONOFF),
+    _nic("Offload", "offload.rx-checksum", "rx-checksumming", "enum", "on", None, _ONOFF),
+    _nic("Offload", "offload.tx-checksum-ip-generic", "tx-checksumming", "enum", "on", None, _ONOFF),
+    _nic("Offload", "offload.tx-udp_tnl-segmentation", "터널(VXLAN·Geneve) TSO", "enum", "on",
+         "CILIUM VXLAN/Geneve 송신 성능에 영향.", _ONOFF),
+    _nic("본딩", "bond.xmit_hash_policy", "송신 해시 정책", "enum", "layer2",
+         "layer2 는 MAC 기준이라 같은 게이트웨이로 가는 트래픽이 링크 하나에 몰린다.",
+         ["layer2", "layer2+3", "layer3+4", "encap2+3", "encap3+4", "vlan+srcmac"], "immediate"),
+    _nic("본딩", "bond.lacp_rate", "LACP rate", "enum", "slow",
+         "802.3ad 만. slow 는 스위치 쪽 장애 감지가 최대 90초 늦다.", ["slow", "fast"], "immediate"),
+    _nic("본딩", "bond.miimon", "링크 감시 주기(ms)", "int", "100", "0 이면 하위 링크 장애를 감지하지 못한다.", None, "immediate"),
 ]
 
 
@@ -372,6 +404,21 @@ RULES: list[dict[str, Any]] = [
     {"rule_key": "kubelet.restart_notice", "service": "kubelet", "key": "*",
      "target_service": None, "target_key": None, "kind": "impact", "rule_type": "impact",
      "reason": "kubelet 을 재시작한다 — 실행 중인 파드는 유지되지만 재시작 동안 노드 상태 보고·새 파드 기동이 멈춘다."},
+    {"rule_key": "nic.lro_off_forwarding", "service": "nic", "key": "offload.rx-lro",
+     "target_service": "nic", "target_key": "offload.rx-lro", "kind": "recommend", "rule_type": "fixed_value",
+     "params": {"value": "off"}, "reason": "LRO 는 패킷을 합쳐 받아 포워딩(Pod·서비스 트래픽)을 깨뜨린다 — K8S 노드는 off."},
+    {"rule_key": "nic.hash_l34", "service": "nic", "key": "bond.xmit_hash_policy",
+     "target_service": "nic", "target_key": "bond.xmit_hash_policy", "kind": "recommend", "rule_type": "fixed_value",
+     "params": {"value": "layer3+4"}, "reason": "IP·포트 기준이라 여러 연결이 링크에 고르게 나뉜다."},
+    {"rule_key": "nic.lacp_fast", "service": "nic", "key": "bond.lacp_rate",
+     "target_service": "nic", "target_key": "bond.lacp_rate", "kind": "recommend", "rule_type": "fixed_value",
+     "params": {"value": "fast"}, "reason": "1초마다 LACPDU 를 보내 스위치 쪽 장애를 3초 안에 감지한다."},
+    {"rule_key": "nic.queue_reset_impact", "service": "nic", "key": "*",
+     "target_service": None, "target_key": None, "kind": "impact", "rule_type": "impact",
+     "reason": "ring·채널·offload 는 하위 인터페이스마다 큐를 다시 만든다 — 하나씩 바꾸고 LACP 재합류를 확인하므로 본딩은 끊기지 않는다(적용은 다음 단계)."},
+    {"rule_key": "nic.tunnel_offload_cilium", "service": "nic", "key": "offload.tx-udp_tnl-segmentation",
+     "target_service": None, "target_key": None, "kind": "impact", "rule_type": "impact",
+     "reason": "끄면 CILIUM VXLAN/Geneve 송신을 CPU 가 나눠야 해 처리량이 떨어진다."},
     {"rule_key": "cilium.restart_notice", "service": "cilium", "key": "*",
      "target_service": None, "target_key": None, "kind": "impact", "rule_type": "impact",
      "reason": "cilium-config 변경은 cilium 에이전트(DaemonSet)를 롤링 재시작해야 반영된다 — 재시작 중 노드별로 잠시 정책 갱신이 멈춘다."},

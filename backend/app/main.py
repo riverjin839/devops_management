@@ -1493,6 +1493,9 @@ def _run_migrations():
     if "os_param_changes" in inspector.get_table_names():
         _safe_create_index("ix_os_param_changes_to_snap", "os_param_changes", "(node, to_snapshot_id)")
         _safe_create_index("ix_os_param_changes_cluster_detected", "os_param_changes", "(cluster_id, detected_at DESC)")
+    # node_nic_states: NIC 상태 — 수집 출처(agent|ssh). 테이블은 create_all, 1.103 이전 DB 는 컬럼 보강.
+    if "node_nic_states" in inspector.get_table_names():
+        _safe_add_column("node_nic_states", "source", "VARCHAR(16)")
     # node_param_agents: 노드 파라미터 에이전트 상태 — 테이블은 create_all, 워치독 조회 인덱스 보강.
     if "node_param_agents" in inspector.get_table_names():
         _safe_create_index("ix_node_param_agents_last_seen", "node_param_agents", "(last_seen_at)")

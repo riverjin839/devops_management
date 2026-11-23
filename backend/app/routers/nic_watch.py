@@ -33,6 +33,8 @@ class SettingsUpdate(BaseModel):
     include_kinds: Optional[list[str]] = Field(default=None, max_length=10)
     include_names: Optional[list[str]] = Field(default=None, max_length=50)
     exclude_names: Optional[list[str]] = Field(default=None, max_length=50)
+    target_mode: Optional[str] = Field(default=None, pattern="^(bond_members|glob)$")
+    target_glob: Optional[list[str]] = Field(default=None, max_length=50)
     expected_bond_mode: Optional[str] = Field(default=None, max_length=32)
     expected_hash_policy: Optional[str] = Field(default=None, max_length=32)
     expected_lacp_rate: Optional[str] = Field(default=None, max_length=16)

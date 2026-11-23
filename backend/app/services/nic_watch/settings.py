@@ -24,6 +24,10 @@ DEFAULTS: dict[str, Any] = {
     "include_kinds": ["physical", "bond", "vlan", "tunnel"],
     "include_names": ["cilium_host", "cilium_vxlan", "cilium_geneve"],
     "exclude_names": ["lo", "lxc*", "veth*", "docker*", "cni*", "flannel*", "kube-ipvs*", "nodelocaldns", "tunl*"],
+    # ── 서비스 구성 nic 서비스(설정 값 비교·버전) 대상 인터페이스 ──
+    # bond_members: 본딩과 그 하위(본딩이 없으면 링크가 올라온 물리 인터페이스) | glob: target_glob 에 맞는 이름
+    "target_mode": "bond_members",
+    "target_glob": [],
     # ── 판정 기준(빈 값 = 검사 안 함) ──
     "expected_bond_mode": "802.3ad",
     "expected_hash_policy": "layer3+4",
@@ -67,6 +71,8 @@ def normalize(stored: Any) -> dict[str, Any]:
     out["include_kinds"] = kinds
     out["include_names"] = _globs(merged.get("include_names"))
     out["exclude_names"] = _globs(merged.get("exclude_names"))
+    out["target_mode"] = merged.get("target_mode") if merged.get("target_mode") in ("bond_members", "glob") else "bond_members"
+    out["target_glob"] = _globs(merged.get("target_glob"))
     for key, allowed in (("expected_bond_mode", BOND_MODES), ("expected_hash_policy", HASH_POLICIES),
                          ("expected_lacp_rate", LACP_RATES)):
         v = str(merged.get(key) or "").strip()

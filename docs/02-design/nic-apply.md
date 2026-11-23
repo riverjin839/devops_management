@@ -1,6 +1,6 @@
 # NIC 적용 (2차) — 설계
 
-> 상태: **설계(미구현)** · 개정 2026-11-23 · 선행: 1차 NIC 상태(v1.102.0, `services/nic_watch/`, 서비스 구성 ▸ NIC)
+> 상태: **2-a 구현됨**(설정 버전·드리프트·SSH 수집) · **2-b 미구현**(적용) · 개정 2026-11-23 · 선행: 1차 NIC 상태(v1.102.0, `services/nic_watch/`, 서비스 구성 ▸ NIC)
 >
 > 1차는 **보는 것**(본딩/LACP·링크·MTU·ring buffer·드롭·offload 판정)까지였다. 2차는 1차가 찾은 문제 중
 > **운영 중 끊김 없이 바꿀 수 있는 값**을 PEP 에서 기대 값으로 정하고, 노드에 적용하고, 재부팅 뒤에도 유지되게 한다.
@@ -105,7 +105,8 @@ NIC 는 레일 구분선 아래 읽기 전용 항목에서 **서비스 목록의
 
 - 평탄화: 키별 값이 대상 인터페이스에서 모두 같으면 그 값, 다르면 `mixed`(드리프트). 인터페이스별 원값은 스냅샷 `per_iface`.
 - **`max` 비교**: 기대 값 `max` = 각 인터페이스 현재 값이 그 인터페이스 최대값과 같으면 일치. `status.py` 드리프트 비교에 서비스별 비교 함수(`nic` 만)를 둔다.
-- 대상 인터페이스(적용 설정 `nic_target`): `bond_members`(기본 — 본딩 하위 물리 인터페이스 + 그 본딩) | `glob`(`nic_target_glob`). 관리용 1G NIC 는 본딩에 없으면 자연히 빠진다.
+- 대상 인터페이스(NIC 설정 `nic_watch.settings` 의 `target_mode`·`target_glob` — 2-a 구현): `bond_members`(기본 — 본딩 하위 물리 인터페이스 + 그 본딩, 본딩이 없으면 링크가 올라온 물리 인터페이스) | `glob`. 관리용 1G NIC 는 본딩에 없으면 자연히 빠진다.
+- 2-a 구현 메모: 평탄화·`max` 비교는 `services/nic_watch/snapshot.py`·`service_config/current.same_value`, SSH 수집은 `routers/versions.py` `collect-nic`(스크립트·파서 `services/nic_watch/ssh_collect.py`), 출처는 `node_nic_states.source`(ssh 는 보고 끊김 판정 제외). 채널 수는 에이전트 1.3.0 부터 보고하고, 보고하지 않는 출처는 이전 값을 유지한다.
 
 ---
 

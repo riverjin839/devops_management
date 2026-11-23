@@ -404,3 +404,264 @@ def test_view_filter_page_and_cache(db, cluster):
     assert svc.cluster_view(db, cluster)["interfaces_total"] == first["interfaces_total"]  # 캐시 안
     svc.invalidate(cluster.id)
     assert svc.cluster_view(db, cluster)["interfaces_total"] == first["interfaces_total"] + 1
+
+
+# ── 2-a: 서비스 구성 nic — max 비교·평탄화·SSH 수집·스냅샷 ─────────────────────
+
+def test_same_value_max_and_iface_parts():
+    from app.services.service_config import current as C
+    from app.services.service_config.status import drift_rows
+
+    assert C.same_value("max", "8192/8192") and C.same_value("1024", "1024/8192")
+    assert not C.same_value("max", "1024/8192") and not C.same_value("2048", "1024/8192")
+    assert C.same_value("max", "ens1f0=8192/8192 ens1f1=4096/4096")
+    assert not C.same_value("on", "ens1f0=on ens1f1=off")
+    assert C.to_version_value("1024/8192") == "1024" and C.to_version_value("a=off b=on c=on") == "on"
+    # 노드마다 최대값이 달라도 모두 max 면 같은 것으로
+    s = C.summarize({"w1": "8192/8192", "w2": "4096/4096"})
+    assert C.item_status("max", s) == "same" and C.item_status("4096", s) == "mixed"
+    assert C.item_status("max", C.summarize({"w1": "1024/8192"})) == "differs"
+    rows = drift_rows({"ring.rx": {"w1": "8192/8192", "w2": "1024/8192"}},
+                      [{"group_id": None, "group_name": "기본", "baseline_version_no": 1, "nodes": ["w1", "w2"],
+                        "expected": {"ring.rx": "max"}}])
+    assert [r["node"] for r in rows] == ["w2"]
+
+
+def test_flatten_targets_mixed_and_carry_over():
+    from app.services.nic_watch import snapshot as SN
+
+    b = _bond(hp="layer2", rate="slow")
+    p0 = {**_phys("ens1f0", ring={"rx": 1024, "rx_max": 8192, "tx": 1024, "tx_max": 8192}),
+          "channels": {"combined": 8, "combined_max": 63}}
+    p1 = {**_phys("ens1f1", ring={"rx": 4096, "rx_max": 8192, "tx": 1024, "tx_max": 8192}),
+          "channels": {"combined": 8, "combined_max": 63}}
+    mgmt = _phys("eno1", master=None, ring={"rx": 256, "rx_max": 512, "tx": 256, "tx_max": 512})
+    out = SN.flatten([b, p0, p1, mgmt])
+    f = out["flat"]
+    assert out["targets"] == ["bond0", "ens1f0", "ens1f1"]  # 관리용 eno1 은 본딩 밖이라 빠진다
+    assert f["ring.rx"] == "ens1f0=1024/8192 ens1f1=4096/8192" and f["ring.tx"] == "1024/8192"
+    assert f["channels.combined"] == "8/63" and f["offload.rx-lro"] == "off"
+    assert f["bond.xmit_hash_policy"] == "layer2" and f["bond.lacp_rate"] == "slow" and f["bond.miimon"] == "100"
+    # 채널을 보고하지 않는 출처(에이전트 1.2.x) — 이전 값을 유지
+    old_agent = SN.flatten([b, _phys("ens1f0"), _phys("ens1f1")])
+    assert "channels.combined" not in old_agent["measured"]
+    assert SN.carry_over(f, old_agent["flat"], old_agent["measured"])["channels.combined"] == "8/63"
+    # 본딩이 없으면 링크가 올라온 물리 인터페이스
+    assert SN.flatten([mgmt, _phys("eno2", master=None, oper="down")])["targets"] == ["eno1"]
+    assert SN.flatten([b, p0, mgmt], mode="glob", globs=["eno*"])["targets"] == ["eno1"]
+
+
+SSH_OUT = """@@IF bond0
+operstate=up
+carrier=1
+speed=50000
+duplex=full
+mtu=9000
+carrier_changes=1
+bonding=1
+lower=ens1f0
+lower=ens1f1
+stat.rx_packets=100
+bond.mode=802.3ad 4
+bond.xmit_hash_policy=layer3+4 1
+bond.lacp_rate=fast 1
+bond.miimon=100
+bond.arp_interval=0
+bond.updelay=0
+bond.downdelay=0
+bond.slaves=ens1f0 ens1f1
+@@PROC
+""" + PROC_BOND_OK + """@@END
+@@IF ens1f0
+operstate=up
+carrier=1
+speed=25000
+duplex=full
+mtu=9000
+carrier_changes=4
+device=1
+master=bond0
+stat.rx_missed_errors=7
+stat.rx_crc_errors=0
+@@ETH g
+Ring parameters for ens1f0:
+Pre-set maximums:
+RX:\t\t\t8192
+RX Mini:\t\tn/a
+TX:\t\t\t8192
+Current hardware settings:
+RX:\t\t\t1024
+RX Mini:\t\tn/a
+TX:\t\t\t1024
+@@END
+@@ETH l
+Channel parameters for ens1f0:
+Pre-set maximums:
+RX:\t\tn/a
+TX:\t\tn/a
+Other:\t\t1
+Combined:\t63
+Current hardware settings:
+RX:\t\tn/a
+TX:\t\tn/a
+Other:\t\t1
+Combined:\t16
+@@END
+@@ETH k
+Features for ens1f0:
+rx-checksumming: on
+tx-checksumming: on
+\ttx-checksum-ipv4: off [fixed]
+\ttx-checksum-ip-generic: on
+generic-receive-offload: on
+large-receive-offload: off [fixed]
+tx-udp_tnl-segmentation: on
+tcp-segmentation-offload: on
+@@END
+@@ETH i
+driver: mlx5_core
+version: 5.14.0
+firmware-version: 22.39.1002 (MT_0000000359)
+bus-info: 0000:3b:00.0
+@@END
+@@ETH S
+     rx_out_of_buffer: 1200
+     rx_discards_phy: 3
+@@END
+@@IF lxc1234
+operstate=up
+mtu=1500
+@@IF eno1
+operstate=down
+carrier=
+speed=-1
+duplex=unknown
+mtu=1500
+device=1
+"""
+
+
+def test_ssh_parse_output_matches_agent_shape():
+    from app.services.nic_watch import ssh_collect as NS
+
+    r = NS.parse_output(SSH_OUT, normalize(None))
+    by = {i["name"]: i for i in r["interfaces"]}
+    assert set(by) == {"bond0", "ens1f0", "eno1"}  # lxc 는 제외 이름
+    e = by["ens1f0"]
+    assert e["ring"] == {"rx": 1024, "rx_max": 8192, "tx": 1024, "tx_max": 8192}
+    assert e["channels"]["combined"] == 16 and e["channels"]["combined_max"] == 63
+    assert e["features"]["rx-lro"] == {"on": False, "fixed": True} and e["features"]["tx-checksum-ip-generic"]["on"] is True
+    assert e["driver"]["driver"] == "mlx5_core" and e["driver"]["firmware"].startswith("22.39")
+    assert e["counters"]["drv:rx_out_of_buffer"] == 1200 and e["counters"]["carrier_changes"] == 4
+    assert e["lacp"]["aggregator_id"] == 1 and by["bond0"]["bond"]["mode"] == "802.3ad"
+    assert by["bond0"]["bond"]["active"]["aggregator_id"] == 1 and by["eno1"]["speed"] is None
+    script = NS.build_script(["lo", "lxc*", "bad name;rm"], ethtool="/usr/sbin/ethtool")
+    assert 'case "$n" in lo|lxc*)' in script and "rm" not in script and "E=/usr/sbin/ethtool" in script
+
+
+def test_snapshot_change_and_ssh_not_stale(db, cluster):
+    from app.models import ClusterConfigSnapshot
+    from app.models.service_config import ServiceConfigChange
+    from app.services.nic_watch import service as svc
+
+    t0 = datetime(2026, 11, 23, 11, 0, 0)
+    ring = {"rx": 1024, "rx_max": 8192, "tx": 1024, "tx_max": 8192}
+    try:
+        svc.ingest(db, cluster, "w1", "10.0.0.1", None, t0.isoformat(),
+                   {"interfaces": [_bond(), _phys("ens1f0", ring=ring), _phys("ens1f1", ring=ring)]}, now=t0, source="ssh")
+        svc.ingest(db, cluster, "w1", "10.0.0.1", None, t0.isoformat(),
+                   {"interfaces": [_bond(), _phys("ens1f0", ring=ring), _phys("ens1f1", ring=ring)]}, now=t0, source="ssh")
+        snaps = db.query(ClusterConfigSnapshot).filter(ClusterConfigSnapshot.cluster_id == cluster.id,
+                                                       ClusterConfigSnapshot.component == "nic:w1").all()
+        assert len(snaps) == 1 and snaps[0].data["flat"]["ring.rx"] == "1024/8192"
+        big = {**ring, "rx": 8192}
+        t1 = t0 + timedelta(minutes=10)
+        svc.ingest(db, cluster, "w1", "10.0.0.1", None, t1.isoformat(),
+                   {"interfaces": [_bond(), _phys("ens1f0", ring=big), _phys("ens1f1", ring=big)]}, now=t1, source="ssh")
+        ch = db.query(ServiceConfigChange).filter(ServiceConfigChange.cluster_id == cluster.id).all()
+        assert [(c.service, c.key, c.old_value, c.new_value, c.source) for c in ch] == [
+            ("nic", "ring.rx", "1024/8192", "8192/8192", "ssh")]
+        # 서비스 구성 화면 — 현재 값이 nic 서비스로 보인다
+        from app.services.service_config import view as V
+
+        v = V.build_view(db, cluster, "nic")
+        rows = {r["key"]: r for s in v["sections"] for r in s["items"]}
+        assert rows["ring.rx"]["current"]["value"] == "8192/8192" and v["sources"][0]["source"] == "NIC · SSH 수집"
+        V.import_v1(db, cluster, "nic", "tester")
+        vals = V.list_versions(db, cluster.id, "nic")[0].values
+        assert vals["ring.rx"] == "8192" and vals["bond.lacp_rate"] == "fast"  # '현재/최대' → 현재
+        # SSH 로 읽은 노드는 시간이 지나도 '보고 끊김' 이 아니다
+        view = svc.cluster_view(db, cluster, now=t1 + timedelta(hours=5))
+        assert "stale" not in {f["code"] for f in view["findings"]}
+    finally:
+        db.rollback()
+        db.query(ServiceConfigChange).filter(ServiceConfigChange.cluster_id == cluster.id).delete(synchronize_session=False)
+        from app.models.alert_event import AlertEvent
+        from app.models.service_config import ServiceConfigVersion
+
+        db.query(AlertEvent).filter(AlertEvent.cluster_id == cluster.id).delete(synchronize_session=False)
+        db.query(ServiceConfigVersion).filter(ServiceConfigVersion.cluster_id == cluster.id).delete(synchronize_session=False)
+        db.query(ClusterConfigSnapshot).filter(ClusterConfigSnapshot.cluster_id == cluster.id).delete(synchronize_session=False)
+        db.commit()
+
+
+def test_version_values_drive_status_expectations(db, cluster):
+    from app.models.service_config import ServiceConfigVersion
+    from app.services.nic_watch import service as svc
+
+    t = datetime(2026, 11, 23, 11, 0, 0)
+    svc.ingest(db, cluster, "w1", None, "1.3.0", t.isoformat(), {"interfaces": [_bond(hp="layer2"), _phys("ens1f0")]}, now=t)
+    assert "bond_hash" in {f["code"] for f in svc.cluster_view(db, cluster, now=t)["findings"]}
+    db.add(ServiceConfigVersion(cluster_id=cluster.id, service="nic", group_id=None, version_no=1, status="saved",
+                                values={"bond.xmit_hash_policy": "layer2", "offload.rx-lro": "on"}, created_by="t"))
+    db.commit()
+    try:
+        eff = svc.effective_settings(db, cluster)
+        assert eff["expected_hash_policy"] == "layer2" and eff["offload_expect"]["rx-lro"] is True
+        codes = {f["code"] for f in svc.cluster_view(db, cluster, now=t)["findings"]}
+        assert "bond_hash" not in codes and "offload_expect" in codes  # LRO off 인데 버전은 on
+    finally:
+        db.query(ServiceConfigVersion).filter(ServiceConfigVersion.cluster_id == cluster.id).delete(synchronize_session=False)
+        db.commit()
+
+
+def test_collect_nic_endpoint_with_fake_ssh(db, cluster, monkeypatch):
+    from types import SimpleNamespace
+
+    from fastapi.testclient import TestClient
+
+    from app.auth.deps import get_current_user, require_operator
+    from app.main import app
+    from app.models import ClusterConfigSnapshot
+    from app.models.node_nic import NodeNicState
+    from app.routers import versions as VR
+
+    calls = []
+
+    def fake_exec(target, cmd, **kw):
+        calls.append((target.host, cmd))
+        if target.host == "10.0.0.9":
+            return SimpleNamespace(status="auth_failed", stdout="", stderr="denied", exit_code=None, error="인증 실패")
+        return SimpleNamespace(status="ok", stdout=SSH_OUT, stderr="", exit_code=0, error=None)
+
+    monkeypatch.setattr(VR, "_exec_ssh", fake_exec)
+    op = type("U", (), {"id": uuid.uuid4(), "username": "op", "role": "operator", "is_active": True})()
+    app.dependency_overrides[get_current_user] = lambda: op
+    app.dependency_overrides[require_operator] = lambda: op
+    try:
+        client = TestClient(app)
+        body = {"hosts": ["10.0.0.1", "10.0.0.9"], "host_names": {"10.0.0.1": "worker-1"},
+                "password": "x", "parallelism": 2}
+        r = client.post(f"/api/v1/clusters/{cluster.id}/collect-nic", json=body)
+        assert r.status_code == 200, r.text
+        out = r.json()
+        assert out["changed"] == 1 and len(out["errors"]) == 1 and "sh -c" in calls[0][1]
+        row = db.query(NodeNicState).filter(NodeNicState.cluster_id == cluster.id).one()
+        assert row.node == "worker-1" and row.source == "ssh"
+        assert db.query(ClusterConfigSnapshot).filter(ClusterConfigSnapshot.cluster_id == cluster.id,
+                                                      ClusterConfigSnapshot.component == "nic:worker-1").count() == 1
+        assert client.post(f"/api/v1/clusters/{cluster.id}/collect-nic", json={"hosts": ["h"]}).status_code == 422
+    finally:
+        app.dependency_overrides.clear()
+        db.query(ClusterConfigSnapshot).filter(ClusterConfigSnapshot.cluster_id == cluster.id).delete(synchronize_session=False)
+        db.commit()

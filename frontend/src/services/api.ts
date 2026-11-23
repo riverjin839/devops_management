@@ -2004,7 +2004,7 @@ import type {
 /** 병목 진단 실행(SSE) — fetch+reader 로 소비(`lib/sse.ts` postSse). 본문은 snake_case. */
 export const podBottleneckStreamUrl = '/api/v1/pod-bottleneck/run/stream';
 /** versions SSH 수집의 SSE 버전(D-135) — 호스트가 끝날 때마다 log·step, 마지막에 동기 응답과 같은 result. */
-export type VersionsCollectKind = 'etcd-systemd' | 'kernel-params' | 'kubelet-config' | 'kubeadm-certs' | 'node-nics' | 'containerd-config';
+export type VersionsCollectKind = 'etcd-systemd' | 'kernel-params' | 'kubelet-config' | 'kubeadm-certs' | 'node-nics' | 'containerd-config' | 'nic';
 export const versionsCollectStreamUrl = (clusterId: string, kind: VersionsCollectKind) =>
   `/api/v1/clusters/${clusterId}/collect-${kind}/stream`;
 

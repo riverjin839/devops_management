@@ -35,7 +35,7 @@ import {
 } from '@/components/service-config';
 import { afterModalClose } from '@/components/service-config/afterModalClose';
 import { RUN_STATUS } from '@/components/service-config/runStatus';
-import { ContainerdConfigCollectModal, EtcdSystemdModal, KernelParamsCollectModal, KubeletConfigCollectModal } from '@/components/versions';
+import { ContainerdConfigCollectModal, EtcdSystemdModal, KernelParamsCollectModal, KubeletConfigCollectModal, NicCollectModal } from '@/components/versions';
 import { camelizeKeys, serviceConfigApi, versionsApi } from '@/services/api';
 import { formatApiError, formatRelativeTime } from '@/lib/utils';
 import type { ServiceConfigApplyRun, ServiceConfigCollectKind, ServiceConfigRow, ServiceConfigRuleResult, ServiceConfigView } from '@/types';
@@ -47,14 +47,15 @@ const COLLECT_LABEL: Record<ServiceConfigCollectKind, string> = {
   'kernel-params': 'SSH 로 수집',
   'static-pods': 'K8S API 로 수집',
   'kubelet-config': 'SSH 로 수집',
+  nic: 'SSH 로 수집',
 };
 const STATUS_LABEL: Record<string, string> = { imported: '가져옴', saved: '저장됨·미적용', applied: '적용됨', superseded: '대체됨' };
 
 type Filter = 'all' | 'flagged' | 'edited';
-/** 설정 버전 없이 상태만 보는 레일 항목 — 서비스 정의(`/service-config/services`)에는 없다. */
-const RAIL_EXTRAS = [
-  { key: 'nic', label: 'NIC', icon: 'cable', description: 'NIC 상태 — 본딩/LACP·링크·MTU·ring buffer·드롭·offload(노드 파라미터 에이전트 보고, 읽기 전용)' },
-];
+/** 적용 버튼 비활성 사유 — NIC 는 적용이 다음 단계(설정 버전·비교·드리프트만). */
+function notSupported(label: string, service: string): string {
+  return service === 'nic' ? 'NIC 적용(노드 반영)은 아직 지원하지 않습니다 — 지금은 설정 버전·비교·드리프트 알람까지' : `${label} 은(는) 적용을 지원하지 않습니다`;
+}
 const APPLY_SUPPORTED = new Set(['linux', 'cilium', 'etcd', 'containerd', 'kube-apiserver', 'kube-controller-manager', 'kube-scheduler', 'kubelet']);
 
 function sourceSummary(view: ServiceConfigView | undefined): string {
@@ -90,33 +91,35 @@ export function ServiceConfigPage() {
   const servicesQ = useServiceConfigServices();
   const services = useMemo(() => servicesQ.data ?? [], [servicesQ.data]);
   const [params, setParams] = useUrlParams({ service: 'etcd', version: '', group: '' });
-  const isNic = params.service === 'nic';
   const service = services.some((s) => s.key === params.service) ? params.service : (services[0]?.key ?? 'etcd');
-  // NIC 화면에서는 설정 서비스 조회를 멈춘다(보이지 않는 화면을 60초마다 다시 읽지 않게).
-  const svcClusterId = isNic ? '' : clusterId;
   const groupId = params.group || null;
   const versionNo = params.version ? Number(params.version) : undefined;
   // 편집 중이 아니면 현재 값을 60초마다 다시 읽는다(노드 파라미터 에이전트 보고 주기). 편집 중엔 초안이 흔들리지 않게 멈춘다.
   const [liveView, setLiveView] = useState(true);
-  const viewQ = useServiceConfigView(svcClusterId, service, versionNo, groupId, liveView);
+  const viewQ = useServiceConfigView(clusterId, service, versionNo, groupId, liveView);
   const view = viewQ.data;
-  const statusQ = useServiceConfigStatus(svcClusterId, service);
+  const statusQ = useServiceConfigStatus(clusterId, service);
   const status = statusQ.data;
   const statusAllQ = useServiceConfigStatusAll(clusterId);
   const nicQ = useNicWatchSummary(clusterId);
   const railLevels = useMemo(() => {
+    // NIC 는 서비스 상태(드리프트·변경 알람)에 상태 판정(본딩·드롭 등) 경고를 더한다 — 더 나쁜 쪽 수준.
     const base = { ...(statusAllQ.data?.services ?? {}) };
     const sum = nicQ.data?.summary;
     if (sum && (sum.level === 'critical' || sum.level === 'warning')) {
       const top = (nicQ.data?.findings ?? []).filter((f) => f.level === sum.level).slice(0, 3).map((f) => `${f.node}${f.iface ? ` ${f.iface}` : ''} ${f.title}`);
-      base.nic = { level: sum.level, reasons: top };
+      const prev = base.nic;
+      const level = prev?.level === 'critical' || sum.level === 'critical' ? 'critical' : 'warning';
+      base.nic = { level, reasons: [...(prev?.reasons ?? []), ...top] };
     }
     return base;
   }, [statusAllQ.data, nicQ.data]);
   /** 드리프트 '다시 적용' — 기준 버전·그 범위·다른 노드로 적용 대화상자를 연다. */
   const [applyTarget, setApplyTarget] = useState<{ versionNo: number; groupId: string | null; nodes: string[] } | null>(null);
 
-  const [tab, setTab] = useState<'config' | 'summary'>('config');
+  const [tab, setTab] = useState<'config' | 'state' | 'summary'>('config');
+  // 상태 탭은 NIC 만 있다 — 다른 서비스로 가면 설정 탭으로
+  useEffect(() => { if (service !== 'nic' && tab === 'state') setTab('config'); }, [service, tab]);
   const [query, setQuery] = useState('');
   const [filter, setFilter] = useState<Filter>('all');
   const [modal, setModal] = useState<ServiceConfigCollectKind | null>(null);
@@ -407,13 +410,8 @@ export function ServiceConfigPage() {
           />
           {clustersLoading || servicesQ.isLoading ? <LoadingState /> : !clusterId ? <SelectClusterEmptyState /> : (
             <div className="flex gap-0 border border-border rounded-md bg-card min-h-[480px]">
-              <ServiceConfigRail services={services} selected={isNic ? 'nic' : service} levels={railLevels} extras={RAIL_EXTRAS}
+              <ServiceConfigRail services={services} selected={service} levels={railLevels}
                 onSelect={(key) => guard(() => { setParams({ service: key, version: '', group: '' }); setQuery(''); })} />
-              {isNic ? (
-                <main className="flex-1 min-w-0 p-4">
-                  <NicStatusView clusterId={clusterId} isAdmin={isAdmin} />
-                </main>
-              ) : (
               <main className="flex-1 min-w-0 p-4 pb-0 space-y-3 flex flex-col">
                 <div className="flex flex-wrap items-center gap-3">
                   <h2 className="inline-flex items-center gap-1 text-lg font-semibold text-foreground">
@@ -421,7 +419,9 @@ export function ServiceConfigPage() {
                     {meta?.description && <InfoHint text={meta.description} label={`${meta.label} 설명`} side="bottom" />}
                   </h2>
                   <SegTabs mode="tabs" label="서비스 보기" value={tab} onChange={setTab}
-                    options={[['config', '설정'], ['summary', '요약']] as const} />
+                    options={service === 'nic'
+                      ? [['config', '설정'], ['state', '상태'], ['summary', '요약']] as const
+                      : [['config', '설정'], ['summary', '요약']] as const} />
                   <div className="ml-auto flex flex-wrap items-center gap-2">
                     {view && view.versions.length > 0 && (
                       <label className="flex items-center gap-1.5 text-xs text-muted-foreground">버전
@@ -443,7 +443,7 @@ export function ServiceConfigPage() {
                       <Button size="sm" variant="outline"
                         disabled={!canOperate || !APPLY_SUPPORTED.has(service) || applyStreaming || dirty}
                         onClick={() => setApplyOpen(true)}
-                        title={!APPLY_SUPPORTED.has(service) ? `${meta?.label ?? service} 은(는) 적용을 지원하지 않습니다`
+                        title={!APPLY_SUPPORTED.has(service) ? notSupported(meta?.label ?? service, service)
                           : dirty ? '저장하지 않은 편집이 있습니다 — 먼저 저장하세요' : withHint(`V${view.version.versionNo} 을(를) 노드에 적용`)}
                         aria-label={ariaWithHint(`V${view.version.versionNo} 적용`)}>
                         <Play /> 적용…
@@ -464,7 +464,9 @@ export function ServiceConfigPage() {
                   <RunLogPanel run={runLog} show={showLog} onShowChange={setShowLog} maxHeight="max-h-56" />
                 )}
 
-                {tab === 'summary' ? (
+                {tab === 'state' && service === 'nic' ? (
+                  <NicStatusView clusterId={clusterId} isAdmin={isAdmin} embedded />
+                ) : tab === 'summary' ? (
                   statusQ.isLoading && !status ? <LoadingState /> : statusQ.isError ? (
                     <ErrorState error={statusQ.error} title="서비스 상태를 불러오지 못했습니다" onRetry={() => { void statusQ.refetch(); }} />
                   ) : status ? (
@@ -546,7 +548,7 @@ export function ServiceConfigPage() {
                             <Button size="sm" variant="outline" onClick={() => setCompareOpen(true)}>변경 보기</Button>
                             <Button size="sm" disabled={!canOperate || !APPLY_SUPPORTED.has(service) || applyStreaming || dirty}
                               onClick={() => setApplyOpen(true)}
-                              title={!APPLY_SUPPORTED.has(service) ? `${meta?.label ?? service} 은(는) 적용을 지원하지 않습니다` : withHint('노드에 적용')}
+                              title={!APPLY_SUPPORTED.has(service) ? notSupported(meta?.label ?? service, service) : withHint('노드에 적용')}
                               aria-label={ariaWithHint('저장된 변경 적용')}>적용…</Button>
                           </>
                         )}
@@ -620,7 +622,6 @@ export function ServiceConfigPage() {
                   </>
                 ) : null}
               </main>
-              )}
             </div>
           )}
         </div>
@@ -629,6 +630,7 @@ export function ServiceConfigPage() {
       <EtcdSystemdModal open={modal === 'etcd-systemd'} clusterId={clusterId} clusterName={clusterName} onClose={closeModal} />
       <KubeletConfigCollectModal open={modal === 'kubelet-config'} clusterId={clusterId} clusterName={clusterName} onClose={closeModal} />
       <KernelParamsCollectModal open={modal === 'kernel-params'} clusterId={clusterId} clusterName={clusterName} onClose={closeModal} />
+      <NicCollectModal open={modal === 'nic'} clusterId={clusterId} clusterName={clusterName} onClose={closeModal} />
       <ContainerdConfigCollectModal open={modal === 'containerd-config'} clusterId={clusterId} clusterName={clusterName}
         onClose={closeModal} onCollected={() => { void invalidate(); }} />
       <ConfirmDialog

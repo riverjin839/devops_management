@@ -64,7 +64,7 @@ PEP 서비스 구성의 변경 감지·알람용으로 containerd `config.toml` 
 - 에이전트는 비 root(65534)라 권한 600 파일(kubelet 인증서 키 등)은 읽지 못합니다 — 설정 파일(보통 644)만 읽습니다.
 - 이전 버전(1.0.x) 에이전트는 파일을 보고하지 않습니다 — 이 매니페스트로 **재배포**해야 CONTAINERD·KUBELET 변경 감지가 동작합니다.
 
-## NIC 상태 보고 (에이전트 1.2.0+)
+## NIC 상태 보고 (에이전트 1.2.0+, 채널 수는 1.3.0+)
 
 PEP 서비스 구성 ▸ **NIC** 화면용으로 노드 인터페이스 상태를 함께 보고합니다 — 본딩/LACP(`/proc/net/bonding`),
 링크 속도·duplex·MTU·carrier 변화·통계 카운터(`/sys/class/net`), ring buffer·드라이버·offload·드라이버 통계(ethtool 조회 ioctl).

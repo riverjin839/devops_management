@@ -70,6 +70,10 @@ def _clean_iface(raw: dict[str, Any]) -> Optional[dict[str, Any]]:
     it["lowers"] = [str(x)[:32] for x in (raw.get("lowers") or [])[:16]] if isinstance(raw.get("lowers"), list) else []
     ring = raw.get("ring")
     it["ring"] = {k: _i(ring.get(k)) for k in ("rx", "rx_max", "tx", "tx_max")} if isinstance(ring, dict) else None
+    if "channels" in raw:  # 채널 수를 보고하지 않는 출처(에이전트 1.2.x)는 키 자체가 없다 — 스냅샷이 이전 값을 유지하게
+        ch = raw.get("channels")
+        it["channels"] = ({k: _i(ch.get(k)) for k in ("combined", "combined_max", "rx", "rx_max", "tx", "tx_max")}
+                          if isinstance(ch, dict) else None)
     drv = raw.get("driver")
     it["driver"] = {k: _s(drv.get(k), 64) for k in ("driver", "version", "firmware", "bus")} if isinstance(drv, dict) else None
     feats = raw.get("features")
@@ -106,8 +110,11 @@ def _parse_dt(v: Any) -> Optional[datetime]:
 
 
 def ingest(db: Session, cluster: Cluster, node: str, host_ip: Optional[str], agent_version: Optional[str],
-           collected_at: Any, report: Any, now: Optional[datetime] = None) -> int:
-    """NIC 보고 1건 저장 — 저장한 인터페이스 수. ``report`` 가 없거나 형식이 틀리면 0(아무것도 바꾸지 않음)."""
+           collected_at: Any, report: Any, now: Optional[datetime] = None, source: str = "agent") -> int:
+    """NIC 보고 1건 저장 — 저장한 인터페이스 수. ``report`` 가 없거나 형식이 틀리면 0(아무것도 바꾸지 않음).
+
+    ``source`` = agent(에이전트 보고) | ssh(서비스 구성 ▸ NIC 현재 값 수집). 전체 저장 때마다 서비스 구성
+    ``nic:{node}`` 스냅샷도 맞춘다(설정 값이 같으면 저장 안 함)."""
     if not isinstance(report, dict):
         return 0
     now = now or datetime.utcnow()
@@ -121,7 +128,8 @@ def ingest(db: Session, cluster: Cluster, node: str, host_ip: Optional[str], age
     if row is None:
         row = NodeNicState(cluster_id=cluster.id, node=node, history=[])
         db.add(row)
-    elif (row.collected_at is not None and row.collected_at <= collected < row.collected_at + HISTORY_SPACING
+    elif (source == "agent" and row.source in (None, "agent") and row.collected_at is not None
+          and row.collected_at <= collected < row.collected_at + HISTORY_SPACING
           and _state_of(row.interfaces) == _state_of(ifaces)):
         # 상태가 그대로면 받은 시각·오류만 — 카운터는 다음 전체 저장(5분) 때
         row.host_ip = (host_ip or row.host_ip or None)
@@ -140,12 +148,16 @@ def ingest(db: Session, cluster: Cluster, node: str, host_ip: Optional[str], age
         history = [h for h in history if (t := _parse_dt(h.get("t"))) and collected - t <= HISTORY_KEEP]
     row.host_ip = (host_ip or row.host_ip or None)
     row.agent_version = agent_version
+    row.source = source
     row.collected_at = collected
     row.received_at = now
     row.interfaces = ifaces
     row.errors = errors
     row.history = history
     db.commit()
+    from app.services.nic_watch import snapshot as SN
+
+    SN.store(db, cluster, node, ifaces, source, now)
     return len(ifaces)
 
 
@@ -161,9 +173,33 @@ def _ver_tuple(v: Optional[str]) -> tuple[int, ...]:
         return (0,)
 
 
+def effective_settings(db: Session, cluster: Cluster) -> dict[str, Any]:
+    """판정 기준 = 설정 값. 서비스 구성 nic 의 기본 그룹 최신 버전이 있으면 그 값(해시 정책·LACP rate·offload)이 우선이다 —
+    두 곳이 어긋나 같은 노드에 반대 경고가 뜨지 않게. 노드 그룹 재정의는 드리프트(서비스 구성)가 본다."""
+    cfg = get_settings(db)
+    try:
+        from app.services.service_config import view as V
+
+        vals = V._default_latest_values(db, cluster.id, "nic")  # noqa: SLF001 — 같은 앱의 조회 함수
+    except Exception:  # noqa: BLE001
+        db.rollback()
+        vals = {}
+    if not vals:
+        return cfg
+    out = {**cfg, "offload_expect": dict(cfg["offload_expect"]), "version_driven": True}
+    if vals.get("bond.xmit_hash_policy"):
+        out["expected_hash_policy"] = str(vals["bond.xmit_hash_policy"])
+    if vals.get("bond.lacp_rate"):
+        out["expected_lacp_rate"] = str(vals["bond.lacp_rate"])
+    for k, v in vals.items():
+        if str(k).startswith("offload.") and str(v) in ("on", "off"):
+            out["offload_expect"][str(k)[len("offload."):]] = str(v) == "on"
+    return out
+
+
 def _analysis(db: Session, cluster: Cluster, now: Optional[datetime] = None) -> dict[str, Any]:
     """판정 전체(모든 노드·인터페이스). ``now`` 를 주지 않으면 클러스터별로 잠시 캐시한다(설정이 바뀌면 무효)."""
-    cfg = get_settings(db)
+    cfg = effective_settings(db, cluster)
     key = str(cluster.id)
     if now is None:
         with _cache_lock:
@@ -172,7 +208,8 @@ def _analysis(db: Session, cluster: Cluster, now: Optional[datetime] = None) -> 
             return hit[1]
     at = now or datetime.utcnow()
     rows = db.query(NodeNicState).filter(NodeNicState.cluster_id == cluster.id).all()
-    states = [{"node": r.node, "host_ip": r.host_ip, "agent_version": r.agent_version, "collected_at": r.collected_at,
+    states = [{"node": r.node, "host_ip": r.host_ip, "agent_version": r.agent_version, "source": r.source or "agent",
+               "collected_at": r.collected_at,
                "received_at": r.received_at, "interfaces": r.interfaces or [], "errors": r.errors or [],
                "history": r.history or []} for r in rows]
     out = A.analyze(states, cfg, at)

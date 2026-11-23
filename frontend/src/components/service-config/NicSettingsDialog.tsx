@@ -31,11 +31,13 @@ export function NicSettingsDialog({ open, isAdmin, onClose }: { open: boolean; i
   const [form, setForm] = useState<NicWatchSettings | null>(null);
   const [incText, setIncText] = useState('');
   const [excText, setExcText] = useState('');
+  const [targetText, setTargetText] = useState('');
   useEffect(() => {
     if (open && q.data) {
       setForm(q.data);
       setIncText(q.data.includeNames.join(', '));
       setExcText(q.data.excludeNames.join(', '));
+      setTargetText((q.data.targetGlob ?? []).join(', '));
     }
   }, [open, q.data]);
   const set = (p: Partial<NicWatchSettings>) => setForm((f) => (f ? { ...f, ...p } : f));
@@ -45,7 +47,7 @@ export function NicSettingsDialog({ open, isAdmin, onClose }: { open: boolean; i
   const onSave = async () => {
     if (!form) return;
     try {
-      await save.mutateAsync({ ...form, includeNames: splitList(incText), excludeNames: splitList(excText) });
+      await save.mutateAsync({ ...form, includeNames: splitList(incText), excludeNames: splitList(excText), targetGlob: splitList(targetText) });
       toast.success('NIC 설정을 저장했습니다');
       onClose();
     } catch (e) {
@@ -94,7 +96,24 @@ export function NicSettingsDialog({ open, isAdmin, onClose }: { open: boolean; i
                 <input className={INPUT} disabled={dis} value={excText} onChange={(e) => setExcText(e.target.value)} aria-label="제외할 인터페이스 이름" />
               </Field>
 
-              <p className="pt-2 text-xs font-semibold text-foreground">본딩 / LACP 기대 값 <span className="font-normal text-muted-foreground">· 비우면 검사하지 않는다</span></p>
+              <p className="pt-2 text-xs font-semibold text-foreground">설정 값 대상 <span className="font-normal text-muted-foreground">· NIC 설정 탭(ring·채널·offload·본딩)이 값을 읽는 인터페이스</span></p>
+              <div className="grid grid-cols-3 gap-2">
+                <Field label="대상">
+                  <select className={INPUT} disabled={dis} value={form.targetMode} aria-label="설정 값 대상 인터페이스"
+                    onChange={(e) => set({ targetMode: e.target.value as NicWatchSettings['targetMode'] })}>
+                    <option value="bond_members">본딩과 그 하위(기본)</option>
+                    <option value="glob">이름(glob)</option>
+                  </select>
+                </Field>
+                <div className="col-span-2">
+                  <Field label="이름(glob, 쉼표)" help="대상이 '이름' 일 때. 예: ens1f*, bond0">
+                    <input className={INPUT} disabled={dis || form.targetMode !== 'glob'} value={targetText}
+                      onChange={(e) => setTargetText(e.target.value)} aria-label="설정 값 대상 이름" />
+                  </Field>
+                </div>
+              </div>
+
+              <p className="pt-2 text-xs font-semibold text-foreground">본딩 / LACP 기대 값 <span className="font-normal text-muted-foreground">· 비우면 검사하지 않는다. NIC 설정 버전이 있으면 버전 값이 우선</span></p>
               <div className="grid grid-cols-3 gap-2">
                 <Field label="본딩 모드">
                   <select className={INPUT} disabled={dis} value={form.expectedBondMode} onChange={(e) => set({ expectedBondMode: e.target.value })} aria-label="기대 본딩 모드">

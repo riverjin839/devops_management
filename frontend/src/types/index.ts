@@ -2323,6 +2323,43 @@ export interface KernelParamsCollectResponse {
   errors: string[];
 }
 
+// ── NIC 수집 (SSH, 서비스 구성 ▸ NIC 현재 값) ──────────────────────────────
+
+export interface NicCollectRequest {
+  hosts: string[];
+  /** host(IP) → 쿠버네티스 노드 이름. NIC 상태·스냅샷은 노드 이름으로 저장된다. */
+  hostNames?: Record<string, string>;
+  port?: number;
+  username?: string;
+  password?: string;
+  privateKey?: string;
+  useSudo?: boolean;
+  connectTimeout?: number;
+  parallelism?: number;
+  chunkSize?: number;
+  chunkPauseMs?: number;
+}
+
+export interface NicCollectPerHost {
+  host: string;
+  node?: string;
+  status: string;
+  interfaceCount?: number;
+  warnings?: string[];
+  stored?: boolean;
+  error?: string;
+  rawStdout?: string;
+  rawStderr?: string;
+  exitCode?: number | null;
+}
+
+export interface NicCollectResponse {
+  clusterId: string;
+  changed: number;
+  hosts: NicCollectPerHost[];
+  errors: string[];
+}
+
 // ── kubelet config 수집 (SSH) ────────────────────────────────────────────
 
 export interface KubeletConfigCollectRequest {
@@ -6653,9 +6690,9 @@ export interface ContainerdConfigCollectResponse {
 
 // ── 서비스 구성 (`/k8s/:clusterId/services`) ─────────────────────────────────
 /** 현재 값을 다시 읽는 수집 종류 — 화면의 '현재 값 수집' 이 여는 모달. */
-export type ServiceConfigCollectKind = 'versions' | 'etcd-systemd' | 'containerd-config' | 'kernel-params' | 'static-pods' | 'kubelet-config';
+export type ServiceConfigCollectKind = 'versions' | 'etcd-systemd' | 'containerd-config' | 'kernel-params' | 'static-pods' | 'kubelet-config' | 'nic';
 export type ServiceConfigRestartScope = 'immediate' | 'restart_member' | 'restart_service' | 'rolling_restart_ds' | 'reboot'
-  | 'restart_static_pod' | 'restart_kubelet';
+  | 'restart_static_pod' | 'restart_kubelet' | 'nic_queue_reset';
 export type ServiceConfigItemStatus = 'same' | 'differs' | 'mixed' | 'unknown';
 
 export interface ServiceConfigServiceDef {
@@ -7008,6 +7045,9 @@ export interface NicViewQuery {
 }
 export interface NicWatchSettings {
   enabled: boolean;
+  /** 서비스 구성 nic 설정 값을 읽을 대상 — 본딩과 그 하위(기본) | glob. */
+  targetMode: 'bond_members' | 'glob';
+  targetGlob: string[];
   includeKinds: string[];
   includeNames: string[];
   excludeNames: string[];

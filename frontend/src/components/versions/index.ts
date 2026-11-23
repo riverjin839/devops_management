@@ -5,3 +5,4 @@ export { NodeNicsCollectModal } from './NodeNicsCollectModal';
 export { KubeletConfigCollectModal } from './KubeletConfigCollectModal';
 export { CsvExportModal } from './CsvExportModal';
 export { ContainerdConfigCollectModal } from './ContainerdConfigCollectModal';
+export { NicCollectModal } from './NicCollectModal';

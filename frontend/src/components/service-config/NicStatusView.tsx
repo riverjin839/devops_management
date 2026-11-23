@@ -162,7 +162,8 @@ function RowDetail({ r }: { r: NicInterfaceDetail }) {
   );
 }
 
-export function NicStatusView({ clusterId, isAdmin }: { clusterId: string; isAdmin: boolean }) {
+/** ``embedded`` = 서비스 구성 NIC 의 상태 탭 안(서비스 이름 제목은 페이지가 그린다). */
+export function NicStatusView({ clusterId, isAdmin, embedded = false }: { clusterId: string; isAdmin: boolean; embedded?: boolean }) {
   const navigate = useNavigate();
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [showInfo, setShowInfo] = useState(false);
@@ -186,11 +187,11 @@ export function NicStatusView({ clusterId, isAdmin }: { clusterId: string; isAdm
   return (
     <div className="space-y-3 pb-4">
       <div className="flex flex-wrap items-center gap-3">
-        <h2 className="inline-flex items-center gap-1 text-lg font-semibold text-foreground">
+        {!embedded && <h2 className="inline-flex items-center gap-1 text-lg font-semibold text-foreground">
           NIC
           <InfoHint label="NIC 설명" side="bottom"
             text="노드 파라미터 에이전트(1.2.0 이상)가 보고 주기마다 읽는 인터페이스 상태 — 본딩/LACP, 링크 속도·MTU·끊김, ring buffer 와 드롭 카운터, offload. 읽기 전용이며 노드 설정은 바꾸지 않는다." />
-        </h2>
+        </h2>}
         {data && (
           <span className="text-xs text-muted-foreground">
             노드 {data.summary.nodes}개{latest ? ` · 마지막 보고 ${formatRelativeTime(latest)}` : ''}
@@ -208,10 +209,10 @@ export function NicStatusView({ clusterId, isAdmin }: { clusterId: string; isAdm
         <ErrorState error={q.error} title="NIC 상태를 불러오지 못했습니다" onRetry={() => { void q.refetch(); }} />
       ) : !data ? null : data.summary.nodes === 0 ? (
         <MacCard>
-          <EmptyState icon={Network} title="NIC 상태를 보고한 노드가 없음"
-            description={data.agentCount === 0
-              ? '노드 파라미터 에이전트(1.2.0 이상)를 설치하면 보고 주기마다 인터페이스 상태가 들어온다.'
-              : (data.pendingAgents[0]?.reason ?? '다음 보고를 기다리는 중')}
+          <EmptyState icon={Network} title="NIC 상태가 아직 없음"
+            description={(data.agentCount === 0
+              ? '「SSH 로 수집」으로 지금 읽어 오거나, 노드 파라미터 에이전트(1.2.0 이상)를 설치하면 1분마다 들어온다(드롭·플래핑 감시는 에이전트가 있을 때만).'
+              : `${data.pendingAgents[0]?.reason ?? '다음 보고를 기다리는 중'} — 「SSH 로 수집」으로 지금 읽어 올 수도 있다.`)}
             action={{ label: '에이전트 설치 화면으로', onClick: () => navigate(`/k8s/${clusterId}/os-param-watch`) }} />
         </MacCard>
       ) : (

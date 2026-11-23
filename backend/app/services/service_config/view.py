@@ -248,7 +248,7 @@ def import_v1(db: Session, cluster: Cluster, service: str, username: Optional[st
     for it in items:
         summary = C.summarize(cur["values"].get(it.key) or {})
         if summary["value"] is not None:
-            values[it.key] = summary["value"]
+            values[it.key] = C.to_version_value(summary["value"]) or summary["value"]
             if not summary["uniform"]:
                 mixed.append(it.key)
     if not values:
