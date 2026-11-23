@@ -5875,6 +5875,43 @@ export interface RbacKubeconfigResult {
 // ── 멀티테넌시 1단계: 테넌트 · 멤버 · 클러스터 바인딩 (Settings ▸ 테넌트) ──────────
 export type ClusterAccessLevel = 'read' | 'operate';
 
+// 사용자별 클러스터 권한 직접 지정 (Settings ▸ 클러스터 권한, routers/cluster_access_grants.py)
+// 'none' = 숨김. 직접 지정이 테넌트 판정보다 우선한다.
+export type ClusterGrantLevel = 'none' | ClusterAccessLevel;
+
+export interface ClusterAccessRow {
+  clusterId: string;
+  clusterName: string;
+  /** 직접 지정 값 — null 이면 지정 없음(테넌트·기본 규칙에 따름) */
+  grant: ClusterGrantLevel | null;
+  /** 실제 적용 — null 이면 숨김 */
+  effective: ClusterAccessLevel | null;
+  /** 'admin' | 'grant' | 'tenant:<이름>' | 'restricted' | 'open' */
+  source: string;
+  /** 전역 역할이 viewer 라 편집 범위여도 실행할 수 없음 */
+  roleLimited: boolean;
+}
+
+export interface UserClusterAccess {
+  userId: string;
+  username: string | null;
+  displayName: string | null;
+  role: string;
+  clusters: ClusterAccessRow[];
+}
+
+export interface ClusterGrantSummary {
+  userId: string;
+  grants: number;
+}
+
+export interface ClusterGrantChange {
+  userId: string;
+  clusterId: string;
+  /** null = 지정 해제 */
+  access: ClusterGrantLevel | null;
+}
+
 export interface TenantMember {
   userId: string;
   username?: string | null;

@@ -93,7 +93,7 @@ from app.models.resource_count import (
     MetricCheckState,
     SnapshotSource,
 )
-from app.models.tenant import Tenant, TenantMember, ClusterBinding, CLUSTER_ACCESS_LEVELS
+from app.models.tenant import Tenant, TenantMember, ClusterBinding, CLUSTER_ACCESS_LEVELS, ClusterUserGrant, CLUSTER_GRANT_LEVELS
 from app.models.check_matrix import (
     CheckMatrixItem,
     CheckMatrixSchedule,
@@ -220,5 +220,7 @@ __all__ = [
     "Tenant",
     "TenantMember",
     "ClusterBinding",
+    "ClusterUserGrant",
+    "CLUSTER_GRANT_LEVELS",
     "CLUSTER_ACCESS_LEVELS",
 ]

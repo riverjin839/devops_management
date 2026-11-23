@@ -24,12 +24,13 @@ ACCESS_MODES = ("open", "link")
 
 def public_clusters(db: Session, allowlist: list[str] | None) -> list:
     from app.models import Cluster
-    from app.models.tenant import ClusterBinding
+    from app.services.cluster_access import restricted_cluster_ids
     clusters = db.query(Cluster).all()
     if allowlist:
         allowed = set(allowlist)
         return sorted([c for c in clusters if str(c.id) in allowed], key=lambda c: c.name)
-    bound = {cid for (cid,) in db.query(ClusterBinding.cluster_id).distinct().all()}
+    # 테넌트 바인딩 또는 사용자 직접 지정(read/operate)으로 제한된 클러스터는 공개하지 않는다.
+    bound = restricted_cluster_ids(db)
     return sorted([c for c in clusters if c.id not in bound], key=lambda c: c.name)
 
 

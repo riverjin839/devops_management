@@ -28,7 +28,7 @@ from sqlalchemy.orm import Session
 
 from app.models.cluster import Cluster
 from app.models.infra_node import InfraNode
-from app.models.tenant import ClusterBinding, TenantMember
+from app.models.tenant import ClusterBinding, ClusterUserGrant, Tenant, TenantMember
 from app.models.user import User
 
 _RANK = {"read": 1, "operate": 2}
@@ -41,25 +41,85 @@ def _is_admin(user: User) -> bool:
     return user.role == "admin"
 
 
+def restricted_cluster_ids(db: Session) -> set[UUID]:
+    """제한된 클러스터 — 테넌트 바인딩이 있거나, 누군가에게 read/operate 를 직접 지정한 클러스터.
+
+    ``none``(숨김) 지정만 있는 클러스터는 제한되지 않는다 — 그 사용자만 가려지고 나머지는 열려 있다.
+    """
+    out = {cid for (cid,) in db.query(ClusterBinding.cluster_id).distinct().all()}
+    out |= {
+        cid for (cid,) in db.query(ClusterUserGrant.cluster_id)
+        .filter(ClusterUserGrant.access.in_(("read", "operate"))).distinct().all()
+    }
+    return out
+
+
+def restricted_clusters_query(db: Session):
+    """제한된 클러스터 id 서브쿼리(SQL ``IN`` 용) — :func:`restricted_cluster_ids` 와 같은 판정."""
+    return db.query(ClusterBinding.cluster_id).union(
+        db.query(ClusterUserGrant.cluster_id).filter(ClusterUserGrant.access.in_(("read", "operate")))
+    )
+
+
+def _user_grant(db: Session, user: User, cluster_id: UUID) -> str | None:
+    row = (
+        db.query(ClusterUserGrant.access)
+        .filter(ClusterUserGrant.cluster_id == cluster_id, ClusterUserGrant.user_id == str(user.id))
+        .first()
+    )
+    return row[0] if row else None
+
+
+def _tenant_best(db: Session, user: User, cluster_id: UUID) -> tuple[str | None, str | None]:
+    """(사용자가 속한 테넌트 바인딩 중 최고 access, 그 테넌트 이름)."""
+    rows = (
+        db.query(ClusterBinding.access, Tenant.name)
+        .join(Tenant, Tenant.id == ClusterBinding.tenant_id)
+        .join(TenantMember, TenantMember.tenant_id == ClusterBinding.tenant_id)
+        .filter(ClusterBinding.cluster_id == cluster_id, TenantMember.user_id == str(user.id))
+        .all()
+    )
+    best: str | None = None
+    name: str | None = None
+    for access, tname in rows:
+        if _RANK.get(access, 0) > _RANK.get(best or "", 0):
+            best, name = access, tname
+    return best, name
+
+
+def cluster_access_with_source(db: Session, user: User, cluster_id: UUID) -> tuple[str | None, str]:
+    """(access, 근거). access = 'operate' | 'read' | None(숨김).
+
+    근거: ``admin`` · ``grant``(직접 지정) · ``tenant:<이름>`` · ``restricted``(제한된 클러스터인데 지정·멤버십 없음)
+    · ``open``(제한 없음).
+    판정 순서: admin → 사용자 직접 지정(우선) → 제한된 클러스터면 테넌트 판정 → 제한 없음.
+    """
+    if _is_admin(user):
+        return "operate", "admin"
+    grant = _user_grant(db, user, cluster_id)
+    if grant is not None:
+        return (None if grant == "none" else grant), "grant"
+    restricted = (
+        db.query(ClusterBinding.id).filter(ClusterBinding.cluster_id == cluster_id).first() is not None
+        or db.query(ClusterUserGrant.id).filter(
+            ClusterUserGrant.cluster_id == cluster_id,
+            ClusterUserGrant.access.in_(("read", "operate")),
+        ).first() is not None
+    )
+    if not restricted:
+        return "operate", "open"
+    best, tname = _tenant_best(db, user, cluster_id)
+    if best is None:
+        return None, "restricted"
+    return best, f"tenant:{tname}"
+
+
 def cluster_access_level(db: Session, user: User, cluster_id: UUID) -> str | None:
     """사용자가 이 클러스터에 가진 access. 'operate' | 'read' | None(접근 불가).
 
-    바인딩이 없는 클러스터는 'operate'(= 제한 없음, 전역 role 게이트에 맡김).
+    제한 없는 클러스터는 'operate'(= 제한 없음, 전역 role 게이트에 맡김).
     """
-    if _is_admin(user):
-        return "operate"
-    bindings = db.query(ClusterBinding).filter(ClusterBinding.cluster_id == cluster_id).all()
-    if not bindings:
-        return "operate"
-    tenant_ids = {
-        row.tenant_id
-        for row in db.query(TenantMember.tenant_id).filter(TenantMember.user_id == user.id).all()
-    }
-    best: str | None = None
-    for b in bindings:
-        if b.tenant_id in tenant_ids and _RANK.get(b.access, 0) > _RANK.get(best or "", 0):
-            best = b.access
-    return best
+    return cluster_access_with_source(db, user, cluster_id)[0]
 
 
 def has_cluster_access(db: Session, user: User, cluster_id: UUID, level: str = "operate") -> bool:
@@ -72,7 +132,7 @@ def _deny(cluster_id: UUID, level: str) -> HTTPException:
     return HTTPException(
         status_code=status.HTTP_403_FORBIDDEN,
         detail=(f"이 클러스터({cluster_id})에 대한 {what} 권한이 없습니다. "
-                "테넌트 바인딩을 확인하세요 (Settings → 테넌트)."),
+                "Settings → 클러스터 권한 또는 테넌트를 확인하세요."),
     )
 
 
@@ -313,8 +373,10 @@ async def aresolve_host_keys(hosts: Iterable[str | None]) -> dict[str, set[str]]
 
 
 def _isolation_enabled(db: Session) -> bool:
-    """테넌트 격리 사용 중 = ClusterBinding 이 하나라도 있다. 없으면 host 판정은 예전 동작(DNS·고정·거부 없음)."""
-    return db.query(ClusterBinding.id).first() is not None
+    """격리 사용 중 = ClusterBinding 이나 사용자 직접 지정(숨김 포함)이 하나라도 있다.
+    없으면 host 판정은 예전 동작(DNS·고정·거부 없음)."""
+    return (db.query(ClusterBinding.id).first() is not None
+            or db.query(ClusterUserGrant.id).first() is not None)
 
 
 def _scope_precheck(db: Session, hosts: Iterable[str | None]) -> tuple[list[str], HostScope | None]:
@@ -485,22 +547,35 @@ async def acluster_ids_for_host(db: Session, host: str) -> set[UUID]:
 
 
 def hidden_cluster_ids(db: Session, user: User) -> frozenset[UUID]:
-    """이 사용자에게 **보이지 않아야** 하는 클러스터 — 바인딩이 있는데 사용자가 어느 바인딩 테넌트의
-    멤버도 아닌 클러스터. read/operate 어느 쪽이든 바인딩 멤버면 보인다(2단계 조회 격리).
+    """이 사용자에게 **보이지 않아야** 하는 클러스터.
 
-    admin 이거나 바인딩이 하나도 없으면 빈 집합 — 목록 필터가 no-op 이 된다.
+    1) 제한된 클러스터(:func:`restricted_cluster_ids`) 중 사용자가 어느 바인딩 테넌트의 멤버도 아닌 것,
+    2) 그 위에 사용자 직접 지정이 우선 — ``none`` 이면 추가, ``read``/``operate`` 면 제거.
+
+    admin 이거나 제한·지정이 하나도 없으면 빈 집합 — 목록 필터가 no-op 이 된다.
     """
     if _is_admin(user):
         return frozenset()
-    rows = db.query(ClusterBinding.cluster_id, ClusterBinding.tenant_id).all()
-    if not rows:
+    restricted = restricted_cluster_ids(db)
+    grants = dict(
+        db.query(ClusterUserGrant.cluster_id, ClusterUserGrant.access)
+        .filter(ClusterUserGrant.user_id == str(user.id)).all()
+    )
+    if not restricted and not grants:
         return frozenset()
     mine = {
-        tid for (tid,) in db.query(TenantMember.tenant_id).filter(TenantMember.user_id == user.id).all()
+        tid for (tid,) in db.query(TenantMember.tenant_id).filter(TenantMember.user_id == str(user.id)).all()
     }
-    restricted = {cid for cid, _ in rows}
-    allowed = {cid for cid, tid in rows if tid in mine}
-    return frozenset(restricted - allowed)
+    allowed = {
+        cid for cid, tid in db.query(ClusterBinding.cluster_id, ClusterBinding.tenant_id).all() if tid in mine
+    }
+    hidden = restricted - allowed
+    for cid, access in grants.items():
+        if access == "none":
+            hidden.add(cid)
+        else:
+            hidden.discard(cid)
+    return frozenset(hidden)
 
 
 class ClusterScope:

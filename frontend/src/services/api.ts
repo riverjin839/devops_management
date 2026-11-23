@@ -1162,6 +1162,14 @@ export const tenantsApi = {
     api.get<{ clusters: Record<string, ClusterAccessLevel | null> }>('/tenants/my-cluster-access'),
 };
 
+// 사용자별 클러스터 권한 직접 지정 (admin 전용, routers/cluster_access_grants.py)
+export const clusterAccessApi = {
+  summary: () => api.get<import('@/types').ClusterGrantSummary[]>('/cluster-access/summary'),
+  getUser: (userId: string) => api.get<import('@/types').UserClusterAccess>(`/cluster-access/users/${userId}`),
+  saveGrants: (changes: import('@/types').ClusterGrantChange[]) =>
+    api.put<{ created: number; updated: number; removed: number }>('/cluster-access/grants/bulk', { changes }),
+};
+
 export const uiSettingsApi = {
   get: () => api.get<UiSettings>('/ui-settings'),
   update: (data: Partial<UiSettings>) => api.put<UiSettings>('/ui-settings', data),

@@ -15,6 +15,9 @@
 ### Changed
 - **K8S 클러스터 허브 — 개요 「전체 점검」 + 점검 항목을 점검 탭으로 이동**: 개요 헤더의 주 버튼이 「전체 점검」이 됐다. 이 클러스터의 활성 점검(심층 점검·애드온·SSH·Ansible) 전부를 실행 묶음 1건으로 돌리며, 실행 전 확인 창에 대상 건수·소스 구성을 보여 주고, 진행은 개요 상단 카드(총계·항목별 상태·「로그 보기」 실시간 로그·취소·항목 상세)로 바로 보인다. 예전 「점검 실행」(애드온 헬스만)은 「더 보기 ▸ 애드온 헬스만 점검」으로 옮겼다. 개요 하단에 있던 점검 항목 표는 **점검 ▸ 점검 항목**(`/k8s/:clusterId/checks`) 뷰로 옮겨 실행 → 결과 리뷰 동선이 점검 탭 안에서 끝나고, 진행 카드의 「점검 항목에서 보기」(`?run=`)로 같은 실행을 이어서 본다. 옛 `/ops-checks` 주소는 이 뷰로 연결되고, 점검 항목 표의 실행 버튼은 viewer 에게 사유와 함께 비활성화된다. Frontend: `components/ops-check/{OpsRunProgressCard,OpsRunItemDetailModal}.tsx` 추출, `hubViews.ts` `checks` 뷰.
 
+### Added
+- **사용자별 클러스터 권한 (Settings ▸ 클러스터 권한)**: admin 이 사용자 한 명 단위로 등록된 클러스터마다 숨김·읽기·편집을 지정한다. 직접 지정이 테넌트 권한보다 우선하고, 한 명에게라도 읽기·편집을 지정한 클러스터는 지정되지 않은 사용자(테넌트 바인딩 멤버 제외)에게 숨겨진다. 숨김만 지정하면 그 사용자만 가려진다. 「편집」은 범위만 열 뿐이라 viewer 역할은 여전히 실행할 수 없다. 화면에서 실제 적용 권한과 근거(직접 지정·테넌트·제한 없음)를 함께 보여준다. Backend: `ClusterUserGrant`(`cluster_user_grants`), `services/cluster_access.py` 판정 확장, `routers/cluster_access_grants.py`(감사 로그 `cluster_access.grant`). Frontend: `ClusterAccessManager`.
+
 ## [1.98.0] - 2026-11-23
 
 ### Added

@@ -24,10 +24,10 @@ from sqlalchemy.orm import Session
 from app.auth.deps import get_current_user, require_admin
 from app.database import get_db
 from app.models.cluster import Cluster
-from app.models.tenant import ClusterBinding, Tenant, TenantMember
+from app.models.tenant import ClusterBinding, ClusterUserGrant, Tenant, TenantMember
 from app.models.user import User
 from app.services import audit_logger
-from app.services.cluster_access import cluster_access_level
+from app.services.cluster_access import restricted_cluster_ids, cluster_access_level
 
 router = APIRouter(prefix="/tenants", tags=["tenants"])
 
@@ -206,7 +206,9 @@ def _ensure_unique_name(db: Session, name: str, exclude_id: UUID | None = None) 
 @router.get("/my-cluster-access", response_model=MyClusterAccessOut)
 def my_cluster_access(db: Session = Depends(get_db), user: User = Depends(get_current_user)):
     """화면이 실행 버튼을 미리 비활성화할 수 있도록 제한된 클러스터별 access 를 알려준다."""
-    restricted = {cid for (cid,) in db.query(ClusterBinding.cluster_id).distinct().all()}
+    restricted = restricted_cluster_ids(db) | {
+        cid for (cid,) in db.query(ClusterUserGrant.cluster_id).filter(ClusterUserGrant.user_id == str(user.id)).all()
+    }
     return MyClusterAccessOut(
         clusters={str(cid): cluster_access_level(db, user, cid) for cid in restricted},
     )

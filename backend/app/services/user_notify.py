@@ -9,22 +9,34 @@ from app.models.user_notification import UserNotification
 def restrict_to_cluster_viewers(db, query, cluster_id):
     """User 쿼리를 이 클러스터를 **볼 수 있는** 사용자로 좁힌다(테넌트 격리 — D-101/D-103).
 
-    바인딩이 없는 클러스터(또는 cluster_id 없음)는 그대로 둔다. 바인딩이 있으면 admin 과
-    바인딩된 테넌트의 멤버만 남긴다 — `cluster_access.hidden_cluster_ids` 와 같은 판정.
+    `cluster_access.hidden_cluster_ids` 와 같은 판정:
+    - 사용자 직접 지정(`cluster_user_grants`)이 우선 — `none` 이면 제외, `read`/`operate` 면 포함.
+    - 제한된 클러스터(바인딩 또는 read/operate 직접 지정이 있음)면 admin · 바인딩 테넌트 멤버 · 지정자만.
+    - 제한이 없으면 `none` 지정자만 뺀다.
     """
     if cluster_id is None:
         return query
-    from sqlalchemy import or_, select
+    from sqlalchemy import and_, or_, select
 
-    from app.models.tenant import ClusterBinding, TenantMember
+    from app.models.tenant import ClusterBinding, ClusterUserGrant, TenantMember
     from app.models.user import User
 
+    hidden_users = select(ClusterUserGrant.user_id).where(
+        ClusterUserGrant.cluster_id == cluster_id, ClusterUserGrant.access == "none")
+    granted_users = select(ClusterUserGrant.user_id).where(
+        ClusterUserGrant.cluster_id == cluster_id, ClusterUserGrant.access.in_(("read", "operate")))
     bound = [tid for (tid,) in db.query(ClusterBinding.tenant_id)
              .filter(ClusterBinding.cluster_id == cluster_id).all()]
-    if not bound:
-        return query
-    members = select(TenantMember.user_id).where(TenantMember.tenant_id.in_(bound))
-    return query.filter(or_(User.role == "admin", User.id.in_(members)))
+    has_grants = db.query(ClusterUserGrant.id).filter(
+        ClusterUserGrant.cluster_id == cluster_id,
+        ClusterUserGrant.access.in_(("read", "operate"))).first() is not None
+    not_hidden = or_(User.role == "admin", User.id.notin_(hidden_users))
+    if not bound and not has_grants:
+        return query.filter(not_hidden)
+    allowed = [User.role == "admin", User.id.in_(granted_users)]
+    if bound:
+        allowed.append(User.id.in_(select(TenantMember.user_id).where(TenantMember.tenant_id.in_(bound))))
+    return query.filter(and_(or_(*allowed), not_hidden))
 
 
 def notify_broadcast(db, *, type: str, title: str, body: str = "", link: str | None = None,
