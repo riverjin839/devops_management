@@ -308,23 +308,25 @@ hover 시 flyout 자체가 라벨을 보여주므로 이름만 뜨는 중복 툴
 
 > **레일 클러스터 목록(2026-11-23)**: 사이드바 레일의 K8s 클러스터 아이콘에 마우스를 올리거나 클릭하면 바로 이동하지 않고 오른쪽 flyout 에 **접근 권한이 있는 클러스터 목록**이 뜬다(`components/layout/K8sClusterFlyoutBody.tsx`, `Sidebar.tsx` 의 `k8sFlyoutAnchor`). 목록은 `useClusters()`(서버 `ClusterScope` 로 이미 거른 `GET /clusters`) — 운영 수준(`operationLevel`)으로 묶고, 상태 점은 정상이면 중립색·경고/위험만 상태색+글자, 사용자 지정 읽기 권한(`useMyClusterAccess` = `read`)은 "읽기" 배지, 7개 이상이면 검색창. 항목은 `/k8s/{id}/{현재 뷰}` 로 이동(허브 밖이면 기본 뷰), 하단에 "전체 클러스터 보기"(`/k8s`)·"클러스터 등록"(`/cluster-manage`, viewer 는 비활성+사유).
 
+> **클러스터 레일 제거 · 터미널·노드 라벨 흡수(2026-11-23, D-243)**: 사이드바 레일 "K8s 클러스터" flyout 에 클러스터 목록이 생기면서 허브 안 클러스터 레일(`ClusterSidebar`)과 목록이 두 군데 보이던 것을 정리했다 — 허브 레일을 없애고 h1 옆 **「클러스터 전환」**(`HubClusterSwitcher`, 같은 `K8sClusterFlyoutBody` 를 버튼 아래로 연다)을 두었다. 레일에만 있던 "비정상 N개만 보기"는 목록 상단 토글(`menuitemcheckbox`)로 옮겼고 ↑/↓ 이동은 flyout 메뉴 키보드가 대신한다. 콘솔 ▸ "터미널" 실행 카드(`HubTerminalsView`, 삭제)는 **k9s**·**노드 SSH** 두 뷰가 됐다(터미널은 화면 위에 뜨는 창이라 탭 안에서 동작, 옛 `terminals` 뷰 URL 은 `k9s` 로). 노드 라벨의 "전체 클러스터" 모드는 허브 뷰의 범위 토글(`?scope=all`)로 옮겼다. 그래서 `/node-labels`·`/k9s(/:id)`·`/node-ssh(/:id)` 도 허브 뷰로 redirect 되고 메뉴·팔레트·즐겨찾기에서 빠진다(`HUB_ABSORBED_PATHS`·`RETIRED_PATH_ALIASES`). 새 창(`/k9s/popup`·`/node-ssh/popup`)만 단독. 허브 안에서 클러스터를 바꾸면 뷰가 다시 마운트돼 열린 터미널 세션은 닫힌다.
+
 > **단축키(2026-11-04)**: `[` 이전 / `]` 다음 화면 — `useHubTabShortcuts`. 입력 요소 포커스·모달 열림·수정키 조합에서는 무시, 양 끝에서 순환하지 않는다.
 
-- **파일**: `frontend/src/pages/K8sHubPage.tsx` + `frontend/src/components/k8s-hub/{hubViews.ts,HubTabs.tsx,HubTerminalsView.tsx}`, 임베드 컨텍스트 `frontend/src/lib/k8sHub.ts`, 공용 탭 `components/common/SegTabs.tsx`(K8s 자원 관리에서 승격).
+- **파일**: `frontend/src/pages/K8sHubPage.tsx` + `frontend/src/components/k8s-hub/{hubViews.ts,HubTabs.tsx,HubClusterSwitcher.tsx}`, 임베드 컨텍스트 `frontend/src/lib/k8sHub.ts`, 공용 탭 `components/common/SegTabs.tsx`(K8s 자원 관리에서 승격).
 - **목적 / UX**: (2026-10-22, D-240) 클러스터 하나를 고르고 보는 K8s 화면 9개(클러스터 상세·K8s 상세 관리·K8s 자원 관리·클러스터 추이·관측 지표·실시간 이벤트·파드 로그·AI 장애 분석·점검 결과 리뷰)가 사이드바 4그룹에 흩어져 있어 화면마다 클러스터를 다시 고르던 것을, **클러스터 레일 하나 + 카테고리 탭** 한 화면으로 모았다. 클러스터는 URL(`:clusterId`)이 들고 있어 뷰를 바꿔도 유지되고, 레일에서 클러스터를 바꾸면 뷰·쿼리는 그대로 클러스터만 바뀐다. 2단계(2026-10-23)로 구성(K8s 접근 권한·노드 라벨·노드 이미지·버전/설정)·콘솔(etcdctl·커널 파라미터·터미널 실행 카드)을, 3단계로 진단(파드 병목·Cilium BPF 추적·패킷 흐름)을 더하고 메뉴에 남아 있던 옛 화면을 정리했다 — 사이드바·커맨드 팔레트·즐겨찾기에는 이제 허브 하나만 보인다.
 - **UI 구성**:
-  - `ClusterSidebar iconOnly`(허브가 하나만 그린다 — 자체 스크롤, 운영등급별 묶음, 상단 "비정상 N개만 보기", 방향키 이동) + `PageHeader`(h1 = 클러스터명 + `StatusBadge`, 설명 = "K8s 클러스터 · 뷰 이름").
+  - `PageHeader`(h1 = 클러스터명 + `StatusBadge` + 「클러스터 전환」, 설명 = "K8s 클러스터 · 뷰 이름"). 클러스터 레일은 없다(D-243) — 클러스터는 사이드바 "K8s 클러스터" flyout 또는 「클러스터 전환」으로 고른다. 클러스터 목록 조회 실패는 본문 `ErrorState`(다시 시도).
   - `HubTabs` — 1행 카테고리(개요 / 리소스 / 자원 / 관측 / 로그 / 점검 / 진단 / 구성 / 콘솔, `SegTabs mode="tabs"`), 2행은 그 카테고리에 뷰가 둘 이상일 때만(관측: 추이·지표·이벤트, 로그: 파드 로그·AI 분석, 점검: 점검 항목·결과 리뷰·OS 파라미터 감시, 진단: 파드 병목·Cilium·패킷 흐름, 구성: 접근 권한·노드 라벨·노드 이미지·버전/설정, 콘솔: etcdctl·커널 파라미터·터미널). 뷰 전환은 **path** 이동(`/k8s/:clusterId/<view>`)이라 뒤로가기가 이전 뷰로 돌아온다. 쿼리는 넘기지 않는다(뷰마다 `?tab=`·`?view=` 같은 자기 키를 쓴다). 허브 헤더·탭바는 sticky 가 아니다(K8s 상세 관리의 2차 사이드바·자원 관리의 sticky 탭바와 겹치지 않게).
   - 서브뷰는 **기존 페이지 컴포넌트를 그대로 마운트**한다(`.island-embed` 래퍼 + `K8sHubContext.Provider`). 컨텍스트가 있으면 페이지 쪽 `ClusterSidebar` 는 null, `PageShell` 은 `div`·패딩 없음, `PageHeader` 는 h2·`back` 숨김, `useClusterRouteParam` 은 허브의 clusterId/selectCluster 를 돌려준다 — 그래서 흡수된 화면의 코드는 거의 그대로다(지식 허브 `/docs`·홈 배치잡 서브탭과 같은 "페이지를 탭 안에 마운트" 패턴). 옛 `LogViewTabs`(파드 로그 ↔ AI 분석 전환)는 2행 탭이 대체해 3단계에서 지웠다.
-  - 뷰 id: `overview`(클러스터 상세) · `checks`(점검 항목 — 2026-11-23 개요에서 이동, D-242) · `manage` · `allocation` · `trends` · `metrics` · `events` · `logs` · `incident` · `review` · `rbac` · `node-labels` · `node-images` · `versions` · `etcdctl` · `kernel-params` · `terminals` · `bottleneck` · `cilium` · `packet-flow`. 모르는 view → overview 로 replace. 클러스터 미지정(`/k8s`) → 첫 클러스터로 replace, 클러스터가 없으면 `SelectClusterEmptyState`.
-  - **콘솔 ▸ 터미널**(`HubTerminalsView`) — k9s 콘솔·노드 SSH 터미널은 전체 높이 웹 터미널(xterm + WebSocket, 새 창 handoff)이라 임베드하지 않고, 카드의 "열기"가 단독 화면(`/k9s/:clusterId`·`/node-ssh/:clusterId`)을 허브가 고른 클러스터로 연다. 접근 제어로 꺼진 쪽은 카드가 빠지고(둘 다 꺼지면 탭도 빠짐 — `HubView.extraNavKeys`), viewer 는 숨기지 않고 비활성 + 사유.
-  - **노드 라벨 이중 진입** — 허브 뷰는 고른 클러스터 하나만 보고, 여러 클러스터를 한 표로 보는 "전체 클러스터" 모드는 단독 화면 `/node-labels`(구성·자산 그룹)에 그대로 남는다.
+  - 뷰 id: `overview`(클러스터 상세) · `checks`(점검 항목 — 2026-11-23 개요에서 이동, D-242) · `manage` · `allocation` · `trends` · `metrics` · `events` · `logs` · `incident` · `review` · `rbac` · `node-labels` · `node-images` · `versions` · `etcdctl` · `kernel-params` · `k9s` · `node-ssh`(D-243, 옛 `terminals` → `k9s`) · `bottleneck` · `cilium` · `packet-flow`. 모르는 view → overview 로 replace. 클러스터 미지정(`/k8s`) → 첫 클러스터로 replace, 클러스터가 없으면 `SelectClusterEmptyState`.
+  - **콘솔 ▸ k9s · 노드 SSH**(D-243) — 단독 화면이던 `K9sPage`·`NodeSshPage` 를 그대로 마운트한다(클러스터는 `useClusterRouteParam` 으로 허브 값). 터미널은 화면 위 창(`SshTerminalWindow`)·새 창 handoff 그대로. 접근 제어는 뷰별 navKey(`/k9s`·`/node-ssh`).
+  - **노드 라벨 범위 토글**(D-243) — 허브 노드 라벨 뷰 툴바의 「이 클러스터 / 전체 클러스터 N」(`SegTabs`, `?scope=all`). 옛 단독 화면 `/node-labels` 는 이 뷰로 redirect.
   - **접근 제어**: 허브 URL 은 `RouteAccessGate` 의 longest-prefix 가 `/k8s` 만 보므로, 뷰마다 흡수한 옛 경로(`HubView.navKey`, 예 `/k8s-manage`)로 `featureAllowed` 를 직접 판정한다 — 꺼진 뷰는 탭에서 빠지고 직접 URL 은 Lock `EmptyState`(아일랜드 패널 호스트와 같은 안내).
 - **Frontend**: `useClusters`, `useNavCatalog`(`featureAllowed`·`getLabel`), `useParams`/`useNavigate`/`useLocation`. 서브뷰의 훅·API 는 각 화면 섹션 참고(허브 전용 API 없음).
 - **Backend**: 없음(프론트 전용 통합).
 - **핵심 기능**:
-  - 옛 URL 은 전부 허브 뷰로 redirect(`App.tsx` `RedirectToHub` — `:clusterId` 와 쿼리 보존, 경로에 클러스터가 없고 쿼리에 `cluster=` 가 있으면 그 클러스터로 보내고 그 키는 뺀다, 그 외 bare URL 은 첫 클러스터). 예외는 `/node-labels`·`/k9s`·`/node-ssh`(단독 유지)·`/versions/:clusterId/graph`(전체 높이 캔버스 — 뒤로가기 링크는 허브 버전 뷰로)·`/pod-bottleneck/:id`(실행 상세 — 목록 링크는 그 실행 클러스터의 허브 병목 뷰로). 앱 안의 링크(클러스터 상세의 "결과 리뷰", 파드 → 로그, 패킷 흐름 → 병목 진단 prefill)는 허브 경로로 직행한다. 홈 매트릭스 클러스터명·커맨드 팔레트는 `/k8s/<id>/overview` 로 직행.
-  - **사이드바·팔레트·즐겨찾기(3단계 잔존 정리)**: 플랫폼 그룹 **"K8s 클러스터"**(`navConfig.ts` `k8s`)에는 `/k8s` 하나만 있다. 흡수된 옛 화면 18개(`HUB_ABSORBED_PATHS` — 1·2·3단계 17개 + 레거시 `/ops-checks`)는 앱 카탈로그·커맨드 팔레트·즐겨찾기·최근 방문에서 숨긴다. 이미 레일에 설치했거나 즐겨찾기에 고정한 옛 경로는 서버가 읽을 때 `/k8s` 로 접는다(`services/home_prefs.py` `RETIRED_PATH_ALIASES`). NAV_MAP 항목은 남는다 — Settings ▸ 접근 제어에서 허브 탭을 하나씩 켜고 끄는 키이고(목록에선 "K8s 클러스터" 그룹 아래), 아일랜드 패널에 화면 하나를 담는 용도로도 쓴다. `/k8s` 자체는 아일랜드 패널 불가(`ISLAND_DENYLIST`).
+  - 옛 URL 은 전부 허브 뷰로 redirect(`App.tsx` `RedirectToHub` — `:clusterId` 와 쿼리 보존, 경로에 클러스터가 없고 쿼리에 `cluster=` 가 있으면 그 클러스터로 보내고 그 키는 뺀다, 그 외 bare URL 은 첫 클러스터). 예외는 터미널 새 창(`/k9s/popup`·`/node-ssh/popup`)·`/versions/:clusterId/graph`(전체 높이 캔버스 — 뒤로가기 링크는 허브 버전 뷰로)·`/pod-bottleneck/:id`(실행 상세 — 목록 링크는 그 실행 클러스터의 허브 병목 뷰로). 앱 안의 링크(클러스터 상세의 "결과 리뷰", 파드 → 로그, 패킷 흐름 → 병목 진단 prefill)는 허브 경로로 직행한다. 홈 매트릭스 클러스터명·커맨드 팔레트는 `/k8s/<id>/overview` 로 직행.
+  - **사이드바·팔레트·즐겨찾기(3단계 잔존 정리)**: 플랫폼 그룹 **"K8s 클러스터"**(`navConfig.ts` `k8s`)에는 `/k8s` 하나만 있다. 흡수된 옛 화면 23개(`HUB_ABSORBED_PATHS` — 1·2·3단계 + 레거시 `/ops-checks` + `/os-param-watch`·`/k8s-services` + D-243 `/node-labels`·`/k9s`·`/node-ssh`)는 앱 카탈로그·커맨드 팔레트·즐겨찾기·최근 방문에서 숨긴다. 이미 레일에 설치했거나 즐겨찾기에 고정한 옛 경로는 서버가 읽을 때 `/k8s` 로 접는다(`services/home_prefs.py` `RETIRED_PATH_ALIASES`). NAV_MAP 항목은 남는다 — Settings ▸ 접근 제어에서 허브 탭을 하나씩 켜고 끄는 키이고(목록에선 "K8s 클러스터" 그룹 아래), 아일랜드 패널에 화면 하나를 담는 용도로도 쓴다. `/k8s` 자체는 아일랜드 패널 불가(`ISLAND_DENYLIST`).
   - 새 뷰 추가: `HUB_VIEWS` 에 항목을 더하고, 옛 라우트를 `RedirectToHub` 로, 옛 경로를 `HUB_ABSORBED_PATHS`·`RETIRED_PATH_ALIASES` 두 목록에 같이 더한다.
 - **요청사항 (수정 요청)**:
   - _(여기에 개선/수정 요청을 직접 적어주세요)_
@@ -440,7 +442,7 @@ hover 시 flyout 자체가 라벨을 보여주므로 이름만 뜨는 중복 툴
 
 ### k9s 콘솔 (`/k9s`, `/k9s/:clusterId`)
 
-> **허브로 통합(2026-10-23, D-240 2단계)**: 단독 화면 유지 — 전체 높이 웹 터미널이라 허브에 임베드하지 않는다. K8s 클러스터 허브 ▸ 콘솔 ▸ 터미널 카드의 "열기"가 `/k9s/:clusterId` 로 이 화면을 연다.
+> **허브 뷰로(2026-11-23, D-243)**: K8s 클러스터 허브 ▸ 콘솔 ▸ **k9s**(`/k8s/:clusterId/k9s`)로 마운트된다. `/k9s(/:clusterId)` 는 그 뷰로 redirect, 클러스터는 `useClusterRouteParam('/k9s')`(허브 값). 새 창(`/k9s/popup`)은 단독. 아래 `ClusterSidebar` 설명은 허브 밖(아일랜드) 렌더 기준 — 허브 안에서는 그리지 않는다.
 
 - **파일**: `frontend/src/pages/K9sPage.tsx` + `frontend/src/components/k8s/K9sTerminal.tsx`(xterm.js 터미널) + `components/common/{ClusterSidebar,EmptyState}`, `components/ui/MacCard`.
 - **목적 / UX**: 각 클러스터의 control-plane(master) 서버에 **SSH 로 접속해 서버에 내장된 `k9s` TUI 를 그대로 웹 터미널로 스트리밍**한다. 별도 재구현이 아니라 실제 k9s 를 브라우저에서 조작(파드/노드/디플로이 탐색, 로그, describe 등)한다.
@@ -462,7 +464,7 @@ hover 시 flyout 자체가 라벨을 보여주므로 이름만 뜨는 중복 툴
 
 ### 노드 SSH 터미널 (`/node-ssh`, `/node-ssh/:clusterId`)
 
-> **허브로 통합(2026-10-23, D-240 2단계)**: 단독 화면 유지 — 전체 높이 웹 터미널이라 허브에 임베드하지 않는다. K8s 클러스터 허브 ▸ 콘솔 ▸ 터미널 카드의 "열기"가 `/node-ssh/:clusterId` 로 이 화면을 연다.
+> **허브 뷰로(2026-11-23, D-243)**: K8s 클러스터 허브 ▸ 콘솔 ▸ **노드 SSH**(`/k8s/:clusterId/node-ssh`)로 마운트된다. `/node-ssh(/:clusterId)` 는 그 뷰로 redirect, 클러스터는 `useClusterRouteParam('/node-ssh')`(허브 값). 새 창(`/node-ssh/popup`)은 단독.
 
 - **파일**: `frontend/src/pages/NodeSshPage.tsx` + `frontend/src/pages/NodeSshPopupPage.tsx`(별도 창) + `frontend/src/components/k8s/{NodeSshTerminal,SshTerminalWindow}.tsx` + `components/common/{ClusterSidebar,EmptyState}`, `components/ui/MacCard`.
 - **목적 / UX**: 클러스터의 **개별 노드 하나에 SSH 로 붙어 로그인 셸을 그대로** 웹 터미널로 쓴다. k9s 콘솔이 control-plane 의 k9s TUI 만 띄우는 것과 달리 범용 셸이라 `journalctl`·`top`·`vi` 같은 인터랙티브 명령까지 동작한다(tty + resize). 여러 노드에 같은 명령을 돌리는 용도는 `/bulk-exec`, 리소스 TUI 탐색은 `/k9s` 로 안내한다.
@@ -834,6 +836,8 @@ hover 시 flyout 자체가 라벨을 보여주므로 이름만 뜨는 중복 툴
 ## 클러스터 — 관리 / 버전 / 실행 콘솔 / LAKE / APM
 
 ### K8S 노드 라벨 (`/node-labels`)
+
+> **허브 뷰로(2026-11-23, D-243)**: `/node-labels` 는 허브 구성 ▸ 노드 라벨 뷰로 redirect 된다. "전체 클러스터" 모드는 그 뷰 툴바의 범위 토글(「이 클러스터 / 전체 클러스터 N」, `?scope=all`)로 옮겼다. 아래 단독 화면 설명(`ClusterSidebar allowAll`)은 아일랜드 패널 렌더에만 해당한다.
 
 > **허브로 통합(2026-10-23, D-240 2단계)**: K8s 클러스터 허브 `/k8s/:clusterId/node-labels`(구성 카테고리)에도 같은 화면이 뷰로 들어 있다 — 허브에서는 고른 클러스터 하나만 보인다. 이 단독 화면은 redirect 하지 않고 "전체 클러스터" 모드(여러 클러스터의 노드를 한 표로)를 위해 그대로 둔다.
 

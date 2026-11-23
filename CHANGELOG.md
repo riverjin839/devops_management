@@ -15,6 +15,9 @@
 ### Changed
 - **로그 중심 화면은 실행 로그를 화면 안에 유지** — `/etcdctl`·`/bulk-exec`·`/mc`·`/cilium-trace`·`/kernel-params`·`/isilon-nfs` 처럼 로그가 화면 중심인 실행 화면(`RunLogPanel fill`)은 "실행 로그 표시" 설정이 새 창이어도 화면 안에 그대로 표시한다(이 화면들에선 창 전환 버튼도 숨김). 필요하면 로그 툴바의 "새 창으로 열기" 로 따로 띄울 수 있다.
 
+### Changed
+- **K8S 클러스터 허브 — 클러스터 목록 중복 정리 · k9s·노드 SSH·노드 라벨 흡수**: 사이드바 K8S 클러스터 아이콘의 클러스터 목록과 허브 안 클러스터 레일이 동시에 보이던 것을 정리했다. 허브 레일을 없애고 클러스터 이름 옆 **「클러스터 전환」**으로 같은 목록을 연다. 목록 상단에 「비정상 N개만 보기」 토글이 생겼다. 콘솔 탭의 "터미널" 실행 카드는 **k9s**·**노드 SSH** 탭이 돼 허브 안에서 바로 접속하고, 노드 라벨은 툴바의 「이 클러스터 / 전체 클러스터」로 전체 클러스터를 한 표로 본다. 옛 `/k9s`·`/node-ssh`·`/node-labels` 주소는 허브 탭으로 연결되고 메뉴·즐겨찾기에서는 K8S 클러스터 하나로 합쳐진다(터미널 새 창은 그대로). Frontend: `HubClusterSwitcher`, `K8sClusterFlyoutBody` 비정상 필터, `HubTerminalsView` 삭제. Backend: `home_prefs.RETIRED_PATH_ALIASES` 에 세 경로 추가.
+
 ## [1.103.0] - 2026-11-23
 
 ### Added

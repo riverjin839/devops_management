@@ -1,7 +1,7 @@
 import { useEffect, useId, useMemo, useRef, useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { ShipWheel, Key, Play, ShieldAlert, ExternalLink, RotateCw } from 'lucide-react';
+import { useClusterRouteParam } from '@/hooks/useClusterRouteParam';
 import { useClusters } from '@/hooks/useCluster';
 import {
   ClusterSidebar, ConfirmDialog, ErrorState, PageShell, RunLogPanel, SelectClusterEmptyState,
@@ -45,21 +45,15 @@ const HANDOFF_FAILED_MSG = '새 창에 접속 정보를 전달하지 못했습�
  * 기본으로 켜지고(끌 때 확인), 연결 전에 대상·계정·읽기 전용 여부를 한 번 더 확인한다.
  */
 export function K9sPage() {
-  const { clusterId = '' } = useParams<{ clusterId: string }>();
-  const navigate = useNavigate();
   const clustersQ = useClusters();
   const clusters = useMemo(() => clustersQ.data ?? [], [clustersQ.data]);
+  // K8s 허브 콘솔 ▸ k9s(`/k8s/:clusterId/k9s`, D-243)로 마운트된다 — 허브 안에서는 허브가 고른 클러스터를 쓰고,
+  // 클러스터가 없으면 첫 클러스터로 간다(단독·아일랜드 동작은 `useClusterRouteParam` 이 맡는다).
+  const { clusterId, selectCluster } = useClusterRouteParam('/k9s', clusters);
   const f = useId();
   const { canOperate, hint, withHint, ariaWithHint } = useCanOperate(clusterId || null);
   const levelsQ = useOperationLevels();
   const levels = levelsQ.data;
-
-  // clusterId 없으면 첫 클러스터로 이동
-  useEffect(() => {
-    if (!clusterId && clusters.length > 0) {
-      navigate(`/k9s/${clusters[0].id}`, { replace: true });
-    }
-  }, [clusterId, clusters, navigate]);
 
   // 선택한 클러스터의 운영등급으로 터미널 Appearance 활성 프로파일(개발/운영)을 맞춘다(§12.6 PTY).
   useTerminalEnvSync(clusters, clusterId || null);
@@ -154,7 +148,7 @@ export function K9sPage() {
     && (authMode === 'password' ? !!password : !!privateKey.trim());
 
   const resetForCluster = (id: string | null) => {
-    navigate(`/k9s/${id ?? ''}`);
+    selectCluster(id);
     window.clearTimeout(popoutTimerRef.current);
     runHandleRef.current?.log('warn', '클러스터를 전환해 세션을 정리했습니다');
     runHandleRef.current?.end();

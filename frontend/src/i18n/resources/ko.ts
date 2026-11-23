@@ -207,6 +207,9 @@ export const ko = {
       readOnly: '읽기',
       openHub: '전체 클러스터 보기',
       register: '클러스터 등록',
+      abnormalOnly: '비정상 {{count}}개만 보기',
+      showAll: '전체 {{count}}개 보기',
+      switch: '클러스터 전환',
     },
   },
   home: {

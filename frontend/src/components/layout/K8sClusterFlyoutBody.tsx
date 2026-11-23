@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { ChevronRight, LayoutGrid, PlusCircle, Search, ServerOff } from 'lucide-react';
+import { AlertTriangle, ChevronRight, LayoutGrid, PlusCircle, Search, ServerOff } from 'lucide-react';
 import { useClusters } from '@/hooks/useCluster';
 import { useCanOperate, useMyClusterAccess } from '@/hooks/useCanOperate';
 import { useAuthStore } from '@/stores/authStore';
@@ -40,21 +40,26 @@ export function K8sClusterFlyoutBody({ onNavigate }: { onNavigate: () => void })
   const { data: access } = useMyClusterAccess(!isAdmin);
   const { canOperate, withHint } = useCanOperate();
   const [query, setQuery] = useState('');
+  // 「비정상 N개만 보기」 — 허브의 옛 클러스터 레일에 있던 필터를 옮겨 왔다(D-243).
+  const [abnormalOnly, setAbnormalOnly] = useState(false);
+  const abnormalCount = useMemo(() => clusters.filter((c) => c.status === 'warning' || c.status === 'critical').length, [clusters]);
+  const filtering = abnormalOnly && abnormalCount > 0;
   const { clusterId: currentId, view } = parseHubPath(location.pathname);
 
   // 운영 수준(operationLevel)으로 묶는다. 값이 없는 클러스터는 마지막 "기타" 묶음. 묶음 안은 서버 순서(seq).
   const groups = useMemo(() => {
     const term = query.trim().toLowerCase();
+    const byStatus = filtering ? clusters.filter((c) => c.status === 'warning' || c.status === 'critical') : clusters;
     const shown = term
-      ? clusters.filter((c) => `${c.name} ${c.region ?? ''}`.toLowerCase().includes(term))
-      : clusters;
+      ? byStatus.filter((c) => `${c.name} ${c.region ?? ''}`.toLowerCase().includes(term))
+      : byStatus;
     const map = new Map<string, Cluster[]>();
     for (const c of shown) {
       const key = c.operationLevel?.trim() || '';
       map.set(key, [...(map.get(key) ?? []), c]);
     }
     return [...map.entries()].sort(([a], [b]) => (a === '' ? 1 : b === '' ? -1 : 0));
-  }, [clusters, query]);
+  }, [clusters, query, filtering]);
   const grouped = groups.length > 1 || (groups.length === 1 && groups[0][0] !== '');
 
   const statusLabel = (s: Status) =>
@@ -77,6 +82,26 @@ export function K8sClusterFlyoutBody({ onNavigate }: { onNavigate: () => void })
               className="flex-1 min-w-0 bg-transparent text-[13px] text-foreground outline-none placeholder:text-faint"
             />
           </label>
+        </div>
+      )}
+
+      {abnormalCount > 0 && (
+        <div className="px-2 pb-1">
+          <button
+            type="button"
+            role="menuitemcheckbox"
+            aria-checked={filtering}
+            onClick={() => setAbnormalOnly((v) => !v)}
+            className={`w-full inline-flex items-center gap-1.5 rounded-xl px-2 py-1 text-xs font-semibold tabular-nums transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 ${
+              filtering ? 'bg-primary/15 text-primary' : 'text-foreground hover:bg-secondary'
+            }`}
+          >
+            <AlertTriangle
+              aria-hidden="true"
+              className={`w-3.5 h-3.5 ${clusters.some((c) => c.status === 'critical') ? 'text-status-critical' : 'text-status-warning'}`}
+            />
+            {filtering ? t('shell.k8sClusters.showAll', { count: clusters.length }) : t('shell.k8sClusters.abnormalOnly', { count: abnormalCount })}
+          </button>
         </div>
       )}
 
