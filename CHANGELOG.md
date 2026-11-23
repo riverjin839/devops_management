@@ -10,6 +10,9 @@
 
 1.100.0 이후 main 에 병합된 변경 (다음 릴리스 후보).
 
+### Added
+- **서비스 구성 ▸ NIC — 노드 NIC 상태·경고**: 서비스 구성 레일에 NIC 항목이 생겼다. 노드 파라미터 에이전트(1.2.0)가 보고 주기마다 인터페이스 상태를 함께 보내고, 화면이 노드 × 인터페이스 표와 경고로 보여준다(읽기 전용). 경고: 본딩/LACP(LACP 집계 실패·스위치와 협상 안 됨·하위 인터페이스 다운·해시 정책 layer2·LACP rate slow·링크 감시 꺼짐) · 링크(속도·half duplex·플래핑) · MTU(VLAN > 부모, 노드 간 차이) · ring buffer + 수신 드롭 증가(ring 에 여유가 있으면 `ethtool -G` 제안)·CRC 증가 · offload(LRO 켜짐, 노드 간 차이) · 보고 끊김. 기대 값·임계치·수집 대상(인터페이스 종류·제외 이름)은 NIC 설정(admin)에서 바꾼다. 에이전트는 sysfs·`/proc/net/bonding`·ethtool 조회 ioctl 만 써서 권한·마운트가 그대로라 이미지만 올려 재배포하면 된다. Backend: `routers/nic_watch.py`, `NodeNicState`(`node_nic_states`), `services/nic_watch/`, 에이전트 `node_param_agent/nic.py`(보고 `nic` 필드). Frontend: `NicStatusView`·`NicSettingsDialog`, `hooks/useNicWatch.ts`.
+
 ### Fixed
 - **서비스 구성 — 적용 설정이 지금 서비스 것만 보이게**: 서비스 화면의 「적용 설정」 대화상자가 8개 서비스의 경로·명령을 한꺼번에 보여주던 것을, 지금 보고 있는 서비스의 구역만 보이도록 고쳤다(변경 감지는 서비스 공통이라 함께 표시). 제목도 「<서비스> 적용 설정」으로 바뀐다. 툴바에서 이름 없이 아이콘만 있던 「적용 이력」 버튼은 없앴고(요약 탭 「최근 적용 ▸ 적용 이력」으로 연다), 톱니 아이콘에는 「적용 설정」 글자를 붙였다. Frontend: `ApplySettingsDialog`(`service` prop), `ServiceConfigPage`.
 

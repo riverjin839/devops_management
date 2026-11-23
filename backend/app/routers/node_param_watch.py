@@ -69,6 +69,8 @@ class AgentReport(BaseModel):
     errors: list[str] = Field(default_factory=list, max_length=200)
     # 서비스 구성 설정 파일(containerd·kubelet) — {id: {sha256, path, content?(바뀐 때만), error?}}. 에이전트 1.1.0+
     files: dict[str, dict[str, Any]] = Field(default_factory=dict)
+    # NIC 상태 — {interfaces: [...], errors: [...]}. 에이전트 1.2.0+ 가 응답의 nic 설정이 켜져 있을 때 보낸다.
+    nic: Optional[dict[str, Any]] = None
 
 
 @ingest_router.post("/agent/report")
@@ -82,7 +84,7 @@ def agent_report(
     if cluster is None:
         raise HTTPException(status_code=404, detail=f"클러스터 '{body.cluster}' 를 찾을 수 없습니다.")
     try:
-        out = svc.handle_report(db, cluster, body.model_dump(exclude={"files"}))
+        out = svc.handle_report(db, cluster, body.model_dump(exclude={"files", "nic"}))
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     except Exception as exc:  # noqa: BLE001
@@ -100,6 +102,19 @@ def agent_report(
         db.rollback()
         logger.warning("service-config 파일 보고 처리 실패 (%s/%s): %s", body.cluster, body.node, exc)
     out["files"] = W.agent_file_targets(db)
+    # NIC 상태 — 실패해도 커널 파라미터 보고는 성공으로 둔다. 응답의 nic 설정으로 다음 주기 수집 대상을 정한다.
+    from app.services.nic_watch import service as nic_svc
+    from app.services.nic_watch.settings import agent_config as nic_agent_config
+    from app.services.nic_watch.settings import get_settings as nic_settings
+
+    if body.nic is not None:
+        try:
+            out["nic_interfaces"] = nic_svc.ingest(db, cluster, body.node, body.host_ip, body.agent_version,
+                                                   body.collected_at, body.nic)
+        except Exception as exc:  # noqa: BLE001
+            db.rollback()
+            logger.warning("nic 보고 처리 실패 (%s/%s): %s", body.cluster, body.node, exc)
+    out["nic"] = nic_agent_config(nic_settings(db))
     return out
 
 
@@ -368,6 +383,9 @@ def delete_agent(
         raise HTTPException(status_code=404, detail="에이전트를 찾을 수 없습니다.")
     node = agent.node
     svc.remove_agent(db, cluster, agent)
+    from app.services.nic_watch.service import remove_node as remove_nic_state
+
+    remove_nic_state(db, cluster_id, node)
     audit_logger.record(db, action="node_params.agent.delete", actor=user, target_type="cluster",
                         target_id=str(cluster_id), details={"node": node}, request=request)
 

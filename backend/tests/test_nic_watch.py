@@ -1,0 +1,352 @@
+"""NIC 상태 감시 — 에이전트 수집(가짜 sysfs)·/proc/net/bonding 해석·판정 규칙·보고 저장(실제 DB) 테스트."""
+import os
+import uuid
+from datetime import datetime, timedelta
+from pathlib import Path
+
+import pytest
+
+os.environ["DATABASE_URL"] = os.environ.get(
+    "DATABASE_URL", "postgresql://postgres:postgres@localhost:5432/k8s_monitor_test"
+)
+os.environ["REDIS_URL"] = os.environ.get("REDIS_URL", "redis://localhost:6379/0")
+
+from app.node_param_agent import nic as N  # noqa: E402
+from app.services.nic_watch import analyze as A  # noqa: E402
+from app.services.nic_watch.settings import DEFAULTS, agent_config, normalize  # noqa: E402
+
+PROC_BOND_OK = """Ethernet Channel Bonding Driver: v5.14.0
+
+Bonding Mode: IEEE 802.3ad Dynamic link aggregation
+Transmit Hash Policy: layer3+4 (1)
+MII Status: up
+MII Polling Interval (ms): 100
+
+802.3ad info
+LACP active: on
+LACP rate: fast
+Aggregator selection policy (ad_select): stable
+System MAC address: 0c:42:a1:00:00:01
+Active Aggregator Info:
+\tAggregator ID: 1
+\tNumber of ports: 2
+\tActor Key: 21
+\tPartner Key: 32801
+\tPartner Mac Address: 00:1c:73:aa:bb:cc
+
+Slave Interface: ens1f0
+MII Status: up
+Speed: 25000 Mbps
+Duplex: full
+Link Failure Count: 0
+Permanent HW addr: 0c:42:a1:00:00:01
+Slave queue ID: 0
+Aggregator ID: 1
+details actor lacp pdu:
+    system priority: 65535
+    system mac address: 0c:42:a1:00:00:01
+    oper key: 21
+details partner lacp pdu:
+    system priority: 32768
+    system mac address: 00:1c:73:aa:bb:cc
+    oper key: 32801
+
+Slave Interface: ens1f1
+MII Status: up
+Speed: 25000 Mbps
+Duplex: full
+Link Failure Count: 2
+Aggregator ID: 2
+details partner lacp pdu:
+    system mac address: 00:00:00:00:00:00
+    oper key: 1
+"""
+
+
+def test_parse_proc_bonding():
+    r = N.parse_proc_bonding(PROC_BOND_OK)
+    assert r["active"] == {"aggregator_id": 1, "ports": 2, "actor_key": 21, "partner_key": 32801,
+                           "partner_mac": "00:1c:73:aa:bb:cc"}
+    s0, s1 = r["slave_state"]["ens1f0"], r["slave_state"]["ens1f1"]
+    assert s0 == {"mii_status": "up", "speed": 25000, "duplex": "full", "link_failures": 0, "aggregator_id": 1,
+                  "partner_mac": "00:1c:73:aa:bb:cc", "partner_key": 32801}
+    assert s1["aggregator_id"] == 2 and s1["link_failures"] == 2 and s1["partner_mac"] == "00:00:00:00:00:00"
+
+
+def _mk(base: Path, name: str, files: dict, *, device=False, devtype=None, bonding=None, master=None, lowers=()):
+    d = base / name
+    (d / "statistics").mkdir(parents=True)
+    for k, v in files.items():
+        (d / k).write_text(f"{v}\n")
+    for c in ("rx_packets", "rx_missed_errors", "rx_crc_errors"):
+        (d / "statistics" / c).write_text("0\n")
+    (d / "uevent").write_text(f"INTERFACE={name}\n" + (f"DEVTYPE={devtype}\n" if devtype else ""))
+    if device:
+        (d / "device").mkdir()
+    if bonding:
+        (d / "bonding").mkdir()
+        for k, v in bonding.items():
+            (d / "bonding" / k).write_text(f"{v}\n")
+    if master:
+        os.symlink(f"../{master}", d / "master")
+    for low in lowers:
+        os.symlink(f"../{low}", d / f"lower_{low}")
+
+
+def test_collect_fake_sysfs(tmp_path):
+    net, bonding = tmp_path / "net", tmp_path / "bonding"
+    net.mkdir()
+    bonding.mkdir()
+    link = {"operstate": "up", "carrier": 1, "mtu": 9000, "speed": 25000, "duplex": "full", "carrier_changes": 3}
+    _mk(net, "ens1f0", link, device=True, master="bond0")
+    _mk(net, "ens1f1", link, device=True, master="bond0")
+    _mk(net, "bond0", {**link, "speed": 50000}, bonding={
+        "mode": "802.3ad 4", "xmit_hash_policy": "layer3+4 1", "lacp_rate": "fast 1", "miimon": 100,
+        "arp_interval": 0, "updelay": 0, "downdelay": 0, "slaves": "ens1f0 ens1f1"}, lowers=("ens1f0", "ens1f1"))
+    _mk(net, "bond0.100", {**link, "mtu": 1500}, devtype="vlan", lowers=("bond0",))
+    _mk(net, "lxc1234", {"operstate": "up", "mtu": 1500})
+    _mk(net, "lo", {"operstate": "unknown", "mtu": 65536})
+    _mk(net, "eno1", {"operstate": "down", "carrier": "", "mtu": 1500, "speed": -1}, device=True)
+    (bonding / "bond0").write_text(PROC_BOND_OK)
+
+    r = N.collect(N.DEFAULT_CONFIG, sys_net=net, proc_bonding=bonding, use_ethtool=False)
+    by = {i["name"]: i for i in r["interfaces"]}
+    assert set(by) == {"ens1f0", "ens1f1", "bond0", "bond0.100", "eno1"}  # lxc*·lo 는 제외
+    assert by["bond0"]["kind"] == "bond" and by["bond0.100"]["kind"] == "vlan" and by["ens1f0"]["kind"] == "physical"
+    assert by["bond0"]["bond"]["mode"] == "802.3ad" and by["bond0"]["bond"]["slaves"] == ["ens1f0", "ens1f1"]
+    assert by["bond0"]["bond"]["active"]["aggregator_id"] == 1
+    assert by["ens1f0"]["master"] == "bond0" and by["bond0.100"]["vlan_id"] == 100 and by["bond0.100"]["lowers"] == ["bond0"]
+    assert by["ens1f1"]["lacp"]["aggregator_id"] == 2 and by["ens1f1"]["counters"]["bond_link_failures"] == 2
+    assert by["ens1f0"]["counters"]["carrier_changes"] == 3
+    assert by["eno1"]["speed"] is None and by["eno1"]["carrier"] is None
+    assert r["errors"] == []
+
+
+def test_collect_real_host_does_not_raise():
+    """실제 커널(이 테스트 환경)에서도 예외 없이 돈다 — ethtool ioctl 이 안 되는 환경이면 항목만 비운다."""
+    r = N.collect({"include_kinds": list(N.DEFAULT_CONFIG["include_kinds"]) + ["virtual"], "exclude_names": []})
+    assert isinstance(r["interfaces"], list)
+
+
+def test_settings_normalize_and_agent_config():
+    cfg = normalize({"include_kinds": ["physical", "bogus"], "exclude_names": "lo, lxc* ,bad name;", "min_speed_mbps": -5,
+                     "expected_bond_mode": "nope", "offload_expect": {"rx-lro": 0, "BAD KEY": 1}})
+    assert cfg["include_kinds"] == ["physical"] and cfg["exclude_names"] == ["lo", "lxc*"]
+    assert cfg["min_speed_mbps"] == 0 and cfg["expected_bond_mode"] == "802.3ad" and cfg["offload_expect"] == {"rx-lro": False}
+    assert set(agent_config(cfg)) == {"enabled", "include_kinds", "include_names", "exclude_names"}
+    assert normalize("garbage") == normalize(None)
+    assert normalize({"offload_expect": [{"name": "rx-gro", "on": True}]})["offload_expect"] == {"rx-gro": True}
+
+
+# ── 판정 ─────────────────────────────────────────────────────────────────────
+
+NOW = datetime(2026, 11, 23, 12, 0, 0)
+
+
+def _phys(name, *, mtu=9000, speed=25000, master="bond0", oper="up", counters=None, ring=None, feats=None, driver="mlx5_core"):
+    return {"name": name, "kind": "physical", "operstate": oper, "carrier": 1, "mtu": mtu, "speed": speed, "duplex": "full",
+            "master": master, "lowers": [], "ring": ring, "driver": {"driver": driver, "firmware": "22.1"},
+            "features": feats or {"rx-lro": {"on": False, "fixed": False}, "rx-gro": {"on": True, "fixed": False}},
+            "counters": counters or {}}
+
+
+def _bond(*, mode="802.3ad", hp="layer3+4", rate="fast", agg=(1, 1), pmac=("00:1c:73:aa:bb:cc",) * 2, miimon=100, mtu=9000):
+    return {"name": "bond0", "kind": "bond", "operstate": "up", "mtu": mtu, "speed": 50000, "lowers": ["ens1f0", "ens1f1"],
+            "counters": {}, "bond": {
+                "mode": mode, "xmit_hash_policy": hp, "lacp_rate": rate, "miimon": miimon, "arp_interval": 0,
+                "slaves": ["ens1f0", "ens1f1"],
+                "active": {"aggregator_id": 1, "ports": 2, "partner_mac": pmac[0]},
+                "slave_state": {"ens1f0": {"mii_status": "up", "speed": 25000, "aggregator_id": agg[0], "partner_mac": pmac[0]},
+                                "ens1f1": {"mii_status": "up", "speed": 25000, "aggregator_id": agg[1], "partner_mac": pmac[1]}}}}
+
+
+def _state(node, ifaces, history=None, received=NOW):
+    return {"node": node, "host_ip": None, "agent_version": "1.2.0", "collected_at": NOW, "received_at": received,
+            "interfaces": ifaces, "errors": [], "history": history or []}
+
+
+def _codes(out, node=None):
+    return sorted({f["code"] for f in out["findings"] if node is None or f["node"] == node})
+
+
+def test_healthy_node_has_no_findings():
+    out = A.analyze([_state("w1", [_bond(), _phys("ens1f0"), _phys("ens1f1")])], normalize(None), NOW)
+    assert out["findings"] == [] and out["summary"]["level"] == "ok"
+    assert all(r["level"] == "ok" for r in out["interfaces"])
+
+
+def test_bond_lacp_findings():
+    bad = _bond(mode="802.3ad", hp="layer2", rate="slow", agg=(1, 2), miimon=0)
+    out = A.analyze([_state("w1", [bad, _phys("ens1f0"), _phys("ens1f1")])], normalize(None), NOW)
+    codes = _codes(out)
+    assert {"bond_hash", "lacp_rate", "lacp_aggregator", "bond_no_monitor"} <= set(codes)
+    agg = next(f for f in out["findings"] if f["code"] == "lacp_aggregator")
+    assert agg["level"] == "critical" and "ens1f1" in agg["detail"]
+    rows = {r["name"]: r for r in out["interfaces"]}
+    assert rows["ens1f1"]["level"] == "critical" and rows["ens1f0"]["level"] == "ok"  # 집계 밖 하위 행에도 표시
+    assert out["summary"]["level"] == "critical" and out["findings"][0]["level"] == "critical"  # 심각한 것부터
+
+    nopartner = _bond(pmac=("00:00:00:00:00:00",) * 2)
+    assert "lacp_no_partner" in _codes(A.analyze([_state("w1", [nopartner])], normalize(None), NOW))
+    # 기대 값을 비우면 그 검사는 하지 않는다
+    loose = normalize({"expected_hash_policy": "", "expected_lacp_rate": ""})
+    assert not {"bond_hash", "lacp_rate"} & set(_codes(A.analyze([_state("w1", [bad])], loose, NOW)))
+
+
+def test_bond_slave_down_and_mtu_hierarchy():
+    b = _bond()
+    b["bond"]["slave_state"]["ens1f1"]["mii_status"] = "down"
+    vlan = {"name": "bond0.100", "kind": "vlan", "operstate": "up", "mtu": 9100, "lowers": ["bond0"], "counters": {}}
+    out = A.analyze([_state("w1", [b, vlan, _phys("ens1f0"), _phys("ens1f1", mtu=1500)])], normalize(None), NOW)
+    codes = _codes(out)
+    assert {"bond_slave_down", "mtu_exceeds_parent", "bond_slave_mtu"} <= set(codes)
+
+
+def test_rates_drops_crc_flaps_with_ring_hint():
+    t0 = NOW - timedelta(minutes=20)
+    hist = [{"t": t0.isoformat(), "c": {"ens1f0": {"rx_missed_errors": 100, "drv:rx_out_of_buffer": 1000,
+                                                    "rx_crc_errors": 5, "carrier_changes": 4, "drv:rx_xdp_drops": 0}}}]
+    cur = {"rx_missed_errors": 150, "drv:rx_out_of_buffer": 3000, "rx_crc_errors": 9, "carrier_changes": 6,
+           "drv:rx_xdp_drops": 999999}
+    out = A.analyze([_state("w1", [_phys("ens1f0", master=None, counters=cur, ring={"rx": 1024, "rx_max": 8192, "tx": 1024, "tx_max": 8192})],
+                            history=hist)], normalize(None), NOW)
+    row = out["interfaces"][0]
+    assert row["rates"]["drops"] == 2000 and row["rates"]["drop_counter"] == "drv:rx_out_of_buffer"  # 큐 합산 X, xdp 제외
+    assert row["rates"]["drops_per_min"] == 100.0 and row["rates"]["crc"] == 4 and row["rates"]["flaps"] == 2
+    drops = next(f for f in out["findings"] if f["code"] == "rx_drops")
+    assert "ethtool -G ens1f0 rx 8192" in drops["hint"]
+    assert {"rx_drops", "crc_errors", "link_flap"} <= set(_codes(out))
+
+
+def test_rates_counter_reset_and_young_history():
+    hist = [{"t": (NOW - timedelta(minutes=30)).isoformat(), "c": {"ens1f0": {"rx_missed_errors": 10_000}}}]
+    out = A.analyze([_state("w1", [_phys("ens1f0", counters={"rx_missed_errors": 3})], history=hist)], normalize(None), NOW)
+    assert out["interfaces"][0]["rates"]["drops"] == 0  # 카운터가 줄었다 = 재설정
+    young = [{"t": (NOW - timedelta(seconds=30)).isoformat(), "c": {"ens1f0": {"rx_missed_errors": 0}}}]
+    out = A.analyze([_state("w1", [_phys("ens1f0", counters={"rx_missed_errors": 9})], history=young)], normalize(None), NOW)
+    assert out["interfaces"][0]["rates"] is None and out["nodes"][0]["rate_ready"] is False
+
+
+def test_offload_expect_and_cross_node():
+    lro_on = {"rx-lro": {"on": True, "fixed": False}, "rx-gro": {"on": True, "fixed": False}}
+    states = [
+        _state("w1", [_phys("ens1f0", master=None)]),
+        _state("w2", [_phys("ens1f0", master=None)]),
+        _state("w3", [_phys("ens1f0", master=None, mtu=1500, speed=10000, feats=lro_on)]),
+    ]
+    out = A.analyze(states, normalize(None), NOW)
+    w3 = _codes(out, "w3")
+    assert {"offload_expect", "cross_mtu", "cross_speed", "cross_offload"} <= set(w3)
+    assert _codes(out, "w1") == [] and _codes(out, "w2") == []
+    mtu = next(f for f in out["findings"] if f["code"] == "cross_mtu")
+    assert "9000" in mtu["detail"]
+    assert "cross_mtu" not in _codes(A.analyze(states, normalize({"cross_node_check": False}), NOW))
+
+
+def test_stale_and_unused_port():
+    out = A.analyze([_state("w1", [_phys("eno2", master=None, oper="down")], received=NOW - timedelta(minutes=30))],
+                    normalize(None), NOW)
+    f = {x["code"]: x for x in out["findings"]}
+    assert f["stale"]["level"] == "warning" and out["nodes"][0]["stale"] is True
+    assert f["link_down_unused"]["level"] == "info"
+    assert out["summary"]["level"] == "warning"  # info 는 화면 수준을 올리지 않는다
+
+
+# ── 보고 저장(실제 DB) ───────────────────────────────────────────────────────
+
+@pytest.fixture
+def db():
+    from app.database import Base, SessionLocal, engine
+    from app.main import _ensure_pgvector_extension
+
+    _ensure_pgvector_extension()
+    Base.metadata.create_all(bind=engine)
+    session = SessionLocal()
+    yield session
+    session.close()
+
+
+@pytest.fixture
+def cluster(db):
+    from app.models.cluster import Cluster
+    from app.models.node_nic import NodeNicState
+    from app.models.node_param_watch import NodeParamAgent
+
+    c = Cluster(name=f"nic-{uuid.uuid4().hex[:8]}", api_endpoint="https://nic:6443")
+    db.add(c)
+    db.commit()
+    yield c
+    db.rollback()
+    db.query(NodeNicState).filter(NodeNicState.cluster_id == c.id).delete(synchronize_session=False)
+    db.query(NodeParamAgent).filter(NodeParamAgent.cluster_id == c.id).delete(synchronize_session=False)
+    db.query(Cluster).filter(Cluster.id == c.id).delete(synchronize_session=False)
+    db.commit()
+
+
+def test_ingest_history_and_view(db, cluster):
+    from app.models.node_param_watch import NodeParamAgent
+    from app.services.nic_watch import service as svc
+
+    t0 = datetime(2026, 11, 23, 11, 0, 0)
+
+    def report(minutes, missed):
+        rep = {"interfaces": [{**_phys("ens1f0", master=None), "counters": {"rx_missed_errors": missed}},
+                              {"name": "x" * 99, "kind": "physical", "counters": {"a": "bad", "b": -1}}, "garbage"],
+               "errors": ["ens9: oops"]}
+        t = t0 + timedelta(minutes=minutes)
+        return svc.ingest(db, cluster, "w1", "10.0.0.1", "1.2.0", t.isoformat(), rep, now=t)
+
+    assert report(0, 0) == 2
+    for m in (1, 2, 3, 4):           # 5분이 안 됐으니 표본을 더하지 않는다
+        report(m, 0)
+    report(5, 0)
+    report(20, 5000)
+    from app.models.node_nic import NodeNicState
+
+    row = db.query(NodeNicState).filter(NodeNicState.cluster_id == cluster.id).one()
+    assert [h["t"][11:16] for h in row.history] == ["11:00", "11:05", "11:20"]
+    assert row.interfaces[1]["name"] == "x" * 32 and row.interfaces[1]["counters"] == {}  # 정리됨
+    db.add(NodeParamAgent(cluster_id=cluster.id, node="w-old", agent_version="1.1.0"))
+    db.commit()
+    view = svc.cluster_view(db, cluster, now=t0 + timedelta(minutes=20))
+    assert view["interfaces"][0]["rates"]["drops"] == 5000  # 11:05 기준 15분
+    assert "rx_drops" in {f["code"] for f in view["findings"]}
+    assert view["pending_agents"][0]["node"] == "w-old" and "1.2.0" in view["pending_agents"][0]["reason"]
+    assert svc.ingest(db, cluster, "w1", None, "1.2.0", None, "not-a-dict") == 0
+    svc.remove_node(db, cluster.id, "w1")
+    assert db.query(NodeNicState).filter(NodeNicState.cluster_id == cluster.id).count() == 0
+
+
+def test_report_endpoint_carries_nic(db, cluster, monkeypatch):
+    from fastapi.testclient import TestClient
+
+    from app.config import settings
+    from app.main import app
+    from app.models.node_nic import NodeNicState
+
+    monkeypatch.setattr(settings, "node_param_ingest_token", "s3cret")
+    client = TestClient(app)
+    hdr = {"Authorization": "Bearer s3cret"}
+    body = {"cluster": str(cluster.id), "node": "w1", "agent_version": "1.2.0", "runtime": {}, "persistent": {}}
+    r = client.post("/api/v1/node-params/agent/report", json=body, headers=hdr)
+    assert r.status_code == 200, r.text
+    assert r.json()["nic"] == agent_config(normalize(None)) == agent_config(DEFAULTS)
+    r = client.post("/api/v1/node-params/agent/report", json={**body, "nic": {"interfaces": [_phys("ens1f0")]}}, headers=hdr)
+    assert r.status_code == 200 and r.json()["nic_interfaces"] == 1
+    assert db.query(NodeNicState).filter(NodeNicState.cluster_id == cluster.id).count() == 1
+
+    from app.auth.deps import get_current_user, require_admin
+
+    admin = type("U", (), {"id": uuid.uuid4(), "username": "t", "role": "admin", "is_active": True})()
+    app.dependency_overrides[get_current_user] = lambda: admin
+    app.dependency_overrides[require_admin] = lambda: admin
+    try:
+        v = client.get(f"/api/v1/nic-watch/clusters/{cluster.id}")
+        assert v.status_code == 200, v.text
+        row = v.json()["interfaces"][0]
+        assert row["name"] == "ens1f0" and isinstance(row["counters"], list) and isinstance(row["offload"], list)
+        assert v.json()["settings"]["offload_expect"] == [{"name": "rx-lro", "on": False}]
+        s = client.get("/api/v1/nic-watch/settings").json()
+        assert "802.3ad" in s["options"]["bond_modes"]
+    finally:
+        app.dependency_overrides.clear()

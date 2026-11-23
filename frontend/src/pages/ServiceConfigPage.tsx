@@ -20,6 +20,7 @@ import {
   useServiceConfigStatus, useServiceConfigStatusAll,
   useServiceConfigView, useServiceConfigApplyRun, useStopServiceConfigApply,
 } from '@/hooks/useServiceConfig';
+import { useNicWatch } from '@/hooks/useNicWatch';
 import {
   ClusterSidebar, ConfirmDialog, EmptyState, ErrorState, InfoHint, LoadingState, PageShell, RunLogPanel, SegTabs,
   SelectClusterEmptyState, useToast,
@@ -28,7 +29,7 @@ import { PageHeader } from '@/components/common/PageHeader';
 import { MacCard } from '@/components/ui/MacCard';
 import { Button } from '@/components/ui/button';
 import {
-  ApplyDialog, ApplyHistoryDialog, ApplyRunPanel, ApplySettingsDialog, DriftBanner, GroupDialog, SaveVersionDialog, ServiceConfigRail,
+  ApplyDialog, ApplyHistoryDialog, ApplyRunPanel, ApplySettingsDialog, DriftBanner, GroupDialog, NicStatusView, SaveVersionDialog, ServiceConfigRail,
   ServiceSummary,
   ServiceConfigSections, VersionCompareDialog, type ApplyRequest, type DraftChange,
 } from '@/components/service-config';
@@ -50,6 +51,10 @@ const COLLECT_LABEL: Record<ServiceConfigCollectKind, string> = {
 const STATUS_LABEL: Record<string, string> = { imported: '가져옴', saved: '저장됨·미적용', applied: '적용됨', superseded: '대체됨' };
 
 type Filter = 'all' | 'flagged' | 'edited';
+/** 설정 버전 없이 상태만 보는 레일 항목 — 서비스 정의(`/service-config/services`)에는 없다. */
+const RAIL_EXTRAS = [
+  { key: 'nic', label: 'NIC', icon: 'cable', description: 'NIC 상태 — 본딩/LACP·링크·MTU·ring buffer·드롭·offload(노드 파라미터 에이전트 보고, 읽기 전용)' },
+];
 const APPLY_SUPPORTED = new Set(['linux', 'cilium', 'etcd', 'containerd', 'kube-apiserver', 'kube-controller-manager', 'kube-scheduler', 'kubelet']);
 
 function sourceSummary(view: ServiceConfigView | undefined): string {
@@ -85,16 +90,29 @@ export function ServiceConfigPage() {
   const servicesQ = useServiceConfigServices();
   const services = useMemo(() => servicesQ.data ?? [], [servicesQ.data]);
   const [params, setParams] = useUrlParams({ service: 'etcd', version: '', group: '' });
+  const isNic = params.service === 'nic';
   const service = services.some((s) => s.key === params.service) ? params.service : (services[0]?.key ?? 'etcd');
+  // NIC 화면에서는 설정 서비스 조회를 멈춘다(보이지 않는 화면을 60초마다 다시 읽지 않게).
+  const svcClusterId = isNic ? '' : clusterId;
   const groupId = params.group || null;
   const versionNo = params.version ? Number(params.version) : undefined;
   // 편집 중이 아니면 현재 값을 60초마다 다시 읽는다(노드 파라미터 에이전트 보고 주기). 편집 중엔 초안이 흔들리지 않게 멈춘다.
   const [liveView, setLiveView] = useState(true);
-  const viewQ = useServiceConfigView(clusterId, service, versionNo, groupId, liveView);
+  const viewQ = useServiceConfigView(svcClusterId, service, versionNo, groupId, liveView);
   const view = viewQ.data;
-  const statusQ = useServiceConfigStatus(clusterId, service);
+  const statusQ = useServiceConfigStatus(svcClusterId, service);
   const status = statusQ.data;
   const statusAllQ = useServiceConfigStatusAll(clusterId);
+  const nicQ = useNicWatch(clusterId);
+  const railLevels = useMemo(() => {
+    const base = { ...(statusAllQ.data?.services ?? {}) };
+    const sum = nicQ.data?.summary;
+    if (sum && (sum.level === 'critical' || sum.level === 'warning')) {
+      const top = (nicQ.data?.findings ?? []).filter((f) => f.level === sum.level).slice(0, 3).map((f) => `${f.node}${f.iface ? ` ${f.iface}` : ''} ${f.title}`);
+      base.nic = { level: sum.level, reasons: top };
+    }
+    return base;
+  }, [statusAllQ.data, nicQ.data]);
   /** 드리프트 '다시 적용' — 기준 버전·그 범위·다른 노드로 적용 대화상자를 연다. */
   const [applyTarget, setApplyTarget] = useState<{ versionNo: number; groupId: string | null; nodes: string[] } | null>(null);
 
@@ -389,8 +407,13 @@ export function ServiceConfigPage() {
           />
           {clustersLoading || servicesQ.isLoading ? <LoadingState /> : !clusterId ? <SelectClusterEmptyState /> : (
             <div className="flex gap-0 border border-border rounded-md bg-card min-h-[480px]">
-              <ServiceConfigRail services={services} selected={service} levels={statusAllQ.data?.services}
+              <ServiceConfigRail services={services} selected={isNic ? 'nic' : service} levels={railLevels} extras={RAIL_EXTRAS}
                 onSelect={(key) => guard(() => { setParams({ service: key, version: '', group: '' }); setQuery(''); })} />
+              {isNic ? (
+                <main className="flex-1 min-w-0 p-4">
+                  <NicStatusView clusterId={clusterId} isAdmin={isAdmin} />
+                </main>
+              ) : (
               <main className="flex-1 min-w-0 p-4 pb-0 space-y-3 flex flex-col">
                 <div className="flex flex-wrap items-center gap-3">
                   <h2 className="inline-flex items-center gap-1 text-lg font-semibold text-foreground">
@@ -597,6 +620,7 @@ export function ServiceConfigPage() {
                   </>
                 ) : null}
               </main>
+              )}
             </div>
           )}
         </div>

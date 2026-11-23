@@ -61,6 +61,7 @@ from app.models.bottleneck_run import BottleneckRun
 from app.models.ops_check import OpsCheckRun, OpsCheckRunItem
 from app.models.os_param_change import OsParamChange
 from app.models.node_param_watch import NodeParamAgent, NodeParamWatchRule
+from app.models.node_nic import NodeNicState
 from app.models.service_config import (
     ServiceConfigApplyRun,
     ServiceConfigChange,
@@ -174,6 +175,7 @@ __all__ = [
     "OsParamChange",
     "NodeParamWatchRule",
     "NodeParamAgent",
+    "NodeNicState",
     "ServiceConfigItem",
     "ServiceConfigVersion",
     "ServiceConfigRule",
