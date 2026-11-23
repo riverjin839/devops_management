@@ -4,7 +4,12 @@ use std::sync::atomic::{AtomicU64, Ordering};
 
 /// 한 줄 로그. Python 에이전트와 같은 포맷(`2026-01-01T00:00:00Z INFO  메시지`)이라 로그 수집 규칙이 그대로 통한다.
 pub fn log(level: &str, msg: &str) {
-    println!("{} {:<5} {}", Utc::now().format("%Y-%m-%dT%H:%M:%SZ"), level, msg);
+    println!(
+        "{} {:<5} {}",
+        Utc::now().format("%Y-%m-%dT%H:%M:%SZ"),
+        level,
+        msg
+    );
 }
 
 /// 공백(탭 포함)을 한 칸으로 — sysctl 다중 값(`4096\t131072`)을 PEP 와 같은 형태로 맞춘다.

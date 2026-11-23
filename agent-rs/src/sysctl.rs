@@ -30,7 +30,10 @@ pub fn read_runtime(params: &[String], proc_sys: &Path) -> (Map<String, Value>, 
     for p in params {
         match fs::read(param_path(proc_sys, p)) {
             Ok(raw) => {
-                values.insert(p.clone(), Value::String(norm(&String::from_utf8_lossy(&raw))));
+                values.insert(
+                    p.clone(),
+                    Value::String(norm(&String::from_utf8_lossy(&raw))),
+                );
             }
             Err(e) => match e.kind() {
                 std::io::ErrorKind::NotFound => {
@@ -55,7 +58,9 @@ fn io_reason(e: &std::io::Error) -> String {
 
 /// `(키, 값, 줄번호)` 목록. `-key = v`(적용 실패 무시 표시)는 값이 같으니 `-` 만 뗀다.
 pub fn parse_sysctl_file(path: &Path) -> Vec<(String, String, usize)> {
-    let Ok(raw) = fs::read(path) else { return Vec::new() };
+    let Ok(raw) = fs::read(path) else {
+        return Vec::new();
+    };
     let text = String::from_utf8_lossy(&raw);
     let mut out = Vec::new();
     for (i, raw_line) in text.lines().enumerate() {
@@ -66,7 +71,9 @@ pub fn parse_sysctl_file(path: &Path) -> Vec<(String, String, usize)> {
         if let Some(rest) = line.strip_prefix('-') {
             line = rest.trim();
         }
-        let Some((key, val)) = line.split_once('=') else { continue };
+        let Some((key, val)) = line.split_once('=') else {
+            continue;
+        };
         let key = key.trim().replace('/', ".");
         if !key.is_empty() {
             out.push((key, norm(val), i + 1));
@@ -94,7 +101,9 @@ pub fn host_path(f: &Path, host_root: &Path) -> PathBuf {
 pub fn sysctl_files(host_root: &Path) -> Vec<PathBuf> {
     let mut by_name: BTreeMap<String, PathBuf> = BTreeMap::new();
     for d in SYSCTL_D_DIRS {
-        let Ok(rd) = fs::read_dir(host_root.join(d)) else { continue };
+        let Ok(rd) = fs::read_dir(host_root.join(d)) else {
+            continue;
+        };
         let mut entries: Vec<PathBuf> = rd
             .filter_map(|e| e.ok().map(|e| e.path()))
             .filter(|p| p.extension().is_some_and(|x| x == "conf"))
@@ -102,7 +111,9 @@ pub fn sysctl_files(host_root: &Path) -> Vec<PathBuf> {
         entries.sort();
         for f in entries {
             if let Some(name) = f.file_name().map(|n| n.to_string_lossy().into_owned()) {
-                by_name.entry(name).or_insert_with(|| host_path(&f, host_root));
+                by_name
+                    .entry(name)
+                    .or_insert_with(|| host_path(&f, host_root));
             }
         }
     }
@@ -115,7 +126,9 @@ pub fn sysctl_files(host_root: &Path) -> Vec<PathBuf> {
 }
 
 fn glob_match(pattern: &str, name: &str) -> bool {
-    glob::Pattern::new(pattern).map(|p| p.matches(name)).unwrap_or(false)
+    glob::Pattern::new(pattern)
+        .map(|p| p.matches(name))
+        .unwrap_or(false)
 }
 
 /// 감시 파라미터의 영구 설정 값과 그 값을 정한 `파일:줄`. 어느 파일에도 없으면 결과에 없다.
@@ -133,7 +146,10 @@ pub fn read_persistent(params: &[String], host_root: &Path) -> Map<String, Value
                 params.iter().filter(|p| **p == key).collect()
             };
             for t in targets {
-                result.insert(t.clone(), json!({"value": val, "source": format!("{shown}:{lineno}")}));
+                result.insert(
+                    t.clone(),
+                    json!({"value": val, "source": format!("{shown}:{lineno}")}),
+                );
             }
         }
     }
@@ -168,10 +184,20 @@ mod tests {
         let root = tmp("pers");
         fs::create_dir_all(root.join("etc/sysctl.d")).unwrap();
         fs::create_dir_all(root.join("usr/lib/sysctl.d")).unwrap();
-        fs::write(root.join("usr/lib/sysctl.d/10-a.conf"), "vm.swappiness = 60\n").unwrap();
+        fs::write(
+            root.join("usr/lib/sysctl.d/10-a.conf"),
+            "vm.swappiness = 60\n",
+        )
+        .unwrap();
         fs::write(root.join("etc/sysctl.d/10-a.conf"), "vm.swappiness = 10\n").unwrap();
-        fs::write(root.join("etc/sysctl.d/20-b.conf"), "# c\n-vm.max_map_count=262144\nnet.core.*=1\n").unwrap();
-        let params: Vec<String> = ["vm.swappiness", "vm.max_map_count", "net.core.somaxconn"].map(String::from).to_vec();
+        fs::write(
+            root.join("etc/sysctl.d/20-b.conf"),
+            "# c\n-vm.max_map_count=262144\nnet.core.*=1\n",
+        )
+        .unwrap();
+        let params: Vec<String> = ["vm.swappiness", "vm.max_map_count", "net.core.somaxconn"]
+            .map(String::from)
+            .to_vec();
         let r = read_persistent(&params, &root);
         assert_eq!(r["vm.swappiness"]["value"], "10");
         assert_eq!(r["vm.swappiness"]["source"], "/etc/sysctl.d/10-a.conf:1");

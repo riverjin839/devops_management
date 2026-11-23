@@ -12,7 +12,7 @@
 
 ### Added
 
-- **노드 에이전트 Rust 구현(1단계)** — DaemonSet 에이전트(`node_param_agent`)를 정적 바이너리로 다시 구현하는 `agent-rs/` 크레이트 추가. sysctl 런타임·영구 설정 값, 서비스 설정 파일 해시/내용, 보고 루프를 Python 에이전트와 같은 환경 변수·보고 프로토콜로 처리한다(서버 무변경, `--dry-run` 출력이 Python 과 동일). NIC 수집·이미지·매니페스트 전환은 후속 단계.
+- **노드 에이전트 Rust 구현** — DaemonSet 에이전트(`node_param_agent`)를 정적 바이너리로 다시 구현하는 `agent-rs/` 크레이트 추가. sysctl 런타임·영구 설정 값, 서비스 설정 파일 해시/내용, 보고 루프를 Python 에이전트와 같은 환경 변수·보고 프로토콜로 처리한다(서버 무변경, `--dry-run` 출력이 Python 과 동일). NIC 상태 수집(본딩/LACP·링크·MTU·ring·offload·드롭 카운터, ethtool GET ioctl)도 같은 보고 계약으로 구현. 이미지·매니페스트 전환은 후속 단계.
 
 ## [1.104.0] - 2026-11-23
 

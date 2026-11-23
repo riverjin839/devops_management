@@ -22,8 +22,16 @@ pub fn parse_targets(v: Option<&Value>) -> Vec<Target> {
             arr.iter()
                 .filter_map(|t| t.as_object())
                 .map(|t| Target {
-                    id: t.get("id").and_then(|x| x.as_str()).unwrap_or("").to_string(),
-                    path: t.get("path").and_then(|x| x.as_str()).unwrap_or("").to_string(),
+                    id: t
+                        .get("id")
+                        .and_then(|x| x.as_str())
+                        .unwrap_or("")
+                        .to_string(),
+                    path: t
+                        .get("path")
+                        .and_then(|x| x.as_str())
+                        .unwrap_or("")
+                        .to_string(),
                 })
                 .collect()
         })
@@ -31,7 +39,11 @@ pub fn parse_targets(v: Option<&Value>) -> Vec<Target> {
 }
 
 /// `{id: {path, sha256, content?}}` 또는 `{id: {path, error}}`. `sent`(id → 마지막으로 보낸 해시)와 같으면 내용은 뺀다.
-pub fn read_files(targets: &[Target], host_root: &Path, sent: &HashMap<String, String>) -> Map<String, Value> {
+pub fn read_files(
+    targets: &[Target],
+    host_root: &Path,
+    sent: &HashMap<String, String>,
+) -> Map<String, Value> {
     let mut out = Map::new();
     for t in targets {
         if t.id.is_empty() || !t.path.starts_with('/') {
@@ -39,17 +51,27 @@ pub fn read_files(targets: &[Target], host_root: &Path, sent: &HashMap<String, S
         }
         let p = host_path(&host_root.join(t.path.trim_start_matches('/')), host_root);
         if !p.is_file() {
-            out.insert(t.id.clone(), json!({"path": t.path, "error": "파일 없음(마운트 확인)"}));
+            out.insert(
+                t.id.clone(),
+                json!({"path": t.path, "error": "파일 없음(마운트 확인)"}),
+            );
             continue;
         }
         let mut raw = Vec::new();
-        let read = fs::File::open(&p).and_then(|f| f.take(FILE_MAX as u64 + 1).read_to_end(&mut raw));
+        let read =
+            fs::File::open(&p).and_then(|f| f.take(FILE_MAX as u64 + 1).read_to_end(&mut raw));
         if let Err(e) = read {
-            out.insert(t.id.clone(), json!({"path": t.path, "error": format!("{:?}: {e}", e.kind())}));
+            out.insert(
+                t.id.clone(),
+                json!({"path": t.path, "error": format!("{:?}: {e}", e.kind())}),
+            );
             continue;
         }
         if raw.len() > FILE_MAX {
-            out.insert(t.id.clone(), json!({"path": t.path, "error": format!("{FILE_MAX} 바이트 초과")}));
+            out.insert(
+                t.id.clone(),
+                json!({"path": t.path, "error": format!("{FILE_MAX} 바이트 초과")}),
+            );
             continue;
         }
         let text = String::from_utf8_lossy(&raw).into_owned();
@@ -78,8 +100,14 @@ mod tests {
         fs::create_dir_all(root.join("etc/containerd")).unwrap();
         fs::write(root.join("etc/containerd/config.toml"), "version = 2\n").unwrap();
         let t = vec![
-            Target { id: "c".into(), path: "/etc/containerd/config.toml".into() },
-            Target { id: "m".into(), path: "/etc/none".into() },
+            Target {
+                id: "c".into(),
+                path: "/etc/containerd/config.toml".into(),
+            },
+            Target {
+                id: "m".into(),
+                path: "/etc/none".into(),
+            },
         ];
         let first = read_files(&t, &root, &HashMap::new());
         assert_eq!(first["c"]["content"], "version = 2\n");
