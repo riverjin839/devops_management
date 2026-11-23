@@ -1,14 +1,14 @@
 # 01. 선언형 서비스 정의
 
-## 원형 (Ambari)
-- `ambari-server/src/main/resources/stacks/BIGTOP/3.2.0/services/<SERVICE>/` — 서비스 1개 = 폴더 1개
+## 원형 (KM)
+- `stacks/<STACK>/<버전>/services/<SERVICE>/` — 서비스 1개 = 폴더 1개
   - `metainfo.xml` 컴포넌트·분류(MASTER/SLAVE/CLIENT)·카디널리티(`1+`)·명령 스크립트·타임아웃·커스텀 명령
   - `configuration/*.xml` 설정 타입과 기본값 · `service_advisor.py` 추천/검증
   - `alerts.json` · `telemetry.json` · `role_command_order.json` · `quicklinks/` · `themes/`
-- `3.3.0/metainfo.xml` 의 `<extends>3.2.0</extends>` — 바뀐 부분만 덮어쓰는 상속
+- 상위 버전 `metainfo.xml` 의 `<extends>이전버전</extends>` — 바뀐 부분만 덮어쓰는 상속
 
 ## 핵심 계약
-엔진(Server/Agent)은 서비스 이름을 모른다. 서비스 지식 = 선언 파일. 새 서비스 추가 = 폴더 추가(또는 mpack).
+엔진(Server/Agent)은 서비스 이름을 모른다. 서비스 지식 = 선언 파일. 새 서비스 추가 = 폴더 추가(또는 관리팩).
 
 ## PEP 이식
 - 대응: `services/service_config/catalog_seed.py`(`ServiceConfigItem`·`ServiceConfigRule` 시드) + `apply.py` 의
@@ -17,7 +17,7 @@
 - 이식안: `ServiceDefinition` 개념을 AppSetting(`service_config.definitions`) 또는 테이블로 모은다.
   - 필드: `service`, `components[{name, category, cardinality, health_cmd, restart_cmd, timeout_s}]`,
     `quicklinks[{label, url_template}]`(예: `https://{{node}}:2379/health`), `extends`(기본 정의 키)
-  - 값 참조 문법은 Ambari 처럼 `{{config_type/key}}` — 현재 설정 버전 값으로 렌더(코드 eval 금지, 치환만).
+  - 값 참조 문법은 KM 정의처럼 `{{config_type/key}}` — 현재 설정 버전 값으로 렌더(코드 eval 금지, 치환만).
 - 화면: `/k8s-services` 서비스 레일의 서비스 상세에 "정의" 탭(조회 + operator 편집).
 
 ## 체크리스트

@@ -1,7 +1,7 @@
 # 07. 자동 복구 예산
 
-## 원형 (Ambari)
-- `ambari-agent/src/main/python/ambari_agent/RecoveryManager.py` 기본값
+## 원형 (KM)
+- 노드 에이전트 `RecoveryManager` 기본값
   `max_count=6`, `window_in_min=60`, `retry_gap=5`, `max_lifetime_count=12`
 - desired=STARTED, current=INSTALLED → Agent 가 같은 명령 스크립트로 START. 예산 초과 → RECOVERY 알람으로 사람 호출
 - 다른 명령 실행 중(`has_active_command`)이면 복구 보류

@@ -1,7 +1,7 @@
 # 03. 집계 알람 (AGGREGATE) + reporting 템플릿
 
-## 원형 (Ambari)
-- `stacks/BIGTOP/3.2.0/services/ZOOKEEPER/alerts.json`
+## 원형 (KM)
+- 서비스 정의의 `alerts.json` (예: ZooKeeper)
   - 호스트 알람 `zookeeper_server_process` (source.type=PORT, `{{zoo.cfg/clientPort}}`, 1.5s warn)
   - 서비스 알람 `zookeeper_server_process_percent` (source.type=AGGREGATE, warn 35% · crit 70%)
 - source 타입: PORT · WEB · METRIC · SCRIPT (Agent 판정) / AGGREGATE · SERVER (Server 판정) / RECOVERY

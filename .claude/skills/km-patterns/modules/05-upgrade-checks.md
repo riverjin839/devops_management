@@ -1,9 +1,9 @@
 # 05. 업그레이드 사전 점검 레지스트리
 
-## 원형 (Ambari)
-- SPI: `ambari-server-spi/.../spi/upgrade/{UpgradeCheck, UpgradeCheckDescription, UpgradeCheckGroup,
+## 원형 (KM)
+- SPI: `spi/upgrade/{UpgradeCheck, UpgradeCheckDescription, UpgradeCheckGroup,
   UpgradeCheckStatus, UpgradeCheckType, CheckQualification}.java`
-- 레지스트리: `ambari-server/.../checks/UpgradeCheckRegistry.java` (+ 플러그인 로딩 `PluginChecksLoadedCheck`)
+- 레지스트리: `UpgradeCheckRegistry` (+ 플러그인 로딩 `PluginChecksLoadedCheck`)
 - 체크 예: `HostsHeartbeatCheck` `ServicesUpCheck` `HostMaintenanceModeCheck` `PreviousUpgradeCompleted`
   `ComponentsInstallationCheck` `ConfigurationMergeCheck` `VersionMismatchCheck`
 - 각 체크 = 그룹 + 결과(PASS/WARNING/FAIL/BYPASS) + 적용 조건(업그레이드 종류별)

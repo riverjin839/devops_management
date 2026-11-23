@@ -1,10 +1,9 @@
 # 08. 텔레메트리 할당 (control plane / data plane 분리)
 
-## 원형 (Ambari)
-- `docs/ambari-agent-prometheus-telemetry-architecture.md`
+## 원형 (KM)
 - Stack `telemetry.json`(포맷·경로·설정 참조·HA 접두사·타임아웃·응답 상한) + 토폴로지 + 실효 설정
   → Server 가 호스트별 할당 컴파일 → STOMP `telemetry-v1` 배포 → Agent 는 **last-known-good** 할당만 저장
-- 데이터: vmagent ← Ambari HTTP SD → Agent `/metrics`, `/metrics/components/{routeId}` → VictoriaMetrics
+- 데이터: vmagent ← KM 서버 HTTP SD → Agent `/metrics`, `/metrics/components/{routeId}` → VictoriaMetrics
 - routeId 는 Server 발급 → 임의 URL 프록시 불가(모르는 경로 404). 라벨 카디널리티 상한을 계약으로 둠
 
 ## 핵심 계약

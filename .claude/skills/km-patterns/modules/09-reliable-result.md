@@ -1,7 +1,7 @@
 # 09. 구조화 결과 판정 (Reliable State And Result Checks)
 
-## 원형 (Ambari)
-- 레포 루트 `AGENTS.md` §Reliable State And Result Checks:
+## 원형 (KM)
+- KM 작업 규칙 §Reliable State And Result Checks:
   - 로그 메시지·사람용 CLI 출력·키워드·퍼지 문자열로 상태/성공/권한/버전을 추론하지 않는다
   - 권위 있는 API 필드, 타입 있는 결과, 문서화된 상태/오류 코드, 정확한 식별자로 판단
   - 프로세스 exit 0 만으로 업무 작업 완료를 증명하지 않는다 — 결과와 요청/작업 ID 계보 확인

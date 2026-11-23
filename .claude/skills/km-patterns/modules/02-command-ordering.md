@@ -1,11 +1,11 @@
 # 02. 명령 선후 그래프 (role_command_order → Stage)
 
-## 원형 (Ambari)
-- `stacks/BIGTOP/3.3.0/role_command_order.json`
+## 원형 (KM)
+- `role_command_order.json`
   - 형식: `"막히는ROLE-COMMAND": ["먼저끝날ROLE-COMMAND", ...]`
   - `general_deps`(항상) + 조건부 섹션(`namenode_optional_ha`, `optional_no_glusterfs` …)
   - 정지는 역방향을 따로 선언: `"ZOOKEEPER_SERVER-STOP": ["HBASE_MASTER-STOP", ...]`
-- `ambari-server/.../stageplanner/RoleGraph.java` — 그래프 위상 정렬 → 같은 레벨 = 한 Stage(병렬), 레벨 순서대로 실행
+- RoleGraph(stage planner) — 그래프 위상 정렬 → 같은 레벨 = 한 Stage(병렬), 레벨 순서대로 실행
 
 ## 핵심 계약
 요청 1건 = Stage N개. Stage 안 Task 는 병렬, Stage 사이는 직렬. 앞 Stage 실패 시 뒤 Stage 미실행(또는 재시도 정책).

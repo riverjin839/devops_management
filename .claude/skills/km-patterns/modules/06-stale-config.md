@@ -1,6 +1,6 @@
 # 06. 재시작 대기 표시 (stale config)
 
-## 원형 (Ambari)
+## 원형 (KM)
 - host_component 마다 `stale_configs` 플래그 — 저장된 desired config 태그 ≠ 실제 로딩된 태그
 - Agent `RecoveryManager.update_config_staleness`, `ActualConfigHandler.py` 가 실제 적용 태그 보고
 - UI: 서비스/호스트에 "Restart Required" + 영향 컴포넌트만 재시작 버튼

@@ -1,6 +1,6 @@
 # 04. 유지보수 모드 (Maintenance Mode)
 
-## 원형 (Ambari)
+## 원형 (KM)
 - 호스트·서비스·컴포넌트 단위 `maintenance_state` (ON/OFF, 상위 상속)
 - 효과: 알람 알림 억제(상태는 계속 계산) + 일괄 작업(롤링 재시작 등) 대상에서 기본 제외
 - 업그레이드 체크 `HostMaintenanceModeCheck` · `ServicesMaintenanceModeCheck` 가 이를 입력으로 씀
