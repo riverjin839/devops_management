@@ -2649,6 +2649,14 @@ export const dailyReportApi = {
 // ── 서비스 구성 — 설정 목록·현재 값(수집 스냅샷)·설정 버전(JWT). 노드 실행 없음 ──
 const toEntries = (values: Record<string, string | null>) =>
   Object.entries(values).map(([key, value]) => ({ key, value }));
+/** NIC 상태(서비스 구성 ▸ NIC) — 노드 파라미터 에이전트 보고의 읽기 전용 판정. 설정 저장은 admin. */
+export const nicWatchApi = {
+  cluster: (clusterId: string) => api.get<import('@/types').NicClusterView>(`/nic-watch/clusters/${clusterId}`),
+  settings: () => api.get<import('@/types').NicWatchSettingsOut>('/nic-watch/settings'),
+  updateSettings: (body: Partial<import('@/types').NicWatchSettings>) =>
+    api.put<import('@/types').NicWatchSettingsOut>('/nic-watch/settings', body),
+};
+
 export const serviceConfigApi = {
   services: () => api.get<{ items: import('@/types').ServiceConfigServiceDef[] }>('/service-config/services'),
   /** 서비스별 수준·사유(레일 상태 점). 아래 status 는 한 서비스 전체. */

@@ -10,14 +10,16 @@
    + 마지막에 ``/etc/sysctl.conf``.
 3. 서비스 구성 설정 파일(응답의 ``files`` — containerd ``config.toml``·kubelet ``config.yaml`` 경로, PEP 적용 설정에서 바꿈)을
    ``HOST_ROOT`` 아래에서 읽어 해시가 바뀐 것만 내용을 함께 보낸다(변경 감지·알람용, 256 KB 상한).
-4. ``POST {PEP_API_URL}/node-params/agent/report`` — 응답의 ``params``·``files``·``interval_sec`` 로 다음 주기를 정한다.
+4. NIC 상태(응답의 ``nic`` 설정이 켜져 있을 때 — 본딩/LACP·링크·MTU·ring buffer·offload·드롭 카운터, ``nic.py``)를 읽는다.
+5. ``POST {PEP_API_URL}/node-params/agent/report`` — 응답의 ``params``·``files``·``nic``·``interval_sec`` 로 다음 주기를 정한다.
    감시 대상은 PEP 화면에서 편집한다(첫 보고는 빈 목록 → 응답으로 목록을 받고 바로 다시 보고).
 
 환경 변수: ``PEP_API_URL``(…/api/v1) · ``NODE_PARAM_INGEST_TOKEN`` · ``PEP_CLUSTER``(UUID 또는 이름) ·
 ``NODE_NAME`` · ``HOST_IP`` · ``HOST_ROOT``(호스트 설정 파일 마운트 위치, 기본 ``/host``) ·
 ``PEP_TLS_VERIFY``(기본 true) · ``PEP_CA_FILE``(사설 CA, 선택) · ``PROC_SYS``(기본 ``/proc/sys``).
 
-점검용: ``python -m app.node_param_agent --dry-run --param net.core.somaxconn`` — 보내지 않고 읽은 값만 출력.
+점검용: ``python -m app.node_param_agent --dry-run --param net.core.somaxconn`` — 보내지 않고 읽은 값만 출력
+(``--nic`` 을 붙이면 NIC 상태도 함께 출력).
 """
 from __future__ import annotations
 
@@ -37,7 +39,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Optional
 
-AGENT_VERSION = "1.1.0"
+AGENT_VERSION = "1.2.0"
 FILE_MAX = 256 * 1024
 
 # systemd-sysctl 우선순위 — 같은 파일 이름이면 앞 디렉터리가 이긴다.
@@ -225,6 +227,7 @@ def run(once: bool = False) -> int:
     log("INFO", f"시작 v{AGENT_VERSION} node={node} host_ip={host_ip or '-'} cluster={cluster} → {url} (TLS 검증 {'켬' if verify else '끔'})")
     params: list[str] = []
     file_targets: list[dict[str, str]] = []
+    nic_cfg: Optional[dict[str, Any]] = None  # 첫 응답 전엔 모른다 — 받은 뒤부터 수집(끄면 보내지 않는다)
     sent_hashes: dict[str, str] = {}
     interval = 60
     failures = 0
@@ -232,11 +235,21 @@ def run(once: bool = False) -> int:
         runtime, errors = read_runtime(params, proc_sys)
         persistent = read_persistent(params, host_root) if params else {}
         files = read_files(file_targets, host_root, sent_hashes)
+        nic_report = None
+        if nic_cfg and nic_cfg.get("enabled"):
+            try:
+                from app.node_param_agent import nic as N
+
+                nic_report = N.collect(nic_cfg)
+            except Exception as exc:  # noqa: BLE001 — NIC 수집 실패가 파라미터 보고를 막지 않는다
+                nic_report = {"interfaces": [], "errors": [f"NIC 수집 실패 {type(exc).__name__}: {exc}"]}
         payload = {
             "cluster": cluster, "node": node, "host_ip": host_ip, "agent_version": AGENT_VERSION,
             "collected_at": datetime.now(timezone.utc).isoformat(),
             "runtime": runtime, "persistent": persistent, "errors": errors, "files": files,
         }
+        if nic_report is not None:
+            payload["nic"] = nic_report
         first_list = False
         try:
             resp = post_report(url, token, payload, ctx)
@@ -254,18 +267,25 @@ def run(once: bool = False) -> int:
                 first_list = first_list or (not file_targets and bool(new_targets))
                 file_targets = new_targets
                 sent_hashes = {}
+            new_nic = resp.get("nic") if isinstance(resp.get("nic"), dict) else None
+            if new_nic is not None and nic_cfg is None and new_nic.get("enabled"):
+                first_list = True  # NIC 설정을 막 받았다 — 바로 NIC 상태까지 보고
+            nic_cfg = new_nic
             interval = int(resp.get("interval_sec") or interval)
             log("INFO", (
                 f"보고 완료 파라미터 {len(runtime)}개 · 영구 설정 {len(persistent)}개 · 변경 {resp.get('changes', 0)}건 · "
                 f"기준 위반 {resp.get('violations', 0)} · 영구 설정 불일치 {resp.get('mismatches', 0)} · "
                 f"알람 열림 {resp.get('alerts_opened', 0)}/닫힘 {resp.get('alerts_resolved', 0)} · "
-                f"설정 파일 {len(files)}개(저장 {len(resp.get('files_stored') or [])}) · 다음 {interval}초 뒤"
+                f"설정 파일 {len(files)}개(저장 {len(resp.get('files_stored') or [])}) · "
+                f"NIC {len(nic_report['interfaces']) if nic_report else '-'}개 · 다음 {interval}초 뒤"
             ))
             for e in errors:
                 log("WARN", f"읽기 오류 {e}")
             for fid, f in files.items():
                 if f.get("error"):
                     log("WARN", f"설정 파일 {fid} {f.get('path')}: {f['error']}")
+            for e in (nic_report or {}).get("errors") or []:
+                log("WARN", f"NIC 읽기 오류 {e}")
             for e in resp.get("file_errors") or []:
                 log("WARN", f"설정 파일 처리 오류(서버) {e}")
         except urllib.error.HTTPError as exc:
@@ -289,13 +309,18 @@ def run(once: bool = False) -> int:
     return 0
 
 
-def dry_run(params: list[str]) -> int:
+def dry_run(params: list[str], with_nic: bool = False) -> int:
     host_root = Path(os.environ.get("HOST_ROOT", "/host"))
     proc_sys = Path(os.environ.get("PROC_SYS", "/proc/sys"))
     runtime, errors = read_runtime(params, proc_sys)
     persistent = read_persistent(params, host_root)
-    print(json.dumps({"runtime": runtime, "persistent": persistent, "errors": errors,
-                      "files": [str(f) for f in sysctl_files(host_root)]}, ensure_ascii=False, indent=2))
+    out: dict[str, Any] = {"runtime": runtime, "persistent": persistent, "errors": errors,
+                           "files": [str(f) for f in sysctl_files(host_root)]}
+    if with_nic:
+        from app.node_param_agent import nic as N
+
+        out["nic"] = N.collect()
+    print(json.dumps(out, ensure_ascii=False, indent=2))
     return 0
 
 
@@ -304,9 +329,10 @@ def main(argv: Optional[list[str]] = None) -> int:
     ap.add_argument("--once", action="store_true", help="한 번만 보고하고 종료")
     ap.add_argument("--dry-run", action="store_true", help="보내지 않고 읽은 값만 출력")
     ap.add_argument("--param", action="append", default=[], help="--dry-run 에서 읽을 파라미터(여러 번)")
+    ap.add_argument("--nic", action="store_true", help="--dry-run 에서 NIC 상태(기본 선택 규칙)도 출력")
     args = ap.parse_args(argv)
     if args.dry_run:
-        return dry_run(args.param)
+        return dry_run(args.param, args.nic)
     signal.signal(signal.SIGTERM, _on_signal)
     signal.signal(signal.SIGINT, _on_signal)
     return run(once=args.once)

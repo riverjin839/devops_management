@@ -92,6 +92,7 @@ from app.routers import (
     k8s_allocation_router,
     k8s_efficiency_router,
     node_param_watch_router,
+    nic_watch_router,
     node_param_ingest_router,
     service_config_router,
     ns_migration_router,
@@ -2680,7 +2681,7 @@ install_logging()  # 앱 로그 줄마다 [req=요청ID] — services/request_co
 app = FastAPI(
     title=settings.app_name,
     description="DevOps K8s Daily Monitoring Dashboard API",
-    version="1.100.0",
+    version="1.103.0",
     docs_url="/docs",
     redoc_url="/redoc",
     lifespan=lifespan,
@@ -2851,6 +2852,8 @@ app.include_router(k8s_efficiency_router, prefix="/api/v1", dependencies=_cluste
 # 먼저 include 해 같은 prefix 의 무인증 경로가 우선 매칭되게 하고, 나머지(규칙·상태·매니페스트)는 JWT.
 app.include_router(node_param_ingest_router, prefix="/api/v1")
 app.include_router(node_param_watch_router, prefix="/api/v1", dependencies=_cluster_scoped)
+# NIC 상태(본딩/LACP·링크·MTU·ring buffer·드롭·offload) — 에이전트 보고의 nic 필드를 저장, 서비스 구성 ▸ NIC 화면(읽기 전용).
+app.include_router(nic_watch_router, prefix="/api/v1", dependencies=_cluster_scoped)
 # 서비스 구성(etcd·containerd·cilium·OS 설정 목록·현재 값·설정 버전) — K8S 허브 ▸ 구성.
 app.include_router(service_config_router, prefix="/api/v1", dependencies=_cluster_scoped)
 # NS 마이그레이션(개발 → 운영) — 소스 read·타깃 operate 는 body 의 클러스터라 라우터가 직접 검사한다.
@@ -2904,7 +2907,7 @@ app.include_router(cluster_access_grants_router, prefix="/api/v1", dependencies=
 def root():
     return {
         "name": settings.app_name,
-        "version": "1.100.0",
+        "version": "1.103.0",
         "status": "running"
     }
 

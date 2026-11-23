@@ -64,6 +64,17 @@ PEP 서비스 구성의 변경 감지·알람용으로 containerd `config.toml` 
 - 에이전트는 비 root(65534)라 권한 600 파일(kubelet 인증서 키 등)은 읽지 못합니다 — 설정 파일(보통 644)만 읽습니다.
 - 이전 버전(1.0.x) 에이전트는 파일을 보고하지 않습니다 — 이 매니페스트로 **재배포**해야 CONTAINERD·KUBELET 변경 감지가 동작합니다.
 
+## NIC 상태 보고 (에이전트 1.2.0+)
+
+PEP 서비스 구성 ▸ **NIC** 화면용으로 노드 인터페이스 상태를 함께 보고합니다 — 본딩/LACP(`/proc/net/bonding`),
+링크 속도·duplex·MTU·carrier 변화·통계 카운터(`/sys/class/net`), ring buffer·드라이버·offload·드라이버 통계(ethtool 조회 ioctl).
+
+- **추가 마운트·권한이 필요 없습니다.** `hostNetwork` 라 노드 인터페이스가 보이고, ethtool 조회(GET) 명령은 커널이
+  권한 없이 허용합니다(`ethtool` 바이너리·`CAP_NET_ADMIN` 불필요). 드라이버가 지원하지 않는 항목은 비워 보냅니다.
+- 수집 대상(인터페이스 종류·포함/제외 이름)과 켜기/끄기는 보고 응답(`nic`)으로 받습니다 — PEP 화면 ▸ NIC 설정에서 바꿉니다.
+- 1.1.x 이하 에이전트는 NIC 를 보고하지 않습니다 — 이미지 태그를 올려 **재배포**하면 됩니다(매니페스트 변경 없음).
+- 점검: `python -m app.node_param_agent --dry-run --nic` — 보내지 않고 읽은 NIC 상태를 출력합니다.
+
 ## 영구 설정 값 계산 규칙
 
 systemd-sysctl 과 같습니다. `sysctl.d` 디렉터리(`/etc` > `/run` > `/usr/local/lib` > `/usr/lib` > `/lib`)의 `*.conf` 를
