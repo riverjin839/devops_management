@@ -34,6 +34,9 @@ class ServiceConfigItem(Base):
     unit = Column(String(16), nullable=True)
     options = Column(JSONB, nullable=True)                         # enum 선택지
     default_value = Column(String(500), nullable=True)
+    # 수치형(int·size) 화면 막대의 끌기 범위(선택) — 비어 있으면 0 ~ 값에 맞춘 눈금.
+    min_value = Column(String(64), nullable=True)
+    max_value = Column(String(64), nullable=True)
     # 바뀌면 무엇이 일어나는가 — immediate(즉시) | restart_member | restart_service | rolling_restart_ds | reboot
     restart_scope = Column(String(32), nullable=False, default="immediate")
     # 현재 값을 읽을 출처 키 — 서비스마다 의미가 다르다(etcd: {"flag","env"}, containerd: {"paths":[...]}, cilium/linux: {"key"}).

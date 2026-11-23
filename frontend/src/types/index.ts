@@ -6696,6 +6696,9 @@ export interface ServiceConfigRow {
   unit: string | null;
   options: string[] | null;
   defaultValue: string | null;
+  /** 수치형 막대 끌기 범위(선택). */
+  minValue?: string | null;
+  maxValue?: string | null;
   restartScope: ServiceConfigRestartScope;
   /** 선택 범위의 실효 값(그룹이면 재정의 ?? 기본). */
   versionValue: string | null;

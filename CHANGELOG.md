@@ -10,6 +10,9 @@
 
 1.104.0 이후 main 에 병합된 변경 (다음 릴리스 후보).
 
+### Changed
+- **서비스 구성 — 수치형 설정 막대 그래프·끌어서 값 변경**: 정수·크기 항목은 VALUE 칸에 설정 값·노드 현재 값·기본값을 위아래 막대로 비교하고(수치는 오른쪽, 노드마다 다르면 값별 막대·경고색), 설정 막대를 끌거나 키보드(←/→·PgUp/PgDn·Home/End)로 값을 바꾼다. 눈금은 값에 맞춰 잡히고 끝까지 끌면 늘어나며, swappiness·imageGC %·maxPods·CIDR 마스크 등은 정해진 범위 안에서만 움직인다(항목 `min_value`/`max_value`, DB 행). Frontend: `NumericBars`. Backend: `service_config_items.min_value`·`max_value`(+ 시드 범위).
+
 ## [1.104.0] - 2026-11-23
 
 ### Changed

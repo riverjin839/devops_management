@@ -1503,6 +1503,9 @@ def _run_migrations():
     if "service_config_apply_runs" in inspector.get_table_names():
         _safe_create_index("ix_service_config_apply_runs_lookup", "service_config_apply_runs",
                            "(cluster_id, service, started_at DESC)")
+    if "service_config_items" in inspector.get_table_names():
+        _safe_add_column("service_config_items", "min_value", "VARCHAR(64)")
+        _safe_add_column("service_config_items", "max_value", "VARCHAR(64)")
     if "service_config_changes" in inspector.get_table_names():
         _safe_create_index("ix_service_config_changes_lookup", "service_config_changes",
                            "(cluster_id, service, detected_at DESC)")
