@@ -1275,7 +1275,7 @@ hover 시 flyout 자체가 라벨을 보여주므로 이름만 뜨는 중복 툴
   - JWT(`_cluster_scoped`): `GET /node-params/clusters/{id}/nodes` · `/changes` · `/manifest`, `DELETE /node-params/clusters/{id}/agents/{agent_id}`(operator), `GET/POST /node-params/rules` · `PUT/DELETE /node-params/rules/{id}`(operator, 공통 규칙은 admin, 클러스터 규칙은 그 클러스터 operate), `GET/PUT /node-params/settings`(PUT admin). 감사 `node_params.rule.*`·`node_params.agent.delete`·`node_params.settings.update`.
   - 서비스 `services/node_param_watch/`(`rules` 순수 판정 · `service` 보고 처리·상태·워치독·기본 규칙 시드 · `settings` AppSetting `node_param_watch.settings` · `manifest`). 모델 `models/node_param_watch.py`(`NodeParamWatchRule`·`NodeParamAgent`), 값 이력은 `cluster_config_snapshots`(component `node_params:{node}`, 값이 바뀔 때만 새 행) + `os_param_changes`(`extra.source="agent"`).
   - 알람(`alert_router.route_and_notify` 재사용): `NodeParamChanged`(변경 1회=1건) · `NodeParamBaselineViolation` · `NodeParamNotPersisted`(상태 전이 때만 열고 해소되면 resolved) · `NodeParamAgentOffline`(Celery Beat `node-param-agent-watchdog` 5분).
-  - 에이전트: `python -m app.node_param_agent`(backend 이미지 재사용, 표준 라이브러리만), 배포 번들 `deploy/k8s/node-param-agent/`.
+  - 에이전트: 전용 Rust 이미지 `…/node-agent`(`agent-rs/`, 정적 바이너리 — 노드 500대 기준 상주 메모리·이미지 크기 최소화). `agent_image` 가 backend 이미지면 Python 에이전트(`python -m app.node_param_agent`)로 렌더(하위 호환). 배포 번들 `deploy/k8s/node-param-agent/`.
 - **요청사항 (수정 요청)**:
   - _(여기에 개선/수정 요청을 직접 적어주세요)_
 
