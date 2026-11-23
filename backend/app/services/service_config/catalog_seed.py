@@ -9,6 +9,8 @@
 - containerd : ``{"paths": ["<평탄화 경로>", ...]}`` — config v2/v3 경로 차이 때문에 후보를 차례로 본다
 - cilium     : ``{"key": "<cilium-config 키>"}``
 - linux      : ``{"key": "<sysctl 이름>"}``
+- kube-apiserver·kube-controller-manager·kube-scheduler : ``{"flag": "<--플래그 이름>"}`` (정적 파드 command 플래그)
+- kubelet    : ``{"path": "<KubeletConfiguration 평탄화 경로>"}`` — 점이 든 키는 따옴표(``evictionHard."memory.available"``)
 """
 from __future__ import annotations
 
@@ -30,7 +32,20 @@ SERVICES: list[dict[str, Any]] = [
     {"key": "linux", "label": "LINUX (OS)", "icon": "cpu",
      "description": "노드 커널 파라미터(sysctl). 노드 파라미터 에이전트 보고를 우선 쓰고, 없으면 SSH 수집 값을 쓴다.",
      "collect_kinds": ["kernel-params"]},
+    {"key": "kube-apiserver", "label": "KUBE-APISERVER", "short": "APISERVER", "icon": "server",
+     "description": "컨트롤 플레인 API 서버(정적 파드). kube-system 의 컨트롤 플레인 파드 플래그를 K8S API 로 노드별로 읽는다.",
+     "collect_kinds": ["static-pods"]},
+    {"key": "kube-controller-manager", "label": "KUBE-CONTROLLER-MANAGER", "short": "CONTROLLER", "icon": "cog",
+     "description": "컨트롤러 매니저(정적 파드). 컨트롤 플레인 파드 플래그를 K8S API 로 노드별로 읽는다.",
+     "collect_kinds": ["static-pods"]},
+    {"key": "kube-scheduler", "label": "KUBE-SCHEDULER", "short": "SCHEDULER", "icon": "calendar",
+     "description": "스케줄러(정적 파드). 컨트롤 플레인 파드 플래그를 K8S API 로 노드별로 읽는다.",
+     "collect_kinds": ["static-pods"]},
+    {"key": "kubelet", "label": "KUBELET", "icon": "boxes",
+     "description": "노드 에이전트. 노드의 kubelet 설정 파일(KubeletConfiguration, 보통 /var/lib/kubelet/config.yaml)을 SSH 로 읽는다.",
+     "collect_kinds": ["kubelet-config"]},
 ]
+STATIC_POD_SERVICES = ("kube-apiserver", "kube-controller-manager", "kube-scheduler")
 SERVICE_KEYS = tuple(s["key"] for s in SERVICES)
 
 _CRI2 = 'plugins."io.containerd.grpc.v1.cri"'
@@ -55,6 +70,30 @@ def _cil(section, key, label, vtype="string", default=None, help_=None, options=
     return {"service": "cilium", "section": section, "key": key, "label": label, "value_type": vtype,
             "default_value": default, "help": help_, "options": options, "restart_scope": "rolling_restart_ds",
             "source_keys": {"key": key}}
+
+
+def _cp(service, section, key, label, vtype="string", default=None, help_=None, options=None, unit=None):
+    return {"service": service, "section": section, "key": key, "label": label, "value_type": vtype, "unit": unit,
+            "default_value": default, "help": help_, "options": options, "restart_scope": "restart_static_pod",
+            "source_keys": {"flag": key}}
+
+
+def _api(*a, **kw):
+    return _cp("kube-apiserver", *a, **kw)
+
+
+def _kcm(*a, **kw):
+    return _cp("kube-controller-manager", *a, **kw)
+
+
+def _sch(*a, **kw):
+    return _cp("kube-scheduler", *a, **kw)
+
+
+def _kl(section, key, label, vtype="string", default=None, help_=None, options=None, path=None, unit=None):
+    return {"service": "kubelet", "section": section, "key": key, "label": label, "value_type": vtype, "unit": unit,
+            "default_value": default, "help": help_, "options": options, "restart_scope": "restart_kubelet",
+            "source_keys": {"path": path or key}}
 
 
 def _os(section, key, label, vtype="int", default=None, help_=None, scope="immediate"):
@@ -157,6 +196,84 @@ ITEMS: list[dict[str, Any]] = [
     _os("커널", "kernel.pid_max", "PID 상한", "int", "4194304"),
     _os("커널", "kernel.panic", "패닉 뒤 재부팅 대기(초)", "int", "0"),
     _os("커널", "kernel.panic_on_oops", "oops 시 패닉", "int", "0"),
+    # ── KUBE-APISERVER ──
+    _api("요청 처리", "max-requests-inflight", "동시 처리 읽기 요청 상한", "int", "400",
+         "넘으면 429 로 거절한다. APF(API Priority and Fairness)가 켜져 있으면 전체 동시성 예산으로 쓰인다."),
+    _api("요청 처리", "max-mutating-requests-inflight", "동시 처리 쓰기 요청 상한", "int", "200"),
+    _api("요청 처리", "request-timeout", "요청 제한 시간", "duration", "1m0s"),
+    _api("요청 처리", "min-request-timeout", "watch 최소 제한 시간(초)", "int", "1800"),
+    _api("클러스터", "service-node-port-range", "NodePort 범위", "string", "30000-32767"),
+    _api("클러스터", "service-cluster-ip-range", "서비스 CIDR", "string", None,
+         "바꾸면 기존 서비스 IP 와 충돌한다 — 운영 중 변경은 사실상 불가. 컨트롤러 매니저 값과 같아야 한다."),
+    _api("클러스터", "event-ttl", "이벤트 보존 시간", "duration", "1h0m0s",
+         "길게 잡으면 etcd 크기가 늘어난다."),
+    _api("클러스터", "default-not-ready-toleration-seconds", "NotReady 노드 파드 축출 대기(초)", "int", "300"),
+    _api("클러스터", "default-unreachable-toleration-seconds", "Unreachable 노드 파드 축출 대기(초)", "int", "300"),
+    _api("보안", "enable-admission-plugins", "추가로 켤 어드미션 플러그인", "string", "NodeRestriction"),
+    _api("보안", "anonymous-auth", "익명 요청 허용", "bool", "true"),
+    _api("보안", "profiling", "/debug/pprof 프로파일링", "bool", "true", "보안 기준(CIS)은 false 를 권장한다."),
+    _api("감사 로그", "audit-log-path", "감사 로그 경로", "string", None, "비어 있으면 감사 로그를 남기지 않는다."),
+    _api("감사 로그", "audit-log-maxage", "감사 로그 보존 일수", "int", None),
+    _api("감사 로그", "audit-log-maxbackup", "감사 로그 보관 파일 수", "int", None),
+    _api("감사 로그", "audit-log-maxsize", "감사 로그 파일 최대 크기(MB)", "int", None),
+    _api("감사 로그", "audit-policy-file", "감사 정책 파일", "string", None),
+    # ── KUBE-CONTROLLER-MANAGER ──
+    _kcm("노드 수명", "node-monitor-grace-period", "노드 무응답 → NotReady 대기", "duration", "40s",
+         "kubelet 상태 보고가 이 시간 동안 없으면 노드를 NotReady 로 본다."),
+    _kcm("노드 수명", "node-monitor-period", "노드 상태 확인 주기", "duration", "5s"),
+    _kcm("노드 수명", "terminated-pod-gc-threshold", "끝난 파드 보존 개수", "int", "12500",
+         "넘으면 오래된 Succeeded/Failed 파드부터 지운다."),
+    _kcm("동시성", "concurrent-deployment-syncs", "Deployment 동시 처리 수", "int", "5"),
+    _kcm("동시성", "concurrent-replicaset-syncs", "ReplicaSet 동시 처리 수", "int", "5"),
+    _kcm("동시성", "concurrent-gc-syncs", "가비지 컬렉터 동시 처리 수", "int", "20"),
+    _kcm("동시성", "kube-api-qps", "API 서버 호출 QPS", "int", "20"),
+    _kcm("동시성", "kube-api-burst", "API 서버 호출 버스트", "int", "30"),
+    _kcm("클러스터", "cluster-cidr", "파드 CIDR", "string", None),
+    _kcm("클러스터", "service-cluster-ip-range", "서비스 CIDR", "string", None),
+    _kcm("클러스터", "node-cidr-mask-size", "노드당 파드 CIDR 마스크", "int", "24"),
+    _kcm("클러스터", "allocate-node-cidrs", "노드 CIDR 할당", "bool", "false",
+         "CILIUM IPAM 이 kubernetes 모드면 true 여야 한다."),
+    _kcm("인증서", "cluster-signing-duration", "서명 인증서 유효 기간", "duration", "8760h0m0s"),
+    _kcm("보안", "profiling", "/debug/pprof 프로파일링", "bool", "true", "보안 기준(CIS)은 false 를 권장한다."),
+    # ── KUBE-SCHEDULER ──
+    _sch("동작", "config", "스케줄러 설정 파일", "string", None, "KubeSchedulerConfiguration 파일 경로(프로파일·플러그인 설정)."),
+    _sch("동작", "leader-elect", "리더 선출", "bool", "true", "컨트롤 플레인이 여러 대면 true 여야 한다."),
+    _sch("동작", "kube-api-qps", "API 서버 호출 QPS", "int", "50"),
+    _sch("동작", "kube-api-burst", "API 서버 호출 버스트", "int", "100"),
+    _sch("보안", "profiling", "/debug/pprof 프로파일링", "bool", "true", "보안 기준(CIS)은 false 를 권장한다."),
+    # ── KUBELET ──
+    _kl("파드", "maxPods", "노드당 최대 파드 수", "int", "110",
+        "CILIUM IPAM 노드당 CIDR(마스크) 안에 들어가야 한다."),
+    _kl("파드", "podPidsLimit", "파드당 PID 상한", "int", "-1"),
+    _kl("파드", "serializeImagePulls", "이미지를 하나씩 받기", "bool", "true"),
+    _kl("파드", "maxParallelImagePulls", "동시 이미지 받기 수", "int", None, "serializeImagePulls=false 일 때만 쓰인다."),
+    _kl("런타임", "cgroupDriver", "cgroup 드라이버", "enum", "systemd",
+        "containerd SystemdCgroup 과 같아야 한다(systemd ↔ true).", ["systemd", "cgroupfs"]),
+    _kl("런타임", "containerRuntimeEndpoint", "컨테이너 런타임 소켓", "string", "unix:///run/containerd/containerd.sock"),
+    _kl("런타임", "failSwapOn", "스왑이 켜져 있으면 기동 거부", "bool", "true"),
+    _kl("자원 예약", "systemReserved.cpu", "시스템 예약 CPU", "string", None, path='systemReserved.cpu'),
+    _kl("자원 예약", "systemReserved.memory", "시스템 예약 메모리", "string", None, path='systemReserved.memory'),
+    _kl("자원 예약", "kubeReserved.cpu", "쿠버네티스 예약 CPU", "string", None, path='kubeReserved.cpu'),
+    _kl("자원 예약", "kubeReserved.memory", "쿠버네티스 예약 메모리", "string", None, path='kubeReserved.memory'),
+    _kl("축출", "evictionHard.memory.available", "메모리 여유 하한(즉시 축출)", "string", "100Mi",
+        path='evictionHard."memory.available"'),
+    _kl("축출", "evictionHard.nodefs.available", "노드 디스크 여유 하한", "string", "10%",
+        path='evictionHard."nodefs.available"'),
+    _kl("축출", "evictionHard.imagefs.available", "이미지 디스크 여유 하한", "string", "15%",
+        path='evictionHard."imagefs.available"'),
+    _kl("이미지·로그", "imageGCHighThresholdPercent", "이미지 정리 시작 디스크 사용률(%)", "int", "85"),
+    _kl("이미지·로그", "imageGCLowThresholdPercent", "이미지 정리 목표 디스크 사용률(%)", "int", "80"),
+    _kl("이미지·로그", "containerLogMaxSize", "컨테이너 로그 파일 최대 크기", "string", "10Mi"),
+    _kl("이미지·로그", "containerLogMaxFiles", "컨테이너 로그 보관 파일 수", "int", "5"),
+    _kl("자원 관리", "cpuManagerPolicy", "CPU 관리자 정책", "enum", "none", "static 이면 Guaranteed 파드에 CPU 를 고정한다(GPU·지연 민감 노드).",
+        ["none", "static"]),
+    _kl("자원 관리", "topologyManagerPolicy", "토폴로지 관리자 정책", "enum", "none", None,
+        ["none", "best-effort", "restricted", "single-numa-node"]),
+    _kl("자원 관리", "memoryManagerPolicy", "메모리 관리자 정책", "enum", "None", None, ["None", "Static"]),
+    _kl("수명", "shutdownGracePeriod", "노드 종료 시 파드 정리 시간", "duration", "0s"),
+    _kl("수명", "shutdownGracePeriodCriticalPods", "중요 파드 정리 시간", "duration", "0s"),
+    _kl("인증서", "rotateCertificates", "클라이언트 인증서 자동 갱신", "bool", "true"),
+    _kl("인증서", "serverTLSBootstrap", "서빙 인증서 CSR 발급", "bool", "false"),
 ]
 
 
@@ -226,6 +343,35 @@ RULES: list[dict[str, Any]] = [
     {"rule_key": "cilium.native_requires_cidr", "service": "cilium", "key": "routing-mode",
      "target_service": "cilium", "target_key": "ipv4-native-routing-cidr", "kind": "require", "rule_type": "requires_when",
      "params": {"when": "native"}, "reason": "네이티브 라우팅이면 마스커레이드하지 않을 대역(파드 CIDR)을 알아야 한다."},
+    {"rule_key": "apiserver.mutating_le_readonly", "service": "kube-apiserver", "key": "max-mutating-requests-inflight",
+     "target_service": "kube-apiserver", "target_key": "max-requests-inflight", "kind": "recommend", "rule_type": "min_of_key",
+     "reason": "읽기 요청 상한은 보통 쓰기 요청 상한 이상으로 둔다(기본 400 : 200)."},
+    {"rule_key": "apiserver.service_cidr_kcm", "service": "kube-apiserver", "key": "service-cluster-ip-range",
+     "target_service": None, "target_key": None, "kind": "impact", "rule_type": "impact",
+     "reason": "컨트롤러 매니저의 service-cluster-ip-range 도 같은 값이어야 한다. 운영 중 변경은 기존 서비스 IP 와 충돌한다."},
+    {"rule_key": "apiserver.restart_notice", "service": "kube-apiserver", "key": "*",
+     "target_service": None, "target_key": None, "kind": "impact", "rule_type": "impact",
+     "reason": "API 서버를 한 대씩 재시작한다 — 컨트롤 플레인이 1대면 재시작 동안 클러스터 API 를 쓸 수 없다."},
+    {"rule_key": "kcm.burst_ge_qps", "service": "kube-controller-manager", "key": "kube-api-qps",
+     "target_service": "kube-controller-manager", "target_key": "kube-api-burst", "kind": "recommend", "rule_type": "min_of_key",
+     "reason": "버스트는 QPS 이상이어야 의미가 있다."},
+    {"rule_key": "scheduler.burst_ge_qps", "service": "kube-scheduler", "key": "kube-api-qps",
+     "target_service": "kube-scheduler", "target_key": "kube-api-burst", "kind": "recommend", "rule_type": "min_of_key",
+     "reason": "버스트는 QPS 이상이어야 의미가 있다."},
+    {"rule_key": "kubelet.gc_high_ge_low", "service": "kubelet", "key": "imageGCLowThresholdPercent",
+     "target_service": "kubelet", "target_key": "imageGCHighThresholdPercent", "kind": "require", "rule_type": "min_of_key",
+     "reason": "이미지 정리 시작 사용률은 목표 사용률보다 커야 한다(kubelet 이 기동을 거부한다)."},
+    {"rule_key": "kubelet.systemd_requires_containerd", "service": "kubelet", "key": "cgroupDriver",
+     "target_service": "containerd", "target_key": "SystemdCgroup", "kind": "require", "rule_type": "requires_when",
+     "params": {"when": "systemd", "equals": "true"},
+     "reason": "kubelet cgroupDriver=systemd 면 containerd 도 SystemdCgroup=true 여야 한다 — 다르면 노드가 NotReady 가 된다."},
+    {"rule_key": "containerd.systemd_requires_kubelet", "service": "containerd", "key": "SystemdCgroup",
+     "target_service": "kubelet", "target_key": "cgroupDriver", "kind": "require", "rule_type": "requires_when",
+     "params": {"when": "true", "equals": "systemd"},
+     "reason": "containerd SystemdCgroup=true 면 kubelet cgroupDriver 도 systemd 여야 한다."},
+    {"rule_key": "kubelet.restart_notice", "service": "kubelet", "key": "*",
+     "target_service": None, "target_key": None, "kind": "impact", "rule_type": "impact",
+     "reason": "kubelet 을 재시작한다 — 실행 중인 파드는 유지되지만 재시작 동안 노드 상태 보고·새 파드 기동이 멈춘다."},
     {"rule_key": "cilium.restart_notice", "service": "cilium", "key": "*",
      "target_service": None, "target_key": None, "kind": "impact", "rule_type": "impact",
      "reason": "cilium-config 변경은 cilium 에이전트(DaemonSet)를 롤링 재시작해야 반영된다 — 재시작 중 노드별로 잠시 정책 갱신이 멈춘다."},

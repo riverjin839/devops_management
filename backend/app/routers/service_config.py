@@ -57,6 +57,23 @@ def all_service_status(
     return S.all_status(db, _cluster(db, cluster_id))
 
 
+@router.post("/clusters/{cluster_id}/collect-static-pods")
+def collect_static_pods(
+    cluster_id: UUID,
+    request: Request,
+    db: Session = Depends(get_db),
+    user: User = Depends(require_operator),
+) -> dict[str, Any]:
+    """컨트롤 플레인 정적 파드(etcd·kube-apiserver·kube-controller-manager·kube-scheduler) 플래그를 노드별로 수집 — K8S API, 노드는 그대로."""
+    from app.services.service_config import collect as CL
+
+    out = CL.collect_static_pods(db, _cluster(db, cluster_id))
+    audit_logger.record(db, action="service_config.collect.static_pods", actor=user, target_type="cluster",
+                        target_id=str(cluster_id), details={"changed": out["changed"], "errors": out["errors"][:5]},
+                        request=request)
+    return out
+
+
 @router.get("/clusters/{cluster_id}/{service}/status")
 def one_service_status(
     cluster_id: UUID,
@@ -360,7 +377,7 @@ async def apply_stream(
             creds = body.ssh.model_dump()
             A.validate_pairs(plan["values"])
         opts = body.options.model_dump()
-        if service == "etcd":  # 쿼럼 보호 — 한 대씩·실패 시 중단은 고정
+        if service in A.ONE_BY_ONE_SERVICES:  # 쿼럼·컨트롤 플레인 보호 — 한 대씩·실패 시 중단은 고정
             opts.update(batch_size=1, stop_on_failure=True)
         run = A.start_run(db, cluster, service, plan, opts, user.username)
     except V.ServiceConfigError as exc:
@@ -463,6 +480,15 @@ class ApplySettingsUpdate(BaseModel):
     containerd_service: Optional[str] = Field(default=None, max_length=100)
     containerd_restart_cmd: Optional[str] = Field(default=None, max_length=300)
     node_ready_timeout_sec: Optional[int] = Field(default=None, ge=30, le=1800)
+    static_pod_manifest_dir: Optional[str] = Field(default=None, max_length=300)
+    apiserver_health_cmd: Optional[str] = Field(default=None, max_length=300)
+    controller_manager_health_cmd: Optional[str] = Field(default=None, max_length=300)
+    scheduler_health_cmd: Optional[str] = Field(default=None, max_length=300)
+    control_plane_health_expect: Optional[str] = Field(default=None, max_length=300)
+    control_plane_health_timeout_sec: Optional[int] = Field(default=None, ge=30, le=1800)
+    kubelet_config: Optional[str] = Field(default=None, max_length=300)
+    kubelet_service: Optional[str] = Field(default=None, max_length=100)
+    kubelet_restart_cmd: Optional[str] = Field(default=None, max_length=300)
 
 
 @router.get("/settings")

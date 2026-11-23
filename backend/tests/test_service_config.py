@@ -109,7 +109,7 @@ def test_summarize_and_status():
 
 
 def test_catalog_shape():
-    assert set(SERVICE_KEYS) == {"etcd", "containerd", "cilium", "linux"}
+    assert list(SERVICE_KEYS) == ["etcd", "containerd", "cilium", "linux", "kube-apiserver", "kube-controller-manager", "kube-scheduler", "kubelet"]
     keys = [(i["service"], i["key"]) for i in ITEMS]
     assert len(keys) == len(set(keys))
     for i in ITEMS:
@@ -213,7 +213,7 @@ def test_api_requires_operator_for_import(db, cluster):
     try:
         client = TestClient(app)
         r = client.get("/api/v1/service-config/services")
-        assert r.status_code == 200 and [s["key"] for s in r.json()["items"]] == ["etcd", "containerd", "cilium", "linux"]
+        assert r.status_code == 200 and [s["key"] for s in r.json()["items"]] == ["etcd", "containerd", "cilium", "linux", "kube-apiserver", "kube-controller-manager", "kube-scheduler", "kubelet"]
         r = client.get(f"/api/v1/service-config/clusters/{cluster.id}/cilium")
         assert r.status_code == 200, r.text
         assert r.json()["counts"]["same"] >= 1
@@ -1116,7 +1116,7 @@ def test_service_status_drift_alerts_changes_and_api(db, linux_v1):
         app.dependency_overrides[get_current_user] = lambda: viewer
         client = TestClient(app)
         r = client.get(f"/api/v1/service-config/clusters/{c.id}/status")
-        assert r.status_code == 200 and set(r.json()["services"]) == {"etcd", "containerd", "cilium", "linux"}
+        assert r.status_code == 200 and set(r.json()["services"]) == set(["etcd", "containerd", "cilium", "linux", "kube-apiserver", "kube-controller-manager", "kube-scheduler", "kubelet"])
         r = client.get(f"/api/v1/service-config/clusters/{c.id}/linux/status")
         assert r.status_code == 200 and r.json()["drift"]["rows"][0]["key"] == "net.ipv4.ip_forward"
         assert client.get(f"/api/v1/service-config/clusters/{c.id}/nope/status").status_code == 404
@@ -1128,3 +1128,280 @@ def test_service_status_drift_alerts_changes_and_api(db, linux_v1):
         db.query(OsParamChange).filter(OsParamChange.cluster_id == c.id).delete(synchronize_session=False)
         db.query(ServiceConfigGroup).filter(ServiceConfigGroup.cluster_id == c.id).delete(synchronize_session=False)
         db.commit()
+
+
+
+# ── 6단계: 컨트롤 플레인 정적 파드 · KUBELET ─────────────────────────────────
+
+APISERVER_MANIFEST = """apiVersion: v1
+kind: Pod
+metadata:
+  name: kube-apiserver
+  namespace: kube-system
+spec:
+  containers:
+  - command:
+    - kube-apiserver
+    - --advertise-address=10.0.0.1
+    - --max-requests-inflight=400
+    - --service-node-port-range=30000-32767
+    image: registry.k8s.io/kube-apiserver:v1.30.4
+    name: kube-apiserver
+"""
+
+KUBELET_YAML = """apiVersion: kubelet.config.k8s.io/v1beta1
+kind: KubeletConfiguration
+cgroupDriver: systemd
+maxPods: 110
+evictionHard:
+  memory.available: 100Mi
+"""
+
+
+def test_static_pod_and_kubelet_current_values():
+    items_api = items_for("kube-apiserver")
+    cur = C.current_values("kube-apiserver", [
+        snap("kube_apiserver", {"podName": "kube-apiserver-cp-1", "flags": {"max-requests-inflight": "400"}}),
+    ], items_api)
+    assert cur["values"]["max-requests-inflight"] == {"cp-1": "400"}  # 대표 파드 1개
+    cur = C.current_values("kube-apiserver", [
+        snap("kube_apiserver", {"podName": "kube-apiserver-cp-1", "flags": {"max-requests-inflight": "400"}}),
+        snap("static_pod:kube-apiserver:cp-1", {"flags": {"max-requests-inflight": "800"}}),
+        snap("static_pod:kube-apiserver:cp-2", {"flags": {"max-requests-inflight": "400"}}),
+        snap("static_pod:kube-scheduler:cp-1", {"flags": {"profiling": "false"}}),  # 다른 서비스는 무시
+    ], items_api)
+    assert cur["values"]["max-requests-inflight"] == {"cp-1": "800", "cp-2": "400"}  # 노드별 수집이 우선
+    cur = C.current_values("kubelet", [snap("kubelet_config:10.0.1.1", {"config_content": KUBELET_YAML})], items_for("kubelet"))
+    assert cur["values"]["maxPods"] == {"10.0.1.1": "110"}
+    assert cur["values"]["evictionHard.memory.available"] == {"10.0.1.1": "100Mi"}
+    assert cur["values"]["cgroupDriver"] == {"10.0.1.1": "systemd"}
+
+
+def test_edit_static_manifest_and_kubelet_config():
+    from app.services.service_config import apply_nodes as AN
+
+    out = AN.edit_etcd_manifest(APISERVER_MANIFEST, {"max-requests-inflight": "800", "profiling": "false"}, "kube-apiserver")
+    assert "    - --max-requests-inflight=800" in out.splitlines()
+    assert AN.manifest_flags(out, "kube-apiserver")["profiling"] == "false"
+    assert "advertise-address=10.0.0.1" in out
+    k = AN.edit_kubelet_config(KUBELET_YAML, {"maxPods": ("200", "int"), 'evictionHard."memory.available"': ("500Mi", "string"),
+                                              "systemReserved.cpu": ("500m", "string"), "failSwapOn": ("false", "bool")})
+    flat = C.parse_kubelet_yaml(k)
+    assert flat["maxPods"] == "200" and flat['evictionHard."memory.available"'] == "500Mi"
+    assert flat["systemReserved.cpu"] == "500m" and flat["failSwapOn"] == "false" and flat["kind"] == "KubeletConfiguration"
+    assert "maxPods: 200" in k  # 정수는 따옴표 없이
+    with pytest.raises(AN.EditError):
+        AN.edit_kubelet_config("foo: 1\n", {"maxPods": ("1", "int")})
+    with pytest.raises(AN.EditError):
+        AN.edit_kubelet_config(KUBELET_YAML, {"maxPods": ("many", "int")})
+    assert "pgrep -f" in AN._proc_cmdline("kube-controller-manager")
+
+
+def test_kubelet_cgroup_rule_cross_service():
+    from app.services.service_config.rules import evaluate
+
+    res = evaluate(_rules(), "kubelet", {"kubelet": {"cgroupDriver": "systemd"}, "containerd": {"SystemdCgroup": "false"}},
+                   {"cgroupDriver"})
+    hit = [r for r in res if r["rule_id"] and r["target_key"] == "SystemdCgroup" and r["kind"] == "require"]
+    assert hit and hit[0]["ok"] is False and hit[0]["suggested"] == "true"
+
+
+class FakeStaticPod:
+    """kube-apiserver 정적 파드 노드 — 매니페스트 기록 시 재시작. crash 노드는 새 설정으로 뜨지 못한다."""
+    M = "/etc/kubernetes/manifests/kube-apiserver.yaml"
+
+    def __init__(self, hosts, unhealthy=(), crash=()):
+        self.files = {h: {self.M: APISERVER_MANIFEST} for h in hosts}
+        self.running = {h: APISERVER_MANIFEST for h in hosts}
+        self.unhealthy, self.crash = set(unhealthy), set(crash)
+        self.cmds = []
+
+    def __call__(self, target, cmd, connect_timeout=8, exec_timeout=30):
+        from app.services.service_config import apply_nodes as AN
+
+        h = target.host
+        self.cmds.append((h, cmd))
+        f = self.files[h]
+        if "livez" in cmd:
+            ok = h not in self.unhealthy and self.running[h] is not None
+            return _ok(h, "ok") if ok else _fail(h, "connection refused")
+        if "pgrep" in cmd:
+            if self.running[h] is None:
+                return _ok(h, "")
+            fl = AN.manifest_flags(self.running[h], "kube-apiserver")
+            return _ok(h, "kube-apiserver " + " ".join(f"--{k}={v}" for k, v in fl.items()))
+        if "<<'PEP_CFG_EOF'" in cmd:
+            path = cmd.split("tee ", 1)[1].split(" ", 1)[0]
+            f[path] = cmd.split("<<'PEP_CFG_EOF'\n", 1)[1].rsplit("PEP_CFG_EOF", 1)[0]
+            self.running[h] = None if h in self.crash else f[path]
+            return _ok(h)
+        if "cp -p" in cmd:
+            src, dst = cmd.split("cp -p ", 1)[1].split()[:2]
+            f[dst] = f[src]
+            if dst == self.M:
+                self.running[h] = f[dst]
+            return _ok(h)
+        if cmd.startswith("cat "):
+            return _ok(h, f.get(cmd.split()[1], ""))
+        return _ok(h)
+
+
+class FakeCPCore(FakeCore):
+    def list_namespaced_pod(self, ns, label_selector=None, **_):
+        comp = (label_selector or "component=").split("=", 1)[1]
+        if label_selector is None:  # 수집 — 전체 kube-system
+            pods = []
+            for c in ("kube-apiserver", "kube-scheduler"):
+                for i in (1, 2):
+                    pods.append(SimpleNamespace(
+                        metadata=SimpleNamespace(name=f"{c}-cp-{i}", labels={"component": c, "tier": "control-plane"}),
+                        spec=SimpleNamespace(node_name=f"cp-{i}", containers=[SimpleNamespace(
+                            name=c, image=f"registry.k8s.io/{c}:v1.30.4",
+                            command=[c, f"--max-requests-inflight={400 * i}"], args=[])]),
+                        status=SimpleNamespace(host_ip=f"10.0.0.{i}")))
+            pods.append(SimpleNamespace(metadata=SimpleNamespace(name="coredns-x", labels={"k8s-app": "kube-dns"}),
+                                        spec=SimpleNamespace(node_name="w1", containers=[]), status=SimpleNamespace(host_ip="1")))
+            return SimpleNamespace(items=pods)
+        return SimpleNamespace(items=[SimpleNamespace(spec=SimpleNamespace(node_name=f"cp-{i}"),
+                                                      status=SimpleNamespace(host_ip=f"10.0.0.{i}")) for i in (1, 2, 3)]
+                               if comp == "kube-apiserver" else [])
+
+
+@pytest.fixture
+def api_v2(db, cluster, monkeypatch):
+    from app.models.service_config import ServiceConfigApplyRun
+    from app.services.service_config import apply as A
+    from app.services.service_config import view as V
+
+    core = FakeCPCore()
+    monkeypatch.setattr(A, "k8s_apis", lambda c: (core, core))
+    _add_snap(db, cluster, "kube_apiserver", {"podName": "kube-apiserver-cp-1", "flags": {"max-requests-inflight": "400"}})
+    V.import_v1(db, cluster, "kube-apiserver", "tester")
+    vals = dict(V.list_versions(db, cluster.id, "kube-apiserver")[0].values)
+    V.save_version(db, cluster, "kube-apiserver", None, 1, {**vals, "max-requests-inflight": "800"}, None, "tester")
+    yield cluster
+    db.rollback()
+    db.query(ServiceConfigApplyRun).filter(ServiceConfigApplyRun.cluster_id == cluster.id).delete(synchronize_session=False)
+    db.commit()
+
+
+def test_collect_static_pods_per_node(db, api_v2):
+    from app.services.service_config import collect as CL
+    from app.services.service_config import view as V
+
+    out = CL.collect_static_pods(db, api_v2)
+    assert out["changed"] == 4 and not out["errors"]
+    assert CL.collect_static_pods(db, api_v2)["changed"] == 0  # 같은 내용은 저장하지 않음
+    rows = {r["key"]: r for s in V.build_view(db, api_v2, "kube-apiserver")["sections"] for r in s["items"]}
+    assert rows["max-requests-inflight"]["current"]["groups"] == [{"value": "400", "nodes": ["cp-1"]}, {"value": "800", "nodes": ["cp-2"]}] \
+        or {g["value"] for g in rows["max-requests-inflight"]["current"]["groups"]} == {"400", "800"}
+
+
+async def test_apply_static_pod_success_and_crash_restore(db, api_v2, monkeypatch):
+    from app.services import ssh_runner
+    from app.services.service_config import apply as A
+    from app.services.service_config import view as V
+
+    c = api_v2
+    hosts = ["10.0.0.1", "10.0.0.2", "10.0.0.3"]
+    fake = FakeStaticPod(hosts)
+    monkeypatch.setattr(ssh_runner, "_exec_ssh", fake)
+    plan = A.plan_apply(db, c, "kube-apiserver", None, None)
+    assert [t["host"] for t in plan["targets"]] == hosts and any("livez" in x for x in plan["commands"])
+    out = await _run_apply(db, c, "kube-apiserver", plan, {"batch_size": 3, "pause_sec": 0, "poll_sec": 0, "settle_sec": 0})
+    assert out["status"] == "succeeded", out
+    assert all("--max-requests-inflight=800" in fake.files[h][FakeStaticPod.M] for h in hosts)
+    assert fake.files["10.0.0.1"]["/etc/kubernetes/pep-backup/kube-apiserver.yaml.pep-bak-v1"] == APISERVER_MANIFEST
+    assert V.list_versions(db, c.id, "kube-apiserver")[0].status == "applied"
+    # 비정상 노드가 있으면 시작 안 함
+    fake = FakeStaticPod(hosts, unhealthy={"10.0.0.2"})
+    monkeypatch.setattr(ssh_runner, "_exec_ssh", fake)
+    V.save_version(db, c, "kube-apiserver", None, 2,
+                   {**dict(V.list_versions(db, c.id, "kube-apiserver")[0].values), "max-requests-inflight": "900"}, None, "tester")
+    out = await _run_apply(db, c, "kube-apiserver", A.plan_apply(db, c, "kube-apiserver", None, None), {"poll_sec": 0, "settle_sec": 0})
+    assert out["status"] == "failed" and not any("PEP_CFG_EOF" in cmd for _, cmd in fake.cmds)
+    # 첫 노드가 새 설정으로 못 뜸 → 복원 + 나머지 건너뜀
+    fake = FakeStaticPod(hosts, crash={"10.0.0.1"})
+    monkeypatch.setattr(ssh_runner, "_exec_ssh", fake)
+    out = await _run_apply(db, c, "kube-apiserver", A.plan_apply(db, c, "kube-apiserver", None, None),
+                           {"poll_sec": 0.01, "settle_sec": 0, "health_timeout_sec": 1})
+    assert [r["status"] for r in out["node_results"]] == ["failed", "skipped", "skipped"]
+    assert "복원" in out["node_results"][0]["error"] and fake.files["10.0.0.1"][FakeStaticPod.M] == APISERVER_MANIFEST
+
+
+class FakeKubelet:
+    PATH = "/var/lib/kubelet/config.yaml"
+
+    def __init__(self, hosts, events):
+        self.files = {h: {self.PATH: KUBELET_YAML} for h in hosts}
+        self.events = events
+        self.cmds = []
+
+    def __call__(self, target, cmd, connect_timeout=8, exec_timeout=30):
+        h = target.host
+        self.cmds.append((h, cmd))
+        f = self.files[h]
+        if "<<'PEP_CFG_EOF'" in cmd:
+            f[self.PATH] = cmd.split("<<'PEP_CFG_EOF'\n", 1)[1].rsplit("PEP_CFG_EOF", 1)[0]
+            self.events.append(("write", h))
+            return _ok(h)
+        if "systemctl restart" in cmd:
+            self.events.append(("restart", h))
+            return _ok(h)
+        if "is-active" in cmd:
+            return _ok(h, "active\n")
+        if "cp -p" in cmd:
+            src, dst = cmd.split("cp -p ", 1)[1].split()[:2]
+            f[dst] = f[src]
+            return _ok(h)
+        if cmd.startswith("cat "):
+            return _ok(h, f.get(cmd.split()[1], ""))
+        return _ok(h)
+
+
+async def test_apply_kubelet_restart_ready_configz_and_snapshot(db, cluster, monkeypatch):
+    import json
+
+    import yaml
+
+    from app.models.service_config import ServiceConfigApplyRun
+    from app.services import ssh_runner
+    from app.services.service_config import apply as A
+    from app.services.service_config import view as V
+
+    for h in ("10.0.1.1", "10.0.1.2"):
+        _add_snap(db, cluster, f"kubelet_config:{h}", {"config_content": KUBELET_YAML, "config_file": FakeKubelet.PATH})
+    V.import_v1(db, cluster, "kubelet", "tester")
+    vals = dict(V.list_versions(db, cluster.id, "kubelet")[0].values)
+    V.save_version(db, cluster, "kubelet", None, 1, {**vals, "maxPods": "200"}, None, "tester")
+    events = []
+    fake = FakeKubelet(["10.0.1.1", "10.0.1.2"], events)
+
+    class Core(FakeCore):
+        def connect_get_node_proxy_with_path(self, name, path, **_):
+            host = {"node-a": "10.0.1.1", "node-b": "10.0.1.2"}[name]
+            return json.dumps({"kubeletconfig": yaml.safe_load(fake.files[host][FakeKubelet.PATH])})
+
+    core = Core(events)
+    monkeypatch.setattr(A, "k8s_apis", lambda cl: (core, core))
+    monkeypatch.setattr(ssh_runner, "_exec_ssh", fake)
+    try:
+        plan = A.plan_apply(db, cluster, "kubelet", None, None)
+        out = await _run_apply(db, cluster, "kubelet", plan, {"batch_size": 1, "pause_sec": 0, "poll_sec": 0})
+        assert out["status"] == "succeeded", out
+        assert ("write", "10.0.1.1") in events and ("restart", "10.0.1.1") in events
+        assert not any(e[0] == "cordon" for e in events)  # kubelet 재시작은 cordon 하지 않는다
+        rows = {r["key"]: r for s in V.build_view(db, cluster, "kubelet")["sections"] for r in s["items"]}
+        assert rows["maxPods"]["current"]["value"] == "200"  # 스냅샷 갱신
+    finally:
+        db.query(ServiceConfigApplyRun).filter(ServiceConfigApplyRun.cluster_id == cluster.id).delete(synchronize_session=False)
+        db.commit()
+
+
+def test_settings_backup_dir_inside_manifest_dir_rejected(db):
+    from app.services.service_config import apply as A
+
+    with pytest.raises(A.ApplyError):
+        A.set_settings(db, {"static_pod_manifest_dir": "/etc/k8s/m", "etcd_backup_dir": "/etc/k8s/m/bak"})
+    with pytest.raises(A.ApplyError):
+        A.set_settings(db, {"kubelet_restart_cmd": "systemctl restart kubelet\nreboot"})

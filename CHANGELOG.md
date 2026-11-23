@@ -10,6 +10,9 @@
 
 1.96.0 이후 main 에 병합된 변경 (다음 릴리스 후보).
 
+### Added
+- **서비스 구성 — 컨트롤 플레인 정적 파드(KUBE-APISERVER·KUBE-CONTROLLER-MANAGER·KUBE-SCHEDULER)·KUBELET 추가**: 서비스 레일에 4개 서비스가 늘었다. 정적 파드 3종은 주요 플래그(동시 요청 상한·이벤트 보존·NodePort 범위·감사 로그, 노드 무응답 대기·동시성·QPS, 스케줄러 설정·리더 선출 등)를, KUBELET 은 KubeletConfiguration(maxPods·cgroupDriver·자원 예약·축출 임계값·이미지 정리·로그 크기·CPU/토폴로지 관리자 등)을 다룬다. 현재 값은 정적 파드를 컨트롤 플레인 노드마다 K8S API 로(etcd 도 노드별로), KUBELET 은 SSH 로 읽는다. 적용은 정적 파드가 ETCD 와 같이 전 노드 health 사전 점검 → 한 대씩 매니페스트 플래그 줄 편집 → 실행 중 프로세스·health 확인 → 실패 시 자동 복원, KUBELET 은 설정 파일 편집 → 재시작 → 노드 Ready → configz 로 실효 값 확인 → 실패 시 복원. 의존 규칙: kubelet cgroupDriver=systemd ↔ containerd SystemdCgroup=true(필수, 양방향), 이미지 정리 시작 ≥ 목표 사용률(필수), QPS ≤ 버스트(권장) 등. 매니페스트 디렉터리·health 명령·kubelet 설정 파일·재시작 명령은 적용 설정에서 바꾼다. Backend: `services/service_config/collect.py`(`POST …/collect-static-pods`), `apply_nodes.py` `run_static_pod`·`run_kubelet`·`edit_kubelet_config`. Frontend: 레일 아이콘·짧은 이름, `ApplyDialog`·`ApplySettingsDialog`.
+
 ## [1.96.0] - 2026-11-23
 
 ### Changed

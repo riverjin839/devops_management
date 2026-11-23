@@ -22,6 +22,8 @@ const RESTART_LABEL: Record<ServiceConfigRestartScope, string> = {
   restart_service: 'containerd 재시작',
   rolling_restart_ds: 'cilium 롤링 재시작',
   reboot: '재부팅',
+  restart_static_pod: '정적 파드 재시작 (1대씩)',
+  restart_kubelet: 'kubelet 재시작',
 };
 
 const STATUS: Record<ServiceConfigItemStatus, { variant: StatusVariant; label: string } | null> = {

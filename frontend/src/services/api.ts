@@ -2719,6 +2719,10 @@ export const serviceConfigApi = {
     api.get<import('@/types').ServiceConfigStatusAll>(`/service-config/clusters/${clusterId}/status`),
   status: (clusterId: string, service: string) =>
     api.get<import('@/types').ServiceConfigStatus>(`/service-config/clusters/${clusterId}/${service}/status`),
+  /** 컨트롤 플레인 정적 파드 플래그를 노드별로 수집(K8S API, 노드는 그대로). */
+  collectStaticPods: (clusterId: string) =>
+    api.post<{ changed: number; components: { component: string; node: string; version: string | null; changed: boolean }[]; errors: string[] }>(
+      `/service-config/clusters/${clusterId}/collect-static-pods`),
   view: (clusterId: string, service: string, version?: number, groupId?: string) =>
     api.get<import('@/types').ServiceConfigView>(`/service-config/clusters/${clusterId}/${service}`,
       { params: { ...(version ? { version } : {}), ...(groupId ? { group_id: groupId } : {}) } }),

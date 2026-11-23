@@ -74,7 +74,7 @@ export function ApplySettingsDialog({ open, isAdmin, onClose }: { open: boolean;
                 <Field label="정적 파드 매니페스트"><input className={INPUT} disabled={!isAdmin} value={form.etcdManifest} onChange={(e) => set({ etcdManifest: e.target.value })} aria-label="etcd 매니페스트 경로" /></Field>
                 <Field label="systemd env 파일"><input className={INPUT} disabled={!isAdmin} value={form.etcdEnvFile} onChange={(e) => set({ etcdEnvFile: e.target.value })} aria-label="etcd env 파일 경로" /></Field>
               </div>
-              <Field label="백업 디렉터리" help="매니페스트 디렉터리 밖이어야 한다 — 안에 두면 kubelet 이 백업본을 정적 파드로 띄운다.">
+              <Field label="백업 디렉터리(정적 파드 공용)" help="매니페스트 디렉터리 밖이어야 한다 — 안에 두면 kubelet 이 백업본을 정적 파드로 띄운다.">
                 <input className={INPUT} disabled={!isAdmin} value={form.etcdBackupDir} onChange={(e) => set({ etcdBackupDir: e.target.value })} aria-label="etcd 백업 디렉터리" />
               </Field>
               <Field label="health 확인 명령" help="노드에서 실행해 아래 문자열이 출력에 있으면 정상. 사전 점검·재시작 뒤 대기에 쓴다.">
@@ -87,6 +87,26 @@ export function ApplySettingsDialog({ open, isAdmin, onClose }: { open: boolean;
                     onChange={(e) => set({ etcdHealthTimeoutSec: Number(e.target.value) || 180 })} aria-label="etcd health 대기 시간" />
                 </Field>
               </div>
+              <p className="pt-2 text-xs font-semibold text-foreground">컨트롤 플레인 정적 파드 (KUBE-APISERVER · CONTROLLER-MANAGER · SCHEDULER)</p>
+              <Field label="매니페스트 디렉터리" help="<디렉터리>/<서비스>.yaml 을 고친다. 백업은 위 ETCD 백업 디렉터리를 같이 쓴다.">
+                <input className={INPUT} disabled={!isAdmin} value={form.staticPodManifestDir} onChange={(e) => set({ staticPodManifestDir: e.target.value })} aria-label="정적 파드 매니페스트 디렉터리" />
+              </Field>
+              <Field label="API 서버 health 명령"><input className={INPUT} disabled={!isAdmin} value={form.apiserverHealthCmd} onChange={(e) => set({ apiserverHealthCmd: e.target.value })} aria-label="API 서버 health 명령" /></Field>
+              <Field label="컨트롤러 매니저 health 명령"><input className={INPUT} disabled={!isAdmin} value={form.controllerManagerHealthCmd} onChange={(e) => set({ controllerManagerHealthCmd: e.target.value })} aria-label="컨트롤러 매니저 health 명령" /></Field>
+              <Field label="스케줄러 health 명령"><input className={INPUT} disabled={!isAdmin} value={form.schedulerHealthCmd} onChange={(e) => set({ schedulerHealthCmd: e.target.value })} aria-label="스케줄러 health 명령" /></Field>
+              <div className="grid grid-cols-2 gap-2">
+                <Field label="정상 판정 문자열"><input className={INPUT} disabled={!isAdmin} value={form.controlPlaneHealthExpect} onChange={(e) => set({ controlPlaneHealthExpect: e.target.value })} aria-label="컨트롤 플레인 health 정상 문자열" /></Field>
+                <Field label="정상 기동 대기 기본값(초)">
+                  <input type="number" min={30} max={1800} className={INPUT} disabled={!isAdmin} value={form.controlPlaneHealthTimeoutSec}
+                    onChange={(e) => set({ controlPlaneHealthTimeoutSec: Number(e.target.value) || 300 })} aria-label="컨트롤 플레인 health 대기 시간" />
+                </Field>
+              </div>
+              <p className="pt-2 text-xs font-semibold text-foreground">KUBELET</p>
+              <div className="grid grid-cols-2 gap-2">
+                <Field label="설정 파일"><input className={INPUT} disabled={!isAdmin} value={form.kubeletConfig} onChange={(e) => set({ kubeletConfig: e.target.value })} aria-label="kubelet 설정 파일" /></Field>
+                <Field label="systemd 유닛"><input className={INPUT} disabled={!isAdmin} value={form.kubeletService} onChange={(e) => set({ kubeletService: e.target.value })} aria-label="kubelet systemd 유닛" /></Field>
+              </div>
+              <Field label="재시작 명령"><input className={INPUT} disabled={!isAdmin} value={form.kubeletRestartCmd} onChange={(e) => set({ kubeletRestartCmd: e.target.value })} aria-label="kubelet 재시작 명령" /></Field>
               <p className="pt-2 text-xs font-semibold text-foreground">CONTAINERD</p>
               <div className="grid grid-cols-2 gap-2">
                 <Field label="설정 파일"><input className={INPUT} disabled={!isAdmin} value={form.containerdConfig} onChange={(e) => set({ containerdConfig: e.target.value })} aria-label="containerd 설정 파일" /></Field>

@@ -6616,13 +6616,16 @@ export interface ContainerdConfigCollectResponse {
 
 // ── 서비스 구성 (`/k8s/:clusterId/services`) ─────────────────────────────────
 /** 현재 값을 다시 읽는 수집 종류 — 화면의 '현재 값 수집' 이 여는 모달. */
-export type ServiceConfigCollectKind = 'versions' | 'etcd-systemd' | 'containerd-config' | 'kernel-params';
-export type ServiceConfigRestartScope = 'immediate' | 'restart_member' | 'restart_service' | 'rolling_restart_ds' | 'reboot';
+export type ServiceConfigCollectKind = 'versions' | 'etcd-systemd' | 'containerd-config' | 'kernel-params' | 'static-pods' | 'kubelet-config';
+export type ServiceConfigRestartScope = 'immediate' | 'restart_member' | 'restart_service' | 'rolling_restart_ds' | 'reboot'
+  | 'restart_static_pod' | 'restart_kubelet';
 export type ServiceConfigItemStatus = 'same' | 'differs' | 'mixed' | 'unknown';
 
 export interface ServiceConfigServiceDef {
   key: string;
   label: string;
+  /** 서비스 레일에 쓰는 짧은 이름(없으면 label). */
+  short?: string;
   icon: string;
   description: string;
   collectKinds: ServiceConfigCollectKind[];
@@ -6864,4 +6867,13 @@ export interface ServiceConfigApplySettings {
   containerdService: string;
   containerdRestartCmd: string;
   nodeReadyTimeoutSec: number;
+  staticPodManifestDir: string;
+  apiserverHealthCmd: string;
+  controllerManagerHealthCmd: string;
+  schedulerHealthCmd: string;
+  controlPlaneHealthExpect: string;
+  controlPlaneHealthTimeoutSec: number;
+  kubeletConfig: string;
+  kubeletService: string;
+  kubeletRestartCmd: string;
 }
