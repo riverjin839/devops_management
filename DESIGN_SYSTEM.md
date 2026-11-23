@@ -614,7 +614,7 @@ MacCard `title` 아래 또 그린 툴바 행(이중 헤더), 같은 모양의 �
 
 **K8s 클러스터 허브 임베드 — `lib/k8sHub.ts` (D-240):** per-cluster K8s 화면은 `/k8s/:clusterId/:view` 허브의 서브뷰로도 마운트된다.
 허브가 `K8sHubContext` 를 제공하면 ① `useClusterRouteParam()` 은 URL 을 건드리지 않고 허브의 `clusterId`/`selectCluster` 를 돌려주고
-② `ClusterSidebar` 는 null(레일은 허브가 하나만) ③ `PageShell` 은 `div` + 밀도 패딩 없음(허브의 `<main>` 안) ④ `PageHeader` 는 h2 + `back` 숨김
+② `ClusterSidebar` 는 null(허브는 레일을 그리지 않는다 — D-243 부터 클러스터 선택은 사이드바 "K8s 클러스터" flyout·헤더 「클러스터 전환」) ③ `PageShell` 은 `div` + 밀도 패딩 없음(허브의 `<main>` 안) ④ `PageHeader` 는 h2 + `back` 숨김
 이다(옛 `LogViewTabs` 는 허브 2행 탭이 대체해 삭제). 그래서 새 per-cluster 화면도 이 세 공용 요소와 `useClusterRouteParam` 만 쓰면 허브에 들어갈 수 있다 —
 클러스터를 `useState`/`?cluster=` 로 따로 들고 있으면 허브에서 허브의 선택을 따르지 못하므로(`K8sEventsPage` 는 `useK8sHub()` 로 보강), 신규 화면은 훅을 쓴다.
 허브 뷰는 path 세그먼트이고 뷰 내부 탭은 `useUrlParams` 쿼리라 키가 겹치지 않는다. 허브 탭바는 공용 `components/common/SegTabs` `mode="tabs"`.

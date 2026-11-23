@@ -1,4 +1,5 @@
 import { useMemo, useRef, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { Tags, Search, LayoutList, Tag, AlertTriangle, FileSpreadsheet, RefreshCw, Pause, Play } from 'lucide-react';
 import { useClusters } from '@/hooks/useCluster';
 import { useK8sHub } from '@/lib/k8sHub';
@@ -7,6 +8,7 @@ import { NodeLabelEditorModal, NodeLabelsTable, type NodeEditAccess, type NodeLa
 import { matchesSearch, buildLabelEntries, filterLabelEntries } from '@/components/node-labels/nodeLabelsShared';
 import { ClusterSidebar, ExportMenu, EmptyState, ErrorState, LoadingState, PageShell, RunLogPanel, useToast } from '@/components/common';
 import { PageHeader } from '@/components/common/PageHeader';
+import { SegTabs } from '@/components/common/SegTabs';
 import { CLUSTER_OPERATE_REQUIRED_HINT, useCanOperate, useMyClusterAccess } from '@/hooks/useCanOperate';
 import { useRunLog, runLogged, type RunLogEntry } from '@/hooks/useRunLog';
 import { useLogPref } from '@/hooks/useLogPref';
@@ -32,10 +34,18 @@ export function NodeLabelsPage() {
   const [autoRefresh, setAutoRefresh] = useState(true);
 
   // 실제 선택 — 미선택(undefined)이면 첫 클러스터로 폴백(기본 단일 뷰). null 이면 전체.
-  // K8s 클러스터 허브(D-240) 안에서는 허브가 고른 클러스터 하나만 — "전체 클러스터" 는 단독 화면(`/node-labels`)에서.
+  // K8s 클러스터 허브(D-240) 안에서는 허브가 고른 클러스터 하나가 기본이고, `?scope=all` 이면 전체 클러스터를 한 표로 본다
+  // (D-243 — 옛 단독 화면 `/node-labels` 의 "전체 클러스터" 모드를 허브로 옮겼다. 쿼리라 공유·뒤로가기가 된다).
   const hub = useK8sHub();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const hubScope: 'cluster' | 'all' = searchParams.get('scope') === 'all' ? 'all' : 'cluster';
+  const setHubScope = (v: 'cluster' | 'all') => {
+    const next = new URLSearchParams(searchParams);
+    if (v === 'all') next.set('scope', 'all'); else next.delete('scope');
+    setSearchParams(next, { replace: true });
+  };
   const effectiveSelection: string | null = hub
-    ? hub.clusterId
+    ? (hubScope === 'all' ? null : hub.clusterId)
     : selectedClusterId === undefined ? (clusters[0]?.id ?? null) : selectedClusterId;
 
   // 취합 대상 클러스터 — 전체(null)면 모든 클러스터, 아니면 선택된 하나. (useQueries 안정화를 위해 memo)
@@ -162,8 +172,16 @@ export function NodeLabelsPage() {
           }
         />
 
-        {/* Toolbar: search + view mode */}
+        {/* Toolbar: (허브) 범위 + search + view mode */}
         <div className="flex items-center gap-3 mb-4">
+          {hub && (
+            <SegTabs
+              label="조회 범위"
+              value={hubScope}
+              onChange={setHubScope}
+              options={[['cluster', '이 클러스터'], ['all', `전체 클러스터 ${clusters.length}`]] as const}
+            />
+          )}
           {/* Search box */}
           <div className="relative flex-1 max-w-sm">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
