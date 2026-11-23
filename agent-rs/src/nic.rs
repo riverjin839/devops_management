@@ -713,8 +713,9 @@ mod tests {
         assert_eq!(v["slave_state"]["eth1"]["aggregator_id"], 2);
     }
 
-    fn fake_sys() -> (PathBuf, PathBuf) {
-        let root = std::env::temp_dir().join(format!("pep-agent-nic-{}", std::process::id()));
+    fn fake_sys(tag: &str) -> (PathBuf, PathBuf) {
+        // 테스트는 병렬로 돈다 — 같은 디렉터리를 공유하면 한쪽의 정리가 다른 쪽 픽스처를 지운다.
+        let root = std::env::temp_dir().join(format!("pep-agent-nic-{tag}-{}", std::process::id()));
         let _ = fs::remove_dir_all(&root);
         let net = root.join("net");
         for n in ["eth0", "eth1", "bond0", "lo", "veth12", "bond0.100"] {
@@ -742,7 +743,7 @@ mod tests {
 
     #[test]
     fn selects_by_kind_and_exclusion() {
-        let (net, _) = fake_sys();
+        let (net, _) = fake_sys("select");
         let got = select_ifaces(&net, &default_config());
         let names: Vec<&str> = got.iter().map(|(n, _)| n.as_str()).collect();
         assert_eq!(names, ["bond0", "bond0.100", "eth0", "eth1"]); // lo·veth* 제외
@@ -751,7 +752,7 @@ mod tests {
 
     #[test]
     fn collect_without_ethtool_reports_bond_lacp_and_counters() {
-        let (net, bonding) = fake_sys();
+        let (net, bonding) = fake_sys("collect");
         let out = collect(None, &net, &bonding, false);
         let ifs = out["interfaces"].as_array().unwrap();
         let by = |n: &str| ifs.iter().find(|i| i["name"] == n).unwrap();
