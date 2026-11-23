@@ -277,8 +277,8 @@ function AppShell() {
               <Route path="/checks/:itemId" element={<CheckItemDetailPage />} />
               {/* 운영 점검 통합 콘솔(레거시) — 같은 패널을 종합 상태까지 보여 주는 허브 개요 뷰로 redirect(D-240 3단계).
                   페이지 컴포넌트는 아일랜드 패널 호환으로 남는다. */}
-              <Route path="/ops-checks/:clusterId" element={<RedirectToHub view="overview" />} />
-              <Route path="/ops-checks" element={<RedirectToHub view="overview" />} />
+              <Route path="/ops-checks/:clusterId" element={<RedirectToHub view="checks" />} />
+              <Route path="/ops-checks" element={<RedirectToHub view="checks" />} />
               {/* OpenLens P0 — 파드 로그 스트리밍(읽기전용) */}
               <Route path="/k8s-logs/:clusterId" element={<RedirectToHub view="logs" />} />
               <Route path="/k8s-logs" element={<RedirectToHub view="logs" />} />

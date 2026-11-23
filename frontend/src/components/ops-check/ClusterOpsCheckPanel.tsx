@@ -1,30 +1,20 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import {
-  Play, Search, RefreshCw, CheckCircle2, Loader2, Circle, X, AlertTriangle, ListChecks, Ban,
+  Play, Search, RefreshCw, Loader2, Circle, AlertTriangle, ListChecks,
 } from 'lucide-react';
 import { MacCard } from '@/components/ui/MacCard';
 import { Button } from '@/components/ui/button';
 import { StatusBadge, statusToVariant } from '@/components/common/StatusBadge';
-import { LogViewer } from '@/components/common/LogViewer';
-import { useToast, ConfirmDialog, useModalA11y, EmptyState, LoadingState } from '@/components/common';
-import { ExecutionStepsTimeline } from '@/components/daily-check/ExecutionStepsTimeline';
+import { useToast, ConfirmDialog, EmptyState, LoadingState } from '@/components/common';
 import { ExecTechBadge } from '@/components/platform-status/ExecTechBadge';
 import { formatApiError, parseUTC } from '@/lib/utils';
-import {
-  useOpsCheckCatalog, useStartOpsRun, useOpsRun, useOpsRunItems, useCancelOpsRun,
-} from '@/hooks/useOpsCheck';
-import { useLogPref } from '@/hooks/useLogPref';
+import { useOpsCheckCatalog, useStartOpsRun, useOpsRun, useOpsRunItems } from '@/hooks/useOpsCheck';
 import { useCanOperate } from '@/hooks/useCanOperate';
 import type { OpsCheckCatalogItem, OpsCheckRunItem } from '@/types';
-
-const CATEGORY_LABEL: Record<string, string> = {
-  os: 'OS', k8s: 'K8s', storage: 'Storage', network: 'Network', app: '앱서비스',
-};
-const SOURCE_LABEL: Record<string, string> = {
-  deep_check: '점검', addon: '애드온', batch_job: 'SSH', playbook: 'Ansible',
-};
-
-const itemKey = (i: { source: string; itemRefId: string }) => `${i.source}::${i.itemRefId}`;
+import { OpsRunProgressCard } from './OpsRunProgressCard';
+import { OpsRunItemDetailModal } from './OpsRunItemDetailModal';
+import { CATEGORY_LABEL, SOURCE_LABEL, itemKey } from './opsCheckLabels';
 
 interface Props {
   clusterId: string | undefined;
@@ -33,63 +23,37 @@ interface Props {
 
 /**
  * 클러스터 하나의 점검 카탈로그 + 실행 + 진행 상황 + 결과 상세 — 등록/수정은 다루지 않는다
- * (그건 `/daily-check/settings`). `OpsCheckConsolePage`(레거시 `/ops-checks/:clusterId`)와
- * `ClusterDetailPage`(`/clusters/:id`) 가 이 패널을 공유한다 — 클러스터 사이드바·헤더처럼
- * 화면마다 다른 크롬은 각 페이지가 맡고, 이 패널은 클러스터 하나를 받아 카탈로그만 그린다.
+ * (그건 `/daily-check/settings`). `OpsCheckConsolePage`(K8s 허브 점검 ▸ 점검 항목 `/k8s/:clusterId/checks`)가
+ * 마운트한다 — 클러스터 사이드바·헤더 같은 크롬은 페이지가 맡고, 이 패널은 클러스터 하나를 받아 카탈로그만 그린다.
+ * 실행 진행 카드는 `OpsRunProgressCard` 로 분리돼 허브 개요의 「전체 점검」과 공유한다.
  */
 export function ClusterOpsCheckPanel({ clusterId, clusterName }: Props) {
   const { data: catalog = [], isLoading, isError, refetch } = useOpsCheckCatalog(clusterId);
   const startRun = useStartOpsRun();
-  const cancelRun = useCancelOpsRun();
   const toast = useToast();
   const { canOperate, withHint } = useCanOperate(clusterId);
-  // "로그 보기" — 실행 진행 카드 아래 항목별 실시간 로그를 펼칠지(화면별 기억, 기본 펼침).
-  const [showRunLog, setShowRunLog] = useLogPref('ops-check-run');
+  // `?run=<id>` — 개요의 「전체 점검」이 만든 실행 묶음을 이 화면에서 이어 본다.
+  const [searchParams] = useSearchParams();
 
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [category, setCategory] = useState<string>('all');
   const [search, setSearch] = useState('');
-  const [activeRunId, setActiveRunId] = useState<string | null>(null);
+  const [activeRunId, setActiveRunId] = useState<string | null>(() => searchParams.get('run'));
   const [detail, setDetail] = useState<OpsCheckRunItem | null>(null);
   // 운영 점검 실행은 모두 운영 위험 레벨 — 실행 전 대상/건수 확인 (D-014)
   const [confirmRun, setConfirmRun] = useState<OpsCheckCatalogItem[] | null>(null);
-  const closeDetail = useCallback(() => setDetail(null), []);
-  const detailRef = useModalA11y(!!detail, closeDetail);
 
+  // 표의 행별 실시간 상태용 — 진행 카드와 같은 쿼리 키라 폴링은 한 번만 나간다.
   const { data: run } = useOpsRun(activeRunId ?? undefined);
   const isRunning = !!run && (run.status === 'pending' || run.status === 'running');
   const { data: runItems = [] } = useOpsRunItems(activeRunId ?? undefined, isRunning);
 
-  // 항목 상태를 시간순 실행 로그로 — 2초 폴링마다 다시 그려 지금 무엇을 돌고 있는지 보인다.
-  const runLogText = useMemo(() => {
-    if (!run) return '';
-    const t = (iso?: string | null) => (iso ? parseUTC(iso).toLocaleTimeString('ko-KR') : '--:--:--');
-    const lines = [`[${t(run.createdAt)}] 실행 묶음 등록 — ${clusterName ?? '클러스터'} · 항목 ${run.total}개${run.triggeredBy ? ` · 요청자 ${run.triggeredBy}` : ''}`];
-    for (const it of runItems) {
-      const name = it.name || it.checkType;
-      if (it.status === 'queued') lines.push(`[--:--:--] 대기 — ${name}${it.message ? ` · ${it.message}` : ''}`);
-      else if (it.status === 'running') lines.push(`[${t(it.startedAt)}] 실행 중 — ${name}`);
-      else if (it.status === 'cancelled') lines.push(`[${t(it.finishedAt)}] 취소 — ${name}${it.message ? ` · ${it.message}` : ''}`);
-      else {
-        const verdict = it.status === 'error' ? '실패' : `판정 ${it.resultStatus ?? '-'}`;
-        lines.push(`[${t(it.finishedAt)}] ${it.status === 'error' ? 'ERROR' : '완료'} — ${name} · ${verdict}${it.durationMs ? ` · ${it.durationMs}ms` : ''}${it.message ? ` · ${it.message.split('\n')[0].slice(0, 200)}` : ''}`);
-      }
-    }
-    if (run.status === 'cancelled') lines.push(`[${t(run.finishedAt)}] 실행 묶음 취소됨 — 남은 항목을 건너뛰었다`);
-    else if (run.status === 'done') lines.push(`[${t(run.finishedAt)}] 실행 묶음 완료 — 정상 ${run.okCount} · 경고 ${run.warnCount} · 위험 ${run.critCount} · 실패 ${run.errorCount}`);
-    return lines.join('\n');
-  }, [run, runItems, clusterName]);
-
-  const doCancel = () => {
-    if (!activeRunId) return;
-    cancelRun.mutate(activeRunId, {
-      onSuccess: () => toast.info('실행을 취소했습니다', '실행 중인 항목이 끝나면 멈추고, 남은 항목은 건너뜁니다.'),
-      onError: (e) => toast.error('취소 실패', formatApiError(e)),
-    });
-  };
-
   // 클러스터 변경 시 선택/실행 초기화
+  // (첫 마운트는 건너뛴다 — `?run=` 으로 받은 실행 묶음을 지우지 않게)
+  const prevClusterId = useRef(clusterId);
   useEffect(() => {
+    if (prevClusterId.current === clusterId) return;
+    prevClusterId.current = clusterId;
     setSelected(new Set());
     setActiveRunId(null);
   }, [clusterId]);
@@ -210,7 +174,8 @@ export function ClusterOpsCheckPanel({ clusterId, clusterName }: Props) {
           <span className="text-sm text-muted-foreground">선택 {selected.size}개</span>
           <button
             onClick={requestRunSelected}
-            disabled={selected.size === 0 || startRun.isPending}
+            disabled={!canOperate || selected.size === 0 || startRun.isPending}
+            title={withHint('선택한 점검 실행')}
             className="ml-auto inline-flex items-center gap-1.5 rounded-xl bg-primary text-primary-foreground px-3 py-1.5 text-sm font-medium disabled:opacity-40 disabled:cursor-not-allowed hover:bg-primary/90">
             {startRun.isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Play className="w-3.5 h-3.5" />}
             선택 {selected.size}개 실행
@@ -311,7 +276,8 @@ export function ClusterOpsCheckPanel({ clusterId, clusterName }: Props) {
                     <td className="px-3 py-2 text-right whitespace-nowrap">
                       <button
                         onClick={() => requestRunOne(c)}
-                        disabled={startRun.isPending}
+                        disabled={!canOperate || startRun.isPending}
+                        title={withHint('이 점검 실행')}
                         className="inline-flex items-center gap-1 rounded-lg border border-border px-2 py-1 text-xs hover:bg-secondary disabled:opacity-40">
                         <Play className="w-3 h-3" /> 실행
                       </button>
@@ -333,71 +299,13 @@ export function ClusterOpsCheckPanel({ clusterId, clusterName }: Props) {
       </MacCard>
 
       {/* run progress */}
-      {activeRunId && run && (
-        <MacCard
-          title="실행 진행"
-          titleExtra={
-            <span className="flex items-center gap-2 text-sm">
-              {isRunning ? <Loader2 className="w-4 h-4 animate-spin text-primary" /> : <CheckCircle2 className="w-4 h-4 text-status-healthy" />}
-              <span className="font-medium">{isRunning ? '실행 중…' : run.status === 'cancelled' ? '취소됨' : '완료'}</span>
-              <span className="text-sm text-muted-foreground tabular-nums">
-                총 {run.total} · 정상 {run.okCount} · 경고 {run.warnCount} · 위험 {run.critCount} · 실패 {run.errorCount}
-              </span>
-            </span>
-          }
-          actions={
-            <span className="flex items-center gap-2">
-              <label className="inline-flex items-center gap-1.5 text-xs text-muted-foreground">
-                <input type="checkbox" checked={showRunLog} onChange={(e) => setShowRunLog(e.target.checked)} />
-                로그 보기
-              </label>
-              {isRunning && (
-                <button
-                  type="button"
-                  onClick={doCancel}
-                  disabled={!canOperate || cancelRun.isPending}
-                  title={withHint('남은 점검 취소')}
-                  className="inline-flex items-center gap-1 rounded-xl border border-border px-2 py-1 text-xs hover:bg-secondary disabled:opacity-40"
-                >
-                  {cancelRun.isPending ? <Loader2 className="w-3 h-3 animate-spin" aria-hidden="true" /> : <Ban className="w-3 h-3" aria-hidden="true" />}
-                  취소
-                </button>
-              )}
-              <button onClick={() => setActiveRunId(null)} className="text-muted-foreground hover:text-foreground" title="닫기" aria-label="닫기">
-                <X className="w-4 h-4" />
-              </button>
-            </span>
-          }
-        >
-          {showRunLog && runLogText && (
-            <div className="mb-3">
-              <LogViewer text={runLogText} maxHeight="max-h-56" />
-            </div>
-          )}
-          <div className="divide-y divide-border/50">
-            {runItems.map((it) => (
-              <button
-                key={it.id}
-                onClick={() => (it.status === 'done' || it.status === 'error') && setDetail(it)}
-                className="w-full flex items-center gap-3 py-2 text-left hover:bg-secondary/20 px-1">
-                <span className="w-32 text-sm truncate">{it.name || it.checkType}</span>
-                {it.status === 'done' ? (
-                  <StatusBadge variant={statusToVariant(it.resultStatus)} />
-                ) : it.status === 'error' ? (
-                  <StatusBadge variant="critical" label="실패" />
-                ) : it.status === 'cancelled' ? (
-                  <span className="text-xs text-muted-foreground">취소</span>
-                ) : (
-                  <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
-                    <Loader2 className="w-3 h-3 animate-spin" /> {it.status === 'running' ? '실행중' : '대기'}
-                  </span>
-                )}
-                <span className="flex-1 text-sm text-muted-foreground truncate">{it.message}</span>
-                {it.durationMs > 0 && <span className="text-xs text-muted-foreground font-mono">{it.durationMs}ms</span>}
-              </button>
-            ))}
-          </div>
-        </MacCard>
+      {activeRunId && (
+        <OpsRunProgressCard
+          runId={activeRunId}
+          clusterId={clusterId}
+          clusterName={clusterName}
+          onClose={() => setActiveRunId(null)}
+        />
       )}
 
       {/* 실행 확인 (운영 위험 레벨 — 모든 실행 공통) */}
@@ -428,42 +336,7 @@ export function ClusterOpsCheckPanel({ clusterId, clusterName }: Props) {
         </ConfirmDialog>
       )}
 
-      {/* item detail modal */}
-      {detail && (
-        <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4" onClick={() => setDetail(null)}>
-          <div
-            ref={detailRef}
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="ops-detail-title"
-            className="bg-card rounded-md border border-border w-full max-w-3xl max-h-[85vh] overflow-auto"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="sticky top-0 bg-card flex items-center gap-2 px-5 py-3 border-b border-border">
-              {detail.status === 'done'
-                ? <StatusBadge variant={statusToVariant(detail.resultStatus)} />
-                : <StatusBadge variant="critical" label="실패" />}
-              <h2 id="ops-detail-title" className="font-semibold text-sm truncate">{detail.name || detail.checkType}</h2>
-              <span className="text-xs text-muted-foreground font-mono ml-1">{detail.durationMs}ms</span>
-              <button onClick={() => setDetail(null)} className="ml-auto text-muted-foreground hover:text-foreground" aria-label="닫기">
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-            <div className="p-5 space-y-3">
-              {detail.message && <p className="text-sm">{detail.message}</p>}
-              {Array.isArray(detail.details?._steps) && detail.details!._steps.length > 0 && (
-                <ExecutionStepsTimeline steps={detail.details!._steps} />
-              )}
-              <div>
-                <div className="text-xs font-semibold text-muted-foreground mb-1 flex items-center gap-1">
-                  <RefreshCw className="w-3 h-3" /> 상세 로그
-                </div>
-                <LogViewer text={detail.details ? JSON.stringify(detail.details, null, 2) : '(상세 없음)'} maxHeight="max-h-[55vh]" />
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
+      <OpsRunItemDetailModal item={detail} onClose={() => setDetail(null)} />
     </div>
   );
 }

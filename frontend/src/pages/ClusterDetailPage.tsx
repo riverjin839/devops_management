@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
 import { PageHeader } from '@/components/common/PageHeader';
 import { PageShell, RunLogPanel, ConfirmDialog, useToast } from '@/components/common';
-import { ClipboardCheck, Settings, AlertTriangle, Loader2, BookOpen, Download, RefreshCw, WifiOff, KeyRound, Plus, MoreHorizontal, ChevronDown } from 'lucide-react';
+import { ClipboardCheck, Settings, AlertTriangle, Loader2, BookOpen, Download, RefreshCw, WifiOff, KeyRound, Plus, MoreHorizontal, ChevronDown, ListChecks, Play, HeartPulse } from 'lucide-react';
 import { ClusterSidebar } from '@/components/common/ClusterSidebar';
 import { MacCard } from '@/components/ui/MacCard';
 import { StatusBadge, statusToVariant } from '@/components/common/StatusBadge';
@@ -27,7 +27,8 @@ import { useRunLog, runLogged, elapsed, type RunLogEntry, type RunLogLevel } fro
 import { useLogPref } from '@/hooks/useLogPref';
 import { useCanOperate } from '@/hooks/useCanOperate';
 import { usePlaybookStore } from '@/stores/playbookStore';
-import { ClusterOpsCheckPanel } from '@/components/ops-check';
+import { OpsRunProgressCard, OPS_SOURCE_LABEL, opsItemKey } from '@/components/ops-check';
+import { useOpsCheckCatalog, useStartOpsRun, useOpsRun } from '@/hooks/useOpsCheck';
 import { healthApi } from '@/services/api';
 import { parseUTC, formatApiError, formatRelativeTime } from '@/lib/utils';
 import { useK8sHub } from '@/lib/k8sHub';
@@ -141,7 +142,49 @@ export function ClusterDetailPage() {
     if (disconnectedRef.current) disconnectedRef.current.inert = isDisconnected;
   }, [isDisconnected, clusterId]);
 
-  // 점검 실행 로그 — 점검 실행 · 애드온 단건 ▶ · 현황 아이템 ▶ · 플레이북 실행이 공유한다(D-135).
+  // 전체 점검 — 이 클러스터의 활성 점검 카탈로그 전부를 운영 점검 실행 묶음(ops-check run) 1건으로 돌린다.
+  // (Cloudera Manager 클러스터 Actions → Command 진행 창, Ambari Background Operations 와 같은 흐름 — D-242)
+  const { data: opsCatalog = [], isLoading: opsCatalogLoading } = useOpsCheckCatalog(clusterId || undefined);
+  const fullRunTargets = useMemo(() => opsCatalog.filter((c) => c.enabled !== false), [opsCatalog]);
+  const fullRunSourceCounts = useMemo(() => {
+    const m = new Map<string, number>();
+    fullRunTargets.forEach((c) => m.set(c.source, (m.get(c.source) ?? 0) + 1));
+    return Array.from(m.entries());
+  }, [fullRunTargets]);
+  const startOpsRun = useStartOpsRun();
+  const [fullRunConfirm, setFullRunConfirm] = useState(false);
+  const [fullRunId, setFullRunId] = useState<string | null>(null);
+  const { data: fullRun } = useOpsRun(fullRunId ?? undefined);
+  const fullRunActive = !!fullRun && (fullRun.status === 'pending' || fullRun.status === 'running');
+  // 클러스터를 바꾸면 이전 클러스터의 진행 카드는 닫는다(실행 자체는 서버에서 계속된다).
+  useEffect(() => { setFullRunId(null); }, [clusterId]);
+  // 실행 묶음이 끝나면 상태 근거를 바로 다시 읽는다(30초 폴링을 기다리지 않게).
+  const fullRunStatus = fullRun?.status;
+  useEffect(() => {
+    if (fullRunStatus === 'done' || fullRunStatus === 'cancelled') void refetchBreakdown();
+  }, [fullRunStatus, refetchBreakdown]);
+
+  const doFullRun = () => {
+    setFullRunConfirm(false);
+    if (!clusterId || fullRunTargets.length === 0) return;
+    startOpsRun.mutate(
+      {
+        clusterId,
+        items: fullRunTargets.map((c) => ({ source: c.source, itemRefId: c.itemRefId, checkType: c.checkType, name: c.name })),
+      },
+      {
+        onSuccess: (r) => setFullRunId(r.id),
+        onError: (e) => toast.error('전체 점검 시작 실패', formatApiError(e)),
+      },
+    );
+  };
+  const fullRunHint = opsCatalogLoading
+    ? '점검 항목을 불러오는 중'
+    : fullRunTargets.length === 0
+      ? '활성 점검 항목이 없습니다 — 점검 항목 관리에서 활성화하세요'
+      : `활성 점검 ${fullRunTargets.length}개 전부 실행`;
+
+  // 점검 실행 로그 — 애드온 헬스 점검 · 애드온 단건 ▶ · 현황 아이템 ▶ · 플레이북 실행이 공유한다(D-135).
   const runLog = useRunLog();
   const [showRunLog, setShowRunLog] = useLogPref('dashboard-health-check');
 
@@ -380,6 +423,15 @@ export function ClusterDetailPage() {
                   </DropdownMenu.Trigger>
                   <DropdownMenu.Portal>
                     <DropdownMenu.Content align="end" sideOffset={4} className={MENU_CONTENT}>
+                      <DropdownMenu.Item className={MENU_ITEM} disabled={!canOperate || !cluster || runLog.running || healthCheck.isPending}
+                        onSelect={() => { void handleRunCheck(); }} title={withHint('애드온 헬스만 빠르게 점검')}>
+                        <HeartPulse className="w-3.5 h-3.5" /> {runLog.running || healthCheck.isPending ? '애드온 점검 중…' : '애드온 헬스만 점검'}
+                      </DropdownMenu.Item>
+                      <DropdownMenu.Item asChild className={MENU_ITEM}>
+                        <Link to={`/k8s/${clusterId}/checks`}>
+                          <ListChecks className="w-3.5 h-3.5" /> 점검 항목
+                        </Link>
+                      </DropdownMenu.Item>
                       <DropdownMenu.Item asChild className={MENU_ITEM}>
                         <Link to={`/k8s/${clusterId}/review`}>
                           <ClipboardCheck className="w-3.5 h-3.5" /> 결과 리뷰
@@ -399,14 +451,16 @@ export function ClusterDetailPage() {
                 </DropdownMenu.Root>
                 <button
                   type="button"
-                  onClick={handleRunCheck}
-                  disabled={!canOperate || !cluster || runLog.running || healthCheck.isPending}
-                  title={withHint('애드온 점검 실행')}
-                  aria-label={ariaWithHint('점검 실행')}
+                  onClick={() => setFullRunConfirm(true)}
+                  disabled={!canOperate || !cluster || opsCatalogLoading || fullRunTargets.length === 0 || startOpsRun.isPending || fullRunActive}
+                  title={withHint(fullRunHint)}
+                  aria-label={ariaWithHint('전체 점검')}
                   className="inline-flex items-center gap-1.5 rounded-xl bg-primary px-3 py-1.5 text-sm font-semibold text-primary-foreground hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  <RefreshCw className={`w-3.5 h-3.5 ${runLog.running || healthCheck.isPending ? 'animate-spin' : ''}`} />
-                  {runLog.running || healthCheck.isPending ? '점검 중…' : '점검 실행'}
+                  {startOpsRun.isPending || fullRunActive
+                    ? <Loader2 className="w-3.5 h-3.5 animate-spin" aria-hidden="true" />
+                    : <Play className="w-3.5 h-3.5" aria-hidden="true" />}
+                  {fullRunActive ? '점검 중…' : '전체 점검'}
                 </button>
               </>
             )}
@@ -426,7 +480,7 @@ export function ClusterDetailPage() {
                 </button>
               </div>
             ) : breakdown.contributors.length === 0 ? (
-              <p className="text-sm text-muted-foreground py-2">아직 점검 결과가 없습니다. 「점검 실행」으로 첫 결과를 만들어 보세요.</p>
+              <p className="text-sm text-muted-foreground py-2">아직 점검 결과가 없습니다. 「전체 점검」으로 첫 결과를 만들어 보세요.</p>
             ) : (
               <div className="space-y-1">
                 {visibleContributors.length === 0 && (
@@ -452,6 +506,21 @@ export function ClusterDetailPage() {
               </div>
             )}
           </MacCard>
+
+          {clusterId && fullRunId && (
+            <OpsRunProgressCard
+              runId={fullRunId}
+              clusterId={clusterId}
+              clusterName={cluster?.name}
+              title="전체 점검"
+              onClose={() => setFullRunId(null)}
+              extraActions={
+                <Link to={`/k8s/${clusterId}/checks?run=${fullRunId}`} className="text-xs text-muted-foreground hover:text-foreground underline-offset-2 hover:underline">
+                  점검 항목에서 보기
+                </Link>
+              }
+            />
+          )}
 
           <RunLogPanel
             run={runLog}
@@ -528,8 +597,6 @@ export function ClusterDetailPage() {
               </MacCard>
             </>
           )}
-
-          <ClusterOpsCheckPanel clusterId={clusterId} clusterName={cluster?.name} />
 
           {clusterId && pinnedPlaybooks.length > 0 && (
             <MacCard
@@ -630,6 +697,36 @@ export function ClusterDetailPage() {
         }}
         onCancel={() => setPlaybookRunConfirm(null)}
       />
+
+      {/* 전체 점검 확인 — 운영 점검 실행은 모두 운영 위험 레벨(D-014). 대상 건수·소스 구성을 보여주고 실행한다. */}
+      <ConfirmDialog
+        open={fullRunConfirm}
+        danger
+        title="전체 점검"
+        description={`${cluster?.name ?? '이 클러스터'}의 활성 점검 ${fullRunTargets.length}개를 한 번에 실행합니다. 실제 서버에 명령(SSH · Ansible · kubectl 등)이 전송될 수 있으니 대상을 확인하세요. 진행 상황과 로그는 이 화면 상단에 표시됩니다.`}
+        confirmLabel={`${fullRunTargets.length}개 실행`}
+        busy={startOpsRun.isPending}
+        onCancel={() => setFullRunConfirm(false)}
+        onConfirm={doFullRun}
+      >
+        <div className="mt-1 flex flex-wrap gap-1.5 text-xs">
+          {fullRunSourceCounts.map(([src, n]) => (
+            <span key={src} className="rounded-full border border-border px-2 py-0.5 text-muted-foreground tabular-nums">
+              {OPS_SOURCE_LABEL[src] ?? src} {n}
+            </span>
+          ))}
+        </div>
+        <ul className="mt-2 max-h-40 overflow-y-auto rounded-md border border-border bg-secondary/30 divide-y divide-border/50 text-sm">
+          {fullRunTargets.map((c) => (
+            <li key={opsItemKey(c)} className="flex items-center gap-2 px-2.5 py-1.5">
+              <span className="text-xs rounded-full border border-border px-1.5 py-0.5 text-muted-foreground shrink-0">
+                {OPS_SOURCE_LABEL[c.source] ?? c.source}
+              </span>
+              <span className="truncate">{c.name || c.checkType}</span>
+            </li>
+          ))}
+        </ul>
+      </ConfirmDialog>
 
       <RunCredsModal
         open={!!credsTarget}

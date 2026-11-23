@@ -303,15 +303,17 @@ hover 시 flyout 자체가 라벨을 보여주므로 이름만 뜨는 중복 툴
 
 ### K8s 클러스터 허브 (`/k8s`, `/k8s/:clusterId/:view?`)
 
+> **개요 = 상태, 점검 = 실행(2026-11-23, D-242)**: Cloudera Manager(클러스터 Status ↔ Actions 의 Command 진행 창)·Ambari(Dashboard ↔ Alerts·Background Operations)처럼 개요는 상태만 보여 주고 점검 카탈로그는 **점검 ▸ 점검 항목**(`checks`)으로 옮겼다. 진단 카테고리는 문제 발생 후 깊이 파는 조사 도구(병목·BPF·패킷)만 둔다. 개요에는 클러스터 전체를 한 번에 돌리는 「전체 점검」만 남는다.
+
 > **단축키(2026-11-04)**: `[` 이전 / `]` 다음 화면 — `useHubTabShortcuts`. 입력 요소 포커스·모달 열림·수정키 조합에서는 무시, 양 끝에서 순환하지 않는다.
 
 - **파일**: `frontend/src/pages/K8sHubPage.tsx` + `frontend/src/components/k8s-hub/{hubViews.ts,HubTabs.tsx,HubTerminalsView.tsx}`, 임베드 컨텍스트 `frontend/src/lib/k8sHub.ts`, 공용 탭 `components/common/SegTabs.tsx`(K8s 자원 관리에서 승격).
 - **목적 / UX**: (2026-10-22, D-240) 클러스터 하나를 고르고 보는 K8s 화면 9개(클러스터 상세·K8s 상세 관리·K8s 자원 관리·클러스터 추이·관측 지표·실시간 이벤트·파드 로그·AI 장애 분석·점검 결과 리뷰)가 사이드바 4그룹에 흩어져 있어 화면마다 클러스터를 다시 고르던 것을, **클러스터 레일 하나 + 카테고리 탭** 한 화면으로 모았다. 클러스터는 URL(`:clusterId`)이 들고 있어 뷰를 바꿔도 유지되고, 레일에서 클러스터를 바꾸면 뷰·쿼리는 그대로 클러스터만 바뀐다. 2단계(2026-10-23)로 구성(K8s 접근 권한·노드 라벨·노드 이미지·버전/설정)·콘솔(etcdctl·커널 파라미터·터미널 실행 카드)을, 3단계로 진단(파드 병목·Cilium BPF 추적·패킷 흐름)을 더하고 메뉴에 남아 있던 옛 화면을 정리했다 — 사이드바·커맨드 팔레트·즐겨찾기에는 이제 허브 하나만 보인다.
 - **UI 구성**:
   - `ClusterSidebar iconOnly`(허브가 하나만 그린다 — 자체 스크롤, 운영등급별 묶음, 상단 "비정상 N개만 보기", 방향키 이동) + `PageHeader`(h1 = 클러스터명 + `StatusBadge`, 설명 = "K8s 클러스터 · 뷰 이름").
-  - `HubTabs` — 1행 카테고리(개요 / 리소스 / 자원 / 관측 / 로그 / 점검 / 진단 / 구성 / 콘솔, `SegTabs mode="tabs"`), 2행은 그 카테고리에 뷰가 둘 이상일 때만(관측: 추이·지표·이벤트, 로그: 파드 로그·AI 분석, 진단: 파드 병목·Cilium·패킷 흐름, 구성: 접근 권한·노드 라벨·노드 이미지·버전/설정, 콘솔: etcdctl·커널 파라미터·터미널). 뷰 전환은 **path** 이동(`/k8s/:clusterId/<view>`)이라 뒤로가기가 이전 뷰로 돌아온다. 쿼리는 넘기지 않는다(뷰마다 `?tab=`·`?view=` 같은 자기 키를 쓴다). 허브 헤더·탭바는 sticky 가 아니다(K8s 상세 관리의 2차 사이드바·자원 관리의 sticky 탭바와 겹치지 않게).
+  - `HubTabs` — 1행 카테고리(개요 / 리소스 / 자원 / 관측 / 로그 / 점검 / 진단 / 구성 / 콘솔, `SegTabs mode="tabs"`), 2행은 그 카테고리에 뷰가 둘 이상일 때만(관측: 추이·지표·이벤트, 로그: 파드 로그·AI 분석, 점검: 점검 항목·결과 리뷰·OS 파라미터 감시, 진단: 파드 병목·Cilium·패킷 흐름, 구성: 접근 권한·노드 라벨·노드 이미지·버전/설정, 콘솔: etcdctl·커널 파라미터·터미널). 뷰 전환은 **path** 이동(`/k8s/:clusterId/<view>`)이라 뒤로가기가 이전 뷰로 돌아온다. 쿼리는 넘기지 않는다(뷰마다 `?tab=`·`?view=` 같은 자기 키를 쓴다). 허브 헤더·탭바는 sticky 가 아니다(K8s 상세 관리의 2차 사이드바·자원 관리의 sticky 탭바와 겹치지 않게).
   - 서브뷰는 **기존 페이지 컴포넌트를 그대로 마운트**한다(`.island-embed` 래퍼 + `K8sHubContext.Provider`). 컨텍스트가 있으면 페이지 쪽 `ClusterSidebar` 는 null, `PageShell` 은 `div`·패딩 없음, `PageHeader` 는 h2·`back` 숨김, `useClusterRouteParam` 은 허브의 clusterId/selectCluster 를 돌려준다 — 그래서 흡수된 화면의 코드는 거의 그대로다(지식 허브 `/docs`·홈 배치잡 서브탭과 같은 "페이지를 탭 안에 마운트" 패턴). 옛 `LogViewTabs`(파드 로그 ↔ AI 분석 전환)는 2행 탭이 대체해 3단계에서 지웠다.
-  - 뷰 id: `overview`(클러스터 상세) · `manage` · `allocation` · `trends` · `metrics` · `events` · `logs` · `incident` · `review` · `rbac` · `node-labels` · `node-images` · `versions` · `etcdctl` · `kernel-params` · `terminals` · `bottleneck` · `cilium` · `packet-flow`. 모르는 view → overview 로 replace. 클러스터 미지정(`/k8s`) → 첫 클러스터로 replace, 클러스터가 없으면 `SelectClusterEmptyState`.
+  - 뷰 id: `overview`(클러스터 상세) · `checks`(점검 항목 — 2026-11-23 개요에서 이동, D-242) · `manage` · `allocation` · `trends` · `metrics` · `events` · `logs` · `incident` · `review` · `rbac` · `node-labels` · `node-images` · `versions` · `etcdctl` · `kernel-params` · `terminals` · `bottleneck` · `cilium` · `packet-flow`. 모르는 view → overview 로 replace. 클러스터 미지정(`/k8s`) → 첫 클러스터로 replace, 클러스터가 없으면 `SelectClusterEmptyState`.
   - **콘솔 ▸ 터미널**(`HubTerminalsView`) — k9s 콘솔·노드 SSH 터미널은 전체 높이 웹 터미널(xterm + WebSocket, 새 창 handoff)이라 임베드하지 않고, 카드의 "열기"가 단독 화면(`/k9s/:clusterId`·`/node-ssh/:clusterId`)을 허브가 고른 클러스터로 연다. 접근 제어로 꺼진 쪽은 카드가 빠지고(둘 다 꺼지면 탭도 빠짐 — `HubView.extraNavKeys`), viewer 는 숨기지 않고 비활성 + 사유.
   - **노드 라벨 이중 진입** — 허브 뷰는 고른 클러스터 하나만 보고, 여러 클러스터를 한 표로 보는 "전체 클러스터" 모드는 단독 화면 `/node-labels`(구성·자산 그룹)에 그대로 남는다.
   - **접근 제어**: 허브 URL 은 `RouteAccessGate` 의 longest-prefix 가 `/k8s` 만 보므로, 뷰마다 흡수한 옛 경로(`HubView.navKey`, 예 `/k8s-manage`)로 `featureAllowed` 를 직접 판정한다 — 꺼진 뷰는 탭에서 빠지고 직접 URL 은 Lock `EmptyState`(아일랜드 패널 호스트와 같은 안내).
@@ -610,6 +612,8 @@ hover 시 flyout 자체가 라벨을 보여주므로 이름만 뜨는 중복 툴
 
 > **허브로 통합(2026-10-23, D-240 3단계)**: 레거시 콘솔 — 옛 URL 은 같은 점검 카탈로그를 종합 상태와 함께 보여 주는 K8s 클러스터 허브 개요 뷰(`/k8s/:clusterId/overview`)로 redirect 된다. 페이지 컴포넌트는 아일랜드 패널 호환으로만 남는다.
 
+> **점검 ▸ 점검 항목 뷰(2026-11-23, D-242)**: 이 페이지가 K8s 클러스터 허브 `/k8s/:clusterId/checks` 로 마운트된다(허브 안에서는 h1·레일을 허브가 그리고 「클러스터 상세」·「결과 리뷰」 링크는 탭이 대신해 숨긴다). 옛 `/ops-checks(/:clusterId)` 는 이 뷰로 redirect(아래 개요 redirect 기록은 이력). `?run=<id>` 쿼리가 있으면 그 실행 묶음의 진행 카드를 연다(개요 「전체 점검」의 「점검 항목에서 보기」). 실행 진행 카드·항목 상세 모달은 `components/ops-check/OpsRunProgressCard.tsx`·`OpsRunItemDetailModal.tsx` 로 분리돼 개요와 공유하고, 표의 실행 버튼은 `useCanOperate` 로 viewer 비활성 + 사유.
+
 > **레거시(2026-10-13, D-129)** — 사이드바 「클러스터 · 점검」그룹에서 제외됐다. 같은 패널을 종합 상태까지 포함해 보여주는 클러스터 상세가 정본이다(지금은 K8s 클러스터 허브 개요 `/k8s/:clusterId/overview`). 이 라우트는 2026-10-23(D-240 3단계)부터 허브 개요로 redirect 되고, 페이지 컴포넌트는 아일랜드 패널 호환으로만 남는다.
 
 - **파일**: `frontend/src/pages/OpsCheckConsolePage.tsx` (+ `components/common/ClusterSidebar`, `components/common/LogViewer`, `components/common/StatusBadge`)
@@ -649,6 +653,8 @@ hover 시 flyout 자체가 라벨을 보여주므로 이름만 뜨는 중복 툴
       상황의 폴백으로만 남아 있다.
 
 ### 클러스터 상세 (`/clusters`, `/clusters/:clusterId`)
+
+> **전체 점검 · 점검 항목 이동(2026-11-23, D-242)**: 헤더 주 버튼이 **「전체 점검」**이다 — `useOpsCheckCatalog` 의 활성(`enabled !== false`) 항목 전부를 `useStartOpsRun` 실행 묶음 1건으로 돌린다. 실행 전 `ConfirmDialog danger`(대상 건수 + 소스별 개수 칩 + 항목 목록), 진행은 상태 근거 바로 아래 `OpsRunProgressCard`(총계·항목별 상태·「로그 보기」 `useLogPref('ops-check-run')`·취소·항목 상세, actions 에 「점검 항목에서 보기」 → `/k8s/:id/checks?run=<id>`). 묶음이 끝나면 상태 근거를 즉시 재조회. 활성 항목 0건·viewer 는 비활성 + 사유. 예전 「점검 실행」(애드온 헬스 `POST /health/check/{id}`)은 「더 보기 ▸ 애드온 헬스만 점검」으로 옮겼고(로그는 그대로 `RunLogPanel`), 「더 보기」에 「점검 항목」 링크가 늘었다. **아래 설명의 `ClusterOpsCheckPanel`(카탈로그 표)은 개요에서 빠지고 허브 점검 ▸ 점검 항목으로 갔다.**
 
 > **허브로 통합(2026-10-22, D-240)**: 이 화면은 K8s 클러스터 허브 `/k8s/:clusterId/overview` 의 서브뷰로 마운트된다. 옛 URL 은 그 뷰로 redirect(클러스터·쿼리 보존). 레일·h1·`PageShell` 은 허브가 그리고(`lib/k8sHub.ts` 컨텍스트), 아래 설명의 나머지는 그대로다.
 
