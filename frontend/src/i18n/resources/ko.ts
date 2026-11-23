@@ -34,7 +34,6 @@ export const ko = {
       sprints: '스프린트',
       members: '멤버별 업무',
       clusterManage: '클러스터 관리',
-      versions: '버전 / 설정',
       bulkExec: '노드 일괄 실행',
       nodeSsh: '노드 SSH 터미널',
       etcdctl: 'etcdctl 콘솔',

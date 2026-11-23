@@ -18,7 +18,6 @@ import { NsMigrationPage } from '@/pages/NsMigrationPage';
 import { CidrCalculatorPage } from '@/pages/CidrCalculatorPage';
 import { ClusterManagePage } from '@/pages/ClusterManagePage';
 import { ClusterMetaFormPage } from '@/pages/ClusterMetaFormPage';
-import { VersionGraphPage } from '@/pages/VersionGraphPage';
 import { BulkExecPage } from '@/pages/BulkExecPage';
 import { McClientPage } from '@/pages/McClientPage';
 import { IsilonNfsPage } from '@/pages/IsilonNfsPage';
@@ -175,8 +174,9 @@ function AppShell() {
               <Route path="/cluster-overview" element={<Navigate to="/clusters" replace />} />
               {/* K8s 클러스터 허브(D-240) — 클러스터 레일 하나 + 탭으로 per-cluster K8s 화면을 모은다.
                   아래 옛 경로들(/clusters·/k8s-manage·/k8s-allocation·/cluster-trends·/observability·/k8s-events·
-                  /k8s-logs·/incident-analysis·/daily-check/review, 2단계: /k8s-rbac·/node-images·/versions·/etcdctl·/kernel-params)은
+                  /k8s-logs·/incident-analysis·/daily-check/review, 2단계: /k8s-rbac·/node-images·/etcdctl·/kernel-params)은
                   해당 뷰로 redirect(클러스터·쿼리 보존). 3단계: /pod-bottleneck·/cilium-trace·/packet-flow·/ops-checks.
+                  /versions·/versions/:id/graph 는 화면을 지우고 서비스 구성 뷰로 redirect(서비스 구성이 대체).
                   /node-labels(전체 클러스터 모드)·/k9s·/node-ssh(전체 높이 터미널)·/pod-bottleneck/:id(실행 상세)는 단독 유지. */}
               <Route path="/k8s" element={<K8sHubPage />} />
               <Route path="/k8s/:clusterId/:view?" element={<K8sHubPage />} />
@@ -215,8 +215,8 @@ function AppShell() {
               <Route path="/cidr" element={<CidrCalculatorPage />} />
               <Route path="/cluster-manage" element={<ClusterManagePage />} />
               <Route path="/cluster-manage/:id/edit" element={<ClusterMetaFormPage />} />
-              <Route path="/versions" element={<RedirectToHub view="versions" />} />
-              <Route path="/versions/:clusterId/graph" element={<VersionGraphPage />} />
+              <Route path="/versions" element={<RedirectToHub view="services" />} />
+              <Route path="/versions/:clusterId/graph" element={<RedirectToHub view="services" />} />
               <Route path="/bulk-exec" element={<BulkExecPage />} />
               <Route path="/etcdctl" element={<RedirectToHub view="etcdctl" />} />
               {/* 홈 화면 "플랫폼 현황" 탭의 배치잡 서브탭으로 병합됨 — 기존 링크/북마크가 홈 첫 탭이 아니라

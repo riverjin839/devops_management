@@ -16,7 +16,6 @@ import { TodoTodayPage } from '@/pages/TodoTodayPage';
 import { SprintsPage } from '@/pages/SprintsPage';
 import { MemberBoardPage } from '@/pages/MemberBoardPage';
 import { ClusterManagePage } from '@/pages/ClusterManagePage';
-import { VersionsPage } from '@/pages/VersionsPage';
 import { BulkExecPage } from '@/pages/BulkExecPage';
 import { EtcdCtlPage } from '@/pages/EtcdCtlPage';
 import { BatchJobsPage } from '@/pages/BatchJobsPage';
@@ -77,7 +76,6 @@ export const PANEL_COMPONENTS: Record<string, ComponentType> = {
   '/sprints': SprintsPage,
   '/members': MemberBoardPage,
   '/cluster-manage': ClusterManagePage,
-  '/versions': VersionsPage,
   '/bulk-exec': BulkExecPage,
   '/etcdctl': EtcdCtlPage,
   '/batch-jobs': BatchJobsPage,
