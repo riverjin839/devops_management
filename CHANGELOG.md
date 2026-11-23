@@ -10,6 +10,9 @@
 
 1.98.0 이후 main 에 병합된 변경 (다음 릴리스 후보).
 
+### Added
+- **사용자별 클러스터 권한 (Settings ▸ 클러스터 권한)**: admin 이 사용자 한 명 단위로 등록된 클러스터마다 숨김·읽기·편집을 지정한다. 직접 지정이 테넌트 권한보다 우선하고, 한 명에게라도 읽기·편집을 지정한 클러스터는 지정되지 않은 사용자(테넌트 바인딩 멤버 제외)에게 숨겨진다. 숨김만 지정하면 그 사용자만 가려진다. 「편집」은 범위만 열 뿐이라 viewer 역할은 여전히 실행할 수 없다. 화면에서 실제 적용 권한과 근거(직접 지정·테넌트·제한 없음)를 함께 보여준다. Backend: `ClusterUserGrant`(`cluster_user_grants`), `services/cluster_access.py` 판정 확장, `routers/cluster_access_grants.py`(감사 로그 `cluster_access.grant`). Frontend: `ClusterAccessManager`.
+
 ## [1.98.0] - 2026-11-23
 
 ### Added

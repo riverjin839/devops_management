@@ -121,6 +121,7 @@ from app.routers import (
     home_prefs_router,
     ns_prefs_router,
     tenants_router,
+    cluster_access_grants_router,
 )
 from app.auth.deps import enforce_cluster_access, get_current_user
 from app.auth.feature_access import enforce_feature_access
@@ -2896,6 +2897,7 @@ app.include_router(home_prefs_router, prefix="/api/v1", dependencies=_auth)
 # NS 선택 기억 — 마지막 선택·최근 선택 NS (user_settings 재사용, 스키마 변경 없음)
 app.include_router(ns_prefs_router, prefix="/api/v1", dependencies=_auth)
 app.include_router(tenants_router, prefix="/api/v1", dependencies=_auth)
+app.include_router(cluster_access_grants_router, prefix="/api/v1", dependencies=_auth)
 
 
 @app.get("/")

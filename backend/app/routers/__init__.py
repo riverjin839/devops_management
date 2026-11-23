@@ -97,6 +97,7 @@ from app.routers.llm_settings import router as llm_settings_router
 from app.routers.home_prefs import router as home_prefs_router
 from app.routers.ns_prefs import router as ns_prefs_router
 from app.routers.tenants import router as tenants_router
+from app.routers.cluster_access_grants import router as cluster_access_grants_router
 
 __all__ = [
     "check_matrix_router",
@@ -191,4 +192,5 @@ __all__ = [
     "home_prefs_router",
     "ns_prefs_router",
     "tenants_router",
+    "cluster_access_grants_router",
 ]

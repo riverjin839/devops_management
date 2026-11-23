@@ -183,7 +183,10 @@ def _ontology_visibility_filter(query, cluster_scope: Any):
             query = query.filter(OntologyEvent.cluster_id.notin_(list(hidden)))
         return query
 
-    cond = ~OntologyEvent.cluster_id.in_(query.session.query(ClusterBinding.cluster_id).distinct())
+    from app.services.cluster_access import restricted_clusters_query
+
+    # 제한된 클러스터(바인딩 또는 사용자 직접 지정)는 사용자 맥락 없이 노출하지 않는다.
+    cond = ~OntologyEvent.cluster_id.in_(restricted_clusters_query(query.session))
     try:
         from app.services.llm.service import current_llm_tenant
         tenant = current_llm_tenant()

@@ -60,3 +60,28 @@ class ClusterBinding(Base):
     # 'read' | 'operate' — CLUSTER_ACCESS_LEVELS
     access = Column(String(16), nullable=False, default="operate", server_default="operate")
     created_at = Column(DateTime, default=datetime.utcnow)
+
+
+# 사용자별 직접 지정 — 'none'(숨김) | 'read' | 'operate'.
+CLUSTER_GRANT_LEVELS = ("none", "read", "operate")
+
+
+class ClusterUserGrant(Base):
+    """admin 이 사용자 한 명에게 직접 지정한 클러스터 권한 (Settings → 클러스터 권한).
+
+    판정(``services/cluster_access.py``):
+    - 직접 지정이 있으면 테넌트 판정보다 **우선**한다(``none`` 이면 숨김, 테넌트가 operate 여도 낮춘다).
+    - ``read``/``operate`` 지정이 하나라도 있는 클러스터는 "제한된 클러스터"가 된다 — 지정도 테넌트
+      바인딩 멤버십도 없는 사용자에겐 숨겨진다(허용 목록). ``none`` 지정만으로는 제한되지 않는다.
+    - 전역 role 게이트는 그대로 — ``operate`` 를 줘도 viewer 는 실행할 수 없다(범위만 연다).
+    """
+    __tablename__ = "cluster_user_grants"
+    __table_args__ = (UniqueConstraint("cluster_id", "user_id", name="uq_cluster_user_grants_cluster_user"),)
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    cluster_id = Column(UUID(as_uuid=True), ForeignKey("clusters.id", ondelete="CASCADE"), nullable=False, index=True)
+    user_id = Column(String(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    access = Column(String(16), nullable=False)
+    granted_by = Column(String(100), nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
