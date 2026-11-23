@@ -1,11 +1,11 @@
 // 서비스 레일 — 클러스터 레일 오른쪽에 붙는 세로 서비스 목록(ETCD·CONTAINERD·CILIUM·LINUX). 아이콘 아래 짧은 이름을 함께 둬
 // 툴팁 없이도 읽힌다. 드리프트·알람·실패한 적용이 있는 서비스는 아이콘에 상태 점(사유는 title·aria-label). 목록은 서버 서비스 정의(`/service-config/services`) 순서 그대로 — 서비스는 추후 서버 쪽에서 늘린다.
 import type { ComponentType } from 'react';
-import { Box, Cpu, Database, Network, Server } from 'lucide-react';
+import { Box, Boxes, CalendarClock, Cog, Cpu, Database, Network, Server } from 'lucide-react';
 import type { ServiceConfigLevel, ServiceConfigServiceDef } from '@/types';
 
 const ICONS: Record<string, ComponentType<{ className?: string }>> = {
-  database: Database, box: Box, network: Network, cpu: Cpu,
+  database: Database, box: Box, network: Network, cpu: Cpu, server: Server, cog: Cog, calendar: CalendarClock, boxes: Boxes,
 };
 
 interface Props {
@@ -43,7 +43,7 @@ export function ServiceConfigRail({ services, selected, onSelect, levels }: Prop
                 <span className={`absolute -top-1 -right-1.5 w-2.5 h-2.5 rounded-full ring-2 ring-card ${lv.level === 'critical' ? 'bg-status-critical' : 'bg-status-warning'}`} />
               )}
             </span>
-            <span className="leading-tight text-center">{s.label.replace(' (OS)', '')}</span>
+            <span className="leading-tight text-center">{s.short ?? s.label.replace(' (OS)', '')}</span>
           </button>
         );
       })}

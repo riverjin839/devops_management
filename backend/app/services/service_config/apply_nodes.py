@@ -35,7 +35,9 @@ from app.services.ssh_runner import SSHTarget
 
 _PLAIN_ITEM = re.compile(r"^[A-Za-z0-9_.:/,+=\-]+$")
 _FLAG_LINE = re.compile(r"""^(?P<indent>\s*)-\s+(?P<q>["']?)--(?P<flag>[A-Za-z0-9-]+)(?:=(?P<val>.*?))?(?P=q)\s*$""")
-_ETCD_CMD_LINE = re.compile(r"""^(?P<indent>\s*)-\s+["']?(?:\S*/)?etcd["']?\s*$""")
+def _cmd_line_re(binary: str) -> "re.Pattern[str]":
+    """정적 파드 command 목록의 실행 파일 줄(``- etcd`` / ``- kube-apiserver``)."""
+    return re.compile(r"""^(?P<indent>\s*)-\s+["']?(?:\S*/)?""" + re.escape(binary) + r"""["']?\s*$""")
 _HEADER = re.compile(r"^\s*\[(?!\[)\s*(?P<path>[^\[\]]+?)\s*\]\s*(#.*)?$")
 _ANY_HEADER = re.compile(r"^\s*\[")
 
@@ -51,15 +53,15 @@ def _render_flag(flag: str, value: str) -> str:
     return item if _PLAIN_ITEM.match(item) else json.dumps(item)
 
 
-def manifest_flags(text: str) -> dict[str, str]:
-    """정적 파드 매니페스트(YAML)의 etcd 컨테이너 command 에서 ``--flag=value`` 를 뽑는다."""
+def manifest_flags(text: str, binary: str = "etcd") -> dict[str, str]:
+    """정적 파드 매니페스트(YAML)의 ``binary`` 컨테이너 command 에서 ``--flag=value`` 를 뽑는다."""
     import yaml
 
     doc = yaml.safe_load(text) or {}
     containers = ((doc.get("spec") or {}).get("containers") or []) if isinstance(doc, dict) else []
     for c in containers:
         cmd = list(c.get("command") or []) + list(c.get("args") or [])
-        if c.get("name") == "etcd" or (cmd and str(cmd[0]).rsplit("/", 1)[-1] == "etcd"):
+        if c.get("name") == binary or (cmd and str(cmd[0]).rsplit("/", 1)[-1] == binary):
             out: dict[str, str] = {}
             for tok in cmd:
                 tok = str(tok)
@@ -67,12 +69,13 @@ def manifest_flags(text: str) -> dict[str, str]:
                     k, _, v = tok[2:].partition("=")
                     out[k] = v if "=" in tok else "true"
             return out
-    raise EditError("매니페스트에서 etcd 컨테이너를 찾지 못했습니다.")
+    raise EditError(f"매니페스트에서 {binary} 컨테이너를 찾지 못했습니다.")
 
 
-def edit_etcd_manifest(text: str, flags: dict[str, str]) -> str:
+def edit_etcd_manifest(text: str, flags: dict[str, str], binary: str = "etcd") -> str:
     """``- --flag=value`` 줄만 바꾸거나(같은 들여쓰기) 마지막 플래그 줄 뒤에 추가 — 나머지 서식은 그대로 둔다.
     바꾼 뒤 YAML 로 다시 읽어 플래그가 기대 값인지 확인하고, 다르면 ``EditError``."""
+    cmd_re = _cmd_line_re(binary)
     lines = text.splitlines()
     last_flag = -1
     cmd_line = -1
@@ -88,7 +91,7 @@ def edit_etcd_manifest(text: str, flags: dict[str, str]) -> str:
                 lines[i] = f"{m.group('indent')}- {_render_flag(f, flags[f])}"
                 seen.add(f)
             continue
-        m2 = _ETCD_CMD_LINE.match(line)
+        m2 = cmd_re.match(line)
         if m2 and cmd_line < 0:
             cmd_line = i
             indent = indent or m2.group("indent")
@@ -96,11 +99,11 @@ def edit_etcd_manifest(text: str, flags: dict[str, str]) -> str:
     if missing:
         at = last_flag if last_flag >= 0 else cmd_line
         if at < 0 or indent is None:
-            raise EditError("매니페스트에서 etcd command 목록을 찾지 못했습니다(- etcd / - --flag 줄).")
+            raise EditError(f"매니페스트에서 {binary} command 목록을 찾지 못했습니다(- {binary} / - --flag 줄).")
         lines[at + 1:at + 1] = [f"{indent}- {_render_flag(f, flags[f])}" for f in missing]
     out = "\n".join(lines) + ("\n" if text.endswith("\n") or not text else "")
     try:
-        got = manifest_flags(out)
+        got = manifest_flags(out, binary)
     except EditError:
         raise
     except Exception as exc:  # noqa: BLE001 — YAML 해석 실패
@@ -386,10 +389,14 @@ def _items(db: Session, service: str) -> dict[str, Any]:
 # ── ETCD ─────────────────────────────────────────────────────────────────────
 
 def etcd_members(cluster: Cluster) -> list[dict[str, str]]:
-    """정적 파드 etcd 멤버(``kube-system`` 의 ``component=etcd``) → [{node, host}]. 실패하면 [](fail-safe)."""
+    return static_pod_members(cluster, "etcd")
+
+
+def static_pod_members(cluster: Cluster, component: str) -> list[dict[str, str]]:
+    """정적 파드 멤버(``kube-system`` 의 ``component=<component>``) → [{node, host}]. 실패하면 [](fail-safe)."""
     try:
         core, _apps = A.k8s_apis(cluster)
-        pods = core.list_namespaced_pod("kube-system", label_selector="component=etcd", _request_timeout=10)
+        pods = core.list_namespaced_pod("kube-system", label_selector=f"component={component}", _request_timeout=10)
     except Exception:  # noqa: BLE001
         return []
     out = []
@@ -403,8 +410,15 @@ def etcd_members(cluster: Cluster) -> list[dict[str, str]]:
 _PROC_CMDLINE = 'for p in $(pgrep -x etcd); do tr "\\000" " " < /proc/$p/cmdline; echo; done'
 
 
-def _running_flags(sh: NodeShell) -> list[dict[str, str]]:
-    r = sh.exec(f"{sh.sudo}sh -c {shlex.quote(_PROC_CMDLINE)}", 15)
+def _proc_cmdline(binary: str) -> str:
+    """실행 중 프로세스 인자 — 이름이 15자를 넘으면 ``pgrep -x`` 가 못 찾으므로 전체 명령줄 정규식으로 찾는다."""
+    if binary == "etcd":
+        return _PROC_CMDLINE
+    return f"for p in $(pgrep -f '^(/[^ ]*/)?{binary}( |$)'); do tr \"\\000\" \" \" < /proc/$p/cmdline; echo; done"
+
+
+def _running_flags(sh: NodeShell, binary: str = "etcd") -> list[dict[str, str]]:
+    r = sh.exec(f"{sh.sudo}sh -c {shlex.quote(_proc_cmdline(binary))}", 15)
     return [C.parse_cli_flags(line) for line in (r.stdout or "").splitlines() if line.strip()]
 
 
@@ -803,4 +817,347 @@ async def run_containerd(db: Session, cluster: Cluster, run: ServiceConfigApplyR
     results, stopped = await _run_batches(
         db, run, targets, batch, pause, stop_on_failure,
         lambda t: _containerd_node(t, values, items, cfg, opts, creds, base, core, names, log), log, after_batch)
+    return A._finish(db, cluster, run, log, results, stopped)  # noqa: SLF001
+
+
+# ── 컨트롤 플레인 정적 파드(kube-apiserver·kube-controller-manager·kube-scheduler) ──
+# ETCD 정적 파드 경로와 같은 순서: 사전 health → 한 대씩 매니페스트 플래그 줄 편집 → kubelet 재기동 대기
+# → 실행 중 프로세스 플래그 + health 확인 → 실패 시 백업 복원·나머지 중단.
+
+STATIC_POD_HEALTH_KEY = {
+    "kube-apiserver": "apiserver_health_cmd",
+    "kube-controller-manager": "controller_manager_health_cmd",
+    "kube-scheduler": "scheduler_health_cmd",
+}
+
+
+def static_pod_manifest(cfg: dict[str, Any], service: str) -> str:
+    return f"{cfg['static_pod_manifest_dir'].rstrip('/')}/{service}.yaml"
+
+
+def _cp_health(sh: NodeShell, cfg: dict[str, Any], service: str) -> tuple[bool, str]:
+    cmd = cfg[STATIC_POD_HEALTH_KEY[service]]
+    r = sh.exec(f"{sh.sudo}sh -c {shlex.quote(cmd)}", 15)
+    out = ((r.stdout or "") + (r.stderr or "")).strip()
+    return (r.status == "ok" and cfg["control_plane_health_expect"] in (r.stdout or "")), out[:200]
+
+
+def static_pod_commands(cfg: dict[str, Any], service: str, base: int) -> list[str]:
+    m, bd = static_pod_manifest(cfg, service), cfg["etcd_backup_dir"]
+    hc = cfg[STATIC_POD_HEALTH_KEY[service]]
+    return [
+        f"{hc}  # 사전 점검 — 대상 전 컨트롤 플레인, 하나라도 비정상이면 시작 안 함",
+        f"cat {m} → mkdir -p {bd} && cp -p {m} {bd}/{service}.yaml.pep-bak-v{base}",
+        f"tee {m}  # '- --flag=값' 줄만 교체·추가, kubelet 이 {service} 재시작",
+        f"실행 중 {service} 프로세스 플래그 확인 + {hc}(정상: '{cfg['control_plane_health_expect']}', 최대 {cfg['control_plane_health_timeout_sec']}초)",
+        "실패 시 백업 복원 후 나머지 노드 건너뜀(한 대씩 고정)",
+    ]
+
+
+def _static_pod_node(t: dict[str, str], service: str, values: dict[str, str], items: dict[str, Any], cfg: dict[str, Any],
+                     opts: dict[str, Any], creds: dict[str, Any], base: int, log: A.RunLog) -> dict[str, Any]:
+    node, host = t["node"], t["host"]
+    t0 = time.monotonic()
+    sh = NodeShell(host, creds)
+    sudo = sh.sudo
+    res: dict[str, Any] = {"node": node, "host": host, "status": "failed", "before": {}, "after": {}, "error": None}
+    timeout = int(opts.get("health_timeout_sec") or cfg["control_plane_health_timeout_sec"])
+    path, bd = static_pod_manifest(cfg, service), cfg["etcd_backup_dir"]
+    backup = f"{bd}/{service}.yaml.pep-bak-v{base}"
+    written = False
+    try:
+        log.step(node, node, "running")
+        want = {(items[k].source_keys or {}).get("flag") or k: v for k, v in values.items()}
+        log.log("info", f"[{node}] SSH {sh.target.username}@{host} — {path} 읽기")
+        text = sh.run(f"{sudo}cat {path}", "매니페스트 읽기").stdout or ""
+        cur = manifest_flags(text, service)
+        res["before"] = {k: cur.get(f) for k, f in zip(values, want)}
+        diff = [f for f, v in want.items() if C.norm(cur.get(f)) != C.norm(v)]
+        if not diff:
+            log.log("info", f"[{node}] 매니페스트가 이미 이 버전과 같습니다 — 건드리지 않습니다.")
+            res["after"] = dict(res["before"])
+        else:
+            log.log("info", f"[{node}] 바뀔 플래그 {len(diff)}개: " + ", ".join(f"--{f} {cur.get(f, '없음')}→{want[f]}" for f in diff[:8]))
+            new = edit_etcd_manifest(text, want, service)
+            sh.run(f"{sudo}mkdir -p {bd} && {sudo}cp -p {path} {backup}", "백업")
+            log.log("info", f"[{node}] 백업 {path} → {backup}")
+            sh.write(path, new, "매니페스트 기록")
+            written = True
+            log.log("info", f"[{node}] 기록 {path} — kubelet 이 {service} 를 다시 띄우기를 기다립니다(최대 {timeout}초)")
+            _sleep(opts, "settle_sec", 10)
+            deadline = time.monotonic() + timeout
+            while True:
+                running = _running_flags(sh, service)
+                applied = any(all(C.norm(fl.get(f)) == C.norm(v) for f, v in want.items()) for fl in running)
+                ok, out = _cp_health(sh, cfg, service) if applied else (False, "새 플래그로 아직 재시작되지 않음")
+                if applied and ok:
+                    break
+                if time.monotonic() > deadline:
+                    raise RuntimeError(f"{timeout}초 안에 새 설정으로 정상 기동하지 않았습니다 — {out}")
+                _sleep(opts)
+            res["after"] = {k: want[f] for k, f in zip(values, want)}
+        res["status"] = "ok"
+        log.log("info", f"[{node}] 확인 — 정상 · 새 값 반영")
+        log.step(node, node, "done")
+    except Exception as exc:  # noqa: BLE001
+        res["error"] = str(exc)[:500]
+        log.log("error", f"[{node}] {res['error']}")
+        if written and opts.get("auto_restore", True):
+            try:
+                log.log("warn", f"[{node}] 백업으로 복원합니다")
+                sh.run(f"{sudo}cp -p {backup} {path}", "복원")
+                deadline = time.monotonic() + timeout
+                while True:
+                    ok, out = _cp_health(sh, cfg, service)
+                    if ok or time.monotonic() > deadline:
+                        break
+                    _sleep(opts)
+                log.log("info" if ok else "error", f"[{node}] 복원 후 health {'정상' if ok else '비정상 — 직접 확인하세요: ' + out}")
+                res["error"] += " · 백업으로 복원함" + ("" if ok else "(복원 후에도 비정상)")
+            except Exception as rexc:  # noqa: BLE001
+                log.log("error", f"[{node}] 복원 실패 — 직접 확인하세요: {str(rexc)[:200]}")
+                res["error"] += " · 복원 실패"
+        log.step(node, node, "failed")
+    res["duration_ms"] = int((time.monotonic() - t0) * 1000)
+    return res
+
+
+async def run_static_pod(db: Session, cluster: Cluster, run: ServiceConfigApplyRun, plan: dict[str, Any],
+                         opts: dict[str, Any], creds: dict[str, Any], log: A.RunLog) -> dict[str, Any]:
+    service = run.service
+    cfg = A.get_settings(db)
+    values = A.validate_pairs(plan["values"])
+    items = _items(db, service)
+    unknown = [k for k in values if k not in items]
+    if unknown:
+        raise A.ApplyError(422, f"알 수 없는 {service} 설정: {', '.join(unknown)}")
+    targets = plan["targets"]
+    base = plan["baseline_version_no"] or 0
+    log.log("info", f"시작 — {plan['service']['label']} {plan['group']['name']} V{plan['version_no']} · 노드 {len(targets)}개"
+                    f" · 한 대씩(고정) · 실패 시 중단(고정) · 자동 복원 {'켬' if opts.get('auto_restore', True) else '끔'}")
+    loop = asyncio.get_running_loop()
+    log.step("preflight", "사전 점검", "running")
+    log.log("info", f"사전 점검 — {cfg[STATIC_POD_HEALTH_KEY[service]]}")
+
+    def check(t: dict[str, str]) -> tuple[str, bool, str]:
+        try:
+            ok, out = _cp_health(NodeShell(t["host"], creds), cfg, service)
+        except Exception as exc:  # noqa: BLE001
+            ok, out = False, str(exc)[:200]
+        return t["node"], ok, out
+
+    checks = await asyncio.gather(*[loop.run_in_executor(None, check, t) for t in targets])
+    for n, ok, out in checks:
+        log.log("info" if ok else "error", f"[{n}] health {'정상' if ok else '비정상'} — {out}")
+    if any(not ok for _n, ok, _o in checks):
+        log.step("preflight", "사전 점검", "failed")
+        log.log("error", "사전 점검 실패 — 비정상 노드가 있어 시작하지 않습니다(한 대를 더 재시작하면 컨트롤 플레인이 멈출 수 있다).")
+        results = [{"node": t["node"], "host": t["host"], "status": "skipped", "before": {}, "after": {},
+                    "error": "사전 점검 실패로 시작 안 함", "duration_ms": 0} for t in targets]
+        return A._finish(db, cluster, run, log, results, False)  # noqa: SLF001
+    log.step("preflight", "사전 점검", "done")
+    results, stopped = await _run_batches(
+        db, run, targets, 1, max(0, min(int(opts.get("pause_sec") or 0), 600)), True,
+        lambda t: _static_pod_node(t, service, values, items, cfg, opts, creds, base, log), log)
+    if any(r["status"] == "ok" for r in results):
+        log.log("info", "화면의 현재 값은 'K8S API 로 수집 (정적 파드)' 뒤 갱신됩니다.")
+    return A._finish(db, cluster, run, log, results, stopped)  # noqa: SLF001
+
+
+# ── KUBELET ──────────────────────────────────────────────────────────────────
+
+def _typed(value: str, vtype: str) -> Any:
+    v = C.norm(value) or ""
+    if vtype == "bool":
+        if v.lower() not in ("true", "false"):
+            raise EditError(f"참/거짓 값이어야 합니다: {v}")
+        return v.lower() == "true"
+    if vtype == "int":
+        if not re.match(r"^-?\d+$", v):
+            raise EditError(f"정수여야 합니다: {v}")
+        return int(v)
+    return v
+
+
+def edit_kubelet_config(text: str, updates: dict[str, tuple[str, str]]) -> str:
+    """KubeletConfiguration YAML 에 ``{평탄화 경로: (값, 형식)}`` 을 넣는다. 중간 맵이 없으면 만든다.
+    YAML 을 다시 쓰므로 주석은 사라진다(kubeadm 이 만든 파일은 주석이 없다). 다시 읽어 값이 맞는지 확인."""
+    import yaml
+
+    try:
+        doc = yaml.safe_load(text) or {}
+    except Exception as exc:  # noqa: BLE001
+        raise EditError(f"kubelet 설정 파일을 YAML 로 읽을 수 없습니다: {str(exc)[:160]}") from exc
+    if not isinstance(doc, dict) or "kind" not in doc:
+        raise EditError("KubeletConfiguration 파일이 아닙니다(kind 없음).")
+    for path, (value, vtype) in updates.items():
+        segs = split_toml_key(path)
+        node = doc
+        for seg in segs[:-1]:
+            nxt = node.get(seg)
+            if nxt is None:
+                nxt = node[seg] = {}
+            if not isinstance(nxt, dict):
+                raise EditError(f"{path}: 중간 경로 {seg} 가 맵이 아닙니다.")
+            node = nxt
+        node[segs[-1]] = _typed(value, vtype)
+    out = yaml.safe_dump(doc, sort_keys=False, default_flow_style=False, allow_unicode=True)
+    flat = C.parse_kubelet_yaml(out)
+    bad = [p for p, (v, _t) in updates.items() if flat.get(p) != C.norm(v)]
+    if bad:
+        raise EditError("편집 뒤 다시 읽은 값이 기대와 다릅니다: " + ", ".join(bad[:5]))
+    return out
+
+
+def kubelet_commands(cfg: dict[str, Any], base: int) -> list[str]:
+    f = cfg["kubelet_config"]
+    return [
+        f"cat {f}  # KubeletConfiguration 편집 + 재해석 검증(노드에 쓰기 전)",
+        f"cp -p {f} {f}.pep-bak-v{base} → tee {f}",
+        f"{cfg['kubelet_restart_cmd']} → systemctl is-active {cfg['kubelet_service']}",
+        f"K8S API: 노드 Ready 대기(최대 {cfg['node_ready_timeout_sec']}초) → /api/v1/nodes/<노드>/proxy/configz 로 실효 값 확인",
+        "실패 시 백업 복원·재시작",
+    ]
+
+
+def _kubelet_node(t: dict[str, str], values: dict[str, str], items: dict[str, Any], cfg: dict[str, Any],
+                  opts: dict[str, Any], creds: dict[str, Any], base: int, core: Any, names: dict[str, str],
+                  log: A.RunLog) -> dict[str, Any]:
+    import json as _json
+
+    node, host = t["node"], t["host"]
+    t0 = time.monotonic()
+    sh = NodeShell(host, creds)
+    sudo = sh.sudo
+    path, svc = cfg["kubelet_config"], cfg["kubelet_service"]
+    backup = f"{path}.pep-bak-v{base}"
+    res: dict[str, Any] = {"node": node, "host": host, "status": "failed", "before": {}, "after": {}, "error": None}
+    k8s_name = names.get(host) or names.get(node)
+    written = False
+    ready_timeout = int(opts.get("node_ready_timeout_sec") or cfg["node_ready_timeout_sec"])
+
+    def restart() -> None:
+        sh.sh(cfg["kubelet_restart_cmd"], "재시작", 120)
+        for _ in range(15):
+            r = sh.exec(f"{sudo}systemctl is-active {svc}", 10)
+            if (r.stdout or "").strip() == "active":
+                return
+            _sleep(opts, "poll_sec", 2)
+        raise RuntimeError(f"재시작 뒤 {svc} 가 active 가 아닙니다")
+
+    try:
+        log.step(node, node, "running")
+        log.log("info", f"[{node}] SSH {sh.target.username}@{host} — {path} 읽기")
+        text = sh.run(f"{sudo}cat {path}", "설정 파일 읽기").stdout or ""
+        flat = C.parse_kubelet_yaml(text)
+        paths = {k: (items[k].source_keys or {}).get("path") or k for k in values}
+        res["before"] = {k: flat.get(p) for k, p in paths.items()}
+        diff = [k for k, p in paths.items() if flat.get(p) != C.norm(values[k])]
+        if not diff:
+            log.log("info", f"[{node}] 설정 파일이 이미 이 버전과 같습니다 — 재시작하지 않습니다.")
+            res.update(status="ok", after=dict(res["before"]))
+            log.step(node, node, "done")
+            res["duration_ms"] = int((time.monotonic() - t0) * 1000)
+            return res
+        log.log("info", f"[{node}] 바뀔 값 {len(diff)}개: " + ", ".join(f"{k} {flat.get(paths[k], '없음')}→{values[k]}" for k in diff[:8]))
+        new = edit_kubelet_config(text, {paths[k]: (values[k], items[k].value_type or "string") for k in values})
+        sh.run(f"{sudo}cp -p {path} {backup}", "백업")
+        log.log("info", f"[{node}] 백업 {path} → {backup}")
+        sh.write(path, new, "설정 파일 기록")
+        written = True
+        log.log("info", f"[{node}] 기록 {path} · {cfg['kubelet_restart_cmd']}")
+        restart()
+        log.log("info", f"[{node}] {svc} active")
+        effective: Optional[dict[str, str]] = None
+        if core is not None and k8s_name:
+            deadline = time.monotonic() + ready_timeout
+            while not _node_ready(core, k8s_name):
+                if time.monotonic() > deadline:
+                    raise RuntimeError(f"노드 {k8s_name} 가 {ready_timeout}초 안에 Ready 가 되지 않았습니다.")
+                _sleep(opts)
+            log.log("info", f"[{node}] 노드 Ready")
+            try:
+                raw = core.connect_get_node_proxy_with_path(k8s_name, "configz", _request_timeout=15)
+                doc = _json.loads(raw) if isinstance(raw, str) else raw
+                effective = C.flatten_toml((doc or {}).get("kubeletconfig") or {})
+            except Exception as exc:  # noqa: BLE001
+                log.log("warn", f"[{node}] configz 를 읽지 못해 파일로 확인합니다 ({str(exc)[:120]})")
+        else:
+            log.log("warn", f"[{node}] K8S 노드를 찾지 못해 Ready 대기·configz 확인을 건너뜁니다.")
+        if effective is None:
+            effective = C.parse_kubelet_yaml(sh.run(f"{sudo}cat {path}", "다시 읽기").stdout or "")
+        res["after"] = {k: effective.get(p) for k, p in paths.items()}
+        bad = [k for k, p in paths.items() if effective.get(p) != C.norm(values[k])]
+        if bad:
+            raise RuntimeError("재시작 뒤 실효 설정이 기대와 다릅니다: " + ", ".join(f"{k}={effective.get(paths[k], '없음')}" for k in bad[:8]))
+        res["_content"] = new
+        res["status"] = "ok"
+        log.log("info", f"[{node}] 확인 {len(values)}/{len(values)} 일치 — 완료")
+        log.step(node, node, "done")
+    except Exception as exc:  # noqa: BLE001
+        res["error"] = str(exc)[:500]
+        log.log("error", f"[{node}] {res['error']}")
+        if written and opts.get("auto_restore", True):
+            try:
+                log.log("warn", f"[{node}] 백업으로 복원 후 재시작합니다")
+                sh.run(f"{sudo}cp -p {backup} {path}", "복원")
+                restart()
+                res["error"] += " · 백업으로 복원함"
+                log.log("info", f"[{node}] 복원 완료 · {svc} active")
+            except Exception as rexc:  # noqa: BLE001
+                res["error"] += " · 복원 실패"
+                log.log("error", f"[{node}] 복원 실패 — 직접 확인하세요: {str(rexc)[:200]}")
+        log.step(node, node, "failed")
+    res["duration_ms"] = int((time.monotonic() - t0) * 1000)
+    return res
+
+
+async def run_kubelet(db: Session, cluster: Cluster, run: ServiceConfigApplyRun, plan: dict[str, Any],
+                      opts: dict[str, Any], creds: dict[str, Any], log: A.RunLog) -> dict[str, Any]:
+    from app.models import ClusterConfigSnapshot
+    from app.services.config_snapshot import store_if_changed
+
+    cfg = A.get_settings(db)
+    values = A.validate_pairs(plan["values"])
+    items = _items(db, "kubelet")
+    for k, v in values.items():
+        if k not in items:
+            raise A.ApplyError(422, f"알 수 없는 kubelet 설정: {k}")
+        _typed(v, items[k].value_type or "string")
+    targets = plan["targets"]
+    base = plan["baseline_version_no"] or 0
+    batch = max(1, min(int(opts.get("batch_size") or 1), 50))
+    pause = max(0, min(int(opts.get("pause_sec") or 0), 600))
+    log.log("info", f"시작 — KUBELET {plan['group']['name']} V{plan['version_no']} · 노드 {len(targets)}개 · {batch}대씩"
+                    f" · 자동 복원 {'켬' if opts.get('auto_restore', True) else '끔'}")
+    loop = asyncio.get_running_loop()
+    core = None
+    names: dict[str, str] = {}
+    try:
+        core, _apps = await loop.run_in_executor(None, A.k8s_apis, cluster)
+        names = await loop.run_in_executor(None, _node_name_map, core)
+    except Exception as exc:  # noqa: BLE001
+        core = None
+        log.log("warn", f"K8S API 를 쓸 수 없어 Ready 대기·configz 확인을 건너뜁니다 ({str(exc)[:160]})")
+
+    def after_batch(done: list[dict[str, Any]]) -> None:
+        now = datetime.utcnow()
+        changed = False
+        for r in done:
+            content = r.pop("_content", None)
+            if not content:
+                continue
+            comp = f"kubelet_config:{r['host']}"
+            last = (db.query(ClusterConfigSnapshot)
+                    .filter(ClusterConfigSnapshot.cluster_id == cluster.id, ClusterConfigSnapshot.component == comp)
+                    .order_by(ClusterConfigSnapshot.collected_at.desc()).first())
+            data = {**((last.data or {}) if last else {"source": "ssh", "host": r["host"], "config_file": cfg["kubelet_config"]}),
+                    "config_content": content, "collected_at": now.isoformat()}
+            changed |= store_if_changed(db, cluster.id, comp, "kubelet", None, data, now)
+        if changed:
+            db.commit()
+
+    results, stopped = await _run_batches(
+        db, run, targets, batch, pause, opts.get("stop_on_failure", True),
+        lambda t: _kubelet_node(t, values, items, cfg, opts, creds, base, core, names, log), log, after_batch)
     return A._finish(db, cluster, run, log, results, stopped)  # noqa: SLF001

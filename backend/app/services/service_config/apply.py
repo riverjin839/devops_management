@@ -31,8 +31,10 @@ from app.services.service_config import view as V
 from app.services.ssh_runner import SSHTarget
 from app.services import ssh_runner
 
-APPLY_SUPPORTED = ("linux", "cilium", "etcd", "containerd")
-SSH_SERVICES = ("linux", "etcd", "containerd")  # 노드에 SSH 로 들어가는 적용 — 요청마다 자격증명 필요
+STATIC_POD_SERVICES = ("kube-apiserver", "kube-controller-manager", "kube-scheduler")
+APPLY_SUPPORTED = ("linux", "cilium", "etcd", "containerd", *STATIC_POD_SERVICES, "kubelet")
+SSH_SERVICES = ("linux", "etcd", "containerd", *STATIC_POD_SERVICES, "kubelet")
+ONE_BY_ONE_SERVICES = ("etcd", *STATIC_POD_SERVICES)  # 쿼럼·컨트롤 플레인 보호 — 한 대씩·실패 시 중단 고정  # 노드에 SSH 로 들어가는 적용 — 요청마다 자격증명 필요
 SETTINGS_KEY = "service_config.settings"
 SETTINGS_DEFAULTS: dict[str, Any] = {
     # PEP 가 소유하는 sysctl 파일 — 99-sysctl.conf(=/etc/sysctl.conf 링크)보다 뒤에 읽혀 부팅 때 덮이지 않는 이름.
@@ -56,12 +58,26 @@ SETTINGS_DEFAULTS: dict[str, Any] = {
     "containerd_service": "containerd",
     "containerd_restart_cmd": "systemctl restart containerd",
     "node_ready_timeout_sec": 300,
+    # 컨트롤 플레인 정적 파드 — 매니페스트는 <dir>/<서비스>.yaml, 백업은 etcd_backup_dir 공용
+    "static_pod_manifest_dir": "/etc/kubernetes/manifests",
+    "apiserver_health_cmd": "curl -sk https://127.0.0.1:6443/livez",
+    "controller_manager_health_cmd": "curl -sk https://127.0.0.1:10257/healthz",
+    "scheduler_health_cmd": "curl -sk https://127.0.0.1:10259/healthz",
+    "control_plane_health_expect": "ok",
+    "control_plane_health_timeout_sec": 300,
+    # KUBELET
+    "kubelet_config": "/var/lib/kubelet/config.yaml",
+    "kubelet_service": "kubelet",
+    "kubelet_restart_cmd": "systemctl restart kubelet",
 }
-_PATH_KEYS = ("sysctl_file", "etcd_manifest", "etcd_env_file", "etcd_backup_dir", "containerd_config")
-_CMD_KEYS = ("etcd_health_cmd", "containerd_restart_cmd")
-_UNIT_KEYS = ("etcd_service", "containerd_service")
+_PATH_KEYS = ("sysctl_file", "etcd_manifest", "etcd_env_file", "etcd_backup_dir", "containerd_config",
+              "static_pod_manifest_dir", "kubelet_config")
+_CMD_KEYS = ("etcd_health_cmd", "containerd_restart_cmd", "apiserver_health_cmd", "controller_manager_health_cmd",
+             "scheduler_health_cmd", "kubelet_restart_cmd")
+_EXPECT_KEYS = ("etcd_health_expect", "control_plane_health_expect")
+_UNIT_KEYS = ("etcd_service", "containerd_service", "kubelet_service")
 _INT_RANGES = {"rollout_timeout_sec": (30, 3600), "etcd_health_timeout_sec": (30, 1800),
-               "node_ready_timeout_sec": (30, 1800)}
+               "node_ready_timeout_sec": (30, 1800), "control_plane_health_timeout_sec": (30, 1800)}
 ETCD_MODES = ("auto", "static_pod", "systemd")
 RUN_ACTIVE = "running"
 WATCH_RULE_OWNER = "service-config"
@@ -99,8 +115,9 @@ def _normalize_settings(stored: Any) -> dict[str, Any]:
     for k in _CMD_KEYS:
         if not _cmd_ok(out[k]):
             out[k] = SETTINGS_DEFAULTS[k]
-    if not _cmd_ok(out["etcd_health_expect"]):
-        out["etcd_health_expect"] = SETTINGS_DEFAULTS["etcd_health_expect"]
+    for k in _EXPECT_KEYS:
+        if not _cmd_ok(out[k]):
+            out[k] = SETTINGS_DEFAULTS[k]
     if out["etcd_mode"] not in ETCD_MODES:
         out["etcd_mode"] = "auto"
     for k, (lo, hi) in _INT_RANGES.items():
@@ -135,12 +152,15 @@ def set_settings(db: Session, patch: dict[str, Any]) -> dict[str, Any]:
             raise ApplyError(422, f"{k}: 쿠버네티스 이름 형식이 아닙니다.")
         if k in _UNIT_KEYS and not _UNIT_RE.match(str(v)):
             raise ApplyError(422, f"{k}: systemd 유닛 이름 형식이 아닙니다.")
-        if k in (*_CMD_KEYS, "etcd_health_expect") and not _cmd_ok(v):
+        if k in (*_CMD_KEYS, *_EXPECT_KEYS) and not _cmd_ok(v):
             raise ApplyError(422, f"{k}: 한 줄(300자 이하)이어야 하고 제어문자를 쓸 수 없습니다.")
         if k == "etcd_mode" and v not in ETCD_MODES:
             raise ApplyError(422, "etcd_mode 는 auto · static_pod · systemd 중 하나입니다.")
-        if k == "etcd_backup_dir" and str(v).rstrip("/").startswith("/etc/kubernetes/manifests"):
-            raise ApplyError(422, "백업 디렉터리를 매니페스트 디렉터리 안에 두면 kubelet 이 사본을 정적 파드로 띄웁니다.")
+    cur = get_settings(db)
+    mdir = str(patch.get("static_pod_manifest_dir") or cur["static_pod_manifest_dir"]).rstrip("/")
+    bdir = str(patch.get("etcd_backup_dir") or cur["etcd_backup_dir"]).rstrip("/")
+    if bdir == mdir or bdir.startswith(mdir + "/") or bdir.startswith("/etc/kubernetes/manifests"):
+        raise ApplyError(422, "백업 디렉터리를 매니페스트 디렉터리 안에 두면 kubelet 이 사본을 정적 파드로 띄웁니다.")
     row = db.query(AppSetting).filter(AppSetting.key == SETTINGS_KEY).first()
     prev = row.value if row and isinstance(row.value, dict) else {}
     merged = _normalize_settings({**prev, **{k: v for k, v in patch.items() if v is not None}})
@@ -211,10 +231,10 @@ def plan_apply(db: Session, cluster: Cluster, service: str, version_no: Optional
         items = V.load_items(db, service)
         cur = C.current_values(service, V.latest_snapshots(db, cluster.id, service), items)
         all_nodes = sorted({s["node"] for s in cur["sources"]})
-        if service == "etcd":
+        if service in ONE_BY_ONE_SERVICES:
             from app.services.service_config import apply_nodes as AN
 
-            members = AN.etcd_members(cluster)  # 정적 파드 멤버(K8S API) — 실패해도 수집 값으로 폴백
+            members = AN.static_pod_members(cluster, service)  # 정적 파드 멤버(K8S API) — 실패해도 수집 값으로 폴백
             etcd_hosts = {m["node"]: m["host"] for m in members}
             all_nodes = sorted(set(all_nodes) | set(etcd_hosts))
         membership = V.node_group_map(all_nodes, V.list_groups(db, cluster.id, service))
@@ -229,7 +249,7 @@ def plan_apply(db: Session, cluster: Cluster, service: str, version_no: Optional
         targets = scope_nodes
     if service == "linux":
         hosts = _node_hosts(db, cluster, targets)
-    elif service == "etcd":
+    elif service in ONE_BY_ONE_SERVICES:
         hosts = {n: etcd_hosts.get(n) or n for n in targets}
     else:
         hosts = {n: n for n in targets}
@@ -261,6 +281,10 @@ def planned_commands(service: str, cfg: dict[str, Any], values: dict[str, Any], 
         return AN.etcd_commands(cfg, plan_base)
     if service == "containerd":
         return AN.containerd_commands(cfg, plan_base)
+    if service in STATIC_POD_SERVICES:
+        return AN.static_pod_commands(cfg, service, plan_base)
+    if service == "kubelet":
+        return AN.kubelet_commands(cfg, plan_base)
     return []
 
 
@@ -663,10 +687,11 @@ async def execute(db: Session, cluster: Cluster, run_id: UUID, plan: dict[str, A
     try:
         if run.service == "linux":
             return await run_os(db, cluster, run, plan, opts, creds, log)
-        if run.service in ("etcd", "containerd"):
+        if run.service in ("etcd", "containerd", "kubelet", *STATIC_POD_SERVICES):
             from app.services.service_config import apply_nodes as AN
 
-            runner = AN.run_etcd if run.service == "etcd" else AN.run_containerd
+            runner = {"etcd": AN.run_etcd, "containerd": AN.run_containerd, "kubelet": AN.run_kubelet}.get(
+                run.service, AN.run_static_pod)
             return await runner(db, cluster, run, plan, opts, creds, log)
         return await run_cilium(db, cluster, run, plan, opts, log)
     except Exception as exc:  # noqa: BLE001 — 실행 행이 running 으로 남지 않게

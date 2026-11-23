@@ -8,6 +8,9 @@
 - containerd : ``containerd_config:{host}`` (``data.flat`` — 수집 때 TOML 을 평탄화해 둔 값)
 - cilium     : ``cilium_config`` (``data.data`` — ConfigMap, 클러스터 하나의 값)
 - linux      : ``node_params:{node}``(노드 에이전트 ``data.runtime``) 우선, 없으면 ``kernel_params:{host}``(SSH ``data.params``)
+- kube-apiserver·kube-controller-manager·kube-scheduler(·etcd): ``static_pod:{service}:{node}``(서비스 구성의 K8S API 수집 —
+  컨트롤 플레인 노드마다 ``data.flags``) 우선, 없으면 버전 수집의 대표 파드 1개(``kube_apiserver`` 등)
+- kubelet    : ``kubelet_config:{host}``(SSH ``data.config_content`` — KubeletConfiguration YAML 을 평탄화)
 """
 from __future__ import annotations
 
@@ -31,12 +34,17 @@ class ItemLike(Protocol):
 
 # 서비스별로 읽어야 할 스냅샷 컴포넌트 — 정확히 같은 이름(exact) 또는 접두어(prefix).
 SERVICE_COMPONENTS: dict[str, dict[str, tuple[str, ...]]] = {
-    "etcd": {"exact": ("etcd",), "prefix": ("etcd_systemd:",)},
+    "etcd": {"exact": ("etcd",), "prefix": ("etcd_systemd:", "static_pod:etcd:")},
+    "kube-apiserver": {"exact": ("kube_apiserver",), "prefix": ("static_pod:kube-apiserver:",)},
+    "kube-controller-manager": {"exact": ("kube_controller_manager",), "prefix": ("static_pod:kube-controller-manager:",)},
+    "kube-scheduler": {"exact": ("kube_scheduler",), "prefix": ("static_pod:kube-scheduler:",)},
+    "kubelet": {"exact": (), "prefix": ("kubelet_config:",)},
     "containerd": {"exact": (), "prefix": ("containerd_config:",)},
     "cilium": {"exact": ("cilium_config",), "prefix": ()},
     "linux": {"exact": (), "prefix": ("node_params:", "kernel_params:")},
 }
 
+STATIC_POD_PREFIX = "static_pod:"
 CLUSTER_NODE = "(클러스터)"  # 노드 구분 없이 클러스터에 하나뿐인 값(cilium-config)
 
 
@@ -126,6 +134,25 @@ def parse_containerd_toml(text: str) -> dict[str, str]:
     return flatten_toml(tomllib.loads(text))
 
 
+def parse_kubelet_yaml(text: Optional[str]) -> dict[str, str]:
+    """KubeletConfiguration YAML → 평탄화 키(``evictionHard."memory.available"``) → 문자열 값. 해석 실패면 빈 dict."""
+    import yaml
+
+    try:
+        doc = yaml.safe_load(text or "") or {}
+    except Exception:  # noqa: BLE001
+        return {}
+    return flatten_toml(doc) if isinstance(doc, dict) else {}
+
+
+def _static_node(service: str, s: SnapLike) -> str:
+    """스냅샷 → 노드 이름. ``static_pod:{svc}:{node}`` 이면 node, 대표 파드 스냅샷이면 파드 이름에서 ``{svc}-`` 접두를 뗀다."""
+    if s.component.startswith(STATIC_POD_PREFIX):
+        return s.component.split(":", 2)[2]
+    pod = str((s.data or {}).get("podName") or service)
+    return pod[len(service) + 1:] if pod.startswith(service + "-") else pod
+
+
 # ── 서비스별 현재 값 ─────────────────────────────────────────────────────────
 
 def _src(component: str, node: str, source: str, snap: SnapLike) -> dict[str, Any]:
@@ -146,12 +173,37 @@ def current_values(service: str, snaps: Iterable[SnapLike], items: Iterable[Item
         if v is not None:
             values.setdefault(key, {})[node] = v
 
-    if service == "etcd":
+    static_snaps = [s for s in snaps if s.component.startswith(STATIC_POD_PREFIX)]
+    if service in ("kube-apiserver", "kube-controller-manager", "kube-scheduler"):
+        # 노드별 수집이 있으면 그것만, 없으면 버전 수집의 대표 파드 1개
+        for s in (static_snaps or snaps):
+            node = _static_node(service, s)
+            flags = (s.data or {}).get("flags") or {}
+            label = "K8S API · 정적 파드 플래그" + ("" if s.component.startswith(STATIC_POD_PREFIX) else " (대표 파드 1개)")
+            sources.append(_src(s.component, node, label, s))
+            for it in items:
+                f = (it.source_keys or {}).get("flag") or it.key
+                if f in flags:
+                    put(it.key, node, flags[f])
+
+    elif service == "kubelet":
+        for s in snaps:
+            node = s.component.split(":", 1)[1]
+            data = s.data or {}
+            flat = parse_kubelet_yaml(data.get("config_content"))
+            sources.append(_src(s.component, node, f"SSH · {data.get('config_file') or 'kubelet 설정 파일'}", s))
+            for it in items:
+                path = (it.source_keys or {}).get("path") or it.key
+                if path in flat:
+                    put(it.key, node, flat[path])
+
+    elif service == "etcd":
+        if static_snaps:  # 노드별 정적 파드 수집이 있으면 대표 파드 1개(etcd)는 쓰지 않는다
+            snaps = [s for s in snaps if s.component != "etcd"]
         for s in snaps:
             data = s.data or {}
-            if s.component == "etcd":
-                node = str(data.get("podName") or "etcd")
-                node = node[5:] if node.startswith("etcd-") else node
+            if s.component == "etcd" or s.component.startswith(STATIC_POD_PREFIX):
+                node = _static_node("etcd", s)
                 flags = data.get("flags") or {}
                 env: dict[str, str] = {}
                 sources.append(_src(s.component, node, "K8S API · 정적 파드 플래그", s))

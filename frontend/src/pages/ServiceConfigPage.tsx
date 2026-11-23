@@ -34,7 +34,7 @@ import {
 } from '@/components/service-config';
 import { afterModalClose } from '@/components/service-config/afterModalClose';
 import { RUN_STATUS } from '@/components/service-config/runStatus';
-import { ContainerdConfigCollectModal, EtcdSystemdModal, KernelParamsCollectModal } from '@/components/versions';
+import { ContainerdConfigCollectModal, EtcdSystemdModal, KernelParamsCollectModal, KubeletConfigCollectModal } from '@/components/versions';
 import { camelizeKeys, serviceConfigApi, versionsApi } from '@/services/api';
 import { formatApiError, formatRelativeTime } from '@/lib/utils';
 import type { ServiceConfigApplyRun, ServiceConfigCollectKind, ServiceConfigRow, ServiceConfigRuleResult, ServiceConfigView } from '@/types';
@@ -44,11 +44,13 @@ const COLLECT_LABEL: Record<ServiceConfigCollectKind, string> = {
   'etcd-systemd': 'SSH 로 수집 (systemd)',
   'containerd-config': 'SSH 로 수집',
   'kernel-params': 'SSH 로 수집',
+  'static-pods': 'K8S API 로 수집',
+  'kubelet-config': 'SSH 로 수집',
 };
 const STATUS_LABEL: Record<string, string> = { imported: '가져옴', saved: '저장됨·미적용', applied: '적용됨', superseded: '대체됨' };
 
 type Filter = 'all' | 'flagged' | 'edited';
-const APPLY_SUPPORTED = new Set(['linux', 'cilium', 'etcd', 'containerd']);
+const APPLY_SUPPORTED = new Set(['linux', 'cilium', 'etcd', 'containerd', 'kube-apiserver', 'kube-controller-manager', 'kube-scheduler', 'kubelet']);
 
 function sourceSummary(view: ServiceConfigView | undefined): string {
   if (!view || view.sources.length === 0) return '아직 수집된 값이 없다';
@@ -242,8 +244,29 @@ export function ServiceConfigPage() {
     }
   };
 
+  // 컨트롤 플레인 정적 파드 — 노드별 플래그(K8S API). 실행 로그는 화면 안 RunLogPanel.
+  const staticCollect = useAbortableMutation({
+    mutationFn: (_: void) => serviceConfigApi.collectStaticPods(clusterId),
+    onSuccess: () => { void invalidate(); },
+    onError: (e: unknown) => toast.error('수집 실패', formatApiError(e)),
+  });
+  const runStaticCollect = () => {
+    void runLogged(runLog, {
+      title: 'K8S API 로 정적 파드 현재 값 수집',
+      first: `${clusterName || clusterId} — kube-system 컨트롤 플레인 파드(etcd·kube-apiserver·kube-controller-manager·kube-scheduler) 플래그를 노드별로 읽기`,
+      fn: () => staticCollect.mutateAsync(undefined),
+      summarize: (res) => {
+        const { changed, errors, components } = res.data;
+        const out: RunLogEntry[] = components.map((c): RunLogEntry => ['info', `${c.component} @ ${c.node}${c.version ? ` ${c.version}` : ''} · ${c.changed ? '변경 저장' : '변경 없음'}`]);
+        errors.forEach((e) => out.push(['warn', `경고 — ${e}`]));
+        out.push([errors.length ? 'warn' : 'info', `완료 — 파드 ${components.length}개 · 변경 ${changed}건 · 경고 ${errors.length}건`]);
+        return out;
+      },
+    });
+  };
   const onCollect = (kind: ServiceConfigCollectKind) => {
     if (kind === 'versions') runApiCollect();
+    else if (kind === 'static-pods') runStaticCollect();
     else setModal(kind);
   };
   const closeModal = () => { setModal(null); void invalidate(); };
@@ -406,10 +429,10 @@ export function ServiceConfigPage() {
                     <Button size="sm" variant="outline" onClick={() => setHistoryOpen(true)} title="적용 이력" aria-label="적용 이력"><History /></Button>
                     <Button size="sm" variant="outline" onClick={() => setSettingsOpen(true)} title="적용 설정" aria-label="적용 설정"><Settings2 /></Button>
                     {(meta?.collectKinds ?? []).map((k) => (
-                      <Button key={k} size="sm" variant="outline" disabled={!canOperate || (k === 'versions' && collectApi.isPending)}
+                      <Button key={k} size="sm" variant="outline" disabled={!canOperate || (k === 'versions' && collectApi.isPending) || (k === 'static-pods' && staticCollect.isPending)}
                         onClick={() => onCollect(k)} title={withHint(`현재 값 수집 — ${COLLECT_LABEL[k]} (노드 설정은 바꾸지 않는다)`)}
                         aria-label={ariaWithHint(`현재 값 ${COLLECT_LABEL[k]}`)}>
-                        {k === 'versions' && collectApi.isPending ? '수집 중…' : COLLECT_LABEL[k]}
+                        {(k === 'versions' && collectApi.isPending) || (k === 'static-pods' && staticCollect.isPending) ? '수집 중…' : COLLECT_LABEL[k]}
                       </Button>
                     ))}
                   </div>
@@ -581,6 +604,7 @@ export function ServiceConfigPage() {
       </PageShell>
 
       <EtcdSystemdModal open={modal === 'etcd-systemd'} clusterId={clusterId} clusterName={clusterName} onClose={closeModal} />
+      <KubeletConfigCollectModal open={modal === 'kubelet-config'} clusterId={clusterId} clusterName={clusterName} onClose={closeModal} />
       <KernelParamsCollectModal open={modal === 'kernel-params'} clusterId={clusterId} clusterName={clusterName} onClose={closeModal} />
       <ContainerdConfigCollectModal open={modal === 'containerd-config'} clusterId={clusterId} clusterName={clusterName}
         onClose={closeModal} onCollected={() => { void invalidate(); }} />
