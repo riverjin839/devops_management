@@ -841,7 +841,7 @@ runLog.begin('K8s 동기화', '요청 전송'); … runLog.log('info', '생성 3
   `warnings[]`·`missing[]`·`steps[]`·`entries[]`·`fieldErrors[]`)은 절삭하지 않고 한 건당 한 줄(수백 건이면 앞 200건 + "외 N건").
   성공 시 자동으로 닫히는 대화상자는 부분 실패(warn/error)면 닫지 않고 로그를 보여준다. 자격증명·쿠키·토큰은 로그 금지(계정 이름까지만).
 - **표시 위치(2026-11-23)** — 전역 설정 `useLogWindowStore().mode`(localStorage `pep.runlog.displayMode`, 기본 `window`). `window` 면
-  `RunLogPanel`·`EfficiencyRunLog`·`CheckMatrixRunLogPanel` 이 로그 본문을 우측 상단 새 창(`common/PopoutWindow` — 같은 React 트리 portal,
+  `RunLogPanel`·`EfficiencyRunLog`·`CheckMatrixRunLogPanel` 이 로그 본문을 새 창(`common/PopoutWindow` — 기본 크기·위치는 앱 화면을 4등분한 1사분면(우측 상단 1/4, 최소 480×320), 작업 화면을 가리지 않게 크기를 넘기지 않는다(D-245) — 같은 React 트리 portal,
   `<head>` 스타일·`<html>` 테마 속성 복사·동기화)에 띄우고 화면 안에는 상태 줄과 "새 창" 버튼만 남긴다. 팝업 차단 시 화면 안으로 폴백(경고 줄),
   사용자가 창을 닫으면 다음 실행 시작 때 다시 연다. `LogViewer` 는 툴바 "새 창으로 열기"(`allowPopout`, 기본 true). 새 로그 패널도
   표시 위치를 직접 정하지 말고 이 설정을 따른다. **예외: 로그 중심 화면(`RunLogPanel fill`, §12.6.1)은 설정과 무관하게 항상 화면 안**

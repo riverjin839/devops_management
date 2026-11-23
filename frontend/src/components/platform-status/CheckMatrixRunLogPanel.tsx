@@ -136,7 +136,7 @@ function PanelBody({
 
   if (windowMode && !blocked) {
     return (
-      <PopoutWindow name="check-matrix-run-log" title={title} width={820} height={720} onClose={onClose} onBlocked={() => setBlocked(true)}>
+      <PopoutWindow name="check-matrix-run-log" title={title} onClose={onClose} onBlocked={() => setBlocked(true)}>
         <p className="text-sm font-semibold px-2">{title}</p>
         {content}
       </PopoutWindow>
