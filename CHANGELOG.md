@@ -8,7 +8,13 @@
 
 ## [Unreleased]
 
-1.100.0 이후 main 에 병합된 변경 (다음 릴리스 후보).
+1.101.0 이후 main 에 병합된 변경 (다음 릴리스 후보).
+
+## [1.101.0] - 2026-11-23
+
+### Added
+
+- **사이드바 K8s 클러스터 목록** — 레일의 K8s 클러스터 아이콘에 마우스를 올리거나 클릭하면 접근 권한이 있는 클러스터 목록이 오른쪽에 펼쳐지고, 골라서 보던 허브 화면 그대로 그 클러스터로 이동한다. 경고·위험 상태와 읽기 전용 권한이 목록에 표시된다. Frontend: `components/layout/K8sClusterFlyoutBody.tsx`, `Sidebar.tsx`.
 
 ### Added
 - **서비스 구성 ▸ NIC — 노드 NIC 상태·경고**: 서비스 구성 레일에 NIC 항목이 생겼다. 노드 파라미터 에이전트(1.2.0)가 보고 주기마다 인터페이스 상태를 함께 보내고, 화면이 노드 × 인터페이스 표와 경고로 보여준다(읽기 전용). 경고: 본딩/LACP(LACP 집계 실패·스위치와 협상 안 됨·하위 인터페이스 다운·해시 정책 layer2·LACP rate slow·링크 감시 꺼짐) · 링크(속도·half duplex·플래핑) · MTU(VLAN > 부모, 노드 간 차이) · ring buffer + 수신 드롭 증가(ring 에 여유가 있으면 `ethtool -G` 제안)·CRC 증가 · offload(LRO 켜짐, 노드 간 차이) · 보고 끊김. 기대 값·임계치·수집 대상(인터페이스 종류·제외 이름)은 NIC 설정(admin)에서 바꾼다. 에이전트는 sysfs·`/proc/net/bonding`·ethtool 조회 ioctl 만 써서 권한·마운트가 그대로라 이미지만 올려 재배포하면 된다. Backend: `routers/nic_watch.py`, `NodeNicState`(`node_nic_states`), `services/nic_watch/`, 에이전트 `node_param_agent/nic.py`(보고 `nic` 필드). Frontend: `NicStatusView`·`NicSettingsDialog`, `hooks/useNicWatch.ts`.

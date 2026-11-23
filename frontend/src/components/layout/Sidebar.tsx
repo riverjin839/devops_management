@@ -29,6 +29,7 @@ import { useCommandPaletteStore } from '@/stores/commandPaletteStore';
 import { SelfAssigneePanel } from './SelfAssigneePanel';
 import { UserFeedbackPanel, USER_FEEDBACK_TAB_TITLE, type UserFeedbackTab } from './UserFeedbackPanel';
 import { FlyoutShell, FlyoutLink, FlyoutAction } from './NavFlyout';
+import { K8sClusterFlyoutBody } from './K8sClusterFlyoutBody';
 import { AddAppDialog } from './AddAppDialog';
 import { usePersonalSettingsTransfer } from './usePersonalSettingsTransfer';
 import { filterSectionsByAccess, installableAppById, sidebarAppSections } from './installableApps';
@@ -91,6 +92,8 @@ const ACCENT_SWATCH_ICON = Object.fromEntries(
 // 이동 중 잠깐 hover 가 끊겨도 안 닫히도록 여유를 둔다(패널 쪽 onMouseEnter 가 다시 취소).
 const HOVER_OPEN_DELAY = 150;
 const HOVER_CLOSE_DELAY = 200;
+/** 레일에서 클러스터 목록 flyout 을 붙이는 K8s 클러스터 허브 경로. */
+const K8S_HUB_PATH = '/k8s';
 
 // ── 호버 툴팁이 붙은 아이콘 버튼 — 레일에서 사용 ────────────────────────────
 interface RailIconButtonProps {
@@ -283,6 +286,9 @@ export function Sidebar() {
   // "도움말·지원" flyout — 화면 검색(⌘K) / VOC / 릴리즈 노트 / 버그 픽스 로그(admin).
   // 개발팀 내부 산출물(버그 픽스 로그)이 제품 셸에 상시 노출되던 것을 admin 전용으로 격리.
   const [helpFlyoutAnchor, setHelpFlyoutAnchor] = useState<DOMRect | null>(null);
+  // K8s 클러스터 아이콘 flyout — 접근 권한이 있는 클러스터 목록(K8sClusterFlyoutBody).
+  // 예전엔 클릭 즉시 `/k8s` 로 이동했고, 허브가 첫 클러스터로 redirect 했다.
+  const [k8sFlyoutAnchor, setK8sFlyoutAnchor] = useState<DOMRect | null>(null);
   const openPalette = useCommandPaletteStore((s) => s.setOpen);
   // 사용자 VOC 게시판 / 릴리즈 노트 / 버그 픽스 로그 — 우측 SidePane 하나 + 탭.
   const [feedbackOpen, setFeedbackOpen] = useState(false);
@@ -305,6 +311,7 @@ export function Sidebar() {
   const closeAllFlyouts = () => {
     setUserFlyoutAnchor(null);
     setHelpFlyoutAnchor(null);
+    setK8sFlyoutAnchor(null);
   };
   const scheduleFlyoutOpen = (openFn: () => void) => {
     clearHoverTimers();
@@ -331,6 +338,7 @@ export function Sidebar() {
   useEffect(() => {
     setUserFlyoutAnchor(null);
     setHelpFlyoutAnchor(null);
+    setK8sFlyoutAnchor(null);
     setSelfPaneOpen(false);
     setFeedbackOpen(false);
   }, [location.pathname]);
@@ -341,6 +349,7 @@ export function Sidebar() {
       if (e.key === 'Escape') {
         setUserFlyoutAnchor(null);
         setHelpFlyoutAnchor(null);
+        setK8sFlyoutAnchor(null);
         setSelfPaneOpen(false);
         setFeedbackOpen(false);
       }
@@ -420,6 +429,31 @@ export function Sidebar() {
               if (meta?.adminOnly && !isAdmin) return null;
               const entry = navMap[appId];
               if (!entry || !featureAllowed(appId)) return null;
+              if (appId === K8S_HUB_PATH) {
+                // K8s 클러스터 — hover/클릭으로 클러스터 목록 flyout 을 연다(목록에서 골라 허브로 이동).
+                return (
+                  <RailIconButton
+                    key={appId}
+                    label={getLabel(appId)}
+                    Icon={entry.icon}
+                    active={location.pathname === appId || location.pathname.startsWith(`${appId}/`)}
+                    highlighted={!!k8sFlyoutAnchor}
+                    suppressTooltip={!!k8sFlyoutAnchor}
+                    hasFlyout
+                    railItem
+                    navStyle={navStyle}
+                    onHoverOpen={(rect) => scheduleFlyoutOpen(() => setK8sFlyoutAnchor(rect))}
+                    onHoverClose={() => scheduleFlyoutClose(() => setK8sFlyoutAnchor(null))}
+                    onClick={(rect, el) => {
+                      clearHoverTimers();
+                      const wasOpen = !!k8sFlyoutAnchor;
+                      closeAllFlyouts();
+                      openByClick(el);
+                      if (!wasOpen) setK8sFlyoutAnchor(rect ?? null);
+                    }}
+                  />
+                );
+              }
               return (
                 <RailIconButton
                   key={appId}
@@ -487,6 +521,23 @@ export function Sidebar() {
           )}
         </div>
       </aside>
+
+      {/* K8s 클러스터 flyout — 접근 권한이 있는 등록 클러스터 목록. */}
+      {k8sFlyoutAnchor && (
+        <>
+          <div className="fixed inset-0 z-30" onClick={() => setK8sFlyoutAnchor(null)} aria-hidden />
+          <FlyoutShell
+            title={getLabel(K8S_HUB_PATH)}
+            anchorRect={k8sFlyoutAnchor}
+            {...focusProps}
+            onClose={() => setK8sFlyoutAnchor(null)}
+            onMouseEnter={cancelScheduledClose}
+            onMouseLeave={() => scheduleFlyoutClose(() => setK8sFlyoutAnchor(null))}
+          >
+            <K8sClusterFlyoutBody onNavigate={() => setK8sFlyoutAnchor(null)} />
+          </FlyoutShell>
+        </>
+      )}
 
       {/* 도움말·지원 flyout — 화면 검색(⌘K) / VOC / 릴리즈 노트 / 버그 픽스 로그(admin). */}
       {helpFlyoutAnchor && currentUser && (
