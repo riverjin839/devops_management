@@ -687,7 +687,7 @@ Cilium BPF Trace `/cilium-trace` · 커널 파라미터 `/kernel-params` · NFS 
 | 영역 | 내용 | 규칙 |
 |---|---|---|
 | 좌 (320px, 제어) | 접히는 `대상·인증` 섹션 + 명령/옵션 입력 + **하단 고정 실행 바** | 입력은 이 한 열에 모은다. 자주 안 바꾸는 값(대상·인증·env·경로·시간 제한)은 접고 **요약 한 줄**(`root@10.0.0.1:22 · 비밀번호`)만 보인다. 실행 버튼은 스크롤과 무관하게 항상 보인다. |
-| 우 상단 (flex 3, **중심**) | 실행 로그 — `<RunLogPanel fill />` | 실행 전에도 같은 자리에 "대기" 상태로 존재. 줄이 쌓이면 맨 아래로 따라간다(`follow`). "로그 보기" 토글(`useLogPref`)은 유지(CLAUDE.md). |
+| 우 상단 (flex 3, **중심**) | 실행 로그 — `<RunLogPanel fill />` | 실행 전에도 같은 자리에 "대기" 상태로 존재. 줄이 쌓이면 맨 아래로 따라간다(`follow`). "로그 보기" 토글(`useLogPref`)은 유지(CLAUDE.md). 전역 "실행 로그 표시"가 새 창이어도 화면 안에 둔다(§12.9.1). |
 | 우 하단 (flex 2) | 결과 — 상태 배지 + exit/소요 + 실행된 명령 + `ExecOutputTabs` | 실행 전 플레이스홀더(`EmptyState compact`). 바깥에 `max-h` 를 또 걸지 않는다(스크롤 중첩 금지). |
 
 **동작 규칙**
@@ -844,7 +844,8 @@ runLog.begin('K8s 동기화', '요청 전송'); … runLog.log('info', '생성 3
   `RunLogPanel`·`EfficiencyRunLog`·`CheckMatrixRunLogPanel` 이 로그 본문을 우측 상단 새 창(`common/PopoutWindow` — 같은 React 트리 portal,
   `<head>` 스타일·`<html>` 테마 속성 복사·동기화)에 띄우고 화면 안에는 상태 줄과 "새 창" 버튼만 남긴다. 팝업 차단 시 화면 안으로 폴백(경고 줄),
   사용자가 창을 닫으면 다음 실행 시작 때 다시 연다. `LogViewer` 는 툴바 "새 창으로 열기"(`allowPopout`, 기본 true). 새 로그 패널도
-  표시 위치를 직접 정하지 말고 이 설정을 따른다. 설정 화면: Settings → 화면 UI 설정 → 실행 로그 표시(`components/settings/LogDisplaySetting.tsx`).
+  표시 위치를 직접 정하지 말고 이 설정을 따른다. **예외: 로그 중심 화면(`RunLogPanel fill`, §12.6.1)은 설정과 무관하게 항상 화면 안**
+  (창 전환 버튼 숨김, 툴바 "새 창으로 열기" 는 유지). 설정 화면: Settings → 화면 UI 설정 → 실행 로그 표시(`components/settings/LogDisplaySetting.tsx`).
 - **새 실행 버튼 체크리스트**: ① `useRunLog` + `useLogPref('<화면키>')` + `RunLogPanel` ② 동기=`runLogged`·SSE=`streamLogged`·큐잉=
   `pollIntoRunLog` ③ 대상(호스트·클러스터·항목)별 한 줄 + 합계 줄 ④ 실패 사유가 error 줄로 남는가(훅에 `onError` 가 없어도)
   ⑤ 자격증명·비밀값을 로그에 싣지 않는가 ⑥ 기존 결과 뷰(표·출력·타임라인)는 그대로인가.

@@ -1,6 +1,7 @@
 // 실행 로그 패널 — "실행" 버튼 아래에 단계 칩 + 상세 로그(LogViewer)를 보여준다(D-089).
 // 로그는 항상 수집하고, 펼쳐 볼지는 사용자가 "로그 보기" 로 정한다. 선택은 화면별로 localStorage 에 기억한다.
 // 어디에 보일지는 전역 설정(useLogWindowStore) — 기본은 우측 상단 새 창(PopoutWindow), "화면 안" 으로 바꿀 수 있다.
+// 단 로그 중심 화면(fill)은 항상 화면 안에 표시한다.
 // 새 창이 차단되면 화면 안 표시로 폴백하고, 사용자가 창을 닫으면 다음 실행이 시작될 때 다시 연다.
 import { useEffect, useId, useRef, useState } from 'react';
 import {
@@ -87,7 +88,9 @@ export function RunLogPanel({
   const statusText = `${run.running ? '실행 중' : idle ? '대기' : hasError ? '오류 있음' : '완료'} · ${run.lines.length}줄`;
   const title = run.title || '실행 로그';
 
-  const windowMode = mode === 'window' && !blocked;
+  // 로그 중심 화면(fill — /etcdctl·/bulk-exec 등)은 로그가 화면의 중심이라 전역 설정과 무관하게 화면 안에 둔다.
+  // 필요하면 LogViewer 툴바의 "새 창으로 열기" 로 따로 띄울 수 있다.
+  const windowMode = !fill && mode === 'window' && !blocked;
   const popped = windowMode && show && !idle && !dismissed;
   const inlineLog = show && !windowMode;
   const logText = idle ? idleHint : (formatRunLog(run.lines) || '로그 대기 중…');
@@ -121,6 +124,7 @@ export function RunLogPanel({
               <ExternalLink className="w-3.5 h-3.5" aria-hidden /> 새 창
             </button>
           )}
+          {!fill && (
           <button
             type="button"
             onClick={() => { setBlocked(false); setDismissed(false); setMode(mode === 'window' ? 'inline' : 'window'); }}
@@ -130,6 +134,7 @@ export function RunLogPanel({
           >
             {mode === 'window' ? <PanelBottom className="w-3.5 h-3.5" aria-hidden /> : <PictureInPicture2 className="w-3.5 h-3.5" aria-hidden />}
           </button>
+          )}
           {!run.running && !idle && (
             <button
               type="button"

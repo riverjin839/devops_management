@@ -18,6 +18,7 @@ export function LogDisplaySetting() {
           <p className="text-sm">로그 표시 위치</p>
           <p className="text-xs text-muted-foreground">
             새 창은 브라우저 우측 상단에 별도 창으로 뜨고 실시간으로 따라갑니다. 팝업이 차단되면 화면 안에 표시합니다.
+            etcdctl·일괄 실행처럼 로그가 화면 중심인 실행 화면은 설정과 무관하게 화면 안에 표시합니다.
             이 브라우저에만 저장되며, 각 로그 패널 헤더의 창 전환 버튼으로도 바꿀 수 있습니다.
           </p>
         </div>
