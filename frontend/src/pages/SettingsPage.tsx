@@ -2,6 +2,7 @@ import { useEffect, useId, useState } from 'react';
 import { Settings as SettingsIcon, Server, Pencil, Trash2, Plus, Globe, ShieldCheck, AlertTriangle, Loader2, Eye, MonitorDot, Wifi, WifiOff, HelpCircle, UserCheck, Bug, HardDrive, DatabaseZap, Boxes, Layers, Lock, Home, Palette, FileSearch, ServerCrash, Stethoscope, Wand2, Bot, Ticket, Users, KeyRound, CheckCircle2, XCircle, Check, X } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { MacCard } from '@/components/ui/MacCard';
+import { LogDisplaySetting } from '@/components/settings/LogDisplaySetting';
 import { BackupRestorePanel } from '@/components/settings/BackupRestorePanel';
 import { TenantManager } from '@/components/settings/TenantManager';
 import { ClusterAccessManager } from '@/components/settings/ClusterAccessManager';
@@ -792,6 +793,8 @@ export function SettingsPage() {
         {activeTab === 'screen-ui' && (
         <div className="space-y-6 mb-6">
         {/* 홈 화면 설정 */}
+        <LogDisplaySetting />
+
         <MacCard title="홈 화면 설정" description="PEP 홈 페이지 표시 옵션" bodyPadding="p-0">
           {/* 홈 버튼 아이콘 커스터마이즈 — 좌측 상단 홈 버튼(홈으로 이동 전용, 모드 폐지) */}
           <div className="px-4 py-3 flex items-center justify-between">
