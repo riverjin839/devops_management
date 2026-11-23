@@ -13,6 +13,7 @@ mod nic;
 mod report;
 mod sysctl;
 mod util;
+mod watch;
 
 use chrono::{SecondsFormat, Utc};
 use files::Target;
@@ -23,6 +24,9 @@ use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, Instant};
 use util::{jitter, log};
+
+/// 변경 감지로 앞당긴 보고 사이의 최소 간격(초).
+const MIN_CHANGE_GAP_SECS: f64 = 5.0;
 
 static STOP: AtomicBool = AtomicBool::new(false);
 
@@ -131,10 +135,17 @@ fn run(once: bool) -> i32 {
     let mut sent_hashes: HashMap<String, String> = HashMap::new();
     // 첫 응답 전엔 NIC 설정을 모른다 — 받은 뒤부터 수집한다(끄면 보내지 않는다).
     let mut nic_cfg: Option<Map<String, Value>> = None;
+    // 설정 파일 변경 즉시 보고(inotify). 못 열면 주기 대기만 한다.
+    let mut watcher = watch::Watcher::new();
+    if let Some(w) = watcher.as_mut() {
+        w.set_targets(&host_root, &file_targets);
+    }
+    let mut last_report: Instant;
     let mut interval: u64 = 60;
     let mut failures: u32 = 0;
 
     while !STOP.load(Ordering::SeqCst) {
+        last_report = Instant::now();
         let (runtime, errors) = sysctl::read_runtime(&params, &proc_sys);
         let persistent = if params.is_empty() {
             Map::new()
@@ -198,6 +209,9 @@ fn run(once: bool) -> i32 {
                     first_list = first_list || (file_targets.is_empty() && !new_targets.is_empty());
                     file_targets = new_targets;
                     sent_hashes.clear();
+                    if let Some(w) = watcher.as_mut() {
+                        w.set_targets(&host_root, &file_targets);
+                    }
                 }
                 let new_nic = resp.get("nic").and_then(|v| v.as_object()).cloned();
                 let enabled = |c: &Option<Map<String, Value>>| {
@@ -281,7 +295,22 @@ fn run(once: bool) -> i32 {
         } else {
             interval.min(10 * (1u64 << (failures - 1).min(4)))
         };
-        sleep(wait as f64 + jitter(10f64.min(interval as f64 * 0.1)));
+        let total = wait as f64 + jitter(10f64.min(interval as f64 * 0.1));
+        let changed = match &watcher {
+            Some(w) => w.wait(total, &STOP),
+            None => {
+                sleep(total);
+                false
+            }
+        };
+        if changed {
+            log(
+                "INFO",
+                "설정 파일 변경 감지 — 주기를 기다리지 않고 바로 보고합니다",
+            );
+            // 연속 변경(편집기 저장 직후 재저장 등)이 보고를 폭주시키지 않게 최소 간격을 둔다.
+            sleep(MIN_CHANGE_GAP_SECS - last_report.elapsed().as_secs_f64());
+        }
     }
     log("INFO", "종료 신호 수신 — 종료합니다");
     0
