@@ -8,10 +8,15 @@
 
 ## [Unreleased]
 
+1.103.0 이후 main 에 병합된 변경 (다음 릴리스 후보).
+
 ### Changed
 - **K8S 클러스터 허브 — 클러스터 목록 중복 정리 · k9s·노드 SSH·노드 라벨 흡수**: 사이드바 K8S 클러스터 아이콘의 클러스터 목록과 허브 안 클러스터 레일이 동시에 보이던 것을 정리했다. 허브 레일을 없애고 클러스터 이름 옆 **「클러스터 전환」**으로 같은 목록을 연다. 목록 상단에 「비정상 N개만 보기」 토글이 생겼다. 콘솔 탭의 "터미널" 실행 카드는 **k9s**·**노드 SSH** 탭이 돼 허브 안에서 바로 접속하고, 노드 라벨은 툴바의 「이 클러스터 / 전체 클러스터」로 전체 클러스터를 한 표로 본다. 옛 `/k9s`·`/node-ssh`·`/node-labels` 주소는 허브 탭으로 연결되고 메뉴·즐겨찾기에서는 K8S 클러스터 하나로 합쳐진다(터미널 새 창은 그대로). Frontend: `HubClusterSwitcher`, `K8sClusterFlyoutBody` 비정상 필터, `HubTerminalsView` 삭제. Backend: `home_prefs.RETIRED_PATH_ALIASES` 에 세 경로 추가.
 
-1.102.0 이후 main 에 병합된 변경 (다음 릴리스 후보).
+## [1.103.0] - 2026-11-23
+
+### Added
+- **실행 로그 새 창 표시(기본값)** — 모든 화면의 "로그 보기" 실행 로그가 화면 안이 아니라 브라우저 우측 상단의 별도 창(팝업)에 뜨고 실시간으로 따라간다. Settings → 화면 UI 설정 → **실행 로그 표시**(새 창/화면 안) 또는 각 로그 패널 헤더의 창 전환 버튼으로 바꿀 수 있고, 팝업이 차단되면 화면 안 표시로 자동 폴백한다. 창을 닫으면 다음 실행 때 다시 열린다. `LogViewer` 툴바에도 "새 창으로 열기" 버튼을 추가했다. Frontend: `PopoutWindow`(portal + 스타일·테마 동기화), `stores/logWindowStore`, `RunLogPanel`·`EfficiencyRunLog`·`CheckMatrixRunLogPanel` 적용.
 
 ## [1.102.0] - 2026-11-23
 
