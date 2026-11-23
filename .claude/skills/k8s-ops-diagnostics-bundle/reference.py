@@ -1,9 +1,7 @@
-"""Diagnostics bundle — cm_api `collect_diagnostic_data_45` + 역할 단위 진단 명령(lsof/jstack/jmap) 패턴.
+"""Diagnostics bundle — KM(K8s Manager) 진단 데이터 수집 + 대상 단위 진단 명령(lsof/스레드 덤프/힙) 패턴.
 
-원본: cms.py `collect_diagnostic_data_45(end_datetime, bundle_size_bytes, cluster_name, roles,
-collect_metrics, start_datetime)` — start 가 있으면 [start,end] 전부(크기 초과 시 실패),
-없으면 end 부터 *거꾸로* bundle_size 까지 채운다. services.py `lsof/jstack/jmap_histo/jmap_dump(*roles)`,
-services.py `create_yarn_application_diagnostics_bundle(ticket_number, comments)`.
+KM 진단 수집(end, bundle_size, cluster, targets, metrics, start) — start 가 있으면 [start,end] 전부
+(크기 초과 시 실패), 없으면 end 부터 *거꾸로* bundle_size 까지 채운다. 번들에는 티켓 번호·코멘트를 붙인다.
 
 K8s 매핑: 지원 번들 = 이벤트·describe·파드 로그(--since-time)·노드 컨디션·메트릭 스냅샷을 시간창/크기 예산으로.
 """
@@ -37,7 +35,7 @@ class BundleRequest:
     end: datetime
     size_budget_bytes: int
     start: datetime | None = None  # None → end 부터 거꾸로 예산까지
-    namespaces: list[str] = field(default_factory=list)  # CM roles 제한에 해당 — 비면 전체
+    namespaces: list[str] = field(default_factory=list)  # KM 대상 제한에 해당 — 비면 전체
     targets: list[str] = field(default_factory=list)  # "ns/pod" 혹은 "node/<name>"
     include_metrics: bool = False
     ticket: str = ""
@@ -65,7 +63,7 @@ def assemble(req: BundleRequest, items: list[Item]) -> tuple[dict[str, str], dic
     items = [Item(i.kind, i.path, redact(i.content), i.ts) for i in items]
     total = sum(len(i.content.encode()) for i in items)
     if req.start and total > req.size_budget_bytes:
-        # CM 의미론: 기간을 명시했으면 잘라서 거짓 완결을 만들지 않고 실패시킨다
+        # KM 의미론: 기간을 명시했으면 잘라서 거짓 완결을 만들지 않고 실패시킨다
         raise BudgetExceeded(f"{total} bytes > budget {req.size_budget_bytes}; 기간을 줄이거나 예산을 늘릴 것")
     ordered = sorted(items, key=lambda i: (PRIORITY.get(i.kind, 99), -(i.ts.timestamp() if i.ts else 0)))
     files: dict[str, str] = {}
@@ -87,7 +85,7 @@ def assemble(req: BundleRequest, items: list[Item]) -> tuple[dict[str, str], dic
     return files, manifest
 
 
-# ── 대상 단위 진단 명령 카탈로그 (CM lsof/jstack/jmap → kubectl exec/debug). 전부 읽기 전용 ──
+# ── 대상 단위 진단 명령 카탈로그 (KM 진단 명령 → kubectl exec/debug). 전부 읽기 전용 ──
 DIAG_COMMANDS = {
     "open_files": {"label": "열린 파일(lsof)", "argv": ["ls", "-l", "/proc/1/fd"], "runtime": "any"},
     "thread_dump": {"label": "스레드 덤프(jstack)", "argv": ["jcmd", "1", "Thread.print"], "runtime": "jvm"},

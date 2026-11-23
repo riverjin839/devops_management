@@ -1,13 +1,13 @@
-"""Templates — cm_api HostTemplate(apply_host_template) + ClusterTemplate(export / import_cluster_template).
+"""Templates — KM(K8s Manager) 노드 템플릿(apply) + 클러스터 템플릿(export / import).
 
-원본: host_templates.py `ApiHostTemplate{name, roleConfigGroupRefs}`, `apply_host_template(host_ids, start_roles)`,
-clusters.py `export(export_auto_config)`, cms.py `import_cluster_template(template, add_repositories)`,
-types.py `ApiClusterTemplate*`(services/hostTemplates(cardinality)/instantiator{clusterName, hosts(hostNameRange), variables}),
-`ApiClusterTemplateConfig{name, value, ref, variable, autoConfig}`.
+KM 노드 템플릿: {name, configGroupRefs}, apply(node_ids, start_roles).
+KM 클러스터 템플릿: export(auto_config) / import(template, add_repositories),
+구성 = services / nodeTemplates(cardinality) / instantiator{clusterName, hosts(hostNameRange), variables},
+설정 항목 = {name, value, ref, variable, autoConfig}.
 
 K8s 매핑
-- HostTemplate → NodeProfile: 노드에 입힐 라벨·테인트·역할(DaemonSet 참여 라벨)·OS 파라미터 그룹 묶음.
-- ClusterTemplate → 클러스터 청사진: 애드온/네임스페이스/정책/노드 프로파일을 변수화해 내보내고 다른 클러스터에 재현.
+- 노드 템플릿 → NodeProfile: 노드에 입힐 라벨·테인트·역할(DaemonSet 참여 라벨)·OS 파라미터 그룹 묶음.
+- 클러스터 템플릿 → 클러스터 청사진: 애드온/네임스페이스/정책/노드 프로파일을 변수화해 내보내고 다른 클러스터에 재현.
 """
 from __future__ import annotations
 
@@ -55,7 +55,7 @@ def plan_apply_profile(p: NodeProfile, nodes: list[NodeState]) -> list[dict]:
 
 
 def expand_host_range(pattern: str) -> list[str]:
-    """CM hostNameRange 'node[01-03].dc' → node01.dc, node02.dc, node03.dc (0 패딩 유지)."""
+    """KM hostNameRange 'node[01-03].dc' → node01.dc, node02.dc, node03.dc (0 패딩 유지)."""
     m = re.search(r"\[(\d+)-(\d+)\]", pattern)
     if not m:
         return [pattern]

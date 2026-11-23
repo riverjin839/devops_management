@@ -38,7 +38,7 @@ PEP 문서 모음. 루트의 [README](../README.md) · [CHANGELOG](../CHANGELOG.
 ## 아키텍처 / 로드맵
 - [openlens-architecture-roadmap.md](openlens-architecture-roadmap.md) — 범용 K8s 관리 + 300노드 실시간 로드맵(P0~P5)
 - [collab-tooling-borrow-report.md](collab-tooling-borrow-report.md) — AFFiNE/AppFlowy 차용 분석
-- [03-analysis/cm-api-borrow-analysis.md](03-analysis/cm-api-borrow-analysis.md) — **Cloudera cm_api 차용 분석**: 명령 추적·롤링 재시작·설정 view/staleness·헬스 롤업·템플릿·단계 배포(Parcel)·진단 번들·클라이언트 계층 → `.claude/skills/k8s-ops-*` 8개 스킬 모듈
+- [03-analysis/km-borrow-analysis.md](03-analysis/km-borrow-analysis.md) — **KM(K8s Manager) 운영 패턴 분석**: 명령 추적·롤링 재시작·설정 view/staleness·헬스 롤업·템플릿·단계 배포(패키지)·진단 번들·클라이언트 계층 → `.claude/skills/k8s-ops-*` 8개 스킬 모듈
 - [03-analysis/check-matrix-commercial-review.md](03-analysis/check-matrix-commercial-review.md) — **점검 매트릭스 상용화 전면 재검토(2026-10)**: 상용화 불가 판정 원인(테넌트 격리·값 유실·실행 피드백·스케줄러·직관성) 감사와 조치, 잔여 백로그, 재검증 체크리스트
 - [03-analysis/ai-look-audit-2026-10.md](03-analysis/ai-look-audit-2026-10.md) — **AI 개발티 조합 수준 감사(2026-10)**: 페이지 헤더 템플릿·KPI 타일 복붙·정상 과잉 채색·무지개 팔레트·카드 남용·밀도·빈 상태·이모지·용어 전수 증거(file:line), 화면별 매트릭스, D-117~D-134 백로그, DESIGN_SYSTEM §12.12 조합 규칙 근거, 재집계 명령·재검증 체크리스트
 - [03-analysis/backend-language-migration-review.md](03-analysis/backend-language-migration-review.md) — **백엔드 언어 변경(Python→TypeScript) 검토**: 무응답 원인(스레드풀 고갈)·타입 게이트 부재 실측, 권고 = 변경하지 않음

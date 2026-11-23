@@ -1,13 +1,11 @@
-"""Config model — cm_api 의 ApiConfig(view=summary|full), role config group, configStale 패턴.
+"""Config model — KM(K8s Manager) 설정 모델: view=summary|full, 설정 그룹, 반영 상태(staleness) 패턴.
 
-원본: types.py `ApiConfig`(name/value/required/default/displayName/description/relatedName/
-sensitive/validationState/validationMessage), `json_to_config`/`config_to_json`,
-services.py `get_config(view)`/`update_config(svc_config, **rt_configs)`(서비스 + 역할 타입별 설정),
-role_config_groups.py(그룹 단위 설정), roles.py/services.py `configStale`/`configStalenessStatus`,
-examples/bulk_config_update.py.
+KM 설정 항목: name/value/required/default/displayName/description/relatedName/
+sensitive/validationState/validationMessage. 서비스 공통 + 역할 타입별 설정을 한 번에 갱신하고,
+설정 그룹(그룹 단위 재정의)과 configStale/configStalenessStatus 로 반영 여부를 표시한다.
 
 K8s 매핑: 서비스 = 컴포넌트(kubelet/containerd/apiserver/앱), 역할 타입 = 노드 역할,
-role config group = 노드 그룹(라벨/glob), role = 노드 1대(인스턴스 재정의).
+설정 그룹 = 노드 그룹(라벨/glob), role = 노드 1대(인스턴스 재정의).
 """
 from __future__ import annotations
 
@@ -104,7 +102,7 @@ def view(values: dict[str, ConfigValue], mode: str = "summary", reveal_sensitive
 
 
 def apply_update(layer: dict[str, Any], update: dict[str, Any]) -> dict[str, Any]:
-    """CM update_config 의미론: 값 None = 재정의 삭제(상위/기본값으로 복귀)."""
+    """KM 설정 갱신 의미론: 값 None = 재정의 삭제(상위/기본값으로 복귀)."""
     new = dict(layer)
     for k, v in update.items():
         if v is None:

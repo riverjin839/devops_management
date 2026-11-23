@@ -1,20 +1,20 @@
 ---
 name: k8s-ops-diagnostics-bundle
-description: 장애 대응용 "지원 번들"(이벤트·describe·로그·노드 상태·메트릭을 시간창/크기 예산으로 묶어 내려받기) 또는 파드 단위 진단 명령(스레드 덤프·열린 파일·소켓·힙 히스토그램)을 만들 때 사용. Cloudera cm_api 의 collect_diagnostic_data_45(end·bundle_size·start·roles·metrics, 티켓 번호/코멘트)와 역할 단위 lsof/jstack/jmap 명령 패턴을 옮긴다.
+description: 장애 대응용 "지원 번들"(이벤트·describe·로그·노드 상태·메트릭을 시간창/크기 예산으로 묶어 내려받기) 또는 파드 단위 진단 명령(스레드 덤프·열린 파일·소켓·힙 히스토그램)을 만들 때 사용. KM(K8s Manager) 진단 데이터 수집(end·bundle_size·start·targets·metrics, 티켓 번호/코멘트)과 대상 단위 진단 명령 패턴을 적용한다.
 ---
 
-# Diagnostics bundle (cm_api `collect_diagnostic_data` / jstack·lsof 차용)
+# Diagnostics bundle (KM 진단 수집 / 대상 진단 명령)
 
 > 레퍼런스 구현: [`reference.py`](reference.py) — `assemble`(우선순위·예산·시간창·마스킹·manifest) /
-> `redact` / `DIAG_COMMANDS` + `diag_argv`(kubectl exec/debug 인자 목록). 분석 배경: `docs/03-analysis/cm-api-borrow-analysis.md` §7.
+> `redact` / `DIAG_COMMANDS` + `diag_argv`(kubectl exec/debug 인자 목록). 분석 배경: `docs/03-analysis/km-borrow-analysis.md` §7.
 
-## 원본에서 가져오는 것
-| cm_api | 의미 | K8s 적용 |
+## KM 패턴
+| KM 개념 | 의미 | K8s 적용 |
 |---|---|---|
-| `collect_diagnostic_data_45(end, bundle_size_bytes, cluster, roles, collect_metrics, start)` | **start 있으면** 기간 전체(초과 시 실패), **없으면** end 부터 거꾸로 예산까지 | 두 모드 그대로: "이 시간대 전부" vs "최근부터 N MB" |
-| `roles` 제한 | 수집 범위 축소 | 네임스페이스·파드·노드 대상 제한 |
-| `create_yarn_application_diagnostics_bundle(ticket_number, comments)` | 번들에 티켓/코멘트 | manifest 에 티켓 번호·코멘트 → Jira/ServiceNow 첨부 |
-| `lsof/jstack/jmap_histo/jmap_dump(*roles)` → ApiCommand | 대상 프로세스 진단 명령 | `kubectl exec`/`kubectl debug`(distroless) 읽기 전용 카탈로그 |
+| 진단 수집 `(end, bundle_size_bytes, cluster, targets, collect_metrics, start)` | **start 있으면** 기간 전체(초과 시 실패), **없으면** end 부터 거꾸로 예산까지 | 두 모드 그대로: "이 시간대 전부" vs "최근부터 N MB" |
+| `targets` 제한 | 수집 범위 축소 | 네임스페이스·파드·노드 대상 제한 |
+| 번들 `ticket_number`, `comments` | 번들에 티켓/코멘트 | manifest 에 티켓 번호·코멘트 → Jira/ServiceNow 첨부 |
+| 대상 진단 명령(열린 파일·스레드 덤프·힙 히스토그램) → 명령 | 대상 프로세스 진단 | `kubectl exec`/`kubectl debug`(distroless) 읽기 전용 카탈로그 |
 
 ## 규칙
 1. 우선순위 고정: manifest > events > describe > node_conditions > 에러 로그 > previous 로그 > 로그 > 메트릭.

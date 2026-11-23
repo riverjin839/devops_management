@@ -1,23 +1,23 @@
 ---
 name: k8s-ops-health-rollup
-description: 클러스터·워크로드·노드·파드의 건강 상태를 계층적으로 계산하고 외부 모니터링(Nagios·Alertmanager·Slack)으로 내보낼 때 사용. Cloudera cm_api 의 healthSummary(DISABLED·HISTORY_NOT_AVAILABLE·NOT_AVAILABLE·GOOD·CONCERNING·BAD) + healthChecks + maintenanceMode + entityStatus 모델과 nagios/cm_nagios.py 의 상태 매핑·상태 문자열 패턴을 옮긴다.
+description: 클러스터·워크로드·노드·파드의 건강 상태를 계층적으로 계산하고 외부 모니터링(Nagios·Alertmanager·Slack)으로 내보낼 때 사용. KM(K8s Manager) 헬스 모델 — healthSummary(DISABLED·HISTORY_NOT_AVAILABLE·NOT_AVAILABLE·GOOD·CONCERNING·BAD) + healthChecks + maintenanceMode + entityStatus, 그리고 외부 모니터링 상태 매핑·상태 문자열 패턴을 적용한다.
 ---
 
-# Health rollup (cm_api `healthSummary` / `cm_nagios` 차용)
+# Health rollup (KM 헬스 모델 / 외부 모니터링 연동)
 
 > 레퍼런스 구현: [`reference.py`](reference.py) — `rollup` / `should_alert` / `status_line` / `NAGIOS`·`TRAFFIC_LIGHT` 매핑 /
-> `node_checks`·`threshold_check`. 분석 배경: `docs/03-analysis/cm-api-borrow-analysis.md` §4.
+> `node_checks`·`threshold_check`. 분석 배경: `docs/03-analysis/km-borrow-analysis.md` §4.
 
-## 원본에서 가져오는 것
-| cm_api | 의미 | K8s 적용 |
+## KM 패턴
+| KM 개념 | 의미 | K8s 적용 |
 |---|---|---|
 | `healthSummary` 6단계 | "모름"(NOT_AVAILABLE/HISTORY_NOT_AVAILABLE)과 "정상"을 구분 | 프로브 실패 ≠ 정상. 수집 직후 = pending |
 | `healthChecks[{name, summary}]` | 요약 뒤에 **이름 붙은 개별 체크** | NODE_READY, POD_RESTARTS, PVC_USAGE … |
-| 계층 롤업 (host·role → service → cluster) | 최악값 전파 | 파드 → 워크로드 → NS/애드온 → 클러스터 |
+| 계층 롤업 (노드·인스턴스 → 서비스 → 클러스터) | 최악값 전파 | 파드 → 워크로드 → NS/애드온 → 클러스터 |
 | `maintenanceMode` | 상태는 계산, 알람만 억제(상속) | 드레인·업그레이드 중 노드/클러스터 |
 | `entityStatus` | 운영 상태(STARTED/STOPPED…)와 건강을 **별도 축** | "정지됨"은 BAD 가 아니다 |
-| `cm_nagios.get_status()` | `"WARNING: CONCERNING, CHECK=…"` — 비정상 체크만 덧붙임 | 알림 본문·외부 연동 상태 문자열 |
-| `CM_STATE_CODES` | 상태 → 외부 코드 매핑을 한 곳에 | Nagios exit code, 3색(healthy/warning/critical) |
+| KM 상태 문자열 | `"WARNING: CONCERNING, CHECK=…"` — 비정상 체크만 덧붙임 | 알림 본문·외부 연동 상태 문자열 |
+| KM 상태 코드 매핑 | 상태 → 외부 코드 매핑을 한 곳에 | Nagios exit code, 3색(healthy/warning/critical) |
 
 ## 규칙
 1. 상태 enum 은 **정렬 가능**하게(값이 클수록 나쁨) → 롤업은 `max`.

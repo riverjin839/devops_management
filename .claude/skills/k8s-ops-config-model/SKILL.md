@@ -1,21 +1,21 @@
 ---
 name: k8s-ops-config-model
-description: 컴포넌트(kubelet·containerd·apiserver·애드온·앱) 설정을 화면에서 보고 고치고 노드에 반영하는 기능을 만들 때 사용. Cloudera cm_api 의 ApiConfig(view=summary|full, default·required·sensitive·validationState·relatedName), 서비스 + 역할 타입별 설정, role config group(그룹 단위 재정의), configStale/configStalenessStatus(FRESH·STALE_REFRESHABLE·STALE), None=재정의 삭제 의미론을 K8s 설정 관리로 옮긴다.
+description: 컴포넌트(kubelet·containerd·apiserver·애드온·앱) 설정을 화면에서 보고 고치고 노드에 반영하는 기능을 만들 때 사용. KM(K8s Manager) 설정 모델(view=summary|full, default·required·sensitive·validationState·relatedName), 서비스 + 역할 타입별 설정, 설정 그룹(그룹 단위 재정의), configStale/configStalenessStatus(FRESH·STALE_REFRESHABLE·STALE), None=재정의 삭제 의미론을 K8s 설정 관리에 적용한다.
 ---
 
-# Config model (cm_api `ApiConfig` / role config group / staleness 차용)
+# Config model (KM 설정 view / 설정 그룹 / staleness)
 
 > 레퍼런스 구현: [`reference.py`](reference.py) — `effective`(계층 해석) / `view`(summary|full) /
-> `apply_update`(None=삭제) / `staleness`. 분석 배경: `docs/03-analysis/cm-api-borrow-analysis.md` §3.
+> `apply_update`(None=삭제) / `staleness`. 분석 배경: `docs/03-analysis/km-borrow-analysis.md` §3.
 
-## 원본에서 가져오는 것
-| cm_api | 의미 | K8s 적용 |
+## KM 패턴
+| KM 개념 | 의미 | K8s 적용 |
 |---|---|---|
 | `get_config(view=None)` → `{name: value}` | **summary**: 명시 설정된 값만 | 변경점만 보기 / export / diff |
-| `get_config(view='full')` → `ApiConfig` | **full**: default·required·displayName·description·relatedName·sensitive·validationState/Message | 편집 폼의 원천(라벨·도움말·검증 메시지) |
-| `update_config(svc_config, **rt_configs)` | 서비스 공통 + 역할 타입별 설정을 한 번에 | 컴포넌트 공통 + 노드 역할별 |
-| role config group (`role_config_groups.py`) | 같은 설정을 공유하는 역할 묶음 | 노드 그룹(라벨/glob, **처음 일치 하나**) |
-| role 단위 설정 | 인스턴스 재정의 | 노드 1대 재정의 |
+| `get_config(view='full')` → 설정 항목 | **full**: default·required·displayName·description·relatedName·sensitive·validationState/Message | 편집 폼의 원천(라벨·도움말·검증 메시지) |
+| `update_config(svc_config, **role_type_configs)` | 서비스 공통 + 역할 타입별 설정을 한 번에 | 컴포넌트 공통 + 노드 역할별 |
+| 설정 그룹 | 같은 설정을 공유하는 인스턴스 묶음 | 노드 그룹(라벨/glob, **처음 일치 하나**) |
+| 인스턴스 단위 설정 | 인스턴스 재정의 | 노드 1대 재정의 |
 | 값 `None` 으로 update | 재정의 삭제 → 상위/기본값 복귀 | "기본값으로 되돌리기" 버튼 |
 | `sensitive` | 응답 마스킹 | 토큰·비밀번호 마스킹, 백업 `SENSITIVE_COLUMNS` |
 | `configStale` / `configStalenessStatus` | 원하는 설정 ≠ 적용된 설정 | DB(desired) vs 노드 관측(applied) 비교, 재시작 필요 여부로 2단계 |
@@ -33,7 +33,7 @@ description: 컴포넌트(kubelet·containerd·apiserver·애드온·앱) 설정
 
 ## PEP 적용 지점
 - `service_config` 도메인(`models/service_config.py`: `ServiceConfigItem`/`Rule`/`Group`/`Version`/`ApplyRun`)이 이미
-  이 구조에 가깝다: Group=role config group, Version=설정 버전. **staleness 3단계와 summary/full view,
+  이 구조에 가깝다: Group=설정 그룹, Version=설정 버전. **staleness 3단계와 summary/full view,
   None=재정의 삭제 의미론**이 보강 후보.
 - 현재 노드 값은 `config_snapshot` 에서 읽는다 → `staleness(desired, applied)` 의 applied 입력.
 

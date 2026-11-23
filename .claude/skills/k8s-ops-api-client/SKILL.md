@@ -1,23 +1,23 @@
 ---
 name: k8s-ops-api-client
-description: K8s(또는 외부 관리 API) 클라이언트 계층을 설계·리팩터링할 때 사용. Cloudera cm_api 의 Resource/BaseApiResource(_path 만 정의하면 동사 메서드 제공), Attr/ROAttr(읽기 전용 필드 직렬화 제외), GET 타임아웃만 재시도, JSON 오류 본문 정규화(ApiException), 최소 API 버전 게이트(check_api_version), do_batch(하나 실패 시 전체 롤백) 패턴을 옮긴다.
+description: K8s(또는 외부 관리 API) 클라이언트 계층을 설계·리팩터링할 때 사용. KM(K8s Manager) 클라이언트 계층 패턴 — 리소스 경로 객체(경로만 정의하면 동사 메서드 제공), 읽기/쓰기 속성 구분(읽기 전용 필드 직렬화 제외), GET 타임아웃만 재시도, JSON 오류 본문 정규화, 최소 API 버전 게이트, 일괄 실행(하나 실패 시 전체 롤백)을 적용한다.
 ---
 
-# API client layer (cm_api resource / types / batch 차용)
+# API client layer (KM 클라이언트 계층)
 
 > 레퍼런스 구현: [`reference.py`](reference.py) — `ApiError.from_response` / `retry_idempotent` / `requires` /
-> `ro()`·`to_payload`·`from_dict` / `run_batch`(보상 롤백). 분석 배경: `docs/03-analysis/cm-api-borrow-analysis.md` §8.
+> `ro()`·`to_payload`·`from_dict` / `run_batch`(보상 롤백). 분석 배경: `docs/03-analysis/km-borrow-analysis.md` §8.
 
-## 원본에서 가져오는 것
-| cm_api | 의미 | K8s 적용 |
+## KM 패턴
+| KM 개념 | 의미 | K8s 적용 |
 |---|---|---|
-| `Resource.get()` 재시도 — **GET + timeout 일 때만** (`resource.py`) | 변경 요청은 자동 재시도하지 않음 | 중복 생성·이중 적용 방지. 429/503/504 + 타임아웃만, 지수 백오프 |
-| `ApiException` — 본문 JSON 의 `message` 추출 (`api_client.py`) | 사람이 읽는 오류 | K8s `Status.message`/`reason` → 화면에 그대로. **빈 500 금지** |
-| `Attr(rw)` / `ROAttr` (`types.py`) | 서버 계산 필드는 쓰기 payload 에서 제외 | `status`, `metadata.resourceVersion` 등 RO 필드 보호 |
-| `from_json_dict` 의 미지 필드 무시 | 서버 버전 차이에 관대 | 신버전 K8s 필드가 와도 깨지지 않음 |
-| `check_api_version(min)` / `_require_min_api_version` | 호출 전 버전 게이트 | 대상 K8s minor 가 기능 지원하는지(예: 1.29+ 사이드카) 호출 전에 명확한 오류 |
-| `BaseApiResource._path()` + `_get/_post/_cmd` | 리소스 경로만 정의 | 새 리소스 래퍼 추가 비용 최소화 |
-| `do_batch(elements)` — 하나 실패 시 전체 롤백 (`batch.py`) | 다중 변경 원자성 | K8s 엔 트랜잭션이 없으므로 **보상 트랜잭션**(undo) 으로 |
+| 리소스 GET 재시도 — **GET + timeout 일 때만** | 변경 요청은 자동 재시도하지 않음 | 중복 생성·이중 적용 방지. 429/503/504 + 타임아웃만, 지수 백오프 |
+| 오류 정규화 — 본문 JSON 의 `message` 추출 | 사람이 읽는 오류 | K8s `Status.message`/`reason` → 화면에 그대로. **빈 500 금지** |
+| 읽기/쓰기 속성 vs 읽기 전용 속성 | 서버 계산 필드는 쓰기 payload 에서 제외 | `status`, `metadata.resourceVersion` 등 RO 필드 보호 |
+| 역직렬화 시 미지 필드 무시 | 서버 버전 차이에 관대 | 신버전 K8s 필드가 와도 깨지지 않음 |
+| 최소 API 버전 확인 | 호출 전 버전 게이트 | 대상 K8s minor 가 기능 지원하는지(예: 1.29+ 사이드카) 호출 전에 명확한 오류 |
+| 리소스 객체는 `_path()` 만 정의 + 공통 `_get/_post/_cmd` | 리소스 경로만 정의 | 새 리소스 래퍼 추가 비용 최소화 |
+| 일괄 실행 — 하나 실패 시 전체 롤백 | 다중 변경 원자성 | K8s 엔 트랜잭션이 없으므로 **보상 트랜잭션**(undo) 으로 |
 
 ## 규칙
 1. 자동 재시도는 멱등 조회에만. 변경은 실패를 그대로 올리고 사용자가 재시도(명령 retry).

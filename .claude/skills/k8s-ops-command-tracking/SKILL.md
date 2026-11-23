@@ -1,23 +1,23 @@
 ---
 name: k8s-ops-command-tracking
-description: K8s 관리 앱에 "오래 걸리는 실행"(재시작·드레인·적용·롤백·수집 등)을 넣을 때 사용. Cloudera cm_api 의 ApiCommand(id/active/success/resultMessage/children/canRetry + fetch·wait·abort·retry), Bulk 명령(errors), 명령 카탈로그(argSchema)를 K8s 용으로 옮긴 패턴. 실행 버튼 → 명령 핸들 반환 → 실시간 로그·중단·재시도·하위 명령 트리가 필요하면 이 스킬을 따른다.
+description: K8s 관리 앱에 "오래 걸리는 실행"(재시작·드레인·적용·롤백·수집 등)을 넣을 때 사용. KM(K8s Manager) 명령(Command) 모델(id/active/success/resultMessage/children/canRetry + fetch·wait·abort·retry), 일괄 명령(errors), 명령 카탈로그(argSchema) 패턴. 실행 버튼 → 명령 핸들 반환 → 실시간 로그·중단·재시도·하위 명령 트리가 필요하면 이 스킬을 따른다.
 ---
 
-# Command tracking (cm_api `ApiCommand` 차용)
+# Command tracking (KM 명령 모델)
 
 > 레퍼런스 구현: [`reference.py`](reference.py) — 표준 라이브러리만, 저장소는 `CommandStore` 프로토콜로 주입.
-> 분석 배경: `docs/03-analysis/cm-api-borrow-analysis.md` §1.
+> 분석 배경: `docs/03-analysis/km-borrow-analysis.md` §1.
 
-## 원본에서 가져오는 것
-| cm_api | 의미 | K8s 앱에서 |
+## KM 패턴
+| KM 개념 | 의미 | K8s 앱에서 |
 |---|---|---|
-| `ApiCommand{id,name,startTime,endTime,active,success,resultMessage}` (`endpoints/types.py`) | 변경 API 는 결과 대신 **명령 핸들**을 즉시 반환 | 실행 API 는 `202 {command_id}` 반환, 본 작업은 워커(Celery 등) |
+| Command `{id,name,startTime,endTime,active,success,resultMessage}` | 변경 API 는 결과 대신 **명령 핸들**을 즉시 반환 | 실행 API 는 `202 {command_id}` 반환, 본 작업은 워커(Celery 등) |
 | `children` / `parent` | 하위 명령 트리 | 롤링 재시작 = 부모, 노드/배치별 = 자식 |
 | `fetch()` / `wait(timeout)` — 타임아웃 시 **예외가 아니라 마지막 상태** 반환 | 호출자가 "아직 실행 중"을 판단 | UI 폴링·SSE, 자동화 스크립트 대기 |
 | `abort()` / `retry()` + `canRetry` | 중단·재시도 1급 기능 | 협조적 중단(단계 사이 `checkpoint()`), 재시도는 `parent_id` 로 원본 연결 |
 | `SYNCHRONOUS_COMMAND_ID = -1` | 즉시 끝난 동기 명령도 같은 타입으로 | 빠른 조회형도 같은 결과 스키마로 응답 |
-| `ApiBulkCommandList.errors` | N개 대상 중 일부 제출 실패를 모아서 | 일괄 실행: 검증 실패 대상은 `errors`, 나머지는 진행 |
-| `ApiCommandMetadata{name,argSchema}` + `list_commands_by_name()` | 대상이 지원하는 명령과 인자 스키마를 서버가 알려줌 | 리소스 종류별 명령 카탈로그 → **UI 가 스키마로 폼을 그림**(UI-First) |
+| 일괄 명령 `errors` | N개 대상 중 일부 제출 실패를 모아서 | 일괄 실행: 검증 실패 대상은 `errors`, 나머지는 진행 |
+| 명령 메타데이터 `{name,argSchema}` + 대상별 명령 목록 | 대상이 지원하는 명령과 인자 스키마를 서버가 알려줌 | 리소스 종류별 명령 카탈로그 → **UI 가 스키마로 폼을 그림**(UI-First) |
 
 ## 규칙
 1. **실행 API 는 블로킹하지 않는다.** 명령 행을 먼저 만들고 id 를 돌려준 뒤 워커에서 실행.

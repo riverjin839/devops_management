@@ -1,6 +1,6 @@
-"""Staged distribution — cm_api Parcel 라이프사이클(download → distribute → activate) 패턴.
+"""Staged distribution — KM(K8s Manager) 패키지 라이프사이클(download → distribute → activate) 패턴.
 
-원본: parcels.py `ApiParcel{product, version, stage, state{progress,totalProgress,count,totalCount,warnings,errors}}`,
+KM 패키지: {product, version, stage, state{progress,totalProgress,count,totalCount,warnings,errors}},
 start_download/cancel_download/remove_download/start_distribution/cancel_distribution/
 start_removal_of_distribution/activate/deactivate.
 

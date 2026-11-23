@@ -1,24 +1,24 @@
 ---
 name: k8s-ops-templates
-description: 노드에 역할 묶음(라벨·테인트·설정 그룹)을 한 번에 입히는 "노드 프로파일", 또는 클러스터 구성을 변수화해 내보내고 다른 클러스터에 재현하는 "클러스터 청사진" 기능을 만들 때 사용. Cloudera cm_api 의 HostTemplate(roleConfigGroupRefs + apply_host_template(host_ids, start_roles)), ClusterTemplate(export / import_cluster_template, variables, hostNameRange, cardinality) 패턴을 옮긴다.
+description: 노드에 역할 묶음(라벨·테인트·설정 그룹)을 한 번에 입히는 "노드 프로파일", 또는 클러스터 구성을 변수화해 내보내고 다른 클러스터에 재현하는 "클러스터 청사진" 기능을 만들 때 사용. KM(K8s Manager) 노드 템플릿(configGroupRefs + apply(node_ids, start_roles))과 클러스터 템플릿(export / import, variables, hostNameRange, cardinality) 패턴을 적용한다.
 ---
 
-# Templates (cm_api HostTemplate / ClusterTemplate 차용)
+# Templates (KM 노드 템플릿 / 클러스터 템플릿)
 
 > 레퍼런스 구현: [`reference.py`](reference.py) — `plan_apply_profile`(노드별 diff) / `expand_host_range` /
 > `export_template`(값 → 변수 역치환) / `instantiate`(변수·cardinality 검증 후 치환).
-> 분석 배경: `docs/03-analysis/cm-api-borrow-analysis.md` §5.
+> 분석 배경: `docs/03-analysis/km-borrow-analysis.md` §5.
 
-## 원본에서 가져오는 것
-| cm_api | 의미 | K8s 적용 |
+## KM 패턴
+| KM 개념 | 의미 | K8s 적용 |
 |---|---|---|
-| `ApiHostTemplate{name, roleConfigGroupRefs}` | 호스트에 줄 역할 그룹 묶음 | **NodeProfile**: 라벨·테인트·설정 그룹 참조 |
-| `apply_host_template(host_ids, start_roles)` → ApiCommand | 여러 호스트에 적용 + 즉시 시작 여부 | 노드 N대에 적용(명령) + "적용 후 uncordon" 옵션 |
-| `cluster.export(export_auto_config)` | 현재 클러스터를 템플릿으로 | 애드온·NS·정책·프로파일 청사진 export |
-| `import_cluster_template(template, add_repositories)` | 템플릿으로 새 클러스터 구성 | 다른 클러스터/환경(dev→prod, 폐쇄망)에 재현 |
-| `ApiClusterTemplateConfig{value, ref, variable}` + `instantiator.variables` | 인스턴스 고유 값은 **변수** | 레지스트리 주소·도메인·클러스터 이름 |
+| 노드 템플릿 `{name, configGroupRefs}` | 노드에 줄 역할·설정 그룹 묶음 | **NodeProfile**: 라벨·테인트·설정 그룹 참조 |
+| 노드 템플릿 `apply(node_ids, start_roles)` → 명령 | 여러 노드에 적용 + 즉시 시작 여부 | 노드 N대에 적용(명령) + "적용 후 uncordon" 옵션 |
+| 클러스터 템플릿 `export(auto_config)` | 현재 클러스터를 템플릿으로 | 애드온·NS·정책·프로파일 청사진 export |
+| 클러스터 템플릿 `import(template, add_repositories)` | 템플릿으로 새 클러스터 구성 | 다른 클러스터/환경(dev→prod, 폐쇄망)에 재현 |
+| 설정 항목 `{value, ref, variable}` + `instantiator.variables` | 인스턴스 고유 값은 **변수** | 레지스트리 주소·도메인·클러스터 이름 |
 | `hostNameRange` (`node[01-10]`) | 호스트 범위 표기 | 노드 이름 패턴 |
-| `hostTemplates.cardinality` | 프로파일당 필요한 호스트 수 | 사전 검증(예: etcd 3대) |
+| 노드 템플릿 `cardinality` | 프로파일당 필요한 노드 수 | 사전 검증(예: etcd 3대) |
 
 ## 규칙
 1. 적용은 항상 **diff 계획 → 확인 → 명령 실행**(`k8s-ops-command-tracking`). noop 노드는 건너뛴다.

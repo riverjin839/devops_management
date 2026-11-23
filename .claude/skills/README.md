@@ -29,10 +29,10 @@
 | `ux-ui-designer` | 디자인 감사·UX 점검·`DESIGN.md` 현행화/백로그 운영 (전담 에이전트: `.claude/agents/ux-ui-designer.md`) |
 | `impeccable` | 프론트엔드 화면(웹/랜딩/대시보드/컴포넌트) 디자인 품질 개선 — 3rd-party 스킬([impeccable.style](https://impeccable.style)). `/impeccable init` 으로 시작, `polish`/`audit`/`critique` 등 23개 서브커맨드 + 60개 결정론적 안티패턴 감지 규칙 제공 (전담 에이전트 4종: `.claude/agents/impeccable-*.md`) |
 
-### K8s 운영 패턴 모듈 (`k8s-ops-*`, Cloudera cm_api 차용)
+### K8s 운영 패턴 모듈 (`k8s-ops-*`, KM = K8s Manager 패턴)
 
 일반 K8s 관리 앱에 옮겨 쓸 수 있는 운영 원시 동작. 각 폴더 = `SKILL.md`(규칙·매핑·PEP 적용 지점·체크리스트)
-+ `reference.py`(표준 라이브러리만 쓰는 레퍼런스 구현). 분석 배경은 `docs/03-analysis/cm-api-borrow-analysis.md`.
++ `reference.py`(표준 라이브러리만 쓰는 레퍼런스 구현). 분석 배경은 `docs/03-analysis/km-borrow-analysis.md`.
 
 | 스킬 | 언제 쓰나 |
 |---|---|

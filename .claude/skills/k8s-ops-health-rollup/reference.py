@@ -1,8 +1,7 @@
-"""Health rollup — cm_api `healthSummary`/`healthChecks`/`entityStatus`/`maintenanceMode` +
-nagios/cm_nagios.py 의 외부 모니터링 매핑 패턴.
+"""Health rollup — KM(K8s Manager) 헬스 모델(healthSummary/healthChecks/entityStatus/maintenanceMode) +
+외부 모니터링(Nagios 등) 매핑 패턴.
 
-원본: hosts.py/services.py/roles.py 의 healthSummary·healthChecks·maintenanceMode·entityStatus 속성,
-nagios/cm_nagios.py `get_status`(요약 + 비정상 체크만 덧붙인 상태 문자열), `CM_STATE_CODES`.
+KM 상태 문자열: 요약 + 비정상 체크만 덧붙인다. 상태 → 외부 코드 매핑은 한 곳(KM_STATE_CODES 격)에서만.
 
 계층: Cluster ← Service(워크로드/애드온) ← Role(파드/노드 인스턴스) ← HealthCheck.
 """
@@ -30,7 +29,7 @@ class HealthCheck:
     name: str  # 예: NODE_READY, POD_RESTARTS, PVC_USAGE
     summary: Health
     explanation: str = ""
-    suppressed: bool = False  # 개별 체크 경고 억제(CM validationWarningsSuppressed 와 같은 발상)
+    suppressed: bool = False  # 개별 체크 경고 억제(KM 경고 억제와 같은 발상)
 
 
 @dataclass
@@ -39,7 +38,7 @@ class Entity:
     kind: str  # cluster | service | role | host
     checks: list[HealthCheck] = field(default_factory=list)
     children: list["Entity"] = field(default_factory=list)
-    maintenance: bool = False  # CM maintenanceMode: 상태는 계산하되 알람은 억제
+    maintenance: bool = False  # KM maintenanceMode: 상태는 계산하되 알람은 억제
     entity_status: str = ""  # 운영 상태(STARTED/STOPPED/...) — 건강과 별개 축
 
 
@@ -71,7 +70,7 @@ def bad_checks(e: Entity) -> list[HealthCheck]:
 
 
 def status_line(e: Entity) -> str:
-    """cm_nagios.get_status: '<CODE>: <summary>, CHECK=summary, ...' (비정상 체크만)."""
+    """KM 상태 문자열: '<CODE>: <summary>, CHECK=summary, ...' (비정상 체크만)."""
     h = rollup(e)
     s = f"{NAGIOS[h][1]}: {h.name}"
     if h not in (Health.GOOD, Health.DISABLED):

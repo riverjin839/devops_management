@@ -1,7 +1,6 @@
-"""Command tracking — cm_api `ApiCommand` 패턴의 K8s 관리 앱용 레퍼런스 구현.
+"""Command tracking — KM(K8s Manager) 명령(Command) 패턴의 레퍼런스 구현.
 
-원본: cm_api/python/src/cm_api/endpoints/types.py `ApiCommand`(fetch/wait/abort/retry),
-`ApiBulkCommandList`(errors), `ApiCommandMetadata`(argSchema), services.py `list_commands_by_name`.
+KM 명령: fetch/wait/abort/retry, 일괄 명령(errors), 명령 메타데이터(argSchema), 대상별 명령 목록.
 
 프레임워크 비의존(표준 라이브러리만). 저장소(DB/Redis)는 `CommandStore` 프로토콜로 주입한다.
 """
@@ -14,7 +13,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any, Callable, Protocol
 
-# CM 은 즉시 끝나는 동기 명령에 id=-1 을 준다 → fetch/wait/abort 가 no-op.
+# KM 은 즉시 끝나는 동기 명령에 id=-1 을 준다 → fetch/wait/abort 가 no-op.
 SYNCHRONOUS_COMMAND_ID = -1
 
 
@@ -134,7 +133,7 @@ class CommandManager:
         return self.store.get(cmd_id)
 
     def wait(self, cmd_id: int, timeout: float | None = None, poll: float = 0.5, max_poll: float = 5.0) -> Command:
-        """끝날 때까지 대기. 타임아웃이면 예외 대신 *마지막 상태*를 돌려준다(CM 의미론)."""
+        """끝날 때까지 대기. 타임아웃이면 예외 대신 *마지막 상태*를 돌려준다(KM 의미론)."""
         if cmd_id == SYNCHRONOUS_COMMAND_ID:
             raise ValueError("synchronous command has no server state")
         deadline = None if timeout is None else time.monotonic() + timeout
@@ -150,7 +149,7 @@ class CommandManager:
                 time.sleep(min(delay, left))
             else:
                 time.sleep(delay)
-            delay = min(delay * 1.5, max_poll)  # CM 은 고정 5초 — 짧은 명령 체감 개선용 백오프
+            delay = min(delay * 1.5, max_poll)  # 고정 간격 대신 — 짧은 명령 체감 개선용 백오프
 
     def abort(self, cmd_id: int) -> Command:
         cmd = self.fetch(cmd_id)
@@ -166,7 +165,7 @@ class CommandManager:
         return self.submit(old.name, fn, target=old.target, args=old.args, parent_id=old.id, **kw)
 
 
-# ── Bulk: 대상 N개에 같은 명령. 일부 실패는 errors 로 모으고 나머지는 계속(ApiBulkCommandList) ──
+# ── Bulk: 대상 N개에 같은 명령. 일부 실패는 errors 로 모으고 나머지는 계속(KM 일괄 명령) ──
 @dataclass
 class BulkResult:
     commands: list[Command]
@@ -184,7 +183,7 @@ def submit_bulk(mgr: CommandManager, name: str, targets: list[dict], make_fn, va
     return BulkResult(cmds, errors)
 
 
-# ── Command catalog: 대상 종류별 실행 가능한 명령 + 인자 스키마 → UI 가 폼을 그린다(ApiCommandMetadata) ──
+# ── Command catalog: 대상 종류별 실행 가능한 명령 + 인자 스키마 → UI 가 폼을 그린다(KM 명령 메타데이터) ──
 @dataclass(frozen=True)
 class CommandSpec:
     name: str

@@ -1,19 +1,19 @@
 ---
 name: k8s-ops-staged-rollout
-description: 애드온·이미지·바이너리 새 버전을 "받기 → 노드에 미리 뿌리기 → 전환(활성화)" 단계로 나눠 배포하는 기능을 만들 때 사용(특히 폐쇄망). Cloudera cm_api 의 Parcel 라이프사이클(AVAILABLE_REMOTELY→DOWNLOADING→DOWNLOADED→DISTRIBUTING→DISTRIBUTED→ACTIVATED, 단계별 cancel/remove, progress·count/totalCount·warnings·errors) 상태 기계를 옮긴다.
+description: 애드온·이미지·바이너리 새 버전을 "받기 → 노드에 미리 뿌리기 → 전환(활성화)" 단계로 나눠 배포하는 기능을 만들 때 사용(특히 폐쇄망). KM(K8s Manager) 패키지 라이프사이클(AVAILABLE_REMOTELY→DOWNLOADING→DOWNLOADED→DISTRIBUTING→DISTRIBUTED→ACTIVATED, 단계별 cancel/remove, progress·count/totalCount·warnings·errors) 상태 기계를 적용한다.
 ---
 
-# Staged rollout (cm_api Parcel 차용)
+# Staged rollout (KM 패키지 라이프사이클)
 
 > 레퍼런스 구현: [`reference.py`](reference.py) — `Stage`/`ACTIONS` 상태 기계, `begin`/`report`/`complete`/`fail`,
-> `allowed_actions()`. 분석 배경: `docs/03-analysis/cm-api-borrow-analysis.md` §6.
+> `allowed_actions()`. 분석 배경: `docs/03-analysis/km-borrow-analysis.md` §6.
 
-## 원본에서 가져오는 것
-| cm_api (`endpoints/parcels.py`) | 의미 | K8s 적용 |
+## KM 패턴
+| KM 패키지 동작 | 의미 | K8s 적용 |
 |---|---|---|
-| `stage` + `allowed actions` | 지금 가능한 버튼만 활성 | `allowed_actions()` 로 버튼 enable |
+| `stage` + 허용 동작 | 지금 가능한 버튼만 활성 | `allowed_actions()` 로 버튼 enable |
 | `start_download` / `cancel_download` / `remove_download` | 중앙 저장소로 받기 | 번들 → 내부 레지스트리 push(Harbor/Nexus) |
-| `start_distribution` / `cancel_distribution` / `start_removal_of_distribution` | 모든 호스트에 미리 배포 | pre-pull DaemonSet / `crictl pull` — 서비스 영향 0 |
+| `start_distribution` / `cancel_distribution` / `start_removal_of_distribution` | 모든 노드에 미리 배포 | pre-pull DaemonSet / `crictl pull` — 서비스 영향 0 |
 | `activate` / `deactivate` | 버전 전환(같은 제품은 하나만 활성) | 이미지 태그 전환·Helm upgrade(→ `k8s-ops-rolling-ops`), 되돌리기 빠름 |
 | `state{progress,totalProgress,count,totalCount,warnings,errors}` | 단계 진행률 | 노드 완료 수/전체, 바이트 진행률 |
 

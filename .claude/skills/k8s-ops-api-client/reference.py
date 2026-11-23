@@ -1,9 +1,9 @@
-"""API client layer — cm_api resource.py / http_client.py / types.py(BaseApiObject, Attr/ROAttr, call,
-check_api_version) / api_client.py(ApiException) / batch.py(do_batch, 전체 롤백) 패턴.
+"""API client layer — KM(K8s Manager) 클라이언트 계층 패턴: 리소스 경로 객체, 읽기/쓰기 속성 구분,
+오류 정규화, 최소 API 버전 게이트, 일괄 실행(전체 롤백).
 
 차용 포인트
 1. Resource(경로) 객체가 HTTP 동사를 감싸고, 도메인 객체는 `_path()` 만 정의 → 엔드포인트 추가가 한 줄.
-2. Attr(rw) / ROAttr: 직렬화 시 읽기 전용 필드는 보내지 않는다(서버 계산 필드 덮어쓰기 방지).
+2. 읽기/쓰기 속성 vs 읽기 전용 속성: 직렬화 시 읽기 전용 필드는 보내지 않는다(서버 계산 필드 덮어쓰기 방지).
 3. 재시도는 *멱등(GET) + 타임아웃* 일 때만. 변경(POST/PUT/DELETE)은 자동 재시도하지 않는다.
 4. 서버 오류 본문이 JSON 이면 message 를 꺼내 사람이 읽을 예외로 정규화.
 5. 최소 API 버전 게이트(check_api_version): 대상 서버(K8s minor) 가 기능을 지원하는지 호출 전에 막는다.
@@ -30,7 +30,7 @@ class ApiError(Exception):
         msg = body
         try:
             j = json.loads(body)
-            # CM: {"message": ...} / K8s Status: {"kind":"Status","message":...,"reason":...}
+            # KM: {"message": ...} / K8s Status: {"kind":"Status","message":...,"reason":...}
             msg = j.get("message") or j.get("reason") or body
         except (ValueError, AttributeError):
             pass
@@ -76,7 +76,7 @@ def requires(min_version: tuple[int, int]):
     return deco
 
 
-# ── 타입 모델: Attr/ROAttr 를 dataclass metadata 로 ──
+# ── 타입 모델: 읽기 전용 속성을 dataclass metadata 로 ──
 def ro(default=None):
     from dataclasses import field
     return field(default=default, metadata={"ro": True})
@@ -108,7 +108,7 @@ class BatchResult:
 
 
 def run_batch(elements: list[BatchElement], log: Callable[[str], None] = print) -> BatchResult:
-    """CM do_batch: 하나라도 실패하면 전체 롤백 + 이후 요소 무시."""
+    """KM 일괄 실행: 하나라도 실패하면 전체 롤백 + 이후 요소 무시."""
     done: list[tuple[BatchElement, Any]] = []
     results: list[dict] = []
     for el in elements:
