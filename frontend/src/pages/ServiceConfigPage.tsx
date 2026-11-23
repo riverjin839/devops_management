@@ -3,7 +3,7 @@
 // 버전 비교·되돌리기, 노드 그룹 재정의. 저장은 노드에 아무것도 하지 않고, 별도의 적용(LINUX·CILIUM·ETCD·CONTAINERD)이 실제로 반영한다.
 // '현재 값 수집' 은 노드 설정을 읽기만 하며 실시간 실행 로그를 남긴다.
 import { useEffect, useMemo, useState } from 'react';
-import { Database, GitCompare, History, Layers, Pencil, Play, Plus, Search, Settings2, Trash2 } from 'lucide-react';
+import { Database, GitCompare, Layers, Pencil, Play, Plus, Search, Settings2, Trash2 } from 'lucide-react';
 import { useClusters } from '@/hooks/useCluster';
 import { useK8sHub } from '@/lib/k8sHub';
 import { useUrlParams } from '@/hooks/useUrlParams';
@@ -426,8 +426,7 @@ export function ServiceConfigPage() {
                         <Play /> 적용…
                       </Button>
                     )}
-                    <Button size="sm" variant="outline" onClick={() => setHistoryOpen(true)} title="적용 이력" aria-label="적용 이력"><History /></Button>
-                    <Button size="sm" variant="outline" onClick={() => setSettingsOpen(true)} title="적용 설정" aria-label="적용 설정"><Settings2 /></Button>
+                    <Button size="sm" variant="outline" onClick={() => setSettingsOpen(true)} title={`${meta?.label ?? service} 적용 설정(경로·리소스 이름·확인 명령)`} aria-label="적용 설정"><Settings2 /> 적용 설정</Button>
                     {(meta?.collectKinds ?? []).map((k) => (
                       <Button key={k} size="sm" variant="outline" disabled={!canOperate || (k === 'versions' && collectApi.isPending) || (k === 'static-pods' && staticCollect.isPending)}
                         onClick={() => onCollect(k)} title={withHint(`현재 값 수집 — ${COLLECT_LABEL[k]} (노드 설정은 바꾸지 않는다)`)}
@@ -682,7 +681,7 @@ export function ServiceConfigPage() {
       )}
       <ApplyHistoryDialog open={historyOpen} clusterId={clusterId} service={service} serviceLabel={meta?.label ?? service}
         onClose={() => setHistoryOpen(false)} />
-      <ApplySettingsDialog open={settingsOpen} isAdmin={isAdmin} onClose={() => setSettingsOpen(false)} />
+      <ApplySettingsDialog open={settingsOpen} isAdmin={isAdmin} service={service} serviceLabel={meta?.label ?? service} onClose={() => setSettingsOpen(false)} />
       <ConfirmDialog
         open={discard != null}
         title="저장하지 않은 변경을 버릴까요?"
