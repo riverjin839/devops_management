@@ -4,6 +4,7 @@ import {
   TerminalSquare, Key, Play, ShieldAlert, ExternalLink, Search, Loader2,
   CheckCircle, XCircle, Wifi, Clock, Plug, RotateCw,
 } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import { useClusterRouteParam } from '@/hooks/useClusterRouteParam';
 import { useClusterSwitchGuard } from '@/stores/clusterSwitchGuardStore';
 import { useK8sHub } from '@/lib/k8sHub';
@@ -84,7 +85,8 @@ export function NodeSshPage() {
   // handoff 실패 시 "다시 열기" 용 — 메모리에만 두고 클러스터 전환·재시도 때 비운다.
   const [retryParams, setRetryParams] = useState<NodeSshConnectParams | null>(null);
   const [pendingConnect, setPendingConnect] = useState<'inline' | 'popout' | null>(null);
-  const [pendingCluster, setPendingCluster] = useState<{ id: string | null } | null>(null);
+  // 확인 대기 중인 이동 — `path` 가 있으면 허브 목록·탭에서 온 이동(D-244·D-246), 없으면 페이지 레일.
+  const [pendingCluster, setPendingCluster] = useState<{ id: string | null; path?: string } | null>(null);
   const clusterIdRef = useRef(clusterId);
   clusterIdRef.current = clusterId;
 
@@ -199,11 +201,20 @@ export function NodeSshPage() {
 
   // 허브의 클러스터 목록(사이드바 flyout·「클러스터 전환」)으로 바꿀 때도 같은 확인을 거친다(D-244).
   const hub = useK8sHub();
-  useClusterSwitchGuard((id) => {
-    if (id === clusterId || !session || termStatus === 'closed' || termStatus === 'error') return false;
-    setPendingCluster({ id });
+  const navigate = useNavigate();
+  useClusterSwitchGuard(({ clusterId: id, path }) => {
+    if (!session || termStatus === 'closed' || termStatus === 'error') return false;
+    setPendingCluster({ id, path });
     return true;
   }, !!hub);
+  const confirmPending = (next: { id: string | null; path?: string }) => {
+    if (next.path) {
+      setSession(null);
+      setTermStatus(null);
+      navigate(next.path);
+    } else changeCluster(next.id);
+  };
+  const pendingIsTab = !!pendingCluster?.path && pendingCluster.id === clusterId;
 
   // 열린 세션이 있으면 클러스터 전환 전에 확인한다(D-177).
   const requestClusterChange = (id: string | null) => {
@@ -560,16 +571,16 @@ export function NodeSshPage() {
       <ConfirmDialog
         open={pendingCluster !== null}
         danger
-        title="클러스터 전환"
+        title={pendingIsTab ? '화면 이동' : '클러스터 전환'}
         description={session
           ? `연결된 SSH 세션을 끊습니다 — ${session.username}@${session.host}:${session.port}. 실행 중인 원격 작업이 함께 종료됩니다.`
           : undefined}
-        confirmLabel="세션 끊고 전환"
+        confirmLabel={pendingIsTab ? '세션 끊고 이동' : '세션 끊고 전환'}
         onCancel={() => setPendingCluster(null)}
         onConfirm={() => {
           const next = pendingCluster;
           setPendingCluster(null);
-          if (next) changeCluster(next.id);
+          if (next) confirmPending(next);
         }}
       />
     </div>

@@ -139,7 +139,7 @@ export function K8sClusterFlyoutBody({ onNavigate }: { onNavigate: () => void })
                       role="menuitem"
                       aria-current={active ? 'page' : undefined}
                       onClick={(e) => {
-                        if (!active && switchGuard?.(c.id)) e.preventDefault();
+                        if (!active && switchGuard?.({ clusterId: c.id, path: `/k8s/${c.id}${view ? `/${view}` : ''}` })) e.preventDefault();
                         onNavigate();
                       }}
                       className={`flex-1 min-w-0 flex items-center gap-2 px-2.5 py-1.5 rounded text-[13px] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 ${

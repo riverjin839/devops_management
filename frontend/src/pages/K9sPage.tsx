@@ -1,6 +1,7 @@
 import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { ShipWheel, Key, Play, ShieldAlert, ExternalLink, RotateCw } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import { useClusterRouteParam } from '@/hooks/useClusterRouteParam';
 import { useClusterSwitchGuard } from '@/stores/clusterSwitchGuardStore';
 import { useK8sHub } from '@/lib/k8sHub';
@@ -91,7 +92,8 @@ export function K9sPage() {
   const [retryParams, setRetryParams] = useState<K9sConnectParams | null>(null);
   const [pendingConnect, setPendingConnect] = useState<'inline' | 'popout' | null>(null);
   const [confirmReadonlyOff, setConfirmReadonlyOff] = useState(false);
-  const [pendingCluster, setPendingCluster] = useState<{ id: string | null } | null>(null);
+  // 확인 대기 중인 이동 — `path` 가 있으면 허브 목록·탭에서 온 이동(D-244·D-246), 없으면 페이지 레일.
+  const [pendingCluster, setPendingCluster] = useState<{ id: string | null; path?: string } | null>(null);
   // 연결 진행 상태·상세 로그(D-089) — 항상 수집하고 보일지는 사용자가 "로그 보기"로 정한다.
   const runLog = useRunLog();
   const [showRunLog, setShowRunLog] = useLogPref('k9s-connect');
@@ -151,8 +153,11 @@ export function K9sPage() {
 
   const resetForCluster = (id: string | null) => {
     selectCluster(id);
+    clearSession('클러스터를 전환해 세션을 정리했습니다');
+  };
+  const clearSession = (reason: string) => {
     window.clearTimeout(popoutTimerRef.current);
-    runHandleRef.current?.log('warn', '클러스터를 전환해 세션을 정리했습니다');
+    runHandleRef.current?.log('warn', reason);
     runHandleRef.current?.end();
     setConnectError('');
     setSession(null);
@@ -172,11 +177,20 @@ export function K9sPage() {
 
   // 허브의 클러스터 목록(사이드바 flyout·「클러스터 전환」)으로 바꿀 때도 같은 확인을 거친다(D-244).
   const hub = useK8sHub();
-  useClusterSwitchGuard((id) => {
-    if (id === clusterId || !session || termStatus === 'closed' || termStatus === 'error') return false;
-    setPendingCluster({ id });
+  const navigate = useNavigate();
+  useClusterSwitchGuard(({ clusterId: id, path }) => {
+    if (!session || termStatus === 'closed' || termStatus === 'error') return false;
+    setPendingCluster({ id, path });
     return true;
   }, !!hub);
+  // 확인 후 허브 이동 — 세션을 정리하고 경로로 간다(뷰가 바뀌거나 클러스터가 바뀌면 이 화면은 내려간다).
+  const confirmPending = (next: { id: string | null; path?: string }) => {
+    if (next.path) {
+      clearSession(next.id === clusterId ? '다른 화면으로 이동해 세션을 정리했습니다' : '클러스터를 전환해 세션을 정리했습니다');
+      navigate(next.path);
+    } else resetForCluster(next.id);
+  };
+  const pendingIsTab = !!pendingCluster?.path && pendingCluster.id === clusterId;
 
   const onTerminalEvent = (e: SshTerminalEvent) => {
     if (abortedRef.current) return;
@@ -705,16 +719,16 @@ export function K9sPage() {
       <ConfirmDialog
         open={pendingCluster !== null}
         danger
-        title="클러스터 전환"
+        title={pendingIsTab ? '화면 이동' : '클러스터 전환'}
         description={session
           ? `SSH 세션(${session.username}@${session.host}:${session.port})과 실행 중인 k9s 가 종료됩니다.`
           : undefined}
-        confirmLabel="세션 끊고 전환"
+        confirmLabel={pendingIsTab ? '세션 끊고 이동' : '세션 끊고 전환'}
         onCancel={() => setPendingCluster(null)}
         onConfirm={() => {
           const next = pendingCluster;
           setPendingCluster(null);
-          if (next) resetForCluster(next.id);
+          if (next) confirmPending(next);
         }}
       />
     </div>
