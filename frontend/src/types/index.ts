@@ -6969,6 +6969,7 @@ export interface NicRates {
   flaps: number;
   bondLinkFailures: number;
 }
+/** 목록 행(가벼운 형태) — 카운터·offload 전체·본딩 하위·경고는 `NicInterfaceDetail`(펼칠 때 따로 조회). */
 export interface NicInterfaceRow {
   node: string;
   name: string;
@@ -6984,25 +6985,26 @@ export interface NicInterfaceRow {
   vlanId: number | null;
   driver: { driver: string | null; version: string | null; firmware: string | null; bus: string | null } | null;
   ring: { rx: number | null; rxMax: number | null; tx: number | null; txMax: number | null } | null;
-  bond: NicBond | null;
+  bond: Omit<NicBond, 'slaveState'> | null;
   lacp: NicSlaveState | null;
   offload: { name: string; label: string; on: boolean }[];
+  rates: NicRates | null;
+  level: NicLevel;
+  /** 위험·확인 필요 경고 수. */
+  findingCount: number;
+}
+export interface NicInterfaceDetail extends Omit<NicInterfaceRow, 'bond' | 'findingCount'> {
+  bond: NicBond | null;
   features: { name: string; label: string; on: boolean; fixed: boolean }[];
   counters: { name: string; value: number }[];
-  rates: NicRates | null;
   findings: NicFinding[];
-  level: NicLevel;
 }
-export interface NicNodeInfo {
-  node: string;
-  hostIp: string | null;
-  agentVersion: string | null;
-  collectedAt: string | null;
-  receivedAt: string | null;
-  stale: boolean;
-  interfaceCount: number;
-  rateReady: boolean;
-  level: NicLevel;
+export interface NicViewQuery {
+  q?: string;
+  kind?: string;
+  onlyFlagged?: boolean;
+  offset?: number;
+  limit?: number;
 }
 export interface NicWatchSettings {
   enabled: boolean;
@@ -7025,10 +7027,14 @@ export interface NicWatchSettingsOut extends NicWatchSettings {
   options: { kinds: string[]; bondModes: string[]; hashPolicies: string[]; lacpRates: string[]; features: { name: string; label: string }[] };
 }
 export interface NicClusterView {
-  nodes: NicNodeInfo[];
   interfaces: NicInterfaceRow[];
+  interfacesTotal: number;
+  offset: number;
+  limit: number;
+  /** 앞 300건(요약만 요청하면 5건). 전체 수는 `findingsTotal`. */
   findings: NicFinding[];
-  summary: { critical: number; warning: number; info: number; nodes: number; stale: number; level: NicLevel };
+  findingsTotal: number;
+  summary: { critical: number; warning: number; info: number; nodes: number; stale: number; level: NicLevel; latestReceivedAt: string | null };
   pendingAgents: { node: string; agentVersion: string | null; reason: string }[];
   agentCount: number;
   settings: NicWatchSettings;

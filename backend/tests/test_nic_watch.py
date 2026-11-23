@@ -344,9 +344,63 @@ def test_report_endpoint_carries_nic(db, cluster, monkeypatch):
         v = client.get(f"/api/v1/nic-watch/clusters/{cluster.id}")
         assert v.status_code == 200, v.text
         row = v.json()["interfaces"][0]
-        assert row["name"] == "ens1f0" and isinstance(row["counters"], list) and isinstance(row["offload"], list)
-        assert v.json()["settings"]["offload_expect"] == [{"name": "rx-lro", "on": False}]
+        assert row["name"] == "ens1f0" and isinstance(row["offload"], list) and "counters" not in row  # 목록은 가벼운 행
+        assert v.json()["interfaces_total"] == 1 and v.json()["settings"]["offload_expect"] == [{"name": "rx-lro", "on": False}]
+        d = client.get(f"/api/v1/nic-watch/clusters/{cluster.id}/nodes/w1/interfaces/ens1f0")
+        assert d.status_code == 200 and isinstance(d.json()["counters"], list) and isinstance(d.json()["findings"], list)
+        assert client.get(f"/api/v1/nic-watch/clusters/{cluster.id}/nodes/w1/interfaces/nope").status_code == 404
+        assert client.get(f"/api/v1/nic-watch/clusters/{cluster.id}?limit=0").json()["interfaces"] == []
         s = client.get("/api/v1/nic-watch/settings").json()
         assert "802.3ad" in s["options"]["bond_modes"]
     finally:
         app.dependency_overrides.clear()
+
+
+def test_ingest_skips_full_write_when_state_unchanged(db, cluster):
+    from app.models.node_nic import NodeNicState
+    from app.services.nic_watch import service as svc
+
+    t0 = datetime(2026, 11, 23, 11, 0, 0)
+
+    def rep(minutes, *, missed=0, mtu=9000):
+        t = t0 + timedelta(minutes=minutes)
+        body = {"interfaces": [{**_phys("ens1f0", master=None, mtu=mtu), "counters": {"rx_missed_errors": missed}}]}
+        svc.ingest(db, cluster, "w1", None, "1.2.0", t.isoformat(), body, now=t)
+        db.expire_all()
+        return db.query(NodeNicState).filter(NodeNicState.cluster_id == cluster.id).one()
+
+    row = rep(0)
+    row = rep(1, missed=7)                       # 카운터만 바뀜 → 받은 시각만
+    assert row.received_at == t0 + timedelta(minutes=1) and row.collected_at == t0
+    assert row.interfaces[0]["counters"]["rx_missed_errors"] == 0
+    row = rep(2, missed=7, mtu=1500)             # 상태가 바뀜 → 바로 전체 저장
+    assert row.collected_at == t0 + timedelta(minutes=2) and row.interfaces[0]["mtu"] == 1500
+    row = rep(7, missed=9, mtu=1500)             # 5분 지남 → 전체 저장
+    assert row.interfaces[0]["counters"]["rx_missed_errors"] == 9
+
+
+def test_view_filter_page_and_cache(db, cluster):
+    from app.services.nic_watch import service as svc
+
+    t = datetime(2026, 11, 23, 11, 0, 0)
+    for i in range(5):
+        lro = {"rx-lro": {"on": i == 3, "fixed": False}}
+        body = {"interfaces": [_phys("ens1f0", master=None, feats=lro), _phys("eno1", master=None, oper="down")]}
+        svc.ingest(db, cluster, f"w{i}", None, "1.2.0", t.isoformat(), body, now=t)
+    v = svc.cluster_view(db, cluster, now=t, limit=3)
+    assert v["interfaces_total"] == 10 and len(v["interfaces"]) == 3 and v["offset"] == 0
+    assert [r["name"] for r in svc.cluster_view(db, cluster, now=t, q="w3")["interfaces"]] == ["ens1f0", "eno1"]
+    assert svc.cluster_view(db, cluster, now=t, q="eno*")["interfaces_total"] == 5
+    flagged = svc.cluster_view(db, cluster, now=t, only_flagged=True)
+    assert [(r["node"], r["name"]) for r in flagged["interfaces"]] == [("w3", "ens1f0")] and flagged["interfaces"][0]["finding_count"] >= 1
+    assert svc.cluster_view(db, cluster, now=t, kind="bond")["interfaces_total"] == 0
+    detail = svc.interface_detail(db, cluster, "w3", "ens1f0", now=t)
+    assert {f["code"] for f in detail["findings"]} >= {"offload_expect"}
+
+    svc.invalidate()
+    first = svc.cluster_view(db, cluster)        # now 없음 → 캐시
+    body = {"interfaces": [_phys("bond9", master=None)]}
+    svc.ingest(db, cluster, "w9", None, "1.2.0", None, body)
+    assert svc.cluster_view(db, cluster)["interfaces_total"] == first["interfaces_total"]  # 캐시 안
+    svc.invalidate(cluster.id)
+    assert svc.cluster_view(db, cluster)["interfaces_total"] == first["interfaces_total"] + 1

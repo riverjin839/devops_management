@@ -2722,7 +2722,14 @@ const toEntries = (values: Record<string, string | null>) =>
   Object.entries(values).map(([key, value]) => ({ key, value }));
 /** NIC 상태(서비스 구성 ▸ NIC) — 노드 파라미터 에이전트 보고의 읽기 전용 판정. 설정 저장은 admin. */
 export const nicWatchApi = {
-  cluster: (clusterId: string) => api.get<import('@/types').NicClusterView>(`/nic-watch/clusters/${clusterId}`),
+  // GET 쿼리는 요청 인터셉터가 snake_case 로 바꾸지 않으므로 직접 쓴다.
+  cluster: (clusterId: string, p: import('@/types').NicViewQuery = {}) =>
+    api.get<import('@/types').NicClusterView>(`/nic-watch/clusters/${clusterId}`, {
+      params: { q: p.q || undefined, kind: p.kind || undefined, only_flagged: p.onlyFlagged || undefined, offset: p.offset ?? 0, limit: p.limit ?? 100 },
+    }),
+  interfaceDetail: (clusterId: string, node: string, iface: string) =>
+    api.get<import('@/types').NicInterfaceDetail>(
+      `/nic-watch/clusters/${clusterId}/nodes/${encodeURIComponent(node)}/interfaces/${encodeURIComponent(iface)}`),
   settings: () => api.get<import('@/types').NicWatchSettingsOut>('/nic-watch/settings'),
   updateSettings: (body: Partial<import('@/types').NicWatchSettings>) =>
     api.put<import('@/types').NicWatchSettingsOut>('/nic-watch/settings', body),

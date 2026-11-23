@@ -10,6 +10,9 @@
 
 1.102.0 이후 main 에 병합된 변경 (다음 릴리스 후보).
 
+### Changed
+- **서비스 구성 ▸ NIC — 노드 수백 대 클러스터 대응**: 인터페이스 표의 검색(이름 일부 또는 glob)·종류·경고만 필터와 페이지(100행)를 서버에서 처리하고, 카운터·offload 전체·본딩 하위 상태는 행을 펼칠 때만 따로 읽는다. 레일 상태 점은 요약만 받는다. 500노드 기준 첫 화면 응답이 약 3MB → 150KB, 레일용 요청은 2KB. 판정 결과는 클러스터별로 20초 캐시하고, 에이전트 보고는 카운터 말고 바뀐 게 없으면 5분 동안 받은 시각만 갱신해 노드마다 매분 다시 쓰지 않는다. Backend: `nic_watch` 조회 쿼리(`q`·`kind`·`only_flagged`·`offset`·`limit`), `GET /nic-watch/clusters/{id}/nodes/{node}/interfaces/{iface}`. Frontend: `NicStatusView` 페이지·상세 지연 조회, `useNicWatchSummary`·`useNicInterfaceDetail`.
+
 ## [1.102.0] - 2026-11-23
 
 ### Added

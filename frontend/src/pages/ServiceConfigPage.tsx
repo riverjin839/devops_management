@@ -20,7 +20,7 @@ import {
   useServiceConfigStatus, useServiceConfigStatusAll,
   useServiceConfigView, useServiceConfigApplyRun, useStopServiceConfigApply,
 } from '@/hooks/useServiceConfig';
-import { useNicWatch } from '@/hooks/useNicWatch';
+import { useNicWatchSummary } from '@/hooks/useNicWatch';
 import {
   ClusterSidebar, ConfirmDialog, EmptyState, ErrorState, InfoHint, LoadingState, PageShell, RunLogPanel, SegTabs,
   SelectClusterEmptyState, useToast,
@@ -103,7 +103,7 @@ export function ServiceConfigPage() {
   const statusQ = useServiceConfigStatus(svcClusterId, service);
   const status = statusQ.data;
   const statusAllQ = useServiceConfigStatusAll(clusterId);
-  const nicQ = useNicWatch(clusterId);
+  const nicQ = useNicWatchSummary(clusterId);
   const railLevels = useMemo(() => {
     const base = { ...(statusAllQ.data?.services ?? {}) };
     const sum = nicQ.data?.summary;
