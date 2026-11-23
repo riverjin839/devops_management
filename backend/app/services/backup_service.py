@@ -87,6 +87,8 @@ LOG_TABLES: frozenset[str] = frozenset({
     "node_param_agents",
     # 서비스 구성 적용 실행 이력 — 노드별 결과·로그(로그성, 365일).
     "service_config_apply_runs",
+    # 서비스 구성 노드 설정 값 변경 이력(로그성, 400일).
+    "service_config_changes",
 })
 
 # 민감 컬럼을 마스킹할 때 쓰는 센티널. ``None`` 을 쓰면 "값이 원래 없었다"와

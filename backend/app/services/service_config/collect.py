@@ -45,9 +45,10 @@ def _component(pod: Any) -> str | None:
     return next((c for c in COMPONENTS if name.startswith(c + "-")), None)
 
 
-def collect_static_pods(db: Session, cluster: Cluster) -> dict[str, Any]:
-    from app.services.config_snapshot import store_if_changed
+def collect_static_pods(db: Session, cluster: Cluster, source: str = "k8s_api") -> dict[str, Any]:
+    """노드별 스냅샷 저장 + 바뀐 값은 변경 이력·변경 알람(``watch.after_store``). 드리프트 알람 동기화는 호출자가 한다."""
     from app.services.service_config import apply as A
+    from app.services.service_config import watch as W
 
     now = datetime.utcnow()
     out: dict[str, Any] = {"changed": 0, "components": [], "errors": []}
@@ -68,7 +69,7 @@ def collect_static_pods(db: Session, cluster: Cluster) -> dict[str, Any]:
         version = image.rsplit(":", 1)[1] if ":" in image.rsplit("/", 1)[-1] else None
         data = {"flags": container_flags(main), "image": image, "podName": pod.metadata.name, "node": node,
                 "host_ip": getattr(pod.status, "host_ip", None), "source": "k8s_api"}
-        changed = store_if_changed(db, cluster.id, f"static_pod:{comp}:{node}", "control_plane", version, data, now)
+        changed = W.store_and_watch(db, cluster, f"static_pod:{comp}:{node}", "control_plane", version, data, now, source)
         out["changed"] += int(changed)
         out["components"].append({"component": comp, "node": node, "version": version, "changed": changed})
     if out["changed"]:

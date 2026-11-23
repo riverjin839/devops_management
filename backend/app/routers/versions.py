@@ -232,6 +232,7 @@ def _collect_all(cluster: Cluster, kc_path: str, db: Session) -> dict:
         errors.append(f"cilium-config: {str(e)[:120]}")
 
     db.commit()
+    _service_config_watch(db, cluster.id, ["cilium_config"], "k8s_api")
     return {"changed": changed, "errors": errors, "collectedAt": now.isoformat(), "components": components}
 
 
@@ -368,6 +369,17 @@ async def _parallel_collect(
 
 
 # ── etcd (systemd) 수집 ──────────────────────────────────────────────────────
+
+
+def _service_config_watch(db: Session, cluster_id: UUID, components: list[str], source: str) -> None:
+    """서비스 구성 변경 감지 — 수집으로 저장된 스냅샷을 직전 것과 비교해 변경 이력·알람, 드리프트 알람 동기화. 실패는 삼킨다."""
+    try:
+        from app.services.service_config import watch as W
+
+        W.after_collect(db, cluster_id, components, source)
+    except Exception:  # noqa: BLE001 — 감지 실패가 수집 응답을 막지 않는다
+        db.rollback()
+
 
 class EtcdSystemdCollectRequest(BaseModel):
     """사내 kubeadm 외 환경에서 etcd 가 systemd 로 기동될 때, 각 master 노드에
@@ -630,6 +642,7 @@ async def collect_etcd_systemd(
 
     if changed:
         db.commit()
+    _service_config_watch(db, cluster_id, [f"etcd_systemd:{e['host']}" for e in per_host if e.get("status") == "ok" and e.get("host")], "ssh")
 
     return {
         "cluster_id": str(cluster_id),
@@ -965,6 +978,7 @@ async def collect_kubelet_config(
 
     if changed:
         db.commit()
+    _service_config_watch(db, cluster_id, [f"kubelet_config:{e['host']}" for e in per_host if e.get("status") == "ok" and e.get("host")], "ssh")
 
     return {
         "cluster_id": str(cluster_id),
@@ -1085,6 +1099,7 @@ async def collect_containerd_config(
             changed += 1
     if changed:
         db.commit()
+    _service_config_watch(db, cluster_id, [f"containerd_config:{e['host']}" for e in per_host if e.get("status") == "ok"], "ssh")
     return {
         "cluster_id": str(cluster_id), "changed": changed, "hosts": per_host,
         "component_key": "containerd_config:{host}", "errors": errors,

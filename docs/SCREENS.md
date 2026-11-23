@@ -1211,6 +1211,11 @@ hover 시 flyout 자체가 라벨을 보여주므로 이름만 뜨는 중복 툴
   - **버전 비교** `VersionCompareDialog`: 두 버전 선택 → 변경/추가/삭제 표 + "V{n} 값으로 되돌리기 (새 버전)"(확인 후 새 버전 저장).
   - **적용…**(헤더·미적용 배너·드리프트 배너의 다시 적용, operator, 편집 중이면 비활성) → `ApplyDialog`: 변경(기준 버전 대비) / 대상(LINUX·ETCD·CONTAINERD: 범위 노드(ETCD 는 멤버) 전체 또는 선택 — 선택이면 버전은 '저장됨·미적용' 으로 남음, 접속 주소 표시 / CILIUM: 클러스터 하나) / 방식(LINUX: 롤링 N대씩·배치 사이 대기·실패 시 중단·영구 파일 기록·감시 기준값 갱신 / ETCD: 한 대씩·실패 시 중단 고정, 멤버 사이 대기·정상 기동 대기·자동 복원 / CONTAINERD: 롤링·대기·실패 시 중단·cordon·drain(+제한)·Ready 대기·자동 복원 / CILIUM: DaemonSet 롤링 재시작·롤아웃 제한 시간 — 대기 기본값은 적용 설정) / 영향 / **명령**(접이식 "실행될 명령 N개" — 계획 응답 `commands`, 비밀값 없음) / SSH(LINUX·ETCD·CONTAINERD — 사용자·포트·비밀번호|개인 키·sudo, 저장하지 않음) / "실행 로그 바로 열기" → 위험 색 "N개 노드(멤버)에 적용 시작".
   - **적용 실행 화면**(§12.6.1 로그 중심, 설정 표 위): 좌 `MacCard` 제어(대상·진행 바·처리 노드 수·상태·**중지**) / 우 상단 `RunLogPanel fill`(SSE 실시간, `useLogPref('service-config-apply')`, 노드별 단계 칩) / 우 하단 노드별 결과(전→후·소요·오류 — 실행 이력 행을 2초마다 다시 읽음). 끝나면 토스트 1회(한국어 상태) + 화면 무효화.
+  - **변경 감지(8개 서비스)**: LINUX 는 노드 파라미터 에이전트(커널 파라미터), 나머지는 `services/service_config/watch.py` —
+    CILIUM·정적 파드(ETCD·APISERVER·CONTROLLER·SCHEDULER)는 Celery Beat `service-config-watch-dispatcher` 가 감시 주기(기본 5분)마다 K8S API 로 수집(설정 버전이 있는 클러스터만),
+    CONTAINERD·KUBELET 은 노드 파라미터 에이전트(1.1.0+)가 `config.toml`·`config.yaml`(적용 설정 경로)을 읽어 보고(해시가 바뀐 때만 내용), ETCD systemd 는 SSH 수동 수집 때.
+    스냅샷이 바뀌면 `ServiceConfigChange` 이력 + 변경 알람 `ServiceConfigChanged`(PEP 적용은 제외), 기준 버전과 다른 값은 드리프트 알람 `ServiceConfigDrift`((서비스·노드·키) 지문, 맞아지면 닫힘).
+    감시 설정(`GET|PUT /service-config/watch-settings`, admin — 켜기·주기·변경/드리프트 알람·심각도)은 설정 대화상자 '변경 감지' 구역. 요약 탭의 열린 알람·최근 변경(감지 경로 열)과 행 배지가 8개 서비스 모두에서 동작.
   - **서비스 상태**(`GET …/{service}/status`, 60초마다 다시 읽음 — 노드 파라미터 에이전트 보고 주기):
     - **레일 상태 점**(`GET /service-config/clusters/{id}/status`): 서비스 아이콘에 critical/warning 점, 사유는 `title`·`aria-label`. 정상이면 점 없음.
     - **드리프트 배너** `DriftBanner`(설정 탭, 미적용 배너 위): 이 범위 노드 값이 마지막 기준 버전(가져옴·적용됨)과 다르면 "노드 값이 V{n}(적용됨) 와(과) 다름 — 노드 N · 키 M" + 요약에서 보기 + **다시 적용…**(기준 버전·그 범위로 `ApplyDialog` 를 열고 다른 노드만 미리 고름 — `initialNodes`). 미적용 저장본은 드리프트가 아니다.
@@ -1237,6 +1242,7 @@ hover 시 flyout 자체가 라벨을 보여주므로 이름만 뜨는 중복 툴
 
 - **파일**: `frontend/src/pages/NodeParamWatchPage.tsx` (+ `components/node-param-watch/{NodeParamNodesCard,NodeParamChangesCard,NodeParamRulesCard,NodeParamRuleDialog,NodeParamInstallCard}.tsx`)
 - **목적 / UX**: 노드마다 떠 있는 **노드 파라미터 에이전트(DaemonSet)** 가 보고한 커널 파라미터(sysctl)를 보고, 값 변경·기준값 위반·런타임↔영구 설정(`/etc/sysctl.d` 등) 불일치·에이전트 무응답을 확인한다. 알람 자체는 백엔드가 **알람 인박스**(`/alerts`, source `node-param-agent`)로 보낸다 — 이 화면은 상태·이력·규칙·설치 화면이고 **실행 버튼이 없다**(수집은 에이전트가 한다). SSH 로 직접 읽는 `/kernel-params` 콘솔과 달리 자격증명이 필요 없다.
+- **에이전트 1.1.0**: 커널 파라미터에 더해 서비스 구성 변경 감지용 설정 파일(containerd `config.toml`·kubelet `config.yaml` — 보고 응답 `files` 로 경로를 받음)을 읽어 보고한다. 설치 매니페스트(`GET …/manifest`)는 그 디렉터리(`/etc/containerd`·`/var/lib/kubelet`, 적용 설정 경로 기준)를 읽기 전용으로 추가 마운트한다 — 이미 설치한 에이전트는 재배포해야 한다.
 - **UI 구성**: `PageHeader`(우측 "알람 인박스" 링크) + `SegTabs mode="tabs"` 4개. 탭·키 필터는 URL 쿼리(`?tab=nodes|changes|rules|install&param=<키>` — 서비스 구성 행 배지·요약에서 바로 연결).
   - **노드 상태**: `MacCard` 표 — 노드(IP) · 에이전트(보고 중/보고 지연/무응답/보고 없음 + 마지막 보고 상대시각·버전·읽기 오류) · 기준 위반 · 영구 설정 불일치 · 마지막 변경 · 목록에서 지우기(operator, danger 확인). 행을 펼치면 파라미터별 현재 값 · 영구 설정(값을 정한 `파일:줄`) · 기준 · 판정. 검색·"문제 있는 노드만". 보고한 노드가 없으면 `EmptyState` → 에이전트 설치 탭. 정상은 중립색, 비정상만 상태색. 탭 라벨에 문제 노드 수.
   - **변경 이력**: 감지 시각 · 노드 · 파라미터 · 이전→새 값(생김/사라짐) · **변경 구간**(마지막으로 같은 값을 본 시각 이후) · 출처(에이전트/SSH 수집 — `kernel_param_drift` 점검이 남긴 이력도 함께).

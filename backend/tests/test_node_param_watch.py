@@ -171,7 +171,8 @@ def test_manifest_is_least_privilege():
     assert "privileged" not in c["securityContext"]
     assert all(m["readOnly"] for m in c["volumeMounts"])
     assert {v["hostPath"]["path"] for v in spec["volumes"]} == {
-        "/etc/sysctl.conf", "/etc/sysctl.d", "/run/sysctl.d", "/usr/lib/sysctl.d"}
+        "/etc/sysctl.conf", "/etc/sysctl.d", "/run/sysctl.d", "/usr/lib/sysctl.d",
+        "/etc/containerd", "/var/lib/kubelet"}  # 서비스 구성 변경 감지용 설정 파일 디렉터리
 
 
 # ── 보고 처리(실제 DB) ───────────────────────────────────────────────────────

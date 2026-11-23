@@ -81,6 +81,13 @@ spec:
         - name: usr-lib-sysctl-d
           mountPath: /host/usr/lib/sysctl.d
           readOnly: true
+        # 서비스 구성 변경 감지 — containerd·kubelet 설정 파일(PEP 적용 설정의 경로와 맞춘다)
+        - name: etc-containerd
+          mountPath: /host/etc/containerd
+          readOnly: true
+        - name: var-lib-kubelet
+          mountPath: /host/var/lib/kubelet
+          readOnly: true
       volumes:
       - name: etc-sysctl-conf
         hostPath:
@@ -97,4 +104,12 @@ spec:
       - name: usr-lib-sysctl-d
         hostPath:
           path: /usr/lib/sysctl.d
+          type: DirectoryOrCreate
+      - name: etc-containerd
+        hostPath:
+          path: /etc/containerd
+          type: DirectoryOrCreate
+      - name: var-lib-kubelet
+        hostPath:
+          path: /var/lib/kubelet
           type: DirectoryOrCreate

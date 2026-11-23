@@ -131,6 +131,12 @@ celery_app.conf.beat_schedule = {
         "task": "app.celery_app.dispatch_external_services_collect",
         "schedule": crontab(minute="*"),
     },
+    # 서비스 구성 변경 감지 — 설정 주기(기본 5분)가 지난 opt-in(V1 있는) 클러스터의 정적 파드·cilium-config 를 K8S API 로 수집 →
+    # 변경 이력·변경/드리프트 알람(containerd·kubelet 파일은 노드 파라미터 에이전트가 보고).
+    "service-config-watch-dispatcher": {
+        "task": "app.celery_app.dispatch_service_config_watch",
+        "schedule": crontab(minute="*"),
+    },
     # 노드 OS 파라미터 에이전트 무응답 감시 — 마지막 보고가 설정(offline_minutes)보다 오래된
     # 노드에 '에이전트 무응답' 알람(열려 있으면 그대로). 에이전트가 죽으면 변경을 감지할 수 없으므로.
     "node-param-agent-watchdog": {
@@ -1257,6 +1263,58 @@ def collect_external_services_one(self, cluster_id: str):
     except Exception as e:  # noqa: BLE001
         db.rollback()
         logging.getLogger(__name__).exception("collect_external_services_one failed %s: %s", cluster_id, e)
+        return {"error": str(e)[:200]}
+    finally:
+        db.close()
+
+
+@celery_app.task(bind=True, name="app.celery_app.dispatch_service_config_watch", ignore_result=True)
+def dispatch_service_config_watch(self):
+    """서비스 구성 변경 감지 디스패처 — 감시 설정 주기가 지난 opt-in 클러스터를 클러스터별 태스크로 팬아웃."""
+    import logging
+    from datetime import datetime
+
+    from app.database import SessionLocal
+    from app.services.service_config import watch as W
+
+    db = SessionLocal()
+    try:
+        now = datetime.utcnow()
+        state = W.get_state(db)
+        due = W.due_clusters(db, now, state)
+        for c in due:
+            state[str(c.id)] = now.timestamp()
+            collect_service_config_watch_one.apply_async(args=[str(c.id)], countdown=_dispatch_jitter())
+        if due:
+            W.set_state(db, state)
+        return {"dispatched": [c.name for c in due]}
+    except Exception as e:  # noqa: BLE001
+        db.rollback()
+        logging.getLogger(__name__).exception("dispatch_service_config_watch failed: %s", e)
+        return {"error": str(e)[:200]}
+    finally:
+        db.close()
+
+
+@celery_app.task(bind=True, name="app.celery_app.collect_service_config_watch_one", time_limit=300,
+                 soft_time_limit=270, ignore_result=True)
+def collect_service_config_watch_one(self, cluster_id: str):
+    """단일 클러스터 서비스 구성 주기 수집(K8S API, 자격증명 없음) → 변경 이력·알람."""
+    import logging
+
+    from app.database import SessionLocal
+    from app.models import Cluster
+    from app.services.service_config import watch as W
+
+    db = SessionLocal()
+    try:
+        cluster = db.query(Cluster).filter(Cluster.id == cluster_id).first()
+        if cluster is None:
+            return {"error": "cluster not found"}
+        return W.collect_cluster(db, cluster)
+    except Exception as e:  # noqa: BLE001
+        db.rollback()
+        logging.getLogger(__name__).exception("collect_service_config_watch_one failed %s: %s", cluster_id, e)
         return {"error": str(e)[:200]}
     finally:
         db.close()

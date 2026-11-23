@@ -2765,6 +2765,10 @@ export const serviceConfigApi = {
   settings: () => api.get<import('@/types').ServiceConfigApplySettings>('/service-config/settings'),
   updateSettings: (body: Partial<import('@/types').ServiceConfigApplySettings>) =>
     api.put<import('@/types').ServiceConfigApplySettings>('/service-config/settings', body),
+  /** 변경 감지·알람 설정(주기 수집·변경/드리프트 알람). */
+  watchSettings: () => api.get<import('@/types').ServiceConfigWatchSettings>('/service-config/watch-settings'),
+  updateWatchSettings: (body: Partial<import('@/types').ServiceConfigWatchSettings>) =>
+    api.put<import('@/types').ServiceConfigWatchSettings>('/service-config/watch-settings', body),
 };
 
 // ── 노드 OS 파라미터 감시 — 노드 에이전트(DaemonSet) 보고 기반. 규칙·상태·변경 이력·설치 매니페스트(JWT) ──

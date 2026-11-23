@@ -411,6 +411,10 @@ def _finish(db: Session, cluster: Cluster, run: ServiceConfigApplyRun, log: RunL
     run.log_lines = list(log.lines)
     run.node_results = list(results)
     db.commit()
+    if run.service != "linux":  # 적용으로 값·기준 버전이 바뀌었으니 드리프트 알람을 다시 맞춘다(LINUX 는 에이전트가 맡음)
+        from app.services.service_config import watch as W
+
+        W.sync_drift(db, cluster, (run.service,))
     return run_out(run)
 
 
@@ -593,7 +597,6 @@ def k8s_apis(cluster: Cluster):
 
 async def run_cilium(db: Session, cluster: Cluster, run: ServiceConfigApplyRun, plan: dict[str, Any],
                      opts: dict[str, Any], log: RunLog) -> dict[str, Any]:
-    from app.services.config_snapshot import store_if_changed
 
     cfg = get_settings(db)
     ns, cm_name, ds_name = cfg["cilium_namespace"], cfg["cilium_configmap"], cfg["cilium_daemonset"]
@@ -665,7 +668,9 @@ async def run_cilium(db: Session, cluster: Cluster, run: ServiceConfigApplyRun, 
         if mismatch:
             raise RuntimeError("다시 읽은 ConfigMap 값이 다릅니다: " + ", ".join(mismatch[:8]))
         version = data2.get("cilium-version") or data2.get("cni-version")
-        if store_if_changed(db, cluster.id, "cilium_config", "cni", version, {"data": data2}, datetime.utcnow()):
+        from app.services.service_config import watch as W
+
+        if W.store_and_watch(db, cluster, "cilium_config", "cni", version, {"data": data2}, datetime.utcnow(), "apply"):
             db.commit()
         log.log("info", f"확인 {len(want)}/{len(want)} 일치 · 현재 값 스냅샷 갱신")
         res["status"] = "ok" if not stopped else "failed"

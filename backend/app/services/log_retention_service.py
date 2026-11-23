@@ -28,7 +28,7 @@ from app.models.k8s_event import K8sEvent
 from app.models.user_notification import UserNotification
 from app.models.k8s_efficiency import K8sEfficiencyRun, K8sNamespaceSample, K8sWorkloadSample
 from app.models.ns_migration import NsMigrationRun
-from app.models.service_config import ServiceConfigApplyRun
+from app.models.service_config import ServiceConfigApplyRun, ServiceConfigChange
 from app.models.system_error_log import SystemErrorLog
 
 # daily_check_logs/check_logs 는 점검 이력 조회 UX 를 감안해 90일, k8s_events 는
@@ -57,6 +57,8 @@ RETENTION_DAYS: dict[str, int] = {
     "ns_migration_runs": 365,
     # 서비스 구성 적용 실행 이력 — 노드 설정 변경 감사 추적용 1년.
     "service_config_apply_runs": 365,
+    # 서비스 구성 노드 설정 값 변경 이력 — OS 파라미터 변경 이력과 같은 400일.
+    "service_config_changes": 400,
     # 서버 오류(요청 ID 추적) — 장애 회고용이라 30일.
     "system_error_logs": 30,
 }
@@ -162,6 +164,7 @@ def purge_all(db: Session) -> dict[str, Any]:
         ("k8s_efficiency_runs", K8sEfficiencyRun, K8sEfficiencyRun.queued_at),
         ("ns_migration_runs", NsMigrationRun, NsMigrationRun.queued_at),
         ("service_config_apply_runs", ServiceConfigApplyRun, ServiceConfigApplyRun.started_at),
+        ("service_config_changes", ServiceConfigChange, ServiceConfigChange.detected_at),
         ("system_error_logs", SystemErrorLog, SystemErrorLog.created_at),
     ]
     for name, model, ts_column in simple_targets:

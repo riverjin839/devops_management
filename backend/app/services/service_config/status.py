@@ -22,6 +22,7 @@ from app.services.service_config import view as V
 from app.services.service_config.catalog_seed import SERVICE_KEYS
 
 AGENT_SOURCE = "node-param-agent"
+WATCH_SOURCE = "service-config"  # services/service_config/watch.py 의 알람 출처
 ALERT_OFFLINE = "NodeParamAgentOffline"
 CHANGE_WINDOW = timedelta(hours=24)
 _LEVEL_RANK = {"ok": 0, "warning": 1, "critical": 2}
@@ -97,10 +98,17 @@ def _alert_keys(ev: Any) -> list[str]:
 
 
 def linux_signals(db: Session, cluster: Cluster, now: Optional[datetime] = None) -> dict[str, Any]:
-    """에이전트 알람(확인 안 된 firing)과 최근 24시간 변경 — 키별 배지와 요약 목록."""
+    return service_signals(db, cluster, "linux", now)
+
+
+def service_signals(db: Session, cluster: Cluster, service: str, now: Optional[datetime] = None) -> dict[str, Any]:
+    """서비스의 열린 알람(확인 안 된 firing)과 최근 24시간 변경 — 키별 배지와 요약 목록.
+    LINUX = 노드 파라미터 에이전트 알람·``os_param_changes``, 그 외 = 서비스 구성 감시 알람·``service_config_changes``."""
     from app.models.alert_event import AlertEvent
     from app.models.os_param_change import OsParamChange
+    from app.models.service_config import ServiceConfigChange
 
+    is_linux = service == "linux"
     now = now or datetime.utcnow()
     errors: list[str] = []
     alerts: list[dict[str, Any]] = []
@@ -108,9 +116,12 @@ def linux_signals(db: Session, cluster: Cluster, now: Optional[datetime] = None)
     offline: list[str] = []
     try:
         evs = (db.query(AlertEvent)
-               .filter(AlertEvent.cluster_id == cluster.id, AlertEvent.source == AGENT_SOURCE,
+               .filter(AlertEvent.cluster_id == cluster.id,
+                       AlertEvent.source == (AGENT_SOURCE if is_linux else WATCH_SOURCE),
                        AlertEvent.status == "firing", AlertEvent.acked.is_(False))
                .order_by(AlertEvent.starts_at.desc().nullslast()).limit(500).all())
+        if not is_linux:
+            evs = [e for e in evs if (e.labels or {}).get("service") == service]
         for ev in evs:
             keys = _alert_keys(ev)
             if ev.alertname == ALERT_OFFLINE:
@@ -127,14 +138,22 @@ def linux_signals(db: Session, cluster: Cluster, now: Optional[datetime] = None)
         errors.append(f"알람 조회 실패: {str(exc)[:160]}")
     changes: list[dict[str, Any]] = []
     try:
-        rows = (db.query(OsParamChange)
-                .filter(OsParamChange.cluster_id == cluster.id, OsParamChange.detected_at >= now - CHANGE_WINDOW)
-                .order_by(OsParamChange.detected_at.desc()).limit(200).all())
-        for r in rows:
-            ch = {"node": r.node, "key": r.param, "old_value": r.old_value, "new_value": r.new_value,
-                  "change_type": r.change_type, "detected_at": r.detected_at.isoformat() if r.detected_at else None}
+        if is_linux:
+            rows = (db.query(OsParamChange)
+                    .filter(OsParamChange.cluster_id == cluster.id, OsParamChange.detected_at >= now - CHANGE_WINDOW)
+                    .order_by(OsParamChange.detected_at.desc()).limit(200).all())
+            norm_rows = [(r.node, r.param, r.old_value, r.new_value, r.change_type, r.detected_at, "agent") for r in rows]
+        else:
+            rows = (db.query(ServiceConfigChange)
+                    .filter(ServiceConfigChange.cluster_id == cluster.id, ServiceConfigChange.service == service,
+                            ServiceConfigChange.detected_at >= now - CHANGE_WINDOW)
+                    .order_by(ServiceConfigChange.detected_at.desc()).limit(200).all())
+            norm_rows = [(r.node, r.key, r.old_value, r.new_value, "changed", r.detected_at, r.source) for r in rows]
+        for node, key, old, new, ctype, at, src in norm_rows:
+            ch = {"node": node, "key": key, "old_value": old, "new_value": new, "change_type": ctype,
+                  "source": src, "detected_at": at.isoformat() if at else None}
             changes.append(ch)
-            sig = key_signals.setdefault(r.param, {"alerts": {"critical": 0, "warning": 0}, "last_change": None})
+            sig = key_signals.setdefault(key, {"alerts": {"critical": 0, "warning": 0}, "last_change": None})
             if sig["last_change"] is None:  # 최신 순이라 처음 것이 마지막 변경
                 sig["last_change"] = ch
     except Exception as exc:  # noqa: BLE001
@@ -185,8 +204,7 @@ def judge(drift_nodes: int, alerts: list[dict[str, Any]], last_run: Optional[dic
 def service_status(db: Session, cluster: Cluster, service: str, full: bool = True) -> dict[str, Any]:
     meta = V.service_meta(service)
     d = drift(db, cluster, service)
-    sig = linux_signals(db, cluster) if service == "linux" else {
-        "alerts": [], "key_signals": {}, "recent_changes": [], "offline_nodes": [], "errors": []}
+    sig = service_signals(db, cluster, service)
     last_run = _last_run(db, cluster, service)
     pending = V._pending(V.list_versions(db, cluster.id, service))  # noqa: SLF001 — 같은 패키지
     level, reasons = judge(len(d["nodes"]), sig["alerts"], last_run, sig["offline_nodes"])

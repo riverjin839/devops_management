@@ -160,6 +160,22 @@ export function useServiceConfigSettings(enabled: boolean) {
   });
 }
 
+export function useServiceConfigWatchSettings(enabled: boolean) {
+  return useQuery({
+    queryKey: ['service-config', 'watch-settings'],
+    queryFn: async () => (await serviceConfigApi.watchSettings()).data,
+    enabled,
+  });
+}
+
+export function useUpdateServiceConfigWatchSettings() {
+  const invalidate = useInvalidateServiceConfig();
+  return useMutation({
+    mutationFn: async (body: Partial<import('@/types').ServiceConfigWatchSettings>) => (await serviceConfigApi.updateWatchSettings(body)).data,
+    onSuccess: invalidate,
+  });
+}
+
 export function useUpdateServiceConfigSettings() {
   const invalidate = useInvalidateServiceConfig();
   return useMutation({

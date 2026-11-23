@@ -1405,3 +1405,171 @@ def test_settings_backup_dir_inside_manifest_dir_rejected(db):
         A.set_settings(db, {"static_pod_manifest_dir": "/etc/k8s/m", "etcd_backup_dir": "/etc/k8s/m/bak"})
     with pytest.raises(A.ApplyError):
         A.set_settings(db, {"kubelet_restart_cmd": "systemctl restart kubelet\nreboot"})
+
+
+# ── 7단계: 변경 감지·알람(비 LINUX) ──────────────────────────────────────────
+
+def test_watch_diff_snapshots_pure():
+    from app.services.service_config import watch as W
+
+    items = items_for("containerd")
+    prev = {"flat": C.parse_containerd_toml(CTD_V2)}
+    new_flat = dict(prev["flat"])
+    new_flat['plugins."io.containerd.grpc.v1.cri".max_concurrent_downloads'] = "9"
+    out = W.diff_snapshots("containerd", items, "containerd_config:10.0.1.1", prev, {"flat": new_flat})
+    assert out == [{"key": "max_concurrent_downloads", "node": "10.0.1.1", "old": "3", "new": "9"}]
+    out = W.diff_snapshots("kube-apiserver", items_for("kube-apiserver"), "static_pod:kube-apiserver:cp-1",
+                           {"flags": {"max-requests-inflight": "400"}}, {"flags": {"max-requests-inflight": "800"}})
+    assert out[0]["node"] == "cp-1" and out[0]["new"] == "800"
+    assert W.watchable("cilium_config") and W.watchable("kubelet_config:h") and not W.watchable("kube_apiserver")
+    assert W.services_of("static_pod:etcd:cp-1") == ["etcd"]
+
+
+def _alerts(db, c, name=None, status="firing"):
+    from app.models.alert_event import AlertEvent
+
+    q = db.query(AlertEvent).filter(AlertEvent.cluster_id == c.id, AlertEvent.source == "service-config",
+                                    AlertEvent.status == status)
+    if name:
+        q = q.filter(AlertEvent.alertname == name)
+    return q.all()
+
+
+@pytest.fixture
+def watch_cleanup(db, cluster):
+    yield cluster
+    from app.models.alert_event import AlertEvent
+    from app.models.app_setting import AppSetting
+    from app.models.service_config import ServiceConfigChange
+
+    db.rollback()
+    db.query(AlertEvent).filter(AlertEvent.cluster_id == cluster.id).delete(synchronize_session=False)
+    db.query(ServiceConfigChange).filter(ServiceConfigChange.cluster_id == cluster.id).delete(synchronize_session=False)
+    db.query(AppSetting).filter(AppSetting.key.in_(["service_config.watch", "service_config.watch_state"])).delete(synchronize_session=False)
+    db.commit()
+
+
+def test_watch_change_history_alerts_and_drift(db, watch_cleanup):
+    from app.models.service_config import ServiceConfigChange
+    from app.services.service_config import view as V
+    from app.services.service_config import watch as W
+
+    c = watch_cleanup
+    now = datetime.utcnow()
+    flat = C.parse_containerd_toml(CTD_V2)
+    for h in ("10.0.1.1", "10.0.1.2"):
+        W.store_and_watch(db, c, f"containerd_config:{h}", "runtime", "2", {"flat": flat}, now, "ssh")
+    db.commit()
+    V.import_v1(db, c, "containerd", "tester")
+    assert W.sync_drift(db, c, ["containerd"]) == {"opened": 0, "resolved": 0}
+    # 노드에서 직접 바뀜(에이전트 보고) → 변경 이력 + 변경 알람 + 드리프트 알람
+    changed = dict(flat)
+    changed['plugins."io.containerd.grpc.v1.cri".max_concurrent_downloads'] = "9"
+    assert W.store_and_watch(db, c, "containerd_config:10.0.1.1", "runtime", "2", {"flat": changed},
+                             now + timedelta(seconds=1), "agent")
+    db.commit()
+    rows = db.query(ServiceConfigChange).filter(ServiceConfigChange.cluster_id == c.id).all()
+    assert [(r.node, r.key, r.old_value, r.new_value, r.source) for r in rows] == [
+        ("10.0.1.1", "max_concurrent_downloads", "3", "9", "agent")]
+    assert len(_alerts(db, c, "ServiceConfigChanged")) == 1
+    assert W.sync_drift(db, c, ["containerd"])["opened"] == 1
+    drift = _alerts(db, c, "ServiceConfigDrift")
+    assert len(drift) == 1 and drift[0].labels["param"] == "max_concurrent_downloads" and drift[0].resource == "10.0.1.1"
+    assert W.sync_drift(db, c, ["containerd"])["opened"] == 0  # 상태 그대로면 다시 열지 않음
+    # 같은 스냅샷은 두 번 기록하지 않음
+    assert W.after_store(db, c, "containerd_config:10.0.1.1", "agent") == []
+    # 적용으로 되돌림 → 변경 이력은 남되 변경 알람 없음, 드리프트 닫힘
+    assert W.store_and_watch(db, c, "containerd_config:10.0.1.1", "runtime", "2", {"flat": flat},
+                             now + timedelta(seconds=2), "apply")
+    db.commit()
+    assert len(_alerts(db, c, "ServiceConfigChanged")) == 1
+    assert W.sync_drift(db, c, ["containerd"])["resolved"] == 1
+    assert not _alerts(db, c, "ServiceConfigDrift")
+    # 상태 신호(행 배지·요약)도 비 LINUX 서비스에서 동작
+    from app.services.service_config import status as S
+    st = S.service_status(db, c, "containerd")
+    assert st["alert_counts"]["warning"] == 1 and st["recent_changes"][0]["source"] == "apply"
+    sig = {s["key"]: s for s in st["key_signals"]}
+    assert sig["max_concurrent_downloads"]["last_change"]["new_value"] == "3"
+    # 알람 끄면 변경 알람·드리프트 알람 없음
+    W.set_settings(db, {"change_alert": False, "drift_alert": False})
+    assert W.store_and_watch(db, c, "containerd_config:10.0.1.2", "runtime", "2", {"flat": changed},
+                             now + timedelta(seconds=3), "agent")
+    db.commit()
+    assert len(_alerts(db, c, "ServiceConfigChanged")) == 1 and W.sync_drift(db, c, ["containerd"])["opened"] == 0
+
+
+def test_watch_agent_files_ingest(db, watch_cleanup):
+    import hashlib
+
+    from app.models import ClusterConfigSnapshot
+    from app.services.service_config import watch as W
+
+    c = watch_cleanup
+    targets = {t["id"]: t["path"] for t in W.agent_file_targets(db)}
+    assert targets == {"containerd": "/etc/containerd/config.toml", "kubelet": "/var/lib/kubelet/config.yaml"}
+    out = W.ingest_agent_files(db, c, "w1", "10.0.1.9", {
+        "containerd": {"path": targets["containerd"], "sha256": "x", "content": CTD_V2},
+        "kubelet": {"path": targets["kubelet"], "sha256": "y", "content": KUBELET_YAML},
+        "bogus": {"content": "nope"},
+    })
+    assert sorted(out["stored"]) == ["containerd", "kubelet"] and not out["errors"]
+    comps = {s.component for s in db.query(ClusterConfigSnapshot).filter(ClusterConfigSnapshot.cluster_id == c.id).all()}
+    assert {"containerd_config:10.0.1.9", "kubelet_config:10.0.1.9"} <= comps
+    # 해시만 온 보고(내용 없음)와 같은 내용은 저장하지 않음
+    assert W.ingest_agent_files(db, c, "w1", "10.0.1.9", {"containerd": {"sha256": hashlib.sha256(b"x").hexdigest()}})["stored"] == []
+    assert W.ingest_agent_files(db, c, "w1", "10.0.1.9",
+                                {"containerd": {"path": targets["containerd"], "content": CTD_V2}})["stored"] == []
+    # 해석 실패·에이전트 오류는 errors 로
+    out = W.ingest_agent_files(db, c, "w1", "10.0.1.9", {"containerd": {"content": "[[[broken"}, "kubelet": {"error": "파일 없음"}})
+    assert len(out["errors"]) == 2
+
+
+def test_watch_dispatch_due_and_collect_cluster(db, watch_cleanup, monkeypatch):
+    from app.services.service_config import apply as A
+    from app.services.service_config import view as V
+    from app.services.service_config import watch as W
+
+    c = watch_cleanup
+    now = datetime.utcnow()
+    assert c not in W.due_clusters(db, now, {})  # V1 없는 클러스터는 opt-in 아님
+    _add_snap(db, c, "cilium_config", {"data": {"routing-mode": "tunnel"}})
+    V.import_v1(db, c, "cilium", "tester")
+    assert c in W.due_clusters(db, now, {})
+    assert c not in W.due_clusters(db, now, {str(c.id): now.timestamp() - 60})  # 주기(5분) 안
+    assert c in W.due_clusters(db, now, {str(c.id): now.timestamp() - 400})
+    W.set_settings(db, {"enabled": False})
+    assert W.due_clusters(db, now, {}) == []
+    W.set_settings(db, {"enabled": True})
+    W.set_state(db, {str(c.id): 1.0})
+    assert W.get_state(db) == {str(c.id): 1.0}
+
+    class Core(FakeCPCore):
+        data = {"routing-mode": "native", "ipv4-native-routing-cidr": "10.0.0.0/8"}
+
+        def read_namespaced_config_map(self, name, ns, **_):
+            return SimpleNamespace(data=dict(self.data))
+
+    core = Core()
+    monkeypatch.setattr(A, "k8s_apis", lambda cl: (core, core))
+    out = W.collect_cluster(db, c)
+    assert out["static_pods_changed"] == 4 and not out["errors"]
+    assert out["drift"]["opened"] >= 1  # routing-mode tunnel → native 드리프트
+    assert any(a.labels.get("service") == "cilium" for a in _alerts(db, c, "ServiceConfigChanged"))
+    # kubeconfig 없음 → fail-safe
+    monkeypatch.setattr(A, "k8s_apis", lambda cl: (_ for _ in ()).throw(RuntimeError("no kubeconfig")))
+    out = W.collect_cluster(db, c)
+    assert out["errors"] and out["static_pods_changed"] == 0
+
+
+def test_agent_read_files(tmp_path):
+    from app.node_param_agent import agent as AG
+
+    (tmp_path / "etc/containerd").mkdir(parents=True)
+    (tmp_path / "etc/containerd/config.toml").write_text(CTD_V2)
+    targets = [{"id": "containerd", "path": "/etc/containerd/config.toml"}, {"id": "kubelet", "path": "/var/lib/kubelet/config.yaml"}]
+    out = AG.read_files(targets, tmp_path, {})
+    assert out["containerd"]["content"] == CTD_V2 and out["containerd"]["sha256"]
+    assert "error" in out["kubelet"]
+    again = AG.read_files(targets, tmp_path, {"containerd": out["containerd"]["sha256"]})
+    assert "content" not in again["containerd"]  # 해시가 같으면 내용 생략

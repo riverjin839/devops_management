@@ -51,8 +51,18 @@ kubectl -n k8s-monitor-agent exec ds/node-param-agent -- \
 | 사용자 | 65534(nobody), 루트 파일시스템 읽기 전용, capability 전부 제거 | `/proc/sys` 와 sysctl 설정 파일은 일반 사용자가 읽을 수 있다 |
 | `hostNetwork: true` | 켬 | `net.*` 는 네트워크 네임스페이스마다 값이 따로 있어, 끄면 노드가 아니라 파드의 값을 읽는다 |
 | `hostIPC: true` | 켬 | `kernel.shm*`·`kernel.msg*` 는 IPC 네임스페이스마다 값이 따로 있다 |
-| 호스트 경로 | `/etc/sysctl.conf`, `/etc/sysctl.d`, `/run/sysctl.d`, `/usr/lib/sysctl.d` 읽기 전용 | 영구 설정 값 계산. `/etc` 전체는 마운트하지 않는다 |
+| 호스트 경로 | `/etc/sysctl.conf`, `/etc/sysctl.d`, `/run/sysctl.d`, `/usr/lib/sysctl.d` · `/etc/containerd`, `/var/lib/kubelet` 읽기 전용 | 영구 설정 값 계산 · 서비스 구성 변경 감지(설정 파일). `/etc` 전체는 마운트하지 않는다 |
 | 서비스어카운트 토큰 | 마운트 안 함 | 쿠버네티스 API 를 쓰지 않는다 |
+
+## 서비스 구성 설정 파일 보고 (에이전트 1.1.0+)
+
+PEP 서비스 구성의 변경 감지·알람용으로 containerd `config.toml` 과 kubelet `config.yaml` 도 읽어 보고합니다.
+읽을 경로는 보고 응답(`files`)으로 받으며 PEP 서비스 구성 ▸ 설정(적용 설정의 containerd·kubelet 설정 파일)에서 바꿉니다.
+파일 해시가 바뀐 때만 내용을 보내고(256 KB 상한), 나머지 보고에는 해시만 실립니다.
+
+- DaemonSet 이 `/etc/containerd` · `/var/lib/kubelet` 를 **읽기 전용**으로 마운트합니다(경로를 바꿨다면 화면의 설치 안내 매니페스트를 다시 받아 적용).
+- 에이전트는 비 root(65534)라 권한 600 파일(kubelet 인증서 키 등)은 읽지 못합니다 — 설정 파일(보통 644)만 읽습니다.
+- 이전 버전(1.0.x) 에이전트는 파일을 보고하지 않습니다 — 이 매니페스트로 **재배포**해야 CONTAINERD·KUBELET 변경 감지가 동작합니다.
 
 ## 영구 설정 값 계산 규칙
 
